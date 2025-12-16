@@ -2,7 +2,6 @@
 
 mod container;
 mod progress;
-mod progress_callback;
 mod server;
 mod types;
 mod utils;

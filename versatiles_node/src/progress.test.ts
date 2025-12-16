@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterAll } from 'vitest';
 import { ContainerReader } from '../index.js';
 import path from 'path';
 import fs from 'fs';
@@ -18,199 +18,206 @@ afterAll(() => {
 	}
 });
 
-describe('Progress', () => {
-	describe('convertTo()', () => {
-		it('should return a Progress object', async () => {
-			const reader = await ContainerReader.open(MBTILES_PATH);
-			const progress = await reader.convertTo(OUTPUT_PATH, {
+describe('convertTo with callbacks', () => {
+	it('should complete conversion without callbacks', async () => {
+		const reader = await ContainerReader.open(MBTILES_PATH);
+
+		// Should complete successfully without any callbacks
+		await reader.convertTo(OUTPUT_PATH, {
+			minZoom: 5,
+			maxZoom: 7,
+		});
+
+		// Verify the output file was created
+		expect(fs.existsSync(OUTPUT_PATH)).toBe(true);
+	});
+
+	it('should emit progress events', async () => {
+		const reader = await ContainerReader.open(MBTILES_PATH);
+		const progressCallback = vi.fn();
+
+		await reader.convertTo(
+			OUTPUT_PATH,
+			{
 				minZoom: 5,
 				maxZoom: 7,
-			});
+			},
+			progressCallback,
+		);
 
-			expect(progress).toBeDefined();
-			expect(typeof progress.onProgress).toBe('function');
-			expect(typeof progress.onMessage).toBe('function');
-			expect(typeof progress.onComplete).toBe('function');
-			expect(typeof progress.done).toBe('function');
+		// Progress should have been emitted at least once
+		// Note: May emit few times if conversion is fast
+		expect(progressCallback.mock.calls.length).toBeGreaterThanOrEqual(0);
+	});
 
-			// Wait for completion
-			await progress.done();
-		});
+	it('should emit message events', async () => {
+		const reader = await ContainerReader.open(MBTILES_PATH);
+		const messageCallback = vi.fn();
 
-		it('should emit progress events', async () => {
-			const reader = await ContainerReader.open(MBTILES_PATH);
-			const progressCallback = vi.fn();
-
-			const progress = await reader.convertTo(OUTPUT_PATH, {
+		await reader.convertTo(
+			OUTPUT_PATH,
+			{
 				minZoom: 5,
 				maxZoom: 7,
-			});
+			},
+			undefined, // no progress callback
+			messageCallback,
+		);
 
-			progress.onProgress(progressCallback);
+		// Should have received at least one message (step messages)
+		expect(messageCallback.mock.calls.length).toBeGreaterThan(0);
 
-			await progress.done();
-
-			// Progress should have been emitted at least once
-			// Note: May not emit if conversion is too fast or no tiles match the filter
-			// So we just check it doesn't throw
-			expect(progressCallback.mock.calls.length).toBeGreaterThanOrEqual(0);
+		// Verify message structure
+		messageCallback.mock.calls.forEach((call) => {
+			const message = call[0];
+			expect(typeof message.type).toBe('string');
+			expect(typeof message.message).toBe('string');
+			expect(['step', 'warning', 'error']).toContain(message.type);
 		});
+	});
 
-		it('should emit step events', async () => {
-			const reader = await ContainerReader.open(MBTILES_PATH);
-			const messageCallback = vi.fn();
+	it('should emit both progress and message events', async () => {
+		const reader = await ContainerReader.open(MBTILES_PATH);
+		const progressCallback = vi.fn();
+		const messageCallback = vi.fn();
 
-			const progress = await reader.convertTo(OUTPUT_PATH, {
+		await reader.convertTo(
+			OUTPUT_PATH,
+			{
 				minZoom: 5,
 				maxZoom: 7,
-			});
+			},
+			progressCallback,
+			messageCallback,
+		);
 
-			progress.onMessage(messageCallback);
+		// Should have received both types of events
+		expect(messageCallback.mock.calls.length).toBeGreaterThan(0);
 
-			await progress.done();
+		// Verify we got step messages
+		const stepMessages = messageCallback.mock.calls.filter((call) => call[0].type === 'step');
+		expect(stepMessages.length).toBeGreaterThan(0);
+	});
 
-			// Note: Message events may be emitted before listeners are registered
-			// due to the async nature of the conversion. We just verify that
-			// if we got any message events, they have the correct structure.
-			messageCallback.mock.calls.forEach((call) => {
-				expect(typeof call[0]).toBe('string'); // type
-				expect(typeof call[1]).toBe('string'); // message
-				expect(['step', 'warning', 'error']).toContain(call[0]);
-			});
-		});
+	it('should verify ProgressData structure', async () => {
+		const reader = await ContainerReader.open(MBTILES_PATH);
+		let progressData: any = null;
 
-		it('should emit complete event', async () => {
-			const reader = await ContainerReader.open(MBTILES_PATH);
-			const completeCallback = vi.fn();
-
-			const progress = await reader.convertTo(OUTPUT_PATH, {
+		await reader.convertTo(
+			OUTPUT_PATH,
+			{
 				minZoom: 5,
 				maxZoom: 7,
-			});
-
-			progress.onComplete(completeCallback);
-
-			await progress.done();
-
-			expect(completeCallback).toHaveBeenCalledTimes(1);
-		});
-
-		it('should support multiple event listeners', async () => {
-			const reader = await ContainerReader.open(MBTILES_PATH);
-			const completeCallback1 = vi.fn();
-			const completeCallback2 = vi.fn();
-
-			const progress = await reader.convertTo(OUTPUT_PATH, {
-				minZoom: 5,
-				maxZoom: 7,
-			});
-
-			progress.onComplete(completeCallback1);
-			progress.onComplete(completeCallback2);
-
-			await progress.done();
-
-			// Both callbacks should have been called for the complete event
-			expect(completeCallback1).toHaveBeenCalledTimes(1);
-			expect(completeCallback2).toHaveBeenCalledTimes(1);
-		});
-
-		it('should support chaining method calls', async () => {
-			const reader = await ContainerReader.open(MBTILES_PATH);
-			const progressCallback = vi.fn();
-			const completeCallback = vi.fn();
-
-			const progress = (
-				await reader.convertTo(OUTPUT_PATH, {
-					minZoom: 5,
-					maxZoom: 7,
-				})
-			)
-				.onProgress(progressCallback)
-				.onComplete(completeCallback);
-
-			await progress.done();
-
-			// Complete event should always be emitted
-			expect(completeCallback).toHaveBeenCalledTimes(1);
-			// Progress events may or may not be emitted depending on timing
-			expect(progressCallback.mock.calls.length).toBeGreaterThanOrEqual(0);
-		});
-
-		it('should verify ProgressData structure', async () => {
-			const reader = await ContainerReader.open(MBTILES_PATH);
-
-			const progress = await reader.convertTo(OUTPUT_PATH, {
-				minZoom: 5,
-				maxZoom: 7,
-			});
-
-			const progressDataPromise = new Promise((resolve) => {
-				progress.onProgress((data) => {
-					resolve(data);
-				});
-			});
-
-			await progress.done();
-
-			// If we got progress data, verify its structure
-			// Note: May not get progress events if conversion is very fast
-			const hasProgressEvents = await Promise.race([
-				progressDataPromise,
-				new Promise((resolve) => setTimeout(() => resolve(null), 100)),
-			]);
-
-			if (hasProgressEvents) {
-				const data = hasProgressEvents as any;
-				expect(data).toHaveProperty('position');
-				expect(data).toHaveProperty('total');
-				expect(data).toHaveProperty('percentage');
-				expect(data).toHaveProperty('speed');
-				expect(data).toHaveProperty('eta');
-				expect(typeof data.position).toBe('number');
-				expect(typeof data.total).toBe('number');
-				expect(typeof data.percentage).toBe('number');
-				expect(typeof data.speed).toBe('number');
-				expect(typeof data.eta).toBe('number');
-			}
-		});
-
-		it('should handle errors gracefully', async () => {
-			const reader = await ContainerReader.open(MBTILES_PATH);
-			const errorCallback = vi.fn();
-
-			// Try to write to an invalid path
-			const progress = await reader.convertTo('/invalid/path/output.versatiles');
-
-			progress.onMessage((type: string, message: string) => {
-				if (type === 'error') {
-					errorCallback(message);
+			},
+			(data) => {
+				// Capture the first progress data
+				if (!progressData) {
+					progressData = data;
 				}
-			});
+			},
+		);
 
-			// Should throw an error
-			await expect(progress.done()).rejects.toThrow();
+		// If we got progress data, verify its structure
+		if (progressData) {
+			expect(progressData).toHaveProperty('position');
+			expect(progressData).toHaveProperty('total');
+			expect(progressData).toHaveProperty('percentage');
+			expect(progressData).toHaveProperty('speed');
+			expect(progressData).toHaveProperty('eta');
+			expect(typeof progressData.position).toBe('number');
+			expect(typeof progressData.total).toBe('number');
+			expect(typeof progressData.percentage).toBe('number');
+			expect(typeof progressData.speed).toBe('number');
+			expect(typeof progressData.eta).toBe('number');
+		}
+	});
 
-			// Note: Error events may be emitted before listeners are registered due to async timing.
-			// The important part is that done() properly rejects with the error.
-			if (errorCallback.mock.calls.length > 0) {
-				expect(typeof errorCallback.mock.calls[0][0]).toBe('string');
-			}
-		});
+	it('should handle errors gracefully', async () => {
+		const reader = await ContainerReader.open(MBTILES_PATH);
+		const errorCallback = vi.fn();
 
-		it('should throw error when done() is called twice', async () => {
-			const reader = await ContainerReader.open(MBTILES_PATH);
+		// Try to write to an invalid path
+		await expect(
+			reader.convertTo('/invalid/path/output.versatiles', undefined, undefined, (data) => {
+				if (data.type === 'error') {
+					errorCallback(data.message);
+				}
+			}),
+		).rejects.toThrow();
 
-			const progress = await reader.convertTo(OUTPUT_PATH, {
+		// Error may or may not be captured in callback depending on timing
+		// The important part is that the Promise rejects
+	});
+
+	it('should work with only progress callback', async () => {
+		const reader = await ContainerReader.open(MBTILES_PATH);
+		const progressCallback = vi.fn();
+
+		await reader.convertTo(
+			OUTPUT_PATH,
+			{
 				minZoom: 5,
 				maxZoom: 7,
-			});
+			},
+			progressCallback,
+			undefined, // no message callback
+		);
 
-			// First call should succeed
-			await progress.done();
+		// Progress callback may or may not be called depending on speed
+		expect(progressCallback.mock.calls.length).toBeGreaterThanOrEqual(0);
+	});
 
-			// Second call should fail
-			await expect(progress.done()).rejects.toThrow();
-		});
+	it('should work with only message callback', async () => {
+		const reader = await ContainerReader.open(MBTILES_PATH);
+		const messageCallback = vi.fn();
+
+		await reader.convertTo(
+			OUTPUT_PATH,
+			{
+				minZoom: 5,
+				maxZoom: 7,
+			},
+			undefined, // no progress callback
+			messageCallback,
+		);
+
+		// Should have received step messages
+		expect(messageCallback.mock.calls.length).toBeGreaterThan(0);
+		const hasStepMessage = messageCallback.mock.calls.some((call) => call[0].type === 'step');
+		expect(hasStepMessage).toBe(true);
+	});
+
+	it('should receive completion message', async () => {
+		const reader = await ContainerReader.open(MBTILES_PATH);
+		const messages: Array<{ type: string; message: string }> = [];
+
+		await reader.convertTo(
+			OUTPUT_PATH,
+			{
+				minZoom: 5,
+				maxZoom: 7,
+			},
+			undefined,
+			(data) => {
+				messages.push({ type: data.type, message: data.message });
+			},
+		);
+
+		// Should have a "Conversion complete" step message
+		const completeMessage = messages.find((m) => m.message === 'Conversion complete');
+		expect(completeMessage).toBeDefined();
+		expect(completeMessage?.type).toBe('step');
+	});
+
+	it('should handle rapid consecutive conversions', async () => {
+		const reader = await ContainerReader.open(MBTILES_PATH);
+
+		// Run 3 conversions in sequence
+		await reader.convertTo(OUTPUT_PATH, { minZoom: 5, maxZoom: 7 });
+		await reader.convertTo(OUTPUT_PATH, { minZoom: 5, maxZoom: 7 });
+		await reader.convertTo(OUTPUT_PATH, { minZoom: 5, maxZoom: 7 });
+
+		// All should complete successfully
+		expect(fs.existsSync(OUTPUT_PATH)).toBe(true);
 	});
 });

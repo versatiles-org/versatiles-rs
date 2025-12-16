@@ -29,6 +29,15 @@ impl From<versatiles_core::progress::ProgressData> for ProgressData {
 	}
 }
 
+/// Message data sent to JavaScript callbacks
+#[napi(object)]
+#[derive(Clone)]
+pub struct MessageData {
+	#[napi(js_name = "type")]
+	pub msg_type: String,
+	pub message: String,
+}
+
 // Type aliases for the three different callback types
 // Note: Using weak references (Weak=true) to avoid blocking process exit
 type ProgressCallback = ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false, true>;

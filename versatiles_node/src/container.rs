@@ -1,10 +1,12 @@
 use crate::{
 	napi_result,
-	progress::Progress,
-	progress_callback::ProgressCallback,
+	progress::{MessageData, ProgressData},
 	types::{ConvertOptions, ProbeResult, ReaderParameters, parse_compression},
 };
-use napi::bindgen_prelude::*;
+use napi::{
+	bindgen_prelude::*,
+	threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
+};
 use napi_derive::napi;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -77,45 +79,35 @@ impl ContainerReader {
 		reader.container_name().to_string()
 	}
 
-	/// Convert this container to another format with progress monitoring
+	/// Convert this container to another format with optional progress monitoring
 	///
-	/// Returns a Progress object that emits events during the conversion.
-	/// Use progress.onProgress(callback) to monitor progress updates.
-	/// Use progress.onMessage(callback) to receive step/warning/error messages.
-	/// Use progress.onComplete(callback) to be notified when complete.
-	/// Use await progress.done() to wait for completion.
+	/// Accepts optional callbacks for progress monitoring:
+	/// - on_progress: Called with progress updates (position, percentage, speed, eta)
+	/// - on_message: Called with messages (type: "step" | "warning" | "error", message: string)
+	///
+	/// Returns a Promise that resolves when the conversion is complete.
 	#[napi]
-	pub async fn convert_to(&self, output: String, options: Option<ConvertOptions>) -> Result<Progress> {
-		let progress = Progress::new();
-		let progress_arc = Arc::new(progress);
-
-		// Clone everything we need for the async task
-		let output_clone = output.clone();
-		let options_clone = options.clone();
-		let registry_clone = self.registry.clone();
-		let reader_arc = self.reader.clone();
-		let progress_task = progress_arc.clone();
-
-		// Spawn the conversion task in the background
-		tokio::spawn(async move {
-			let result = Self::do_convert(
-				reader_arc,
-				registry_clone,
-				output_clone,
-				options_clone,
-				Some(progress_task.clone()),
+	pub async fn convert_to(
+		&self,
+		output: String,
+		options: Option<ConvertOptions>,
+		on_progress: Option<ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false, true>>,
+		on_message: Option<ThreadsafeFunction<MessageData, Unknown<'static>, MessageData, Status, false, true>>,
+	) -> Result<()> {
+		// Call do_convert directly and await it
+		napi_result!(
+			Self::do_convert(
+				self.reader.clone(),
+				self.registry.clone(),
+				output,
+				options,
+				on_progress,
+				on_message,
 			)
-			.await;
+			.await
+		)?;
 
-			match result {
-				Ok(()) => progress_task.complete(),
-				Err(e) => progress_task.fail(e),
-			}
-		});
-
-		// Return the Progress object immediately
-		// We need to extract the Progress from Arc and clone it
-		Ok((*progress_arc).clone())
+		Ok(())
 	}
 
 	/// Internal conversion implementation
@@ -124,11 +116,18 @@ impl ContainerReader {
 		registry: ContainerRegistry,
 		output: String,
 		options: Option<ConvertOptions>,
-		progress: Option<Arc<Progress>>,
+		on_progress: Option<ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false, true>>,
+		on_message: Option<ThreadsafeFunction<MessageData, Unknown<'static>, MessageData, Status, false, true>>,
 	) -> anyhow::Result<()> {
-		// Emit initial step if progress monitoring is enabled
-		if let Some(ref p) = progress {
-			p.emit_step("Initializing conversion".to_string());
+		// Emit initial step if message callback is provided
+		if let Some(ref cb) = on_message {
+			let _ = cb.call(
+				MessageData {
+					msg_type: "step".to_string(),
+					message: "Initializing conversion".to_string(),
+				},
+				ThreadsafeFunctionCallMode::NonBlocking,
+			);
 		}
 
 		let opts = options.unwrap_or(ConvertOptions {
@@ -197,17 +196,39 @@ impl ContainerReader {
 		// Release the lock before re-opening
 		drop(reader_lock);
 
-		if let Some(ref p) = progress {
-			p.emit_step("Reading tiles".to_string());
+		if let Some(ref cb) = on_message {
+			let _ = cb.call(
+				MessageData {
+					msg_type: "step".to_string(),
+					message: "Reading tiles".to_string(),
+				},
+				ThreadsafeFunctionCallMode::NonBlocking,
+			);
 		}
 
 		// Clone the reader by re-opening from source
 		let reader_clone = registry.get_reader_from_str(&source_name).await?;
 
 		// Create a processing config with progress monitoring if enabled
-		let config = if let Some(ref p) = progress {
-			let progress_callback = ProgressCallback::new("converting tiles", 1000, p.clone());
-			let progress_bar = progress_callback.progress_bar().clone();
+		let config = if let Some(cb) = on_progress {
+			let progress_bar = versatiles_core::progress::ProgressBar::new("converting tiles", 1000);
+
+			// Set callback to emit progress events
+			// Wrap in Arc to share between multiple callback invocations
+			let cb_arc = std::sync::Arc::new(cb);
+			progress_bar.set_callback(move |data| {
+				// Convert from versatiles_core::progress::ProgressData to our ProgressData
+				let js_data = ProgressData {
+					position: data.position as f64,
+					total: data.total as f64,
+					percentage: data.percentage,
+					speed: data.speed,
+					eta: data.eta,
+					message: Some(data.message),
+				};
+				// Ignore the result since we're in a callback
+				let _ = cb_arc.call(js_data, ThreadsafeFunctionCallMode::NonBlocking);
+			});
 
 			ProcessingConfig {
 				cache_type: versatiles_container::CacheType::new_memory(),
@@ -220,6 +241,17 @@ impl ContainerReader {
 		// Use the new function that accepts a ProcessingConfig
 		versatiles_container::convert_tiles_container_with_config(reader_clone, params, &output_path, registry, config)
 			.await?;
+
+		// Emit final completion message
+		if let Some(ref cb) = on_message {
+			let _ = cb.call(
+				MessageData {
+					msg_type: "step".to_string(),
+					message: "Conversion complete".to_string(),
+				},
+				ThreadsafeFunctionCallMode::NonBlocking,
+			);
+		}
 
 		Ok(())
 	}
