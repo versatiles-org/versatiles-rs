@@ -21,7 +21,7 @@ pub struct Inner {
 
 impl Inner {
 	pub fn redraw(&mut self) {
-		if self.last_draw.elapsed() < Duration::from_secs(1) && !self.finished {
+		if self.last_draw.elapsed() < Duration::from_millis(500) && !self.finished {
 			return;
 		}
 		self.last_draw = Instant::now();
