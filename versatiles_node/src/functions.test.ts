@@ -1,5 +1,5 @@
 import { afterAll } from 'vitest';
-import { convertTiles, probeTiles, ContainerReader } from '../index.js';
+import { convertTiles, ContainerReader } from '../index.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -9,59 +9,6 @@ const PMTILES_PATH = path.join(TESTDATA_DIR, 'berlin.pmtiles');
 const OUTPUT_DIR = __dirname;
 
 describe('Standalone Functions', () => {
-	describe('probeTiles()', () => {
-		it('should probe MBTiles file with shallow depth', async () => {
-			const result = await probeTiles(MBTILES_PATH, 'shallow');
-
-			expect(result).toBeDefined();
-			expect(typeof result.sourceName).toBe('string');
-			expect(typeof result.containerName).toBe('string');
-			expect(result.sourceName.length).toBeGreaterThan(0);
-			expect(result.containerName.length).toBeGreaterThan(0);
-		});
-
-		it('should probe MBTiles file with container depth', async () => {
-			const result = await probeTiles(MBTILES_PATH, 'container');
-
-			expect(result).toBeDefined();
-			expect(result.tileJson).toBeDefined();
-			expect(result.parameters).toBeDefined();
-
-			const tileJson = JSON.parse(result.tileJson);
-			expect(tileJson.tilejson).toBe('3.0.0');
-
-			expect(typeof result.parameters.tileFormat).toBe('string');
-			expect(typeof result.parameters.tileCompression).toBe('string');
-			expect(typeof result.parameters.minZoom).toBe('number');
-			expect(typeof result.parameters.maxZoom).toBe('number');
-		});
-
-		it('should probe PMTiles file', async () => {
-			const result = await probeTiles(PMTILES_PATH, 'container');
-
-			expect(result).toBeDefined();
-			expect(result.containerName).toContain('pmtiles');
-		});
-
-		it('should probe without depth argument', async () => {
-			const result = await probeTiles(MBTILES_PATH);
-			expect(result).toBeDefined();
-		});
-
-		it('should probe with tiles depth', async () => {
-			const result = await probeTiles(MBTILES_PATH, 'tiles');
-			expect(result).toBeDefined();
-		});
-
-		it('should throw error for non-existent file', async () => {
-			await expect(probeTiles('/nonexistent/file.mbtiles')).rejects.toThrow();
-		});
-
-		it('should throw error for invalid file format', async () => {
-			await expect(probeTiles(__filename)).rejects.toThrow();
-		});
-	});
-
 	describe('convertTiles()', () => {
 		const OUTPUT_VERSATILES = path.join(OUTPUT_DIR, 'converted.versatiles');
 		const OUTPUT_MBTILES = path.join(OUTPUT_DIR, 'converted.mbtiles');
@@ -250,33 +197,6 @@ describe('Standalone Functions', () => {
 
 			const reader: ContainerReader = await ContainerReader.open(output);
 			expect(reader).toBeDefined();
-
-			fs.unlinkSync(output);
-		});
-	});
-
-	describe('integration: probe then convert', () => {
-		it('should probe file and use metadata for conversion', async () => {
-			const output = path.join(OUTPUT_DIR, 'integration.versatiles');
-
-			// First, probe the file
-			const probeResult = await probeTiles(MBTILES_PATH, 'container');
-			expect(probeResult).toBeDefined();
-
-			const { minZoom, maxZoom } = probeResult.parameters;
-
-			// Use the probed zoom levels for conversion
-			await convertTiles(MBTILES_PATH, output, {
-				minZoom: minZoom,
-				maxZoom: Math.min(maxZoom, minZoom + 2), // Limit range
-			});
-
-			expect(fs.existsSync(output)).toBeTruthy();
-
-			// Verify the converted file
-			const reader: ContainerReader = await ContainerReader.open(output);
-			const params = await reader.parameters;
-			expect(params.minZoom).toBe(minZoom);
 
 			fs.unlinkSync(output);
 		});

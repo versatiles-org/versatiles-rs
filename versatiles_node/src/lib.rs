@@ -102,24 +102,3 @@ pub async fn convert_tiles(input: String, output: String, options: Option<Conver
 
 	Ok(())
 }
-
-/// Probe a tile container to get metadata and statistics
-///
-/// # Example
-/// ```javascript
-/// const result = await probeTiles('tiles.mbtiles', 'shallow');
-/// console.log(result.tileJson);
-/// console.log(result.parameters);
-/// ```
-#[napi]
-pub async fn probe_tiles(path: String, _depth: Option<String>) -> Result<ProbeResult> {
-	let registry = ContainerRegistry::default();
-	let reader = napi_result!(registry.get_reader_from_str(&path).await)?;
-
-	Ok(ProbeResult {
-		source_name: reader.source_name().to_string(),
-		container_name: reader.container_name().to_string(),
-		tile_json: reader.tilejson().as_string(),
-		parameters: ReaderParameters::from(reader.parameters()),
-	})
-}
