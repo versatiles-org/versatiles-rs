@@ -579,7 +579,7 @@ static:
 ### Full Reference
 
 For complete configuration documentation, see:
-- [versatiles/config.md](https://github.com/versatiles-org/versatiles-rs/blob/main/versatiles/config.md) - Full reference (auto-generated)
+- [versatiles/CONFIG.md](https://github.com/versatiles-org/versatiles-rs/blob/main/versatiles/CONFIG.md) - Full reference (auto-generated)
 
 Or run:
 ```sh

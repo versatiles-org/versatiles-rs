@@ -334,5 +334,5 @@ This covers most of what CI checks, except for coverage reporting.
 
 - **Node.js Development:** [versatiles_node/CONTRIBUTING.md](versatiles_node/CONTRIBUTING.md)
 - **VersaTiles Pipeline:** [versatiles_pipeline/README.md](versatiles_pipeline/README.md)
-- **Configuration:** [versatiles/config.md](versatiles/config.md)
+- **Configuration:** [versatiles/CONFIG.md](versatiles/CONFIG.md)
 - **Official Docs:** https://docs.versatiles.org/
