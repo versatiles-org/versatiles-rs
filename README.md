@@ -237,15 +237,15 @@ versatiles convert input.mbtiles output.versatiles
 
 **Advanced options:**
 
-| Option | Description | Example |
-|--------|-------------|---------|
-| `--min-zoom`, `--max-zoom` | Filter zoom levels | `--min-zoom=5 --max-zoom=12` |
-| `--bbox` | Extract region (lon_min,lat_min,lon_max,lat_max) | `--bbox=13.0,52.3,13.8,52.7` |
-| `--bbox-border` | Add border tiles around bbox | `--bbox-border=3` |
-| `--compress` | Set compression (gzip, brotli, zstd) | `--compress=brotli` |
-| `--tile-format` | Convert tile format (png, jpg, webp, avif, pbf) | `--tile-format=webp` |
-| `--swap-xy` | Swap X/Y coordinates (z/x/y → z/y/x) | `--swap-xy` |
-| `--flip-y` | Flip tiles vertically | `--flip-y` |
+| Option                     | Description                                      | Example                      |
+|----------------------------|--------------------------------------------------|------------------------------|
+| `--min-zoom`, `--max-zoom` | Filter zoom levels                               | `--min-zoom=5 --max-zoom=12` |
+| `--bbox`                   | Extract region (lon_min,lat_min,lon_max,lat_max) | `--bbox=13.0,52.3,13.8,52.7` |
+| `--bbox-border`            | Add border tiles around bbox                     | `--bbox-border=3`            |
+| `--compress`               | Set compression (gzip, brotli, zstd)             | `--compress=brotli`          |
+| `--tile-format`            | Convert tile format (png, jpg, webp, avif, pbf)  | `--tile-format=webp`         |
+| `--swap-xy`                | Swap X/Y coordinates (z/x/y → z/y/x)             | `--swap-xy`                  |
+| `--flip-y`                 | Flip tiles vertically                            | `--flip-y`                   |
 
 **Real-world examples:**
 
@@ -283,11 +283,11 @@ versatiles probe tiles.versatiles
 
 **Depth levels:**
 
-| Level | Flag | Scans | Use Case |
-|-------|------|-------|----------|
-| 1 | `-d` | Container metadata | Quick info (zoom range, tile format) |
-| 2 | `-dd` | All tile coordinates | Find actual tile coverage |
-| 3 | `-ddd` | Tile contents | Analyze tile sizes, validate data |
+| Level | Flag   | Scans                | Use Case                             |
+|-------|--------|----------------------|--------------------------------------|
+| 1     | `-d`   | Container metadata   | Quick info (zoom range, tile format) |
+| 2     | `-dd`  | All tile coordinates | Find actual tile coverage            |
+| 3     | `-ddd` | Tile contents        | Analyze tile sizes, validate data    |
 
 **Examples:**
 
@@ -317,13 +317,13 @@ versatiles serve tiles.versatiles
 
 **Server options:**
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `-i, --ip` | Bind IP address | 0.0.0.0 |
-| `-p, --port` | Port number | 8080 |
-| `-c, --config` | YAML configuration file | - |
-| `--minimal-recompression` | Fast serving (less compression) | false |
-| `--disable-api` | Disable `/api` endpoints | false |
+| Option                    | Description                     | Default |
+|---------------------------|---------------------------------|---------|
+| `-i, --ip`                | Bind IP address                 | 0.0.0.0 |
+| `-p, --port`              | Port number                     | 8080    |
+| `-c, --config`            | YAML configuration file         | -       |
+| `--minimal-recompression` | Fast serving (less compression) | false   |
+| `--disable-api`           | Disable `/api` endpoints        | false   |
 
 **Custom tile IDs:**
 
@@ -868,8 +868,30 @@ flowchart TB
 ### Helpers
 
 - **/docker/** - Dockerfile for Linux builds
-- **/scripts/** - Scripts for checking, building, testing, and releasing
 - **/testdata/** - Test files for validation
+- **/scripts/** - Development and CI/CD automation scripts:
+
+| Script                 | Purpose                                                        |
+|------------------------|----------------------------------------------------------------|
+| **`build-debug.sh`**   | **Build debug binary with GDAL**                               |
+| **`build-release.sh`** | **Build release binary with GDAL support**                     |
+| **`check.sh`**         | **Run all checks (formatting, linting, tests Rust + Node.js)** |
+| **`install-gdal.sh`**  | **Install GDAL 3.11.5 from source into `.toolchain/gdal`**     |
+| `audit-unused-deps.sh` | Find unused dependencies                                       |
+| `build-docker-*.sh`    | Build Docker images (GDAL, multi-platform)                     |
+| `build-docs*.sh`       | Generate documentation                                         |
+| `install-unix.sh`      | Install VersaTiles binary on Unix platforms                    |
+| `install-windows.ps1`  | Install VersaTiles binary on Windows                           |
+| `perf-benchmarks.sh`   | Run performance benchmarks                                     |
+| `release-package.sh`   | Create versioned releases                                      |
+| `sync-version.sh`      | Synchronize versions across workspace                          |
+| `test-coverage.sh`     | Generate code coverage reports                                 |
+| `test-unix.sh`         | Run tests on Unix platforms                                    |
+| `test-windows.ps1`     | Run tests on Windows                                           |
+| `upgrade-deps.sh`      | Update Rust dependencies to latest versions                    |
+| `workflow-*.sh/ps1`    | CI/CD workflow automation                                      |
+
+**Most commonly used:** `check.sh`, `build-release.sh`, `release-package.sh`
 
 ---
 
