@@ -24,6 +24,7 @@ VersaTiles is a Rust-based tool for processing and serving tile data efficiently
   - [Core Concepts](#core-concepts)
   - [Commands](#commands)
   - [VersaTiles Pipeline Language](#versatiles-pipeline-language)
+- [Configuration](#configuration)
 - [GDAL support](#gdal-support)
 - [Development](#development)
   - [Running All Checks](#running-all-checks)
@@ -452,6 +453,138 @@ from_merged_vector [
 ```
 
 More details can be found in [versatiles_pipeline/README.md](https://github.com/versatiles-org/versatiles-rs/blob/main/versatiles_pipeline/README.md).
+
+---
+
+## Configuration
+
+For production deployments, use YAML configuration files for fine-grained control over the tile server.
+
+### Basic Configuration
+
+```yaml
+server:
+  ip: 0.0.0.0
+  port: 8080
+  minimal_recompression: false  # true = faster, larger responses
+  disable_api: false             # true = disable /api endpoints
+
+tiles:
+  - name: osm
+    src: "./tiles/osm.versatiles"
+  - name: satellite
+    src: "https://tiles.example.com/sat.versatiles"
+
+static:
+  - src: "./static"
+    prefix: "/"
+```
+
+**Start with config:**
+```sh
+versatiles serve -c config.yaml
+```
+
+### Key Features
+
+**CORS Configuration** - Control cross-origin access:
+
+```yaml
+cors:
+  allowed_origins:
+    - "https://example.org"          # Exact domain
+    - "*.dev.example.org"            # Subdomain wildcard
+    - "https://example.*"            # TLD wildcard
+    - "/^https://.*\\.example\\.org$/" # Regex pattern
+  max_age_seconds: 86400
+```
+
+**Custom Response Headers** - Add caching and CDN headers:
+
+```yaml
+extra_response_headers:
+  Cache-Control: "public, max-age=86400, immutable"
+  Surrogate-Control: "max-age=604800"      # For Varnish
+  CDN-Cache-Control: "max-age=604800"      # For CDNs
+```
+
+**Multiple Tile Sources** - Serve multiple tile sets:
+
+```yaml
+tiles:
+  # Local file
+  - name: city
+    src: "./city.versatiles"
+
+  # Remote HTTPS
+  - name: osm
+    src: "https://download.versatiles.org/osm.versatiles"
+
+  # MBTiles format
+  - name: elevation
+    src: "./terrain.mbtiles"
+
+  # VPL pipeline (processed on-the-fly)
+  - name: processed
+    src: "./pipeline.vpl"
+```
+
+Access tiles at: `http://localhost:8080/{name}/{z}/{x}/{y}.{ext}`
+
+**Static Content** - Serve styles, fonts, and sprites:
+
+```yaml
+static:
+  # Tar archive at root
+  - src: "./static.tar.br"
+    prefix: "/"
+
+  # Directory at custom path
+  - src: "./public"
+    prefix: "/assets"
+```
+
+Supported formats: directories, `.tar`, `.tar.gz`, `.tar.br`
+
+### Complete Example
+
+```yaml
+server:
+  ip: 0.0.0.0
+  port: 8080
+  minimal_recompression: false
+
+cors:
+  allowed_origins:
+    - "https://myapp.com"
+    - "*.myapp.dev"
+  max_age_seconds: 86400
+
+extra_response_headers:
+  Cache-Control: "public, max-age=86400"
+
+tiles:
+  - name: basemap
+    src: "https://download.versatiles.org/osm.versatiles"
+  - name: satellite
+    src: "./satellite.mbtiles"
+
+static:
+  - src: "./styles.tar.br"
+    prefix: "/styles"
+  - src: "./fonts.tar.gz"
+    prefix: "/fonts"
+```
+
+### Full Reference
+
+For complete configuration documentation, see:
+- [versatiles/config.md](https://github.com/versatiles-org/versatiles-rs/blob/main/versatiles/config.md) - Full reference (auto-generated)
+
+Or run:
+```sh
+versatiles help config
+```
 
 ---
 
