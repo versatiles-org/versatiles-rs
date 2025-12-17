@@ -128,11 +128,14 @@ fn main() -> Result<()> {
 		})
 		.init();
 
-	// Create runtime with default settings
-	let runtime = std::sync::Arc::new(versatiles::container::TilesRuntime::default());
-
-	// Register additional readers (like .vpl files)
-	versatiles::register_readers(&runtime);
+	// Create runtime with default settings and register .vpl reader
+	let runtime = std::sync::Arc::new(
+		versatiles::container::TilesRuntime::builder()
+			.customize_registry(|registry| {
+				versatiles::register_readers(registry);
+			})
+			.build()
+	);
 
 	run(cli, runtime)
 }
@@ -160,7 +163,8 @@ mod tests {
 	pub fn run_command(arg_vec: Vec<&str>) -> Result<String> {
 		let cli = Cli::try_parse_from(arg_vec)?;
 		let msg = format!("{cli:?}");
-		run(cli)?;
+		let runtime = std::sync::Arc::new(versatiles::container::TilesRuntime::default());
+		run(cli, runtime)?;
 		Ok(msg)
 	}
 

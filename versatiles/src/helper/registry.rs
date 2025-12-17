@@ -3,53 +3,37 @@
 use std::sync::Arc;
 use versatiles_container::{TilesReaderTrait, TilesRuntime};
 
-/// Registers additional readers (like `.vpl` for pipelines) to a `TilesRuntime`.
+/// Registers additional readers (like `.vpl` for pipelines) to a `ContainerRegistry`.
 ///
 /// # Parameters
-/// - `runtime`: A `TilesRuntime` instance that will be configured with additional readers.
+/// - `registry`: A mutable reference to `ContainerRegistry` that will be configured with additional readers.
 ///
 /// # Behavior
-/// Registers an additional reader for the `.vpl` file extension to the runtime's registry.
+/// Registers an additional reader for the `.vpl` file extension.
 ///
 /// # Example
 /// ```rust
-/// use versatiles::{
-///    container::{TilesReaderTrait, TilesRuntime},
-///    register_readers
-/// };
-/// use std::sync::Arc;
+/// use versatiles::container::{TilesRuntime, ContainerRegistry};
 ///
-/// #[tokio::main]
-/// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     let runtime = Arc::new(TilesRuntime::default());
-///     register_readers(&runtime);
-///     let reader = runtime.registry().get_reader_from_str("../testdata/berlin.vpl").await?;
-///     // Use the reader here
-///     Ok(())
-/// }
+/// let runtime = TilesRuntime::builder()
+///     .customize_registry(|registry| {
+///         versatiles::register_readers(registry);
+///     })
+///     .build();
 /// ```
-pub fn register_readers(runtime: &Arc<TilesRuntime>) {
-	let mut registry = runtime.registry().clone();
-
-	// Register a reader for "vpl" files. The closure captures the runtime and clones it for async usage.
-	let rt = runtime.clone();
-	registry.register_reader_file("vpl", move |p| {
-		let runtime = rt.clone();
-		async move {
-			// Clone runtime again inside async block to ensure it is owned
-			Ok(Box::new(versatiles_pipeline::PipelineReader::open_path(&p, runtime).await?) as Box<dyn TilesReaderTrait>)
-		}
+pub fn register_readers(registry: &mut versatiles_container::ContainerRegistry) {
+	// Register a reader for "vpl" files
+	registry.register_reader_file("vpl", |p| async move {
+		// We can't easily pass runtime here, so we create a default one
+		let runtime = std::sync::Arc::new(TilesRuntime::default());
+		Ok(Box::new(versatiles_pipeline::PipelineReader::open_path(&p, runtime).await?) as Box<dyn TilesReaderTrait>)
 	});
 
-	let rt = runtime.clone();
-	registry.register_reader_data("vpl", move |p| {
-		let runtime = rt.clone();
-		async move {
-			// Clone runtime again inside async block to ensure it is owned
-			Ok(Box::new(
-				versatiles_pipeline::PipelineReader::open_reader(p, &std::env::current_dir().unwrap(), runtime).await?,
-			) as Box<dyn TilesReaderTrait>)
-		}
+	registry.register_reader_data("vpl", |p| async move {
+		let runtime = std::sync::Arc::new(TilesRuntime::default());
+		Ok(Box::new(
+			versatiles_pipeline::PipelineReader::open_reader(p, &std::env::current_dir().unwrap(), runtime).await?,
+		) as Box<dyn TilesReaderTrait>)
 	});
 }
 

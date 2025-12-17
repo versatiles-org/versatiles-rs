@@ -10,7 +10,7 @@ use napi::{
 use napi_derive::napi;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use versatiles_container::{ContainerRegistry, ProcessingConfig, TilesConverterParameters, TilesReaderTrait};
+use versatiles_container::{ContainerRegistry, TilesConverterParameters, TilesReaderTrait, TilesRuntime};
 use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCoord as RustTileCoord};
 
 /// Container reader for accessing tile data from various formats
@@ -198,42 +198,22 @@ impl ContainerReader {
 		// Clone the reader by re-opening from source
 		let reader_clone = self.registry.get_reader_from_str(&source_name).await?;
 
-		// Create a processing config with progress monitoring if enabled
-		let config = if let Some(cb) = on_progress {
-			let progress_bar = versatiles_core::progress::ProgressBar::new("converting tiles", 1000);
+		// Create a runtime
+		// TODO: Add progress monitoring support when event system is implemented
+		let runtime = Arc::new(TilesRuntime::default());
 
-			// Set callback to emit progress events
-			// Wrap in Arc to share between multiple callback invocations
-			let cb_arc = std::sync::Arc::new(cb);
-			progress_bar.set_callback(move |data| {
-				// Convert from versatiles_core::progress::ProgressData to our ProgressData
-				let js_data = ProgressData {
-					position: data.position as f64,
-					total: data.total as f64,
-					percentage: data.percentage,
-					speed: data.speed,
-					eta: data.eta,
-					message: Some(data.message),
-				};
-				// Ignore the result since we're in a callback
-				let _ = cb_arc.call(js_data, ThreadsafeFunctionCallMode::NonBlocking);
-			});
+		// Note: Progress callbacks (on_progress) are currently not supported
+		// This will be re-enabled in a future update when the event system is implemented
+		if on_progress.is_some() {
+			eprintln!("Warning: Progress callbacks are not yet supported in this version");
+		}
 
-			ProcessingConfig {
-				cache_type: versatiles_container::CacheType::new_memory(),
-				progress_bar: Some(progress_bar),
-			}
-		} else {
-			ProcessingConfig::default()
-		};
-
-		// Use the new function that accepts a ProcessingConfig
-		versatiles_container::convert_tiles_container_with_config(
+		// Convert tiles using the new API
+		versatiles_container::convert_tiles_container(
 			reader_clone,
 			params,
 			&output_path,
-			self.registry.clone(),
-			Arc::new(config),
+			runtime,
 		)
 		.await?;
 

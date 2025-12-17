@@ -186,8 +186,9 @@ mod tests {
 	use super::*;
 	use assert_fs::NamedTempFile;
 	use rstest::rstest;
+	use std::sync::Arc;
 	use versatiles_container::{
-		MockTilesReader, MockTilesReaderProfile, ProcessingConfig, TilesConverterParameters, TilesReaderTrait,
+		MockTilesReader, MockTilesReaderProfile, TilesConverterParameters, TilesReaderTrait, TilesRuntime,
 		convert_tiles_container,
 	};
 	use versatiles_core::TileBBoxPyramid;
@@ -204,10 +205,9 @@ mod tests {
 			bbox_pyramid: Some(TileBBoxPyramid::new_full(0)),
 			..TilesConverterParameters::default()
 		};
-		let config = ProcessingConfig::default().arc();
-		let registry = crate::get_registry(config);
+		let runtime = Arc::new(TilesRuntime::default());
 
-		convert_tiles_container(reader.boxed(), parameters, &container_file, registry)
+		convert_tiles_container(reader.boxed(), parameters, &container_file, runtime)
 			.await
 			.unwrap();
 

@@ -1,7 +1,6 @@
 use anyhow::{Context, Result, bail};
-use std::path::PathBuf;
-use versatiles::get_registry;
-use versatiles_container::ProcessingConfig;
+use std::{path::PathBuf, sync::Arc};
+use versatiles_container::TilesRuntime;
 use versatiles_core::progress::get_progress_bar;
 use versatiles_geometry::{geo::GeoCollection, tile_outline::TileOutline};
 
@@ -28,7 +27,9 @@ pub async fn run(args: &ExportOutline) -> Result<()> {
 	let input = &args.input;
 	let output = &args.output;
 
-	let reader = get_registry(ProcessingConfig::default().arc())
+	let runtime = Arc::new(TilesRuntime::default());
+	versatiles::register_readers(&runtime);
+	let reader = runtime.registry()
 		.get_reader_from_str(input)
 		.await?;
 

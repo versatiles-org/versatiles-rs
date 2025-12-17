@@ -1,7 +1,6 @@
 use anyhow::Result;
-use std::io::Write;
-use versatiles::get_registry;
-use versatiles_container::ProcessingConfig;
+use std::{io::Write, sync::Arc};
+use versatiles_container::TilesRuntime;
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_help_flag = true, disable_version_flag = true)]
@@ -26,7 +25,9 @@ async fn fetch_tilejson(args: &PrintTilejson) -> Result<String> {
 	let input = &args.input;
 	let pretty = args.pretty;
 
-	let reader = get_registry(ProcessingConfig::default().arc())
+	let runtime = Arc::new(TilesRuntime::default());
+	versatiles::register_readers(&runtime);
+	let reader = runtime.registry()
 		.get_reader_from_str(input)
 		.await?;
 

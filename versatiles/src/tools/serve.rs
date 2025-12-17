@@ -105,7 +105,7 @@ pub async fn run(arguments: &Subcommand, runtime: Arc<TilesRuntime>) -> Result<(
 	swap(&mut config.static_sources, &mut static_sources);
 	config.static_sources.extend(static_sources);
 
-	let mut server: TileServer = TileServer::from_config(config, runtime).await?;
+	let mut server: TileServer = TileServer::from_config(config, runtime.registry().clone()).await?;
 
 	let mut list = server.get_url_mapping().await;
 	list.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());

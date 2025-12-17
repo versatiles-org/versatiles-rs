@@ -57,7 +57,7 @@ impl Operation {
 		tilejson.update_from_reader_parameters(&parameters);
 
 		let tile_size = args.tile_size.unwrap_or(512);
-		let cache = Arc::new(Mutex::new(CacheMap::new(factory.config())));
+		let cache = Arc::new(Mutex::new(CacheMap::new(&factory.runtime().cache_type())));
 		let traversal = Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?;
 
 		Ok(Self {

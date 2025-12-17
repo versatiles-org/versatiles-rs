@@ -25,7 +25,7 @@ use std::{
 	sync::Arc,
 	vec,
 };
-use versatiles_container::{ProcessingConfig, TilesReaderTrait};
+use versatiles_container::{TilesReaderTrait, TilesRuntime};
 use versatiles_core::{TileFormat, TileType};
 use versatiles_derive::context;
 
@@ -41,30 +41,30 @@ type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesRea
 /// - `read_ops` and `tran_ops`: registries keyed by VPL tag name.
 /// - `dir`: base directory used to resolve relative filenames.
 /// - `create_reader`: callback to open external containers as [`TilesReaderTrait`].
-/// - `config`: processing configuration forwarded to operations.
+/// - `runtime`: runtime configuration forwarded to operations.
 pub struct PipelineFactory {
 	read_ops: HashMap<String, Box<dyn ReadOperationFactoryTrait>>,
 	tran_ops: HashMap<String, Box<dyn TransformOperationFactoryTrait>>,
 	dir: PathBuf,
 	create_reader: Callback,
-	config: Arc<ProcessingConfig>,
+	runtime: Arc<TilesRuntime>,
 }
 
 impl PipelineFactory {
 	/// Creates an empty factory with no registered operations.
-	pub fn new_empty(dir: &Path, create_reader: Callback, config: Arc<ProcessingConfig>) -> Self {
+	pub fn new_empty(dir: &Path, create_reader: Callback, runtime: Arc<TilesRuntime>) -> Self {
 		PipelineFactory {
 			read_ops: HashMap::new(),
 			tran_ops: HashMap::new(),
 			dir: dir.to_path_buf(),
 			create_reader,
-			config,
+			runtime,
 		}
 	}
 
 	/// Creates a factory pre-loaded with all built-in read and transform operation factories.
-	pub fn new_default(dir: &Path, create_reader: Callback, config: Arc<ProcessingConfig>) -> Self {
-		let mut factory = PipelineFactory::new_empty(dir, create_reader, config);
+	pub fn new_default(dir: &Path, create_reader: Callback, runtime: Arc<TilesRuntime>) -> Self {
+		let mut factory = PipelineFactory::new_empty(dir, create_reader, runtime);
 
 		for f in get_read_operation_factories() {
 			factory.add_read_factory(f)
@@ -115,7 +115,7 @@ impl PipelineFactory {
 
 	/// Creates a default-registered factory using the provided custom reader callback.
 	pub fn new_dummy_reader(create_reader: Callback) -> Self {
-		PipelineFactory::new_default(Path::new(""), create_reader, ProcessingConfig::default().arc())
+		PipelineFactory::new_default(Path::new(""), create_reader, Arc::new(TilesRuntime::default()))
 	}
 
 	/// Registers a read operation factory under its VPL tag name.
@@ -215,9 +215,9 @@ impl PipelineFactory {
 		.join("\n")
 	}
 
-	/// Returns the processing configuration associated with this factory.
-	pub fn config(&self) -> &ProcessingConfig {
-		&self.config
+	/// Returns the runtime associated with this factory.
+	pub fn runtime(&self) -> &TilesRuntime {
+		&self.runtime
 	}
 }
 

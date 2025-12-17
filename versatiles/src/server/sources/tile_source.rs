@@ -118,10 +118,10 @@ impl Debug for TileSource {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::get_registry;
 	use anyhow::Result;
 	use rstest::rstest;
-	use versatiles_container::{MockTilesReader, MockTilesReaderProfile, ProcessingConfig};
+	use std::sync::Arc;
+	use versatiles_container::{MockTilesReader, MockTilesReaderProfile, TilesRuntime};
 	use versatiles_core::TileJSON;
 
 	// Test the constructor function for TileSource
@@ -207,8 +207,9 @@ mod tests {
 
 		let (exp_mime, exp_bounds, exp_header, exp_minzoom, exp_maxzoom) = expected_tile_json;
 
-		let registry = get_registry(ProcessingConfig::default().arc());
-		let reader = registry.get_reader_from_str(filename).await?;
+		let runtime = Arc::new(TilesRuntime::default());
+		crate::register_readers(&runtime);
+		let reader = runtime.registry().get_reader_from_str(filename).await?;
 		let c = &mut TileSource::from(reader, "prefix")?;
 
 		assert_eq!(

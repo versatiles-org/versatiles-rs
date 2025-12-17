@@ -14,7 +14,7 @@
 
 use super::{cors, routes, sources};
 #[cfg(test)]
-use crate::get_registry;
+use versatiles_container::TilesRuntime;
 use crate::{Config, TileSourceConfig};
 use anyhow::{Result, bail};
 use axum::error_handling::HandleErrorLayer;
@@ -82,6 +82,8 @@ pub struct TileServer {
 impl TileServer {
 	#[cfg(test)]
 	pub fn new_test(ip: &str, port: u16, minimal_recompression: bool, disable_api: bool) -> TileServer {
+		let runtime = std::sync::Arc::new(TilesRuntime::default());
+		crate::register_readers(&runtime);
 		TileServer {
 			ip: ip.to_owned(),
 			port,
@@ -91,7 +93,7 @@ impl TileServer {
 			join: None,
 			minimal_recompression,
 			disable_api,
-			registry: get_registry(ProcessingConfig::default().arc()),
+			registry: runtime.registry().clone(),
 			cors_allowed_origins: Vec::new(),
 			cors_max_age_seconds: 3600,
 			extra_response_headers: Vec::new(),
