@@ -31,8 +31,6 @@ use tower::{
 };
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
-#[cfg(test)]
-use versatiles_container::ProcessingConfig;
 use versatiles_container::{ContainerRegistry, TilesReaderTrait};
 use versatiles_derive::context;
 
@@ -82,8 +80,13 @@ pub struct TileServer {
 impl TileServer {
 	#[cfg(test)]
 	pub fn new_test(ip: &str, port: u16, minimal_recompression: bool, disable_api: bool) -> TileServer {
-		let runtime = std::sync::Arc::new(TilesRuntime::default());
-		crate::register_readers(&runtime);
+		let runtime = std::sync::Arc::new(
+			TilesRuntime::builder()
+				.customize_registry(|registry| {
+					crate::register_readers(registry);
+				})
+				.build()
+		);
 		TileServer {
 			ip: ip.to_owned(),
 			port,

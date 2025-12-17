@@ -12,7 +12,7 @@
 //! ```no_run
 //! use versatiles_container::*;
 //! use versatiles_core::*;
-//! use std::path::Path;
+//! use std::{path::Path, sync::Arc};
 //! use anyhow::Result;
 //!
 //! #[tokio::main]
@@ -28,10 +28,11 @@
 //!
 //!     // Writing to a tar archive
 //!     let output_path = Path::new("path/to/output.tar");
+//!     let runtime = Arc::new(TilesRuntime::default());
 //!     let mut writer = TarTilesWriter::write_to_path(
 //!         &mut reader,
 //!         output_path,
-//!         ProcessingConfig::default().arc()
+//!         runtime
 //!     ).await?;
 //!
 //!     Ok(())

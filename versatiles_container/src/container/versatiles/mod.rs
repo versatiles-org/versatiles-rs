@@ -9,7 +9,7 @@
 //! ```rust
 //! use versatiles_container::*;
 //! use versatiles_core::*;
-//! use std::path::Path;
+//! use std::{path::Path, sync::Arc};
 //! use anyhow::Result;
 //!
 //! #[tokio::main]
@@ -21,10 +21,11 @@
 //!     let mut reader = MBTilesReader::open_path(&path_mbtiles)?;
 //!
 //!     // Write the tiles to the .versatiles file
+//!     let runtime = Arc::new(TilesRuntime::default());
 //!     VersaTilesWriter::write_to_path(
 //!         &mut reader,
 //!         &path_versatiles,
-//!         ProcessingConfig::default().arc()
+//!         runtime
 //!     ).await?;
 //!
 //!     println!("Tiles have been successfully written to {path_versatiles:?}");

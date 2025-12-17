@@ -163,7 +163,13 @@ mod tests {
 	pub fn run_command(arg_vec: Vec<&str>) -> Result<String> {
 		let cli = Cli::try_parse_from(arg_vec)?;
 		let msg = format!("{cli:?}");
-		let runtime = std::sync::Arc::new(versatiles::container::TilesRuntime::default());
+		let runtime = std::sync::Arc::new(
+			versatiles::container::TilesRuntime::builder()
+				.customize_registry(|registry| {
+					versatiles::register_readers(registry);
+				})
+				.build()
+		);
 		run(cli, runtime)?;
 		Ok(msg)
 	}

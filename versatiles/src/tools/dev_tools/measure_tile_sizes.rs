@@ -50,8 +50,13 @@ pub async fn run(args: &MeasureTileSizes) -> Result<()> {
 		output_file.extension().unwrap_or_default()
 	);
 
-	let runtime = Arc::new(TilesRuntime::default());
-	versatiles::register_readers(&runtime);
+	let runtime = Arc::new(
+		TilesRuntime::builder()
+			.customize_registry(|registry| {
+				versatiles::register_readers(registry);
+			})
+			.build()
+	);
 	let reader = runtime.registry()
 		.get_reader_from_str(input)
 		.await?;

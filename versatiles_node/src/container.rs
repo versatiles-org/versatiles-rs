@@ -10,14 +10,14 @@ use napi::{
 use napi_derive::napi;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use versatiles_container::{ContainerRegistry, TilesConverterParameters, TilesReaderTrait, TilesRuntime};
+use versatiles_container::{Event, TilesConverterParameters, TilesReaderTrait, TilesRuntime};
 use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCoord as RustTileCoord};
 
 /// Container reader for accessing tile data from various formats
 #[napi]
 pub struct ContainerReader {
 	reader: Arc<Mutex<Box<dyn TilesReaderTrait>>>,
-	registry: Arc<ContainerRegistry>,
+	runtime: Arc<TilesRuntime>,
 }
 
 #[napi]
@@ -27,12 +27,12 @@ impl ContainerReader {
 	/// Supports: .versatiles, .mbtiles, .pmtiles, .tar, directories, HTTP URLs
 	#[napi(factory)]
 	pub async fn open(path: String) -> Result<Self> {
-		let registry = ContainerRegistry::default();
-		let reader = napi_result!(registry.get_reader_from_str(&path).await)?;
+		let runtime = Arc::new(TilesRuntime::default());
+		let reader = napi_result!(runtime.registry().get_reader_from_str(&path).await)?;
 
 		Ok(Self {
 			reader: Arc::new(Mutex::new(reader)),
-			registry: Arc::new(registry),
+			runtime,
 		})
 	}
 
@@ -108,17 +108,6 @@ impl ContainerReader {
 		on_progress: Option<ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false, true>>,
 		on_message: Option<ThreadsafeFunction<MessageData, Unknown<'static>, MessageData, Status, false, true>>,
 	) -> anyhow::Result<()> {
-		// Emit initial step if message callback is provided
-		if let Some(ref cb) = on_message {
-			let _ = cb.call(
-				MessageData {
-					msg_type: "step".to_string(),
-					message: "Initializing conversion".to_string(),
-				},
-				ThreadsafeFunctionCallMode::NonBlocking,
-			);
-		}
-
 		let opts = options.unwrap_or(ConvertOptions {
 			min_zoom: None,
 			max_zoom: None,
@@ -185,27 +174,47 @@ impl ContainerReader {
 		// Release the lock before re-opening
 		drop(reader_lock);
 
-		if let Some(ref cb) = on_message {
-			let _ = cb.call(
-				MessageData {
-					msg_type: "step".to_string(),
-					message: "Reading tiles".to_string(),
-				},
-				ThreadsafeFunctionCallMode::NonBlocking,
-			);
-		}
-
 		// Clone the reader by re-opening from source
-		let reader_clone = self.registry.get_reader_from_str(&source_name).await?;
+		let reader_clone = self.runtime.registry().get_reader_from_str(&source_name).await?;
 
-		// Create a runtime
-		// TODO: Add progress monitoring support when event system is implemented
+		// Create a new runtime for this conversion with event bridging to JavaScript
 		let runtime = Arc::new(TilesRuntime::default());
 
-		// Note: Progress callbacks (on_progress) are currently not supported
-		// This will be re-enabled in a future update when the event system is implemented
-		if on_progress.is_some() {
-			eprintln!("Warning: Progress callbacks are not yet supported in this version");
+		// Bridge progress events to JavaScript callback
+		if let Some(cb) = on_progress {
+			let cb_arc = Arc::new(cb);
+			runtime.events().subscribe(move |event| {
+				if let Event::Progress { data, .. } = event {
+					// Convert Rust ProgressData to Node.js ProgressData
+					let js_data = ProgressData {
+						position: data.position as f64,
+						total: data.total as f64,
+						percentage: data.percentage,
+						speed: data.speed,
+						eta: data.eta,
+						message: Some(data.message.clone()),
+					};
+					let _ = cb_arc.call(js_data, ThreadsafeFunctionCallMode::NonBlocking);
+				}
+			});
+		}
+
+		// Bridge message events (step, warning, error) to JavaScript callback
+		if let Some(cb) = on_message {
+			let cb_arc = Arc::new(cb);
+			runtime.events().subscribe(move |event| {
+				let (msg_type, message) = match event {
+					Event::Step { message } => ("step", message.clone()),
+					Event::Warning { message } => ("warning", message.clone()),
+					Event::Error { message } => ("error", message.clone()),
+					_ => return,
+				};
+				let js_msg = MessageData {
+					msg_type: msg_type.to_string(),
+					message,
+				};
+				let _ = cb_arc.call(js_msg, ThreadsafeFunctionCallMode::NonBlocking);
+			});
 		}
 
 		// Convert tiles using the new API
@@ -216,17 +225,6 @@ impl ContainerReader {
 			runtime,
 		)
 		.await?;
-
-		// Emit final completion message
-		if let Some(ref cb) = on_message {
-			let _ = cb.call(
-				MessageData {
-					msg_type: "step".to_string(),
-					message: "Conversion complete".to_string(),
-				},
-				ThreadsafeFunctionCallMode::NonBlocking,
-			);
-		}
 
 		Ok(())
 	}

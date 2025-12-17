@@ -1,6 +1,5 @@
 /// This module provides a function to create a `ContainerRegistry` pre-configured
 /// with specific file readers, such as `.vpl` for pipelines.
-use std::sync::Arc;
 use versatiles_container::{TilesReaderTrait, TilesRuntime};
 
 /// Registers additional readers (like `.vpl` for pipelines) to a `ContainerRegistry`.
@@ -40,12 +39,18 @@ pub fn register_readers(registry: &mut versatiles_container::ContainerRegistry) 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::sync::Arc;
 
 	#[tokio::test]
 	async fn test_register_readers() {
-		let runtime = Arc::new(TilesRuntime::default());
-		register_readers(&runtime);
-		let reader_result = runtime.registry().get_reader_from_str("test.vpl").await;
+		let runtime = Arc::new(
+			TilesRuntime::builder()
+				.customize_registry(|registry| {
+					register_readers(registry);
+				})
+				.build()
+		);
+		let reader_result: Result<Box<dyn TilesReaderTrait>, anyhow::Error> = runtime.registry().get_reader_from_str("test.vpl").await;
 		assert!(reader_result.is_err(), "Expected error for non-existent file");
 	}
 }

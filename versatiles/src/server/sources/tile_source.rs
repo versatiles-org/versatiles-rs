@@ -207,8 +207,13 @@ mod tests {
 
 		let (exp_mime, exp_bounds, exp_header, exp_minzoom, exp_maxzoom) = expected_tile_json;
 
-		let runtime = Arc::new(TilesRuntime::default());
-		crate::register_readers(&runtime);
+		let runtime = Arc::new(
+			TilesRuntime::builder()
+				.customize_registry(|registry| {
+					crate::register_readers(registry);
+				})
+				.build()
+		);
 		let reader = runtime.registry().get_reader_from_str(filename).await?;
 		let c = &mut TileSource::from(reader, "prefix")?;
 
