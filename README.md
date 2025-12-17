@@ -876,7 +876,7 @@ flowchart TB
 | **`build-debug.sh`**   | **Build debug binary with GDAL**                               |
 | **`build-release.sh`** | **Build release binary with GDAL support**                     |
 | **`check.sh`**         | **Run all checks (formatting, linting, tests Rust + Node.js)** |
-| **`install-gdal.sh`**  | **Install GDAL 3.11.5 from source into `.toolchain/gdal`**     |
+| **`install-gdal.sh`**  | **Install GDAL from source into `.toolchain/gdal`**            |
 | `audit-unused-deps.sh` | Find unused dependencies                                       |
 | `build-docker-*.sh`    | Build Docker images (GDAL, multi-platform)                     |
 | `build-docs*.sh`       | Generate documentation                                         |
