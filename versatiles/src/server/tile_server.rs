@@ -91,7 +91,7 @@ impl TileServer {
 			join: None,
 			minimal_recompression,
 			disable_api,
-			registry: get_registry(ProcessingConfig::default()),
+			registry: get_registry(ProcessingConfig::default().arc()),
 			cors_allowed_origins: Vec::new(),
 			cors_max_age_seconds: 3600,
 			extra_response_headers: Vec::new(),

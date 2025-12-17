@@ -29,7 +29,7 @@
 //!
 //!     // Convert it to PMTiles format
 //!     let temp_path = std::env::temp_dir().join("berlin.pmtiles");
-//!     PMTilesWriter::write_to_path(&mut reader, &temp_path, ProcessingConfig::default()).await?;
+//!     PMTilesWriter::write_to_path(&mut reader, &temp_path, ProcessingConfig::default().arc()).await?;
 //!     Ok(())
 //! }
 //! ```
@@ -76,7 +76,7 @@ impl TilesWriterTrait for PMTilesWriter {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
-		config: ProcessingConfig,
+		config: Arc<ProcessingConfig>,
 	) -> Result<()> {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
 
@@ -168,7 +168,7 @@ mod tests {
 		})?;
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, ProcessingConfig::default()).await?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, ProcessingConfig::default().arc()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let mut reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;
@@ -191,7 +191,7 @@ mod tests {
 		})?;
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, ProcessingConfig::default()).await?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, ProcessingConfig::default().arc()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;

@@ -28,7 +28,7 @@ pub async fn run(args: &ExportOutline) -> Result<()> {
 	let input = &args.input;
 	let output = &args.output;
 
-	let reader = get_registry(ProcessingConfig::default())
+	let reader = get_registry(ProcessingConfig::default().arc())
 		.get_reader_from_str(input)
 		.await?;
 

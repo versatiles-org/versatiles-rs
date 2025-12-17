@@ -207,7 +207,7 @@ mod tests {
 
 		let (exp_mime, exp_bounds, exp_header, exp_minzoom, exp_maxzoom) = expected_tile_json;
 
-		let registry = get_registry(ProcessingConfig::default());
+		let registry = get_registry(ProcessingConfig::default().arc());
 		let reader = registry.get_reader_from_str(filename).await?;
 		let c = &mut TileSource::from(reader, "prefix")?;
 

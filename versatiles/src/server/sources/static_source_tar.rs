@@ -204,7 +204,7 @@ mod tests {
 			bbox_pyramid: Some(TileBBoxPyramid::new_full(0)),
 			..TilesConverterParameters::default()
 		};
-		let config = ProcessingConfig::default();
+		let config = ProcessingConfig::default().arc();
 		let registry = crate::get_registry(config);
 
 		convert_tiles_container(reader.boxed(), parameters, &container_file, registry)

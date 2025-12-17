@@ -17,7 +17,7 @@ use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCoord as RustTileCoord};
 #[napi]
 pub struct ContainerReader {
 	reader: Arc<Mutex<Box<dyn TilesReaderTrait>>>,
-	registry: ContainerRegistry,
+	registry: Arc<ContainerRegistry>,
 }
 
 #[napi]
@@ -32,7 +32,7 @@ impl ContainerReader {
 
 		Ok(Self {
 			reader: Arc::new(Mutex::new(reader)),
-			registry,
+			registry: Arc::new(registry),
 		})
 	}
 
@@ -95,25 +95,14 @@ impl ContainerReader {
 		on_message: Option<ThreadsafeFunction<MessageData, Unknown<'static>, MessageData, Status, false, true>>,
 	) -> Result<()> {
 		// Call do_convert directly and await it
-		napi_result!(
-			Self::do_convert(
-				self.reader.clone(),
-				self.registry.clone(),
-				output,
-				options,
-				on_progress,
-				on_message,
-			)
-			.await
-		)?;
+		napi_result!(self.do_convert(output, options, on_progress, on_message).await)?;
 
 		Ok(())
 	}
 
 	/// Internal conversion implementation
 	async fn do_convert(
-		reader: Arc<Mutex<Box<dyn TilesReaderTrait>>>,
-		registry: ContainerRegistry,
+		&self,
 		output: String,
 		options: Option<ConvertOptions>,
 		on_progress: Option<ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false, true>>,
@@ -170,7 +159,7 @@ impl ContainerReader {
 			bbox_pyramid = Some(pyramid);
 		}
 
-		let reader_lock = reader.lock().await;
+		let reader_lock = self.reader.lock().await;
 
 		let tile_compression = if let Some(ref comp_str) = opts.compress {
 			parse_compression(comp_str).ok_or_else(|| {
@@ -207,7 +196,7 @@ impl ContainerReader {
 		}
 
 		// Clone the reader by re-opening from source
-		let reader_clone = registry.get_reader_from_str(&source_name).await?;
+		let reader_clone = self.registry.get_reader_from_str(&source_name).await?;
 
 		// Create a processing config with progress monitoring if enabled
 		let config = if let Some(cb) = on_progress {
@@ -239,8 +228,14 @@ impl ContainerReader {
 		};
 
 		// Use the new function that accepts a ProcessingConfig
-		versatiles_container::convert_tiles_container_with_config(reader_clone, params, &output_path, registry, config)
-			.await?;
+		versatiles_container::convert_tiles_container_with_config(
+			reader_clone,
+			params,
+			&output_path,
+			self.registry.clone(),
+			Arc::new(config),
+		)
+		.await?;
 
 		// Emit final completion message
 		if let Some(ref cb) = on_message {

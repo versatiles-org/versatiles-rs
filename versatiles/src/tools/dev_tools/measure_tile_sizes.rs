@@ -51,7 +51,7 @@ pub async fn run(args: &MeasureTileSizes) -> Result<()> {
 		output_file.extension().unwrap_or_default()
 	);
 
-	let reader = get_registry(ProcessingConfig::default())
+	let reader = get_registry(ProcessingConfig::default().arc())
 		.get_reader_from_str(input)
 		.await?;
 	let bbox = TileBBox::new_full(level)?;

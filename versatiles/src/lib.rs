@@ -23,7 +23,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let config = ProcessingConfig::default();
+//!     let config = ProcessingConfig::default().arc();
 //!     let registry = versatiles::get_registry(config);
 //!     let reader = registry.get_reader_from_str("../testdata/berlin.pmtiles").await.unwrap();
 //!

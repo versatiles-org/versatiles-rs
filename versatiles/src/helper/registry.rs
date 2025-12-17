@@ -1,5 +1,6 @@
 /// This module provides a function to create a `ContainerRegistry` pre-configured
 /// with specific file readers, such as `.vpl` for pipelines.
+use std::sync::Arc;
 use versatiles_container::{ContainerRegistry, ProcessingConfig, TilesReaderTrait};
 
 /// Creates a `ContainerRegistry` with pre-registered readers for specific file types.
@@ -22,13 +23,13 @@ use versatiles_container::{ContainerRegistry, ProcessingConfig, TilesReaderTrait
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     let registry: ContainerRegistry = get_registry(ProcessingConfig::default());
+///     let registry: ContainerRegistry = get_registry(ProcessingConfig::default().arc());
 ///     let reader = registry.get_reader_from_str("../testdata/berlin.vpl").await?;
 ///     // Use the reader here
 ///     Ok(())
 /// }
 /// ```
-pub fn get_registry(config: ProcessingConfig) -> ContainerRegistry {
+pub fn get_registry(config: Arc<ProcessingConfig>) -> ContainerRegistry {
 	let mut registry = ContainerRegistry::default();
 
 	// Register a reader for "vpl" files. The closure captures the config and clones it for async usage.
@@ -37,7 +38,6 @@ pub fn get_registry(config: ProcessingConfig) -> ContainerRegistry {
 		let config = c.clone();
 		async move {
 			// Clone config again inside async block to ensure it is owned
-			let config = config.clone();
 			Ok(Box::new(versatiles_pipeline::PipelineReader::open_path(&p, config).await?) as Box<dyn TilesReaderTrait>)
 		}
 	});
@@ -46,7 +46,6 @@ pub fn get_registry(config: ProcessingConfig) -> ContainerRegistry {
 		let config = config.clone();
 		async move {
 			// Clone config again inside async block to ensure it is owned
-			let config = config.clone();
 			Ok(Box::new(
 				versatiles_pipeline::PipelineReader::open_reader(p, &std::env::current_dir().unwrap(), config).await?,
 			) as Box<dyn TilesReaderTrait>)
@@ -62,7 +61,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_registry() {
-		let config = ProcessingConfig::default();
+		let config = ProcessingConfig::default().arc();
 		let registry = get_registry(config);
 		let reader_result = registry.get_reader_from_str("test.vpl").await;
 		assert!(reader_result.is_err(), "Expected error for non-existent file");

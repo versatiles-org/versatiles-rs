@@ -42,7 +42,7 @@
 use crate::{ContainerRegistry, ProcessingConfig, Tile, TilesReaderTrait};
 use anyhow::Result;
 use async_trait::async_trait;
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 use versatiles_core::{
 	TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal,
 };
@@ -128,8 +128,8 @@ pub async fn convert_tiles_container_with_config(
 	reader: Box<dyn TilesReaderTrait>,
 	cp: TilesConverterParameters,
 	path: &Path,
-	registry: ContainerRegistry,
-	config: ProcessingConfig,
+	registry: Arc<ContainerRegistry>,
+	config: Arc<ProcessingConfig>,
 ) -> Result<()> {
 	let converter = TilesConvertReader::new_from_reader(reader, cp)?;
 	registry

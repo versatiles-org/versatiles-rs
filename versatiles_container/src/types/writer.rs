@@ -33,7 +33,7 @@
 use crate::{ProcessingConfig, TilesReaderTrait};
 use anyhow::Result;
 use async_trait::async_trait;
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 use versatiles_core::io::*;
 
 /// Object‑safe interface for writing tiles from a reader into a container format.
@@ -52,7 +52,7 @@ pub trait TilesWriterTrait: Send {
 	///
 	/// # Errors
 	/// Returns an error if the file cannot be created or the writing operation fails.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: ProcessingConfig) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: Arc<ProcessingConfig>) -> Result<()> {
 		Self::write_to_writer(reader, &mut DataWriterFile::from_path(path)?, config).await
 	}
 
@@ -71,6 +71,6 @@ pub trait TilesWriterTrait: Send {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
-		config: ProcessingConfig,
+		config: Arc<ProcessingConfig>,
 	) -> Result<()>;
 }

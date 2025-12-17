@@ -23,7 +23,7 @@ pub struct Subcommand {
 pub async fn run(arguments: &Subcommand) -> Result<()> {
 	log::info!("probe {:?}", arguments.filename);
 
-	let mut reader = get_registry(ProcessingConfig::default())
+	let mut reader = get_registry(ProcessingConfig::default().arc())
 		.get_reader_from_str(&arguments.filename)
 		.await?;
 

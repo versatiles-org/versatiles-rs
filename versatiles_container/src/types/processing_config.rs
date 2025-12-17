@@ -23,7 +23,6 @@ use versatiles_core::progress::ProgressBar;
 /// let config = ProcessingConfig::default();
 /// let config_arc = config.arc();
 /// ```
-#[derive(Clone)]
 pub struct ProcessingConfig {
 	/// The type of cache backend to use for tile data.
 	pub cache_type: CacheType,

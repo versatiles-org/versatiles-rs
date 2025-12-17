@@ -105,7 +105,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	swap(&mut config.static_sources, &mut static_sources);
 	config.static_sources.extend(static_sources);
 
-	let registry = get_registry(ProcessingConfig::default());
+	let registry = get_registry(ProcessingConfig::default().arc());
 	let mut server: TileServer = TileServer::from_config(config, registry).await?;
 
 	let mut list = server.get_url_mapping().await;

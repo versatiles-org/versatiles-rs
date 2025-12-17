@@ -228,7 +228,7 @@ pub trait TilesReaderTraverseExt: TilesReaderTrait {
 		&'s self,
 		traversal_write: &'s Traversal,
 		mut callback: C,
-		config: ProcessingConfig,
+		config: Arc<ProcessingConfig>,
 		progress_bar: Option<ProgressBar>,
 	) -> impl core::future::Future<Output = Result<()>> + Send + 'a
 	where

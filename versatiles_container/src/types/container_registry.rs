@@ -49,7 +49,7 @@ type ReadData = Box<dyn Fn(DataReader) -> ReadFuture + Send + Sync + 'static>;
 type ReadFile = Box<dyn Fn(PathBuf) -> ReadFuture + Send + Sync + 'static>;
 type WriteFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 type WriteFile =
-	Box<dyn Fn(Box<dyn TilesReaderTrait>, PathBuf, ProcessingConfig) -> WriteFuture + Send + Sync + 'static>;
+	Box<dyn Fn(Box<dyn TilesReaderTrait>, PathBuf, Arc<ProcessingConfig>) -> WriteFuture + Send + Sync + 'static>;
 
 /// Registry mapping file extensions to async tile container readers and writers.
 ///
@@ -64,19 +64,19 @@ pub struct ContainerRegistry {
 	data_readers: HashMap<String, Arc<ReadData>>,
 	file_readers: HashMap<String, Arc<ReadFile>>,
 	file_writers: HashMap<String, Arc<WriteFile>>,
-	writer_config: ProcessingConfig,
+	config: Arc<ProcessingConfig>,
 }
 
 impl ContainerRegistry {
 	/// Creates a new `ContainerRegistry` with the specified writer configuration.
 	///
 	/// Registers built-in readers and writers for supported container formats.
-	pub fn new(writer_config: ProcessingConfig) -> Self {
+	pub fn new(config: ProcessingConfig) -> Self {
 		let mut reg = Self {
 			data_readers: HashMap::new(),
 			file_readers: HashMap::new(),
 			file_writers: HashMap::new(),
-			writer_config,
+			config: Arc::new(config),
 		};
 
 		// MBTiles
@@ -156,7 +156,7 @@ impl ContainerRegistry {
 	///   and writes the tiles to the specified path.
 	pub fn register_writer_file<F, Fut>(&mut self, ext: &str, write_file: F)
 	where
-		F: Fn(Box<dyn TilesReaderTrait>, PathBuf, ProcessingConfig) -> Fut + Send + Sync + 'static,
+		F: Fn(Box<dyn TilesReaderTrait>, PathBuf, Arc<ProcessingConfig>) -> Fut + Send + Sync + 'static,
 		Fut: Future<Output = Result<()>> + Send + 'static,
 	{
 		self.file_writers.insert(
@@ -238,7 +238,7 @@ impl ContainerRegistry {
 	pub async fn write_to_path(&self, mut reader: Box<dyn TilesReaderTrait>, path: &Path) -> Result<()> {
 		let path = env::current_dir()?.join(path);
 		if path.is_dir() {
-			return DirectoryTilesWriter::write_to_path(reader.as_mut(), &path, self.writer_config.clone()).await;
+			return DirectoryTilesWriter::write_to_path(reader.as_mut(), &path, self.config.clone()).await;
 		}
 
 		let extension = path
@@ -251,7 +251,7 @@ impl ContainerRegistry {
 			.file_writers
 			.get(&extension)
 			.ok_or_else(|| anyhow!("Error when reading: file extension '{extension}' unknown"))?;
-		writer(reader, path.to_path_buf(), self.writer_config.clone()).await?;
+		writer(reader, path.to_path_buf(), self.config.clone()).await?;
 
 		Ok(())
 	}
@@ -270,7 +270,7 @@ impl ContainerRegistry {
 		&self,
 		mut reader: Box<dyn TilesReaderTrait>,
 		path: &Path,
-		config: ProcessingConfig,
+		config: Arc<ProcessingConfig>,
 	) -> Result<()> {
 		let path = env::current_dir()?.join(path);
 		if path.is_dir() {

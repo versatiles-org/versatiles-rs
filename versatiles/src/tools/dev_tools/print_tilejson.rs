@@ -26,7 +26,7 @@ async fn fetch_tilejson(args: &PrintTilejson) -> Result<String> {
 	let input = &args.input;
 	let pretty = args.pretty;
 
-	let reader = get_registry(ProcessingConfig::default())
+	let reader = get_registry(ProcessingConfig::default().arc())
 		.get_reader_from_str(input)
 		.await?;
 

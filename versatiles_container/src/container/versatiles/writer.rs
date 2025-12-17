@@ -34,7 +34,7 @@
 //!
 //!     // Write as a .versatiles container
 //!     let path_out = std::env::temp_dir().join("berlin.versatiles");
-//!     VersaTilesWriter::write_to_path(&mut reader, &path_out, ProcessingConfig::default()).await?;
+//!     VersaTilesWriter::write_to_path(&mut reader, &path_out, ProcessingConfig::default().arc()).await?;
 //!     Ok(())
 //! }
 //! ```
@@ -80,7 +80,7 @@ impl TilesWriterTrait for VersaTilesWriter {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
-		config: ProcessingConfig,
+		config: Arc<ProcessingConfig>,
 	) -> Result<()> {
 		// Finalize the configuration
 		let parameters = reader.parameters();
@@ -149,7 +149,7 @@ impl VersaTilesWriter {
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
 		tile_compression: TileCompression,
-		config: ProcessingConfig,
+		config: Arc<ProcessingConfig>,
 	) -> Result<ByteRange> {
 		if reader.parameters().bbox_pyramid.is_empty() {
 			return Ok(ByteRange::empty());
