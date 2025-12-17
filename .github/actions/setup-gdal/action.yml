@@ -1,0 +1,76 @@
+name: 'Setup GDAL'
+description: 'Install and configure GDAL for Rust builds'
+
+inputs:
+  cache-key-prefix:
+    description: 'Prefix for cache key (e.g., "clippy", "test")'
+    required: false
+    default: 'default'
+
+outputs:
+  gdal-version:
+    description: 'The GDAL version that was installed'
+    value: ${{ steps.gdal-version.outputs.version }}
+  cache-hit:
+    description: 'Whether the GDAL cache was hit'
+    value: ${{ steps.restore-cache.outputs.cache-hit }}
+
+runs:
+  using: 'composite'
+  steps:
+    # Step 1: Resolve GDAL version from install-gdal.sh
+    - name: Resolve GDAL version
+      id: gdal-version
+      shell: bash
+      run: |
+        source ./scripts/install-gdal.sh
+        echo "version=${GDAL_VERSION}" >> "$GITHUB_OUTPUT"
+        echo "GDAL_VERSION=${GDAL_VERSION}" >> "$GITHUB_ENV"
+        echo "Detected GDAL version: ${GDAL_VERSION}"
+
+    # Step 2: Install system dependencies
+    - name: Install dependencies
+      shell: bash
+      run: |
+        source ./scripts/install-gdal.sh
+        detect_platform
+        install_deps
+
+    # Step 3: Restore GDAL from cache
+    - name: Restore GDAL cache
+      id: restore-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: .toolchain/gdal
+        key: ${{ runner.os }}-gdal-${{ steps.gdal-version.outputs.version }}-${{ hashFiles('scripts/install-gdal.sh') }}
+
+    # Step 4: Build and install GDAL (if cache miss)
+    - name: Build and install GDAL
+      if: steps.restore-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: ./scripts/install-gdal.sh
+
+    # Step 5: Export GDAL environment variables
+    - name: Export GDAL environment
+      shell: bash
+      run: |
+        WORKSPACE="${{ github.workspace }}" ./scripts/setup-gdal-env.sh
+
+    # Step 6: Save GDAL to cache (if built)
+    - name: Save GDAL cache
+      if: steps.restore-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: .toolchain/gdal
+        key: ${{ steps.restore-cache.outputs.cache-primary-key }}
+
+    # Step 7: Verify installation
+    - name: Verify GDAL installation
+      shell: bash
+      run: |
+        echo "=== GDAL Configuration ==="
+        echo "GDAL_VERSION: ${{ steps.gdal-version.outputs.version }}"
+        echo "GDAL_PREFIX: ${GDAL_PREFIX}"
+        echo "GDAL_CONFIG: ${GDAL_CONFIG}"
+        ${GDAL_CONFIG} --version
+        echo "Cache hit: ${{ steps.restore-cache.outputs.cache-hit }}"

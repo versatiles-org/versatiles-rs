@@ -57,54 +57,8 @@ jobs:
         with:
           components: clippy
 
-      - name: Resolve GDAL version and install dependencies
-        id: gdal-version
-        shell: bash
-        run: |
-          source ./scripts/install-gdal.sh
-          detect_platform
-          install_deps
-          echo "GDAL_VERSION=$GDAL_VERSION" >> "$GITHUB_ENV"
-
-      - name: Restore GDAL toolchain cache
-        id: restore-gdal-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .toolchain/gdal
-          key: ${{ runner.os }}-gdal-${{ env.GDAL_VERSION }}-${{ hashFiles('scripts/install-gdal.sh') }}
-
-      - name: Build and install GDAL (cache miss)
-        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
-        run: ./scripts/install-gdal.sh
-
-      - name: Export GDAL environment for cargo
-        shell: bash
-        run: |
-          GDAL_PREFIX="${{ github.workspace }}/.toolchain/gdal"
-          echo "GDAL_PREFIX=${GDAL_PREFIX}" >> "$GITHUB_ENV"
-          echo "GDAL_CONFIG=${GDAL_PREFIX}/bin/gdal-config" >> "$GITHUB_ENV"
-          echo "GDAL_DATA=${GDAL_PREFIX}/share/gdal" >> "$GITHUB_ENV"
-          echo "GDAL_INCLUDE_DIR=${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
-          echo "GDAL_LIB_DIR=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
-          echo "PKG_CONFIG_PATH=${GDAL_PREFIX}/lib/pkgconfig" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
-          echo "PROJ_DATA=/usr/share/proj" >> "$GITHUB_ENV"
-          # libclang for bindgen
-          if command -v llvm-config >/dev/null 2>&1; then
-            echo "LIBCLANG_PATH=$(llvm-config --libdir)" >> "$GITHUB_ENV"
-          else
-            for d in /usr/lib/llvm-*/lib; do
-              if [ -d "$d" ]; then echo "LIBCLANG_PATH=$d" >> "$GITHUB_ENV"; break; fi
-            done
-          fi
-          echo "BINDGEN_EXTRA_CLANG_ARGS=-I${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
-
-      - name: Save GDAL toolchain cache
-        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: .toolchain/gdal
-          key: ${{ steps.restore-gdal-cache.outputs.cache-primary-key }}
+      - name: Setup GDAL
+        uses: ./.github/actions/setup-gdal
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
@@ -130,54 +84,8 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Resolve GDAL version and install dependencies
-        id: gdal-version
-        shell: bash
-        run: |
-          source ./scripts/install-gdal.sh
-          detect_platform
-          install_deps
-          echo "GDAL_VERSION=$GDAL_VERSION" >> "$GITHUB_ENV"
-
-      - name: Restore GDAL toolchain cache
-        id: restore-gdal-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .toolchain/gdal
-          key: ${{ runner.os }}-gdal-${{ env.GDAL_VERSION }}-${{ hashFiles('scripts/install-gdal.sh') }}
-
-      - name: Build and install GDAL (cache miss)
-        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
-        run: ./scripts/install-gdal.sh
-
-      - name: Export GDAL environment for cargo
-        shell: bash
-        run: |
-          GDAL_PREFIX="${{ github.workspace }}/.toolchain/gdal"
-          echo "GDAL_PREFIX=${GDAL_PREFIX}" >> "$GITHUB_ENV"
-          echo "GDAL_CONFIG=${GDAL_PREFIX}/bin/gdal-config" >> "$GITHUB_ENV"
-          echo "GDAL_DATA=${GDAL_PREFIX}/share/gdal" >> "$GITHUB_ENV"
-          echo "GDAL_INCLUDE_DIR=${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
-          echo "GDAL_LIB_DIR=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
-          echo "PKG_CONFIG_PATH=${GDAL_PREFIX}/lib/pkgconfig" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
-          echo "PROJ_DATA=/usr/share/proj" >> "$GITHUB_ENV"
-          # libclang for bindgen
-          if command -v llvm-config >/dev/null 2>&1; then
-            echo "LIBCLANG_PATH=$(llvm-config --libdir)" >> "$GITHUB_ENV"
-          else
-            for d in /usr/lib/llvm-*/lib; do
-              if [ -d "$d" ]; then echo "LIBCLANG_PATH=$d" >> "$GITHUB_ENV"; break; fi
-            done
-          fi
-          echo "BINDGEN_EXTRA_CLANG_ARGS=-I${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
-
-      - name: Save GDAL toolchain cache
-        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: .toolchain/gdal
-          key: ${{ steps.restore-gdal-cache.outputs.cache-primary-key }}
+      - name: Setup GDAL
+        uses: ./.github/actions/setup-gdal
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
@@ -203,54 +111,8 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Resolve GDAL version and install dependencies
-        id: gdal-version
-        shell: bash
-        run: |
-          source ./scripts/install-gdal.sh
-          detect_platform
-          install_deps
-          echo "GDAL_VERSION=$GDAL_VERSION" >> "$GITHUB_ENV"
-
-      - name: Restore GDAL toolchain cache
-        id: restore-gdal-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .toolchain/gdal
-          key: ${{ runner.os }}-gdal-${{ env.GDAL_VERSION }}-${{ hashFiles('scripts/install-gdal.sh') }}
-
-      - name: Build and install GDAL (cache miss)
-        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
-        run: ./scripts/install-gdal.sh
-
-      - name: Export GDAL environment for cargo
-        shell: bash
-        run: |
-          GDAL_PREFIX="${{ github.workspace }}/.toolchain/gdal"
-          echo "GDAL_PREFIX=${GDAL_PREFIX}" >> "$GITHUB_ENV"
-          echo "GDAL_CONFIG=${GDAL_PREFIX}/bin/gdal-config" >> "$GITHUB_ENV"
-          echo "GDAL_DATA=${GDAL_PREFIX}/share/gdal" >> "$GITHUB_ENV"
-          echo "GDAL_INCLUDE_DIR=${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
-          echo "GDAL_LIB_DIR=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
-          echo "PKG_CONFIG_PATH=${GDAL_PREFIX}/lib/pkgconfig" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
-          echo "PROJ_DATA=/usr/share/proj" >> "$GITHUB_ENV"
-          # libclang for bindgen
-          if command -v llvm-config >/dev/null 2>&1; then
-            echo "LIBCLANG_PATH=$(llvm-config --libdir)" >> "$GITHUB_ENV"
-          else
-            for d in /usr/lib/llvm-*/lib; do
-              if [ -d "$d" ]; then echo "LIBCLANG_PATH=$d" >> "$GITHUB_ENV"; break; fi
-            done
-          fi
-          echo "BINDGEN_EXTRA_CLANG_ARGS=-I${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
-
-      - name: Save GDAL toolchain cache
-        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: .toolchain/gdal
-          key: ${{ steps.restore-gdal-cache.outputs.cache-primary-key }}
+      - name: Setup GDAL
+        uses: ./.github/actions/setup-gdal
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
@@ -277,47 +139,8 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Resolve GDAL version and install dependencies
-        id: gdal-version
-        shell: bash
-        run: |
-          source ./scripts/install-gdal.sh
-          detect_platform
-          install_deps
-          echo "GDAL_VERSION=$GDAL_VERSION" >> "$GITHUB_ENV"
-
-      - name: Restore GDAL toolchain cache
-        id: restore-gdal-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .toolchain/gdal
-          key: ${{ runner.os }}-gdal-${{ env.GDAL_VERSION }}-${{ hashFiles('scripts/install-gdal.sh') }}
-
-      - name: Build and install GDAL (cache miss)
-        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
-        run: ./scripts/install-gdal.sh
-
-      - name: Export GDAL environment for cargo
-        shell: bash
-        run: |
-          GDAL_PREFIX="${{ github.workspace }}/.toolchain/gdal"
-          echo "GDAL_PREFIX=${GDAL_PREFIX}" >> "$GITHUB_ENV"
-          echo "GDAL_CONFIG=${GDAL_PREFIX}/bin/gdal-config" >> "$GITHUB_ENV"
-          echo "GDAL_DATA=${GDAL_PREFIX}/share/gdal" >> "$GITHUB_ENV"
-          echo "GDAL_INCLUDE_DIR=${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
-          echo "GDAL_LIB_DIR=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
-          echo "PKG_CONFIG_PATH=${GDAL_PREFIX}/lib/pkgconfig" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
-          echo "PROJ_DATA=/usr/share/proj" >> "$GITHUB_ENV"
-          # libclang for bindgen
-          if command -v llvm-config >/dev/null 2>&1; then
-            echo "LIBCLANG_PATH=$(llvm-config --libdir)" >> "$GITHUB_ENV"
-          else
-            for d in /usr/lib/llvm-*/lib; do
-              if [ -d "$d" ]; then echo "LIBCLANG_PATH=$d" >> "$GITHUB_ENV"; break; fi
-            done
-          fi
-          echo "BINDGEN_EXTRA_CLANG_ARGS=-I${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
+      - name: Setup GDAL
+        uses: ./.github/actions/setup-gdal
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
@@ -376,54 +199,8 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Resolve GDAL version and install dependencies
-        id: gdal-version
-        shell: bash
-        run: |
-          source ./scripts/install-gdal.sh
-          detect_platform
-          install_deps
-          echo "GDAL_VERSION=$GDAL_VERSION" >> "$GITHUB_ENV"
-
-      - name: Restore GDAL toolchain cache
-        id: restore-gdal-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .toolchain/gdal
-          key: ${{ runner.os }}-gdal-${{ env.GDAL_VERSION }}-${{ hashFiles('scripts/install-gdal.sh') }}
-
-      - name: Build and install GDAL (cache miss)
-        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
-        run: ./scripts/install-gdal.sh
-
-      - name: Export GDAL environment for cargo
-        shell: bash
-        run: |
-          GDAL_PREFIX="${{ github.workspace }}/.toolchain/gdal"
-          echo "GDAL_PREFIX=${GDAL_PREFIX}" >> "$GITHUB_ENV"
-          echo "GDAL_CONFIG=${GDAL_PREFIX}/bin/gdal-config" >> "$GITHUB_ENV"
-          echo "GDAL_DATA=${GDAL_PREFIX}/share/gdal" >> "$GITHUB_ENV"
-          echo "GDAL_INCLUDE_DIR=${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
-          echo "GDAL_LIB_DIR=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
-          echo "PKG_CONFIG_PATH=${GDAL_PREFIX}/lib/pkgconfig" >> "$GITHUB_ENV"
-          echo "LD_LIBRARY_PATH=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
-          echo "PROJ_DATA=/usr/share/proj" >> "$GITHUB_ENV"
-          # libclang for bindgen
-          if command -v llvm-config >/dev/null 2>&1; then
-            echo "LIBCLANG_PATH=$(llvm-config --libdir)" >> "$GITHUB_ENV"
-          else
-            for d in /usr/lib/llvm-*/lib; do
-              if [ -d "$d" ]; then echo "LIBCLANG_PATH=$d" >> "$GITHUB_ENV"; break; fi
-            done
-          fi
-          echo "BINDGEN_EXTRA_CLANG_ARGS=-I${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
-
-      - name: Save GDAL toolchain cache
-        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: .toolchain/gdal
-          key: ${{ steps.restore-gdal-cache.outputs.cache-primary-key }}
+      - name: Setup GDAL
+        uses: ./.github/actions/setup-gdal
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2

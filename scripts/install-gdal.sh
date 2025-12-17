@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # -----------------------------------------------------------------------------
-# Build & install the latest stable GDAL release from source for THIS PROJECT.
+# Build & install GDAL from source for THIS PROJECT.
+# - Single source of truth for GDAL version (GDAL_VERSION variable)
 # - Installs into: <repo>/.toolchain/gdal
 # - Uses Homebrew (macOS) or APT (Debian/Ubuntu) for dependencies
-# - Keeps runtime/env logic consistent and self-tested
+# - Can be sourced for functions/variables or executed directly
 #
 # Usage:
+#   # Source for functions/variables (used by CI composite action):
+#   source ./scripts/install-gdal.sh
+#
+#   # Execute directly (full install):
 #   bash scripts/install-gdal.sh [--jobs N] [--skip-deps] [--src-dir DIR] [--no-test]
 # -----------------------------------------------------------------------------
 set -euo pipefail
@@ -16,7 +21,7 @@ set -euo pipefail
 : "${SKIP_DEPS:=0}"           # 1 = do not install deps
 : "${SRC_DIR:=/tmp/gdal-src}" # Working dir for downloading/building
 : "${INSTALL_TEST:=1}"        # 1 = run post-install sanity checks
-: "${GDAL_VERSION:=3.12.0}"   # GDAL version to install
+: "${GDAL_VERSION:=3.12.0}"   # GDAL version to install (compatible with gdal 0.18.0)
 # =============================================================================
 
 # ----- tiny logger helpers ----------------------------------------------------
