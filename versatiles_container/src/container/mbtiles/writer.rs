@@ -37,12 +37,13 @@
 //!
 //!     // Write to an MBTiles file
 //!     let out_file = std::env::temp_dir().join("berlin.mbtiles");
-//!     MBTilesWriter::write_to_path(&mut reader, &out_file, ProcessingConfig::default().arc()).await?;
+//!     let runtime = std::sync::Arc::new(TilesRuntime::default());
+//!     MBTilesWriter::write_to_path(&mut reader, &out_file, runtime).await?;
 //!     Ok(())
 //! }
 //! ```
 
-use crate::{ProcessingConfig, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
+use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -143,7 +144,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	/// Returns an error if writing fails, if an unsupported format/compression is used,
 	/// or if database insertion encounters an error.
 	#[context("writing MBTiles to '{}'", path.display())]
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: Arc<ProcessingConfig>) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, runtime: Arc<TilesRuntime>) -> Result<()> {
 		use TileCompression::*;
 		use TileFormat::*;
 
@@ -212,8 +213,8 @@ impl TilesWriterTrait for MBTilesWriter {
 						Ok(())
 					})
 				},
-				config.clone(),
-				config.progress_bar.clone(),
+				runtime.clone(),
+				None,
 			)
 			.await?;
 
@@ -228,7 +229,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
-		_config: Arc<ProcessingConfig>,
+		_runtime: Arc<TilesRuntime>,
 	) -> Result<()> {
 		bail!("not implemented")
 	}
@@ -249,7 +250,7 @@ mod tests {
 		})?;
 
 		let filename = NamedTempFile::new("temp.mbtiles")?;
-		MBTilesWriter::write_to_path(&mut mock_reader, &filename, ProcessingConfig::default().arc()).await?;
+		MBTilesWriter::write_to_path(&mut mock_reader, &filename, Arc::new(TilesRuntime::default())).await?;
 
 		let mut reader = MBTilesReader::open_path(&filename)?;
 

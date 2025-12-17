@@ -29,7 +29,8 @@
 //!
 //!     // Convert it to PMTiles format
 //!     let temp_path = std::env::temp_dir().join("berlin.pmtiles");
-//!     PMTilesWriter::write_to_path(&mut reader, &temp_path, ProcessingConfig::default().arc()).await?;
+//!     let runtime = std::sync::Arc::new(TilesRuntime::default());
+//!     PMTilesWriter::write_to_path(&mut reader, &temp_path, runtime).await?;
 //!     Ok(())
 //! }
 //! ```
@@ -38,7 +39,7 @@
 //! Returns errors if writing, compression, or serialization fails.
 
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression};
-use crate::{ProcessingConfig, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
+use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -76,7 +77,7 @@ impl TilesWriterTrait for PMTilesWriter {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
-		config: Arc<ProcessingConfig>,
+		runtime: Arc<TilesRuntime>,
 	) -> Result<()> {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
 
@@ -117,8 +118,8 @@ impl TilesWriterTrait for PMTilesWriter {
 						Ok(())
 					})
 				},
-				config.clone(),
-				config.progress_bar.clone(),
+				runtime.clone(),
+				None,
 			)
 			.await?;
 
@@ -168,7 +169,7 @@ mod tests {
 		})?;
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, ProcessingConfig::default().arc()).await?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, Arc::new(TilesRuntime::default())).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let mut reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;
@@ -191,7 +192,7 @@ mod tests {
 		})?;
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, ProcessingConfig::default().arc()).await?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, Arc::new(TilesRuntime::default())).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;

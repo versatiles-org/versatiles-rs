@@ -28,7 +28,7 @@
 //! # }
 //! ```
 
-use crate::{CacheMap, ProcessingConfig, Tile};
+use crate::{CacheMap, Tile, TilesRuntime, ProgressHandle};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{StreamExt, future::BoxFuture, stream};
@@ -39,7 +39,6 @@ use versatiles_core::{ProbeDepth, utils::PrettyPrint};
 use versatiles_core::{
 	TileBBox, TileCompression, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal,
 	TraversalTranslationStep,
-	progress::{ProgressBar, get_progress_bar},
 	translate_traversals,
 };
 
@@ -220,16 +219,16 @@ pub trait TilesReaderTraverseExt: TilesReaderTrait {
 	///
 	/// * `traversal_write` — desired traversal to write/consume in.
 	/// * `callback` — async function to consume each bbox + stream.
-	/// * `config` — processing configuration (also used to size caches).
-	/// * `progress_bar` — optional progress bar for custom progress monitoring.
+	/// * `runtime` — runtime configuration providing cache type and progress tracking.
+	/// * `progress` — optional progress handle for custom progress monitoring.
 	///
-	/// Progress is reported via a progress bar (either provided or created); caching is used to support `Push/Pop` phases.
+	/// Progress is reported via a progress handle (either provided or created via runtime); caching is used to support `Push/Pop` phases.
 	fn traverse_all_tiles<'s, 'a, C>(
 		&'s self,
 		traversal_write: &'s Traversal,
 		mut callback: C,
-		config: Arc<ProcessingConfig>,
-		progress_bar: Option<ProgressBar>,
+		runtime: Arc<TilesRuntime>,
+		progress: Option<ProgressHandle>,
 	) -> impl core::future::Future<Output = Result<()>> + Send + 'a
 	where
 		C: FnMut(TileBBox, TileStream<'a, Tile>) -> BoxFuture<'a, Result<()>> + Send + 'a,
@@ -258,13 +257,12 @@ pub trait TilesReaderTraverseExt: TilesReaderTrait {
 					}
 				}
 			}
-			let progress =
-				progress_bar.unwrap_or_else(|| get_progress_bar("converting tiles", u64::midpoint(tn_read, tn_write)));
+			let progress = progress.unwrap_or_else(|| runtime.create_progress("converting tiles", u64::midpoint(tn_read, tn_write)));
 
 			let mut ti_read = 0;
 			let mut ti_write = 0;
 
-			let cache = Arc::new(Mutex::new(CacheMap::<usize, (TileCoord, Tile)>::new(&config)));
+			let cache = Arc::new(Mutex::new(CacheMap::<usize, (TileCoord, Tile)>::new(runtime.cache_type())));
 			for step in traversal_steps {
 				match step {
 					Push(bboxes, index) => {

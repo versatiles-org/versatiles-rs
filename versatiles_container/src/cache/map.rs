@@ -1,7 +1,7 @@
 //! Generic key→values cache that can live in memory or on disk.
 //!
 //! `CacheMap<K, V>` provides a simple append-friendly cache from a `CacheKey` to a `Vec<V>` of
-//! `CacheValue`s. The concrete backend is chosen at runtime via [`ProcessingConfig`], using either
+//! `CacheValue`s. The concrete backend is chosen at runtime via [`CacheType`], using either
 //! an in-memory map or an on-disk directory-backed store. When disk-backed, each instance gets a
 //! unique subdirectory named `map_<UUID>` inside the configured cache directory.
 //!
@@ -9,7 +9,6 @@
 //! behavior of a multimap. Errors are enriched with contextual messages via `#[context(...)]`.
 
 use crate::{
-	ProcessingConfig,
 	cache::{
 		cache_in_memory::InMemoryCache,
 		cache_on_disk::OnDiskCache,
@@ -31,13 +30,13 @@ pub enum CacheMap<K: CacheKey, V: CacheValue> {
 }
 
 impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
-	/// Create a new cache using the backend specified by `ProcessingConfig`.
+	/// Create a new cache using the specified cache type.
 	///
 	/// * `InMemory` → uses an in-process map.
 	/// * `Disk(path)` → creates/uses a unique subdirectory `map_<UUID>` under `path`.
 	#[must_use]
-	pub fn new(config: &ProcessingConfig) -> Self {
-		match &config.cache_type {
+	pub fn new(cache_type: &CacheType) -> Self {
+		match cache_type {
 			CacheType::InMemory => Self::Memory(InMemoryCache::new()),
 			CacheType::Disk(path) => {
 				let random_name = format!("map_{}", Uuid::new_v4());
@@ -142,11 +141,7 @@ mod tests {
 			"disk" => CacheType::Disk(TempDir::new().unwrap().path().to_path_buf()),
 			_ => panic!("unknown cache kind"),
 		};
-		let config = ProcessingConfig {
-			cache_type,
-			progress_bar: None,
-		};
-		let mut cache = CacheMap::<String, String>::new(&config);
+		let mut cache = CacheMap::<String, String>::new(&cache_type);
 
 		let k1 = "k:1".to_string();
 		let k2 = "k:2".to_string();

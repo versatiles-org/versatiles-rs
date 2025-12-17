@@ -30,7 +30,7 @@
 //! }
 //! ```
 
-use crate::{ProcessingConfig, TilesReaderTrait};
+use crate::{TilesReaderTrait, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{path::Path, sync::Arc};
@@ -41,7 +41,7 @@ use versatiles_core::io::*;
 /// Writers implement serialization to a specific format (e.g., MBTiles, VersaTiles, TAR),
 /// and can operate either on filesystem paths or any sink implementing [`DataWriterTrait`].
 ///
-/// Implementors should handle compression, metadata, and configuration from [`ProcessingConfig`].
+/// Implementors should handle compression, metadata, and configuration from [`TilesRuntime`].
 #[async_trait]
 pub trait TilesWriterTrait: Send {
 	/// Writes all tile data from `reader` into the file or directory at `path`.
@@ -52,25 +52,25 @@ pub trait TilesWriterTrait: Send {
 	///
 	/// # Errors
 	/// Returns an error if the file cannot be created or the writing operation fails.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: Arc<ProcessingConfig>) -> Result<()> {
-		Self::write_to_writer(reader, &mut DataWriterFile::from_path(path)?, config).await
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, runtime: Arc<TilesRuntime>) -> Result<()> {
+		Self::write_to_writer(reader, &mut DataWriterFile::from_path(path)?, runtime).await
 	}
 
 	/// Writes tile data from `reader` to the provided [`DataWriterTrait`] sink.
 	///
 	/// Implementations must serialize tiles according to their format and use the
-	/// [`ProcessingConfig`] to control parallelism, buffering, or compression.
+	/// [`TilesRuntime`] to control parallelism, buffering, compression, and emit events.
 	///
 	/// # Arguments
 	/// - `reader`: Source tile reader providing tile data.
 	/// - `writer`: Output sink implementing [`DataWriterTrait`].
-	/// - `config`: Writer configuration (compression, parallelism, etc.).
+	/// - `runtime`: Runtime configuration (cache type, event bus, progress factory, etc.).
 	///
 	/// # Errors
 	/// Returns an error if reading from the source or writing to the sink fails.
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
-		config: Arc<ProcessingConfig>,
+		runtime: Arc<TilesRuntime>,
 	) -> Result<()>;
 }

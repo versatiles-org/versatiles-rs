@@ -34,7 +34,8 @@
 //!
 //!     // Write as a .versatiles container
 //!     let path_out = std::env::temp_dir().join("berlin.versatiles");
-//!     VersaTilesWriter::write_to_path(&mut reader, &path_out, ProcessingConfig::default().arc()).await?;
+//!     let runtime = std::sync::Arc::new(TilesRuntime::default());
+//!     VersaTilesWriter::write_to_path(&mut reader, &path_out, runtime).await?;
 //!     Ok(())
 //! }
 //! ```
@@ -45,7 +46,7 @@
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader};
 use crate::{
-	ProcessingConfig, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait,
+	TilesReaderTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait,
 	container::versatiles::types::BlockWriter,
 };
 use anyhow::{Result, anyhow};
@@ -80,7 +81,7 @@ impl TilesWriterTrait for VersaTilesWriter {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
-		config: Arc<ProcessingConfig>,
+		runtime: Arc<TilesRuntime>,
 	) -> Result<()> {
 		// Finalize the configuration
 		let parameters = reader.parameters();
@@ -112,7 +113,7 @@ impl TilesWriterTrait for VersaTilesWriter {
 		header.meta_range = Self::write_meta(reader, writer, tile_compression).await?;
 
 		log::trace!("write blocks");
-		header.blocks_range = Self::write_blocks(reader, writer, tile_compression, config).await?;
+		header.blocks_range = Self::write_blocks(reader, writer, tile_compression, runtime).await?;
 
 		log::trace!("update header");
 		let blob: Blob = header.to_blob()?;
@@ -149,7 +150,7 @@ impl VersaTilesWriter {
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
 		tile_compression: TileCompression,
-		config: Arc<ProcessingConfig>,
+		runtime: Arc<TilesRuntime>,
 	) -> Result<ByteRange> {
 		if reader.parameters().bbox_pyramid.is_empty() {
 			return Ok(ByteRange::empty());
@@ -201,8 +202,8 @@ impl VersaTilesWriter {
 						Ok(())
 					})
 				},
-				config.clone(),
-				config.progress_bar.clone(),
+				runtime.clone(),
+				None,
 			)
 			.await?;
 

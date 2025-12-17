@@ -33,7 +33,8 @@
 //!
 //!     // Choose an absolute output directory
 //!     let out_dir = std::env::temp_dir().join("versatiles_demo_out");
-//!     DirectoryTilesWriter::write_to_path(&mut reader, &out_dir, ProcessingConfig::default().arc()).await?;
+//!     let runtime = std::sync::Arc::new(TilesRuntime::default());
+//!     DirectoryTilesWriter::write_to_path(&mut reader, &out_dir, runtime).await?;
 //!     Ok(())
 //! }
 //! ```
@@ -41,7 +42,7 @@
 //! ### Errors
 //! Returns errors if the destination path is not absolute, if file I/O fails, or if compression/encoding fails.
 
-use crate::{ProcessingConfig, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
+use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use std::{
@@ -84,7 +85,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	/// # Errors
 	/// Returns an error for non-absolute paths, I/O failures, or encoding/compression errors.
 	#[context("writing tiles to directory '{}'", path.display())]
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: Arc<ProcessingConfig>) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, runtime: Arc<TilesRuntime>) -> Result<()> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
 		log::trace!("convert_from");
@@ -123,8 +124,8 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 						Ok(())
 					})
 				},
-				config.clone(),
-				config.progress_bar.clone(),
+				runtime.clone(),
+				None,
 			)
 			.await?;
 
@@ -139,7 +140,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
-		_config: Arc<ProcessingConfig>,
+		_runtime: Arc<TilesRuntime>,
 	) -> Result<()> {
 		bail!("not implemented")
 	}
@@ -163,7 +164,7 @@ mod tests {
 			TileBBoxPyramid::new_full(2),
 		))?;
 
-		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path, ProcessingConfig::default().arc()).await?;
+		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path, Arc::new(TilesRuntime::default())).await?;
 
 		let load = |filename| {
 			let path = temp_path.join(filename);

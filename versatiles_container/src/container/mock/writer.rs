@@ -20,7 +20,7 @@
 //! }
 //! ```
 
-use crate::{ProcessingConfig, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
+use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -57,7 +57,7 @@ impl MockTilesWriter {
 						Ok(())
 					})
 				},
-				ProcessingConfig::default().arc(),
+				Arc::new(TilesRuntime::default()),
 				None,
 			)
 			.await
@@ -82,7 +82,7 @@ impl TilesWriterTrait for MockTilesWriter {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
-		_config: Arc<ProcessingConfig>,
+		_runtime: Arc<TilesRuntime>,
 	) -> Result<()> {
 		MockTilesWriter::write(reader).await
 	}

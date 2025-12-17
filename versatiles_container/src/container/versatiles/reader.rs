@@ -507,7 +507,7 @@ impl PartialEq for VersaTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{MOCK_BYTES_PBF, MockTilesReader, ProcessingConfig, TilesWriterTrait, VersaTilesWriter, make_test_file};
+	use crate::{MOCK_BYTES_PBF, MockTilesReader, TilesRuntime, TilesWriterTrait, VersaTilesWriter, make_test_file};
 	use assert_fs::NamedTempFile;
 	use versatiles_core::{assert_wildcard, io::DataWriterBlob};
 
@@ -625,13 +625,13 @@ mod tests {
 		))?;
 
 		let mut data_writer1 = DataWriterBlob::new()?;
-		VersaTilesWriter::write_to_writer(&mut reader1, &mut data_writer1, ProcessingConfig::default().arc()).await?;
+		VersaTilesWriter::write_to_writer(&mut reader1, &mut data_writer1, Arc::new(TilesRuntime::default())).await?;
 
 		let data_reader1 = data_writer1.to_reader();
 		let mut reader2 = VersaTilesReader::open_reader(Box::new(data_reader1)).await?;
 
 		let mut data_writer2 = DataWriterBlob::new()?;
-		VersaTilesWriter::write_to_writer(&mut reader2, &mut data_writer2, ProcessingConfig::default().arc()).await?;
+		VersaTilesWriter::write_to_writer(&mut reader2, &mut data_writer2, Arc::new(TilesRuntime::default())).await?;
 
 		let data_reader2 = data_writer2.to_reader();
 		let reader3 = VersaTilesReader::open_reader(Box::new(data_reader2)).await?;

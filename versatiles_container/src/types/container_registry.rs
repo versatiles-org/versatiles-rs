@@ -350,8 +350,50 @@ fn sanitize_extension(ext: &str) -> String {
 
 impl Default for ContainerRegistry {
 	fn default() -> Self {
-		// Create with default runtime
-		Self::with_runtime(Arc::new(TilesRuntime::default()))
+		let mut reg = Self {
+			data_readers: HashMap::new(),
+			file_readers: HashMap::new(),
+			file_writers: HashMap::new(),
+			runtime: None,
+		};
+
+		// Register format handlers (same as with_runtime but without runtime)
+		// MBTiles
+		reg.register_reader_file("mbtiles", |p| async move { Ok(MBTilesReader::open_path(&p)?.boxed()) });
+		reg.register_writer_file("mbtiles", |mut r, p, rt| async move {
+			MBTilesWriter::write_to_path(r.as_mut(), &p, rt).await
+		});
+
+		// TAR
+		reg.register_reader_file("tar", |p| async move { Ok(TarTilesReader::open_path(&p)?.boxed()) });
+		reg.register_writer_file("tar", |mut r, p, rt| async move {
+			TarTilesWriter::write_to_path(r.as_mut(), &p, rt).await
+		});
+
+		// PMTiles
+		reg.register_reader_file(
+			"pmtiles",
+			|p| async move { Ok(PMTilesReader::open_path(&p).await?.boxed()) },
+		);
+		reg.register_reader_data("pmtiles", |p| async move {
+			Ok(PMTilesReader::open_reader(p).await?.boxed())
+		});
+		reg.register_writer_file("pmtiles", |mut r, p, rt| async move {
+			PMTilesWriter::write_to_path(r.as_mut(), &p, rt).await
+		});
+
+		// VersaTiles
+		reg.register_reader_file("versatiles", |p| async move {
+			Ok(VersaTilesReader::open_path(&p).await?.boxed())
+		});
+		reg.register_reader_data("versatiles", |p| async move {
+			Ok(VersaTilesReader::open_reader(p).await?.boxed())
+		});
+		reg.register_writer_file("versatiles", |mut r, p, rt| async move {
+			VersaTilesWriter::write_to_path(r.as_mut(), &p, rt).await
+		});
+
+		reg
 	}
 }
 
