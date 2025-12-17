@@ -116,21 +116,6 @@ impl ContainerRegistry {
 		reg
 	}
 
-	/// Creates a new `ContainerRegistry` with the specified writer configuration.
-	///
-	/// **Deprecated:** Use `with_runtime` instead.
-	///
-	/// Registers built-in readers and writers for supported container formats.
-	#[deprecated(note = "Use with_runtime instead")]
-	pub fn new(config: ProcessingConfig) -> Self {
-		// Create a runtime from the config for backward compatibility
-		let runtime = TilesRuntime::builder()
-			.cache_type(config.cache_type.clone())
-			.build();
-
-		Self::with_runtime(Arc::new(runtime))
-	}
-
 	/// Register an async file-based reader for a given file extension.
 	///
 	/// # Arguments
@@ -311,33 +296,6 @@ impl ContainerRegistry {
 		Ok(())
 	}
 
-	/// Write tiles with a custom processing config for progress monitoring and other options.
-	///
-	/// **Deprecated:** Use `write_to_path_with_runtime` instead.
-	///
-	/// # Arguments
-	/// * `reader` - A boxed tile container reader providing tiles to write.
-	/// * `path` - The output path to write tiles to.
-	/// * `config` - Processing configuration (cache type, progress bar, etc.).
-	///
-	/// # Returns
-	/// Result indicating success or failure.
-	#[deprecated(note = "Use write_to_path_with_runtime instead")]
-	#[context("writing tiles to path '{path:?}' with config")]
-	pub async fn write_to_path_with_config(
-		&self,
-		reader: Box<dyn TilesReaderTrait>,
-		path: &Path,
-		config: Arc<ProcessingConfig>,
-	) -> Result<()> {
-		// Convert ProcessingConfig to TilesRuntime for backward compatibility
-		let runtime = TilesRuntime::builder()
-			.cache_type(config.cache_type.clone())
-			.build();
-
-		self.write_to_path_with_runtime(reader, path, Arc::new(runtime)).await
-	}
-
 	pub fn supports_reader_extension(&self, ext: &str) -> bool {
 		let ext = sanitize_extension(ext);
 		self.data_readers.contains_key(&ext) || self.file_readers.contains_key(&ext)
@@ -421,7 +379,7 @@ pub async fn make_test_file(
 		_ => panic!("make_test_file: extension {extension} not found"),
 	}?;
 
-	let registry = ContainerRegistry::new(ProcessingConfig::default());
+	let registry = ContainerRegistry::default();
 	registry.write_to_path(Box::new(reader), container_file.path()).await?;
 
 	Ok(container_file)
@@ -474,7 +432,7 @@ pub mod tests {
 				Container::Versatiles => path.join("temp.versatiles"),
 			};
 
-			let registry = ContainerRegistry::new(ProcessingConfig::default());
+			let registry = ContainerRegistry::default();
 			registry.write_to_path(Box::new(reader1), &path).await?;
 
 			// get test container reader using the default registry (back-compat)

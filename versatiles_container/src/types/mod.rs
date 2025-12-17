@@ -2,7 +2,6 @@ mod container_registry;
 mod converter;
 mod data_location;
 mod data_source;
-mod processing_config;
 pub mod runtime;
 mod tile;
 mod tile_content;
@@ -13,7 +12,6 @@ pub use container_registry::*;
 pub use converter::*;
 pub use data_location::*;
 pub use data_source::*;
-pub use processing_config::*;
 pub use runtime::{
 	Event, EventBus, ListenerId, LogAdapter, LogLevel, ProgressData, ProgressFactory, ProgressHandle,
 	ProgressId, RuntimeBuilder, TilesRuntime,

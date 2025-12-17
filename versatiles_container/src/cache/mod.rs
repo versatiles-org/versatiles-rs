@@ -13,7 +13,7 @@
 //! - [`traits`] — core traits for cache key/value serialization
 //!
 //! # Usage
-//! Cache type selection is determined by the [`ProcessingConfig`](crate::ProcessingConfig):
+//! Cache type selection is determined by the [`TilesRuntime`](crate::TilesRuntime):
 //!
 //! The cache API provides consistent behavior across backends, with automatic
 //! cleanup when dropped.

@@ -11,7 +11,7 @@
 //! A tile writer must:
 //! - Pull tiles from a [`TilesReaderTrait`] source (possibly streamed)
 //! - Serialize them to the target format
-//! - Respect [`ProcessingConfig`] parameters such as compression and parallelism
+//! - Respect [`TilesRuntime`] parameters such as compression and parallelism
 //!
 //! ## Example
 //! ```rust
