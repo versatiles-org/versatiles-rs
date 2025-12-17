@@ -13,8 +13,6 @@
 //! a tiny `/status` probe for liveness checks.
 
 use super::{cors, routes, sources};
-#[cfg(test)]
-use versatiles_container::TilesRuntime;
 use crate::{Config, TileSourceConfig};
 use anyhow::{Result, bail};
 use axum::error_handling::HandleErrorLayer;
@@ -31,6 +29,8 @@ use tower::{
 };
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
+#[cfg(test)]
+use versatiles_container::TilesRuntime;
 use versatiles_container::{ContainerRegistry, TilesReaderTrait};
 use versatiles_derive::context;
 
@@ -85,7 +85,7 @@ impl TileServer {
 				.customize_registry(|registry| {
 					crate::register_readers(registry);
 				})
-				.build()
+				.build(),
 		);
 		TileServer {
 			ip: ip.to_owned(),

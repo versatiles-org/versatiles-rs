@@ -5,8 +5,8 @@
 
 use super::events::{EventBus, ProgressData, ProgressId};
 use std::sync::{
-	atomic::{AtomicU64, Ordering},
 	Arc, Mutex,
+	atomic::{AtomicU64, Ordering},
 };
 use std::time::Instant;
 

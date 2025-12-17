@@ -1,6 +1,6 @@
 //! Builder pattern for constructing TilesRuntime instances
 
-use super::{EventBus, ProgressFactory, TilesRuntime, RuntimeInner};
+use super::{EventBus, ProgressFactory, RuntimeInner, TilesRuntime};
 use crate::{CacheType, ContainerRegistry};
 use std::sync::Arc;
 

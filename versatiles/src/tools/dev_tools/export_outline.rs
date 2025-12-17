@@ -32,11 +32,9 @@ pub async fn run(args: &ExportOutline) -> Result<()> {
 			.customize_registry(|registry| {
 				versatiles::register_readers(registry);
 			})
-			.build()
+			.build(),
 	);
-	let reader = runtime.registry()
-		.get_reader_from_str(input)
-		.await?;
+	let reader = runtime.registry().get_reader_from_str(input).await?;
 
 	let compression = reader.parameters().tile_compression;
 	let bbox_pyramid = reader.parameters().bbox_pyramid.clone();

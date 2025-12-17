@@ -212,7 +212,7 @@ mod tests {
 				.customize_registry(|registry| {
 					crate::register_readers(registry);
 				})
-				.build()
+				.build(),
 		);
 		let reader = runtime.registry().get_reader_from_str(filename).await?;
 		let c = &mut TileSource::from(reader, "prefix")?;

@@ -46,8 +46,7 @@
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader};
 use crate::{
-	TilesReaderTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait,
-	container::versatiles::types::BlockWriter,
+	TilesReaderTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait, container::versatiles::types::BlockWriter,
 };
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;

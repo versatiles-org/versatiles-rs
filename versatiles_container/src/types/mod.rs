@@ -13,8 +13,8 @@ pub use converter::*;
 pub use data_location::*;
 pub use data_source::*;
 pub use runtime::{
-	Event, EventBus, ListenerId, LogAdapter, LogLevel, ProgressData, ProgressFactory, ProgressHandle,
-	ProgressId, RuntimeBuilder, TilesRuntime,
+	Event, EventBus, ListenerId, LogAdapter, LogLevel, ProgressData, ProgressFactory, ProgressHandle, ProgressId,
+	RuntimeBuilder, TilesRuntime,
 };
 pub use tile::*;
 pub use tile_content::*;

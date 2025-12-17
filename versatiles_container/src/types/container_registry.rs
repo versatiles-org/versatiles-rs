@@ -239,7 +239,10 @@ impl ContainerRegistry {
 		let path = env::current_dir()?.join(path);
 
 		// Get or create default runtime
-		let runtime = self.runtime.clone().unwrap_or_else(|| Arc::new(TilesRuntime::default()));
+		let runtime = self
+			.runtime
+			.clone()
+			.unwrap_or_else(|| Arc::new(TilesRuntime::default()));
 
 		if path.is_dir() {
 			return DirectoryTilesWriter::write_to_path(reader.as_mut(), &path, runtime).await;

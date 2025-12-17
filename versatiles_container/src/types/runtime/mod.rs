@@ -32,7 +32,7 @@ mod events;
 mod progress;
 
 pub use builder::RuntimeBuilder;
-pub use events::{Event, EventBus, LogAdapter, LogLevel, ProgressData, ProgressId, ListenerId};
+pub use events::{Event, EventBus, ListenerId, LogAdapter, LogLevel, ProgressData, ProgressId};
 pub use progress::{ProgressFactory, ProgressHandle};
 
 use crate::{CacheType, ContainerRegistry};
@@ -127,7 +127,10 @@ impl TilesRuntime {
 	/// progress.finish();
 	/// ```
 	pub fn create_progress(&self, message: &str, total: u64) -> ProgressHandle {
-		self.inner.progress_factory.create(message, total, &self.inner.event_bus)
+		self
+			.inner
+			.progress_factory
+			.create(message, total, &self.inner.event_bus)
 	}
 
 	/// Get maximum memory limit (if configured)

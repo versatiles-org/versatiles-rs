@@ -48,9 +48,10 @@ mod tests {
 				.customize_registry(|registry| {
 					register_readers(registry);
 				})
-				.build()
+				.build(),
 		);
-		let reader_result: Result<Box<dyn TilesReaderTrait>, anyhow::Error> = runtime.registry().get_reader_from_str("test.vpl").await;
+		let reader_result: Result<Box<dyn TilesReaderTrait>, anyhow::Error> =
+			runtime.registry().get_reader_from_str("test.vpl").await;
 		assert!(reader_result.is_err(), "Expected error for non-existent file");
 	}
 }

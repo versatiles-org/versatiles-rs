@@ -28,7 +28,7 @@
 //! # }
 //! ```
 
-use crate::{CacheMap, Tile, TilesRuntime, ProgressHandle};
+use crate::{CacheMap, ProgressHandle, Tile, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{StreamExt, future::BoxFuture, stream};
@@ -38,8 +38,7 @@ use tokio::sync::Mutex;
 use versatiles_core::{ProbeDepth, utils::PrettyPrint};
 use versatiles_core::{
 	TileBBox, TileCompression, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal,
-	TraversalTranslationStep,
-	translate_traversals,
+	TraversalTranslationStep, translate_traversals,
 };
 
 /// Object‑safe interface for reading tiles from a container.
@@ -257,12 +256,15 @@ pub trait TilesReaderTraverseExt: TilesReaderTrait {
 					}
 				}
 			}
-			let progress = progress.unwrap_or_else(|| runtime.create_progress("converting tiles", u64::midpoint(tn_read, tn_write)));
+			let progress =
+				progress.unwrap_or_else(|| runtime.create_progress("converting tiles", u64::midpoint(tn_read, tn_write)));
 
 			let mut ti_read = 0;
 			let mut ti_write = 0;
 
-			let cache = Arc::new(Mutex::new(CacheMap::<usize, (TileCoord, Tile)>::new(runtime.cache_type())));
+			let cache = Arc::new(Mutex::new(CacheMap::<usize, (TileCoord, Tile)>::new(
+				runtime.cache_type(),
+			)));
 			for step in traversal_steps {
 				match step {
 					Push(bboxes, index) => {

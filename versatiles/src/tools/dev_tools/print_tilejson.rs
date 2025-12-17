@@ -30,11 +30,9 @@ async fn fetch_tilejson(args: &PrintTilejson) -> Result<String> {
 			.customize_registry(|registry| {
 				versatiles::register_readers(registry);
 			})
-			.build()
+			.build(),
 	);
-	let reader = runtime.registry()
-		.get_reader_from_str(input)
-		.await?;
+	let reader = runtime.registry().get_reader_from_str(input).await?;
 
 	Ok(if pretty {
 		reader.tilejson().as_pretty_lines(80).join("\n")

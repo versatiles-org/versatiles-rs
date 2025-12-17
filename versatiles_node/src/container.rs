@@ -218,13 +218,7 @@ impl ContainerReader {
 		}
 
 		// Convert tiles using the new API
-		versatiles_container::convert_tiles_container(
-			reader_clone,
-			params,
-			&output_path,
-			runtime,
-		)
-		.await?;
+		versatiles_container::convert_tiles_container(reader_clone, params, &output_path, runtime).await?;
 
 		Ok(())
 	}

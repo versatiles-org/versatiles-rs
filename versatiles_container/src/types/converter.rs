@@ -106,7 +106,10 @@ pub async fn convert_tiles_container(
 	runtime: Arc<TilesRuntime>,
 ) -> Result<()> {
 	let converter = TilesConvertReader::new_from_reader(reader, cp)?;
-	runtime.registry().write_to_path_with_runtime(Box::new(converter), path, runtime.clone()).await
+	runtime
+		.registry()
+		.write_to_path_with_runtime(Box::new(converter), path, runtime.clone())
+		.await
 }
 
 /// Reader adapter that applies coordinate transforms, bbox filtering, and optional

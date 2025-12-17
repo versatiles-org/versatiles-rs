@@ -134,7 +134,7 @@ fn main() -> Result<()> {
 			.customize_registry(|registry| {
 				versatiles::register_readers(registry);
 			})
-			.build()
+			.build(),
 	);
 
 	run(cli, runtime)
@@ -168,7 +168,7 @@ mod tests {
 				.customize_registry(|registry| {
 					versatiles::register_readers(registry);
 				})
-				.build()
+				.build(),
 		);
 		run(cli, runtime)?;
 		Ok(msg)

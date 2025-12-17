@@ -8,13 +8,11 @@
 //! Typical operations are `insert`, `append`, `get_clone`, and `remove`, all of which mirror the
 //! behavior of a multimap. Errors are enriched with contextual messages via `#[context(...)]`.
 
-use crate::{
-	cache::{
-		cache_in_memory::InMemoryCache,
-		cache_on_disk::OnDiskCache,
-		cache_type::CacheType,
-		traits::{Cache, CacheKey, CacheValue},
-	},
+use crate::cache::{
+	cache_in_memory::InMemoryCache,
+	cache_on_disk::OnDiskCache,
+	cache_type::CacheType,
+	traits::{Cache, CacheKey, CacheValue},
 };
 use anyhow::Result;
 use std::fmt::Debug;
