@@ -2,7 +2,6 @@ use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
 use std::sync::{Arc, Mutex};
-use tokio::sync::oneshot;
 
 /// Progress data sent to JavaScript callbacks
 #[napi(object)]
@@ -42,7 +41,6 @@ pub struct MessageData {
 // Note: Using weak references (Weak=true) to avoid blocking process exit
 type ProgressCallback = ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false, true>;
 type MessageCallback = ThreadsafeFunction<(String, String), Unknown<'static>, (String, String), Status, false, true>;
-type CompleteCallback = ThreadsafeFunction<(), Unknown<'static>, (), Status, false, true>;
 
 /// Progress monitor for long-running operations
 ///
@@ -54,25 +52,15 @@ pub struct Progress {
 	// Event listeners with typed callbacks
 	progress_listeners: Arc<Mutex<Vec<ProgressCallback>>>,
 	message_listeners: Arc<Mutex<Vec<MessageCallback>>>,
-	complete_listeners: Arc<Mutex<Vec<CompleteCallback>>>,
-
-	// Channel to signal completion
-	completion_tx: Arc<Mutex<Option<oneshot::Sender<Result<()>>>>>,
-	completion_rx: Arc<Mutex<Option<oneshot::Receiver<Result<()>>>>>,
 }
 
 #[napi]
 impl Progress {
 	/// Create a new Progress instance
 	pub fn new() -> Self {
-		let (tx, rx) = oneshot::channel();
-
 		Progress {
 			progress_listeners: Arc::new(Mutex::new(Vec::new())),
 			message_listeners: Arc::new(Mutex::new(Vec::new())),
-			complete_listeners: Arc::new(Mutex::new(Vec::new())),
-			completion_tx: Arc::new(Mutex::new(Some(tx))),
-			completion_rx: Arc::new(Mutex::new(Some(rx))),
 		}
 	}
 }
@@ -112,38 +100,6 @@ impl Progress {
 		listeners.push(tsfn);
 		Ok(self)
 	}
-
-	/// Register a complete event listener
-	///
-	/// The callback is called with no arguments when the operation completes
-	#[napi(ts_args_type = "callback: () => void")]
-	pub fn on_complete(&self, callback: Function<'static>) -> Result<&Self> {
-		let tsfn = callback
-			.build_threadsafe_function::<()>()
-			.weak::<true>()
-			.build_callback(|_ctx| Ok(()))?;
-		let mut listeners = self.complete_listeners.lock().unwrap();
-		listeners.push(tsfn);
-		Ok(self)
-	}
-
-	/// Returns a Promise that resolves when the operation completes
-	#[napi]
-	pub async fn done(&self) -> Result<()> {
-		let rx = {
-			let mut completion_rx = self.completion_rx.lock().unwrap();
-			completion_rx.take()
-		};
-
-		match rx {
-			Some(receiver) => match receiver.await {
-				Ok(Ok(())) => Ok(()),
-				Ok(Err(e)) => Err(Error::from_reason(e.to_string())),
-				Err(_) => Err(Error::from_reason("Operation was cancelled")),
-			},
-			None => Err(Error::from_reason("done() can only be called once")),
-		}
-	}
 }
 
 impl Progress {
@@ -179,33 +135,5 @@ impl Progress {
 	/// Emit an error event
 	pub fn emit_error(&self, message: String) {
 		self.emit_message("error", message);
-	}
-
-	/// Emit a complete event
-	pub fn emit_complete(&self) {
-		let listeners = self.complete_listeners.lock().unwrap();
-		for listener in listeners.iter() {
-			let _ = listener.call((), ThreadsafeFunctionCallMode::NonBlocking);
-		}
-	}
-
-	/// Signal that the operation has completed successfully
-	pub fn complete(&self) {
-		self.emit_complete();
-
-		let mut tx = self.completion_tx.lock().unwrap();
-		if let Some(sender) = tx.take() {
-			let _ = sender.send(Ok(()));
-		}
-	}
-
-	/// Signal that the operation has failed with an error
-	pub fn fail(&self, error: anyhow::Error) {
-		self.emit_error(error.to_string());
-
-		let mut tx = self.completion_tx.lock().unwrap();
-		if let Some(sender) = tx.take() {
-			let _ = sender.send(Err(Error::from_reason(error.to_string())));
-		}
 	}
 }
