@@ -19,6 +19,7 @@ use std::sync::Arc;
 pub struct RuntimeBuilder {
 	cache_type: Option<CacheType>,
 	max_memory: Option<usize>,
+	#[allow(clippy::type_complexity)]
 	registry_customizer: Option<Box<dyn FnOnce(&mut ContainerRegistry)>>,
 }
 
