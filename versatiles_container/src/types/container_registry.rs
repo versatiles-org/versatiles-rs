@@ -49,7 +49,7 @@ type ReadData = Box<dyn Fn(DataReader) -> ReadFuture + Send + Sync + 'static>;
 type ReadFile = Box<dyn Fn(PathBuf) -> ReadFuture + Send + Sync + 'static>;
 type WriteFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 type WriteFile =
-	Box<dyn Fn(Box<dyn TilesReaderTrait>, PathBuf, Arc<ProcessingConfig>) -> WriteFuture + Send + Sync + 'static>;
+	Box<dyn Fn(Box<dyn TilesReaderTrait>, PathBuf, Arc<TilesRuntime>) -> WriteFuture + Send + Sync + 'static>;
 
 /// Registry mapping file extensions to async tile container readers and writers.
 ///
@@ -64,31 +64,31 @@ pub struct ContainerRegistry {
 	data_readers: HashMap<String, Arc<ReadData>>,
 	file_readers: HashMap<String, Arc<ReadFile>>,
 	file_writers: HashMap<String, Arc<WriteFile>>,
-	config: Arc<ProcessingConfig>,
+	runtime: Option<Arc<TilesRuntime>>,
 }
 
 impl ContainerRegistry {
-	/// Creates a new `ContainerRegistry` with the specified writer configuration.
+	/// Creates a new `ContainerRegistry` with the specified runtime.
 	///
 	/// Registers built-in readers and writers for supported container formats.
-	pub fn new(config: ProcessingConfig) -> Self {
+	pub fn with_runtime(runtime: Arc<TilesRuntime>) -> Self {
 		let mut reg = Self {
 			data_readers: HashMap::new(),
 			file_readers: HashMap::new(),
 			file_writers: HashMap::new(),
-			config: Arc::new(config),
+			runtime: Some(runtime),
 		};
 
 		// MBTiles
 		reg.register_reader_file("mbtiles", |p| async move { Ok(MBTilesReader::open_path(&p)?.boxed()) });
-		reg.register_writer_file("mbtiles", |mut r, p, c| async move {
-			MBTilesWriter::write_to_path(r.as_mut(), &p, c).await
+		reg.register_writer_file("mbtiles", |mut r, p, rt| async move {
+			MBTilesWriter::write_to_path(r.as_mut(), &p, rt).await
 		});
 
 		// TAR
 		reg.register_reader_file("tar", |p| async move { Ok(TarTilesReader::open_path(&p)?.boxed()) });
-		reg.register_writer_file("tar", |mut r, p, c| async move {
-			TarTilesWriter::write_to_path(r.as_mut(), &p, c).await
+		reg.register_writer_file("tar", |mut r, p, rt| async move {
+			TarTilesWriter::write_to_path(r.as_mut(), &p, rt).await
 		});
 		// PMTiles
 		reg.register_reader_file(
@@ -98,8 +98,8 @@ impl ContainerRegistry {
 		reg.register_reader_data("pmtiles", |p| async move {
 			Ok(PMTilesReader::open_reader(p).await?.boxed())
 		});
-		reg.register_writer_file("pmtiles", |mut r, p, c| async move {
-			PMTilesWriter::write_to_path(r.as_mut(), &p, c).await
+		reg.register_writer_file("pmtiles", |mut r, p, rt| async move {
+			PMTilesWriter::write_to_path(r.as_mut(), &p, rt).await
 		});
 
 		// VersaTiles
@@ -109,11 +109,26 @@ impl ContainerRegistry {
 		reg.register_reader_data("versatiles", |p| async move {
 			Ok(VersaTilesReader::open_reader(p).await?.boxed())
 		});
-		reg.register_writer_file("versatiles", |mut r, p, c| async move {
-			VersaTilesWriter::write_to_path(r.as_mut(), &p, c).await
+		reg.register_writer_file("versatiles", |mut r, p, rt| async move {
+			VersaTilesWriter::write_to_path(r.as_mut(), &p, rt).await
 		});
 
 		reg
+	}
+
+	/// Creates a new `ContainerRegistry` with the specified writer configuration.
+	///
+	/// **Deprecated:** Use `with_runtime` instead.
+	///
+	/// Registers built-in readers and writers for supported container formats.
+	#[deprecated(note = "Use with_runtime instead")]
+	pub fn new(config: ProcessingConfig) -> Self {
+		// Create a runtime from the config for backward compatibility
+		let runtime = TilesRuntime::builder()
+			.cache_type(config.cache_type.clone())
+			.build();
+
+		Self::with_runtime(Arc::new(runtime))
 	}
 
 	/// Register an async file-based reader for a given file extension.
@@ -152,16 +167,16 @@ impl ContainerRegistry {
 	///
 	/// # Arguments
 	/// * `ext` - The file extension to associate with the writer.
-	/// * `write_file` - Async function that takes a boxed `TilesReaderTrait`, a `PathBuf`, and a `ProcessingConfig`,
+	/// * `write_file` - Async function that takes a boxed `TilesReaderTrait`, a `PathBuf`, and a `TilesRuntime`,
 	///   and writes the tiles to the specified path.
 	pub fn register_writer_file<F, Fut>(&mut self, ext: &str, write_file: F)
 	where
-		F: Fn(Box<dyn TilesReaderTrait>, PathBuf, Arc<ProcessingConfig>) -> Fut + Send + Sync + 'static,
+		F: Fn(Box<dyn TilesReaderTrait>, PathBuf, Arc<TilesRuntime>) -> Fut + Send + Sync + 'static,
 		Fut: Future<Output = Result<()>> + Send + 'static,
 	{
 		self.file_writers.insert(
 			sanitize_extension(ext),
-			Arc::new(Box::new(move |r, p, c| Box::pin(write_file(r, p, c)))),
+			Arc::new(Box::new(move |r, p, rt| Box::pin(write_file(r, p, rt)))),
 		);
 	}
 
@@ -237,8 +252,12 @@ impl ContainerRegistry {
 	#[context("writing tiles to path '{path:?}'")]
 	pub async fn write_to_path(&self, mut reader: Box<dyn TilesReaderTrait>, path: &Path) -> Result<()> {
 		let path = env::current_dir()?.join(path);
+
+		// Get or create default runtime
+		let runtime = self.runtime.clone().unwrap_or_else(|| Arc::new(TilesRuntime::default()));
+
 		if path.is_dir() {
-			return DirectoryTilesWriter::write_to_path(reader.as_mut(), &path, self.config.clone()).await;
+			return DirectoryTilesWriter::write_to_path(reader.as_mut(), &path, runtime).await;
 		}
 
 		let extension = path
@@ -251,12 +270,50 @@ impl ContainerRegistry {
 			.file_writers
 			.get(&extension)
 			.ok_or_else(|| anyhow!("Error when reading: file extension '{extension}' unknown"))?;
-		writer(reader, path.to_path_buf(), self.config.clone()).await?;
+		writer(reader, path.to_path_buf(), runtime).await?;
+
+		Ok(())
+	}
+
+	/// Write tiles with a custom runtime for progress monitoring and other options.
+	///
+	/// # Arguments
+	/// * `reader` - A boxed tile container reader providing tiles to write.
+	/// * `path` - The output path to write tiles to.
+	/// * `runtime` - Runtime configuration (cache type, event bus, progress factory, etc.).
+	///
+	/// # Returns
+	/// Result indicating success or failure.
+	#[context("writing tiles to path '{path:?}' with runtime")]
+	pub async fn write_to_path_with_runtime(
+		&self,
+		mut reader: Box<dyn TilesReaderTrait>,
+		path: &Path,
+		runtime: Arc<TilesRuntime>,
+	) -> Result<()> {
+		let path = env::current_dir()?.join(path);
+		if path.is_dir() {
+			return DirectoryTilesWriter::write_to_path(reader.as_mut(), &path, runtime).await;
+		}
+
+		let extension = path
+			.extension()
+			.unwrap_or_default()
+			.to_string_lossy()
+			.to_ascii_lowercase();
+
+		let writer = self
+			.file_writers
+			.get(&extension)
+			.ok_or_else(|| anyhow!("Error when reading: file extension '{extension}' unknown"))?;
+		writer(reader, path.to_path_buf(), runtime).await?;
 
 		Ok(())
 	}
 
 	/// Write tiles with a custom processing config for progress monitoring and other options.
+	///
+	/// **Deprecated:** Use `write_to_path_with_runtime` instead.
 	///
 	/// # Arguments
 	/// * `reader` - A boxed tile container reader providing tiles to write.
@@ -265,31 +322,20 @@ impl ContainerRegistry {
 	///
 	/// # Returns
 	/// Result indicating success or failure.
+	#[deprecated(note = "Use write_to_path_with_runtime instead")]
 	#[context("writing tiles to path '{path:?}' with config")]
 	pub async fn write_to_path_with_config(
 		&self,
-		mut reader: Box<dyn TilesReaderTrait>,
+		reader: Box<dyn TilesReaderTrait>,
 		path: &Path,
 		config: Arc<ProcessingConfig>,
 	) -> Result<()> {
-		let path = env::current_dir()?.join(path);
-		if path.is_dir() {
-			return DirectoryTilesWriter::write_to_path(reader.as_mut(), &path, config).await;
-		}
+		// Convert ProcessingConfig to TilesRuntime for backward compatibility
+		let runtime = TilesRuntime::builder()
+			.cache_type(config.cache_type.clone())
+			.build();
 
-		let extension = path
-			.extension()
-			.unwrap_or_default()
-			.to_string_lossy()
-			.to_ascii_lowercase();
-
-		let writer = self
-			.file_writers
-			.get(&extension)
-			.ok_or_else(|| anyhow!("Error when reading: file extension '{extension}' unknown"))?;
-		writer(reader, path.to_path_buf(), config).await?;
-
-		Ok(())
+		self.write_to_path_with_runtime(reader, path, Arc::new(runtime)).await
 	}
 
 	pub fn supports_reader_extension(&self, ext: &str) -> bool {
@@ -304,7 +350,8 @@ fn sanitize_extension(ext: &str) -> String {
 
 impl Default for ContainerRegistry {
 	fn default() -> Self {
-		Self::new(ProcessingConfig::default())
+		// Create with default runtime
+		Self::with_runtime(Arc::new(TilesRuntime::default()))
 	}
 }
 
