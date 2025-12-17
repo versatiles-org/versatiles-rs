@@ -13,15 +13,16 @@
 //! ```rust
 //! use versatiles_container::*;
 //! use versatiles_core::*;
+//! use std::sync::Arc;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
 //!
-//!     // Default registry knows how to open/read and write common containers
-//!     let registry = ContainerRegistry::default();
+//!     // Create runtime with default settings
+//!     let runtime = Arc::new(TilesRuntime::default());
 //!
 //!     // Open the source
-//!     let reader = registry.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+//!     let reader = runtime.registry().get_reader_from_str("../testdata/berlin.mbtiles").await?;
 //!
 //!     // Limit to a bbox pyramid and keep source compression;
 //!     // you could also set `tile_compression: Some(TileCompression::Brotli)` to re-encode.
@@ -32,14 +33,14 @@
 //!
 //!     // Convert and write
 //!     let path_versatiles = std::env::temp_dir().join("temp2.versatiles");
-//!     convert_tiles_container(reader, converter_params, &path_versatiles.as_path(), registry).await?;
+//!     convert_tiles_container(reader, converter_params, &path_versatiles.as_path(), runtime).await?;
 //!
 //!     println!("Wrote {:?}", path_versatiles);
 //!     Ok(())
 //! }
 //! ```
 
-use crate::{ContainerRegistry, ProcessingConfig, Tile, TilesReaderTrait};
+use crate::{Tile, TilesReaderTrait, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{path::Path, sync::Arc};
@@ -81,7 +82,7 @@ impl Default for TilesConverterParameters {
 	}
 }
 
-/// Converts tiles from the given reader and writes them to `path` via the provided [`ContainerRegistry`].
+/// Converts tiles from the given reader and writes them to `path` using the provided runtime.
 ///
 /// The conversion is applied by wrapping `reader` in a [`TilesConvertReader`] configured by `cp`.
 ///
@@ -89,7 +90,7 @@ impl Default for TilesConverterParameters {
 /// - `reader`: Source container reader.
 /// - `cp`: Conversion parameters (bbox filter, compression override, `flip_y`, `swap_xy`).
 /// - `path`: Output path; the format is inferred from its extension (or directory).
-/// - `registry`: Registry that knows how to write the inferred output container.
+/// - `runtime`: Runtime configuration providing registry, cache, and event system.
 ///
 /// ### Errors
 /// Returns an error if reading tiles fails, if writing to the destination fails,
@@ -102,39 +103,10 @@ pub async fn convert_tiles_container(
 	reader: Box<dyn TilesReaderTrait>,
 	cp: TilesConverterParameters,
 	path: &Path,
-	registry: ContainerRegistry,
+	runtime: Arc<TilesRuntime>,
 ) -> Result<()> {
 	let converter = TilesConvertReader::new_from_reader(reader, cp)?;
-	registry.write_to_path(Box::new(converter), path).await
-}
-
-/// Converts tiles with a custom [`ProcessingConfig`] for progress monitoring and other options.
-///
-/// This is similar to [`convert_tiles_container`] but allows passing a custom config
-/// with progress monitoring support.
-///
-/// ### Arguments
-/// - `reader`: Source container reader.
-/// - `cp`: Conversion parameters (bbox filter, compression override, `flip_y`, `swap_xy`).
-/// - `path`: Output path; the format is inferred from its extension (or directory).
-/// - `registry`: Registry that knows how to write the inferred output container.
-/// - `config`: Processing configuration (cache type, progress bar, etc.).
-///
-/// ### Errors
-/// Returns an error if reading tiles fails, if writing to the destination fails,
-/// or if no suitable writer is registered for the output path.
-#[context("Converting tiles from reader to file with config")]
-pub async fn convert_tiles_container_with_config(
-	reader: Box<dyn TilesReaderTrait>,
-	cp: TilesConverterParameters,
-	path: &Path,
-	registry: Arc<ContainerRegistry>,
-	config: Arc<ProcessingConfig>,
-) -> Result<()> {
-	let converter = TilesConvertReader::new_from_reader(reader, cp)?;
-	registry
-		.write_to_path_with_config(Box::new(converter), path, config)
-		.await
+	runtime.registry().write_to_path_with_runtime(Box::new(converter), path, runtime.clone()).await
 }
 
 /// Reader adapter that applies coordinate transforms, bbox filtering, and optional
@@ -326,7 +298,7 @@ mod tests {
 				swap_xy,
 				tile_compression: None,
 			};
-			convert_tiles_container(reader.boxed(), cp, &temp_file, ContainerRegistry::default()).await?;
+			convert_tiles_container(reader.boxed(), cp, &temp_file, Arc::new(TilesRuntime::default())).await?;
 
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.parameters();
