@@ -128,17 +128,23 @@ fn main() -> Result<()> {
 		})
 		.init();
 
-	run(cli)
+	// Create runtime with default settings
+	let runtime = std::sync::Arc::new(versatiles::container::TilesRuntime::default());
+
+	// Register additional readers (like .vpl files)
+	versatiles::register_readers(&runtime);
+
+	run(cli, runtime)
 }
 
 /// Helper function for running subcommands
-fn run(cli: Cli) -> Result<()> {
+fn run(cli: Cli, runtime: std::sync::Arc<versatiles::container::TilesRuntime>) -> Result<()> {
 	match &cli.command {
-		Commands::Convert(arguments) => tools::convert::run(arguments),
+		Commands::Convert(arguments) => tools::convert::run(arguments, runtime),
 		Commands::Help(arguments) => tools::help::run(arguments),
-		Commands::Probe(arguments) => tools::probe::run(arguments),
+		Commands::Probe(arguments) => tools::probe::run(arguments, runtime),
 		#[cfg(feature = "server")]
-		Commands::Serve(arguments) => tools::serve::run(arguments),
+		Commands::Serve(arguments) => tools::serve::run(arguments, runtime),
 		Commands::Dev(arguments) => tools::dev::run(arguments),
 	}
 }

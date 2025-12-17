@@ -1,58 +1,56 @@
 /// This module provides a function to create a `ContainerRegistry` pre-configured
 /// with specific file readers, such as `.vpl` for pipelines.
 use std::sync::Arc;
-use versatiles_container::{ContainerRegistry, ProcessingConfig, TilesReaderTrait};
+use versatiles_container::{TilesReaderTrait, TilesRuntime};
 
-/// Creates a `ContainerRegistry` with pre-registered readers for specific file types.
+/// Registers additional readers (like `.vpl` for pipelines) to a `TilesRuntime`.
 ///
 /// # Parameters
-/// - `config`: A `ProcessingConfig` instance used to configure the readers.
-///
-/// # Returns
-/// A `ContainerRegistry` with readers registered for handling certain file extensions.
+/// - `runtime`: A `TilesRuntime` instance that will be configured with additional readers.
 ///
 /// # Behavior
-/// Registers an additional reader for the `.vpl` file extension.
+/// Registers an additional reader for the `.vpl` file extension to the runtime's registry.
 ///
 /// # Example
 /// ```rust
 /// use versatiles::{
-///    container::{ProcessingConfig, ContainerRegistry, TilesReaderTrait},
-///    get_registry
+///    container::{TilesReaderTrait, TilesRuntime},
+///    register_readers
 /// };
+/// use std::sync::Arc;
 ///
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     let registry: ContainerRegistry = get_registry(ProcessingConfig::default().arc());
-///     let reader = registry.get_reader_from_str("../testdata/berlin.vpl").await?;
+///     let runtime = Arc::new(TilesRuntime::default());
+///     register_readers(&runtime);
+///     let reader = runtime.registry().get_reader_from_str("../testdata/berlin.vpl").await?;
 ///     // Use the reader here
 ///     Ok(())
 /// }
 /// ```
-pub fn get_registry(config: Arc<ProcessingConfig>) -> ContainerRegistry {
-	let mut registry = ContainerRegistry::default();
+pub fn register_readers(runtime: &Arc<TilesRuntime>) {
+	let mut registry = runtime.registry().clone();
 
-	// Register a reader for "vpl" files. The closure captures the config and clones it for async usage.
-	let c = config.clone();
+	// Register a reader for "vpl" files. The closure captures the runtime and clones it for async usage.
+	let rt = runtime.clone();
 	registry.register_reader_file("vpl", move |p| {
-		let config = c.clone();
+		let runtime = rt.clone();
 		async move {
-			// Clone config again inside async block to ensure it is owned
-			Ok(Box::new(versatiles_pipeline::PipelineReader::open_path(&p, config).await?) as Box<dyn TilesReaderTrait>)
+			// Clone runtime again inside async block to ensure it is owned
+			Ok(Box::new(versatiles_pipeline::PipelineReader::open_path(&p, runtime).await?) as Box<dyn TilesReaderTrait>)
 		}
 	});
 
+	let rt = runtime.clone();
 	registry.register_reader_data("vpl", move |p| {
-		let config = config.clone();
+		let runtime = rt.clone();
 		async move {
-			// Clone config again inside async block to ensure it is owned
+			// Clone runtime again inside async block to ensure it is owned
 			Ok(Box::new(
-				versatiles_pipeline::PipelineReader::open_reader(p, &std::env::current_dir().unwrap(), config).await?,
+				versatiles_pipeline::PipelineReader::open_reader(p, &std::env::current_dir().unwrap(), runtime).await?,
 			) as Box<dyn TilesReaderTrait>)
 		}
 	});
-
-	registry
 }
 
 #[cfg(test)]
@@ -60,10 +58,10 @@ mod tests {
 	use super::*;
 
 	#[tokio::test]
-	async fn test_get_registry() {
-		let config = ProcessingConfig::default().arc();
-		let registry = get_registry(config);
-		let reader_result = registry.get_reader_from_str("test.vpl").await;
+	async fn test_register_readers() {
+		let runtime = Arc::new(TilesRuntime::default());
+		register_readers(&runtime);
+		let reader_result = runtime.registry().get_reader_from_str("test.vpl").await;
 		assert!(reader_result.is_err(), "Expected error for non-existent file");
 	}
 }

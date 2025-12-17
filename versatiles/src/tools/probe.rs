@@ -1,6 +1,6 @@
 use anyhow::Result;
-use versatiles::get_registry;
-use versatiles_container::ProcessingConfig;
+use std::sync::Arc;
+use versatiles_container::TilesRuntime;
 use versatiles_core::ProbeDepth;
 
 #[derive(clap::Args, Debug)]
@@ -20,10 +20,10 @@ pub struct Subcommand {
 }
 
 #[tokio::main]
-pub async fn run(arguments: &Subcommand) -> Result<()> {
+pub async fn run(arguments: &Subcommand, runtime: Arc<TilesRuntime>) -> Result<()> {
 	log::info!("probe {:?}", arguments.filename);
 
-	let mut reader = get_registry(ProcessingConfig::default().arc())
+	let mut reader = runtime.registry()
 		.get_reader_from_str(&arguments.filename)
 		.await?;
 

@@ -20,18 +20,18 @@
 //!     container::*,
 //!     core::*,
 //! };
+//! use std::sync::Arc;
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let config = ProcessingConfig::default().arc();
-//!     let registry = versatiles::get_registry(config);
-//!     let reader = registry.get_reader_from_str("../testdata/berlin.pmtiles").await.unwrap();
+//!     let runtime = Arc::new(TilesRuntime::default());
+//!     let reader = runtime.registry().get_reader_from_str("../testdata/berlin.pmtiles").await.unwrap();
 //!
 //!     // Define the output filename
 //!     let output_path = std::env::temp_dir().join("temp1.versatiles");
 //!
 //!     // Write the tiles to the output file
-//!     registry.write_to_path(reader, &output_path).await.unwrap();
+//!     runtime.registry().write_to_path(reader, &output_path).await.unwrap();
 //!
 //!     println!("Tiles have been successfully converted and saved to {output_path:?}");
 //! }

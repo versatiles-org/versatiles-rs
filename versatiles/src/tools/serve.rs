@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
 use regex::Regex;
-use std::{mem::swap, path::PathBuf};
+use std::{mem::swap, path::PathBuf, sync::Arc};
 use tokio::time::{Duration, sleep};
-use versatiles::{Config, StaticSourceConfig, TileSourceConfig, get_registry, server::TileServer};
-use versatiles_container::{DataLocation, DataSource, ProcessingConfig};
+use versatiles::{Config, StaticSourceConfig, TileSourceConfig, server::TileServer};
+use versatiles_container::{DataLocation, DataSource, TilesRuntime};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]
@@ -53,7 +53,7 @@ pub struct Subcommand {
 }
 
 #[tokio::main]
-pub async fn run(arguments: &Subcommand) -> Result<()> {
+pub async fn run(arguments: &Subcommand, runtime: Arc<TilesRuntime>) -> Result<()> {
 	let mut config = if let Some(config_path) = &arguments.config {
 		Config::from_path(config_path)
 			.context("run `versatiles help config` to get more information about the config file format")?
@@ -105,8 +105,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	swap(&mut config.static_sources, &mut static_sources);
 	config.static_sources.extend(static_sources);
 
-	let registry = get_registry(ProcessingConfig::default().arc());
-	let mut server: TileServer = TileServer::from_config(config, registry).await?;
+	let mut server: TileServer = TileServer::from_config(config, runtime).await?;
 
 	let mut list = server.get_url_mapping().await;
 	list.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
