@@ -26,7 +26,7 @@
 //! }
 //! ```
 
-use crate::{types::data_location::DataLocation, *};
+use crate::{TilesRuntime, types::data_location::DataLocation, *};
 use anyhow::{Result, anyhow, bail};
 #[cfg(test)]
 use assert_fs::NamedTempFile;

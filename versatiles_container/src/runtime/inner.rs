@@ -1,4 +1,5 @@
-use crate::{CacheType, ContainerRegistry, EventBus, ProgressFactory};
+use super::{EventBus, ProgressFactory};
+use crate::{CacheType, ContainerRegistry};
 
 pub(crate) struct RuntimeInner {
 	pub(crate) cache_type: CacheType,

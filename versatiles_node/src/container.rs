@@ -10,7 +10,10 @@ use napi::{
 use napi_derive::napi;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use versatiles_container::{Event, TilesConverterParameters, TilesReaderTrait, TilesRuntime};
+use versatiles_container::{
+	TilesConverterParameters, TilesReaderTrait,
+	runtime::{Event, TilesRuntime},
+};
 use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCoord as RustTileCoord};
 
 /// Container reader for accessing tile data from various formats
@@ -203,7 +206,7 @@ impl ContainerReader {
 		if let Some(cb) = on_message {
 			let cb_arc = Arc::new(cb);
 			runtime.events().subscribe(move |event| {
-				let (msg_type, message) = match event {
+				let (msg_type, message): (&str, String) = match event {
 					Event::Step { message } => ("step", message.clone()),
 					Event::Warning { message } => ("warning", message.clone()),
 					Event::Error { message } => ("error", message.clone()),

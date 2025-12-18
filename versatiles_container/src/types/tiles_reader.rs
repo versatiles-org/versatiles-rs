@@ -28,7 +28,7 @@
 //! # }
 //! ```
 
-use crate::{CacheMap, ProgressHandle, Tile, TilesRuntime};
+use crate::{CacheMap, Tile, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{StreamExt, future::BoxFuture, stream};
@@ -227,12 +227,14 @@ pub trait TilesReaderTraverseExt: TilesReaderTrait {
 		traversal_write: &'s Traversal,
 		mut callback: C,
 		runtime: Arc<TilesRuntime>,
-		progress: Option<ProgressHandle>,
+		progress_message: Option<&str>,
 	) -> impl core::future::Future<Output = Result<()>> + Send + 'a
 	where
 		C: FnMut(TileBBox, TileStream<'a, Tile>) -> BoxFuture<'a, Result<()>> + Send + 'a,
 		's: 'a,
 	{
+		let progress_message = progress_message.unwrap_or("converting tiles").to_string();
+
 		async move {
 			let traversal_steps =
 				translate_traversals(&self.parameters().bbox_pyramid, self.traversal(), traversal_write)?;
@@ -256,8 +258,7 @@ pub trait TilesReaderTraverseExt: TilesReaderTrait {
 					}
 				}
 			}
-			let progress =
-				progress.unwrap_or_else(|| runtime.create_progress("converting tiles", u64::midpoint(tn_read, tn_write)));
+			let progress = runtime.create_progress(&progress_message, u64::midpoint(tn_read, tn_write));
 
 			let mut ti_read = 0;
 			let mut ti_write = 0;

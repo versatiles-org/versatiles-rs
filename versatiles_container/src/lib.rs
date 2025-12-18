@@ -52,6 +52,10 @@ mod container;
 /// Re‑exports the container registry and common open/write helpers.
 pub use container::*;
 
+/// Re‑exports progress tracking and event bus types.
+pub mod runtime;
+pub use runtime::*;
+
 mod types;
 /// Re‑exports reader/writer traits, converters, and auxiliary types.
 pub use types::*;
