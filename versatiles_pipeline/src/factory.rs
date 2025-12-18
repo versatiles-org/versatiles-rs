@@ -215,8 +215,8 @@ impl PipelineFactory {
 	}
 
 	/// Returns the runtime associated with this factory.
-	pub fn runtime(&self) -> &TilesRuntime {
-		&self.runtime
+	pub fn runtime(&self) -> TilesRuntime {
+		self.runtime.clone()
 	}
 }
 

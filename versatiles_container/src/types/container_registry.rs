@@ -251,22 +251,22 @@ impl Default for ContainerRegistry {
 			TarTilesWriter::write_to_path(r.as_mut(), &p, rt).await
 		});
 		// PMTiles
-		reg.register_reader_file("pmtiles", |p, _r| async move {
-			Ok(PMTilesReader::open_path(&p).await?.boxed())
+		reg.register_reader_file("pmtiles", |p, r| async move {
+			Ok(PMTilesReader::open_path(&p, r).await?.boxed())
 		});
-		reg.register_reader_data("pmtiles", |p, _r| async move {
-			Ok(PMTilesReader::open_reader(p).await?.boxed())
+		reg.register_reader_data("pmtiles", |p, r| async move {
+			Ok(PMTilesReader::open_reader(p, r).await?.boxed())
 		});
 		reg.register_writer_file("pmtiles", |mut r, p, rt| async move {
 			PMTilesWriter::write_to_path(r.as_mut(), &p, rt).await
 		});
 
 		// VersaTiles
-		reg.register_reader_file("versatiles", |p, _r| async move {
-			Ok(VersaTilesReader::open_path(&p).await?.boxed())
+		reg.register_reader_file("versatiles", |p, r| async move {
+			Ok(VersaTilesReader::open_path(&p, r).await?.boxed())
 		});
-		reg.register_reader_data("versatiles", |p, _r| async move {
-			Ok(VersaTilesReader::open_reader(p).await?.boxed())
+		reg.register_reader_data("versatiles", |p, r| async move {
+			Ok(VersaTilesReader::open_reader(p, r).await?.boxed())
 		});
 		reg.register_writer_file("versatiles", |mut r, p, rt| async move {
 			VersaTilesWriter::write_to_path(r.as_mut(), &p, rt).await

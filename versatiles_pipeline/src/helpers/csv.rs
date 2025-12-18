@@ -1,6 +1,7 @@
 use anyhow::{Result, bail};
 use std::{io::BufReader, path::Path};
-use versatiles_core::{progress::get_progress_bar, utils::read_csv_iter};
+use versatiles_container::TilesRuntime;
+use versatiles_core::utils::read_csv_iter;
 use versatiles_derive::context;
 use versatiles_geometry::geo::*;
 
@@ -13,11 +14,11 @@ use versatiles_geometry::geo::*;
 /// # Returns
 /// * `Result<Vec<GeoProperties>>` - A vector of `GeoProperties` or an error if the file could not be read.
 #[context("Failed to read CSV file at path: {path:?}")]
-pub async fn read_csv_file(path: &Path) -> Result<Vec<GeoProperties>> {
+pub async fn read_csv_file(path: &Path, runtime: TilesRuntime) -> Result<Vec<GeoProperties>> {
 	let file = std::fs::File::open(path).with_context(|| format!("Failed to open file at path: {path:?}"))?;
 
 	let size = file.metadata()?.len();
-	let progress = get_progress_bar("read csv", size);
+	let progress = runtime.create_progress("read csv", size);
 
 	let reader = BufReader::new(file);
 
@@ -71,7 +72,7 @@ mod tests {
 	async fn test_read_csv_file() -> Result<()> {
 		let file_path =
 			make_temp_csv("name,age,city\nJohn Doe,30,New York\nJane Smith,25,Los Angeles\nAlice Johnson,28,Chicago")?;
-		let data = read_csv_file(file_path.path()).await?;
+		let data = read_csv_file(file_path.path(), TilesRuntime::default()).await?;
 
 		assert_eq!(data.len(), 3);
 
@@ -96,7 +97,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_read_empty_csv_file() -> Result<()> {
 		let file_path = make_temp_csv("name,age,city")?;
-		let data = read_csv_file(file_path.path()).await?;
+		let data = read_csv_file(file_path.path(), TilesRuntime::default()).await?;
 		assert!(data.is_empty());
 		Ok(())
 	}
@@ -105,7 +106,7 @@ mod tests {
 	async fn test_read_csv_file_missing_values() -> Result<()> {
 		let file_path = make_temp_csv("name,age,city\nJohn Doe,,New York\n,25,Los Angeles\nAlice Johnson,28,")?;
 
-		let data = read_csv_file(file_path.path()).await?;
+		let data = read_csv_file(file_path.path(), TilesRuntime::default()).await?;
 
 		assert_eq!(data.len(), 3);
 
@@ -130,7 +131,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_read_csv_file_incorrect_path() {
 		let path = Path::new("non_existent.csv");
-		let result = read_csv_file(path).await;
+		let result = read_csv_file(path, TilesRuntime::default()).await;
 		assert!(result.is_err());
 	}
 }

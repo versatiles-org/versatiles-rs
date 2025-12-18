@@ -29,7 +29,7 @@ axum = { version = "0.8.7", default-features = false, optional = true, features 
 	"http2",
 	"tokio",
 ] }
-clap = { workspace = true, optional = true }
+clap = { workspace = true, optional = true, features = ["default"] }
 enumset = { workspace = true, optional = true }
 env_logger = { version = "0.11.8", optional = true }
 log = { workspace = true }
@@ -100,7 +100,6 @@ cli = [
 	"dep:termimad",
 	"dep:tokio",
 	"versatiles_container/cli",
-	"versatiles_core/cli",
 ]
 gdal = []
 bindgen = []

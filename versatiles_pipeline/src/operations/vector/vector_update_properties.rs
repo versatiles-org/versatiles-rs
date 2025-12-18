@@ -158,7 +158,7 @@ impl TransformOperationFactoryTrait for Factory {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		// Load the CSV file referenced in the VPL.
-		let data = read_csv_file(&factory.resolve_path(&args.data_source_path))
+		let data = read_csv_file(&factory.resolve_path(&args.data_source_path), factory.runtime())
 			.await
 			.with_context(|| format!("Failed to read CSV file from '{}'", args.data_source_path))?;
 

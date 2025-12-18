@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
 use std::path::PathBuf;
 use versatiles_container::{TilesConverterParameters, TilesRuntime, convert_tiles_container};
-use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCompression};
+use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCompression, TileFormat};
 use versatiles_derive::context;
 
 #[derive(clap::Args, Debug)]
@@ -55,7 +55,7 @@ pub struct Subcommand {
 
 	/// set the output tile format
 	#[arg(long, value_name = "TILE_FORMAT", display_order = 3)]
-	tile_format: Option<versatiles_core::TileFormat>,
+	tile_format: Option<TileFormat>,
 }
 
 #[tokio::main]

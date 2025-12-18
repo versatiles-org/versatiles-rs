@@ -16,6 +16,8 @@ version.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 byteorder.workspace = true
+clap = { workspace = true, optional = true, features = ["std", "derive"] }
+colored = { version = "3.0.0", default-features = false, optional = true }
 futures.workspace = true
 itertools = { workspace = true, features = ["use_alloc"] }
 lazy_static.workspace = true
@@ -50,5 +52,5 @@ versatiles_core = { workspace = true, features = ["test"] }
 
 [features]
 default = []
-cli = ["versatiles_core/cli"]
+cli = ["dep:clap", "dep:colored", "versatiles_core/cli"]
 test = []

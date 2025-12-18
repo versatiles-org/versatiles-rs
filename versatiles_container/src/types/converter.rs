@@ -296,6 +296,7 @@ mod tests {
 			let reader = MockTilesReader::new_mock(reader_parameters)?;
 
 			let temp_file = NamedTempFile::new("test.versatiles")?;
+			let runtime = TilesRuntime::default();
 
 			let cp = TilesConverterParameters {
 				bbox_pyramid: Some(pyramid_convert),
@@ -303,9 +304,9 @@ mod tests {
 				swap_xy,
 				tile_compression: None,
 			};
-			convert_tiles_container(reader.boxed(), cp, &temp_file, TilesRuntime::default()).await?;
+			convert_tiles_container(reader.boxed(), cp, &temp_file, runtime.clone()).await?;
 
-			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
+			let reader_out = VersaTilesReader::open_path(&temp_file, runtime).await?;
 			let parameters_out = reader_out.parameters();
 			let tile_compression_out = parameters_out.tile_compression;
 			assert_eq!(parameters_out.bbox_pyramid, pyramid_out);

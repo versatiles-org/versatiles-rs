@@ -54,7 +54,7 @@
 //! or when a requested tile is missing.
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
-use crate::{Tile, TilesReaderTrait};
+use crate::{Tile, TilesReaderTrait, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{lock::Mutex, stream::StreamExt};
@@ -76,6 +76,7 @@ pub struct VersaTilesReader {
 	reader: DataReader,
 	tile_index_cache: Mutex<LimitedCache<TileCoord, Arc<TileIndex>>>,
 	tilejson: TileJSON,
+	runtime: TilesRuntime,
 }
 
 impl VersaTilesReader {
@@ -87,8 +88,8 @@ impl VersaTilesReader {
 	/// # Errors
 	/// Returns an error if the file cannot be opened.
 	#[context("Failed to open versatiles file at '{path:?}'")]
-	pub async fn open_path(path: &Path) -> Result<VersaTilesReader> {
-		VersaTilesReader::open_reader(DataReaderFile::open(path)?).await
+	pub async fn open_path(path: &Path, runtime: TilesRuntime) -> Result<VersaTilesReader> {
+		VersaTilesReader::open_reader(DataReaderFile::open(path)?, runtime).await
 	}
 
 	/// Open a `.versatiles` container from an existing [`DataReader`].
@@ -100,7 +101,7 @@ impl VersaTilesReader {
 	/// # Errors
 	/// Returns an error if header/metadata/index reads or decompressions fail.
 	#[context("Failed to open versatiles reader")]
-	pub async fn open_reader(mut reader: DataReader) -> Result<VersaTilesReader> {
+	pub async fn open_reader(mut reader: DataReader, runtime: TilesRuntime) -> Result<VersaTilesReader> {
 		let header = FileHeader::from_reader(&mut reader)
 			.await
 			.context("Failed reading the header")?;
@@ -134,6 +135,7 @@ impl VersaTilesReader {
 			reader,
 			tile_index_cache: Mutex::new(LimitedCache::with_maximum_size(100_000_000)),
 			tilejson,
+			runtime,
 		})
 	}
 
@@ -423,8 +425,6 @@ impl TilesReaderTrait for VersaTilesReader {
 	#[cfg(feature = "cli")]
 	#[context("probing versatiles tiles (scan & stats)")]
 	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
-		use versatiles_core::progress::get_progress_bar;
-
 		#[derive(Debug)]
 		#[allow(dead_code)]
 		struct Entry {
@@ -440,7 +440,9 @@ impl TilesReaderTrait for VersaTilesReader {
 		let mut tile_count: u64 = 0;
 
 		let block_index = self.block_index.clone();
-		let progress = get_progress_bar("scanning blocks", block_index.len() as u64);
+		let progress = self
+			.runtime
+			.create_progress("scanning blocks", block_index.len() as u64);
 
 		for block in block_index.iter() {
 			let tile_index = self.get_block_tile_index(block).await?;
@@ -471,7 +473,7 @@ impl TilesReaderTrait for VersaTilesReader {
 			}
 			progress.inc(1);
 		}
-		progress.remove();
+		progress.finish();
 
 		print
 			.add_key_value("average tile size", &size_sum.div_euclid(tile_count))
@@ -514,7 +516,8 @@ mod tests {
 	// Helper to quickly create a test reader and bbox
 	async fn mk_reader() -> Result<(NamedTempFile, VersaTilesReader)> {
 		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 4, "versatiles").await?;
-		let reader = VersaTilesReader::open_path(&temp_file).await?;
+		let runtime = TilesRuntime::default();
+		let reader = VersaTilesReader::open_path(&temp_file, runtime).await?;
 		Ok((temp_file, reader))
 	}
 
@@ -624,17 +627,19 @@ mod tests {
 			TileBBoxPyramid::new_full(4),
 		))?;
 
+		let runtime = TilesRuntime::default();
+
 		let mut data_writer1 = DataWriterBlob::new()?;
-		VersaTilesWriter::write_to_writer(&mut reader1, &mut data_writer1, TilesRuntime::default()).await?;
+		VersaTilesWriter::write_to_writer(&mut reader1, &mut data_writer1, runtime.clone()).await?;
 
 		let data_reader1 = data_writer1.to_reader();
-		let mut reader2 = VersaTilesReader::open_reader(Box::new(data_reader1)).await?;
+		let mut reader2 = VersaTilesReader::open_reader(Box::new(data_reader1), runtime.clone()).await?;
 
 		let mut data_writer2 = DataWriterBlob::new()?;
-		VersaTilesWriter::write_to_writer(&mut reader2, &mut data_writer2, TilesRuntime::default()).await?;
+		VersaTilesWriter::write_to_writer(&mut reader2, &mut data_writer2, runtime.clone()).await?;
 
 		let data_reader2 = data_writer2.to_reader();
-		let reader3 = VersaTilesReader::open_reader(Box::new(data_reader2)).await?;
+		let reader3 = VersaTilesReader::open_reader(Box::new(data_reader2), runtime).await?;
 
 		assert_eq!(reader2, reader3);
 

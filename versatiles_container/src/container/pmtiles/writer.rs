@@ -169,11 +169,13 @@ mod tests {
 			tile_format: TileFormat::MVT,
 		})?;
 
+		let runtime = TilesRuntime::default();
+
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, TilesRuntime::default()).await?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, runtime.clone()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
-		let mut reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;
+		let mut reader = PMTilesReader::open_reader(Box::new(data_reader), runtime).await?;
 		MockTilesWriter::write(&mut reader).await?;
 
 		Ok(())
@@ -192,11 +194,13 @@ mod tests {
 			tile_format: TileFormat::MVT,
 		})?;
 
+		let runtime = TilesRuntime::default();
+
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, TilesRuntime::default()).await?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, runtime.clone()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
-		let reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;
+		let reader = PMTilesReader::open_reader(Box::new(data_reader), runtime).await?;
 
 		let entries = reader.get_tile_entries()?;
 		let entries = entries.iter().collect::<Vec<_>>();

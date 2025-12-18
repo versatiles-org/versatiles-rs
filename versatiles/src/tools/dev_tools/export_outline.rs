@@ -1,7 +1,6 @@
 use anyhow::{Context, Result, bail};
 use std::path::PathBuf;
 use versatiles_container::TilesRuntime;
-use versatiles_core::progress::get_progress_bar;
 use versatiles_geometry::{geo::GeoCollection, tile_outline::TileOutline};
 
 #[derive(clap::Args, Debug)]
@@ -45,7 +44,7 @@ pub async fn run(args: &ExportOutline, runtime: TilesRuntime) -> Result<()> {
 		.await?
 		.map_item_parallel(move |mut tile| Ok(tile.as_blob(compression)?.len()));
 
-	let progress = get_progress_bar("Scanning tile sizes", bbox.count_tiles());
+	let progress = runtime.create_progress("Scanning tile sizes", bbox.count_tiles());
 	let mut outline = TileOutline::new();
 	while let Some(entry) = stream.next().await {
 		outline.add_coord(entry.0);

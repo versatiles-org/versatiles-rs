@@ -46,7 +46,7 @@
 //! PMTiles header/directories cannot be parsed or decompressed, or a requested tile is missing.
 
 use super::types::{EntriesV3, HeaderV3};
-use crate::{Tile, TilesReaderTrait};
+use crate::{Tile, TilesReaderTrait, TilesRuntime};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -55,7 +55,6 @@ use std::{fmt::Debug, path::Path, sync::Arc};
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
 	io::*,
-	progress::get_progress_bar,
 	utils::{HilbertIndex, decompress},
 	*,
 };
@@ -96,8 +95,8 @@ impl PMTilesReader {
 	/// # Errors
 	/// Returns an error if the file cannot be opened.
 	#[context("opening PMTiles at '{}'", path.display())]
-	pub async fn open_path(path: &Path) -> Result<PMTilesReader> {
-		PMTilesReader::open_reader(DataReaderFile::open(path)?).await
+	pub async fn open_path(path: &Path, runtime: TilesRuntime) -> Result<PMTilesReader> {
+		PMTilesReader::open_reader(DataReaderFile::open(path)?, runtime).await
 	}
 
 	/// Open a PMTiles container from an existing [`DataReader`].
@@ -109,7 +108,7 @@ impl PMTilesReader {
 	/// # Errors
 	/// Returns an error if reading or decompression fails, or if the header/dirs are invalid.
 	#[context("opening PMTiles from reader")]
-	pub async fn open_reader(data_reader: DataReader) -> Result<PMTilesReader>
+	pub async fn open_reader(data_reader: DataReader, runtime: TilesRuntime) -> Result<PMTilesReader>
 	where
 		Self: Sized,
 	{
@@ -138,7 +137,12 @@ impl PMTilesReader {
 		let leaves_bytes = data_reader.read_range(&header.leaf_dirs).await?;
 		log::trace!("Leaf directories bytes length: {}", leaves_bytes.len());
 
-		let bbox_pyramid = calc_bbox_pyramid(&root_bytes_uncompressed, &leaves_bytes, internal_compression)?;
+		let bbox_pyramid = calc_bbox_pyramid(
+			&root_bytes_uncompressed,
+			&leaves_bytes,
+			internal_compression,
+			runtime.clone(),
+		)?;
 		log::trace!("Bounding box pyramid: {:?}", bbox_pyramid);
 
 		let parameters = TilesReaderParameters::new(
@@ -188,6 +192,7 @@ fn calc_bbox_pyramid(
 	root_bytes_uncompressed: &Blob,
 	leaves_bytes: &Blob,
 	compression: TileCompression,
+	runtime: TilesRuntime,
 ) -> Result<TileBBoxPyramid> {
 	let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
@@ -196,23 +201,22 @@ fn calc_bbox_pyramid(
 		root_bytes_uncompressed,
 		leaves_bytes,
 		compression,
-		true,
+		Some(runtime),
 	)?;
 
-	#[context("parsing PMTiles directory (root={})", root)]
 	fn parse_directories(
 		bbox_pyramid: &mut TileBBoxPyramid,
 		dir: &Blob,
 		leaves_bytes: &Blob,
 		compression: TileCompression,
-		root: bool,
+		root_runtime: Option<TilesRuntime>,
 	) -> Result<u64> {
 		log::trace!("parse_directories");
 
 		let entries = EntriesV3::from_blob(dir)?;
 		let entries = entries.iter().collect::<Vec<_>>();
-		let progress = if root {
-			Some(get_progress_bar("Parsing PMTiles directories", entries.len() as u64))
+		let progress = if let Some(runtime) = &root_runtime {
+			Some(runtime.create_progress("Parsing PMTiles directories", entries.len() as u64))
 		} else {
 			None
 		};
@@ -234,7 +238,7 @@ fn calc_bbox_pyramid(
 					let range = entry.range;
 					let mut blob = leaves_bytes.read_range(&range)?;
 					blob = decompress(blob, compression)?;
-					total_entries += parse_directories(bbox_pyramid, &blob, leaves_bytes, compression, false)?;
+					total_entries += parse_directories(bbox_pyramid, &blob, leaves_bytes, compression, None)?;
 				}
 			}
 		}
@@ -367,7 +371,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let reader = PMTilesReader::open_path(&PATH).await?;
+		let reader = PMTilesReader::open_path(&PATH, TilesRuntime::default()).await?;
 
 		assert_eq!(reader.container_name(), "pmtiles");
 

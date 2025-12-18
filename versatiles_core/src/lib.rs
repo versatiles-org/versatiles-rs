@@ -4,7 +4,6 @@ pub mod byte_iterator;
 pub mod io;
 pub mod json;
 pub mod macros;
-pub mod progress;
 pub mod traversal;
 pub use traversal::*;
 pub mod types;
