@@ -29,6 +29,7 @@
 
 mod builder;
 mod events;
+mod inner;
 mod progress;
 
 pub use builder::RuntimeBuilder;
@@ -36,6 +37,7 @@ pub use events::{Event, EventBus, ListenerId, LogAdapter, LogLevel, ProgressData
 pub use progress::{ProgressFactory, ProgressHandle};
 
 use crate::{CacheType, ContainerRegistry};
+use inner::RuntimeInner;
 use std::sync::Arc;
 
 /// Immutable runtime configuration and services for tile processing operations
@@ -51,14 +53,6 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct TilesRuntime {
 	pub(crate) inner: Arc<RuntimeInner>,
-}
-
-pub(crate) struct RuntimeInner {
-	pub(crate) cache_type: CacheType,
-	pub(crate) registry: ContainerRegistry,
-	pub(crate) event_bus: EventBus,
-	pub(crate) progress_factory: ProgressFactory,
-	pub(crate) max_memory: Option<usize>,
 }
 
 impl TilesRuntime {
