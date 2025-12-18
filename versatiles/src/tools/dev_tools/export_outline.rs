@@ -23,17 +23,10 @@ pub struct ExportOutline {
 	level: Option<u8>,
 }
 
-pub async fn run(args: &ExportOutline) -> Result<()> {
+pub async fn run(args: &ExportOutline, runtime: Arc<TilesRuntime>) -> Result<()> {
 	let input = &args.input;
 	let output = &args.output;
 
-	let runtime = Arc::new(
-		TilesRuntime::builder()
-			.customize_registry(|registry| {
-				versatiles::register_readers(registry);
-			})
-			.build(),
-	);
 	let reader = runtime.registry().get_reader_from_str(input).await?;
 
 	let compression = reader.parameters().tile_compression;

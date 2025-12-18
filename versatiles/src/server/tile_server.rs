@@ -13,7 +13,7 @@
 //! a tiny `/status` probe for liveness checks.
 
 use super::{cors, routes, sources};
-use crate::{Config, TileSourceConfig};
+use crate::config::{Config, TileSourceConfig};
 use anyhow::{Result, bail};
 use axum::error_handling::HandleErrorLayer;
 use axum::http::{StatusCode, header::HeaderName, header::HeaderValue};
@@ -29,9 +29,7 @@ use tower::{
 };
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
-#[cfg(test)]
-use versatiles_container::TilesRuntime;
-use versatiles_container::{ContainerRegistry, TilesReaderTrait};
+use versatiles_container::{TilesReaderTrait, TilesRuntime};
 use versatiles_derive::context;
 
 /// Thin orchestration layer for the VersaTiles HTTP server.
@@ -45,7 +43,7 @@ use versatiles_derive::context;
 ///
 /// Typical usage in tests:
 /// ```no_run
-/// # use versatiles::{Config, server::TileServer};
+/// # use versatiles::{config::Config, server::TileServer};
 /// # async fn demo(mut server: TileServer) {
 /// server.start().await.unwrap();
 /// // ... run requests ...
@@ -69,7 +67,7 @@ pub struct TileServer {
 	minimal_recompression: bool,
 	/// Expose small helper endpoints like `/tiles/index.json` and `/status`.
 	disable_api: bool,
-	registry: ContainerRegistry,
+	runtime: Arc<TilesRuntime>,
 	/// Configured CORS origins (supports `*`, prefix/suffix wildcard, or `/regex/`).
 	cors_allowed_origins: Vec<String>,
 	cors_max_age_seconds: u64,
@@ -80,13 +78,7 @@ pub struct TileServer {
 impl TileServer {
 	#[cfg(test)]
 	pub fn new_test(ip: &str, port: u16, minimal_recompression: bool, disable_api: bool) -> TileServer {
-		let runtime = std::sync::Arc::new(
-			TilesRuntime::builder()
-				.customize_registry(|registry| {
-					crate::register_readers(registry);
-				})
-				.build(),
-		);
+		let runtime = crate::runtime::create_runtime_with_vpl();
 		TileServer {
 			ip: ip.to_owned(),
 			port,
@@ -96,7 +88,7 @@ impl TileServer {
 			join: None,
 			minimal_recompression,
 			disable_api,
-			registry: runtime.registry().clone(),
+			runtime,
 			cors_allowed_origins: Vec::new(),
 			cors_max_age_seconds: 3600,
 			extra_response_headers: Vec::new(),
@@ -108,7 +100,7 @@ impl TileServer {
 	/// This ingests tile and static sources, applying optional on-the-fly
 	/// transforms (e.g., `flip_y`, `swap_xy`) and compression overrides.
 	#[context("building tile server from config")]
-	pub async fn from_config(config: Config, registry: ContainerRegistry) -> Result<TileServer> {
+	pub async fn from_config(config: Config, runtime: Arc<TilesRuntime>) -> Result<TileServer> {
 		let mut parsed_headers: Vec<(HeaderName, HeaderValue)> = Vec::new();
 		for (k, v) in &config.extra_response_headers {
 			let name =
@@ -127,7 +119,7 @@ impl TileServer {
 			join: None,
 			minimal_recompression: config.server.minimal_recompression.unwrap_or(false),
 			disable_api: config.server.disable_api.unwrap_or(false),
-			registry,
+			runtime,
 			cors_allowed_origins: config.cors.allowed_origins.clone(),
 			cors_max_age_seconds: config.cors.max_age_seconds.unwrap_or(3600),
 			extra_response_headers: parsed_headers,
@@ -159,7 +151,7 @@ impl TileServer {
 			tile_config.src,
 		);
 
-		let reader = self.registry.get_reader(tile_config.src.clone()).await?;
+		let reader = self.runtime.registry().get_reader(tile_config.src.clone()).await?;
 
 		self.add_tile_source(name, reader).await
 	}

@@ -1,10 +1,10 @@
-use crate::{napi_result, types::ServerOptions};
+use crate::{napi_result, runtime::create_runtime, types::ServerOptions};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use versatiles::{Config, server::TileServer as RustTileServer};
-use versatiles_container::{ContainerRegistry, DataLocation, DataSource};
+use versatiles::{config::Config, server::TileServer as RustTileServer};
+use versatiles_container::{DataLocation, DataSource, TilesRuntime};
 
 // Type aliases for complex types
 type TileSourceList = Arc<Mutex<Vec<(String, String)>>>;
@@ -14,7 +14,7 @@ type StaticSourceList = Arc<Mutex<Vec<(String, Option<String>)>>>;
 #[napi]
 pub struct TileServer {
 	inner: Arc<Mutex<Option<RustTileServer>>>,
-	registry: ContainerRegistry,
+	runtime: Arc<TilesRuntime>,
 	port: Arc<Mutex<u16>>,
 	ip: Arc<Mutex<String>>,
 	minimal_recompression: Arc<Mutex<Option<bool>>>,
@@ -34,14 +34,14 @@ impl TileServer {
 			minimal_recompression: None,
 		});
 
-		let registry = ContainerRegistry::default();
+		let runtime = create_runtime();
 		let ip = opts.ip.unwrap_or_else(|| "0.0.0.0".to_string());
 		let port = opts.port.unwrap_or(8080) as u16;
 		let minimal_recompression = opts.minimal_recompression;
 
 		Ok(Self {
 			inner: Arc::new(Mutex::new(None)),
-			registry,
+			runtime,
 			port: Arc::new(Mutex::new(port)),
 			ip: Arc::new(Mutex::new(ip)),
 			minimal_recompression: Arc::new(Mutex::new(minimal_recompression)),
@@ -58,7 +58,7 @@ impl TileServer {
 	#[napi]
 	pub async fn add_tile_source(&self, name: String, path: String) -> Result<()> {
 		// Get reader to validate that the file exists
-		let reader = napi_result!(self.registry.get_reader_from_str(&path).await)?;
+		let reader = napi_result!(self.runtime.registry().get_reader_from_str(&path).await)?;
 
 		// Store the source in our list (source of truth)
 		let mut sources = self.tile_sources.lock().await;
@@ -172,7 +172,7 @@ impl TileServer {
 		// Add all tile sources to config
 		let tile_sources = self.tile_sources.lock().await;
 		for (name, path) in tile_sources.iter() {
-			use versatiles::TileSourceConfig;
+			use versatiles::config::TileSourceConfig;
 			let data_source = napi_result!(DataSource::try_from(path.as_str()))?;
 			config.tile_sources.push(TileSourceConfig {
 				name: Some(name.clone()),
@@ -183,7 +183,7 @@ impl TileServer {
 		// Add all static sources to config
 		let static_sources = self.static_sources.lock().await;
 		for (path, url_prefix) in static_sources.iter() {
-			use versatiles::StaticSourceConfig;
+			use versatiles::config::StaticSourceConfig;
 			let data_location = DataLocation::from(path.clone());
 			config.static_sources.push(StaticSourceConfig {
 				src: data_location,
@@ -191,7 +191,7 @@ impl TileServer {
 			});
 		}
 
-		let mut server = napi_result!(RustTileServer::from_config(config, self.registry.clone()).await)?;
+		let mut server = napi_result!(RustTileServer::from_config(config, self.runtime.clone()).await)?;
 
 		napi_result!(server.start().await)?;
 

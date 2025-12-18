@@ -32,7 +32,7 @@ pub struct MeasureTileSizes {
 	scale: usize,
 }
 
-pub async fn run(args: &MeasureTileSizes) -> Result<()> {
+pub async fn run(args: &MeasureTileSizes, runtime: Arc<TilesRuntime>) -> Result<()> {
 	let input = &args.input;
 	let output_file = &args.output;
 	let level = args.level;
@@ -50,13 +50,6 @@ pub async fn run(args: &MeasureTileSizes) -> Result<()> {
 		output_file.extension().unwrap_or_default()
 	);
 
-	let runtime = Arc::new(
-		TilesRuntime::builder()
-			.customize_registry(|registry| {
-				versatiles::register_readers(registry);
-			})
-			.build(),
-	);
 	let reader = runtime.registry().get_reader_from_str(input).await?;
 	let bbox = TileBBox::new_full(level)?;
 	let stream = reader.get_tile_stream(bbox).await?;

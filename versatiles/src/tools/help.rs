@@ -1,5 +1,5 @@
 use anyhow::Result;
-use versatiles::Config;
+use versatiles::config::Config;
 use versatiles_pipeline::PipelineFactory;
 
 #[derive(clap::Args, Debug)]

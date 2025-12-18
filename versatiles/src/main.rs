@@ -30,7 +30,9 @@ mod tools;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use log::LevelFilter;
-use std::io::Write;
+use std::{io::Write, sync::Arc};
+use versatiles::runtime::create_runtime_with_vpl;
+use versatiles_container::TilesRuntime;
 
 /// Command-line interface for VersaTiles
 #[derive(Parser, Debug)]
@@ -128,48 +130,31 @@ fn main() -> Result<()> {
 		})
 		.init();
 
-	// Create runtime with default settings and register .vpl reader
-	let runtime = std::sync::Arc::new(
-		versatiles::container::TilesRuntime::builder()
-			.customize_registry(|registry| {
-				versatiles::register_readers(registry);
-			})
-			.build(),
-	);
-
-	run(cli, runtime)
+	run(cli, create_runtime_with_vpl())
 }
 
 /// Helper function for running subcommands
-fn run(cli: Cli, runtime: std::sync::Arc<versatiles::container::TilesRuntime>) -> Result<()> {
+fn run(cli: Cli, runtime: Arc<TilesRuntime>) -> Result<()> {
 	match &cli.command {
 		Commands::Convert(arguments) => tools::convert::run(arguments, runtime),
 		Commands::Help(arguments) => tools::help::run(arguments),
 		Commands::Probe(arguments) => tools::probe::run(arguments, runtime),
 		#[cfg(feature = "server")]
 		Commands::Serve(arguments) => tools::serve::run(arguments, runtime),
-		Commands::Dev(arguments) => tools::dev::run(arguments),
+		Commands::Dev(arguments) => tools::dev::run(arguments, runtime),
 	}
 }
 
 /// Unit tests for the command-line interface
 #[cfg(test)]
 mod tests {
-	use crate::{Cli, run};
-	use anyhow::Result;
-	use clap::Parser;
+	use super::*;
 
 	/// Function for running command-line arguments in tests
 	pub fn run_command(arg_vec: Vec<&str>) -> Result<String> {
 		let cli = Cli::try_parse_from(arg_vec)?;
 		let msg = format!("{cli:?}");
-		let runtime = std::sync::Arc::new(
-			versatiles::container::TilesRuntime::builder()
-				.customize_registry(|registry| {
-					versatiles::register_readers(registry);
-				})
-				.build(),
-		);
+		let runtime = create_runtime_with_vpl();
 		run(cli, runtime)?;
 		Ok(msg)
 	}

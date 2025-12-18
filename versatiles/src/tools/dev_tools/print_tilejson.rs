@@ -15,26 +15,16 @@ pub struct PrintTilejson {
 	pretty: bool,
 }
 
-pub async fn run(args: &PrintTilejson) -> Result<()> {
-	let tilejson = fetch_tilejson(args).await?;
+pub async fn run(args: &PrintTilejson, runtime: Arc<TilesRuntime>) -> Result<()> {
+	let tilejson = fetch_tilejson(args, runtime).await?;
 	std::io::stdout().write_all(tilejson.as_bytes())?;
 	Ok(())
 }
 
-async fn fetch_tilejson(args: &PrintTilejson) -> Result<String> {
-	let input = &args.input;
-	let pretty = args.pretty;
+async fn fetch_tilejson(args: &PrintTilejson, runtime: Arc<TilesRuntime>) -> Result<String> {
+	let reader = runtime.registry().get_reader_from_str(&args.input).await?;
 
-	let runtime = Arc::new(
-		TilesRuntime::builder()
-			.customize_registry(|registry| {
-				versatiles::register_readers(registry);
-			})
-			.build(),
-	);
-	let reader = runtime.registry().get_reader_from_str(input).await?;
-
-	Ok(if pretty {
+	Ok(if args.pretty {
 		reader.tilejson().as_pretty_lines(80).join("\n")
 	} else {
 		reader.tilejson().as_string()
@@ -45,13 +35,17 @@ async fn fetch_tilejson(args: &PrintTilejson) -> Result<String> {
 mod tests {
 	use super::*;
 	use pretty_assertions::assert_eq;
+	use versatiles::runtime::create_test_runtime;
 
 	#[tokio::test]
 	async fn test_print_tilejson() {
-		let output = fetch_tilejson(&PrintTilejson {
-			input: "../testdata/berlin.mbtiles".into(),
-			pretty: false,
-		})
+		let output = fetch_tilejson(
+			&PrintTilejson {
+				input: "../testdata/berlin.mbtiles".into(),
+				pretty: false,
+			},
+			create_test_runtime(),
+		)
 		.await
 		.unwrap();
 		assert_eq!(
@@ -62,10 +56,13 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_pretty_print_tilejson() {
-		let output = fetch_tilejson(&PrintTilejson {
-			input: "../testdata/berlin.mbtiles".into(),
-			pretty: true,
-		})
+		let output = fetch_tilejson(
+			&PrintTilejson {
+				input: "../testdata/berlin.mbtiles".into(),
+				pretty: true,
+			},
+			create_test_runtime(),
+		)
 		.await
 		.unwrap();
 		assert_eq!(

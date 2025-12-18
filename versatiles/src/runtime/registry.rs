@@ -9,18 +9,7 @@ use versatiles_container::{TilesReaderTrait, TilesRuntime};
 ///
 /// # Behavior
 /// Registers an additional reader for the `.vpl` file extension.
-///
-/// # Example
-/// ```rust
-/// use versatiles::container::{TilesRuntime, ContainerRegistry};
-///
-/// let runtime = TilesRuntime::builder()
-///     .customize_registry(|registry| {
-///         versatiles::register_readers(registry);
-///     })
-///     .build();
-/// ```
-pub fn register_readers(registry: &mut versatiles_container::ContainerRegistry) {
+pub fn register_vpl_readers(registry: &mut versatiles_container::ContainerRegistry) {
 	// Register a reader for "vpl" files
 	registry.register_reader_file("vpl", |p| async move {
 		// We can't easily pass runtime here, so we create a default one
@@ -46,7 +35,7 @@ mod tests {
 		let runtime = Arc::new(
 			TilesRuntime::builder()
 				.customize_registry(|registry| {
-					register_readers(registry);
+					register_vpl_readers(registry);
 				})
 				.build(),
 		);
