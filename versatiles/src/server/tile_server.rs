@@ -67,7 +67,7 @@ pub struct TileServer {
 	minimal_recompression: bool,
 	/// Expose small helper endpoints like `/tiles/index.json` and `/status`.
 	disable_api: bool,
-	runtime: Arc<TilesRuntime>,
+	runtime: TilesRuntime,
 	/// Configured CORS origins (supports `*`, prefix/suffix wildcard, or `/regex/`).
 	cors_allowed_origins: Vec<String>,
 	cors_max_age_seconds: u64,
@@ -78,7 +78,7 @@ pub struct TileServer {
 impl TileServer {
 	#[cfg(test)]
 	pub fn new_test(ip: &str, port: u16, minimal_recompression: bool, disable_api: bool) -> TileServer {
-		let runtime = crate::runtime::create_runtime_with_vpl();
+		let runtime = crate::runtime::create_test_runtime();
 		TileServer {
 			ip: ip.to_owned(),
 			port,
@@ -100,7 +100,7 @@ impl TileServer {
 	/// This ingests tile and static sources, applying optional on-the-fly
 	/// transforms (e.g., `flip_y`, `swap_xy`) and compression overrides.
 	#[context("building tile server from config")]
-	pub async fn from_config(config: Config, runtime: Arc<TilesRuntime>) -> Result<TileServer> {
+	pub async fn from_config(config: Config, runtime: TilesRuntime) -> Result<TileServer> {
 		let mut parsed_headers: Vec<(HeaderName, HeaderValue)> = Vec::new();
 		for (k, v) in &config.extra_response_headers {
 			let name =
@@ -151,7 +151,7 @@ impl TileServer {
 			tile_config.src,
 		);
 
-		let reader = self.runtime.registry().get_reader(tile_config.src.clone()).await?;
+		let reader = self.runtime.get_reader(tile_config.src.clone()).await?;
 
 		self.add_tile_source(name, reader).await
 	}

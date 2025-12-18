@@ -23,13 +23,14 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
+//!     let runtime = TilesRuntime::default();
+//!
 //!     // Open an existing MBTiles file
 //!     let path = Path::new("/absolute/path/to/berlin.mbtiles");
-//!     let mut reader = MBTilesReader::open_path(&path)?;
+//!     let mut reader = MBTilesReader::open_path(&path, runtime.clone())?;
 //!
 //!     // Convert it to PMTiles format
 //!     let temp_path = std::env::temp_dir().join("berlin.pmtiles");
-//!     let runtime = std::sync::Arc::new(TilesRuntime::default());
 //!     PMTilesWriter::write_to_path(&mut reader, &temp_path, runtime).await?;
 //!     Ok(())
 //! }
@@ -77,7 +78,7 @@ impl TilesWriterTrait for PMTilesWriter {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
-		runtime: Arc<TilesRuntime>,
+		runtime: TilesRuntime,
 	) -> Result<()> {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
 
@@ -169,7 +170,7 @@ mod tests {
 		})?;
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, Arc::new(TilesRuntime::default())).await?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, TilesRuntime::default()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let mut reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;
@@ -192,7 +193,7 @@ mod tests {
 		})?;
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, Arc::new(TilesRuntime::default())).await?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, TilesRuntime::default()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;

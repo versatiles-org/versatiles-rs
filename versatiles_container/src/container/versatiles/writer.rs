@@ -28,13 +28,14 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
+//!     let runtime = TilesRuntime::default();
+//!
 //!     // Open an MBTiles source
 //!     let path_in = Path::new("../testdata/berlin.mbtiles");
-//!     let mut reader = MBTilesReader::open_path(&path_in)?;
+//!     let mut reader = MBTilesReader::open_path(&path_in, runtime.clone())?;
 //!
 //!     // Write as a .versatiles container
 //!     let path_out = std::env::temp_dir().join("berlin.versatiles");
-//!     let runtime = std::sync::Arc::new(TilesRuntime::default());
 //!     VersaTilesWriter::write_to_path(&mut reader, &path_out, runtime).await?;
 //!     Ok(())
 //! }
@@ -80,7 +81,7 @@ impl TilesWriterTrait for VersaTilesWriter {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
-		runtime: Arc<TilesRuntime>,
+		runtime: TilesRuntime,
 	) -> Result<()> {
 		// Finalize the configuration
 		let parameters = reader.parameters();
@@ -149,7 +150,7 @@ impl VersaTilesWriter {
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
 		tile_compression: TileCompression,
-		runtime: Arc<TilesRuntime>,
+		runtime: TilesRuntime,
 	) -> Result<ByteRange> {
 		if reader.parameters().bbox_pyramid.is_empty() {
 			return Ok(ByteRange::empty());

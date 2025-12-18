@@ -14,7 +14,7 @@ type StaticSourceList = Arc<Mutex<Vec<(String, Option<String>)>>>;
 #[napi]
 pub struct TileServer {
 	inner: Arc<Mutex<Option<RustTileServer>>>,
-	runtime: Arc<TilesRuntime>,
+	runtime: TilesRuntime,
 	port: Arc<Mutex<u16>>,
 	ip: Arc<Mutex<String>>,
 	minimal_recompression: Arc<Mutex<Option<bool>>>,
@@ -58,7 +58,7 @@ impl TileServer {
 	#[napi]
 	pub async fn add_tile_source(&self, name: String, path: String) -> Result<()> {
 		// Get reader to validate that the file exists
-		let reader = napi_result!(self.runtime.registry().get_reader_from_str(&path).await)?;
+		let reader = napi_result!(self.runtime.get_reader_from_str(&path).await)?;
 
 		// Store the source in our list (source of truth)
 		let mut sources = self.tile_sources.lock().await;

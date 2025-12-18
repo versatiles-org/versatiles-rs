@@ -11,16 +11,16 @@
 //! #[tokio::main]
 //! async fn main() {
 //!     // Use the default registry
-//!     let registry = ContainerRegistry::default();
+//!     let runtime = TilesRuntime::default();
 //!
 //!     // Read from a local file
-//!     let reader = registry.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+//!     let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
 //!
 //!     // Define the output filename
 //!     let output_path = std::env::temp_dir().join("temp3.versatiles");
 //!
 //!     // Write the tiles to the output file
-//!     registry.write_to_path(reader, &output_path).await.unwrap();
+//!     runtime.write_to_path(reader, &output_path).await.unwrap();
 //!
 //!     println!("Tiles have been successfully converted and saved to {output_path:?}");
 //! }
@@ -45,11 +45,10 @@ use versatiles_derive::context;
 
 /// Signature for async opener functions used by the registry.
 type ReadFuture = Pin<Box<dyn Future<Output = Result<Box<dyn TilesReaderTrait>>> + Send>>;
-type ReadData = Box<dyn Fn(DataReader) -> ReadFuture + Send + Sync + 'static>;
-type ReadFile = Box<dyn Fn(PathBuf) -> ReadFuture + Send + Sync + 'static>;
+type ReadData = Box<dyn Fn(DataReader, TilesRuntime) -> ReadFuture + Send + Sync + 'static>;
+type ReadFile = Box<dyn Fn(PathBuf, TilesRuntime) -> ReadFuture + Send + Sync + 'static>;
 type WriteFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
-type WriteFile =
-	Box<dyn Fn(Box<dyn TilesReaderTrait>, PathBuf, Arc<TilesRuntime>) -> WriteFuture + Send + Sync + 'static>;
+type WriteFile = Box<dyn Fn(Box<dyn TilesReaderTrait>, PathBuf, TilesRuntime) -> WriteFuture + Send + Sync + 'static>;
 
 /// Registry mapping file extensions to async tile container readers and writers.
 ///
@@ -64,56 +63,18 @@ pub struct ContainerRegistry {
 	data_readers: HashMap<String, Arc<ReadData>>,
 	file_readers: HashMap<String, Arc<ReadFile>>,
 	file_writers: HashMap<String, Arc<WriteFile>>,
-	runtime: Option<Arc<TilesRuntime>>,
 }
 
 impl ContainerRegistry {
 	/// Creates a new `ContainerRegistry` with the specified runtime.
 	///
 	/// Registers built-in readers and writers for supported container formats.
-	pub fn with_runtime(runtime: Arc<TilesRuntime>) -> Self {
-		let mut reg = Self {
+	pub fn new_empty() -> Self {
+		Self {
 			data_readers: HashMap::new(),
 			file_readers: HashMap::new(),
 			file_writers: HashMap::new(),
-			runtime: Some(runtime),
-		};
-
-		// MBTiles
-		reg.register_reader_file("mbtiles", |p| async move { Ok(MBTilesReader::open_path(&p)?.boxed()) });
-		reg.register_writer_file("mbtiles", |mut r, p, rt| async move {
-			MBTilesWriter::write_to_path(r.as_mut(), &p, rt).await
-		});
-
-		// TAR
-		reg.register_reader_file("tar", |p| async move { Ok(TarTilesReader::open_path(&p)?.boxed()) });
-		reg.register_writer_file("tar", |mut r, p, rt| async move {
-			TarTilesWriter::write_to_path(r.as_mut(), &p, rt).await
-		});
-		// PMTiles
-		reg.register_reader_file(
-			"pmtiles",
-			|p| async move { Ok(PMTilesReader::open_path(&p).await?.boxed()) },
-		);
-		reg.register_reader_data("pmtiles", |p| async move {
-			Ok(PMTilesReader::open_reader(p).await?.boxed())
-		});
-		reg.register_writer_file("pmtiles", |mut r, p, rt| async move {
-			PMTilesWriter::write_to_path(r.as_mut(), &p, rt).await
-		});
-
-		// VersaTiles
-		reg.register_reader_file("versatiles", |p| async move {
-			Ok(VersaTilesReader::open_path(&p).await?.boxed())
-		});
-		reg.register_reader_data("versatiles", |p| async move {
-			Ok(VersaTilesReader::open_reader(p).await?.boxed())
-		});
-		reg.register_writer_file("versatiles", |mut r, p, rt| async move {
-			VersaTilesWriter::write_to_path(r.as_mut(), &p, rt).await
-		});
-
-		reg
+		}
 	}
 
 	/// Register an async file-based reader for a given file extension.
@@ -123,12 +84,12 @@ impl ContainerRegistry {
 	/// * `read_file` - Async function that takes a `PathBuf` and returns a boxed `TilesReaderTrait`.
 	pub fn register_reader_file<F, Fut>(&mut self, ext: &str, read_file: F)
 	where
-		F: Fn(PathBuf) -> Fut + Send + Sync + 'static,
+		F: Fn(PathBuf, TilesRuntime) -> Fut + Send + Sync + 'static,
 		Fut: Future<Output = Result<Box<dyn TilesReaderTrait>>> + Send + 'static,
 	{
 		self.file_readers.insert(
 			sanitize_extension(ext),
-			Arc::new(Box::new(move |p| Box::pin(read_file(p)))),
+			Arc::new(Box::new(move |p, r| Box::pin(read_file(p, r)))),
 		);
 	}
 
@@ -139,12 +100,12 @@ impl ContainerRegistry {
 	/// * `read_data` - Async function that takes a `DataReader` and returns a boxed `TilesReaderTrait`.
 	pub fn register_reader_data<F, Fut>(&mut self, ext: &str, read_data: F)
 	where
-		F: Fn(DataReader) -> Fut + Send + Sync + 'static,
+		F: Fn(DataReader, TilesRuntime) -> Fut + Send + Sync + 'static,
 		Fut: Future<Output = Result<Box<dyn TilesReaderTrait>>> + Send + 'static,
 	{
 		self.data_readers.insert(
 			sanitize_extension(ext),
-			Arc::new(Box::new(move |p| Box::pin(read_data(p)))),
+			Arc::new(Box::new(move |p, r| Box::pin(read_data(p, r)))),
 		);
 	}
 
@@ -156,7 +117,7 @@ impl ContainerRegistry {
 	///   and writes the tiles to the specified path.
 	pub fn register_writer_file<F, Fut>(&mut self, ext: &str, write_file: F)
 	where
-		F: Fn(Box<dyn TilesReaderTrait>, PathBuf, Arc<TilesRuntime>) -> Fut + Send + Sync + 'static,
+		F: Fn(Box<dyn TilesReaderTrait>, PathBuf, TilesRuntime) -> Fut + Send + Sync + 'static,
 		Fut: Future<Output = Result<()>> + Send + 'static,
 	{
 		self.file_writers.insert(
@@ -166,8 +127,12 @@ impl ContainerRegistry {
 	}
 
 	#[context("Failed to get reader from string '{data_source}'")]
-	pub async fn get_reader_from_str(&self, data_source: &str) -> Result<Box<dyn TilesReaderTrait>> {
-		self.get_reader(DataSource::parse(data_source)?).await
+	pub async fn get_reader_from_str(
+		&self,
+		data_source: &str,
+		runtime: TilesRuntime,
+	) -> Result<Box<dyn TilesReaderTrait>> {
+		self.get_reader(DataSource::parse(data_source)?, runtime).await
 	}
 
 	/// Get a tile container reader for a given filename or URL.
@@ -180,7 +145,7 @@ impl ContainerRegistry {
 	/// # Returns
 	/// A boxed `TilesReaderTrait` for reading tiles.
 	#[context("Failed to get reader for '{data_source:?}'")]
-	pub async fn get_reader(&self, data_source: DataSource) -> Result<Box<dyn TilesReaderTrait>> {
+	pub async fn get_reader(&self, data_source: DataSource, runtime: TilesRuntime) -> Result<Box<dyn TilesReaderTrait>> {
 		let mut data_source = data_source.clone();
 		data_source.resolve(&DataLocation::cwd()?)?;
 		let extension = sanitize_extension(data_source.container_type()?);
@@ -193,7 +158,7 @@ impl ContainerRegistry {
 				self
 					.data_readers
 					.get(&extension)
-					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?(reader)
+					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?(reader, runtime)
 				.await
 			}
 			DataLocation::Path(path) => {
@@ -210,7 +175,7 @@ impl ContainerRegistry {
 				self
 					.file_readers
 					.get(&extension)
-					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?(path.to_path_buf())
+					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?(path.to_path_buf(), runtime)
 				.await
 			}
 			DataLocation::Blob(blob) => {
@@ -218,49 +183,10 @@ impl ContainerRegistry {
 				self
 					.data_readers
 					.get(&extension)
-					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?(reader)
+					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?(reader, runtime)
 				.await
 			}
 		}
-	}
-
-	/// Write tiles from a reader to the specified output path.
-	///
-	/// If the path is a directory, writes using the directory writer; otherwise, uses the appropriate file writer based on extension.
-	///
-	/// # Arguments
-	/// * `reader` - A boxed tile container reader providing tiles to write.
-	/// * `path` - The output path to write tiles to.
-	///
-	/// # Returns
-	/// Result indicating success or failure.
-	#[context("writing tiles to path '{path:?}'")]
-	pub async fn write_to_path(&self, mut reader: Box<dyn TilesReaderTrait>, path: &Path) -> Result<()> {
-		let path = env::current_dir()?.join(path);
-
-		// Get or create default runtime
-		let runtime = self
-			.runtime
-			.clone()
-			.unwrap_or_else(|| Arc::new(TilesRuntime::default()));
-
-		if path.is_dir() {
-			return DirectoryTilesWriter::write_to_path(reader.as_mut(), &path, runtime).await;
-		}
-
-		let extension = path
-			.extension()
-			.unwrap_or_default()
-			.to_string_lossy()
-			.to_ascii_lowercase();
-
-		let writer = self
-			.file_writers
-			.get(&extension)
-			.ok_or_else(|| anyhow!("Error when reading: file extension '{extension}' unknown"))?;
-		writer(reader, path.to_path_buf(), runtime).await?;
-
-		Ok(())
 	}
 
 	/// Write tiles with a custom runtime for progress monitoring and other options.
@@ -272,14 +198,15 @@ impl ContainerRegistry {
 	///
 	/// # Returns
 	/// Result indicating success or failure.
-	#[context("writing tiles to path '{path:?}' with runtime")]
-	pub async fn write_to_path_with_runtime(
+	#[context("writing tiles to path '{path:?}'")]
+	pub async fn write_to_path(
 		&self,
 		mut reader: Box<dyn TilesReaderTrait>,
 		path: &Path,
-		runtime: Arc<TilesRuntime>,
+		runtime: TilesRuntime,
 	) -> Result<()> {
 		let path = env::current_dir()?.join(path);
+
 		if path.is_dir() {
 			return DirectoryTilesWriter::write_to_path(reader.as_mut(), &path, runtime).await;
 		}
@@ -305,38 +232,29 @@ impl ContainerRegistry {
 	}
 }
 
-fn sanitize_extension(ext: &str) -> String {
-	ext.to_ascii_lowercase().trim_matches('.').to_string()
-}
-
 impl Default for ContainerRegistry {
 	fn default() -> Self {
-		let mut reg = Self {
-			data_readers: HashMap::new(),
-			file_readers: HashMap::new(),
-			file_writers: HashMap::new(),
-			runtime: None,
-		};
+		let mut reg = Self::new_empty();
 
-		// Register format handlers (same as with_runtime but without runtime)
 		// MBTiles
-		reg.register_reader_file("mbtiles", |p| async move { Ok(MBTilesReader::open_path(&p)?.boxed()) });
+		reg.register_reader_file(
+			"mbtiles",
+			|p, r| async move { Ok(MBTilesReader::open_path(&p, r)?.boxed()) },
+		);
 		reg.register_writer_file("mbtiles", |mut r, p, rt| async move {
 			MBTilesWriter::write_to_path(r.as_mut(), &p, rt).await
 		});
 
 		// TAR
-		reg.register_reader_file("tar", |p| async move { Ok(TarTilesReader::open_path(&p)?.boxed()) });
+		reg.register_reader_file("tar", |p, _r| async move { Ok(TarTilesReader::open_path(&p)?.boxed()) });
 		reg.register_writer_file("tar", |mut r, p, rt| async move {
 			TarTilesWriter::write_to_path(r.as_mut(), &p, rt).await
 		});
-
 		// PMTiles
-		reg.register_reader_file(
-			"pmtiles",
-			|p| async move { Ok(PMTilesReader::open_path(&p).await?.boxed()) },
-		);
-		reg.register_reader_data("pmtiles", |p| async move {
+		reg.register_reader_file("pmtiles", |p, _r| async move {
+			Ok(PMTilesReader::open_path(&p).await?.boxed())
+		});
+		reg.register_reader_data("pmtiles", |p, _r| async move {
 			Ok(PMTilesReader::open_reader(p).await?.boxed())
 		});
 		reg.register_writer_file("pmtiles", |mut r, p, rt| async move {
@@ -344,10 +262,10 @@ impl Default for ContainerRegistry {
 		});
 
 		// VersaTiles
-		reg.register_reader_file("versatiles", |p| async move {
+		reg.register_reader_file("versatiles", |p, _r| async move {
 			Ok(VersaTilesReader::open_path(&p).await?.boxed())
 		});
-		reg.register_reader_data("versatiles", |p| async move {
+		reg.register_reader_data("versatiles", |p, _r| async move {
 			Ok(VersaTilesReader::open_reader(p).await?.boxed())
 		});
 		reg.register_writer_file("versatiles", |mut r, p, rt| async move {
@@ -356,6 +274,10 @@ impl Default for ContainerRegistry {
 
 		reg
 	}
+}
+
+fn sanitize_extension(ext: &str) -> String {
+	ext.to_ascii_lowercase().trim_matches('.').to_string()
 }
 
 #[cfg(test)]
@@ -383,8 +305,9 @@ pub async fn make_test_file(
 	}?;
 
 	let registry = ContainerRegistry::default();
-	registry.write_to_path(Box::new(reader), container_file.path()).await?;
-
+	registry
+		.write_to_path(Box::new(reader), container_file.path(), TilesRuntime::default())
+		.await?;
 	Ok(container_file)
 }
 
@@ -436,10 +359,13 @@ pub mod tests {
 			};
 
 			let registry = ContainerRegistry::default();
-			registry.write_to_path(Box::new(reader1), &path).await?;
+			let runtime = TilesRuntime::default();
+			registry
+				.write_to_path(Box::new(reader1), &path, runtime.clone())
+				.await?;
 
 			// get test container reader using the default registry (back-compat)
-			let mut reader2 = registry.get_reader_from_str(path.to_str().unwrap()).await?;
+			let mut reader2 = registry.get_reader_from_str(path.to_str().unwrap(), runtime).await?;
 			MockTilesWriter::write(reader2.as_mut()).await?;
 
 			Ok(())

@@ -1,5 +1,5 @@
 use anyhow::{Result, ensure};
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 use versatiles_container::TilesRuntime;
 use versatiles_core::{TileBBox, TileFormat, progress::get_progress_bar};
 use versatiles_image::{DynamicImage, DynamicImageTraitConvert, encode};
@@ -32,7 +32,7 @@ pub struct MeasureTileSizes {
 	scale: usize,
 }
 
-pub async fn run(args: &MeasureTileSizes, runtime: Arc<TilesRuntime>) -> Result<()> {
+pub async fn run(args: &MeasureTileSizes, runtime: TilesRuntime) -> Result<()> {
 	let input = &args.input;
 	let output_file = &args.output;
 	let level = args.level;
@@ -50,7 +50,7 @@ pub async fn run(args: &MeasureTileSizes, runtime: Arc<TilesRuntime>) -> Result<
 		output_file.extension().unwrap_or_default()
 	);
 
-	let reader = runtime.registry().get_reader_from_str(input).await?;
+	let reader = runtime.get_reader_from_str(input).await?;
 	let bbox = TileBBox::new_full(level)?;
 	let stream = reader.get_tile_stream(bbox).await?;
 

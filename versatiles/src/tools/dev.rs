@@ -1,6 +1,5 @@
 use super::dev_tools::{export_outline, measure_tile_sizes, print_tilejson};
 use anyhow::Result;
-use std::sync::Arc;
 use versatiles_container::TilesRuntime;
 
 #[derive(clap::Args, Debug)]
@@ -18,7 +17,7 @@ enum DevCommands {
 }
 
 #[tokio::main]
-pub async fn run(command: &Subcommand, runtime: Arc<TilesRuntime>) -> Result<()> {
+pub async fn run(command: &Subcommand, runtime: TilesRuntime) -> Result<()> {
 	match &command.sub_command {
 		DevCommands::MeasureTileSizes(args) => measure_tile_sizes::run(args, runtime).await?,
 		DevCommands::ExportOutline(args) => export_outline::run(args, runtime).await?,

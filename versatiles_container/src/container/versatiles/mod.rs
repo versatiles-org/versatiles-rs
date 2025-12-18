@@ -17,11 +17,12 @@
 //!     let path_mbtiles = std::env::current_dir()?.join("../testdata/berlin.mbtiles");
 //!     let path_versatiles = std::env::temp_dir().join("temp4.versatiles");
 //!
+//!     let runtime = TilesRuntime::default();
+//!
 //!     // Create a mbtiles reader
-//!     let mut reader = MBTilesReader::open_path(&path_mbtiles)?;
+//!     let mut reader = MBTilesReader::open_path(&path_mbtiles, runtime.clone())?;
 //!
 //!     // Write the tiles to the .versatiles file
-//!     let runtime = Arc::new(TilesRuntime::default());
 //!     VersaTilesWriter::write_to_path(
 //!         &mut reader,
 //!         &path_versatiles,

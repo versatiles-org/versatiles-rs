@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::sync::Arc;
 use versatiles_container::TilesRuntime;
 use versatiles_core::ProbeDepth;
 
@@ -20,10 +19,10 @@ pub struct Subcommand {
 }
 
 #[tokio::main]
-pub async fn run(arguments: &Subcommand, runtime: Arc<TilesRuntime>) -> Result<()> {
+pub async fn run(arguments: &Subcommand, runtime: TilesRuntime) -> Result<()> {
 	log::info!("probe {:?}", arguments.filename);
 
-	let mut reader = runtime.registry().get_reader_from_str(&arguments.filename).await?;
+	let mut reader = runtime.get_reader_from_str(&arguments.filename).await?;
 
 	let level = match arguments.deep {
 		0 => ProbeDepth::Shallow,

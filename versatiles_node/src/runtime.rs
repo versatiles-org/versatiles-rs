@@ -1,13 +1,6 @@
-use std::sync::Arc;
-use versatiles::runtime::register_vpl_readers;
+use versatiles::runtime::create_runtime as create_runtime_wit;
 use versatiles_container::TilesRuntime;
 
-pub fn create_runtime() -> Arc<TilesRuntime> {
-	Arc::new(
-		TilesRuntime::builder()
-			.customize_registry(|registry| {
-				register_vpl_readers(registry);
-			})
-			.build(),
-	)
+pub fn create_runtime() -> TilesRuntime {
+	create_runtime_wit()
 }

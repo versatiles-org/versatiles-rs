@@ -19,10 +19,10 @@
 //! async fn main() -> anyhow::Result<()> {
 //!
 //!     // Create runtime with default settings
-//!     let runtime = Arc::new(TilesRuntime::default());
+//!     let runtime = TilesRuntime::default();
 //!
 //!     // Open the source
-//!     let reader = runtime.registry().get_reader_from_str("../testdata/berlin.mbtiles").await?;
+//!     let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
 //!
 //!     // Limit to a bbox pyramid and keep source compression;
 //!     // you could also set `tile_compression: Some(TileCompression::Brotli)` to re-encode.
@@ -43,7 +43,7 @@
 use crate::{Tile, TilesReaderTrait, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
-use std::{path::Path, sync::Arc};
+use std::path::Path;
 use versatiles_core::{
 	TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal,
 };
@@ -103,15 +103,12 @@ pub async fn convert_tiles_container(
 	reader: Box<dyn TilesReaderTrait>,
 	cp: TilesConverterParameters,
 	path: &Path,
-	runtime: Arc<TilesRuntime>,
+	runtime: TilesRuntime,
 ) -> Result<()> {
 	runtime.events().step("Starting conversion".to_string());
 
 	let converter = TilesConvertReader::new_from_reader(reader, cp)?;
-	runtime
-		.registry()
-		.write_to_path_with_runtime(Box::new(converter), path, runtime.clone())
-		.await?;
+	runtime.write_to_path(Box::new(converter), path).await?;
 
 	runtime.events().step("Conversion complete".to_string());
 	Ok(())
@@ -306,7 +303,7 @@ mod tests {
 				swap_xy,
 				tile_compression: None,
 			};
-			convert_tiles_container(reader.boxed(), cp, &temp_file, Arc::new(TilesRuntime::default())).await?;
+			convert_tiles_container(reader.boxed(), cp, &temp_file, TilesRuntime::default()).await?;
 
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.parameters();

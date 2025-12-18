@@ -20,12 +20,12 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     let registry = ContainerRegistry::default();
-//!     let reader = registry.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+//!     let runtime = TilesRuntime::default();
+//!     let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
 //!     let output_path = std::env::temp_dir().join("example.versatiles");
 //!
-//!     // The registry automatically dispatches to the correct writer
-//!     registry.write_to_path(reader, &output_path).await?;
+//!     // The runtime automatically dispatches to the correct writer
+//!     runtime.write_to_path(reader, &output_path).await?;
 //!     Ok(())
 //! }
 //! ```
@@ -33,7 +33,7 @@
 use crate::{TilesReaderTrait, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
-use std::{path::Path, sync::Arc};
+use std::path::Path;
 use versatiles_core::io::*;
 
 /// Object‑safe interface for writing tiles from a reader into a container format.
@@ -52,7 +52,7 @@ pub trait TilesWriterTrait: Send {
 	///
 	/// # Errors
 	/// Returns an error if the file cannot be created or the writing operation fails.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, runtime: Arc<TilesRuntime>) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, runtime: TilesRuntime) -> Result<()> {
 		Self::write_to_writer(reader, &mut DataWriterFile::from_path(path)?, runtime).await
 	}
 
@@ -71,6 +71,6 @@ pub trait TilesWriterTrait: Send {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
-		runtime: Arc<TilesRuntime>,
+		runtime: TilesRuntime,
 	) -> Result<()>;
 }

@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, bail};
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 use versatiles_container::TilesRuntime;
 use versatiles_core::progress::get_progress_bar;
 use versatiles_geometry::{geo::GeoCollection, tile_outline::TileOutline};
@@ -23,11 +23,11 @@ pub struct ExportOutline {
 	level: Option<u8>,
 }
 
-pub async fn run(args: &ExportOutline, runtime: Arc<TilesRuntime>) -> Result<()> {
+pub async fn run(args: &ExportOutline, runtime: TilesRuntime) -> Result<()> {
 	let input = &args.input;
 	let output = &args.output;
 
-	let reader = runtime.registry().get_reader_from_str(input).await?;
+	let reader = runtime.get_reader_from_str(input).await?;
 
 	let compression = reader.parameters().tile_compression;
 	let bbox_pyramid = reader.parameters().bbox_pyramid.clone();

@@ -28,7 +28,7 @@
 //!
 //!     // Writing to a tar archive
 //!     let output_path = Path::new("path/to/output.tar");
-//!     let runtime = Arc::new(TilesRuntime::default());
+//!     let runtime = TilesRuntime::default();
 //!     let mut writer = TarTilesWriter::write_to_path(
 //!         &mut reader,
 //!         output_path,

@@ -20,7 +20,7 @@ use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCoord as RustTileCoord};
 #[napi]
 pub struct ContainerReader {
 	reader: Arc<Mutex<Box<dyn TilesReaderTrait>>>,
-	runtime: Arc<TilesRuntime>,
+	runtime: TilesRuntime,
 }
 
 #[napi]
@@ -30,8 +30,8 @@ impl ContainerReader {
 	/// Supports: .versatiles, .mbtiles, .pmtiles, .tar, directories, HTTP URLs
 	#[napi(factory)]
 	pub async fn open(path: String) -> Result<Self> {
-		let runtime = Arc::new(TilesRuntime::default());
-		let reader = napi_result!(runtime.registry().get_reader_from_str(&path).await)?;
+		let runtime = TilesRuntime::default();
+		let reader = napi_result!(runtime.get_reader_from_str(&path).await)?;
 
 		Ok(Self {
 			reader: Arc::new(Mutex::new(reader)),
@@ -178,10 +178,10 @@ impl ContainerReader {
 		drop(reader_lock);
 
 		// Clone the reader by re-opening from source
-		let reader_clone = self.runtime.registry().get_reader_from_str(&source_name).await?;
+		let reader_clone = self.runtime.get_reader_from_str(&source_name).await?;
 
 		// Create a new runtime for this conversion with event bridging to JavaScript
-		let runtime = Arc::new(TilesRuntime::default());
+		let runtime = TilesRuntime::default();
 
 		// Bridge progress events to JavaScript callback
 		if let Some(cb) = on_progress {

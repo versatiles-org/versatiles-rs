@@ -37,7 +37,7 @@
 //!
 //!     // Write to an MBTiles file
 //!     let out_file = std::env::temp_dir().join("berlin.mbtiles");
-//!     let runtime = std::sync::Arc::new(TilesRuntime::default());
+//!     let runtime = TilesRuntime::default();
 //!     MBTilesWriter::write_to_path(&mut reader, &out_file, runtime).await?;
 //!     Ok(())
 //! }
@@ -144,7 +144,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	/// Returns an error if writing fails, if an unsupported format/compression is used,
 	/// or if database insertion encounters an error.
 	#[context("writing MBTiles to '{}'", path.display())]
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, runtime: Arc<TilesRuntime>) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, runtime: TilesRuntime) -> Result<()> {
 		use TileCompression::*;
 		use TileFormat::*;
 
@@ -229,7 +229,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
-		_runtime: Arc<TilesRuntime>,
+		_runtime: TilesRuntime,
 	) -> Result<()> {
 		bail!("not implemented")
 	}
@@ -250,9 +250,9 @@ mod tests {
 		})?;
 
 		let filename = NamedTempFile::new("temp.mbtiles")?;
-		MBTilesWriter::write_to_path(&mut mock_reader, &filename, Arc::new(TilesRuntime::default())).await?;
+		MBTilesWriter::write_to_path(&mut mock_reader, &filename, TilesRuntime::default()).await?;
 
-		let mut reader = MBTilesReader::open_path(&filename)?;
+		let mut reader = MBTilesReader::open_path(&filename, TilesRuntime::default())?;
 
 		MockTilesWriter::write(&mut reader).await?;
 

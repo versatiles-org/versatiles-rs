@@ -1,5 +1,5 @@
 use anyhow::Result;
-use std::{io::Write, sync::Arc};
+use std::io::Write;
 use versatiles_container::TilesRuntime;
 
 #[derive(clap::Args, Debug)]
@@ -15,14 +15,14 @@ pub struct PrintTilejson {
 	pretty: bool,
 }
 
-pub async fn run(args: &PrintTilejson, runtime: Arc<TilesRuntime>) -> Result<()> {
+pub async fn run(args: &PrintTilejson, runtime: TilesRuntime) -> Result<()> {
 	let tilejson = fetch_tilejson(args, runtime).await?;
 	std::io::stdout().write_all(tilejson.as_bytes())?;
 	Ok(())
 }
 
-async fn fetch_tilejson(args: &PrintTilejson, runtime: Arc<TilesRuntime>) -> Result<String> {
-	let reader = runtime.registry().get_reader_from_str(&args.input).await?;
+async fn fetch_tilejson(args: &PrintTilejson, runtime: TilesRuntime) -> Result<String> {
+	let reader = runtime.get_reader_from_str(&args.input).await?;
 
 	Ok(if args.pretty {
 		reader.tilejson().as_pretty_lines(80).join("\n")

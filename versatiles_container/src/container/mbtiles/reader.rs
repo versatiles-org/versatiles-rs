@@ -27,9 +27,11 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
+//!     let runtime = TilesRuntime::default();
+//!
 //!     // Use an absolute path
 //!     let path = Path::new("/absolute/path/to/berlin.mbtiles");
-//!     let mut reader = MBTilesReader::open_path(path)?;
+//!     let mut reader = MBTilesReader::open_path(path, runtime)?;
 //!
 //!     // Inspect metadata
 //!     let tj: &TileJSON = reader.tilejson();
@@ -48,13 +50,13 @@
 //! - Returns errors if the database is unreadable, the `format` is missing/unknown,
 //!   or queries fail.
 
-use crate::{Tile, TilesReaderTrait};
+use crate::{Tile, TilesReaderTrait, TilesRuntime};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use std::path::Path;
-use versatiles_core::{TileCompression::*, TileFormat::*, json::parse_json_str, progress::get_progress_bar, types::*};
+use versatiles_core::{TileCompression::*, TileFormat::*, json::parse_json_str, types::*};
 use versatiles_derive::context;
 
 /// Reader for MBTiles (SQLite) containers.
@@ -67,6 +69,7 @@ pub struct MBTilesReader {
 	pool: Pool<SqliteConnectionManager>,
 	tilejson: TileJSON,
 	parameters: TilesReaderParameters,
+	runtime: TilesRuntime,
 }
 
 impl MBTilesReader {
@@ -80,13 +83,13 @@ impl MBTilesReader {
 	/// # Errors
 	/// Returns an error if the file does not exist, the path is not absolute, or SQLite cannot be opened.
 	#[context("opening MBTiles at '{}'", path.display())]
-	pub fn open_path(path: &Path) -> Result<MBTilesReader> {
+	pub fn open_path(path: &Path, runtime: TilesRuntime) -> Result<MBTilesReader> {
 		log::debug!("open {path:?}");
 
 		ensure!(path.exists(), "file {path:?} does not exist");
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
-		MBTilesReader::load_from_sqlite(path)
+		MBTilesReader::load_from_sqlite(path, runtime)
 	}
 
 	/// Internal loader that establishes the SQLite pool, sets default parameters,
@@ -95,7 +98,7 @@ impl MBTilesReader {
 	/// # Errors
 	/// Returns an error if the connection cannot be established or metadata fails to load.
 	#[context("loading SQLite '{}'", path.display())]
-	fn load_from_sqlite(path: &Path) -> Result<MBTilesReader> {
+	fn load_from_sqlite(path: &Path, runtime: TilesRuntime) -> Result<MBTilesReader> {
 		log::debug!("load_from_sqlite {path:?}");
 
 		let manager = SqliteConnectionManager::file(path);
@@ -107,6 +110,7 @@ impl MBTilesReader {
 			pool,
 			tilejson: TileJSON::default(),
 			parameters,
+			runtime,
 		};
 
 		reader.load_meta_data()?;
@@ -235,7 +239,9 @@ impl MBTilesReader {
 		let z0 = self.simple_query("MIN(zoom_level)", "")?;
 		let z1 = self.simple_query("MAX(zoom_level)", "")?;
 
-		let progress = get_progress_bar("get mbtiles bbox pyramid", (z1 - z0 + 1) as u64);
+		let progress = self
+			.runtime
+			.create_progress("get mbtiles bbox pyramid", (z1 - z0 + 1) as u64);
 
 		for z in z0..=z1 {
 			let x0 = self.simple_query("MIN(tile_column)", &format!("zoom_level = {z}"))?;
@@ -437,7 +443,7 @@ pub mod tests {
 	#[tokio::test]
 	async fn reader() -> Result<()> {
 		// get test container reader
-		let mut reader = MBTilesReader::open_path(&PATH)?;
+		let mut reader = MBTilesReader::open_path(&PATH, TilesRuntime::default())?;
 
 		assert_eq!(
 			format!("{reader:?}"),
@@ -479,7 +485,7 @@ pub mod tests {
 	async fn probe() -> Result<()> {
 		use versatiles_core::utils::PrettyPrint;
 
-		let mut reader = MBTilesReader::open_path(&PATH)?;
+		let mut reader = MBTilesReader::open_path(&PATH, TilesRuntime::default())?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(&printer.get_category("container").await).await?;

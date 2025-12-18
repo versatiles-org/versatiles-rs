@@ -27,13 +27,14 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
+//!     let runtime = TilesRuntime::default();
+//!
 //!     // Open any reader, e.g. MBTiles
 //!     let mbtiles_path = Path::new("/absolute/path/to/berlin.mbtiles");
-//!     let mut reader = MBTilesReader::open_path(mbtiles_path)?;
+//!     let mut reader = MBTilesReader::open_path(mbtiles_path, runtime.clone())?;
 //!
 //!     // Choose an absolute output directory
 //!     let out_dir = std::env::temp_dir().join("versatiles_demo_out");
-//!     let runtime = std::sync::Arc::new(TilesRuntime::default());
 //!     DirectoryTilesWriter::write_to_path(&mut reader, &out_dir, runtime).await?;
 //!     Ok(())
 //! }
@@ -48,7 +49,6 @@ use async_trait::async_trait;
 use std::{
 	fs,
 	path::{Path, PathBuf},
-	sync::Arc,
 };
 use versatiles_core::{io::DataWriterTrait, utils::compress, *};
 use versatiles_derive::context;
@@ -85,7 +85,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	/// # Errors
 	/// Returns an error for non-absolute paths, I/O failures, or encoding/compression errors.
 	#[context("writing tiles to directory '{}'", path.display())]
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, runtime: Arc<TilesRuntime>) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, runtime: TilesRuntime) -> Result<()> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
 		log::trace!("convert_from");
@@ -140,7 +140,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
-		_runtime: Arc<TilesRuntime>,
+		_runtime: TilesRuntime,
 	) -> Result<()> {
 		bail!("not implemented")
 	}
@@ -164,7 +164,7 @@ mod tests {
 			TileBBoxPyramid::new_full(2),
 		))?;
 
-		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path, Arc::new(TilesRuntime::default())).await?;
+		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path, TilesRuntime::default()).await?;
 
 		let load = |filename| {
 			let path = temp_path.join(filename);

@@ -1,5 +1,5 @@
 use anyhow::{Result, bail};
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 use versatiles_container::{TilesConverterParameters, TilesRuntime, convert_tiles_container};
 use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCompression};
 use versatiles_derive::context;
@@ -59,10 +59,10 @@ pub struct Subcommand {
 }
 
 #[tokio::main]
-pub async fn run(arguments: &Subcommand, runtime: Arc<TilesRuntime>) -> Result<()> {
+pub async fn run(arguments: &Subcommand, runtime: TilesRuntime) -> Result<()> {
 	log::info!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
-	let mut reader = runtime.registry().get_reader_from_str(&arguments.input_file).await?;
+	let mut reader = runtime.get_reader_from_str(&arguments.input_file).await?;
 
 	if arguments.override_input_compression.is_some() {
 		reader.override_compression(arguments.override_input_compression.unwrap());

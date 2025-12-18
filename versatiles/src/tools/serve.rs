@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use regex::Regex;
-use std::{mem::swap, path::PathBuf, sync::Arc};
+use std::{mem::swap, path::PathBuf};
 use tokio::time::{Duration, sleep};
 use versatiles::{
 	config::{Config, StaticSourceConfig, TileSourceConfig},
@@ -56,7 +56,7 @@ pub struct Subcommand {
 }
 
 #[tokio::main]
-pub async fn run(arguments: &Subcommand, runtime: Arc<TilesRuntime>) -> Result<()> {
+pub async fn run(arguments: &Subcommand, runtime: TilesRuntime) -> Result<()> {
 	let mut config = if let Some(config_path) = &arguments.config {
 		Config::from_path(config_path)
 			.context("run `versatiles help config` to get more information about the config file format")?

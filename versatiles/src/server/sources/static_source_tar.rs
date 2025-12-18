@@ -186,7 +186,6 @@ mod tests {
 	use super::*;
 	use assert_fs::NamedTempFile;
 	use rstest::rstest;
-	use std::sync::Arc;
 	use versatiles_container::{
 		MockTilesReader, MockTilesReaderProfile, TilesConverterParameters, TilesReaderTrait, TilesRuntime,
 		convert_tiles_container,
@@ -205,7 +204,7 @@ mod tests {
 			bbox_pyramid: Some(TileBBoxPyramid::new_full(0)),
 			..TilesConverterParameters::default()
 		};
-		let runtime = Arc::new(TilesRuntime::default());
+		let runtime = TilesRuntime::default();
 
 		convert_tiles_container(reader.boxed(), parameters, &container_file, runtime)
 			.await

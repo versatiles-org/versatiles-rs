@@ -18,8 +18,8 @@
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
 //!     // Open a source container via the registry
-//!     let registry = ContainerRegistry::default();
-//!     let reader = registry.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+//!     let runtime = TilesRuntime::default();
+//!     let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
 //!
 //!     // Optionally adapt the reader: limit to a bbox pyramid, keep compression as-is
 //!     let params = TilesConverterParameters {
@@ -30,7 +30,7 @@
 //!
 //!     // Write to a target path; format is inferred from the extension
 //!     let output = std::env::temp_dir().join("example.versatiles");
-//!     registry.write_to_path(reader, &output).await?;
+//!     runtime.write_to_path(reader, &output).await?;
 //!     Ok(())
 //! }
 //! ```

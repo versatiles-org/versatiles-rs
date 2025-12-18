@@ -22,7 +22,6 @@ use itertools::Itertools;
 use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
-	sync::Arc,
 	vec,
 };
 use versatiles_container::{TilesReaderTrait, TilesRuntime};
@@ -47,12 +46,12 @@ pub struct PipelineFactory {
 	tran_ops: HashMap<String, Box<dyn TransformOperationFactoryTrait>>,
 	dir: PathBuf,
 	create_reader: Callback,
-	runtime: Arc<TilesRuntime>,
+	runtime: TilesRuntime,
 }
 
 impl PipelineFactory {
 	/// Creates an empty factory with no registered operations.
-	pub fn new_empty(dir: &Path, create_reader: Callback, runtime: Arc<TilesRuntime>) -> Self {
+	pub fn new_empty(dir: &Path, create_reader: Callback, runtime: TilesRuntime) -> Self {
 		PipelineFactory {
 			read_ops: HashMap::new(),
 			tran_ops: HashMap::new(),
@@ -63,7 +62,7 @@ impl PipelineFactory {
 	}
 
 	/// Creates a factory pre-loaded with all built-in read and transform operation factories.
-	pub fn new_default(dir: &Path, create_reader: Callback, runtime: Arc<TilesRuntime>) -> Self {
+	pub fn new_default(dir: &Path, create_reader: Callback, runtime: TilesRuntime) -> Self {
 		let mut factory = PipelineFactory::new_empty(dir, create_reader, runtime);
 
 		for f in get_read_operation_factories() {
@@ -115,7 +114,7 @@ impl PipelineFactory {
 
 	/// Creates a default-registered factory using the provided custom reader callback.
 	pub fn new_dummy_reader(create_reader: Callback) -> Self {
-		PipelineFactory::new_default(Path::new(""), create_reader, Arc::new(TilesRuntime::default()))
+		PipelineFactory::new_default(Path::new(""), create_reader, TilesRuntime::default())
 	}
 
 	/// Registers a read operation factory under its VPL tag name.

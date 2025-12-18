@@ -23,7 +23,6 @@
 use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait};
 use anyhow::Result;
 use async_trait::async_trait;
-use std::sync::Arc;
 use versatiles_core::{Traversal, io::DataWriterTrait};
 use versatiles_derive::context;
 
@@ -57,7 +56,7 @@ impl MockTilesWriter {
 						Ok(())
 					})
 				},
-				Arc::new(TilesRuntime::default()),
+				TilesRuntime::default(),
 				None,
 			)
 			.await
@@ -82,7 +81,7 @@ impl TilesWriterTrait for MockTilesWriter {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
-		_runtime: Arc<TilesRuntime>,
+		_runtime: TilesRuntime,
 	) -> Result<()> {
 		MockTilesWriter::write(reader).await
 	}

@@ -20,7 +20,7 @@ pub struct RuntimeBuilder {
 	cache_type: Option<CacheType>,
 	max_memory: Option<usize>,
 	#[allow(clippy::type_complexity)]
-	registry_customizer: Option<Box<dyn FnOnce(&mut ContainerRegistry)>>,
+	registry_customizer: Vec<Box<dyn FnOnce(&mut ContainerRegistry)>>,
 }
 
 impl RuntimeBuilder {
@@ -29,7 +29,7 @@ impl RuntimeBuilder {
 		Self {
 			cache_type: None,
 			max_memory: None,
-			registry_customizer: None,
+			registry_customizer: Vec::new(),
 		}
 	}
 
@@ -77,9 +77,9 @@ impl RuntimeBuilder {
 	/// ```
 	pub fn customize_registry<F>(mut self, customizer: F) -> Self
 	where
-		F: FnOnce(&mut ContainerRegistry) + 'static,
+		F: Fn(&mut ContainerRegistry) + 'static,
 	{
-		self.registry_customizer = Some(Box::new(customizer));
+		self.registry_customizer.push(Box::new(customizer));
 		self
 	}
 
@@ -95,7 +95,7 @@ impl RuntimeBuilder {
 		let mut registry = ContainerRegistry::default();
 
 		// Apply customizations if provided
-		if let Some(customizer) = self.registry_customizer {
+		for customizer in self.registry_customizer {
 			customizer(&mut registry);
 		}
 

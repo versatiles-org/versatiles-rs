@@ -30,8 +30,8 @@ mod tools;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use log::LevelFilter;
-use std::{io::Write, sync::Arc};
-use versatiles::runtime::create_runtime_with_vpl;
+use std::io::Write;
+use versatiles::runtime::create_runtime;
 use versatiles_container::TilesRuntime;
 
 /// Command-line interface for VersaTiles
@@ -130,11 +130,11 @@ fn main() -> Result<()> {
 		})
 		.init();
 
-	run(cli, create_runtime_with_vpl())
+	run(cli, create_runtime())
 }
 
 /// Helper function for running subcommands
-fn run(cli: Cli, runtime: Arc<TilesRuntime>) -> Result<()> {
+fn run(cli: Cli, runtime: TilesRuntime) -> Result<()> {
 	match &cli.command {
 		Commands::Convert(arguments) => tools::convert::run(arguments, runtime),
 		Commands::Help(arguments) => tools::help::run(arguments),
@@ -148,13 +148,15 @@ fn run(cli: Cli, runtime: Arc<TilesRuntime>) -> Result<()> {
 /// Unit tests for the command-line interface
 #[cfg(test)]
 mod tests {
+	use versatiles::runtime::create_test_runtime;
+
 	use super::*;
 
 	/// Function for running command-line arguments in tests
 	pub fn run_command(arg_vec: Vec<&str>) -> Result<String> {
 		let cli = Cli::try_parse_from(arg_vec)?;
 		let msg = format!("{cli:?}");
-		let runtime = create_runtime_with_vpl();
+		let runtime = create_test_runtime();
 		run(cli, runtime)?;
 		Ok(msg)
 	}
