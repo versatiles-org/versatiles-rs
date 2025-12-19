@@ -102,10 +102,10 @@ if [ -d "$NODEJS_DIR" ]; then
    fi
 
    # Build the project
-   echo "npm run build"
-   result=$(npm run build 2>&1)
+   echo "npm run build:debug"
+   result=$(npm run build:debug 2>&1)
    if [ $? -ne 0 ]; then
-      echo -e "$result\nERROR DURING: npm run build"
+      echo -e "$result\nERROR DURING: npm run build:debug"
       exit 1
    fi
 
