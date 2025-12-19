@@ -44,13 +44,16 @@
 //! - [`TilesReaderTrait`], [`TilesWriterTrait`]: object‑safe traits for IO
 //! - [`TilesConvertReader`], [`convert_tiles_container`]: convenience conversion helpers
 
-mod cache;
+pub mod cache;
 /// Re‑exports in‑memory caches and helpers used by readers/writers.
 pub use cache::*;
 
 mod container;
 /// Re‑exports the container registry and common open/write helpers.
 pub use container::*;
+
+pub mod progress;
+pub use progress::*;
 
 /// Re‑exports progress tracking and event bus types.
 pub mod runtime;

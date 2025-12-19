@@ -30,6 +30,7 @@ r2d2_sqlite = { version = "0.31.0", default-features = false, features = [
 regex.workspace = true
 reqwest = { workspace = true, features = ["rustls-tls"] }
 tar = { version = "0.4.44", default-features = false }
+terminal_size = "0.4.3"
 time = { version = "0.3.44", default-features = false, features = [
 	"formatting",
 	"local-offset",

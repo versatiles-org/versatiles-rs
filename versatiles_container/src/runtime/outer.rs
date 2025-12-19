@@ -1,8 +1,6 @@
+use super::{EventBus, RuntimeBuilder, RuntimeInner};
+use crate::{CacheType, DataSource, ProgressHandle, TilesReaderTrait};
 use anyhow::Result;
-
-use crate::{CacheType, DataSource, TilesReaderTrait};
-
-use super::{EventBus, ProgressHandle, RuntimeBuilder, RuntimeInner};
 use std::{path::Path, sync::Arc};
 
 /// Immutable runtime configuration and services for tile processing operations
@@ -25,7 +23,11 @@ impl TilesRuntime {
 	///
 	/// Equivalent to `TilesRuntime::builder().build()`
 	pub fn new() -> Self {
-		Self::builder().build()
+		Self::builder().build(true)
+	}
+
+	pub fn new_silent() -> Self {
+		Self::builder().build(false)
 	}
 
 	/// Create a builder for customizing runtime configuration
@@ -79,10 +81,7 @@ impl TilesRuntime {
 	/// progress.finish();
 	/// ```
 	pub fn create_progress(&self, message: &str, total: u64) -> ProgressHandle {
-		self
-			.inner
-			.progress_factory
-			.create(message, total, &self.inner.event_bus)
+		self.inner.progress_factory.lock().unwrap().create(message, total)
 	}
 
 	/// Get maximum memory limit (if configured)
@@ -126,7 +125,10 @@ mod tests {
 
 	#[test]
 	fn test_runtime_builder() {
-		let runtime = TilesRuntime::builder().max_memory(1024).with_memory_cache().build();
+		let runtime = TilesRuntime::builder()
+			.max_memory(1024)
+			.with_memory_cache()
+			.build(false);
 
 		assert_eq!(runtime.max_memory(), Some(1024));
 	}

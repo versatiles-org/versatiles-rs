@@ -215,11 +215,9 @@ fn calc_bbox_pyramid(
 
 		let entries = EntriesV3::from_blob(dir)?;
 		let entries = entries.iter().collect::<Vec<_>>();
-		let progress = if let Some(runtime) = &root_runtime {
-			Some(runtime.create_progress("Parsing PMTiles directories", entries.len() as u64))
-		} else {
-			None
-		};
+		let progress = root_runtime
+			.as_ref()
+			.map(|runtime| runtime.create_progress("Parsing PMTiles directories", entries.len() as u64));
 
 		let mut total_entries = 0;
 		for entry in entries.iter() {

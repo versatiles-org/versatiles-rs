@@ -6,6 +6,7 @@
 //! - Step/stage messages
 //! - Warnings and errors
 
+use crate::ProgressState;
 use std::sync::{Arc, RwLock};
 
 /// Event types that can be emitted by the runtime
@@ -19,7 +20,7 @@ pub enum Event {
 	},
 
 	/// Progress update event
-	Progress { id: ProgressId, data: ProgressData },
+	Progress { data: ProgressState },
 
 	/// Step/stage message
 	Step { message: String },
@@ -40,21 +41,6 @@ pub enum LogLevel {
 	Debug,
 	Trace,
 }
-
-/// Progress event data
-#[derive(Debug, Clone)]
-pub struct ProgressData {
-	pub position: u64,
-	pub total: u64,
-	pub percentage: f64,
-	pub speed: f64,
-	pub eta: f64,
-	pub message: String,
-}
-
-/// Unique identifier for progress bars
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ProgressId(pub(crate) u64);
 
 /// Unique identifier for event listeners
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -117,8 +103,8 @@ impl EventBus {
 	}
 
 	/// Emit a progress event
-	pub fn progress(&self, id: ProgressId, data: ProgressData) {
-		self.emit(Event::Progress { id, data });
+	pub fn progress(&self, data: ProgressState) {
+		self.emit(Event::Progress { data });
 	}
 
 	/// Emit a step event

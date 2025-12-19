@@ -2,6 +2,7 @@ use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
 use std::sync::{Arc, Mutex};
+use versatiles_container::ProgressState;
 
 /// Progress data sent to JavaScript callbacks
 #[napi(object)]
@@ -11,19 +12,25 @@ pub struct ProgressData {
 	pub total: f64,
 	pub percentage: f64,
 	pub speed: f64,
-	pub eta: f64,
+	pub estimated_time_remaining: f64,
 	pub message: Option<String>,
 }
 
-impl From<versatiles_core::progress::ProgressData> for ProgressData {
-	fn from(data: versatiles_core::progress::ProgressData) -> Self {
+impl From<&ProgressState> for ProgressData {
+	fn from(data: &ProgressState) -> Self {
+		let speed = data.position as f64 / data.start.elapsed().as_secs_f64();
+		let estimated_time_remaining = if speed > 0.0 {
+			(data.total as f64 - data.position as f64) / speed
+		} else {
+			f64::INFINITY
+		};
 		ProgressData {
 			position: data.position as f64,
 			total: data.total as f64,
-			percentage: data.percentage,
-			speed: data.speed,
-			eta: data.eta,
-			message: Some(data.message),
+			percentage: data.position as f64 / data.total as f64 * 100.0,
+			speed,
+			estimated_time_remaining,
+			message: Some(data.message.clone()),
 		}
 	}
 }

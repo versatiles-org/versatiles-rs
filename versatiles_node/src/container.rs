@@ -30,7 +30,7 @@ impl ContainerReader {
 	/// Supports: .versatiles, .mbtiles, .pmtiles, .tar, directories, HTTP URLs
 	#[napi(factory)]
 	pub async fn open(path: String) -> Result<Self> {
-		let runtime = TilesRuntime::default();
+		let runtime = TilesRuntime::new_silent();
 		let reader = napi_result!(runtime.get_reader_from_str(&path).await)?;
 
 		Ok(Self {
@@ -189,14 +189,7 @@ impl ContainerReader {
 			runtime.events().subscribe(move |event| {
 				if let Event::Progress { data, .. } = event {
 					// Convert Rust ProgressData to Node.js ProgressData
-					let js_data = ProgressData {
-						position: data.position as f64,
-						total: data.total as f64,
-						percentage: data.percentage,
-						speed: data.speed,
-						eta: data.eta,
-						message: Some(data.message.clone()),
-					};
+					let js_data = ProgressData::from(data);
 					let _ = cb_arc.call(js_data, ThreadsafeFunctionCallMode::NonBlocking);
 				}
 			});
