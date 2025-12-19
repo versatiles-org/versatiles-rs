@@ -13,25 +13,25 @@ if [ $? -ne 0 ]; then
    echo -e "$result\nERROR DURING: cargo check"
    exit 1
 fi
-echo "cargo check S"
+echo "cargo check - server"
 result=$(cargo check --workspace --no-default-features --features server --all-targets 2>&1)
 if [ $? -ne 0 ]; then
    echo -e "$result\nERROR DURING: cargo check"
    exit 1
 fi
-echo "cargo check C"
+echo "cargo check - cli"
 result=$(cargo check --workspace --no-default-features --features cli --all-targets 2>&1)
 if [ $? -ne 0 ]; then
    echo -e "$result\nERROR DURING: cargo check"
    exit 1
 fi
-echo "cargo check C,S"
+echo "cargo check - server, cli"
 result=$(cargo check --workspace --no-default-features --features server,cli --all-targets 2>&1)
 if [ $? -ne 0 ]; then
    echo -e "$result\nERROR DURING: cargo check"
    exit 1
 fi
-echo "cargo check *"
+echo "cargo check - all features"
 result=$(cargo check --workspace --all-features --all-targets 2>&1)
 if [ $? -ne 0 ]; then
    echo -e "$result\nERROR DURING: cargo check"
