@@ -101,6 +101,14 @@ if [ -d "$NODEJS_DIR" ]; then
       fi
    fi
 
+   # Build the project
+   echo "npm run build"
+   result=$(npm run build 2>&1)
+   if [ $? -ne 0 ]; then
+      echo -e "$result\nERROR DURING: npm run build"
+      exit 1
+   fi
+
    # TypeScript type checking
    echo "npm run typecheck"
    result=$(npm run typecheck 2>&1)
