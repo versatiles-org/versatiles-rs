@@ -15,7 +15,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 lazy_static.workspace = true
 napi = { version = "3.7.1", features = ["async"] }
-napi-derive = "3.4.0"
+napi-derive = "3.4.1"
 tokio.workspace = true
 versatiles = { workspace = true, default-features = false, features = [
 	"server",
