@@ -217,3 +217,214 @@ fn make_bar(pos: u64, len: u64, width: usize) -> String {
 	}
 	s
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::time::Duration;
+
+	#[test]
+	fn test_progress_handle_new() {
+		let event_bus = EventBus::new();
+		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+
+		assert_eq!(handle.id().0, 1);
+	}
+
+	#[test]
+	fn test_progress_handle_set_position() {
+		let event_bus = EventBus::new();
+		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+
+		handle.set_position(50);
+		let state = handle.state.lock().unwrap();
+		assert_eq!(state.position, 50);
+	}
+
+	#[test]
+	fn test_progress_handle_set_position_clamps_to_max() {
+		let event_bus = EventBus::new();
+		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+
+		handle.set_position(150); // Exceeds total
+		let state = handle.state.lock().unwrap();
+		assert_eq!(state.position, 100); // Should be clamped to total
+	}
+
+	#[test]
+	fn test_progress_handle_inc() {
+		let event_bus = EventBus::new();
+		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+
+		handle.inc(10);
+		handle.inc(15);
+		handle.inc(25);
+
+		let state = handle.state.lock().unwrap();
+		assert_eq!(state.position, 50);
+	}
+
+	#[test]
+	fn test_progress_handle_inc_saturates() {
+		let event_bus = EventBus::new();
+		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+
+		handle.set_position(90);
+		handle.inc(20); // Would go to 110, but should clamp to 100
+
+		let state = handle.state.lock().unwrap();
+		assert_eq!(state.position, 100);
+	}
+
+	#[test]
+	fn test_progress_handle_set_max_value() {
+		let event_bus = EventBus::new();
+		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+
+		handle.set_max_value(200);
+		let state = handle.state.lock().unwrap();
+		assert_eq!(state.total, 200);
+	}
+
+	#[test]
+	fn test_progress_handle_set_max_value_clamps_position() {
+		let event_bus = EventBus::new();
+		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+
+		handle.set_position(80);
+		handle.set_max_value(50); // New max is less than current position
+
+		let state = handle.state.lock().unwrap();
+		assert_eq!(state.total, 50);
+		assert_eq!(state.position, 50); // Position should be clamped
+	}
+
+	#[test]
+	fn test_progress_handle_finish() {
+		let event_bus = EventBus::new();
+		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+
+		handle.set_position(50);
+		handle.finish();
+
+		let state = handle.state.lock().unwrap();
+		assert_eq!(state.position, 100);
+		assert!(state.finished);
+	}
+
+	#[test]
+	fn test_progress_handle_clone() {
+		let event_bus = EventBus::new();
+		let handle1 = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+
+		handle1.set_position(50);
+
+		let handle2 = handle1.clone();
+		handle2.set_position(75);
+
+		// Both handles share the same state - verify by checking separately
+		{
+			let state1 = handle1.state.lock().unwrap();
+			assert_eq!(state1.position, 75);
+		}
+		{
+			let state2 = handle2.state.lock().unwrap();
+			assert_eq!(state2.position, 75);
+		}
+	}
+
+	// Helper function tests
+	#[test]
+	fn test_format_rate() {
+		assert_eq!(format_rate(0.0), "0/s");
+		assert_eq!(format_rate(50.0), "50/s");
+		assert_eq!(format_rate(1500.0), "1.5k/s");
+		assert_eq!(format_rate(2_500_000.0), "2.5M/s");
+		assert_eq!(format_rate(3_500_000_000.0), "3.5G/s");
+		assert_eq!(format_rate(f64::INFINITY), "--/s");
+		assert_eq!(format_rate(f64::NAN), "--/s");
+	}
+
+	#[test]
+	fn test_human_number() {
+		assert_eq!(human_number(0.0), "0");
+		assert_eq!(human_number(5.0), "5");
+		assert_eq!(human_number(999.0), "999");
+		assert_eq!(human_number(1_000.0), "1.0k");
+		assert_eq!(human_number(1_500.0), "1.5k");
+		assert_eq!(human_number(1_000_000.0), "1.0M");
+		assert_eq!(human_number(2_500_000.0), "2.5M");
+		assert_eq!(human_number(1_000_000_000.0), "1.0G");
+		assert_eq!(human_number(3_500_000_000.0), "3.5G");
+		assert_eq!(human_number(-1_500.0), "-1.5k");
+	}
+
+	#[test]
+	fn test_format_eta() {
+		assert_eq!(format_eta(Duration::from_secs(0)), "0s");
+		assert_eq!(format_eta(Duration::from_secs(45)), "45s");
+		assert_eq!(format_eta(Duration::from_secs(59)), "59s");
+		assert_eq!(format_eta(Duration::from_secs(60)), "01:00");
+		assert_eq!(format_eta(Duration::from_secs(90)), "01:30");
+		assert_eq!(format_eta(Duration::from_secs(754)), "12:34"); // 12 min 34 sec
+		assert_eq!(format_eta(Duration::from_secs(3_599)), "59:59");
+		assert_eq!(format_eta(Duration::from_secs(3_600)), "1:00:00"); // 1 hour
+		assert_eq!(format_eta(Duration::from_secs(11_142)), "3:05:42"); // 3h 5m 42s
+		assert_eq!(format_eta(Duration::from_secs(86_399)), "23:59:59");
+		assert_eq!(format_eta(Duration::from_secs(86_400)), "1d00h"); // 1 day
+		assert_eq!(format_eta(Duration::from_secs(97_200)), "1d03h"); // 1d 3h
+		assert_eq!(format_eta(Duration::from_secs(183_600)), "2d03h"); // 2d 3h
+	}
+
+	#[test]
+	fn test_make_bar_empty() {
+		let bar = make_bar(0, 100, 10);
+		assert_eq!(bar.chars().count(), 10);
+		assert!(bar.starts_with(' '));
+	}
+
+	#[test]
+	fn test_make_bar_full() {
+		let bar = make_bar(100, 100, 10);
+		assert_eq!(bar.chars().count(), 10);
+		assert_eq!(bar, "██████████");
+	}
+
+	#[test]
+	fn test_make_bar_half() {
+		let bar = make_bar(50, 100, 10);
+		assert_eq!(bar.chars().count(), 10);
+		// Should have 5 full blocks
+		let full_count = bar.chars().filter(|&c| c == '█').count();
+		assert_eq!(full_count, 5);
+	}
+
+	#[test]
+	fn test_make_bar_partial() {
+		let bar = make_bar(25, 100, 10);
+		assert_eq!(bar.chars().count(), 10);
+		// Should have some full blocks and a partial
+		let full_count = bar.chars().filter(|&c| c == '█').count();
+		assert_eq!(full_count, 2); // 2.5 -> 2 full blocks + 1 partial
+	}
+
+	#[test]
+	fn test_make_bar_minimum_width() {
+		let bar = make_bar(50, 100, 0);
+		assert_eq!(bar.chars().count(), 1); // width.max(1)
+	}
+
+	#[test]
+	fn test_make_bar_zero_total() {
+		// Should handle division by zero gracefully
+		let bar = make_bar(0, 0, 10);
+		assert_eq!(bar.chars().count(), 10);
+	}
+
+	#[test]
+	fn test_terminal_width() {
+		// Just verify it returns a reasonable value
+		let width = terminal_width();
+		assert!(width >= 10); // Minimum fallback is 10
+	}
+}

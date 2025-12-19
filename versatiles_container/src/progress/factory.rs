@@ -33,3 +33,85 @@ impl ProgressFactory {
 		ProgressHandle::new(id, message.to_string(), total, self.event_bus.clone(), self.stderr)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_factory_creation() {
+		let event_bus = EventBus::new();
+		let factory = ProgressFactory::new(event_bus, false);
+		assert_eq!(factory.next_id, 0);
+		assert!(!factory.stderr);
+	}
+
+	#[test]
+	fn test_factory_creation_with_stderr() {
+		let event_bus = EventBus::new();
+		let factory = ProgressFactory::new(event_bus, true);
+		assert_eq!(factory.next_id, 0);
+		assert!(factory.stderr);
+	}
+
+	#[test]
+	fn test_factory_creates_progress_with_incrementing_ids() {
+		let event_bus = EventBus::new();
+		let mut factory = ProgressFactory::new(event_bus, false);
+
+		let handle1 = factory.create("Task 1", 100);
+		let handle2 = factory.create("Task 2", 200);
+		let handle3 = factory.create("Task 3", 300);
+
+		assert_eq!(handle1.id().0, 1);
+		assert_eq!(handle2.id().0, 2);
+		assert_eq!(handle3.id().0, 3);
+	}
+
+	#[test]
+	fn test_factory_id_wrapping() {
+		let event_bus = EventBus::new();
+		let mut factory = ProgressFactory::new(event_bus, false);
+
+		// Set next_id to max value
+		factory.next_id = u32::MAX;
+
+		let handle1 = factory.create("Wrap test", 100);
+		assert_eq!(handle1.id().0, 0); // Should wrap to 0
+
+		let handle2 = factory.create("After wrap", 100);
+		assert_eq!(handle2.id().0, 1); // Should continue from 1
+	}
+
+	#[test]
+	fn test_factory_clone() {
+		let event_bus = EventBus::new();
+		let mut factory1 = ProgressFactory::new(event_bus, false);
+
+		// Create one handle to increment the ID
+		let _handle1 = factory1.create("First", 100);
+		assert_eq!(factory1.next_id, 1);
+
+		// Clone the factory
+		let mut factory2 = factory1.clone();
+
+		// Both factories should have independent counters after clone
+		let handle2 = factory2.create("Second", 100);
+		assert_eq!(handle2.id().0, 2);
+	}
+
+	#[test]
+	fn test_factory_multiple_handles() {
+		let event_bus = EventBus::new();
+		let mut factory = ProgressFactory::new(event_bus, false);
+
+		let handles: Vec<_> = (0..10)
+			.map(|i| factory.create(&format!("Task {}", i), i as u64 * 100))
+			.collect();
+
+		assert_eq!(handles.len(), 10);
+		for (i, handle) in handles.iter().enumerate() {
+			assert_eq!(handle.id().0, (i + 1) as u32);
+		}
+	}
+}
