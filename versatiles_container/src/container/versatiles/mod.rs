@@ -26,13 +26,13 @@
 //!     VersaTilesWriter::write_to_path(
 //!         &mut reader,
 //!         &path_versatiles,
-//!         runtime
+//!         runtime.clone()
 //!     ).await?;
 //!
 //!     println!("Tiles have been successfully written to {path_versatiles:?}");
 //!
 //!     // Read the tiles back from the .versatiles file
-//!     let mut reader = VersaTilesReader::open_path(&path_versatiles).await?;
+//!     let mut reader = VersaTilesReader::open_path(&path_versatiles, runtime).await?;
 //!
 //!     // Get tile data
 //!     if let Some(tile) = reader.get_tile(&TileCoord::new(12, 2200, 1345)?).await? {

@@ -25,8 +25,9 @@
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
 //!     // Open PMTiles via absolute path
+//!     let runtime = TilesRuntime::default();
 //!     let path = Path::new("/absolute/path/to/berlin.pmtiles");
-//!     let mut reader = PMTilesReader::open_path(path).await?;
+//!     let mut reader = PMTilesReader::open_path(path, runtime).await?;
 //!
 //!     // Inspect metadata and parameters
 //!     let tj = reader.tilejson();

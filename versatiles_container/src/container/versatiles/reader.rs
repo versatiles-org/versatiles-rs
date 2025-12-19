@@ -25,8 +25,9 @@
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     // Open a .versatiles container (relative or absolute path)
+//!     let runtime = TilesRuntime::default();
 //!     let path = Path::new("./data/world.versatiles");
-//!     let mut reader = VersaTilesReader::open_path(&path).await?;
+//!     let mut reader = VersaTilesReader::open_path(&path, runtime).await?;
 //!
 //!     // Inspect parameters & TileJSON
 //!     let params = reader.parameters();

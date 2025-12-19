@@ -40,7 +40,7 @@ impl TilesRuntime {
 	/// let runtime = TilesRuntime::builder()
 	///     .with_disk_cache()
 	///     .max_memory(2_000_000_000)
-	///     .build();
+	///     .build(false);
 	/// ```
 	pub fn builder() -> RuntimeBuilder {
 		RuntimeBuilder::default()

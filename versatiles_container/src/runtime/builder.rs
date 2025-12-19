@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 /// let runtime = TilesRuntime::builder()
 ///     .with_disk_cache()
 ///     .max_memory(2 * 1024 * 1024 * 1024)
-///     .build();
+///     .build(false);
 /// ```
 pub struct RuntimeBuilder {
 	cache_type: Option<CacheType>,
@@ -73,7 +73,7 @@ impl RuntimeBuilder {
 	///     .customize_registry(|registry| {
 	///         // Register custom format handlers
 	///     })
-	///     .build();
+	///     .build(false);
 	/// ```
 	pub fn customize_registry<F>(mut self, customizer: F) -> Self
 	where

@@ -32,12 +32,12 @@
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     // Read any existing source (e.g. PMTiles, Directory)
+//!     let runtime = TilesRuntime::default();
 //!     let source_path = Path::new("/absolute/path/to/berlin.pmtiles");
-//!     let mut reader = PMTilesReader::open_path(&source_path).await?;
+//!     let mut reader = PMTilesReader::open_path(&source_path, runtime.clone()).await?;
 //!
 //!     // Write to an MBTiles file
 //!     let out_file = std::env::temp_dir().join("berlin.mbtiles");
-//!     let runtime = TilesRuntime::default();
 //!     MBTilesWriter::write_to_path(&mut reader, &out_file, runtime).await?;
 //!     Ok(())
 //! }
