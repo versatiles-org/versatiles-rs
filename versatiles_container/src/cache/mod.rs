@@ -6,11 +6,11 @@
 //! results such as decoded tiles, rendered images, or serialized metadata.
 //!
 //! # Submodules
-//! - [`cache_in_memory`] — fast, non-persistent cache for small datasets
-//! - [`cache_on_disk`] — disk-based cache storing data in binary files
-//! - [`cache_type`] — defines which backend to use
-//! - [`map`] — high-level cache wrapper for key→values storage
-//! - [`traits`] — core traits for cache key/value serialization
+//! - `cache_in_memory` — fast, non-persistent cache for small datasets
+//! - `cache_on_disk` — disk-based cache storing data in binary files
+//! - [`CacheType`] — defines which backend to use
+//! - [`CacheMap`] — high-level cache wrapper for key→values storage
+//! - [`Cache`], [`CacheKey`], [`CacheValue`] — core traits for cache key/value serialization
 //!
 //! # Usage
 //! Cache type selection is determined by the [`TilesRuntime`](crate::TilesRuntime):
