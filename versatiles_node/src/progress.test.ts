@@ -119,16 +119,17 @@ describe('convertTo with callbacks', () => {
 
 		// If we got progress data, verify its structure
 		if (progressData) {
-			expect(progressData).toHaveProperty('position');
-			expect(progressData).toHaveProperty('total');
-			expect(progressData).toHaveProperty('percentage');
-			expect(progressData).toHaveProperty('speed');
-			expect(progressData).toHaveProperty('eta');
-			expect(typeof progressData.position).toBe('number');
-			expect(typeof progressData.total).toBe('number');
-			expect(typeof progressData.percentage).toBe('number');
-			expect(typeof progressData.speed).toBe('number');
-			expect(typeof progressData.eta).toBe('number');
+			expect(Object.fromEntries(Object.entries(progressData).map(([key, value]) => [key, typeof value]))).toStrictEqual(
+				{
+					estimatedSecondsRemaining: 'number',
+					eta: 'number',
+					message: 'string',
+					percentage: 'number',
+					position: 'number',
+					speed: 'number',
+					total: 'number',
+				},
+			);
 		}
 	});
 

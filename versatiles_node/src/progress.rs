@@ -1,8 +1,17 @@
-use napi::bindgen_prelude::*;
-use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
+use napi::{
+	bindgen_prelude::*,
+	threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
+};
 use napi_derive::napi;
-use std::sync::{Arc, Mutex};
+use std::{
+	sync::{Arc, Mutex},
+	time::Instant,
+};
 use versatiles_container::ProgressState;
+
+lazy_static::lazy_static! {
+	static ref UNIX_EPOCH_INSTANT: Instant = Instant::now() - std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap();
+}
 
 /// Progress data sent to JavaScript callbacks
 #[napi(object)]
@@ -12,25 +21,32 @@ pub struct ProgressData {
 	pub total: f64,
 	pub percentage: f64,
 	pub speed: f64,
-	pub estimated_time_remaining: f64,
+	pub estimated_seconds_remaining: f64,
+	pub eta: f64,
 	pub message: Option<String>,
 }
 
 impl From<&ProgressState> for ProgressData {
 	fn from(data: &ProgressState) -> Self {
 		let speed = data.position as f64 / data.start.elapsed().as_secs_f64();
-		let estimated_time_remaining = if speed > 0.0 {
+		let estimated_seconds_remaining = if speed > 0.0 {
 			(data.total as f64 - data.position as f64) / speed
 		} else {
 			f64::INFINITY
 		};
+		let eta = if estimated_seconds_remaining.is_finite() {
+			data.start.duration_since(*UNIX_EPOCH_INSTANT).as_secs_f64() + data.total as f64 / speed
+		} else {
+			f64::INFINITY
+		};
 		ProgressData {
-			position: data.position as f64,
-			total: data.total as f64,
-			percentage: data.position as f64 / data.total as f64 * 100.0,
-			speed,
-			estimated_time_remaining,
+			estimated_seconds_remaining,
+			eta,
 			message: Some(data.message.clone()),
+			percentage: data.position as f64 / data.total as f64 * 100.0,
+			position: data.position as f64,
+			speed,
+			total: data.total as f64,
 		}
 	}
 }
