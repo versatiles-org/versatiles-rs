@@ -251,7 +251,14 @@ jobs:
           cache-targets: true
           cache-on-failure: true
 
-      - name: Format, lint and test (Windows)
-        shell: pwsh
-        working-directory: ${{ github.workspace }}
-        run: .\scripts\test-windows.ps1
+      - name: Format check (rustfmt)
+        run: cargo fmt -- --check
+
+      - name: Clippy (all targets)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Tests (all targets)
+        run: cargo test --workspace --all-targets
+
+      - name: Doctests (all-features)
+        run: cargo test --workspace --doc
