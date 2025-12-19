@@ -23,11 +23,11 @@ impl TilesRuntime {
 	///
 	/// Equivalent to `TilesRuntime::builder().build()`
 	pub fn new() -> Self {
-		Self::builder().build(true)
+		Self::builder().build()
 	}
 
 	pub fn new_silent() -> Self {
-		Self::builder().build(false)
+		Self::builder().silent().build()
 	}
 
 	/// Create a builder for customizing runtime configuration
@@ -40,7 +40,8 @@ impl TilesRuntime {
 	/// let runtime = TilesRuntime::builder()
 	///     .with_disk_cache()
 	///     .max_memory(2_000_000_000)
-	///     .build(false);
+	///     .silent()
+	///     .build();
 	/// ```
 	pub fn builder() -> RuntimeBuilder {
 		RuntimeBuilder::default()
@@ -128,7 +129,8 @@ mod tests {
 		let runtime = TilesRuntime::builder()
 			.max_memory(1024)
 			.with_memory_cache()
-			.build(false);
+			.silent()
+			.build();
 
 		assert_eq!(runtime.max_memory(), Some(1024));
 	}

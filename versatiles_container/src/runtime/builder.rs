@@ -14,13 +14,15 @@ use std::sync::{Arc, Mutex};
 /// let runtime = TilesRuntime::builder()
 ///     .with_disk_cache()
 ///     .max_memory(2 * 1024 * 1024 * 1024)
-///     .build(false);
+///     .silent()
+///     .build();
 /// ```
 pub struct RuntimeBuilder {
 	cache_type: Option<CacheType>,
 	max_memory: Option<usize>,
 	#[allow(clippy::type_complexity)]
 	registry_customizer: Vec<Box<dyn FnOnce(&mut ContainerRegistry)>>,
+	silent: bool,
 }
 
 impl RuntimeBuilder {
@@ -30,6 +32,7 @@ impl RuntimeBuilder {
 			cache_type: None,
 			max_memory: None,
 			registry_customizer: Vec::new(),
+			silent: false,
 		}
 	}
 
@@ -47,6 +50,11 @@ impl RuntimeBuilder {
 	/// Use disk cache
 	pub fn with_disk_cache(self) -> Self {
 		self.cache_type(CacheType::new_disk())
+	}
+
+	pub fn silent(mut self) -> Self {
+		self.silent = true;
+		self
 	}
 
 	/// Set maximum memory limit in bytes
@@ -73,7 +81,8 @@ impl RuntimeBuilder {
 	///     .customize_registry(|registry| {
 	///         // Register custom format handlers
 	///     })
-	///     .build(false);
+	///     .silent()
+	///     .build();
 	/// ```
 	pub fn customize_registry<F>(mut self, customizer: F) -> Self
 	where
@@ -86,10 +95,10 @@ impl RuntimeBuilder {
 	/// Build the runtime
 	///
 	/// Creates a new TilesRuntime with the configured settings.
-	pub fn build(self, stderr: bool) -> TilesRuntime {
+	pub fn build(self) -> TilesRuntime {
 		let cache_type = self.cache_type.unwrap_or_else(CacheType::new_memory);
 		let event_bus = EventBus::new();
-		let progress_factory = Mutex::new(ProgressFactory::new(event_bus.clone(), stderr));
+		let progress_factory = Mutex::new(ProgressFactory::new(event_bus.clone(), !self.silent));
 
 		// Create registry with default format handlers
 		let mut registry = ContainerRegistry::default();
