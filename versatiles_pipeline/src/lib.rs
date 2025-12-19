@@ -17,5 +17,6 @@ mod vpl;
 
 pub use container_reader::*;
 pub use factory::PipelineFactory;
+pub use helpers::register_pipeline_readers;
 pub use traits::OperationTrait;
 pub use vpl::VPLNode;

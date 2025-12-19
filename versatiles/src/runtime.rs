@@ -1,18 +1,8 @@
-use versatiles_container::{RuntimeBuilder, TilesReaderTrait, TilesRuntime};
+use versatiles_container::{RuntimeBuilder, TilesRuntime};
+use versatiles_pipeline::register_pipeline_readers;
 
 pub fn create_runtime_builder() -> RuntimeBuilder {
-	TilesRuntime::builder().customize_registry(|registry| {
-		registry.register_reader_file("vpl", |p, r| async move {
-			Ok(Box::new(versatiles_pipeline::PipelineReader::open_path(&p, r).await?) as Box<dyn TilesReaderTrait>)
-		});
-
-		registry.register_reader_data("vpl", |p, r| async move {
-			Ok(
-				Box::new(versatiles_pipeline::PipelineReader::open_reader(p, &std::env::current_dir().unwrap(), r).await?)
-					as Box<dyn TilesReaderTrait>,
-			)
-		});
-	})
+	TilesRuntime::builder().customize_registry(register_pipeline_readers)
 }
 
 pub fn create_runtime() -> TilesRuntime {

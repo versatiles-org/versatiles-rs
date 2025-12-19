@@ -1,6 +1,9 @@
-use versatiles::runtime::create_runtime as create_runtime_wit;
+use versatiles::pipeline::register_pipeline_readers;
 use versatiles_container::TilesRuntime;
 
 pub fn create_runtime() -> TilesRuntime {
-	create_runtime_wit()
+	TilesRuntime::builder()
+		.customize_registry(register_pipeline_readers)
+		.silent()
+		.build()
 }
