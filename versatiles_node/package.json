@@ -4,6 +4,11 @@
   "description": "Node.js bindings for VersaTiles - convert, serve, and process map tiles",
   "main": "index.js",
   "types": "index.d.ts",
+  "files": [
+    "index.d.ts",
+    "index.js",
+    "versatiles.*.node"
+  ],
   "napi": {
     "binaryName": "versatiles",
     "targets": [
