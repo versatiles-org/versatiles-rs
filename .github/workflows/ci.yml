@@ -185,13 +185,13 @@ jobs:
   # Runtime: ~5-6 minutes (GDAL setup + coverage generation)
   # ============================================================================
   coverage:
-    name: "Coverage (main branch only)"
+    name: "Coverage"
     runs-on: ubuntu-latest
     # Only run on main branch pushes, scheduled runs, or manual dispatch
     if: |
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      github.event_name == 'push'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
