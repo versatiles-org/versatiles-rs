@@ -1,11 +1,11 @@
 #![deny(clippy::all)]
 
 mod container;
+mod macros;
 mod progress;
 mod runtime;
 mod server;
 mod types;
-mod utils;
 
 pub use container::ContainerReader;
 pub use progress::{Progress, ProgressData};

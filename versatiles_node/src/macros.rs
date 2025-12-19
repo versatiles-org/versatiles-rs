@@ -9,6 +9,6 @@ pub fn anyhow_to_napi(err: anyhow::Error) -> NapiError {
 #[macro_export]
 macro_rules! napi_result {
 	($expr:expr) => {
-		$expr.map_err($crate::utils::anyhow_to_napi)
+		$expr.map_err($crate::macros::anyhow_to_napi)
 	};
 }
