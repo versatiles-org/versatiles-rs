@@ -33,6 +33,9 @@ Thumbs.db
 coverage/
 .nyc_output/
 
+# Documentation output
+docs/
+
 # Temporary files
 *.log
 .env

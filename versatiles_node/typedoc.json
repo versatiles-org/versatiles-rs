@@ -1,0 +1,27 @@
+{
+	"entryPoints": ["./index.d.ts"],
+	"out": "docs",
+	"name": "VersaTiles Node.js",
+	"includeVersion": true,
+	"readme": "README.md",
+	"plugin": [],
+	"theme": "default",
+	"navigationLinks": {
+		"GitHub": "https://github.com/versatiles-org/versatiles-rs",
+		"NPM": "https://www.npmjs.com/package/@versatiles/versatiles-rs"
+	},
+	"exclude": ["**/node_modules/**", "**/*.test.ts"],
+	"excludePrivate": true,
+	"excludeProtected": false,
+	"excludeInternal": true,
+	"categorizeByGroup": true,
+	"searchInComments": true,
+	"searchInDocuments": true,
+	"sort": ["source-order"],
+	"kindSortOrder": ["Class", "Interface", "Function", "TypeAlias", "Enum"],
+	"navigation": {
+		"includeCategories": true,
+		"includeGroups": true
+	},
+	"groupOrder": ["Classes", "Interfaces", "Type Aliases", "Functions"]
+}

@@ -1,0 +1,70 @@
+name: Documentation
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v2.3.2
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy Documentation
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: versatiles_node/package-lock.json
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup GDAL
+        uses: ./.github/actions/setup-gdal
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "docs"
+          cache-targets: true
+
+      - name: Install Node.js dependencies
+        working-directory: ./versatiles_node
+        run: npm ci
+
+      - name: Build native module
+        working-directory: ./versatiles_node
+        run: npm run build
+
+      - name: Generate documentation
+        working-directory: ./versatiles_node
+        run: npm run docs:generate
+
+      - name: Add .nojekyll file
+        working-directory: ./versatiles_node
+        run: touch docs/.nojekyll
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload documentation artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./versatiles_node/docs
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

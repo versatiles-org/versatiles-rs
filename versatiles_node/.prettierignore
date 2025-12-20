@@ -5,4 +5,5 @@ dist
 index.js
 index.d.ts
 package-lock.json
+package.json
 Cargo.lock

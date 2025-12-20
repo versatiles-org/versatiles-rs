@@ -1,89 +1,94 @@
 {
-  "name": "@versatiles/versatiles-rs",
-  "version": "2.3.1",
-  "description": "Node.js bindings for VersaTiles - convert, serve, and process map tiles",
-  "main": "index.js",
-  "types": "index.d.ts",
-  "files": [
-    "index.d.ts",
-    "index.js",
-    "versatiles.*.node"
-  ],
-  "napi": {
-    "binaryName": "versatiles",
-    "targets": [
-      "aarch64-apple-darwin",
-      "x86_64-apple-darwin",
-      "aarch64-unknown-linux-gnu",
-      "x86_64-unknown-linux-gnu",
-      "aarch64-unknown-linux-musl",
-      "x86_64-unknown-linux-musl",
-      "aarch64-pc-windows-msvc",
-      "x86_64-pc-windows-msvc"
-    ]
-  },
-  "keywords": [
-    "versatiles",
-    "mbtiles",
-    "pmtiles",
-    "tiles",
-    "map",
-    "gis",
-    "geo",
-    "rust"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/versatiles-org/versatiles-rs.git",
-    "directory": "versatiles_node"
-  },
-  "license": "MIT",
-  "author": "Michael Kreil <versatiles@michael-kreil.de>",
-  "engines": {
-    "node": ">= 16"
-  },
-  "scripts": {
-    "artifacts": "napi artifacts",
-    "build:debug": "napi build --platform",
-    "build": "napi build --platform --release",
-    "check": "npm run build:debug && npm run typecheck && npm run lint && npm run format:check && npm test",
-    "fix": "npm run lint:fix && npm run format",
-    "format:check": "prettier --check .",
-    "format": "prettier --write .",
-    "lint:fix": "eslint src --fix",
-    "lint": "eslint src",
-    "pack:dry": "npm pack --dry-run",
-    "prepublishOnly": "napi prepublish -t npm",
-    "test:coverage": "vitest run --coverage",
-    "test:ui": "vitest --ui",
-    "test:watch": "vitest",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "upgrade": "npm-check-updates -u && npm install",
-    "version": "napi version"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.39.2",
-    "@napi-rs/cli": "^3.5.0",
-    "@types/node": "^25",
-    "@vitest/ui": "^4.0.15",
-    "eslint": "^9.39.2",
-    "eslint-config-prettier": "^10.1.8",
-    "prettier": "^3.7.4",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.50.0",
-    "npm-check-updates": "^19.2.0",
-    "vitest": "^4.0.15"
-  },
-  "optionalDependencies": {
-    "@versatiles/versatiles-rs-darwin-arm64": "2.3.1",
-    "@versatiles/versatiles-rs-darwin-x64": "2.3.1",
-    "@versatiles/versatiles-rs-linux-arm64-gnu": "2.3.1",
-    "@versatiles/versatiles-rs-linux-x64-gnu": "2.3.1",
-    "@versatiles/versatiles-rs-linux-arm64-musl": "2.3.1",
-    "@versatiles/versatiles-rs-linux-x64-musl": "2.3.1",
-    "@versatiles/versatiles-rs-win32-arm64-msvc": "2.3.1",
-    "@versatiles/versatiles-rs-win32-x64-msvc": "2.3.1"
-  }
+	"name": "@versatiles/versatiles-rs",
+	"version": "2.3.1",
+	"description": "Node.js bindings for VersaTiles - convert, serve, and process map tiles",
+	"main": "index.js",
+	"types": "index.d.ts",
+	"files": [
+		"index.d.ts",
+		"index.js",
+		"versatiles.*.node"
+	],
+	"napi": {
+		"binaryName": "versatiles",
+		"targets": [
+			"aarch64-apple-darwin",
+			"x86_64-apple-darwin",
+			"aarch64-unknown-linux-gnu",
+			"x86_64-unknown-linux-gnu",
+			"aarch64-unknown-linux-musl",
+			"x86_64-unknown-linux-musl",
+			"aarch64-pc-windows-msvc",
+			"x86_64-pc-windows-msvc"
+		]
+	},
+	"keywords": [
+		"versatiles",
+		"mbtiles",
+		"pmtiles",
+		"tiles",
+		"map",
+		"gis",
+		"geo",
+		"rust"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/versatiles-org/versatiles-rs.git",
+		"directory": "versatiles_node"
+	},
+	"license": "MIT",
+	"author": "Michael Kreil <versatiles@michael-kreil.de>",
+	"engines": {
+		"node": ">= 16"
+	},
+	"scripts": {
+		"artifacts": "napi artifacts",
+		"build:debug": "napi build --platform",
+		"build": "napi build --platform --release",
+		"check": "npm run build:debug && npm run typecheck && npm run lint && npm run format:check && npm test",
+		"docs:clean": "rm -rf docs",
+		"docs:generate": "typedoc",
+		"docs:serve": "npx http-server docs -p 8080 -o",
+		"fix": "npm run lint:fix && npm run format",
+		"format:check": "prettier --check .",
+		"format": "prettier --write .",
+		"lint:fix": "eslint src --fix",
+		"lint": "eslint src",
+		"pack:dry": "npm pack --dry-run",
+		"prepublishOnly": "napi prepublish -t npm",
+		"test:coverage": "vitest run --coverage",
+		"test:ui": "vitest --ui",
+		"test:watch": "vitest",
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit",
+		"upgrade": "npm-check-updates -u && npm install",
+		"version": "napi version"
+	},
+	"devDependencies": {
+		"@eslint/js": "^9.39.2",
+		"@napi-rs/cli": "^3.5.0",
+		"@types/node": "^25",
+		"@vitest/ui": "^4.0.16",
+		"eslint": "^9.39.2",
+		"eslint-config-prettier": "^10.1.8",
+		"npm-check-updates": "^19.2.0",
+		"prettier": "^3.7.4",
+		"tsx": "^4.21.0",
+		"typedoc": "^0.28.15",
+		"typedoc-plugin-markdown": "^4.9.0",
+		"typescript": "^5.9.3",
+		"typescript-eslint": "^8.50.0",
+		"vitest": "^4.0.16"
+	},
+	"optionalDependencies": {
+		"@versatiles/versatiles-rs-darwin-arm64": "2.3.1",
+		"@versatiles/versatiles-rs-darwin-x64": "2.3.1",
+		"@versatiles/versatiles-rs-linux-arm64-gnu": "2.3.1",
+		"@versatiles/versatiles-rs-linux-x64-gnu": "2.3.1",
+		"@versatiles/versatiles-rs-linux-arm64-musl": "2.3.1",
+		"@versatiles/versatiles-rs-linux-x64-musl": "2.3.1",
+		"@versatiles/versatiles-rs-win32-arm64-msvc": "2.3.1",
+		"@versatiles/versatiles-rs-win32-x64-msvc": "2.3.1"
+	}
 }
