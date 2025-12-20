@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterAll } from 'vitest';
-import { ContainerReader } from '../index.js';
+import { convert } from '../index.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const TESTDATA_DIR = path.join(__dirname, '../../testdata');
-const MBTILES_PATH = path.join(TESTDATA_DIR, 'berlin.mbtiles');
+const PMTILES_PATH = path.join(TESTDATA_DIR, 'berlin.pmtiles');
 const OUTPUT_PATH = path.join(__dirname, 'test-output-progress.versatiles');
 
 // Clean up output file after tests
@@ -20,10 +20,8 @@ afterAll(() => {
 
 describe('convertTo with callbacks', () => {
 	it('should complete conversion without callbacks', async () => {
-		const reader = await ContainerReader.open(MBTILES_PATH);
-
 		// Should complete successfully without any callbacks
-		await reader.convertTo(OUTPUT_PATH, {
+		await convert(PMTILES_PATH, OUTPUT_PATH, {
 			minZoom: 5,
 			maxZoom: 7,
 		});
@@ -33,10 +31,10 @@ describe('convertTo with callbacks', () => {
 	});
 
 	it('should emit progress events', async () => {
-		const reader = await ContainerReader.open(MBTILES_PATH);
 		const progressCallback = vi.fn();
 
-		await reader.convertTo(
+		await convert(
+			PMTILES_PATH,
 			OUTPUT_PATH,
 			{
 				minZoom: 5,
@@ -51,10 +49,10 @@ describe('convertTo with callbacks', () => {
 	});
 
 	it('should emit message events', async () => {
-		const reader = await ContainerReader.open(MBTILES_PATH);
 		const messageCallback = vi.fn();
 
-		await reader.convertTo(
+		await convert(
+			PMTILES_PATH,
 			OUTPUT_PATH,
 			{
 				minZoom: 5,
@@ -77,11 +75,11 @@ describe('convertTo with callbacks', () => {
 	});
 
 	it('should emit both progress and message events', async () => {
-		const reader = await ContainerReader.open(MBTILES_PATH);
 		const progressCallback = vi.fn();
 		const messageCallback = vi.fn();
 
-		await reader.convertTo(
+		await convert(
+			PMTILES_PATH,
 			OUTPUT_PATH,
 			{
 				minZoom: 5,
@@ -100,10 +98,10 @@ describe('convertTo with callbacks', () => {
 	});
 
 	it('should verify ProgressData structure', async () => {
-		const reader = await ContainerReader.open(MBTILES_PATH);
 		let progressData: any = null;
 
-		await reader.convertTo(
+		await convert(
+			PMTILES_PATH,
 			OUTPUT_PATH,
 			{
 				minZoom: 5,
@@ -134,12 +132,11 @@ describe('convertTo with callbacks', () => {
 	});
 
 	it('should handle errors gracefully', async () => {
-		const reader = await ContainerReader.open(MBTILES_PATH);
 		const errorCallback = vi.fn();
 
 		// Try to write to an invalid path
 		await expect(
-			reader.convertTo('/invalid/path/output.versatiles', undefined, undefined, (data) => {
+			convert(PMTILES_PATH, '/invalid/path/output.versatiles', undefined, undefined, (data) => {
 				if (data.type === 'error') {
 					errorCallback(data.message);
 				}
@@ -151,10 +148,10 @@ describe('convertTo with callbacks', () => {
 	});
 
 	it('should work with only progress callback', async () => {
-		const reader = await ContainerReader.open(MBTILES_PATH);
 		const progressCallback = vi.fn();
 
-		await reader.convertTo(
+		await convert(
+			PMTILES_PATH,
 			OUTPUT_PATH,
 			{
 				minZoom: 5,
@@ -169,10 +166,10 @@ describe('convertTo with callbacks', () => {
 	});
 
 	it('should work with only message callback', async () => {
-		const reader = await ContainerReader.open(MBTILES_PATH);
 		const messageCallback = vi.fn();
 
-		await reader.convertTo(
+		await convert(
+			PMTILES_PATH,
 			OUTPUT_PATH,
 			{
 				minZoom: 5,
@@ -189,10 +186,10 @@ describe('convertTo with callbacks', () => {
 	});
 
 	it('should receive completion message', async () => {
-		const reader = await ContainerReader.open(MBTILES_PATH);
 		const messages: Array<{ type: string; message: string }> = [];
 
-		await reader.convertTo(
+		await convert(
+			PMTILES_PATH,
 			OUTPUT_PATH,
 			{
 				minZoom: 5,
@@ -211,12 +208,10 @@ describe('convertTo with callbacks', () => {
 	});
 
 	it('should handle rapid consecutive conversions', async () => {
-		const reader = await ContainerReader.open(MBTILES_PATH);
-
 		// Run 3 conversions in sequence
-		await reader.convertTo(OUTPUT_PATH, { minZoom: 5, maxZoom: 7 });
-		await reader.convertTo(OUTPUT_PATH, { minZoom: 5, maxZoom: 7 });
-		await reader.convertTo(OUTPUT_PATH, { minZoom: 5, maxZoom: 7 });
+		await convert(PMTILES_PATH, OUTPUT_PATH, { minZoom: 5, maxZoom: 7 });
+		await convert(PMTILES_PATH, OUTPUT_PATH, { minZoom: 5, maxZoom: 7 });
+		await convert(PMTILES_PATH, OUTPUT_PATH, { minZoom: 5, maxZoom: 7 });
 
 		// All should complete successfully
 		expect(fs.existsSync(OUTPUT_PATH)).toBe(true);

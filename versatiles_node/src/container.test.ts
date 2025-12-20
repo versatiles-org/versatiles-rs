@@ -1,7 +1,6 @@
 import { beforeAll } from 'vitest';
 import { ContainerReader } from '../index.js';
 import path from 'path';
-import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -122,75 +121,6 @@ describe('ContainerReader', () => {
 			expect(typeof params.minZoom).toBe('number');
 			expect(typeof params.maxZoom).toBe('number');
 			expect(params.minZoom).toBeLessThanOrEqual(params.maxZoom);
-		});
-	});
-
-	describe('probe()', () => {
-		let reader: ContainerReader;
-
-		beforeAll(async () => {
-			reader = await ContainerReader.open(MBTILES_PATH);
-		});
-
-		it('should probe with shallow depth', async () => {
-			const result = await reader.probe('shallow');
-			expect(result).toBeDefined();
-			expect(typeof result.sourceName).toBe('string');
-			expect(typeof result.containerName).toBe('string');
-		});
-
-		it('should probe with container depth', async () => {
-			const result = await reader.probe('container');
-			expect(result).toBeDefined();
-			expect(result.tileJson).toBeDefined();
-			expect(result.parameters).toBeDefined();
-		});
-
-		it('should probe without depth argument', async () => {
-			const result = await reader.probe();
-			expect(result).toBeDefined();
-		});
-	});
-
-	describe('convertTo()', () => {
-		let reader: ContainerReader;
-		const OUTPUT_PATH = path.join(__dirname, 'output-test.versatiles');
-
-		beforeAll(async () => {
-			reader = await ContainerReader.open(MBTILES_PATH);
-			// Clean up output file if it exists
-			if (fs.existsSync(OUTPUT_PATH)) {
-				fs.unlinkSync(OUTPUT_PATH);
-			}
-		});
-
-		it('should convert to versatiles format', async () => {
-			await reader.convertTo(OUTPUT_PATH);
-			expect(fs.existsSync(OUTPUT_PATH)).toBeTruthy();
-
-			// Verify we can open the converted file
-			const newReader = await ContainerReader.open(OUTPUT_PATH);
-			expect(newReader).toBeDefined();
-
-			// Clean up
-			fs.unlinkSync(OUTPUT_PATH);
-		});
-
-		it('should convert with options', async () => {
-			await reader.convertTo(OUTPUT_PATH, {
-				minZoom: 5,
-				maxZoom: 7,
-				compress: 'gzip',
-			});
-			expect(fs.existsSync(OUTPUT_PATH)).toBeTruthy();
-
-			const newReader = await ContainerReader.open(OUTPUT_PATH);
-			const params = await newReader.parameters;
-			expect(params.minZoom).toBe(5);
-			expect(params.maxZoom).toBe(7);
-
-			// Clean up
-			fs.unlinkSync(OUTPUT_PATH);
 		});
 	});
 });
