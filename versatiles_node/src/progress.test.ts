@@ -3,13 +3,14 @@ import { convert } from '../index.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { tmpdir } from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const TESTDATA_DIR = path.join(__dirname, '../../testdata');
 const PMTILES_PATH = path.join(TESTDATA_DIR, 'berlin.pmtiles');
-const OUTPUT_PATH = path.join(__dirname, 'test-output-progress.versatiles');
+const OUTPUT_PATH = path.join(tmpdir(), 'versatiles-test-output-progress.versatiles');
 
 // Clean up output file after tests
 afterAll(() => {

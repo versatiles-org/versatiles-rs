@@ -2,6 +2,7 @@ import { ContainerReader, convert } from '../index.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { tmpdir } from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,7 +12,7 @@ const MBTILES_PATH = path.join(TESTDATA_DIR, 'berlin.mbtiles');
 const PMTILES_PATH = path.join(TESTDATA_DIR, 'berlin.pmtiles');
 
 describe('convertTo()', () => {
-	const OUTPUT_PATH = path.join(__dirname, 'output-test.versatiles');
+	const OUTPUT_PATH = path.join(tmpdir(), 'output-test.versatiles');
 
 	it('should convert from MBTiles to versatiles format', async () => {
 		await convert(MBTILES_PATH, OUTPUT_PATH);
