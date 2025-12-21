@@ -4,6 +4,7 @@ use napi::{
 };
 use napi_derive::napi;
 use std::{
+	ops::Div,
 	sync::{Arc, Mutex},
 	time::Instant,
 };
@@ -21,25 +22,22 @@ pub struct ProgressData {
 	pub total: f64,
 	pub percentage: f64,
 	pub speed: f64,
-	pub estimated_seconds_remaining: f64,
+	pub estimated_seconds_remaining: Option<f64>,
 	/// ETA in milliseconds since UNIX epoch (can be converted to Date with `new Date(eta)`)
-	pub eta: f64,
+	pub eta: Option<f64>,
 	pub message: Option<String>,
 }
 
 impl From<&ProgressState> for ProgressData {
 	fn from(data: &ProgressState) -> Self {
 		let speed = data.position as f64 / data.start.elapsed().as_secs_f64();
-		let estimated_seconds_remaining = if speed > 0.0 {
-			(data.total as f64 - data.position as f64) / speed
+		let (estimated_seconds_remaining, eta) = if speed > 0.0 && data.position > data.total.div(1000) {
+			(
+				Some((data.total as f64 - data.position as f64) / speed),
+				Some((data.start.duration_since(*UNIX_EPOCH_INSTANT).as_secs_f64() + data.total as f64 / speed) * 1000.0),
+			)
 		} else {
-			f64::INFINITY
-		};
-		let eta = if estimated_seconds_remaining.is_finite() {
-			// Return milliseconds since UNIX epoch for JavaScript Date
-			(data.start.duration_since(*UNIX_EPOCH_INSTANT).as_secs_f64() + data.total as f64 / speed) * 1000.0
-		} else {
-			f64::INFINITY
+			(None, None)
 		};
 		ProgressData {
 			estimated_seconds_remaining,
@@ -192,8 +190,8 @@ mod tests {
 		assert_eq!(progress_data.total, 100.0);
 		assert_eq!(progress_data.percentage, 50.0);
 		assert!(progress_data.speed > 0.0);
-		assert!(progress_data.estimated_seconds_remaining.is_finite());
-		assert!(progress_data.eta.is_finite());
+		assert!(progress_data.estimated_seconds_remaining.is_some());
+		assert!(progress_data.eta.is_some());
 		assert_eq!(progress_data.message, Some("Test progress".to_string()));
 	}
 
@@ -220,8 +218,8 @@ mod tests {
 		assert_eq!(progress_data.total, 100.0);
 		assert_eq!(progress_data.percentage, 0.0);
 		assert_eq!(progress_data.speed, 0.0);
-		assert!(progress_data.estimated_seconds_remaining.is_infinite());
-		assert!(progress_data.eta.is_infinite());
+		assert_eq!(progress_data.estimated_seconds_remaining, None);
+		assert_eq!(progress_data.eta, None);
 	}
 
 	#[test]
@@ -247,7 +245,8 @@ mod tests {
 		assert_eq!(progress_data.total, 100.0);
 		assert_eq!(progress_data.percentage, 100.0);
 		assert!(progress_data.speed > 0.0);
-		assert_eq!(progress_data.estimated_seconds_remaining, 0.0);
+		assert_eq!(progress_data.estimated_seconds_remaining, Some(0.0));
+		assert!(progress_data.eta.is_some());
 	}
 
 	#[test]

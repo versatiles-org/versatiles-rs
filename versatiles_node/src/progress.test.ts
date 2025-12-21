@@ -99,7 +99,8 @@ describe('convertTo with callbacks', () => {
 	});
 
 	it('should verify ProgressData structure', async () => {
-		let progressData: any = null;
+		let progressData1: any = null;
+		let progressData2: any = null;
 
 		await convert(
 			PMTILES_PATH,
@@ -110,26 +111,35 @@ describe('convertTo with callbacks', () => {
 			},
 			(data) => {
 				// Capture the first progress data
-				if (!progressData) {
-					progressData = data;
+				if (!progressData1) {
+					progressData1 = data;
+				} else if (!progressData2) {
+					progressData2 = data;
 				}
 			},
 		);
 
-		// If we got progress data, verify its structure
-		if (progressData) {
-			expect(Object.fromEntries(Object.entries(progressData).map(([key, value]) => [key, typeof value]))).toStrictEqual(
-				{
-					estimatedSecondsRemaining: 'number',
-					eta: 'number',
-					message: 'string',
-					percentage: 'number',
-					position: 'number',
-					speed: 'number',
-					total: 'number',
-				},
-			);
-		}
+		expect(Object.fromEntries(Object.entries(progressData1).map(([key, value]) => [key, typeof value]))).toStrictEqual(
+			{
+				message: 'string',
+				percentage: 'number',
+				position: 'number',
+				speed: 'number',
+				total: 'number',
+			},
+		);
+
+		expect(Object.fromEntries(Object.entries(progressData2).map(([key, value]) => [key, typeof value]))).toStrictEqual(
+			{
+				estimatedSecondsRemaining: 'number',
+				eta: 'number',
+				message: 'string',
+				percentage: 'number',
+				position: 'number',
+				speed: 'number',
+				total: 'number',
+			},
+		);
 	});
 
 	it('should handle errors gracefully', async () => {
