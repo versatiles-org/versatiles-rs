@@ -8,15 +8,13 @@
 //!
 //! This crate integrates tightly with [`versatiles_container`] and [`versatiles_core`] for tile I/O and metadata management.
 
-mod container_reader;
 mod factory;
 mod helpers;
 mod operations;
 mod traits;
 mod vpl;
 
-pub use container_reader::*;
 pub use factory::PipelineFactory;
-pub use helpers::register_pipeline_readers;
+pub use helpers::{PipelineReader, register_pipeline_readers};
 pub use traits::OperationTrait;
 pub use vpl::VPLNode;

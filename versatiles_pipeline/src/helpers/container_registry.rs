@@ -1,4 +1,4 @@
-use crate::PipelineReader;
+use super::PipelineReader;
 use versatiles_container::{ContainerRegistry, TilesReaderTrait};
 
 pub fn register_pipeline_readers(registry: &mut ContainerRegistry) {
