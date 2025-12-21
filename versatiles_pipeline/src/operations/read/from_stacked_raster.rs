@@ -155,19 +155,19 @@ impl OperationTrait for Operation {
 			move |bbox| async move {
 				let mut tiles = TileBBoxMap::<Vec<Tile>>::new_default(bbox);
 
-				let streams = sources.iter().map(|source| source.get_stream(bbox));
-				let results = futures::future::join_all(streams).await;
+				let streams = sources.iter().map(async |source| {
+					let stream = source.get_stream(bbox).await.unwrap();
+					stream.to_vec().await
+				});
+				let results: Vec<Vec<(TileCoord, Tile)>> = futures::future::join_all(streams).await;
 
 				for result in results.into_iter() {
-					let result = result.unwrap();
-					result
-						.for_each_sync(|(coord, mut tile)| {
-							let image = tile.as_image().unwrap();
-							if !image.is_empty() {
-								tiles.get_mut(&coord).unwrap().push(tile);
-							}
-						})
-						.await;
+					for (coord, mut tile) in result.into_iter() {
+						let image = tile.as_image().unwrap();
+						if !image.is_empty() {
+							tiles.get_mut(&coord).unwrap().push(tile);
+						}
+					}
 				}
 
 				let v = tiles
