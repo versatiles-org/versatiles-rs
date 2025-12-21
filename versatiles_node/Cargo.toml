@@ -23,5 +23,8 @@ versatiles = { workspace = true, default-features = false, features = [
 versatiles_container.workspace = true
 versatiles_core = { workspace = true, default-features = false }
 
+[dev-dependencies]
+rstest.workspace = true
+
 [build-dependencies]
 napi-build = "2"

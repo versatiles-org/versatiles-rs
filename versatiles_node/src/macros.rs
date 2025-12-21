@@ -53,7 +53,8 @@ macro_rules! napi_result {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use anyhow::anyhow;
+	use anyhow::{Context, anyhow};
+	use rstest::rstest;
 
 	#[test]
 	fn test_anyhow_to_napi_conversion() {
@@ -90,5 +91,90 @@ mod tests {
 		assert!(converted.is_err());
 		let err = converted.unwrap_err();
 		assert_eq!(err.reason, "Macro test error");
+	}
+
+	#[test]
+	fn test_anyhow_to_napi_with_multiple_contexts() {
+		let anyhow_err = anyhow!("Root cause")
+			.context("First context")
+			.context("Second context")
+			.context("Third context");
+		let napi_err = anyhow_to_napi(anyhow_err);
+
+		// All contexts should be preserved in the error message
+		assert!(napi_err.reason.contains("Root cause"));
+		assert!(napi_err.reason.contains("First context"));
+		assert!(napi_err.reason.contains("Second context"));
+		assert!(napi_err.reason.contains("Third context"));
+	}
+
+	#[rstest]
+	#[case("Simple error message")]
+	#[case("Error with unicode: 日本語 🦀 Ελληνικά")]
+	#[case("Multiline\nerror\nmessage")]
+	#[case("Error with\nnewlines\tand\ttabs\nand \"quotes\"")]
+	#[case("")]
+	fn test_anyhow_to_napi(#[case] message: &str) {
+		let anyhow_err = anyhow!(message.to_string());
+		let napi_err = anyhow_to_napi(anyhow_err);
+		assert_eq!(napi_err.reason, message);
+	}
+
+	#[test]
+	fn test_anyhow_to_napi_long_message() {
+		let anyhow_err = anyhow!("{}", "a".repeat(1000));
+		let napi_err = anyhow_to_napi(anyhow_err);
+		assert_eq!(napi_err.reason.len(), 1000);
+		assert_eq!(napi_err.reason, "a".repeat(1000));
+	}
+
+	#[test]
+	fn test_napi_result_macro_with_string_result() {
+		let result: anyhow::Result<String> = Ok("Success".to_string());
+		let converted = napi_result!(result);
+
+		assert!(converted.is_ok());
+		assert_eq!(converted.unwrap(), "Success");
+	}
+
+	#[test]
+	fn test_napi_result_macro_with_vec_result() {
+		let result: anyhow::Result<Vec<i32>> = Ok(vec![1, 2, 3]);
+		let converted = napi_result!(result);
+
+		assert!(converted.is_ok());
+		assert_eq!(converted.unwrap(), vec![1, 2, 3]);
+	}
+
+	#[test]
+	fn test_napi_result_macro_preserves_error_chain() {
+		let result: anyhow::Result<()> = Err(anyhow!("Inner error"))
+			.context("Middle layer")
+			.context("Outer layer");
+		let converted = napi_result!(result);
+
+		assert!(converted.is_err());
+		let err = converted.unwrap_err();
+		assert!(err.reason.contains("Inner error"));
+		assert!(err.reason.contains("Middle layer"));
+		assert!(err.reason.contains("Outer layer"));
+	}
+
+	#[test]
+	fn test_napi_result_macro_with_option_unwrap() {
+		let result: anyhow::Result<i32> = Some(42).ok_or_else(|| anyhow!("Value was None"));
+		let converted = napi_result!(result);
+
+		assert!(converted.is_ok());
+		assert_eq!(converted.unwrap(), 42);
+	}
+
+	#[test]
+	fn test_napi_result_macro_with_option_none() {
+		let result: anyhow::Result<i32> = None.ok_or_else(|| anyhow!("Value was None"));
+		let converted = napi_result!(result);
+
+		assert!(converted.is_err());
+		assert_eq!(converted.unwrap_err().reason, "Value was None");
 	}
 }
