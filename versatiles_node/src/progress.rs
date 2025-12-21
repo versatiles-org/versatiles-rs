@@ -6,13 +6,9 @@ use napi_derive::napi;
 use std::{
 	ops::Div,
 	sync::{Arc, Mutex},
-	time::Instant,
+	time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use versatiles_container::ProgressState;
-
-lazy_static::lazy_static! {
-	static ref UNIX_EPOCH_INSTANT: Instant = Instant::now() - std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap();
-}
 
 /// Progress data sent to JavaScript callbacks
 #[napi(object)]
@@ -32,10 +28,15 @@ impl From<&ProgressState> for ProgressData {
 	fn from(data: &ProgressState) -> Self {
 		let speed = data.position as f64 / data.start.elapsed().as_secs_f64();
 		let (estimated_seconds_remaining, eta) = if speed > 0.0 && data.position > data.total.div(1000) {
-			(
-				Some((data.total as f64 - data.position as f64) / speed),
-				Some((data.start.duration_since(*UNIX_EPOCH_INSTANT).as_secs_f64() + data.total as f64 / speed) * 1000.0),
-			)
+			let remaining_secs = (data.total as f64 - data.position as f64) / speed;
+
+			// Calculate ETA by adding remaining time to current system time
+			let eta_ms = SystemTime::now()
+				.checked_add(Duration::from_secs_f64(remaining_secs))
+				.and_then(|eta_time| eta_time.duration_since(UNIX_EPOCH).ok())
+				.map(|d| d.as_secs_f64() * 1000.0);
+
+			(Some(remaining_secs), eta_ms)
 		} else {
 			(None, None)
 		};
@@ -165,6 +166,7 @@ impl Progress {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::time::Instant;
 	use versatiles_container::ProgressId;
 
 	#[test]
