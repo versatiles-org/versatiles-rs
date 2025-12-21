@@ -178,11 +178,11 @@ jobs:
 
       - name: Node.js tests
         working-directory: ./versatiles_node
-        run: npm test
+        run: npm run test
 
       - name: Node.js test examples
         working-directory: ./versatiles_node
-        run: npm test:examples
+        run: npm run test:examples
 
   # ============================================================================
   # Job 6: Coverage (Only on main branch, schedule, or workflow_dispatch)
