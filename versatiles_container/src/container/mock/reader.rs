@@ -179,7 +179,7 @@ mod tests {
 
 		test(MockTilesReaderProfile::Png, Blob::from(MOCK_BYTES_PNG.to_vec())).await;
 		test(MockTilesReaderProfile::Pbf, Blob::from(MOCK_BYTES_PBF.to_vec())).await;
-		test(MockTilesReaderProfile::Json, Blob::from("{x:23,y:45,z:6}")).await;
+		test(MockTilesReaderProfile::Json, Blob::from("{\"z\":6,\"x\":23,\"y\":45}")).await;
 	}
 
 	#[tokio::test]

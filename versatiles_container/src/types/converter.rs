@@ -320,7 +320,10 @@ mod tests {
 					.unwrap()
 					.into_blob(tile_compression_out)?
 					.to_string();
-				text = text.replace("{x:", "").replace(",y:", "").replace(",z:3}", "");
+				text = text
+					.replace("{\"z\":3,\"x\":", "")
+					.replace(",\"y\":", "")
+					.replace("}", "");
 				tiles.push(text);
 			}
 			let tiles = tiles.join(" ");
