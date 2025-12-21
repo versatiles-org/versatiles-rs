@@ -1,3 +1,23 @@
+//! HTTP tile server
+//!
+//! This module provides the [`TileServer`] class for serving tiles and static
+//! content over HTTP. The server supports hot-reloading of tile sources and
+//! can serve multiple tile containers simultaneously.
+//!
+//! ## Features
+//!
+//! - **Multiple tile sources**: Serve different tile sets at different endpoints
+//! - **Static file serving**: Serve static files from directories or TAR archives
+//! - **Hot reload**: Add/remove sources without restarting the server
+//! - **Compression support**: Automatic tile recompression based on client requests
+//! - **TileJSON**: Automatic TileJSON metadata endpoints for each tile source
+//!
+//! ## URL Structure
+//!
+//! - Tiles: `/tiles/{name}/{z}/{x}/{y}` - Individual tiles
+//! - TileJSON: `/tiles/{name}/tiles.json` - Metadata for tile source
+//! - Static files: Served according to configured URL prefixes
+
 use crate::{napi_result, runtime::create_runtime, types::ServerOptions};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -11,6 +31,41 @@ type TileSourceList = Arc<Mutex<Vec<(String, String)>>>;
 type StaticSourceList = Arc<Mutex<Vec<(String, Option<String>)>>>;
 
 /// HTTP tile server for serving tiles and static content
+///
+/// A high-performance HTTP server for serving map tiles and static files.
+/// Supports multiple tile sources with hot-reload capability, allowing you
+/// to add or remove tile sources without restarting the server.
+///
+/// # URL Endpoints
+///
+/// When a tile source named "osm" is added, the following endpoints become available:
+/// - `GET /tiles/osm/{z}/{x}/{y}` - Retrieve a tile
+/// - `GET /tiles/osm/tiles.json` - TileJSON metadata
+///
+/// Static files are served according to their configured URL prefix.
+///
+/// # Examples
+///
+/// ```javascript
+/// const server = new TileServer({ port: 8080 });
+///
+/// // Add tile sources
+/// await server.addTileSource('osm', 'tiles/osm.versatiles');
+/// await server.addTileSource('terrain', 'tiles/terrain.mbtiles');
+///
+/// // Add static content
+/// await server.addStaticSource('public/', '/');
+///
+/// // Start the server
+/// await server.start();
+/// console.log(`Server running on port ${await server.port}`);
+///
+/// // Hot reload: add more sources while running
+/// await server.addTileSource('satellite', 'tiles/satellite.pmtiles');
+///
+/// // Clean up
+/// await server.stop();
+/// ```
 #[napi]
 pub struct TileServer {
 	inner: Arc<Mutex<Option<RustTileServer>>>,
@@ -26,6 +81,33 @@ pub struct TileServer {
 #[napi]
 impl TileServer {
 	/// Create a new tile server
+	///
+	/// Creates a new HTTP tile server with the specified configuration.
+	/// The server is not started until `start()` is called.
+	///
+	/// # Arguments
+	///
+	/// * `options` - Optional server configuration
+	///   - `ip`: IP address to bind to (default: "0.0.0.0")
+	///   - `port`: Port to listen on (default: 8080)
+	///   - `minimalRecompression`: Use minimal recompression for better performance (default: false)
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// // Default settings (0.0.0.0:8080)
+	/// const server = new TileServer();
+	///
+	/// // Custom port
+	/// const server = new TileServer({ port: 3000 });
+	///
+	/// // Custom IP and port with minimal recompression
+	/// const server = new TileServer({
+	///   ip: '127.0.0.1',
+	///   port: 8080,
+	///   minimalRecompression: true
+	/// });
+	/// ```
 	#[napi(constructor)]
 	pub fn new(options: Option<ServerOptions>) -> Result<Self> {
 		let opts = options.unwrap_or(ServerOptions {
@@ -151,6 +233,31 @@ impl TileServer {
 	}
 
 	/// Start the HTTP server
+	///
+	/// Starts the HTTP server and begins listening for requests on the configured
+	/// IP address and port. All tile and static sources that have been added will
+	/// be immediately available.
+	///
+	/// # Returns
+	///
+	/// Returns `Ok(())` if the server started successfully
+	///
+	/// # Errors
+	///
+	/// Returns an error if:
+	/// - The server is already running
+	/// - The port is already in use
+	/// - Unable to bind to the specified IP address
+	/// - Configuration is invalid
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// const server = new TileServer({ port: 8080 });
+	/// await server.addTileSource('osm', 'tiles.versatiles');
+	/// await server.start();
+	/// console.log('Server started successfully');
+	/// ```
 	#[napi]
 	pub async fn start(&self) -> Result<()> {
 		let mut server_lock = self.inner.lock().await;
@@ -208,6 +315,24 @@ impl TileServer {
 	}
 
 	/// Stop the HTTP server gracefully
+	///
+	/// Gracefully shuts down the HTTP server, completing any in-flight requests
+	/// before closing. After stopping, the server can be restarted by calling
+	/// `start()` again.
+	///
+	/// If the server is not running, this method does nothing and returns successfully.
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// await server.start();
+	/// // ... server is running ...
+	/// await server.stop();
+	/// console.log('Server stopped');
+	///
+	/// // Can restart later
+	/// await server.start();
+	/// ```
 	#[napi]
 	pub async fn stop(&self) -> Result<()> {
 		let mut server_lock = self.inner.lock().await;
@@ -220,6 +345,25 @@ impl TileServer {
 	}
 
 	/// Get the port the server is listening on
+	///
+	/// Returns the port number the server is configured to use or is currently
+	/// listening on. If the server was configured with port 0 (ephemeral port),
+	/// this will return the actual port assigned by the operating system after
+	/// the server has started.
+	///
+	/// # Returns
+	///
+	/// The port number (1-65535)
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// const server = new TileServer({ port: 8080 });
+	/// console.log(`Configured port: ${await server.port}`); // 8080
+	///
+	/// await server.start();
+	/// console.log(`Server listening on port: ${await server.port}`); // 8080
+	/// ```
 	#[napi(getter)]
 	pub async fn port(&self) -> u32 {
 		let server_lock = self.inner.lock().await;

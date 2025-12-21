@@ -1,11 +1,48 @@
+//! Error conversion utilities
+//!
+//! This module provides utilities for converting between Rust's `anyhow::Error`
+//! and NAPI's `napi::Error` types, which is essential for bridging Rust error
+//! handling with JavaScript/Node.js error handling.
+//!
+//! The main entry point is the [`napi_result!`] macro, which automatically
+//! converts `Result<T, anyhow::Error>` to `Result<T, napi::Error>`.
+
 use napi::Error as NapiError;
 
-/// Convert anyhow::Error to napi::Error
+/// Convert `anyhow::Error` to `napi::Error`
+///
+/// This function formats the anyhow error with its full context chain
+/// and creates a NAPI error with the formatted message.
+///
+/// # Arguments
+///
+/// * `err` - The anyhow error to convert
+///
+/// # Returns
+///
+/// A NAPI error containing the formatted error message
 pub fn anyhow_to_napi(err: anyhow::Error) -> NapiError {
 	NapiError::from_reason(format!("{:#}", err))
 }
 
-/// Helper macro to convert Result<T, anyhow::Error> to Result<T, napi::Error>
+/// Convert `Result<T, anyhow::Error>` to `Result<T, napi::Error>`
+///
+/// This macro simplifies error conversion in NAPI bindings by automatically
+/// mapping anyhow errors to NAPI errors.
+///
+/// # Example
+///
+/// ```
+/// use versatiles_node::napi_result;
+///
+/// fn some_operation() -> anyhow::Result<i32> {
+///     Ok(42)
+/// }
+///
+/// fn napi_wrapper() -> napi::Result<i32> {
+///     napi_result!(some_operation())
+/// }
+/// ```
 #[macro_export]
 macro_rules! napi_result {
 	($expr:expr) => {

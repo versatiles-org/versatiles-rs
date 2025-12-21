@@ -1,3 +1,18 @@
+//! Tile conversion functionality
+//!
+//! This module provides the `convert` function for converting tiles between different
+//! container formats with support for filtering, transformation, and real-time progress
+//! monitoring.
+//!
+//! ## Conversion Features
+//!
+//! - **Format conversion**: Convert between .versatiles, .mbtiles, .pmtiles, .tar
+//! - **Zoom filtering**: Select specific zoom level ranges
+//! - **Geographic filtering**: Extract tiles within a bounding box
+//! - **Compression**: Change tile compression (gzip, brotli, uncompressed)
+//! - **Transformations**: Flip Y-axis or swap X/Y coordinates
+//! - **Progress monitoring**: Real-time progress updates and messages
+
 use crate::{
 	napi_result,
 	progress::{MessageData, ProgressData},
@@ -16,13 +31,88 @@ use versatiles_container::{
 };
 use versatiles_core::{GeoBBox, TileBBoxPyramid};
 
-/// Convert this container to another format with optional progress monitoring
+/// Convert tiles from one container format to another
 ///
-/// Accepts optional callbacks for progress monitoring:
-/// - on_progress: Called with progress updates (position, percentage, speed, eta)
-/// - on_message: Called with messages (type: "step" | "warning" | "error", message: string)
+/// Converts tiles between different container formats with optional filtering,
+/// transformation, and compression changes. Supports real-time progress monitoring
+/// through callback functions.
 ///
-/// Returns a Promise that resolves when the conversion is complete.
+/// # Arguments
+///
+/// * `input` - Path or URL to the input tile container
+/// * `output` - Path to the output tile container
+/// * `options` - Optional conversion options (zoom range, bbox, compression, etc.)
+/// * `on_progress` - Optional callback for progress updates
+/// * `on_message` - Optional callback for step/warning/error messages
+///
+/// # Conversion Options
+///
+/// - `minZoom` / `maxZoom`: Filter to specific zoom levels
+/// - `bbox`: Geographic bounding box `[west, south, east, north]`
+/// - `bboxBorder`: Add border tiles around bbox (in tile units)
+/// - `compress`: Output compression ("gzip", "brotli", "uncompressed")
+/// - `flipY`: Flip tiles vertically (TMS ↔ XYZ coordinate systems)
+/// - `swapXY`: Swap X and Y tile coordinates
+///
+/// # Progress Callbacks
+///
+/// **onProgress callback** receives:
+/// - `position`: Current tile count
+/// - `total`: Total tile count
+/// - `percentage`: Progress percentage (0-100)
+/// - `speed`: Processing speed (tiles/second)
+/// - `eta`: Estimated completion time (as JavaScript Date)
+///
+/// **onMessage callback** receives:
+/// - `type`: Message type ("step", "warning", or "error")
+/// - `message`: The message text
+///
+/// # Returns
+///
+/// A Promise that resolves when conversion is complete
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Input file/URL doesn't exist or is inaccessible
+/// - Output path is invalid or not writable
+/// - Bbox coordinates are invalid (must be `[west, south, east, north]`)
+/// - Compression format is not recognized
+/// - An I/O error occurs during conversion
+///
+/// # Examples
+///
+/// ```javascript
+/// // Simple conversion
+/// await convert('input.mbtiles', 'output.versatiles');
+///
+/// // Convert with compression
+/// await convert('input.pmtiles', 'output.versatiles', {
+///   compress: 'brotli'
+/// });
+///
+/// // Convert specific area and zoom range
+/// await convert('world.mbtiles', 'europe.versatiles', {
+///   minZoom: 0,
+///   maxZoom: 14,
+///   bbox: [-10, 35, 40, 70], // Europe
+///   bboxBorder: 1
+/// });
+///
+/// // With progress monitoring
+/// await convert('input.tar', 'output.versatiles', null,
+///   (progress) => {
+///     console.log(`${progress.percentage.toFixed(1)}% complete`);
+///     console.log(`Speed: ${progress.speed.toFixed(0)} tiles/sec`);
+///     console.log(`ETA: ${new Date(progress.eta)}`);
+///   },
+///   (type, message) => {
+///     if (type === 'error') console.error(message);
+///     else if (type === 'warning') console.warn(message);
+///     else console.log(message);
+///   }
+/// );
+/// ```
 #[napi]
 pub async fn convert(
 	input: String,

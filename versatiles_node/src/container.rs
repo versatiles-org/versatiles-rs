@@ -1,3 +1,16 @@
+//! Tile container reader
+//!
+//! This module provides the [`ContainerReader`] class for reading tiles from
+//! various container formats. It supports both local files and remote URLs.
+//!
+//! ## Supported Formats
+//!
+//! - **VersaTiles** (.versatiles) - Native format, local and remote
+//! - **MBTiles** (.mbtiles) - SQLite-based format, local only
+//! - **PMTiles** (.pmtiles) - Cloud-optimized format, local and remote
+//! - **TAR** (.tar) - Archive format, local only
+//! - **Directories** - Tile directories following standard naming conventions
+
 use crate::{napi_result, runtime::create_runtime, types::ReaderParameters};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -7,6 +20,22 @@ use versatiles_container::TilesReaderTrait;
 use versatiles_core::TileCoord as RustTileCoord;
 
 /// Container reader for accessing tile data from various formats
+///
+/// Provides async methods to read tiles and metadata from supported container formats.
+/// All operations are thread-safe and can be called concurrently from multiple tasks.
+///
+/// # Supported Formats
+///
+/// **Local files:**
+/// - `.versatiles` - VersaTiles native format
+/// - `.mbtiles` - MBTiles (SQLite-based)
+/// - `.pmtiles` - PMTiles (cloud-optimized)
+/// - `.tar` - TAR archives
+/// - Directories - Standard tile directory structure
+///
+/// **Remote URLs:**
+/// - `.versatiles` files via HTTP/HTTPS
+/// - `.pmtiles` files via HTTP/HTTPS (with range request support)
 #[napi]
 pub struct ContainerReader {
 	reader: Arc<Mutex<Box<dyn TilesReaderTrait>>>,
@@ -16,8 +45,33 @@ pub struct ContainerReader {
 impl ContainerReader {
 	/// Open a tile container from a file path or URL
 	///
-	/// File support: .versatiles, .mbtiles, .pmtiles, .tar, directories
-	/// URL support: .versatiles, .pmtiles
+	/// Automatically detects the container format based on the file extension
+	/// or content. Supports both local files and remote URLs.
+	///
+	/// # Arguments
+	///
+	/// * `path` - File path or URL to the tile container
+	///
+	/// # Returns
+	///
+	/// A `ContainerReader` instance ready to read tiles
+	///
+	/// # Errors
+	///
+	/// Returns an error if:
+	/// - The file or URL doesn't exist or is inaccessible
+	/// - The format is not recognized or supported
+	/// - The file is corrupted or invalid
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// // Open local file
+	/// const reader = await ContainerReader.open('tiles.versatiles');
+	///
+	/// // Open remote file
+	/// const reader = await ContainerReader.open('https://example.com/tiles.pmtiles');
+	/// ```
 	#[napi(factory)]
 	pub async fn open(path: String) -> Result<Self> {
 		let runtime = create_runtime();
@@ -30,7 +84,34 @@ impl ContainerReader {
 
 	/// Get a single tile at the specified coordinates
 	///
-	/// Returns null if the tile doesn't exist
+	/// Retrieves the tile data for the given zoom level (z) and tile coordinates (x, y).
+	/// The tile is automatically decompressed and returned as a Buffer.
+	///
+	/// # Arguments
+	///
+	/// * `z` - Zoom level (0-32)
+	/// * `x` - Tile column (0 to 2^z - 1)
+	/// * `y` - Tile row (0 to 2^z - 1)
+	///
+	/// # Returns
+	///
+	/// - `Some(Buffer)` containing the uncompressed tile data if the tile exists
+	/// - `None` if the tile doesn't exist at these coordinates
+	///
+	/// # Errors
+	///
+	/// Returns an error if:
+	/// - The coordinates are invalid (out of bounds for the zoom level)
+	/// - An I/O error occurs while reading the tile
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// const tile = await reader.getTile(10, 512, 384);
+	/// if (tile) {
+	///   console.log(`Tile size: ${tile.length} bytes`);
+	/// }
+	/// ```
 	#[napi]
 	pub async fn get_tile(&self, z: u32, x: u32, y: u32) -> Result<Option<Buffer>> {
 		let coord = napi_result!(RustTileCoord::new(z as u8, x, y))?;
@@ -44,13 +125,48 @@ impl ContainerReader {
 	}
 
 	/// Get TileJSON metadata as a JSON string
+	///
+	/// Returns the container's metadata in TileJSON format, which includes
+	/// information about tile bounds, zoom levels, attribution, and more.
+	///
+	/// # Returns
+	///
+	/// A JSON string containing TileJSON metadata
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// const tileJson = await reader.tileJson();
+	/// const metadata = JSON.parse(tileJson);
+	/// console.log(`Zoom range: ${metadata.minzoom} - ${metadata.maxzoom}`);
+	/// ```
 	#[napi]
 	pub async fn tile_json(&self) -> String {
 		let reader = self.reader.lock().await;
 		reader.tilejson().as_string()
 	}
 
-	/// Get reader parameters (format, compression, zoom levels)
+	/// Get reader parameters
+	///
+	/// Returns detailed technical parameters about the tile container including
+	/// format, compression, and available zoom levels.
+	///
+	/// # Returns
+	///
+	/// A [`ReaderParameters`] object containing:
+	/// - `tileFormat`: The tile format (e.g., "png", "jpg", "mvt")
+	/// - `tileCompression`: The compression method (e.g., "gzip", "brotli", "uncompressed")
+	/// - `minZoom`: Minimum available zoom level
+	/// - `maxZoom`: Maximum available zoom level
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// const params = await reader.parameters();
+	/// console.log(`Format: ${params.tileFormat}`);
+	/// console.log(`Compression: ${params.tileCompression}`);
+	/// console.log(`Zoom: ${params.minZoom}-${params.maxZoom}`);
+	/// ```
 	#[napi]
 	pub async fn parameters(&self) -> ReaderParameters {
 		let reader = self.reader.lock().await;
@@ -58,12 +174,38 @@ impl ContainerReader {
 	}
 
 	/// Get the source name
+	///
+	/// Returns the name or path of the data source being read.
+	///
+	/// # Returns
+	///
+	/// The source name (typically the file path or URL)
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// const name = await reader.sourceName();
+	/// console.log(`Reading from: ${name}`);
+	/// ```
 	#[napi]
 	pub async fn source_name(&self) -> String {
 		self.reader.lock().await.source_name().to_string()
 	}
 
 	/// Get the container type name
+	///
+	/// Returns the name of the container format being used.
+	///
+	/// # Returns
+	///
+	/// Container type name (e.g., "versatiles", "mbtiles", "pmtiles")
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// const type = await reader.containerName();
+	/// console.log(`Container type: ${type}`);
+	/// ```
 	#[napi]
 	pub async fn container_name(&self) -> String {
 		self.reader.lock().await.container_name().to_string()

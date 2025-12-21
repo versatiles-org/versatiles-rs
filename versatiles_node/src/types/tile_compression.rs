@@ -1,6 +1,37 @@
+//! Tile compression parsing utilities
+//!
+//! This module provides utilities for parsing compression format strings
+//! from JavaScript into Rust's [`TileCompression`] enum.
+
 use versatiles_core::TileCompression;
 
-/// Helper to parse compression string
+/// Parse a compression format string into a [`TileCompression`] enum
+///
+/// Supports case-insensitive parsing of standard compression formats used
+/// in tile containers.
+///
+/// # Supported Formats
+///
+/// - `"gzip"` - GZIP compression
+/// - `"brotli"` - Brotli compression
+/// - `"uncompressed"` or `"none"` - No compression
+///
+/// # Arguments
+///
+/// * `s` - The compression format string (case-insensitive)
+///
+/// # Returns
+///
+/// - `Ok(TileCompression)` if the format is valid
+/// - `Err(napi::Error)` if the format is not recognized
+///
+/// # Example
+///
+/// ```
+/// let compression = parse_compression("gzip")?; // TileCompression::Gzip
+/// let compression = parse_compression("BROTLI")?; // TileCompression::Brotli
+/// let compression = parse_compression("none")?; // TileCompression::Uncompressed
+/// ```
 pub fn parse_compression(s: &str) -> napi::Result<TileCompression> {
 	match s.to_lowercase().as_str() {
 		"gzip" => Ok(TileCompression::Gzip),

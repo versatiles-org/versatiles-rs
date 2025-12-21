@@ -1,3 +1,46 @@
+//! # VersaTiles Node.js Bindings
+//!
+//! Native Node.js bindings for the VersaTiles library, providing high-performance
+//! tile container operations and HTTP tile serving capabilities.
+//!
+//! ## Features
+//!
+//! - **Container Reading**: Read tiles from various formats (.versatiles, .mbtiles, .pmtiles, .tar, directories)
+//! - **Tile Conversion**: Convert between different tile container formats with progress monitoring
+//! - **HTTP Server**: Serve tiles and static content over HTTP with hot reload support
+//! - **Progress Monitoring**: Real-time progress updates for long-running operations
+//!
+//! ## Main Types
+//!
+//! - [`ContainerReader`]: Read tiles from various container formats
+//! - [`TileServer`]: HTTP server for serving tiles and static content
+//! - [`Progress`]: Progress monitoring for conversion operations
+//! - [`ConvertOptions`]: Configuration for tile conversion
+//!
+//! ## Example Usage
+//!
+//! ```javascript
+//! const { ContainerReader, TileServer, convert } = require('versatiles');
+//!
+//! // Read tiles from a container
+//! const reader = await ContainerReader.open('tiles.versatiles');
+//! const tile = await reader.getTile(10, 512, 384);
+//!
+//! // Convert tiles with progress monitoring
+//! await convert('input.mbtiles', 'output.versatiles', {
+//!   minZoom: 0,
+//!   maxZoom: 14,
+//!   compress: 'brotli'
+//! }, (progress) => {
+//!   console.log(`${progress.percentage.toFixed(1)}%`);
+//! });
+//!
+//! // Start a tile server
+//! const server = new TileServer({ port: 8080 });
+//! await server.addTileSource('osm', 'tiles.versatiles');
+//! await server.start();
+//! ```
+
 #![deny(clippy::all)]
 
 mod container;
