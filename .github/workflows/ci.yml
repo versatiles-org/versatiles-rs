@@ -180,6 +180,10 @@ jobs:
         working-directory: ./versatiles_node
         run: npm test
 
+      - name: Node.js test examples
+        working-directory: ./versatiles_node
+        run: npm test:examples
+
   # ============================================================================
   # Job 6: Coverage (Only on main branch, schedule, or workflow_dispatch)
   # Runtime: ~5-6 minutes (GDAL setup + coverage generation)
