@@ -119,27 +119,23 @@ describe('convertTo with callbacks', () => {
 			},
 		);
 
-		expect(Object.fromEntries(Object.entries(progressData1).map(([key, value]) => [key, typeof value]))).toStrictEqual(
-			{
-				message: 'string',
-				percentage: 'number',
-				position: 'number',
-				speed: 'number',
-				total: 'number',
-			},
-		);
+		expect(Object.fromEntries(Object.entries(progressData1).map(([key, value]) => [key, typeof value]))).toStrictEqual({
+			message: 'string',
+			percentage: 'number',
+			position: 'number',
+			speed: 'number',
+			total: 'number',
+		});
 
-		expect(Object.fromEntries(Object.entries(progressData2).map(([key, value]) => [key, typeof value]))).toStrictEqual(
-			{
-				estimatedSecondsRemaining: 'number',
-				eta: 'number',
-				message: 'string',
-				percentage: 'number',
-				position: 'number',
-				speed: 'number',
-				total: 'number',
-			},
-		);
+		expect(Object.fromEntries(Object.entries(progressData2).map(([key, value]) => [key, typeof value]))).toStrictEqual({
+			estimatedSecondsRemaining: 'number',
+			eta: 'number',
+			message: 'string',
+			percentage: 'number',
+			position: 'number',
+			speed: 'number',
+			total: 'number',
+		});
 	});
 
 	it('should handle errors gracefully', async () => {
