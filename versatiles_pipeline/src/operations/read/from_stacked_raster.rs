@@ -170,20 +170,16 @@ impl OperationTrait for Operation {
 					}
 				}
 
-				let v = tiles
-					.into_iter()
-					.filter_map(|(c, v)| match stack_tiles(v) {
+				tiles
+					.into_stream()
+					.filter_map_item_parallel(move |v| match stack_tiles(v) {
 						Ok(Some(mut tile)) => {
 							tile.change_format(tile_format, None, None).unwrap();
-							Some(Ok((c, tile)))
+							Ok(Some(tile))
 						}
-						Ok(None) => None,
-						Err(err) => Some(Err(err)),
+						Ok(None) => Ok(None),
+						Err(err) => Err(err),
 					})
-					.collect::<Result<Vec<_>>>()
-					.unwrap();
-
-				TileStream::from_vec(v)
 			},
 		)))
 	}

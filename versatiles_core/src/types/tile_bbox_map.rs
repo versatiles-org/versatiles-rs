@@ -138,6 +138,13 @@ impl<I> TileBBoxMap<I> {
 			vec: self.vec.into_iter().map(f).collect(),
 		}
 	}
+
+	pub fn into_stream(self) -> TileStream<'static, I>
+	where
+		I: Send + 'static,
+	{
+		TileStream::from_vec(self.into_iter().collect())
+	}
 }
 
 /// Constructors for `TileBBoxMap<Option<I>>` that populate the map from
