@@ -163,3 +163,135 @@ impl Progress {
 		self.emit_message("error", message);
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use versatiles_container::ProgressId;
+
+	#[test]
+	fn test_progress_data_conversion_with_finite_values() {
+		let start = Instant::now();
+		let state = ProgressState {
+			id: ProgressId(1),
+			message: "Test progress".to_string(),
+			position: 50,
+			total: 100,
+			start,
+			next_draw: start,
+			next_emit: start,
+			finished: false,
+		};
+
+		// Sleep a tiny bit to ensure elapsed time > 0
+		std::thread::sleep(std::time::Duration::from_millis(10));
+
+		let progress_data = ProgressData::from(&state);
+
+		assert_eq!(progress_data.position, 50.0);
+		assert_eq!(progress_data.total, 100.0);
+		assert_eq!(progress_data.percentage, 50.0);
+		assert!(progress_data.speed > 0.0);
+		assert!(progress_data.estimated_seconds_remaining.is_finite());
+		assert!(progress_data.eta.is_finite());
+		assert_eq!(progress_data.message, Some("Test progress".to_string()));
+	}
+
+	#[test]
+	fn test_progress_data_conversion_with_zero_position() {
+		let start = Instant::now();
+		let state = ProgressState {
+			id: ProgressId(1),
+			message: "Starting".to_string(),
+			position: 0,
+			total: 100,
+			start,
+			next_draw: start,
+			next_emit: start,
+			finished: false,
+		};
+
+		// Sleep to ensure elapsed time > 0
+		std::thread::sleep(std::time::Duration::from_millis(10));
+
+		let progress_data = ProgressData::from(&state);
+
+		assert_eq!(progress_data.position, 0.0);
+		assert_eq!(progress_data.total, 100.0);
+		assert_eq!(progress_data.percentage, 0.0);
+		assert_eq!(progress_data.speed, 0.0);
+		assert!(progress_data.estimated_seconds_remaining.is_infinite());
+		assert!(progress_data.eta.is_infinite());
+	}
+
+	#[test]
+	fn test_progress_data_conversion_with_completed() {
+		let start = Instant::now();
+		// Sleep to ensure elapsed time > 0
+		std::thread::sleep(std::time::Duration::from_millis(10));
+
+		let state = ProgressState {
+			id: ProgressId(1),
+			message: "Completed".to_string(),
+			position: 100,
+			total: 100,
+			start,
+			next_draw: start,
+			next_emit: start,
+			finished: true,
+		};
+
+		let progress_data = ProgressData::from(&state);
+
+		assert_eq!(progress_data.position, 100.0);
+		assert_eq!(progress_data.total, 100.0);
+		assert_eq!(progress_data.percentage, 100.0);
+		assert!(progress_data.speed > 0.0);
+		assert_eq!(progress_data.estimated_seconds_remaining, 0.0);
+	}
+
+	#[test]
+	fn test_progress_data_percentage_calculation() {
+		let start = Instant::now();
+		let state = ProgressState {
+			id: ProgressId(1),
+			message: "Quarter done".to_string(),
+			position: 25,
+			total: 100,
+			start,
+			next_draw: start,
+			next_emit: start,
+			finished: false,
+		};
+
+		let progress_data = ProgressData::from(&state);
+		assert_eq!(progress_data.percentage, 25.0);
+	}
+
+	#[test]
+	fn test_progress_new() {
+		let progress = Progress::new();
+		let listeners = progress.progress_listeners.lock().unwrap();
+		assert_eq!(listeners.len(), 0);
+	}
+
+	#[test]
+	fn test_progress_default() {
+		let progress = Progress::default();
+		let listeners = progress.progress_listeners.lock().unwrap();
+		assert_eq!(listeners.len(), 0);
+	}
+
+	#[test]
+	fn test_progress_clone() {
+		let progress1 = Progress::new();
+		let progress2 = progress1.clone();
+
+		// Both should share the same Arc references
+		assert!(Arc::ptr_eq(
+			&progress1.progress_listeners,
+			&progress2.progress_listeners
+		));
+		assert!(Arc::ptr_eq(&progress1.message_listeners, &progress2.message_listeners));
+	}
+}
