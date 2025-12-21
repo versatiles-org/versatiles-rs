@@ -26,6 +26,7 @@ impl ProgressHandle {
 				total,
 				start,
 				next_draw: start,
+				next_emit: start,
 				finished: false,
 			})),
 			event_bus,
@@ -87,10 +88,26 @@ impl ProgressHandle {
 		self.state.lock().unwrap().id.clone()
 	}
 
-	/// Emit a progress update event
+	/// Emit a progress update event (throttled to 10 per second)
 	fn emit_update(&self) {
-		let state = self.state.lock().unwrap().clone();
-		self.event_bus.progress(state);
+		let mut state = self.state.lock().unwrap();
+		let now = Instant::now();
+
+		// Emit if:
+		// 1. Progress is finished (always emit final state)
+		// 2. Enough time has passed (100ms = 10 updates per second)
+		if state.finished || now >= state.next_emit {
+			// Update next emit time
+			if !state.finished {
+				state.next_emit = now + Duration::from_millis(100);
+			}
+
+			// Clone state and release lock before emitting
+			let state_clone = state.clone();
+			drop(state);
+
+			self.event_bus.progress(state_clone);
+		}
 	}
 
 	pub fn redraw(&self, state: &mut ProgressState) {

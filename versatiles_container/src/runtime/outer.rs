@@ -174,8 +174,9 @@ mod tests {
 		progress.finish();
 
 		let captured = events.lock().unwrap();
-		// Initial + set_position + inc + finish = 4 events
-		assert!(captured.len() >= 4);
+		// With throttling (10/sec), rapid updates are filtered out.
+		// We expect at least: initial event + finish event = 2 events
+		assert!(captured.len() >= 2);
 	}
 
 	#[test]

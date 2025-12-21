@@ -9,6 +9,7 @@ pub struct ProgressState {
 	pub total: u64,
 	pub start: std::time::Instant,
 	pub next_draw: std::time::Instant,
+	pub next_emit: std::time::Instant,
 	pub finished: bool,
 }
 
@@ -41,6 +42,7 @@ mod tests {
 			total: 100,
 			start: now,
 			next_draw: now,
+			next_emit: now,
 			finished: false,
 		};
 
@@ -61,6 +63,7 @@ mod tests {
 			total: 50,
 			start: now,
 			next_draw: now,
+			next_emit: now,
 			finished: true,
 		};
 
@@ -82,6 +85,7 @@ mod tests {
 			total: 100,
 			start: now,
 			next_draw: now,
+			next_emit: now,
 			finished: false,
 		};
 
