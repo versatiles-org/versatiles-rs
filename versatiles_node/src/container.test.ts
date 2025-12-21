@@ -89,7 +89,7 @@ describe('ContainerReader', () => {
 	describe('tileJson', () => {
 		it('should return valid TileJSON for MBTiles', async () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
-			const tileJson = await reader.tileJson;
+			const tileJson = await reader.tileJson();
 
 			expect(tileJson).toBeDefined();
 			expect(typeof tileJson).toBe('string');
@@ -103,7 +103,7 @@ describe('ContainerReader', () => {
 
 		it('should return valid TileJSON for PMTiles', async () => {
 			const reader = await ContainerReader.open(PMTILES_PATH);
-			const tileJson = await reader.tileJson;
+			const tileJson = await reader.tileJson();
 
 			const parsed = JSON.parse(tileJson);
 			expect(parsed.tilejson).toBe('3.0.0');
@@ -113,14 +113,14 @@ describe('ContainerReader', () => {
 	describe('parameters', () => {
 		it('should return reader parameters', async () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
-			const params = await reader.parameters;
+			const params = await reader.parameters();
 
-			expect(params).toBeDefined();
-			expect(typeof params.tileFormat).toBe('string');
-			expect(typeof params.tileCompression).toBe('string');
-			expect(typeof params.minZoom).toBe('number');
-			expect(typeof params.maxZoom).toBe('number');
-			expect(params.minZoom).toBeLessThanOrEqual(params.maxZoom);
+			expect(params).toStrictEqual({
+				maxZoom: 14,
+				minZoom: 0,
+				tileCompression: "gzip",
+				tileFormat: "mvt",
+			});
 		});
 	});
 });

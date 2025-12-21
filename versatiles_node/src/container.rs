@@ -44,27 +44,27 @@ impl ContainerReader {
 	}
 
 	/// Get TileJSON metadata as a JSON string
-	#[napi(getter)]
+	#[napi]
 	pub async fn tile_json(&self) -> String {
 		let reader = self.reader.lock().await;
 		reader.tilejson().as_string()
 	}
 
 	/// Get reader parameters (format, compression, zoom levels)
-	#[napi(getter)]
+	#[napi]
 	pub async fn parameters(&self) -> ReaderParameters {
 		let reader = self.reader.lock().await;
 		ReaderParameters::from(reader.parameters())
 	}
 
 	/// Get the source name
-	#[napi(getter)]
+	#[napi]
 	pub async fn source_name(&self) -> String {
 		self.reader.lock().await.source_name().to_string()
 	}
 
 	/// Get the container type name
-	#[napi(getter)]
+	#[napi]
 	pub async fn container_name(&self) -> String {
 		self.reader.lock().await.container_name().to_string()
 	}

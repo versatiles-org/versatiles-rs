@@ -22,6 +22,7 @@ pub struct ProgressData {
 	pub percentage: f64,
 	pub speed: f64,
 	pub estimated_seconds_remaining: f64,
+	/// ETA in milliseconds since UNIX epoch (can be converted to Date with `new Date(eta)`)
 	pub eta: f64,
 	pub message: Option<String>,
 }
@@ -35,7 +36,8 @@ impl From<&ProgressState> for ProgressData {
 			f64::INFINITY
 		};
 		let eta = if estimated_seconds_remaining.is_finite() {
-			data.start.duration_since(*UNIX_EPOCH_INSTANT).as_secs_f64() + data.total as f64 / speed
+			// Return milliseconds since UNIX epoch for JavaScript Date
+			(data.start.duration_since(*UNIX_EPOCH_INSTANT).as_secs_f64() + data.total as f64 / speed) * 1000.0
 		} else {
 			f64::INFINITY
 		};
@@ -98,7 +100,8 @@ impl Default for Progress {
 impl Progress {
 	/// Register a progress event listener
 	///
-	/// The callback receives ProgressData with position, total, percentage, speed, eta, and message
+	/// The callback receives ProgressData with position, total, percentage, speed, eta, and message.
+	/// The eta field is a JavaScript Date object representing the estimated time of completion.
 	#[napi(ts_args_type = "callback: (data: ProgressData) => void")]
 	pub fn on_progress(&self, callback: Function<'static>) -> Result<&Self> {
 		let tsfn = callback

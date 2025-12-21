@@ -20,7 +20,7 @@ describe('convertTo()', () => {
 
 		// Verify we can open the converted file
 		const newReader = await ContainerReader.open(OUTPUT_PATH);
-		expect(await newReader.parameters).toStrictEqual({
+		expect(await newReader.parameters()).toStrictEqual({
 			maxZoom: 14,
 			minZoom: 0,
 			tileCompression: 'gzip',
@@ -37,7 +37,7 @@ describe('convertTo()', () => {
 
 		// Verify we can open the converted file
 		const newReader = await ContainerReader.open(OUTPUT_PATH);
-		expect(await newReader.parameters).toStrictEqual({
+		expect(await newReader.parameters()).toStrictEqual({
 			maxZoom: 14,
 			minZoom: 0,
 			tileCompression: 'gzip',
@@ -57,7 +57,7 @@ describe('convertTo()', () => {
 		expect(fs.existsSync(OUTPUT_PATH)).toBeTruthy();
 
 		const newReader = await ContainerReader.open(OUTPUT_PATH);
-		expect(await newReader.parameters).toStrictEqual({
+		expect(await newReader.parameters()).toStrictEqual({
 			maxZoom: 7,
 			minZoom: 5,
 			tileCompression: 'gzip',
