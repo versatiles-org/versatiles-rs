@@ -17,26 +17,21 @@ anyhow.workspace = true
 async-trait.workspace = true
 byteorder.workspace = true
 clap = { workspace = true, optional = true, features = ["std", "derive"] }
-colored = { version = "3.0.0", default-features = false, optional = true }
+colored = { workspace = true, optional = true }
 futures.workspace = true
 itertools = { workspace = true, features = ["use_alloc"] }
 lazy_static.workspace = true
 log.workspace = true
 num_cpus.workspace = true
-r2d2 = { version = "0.8.10", default-features = false }
-r2d2_sqlite = { version = "0.31.0", default-features = false, features = [
-	"bundled",
-] }
+r2d2 = { workspace = true, features = [] }
+r2d2_sqlite = { workspace = true, features = ["bundled"] }
 regex.workspace = true
 reqwest = { workspace = true, features = ["rustls-tls"] }
-tar = { version = "0.4.44", default-features = false }
-terminal_size = "0.4.3"
-time = { version = "0.3.44", default-features = false, features = [
-	"formatting",
-	"local-offset",
-] }
+tar.workspace = true
+terminal_size.workspace = true
+time = { workspace = true, features = ["formatting", "local-offset"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
-uuid = { version = "1.19.0", features = ["v4"] }
+uuid = { workspace = true, features = ["v4"] }
 
 versatiles_core = { workspace = true, default-features = false }
 versatiles_derive.workspace = true

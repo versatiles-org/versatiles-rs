@@ -15,17 +15,17 @@ version.workspace = true
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-brotli = { version = "8.0.2", default-features = false, features = ["std"] }
+brotli.workspace = true
 byteorder = { workspace = true, features = [] }
 clap = { workspace = true, default-features = false, optional = true, features = [
 	"derive",
 ] }
-colored = { version = "3.0.0", default-features = false, optional = true }
+colored = { workspace = true, optional = true }
 enumset.workspace = true
-flate2 = { version = "1.1.5", default-features = false, features = ["default"] }
+flate2.workspace = true
 futures.workspace = true
 itertools.workspace = true
-lazy_static = { workspace = true }
+lazy_static.workspace = true
 log.workspace = true
 num_cpus.workspace = true
 regex.workspace = true
@@ -36,7 +36,7 @@ versatiles_derive.workspace = true
 
 [dev-dependencies]
 assert_fs.workspace = true
-criterion = "0.8.1"
+criterion.workspace = true
 rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros"] }

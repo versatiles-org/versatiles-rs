@@ -24,35 +24,35 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true, features = ["std", "backtrace"] }
 async-trait.workspace = true
-axum = { version = "0.8.7", default-features = false, optional = true, features = [
+axum = { workspace = true, optional = true, features = [
 	"http1",
 	"http2",
 	"tokio",
 ] }
 clap = { workspace = true, optional = true, features = ["default"] }
 enumset = { workspace = true, optional = true }
-env_logger = { version = "0.11.8", optional = true }
-log = { workspace = true }
-mime_guess = { version = "2.0.5", default-features = false, optional = true }
+env_logger = { workspace = true, optional = true }
+log.workspace = true
+mime_guess = { workspace = true, optional = true }
 regex = { workspace = true, optional = true, features = ["unicode"] }
 serde.workspace = true
 serde_yaml_ng.workspace = true
-tar = { version = "0.4.44", default-features = false, optional = true }
-termimad = { version = "0.34.1", optional = true }
+tar = { workspace = true, optional = true }
+termimad = { workspace = true, optional = true }
 tokio = { workspace = true, features = [
 	"rt-multi-thread",
 	"sync",
 ], optional = true }
-tower = { version = "0.5.2", features = [
+tower = { workspace = true, optional = true, features = [
 	"buffer",
 	"limit",
 	"load-shed",
-], optional = true }
-tower-http = { version = "0.6.8", features = [
+] }
+tower-http = { workspace = true, optional = true, features = [
 	"catch-panic",
 	"cors",
 	"set-header",
-], optional = true }
+] }
 
 versatiles_container = { workspace = true }
 versatiles_core = { workspace = true }
@@ -62,10 +62,10 @@ versatiles_image = { workspace = true }
 versatiles_pipeline = { workspace = true }
 
 [dev-dependencies]
-assert_cmd = { version = "2.1.1", features = ["color"] }
+assert_cmd = { workspace = true, features = ["color"] }
 assert_fs.workspace = true
 lazy_static.workspace = true
-predicates = { version = "3.1.3" }
+predicates.workspace = true
 pretty_assertions.workspace = true
 reqwest = { workspace = true, features = [
 	"rustls-tls",
