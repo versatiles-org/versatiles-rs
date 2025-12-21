@@ -7,7 +7,7 @@
  * metadata, format information, and other details.
  */
 
-const { probeTiles, ContainerReader } = require('../index.js');
+const { ContainerReader } = require('../index.js');
 const path = require('path');
 
 async function main() {

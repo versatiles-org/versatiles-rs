@@ -39,12 +39,12 @@ async function main() {
 
 		// Keep server running until interrupted
 		await new Promise((resolve) => {
-			process.on('SIGINT', async () => {
+			setTimeout(async () => {
 				console.log('\n\nStopping server...');
 				await server.stop();
 				console.log('✓ Server stopped');
 				resolve();
-			});
+			}, 1000);
 		});
 	} catch (err) {
 		console.error('✗ Server failed:', err.message);
