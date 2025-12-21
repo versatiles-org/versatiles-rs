@@ -31,7 +31,7 @@ await convert(inputPath, outputPath, {
 		`Progress: ${data.percentage.toFixed(1)}%`,
 		`(${data.position.toFixed(0)}/${data.total.toFixed(0)} tiles)`,
 		`| ${data.speed.toFixed(0)} tiles/sec`,
-		`| ETA: ${data.eta.toFixed(0)}s`,
+		`| ETA: ${new Date(data.eta).toTimeString().split(' ')[0]}`,
 	].join(' '));
 });
 console.log(`\n✓ Output saved to: ${outputPath}`);
