@@ -1,9 +1,7 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::stream::{self, StreamExt};
 use lru::LruCache;
-use num_cpus;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -247,24 +245,21 @@ impl OperationTrait for Operation {
 		let coords: Vec<TileCoord> = bbox_dst.into_iter_coords().collect();
 		let self_arc = Arc::new(self.clone()); // Share Operation across tasks
 
-		let stream = stream::iter(coords)
-			.map(move |coord| {
-				let op = Arc::clone(&self_arc);
-				async move {
-					match op.get_tile_with_climbing(coord).await {
-						Ok(Some(tile)) => Some((coord, tile)),
-						Ok(None) => None,
-						Err(e) => {
-							log::warn!("Failed to get tile {:?}: {}", coord, e);
-							None
-						}
+		let stream = TileStream::from_coord_vec_async(coords, move |coord| {
+			let self_arc = Arc::clone(&self_arc);
+			async move {
+				match self_arc.get_tile_with_climbing(coord).await {
+					Ok(Some(tile)) => Some((coord, tile)),
+					Ok(None) => None,
+					Err(e) => {
+						log::warn!("Failed to get tile {:?}: {}", coord, e);
+						None
 					}
 				}
-			})
-			.buffer_unordered(num_cpus::get()) // Bounded concurrency
-			.filter_map(|result| async move { result });
+			}
+		});
 
-		Ok(TileStream::from_stream(Box::pin(stream)))
+		Ok(stream)
 	}
 }
 
