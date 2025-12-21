@@ -1,7 +1,9 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::stream::{self, StreamExt};
 use lru::LruCache;
+use num_cpus;
 use std::fmt::Debug;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -62,12 +64,26 @@ impl TileCache {
 #[derive(Debug)]
 struct Operation {
 	parameters: TilesReaderParameters,
-	source: Box<dyn OperationTrait>,
+	source: Arc<Box<dyn OperationTrait>>,
 	tilejson: TileJSON,
 	level_base: u8,
 	level_min: u8,
 	tile_size: u32,
 	cache: Arc<Mutex<TileCache>>,
+}
+
+impl Clone for Operation {
+	fn clone(&self) -> Self {
+		Self {
+			parameters: self.parameters.clone(),
+			source: Arc::clone(&self.source),
+			tilejson: self.tilejson.clone(),
+			level_base: self.level_base,
+			level_min: self.level_min,
+			tile_size: self.tile_size,
+			cache: Arc::clone(&self.cache),
+		}
+	}
 }
 
 impl Operation {
@@ -77,11 +93,11 @@ impl Operation {
 		Self: Sized + OperationTrait,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let mut parameters = source.parameters().clone();
+		let mut parameters = source.as_ref().parameters().clone();
 
 		let level_base = args
 			.level_base
-			.unwrap_or(source.parameters().bbox_pyramid.get_level_max().unwrap());
+			.unwrap_or(source.as_ref().parameters().bbox_pyramid.get_level_max().unwrap());
 		log::trace!("level_base {}", level_base);
 
 		let level_max = args.level_max.unwrap_or(30).clamp(level_base, 30);
@@ -92,15 +108,15 @@ impl Operation {
 			parameters.bbox_pyramid.set_level_bbox(level_bbox);
 		}
 
-		let mut tilejson = source.tilejson().clone();
+		let mut tilejson = source.as_ref().tilejson().clone();
 		tilejson.update_from_reader_parameters(&parameters);
 
-		let level_min = source.parameters().bbox_pyramid.get_level_min().unwrap_or(0);
+		let level_min = source.as_ref().parameters().bbox_pyramid.get_level_min().unwrap_or(0);
 		let cache = Arc::new(Mutex::new(TileCache::new(512)));
 
 		Ok(Self {
 			parameters,
-			source,
+			source: Arc::new(source),
 			tilejson,
 			level_base,
 			level_min,
@@ -126,7 +142,7 @@ impl Operation {
 
 			// 2. Try to fetch from source
 			let bbox = coord_src.as_tile_bbox();
-			let mut stream = self.source.get_stream(bbox).await?;
+			let mut stream = self.source.as_ref().get_stream(bbox).await?;
 
 			if let Some((found_coord, tile)) = stream.next().await
 				&& found_coord == coord_src
@@ -162,27 +178,37 @@ impl Operation {
 		let level_diff = coord_dst.level - coord_src.level;
 
 		if level_diff == 0 {
-			// Same level - use as-is
+			// Same level - use as-is (no extraction needed)
 			let tile = Tile::from_image((*source_image).clone(), self.parameters.tile_format)?;
 			return Ok(Some(tile));
 		}
 
 		// Calculate extraction parameters
 		let scale = 1 << level_diff;
-		let tile_size = self.tile_size as f64;
-		let sub_size = tile_size / scale as f64;
-
+		let tile_size = self.tile_size;
+		let sub_size = tile_size as f64 / scale as f64;
 		let tile_offset_x = (coord_dst.x % scale) as f64;
 		let tile_offset_y = (coord_dst.y % scale) as f64;
-
 		let x0 = tile_offset_x * sub_size;
 		let y0 = tile_offset_y * sub_size;
+		let tile_format = self.parameters.tile_format;
 
-		// Extract and scale
-		match source_image.get_extract(x0, y0, sub_size, sub_size, self.tile_size, self.tile_size) {
-			Ok(img) => Ok(Some(Tile::from_image(img, self.parameters.tile_format)?)),
-			Err(e) => {
+		// Offload CPU-intensive image extraction to blocking thread pool
+		let result = tokio::task::spawn_blocking(move || {
+			source_image
+				.get_extract(x0, y0, sub_size, sub_size, tile_size, tile_size)
+				.and_then(|img| Tile::from_image(img, tile_format))
+		})
+		.await;
+
+		match result {
+			Ok(Ok(tile)) => Ok(Some(tile)),
+			Ok(Err(e)) => {
 				log::warn!("Failed to extract tile {:?} from {:?}: {}", coord_dst, coord_src, e);
+				Ok(None)
+			}
+			Err(e) => {
+				log::error!("Task panicked while extracting tile {:?}: {}", coord_dst, e);
 				Ok(None)
 			}
 		}
@@ -200,7 +226,7 @@ impl OperationTrait for Operation {
 	}
 
 	fn traversal(&self) -> &Traversal {
-		self.source.traversal()
+		self.source.as_ref().traversal()
 	}
 
 	#[context("Failed to get stream for bbox: {:?}", bbox_dst)]
@@ -214,21 +240,31 @@ impl OperationTrait for Operation {
 
 		if bbox_dst.level <= self.level_base {
 			log::trace!("get_stream level <= level_base");
-			return self.source.get_stream(bbox_dst).await;
+			return self.source.as_ref().get_stream(bbox_dst).await;
 		}
 
-		// Use tile climbing for all upscaling
+		// Use tile climbing for all upscaling - process in parallel
 		let coords: Vec<TileCoord> = bbox_dst.into_iter_coords().collect();
+		let self_arc = Arc::new(self.clone()); // Share Operation across tasks
 
-		// Process each coordinate
-		let mut tiles = Vec::new();
-		for coord in coords {
-			if let Some(tile) = self.get_tile_with_climbing(coord).await? {
-				tiles.push((coord, tile));
-			}
-		}
+		let stream = stream::iter(coords)
+			.map(move |coord| {
+				let op = Arc::clone(&self_arc);
+				async move {
+					match op.get_tile_with_climbing(coord).await {
+						Ok(Some(tile)) => Some((coord, tile)),
+						Ok(None) => None,
+						Err(e) => {
+							log::warn!("Failed to get tile {:?}: {}", coord, e);
+							None
+						}
+					}
+				}
+			})
+			.buffer_unordered(num_cpus::get()) // Bounded concurrency
+			.filter_map(|result| async move { result });
 
-		Ok(TileStream::from_vec(tiles))
+		Ok(TileStream::from_stream(Box::pin(stream)))
 	}
 }
 

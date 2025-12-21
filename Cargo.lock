@@ -3995,6 +3995,7 @@ dependencies = [
  "lru",
  "nom 8.0.0",
  "nom-language",
+ "num_cpus",
  "pretty_assertions",
  "regex",
  "rstest",
