@@ -18,7 +18,6 @@ console.log('Example 1: Convert MBTiles to VersaTiles');
 const inputPath = new URL('../../testdata/berlin.mbtiles', import.meta.url).pathname;
 const outputPath = path.join(tmpdir(), 'output.versatiles');
 
-
 await convert(inputPath, outputPath);
 console.log('✓ Conversion complete:', outputPath);
 

@@ -118,8 +118,8 @@ describe('ContainerReader', () => {
 			expect(params).toStrictEqual({
 				maxZoom: 14,
 				minZoom: 0,
-				tileCompression: "gzip",
-				tileFormat: "mvt",
+				tileCompression: 'gzip',
+				tileFormat: 'mvt',
 			});
 		});
 	});

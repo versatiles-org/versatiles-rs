@@ -9,8 +9,6 @@
 
 import { TileServer } from '../index.js';
 
-
-
 console.log('VersaTiles Server Example\n');
 
 {
@@ -63,7 +61,6 @@ console.log('VersaTiles Server Example\n');
 	// console.log('  /tiles/satellite/{z}/{x}/{y}');
 	// console.log('  /tiles/terrain/{z}/{x}/{y}');
 
-	
 	await sleepForOneSecond();
 	await server.stop();
 }
@@ -89,7 +86,6 @@ console.log('VersaTiles Server Example\n');
 	console.log('    Tiles: /tiles/tiles/{z}/{x}/{y}');
 	console.log('    Static: / (index.html, style.css, etc.)');
 
-	
 	await sleepForOneSecond();
 	await server.stop();
 }
@@ -114,7 +110,7 @@ console.log('VersaTiles Server Example\n');
 	console.log('\n  Removing tile source "berlin"...');
 	await server.removeTileSource('berlin');
 	console.log('  ✓ Source removed.');
-	
+
 	await sleepForOneSecond();
 	await server.stop();
 }

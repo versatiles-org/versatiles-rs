@@ -9,12 +9,10 @@
 
 import { ContainerReader } from '../index.js';
 
-
 console.log('VersaTiles Probe Example\n');
 
 const containerPath = new URL('../../testdata/berlin.mbtiles', import.meta.url).pathname;
-const container =await ContainerReader.open(containerPath);
-
+const container = await ContainerReader.open(containerPath);
 
 console.log('Container Information:');
 console.log('  Type:', await container.containerName());
