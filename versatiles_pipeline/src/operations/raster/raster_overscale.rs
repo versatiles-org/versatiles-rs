@@ -1,5 +1,5 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
-use anyhow::Result;
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use lru::LruCache;
 use std::fmt::Debug;
@@ -134,7 +134,10 @@ impl Operation {
 				let mut cache = self.cache.lock().await;
 				if let Some(cached_image) = cache.get(&coord_src) {
 					drop(cache);
-					return self.extract_tile(cached_image, coord_dst, coord_src).await;
+					return Ok(Some(Tile::from_image(
+						extract_image(&cached_image, coord_src, coord_dst)?,
+						self.parameters.tile_format,
+					)?));
 				}
 			}
 
@@ -154,7 +157,10 @@ impl Operation {
 					cache.insert(coord_src, image_arc.clone());
 				}
 
-				return self.extract_tile(image_arc, coord_dst, coord_src).await;
+				return Ok(Some(Tile::from_image(
+					extract_image(&image_arc, coord_src, coord_dst)?,
+					self.parameters.tile_format,
+				)?));
 			}
 
 			// 3. Tile not found - climb to parent
@@ -166,51 +172,27 @@ impl Operation {
 			coord_src = coord_src.as_level_decreased()?;
 		}
 	}
+}
 
-	async fn extract_tile(
-		&self,
-		source_image: Arc<DynamicImage>,
-		coord_dst: TileCoord,
-		coord_src: TileCoord,
-	) -> Result<Option<Tile>> {
-		let level_diff = coord_dst.level - coord_src.level;
+fn extract_image(image_src: &DynamicImage, coord_src: TileCoord, coord_dst: TileCoord) -> Result<DynamicImage> {
+	let level_diff = coord_dst.level as i32 - coord_src.level as i32;
 
-		if level_diff == 0 {
-			// Same level - use as-is (no extraction needed)
-			let tile = Tile::from_image((*source_image).clone(), self.parameters.tile_format)?;
-			return Ok(Some(tile));
-		}
+	ensure!(level_diff >= 0, "difference in levels must be non-negative");
 
-		// Calculate extraction parameters
-		let scale = 1 << level_diff;
-		let tile_size = self.tile_size;
-		let sub_size = tile_size as f64 / scale as f64;
-		let tile_offset_x = (coord_dst.x % scale) as f64;
-		let tile_offset_y = (coord_dst.y % scale) as f64;
-		let x0 = tile_offset_x * sub_size;
-		let y0 = tile_offset_y * sub_size;
-		let tile_format = self.parameters.tile_format;
-
-		// Offload CPU-intensive image extraction to blocking thread pool
-		let result = tokio::task::spawn_blocking(move || {
-			source_image
-				.get_extract(x0, y0, sub_size, sub_size, tile_size, tile_size)
-				.and_then(|img| Tile::from_image(img, tile_format))
-		})
-		.await;
-
-		match result {
-			Ok(Ok(tile)) => Ok(Some(tile)),
-			Ok(Err(e)) => {
-				log::warn!("Failed to extract tile {:?} from {:?}: {}", coord_dst, coord_src, e);
-				Ok(None)
-			}
-			Err(e) => {
-				log::error!("Task panicked while extracting tile {:?}: {}", coord_dst, e);
-				Ok(None)
-			}
-		}
+	if level_diff == 0 {
+		return Ok((*image_src).clone());
 	}
+
+	// Calculate extraction parameters
+	let scale = 1 << level_diff;
+	let tile_size = image_src.width(); // Assume square tiles
+	let sub_size = tile_size as f64 / scale as f64;
+	let tile_offset_x = (coord_dst.x % scale) as f64;
+	let tile_offset_y = (coord_dst.y % scale) as f64;
+	let x0 = tile_offset_x * sub_size;
+	let y0 = tile_offset_y * sub_size;
+
+	image_src.get_extract(x0, y0, sub_size, sub_size, tile_size, tile_size)
 }
 
 #[async_trait]
