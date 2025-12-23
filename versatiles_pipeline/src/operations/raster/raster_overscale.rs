@@ -126,7 +126,7 @@ impl Operation {
 	async fn get_tile_with_climbing(&self, coord_dst: TileCoord) -> Result<Option<Tile>> {
 		let level_dst = coord_dst.level;
 		let mut search_level = self.level_base.min(level_dst);
-		let mut coord_src = coord_dst.as_level(search_level);
+		let mut coord_src = coord_dst.at_level(search_level);
 
 		loop {
 			// 1. Check cache

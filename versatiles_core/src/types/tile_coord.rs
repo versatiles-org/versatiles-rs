@@ -135,7 +135,7 @@ impl TileCoord {
 	///
 	/// If `level` > current, x/y are multiplied; if lower, x/y are divided.
 	#[must_use]
-	pub fn as_level(&self, level: u8) -> TileCoord {
+	pub fn at_level(&self, level: u8) -> TileCoord {
 		assert!(level <= 31, "level ({level}) must be <= 31");
 		if level > self.level {
 			let scale = 2u32.pow(u32::from(level - self.level));
@@ -315,12 +315,12 @@ mod tests {
 		let bbox = coord.as_tile_bbox();
 		assert_eq!(bbox, TileBBox::from_min_and_max(3, 1, 2, 1, 2).unwrap());
 		// as_level upscales and downscales correctly
-		let up = coord.as_level(5);
+		let up = coord.at_level(5);
 		assert_eq!(up, TileCoord::new(5, 4, 8).unwrap());
-		let down = coord.as_level(2);
+		let down = coord.at_level(2);
 		assert_eq!(down, TileCoord::new(2, 0, 1).unwrap());
 		// same level returns identical
-		assert_eq!(coord.as_level(3), coord);
+		assert_eq!(coord.at_level(3), coord);
 	}
 
 	#[test]

@@ -124,7 +124,7 @@ impl<I> TileBBoxMap<I> {
 			TileBBoxMap::<Vec<(TileCoord, I)>>::new_default(bbox1),
 			|mut container1, (i, item)| {
 				let coord0 = self.bbox.coord_at_index(i as u64).unwrap();
-				let coord1 = coord0.as_level(self.bbox.level - 1);
+				let coord1 = coord0.at_level(self.bbox.level - 1);
 				container1.get_mut(&coord1).unwrap().push((coord0, item));
 				container1
 			},
