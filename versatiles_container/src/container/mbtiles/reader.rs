@@ -485,7 +485,7 @@ pub mod tests {
 	async fn probe() -> Result<()> {
 		use versatiles_core::utils::PrettyPrint;
 
-		let mut reader = MBTilesReader::open_path(&PATH, TilesRuntime::default())?;
+		let reader = MBTilesReader::open_path(&PATH, TilesRuntime::default())?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(&printer.get_category("container").await).await?;

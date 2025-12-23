@@ -110,7 +110,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	///
 	/// Output is structured using categories/lists for human‑friendly inspection.
 	#[cfg(feature = "cli")]
-	async fn probe(&mut self, level: ProbeDepth) -> Result<()> {
+	async fn probe(&self, level: ProbeDepth) -> Result<()> {
 		use ProbeDepth::*;
 
 		let mut print = PrettyPrint::new();
@@ -155,7 +155,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 	/// Writes reader parameters (bbox levels, formats, compression) into the CLI reporter.
 	#[cfg(feature = "cli")]
-	async fn probe_parameters(&mut self, print: &mut PrettyPrint) -> Result<()> {
+	async fn probe_parameters(&self, print: &mut PrettyPrint) -> Result<()> {
 		let parameters = self.parameters();
 		let p = print.get_list("bbox_pyramid").await;
 		for level in parameters.bbox_pyramid.iter_levels() {
@@ -173,7 +173,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 	/// Writes container‑specific metadata or a placeholder warning if not implemented.
 	#[cfg(feature = "cli")]
-	async fn probe_container(&mut self, print: &PrettyPrint) -> Result<()> {
+	async fn probe_container(&self, print: &PrettyPrint) -> Result<()> {
 		print
 			.add_warning("deep container probing is not implemented for this container format")
 			.await;
@@ -182,7 +182,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 	/// Writes tile‑level probing output or a placeholder warning if not implemented.
 	#[cfg(feature = "cli")]
-	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
+	async fn probe_tiles(&self, print: &PrettyPrint) -> Result<()> {
 		print
 			.add_warning("deep tiles probing is not implemented for this container format")
 			.await;
@@ -191,7 +191,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 	/// Writes sample tile content diagnostics or a placeholder warning if not implemented.
 	#[cfg(feature = "cli")]
-	async fn probe_tile_contents(&mut self, print: &PrettyPrint) -> Result<()> {
+	async fn probe_tile_contents(&self, print: &PrettyPrint) -> Result<()> {
 		print
 			.add_warning("deep tile contents probing is not implemented for this container format")
 			.await;
@@ -451,7 +451,7 @@ mod tests {
 		{
 			use versatiles_core::utils::PrettyPrint;
 
-			let mut reader = TestReader::new_dummy();
+			let reader = TestReader::new_dummy();
 			let mut print = PrettyPrint::new();
 			reader
 				.probe_tile_contents(&print.get_category("tile contents").await)
@@ -463,7 +463,7 @@ mod tests {
 	#[cfg(feature = "cli")]
 	#[tokio::test]
 	async fn test_probe_parameters() -> Result<()> {
-		let mut reader = TestReader::new_dummy();
+		let reader = TestReader::new_dummy();
 		let mut print = PrettyPrint::new();
 		reader.probe_parameters(&mut print).await?;
 		Ok(())
@@ -472,7 +472,7 @@ mod tests {
 	#[cfg(feature = "cli")]
 	#[tokio::test]
 	async fn test_probe_container() -> Result<()> {
-		let mut reader = TestReader::new_dummy();
+		let reader = TestReader::new_dummy();
 		let print = PrettyPrint::new();
 		reader.probe_container(&print).await?;
 		Ok(())
@@ -481,7 +481,7 @@ mod tests {
 	#[cfg(feature = "cli")]
 	#[tokio::test]
 	async fn test_probe_tiles() -> Result<()> {
-		let mut reader = TestReader::new_dummy();
+		let reader = TestReader::new_dummy();
 		let print = PrettyPrint::new();
 		reader.probe_tiles(&print).await?;
 		Ok(())
@@ -490,7 +490,7 @@ mod tests {
 	#[cfg(feature = "cli")]
 	#[tokio::test]
 	async fn test_probe_all_levels() -> Result<()> {
-		let mut reader = TestReader::new_dummy();
+		let reader = TestReader::new_dummy();
 		reader.probe(ProbeDepth::Container).await?;
 		reader.probe(ProbeDepth::Tiles).await?;
 		reader.probe(ProbeDepth::TileContents).await?;

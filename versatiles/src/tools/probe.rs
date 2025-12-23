@@ -22,7 +22,7 @@ pub struct Subcommand {
 pub async fn run(arguments: &Subcommand, runtime: TilesRuntime) -> Result<()> {
 	log::info!("probe {:?}", arguments.filename);
 
-	let mut reader = runtime.get_reader_from_str(&arguments.filename).await?;
+	let reader = runtime.get_reader_from_str(&arguments.filename).await?;
 
 	let level = match arguments.deep {
 		0 => ProbeDepth::Shallow,

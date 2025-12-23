@@ -319,7 +319,7 @@ pub mod tests {
 	async fn probe() -> Result<()> {
 		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 4, "tar").await?;
 
-		let mut reader = TarTilesReader::open_path(&temp_file)?;
+		let reader = TarTilesReader::open_path(&temp_file)?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(&printer.get_category("container").await).await?;

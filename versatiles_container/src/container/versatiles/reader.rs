@@ -408,7 +408,7 @@ impl TilesReaderTrait for VersaTilesReader {
 	// deep probe of container meta
 	#[cfg(feature = "cli")]
 	#[context("probing versatiles container metadata")]
-	async fn probe_container(&mut self, print: &PrettyPrint) -> Result<()> {
+	async fn probe_container(&self, print: &PrettyPrint) -> Result<()> {
 		print.add_key_value("meta size", &self.header.meta_range.length).await;
 		print.add_key_value("block count", &self.block_index.len()).await;
 
@@ -425,7 +425,7 @@ impl TilesReaderTrait for VersaTilesReader {
 	// deep probe of container tiles
 	#[cfg(feature = "cli")]
 	#[context("probing versatiles tiles (scan & stats)")]
-	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
+	async fn probe_tiles(&self, print: &PrettyPrint) -> Result<()> {
 		#[derive(Debug)]
 		#[allow(dead_code)]
 		struct Entry {
@@ -650,7 +650,7 @@ mod tests {
 	#[tokio::test]
 	#[cfg(feature = "cli")]
 	async fn probe() -> Result<()> {
-		let (_, mut reader) = mk_reader().await?;
+		let (_, reader) = mk_reader().await?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(&printer.get_category("container").await).await?;
