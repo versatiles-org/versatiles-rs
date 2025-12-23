@@ -1,8 +1,8 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
-use std::fmt::Debug;
-use versatiles_container::Tile;
+use std::{fmt::Debug, sync::Arc};
+use versatiles_container::{SourceType, Tile, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -23,15 +23,15 @@ struct Args {
 
 #[derive(Debug)]
 struct Operation {
-	source: Box<dyn OperationTrait>,
+	source: Box<dyn TileSourceTrait>,
 	tilejson: TileJSON,
 }
 
 impl Operation {
 	#[context("Building meta_update operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn OperationTrait>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSourceTrait>, _factory: &PipelineFactory) -> Result<Operation>
 	where
-		Self: Sized + OperationTrait,
+		Self: Sized + TileSourceTrait,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let mut tilejson = source.tilejson().clone();
@@ -61,7 +61,11 @@ impl Operation {
 }
 
 #[async_trait]
-impl OperationTrait for Operation {
+impl TileSourceTrait for Operation {
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_processor("meta_update", self.source.source_type())
+	}
+
 	fn parameters(&self) -> &TilesReaderParameters {
 		self.source.parameters()
 	}
@@ -74,10 +78,9 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	#[context("Failed to get stream for bbox: {:?}", bbox)]
-	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_stream {:?}", bbox);
-		self.source.get_stream(bbox).await
+	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		self.source.get_tile_stream(bbox).await
 	}
 }
 
@@ -97,12 +100,12 @@ impl TransformOperationFactoryTrait for Factory {
 	async fn build<'a>(
 		&self,
 		vpl_node: VPLNode,
-		source: Box<dyn OperationTrait>,
+		source: Box<dyn TileSourceTrait>,
 		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>> {
+	) -> Result<Box<dyn TileSourceTrait>> {
 		Operation::build(vpl_node, source, factory)
 			.await
-			.map(|op| Box::new(op) as Box<dyn OperationTrait>)
+			.map(|op| Box::new(op) as Box<dyn TileSourceTrait>)
 	}
 }
 

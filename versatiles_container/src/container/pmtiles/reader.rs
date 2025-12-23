@@ -268,8 +268,9 @@ impl TileSourceTrait for PMTilesReader {
 	///
 	/// # Arguments
 	/// * `tile_compression` - The new tile compression method.
-	fn override_compression(&mut self, tile_compression: TileCompression) {
+	fn override_compression(&mut self, tile_compression: TileCompression) -> Result<()> {
 		self.parameters.tile_compression = tile_compression;
+		Ok(())
 	}
 
 	/// Returns the parsed and merged TileJSON metadata.
@@ -337,6 +338,10 @@ impl TileSourceTrait for PMTilesReader {
 
 		// If the tile data is not found after traversing all levels, return an error
 		bail!("not found")
+	}
+
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		self.stream_individual_tiles(bbox).await
 	}
 
 	// deep probe of container meta

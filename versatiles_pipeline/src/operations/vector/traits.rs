@@ -1,8 +1,7 @@
-use crate::traits::OperationTrait;
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::sync::Arc;
-use versatiles_container::Tile;
+use versatiles_container::{SourceType, Tile, TileSourceTrait};
 use versatiles_core::{TileBBox, TileJSON, TileStream, TileType, TilesReaderParameters, Traversal};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
@@ -16,13 +15,13 @@ pub trait RunnerTrait: std::fmt::Debug + Send + Sync + 'static {
 #[derive(Debug)]
 pub struct TransformOp<R: RunnerTrait> {
 	pub runner: Arc<R>,
-	pub source: Box<dyn OperationTrait>,
+	pub source: Box<dyn TileSourceTrait>,
 	pub params: TilesReaderParameters,
 	pub tilejson: TileJSON,
 }
 
 #[async_trait]
-impl<R: RunnerTrait> OperationTrait for TransformOp<R> {
+impl<R: RunnerTrait> TileSourceTrait for TransformOp<R> {
 	/* --- metadata --- */
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.params
@@ -35,13 +34,17 @@ impl<R: RunnerTrait> OperationTrait for TransformOp<R> {
 		self.source.traversal()
 	}
 
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_processor("vector_transform", self.source.source_type())
+	}
+
 	#[context("Failed to get transformed tile stream for bbox: {:?}", bbox)]
-	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		let runner = self.runner.clone();
 		let tile_format = self.params.tile_format;
 		Ok(self
 			.source
-			.get_stream(bbox)
+			.get_tile_stream(bbox)
 			.await?
 			.filter_map_item_parallel(move |tile| {
 				let vector = tile.into_vector()?;
@@ -56,7 +59,7 @@ impl<R: RunnerTrait> OperationTrait for TransformOp<R> {
 
 // transform_factory.rs
 #[context("Failed to build transform operation")]
-pub async fn build_transform<R>(source: Box<dyn OperationTrait>, runner: R) -> Result<Box<dyn OperationTrait>>
+pub async fn build_transform<R>(source: Box<dyn TileSourceTrait>, runner: R) -> Result<Box<dyn TileSourceTrait>>
 where
 	R: RunnerTrait,
 {
@@ -80,5 +83,5 @@ where
 		source,
 		params,
 		tilejson,
-	}) as Box<dyn OperationTrait>)
+	}) as Box<dyn TileSourceTrait>)
 }

@@ -2,10 +2,9 @@ use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use lru::LruCache;
-use std::fmt::Debug;
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
-use versatiles_container::Tile;
+use versatiles_container::{SourceType, Tile, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::{DynamicImage, traits::*};
@@ -62,7 +61,7 @@ impl TileCache {
 #[derive(Debug)]
 struct Operation {
 	parameters: TilesReaderParameters,
-	source: Arc<Box<dyn OperationTrait>>,
+	source: Arc<Box<dyn TileSourceTrait>>,
 	tilejson: TileJSON,
 	level_base: u8,
 	level_min: u8,
@@ -86,9 +85,9 @@ impl Clone for Operation {
 
 impl Operation {
 	#[context("Building raster_overscale operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn OperationTrait>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSourceTrait>, _factory: &PipelineFactory) -> Result<Operation>
 	where
-		Self: Sized + OperationTrait,
+		Self: Sized + TileSourceTrait,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let mut parameters = source.as_ref().parameters().clone();
@@ -143,7 +142,7 @@ impl Operation {
 
 			// 2. Try to fetch from source
 			let bbox = coord_src.to_tile_bbox();
-			let mut stream = self.source.as_ref().get_stream(bbox).await?;
+			let mut stream = self.source.as_ref().get_tile_stream(bbox).await?;
 
 			if let Some((found_coord, tile)) = stream.next().await
 				&& found_coord == coord_src
@@ -196,7 +195,7 @@ fn extract_image(image_src: &DynamicImage, coord_src: TileCoord, coord_dst: Tile
 }
 
 #[async_trait]
-impl OperationTrait for Operation {
+impl TileSourceTrait for Operation {
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
@@ -209,8 +208,12 @@ impl OperationTrait for Operation {
 		self.source.as_ref().traversal()
 	}
 
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_processor("raster_overscale", self.source.as_ref().source_type())
+	}
+
 	#[context("Failed to get stream for bbox: {:?}", bbox_dst)]
-	async fn get_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<Tile>> {
+	async fn get_tile_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox_dst);
 
 		if !self.parameters.bbox_pyramid.overlaps_bbox(&bbox_dst) {
@@ -220,7 +223,7 @@ impl OperationTrait for Operation {
 
 		if bbox_dst.level <= self.level_base {
 			log::trace!("get_stream level <= level_base");
-			return self.source.as_ref().get_stream(bbox_dst).await;
+			return self.source.as_ref().get_tile_stream(bbox_dst).await;
 		}
 
 		// Use tile climbing for all upscaling - process in parallel
@@ -261,12 +264,12 @@ impl TransformOperationFactoryTrait for Factory {
 	async fn build<'a>(
 		&self,
 		vpl_node: VPLNode,
-		source: Box<dyn OperationTrait>,
+		source: Box<dyn TileSourceTrait>,
 		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>> {
+	) -> Result<Box<dyn TileSourceTrait>> {
 		Operation::build(vpl_node, source, factory)
 			.await
-			.map(|op| Box::new(op) as Box<dyn OperationTrait>)
+			.map(|op| Box::new(op) as Box<dyn TileSourceTrait>)
 	}
 }
 
@@ -291,7 +294,7 @@ mod tests {
 	async fn get_avg(op: &Operation, coord: (u8, u8, u8), scale: u32) -> Vec<u8> {
 		let (level, x, y) = coord;
 		let coord = TileCoord::new(level, x as u32, y as u32).unwrap().to_tile_bbox();
-		let mut tiles = op.get_stream(coord).await.unwrap().to_vec().await;
+		let mut tiles = op.get_tile_stream(coord).await.unwrap().to_vec().await;
 		assert_eq!(tiles.len(), 1);
 		let mut tile = tiles.pop().unwrap().1;
 		let image = tile.as_image().unwrap();

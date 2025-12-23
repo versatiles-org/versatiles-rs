@@ -73,10 +73,6 @@ impl TileSourceTrait for DummyVectorSource {
 		&self.parameters
 	}
 
-	fn override_compression(&mut self, _tile_compression: TileCompression) {
-		panic!("not possible")
-	}
-
 	fn traversal(&self) -> &Traversal {
 		&self.traversal
 	}
@@ -119,6 +115,10 @@ impl TileSourceTrait for DummyVectorSource {
 
 		// Create a vector tile from the layers and convert it to a blob
 		Ok(Some(tile))
+	}
+
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		self.stream_individual_tiles(bbox).await
 	}
 }
 

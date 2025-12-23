@@ -314,8 +314,9 @@ impl TileSourceTrait for VersaTilesReader {
 		&self.parameters
 	}
 
-	fn override_compression(&mut self, tile_compression: TileCompression) {
+	fn override_compression(&mut self, tile_compression: TileCompression) -> Result<()> {
 		self.parameters.tile_compression = tile_compression;
+		Ok(())
 	}
 
 	/// Fetch a single tile by XYZ coordinate.

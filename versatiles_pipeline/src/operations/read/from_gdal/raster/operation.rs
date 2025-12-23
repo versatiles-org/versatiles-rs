@@ -3,16 +3,16 @@
 //! This module defines an [`Operation`] that streams tiles out of a **single
 //! tile container** (e.g. `*.versatiles`, MBTiles, PMTiles, TAR bundles).
 //! It adapts the container’s [`TileSourceTrait`] interface to
-//! [`OperationTrait`] so that the rest of the pipeline can treat it like any
+//! [`TileSourceTrait`] so that the rest of the pipeline can treat it like any
 //! other data source.
 
 use super::RasterSource;
-use crate::{PipelineFactory, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, operations::read::traits::ReadTileSourceTrait, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
-use std::{fmt::Debug, vec};
-use versatiles_container::Tile;
+use std::{fmt::Debug, sync::Arc, vec};
+use versatiles_container::{SourceType, Tile, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -42,7 +42,7 @@ struct Args {
 }
 
 #[derive(Debug)]
-/// Concrete [`OperationTrait`] that merely forwards every request to an
+/// Concrete [`TileSourceTrait`] that merely forwards every request to an
 /// underlying container [`TileSourceTrait`].  A cached copy of the
 /// container’s [`TileJSON`] metadata is kept so downstream stages can query
 /// bounds and zoom levels without touching the reader again.
@@ -57,7 +57,7 @@ impl Operation {
 	#[context("Building from_gdal_raster operation in VPL node {:?}", vpl_node.name)]
 	async fn new(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Self>
 	where
-		Self: Sized + OperationTrait,
+		Self: Sized + TileSourceTrait,
 	{
 		let args = Args::from_vpl_node(&vpl_node).context("Failed to parse arguments from VPL node")?;
 		log::trace!(
@@ -134,33 +134,37 @@ impl Operation {
 	}
 }
 
-impl ReadOperationTrait for Operation {
+impl ReadTileSourceTrait for Operation {
 	#[context("Failed to build read operation")]
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSourceTrait>>
 	where
-		Self: Sized + OperationTrait,
+		Self: Sized + TileSourceTrait,
 	{
-		Ok(Box::new(Self::new(vpl_node, factory).await?) as Box<dyn OperationTrait>)
+		Ok(Box::new(Self::new(vpl_node, factory).await?) as Box<dyn TileSourceTrait>)
 	}
 }
 
 #[async_trait]
-impl OperationTrait for Operation {
+impl TileSourceTrait for Operation {
 	/// Return the reader’s technical parameters (compression, tile size,
 	/// etc.) without performing any I/O.
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
-	/// Expose the container’s `TileJSON` so that consumers can inspect
+	/// Expose the container's `TileJSON` so that consumers can inspect
 	/// bounds, zoom range and other dataset metadata.
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_container("gdal_raster", "gdal_raster")
+	}
+
 	/// Stream decoded raster images for all tiles within the bounding box.
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
-	async fn get_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
+	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox);
 
 		let count = 8192u32.div_euclid(self.tile_size).max(1);
@@ -234,7 +238,7 @@ impl OperationFactoryTrait for Factory {
 
 #[async_trait]
 impl ReadOperationFactoryTrait for Factory {
-	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn OperationTrait>> {
+	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSourceTrait>> {
 		Operation::build(vpl_node, factory).await
 	}
 }
@@ -321,7 +325,7 @@ mod tests {
 	#[tokio::test(flavor = "multi_thread")]
 	async fn test_get_image_stream_returns_images() -> Result<()> {
 		let operation = get_operation(16).await;
-		let mut stream = operation.get_stream(TileBBox::new_full(1)?).await?;
+		let mut stream = operation.get_tile_stream(TileBBox::new_full(1)?).await?;
 		let mut count = 0;
 		while let Some((coord_out, tile)) = stream.next().await {
 			let image = tile.into_image()?;

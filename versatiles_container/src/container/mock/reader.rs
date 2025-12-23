@@ -95,8 +95,9 @@ impl TileSourceTrait for MockTilesReader {
 		&self.parameters
 	}
 
-	fn override_compression(&mut self, tile_compression: TileCompression) {
+	fn override_compression(&mut self, tile_compression: TileCompression) -> Result<()> {
 		self.parameters.tile_compression = tile_compression;
+		Ok(())
 	}
 
 	fn tilejson(&self) -> &TileJSON {
@@ -123,6 +124,10 @@ impl TileSourceTrait for MockTilesReader {
 		};
 		blob = compress(blob, self.parameters.tile_compression)?;
 		Ok(Some(Tile::from_blob(blob, self.parameters.tile_compression, format)))
+	}
+
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		self.stream_individual_tiles(bbox).await
 	}
 }
 

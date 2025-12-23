@@ -3,10 +3,10 @@
 //! This module defines an [`Operation`] that streams tiles out of a **single
 //! tile container** (e.g. `*.versatiles`, MBTiles, PMTiles, TAR bundles).
 //! It adapts the container’s [`TileSourceTrait`] interface to
-//! [`OperationTrait`] so that the rest of the pipeline can treat it like any
+//! [`TileSourceTrait`] so that the rest of the pipeline can treat it like any
 //! other data source.
 
-use crate::{PipelineFactory, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, operations::read::traits::ReadTileSourceTrait, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
@@ -23,7 +23,7 @@ struct Args {
 }
 
 #[derive(Debug)]
-/// Concrete [`OperationTrait`] that merely forwards every request to an
+/// Concrete [`TileSourceTrait`] that merely forwards every request to an
 /// underlying container [`TileSourceTrait`].  A cached copy of the
 /// container’s [`TileJSON`] metadata is kept so downstream stages can query
 /// bounds and zoom levels without touching the reader again.
@@ -33,11 +33,11 @@ struct Operation {
 	tilejson: TileJSON,
 }
 
-impl ReadOperationTrait for Operation {
+impl ReadTileSourceTrait for Operation {
 	#[context("Failed to build from_container operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSourceTrait>>
 	where
-		Self: Sized + OperationTrait,
+		Self: Sized + TileSourceTrait,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let reader = factory.get_reader(&factory.resolve_filename(&args.filename)).await?;
@@ -49,19 +49,23 @@ impl ReadOperationTrait for Operation {
 			tilejson,
 			parameters,
 			reader,
-		}) as Box<dyn OperationTrait>)
+		}) as Box<dyn TileSourceTrait>)
 	}
 }
 
 #[async_trait]
-impl OperationTrait for Operation {
-	/// Return the reader’s technical parameters (compression, tile size,
+impl TileSourceTrait for Operation {
+	fn source_type(&self) -> std::sync::Arc<versatiles_container::SourceType> {
+		self.reader.source_type()
+	}
+
+	/// Return the reader's technical parameters (compression, tile size,
 	/// etc.) without performing any I/O.
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
-	/// Expose the container’s `TileJSON` so that consumers can inspect
+	/// Expose the container's `TileJSON` so that consumers can inspect
 	/// bounds, zoom range and other dataset metadata.
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
@@ -74,9 +78,9 @@ impl OperationTrait for Operation {
 	/// Stream raw tile blobs intersecting the bounding box by delegating to
 	/// `TileSourceTrait::get_tile_stream`.
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("getstream {:?}", bbox);
-		Ok(self.reader.get_tile_stream(bbox).await?)
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_tile_stream {:?}", bbox);
+		self.reader.get_tile_stream(bbox).await
 	}
 }
 
@@ -93,13 +97,13 @@ impl OperationFactoryTrait for Factory {
 
 #[async_trait]
 impl ReadOperationFactoryTrait for Factory {
-	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn OperationTrait>> {
+	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSourceTrait>> {
 		Operation::build(vpl_node, factory).await
 	}
 }
 
 #[cfg(test)]
-pub fn operation_from_reader(reader: Box<dyn TileSourceTrait>) -> Box<dyn OperationTrait> {
+pub fn operation_from_reader(reader: Box<dyn TileSourceTrait>) -> Box<dyn TileSourceTrait> {
 	let parameters = reader.parameters().clone();
 	let mut tilejson = reader.tilejson().clone();
 	tilejson.update_from_reader_parameters(&parameters);
@@ -108,7 +112,7 @@ pub fn operation_from_reader(reader: Box<dyn TileSourceTrait>) -> Box<dyn Operat
 		parameters,
 		reader,
 		tilejson,
-	}) as Box<dyn OperationTrait>
+	}) as Box<dyn TileSourceTrait>
 }
 
 #[cfg(test)]
@@ -149,7 +153,9 @@ mod tests {
 			]
 		);
 
-		let mut stream = operation.get_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?).await?;
+		let mut stream = operation
+			.get_tile_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?)
+			.await?;
 
 		let mut n = 0;
 		while let Some((coord, tile)) = stream.next().await {
@@ -197,7 +203,9 @@ mod tests {
 			]
 		);
 
-		let mut stream = operation.get_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?).await?;
+		let mut stream = operation
+			.get_tile_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?)
+			.await?;
 
 		let mut n = 0;
 		while let Some((coord, tile)) = stream.next().await {

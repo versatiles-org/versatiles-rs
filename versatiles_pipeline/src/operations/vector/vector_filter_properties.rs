@@ -1,12 +1,13 @@
 use crate::{
 	PipelineFactory,
 	operations::vector::traits::{RunnerTrait, build_transform},
-	traits::{OperationFactoryTrait, OperationTrait, TransformOperationFactoryTrait},
+	traits::{OperationFactoryTrait, TransformOperationFactoryTrait},
 	vpl::VPLNode,
 };
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use regex::Regex;
+use versatiles_container::TileSourceTrait;
 use versatiles_core::TileJSON;
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
@@ -81,9 +82,9 @@ impl TransformOperationFactoryTrait for Factory {
 	async fn build<'a>(
 		&self,
 		vpl_node: VPLNode,
-		source: Box<dyn OperationTrait>,
+		source: Box<dyn TileSourceTrait>,
 		_factory: &'a PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>> {
+	) -> Result<Box<dyn TileSourceTrait>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		build_transform::<Runner>(source, Runner::from_args(args)?).await
@@ -185,7 +186,7 @@ mod tests {
 			)
 			.await?;
 
-		let mut stream = operation.get_stream(TileBBox::new_full(0)?).await?;
+		let mut stream = operation.get_tile_stream(TileBBox::new_full(0)?).await?;
 		let tile = stream.next().await.unwrap().1.into_vector()?;
 
 		Ok((

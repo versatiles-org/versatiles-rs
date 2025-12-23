@@ -1,8 +1,8 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
-use std::{fmt::Debug, str};
-use versatiles_container::Tile;
+use std::{fmt::Debug, str, sync::Arc};
+use versatiles_container::{SourceType, Tile, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -71,7 +71,7 @@ impl From<RasterTileFormat> for TileFormat {
 #[derive(Debug)]
 struct Operation {
 	parameters: TilesReaderParameters,
-	source: Box<dyn OperationTrait>,
+	source: Box<dyn TileSourceTrait>,
 	tilejson: TileJSON,
 	format: RasterTileFormat,
 	quality: [Option<u8>; 32],
@@ -80,9 +80,9 @@ struct Operation {
 
 impl Operation {
 	#[context("Building raster_format operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn OperationTrait>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSourceTrait>, _factory: &PipelineFactory) -> Result<Operation>
 	where
-		Self: Sized + OperationTrait,
+		Self: Sized + TileSourceTrait,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 
@@ -138,7 +138,11 @@ fn parse_quality(quality: Option<String>) -> Result<[Option<u8>; 32]> {
 }
 
 #[async_trait]
-impl OperationTrait for Operation {
+impl TileSourceTrait for Operation {
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_processor("raster_format", self.source.source_type())
+	}
+
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
@@ -151,13 +155,13 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	#[context("Failed to get stream for bbox: {:?}", bbox)]
-	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_stream {:?}", bbox);
+	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_tile_stream {:?}", bbox);
 
 		let quality = self.quality[bbox.level as usize];
 		let speed = self.speed;
-		let stream = self.source.get_stream(bbox).await?;
+		let stream = self.source.get_tile_stream(bbox).await?;
 		let format: TileFormat = self.format.into();
 
 		Ok(stream.map_item_parallel(move |mut tile| {
@@ -183,12 +187,12 @@ impl TransformOperationFactoryTrait for Factory {
 	async fn build<'a>(
 		&self,
 		vpl_node: VPLNode,
-		source: Box<dyn OperationTrait>,
+		source: Box<dyn TileSourceTrait>,
 		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>> {
+	) -> Result<Box<dyn TileSourceTrait>> {
 		Operation::build(vpl_node, source, factory)
 			.await
-			.map(|op| Box::new(op) as Box<dyn OperationTrait>)
+			.map(|op| Box::new(op) as Box<dyn TileSourceTrait>)
 	}
 }
 
@@ -278,7 +282,7 @@ mod tests {
 
 		// Stream should still yield exactly one tile and the tile should be WEBP now
 		let bbox = TileCoord::new(3, 2, 2)?.to_tile_bbox();
-		let mut items = op.get_stream(bbox).await?.to_vec().await;
+		let mut items = op.get_tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(items.len(), 1, "expected exactly one tile at z=3, x=2, y=2");
 		let (_coord, tile) = items.remove(0);
 		assert_eq!(tile.format(), TileFormat::WEBP);

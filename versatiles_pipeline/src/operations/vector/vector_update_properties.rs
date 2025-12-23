@@ -2,12 +2,13 @@ use crate::{
 	PipelineFactory,
 	helpers::read_csv_file,
 	operations::vector::traits::{RunnerTrait, build_transform},
-	traits::{OperationFactoryTrait, OperationTrait, TransformOperationFactoryTrait},
+	traits::{OperationFactoryTrait, TransformOperationFactoryTrait},
 	vpl::VPLNode,
 };
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
+use versatiles_container::TileSourceTrait;
 use versatiles_core::TileJSON;
 use versatiles_derive::context;
 use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
@@ -152,9 +153,9 @@ impl TransformOperationFactoryTrait for Factory {
 	async fn build<'a>(
 		&self,
 		vpl_node: VPLNode,
-		source: Box<dyn OperationTrait>,
+		source: Box<dyn TileSourceTrait>,
 		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>> {
+	) -> Result<Box<dyn TileSourceTrait>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		// Load the CSV file referenced in the VPL.
@@ -263,7 +264,7 @@ mod tests {
 
 		// ── extract a single feature for inspection ────────────────
 		let mut stream = operation
-			.get_stream(TileCoord::new(10, 1000, 100)?.to_tile_bbox())
+			.get_tile_stream(TileCoord::new(10, 1000, 100)?.to_tile_bbox())
 			.await?;
 		let tile = stream.next().await.unwrap().1.into_vector()?;
 		let layer = tile.find_layer("debug_y").unwrap();

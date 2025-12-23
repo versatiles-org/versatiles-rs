@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use imageproc::image::{DynamicImage, GenericImage};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
-use versatiles_container::{CacheMap, Tile};
+use versatiles_container::{CacheMap, SourceType, Tile, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -23,7 +23,7 @@ struct Args {
 #[derive(Debug)]
 struct Operation {
 	parameters: TilesReaderParameters,
-	source: Box<dyn OperationTrait>,
+	source: Box<dyn TileSourceTrait>,
 	tilejson: TileJSON,
 	level_base: u8,
 	tile_size: u32,
@@ -34,9 +34,9 @@ struct Operation {
 
 impl Operation {
 	#[context("Building raster_levels operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn OperationTrait>, factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSourceTrait>, factory: &PipelineFactory) -> Result<Operation>
 	where
-		Self: Sized + OperationTrait,
+		Self: Sized + TileSourceTrait,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 		ensure!(source.traversal().is_any());
@@ -173,7 +173,7 @@ impl Operation {
 }
 
 #[async_trait]
-impl OperationTrait for Operation {
+impl TileSourceTrait for Operation {
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
@@ -186,12 +186,16 @@ impl OperationTrait for Operation {
 		&self.traversal
 	}
 
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_processor("raster_overview", self.source.source_type())
+	}
+
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
-	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox);
 
 		if bbox.level > self.level_base {
-			return self.source.get_stream(bbox).await;
+			return self.source.get_tile_stream(bbox).await;
 		}
 
 		let size = bbox.max_count().min(BLOCK_TILE_COUNT);
@@ -206,7 +210,7 @@ impl OperationTrait for Operation {
 				bbox,
 				self
 					.source
-					.get_stream(bbox)
+					.get_tile_stream(bbox)
 					.await?
 					.map_item_parallel(|tile| tile.into_image()),
 			)
@@ -257,12 +261,12 @@ impl TransformOperationFactoryTrait for Factory {
 	async fn build<'a>(
 		&self,
 		vpl_node: VPLNode,
-		source: Box<dyn OperationTrait>,
+		source: Box<dyn TileSourceTrait>,
 		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>> {
+	) -> Result<Box<dyn TileSourceTrait>> {
 		Operation::build(vpl_node, source, factory)
 			.await
-			.map(|op| Box::new(op) as Box<dyn OperationTrait>)
+			.map(|op| Box::new(op) as Box<dyn TileSourceTrait>)
 	}
 }
 

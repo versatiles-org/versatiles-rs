@@ -1,8 +1,8 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
-use std::fmt::Debug;
-use versatiles_container::Tile;
+use std::{fmt::Debug, sync::Arc};
+use versatiles_container::{SourceType, Tile, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -20,7 +20,7 @@ struct Args {
 
 #[derive(Debug)]
 struct Operation {
-	source: Box<dyn OperationTrait>,
+	source: Box<dyn TileSourceTrait>,
 	brightness: f32,
 	contrast: f32,
 	gamma: f32,
@@ -28,9 +28,9 @@ struct Operation {
 
 impl Operation {
 	#[context("Building raster_levels operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn OperationTrait>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSourceTrait>, _factory: &PipelineFactory) -> Result<Operation>
 	where
-		Self: Sized + OperationTrait,
+		Self: Sized + TileSourceTrait,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 
@@ -44,7 +44,11 @@ impl Operation {
 }
 
 #[async_trait]
-impl OperationTrait for Operation {
+impl TileSourceTrait for Operation {
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_processor("raster_levels", self.source.source_type())
+	}
+
 	fn parameters(&self) -> &TilesReaderParameters {
 		self.source.parameters()
 	}
@@ -57,20 +61,24 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	#[context("Failed to get stream for bbox: {:?}", bbox)]
-	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_stream {:?}", bbox);
+	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_tile_stream {:?}", bbox);
 
 		let contrast = self.contrast / 255.0;
 		let brightness = self.brightness / 255.0;
 		let gamma = self.gamma;
-		Ok(self.source.get_stream(bbox).await?.map_item_parallel(move |mut tile| {
-			tile.as_image_mut()?.mut_color_values(|v| {
-				let v = ((v as f32 - 127.5) * contrast + 0.5 + brightness).powf(gamma) * 255.0;
-				v.round().clamp(0.0, 255.0) as u8
-			});
-			Ok(tile)
-		}))
+		Ok(self
+			.source
+			.get_tile_stream(bbox)
+			.await?
+			.map_item_parallel(move |mut tile| {
+				tile.as_image_mut()?.mut_color_values(|v| {
+					let v = ((v as f32 - 127.5) * contrast + 0.5 + brightness).powf(gamma) * 255.0;
+					v.round().clamp(0.0, 255.0) as u8
+				});
+				Ok(tile)
+			}))
 	}
 }
 
@@ -90,12 +98,12 @@ impl TransformOperationFactoryTrait for Factory {
 	async fn build<'a>(
 		&self,
 		vpl_node: VPLNode,
-		source: Box<dyn OperationTrait>,
+		source: Box<dyn TileSourceTrait>,
 		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>> {
+	) -> Result<Box<dyn TileSourceTrait>> {
 		Operation::build(vpl_node, source, factory)
 			.await
-			.map(|op| Box::new(op) as Box<dyn OperationTrait>)
+			.map(|op| Box::new(op) as Box<dyn TileSourceTrait>)
 	}
 }
 
@@ -136,7 +144,7 @@ mod tests {
 			gamma,
 		};
 		let mut tiles = op
-			.get_stream(TileBBox::from_min_and_max(8, 56, 56, 56, 56)?)
+			.get_tile_stream(TileBBox::from_min_and_max(8, 56, 56, 56, 56)?)
 			.await?
 			.to_vec()
 			.await;
@@ -166,7 +174,7 @@ mod tests {
 			.await?;
 
 		let bbox = TileCoord::new(3, 2, 1)?.to_tile_bbox();
-		let adj = op.get_stream(bbox).await?.next().await.unwrap().1.into_image()?;
+		let adj = op.get_tile_stream(bbox).await?.next().await.unwrap().1.into_image()?;
 		assert_eq!(adj.average_color(), expected_color);
 		Ok(())
 	}

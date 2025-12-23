@@ -185,8 +185,9 @@ impl TileSourceTrait for TilesConvertReader {
 		&self.reader_parameters
 	}
 
-	fn override_compression(&mut self, tile_compression: TileCompression) {
-		self.reader.override_compression(tile_compression);
+	fn override_compression(&mut self, tile_compression: TileCompression) -> Result<()> {
+		self.reader.override_compression(tile_compression)?;
+		Ok(())
 	}
 
 	fn tilejson(&self) -> &TileJSON {
@@ -383,7 +384,7 @@ mod tests {
 		let cp = TilesConverterParameters::default();
 		let mut tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
 
-		tcr.override_compression(Gzip);
+		tcr.override_compression(Gzip).unwrap();
 		assert_eq!(tcr.reader.parameters().tile_compression, Gzip);
 	}
 

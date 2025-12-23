@@ -6,7 +6,7 @@
 //! It supports opening from paths or arbitrary [`DataReader`]s, validates and
 //! executes the configured operations, and streams tiles for a given bbox.
 
-use crate::{OperationTrait, PipelineFactory};
+use crate::PipelineFactory;
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
@@ -24,7 +24,7 @@ use versatiles_derive::context;
 /// and govern traversal, tile format, compression, and metadata.
 pub struct PipelineReader {
 	name: String,
-	operation: Box<dyn OperationTrait>,
+	operation: Box<dyn TileSourceTrait>,
 	parameters: TilesReaderParameters,
 }
 
@@ -74,7 +74,7 @@ impl<'a> PipelineReader {
 				Box::pin(async move { runtime.clone().get_reader_from_str(&filename).await })
 			});
 			let factory = PipelineFactory::new_default(dir, callback, runtime);
-			let operation: Box<dyn OperationTrait> = factory.operation_from_vpl(vpl).await?;
+			let operation: Box<dyn TileSourceTrait> = factory.operation_from_vpl(vpl).await?;
 			let parameters = operation.parameters().clone();
 
 			Ok(PipelineReader {
@@ -97,13 +97,6 @@ impl TileSourceTrait for PipelineReader {
 		&self.parameters
 	}
 
-	/// Not supported for pipelines; calling this will panic.
-	///
-	/// Pipelines define compression in their operations, so overriding it is disallowed.
-	fn override_compression(&mut self, _tile_compression: TileCompression) {
-		panic!("you can't override the compression of pipeline")
-	}
-
 	/// Returns the traversal strategy derived from the pipeline’s output operation.
 	fn traversal(&self) -> &Traversal {
 		self.operation.traversal()
@@ -120,7 +113,12 @@ impl TileSourceTrait for PipelineReader {
 	/// are produced (pipelines must emit at most one tile per coordinate).
 	#[context("getting tile {:?} via pipeline '{}'", coord, self.name)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		let mut vec = self.operation.get_stream(coord.to_tile_bbox()).await?.to_vec().await;
+		let mut vec = self
+			.operation
+			.get_tile_stream(coord.to_tile_bbox())
+			.await?
+			.to_vec()
+			.await;
 
 		ensure!(vec.len() <= 1, "PipelineReader should return at most one tile");
 
@@ -131,11 +129,11 @@ impl TileSourceTrait for PipelineReader {
 		}
 	}
 
-	/// Streams all tiles intersecting `bbox` by executing the pipeline’s output operation.
+	/// Streams all tiles intersecting `bbox` by executing the pipeline's output operation.
 	#[context("streaming tiles for bbox {:?} via pipeline '{}'", bbox, self.name)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_tile_stream {:?}", bbox);
-		self.operation.get_stream(bbox).await
+		self.operation.get_tile_stream(bbox).await
 	}
 }
 
@@ -225,12 +223,17 @@ mod tests {
 	}
 
 	#[tokio::test]
-	#[should_panic(expected = "you can't override the compression of pipeline")]
 	async fn test_override_compression_panic() {
 		let mut reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), TilesRuntime::default())
 			.await
 			.unwrap();
 		// override_compression should panic
-		reader.override_compression(TileCompression::Uncompressed);
+		assert_eq!(
+			reader
+				.override_compression(TileCompression::Uncompressed)
+				.unwrap_err()
+				.to_string(),
+			"override_compression is not implemented for this source"
+		);
 	}
 }

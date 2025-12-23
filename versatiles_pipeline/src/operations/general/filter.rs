@@ -1,8 +1,8 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
-use std::fmt::Debug;
-use versatiles_container::Tile;
+use std::{fmt::Debug, sync::Arc};
+use versatiles_container::{SourceType, Tile, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -20,15 +20,15 @@ struct Args {
 #[derive(Debug)]
 struct Operation {
 	parameters: TilesReaderParameters,
-	source: Box<dyn OperationTrait>,
+	source: Box<dyn TileSourceTrait>,
 	tilejson: TileJSON,
 }
 
 impl Operation {
 	#[context("Building filter operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn OperationTrait>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSourceTrait>, _factory: &PipelineFactory) -> Result<Operation>
 	where
-		Self: Sized + OperationTrait,
+		Self: Sized + TileSourceTrait,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let mut parameters = source.parameters().clone();
@@ -73,7 +73,11 @@ impl Operation {
 }
 
 #[async_trait]
-impl OperationTrait for Operation {
+impl TileSourceTrait for Operation {
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_processor("filter", self.source.source_type())
+	}
+
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
@@ -86,13 +90,13 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	async fn get_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_stream {:?}", bbox);
+	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_tile_stream {:?}", bbox);
 		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
-		Ok(self.source.get_stream(bbox).await?)
+		self.source.get_tile_stream(bbox).await
 	}
 }
 
@@ -112,12 +116,12 @@ impl TransformOperationFactoryTrait for Factory {
 	async fn build<'a>(
 		&self,
 		vpl_node: VPLNode,
-		source: Box<dyn OperationTrait>,
+		source: Box<dyn TileSourceTrait>,
 		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>> {
+	) -> Result<Box<dyn TileSourceTrait>> {
 		Operation::build(vpl_node, source, factory)
 			.await
-			.map(|op| Box::new(op) as Box<dyn OperationTrait>)
+			.map(|op| Box::new(op) as Box<dyn TileSourceTrait>)
 	}
 }
 
@@ -161,7 +165,7 @@ mod tests {
 			for x in 0..max_xy {
 				for y in 0..max_xy {
 					let coord = TileCoord::new(level, x, y)?;
-					let count = op.get_stream(coord.to_tile_bbox()).await?.to_vec().await.len();
+					let count = op.get_tile_stream(coord.to_tile_bbox()).await?.to_vec().await.len();
 					if set.contains(&(level, x, y)) {
 						assert!(count == 1, "Expected one tile for {coord:?}, found {count}");
 					} else {
@@ -191,7 +195,7 @@ mod tests {
 
 		for z in 0..=6 {
 			let coord = TileCoord::new(z, 0, 0)?;
-			let n = op.get_stream(coord.to_tile_bbox()).await?.to_vec().await.len();
+			let n = op.get_tile_stream(coord.to_tile_bbox()).await?.to_vec().await.len();
 			assert_eq!(n == 1, (3..=4).contains(&z), "z={z}");
 		}
 		Ok(())
@@ -233,12 +237,12 @@ mod tests {
 
 		// Sanity: tiles outside the final bbox shouldn’t pass
 		let outside = TileCoord::new(4, 0, 0)?.to_tile_bbox();
-		let n_out = op.get_stream(outside).await?.to_vec().await.len();
+		let n_out = op.get_tile_stream(outside).await?.to_vec().await.len();
 		assert_eq!(n_out, 0);
 
 		// Inside tile at z=4 should pass
 		let inside = TileCoord::new(4, 8, 7)?.to_tile_bbox(); // somewhere within [10,5,40,20]
-		let n_in = op.get_stream(inside).await?.to_vec().await.len();
+		let n_in = op.get_tile_stream(inside).await?.to_vec().await.len();
 		assert_eq!(n_in, 1);
 
 		Ok(())

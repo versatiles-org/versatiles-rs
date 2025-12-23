@@ -204,8 +204,9 @@ impl TileSourceTrait for TarTilesReader {
 	///
 	/// # Arguments
 	/// * `tile_compression` - The new tile compression method.
-	fn override_compression(&mut self, tile_compression: TileCompression) {
+	fn override_compression(&mut self, tile_compression: TileCompression) -> Result<()> {
 		self.parameters.tile_compression = tile_compression;
+		Ok(())
 	}
 
 	/// Return the parsed TileJSON metadata for this archive.
@@ -236,6 +237,10 @@ impl TileSourceTrait for TarTilesReader {
 		} else {
 			Ok(None)
 		}
+	}
+
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		self.stream_individual_tiles(bbox).await
 	}
 }
 

@@ -1,8 +1,9 @@
-use crate::{OperationTrait, PipelineFactory, vpl::VPLNode};
+use crate::{PipelineFactory, vpl::VPLNode};
 use anyhow::Result;
+use versatiles_container::TileSourceTrait;
 
-pub trait ReadOperationTrait: OperationTrait {
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
+pub trait ReadTileSourceTrait: TileSourceTrait {
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSourceTrait>>
 	where
-		Self: Sized + OperationTrait;
+		Self: Sized + TileSourceTrait;
 }

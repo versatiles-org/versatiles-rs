@@ -3,7 +3,7 @@
 //! This module provides [`PipelineFactory`], a registry-driven builder that parses the
 //! VersaTiles Pipeline Language (VPL) and constructs an executable chain of operations.
 //! It wires together *read* and *transform* operation factories, resolves nested
-//! container readers via a user-provided callback, and returns a boxed [`OperationTrait`]
+//! container readers via a user-provided callback, and returns a boxed [`TileSourceTrait`]
 //! ready to stream tiles.
 //!
 //! The factory can be instantiated empty (for custom registration) or with defaults that
@@ -13,7 +13,7 @@
 use crate::{
 	helpers::{dummy_image_source::DummyImageSource, dummy_vector_source::DummyVectorSource},
 	operations::{get_read_operation_factories, get_transform_operation_factories},
-	traits::{OperationTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
+	traits::{ReadOperationFactoryTrait, TransformOperationFactoryTrait},
 	vpl::{VPLNode, VPLPipeline, parse_vpl},
 };
 use anyhow::{Result, anyhow, bail};
@@ -135,7 +135,7 @@ impl PipelineFactory {
 
 	/// Parses VPL text and builds the corresponding operation graph.
 	#[context("Failed to create reader from VPL")]
-	pub async fn operation_from_vpl(&self, text: &str) -> Result<Box<dyn OperationTrait>> {
+	pub async fn operation_from_vpl(&self, text: &str) -> Result<Box<dyn TileSourceTrait>> {
 		let pipeline = parse_vpl(text)?;
 		self.build_pipeline(pipeline).await
 	}
@@ -144,7 +144,7 @@ impl PipelineFactory {
 	///
 	/// Takes the head node as a read operation and folds the remaining nodes as transforms.
 	#[context("Failed to build pipeline from VPL")]
-	pub async fn build_pipeline(&self, pipeline: VPLPipeline) -> Result<Box<dyn OperationTrait>> {
+	pub async fn build_pipeline(&self, pipeline: VPLPipeline) -> Result<Box<dyn TileSourceTrait>> {
 		let (head, tail) = pipeline.split()?;
 
 		let mut vpl_operation = self.read_operation_from_node(head).await?;
@@ -158,7 +158,7 @@ impl PipelineFactory {
 
 	/// Instantiates a read operation from a VPL node using the registered factory.
 	#[context("Failed to create read operation from VPL node")]
-	async fn read_operation_from_node(&self, node: VPLNode) -> Result<Box<dyn OperationTrait>> {
+	async fn read_operation_from_node(&self, node: VPLNode) -> Result<Box<dyn TileSourceTrait>> {
 		let factory = self
 			.read_ops
 			.get(&node.name)
@@ -172,8 +172,8 @@ impl PipelineFactory {
 	async fn tran_operation_from_node(
 		&self,
 		node: VPLNode,
-		source: Box<dyn OperationTrait>,
-	) -> Result<Box<dyn OperationTrait>> {
+		source: Box<dyn TileSourceTrait>,
+	) -> Result<Box<dyn TileSourceTrait>> {
 		let factory = self
 			.tran_ops
 			.get(&node.name)

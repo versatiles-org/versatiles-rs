@@ -12,15 +12,15 @@
 
 use crate::{
 	PipelineFactory,
-	operations::read::traits::ReadOperationTrait,
+	operations::read::traits::ReadTileSourceTrait,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
 };
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
-use std::vec;
-use versatiles_container::Tile;
+use std::{sync::Arc, vec};
+use versatiles_container::{SourceType, Tile, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -37,14 +37,14 @@ struct Args {
 	format: Option<TileFormat>,
 }
 
-/// [`OperationTrait`] implementation that overlays raster tiles “on the fly.”
+/// [`TileSourceTrait`] implementation that overlays raster tiles “on the fly.”
 ///
 /// * Caches only metadata (`TileJSON`, `TilesReaderParameters`).  
 /// * Performs no disk I/O itself; all data come from the child pipelines.
 #[derive(Debug)]
 struct Operation {
 	parameters: TilesReaderParameters,
-	sources: Vec<Box<dyn OperationTrait>>,
+	sources: Vec<Box<dyn TileSourceTrait>>,
 	tilejson: TileJSON,
 	traversal: Traversal,
 }
@@ -73,11 +73,11 @@ fn stack_tiles(tiles: Vec<Tile>) -> Result<Option<Tile>> {
 	Ok(tile)
 }
 
-impl ReadOperationTrait for Operation {
+impl ReadTileSourceTrait for Operation {
 	#[context("Failed to build from_stacked_raster operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSourceTrait>>
 	where
-		Self: Sized + OperationTrait,
+		Self: Sized + TileSourceTrait,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let sources = join_all(args.sources.into_iter().map(|c| factory.build_pipeline(c)))
@@ -122,12 +122,12 @@ impl ReadOperationTrait for Operation {
 			parameters,
 			sources,
 			traversal,
-		}) as Box<dyn OperationTrait>)
+		}) as Box<dyn TileSourceTrait>)
 	}
 }
 
 #[async_trait]
-impl OperationTrait for Operation {
+impl TileSourceTrait for Operation {
 	/// Reader parameters (format, compression, pyramid) for the *blended* result.
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
@@ -142,9 +142,14 @@ impl OperationTrait for Operation {
 		&self.traversal
 	}
 
+	fn source_type(&self) -> Arc<SourceType> {
+		let source_types: Vec<Arc<SourceType>> = self.sources.iter().map(|s| s.source_type()).collect();
+		SourceType::new_composite("from_stacked_raster", &source_types)
+	}
+
 	/// Stream packed raster tiles intersecting `bbox`.
 	#[context("Failed to get stacked raster tile stream for bbox: {:?}", bbox)]
-	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox);
 
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(16).collect();
@@ -156,7 +161,7 @@ impl OperationTrait for Operation {
 				let mut tiles = TileBBoxMap::<Vec<Tile>>::new_default(bbox);
 
 				let streams = sources.iter().map(async |source| {
-					let stream = source.get_stream(bbox).await.unwrap();
+					let stream = source.get_tile_stream(bbox).await.unwrap();
 					stream.to_vec().await
 				});
 				let results: Vec<Vec<(TileCoord, Tile)>> = futures::future::join_all(streams).await;
@@ -198,7 +203,7 @@ impl OperationFactoryTrait for Factory {
 
 #[async_trait]
 impl ReadOperationFactoryTrait for Factory {
-	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn OperationTrait>> {
+	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSourceTrait>> {
 		Operation::build(vpl_node, factory).await
 	}
 }
@@ -280,7 +285,7 @@ mod tests {
 			.await?;
 
 		let bbox = TileBBox::new_full(3)?;
-		let tiles = result.get_stream(bbox).await?.to_vec().await;
+		let tiles = result.get_tile_stream(bbox).await?.to_vec().await;
 
 		assert_eq!(
 			arrange_tiles(tiles, |mut tile| {
@@ -393,8 +398,8 @@ mod tests {
 		let plain = factory.operation_from_vpl("from_container filename=00F7.png").await?;
 
 		let bbox = TileBBox::new_full(3)?;
-		let stacked_tiles = stacked.get_stream(bbox).await?.to_vec().await;
-		let plain_tiles = plain.get_stream(bbox).await?.to_vec().await;
+		let stacked_tiles = stacked.get_tile_stream(bbox).await?.to_vec().await;
+		let plain_tiles = plain.get_tile_stream(bbox).await?.to_vec().await;
 
 		// Convert to maps for easy lookup
 		use std::collections::HashMap;
@@ -427,9 +432,9 @@ mod tests {
 		let bbox = TileBBox::new_full(3)?;
 		let coord = TileCoord::new(3, 2, 2)?; // a tile that lies in the overlap area in our dummy dataset
 
-		let stacked_tile = stacked.get_stream(bbox).await?.to_map().await.remove(&coord);
-		let tile1 = src1.get_stream(bbox).await?.to_map().await.remove(&coord);
-		let tile2 = src2.get_stream(bbox).await?.to_map().await.remove(&coord);
+		let stacked_tile = stacked.get_tile_stream(bbox).await?.to_map().await.remove(&coord);
+		let tile1 = src1.get_tile_stream(bbox).await?.to_map().await.remove(&coord);
+		let tile2 = src2.get_tile_stream(bbox).await?.to_map().await.remove(&coord);
 
 		if let Some(mut stacked_tile) = stacked_tile {
 			// If both sources produced a tile here, blended output must differ from each single-source blob

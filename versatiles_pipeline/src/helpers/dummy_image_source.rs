@@ -1,4 +1,3 @@
-use crate::OperationTrait;
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
@@ -77,10 +76,6 @@ impl TileSourceTrait for DummyImageSource {
 		&self.parameters
 	}
 
-	fn override_compression(&mut self, _tile_compression: TileCompression) {
-		panic!("not possible")
-	}
-
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
@@ -92,21 +87,10 @@ impl TileSourceTrait for DummyImageSource {
 		}
 		Ok((self.generate_tile)(coord))
 	}
-}
 
-#[async_trait]
-impl OperationTrait for DummyImageSource {
-	fn parameters(&self) -> &TilesReaderParameters {
-		&self.parameters
-	}
-
-	fn tilejson(&self) -> &TileJSON {
-		&self.tilejson
-	}
-
-	#[context("Failed to get stream for bbox: {:?}", bbox)]
-	async fn get_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_stream {:?}", bbox);
+	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
+	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_tile_stream {:?}", bbox);
 
 		let generate_tile = (self.generate_tile).clone();
 		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
@@ -181,7 +165,7 @@ mod tests {
 		)
 		.unwrap();
 		assert_eq!(
-			OperationTrait::tilejson(&source).as_pretty_lines(100),
+			source.tilejson().as_pretty_lines(100),
 			[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 0, 0],",

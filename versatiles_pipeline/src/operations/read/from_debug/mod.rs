@@ -17,13 +17,13 @@
 mod image;
 mod vector;
 
-use crate::{PipelineFactory, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, operations::read::traits::ReadTileSourceTrait, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use image::create_debug_image;
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 use vector::create_debug_vector_tile;
-use versatiles_container::Tile;
+use versatiles_container::{SourceType, Tile, TileSourceTrait};
 use versatiles_core::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -33,7 +33,7 @@ struct Args {
 	format: Option<String>,
 }
 
-/// Implements [`OperationTrait`] by fabricating debug tiles entirely in
+/// Implements [`TileSourceTrait`] by fabricating debug tiles entirely in
 /// memory.  No I/O other than the caller’s request/response is performed.
 #[derive(Debug)]
 pub struct Operation {
@@ -78,17 +78,17 @@ impl Operation {
 	}
 }
 
-impl ReadOperationTrait for Operation {
-	async fn build(vpl_node: VPLNode, _factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
+impl ReadTileSourceTrait for Operation {
+	async fn build(vpl_node: VPLNode, _factory: &PipelineFactory) -> Result<Box<dyn TileSourceTrait>>
 	where
-		Self: Sized + OperationTrait,
+		Self: Sized + TileSourceTrait,
 	{
-		Operation::from_vpl_node(&vpl_node).map(|op| Box::new(op) as Box<dyn OperationTrait>)
+		Operation::from_vpl_node(&vpl_node).map(|op| Box::new(op) as Box<dyn TileSourceTrait>)
 	}
 }
 
 #[async_trait]
-impl OperationTrait for Operation {
+impl TileSourceTrait for Operation {
 	/// Return static reader parameters (compression *always* uncompressed).
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
@@ -99,7 +99,11 @@ impl OperationTrait for Operation {
 		&self.tilejson
 	}
 
-	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_container("debug", "debug")
+	}
+
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox);
 		let format = self.parameters.tile_format;
 		match self.parameters.tile_format.to_type() {
@@ -132,7 +136,7 @@ impl OperationFactoryTrait for Factory {
 
 #[async_trait]
 impl ReadOperationFactoryTrait for Factory {
-	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn OperationTrait>> {
+	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSourceTrait>> {
 		Operation::build(vpl_node, factory).await
 	}
 }
@@ -150,7 +154,7 @@ mod tests {
 
 		let coord = TileCoord { x: 1, y: 2, level: 3 };
 		let tile = operation
-			.get_stream(coord.to_tile_bbox())
+			.get_tile_stream(coord.to_tile_bbox())
 			.await?
 			.next()
 			.await
@@ -160,7 +164,9 @@ mod tests {
 		assert_eq!(tile.into_blob(Uncompressed)?.len(), len, "for '{format}'");
 		assert_eq!(operation.tilejson().as_pretty_lines(100), tilejson, "for '{format}'");
 
-		let mut stream = operation.get_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?).await?;
+		let mut stream = operation
+			.get_tile_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?)
+			.await?;
 
 		let mut n = 0;
 		while let Some((coord, tile)) = stream.next().await {

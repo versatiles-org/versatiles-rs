@@ -17,14 +17,15 @@
 
 use crate::{
 	PipelineFactory,
-	operations::read::traits::ReadOperationTrait,
+	operations::read::traits::ReadTileSourceTrait,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
 };
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
-use versatiles_container::Tile;
+use std::sync::Arc;
+use versatiles_container::{SourceType, Tile, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -36,7 +37,7 @@ struct Args {
 }
 
 #[derive(Debug)]
-/// Implements [`OperationTrait`] by performing *short‑circuit* look‑ups
+/// Implements [`TileSourceTrait`] by performing *short‑circuit* look‑ups
 /// across multiple sources.
 ///
 /// The struct keeps only metadata (`TileJSON`, `TilesReaderParameters`) in
@@ -44,16 +45,16 @@ struct Args {
 /// contains them.
 struct Operation {
 	parameters: TilesReaderParameters,
-	sources: Vec<Box<dyn OperationTrait>>,
+	sources: Vec<Box<dyn TileSourceTrait>>,
 	tilejson: TileJSON,
 	traversal: Traversal,
 }
 
-impl ReadOperationTrait for Operation {
+impl ReadTileSourceTrait for Operation {
 	#[context("Failed to build from_stacked operation")]
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSourceTrait>>
 	where
-		Self: Sized + OperationTrait,
+		Self: Sized + TileSourceTrait,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let sources = join_all(args.sources.into_iter().map(|c| factory.build_pipeline(c)))
@@ -61,13 +62,13 @@ impl ReadOperationTrait for Operation {
 			.into_iter()
 			.collect::<Result<Vec<_>>>()?;
 
-		Ok(Box::new(Operation::new(sources)?) as Box<dyn OperationTrait>)
+		Ok(Box::new(Operation::new(sources)?) as Box<dyn TileSourceTrait>)
 	}
 }
 
 impl Operation {
 	#[context("Failed to create from_stacked operation")]
-	fn new(sources: Vec<Box<dyn OperationTrait>>) -> Result<Operation> {
+	fn new(sources: Vec<Box<dyn TileSourceTrait>>) -> Result<Operation> {
 		ensure!(sources.len() > 1, "must have at least two sources");
 
 		let mut tilejson = TileJSON::default();
@@ -105,7 +106,7 @@ impl Operation {
 }
 
 #[async_trait]
-impl OperationTrait for Operation {
+impl TileSourceTrait for Operation {
 	/// Reader parameters (format, compression, pyramid) for the overlay result.
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
@@ -120,9 +121,14 @@ impl OperationTrait for Operation {
 		&self.traversal
 	}
 
+	fn source_type(&self) -> Arc<SourceType> {
+		let source_types: Vec<Arc<SourceType>> = self.sources.iter().map(|s| s.source_type()).collect();
+		SourceType::new_composite("from_stacked", &source_types)
+	}
+
 	/// Stream packed tiles intersecting `bbox` using the overlay strategy.
 	#[context("Failed to get stacked tile stream for bbox: {:?}", bbox)]
-	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox);
 		// We need the desired output compression inside the closure, so copy it.
 		let format = self.parameters.tile_format;
@@ -144,7 +150,7 @@ impl OperationTrait for Operation {
 						continue;
 					}
 
-					let stream = source.get_stream(bbox_left).await.unwrap();
+					let stream = source.get_tile_stream(bbox_left).await.unwrap();
 					stream
 						.for_each_sync(|(coord, mut tile)| {
 							let entry = tiles.get_mut(&coord).unwrap();
@@ -178,7 +184,7 @@ impl OperationFactoryTrait for Factory {
 
 #[async_trait]
 impl ReadOperationFactoryTrait for Factory {
-	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn OperationTrait>> {
+	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSourceTrait>> {
 		Operation::build(vpl_node, factory).await
 	}
 }
@@ -299,7 +305,7 @@ mod tests {
 
 		let bbox = TileBBox::new_full(3)?;
 
-		let tiles = result.get_stream(bbox).await?.to_vec().await;
+		let tiles = result.get_tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(arrange_tiles(tiles, check_vector), *RESULT_PATTERN);
 
 		Ok(())
@@ -322,7 +328,7 @@ mod tests {
 
 		let bbox = TileBBox::new_full(3)?;
 
-		let tiles = result.get_stream(bbox).await?.to_vec().await;
+		let tiles = result.get_tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(arrange_tiles(tiles, check_image), *RESULT_PATTERN);
 
 		Ok(())

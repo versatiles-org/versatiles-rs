@@ -237,8 +237,9 @@ impl TileSourceTrait for DirectoryTilesReader {
 		&self.parameters
 	}
 
-	fn override_compression(&mut self, tile_compression: TileCompression) {
+	fn override_compression(&mut self, tile_compression: TileCompression) -> Result<()> {
 		self.parameters.tile_compression = tile_compression;
+		Ok(())
 	}
 
 	fn tilejson(&self) -> &TileJSON {
@@ -260,6 +261,10 @@ impl TileSourceTrait for DirectoryTilesReader {
 		} else {
 			Ok(None)
 		}
+	}
+
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		self.stream_individual_tiles(bbox).await
 	}
 }
 
@@ -465,7 +470,7 @@ mod tests {
 		);
 
 		assert_eq!(reader.parameters().tile_compression, TileCompression::Brotli);
-		reader.override_compression(TileCompression::Gzip);
+		reader.override_compression(TileCompression::Gzip).unwrap();
 		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
 
 		Ok(())

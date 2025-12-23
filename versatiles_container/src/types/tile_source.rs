@@ -132,7 +132,9 @@ pub trait TileSourceTrait: Debug + Send + Sync + Unpin {
 	///
 	/// Implementors should update their parameters so that [`Self::parameters()`]
 	/// reflects the new compression setting.
-	fn override_compression(&mut self, tile_compression: TileCompression);
+	fn override_compression(&mut self, _tile_compression: TileCompression) -> Result<()> {
+		anyhow::bail!("override_compression is not implemented for this source");
+	}
 
 	/// Fetches a single tile at the given coordinate.
 	///
@@ -140,7 +142,11 @@ pub trait TileSourceTrait: Debug + Send + Sync + Unpin {
 	/// - `Ok(Some(tile))` if the tile exists
 	/// - `Ok(None)` for gaps or empty tiles
 	/// - `Err(_)` on read/processing errors
-	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>>;
+	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+		let bbox = coord.to_tile_bbox();
+		let mut stream = self.get_tile_stream(bbox).await?;
+		Ok(stream.next().await.map(|(_, t)| t))
+	}
 
 	/// Asynchronously streams all tiles within the given bounding box.
 	///
@@ -149,21 +155,13 @@ pub trait TileSourceTrait: Debug + Send + Sync + Unpin {
 	///
 	/// Default implementation wraps individual `get_tile` calls with internal synchronization.
 	/// Sources that can optimize bulk reads should override this.
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		let mutex = Arc::new(Mutex::new(self));
-		let coords: Vec<TileCoord> = bbox.iter_coords().collect();
-		Ok(TileStream::from_coord_vec_async(coords, move |coord| {
-			let mutex = mutex.clone();
-			async move {
-				mutex
-					.lock()
-					.await
-					.get_tile(&coord)
-					.await
-					.map(|blob_option| blob_option.map(|blob| (coord, blob)))
-					.unwrap_or(None)
-			}
-		}))
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>>;
+
+	async fn stream_individual_tiles(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		Ok(TileStream::from_coord_vec_async(
+			bbox.into_iter_coords().collect(),
+			async move |c| self.get_tile(&c).await.ok().flatten().map(|t| (c, t)),
+		))
 	}
 
 	/// Performs a hierarchical CLI probe at the specified depth.
@@ -439,20 +437,25 @@ mod tests {
 			&self.parameters
 		}
 
-		fn override_compression(&mut self, tile_compression: TileCompression) {
+		fn override_compression(&mut self, tile_compression: TileCompression) -> Result<()> {
 			self.parameters.tile_compression = tile_compression;
+			Ok(())
 		}
 
 		fn tilejson(&self) -> &TileJSON {
 			&self.tilejson
 		}
 
-		async fn get_tile(&self, _coord: &TileCoord) -> Result<Option<Tile>> {
-			Ok(Some(Tile::from_blob(
-				Blob::from("test tile data"),
-				self.parameters.tile_compression,
-				self.parameters.tile_format,
-			)))
+		async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+			let tile_compression = self.parameters.tile_compression;
+			let tile_format = self.parameters.tile_format;
+			Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {
+				Some(Tile::from_blob(
+					Blob::from("test tile data"),
+					tile_compression,
+					tile_format,
+				))
+			}))
 		}
 	}
 
@@ -471,7 +474,7 @@ mod tests {
 		let mut reader = TestReader::new_dummy();
 		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
 
-		reader.override_compression(TileCompression::Brotli);
+		reader.override_compression(TileCompression::Brotli).unwrap();
 		assert_eq!(reader.parameters().tile_compression, TileCompression::Brotli);
 	}
 
