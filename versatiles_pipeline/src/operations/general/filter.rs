@@ -161,7 +161,7 @@ mod tests {
 			for x in 0..max_xy {
 				for y in 0..max_xy {
 					let coord = TileCoord::new(level, x, y)?;
-					let count = op.get_stream(coord.as_tile_bbox()).await?.to_vec().await.len();
+					let count = op.get_stream(coord.to_tile_bbox()).await?.to_vec().await.len();
 					if set.contains(&(level, x, y)) {
 						assert!(count == 1, "Expected one tile for {coord:?}, found {count}");
 					} else {
@@ -191,7 +191,7 @@ mod tests {
 
 		for z in 0..=6 {
 			let coord = TileCoord::new(z, 0, 0)?;
-			let n = op.get_stream(coord.as_tile_bbox()).await?.to_vec().await.len();
+			let n = op.get_stream(coord.to_tile_bbox()).await?.to_vec().await.len();
 			assert_eq!(n == 1, (3..=4).contains(&z), "z={z}");
 		}
 		Ok(())
@@ -232,12 +232,12 @@ mod tests {
 		assert_eq!(o.get_number("maxzoom")?.unwrap(), 25.0);
 
 		// Sanity: tiles outside the final bbox shouldn’t pass
-		let outside = TileCoord::new(4, 0, 0)?.as_tile_bbox();
+		let outside = TileCoord::new(4, 0, 0)?.to_tile_bbox();
 		let n_out = op.get_stream(outside).await?.to_vec().await.len();
 		assert_eq!(n_out, 0);
 
 		// Inside tile at z=4 should pass
-		let inside = TileCoord::new(4, 8, 7)?.as_tile_bbox(); // somewhere within [10,5,40,20]
+		let inside = TileCoord::new(4, 8, 7)?.to_tile_bbox(); // somewhere within [10,5,40,20]
 		let n_in = op.get_stream(inside).await?.to_vec().await.len();
 		assert_eq!(n_in, 1);
 

@@ -105,11 +105,11 @@ mod tests {
 			.operation_from_vpl("from_debug format=png | raster_flatten color=[255,127,0]")
 			.await?;
 
-		let bbox = TileCoord::new(2, 1, 1)?.as_tile_bbox();
+		let bbox = TileCoord::new(2, 1, 1)?.to_tile_bbox();
 		let image = op.get_stream(bbox).await?.next().await.unwrap().1.into_image()?;
 		assert_eq!(image.average_color(), [238, 119, 0]);
 
-		let bbox = TileCoord::new(2, 2, 1)?.as_tile_bbox();
+		let bbox = TileCoord::new(2, 2, 1)?.to_tile_bbox();
 		let image = op.get_stream(bbox).await?.next().await.unwrap().1.into_image()?;
 		assert_eq!(image.average_color(), [254, 135, 16]);
 

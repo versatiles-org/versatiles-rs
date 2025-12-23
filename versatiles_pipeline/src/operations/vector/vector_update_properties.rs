@@ -263,7 +263,7 @@ mod tests {
 
 		// ── extract a single feature for inspection ────────────────
 		let mut stream = operation
-			.get_stream(TileCoord::new(10, 1000, 100)?.as_tile_bbox())
+			.get_stream(TileCoord::new(10, 1000, 100)?.to_tile_bbox())
 			.await?;
 		let tile = stream.next().await.unwrap().1.into_vector()?;
 		let layer = tile.find_layer("debug_y").unwrap();

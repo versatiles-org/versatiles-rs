@@ -96,7 +96,7 @@ impl TileCoord {
 	/// Return the geographic bounding box of this tile as `[west, south, east, north]`.
 	#[must_use]
 	pub fn to_geo_bbox(&self) -> GeoBBox {
-		self.as_tile_bbox().to_geo_bbox().unwrap()
+		self.to_tile_bbox().to_geo_bbox().unwrap()
 	}
 
 	/// Serialize this coordinate to a compact JSON-like string `{x:…,y:…,z:…}`.
@@ -127,7 +127,7 @@ impl TileCoord {
 	///
 	/// # Errors
 	/// Returns an error if bounding coordinates overflow.
-	pub fn as_tile_bbox(&self) -> TileBBox {
+	pub fn to_tile_bbox(&self) -> TileBBox {
 		TileBBox::from_min_and_size(self.level, self.x, self.y, 1, 1).unwrap()
 	}
 
@@ -312,7 +312,7 @@ mod tests {
 	fn tilecoord_as_tile_bbox_and_as_level() {
 		let coord = TileCoord::new(3, 1, 2).unwrap();
 		// as_tile_bbox with tile_size=4: x..x+3, y..y+3
-		let bbox = coord.as_tile_bbox();
+		let bbox = coord.to_tile_bbox();
 		assert_eq!(bbox, TileBBox::from_min_and_max(3, 1, 2, 1, 2).unwrap());
 		// as_level upscales and downscales correctly
 		let up = coord.at_level(5);

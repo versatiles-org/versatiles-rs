@@ -103,7 +103,7 @@ mod tests {
 		// Add once via coord
 		outline.add_coord(coord);
 		// Add again via its TileBBox (same area)
-		let bbox = coord.as_tile_bbox();
+		let bbox = coord.to_tile_bbox();
 		outline.add_tile_bbox(bbox);
 		let mp = outline.to_multi_polygon();
 		assert_eq!(

@@ -142,7 +142,7 @@ impl Operation {
 			}
 
 			// 2. Try to fetch from source
-			let bbox = coord_src.as_tile_bbox();
+			let bbox = coord_src.to_tile_bbox();
 			let mut stream = self.source.as_ref().get_stream(bbox).await?;
 
 			if let Some((found_coord, tile)) = stream.next().await
@@ -290,7 +290,7 @@ mod tests {
 
 	async fn get_avg(op: &Operation, coord: (u8, u8, u8), scale: u32) -> Vec<u8> {
 		let (level, x, y) = coord;
-		let coord = TileCoord::new(level, x as u32, y as u32).unwrap().as_tile_bbox();
+		let coord = TileCoord::new(level, x as u32, y as u32).unwrap().to_tile_bbox();
 		let mut tiles = op.get_stream(coord).await.unwrap().to_vec().await;
 		assert_eq!(tiles.len(), 1);
 		let mut tile = tiles.pop().unwrap().1;

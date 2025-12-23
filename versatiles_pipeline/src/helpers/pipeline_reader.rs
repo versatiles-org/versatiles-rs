@@ -128,7 +128,7 @@ impl TilesReaderTrait for PipelineReader {
 	/// are produced (pipelines must emit at most one tile per coordinate).
 	#[context("getting tile {:?} via pipeline '{}'", coord, self.name)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		let mut vec = self.operation.get_stream(coord.as_tile_bbox()).await?.to_vec().await;
+		let mut vec = self.operation.get_stream(coord.to_tile_bbox()).await?.to_vec().await;
 
 		ensure!(vec.len() <= 1, "PipelineReader should return at most one tile");
 

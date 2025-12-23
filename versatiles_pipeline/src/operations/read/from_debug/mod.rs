@@ -150,7 +150,7 @@ mod tests {
 
 		let coord = TileCoord { x: 1, y: 2, level: 3 };
 		let tile = operation
-			.get_stream(coord.as_tile_bbox())
+			.get_stream(coord.to_tile_bbox())
 			.await?
 			.next()
 			.await
