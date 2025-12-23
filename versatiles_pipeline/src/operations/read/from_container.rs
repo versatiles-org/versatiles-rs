@@ -2,7 +2,7 @@
 //!
 //! This module defines an [`Operation`] that streams tiles out of a **single
 //! tile container** (e.g. `*.versatiles`, MBTiles, PMTiles, TAR bundles).
-//! It adapts the container’s [`TilesReaderTrait`] interface to
+//! It adapts the container’s [`TileSourceTrait`] interface to
 //! [`OperationTrait`] so that the rest of the pipeline can treat it like any
 //! other data source.
 
@@ -10,7 +10,7 @@ use crate::{PipelineFactory, operations::read::traits::ReadOperationTrait, trait
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
-use versatiles_container::{Tile, TilesReaderTrait};
+use versatiles_container::{Tile, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -24,12 +24,12 @@ struct Args {
 
 #[derive(Debug)]
 /// Concrete [`OperationTrait`] that merely forwards every request to an
-/// underlying container [`TilesReaderTrait`].  A cached copy of the
+/// underlying container [`TileSourceTrait`].  A cached copy of the
 /// container’s [`TileJSON`] metadata is kept so downstream stages can query
 /// bounds and zoom levels without touching the reader again.
 struct Operation {
 	parameters: TilesReaderParameters,
-	reader: Box<dyn TilesReaderTrait>,
+	reader: Box<dyn TileSourceTrait>,
 	tilejson: TileJSON,
 }
 
@@ -72,7 +72,7 @@ impl OperationTrait for Operation {
 	}
 
 	/// Stream raw tile blobs intersecting the bounding box by delegating to
-	/// `TilesReaderTrait::get_tile_stream`.
+	/// `TileSourceTrait::get_tile_stream`.
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
 	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("getstream {:?}", bbox);
@@ -99,7 +99,7 @@ impl ReadOperationFactoryTrait for Factory {
 }
 
 #[cfg(test)]
-pub fn operation_from_reader(reader: Box<dyn TilesReaderTrait>) -> Box<dyn OperationTrait> {
+pub fn operation_from_reader(reader: Box<dyn TileSourceTrait>) -> Box<dyn OperationTrait> {
 	let parameters = reader.parameters().clone();
 	let mut tilejson = reader.tilejson().clone();
 	tilejson.update_from_reader_parameters(&parameters);

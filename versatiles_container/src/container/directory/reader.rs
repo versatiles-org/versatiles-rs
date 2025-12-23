@@ -40,7 +40,7 @@
 //! ## Errors
 //! Errors are returned if the directory is not absolute, does not exist, is not a directory, contains no tiles, or if tiles have inconsistent formats or compressions.
 
-use crate::{Tile, TilesReaderTrait};
+use crate::{SourceType, Tile, TileSourceTrait};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use itertools::Itertools;
@@ -221,15 +221,19 @@ impl DirectoryTilesReader {
 	}
 }
 
-/// Implements the `TilesReaderTrait` for `DirectoryTilesReader`.
+/// Implements the `TileSourceTrait` for `DirectoryTilesReader`.
 ///
 /// Provides the container name ("directory"), access to tile reading parameters,
 /// ability to override the tile compression, access to TileJSON metadata,
 /// and asynchronous fetching of tile data by coordinate.
 #[async_trait]
-impl TilesReaderTrait for DirectoryTilesReader {
+impl TileSourceTrait for DirectoryTilesReader {
 	fn container_name(&self) -> &str {
 		"directory"
+	}
+
+	fn source_type(&self) -> SourceType {
+		SourceType::Container
 	}
 
 	fn parameters(&self) -> &TilesReaderParameters {

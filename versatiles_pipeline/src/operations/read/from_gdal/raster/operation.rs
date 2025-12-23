@@ -2,7 +2,7 @@
 //!
 //! This module defines an [`Operation`] that streams tiles out of a **single
 //! tile container** (e.g. `*.versatiles`, MBTiles, PMTiles, TAR bundles).
-//! It adapts the container’s [`TilesReaderTrait`] interface to
+//! It adapts the container’s [`TileSourceTrait`] interface to
 //! [`OperationTrait`] so that the rest of the pipeline can treat it like any
 //! other data source.
 
@@ -43,7 +43,7 @@ struct Args {
 
 #[derive(Debug)]
 /// Concrete [`OperationTrait`] that merely forwards every request to an
-/// underlying container [`TilesReaderTrait`].  A cached copy of the
+/// underlying container [`TileSourceTrait`].  A cached copy of the
 /// container’s [`TileJSON`] metadata is kept so downstream stages can query
 /// bounds and zoom levels without touching the reader again.
 struct Operation {

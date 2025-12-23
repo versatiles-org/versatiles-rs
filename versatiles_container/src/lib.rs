@@ -41,7 +41,7 @@
 //!
 //! ## See also
 //! - [`ContainerRegistry`]: register custom reader/writer implementations at runtime
-//! - [`TilesReaderTrait`], [`TilesWriterTrait`]: object‑safe traits for IO
+//! - [`TileSourceTrait`], [`TilesWriterTrait`]: object‑safe traits for IO
 //! - [`TilesConvertReader`], [`convert_tiles_container`]: convenience conversion helpers
 
 pub mod cache;

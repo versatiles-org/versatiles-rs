@@ -24,22 +24,22 @@ use std::{
 	path::{Path, PathBuf},
 	vec,
 };
-use versatiles_container::{TilesReaderTrait, TilesRuntime};
+use versatiles_container::{TileSourceTrait, TilesRuntime};
 use versatiles_core::{TileFormat, TileType};
 use versatiles_derive::context;
 
-/// Callback used to resolve a filename/URL into a concrete [`TilesReaderTrait`].
+/// Callback used to resolve a filename/URL into a concrete [`TileSourceTrait`].
 ///
 /// The factory invokes this to open external containers referenced by VPL `read` nodes.
 /// It receives the resolved path (relative to `dir`) and returns a boxed reader.
-type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesReaderTrait>>>>;
+type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TileSourceTrait>>>>;
 
 /// Builder that registers read/transform operation factories and produces an operation graph.
 ///
 /// `PipelineFactory` maintains:
 /// - `read_ops` and `tran_ops`: registries keyed by VPL tag name.
 /// - `dir`: base directory used to resolve relative filenames.
-/// - `create_reader`: callback to open external containers as [`TilesReaderTrait`].
+/// - `create_reader`: callback to open external containers as [`TileSourceTrait`].
 /// - `runtime`: runtime configuration forwarded to operations.
 pub struct PipelineFactory {
 	read_ops: HashMap<String, Box<dyn ReadOperationFactoryTrait>>,
@@ -82,7 +82,7 @@ impl PipelineFactory {
 	/// raster sources to `DummyImageSource` based on the filename’s extension/color code.
 	pub fn new_dummy() -> Self {
 		PipelineFactory::new_dummy_reader(Box::new(
-			|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
+			|filename: String| -> BoxFuture<Result<Box<dyn TileSourceTrait>>> {
 				Box::pin(async move {
 					let mut name = filename.clone();
 					let format = TileFormat::from_filename(&mut name)
@@ -92,7 +92,7 @@ impl PipelineFactory {
 						TileType::Vector => Box::new(DummyVectorSource::new(
 							&[("dummy", &[&[("filename", &filename)]])],
 							None,
-						)) as Box<dyn TilesReaderTrait>,
+						)) as Box<dyn TileSourceTrait>,
 						TileType::Raster => {
 							let color = if !name.is_empty() && name.len() <= 4 {
 								name
@@ -103,7 +103,7 @@ impl PipelineFactory {
 								vec![50, 150, 250]
 							};
 							Box::new(DummyImageSource::from_color(&color, 4, format, None).unwrap())
-								as Box<dyn TilesReaderTrait>
+								as Box<dyn TileSourceTrait>
 						}
 						_ => bail!("unsupported tile type for dummy reader in filename '{filename}'"),
 					})
@@ -129,7 +129,7 @@ impl PipelineFactory {
 
 	/// Resolves `filename` relative to `dir` and invokes `create_reader` to open a container.
 	#[context("Failed to get reader for file '{}'", filename)]
-	pub async fn get_reader(&self, filename: &str) -> Result<Box<dyn TilesReaderTrait>> {
+	pub async fn get_reader(&self, filename: &str) -> Result<Box<dyn TileSourceTrait>> {
 		(self.create_reader.as_ref())(self.dir.join(filename).to_string_lossy().to_string()).await
 	}
 

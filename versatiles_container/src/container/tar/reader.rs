@@ -31,7 +31,7 @@
 //! Returns errors when the tar cannot be opened or read, when no tiles are found,
 //! or when mixed formats/compressions are detected.
 
-use crate::{Tile, TilesReaderTrait};
+use crate::{SourceType, Tile, TileSourceTrait};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path};
@@ -43,7 +43,7 @@ use versatiles_derive::context;
 ///
 /// Merges TileJSON from recognized metadata files, builds a map from `{z,x,y}` to
 /// byte ranges within the archive, infers uniform format/compression, and exposes
-/// tiles via [`TilesReaderTrait`].
+/// tiles via [`TileSourceTrait`].
 pub struct TarTilesReader {
 	tilejson: TileJSON,
 	name: String,
@@ -190,10 +190,14 @@ impl TarTilesReader {
 }
 
 #[async_trait]
-impl TilesReaderTrait for TarTilesReader {
+impl TileSourceTrait for TarTilesReader {
 	/// Returns the container name.
 	fn container_name(&self) -> &str {
 		"tar"
+	}
+
+	fn source_type(&self) -> SourceType {
+		SourceType::Container
 	}
 
 	/// Returns the parameters of the tiles reader.
@@ -325,14 +329,14 @@ pub mod tests {
 		reader.probe_container(&printer.get_category("container").await).await?;
 		assert_eq!(
 			printer.as_string().await,
-			"container:\n  deep container probing is not implemented for this container format\n"
+			"container:\n  deep container probing is not implemented for this source\n"
 		);
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_tiles(&printer.get_category("tiles").await).await?;
 		assert_eq!(
 			printer.as_string().await,
-			"tiles:\n  deep tiles probing is not implemented for this container format\n"
+			"tiles:\n  deep tiles probing is not implemented for this source\n"
 		);
 
 		Ok(())

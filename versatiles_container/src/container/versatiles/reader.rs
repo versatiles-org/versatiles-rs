@@ -3,7 +3,7 @@
 //! Read tiles and metadata from a `.versatiles` container.
 //!
 //! The `VersaTilesReader` parses the container header, decompresses the **block index**,
-//! reads embedded TileJSON metadata, and exposes tiles via [`TilesReaderTrait`]. The
+//! reads embedded TileJSON metadata, and exposes tiles via [`TileSourceTrait`]. The
 //! file format organizes data into fixed **256×256 tile blocks**; each block stores
 //! a Brotli-compressed tile index (byte ranges), followed by a contiguous region of
 //! tile blobs. This reader lazily caches decoded tile indices for fast random access.
@@ -55,7 +55,7 @@
 //! or when a requested tile is missing.
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
-use crate::{Tile, TilesReaderTrait, TilesRuntime};
+use crate::{SourceType, Tile, TileSourceTrait, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{lock::Mutex, stream::StreamExt};
@@ -298,13 +298,17 @@ impl Chunk {
 }
 
 #[async_trait]
-/// [`TilesReaderTrait`] implementation — provides `container_name`, `parameters`, `tilejson`,
+/// [`TileSourceTrait`] implementation — provides `container_name`, `parameters`, `tilejson`,
 /// on-the-fly `override_compression`, single-tile fetch via `get_tile`, and bbox streaming via
 /// `get_tile_stream` (with internal read coalescing).
-impl TilesReaderTrait for VersaTilesReader {
+impl TileSourceTrait for VersaTilesReader {
 	/// Gets the container name.
 	fn container_name(&self) -> &str {
 		"versatiles"
+	}
+
+	fn source_type(&self) -> SourceType {
+		SourceType::Container
 	}
 
 	fn tilejson(&self) -> &TileJSON {

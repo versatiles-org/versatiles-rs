@@ -1,15 +1,15 @@
 use super::PipelineReader;
-use versatiles_container::{ContainerRegistry, TilesReaderTrait};
+use versatiles_container::{ContainerRegistry, TileSourceTrait};
 
 pub fn register_pipeline_readers(registry: &mut ContainerRegistry) {
 	registry.register_reader_file("vpl", |p, r| async move {
-		Ok(Box::new(PipelineReader::open_path(&p, r).await?) as Box<dyn TilesReaderTrait>)
+		Ok(Box::new(PipelineReader::open_path(&p, r).await?) as Box<dyn TileSourceTrait>)
 	});
 
 	registry.register_reader_data("vpl", |p, r| async move {
 		Ok(
 			Box::new(PipelineReader::open_reader(p, &std::env::current_dir().unwrap(), r).await?)
-				as Box<dyn TilesReaderTrait>,
+				as Box<dyn TileSourceTrait>,
 		)
 	});
 }

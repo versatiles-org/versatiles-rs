@@ -1,7 +1,7 @@
 //! Write tiles and metadata into a PMTiles v3 container.
 //!
 //! The `PMTilesWriter` produces a valid [PMTiles v3](https://github.com/protomaps/PMTiles) archive
-//! from any [`TilesReaderTrait`] source. It serializes tile data, compresses metadata and directories,
+//! from any [`TileSourceTrait`] source. It serializes tile data, compresses metadata and directories,
 //! and builds a compact Hilbert-ordered directory layout.
 //!
 //! ## Behavior
@@ -12,7 +12,7 @@
 //!
 //! ## Requirements
 //! - The writer must output to a valid [`DataWriterTrait`] target (e.g. file, blob, memory).
-//! - The input [`TilesReaderTrait`] must provide consistent `tile_format` and `tile_compression`.
+//! - The input [`TileSourceTrait`] must provide consistent `tile_format` and `tile_compression`.
 //!
 //! ## Example
 //! ```rust,no_run
@@ -40,7 +40,7 @@
 //! Returns errors if writing, compression, or serialization fails.
 
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression};
-use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait};
+use crate::{TileSourceTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -55,7 +55,7 @@ use versatiles_derive::context;
 
 /// Writer for PMTiles v3 archives.
 ///
-/// Converts a [`TilesReaderTrait`] source into a single PMTiles container by serializing
+/// Converts a [`TileSourceTrait`] source into a single PMTiles container by serializing
 /// tiles, compressing metadata, generating directory entries, and writing a final header
 /// with offsets and counts.
 ///
@@ -65,7 +65,7 @@ pub struct PMTilesWriter {}
 #[async_trait]
 impl TilesWriterTrait for PMTilesWriter {
 	#[context("writing PMTiles to DataWriter")]
-	/// Write tiles and metadata from a [`TilesReaderTrait`] to a [`DataWriterTrait`] as a PMTiles archive.
+	/// Write tiles and metadata from a [`TileSourceTrait`] to a [`DataWriterTrait`] as a PMTiles archive.
 	///
 	/// This method:
 	/// - Compresses metadata and directories with gzip (`INTERNAL_COMPRESSION`).
@@ -76,7 +76,7 @@ impl TilesWriterTrait for PMTilesWriter {
 	/// # Errors
 	/// Returns an error if any I/O, compression, or serialization operation fails.
 	async fn write_to_writer(
-		reader: &mut dyn TilesReaderTrait,
+		reader: &mut dyn TileSourceTrait,
 		writer: &mut dyn DataWriterTrait,
 		runtime: TilesRuntime,
 	) -> Result<()> {

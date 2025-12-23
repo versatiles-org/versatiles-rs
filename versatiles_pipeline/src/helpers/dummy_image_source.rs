@@ -3,7 +3,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use std::sync::Arc;
-use versatiles_container::{Tile, TilesReaderTrait};
+use versatiles_container::{SourceType, Tile, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -68,9 +68,13 @@ impl DummyImageSource {
 }
 
 #[async_trait]
-impl TilesReaderTrait for DummyImageSource {
+impl TileSourceTrait for DummyImageSource {
 	fn source_name(&self) -> &str {
 		"DummyImageSource"
+	}
+
+	fn source_type(&self) -> SourceType {
+		SourceType::Container
 	}
 
 	fn container_name(&self) -> &str {

@@ -43,7 +43,7 @@
 //! }
 //! ```
 
-use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait};
+use crate::{TileSourceTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -144,7 +144,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	/// Returns an error if writing fails, if an unsupported format/compression is used,
 	/// or if database insertion encounters an error.
 	#[context("writing MBTiles to '{}'", path.display())]
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, runtime: TilesRuntime) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TileSourceTrait, path: &Path, runtime: TilesRuntime) -> Result<()> {
 		use TileCompression::*;
 		use TileFormat::*;
 
@@ -227,7 +227,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	/// Always returns `not implemented`.
 	#[context("writing MBTiles to generic writer")]
 	async fn write_to_writer(
-		_reader: &mut dyn TilesReaderTrait,
+		_reader: &mut dyn TileSourceTrait,
 		_writer: &mut dyn DataWriterTrait,
 		_runtime: TilesRuntime,
 	) -> Result<()> {

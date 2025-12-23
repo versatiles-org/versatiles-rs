@@ -210,7 +210,7 @@ mod tests {
 	use futures::future::BoxFuture;
 	use imageproc::image::GenericImage;
 	use pretty_assertions::assert_eq;
-	use versatiles_container::TilesReaderTrait;
+	use versatiles_container::TileSourceTrait;
 	use versatiles_core::TileCompression::Uncompressed;
 	use versatiles_image::DynamicImage;
 
@@ -324,7 +324,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_operation_parameters() -> Result<()> {
 		let factory = PipelineFactory::new_dummy_reader(Box::new(
-			|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
+			|filename: String| -> BoxFuture<Result<Box<dyn TileSourceTrait>>> {
 				Box::pin(async move {
 					let mut pyramide = TileBBoxPyramid::new_empty();
 					for c in filename[0..filename.len() - 4].chars() {
@@ -332,7 +332,7 @@ mod tests {
 					}
 					Ok(
 						Box::new(DummyImageSource::from_color(&[0, 0, 0], 4, TileFormat::PNG, Some(pyramide)).unwrap())
-							as Box<dyn TilesReaderTrait>,
+							as Box<dyn TileSourceTrait>,
 					)
 				})
 			},

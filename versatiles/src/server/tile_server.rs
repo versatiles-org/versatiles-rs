@@ -29,7 +29,7 @@ use tower::{
 };
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
-use versatiles_container::{TilesReaderTrait, TilesRuntime};
+use versatiles_container::{TileSourceTrait, TilesRuntime};
 use versatiles_derive::context;
 
 /// Thin orchestration layer for the VersaTiles HTTP server.
@@ -161,7 +161,7 @@ impl TileServer {
 	/// Returns error if a source with this name already exists or if URL prefix collides.
 	/// Can be called before or after `start()` - changes take effect immediately.
 	#[context("adding tile source: id='{name}'")]
-	pub async fn add_tile_source(&mut self, name: String, reader: Box<dyn TilesReaderTrait>) -> Result<()> {
+	pub async fn add_tile_source(&mut self, name: String, reader: Box<dyn TileSourceTrait>) -> Result<()> {
 		log::debug!("add source: id='{name}', source={reader:?}");
 
 		// Create TileSource (validates and wraps reader)

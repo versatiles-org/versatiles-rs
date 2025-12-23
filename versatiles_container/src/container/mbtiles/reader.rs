@@ -50,7 +50,7 @@
 //! - Returns errors if the database is unreadable, the `format` is missing/unknown,
 //!   or queries fail.
 
-use crate::{Tile, TilesReaderTrait, TilesRuntime};
+use crate::{SourceType, Tile, TileSourceTrait, TilesRuntime};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use r2d2::Pool;
@@ -63,7 +63,7 @@ use versatiles_derive::context;
 ///
 /// Opens a SQLite database with `metadata` and `tiles` tables, merges metadata into
 /// [`TileJSON`], infers a bounding-box pyramid by scanning levels/rows/columns, and
-/// exposes tiles via the [`TilesReaderTrait`] interface.
+/// exposes tiles via the [`TileSourceTrait`] interface.
 pub struct MBTilesReader {
 	name: String,
 	pool: Pool<SqliteConnectionManager>,
@@ -302,9 +302,13 @@ impl MBTilesReader {
 }
 
 #[async_trait]
-impl TilesReaderTrait for MBTilesReader {
+impl TileSourceTrait for MBTilesReader {
 	fn container_name(&self) -> &str {
 		"mbtiles"
+	}
+
+	fn source_type(&self) -> SourceType {
+		SourceType::Container
 	}
 
 	/// Return the TileJSON metadata view for this dataset.
@@ -491,14 +495,14 @@ pub mod tests {
 		reader.probe_container(&printer.get_category("container").await).await?;
 		assert_eq!(
 			printer.as_string().await,
-			"container:\n  deep container probing is not implemented for this container format\n"
+			"container:\n  deep container probing is not implemented for this source\n"
 		);
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_tiles(&printer.get_category("tiles").await).await?;
 		assert_eq!(
 			printer.as_string().await,
-			"tiles:\n  deep tiles probing is not implemented for this container format\n"
+			"tiles:\n  deep tiles probing is not implemented for this source\n"
 		);
 
 		Ok(())

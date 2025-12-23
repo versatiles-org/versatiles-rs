@@ -1,32 +1,20 @@
-//! Read and probe tile data from various container formats in a streaming-friendly way.
+//! Unified interface for tile sources (readers and processors).
 //!
-//! This module defines the object‑safe [`TilesReaderTrait`], which exposes:
-//! - Lightweight metadata access (`source_name`, `container_name`, [`tilejson`])
-//! - Runtime parameters and formats via [`parameters`]
-//! - Random access to individual tiles (`get_tile`)
-//! - Async streaming over regions via [`get_tile_stream`]
-//! - An optional CLI probing interface (behind the `cli` feature)
+//! This module defines [`TileSourceTrait`], the common interface for anything that produces tiles,
+//! whether reading from physical containers or processing/transforming tiles from upstream sources.
 //!
-//! ### Object safety & adapters
-//! The trait is intentionally object‑safe so readers can be stored behind `Box<dyn TilesReaderTrait>`
-//! and composed at runtime (e.g., converter/filters). For traversal that requires higher‑rank trait bounds
-//! (HRTBs), see [`TilesReaderTraverseExt`], which keeps the base trait object‑safe.
+//! ## Design Philosophy
 //!
-//! ### Example: stream tiles from a bbox
-//! ```rust
-//! # use versatiles_container::*;
-//! # use versatiles_core::*;
-//! # async fn demo() -> anyhow::Result<()> {
-//! let runtime = TilesRuntime::default();
-//! let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
-//! let bbox = TileBBox::from_min_and_max(1, 0, 0, 1, 1)?;
-//! let mut stream = reader.get_tile_stream(bbox).await?;
-//! // drain tiles
-//! let count = stream.drain_and_count().await;
-//! # assert!(count > 0);
-//! # Ok(())
-//! # }
-//! ```
+//! Both container readers (e.g., MBTiles, VersaTiles) and tile processors (e.g., filters, format converters)
+//! share the same fundamental operations:
+//! - Provide metadata (TileJSON, parameters)
+//! - Stream tiles from a bounding box
+//! - Support runtime composition
+//!
+//! By unifying these under a single trait, we enable:
+//! - Seamless composition of readers and processors
+//! - Type-safe pipeline construction
+//! - Clear separation between data sources and transformations
 
 use crate::{CacheMap, Tile, TilesRuntime};
 use anyhow::Result;
@@ -41,54 +29,101 @@ use versatiles_core::{
 	TraversalTranslationStep, translate_traversals,
 };
 
-/// Object‑safe interface for reading tiles from a container.
+/// Distinguishes between different tile source types.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SourceType {
+	/// Physical container format (e.g., "mbtiles", "versatiles", "pmtiles", "tar", "directory")
+	Container,
+	/// Tile processor/transformer (e.g., "filter", "raster_format", "converter")
+	Processor,
+	/// Composite source combining multiple upstream sources (e.g., "stacked", "merged")
+	Composite,
+	Pipeline,
+}
+
+impl SourceType {
+	/// Returns the string representation of this source type
+	pub fn as_str(&self) -> &str {
+		match self {
+			SourceType::Container => "container",
+			SourceType::Processor => "processor",
+			SourceType::Composite => "composite",
+			SourceType::Pipeline => "pipeline",
+		}
+	}
+}
+
+/// Unified object-safe interface for reading or processing tiles.
 ///
-/// Implementors provide access to:
-/// * **Identification**: human‑readable source and container names.
-/// * **Metadata**: [`TileJSON`] and runtime [`TilesReaderParameters`].
-/// * **Access patterns**: single‑tile fetches and async streaming over a [`TileBBox`].
-/// * **Traversal hint**: override [`TilesReaderTrait::traversal`] to advertise a preferred read order; the default is [`Traversal::ANY`].
+/// Implementors include:
+/// * **Container readers**: Read tiles from physical storage (files, databases, archives)
+/// * **Tile processors**: Transform tiles from upstream sources (filtering, format conversion, etc.)
+/// * **Composite sources**: Combine multiple sources (stacking, merging)
 ///
-/// The trait remains object‑safe to support dynamic dispatch and runtime composition.
+/// The trait is object-safe to support dynamic dispatch via `Box<dyn TileSourceTrait>`,
+/// enabling runtime composition of heterogeneous sources and processors.
+///
+/// ## Object Safety & Extension Traits
+///
+/// For operations requiring higher-rank trait bounds (HRTBs), see [`TileSourceTraverseExt`],
+/// which provides advanced traversal while keeping the base trait object-safe.
 #[async_trait]
-pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
-	/// Returns a short, human‑readable identifier for the source (e.g., filename or URI).
+pub trait TileSourceTrait: Debug + Send + Sync + Unpin {
+	/// Returns a human-readable identifier for this source (e.g., filename, URI, or operation name).
 	fn source_name(&self) -> &str;
 
-	/// Returns the container type (e.g., `"mbtiles"`, `"pmtiles"`, `"versatiles"`, `"tar"`, `"dir"`).
+	/// Returns the source type (container format, processor name, or composite).
+	///
+	/// This helps distinguish between:
+	/// - Physical containers: `SourceType::Container("mbtiles")`
+	/// - Tile processors: `SourceType::Processor("filter")`
+	/// - Composite sources: `SourceType::Composite`
+	fn source_type(&self) -> SourceType;
+
+	/// Returns the container type name (e.g., "mbtiles", "versatiles", "filter", "converter").
+	///
+	/// **Deprecated**: Use `source_type()` instead. This method is provided for backward compatibility.
 	fn container_name(&self) -> &str;
 
-	/// Returns runtime reader parameters (bbox pyramid, compression, tile format).
+	/// Returns runtime parameters describing the tiles this source will produce.
 	///
-	/// These values describe what the reader **will** return (e.g., the current compression).
+	/// Includes:
+	/// - `bbox_pyramid`: Spatial extent at each zoom level
+	/// - `tile_compression`: Current output compression
+	/// - `tile_format`: Tile format (PNG, JPG, MVT, etc.)
 	fn parameters(&self) -> &TilesReaderParameters;
 
-	/// Overrides the output compression for subsequent reads.
-	///
-	/// Implementors should update their internal parameters so [`TilesReaderTrait::parameters`].`tile_compression`
-	/// reflects the new setting.
-	fn override_compression(&mut self, tile_compression: TileCompression);
-
-	/// Returns the immutable [`TileJSON`] metadata for this set.
+	/// Returns the TileJSON metadata for this tileset.
 	fn tilejson(&self) -> &TileJSON;
 
-	/// Returns the supported/preferred traversal order (default: [`Traversal::ANY`]).
+	/// Returns the preferred traversal order hint (default: [`Traversal::ANY`]).
 	///
-	/// Override in readers that can more efficiently stream in a specific order.
+	/// Sources that can efficiently stream in a specific order should override this.
 	fn traversal(&self) -> &Traversal {
 		&Traversal::ANY
 	}
 
-	/// Fetches a single tile at `coord`.
+	/// Overrides the output compression for subsequent tile reads.
 	///
-	/// Returns `Ok(Some(tile))` if present, `Ok(None)` for gaps/empty tiles, and `Err(_)` on read errors.
-	/// The tile's compression/format follow the current [`TilesReaderTrait::parameters`].
+	/// Implementors should update their parameters so that [`Self::parameters()`]
+	/// reflects the new compression setting.
+	fn override_compression(&mut self, tile_compression: TileCompression);
+
+	/// Fetches a single tile at the given coordinate.
+	///
+	/// Returns:
+	/// - `Ok(Some(tile))` if the tile exists
+	/// - `Ok(None)` for gaps or empty tiles
+	/// - `Err(_)` on read/processing errors
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>>;
 
-	/// Asynchronously streams all tiles within `bbox` as `(TileCoord, Tile)` pairs.
+	/// Asynchronously streams all tiles within the given bounding box.
 	///
-	/// Implemented with internal synchronization to allow concurrent pulls from the stream.
-	/// Backpressure is handled by the returned [`TileStream`].
+	/// Returns a [`TileStream`] of `(TileCoord, Tile)` pairs. The stream handles
+	/// backpressure and supports concurrent pulls.
+	///
+	/// Default implementation wraps individual `get_tile` calls with internal synchronization.
+	/// Sources that can optimize bulk reads should override this.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		let mutex = Arc::new(Mutex::new(self));
 		let coords: Vec<TileCoord> = bbox.iter_coords().collect();
@@ -106,9 +141,10 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		}))
 	}
 
-	/// Performs a hierarchical CLI probe of metadata, parameters, container, tiles, and contents.
+	/// Performs a hierarchical CLI probe at the specified depth.
 	///
-	/// Output is structured using categories/lists for human‑friendly inspection.
+	/// Probes metadata, parameters, container specifics, tiles, and tile contents
+	/// based on the requested depth level.
 	#[cfg(feature = "cli")]
 	async fn probe(&self, level: ProbeDepth) -> Result<()> {
 		use ProbeDepth::*;
@@ -117,7 +153,9 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 		let cat = print.get_category("meta_data").await;
 		cat.add_key_value("name", self.source_name()).await;
-		cat.add_key_value("container", self.container_name()).await;
+		cat.add_key_value("source_type", self.source_type().as_str()).await;
+		cat.add_key_value("container_name", self.container_name()).await;
+		cat.add_key_value("source_name", self.source_name()).await;
 
 		cat.add_key_json("meta", &self.tilejson().as_json_value()).await;
 
@@ -126,7 +164,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 			.await?;
 
 		if matches!(level, Container | Tiles | TileContents) {
-			log::debug!("probing container {:?} at depth {:?}", self.container_name(), level);
+			log::debug!("probing source {:?} at depth {:?}", self.source_name(), level);
 			self.probe_container(&print.get_category("container").await).await?;
 		}
 
@@ -153,7 +191,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
-	/// Writes reader parameters (bbox levels, formats, compression) into the CLI reporter.
+	/// Writes source parameters (bbox pyramid, formats, compression) to the CLI reporter.
 	#[cfg(feature = "cli")]
 	async fn probe_parameters(&self, print: &mut PrettyPrint) -> Result<()> {
 		let parameters = self.parameters();
@@ -171,35 +209,37 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
-	/// Writes container‑specific metadata or a placeholder warning if not implemented.
+	/// Writes source-specific metadata or a placeholder if not implemented.
+	///
+	/// Container readers may override to provide format-specific details.
 	#[cfg(feature = "cli")]
 	async fn probe_container(&self, print: &PrettyPrint) -> Result<()> {
 		print
-			.add_warning("deep container probing is not implemented for this container format")
+			.add_warning("deep container probing is not implemented for this source")
 			.await;
 		Ok(())
 	}
 
-	/// Writes tile‑level probing output or a placeholder warning if not implemented.
+	/// Writes tile-level probing output or a placeholder if not implemented.
 	#[cfg(feature = "cli")]
 	async fn probe_tiles(&self, print: &PrettyPrint) -> Result<()> {
 		print
-			.add_warning("deep tiles probing is not implemented for this container format")
+			.add_warning("deep tiles probing is not implemented for this source")
 			.await;
 		Ok(())
 	}
 
-	/// Writes sample tile content diagnostics or a placeholder warning if not implemented.
+	/// Writes sample tile content diagnostics or a placeholder if not implemented.
 	#[cfg(feature = "cli")]
 	async fn probe_tile_contents(&self, print: &PrettyPrint) -> Result<()> {
 		print
-			.add_warning("deep tile contents probing is not implemented for this container format")
+			.add_warning("deep tile contents probing is not implemented for this source")
 			.await;
 		Ok(())
 	}
 
-	/// Converts `self` into a boxed trait object for dynamic dispatch and composition.
-	fn boxed(self) -> Box<dyn TilesReaderTrait>
+	/// Converts `self` into a boxed trait object for dynamic dispatch.
+	fn boxed(self) -> Box<dyn TileSourceTrait>
 	where
 		Self: Sized + 'static,
 	{
@@ -207,21 +247,24 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	}
 }
 
-/// Extension trait providing traversal with higher‑rank trait bounds (HRTBs) while
-/// keeping [`TilesReaderTrait`] object‑safe.
+/// Extension trait providing traversal with higher-rank trait bounds (HRTBs).
 ///
-/// Use this when you need to stream tiles across complex traversal plans and hand
-/// each produced stream to a callback for further processing.
-pub trait TilesReaderTraverseExt: TilesReaderTrait {
-	/// Traverses all tiles according to a translated traversal plan and invokes `callback`
-	/// for each output [`TileBBox`] with a corresponding [`TileStream`].
+/// This trait is separate from [`TileSourceTrait`] to maintain object safety while
+/// still supporting complex traversal scenarios that require HRTBs.
+///
+/// Automatically implemented for all types that implement [`TileSourceTrait`].
+pub trait TileSourceTraverseExt: TileSourceTrait {
+	/// Traverses all tiles according to a traversal plan, invoking a callback for each batch.
 	///
-	/// * `traversal_write` — desired traversal to write/consume in.
-	/// * `callback` — async function to consume each bbox + stream.
-	/// * `runtime` — runtime configuration providing cache type and progress tracking.
-	/// * `progress` — optional progress handle for custom progress monitoring.
+	/// This method translates between the source's preferred traversal order and the desired
+	/// write/consumption order, handling caching for `Push/Pop` phases as needed.
 	///
-	/// Progress is reported via a progress handle (either provided or created via runtime); caching is used to support `Push/Pop` phases.
+	/// # Arguments
+	///
+	/// * `traversal_write` - Desired traversal order for consumption
+	/// * `callback` - Async function called for each (bbox, stream) pair
+	/// * `runtime` - Runtime configuration for caching and progress tracking
+	/// * `progress_message` - Optional progress bar label
 	fn traverse_all_tiles<'s, 'a, C>(
 		&'s self,
 		traversal_write: &'s Traversal,
@@ -233,7 +276,7 @@ pub trait TilesReaderTraverseExt: TilesReaderTrait {
 		C: FnMut(TileBBox, TileStream<'a, Tile>) -> BoxFuture<'a, Result<()>> + Send + 'a,
 		's: 'a,
 	{
-		let progress_message = progress_message.unwrap_or("converting tiles").to_string();
+		let progress_message = progress_message.unwrap_or("processing tiles").to_string();
 
 		async move {
 			let traversal_steps =
@@ -330,7 +373,8 @@ pub trait TilesReaderTraverseExt: TilesReaderTrait {
 	}
 }
 
-impl<T: TilesReaderTrait + ?Sized> TilesReaderTraverseExt for T {}
+// Blanket implementation: all TileSourceTrait implementors get traversal support
+impl<T: TileSourceTrait + ?Sized> TileSourceTraverseExt for T {}
 
 /// Tests cover trait defaults, parameter plumbing, streaming behavior, and the CLI probe stubs.
 #[cfg(test)]
@@ -364,9 +408,13 @@ mod tests {
 	}
 
 	#[async_trait]
-	impl TilesReaderTrait for TestReader {
+	impl TileSourceTrait for TestReader {
 		fn source_name(&self) -> &'static str {
 			"dummy"
+		}
+
+		fn source_type(&self) -> SourceType {
+			SourceType::Container
 		}
 
 		fn container_name(&self) -> &'static str {

@@ -2,7 +2,7 @@ use super::{super::utils::Url, SourceResponse};
 use anyhow::Result;
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
-use versatiles_container::TilesReaderTrait;
+use versatiles_container::TileSourceTrait;
 use versatiles_core::{Blob, TileCompression, TileCoord, utils::TargetCompression};
 use versatiles_derive::context;
 
@@ -11,7 +11,7 @@ use versatiles_derive::context;
 pub struct TileSource {
 	pub prefix: Url,
 	pub id: String,
-	reader: Arc<Mutex<Box<dyn TilesReaderTrait>>>,
+	reader: Arc<Mutex<Box<dyn TileSourceTrait>>>,
 	pub tile_mime: String,
 	pub compression: TileCompression,
 }
@@ -19,7 +19,7 @@ pub struct TileSource {
 impl TileSource {
 	// Constructor function for creating a TileSource instance
 	#[context("creating tile source: id='{id}'")]
-	pub fn from(reader: Box<dyn TilesReaderTrait>, id: &str) -> Result<TileSource> {
+	pub fn from(reader: Box<dyn TileSourceTrait>, id: &str) -> Result<TileSource> {
 		let parameters = reader.parameters();
 		let tile_mime = parameters.tile_format.as_mime_str().to_string();
 		let compression = parameters.tile_compression;

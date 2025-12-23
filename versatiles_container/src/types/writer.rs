@@ -1,7 +1,7 @@
 //! Defines the interface for writing tile data to various container formats.
 //!
 //! This module provides the object‑safe [`TilesWriterTrait`], which enables writing tiles
-//! from any [`TilesReaderTrait`] source into a file or arbitrary output writer implementing
+//! from any [`TileSourceTrait`] source into a file or arbitrary output writer implementing
 //! [`DataWriterTrait`].
 //!
 //! Implementations of this trait are registered in the [`ContainerRegistry`] to handle specific
@@ -9,7 +9,7 @@
 //!
 //! ## Responsibilities
 //! A tile writer must:
-//! - Pull tiles from a [`TilesReaderTrait`] source (possibly streamed)
+//! - Pull tiles from a [`TileSourceTrait`] source (possibly streamed)
 //! - Serialize them to the target format
 //! - Respect [`TilesRuntime`] parameters such as compression and parallelism
 //!
@@ -30,7 +30,7 @@
 //! }
 //! ```
 
-use crate::{TilesReaderTrait, TilesRuntime};
+use crate::{TileSourceTrait, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::path::Path;
@@ -52,7 +52,7 @@ pub trait TilesWriterTrait: Send {
 	///
 	/// # Errors
 	/// Returns an error if the file cannot be created or the writing operation fails.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, runtime: TilesRuntime) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TileSourceTrait, path: &Path, runtime: TilesRuntime) -> Result<()> {
 		Self::write_to_writer(reader, &mut DataWriterFile::from_path(path)?, runtime).await
 	}
 
@@ -69,7 +69,7 @@ pub trait TilesWriterTrait: Send {
 	/// # Errors
 	/// Returns an error if reading from the source or writing to the sink fails.
 	async fn write_to_writer(
-		reader: &mut dyn TilesReaderTrait,
+		reader: &mut dyn TileSourceTrait,
 		writer: &mut dyn DataWriterTrait,
 		runtime: TilesRuntime,
 	) -> Result<()>;

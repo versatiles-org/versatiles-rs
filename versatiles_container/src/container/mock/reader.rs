@@ -22,7 +22,7 @@
 //! }
 //! ```
 
-use crate::{Tile, TilesReaderTrait};
+use crate::{SourceType, Tile, TileSourceTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{utils::compress, *};
@@ -84,9 +84,13 @@ impl MockTilesReader {
 }
 
 #[async_trait]
-impl TilesReaderTrait for MockTilesReader {
+impl TileSourceTrait for MockTilesReader {
 	fn container_name(&self) -> &str {
 		"dummy_container"
+	}
+
+	fn source_type(&self) -> SourceType {
+		SourceType::Container
 	}
 
 	fn source_name(&self) -> &str {

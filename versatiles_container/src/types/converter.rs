@@ -40,7 +40,7 @@
 //! }
 //! ```
 
-use crate::{Tile, TilesReaderTrait, TilesRuntime};
+use crate::{SourceType, Tile, TileSourceTrait, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::path::Path;
@@ -100,7 +100,7 @@ impl Default for TilesConverterParameters {
 /// See the module-level example.
 #[context("Converting tiles from reader to file")]
 pub async fn convert_tiles_container(
-	reader: Box<dyn TilesReaderTrait>,
+	reader: Box<dyn TileSourceTrait>,
 	cp: TilesConverterParameters,
 	path: &Path,
 	runtime: TilesRuntime,
@@ -117,12 +117,12 @@ pub async fn convert_tiles_container(
 /// Reader adapter that applies coordinate transforms, bbox filtering, and optional
 /// compression changes on-the-fly.
 ///
-/// This type implements [`TilesReaderTrait`], so it can be used anywhere a normal
+/// This type implements [`TileSourceTrait`], so it can be used anywhere a normal
 /// reader is expected. Use [`TilesConvertReader::new_from_reader`] to wrap an
 /// existing reader.
 #[derive(Debug)]
 pub struct TilesConvertReader {
-	reader: Box<dyn TilesReaderTrait>,
+	reader: Box<dyn TileSourceTrait>,
 	converter_parameters: TilesConverterParameters,
 	reader_parameters: TilesReaderParameters,
 	container_name: String,
@@ -140,7 +140,7 @@ impl TilesConvertReader {
 	/// Propagates errors from querying/deriving parameters or updating metadata.
 	#[context("Creating converter reader from existing reader")]
 	pub fn new_from_reader(
-		reader: Box<dyn TilesReaderTrait>,
+		reader: Box<dyn TileSourceTrait>,
 		cp: TilesConverterParameters,
 	) -> Result<TilesConvertReader> {
 		let container_name = format!("converter({})", reader.container_name());
@@ -179,9 +179,13 @@ impl TilesConvertReader {
 }
 
 #[async_trait]
-impl TilesReaderTrait for TilesConvertReader {
+impl TileSourceTrait for TilesConvertReader {
 	fn source_name(&self) -> &str {
 		&self.name
+	}
+
+	fn source_type(&self) -> SourceType {
+		SourceType::Processor
 	}
 
 	fn container_name(&self) -> &str {

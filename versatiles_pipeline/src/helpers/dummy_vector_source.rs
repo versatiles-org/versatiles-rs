@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_container::{Tile, TilesReaderTrait};
+use versatiles_container::{SourceType, Tile, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_geometry::{
 	geo::{GeoFeature, Geometry},
@@ -62,9 +62,13 @@ impl DummyVectorSource {
 }
 
 #[async_trait]
-impl TilesReaderTrait for DummyVectorSource {
+impl TileSourceTrait for DummyVectorSource {
 	fn source_name(&self) -> &str {
 		"DummyVectorSource"
+	}
+
+	fn source_type(&self) -> SourceType {
+		SourceType::Container
 	}
 
 	fn container_name(&self) -> &str {

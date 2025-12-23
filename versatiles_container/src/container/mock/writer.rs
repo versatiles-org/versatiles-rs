@@ -20,7 +20,7 @@
 //! }
 //! ```
 
-use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait};
+use crate::{TileSourceTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{Traversal, io::DataWriterTrait};
@@ -42,7 +42,7 @@ impl MockTilesWriter {
 	/// # Returns
 	///
 	/// A `Result` indicating the success or failure of the operation.
-	pub async fn write(reader: &mut dyn TilesReaderTrait) -> Result<()> {
+	pub async fn write(reader: &mut dyn TileSourceTrait) -> Result<()> {
 		let _temp = reader.container_name();
 		let _temp = reader.source_name();
 		let _temp = reader.tilejson();
@@ -79,7 +79,7 @@ impl TilesWriterTrait for MockTilesWriter {
 	/// A `Result` indicating the success or failure of the operation.
 	#[context("mock writing tiles to DataWriter")]
 	async fn write_to_writer(
-		reader: &mut dyn TilesReaderTrait,
+		reader: &mut dyn TileSourceTrait,
 		_writer: &mut dyn DataWriterTrait,
 		_runtime: TilesRuntime,
 	) -> Result<()> {

@@ -44,11 +44,11 @@ use versatiles_core::{TileCompression, TileFormat};
 use versatiles_derive::context;
 
 /// Signature for async opener functions used by the registry.
-type ReadFuture = Pin<Box<dyn Future<Output = Result<Box<dyn TilesReaderTrait>>> + Send>>;
+type ReadFuture = Pin<Box<dyn Future<Output = Result<Box<dyn TileSourceTrait>>> + Send>>;
 type ReadData = Box<dyn Fn(DataReader, TilesRuntime) -> ReadFuture + Send + Sync + 'static>;
 type ReadFile = Box<dyn Fn(PathBuf, TilesRuntime) -> ReadFuture + Send + Sync + 'static>;
 type WriteFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
-type WriteFile = Box<dyn Fn(Box<dyn TilesReaderTrait>, PathBuf, TilesRuntime) -> WriteFuture + Send + Sync + 'static>;
+type WriteFile = Box<dyn Fn(Box<dyn TileSourceTrait>, PathBuf, TilesRuntime) -> WriteFuture + Send + Sync + 'static>;
 
 /// Registry mapping file extensions to async tile container readers and writers.
 ///
@@ -81,11 +81,11 @@ impl ContainerRegistry {
 	///
 	/// # Arguments
 	/// * `ext` - The file extension to associate with the reader.
-	/// * `read_file` - Async function that takes a `PathBuf` and returns a boxed `TilesReaderTrait`.
+	/// * `read_file` - Async function that takes a `PathBuf` and returns a boxed `TileSourceTrait`.
 	pub fn register_reader_file<F, Fut>(&mut self, ext: &str, read_file: F)
 	where
 		F: Fn(PathBuf, TilesRuntime) -> Fut + Send + Sync + 'static,
-		Fut: Future<Output = Result<Box<dyn TilesReaderTrait>>> + Send + 'static,
+		Fut: Future<Output = Result<Box<dyn TileSourceTrait>>> + Send + 'static,
 	{
 		self.file_readers.insert(
 			sanitize_extension(ext),
@@ -97,11 +97,11 @@ impl ContainerRegistry {
 	///
 	/// # Arguments
 	/// * `ext` - The file extension to associate with the reader.
-	/// * `read_data` - Async function that takes a `DataReader` and returns a boxed `TilesReaderTrait`.
+	/// * `read_data` - Async function that takes a `DataReader` and returns a boxed `TileSourceTrait`.
 	pub fn register_reader_data<F, Fut>(&mut self, ext: &str, read_data: F)
 	where
 		F: Fn(DataReader, TilesRuntime) -> Fut + Send + Sync + 'static,
-		Fut: Future<Output = Result<Box<dyn TilesReaderTrait>>> + Send + 'static,
+		Fut: Future<Output = Result<Box<dyn TileSourceTrait>>> + Send + 'static,
 	{
 		self.data_readers.insert(
 			sanitize_extension(ext),
@@ -113,11 +113,11 @@ impl ContainerRegistry {
 	///
 	/// # Arguments
 	/// * `ext` - The file extension to associate with the writer.
-	/// * `write_file` - Async function that takes a boxed `TilesReaderTrait`, a `PathBuf`, and a `TilesRuntime`,
+	/// * `write_file` - Async function that takes a boxed `TileSourceTrait`, a `PathBuf`, and a `TilesRuntime`,
 	///   and writes the tiles to the specified path.
 	pub fn register_writer_file<F, Fut>(&mut self, ext: &str, write_file: F)
 	where
-		F: Fn(Box<dyn TilesReaderTrait>, PathBuf, TilesRuntime) -> Fut + Send + Sync + 'static,
+		F: Fn(Box<dyn TileSourceTrait>, PathBuf, TilesRuntime) -> Fut + Send + Sync + 'static,
 		Fut: Future<Output = Result<()>> + Send + 'static,
 	{
 		self.file_writers.insert(
@@ -131,7 +131,7 @@ impl ContainerRegistry {
 		&self,
 		data_source: &str,
 		runtime: TilesRuntime,
-	) -> Result<Box<dyn TilesReaderTrait>> {
+	) -> Result<Box<dyn TileSourceTrait>> {
 		self.get_reader(DataSource::parse(data_source)?, runtime).await
 	}
 
@@ -143,9 +143,9 @@ impl ContainerRegistry {
 	/// * `url_path` - The file path or URL to read from.
 	///
 	/// # Returns
-	/// A boxed `TilesReaderTrait` for reading tiles.
+	/// A boxed `TileSourceTrait` for reading tiles.
 	#[context("Failed to get reader for '{data_source:?}'")]
-	pub async fn get_reader(&self, data_source: DataSource, runtime: TilesRuntime) -> Result<Box<dyn TilesReaderTrait>> {
+	pub async fn get_reader(&self, data_source: DataSource, runtime: TilesRuntime) -> Result<Box<dyn TileSourceTrait>> {
 		let mut data_source = data_source.clone();
 		data_source.resolve(&DataLocation::cwd()?)?;
 		let extension = sanitize_extension(data_source.container_type()?);
@@ -201,7 +201,7 @@ impl ContainerRegistry {
 	#[context("writing tiles to path '{path:?}'")]
 	pub async fn write_to_path(
 		&self,
-		mut reader: Box<dyn TilesReaderTrait>,
+		mut reader: Box<dyn TileSourceTrait>,
 		path: &Path,
 		runtime: TilesRuntime,
 	) -> Result<()> {

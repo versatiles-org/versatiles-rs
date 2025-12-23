@@ -199,7 +199,7 @@ mod tests {
 	use futures::future::BoxFuture;
 	use itertools::Itertools;
 	use pretty_assertions::assert_eq;
-	use versatiles_container::TilesReaderTrait;
+	use versatiles_container::TileSourceTrait;
 
 	pub fn check_tile(blob: &Blob) -> String {
 		let tile = VectorTile::from_blob(blob).unwrap();
@@ -345,7 +345,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_operation_parameters() -> Result<()> {
 		let factory = PipelineFactory::new_dummy_reader(Box::new(
-			|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
+			|filename: String| -> BoxFuture<Result<Box<dyn TileSourceTrait>>> {
 				Box::pin(async move {
 					let mut pyramide = TileBBoxPyramid::new_empty();
 					for c in filename[0..filename.len() - 4].chars() {
@@ -354,7 +354,7 @@ mod tests {
 					Ok(Box::new(DummyVectorSource::new(
 						&[("dummy", &[&[("filename", &filename)]])],
 						Some(pyramide),
-					)) as Box<dyn TilesReaderTrait>)
+					)) as Box<dyn TileSourceTrait>)
 				})
 			},
 		));
