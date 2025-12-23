@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_container::{SourceType, Tile, TileSourceTrait};
@@ -63,16 +65,8 @@ impl DummyVectorSource {
 
 #[async_trait]
 impl TileSourceTrait for DummyVectorSource {
-	fn source_name(&self) -> &str {
-		"DummyVectorSource"
-	}
-
-	fn source_type(&self) -> SourceType {
-		SourceType::Container
-	}
-
-	fn container_name(&self) -> &str {
-		"DummyVectorSource"
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_container("dummy vector source", "dummy")
 	}
 
 	fn parameters(&self) -> &TilesReaderParameters {
@@ -144,8 +138,6 @@ mod tests {
 			)),
 		);
 
-		assert_eq!(source.source_name(), "DummyVectorSource");
-		assert_eq!(source.container_name(), "DummyVectorSource");
 		assert!(
 			source
 				.parameters()

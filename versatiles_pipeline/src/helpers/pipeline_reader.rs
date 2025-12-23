@@ -10,7 +10,7 @@ use crate::{OperationTrait, PipelineFactory};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesRuntime};
 use versatiles_core::{io::DataReader, *};
 use versatiles_derive::context;
@@ -88,18 +88,8 @@ impl<'a> PipelineReader {
 
 #[async_trait]
 impl TileSourceTrait for PipelineReader {
-	/// Returns the source name of this pipeline (usually the VPL path or a label).
-	fn source_name(&self) -> &str {
-		&self.name
-	}
-
-	fn source_type(&self) -> SourceType {
-		SourceType::Pipeline
-	}
-
-	/// Returns the logical container name: always `"pipeline"`.
-	fn container_name(&self) -> &str {
-		"pipeline"
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_processor("pipeline", SourceType::new_container("replace", "me"))
 	}
 
 	/// Returns the reader parameters (tile format, compression, and traversal hints).
@@ -224,8 +214,7 @@ mod tests {
 	async fn test_pipeline_reader_trait_and_debug() -> Result<()> {
 		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), TilesRuntime::default()).await?;
 		// Trait methods
-		assert_eq!(reader.source_name(), "from str");
-		assert_eq!(reader.container_name(), "pipeline");
+		assert_eq!(reader.source_type().to_string(), "processor 'pipeline'");
 		// Parameters should have at least one bbox level
 		assert!(reader.parameters().bbox_pyramid.iter_levels().next().is_some());
 		// Debug formatting should include struct name and source

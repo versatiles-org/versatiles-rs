@@ -22,6 +22,8 @@
 //! }
 //! ```
 
+use std::sync::Arc;
+
 use crate::{SourceType, Tile, TileSourceTrait};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -85,16 +87,8 @@ impl MockTilesReader {
 
 #[async_trait]
 impl TileSourceTrait for MockTilesReader {
-	fn container_name(&self) -> &str {
-		"dummy_container"
-	}
-
-	fn source_type(&self) -> SourceType {
-		SourceType::Container
-	}
-
-	fn source_name(&self) -> &str {
-		"dummy_name"
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_container("dummy", "dummy")
 	}
 
 	fn parameters(&self) -> &TilesReaderParameters {
@@ -149,8 +143,7 @@ mod tests {
 	#[tokio::test]
 	async fn reader() -> Result<()> {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
-		assert_eq!(reader.container_name(), "dummy_container");
-		assert_eq!(reader.source_name(), "dummy_name");
+		assert_eq!(reader.source_type().to_string(), "container 'dummy' ('dummy')");
 
 		assert_eq!(
 			reader.tilejson().as_string(),

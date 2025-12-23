@@ -173,41 +173,22 @@ impl ContainerReader {
 		ReaderParameters::from(reader.parameters())
 	}
 
-	/// Get the source name
+	/// Get the source type
 	///
 	/// Returns the name or path of the data source being read.
 	///
 	/// # Returns
 	///
-	/// The source name (typically the file path or URL)
+	/// The source type (typically the file path or URL)
 	///
 	/// # Examples
 	///
 	/// ```javascript
-	/// const name = await reader.sourceName();
+	/// const name = await reader.sourceType();
 	/// console.log(`Reading from: ${name}`);
 	/// ```
 	#[napi]
-	pub async fn source_name(&self) -> String {
-		self.reader.lock().await.source_name().to_string()
-	}
-
-	/// Get the container type name
-	///
-	/// Returns the name of the container format being used.
-	///
-	/// # Returns
-	///
-	/// Container type name (e.g., "versatiles", "mbtiles", "pmtiles")
-	///
-	/// # Examples
-	///
-	/// ```javascript
-	/// const type = await reader.containerName();
-	/// console.log(`Container type: ${type}`);
-	/// ```
-	#[napi]
-	pub async fn container_name(&self) -> String {
-		self.reader.lock().await.container_name().to_string()
+	pub async fn source_type(&self) -> String {
+		self.reader.lock().await.source_type().to_string()
 	}
 }

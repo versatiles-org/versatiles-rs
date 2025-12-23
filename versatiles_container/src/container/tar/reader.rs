@@ -34,7 +34,7 @@
 use crate::{SourceType, Tile, TileSourceTrait};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
-use std::{collections::HashMap, fmt::Debug, io::Read, path::Path};
+use std::{collections::HashMap, fmt::Debug, io::Read, path::Path, sync::Arc};
 use tar::{Archive, EntryType};
 use versatiles_core::{io::*, utils::decompress, *};
 use versatiles_derive::context;
@@ -191,13 +191,8 @@ impl TarTilesReader {
 
 #[async_trait]
 impl TileSourceTrait for TarTilesReader {
-	/// Returns the container name.
-	fn container_name(&self) -> &str {
-		"tar"
-	}
-
-	fn source_type(&self) -> SourceType {
-		SourceType::Container
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_container("tar", &self.name)
 	}
 
 	/// Returns the parameters of the tiles reader.
@@ -242,11 +237,6 @@ impl TileSourceTrait for TarTilesReader {
 			Ok(None)
 		}
 	}
-
-	/// Returns the name of the tar archive.
-	fn source_name(&self) -> &str {
-		&self.name
-	}
 }
 
 impl Debug for TarTilesReader {
@@ -276,8 +266,7 @@ pub mod tests {
 			format!("{reader:?}"),
 			"TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)], tile_compression: Gzip, tile_format: MVT } }"
 		);
-		assert_eq!(reader.container_name(), "tar");
-		assert!(reader.source_name().ends_with(temp_file.to_str().unwrap()));
+		assert_wildcard!(reader.source_type().to_string(), "container 'tar' ('*.tar')");
 		assert_eq!(
 			reader.tilejson().as_string(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"

@@ -34,8 +34,7 @@ impl TileSource {
 	}
 
 	pub async fn get_source_name(&self) -> String {
-		let reader = self.reader.lock().await;
-		reader.source_name().to_owned()
+		self.reader.lock().await.source_type().to_string()
 	}
 
 	// Retrieve the tile data as an HTTP response

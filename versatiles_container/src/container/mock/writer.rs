@@ -30,7 +30,7 @@ use versatiles_derive::context;
 pub struct MockTilesWriter {}
 
 impl MockTilesWriter {
-	#[context("mock writing tiles from reader '{}'", reader.container_name())]
+	#[context("mock writing tiles from reader '{}'", reader.source_type())]
 	/// Simulates writing tile data from the given `TilesReader`.
 	///
 	/// This method iterates through the tile data provided by the reader and simulates the writing process.
@@ -43,8 +43,6 @@ impl MockTilesWriter {
 	///
 	/// A `Result` indicating the success or failure of the operation.
 	pub async fn write(reader: &mut dyn TileSourceTrait) -> Result<()> {
-		let _temp = reader.container_name();
-		let _temp = reader.source_name();
 		let _temp = reader.tilejson();
 
 		reader

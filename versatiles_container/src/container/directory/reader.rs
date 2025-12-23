@@ -49,6 +49,7 @@ use std::{
 	fmt::Debug,
 	fs,
 	path::{Path, PathBuf},
+	sync::Arc,
 };
 use versatiles_core::{utils::*, *};
 use versatiles_derive::context;
@@ -228,12 +229,8 @@ impl DirectoryTilesReader {
 /// and asynchronous fetching of tile data by coordinate.
 #[async_trait]
 impl TileSourceTrait for DirectoryTilesReader {
-	fn container_name(&self) -> &str {
-		"directory"
-	}
-
-	fn source_type(&self) -> SourceType {
-		SourceType::Container
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_container("directory", self.dir.to_str().unwrap())
 	}
 
 	fn parameters(&self) -> &TilesReaderParameters {
@@ -264,15 +261,12 @@ impl TileSourceTrait for DirectoryTilesReader {
 			Ok(None)
 		}
 	}
-	fn source_name(&self) -> &str {
-		self.dir.to_str().unwrap()
-	}
 }
 
 impl Debug for DirectoryTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("DirectoryTilesReader")
-			.field("name", &self.source_name())
+			.field("source_type", &self.source_type())
 			.field("parameters", &self.parameters())
 			.finish()
 	}
@@ -455,11 +449,14 @@ mod tests {
 
 		let mut reader = DirectoryTilesReader::open_path(dir.path())?;
 
-		assert_eq!(reader.container_name(), "directory");
+		assert_eq!(
+			reader.source_type().to_string(),
+			format!("container 'directory' ('{}')", dir.path().to_str().unwrap())
+		);
 
 		assert_wildcard!(
 			format!("{reader:?}"),
-			"DirectoryTilesReader { name: \"*\", parameters: TilesReaderParameters { bbox_pyramid: [3: [2,1,2,1] (1x1)], tile_compression: Brotli, tile_format: PNG } }"
+			"DirectoryTilesReader { source_type: Container { name: \"directory\", uri: \"*\" }, parameters: TilesReaderParameters { bbox_pyramid: [3: [2,1,2,1] (1x1)], tile_compression: Brotli, tile_format: PNG } }"
 		);
 
 		assert_eq!(

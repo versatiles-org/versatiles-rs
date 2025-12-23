@@ -69,16 +69,8 @@ impl DummyImageSource {
 
 #[async_trait]
 impl TileSourceTrait for DummyImageSource {
-	fn source_name(&self) -> &str {
-		"DummyImageSource"
-	}
-
-	fn source_type(&self) -> SourceType {
-		SourceType::Container
-	}
-
-	fn container_name(&self) -> &str {
-		"DummyImageSource"
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_container("dummy image source", "dummy")
 	}
 
 	fn parameters(&self) -> &TilesReaderParameters {

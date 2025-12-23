@@ -43,7 +43,7 @@
 use crate::{SourceType, Tile, TileSourceTrait, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 use versatiles_core::{
 	TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal,
 };
@@ -125,8 +125,6 @@ pub struct TilesConvertReader {
 	reader: Box<dyn TileSourceTrait>,
 	converter_parameters: TilesConverterParameters,
 	reader_parameters: TilesReaderParameters,
-	container_name: String,
-	name: String,
 	tilejson: TileJSON,
 }
 
@@ -143,9 +141,6 @@ impl TilesConvertReader {
 		reader: Box<dyn TileSourceTrait>,
 		cp: TilesConverterParameters,
 	) -> Result<TilesConvertReader> {
-		let container_name = format!("converter({})", reader.container_name());
-		let name = format!("converter({})", reader.source_name());
-
 		let rp: TilesReaderParameters = reader.parameters().to_owned();
 		let mut new_rp: TilesReaderParameters = rp.clone();
 
@@ -171,8 +166,6 @@ impl TilesConvertReader {
 			reader,
 			converter_parameters: cp,
 			reader_parameters: new_rp,
-			container_name,
-			name,
 			tilejson,
 		})
 	}
@@ -180,16 +173,8 @@ impl TilesConvertReader {
 
 #[async_trait]
 impl TileSourceTrait for TilesConvertReader {
-	fn source_name(&self) -> &str {
-		&self.name
-	}
-
-	fn source_type(&self) -> SourceType {
-		SourceType::Processor
-	}
-
-	fn container_name(&self) -> &str {
-		&self.container_name
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_processor("TilesConvertReader", self.reader.source_type())
 	}
 
 	fn traversal(&self) -> &Traversal {
@@ -375,9 +360,8 @@ mod tests {
 
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
 
-		assert_eq!(tcr.reader.container_name(), "dummy_container");
-		assert_eq!(tcr.name, "converter(dummy_name)");
-		assert_eq!(tcr.container_name, "converter(dummy_container)");
+		assert_eq!(tcr.reader.source_type().to_string(), "container 'dummy' ('dummy')");
+		assert_eq!(tcr.source_type().to_string(), "processor 'TilesConvertReader'");
 	}
 
 	#[tokio::test]
@@ -391,24 +375,6 @@ mod tests {
 		assert!(data.is_some());
 
 		Ok(())
-	}
-
-	#[test]
-	fn test_get_name() {
-		let reader = get_mock_reader(MVT, Uncompressed);
-		let cp = TilesConverterParameters::default();
-		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
-
-		assert_eq!(tcr.source_name(), "converter(dummy_name)");
-	}
-
-	#[test]
-	fn test_container_name() {
-		let reader = get_mock_reader(MVT, Uncompressed);
-		let cp = TilesConverterParameters::default();
-		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
-
-		assert_eq!(tcr.container_name(), "converter(dummy_container)");
 	}
 
 	#[test]

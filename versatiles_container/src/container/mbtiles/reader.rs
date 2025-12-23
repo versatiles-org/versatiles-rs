@@ -55,7 +55,7 @@ use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 use versatiles_core::{TileCompression::*, TileFormat::*, json::parse_json_str, types::*};
 use versatiles_derive::context;
 
@@ -303,12 +303,8 @@ impl MBTilesReader {
 
 #[async_trait]
 impl TileSourceTrait for MBTilesReader {
-	fn container_name(&self) -> &str {
-		"mbtiles"
-	}
-
-	fn source_type(&self) -> SourceType {
-		SourceType::Container
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_container("mbtiles", &self.name)
 	}
 
 	/// Return the TileJSON metadata view for this dataset.
@@ -412,11 +408,6 @@ impl TileSourceTrait for MBTilesReader {
 
 		Ok(TileStream::from_vec(vec))
 	}
-
-	/// Returns the name of the MBTiles database.
-	fn source_name(&self) -> &str {
-		&self.name
-	}
 }
 
 impl std::fmt::Debug for MBTilesReader {
@@ -453,8 +444,10 @@ pub mod tests {
 			format!("{reader:?}"),
 			"MBTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [1,0,1,0] (1x1), 2: [2,1,2,1] (1x1), 3: [4,2,4,2] (1x1), 4: [8,5,8,5] (1x1), 5: [17,10,17,10] (1x1), 6: [34,20,34,21] (1x2), 7: [68,41,68,42] (1x2), 8: [137,83,137,84] (1x2), 9: [274,167,275,168] (2x2), 10: [549,335,551,336] (3x2), 11: [1098,670,1102,673] (5x4), 12: [2196,1340,2204,1346] (9x7), 13: [4393,2680,4409,2693] (17x14), 14: [8787,5361,8818,5387] (32x27)], tile_compression: Gzip, tile_format: MVT } }"
 		);
-		assert_eq!(reader.container_name(), "mbtiles");
-		assert!(reader.source_name().ends_with("../testdata/berlin.mbtiles"));
+		assert_eq!(
+			reader.source_type().to_string(),
+			format!("container 'mbtiles' ('{}')", PATH.to_str().unwrap())
+		);
 		assert_eq!(
 			reader.tilejson().as_string(),
 			"{\"author\":\"OpenStreetMap contributors, Geofabrik GmbH\",\"bounds\":[13.08283,52.33446,13.762245,52.6783],\"description\":\"Tile config for simple vector tiles schema\",\"license\":\"Open Database License 1.0\",\"maxzoom\":14,\"minzoom\":0,\"name\":\"Tilemaker to Geofabrik Vector Tiles schema\",\"tilejson\":\"3.0.0\",\"type\":\"baselayer\",\"vector_layers\":[{\"fields\":{\"name\":\"String\",\"number\":\"String\"},\"id\":\"addresses\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\"},\"id\":\"aerialways\",\"maxzoom\":14,\"minzoom\":12},{\"fields\":{\"admin_level\":\"Number\",\"maritime\":\"Boolean\"},\"id\":\"boundaries\",\"maxzoom\":14,\"minzoom\":0},{\"fields\":{\"admin_level\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"way_area\":\"Number\"},\"id\":\"boundary_labels\",\"maxzoom\":14,\"minzoom\":2},{\"fields\":{\"dummy\":\"Number\"},\"id\":\"buildings\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\"},\"id\":\"land\",\"maxzoom\":14,\"minzoom\":7},{\"fields\":{},\"id\":\"ocean\",\"maxzoom\":14,\"minzoom\":8},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"population\":\"Number\"},\"id\":\"place_labels\",\"maxzoom\":14,\"minzoom\":3},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"id\":\"public_transport\",\"maxzoom\":14,\"minzoom\":11},{\"fields\":{\"kind\":\"String\"},\"id\":\"sites\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"ref\":\"String\",\"ref_cols\":\"Number\",\"ref_rows\":\"Number\",\"tunnel\":\"Boolean\"},\"id\":\"street_labels\",\"maxzoom\":14,\"minzoom\":10},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"ref\":\"String\"},\"id\":\"street_labels_points\",\"maxzoom\":14,\"minzoom\":12},{\"fields\":{\"bridge\":\"Boolean\",\"kind\":\"String\",\"rail\":\"Boolean\",\"service\":\"String\",\"surface\":\"String\",\"tunnel\":\"Boolean\"},\"id\":\"street_polygons\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"bicycle\":\"String\",\"bridge\":\"Boolean\",\"horse\":\"String\",\"kind\":\"String\",\"link\":\"Boolean\",\"rail\":\"Boolean\",\"service\":\"String\",\"surface\":\"String\",\"tracktype\":\"String\",\"tunnel\":\"Boolean\"},\"id\":\"streets\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"id\":\"streets_polygons_labels\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\"},\"id\":\"water_lines\",\"maxzoom\":14,\"minzoom\":4},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"id\":\"water_lines_labels\",\"maxzoom\":14,\"minzoom\":4},{\"fields\":{\"kind\":\"String\"},\"id\":\"water_polygons\",\"maxzoom\":14,\"minzoom\":4},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"id\":\"water_polygons_labels\",\"maxzoom\":14,\"minzoom\":14}],\"version\":\"3.0\"}"

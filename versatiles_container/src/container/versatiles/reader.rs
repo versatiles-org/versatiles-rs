@@ -302,13 +302,8 @@ impl Chunk {
 /// on-the-fly `override_compression`, single-tile fetch via `get_tile`, and bbox streaming via
 /// `get_tile_stream` (with internal read coalescing).
 impl TileSourceTrait for VersaTilesReader {
-	/// Gets the container name.
-	fn container_name(&self) -> &str {
-		"versatiles"
-	}
-
-	fn source_type(&self) -> SourceType {
-		SourceType::Container
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_container("versatiles", self.reader.get_name())
 	}
 
 	fn tilejson(&self) -> &TileJSON {
@@ -402,11 +397,6 @@ impl TileSourceTrait for VersaTilesReader {
 				.flatten()
 				.boxed(),
 		))
-	}
-
-	// Get the name of the reader
-	fn source_name(&self) -> &str {
-		self.reader.get_name()
 	}
 
 	// deep probe of container meta
@@ -534,8 +524,10 @@ mod tests {
 			format!("{reader:?}"),
 			"VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT } }"
 		);
-		assert_eq!(reader.container_name(), "versatiles");
-		assert_wildcard!(reader.source_name(), "*.versatiles");
+		assert_wildcard!(
+			reader.source_type().to_string(),
+			"container 'versatiles' ('*.versatiles')"
+		);
 		assert_eq!(
 			reader.tilejson().as_string(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"

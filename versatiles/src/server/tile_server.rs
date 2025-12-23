@@ -504,7 +504,10 @@ mod tests {
 
 		assert_eq!(
 			server.get_url_mapping().await,
-			vec![(crate::server::Url::from("/tiles/cheese/"), "dummy_name".to_string())]
+			vec![(
+				crate::server::Url::from("/tiles/cheese/"),
+				"container 'dummy' ('dummy')".to_string()
+			)]
 		);
 	}
 

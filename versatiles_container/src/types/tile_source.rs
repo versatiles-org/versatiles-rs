@@ -30,25 +30,58 @@ use versatiles_core::{
 };
 
 /// Distinguishes between different tile source types.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub enum SourceType {
 	/// Physical container format (e.g., "mbtiles", "versatiles", "pmtiles", "tar", "directory")
-	Container,
+	Container(String, String),
 	/// Tile processor/transformer (e.g., "filter", "raster_format", "converter")
-	Processor,
+	Processor(String, Arc<SourceType>),
 	/// Composite source combining multiple upstream sources (e.g., "stacked", "merged")
-	Composite,
-	Pipeline,
+	Composite(String, Vec<Arc<SourceType>>),
 }
 
 impl SourceType {
-	/// Returns the string representation of this source type
-	pub fn as_str(&self) -> &str {
+	pub fn new_container(name: &str, uri: &str) -> Arc<SourceType> {
+		Arc::new(SourceType::Container(name.to_string(), uri.to_string()))
+	}
+
+	pub fn new_processor(name: &str, source: Arc<SourceType>) -> Arc<SourceType> {
+		Arc::new(SourceType::Processor(name.to_string(), source))
+	}
+
+	pub fn new_composite(name: &str, source: &[Arc<SourceType>]) -> Arc<SourceType> {
+		Arc::new(SourceType::Composite(name.to_string(), source.to_vec()))
+	}
+}
+
+impl std::fmt::Display for SourceType {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			SourceType::Container => "container",
-			SourceType::Processor => "processor",
-			SourceType::Composite => "composite",
-			SourceType::Pipeline => "pipeline",
+			SourceType::Container(name, uri) => write!(f, "container '{name}' ('{uri}')"),
+			SourceType::Processor(name, _) => write!(f, "processor '{name}'"),
+			SourceType::Composite(name, _) => write!(f, "composite '{name}'"),
+		}
+	}
+}
+
+impl Debug for SourceType {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			SourceType::Container(name, uri) => f
+				.debug_struct("Container")
+				.field("name", name)
+				.field("uri", uri)
+				.finish(),
+			SourceType::Processor(name, source) => f
+				.debug_struct("Processor")
+				.field("name", name)
+				.field("source", source)
+				.finish(),
+			SourceType::Composite(name, sources) => f
+				.debug_struct("Composite")
+				.field("name", name)
+				.field("sources", sources)
+				.finish(),
 		}
 	}
 }
@@ -69,21 +102,13 @@ impl SourceType {
 /// which provides advanced traversal while keeping the base trait object-safe.
 #[async_trait]
 pub trait TileSourceTrait: Debug + Send + Sync + Unpin {
-	/// Returns a human-readable identifier for this source (e.g., filename, URI, or operation name).
-	fn source_name(&self) -> &str;
-
 	/// Returns the source type (container format, processor name, or composite).
 	///
 	/// This helps distinguish between:
 	/// - Physical containers: `SourceType::Container("mbtiles")`
 	/// - Tile processors: `SourceType::Processor("filter")`
 	/// - Composite sources: `SourceType::Composite`
-	fn source_type(&self) -> SourceType;
-
-	/// Returns the container type name (e.g., "mbtiles", "versatiles", "filter", "converter").
-	///
-	/// **Deprecated**: Use `source_type()` instead. This method is provided for backward compatibility.
-	fn container_name(&self) -> &str;
+	fn source_type(&self) -> Arc<SourceType>;
 
 	/// Returns runtime parameters describing the tiles this source will produce.
 	///
@@ -152,10 +177,7 @@ pub trait TileSourceTrait: Debug + Send + Sync + Unpin {
 		let mut print = PrettyPrint::new();
 
 		let cat = print.get_category("meta_data").await;
-		cat.add_key_value("name", self.source_name()).await;
-		cat.add_key_value("source_type", self.source_type().as_str()).await;
-		cat.add_key_value("container_name", self.container_name()).await;
-		cat.add_key_value("source_name", self.source_name()).await;
+		cat.add_key_value("source_type", &self.source_type().to_string()).await;
 
 		cat.add_key_json("meta", &self.tilejson().as_json_value()).await;
 
@@ -164,7 +186,7 @@ pub trait TileSourceTrait: Debug + Send + Sync + Unpin {
 			.await?;
 
 		if matches!(level, Container | Tiles | TileContents) {
-			log::debug!("probing source {:?} at depth {:?}", self.source_name(), level);
+			log::debug!("probing source {:?} at depth {:?}", self.source_type(), level);
 			self.probe_container(&print.get_category("container").await).await?;
 		}
 
@@ -409,16 +431,8 @@ mod tests {
 
 	#[async_trait]
 	impl TileSourceTrait for TestReader {
-		fn source_name(&self) -> &'static str {
-			"dummy"
-		}
-
-		fn source_type(&self) -> SourceType {
-			SourceType::Container
-		}
-
-		fn container_name(&self) -> &'static str {
-			"test container name"
+		fn source_type(&self) -> Arc<SourceType> {
+			SourceType::new_container("dummy_format", "dummy_uri")
 		}
 
 		fn parameters(&self) -> &TilesReaderParameters {
@@ -440,18 +454,6 @@ mod tests {
 				self.parameters.tile_format,
 			)))
 		}
-	}
-
-	#[tokio::test]
-	async fn test_get_name() {
-		let reader = TestReader::new_dummy();
-		assert_eq!(reader.source_name(), "dummy");
-	}
-
-	#[tokio::test]
-	async fn test_container_name() {
-		let reader = TestReader::new_dummy();
-		assert_eq!(reader.container_name(), "test container name");
 	}
 
 	#[tokio::test]
@@ -543,14 +545,5 @@ mod tests {
 		reader.probe(ProbeDepth::Tiles).await?;
 		reader.probe(ProbeDepth::TileContents).await?;
 		Ok(())
-	}
-
-	#[tokio::test]
-	async fn test_boxed_trait_object() {
-		let reader = TestReader::new_dummy();
-		let boxed = reader.boxed();
-		// Should forward trait methods
-		assert_eq!(boxed.source_name(), "dummy");
-		assert_eq!(boxed.container_name(), "test container name");
 	}
 }

@@ -255,13 +255,8 @@ fn calc_bbox_pyramid(
 
 #[async_trait]
 impl TileSourceTrait for PMTilesReader {
-	/// Returns the container type identifier for this reader (`"pmtiles"`).
-	fn container_name(&self) -> &str {
-		"pmtiles"
-	}
-
-	fn source_type(&self) -> SourceType {
-		SourceType::Container
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_container("pmtiles", self.data_reader.get_name())
 	}
 
 	/// Returns the current reader parameters (tile format, compression, bbox pyramid).
@@ -280,11 +275,6 @@ impl TileSourceTrait for PMTilesReader {
 	/// Returns the parsed and merged TileJSON metadata.
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
-	}
-
-	/// Returns the underlying source name from the `DataReader` (usually an absolute file path).
-	fn source_name(&self) -> &str {
-		self.data_reader.get_name()
 	}
 
 	/// Fetch a tile by XYZ coordinate.
@@ -376,9 +366,10 @@ mod tests {
 	async fn reader() -> Result<()> {
 		let reader = PMTilesReader::open_path(&PATH, TilesRuntime::default()).await?;
 
-		assert_eq!(reader.container_name(), "pmtiles");
-
-		assert_wildcard!(reader.source_name(), "*testdata?berlin.pmtiles");
+		assert_wildcard!(
+			reader.source_type().to_string(),
+			"container 'pmtiles' ('*testdata?berlin.pmtiles')"
+		);
 
 		assert_eq!(
 			format!("{:?}", reader.header),
