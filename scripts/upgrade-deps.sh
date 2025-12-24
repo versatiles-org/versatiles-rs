@@ -2,7 +2,7 @@
 cd "$(dirname "$0")/.."
 set -e
 
-echo "Update Rust"
+echo "Update rust toolchain"
 rustup update
 
 #echo "check features"
@@ -10,9 +10,14 @@ rustup update
 
 rm Cargo.lock
 
-echo "Upgrade Dependencies"
+echo "Upgrade Rust Dependencies"
 
 # to use "cargo upgrade": cargo install cargo-edit
 cargo upgrade --incompatible
 
 cargo check --workspace
+
+echo "Upgrade NPM dependencies"
+cd versatiles_node
+npm install
+npm run upgrade
