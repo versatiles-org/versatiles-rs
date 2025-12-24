@@ -8,12 +8,13 @@
  */
 
 import { TileServer } from '../index.js';
+import { log } from './lib/logger.mjs';
 
-console.log('VersaTiles Server Example\n');
+log.title('VersaTiles Server Example');
 
 {
 	// Example 1: Simple server with one tile source
-	console.log('\nExample 1: Basic tile server');
+	log.section('Example 1: Basic tile server');
 
 	const server = new TileServer({
 		ip: '127.0.0.1',
@@ -29,11 +30,11 @@ console.log('VersaTiles Server Example\n');
 	await server.start();
 	const port = await server.port;
 
-	console.log(`  ✓ Server started successfully!`);
-	console.log(`\n  Tile URLs:`);
-	console.log(`    Tiles: http://127.0.0.1:${port}/tiles/berlin/{z}/{x}/{y}`);
-	console.log(`    TileJSON: http://127.0.0.1:${port}/tiles/berlin/meta.json`);
-	console.log(`    Status: http://127.0.0.1:${port}/status`);
+	log.success('Server started successfully!');
+	console.log();
+	log.url('Tiles', `http://127.0.0.1:${port}/tiles/berlin/{z}/{x}/{y}`);
+	log.url('TileJSON', `http://127.0.0.1:${port}/tiles/berlin/meta.json`);
+	log.url('Status', `http://127.0.0.1:${port}/status`);
 
 	await sleepForOneSecond();
 	await server.stop();
@@ -42,7 +43,7 @@ console.log('VersaTiles Server Example\n');
 {
 	// Example 2: Server with multiple tile sources (commented out)
 
-	console.log('\nExample 2: Server with multiple tile sources');
+	log.section('Example 2: Server with multiple tile sources');
 
 	const server = new TileServer({ port: 8080 });
 
@@ -55,11 +56,11 @@ console.log('VersaTiles Server Example\n');
 	await server.start();
 	const port = await server.port;
 
-	console.log(`  ✓ Multi-source server started on port ${port}`);
-	console.log('\n  Available sources:');
-	console.log('    /tiles/osm/{z}/{x}/{y}');
-	// console.log('  /tiles/satellite/{z}/{x}/{y}');
-	// console.log('  /tiles/terrain/{z}/{x}/{y}');
+	log.success(`Multi-source server started on port ${port}`);
+	log.text('\nAvailable sources:');
+	log.text('/tiles/osm/{z}/{x}/{y}', 4);
+	// log.text('/tiles/satellite/{z}/{x}/{y}', 4);
+	// log.text('/tiles/terrain/{z}/{x}/{y}', 4);
 
 	await sleepForOneSecond();
 	await server.stop();
@@ -68,7 +69,7 @@ console.log('VersaTiles Server Example\n');
 {
 	// Example 3: Server with static files (commented out)
 
-	console.log('\nExample 3: Server with tiles and static files');
+	log.section('Example 3: Server with tiles and static files');
 
 	const server = new TileServer({ port: 8080 });
 
@@ -81,10 +82,10 @@ console.log('VersaTiles Server Example\n');
 	await server.start();
 	const port = await server.port;
 
-	console.log(`  ✓ Server with static files started on port ${port}`);
-	console.log('\n  URLs:');
-	console.log('    Tiles: /tiles/tiles/{z}/{x}/{y}');
-	console.log('    Static: / (index.html, style.css, etc.)');
+	log.success(`Server with static files started on port ${port}`);
+	log.text('\nURLs:');
+	log.text('Tiles: /tiles/tiles/{z}/{x}/{y}', 4);
+	log.text('Static: / (index.html, style.css, etc.)', 4);
 
 	await sleepForOneSecond();
 	await server.stop();
@@ -93,23 +94,23 @@ console.log('VersaTiles Server Example\n');
 {
 	// Example 4: Dynamic server (add sources while running)
 
-	console.log('\nExample 4: Dynamic source management');
+	log.section('Example 4: Dynamic source management');
 
 	const server = new TileServer({ port: 8080 });
 	await server.start();
 	const port = await server.port;
 
-	console.log(`  ✓ Empty server started on port ${port}`);
+	log.success(`Empty server started on port ${port}`);
 
 	// Add sources dynamically
-	console.log('\n  Adding tile source "berlin"...');
+	log.text('\nAdding tile source "berlin"...');
 	await server.addTileSource('berlin', new URL('../../testdata/berlin.pmtiles', import.meta.url).pathname);
-	console.log('  ✓ Source added: /tiles/berlin/{z}/{x}/{y}');
+	log.success('Source added: /tiles/berlin/{z}/{x}/{y}');
 
 	await sleepForOneSecond();
-	console.log('\n  Removing tile source "berlin"...');
+	log.text('\nRemoving tile source "berlin"...');
 	await server.removeTileSource('berlin');
-	console.log('  ✓ Source removed.');
+	log.success('Source removed.');
 
 	await sleepForOneSecond();
 	await server.stop();

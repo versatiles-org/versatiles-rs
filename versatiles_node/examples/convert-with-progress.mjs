@@ -11,14 +11,16 @@
 import { convert } from '../index.js';
 import path from 'path';
 import { tmpdir } from 'os';
+import { log } from './lib/logger.mjs';
 
-console.log('VersaTiles Progress Monitoring Example\n');
+log.title('VersaTiles Progress Monitoring Example');
 
 const inputPath = new URL('../../testdata/berlin.mbtiles', import.meta.url).pathname;
 const outputPath = path.join(tmpdir(), 'output-with-progress.versatiles');
 
-console.log(`Input:  ${inputPath}`);
-console.log(`Output: ${outputPath}\n`);
+log.path('Input', inputPath);
+log.path('Output', outputPath);
+console.log();
 
 // Start the conversion with progress monitoring
 await convert(
@@ -30,14 +32,8 @@ await convert(
 		compress: 'brotli',
 	},
 	(data) => {
-		console.log(
-			[
-				`Progress: ${data.percentage.toFixed(1)}%`,
-				`(${data.position.toFixed(0)}/${data.total.toFixed(0)} tiles)`,
-				`| ${data.speed.toFixed(0)} tiles/sec`,
-				`| ETA: ${data.eta ? new Date(data.eta).toTimeString().split(' ')[0] : 'N/A'}`,
-			].join(' '),
-		);
+		log.progress(data);
 	},
 );
-console.log(`\n✓ Output saved to: ${outputPath}`);
+
+log.success(`Output saved to: ${outputPath}`);

@@ -71,6 +71,7 @@
 		"@napi-rs/cli": "^3.5.0",
 		"@types/node": "^25",
 		"@vitest/ui": "^4.0.16",
+		"chalk": "^5.6.2",
 		"eslint": "^9.39.2",
 		"eslint-config-prettier": "^10.1.8",
 		"npm-check-updates": "^19.2.0",
@@ -86,8 +87,8 @@
 		"@versatiles/versatiles-rs-darwin-arm64": "2.3.1",
 		"@versatiles/versatiles-rs-darwin-x64": "2.3.1",
 		"@versatiles/versatiles-rs-linux-arm64-gnu": "2.3.1",
-		"@versatiles/versatiles-rs-linux-x64-gnu": "2.3.1",
 		"@versatiles/versatiles-rs-linux-arm64-musl": "2.3.1",
+		"@versatiles/versatiles-rs-linux-x64-gnu": "2.3.1",
 		"@versatiles/versatiles-rs-linux-x64-musl": "2.3.1",
 		"@versatiles/versatiles-rs-win32-arm64-msvc": "2.3.1",
 		"@versatiles/versatiles-rs-win32-x64-msvc": "2.3.1"

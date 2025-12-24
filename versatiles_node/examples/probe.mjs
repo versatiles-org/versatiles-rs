@@ -8,26 +8,31 @@
  */
 
 import { ContainerReader } from '../index.js';
+import { log } from './lib/logger.mjs';
 
-console.log('VersaTiles Probe Example\n');
+log.title('VersaTiles Probe Example');
 
 const containerPath = new URL('../../testdata/berlin.mbtiles', import.meta.url).pathname;
 const container = await ContainerReader.open(containerPath);
 
-console.log('Container Information:');
-console.log('  Type:', await container.sourceType());
+log.section('Container Information');
+const sourceType = await container.sourceType();
+log.info('Type', `${sourceType.kind} (${sourceType.name})`);
+if (sourceType.uri) {
+	log.info('URI', sourceType.uri);
+}
 
-console.log('\nTile Parameters:');
+log.section('Tile Parameters');
 const parameters = await container.parameters();
-console.log('  Format:', parameters.tileFormat);
-console.log('  Compression:', parameters.tileCompression);
-console.log('  Zoom Range:', parameters.minZoom, '-', parameters.maxZoom);
+log.info('Format', parameters.tileFormat);
+log.info('Compression', parameters.tileCompression);
+log.info('Zoom Range', `${parameters.minZoom} - ${parameters.maxZoom}`);
 
 // Parse and display TileJSON
 const tileJSON = JSON.parse(await container.tileJson());
-console.log('\nTileJSON Metadata:');
-console.log('  Version:', tileJSON.tilejson);
-console.log('  Bounds:', tileJSON.bounds);
+log.section('TileJSON Metadata');
+log.info('Version', tileJSON.tilejson);
+log.info('Bounds', tileJSON.bounds);
 if (tileJSON.vector_layers) {
-	console.log('  Vector Layers:', tileJSON.vector_layers.length);
+	log.info('Vector Layers', tileJSON.vector_layers.length);
 }

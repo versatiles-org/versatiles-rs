@@ -10,29 +10,30 @@
 import { tmpdir } from 'os';
 import { convert } from '../index.js';
 import path from 'path';
+import { log } from './lib/logger.mjs';
 
-console.log('VersaTiles Conversion Example\n');
+log.title('VersaTiles Conversion Example');
 
 // Example 1: Simple conversion
-console.log('Example 1: Convert MBTiles to VersaTiles');
+log.section('Example 1: Convert MBTiles to VersaTiles');
 const inputPath = new URL('../../testdata/berlin.mbtiles', import.meta.url).pathname;
 const outputPath = path.join(tmpdir(), 'output.versatiles');
 
 await convert(inputPath, outputPath);
-console.log('✓ Conversion complete:', outputPath);
+log.success(`Conversion complete: ${outputPath}`);
 
 // Example 2: Conversion with zoom filtering
-console.log('\nExample 2: Convert with zoom level filtering');
+log.section('Example 2: Convert with zoom level filtering');
 const outputFiltered = path.join(tmpdir(), 'output-filtered.versatiles');
 
 await convert(inputPath, outputFiltered, {
 	minZoom: 5,
 	maxZoom: 12,
 });
-console.log('✓ Filtered conversion complete:', outputFiltered);
+log.success(`Filtered conversion complete: ${outputFiltered}`);
 
 // Example 3: Conversion with bounding box
-console.log('\nExample 3: Convert with bounding box (Berlin area)');
+log.section('Example 3: Convert with bounding box (Berlin area)');
 const outputBbox = path.join(tmpdir(), 'output-bbox.versatiles');
 
 await convert(inputPath, outputBbox, {
@@ -41,10 +42,10 @@ await convert(inputPath, outputBbox, {
 	minZoom: 10,
 	maxZoom: 14,
 });
-console.log('✓ BBox conversion complete:', outputBbox);
+log.success(`BBox conversion complete: ${outputBbox}`);
 
 // Example 4: Conversion with compression
-console.log('\nExample 4: Convert with gzip compression');
+log.section('Example 4: Convert with gzip compression');
 const outputCompressed = path.join(tmpdir(), 'output-compressed.versatiles');
 
 await convert(inputPath, outputCompressed, {
@@ -52,10 +53,10 @@ await convert(inputPath, outputCompressed, {
 	minZoom: 0,
 	maxZoom: 14,
 });
-console.log('✓ Compressed conversion complete:', outputCompressed);
+log.success(`Compressed conversion complete: ${outputCompressed}`);
 
 // Example 5: Conversion with coordinate transformations
-console.log('\nExample 5: Convert with coordinate transformation');
+log.section('Example 5: Convert with coordinate transformation');
 const outputFlipped = path.join(tmpdir(), 'output-flipped.versatiles');
 
 await convert(inputPath, outputFlipped, {
@@ -64,4 +65,4 @@ await convert(inputPath, outputFlipped, {
 	minZoom: 0,
 	maxZoom: 10,
 });
-console.log('✓ Transformed conversion complete:', outputFlipped);
+log.success(`Transformed conversion complete: ${outputFlipped}`);
