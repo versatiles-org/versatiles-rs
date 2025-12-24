@@ -123,4 +123,28 @@ describe('ContainerReader', () => {
 			});
 		});
 	});
+
+	describe('sourceType', () => {
+		it('should return correct source type for MBTiles', async () => {
+			const reader = await ContainerReader.open(MBTILES_PATH);
+			const sourceType = await reader.sourceType();
+
+			expect(sourceType.kind).toEqual('container');
+			expect(sourceType.name).toEqual('mbtiles');
+			expect(sourceType.uri).not.toBeNull();
+			expect(sourceType.input).toBeNull();
+			expect(sourceType.inputs).toBeNull();
+		});
+
+		it('should return correct source type for PMTiles', async () => {
+			const reader = await ContainerReader.open(PMTILES_PATH);
+			const sourceType = await reader.sourceType();
+
+			expect(sourceType.kind).toEqual('container');
+			expect(sourceType.name).toEqual('pmtiles');
+			expect(sourceType.uri).not.toBeNull();
+			expect(sourceType.input).toBeNull();
+			expect(sourceType.inputs).toBeNull();
+		});
+	});
 });

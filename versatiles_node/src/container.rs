@@ -1,22 +1,21 @@
-//! Tile container reader
-//!
-//! This module provides the [`ContainerReader`] class for reading tiles from
-//! various container formats. It supports both local files and remote URLs.
-//!
-//! ## Supported Formats
-//!
-//! - **VersaTiles** (.versatiles) - Native format, local and remote
-//! - **MBTiles** (.mbtiles) - SQLite-based format, local only
-//! - **PMTiles** (.pmtiles) - Cloud-optimized format, local and remote
-//! - **TAR** (.tar) - Archive format, local only
-//! - **Directories** - Tile directories following standard naming conventions
-
+/// Tile container reader
+///
+/// This module provides the [`ContainerReader`] class for reading tiles from
+/// various container formats. It supports both local files and remote URLs.
+///
+/// ## Supported Formats
+///
+/// - **VersaTiles** (.versatiles) - Native format, local and remote
+/// - **MBTiles** (.mbtiles) - SQLite-based format, local only
+/// - **PMTiles** (.pmtiles) - Cloud-optimized format, local and remote
+/// - **TAR** (.tar) - Archive format, local only
+/// - **Directories** - Tile directories following standard naming conventions
 use crate::{napi_result, runtime::create_runtime, types::ReaderParameters};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use versatiles_container::TileSourceTrait;
+use versatiles_container::{SourceType as RustSourceType, TileSourceTrait};
 use versatiles_core::TileCoord as RustTileCoord;
 
 /// Container reader for accessing tile data from various formats
@@ -184,11 +183,105 @@ impl ContainerReader {
 	/// # Examples
 	///
 	/// ```javascript
-	/// const name = await reader.sourceType();
-	/// console.log(`Reading from: ${name}`);
+	/// const sourceType = await reader.sourceType();
+	/// console.log(sourceType.kind);  // "container", "processor", or "composite"
+	/// console.log(sourceType.name);  // e.g., "mbtiles"
+	/// if (sourceType.kind === "container") {
+	///   console.log(sourceType.uri);  // file path or URL
+	/// }
 	/// ```
 	#[napi]
-	pub async fn source_type(&self) -> String {
-		self.reader.lock().await.source_type().to_string()
+	pub async fn source_type(&self) -> SourceType {
+		self.reader.lock().await.source_type().as_ref().into()
+	}
+}
+
+/// SourceType exposed to JavaScript as a class with getters and methods.
+///
+/// Properties (getters):
+/// - kind: "container" | "processor" | "composite"
+/// - name: string
+/// - uri: string | null (only for Container)
+///
+/// Methods:
+/// - input(): SourceType | null (only for Processor)
+/// - inputs(): SourceType[] | null (only for Composite)
+
+#[napi]
+pub struct SourceType {
+	// Internal storage - not exposed to JS
+	inner: Arc<RustSourceType>,
+}
+
+#[napi]
+impl SourceType {
+	/// Get the kind of source ("container", "processor", or "composite")
+	#[napi(getter)]
+	pub fn kind(&self) -> String {
+		match self.inner.as_ref() {
+			RustSourceType::Container { .. } => "container".to_string(),
+			RustSourceType::Processor { .. } => "processor".to_string(),
+			RustSourceType::Composite { .. } => "composite".to_string(),
+		}
+	}
+
+	/// Get the name of the source
+	#[napi(getter)]
+	pub fn name(&self) -> String {
+		match self.inner.as_ref() {
+			RustSourceType::Container { name, .. } => name.clone(),
+			RustSourceType::Processor { name, .. } => name.clone(),
+			RustSourceType::Composite { name, .. } => name.clone(),
+		}
+	}
+
+	/// Get the URI (for Container type only)
+	#[napi(getter)]
+	pub fn uri(&self) -> Option<String> {
+		match self.inner.as_ref() {
+			RustSourceType::Container { input, .. } => Some(input.clone()),
+			_ => None,
+		}
+	}
+
+	/// Get the input source (for Processor type only)
+	#[napi(getter)]
+	pub fn input(&self) -> Option<SourceType> {
+		match self.inner.as_ref() {
+			RustSourceType::Processor { input, .. } => Some(SourceType {
+				inner: Arc::clone(input),
+			}),
+			_ => None,
+		}
+	}
+
+	/// Get the input sources (for Composite type only)
+	#[napi(getter)]
+	pub fn inputs(&self) -> Option<Vec<SourceType>> {
+		match self.inner.as_ref() {
+			RustSourceType::Composite { inputs, .. } => Some(
+				inputs
+					.iter()
+					.map(|input| SourceType {
+						inner: Arc::clone(input),
+					})
+					.collect(),
+			),
+			_ => None,
+		}
+	}
+}
+
+impl From<&RustSourceType> for SourceType {
+	fn from(src: &RustSourceType) -> Self {
+		SourceType {
+			inner: Arc::new(src.clone()),
+		}
+	}
+}
+
+impl From<Arc<RustSourceType>> for SourceType {
+	fn from(inner: Arc<RustSourceType>) -> Self {
+		SourceType { inner }
 	}
 }
