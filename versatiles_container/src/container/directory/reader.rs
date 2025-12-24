@@ -31,8 +31,6 @@
 //! #[tokio::main]
 //! async fn main() {
 //!     let mut reader = DirectoryTilesReader::open_path(Path::new("/absolute/path/to/tiles")).unwrap();
-//!     // Optionally override the compression type
-//!     reader.override_compression(TileCompression::Gzip);
 //!     let tile_data = reader.get_tile(&TileCoord::new(3, 1, 2).unwrap()).await.unwrap();
 //! }
 //! ```
@@ -235,11 +233,6 @@ impl TileSourceTrait for DirectoryTilesReader {
 
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
-	}
-
-	fn override_compression(&mut self, tile_compression: TileCompression) -> Result<()> {
-		self.parameters.tile_compression = tile_compression;
-		Ok(())
 	}
 
 	fn tilejson(&self) -> &TileJSON {
@@ -452,7 +445,7 @@ mod tests {
 		dir.child("meta.json").write_str("{\"key\": \"value\"}")?;
 		dir.child("3/2/1.png.br").write_str("tile data")?;
 
-		let mut reader = DirectoryTilesReader::open_path(dir.path())?;
+		let reader = DirectoryTilesReader::open_path(dir.path())?;
 
 		assert_eq!(
 			reader.source_type().to_string(),
@@ -468,10 +461,6 @@ mod tests {
 			reader.tilejson().as_string(),
 			"{\"bounds\":[-90,66.51326,-45,79.171335],\"key\":\"value\",\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\"}"
 		);
-
-		assert_eq!(reader.parameters().tile_compression, TileCompression::Brotli);
-		reader.override_compression(TileCompression::Gzip).unwrap();
-		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
 
 		Ok(())
 	}

@@ -221,19 +221,4 @@ mod tests {
 		assert!(debug.contains("from str"));
 		Ok(())
 	}
-
-	#[tokio::test]
-	async fn test_override_compression_panic() {
-		let mut reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), TilesRuntime::default())
-			.await
-			.unwrap();
-		// override_compression should panic
-		assert_eq!(
-			reader
-				.override_compression(TileCompression::Uncompressed)
-				.unwrap_err()
-				.to_string(),
-			"override_compression is not implemented for this source"
-		);
-	}
 }

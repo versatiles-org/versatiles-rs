@@ -200,15 +200,6 @@ impl TileSourceTrait for TarTilesReader {
 		&self.parameters
 	}
 
-	/// Overrides the tile compression method.
-	///
-	/// # Arguments
-	/// * `tile_compression` - The new tile compression method.
-	fn override_compression(&mut self, tile_compression: TileCompression) -> Result<()> {
-		self.parameters.tile_compression = tile_compression;
-		Ok(())
-	}
-
 	/// Return the parsed TileJSON metadata for this archive.
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson

@@ -264,15 +264,6 @@ impl TileSourceTrait for PMTilesReader {
 		&self.parameters
 	}
 
-	/// Overrides the tile compression method.
-	///
-	/// # Arguments
-	/// * `tile_compression` - The new tile compression method.
-	fn override_compression(&mut self, tile_compression: TileCompression) -> Result<()> {
-		self.parameters.tile_compression = tile_compression;
-		Ok(())
-	}
-
 	/// Returns the parsed and merged TileJSON metadata.
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson

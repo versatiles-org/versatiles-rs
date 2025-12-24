@@ -41,10 +41,6 @@ pub struct Subcommand {
 	#[arg(long, short, value_enum, display_order = 2)]
 	compress: Option<TileCompression>,
 
-	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
-	#[arg(long, value_enum, value_name = "COMPRESSION", display_order = 2)]
-	override_input_compression: Option<TileCompression>,
-
 	/// swap rows and columns, e.g. z/x/y -> z/y/x
 	#[arg(long, display_order = 3)]
 	swap_xy: bool,
@@ -62,11 +58,7 @@ pub struct Subcommand {
 pub async fn run(arguments: &Subcommand, runtime: TilesRuntime) -> Result<()> {
 	log::info!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
-	let mut reader = runtime.get_reader_from_str(&arguments.input_file).await?;
-
-	if arguments.override_input_compression.is_some() {
-		reader.override_compression(arguments.override_input_compression.unwrap())?;
-	}
+	let reader = runtime.get_reader_from_str(&arguments.input_file).await?;
 
 	let parameters = TilesConverterParameters {
 		bbox_pyramid: get_bbox_pyramid(arguments)?,

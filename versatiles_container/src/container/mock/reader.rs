@@ -95,11 +95,6 @@ impl TileSourceTrait for MockTilesReader {
 		&self.parameters
 	}
 
-	fn override_compression(&mut self, tile_compression: TileCompression) -> Result<()> {
-		self.parameters.tile_compression = tile_compression;
-		Ok(())
-	}
-
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}

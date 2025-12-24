@@ -317,15 +317,6 @@ impl TileSourceTrait for MBTilesReader {
 		&self.parameters
 	}
 
-	/// Overrides the tile compression method.
-	///
-	/// # Arguments
-	/// * `tile_compression` - The new tile compression method.
-	fn override_compression(&mut self, tile_compression: TileCompression) -> Result<()> {
-		self.parameters.tile_compression = tile_compression;
-		Ok(())
-	}
-
 	/// Fetch a single tile by XYZ coordinate.
 	///
 	/// Coordinates are converted to TMS row indexing internally (via `y' = 2^z - 1 - y`).

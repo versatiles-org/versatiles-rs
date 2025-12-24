@@ -25,8 +25,8 @@ use tokio::sync::Mutex;
 #[cfg(feature = "cli")]
 use versatiles_core::{ProbeDepth, utils::PrettyPrint};
 use versatiles_core::{
-	TileBBox, TileCompression, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal,
-	TraversalTranslationStep, translate_traversals,
+	TileBBox, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal, TraversalTranslationStep,
+	translate_traversals,
 };
 
 /// Distinguishes between different tile source types.
@@ -126,14 +126,6 @@ pub trait TileSourceTrait: Debug + Send + Sync + Unpin {
 	/// Sources that can efficiently stream in a specific order should override this.
 	fn traversal(&self) -> &Traversal {
 		&Traversal::ANY
-	}
-
-	/// Overrides the output compression for subsequent tile reads.
-	///
-	/// Implementors should update their parameters so that [`Self::parameters()`]
-	/// reflects the new compression setting.
-	fn override_compression(&mut self, _tile_compression: TileCompression) -> Result<()> {
-		anyhow::bail!("override_compression is not implemented for this source");
 	}
 
 	/// Fetches a single tile at the given coordinate.
@@ -404,7 +396,7 @@ mod tests {
 	use super::*;
 	#[cfg(feature = "cli")]
 	use versatiles_core::utils::PrettyPrint;
-	use versatiles_core::{Blob, TileBBoxPyramid, TileFormat};
+	use versatiles_core::{Blob, TileBBoxPyramid, TileCompression, TileFormat};
 
 	#[derive(Debug)]
 	struct TestReader {
@@ -437,11 +429,6 @@ mod tests {
 			&self.parameters
 		}
 
-		fn override_compression(&mut self, tile_compression: TileCompression) -> Result<()> {
-			self.parameters.tile_compression = tile_compression;
-			Ok(())
-		}
-
 		fn tilejson(&self) -> &TileJSON {
 			&self.tilejson
 		}
@@ -467,15 +454,6 @@ mod tests {
 		assert_eq!(parameters.tile_format, TileFormat::MVT);
 		assert_eq!(parameters.bbox_pyramid.get_level_min().unwrap(), 0);
 		assert_eq!(parameters.bbox_pyramid.get_level_max().unwrap(), 3);
-	}
-
-	#[tokio::test]
-	async fn test_override_compression() {
-		let mut reader = TestReader::new_dummy();
-		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
-
-		reader.override_compression(TileCompression::Brotli).unwrap();
-		assert_eq!(reader.parameters().tile_compression, TileCompression::Brotli);
 	}
 
 	#[tokio::test]
