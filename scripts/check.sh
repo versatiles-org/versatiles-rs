@@ -125,19 +125,27 @@ if [ -d "$NODEJS_DIR" ]; then
       exit 1
    fi
 
+   # Node.js tests
+   echo "npm run test"
+   result=$(npm run test 2>&1)
+   if [ $? -ne 0 ]; then
+      echo -e "$result\nERROR DURING: npm run test"
+      exit 1
+   fi
+
+   # Node.js tests
+   echo "npm run test:examples"
+   result=$(npm run test:examples 2>&1)
+   if [ $? -ne 0 ]; then
+      echo -e "$result\nERROR DURING: npm run test:examples"
+      exit 1
+   fi
+
    # Prettier format check
    echo "npm run format:check"
    result=$(npm run format:check 2>&1)
    if [ $? -ne 0 ]; then
       echo -e "$result\nERROR DURING: npm run format:check"
-      exit 1
-   fi
-
-   # Node.js tests
-   echo "npm test"
-   result=$(npm test 2>&1)
-   if [ $? -ne 0 ]; then
-      echo -e "$result\nERROR DURING: npm test"
       exit 1
    fi
 
