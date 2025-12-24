@@ -16,8 +16,8 @@ struct Args {
 	level_base: Option<u8>,
 	/// use this as maximum zoom level. Defaults to 30.
 	level_max: Option<u8>,
-	/// Size of the tiles in pixels. Defaults to 512.
-	tile_size: Option<u32>,
+	/// Enable tile climbing when overscaling. Defaults to false.
+	enable_climbing: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -58,29 +58,15 @@ impl TileCache {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Operation {
 	parameters: TilesReaderParameters,
 	source: Arc<Box<dyn TileSourceTrait>>,
 	tilejson: TileJSON,
 	level_base: u8,
 	level_min: u8,
-	tile_size: u32,
+	enable_climbing: bool,
 	cache: Arc<Mutex<TileCache>>,
-}
-
-impl Clone for Operation {
-	fn clone(&self) -> Self {
-		Self {
-			parameters: self.parameters.clone(),
-			source: Arc::clone(&self.source),
-			tilejson: self.tilejson.clone(),
-			level_base: self.level_base,
-			level_min: self.level_min,
-			tile_size: self.tile_size,
-			cache: Arc::clone(&self.cache),
-		}
-	}
 }
 
 impl Operation {
@@ -117,32 +103,59 @@ impl Operation {
 			tilejson,
 			level_base,
 			level_min,
-			tile_size: args.tile_size.unwrap_or(512),
 			cache,
+			enable_climbing: args.enable_climbing.unwrap_or(false),
 		})
 	}
 
-	async fn get_tile_with_climbing(&self, coord_dst: TileCoord) -> Result<Option<Tile>> {
-		let level_dst = coord_dst.level;
-		let mut search_level = self.level_base.min(level_dst);
-		let mut coord_src = coord_dst.at_level(search_level);
+	#[context("finding tile for coord {:?}", coord_dst)]
+	async fn find_tile(
+		&self,
+		coord_dst: TileCoord,
+		with_climbing: bool,
+	) -> Result<Option<(TileCoord, Arc<DynamicImage>)>> {
+		let mut coord_src = coord_dst.at_level(self.level_base.min(coord_dst.level));
 
-		loop {
-			// 1. Check cache
-			{
-				let mut cache = self.cache.lock().await;
-				if let Some(cached_image) = cache.get(&coord_src) {
-					drop(cache);
-					return Ok(Some(Tile::from_image(
-						extract_image(&cached_image, coord_src, coord_dst)?,
-						self.parameters.tile_format,
-					)?));
+		if with_climbing {
+			loop {
+				// 1. Check cache
+				{
+					let mut cache = self.cache.lock().await;
+					if let Some(cached_image) = cache.get(&coord_src) {
+						drop(cache);
+						return Ok(Some((coord_src, cached_image)));
+					}
 				}
-			}
 
-			// 2. Try to fetch from source
+				// 2. Try to fetch from source
+				let bbox = coord_src.to_tile_bbox();
+				let mut stream = self.source.get_tile_stream(bbox).await?;
+
+				if let Some((found_coord, tile)) = stream.next().await
+					&& found_coord == coord_src
+				{
+					let image = tile.into_image()?;
+					let image_arc = Arc::new(image);
+
+					// Cache it
+					{
+						let mut cache = self.cache.lock().await;
+						cache.insert(coord_src, image_arc.clone());
+					}
+
+					return Ok(Some((coord_src, image_arc)));
+				}
+
+				// 3. Tile not found - climb to parent
+				if coord_src.level <= self.level_min {
+					return Ok(None);
+				}
+
+				coord_src = coord_src.as_level_decreased()?;
+			}
+		} else {
 			let bbox = coord_src.to_tile_bbox();
-			let mut stream = self.source.as_ref().get_tile_stream(bbox).await?;
+			let mut stream = self.source.get_tile_stream(bbox).await?;
 
 			if let Some((found_coord, tile)) = stream.next().await
 				&& found_coord == coord_src
@@ -150,29 +163,15 @@ impl Operation {
 				let image = tile.into_image()?;
 				let image_arc = Arc::new(image);
 
-				// Cache it
-				{
-					let mut cache = self.cache.lock().await;
-					cache.insert(coord_src, image_arc.clone());
-				}
-
-				return Ok(Some(Tile::from_image(
-					extract_image(&image_arc, coord_src, coord_dst)?,
-					self.parameters.tile_format,
-				)?));
-			}
-
-			// 3. Tile not found - climb to parent
-			if search_level <= self.level_min {
+				return Ok(Some((coord_src, image_arc)));
+			} else {
 				return Ok(None);
 			}
-
-			search_level -= 1;
-			coord_src = coord_src.as_level_decreased()?;
 		}
 	}
 }
 
+#[context("extracting image for tile {:?}", coord_dst)]
 fn extract_image(image_src: &DynamicImage, coord_src: TileCoord, coord_dst: TileCoord) -> Result<DynamicImage> {
 	let level_diff = coord_dst.level as i32 - coord_src.level as i32;
 
@@ -229,15 +228,29 @@ impl TileSourceTrait for Operation {
 		// Use tile climbing for all upscaling - process in parallel
 		let coords: Vec<TileCoord> = bbox_dst.into_iter_coords().collect();
 		let self_arc = Arc::new(self.clone()); // Share Operation across tasks
+		let enable_climbing = self.enable_climbing;
+		let tile_format = self.parameters.tile_format;
 
-		let stream = TileStream::from_coord_vec_async(coords, move |coord| {
-			let self_arc = Arc::clone(&self_arc);
+		let get_tile = async move |coord_dst: TileCoord| -> Result<Option<Tile>> {
+			let (coord_src, image_src) = match self_arc.find_tile(coord_dst, enable_climbing).await? {
+				Some(t) => t,
+				None => return Ok(None),
+			};
+
+			Ok(Some(Tile::from_image(
+				extract_image(&image_src, coord_src, coord_dst)?,
+				tile_format,
+			)?))
+		};
+
+		let stream = TileStream::from_coord_vec_async(coords, move |coord_dst| {
+			let get_tile = get_tile.clone();
 			async move {
-				match self_arc.get_tile_with_climbing(coord).await {
-					Ok(Some(tile)) => Some((coord, tile)),
+				match get_tile(coord_dst).await {
+					Ok(Some(tile)) => Some((coord_dst, tile)),
 					Ok(None) => None,
 					Err(e) => {
-						log::warn!("Failed to get tile {:?}: {}", coord, e);
+						log::error!("Error processing tile {:?}: {:?}", coord_dst, e);
 						None
 					}
 				}
@@ -309,7 +322,7 @@ mod tests {
 		let source = Box::new(DummyImageSource::from_image(image, TileFormat::PNG, None)?);
 
 		Operation::build(
-			VPLNode::try_from_str("raster_overscale tile_size=256 level_base=2")?,
+			VPLNode::try_from_str("raster_overscale level_base=2")?,
 			source,
 			&PipelineFactory::new_dummy(),
 		)
