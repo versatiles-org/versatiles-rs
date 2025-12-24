@@ -15,8 +15,7 @@ const containerPath = new URL('../../testdata/berlin.mbtiles', import.meta.url).
 const container = await ContainerReader.open(containerPath);
 
 console.log('Container Information:');
-console.log('  Type:', await container.containerName());
-console.log('  Source:', await container.sourceName());
+console.log('  Type:', await container.sourceType());
 
 console.log('\nTile Parameters:');
 const parameters = await container.parameters();
