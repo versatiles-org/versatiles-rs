@@ -118,71 +118,54 @@ impl Operation {
 
 		if with_climbing {
 			loop {
-				// 1. Check cache
-				{
-					let mut cache = self.cache.lock().await;
-					if let Some(cached_image) = cache.get(&coord_src) {
-						drop(cache);
-						return Ok(Some((coord_src, cached_image)));
-					}
+				if let Some(image) = self.try_fetch_tile(coord_src).await? {
+					return Ok(Some((coord_src, image)));
 				}
 
-				// 2. Try to fetch from source
-				let bbox = coord_src.to_tile_bbox();
-				let mut stream = self.source.get_tile_stream(bbox).await?;
-
-				if let Some((found_coord, tile)) = stream.next().await
-					&& found_coord == coord_src
-				{
-					let image = tile.into_image()?;
-					let image_arc = Arc::new(image);
-
-					// Cache it
-					{
-						let mut cache = self.cache.lock().await;
-						cache.insert(coord_src, image_arc.clone());
-					}
-
-					return Ok(Some((coord_src, image_arc)));
-				}
-
-				// 3. Tile not found - climb to parent
+				// Climb to parent
 				if coord_src.level <= self.level_min {
 					return Ok(None);
 				}
-
 				coord_src = coord_src.as_level_decreased()?;
 			}
 		} else {
-			// Check cache first (non-climbing mode)
+			// Single attempt - no climbing
+			if let Some(image) = self.try_fetch_tile(coord_src).await? {
+				return Ok(Some((coord_src, image)));
+			}
+			Ok(None)
+		}
+	}
+
+	/// Attempts to fetch a tile at the given coordinate, checking cache first.
+	/// Returns None if the tile doesn't exist at this coordinate.
+	async fn try_fetch_tile(&self, coord: TileCoord) -> Result<Option<Arc<DynamicImage>>> {
+		// Check cache
+		{
+			let mut cache = self.cache.lock().await;
+			if let Some(cached_image) = cache.get(&coord) {
+				return Ok(Some(cached_image));
+			}
+		}
+
+		// Fetch from source
+		let bbox = coord.to_tile_bbox();
+		let mut stream = self.source.get_tile_stream(bbox).await?;
+
+		if let Some((found_coord, tile)) = stream.next().await
+			&& found_coord == coord
+		{
+			let image = Arc::new(tile.into_image()?);
+
+			// Cache it
 			{
 				let mut cache = self.cache.lock().await;
-				if let Some(cached_image) = cache.get(&coord_src) {
-					drop(cache);
-					return Ok(Some((coord_src, cached_image)));
-				}
+				cache.insert(coord, image.clone());
 			}
 
-			// Fetch from source
-			let bbox = coord_src.to_tile_bbox();
-			let mut stream = self.source.get_tile_stream(bbox).await?;
-
-			if let Some((found_coord, tile)) = stream.next().await
-				&& found_coord == coord_src
-			{
-				let image = tile.into_image()?;
-				let image_arc = Arc::new(image);
-
-				// Cache it
-				{
-					let mut cache = self.cache.lock().await;
-					cache.insert(coord_src, image_arc.clone());
-				}
-
-				return Ok(Some((coord_src, image_arc)));
-			} else {
-				return Ok(None);
-			}
+			Ok(Some(image))
+		} else {
+			Ok(None)
 		}
 	}
 }
