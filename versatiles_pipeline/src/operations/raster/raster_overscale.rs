@@ -10,7 +10,7 @@ use versatiles_derive::context;
 use versatiles_image::{DynamicImage, traits::*};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Filter tiles by bounding box and/or zoom levels.
+/// Raster overscale operation - generates tiles beyond the source's native resolution.
 struct Args {
 	/// use this zoom level to build the overscale. Defaults to the maximum zoom level of the source.
 	level_base: Option<u8>,
@@ -154,6 +154,16 @@ impl Operation {
 				coord_src = coord_src.as_level_decreased()?;
 			}
 		} else {
+			// Check cache first (non-climbing mode)
+			{
+				let mut cache = self.cache.lock().await;
+				if let Some(cached_image) = cache.get(&coord_src) {
+					drop(cache);
+					return Ok(Some((coord_src, cached_image)));
+				}
+			}
+
+			// Fetch from source
 			let bbox = coord_src.to_tile_bbox();
 			let mut stream = self.source.get_tile_stream(bbox).await?;
 
@@ -162,6 +172,12 @@ impl Operation {
 			{
 				let image = tile.into_image()?;
 				let image_arc = Arc::new(image);
+
+				// Cache it
+				{
+					let mut cache = self.cache.lock().await;
+					cache.insert(coord_src, image_arc.clone());
+				}
 
 				return Ok(Some((coord_src, image_arc)));
 			} else {
@@ -360,6 +376,58 @@ mod tests {
 				);
 			}
 		}
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_overscale_without_climbing() -> Result<()> {
+		let image = make_gradient_image(3);
+		let source = Box::new(DummyImageSource::from_image(image, TileFormat::PNG, None)?);
+
+		// Build with climbing disabled (default)
+		let op = Operation::build(
+			VPLNode::try_from_str("raster_overscale level_base=2")?,
+			source,
+			&PipelineFactory::new_dummy(),
+		)
+		.await?;
+
+		// Should work for tiles at level_base (z=2)
+		let coord_base = TileCoord::new(2, 0, 0)?.to_tile_bbox();
+		let tiles = op.get_tile_stream(coord_base).await?.to_vec().await;
+		assert_eq!(tiles.len(), 1, "Should return tile at level_base");
+
+		// Should work for tiles above level_base (extracted from level_base)
+		let coord_high = TileCoord::new(3, 0, 0)?.to_tile_bbox();
+		let tiles = op.get_tile_stream(coord_high).await?.to_vec().await;
+		assert_eq!(tiles.len(), 1, "Should extract from level_base for high zoom");
+
+		// Multiple high-zoom tiles should reuse cached base tile
+		let coord_high2 = TileCoord::new(3, 1, 0)?.to_tile_bbox();
+		let tiles2 = op.get_tile_stream(coord_high2).await?.to_vec().await;
+		assert_eq!(tiles2.len(), 1, "Should also work for adjacent tile");
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_overscale_with_climbing_enabled() -> Result<()> {
+		let image = make_gradient_image(3);
+		let source = Box::new(DummyImageSource::from_image(image, TileFormat::PNG, None)?);
+
+		// Build with climbing ENABLED
+		let op = Operation::build(
+			VPLNode::try_from_str("raster_overscale level_base=2 enable_climbing=true")?,
+			source,
+			&PipelineFactory::new_dummy(),
+		)
+		.await?;
+
+		// Should work with climbing enabled
+		let coord = TileCoord::new(3, 0, 0)?.to_tile_bbox();
+		let tiles = op.get_tile_stream(coord).await?.to_vec().await;
+		assert_eq!(tiles.len(), 1, "Should return tile with climbing enabled");
+
 		Ok(())
 	}
 }
