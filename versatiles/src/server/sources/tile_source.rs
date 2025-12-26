@@ -1,7 +1,6 @@
 use super::{super::utils::Url, SourceResponse};
 use anyhow::Result;
 use std::{fmt::Debug, sync::Arc};
-use tokio::sync::Mutex;
 use versatiles_container::TileSourceTrait;
 use versatiles_core::{Blob, TileCompression, TileCoord, utils::TargetCompression};
 use versatiles_derive::context;
@@ -11,7 +10,7 @@ use versatiles_derive::context;
 pub struct TileSource {
 	pub prefix: Url,
 	pub id: String,
-	reader: Arc<Mutex<Box<dyn TileSourceTrait>>>,
+	reader: Arc<Box<dyn TileSourceTrait>>, // NO MORE MUTEX! 🚀
 	pub tile_mime: String,
 	pub compression: TileCompression,
 }
@@ -27,14 +26,14 @@ impl TileSource {
 		Ok(TileSource {
 			prefix: Url::new(format!("/tiles/{id}/")).to_dir(),
 			id: id.to_owned(),
-			reader: Arc::new(Mutex::new(reader)),
+			reader: Arc::new(reader), // No Mutex wrapper!
 			tile_mime,
 			compression,
 		})
 	}
 
 	pub async fn get_source_name(&self) -> String {
-		self.reader.lock().await.source_type().to_string()
+		self.reader.source_type().to_string() // Direct access!
 	}
 
 	// Retrieve the tile data as an HTTP response
@@ -56,9 +55,7 @@ impl TileSource {
 			log::debug!("get tile, prefix: {}, coord: {}", self.prefix, coord.as_json());
 
 			// Get tile data
-			let reader = self.reader.lock().await;
-			let tile = reader.get_tile(&coord).await;
-			drop(reader);
+			let tile = self.reader.get_tile(&coord).await;
 
 			// If tile data is not found, return a not found response
 			if tile.is_err() {
@@ -92,9 +89,9 @@ impl TileSource {
 
 	#[context("building tilejson for tile source id='{}'", self.id)]
 	async fn build_tile_json(&self) -> Result<Blob> {
-		let reader = self.reader.lock().await;
-		let mut tilejson = reader.tilejson().clone();
-		tilejson.update_from_reader_parameters(reader.parameters());
+		// Direct access - no lock!
+		let mut tilejson = self.reader.tilejson().clone();
+		tilejson.update_from_reader_parameters(self.reader.parameters());
 
 		let tiles_url = self.prefix.join_as_string("{z}/{x}/{y}");
 		tilejson.set_list("tiles", vec![tiles_url])?;
@@ -143,9 +140,10 @@ mod tests {
 	fn debug() -> Result<()> {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
 		let container = TileSource::from(reader.boxed(), "prefix")?;
+		// Updated expected output - no more "Mutex { data: ... }"
 		assert_eq!(
 			format!("{container:?}"),
-			"TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [2: [0,1,2,3] (3x3), 3: [0,2,4,6] (5x5), 4: [0,0,15,15] (16x16), 5: [0,0,31,31] (32x32), 6: [0,0,63,63] (64x64)], tile_compression: Uncompressed, tile_format: PNG } } }, tile_mime: \"image/png\", compression: Uncompressed }"
+			"TileSource { reader: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [2: [0,1,2,3] (3x3), 3: [0,2,4,6] (5x5), 4: [0,0,15,15] (16x16), 5: [0,0,31,31] (32x32), 6: [0,0,63,63] (64x64)], tile_compression: Uncompressed, tile_format: PNG } }, tile_mime: \"image/png\", compression: Uncompressed }"
 		);
 		Ok(())
 	}

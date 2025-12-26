@@ -7,7 +7,8 @@
 //! - Warnings and errors
 
 use crate::ProgressState;
-use std::sync::{Arc, RwLock};
+use arc_swap::ArcSwap;
+use std::sync::Arc;
 
 /// Event types that can be emitted by the runtime
 #[derive(Debug, Clone)]
@@ -52,16 +53,17 @@ type EventListener = Arc<dyn Fn(&Event) + Send + Sync>;
 ///
 /// The event bus allows subscribers to register listeners that will be called
 /// when events are emitted. All listener calls are synchronous and blocking.
+/// Uses lock-free arc-swap for optimal performance when emitting frequent events.
 #[derive(Clone)]
 pub struct EventBus {
-	listeners: Arc<RwLock<Vec<EventListener>>>,
+	listeners: Arc<ArcSwap<Vec<EventListener>>>,
 }
 
 impl EventBus {
 	/// Create a new event bus
 	pub fn new() -> Self {
 		Self {
-			listeners: Arc::new(RwLock::new(Vec::new())),
+			listeners: Arc::new(ArcSwap::from_pointee(Vec::new())),
 		}
 	}
 
@@ -69,13 +71,18 @@ impl EventBus {
 	///
 	/// Returns a listener ID that can be used to unsubscribe (future enhancement).
 	/// The listener will be called for all events emitted on this bus.
+	/// Uses read-copy-update (RCU) for lock-free hot-reload.
 	pub fn subscribe<F>(&self, listener: F) -> ListenerId
 	where
 		F: Fn(&Event) + Send + Sync + 'static,
 	{
-		let mut listeners = self.listeners.write().unwrap();
-		let id = listeners.len();
-		listeners.push(Arc::new(listener));
+		let listener = Arc::new(listener);
+		let id = self.listeners.load().len();
+		self.listeners.rcu(|old| {
+			let mut new = (**old).clone();
+			new.push(listener.clone());
+			new
+		});
 		ListenerId(id)
 	}
 
@@ -83,8 +90,9 @@ impl EventBus {
 	///
 	/// Listeners are called synchronously in the order they were registered.
 	/// If a listener panics, the panic is caught and other listeners continue.
+	/// Lock-free load for optimal performance on frequent emissions.
 	pub fn emit(&self, event: Event) {
-		let listeners = self.listeners.read().unwrap();
+		let listeners = self.listeners.load();
 		for listener in listeners.iter() {
 			// Catch panics to prevent one bad listener from breaking others
 			let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -177,15 +185,13 @@ mod tests {
 	#[test]
 	fn test_event_bus_new() {
 		let bus = EventBus::new();
-		let listeners = bus.listeners.read().unwrap();
-		assert_eq!(listeners.len(), 0);
+		assert_eq!(bus.listeners.load().len(), 0);
 	}
 
 	#[test]
 	fn test_event_bus_default() {
 		let bus = EventBus::default();
-		let listeners = bus.listeners.read().unwrap();
-		assert_eq!(listeners.len(), 0);
+		assert_eq!(bus.listeners.load().len(), 0);
 	}
 
 	#[test]

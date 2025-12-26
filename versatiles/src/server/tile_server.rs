@@ -15,14 +15,14 @@
 use super::{cors, routes, sources};
 use crate::config::{Config, TileSourceConfig};
 use anyhow::{Result, bail};
+use arc_swap::ArcSwap;
 use axum::error_handling::HandleErrorLayer;
 use axum::http::{StatusCode, header::HeaderName, header::HeaderValue};
 use axum::{BoxError, response::IntoResponse};
 use axum::{Router, routing::get};
-use std::collections::HashMap;
+use dashmap::DashMap;
 use std::path::Path;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tokio::{net::TcpListener, sync::oneshot};
 use tower::{
 	ServiceBuilder, buffer::BufferLayer, limit::ConcurrencyLimitLayer, load_shed::LoadShedLayer, timeout::TimeoutLayer,
@@ -53,12 +53,12 @@ use versatiles_derive::context;
 pub struct TileServer {
 	ip: String,
 	port: u16,
-	/// Tile sources stored in a shared HashMap for dynamic hot-reload.
-	/// Arc<RwLock<...>> allows concurrent reads (serving tiles) and exclusive writes (add/remove).
-	tile_sources: Arc<RwLock<HashMap<String, Arc<sources::TileSource>>>>,
-	/// Static sources stored in a shared Vec for dynamic hot-reload.
-	/// Arc<RwLock<...>> allows concurrent reads (serving files) and exclusive writes (add/remove).
-	static_sources: Arc<RwLock<Vec<sources::StaticSource>>>,
+	/// Tile sources stored in a lock-free concurrent HashMap for dynamic hot-reload.
+	/// DashMap provides lock-free reads (serving tiles) with sharded locking for writes (add/remove).
+	tile_sources: Arc<DashMap<String, Arc<sources::TileSource>>>,
+	/// Static sources stored in a lock-free arc-swapped Vec for dynamic hot-reload.
+	/// ArcSwap allows lock-free reads (serving files) and copy-on-write updates (add/remove).
+	static_sources: Arc<ArcSwap<Vec<sources::StaticSource>>>,
 	/// One-shot channel to signal graceful shutdown to the serving task.
 	exit_signal: Option<oneshot::Sender<()>>,
 	/// Join handle for the serving task; awaited in `stop()` to ensure shutdown completes.
@@ -82,8 +82,8 @@ impl TileServer {
 		TileServer {
 			ip: ip.to_owned(),
 			port,
-			tile_sources: Arc::new(RwLock::new(HashMap::new())),
-			static_sources: Arc::new(RwLock::new(Vec::new())),
+			tile_sources: Arc::new(DashMap::new()),
+			static_sources: Arc::new(ArcSwap::from_pointee(Vec::new())),
 			exit_signal: None,
 			join: None,
 			minimal_recompression,
@@ -113,8 +113,8 @@ impl TileServer {
 		let mut server = TileServer {
 			ip: config.server.ip.unwrap_or("0.0.0.0".into()),
 			port: config.server.port.unwrap_or(8080),
-			tile_sources: Arc::new(RwLock::new(HashMap::new())),
-			static_sources: Arc::new(RwLock::new(Vec::new())),
+			tile_sources: Arc::new(DashMap::new()),
+			static_sources: Arc::new(ArcSwap::from_pointee(Vec::new())),
 			exit_signal: None,
 			join: None,
 			minimal_recompression: config.server.minimal_recompression.unwrap_or(false),
@@ -168,17 +168,15 @@ impl TileServer {
 		let source = sources::TileSource::from(reader, &name)?;
 		let source_arc = Arc::new(source);
 
-		// Acquire write lock for exclusive access
-		let mut sources = self.tile_sources.write().await;
-
 		// Check for ID collision
-		if sources.contains_key(&name) {
+		if self.tile_sources.contains_key(&name) {
 			bail!("tile source '{}' already exists", name);
 		}
 
 		// Check URL prefix collision with existing sources
 		let new_prefix = source_arc.prefix.clone();
-		for (other_id, other_source) in sources.iter() {
+		for entry in self.tile_sources.iter() {
+			let (other_id, other_source) = entry.pair();
 			let other_prefix = &other_source.prefix;
 			if other_prefix.starts_with(&new_prefix) || new_prefix.starts_with(other_prefix) {
 				bail!(
@@ -191,8 +189,8 @@ impl TileServer {
 			}
 		}
 
-		// Insert into HashMap
-		sources.insert(name.clone(), source_arc);
+		// Insert into DashMap (lock-free!)
+		self.tile_sources.insert(name.clone(), source_arc);
 
 		log::info!("added tile source: id='{}', prefix='{}'", name, new_prefix);
 		Ok(())
@@ -204,8 +202,7 @@ impl TileServer {
 	/// In-flight requests to the removed source will complete successfully
 	/// due to Arc reference counting.
 	pub async fn remove_tile_source(&mut self, name: &str) -> Result<bool> {
-		let mut sources = self.tile_sources.write().await;
-		let removed = sources.remove(name);
+		let removed = self.tile_sources.remove(name);
 
 		if removed.is_some() {
 			log::info!("removed tile source: id='{}'", name);
@@ -218,14 +215,17 @@ impl TileServer {
 
 	/// Register a static file source mounted at `url_prefix`.
 	///
-	/// This method is async because it needs to acquire a write lock on the sources.
-	/// Can be called before or after `start()` - changes take effect immediately (hot reload).
+	/// Uses read-copy-update (RCU) for lock-free hot-reload.
+	/// Can be called before or after `start()` - changes take effect immediately.
 	#[context("adding static source: path={path:?}, url_prefix='{url_prefix}'")]
 	pub async fn add_static_source(&mut self, path: &Path, url_prefix: &str) -> Result<()> {
 		log::debug!("add static: {path:?}");
 		let source = sources::StaticSource::new(path, url_prefix)?;
-		let mut sources = self.static_sources.write().await;
-		sources.push(source);
+		self.static_sources.rcu(|old| {
+			let mut new = (**old).clone();
+			new.push(source.clone());
+			new
+		});
 		log::info!("added static source: path={:?}, url_prefix='{}'", path, url_prefix);
 		Ok(())
 	}
@@ -234,15 +234,21 @@ impl TileServer {
 	///
 	/// Returns true if a source was removed, false if prefix not found.
 	/// In-flight requests to the removed source will complete successfully.
+	/// Uses read-copy-update (RCU) for lock-free hot-reload.
 	pub async fn remove_static_source(&mut self, url_prefix: &str) -> Result<bool> {
 		let target_prefix = crate::server::Url::from(url_prefix).to_dir();
 
-		let mut sources = self.static_sources.write().await;
-		let initial_len = sources.len();
+		let initial_len = self.static_sources.load().len();
+		self.static_sources.rcu(|old| {
+			let new: Vec<_> = old
+				.iter()
+				.filter(|source| source.get_prefix() != &target_prefix)
+				.cloned()
+				.collect();
+			new
+		});
+		let was_removed = self.static_sources.load().len() < initial_len;
 
-		sources.retain(|source| source.get_prefix() != &target_prefix);
-
-		let was_removed = sources.len() < initial_len;
 		if was_removed {
 			log::info!("removed static source: url_prefix='{}'", url_prefix);
 		} else {
@@ -399,9 +405,9 @@ impl TileServer {
 	}
 
 	pub async fn get_url_mapping(&self) -> Vec<(super::Url, String)> {
-		let sources = self.tile_sources.read().await;
 		let mut result = Vec::new();
-		for tile_source in sources.values() {
+		for entry in self.tile_sources.iter() {
+			let tile_source = entry.value();
 			let source_name = tile_source.get_source_name().await;
 			result.push((tile_source.prefix.clone(), source_name))
 		}
@@ -473,8 +479,8 @@ mod tests {
 		let mut server = TileServer::new_test(IP, 50003, true, false);
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50003);
-		assert_eq!(server.tile_sources.read().await.len(), 0);
-		assert_eq!(server.static_sources.read().await.len(), 0);
+		assert_eq!(server.tile_sources.len(), 0);
+		assert_eq!(server.static_sources.load().len(), 0);
 		assert!(server.exit_signal.is_none());
 		server.start().await.unwrap();
 		server.stop().await; // No assertion here as it's void
@@ -488,10 +494,9 @@ mod tests {
 		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf).unwrap().boxed();
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 
-		let sources = server.tile_sources.read().await;
-		assert_eq!(sources.len(), 1);
-		assert!(sources.contains_key("cheese"));
-		assert_eq!(sources.get("cheese").unwrap().prefix.str, "/tiles/cheese/");
+		assert_eq!(server.tile_sources.len(), 1);
+		assert!(server.tile_sources.contains_key("cheese"));
+		assert_eq!(server.tile_sources.get("cheese").unwrap().prefix.str, "/tiles/cheese/");
 	}
 
 	#[tokio::test]

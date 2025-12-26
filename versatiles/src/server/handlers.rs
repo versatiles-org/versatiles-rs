@@ -19,7 +19,6 @@ use axum::{
 	response::Response,
 };
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use versatiles_core::{
 	Blob, TileCompression,
 	utils::{TargetCompression, optimize_compression},
@@ -28,7 +27,7 @@ use versatiles_core::{
 /// State for static file requests across multiple `StaticSource`s.
 #[derive(Clone)]
 pub struct StaticHandlerState {
-	pub sources: Arc<RwLock<Vec<StaticSource>>>,
+	pub sources: Arc<arc_swap::ArcSwap<Vec<StaticSource>>>,
 	pub minimal_recompression: bool,
 }
 
@@ -86,8 +85,8 @@ pub async fn serve_static(uri: Uri, headers: HeaderMap, State(state): State<Stat
 		target.set_fast_compression();
 	}
 
-	// Acquire read lock for request duration
-	let sources = state.sources.read().await;
+	// Load sources (lock-free!)
+	let sources = state.sources.load();
 
 	for source in sources.iter() {
 		if let Some(result) = source.get_data(&url, &target) {
@@ -95,8 +94,6 @@ pub async fn serve_static(uri: Uri, headers: HeaderMap, State(state): State<Stat
 			return ok_data(result, target);
 		}
 	}
-
-	// Lock automatically released when sources goes out of scope
 	log::debug!("send 404 to static request: {url}");
 	error_404()
 }

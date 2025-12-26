@@ -17,15 +17,14 @@ use axum::{
 	response::Response,
 	routing::get,
 };
-use std::collections::HashMap;
+use dashmap::DashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use versatiles_derive::context;
 
 /// State for dynamic tile routing - looks up sources at request time.
 #[derive(Clone)]
 pub struct DynamicTileHandlerState {
-	pub tile_sources: Arc<RwLock<HashMap<String, Arc<TileSource>>>>,
+	pub tile_sources: Arc<DashMap<String, Arc<TileSource>>>,
 	pub minimal_recompression: bool,
 }
 
@@ -48,17 +47,14 @@ pub async fn serve_dynamic_tile(
 
 	let source_id = &parts[1];
 
-	// Lookup source (read lock)
-	let sources = state.tile_sources.read().await;
-	let tile_source = match sources.get(source_id) {
-		Some(src) => Arc::clone(src),
+	// Lookup source (lock-free!)
+	let tile_source = match state.tile_sources.get(source_id) {
+		Some(entry) => Arc::clone(entry.value()),
 		None => {
 			log::debug!("tile source '{}' not found", source_id);
-			drop(sources); // release lock before returning
 			return error_404();
 		}
 	};
-	drop(sources); // Release lock ASAP
 
 	// Delegate to core serving logic
 	serve_tile_from_source(path, headers, tile_source, state.minimal_recompression).await
@@ -67,7 +63,7 @@ pub async fn serve_dynamic_tile(
 /// Attach dynamic tile routing with single catch-all route.
 pub fn add_tile_sources_to_app(
 	app: Router,
-	sources: Arc<RwLock<HashMap<String, Arc<TileSource>>>>,
+	sources: Arc<DashMap<String, Arc<TileSource>>>,
 	minimal_recompression: bool,
 ) -> Router {
 	let state = DynamicTileHandlerState {
@@ -86,7 +82,7 @@ pub fn add_tile_sources_to_app(
 /// Sources are checked in order; the first one returning data wins.
 pub fn add_static_sources_to_app(
 	app: Router,
-	static_sources: Arc<RwLock<Vec<StaticSource>>>,
+	static_sources: Arc<arc_swap::ArcSwap<Vec<StaticSource>>>,
 	minimal_recompression: bool,
 ) -> Router {
 	let state = StaticHandlerState {
@@ -99,7 +95,7 @@ pub fn add_static_sources_to_app(
 
 /// Attach small JSON API endpoints (currently `/tiles/index.json`).
 #[context("adding API routes to app")]
-pub async fn add_api_to_app(app: Router, sources: Arc<RwLock<HashMap<String, Arc<TileSource>>>>) -> Result<Router> {
+pub async fn add_api_to_app(app: Router, sources: Arc<DashMap<String, Arc<TileSource>>>) -> Result<Router> {
 	let mut api_app = Router::new();
 
 	api_app = api_app.route(
@@ -107,8 +103,7 @@ pub async fn add_api_to_app(app: Router, sources: Arc<RwLock<HashMap<String, Arc
 		get({
 			let sources = Arc::clone(&sources);
 			move || async move {
-				let sources_lock = sources.read().await;
-				let mut ids: Vec<_> = sources_lock.keys().map(|s| s.as_str()).collect();
+				let mut ids: Vec<_> = sources.iter().map(|entry| entry.key().clone()).collect();
 				ids.sort();
 				let tiles_index_json = format!(
 					"[{}]",
@@ -140,7 +135,7 @@ mod tests {
 	#[tokio::test]
 	async fn api_index_json_is_precomputed_and_empty_when_no_sources() {
 		let app = Router::new();
-		let sources = Arc::new(RwLock::new(HashMap::new()));
+		let sources = Arc::new(DashMap::new());
 		let app = add_api_to_app(app, sources).await.unwrap();
 
 		let (status, body) = get_body_text(app, "/tiles/index.json").await;
@@ -151,7 +146,7 @@ mod tests {
 	#[tokio::test]
 	async fn no_tile_sources_yields_404() {
 		let app = Router::new();
-		let sources = Arc::new(RwLock::new(HashMap::new()));
+		let sources = Arc::new(DashMap::new());
 		let app = add_tile_sources_to_app(app, sources, false);
 
 		let (status, _body) = get_body_text(app, "/tiles/any/1/2/3").await;
@@ -161,7 +156,7 @@ mod tests {
 	#[tokio::test]
 	async fn no_static_sources_yields_404() {
 		let app = Router::new();
-		let static_sources = Arc::new(RwLock::new(Vec::new()));
+		let static_sources = Arc::new(arc_swap::ArcSwap::from_pointee(Vec::new()));
 		let app = add_static_sources_to_app(app, static_sources, false);
 
 		let (status, _body) = get_body_text(app, "/").await;

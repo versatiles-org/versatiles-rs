@@ -23,6 +23,7 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true, features = ["std", "backtrace"] }
+arc-swap = { workspace = true, optional = true }
 async-trait.workspace = true
 axum = { workspace = true, optional = true, features = [
 	"http1",
@@ -30,6 +31,7 @@ axum = { workspace = true, optional = true, features = [
 	"tokio",
 ] }
 clap = { workspace = true, optional = true, features = ["default"] }
+dashmap = { workspace = true, optional = true }
 enumset = { workspace = true, optional = true }
 env_logger = { workspace = true, optional = true }
 log.workspace = true
@@ -84,7 +86,9 @@ versatiles_core = { workspace = true, features = ["test"] }
 [features]
 default = ["cli", "server"]
 server = [
+	"dep:arc-swap",
 	"dep:axum",
+	"dep:dashmap",
 	"dep:enumset",
 	"dep:mime_guess",
 	"dep:regex",
