@@ -334,6 +334,7 @@ pub trait TileSourceTraverseExt: TileSourceTrait {
 				match step {
 					Push(bboxes, index) => {
 						log::trace!("Cache {bboxes:?} at index {index}");
+						let limits = versatiles_core::ConcurrencyLimits::default();
 						stream::iter(bboxes.clone())
 							.map(|bbox| {
 								let progress = progress.clone();
@@ -352,7 +353,7 @@ pub trait TileSourceTraverseExt: TileSourceTrait {
 									Ok::<_, anyhow::Error>(())
 								}
 							})
-							.buffer_unordered(num_cpus::get() / 4)
+							.buffer_unordered(limits.io_bound) // I/O-bound: reading tiles from disk/network
 							.collect::<Vec<_>>()
 							.await
 							.into_iter()

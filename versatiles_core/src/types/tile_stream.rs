@@ -41,7 +41,7 @@
 ///
 /// # Utility Functions
 /// - `unwrap_result`: Unwraps a `Result`, printing detailed error information and terminating the program on failure.
-use crate::{Blob, TileCoord};
+use crate::{Blob, ConcurrencyLimits, TileCoord};
 use anyhow::Result;
 use futures::{
 	Future, Stream, StreamExt,
@@ -126,8 +126,10 @@ where
 	/// Creates a `TileStream` by converting an iterator of `TileCoord` into parallel tasks
 	/// that produce `(TileCoord, T)` items asynchronously.
 	///
-	/// Spawns one tokio task per coordinate (buffered by `num_cpus::get()`), calling `callback`
+	/// Spawns one tokio task per coordinate (buffered by CPU-bound concurrency limit), calling `callback`
 	/// to produce the tile value. Returns only items where `callback(coord)` yields `Some(value)`.
+	///
+	/// Uses CPU-bound concurrency limit since the callback runs in `spawn_blocking`.
 	///
 	/// # Arguments
 	/// * `iter` - An iterator of tile coordinates.
@@ -151,13 +153,14 @@ where
 		T: 'static,
 	{
 		let callback = Arc::new(callback);
+		let limits = ConcurrencyLimits::default();
 		let s = stream::iter(iter)
 			.map(move |coord| {
 				let cb = Arc::clone(&callback);
 				// Spawn a task for each coordinate
 				tokio::task::spawn_blocking(move || (coord, cb(coord)))
 			})
-			.buffer_unordered(num_cpus::get()) // concurrency
+			.buffer_unordered(limits.cpu_bound) // CPU-bound: spawn_blocking
 			.filter_map(|result| async {
 				match result {
 					Ok((coord, Some(item))) => Some((coord, item)),
@@ -237,8 +240,9 @@ where
 	where
 		FutureStream: Future<Output = TileStream<'a, T>> + Send + 'a,
 	{
+		let limits = ConcurrencyLimits::default();
 		TileStream {
-			inner: Box::pin(streams.buffer_unordered(num_cpus::get()).map(|s| s.inner).flatten()),
+			inner: Box::pin(streams.buffer_unordered(limits.io_bound).map(|s| s.inner).flatten()), // I/O-bound: awaiting async streams
 		}
 	}
 
@@ -327,7 +331,8 @@ where
 		F: FnMut((TileCoord, T)) -> Fut,
 		Fut: Future<Output = ()>,
 	{
-		self.inner.for_each_concurrent(num_cpus::get(), callback).await;
+		let limits = ConcurrencyLimits::default();
+		self.inner.for_each_concurrent(limits.mixed, callback).await; // Mixed: async callback (I/O + CPU)
 	}
 
 	/// Applies a synchronous callback `callback` to each `(TileCoord, T)` item.
@@ -407,8 +412,10 @@ where
 
 	/// Transforms the **value of type `T`** for each tile in parallel using the provided closure `callback`.
 	///
-	/// Spawns tokio tasks with concurrency of `num_cpus::get()`. Each item `(coord, value)` is mapped
+	/// Spawns tokio tasks with CPU-bound concurrency limit. Each item `(coord, value)` is mapped
 	/// to `(coord, callback(value))`.
+	///
+	/// Uses CPU-bound concurrency limit since the callback runs in `spawn_blocking`.
 	///
 	/// # Examples
 	/// ```
@@ -435,13 +442,14 @@ where
 		O: Send + Sync + 'static,
 	{
 		let arc_cb = Arc::new(callback);
+		let limits = ConcurrencyLimits::default();
 		let s = self
 			.inner
 			.map(move |(coord, item)| {
 				let cb = Arc::clone(&arc_cb);
 				tokio::task::spawn_blocking(move || (coord, cb(item)))
 			})
-			.buffer_unordered(num_cpus::get())
+			.buffer_unordered(limits.cpu_bound) // CPU-bound: spawn_blocking
 			.map(|e| {
 				let (coord, item) = e.unwrap();
 				(
@@ -459,6 +467,7 @@ where
 		O: 'static,
 	{
 		let arc_cb = Arc::new(callback);
+		let limits = ConcurrencyLimits::default();
 		let s = self
 			.inner
 			.map(move |(coord, item)| {
@@ -468,7 +477,7 @@ where
 					unsafe { std::mem::transmute::<_, TileStream<O>>(s) }
 				})
 			})
-			.buffer_unordered(num_cpus::get())
+			.buffer_unordered(limits.cpu_bound) // CPU-bound: spawn_blocking
 			.flat_map_unordered(None, |e| e.unwrap().inner);
 		TileStream { inner: s.boxed() }
 	}
@@ -506,13 +515,14 @@ where
 		O: Send + Sync + 'static,
 	{
 		let arc_cb = Arc::new(callback);
+		let limits = ConcurrencyLimits::default();
 		let s = self
 			.inner
 			.map(move |(coord, item)| {
 				let cb = Arc::clone(&arc_cb);
 				tokio::task::spawn_blocking(move || (coord, cb(item)))
 			})
-			.buffer_unordered(num_cpus::get())
+			.buffer_unordered(limits.cpu_bound) // CPU-bound: spawn_blocking
 			.filter_map(|res| async move {
 				let (coord, maybe_item) = res.unwrap();
 				let maybe_item = unwrap_result(maybe_item, || format!("Failed to process tile at {coord:?}"));
