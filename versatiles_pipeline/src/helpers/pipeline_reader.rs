@@ -11,7 +11,7 @@ use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::{path::Path, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesRuntime};
+use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters, TilesRuntime};
 use versatiles_core::{io::DataReader, *};
 use versatiles_derive::context;
 

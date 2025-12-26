@@ -38,7 +38,7 @@
 //! ## Errors
 //! Errors are returned if the directory is not absolute, does not exist, is not a directory, contains no tiles, or if tiles have inconsistent formats or compressions.
 
-use crate::{SourceType, Tile, TileSourceTrait};
+use crate::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use itertools::Itertools;

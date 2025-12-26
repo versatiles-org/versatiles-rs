@@ -10,7 +10,7 @@ use crate::{PipelineFactory, operations::read::traits::ReadTileSourceTrait, trai
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
-use versatiles_container::{Tile, TileSourceTrait};
+use versatiles_container::{Tile, TileSourceTrait, TilesReaderParameters};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -43,7 +43,7 @@ impl ReadTileSourceTrait for Operation {
 		let reader = factory.get_reader(&factory.resolve_filename(&args.filename)).await?;
 		let parameters = reader.parameters().clone();
 		let mut tilejson = reader.tilejson().clone();
-		tilejson.update_from_reader_parameters(&parameters);
+		parameters.update_tilejson(&mut tilejson);
 
 		Ok(Box::new(Self {
 			tilejson,
@@ -106,7 +106,7 @@ impl ReadOperationFactoryTrait for Factory {
 pub fn operation_from_reader(reader: Box<dyn TileSourceTrait>) -> Box<dyn TileSourceTrait> {
 	let parameters = reader.parameters().clone();
 	let mut tilejson = reader.tilejson().clone();
-	tilejson.update_from_reader_parameters(&parameters);
+	parameters.update_tilejson(&mut tilejson);
 
 	Box::new(Operation {
 		parameters,

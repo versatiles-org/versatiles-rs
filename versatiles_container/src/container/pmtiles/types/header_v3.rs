@@ -1,7 +1,8 @@
 use super::{PMTilesCompression, PMTilesType};
+use crate::TilesReaderParameters;
 use anyhow::{Result, ensure};
 use versatiles_core::{
-	Blob, ByteRange, TilesReaderParameters,
+	Blob, ByteRange,
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 };
 

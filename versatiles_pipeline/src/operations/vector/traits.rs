@@ -1,8 +1,8 @@
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::sync::Arc;
-use versatiles_container::{SourceType, Tile, TileSourceTrait};
-use versatiles_core::{TileBBox, TileJSON, TileStream, TileType, TilesReaderParameters, Traversal};
+use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
+use versatiles_core::{TileBBox, TileJSON, TileStream, TileType, Traversal};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 
@@ -76,7 +76,7 @@ where
 	// ── tile-json patching (always the same) ───────────────────────
 	let mut tilejson = source.tilejson().clone();
 	runner.update_tilejson(&mut tilejson);
-	tilejson.update_from_reader_parameters(&params);
+	params.update_tilejson(&mut tilejson);
 
 	Ok(Box::new(TransformOp::<R> {
 		runner,

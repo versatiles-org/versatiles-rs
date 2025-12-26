@@ -12,7 +12,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use std::{fmt::Debug, sync::Arc, vec};
-use versatiles_container::{SourceType, Tile, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -103,7 +103,7 @@ impl Operation {
 			bounds: Some(*bbox),
 			..Default::default()
 		};
-		tilejson.update_from_reader_parameters(&parameters);
+		parameters.update_tilejson(&mut tilejson);
 		tilejson.tile_schema = Some(TileSchema::RasterRGBA);
 		log::trace!("TileJSON bounds set to {:?}", tilejson.bounds);
 		log::trace!("from_gdal_raster::Operation built successfully");

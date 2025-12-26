@@ -2,7 +2,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use std::sync::Arc;
-use versatiles_container::{SourceType, Tile, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -56,7 +56,7 @@ impl DummyImageSource {
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("name", "dummy raster source")?;
-		tilejson.update_from_reader_parameters(&parameters);
+		parameters.update_tilejson(&mut tilejson);
 
 		Ok(DummyImageSource {
 			generate_tile: Arc::new(generate_tile),

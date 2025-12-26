@@ -2,7 +2,7 @@ use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
 use versatiles_core::*;
 use versatiles_derive::context;
 

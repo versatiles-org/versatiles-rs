@@ -238,7 +238,7 @@ impl TilesWriterTrait for MBTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{MBTilesReader, MockTilesReader, MockTilesWriter};
+	use crate::{MBTilesReader, MockTilesReader, MockTilesWriter, TilesReaderParameters};
 	use assert_fs::NamedTempFile;
 
 	#[tokio::test]

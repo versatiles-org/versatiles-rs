@@ -31,7 +31,7 @@
 //! Returns errors when the tar cannot be opened or read, when no tiles are found,
 //! or when mixed formats/compressions are detected.
 
-use crate::{SourceType, Tile, TileSourceTrait};
+use crate::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path, sync::Arc};

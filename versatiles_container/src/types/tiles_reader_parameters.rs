@@ -1,6 +1,6 @@
 //! This module defines configuration parameters for creating and initializing `TilesReader` instances.
 
-use super::{TileBBoxPyramid, TileCompression, TileFormat};
+use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat, TileJSON, TileSchema, TileType};
 
 /// Configuration parameters for creating and initializing a `TilesReader`.
 ///
@@ -52,10 +52,37 @@ impl TilesReaderParameters {
 			bbox_pyramid: TileBBoxPyramid::new_full(31),
 		}
 	}
+
+	/// Updates fields using information from [`TilesReaderParameters`].
+	///
+	/// - Applies [`TileJSON::update_from_pyramid`] to intersect/set bounds and min/max zoom.
+	/// - Sets `tile_format` from the reader parameters and derives `tile_type` from it.
+	/// - If `tile_schema` is absent or mismatched with `tile_type`, infers a suitable schema
+	///   (e.g., `RasterRGB` for rasters; for vectors, derived from `vector_layers`).
+	pub fn update_tilejson(&self, tile_json: &mut TileJSON) {
+		tile_json.update_from_pyramid(&self.bbox_pyramid);
+
+		tile_json.tile_format = Some(self.tile_format);
+
+		tile_json.tile_type = tile_json.tile_format.map(|f| f.to_type());
+
+		if let Some(tile_type) = tile_json.tile_type
+			&& tile_json.tile_schema.map(|s| s.get_tile_type()) != tile_json.tile_type
+		{
+			tile_json.tile_schema = Some(match tile_type {
+				TileType::Raster => TileSchema::RasterRGB,
+				TileType::Vector => tile_json.vector_layers.get_tile_schema(),
+				TileType::Unknown => TileSchema::Unknown,
+			});
+		}
+	}
 }
 
 #[cfg(test)]
 mod tests {
+	use anyhow::Result;
+	use versatiles_core::GeoBBox;
+
 	use super::*;
 
 	#[test]
@@ -81,5 +108,26 @@ mod tests {
 		assert_eq!(params.tile_format, tile_format);
 		assert_eq!(params.tile_compression, tile_compression);
 		assert_eq!(params.bbox_pyramid, TileBBoxPyramid::new_full(31));
+	}
+
+	#[test]
+	fn should_update_tile_json() -> Result<()> {
+		let mut tj = TileJSON::default();
+		// Prepare reader parameters
+		let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(1, 4, &GeoBBox::new(-180.0, -90.0, 180.0, 90.0).unwrap());
+		let rp = TilesReaderParameters {
+			bbox_pyramid,
+			tile_format: TileFormat::PNG,
+			..Default::default()
+		};
+		rp.update_tilejson(&mut tj);
+		// Bounds and zooms
+		assert_eq!(tj.values.get_byte("minzoom"), Some(1));
+		assert_eq!(tj.values.get_byte("maxzoom"), Some(4));
+		// Format, content, and schema
+		assert_eq!(tj.tile_format, Some(TileFormat::PNG));
+		assert_eq!(tj.tile_type, Some(TileType::Raster));
+		assert_eq!(tj.tile_schema, Some(TileSchema::RasterRGB));
+		Ok(())
 	}
 }

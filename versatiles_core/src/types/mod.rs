@@ -39,9 +39,6 @@ pub use tile_format::*;
 mod tilejson;
 pub use tilejson::*;
 
-mod tiles_reader_parameters;
-pub use tiles_reader_parameters::*;
-
 mod tile_schema;
 pub use tile_schema::*;
 

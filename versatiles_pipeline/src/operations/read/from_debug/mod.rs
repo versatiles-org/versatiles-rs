@@ -23,7 +23,7 @@ use async_trait::async_trait;
 use image::create_debug_image;
 use std::{fmt::Debug, sync::Arc};
 use vector::create_debug_vector_tile;
-use versatiles_container::{SourceType, Tile, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
 use versatiles_core::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -62,7 +62,7 @@ impl Operation {
 			)?)?;
 		}
 
-		tilejson.update_from_reader_parameters(&parameters);
+		parameters.update_tilejson(&mut tilejson);
 
 		Ok(Self { tilejson, parameters })
 	}

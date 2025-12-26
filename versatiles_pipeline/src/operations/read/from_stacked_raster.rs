@@ -20,7 +20,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
 use std::{sync::Arc, vec};
-use versatiles_container::{SourceType, Tile, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -115,7 +115,7 @@ impl ReadTileSourceTrait for Operation {
 		}
 
 		let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
-		tilejson.update_from_reader_parameters(&parameters);
+		parameters.update_tilejson(&mut tilejson);
 
 		Ok(Box::new(Self {
 			tilejson,

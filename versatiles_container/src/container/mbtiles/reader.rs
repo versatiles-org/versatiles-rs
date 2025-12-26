@@ -50,7 +50,7 @@
 //! - Returns errors if the database is unreadable, the `format` is missing/unknown,
 //!   or queries fail.
 
-use crate::{SourceType, Tile, TileSourceTrait, TilesRuntime};
+use crate::{SourceType, Tile, TileSourceTrait, TilesReaderParameters, TilesRuntime};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use r2d2::Pool;

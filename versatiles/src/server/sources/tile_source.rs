@@ -91,7 +91,7 @@ impl TileSource {
 	async fn build_tile_json(&self) -> Result<Blob> {
 		// Direct access - no lock!
 		let mut tilejson = self.reader.tilejson().clone();
-		tilejson.update_from_reader_parameters(self.reader.parameters());
+		self.reader.parameters().update_tilejson(&mut tilejson);
 
 		let tiles_url = self.prefix.join_as_string("{z}/{x}/{y}");
 		tilejson.set_list("tiles", vec![tiles_url])?;

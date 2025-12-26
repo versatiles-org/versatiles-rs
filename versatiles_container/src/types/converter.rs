@@ -40,13 +40,11 @@
 //! }
 //! ```
 
-use crate::{SourceType, Tile, TileSourceTrait, TilesRuntime};
+use crate::{SourceType, Tile, TileSourceTrait, TilesReaderParameters, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{path::Path, sync::Arc};
-use versatiles_core::{
-	TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal,
-};
+use versatiles_core::{TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileStream, Traversal};
 use versatiles_derive::context;
 
 /// Parameters that control how tiles are transformed during reading/conversion.
@@ -160,7 +158,7 @@ impl TilesConvertReader {
 		}
 
 		let mut tilejson = reader.tilejson().clone();
-		tilejson.update_from_reader_parameters(&new_rp);
+		new_rp.update_tilejson(&mut tilejson);
 
 		Ok(TilesConvertReader {
 			reader,

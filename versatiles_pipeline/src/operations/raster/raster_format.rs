@@ -2,7 +2,7 @@ use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use std::{fmt::Debug, str, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -98,7 +98,7 @@ impl Operation {
 		parameters.tile_compression = TileCompression::Uncompressed;
 
 		let mut tilejson = source.tilejson().clone();
-		tilejson.update_from_reader_parameters(&parameters);
+		parameters.update_tilejson(&mut tilejson);
 
 		Ok(Self {
 			format,

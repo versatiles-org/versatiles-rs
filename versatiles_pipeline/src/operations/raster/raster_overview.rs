@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use imageproc::image::{DynamicImage, GenericImage};
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -54,7 +54,7 @@ impl Operation {
 		}
 
 		let mut tilejson = source.tilejson().clone();
-		tilejson.update_from_reader_parameters(&parameters);
+		parameters.update_tilejson(&mut tilejson);
 
 		let tile_size = args.tile_size.unwrap_or(512);
 		let cache = Arc::new(DashMap::new());

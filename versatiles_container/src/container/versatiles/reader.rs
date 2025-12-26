@@ -55,7 +55,7 @@
 //! or when a requested tile is missing.
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
-use crate::{SourceType, Tile, TileSourceTrait, TilesRuntime};
+use crate::{SourceType, Tile, TileSourceTrait, TilesReaderParameters, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{lock::Mutex, stream::StreamExt};

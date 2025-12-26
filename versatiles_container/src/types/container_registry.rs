@@ -290,7 +290,7 @@ pub async fn make_test_file(
 ) -> Result<NamedTempFile> {
 	// get dummy reader
 
-	use versatiles_core::{TileBBoxPyramid, TilesReaderParameters};
+	use versatiles_core::TileBBoxPyramid;
 	let reader = MockTilesReader::new_mock(TilesReaderParameters::new(
 		tile_format,
 		compression,
@@ -317,7 +317,7 @@ pub mod tests {
 	use super::*;
 	use assert_fs::TempDir;
 	use std::time::Instant;
-	use versatiles_core::{TileBBoxPyramid, TilesReaderParameters};
+	use versatiles_core::TileBBoxPyramid;
 
 	/// Test writers and readers for various formats.
 	#[test]

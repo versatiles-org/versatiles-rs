@@ -149,7 +149,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{MOCK_BYTES_PBF, MockTilesReader};
+	use crate::{MOCK_BYTES_PBF, MockTilesReader, TilesReaderParameters};
 	use versatiles_core::utils::decompress_gzip;
 
 	/// Tests the functionality of writing tile data to a directory from a mock reader.

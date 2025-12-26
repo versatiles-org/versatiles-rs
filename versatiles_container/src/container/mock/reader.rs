@@ -24,7 +24,7 @@
 
 use std::sync::Arc;
 
-use crate::{SourceType, Tile, TileSourceTrait};
+use crate::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{utils::compress, *};

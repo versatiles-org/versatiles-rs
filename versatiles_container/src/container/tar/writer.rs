@@ -123,7 +123,7 @@ impl TilesWriterTrait for TarTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{MockTilesReader, MockTilesWriter, TarTilesReader};
+	use crate::{MockTilesReader, MockTilesWriter, TarTilesReader, TilesReaderParameters};
 	use assert_fs::NamedTempFile;
 	use versatiles_core::*;
 

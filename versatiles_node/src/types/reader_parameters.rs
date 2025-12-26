@@ -1,5 +1,5 @@
 use napi_derive::napi;
-use versatiles_core::TilesReaderParameters;
+use versatiles_container::TilesReaderParameters;
 
 /// Tile reader parameters
 #[napi(object)]

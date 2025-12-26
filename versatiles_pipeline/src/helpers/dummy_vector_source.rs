@@ -1,8 +1,7 @@
-use std::sync::Arc;
-
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_container::{SourceType, Tile, TileSourceTrait};
+use std::sync::Arc;
+use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
 use versatiles_core::*;
 use versatiles_geometry::{
 	geo::{GeoFeature, Geometry},
@@ -47,7 +46,7 @@ impl DummyVectorSource {
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("name", "dummy vector source").unwrap();
-		tilejson.update_from_reader_parameters(&parameters);
+		parameters.update_tilejson(&mut tilejson);
 
 		DummyVectorSource {
 			data,

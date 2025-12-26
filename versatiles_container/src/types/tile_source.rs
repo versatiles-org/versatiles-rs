@@ -16,7 +16,7 @@
 //! - Type-safe pipeline construction
 //! - Clear separation between data sources and transformations
 
-use crate::{CacheMap, Tile, TilesRuntime};
+use crate::{CacheMap, Tile, TilesReaderParameters, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{StreamExt, future::BoxFuture, stream};
@@ -25,8 +25,7 @@ use tokio::sync::Mutex;
 #[cfg(feature = "cli")]
 use versatiles_core::{ProbeDepth, utils::PrettyPrint};
 use versatiles_core::{
-	TileBBox, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal, TraversalTranslationStep,
-	translate_traversals,
+	TileBBox, TileCoord, TileJSON, TileStream, Traversal, TraversalTranslationStep, translate_traversals,
 };
 
 /// Distinguishes between different tile source types.

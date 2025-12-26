@@ -47,7 +47,7 @@
 //! PMTiles header/directories cannot be parsed or decompressed, or a requested tile is missing.
 
 use super::types::{EntriesV3, HeaderV3};
-use crate::{SourceType, Tile, TileSourceTrait, TilesRuntime};
+use crate::{SourceType, Tile, TileSourceTrait, TilesReaderParameters, TilesRuntime};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;

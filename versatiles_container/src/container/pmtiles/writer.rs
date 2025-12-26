@@ -153,9 +153,12 @@ impl TilesWriterTrait for PMTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::{
-		mock::{MockTilesReader, MockTilesWriter},
-		pmtiles::PMTilesReader,
+	use crate::{
+		TilesReaderParameters,
+		container::{
+			mock::{MockTilesReader, MockTilesWriter},
+			pmtiles::PMTilesReader,
+		},
 	};
 	use versatiles_core::io::*;
 	use versatiles_derive::context;

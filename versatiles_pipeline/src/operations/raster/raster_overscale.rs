@@ -3,7 +3,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use moka::future::Cache;
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::{DynamicImage, traits::*};
@@ -67,7 +67,7 @@ impl Operation {
 		}
 
 		let mut tilejson = source.as_ref().tilejson().clone();
-		tilejson.update_from_reader_parameters(&parameters);
+		parameters.update_tilejson(&mut tilejson);
 
 		let level_min = source.as_ref().parameters().bbox_pyramid.get_level_min().unwrap_or(0);
 		let cache = Cache::builder()
