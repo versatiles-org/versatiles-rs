@@ -1,9 +1,9 @@
 use super::{BandMapping, BandMappingItem, Instance};
 use anyhow::{Result, ensure};
+use deadpool::managed::{Manager, Object, Pool, RecycleResult};
 use gdal::{Dataset, config::set_config_option};
 use imageproc::image::DynamicImage;
-use std::{collections::LinkedList, path::Path, sync::Arc};
-use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
+use std::{path::Path, sync::Arc};
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -12,26 +12,55 @@ use versatiles_image::traits::*;
 /// Used to compute the ground resolution at zoom 0 for a given tile size.
 const EARTH_CIRCUMFERENCE: f64 = 2.0 * std::f64::consts::PI * 6_378_137.0;
 
+/// Manager for deadpool that creates and recycles GDAL dataset instances
+struct GdalManager {
+	open_dataset: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static>,
+	reuse_limit: u32,
+}
+
+impl Manager for GdalManager {
+	type Type = Instance;
+	type Error = anyhow::Error;
+
+	async fn create(&self) -> Result<Self::Type, Self::Error> {
+		use anyhow::Context;
+		let open_dataset = self.open_dataset.clone();
+		let result = tokio::task::spawn_blocking(move || {
+			let ds = (open_dataset)().context("failed to open GDAL dataset via factory")?;
+			Ok(Instance::new(ds))
+		})
+		.await;
+
+		match result {
+			Ok(Ok(instance)) => Ok(instance),
+			Ok(Err(e)) => Err(e),
+			Err(e) => Err(anyhow::anyhow!("spawn_blocking failed: {}", e)),
+		}
+	}
+
+	async fn recycle(&self, obj: &mut Self::Type, _metrics: &deadpool::managed::Metrics) -> RecycleResult<Self::Error> {
+		use deadpool::managed::RecycleError;
+
+		// Check if instance has exceeded reuse limit
+		if obj.age() > self.reuse_limit {
+			return Err(RecycleError::message("instance exceeded reuse limit"));
+		}
+
+		// Cleanup the instance for reuse
+		obj.cleanup();
+		Ok(())
+	}
+}
+
 #[derive(Clone)]
 pub struct RasterSource {
-	/// Factory used to open new GDAL datasets (e.g., from a filename, in‑memory, S3, etc.).
-	open_dataset: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static>,
-	instances: Arc<Mutex<LinkedList<Instance>>>,
+	pool: Pool<GdalManager>,
 	bbox: GeoBBox,
 	band_mapping: Arc<BandMapping>,
 	pixel_size: f64,
-	reuse_limit: u32,
-	/// Limits the maximum number of concurrently checked‑out `Instance`s.
-	sem: Arc<Semaphore>,
 }
 
 unsafe impl Sync for RasterSource {}
-
-/// An `Instance` checked out from the pool while holding a semaphore permit.
-struct HeldInstance {
-	inst: Instance,
-	_permit: OwnedSemaphorePermit,
-}
 
 impl RasterSource {
 	/// Create a `RasterSource` from a file path.
@@ -56,7 +85,7 @@ impl RasterSource {
 		set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
 		log::trace!("GDAL_NUM_THREADS set to ALL_CPUS");
 
-		// Open one dataset to probe metadata and seed the pool
+		// Open one dataset to probe metadata
 		let dataset = (open_dataset)()?;
 		log::trace!(
 			"Opened GDAL dataset ({}x{}, bands={})",
@@ -72,52 +101,37 @@ impl RasterSource {
 		log::trace!("Dataset bbox (EPSG:4326): {:?}", bbox);
 		log::trace!("Band mapping: {band_mapping:?}");
 
-		let mut list = LinkedList::new();
-		list.push_back(instance);
+		// Create deadpool manager and pool - single synchronization point!
+		let manager = GdalManager {
+			open_dataset,
+			reuse_limit: reuse_limit.min(1024),
+		};
+
+		let pool = Pool::builder(manager)
+			.max_size(concurrency_limit.max(1))
+			.build()
+			.context("failed to build deadpool")?;
 
 		Ok(RasterSource {
-			open_dataset,
-			instances: Arc::new(Mutex::new(list)),
+			pool,
 			bbox,
 			band_mapping: Arc::new(band_mapping),
 			pixel_size,
-			reuse_limit: reuse_limit.min(1024),
-			sem: Arc::new(Semaphore::new(concurrency_limit.max(1))),
 		})
-	}
-
-	async fn get_instance(&self) -> HeldInstance {
-		let permit = self.sem.clone().acquire_owned().await.expect("semaphore closed");
-
-		let inst = {
-			let mut instances = self.instances.lock().await;
-			if let Some(instance) = instances.pop_front()
-				&& instance.age() < self.reuse_limit + 1
-			{
-				instance
-			} else {
-				let ds = (self.open_dataset)().expect("failed to open GDAL dataset via factory");
-				Instance::new(ds)
-			}
-		};
-
-		HeldInstance { inst, _permit: permit }
-	}
-
-	async fn drop_instance(&self, mut held: HeldInstance) {
-		held.inst.cleanup();
-		let mut instances = self.instances.lock().await;
-		instances.push_back(held.inst);
-		// `_permit` drops here, releasing one concurrency slot
 	}
 
 	#[context("Failed to get image data ({width}x{height}) for bbox ({bbox:?}) from GDAL dataset")]
 	pub async fn get_image(&self, bbox: &GeoBBox, width: usize, height: usize) -> Result<Option<DynamicImage>> {
 		let band_mapping = self.band_mapping.clone();
 
-		let held = self.get_instance().await;
-		let dst = held.inst.reproject_to_dataset(width, height, bbox, band_mapping)?;
-		self.drop_instance(held).await;
+		// Get instance from pool - single synchronization point!
+		let instance: Object<GdalManager> = self
+			.pool
+			.get()
+			.await
+			.map_err(|e| anyhow::anyhow!("failed to get instance from pool: {}", e))?;
+		let dst = instance.reproject_to_dataset(width, height, bbox, band_mapping)?;
+		// Instance automatically returned to pool when dropped
 
 		let band_mapping = self.band_mapping.clone();
 		let channel_count = band_mapping.len();
@@ -208,10 +222,10 @@ impl RasterSource {
 impl std::fmt::Debug for RasterSource {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("RasterSource")
+			.field("pool", &"<deadpool::Pool<GdalManager>>")
 			.field("bbox", &self.bbox)
 			.field("band_mapping", &self.band_mapping)
 			.field("pixel_size", &self.pixel_size)
-			.field("reuse_limit", &self.reuse_limit)
 			.finish()
 	}
 }
