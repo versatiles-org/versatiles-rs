@@ -3999,6 +3999,7 @@ name = "versatiles_core"
 version = "2.3.1"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "assert_fs",
  "async-trait",
  "brotli",
@@ -4006,6 +4007,7 @@ dependencies = [
  "clap",
  "colored",
  "criterion",
+ "dashmap",
  "enumset",
  "flate2",
  "futures",
@@ -4013,6 +4015,7 @@ dependencies = [
  "lazy_static",
  "log",
  "num_cpus",
+ "parking_lot",
  "regex",
  "reqwest",
  "rstest",

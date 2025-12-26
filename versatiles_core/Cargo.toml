@@ -42,6 +42,11 @@ tempfile.workspace = true
 tokio = { workspace = true, features = ["macros"] }
 wildmatch.workspace = true
 
+# Multithreading benchmark dependencies
+dashmap.workspace = true
+arc-swap.workspace = true
+parking_lot.workspace = true
+
 # Features:
 # - cli: Enable CLI-specific dependencies (colored output, clap)
 # - test: Disable terminal output for testing
@@ -53,4 +58,8 @@ test = []
 
 [[bench]]
 name = "byte_iterator"
+harness = false
+
+[[bench]]
+name = "multithreading_optimizations"
 harness = false
