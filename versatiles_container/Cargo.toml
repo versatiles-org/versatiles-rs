@@ -23,6 +23,7 @@ itertools = { workspace = true, features = ["use_alloc"] }
 lazy_static.workspace = true
 log.workspace = true
 num_cpus.workspace = true
+parking_lot.workspace = true
 r2d2 = { workspace = true, features = [] }
 r2d2_sqlite = { workspace = true, features = ["bundled"] }
 regex.workspace = true

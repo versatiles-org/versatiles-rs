@@ -1,10 +1,10 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
+use dashmap::DashMap;
 use imageproc::image::{DynamicImage, GenericImage};
 use std::{fmt::Debug, sync::Arc};
-use tokio::sync::Mutex;
-use versatiles_container::{CacheMap, SourceType, Tile, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -29,12 +29,12 @@ struct Operation {
 	tile_size: u32,
 	traversal: Traversal,
 	#[allow(clippy::type_complexity)]
-	cache: Arc<Mutex<CacheMap<TileCoord, (TileCoord, Option<DynamicImage>)>>>,
+	cache: Arc<DashMap<TileCoord, Vec<(TileCoord, Option<DynamicImage>)>>>,
 }
 
 impl Operation {
 	#[context("Building raster_levels operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSourceTrait>, factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSourceTrait>, _factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + TileSourceTrait,
 	{
@@ -57,7 +57,7 @@ impl Operation {
 		tilejson.update_from_reader_parameters(&parameters);
 
 		let tile_size = args.tile_size.unwrap_or(512);
-		let cache = Arc::new(Mutex::new(CacheMap::new(factory.runtime().cache_type())));
+		let cache = Arc::new(DashMap::new());
 		let traversal = Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?;
 
 		Ok(Self {
@@ -105,8 +105,8 @@ impl Operation {
 
 		let mut coord = bbox.min_corner()?;
 		coord.floor(BLOCK_TILE_COUNT);
-		let mut cache = self.cache.lock().await;
-		cache.insert(&coord, images)?;
+		// No lock needed with DashMap!
+		self.cache.insert(coord, images);
 
 		Ok(())
 	}
@@ -130,12 +130,11 @@ impl Operation {
 		let full_size = self.tile_size;
 		let half_size = self.tile_size / 2;
 
-		// get images from cache
-		let mut cache = self.cache.lock().await;
+		// get images from cache - no lock needed!
 		for q in &[0, 1, 2, 3] {
 			let bbox1 = bbox0.leveled_up().get_quadrant(*q)?;
 
-			if let Some(images1) = cache.remove(&bbox1.min_corner()?)? {
+			if let Some((_key, images1)) = self.cache.remove(&bbox1.min_corner()?) {
 				for (coord1, image1) in images1 {
 					if let Some(image1) = image1 {
 						assert_eq!(image1.width(), half_size);
@@ -148,7 +147,6 @@ impl Operation {
 				}
 			}
 		}
-		drop(cache);
 
 		let vec: Vec<(TileCoord, DynamicImage)> = map
 			.into_iter()
@@ -319,11 +317,11 @@ mod tests {
 		op.add_images_to_cache(&container).await?;
 
 		// Cache key should be the floored corner of the container bbox at level 6
-		let mut cache = op.cache.lock().await;
+		// DashMap doesn't need locking!
 		let key = TileCoord::new(6, 0, 0)?;
-		assert!(cache.contains_key(&key));
+		assert!(op.cache.contains_key(&key));
 
-		let stored = cache.remove(&key)?.expect("value stored");
+		let (_key, stored) = op.cache.remove(&key).expect("value stored");
 		// Stored entries are (coord, Option<img>) with half-size images (1x1 at tile_size=2)
 		assert!(!stored.is_empty());
 

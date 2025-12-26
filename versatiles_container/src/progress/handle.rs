@@ -1,6 +1,7 @@
 use crate::{EventBus, ProgressId, ProgressState};
+use parking_lot::Mutex;
 use std::{
-	sync::{Arc, Mutex},
+	sync::Arc,
 	time::{Duration, Instant},
 };
 
@@ -42,7 +43,7 @@ impl ProgressHandle {
 	///
 	/// The position will be clamped to the maximum value (total).
 	pub fn set_position(&self, position: u64) {
-		let mut state = self.state.lock().unwrap();
+		let mut state = self.state.lock();
 		state.position = position.min(state.total);
 		self.redraw(&mut state);
 		drop(state);
@@ -53,7 +54,7 @@ impl ProgressHandle {
 	///
 	/// The position will be clamped to the maximum value (total).
 	pub fn inc(&self, delta: u64) {
-		let mut state = self.state.lock().unwrap();
+		let mut state = self.state.lock();
 		state.position = state.position.saturating_add(delta).min(state.total);
 		drop(state);
 		self.emit_update();
@@ -63,7 +64,7 @@ impl ProgressHandle {
 	///
 	/// If the current position exceeds the new total, it will be clamped.
 	pub fn set_max_value(&self, total: u64) {
-		let mut state = self.state.lock().unwrap();
+		let mut state = self.state.lock();
 		state.total = total;
 		if state.position > state.total {
 			state.position = state.total;
@@ -76,7 +77,7 @@ impl ProgressHandle {
 	///
 	/// Sets position to total and marks the progress as complete.
 	pub fn finish(&self) {
-		let mut state = self.state.lock().unwrap();
+		let mut state = self.state.lock();
 		state.position = state.total;
 		state.finished = true;
 		drop(state);
@@ -85,12 +86,12 @@ impl ProgressHandle {
 
 	/// Get the progress ID
 	pub fn id(&self) -> ProgressId {
-		self.state.lock().unwrap().id.clone()
+		self.state.lock().id.clone()
 	}
 
 	/// Emit a progress update event (throttled to 10 per second)
 	fn emit_update(&self) {
-		let mut state = self.state.lock().unwrap();
+		let mut state = self.state.lock();
 		let now = Instant::now();
 
 		// Emit if:
@@ -254,7 +255,7 @@ mod tests {
 		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
 
 		handle.set_position(50);
-		let state = handle.state.lock().unwrap();
+		let state = handle.state.lock();
 		assert_eq!(state.position, 50);
 	}
 
@@ -264,7 +265,7 @@ mod tests {
 		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
 
 		handle.set_position(150); // Exceeds total
-		let state = handle.state.lock().unwrap();
+		let state = handle.state.lock();
 		assert_eq!(state.position, 100); // Should be clamped to total
 	}
 
@@ -277,7 +278,7 @@ mod tests {
 		handle.inc(15);
 		handle.inc(25);
 
-		let state = handle.state.lock().unwrap();
+		let state = handle.state.lock();
 		assert_eq!(state.position, 50);
 	}
 
@@ -289,7 +290,7 @@ mod tests {
 		handle.set_position(90);
 		handle.inc(20); // Would go to 110, but should clamp to 100
 
-		let state = handle.state.lock().unwrap();
+		let state = handle.state.lock();
 		assert_eq!(state.position, 100);
 	}
 
@@ -299,7 +300,7 @@ mod tests {
 		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
 
 		handle.set_max_value(200);
-		let state = handle.state.lock().unwrap();
+		let state = handle.state.lock();
 		assert_eq!(state.total, 200);
 	}
 
@@ -311,7 +312,7 @@ mod tests {
 		handle.set_position(80);
 		handle.set_max_value(50); // New max is less than current position
 
-		let state = handle.state.lock().unwrap();
+		let state = handle.state.lock();
 		assert_eq!(state.total, 50);
 		assert_eq!(state.position, 50); // Position should be clamped
 	}
@@ -324,7 +325,7 @@ mod tests {
 		handle.set_position(50);
 		handle.finish();
 
-		let state = handle.state.lock().unwrap();
+		let state = handle.state.lock();
 		assert_eq!(state.position, 100);
 		assert!(state.finished);
 	}
@@ -341,11 +342,11 @@ mod tests {
 
 		// Both handles share the same state - verify by checking separately
 		{
-			let state1 = handle1.state.lock().unwrap();
+			let state1 = handle1.state.lock();
 			assert_eq!(state1.position, 75);
 		}
 		{
-			let state2 = handle2.state.lock().unwrap();
+			let state2 = handle2.state.lock();
 			assert_eq!(state2.position, 75);
 		}
 	}

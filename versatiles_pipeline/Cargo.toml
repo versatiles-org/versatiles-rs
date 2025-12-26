@@ -23,7 +23,8 @@ imageproc.workspace = true
 itertools = { workspace = true, features = ["use_alloc"] }
 lazy_static.workspace = true
 log.workspace = true
-lru.workspace = true
+moka.workspace = true
+dashmap.workspace = true
 nom = { version = "8.0.0" }
 nom-language = { version = "0.1.0" }
 num_cpus.workspace = true

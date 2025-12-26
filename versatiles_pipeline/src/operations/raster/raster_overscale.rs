@@ -1,9 +1,8 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use lru::LruCache;
+use moka::future::Cache;
 use std::{fmt::Debug, sync::Arc};
-use tokio::sync::Mutex;
 use versatiles_container::{SourceType, Tile, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
@@ -20,45 +19,7 @@ struct Args {
 	enable_climbing: Option<bool>,
 }
 
-#[derive(Debug)]
-struct TileCache {
-	lru: LruCache<TileCoord, Arc<DynamicImage>>,
-	max_memory_bytes: usize,
-	current_memory_bytes: usize,
-}
-
-impl TileCache {
-	fn new(max_memory_mb: usize) -> Self {
-		Self {
-			lru: LruCache::unbounded(),
-			max_memory_bytes: max_memory_mb * 1024 * 1024,
-			current_memory_bytes: 0,
-		}
-	}
-
-	fn insert(&mut self, coord: TileCoord, image: Arc<DynamicImage>) {
-		let image_bytes = (image.width() * image.height() * 4) as usize;
-
-		// Evict until we have space
-		while self.current_memory_bytes + image_bytes > self.max_memory_bytes {
-			if let Some((_, evicted)) = self.lru.pop_lru() {
-				let evicted_bytes = (evicted.width() * evicted.height() * 4) as usize;
-				self.current_memory_bytes -= evicted_bytes;
-			} else {
-				break;
-			}
-		}
-
-		self.lru.put(coord, image);
-		self.current_memory_bytes += image_bytes;
-	}
-
-	fn get(&mut self, coord: &TileCoord) -> Option<Arc<DynamicImage>> {
-		self.lru.get(coord).cloned()
-	}
-}
-
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct Operation {
 	parameters: TilesReaderParameters,
 	source: Arc<Box<dyn TileSourceTrait>>,
@@ -66,7 +27,21 @@ struct Operation {
 	level_base: u8,
 	level_min: u8,
 	enable_climbing: bool,
-	cache: Arc<Mutex<TileCache>>,
+	cache: Arc<Cache<TileCoord, Arc<DynamicImage>>>,
+}
+
+impl Debug for Operation {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Operation")
+			.field("parameters", &self.parameters)
+			.field("source", &self.source)
+			.field("tilejson", &self.tilejson)
+			.field("level_base", &self.level_base)
+			.field("level_min", &self.level_min)
+			.field("enable_climbing", &self.enable_climbing)
+			.field("cache", &"<moka::future::Cache>")
+			.finish()
+	}
 }
 
 impl Operation {
@@ -95,7 +70,13 @@ impl Operation {
 		tilejson.update_from_reader_parameters(&parameters);
 
 		let level_min = source.as_ref().parameters().bbox_pyramid.get_level_min().unwrap_or(0);
-		let cache = Arc::new(Mutex::new(TileCache::new(512)));
+		let cache = Cache::builder()
+			.max_capacity(512 * 1024 * 1024) // 512MB limit
+			.weigher(|_k: &TileCoord, v: &Arc<DynamicImage>| -> u32 {
+				v.width() * v.height() * 4 // RGBA bytes
+			})
+			.build();
+		let cache = Arc::new(cache);
 
 		Ok(Self {
 			parameters,
@@ -140,12 +121,9 @@ impl Operation {
 	/// Attempts to fetch a tile at the given coordinate, checking cache first.
 	/// Returns None if the tile doesn't exist at this coordinate.
 	async fn try_fetch_tile(&self, coord: TileCoord) -> Result<Option<Arc<DynamicImage>>> {
-		// Check cache
-		{
-			let mut cache = self.cache.lock().await;
-			if let Some(cached_image) = cache.get(&coord) {
-				return Ok(Some(cached_image));
-			}
+		// Check cache - no lock needed!
+		if let Some(cached_image) = self.cache.get(&coord).await {
+			return Ok(Some(cached_image));
 		}
 
 		// Fetch from source
@@ -157,11 +135,8 @@ impl Operation {
 		{
 			let image = Arc::new(tile.into_image()?);
 
-			// Cache it
-			{
-				let mut cache = self.cache.lock().await;
-				cache.insert(coord, image.clone());
-			}
+			// Cache it - no lock needed!
+			self.cache.insert(coord, image.clone()).await;
 
 			Ok(Some(image))
 		} else {

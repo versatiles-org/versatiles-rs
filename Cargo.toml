@@ -132,12 +132,18 @@ webp = { version = "0.3.1" }
 geo = { version = "0.32.0" }
 
 # Utility dependencies
-lru = { version = "0.16.2" }
 serde_yaml_ng = "0.10.0"
 terminal_size = { version = "0.4.3" }
 time = { version = "0.3.44", default-features = false }
 uuid = { version = "1.19.0" }
 wildmatch = { version = "2.6.1", default-features = false }
+
+# Multithreading optimization dependencies
+moka = { version = "0.12", features = ["future"] }  # Lock-free LRU cache
+dashmap = "6.1"                                     # Concurrent HashMap
+parking_lot = "0.12"                                # Fast synchronization
+arc-swap = "1.8"                                    # Lock-free updates
+deadpool = { version = "0.12", features = ["managed"] }  # Connection pooling
 
 # Development dependencies
 assert_cmd = { version = "2.1.1" }
