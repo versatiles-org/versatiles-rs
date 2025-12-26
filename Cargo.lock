@@ -4014,6 +4014,7 @@ dependencies = [
  "itertools 0.14.0",
  "lazy_static",
  "log",
+ "moka",
  "num_cpus",
  "parking_lot",
  "regex",

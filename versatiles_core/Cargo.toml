@@ -46,6 +46,7 @@ wildmatch.workspace = true
 dashmap.workspace = true
 arc-swap.workspace = true
 parking_lot.workspace = true
+moka.workspace = true
 
 # Features:
 # - cli: Enable CLI-specific dependencies (colored output, clap)
@@ -62,4 +63,8 @@ harness = false
 
 [[bench]]
 name = "multithreading_optimizations"
+harness = false
+
+[[bench]]
+name = "cache_performance"
 harness = false
