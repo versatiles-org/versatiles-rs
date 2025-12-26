@@ -10,7 +10,7 @@
 /// - **PMTiles** (.pmtiles) - Cloud-optimized format, local and remote
 /// - **TAR** (.tar) - Archive format, local only
 /// - **Directories** - Tile directories following standard naming conventions
-use crate::{napi_result, runtime::create_runtime, types::ReaderParameters};
+use crate::{napi_result, runtime::create_runtime, types::SourceMetadata};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use std::sync::Arc;
@@ -152,7 +152,7 @@ impl ContainerReader {
 	///
 	/// # Returns
 	///
-	/// A [`ReaderParameters`] object containing:
+	/// A [`SourceMetadata`] object containing:
 	/// - `tileFormat`: The tile format (e.g., "png", "jpg", "mvt")
 	/// - `tileCompression`: The compression method (e.g., "gzip", "brotli", "uncompressed")
 	/// - `minZoom`: Minimum available zoom level
@@ -167,9 +167,9 @@ impl ContainerReader {
 	/// console.log(`Zoom: ${params.minZoom}-${params.maxZoom}`);
 	/// ```
 	#[napi]
-	pub async fn parameters(&self) -> ReaderParameters {
+	pub async fn parameters(&self) -> SourceMetadata {
 		let reader = self.reader.lock().await;
-		ReaderParameters::from(reader.parameters())
+		SourceMetadata::from(reader.parameters())
 	}
 
 	/// Get the source type

@@ -1,10 +1,10 @@
 use napi_derive::napi;
 use versatiles_container::TileSourceMetadata;
 
-/// Tile reader parameters
+/// Tile source metadata describing output characteristics
 #[napi(object)]
 #[derive(Clone)]
-pub struct ReaderParameters {
+pub struct SourceMetadata {
 	/// Tile format (e.g., "png", "jpg", "mvt")
 	pub tile_format: String,
 	/// Tile compression (e.g., "gzip", "brotli", "uncompressed")
@@ -15,7 +15,7 @@ pub struct ReaderParameters {
 	pub max_zoom: u8,
 }
 
-impl From<&TileSourceMetadata> for ReaderParameters {
+impl From<&TileSourceMetadata> for SourceMetadata {
 	fn from(params: &TileSourceMetadata) -> Self {
 		Self {
 			tile_format: format!("{:?}", params.tile_format).to_lowercase(),
@@ -47,7 +47,7 @@ mod tests {
 	#[test]
 	fn test_from_tiles_reader_parameters_png_uncompressed() {
 		let params = create_test_parameters(TileFormat::PNG, TileCompression::Uncompressed, 0, 14);
-		let reader_params = ReaderParameters::from(&params);
+		let reader_params = SourceMetadata::from(&params);
 
 		assert_eq!(reader_params.tile_format, "png");
 		assert_eq!(reader_params.tile_compression, "uncompressed");
@@ -58,7 +58,7 @@ mod tests {
 	#[test]
 	fn test_from_tiles_reader_parameters_jpg_gzip() {
 		let params = create_test_parameters(TileFormat::JPG, TileCompression::Gzip, 2, 10);
-		let reader_params = ReaderParameters::from(&params);
+		let reader_params = SourceMetadata::from(&params);
 
 		assert_eq!(reader_params.tile_format, "jpg");
 		assert_eq!(reader_params.tile_compression, "gzip");
@@ -69,7 +69,7 @@ mod tests {
 	#[test]
 	fn test_from_tiles_reader_parameters_webp_brotli() {
 		let params = create_test_parameters(TileFormat::WEBP, TileCompression::Brotli, 5, 18);
-		let reader_params = ReaderParameters::from(&params);
+		let reader_params = SourceMetadata::from(&params);
 
 		assert_eq!(reader_params.tile_format, "webp");
 		assert_eq!(reader_params.tile_compression, "brotli");
@@ -80,7 +80,7 @@ mod tests {
 	#[test]
 	fn test_from_tiles_reader_parameters_mvt_gzip() {
 		let params = create_test_parameters(TileFormat::MVT, TileCompression::Gzip, 0, 14);
-		let reader_params = ReaderParameters::from(&params);
+		let reader_params = SourceMetadata::from(&params);
 
 		assert_eq!(reader_params.tile_format, "mvt");
 		assert_eq!(reader_params.tile_compression, "gzip");
@@ -91,7 +91,7 @@ mod tests {
 	#[test]
 	fn test_from_tiles_reader_parameters_same_min_max_zoom() {
 		let params = create_test_parameters(TileFormat::PNG, TileCompression::Uncompressed, 5, 5);
-		let reader_params = ReaderParameters::from(&params);
+		let reader_params = SourceMetadata::from(&params);
 
 		assert_eq!(reader_params.min_zoom, 5);
 		assert_eq!(reader_params.max_zoom, 5);
@@ -100,7 +100,7 @@ mod tests {
 	#[test]
 	fn test_from_tiles_reader_parameters_max_zoom_range() {
 		let params = create_test_parameters(TileFormat::PNG, TileCompression::Uncompressed, 0, 31);
-		let reader_params = ReaderParameters::from(&params);
+		let reader_params = SourceMetadata::from(&params);
 
 		assert_eq!(reader_params.min_zoom, 0);
 		assert_eq!(reader_params.max_zoom, 31);
@@ -117,7 +117,7 @@ mod tests {
 
 		for (format, expected) in formats {
 			let params = create_test_parameters(format, TileCompression::Uncompressed, 0, 14);
-			let reader_params = ReaderParameters::from(&params);
+			let reader_params = SourceMetadata::from(&params);
 			assert_eq!(reader_params.tile_format, expected);
 		}
 	}
@@ -132,14 +132,14 @@ mod tests {
 
 		for (compression, expected) in compressions {
 			let params = create_test_parameters(TileFormat::PNG, compression, 0, 14);
-			let reader_params = ReaderParameters::from(&params);
+			let reader_params = SourceMetadata::from(&params);
 			assert_eq!(reader_params.tile_compression, expected);
 		}
 	}
 
 	#[test]
 	fn test_reader_parameters_clone() {
-		let params = ReaderParameters {
+		let params = SourceMetadata {
 			tile_format: "png".to_string(),
 			tile_compression: "gzip".to_string(),
 			min_zoom: 5,

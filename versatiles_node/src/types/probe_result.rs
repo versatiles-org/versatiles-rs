@@ -1,4 +1,4 @@
-use super::ReaderParameters;
+use super::SourceMetadata;
 use napi_derive::napi;
 
 /// Probe result with container information
@@ -11,5 +11,5 @@ pub struct ProbeResult {
 	/// TileJSON metadata as JSON string
 	pub tile_json: String,
 	/// Reader parameters
-	pub parameters: ReaderParameters,
+	pub parameters: SourceMetadata,
 }

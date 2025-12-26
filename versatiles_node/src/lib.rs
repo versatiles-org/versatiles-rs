@@ -55,4 +55,4 @@ pub use container::ContainerReader;
 pub use convert::convert;
 pub use progress::{Progress, ProgressData};
 pub use server::TileServer;
-pub use types::{ConvertOptions, ProbeResult, ReaderParameters, ServerOptions, TileCoord};
+pub use types::{ConvertOptions, ProbeResult, ServerOptions, SourceMetadata, TileCoord};
