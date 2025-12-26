@@ -11,7 +11,7 @@ use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::{path::Path, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters, TilesRuntime};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime};
 use versatiles_core::{io::DataReader, *};
 use versatiles_derive::context;
 
@@ -25,7 +25,7 @@ use versatiles_derive::context;
 pub struct PipelineReader {
 	name: String,
 	operation: Box<dyn TileSourceTrait>,
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 }
 
 #[allow(dead_code)]
@@ -93,7 +93,7 @@ impl TileSourceTrait for PipelineReader {
 	}
 
 	/// Returns the reader parameters (tile format, compression, and traversal hints).
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 

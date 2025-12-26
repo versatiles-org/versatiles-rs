@@ -10,7 +10,7 @@
 //!
 //! ## Extracted artifacts
 //! - `tilejson`: parsed TileJSON from the `meta_range` (if present)
-//! - `parameters`: [`TilesReaderParameters`] with `tile_format`, `tile_compression`, and a
+//! - `parameters`: [`TileSourceMetadata`] with `tile_format`, `tile_compression`, and a
 //!   **bbox pyramid** computed from the block index
 //! - `block_index`: lightweight structure describing all block ranges
 //!
@@ -55,7 +55,7 @@
 //! or when a requested tile is missing.
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
-use crate::{SourceType, Tile, TileSourceTrait, TilesReaderParameters, TilesRuntime};
+use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{lock::Mutex, stream::StreamExt};
@@ -73,7 +73,7 @@ use versatiles_derive::context;
 pub struct VersaTilesReader {
 	block_index: BlockIndex,
 	header: FileHeader,
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 	reader: DataReader,
 	tile_index_cache: Mutex<LimitedCache<TileCoord, Arc<TileIndex>>>,
 	tilejson: TileJSON,
@@ -127,7 +127,7 @@ impl VersaTilesReader {
 		.context("Failed decompressing the block index")?;
 
 		let bbox_pyramid = block_index.get_bbox_pyramid();
-		let parameters = TilesReaderParameters::new(header.tile_format, header.compression, bbox_pyramid);
+		let parameters = TileSourceMetadata::new(header.tile_format, header.compression, bbox_pyramid);
 
 		Ok(VersaTilesReader {
 			block_index,
@@ -310,7 +310,7 @@ impl TileSourceTrait for VersaTilesReader {
 		&self.tilejson
 	}
 
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 
@@ -518,7 +518,7 @@ mod tests {
 
 		assert_eq!(
 			format!("{reader:?}"),
-			"VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT } }"
+			"VersaTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT } }"
 		);
 		assert_wildcard!(
 			reader.source_type().to_string(),
@@ -530,7 +530,7 @@ mod tests {
 		);
 		assert_eq!(
 			format!("{:?}", reader.parameters()),
-			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT }"
+			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT }"
 		);
 		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.parameters().tile_format, TileFormat::MVT);
@@ -614,7 +614,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn read_your_own_dog_food() -> Result<()> {
-		let mut reader1 = MockTilesReader::new_mock(TilesReaderParameters::new(
+		let mut reader1 = MockTilesReader::new_mock(TileSourceMetadata::new(
 			TileFormat::JSON,
 			TileCompression::Gzip,
 			TileBBoxPyramid::new_full(4),

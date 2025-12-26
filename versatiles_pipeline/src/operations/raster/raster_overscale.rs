@@ -3,7 +3,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use moka::future::Cache;
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::{DynamicImage, traits::*};
@@ -21,7 +21,7 @@ struct Args {
 
 #[derive(Clone)]
 struct Operation {
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 	source: Arc<Box<dyn TileSourceTrait>>,
 	tilejson: TileJSON,
 	level_base: u8,
@@ -169,7 +169,7 @@ fn extract_image(image_src: &DynamicImage, coord_src: TileCoord, coord_dst: Tile
 
 #[async_trait]
 impl TileSourceTrait for Operation {
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 

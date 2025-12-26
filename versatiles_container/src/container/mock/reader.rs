@@ -24,7 +24,7 @@
 
 use std::sync::Arc;
 
-use crate::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
+use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{utils::compress, *};
@@ -48,7 +48,7 @@ pub const MOCK_BYTES_WEBP: &[u8; 44] = include_bytes!("./mock_tiles/mock.webp");
 
 /// Mock implementation of a `TilesReader`.
 pub struct MockTilesReader {
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 	tilejson: TileJSON,
 }
 
@@ -65,20 +65,18 @@ impl MockTilesReader {
 
 		MockTilesReader::new_mock(match profile {
 			MockTilesReaderProfile::Json => {
-				TilesReaderParameters::new(TileFormat::JSON, TileCompression::Uncompressed, bbox_pyramid)
+				TileSourceMetadata::new(TileFormat::JSON, TileCompression::Uncompressed, bbox_pyramid)
 			}
 			MockTilesReaderProfile::Png => {
-				TilesReaderParameters::new(TileFormat::PNG, TileCompression::Uncompressed, bbox_pyramid)
+				TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, bbox_pyramid)
 			}
-			MockTilesReaderProfile::Pbf => {
-				TilesReaderParameters::new(TileFormat::MVT, TileCompression::Gzip, bbox_pyramid)
-			}
+			MockTilesReaderProfile::Pbf => TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, bbox_pyramid),
 		})
 	}
 
 	/// Creates a new mock tiles reader with the specified parameters.
 	#[context("creating mock reader from parameters")]
-	pub fn new_mock(parameters: TilesReaderParameters) -> Result<MockTilesReader> {
+	pub fn new_mock(parameters: TileSourceMetadata) -> Result<MockTilesReader> {
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("type", "dummy")?;
 		Ok(MockTilesReader { parameters, tilejson })
@@ -91,7 +89,7 @@ impl TileSourceTrait for MockTilesReader {
 		SourceType::new_container("dummy", "dummy")
 	}
 
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 

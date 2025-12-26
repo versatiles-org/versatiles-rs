@@ -16,7 +16,7 @@
 //! - Type-safe pipeline construction
 //! - Clear separation between data sources and transformations
 
-use crate::{CacheMap, Tile, TilesReaderParameters, TilesRuntime};
+use crate::{CacheMap, Tile, TileSourceMetadata, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{StreamExt, future::BoxFuture, stream};
@@ -124,7 +124,7 @@ pub trait TileSourceTrait: Debug + Send + Sync + Unpin {
 	/// - `bbox_pyramid`: Spatial extent at each zoom level
 	/// - `tile_compression`: Current output compression
 	/// - `tile_format`: Tile format (PNG, JPG, MVT, etc.)
-	fn parameters(&self) -> &TilesReaderParameters;
+	fn parameters(&self) -> &TileSourceMetadata;
 
 	/// Returns the TileJSON metadata for this tileset.
 	fn tilejson(&self) -> &TileJSON;
@@ -409,7 +409,7 @@ mod tests {
 
 	#[derive(Debug)]
 	struct TestReader {
-		parameters: TilesReaderParameters,
+		parameters: TileSourceMetadata,
 		tilejson: TileJSON,
 	}
 
@@ -418,7 +418,7 @@ mod tests {
 			let mut tilejson = TileJSON::default();
 			tilejson.set_string("metadata", "test").unwrap();
 			TestReader {
-				parameters: TilesReaderParameters {
+				parameters: TileSourceMetadata {
 					bbox_pyramid: TileBBoxPyramid::new_full(3),
 					tile_compression: TileCompression::Gzip,
 					tile_format: TileFormat::MVT,
@@ -434,7 +434,7 @@ mod tests {
 			SourceType::new_container("dummy_format", "dummy_uri")
 		}
 
-		fn parameters(&self) -> &TilesReaderParameters {
+		fn parameters(&self) -> &TileSourceMetadata {
 			&self.parameters
 		}
 

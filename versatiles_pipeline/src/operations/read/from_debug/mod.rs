@@ -23,7 +23,7 @@ use async_trait::async_trait;
 use image::create_debug_image;
 use std::{fmt::Debug, sync::Arc};
 use vector::create_debug_vector_tile;
-use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -38,12 +38,12 @@ struct Args {
 #[derive(Debug)]
 pub struct Operation {
 	tilejson: TileJSON,
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 }
 
 impl Operation {
 	pub fn from_parameters(tile_format: TileFormat) -> Result<Self> {
-		let parameters = TilesReaderParameters::new(
+		let parameters = TileSourceMetadata::new(
 			tile_format,
 			TileCompression::Uncompressed,
 			TileBBoxPyramid::new_full(30),
@@ -90,7 +90,7 @@ impl ReadTileSourceTrait for Operation {
 #[async_trait]
 impl TileSourceTrait for Operation {
 	/// Return static reader parameters (compression *always* uncompressed).
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 

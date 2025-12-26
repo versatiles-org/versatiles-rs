@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
-use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_geometry::{
 	geo::{GeoFeature, Geometry},
@@ -12,7 +12,7 @@ use versatiles_geometry::{
 pub struct DummyVectorSource {
 	#[allow(clippy::type_complexity)]
 	data: Vec<(String, Vec<Vec<(String, String)>>)>,
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 	tilejson: TileJSON,
 	traversal: Traversal,
 }
@@ -38,7 +38,7 @@ impl DummyVectorSource {
 			.collect();
 
 		// Initialize the parameters with the given bounding box or a default one
-		let parameters = TilesReaderParameters::new(
+		let parameters = TileSourceMetadata::new(
 			TileFormat::MVT,
 			TileCompression::Uncompressed,
 			pyramid.unwrap_or_else(|| TileBBoxPyramid::new_full(8)),
@@ -68,7 +68,7 @@ impl TileSourceTrait for DummyVectorSource {
 		SourceType::new_container("dummy vector source", "dummy")
 	}
 
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 

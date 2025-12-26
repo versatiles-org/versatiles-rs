@@ -12,7 +12,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use std::{fmt::Debug, sync::Arc, vec};
-use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -48,7 +48,7 @@ struct Args {
 /// bounds and zoom levels without touching the reader again.
 struct Operation {
 	source: RasterSource,
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 	tilejson: TileJSON,
 	tile_size: u32,
 }
@@ -89,7 +89,7 @@ impl Operation {
 		);
 		let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(level_min, level_max, bbox);
 
-		let parameters = TilesReaderParameters::new(
+		let parameters = TileSourceMetadata::new(
 			args.tile_format.unwrap_or(TileFormat::PNG),
 			TileCompression::Uncompressed,
 			bbox_pyramid,
@@ -148,7 +148,7 @@ impl ReadTileSourceTrait for Operation {
 impl TileSourceTrait for Operation {
 	/// Return the reader’s technical parameters (compression, tile size,
 	/// etc.) without performing any I/O.
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 

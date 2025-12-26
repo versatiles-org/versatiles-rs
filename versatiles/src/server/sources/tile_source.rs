@@ -143,7 +143,7 @@ mod tests {
 		// Updated expected output - no more "Mutex { data: ... }"
 		assert_eq!(
 			format!("{container:?}"),
-			"TileSource { reader: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [2: [0,1,2,3] (3x3), 3: [0,2,4,6] (5x5), 4: [0,0,15,15] (16x16), 5: [0,0,31,31] (32x32), 6: [0,0,63,63] (64x64)], tile_compression: Uncompressed, tile_format: PNG } }, tile_mime: \"image/png\", compression: Uncompressed }"
+			"TileSource { reader: MockTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [2: [0,1,2,3] (3x3), 3: [0,2,4,6] (5x5), 4: [0,0,15,15] (16x16), 5: [0,0,31,31] (32x32), 6: [0,0,63,63] (64x64)], tile_compression: Uncompressed, tile_format: PNG } }, tile_mime: \"image/png\", compression: Uncompressed }"
 		);
 		Ok(())
 	}

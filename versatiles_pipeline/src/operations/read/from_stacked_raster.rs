@@ -20,7 +20,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
 use std::{sync::Arc, vec};
-use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -39,11 +39,11 @@ struct Args {
 
 /// [`TileSourceTrait`] implementation that overlays raster tiles “on the fly.”
 ///
-/// * Caches only metadata (`TileJSON`, `TilesReaderParameters`).  
+/// * Caches only metadata (`TileJSON`, `TileSourceMetadata`).  
 /// * Performs no disk I/O itself; all data come from the child pipelines.
 #[derive(Debug)]
 struct Operation {
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 	sources: Vec<Box<dyn TileSourceTrait>>,
 	tilejson: TileJSON,
 	traversal: Traversal,
@@ -114,7 +114,7 @@ impl ReadTileSourceTrait for Operation {
 			);
 		}
 
-		let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
+		let parameters = TileSourceMetadata::new(tile_format, tile_compression, pyramid);
 		parameters.update_tilejson(&mut tilejson);
 
 		Ok(Box::new(Self {
@@ -129,7 +129,7 @@ impl ReadTileSourceTrait for Operation {
 #[async_trait]
 impl TileSourceTrait for Operation {
 	/// Reader parameters (format, compression, pyramid) for the *blended* result.
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 

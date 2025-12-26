@@ -1,5 +1,5 @@
 use super::{PMTilesCompression, PMTilesType};
-use crate::TilesReaderParameters;
+use crate::TileSourceMetadata;
 use anyhow::{Result, ensure};
 use versatiles_core::{
 	Blob, ByteRange,
@@ -31,7 +31,7 @@ pub struct HeaderV3 {
 }
 
 impl HeaderV3 {
-	pub fn from_parameters(parameters: &TilesReaderParameters) -> HeaderV3 {
+	pub fn from_parameters(parameters: &TileSourceMetadata) -> HeaderV3 {
 		use PMTilesCompression as PC;
 		use PMTilesType as PT;
 

@@ -1,15 +1,15 @@
-//! This module defines configuration parameters for creating and initializing `TilesReader` instances.
+//! This module defines metadata describing tile source output characteristics.
 
 use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat, TileJSON, TileSchema, TileType};
 
-/// Configuration parameters for creating and initializing a `TilesReader`.
+/// Metadata describing the output characteristics of a tile source.
 ///
 /// # Fields
 /// - `bbox_pyramid`: The bounding box and zoom pyramid defining the tile coverage.
 /// - `tile_compression`: The compression algorithm applied to tiles (e.g., gzip, brotli).
 /// - `tile_format`: The format of the tiles (e.g., PNG, JPEG, PBF).
 #[derive(Debug, Default, PartialEq, Clone)]
-pub struct TilesReaderParameters {
+pub struct TileSourceMetadata {
 	/// The bounding box and zoom pyramid defining the tile coverage.
 	pub bbox_pyramid: TileBBoxPyramid,
 	/// The compression algorithm applied to tiles (e.g., gzip, brotli).
@@ -18,8 +18,8 @@ pub struct TilesReaderParameters {
 	pub tile_format: TileFormat,
 }
 
-impl TilesReaderParameters {
-	/// Create a new `TilesReaderParameters`.
+impl TileSourceMetadata {
+	/// Create a new `TileSourceMetadata`.
 	///
 	/// # Arguments
 	/// * `tile_format` - The format of the tiles.
@@ -27,14 +27,14 @@ impl TilesReaderParameters {
 	/// * `bbox_pyramid` - The bounding box and zoom pyramid defining the tile coverage.
 	///
 	/// # Returns
-	/// A new instance of `TilesReaderParameters` configured with the specified parameters.
+	/// A new instance of `TileSourceMetadata` configured with the specified parameters.
 	#[must_use]
 	pub fn new(
 		tile_format: TileFormat,
 		tile_compression: TileCompression,
 		bbox_pyramid: TileBBoxPyramid,
-	) -> TilesReaderParameters {
-		TilesReaderParameters {
+	) -> TileSourceMetadata {
+		TileSourceMetadata {
 			bbox_pyramid,
 			tile_compression,
 			tile_format,
@@ -43,17 +43,17 @@ impl TilesReaderParameters {
 
 	#[cfg(test)]
 	#[allow(dead_code)]
-	/// Creates a `TilesReaderParameters` with a default full pyramid up to zoom level 31 for testing purposes.
+	/// Creates a `TileSourceMetadata` with a default full pyramid up to zoom level 31 for testing purposes.
 	#[must_use]
-	pub fn new_full(tile_format: TileFormat, tile_compression: TileCompression) -> TilesReaderParameters {
-		TilesReaderParameters {
+	pub fn new_full(tile_format: TileFormat, tile_compression: TileCompression) -> TileSourceMetadata {
+		TileSourceMetadata {
 			tile_format,
 			tile_compression,
 			bbox_pyramid: TileBBoxPyramid::new_full(31),
 		}
 	}
 
-	/// Updates fields using information from [`TilesReaderParameters`].
+	/// Updates fields using information from [`TileSourceMetadata`].
 	///
 	/// - Applies [`TileJSON::update_from_pyramid`] to intersect/set bounds and min/max zoom.
 	/// - Sets `tile_format` from the reader parameters and derives `tile_type` from it.
@@ -91,7 +91,7 @@ mod tests {
 		let tile_format = TileFormat::PNG;
 		let tile_compression = TileCompression::Gzip;
 
-		let params = TilesReaderParameters::new(tile_format, tile_compression, bbox_pyramid.clone());
+		let params = TileSourceMetadata::new(tile_format, tile_compression, bbox_pyramid.clone());
 
 		assert_eq!(params.tile_format, tile_format);
 		assert_eq!(params.tile_compression, tile_compression);
@@ -103,7 +103,7 @@ mod tests {
 		let tile_format = TileFormat::JPG;
 		let tile_compression = TileCompression::Gzip;
 
-		let params = TilesReaderParameters::new_full(tile_format, tile_compression);
+		let params = TileSourceMetadata::new_full(tile_format, tile_compression);
 
 		assert_eq!(params.tile_format, tile_format);
 		assert_eq!(params.tile_compression, tile_compression);
@@ -115,7 +115,7 @@ mod tests {
 		let mut tj = TileJSON::default();
 		// Prepare reader parameters
 		let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(1, 4, &GeoBBox::new(-180.0, -90.0, 180.0, 90.0).unwrap());
-		let rp = TilesReaderParameters {
+		let rp = TileSourceMetadata {
 			bbox_pyramid,
 			tile_format: TileFormat::PNG,
 			..Default::default()

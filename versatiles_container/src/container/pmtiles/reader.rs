@@ -9,7 +9,7 @@
 //! ## What it extracts
 //! - `header`: parsed [`HeaderV3`] with offsets and compression flags
 //! - `tilejson`: parsed TileJSON (from `metadata` range), merged into [`TileJSON`]
-//! - `parameters`: [`TilesReaderParameters`] with `tile_format`, `tile_compression`, and a
+//! - `parameters`: [`TileSourceMetadata`] with `tile_format`, `tile_compression`, and a
 //!   computed **bbox pyramid** inferred from the directory tree
 //!
 //! ## Requirements
@@ -47,7 +47,7 @@
 //! PMTiles header/directories cannot be parsed or decompressed, or a requested tile is missing.
 
 use super::types::{EntriesV3, HeaderV3};
-use crate::{SourceType, Tile, TileSourceTrait, TilesReaderParameters, TilesRuntime};
+use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -81,7 +81,7 @@ pub struct PMTilesReader {
 	/// Merged TileJSON metadata extracted from the PMTiles `metadata` range.
 	pub tilejson: TileJSON,
 	/// Runtime parameters (tile format, compression, bbox pyramid) advertised by this reader.
-	pub parameters: TilesReaderParameters,
+	pub parameters: TileSourceMetadata,
 	/// Uncompressed root directory blob.
 	pub root_bytes_uncompressed: Blob,
 	/// Parsed entries of the root directory (shared across queries).
@@ -146,7 +146,7 @@ impl PMTilesReader {
 		)?;
 		log::trace!("Bounding box pyramid: {:?}", bbox_pyramid);
 
-		let parameters = TilesReaderParameters::new(
+		let parameters = TileSourceMetadata::new(
 			header.tile_type.as_value()?,
 			header.tile_compression.as_value()?,
 			bbox_pyramid,
@@ -260,7 +260,7 @@ impl TileSourceTrait for PMTilesReader {
 	}
 
 	/// Returns the current reader parameters (tile format, compression, bbox pyramid).
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 
@@ -379,7 +379,7 @@ mod tests {
 
 		assert_wildcard!(
 			format!("{:?}", reader.parameters()),
-			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [1,0,1,0] (1x1), 2: [2,1,2,1] (1x1), 3: [4,2,4,2] (1x1), 4: [8,5,8,5] (1x1), 5: [17,10,17,10] (1x1), 6: [34,20,34,21] (1x2), 7: [68,41,68,42] (1x2), 8: [137,83,137,84] (1x2), 9: [274,167,275,168] (2x2), 10: [549,335,551,336] (3x2), 11: [1098,670,1102,673] (5x4), 12: [2196,1340,2204,1346] (9x7), 13: [4393,2680,4409,2693] (17x14), 14: [8787,5361,8818,5387] (32x27)], tile_compression: Gzip, tile_format: MVT }"
+			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [1,0,1,0] (1x1), 2: [2,1,2,1] (1x1), 3: [4,2,4,2] (1x1), 4: [8,5,8,5] (1x1), 5: [17,10,17,10] (1x1), 6: [34,20,34,21] (1x2), 7: [68,41,68,42] (1x2), 8: [137,83,137,84] (1x2), 9: [274,167,275,168] (2x2), 10: [549,335,551,336] (3x2), 11: [1098,670,1102,673] (5x4), 12: [2196,1340,2204,1346] (9x7), 13: [4393,2680,4409,2693] (17x14), 14: [8787,5361,8818,5387] (32x27)], tile_compression: Gzip, tile_format: MVT }"
 		);
 
 		assert_eq!(

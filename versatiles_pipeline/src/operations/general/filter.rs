@@ -2,7 +2,7 @@ use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -19,7 +19,7 @@ struct Args {
 
 #[derive(Debug)]
 struct Operation {
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 	source: Box<dyn TileSourceTrait>,
 	tilejson: TileJSON,
 }
@@ -78,7 +78,7 @@ impl TileSourceTrait for Operation {
 		SourceType::new_processor("filter", self.source.source_type())
 	}
 
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 

@@ -1,5 +1,5 @@
 use napi_derive::napi;
-use versatiles_container::TilesReaderParameters;
+use versatiles_container::TileSourceMetadata;
 
 /// Tile reader parameters
 #[napi(object)]
@@ -15,8 +15,8 @@ pub struct ReaderParameters {
 	pub max_zoom: u8,
 }
 
-impl From<&TilesReaderParameters> for ReaderParameters {
-	fn from(params: &TilesReaderParameters) -> Self {
+impl From<&TileSourceMetadata> for ReaderParameters {
+	fn from(params: &TileSourceMetadata) -> Self {
 		Self {
 			tile_format: format!("{:?}", params.tile_format).to_lowercase(),
 			tile_compression: format!("{:?}", params.tile_compression).to_lowercase(),
@@ -36,12 +36,12 @@ mod tests {
 		compression: TileCompression,
 		min_zoom: u8,
 		max_zoom: u8,
-	) -> TilesReaderParameters {
+	) -> TileSourceMetadata {
 		let mut bbox_pyramid = TileBBoxPyramid::new_full(32);
 		bbox_pyramid.set_level_min(min_zoom);
 		bbox_pyramid.set_level_max(max_zoom);
 
-		TilesReaderParameters::new(format, compression, bbox_pyramid)
+		TileSourceMetadata::new(format, compression, bbox_pyramid)
 	}
 
 	#[test]

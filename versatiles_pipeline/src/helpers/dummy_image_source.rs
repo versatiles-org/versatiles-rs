@@ -2,7 +2,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use std::sync::Arc;
-use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -10,7 +10,7 @@ use versatiles_image::traits::*;
 pub struct DummyImageSource {
 	#[allow(clippy::type_complexity)]
 	generate_tile: Arc<dyn Fn(&TileCoord) -> Option<Tile> + Send + Sync>,
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 	tilejson: TileJSON,
 }
 
@@ -48,7 +48,7 @@ impl DummyImageSource {
 	{
 		ensure!(tile_format.is_raster(), "tile_format must be a raster format");
 
-		let parameters = TilesReaderParameters::new(
+		let parameters = TileSourceMetadata::new(
 			tile_format,
 			TileCompression::Uncompressed,
 			pyramid.unwrap_or_else(|| TileBBoxPyramid::new_full(8)),
@@ -72,7 +72,7 @@ impl TileSourceTrait for DummyImageSource {
 		SourceType::new_container("dummy image source", "dummy")
 	}
 
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 

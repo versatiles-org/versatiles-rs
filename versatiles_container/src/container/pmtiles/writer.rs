@@ -154,7 +154,7 @@ impl TilesWriterTrait for PMTilesWriter {
 mod tests {
 	use super::*;
 	use crate::{
-		TilesReaderParameters,
+		TileSourceMetadata,
 		container::{
 			mock::{MockTilesReader, MockTilesWriter},
 			pmtiles::PMTilesReader,
@@ -166,7 +166,7 @@ mod tests {
 	#[context("test: PMTiles read↔write roundtrip")]
 	#[tokio::test]
 	async fn read_write() -> Result<()> {
-		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+		let mut mock_reader = MockTilesReader::new_mock(TileSourceMetadata {
 			bbox_pyramid: TileBBoxPyramid::new_full(4),
 			tile_compression: TileCompression::Gzip,
 			tile_format: TileFormat::MVT,
@@ -191,7 +191,7 @@ mod tests {
 		bbox_pyramid.include_bbox(&TileBBox::from_min_and_max(15, 4090, 4090, 5000, 5000)?);
 		bbox_pyramid.include_bbox(&TileBBox::from_min_and_max(14, 250, 250, 260, 260)?);
 
-		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+		let mut mock_reader = MockTilesReader::new_mock(TileSourceMetadata {
 			bbox_pyramid,
 			tile_compression: TileCompression::Uncompressed,
 			tile_format: TileFormat::MVT,

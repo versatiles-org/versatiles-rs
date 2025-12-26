@@ -2,7 +2,7 @@ use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use std::{fmt::Debug, str, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -70,7 +70,7 @@ impl From<RasterTileFormat> for TileFormat {
 
 #[derive(Debug)]
 struct Operation {
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 	source: Box<dyn TileSourceTrait>,
 	tilejson: TileJSON,
 	format: RasterTileFormat,
@@ -143,7 +143,7 @@ impl TileSourceTrait for Operation {
 		SourceType::new_processor("raster_format", self.source.source_type())
 	}
 
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 

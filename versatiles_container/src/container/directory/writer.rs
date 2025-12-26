@@ -12,7 +12,7 @@
 //! ### Requirements
 //! - The output `path` **must be absolute**.
 //! - All emitted tiles use the **same format** and **compression** as reported by the source reader's
-//!   [`TilesReaderParameters`](versatiles_core::TilesReaderParameters).
+//!   [`TileSourceMetadata`](versatiles_core::TileSourceMetadata).
 //! - The directory tree is created as needed.
 //!
 //! ### Recognized outputs
@@ -149,7 +149,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{MOCK_BYTES_PBF, MockTilesReader, TilesReaderParameters};
+	use crate::{MOCK_BYTES_PBF, MockTilesReader, TileSourceMetadata};
 	use versatiles_core::utils::decompress_gzip;
 
 	/// Tests the functionality of writing tile data to a directory from a mock reader.
@@ -158,7 +158,7 @@ mod tests {
 		let temp_dir = assert_fs::TempDir::new()?;
 		let temp_path = temp_dir.path();
 
-		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters::new(
+		let mut mock_reader = MockTilesReader::new_mock(TileSourceMetadata::new(
 			TileFormat::MVT,
 			TileCompression::Gzip,
 			TileBBoxPyramid::new_full(2),

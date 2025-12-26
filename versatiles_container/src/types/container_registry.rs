@@ -291,7 +291,7 @@ pub async fn make_test_file(
 	// get dummy reader
 
 	use versatiles_core::TileBBoxPyramid;
-	let reader = MockTilesReader::new_mock(TilesReaderParameters::new(
+	let reader = MockTilesReader::new_mock(TileSourceMetadata::new(
 		tile_format,
 		compression,
 		TileBBoxPyramid::new_full(max_zoom_level),
@@ -340,7 +340,7 @@ pub mod tests {
 			let _start = Instant::now();
 
 			// get dummy reader
-			let reader1 = MockTilesReader::new_mock(TilesReaderParameters::new(
+			let reader1 = MockTilesReader::new_mock(TileSourceMetadata::new(
 				tile_format,
 				compression,
 				TileBBoxPyramid::new_full(2),

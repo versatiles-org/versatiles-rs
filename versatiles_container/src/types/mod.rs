@@ -6,7 +6,7 @@ mod processor;
 mod tile;
 mod tile_content;
 mod tile_source;
-mod tiles_reader_parameters;
+mod tile_source_metadata;
 mod writer;
 
 pub use container_registry::*;
@@ -17,7 +17,7 @@ pub use processor::*;
 pub use tile::*;
 pub use tile_content::*;
 pub use tile_source::*;
-pub use tiles_reader_parameters::*;
+pub use tile_source_metadata::*;
 pub use writer::*;
 
 // Backward compatibility aliases

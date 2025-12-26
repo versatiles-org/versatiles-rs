@@ -31,7 +31,7 @@
 //! Returns errors when the tar cannot be opened or read, when no tiles are found,
 //! or when mixed formats/compressions are detected.
 
-use crate::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
+use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path, sync::Arc};
@@ -49,7 +49,7 @@ pub struct TarTilesReader {
 	name: String,
 	reader: Box<DataReaderFile>,
 	tile_map: HashMap<TileCoord, ByteRange>,
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 }
 
 impl TarTilesReader {
@@ -173,7 +173,7 @@ impl TarTilesReader {
 			return Err(anyhow!("no tiles found in tar"));
 		}
 
-		let parameters = TilesReaderParameters::new(
+		let parameters = TileSourceMetadata::new(
 			tile_format.ok_or(anyhow!("unknown tile format, can't detect format"))?,
 			tile_compression.ok_or(anyhow!("unknown tile compression, can't detect compression"))?,
 			bbox_pyramid.clone(),
@@ -196,7 +196,7 @@ impl TileSourceTrait for TarTilesReader {
 	}
 
 	/// Returns the parameters of the tiles reader.
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 
@@ -260,7 +260,7 @@ pub mod tests {
 
 		assert_eq!(
 			format!("{reader:?}"),
-			"TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)], tile_compression: Gzip, tile_format: MVT } }"
+			"TarTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)], tile_compression: Gzip, tile_format: MVT } }"
 		);
 		assert_wildcard!(reader.source_type().to_string(), "container 'tar' ('*.tar')");
 		assert_eq!(
@@ -269,7 +269,7 @@ pub mod tests {
 		);
 		assert_eq!(
 			format!("{:?}", reader.parameters()),
-			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)], tile_compression: Gzip, tile_format: MVT }"
+			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)], tile_compression: Gzip, tile_format: MVT }"
 		);
 		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.parameters().tile_format, TileFormat::MVT);

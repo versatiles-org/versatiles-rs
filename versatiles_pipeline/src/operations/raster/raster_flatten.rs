@@ -3,7 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use imageproc::image::Rgb;
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -42,7 +42,7 @@ impl TileSourceTrait for Operation {
 		SourceType::new_processor("raster_flatten", self.source.source_type())
 	}
 
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		self.source.parameters()
 	}
 

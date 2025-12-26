@@ -38,7 +38,7 @@
 //! ## Errors
 //! Errors are returned if the directory is not absolute, does not exist, is not a directory, contains no tiles, or if tiles have inconsistent formats or compressions.
 
-use crate::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
+use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use itertools::Itertools;
@@ -66,7 +66,7 @@ pub struct DirectoryTilesReader {
 	tilejson: TileJSON,
 	dir: PathBuf,
 	tile_map: HashMap<TileCoord, PathBuf>,
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 }
 
 impl DirectoryTilesReader {
@@ -79,7 +79,7 @@ impl DirectoryTilesReader {
 	/// Metadata files (`meta.json`, `tiles.json`, `metadata.json` and their `.gz`/`.br` variants) are merged into the TileJSON.
 	/// Bounds, minzoom, and maxzoom are inferred from the directory's tile pyramid and merged with metadata.
 	///
-	/// The returned `DirectoryTilesReader` contains `TilesReaderParameters` which specify the tile format, compression, and bounding box pyramid.
+	/// The returned `DirectoryTilesReader` contains `TileSourceMetadata` which specify the tile format, compression, and bounding box pyramid.
 	///
 	/// # Arguments
 	///
@@ -209,7 +209,7 @@ impl DirectoryTilesReader {
 			tilejson,
 			dir: dir.to_path_buf(),
 			tile_map,
-			parameters: TilesReaderParameters::new(tile_format, tile_compression, bbox_pyramid),
+			parameters: TileSourceMetadata::new(tile_format, tile_compression, bbox_pyramid),
 		})
 	}
 
@@ -231,7 +231,7 @@ impl TileSourceTrait for DirectoryTilesReader {
 		SourceType::new_container("directory", self.dir.to_str().unwrap())
 	}
 
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 
@@ -454,7 +454,7 @@ mod tests {
 
 		assert_wildcard!(
 			format!("{reader:?}"),
-			"DirectoryTilesReader { source_type: Container { name: \"directory\", uri: \"*\" }, parameters: TilesReaderParameters { bbox_pyramid: [3: [2,1,2,1] (1x1)], tile_compression: Brotli, tile_format: PNG } }"
+			"DirectoryTilesReader { source_type: Container { name: \"directory\", uri: \"*\" }, parameters: TileSourceMetadata { bbox_pyramid: [3: [2,1,2,1] (1x1)], tile_compression: Brotli, tile_format: PNG } }"
 		);
 
 		assert_eq!(

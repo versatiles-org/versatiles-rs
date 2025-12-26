@@ -425,7 +425,7 @@ mod tests {
 	use reqwest::Client;
 	use rstest::rstest;
 	use std::sync::Arc;
-	use versatiles_container::{MockTilesReader, MockTilesReaderProfile as MTRP, TilesReaderParameters};
+	use versatiles_container::{MockTilesReader, MockTilesReaderProfile as MTRP, TileSourceMetadata};
 	use versatiles_core::{TileBBoxPyramid, TileCompression as TC, TileFormat as TF};
 
 	const IP: &str = "127.0.0.1";
@@ -548,7 +548,7 @@ mod tests {
 
 		let mut server = TileServer::new_test(IP, 0, true, false);
 
-		let parameters = TilesReaderParameters::new(format, compression, TileBBoxPyramid::new_full(8));
+		let parameters = TileSourceMetadata::new(format, compression, TileBBoxPyramid::new_full(8));
 		let reader = MockTilesReader::new_mock(parameters).unwrap().boxed();
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 		server.start().await.unwrap();

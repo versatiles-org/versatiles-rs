@@ -25,7 +25,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
 use std::sync::Arc;
-use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -40,11 +40,11 @@ struct Args {
 /// Implements [`TileSourceTrait`] by performing *short‑circuit* look‑ups
 /// across multiple sources.
 ///
-/// The struct keeps only metadata (`TileJSON`, `TilesReaderParameters`) in
+/// The struct keeps only metadata (`TileJSON`, `TileSourceMetadata`) in
 /// memory; actual tile data are streamed directly from the first source that
 /// contains them.
 struct Operation {
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 	sources: Vec<Box<dyn TileSourceTrait>>,
 	tilejson: TileJSON,
 	traversal: Traversal,
@@ -93,7 +93,7 @@ impl Operation {
 			);
 		}
 
-		let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
+		let parameters = TileSourceMetadata::new(tile_format, tile_compression, pyramid);
 		parameters.update_tilejson(&mut tilejson);
 
 		Ok(Self {
@@ -108,7 +108,7 @@ impl Operation {
 #[async_trait]
 impl TileSourceTrait for Operation {
 	/// Reader parameters (format, compression, pyramid) for the overlay result.
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 

@@ -10,7 +10,7 @@ use crate::{PipelineFactory, operations::read::traits::ReadTileSourceTrait, trai
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
-use versatiles_container::{Tile, TileSourceTrait, TilesReaderParameters};
+use versatiles_container::{Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -28,7 +28,7 @@ struct Args {
 /// container’s [`TileJSON`] metadata is kept so downstream stages can query
 /// bounds and zoom levels without touching the reader again.
 struct Operation {
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 	reader: Box<dyn TileSourceTrait>,
 	tilejson: TileJSON,
 }
@@ -61,7 +61,7 @@ impl TileSourceTrait for Operation {
 
 	/// Return the reader's technical parameters (compression, tile size,
 	/// etc.) without performing any I/O.
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 

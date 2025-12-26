@@ -1,7 +1,7 @@
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::sync::Arc;
-use versatiles_container::{SourceType, Tile, TileSourceTrait, TilesReaderParameters};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::{TileBBox, TileJSON, TileStream, TileType, Traversal};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
@@ -16,14 +16,14 @@ pub trait RunnerTrait: std::fmt::Debug + Send + Sync + 'static {
 pub struct TransformOp<R: RunnerTrait> {
 	pub runner: Arc<R>,
 	pub source: Box<dyn TileSourceTrait>,
-	pub params: TilesReaderParameters,
+	pub params: TileSourceMetadata,
 	pub tilejson: TileJSON,
 }
 
 #[async_trait]
 impl<R: RunnerTrait> TileSourceTrait for TransformOp<R> {
 	/* --- metadata --- */
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.params
 	}
 	fn tilejson(&self) -> &TileJSON {

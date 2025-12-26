@@ -22,7 +22,7 @@
 //!         SourceType::Processor("my_processor")
 //!     }
 //!
-//!     fn parameters(&self) -> &TilesReaderParameters {
+//!     fn parameters(&self) -> &TileSourceMetadata {
 //!         self.base.parameters()
 //!     }
 //!
@@ -44,7 +44,7 @@
 //! }
 //! ```
 
-use super::{TileSourceTrait, TilesReaderParameters};
+use super::{TileSourceMetadata, TileSourceTrait};
 use versatiles_core::{TileJSON, Traversal};
 
 /// Base struct for tile processors that wrap a single upstream source.
@@ -61,7 +61,7 @@ use versatiles_core::{TileJSON, Traversal};
 pub struct Processor {
 	name: String,
 	source: Box<dyn TileSourceTrait>,
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 	tilejson: TileJSON,
 	traversal: Traversal,
 }
@@ -93,7 +93,7 @@ impl Processor {
 	/// Builder method to override the parameters.
 	///
 	/// Use this when the processor modifies spatial extent, compression, or format.
-	pub fn with_parameters(mut self, parameters: TilesReaderParameters) -> Self {
+	pub fn with_parameters(mut self, parameters: TileSourceMetadata) -> Self {
 		self.parameters = parameters;
 		self
 	}
@@ -132,7 +132,7 @@ impl Processor {
 	}
 
 	/// Returns the (potentially modified) parameters.
-	pub fn parameters(&self) -> &TilesReaderParameters {
+	pub fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 
@@ -149,7 +149,7 @@ impl Processor {
 	/// Returns a mutable reference to the parameters.
 	///
 	/// Use this to modify parameters after construction.
-	pub fn parameters_mut(&mut self) -> &mut TilesReaderParameters {
+	pub fn parameters_mut(&mut self) -> &mut TileSourceMetadata {
 		&mut self.parameters
 	}
 

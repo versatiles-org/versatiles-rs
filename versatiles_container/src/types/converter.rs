@@ -40,7 +40,7 @@
 //! }
 //! ```
 
-use crate::{SourceType, Tile, TileSourceTrait, TilesReaderParameters, TilesRuntime};
+use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{path::Path, sync::Arc};
@@ -122,14 +122,14 @@ pub async fn convert_tiles_container(
 pub struct TilesConvertReader {
 	reader: Box<dyn TileSourceTrait>,
 	converter_parameters: TilesConverterParameters,
-	reader_parameters: TilesReaderParameters,
+	reader_parameters: TileSourceMetadata,
 	tilejson: TileJSON,
 }
 
 impl TilesConvertReader {
 	/// Wraps an existing reader so that reads are transformed according to `cp`.
 	///
-	/// Updates the internal [`TilesReaderParameters`] and [`TileJSON`] to reflect
+	/// Updates the internal [`TileSourceMetadata`] and [`TileJSON`] to reflect
 	/// the chosen bbox, axis transforms, and compression.
 	///
 	/// ### Errors
@@ -139,8 +139,8 @@ impl TilesConvertReader {
 		reader: Box<dyn TileSourceTrait>,
 		cp: TilesConverterParameters,
 	) -> Result<TilesConvertReader> {
-		let rp: TilesReaderParameters = reader.parameters().to_owned();
-		let mut new_rp: TilesReaderParameters = rp.clone();
+		let rp: TileSourceMetadata = reader.parameters().to_owned();
+		let mut new_rp: TileSourceMetadata = rp.clone();
 
 		if cp.flip_y {
 			new_rp.bbox_pyramid.flip_y();
@@ -179,7 +179,7 @@ impl TileSourceTrait for TilesConvertReader {
 		self.reader.traversal()
 	}
 
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.reader_parameters
 	}
 
@@ -259,7 +259,7 @@ mod tests {
 
 	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> MockTilesReader {
 		let bbox_pyramid = TileBBoxPyramid::new_full(4);
-		let reader_parameters = TilesReaderParameters::new(tf, tc, bbox_pyramid);
+		let reader_parameters = TileSourceMetadata::new(tf, tc, bbox_pyramid);
 		MockTilesReader::new_mock(reader_parameters).unwrap()
 	}
 
@@ -275,7 +275,7 @@ mod tests {
 			let pyramid_convert = new_bbox([2, 3, 7, 7]);
 			let pyramid_out = new_bbox(bbox_out);
 
-			let reader_parameters = TilesReaderParameters::new(JSON, Uncompressed, pyramid_in);
+			let reader_parameters = TileSourceMetadata::new(JSON, Uncompressed, pyramid_in);
 			let reader = MockTilesReader::new_mock(reader_parameters)?;
 
 			let temp_file = NamedTempFile::new("test.versatiles")?;

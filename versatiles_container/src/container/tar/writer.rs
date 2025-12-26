@@ -3,7 +3,7 @@
 //! The `TarTilesWriter` emits a directory-like tile pyramid into a tarball using the
 //! `{z}/{x}/{y}.<format>[.<compression>]` layout and writes TileJSON as `tiles.json[.<compression>]`.
 //! The transport **compression** (`.br`/`.gz` or none) follows the source reader’s
-//! [`TilesReaderParameters::tile_compression`].
+//! [`TileSourceMetadata::tile_compression`].
 //!
 //! ## Behavior
 //! - Creates regular file entries with mode `0644`.
@@ -123,13 +123,13 @@ impl TilesWriterTrait for TarTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{MockTilesReader, MockTilesWriter, TarTilesReader, TilesReaderParameters};
+	use crate::{MockTilesReader, MockTilesWriter, TarTilesReader, TileSourceMetadata};
 	use assert_fs::NamedTempFile;
 	use versatiles_core::*;
 
 	#[tokio::test]
 	async fn read_write() -> Result<()> {
-		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+		let mut mock_reader = MockTilesReader::new_mock(TileSourceMetadata {
 			bbox_pyramid: TileBBoxPyramid::new_full(4),
 			tile_compression: TileCompression::Gzip,
 			tile_format: TileFormat::MVT,
@@ -146,7 +146,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_meta_data() -> Result<()> {
-		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+		let mut mock_reader = MockTilesReader::new_mock(TileSourceMetadata {
 			bbox_pyramid: TileBBoxPyramid::new_full(1),
 			tile_compression: TileCompression::Uncompressed,
 			tile_format: TileFormat::JSON,
@@ -166,7 +166,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_empty_tiles() -> Result<()> {
-		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+		let mut mock_reader = MockTilesReader::new_mock(TileSourceMetadata {
 			bbox_pyramid: TileBBoxPyramid::new_empty(),
 			tile_compression: TileCompression::Uncompressed,
 			tile_format: TileFormat::JSON,
@@ -190,7 +190,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_invalid_path() -> Result<()> {
-		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+		let mut mock_reader = MockTilesReader::new_mock(TileSourceMetadata {
 			bbox_pyramid: TileBBoxPyramid::new_full(2),
 			tile_compression: TileCompression::Gzip,
 			tile_format: TileFormat::MVT,
@@ -205,7 +205,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_large_tile_set() -> Result<()> {
-		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+		let mut mock_reader = MockTilesReader::new_mock(TileSourceMetadata {
 			bbox_pyramid: TileBBoxPyramid::new_full(7),
 			tile_compression: TileCompression::Uncompressed,
 			tile_format: TileFormat::PNG,
@@ -229,7 +229,7 @@ mod tests {
 		];
 
 		for tile_compression in compressions {
-			let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+			let mut mock_reader = MockTilesReader::new_mock(TileSourceMetadata {
 				bbox_pyramid: TileBBoxPyramid::new_full(2),
 				tile_compression,
 				tile_format: TileFormat::MVT,
@@ -249,7 +249,7 @@ mod tests {
 	async fn test_correct_zxy_scheme() -> Result<()> {
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 		bbox_pyramid.include_coord(&TileCoord::new(3, 1, 2)?);
-		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+		let mut mock_reader = MockTilesReader::new_mock(TileSourceMetadata {
 			bbox_pyramid,
 			tile_compression: TileCompression::Uncompressed,
 			tile_format: TileFormat::PNG,

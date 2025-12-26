@@ -50,7 +50,7 @@
 //! - Returns errors if the database is unreadable, the `format` is missing/unknown,
 //!   or queries fail.
 
-use crate::{SourceType, Tile, TileSourceTrait, TilesReaderParameters, TilesRuntime};
+use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use r2d2::Pool;
@@ -68,7 +68,7 @@ pub struct MBTilesReader {
 	name: String,
 	pool: Pool<SqliteConnectionManager>,
 	tilejson: TileJSON,
-	parameters: TilesReaderParameters,
+	parameters: TileSourceMetadata,
 	runtime: TilesRuntime,
 }
 
@@ -103,7 +103,7 @@ impl MBTilesReader {
 
 		let manager = SqliteConnectionManager::file(path);
 		let pool = Pool::builder().max_size(10).build(manager)?;
-		let parameters = TilesReaderParameters::new(MVT, Uncompressed, TileBBoxPyramid::new_empty());
+		let parameters = TileSourceMetadata::new(MVT, Uncompressed, TileBBoxPyramid::new_empty());
 
 		let mut reader = MBTilesReader {
 			name: String::from(path.to_str().unwrap()),
@@ -313,7 +313,7 @@ impl TileSourceTrait for MBTilesReader {
 	}
 
 	/// Returns the parameters of the tiles reader.
-	fn parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 
@@ -434,7 +434,7 @@ pub mod tests {
 
 		assert_eq!(
 			format!("{reader:?}"),
-			"MBTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [1,0,1,0] (1x1), 2: [2,1,2,1] (1x1), 3: [4,2,4,2] (1x1), 4: [8,5,8,5] (1x1), 5: [17,10,17,10] (1x1), 6: [34,20,34,21] (1x2), 7: [68,41,68,42] (1x2), 8: [137,83,137,84] (1x2), 9: [274,167,275,168] (2x2), 10: [549,335,551,336] (3x2), 11: [1098,670,1102,673] (5x4), 12: [2196,1340,2204,1346] (9x7), 13: [4393,2680,4409,2693] (17x14), 14: [8787,5361,8818,5387] (32x27)], tile_compression: Gzip, tile_format: MVT } }"
+			"MBTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [1,0,1,0] (1x1), 2: [2,1,2,1] (1x1), 3: [4,2,4,2] (1x1), 4: [8,5,8,5] (1x1), 5: [17,10,17,10] (1x1), 6: [34,20,34,21] (1x2), 7: [68,41,68,42] (1x2), 8: [137,83,137,84] (1x2), 9: [274,167,275,168] (2x2), 10: [549,335,551,336] (3x2), 11: [1098,670,1102,673] (5x4), 12: [2196,1340,2204,1346] (9x7), 13: [4393,2680,4409,2693] (17x14), 14: [8787,5361,8818,5387] (32x27)], tile_compression: Gzip, tile_format: MVT } }"
 		);
 		assert_eq!(
 			reader.source_type().to_string(),
@@ -446,7 +446,7 @@ pub mod tests {
 		);
 		assert_eq!(
 			format!("{:?}", reader.parameters()),
-			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [1,0,1,0] (1x1), 2: [2,1,2,1] (1x1), 3: [4,2,4,2] (1x1), 4: [8,5,8,5] (1x1), 5: [17,10,17,10] (1x1), 6: [34,20,34,21] (1x2), 7: [68,41,68,42] (1x2), 8: [137,83,137,84] (1x2), 9: [274,167,275,168] (2x2), 10: [549,335,551,336] (3x2), 11: [1098,670,1102,673] (5x4), 12: [2196,1340,2204,1346] (9x7), 13: [4393,2680,4409,2693] (17x14), 14: [8787,5361,8818,5387] (32x27)], tile_compression: Gzip, tile_format: MVT }"
+			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [1,0,1,0] (1x1), 2: [2,1,2,1] (1x1), 3: [4,2,4,2] (1x1), 4: [8,5,8,5] (1x1), 5: [17,10,17,10] (1x1), 6: [34,20,34,21] (1x2), 7: [68,41,68,42] (1x2), 8: [137,83,137,84] (1x2), 9: [274,167,275,168] (2x2), 10: [549,335,551,336] (3x2), 11: [1098,670,1102,673] (5x4), 12: [2196,1340,2204,1346] (9x7), 13: [4393,2680,4409,2693] (17x14), 14: [8787,5361,8818,5387] (32x27)], tile_compression: Gzip, tile_format: MVT }"
 		);
 		assert_eq!(reader.parameters().tile_compression, Gzip);
 		assert_eq!(reader.parameters().tile_format, MVT);
