@@ -28,7 +28,6 @@ moka.workspace = true
 dashmap.workspace = true
 nom = { version = "8.0.0" }
 nom-language = { version = "0.1.0" }
-num_cpus.workspace = true
 regex.workspace = true
 tokio.workspace = true
 

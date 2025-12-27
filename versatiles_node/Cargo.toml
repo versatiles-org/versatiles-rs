@@ -12,8 +12,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow.workspace = true
-async-trait.workspace = true
-lazy_static.workspace = true
 napi = { version = "3.7.1", features = ["async"] }
 napi-derive = "3.4.1"
 tokio.workspace = true
