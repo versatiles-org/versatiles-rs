@@ -47,7 +47,7 @@
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader};
 use crate::{
-	TileSourceTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait, Traversal,
+	TileSourceTrait, TileSourceTraverseExt, TilesRuntime, TilesWriterTrait, Traversal,
 	container::versatiles::types::BlockWriter,
 };
 use anyhow::{Result, anyhow};

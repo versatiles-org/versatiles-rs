@@ -40,7 +40,7 @@
 //! Returns errors if writing, compression, or serialization fails.
 
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression};
-use crate::{TileSourceTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait, traversal::*};
+use crate::{TileSourceTrait, TileSourceTraverseExt, TilesRuntime, TilesWriterTrait, traversal::*};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;

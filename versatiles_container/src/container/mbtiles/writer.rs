@@ -43,7 +43,7 @@
 //! }
 //! ```
 
-use crate::{TileSourceTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait, Traversal};
+use crate::{TileSourceTrait, TileSourceTraverseExt, TilesRuntime, TilesWriterTrait, Traversal};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;

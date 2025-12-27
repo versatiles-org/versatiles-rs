@@ -5,8 +5,9 @@ mod data_source;
 mod processor;
 mod tile;
 mod tile_content;
-mod tile_source;
 mod tile_source_metadata;
+mod tile_source_trait;
+mod tile_source_type;
 mod writer;
 
 pub use container_registry::*;
@@ -16,10 +17,7 @@ pub use data_source::*;
 pub use processor::*;
 pub use tile::*;
 pub use tile_content::*;
-pub use tile_source::*;
 pub use tile_source_metadata::*;
+pub use tile_source_trait::*;
+pub use tile_source_type::*;
 pub use writer::*;
-
-// Backward compatibility aliases
-pub use tile_source::TileSourceTrait;
-pub use tile_source::TileSourceTraverseExt as TilesReaderTraverseExt;
