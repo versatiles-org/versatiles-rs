@@ -122,7 +122,7 @@ impl<K: CacheKey, V: CacheValue> Cache<K, V> for OnDiskCache<K, V> {
 
 	/// Remove the on-disk entry for `key`, returning its previous values if it existed.
 	#[context("removing cache entry for key '{}'", key.to_cache_key())]
-	fn remove(&mut self, key: &K) -> Result<Option<Vec<V>>> {
+	fn remove(&self, key: &K) -> Result<Option<Vec<V>>> {
 		let entry_path = self.get_entry_path(key);
 		let values = self.read_file(&entry_path)?;
 		if entry_path.exists() {
@@ -133,7 +133,7 @@ impl<K: CacheKey, V: CacheValue> Cache<K, V> for OnDiskCache<K, V> {
 
 	/// Overwrite the cache entry for `key` with `values`.
 	#[context("writing values for key '{}'", key.to_cache_key())]
-	fn insert(&mut self, key: &K, values: Vec<V>) -> Result<()> {
+	fn insert(&self, key: &K, values: Vec<V>) -> Result<()> {
 		let entry_path = self.get_entry_path(key);
 		write(entry_path, Self::values_to_buffer(&values)?)?;
 		Ok(())
@@ -141,7 +141,7 @@ impl<K: CacheKey, V: CacheValue> Cache<K, V> for OnDiskCache<K, V> {
 
 	/// Append `values` to the existing cache entry for `key`, creating the file if needed.
 	#[context("appending values for key '{}'",  key.to_cache_key())]
-	fn append(&mut self, key: &K, values: Vec<V>) -> Result<()> {
+	fn append(&self, key: &K, values: Vec<V>) -> Result<()> {
 		let entry_path = self.get_entry_path(key);
 		let buffer = Self::values_to_buffer(&values)?;
 		if entry_path.exists() {
@@ -153,7 +153,7 @@ impl<K: CacheKey, V: CacheValue> Cache<K, V> for OnDiskCache<K, V> {
 	}
 
 	/// Recursively delete the entire cache directory.
-	fn clean_up(&mut self) {
+	fn clean_up(&self) {
 		remove_dir_all(&self.path).ok();
 	}
 }
@@ -197,7 +197,7 @@ mod tests {
 
 	#[test]
 	fn insert_get_append_remove_flow_strings() {
-		let (tmp, mut cache) = new_cache();
+		let (tmp, cache) = new_cache();
 		let k = "key:1".to_string();
 		// initially
 		assert!(!cache.contains_key(&k));
@@ -233,7 +233,7 @@ mod tests {
 	fn binary_values_roundtrip_and_append() {
 		let dir = tempfile::tempdir().expect("tempdir");
 		let cache_path = dir.path().join("cache");
-		let mut cache = OnDiskCache::<String, Vec<u8>>::new(cache_path);
+		let cache = OnDiskCache::<String, Vec<u8>>::new(cache_path);
 		let k = "blob".to_string();
 
 		// write binary chunks (including non-UTF8)
@@ -248,7 +248,7 @@ mod tests {
 
 	#[test]
 	fn append_creates_file_if_missing() {
-		let (_tmp, mut cache) = new_cache();
+		let (_tmp, cache) = new_cache();
 		let k = "new-key".to_string();
 		assert!(!cache.contains_key(&k));
 		cache.append(&k, v(&["v1"])).unwrap();

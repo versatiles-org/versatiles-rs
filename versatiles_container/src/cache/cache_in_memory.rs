@@ -8,22 +8,25 @@
 //! This implementation is primarily used for testing, ephemeral pipelines, or
 //! environments where caching to disk would be unnecessarily slow.
 //!
-//! All operations are synchronous and thread-safe only through external synchronization.
+//! All operations are lock-free and thread-safe using DashMap for concurrent access.
 use anyhow::Result;
 use versatiles_derive::context;
 
 use super::traits::{Cache, CacheKey, CacheValue};
-use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
+use dashmap::DashMap;
+use std::{fmt::Debug, marker::PhantomData};
 
 /// A non-persistent, in-memory cache mapping a [`CacheKey`] to a vector of [`CacheValue`]s.
 ///
-/// The cache stores all data inside a standard [`HashMap`] and is intended
+/// The cache stores all data inside a lock-free concurrent [`DashMap`] and is intended
 /// for high-speed operations where data does not need to survive process restarts.
+///
+/// This cache is thread-safe and supports lock-free concurrent access for high performance.
 ///
 /// This cache is used when the configured [`CacheType`](crate::cache::cache_type::CacheType)
 /// is `InMemory`.
 pub struct InMemoryCache<K: CacheKey, V: CacheValue> {
-	data: HashMap<String, Vec<V>>,
+	data: DashMap<String, Vec<V>>,
 	_marker_k: PhantomData<K>,
 }
 
@@ -32,10 +35,10 @@ pub struct InMemoryCache<K: CacheKey, V: CacheValue> {
 impl<K: CacheKey, V: CacheValue> InMemoryCache<K, V> {
 	/// Create an empty `InMemoryCache` instance.
 	///
-	/// Initializes an internal [`HashMap`] with no entries.
+	/// Initializes an internal [`DashMap`] with no entries.
 	pub fn new() -> Self {
 		Self {
-			data: HashMap::new(),
+			data: DashMap::new(),
 			_marker_k: PhantomData,
 		}
 	}
@@ -53,22 +56,25 @@ impl<K: CacheKey, V: CacheValue> Cache<K, V> for InMemoryCache<K, V> {
 
 	#[context("retrieving clone for key '{}'", key.to_cache_key())]
 	fn get_clone(&self, key: &K) -> Result<Option<Vec<V>>> {
-		Ok(self.data.get(&key.to_cache_key()).cloned())
+		Ok(self
+			.data
+			.get(&key.to_cache_key())
+			.map(|entry_ref| entry_ref.value().clone()))
 	}
 
 	#[context("removing entry for key '{}'", key.to_cache_key())]
-	fn remove(&mut self, key: &K) -> Result<Option<Vec<V>>> {
-		Ok(self.data.remove(&key.to_cache_key()))
+	fn remove(&self, key: &K) -> Result<Option<Vec<V>>> {
+		Ok(self.data.remove(&key.to_cache_key()).map(|(_, v)| v))
 	}
 
 	#[context("inserting values for key '{}'",  key.to_cache_key())]
-	fn insert(&mut self, key: &K, values: Vec<V>) -> Result<()> {
+	fn insert(&self, key: &K, values: Vec<V>) -> Result<()> {
 		self.data.insert(key.to_cache_key(), values);
 		Ok(())
 	}
 
 	#[context("appending values for key '{}'",  key.to_cache_key())]
-	fn append(&mut self, key: &K, values: Vec<V>) -> Result<()> {
+	fn append(&self, key: &K, values: Vec<V>) -> Result<()> {
 		self.data.entry(key.to_cache_key()).or_default().extend(values);
 		Ok(())
 	}
@@ -76,7 +82,7 @@ impl<K: CacheKey, V: CacheValue> Cache<K, V> for InMemoryCache<K, V> {
 	/// Clear all entries from the cache.
 	///
 	/// Since this cache is memory-based, cleanup simply empties the internal map.
-	fn clean_up(&mut self) {
+	fn clean_up(&self) {
 		self.data.clear();
 	}
 }
@@ -85,7 +91,7 @@ impl<K: CacheKey, V: CacheValue> Cache<K, V> for InMemoryCache<K, V> {
 impl<K: CacheKey, V: CacheValue> Debug for InMemoryCache<K, V> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_map()
-			.entries(self.data.iter().map(|(k, v)| (k, v.len())))
+			.entries(self.data.iter().map(|entry| (entry.key().clone(), entry.value().len())))
 			.finish()
 	}
 }
@@ -100,7 +106,7 @@ mod tests {
 
 	#[test]
 	fn basic_ops_with_string_values() -> Result<()> {
-		let mut cache: InMemoryCache<String, String> = InMemoryCache::new();
+		let cache = InMemoryCache::<String, String>::new();
 		let k1 = "k:1".to_string();
 		let k2 = "k:2".to_string();
 
@@ -135,7 +141,7 @@ mod tests {
 
 	#[test]
 	fn basic_ops_with_binary_values() -> Result<()> {
-		let mut cache: InMemoryCache<String, Vec<u8>> = InMemoryCache::new();
+		let cache = InMemoryCache::<String, Vec<u8>>::new();
 		let k = "blob".to_string();
 
 		assert!(!cache.contains_key(&k));
@@ -151,7 +157,7 @@ mod tests {
 
 	#[test]
 	fn append_creates_entry_if_missing() -> Result<()> {
-		let mut cache: InMemoryCache<String, String> = InMemoryCache::new();
+		let cache = InMemoryCache::<String, String>::new();
 		let k = "new".to_string();
 		cache.append(&k, v(&["v"]))?;
 		assert!(cache.contains_key(&k));
@@ -161,7 +167,7 @@ mod tests {
 
 	#[test]
 	fn works_with_str_keys() -> Result<()> {
-		let mut cache: InMemoryCache<&'static str, String> = InMemoryCache::new();
+		let cache = InMemoryCache::<&'static str, String>::new();
 		let k: &str = "key";
 		assert!(!cache.contains_key(&k));
 		cache.insert(&k, v(&["a"]))?;

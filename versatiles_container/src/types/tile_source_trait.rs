@@ -24,7 +24,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::{StreamExt, future::BoxFuture, stream};
 use std::{fmt::Debug, sync::Arc};
-use tokio::sync::Mutex;
 #[cfg(feature = "cli")]
 use versatiles_core::{ProbeDepth, utils::PrettyPrint};
 use versatiles_core::{TileBBox, TileCoord, TileJSON, TileStream};
@@ -261,9 +260,7 @@ pub trait TileSourceTraverseExt: TileSourceTrait {
 			let mut ti_read = 0;
 			let mut ti_write = 0;
 
-			let cache = Arc::new(Mutex::new(CacheMap::<usize, (TileCoord, Tile)>::new(
-				runtime.cache_type(),
-			)));
+			let cache = Arc::new(CacheMap::<usize, (TileCoord, Tile)>::new(runtime.cache_type()));
 			for step in traversal_steps {
 				match step {
 					Push(bboxes, index) => {
@@ -281,8 +278,7 @@ pub trait TileSourceTraverseExt: TileSourceTrait {
 										.to_vec()
 										.await;
 
-									let mut cache = c.lock().await;
-									cache.append(&index, vec)?;
+									c.append(&index, vec)?;
 
 									Ok::<_, anyhow::Error>(())
 								}
@@ -296,7 +292,7 @@ pub trait TileSourceTraverseExt: TileSourceTrait {
 					}
 					Pop(index, bbox) => {
 						log::trace!("Uncache {bbox:?} at index {index}");
-						let vec = cache.lock().await.remove(&index)?.unwrap();
+						let vec = cache.remove(&index)?.unwrap();
 						let progress = progress.clone();
 						let stream = TileStream::from_vec(vec).inspect(move || progress.inc(1));
 						callback(bbox, stream).await?;

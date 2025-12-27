@@ -19,6 +19,7 @@ async-trait.workspace = true
 byteorder.workspace = true
 clap = { workspace = true, optional = true, features = ["std", "derive"] }
 colored = { workspace = true, optional = true }
+dashmap.workspace = true
 enumset.workspace = true
 futures.workspace = true
 itertools = { workspace = true, features = ["use_alloc"] }

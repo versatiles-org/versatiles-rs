@@ -38,20 +38,20 @@ pub trait Cache<K: CacheKey, V: CacheValue>: Debug {
 	/// Remove and return the cached values for the given `key`, if they exist.
 	///
 	/// This operation may delete files or free memory depending on the backend.
-	fn remove(&mut self, key: &K) -> Result<Option<Vec<V>>>;
+	fn remove(&self, key: &K) -> Result<Option<Vec<V>>>;
 
 	/// Insert or overwrite the list of values for a given `key`.
 	///
 	/// Replaces any previous values associated with the key.
-	fn insert(&mut self, key: &K, values: Vec<V>) -> Result<()>;
+	fn insert(&self, key: &K, values: Vec<V>) -> Result<()>;
 
 	/// Append one or more values to the existing list for `key`.
 	///
 	/// Creates a new entry if the key does not yet exist.
-	fn append(&mut self, key: &K, values: Vec<V>) -> Result<()>;
+	fn append(&self, key: &K, values: Vec<V>) -> Result<()>;
 
 	/// Perform backend-specific cleanup, such as freeing memory or removing temporary files.
 	///
 	/// Called automatically by higher-level abstractions when caches are dropped.
-	fn clean_up(&mut self);
+	fn clean_up(&self);
 }

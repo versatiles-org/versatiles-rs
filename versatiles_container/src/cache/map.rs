@@ -35,7 +35,7 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 	#[must_use]
 	pub fn new(cache_type: &CacheType) -> Self {
 		match cache_type {
-			CacheType::InMemory => Self::Memory(InMemoryCache::new()),
+			CacheType::InMemory => Self::Memory(InMemoryCache::<K, V>::new()),
 			CacheType::Disk(path) => {
 				let random_name = format!("map_{}", Uuid::new_v4());
 				Self::Disk(OnDiskCache::new(path.clone().join(random_name)))
@@ -63,7 +63,7 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 
 	/// Remove and return the cached vector for `key`, if present.
 	#[context("Failed to remove from cache for key: {:?}", key)]
-	pub fn remove(&mut self, key: &K) -> Result<Option<Vec<V>>> {
+	pub fn remove(&self, key: &K) -> Result<Option<Vec<V>>> {
 		match self {
 			Self::Memory(cache) => cache.remove(key),
 			Self::Disk(cache) => cache.remove(key),
@@ -74,7 +74,7 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 	///
 	/// Replaces any previous value vector stored under the same key.
 	#[context("Failed to insert into cache for key: {:?}", key)]
-	pub fn insert(&mut self, key: &K, value: Vec<V>) -> Result<()> {
+	pub fn insert(&self, key: &K, value: Vec<V>) -> Result<()> {
 		match self {
 			Self::Memory(cache) => cache.insert(key, value),
 			Self::Disk(cache) => cache.insert(key, value),
@@ -85,7 +85,7 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 	///
 	/// Creates a new entry if the key does not exist yet.
 	#[context("Failed to append into cache for key: {:?}", key)]
-	pub fn append(&mut self, key: &K, value: Vec<V>) -> Result<()> {
+	pub fn append(&self, key: &K, value: Vec<V>) -> Result<()> {
 		match self {
 			Self::Memory(cache) => cache.append(key, value),
 			Self::Disk(cache) => cache.append(key, value),
@@ -95,7 +95,7 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 	/// Release backend resources (e.g., flush and remove temporary files on disk).
 	///
 	/// Called automatically on drop; can be invoked manually to free resources sooner.
-	pub fn clean_up(&mut self) {
+	pub fn clean_up(&self) {
 		match self {
 			Self::Memory(cache) => cache.clean_up(),
 			Self::Disk(cache) => cache.clean_up(),
@@ -106,7 +106,8 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 // Ensure resources are cleaned up when the cache goes out of scope.
 impl<K: CacheKey, V: CacheValue> Drop for CacheMap<K, V> {
 	fn drop(&mut self) {
-		self.clean_up();
+		// clean_up takes &self, so we can call it directly
+		CacheMap::clean_up(self);
 	}
 }
 
@@ -139,7 +140,7 @@ mod tests {
 			"disk" => CacheType::Disk(TempDir::new().unwrap().path().to_path_buf()),
 			_ => panic!("unknown cache kind"),
 		};
-		let mut cache = CacheMap::<String, String>::new(&cache_type);
+		let cache = CacheMap::<String, String>::new(&cache_type);
 
 		let k1 = "k:1".to_string();
 		let k2 = "k:2".to_string();
