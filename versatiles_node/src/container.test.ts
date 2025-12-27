@@ -110,12 +110,12 @@ describe('ContainerReader', () => {
 		});
 	});
 
-	describe('parameters', () => {
-		it('should return reader parameters', async () => {
+	describe('metadata', () => {
+		it('should return reader metadata', async () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
-			const params = await reader.parameters();
+			const metadata = await reader.metadata();
 
-			expect(params).toStrictEqual({
+			expect(metadata).toStrictEqual({
 				maxZoom: 14,
 				minZoom: 0,
 				tileCompression: 'gzip',

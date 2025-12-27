@@ -22,11 +22,11 @@ if (sourceType.uri) {
 	log.info('URI', sourceType.uri);
 }
 
-log.section('Tile Parameters');
-const parameters = await container.parameters();
-log.info('Format', parameters.tileFormat);
-log.info('Compression', parameters.tileCompression);
-log.info('Zoom Range', `${parameters.minZoom} - ${parameters.maxZoom}`);
+log.section('Tile Metadata');
+const metadata = await container.metadata();
+log.info('Format', metadata.tileFormat);
+log.info('Compression', metadata.tileCompression);
+log.info('Zoom Range', `${metadata.minZoom} - ${metadata.maxZoom}`);
 
 // Parse and display TileJSON
 const tileJSON = JSON.parse(await container.tileJson());

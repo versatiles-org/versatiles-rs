@@ -145,9 +145,9 @@ impl ContainerReader {
 		reader.tilejson().as_string()
 	}
 
-	/// Get reader parameters
+	/// Get reader metadata
 	///
-	/// Returns detailed technical parameters about the tile container including
+	/// Returns detailed technical metadata about the tile container including
 	/// format, compression, and available zoom levels.
 	///
 	/// # Returns
@@ -161,13 +161,13 @@ impl ContainerReader {
 	/// # Examples
 	///
 	/// ```javascript
-	/// const params = await reader.parameters();
-	/// console.log(`Format: ${params.tileFormat}`);
-	/// console.log(`Compression: ${params.tileCompression}`);
-	/// console.log(`Zoom: ${params.minZoom}-${params.maxZoom}`);
+	/// const metadata = await reader.metadata();
+	/// console.log(`Format: ${metadata.tileFormat}`);
+	/// console.log(`Compression: ${metadata.tileCompression}`);
+	/// console.log(`Zoom: ${metadata.minZoom}-${metadata.maxZoom}`);
 	/// ```
 	#[napi]
-	pub async fn parameters(&self) -> SourceMetadata {
+	pub async fn metadata(&self) -> SourceMetadata {
 		let reader = self.reader.lock().await;
 		SourceMetadata::from(reader.metadata())
 	}
