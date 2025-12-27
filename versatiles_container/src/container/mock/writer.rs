@@ -20,10 +20,10 @@
 //! }
 //! ```
 
-use crate::{TileSourceTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait};
+use crate::{TileSourceTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait, Traversal};
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{Traversal, io::DataWriterTrait};
+use versatiles_core::io::DataWriterTrait;
 use versatiles_derive::context;
 
 /// Mock implementation of a `TilesWriter`.

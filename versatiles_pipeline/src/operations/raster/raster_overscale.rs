@@ -3,7 +3,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use moka::future::Cache;
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::{DynamicImage, traits::*};

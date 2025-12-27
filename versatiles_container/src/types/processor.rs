@@ -44,8 +44,8 @@
 //! }
 //! ```
 
-use super::{TileSourceMetadata, TileSourceTrait};
-use versatiles_core::{TileJSON, Traversal};
+use crate::{TileSourceMetadata, TileSourceTrait, Traversal};
+use versatiles_core::TileJSON;
 
 /// Base struct for tile processors that wrap a single upstream source.
 ///

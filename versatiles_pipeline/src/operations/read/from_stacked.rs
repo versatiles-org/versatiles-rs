@@ -25,7 +25,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
 use std::sync::Arc;
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -190,10 +190,11 @@ impl ReadOperationFactoryTrait for Factory {
 }
 #[cfg(test)]
 mod tests {
+	use versatiles_container::TraversalOrder;
+
 	use super::*;
 	use crate::helpers::{arrange_tiles, dummy_vector_source::DummyVectorSource};
 	use std::sync::LazyLock;
-	use versatiles_core::TraversalOrder;
 
 	static RESULT_PATTERN: LazyLock<Vec<String>> = LazyLock::new(|| {
 		vec![

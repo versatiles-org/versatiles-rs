@@ -2,12 +2,13 @@
 //! traversal configurations, allowing translation and validation of tile traversal
 //! operations (such as Push, Pop, and Stream) between reading and writing traversals.
 
-use crate::{TileBBox, TileBBoxPyramid, Traversal, TraversalOrder};
+use crate::{Traversal, TraversalOrder};
 use anyhow::{Result, anyhow, bail, ensure};
 use std::{
 	collections::{HashMap, HashSet},
 	vec,
 };
+use versatiles_core::{TileBBox, TileBBoxPyramid};
 use versatiles_derive::context;
 
 /// Represents a single operation during traversal translation from one traversal configuration to another.
@@ -312,8 +313,8 @@ fn verify_steps(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::GeoBBox;
 	use TraversalOrder::*;
+	use versatiles_core::GeoBBox;
 
 	fn test(
 		order_read: TraversalOrder,

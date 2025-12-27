@@ -40,11 +40,11 @@
 //! }
 //! ```
 
-use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime};
+use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime, Traversal};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{path::Path, sync::Arc};
-use versatiles_core::{TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileStream, Traversal};
+use versatiles_core::{TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileStream};
 use versatiles_derive::context;
 
 /// Parameters that control how tiles are transformed during reading/conversion.

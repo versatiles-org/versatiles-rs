@@ -59,6 +59,9 @@ pub use progress::*;
 pub mod runtime;
 pub use runtime::*;
 
+mod traversal;
+pub use traversal::*;
+
 mod types;
 /// Re‑exports reader/writer traits, converters, and auxiliary types.
 pub use types::*;

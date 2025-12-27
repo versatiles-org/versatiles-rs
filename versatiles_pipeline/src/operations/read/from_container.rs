@@ -10,7 +10,7 @@ use crate::{PipelineFactory, operations::read::traits::ReadTileSourceTrait, trai
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
-use versatiles_container::{Tile, TileSourceMetadata, TileSourceTrait};
+use versatiles_container::{Tile, TileSourceMetadata, TileSourceTrait, Traversal};
 use versatiles_core::*;
 use versatiles_derive::context;
 

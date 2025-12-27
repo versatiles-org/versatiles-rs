@@ -47,13 +47,14 @@
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader};
 use crate::{
-	TileSourceTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait, container::versatiles::types::BlockWriter,
+	TileSourceTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait, Traversal,
+	container::versatiles::types::BlockWriter,
 };
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::sync::Arc;
-use versatiles_core::{Traversal, io::DataWriterTrait, types::*, utils::compress};
+use versatiles_core::{io::DataWriterTrait, types::*, utils::compress};
 use versatiles_derive::context;
 
 /// Writer for `.versatiles` containers.

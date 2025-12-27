@@ -1,8 +1,8 @@
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::sync::Arc;
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
-use versatiles_core::{TileBBox, TileJSON, TileStream, TileType, Traversal};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
+use versatiles_core::{TileBBox, TileJSON, TileStream, TileType};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 

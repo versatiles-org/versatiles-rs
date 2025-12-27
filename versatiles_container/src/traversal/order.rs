@@ -4,9 +4,9 @@
 //! tile bounding boxes according to different traversal strategies:
 //! depth-first quadtree and Hilbert curve.
 
-use crate::{TileBBox, utils::HilbertIndex};
 use anyhow::{Result, bail};
 use enumset::EnumSetType;
+use versatiles_core::{TileBBox, utils::HilbertIndex};
 
 /// Strategies for ordering tiles when traversing a tile pyramid.
 ///

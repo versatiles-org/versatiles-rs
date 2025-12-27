@@ -4,10 +4,11 @@
 //! and provides methods to generate ordered tile bounding boxes from a pyramid.
 
 use crate::{
-	TileBBox, TileBBoxPyramid, TraversalOrder, TraversalSize,
+	TraversalOrder, TraversalSize,
 	traversal::processing::{TraversalTranslationStep, translate_traversals},
 };
 use anyhow::Result;
+use versatiles_core::{TileBBox, TileBBoxPyramid};
 use versatiles_derive::context;
 
 #[derive(Clone, PartialEq)]
@@ -159,8 +160,8 @@ impl std::fmt::Debug for Traversal {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::GeoBBox;
 	use enumset::EnumSet;
+	use versatiles_core::GeoBBox;
 
 	#[test]
 	fn test_traverse_pyramid() {

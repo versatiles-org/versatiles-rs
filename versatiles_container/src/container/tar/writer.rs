@@ -15,7 +15,7 @@
 //! Returns errors if the archive file cannot be created, or if encoding/compression of
 //! tiles/TileJSON fails while streaming from the reader.
 
-use crate::{TileSourceTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait};
+use crate::{TileSourceTrait, TilesReaderTraverseExt, TilesRuntime, TilesWriterTrait, Traversal};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -25,7 +25,7 @@ use std::{
 	sync::Arc,
 };
 use tar::{Builder, Header};
-use versatiles_core::{Traversal, io::DataWriterTrait, utils::compress};
+use versatiles_core::{io::DataWriterTrait, utils::compress};
 use versatiles_derive::context;
 
 /// Writer for tiles packaged inside a tar archive.

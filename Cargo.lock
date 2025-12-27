@@ -3970,6 +3970,7 @@ dependencies = [
  "byteorder",
  "clap",
  "colored",
+ "enumset",
  "futures",
  "itertools 0.14.0",
  "lazy_static",
