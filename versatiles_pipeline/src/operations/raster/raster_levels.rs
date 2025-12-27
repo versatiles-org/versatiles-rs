@@ -2,7 +2,7 @@ use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -49,16 +49,12 @@ impl TileSourceTrait for Operation {
 		SourceType::new_processor("raster_levels", self.source.source_type())
 	}
 
-	fn parameters(&self) -> &TileSourceMetadata {
-		self.source.parameters()
+	fn metadata(&self) -> &TileSourceMetadata {
+		self.source.metadata()
 	}
 
 	fn tilejson(&self) -> &TileJSON {
 		self.source.tilejson()
-	}
-
-	fn traversal(&self) -> &Traversal {
-		self.source.traversal()
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]

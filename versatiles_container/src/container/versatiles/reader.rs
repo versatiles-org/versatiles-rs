@@ -30,20 +30,20 @@
 //!     let mut reader = VersaTilesReader::open_path(&path, runtime).await?;
 //!
 //!     // Inspect parameters & TileJSON
-//!     let params = reader.parameters();
+//!     let metadata = reader.metadata();
 //!     let tj = reader.tilejson();
-//!     println!("format={:?} compression={:?}", params.tile_format, params.tile_compression);
+//!     println!("format={:?} compression={:?}", metadata.tile_format, metadata.tile_compression);
 //!
 //!     // Fetch one tile
 //!     if let Some(mut tile) = reader.get_tile(&TileCoord::new(15, 1, 4)?).await? {
-//!         let _blob = tile.as_blob(params.tile_compression)?;
+//!         let _blob = tile.as_blob(metadata.tile_compression)?;
 //!     }
 //!
 //!     // Stream a bbox (coalesces reads per block for fewer I/O calls)
-//!     let bbox = params.bbox_pyramid.get_level_bbox(4).clone();
+//!     let bbox = metadata.bbox_pyramid.get_level_bbox(4).clone();
 //!     let mut stream = reader.get_tile_stream(bbox).await?;
 //!     while let Some((coord, mut tile)) = stream.next().await {
-//!         let _size = tile.as_blob(params.tile_compression)?.len();
+//!         let _size = tile.as_blob(metadata.tile_compression)?.len();
 //!         // use (coord, _size)
 //!     }
 //!     Ok(())
@@ -55,7 +55,9 @@
 //! or when a requested tile is missing.
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
-use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime};
+use crate::{
+	SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime, Traversal, TraversalOrder, TraversalSize,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{lock::Mutex, stream::StreamExt};
@@ -73,7 +75,7 @@ use versatiles_derive::context;
 pub struct VersaTilesReader {
 	block_index: BlockIndex,
 	header: FileHeader,
-	parameters: TileSourceMetadata,
+	metadata: TileSourceMetadata,
 	reader: DataReader,
 	tile_index_cache: Mutex<LimitedCache<TileCoord, Arc<TileIndex>>>,
 	tilejson: TileJSON,
@@ -127,12 +129,20 @@ impl VersaTilesReader {
 		.context("Failed decompressing the block index")?;
 
 		let bbox_pyramid = block_index.get_bbox_pyramid();
-		let parameters = TileSourceMetadata::new(header.tile_format, header.compression, bbox_pyramid);
+		let metadata = TileSourceMetadata::new(
+			header.tile_format,
+			header.compression,
+			bbox_pyramid,
+			Traversal {
+				order: TraversalOrder::AnyOrder,
+				size: TraversalSize::new(256, 256)?,
+			},
+		);
 
 		Ok(VersaTilesReader {
 			block_index,
 			header,
-			parameters,
+			metadata,
 			reader,
 			tile_index_cache: Mutex::new(LimitedCache::with_maximum_size(100_000_000)),
 			tilejson,
@@ -310,8 +320,8 @@ impl TileSourceTrait for VersaTilesReader {
 		&self.tilejson
 	}
 
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	/// Fetch a single tile by XYZ coordinate.
@@ -357,8 +367,8 @@ impl TileSourceTrait for VersaTilesReader {
 		let blob = self.reader.read_range(&tile_range).await?;
 		Ok(Some(Tile::from_blob(
 			blob,
-			self.parameters.tile_compression,
-			self.parameters.tile_format,
+			self.metadata.tile_compression,
+			self.metadata.tile_format,
 		)))
 	}
 
@@ -382,7 +392,7 @@ impl TileSourceTrait for VersaTilesReader {
 							let tile_range = (start as usize)..(end as usize);
 
 							let blob = Blob::from(big_blob.get_range(tile_range));
-							let tile = Tile::from_blob(blob, self.parameters.tile_compression, self.parameters.tile_format);
+							let tile = Tile::from_blob(blob, self.metadata.tile_compression, self.metadata.tile_format);
 
 							(coord, tile)
 						})
@@ -484,7 +494,7 @@ impl TileSourceTrait for VersaTilesReader {
 impl Debug for VersaTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("VersaTilesReader")
-			.field("parameters", &self.parameters())
+			.field("parameters", &self.metadata())
 			.finish()
 	}
 }
@@ -492,7 +502,7 @@ impl Debug for VersaTilesReader {
 impl PartialEq for VersaTilesReader {
 	fn eq(&self, other: &Self) -> bool {
 		self.tilejson == other.tilejson
-			&& self.parameters == other.parameters
+			&& self.metadata == other.metadata
 			&& self.get_tiles_size() == other.get_tiles_size()
 	}
 }
@@ -518,7 +528,7 @@ mod tests {
 
 		assert_eq!(
 			format!("{reader:?}"),
-			"VersaTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT } }"
+			"VersaTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,256) } }"
 		);
 		assert_wildcard!(
 			reader.source_type().to_string(),
@@ -529,11 +539,11 @@ mod tests {
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 		assert_eq!(
-			format!("{:?}", reader.parameters()),
-			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT }"
+			format!("{:?}", reader.metadata()),
+			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,256) }"
 		);
-		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
-		assert_eq!(reader.parameters().tile_format, TileFormat::MVT);
+		assert_eq!(reader.metadata().tile_compression, TileCompression::Gzip);
+		assert_eq!(reader.metadata().tile_format, TileFormat::MVT);
 
 		let blob = reader
 			.get_tile(&TileCoord::new(4, 15, 1)?)
@@ -618,6 +628,7 @@ mod tests {
 			TileFormat::JSON,
 			TileCompression::Gzip,
 			TileBBoxPyramid::new_full(4),
+			Traversal::ANY,
 		))?;
 
 		let runtime = TilesRuntime::default();

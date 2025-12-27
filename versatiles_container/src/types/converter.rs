@@ -40,7 +40,7 @@
 //! }
 //! ```
 
-use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime, Traversal};
+use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{path::Path, sync::Arc};
@@ -122,7 +122,7 @@ pub async fn convert_tiles_container(
 pub struct TilesConvertReader {
 	reader: Box<dyn TileSourceTrait>,
 	converter_parameters: TilesConverterParameters,
-	reader_parameters: TileSourceMetadata,
+	reader_metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 }
 
@@ -139,7 +139,7 @@ impl TilesConvertReader {
 		reader: Box<dyn TileSourceTrait>,
 		cp: TilesConverterParameters,
 	) -> Result<TilesConvertReader> {
-		let rp: TileSourceMetadata = reader.parameters().to_owned();
+		let rp: TileSourceMetadata = reader.metadata().to_owned();
 		let mut new_rp: TileSourceMetadata = rp.clone();
 
 		if cp.flip_y {
@@ -163,7 +163,7 @@ impl TilesConvertReader {
 		Ok(TilesConvertReader {
 			reader,
 			converter_parameters: cp,
-			reader_parameters: new_rp,
+			reader_metadata: new_rp,
 			tilejson,
 		})
 	}
@@ -175,12 +175,8 @@ impl TileSourceTrait for TilesConvertReader {
 		SourceType::new_processor("TilesConvertReader", self.reader.source_type())
 	}
 
-	fn traversal(&self) -> &Traversal {
-		self.reader.traversal()
-	}
-
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.reader_parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.reader_metadata
 	}
 
 	fn tilejson(&self) -> &TileJSON {
@@ -250,7 +246,7 @@ impl TileSourceTrait for TilesConvertReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{MockTilesReader, VersaTilesReader};
+	use crate::{MockTilesReader, Traversal, VersaTilesReader};
 	use assert_fs::NamedTempFile;
 	use versatiles_core::{
 		TileCompression::*,
@@ -259,8 +255,8 @@ mod tests {
 
 	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> MockTilesReader {
 		let bbox_pyramid = TileBBoxPyramid::new_full(4);
-		let reader_parameters = TileSourceMetadata::new(tf, tc, bbox_pyramid);
-		MockTilesReader::new_mock(reader_parameters).unwrap()
+		let reader_metadata = TileSourceMetadata::new(tf, tc, bbox_pyramid, Traversal::ANY);
+		MockTilesReader::new_mock(reader_metadata).unwrap()
 	}
 
 	#[tokio::test]
@@ -275,8 +271,8 @@ mod tests {
 			let pyramid_convert = new_bbox([2, 3, 7, 7]);
 			let pyramid_out = new_bbox(bbox_out);
 
-			let reader_parameters = TileSourceMetadata::new(JSON, Uncompressed, pyramid_in);
-			let reader = MockTilesReader::new_mock(reader_parameters)?;
+			let reader_metadata = TileSourceMetadata::new(JSON, Uncompressed, pyramid_in, Traversal::ANY);
+			let reader = MockTilesReader::new_mock(reader_metadata)?;
 
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let runtime = TilesRuntime::default();
@@ -290,7 +286,7 @@ mod tests {
 			convert_tiles_container(reader.boxed(), cp, &temp_file, runtime.clone()).await?;
 
 			let reader_out = VersaTilesReader::open_path(&temp_file, runtime).await?;
-			let parameters_out = reader_out.parameters();
+			let parameters_out = reader_out.metadata();
 			let tile_compression_out = parameters_out.tile_compression;
 			assert_eq!(parameters_out.bbox_pyramid, pyramid_out);
 

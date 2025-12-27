@@ -72,15 +72,20 @@ impl TraversalOrder {
 	}
 }
 
+impl std::fmt::Display for TraversalOrder {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			TraversalOrder::AnyOrder => write!(f, "AnyOrder"),
+			TraversalOrder::DepthFirst => write!(f, "DepthFirst"),
+			TraversalOrder::PMTiles => write!(f, "PMTiles"),
+		}
+	}
+}
+
 impl std::fmt::Debug for TraversalOrder {
 	/// Format the traversal order as a string.
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let name = match self {
-			TraversalOrder::AnyOrder => "AnyOrder",
-			TraversalOrder::DepthFirst => "DepthFirst",
-			TraversalOrder::PMTiles => "PMTiles",
-		};
-		write!(f, "{name}")
+		write!(f, "TraversalOrder({})", self)
 	}
 }
 

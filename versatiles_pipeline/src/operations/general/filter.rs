@@ -2,7 +2,7 @@ use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -19,7 +19,7 @@ struct Args {
 
 #[derive(Debug)]
 struct Operation {
-	parameters: TileSourceMetadata,
+	metadata: TileSourceMetadata,
 	source: Box<dyn TileSourceTrait>,
 	tilejson: TileJSON,
 }
@@ -31,7 +31,7 @@ impl Operation {
 		Self: Sized + TileSourceTrait,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let mut parameters = source.parameters().clone();
+		let mut metadata = source.metadata().clone();
 
 		if let (Some(lo), Some(hi)) = (args.level_min, args.level_max)
 			&& lo > hi
@@ -43,18 +43,18 @@ impl Operation {
 		}
 
 		if let Some(level_min) = args.level_min {
-			parameters.bbox_pyramid.set_level_min(level_min);
+			metadata.bbox_pyramid.set_level_min(level_min);
 		}
 
 		if let Some(level_max) = args.level_max {
-			parameters.bbox_pyramid.set_level_max(level_max);
+			metadata.bbox_pyramid.set_level_max(level_max);
 		}
 
 		if let Some(bbox) = args.bbox {
-			parameters.bbox_pyramid.intersect_geo_bbox(&GeoBBox::try_from(&bbox)?)?;
+			metadata.bbox_pyramid.intersect_geo_bbox(&GeoBBox::try_from(&bbox)?)?;
 		}
 
-		if parameters.bbox_pyramid.is_empty() {
+		if metadata.bbox_pyramid.is_empty() {
 			log::warn!(
 				"Filter operation in VPL node {:?} results in empty bbox_pyramid",
 				vpl_node.name
@@ -62,10 +62,10 @@ impl Operation {
 		}
 
 		let mut tilejson = source.tilejson().clone();
-		parameters.update_tilejson(&mut tilejson);
+		metadata.update_tilejson(&mut tilejson);
 
 		Ok(Self {
-			parameters,
+			metadata,
 			source,
 			tilejson,
 		})
@@ -78,21 +78,17 @@ impl TileSourceTrait for Operation {
 		SourceType::new_processor("filter", self.source.source_type())
 	}
 
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
-	fn traversal(&self) -> &Traversal {
-		self.source.traversal()
-	}
-
 	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_tile_stream {:?}", bbox);
-		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
+		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}

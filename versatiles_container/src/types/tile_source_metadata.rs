@@ -1,5 +1,6 @@
 //! This module defines metadata describing tile source output characteristics.
 
+use crate::Traversal;
 use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat, TileJSON, TileSchema, TileType};
 
 /// Metadata describing the output characteristics of a tile source.
@@ -16,6 +17,8 @@ pub struct TileSourceMetadata {
 	pub tile_compression: TileCompression,
 	/// The format of the tiles (e.g., PNG, JPEG, PBF).
 	pub tile_format: TileFormat,
+
+	pub traversal: Traversal,
 }
 
 impl TileSourceMetadata {
@@ -33,11 +36,13 @@ impl TileSourceMetadata {
 		tile_format: TileFormat,
 		tile_compression: TileCompression,
 		bbox_pyramid: TileBBoxPyramid,
+		traversal: Traversal,
 	) -> TileSourceMetadata {
 		TileSourceMetadata {
 			bbox_pyramid,
 			tile_compression,
 			tile_format,
+			traversal,
 		}
 	}
 
@@ -45,11 +50,16 @@ impl TileSourceMetadata {
 	#[allow(dead_code)]
 	/// Creates a `TileSourceMetadata` with a default full pyramid up to zoom level 31 for testing purposes.
 	#[must_use]
-	pub fn new_full(tile_format: TileFormat, tile_compression: TileCompression) -> TileSourceMetadata {
+	pub fn new_full(
+		tile_format: TileFormat,
+		tile_compression: TileCompression,
+		traversal: Traversal,
+	) -> TileSourceMetadata {
 		TileSourceMetadata {
 			tile_format,
 			tile_compression,
 			bbox_pyramid: TileBBoxPyramid::new_full(31),
+			traversal,
 		}
 	}
 
@@ -91,7 +101,7 @@ mod tests {
 		let tile_format = TileFormat::PNG;
 		let tile_compression = TileCompression::Gzip;
 
-		let params = TileSourceMetadata::new(tile_format, tile_compression, bbox_pyramid.clone());
+		let params = TileSourceMetadata::new(tile_format, tile_compression, bbox_pyramid.clone(), Traversal::ANY);
 
 		assert_eq!(params.tile_format, tile_format);
 		assert_eq!(params.tile_compression, tile_compression);
@@ -103,7 +113,7 @@ mod tests {
 		let tile_format = TileFormat::JPG;
 		let tile_compression = TileCompression::Gzip;
 
-		let params = TileSourceMetadata::new_full(tile_format, tile_compression);
+		let params = TileSourceMetadata::new_full(tile_format, tile_compression, Traversal::ANY);
 
 		assert_eq!(params.tile_format, tile_format);
 		assert_eq!(params.tile_compression, tile_compression);

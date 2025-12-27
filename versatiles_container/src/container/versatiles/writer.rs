@@ -85,13 +85,13 @@ impl TilesWriterTrait for VersaTilesWriter {
 		runtime: TilesRuntime,
 	) -> Result<()> {
 		// Finalize the configuration
-		let parameters = reader.parameters();
+		let parameters = reader.metadata();
 		log::trace!("convert_from - reader.parameters: {parameters:?}");
 
 		let tile_compression = parameters.tile_compression;
 
 		// Get the bounding box pyramid
-		let bbox_pyramid = reader.parameters().bbox_pyramid.clone();
+		let bbox_pyramid = reader.metadata().bbox_pyramid.clone();
 		log::trace!("convert_from - bbox_pyramid: {bbox_pyramid:#}");
 
 		// Create the file header
@@ -153,7 +153,7 @@ impl VersaTilesWriter {
 		tile_compression: TileCompression,
 		runtime: TilesRuntime,
 	) -> Result<ByteRange> {
-		if reader.parameters().bbox_pyramid.is_empty() {
+		if reader.metadata().bbox_pyramid.is_empty() {
 			return Ok(ByteRange::empty());
 		}
 

@@ -29,14 +29,14 @@
 //!     let path = Path::new("/absolute/path/to/berlin.pmtiles");
 //!     let mut reader = PMTilesReader::open_path(path, runtime).await?;
 //!
-//!     // Inspect metadata and parameters
+//!     // Inspect metadata
 //!     let tj = reader.tilejson();
-//!     println!("format={:?} compression={:?}", reader.parameters().tile_format, reader.parameters().tile_compression);
+//!     println!("format={:?} compression={:?}", reader.metadata().tile_format, reader.metadata().tile_compression);
 //!
 //!     // Fetch a tile
 //!     let coord = TileCoord::new(14, 8800, 5370)?;
 //!     if let Some(mut tile) = reader.get_tile(&coord).await? {
-//!         let _blob = tile.as_blob(reader.parameters().tile_compression)?;
+//!         let _blob = tile.as_blob(reader.metadata().tile_compression)?;
 //!     }
 //!     Ok(())
 //! }
@@ -47,7 +47,9 @@
 //! PMTiles header/directories cannot be parsed or decompressed, or a requested tile is missing.
 
 use super::types::{EntriesV3, HeaderV3};
-use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime};
+use crate::{
+	SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime, Traversal, TraversalOrder, TraversalSize,
+};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -81,7 +83,7 @@ pub struct PMTilesReader {
 	/// Merged TileJSON metadata extracted from the PMTiles `metadata` range.
 	pub tilejson: TileJSON,
 	/// Runtime parameters (tile format, compression, bbox pyramid) advertised by this reader.
-	pub parameters: TileSourceMetadata,
+	pub metadata: TileSourceMetadata,
 	/// Uncompressed root directory blob.
 	pub root_bytes_uncompressed: Blob,
 	/// Parsed entries of the root directory (shared across queries).
@@ -146,12 +148,16 @@ impl PMTilesReader {
 		)?;
 		log::trace!("Bounding box pyramid: {:?}", bbox_pyramid);
 
-		let parameters = TileSourceMetadata::new(
+		let metadata = TileSourceMetadata::new(
 			header.tile_type.as_value()?,
 			header.tile_compression.as_value()?,
 			bbox_pyramid,
+			Traversal {
+				order: TraversalOrder::PMTiles,
+				size: TraversalSize::new_default(),
+			},
 		);
-		log::trace!("Reader parameters: {:?}", parameters);
+		log::trace!("Reader parameters: {:?}", metadata);
 
 		let root_entries = Arc::new(EntriesV3::from_blob(&root_bytes_uncompressed)?);
 
@@ -162,7 +168,7 @@ impl PMTilesReader {
 			leaves_bytes,
 			leaves_cache: Mutex::new(LimitedCache::with_maximum_size(100_000_000)),
 			tilejson,
-			parameters,
+			metadata,
 			root_bytes_uncompressed,
 			root_entries,
 		})
@@ -260,8 +266,8 @@ impl TileSourceTrait for PMTilesReader {
 	}
 
 	/// Returns the current reader parameters (tile format, compression, bbox pyramid).
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	/// Returns the parsed and merged TileJSON metadata.
@@ -305,8 +311,8 @@ impl TileSourceTrait for PMTilesReader {
 							.data_reader
 							.read_range(&entry.range.get_shifted_forward(self.header.tile_data.offset))
 							.await?,
-						self.parameters.tile_compression,
-						self.parameters.tile_format,
+						self.metadata.tile_compression,
+						self.metadata.tile_format,
 					)));
 				} else {
 					// Otherwise, fetch the directory bytes for the next level
@@ -378,8 +384,8 @@ mod tests {
 		);
 
 		assert_wildcard!(
-			format!("{:?}", reader.parameters()),
-			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [1,0,1,0] (1x1), 2: [2,1,2,1] (1x1), 3: [4,2,4,2] (1x1), 4: [8,5,8,5] (1x1), 5: [17,10,17,10] (1x1), 6: [34,20,34,21] (1x2), 7: [68,41,68,42] (1x2), 8: [137,83,137,84] (1x2), 9: [274,167,275,168] (2x2), 10: [549,335,551,336] (3x2), 11: [1098,670,1102,673] (5x4), 12: [2196,1340,2204,1346] (9x7), 13: [4393,2680,4409,2693] (17x14), 14: [8787,5361,8818,5387] (32x27)], tile_compression: Gzip, tile_format: MVT }"
+			format!("{:?}", reader.metadata()),
+			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [1,0,1,0] (1x1), 2: [2,1,2,1] (1x1), 3: [4,2,4,2] (1x1), 4: [8,5,8,5] (1x1), 5: [17,10,17,10] (1x1), 6: [34,20,34,21] (1x2), 7: [68,41,68,42] (1x2), 8: [137,83,137,84] (1x2), 9: [274,167,275,168] (2x2), 10: [549,335,551,336] (3x2), 11: [1098,670,1102,673] (5x4), 12: [2196,1340,2204,1346] (9x7), 13: [4393,2680,4409,2693] (17x14), 14: [8787,5361,8818,5387] (32x27)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(PMTiles,full) }"
 		);
 
 		assert_eq!(
@@ -387,7 +393,7 @@ mod tests {
 				.get_tile(&TileCoord::new(0, 0, 0)?)
 				.await?
 				.unwrap()
-				.as_blob(reader.parameters.tile_compression)?
+				.as_blob(reader.metadata.tile_compression)?
 				.len(),
 			20
 		);
@@ -397,7 +403,7 @@ mod tests {
 				.get_tile(&TileCoord::new(14, 8800, 5370)?)
 				.await?
 				.unwrap()
-				.as_blob(reader.parameters.tile_compression)?
+				.as_blob(reader.metadata.tile_compression)?
 				.len(),
 			100391
 		);

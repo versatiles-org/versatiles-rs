@@ -10,7 +10,7 @@ use crate::{PipelineFactory, operations::read::traits::ReadTileSourceTrait, trai
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
-use versatiles_container::{Tile, TileSourceMetadata, TileSourceTrait, Traversal};
+use versatiles_container::{Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -28,8 +28,7 @@ struct Args {
 /// container’s [`TileJSON`] metadata is kept so downstream stages can query
 /// bounds and zoom levels without touching the reader again.
 struct Operation {
-	parameters: TileSourceMetadata,
-	reader: Box<dyn TileSourceTrait>,
+	source: Box<dyn TileSourceTrait>,
 	tilejson: TileJSON,
 }
 
@@ -40,29 +39,24 @@ impl ReadTileSourceTrait for Operation {
 		Self: Sized + TileSourceTrait,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let reader = factory.get_reader(&factory.resolve_filename(&args.filename)).await?;
-		let parameters = reader.parameters().clone();
-		let mut tilejson = reader.tilejson().clone();
-		parameters.update_tilejson(&mut tilejson);
+		let source = factory.get_reader(&factory.resolve_filename(&args.filename)).await?;
+		let mut tilejson = source.tilejson().clone();
+		source.metadata().update_tilejson(&mut tilejson);
 
-		Ok(Box::new(Self {
-			tilejson,
-			parameters,
-			reader,
-		}) as Box<dyn TileSourceTrait>)
+		Ok(Box::new(Self { tilejson, source }) as Box<dyn TileSourceTrait>)
 	}
 }
 
 #[async_trait]
 impl TileSourceTrait for Operation {
 	fn source_type(&self) -> std::sync::Arc<versatiles_container::SourceType> {
-		self.reader.source_type()
+		self.source.source_type()
 	}
 
 	/// Return the reader's technical parameters (compression, tile size,
 	/// etc.) without performing any I/O.
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		self.source.metadata()
 	}
 
 	/// Expose the container's `TileJSON` so that consumers can inspect
@@ -71,16 +65,12 @@ impl TileSourceTrait for Operation {
 		&self.tilejson
 	}
 
-	fn traversal(&self) -> &Traversal {
-		self.reader.traversal()
-	}
-
 	/// Stream raw tile blobs intersecting the bounding box by delegating to
 	/// `TileSourceTrait::get_tile_stream`.
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_tile_stream {:?}", bbox);
-		self.reader.get_tile_stream(bbox).await
+		self.source.get_tile_stream(bbox).await
 	}
 }
 
@@ -104,13 +94,10 @@ impl ReadOperationFactoryTrait for Factory {
 
 #[cfg(test)]
 pub fn operation_from_reader(reader: Box<dyn TileSourceTrait>) -> Box<dyn TileSourceTrait> {
-	let parameters = reader.parameters().clone();
 	let mut tilejson = reader.tilejson().clone();
-	parameters.update_tilejson(&mut tilejson);
-
+	reader.metadata().update_tilejson(&mut tilejson);
 	Box::new(Operation {
-		parameters,
-		reader,
+		source: reader,
 		tilejson,
 	}) as Box<dyn TileSourceTrait>
 }

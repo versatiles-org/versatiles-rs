@@ -295,6 +295,7 @@ pub async fn make_test_file(
 		tile_format,
 		compression,
 		TileBBoxPyramid::new_full(max_zoom_level),
+		Traversal::ANY,
 	))?;
 
 	// get to test container converter
@@ -344,6 +345,7 @@ pub mod tests {
 				tile_format,
 				compression,
 				TileBBoxPyramid::new_full(2),
+				Traversal::ANY,
 			))?;
 
 			let path = TempDir::new()?.to_path_buf();

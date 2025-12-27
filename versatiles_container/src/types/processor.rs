@@ -77,9 +77,9 @@ impl Processor {
 	/// * `name` - Human-readable name for this processor (e.g., "filter", "converter")
 	/// * `source` - The upstream tile source to wrap
 	pub fn new(name: impl Into<String>, source: Box<dyn TileSourceTrait>) -> Self {
-		let parameters = source.parameters().clone();
+		let parameters = source.metadata().clone();
 		let tilejson = source.tilejson().clone();
-		let traversal = source.traversal().clone();
+		let traversal = parameters.traversal.clone();
 
 		Self {
 			name: name.into(),

@@ -143,17 +143,7 @@ impl Default for Traversal {
 
 impl std::fmt::Debug for Traversal {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		if self.size.is_empty() {
-			write!(f, "Traversal({:?}, but no suitable block size)", self.order)
-		} else {
-			write!(
-				f,
-				"Traversal({:?}, min-size: {}, max-size: {})",
-				self.order,
-				self.size.min_size().map_or_else(|e| e.to_string(), |s| s.to_string()),
-				self.size.max_size().map_or_else(|e| e.to_string(), |s| s.to_string())
-			)
-		}
+		write!(f, "Traversal({},{})", self.order, self.size)
 	}
 }
 
@@ -325,7 +315,7 @@ mod tests {
 		assert_eq!(any, def);
 		assert_eq!(any.order(), &TraversalOrder::AnyOrder);
 		// default size covers full range
-		assert_eq!(any.max_size().unwrap(), 1 << 20);
+		assert_eq!(any.max_size().unwrap(), 1 << 30);
 	}
 
 	#[test]

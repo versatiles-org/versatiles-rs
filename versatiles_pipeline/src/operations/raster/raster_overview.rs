@@ -22,12 +22,11 @@ struct Args {
 
 #[derive(Debug)]
 struct Operation {
-	parameters: TileSourceMetadata,
+	metadata: TileSourceMetadata,
 	source: Box<dyn TileSourceTrait>,
 	tilejson: TileJSON,
 	level_base: u8,
 	tile_size: u32,
-	traversal: Traversal,
 	#[allow(clippy::type_complexity)]
 	cache: Arc<DashMap<TileCoord, Vec<(TileCoord, Option<DynamicImage>)>>>,
 }
@@ -39,35 +38,34 @@ impl Operation {
 		Self: Sized + TileSourceTrait,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		ensure!(source.traversal().is_any());
+		ensure!(source.metadata().traversal.is_any());
 
-		let mut parameters = source.parameters().clone();
+		let mut metadata = source.metadata().clone();
 
 		let level_base = args
 			.level
-			.unwrap_or_else(|| source.parameters().bbox_pyramid.get_level_max().unwrap());
+			.unwrap_or_else(|| source.metadata().bbox_pyramid.get_level_max().unwrap());
 
-		let mut level_bbox = *parameters.bbox_pyramid.get_level_bbox(level_base);
+		let mut level_bbox = *metadata.bbox_pyramid.get_level_bbox(level_base);
 		while level_bbox.level > 0 {
 			level_bbox.level_down();
-			parameters.bbox_pyramid.set_level_bbox(level_bbox);
+			metadata.bbox_pyramid.set_level_bbox(level_bbox);
 		}
 
 		let mut tilejson = source.tilejson().clone();
-		parameters.update_tilejson(&mut tilejson);
+		metadata.update_tilejson(&mut tilejson);
 
 		let tile_size = args.tile_size.unwrap_or(512);
 		let cache = Arc::new(DashMap::new());
-		let traversal = Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?;
+		metadata.traversal = Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?;
 
 		Ok(Self {
 			cache,
-			parameters,
+			metadata,
 			source,
 			tilejson,
 			level_base,
 			tile_size,
-			traversal,
 		})
 	}
 
@@ -172,16 +170,12 @@ impl Operation {
 
 #[async_trait]
 impl TileSourceTrait for Operation {
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
-	}
-
-	fn traversal(&self) -> &Traversal {
-		&self.traversal
 	}
 
 	fn source_type(&self) -> Arc<SourceType> {
@@ -200,7 +194,7 @@ impl TileSourceTrait for Operation {
 		let mut bbox0 = bbox.rounded(size);
 		assert_eq!(bbox0.width(), size);
 		assert_eq!(bbox0.height(), size);
-		bbox0.intersect_with_pyramid(&self.parameters.bbox_pyramid);
+		bbox0.intersect_with_pyramid(&self.metadata.bbox_pyramid);
 
 		let container: TileBBoxMap<Option<DynamicImage>> = if bbox.level == self.level_base {
 			log::trace!("Fetching images from source for bbox {:?}", bbox);
@@ -221,7 +215,7 @@ impl TileSourceTrait for Operation {
 		log::trace!("Adding images to cache for bbox {:?}", container.bbox());
 		self.add_images_to_cache(&container).await?;
 
-		let format = self.source.parameters().tile_format;
+		let format = self.source.metadata().tile_format;
 
 		log::trace!("Composing final stream for bbox {:?}", bbox);
 		let vec = container

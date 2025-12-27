@@ -15,6 +15,9 @@ pub struct TraversalSize {
 	max: u8,
 }
 
+const MIN_TRAVERSAL_SIZE_BITS: u8 = 0;
+const MAX_TRAVERSAL_SIZE_BITS: u8 = 30;
+
 impl TraversalSize {
 	/// Create a new `TraversalSize` covering sizes from `min_size` up to `max_size`.
 	///
@@ -34,7 +37,10 @@ impl TraversalSize {
 	/// Return a default `TraversalSize` covering the full range of valid sizes (1 to 2^31).
 	#[must_use]
 	pub const fn new_default() -> Self {
-		TraversalSize { min: 0, max: 20 }
+		TraversalSize {
+			min: MIN_TRAVERSAL_SIZE_BITS,
+			max: MAX_TRAVERSAL_SIZE_BITS,
+		}
 	}
 
 	/// Shortcut to create a `TraversalSize` with minimum size 1 and maximum size `size`.
@@ -43,9 +49,12 @@ impl TraversalSize {
 	}
 
 	/// Check whether the size range is empty (min > max).
-	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.min > self.max
+	}
+
+	pub fn is_full_range(&self) -> bool {
+		self.min == MIN_TRAVERSAL_SIZE_BITS && self.max == MAX_TRAVERSAL_SIZE_BITS
 	}
 
 	/// Return the maximum allowed block size.
@@ -54,7 +63,7 @@ impl TraversalSize {
 	/// Returns an error if the range is empty or `max` is out of bounds.
 	pub fn max_size(&self) -> Result<u32> {
 		ensure!(!self.is_empty(), "TraversalSize is empty: {self:?}");
-		ensure!(self.max <= 20, "TraversalSize max is too large: {self:?}");
+		ensure!(self.max <= 30, "TraversalSize max is too large: {self:?}");
 		Ok(1 << self.max)
 	}
 
@@ -93,13 +102,23 @@ impl Default for TraversalSize {
 	}
 }
 
-impl std::fmt::Debug for TraversalSize {
+impl std::fmt::Display for TraversalSize {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		if self.is_empty() {
-			write!(f, "TraversalSize (empty)")
+			write!(f, "empty")
+		} else if self.is_full_range() {
+			write!(f, "full")
+		} else if self.min == self.max {
+			write!(f, "{}", 1 << self.min)
 		} else {
-			write!(f, "TraversalSize ({}..{})", 1 << self.min, 1 << self.max)
+			write!(f, "{}..{}", 1 << self.min, 1 << self.max)
 		}
+	}
+}
+
+impl std::fmt::Debug for TraversalSize {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "TraversalSize({})", self)
 	}
 }
 
@@ -156,7 +175,7 @@ mod tests {
 		let ts2 = TraversalSize::new(4, 32)?;
 		ts1.intersect(&ts2)?;
 		assert_eq!(ts1.max_size()?, 16);
-		assert_eq!(format!("{ts1:?}"), "TraversalSize (4..16)");
+		assert_eq!(format!("{ts1:?}"), "TraversalSize(4..16)");
 		Ok(())
 	}
 
@@ -166,7 +185,7 @@ mod tests {
 		let ts2 = TraversalSize::new(8, 16)?;
 		assert_eq!(
 			extract_error_lines(ts1.intersect(&ts2)),
-			["Non-overlapping traversal sizes: TraversalSize (2..4) and TraversalSize (8..16)"]
+			["Non-overlapping traversal sizes: TraversalSize(2..4) and TraversalSize(8..16)"]
 		);
 		Ok(())
 	}
@@ -174,8 +193,8 @@ mod tests {
 	#[test]
 	fn test_default_and_debug() -> Result<()> {
 		let ts = TraversalSize::default();
-		assert_eq!(ts.max_size()?, 1 << 20);
-		assert_eq!(format!("{ts:?}"), "TraversalSize (1..1048576)");
+		assert_eq!(ts.max_size()?, 1 << 30);
+		assert_eq!(format!("{ts:?}"), "TraversalSize(full)");
 		Ok(())
 	}
 
@@ -215,7 +234,7 @@ mod tests {
 		let ts2 = TraversalSize::new(2, 32)?;
 		ts1.intersect(&ts2)?;
 		assert_eq!(ts1.max_size()?, 32);
-		assert_eq!(format!("{ts1:?}"), "TraversalSize (8..32)");
+		assert_eq!(format!("{ts1:?}"), "TraversalSize(8..32)");
 		Ok(())
 	}
 }

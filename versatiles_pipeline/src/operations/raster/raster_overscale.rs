@@ -3,7 +3,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use moka::future::Cache;
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::{DynamicImage, traits::*};
@@ -21,7 +21,7 @@ struct Args {
 
 #[derive(Clone)]
 struct Operation {
-	parameters: TileSourceMetadata,
+	metadata: TileSourceMetadata,
 	source: Arc<Box<dyn TileSourceTrait>>,
 	tilejson: TileJSON,
 	level_base: u8,
@@ -33,7 +33,7 @@ struct Operation {
 impl Debug for Operation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("Operation")
-			.field("parameters", &self.parameters)
+			.field("metadata", &self.metadata)
 			.field("source", &self.source)
 			.field("tilejson", &self.tilejson)
 			.field("level_base", &self.level_base)
@@ -51,25 +51,25 @@ impl Operation {
 		Self: Sized + TileSourceTrait,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let mut parameters = source.as_ref().parameters().clone();
+		let mut metadata = source.as_ref().metadata().clone();
 
 		let level_base = args
 			.level_base
-			.unwrap_or(source.as_ref().parameters().bbox_pyramid.get_level_max().unwrap());
+			.unwrap_or(source.as_ref().metadata().bbox_pyramid.get_level_max().unwrap());
 		log::trace!("level_base {}", level_base);
 
 		let level_max = args.level_max.unwrap_or(30).clamp(level_base, 30);
 
-		let mut level_bbox = *parameters.bbox_pyramid.get_level_bbox(level_base);
+		let mut level_bbox = *metadata.bbox_pyramid.get_level_bbox(level_base);
 		while level_bbox.level <= level_max {
 			level_bbox.level_up();
-			parameters.bbox_pyramid.set_level_bbox(level_bbox);
+			metadata.bbox_pyramid.set_level_bbox(level_bbox);
 		}
 
 		let mut tilejson = source.as_ref().tilejson().clone();
-		parameters.update_tilejson(&mut tilejson);
+		metadata.update_tilejson(&mut tilejson);
 
-		let level_min = source.as_ref().parameters().bbox_pyramid.get_level_min().unwrap_or(0);
+		let level_min = source.as_ref().metadata().bbox_pyramid.get_level_min().unwrap_or(0);
 		let cache = Cache::builder()
 			.max_capacity(512 * 1024 * 1024) // 512MB limit
 			.weigher(|_k: &TileCoord, v: &Arc<DynamicImage>| -> u32 {
@@ -79,7 +79,7 @@ impl Operation {
 		let cache = Arc::new(cache);
 
 		Ok(Self {
-			parameters,
+			metadata,
 			source: Arc::new(source),
 			tilejson,
 			level_base,
@@ -169,16 +169,12 @@ fn extract_image(image_src: &DynamicImage, coord_src: TileCoord, coord_dst: Tile
 
 #[async_trait]
 impl TileSourceTrait for Operation {
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
-	}
-
-	fn traversal(&self) -> &Traversal {
-		self.source.as_ref().traversal()
 	}
 
 	fn source_type(&self) -> Arc<SourceType> {
@@ -189,7 +185,7 @@ impl TileSourceTrait for Operation {
 	async fn get_tile_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox_dst);
 
-		if !self.parameters.bbox_pyramid.overlaps_bbox(&bbox_dst) {
+		if !self.metadata.bbox_pyramid.overlaps_bbox(&bbox_dst) {
 			log::trace!("get_stream outside bbox_pyramid");
 			return Ok(TileStream::empty());
 		}
@@ -203,7 +199,7 @@ impl TileSourceTrait for Operation {
 		let coords: Vec<TileCoord> = bbox_dst.into_iter_coords().collect();
 		let self_arc = Arc::new(self.clone()); // Share Operation across tasks
 		let enable_climbing = self.enable_climbing;
-		let tile_format = self.parameters.tile_format;
+		let tile_format = self.metadata.tile_format;
 
 		let get_tile = async move |coord_dst: TileCoord| -> Result<Option<Tile>> {
 			let (coord_src, image_src) = match self_arc.find_tile(coord_dst, enable_climbing).await? {

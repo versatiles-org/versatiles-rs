@@ -55,7 +55,7 @@ pub async fn run(args: &MeasureTileSizes, runtime: TilesRuntime) -> Result<()> {
 	let stream = reader.get_tile_stream(bbox).await?;
 
 	let progress = runtime.create_progress("Scanning tile sizes", (width_original * width_original) as u64);
-	let compression = reader.parameters().tile_compression;
+	let compression = reader.metadata().tile_compression;
 	let vec = stream
 		.map_item_parallel(move |mut tile| Ok(tile.as_blob(compression)?.len()))
 		.inspect(|| progress.inc(1))

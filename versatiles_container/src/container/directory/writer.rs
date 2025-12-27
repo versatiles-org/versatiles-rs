@@ -90,11 +90,11 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 
 		log::trace!("convert_from");
 
-		let parameters = reader.parameters();
+		let parameters = reader.metadata();
 		let tile_format = parameters.tile_format;
 
 		let extension_format = tile_format.as_extension().to_string();
-		let tile_compression = reader.parameters().tile_compression;
+		let tile_compression = reader.metadata().tile_compression;
 		let extension_compression = tile_compression.as_extension().to_string();
 
 		let tilejson = reader.tilejson();
@@ -162,6 +162,7 @@ mod tests {
 			TileFormat::MVT,
 			TileCompression::Gzip,
 			TileBBoxPyramid::new_full(2),
+			Traversal::ANY,
 		))?;
 
 		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path, TilesRuntime::default()).await?;

@@ -169,7 +169,7 @@ impl ContainerReader {
 	#[napi]
 	pub async fn parameters(&self) -> SourceMetadata {
 		let reader = self.reader.lock().await;
-		SourceMetadata::from(reader.parameters())
+		SourceMetadata::from(reader.metadata())
 	}
 
 	/// Get the source type

@@ -2,7 +2,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use std::sync::Arc;
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -10,7 +10,7 @@ use versatiles_image::traits::*;
 pub struct DummyImageSource {
 	#[allow(clippy::type_complexity)]
 	generate_tile: Arc<dyn Fn(&TileCoord) -> Option<Tile> + Send + Sync>,
-	parameters: TileSourceMetadata,
+	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 }
 
@@ -48,19 +48,20 @@ impl DummyImageSource {
 	{
 		ensure!(tile_format.is_raster(), "tile_format must be a raster format");
 
-		let parameters = TileSourceMetadata::new(
+		let metadata = TileSourceMetadata::new(
 			tile_format,
 			TileCompression::Uncompressed,
 			pyramid.unwrap_or_else(|| TileBBoxPyramid::new_full(8)),
+			Traversal::ANY,
 		);
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("name", "dummy raster source")?;
-		parameters.update_tilejson(&mut tilejson);
+		metadata.update_tilejson(&mut tilejson);
 
 		Ok(DummyImageSource {
 			generate_tile: Arc::new(generate_tile),
-			parameters,
+			metadata,
 			tilejson,
 		})
 	}
@@ -72,8 +73,8 @@ impl TileSourceTrait for DummyImageSource {
 		SourceType::new_container("dummy image source", "dummy")
 	}
 
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	fn tilejson(&self) -> &TileJSON {
@@ -82,7 +83,7 @@ impl TileSourceTrait for DummyImageSource {
 
 	#[context("Getting tile for coord: {:?}", coord)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		if !self.parameters.bbox_pyramid.contains_coord(coord) {
+		if !self.metadata.bbox_pyramid.contains_coord(coord) {
 			return Ok(None);
 		}
 		Ok((self.generate_tile)(coord))
@@ -93,7 +94,7 @@ impl TileSourceTrait for DummyImageSource {
 		log::debug!("get_tile_stream {:?}", bbox);
 
 		let generate_tile = (self.generate_tile).clone();
-		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
+		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |coord| {
 			(generate_tile)(&coord)
 		}))
@@ -103,9 +104,9 @@ impl TileSourceTrait for DummyImageSource {
 impl std::fmt::Debug for DummyImageSource {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("DummyImageSource")
-			.field("tile_format", &self.parameters.tile_format)
-			.field("tile_compression", &self.parameters.tile_compression)
-			.field("bbox_pyramid", &self.parameters.bbox_pyramid)
+			.field("tile_format", &self.metadata.tile_format)
+			.field("tile_compression", &self.metadata.tile_compression)
+			.field("bbox_pyramid", &self.metadata.bbox_pyramid)
 			.finish()
 	}
 }

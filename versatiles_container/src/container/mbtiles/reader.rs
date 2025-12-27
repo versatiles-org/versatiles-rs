@@ -39,7 +39,7 @@
 //!     // Fetch a single tile (z/x/y)
 //!     let coord = TileCoord::new(1, 1, 1)?;
 //!     if let Some(tile) = reader.get_tile(&coord).await? {
-//!         let _blob = tile.into_blob(reader.parameters().tile_compression)?;
+//!         let _blob = tile.into_blob(reader.metadata().tile_compression)?;
 //!     }
 //!     Ok(())
 //! }
@@ -50,7 +50,7 @@
 //! - Returns errors if the database is unreadable, the `format` is missing/unknown,
 //!   or queries fail.
 
-use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime};
+use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime, Traversal};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use r2d2::Pool;
@@ -68,7 +68,7 @@ pub struct MBTilesReader {
 	name: String,
 	pool: Pool<SqliteConnectionManager>,
 	tilejson: TileJSON,
-	parameters: TileSourceMetadata,
+	metadata: TileSourceMetadata,
 	runtime: TilesRuntime,
 }
 
@@ -103,13 +103,13 @@ impl MBTilesReader {
 
 		let manager = SqliteConnectionManager::file(path);
 		let pool = Pool::builder().max_size(10).build(manager)?;
-		let parameters = TileSourceMetadata::new(MVT, Uncompressed, TileBBoxPyramid::new_empty());
+		let metadata = TileSourceMetadata::new(MVT, Uncompressed, TileBBoxPyramid::new_empty(), Traversal::ANY);
 
 		let mut reader = MBTilesReader {
 			name: String::from(path.to_str().unwrap()),
 			pool,
 			tilejson: TileJSON::default(),
-			parameters,
+			metadata,
 			runtime,
 		};
 
@@ -193,9 +193,9 @@ impl MBTilesReader {
 		}
 
 		self.tilejson.update_from_pyramid(&pyramid);
-		self.parameters.tile_format = tile_format?;
-		self.parameters.tile_compression = compression?;
-		self.parameters.bbox_pyramid = pyramid;
+		self.metadata.tile_format = tile_format?;
+		self.metadata.tile_compression = compression?;
+		self.metadata.bbox_pyramid = pyramid;
 
 		Ok(())
 	}
@@ -313,8 +313,8 @@ impl TileSourceTrait for MBTilesReader {
 	}
 
 	/// Returns the parameters of the tiles reader.
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	/// Fetch a single tile by XYZ coordinate.
@@ -338,8 +338,8 @@ impl TileSourceTrait for MBTilesReader {
 		}) {
 			Ok(Some(Tile::from_blob(
 				Blob::from(vec),
-				self.parameters.tile_compression,
-				self.parameters.tile_format,
+				self.metadata.tile_compression,
+				self.metadata.tile_format,
 			)))
 		} else {
 			Ok(None)
@@ -388,7 +388,7 @@ impl TileSourceTrait for MBTilesReader {
 					let mut coord = TileCoord::new(level, x, y).unwrap();
 					coord.flip_y();
 					let blob = Blob::from(row.get::<_, Vec<u8>>(3)?);
-					let tile = Tile::from_blob(blob, self.parameters.tile_compression, self.parameters.tile_format);
+					let tile = Tile::from_blob(blob, self.metadata.tile_compression, self.metadata.tile_format);
 					Ok((coord, tile))
 				},
 			)
@@ -405,7 +405,7 @@ impl TileSourceTrait for MBTilesReader {
 impl std::fmt::Debug for MBTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("MBTilesReader")
-			.field("parameters", &self.parameters())
+			.field("parameters", &self.metadata())
 			.finish()
 	}
 }
@@ -434,7 +434,7 @@ pub mod tests {
 
 		assert_eq!(
 			format!("{reader:?}"),
-			"MBTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [1,0,1,0] (1x1), 2: [2,1,2,1] (1x1), 3: [4,2,4,2] (1x1), 4: [8,5,8,5] (1x1), 5: [17,10,17,10] (1x1), 6: [34,20,34,21] (1x2), 7: [68,41,68,42] (1x2), 8: [137,83,137,84] (1x2), 9: [274,167,275,168] (2x2), 10: [549,335,551,336] (3x2), 11: [1098,670,1102,673] (5x4), 12: [2196,1340,2204,1346] (9x7), 13: [4393,2680,4409,2693] (17x14), 14: [8787,5361,8818,5387] (32x27)], tile_compression: Gzip, tile_format: MVT } }"
+			"MBTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [1,0,1,0] (1x1), 2: [2,1,2,1] (1x1), 3: [4,2,4,2] (1x1), 4: [8,5,8,5] (1x1), 5: [17,10,17,10] (1x1), 6: [34,20,34,21] (1x2), 7: [68,41,68,42] (1x2), 8: [137,83,137,84] (1x2), 9: [274,167,275,168] (2x2), 10: [549,335,551,336] (3x2), 11: [1098,670,1102,673] (5x4), 12: [2196,1340,2204,1346] (9x7), 13: [4393,2680,4409,2693] (17x14), 14: [8787,5361,8818,5387] (32x27)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,full) } }"
 		);
 		assert_eq!(
 			reader.source_type().to_string(),
@@ -445,17 +445,17 @@ pub mod tests {
 			"{\"author\":\"OpenStreetMap contributors, Geofabrik GmbH\",\"bounds\":[13.08283,52.33446,13.762245,52.6783],\"description\":\"Tile config for simple vector tiles schema\",\"license\":\"Open Database License 1.0\",\"maxzoom\":14,\"minzoom\":0,\"name\":\"Tilemaker to Geofabrik Vector Tiles schema\",\"tilejson\":\"3.0.0\",\"type\":\"baselayer\",\"vector_layers\":[{\"fields\":{\"name\":\"String\",\"number\":\"String\"},\"id\":\"addresses\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\"},\"id\":\"aerialways\",\"maxzoom\":14,\"minzoom\":12},{\"fields\":{\"admin_level\":\"Number\",\"maritime\":\"Boolean\"},\"id\":\"boundaries\",\"maxzoom\":14,\"minzoom\":0},{\"fields\":{\"admin_level\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"way_area\":\"Number\"},\"id\":\"boundary_labels\",\"maxzoom\":14,\"minzoom\":2},{\"fields\":{\"dummy\":\"Number\"},\"id\":\"buildings\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\"},\"id\":\"land\",\"maxzoom\":14,\"minzoom\":7},{\"fields\":{},\"id\":\"ocean\",\"maxzoom\":14,\"minzoom\":8},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"population\":\"Number\"},\"id\":\"place_labels\",\"maxzoom\":14,\"minzoom\":3},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"id\":\"public_transport\",\"maxzoom\":14,\"minzoom\":11},{\"fields\":{\"kind\":\"String\"},\"id\":\"sites\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"ref\":\"String\",\"ref_cols\":\"Number\",\"ref_rows\":\"Number\",\"tunnel\":\"Boolean\"},\"id\":\"street_labels\",\"maxzoom\":14,\"minzoom\":10},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"ref\":\"String\"},\"id\":\"street_labels_points\",\"maxzoom\":14,\"minzoom\":12},{\"fields\":{\"bridge\":\"Boolean\",\"kind\":\"String\",\"rail\":\"Boolean\",\"service\":\"String\",\"surface\":\"String\",\"tunnel\":\"Boolean\"},\"id\":\"street_polygons\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"bicycle\":\"String\",\"bridge\":\"Boolean\",\"horse\":\"String\",\"kind\":\"String\",\"link\":\"Boolean\",\"rail\":\"Boolean\",\"service\":\"String\",\"surface\":\"String\",\"tracktype\":\"String\",\"tunnel\":\"Boolean\"},\"id\":\"streets\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"id\":\"streets_polygons_labels\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\"},\"id\":\"water_lines\",\"maxzoom\":14,\"minzoom\":4},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"id\":\"water_lines_labels\",\"maxzoom\":14,\"minzoom\":4},{\"fields\":{\"kind\":\"String\"},\"id\":\"water_polygons\",\"maxzoom\":14,\"minzoom\":4},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"id\":\"water_polygons_labels\",\"maxzoom\":14,\"minzoom\":14}],\"version\":\"3.0\"}"
 		);
 		assert_eq!(
-			format!("{:?}", reader.parameters()),
-			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [1,0,1,0] (1x1), 2: [2,1,2,1] (1x1), 3: [4,2,4,2] (1x1), 4: [8,5,8,5] (1x1), 5: [17,10,17,10] (1x1), 6: [34,20,34,21] (1x2), 7: [68,41,68,42] (1x2), 8: [137,83,137,84] (1x2), 9: [274,167,275,168] (2x2), 10: [549,335,551,336] (3x2), 11: [1098,670,1102,673] (5x4), 12: [2196,1340,2204,1346] (9x7), 13: [4393,2680,4409,2693] (17x14), 14: [8787,5361,8818,5387] (32x27)], tile_compression: Gzip, tile_format: MVT }"
+			format!("{:?}", reader.metadata()),
+			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [1,0,1,0] (1x1), 2: [2,1,2,1] (1x1), 3: [4,2,4,2] (1x1), 4: [8,5,8,5] (1x1), 5: [17,10,17,10] (1x1), 6: [34,20,34,21] (1x2), 7: [68,41,68,42] (1x2), 8: [137,83,137,84] (1x2), 9: [274,167,275,168] (2x2), 10: [549,335,551,336] (3x2), 11: [1098,670,1102,673] (5x4), 12: [2196,1340,2204,1346] (9x7), 13: [4393,2680,4409,2693] (17x14), 14: [8787,5361,8818,5387] (32x27)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,full) }"
 		);
-		assert_eq!(reader.parameters().tile_compression, Gzip);
-		assert_eq!(reader.parameters().tile_format, MVT);
+		assert_eq!(reader.metadata().tile_compression, Gzip);
+		assert_eq!(reader.metadata().tile_format, MVT);
 
 		let tile = reader
 			.get_tile(&TileCoord::new(14, 8803, 5376)?)
 			.await?
 			.unwrap()
-			.into_blob(reader.parameters().tile_compression)?;
+			.into_blob(reader.metadata().tile_compression)?;
 		assert_eq!(tile.len(), 172969);
 		assert_eq!(tile.get_range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
 		assert_eq!(

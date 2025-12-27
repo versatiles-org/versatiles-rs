@@ -23,7 +23,7 @@ use async_trait::async_trait;
 use image::create_debug_image;
 use std::{fmt::Debug, sync::Arc};
 use vector::create_debug_vector_tile;
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
 use versatiles_core::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -38,15 +38,16 @@ struct Args {
 #[derive(Debug)]
 pub struct Operation {
 	tilejson: TileJSON,
-	parameters: TileSourceMetadata,
+	metadata: TileSourceMetadata,
 }
 
 impl Operation {
 	pub fn from_parameters(tile_format: TileFormat) -> Result<Self> {
-		let parameters = TileSourceMetadata::new(
+		let metadata = TileSourceMetadata::new(
 			tile_format,
 			TileCompression::Uncompressed,
 			TileBBoxPyramid::new_full(30),
+			Traversal::ANY,
 		);
 
 		let mut tilejson = TileJSON::default();
@@ -62,9 +63,9 @@ impl Operation {
 			)?)?;
 		}
 
-		parameters.update_tilejson(&mut tilejson);
+		metadata.update_tilejson(&mut tilejson);
 
-		Ok(Self { tilejson, parameters })
+		Ok(Self { tilejson, metadata })
 	}
 	pub fn from_vpl_node(vpl_node: &VPLNode) -> Result<Self> {
 		let args = Args::from_vpl_node(vpl_node)?;
@@ -90,8 +91,8 @@ impl ReadTileSourceTrait for Operation {
 #[async_trait]
 impl TileSourceTrait for Operation {
 	/// Return static reader parameters (compression *always* uncompressed).
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	/// Return a synthetic `TileJSON` that matches the chosen debug format.
@@ -105,8 +106,8 @@ impl TileSourceTrait for Operation {
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox);
-		let format = self.parameters.tile_format;
-		match self.parameters.tile_format.to_type() {
+		let format = self.metadata.tile_format;
+		match self.metadata.tile_format.to_type() {
 			TileType::Raster => {
 				let alpha = format != TileFormat::JPG;
 				Ok(TileStream::from_iter_coord_parallel(
@@ -118,7 +119,7 @@ impl TileSourceTrait for Operation {
 				bbox.into_iter_coords(),
 				move |c| Some(Tile::from_vector(create_debug_vector_tile(&c).unwrap(), format).unwrap()),
 			)),
-			_ => bail!("tile format '{}' is not supported.", self.parameters.tile_format),
+			_ => bail!("tile format '{}' is not supported.", self.metadata.tile_format),
 		}
 	}
 }

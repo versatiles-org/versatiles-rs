@@ -81,7 +81,7 @@ impl TilesWriterTrait for PMTilesWriter {
 	) -> Result<()> {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
 
-		let parameters = reader.parameters().clone();
+		let parameters = reader.metadata().clone();
 
 		let entries = EntriesV3::new();
 
@@ -97,7 +97,7 @@ impl TilesWriterTrait for PMTilesWriter {
 
 		let writer_mutex = Arc::new(Mutex::new(writer));
 		let entries_mutex = Arc::new(Mutex::new(entries));
-		let tile_compression = reader.parameters().tile_compression;
+		let tile_compression = reader.metadata().tile_compression;
 
 		reader
 			.traverse_all_tiles(
@@ -169,6 +169,7 @@ mod tests {
 			bbox_pyramid: TileBBoxPyramid::new_full(4),
 			tile_compression: TileCompression::Gzip,
 			tile_format: TileFormat::MVT,
+			traversal: Traversal::ANY,
 		})?;
 
 		let runtime = TilesRuntime::default();
@@ -194,6 +195,7 @@ mod tests {
 			bbox_pyramid,
 			tile_compression: TileCompression::Uncompressed,
 			tile_format: TileFormat::MVT,
+			traversal: Traversal::ANY,
 		})?;
 
 		let runtime = TilesRuntime::default();

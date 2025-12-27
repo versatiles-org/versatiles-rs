@@ -22,7 +22,7 @@
 //!
 //! // Read one tile
 //! if let Some(mut tile) = reader.get_tile(&TileCoord::new(3, 6, 2)?).await? {
-//!     let _blob = tile.as_blob(reader.parameters().tile_compression)?;
+//!     let _blob = tile.as_blob(reader.metadata().tile_compression)?;
 //! }
 //! # Ok(()) }
 //! ```
@@ -31,7 +31,7 @@
 //! Returns errors when the tar cannot be opened or read, when no tiles are found,
 //! or when mixed formats/compressions are detected.
 
-use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
+use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path, sync::Arc};
@@ -49,7 +49,7 @@ pub struct TarTilesReader {
 	name: String,
 	reader: Box<DataReaderFile>,
 	tile_map: HashMap<TileCoord, ByteRange>,
-	parameters: TileSourceMetadata,
+	metadata: TileSourceMetadata,
 }
 
 impl TarTilesReader {
@@ -173,16 +173,17 @@ impl TarTilesReader {
 			return Err(anyhow!("no tiles found in tar"));
 		}
 
-		let parameters = TileSourceMetadata::new(
+		let metadata = TileSourceMetadata::new(
 			tile_format.ok_or(anyhow!("unknown tile format, can't detect format"))?,
 			tile_compression.ok_or(anyhow!("unknown tile compression, can't detect compression"))?,
 			bbox_pyramid.clone(),
+			Traversal::ANY,
 		);
 
 		Ok(TarTilesReader {
 			tilejson,
 			name: path.to_str().unwrap().to_string(),
-			parameters,
+			metadata,
 			reader,
 			tile_map,
 		})
@@ -196,8 +197,8 @@ impl TileSourceTrait for TarTilesReader {
 	}
 
 	/// Returns the parameters of the tiles reader.
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	/// Return the parsed TileJSON metadata for this archive.
@@ -222,8 +223,8 @@ impl TileSourceTrait for TarTilesReader {
 			let blob = self.reader.read_range(range).await?;
 			Ok(Some(Tile::from_blob(
 				blob,
-				self.parameters.tile_compression,
-				self.parameters.tile_format,
+				self.metadata.tile_compression,
+				self.metadata.tile_format,
 			)))
 		} else {
 			Ok(None)
@@ -238,7 +239,7 @@ impl TileSourceTrait for TarTilesReader {
 impl Debug for TarTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TarTilesReader")
-			.field("parameters", &self.parameters())
+			.field("parameters", &self.metadata())
 			.finish()
 	}
 }
@@ -260,7 +261,7 @@ pub mod tests {
 
 		assert_eq!(
 			format!("{reader:?}"),
-			"TarTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)], tile_compression: Gzip, tile_format: MVT } }"
+			"TarTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,full) } }"
 		);
 		assert_wildcard!(reader.source_type().to_string(), "container 'tar' ('*.tar')");
 		assert_eq!(
@@ -268,11 +269,11 @@ pub mod tests {
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 		assert_eq!(
-			format!("{:?}", reader.parameters()),
-			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)], tile_compression: Gzip, tile_format: MVT }"
+			format!("{:?}", reader.metadata()),
+			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,full) }"
 		);
-		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
-		assert_eq!(reader.parameters().tile_format, TileFormat::MVT);
+		assert_eq!(reader.metadata().tile_compression, TileCompression::Gzip);
+		assert_eq!(reader.metadata().tile_format, TileFormat::MVT);
 
 		let blob = reader
 			.get_tile(&TileCoord::new(3, 6, 2)?)
@@ -358,9 +359,9 @@ pub mod tests {
 		a.finish()?;
 
 		let reader = TarTilesReader::open_path(&filename)?;
-		assert_eq!(reader.parameters().tile_format, TileFormat::BIN);
-		assert_eq!(reader.parameters().tile_compression, TileCompression::Uncompressed);
-		assert_eq!(reader.parameters().bbox_pyramid.count_tiles(), 1);
+		assert_eq!(reader.metadata().tile_format, TileFormat::BIN);
+		assert_eq!(reader.metadata().tile_compression, TileCompression::Uncompressed);
+		assert_eq!(reader.metadata().bbox_pyramid.count_tiles(), 1);
 		assert_eq!(
 			reader
 				.get_tile(&TileCoord::new(3, 1, 2)?)

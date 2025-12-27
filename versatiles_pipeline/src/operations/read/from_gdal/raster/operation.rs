@@ -12,7 +12,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use std::{fmt::Debug, sync::Arc, vec};
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -48,7 +48,7 @@ struct Args {
 /// bounds and zoom levels without touching the reader again.
 struct Operation {
 	source: RasterSource,
-	parameters: TileSourceMetadata,
+	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 	tile_size: u32,
 }
@@ -89,28 +89,29 @@ impl Operation {
 		);
 		let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(level_min, level_max, bbox);
 
-		let parameters = TileSourceMetadata::new(
+		let metadata = TileSourceMetadata::new(
 			args.tile_format.unwrap_or(TileFormat::PNG),
 			TileCompression::Uncompressed,
 			bbox_pyramid,
+			Traversal::ANY,
 		);
 		log::trace!(
 			"Parameters: format={:?}, compression={:?}",
-			parameters.tile_format,
-			parameters.tile_compression
+			metadata.tile_format,
+			metadata.tile_compression
 		);
 		let mut tilejson = TileJSON {
 			bounds: Some(*bbox),
 			..Default::default()
 		};
-		parameters.update_tilejson(&mut tilejson);
+		metadata.update_tilejson(&mut tilejson);
 		tilejson.tile_schema = Some(TileSchema::RasterRGBA);
 		log::trace!("TileJSON bounds set to {:?}", tilejson.bounds);
 		log::trace!("from_gdal_raster::Operation built successfully");
 
 		Ok(Self {
 			tilejson,
-			parameters,
+			metadata,
 			source,
 			tile_size,
 		})
@@ -148,8 +149,8 @@ impl ReadTileSourceTrait for Operation {
 impl TileSourceTrait for Operation {
 	/// Return the reader’s technical parameters (compression, tile size,
 	/// etc.) without performing any I/O.
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	/// Expose the container's `TileJSON` so that consumers can inspect
@@ -169,7 +170,7 @@ impl TileSourceTrait for Operation {
 
 		let count = 8192u32.div_euclid(self.tile_size).max(1);
 
-		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
+		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
 
 		let bboxes: Vec<TileBBox> = bbox.iter_bbox_grid(count).collect();
 		let size = self.tile_size;
@@ -192,7 +193,7 @@ impl TileSourceTrait for Operation {
 					.unwrap();
 
 				if let Some(image) = image {
-					let tile_format = self.parameters.tile_format;
+					let tile_format = self.metadata.tile_format;
 					// Crop into tiles on a blocking thread
 					let vec = tokio::task::spawn_blocking(move || {
 						bbox

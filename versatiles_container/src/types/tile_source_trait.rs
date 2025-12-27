@@ -7,7 +7,7 @@
 //!
 //! Both container readers (e.g., MBTiles, VersaTiles) and tile processors (e.g., filters, format converters)
 //! share the same fundamental operations:
-//! - Provide metadata (TileJSON, parameters)
+//! - Provide metadata (TileJSON, metadata)
 //! - Stream tiles from a bounding box
 //! - Support runtime composition
 //!
@@ -52,23 +52,17 @@ pub trait TileSourceTrait: Debug + Send + Sync + Unpin {
 	/// - Composite sources: `SourceType::Composite`
 	fn source_type(&self) -> Arc<SourceType>;
 
-	/// Returns runtime parameters describing the tiles this source will produce.
+	/// Returns runtime metadata describing the tiles this source will produce.
 	///
 	/// Includes:
 	/// - `bbox_pyramid`: Spatial extent at each zoom level
 	/// - `tile_compression`: Current output compression
 	/// - `tile_format`: Tile format (PNG, JPG, MVT, etc.)
-	fn parameters(&self) -> &TileSourceMetadata;
+	/// - `traversal`: Preferred tile traversal order
+	fn metadata(&self) -> &TileSourceMetadata;
 
 	/// Returns the TileJSON metadata for this tileset.
 	fn tilejson(&self) -> &TileJSON;
-
-	/// Returns the preferred traversal order hint (default: [`Traversal::ANY`]).
-	///
-	/// Sources that can efficiently stream in a specific order should override this.
-	fn traversal(&self) -> &Traversal {
-		&Traversal::ANY
-	}
 
 	/// Fetches a single tile at the given coordinate.
 	///
@@ -100,7 +94,7 @@ pub trait TileSourceTrait: Debug + Send + Sync + Unpin {
 
 	/// Performs a hierarchical CLI probe at the specified depth.
 	///
-	/// Probes metadata, parameters, container specifics, tiles, and tile contents
+	/// Probes metadata, container specifics, tiles, and tile contents
 	/// based on the requested depth level.
 	#[cfg(feature = "cli")]
 	async fn probe(&self, level: ProbeDepth) -> Result<()> {
@@ -113,9 +107,7 @@ pub trait TileSourceTrait: Debug + Send + Sync + Unpin {
 
 		cat.add_key_json("meta", &self.tilejson().as_json_value()).await;
 
-		self
-			.probe_parameters(&mut print.get_category("parameters").await)
-			.await?;
+		self.probe_metadata(&mut print.get_category("parameters").await).await?;
 
 		if matches!(level, Container | Tiles | TileContents) {
 			log::debug!("probing source {:?} at depth {:?}", self.source_type(), level);
@@ -145,21 +137,21 @@ pub trait TileSourceTrait: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
-	/// Writes source parameters (bbox pyramid, formats, compression) to the CLI reporter.
+	/// Writes source metadata (bbox pyramid, formats, compression) to the CLI reporter.
 	#[cfg(feature = "cli")]
-	async fn probe_parameters(&self, print: &mut PrettyPrint) -> Result<()> {
-		let parameters = self.parameters();
+	async fn probe_metadata(&self, print: &mut PrettyPrint) -> Result<()> {
+		let metadata = self.metadata();
 		let p = print.get_list("bbox_pyramid").await;
-		for level in parameters.bbox_pyramid.iter_levels() {
+		for level in metadata.bbox_pyramid.iter_levels() {
 			p.add_value(level).await;
 		}
 		print
-			.add_key_value("bbox", &format!("{:?}", parameters.bbox_pyramid.get_geo_bbox()))
+			.add_key_value("bbox", &format!("{:?}", metadata.bbox_pyramid.get_geo_bbox()))
 			.await;
 		print
-			.add_key_value("tile compression", &parameters.tile_compression)
+			.add_key_value("tile compression", &metadata.tile_compression)
 			.await;
-		print.add_key_value("tile format", &parameters.tile_format).await;
+		print.add_key_value("tile format", &metadata.tile_format).await;
 		Ok(())
 	}
 
@@ -233,8 +225,11 @@ pub trait TileSourceTraverseExt: TileSourceTrait {
 		let progress_message = progress_message.unwrap_or("processing tiles").to_string();
 
 		async move {
-			let traversal_steps =
-				translate_traversals(&self.parameters().bbox_pyramid, self.traversal(), traversal_write)?;
+			let traversal_steps = translate_traversals(
+				&self.metadata().bbox_pyramid,
+				&self.metadata().traversal,
+				traversal_write,
+			)?;
 
 			use TraversalTranslationStep::*;
 
@@ -340,7 +335,7 @@ mod tests {
 
 	#[derive(Debug)]
 	struct TestReader {
-		parameters: TileSourceMetadata,
+		metadata: TileSourceMetadata,
 		tilejson: TileJSON,
 	}
 
@@ -349,10 +344,11 @@ mod tests {
 			let mut tilejson = TileJSON::default();
 			tilejson.set_string("metadata", "test").unwrap();
 			TestReader {
-				parameters: TileSourceMetadata {
+				metadata: TileSourceMetadata {
 					bbox_pyramid: TileBBoxPyramid::new_full(3),
 					tile_compression: TileCompression::Gzip,
 					tile_format: TileFormat::MVT,
+					traversal: Traversal::ANY,
 				},
 				tilejson,
 			}
@@ -365,8 +361,8 @@ mod tests {
 			SourceType::new_container("dummy_format", "dummy_uri")
 		}
 
-		fn parameters(&self) -> &TileSourceMetadata {
-			&self.parameters
+		fn metadata(&self) -> &TileSourceMetadata {
+			&self.metadata
 		}
 
 		fn tilejson(&self) -> &TileJSON {
@@ -374,8 +370,8 @@ mod tests {
 		}
 
 		async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-			let tile_compression = self.parameters.tile_compression;
-			let tile_format = self.parameters.tile_format;
+			let tile_compression = self.metadata.tile_compression;
+			let tile_format = self.metadata.tile_format;
 			Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {
 				Some(Tile::from_blob(
 					Blob::from("test tile data"),
@@ -387,13 +383,13 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_parameters() {
+	async fn test_metadata() {
 		let reader = TestReader::new_dummy();
-		let parameters = reader.parameters();
-		assert_eq!(parameters.tile_compression, TileCompression::Gzip);
-		assert_eq!(parameters.tile_format, TileFormat::MVT);
-		assert_eq!(parameters.bbox_pyramid.get_level_min().unwrap(), 0);
-		assert_eq!(parameters.bbox_pyramid.get_level_max().unwrap(), 3);
+		let metadata = reader.metadata();
+		assert_eq!(metadata.tile_compression, TileCompression::Gzip);
+		assert_eq!(metadata.tile_format, TileFormat::MVT);
+		assert_eq!(metadata.bbox_pyramid.get_level_min().unwrap(), 0);
+		assert_eq!(metadata.bbox_pyramid.get_level_max().unwrap(), 3);
 	}
 
 	#[tokio::test]
@@ -433,10 +429,10 @@ mod tests {
 
 	#[cfg(feature = "cli")]
 	#[tokio::test]
-	async fn test_probe_parameters() -> Result<()> {
+	async fn test_probe_metadata() -> Result<()> {
 		let reader = TestReader::new_dummy();
 		let mut print = PrettyPrint::new();
-		reader.probe_parameters(&mut print).await?;
+		reader.probe_metadata(&mut print).await?;
 		Ok(())
 	}
 

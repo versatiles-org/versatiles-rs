@@ -12,9 +12,8 @@ use versatiles_geometry::{
 pub struct DummyVectorSource {
 	#[allow(clippy::type_complexity)]
 	data: Vec<(String, Vec<Vec<(String, String)>>)>,
-	parameters: TileSourceMetadata,
+	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
-	traversal: Traversal,
 }
 
 impl DummyVectorSource {
@@ -38,27 +37,27 @@ impl DummyVectorSource {
 			.collect();
 
 		// Initialize the parameters with the given bounding box or a default one
-		let parameters = TileSourceMetadata::new(
+		let metadata = TileSourceMetadata::new(
 			TileFormat::MVT,
 			TileCompression::Uncompressed,
 			pyramid.unwrap_or_else(|| TileBBoxPyramid::new_full(8)),
+			Traversal::ANY,
 		);
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("name", "dummy vector source").unwrap();
-		parameters.update_tilejson(&mut tilejson);
+		metadata.update_tilejson(&mut tilejson);
 
 		DummyVectorSource {
 			data,
-			parameters,
+			metadata,
 			tilejson,
-			traversal: Traversal::default(),
 		}
 	}
 
 	#[allow(dead_code)]
 	pub fn set_traversal(&mut self, traversal: Traversal) {
-		self.traversal = traversal;
+		self.metadata.traversal = traversal;
 	}
 }
 
@@ -68,12 +67,8 @@ impl TileSourceTrait for DummyVectorSource {
 		SourceType::new_container("dummy vector source", "dummy")
 	}
 
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
-	}
-
-	fn traversal(&self) -> &Traversal {
-		&self.traversal
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	fn tilejson(&self) -> &TileJSON {
@@ -81,7 +76,7 @@ impl TileSourceTrait for DummyVectorSource {
 	}
 
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		if !self.parameters.bbox_pyramid.contains_coord(coord) {
+		if !self.metadata.bbox_pyramid.contains_coord(coord) {
 			return Ok(None);
 		}
 
@@ -139,7 +134,7 @@ mod tests {
 
 		assert!(
 			source
-				.parameters()
+				.metadata()
 				.bbox_pyramid
 				.contains_coord(&TileCoord::new(8, 0, 200).unwrap())
 		);

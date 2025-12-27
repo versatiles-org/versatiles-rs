@@ -19,7 +19,7 @@ impl TileSource {
 	// Constructor function for creating a TileSource instance
 	#[context("creating tile source: id='{id}'")]
 	pub fn from(reader: Box<dyn TileSourceTrait>, id: &str) -> Result<TileSource> {
-		let parameters = reader.parameters();
+		let parameters = reader.metadata();
 		let tile_mime = parameters.tile_format.as_mime_str().to_string();
 		let compression = parameters.tile_compression;
 
@@ -91,7 +91,7 @@ impl TileSource {
 	async fn build_tile_json(&self) -> Result<Blob> {
 		// Direct access - no lock!
 		let mut tilejson = self.reader.tilejson().clone();
-		self.reader.parameters().update_tilejson(&mut tilejson);
+		self.reader.metadata().update_tilejson(&mut tilejson);
 
 		let tiles_url = self.prefix.join_as_string("{z}/{x}/{y}");
 		tilejson.set_list("tiles", vec![tiles_url])?;
@@ -143,7 +143,7 @@ mod tests {
 		// Updated expected output - no more "Mutex { data: ... }"
 		assert_eq!(
 			format!("{container:?}"),
-			"TileSource { reader: MockTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [2: [0,1,2,3] (3x3), 3: [0,2,4,6] (5x5), 4: [0,0,15,15] (16x16), 5: [0,0,31,31] (32x32), 6: [0,0,63,63] (64x64)], tile_compression: Uncompressed, tile_format: PNG } }, tile_mime: \"image/png\", compression: Uncompressed }"
+			"TileSource { reader: MockTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [2: [0,1,2,3] (3x3), 3: [0,2,4,6] (5x5), 4: [0,0,15,15] (16x16), 5: [0,0,31,31] (32x32), 6: [0,0,63,63] (64x64)], tile_compression: Uncompressed, tile_format: PNG, traversal: Traversal(AnyOrder,full) } }, tile_mime: \"image/png\", compression: Uncompressed }"
 		);
 		Ok(())
 	}

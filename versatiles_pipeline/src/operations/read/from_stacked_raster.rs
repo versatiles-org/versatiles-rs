@@ -43,10 +43,9 @@ struct Args {
 /// * Performs no disk I/O itself; all data come from the child pipelines.
 #[derive(Debug)]
 struct Operation {
-	parameters: TileSourceMetadata,
+	metadata: TileSourceMetadata,
 	sources: Vec<Box<dyn TileSourceTrait>>,
 	tilejson: TileJSON,
-	traversal: Traversal,
 }
 
 /// Blend a list of equally‑sized tiles using *source‑over* compositing.
@@ -89,7 +88,7 @@ impl ReadTileSourceTrait for Operation {
 
 		let mut tilejson = TileJSON::default();
 
-		let first_parameters = sources.first().unwrap().parameters();
+		let first_parameters = sources.first().unwrap().metadata();
 		let tile_format = args.format.unwrap_or(first_parameters.tile_format);
 		ensure!(
 			tile_format.to_type() == TileType::Raster,
@@ -103,25 +102,23 @@ impl ReadTileSourceTrait for Operation {
 		for source in sources.iter() {
 			tilejson.merge(source.tilejson())?;
 
-			traversal.intersect(source.traversal())?;
-
-			let parameters = source.parameters();
-			pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
+			let metadata = source.metadata();
+			traversal.intersect(&metadata.traversal)?;
+			pyramid.include_bbox_pyramid(&metadata.bbox_pyramid);
 
 			ensure!(
-				parameters.tile_format.to_type() == TileType::Raster,
+				metadata.tile_format.to_type() == TileType::Raster,
 				"all sources must be raster tiles"
 			);
 		}
 
-		let parameters = TileSourceMetadata::new(tile_format, tile_compression, pyramid);
-		parameters.update_tilejson(&mut tilejson);
+		let metadata = TileSourceMetadata::new(tile_format, tile_compression, pyramid, traversal);
+		metadata.update_tilejson(&mut tilejson);
 
 		Ok(Box::new(Self {
 			tilejson,
-			parameters,
+			metadata,
 			sources,
-			traversal,
 		}) as Box<dyn TileSourceTrait>)
 	}
 }
@@ -129,17 +126,13 @@ impl ReadTileSourceTrait for Operation {
 #[async_trait]
 impl TileSourceTrait for Operation {
 	/// Reader parameters (format, compression, pyramid) for the *blended* result.
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	/// Combined `TileJSON` derived from all sources.
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
-	}
-
-	fn traversal(&self) -> &Traversal {
-		&self.traversal
 	}
 
 	fn source_type(&self) -> Arc<SourceType> {
@@ -154,7 +147,7 @@ impl TileSourceTrait for Operation {
 
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(16).collect();
 		let sources = &self.sources;
-		let tile_format = self.parameters.tile_format;
+		let tile_format = self.metadata.tile_format;
 
 		Ok(TileStream::from_streams(stream::iter(bboxes).map(
 			move |bbox| async move {
@@ -349,7 +342,7 @@ mod tests {
 			)
 			.await?;
 
-		let parameters = result.parameters();
+		let parameters = result.metadata();
 
 		assert_eq!(parameters.tile_format, TileFormat::PNG);
 		assert_eq!(parameters.tile_compression, TileCompression::Uncompressed);

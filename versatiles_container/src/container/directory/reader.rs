@@ -38,7 +38,7 @@
 //! ## Errors
 //! Errors are returned if the directory is not absolute, does not exist, is not a directory, contains no tiles, or if tiles have inconsistent formats or compressions.
 
-use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
+use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use itertools::Itertools;
@@ -66,7 +66,7 @@ pub struct DirectoryTilesReader {
 	tilejson: TileJSON,
 	dir: PathBuf,
 	tile_map: HashMap<TileCoord, PathBuf>,
-	parameters: TileSourceMetadata,
+	metadata: TileSourceMetadata,
 }
 
 impl DirectoryTilesReader {
@@ -209,7 +209,7 @@ impl DirectoryTilesReader {
 			tilejson,
 			dir: dir.to_path_buf(),
 			tile_map,
-			parameters: TileSourceMetadata::new(tile_format, tile_compression, bbox_pyramid),
+			metadata: TileSourceMetadata::new(tile_format, tile_compression, bbox_pyramid, Traversal::ANY),
 		})
 	}
 
@@ -231,8 +231,8 @@ impl TileSourceTrait for DirectoryTilesReader {
 		SourceType::new_container("directory", self.dir.to_str().unwrap())
 	}
 
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	fn tilejson(&self) -> &TileJSON {
@@ -247,8 +247,8 @@ impl TileSourceTrait for DirectoryTilesReader {
 			Self::read(path).map(|blob| {
 				Some(Tile::from_blob(
 					blob,
-					self.parameters.tile_compression,
-					self.parameters.tile_format,
+					self.metadata.tile_compression,
+					self.metadata.tile_format,
 				))
 			})
 		} else {
@@ -265,7 +265,7 @@ impl Debug for DirectoryTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("DirectoryTilesReader")
 			.field("source_type", &self.source_type())
-			.field("parameters", &self.parameters())
+			.field("parameters", &self.metadata())
 			.finish()
 	}
 }
@@ -296,7 +296,7 @@ mod tests {
 
 		let mut tile_data = reader.get_tile(&TileCoord::new(3, 2, 1)?).await?.unwrap();
 		assert_eq!(
-			tile_data.as_blob(reader.parameters().tile_compression)?,
+			tile_data.as_blob(reader.metadata().tile_compression)?,
 			&Blob::from("test tile data")
 		);
 
@@ -374,7 +374,7 @@ mod tests {
 			.await
 			.unwrap()
 			.unwrap()
-			.into_blob(reader.parameters().tile_compression)?;
+			.into_blob(reader.metadata().tile_compression)?;
 
 		assert_eq!(blob, Blob::from("tile at 3/2/1"));
 
@@ -454,7 +454,7 @@ mod tests {
 
 		assert_wildcard!(
 			format!("{reader:?}"),
-			"DirectoryTilesReader { source_type: Container { name: \"directory\", uri: \"*\" }, parameters: TileSourceMetadata { bbox_pyramid: [3: [2,1,2,1] (1x1)], tile_compression: Brotli, tile_format: PNG } }"
+			"DirectoryTilesReader { source_type: Container { name: \"directory\", uri: \"*\" }, parameters: TileSourceMetadata { bbox_pyramid: [3: [2,1,2,1] (1x1)], tile_compression: Brotli, tile_format: PNG, traversal: Traversal(AnyOrder,full) } }"
 		);
 
 		assert_eq!(

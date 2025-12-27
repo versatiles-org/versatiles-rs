@@ -2,7 +2,7 @@ use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use std::{fmt::Debug, str, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -70,7 +70,7 @@ impl From<RasterTileFormat> for TileFormat {
 
 #[derive(Debug)]
 struct Operation {
-	parameters: TileSourceMetadata,
+	metadata: TileSourceMetadata,
 	source: Box<dyn TileSourceTrait>,
 	tilejson: TileJSON,
 	format: RasterTileFormat,
@@ -86,25 +86,25 @@ impl Operation {
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		let mut parameters = source.parameters().clone();
+		let mut metadata = source.metadata().clone();
 
 		let format: RasterTileFormat = if let Some(text) = args.format {
 			RasterTileFormat::from_str(&text)?
 		} else {
-			RasterTileFormat::try_from(parameters.tile_format)?
+			RasterTileFormat::try_from(metadata.tile_format)?
 		};
 
-		parameters.tile_format = format.into();
-		parameters.tile_compression = TileCompression::Uncompressed;
+		metadata.tile_format = format.into();
+		metadata.tile_compression = TileCompression::Uncompressed;
 
 		let mut tilejson = source.tilejson().clone();
-		parameters.update_tilejson(&mut tilejson);
+		metadata.update_tilejson(&mut tilejson);
 
 		Ok(Self {
 			format,
 			quality: parse_quality(args.quality)?,
 			speed: args.speed,
-			parameters,
+			metadata,
 			source,
 			tilejson,
 		})
@@ -143,16 +143,12 @@ impl TileSourceTrait for Operation {
 		SourceType::new_processor("raster_format", self.source.source_type())
 	}
 
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
-	}
-
-	fn traversal(&self) -> &Traversal {
-		self.source.traversal()
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
@@ -276,7 +272,7 @@ mod tests {
 			.await?;
 
 		// Parameters must reflect the target format and uncompressed tile_compression
-		let params = op.parameters().clone();
+		let params = op.metadata().clone();
 		assert_eq!(params.tile_format, TileFormat::WEBP);
 		assert_eq!(params.tile_compression, TileCompression::Uncompressed);
 

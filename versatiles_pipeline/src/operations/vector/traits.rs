@@ -1,7 +1,7 @@
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::sync::Arc;
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
 use versatiles_core::{TileBBox, TileJSON, TileStream, TileType};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
@@ -16,22 +16,18 @@ pub trait RunnerTrait: std::fmt::Debug + Send + Sync + 'static {
 pub struct TransformOp<R: RunnerTrait> {
 	pub runner: Arc<R>,
 	pub source: Box<dyn TileSourceTrait>,
-	pub params: TileSourceMetadata,
+	pub metadata: TileSourceMetadata,
 	pub tilejson: TileJSON,
 }
 
 #[async_trait]
 impl<R: RunnerTrait> TileSourceTrait for TransformOp<R> {
 	/* --- metadata --- */
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.params
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
-	}
-
-	fn traversal(&self) -> &Traversal {
-		self.source.traversal()
 	}
 
 	fn source_type(&self) -> Arc<SourceType> {
@@ -41,7 +37,7 @@ impl<R: RunnerTrait> TileSourceTrait for TransformOp<R> {
 	#[context("Failed to get transformed tile stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		let runner = self.runner.clone();
-		let tile_format = self.params.tile_format;
+		let tile_format = self.metadata.tile_format;
 		Ok(self
 			.source
 			.get_tile_stream(bbox)
@@ -64,9 +60,9 @@ where
 	R: RunnerTrait,
 {
 	// ── common steps ───────────────────────────────────────────────
-	let params = source.parameters().clone();
+	let metadata = source.metadata().clone();
 	ensure!(
-		params.tile_format.to_type() == TileType::Vector,
+		metadata.tile_format.to_type() == TileType::Vector,
 		"source must be vector tiles"
 	);
 
@@ -76,12 +72,12 @@ where
 	// ── tile-json patching (always the same) ───────────────────────
 	let mut tilejson = source.tilejson().clone();
 	runner.update_tilejson(&mut tilejson);
-	params.update_tilejson(&mut tilejson);
+	metadata.update_tilejson(&mut tilejson);
 
 	Ok(Box::new(TransformOp::<R> {
 		runner,
 		source,
-		params,
+		metadata,
 		tilejson,
 	}) as Box<dyn TileSourceTrait>)
 }

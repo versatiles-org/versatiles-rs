@@ -43,10 +43,9 @@ struct Args {
 /// * Performs no disk I/O itself – it relies entirely on the child pipelines.
 #[derive(Debug)]
 struct Operation {
-	parameters: TileSourceMetadata,
+	metadata: TileSourceMetadata,
 	sources: Vec<Box<dyn TileSourceTrait>>,
 	tilejson: TileJSON,
-	traversal: Traversal,
 }
 
 /// Combine several `VectorTile`s by merging layers with identical names.
@@ -83,34 +82,32 @@ impl ReadTileSourceTrait for Operation {
 		ensure!(sources.len() > 1, "must have at least two sources");
 
 		let mut tilejson = TileJSON::default();
-		let first_parameters = sources.first().unwrap().parameters();
+		let first_parameters = sources.first().unwrap().metadata();
 		let tile_format = first_parameters.tile_format;
 		let tile_compression = first_parameters.tile_compression;
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		let mut traversal = Traversal::new_any();
+		let mut traversal = Traversal::ANY;
 
 		for source in sources.iter() {
 			tilejson.merge(source.tilejson())?;
 
-			traversal.intersect(source.traversal())?;
-
-			let parameters = source.parameters();
-			pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
+			let metadata = source.metadata();
+			traversal.intersect(&metadata.traversal)?;
+			pyramid.include_bbox_pyramid(&metadata.bbox_pyramid);
 
 			ensure!(
-				parameters.tile_format.to_type() == TileType::Vector,
+				metadata.tile_format.to_type() == TileType::Vector,
 				"all sources must be vector tiles"
 			);
 		}
 
-		let parameters = TileSourceMetadata::new(tile_format, tile_compression, pyramid);
-		parameters.update_tilejson(&mut tilejson);
+		let metadata = TileSourceMetadata::new(tile_format, tile_compression, pyramid, traversal);
+		metadata.update_tilejson(&mut tilejson);
 
 		Ok(Box::new(Self {
 			tilejson,
-			parameters,
+			metadata,
 			sources,
-			traversal,
 		}) as Box<dyn TileSourceTrait>)
 	}
 }
@@ -118,17 +115,13 @@ impl ReadTileSourceTrait for Operation {
 #[async_trait]
 impl TileSourceTrait for Operation {
 	/// Reader parameters (format, compression, pyramid) for the merged result.
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	/// `TileJSON` after combining metadata from every source.
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
-	}
-
-	fn traversal(&self) -> &Traversal {
-		&self.traversal
 	}
 
 	fn source_type(&self) -> Arc<SourceType> {
@@ -157,7 +150,7 @@ impl TileSourceTrait for Operation {
 						.await;
 				}
 
-				let format = self.parameters.tile_format;
+				let format = self.metadata.tile_format;
 
 				TileStream::from_vec(
 					tiles
@@ -370,7 +363,7 @@ mod tests {
 			)
 			.await?;
 
-		let parameters = result.parameters();
+		let parameters = result.metadata();
 
 		assert_eq!(parameters.tile_format, TileFormat::MVT);
 		assert_eq!(parameters.tile_compression, TileCompression::Uncompressed);

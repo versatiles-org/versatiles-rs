@@ -11,7 +11,7 @@ use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::{path::Path, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime, Traversal};
+use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime};
 use versatiles_core::{io::DataReader, *};
 use versatiles_derive::context;
 
@@ -25,7 +25,6 @@ use versatiles_derive::context;
 pub struct PipelineReader {
 	name: String,
 	operation: Box<dyn TileSourceTrait>,
-	parameters: TileSourceMetadata,
 }
 
 #[allow(dead_code)]
@@ -75,12 +74,10 @@ impl<'a> PipelineReader {
 			});
 			let factory = PipelineFactory::new_default(dir, callback, runtime);
 			let operation: Box<dyn TileSourceTrait> = factory.operation_from_vpl(vpl).await?;
-			let parameters = operation.parameters().clone();
 
 			Ok(PipelineReader {
 				name: name.to_string(),
 				operation,
-				parameters,
 			})
 		})
 	}
@@ -93,13 +90,8 @@ impl TileSourceTrait for PipelineReader {
 	}
 
 	/// Returns the reader parameters (tile format, compression, and traversal hints).
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
-	}
-
-	/// Returns the traversal strategy derived from the pipeline’s output operation.
-	fn traversal(&self) -> &Traversal {
-		self.operation.traversal()
+	fn metadata(&self) -> &TileSourceMetadata {
+		self.operation.metadata()
 	}
 
 	/// Returns the pipeline’s tile metadata (`TileJSON`), always uncompressed.
@@ -141,7 +133,6 @@ impl std::fmt::Debug for PipelineReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("PipelineReader")
 			.field("name", &self.name)
-			.field("parameters", &self.parameters)
 			.field("output", &self.operation)
 			.finish()
 	}
@@ -214,7 +205,7 @@ mod tests {
 		// Trait methods
 		assert_eq!(reader.source_type().to_string(), "processor 'pipeline'");
 		// Parameters should have at least one bbox level
-		assert!(reader.parameters().bbox_pyramid.iter_levels().next().is_some());
+		assert!(reader.metadata().bbox_pyramid.iter_levels().next().is_some());
 		// Debug formatting should include struct name and source
 		let debug = format!("{reader:?}");
 		assert!(debug.contains("PipelineReader"));

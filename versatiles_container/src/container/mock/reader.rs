@@ -24,7 +24,7 @@
 
 use std::sync::Arc;
 
-use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
+use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{utils::compress, *};
@@ -48,7 +48,7 @@ pub const MOCK_BYTES_WEBP: &[u8; 44] = include_bytes!("./mock_tiles/mock.webp");
 
 /// Mock implementation of a `TilesReader`.
 pub struct MockTilesReader {
-	parameters: TileSourceMetadata,
+	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 }
 
@@ -64,22 +64,30 @@ impl MockTilesReader {
 		bbox_pyramid.set_level_bbox(TileBBox::new_full(6)?);
 
 		MockTilesReader::new_mock(match profile {
-			MockTilesReaderProfile::Json => {
-				TileSourceMetadata::new(TileFormat::JSON, TileCompression::Uncompressed, bbox_pyramid)
+			MockTilesReaderProfile::Json => TileSourceMetadata::new(
+				TileFormat::JSON,
+				TileCompression::Uncompressed,
+				bbox_pyramid,
+				Traversal::ANY,
+			),
+			MockTilesReaderProfile::Png => TileSourceMetadata::new(
+				TileFormat::PNG,
+				TileCompression::Uncompressed,
+				bbox_pyramid,
+				Traversal::ANY,
+			),
+			MockTilesReaderProfile::Pbf => {
+				TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, bbox_pyramid, Traversal::ANY)
 			}
-			MockTilesReaderProfile::Png => {
-				TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, bbox_pyramid)
-			}
-			MockTilesReaderProfile::Pbf => TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, bbox_pyramid),
 		})
 	}
 
 	/// Creates a new mock tiles reader with the specified parameters.
 	#[context("creating mock reader from parameters")]
-	pub fn new_mock(parameters: TileSourceMetadata) -> Result<MockTilesReader> {
+	pub fn new_mock(metadata: TileSourceMetadata) -> Result<MockTilesReader> {
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("type", "dummy")?;
-		Ok(MockTilesReader { parameters, tilejson })
+		Ok(MockTilesReader { metadata, tilejson })
 	}
 }
 
@@ -89,23 +97,23 @@ impl TileSourceTrait for MockTilesReader {
 		SourceType::new_container("dummy", "dummy")
 	}
 
-	fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
-	#[context("fetching mock tile {:?} (format={:?}, compression={:?})", coord, self.parameters.tile_format, self.parameters.tile_compression)]
+	#[context("fetching mock tile {:?} (format={:?}, compression={:?})", coord, self.metadata.tile_format, self.metadata.tile_compression)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		use TileFormat::*;
 
-		if !self.parameters.bbox_pyramid.contains_coord(coord) {
+		if !self.metadata.bbox_pyramid.contains_coord(coord) {
 			return Ok(None);
 		}
 
-		let format = self.parameters.tile_format;
+		let format = self.metadata.tile_format;
 		let mut blob = match format {
 			JSON => Blob::from(coord.as_json()),
 			PNG => Blob::from(MOCK_BYTES_PNG.to_vec()),
@@ -115,8 +123,8 @@ impl TileSourceTrait for MockTilesReader {
 			WEBP => Blob::from(MOCK_BYTES_WEBP.to_vec()),
 			_ => panic!("tile format {format:?} is not implemented for MockTileReader"),
 		};
-		blob = compress(blob, self.parameters.tile_compression)?;
-		Ok(Some(Tile::from_blob(blob, self.parameters.tile_compression, format)))
+		blob = compress(blob, self.metadata.tile_compression)?;
+		Ok(Some(Tile::from_blob(blob, self.metadata.tile_compression, format)))
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
@@ -127,7 +135,7 @@ impl TileSourceTrait for MockTilesReader {
 impl std::fmt::Debug for MockTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("MockTilesReader")
-			.field("parameters", &self.parameters())
+			.field("parameters", &self.metadata())
 			.finish()
 	}
 }

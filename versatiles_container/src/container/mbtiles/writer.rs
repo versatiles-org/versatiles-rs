@@ -150,7 +150,7 @@ impl TilesWriterTrait for MBTilesWriter {
 
 		let writer = MBTilesWriter::new(path)?;
 
-		let parameters = reader.parameters().clone();
+		let parameters = reader.metadata().clone();
 
 		let format = match (parameters.tile_format, parameters.tile_compression) {
 			(JPG, Uncompressed) => "jpg",
@@ -167,7 +167,7 @@ impl TilesWriterTrait for MBTilesWriter {
 		writer.set_metadata("format", format)?;
 		writer.set_metadata("type", "baselayer")?;
 		writer.set_metadata("version", "3.0")?;
-		let pyramid = &reader.parameters().bbox_pyramid;
+		let pyramid = &reader.metadata().bbox_pyramid;
 		let bbox = pyramid.get_geo_bbox().unwrap();
 		let center = pyramid.get_geo_center().unwrap();
 		let zoom_min = pyramid.get_level_min().unwrap();
@@ -195,7 +195,7 @@ impl TilesWriterTrait for MBTilesWriter {
 		}
 
 		let writer_mutex = Arc::new(Mutex::new(writer));
-		let tile_compression = reader.parameters().tile_compression;
+		let tile_compression = reader.metadata().tile_compression;
 
 		reader
 			.traverse_all_tiles(
@@ -247,6 +247,7 @@ mod tests {
 			bbox_pyramid: TileBBoxPyramid::new_full(5),
 			tile_compression: TileCompression::Gzip,
 			tile_format: TileFormat::MVT,
+			traversal: Traversal::ANY,
 		})?;
 
 		let filename = NamedTempFile::new("temp.mbtiles")?;
