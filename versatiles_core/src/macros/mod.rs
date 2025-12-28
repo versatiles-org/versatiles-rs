@@ -1,4 +1,6 @@
-//! This module provides macros
+//! Testing and assertion macros
+//!
+//! This module provides utility macros for testing, particularly for pattern-based assertions.
 
 /// Asserts that the string representation of an expression matches a given wildcard pattern.
 ///

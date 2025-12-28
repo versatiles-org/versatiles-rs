@@ -1,5 +1,24 @@
-// ! This module provides JSON utilities for parsing, reading, and stringifying JSON data, including support for NDJSON (newline-delimited JSON).
-// ! It re-exports helper functions and types like `JsonValue`, `JsonArray`, and `JsonObject`.
+//! JSON parsing, serialization, and NDJSON utilities
+//!
+//! This module provides comprehensive JSON support including:
+//! - **Parsing**: Convert JSON strings and byte streams to [`JsonValue`]
+//! - **Serialization**: Convert [`JsonValue`] to JSON strings
+//! - **NDJSON**: Read newline-delimited JSON streams
+//! - **Types**: Work with [`JsonValue`], [`JsonArray`], and [`JsonObject`]
+//!
+//! # Examples
+//!
+//! ```rust
+//! use versatiles_core::json::{parse_json_str, JsonValue};
+//!
+//! // Parse JSON from a string
+//! let json = parse_json_str(r#"{"name": "example", "count": 42}"#).unwrap();
+//!
+//! // Access values
+//! if let JsonValue::Object(obj) = json {
+//!     assert_eq!(obj.get("name").unwrap().as_str(), Some("example"));
+//! }
+//! ```
 
 mod parse;
 mod read;

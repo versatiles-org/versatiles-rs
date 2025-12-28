@@ -1,10 +1,17 @@
+//! Geographic center point with zoom level
+
 use anyhow::{Result, ensure};
 use std::fmt::Debug;
 
-/// A center point in geographic space, represented by:
-/// - `f64` longitude, in the range `[-180, 180]`
-/// - `f64` latitude, in the range `[-90, 90]`
-/// - `u8` zoom level, typically in the range `[0, 30]`
+/// A center point in geographic space with an associated zoom level.
+///
+/// Represents a geographic location specified by:
+/// - **Longitude** (`f64`): In the range `[-180, 180]` degrees
+/// - **Latitude** (`f64`): In the range `[-90, 90]` degrees
+/// - **Zoom level** (`u8`): Typically in the range `[0, 30]`
+///
+/// This type is commonly used in map tile specifications like TileJSON to indicate
+/// the default view center and zoom level.
 #[derive(Clone, Copy, PartialEq)]
 pub struct GeoCenter(pub f64, pub f64, pub u8);
 

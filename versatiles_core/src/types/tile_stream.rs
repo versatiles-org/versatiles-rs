@@ -1,46 +1,42 @@
-/// A module defining the `TileStream` struct, which provides asynchronous handling of a stream of tiles.
-///
-/// Each tile is represented by a coordinate (`TileCoord`) and an associated value of **generic type `T`** (default: `Blob`). The `TileStream`
-/// offers methods for parallel processing, buffering, synchronization callbacks, and easy iteration.
-///
-/// # Features
-/// - **Parallel Processing**: Transform or filter tile data in parallel using tokio tasks.
-/// - **Buffering**: Collect or process data in configurable batches.
-/// - **Synchronous and Asynchronous Callbacks**: Choose between sync and async processing steps.
-///
-/// # Structs
-/// - `TileStream`: Encapsulates a stream of `(TileCoord, T)` tuples, providing methods for transformation, iteration, and buffering.
-///
-/// # Methods
-/// ## Constructors
-/// - `new_empty`: Creates an empty `TileStream`.
-/// - `from_stream`: Constructs a `TileStream` from an existing `Stream`.
-/// - `from_vec`: Constructs a `TileStream` from a vector of `(TileCoord, T)` items.
-/// - `from_iter_coord_parallel`: Creates a `TileStream` from an iterator of coordinates, processing them in parallel.
-/// - `from_coord_vec_async`: Creates a `TileStream` from a vector of coordinates, applying an async closure.
-///
-/// ## Stream Flattening
-/// - `from_iter_stream`: Flattens multiple `TileStream`s from an iterator of `Future`s into a single `TileStream`.
-///
-/// ## Collecting and Iteration
-/// - `collect`: Collects all items from the stream into a vector.
-/// - `next`: Retrieves the next item from the stream.
-/// - `for_each_async`: Applies an async callback to each item.
-/// - `for_each_sync`: Applies a sync callback to each item.
-/// - `for_each_buffered`: Buffers items in chunks and processes them.
-///
-/// ## Parallel Transformations
-/// - `map_blob_parallel`: Transforms the value of type `T` for each tile in parallel.
-/// - `filter_map_blob_parallel`: Filters and transforms the value of type `T` for each tile in parallel.
-///
-/// ## Coordinate Transformations
-/// - `map_coord`: Applies a synchronous coordinate transformation to each item.
-///
-/// ## Utility
-/// - `drain_and_count`: Drains the stream and returns the total count of items.
-///
-/// # Utility Functions
-/// - `unwrap_result`: Unwraps a `Result`, printing detailed error information and terminating the program on failure.
+//! Asynchronous tile stream processing
+//!
+//! This module provides [`TileStream`], an asynchronous stream abstraction for processing
+//! map tiles in parallel. Each tile is represented by a coordinate ([`TileCoord`]) and an
+//! associated value of generic type `T` (default: [`Blob`]).
+//!
+//! # Features
+//!
+//! - **Parallel Processing**: Transform or filter tile data in parallel using tokio tasks
+//! - **Buffering**: Collect or process data in configurable batches
+//! - **Flexible Callbacks**: Choose between sync and async processing steps
+//! - **Stream Composition**: Flatten and combine multiple tile streams
+//!
+//! # Examples
+//!
+//! ```rust
+//! use versatiles_core::{TileStream, TileCoord, Blob};
+//!
+//! # async fn example() -> anyhow::Result<()> {
+//! // Create a stream from coordinates
+//! let coords = vec![
+//!     TileCoord::new(5, 10, 15)?,
+//!     TileCoord::new(5, 11, 15)?,
+//! ];
+//!
+//! let stream = TileStream::from_vec(
+//!     coords.into_iter()
+//!         .map(|coord| (coord, Blob::from("tile data")))
+//!         .collect()
+//! );
+//!
+//! // Process tiles asynchronously
+//! stream.for_each_async(|coord, blob| async move {
+//!     println!("Processing tile {:?}, size: {}", coord, blob.len());
+//!     Ok(())
+//! }).await?;
+//! # Ok(())
+//! # }
+//! ```
 use crate::{Blob, ConcurrencyLimits, TileCoord};
 use anyhow::Result;
 use futures::{

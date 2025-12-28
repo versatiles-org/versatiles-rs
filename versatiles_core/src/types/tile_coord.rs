@@ -1,23 +1,30 @@
-//! Utilities for three-dimensional tile coordinates (x, y, z) in a Web Mercator pyramid.
+//! Three-dimensional tile coordinates in a Web Mercator pyramid
 //!
-//! Defines `TileCoord` with methods for coordinate conversion, validation, and transformation.
-//! This module defines the `TileCoord` structures, representing tile coordinates
-//! in two dimensions, respectively. It includes methods for creating and manipulating
-//! tile coordinates, converting them to geographic coordinates, and various utility functions.
+//! This module provides the [`TileCoord`] type for representing tile coordinates in a
+//! Web Mercator tile pyramid. It includes methods for:
+//! - Creating and validating tile coordinates
+//! - Converting between tile and geographic coordinates
+//! - Transforming coordinates across zoom levels
+//! - Computing spatial indices and relationships
 //!
 //! # Examples
 //!
 //! ```
 //! use versatiles_core::TileCoord;
 //!
-//! // Creating a new TileCoord instance
+//! // Create a new tile coordinate
 //! let coord = TileCoord::new(5, 6, 7).unwrap();
 //! assert_eq!(coord.level, 5);
 //! assert_eq!(coord.x, 6);
 //! assert_eq!(coord.y, 7);
 //!
-//! // Converting TileCoord to geographic coordinates
-//! let geo = coord.as_geo();
+//! // Convert to geographic coordinates
+//! let [lon, lat] = coord.as_geo();
+//! println!("Tile is at {}, {}", lon, lat);
+//!
+//! // Scale to a different zoom level
+//! let zoomed = coord.at_level(7);
+//! assert_eq!(zoomed.level, 7);
 //! ```
 
 use crate::{GeoBBox, TileBBox};
