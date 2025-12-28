@@ -115,7 +115,7 @@ impl ProgressHandle {
 		if !self.stderr {
 			return;
 		}
-		if state.next_draw < Instant::now() && !state.finished {
+		if state.next_draw > Instant::now() && !state.finished {
 			return;
 		}
 		state.next_draw = Instant::now() + Duration::from_millis(500);
