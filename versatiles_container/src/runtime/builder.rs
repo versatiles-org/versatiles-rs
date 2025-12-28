@@ -98,7 +98,8 @@ impl RuntimeBuilder {
 	pub fn build(self) -> TilesRuntime {
 		let cache_type = self.cache_type.unwrap_or_else(CacheType::new_memory);
 		let event_bus = EventBus::new();
-		let progress_factory = Mutex::new(ProgressFactory::new(event_bus.clone(), !self.silent));
+
+		let progress_factory = Mutex::new(ProgressFactory::new(event_bus.clone(), self.silent));
 
 		// Create registry with default format handlers
 		let mut registry = ContainerRegistry::default();

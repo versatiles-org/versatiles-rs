@@ -8,16 +8,16 @@ use crate::{EventBus, ProgressHandle};
 pub struct ProgressFactory {
 	next_id: u32,
 	event_bus: EventBus,
-	stderr: bool,
+	silent: bool,
 }
 
 impl ProgressFactory {
 	/// Create a new progress factory
-	pub fn new(event_bus: EventBus, stderr: bool) -> Self {
+	pub fn new(event_bus: EventBus, silent: bool) -> Self {
 		Self {
 			next_id: 0,
 			event_bus,
-			stderr,
+			silent,
 		}
 	}
 
@@ -30,7 +30,7 @@ impl ProgressFactory {
 	pub fn create(&mut self, message: &str, total: u64) -> ProgressHandle {
 		self.next_id = self.next_id.wrapping_add(1);
 		let id = crate::ProgressId(self.next_id);
-		ProgressHandle::new(id, message.to_string(), total, self.event_bus.clone(), self.stderr)
+		ProgressHandle::new(id, message.to_string(), total, self.event_bus.clone(), self.silent)
 	}
 }
 
@@ -43,21 +43,21 @@ mod tests {
 		let event_bus = EventBus::new();
 		let factory = ProgressFactory::new(event_bus, false);
 		assert_eq!(factory.next_id, 0);
-		assert!(!factory.stderr);
+		assert!(!factory.silent);
 	}
 
 	#[test]
-	fn test_factory_creation_with_stderr() {
+	fn test_factory_creation_with_silent() {
 		let event_bus = EventBus::new();
 		let factory = ProgressFactory::new(event_bus, true);
 		assert_eq!(factory.next_id, 0);
-		assert!(factory.stderr);
+		assert!(factory.silent);
 	}
 
 	#[test]
 	fn test_factory_creates_progress_with_incrementing_ids() {
 		let event_bus = EventBus::new();
-		let mut factory = ProgressFactory::new(event_bus, false);
+		let mut factory = ProgressFactory::new(event_bus, true);
 
 		let handle1 = factory.create("Task 1", 100);
 		let handle2 = factory.create("Task 2", 200);
@@ -71,7 +71,7 @@ mod tests {
 	#[test]
 	fn test_factory_id_wrapping() {
 		let event_bus = EventBus::new();
-		let mut factory = ProgressFactory::new(event_bus, false);
+		let mut factory = ProgressFactory::new(event_bus, true);
 
 		// Set next_id to max value
 		factory.next_id = u32::MAX;
@@ -86,7 +86,7 @@ mod tests {
 	#[test]
 	fn test_factory_clone() {
 		let event_bus = EventBus::new();
-		let mut factory1 = ProgressFactory::new(event_bus, false);
+		let mut factory1 = ProgressFactory::new(event_bus, true);
 
 		// Create one handle to increment the ID
 		let _handle1 = factory1.create("First", 100);
@@ -103,7 +103,7 @@ mod tests {
 	#[test]
 	fn test_factory_multiple_handles() {
 		let event_bus = EventBus::new();
-		let mut factory = ProgressFactory::new(event_bus, false);
+		let mut factory = ProgressFactory::new(event_bus, true);
 
 		let handles: Vec<_> = (0..10)
 			.map(|i| factory.create(&format!("Task {}", i), i as u64 * 100))

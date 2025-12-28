@@ -13,11 +13,11 @@ use std::{
 pub struct ProgressHandle {
 	state: Arc<Mutex<ProgressState>>,
 	event_bus: EventBus,
-	stderr: bool,
+	silent: bool,
 }
 
 impl ProgressHandle {
-	pub fn new(id: ProgressId, message: String, total: u64, event_bus: EventBus, stderr: bool) -> Self {
+	pub fn new(id: ProgressId, message: String, total: u64, event_bus: EventBus, silent: bool) -> Self {
 		let start = Instant::now();
 		let handle = Self {
 			state: Arc::new(Mutex::new(ProgressState {
@@ -31,7 +31,7 @@ impl ProgressHandle {
 				finished: false,
 			})),
 			event_bus,
-			stderr,
+			silent,
 		};
 
 		// Emit initial progress event
@@ -112,7 +112,7 @@ impl ProgressHandle {
 	}
 
 	pub fn redraw(&self, state: &mut ProgressState) {
-		if !self.stderr {
+		if self.silent {
 			return;
 		}
 		if state.next_draw > Instant::now() && !state.finished {
