@@ -42,7 +42,7 @@ use futures::{
 	future::ready,
 	stream::{self, BoxStream},
 };
-use std::{collections::HashMap, io::Write, pin::Pin, sync::Arc};
+use std::{collections::HashMap, pin::Pin, sync::Arc};
 
 /// A stream of tiles represented by `(TileCoord, T)` pairs.
 ///
@@ -444,21 +444,22 @@ where
 				tokio::task::spawn_blocking(move || (coord, cb(item)))
 			})
 			.buffer_unordered(limits.cpu_bound) // CPU-bound: spawn_blocking
-			.map(|e| {
-				let (coord, item) = e.unwrap();
-				(
-					coord,
-					unwrap_result(item, || format!("Failed to process tile at {coord:?}")),
-				)
+			.map(|result| {
+				let (coord, item_result) = result.expect("spawned task panicked");
+				let item = item_result.unwrap_or_else(|e| {
+					panic!("Failed to process tile at {coord:?}: {e}")
+				});
+				(coord, item)
 			});
 		TileStream { inner: s.boxed() }
 	}
 
 	pub fn flat_map_parallel<F, O>(self, callback: F) -> TileStream<'a, O>
 	where
-		F: Fn(TileCoord, T) -> Result<TileStream<'a, O>> + Send + Sync + 'static,
+		F: Fn(TileCoord, T) -> Result<TileStream<'static, O>> + Send + Sync + 'static,
 		T: 'static,
-		O: 'static,
+		O: Send + 'static,
+		'a: 'static,
 	{
 		let arc_cb = Arc::new(callback);
 		let limits = ConcurrencyLimits::default();
@@ -466,13 +467,16 @@ where
 			.inner
 			.map(move |(coord, item)| {
 				let cb = Arc::clone(&arc_cb);
-				tokio::task::spawn_blocking(move || {
-					let s = unwrap_result(cb(coord, item), || format!("Failed to process tile at {coord:?}"));
-					unsafe { std::mem::transmute::<_, TileStream<O>>(s) }
-				})
+				tokio::task::spawn_blocking(move || (coord, cb(coord, item)))
 			})
 			.buffer_unordered(limits.cpu_bound) // CPU-bound: spawn_blocking
-			.flat_map_unordered(None, |e| e.unwrap().inner);
+			.map(|result| {
+				let (coord, stream_result) = result.expect("spawned task panicked");
+				stream_result.unwrap_or_else(|e| {
+					panic!("Failed to process tile at {coord:?}: {e}")
+				})
+			})
+			.flat_map_unordered(None, |s| s.inner);
 		TileStream { inner: s.boxed() }
 	}
 
@@ -517,9 +521,11 @@ where
 				tokio::task::spawn_blocking(move || (coord, cb(item)))
 			})
 			.buffer_unordered(limits.cpu_bound) // CPU-bound: spawn_blocking
-			.filter_map(|res| async move {
-				let (coord, maybe_item) = res.unwrap();
-				let maybe_item = unwrap_result(maybe_item, || format!("Failed to process tile at {coord:?}"));
+			.filter_map(|result| async move {
+				let (coord, maybe_item_result) = result.expect("spawned task panicked");
+				let maybe_item = maybe_item_result.unwrap_or_else(|e| {
+					panic!("Failed to process tile at {coord:?}: {e}")
+				});
 				maybe_item.map(|item| (coord, item))
 			});
 		TileStream { inner: s.boxed() }
@@ -643,27 +649,6 @@ where
 	}
 }
 
-/// Unwraps a `Result`, printing a detailed error report and terminating the program on failure.
-///
-/// * Every layer of context is written on its own line.
-/// * If a layer exposes a `source` error, it is written on a separate indented line.
-/// * After reporting, the process exits with status 1.
-fn unwrap_result<T>(result: anyhow::Result<T>, context: impl FnOnce() -> String) -> T {
-	match result {
-		Ok(value) => value,
-		Err(mut err) => {
-			log::error!("ERROR:");
-			err = err.context(context());
-			for (idx, cause) in err.chain().enumerate() {
-				log::error!("  {idx}: {cause}");
-			}
-
-			// Make sure the message is flushed before aborting.
-			let _ = std::io::stderr().flush();
-			std::process::exit(1);
-		}
-	}
-}
 
 #[cfg(test)]
 mod tests {
