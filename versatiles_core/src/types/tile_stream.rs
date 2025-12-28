@@ -16,11 +16,11 @@
 //! ```rust
 //! use versatiles_core::{TileStream, TileCoord, Blob};
 //!
-//! # async fn example() -> anyhow::Result<()> {
+//! # async fn example() {
 //! // Create a stream from coordinates
 //! let coords = vec![
-//!     TileCoord::new(5, 10, 15)?,
-//!     TileCoord::new(5, 11, 15)?,
+//!     TileCoord::new(5, 10, 15).unwrap(),
+//!     TileCoord::new(5, 11, 15).unwrap(),
 //! ];
 //!
 //! let stream = TileStream::from_vec(
@@ -30,11 +30,9 @@
 //! );
 //!
 //! // Process tiles asynchronously
-//! stream.for_each_async(|coord, blob| async move {
+//! stream.for_each_async(|(coord, blob)| async move {
 //!     println!("Processing tile {:?}, size: {}", coord, blob.len());
-//!     Ok(())
-//! }).await?;
-//! # Ok(())
+//! }).await;
 //! # }
 //! ```
 use crate::{Blob, ConcurrencyLimits, TileCoord};

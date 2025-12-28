@@ -31,7 +31,7 @@
 //! println!("Tile: {:?}", coord);
 //!
 //! // Create a bounding box
-//! let bbox = TileBBox::new_full(5);
+//! let bbox = TileBBox::new_full(5).unwrap();
 //! println!("BBox covers {} tiles", bbox.count_tiles());
 //!
 //! // Work with binary data

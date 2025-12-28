@@ -38,7 +38,7 @@
 //! let coord = TileCoord::new(5, 10, 15).unwrap();
 //!
 //! // Create a tile bounding box
-//! let tile_bbox = TileBBox::new_full(5);
+//! let tile_bbox = TileBBox::new_full(5).unwrap();
 //! assert_eq!(tile_bbox.count_tiles(), 1024); // 32×32 tiles at zoom 5
 //!
 //! // Convert to geographic bounding box

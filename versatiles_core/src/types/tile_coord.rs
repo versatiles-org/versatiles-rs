@@ -62,11 +62,58 @@ impl TileCoord {
 		Ok(TileCoord { x, y, level })
 	}
 
+	/// Create a new `TileCoord`, clamping the x and y indices to valid bounds for the given level.
+	///
+	/// Unlike [`new`](Self::new), this method clamps out-of-bounds coordinates instead of returning an error.
+	///
+	/// # Arguments
+	///
+	/// * `level` - The zoom level
+	/// * `x` - The x coordinate (will be clamped to `[0, 2^level - 1]`)
+	/// * `y` - The y coordinate (will be clamped to `[0, 2^level - 1]`)
+	///
+	/// # Errors
+	///
+	/// Returns an error if `level` > 31.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileCoord;
+	///
+	/// // x=1000 is out of bounds for level 5 (max is 31), so it gets clamped
+	/// let coord = TileCoord::new_clamped(5, 1000, 10).unwrap();
+	/// assert_eq!(coord.x, 31);
+	/// assert_eq!(coord.y, 10);
+	/// ```
 	pub fn new_clamped(level: u8, x: u32, y: u32) -> Result<TileCoord> {
 		let max = 2u32.pow(u32::from(level)) - 1;
 		TileCoord::new(level, x.min(max), y.min(max))
 	}
 
+	/// Create a `TileCoord` from geographic coordinates (longitude, latitude) at a given zoom level.
+	///
+	/// Uses Web Mercator projection to convert from WGS84 coordinates to tile indices.
+	///
+	/// # Arguments
+	///
+	/// * `x` - Longitude in degrees, range `[-180, 180]`
+	/// * `y` - Latitude in degrees, range `[-90, 90]`
+	/// * `z` - Zoom level, range `[0, 31]`
+	///
+	/// # Errors
+	///
+	/// Returns an error if coordinates are out of valid ranges.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileCoord;
+	///
+	/// // Berlin coordinates at zoom 10
+	/// let coord = TileCoord::from_geo(13.404954, 52.520008, 10).unwrap();
+	/// assert_eq!(coord.level, 10);
+	/// ```
 	#[context("Failed to convert geo coordinates ({x}, {y}, {z}) to TileCoord")]
 	pub fn from_geo(x: f64, y: f64, z: u8) -> Result<TileCoord> {
 		ensure!(z <= 31, "z ({z}) must be <= 31");
@@ -86,6 +133,30 @@ impl TileCoord {
 		)
 	}
 
+	/// Convert tile coordinates to geographic coordinates (longitude, latitude) in degrees.
+	///
+	/// Returns the northwest corner of the tile in WGS84 coordinates.
+	///
+	/// # Arguments
+	///
+	/// * `level` - The zoom level
+	/// * `x` - The x tile index
+	/// * `y` - The y tile index
+	///
+	/// # Returns
+	///
+	/// `[longitude, latitude]` in degrees
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileCoord;
+	///
+	/// let [lon, lat] = TileCoord::coord_to_geo(10, 1, 1020);
+	/// // Returns coordinates for the northwest corner of the tile
+	/// assert_eq!(format!("{lon:.5}"), "-179.64844");
+	/// assert_eq!(format!("{lat:.5}"), "-84.92832");
+	/// ```
 	pub fn coord_to_geo(level: u8, x: u32, y: u32) -> [f64; 2] {
 		let zoom: f64 = 2.0f64.powi(i32::from(level));
 		[
@@ -163,32 +234,139 @@ impl TileCoord {
 		}
 	}
 
+	/// Round down the x and y coordinates to the nearest multiple of `size`.
+	///
+	/// This is useful for aligning tiles to a grid of a given size.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileCoord;
+	///
+	/// let mut coord = TileCoord::new(5, 17, 23).unwrap();
+	/// coord.floor(8);
+	/// assert_eq!(coord.x, 16); // 17 floored to nearest multiple of 8
+	/// assert_eq!(coord.y, 16); // 23 floored to nearest multiple of 8
+	/// ```
 	pub fn floor(&mut self, size: u32) {
 		self.x = (self.x / size) * size;
 		self.y = (self.y / size) * size;
 	}
 
+	/// Round up the x and y coordinates to the nearest multiple of `size`, minus one.
+	///
+	/// This aligns tiles to the upper boundary of a grid cell.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileCoord;
+	///
+	/// let mut coord = TileCoord::new(5, 17, 23).unwrap();
+	/// coord.ceil(8);
+	/// assert_eq!(coord.x, 23); // (17/8 + 1) * 8 - 1
+	/// assert_eq!(coord.y, 23); // (23/8 + 1) * 8 - 1
+	/// ```
 	pub fn ceil(&mut self, size: u32) {
 		self.x = (self.x / size + 1) * size - 1;
 		self.y = (self.y / size + 1) * size - 1;
 	}
 
+	/// Shift the tile coordinate by the given deltas, clamping to valid bounds.
+	///
+	/// # Arguments
+	///
+	/// * `dx` - The number of tiles to shift in the x direction (can be negative)
+	/// * `dy` - The number of tiles to shift in the y direction (can be negative)
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileCoord;
+	///
+	/// let mut coord = TileCoord::new(5, 16, 16).unwrap();
+	/// coord.shift_by(5, -3);
+	/// assert_eq!(coord.x, 21);
+	/// assert_eq!(coord.y, 13);
+	/// ```
 	pub fn shift_by(&mut self, dx: i64, dy: i64) {
 		let max_value = 2i64.pow(u32::from(self.level)) - 1;
 		self.x = (i64::from(self.x) + dx).max(0).min(max_value) as u32;
 		self.y = (i64::from(self.y) + dy).max(0).min(max_value) as u32;
 	}
 
+	/// Get the maximum valid x or y coordinate for this tile's zoom level.
+	///
+	/// Returns `2^level - 1`.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileCoord;
+	///
+	/// let coord = TileCoord::new(5, 10, 15).unwrap();
+	/// assert_eq!(coord.max_value(), 31); // 2^5 - 1
+	/// ```
 	#[must_use]
 	pub fn max_value(&self) -> u32 {
 		(1u32 << self.level) - 1
 	}
+
+	/// Flip the y coordinate vertically within the tile grid.
+	///
+	/// This is useful for converting between TMS (y increasing upward) and
+	/// XYZ (y increasing downward) tile schemes.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileCoord;
+	///
+	/// let mut coord = TileCoord::new(3, 1, 2).unwrap();
+	/// coord.flip_y();
+	/// assert_eq!(coord.y, 5); // 7 (max) - 2 = 5
+	/// ```
 	pub fn flip_y(&mut self) {
 		self.y = self.max_value() - self.y;
 	}
+
+	/// Swap the x and y coordinates.
+	///
+	/// This can be useful for transposing tile grids.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileCoord;
+	///
+	/// let mut coord = TileCoord::new(5, 10, 20).unwrap();
+	/// coord.swap_xy();
+	/// assert_eq!(coord.x, 20);
+	/// assert_eq!(coord.y, 10);
+	/// ```
 	pub fn swap_xy(&mut self) {
 		std::mem::swap(&mut self.x, &mut self.y);
 	}
+
+	/// Return a new coordinate at the parent zoom level (level - 1).
+	///
+	/// The x and y coordinates are divided by 2 to move up one level in the tile pyramid.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the current level is 0 (no parent level exists).
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileCoord;
+	///
+	/// let coord = TileCoord::new(5, 16, 20).unwrap();
+	/// let parent = coord.to_level_decreased().unwrap();
+	/// assert_eq!(parent.level, 4);
+	/// assert_eq!(parent.x, 8);
+	/// assert_eq!(parent.y, 10);
+	/// ```
 	pub fn to_level_decreased(&self) -> Result<TileCoord> {
 		ensure!(self.level > 0, "cannot decrease level below 0");
 		TileCoord::new(self.level - 1, self.x / 2, self.y / 2)

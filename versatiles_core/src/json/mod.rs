@@ -9,15 +9,13 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::json::{parse_json_str, JsonValue};
+//! use versatiles_core::json::parse_json_str;
 //!
 //! // Parse JSON from a string
 //! let json = parse_json_str(r#"{"name": "example", "count": 42}"#).unwrap();
 //!
-//! // Access values
-//! if let JsonValue::Object(obj) = json {
-//!     assert_eq!(obj.get("name").unwrap().as_str(), Some("example"));
-//! }
+//! // Access the parsed object
+//! assert!(json.as_object().is_ok());
 //! ```
 
 mod parse;

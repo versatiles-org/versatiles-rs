@@ -261,6 +261,22 @@ impl TileFormat {
 		}
 	}
 
+	/// Convert this tile format to its corresponding [`TileType`].
+	///
+	/// Maps the format to one of three categories:
+	/// - **Raster**: `AVIF`, `PNG`, `JPG`, `WEBP`
+	/// - **Vector**: `MVT`
+	/// - **Unknown**: `BIN`, `GEOJSON`, `JSON`, `SVG`, `TOPOJSON`
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::{TileFormat, TileType};
+	///
+	/// assert_eq!(TileFormat::PNG.to_type(), TileType::Raster);
+	/// assert_eq!(TileFormat::MVT.to_type(), TileType::Vector);
+	/// assert_eq!(TileFormat::JSON.to_type(), TileType::Unknown);
+	/// ```
 	pub fn to_type(&self) -> TileType {
 		use TileType::*;
 		match self {
@@ -270,10 +286,36 @@ impl TileFormat {
 		}
 	}
 
+	/// Check if this format represents raster data (image tiles).
+	///
+	/// Returns `true` for `AVIF`, `PNG`, `JPG`, and `WEBP`.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileFormat;
+	///
+	/// assert!(TileFormat::PNG.is_raster());
+	/// assert!(TileFormat::WEBP.is_raster());
+	/// assert!(!TileFormat::MVT.is_raster());
+	/// ```
 	pub fn is_raster(&self) -> bool {
 		self.to_type() == TileType::Raster
 	}
 
+	/// Check if this format represents vector data (MVT tiles).
+	///
+	/// Returns `true` only for `MVT` (Mapbox Vector Tiles).
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileFormat;
+	///
+	/// assert!(TileFormat::MVT.is_vector());
+	/// assert!(!TileFormat::PNG.is_vector());
+	/// assert!(!TileFormat::GEOJSON.is_vector());
+	/// ```
 	pub fn is_vector(&self) -> bool {
 		self.to_type() == TileType::Vector
 	}

@@ -45,6 +45,17 @@ pub enum TileCompression {
 }
 
 impl TileCompression {
+	/// Return the string representation of this compression type.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileCompression;
+	///
+	/// assert_eq!(TileCompression::Gzip.as_str(), "gzip");
+	/// assert_eq!(TileCompression::Brotli.as_str(), "brotli");
+	/// assert_eq!(TileCompression::Uncompressed.as_str(), "none");
+	/// ```
 	pub fn as_str(&self) -> &str {
 		match self {
 			Uncompressed => "none",
@@ -52,6 +63,19 @@ impl TileCompression {
 			Brotli => "brotli",
 		}
 	}
+
+	/// Return all possible compression variant strings.
+	///
+	/// Useful for generating help messages or validating user input.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileCompression;
+	///
+	/// let variants = TileCompression::variants();
+	/// assert_eq!(variants, &["none", "gzip", "brotli"]);
+	/// ```
 	pub fn variants() -> &'static [&'static str] {
 		&["none", "gzip", "brotli"]
 	}
