@@ -457,11 +457,8 @@ pub mod tests {
 			.unwrap()
 			.into_blob(reader.metadata().tile_compression)?;
 		assert_eq!(tile.len(), 172969);
-		assert_eq!(tile.get_range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
-		assert_eq!(
-			tile.get_range(172959..172969),
-			&[255, 15, 172, 89, 205, 237, 7, 134, 5, 0]
-		);
+		assert_eq!(tile.range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
+		assert_eq!(tile.range(172959..172969), &[255, 15, 172, 89, 205, 237, 7, 134, 5, 0]);
 
 		MockTilesWriter::write(&mut reader).await?;
 

@@ -113,7 +113,7 @@ impl TilesWriterTrait for PMTilesWriter {
 						for (coord, mut tile) in tiles {
 							let id = coord.get_hilbert_index()?;
 							let range = writer.append(tile.as_blob(tile_compression)?)?;
-							entries.push(EntryV3::new(id, range.get_shifted_backward(tile_data_start), 1));
+							entries.push(EntryV3::new(id, range.shifted_backward(tile_data_start), 1));
 						}
 						Ok(())
 					})

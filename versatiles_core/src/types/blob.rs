@@ -16,7 +16,7 @@
 //! let vec = vec![0, 1, 2, 3, 4, 5, 6, 7];
 //! let blob = Blob::from(&vec);
 //! assert_eq!(blob.len(), 8);
-//! assert_eq!(blob.get_range(2..5), &vec![2, 3, 4]);
+//! assert_eq!(blob.range(2..5), &vec![2, 3, 4]);
 //! assert_eq!(blob.clone().into_vec(), vec);
 //!
 //! // Creating a new Blob from a string
@@ -113,11 +113,11 @@ impl Blob {
 	/// use versatiles_core::Blob;
 	///
 	/// let blob = Blob::from(&[10, 20, 30, 40, 50]);
-	/// let slice = blob.get_range(1..4);
+	/// let slice = blob.range(1..4);
 	/// assert_eq!(slice, &[20, 30, 40]);
 	/// ```
 	#[must_use]
-	pub fn get_range(&self, range: Range<usize>) -> &[u8] {
+	pub fn range(&self, range: Range<usize>) -> &[u8] {
 		&self.0[range]
 	}
 
@@ -513,7 +513,7 @@ mod tests {
 		assert_eq!(blob.len(), 8);
 
 		// Assert that a range of bytes can be extracted from the Blob correctly
-		assert_eq!(blob.get_range(2..5), &vec![2, 3, 4]);
+		assert_eq!(blob.range(2..5), &vec![2, 3, 4]);
 
 		// Assert that the Blob's underlying bytes are the same as the original vector
 		assert_eq!(blob.into_vec(), vec);
@@ -614,9 +614,9 @@ mod tests {
 	}
 
 	#[test]
-	fn test_get_range() {
+	fn test_range() {
 		let blob = Blob::from(&[10, 20, 30, 40, 50]);
-		assert_eq!(blob.get_range(1..4), &[20, 30, 40]);
+		assert_eq!(blob.range(1..4), &[20, 30, 40]);
 	}
 
 	#[test]

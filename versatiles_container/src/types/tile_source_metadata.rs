@@ -77,7 +77,7 @@ impl TileSourceMetadata {
 		tile_json.tile_type = tile_json.tile_format.map(|f| f.to_type());
 
 		if let Some(tile_type) = tile_json.tile_type
-			&& tile_json.tile_schema.map(|s| s.get_tile_type()) != tile_json.tile_type
+			&& tile_json.tile_schema.map(|s| s.tile_type()) != tile_json.tile_type
 		{
 			tile_json.tile_schema = Some(match tile_type {
 				TileType::Raster => TileSchema::RasterRGB,

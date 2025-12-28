@@ -107,7 +107,7 @@ impl TileCoord {
 
 	/// Compute a linear sort index combining zoom and x/y for total ordering.
 	#[must_use]
-	pub fn get_sort_index(&self) -> u64 {
+	pub fn sort_index(&self) -> u64 {
 		let size = 2u64.pow(u32::from(self.level));
 		let offset = (size * size - 1) / 3;
 		offset + size * u64::from(self.y) + u64::from(self.x)
@@ -115,7 +115,7 @@ impl TileCoord {
 
 	/// Scale down the x/y indices by integer `factor`, keeping the same zoom level.
 	#[must_use]
-	pub fn get_scaled_down(&self, factor: u32) -> TileCoord {
+	pub fn scaled_down(&self, factor: u32) -> TileCoord {
 		TileCoord {
 			level: self.level,
 			x: self.x / factor,
@@ -182,7 +182,7 @@ impl TileCoord {
 	pub fn swap_xy(&mut self) {
 		std::mem::swap(&mut self.x, &mut self.y);
 	}
-	pub fn as_level_decreased(&self) -> Result<TileCoord> {
+	pub fn to_level_decreased(&self) -> Result<TileCoord> {
 		ensure!(self.level > 0, "cannot decrease level below 0");
 		TileCoord::new(self.level - 1, self.x / 2, self.y / 2)
 	}
@@ -249,9 +249,9 @@ mod tests {
 	}
 
 	#[test]
-	fn tilecoord_get_sort_index() {
+	fn tilecoord_sort_index() {
 		let coord = TileCoord::new(5, 3, 4).unwrap();
-		assert_eq!(coord.get_sort_index(), 472);
+		assert_eq!(coord.sort_index(), 472);
 	}
 
 	#[test]
@@ -302,10 +302,10 @@ mod tests {
 		// Test JSON serialization
 		assert_eq!(coord.as_json(), "{\"z\":4,\"x\":5,\"y\":6}");
 		// Test scaling down by a factor
-		let scaled = coord.get_scaled_down(5);
+		let scaled = coord.scaled_down(5);
 		assert_eq!(scaled, TileCoord::new(4, 1, 1).unwrap());
 		// Scaling by 1 returns same
-		assert_eq!(coord.get_scaled_down(1), coord);
+		assert_eq!(coord.scaled_down(1), coord);
 	}
 
 	#[test]

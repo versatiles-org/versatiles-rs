@@ -161,7 +161,7 @@ impl BlockDefinition {
 	/// The sort index for the block.
 	#[allow(dead_code)]
 	pub fn get_sort_index(&self) -> u64 {
-		self.offset.get_sort_index()
+		self.offset.sort_index()
 	}
 
 	/// Returns the global bounding box of the defined tiles.

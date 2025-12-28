@@ -87,13 +87,13 @@ impl ByteRange {
 	/// use versatiles_core::ByteRange;
 	///
 	/// let r1 = ByteRange::new(10, 5);
-	/// let r2 = r1.get_shifted_forward(7);
+	/// let r2 = r1.shifted_forward(7);
 	/// assert_eq!(r2.offset, 17);
 	/// assert_eq!(r2.length, 5);
 	/// assert_eq!(r1.offset, 10); // original remains unchanged
 	/// ```
 	#[must_use]
-	pub fn get_shifted_forward(&self, offset: u64) -> Self {
+	pub fn shifted_forward(&self, offset: u64) -> Self {
 		Self {
 			offset: self.offset + offset,
 			length: self.length,
@@ -116,12 +116,12 @@ impl ByteRange {
 	/// use versatiles_core::ByteRange;
 	///
 	/// let r1 = ByteRange::new(10, 5);
-	/// let r2 = r1.get_shifted_backward(3);
+	/// let r2 = r1.shifted_backward(3);
 	/// assert_eq!(r2.offset, 7);
 	/// assert_eq!(r2.length, 5);
 	/// ```
 	#[must_use]
-	pub fn get_shifted_backward(&self, offset: u64) -> Self {
+	pub fn shifted_backward(&self, offset: u64) -> Self {
 		Self {
 			offset: self.offset - offset,
 			length: self.length,
@@ -236,22 +236,22 @@ mod tests {
 		assert_eq!(range_usize.end, 65, "end should be offset + length = 65");
 	}
 
-	/// Ensures `get_shifted_forward` does not alter the original range and returns a new range with an increased offset.
+	/// Ensures `shifted_forward` does not alter the original range and returns a new range with an increased offset.
 	#[test]
-	fn test_get_shifted_forward() {
+	fn test_shifted_forward() {
 		let original = ByteRange::new(10, 5);
-		let shifted = original.get_shifted_forward(3);
+		let shifted = original.shifted_forward(3);
 		assert_eq!(shifted.offset, 13, "Offset should be 10 + 3 = 13");
 		assert_eq!(shifted.length, 5, "Length should remain unchanged");
 		// Original should remain unchanged
 		assert_eq!(original.offset, 10, "Original offset unchanged");
 	}
 
-	/// Ensures `get_shifted_backward` does not alter the original range and returns a new range with a decreased offset.
+	/// Ensures `shifted_backward` does not alter the original range and returns a new range with a decreased offset.
 	#[test]
-	fn test_get_shifted_backward() {
+	fn test_shifted_backward() {
 		let original = ByteRange::new(10, 5);
-		let shifted = original.get_shifted_backward(5);
+		let shifted = original.shifted_backward(5);
 		assert_eq!(shifted.offset, 5, "Offset should be 10 - 5 = 5");
 		assert_eq!(shifted.length, 5, "Length should remain unchanged");
 		// Original should remain unchanged

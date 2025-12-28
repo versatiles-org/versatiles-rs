@@ -71,12 +71,12 @@ impl TileType {
 	/// ```
 	/// use versatiles_core::TileType;
 	///
-	/// assert_eq!(TileType::Raster.get_default_tile_schema(), Some("rgb"));
-	/// assert_eq!(TileType::Vector.get_default_tile_schema(), Some("other"));
-	/// assert_eq!(TileType::Unknown.get_default_tile_schema(), None);
+	/// assert_eq!(TileType::Raster.default_tile_schema(), Some("rgb"));
+	/// assert_eq!(TileType::Vector.default_tile_schema(), Some("other"));
+	/// assert_eq!(TileType::Unknown.default_tile_schema(), None);
 	/// ```
 	#[must_use]
-	pub fn get_default_tile_schema(&self) -> Option<&'static str> {
+	pub fn default_tile_schema(&self) -> Option<&'static str> {
 		use TileType::*;
 		match self {
 			Raster => Some("rgb"),
@@ -152,10 +152,10 @@ mod tests {
 	}
 
 	#[test]
-	fn test_get_default_tile_schema() {
-		assert_eq!(TileType::Raster.get_default_tile_schema(), Some("rgb"));
-		assert_eq!(TileType::Vector.get_default_tile_schema(), Some("other"));
-		assert_eq!(TileType::Unknown.get_default_tile_schema(), None);
+	fn test_default_tile_schema() {
+		assert_eq!(TileType::Raster.default_tile_schema(), Some("rgb"));
+		assert_eq!(TileType::Vector.default_tile_schema(), Some("other"));
+		assert_eq!(TileType::Unknown.default_tile_schema(), None);
 	}
 
 	#[test]

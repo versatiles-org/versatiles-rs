@@ -86,10 +86,10 @@ impl TileSchema {
 	/// # Examples
 	/// ```
 	/// use versatiles_core::{TileSchema, TileType};
-	/// assert_eq!(TileSchema::RasterRGBA.get_tile_type(), TileType::Raster);
+	/// assert_eq!(TileSchema::RasterRGBA.tile_type(), TileType::Raster);
 	/// ```
 	#[must_use]
-	pub fn get_tile_type(&self) -> TileType {
+	pub fn tile_type(&self) -> TileType {
 		use TileSchema::*;
 		match self {
 			RasterRGB | RasterRGBA | RasterDEMMapbox | RasterDEMTerrarium | RasterDEMVersatiles => TileType::Raster,
@@ -155,7 +155,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_get_tile_type() {
+	fn test_tile_type() {
 		use TileSchema::*;
 		use TileType::*;
 
@@ -170,7 +170,7 @@ mod tests {
 			(VectorOther, Vector),
 			(TileSchema::Unknown, TileType::Unknown),
 		] {
-			assert_eq!(schema.get_tile_type(), tile_type);
+			assert_eq!(schema.tile_type(), tile_type);
 		}
 	}
 

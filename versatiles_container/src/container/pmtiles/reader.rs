@@ -309,7 +309,7 @@ impl TileSourceTrait for PMTilesReader {
 					return Ok(Some(Tile::from_blob(
 						self
 							.data_reader
-							.read_range(&entry.range.get_shifted_forward(self.header.tile_data.offset))
+							.read_range(&entry.range.shifted_forward(self.header.tile_data.offset))
 							.await?,
 						self.metadata.tile_compression,
 						self.metadata.tile_format,

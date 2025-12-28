@@ -107,7 +107,7 @@ impl Operation {
 				if coord_src.level <= self.level_min {
 					return Ok(None);
 				}
-				coord_src = coord_src.as_level_decreased()?;
+				coord_src = coord_src.to_level_decreased()?;
 			}
 		} else {
 			// Single attempt - no climbing

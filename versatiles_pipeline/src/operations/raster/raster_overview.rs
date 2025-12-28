@@ -137,7 +137,7 @@ impl Operation {
 					if let Some(image1) = image1 {
 						assert_eq!(image1.width(), half_size);
 						assert_eq!(image1.height(), half_size);
-						let coord0 = coord1.as_level_decreased()?;
+						let coord0 = coord1.to_level_decreased()?;
 						if bbox.contains(&coord0) {
 							map.get_mut(&coord0)?.push((coord1, image1));
 						}

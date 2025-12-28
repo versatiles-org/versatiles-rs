@@ -391,7 +391,7 @@ impl TileSourceTrait for VersaTilesReader {
 							let end = start + range.length;
 							let tile_range = (start as usize)..(end as usize);
 
-							let blob = Blob::from(big_blob.get_range(tile_range));
+							let blob = Blob::from(big_blob.range(tile_range));
 							let tile = Tile::from_blob(blob, self.metadata.tile_compression, self.metadata.tile_format);
 
 							(coord, tile)
