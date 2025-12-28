@@ -36,7 +36,7 @@ cargo build --release
 
 # Build with GDAL support (requires GDAL installation)
 source scripts/env-gdal.sh
-cargo build --release --features gdal,bindgen
+cargo build --release --features gdal
 ```
 
 ### Testing

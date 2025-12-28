@@ -212,8 +212,8 @@ run_check "lib-test" \
 	--lib --workspace --no-default-features --features test
 
 run_check "lib-gdal" \
-	"Unused dependencies for library (GDAL with bindgen features)" \
-	--lib --workspace --no-default-features --features gdal,bindgen
+	"Unused dependencies for library (GDAL features)" \
+	--lib --workspace --no-default-features --features gdal
 
 run_check "lib-all" \
 	"Unused dependencies for library (all features)" \

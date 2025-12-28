@@ -10,8 +10,8 @@ cd "$(dirname "$0")/.."
 
 #source scripts/env-gdal.sh
 
-#cargo instruments -t "CPU Profiler" --bin versatiles --features gdal,bindgen --release -- convert ../../temp/paris.vpl ../../temp/paris.versatiles
-#cargo instruments -t "Allocations" --bin versatiles --features gdal,bindgen --time-limit 300000 -- convert ../../temp/paris.vpl ../../temp/paris.versatiles
+#cargo instruments -t "CPU Profiler" --bin versatiles --features gdal --release -- convert ../../temp/paris.vpl ../../temp/paris.versatiles
+#cargo instruments -t "Allocations" --bin versatiles --features gdal --time-limit 300000 -- convert ../../temp/paris.vpl ../../temp/paris.versatiles
 #cargo instruments -t "CPU Profiler" --bin versatiles -- convert -c gzip --max-zoom 8 ../../temp/remove-labels.vpl ../../temp/temp.versatiles
 
 # profile a specific test
