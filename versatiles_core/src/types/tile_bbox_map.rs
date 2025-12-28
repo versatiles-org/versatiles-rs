@@ -49,19 +49,50 @@ impl<I> TileBBoxMap<I> {
 	}
 
 	/// Total number of tiles (slots) in the container.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::{TileBBox, TileBBoxMap};
+	///
+	/// let bbox = TileBBox::from_min_and_size(5, 0, 0, 10, 10).unwrap();
+	/// let map: TileBBoxMap<u32> = TileBBoxMap::new_default(bbox);
+	/// assert_eq!(map.len(), 100); // 10×10 tiles
+	/// ```
 	#[must_use]
 	pub fn len(&self) -> usize {
 		self.vec.len()
 	}
 
-	/// Whether the container has zero slots. Note: this is equivalent to
-	/// `bbox.count_tiles() == 0`.
+	/// Whether the container has zero slots.
+	///
+	/// Note: this is equivalent to `bbox.count_tiles() == 0`.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::{TileBBox, TileBBoxMap};
+	///
+	/// let empty_bbox = TileBBox::new_empty(5).unwrap();
+	/// let map: TileBBoxMap<u32> = TileBBoxMap::new_default(empty_bbox);
+	/// assert!(map.is_empty());
+	/// ```
 	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.vec.is_empty()
 	}
 
 	/// The bounding box that defines the grid covered by this container.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::{TileBBox, TileBBoxMap};
+	///
+	/// let bbox = TileBBox::from_min_and_size(5, 10, 20, 5, 5).unwrap();
+	/// let map: TileBBoxMap<u32> = TileBBoxMap::new_default(bbox);
+	/// assert_eq!(map.bbox().level, 5);
+	/// ```
 	#[must_use]
 	pub fn bbox(&self) -> &TileBBox {
 		&self.bbox
@@ -132,6 +163,17 @@ impl<I> TileBBoxMap<I> {
 	}
 
 	/// Transform all stored values with `f`, keeping the same bbox and order.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::{TileBBox, TileBBoxMap};
+	///
+	/// let bbox = TileBBox::from_min_and_size(3, 0, 0, 2, 2).unwrap();
+	/// let map: TileBBoxMap<u32> = TileBBoxMap::new_prefilled_with(bbox, 10);
+	/// let doubled = map.map(|x| x * 2);
+	/// assert_eq!(doubled.len(), 4);
+	/// ```
 	pub fn map<O: Clone>(self, f: impl FnMut(I) -> O) -> TileBBoxMap<O> {
 		TileBBoxMap {
 			bbox: self.bbox,
@@ -139,6 +181,19 @@ impl<I> TileBBoxMap<I> {
 		}
 	}
 
+	/// Convert this map into a [`TileStream`] for async processing.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::{TileBBox, TileBBoxMap};
+	///
+	/// # async fn example() {
+	/// let bbox = TileBBox::from_min_and_size(3, 0, 0, 2, 2).unwrap();
+	/// let map: TileBBoxMap<u32> = TileBBoxMap::new_default(bbox);
+	/// let stream = map.into_stream();
+	/// # }
+	/// ```
 	pub fn into_stream(self) -> TileStream<'static, I>
 	where
 		I: Send + 'static,

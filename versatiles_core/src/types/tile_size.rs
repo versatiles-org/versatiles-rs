@@ -16,7 +16,25 @@ pub enum TileSize {
 
 impl TileSize {
 	/// Constructs a `TileSize` from a `u16` value.
-	/// Returns an error if the size is unsupported.
+	///
+	/// # Arguments
+	///
+	/// * `size` - The pixel dimension (256 or 512)
+	///
+	/// # Errors
+	///
+	/// Returns an error if the size is not 256 or 512.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileSize;
+	///
+	/// let size = TileSize::new(256).unwrap();
+	/// assert_eq!(size.size(), 256);
+	///
+	/// assert!(TileSize::new(128).is_err());
+	/// ```
 	pub fn new(size: u16) -> Result<Self> {
 		match size {
 			256 => Ok(Self::Size256),
@@ -26,6 +44,16 @@ impl TileSize {
 	}
 
 	/// Returns the size of the tile in pixels.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileSize;
+	///
+	/// assert_eq!(TileSize::Size256.size(), 256);
+	/// assert_eq!(TileSize::Size512.size(), 512);
+	/// ```
+	#[must_use]
 	pub fn size(&self) -> u16 {
 		match self {
 			TileSize::Size256 => 256,
