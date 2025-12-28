@@ -164,6 +164,46 @@ where
 		TileStream { inner: s.boxed() }
 	}
 
+	/// Creates a `TileStream` by sequentially filtering and mapping coordinates from an iterator.
+	///
+	/// For each coordinate in `iter`, calls `callback(coord)`. If the callback returns `Some(item)`,
+	/// the `(coord, item)` pair is included in the stream. If it returns `None`, the coordinate
+	/// is skipped.
+	///
+	/// This is the **sequential** version that processes coordinates one at a time without parallelism.
+	/// For CPU-intensive callbacks or large iterators, consider using [`TileStream::from_iter_coord_parallel`].
+	///
+	/// # When to Use
+	///
+	/// - When the callback is very fast (e.g., simple filtering or lookups)
+	/// - When you want deterministic ordering (parallel version uses unordered processing)
+	/// - When the overhead of spawning tasks exceeds the benefit of parallelism
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::{TileCoord, TileStream, Blob};
+	///
+	/// # async fn example() {
+	/// let coords = vec![
+	///     TileCoord::new(0, 0, 0).unwrap(),
+	///     TileCoord::new(1, 0, 0).unwrap(),
+	///     TileCoord::new(2, 0, 0).unwrap(),
+	/// ];
+	///
+	/// // Only include even zoom levels
+	/// let stream = TileStream::from_iter_coord(coords.into_iter(), |coord| {
+	///     if coord.level % 2 == 0 {
+	///         Some(Blob::from(format!("level {}", coord.level)))
+	///     } else {
+	///         None
+	///     }
+	/// });
+	///
+	/// let items = stream.to_vec().await;
+	/// assert_eq!(items.len(), 2); // levels 0 and 2
+	/// # }
+	/// ```
 	pub fn from_iter_coord<F>(iter: impl Iterator<Item = TileCoord> + Send + 'a, callback: F) -> Self
 	where
 		F: Fn(TileCoord) -> Option<T> + Send + Sync + 'static,
@@ -264,6 +304,36 @@ where
 		self.inner.collect().await
 	}
 
+	/// Collects all items from the stream into a [`HashMap`] keyed by coordinate.
+	///
+	/// This consumes the stream and returns a map that allows O(1) random access to tiles by their
+	/// coordinates. Useful when you need to look up tiles by coordinate frequently, or when you need
+	/// to check if a specific tile exists.
+	///
+	/// **Note**: If the stream contains duplicate coordinates, only the **last** value for each
+	/// coordinate will be retained in the map.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::{TileCoord, TileStream, Blob};
+	/// use std::collections::HashMap;
+	///
+	/// # async fn example() {
+	/// let items = vec![
+	///     (TileCoord::new(0, 0, 0).unwrap(), Blob::from("tile0")),
+	///     (TileCoord::new(1, 0, 0).unwrap(), Blob::from("tile1")),
+	/// ];
+	///
+	/// let stream = TileStream::from_vec(items);
+	/// let map: HashMap<TileCoord, Blob> = stream.to_map().await;
+	///
+	/// // Fast lookup by coordinate
+	/// let coord = TileCoord::new(1, 0, 0).unwrap();
+	/// assert!(map.contains_key(&coord));
+	/// assert_eq!(map.get(&coord).unwrap().as_str(), "tile1");
+	/// # }
+	/// ```
 	pub async fn to_map(self) -> HashMap<TileCoord, T> {
 		self.inner.collect().await
 	}
@@ -320,6 +390,53 @@ where
 		self.inner.for_each(callback).await;
 	}
 
+	/// Applies an async callback to each item in parallel with concurrency limits.
+	///
+	/// Unlike [`for_each_async`](Self::for_each_async) which processes items sequentially, this method
+	/// processes multiple items concurrently up to a concurrency limit. This is ideal for I/O-bound
+	/// operations like writing tiles to disk, uploading to remote storage, or making network requests.
+	///
+	/// The concurrency limit is set to `ConcurrencyLimits::default().mixed`, which balances between
+	/// CPU and I/O workloads.
+	///
+	/// # When to Use
+	///
+	/// - **I/O-bound operations**: Writing files, network requests, database operations
+	/// - **Mixed workloads**: Operations that involve both computation and I/O
+	/// - **When order doesn't matter**: Items may complete in any order
+	///
+	/// For sequential processing where order matters, use [`for_each_async`](Self::for_each_async).
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::{TileCoord, TileStream, Blob};
+	/// use std::sync::atomic::{AtomicUsize, Ordering};
+	/// use std::sync::Arc;
+	///
+	/// # async fn example() {
+	/// let counter = Arc::new(AtomicUsize::new(0));
+	/// let counter_clone = Arc::clone(&counter);
+	///
+	/// let stream = TileStream::from_vec(vec![
+	///     (TileCoord::new(0, 0, 0).unwrap(), Blob::from("tile0")),
+	///     (TileCoord::new(1, 0, 0).unwrap(), Blob::from("tile1")),
+	///     (TileCoord::new(2, 0, 0).unwrap(), Blob::from("tile2")),
+	/// ]);
+	///
+	/// // Process tiles in parallel (e.g., simulating I/O operations)
+	/// stream.for_each_async_parallel(move |(coord, _blob)| {
+	///     let c = Arc::clone(&counter_clone);
+	///     async move {
+	///         // Simulate async I/O work
+	///         tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+	///         c.fetch_add(1, Ordering::Relaxed);
+	///     }
+	/// }).await;
+	///
+	/// assert_eq!(counter.load(Ordering::Relaxed), 3); // 3 tiles processed
+	/// # }
+	/// ```
 	pub async fn for_each_async_parallel<F, Fut>(self, callback: F)
 	where
 		F: FnMut((TileCoord, T)) -> Fut,
@@ -454,6 +571,49 @@ where
 		TileStream { inner: s.boxed() }
 	}
 
+	/// Transforms each tile into multiple tiles using parallel processing.
+	///
+	/// Each `(coord, value)` pair is mapped to a stream of tiles via the `callback` function.
+	/// The callback runs in a blocking task pool (CPU-bound concurrency limit) and all
+	/// resulting streams are flattened into a single output stream.
+	///
+	/// # Use Cases
+	/// - Tile subdivision: split one tile into four child tiles at a higher zoom level
+	/// - Multi-resolution generation: create multiple zoom levels from source tiles
+	/// - Format conversion with variants: generate both compressed and uncompressed versions
+	///
+	/// # Concurrency
+	/// Uses CPU-bound concurrency limit since callbacks run in `spawn_blocking`.
+	///
+	/// # Panics
+	/// Panics if the callback returns an error or if a spawned task panics.
+	///
+	/// # Examples
+	/// ```
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
+	/// # use anyhow::Result;
+	/// # async fn example() -> Result<()> {
+	/// let stream = TileStream::from_vec(vec![
+	///     (TileCoord::new(1, 0, 0)?, Blob::from("tile")),
+	/// ]);
+	///
+	/// // Subdivide each tile into 4 child tiles
+	/// let subdivided = stream.flat_map_parallel(|coord, blob| {
+	///     let child_level = coord.level + 1;
+	///     let children = vec![
+	///         (TileCoord::new(child_level, coord.x * 2, coord.y * 2)?, blob.clone()),
+	///         (TileCoord::new(child_level, coord.x * 2 + 1, coord.y * 2)?, blob.clone()),
+	///         (TileCoord::new(child_level, coord.x * 2, coord.y * 2 + 1)?, blob.clone()),
+	///         (TileCoord::new(child_level, coord.x * 2 + 1, coord.y * 2 + 1)?, blob),
+	///     ];
+	///     Ok(TileStream::from_vec(children))
+	/// });
+	///
+	/// let tiles = subdivided.to_vec().await;
+	/// assert_eq!(tiles.len(), 4); // 1 input tile → 4 output tiles
+	/// # Ok(())
+	/// # }
+	/// ```
 	pub fn flat_map_parallel<F, O>(self, callback: F) -> TileStream<'a, O>
 	where
 		F: Fn(TileCoord, T) -> Result<TileStream<'static, O>> + Send + Sync + 'static,
@@ -601,7 +761,47 @@ where
 		TileStream { inner: s }
 	}
 
-	/// Runs a callback for every item, e.g. for progress tracking.
+	/// Observes each item passing through the stream by calling a callback.
+	///
+	/// This method is useful for side effects like progress tracking, logging, or metrics collection.
+	/// The callback is invoked once per item but receives no arguments and cannot modify the items.
+	/// The stream passes through unchanged.
+	///
+	/// # Use Cases
+	///
+	/// - **Progress tracking**: Increment a counter to show processing progress
+	/// - **Logging**: Record that an item was processed without inspecting it
+	/// - **Metrics**: Count the total number of items in a stream
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::{TileCoord, TileStream, Blob};
+	/// use std::sync::atomic::{AtomicUsize, Ordering};
+	/// use std::sync::Arc;
+	///
+	/// # async fn example() {
+	/// let counter = Arc::new(AtomicUsize::new(0));
+	/// let counter_clone = Arc::clone(&counter);
+	///
+	/// let stream = TileStream::from_vec(vec![
+	///     (TileCoord::new(0, 0, 0).unwrap(), Blob::from("a")),
+	///     (TileCoord::new(1, 0, 0).unwrap(), Blob::from("b")),
+	///     (TileCoord::new(2, 0, 0).unwrap(), Blob::from("c")),
+	/// ]);
+	///
+	/// // Track progress as items are processed
+	/// let result = stream
+	///     .inspect(move || {
+	///         counter_clone.fetch_add(1, Ordering::Relaxed);
+	///     })
+	///     .to_vec()
+	///     .await;
+	///
+	/// assert_eq!(counter.load(Ordering::Relaxed), 3);
+	/// assert_eq!(result.len(), 3);
+	/// # }
+	/// ```
 	pub fn inspect<F>(self, mut callback: F) -> Self
 	where
 		F: FnMut() + Send + 'a,
