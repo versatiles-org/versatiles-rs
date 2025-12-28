@@ -563,9 +563,7 @@ where
 			.buffer_unordered(limits.cpu_bound) // CPU-bound: spawn_blocking
 			.map(|result| {
 				let (coord, item_result) = result.expect("spawned task panicked");
-				let item = item_result.unwrap_or_else(|e| {
-					panic!("Failed to process tile at {coord:?}: {e}")
-				});
+				let item = item_result.unwrap_or_else(|e| panic!("Failed to process tile at {coord:?}: {e}"));
 				(coord, item)
 			});
 		TileStream { inner: s.boxed() }
@@ -632,9 +630,7 @@ where
 			.buffer_unordered(limits.cpu_bound) // CPU-bound: spawn_blocking
 			.map(|result| {
 				let (coord, stream_result) = result.expect("spawned task panicked");
-				stream_result.unwrap_or_else(|e| {
-					panic!("Failed to process tile at {coord:?}: {e}")
-				})
+				stream_result.unwrap_or_else(|e| panic!("Failed to process tile at {coord:?}: {e}"))
 			})
 			.flat_map_unordered(None, |s| s.inner);
 		TileStream { inner: s.boxed() }
@@ -683,9 +679,7 @@ where
 			.buffer_unordered(limits.cpu_bound) // CPU-bound: spawn_blocking
 			.filter_map(|result| async move {
 				let (coord, maybe_item_result) = result.expect("spawned task panicked");
-				let maybe_item = maybe_item_result.unwrap_or_else(|e| {
-					panic!("Failed to process tile at {coord:?}: {e}")
-				});
+				let maybe_item = maybe_item_result.unwrap_or_else(|e| panic!("Failed to process tile at {coord:?}: {e}"));
 				maybe_item.map(|item| (coord, item))
 			});
 		TileStream { inner: s.boxed() }
@@ -848,7 +842,6 @@ where
 		count
 	}
 }
-
 
 #[cfg(test)]
 mod tests {
