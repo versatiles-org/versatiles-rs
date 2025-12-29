@@ -3,7 +3,7 @@
 //! This module provides [`PipelineFactory`], a registry-driven builder that parses the
 //! VersaTiles Pipeline Language (VPL) and constructs an executable chain of operations.
 //! It wires together *read* and *transform* operation factories, resolves nested
-//! container readers via a user-provided callback, and returns a boxed [`TileSourceTrait`]
+//! container readers via a user-provided callback, and returns a boxed [`TileSource`]
 //! ready to stream tiles.
 //!
 //! The factory can be instantiated empty (for custom registration) or with defaults that
@@ -24,22 +24,22 @@ use std::{
 	path::{Path, PathBuf},
 	vec,
 };
-use versatiles_container::{TileSourceTrait, TilesRuntime};
+use versatiles_container::{TileSource, TilesRuntime};
 use versatiles_core::{TileFormat, TileType};
 use versatiles_derive::context;
 
-/// Callback used to resolve a filename/URL into a concrete [`TileSourceTrait`].
+/// Callback used to resolve a filename/URL into a concrete [`TileSource`].
 ///
 /// The factory invokes this to open external containers referenced by VPL `read` nodes.
 /// It receives the resolved path (relative to `dir`) and returns a boxed reader.
-type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TileSourceTrait>>>>;
+type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TileSource>>>>;
 
 /// Builder that registers read/transform operation factories and produces an operation graph.
 ///
 /// `PipelineFactory` maintains:
 /// - `read_ops` and `tran_ops`: registries keyed by VPL tag name.
 /// - `dir`: base directory used to resolve relative filenames.
-/// - `create_reader`: callback to open external containers as [`TileSourceTrait`].
+/// - `create_reader`: callback to open external containers as [`TileSource`].
 /// - `runtime`: runtime configuration forwarded to operations.
 pub struct PipelineFactory {
 	read_ops: HashMap<String, Box<dyn ReadOperationFactoryTrait>>,
@@ -81,35 +81,32 @@ impl PipelineFactory {
 	/// Useful for examples and tests: resolves vector sources to `DummyVectorSource` and
 	/// raster sources to `DummyImageSource` based on the filename’s extension/color code.
 	pub fn new_dummy() -> Self {
-		PipelineFactory::new_dummy_reader(Box::new(
-			|filename: String| -> BoxFuture<Result<Box<dyn TileSourceTrait>>> {
-				Box::pin(async move {
-					let mut name = filename.clone();
-					let format = TileFormat::from_filename(&mut name)
-						.ok_or_else(|| anyhow!("cannot determine tile format from filename '{filename}'"))?;
+		PipelineFactory::new_dummy_reader(Box::new(|filename: String| -> BoxFuture<Result<Box<dyn TileSource>>> {
+			Box::pin(async move {
+				let mut name = filename.clone();
+				let format = TileFormat::from_filename(&mut name)
+					.ok_or_else(|| anyhow!("cannot determine tile format from filename '{filename}'"))?;
 
-					Ok(match format.to_type() {
-						TileType::Vector => Box::new(DummyVectorSource::new(
-							&[("dummy", &[&[("filename", &filename)]])],
-							None,
-						)) as Box<dyn TileSourceTrait>,
-						TileType::Raster => {
-							let color = if !name.is_empty() && name.len() <= 4 {
-								name
-									.chars()
-									.filter_map(|c| c.to_digit(16).map(|d| (d * 17) as u8))
-									.collect()
-							} else {
-								vec![50, 150, 250]
-							};
-							Box::new(DummyImageSource::from_color(&color, 4, format, None).unwrap())
-								as Box<dyn TileSourceTrait>
-						}
-						_ => bail!("unsupported tile type for dummy reader in filename '{filename}'"),
-					})
+				Ok(match format.to_type() {
+					TileType::Vector => Box::new(DummyVectorSource::new(
+						&[("dummy", &[&[("filename", &filename)]])],
+						None,
+					)) as Box<dyn TileSource>,
+					TileType::Raster => {
+						let color = if !name.is_empty() && name.len() <= 4 {
+							name
+								.chars()
+								.filter_map(|c| c.to_digit(16).map(|d| (d * 17) as u8))
+								.collect()
+						} else {
+							vec![50, 150, 250]
+						};
+						Box::new(DummyImageSource::from_color(&color, 4, format, None).unwrap()) as Box<dyn TileSource>
+					}
+					_ => bail!("unsupported tile type for dummy reader in filename '{filename}'"),
 				})
-			},
-		))
+			})
+		}))
 	}
 
 	/// Creates a default-registered factory using the provided custom reader callback.
@@ -129,13 +126,13 @@ impl PipelineFactory {
 
 	/// Resolves `filename` relative to `dir` and invokes `create_reader` to open a container.
 	#[context("Failed to get reader for file '{}'", filename)]
-	pub async fn get_reader(&self, filename: &str) -> Result<Box<dyn TileSourceTrait>> {
+	pub async fn get_reader(&self, filename: &str) -> Result<Box<dyn TileSource>> {
 		(self.create_reader.as_ref())(self.dir.join(filename).to_string_lossy().to_string()).await
 	}
 
 	/// Parses VPL text and builds the corresponding operation graph.
 	#[context("Failed to create reader from VPL")]
-	pub async fn operation_from_vpl(&self, text: &str) -> Result<Box<dyn TileSourceTrait>> {
+	pub async fn operation_from_vpl(&self, text: &str) -> Result<Box<dyn TileSource>> {
 		let pipeline = parse_vpl(text)?;
 		self.build_pipeline(pipeline).await
 	}
@@ -144,7 +141,7 @@ impl PipelineFactory {
 	///
 	/// Takes the head node as a read operation and folds the remaining nodes as transforms.
 	#[context("Failed to build pipeline from VPL")]
-	pub async fn build_pipeline(&self, pipeline: VPLPipeline) -> Result<Box<dyn TileSourceTrait>> {
+	pub async fn build_pipeline(&self, pipeline: VPLPipeline) -> Result<Box<dyn TileSource>> {
 		let (head, tail) = pipeline.split()?;
 
 		let mut vpl_operation = self.read_operation_from_node(head).await?;
@@ -158,7 +155,7 @@ impl PipelineFactory {
 
 	/// Instantiates a read operation from a VPL node using the registered factory.
 	#[context("Failed to create read operation from VPL node")]
-	async fn read_operation_from_node(&self, node: VPLNode) -> Result<Box<dyn TileSourceTrait>> {
+	async fn read_operation_from_node(&self, node: VPLNode) -> Result<Box<dyn TileSource>> {
 		let factory = self
 			.read_ops
 			.get(&node.name)
@@ -169,11 +166,7 @@ impl PipelineFactory {
 
 	/// Instantiates a transform operation from a VPL node using the registered factory.
 	#[context("Failed to create transform operation from VPL node")]
-	async fn tran_operation_from_node(
-		&self,
-		node: VPLNode,
-		source: Box<dyn TileSourceTrait>,
-	) -> Result<Box<dyn TileSourceTrait>> {
+	async fn tran_operation_from_node(&self, node: VPLNode, source: Box<dyn TileSource>) -> Result<Box<dyn TileSource>> {
 		let factory = self
 			.tran_ops
 			.get(&node.name)

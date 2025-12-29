@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::*;
 use versatiles_geometry::{
 	geo::{GeoFeature, Geometry},
@@ -62,7 +62,7 @@ impl DummyVectorSource {
 }
 
 #[async_trait]
-impl TileSourceTrait for DummyVectorSource {
+impl TileSource for DummyVectorSource {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_container("dummy vector source", "dummy")
 	}

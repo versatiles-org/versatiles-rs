@@ -3,7 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use imageproc::image::Rgb;
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -17,15 +17,15 @@ struct Args {
 
 #[derive(Debug)]
 struct Operation {
-	source: Box<dyn TileSourceTrait>,
+	source: Box<dyn TileSource>,
 	color: Rgb<u8>,
 }
 
 impl Operation {
 	#[context("Building raster_flatten operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSourceTrait>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<Operation>
 	where
-		Self: Sized + TileSourceTrait,
+		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 
@@ -37,7 +37,7 @@ impl Operation {
 }
 
 #[async_trait]
-impl TileSourceTrait for Operation {
+impl TileSource for Operation {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_processor("raster_flatten", self.source.source_type())
 	}
@@ -88,12 +88,12 @@ impl TransformOperationFactoryTrait for Factory {
 	async fn build<'a>(
 		&self,
 		vpl_node: VPLNode,
-		source: Box<dyn TileSourceTrait>,
+		source: Box<dyn TileSource>,
 		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn TileSourceTrait>> {
+	) -> Result<Box<dyn TileSource>> {
 		Operation::build(vpl_node, source, factory)
 			.await
-			.map(|op| Box::new(op) as Box<dyn TileSourceTrait>)
+			.map(|op| Box::new(op) as Box<dyn TileSource>)
 	}
 }
 

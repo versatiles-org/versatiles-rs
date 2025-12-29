@@ -2,17 +2,17 @@
 //!
 //! This module defines an [`Operation`] that streams tiles out of a **single
 //! tile container** (e.g. `*.versatiles`, MBTiles, PMTiles, TAR bundles).
-//! It adapts the container’s [`TileSourceTrait`] interface to
-//! [`TileSourceTrait`] so that the rest of the pipeline can treat it like any
+//! It adapts the container’s [`TileSource`] interface to
+//! [`TileSource`] so that the rest of the pipeline can treat it like any
 //! other data source.
 
 use super::RasterSource;
-use crate::{PipelineFactory, operations::read::traits::ReadTileSourceTrait, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, operations::read::traits::ReadTileSource, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use std::{fmt::Debug, sync::Arc, vec};
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -42,8 +42,8 @@ struct Args {
 }
 
 #[derive(Debug)]
-/// Concrete [`TileSourceTrait`] that merely forwards every request to an
-/// underlying container [`TileSourceTrait`].  A cached copy of the
+/// Concrete [`TileSource`] that merely forwards every request to an
+/// underlying container [`TileSource`].  A cached copy of the
 /// container’s [`TileJSON`] metadata is kept so downstream stages can query
 /// bounds and zoom levels without touching the reader again.
 struct Operation {
@@ -57,7 +57,7 @@ impl Operation {
 	#[context("Building from_gdal_raster operation in VPL node {:?}", vpl_node.name)]
 	async fn new(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Self>
 	where
-		Self: Sized + TileSourceTrait,
+		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node).context("Failed to parse arguments from VPL node")?;
 		log::trace!(
@@ -135,18 +135,18 @@ impl Operation {
 	}
 }
 
-impl ReadTileSourceTrait for Operation {
+impl ReadTileSource for Operation {
 	#[context("Failed to build read operation")]
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSourceTrait>>
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
 	where
-		Self: Sized + TileSourceTrait,
+		Self: Sized + TileSource,
 	{
-		Ok(Box::new(Self::new(vpl_node, factory).await?) as Box<dyn TileSourceTrait>)
+		Ok(Box::new(Self::new(vpl_node, factory).await?) as Box<dyn TileSource>)
 	}
 }
 
 #[async_trait]
-impl TileSourceTrait for Operation {
+impl TileSource for Operation {
 	/// Return the reader’s technical parameters (compression, tile size,
 	/// etc.) without performing any I/O.
 	fn metadata(&self) -> &TileSourceMetadata {
@@ -239,7 +239,7 @@ impl OperationFactoryTrait for Factory {
 
 #[async_trait]
 impl ReadOperationFactoryTrait for Factory {
-	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSourceTrait>> {
+	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSource>> {
 		Operation::build(vpl_node, factory).await
 	}
 }

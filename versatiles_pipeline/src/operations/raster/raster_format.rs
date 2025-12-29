@@ -2,7 +2,7 @@ use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use std::{fmt::Debug, str, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -71,7 +71,7 @@ impl From<RasterTileFormat> for TileFormat {
 #[derive(Debug)]
 struct Operation {
 	metadata: TileSourceMetadata,
-	source: Box<dyn TileSourceTrait>,
+	source: Box<dyn TileSource>,
 	tilejson: TileJSON,
 	format: RasterTileFormat,
 	quality: [Option<u8>; 32],
@@ -80,9 +80,9 @@ struct Operation {
 
 impl Operation {
 	#[context("Building raster_format operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSourceTrait>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<Operation>
 	where
-		Self: Sized + TileSourceTrait,
+		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 
@@ -138,7 +138,7 @@ fn parse_quality(quality: Option<String>) -> Result<[Option<u8>; 32]> {
 }
 
 #[async_trait]
-impl TileSourceTrait for Operation {
+impl TileSource for Operation {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_processor("raster_format", self.source.source_type())
 	}
@@ -183,12 +183,12 @@ impl TransformOperationFactoryTrait for Factory {
 	async fn build<'a>(
 		&self,
 		vpl_node: VPLNode,
-		source: Box<dyn TileSourceTrait>,
+		source: Box<dyn TileSource>,
 		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn TileSourceTrait>> {
+	) -> Result<Box<dyn TileSource>> {
 		Operation::build(vpl_node, source, factory)
 			.await
-			.map(|op| Box::new(op) as Box<dyn TileSourceTrait>)
+			.map(|op| Box::new(op) as Box<dyn TileSource>)
 	}
 }
 

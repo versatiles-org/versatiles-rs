@@ -3,7 +3,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use moka::future::Cache;
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::{DynamicImage, traits::*};
@@ -22,7 +22,7 @@ struct Args {
 #[derive(Clone)]
 struct Operation {
 	metadata: TileSourceMetadata,
-	source: Arc<Box<dyn TileSourceTrait>>,
+	source: Arc<Box<dyn TileSource>>,
 	tilejson: TileJSON,
 	level_base: u8,
 	level_min: u8,
@@ -46,9 +46,9 @@ impl Debug for Operation {
 
 impl Operation {
 	#[context("Building raster_overscale operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSourceTrait>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<Operation>
 	where
-		Self: Sized + TileSourceTrait,
+		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let mut metadata = source.as_ref().metadata().clone();
@@ -168,7 +168,7 @@ fn extract_image(image_src: &DynamicImage, coord_src: TileCoord, coord_dst: Tile
 }
 
 #[async_trait]
-impl TileSourceTrait for Operation {
+impl TileSource for Operation {
 	fn metadata(&self) -> &TileSourceMetadata {
 		&self.metadata
 	}
@@ -247,12 +247,12 @@ impl TransformOperationFactoryTrait for Factory {
 	async fn build<'a>(
 		&self,
 		vpl_node: VPLNode,
-		source: Box<dyn TileSourceTrait>,
+		source: Box<dyn TileSource>,
 		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn TileSourceTrait>> {
+	) -> Result<Box<dyn TileSource>> {
 		Operation::build(vpl_node, source, factory)
 			.await
-			.map(|op| Box::new(op) as Box<dyn TileSourceTrait>)
+			.map(|op| Box::new(op) as Box<dyn TileSource>)
 	}
 }
 

@@ -8,7 +8,7 @@ use crate::{
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
-use versatiles_container::TileSourceTrait;
+use versatiles_container::TileSource;
 use versatiles_core::TileJSON;
 use versatiles_derive::context;
 use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
@@ -153,9 +153,9 @@ impl TransformOperationFactoryTrait for Factory {
 	async fn build<'a>(
 		&self,
 		vpl_node: VPLNode,
-		source: Box<dyn TileSourceTrait>,
+		source: Box<dyn TileSource>,
 		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn TileSourceTrait>> {
+	) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		// Load the CSV file referenced in the VPL.

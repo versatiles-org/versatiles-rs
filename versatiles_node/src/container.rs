@@ -15,7 +15,7 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use versatiles_container::{SourceType as RustSourceType, TileSourceTrait};
+use versatiles_container::{SourceType as RustSourceType, TileSource};
 use versatiles_core::TileCoord as RustTileCoord;
 
 /// Container reader for accessing tile data from various formats
@@ -37,7 +37,7 @@ use versatiles_core::TileCoord as RustTileCoord;
 /// - `.pmtiles` files via HTTP/HTTPS (with range request support)
 #[napi]
 pub struct ContainerReader {
-	reader: Arc<Mutex<Box<dyn TileSourceTrait>>>,
+	reader: Arc<Mutex<Box<dyn TileSource>>>,
 }
 
 #[napi]

@@ -1,9 +1,9 @@
 use crate::{PipelineFactory, vpl::VPLNode};
 use anyhow::Result;
-use versatiles_container::TileSourceTrait;
+use versatiles_container::TileSource;
 
-pub trait ReadTileSourceTrait: TileSourceTrait {
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSourceTrait>>
+pub trait ReadTileSource: TileSource {
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
 	where
-		Self: Sized + TileSourceTrait;
+		Self: Sized + TileSource;
 }

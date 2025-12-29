@@ -12,7 +12,7 @@
 
 use crate::{
 	PipelineFactory,
-	operations::read::traits::ReadTileSourceTrait,
+	operations::read::traits::ReadTileSource,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
 };
@@ -20,7 +20,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
 use std::{sync::Arc, vec};
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -37,14 +37,14 @@ struct Args {
 	format: Option<TileFormat>,
 }
 
-/// [`TileSourceTrait`] implementation that overlays raster tiles “on the fly.”
+/// [`TileSource`] implementation that overlays raster tiles “on the fly.”
 ///
 /// * Caches only metadata (`TileJSON`, `TileSourceMetadata`).  
 /// * Performs no disk I/O itself; all data come from the child pipelines.
 #[derive(Debug)]
 struct Operation {
 	metadata: TileSourceMetadata,
-	sources: Vec<Box<dyn TileSourceTrait>>,
+	sources: Vec<Box<dyn TileSource>>,
 	tilejson: TileJSON,
 }
 
@@ -72,11 +72,11 @@ fn stack_tiles(tiles: Vec<Tile>) -> Result<Option<Tile>> {
 	Ok(tile)
 }
 
-impl ReadTileSourceTrait for Operation {
+impl ReadTileSource for Operation {
 	#[context("Failed to build from_stacked_raster operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSourceTrait>>
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
 	where
-		Self: Sized + TileSourceTrait,
+		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let sources = join_all(args.sources.into_iter().map(|c| factory.build_pipeline(c)))
@@ -119,12 +119,12 @@ impl ReadTileSourceTrait for Operation {
 			tilejson,
 			metadata,
 			sources,
-		}) as Box<dyn TileSourceTrait>)
+		}) as Box<dyn TileSource>)
 	}
 }
 
 #[async_trait]
-impl TileSourceTrait for Operation {
+impl TileSource for Operation {
 	/// Reader parameters (format, compression, pyramid) for the *blended* result.
 	fn metadata(&self) -> &TileSourceMetadata {
 		&self.metadata
@@ -196,7 +196,7 @@ impl OperationFactoryTrait for Factory {
 
 #[async_trait]
 impl ReadOperationFactoryTrait for Factory {
-	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSourceTrait>> {
+	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSource>> {
 		Operation::build(vpl_node, factory).await
 	}
 }
@@ -208,7 +208,7 @@ mod tests {
 	use futures::future::BoxFuture;
 	use imageproc::image::GenericImage;
 	use pretty_assertions::assert_eq;
-	use versatiles_container::TileSourceTrait;
+	use versatiles_container::TileSource;
 	use versatiles_core::TileCompression::Uncompressed;
 	use versatiles_image::DynamicImage;
 
@@ -321,8 +321,8 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_operation_parameters() -> Result<()> {
-		let factory = PipelineFactory::new_dummy_reader(Box::new(
-			|filename: String| -> BoxFuture<Result<Box<dyn TileSourceTrait>>> {
+		let factory =
+			PipelineFactory::new_dummy_reader(Box::new(|filename: String| -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
 					let mut pyramide = TileBBoxPyramid::new_empty();
 					for c in filename[0..filename.len() - 4].chars() {
@@ -330,11 +330,10 @@ mod tests {
 					}
 					Ok(
 						Box::new(DummyImageSource::from_color(&[0, 0, 0], 4, TileFormat::PNG, Some(pyramide)).unwrap())
-							as Box<dyn TileSourceTrait>,
+							as Box<dyn TileSource>,
 					)
 				})
-			},
-		));
+			}));
 
 		let result = factory
 			.operation_from_vpl(

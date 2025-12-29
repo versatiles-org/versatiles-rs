@@ -38,7 +38,7 @@
 //! ## Errors
 //! Errors are returned if the directory is not absolute, does not exist, is not a directory, contains no tiles, or if tiles have inconsistent formats or compressions.
 
-use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
+use crate::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use itertools::Itertools;
@@ -220,13 +220,13 @@ impl DirectoryReader {
 	}
 }
 
-/// Implements the `TileSourceTrait` for `DirectoryReader`.
+/// Implements the `TileSource` for `DirectoryReader`.
 ///
 /// Provides the container name ("directory"), access to tile reading parameters,
 /// ability to override the tile compression, access to TileJSON metadata,
 /// and asynchronous fetching of tile data by coordinate.
 #[async_trait]
-impl TileSourceTrait for DirectoryReader {
+impl TileSource for DirectoryReader {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_container("directory", self.dir.to_str().unwrap())
 	}

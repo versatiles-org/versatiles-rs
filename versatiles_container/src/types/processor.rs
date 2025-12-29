@@ -1,19 +1,19 @@
 //! Base pattern for implementing tile processors.
 //!
-//! This module provides [`Processor`], a base struct that simplifies implementing
+//! This module provides [`TileProcessor`], a base struct that simplifies implementing
 //! tile processors (sources that wrap and transform upstream tile sources).
 //!
 //! ## Usage Pattern
 //!
 //! ```rust,ignore
-//! use versatiles_container::{Processor, TileSourceTrait, SourceType};
+//! use versatiles_container::{TileProcessor, TileSource, SourceType};
 //!
 //! struct MyProcessor {
-//!     base: Processor,
+//!     base: TileProcessor,
 //!     // processor-specific fields
 //! }
 //!
-//! impl TileSourceTrait for MyProcessor {
+//! impl TileSource for MyProcessor {
 //!     fn source_name(&self) -> &str {
 //!         self.base.name()
 //!     }
@@ -44,7 +44,7 @@
 //! }
 //! ```
 
-use crate::{TileSourceMetadata, TileSourceTrait, Traversal};
+use crate::{TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::TileJSON;
 
 /// Base struct for tile processors that wrap a single upstream source.
@@ -58,15 +58,15 @@ use versatiles_core::TileJSON;
 /// Processors should embed this struct and delegate trait method implementations
 /// to its methods where appropriate.
 #[derive(Debug)]
-pub struct Processor {
+pub struct TileProcessor {
 	name: String,
-	source: Box<dyn TileSourceTrait>,
+	source: Box<dyn TileSource>,
 	parameters: TileSourceMetadata,
 	tilejson: TileJSON,
 	traversal: Traversal,
 }
 
-impl Processor {
+impl TileProcessor {
 	/// Creates a new processor wrapping the given source.
 	///
 	/// Clones metadata (parameters, TileJSON, traversal) from the source, which can
@@ -76,7 +76,7 @@ impl Processor {
 	///
 	/// * `name` - Human-readable name for this processor (e.g., "filter", "converter")
 	/// * `source` - The upstream tile source to wrap
-	pub fn new(name: impl Into<String>, source: Box<dyn TileSourceTrait>) -> Self {
+	pub fn new(name: impl Into<String>, source: Box<dyn TileSource>) -> Self {
 		let parameters = source.metadata().clone();
 		let tilejson = source.tilejson().clone();
 		let traversal = parameters.traversal.clone();
@@ -120,14 +120,14 @@ impl Processor {
 	}
 
 	/// Returns the upstream source as a trait object reference.
-	pub fn source(&self) -> &dyn TileSourceTrait {
+	pub fn source(&self) -> &dyn TileSource {
 		&*self.source
 	}
 
 	/// Returns a mutable reference to the boxed source.
 	///
 	/// Use this when you need to call mutable methods on the source (e.g., `override_compression`).
-	pub fn source_mut(&mut self) -> &mut Box<dyn TileSourceTrait> {
+	pub fn source_mut(&mut self) -> &mut Box<dyn TileSource> {
 		&mut self.source
 	}
 

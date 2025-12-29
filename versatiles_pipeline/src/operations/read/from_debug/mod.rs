@@ -17,13 +17,13 @@
 mod image;
 mod vector;
 
-use crate::{PipelineFactory, operations::read::traits::ReadTileSourceTrait, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, operations::read::traits::ReadTileSource, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use image::create_debug_image;
 use std::{fmt::Debug, sync::Arc};
 use vector::create_debug_vector_tile;
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -33,7 +33,7 @@ struct Args {
 	format: Option<String>,
 }
 
-/// Implements [`TileSourceTrait`] by fabricating debug tiles entirely in
+/// Implements [`TileSource`] by fabricating debug tiles entirely in
 /// memory.  No I/O other than the caller’s request/response is performed.
 #[derive(Debug)]
 pub struct Operation {
@@ -79,17 +79,17 @@ impl Operation {
 	}
 }
 
-impl ReadTileSourceTrait for Operation {
-	async fn build(vpl_node: VPLNode, _factory: &PipelineFactory) -> Result<Box<dyn TileSourceTrait>>
+impl ReadTileSource for Operation {
+	async fn build(vpl_node: VPLNode, _factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
 	where
-		Self: Sized + TileSourceTrait,
+		Self: Sized + TileSource,
 	{
-		Operation::from_vpl_node(&vpl_node).map(|op| Box::new(op) as Box<dyn TileSourceTrait>)
+		Operation::from_vpl_node(&vpl_node).map(|op| Box::new(op) as Box<dyn TileSource>)
 	}
 }
 
 #[async_trait]
-impl TileSourceTrait for Operation {
+impl TileSource for Operation {
 	/// Return static reader parameters (compression *always* uncompressed).
 	fn metadata(&self) -> &TileSourceMetadata {
 		&self.metadata
@@ -137,7 +137,7 @@ impl OperationFactoryTrait for Factory {
 
 #[async_trait]
 impl ReadOperationFactoryTrait for Factory {
-	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSourceTrait>> {
+	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSource>> {
 		Operation::build(vpl_node, factory).await
 	}
 }

@@ -17,7 +17,7 @@
 
 use crate::{
 	PipelineFactory,
-	operations::read::traits::ReadTileSourceTrait,
+	operations::read::traits::ReadTileSource,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
 };
@@ -25,7 +25,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
 use std::sync::Arc;
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -37,7 +37,7 @@ struct Args {
 }
 
 #[derive(Debug)]
-/// Implements [`TileSourceTrait`] by performing *short‑circuit* look‑ups
+/// Implements [`TileSource`] by performing *short‑circuit* look‑ups
 /// across multiple sources.
 ///
 /// The struct keeps only metadata (`TileJSON`, `TileSourceMetadata`) in
@@ -45,15 +45,15 @@ struct Args {
 /// contains them.
 struct Operation {
 	metadata: TileSourceMetadata,
-	sources: Vec<Box<dyn TileSourceTrait>>,
+	sources: Vec<Box<dyn TileSource>>,
 	tilejson: TileJSON,
 }
 
-impl ReadTileSourceTrait for Operation {
+impl ReadTileSource for Operation {
 	#[context("Failed to build from_stacked operation")]
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSourceTrait>>
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
 	where
-		Self: Sized + TileSourceTrait,
+		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let sources = join_all(args.sources.into_iter().map(|c| factory.build_pipeline(c)))
@@ -61,13 +61,13 @@ impl ReadTileSourceTrait for Operation {
 			.into_iter()
 			.collect::<Result<Vec<_>>>()?;
 
-		Ok(Box::new(Operation::new(sources)?) as Box<dyn TileSourceTrait>)
+		Ok(Box::new(Operation::new(sources)?) as Box<dyn TileSource>)
 	}
 }
 
 impl Operation {
 	#[context("Failed to create from_stacked operation")]
-	fn new(sources: Vec<Box<dyn TileSourceTrait>>) -> Result<Operation> {
+	fn new(sources: Vec<Box<dyn TileSource>>) -> Result<Operation> {
 		ensure!(sources.len() > 1, "must have at least two sources");
 
 		let mut tilejson = TileJSON::default();
@@ -103,7 +103,7 @@ impl Operation {
 }
 
 #[async_trait]
-impl TileSourceTrait for Operation {
+impl TileSource for Operation {
 	/// Reader parameters (format, compression, pyramid) for the overlay result.
 	fn metadata(&self) -> &TileSourceMetadata {
 		&self.metadata
@@ -177,7 +177,7 @@ impl OperationFactoryTrait for Factory {
 
 #[async_trait]
 impl ReadOperationFactoryTrait for Factory {
-	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSourceTrait>> {
+	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSource>> {
 		Operation::build(vpl_node, factory).await
 	}
 }

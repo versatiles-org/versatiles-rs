@@ -40,7 +40,7 @@
 //! }
 //! ```
 
-use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime};
+use crate::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{path::Path, sync::Arc};
@@ -98,7 +98,7 @@ impl Default for TilesConverterParameters {
 /// See the module-level example.
 #[context("Converting tiles from reader to file")]
 pub async fn convert_tiles_container(
-	reader: Box<dyn TileSourceTrait>,
+	reader: Box<dyn TileSource>,
 	cp: TilesConverterParameters,
 	path: &Path,
 	runtime: TilesRuntime,
@@ -115,12 +115,12 @@ pub async fn convert_tiles_container(
 /// Reader adapter that applies coordinate transforms, bbox filtering, and optional
 /// compression changes on-the-fly.
 ///
-/// This type implements [`TileSourceTrait`], so it can be used anywhere a normal
+/// This type implements [`TileSource`], so it can be used anywhere a normal
 /// reader is expected. Use [`TilesConvertReader::new_from_reader`] to wrap an
 /// existing reader.
 #[derive(Debug)]
 pub struct TilesConvertReader {
-	reader: Box<dyn TileSourceTrait>,
+	reader: Box<dyn TileSource>,
 	converter_parameters: TilesConverterParameters,
 	reader_metadata: TileSourceMetadata,
 	tilejson: TileJSON,
@@ -135,10 +135,7 @@ impl TilesConvertReader {
 	/// ### Errors
 	/// Propagates errors from querying/deriving parameters or updating metadata.
 	#[context("Creating converter reader from existing reader")]
-	pub fn new_from_reader(
-		reader: Box<dyn TileSourceTrait>,
-		cp: TilesConverterParameters,
-	) -> Result<TilesConvertReader> {
+	pub fn new_from_reader(reader: Box<dyn TileSource>, cp: TilesConverterParameters) -> Result<TilesConvertReader> {
 		let rp: TileSourceMetadata = reader.metadata().to_owned();
 		let mut new_rp: TileSourceMetadata = rp.clone();
 
@@ -170,7 +167,7 @@ impl TilesConvertReader {
 }
 
 #[async_trait]
-impl TileSourceTrait for TilesConvertReader {
+impl TileSource for TilesConvertReader {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_processor("TilesConvertReader", self.reader.source_type())
 	}

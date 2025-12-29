@@ -1,6 +1,6 @@
 //! Write tiles and metadata into a `.versatiles` container.
 //!
-//! The `VersaTilesWriter` produces a valid `.versatiles` file from any [`TileSourceTrait`]
+//! The `VersaTilesWriter` produces a valid `.versatiles` file from any [`TileSource`]
 //! source. It serializes TileJSON metadata, groups tiles into fixed **256×256 blocks**,
 //! compresses per-block tile indices and metadata, and writes a compact binary structure
 //! ready for fast random access by the [`VersaTilesReader`](crate::container::versatiles::VersaTilesReader).
@@ -47,8 +47,7 @@
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader};
 use crate::{
-	TileSourceTrait, TileSourceTraverseExt, TilesRuntime, TilesWriterTrait, Traversal,
-	container::versatiles::types::BlockWriter,
+	TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal, container::versatiles::types::BlockWriter,
 };
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
@@ -59,7 +58,7 @@ use versatiles_derive::context;
 
 /// Writer for `.versatiles` containers.
 ///
-/// Serializes a [`TileSourceTrait`] source into a compact binary container optimized
+/// Serializes a [`TileSource`] source into a compact binary container optimized
 /// for fast random tile access. The writer:
 /// - compresses metadata and block indices with Brotli
 /// - organizes tiles into 256×256 blocks
@@ -69,8 +68,8 @@ use versatiles_derive::context;
 pub struct VersaTilesWriter {}
 
 #[async_trait]
-impl TilesWriterTrait for VersaTilesWriter {
-	/// Convert tiles from a [`TileSourceTrait`] and write them to a [`DataWriterTrait`].
+impl TilesWriter for VersaTilesWriter {
+	/// Convert tiles from a [`TileSource`] and write them to a [`DataWriterTrait`].
 	///
 	/// This method writes the file header, followed by metadata, blocks, and an updated
 	/// header containing the final byte ranges. It compresses metadata and block indices
@@ -80,7 +79,7 @@ impl TilesWriterTrait for VersaTilesWriter {
 	/// Returns an error if writing, compression, or bounding box validation fails.
 	#[context("writing VersaTiles to DataWriter")]
 	async fn write_to_writer(
-		reader: &mut dyn TileSourceTrait,
+		reader: &mut dyn TileSource,
 		writer: &mut dyn DataWriterTrait,
 		runtime: TilesRuntime,
 	) -> Result<()> {
@@ -130,7 +129,7 @@ impl VersaTilesWriter {
 	/// Returns the byte range where the metadata was written.
 	#[context("Failed to write metadata")]
 	async fn write_meta(
-		reader: &dyn TileSourceTrait,
+		reader: &dyn TileSource,
 		writer: &mut dyn DataWriterTrait,
 		compression: TileCompression,
 	) -> Result<ByteRange> {
@@ -148,7 +147,7 @@ impl VersaTilesWriter {
 	/// Returns the byte range covering the block index blob.
 	#[context("Failed to write blocks")]
 	async fn write_blocks(
-		reader: &mut dyn TileSourceTrait,
+		reader: &mut dyn TileSource,
 		writer: &mut dyn DataWriterTrait,
 		tile_compression: TileCompression,
 		runtime: TilesRuntime,

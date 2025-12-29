@@ -1,7 +1,7 @@
 use crate::{PipelineFactory, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_container::TileSourceTrait;
+use versatiles_container::TileSource;
 
 pub trait OperationFactoryTrait: Send + Sync {
 	fn get_tag_name(&self) -> &str;
@@ -16,9 +16,9 @@ pub trait OperationFactoryTrait: Send + Sync {
 pub trait ReadOperationFactoryTrait: OperationFactoryTrait {
 	/// Build a tile source from a VPL node configuration.
 	///
-	/// Returns a boxed [`TileSourceTrait`] (which also implements [`TileSourceTrait`]
+	/// Returns a boxed [`TileSource`] (which also implements [`TileSource`]
 	/// via blanket implementation) that can be used as the start of a pipeline.
-	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSourceTrait>>;
+	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSource>>;
 }
 
 /// Factory trait for transform operations that wrap and modify existing tile sources.
@@ -34,7 +34,7 @@ pub trait TransformOperationFactoryTrait: OperationFactoryTrait {
 	async fn build<'a>(
 		&self,
 		vpl_node: VPLNode,
-		source: Box<dyn TileSourceTrait>,
+		source: Box<dyn TileSource>,
 		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn TileSourceTrait>>;
+	) -> Result<Box<dyn TileSource>>;
 }

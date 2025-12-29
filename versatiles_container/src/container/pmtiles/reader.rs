@@ -47,9 +47,7 @@
 //! PMTiles header/directories cannot be parsed or decompressed, or a requested tile is missing.
 
 use super::types::{EntriesV3, HeaderV3};
-use crate::{
-	SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime, Traversal, TraversalOrder, TraversalSize,
-};
+use crate::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal, TraversalOrder, TraversalSize};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -67,7 +65,7 @@ use versatiles_derive::context;
 ///
 /// Parses the header and directory blobs, merges embedded TileJSON, computes a
 /// bounding-box pyramid by traversing directory entries, and exposes tiles via
-/// the [`TileSourceTrait`] interface.
+/// the [`TileSource`] interface.
 #[derive(Debug)]
 pub struct PMTilesReader {
 	/// Underlying byte source used to read header, directories, and tile data.
@@ -260,7 +258,7 @@ fn calc_bbox_pyramid(
 }
 
 #[async_trait]
-impl TileSourceTrait for PMTilesReader {
+impl TileSource for PMTilesReader {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_container("pmtiles", self.data_reader.get_name())
 	}

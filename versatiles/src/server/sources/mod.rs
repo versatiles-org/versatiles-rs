@@ -8,4 +8,4 @@ mod tile_source;
 
 pub use response::SourceResponse;
 pub use static_source::StaticSource;
-pub use tile_source::TileSource;
+pub use tile_source::ServerTileSource;

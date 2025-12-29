@@ -1,6 +1,6 @@
 //! Unified interface for tile sources (readers and processors).
 //!
-//! This module defines [`TileSourceTrait`], the common interface for anything that produces tiles,
+//! This module defines [`TileSource`], the common interface for anything that produces tiles,
 //! whether reading from physical containers or processing/transforming tiles from upstream sources.
 //!
 //! ## Design Philosophy
@@ -35,7 +35,7 @@ use versatiles_core::{TileBBox, TileCoord, TileJSON, TileStream};
 /// * **Tile processors**: Transform tiles from upstream sources (filtering, format conversion, etc.)
 /// * **Composite sources**: Combine multiple sources (stacking, merging)
 ///
-/// The trait is object-safe to support dynamic dispatch via `Box<dyn TileSourceTrait>`,
+/// The trait is object-safe to support dynamic dispatch via `Box<dyn TileSource>`,
 /// enabling runtime composition of heterogeneous sources and processors.
 ///
 /// ## Object Safety & Extension Traits
@@ -43,7 +43,7 @@ use versatiles_core::{TileBBox, TileCoord, TileJSON, TileStream};
 /// For operations requiring higher-rank trait bounds (HRTBs), see [`TileSourceTraverseExt`],
 /// which provides advanced traversal while keeping the base trait object-safe.
 #[async_trait]
-pub trait TileSourceTrait: Debug + Send + Sync + Unpin {
+pub trait TileSource: Debug + Send + Sync + Unpin {
 	/// Returns the source type (container format, processor name, or composite).
 	///
 	/// This helps distinguish between:
@@ -185,7 +185,7 @@ pub trait TileSourceTrait: Debug + Send + Sync + Unpin {
 	}
 
 	/// Converts `self` into a boxed trait object for dynamic dispatch.
-	fn boxed(self) -> Box<dyn TileSourceTrait>
+	fn boxed(self) -> Box<dyn TileSource>
 	where
 		Self: Sized + 'static,
 	{
@@ -195,11 +195,11 @@ pub trait TileSourceTrait: Debug + Send + Sync + Unpin {
 
 /// Extension trait providing traversal with higher-rank trait bounds (HRTBs).
 ///
-/// This trait is separate from [`TileSourceTrait`] to maintain object safety while
+/// This trait is separate from [`TileSource`] to maintain object safety while
 /// still supporting complex traversal scenarios that require HRTBs.
 ///
-/// Automatically implemented for all types that implement [`TileSourceTrait`].
-pub trait TileSourceTraverseExt: TileSourceTrait {
+/// Automatically implemented for all types that implement [`TileSource`].
+pub trait TileSourceTraverseExt: TileSource {
 	/// Traverses all tiles according to a traversal plan, invoking a callback for each batch.
 	///
 	/// This method translates between the source's preferred traversal order and the desired
@@ -320,8 +320,8 @@ pub trait TileSourceTraverseExt: TileSourceTrait {
 	}
 }
 
-// Blanket implementation: all TileSourceTrait implementors get traversal support
-impl<T: TileSourceTrait + ?Sized> TileSourceTraverseExt for T {}
+// Blanket implementation: all TileSource implementors get traversal support
+impl<T: TileSource + ?Sized> TileSourceTraverseExt for T {}
 
 /// Tests cover trait defaults, parameter plumbing, streaming behavior, and the CLI probe stubs.
 #[cfg(test)]
@@ -356,7 +356,7 @@ mod tests {
 	}
 
 	#[async_trait]
-	impl TileSourceTrait for TestReader {
+	impl TileSource for TestReader {
 		fn source_type(&self) -> Arc<SourceType> {
 			SourceType::new_container("dummy_format", "dummy_uri")
 		}

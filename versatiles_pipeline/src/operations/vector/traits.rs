@@ -1,7 +1,7 @@
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::sync::Arc;
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileJSON, TileStream, TileType};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
@@ -15,13 +15,13 @@ pub trait RunnerTrait: std::fmt::Debug + Send + Sync + 'static {
 #[derive(Debug)]
 pub struct TransformOp<R: RunnerTrait> {
 	pub runner: Arc<R>,
-	pub source: Box<dyn TileSourceTrait>,
+	pub source: Box<dyn TileSource>,
 	pub metadata: TileSourceMetadata,
 	pub tilejson: TileJSON,
 }
 
 #[async_trait]
-impl<R: RunnerTrait> TileSourceTrait for TransformOp<R> {
+impl<R: RunnerTrait> TileSource for TransformOp<R> {
 	/* --- metadata --- */
 	fn metadata(&self) -> &TileSourceMetadata {
 		&self.metadata
@@ -55,7 +55,7 @@ impl<R: RunnerTrait> TileSourceTrait for TransformOp<R> {
 
 // transform_factory.rs
 #[context("Failed to build transform operation")]
-pub async fn build_transform<R>(source: Box<dyn TileSourceTrait>, runner: R) -> Result<Box<dyn TileSourceTrait>>
+pub async fn build_transform<R>(source: Box<dyn TileSource>, runner: R) -> Result<Box<dyn TileSource>>
 where
 	R: RunnerTrait,
 {
@@ -79,5 +79,5 @@ where
 		source,
 		metadata,
 		tilejson,
-	}) as Box<dyn TileSourceTrait>)
+	}) as Box<dyn TileSource>)
 }

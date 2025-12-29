@@ -1,7 +1,7 @@
 //! Defines the interface for writing tile data to various container formats.
 //!
-//! This module provides the object‑safe [`TilesWriterTrait`], which enables writing tiles
-//! from any [`TileSourceTrait`] source into a file or arbitrary output writer implementing
+//! This module provides the object‑safe [`TilesWriter`], which enables writing tiles
+//! from any [`TileSource`] source into a file or arbitrary output writer implementing
 //! [`DataWriterTrait`].
 //!
 //! Implementations of this trait are registered in the [`ContainerRegistry`] to handle specific
@@ -9,7 +9,7 @@
 //!
 //! ## Responsibilities
 //! A tile writer must:
-//! - Pull tiles from a [`TileSourceTrait`] source (possibly streamed)
+//! - Pull tiles from a [`TileSource`] source (possibly streamed)
 //! - Serialize them to the target format
 //! - Respect [`TilesRuntime`] parameters such as compression and parallelism
 //!
@@ -30,7 +30,7 @@
 //! }
 //! ```
 
-use crate::{TileSourceTrait, TilesRuntime};
+use crate::{TileSource, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::path::Path;
@@ -43,16 +43,16 @@ use versatiles_core::io::*;
 ///
 /// Implementors should handle compression, metadata, and configuration from [`TilesRuntime`].
 #[async_trait]
-pub trait TilesWriterTrait: Send {
+pub trait TilesWriter: Send {
 	/// Writes all tile data from `reader` into the file or directory at `path`.
 	///
 	/// The default implementation wraps `path` in a [`DataWriterFile`] and calls
-	/// [`TilesWriterTrait::write_to_writer`]. Implementations may override this for more efficient
+	/// [`TilesWriter::write_to_writer`]. Implementations may override this for more efficient
 	/// file handling.
 	///
 	/// # Errors
 	/// Returns an error if the file cannot be created or the writing operation fails.
-	async fn write_to_path(reader: &mut dyn TileSourceTrait, path: &Path, runtime: TilesRuntime) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
 		Self::write_to_writer(reader, &mut DataWriterFile::from_path(path)?, runtime).await
 	}
 
@@ -69,7 +69,7 @@ pub trait TilesWriterTrait: Send {
 	/// # Errors
 	/// Returns an error if reading from the source or writing to the sink fails.
 	async fn write_to_writer(
-		reader: &mut dyn TileSourceTrait,
+		reader: &mut dyn TileSource,
 		writer: &mut dyn DataWriterTrait,
 		runtime: TilesRuntime,
 	) -> Result<()>;

@@ -2,7 +2,7 @@ use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -23,15 +23,15 @@ struct Args {
 
 #[derive(Debug)]
 struct Operation {
-	source: Box<dyn TileSourceTrait>,
+	source: Box<dyn TileSource>,
 	tilejson: TileJSON,
 }
 
 impl Operation {
 	#[context("Building meta_update operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSourceTrait>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<Operation>
 	where
-		Self: Sized + TileSourceTrait,
+		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let mut tilejson = source.tilejson().clone();
@@ -61,7 +61,7 @@ impl Operation {
 }
 
 #[async_trait]
-impl TileSourceTrait for Operation {
+impl TileSource for Operation {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_processor("meta_update", self.source.source_type())
 	}
@@ -96,12 +96,12 @@ impl TransformOperationFactoryTrait for Factory {
 	async fn build<'a>(
 		&self,
 		vpl_node: VPLNode,
-		source: Box<dyn TileSourceTrait>,
+		source: Box<dyn TileSource>,
 		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn TileSourceTrait>> {
+	) -> Result<Box<dyn TileSource>> {
 		Operation::build(vpl_node, source, factory)
 			.await
-			.map(|op| Box::new(op) as Box<dyn TileSourceTrait>)
+			.map(|op| Box::new(op) as Box<dyn TileSource>)
 	}
 }
 

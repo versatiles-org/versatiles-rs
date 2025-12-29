@@ -31,7 +31,7 @@
 //! Returns errors when the tar cannot be opened or read, when no tiles are found,
 //! or when mixed formats/compressions are detected.
 
-use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
+use crate::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path, sync::Arc};
@@ -43,7 +43,7 @@ use versatiles_derive::context;
 ///
 /// Merges TileJSON from recognized metadata files, builds a map from `{z,x,y}` to
 /// byte ranges within the archive, infers uniform format/compression, and exposes
-/// tiles via [`TileSourceTrait`].
+/// tiles via [`TileSource`].
 pub struct TarTilesReader {
 	tilejson: TileJSON,
 	name: String,
@@ -191,7 +191,7 @@ impl TarTilesReader {
 }
 
 #[async_trait]
-impl TileSourceTrait for TarTilesReader {
+impl TileSource for TarTilesReader {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_container("tar", &self.name)
 	}

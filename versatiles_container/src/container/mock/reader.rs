@@ -24,7 +24,7 @@
 
 use std::sync::Arc;
 
-use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal};
+use crate::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{utils::compress, *};
@@ -92,7 +92,7 @@ impl MockReader {
 }
 
 #[async_trait]
-impl TileSourceTrait for MockReader {
+impl TileSource for MockReader {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_container("dummy", "dummy")
 	}

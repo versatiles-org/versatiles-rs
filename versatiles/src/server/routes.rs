@@ -5,7 +5,7 @@
 
 use super::{
 	handlers::{StaticHandlerState, error_404, ok_json, serve_static, serve_tile_from_source},
-	sources::{StaticSource, TileSource},
+	sources::{ServerTileSource, StaticSource},
 	utils::Url,
 };
 use anyhow::Result;
@@ -24,7 +24,7 @@ use versatiles_derive::context;
 /// State for dynamic tile routing - looks up sources at request time.
 #[derive(Clone)]
 pub struct DynamicTileHandlerState {
-	pub tile_sources: Arc<DashMap<String, Arc<TileSource>>>,
+	pub tile_sources: Arc<DashMap<String, Arc<ServerTileSource>>>,
 	pub minimal_recompression: bool,
 }
 
@@ -63,7 +63,7 @@ pub async fn serve_dynamic_tile(
 /// Attach dynamic tile routing with single catch-all route.
 pub fn add_tile_sources_to_app(
 	app: Router,
-	sources: Arc<DashMap<String, Arc<TileSource>>>,
+	sources: Arc<DashMap<String, Arc<ServerTileSource>>>,
 	minimal_recompression: bool,
 ) -> Router {
 	let state = DynamicTileHandlerState {
@@ -95,7 +95,7 @@ pub fn add_static_sources_to_app(
 
 /// Attach small JSON API endpoints (currently `/tiles/index.json`).
 #[context("adding API routes to app")]
-pub async fn add_api_to_app(app: Router, sources: Arc<DashMap<String, Arc<TileSource>>>) -> Result<Router> {
+pub async fn add_api_to_app(app: Router, sources: Arc<DashMap<String, Arc<ServerTileSource>>>) -> Result<Router> {
 	let mut api_app = Router::new();
 
 	api_app = api_app.route(

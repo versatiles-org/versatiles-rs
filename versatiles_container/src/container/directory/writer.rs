@@ -43,7 +43,7 @@
 //! ### Errors
 //! Returns errors if the destination path is not absolute, if file I/O fails, or if compression/encoding fails.
 
-use crate::{TileSourceTrait, TileSourceTraverseExt, TilesRuntime, TilesWriterTrait, Traversal};
+use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use std::{
@@ -74,7 +74,7 @@ impl DirectoryWriter {
 }
 
 #[async_trait]
-impl TilesWriterTrait for DirectoryWriter {
+impl TilesWriter for DirectoryWriter {
 	/// Write all tiles and metadata from `reader` into the absolute directory `path`.
 	///
 	/// * Validates that `path` is absolute.
@@ -85,7 +85,7 @@ impl TilesWriterTrait for DirectoryWriter {
 	/// # Errors
 	/// Returns an error for non-absolute paths, I/O failures, or encoding/compression errors.
 	#[context("writing tiles to directory '{}'", path.display())]
-	async fn write_to_path(reader: &mut dyn TileSourceTrait, path: &Path, runtime: TilesRuntime) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
 		log::trace!("convert_from");
@@ -138,7 +138,7 @@ impl TilesWriterTrait for DirectoryWriter {
 	/// Always returns an error (`not implemented`).
 	#[context("writing tiles to external writer")]
 	async fn write_to_writer(
-		_reader: &mut dyn TileSourceTrait,
+		_reader: &mut dyn TileSource,
 		_writer: &mut dyn DataWriterTrait,
 		_runtime: TilesRuntime,
 	) -> Result<()> {

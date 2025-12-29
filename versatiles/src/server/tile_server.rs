@@ -29,7 +29,7 @@ use tower::{
 };
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
-use versatiles_container::{TileSourceTrait, TilesRuntime};
+use versatiles_container::{TileSource, TilesRuntime};
 use versatiles_derive::context;
 
 /// Thin orchestration layer for the VersaTiles HTTP server.
@@ -55,7 +55,7 @@ pub struct TileServer {
 	port: u16,
 	/// Tile sources stored in a lock-free concurrent HashMap for dynamic hot-reload.
 	/// DashMap provides lock-free reads (serving tiles) with sharded locking for writes (add/remove).
-	tile_sources: Arc<DashMap<String, Arc<sources::TileSource>>>,
+	tile_sources: Arc<DashMap<String, Arc<sources::ServerTileSource>>>,
 	/// Static sources stored in a lock-free arc-swapped Vec for dynamic hot-reload.
 	/// ArcSwap allows lock-free reads (serving files) and copy-on-write updates (add/remove).
 	static_sources: Arc<ArcSwap<Vec<sources::StaticSource>>>,
@@ -161,11 +161,11 @@ impl TileServer {
 	/// Returns error if a source with this name already exists or if URL prefix collides.
 	/// Can be called before or after `start()` - changes take effect immediately.
 	#[context("adding tile source: id='{name}'")]
-	pub async fn add_tile_source(&mut self, name: String, reader: Box<dyn TileSourceTrait>) -> Result<()> {
+	pub async fn add_tile_source(&mut self, name: String, reader: Box<dyn TileSource>) -> Result<()> {
 		log::debug!("add source: id='{name}', source={reader:?}");
 
-		// Create TileSource (validates and wraps reader)
-		let source = sources::TileSource::from(reader, &name)?;
+		// Create ServerTileSource (validates and wraps reader)
+		let source = sources::ServerTileSource::from(reader, &name)?;
 		let source_arc = Arc::new(source);
 
 		// Check for ID collision

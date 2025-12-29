@@ -1,6 +1,6 @@
 //! Pipeline tile reader.
 //!
-//! This module defines [`PipelineReader`], a `TileSourceTrait` implementation that
+//! This module defines [`PipelineReader`], a `TileSource` implementation that
 //! loads a VersaTiles Pipeline Language (VPL) description, builds the operation
 //! graph via [`PipelineFactory`], and exposes a unified tile-reading interface.
 //! It supports opening from paths or arbitrary [`DataReader`]s, validates and
@@ -11,20 +11,20 @@ use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::{path::Path, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 use versatiles_core::{io::DataReader, *};
 use versatiles_derive::context;
 
 /// Tile reader that executes a VPL-defined operation pipeline and returns composed tiles.
 ///
 /// `PipelineReader` owns the parsed operation graph (`operation`) and exposes
-/// `TileSourceTrait` so it can be used like any other container reader. It can be
+/// `TileSource` so it can be used like any other container reader. It can be
 /// constructed from a file path, from any [`DataReader`], or (in tests) from a raw string.
 /// The `parameters` reported by the reader originate from the pipeline’s output operation
 /// and govern traversal, tile format, compression, and metadata.
 pub struct PipelineReader {
 	name: String,
-	operation: Box<dyn TileSourceTrait>,
+	operation: Box<dyn TileSource>,
 }
 
 #[allow(dead_code)]
@@ -68,12 +68,12 @@ impl<'a> PipelineReader {
 	) -> BoxFuture<'a, Result<PipelineReader>> {
 		Box::pin(async move {
 			let runtime2 = runtime.clone();
-			let callback = Box::new(move |filename: String| -> BoxFuture<Result<Box<dyn TileSourceTrait>>> {
+			let callback = Box::new(move |filename: String| -> BoxFuture<Result<Box<dyn TileSource>>> {
 				let runtime = runtime2.clone();
 				Box::pin(async move { runtime.clone().get_reader_from_str(&filename).await })
 			});
 			let factory = PipelineFactory::new_default(dir, callback, runtime);
-			let operation: Box<dyn TileSourceTrait> = factory.operation_from_vpl(vpl).await?;
+			let operation: Box<dyn TileSource> = factory.operation_from_vpl(vpl).await?;
 
 			Ok(PipelineReader {
 				name: name.to_string(),
@@ -84,7 +84,7 @@ impl<'a> PipelineReader {
 }
 
 #[async_trait]
-impl TileSourceTrait for PipelineReader {
+impl TileSource for PipelineReader {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_processor("pipeline", SourceType::new_container("replace", "me"))
 	}

@@ -1,6 +1,6 @@
 //! HTTP handlers and small response helpers for the tile/static server.
 //!
-//! - `serve_tile` serves tiles from a single `TileSource`.
+//! - `serve_tile` serves tiles from a single `ServerTileSource`.
 //! - `serve_static` serves files from a list of `StaticSource`s.
 //! - `ok_json` is a tiny helper used by the API routes.
 //!
@@ -9,7 +9,7 @@
 
 use super::{
 	encoding::get_encoding,
-	sources::{SourceResponse, StaticSource, TileSource},
+	sources::{ServerTileSource, SourceResponse, StaticSource},
 	utils::Url,
 };
 use axum::{
@@ -32,11 +32,11 @@ pub struct StaticHandlerState {
 }
 
 /// Core tile serving logic extracted for reuse in dynamic routing.
-/// Takes an Arc<TileSource> to support both static and dynamic routing.
+/// Takes an Arc<ServerTileSource> to support both static and dynamic routing.
 pub async fn serve_tile_from_source(
 	path: Url,
 	headers: HeaderMap,
-	tile_source: Arc<TileSource>,
+	tile_source: Arc<ServerTileSource>,
 	minimal_recompression: bool,
 ) -> Response<Body> {
 	log::debug!("handle tile request: {path}");

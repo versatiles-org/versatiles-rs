@@ -3,7 +3,7 @@
 //! Read tiles and metadata from a `.versatiles` container.
 //!
 //! The `VersaTilesReader` parses the container header, decompresses the **block index**,
-//! reads embedded TileJSON metadata, and exposes tiles via [`TileSourceTrait`]. The
+//! reads embedded TileJSON metadata, and exposes tiles via [`TileSource`]. The
 //! file format organizes data into fixed **256×256 tile blocks**; each block stores
 //! a Brotli-compressed tile index (byte ranges), followed by a contiguous region of
 //! tile blobs. This reader lazily caches decoded tile indices for fast random access.
@@ -55,9 +55,7 @@
 //! or when a requested tile is missing.
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
-use crate::{
-	SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime, Traversal, TraversalOrder, TraversalSize,
-};
+use crate::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal, TraversalOrder, TraversalSize};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{lock::Mutex, stream::StreamExt};
@@ -308,10 +306,10 @@ impl Chunk {
 }
 
 #[async_trait]
-/// [`TileSourceTrait`] implementation — provides `container_name`, `parameters`, `tilejson`,
+/// [`TileSource`] implementation — provides `container_name`, `parameters`, `tilejson`,
 /// on-the-fly `override_compression`, single-tile fetch via `get_tile`, and bbox streaming via
 /// `get_tile_stream` (with internal read coalescing).
-impl TileSourceTrait for VersaTilesReader {
+impl TileSource for VersaTilesReader {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_container("versatiles", self.reader.get_name())
 	}
@@ -510,7 +508,7 @@ impl PartialEq for VersaTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{MOCK_BYTES_PBF, MockReader, TilesRuntime, TilesWriterTrait, VersaTilesWriter, make_test_file};
+	use crate::{MOCK_BYTES_PBF, MockReader, TilesRuntime, TilesWriter, VersaTilesWriter, make_test_file};
 	use assert_fs::NamedTempFile;
 	use versatiles_core::{assert_wildcard, io::DataWriterBlob};
 

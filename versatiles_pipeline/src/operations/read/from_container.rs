@@ -2,15 +2,15 @@
 //!
 //! This module defines an [`Operation`] that streams tiles out of a **single
 //! tile container** (e.g. `*.versatiles`, MBTiles, PMTiles, TAR bundles).
-//! It adapts the container’s [`TileSourceTrait`] interface to
-//! [`TileSourceTrait`] so that the rest of the pipeline can treat it like any
+//! It adapts the container’s [`TileSource`] interface to
+//! [`TileSource`] so that the rest of the pipeline can treat it like any
 //! other data source.
 
-use crate::{PipelineFactory, operations::read::traits::ReadTileSourceTrait, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, operations::read::traits::ReadTileSource, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
-use versatiles_container::{Tile, TileSourceMetadata, TileSourceTrait};
+use versatiles_container::{Tile, TileSource, TileSourceMetadata};
 use versatiles_core::*;
 use versatiles_derive::context;
 
@@ -23,32 +23,32 @@ struct Args {
 }
 
 #[derive(Debug)]
-/// Concrete [`TileSourceTrait`] that merely forwards every request to an
-/// underlying container [`TileSourceTrait`].  A cached copy of the
+/// Concrete [`TileSource`] that merely forwards every request to an
+/// underlying container [`TileSource`].  A cached copy of the
 /// container’s [`TileJSON`] metadata is kept so downstream stages can query
 /// bounds and zoom levels without touching the reader again.
 struct Operation {
-	source: Box<dyn TileSourceTrait>,
+	source: Box<dyn TileSource>,
 	tilejson: TileJSON,
 }
 
-impl ReadTileSourceTrait for Operation {
+impl ReadTileSource for Operation {
 	#[context("Failed to build from_container operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSourceTrait>>
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
 	where
-		Self: Sized + TileSourceTrait,
+		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let source = factory.get_reader(&factory.resolve_filename(&args.filename)).await?;
 		let mut tilejson = source.tilejson().clone();
 		source.metadata().update_tilejson(&mut tilejson);
 
-		Ok(Box::new(Self { tilejson, source }) as Box<dyn TileSourceTrait>)
+		Ok(Box::new(Self { tilejson, source }) as Box<dyn TileSource>)
 	}
 }
 
 #[async_trait]
-impl TileSourceTrait for Operation {
+impl TileSource for Operation {
 	fn source_type(&self) -> std::sync::Arc<versatiles_container::SourceType> {
 		self.source.source_type()
 	}
@@ -66,7 +66,7 @@ impl TileSourceTrait for Operation {
 	}
 
 	/// Stream raw tile blobs intersecting the bounding box by delegating to
-	/// `TileSourceTrait::get_tile_stream`.
+	/// `TileSource::get_tile_stream`.
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_tile_stream {:?}", bbox);
@@ -87,19 +87,19 @@ impl OperationFactoryTrait for Factory {
 
 #[async_trait]
 impl ReadOperationFactoryTrait for Factory {
-	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSourceTrait>> {
+	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSource>> {
 		Operation::build(vpl_node, factory).await
 	}
 }
 
 #[cfg(test)]
-pub fn operation_from_reader(reader: Box<dyn TileSourceTrait>) -> Box<dyn TileSourceTrait> {
+pub fn operation_from_reader(reader: Box<dyn TileSource>) -> Box<dyn TileSource> {
 	let mut tilejson = reader.tilejson().clone();
 	reader.metadata().update_tilejson(&mut tilejson);
 	Box::new(Operation {
 		source: reader,
 		tilejson,
-	}) as Box<dyn TileSourceTrait>
+	}) as Box<dyn TileSource>
 }
 
 #[cfg(test)]

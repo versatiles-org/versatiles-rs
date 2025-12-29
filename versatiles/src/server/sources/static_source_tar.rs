@@ -187,7 +187,7 @@ mod tests {
 	use assert_fs::NamedTempFile;
 	use rstest::rstest;
 	use versatiles_container::{
-		MockReader, MockReaderProfile, TileSourceTrait, TilesConverterParameters, TilesRuntime, convert_tiles_container,
+		MockReader, MockReaderProfile, TileSource, TilesConverterParameters, TilesRuntime, convert_tiles_container,
 	};
 	use versatiles_core::TileBBoxPyramid;
 

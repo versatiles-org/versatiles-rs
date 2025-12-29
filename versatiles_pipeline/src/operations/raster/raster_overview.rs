@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use imageproc::image::{DynamicImage, GenericImage};
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, Traversal, TraversalOrder};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal, TraversalOrder};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -23,7 +23,7 @@ struct Args {
 #[derive(Debug)]
 struct Operation {
 	metadata: TileSourceMetadata,
-	source: Box<dyn TileSourceTrait>,
+	source: Box<dyn TileSource>,
 	tilejson: TileJSON,
 	level_base: u8,
 	tile_size: u32,
@@ -33,9 +33,9 @@ struct Operation {
 
 impl Operation {
 	#[context("Building raster_levels operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSourceTrait>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<Operation>
 	where
-		Self: Sized + TileSourceTrait,
+		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 		ensure!(source.metadata().traversal.is_any());
@@ -169,7 +169,7 @@ impl Operation {
 }
 
 #[async_trait]
-impl TileSourceTrait for Operation {
+impl TileSource for Operation {
 	fn metadata(&self) -> &TileSourceMetadata {
 		&self.metadata
 	}
@@ -253,12 +253,12 @@ impl TransformOperationFactoryTrait for Factory {
 	async fn build<'a>(
 		&self,
 		vpl_node: VPLNode,
-		source: Box<dyn TileSourceTrait>,
+		source: Box<dyn TileSource>,
 		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn TileSourceTrait>> {
+	) -> Result<Box<dyn TileSource>> {
 		Operation::build(vpl_node, source, factory)
 			.await
-			.map(|op| Box::new(op) as Box<dyn TileSourceTrait>)
+			.map(|op| Box::new(op) as Box<dyn TileSource>)
 	}
 }
 

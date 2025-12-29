@@ -9,7 +9,7 @@
 //! These mocks can be used to simulate tile writing operations in tests, allowing verification of code behavior under controlled conditions.
 //!
 //! ```rust
-//! use versatiles_container::{MockReader, MockReaderProfile, MockWriter, TilesWriterTrait};
+//! use versatiles_container::{MockReader, MockReaderProfile, MockWriter, TilesWriter};
 //! use anyhow::Result;
 //!
 //! #[tokio::test]
@@ -20,7 +20,7 @@
 //! }
 //! ```
 
-use crate::{TileSourceTrait, TileSourceTraverseExt, TilesRuntime, TilesWriterTrait, Traversal};
+use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::io::DataWriterTrait;
@@ -42,7 +42,7 @@ impl MockWriter {
 	/// # Returns
 	///
 	/// A `Result` indicating the success or failure of the operation.
-	pub async fn write(reader: &mut dyn TileSourceTrait) -> Result<()> {
+	pub async fn write(reader: &mut dyn TileSource) -> Result<()> {
 		let _temp = reader.tilejson();
 
 		reader
@@ -62,7 +62,7 @@ impl MockWriter {
 }
 
 #[async_trait]
-impl TilesWriterTrait for MockWriter {
+impl TilesWriter for MockWriter {
 	/// Writes tile data from a `TilesReader` to a `DataWriterTrait`.
 	///
 	/// This method is not implemented for the mock writer and simply calls `MockWriter::write`.
@@ -77,7 +77,7 @@ impl TilesWriterTrait for MockWriter {
 	/// A `Result` indicating the success or failure of the operation.
 	#[context("mock writing tiles to DataWriter")]
 	async fn write_to_writer(
-		reader: &mut dyn TileSourceTrait,
+		reader: &mut dyn TileSource,
 		_writer: &mut dyn DataWriterTrait,
 		_runtime: TilesRuntime,
 	) -> Result<()> {

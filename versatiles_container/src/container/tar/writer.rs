@@ -15,7 +15,7 @@
 //! Returns errors if the archive file cannot be created, or if encoding/compression of
 //! tiles/TileJSON fails while streaming from the reader.
 
-use crate::{TileSourceTrait, TileSourceTraverseExt, TilesRuntime, TilesWriterTrait, Traversal};
+use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -38,7 +38,7 @@ use versatiles_derive::context;
 pub struct TarTilesWriter {}
 
 #[async_trait]
-impl TilesWriterTrait for TarTilesWriter {
+impl TilesWriter for TarTilesWriter {
 	/// Write all tiles and TileJSON from `reader` into a tarball at `path`.
 	///
 	/// * Encodes TileJSON to a blob using `reader.parameters().tile_compression` and writes it as `tiles.json[.<compression>]`.
@@ -49,7 +49,7 @@ impl TilesWriterTrait for TarTilesWriter {
 	/// Returns an error if the output file cannot be created, or if any tile/metadata
 	/// serialization or compression fails.
 	#[context("writing tar to path '{}'", path.display())]
-	async fn write_to_path(reader: &mut dyn TileSourceTrait, path: &Path, runtime: TilesRuntime) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
 		let file = File::create(path)?;
 		let mut builder = Builder::new(file);
 
@@ -112,7 +112,7 @@ impl TilesWriterTrait for TarTilesWriter {
 	/// Always returns `not implemented`.
 	#[context("writing tar to DataWriter")]
 	async fn write_to_writer(
-		_reader: &mut dyn TileSourceTrait,
+		_reader: &mut dyn TileSource,
 		_writer: &mut dyn DataWriterTrait,
 		_runtime: TilesRuntime,
 	) -> Result<()> {

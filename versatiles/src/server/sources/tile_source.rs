@@ -1,29 +1,29 @@
 use super::{super::utils::Url, SourceResponse};
 use anyhow::Result;
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::TileSourceTrait;
+use versatiles_container::TileSource;
 use versatiles_core::{Blob, TileCompression, TileCoord, utils::TargetCompression};
 use versatiles_derive::context;
 
 // TileSource struct definition
 #[derive(Clone)]
-pub struct TileSource {
+pub struct ServerTileSource {
 	pub prefix: Url,
 	pub id: String,
-	reader: Arc<Box<dyn TileSourceTrait>>, // NO MORE MUTEX! 🚀
+	reader: Arc<Box<dyn TileSource>>, // NO MORE MUTEX! 🚀
 	pub tile_mime: String,
 	pub compression: TileCompression,
 }
 
-impl TileSource {
+impl ServerTileSource {
 	// Constructor function for creating a TileSource instance
 	#[context("creating tile source: id='{id}'")]
-	pub fn from(reader: Box<dyn TileSourceTrait>, id: &str) -> Result<TileSource> {
+	pub fn from(reader: Box<dyn TileSource>, id: &str) -> Result<ServerTileSource> {
 		let parameters = reader.metadata();
 		let tile_mime = parameters.tile_format.as_mime_str().to_string();
 		let compression = parameters.tile_compression;
 
-		Ok(TileSource {
+		Ok(ServerTileSource {
 			prefix: Url::new(format!("/tiles/{id}/")).to_dir(),
 			id: id.to_owned(),
 			reader: Arc::new(reader), // No Mutex wrapper!
@@ -100,10 +100,10 @@ impl TileSource {
 	}
 }
 
-// Debug implementation for TileSource
-impl Debug for TileSource {
+// Debug implementation for ServerTileSource
+impl Debug for ServerTileSource {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("TileSource")
+		f.debug_struct("ServerTileSource")
 			.field("reader", &self.reader)
 			.field("tile_mime", &self.tile_mime)
 			.field("compression", &self.compression)
@@ -124,7 +124,7 @@ mod tests {
 	#[tokio::test]
 	async fn tile_container_from() -> Result<()> {
 		let reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
-		let container = TileSource::from(reader.boxed(), "prefix")?;
+		let container = ServerTileSource::from(reader.boxed(), "prefix")?;
 
 		assert_eq!(container.prefix.str, "/tiles/prefix/");
 		assert_eq!(
@@ -139,16 +139,16 @@ mod tests {
 	#[test]
 	fn debug() -> Result<()> {
 		let reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
-		let container = TileSource::from(reader.boxed(), "prefix")?;
+		let container = ServerTileSource::from(reader.boxed(), "prefix")?;
 		// Updated expected output - no more "Mutex { data: ... }"
 		assert_eq!(
 			format!("{container:?}"),
-			"TileSource { reader: MockReader { parameters: TileSourceMetadata { bbox_pyramid: [2: [0,1,2,3] (3x3), 3: [0,2,4,6] (5x5), 4: [0,0,15,15] (16x16), 5: [0,0,31,31] (32x32), 6: [0,0,63,63] (64x64)], tile_compression: Uncompressed, tile_format: PNG, traversal: Traversal(AnyOrder,full) } }, tile_mime: \"image/png\", compression: Uncompressed }"
+			"ServerTileSource { reader: MockReader { parameters: TileSourceMetadata { bbox_pyramid: [2: [0,1,2,3] (3x3), 3: [0,2,4,6] (5x5), 4: [0,0,15,15] (16x16), 5: [0,0,31,31] (32x32), 6: [0,0,63,63] (64x64)], tile_compression: Uncompressed, tile_format: PNG, traversal: Traversal(AnyOrder,full) } }, tile_mime: \"image/png\", compression: Uncompressed }"
 		);
 		Ok(())
 	}
 
-	// Test the get_data method of the TileSource
+	// Test the get_data method of the ServerTileSource
 	#[rstest]
 	#[case(
 		"../testdata/berlin.mbtiles",
@@ -174,7 +174,7 @@ mod tests {
 		use TileCompression::*;
 
 		async fn get_response(
-			container: &mut TileSource,
+			container: &mut ServerTileSource,
 			url: &str,
 			compression: TileCompression,
 		) -> Result<Option<SourceResponse>> {
@@ -184,7 +184,7 @@ mod tests {
 		}
 
 		async fn check_response(
-			container: &mut TileSource,
+			container: &mut ServerTileSource,
 			url: &str,
 			compression: TileCompression,
 			mime_type: &str,
@@ -194,7 +194,7 @@ mod tests {
 			Ok(response.blob.into_vec())
 		}
 
-		async fn check_status(container: &mut TileSource, url: &str) -> u16 {
+		async fn check_status(container: &mut ServerTileSource, url: &str) -> u16 {
 			let response = get_response(container, url, Uncompressed).await;
 			if response.is_err() {
 				return 400;
@@ -206,7 +206,7 @@ mod tests {
 
 		let runtime = create_test_runtime();
 		let reader = runtime.get_reader_from_str(filename).await?;
-		let c = &mut TileSource::from(reader, "prefix")?;
+		let c = &mut ServerTileSource::from(reader, "prefix")?;
 
 		assert_eq!(
 			&check_response(c, coord, Uncompressed, exp_mime).await?[0..4],

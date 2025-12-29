@@ -50,7 +50,7 @@
 //! - Returns errors if the database is unreadable, the `format` is missing/unknown,
 //!   or queries fail.
 
-use crate::{SourceType, Tile, TileSourceMetadata, TileSourceTrait, TilesRuntime, Traversal};
+use crate::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use r2d2::Pool;
@@ -63,7 +63,7 @@ use versatiles_derive::context;
 ///
 /// Opens a SQLite database with `metadata` and `tiles` tables, merges metadata into
 /// [`TileJSON`], infers a bounding-box pyramid by scanning levels/rows/columns, and
-/// exposes tiles via the [`TileSourceTrait`] interface.
+/// exposes tiles via the [`TileSource`] interface.
 pub struct MBTilesReader {
 	name: String,
 	pool: Pool<SqliteConnectionManager>,
@@ -302,7 +302,7 @@ impl MBTilesReader {
 }
 
 #[async_trait]
-impl TileSourceTrait for MBTilesReader {
+impl TileSource for MBTilesReader {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_container("mbtiles", &self.name)
 	}
