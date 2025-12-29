@@ -135,17 +135,31 @@ update_cargo_toml_version() {
 	log_success "Cargo.toml updated to version $new_version"
 }
 
-# Update package.json version
+# Update package.json and package-lock.json version
 update_package_json_version() {
 	local new_version="$1"
 
-	log_step "Updating package.json..."
+	log_step "Updating package.json and package-lock.json..."
 
 	cd versatiles_node
 	npm version "$new_version" --no-git-tag-version --allow-same-version >/dev/null 2>&1
 	cd ..
 
-	log_success "package.json updated to version $new_version"
+	# Verify both files were updated
+	local pkg_version
+	pkg_version=$(node -p "require('./versatiles_node/package.json').version")
+	local lock_version
+	lock_version=$(node -p "require('./versatiles_node/package-lock.json').version")
+
+	if [ "$pkg_version" = "$new_version" ] && [ "$lock_version" = "$new_version" ]; then
+		log_success "package.json and package-lock.json updated to version $new_version"
+	else
+		log_error "Failed to update package files correctly"
+		echo "  package.json: $pkg_version"
+		echo "  package-lock.json: $lock_version"
+		echo "  expected: $new_version"
+		exit 1
+	fi
 }
 
 # Update Cargo.lock
