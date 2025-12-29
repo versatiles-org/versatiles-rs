@@ -100,8 +100,16 @@ case "$RELEASE_ARG" in
 		;;
 esac
 
-# commit package.json if it was updated by cargo-release
+# Sync package.json to match the new version set by cargo-release
+NEW_VERSION=$(grep -m1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+echo "Syncing package.json to version $NEW_VERSION..."
+cd versatiles_node
+npm version "$NEW_VERSION" --no-git-tag-version --allow-same-version
+cd ..
+
+# Amend the cargo-release commit to include package.json
 if [ -n "$(git status --porcelain versatiles_node/package.json)" ]; then
 	git add versatiles_node/package.json
 	git commit --amend --no-edit --no-verify
+	echo -e "${GRE}✓ Package.json synced and commit amended${END}"
 fi
