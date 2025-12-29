@@ -172,9 +172,9 @@ mod tests {
 			"versatiles",
 			"serve",
 			"-c",
+			"../testdata/config1.yml",
 			"-p",
 			"65003",
-			"../testdata/config1.yml",
 			"--auto-shutdown",
 			"500",
 		])?;
