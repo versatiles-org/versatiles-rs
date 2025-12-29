@@ -520,6 +520,79 @@ jobs:
           npm view @versatiles/versatiles-rs@$TAG_VERSION version
           npm view @versatiles/versatiles-rs-darwin-arm64@$TAG_VERSION version
 
+  publish-crates:
+    name: Publish to crates.io
+    needs:
+      - prepare
+      - build-linux-x86
+      - build-linux-arm
+      - build-macos
+      - build-windows
+    runs-on: ubuntu-latest
+    # Only publish stable releases to crates.io (not pre-releases)
+    if: needs.prepare.outputs.is_prerelease == 'false'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: 'crates-publish'
+
+      - name: Publish crates to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          set -e
+
+          echo "Publishing crates in dependency order..."
+
+          # Publish in dependency order (derived from Cargo.toml dependencies)
+          crates=(
+            "versatiles_derive"
+            "versatiles_core"
+            "versatiles_geometry"
+            "versatiles_image"
+            "versatiles_container"
+            "versatiles_pipeline"
+            "versatiles"
+          )
+
+          for crate in "${crates[@]}"; do
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "Publishing $crate..."
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+            cd "$crate"
+
+            # Check if this version is already published
+            VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+            if cargo search "$crate" --limit 1 | grep -q "^$crate = \"$VERSION\""; then
+              echo "⚠️  $crate@$VERSION is already published, skipping..."
+            else
+              echo "Publishing $crate@$VERSION..."
+              cargo publish --allow-dirty
+              echo "✓ Published $crate@$VERSION"
+              # Wait to avoid rate limiting
+              echo "Waiting 30 seconds before next publish..."
+              sleep 30
+            fi
+
+            cd ..
+          done
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✓ All crates published successfully!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
   finish-release:
     name: Finish release
     needs:
@@ -529,6 +602,7 @@ jobs:
       - build-macos
       - build-windows
       - publish-npm
+      - publish-crates
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
