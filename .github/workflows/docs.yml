@@ -14,6 +14,8 @@ jobs:
   build-and-deploy:
     name: Build and Deploy Documentation
     runs-on: ubuntu-latest
+    # Only run for regular release versions (not pre-releases like v3.0.1-rc.3)
+    if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
