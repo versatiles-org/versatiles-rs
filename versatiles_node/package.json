@@ -1,6 +1,6 @@
 {
 	"name": "@versatiles/versatiles-rs",
-	"version": "3.0.1-rc.2",
+	"version": "3.0.0-rc.1",
 	"description": "Node.js bindings for VersaTiles - convert, serve, and process map tiles",
 	"main": "index.js",
 	"types": "index.d.ts",
