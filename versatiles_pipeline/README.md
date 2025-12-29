@@ -118,11 +118,11 @@ Adjust brightness, contrast and gamma of raster tiles.
 - *`gamma`: f32 (optional)* - Gamma adjustment, between 0 and infinity. Defaults to 1.0 (no change).
 
 ## raster_overscale
-Filter tiles by bounding box and/or zoom levels.
+Raster overscale operation - generates tiles beyond the source's native resolution.
 ### Parameters:
 - *`level_base`: u8 (optional)* - use this zoom level to build the overscale. Defaults to the maximum zoom level of the source.
 - *`level_max`: u8 (optional)* - use this as maximum zoom level. Defaults to 30.
-- *`tile_size`: u32 (optional)* - Size of the tiles in pixels. Defaults to 512.
+- *`enable_climbing`: bool (optional)* - Enable tile climbing when overscaling. Defaults to false.
 
 ## raster_overview
 Filter tiles by bounding box and/or zoom levels.
