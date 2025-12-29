@@ -77,7 +77,7 @@ fi
 
 # Perform the release
 echo "Releasing $RELEASE_ARG version..."
-cargo release "$RELEASE_ARG" --no-verify --sign-commit --workspace --execute
+cargo release "$RELEASE_ARG" --no-verify --sign-commit --workspace --execute --no-push
 
 # sync version
 echo "Checking version synchronization..."
@@ -89,3 +89,5 @@ if [ -n "$(git status --porcelain versatiles_node/package.json)" ]; then
 	git commit --amend --no-edit --no-verify
 	echo -e "${GRE}✓ Package.json synced and commit amended${END}"
 fi
+
+git push origin main --follow-tags
