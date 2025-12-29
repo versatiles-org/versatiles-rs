@@ -381,3 +381,439 @@ impl TileServer {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_new_server_default_options() {
+		let server = TileServer::new(None).unwrap();
+		// Verify the server was created successfully
+		assert!(server.inner.try_lock().is_ok());
+	}
+
+	#[test]
+	fn test_new_server_custom_port() {
+		let options = ServerOptions {
+			ip: None,
+			port: Some(3000),
+			minimal_recompression: None,
+		};
+		let server = TileServer::new(Some(options)).unwrap();
+
+		// Verify custom port was set
+		let rt = tokio::runtime::Runtime::new().unwrap();
+		let port = rt.block_on(server.port());
+		assert_eq!(port, 3000);
+	}
+
+	#[test]
+	fn test_new_server_custom_ip() {
+		let options = ServerOptions {
+			ip: Some("127.0.0.1".to_string()),
+			port: None,
+			minimal_recompression: None,
+		};
+		let server = TileServer::new(Some(options)).unwrap();
+
+		// Verify custom IP was set
+		let rt = tokio::runtime::Runtime::new().unwrap();
+		let ip = rt.block_on(async { server.ip.lock().await.clone() });
+		assert_eq!(ip, "127.0.0.1");
+	}
+
+	#[test]
+	fn test_new_server_minimal_recompression() {
+		let options = ServerOptions {
+			ip: None,
+			port: None,
+			minimal_recompression: Some(true),
+		};
+		let server = TileServer::new(Some(options)).unwrap();
+
+		// Verify minimal recompression was set
+		let rt = tokio::runtime::Runtime::new().unwrap();
+		let minimal_recomp = rt.block_on(async { *server.minimal_recompression.lock().await });
+		assert_eq!(minimal_recomp, Some(true));
+	}
+
+	#[test]
+	fn test_new_server_all_custom_options() {
+		let options = ServerOptions {
+			ip: Some("0.0.0.0".to_string()),
+			port: Some(9999),
+			minimal_recompression: Some(false),
+		};
+		let server = TileServer::new(Some(options)).unwrap();
+
+		let rt = tokio::runtime::Runtime::new().unwrap();
+		let port = rt.block_on(server.port());
+		let ip = rt.block_on(async { server.ip.lock().await.clone() });
+		let minimal_recomp = rt.block_on(async { *server.minimal_recompression.lock().await });
+
+		assert_eq!(port, 9999);
+		assert_eq!(ip, "0.0.0.0");
+		assert_eq!(minimal_recomp, Some(false));
+	}
+
+	#[tokio::test]
+	async fn test_port_getter_before_start() {
+		let options = ServerOptions {
+			ip: None,
+			port: Some(8080),
+			minimal_recompression: None,
+		};
+		let server = TileServer::new(Some(options)).unwrap();
+
+		// Port should return configured value even before server starts
+		let port = server.port().await;
+		assert_eq!(port, 8080);
+	}
+
+	#[tokio::test]
+	async fn test_add_tile_source_invalid_path() {
+		let server = TileServer::new(None).unwrap();
+
+		// Try to add a non-existent tile source
+		let result = server
+			.add_tile_source("test".to_string(), "/nonexistent/path.mbtiles".to_string())
+			.await;
+
+		// Should fail because file doesn't exist
+		assert!(result.is_err());
+	}
+
+	#[tokio::test]
+	async fn test_add_tile_source_valid_path() {
+		let server = TileServer::new(None).unwrap();
+
+		// Use a real test file
+		let result = server
+			.add_tile_source("berlin".to_string(), "../testdata/berlin.mbtiles".to_string())
+			.await;
+
+		// Should succeed
+		assert!(result.is_ok());
+
+		// Verify it was added to the list
+		let sources = server.tile_sources.lock().await;
+		assert_eq!(sources.len(), 1);
+		assert_eq!(sources[0].0, "berlin");
+	}
+
+	#[tokio::test]
+	async fn test_add_multiple_tile_sources() {
+		let server = TileServer::new(None).unwrap();
+
+		// Add first source
+		server
+			.add_tile_source("berlin1".to_string(), "../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Add second source
+		server
+			.add_tile_source("berlin2".to_string(), "../testdata/berlin.pmtiles".to_string())
+			.await
+			.unwrap();
+
+		// Verify both were added
+		let sources = server.tile_sources.lock().await;
+		assert_eq!(sources.len(), 2);
+		assert_eq!(sources[0].0, "berlin1");
+		assert_eq!(sources[1].0, "berlin2");
+	}
+
+	#[tokio::test]
+	async fn test_remove_tile_source_not_found() {
+		let server = TileServer::new(None).unwrap();
+
+		// Try to remove a source that doesn't exist
+		let result = server.remove_tile_source("nonexistent".to_string()).await;
+
+		// Should return false (not found)
+		assert!(!result.unwrap());
+	}
+
+	#[tokio::test]
+	async fn test_remove_tile_source_success() {
+		let server = TileServer::new(None).unwrap();
+
+		// Add a source
+		server
+			.add_tile_source("berlin".to_string(), "../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Verify it was added
+		let sources = server.tile_sources.lock().await;
+		assert_eq!(sources.len(), 1);
+		drop(sources);
+
+		// Remove the source
+		let result = server.remove_tile_source("berlin".to_string()).await;
+
+		// Should return true (found and removed)
+		assert!(result.unwrap());
+
+		// Verify it was removed
+		let sources = server.tile_sources.lock().await;
+		assert_eq!(sources.len(), 0);
+	}
+
+	#[tokio::test]
+	async fn test_remove_tile_source_specific_from_multiple() {
+		let server = TileServer::new(None).unwrap();
+
+		// Add multiple sources
+		server
+			.add_tile_source("berlin1".to_string(), "../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+		server
+			.add_tile_source("berlin2".to_string(), "../testdata/berlin.pmtiles".to_string())
+			.await
+			.unwrap();
+
+		// Remove only the first one
+		server.remove_tile_source("berlin1".to_string()).await.unwrap();
+
+		// Verify only berlin2 remains
+		let sources = server.tile_sources.lock().await;
+		assert_eq!(sources.len(), 1);
+		assert_eq!(sources[0].0, "berlin2");
+	}
+
+	#[tokio::test]
+	async fn test_add_static_source_invalid_path() {
+		let server = TileServer::new(None).unwrap();
+
+		// Try to add a non-existent static source
+		let result = server
+			.add_static_source("/nonexistent/path".to_string(), Some("/".to_string()))
+			.await;
+
+		// Should fail because path doesn't exist
+		assert!(result.is_err());
+		let err = result.unwrap_err();
+		assert!(err.to_string().contains("does not exist"));
+	}
+
+	#[tokio::test]
+	async fn test_add_static_source_valid_path() {
+		let server = TileServer::new(None).unwrap();
+
+		// Use a real test file
+		let result = server
+			.add_static_source("../testdata/static.tar.gz".to_string(), Some("/static".to_string()))
+			.await;
+
+		// Should succeed
+		assert!(result.is_ok());
+
+		// Verify it was added to the list
+		let sources = server.static_sources.lock().await;
+		assert_eq!(sources.len(), 1);
+		assert_eq!(sources[0].0, "../testdata/static.tar.gz");
+		assert_eq!(sources[0].1, Some("/static".to_string()));
+	}
+
+	#[tokio::test]
+	async fn test_add_static_source_default_prefix() {
+		let server = TileServer::new(None).unwrap();
+
+		// Add static source without specifying prefix
+		server
+			.add_static_source("../testdata/static.tar.gz".to_string(), None)
+			.await
+			.unwrap();
+
+		// Verify default prefix was used
+		let sources = server.static_sources.lock().await;
+		assert_eq!(sources.len(), 1);
+		assert_eq!(sources[0].1, None);
+	}
+
+	#[tokio::test]
+	async fn test_remove_static_source_not_found() {
+		let server = TileServer::new(None).unwrap();
+
+		// Try to remove a source that doesn't exist
+		let result = server.remove_static_source("/nonexistent".to_string()).await;
+
+		// Should return false (not found)
+		assert!(!result.unwrap());
+	}
+
+	#[tokio::test]
+	async fn test_remove_static_source_success() {
+		let server = TileServer::new(None).unwrap();
+
+		// Add a static source
+		server
+			.add_static_source("../testdata/static.tar.gz".to_string(), Some("/static".to_string()))
+			.await
+			.unwrap();
+
+		// Remove it
+		let result = server.remove_static_source("/static".to_string()).await;
+
+		// Should return true (found and removed)
+		assert!(result.unwrap());
+
+		// Verify it was removed
+		let sources = server.static_sources.lock().await;
+		assert_eq!(sources.len(), 0);
+	}
+
+	#[tokio::test]
+	async fn test_stop_when_not_running() {
+		let server = TileServer::new(None).unwrap();
+
+		// Stop a server that was never started
+		let result = server.stop().await;
+
+		// Should succeed (no-op)
+		assert!(result.is_ok());
+	}
+
+	#[tokio::test]
+	async fn test_start_already_running() {
+		let server = TileServer::new(Some(ServerOptions {
+			ip: Some("127.0.0.1".to_string()),
+			port: Some(0), // Use ephemeral port to avoid conflicts
+			minimal_recompression: None,
+		}))
+		.unwrap();
+
+		// Start the server
+		server.start().await.unwrap();
+
+		// Try to start again while running
+		let result = server.start().await;
+
+		// Should fail with "already running" error
+		assert!(result.is_err());
+		let err = result.unwrap_err();
+		assert!(err.to_string().contains("already running"));
+
+		// Clean up
+		server.stop().await.unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_server_start_stop_lifecycle() {
+		let server = TileServer::new(Some(ServerOptions {
+			ip: Some("127.0.0.1".to_string()),
+			port: Some(0), // Use ephemeral port
+			minimal_recompression: None,
+		}))
+		.unwrap();
+
+		// Initially not running
+		{
+			let server_lock = server.inner.lock().await;
+			assert!(server_lock.is_none());
+		}
+
+		// Start the server
+		server.start().await.unwrap();
+
+		// Should be running now
+		{
+			let server_lock = server.inner.lock().await;
+			assert!(server_lock.is_some());
+		}
+
+		// Stop the server
+		server.stop().await.unwrap();
+
+		// Should not be running
+		{
+			let server_lock = server.inner.lock().await;
+			assert!(server_lock.is_none());
+		}
+	}
+
+	#[tokio::test]
+	async fn test_server_restart() {
+		let server = TileServer::new(Some(ServerOptions {
+			ip: Some("127.0.0.1".to_string()),
+			port: Some(0),
+			minimal_recompression: None,
+		}))
+		.unwrap();
+
+		// Start, stop, start again
+		server.start().await.unwrap();
+		server.stop().await.unwrap();
+		let result = server.start().await;
+
+		// Should be able to restart
+		assert!(result.is_ok());
+
+		// Clean up
+		server.stop().await.unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_add_tile_source_after_start() {
+		let server = TileServer::new(Some(ServerOptions {
+			ip: Some("127.0.0.1".to_string()),
+			port: Some(0),
+			minimal_recompression: None,
+		}))
+		.unwrap();
+
+		// Start server first
+		server.start().await.unwrap();
+
+		// Add source after starting (hot reload)
+		let result = server
+			.add_tile_source("berlin".to_string(), "../testdata/berlin.mbtiles".to_string())
+			.await;
+
+		// Should succeed
+		assert!(result.is_ok());
+
+		// Verify it was added
+		let sources = server.tile_sources.lock().await;
+		assert_eq!(sources.len(), 1);
+
+		// Clean up
+		server.stop().await.unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_remove_tile_source_after_start() {
+		let server = TileServer::new(Some(ServerOptions {
+			ip: Some("127.0.0.1".to_string()),
+			port: Some(0),
+			minimal_recompression: None,
+		}))
+		.unwrap();
+
+		// Add source before starting
+		server
+			.add_tile_source("berlin".to_string(), "../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Start server
+		server.start().await.unwrap();
+
+		// Remove source after starting (hot reload)
+		let result = server.remove_tile_source("berlin".to_string()).await;
+
+		// Should succeed
+		assert!(result.unwrap());
+
+		// Verify it was removed
+		let sources = server.tile_sources.lock().await;
+		assert_eq!(sources.len(), 0);
+
+		// Clean up
+		server.stop().await.unwrap();
+	}
+}
