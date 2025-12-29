@@ -295,4 +295,256 @@ mod tests {
 		));
 		assert!(Arc::ptr_eq(&progress1.message_listeners, &progress2.message_listeners));
 	}
+
+	#[test]
+	fn test_progress_data_conversion_below_threshold() {
+		let start = Instant::now();
+		// Sleep to ensure elapsed time > 0
+		std::thread::sleep(std::time::Duration::from_millis(10));
+
+		// Position is less than total/1000 (threshold check)
+		let state = ProgressState {
+			id: ProgressId(1),
+			message: "Just started".to_string(),
+			position: 1, // 1 < 100000/1000 = 100
+			total: 100000,
+			start,
+			next_draw: start,
+			next_emit: start,
+			finished: false,
+		};
+
+		let progress_data = ProgressData::from(&state);
+
+		// Should not have ETA when below threshold
+		assert_eq!(progress_data.position, 1.0);
+		assert_eq!(progress_data.total, 100000.0);
+		assert!(progress_data.speed > 0.0);
+		assert_eq!(progress_data.estimated_seconds_remaining, None);
+		assert_eq!(progress_data.eta, None);
+	}
+
+	#[test]
+	fn test_progress_data_conversion_large_numbers() {
+		let start = Instant::now();
+		// Sleep to ensure elapsed time > 0
+		std::thread::sleep(std::time::Duration::from_millis(50));
+
+		let state = ProgressState {
+			id: ProgressId(1),
+			message: "Processing many tiles".to_string(),
+			position: 5_000_000,
+			total: 10_000_000,
+			start,
+			next_draw: start,
+			next_emit: start,
+			finished: false,
+		};
+
+		let progress_data = ProgressData::from(&state);
+
+		assert_eq!(progress_data.position, 5_000_000.0);
+		assert_eq!(progress_data.total, 10_000_000.0);
+		assert_eq!(progress_data.percentage, 50.0);
+		assert!(progress_data.speed > 0.0);
+		assert!(progress_data.estimated_seconds_remaining.is_some());
+		assert!(progress_data.eta.is_some());
+
+		// ETA should be in the future
+		if let Some(eta_ms) = progress_data.eta {
+			let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64() * 1000.0;
+			assert!(eta_ms > now_ms);
+		}
+	}
+
+	#[test]
+	fn test_progress_data_eta_calculation() {
+		let start = Instant::now();
+		// Sleep to ensure measurable elapsed time
+		std::thread::sleep(std::time::Duration::from_millis(100));
+
+		let state = ProgressState {
+			id: ProgressId(1),
+			message: "Testing ETA".to_string(),
+			position: 1000,
+			total: 2000,
+			start,
+			next_draw: start,
+			next_emit: start,
+			finished: false,
+		};
+
+		let progress_data = ProgressData::from(&state);
+
+		// Verify ETA is calculated and reasonable
+		assert!(progress_data.eta.is_some());
+		if let Some(eta_ms) = progress_data.eta {
+			// ETA should be a valid timestamp (not negative, not too far in future)
+			assert!(eta_ms > 0.0);
+
+			// ETA should be in the future but not too far (within 1 hour for this test)
+			let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64() * 1000.0;
+			assert!(eta_ms > now_ms);
+			assert!(eta_ms < now_ms + 3_600_000.0); // Within 1 hour
+		}
+	}
+
+	#[test]
+	fn test_progress_data_speed_calculation() {
+		let start = Instant::now();
+		// Sleep to get measurable elapsed time
+		std::thread::sleep(std::time::Duration::from_millis(100));
+
+		let state = ProgressState {
+			id: ProgressId(1),
+			message: "Speed test".to_string(),
+			position: 1000,
+			total: 5000,
+			start,
+			next_draw: start,
+			next_emit: start,
+			finished: false,
+		};
+
+		let progress_data = ProgressData::from(&state);
+
+		// Speed should be position / elapsed_time
+		// Note: Using a larger tolerance since timing can vary
+		let elapsed_secs = start.elapsed().as_secs_f64();
+		let expected_speed = 1000.0 / elapsed_secs;
+
+		// Speed should be within 10% of expected due to timing variations
+		let tolerance = expected_speed * 0.1;
+		assert!(
+			(progress_data.speed - expected_speed).abs() < tolerance,
+			"Speed {} not close to expected {} (tolerance: {})",
+			progress_data.speed,
+			expected_speed,
+			tolerance
+		);
+	}
+
+	#[test]
+	fn test_progress_data_message_handling() {
+		let start = Instant::now();
+		let messages = vec![
+			"Step 1: Loading tiles",
+			"",
+			"Processing batch 5/10",
+			"Special characters: ñ, é, 中文, 🚀",
+		];
+
+		for msg in messages {
+			let state = ProgressState {
+				id: ProgressId(1),
+				message: msg.to_string(),
+				position: 50,
+				total: 100,
+				start,
+				next_draw: start,
+				next_emit: start,
+				finished: false,
+			};
+
+			let progress_data = ProgressData::from(&state);
+			assert_eq!(progress_data.message, Some(msg.to_string()));
+		}
+	}
+
+	#[test]
+	fn test_progress_data_percentage_edge_cases() {
+		let start = Instant::now();
+
+		// Test 0% case
+		let state = ProgressState {
+			id: ProgressId(1),
+			message: "Starting".to_string(),
+			position: 0,
+			total: 1000,
+			start,
+			next_draw: start,
+			next_emit: start,
+			finished: false,
+		};
+		let progress_data = ProgressData::from(&state);
+		assert_eq!(progress_data.percentage, 0.0);
+
+		// Test 100% case
+		let state = ProgressState {
+			id: ProgressId(1),
+			message: "Done".to_string(),
+			position: 1000,
+			total: 1000,
+			start,
+			next_draw: start,
+			next_emit: start,
+			finished: true,
+		};
+		let progress_data = ProgressData::from(&state);
+		assert_eq!(progress_data.percentage, 100.0);
+
+		// Test fractional percentage
+		let state = ProgressState {
+			id: ProgressId(1),
+			message: "Third".to_string(),
+			position: 33,
+			total: 100,
+			start,
+			next_draw: start,
+			next_emit: start,
+			finished: false,
+		};
+		let progress_data = ProgressData::from(&state);
+		assert_eq!(progress_data.percentage, 33.0);
+	}
+
+	#[test]
+	fn test_message_data_creation() {
+		let msg = MessageData {
+			msg_type: "warning".to_string(),
+			message: "Test warning message".to_string(),
+		};
+
+		assert_eq!(msg.msg_type, "warning");
+		assert_eq!(msg.message, "Test warning message");
+	}
+
+	#[test]
+	fn test_message_data_clone() {
+		let msg1 = MessageData {
+			msg_type: "error".to_string(),
+			message: "Test error".to_string(),
+		};
+
+		let msg2 = msg1.clone();
+
+		assert_eq!(msg1.msg_type, msg2.msg_type);
+		assert_eq!(msg1.message, msg2.message);
+	}
+
+	#[test]
+	fn test_progress_data_clone() {
+		let progress_data1 = ProgressData {
+			position: 50.0,
+			total: 100.0,
+			percentage: 50.0,
+			speed: 10.5,
+			estimated_seconds_remaining: Some(5.0),
+			eta: Some(1234567890.0),
+			message: Some("Test".to_string()),
+		};
+
+		let progress_data2 = progress_data1.clone();
+
+		assert_eq!(progress_data1.position, progress_data2.position);
+		assert_eq!(progress_data1.total, progress_data2.total);
+		assert_eq!(progress_data1.percentage, progress_data2.percentage);
+		assert_eq!(progress_data1.speed, progress_data2.speed);
+		assert_eq!(
+			progress_data1.estimated_seconds_remaining,
+			progress_data2.estimated_seconds_remaining
+		);
+		assert_eq!(progress_data1.eta, progress_data2.eta);
+		assert_eq!(progress_data1.message, progress_data2.message);
+	}
 }
