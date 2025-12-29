@@ -38,13 +38,17 @@ RUN cargo test --target "$TARGET"
 RUN cargo build --package "versatiles" --bin "versatiles" --release --target "$TARGET"
 RUN ./scripts/selftest-versatiles.sh "/versatiles/target/$TARGET/release/versatiles"
 
-# Build NAPI binding for Node.js
-RUN cargo build --package "versatiles_node" --release --target "$TARGET"
+# Build NAPI binding for Node.js (only for GNU, musl doesn't support cdylib)
+RUN if [ "$LIBC" = "gnu" ]; then \
+    cargo build --package "versatiles_node" --release --target "$TARGET"; \
+fi
 
 # Prepare output directory
 RUN mkdir -p /output/cli /output/node && \
     cp "/versatiles/target/$TARGET/release/versatiles" /output/cli/ && \
-    cp "/versatiles/target/$TARGET/release/libversatiles_node.so" /output/node/ 2>/dev/null || true
+    if [ "$LIBC" = "gnu" ]; then \
+        cp "/versatiles/target/$TARGET/release/libversatiles_node.so" /output/node/; \
+    fi
 
 # Build .deb package if using GNU
 RUN if [ "$LIBC" = "gnu" ]; then \
