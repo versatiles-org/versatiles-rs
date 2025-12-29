@@ -30,28 +30,20 @@ get_current_version() {
 	grep -m1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/'
 }
 
-# Calculate new version using npm for keywords
+# Calculate new version using cargo-release (dry-run mode)
 calculate_new_version() {
 	local release_type="$1"
 	local new_version
 
-	cd versatiles_node
-	case "$release_type" in
-		patch|minor|major)
-			new_version=$(npm version "$release_type" --no-git-tag-version 2>&1 | grep '^v' | sed 's/^v//')
-			;;
-		rc|alpha|beta)
-			new_version=$(npm version prerelease --preid="$release_type" --no-git-tag-version 2>&1 | grep '^v' | sed 's/^v//')
-			;;
-		*)
-			log_error "Invalid release type: $release_type"
-			exit 1
-			;;
-	esac
+	# cargo-release outputs: "Upgrading workspace to version X.Y.Z"
+	new_version=$(cargo release version "$release_type" --workspace 2>&1 | \
+		grep "Upgrading workspace to version" | \
+		sed 's/.*version //')
 
-	# Revert npm's changes
-	git checkout package.json package-lock.json 2>/dev/null
-	cd ..
+	if [ -z "$new_version" ]; then
+		log_error "Failed to calculate new version for release type: $release_type"
+		exit 1
+	fi
 
 	echo "$new_version"
 }
@@ -61,16 +53,11 @@ validate_specific_version() {
 	local version="$1"
 	local current_version="$2"
 
-	# Validate it's a valid semver
-	cd versatiles_node
-	if ! npm version "$version" --no-git-tag-version --allow-same-version 2>/dev/null; then
-		git checkout package.json package-lock.json 2>/dev/null
-		cd ..
+	# Validate it's a valid semver using cargo-release
+	if ! cargo release version "$version" --workspace 2>/dev/null | grep -q "Upgrading workspace to version"; then
 		log_error "Invalid semver version: $version"
 		exit 1
 	fi
-	git checkout package.json package-lock.json 2>/dev/null
-	cd ..
 
 	# Check it's not the same as current
 	if [ "$version" = "$current_version" ]; then
@@ -78,29 +65,22 @@ validate_specific_version() {
 		exit 1
 	fi
 
-	# Check it's greater than current version using Node.js
-	# Try to use semver package, fallback to basic comparison
+	# Check it's greater than current version using Node.js + semver
 	local is_greater
 	if command -v node >/dev/null 2>&1; then
-		# Try with semver package
 		is_greater=$(node -e "
 			try {
 				const semver = require('semver');
 				console.log(semver.gt('$version', '$current_version'));
 			} catch (e) {
-				// Fallback: basic string comparison (not perfect but better than nothing)
-				const compareVersions = (v1, v2) => {
-					const parts1 = v1.split(/[-.]/).map(p => parseInt(p) || p);
-					const parts2 = v2.split(/[-.]/).map(p => parseInt(p) || p);
-					for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-						const p1 = parts1[i] || 0;
-						const p2 = parts2[i] || 0;
-						if (p1 > p2) return true;
-						if (p1 < p2) return false;
-					}
-					return false;
-				};
-				console.log(compareVersions('$version', '$current_version'));
+				// Fallback: basic comparison
+				const v1 = '$version'.split(/[-.]/).map(p => parseInt(p) || p);
+				const v2 = '$current_version'.split(/[-.]/).map(p => parseInt(p) || p);
+				for (let i = 0; i < Math.max(v1.length, v2.length); i++) {
+					if ((v1[i] || 0) > (v2[i] || 0)) { console.log('true'); process.exit(0); }
+					if ((v1[i] || 0) < (v2[i] || 0)) { console.log('false'); process.exit(0); }
+				}
+				console.log('false');
 			}
 		" 2>/dev/null)
 
@@ -116,23 +96,23 @@ validate_specific_version() {
 	log_success "Version validation passed: $version > $current_version"
 }
 
-# Update Cargo.toml version in two locations
-update_cargo_toml_version() {
+# Update Cargo.toml files and Cargo.lock using cargo-release
+update_cargo_versions() {
 	local new_version="$1"
 
-	log_step "Updating Cargo.toml..."
+	log_step "Updating Cargo.toml files and Cargo.lock..."
 
-	# Update workspace.package.version (around line 28)
-	sed -i.bak "s/^version = \".*\"/version = \"$new_version\"/" Cargo.toml
+	# Use cargo-release version step to update all Cargo files
+	# This updates:
+	# - workspace.package.version in root Cargo.toml
+	# - all workspace dependencies in root Cargo.toml
+	# - version.workspace references in all crate Cargo.toml files
+	# - Cargo.lock automatically
+	# --execute: actually perform the changes (not dry-run)
+	# --no-confirm: skip interactive confirmation
+	cargo release version "$new_version" --execute --workspace --no-confirm 2>&1 | grep -v "Upgrading workspace to version" || true
 
-	# Update all workspace dependencies (around lines 156-162)
-	# Pattern: versatiles* = { version = "X.Y.Z", path = ...
-	sed -i.bak "s/\(versatiles[^=]*= { version = \)\"[^\"]*\"/\1\"$new_version\"/" Cargo.toml
-
-	# Remove backup files
-	rm -f Cargo.toml.bak
-
-	log_success "Cargo.toml updated to version $new_version"
+	log_success "Cargo.toml files and Cargo.lock updated to version $new_version"
 }
 
 # Update package.json and package-lock.json version
@@ -160,13 +140,6 @@ update_package_json_version() {
 		echo "  expected: $new_version"
 		exit 1
 	fi
-}
-
-# Update Cargo.lock
-update_cargo_lock() {
-	log_step "Updating Cargo.lock..."
-	cargo check --quiet 2>/dev/null || cargo check 2>&1 | grep -v "Compiling\|Finished" || true
-	log_success "Cargo.lock updated"
 }
 
 # Create release commit
@@ -297,9 +270,8 @@ main() {
 	echo ""
 
 	# Update version files
-	update_cargo_toml_version "$new_version"
+	update_cargo_versions "$new_version"
 	update_package_json_version "$new_version"
-	update_cargo_lock
 
 	echo ""
 
