@@ -10,7 +10,7 @@ BLU="\033[1;34m"
 END="\033[0m"
 
 # Valid release type keywords
-VALID_KEYWORDS="patch minor major alpha beta rc"
+VALID_KEYWORDS="patch minor major release alpha beta rc"
 
 # Helper function for logging steps
 log_step() {
@@ -186,6 +186,7 @@ main() {
 			"patch   - Bug fixes, small improvements (x.y.Z)"
 			"minor   - New features, backward compatible (x.Y.0)"
 			"major   - Breaking changes (X.0.0)"
+			"release - Remove pre-release suffix (x.y.z-rc.N → x.y.z)"
 			"alpha   - Early development, unstable API (x.y.z-alpha.N)"
 			"beta    - Feature complete, testing phase (x.y.z-beta.N)"
 			"rc      - Release candidate, final testing (x.y.z-rc.N)"
@@ -197,10 +198,11 @@ main() {
 				1) release_type="patch"; break;;
 				2) release_type="minor"; break;;
 				3) release_type="major"; break;;
-				4) release_type="alpha"; break;;
-				5) release_type="beta"; break;;
-				6) release_type="rc"; break;;
-				7) echo -e "${YEL}Cancelled${END}"; exit 0;;
+				4) release_type="release"; break;;
+				5) release_type="alpha"; break;;
+				6) release_type="beta"; break;;
+				7) release_type="rc"; break;;
+				8) echo -e "${YEL}Cancelled${END}"; exit 0;;
 				*) echo -e "${RED}Invalid selection${END}";;
 			esac
 		done
