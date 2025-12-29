@@ -418,7 +418,7 @@ jobs:
       - name: Generate platform packages
         working-directory: ./versatiles_node
         run: |
-          npm run artifacts
+          npx napi artifacts --output-dir .
           ls -lah npm/
 
       - name: Upload npm packages as artifacts
