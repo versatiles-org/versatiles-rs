@@ -12,7 +12,7 @@ BLU="\033[1;34m"
 END="\033[0m"
 
 # Validate argument or provide interactive selection
-VALID_ARGS="patch minor major alpha beta rc dev"
+VALID_ARGS="patch minor major alpha beta rc"
 RELEASE_ARG=""
 
 if [ -z "$1" ]; then
@@ -27,7 +27,6 @@ if [ -z "$1" ]; then
 		"alpha   - Early development, unstable API (x.y.z-alpha.N)"
 		"beta    - Feature complete, testing phase (x.y.z-beta.N)"
 		"rc      - Release candidate, final testing (x.y.z-rc.N)"
-		"dev     - Daily builds, experimental features (x.y.z-dev.N)"
 		"Cancel"
 	)
 
@@ -39,8 +38,7 @@ if [ -z "$1" ]; then
 			4) RELEASE_ARG="alpha"; break;;
 			5) RELEASE_ARG="beta"; break;;
 			6) RELEASE_ARG="rc"; break;;
-			7) RELEASE_ARG="dev"; break;;
-			8) echo -e "${YEL}Cancelled${END}"; exit 0;;
+			7) echo -e "${YEL}Cancelled${END}"; exit 0;;
 			*) echo -e "${RED}Invalid selection${END}";;
 		esac
 	done
@@ -61,10 +59,6 @@ fi
 # build readme docs
 ./scripts/build-docs-readme.sh
 
-# check version synchronization
-echo "Checking version synchronization..."
-./scripts/sync-version.sh --fix
-
 # check if git is clean
 if [ -n "$(git status --porcelain)" ]; then
 	echo -e "${RED}❗️ Git is not clean!${END}"
@@ -81,35 +75,17 @@ if [ $? -ne 0 ]; then
 	exit 1
 fi
 
-# Determine cargo-release command based on selected release type
-case "$RELEASE_ARG" in
-	dev)
-		# dev requires custom pre-release-identifier
-		echo "Releasing dev version..."
-		cargo release --pre-release-identifier dev --no-verify --sign-commit --workspace --execute
-		;;
-	alpha|beta|rc)
-		# cargo-release natively supports these
-		echo "Releasing $RELEASE_ARG version..."
-		cargo release "$RELEASE_ARG" --no-verify --sign-commit --workspace --execute
-		;;
-	patch|minor|major)
-		# Existing stable release behavior
-		echo "Releasing $RELEASE_ARG version..."
-		cargo release "$RELEASE_ARG" --no-verify --sign-commit --workspace --execute
-		;;
-esac
+# Perform the release
+echo "Releasing $RELEASE_ARG version..."
+cargo release "$RELEASE_ARG" --no-verify --sign-commit --workspace --execute
 
-# Sync package.json to match the new version set by cargo-release
-NEW_VERSION=$(grep -m1 '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
-echo "Syncing package.json to version $NEW_VERSION..."
-cd versatiles_node
-npm version "$NEW_VERSION" --no-git-tag-version --allow-same-version
-cd ..
+# sync version
+echo "Checking version synchronization..."
+./scripts/sync-version.sh --fix
 
 # Amend the cargo-release commit to include package.json
 if [ -n "$(git status --porcelain versatiles_node/package.json)" ]; then
-	git add versatiles_node/package.json
+	git add versatiles_node/package*
 	git commit --amend --no-edit --no-verify
 	echo -e "${GRE}✓ Package.json synced and commit amended${END}"
 fi
