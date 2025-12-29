@@ -418,14 +418,30 @@ jobs:
       - name: Generate platform packages
         working-directory: ./versatiles_node
         run: |
-          npx napi artifacts --output-dir .
-          ls -lah npm/
+          # Create platform-specific package directories with package.json files
+          npx napi create-npm-dirs
+
+          # Copy .node files to their platform directories and pack them
+          for platform in darwin-arm64 darwin-x64 linux-arm64-gnu linux-x64-gnu win32-arm64-msvc win32-x64-msvc; do
+            if [ -f "versatiles.$platform.node" ]; then
+              cp "versatiles.$platform.node" "npm/$platform/"
+              (cd "npm/$platform" && npm pack)
+              echo "✓ Created package for $platform"
+            else
+              echo "✗ Missing versatiles.$platform.node"
+            fi
+          done
+
+          # List created packages
+          echo ""
+          echo "Platform packages created:"
+          ls -lah npm/*/*.tgz
 
       - name: Upload npm packages as artifacts
         uses: actions/upload-artifact@v4
         with:
           name: npm-packages
-          path: versatiles_node/npm/*.tgz
+          path: versatiles_node/npm/*/*.tgz
           retention-days: 7
 
   publish-npm:
