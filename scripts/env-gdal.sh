@@ -111,15 +111,15 @@ fi
 
 echo "Configured:"
 echo "  GDAL_VERSION:      ${GDAL_VERSION:-unset}"
-#echo "  GDAL_HOME:         ${GDAL_HOME:-unset}"
-#echo "  GDAL_CONFIG:       ${GDAL_CONFIG:-unset}"
-#echo "  PROJ_DATA:         ${PROJ_DATA:-unset}"
-#echo "  GDAL_DATA:         ${GDAL_DATA:-unset}"
+# echo "  GDAL_HOME:         ${GDAL_HOME:-unset}"
+# echo "  GDAL_CONFIG:       ${GDAL_CONFIG:-unset}"
+# echo "  PROJ_DATA:         ${PROJ_DATA:-unset}"
+# echo "  GDAL_DATA:         ${GDAL_DATA:-unset}"
 
-case "$kernel_name" in
-  Darwin) echo "  DYLD_LIBRARY_PATH: ${DYLD_LIBRARY_PATH:-unset}" ;;
-  Linux)  echo "  LD_LIBRARY_PATH:   ${LD_LIBRARY_PATH:-unset}" ;;
-  *) : ;;
-esac
+# case "$kernel_name" in
+#   Darwin) echo "  DYLD_LIBRARY_PATH: ${DYLD_LIBRARY_PATH:-unset}" ;;
+#   Linux)  echo "  LD_LIBRARY_PATH:   ${LD_LIBRARY_PATH:-unset}" ;;
+#   *) : ;;
+# esac
 
 unset kernel_name  # keep the user environment clean
