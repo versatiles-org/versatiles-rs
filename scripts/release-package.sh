@@ -121,9 +121,8 @@ update_package_json_version() {
 
 	log_step "Updating package.json and package-lock.json..."
 
-	cd versatiles_node
-	npm version "$new_version" --no-git-tag-version --allow-same-version >/dev/null 2>&1
-	cd ..
+	# Use sync-version.sh to update package.json
+	./scripts/sync-version.sh --fix
 
 	# Verify both files were updated
 	local pkg_version
