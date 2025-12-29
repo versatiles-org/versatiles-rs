@@ -285,3 +285,360 @@ impl From<Arc<RustSourceType>> for SourceType {
 		SourceType { inner }
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use versatiles_core::json::parse_json_str;
+
+	#[tokio::test]
+	async fn test_open_valid_mbtiles() {
+		let result = ContainerReader::open("../testdata/berlin.mbtiles".to_string()).await;
+		assert!(result.is_ok());
+	}
+
+	#[tokio::test]
+	async fn test_open_valid_pmtiles() {
+		let result = ContainerReader::open("../testdata/berlin.pmtiles".to_string()).await;
+		assert!(result.is_ok());
+	}
+
+	#[tokio::test]
+	async fn test_open_invalid_path() {
+		let result = ContainerReader::open("/nonexistent/file.mbtiles".to_string()).await;
+		assert!(result.is_err());
+	}
+
+	#[tokio::test]
+	async fn test_open_invalid_extension() {
+		// Create a temporary file with unsupported extension
+		let result = ContainerReader::open("/tmp/invalid.xyz".to_string()).await;
+		assert!(result.is_err());
+	}
+
+	#[tokio::test]
+	async fn test_get_tile_valid() {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Berlin test data typically has tiles at zoom level 10
+		// Using coordinates that should exist
+		let tile = reader.get_tile(10, 550, 335).await.unwrap();
+
+		// Tile might or might not exist, but the call should succeed
+		if let Some(buffer) = tile {
+			// If tile exists, verify it's a valid buffer
+			assert!(!buffer.is_empty());
+		}
+	}
+
+	#[tokio::test]
+	async fn test_get_tile_non_existent() {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Request a tile at coordinates that definitely don't exist (zoom 0, extreme coordinates)
+		let tile = reader.get_tile(0, 1000, 1000).await;
+
+		// Should return error due to invalid coordinates
+		assert!(tile.is_err());
+	}
+
+	#[tokio::test]
+	async fn test_get_tile_out_of_bounds() {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// At zoom 1, max x and y is 1, so (2, 2) is out of bounds
+		let result = reader.get_tile(1, 2, 2).await;
+		assert!(result.is_err());
+	}
+
+	#[tokio::test]
+	async fn test_get_tile_zero_coords() {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Zoom 0, tile (0, 0) is always valid
+		let result = reader.get_tile(0, 0, 0).await;
+		assert!(result.is_ok());
+	}
+
+	#[tokio::test]
+	async fn test_tile_json_valid() -> anyhow::Result<()> {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		let tile_json = reader.tile_json().await;
+
+		// Verify it's a non-empty string
+		assert!(!tile_json.is_empty());
+
+		// Verify it's valid JSON
+		let json = parse_json_str(&tile_json)?.into_object()?;
+
+		// Verify it has expected TileJSON fields
+		assert_eq!(json.get_string("tilejson")?.unwrap(), "3.0.0");
+		assert_eq!(json.get_number("minzoom")?.unwrap(), 0.0);
+		assert_eq!(json.get_number("maxzoom")?.unwrap(), 14.0);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_tile_json_mbtiles_vs_pmtiles() {
+		let reader_mbtiles = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+		let reader_pmtiles = ContainerReader::open("../testdata/berlin.pmtiles".to_string())
+			.await
+			.unwrap();
+
+		let json_mbtiles = reader_mbtiles.tile_json().await;
+		let json_pmtiles = reader_pmtiles.tile_json().await;
+
+		// Both should return valid JSON
+		assert!(!json_mbtiles.is_empty());
+		assert!(!json_pmtiles.is_empty());
+	}
+
+	#[tokio::test]
+	async fn test_metadata_valid() {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		let metadata = reader.metadata().await;
+
+		// Verify metadata has expected fields
+		assert!(!metadata.tile_format.is_empty());
+		assert!(!metadata.tile_compression.is_empty());
+		assert!(metadata.min_zoom <= metadata.max_zoom);
+	}
+
+	#[tokio::test]
+	async fn test_metadata_zoom_levels() {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		let metadata = reader.metadata().await;
+
+		// Zoom levels should be valid (0-32)
+		assert!(metadata.min_zoom <= 32);
+		assert!(metadata.max_zoom <= 32);
+		assert!(metadata.min_zoom <= metadata.max_zoom);
+	}
+
+	#[tokio::test]
+	async fn test_metadata_tile_format() {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		let metadata = reader.metadata().await;
+
+		// Berlin test data should be in a known format
+		let valid_formats = ["png", "jpg", "jpeg", "webp", "pbf", "mvt"];
+		assert!(valid_formats.contains(&metadata.tile_format.as_str()));
+	}
+
+	#[tokio::test]
+	async fn test_metadata_compression() {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		let metadata = reader.metadata().await;
+
+		// Should have a valid compression type
+		let valid_compressions = ["uncompressed", "gzip", "brotli", "zstd"];
+		assert!(valid_compressions.contains(&metadata.tile_compression.as_str()));
+	}
+
+	#[tokio::test]
+	async fn test_source_type_container() {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		let source_type = reader.source_type().await;
+
+		// Should be a container type
+		assert_eq!(source_type.kind(), "container");
+		assert!(!source_type.name().is_empty());
+		assert!(source_type.uri().is_some());
+	}
+
+	#[tokio::test]
+	async fn test_source_type_name() {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		let source_type = reader.source_type().await;
+
+		// Name should indicate the format
+		let name = source_type.name();
+		assert!(name.contains("mbtiles") || name.contains("MBTiles"));
+	}
+
+	#[tokio::test]
+	async fn test_source_type_uri_mbtiles() {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		let source_type = reader.source_type().await;
+
+		// URI should contain the path
+		let uri = source_type.uri().unwrap();
+		assert!(uri.contains("berlin.mbtiles"));
+	}
+
+	#[tokio::test]
+	async fn test_source_type_uri_pmtiles() {
+		let reader = ContainerReader::open("../testdata/berlin.pmtiles".to_string())
+			.await
+			.unwrap();
+
+		let source_type = reader.source_type().await;
+
+		let uri = source_type.uri().unwrap();
+		assert!(uri.contains("berlin.pmtiles"));
+	}
+
+	#[tokio::test]
+	async fn test_source_type_container_no_input() {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		let source_type = reader.source_type().await;
+
+		// Container type should not have input() or inputs()
+		assert!(source_type.input().is_none());
+		assert!(source_type.inputs().is_none());
+	}
+
+	#[tokio::test]
+	async fn test_multiple_readers_independent() {
+		let reader1 = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+		let reader2 = ContainerReader::open("../testdata/berlin.pmtiles".to_string())
+			.await
+			.unwrap();
+
+		// Both should work independently
+		let metadata1 = reader1.metadata().await;
+		let metadata2 = reader2.metadata().await;
+
+		assert!(!metadata1.tile_format.is_empty());
+		assert!(!metadata2.tile_format.is_empty());
+	}
+
+	#[tokio::test]
+	async fn test_concurrent_tile_reads() {
+		let reader = Arc::new(
+			ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+				.await
+				.unwrap(),
+		);
+
+		// Spawn multiple concurrent reads
+		let reader1 = Arc::clone(&reader);
+		let reader2 = Arc::clone(&reader);
+
+		let handle1 = tokio::spawn(async move { reader1.get_tile(10, 550, 335).await });
+		let handle2 = tokio::spawn(async move { reader2.get_tile(10, 551, 335).await });
+
+		// Both should complete without error
+		let result1 = handle1.await.unwrap();
+		let result2 = handle2.await.unwrap();
+
+		assert!(result1.is_ok());
+		assert!(result2.is_ok());
+	}
+
+	#[tokio::test]
+	async fn test_tile_json_is_valid_json() -> anyhow::Result<()> {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		let tile_json = reader.tile_json().await;
+
+		// Parse and verify structure
+		let json = parse_json_str(&tile_json)?.into_object()?;
+
+		// Check for required TileJSON fields
+		assert_eq!(json.get_string("tilejson")?.unwrap(), "3.0.0");
+
+		// Check optional but common fields
+		assert_eq!(json.get_number("minzoom")?.unwrap(), 0.0);
+		assert_eq!(json.get_number("maxzoom")?.unwrap(), 14.0);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_source_type_kind_values() {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		let source_type = reader.source_type().await;
+		let kind = source_type.kind();
+
+		// Kind should be one of the valid values
+		assert!(kind == "container" || kind == "processor" || kind == "composite");
+	}
+
+	#[tokio::test]
+	async fn test_metadata_consistency_across_calls() {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Call metadata multiple times
+		let metadata1 = reader.metadata().await;
+		let metadata2 = reader.metadata().await;
+
+		// Should return consistent results
+		assert_eq!(metadata1.tile_format, metadata2.tile_format);
+		assert_eq!(metadata1.tile_compression, metadata2.tile_compression);
+		assert_eq!(metadata1.min_zoom, metadata2.min_zoom);
+		assert_eq!(metadata1.max_zoom, metadata2.max_zoom);
+	}
+
+	#[tokio::test]
+	async fn test_tile_json_consistency_across_calls() {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Call tile_json multiple times
+		let json1 = reader.tile_json().await;
+		let json2 = reader.tile_json().await;
+
+		// Should return identical results
+		assert_eq!(json1, json2);
+	}
+
+	#[tokio::test]
+	async fn test_get_tile_returns_buffer() {
+		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Get a tile that likely exists
+		let buffer = reader.get_tile(10, 550, 335).await.unwrap().unwrap();
+		assert_eq!(buffer.len(), 113612);
+	}
+}
