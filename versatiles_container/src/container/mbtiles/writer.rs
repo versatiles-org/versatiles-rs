@@ -238,12 +238,12 @@ impl TilesWriterTrait for MBTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{MBTilesReader, MockTilesReader, MockTilesWriter, TileSourceMetadata};
+	use crate::{MBTilesReader, MockReader, MockWriter, TileSourceMetadata};
 	use assert_fs::NamedTempFile;
 
 	#[tokio::test]
 	async fn read_write() -> Result<()> {
-		let mut mock_reader = MockTilesReader::new_mock(TileSourceMetadata {
+		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
 			bbox_pyramid: TileBBoxPyramid::new_full(5),
 			tile_compression: TileCompression::Gzip,
 			tile_format: TileFormat::MVT,
@@ -255,7 +255,7 @@ mod tests {
 
 		let mut reader = MBTilesReader::open_path(&filename, TilesRuntime::default())?;
 
-		MockTilesWriter::write(&mut reader).await?;
+		MockWriter::write(&mut reader).await?;
 
 		Ok(())
 	}

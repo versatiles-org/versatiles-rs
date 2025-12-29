@@ -246,17 +246,17 @@ impl TileSourceTrait for TilesConvertReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{MockTilesReader, Traversal, VersaTilesReader};
+	use crate::{MockReader, Traversal, VersaTilesReader};
 	use assert_fs::NamedTempFile;
 	use versatiles_core::{
 		TileCompression::*,
 		TileFormat::{self, *},
 	};
 
-	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> MockTilesReader {
+	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> MockReader {
 		let bbox_pyramid = TileBBoxPyramid::new_full(4);
 		let reader_metadata = TileSourceMetadata::new(tf, tc, bbox_pyramid, Traversal::ANY);
-		MockTilesReader::new_mock(reader_metadata).unwrap()
+		MockReader::new_mock(reader_metadata).unwrap()
 	}
 
 	#[tokio::test]
@@ -272,7 +272,7 @@ mod tests {
 			let pyramid_out = new_bbox(bbox_out);
 
 			let reader_metadata = TileSourceMetadata::new(JSON, Uncompressed, pyramid_in, Traversal::ANY);
-			let reader = MockTilesReader::new_mock(reader_metadata)?;
+			let reader = MockReader::new_mock(reader_metadata)?;
 
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let runtime = TilesRuntime::default();

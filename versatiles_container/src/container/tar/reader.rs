@@ -247,7 +247,7 @@ impl Debug for TarTilesReader {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::{MOCK_BYTES_PBF, MockTilesWriter, make_test_file};
+	use crate::{MOCK_BYTES_PBF, MockWriter, make_test_file};
 
 	#[cfg(feature = "cli")]
 	use versatiles_core::utils::PrettyPrint;
@@ -293,7 +293,7 @@ pub mod tests {
 			// get tar reader
 			let mut reader = TarTilesReader::open_path(&temp_file)?;
 
-			MockTilesWriter::write(&mut reader).await?;
+			MockWriter::write(&mut reader).await?;
 			Ok(())
 		}
 

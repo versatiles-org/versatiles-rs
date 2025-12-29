@@ -30,7 +30,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let mut reader = DirectoryTilesReader::open_path(Path::new("/absolute/path/to/tiles")).unwrap();
+//!     let mut reader = DirectoryReader::open_path(Path::new("/absolute/path/to/tiles")).unwrap();
 //!     let tile_data = reader.get_tile(&TileCoord::new(3, 1, 2).unwrap()).await.unwrap();
 //! }
 //! ```
@@ -59,18 +59,18 @@ use versatiles_derive::context;
 ///
 /// The directory structure is expected as:
 /// ```text
-/// <root>/<z>/<x>/<y>.<format>[.<compression>]
+/// <root>/<z>/<x>/<y>.<format>[.<compression>]]
 /// ```
 /// where `<z>`, `<x>`, and `<y>` are tile coordinates, `<format>` is the tile format, and `<compression>` is optional.
-pub struct DirectoryTilesReader {
+pub struct DirectoryReader {
 	tilejson: TileJSON,
 	dir: PathBuf,
 	tile_map: HashMap<TileCoord, PathBuf>,
 	metadata: TileSourceMetadata,
 }
 
-impl DirectoryTilesReader {
-	/// Opens a directory and initializes a `DirectoryTilesReader`.
+impl DirectoryReader {
+	/// Opens a directory and initializes a `DirectoryReader`.
 	///
 	/// The provided path must be **absolute**.
 	///
@@ -79,7 +79,7 @@ impl DirectoryTilesReader {
 	/// Metadata files (`meta.json`, `tiles.json`, `metadata.json` and their `.gz`/`.br` variants) are merged into the TileJSON.
 	/// Bounds, minzoom, and maxzoom are inferred from the directory's tile pyramid and merged with metadata.
 	///
-	/// The returned `DirectoryTilesReader` contains `TileSourceMetadata` which specify the tile format, compression, and bounding box pyramid.
+	/// The returned `DirectoryReader` contains `TileSourceMetadata` which specify the tile format, compression, and bounding box pyramid.
 	///
 	/// # Arguments
 	///
@@ -89,7 +89,7 @@ impl DirectoryTilesReader {
 	///
 	/// Returns an error if the directory does not exist, is not a directory, contains no tiles, or contains inconsistent tile formats or compressions.
 	#[context("opening tiles directory {:?}", dir)]
-	pub fn open_path(dir: &Path) -> Result<DirectoryTilesReader>
+	pub fn open_path(dir: &Path) -> Result<DirectoryReader>
 	where
 		Self: Sized,
 	{
@@ -205,7 +205,7 @@ impl DirectoryTilesReader {
 
 		tilejson.update_from_pyramid(&bbox_pyramid);
 
-		Ok(DirectoryTilesReader {
+		Ok(DirectoryReader {
 			tilejson,
 			dir: dir.to_path_buf(),
 			tile_map,
@@ -220,13 +220,13 @@ impl DirectoryTilesReader {
 	}
 }
 
-/// Implements the `TileSourceTrait` for `DirectoryTilesReader`.
+/// Implements the `TileSourceTrait` for `DirectoryReader`.
 ///
 /// Provides the container name ("directory"), access to tile reading parameters,
 /// ability to override the tile compression, access to TileJSON metadata,
 /// and asynchronous fetching of tile data by coordinate.
 #[async_trait]
-impl TileSourceTrait for DirectoryTilesReader {
+impl TileSourceTrait for DirectoryReader {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_container("directory", self.dir.to_str().unwrap())
 	}
@@ -261,9 +261,9 @@ impl TileSourceTrait for DirectoryTilesReader {
 	}
 }
 
-impl Debug for DirectoryTilesReader {
+impl Debug for DirectoryReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("DirectoryTilesReader")
+		f.debug_struct("DirectoryReader")
 			.field("source_type", &self.source_type())
 			.field("parameters", &self.metadata())
 			.finish()
@@ -287,7 +287,7 @@ mod tests {
 		dir.child("3/2/1.png").write_str("test tile data")?;
 		dir.child("meta.json").write_str(r#"{"type":"dummy"}"#)?;
 
-		let reader = DirectoryTilesReader::open_path(&dir)?;
+		let reader = DirectoryReader::open_path(&dir)?;
 
 		assert_eq!(
 			reader.tilejson().as_string(),
@@ -309,7 +309,7 @@ mod tests {
 	async fn open_path_with_nonexistent_directory() -> Result<()> {
 		let dir = TempDir::new()?;
 
-		let msg = DirectoryTilesReader::open_path(&dir.join("dont_exist"))
+		let msg = DirectoryReader::open_path(&dir.join("dont_exist"))
 			.unwrap_err()
 			.chain()
 			.last()
@@ -326,7 +326,7 @@ mod tests {
 		dir.child("3/2/1.unknown").write_str("unsupported format")?;
 
 		assert_eq!(
-			DirectoryTilesReader::open_path(dir.path())
+			DirectoryReader::open_path(dir.path())
 				.unwrap_err()
 				.chain()
 				.last()
@@ -351,7 +351,7 @@ mod tests {
 		fs::create_dir_all(dir.path().join("2/1")).unwrap();
 		fs::write(dir.path().join("2/1/0.png"), "tile at 2/1/0").unwrap();
 
-		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
+		let reader = DirectoryReader::open_path(&dir).unwrap();
 		assert_eq!(
 			reader.tilejson().as_string(),
 			"{\"bounds\":[-90,66.51326,0,85.051129],\"maxzoom\":2,\"minzoom\":2,\"tilejson\":\"3.0.0\",\"type\":\"dummy data\"}"
@@ -367,7 +367,7 @@ mod tests {
 		fs::write(dir.path().join("3/2/1.png"), "tile at 3/2/1").unwrap();
 		fs::write(dir.path().join("meta.json"), r#"{"type":"dummy data"}"#).unwrap();
 
-		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
+		let reader = DirectoryReader::open_path(&dir).unwrap();
 		let coord = TileCoord::new(3, 2, 1).unwrap();
 		let blob = reader
 			.get_tile(&coord)
@@ -388,7 +388,7 @@ mod tests {
 		fs::write(dir.path().join("3/2/1.txt"), "wrong format").unwrap();
 
 		assert_eq!(
-			&DirectoryTilesReader::open_path(&dir)
+			&DirectoryReader::open_path(&dir)
 				.unwrap_err()
 				.chain()
 				.last()
@@ -408,7 +408,7 @@ mod tests {
 		dir.child("4/2/1.jpg").write_str("test tile data")?;
 
 		assert_eq!(
-			DirectoryTilesReader::open_path(&dir)
+			DirectoryReader::open_path(&dir)
 				.unwrap_err()
 				.chain()
 				.last()
@@ -427,7 +427,7 @@ mod tests {
 		dir.child("4/2/1.pbf.br").write_str("test tile data")?;
 
 		assert_eq!(
-			DirectoryTilesReader::open_path(&dir)
+			DirectoryReader::open_path(&dir)
 				.unwrap_err()
 				.chain()
 				.last()
@@ -445,7 +445,7 @@ mod tests {
 		dir.child("meta.json").write_str("{\"key\": \"value\"}")?;
 		dir.child("3/2/1.png.br").write_str("tile data")?;
 
-		let reader = DirectoryTilesReader::open_path(dir.path())?;
+		let reader = DirectoryReader::open_path(dir.path())?;
 
 		assert_eq!(
 			reader.source_type().to_string(),
@@ -454,7 +454,7 @@ mod tests {
 
 		assert_wildcard!(
 			format!("{reader:?}"),
-			"DirectoryTilesReader { source_type: Container { name: \"directory\", uri: \"*\" }, parameters: TileSourceMetadata { bbox_pyramid: [3: [2,1,2,1] (1x1)], tile_compression: Brotli, tile_format: PNG, traversal: Traversal(AnyOrder,full) } }"
+			"DirectoryReader { source_type: Container { name: \"directory\", uri: \"*\" }, parameters: TileSourceMetadata { bbox_pyramid: [3: [2,1,2,1] (1x1)], tile_compression: Brotli, tile_format: PNG, traversal: Traversal(AnyOrder,full) } }"
 		);
 
 		assert_eq!(

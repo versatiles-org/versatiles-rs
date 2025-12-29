@@ -2,20 +2,20 @@
 //!
 //! This module provides a mock implementation of the `TilesWriter` trait, allowing for testing of tile writing functionality without actual file I/O operations.
 //!
-//! ## MockTilesWriter
-//! The `MockTilesWriter` struct is the main component, which provides methods to simulate the writing of tile data.
+//! ## MockWriter
+//! The `MockWriter` struct is the main component, which provides methods to simulate the writing of tile data.
 //!
 //! ## Usage
 //! These mocks can be used to simulate tile writing operations in tests, allowing verification of code behavior under controlled conditions.
 //!
 //! ```rust
-//! use versatiles_container::{MockTilesReader, MockTilesReaderProfile, MockTilesWriter, TilesWriterTrait};
+//! use versatiles_container::{MockReader, MockReaderProfile, MockWriter, TilesWriterTrait};
 //! use anyhow::Result;
 //!
 //! #[tokio::test]
 //! async fn test_mock_writer() -> Result<()> {
-//!     let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
-//!     MockTilesWriter::write(&mut reader).await?;
+//!     let mut reader = MockReader::new_mock_profile(MockReaderProfile::PNG)?;
+//!     MockWriter::write(&mut reader).await?;
 //!     Ok(())
 //! }
 //! ```
@@ -27,9 +27,9 @@ use versatiles_core::io::DataWriterTrait;
 use versatiles_derive::context;
 
 /// Mock implementation of a `TilesWriter`.
-pub struct MockTilesWriter {}
+pub struct MockWriter {}
 
-impl MockTilesWriter {
+impl MockWriter {
 	#[context("mock writing tiles from reader '{}'", reader.source_type())]
 	/// Simulates writing tile data from the given `TilesReader`.
 	///
@@ -62,10 +62,10 @@ impl MockTilesWriter {
 }
 
 #[async_trait]
-impl TilesWriterTrait for MockTilesWriter {
+impl TilesWriterTrait for MockWriter {
 	/// Writes tile data from a `TilesReader` to a `DataWriterTrait`.
 	///
-	/// This method is not implemented for the mock writer and simply calls `MockTilesWriter::write`.
+	/// This method is not implemented for the mock writer and simply calls `MockWriter::write`.
 	///
 	/// # Arguments
 	///
@@ -81,26 +81,26 @@ impl TilesWriterTrait for MockTilesWriter {
 		_writer: &mut dyn DataWriterTrait,
 		_runtime: TilesRuntime,
 	) -> Result<()> {
-		MockTilesWriter::write(reader).await
+		MockWriter::write(reader).await
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{MockTilesReader, MockTilesReaderProfile};
+	use crate::{MockReader, MockReaderProfile};
 
 	#[tokio::test]
 	async fn convert_png() -> Result<()> {
-		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
-		MockTilesWriter::write(&mut reader).await?;
+		let mut reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
+		MockWriter::write(&mut reader).await?;
 		Ok(())
 	}
 
 	#[tokio::test]
 	async fn convert_pbf() -> Result<()> {
-		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Pbf)?;
-		MockTilesWriter::write(&mut reader).await?;
+		let mut reader = MockReader::new_mock_profile(MockReaderProfile::Pbf)?;
+		MockWriter::write(&mut reader).await?;
 		Ok(())
 	}
 }

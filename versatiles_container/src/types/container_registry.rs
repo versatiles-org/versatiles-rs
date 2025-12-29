@@ -167,7 +167,7 @@ impl ContainerRegistry {
 				}
 
 				if path.is_dir() {
-					return Ok(DirectoryTilesReader::open_path(&path)
+					return Ok(DirectoryReader::open_path(&path)
 						.with_context(|| format!("Failed opening {path:?} as directory"))?
 						.boxed());
 				}
@@ -208,7 +208,7 @@ impl ContainerRegistry {
 		let path = env::current_dir()?.join(path);
 
 		if path.is_dir() {
-			return DirectoryTilesWriter::write_to_path(reader.as_mut(), &path, runtime).await;
+			return DirectoryWriter::write_to_path(reader.as_mut(), &path, runtime).await;
 		}
 
 		let extension = path
@@ -291,7 +291,7 @@ pub async fn make_test_file(
 	// get dummy reader
 
 	use versatiles_core::TileBBoxPyramid;
-	let reader = MockTilesReader::new_mock(TileSourceMetadata::new(
+	let reader = MockReader::new_mock(TileSourceMetadata::new(
 		tile_format,
 		compression,
 		TileBBoxPyramid::new_full(max_zoom_level),
@@ -341,7 +341,7 @@ pub mod tests {
 			let _start = Instant::now();
 
 			// get dummy reader
-			let reader1 = MockTilesReader::new_mock(TileSourceMetadata::new(
+			let reader1 = MockReader::new_mock(TileSourceMetadata::new(
 				tile_format,
 				compression,
 				TileBBoxPyramid::new_full(2),
@@ -368,7 +368,7 @@ pub mod tests {
 
 			// get test container reader using the default registry (back-compat)
 			let mut reader2 = registry.get_reader_from_str(path.to_str().unwrap(), runtime).await?;
-			MockTilesWriter::write(reader2.as_mut()).await?;
+			MockWriter::write(reader2.as_mut()).await?;
 
 			Ok(())
 		}

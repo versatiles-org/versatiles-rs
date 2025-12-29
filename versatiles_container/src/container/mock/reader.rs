@@ -2,8 +2,8 @@
 //!
 //! This module provides a mock implementation of the `TilesReader` trait, allowing for testing of tile reading functionality without relying on actual tile data or I/O operations.
 //!
-//! ## MockTilesReader
-//! The `MockTilesReader` struct is the main component, which can be initialized with different profiles representing various tile formats and compressions.
+//! ## MockReader
+//! The `MockReader` struct is the main component, which can be initialized with different profiles representing various tile formats and compressions.
 //!
 //! ## Usage
 //! These mocks can be used to simulate tile reading operations in tests, allowing verification of code behavior under controlled conditions.
@@ -15,7 +15,7 @@
 //!
 //! #[tokio::test]
 //! async fn test_mock_reader() -> Result<()> {
-//!     let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
+//!     let mut reader = MockReader::new_mock_profile(MockReaderProfile::PNG)?;
 //!     let tile_data = reader.get_tile(&TileCoord::new(0, 0, 0)?).await?;
 //!     assert!(tile_data.is_some());
 //!     Ok(())
@@ -32,7 +32,7 @@ use versatiles_derive::context;
 
 /// Enum representing different mock profiles for tile data.
 #[derive(Debug)]
-pub enum MockTilesReaderProfile {
+pub enum MockReaderProfile {
 	/// Mock profile for JSON format.
 	Json,
 	/// Mock profile for PNG format.
@@ -47,15 +47,15 @@ pub const MOCK_BYTES_PNG: &[u8; 103] = include_bytes!("./mock_tiles/mock.png");
 pub const MOCK_BYTES_WEBP: &[u8; 44] = include_bytes!("./mock_tiles/mock.webp");
 
 /// Mock implementation of a `TilesReader`.
-pub struct MockTilesReader {
+pub struct MockReader {
 	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 }
 
-impl MockTilesReader {
+impl MockReader {
 	/// Creates a new mock tiles reader with the specified profile.
 	#[context("creating mock reader with profile {:?}", profile)]
-	pub fn new_mock_profile(profile: MockTilesReaderProfile) -> Result<MockTilesReader> {
+	pub fn new_mock_profile(profile: MockReaderProfile) -> Result<MockReader> {
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 		bbox_pyramid.set_level_bbox(TileBBox::from_min_and_max(2, 0, 1, 2, 3)?);
 		bbox_pyramid.set_level_bbox(TileBBox::from_min_and_max(3, 0, 2, 4, 6)?);
@@ -63,20 +63,20 @@ impl MockTilesReader {
 		bbox_pyramid.set_level_bbox(TileBBox::new_full(5)?);
 		bbox_pyramid.set_level_bbox(TileBBox::new_full(6)?);
 
-		MockTilesReader::new_mock(match profile {
-			MockTilesReaderProfile::Json => TileSourceMetadata::new(
+		MockReader::new_mock(match profile {
+			MockReaderProfile::Json => TileSourceMetadata::new(
 				TileFormat::JSON,
 				TileCompression::Uncompressed,
 				bbox_pyramid,
 				Traversal::ANY,
 			),
-			MockTilesReaderProfile::Png => TileSourceMetadata::new(
+			MockReaderProfile::Png => TileSourceMetadata::new(
 				TileFormat::PNG,
 				TileCompression::Uncompressed,
 				bbox_pyramid,
 				Traversal::ANY,
 			),
-			MockTilesReaderProfile::Pbf => {
+			MockReaderProfile::Pbf => {
 				TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, bbox_pyramid, Traversal::ANY)
 			}
 		})
@@ -84,15 +84,15 @@ impl MockTilesReader {
 
 	/// Creates a new mock tiles reader with the specified parameters.
 	#[context("creating mock reader from parameters")]
-	pub fn new_mock(metadata: TileSourceMetadata) -> Result<MockTilesReader> {
+	pub fn new_mock(metadata: TileSourceMetadata) -> Result<MockReader> {
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("type", "dummy")?;
-		Ok(MockTilesReader { metadata, tilejson })
+		Ok(MockReader { metadata, tilejson })
 	}
 }
 
 #[async_trait]
-impl TileSourceTrait for MockTilesReader {
+impl TileSourceTrait for MockReader {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_container("dummy", "dummy")
 	}
@@ -121,7 +121,7 @@ impl TileSourceTrait for MockTilesReader {
 			//AVIF => Blob::from(MOCK_BYTES_AVIF.to_vec()),
 			JPG => Blob::from(MOCK_BYTES_JPG.to_vec()),
 			WEBP => Blob::from(MOCK_BYTES_WEBP.to_vec()),
-			_ => panic!("tile format {format:?} is not implemented for MockTileReader"),
+			_ => panic!("tile format {format:?} is not implemented for MockReader"),
 		};
 		blob = compress(blob, self.metadata.tile_compression)?;
 		Ok(Some(Tile::from_blob(blob, self.metadata.tile_compression, format)))
@@ -132,9 +132,9 @@ impl TileSourceTrait for MockTilesReader {
 	}
 }
 
-impl std::fmt::Debug for MockTilesReader {
+impl std::fmt::Debug for MockReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("MockTilesReader")
+		f.debug_struct("MockReader")
 			.field("parameters", &self.metadata())
 			.finish()
 	}
@@ -143,12 +143,12 @@ impl std::fmt::Debug for MockTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::MockTilesWriter;
+	use crate::MockWriter;
 	use anyhow::Result;
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
+		let reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
 		assert_eq!(reader.source_type().to_string(), "container 'dummy' ('dummy')");
 
 		assert_eq!(
@@ -169,7 +169,7 @@ mod tests {
 	async fn get_tile() {
 		let test = |profile, blob| async move {
 			let coord = TileCoord::new(6, 23, 45).unwrap();
-			let reader = MockTilesReader::new_mock_profile(profile).unwrap();
+			let reader = MockReader::new_mock_profile(profile).unwrap();
 			let tile_uncompressed = reader
 				.get_tile(&coord)
 				.await
@@ -180,15 +180,15 @@ mod tests {
 			assert_eq!(tile_uncompressed, blob);
 		};
 
-		test(MockTilesReaderProfile::Png, Blob::from(MOCK_BYTES_PNG.to_vec())).await;
-		test(MockTilesReaderProfile::Pbf, Blob::from(MOCK_BYTES_PBF.to_vec())).await;
-		test(MockTilesReaderProfile::Json, Blob::from("{\"z\":6,\"x\":23,\"y\":45}")).await;
+		test(MockReaderProfile::Png, Blob::from(MOCK_BYTES_PNG.to_vec())).await;
+		test(MockReaderProfile::Pbf, Blob::from(MOCK_BYTES_PBF.to_vec())).await;
+		test(MockReaderProfile::Json, Blob::from("{\"z\":6,\"x\":23,\"y\":45}")).await;
 	}
 
 	#[tokio::test]
 	async fn convert_from() -> Result<()> {
-		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
-		MockTilesWriter::write(&mut reader).await.unwrap();
+		let mut reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
+		MockWriter::write(&mut reader).await.unwrap();
 		Ok(())
 	}
 }

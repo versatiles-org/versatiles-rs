@@ -510,7 +510,7 @@ impl PartialEq for VersaTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{MOCK_BYTES_PBF, MockTilesReader, TilesRuntime, TilesWriterTrait, VersaTilesWriter, make_test_file};
+	use crate::{MOCK_BYTES_PBF, MockReader, TilesRuntime, TilesWriterTrait, VersaTilesWriter, make_test_file};
 	use assert_fs::NamedTempFile;
 	use versatiles_core::{assert_wildcard, io::DataWriterBlob};
 
@@ -624,7 +624,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn read_your_own_dog_food() -> Result<()> {
-		let mut reader1 = MockTilesReader::new_mock(TileSourceMetadata::new(
+		let mut reader1 = MockReader::new_mock(TileSourceMetadata::new(
 			TileFormat::JSON,
 			TileCompression::Gzip,
 			TileBBoxPyramid::new_full(4),

@@ -187,14 +187,13 @@ mod tests {
 	use assert_fs::NamedTempFile;
 	use rstest::rstest;
 	use versatiles_container::{
-		MockTilesReader, MockTilesReaderProfile, TileSourceTrait, TilesConverterParameters, TilesRuntime,
-		convert_tiles_container,
+		MockReader, MockReaderProfile, TileSourceTrait, TilesConverterParameters, TilesRuntime, convert_tiles_container,
 	};
 	use versatiles_core::TileBBoxPyramid;
 
 	pub async fn make_test_tar(compression: TileCompression) -> NamedTempFile {
 		// get dummy reader
-		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Pbf).unwrap();
+		let reader = MockReader::new_mock_profile(MockReaderProfile::Pbf).unwrap();
 
 		// get to test container converter
 		let container_file = NamedTempFile::new("temp.tar").unwrap();

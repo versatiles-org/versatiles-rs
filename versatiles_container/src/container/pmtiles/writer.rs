@@ -155,7 +155,7 @@ mod tests {
 	use crate::{
 		TileSourceMetadata,
 		container::{
-			mock::{MockTilesReader, MockTilesWriter},
+			mock::{MockReader, MockWriter},
 			pmtiles::PMTilesReader,
 		},
 	};
@@ -165,7 +165,7 @@ mod tests {
 	#[context("test: PMTiles read↔write roundtrip")]
 	#[tokio::test]
 	async fn read_write() -> Result<()> {
-		let mut mock_reader = MockTilesReader::new_mock(TileSourceMetadata {
+		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
 			bbox_pyramid: TileBBoxPyramid::new_full(4),
 			tile_compression: TileCompression::Gzip,
 			tile_format: TileFormat::MVT,
@@ -179,7 +179,7 @@ mod tests {
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let mut reader = PMTilesReader::open_reader(Box::new(data_reader), runtime).await?;
-		MockTilesWriter::write(&mut reader).await?;
+		MockWriter::write(&mut reader).await?;
 
 		Ok(())
 	}
@@ -191,7 +191,7 @@ mod tests {
 		bbox_pyramid.include_bbox(&TileBBox::from_min_and_max(15, 4090, 4090, 5000, 5000)?);
 		bbox_pyramid.include_bbox(&TileBBox::from_min_and_max(14, 250, 250, 260, 260)?);
 
-		let mut mock_reader = MockTilesReader::new_mock(TileSourceMetadata {
+		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
 			bbox_pyramid,
 			tile_compression: TileCompression::Uncompressed,
 			tile_format: TileFormat::MVT,

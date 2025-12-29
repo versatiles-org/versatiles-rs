@@ -425,7 +425,7 @@ mod tests {
 	use reqwest::Client;
 	use rstest::rstest;
 	use std::sync::Arc;
-	use versatiles_container::{MockTilesReader, MockTilesReaderProfile as MTRP, TileSourceMetadata, Traversal};
+	use versatiles_container::{MockReader, MockReaderProfile as MRP, TileSourceMetadata, Traversal};
 	use versatiles_core::{TileBBoxPyramid, TileCompression as TC, TileFormat as TF};
 
 	const IP: &str = "127.0.0.1";
@@ -443,7 +443,7 @@ mod tests {
 
 		let mut server = TileServer::new_test(IP, 50001, true, false);
 
-		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf)?.boxed();
+		let reader = MockReader::new_mock_profile(MRP::Pbf)?.boxed();
 		server.add_tile_source("cheese".to_string(), reader).await?;
 
 		server.start().await?;
@@ -467,10 +467,10 @@ mod tests {
 	async fn same_prefix_twice() {
 		let mut server = TileServer::new_test(IP, 0, true, false);
 
-		let reader = MockTilesReader::new_mock_profile(MTRP::Png).unwrap().boxed();
+		let reader = MockReader::new_mock_profile(MRP::Png).unwrap().boxed();
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 
-		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf).unwrap().boxed();
+		let reader = MockReader::new_mock_profile(MRP::Pbf).unwrap().boxed();
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 	}
 
@@ -491,7 +491,7 @@ mod tests {
 		let mut server = TileServer::new_test(IP, 0, true, false);
 		assert_eq!(server.ip, IP);
 
-		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf).unwrap().boxed();
+		let reader = MockReader::new_mock_profile(MRP::Pbf).unwrap().boxed();
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 
 		assert_eq!(server.tile_sources.len(), 1);
@@ -504,7 +504,7 @@ mod tests {
 		let mut server = TileServer::new_test(IP, 0, true, false);
 		assert_eq!(server.ip, IP);
 
-		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf).unwrap().boxed();
+		let reader = MockReader::new_mock_profile(MRP::Pbf).unwrap().boxed();
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 
 		assert_eq!(
@@ -549,7 +549,7 @@ mod tests {
 		let mut server = TileServer::new_test(IP, 0, true, false);
 
 		let parameters = TileSourceMetadata::new(format, compression, TileBBoxPyramid::new_full(8), Traversal::ANY);
-		let reader = MockTilesReader::new_mock(parameters).unwrap().boxed();
+		let reader = MockReader::new_mock(parameters).unwrap().boxed();
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 		server.start().await.unwrap();
 

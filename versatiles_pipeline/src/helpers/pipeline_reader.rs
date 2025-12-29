@@ -142,14 +142,14 @@ impl std::fmt::Debug for PipelineReader {
 mod tests {
 	use super::*;
 	use pretty_assertions::assert_eq;
-	use versatiles_container::MockTilesWriter;
+	use versatiles_container::MockWriter;
 
 	pub const VPL: &str = include_str!("../../../testdata/berlin.vpl");
 
 	#[tokio::test(flavor = "multi_thread", worker_threads = 16)]
 	async fn open_vpl_str() -> Result<()> {
 		let mut reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), TilesRuntime::default()).await?;
-		MockTilesWriter::write(&mut reader).await?;
+		MockWriter::write(&mut reader).await?;
 
 		Ok(())
 	}

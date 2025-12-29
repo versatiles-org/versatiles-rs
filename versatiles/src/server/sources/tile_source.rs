@@ -117,13 +117,13 @@ mod tests {
 	use crate::runtime::create_test_runtime;
 	use anyhow::Result;
 	use rstest::rstest;
-	use versatiles_container::{MockTilesReader, MockTilesReaderProfile};
+	use versatiles_container::{MockReader, MockReaderProfile};
 	use versatiles_core::TileJSON;
 
 	// Test the constructor function for TileSource
 	#[tokio::test]
 	async fn tile_container_from() -> Result<()> {
-		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
+		let reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
 		let container = TileSource::from(reader.boxed(), "prefix")?;
 
 		assert_eq!(container.prefix.str, "/tiles/prefix/");
@@ -138,12 +138,12 @@ mod tests {
 	// Test the debug function
 	#[test]
 	fn debug() -> Result<()> {
-		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
+		let reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
 		let container = TileSource::from(reader.boxed(), "prefix")?;
 		// Updated expected output - no more "Mutex { data: ... }"
 		assert_eq!(
 			format!("{container:?}"),
-			"TileSource { reader: MockTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [2: [0,1,2,3] (3x3), 3: [0,2,4,6] (5x5), 4: [0,0,15,15] (16x16), 5: [0,0,31,31] (32x32), 6: [0,0,63,63] (64x64)], tile_compression: Uncompressed, tile_format: PNG, traversal: Traversal(AnyOrder,full) } }, tile_mime: \"image/png\", compression: Uncompressed }"
+			"TileSource { reader: MockReader { parameters: TileSourceMetadata { bbox_pyramid: [2: [0,1,2,3] (3x3), 3: [0,2,4,6] (5x5), 4: [0,0,15,15] (16x16), 5: [0,0,31,31] (32x32), 6: [0,0,63,63] (64x64)], tile_compression: Uncompressed, tile_format: PNG, traversal: Traversal(AnyOrder,full) } }, tile_mime: \"image/png\", compression: Uncompressed }"
 		);
 		Ok(())
 	}

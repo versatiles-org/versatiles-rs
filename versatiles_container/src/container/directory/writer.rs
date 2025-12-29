@@ -35,7 +35,7 @@
 //!
 //!     // Choose an absolute output directory
 //!     let out_dir = std::env::temp_dir().join("versatiles_demo_out");
-//!     DirectoryTilesWriter::write_to_path(&mut reader, &out_dir, runtime).await?;
+//!     DirectoryWriter::write_to_path(&mut reader, &out_dir, runtime).await?;
 //!     Ok(())
 //! }
 //! ```
@@ -57,9 +57,9 @@ use versatiles_derive::context;
 ///
 /// Tiles are encoded using the format and compression from the source `TilesReader`. The
 /// writer creates intermediate directories on demand and preserves the `{z}/{x}/{y}` layout.
-pub struct DirectoryTilesWriter {}
+pub struct DirectoryWriter {}
 
-impl DirectoryTilesWriter {
+impl DirectoryWriter {
 	/// Write a `Blob` to `path`, creating missing parent directories.
 	#[context("writing file '{}'", path.display())]
 	fn write(path: PathBuf, blob: Blob) -> Result<()> {
@@ -74,7 +74,7 @@ impl DirectoryTilesWriter {
 }
 
 #[async_trait]
-impl TilesWriterTrait for DirectoryTilesWriter {
+impl TilesWriterTrait for DirectoryWriter {
 	/// Write all tiles and metadata from `reader` into the absolute directory `path`.
 	///
 	/// * Validates that `path` is absolute.
@@ -149,7 +149,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{MOCK_BYTES_PBF, MockTilesReader, TileSourceMetadata};
+	use crate::{MOCK_BYTES_PBF, MockReader, TileSourceMetadata};
 	use versatiles_core::utils::decompress_gzip;
 
 	/// Tests the functionality of writing tile data to a directory from a mock reader.
@@ -158,14 +158,14 @@ mod tests {
 		let temp_dir = assert_fs::TempDir::new()?;
 		let temp_path = temp_dir.path();
 
-		let mut mock_reader = MockTilesReader::new_mock(TileSourceMetadata::new(
+		let mut mock_reader = MockReader::new_mock(TileSourceMetadata::new(
 			TileFormat::MVT,
 			TileCompression::Gzip,
 			TileBBoxPyramid::new_full(2),
 			Traversal::ANY,
 		))?;
 
-		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path, TilesRuntime::default()).await?;
+		DirectoryWriter::write_to_path(&mut mock_reader, temp_path, TilesRuntime::default()).await?;
 
 		let load = |filename| {
 			let path = temp_path.join(filename);

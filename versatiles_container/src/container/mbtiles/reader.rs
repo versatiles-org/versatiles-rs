@@ -419,7 +419,7 @@ struct RecordMetadata {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::MockTilesWriter;
+	use crate::MockWriter;
 	use lazy_static::lazy_static;
 	use std::{env, path::PathBuf};
 
@@ -460,7 +460,7 @@ pub mod tests {
 		assert_eq!(tile.range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
 		assert_eq!(tile.range(172959..172969), &[255, 15, 172, 89, 205, 237, 7, 134, 5, 0]);
 
-		MockTilesWriter::write(&mut reader).await?;
+		MockWriter::write(&mut reader).await?;
 
 		Ok(())
 	}
