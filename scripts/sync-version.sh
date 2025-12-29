@@ -31,7 +31,7 @@ if [ "$CARGO_VERSION" != "$NPM_VERSION" ]; then
                         pkg.optionalDependencies[dep] = '$CARGO_VERSION';
                     }
                 });
-                fs.writeFileSync('package.json', JSON.stringify(pkg, null, '\t') + '\n');
+                fs.writeFileSync('package.json', JSON.stringify(pkg, null, '  ') + '\n');
             }
         "
 
