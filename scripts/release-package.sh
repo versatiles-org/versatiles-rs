@@ -253,17 +253,13 @@ main() {
 	fi
 	log_success "Git working directory is clean"
 
-	log_step "Running cargo check..."
-	cargo check
-	log_success "Cargo check passed"
-
-	log_step "Running tests..."
-	./scripts/test-unix.sh
+	log_step "Running checks..."
+	./scripts/check.sh
 	if [ $? -ne 0 ]; then
-		log_error "Tests failed!"
+		log_error "Checks failed!"
 		exit 1
 	fi
-	log_success "Tests passed"
+	log_success "Checks passed"
 
 	# Get current version
 	local current_version
