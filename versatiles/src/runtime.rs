@@ -10,5 +10,5 @@ pub fn create_runtime() -> TilesRuntime {
 }
 
 pub fn create_test_runtime() -> TilesRuntime {
-	create_runtime_builder().silent().build()
+	create_runtime_builder().silent(true).build()
 }

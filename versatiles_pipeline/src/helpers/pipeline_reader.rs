@@ -148,7 +148,7 @@ mod tests {
 
 	#[tokio::test(flavor = "multi_thread", worker_threads = 16)]
 	async fn open_vpl_str() -> Result<()> {
-		let mut reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), TilesRuntime::default()).await?;
+		let mut reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), TilesRuntime::new_silent()).await?;
 		MockWriter::write(&mut reader).await?;
 
 		Ok(())
@@ -157,7 +157,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_tile_pipeline_reader_open_path() -> Result<()> {
 		let path = Path::new("../testdata/pipeline.vpl");
-		let result = PipelineReader::open_path(path, TilesRuntime::default()).await;
+		let result = PipelineReader::open_path(path, TilesRuntime::new_silent()).await;
 		assert_eq!(
 			result.unwrap_err().chain().map(|e| e.to_string()).collect::<Vec<_>>()[0..2],
 			[
@@ -171,7 +171,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_pipeline_reader_get_tile() -> Result<()> {
-		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), TilesRuntime::default()).await?;
+		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), TilesRuntime::new_silent()).await?;
 
 		let result = reader.get_tile(&TileCoord::new(14, 0, 0)?).await;
 		assert_eq!(result?, None);
@@ -189,7 +189,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_pipeline_reader_get_tile_stream() -> Result<()> {
-		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), TilesRuntime::default()).await?;
+		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), TilesRuntime::new_silent()).await?;
 		let bbox = TileBBox::from_min_and_max(1, 0, 0, 1, 1)?;
 		let result_stream = reader.get_tile_stream(bbox).await?;
 		let result = result_stream.to_vec().await;
@@ -201,7 +201,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_pipeline_reader_trait_and_debug() -> Result<()> {
-		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), TilesRuntime::default()).await?;
+		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), TilesRuntime::new_silent()).await?;
 		// Trait methods
 		assert_eq!(reader.source_type().to_string(), "processor 'pipeline'");
 		// Parameters should have at least one bbox level

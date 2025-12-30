@@ -72,7 +72,7 @@ mod tests {
 	async fn test_read_csv_file() -> Result<()> {
 		let file_path =
 			make_temp_csv("name,age,city\nJohn Doe,30,New York\nJane Smith,25,Los Angeles\nAlice Johnson,28,Chicago")?;
-		let data = read_csv_file(file_path.path(), TilesRuntime::default()).await?;
+		let data = read_csv_file(file_path.path(), TilesRuntime::new_silent()).await?;
 
 		assert_eq!(data.len(), 3);
 
@@ -97,7 +97,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_read_empty_csv_file() -> Result<()> {
 		let file_path = make_temp_csv("name,age,city")?;
-		let data = read_csv_file(file_path.path(), TilesRuntime::default()).await?;
+		let data = read_csv_file(file_path.path(), TilesRuntime::new_silent()).await?;
 		assert!(data.is_empty());
 		Ok(())
 	}
@@ -106,7 +106,7 @@ mod tests {
 	async fn test_read_csv_file_missing_values() -> Result<()> {
 		let file_path = make_temp_csv("name,age,city\nJohn Doe,,New York\n,25,Los Angeles\nAlice Johnson,28,")?;
 
-		let data = read_csv_file(file_path.path(), TilesRuntime::default()).await?;
+		let data = read_csv_file(file_path.path(), TilesRuntime::new_silent()).await?;
 
 		assert_eq!(data.len(), 3);
 
@@ -131,7 +131,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_read_csv_file_incorrect_path() {
 		let path = Path::new("non_existent.csv");
-		let result = read_csv_file(path, TilesRuntime::default()).await;
+		let result = read_csv_file(path, TilesRuntime::new_silent()).await;
 		assert!(result.is_err());
 	}
 }

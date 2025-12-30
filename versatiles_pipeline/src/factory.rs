@@ -111,7 +111,12 @@ impl PipelineFactory {
 
 	/// Creates a default-registered factory using the provided custom reader callback.
 	pub fn new_dummy_reader(create_reader: Callback) -> Self {
-		PipelineFactory::new_default(Path::new(""), create_reader, TilesRuntime::default())
+		#[cfg(not(test))]
+		let runtime = TilesRuntime::default();
+		#[cfg(test)]
+		let runtime = TilesRuntime::new_silent();
+
+		PipelineFactory::new_default(Path::new(""), create_reader, runtime)
 	}
 
 	/// Registers a read operation factory under its VPL tag name.

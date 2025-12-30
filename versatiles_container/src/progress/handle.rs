@@ -244,7 +244,7 @@ mod tests {
 	#[test]
 	fn test_progress_handle_new() {
 		let event_bus = EventBus::new();
-		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, true);
 
 		assert_eq!(handle.id().0, 1);
 	}
@@ -252,7 +252,7 @@ mod tests {
 	#[test]
 	fn test_progress_handle_set_position() {
 		let event_bus = EventBus::new();
-		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, true);
 
 		handle.set_position(50);
 		let state = handle.state.lock();
@@ -262,7 +262,7 @@ mod tests {
 	#[test]
 	fn test_progress_handle_set_position_clamps_to_max() {
 		let event_bus = EventBus::new();
-		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, true);
 
 		handle.set_position(150); // Exceeds total
 		let state = handle.state.lock();
@@ -272,7 +272,7 @@ mod tests {
 	#[test]
 	fn test_progress_handle_inc() {
 		let event_bus = EventBus::new();
-		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, true);
 
 		handle.inc(10);
 		handle.inc(15);
@@ -285,7 +285,7 @@ mod tests {
 	#[test]
 	fn test_progress_handle_inc_saturates() {
 		let event_bus = EventBus::new();
-		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, true);
 
 		handle.set_position(90);
 		handle.inc(20); // Would go to 110, but should clamp to 100
@@ -297,7 +297,7 @@ mod tests {
 	#[test]
 	fn test_progress_handle_set_max_value() {
 		let event_bus = EventBus::new();
-		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, true);
 
 		handle.set_max_value(200);
 		let state = handle.state.lock();
@@ -307,7 +307,7 @@ mod tests {
 	#[test]
 	fn test_progress_handle_set_max_value_clamps_position() {
 		let event_bus = EventBus::new();
-		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, true);
 
 		handle.set_position(80);
 		handle.set_max_value(50); // New max is less than current position
@@ -320,7 +320,7 @@ mod tests {
 	#[test]
 	fn test_progress_handle_finish() {
 		let event_bus = EventBus::new();
-		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+		let handle = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, true);
 
 		handle.set_position(50);
 		handle.finish();
@@ -333,7 +333,7 @@ mod tests {
 	#[test]
 	fn test_progress_handle_clone() {
 		let event_bus = EventBus::new();
-		let handle1 = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, false);
+		let handle1 = ProgressHandle::new(crate::ProgressId(1), "Test".to_string(), 100, event_bus, true);
 
 		handle1.set_position(50);
 

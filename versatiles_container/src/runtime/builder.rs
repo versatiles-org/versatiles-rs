@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 /// let runtime = TilesRuntime::builder()
 ///     .with_disk_cache()
 ///     .max_memory(2 * 1024 * 1024 * 1024)
-///     .silent()
+///     .silent(true)
 ///     .build();
 /// ```
 pub struct RuntimeBuilder {
@@ -32,7 +32,10 @@ impl RuntimeBuilder {
 			cache_type: None,
 			max_memory: None,
 			registry_customizer: Vec::new(),
+			#[cfg(not(test))]
 			silent: false,
+			#[cfg(test)]
+			silent: true,
 		}
 	}
 
@@ -52,8 +55,8 @@ impl RuntimeBuilder {
 		self.cache_type(CacheType::new_disk())
 	}
 
-	pub fn silent(mut self) -> Self {
-		self.silent = true;
+	pub fn silent(mut self, silent: bool) -> Self {
+		self.silent = silent;
 		self
 	}
 
@@ -81,7 +84,7 @@ impl RuntimeBuilder {
 	///     .customize_registry(|registry| {
 	///         // Register custom format handlers
 	///     })
-	///     .silent()
+	///     .silent(true)
 	///     .build();
 	/// ```
 	pub fn customize_registry<F>(mut self, customizer: F) -> Self
@@ -136,7 +139,7 @@ mod tests {
 		let builder = RuntimeBuilder::new();
 		assert!(builder.cache_type.is_none());
 		assert!(builder.max_memory.is_none());
-		assert!(!builder.silent);
+		assert!(builder.silent);
 		assert_eq!(builder.registry_customizer.len(), 0);
 	}
 
@@ -145,7 +148,7 @@ mod tests {
 		let builder = RuntimeBuilder::default();
 		assert!(builder.cache_type.is_none());
 		assert!(builder.max_memory.is_none());
-		assert!(!builder.silent);
+		assert!(builder.silent);
 	}
 
 	#[test]
@@ -168,8 +171,11 @@ mod tests {
 
 	#[test]
 	fn test_runtime_builder_silent() {
-		let builder = RuntimeBuilder::new().silent();
+		let mut builder = RuntimeBuilder::new();
+		builder = builder.silent(true);
 		assert!(builder.silent);
+		builder = builder.silent(false);
+		assert!(!builder.silent);
 	}
 
 	#[test]
@@ -193,7 +199,7 @@ mod tests {
 		let builder = RuntimeBuilder::new()
 			.with_memory_cache()
 			.max_memory(2048)
-			.silent()
+			.silent(true)
 			.customize_registry(|_| {});
 
 		assert!(builder.cache_type.is_some());
@@ -229,7 +235,7 @@ mod tests {
 
 	#[test]
 	fn test_runtime_builder_build_silent() {
-		let runtime = RuntimeBuilder::new().silent().build();
+		let runtime = RuntimeBuilder::new().silent(true).build();
 		// Create a progress and verify it works
 		let progress = runtime.create_progress("Test", 100);
 		progress.inc(10);
@@ -258,7 +264,7 @@ mod tests {
 		let runtime = RuntimeBuilder::new()
 			.with_disk_cache()
 			.max_memory(8 * 1024 * 1024)
-			.silent()
+			.silent(true)
 			.customize_registry(|_| {})
 			.build();
 
