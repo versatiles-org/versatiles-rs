@@ -3,8 +3,25 @@ cd "$(dirname "$0")/.."
 
 set -e
 
+# Set up authentication header if GH_TOKEN is available
+AUTH_HEADER=""
+if [ -n "$GH_TOKEN" ]; then
+  AUTH_HEADER="Authorization: token $GH_TOKEN"
+fi
+
 # get latest tags
-curl -s https://api.github.com/repos/versatiles-org/versatiles-rs/tags >tags.json
+if [ -n "$AUTH_HEADER" ]; then
+  curl -s -H "$AUTH_HEADER" https://api.github.com/repos/versatiles-org/versatiles-rs/tags >tags.json
+else
+  curl -s https://api.github.com/repos/versatiles-org/versatiles-rs/tags >tags.json
+fi
+
+# Check if we got valid JSON
+if ! jq -e . >/dev/null 2>&1 <tags.json; then
+  echo "Failed to fetch tags from GitHub API. Response:" >&2
+  cat tags.json >&2
+  exit 1
+fi
 
 # get new tag
 export NEW_TAG=$(jq -r "nth(0; .[] | .name | select(startswith(\"v\")))" tags.json)
@@ -24,9 +41,15 @@ fi
 
 echo "# Release: $NEW_TAG" >notes.txt
 
-curl -s "https://api.github.com/repos/versatiles-org/versatiles-rs/commits?per_page=100" |
-   jq -r ".[] | if .sha == \"$OLD_SHA\" then halt else \"- \" + .commit.message end" |
-   tac >>notes.txt
+if [ -n "$AUTH_HEADER" ]; then
+  curl -s -H "$AUTH_HEADER" "https://api.github.com/repos/versatiles-org/versatiles-rs/commits?per_page=100" |
+    jq -r ".[] | if .sha == \"$OLD_SHA\" then halt else \"- \" + .commit.message end" |
+    tac >>notes.txt
+else
+  curl -s "https://api.github.com/repos/versatiles-org/versatiles-rs/commits?per_page=100" |
+    jq -r ".[] | if .sha == \"$OLD_SHA\" then halt else \"- \" + .commit.message end" |
+    tac >>notes.txt
+fi
 
 # Try to create release
 gh release view "$NEW_TAG" || gh release create "$NEW_TAG" --title "$NEW_TAG" -F notes.txt --draft --prerelease
