@@ -550,8 +550,6 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
-          set -e
-
           echo "Publishing crates in dependency order..."
 
           # Publish in dependency order (derived from Cargo.toml dependencies)
@@ -575,18 +573,24 @@ jobs:
 
             VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
 
-            # Check if this version is already published
-            if cargo search "$crate" --limit 1 | grep -q "^$crate = \"$VERSION\""; then
-              echo "⚠️  $crate@$VERSION is already published on crates.io, skipping..."
-            else
-              echo "Publishing $crate@$VERSION..."
-              cargo publish --allow-dirty
+            # Try to publish, but don't fail if version already exists
+            echo "Publishing $crate@$VERSION..."
+            if cargo publish --allow-dirty 2>&1 | tee /tmp/publish.log; then
               echo "✓ Published $crate@$VERSION"
-
               # Wait to avoid rate limiting (except for the last crate)
               if [ "$crate" != "versatiles" ]; then
                 echo "Waiting 30 seconds before next publish..."
                 sleep 30
+              fi
+            else
+              # Check if the error is because version already exists
+              if grep -q "already exists" /tmp/publish.log; then
+                echo "⚠️  $crate@$VERSION already exists on crates.io, skipping..."
+              else
+                # It's a real error, fail the build
+                echo "❌ Failed to publish $crate@$VERSION"
+                cat /tmp/publish.log
+                exit 1
               fi
             fi
 
