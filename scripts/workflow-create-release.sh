@@ -3,18 +3,8 @@ cd "$(dirname "$0")/.."
 
 set -e
 
-# Set up authentication header if GH_TOKEN is available
-AUTH_HEADER=""
-if [ -n "$GH_TOKEN" ]; then
-  AUTH_HEADER="Authorization: token $GH_TOKEN"
-fi
-
-# get latest tags
-if [ -n "$AUTH_HEADER" ]; then
-  curl -s -H "$AUTH_HEADER" https://api.github.com/repos/versatiles-org/versatiles-rs/tags >tags.json
-else
-  curl -s https://api.github.com/repos/versatiles-org/versatiles-rs/tags >tags.json
-fi
+# Get latest tags using gh CLI
+gh api repos/versatiles-org/versatiles-rs/tags --paginate >tags.json
 
 # Check if we got valid JSON
 if ! jq -e . >/dev/null 2>&1 <tags.json; then
@@ -41,15 +31,10 @@ fi
 
 echo "# Release: $NEW_TAG" >notes.txt
 
-if [ -n "$AUTH_HEADER" ]; then
-  curl -s -H "$AUTH_HEADER" "https://api.github.com/repos/versatiles-org/versatiles-rs/commits?per_page=100" |
-    jq -r ".[] | if .sha == \"$OLD_SHA\" then halt else \"- \" + .commit.message end" |
-    tac >>notes.txt
-else
-  curl -s "https://api.github.com/repos/versatiles-org/versatiles-rs/commits?per_page=100" |
-    jq -r ".[] | if .sha == \"$OLD_SHA\" then halt else \"- \" + .commit.message end" |
-    tac >>notes.txt
-fi
+# Get commits since last tag using gh CLI
+gh api "repos/versatiles-org/versatiles-rs/commits?per_page=100" |
+   jq -r ".[] | if .sha == \"$OLD_SHA\" then halt else \"- \" + .commit.message end" |
+   tac >>notes.txt
 
 # Try to create release
 gh release view "$NEW_TAG" || gh release create "$NEW_TAG" --title "$NEW_TAG" -F notes.txt --draft --prerelease
