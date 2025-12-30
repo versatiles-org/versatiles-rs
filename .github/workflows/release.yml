@@ -538,35 +538,15 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.tag }}
 
-      - name: Check if version already published
-        id: check_published
-        run: |
-          TAG="${{ needs.prepare.outputs.tag }}"
-          VERSION="${TAG#v}"  # Remove 'v' prefix
-
-          echo "Checking if versatiles@$VERSION is already published on crates.io..."
-
-          # Check if the main crate is already published
-          if cargo search versatiles --limit 1 | grep -q "^versatiles = \"$VERSION\""; then
-            echo "✓ Version $VERSION is already published on crates.io"
-            echo "already_published=true" >> $GITHUB_OUTPUT
-          else
-            echo "Version $VERSION not found on crates.io, will publish"
-            echo "already_published=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Install Rust toolchain
-        if: steps.check_published.outputs.already_published == 'false'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Rust build artifacts
-        if: steps.check_published.outputs.already_published == 'false'
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: 'crates-publish'
 
       - name: Publish crates to crates.io
-        if: steps.check_published.outputs.already_published == 'false'
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
@@ -588,37 +568,34 @@ jobs:
           for crate in "${crates[@]}"; do
             echo ""
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "Publishing $crate..."
+            echo "Processing $crate..."
             echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
             cd "$crate"
 
             VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
-            echo "Publishing $crate@$VERSION..."
-            cargo publish --allow-dirty
-            echo "✓ Published $crate@$VERSION"
+
+            # Check if this version is already published
+            if cargo search "$crate" --limit 1 | grep -q "^$crate = \"$VERSION\""; then
+              echo "⚠️  $crate@$VERSION is already published on crates.io, skipping..."
+            else
+              echo "Publishing $crate@$VERSION..."
+              cargo publish --allow-dirty
+              echo "✓ Published $crate@$VERSION"
+
+              # Wait to avoid rate limiting (except for the last crate)
+              if [ "$crate" != "versatiles" ]; then
+                echo "Waiting 30 seconds before next publish..."
+                sleep 30
+              fi
+            fi
 
             cd ..
-
-            # Wait to avoid rate limiting (except for the last crate)
-            if [ "$crate" != "versatiles" ]; then
-              echo "Waiting 30 seconds before next publish..."
-              sleep 30
-            fi
           done
 
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "✓ All crates published successfully!"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-      - name: Report skipped publish
-        if: steps.check_published.outputs.already_published == 'true'
-        run: |
-          TAG="${{ needs.prepare.outputs.tag }}"
-          VERSION="${TAG#v}"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "ℹ️  Skipped publishing - version $VERSION already exists on crates.io"
+          echo "✓ Crates publish process completed!"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
   finish-release:
