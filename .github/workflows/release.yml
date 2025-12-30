@@ -30,6 +30,7 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write  # Required for npm provenance attestations
 
 env:
   CARGO_TERM_COLOR: always
