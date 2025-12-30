@@ -585,6 +585,7 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
+          set -o pipefail
           echo "Publishing crates in dependency order..."
 
           # Publish in dependency order (derived from Cargo.toml dependencies)
