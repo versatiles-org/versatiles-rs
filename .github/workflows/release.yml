@@ -368,7 +368,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./versatiles_node
-        run: npm ci --omit=optional
+        run: npm i --omit=optional
 
       - name: Download NAPI bindings from workflow artifacts
         uses: actions/download-artifact@v4
@@ -463,7 +463,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./versatiles_node
-        run: npm ci --omit=optional
+        run: npm i --omit=optional
 
       - name: Download npm packages
         uses: actions/download-artifact@v4

@@ -158,7 +158,7 @@ jobs:
 
       - name: Install Node.js dependencies
         working-directory: ./versatiles_node
-        run: npm ci --omit=optional
+        run: npm i --omit=optional
 
       - name: Build native module
         working-directory: ./versatiles_node
