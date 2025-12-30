@@ -538,10 +538,6 @@ jobs:
           echo ""
           echo "✓ All platform packages published"
 
-      - name: Prepare main package
-        working-directory: ./versatiles_node
-        run: npm run prepublishOnly
-
       - name: Publish main package
         working-directory: ./versatiles_node
         env:
@@ -553,7 +549,7 @@ jobs:
 
       - name: Verify publication
         run: |
-          sleep 10
+          sleep 60
           TAG_VERSION="${{ needs.prepare.outputs.tag }}"
           TAG_VERSION="${TAG_VERSION#v}"
           echo "Verifying publication of version: $TAG_VERSION"
