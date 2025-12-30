@@ -469,7 +469,32 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: npm-packages
-          path: versatiles_node/npm
+          path: versatiles_node/npm-downloaded
+
+      - name: Move packages to correct location
+        working-directory: ./versatiles_node
+        run: |
+          # The artifact download may flatten the directory structure
+          # Let's see what we got and reorganize if needed
+          echo "Downloaded artifacts:"
+          find npm-downloaded -type f -name "*.tgz" || echo "No .tgz files found"
+
+          # Create npm directory structure
+          mkdir -p npm
+
+          # Move tgz files to npm directory, preserving or recreating structure
+          if [ -d "npm-downloaded" ]; then
+            # If files are in subdirectories, preserve them
+            if ls npm-downloaded/*/*.tgz 1> /dev/null 2>&1; then
+              mv npm-downloaded/* npm/
+            # If files are flattened, just move them
+            elif ls npm-downloaded/*.tgz 1> /dev/null 2>&1; then
+              mv npm-downloaded/*.tgz npm/
+            fi
+          fi
+
+          echo "Final npm directory structure:"
+          find npm -type f -name "*.tgz" || echo "No .tgz files in npm directory"
 
       - name: Validate package version
         working-directory: ./versatiles_node
@@ -492,10 +517,26 @@ jobs:
           NPM_TAG="${{ needs.prepare.outputs.npm_tag }}"
           echo "Publishing platform packages with tag: $NPM_TAG"
 
-          for pkg in npm/*.tgz; do
+          # Find all .tgz files recursively
+          packages=$(find npm -name "*.tgz" -type f)
+
+          if [ -z "$packages" ]; then
+            echo "ERROR: No .tgz files found in npm directory"
+            exit 1
+          fi
+
+          echo "Found packages:"
+          echo "$packages"
+
+          # Publish each platform package
+          for pkg in $packages; do
+            echo ""
             echo "Publishing $pkg with --tag $NPM_TAG"
             npm publish "$pkg" --access public --provenance --tag "$NPM_TAG"
           done
+
+          echo ""
+          echo "✓ All platform packages published"
 
       - name: Prepare main package
         working-directory: ./versatiles_node
