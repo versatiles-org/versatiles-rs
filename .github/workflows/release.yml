@@ -451,8 +451,6 @@ jobs:
       - prepare
       - package-npm-binaries
     runs-on: ubuntu-latest
-    # Only publish on actual tag pushes
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
