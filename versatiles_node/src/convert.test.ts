@@ -1,4 +1,4 @@
-import { ContainerReader, convert } from '../index.js';
+import { TileSource, convert } from '../index.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -19,7 +19,7 @@ describe('convertTo()', () => {
 		expect(fs.existsSync(OUTPUT_PATH)).toBeTruthy();
 
 		// Verify we can open the converted file
-		const newReader = await ContainerReader.open(OUTPUT_PATH);
+		const newReader = await TileSource.open(OUTPUT_PATH);
 		expect(await newReader.metadata()).toStrictEqual({
 			maxZoom: 14,
 			minZoom: 0,
@@ -36,7 +36,7 @@ describe('convertTo()', () => {
 		expect(fs.existsSync(OUTPUT_PATH)).toBeTruthy();
 
 		// Verify we can open the converted file
-		const newReader = await ContainerReader.open(OUTPUT_PATH);
+		const newReader = await TileSource.open(OUTPUT_PATH);
 		expect(await newReader.metadata()).toStrictEqual({
 			maxZoom: 14,
 			minZoom: 0,
@@ -56,7 +56,7 @@ describe('convertTo()', () => {
 		});
 		expect(fs.existsSync(OUTPUT_PATH)).toBeTruthy();
 
-		const newReader = await ContainerReader.open(OUTPUT_PATH);
+		const newReader = await TileSource.open(OUTPUT_PATH);
 		expect(await newReader.metadata()).toStrictEqual({
 			maxZoom: 7,
 			minZoom: 5,

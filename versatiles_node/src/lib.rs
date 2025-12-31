@@ -12,7 +12,7 @@
 //!
 //! ## Main Types
 //!
-//! - [`ContainerReader`]: Read tiles from various container formats
+//! - [`TileSource`]: Read tiles from various container formats
 //! - [`TileServer`]: HTTP server for serving tiles and static content
 //! - [`Progress`]: Progress monitoring for conversion operations
 //! - [`ConvertOptions`]: Configuration for tile conversion
@@ -20,10 +20,10 @@
 //! ## Example Usage
 //!
 //! ```javascript
-//! const { ContainerReader, TileServer, convert } = require('versatiles');
+//! const { TileSource, TileServer, convert } = require('versatiles');
 //!
 //! // Read tiles from a container
-//! const reader = await ContainerReader.open('tiles.versatiles');
+//! const reader = await TileSource.open('tiles.versatiles');
 //! const tile = await reader.getTile(10, 512, 384);
 //!
 //! // Convert tiles with progress monitoring
@@ -43,16 +43,16 @@
 
 #![deny(clippy::all)]
 
-mod container;
 mod convert;
 mod macros;
 mod progress;
 mod runtime;
 mod server;
+mod tile_source;
 mod types;
 
-pub use container::TileSource;
 pub use convert::convert;
 pub use progress::{Progress, ProgressData};
 pub use server::TileServer;
+pub use tile_source::TileSource;
 pub use types::{ConvertOptions, ProbeResult, ServerOptions, SourceMetadata, TileCoord};

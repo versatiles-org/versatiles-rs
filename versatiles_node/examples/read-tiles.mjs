@@ -9,7 +9,7 @@
  */
 
 import { tmpdir } from 'os';
-import { ContainerReader, TileCoord } from '../index.js';
+import { TileSource, TileCoord } from '../index.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { log } from './lib/logger.mjs';
@@ -22,7 +22,7 @@ const containerPath = new URL('../../testdata/berlin.mbtiles', import.meta.url).
 	// Example 1: Read a single tile
 	log.section('Example 1: Read a single tile');
 
-	const reader = await ContainerReader.open(containerPath);
+	const reader = await TileSource.open(containerPath);
 
 	// Get a tile at zoom 10, column 550, row 335 (Berlin area)
 	const tile = await reader.getTile(10, 550, 335);
@@ -41,7 +41,7 @@ const containerPath = new URL('../../testdata/berlin.mbtiles', import.meta.url).
 {
 	// Example 2: Read multiple tiles
 	log.section('Example 2: Read multiple tiles');
-	const reader = await ContainerReader.open(containerPath);
+	const reader = await TileSource.open(containerPath);
 
 	const tiles = [
 		{ z: 5, x: 17, y: 10 },
@@ -71,7 +71,7 @@ const containerPath = new URL('../../testdata/berlin.mbtiles', import.meta.url).
 	log.info('Tile coordinates', `zoom=${zoom}, x=${coord.x}, y=${coord.y}`);
 	// Get the tile at these coordinates
 
-	const reader = await ContainerReader.open(containerPath);
+	const reader = await TileSource.open(containerPath);
 	const tile = await reader.getTile(coord.z, coord.x, coord.y);
 
 	log.info('Tile size', `${tile.length} bytes`);
@@ -103,7 +103,7 @@ const containerPath = new URL('../../testdata/berlin.mbtiles', import.meta.url).
 	// Example 5: Read tiles in a geographic area
 	log.section('Example 5: Read all tiles in a bounding box');
 
-	const reader = await ContainerReader.open(containerPath);
+	const reader = await TileSource.open(containerPath);
 
 	// Define a small area in Berlin
 	const west = 13.4;
@@ -141,7 +141,7 @@ const containerPath = new URL('../../testdata/berlin.mbtiles', import.meta.url).
 	// Example 6: Get tile information without reading data
 	log.section('Example 6: Check tile availability');
 
-	const reader = await ContainerReader.open(containerPath);
+	const reader = await TileSource.open(containerPath);
 
 	const testCoords = [
 		{ z: 0, x: 0, y: 0, name: 'World (zoom 0)' },

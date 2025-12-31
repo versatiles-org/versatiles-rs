@@ -7,13 +7,13 @@
  * metadata, format information, and other details.
  */
 
-import { ContainerReader } from '../index.js';
+import { TileSource } from '../index.js';
 import { log } from './lib/logger.mjs';
 
 log.title('VersaTiles Probe Example');
 
 const containerPath = new URL('../../testdata/berlin.mbtiles', import.meta.url).pathname;
-const container = await ContainerReader.open(containerPath);
+const container = await TileSource.open(containerPath);
 
 log.section('Container Information');
 const sourceType = await container.sourceType();
