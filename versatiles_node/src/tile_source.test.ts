@@ -145,4 +145,108 @@ describe('TileSource', () => {
 			expect(sourceType.inputs).toBeNull();
 		});
 	});
+
+	describe('fromVpl', () => {
+		it('should create TileSource from simple VPL string', async () => {
+			const vpl = 'from_container filename="berlin.mbtiles"';
+			const reader = await TileSource.fromVpl(vpl, TESTDATA_DIR);
+
+			expect(reader).toBeDefined();
+
+			// Verify metadata
+			const metadata = reader.metadata();
+			expect(metadata.tileFormat).toBe('mvt');
+			expect(metadata.tileCompression).toBe('gzip');
+			expect(metadata.minZoom).toBe(0);
+			expect(metadata.maxZoom).toBe(14);
+		});
+
+		it('should create TileSource from VPL file content', async () => {
+			const fs = await import('fs/promises');
+			const vplPath = path.join(TESTDATA_DIR, 'berlin.vpl');
+			const vpl = await fs.readFile(vplPath, 'utf-8');
+
+			const reader = await TileSource.fromVpl(vpl, TESTDATA_DIR);
+
+			expect(reader).toBeDefined();
+
+			// Verify we can read metadata
+			const metadata = reader.metadata();
+			expect(metadata.tileFormat).toBe('mvt');
+			expect(metadata.tileCompression).toBe('gzip');
+		});
+
+		it('should support VPL with pipeline operations', async () => {
+			const vpl = 'from_container filename="berlin.mbtiles" | filter level_min=5 level_max=10';
+			const reader = await TileSource.fromVpl(vpl, TESTDATA_DIR);
+
+			// Verify zoom filter is applied
+			const metadata = reader.metadata();
+			expect(metadata.minZoom).toBe(5);
+			expect(metadata.maxZoom).toBe(10);
+		});
+
+		it('should retrieve tiles from VPL source', async () => {
+			const vpl = 'from_container filename="berlin.mbtiles"';
+			const reader = await TileSource.fromVpl(vpl, TESTDATA_DIR);
+
+			// Get a tile that should exist
+			const tile = await reader.getTile(5, 17, 10);
+			expect(tile).toBeDefined();
+			expect(Buffer.isBuffer(tile)).toBeTruthy();
+			expect(tile!.length).toBeGreaterThan(0);
+		});
+
+		it('should return valid TileJSON from VPL source', async () => {
+			const vpl = 'from_container filename="berlin.mbtiles"';
+			const reader = await TileSource.fromVpl(vpl, TESTDATA_DIR);
+
+			const tileJson = reader.tileJson();
+			expect(tileJson).toBeDefined();
+			expect(tileJson.tilejson).toBe('3.0');
+			expect(tileJson.minzoom).toBe(0);
+			expect(tileJson.maxzoom).toBe(14);
+			expect(tileJson.vectorLayers).toBeDefined();
+		});
+
+		it('should have correct source type for VPL source', async () => {
+			const vpl = 'from_container filename="berlin.mbtiles"';
+			const reader = await TileSource.fromVpl(vpl, TESTDATA_DIR);
+
+			const sourceType = reader.sourceType();
+			expect(sourceType.kind).toBe('processor');
+			expect(sourceType.input).not.toBeNull();
+			// VPL creates a processor with an input
+			expect(sourceType.input?.kind).toBe('container');
+		});
+
+		it('should throw error for invalid VPL syntax', async () => {
+			const vpl = 'invalid vpl syntax here';
+			await expect(TileSource.fromVpl(vpl, TESTDATA_DIR)).rejects.toThrow();
+		});
+
+		it('should throw error for non-existent file in VPL', async () => {
+			const vpl = 'from_container filename="nonexistent.mbtiles"';
+			await expect(TileSource.fromVpl(vpl, TESTDATA_DIR)).rejects.toThrow();
+		});
+
+		it('should handle multiple pipeline operations', async () => {
+			const vpl = `from_container filename="berlin.mbtiles" |
+				filter level_min=3 level_max=8 bbox=[13.0,52.0,14.0,53.0]`;
+			const reader = await TileSource.fromVpl(vpl, TESTDATA_DIR);
+
+			const metadata = reader.metadata();
+			expect(metadata.minZoom).toBe(3);
+			expect(metadata.maxZoom).toBe(8);
+		});
+
+		it('should resolve relative paths correctly', async () => {
+			// Test that the directory parameter is used for resolving relative paths
+			const vpl = 'from_container filename="berlin.mbtiles"';
+			const reader = await TileSource.fromVpl(vpl, TESTDATA_DIR);
+
+			const tile = await reader.getTile(5, 17, 10);
+			expect(tile).toBeDefined();
+		});
+	});
 });

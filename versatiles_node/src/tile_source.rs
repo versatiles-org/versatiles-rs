@@ -630,4 +630,107 @@ mod tests {
 		let buffer = reader.get_tile(10, 550, 335).await.unwrap().unwrap();
 		assert_eq!(buffer.len(), 113612);
 	}
+
+	#[tokio::test]
+	async fn test_from_vpl_simple_container() {
+		// Test loading a simple VPL that just references a container
+		let vpl = r#"from_container filename="berlin.mbtiles""#;
+		let reader = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+			.await
+			.unwrap();
+
+		// Verify we can read metadata
+		let metadata = reader.metadata();
+		assert_eq!(metadata.tile_format, "mvt");
+		assert_eq!(metadata.tile_compression, "gzip");
+		assert_eq!(metadata.min_zoom, 0);
+		assert_eq!(metadata.max_zoom, 14);
+	}
+
+	#[tokio::test]
+	async fn test_from_vpl_file() {
+		// Test loading a VPL file that includes transformations
+		let vpl = std::fs::read_to_string("../testdata/berlin.vpl").unwrap();
+		let reader = TileSource::from_vpl(vpl, "../testdata".to_string()).await.unwrap();
+
+		// Verify we can read metadata
+		let metadata = reader.metadata();
+		assert_eq!(metadata.tile_format, "mvt");
+		assert_eq!(metadata.tile_compression, "gzip");
+
+		// Verify we can get tiles
+		let tile = reader.get_tile(10, 550, 335).await.unwrap();
+		assert!(tile.is_some());
+	}
+
+	#[tokio::test]
+	async fn test_from_vpl_with_pipeline() {
+		// Test a VPL with multiple pipeline operations
+		let vpl = r#"from_container filename="berlin.mbtiles" | filter level_min=5 level_max=10"#;
+		let reader = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+			.await
+			.unwrap();
+
+		// Verify metadata reflects the zoom filter
+		let metadata = reader.metadata();
+		assert_eq!(metadata.min_zoom, 5);
+		assert_eq!(metadata.max_zoom, 10);
+	}
+
+	#[tokio::test]
+	async fn test_from_vpl_tile_retrieval() {
+		// Test that we can retrieve tiles through VPL
+		let vpl = r#"from_container filename="berlin.mbtiles""#;
+		let reader = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+			.await
+			.unwrap();
+
+		// Get a tile that should exist
+		let tile = reader.get_tile(5, 17, 10).await.unwrap();
+		assert_eq!(tile.unwrap().len(), 4137);
+	}
+
+	#[tokio::test]
+	async fn test_from_vpl_tilejson() {
+		// Test that TileJSON works with VPL sources
+		let vpl = r#"from_container filename="berlin.mbtiles""#;
+		let reader = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+			.await
+			.unwrap();
+
+		let tile_json = reader.tile_json();
+		assert_eq!(tile_json.tilejson, "3.0");
+		assert_eq!(tile_json.minzoom, 0.0);
+		assert_eq!(tile_json.maxzoom, 14.0);
+		assert!(tile_json.vector_layers.is_some());
+	}
+
+	#[tokio::test]
+	async fn test_from_vpl_invalid_syntax() {
+		// Test that invalid VPL returns an error
+		let vpl = r#"invalid vpl syntax here"#;
+		let result = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string()).await;
+		assert!(result.is_err());
+	}
+
+	#[tokio::test]
+	async fn test_from_vpl_nonexistent_file() {
+		// Test that referencing a non-existent file returns an error
+		let vpl = r#"from_container filename="nonexistent.mbtiles""#;
+		let result = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string()).await;
+		assert!(result.is_err());
+	}
+
+	#[tokio::test]
+	async fn test_from_vpl_source_type() {
+		// Test that source_type works correctly for VPL sources
+		let vpl = r#"from_container filename="berlin.mbtiles""#;
+		let reader = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+			.await
+			.unwrap();
+
+		let source_type = reader.source_type();
+		assert_eq!(source_type.kind(), "processor");
+		assert!(source_type.input().is_some());
+	}
 }
