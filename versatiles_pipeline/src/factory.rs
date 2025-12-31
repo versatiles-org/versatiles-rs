@@ -138,8 +138,7 @@ impl PipelineFactory {
 	/// Parses VPL text and builds the corresponding operation graph.
 	#[context("Failed to create reader from VPL")]
 	pub async fn operation_from_vpl(&self, text: &str) -> Result<Box<dyn TileSource>> {
-		let pipeline = parse_vpl(text)?;
-		self.build_pipeline(pipeline).await
+		self.build_pipeline(parse_vpl(text)?).await
 	}
 
 	/// Builds an executable operation graph from a parsed `VPLPipeline`.
