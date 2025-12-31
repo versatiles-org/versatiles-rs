@@ -75,11 +75,22 @@ impl TileSource {
 	#[napi(factory)]
 	pub async fn open(path: String) -> Result<Self> {
 		let runtime = create_runtime();
-		let reader = napi_result!(runtime.get_reader_from_str(&path).await)?;
+		let source = napi_result!(runtime.get_reader_from_str(&path).await)?;
+		Ok(Self::new(source))
+	}
 
-		Ok(Self {
-			reader: Arc::new(Mutex::new(reader)),
-		})
+	fn new(source: Box<dyn RustTileSource>) -> Self {
+		Self {
+			reader: Arc::new(Mutex::new(source)),
+		}
+	}
+
+	/// Get a ContainerReader instance from an VPL string
+	#[napi(factory)]
+	pub async fn from_vpl(vpl: String, dir: String) -> Result<Self> {
+		let runtime = create_runtime();
+		let source = napi_result!(PipelineReader::open_str(&vpl, Path::new(&dir), runtime).await)?;
+		Ok(Self::new(Box::new(source)))
 	}
 
 	/// Get a single tile at the specified coordinates

@@ -53,7 +53,7 @@ impl<'a> PipelineReader {
 	}
 
 	/// Test helper: constructs a `PipelineReader` from a raw VPL string.
-	#[cfg(test)]
+	#[context("opening VPL from string")]
 	pub async fn open_str(vpl: &str, dir: &Path, runtime: TilesRuntime) -> Result<PipelineReader> {
 		Self::from_str(vpl, "from str", dir, runtime).await
 	}
