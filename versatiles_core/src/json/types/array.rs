@@ -83,6 +83,10 @@ impl JsonArray {
 	pub fn is_empty(&self) -> bool {
 		self.0.is_empty()
 	}
+
+	pub fn iter(&self) -> std::slice::Iter<'_, JsonValue> {
+		self.0.iter()
+	}
 }
 
 impl Debug for JsonArray {
