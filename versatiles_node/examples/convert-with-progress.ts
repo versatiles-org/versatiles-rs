@@ -8,10 +8,10 @@
  * step changes, warnings, and errors.
  */
 
-import { convert } from '../index.js';
+import { convert, type ProgressData } from '../index.cjs';
 import path from 'path';
 import { tmpdir } from 'os';
-import { log } from './lib/logger.mjs';
+import { log } from './lib/logger.js';
 
 log.title('VersaTiles Progress Monitoring Example');
 
@@ -31,7 +31,7 @@ await convert(
 		maxZoom: 13,
 		compress: 'brotli',
 	},
-	(data) => {
+	(data: ProgressData) => {
 		log.progress(data);
 	},
 );

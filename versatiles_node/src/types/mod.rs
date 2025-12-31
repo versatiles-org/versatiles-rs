@@ -18,6 +18,7 @@ mod server_options;
 mod source_metadata;
 mod tile_compression;
 mod tile_coord;
+mod tilejson;
 
 pub use convert_options::ConvertOptions;
 pub use probe_result::ProbeResult;
@@ -25,3 +26,4 @@ pub use server_options::ServerOptions;
 pub use source_metadata::SourceMetadata;
 pub use tile_compression::parse_compression;
 pub use tile_coord::TileCoord;
+pub use tilejson::TileJSON;

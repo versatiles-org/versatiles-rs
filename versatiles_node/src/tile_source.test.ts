@@ -89,31 +89,29 @@ describe('TileSource', () => {
 	describe('tileJson', () => {
 		it('should return valid TileJSON for MBTiles', async () => {
 			const reader = await TileSource.open(MBTILES_PATH);
-			const tileJson = await reader.tileJson();
+			const tileJson = reader.tileJson();
 
 			expect(tileJson).toBeDefined();
-			expect(typeof tileJson).toBe('string');
+			expect(typeof tileJson).toBe('object');
 
-			const parsed = JSON.parse(tileJson);
-			expect(parsed.tilejson).toBe('3.0.0');
+			expect(tileJson.tilejson).toBe('3.0');
 			// tiles array, bounds, and other fields may or may not be present depending on implementation
-			expect(typeof parsed.minzoom).toBe('number');
-			expect(typeof parsed.maxzoom).toBe('number');
+			expect(typeof tileJson.minzoom).toBe('number');
+			expect(typeof tileJson.maxzoom).toBe('number');
 		});
 
 		it('should return valid TileJSON for PMTiles', async () => {
 			const reader = await TileSource.open(PMTILES_PATH);
-			const tileJson = await reader.tileJson();
+			const tileJson = reader.tileJson();
 
-			const parsed = JSON.parse(tileJson);
-			expect(parsed.tilejson).toBe('3.0.0');
+			expect(tileJson.tilejson).toBe('3.0');
 		});
 	});
 
 	describe('metadata', () => {
 		it('should return reader metadata', async () => {
 			const reader = await TileSource.open(MBTILES_PATH);
-			const metadata = await reader.metadata();
+			const metadata = reader.metadata();
 
 			expect(metadata).toStrictEqual({
 				maxZoom: 14,
@@ -127,7 +125,7 @@ describe('TileSource', () => {
 	describe('sourceType', () => {
 		it('should return correct source type for MBTiles', async () => {
 			const reader = await TileSource.open(MBTILES_PATH);
-			const sourceType = await reader.sourceType();
+			const sourceType = reader.sourceType();
 
 			expect(sourceType.kind).toEqual('container');
 			expect(sourceType.name).toEqual('mbtiles');
@@ -138,7 +136,7 @@ describe('TileSource', () => {
 
 		it('should return correct source type for PMTiles', async () => {
 			const reader = await TileSource.open(PMTILES_PATH);
-			const sourceType = await reader.sourceType();
+			const sourceType = reader.sourceType();
 
 			expect(sourceType.kind).toEqual('container');
 			expect(sourceType.name).toEqual('pmtiles');

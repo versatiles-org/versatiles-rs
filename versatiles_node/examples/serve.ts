@@ -7,8 +7,8 @@
  * tiles from various container formats.
  */
 
-import { TileServer } from '../index.js';
-import { log } from './lib/logger.mjs';
+import { TileServer } from '../index.cjs';
+import { log } from './lib/logger.js';
 
 log.title('VersaTiles Server Example');
 

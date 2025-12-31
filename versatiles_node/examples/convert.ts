@@ -8,9 +8,9 @@
  */
 
 import { tmpdir } from 'os';
-import { convert } from '../index.js';
+import { convert } from '../index.cjs';
 import path from 'path';
-import { log } from './lib/logger.mjs';
+import { log } from './lib/logger.js';
 
 log.title('VersaTiles Conversion Example');
 
