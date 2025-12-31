@@ -51,7 +51,7 @@ mod runtime;
 mod server;
 mod types;
 
-pub use container::ContainerReader;
+pub use container::TileSource;
 pub use convert::convert;
 pub use progress::{Progress, ProgressData};
 pub use server::TileServer;

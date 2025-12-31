@@ -13,9 +13,10 @@
 use crate::{napi_result, runtime::create_runtime, types::SourceMetadata};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 use tokio::sync::Mutex;
-use versatiles_container::{SourceType as RustSourceType, TileSource};
+use versatiles::pipeline::PipelineReader;
+use versatiles_container::{SourceType as RustSourceType, TileSource as RustTileSource};
 use versatiles_core::TileCoord as RustTileCoord;
 
 /// Container reader for accessing tile data from various formats
@@ -36,12 +37,12 @@ use versatiles_core::TileCoord as RustTileCoord;
 /// - `.versatiles` files via HTTP/HTTPS
 /// - `.pmtiles` files via HTTP/HTTPS (with range request support)
 #[napi]
-pub struct ContainerReader {
-	reader: Arc<Mutex<Box<dyn TileSource>>>,
+pub struct TileSource {
+	reader: Arc<Mutex<Box<dyn RustTileSource>>>,
 }
 
 #[napi]
-impl ContainerReader {
+impl TileSource {
 	/// Open a tile container from a file path or URL
 	///
 	/// Automatically detects the container format based on the file extension
@@ -293,32 +294,32 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_open_valid_mbtiles() {
-		let result = ContainerReader::open("../testdata/berlin.mbtiles".to_string()).await;
+		let result = TileSource::open("../testdata/berlin.mbtiles".to_string()).await;
 		assert!(result.is_ok());
 	}
 
 	#[tokio::test]
 	async fn test_open_valid_pmtiles() {
-		let result = ContainerReader::open("../testdata/berlin.pmtiles".to_string()).await;
+		let result = TileSource::open("../testdata/berlin.pmtiles".to_string()).await;
 		assert!(result.is_ok());
 	}
 
 	#[tokio::test]
 	async fn test_open_invalid_path() {
-		let result = ContainerReader::open("/nonexistent/file.mbtiles".to_string()).await;
+		let result = TileSource::open("/nonexistent/file.mbtiles".to_string()).await;
 		assert!(result.is_err());
 	}
 
 	#[tokio::test]
 	async fn test_open_invalid_extension() {
 		// Create a temporary file with unsupported extension
-		let result = ContainerReader::open("/tmp/invalid.xyz".to_string()).await;
+		let result = TileSource::open("/tmp/invalid.xyz".to_string()).await;
 		assert!(result.is_err());
 	}
 
 	#[tokio::test]
 	async fn test_get_tile_valid() {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -335,7 +336,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_tile_non_existent() {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -348,7 +349,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_tile_out_of_bounds() {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -359,7 +360,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_tile_zero_coords() {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -370,7 +371,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_json_valid() -> anyhow::Result<()> {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -392,10 +393,10 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_json_mbtiles_vs_pmtiles() {
-		let reader_mbtiles = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader_mbtiles = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
-		let reader_pmtiles = ContainerReader::open("../testdata/berlin.pmtiles".to_string())
+		let reader_pmtiles = TileSource::open("../testdata/berlin.pmtiles".to_string())
 			.await
 			.unwrap();
 
@@ -409,7 +410,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_metadata_valid() {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -423,7 +424,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_metadata_zoom_levels() {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -437,7 +438,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_metadata_tile_format() {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -450,7 +451,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_metadata_compression() {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -463,7 +464,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_source_type_container() {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -477,7 +478,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_source_type_name() {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -490,7 +491,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_source_type_uri_mbtiles() {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -503,7 +504,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_source_type_uri_pmtiles() {
-		let reader = ContainerReader::open("../testdata/berlin.pmtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.pmtiles".to_string())
 			.await
 			.unwrap();
 
@@ -515,7 +516,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_source_type_container_no_input() {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -528,10 +529,10 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_multiple_readers_independent() {
-		let reader1 = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader1 = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
-		let reader2 = ContainerReader::open("../testdata/berlin.pmtiles".to_string())
+		let reader2 = TileSource::open("../testdata/berlin.pmtiles".to_string())
 			.await
 			.unwrap();
 
@@ -546,7 +547,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_concurrent_tile_reads() {
 		let reader = Arc::new(
-			ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+			TileSource::open("../testdata/berlin.mbtiles".to_string())
 				.await
 				.unwrap(),
 		);
@@ -568,7 +569,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_json_is_valid_json() -> anyhow::Result<()> {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -589,7 +590,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_source_type_kind_values() {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -602,7 +603,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_metadata_consistency_across_calls() {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -619,7 +620,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_json_consistency_across_calls() {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -633,7 +634,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_tile_returns_buffer() {
-		let reader = ContainerReader::open("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
