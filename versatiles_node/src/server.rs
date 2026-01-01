@@ -27,8 +27,8 @@ use versatiles::{config::Config, server::TileServer as RustTileServer};
 use versatiles_container::{DataLocation, TileSource as RustTileSource, TilesRuntime};
 
 // Type aliases for complex types
-type TileSourceList = Arc<Mutex<Vec<(String, Arc<Box<dyn RustTileSource>>)>>>; // Vec of (name, TileSource)
-type StaticSourceList = Arc<Mutex<Vec<(String, Option<String>)>>>; // Vec of (path, url_prefix)
+type TileSourceList = Mutex<Vec<(String, Arc<Box<dyn RustTileSource>>)>>; // Vec of (name, TileSource)
+type StaticSourceList = Mutex<Vec<(String, Option<String>)>>; // Vec of (path, url_prefix)
 
 /// HTTP tile server for serving tiles and static content
 ///
@@ -68,11 +68,11 @@ type StaticSourceList = Arc<Mutex<Vec<(String, Option<String>)>>>; // Vec of (pa
 /// ```
 #[napi]
 pub struct TileServer {
-	inner: Arc<Mutex<Option<RustTileServer>>>,
+	inner: Mutex<Option<RustTileServer>>,
 	runtime: TilesRuntime,
-	port: Arc<Mutex<u16>>,
-	ip: Arc<Mutex<String>>,
-	minimal_recompression: Arc<Mutex<Option<bool>>>,
+	port: Mutex<u16>,
+	ip: Mutex<String>,
+	minimal_recompression: Mutex<Option<bool>>,
 	// Track accumulated sources to rebuild config on start
 	tile_sources: TileSourceList,     // Vec of (name, TileSource) - file-based sources
 	static_sources: StaticSourceList, // Vec of (path, url_prefix)
@@ -122,13 +122,13 @@ impl TileServer {
 		let minimal_recompression = opts.minimal_recompression;
 
 		Ok(Self {
-			inner: Arc::new(Mutex::new(None)),
+			inner: Mutex::new(None),
 			runtime,
-			port: Arc::new(Mutex::new(port)),
-			ip: Arc::new(Mutex::new(ip)),
-			minimal_recompression: Arc::new(Mutex::new(minimal_recompression)),
-			tile_sources: Arc::new(Mutex::new(Vec::new())),
-			static_sources: Arc::new(Mutex::new(Vec::new())),
+			port: Mutex::new(port),
+			ip: Mutex::new(ip),
+			minimal_recompression: Mutex::new(minimal_recompression),
+			tile_sources: Mutex::new(Vec::new()),
+			static_sources: Mutex::new(Vec::new()),
 		})
 	}
 
