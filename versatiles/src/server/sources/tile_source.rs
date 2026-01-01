@@ -18,7 +18,7 @@ pub struct ServerTileSource {
 impl ServerTileSource {
 	// Constructor function for creating a TileSource instance
 	#[context("creating tile source: id='{id}'")]
-	pub fn from(reader: Box<dyn TileSource>, id: &str) -> Result<ServerTileSource> {
+	pub fn from(reader: Arc<Box<dyn TileSource>>, id: &str) -> Result<ServerTileSource> {
 		let parameters = reader.metadata();
 		let tile_mime = parameters.tile_format.as_mime_str().to_string();
 		let compression = parameters.tile_compression;
@@ -26,7 +26,7 @@ impl ServerTileSource {
 		Ok(ServerTileSource {
 			prefix: Url::new(format!("/tiles/{id}/")).to_dir(),
 			id: id.to_owned(),
-			reader: Arc::new(reader), // No Mutex wrapper!
+			reader,
 			tile_mime,
 			compression,
 		})
@@ -123,8 +123,8 @@ mod tests {
 	// Test the constructor function for TileSource
 	#[tokio::test]
 	async fn tile_container_from() -> Result<()> {
-		let reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
-		let container = ServerTileSource::from(reader.boxed(), "prefix")?;
+		let reader = Arc::new(MockReader::new_mock_profile(MockReaderProfile::Png)?.boxed());
+		let container = ServerTileSource::from(reader, "prefix")?;
 
 		assert_eq!(container.prefix.str, "/tiles/prefix/");
 		assert_eq!(
@@ -138,8 +138,8 @@ mod tests {
 	// Test the debug function
 	#[test]
 	fn debug() -> Result<()> {
-		let reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
-		let container = ServerTileSource::from(reader.boxed(), "prefix")?;
+		let reader = Arc::new(MockReader::new_mock_profile(MockReaderProfile::Png)?.boxed());
+		let container = ServerTileSource::from(reader, "prefix")?;
 		// Updated expected output - no more "Mutex { data: ... }"
 		assert_eq!(
 			format!("{container:?}"),
@@ -206,7 +206,7 @@ mod tests {
 
 		let runtime = create_test_runtime();
 		let reader = runtime.get_reader_from_str(filename).await?;
-		let c = &mut ServerTileSource::from(reader, "prefix")?;
+		let c = &mut ServerTileSource::from(Arc::new(reader), "prefix")?;
 
 		assert_eq!(
 			&check_response(c, coord, Uncompressed, exp_mime).await?[0..4],

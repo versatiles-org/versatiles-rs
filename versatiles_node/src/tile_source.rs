@@ -40,6 +40,7 @@ use versatiles_core::TileCoord as RustTileCoord;
 /// - `.versatiles` files via HTTP/HTTPS
 /// - `.pmtiles` files via HTTP/HTTPS (with range request support)
 #[napi]
+#[derive(Clone)]
 pub struct TileSource {
 	reader: Arc<Box<dyn RustTileSource>>,
 }
@@ -86,6 +87,12 @@ impl TileSource {
 		Self {
 			reader: Arc::new(source),
 		}
+	}
+
+	/// Create a new reader from this TileSource (for server use)
+	/// This recreates the reader, which is needed when the server API requires ownership
+	pub(crate) fn reader(&self) -> Arc<Box<dyn RustTileSource>> {
+		self.reader.clone()
 	}
 
 	/// Get a ContainerReader instance from an VPL string

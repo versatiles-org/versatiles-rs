@@ -18,17 +18,17 @@
 //! - TileJSON: `/tiles/{name}/tiles.json` - Metadata for tile source
 //! - Static files: Served according to configured URL prefixes
 
-use crate::{napi_result, runtime::create_runtime, types::ServerOptions};
+use crate::{napi_result, runtime::create_runtime, tile_source::TileSource, types::ServerOptions};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use versatiles::{config::Config, server::TileServer as RustTileServer};
-use versatiles_container::{DataLocation, DataSource, TilesRuntime};
+use versatiles_container::{DataLocation, TileSource as RustTileSource, TilesRuntime};
 
 // Type aliases for complex types
-type TileSourceList = Arc<Mutex<Vec<(String, String)>>>;
-type StaticSourceList = Arc<Mutex<Vec<(String, Option<String>)>>>;
+type TileSourceList = Arc<Mutex<Vec<(String, Arc<Box<dyn RustTileSource>>)>>>; // Vec of (name, TileSource)
+type StaticSourceList = Arc<Mutex<Vec<(String, Option<String>)>>>; // Vec of (path, url_prefix)
 
 /// HTTP tile server for serving tiles and static content
 ///
@@ -74,7 +74,7 @@ pub struct TileServer {
 	ip: Arc<Mutex<String>>,
 	minimal_recompression: Arc<Mutex<Option<bool>>>,
 	// Track accumulated sources to rebuild config on start
-	tile_sources: TileSourceList,     // Vec of (name, path)
+	tile_sources: TileSourceList,     // Vec of (name, TileSource) - file-based sources
 	static_sources: StaticSourceList, // Vec of (path, url_prefix)
 }
 
@@ -132,28 +132,42 @@ impl TileServer {
 		})
 	}
 
-	/// Add a tile source to the server
+	/// Add a tile source to the server from a TileSource object
+	///
+	/// The tiles will be served at /tiles/{name}/...
+	///
+	/// This method supports all types of TileSources:
+	/// - File-based sources (MBTiles, PMTiles, VersaTiles, TAR, directories) - support hot reload and server restart
+	/// - VPL pipeline sources (e.g., filtered or transformed tiles) - must be added before server starts
+	///
+	/// File-based sources can be added before or after starting the server (hot reload).
+	/// VPL sources must be added before calling start() and will be consumed when the server starts.
+	#[napi]
+	pub async fn add_tile_source(&self, name: String, source: &TileSource) -> Result<()> {
+		let reader = source.reader();
+
+		if let Some(server) = self.inner.lock().await.as_mut() {
+			napi_result!(server.add_tile_source(name.clone(), Arc::clone(&reader)).await)?;
+		}
+
+		let mut sources = self.tile_sources.lock().await;
+		sources.push((name, reader));
+
+		Ok(())
+	}
+
+	/// Add a tile source to the server from a file path
 	///
 	/// The tiles will be served at /tiles/{name}/...
 	/// Sources can be added before or after starting the server.
 	/// Changes take effect immediately without requiring a restart (hot reload).
 	#[napi]
-	pub async fn add_tile_source(&self, name: String, path: String) -> Result<()> {
-		// Get reader to validate that the file exists
-		let reader = napi_result!(self.runtime.get_reader_from_str(&path).await)?;
+	pub async fn add_tile_source_from_path(&self, name: String, path: String) -> Result<()> {
+		// Open the tile source
+		let tile_source = TileSource::open(path).await?;
 
-		// Store the source in our list (source of truth)
-		let mut sources = self.tile_sources.lock().await;
-		sources.push((name.clone(), path));
-		drop(sources); // Release lock before potentially slow operation
-
-		// If server is running, add the source directly for hot reload
-		let mut server_lock = self.inner.lock().await;
-		if let Some(server) = server_lock.as_mut() {
-			napi_result!(server.add_tile_source(name, reader).await)?;
-		}
-
-		Ok(())
+		// Delegate to add_tile_source
+		self.add_tile_source(name, &tile_source).await
 	}
 
 	/// Remove a tile source from the server
@@ -276,17 +290,6 @@ impl TileServer {
 		config.server.ip = Some(ip_val);
 		config.server.minimal_recompression = min_recomp;
 
-		// Add all tile sources to config
-		let tile_sources = self.tile_sources.lock().await;
-		for (name, path) in tile_sources.iter() {
-			use versatiles::config::TileSourceConfig;
-			let data_source = napi_result!(DataSource::try_from(path.as_str()))?;
-			config.tile_sources.push(TileSourceConfig {
-				name: Some(name.clone()),
-				src: data_source,
-			});
-		}
-
 		// Add all static sources to config
 		let static_sources = self.static_sources.lock().await;
 		for (path, url_prefix) in static_sources.iter() {
@@ -301,6 +304,12 @@ impl TileServer {
 		let mut server = napi_result!(RustTileServer::from_config(config, self.runtime.clone()).await)?;
 
 		napi_result!(server.start().await)?;
+
+		let tile_sources = self.tile_sources.lock().await;
+		for (name, tile_source) in tile_sources.iter() {
+			// Add to server
+			napi_result!(server.add_tile_source(name.clone(), tile_source.clone()).await)?;
+		}
 
 		// Update the actual port if we used 0 (ephemeral)
 		let actual_port = server.get_url_mapping().await;
@@ -472,12 +481,12 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_add_tile_source_invalid_path() {
+	async fn test_add_tile_source_from_path_invalid() {
 		let server = TileServer::new(None).unwrap();
 
 		// Try to add a non-existent tile source
 		let result = server
-			.add_tile_source("test".to_string(), "/nonexistent/path.mbtiles".to_string())
+			.add_tile_source_from_path("test".to_string(), "/nonexistent/path.mbtiles".to_string())
 			.await;
 
 		// Should fail because file doesn't exist
@@ -485,12 +494,12 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_add_tile_source_valid_path() {
+	async fn test_add_tile_source_from_path_valid() {
 		let server = TileServer::new(None).unwrap();
 
 		// Use a real test file
 		let result = server
-			.add_tile_source("berlin".to_string(), "../testdata/berlin.mbtiles".to_string())
+			.add_tile_source_from_path("berlin".to_string(), "../testdata/berlin.mbtiles".to_string())
 			.await;
 
 		// Should succeed
@@ -503,18 +512,18 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_add_multiple_tile_sources() {
+	async fn test_add_multiple_tile_sources_from_path() {
 		let server = TileServer::new(None).unwrap();
 
 		// Add first source
 		server
-			.add_tile_source("berlin1".to_string(), "../testdata/berlin.mbtiles".to_string())
+			.add_tile_source_from_path("berlin1".to_string(), "../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
 		// Add second source
 		server
-			.add_tile_source("berlin2".to_string(), "../testdata/berlin.pmtiles".to_string())
+			.add_tile_source_from_path("berlin2".to_string(), "../testdata/berlin.pmtiles".to_string())
 			.await
 			.unwrap();
 
@@ -542,7 +551,7 @@ mod tests {
 
 		// Add a source
 		server
-			.add_tile_source("berlin".to_string(), "../testdata/berlin.mbtiles".to_string())
+			.add_tile_source_from_path("berlin".to_string(), "../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -568,11 +577,11 @@ mod tests {
 
 		// Add multiple sources
 		server
-			.add_tile_source("berlin1".to_string(), "../testdata/berlin.mbtiles".to_string())
+			.add_tile_source_from_path("berlin1".to_string(), "../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 		server
-			.add_tile_source("berlin2".to_string(), "../testdata/berlin.pmtiles".to_string())
+			.add_tile_source_from_path("berlin2".to_string(), "../testdata/berlin.pmtiles".to_string())
 			.await
 			.unwrap();
 
@@ -758,7 +767,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_add_tile_source_after_start() {
+	async fn test_add_tile_source_from_path_after_start() {
 		let server = TileServer::new(Some(ServerOptions {
 			ip: Some("127.0.0.1".to_string()),
 			port: Some(0),
@@ -771,7 +780,7 @@ mod tests {
 
 		// Add source after starting (hot reload)
 		let result = server
-			.add_tile_source("berlin".to_string(), "../testdata/berlin.mbtiles".to_string())
+			.add_tile_source_from_path("berlin".to_string(), "../testdata/berlin.mbtiles".to_string())
 			.await;
 
 		// Should succeed
@@ -796,7 +805,7 @@ mod tests {
 
 		// Add source before starting
 		server
-			.add_tile_source("berlin".to_string(), "../testdata/berlin.mbtiles".to_string())
+			.add_tile_source_from_path("berlin".to_string(), "../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -812,6 +821,165 @@ mod tests {
 		// Verify it was removed
 		let sources = server.tile_sources.lock().await;
 		assert_eq!(sources.len(), 0);
+
+		// Clean up
+		server.stop().await.unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_add_tile_source_with_tile_source_object() {
+		let server = TileServer::new(None).unwrap();
+
+		// Open a TileSource
+		let tile_source = TileSource::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Add the TileSource object to the server
+		let result = server.add_tile_source("berlin".to_string(), &tile_source).await;
+
+		// Should succeed
+		assert!(result.is_ok());
+
+		// Verify it was added to the list
+		let sources = server.tile_sources.lock().await;
+		assert_eq!(sources.len(), 1);
+		assert_eq!(sources[0].0, "berlin");
+
+		// Verify the TileSource is stored
+		let stored_source = &sources[0].1;
+		let metadata = stored_source.metadata();
+		assert_eq!(metadata.tile_format.as_str(), "mvt");
+	}
+
+	#[tokio::test]
+	async fn test_add_tile_source_object_after_start() {
+		let server = TileServer::new(Some(ServerOptions {
+			ip: Some("127.0.0.1".to_string()),
+			port: Some(0),
+			minimal_recompression: None,
+		}))
+		.unwrap();
+
+		// Start server first
+		server.start().await.unwrap();
+
+		// Open a TileSource
+		let tile_source = TileSource::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Add source after starting (hot reload)
+		let result = server.add_tile_source("berlin".to_string(), &tile_source).await;
+
+		// Should succeed
+		assert!(result.is_ok());
+
+		// Verify it was added
+		let sources = server.tile_sources.lock().await;
+		assert_eq!(sources.len(), 1);
+
+		// Clean up
+		server.stop().await.unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_mix_tile_source_types() {
+		let server = TileServer::new(None).unwrap();
+
+		// Add from path
+		server
+			.add_tile_source_from_path("berlin1".to_string(), "../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Add from TileSource object
+		let tile_source = TileSource::open("../testdata/berlin.pmtiles".to_string())
+			.await
+			.unwrap();
+		server
+			.add_tile_source("berlin2".to_string(), &tile_source)
+			.await
+			.unwrap();
+
+		// Verify both were added
+		let sources = server.tile_sources.lock().await;
+		assert_eq!(sources.len(), 2);
+		assert_eq!(sources[0].0, "berlin1");
+		assert_eq!(sources[1].0, "berlin2");
+
+		// Verify both are TileSource objects
+		assert_eq!(sources[0].1.metadata().tile_format.as_str(), "mvt");
+		assert_eq!(sources[1].1.metadata().tile_format.as_str(), "mvt");
+	}
+
+	#[tokio::test]
+	async fn test_server_start_with_tile_source_objects() {
+		let server = TileServer::new(Some(ServerOptions {
+			ip: Some("127.0.0.1".to_string()),
+			port: Some(0),
+			minimal_recompression: None,
+		}))
+		.unwrap();
+
+		// Add TileSource object before starting
+		let tile_source = TileSource::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+		server
+			.add_tile_source("berlin".to_string(), &tile_source)
+			.await
+			.unwrap();
+
+		// Start should succeed even with Source-based tile sources
+		let result = server.start().await;
+		assert!(result.is_ok());
+
+		// Verify server is running
+		{
+			let server_lock = server.inner.lock().await;
+			assert!(server_lock.is_some());
+		}
+
+		// Clean up
+		server.stop().await.unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_server_with_vpl_tile_source() {
+		let server = TileServer::new(Some(ServerOptions {
+			ip: Some("127.0.0.1".to_string()),
+			port: Some(0),
+			minimal_recompression: None,
+		}))
+		.unwrap();
+
+		// Create a VPL-based TileSource and add it immediately (don't hold reference)
+		{
+			let vpl = r#"from_container filename="berlin.mbtiles" | filter level_min=5 level_max=10"#;
+			let tile_source = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+				.await
+				.unwrap();
+
+			// Add VPL source to server (tile_source will be dropped after this block)
+			server
+				.add_tile_source("berlin_filtered".to_string(), &tile_source)
+				.await
+				.unwrap();
+		} // tile_source is dropped here
+
+		// Start should succeed with VPL sources
+		let result = server.start().await;
+		if let Err(e) = &result {
+			eprintln!("Start failed: {:?}", e);
+		}
+		assert!(result.is_ok());
+
+		// Verify server is running
+		{
+			let server_lock = server.inner.lock().await;
+			assert!(server_lock.is_some());
+		}
 
 		// Clean up
 		server.stop().await.unwrap();
