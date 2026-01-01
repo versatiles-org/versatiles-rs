@@ -44,7 +44,7 @@ This is controlled by [.npmignore](./.npmignore).
 The package uses `optionalDependencies` for platform-specific binaries:
 
 | Platform            | Package Name                                 | Binary Size |
-|---------------------|----------------------------------------------|-------------|
+| ------------------- | -------------------------------------------- | ----------- |
 | macOS Intel         | `@versatiles/versatiles-rs-darwin-x64`       | ~5 MB       |
 | macOS Apple Silicon | `@versatiles/versatiles-rs-darwin-arm64`     | ~5 MB       |
 | Linux x64 (glibc)   | `@versatiles/versatiles-rs-linux-x64-gnu`    | ~8 MB       |
@@ -140,7 +140,7 @@ See `.github/workflows/node-bindings.yml` for configuration.
 ### Size Comparison
 
 | Package Type           | Size     | Notes                  |
-|------------------------|----------|------------------------|
+| ---------------------- | -------- | ---------------------- |
 | Source repository      | ~500 MB  | With build artifacts   |
 | Source (no artifacts)  | ~50 KB   | Just .rs files         |
 | Single platform binary | ~5-8 MB  | Optimized and stripped |
