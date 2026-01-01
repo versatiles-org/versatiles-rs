@@ -70,9 +70,9 @@ type StaticSourceList = Mutex<Vec<(String, Option<String>)>>; // Vec of (path, u
 pub struct TileServer {
 	inner: Mutex<Option<RustTileServer>>,
 	runtime: TilesRuntime,
-	port: Mutex<u16>,
-	ip: Mutex<String>,
-	minimal_recompression: Mutex<Option<bool>>,
+	port: u16,
+	ip: String,
+	minimal_recompression: Option<bool>,
 	// Track accumulated sources to rebuild config on start
 	tile_sources: TileSourceList,     // Vec of (name, TileSource) - file-based sources
 	static_sources: StaticSourceList, // Vec of (path, url_prefix)
@@ -124,9 +124,9 @@ impl TileServer {
 		Ok(Self {
 			inner: Mutex::new(None),
 			runtime,
-			port: Mutex::new(port),
-			ip: Mutex::new(ip),
-			minimal_recompression: Mutex::new(minimal_recompression),
+			port,
+			ip,
+			minimal_recompression,
 			tile_sources: Mutex::new(Vec::new()),
 			static_sources: Mutex::new(Vec::new()),
 		})
@@ -282,13 +282,10 @@ impl TileServer {
 
 		// Build config with all accumulated sources
 		let mut config = Config::default();
-		let port_val = *self.port.lock().await;
-		let ip_val = self.ip.lock().await.clone();
-		let min_recomp = *self.minimal_recompression.lock().await;
 
-		config.server.port = Some(port_val);
-		config.server.ip = Some(ip_val);
-		config.server.minimal_recompression = min_recomp;
+		config.server.port = Some(self.port);
+		config.server.ip = Some(self.ip.clone());
+		config.server.minimal_recompression = self.minimal_recompression;
 
 		// Add all static sources to config
 		let static_sources = self.static_sources.lock().await;
@@ -386,7 +383,7 @@ impl TileServer {
 			server.get_port() as u32
 		} else {
 			// If server isn't running, return the configured port
-			*self.port.lock().await as u32
+			self.port as u32
 		}
 	}
 }
@@ -427,9 +424,7 @@ mod tests {
 		let server = TileServer::new(Some(options)).unwrap();
 
 		// Verify custom IP was set
-		let rt = tokio::runtime::Runtime::new().unwrap();
-		let ip = rt.block_on(async { server.ip.lock().await.clone() });
-		assert_eq!(ip, "127.0.0.1");
+		assert_eq!(server.ip, "127.0.0.1");
 	}
 
 	#[test]
@@ -442,9 +437,7 @@ mod tests {
 		let server = TileServer::new(Some(options)).unwrap();
 
 		// Verify minimal recompression was set
-		let rt = tokio::runtime::Runtime::new().unwrap();
-		let minimal_recomp = rt.block_on(async { *server.minimal_recompression.lock().await });
-		assert_eq!(minimal_recomp, Some(true));
+		assert_eq!(server.minimal_recompression, Some(true));
 	}
 
 	#[test]
@@ -458,12 +451,10 @@ mod tests {
 
 		let rt = tokio::runtime::Runtime::new().unwrap();
 		let port = rt.block_on(server.port());
-		let ip = rt.block_on(async { server.ip.lock().await.clone() });
-		let minimal_recomp = rt.block_on(async { *server.minimal_recompression.lock().await });
 
 		assert_eq!(port, 9999);
-		assert_eq!(ip, "0.0.0.0");
-		assert_eq!(minimal_recomp, Some(false));
+		assert_eq!(server.ip, "0.0.0.0");
+		assert_eq!(server.minimal_recompression, Some(false));
 	}
 
 	#[tokio::test]
