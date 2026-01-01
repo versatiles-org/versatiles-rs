@@ -19,7 +19,7 @@ use crate::{
 };
 use napi::{bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
-use std::{path::Path, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 use versatiles::pipeline::PipelineReader;
 use versatiles_container::{SourceType as RustSourceType, TileSource as RustTileSource};
 use versatiles_core::TileCoord as RustTileCoord;
@@ -106,7 +106,8 @@ impl TileSource {
 	/// # Arguments
 	///
 	/// * `vpl` - VPL pipeline definition string
-	/// * `dir` - Base directory for resolving relative file paths in the VPL
+	/// * `dir` - Optional base directory for resolving relative file paths in the VPL.
+	///   Defaults to the current working directory if not specified.
 	///
 	/// # VPL Operations
 	///
@@ -130,10 +131,15 @@ impl TileSource {
 	/// # Examples
 	///
 	/// ```javascript
-	/// // Simple container loading
+	/// // Simple container loading with explicit directory
 	/// const source = await TileSource.fromVpl(
 	///   'from_container filename="tiles.mbtiles"',
 	///   '/path/to/tiles'
+	/// );
+	///
+	/// // Using current directory (omit second argument)
+	/// const source2 = await TileSource.fromVpl(
+	///   'from_container filename="tiles.mbtiles"'
 	/// );
 	///
 	/// // Filter by zoom level
@@ -154,9 +160,14 @@ impl TileSource {
 	/// VPL sources cannot be converted using `convertTo()` since they may represent
 	/// complex pipelines. To convert VPL output, use the `convert()` function instead.
 	#[napi(factory)]
-	pub async fn from_vpl(vpl: String, dir: String) -> Result<Self> {
+	pub async fn from_vpl(vpl: String, dir: Option<String>) -> Result<Self> {
 		let runtime = create_runtime();
-		let source = napi_result!(PipelineReader::open_str(&vpl, Path::new(&dir), runtime).await)?;
+		let path = if let Some(d) = dir {
+			PathBuf::from(&d)
+		} else {
+			std::env::current_dir()?
+		};
+		let source = napi_result!(PipelineReader::open_str(&vpl, &path, runtime).await)?;
 		Ok(Self::new(Box::new(source)))
 	}
 
@@ -880,7 +891,7 @@ mod tests {
 	async fn test_from_vpl_simple_container() {
 		// Test loading a simple VPL that just references a container
 		let vpl = r#"from_container filename="berlin.mbtiles""#;
-		let reader = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+		let reader = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
 			.await
 			.unwrap();
 
@@ -896,7 +907,9 @@ mod tests {
 	async fn test_from_vpl_file() {
 		// Test loading a VPL file that includes transformations
 		let vpl = std::fs::read_to_string("../testdata/berlin.vpl").unwrap();
-		let reader = TileSource::from_vpl(vpl, "../testdata".to_string()).await.unwrap();
+		let reader = TileSource::from_vpl(vpl, Some("../testdata".to_string()))
+			.await
+			.unwrap();
 
 		// Verify we can read metadata
 		let metadata = reader.metadata();
@@ -912,7 +925,7 @@ mod tests {
 	async fn test_from_vpl_with_pipeline() {
 		// Test a VPL with multiple pipeline operations
 		let vpl = r#"from_container filename="berlin.mbtiles" | filter level_min=5 level_max=10"#;
-		let reader = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+		let reader = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
 			.await
 			.unwrap();
 
@@ -926,7 +939,7 @@ mod tests {
 	async fn test_from_vpl_tile_retrieval() {
 		// Test that we can retrieve tiles through VPL
 		let vpl = r#"from_container filename="berlin.mbtiles""#;
-		let reader = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+		let reader = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
 			.await
 			.unwrap();
 
@@ -939,7 +952,7 @@ mod tests {
 	async fn test_from_vpl_tilejson() {
 		// Test that TileJSON works with VPL sources
 		let vpl = r#"from_container filename="berlin.mbtiles""#;
-		let reader = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+		let reader = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
 			.await
 			.unwrap();
 
@@ -954,7 +967,7 @@ mod tests {
 	async fn test_from_vpl_invalid_syntax() {
 		// Test that invalid VPL returns an error
 		let vpl = r#"invalid vpl syntax here"#;
-		let result = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string()).await;
+		let result = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string())).await;
 		assert!(result.is_err());
 	}
 
@@ -962,7 +975,7 @@ mod tests {
 	async fn test_from_vpl_nonexistent_file() {
 		// Test that referencing a non-existent file returns an error
 		let vpl = r#"from_container filename="nonexistent.mbtiles""#;
-		let result = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string()).await;
+		let result = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string())).await;
 		assert!(result.is_err());
 	}
 
@@ -970,7 +983,7 @@ mod tests {
 	async fn test_from_vpl_source_type() {
 		// Test that source_type works correctly for VPL sources
 		let vpl = r#"from_container filename="berlin.mbtiles""#;
-		let reader = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+		let reader = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
 			.await
 			.unwrap();
 
@@ -1048,7 +1061,7 @@ mod tests {
 
 		// Create a VPL source
 		let vpl = r#"from_container filename="berlin.mbtiles""#;
-		let source = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+		let source = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
 			.await
 			.unwrap();
 
