@@ -10,12 +10,15 @@ When you install `@versatiles/versatiles-rs`, you get:
 
 ```
 @versatiles/versatiles-rs/
-├── index.js              # Generated JavaScript bindings
+├── index.js              # ESM JavaScript bindings
+├── index.cjs             # CommonJS JavaScript bindings
 ├── index.d.ts            # TypeScript type definitions
 ├── *.node                # Native binary (platform-specific)
 ├── package.json          # Package metadata
 └── README.md             # Documentation
 ```
+
+**Module Format:** The package supports both ESM (`import`) and CommonJS (`require`) through dual exports.
 
 **Total size: ~5-15 MB** (varies by platform)
 
@@ -41,7 +44,7 @@ This is controlled by [.npmignore](./.npmignore).
 The package uses `optionalDependencies` for platform-specific binaries:
 
 | Platform            | Package Name                                 | Binary Size |
-| ------------------- | -------------------------------------------- | ----------- |
+|---------------------|----------------------------------------------|-------------|
 | macOS Intel         | `@versatiles/versatiles-rs-darwin-x64`       | ~5 MB       |
 | macOS Apple Silicon | `@versatiles/versatiles-rs-darwin-arm64`     | ~5 MB       |
 | Linux x64 (glibc)   | `@versatiles/versatiles-rs-linux-x64-gnu`    | ~8 MB       |
@@ -137,7 +140,7 @@ See `.github/workflows/node-bindings.yml` for configuration.
 ### Size Comparison
 
 | Package Type           | Size     | Notes                  |
-| ---------------------- | -------- | ---------------------- |
+|------------------------|----------|------------------------|
 | Source repository      | ~500 MB  | With build artifacts   |
 | Source (no artifacts)  | ~50 KB   | Just .rs files         |
 | Single platform binary | ~5-8 MB  | Optimized and stripped |
@@ -150,12 +153,13 @@ Typical NPM package contents:
 
 ```
 5.2 MB  versatiles.darwin-arm64.node    # Native binary
-  45 KB  index.js                        # JS bindings
+  45 KB  index.js                        # ESM bindings
+  45 KB  index.cjs                       # CommonJS bindings
   12 KB  index.d.ts                      # TS definitions
    3 KB  package.json                    # Metadata
   15 KB  README.md                       # Documentation
 ────────
-5.3 MB  Total
+5.4 MB  Total
 ```
 
 ## Advanced: Creating Custom Builds

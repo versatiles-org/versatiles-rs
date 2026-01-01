@@ -10,6 +10,7 @@ Node.js bindings for [VersaTiles](https://github.com/versatiles-org/versatiles-r
 - 📊 **Metadata Access** - Read TileJSON and inspect container details
 - 🌍 **Coordinate Utils** - Convert between tile and geographic coordinates
 - ⚡ **Async API** - Non-blocking operations with Promise-based interface
+- 📦 **Dual Format** - Supports both ESM and CommonJS
 
 ## Installation
 
@@ -23,16 +24,16 @@ Pre-built binaries are available for:
 
 - macOS (arm64, x64)
 - Linux (x64, arm64, musl)
-- Windows (x64)
+- Windows (x64, arm64)
 
 ## Quick Start
 
 ### Convert Tiles
 
 ```javascript
-const { convertTiles } = require('@versatiles/versatiles-rs');
+import { convert } from '@versatiles/versatiles-rs';
 
-await convertTiles('input.mbtiles', 'output.versatiles', {
+await convert('input.mbtiles', 'output.versatiles', {
   minZoom: 0,
   maxZoom: 14,
   bbox: [-180, -85, 180, 85],
@@ -43,10 +44,10 @@ await convertTiles('input.mbtiles', 'output.versatiles', {
 ### Serve Tiles
 
 ```javascript
-const { TileServer } = require('@versatiles/versatiles-rs');
+import { TileServer } from '@versatiles/versatiles-rs';
 
 const server = new TileServer({ port: 8080 });
-await server.addTileSource('osm', 'tiles.mbtiles');
+await server.addTileSourceFromPath('osm', 'tiles.mbtiles');
 await server.start();
 
 console.log(`Server running at http://localhost:${await server.port}`);
@@ -55,40 +56,44 @@ console.log(`Server running at http://localhost:${await server.port}`);
 ### Read Tiles
 
 ```javascript
-const { ContainerReader } = require('@versatiles/versatiles-rs');
+import { TileSource } from '@versatiles/versatiles-rs';
 
-const reader = await ContainerReader.open('tiles.mbtiles');
+const source = await TileSource.open('tiles.mbtiles');
 
 // Get a single tile
-const tile = await reader.getTile(5, 16, 10);
+const tile = await source.getTile(5, 16, 10);
 if (tile) {
   console.log('Tile size:', tile.length, 'bytes');
 }
 
 // Get metadata
-const tileJSON = JSON.parse(await reader.tileJSON);
-console.log('Format:', tileJSON.tile_format);
+const metadata = source.metadata();
+console.log('Format:', metadata.tileFormat);
+console.log('Zoom levels:', metadata.minZoom, '-', metadata.maxZoom);
 
-const params = await reader.parameters;
-console.log('Zoom levels:', params.minZoom, '-', params.maxZoom);
+// Get TileJSON
+const tileJSON = source.tileJson();
+console.log('Bounds:', tileJSON.bounds);
 ```
 
 ### Probe Container
 
 ```javascript
-const { probeTiles } = require('@versatiles/versatiles-rs');
+import { TileSource } from '@versatiles/versatiles-rs';
 
-const info = await probeTiles('tiles.mbtiles');
-console.log('Container:', info.containerName);
-console.log('Source:', info.sourceName);
-console.log('Format:', info.parameters.tileFormat);
-console.log('Compression:', info.parameters.tileCompression);
+const source = await TileSource.open('tiles.mbtiles');
+const sourceType = source.sourceType();
+const metadata = source.metadata();
+
+console.log('Type:', sourceType.kind);
+console.log('Format:', metadata.tileFormat);
+console.log('Compression:', metadata.tileCompression);
 ```
 
 ### Coordinate Conversion
 
 ```javascript
-const { TileCoord } = require('@versatiles/versatiles-rs');
+import { TileCoord } from '@versatiles/versatiles-rs';
 
 // Geographic to tile coordinates
 const coord = TileCoord.fromGeo(13.4, 52.5, 10);
@@ -104,9 +109,17 @@ const bbox = tile.toGeoBbox();
 console.log('BBox:', bbox); // [west, south, east, north]
 ```
 
+### CommonJS Support
+
+The package also supports CommonJS:
+
+```javascript
+const { convert, TileSource, TileServer, TileCoord } = require('@versatiles/versatiles-rs');
+```
+
 ## API Reference
 
-### `convertTiles(input, output, options?)`
+### `convert(input, output, options?, onProgress?, onMessage?)`
 
 Convert tiles from one format to another.
 
@@ -114,7 +127,7 @@ Convert tiles from one format to another.
 
 - `input` (string): Input file path (.versatiles, .mbtiles, .pmtiles, .tar, directory)
 - `output` (string): Output file path
-- `options` (object, optional):
+- `options` (ConvertOptions, optional):
   - `minZoom` (number): Minimum zoom level
   - `maxZoom` (number): Maximum zoom level
   - `bbox` (array): Bounding box `[west, south, east, north]`
@@ -122,32 +135,14 @@ Convert tiles from one format to another.
   - `compress` (string): Compression `"gzip"`, `"brotli"`, or `"uncompressed"`
   - `flipY` (boolean): Flip tiles vertically
   - `swapXy` (boolean): Swap x and y coordinates
+- `onProgress` (function, optional): Progress callback `(data: ProgressData) => void`
+- `onMessage` (function, optional): Message callback `(data: MessageData) => void`
 
 **Returns:** `Promise<void>`
 
-### `probeTiles(path, depth?)`
+### `class TileSource`
 
-Inspect a tile container.
-
-**Parameters:**
-
-- `path` (string): Container file path
-- `depth` (string, optional): Probe depth - currently not implemented
-
-**Returns:** `Promise<ProbeResult>`
-
-```typescript
-interface ProbeResult {
-  sourceName: string;
-  containerName: string;
-  tileJson: string;
-  parameters: ReaderParameters;
-}
-```
-
-### `class ContainerReader`
-
-#### `ContainerReader.open(path)`
+#### `TileSource.open(path)`
 
 Open a tile container.
 
@@ -155,9 +150,20 @@ Open a tile container.
 
 - `path` (string): File path or URL
 
-**Returns:** `Promise<ContainerReader>`
+**Returns:** `Promise<TileSource>`
 
-#### `reader.getTile(z, x, y)`
+#### `TileSource.fromVpl(vpl, basePath?)`
+
+Create a tile source from VPL (VersaTiles Pipeline Language).
+
+**Parameters:**
+
+- `vpl` (string): VPL query string
+- `basePath` (string, optional): Base path for resolving relative paths
+
+**Returns:** `Promise<TileSource>`
+
+#### `source.getTile(z, x, y)`
 
 Get a single tile.
 
@@ -169,20 +175,32 @@ Get a single tile.
 
 **Returns:** `Promise<Buffer | null>`
 
-#### `reader.tileJSON`
+#### `source.tileJson()`
 
-Get TileJSON metadata (getter).
+Get TileJSON metadata.
 
-**Returns:** `Promise<string>`
-
-#### `reader.parameters`
-
-Get reader parameters (getter).
-
-**Returns:** `Promise<ReaderParameters>`
+**Returns:** `TileJSON`
 
 ```typescript
-interface ReaderParameters {
+interface TileJSON {
+  tilejson: string;
+  tiles?: string[];
+  vector_layers?: VectorLayer[];
+  attribution?: string;
+  bounds?: [number, number, number, number];
+  center?: [number, number, number];
+  // ... and more
+}
+```
+
+#### `source.metadata()`
+
+Get source metadata.
+
+**Returns:** `SourceMetadata`
+
+```typescript
+interface SourceMetadata {
   tileFormat: string;
   tileCompression: string;
   minZoom: number;
@@ -190,38 +208,24 @@ interface ReaderParameters {
 }
 ```
 
-#### `reader.sourceName`
+#### `source.sourceType()`
 
-Get source name (getter).
+Get source type information.
 
-**Returns:** `Promise<string>`
+**Returns:** `SourceType`
 
-#### `reader.containerName`
+#### `source.convertTo(output, options?, onProgress?, onMessage?)`
 
-Get container type (getter).
-
-**Returns:** `Promise<string>`
-
-#### `reader.convertTo(output, options?)`
-
-Convert this container to another format.
+Convert this source to another format.
 
 **Parameters:**
 
 - `output` (string): Output file path
-- `options` (ConvertOptions, optional): Same as `convertTiles`
+- `options` (ConvertOptions, optional): Same as `convert()`
+- `onProgress` (function, optional): Progress callback
+- `onMessage` (function, optional): Message callback
 
 **Returns:** `Promise<void>`
-
-#### `reader.probe(depth?)`
-
-Probe container details.
-
-**Parameters:**
-
-- `depth` (string, optional): Probe depth
-
-**Returns:** `Promise<ProbeResult>`
 
 ### `class TileServer`
 
@@ -236,14 +240,35 @@ Create a new tile server.
   - `port` (number): Port number (default: `8080`)
   - `minimalRecompression` (boolean): Use minimal recompression
 
-#### `server.addTileSource(name, path)`
+#### `server.addTileSourceFromPath(name, path)`
 
-Add a tile source.
+Add a tile source from a file path.
 
 **Parameters:**
 
 - `name` (string): Source name (URL will be `/tiles/{name}/...`)
 - `path` (string): Container file path
+
+**Returns:** `Promise<void>`
+
+#### `server.addTileSource(name, source)`
+
+Add a tile source from a TileSource instance.
+
+**Parameters:**
+
+- `name` (string): Source name
+- `source` (TileSource): TileSource instance
+
+**Returns:** `Promise<void>`
+
+#### `server.removeTileSource(name)`
+
+Remove a tile source.
+
+**Parameters:**
+
+- `name` (string): Source name to remove
 
 **Returns:** `Promise<void>`
 
@@ -336,10 +361,16 @@ Get JSON representation.
 
 See the [examples](./examples) directory for more usage examples:
 
-- [convert.js](./examples/convert.js) - Format conversion
-- [probe.js](./examples/probe.js) - Container inspection
-- [serve.js](./examples/serve.js) - Tile server
-- [read-tiles.js](./examples/read-tiles.js) - Reading tiles
+- [convert.ts](./examples/convert.ts) - Format conversion with various options
+- [convert-with-progress.ts](./examples/convert-with-progress.ts) - Conversion with progress monitoring
+- [probe.ts](./examples/probe.ts) - Container inspection
+- [serve.ts](./examples/serve.ts) - HTTP tile server
+- [read-tiles.ts](./examples/read-tiles.ts) - Reading tiles and coordinate conversion
+
+All examples use TypeScript and can be run with:
+```bash
+npx tsx examples/<filename>.ts
+```
 
 ## Development
 

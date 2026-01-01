@@ -7,17 +7,23 @@ This directory contains practical examples demonstrating the main features of th
 Before running the examples, make sure you have:
 
 1. Installed the package: `npm install` in the `versatiles_node` directory
-2. Built the native bindings: `npm run build`
-3. Test data available at `../testdata/berlin.mbtiles`
+2. Built the native bindings: `npm run build:debug` (or `npm run build` for release)
+3. Test data available at `../testdata/berlin.mbtiles` and `../testdata/berlin.pmtiles`
 
 ## Examples
 
-### 1. convert.js - Tile Format Conversion
+All examples are written in TypeScript and use ESM imports. Run them with:
+
+```bash
+npx tsx examples/<filename>.ts
+```
+
+### 1. convert.ts - Tile Format Conversion
 
 Demonstrates various ways to convert tiles between formats.
 
 ```bash
-node examples/convert.js
+npx tsx examples/convert.ts
 ```
 
 **Features shown:**
@@ -27,50 +33,57 @@ node examples/convert.js
 - Filtering by bounding box
 - Adding border tiles around a bounding box
 - Applying compression (gzip, brotli)
-- Coordinate transformations (flip_y, swap_xy)
+- Coordinate transformations (flipY, swapXy)
 
-**Output:** Creates several `.versatiles` files in the `examples/` directory
+**Output:** Creates several `.versatiles` files in `/tmp/`
 
-### 2. probe.js - Container Inspection
+### 2. convert-with-progress.ts - Conversion with Progress Monitoring
 
-Shows how to inspect tile containers and retrieve metadata.
+Shows how to monitor conversion progress with callbacks.
 
 ```bash
-node examples/probe.js
+npx tsx examples/convert-with-progress.ts
 ```
 
 **Features shown:**
 
-- Quick probe using `probeTiles()` function
-- Detailed inspection using `ContainerReader`
+- Using progress callbacks to monitor conversion
+- Real-time progress updates with percentage, speed, and ETA
+- Message callbacks for warnings and errors
+
+**Output:** Displays live progress bar during conversion
+
+### 3. probe.ts - Container Inspection
+
+Shows how to inspect tile containers and retrieve metadata.
+
+```bash
+npx tsx examples/probe.ts
+```
+
+**Features shown:**
+
+- Opening tile sources with `TileSource.open()`
+- Accessing source type information
+- Reading metadata (format, compression, zoom levels)
 - Accessing TileJSON metadata
-- Reading container parameters (format, compression, zoom levels)
-- Displaying geographic coverage and center point
-- Comparing multiple containers
 
 **Output:** Prints detailed information about the container to the console
 
-### 3. serve.js - HTTP Tile Server
+### 4. serve.ts - HTTP Tile Server
 
 Demonstrates how to serve tiles via HTTP server.
 
 ```bash
-# Run basic example (default)
-node examples/serve.js
-
-# Run specific example
-node examples/serve.js 1  # Basic server
-node examples/serve.js 2  # Multiple sources
-node examples/serve.js 3  # Static files
-node examples/serve.js 4  # Dynamic sources
+npx tsx examples/serve.ts
 ```
 
 **Features shown:**
 
 - Starting a basic HTTP server
-- Adding tile sources
-- Adding static file sources
-- Dynamic source management (add sources while running)
+- Adding tile sources from file paths
+- Dynamic source management (add/remove sources while running)
+- Multiple server configurations
 - Graceful shutdown
 
 **URLs available:**
@@ -79,14 +92,14 @@ node examples/serve.js 4  # Dynamic sources
 - TileJSON: `http://127.0.0.1:8080/tiles/berlin/meta.json`
 - Status: `http://127.0.0.1:8080/status`
 
-**Stop:** Press `Ctrl+C`
+**Note:** The example runs multiple server configurations sequentially, each for 1 second.
 
-### 4. read-tiles.js - Tile Reading and Coordinates
+### 5. read-tiles.ts - Tile Reading and Coordinates
 
 Shows how to read individual tiles and work with coordinates.
 
 ```bash
-node examples/read-tiles.js
+npx tsx examples/read-tiles.ts
 ```
 
 **Features shown:**
@@ -103,11 +116,15 @@ node examples/read-tiles.js
 **Output:**
 
 - Prints tile information to the console
-- Saves a sample tile as `tile-10-550-335.png`
+- Saves a sample tile as `/tmp/tile-10-550-335.png`
 
 ## Example Data
 
-All examples use the test data file `../testdata/berlin.mbtiles`. This file should contain map tiles for the Berlin area.
+All examples use test data files from `../testdata/`:
+- `berlin.mbtiles` - MBTiles format
+- `berlin.pmtiles` - PMTiles format
+
+These files contain map tiles for the Berlin area.
 
 If you don't have this test data, you can:
 
@@ -119,26 +136,30 @@ If you don't have this test data, you can:
 
 ### Opening a Container
 
-```javascript
-const { ContainerReader } = require('@versatiles/versatiles-rs');
+```typescript
+import { TileSource } from '@versatiles/versatiles-rs';
 
-const reader = await ContainerReader.open('path/to/tiles.mbtiles');
+const source = await TileSource.open('path/to/tiles.mbtiles');
 ```
 
 ### Getting Tile Metadata
 
-```javascript
-const tileJSON = JSON.parse(await reader.tileJSON);
-const params = await reader.parameters;
+```typescript
+import { TileSource } from '@versatiles/versatiles-rs';
 
-console.log('Format:', params.tileFormat);
-console.log('Zoom:', params.minZoom, '-', params.maxZoom);
+const source = await TileSource.open('tiles.mbtiles');
+const metadata = source.metadata();
+const tileJSON = source.tileJson();
+
+console.log('Format:', metadata.tileFormat);
+console.log('Zoom:', metadata.minZoom, '-', metadata.maxZoom);
+console.log('Bounds:', tileJSON.bounds);
 ```
 
 ### Converting Coordinates
 
-```javascript
-const { TileCoord } = require('@versatiles/versatiles-rs');
+```typescript
+import { TileCoord } from '@versatiles/versatiles-rs';
 
 // Geographic → Tile
 const coord = TileCoord.fromGeo(13.405, 52.52, 10);
@@ -150,15 +171,39 @@ const [lon, lat] = tile.toGeo();
 console.log(`Location: ${lon}°, ${lat}°`);
 ```
 
+### Converting Tiles
+
+```typescript
+import { convert } from '@versatiles/versatiles-rs';
+
+await convert('input.mbtiles', 'output.versatiles', {
+  minZoom: 5,
+  maxZoom: 12,
+  compress: 'gzip',
+});
+```
+
 ### Error Handling
 
-```javascript
+```typescript
+import { convert } from '@versatiles/versatiles-rs';
+
 try {
-  await convertTiles('input.mbtiles', 'output.versatiles');
+  await convert('input.mbtiles', 'output.versatiles');
 } catch (err) {
   console.error('Conversion failed:', err.message);
   // Handle error appropriately
 }
+```
+
+### Using with CommonJS
+
+If you need to use CommonJS instead of ESM:
+
+```javascript
+const { convert, TileSource, TileServer, TileCoord } = require('@versatiles/versatiles-rs');
+
+// Use the same API as shown above
 ```
 
 ## Tips
@@ -180,31 +225,46 @@ try {
 
 ## Troubleshooting
 
-### "Cannot find module '../index.js'"
+### "Cannot find module '@versatiles/versatiles-rs'"
 
 Make sure you've built the native bindings:
 
 ```bash
 cd versatiles_node
 npm install
-npm run build
+npm run build:debug
 ```
 
 ### "ENOENT: no such file or directory"
 
-Check that the test data file exists:
+Check that the test data files exist:
 
 ```bash
 ls ../testdata/berlin.mbtiles
+ls ../testdata/berlin.pmtiles
+```
+
+### "Cannot find native binding"
+
+Rebuild the native bindings:
+
+```bash
+npm run build:debug
 ```
 
 ### Server port already in use
 
-Change the port in the server examples:
+The server examples run on port 8080. If it's already in use, you can modify the example files to use a different port.
 
-```javascript
-const server = new TileServer({ port: 8081 }); // Use a different port
+### TypeScript/ESM issues
+
+All examples use ESM imports and TypeScript. They're designed to be run with `tsx`:
+
+```bash
+npx tsx examples/probe.ts
 ```
+
+If you prefer CommonJS, you can convert the imports to require() statements.
 
 ## Next Steps
 
