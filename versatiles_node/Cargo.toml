@@ -12,8 +12,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow.workspace = true
-napi = { version = "3.7.1", features = ["async"] }
-napi-derive = "3.4.1"
+napi = { version = "3.8.1", features = ["async"] }
+napi-derive = "3.5.0"
 tokio.workspace = true
 versatiles = { workspace = true, default-features = false, features = [
 	"server",
