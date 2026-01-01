@@ -50,7 +50,7 @@ jobs:
 
       - name: Build native module
         working-directory: ./versatiles_node
-        run: npm run build
+        run: npm run build:debug
 
       - name: Generate documentation
         working-directory: ./versatiles_node
