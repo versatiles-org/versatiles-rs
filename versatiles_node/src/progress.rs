@@ -10,17 +10,72 @@ use std::{
 };
 use versatiles_container::ProgressState;
 
-/// Progress data sent to JavaScript callbacks
+/// Progress information for long-running operations
+///
+/// Provides real-time progress updates during tile conversion and other
+/// operations. All numeric values are floating-point for precision.
 #[napi(object)]
 #[derive(Clone)]
 pub struct ProgressData {
+	/// Current position in the operation
+	///
+	/// Number of items (tiles, bytes, etc.) that have been processed so far.
+	/// Compare with `total` to determine progress.
 	pub position: f64,
+
+	/// Total number of items to process
+	///
+	/// The expected total number of items for the complete operation.
+	/// May be an estimate and could change during processing.
 	pub total: f64,
+
+	/// Completion percentage (0-100)
+	///
+	/// Calculated as `(position / total) * 100`.
+	/// Useful for displaying progress bars.
+	///
+	/// **Example:** `50.5` means 50.5% complete
 	pub percentage: f64,
+
+	/// Processing speed in items per second
+	///
+	/// Average speed calculated from operation start.
+	/// Units match the operation (tiles/sec, bytes/sec, etc.).
+	///
+	/// **Example:** `1523.4` means 1523.4 items per second
 	pub speed: f64,
+
+	/// Estimated seconds until completion
+	///
+	/// Time remaining based on current speed and remaining items.
+	/// Returns `null` if insufficient data to estimate (early in operation).
+	///
+	/// **Example:** `45.2` means approximately 45 seconds remaining
 	pub estimated_seconds_remaining: Option<f64>,
-	/// ETA in milliseconds since UNIX epoch (can be converted to Date with `new Date(eta)`)
+
+	/// Estimated completion time as JavaScript Date
+	///
+	/// Timestamp in milliseconds since UNIX epoch (January 1, 1970).
+	/// Can be converted to a JavaScript Date object with `new Date(eta)`.
+	/// Returns `null` if insufficient data to estimate.
+	///
+	/// **Example:**
+	/// ```javascript
+	/// if (progress.eta) {
+	///   const completionTime = new Date(progress.eta);
+	///   console.log(`Expected completion: ${completionTime.toLocaleTimeString()}`);
+	/// }
+	/// ```
 	pub eta: Option<f64>,
+
+	/// Current operation step or status message
+	///
+	/// Descriptive text about what the operation is currently doing.
+	///
+	/// **Examples:**
+	/// - `"Reading tiles"`
+	/// - `"Compressing data"`
+	/// - `"Writing output"`
 	pub message: Option<String>,
 }
 
@@ -52,12 +107,24 @@ impl From<&ProgressState> for ProgressData {
 	}
 }
 
-/// Message data sent to JavaScript callbacks
+/// Status or diagnostic message from an operation
+///
+/// Provides step updates, warnings, and errors during processing.
 #[napi(object)]
 #[derive(Clone)]
 pub struct MessageData {
+	/// Message type
+	///
+	/// One of:
+	/// - `"step"`: Normal progress step or status update
+	/// - `"warning"`: Non-fatal issue that doesn't stop the operation
+	/// - `"error"`: Fatal error that causes operation failure
 	#[napi(js_name = "type")]
 	pub msg_type: String,
+
+	/// The message text
+	///
+	/// Human-readable description of the step, warning, or error.
 	pub message: String,
 }
 

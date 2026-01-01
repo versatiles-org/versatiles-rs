@@ -3,7 +3,23 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use versatiles_core::TileCoord as RustTileCoord;
 
-/// Tile coordinate with zoom level (z), column (x), and row (y)
+/// Tile coordinate in the Web Mercator tile grid
+///
+/// Represents a specific tile in the standard Web Mercator (EPSG:3857) tiling scheme.
+/// Uses XYZ coordinate convention where:
+/// - **z** (zoom): Zoom level (0-32), where 0 is the world in one tile
+/// - **x** (column): Tile column, from 0 (west) to 2^z - 1 (east)
+/// - **y** (row): Tile row, from 0 (north) to 2^z - 1 (south)
+///
+/// # Coordinate System
+///
+/// This implementation uses the **XYZ** (Slippy Map) convention:
+/// - Origin (0,0) is at the top-left (north-west)
+/// - Y increases going south
+/// - X increases going east
+///
+/// Note: This differs from **TMS** (Tile Map Service) where Y increases going north.
+/// Use the `flipY` option in conversion if you need TMS coordinates.
 #[napi]
 pub struct TileCoord {
 	inner: RustTileCoord,
@@ -11,52 +27,153 @@ pub struct TileCoord {
 
 #[napi]
 impl TileCoord {
-	/// Create a new TileCoord
+	/// Create a new tile coordinate
+	///
+	/// # Arguments
+	///
+	/// * `z` - Zoom level (0-32)
+	/// * `x` - Tile column (0 to 2^z - 1)
+	/// * `y` - Tile row (0 to 2^z - 1)
+	///
+	/// # Errors
+	///
+	/// Returns an error if coordinates are out of valid range for the zoom level.
+	/// At zoom level z, valid coordinates are:
+	/// - x: 0 to 2^z - 1
+	/// - y: 0 to 2^z - 1
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// // Berlin tile at zoom 10
+	/// const tile = new TileCoord(10, 550, 335);
+	///
+	/// // World tile at zoom 0
+	/// const world = new TileCoord(0, 0, 0);
+	/// ```
 	#[napi(constructor)]
 	pub fn new(z: u32, x: u32, y: u32) -> Result<Self> {
 		let inner = napi_result!(RustTileCoord::new(z as u8, x, y))?;
 		Ok(Self { inner })
 	}
 
-	/// Create a TileCoord from geographic coordinates
+	/// Create a tile coordinate from geographic coordinates
+	///
+	/// Converts WGS84 latitude/longitude to the tile containing that point.
+	///
+	/// # Arguments
+	///
+	/// * `lon` - Longitude in decimal degrees (-180 to 180)
+	/// * `lat` - Latitude in decimal degrees (-85.0511 to 85.0511)
+	/// * `z` - Zoom level (0-32)
+	///
+	/// # Returns
+	///
+	/// The tile coordinate containing the specified geographic point
+	///
+	/// # Errors
+	///
+	/// Returns an error if coordinates are outside valid Web Mercator range.
+	/// Valid latitude range is approximately ±85.05° (Web Mercator limit).
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// // Find tile containing Berlin city center
+	/// const berlin = TileCoord.fromGeo(13.405, 52.520, 10);
+	/// console.log(`Tile: ${berlin.z}/${berlin.x}/${berlin.y}`);
+	///
+	/// // Find tile for New York City
+	/// const nyc = TileCoord.fromGeo(-74.006, 40.7128, 12);
+	/// ```
 	#[napi(factory)]
 	pub fn from_geo(lon: f64, lat: f64, z: u32) -> Result<Self> {
 		let inner = napi_result!(RustTileCoord::from_geo(lon, lat, z as u8))?;
 		Ok(Self { inner })
 	}
 
-	/// Convert to geographic coordinates [longitude, latitude]
+	/// Get the geographic center point of this tile
+	///
+	/// Returns the WGS84 coordinates of the tile's center point.
+	///
+	/// # Returns
+	///
+	/// Array of `[longitude, latitude]` in decimal degrees
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// const tile = new TileCoord(10, 550, 335);
+	/// const [lon, lat] = tile.toGeo();
+	/// console.log(`Center: ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E`);
+	/// ```
 	#[napi]
 	pub fn to_geo(&self) -> Vec<f64> {
 		let [lon, lat] = self.inner.as_geo();
 		vec![lon, lat]
 	}
 
-	/// Get the geographic bounding box [west, south, east, north]
+	/// Get the geographic bounding box of this tile
+	///
+	/// Returns the geographic extent of the tile in WGS84 coordinates.
+	///
+	/// # Returns
+	///
+	/// Array of `[west, south, east, north]` in decimal degrees:
+	/// - **west**: Minimum longitude (left edge)
+	/// - **south**: Minimum latitude (bottom edge)
+	/// - **east**: Maximum longitude (right edge)
+	/// - **north**: Maximum latitude (top edge)
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// const tile = new TileCoord(10, 550, 335);
+	/// const [west, south, east, north] = tile.toGeoBbox();
+	/// console.log(`Bbox: ${west},${south},${east},${north}`);
+	/// ```
 	#[napi]
 	pub fn to_geo_bbox(&self) -> Vec<f64> {
 		self.inner.to_geo_bbox().as_array().to_vec()
 	}
 
-	/// Get the zoom level
+	/// Get the zoom level (0-32)
+	///
+	/// Returns the tile's zoom level. At zoom 0, the entire world is one tile.
+	/// Each zoom level doubles the number of tiles in each dimension.
 	#[napi(getter)]
 	pub fn z(&self) -> u32 {
 		self.inner.level as u32
 	}
 
-	/// Get the column (x)
+	/// Get the tile column (x coordinate)
+	///
+	/// Returns the horizontal position in the tile grid (0 to 2^z - 1).
+	/// Lower values are further west, higher values are further east.
 	#[napi(getter)]
 	pub fn x(&self) -> u32 {
 		self.inner.x
 	}
 
-	/// Get the row (y)
+	/// Get the tile row (y coordinate)
+	///
+	/// Returns the vertical position in the tile grid (0 to 2^z - 1).
+	/// In XYZ convention: lower values are further north, higher values are further south.
 	#[napi(getter)]
 	pub fn y(&self) -> u32 {
 		self.inner.y
 	}
 
-	/// Get JSON representation
+	/// Convert to JSON string representation
+	///
+	/// Returns a JSON object with z, x, and y properties.
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// const tile = new TileCoord(10, 550, 335);
+	/// console.log(tile.toJson());  // '{"z":10,"x":550,"y":335}'
+	/// ```
 	#[napi]
 	pub fn to_json(&self) -> String {
 		self.inner.as_json()

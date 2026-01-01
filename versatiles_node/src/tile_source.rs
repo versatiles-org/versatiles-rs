@@ -1,6 +1,6 @@
 /// Tile container reader
 ///
-/// This module provides the [`ContainerReader`] class for reading tiles from
+/// This module provides the [`TileSource`] class for reading tiles from
 /// various container formats. It supports both local files and remote URLs.
 ///
 /// ## Supported Formats
@@ -97,7 +97,62 @@ impl TileSource {
 		self.reader.clone()
 	}
 
-	/// Get a ContainerReader instance from an VPL string
+	/// Create a TileSource from a VPL (VersaTiles Pipeline Language) string
+	///
+	/// VPL allows you to define tile processing pipelines that can filter, transform,
+	/// and combine tile sources. This is useful for on-the-fly tile manipulation without
+	/// creating intermediate files.
+	///
+	/// # Arguments
+	///
+	/// * `vpl` - VPL pipeline definition string
+	/// * `dir` - Base directory for resolving relative file paths in the VPL
+	///
+	/// # VPL Operations
+	///
+	/// Common VPL operations include:
+	/// - `from_container filename="..."` - Load tiles from a container file
+	/// - `filter level_min=X level_max=Y` - Filter by zoom levels
+	/// - `filter bbox=[west,south,east,north]` - Filter by geographic bounds
+	/// - Pipeline operators can be chained with `|`
+	///
+	/// # Returns
+	///
+	/// A `TileSource` instance representing the VPL pipeline
+	///
+	/// # Errors
+	///
+	/// Returns an error if:
+	/// - The VPL syntax is invalid
+	/// - Referenced files don't exist or are inaccessible
+	/// - Pipeline operations are incompatible
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// // Simple container loading
+	/// const source = await TileSource.fromVpl(
+	///   'from_container filename="tiles.mbtiles"',
+	///   '/path/to/tiles'
+	/// );
+	///
+	/// // Filter by zoom level
+	/// const filtered = await TileSource.fromVpl(
+	///   'from_container filename="tiles.mbtiles" | filter level_min=5 level_max=10',
+	///   '/path/to/tiles'
+	/// );
+	///
+	/// // Filter by geographic area
+	/// const berlin = await TileSource.fromVpl(
+	///   'from_container filename="world.mbtiles" | filter bbox=[13.0,52.0,14.0,53.0]',
+	///   '/path/to/tiles'
+	/// );
+	/// ```
+	///
+	/// # Note
+	///
+	/// VPL sources cannot be converted using `convertTo()` since they may represent
+	/// complex pipelines. To convert VPL output, use the `convert()` function instead.
 	#[napi(factory)]
 	pub async fn from_vpl(vpl: String, dir: String) -> Result<Self> {
 		let runtime = create_runtime();
@@ -332,16 +387,31 @@ impl TileSource {
 	}
 }
 
-/// SourceType exposed to JavaScript as a class with getters and methods.
+/// Information about the tile source type and origin
 ///
-/// Properties (getters):
-/// - kind: "container" | "processor" | "composite"
-/// - name: string
-/// - uri: string | null (only for Container)
+/// Provides metadata about how the tile source was created and what it represents.
+/// This is useful for debugging and understanding the source of tiles being served.
 ///
-/// Methods:
-/// - input(): SourceType | null (only for Processor)
-/// - inputs(): SourceType[] | null (only for Composite)
+/// # Source Kinds
+///
+/// - **Container**: A file-based tile container (MBTiles, PMTiles, VersaTiles, TAR, or directory)
+/// - **Processor**: A tile source with transformations applied (e.g., from VPL pipelines)
+/// - **Composite**: Multiple tile sources combined together
+///
+/// # Properties
+///
+/// All source types have:
+/// - `kind`: The type of source ("container", "processor", or "composite")
+/// - `name`: A descriptive name for the source
+///
+/// Container sources also have:
+/// - `uri`: The file path or URL of the container
+///
+/// Processor sources also have:
+/// - `input`: The source being processed
+///
+/// Composite sources also have:
+/// - `inputs`: Array of combined sources
 
 #[napi]
 pub struct SourceType {
@@ -351,7 +421,12 @@ pub struct SourceType {
 
 #[napi]
 impl SourceType {
-	/// Get the kind of source ("container", "processor", or "composite")
+	/// Get the kind of source
+	///
+	/// Returns one of:
+	/// - `"container"`: File-based tile container
+	/// - `"processor"`: Transformed tile source (e.g., VPL pipeline)
+	/// - `"composite"`: Multiple sources combined
 	#[napi(getter)]
 	pub fn kind(&self) -> String {
 		match self.inner.as_ref() {
@@ -362,6 +437,10 @@ impl SourceType {
 	}
 
 	/// Get the name of the source
+	///
+	/// Returns a descriptive name indicating the source format or type.
+	/// For containers, this is typically the format name (e.g., "MBTiles", "PMTiles").
+	/// For processors, this describes the transformation (e.g., "filter", "transform").
 	#[napi(getter)]
 	pub fn name(&self) -> String {
 		match self.inner.as_ref() {
@@ -371,7 +450,18 @@ impl SourceType {
 		}
 	}
 
-	/// Get the URI (for Container type only)
+	/// Get the file path or URL (for Container sources only)
+	///
+	/// Returns the full path or URL of the tile container file.
+	/// Returns `null` for Processor and Composite sources.
+	///
+	/// # Example
+	///
+	/// ```javascript
+	/// const source = await TileSource.open('tiles.mbtiles');
+	/// const type = source.sourceType();
+	/// console.log(type.uri);  // "/path/to/tiles.mbtiles"
+	/// ```
 	#[napi(getter)]
 	pub fn uri(&self) -> Option<String> {
 		match self.inner.as_ref() {
@@ -380,7 +470,24 @@ impl SourceType {
 		}
 	}
 
-	/// Get the input source (for Processor type only)
+	/// Get the input source being processed (for Processor sources only)
+	///
+	/// Returns the source that this processor is transforming.
+	/// Returns `null` for Container and Composite sources.
+	///
+	/// # Example
+	///
+	/// ```javascript
+	/// const source = await TileSource.fromVpl(
+	///   'from_container filename="tiles.mbtiles" | filter level_min=5',
+	///   '.'
+	/// );
+	/// const type = source.sourceType();
+	/// console.log(type.kind);  // "processor"
+	/// console.log(type.name);  // "filter"
+	/// const inputType = type.input;
+	/// console.log(inputType.kind);  // "container"
+	/// ```
 	#[napi(getter)]
 	pub fn input(&self) -> Option<SourceType> {
 		match self.inner.as_ref() {
@@ -391,7 +498,21 @@ impl SourceType {
 		}
 	}
 
-	/// Get the input sources (for Composite type only)
+	/// Get the array of combined sources (for Composite sources only)
+	///
+	/// Returns an array of all sources that have been combined together.
+	/// Returns `null` for Container and Processor sources.
+	///
+	/// # Example
+	///
+	/// ```javascript
+	/// // For a composite source combining multiple tile sets
+	/// const type = source.sourceType();
+	/// if (type.kind === 'composite') {
+	///   const sources = type.inputs;
+	///   console.log(`Combined ${sources.length} tile sources`);
+	/// }
+	/// ```
 	#[napi(getter)]
 	pub fn inputs(&self) -> Option<Vec<SourceType>> {
 		match self.inner.as_ref() {
