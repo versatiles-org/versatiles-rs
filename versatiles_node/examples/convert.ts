@@ -8,7 +8,7 @@
  */
 
 import { tmpdir } from 'os';
-import { convert } from '../index.cjs';
+import { convert } from '@versatiles/versatiles-rs';
 import path from 'path';
 import { log } from './lib/logger.js';
 

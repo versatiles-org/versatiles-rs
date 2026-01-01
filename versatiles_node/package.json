@@ -2,9 +2,14 @@
   "name": "@versatiles/versatiles-rs",
   "version": "3.0.1",
   "description": "Node.js bindings for VersaTiles - convert, serve, and process map tiles",
-  "main": "index.cjs",
+  "main": "index.js",
   "types": "index.d.ts",
   "type": "module",
+  "exports": {
+    "types": "./index.d.ts",
+    "import": "./index.js",
+    "require": "./index.cjs"
+  },
   "files": [
     "index.d.ts",
     "index.js",
@@ -44,8 +49,8 @@
   },
   "scripts": {
     "artifacts": "napi artifacts",
-    "build:debug": "napi build --platform",
-    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform --esm",
+    "build": "napi build --platform --release --esm",
     "check": "npm run build:debug && npm run typecheck && npm run lint && npm run test && npm run test:examples && npm run format:check",
     "docs:clean": "rm -rf docs",
     "docs:generate": "typedoc",

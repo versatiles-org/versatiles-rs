@@ -9,7 +9,7 @@
  */
 
 import { tmpdir } from 'os';
-import { TileSource, TileCoord } from '../index.cjs';
+import { TileSource, TileCoord } from '@versatiles/versatiles-rs';
 import fs from 'fs/promises';
 import path from 'path';
 import { log } from './lib/logger.js';

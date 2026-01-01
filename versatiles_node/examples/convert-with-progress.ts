@@ -8,7 +8,7 @@
  * step changes, warnings, and errors.
  */
 
-import { convert, type ProgressData } from '../index.cjs';
+import { convert, type ProgressData } from '@versatiles/versatiles-rs';
 import path from 'path';
 import { tmpdir } from 'os';
 import { log } from './lib/logger.js';

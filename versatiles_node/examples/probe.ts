@@ -7,7 +7,7 @@
  * metadata, format information, and other details.
  */
 
-import { TileSource } from '../index.cjs';
+import { TileSource } from '@versatiles/versatiles-rs';
 import { log } from './lib/logger.js';
 
 log.title('VersaTiles Probe Example');
