@@ -948,7 +948,7 @@ mod tests {
 		// Create a VPL-based TileSource and add it immediately (don't hold reference)
 		{
 			let vpl = r#"from_container filename="berlin.mbtiles" | filter level_min=5 level_max=10"#;
-			let tile_source = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+			let tile_source = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
 				.await
 				.unwrap();
 
