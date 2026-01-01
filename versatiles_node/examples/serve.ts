@@ -7,8 +7,8 @@
  * tiles from various container formats.
  */
 
-import { TileServer } from '../index.js';
-import { log } from './lib/logger.mjs';
+import { TileServer } from '@versatiles/versatiles-rs';
+import { log } from './lib/logger.js';
 
 log.title('VersaTiles Server Example');
 
@@ -24,7 +24,7 @@ log.title('VersaTiles Server Example');
 
 	// Add a tile source
 	const tilesPath = new URL('../../testdata/berlin.pmtiles', import.meta.url).pathname;
-	await server.addTileSource('berlin', tilesPath);
+	await server.addTileSourceFromPath('berlin', tilesPath);
 
 	// Start the server
 	await server.start();
@@ -48,10 +48,10 @@ log.title('VersaTiles Server Example');
 	const server = new TileServer({ port: 8080 });
 
 	// Add multiple tile sources
-	await server.addTileSource('osm', new URL('../../testdata/berlin.pmtiles', import.meta.url).pathname);
+	await server.addTileSourceFromPath('osm', new URL('../../testdata/berlin.pmtiles', import.meta.url).pathname);
 	// Uncomment these if you have more test data:
-	// await server.addTileSource('satellite', './satellite.pmtiles');
-	// await server.addTileSource('terrain', './terrain.versatiles');
+	// await server.addTileSourceFromPath('satellite', './satellite.pmtiles');
+	// await server.addTileSourceFromPath('terrain', './terrain.versatiles');
 
 	await server.start();
 	const port = await server.port;
@@ -74,7 +74,7 @@ log.title('VersaTiles Server Example');
 	const server = new TileServer({ port: 8080 });
 
 	// Add tile sources
-	await server.addTileSource('tiles', new URL('../../testdata/berlin.pmtiles', import.meta.url).pathname);
+	await server.addTileSourceFromPath('tiles', new URL('../../testdata/berlin.pmtiles', import.meta.url).pathname);
 
 	// Add static files (if you have a static.tar file)
 	// await server.addStaticSource('./static.tar', '/');
@@ -104,7 +104,7 @@ log.title('VersaTiles Server Example');
 
 	// Add sources dynamically
 	log.text('\nAdding tile source "berlin"...');
-	await server.addTileSource('berlin', new URL('../../testdata/berlin.pmtiles', import.meta.url).pathname);
+	await server.addTileSourceFromPath('berlin', new URL('../../testdata/berlin.pmtiles', import.meta.url).pathname);
 	log.success('Source added: /tiles/berlin/{z}/{x}/{y}');
 
 	await sleepForOneSecond();

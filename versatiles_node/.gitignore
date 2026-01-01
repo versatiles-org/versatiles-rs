@@ -8,6 +8,8 @@ yarn-error.log*
 # Build outputs
 index.js
 index.d.ts
+index.cjs
+index.d.cts
 *.node
 
 # napi-rs artifacts

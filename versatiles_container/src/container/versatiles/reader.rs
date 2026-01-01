@@ -133,7 +133,7 @@ impl VersaTilesReader {
 			bbox_pyramid,
 			Traversal {
 				order: TraversalOrder::AnyOrder,
-				size: TraversalSize::new(256, 256)?,
+				size: TraversalSize::new_max(256)?,
 			},
 		);
 
@@ -526,7 +526,7 @@ mod tests {
 
 		assert_eq!(
 			format!("{reader:?}"),
-			"VersaTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,256) } }"
+			"VersaTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,1..256) } }"
 		);
 		assert_wildcard!(
 			reader.source_type().to_string(),
@@ -538,7 +538,7 @@ mod tests {
 		);
 		assert_eq!(
 			format!("{:?}", reader.metadata()),
-			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,256) }"
+			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,1..256) }"
 		);
 		assert_eq!(reader.metadata().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.metadata().tile_format, TileFormat::MVT);

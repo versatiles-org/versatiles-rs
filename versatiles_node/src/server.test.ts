@@ -88,7 +88,7 @@ describe('TileServer', () => {
 
 		it('should start server', async () => {
 			await server.start();
-			await server.addTileSource('berlin', MBTILES_PATH);
+			await server.addTileSourceFromPath('berlin', MBTILES_PATH);
 			const port = await server.port;
 			expect(port).toBeGreaterThan(0);
 		});
@@ -112,7 +112,7 @@ describe('TileServer', () => {
 		});
 	});
 
-	describe('addTileSource()', () => {
+	describe('addTileSourceFromPath()', () => {
 		let server: TileServer;
 
 		beforeAll(async () => {
@@ -125,28 +125,28 @@ describe('TileServer', () => {
 		});
 
 		it('should add MBTiles source', async () => {
-			await server.addTileSource('berlin', MBTILES_PATH);
+			await server.addTileSourceFromPath('berlin', MBTILES_PATH);
 			const port = await server.port;
 			expect(port).toBeGreaterThan(0);
 		});
 
 		it('should add PMTiles source', async () => {
-			await server.addTileSource('berlin-pm', PMTILES_PATH);
+			await server.addTileSourceFromPath('berlin-pm', PMTILES_PATH);
 			expect(true).toBeTruthy();
 		});
 
 		it('should add multiple sources', async () => {
 			const server2: TileServer = new TileServer({ port: 0 });
 			await server2.start();
-			await server2.addTileSource('source1', MBTILES_PATH);
-			await server2.addTileSource('source2', PMTILES_PATH);
+			await server2.addTileSourceFromPath('source1', MBTILES_PATH);
+			await server2.addTileSourceFromPath('source2', PMTILES_PATH);
 			const port = await server2.port;
 			expect(port).toBeGreaterThan(0);
 			await server2.stop();
 		});
 
 		it('should throw error for non-existent file', async () => {
-			await expect(server.addTileSource('invalid', '/nonexistent/file.mbtiles')).rejects.toThrow();
+			await expect(server.addTileSourceFromPath('invalid', '/nonexistent/file.mbtiles')).rejects.toThrow();
 		});
 	});
 
@@ -157,7 +157,7 @@ describe('TileServer', () => {
 		beforeAll(async () => {
 			server = new TileServer({ port: 0 });
 			await server.start();
-			await server.addTileSource('berlin', MBTILES_PATH);
+			await server.addTileSourceFromPath('berlin', MBTILES_PATH);
 
 			// Restart server to apply sources
 			await server.stop();
@@ -249,8 +249,8 @@ describe('TileServer', () => {
 		beforeAll(async () => {
 			server = new TileServer({ port: 0 });
 			await server.start();
-			await server.addTileSource('berlin-mb', MBTILES_PATH);
-			await server.addTileSource('berlin-pm', PMTILES_PATH);
+			await server.addTileSourceFromPath('berlin-mb', MBTILES_PATH);
+			await server.addTileSourceFromPath('berlin-pm', PMTILES_PATH);
 			await server.addStaticSource(TESTDATA_DIR, '/static');
 
 			// Restart server to apply sources
@@ -289,7 +289,7 @@ describe('TileServer', () => {
 		it('should return actual port after server starts', async () => {
 			const server: TileServer = new TileServer({ port: 0 });
 			await server.start();
-			await server.addTileSource('berlin', MBTILES_PATH);
+			await server.addTileSourceFromPath('berlin', MBTILES_PATH);
 
 			const port = await server.port;
 			expect(port).toBeGreaterThan(0);
@@ -316,7 +316,7 @@ describe('TileServer', () => {
 
 		it('should hot-reload tile source addition without restart', async () => {
 			// Add source to running server
-			await server.addTileSource('berlin', MBTILES_PATH);
+			await server.addTileSourceFromPath('berlin', MBTILES_PATH);
 
 			// Verify source is immediately available without restart
 			const { statusCode, data } = await httpGet(`${baseUrl}/tiles/berlin/tiles.json`);
@@ -335,7 +335,7 @@ describe('TileServer', () => {
 
 		it('should hot-reload multiple sources without restart', async () => {
 			// Add second source
-			await server.addTileSource('berlin-pm', PMTILES_PATH);
+			await server.addTileSourceFromPath('berlin-pm', PMTILES_PATH);
 
 			// Both sources should be available
 			const mb = await httpGetBuffer(`${baseUrl}/tiles/berlin/5/17/10`);
@@ -365,7 +365,7 @@ describe('TileServer', () => {
 
 		it('should preserve hot-reloaded sources after restart', async () => {
 			// Add a new source
-			await server.addTileSource('test-source', MBTILES_PATH);
+			await server.addTileSourceFromPath('test-source', MBTILES_PATH);
 
 			// Verify it works
 			let response = await httpGet(`${baseUrl}/tiles/test-source/tiles.json`);

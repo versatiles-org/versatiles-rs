@@ -153,7 +153,7 @@ impl TileServer {
 
 		let reader = self.runtime.get_reader(tile_config.src.clone()).await?;
 
-		self.add_tile_source(name, reader).await
+		self.add_tile_source(name, Arc::new(reader)).await
 	}
 
 	/// Add a tile source dynamically while server is running.
@@ -161,7 +161,7 @@ impl TileServer {
 	/// Returns error if a source with this name already exists or if URL prefix collides.
 	/// Can be called before or after `start()` - changes take effect immediately.
 	#[context("adding tile source: id='{name}'")]
-	pub async fn add_tile_source(&mut self, name: String, reader: Box<dyn TileSource>) -> Result<()> {
+	pub async fn add_tile_source(&mut self, name: String, reader: Arc<Box<dyn TileSource>>) -> Result<()> {
 		log::debug!("add source: id='{name}', source={reader:?}");
 
 		// Create ServerTileSource (validates and wraps reader)
@@ -443,7 +443,7 @@ mod tests {
 
 		let mut server = TileServer::new_test(IP, 50001, true, false);
 
-		let reader = MockReader::new_mock_profile(MRP::Pbf)?.boxed();
+		let reader = Arc::new(MockReader::new_mock_profile(MRP::Pbf)?.boxed());
 		server.add_tile_source("cheese".to_string(), reader).await?;
 
 		server.start().await?;
@@ -467,10 +467,10 @@ mod tests {
 	async fn same_prefix_twice() {
 		let mut server = TileServer::new_test(IP, 0, true, false);
 
-		let reader = MockReader::new_mock_profile(MRP::Png).unwrap().boxed();
+		let reader = Arc::new(MockReader::new_mock_profile(MRP::Png).unwrap().boxed());
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 
-		let reader = MockReader::new_mock_profile(MRP::Pbf).unwrap().boxed();
+		let reader = Arc::new(MockReader::new_mock_profile(MRP::Pbf).unwrap().boxed());
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 	}
 
@@ -491,7 +491,7 @@ mod tests {
 		let mut server = TileServer::new_test(IP, 0, true, false);
 		assert_eq!(server.ip, IP);
 
-		let reader = MockReader::new_mock_profile(MRP::Pbf).unwrap().boxed();
+		let reader = Arc::new(MockReader::new_mock_profile(MRP::Pbf).unwrap().boxed());
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 
 		assert_eq!(server.tile_sources.len(), 1);
@@ -504,7 +504,7 @@ mod tests {
 		let mut server = TileServer::new_test(IP, 0, true, false);
 		assert_eq!(server.ip, IP);
 
-		let reader = MockReader::new_mock_profile(MRP::Pbf).unwrap().boxed();
+		let reader = Arc::new(MockReader::new_mock_profile(MRP::Pbf).unwrap().boxed());
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 
 		assert_eq!(
@@ -549,7 +549,7 @@ mod tests {
 		let mut server = TileServer::new_test(IP, 0, true, false);
 
 		let parameters = TileSourceMetadata::new(format, compression, TileBBoxPyramid::new_full(8), Traversal::ANY);
-		let reader = MockReader::new_mock(parameters).unwrap().boxed();
+		let reader = Arc::new(MockReader::new_mock(parameters).unwrap().boxed());
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 		server.start().await.unwrap();
 

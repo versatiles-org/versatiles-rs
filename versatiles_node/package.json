@@ -1,12 +1,19 @@
 {
   "name": "@versatiles/versatiles-rs",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "Node.js bindings for VersaTiles - convert, serve, and process map tiles",
   "main": "index.js",
   "types": "index.d.ts",
+  "type": "module",
+  "exports": {
+    "types": "./index.d.ts",
+    "import": "./index.js",
+    "require": "./index.cjs"
+  },
   "files": [
     "index.d.ts",
     "index.js",
+    "index.cjs",
     "versatiles.*.node"
   ],
   "napi": {
@@ -42,8 +49,8 @@
   },
   "scripts": {
     "artifacts": "napi artifacts",
-    "build:debug": "napi build --platform",
-    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform --esm",
+    "build": "napi build --platform --release --esm",
     "check": "npm run build:debug && npm run typecheck && npm run lint && npm run test && npm run test:examples && npm run format:check",
     "docs:clean": "rm -rf docs",
     "docs:generate": "typedoc",
@@ -51,12 +58,12 @@
     "fix": "npm run lint:fix && npm run format",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
-    "lint:fix": "eslint src --fix",
-    "lint": "eslint src",
+    "lint:fix": "eslint . --fix",
+    "lint": "eslint .",
     "pack:dry": "npm pack --dry-run",
     "prepublishOnly": "napi prepublish -t npm",
     "test:coverage": "vitest run --coverage",
-    "test:examples": "for file in examples/*.mjs; do echo \"\\n=== Running $file ===\"; node \"$file\" || exit 1; done",
+    "test:examples": "for file in examples/*.ts; do echo \"\\n=== Running $file ===\"; npx tsx \"$file\" || exit 1; done",
     "test:ui": "vitest --ui",
     "test:watch": "vitest",
     "test": "vitest run",
@@ -82,11 +89,11 @@
     "vitest": "^4.0.16"
   },
   "optionalDependencies": {
-    "@versatiles/versatiles-rs-darwin-arm64": "3.0.1",
-    "@versatiles/versatiles-rs-darwin-x64": "3.0.1",
-    "@versatiles/versatiles-rs-linux-arm64-gnu": "3.0.1",
-    "@versatiles/versatiles-rs-linux-x64-gnu": "3.0.1",
-    "@versatiles/versatiles-rs-win32-arm64-msvc": "3.0.1",
-    "@versatiles/versatiles-rs-win32-x64-msvc": "3.0.1"
+    "@versatiles/versatiles-rs-darwin-arm64": "3.0.2",
+    "@versatiles/versatiles-rs-darwin-x64": "3.0.2",
+    "@versatiles/versatiles-rs-linux-arm64-gnu": "3.0.2",
+    "@versatiles/versatiles-rs-linux-x64-gnu": "3.0.2",
+    "@versatiles/versatiles-rs-win32-arm64-msvc": "3.0.2",
+    "@versatiles/versatiles-rs-win32-x64-msvc": "3.0.2"
   }
 }

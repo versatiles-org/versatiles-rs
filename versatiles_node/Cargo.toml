@@ -23,6 +23,7 @@ versatiles_core = { workspace = true, default-features = false }
 
 [dev-dependencies]
 rstest.workspace = true
+pretty_assertions.workspace = true
 
 [build-dependencies]
 napi-build = "2"

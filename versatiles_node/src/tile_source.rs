@@ -10,11 +10,16 @@
 /// - **PMTiles** (.pmtiles) - Cloud-optimized format, local and remote
 /// - **TAR** (.tar) - Archive format, local only
 /// - **Directories** - Tile directories following standard naming conventions
-use crate::{napi_result, runtime::create_runtime, types::SourceMetadata};
-use napi::bindgen_prelude::*;
+use crate::{
+	convert::convert_tiles_with_options,
+	napi_result,
+	progress::{MessageData, ProgressData},
+	runtime::create_runtime,
+	types::{ConvertOptions, SourceMetadata, TileJSON},
+};
+use napi::{bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
 use std::{path::Path, sync::Arc};
-use tokio::sync::Mutex;
 use versatiles::pipeline::PipelineReader;
 use versatiles_container::{SourceType as RustSourceType, TileSource as RustTileSource};
 use versatiles_core::TileCoord as RustTileCoord;
@@ -37,8 +42,9 @@ use versatiles_core::TileCoord as RustTileCoord;
 /// - `.versatiles` files via HTTP/HTTPS
 /// - `.pmtiles` files via HTTP/HTTPS (with range request support)
 #[napi]
+#[derive(Clone)]
 pub struct TileSource {
-	reader: Arc<Mutex<Box<dyn RustTileSource>>>,
+	reader: Arc<Box<dyn RustTileSource>>,
 }
 
 #[napi]
@@ -81,8 +87,14 @@ impl TileSource {
 
 	fn new(source: Box<dyn RustTileSource>) -> Self {
 		Self {
-			reader: Arc::new(Mutex::new(source)),
+			reader: Arc::new(source),
 		}
+	}
+
+	/// Create a new reader from this TileSource (for server use)
+	/// This recreates the reader, which is needed when the server API requires ownership
+	pub(crate) fn reader(&self) -> Arc<Box<dyn RustTileSource>> {
+		self.reader.clone()
 	}
 
 	/// Get a ContainerReader instance from an VPL string
@@ -91,6 +103,121 @@ impl TileSource {
 		let runtime = create_runtime();
 		let source = napi_result!(PipelineReader::open_str(&vpl, Path::new(&dir), runtime).await)?;
 		Ok(Self::new(Box::new(source)))
+	}
+
+	/// Convert this tile source to another format
+	///
+	/// Converts the current tile source to a different container format with optional
+	/// filtering, transformation, and compression changes. Supports real-time progress
+	/// monitoring through callback functions.
+	///
+	/// # Arguments
+	///
+	/// * `output` - Path to the output tile container
+	/// * `options` - Optional conversion options (zoom range, bbox, compression, etc.)
+	/// * `on_progress` - Optional callback for progress updates
+	/// * `on_message` - Optional callback for step/warning/error messages
+	///
+	/// # Conversion Options
+	///
+	/// - `minZoom` / `maxZoom`: Filter to specific zoom levels
+	/// - `bbox`: Geographic bounding box `[west, south, east, north]`
+	/// - `bboxBorder`: Add border tiles around bbox (in tile units)
+	/// - `compress`: Output compression ("gzip", "brotli", "uncompressed")
+	/// - `flipY`: Flip tiles vertically (TMS ↔ XYZ coordinate systems)
+	/// - `swapXY`: Swap X and Y tile coordinates
+	///
+	/// # Progress Callbacks
+	///
+	/// **onProgress callback** receives:
+	/// - `position`: Current tile count
+	/// - `total`: Total tile count
+	/// - `percentage`: Progress percentage (0-100)
+	/// - `speed`: Processing speed (tiles/second)
+	/// - `eta`: Estimated completion time (as JavaScript Date)
+	///
+	/// **onMessage callback** receives:
+	/// - `type`: Message type ("step", "warning", or "error")
+	/// - `message`: The message text
+	///
+	/// # Returns
+	///
+	/// A Promise that resolves when conversion is complete
+	///
+	/// # Errors
+	///
+	/// Returns an error if:
+	/// - Output path is invalid or not writable
+	/// - Bbox coordinates are invalid (must be `[west, south, east, north]`)
+	/// - Compression format is not recognized
+	/// - An I/O error occurs during conversion
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// const source = await TileSource.open('input.mbtiles');
+	///
+	/// // Simple conversion
+	/// await source.convertTo('output.versatiles');
+	///
+	/// // Convert with compression
+	/// await source.convertTo('output.versatiles', {
+	///   compress: 'brotli'
+	/// });
+	///
+	/// // Convert specific area and zoom range
+	/// await source.convertTo('europe.versatiles', {
+	///   minZoom: 0,
+	///   maxZoom: 14,
+	///   bbox: [-10, 35, 40, 70], // Europe
+	///   bboxBorder: 1
+	/// });
+	///
+	/// // With progress monitoring
+	/// await source.convertTo('output.versatiles', null,
+	///   (progress) => {
+	///     console.log(`${progress.percentage.toFixed(1)}% complete`);
+	///   },
+	///   (type, message) => {
+	///     if (type === 'error') console.error(message);
+	///   }
+	/// );
+	/// ```
+	#[napi]
+	pub async fn convert_to(
+		&self,
+		output: String,
+		options: Option<ConvertOptions>,
+		on_progress: Option<ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false, true>>,
+		on_message: Option<ThreadsafeFunction<MessageData, Unknown<'static>, MessageData, Status, false, true>>,
+	) -> Result<()> {
+		// Get a reader for conversion
+		// Try to unwrap the Arc if this is the only reference, otherwise recreate from URI
+		let reader = match Arc::try_unwrap(Arc::clone(&self.reader)) {
+			Ok(boxed_reader) => boxed_reader,
+			Err(arc_reader) => {
+				// Can't unwrap - there are multiple references
+				// Check if we can get a URI to recreate the reader
+				let source_type = arc_reader.source_type();
+				match source_type.as_ref() {
+					versatiles_container::SourceType::Container { input, .. } => {
+						// Recreate reader from URI
+						let runtime = create_runtime();
+						napi_result!(runtime.get_reader_from_str(input).await)?
+					}
+					_ => {
+						// VPL or composite source - can't easily recreate
+						return Err(Error::from_reason(
+							"Cannot convert VPL or composite sources. Please convert from the original file path.",
+						));
+					}
+				}
+			}
+		};
+
+		// Use shared conversion logic
+		let output_path = std::path::PathBuf::from(&output);
+		convert_tiles_with_options(reader, &output_path, options, on_progress, on_message).await
 	}
 
 	/// Get a single tile at the specified coordinates
@@ -126,8 +253,7 @@ impl TileSource {
 	#[napi]
 	pub async fn get_tile(&self, z: u32, x: u32, y: u32) -> Result<Option<Buffer>> {
 		let coord = napi_result!(RustTileCoord::new(z as u8, x, y))?;
-		let reader = self.reader.lock().await;
-		let tile_opt = napi_result!(reader.get_tile(&coord).await)?;
+		let tile_opt = napi_result!(self.reader.get_tile(&coord).await)?;
 
 		Ok(tile_opt.map(|mut tile| {
 			let blob = tile.as_blob(versatiles_core::TileCompression::Uncompressed).unwrap();
@@ -152,9 +278,8 @@ impl TileSource {
 	/// console.log(`Zoom range: ${metadata.minzoom} - ${metadata.maxzoom}`);
 	/// ```
 	#[napi]
-	pub async fn tile_json(&self) -> String {
-		let reader = self.reader.lock().await;
-		reader.tilejson().as_string()
+	pub fn tile_json(&self) -> TileJSON {
+		TileJSON::build(self.reader.tilejson(), &self.reader.metadata().bbox_pyramid)
 	}
 
 	/// Get reader metadata
@@ -179,9 +304,8 @@ impl TileSource {
 	/// console.log(`Zoom: ${metadata.minZoom}-${metadata.maxZoom}`);
 	/// ```
 	#[napi]
-	pub async fn metadata(&self) -> SourceMetadata {
-		let reader = self.reader.lock().await;
-		SourceMetadata::from(reader.metadata())
+	pub fn metadata(&self) -> SourceMetadata {
+		SourceMetadata::from(self.reader.metadata())
 	}
 
 	/// Get the source type
@@ -203,8 +327,8 @@ impl TileSource {
 	/// }
 	/// ```
 	#[napi]
-	pub async fn source_type(&self) -> SourceType {
-		self.reader.lock().await.source_type().as_ref().into()
+	pub fn source_type(&self) -> SourceType {
+		self.reader.source_type().as_ref().into()
 	}
 }
 
@@ -301,7 +425,6 @@ impl From<Arc<RustSourceType>> for SourceType {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use versatiles_core::json::parse_json_str;
 
 	#[tokio::test]
 	async fn test_open_valid_mbtiles() {
@@ -381,42 +504,41 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_tile_json_valid() -> anyhow::Result<()> {
+	async fn test_tile_json_mbtiles() {
 		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
-		let tile_json = reader.tile_json().await;
+		let tile_json = reader.tile_json();
 
-		// Verify it's a non-empty string
-		assert!(!tile_json.is_empty());
+		// MBTiles should have bounds
+		assert_eq!(tile_json.bounds.unwrap(), [13.08283, 52.33446, 13.762245, 52.6783]);
 
-		// Verify it's valid JSON
-		let json = parse_json_str(&tile_json)?.into_object()?;
-
-		// Verify it has expected TileJSON fields
-		assert_eq!(json.get_string("tilejson")?.unwrap(), "3.0.0");
-		assert_eq!(json.get_number("minzoom")?.unwrap(), 0.0);
-		assert_eq!(json.get_number("maxzoom")?.unwrap(), 14.0);
-
-		Ok(())
+		// Check common fields
+		assert_eq!(tile_json.tilejson, "3.0");
+		assert_eq!(tile_json.minzoom, 0.0);
+		assert_eq!(tile_json.maxzoom, 14.0);
+		assert!(tile_json.vector_layers.is_some());
+		assert_eq!(tile_json.vector_layers.as_ref().unwrap().len(), 19);
 	}
 
 	#[tokio::test]
-	async fn test_tile_json_mbtiles_vs_pmtiles() {
-		let reader_mbtiles = TileSource::open("../testdata/berlin.mbtiles".to_string())
-			.await
-			.unwrap();
-		let reader_pmtiles = TileSource::open("../testdata/berlin.pmtiles".to_string())
+	async fn test_tile_json_pmtiles() {
+		let reader = TileSource::open("../testdata/berlin.pmtiles".to_string())
 			.await
 			.unwrap();
 
-		let json_mbtiles = reader_mbtiles.tile_json().await;
-		let json_pmtiles = reader_pmtiles.tile_json().await;
+		let tile_json = reader.tile_json();
 
-		// Both should return valid JSON
-		assert!(!json_mbtiles.is_empty());
-		assert!(!json_pmtiles.is_empty());
+		// PMTiles doesn't have bounds in metadata
+		assert!(tile_json.bounds.is_none());
+
+		// Check common fields
+		assert_eq!(tile_json.tilejson, "3.0");
+		assert_eq!(tile_json.minzoom, 0.0);
+		assert_eq!(tile_json.maxzoom, 14.0);
+		assert!(tile_json.vector_layers.is_some());
+		assert_eq!(tile_json.vector_layers.as_ref().unwrap().len(), 19);
 	}
 
 	#[tokio::test]
@@ -425,7 +547,7 @@ mod tests {
 			.await
 			.unwrap();
 
-		let metadata = reader.metadata().await;
+		let metadata = reader.metadata();
 
 		// Verify metadata has expected fields
 		assert!(!metadata.tile_format.is_empty());
@@ -439,7 +561,7 @@ mod tests {
 			.await
 			.unwrap();
 
-		let metadata = reader.metadata().await;
+		let metadata = reader.metadata();
 
 		// Zoom levels should be valid (0-32)
 		assert!(metadata.min_zoom <= 32);
@@ -453,7 +575,7 @@ mod tests {
 			.await
 			.unwrap();
 
-		let metadata = reader.metadata().await;
+		let metadata = reader.metadata();
 
 		// Berlin test data should be in a known format
 		let valid_formats = ["png", "jpg", "jpeg", "webp", "pbf", "mvt"];
@@ -466,7 +588,7 @@ mod tests {
 			.await
 			.unwrap();
 
-		let metadata = reader.metadata().await;
+		let metadata = reader.metadata();
 
 		// Should have a valid compression type
 		let valid_compressions = ["uncompressed", "gzip", "brotli", "zstd"];
@@ -479,7 +601,7 @@ mod tests {
 			.await
 			.unwrap();
 
-		let source_type = reader.source_type().await;
+		let source_type = reader.source_type();
 
 		// Should be a container type
 		assert_eq!(source_type.kind(), "container");
@@ -493,7 +615,7 @@ mod tests {
 			.await
 			.unwrap();
 
-		let source_type = reader.source_type().await;
+		let source_type = reader.source_type();
 
 		// Name should indicate the format
 		let name = source_type.name();
@@ -506,7 +628,7 @@ mod tests {
 			.await
 			.unwrap();
 
-		let source_type = reader.source_type().await;
+		let source_type = reader.source_type();
 
 		// URI should contain the path
 		let uri = source_type.uri().unwrap();
@@ -519,7 +641,7 @@ mod tests {
 			.await
 			.unwrap();
 
-		let source_type = reader.source_type().await;
+		let source_type = reader.source_type();
 
 		let uri = source_type.uri().unwrap();
 		assert!(uri.contains("berlin.pmtiles"));
@@ -531,7 +653,7 @@ mod tests {
 			.await
 			.unwrap();
 
-		let source_type = reader.source_type().await;
+		let source_type = reader.source_type();
 
 		// Container type should not have input() or inputs()
 		assert!(source_type.input().is_none());
@@ -548,8 +670,8 @@ mod tests {
 			.unwrap();
 
 		// Both should work independently
-		let metadata1 = reader1.metadata().await;
-		let metadata2 = reader2.metadata().await;
+		let metadata1 = reader1.metadata();
+		let metadata2 = reader2.metadata();
 
 		assert!(!metadata1.tile_format.is_empty());
 		assert!(!metadata2.tile_format.is_empty());
@@ -579,33 +701,12 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_tile_json_is_valid_json() -> anyhow::Result<()> {
-		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
-			.await
-			.unwrap();
-
-		let tile_json = reader.tile_json().await;
-
-		// Parse and verify structure
-		let json = parse_json_str(&tile_json)?.into_object()?;
-
-		// Check for required TileJSON fields
-		assert_eq!(json.get_string("tilejson")?.unwrap(), "3.0.0");
-
-		// Check optional but common fields
-		assert_eq!(json.get_number("minzoom")?.unwrap(), 0.0);
-		assert_eq!(json.get_number("maxzoom")?.unwrap(), 14.0);
-
-		Ok(())
-	}
-
-	#[tokio::test]
 	async fn test_source_type_kind_values() {
 		let reader = TileSource::open("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
-		let source_type = reader.source_type().await;
+		let source_type = reader.source_type();
 		let kind = source_type.kind();
 
 		// Kind should be one of the valid values
@@ -619,8 +720,8 @@ mod tests {
 			.unwrap();
 
 		// Call metadata multiple times
-		let metadata1 = reader.metadata().await;
-		let metadata2 = reader.metadata().await;
+		let metadata1 = reader.metadata();
+		let metadata2 = reader.metadata();
 
 		// Should return consistent results
 		assert_eq!(metadata1.tile_format, metadata2.tile_format);
@@ -636,8 +737,8 @@ mod tests {
 			.unwrap();
 
 		// Call tile_json multiple times
-		let json1 = reader.tile_json().await;
-		let json2 = reader.tile_json().await;
+		let json1 = reader.tile_json();
+		let json2 = reader.tile_json();
 
 		// Should return identical results
 		assert_eq!(json1, json2);
@@ -652,5 +753,195 @@ mod tests {
 		// Get a tile that likely exists
 		let buffer = reader.get_tile(10, 550, 335).await.unwrap().unwrap();
 		assert_eq!(buffer.len(), 113612);
+	}
+
+	#[tokio::test]
+	async fn test_from_vpl_simple_container() {
+		// Test loading a simple VPL that just references a container
+		let vpl = r#"from_container filename="berlin.mbtiles""#;
+		let reader = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+			.await
+			.unwrap();
+
+		// Verify we can read metadata
+		let metadata = reader.metadata();
+		assert_eq!(metadata.tile_format, "mvt");
+		assert_eq!(metadata.tile_compression, "gzip");
+		assert_eq!(metadata.min_zoom, 0);
+		assert_eq!(metadata.max_zoom, 14);
+	}
+
+	#[tokio::test]
+	async fn test_from_vpl_file() {
+		// Test loading a VPL file that includes transformations
+		let vpl = std::fs::read_to_string("../testdata/berlin.vpl").unwrap();
+		let reader = TileSource::from_vpl(vpl, "../testdata".to_string()).await.unwrap();
+
+		// Verify we can read metadata
+		let metadata = reader.metadata();
+		assert_eq!(metadata.tile_format, "mvt");
+		assert_eq!(metadata.tile_compression, "gzip");
+
+		// Verify we can get tiles
+		let tile = reader.get_tile(10, 550, 335).await.unwrap();
+		assert!(tile.is_some());
+	}
+
+	#[tokio::test]
+	async fn test_from_vpl_with_pipeline() {
+		// Test a VPL with multiple pipeline operations
+		let vpl = r#"from_container filename="berlin.mbtiles" | filter level_min=5 level_max=10"#;
+		let reader = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+			.await
+			.unwrap();
+
+		// Verify metadata reflects the zoom filter
+		let metadata = reader.metadata();
+		assert_eq!(metadata.min_zoom, 5);
+		assert_eq!(metadata.max_zoom, 10);
+	}
+
+	#[tokio::test]
+	async fn test_from_vpl_tile_retrieval() {
+		// Test that we can retrieve tiles through VPL
+		let vpl = r#"from_container filename="berlin.mbtiles""#;
+		let reader = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+			.await
+			.unwrap();
+
+		// Get a tile that should exist
+		let tile = reader.get_tile(5, 17, 10).await.unwrap();
+		assert_eq!(tile.unwrap().len(), 4137);
+	}
+
+	#[tokio::test]
+	async fn test_from_vpl_tilejson() {
+		// Test that TileJSON works with VPL sources
+		let vpl = r#"from_container filename="berlin.mbtiles""#;
+		let reader = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+			.await
+			.unwrap();
+
+		let tile_json = reader.tile_json();
+		assert_eq!(tile_json.tilejson, "3.0");
+		assert_eq!(tile_json.minzoom, 0.0);
+		assert_eq!(tile_json.maxzoom, 14.0);
+		assert!(tile_json.vector_layers.is_some());
+	}
+
+	#[tokio::test]
+	async fn test_from_vpl_invalid_syntax() {
+		// Test that invalid VPL returns an error
+		let vpl = r#"invalid vpl syntax here"#;
+		let result = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string()).await;
+		assert!(result.is_err());
+	}
+
+	#[tokio::test]
+	async fn test_from_vpl_nonexistent_file() {
+		// Test that referencing a non-existent file returns an error
+		let vpl = r#"from_container filename="nonexistent.mbtiles""#;
+		let result = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string()).await;
+		assert!(result.is_err());
+	}
+
+	#[tokio::test]
+	async fn test_from_vpl_source_type() {
+		// Test that source_type works correctly for VPL sources
+		let vpl = r#"from_container filename="berlin.mbtiles""#;
+		let reader = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+			.await
+			.unwrap();
+
+		let source_type = reader.source_type();
+		assert_eq!(source_type.kind(), "processor");
+		assert!(source_type.input().is_some());
+	}
+
+	#[tokio::test]
+	async fn test_convert_to() {
+		// Create a temp output file path
+		let output_path = std::env::temp_dir().join("test_convert_to.versatiles");
+
+		// Open a tile source
+		let source = TileSource::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Convert to versatiles format
+		let result = source
+			.convert_to(output_path.to_str().unwrap().to_string(), None, None, None)
+			.await;
+
+		// Should succeed
+		assert!(result.is_ok(), "Conversion should succeed");
+
+		// Verify output file exists and has content
+		assert!(output_path.exists(), "Output file should exist");
+		let metadata = std::fs::metadata(&output_path).unwrap();
+		assert!(metadata.len() > 0, "Output file should not be empty");
+
+		// Clean up
+		let _ = std::fs::remove_file(&output_path);
+	}
+
+	#[tokio::test]
+	async fn test_convert_to_with_options() {
+		// Create a temp output file path
+		let output_path = std::env::temp_dir().join("test_convert_to_with_options.versatiles");
+
+		// Open a tile source
+		let source = TileSource::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Convert with options (zoom filter)
+		let options = ConvertOptions {
+			min_zoom: Some(5),
+			max_zoom: Some(10),
+			bbox: None,
+			bbox_border: None,
+			compress: Some("gzip".to_string()),
+			flip_y: None,
+			swap_xy: None,
+		};
+
+		let result = source
+			.convert_to(output_path.to_str().unwrap().to_string(), Some(options), None, None)
+			.await;
+
+		// Should succeed
+		assert!(result.is_ok(), "Conversion with options should succeed");
+
+		// Verify output file exists
+		assert!(output_path.exists(), "Output file should exist");
+
+		// Clean up
+		let _ = std::fs::remove_file(&output_path);
+	}
+
+	#[tokio::test]
+	async fn test_convert_to_vpl_source_fails() {
+		// Create a temp output file path
+		let output_path = std::env::temp_dir().join("test_convert_to_vpl.versatiles");
+
+		// Create a VPL source
+		let vpl = r#"from_container filename="berlin.mbtiles""#;
+		let source = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+			.await
+			.unwrap();
+
+		// Try to convert - should fail for VPL sources
+		let result = source
+			.convert_to(output_path.to_str().unwrap().to_string(), None, None, None)
+			.await;
+
+		// Should fail with appropriate error
+		assert!(result.is_err(), "VPL source conversion should fail");
+		let err = result.unwrap_err();
+		assert!(err.to_string().contains("VPL"), "Error should mention VPL: {}", err);
+
+		// Clean up
+		let _ = std::fs::remove_file(&output_path);
 	}
 }
