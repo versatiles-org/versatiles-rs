@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'  # Trigger on version tags like v2.3.2
+  workflow_dispatch:
 
 permissions:
   contents: read
