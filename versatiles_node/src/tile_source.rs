@@ -11,11 +11,13 @@
 /// - **TAR** (.tar) - Archive format, local only
 /// - **Directories** - Tile directories following standard naming conventions
 use crate::{
+	convert::convert_tiles_with_options,
 	napi_result,
+	progress::{MessageData, ProgressData},
 	runtime::create_runtime,
-	types::{SourceMetadata, TileJSON},
+	types::{ConvertOptions, SourceMetadata, TileJSON},
 };
-use napi::bindgen_prelude::*;
+use napi::{bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
 use std::{path::Path, sync::Arc};
 use versatiles::pipeline::PipelineReader;
@@ -101,6 +103,121 @@ impl TileSource {
 		let runtime = create_runtime();
 		let source = napi_result!(PipelineReader::open_str(&vpl, Path::new(&dir), runtime).await)?;
 		Ok(Self::new(Box::new(source)))
+	}
+
+	/// Convert this tile source to another format
+	///
+	/// Converts the current tile source to a different container format with optional
+	/// filtering, transformation, and compression changes. Supports real-time progress
+	/// monitoring through callback functions.
+	///
+	/// # Arguments
+	///
+	/// * `output` - Path to the output tile container
+	/// * `options` - Optional conversion options (zoom range, bbox, compression, etc.)
+	/// * `on_progress` - Optional callback for progress updates
+	/// * `on_message` - Optional callback for step/warning/error messages
+	///
+	/// # Conversion Options
+	///
+	/// - `minZoom` / `maxZoom`: Filter to specific zoom levels
+	/// - `bbox`: Geographic bounding box `[west, south, east, north]`
+	/// - `bboxBorder`: Add border tiles around bbox (in tile units)
+	/// - `compress`: Output compression ("gzip", "brotli", "uncompressed")
+	/// - `flipY`: Flip tiles vertically (TMS ↔ XYZ coordinate systems)
+	/// - `swapXY`: Swap X and Y tile coordinates
+	///
+	/// # Progress Callbacks
+	///
+	/// **onProgress callback** receives:
+	/// - `position`: Current tile count
+	/// - `total`: Total tile count
+	/// - `percentage`: Progress percentage (0-100)
+	/// - `speed`: Processing speed (tiles/second)
+	/// - `eta`: Estimated completion time (as JavaScript Date)
+	///
+	/// **onMessage callback** receives:
+	/// - `type`: Message type ("step", "warning", or "error")
+	/// - `message`: The message text
+	///
+	/// # Returns
+	///
+	/// A Promise that resolves when conversion is complete
+	///
+	/// # Errors
+	///
+	/// Returns an error if:
+	/// - Output path is invalid or not writable
+	/// - Bbox coordinates are invalid (must be `[west, south, east, north]`)
+	/// - Compression format is not recognized
+	/// - An I/O error occurs during conversion
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// const source = await TileSource.open('input.mbtiles');
+	///
+	/// // Simple conversion
+	/// await source.convertTo('output.versatiles');
+	///
+	/// // Convert with compression
+	/// await source.convertTo('output.versatiles', {
+	///   compress: 'brotli'
+	/// });
+	///
+	/// // Convert specific area and zoom range
+	/// await source.convertTo('europe.versatiles', {
+	///   minZoom: 0,
+	///   maxZoom: 14,
+	///   bbox: [-10, 35, 40, 70], // Europe
+	///   bboxBorder: 1
+	/// });
+	///
+	/// // With progress monitoring
+	/// await source.convertTo('output.versatiles', null,
+	///   (progress) => {
+	///     console.log(`${progress.percentage.toFixed(1)}% complete`);
+	///   },
+	///   (type, message) => {
+	///     if (type === 'error') console.error(message);
+	///   }
+	/// );
+	/// ```
+	#[napi]
+	pub async fn convert_to(
+		&self,
+		output: String,
+		options: Option<ConvertOptions>,
+		on_progress: Option<ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false, true>>,
+		on_message: Option<ThreadsafeFunction<MessageData, Unknown<'static>, MessageData, Status, false, true>>,
+	) -> Result<()> {
+		// Get a reader for conversion
+		// Try to unwrap the Arc if this is the only reference, otherwise recreate from URI
+		let reader = match Arc::try_unwrap(Arc::clone(&self.reader)) {
+			Ok(boxed_reader) => boxed_reader,
+			Err(arc_reader) => {
+				// Can't unwrap - there are multiple references
+				// Check if we can get a URI to recreate the reader
+				let source_type = arc_reader.source_type();
+				match source_type.as_ref() {
+					versatiles_container::SourceType::Container { input, .. } => {
+						// Recreate reader from URI
+						let runtime = create_runtime();
+						napi_result!(runtime.get_reader_from_str(input).await)?
+					}
+					_ => {
+						// VPL or composite source - can't easily recreate
+						return Err(Error::from_reason(
+							"Cannot convert VPL or composite sources. Please convert from the original file path.",
+						));
+					}
+				}
+			}
+		};
+
+		// Use shared conversion logic
+		let output_path = std::path::PathBuf::from(&output);
+		convert_tiles_with_options(reader, &output_path, options, on_progress, on_message).await
 	}
 
 	/// Get a single tile at the specified coordinates
@@ -739,5 +856,92 @@ mod tests {
 		let source_type = reader.source_type();
 		assert_eq!(source_type.kind(), "processor");
 		assert!(source_type.input().is_some());
+	}
+
+	#[tokio::test]
+	async fn test_convert_to() {
+		// Create a temp output file path
+		let output_path = std::env::temp_dir().join("test_convert_to.versatiles");
+
+		// Open a tile source
+		let source = TileSource::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Convert to versatiles format
+		let result = source
+			.convert_to(output_path.to_str().unwrap().to_string(), None, None, None)
+			.await;
+
+		// Should succeed
+		assert!(result.is_ok(), "Conversion should succeed");
+
+		// Verify output file exists and has content
+		assert!(output_path.exists(), "Output file should exist");
+		let metadata = std::fs::metadata(&output_path).unwrap();
+		assert!(metadata.len() > 0, "Output file should not be empty");
+
+		// Clean up
+		let _ = std::fs::remove_file(&output_path);
+	}
+
+	#[tokio::test]
+	async fn test_convert_to_with_options() {
+		// Create a temp output file path
+		let output_path = std::env::temp_dir().join("test_convert_to_with_options.versatiles");
+
+		// Open a tile source
+		let source = TileSource::open("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Convert with options (zoom filter)
+		let options = ConvertOptions {
+			min_zoom: Some(5),
+			max_zoom: Some(10),
+			bbox: None,
+			bbox_border: None,
+			compress: Some("gzip".to_string()),
+			flip_y: None,
+			swap_xy: None,
+		};
+
+		let result = source
+			.convert_to(output_path.to_str().unwrap().to_string(), Some(options), None, None)
+			.await;
+
+		// Should succeed
+		assert!(result.is_ok(), "Conversion with options should succeed");
+
+		// Verify output file exists
+		assert!(output_path.exists(), "Output file should exist");
+
+		// Clean up
+		let _ = std::fs::remove_file(&output_path);
+	}
+
+	#[tokio::test]
+	async fn test_convert_to_vpl_source_fails() {
+		// Create a temp output file path
+		let output_path = std::env::temp_dir().join("test_convert_to_vpl.versatiles");
+
+		// Create a VPL source
+		let vpl = r#"from_container filename="berlin.mbtiles""#;
+		let source = TileSource::from_vpl(vpl.to_string(), "../testdata".to_string())
+			.await
+			.unwrap();
+
+		// Try to convert - should fail for VPL sources
+		let result = source
+			.convert_to(output_path.to_str().unwrap().to_string(), None, None, None)
+			.await;
+
+		// Should fail with appropriate error
+		assert!(result.is_err(), "VPL source conversion should fail");
+		let err = result.unwrap_err();
+		assert!(err.to_string().contains("VPL"), "Error should mention VPL: {}", err);
+
+		// Clean up
+		let _ = std::fs::remove_file(&output_path);
 	}
 }
