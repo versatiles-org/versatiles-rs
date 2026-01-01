@@ -58,7 +58,7 @@
     "check": "npm run build:debug && npm run typecheck && npm run lint && npm run test && npm run test:examples && npm run format:check",
     "docs:clean": "rm -rf docs",
     "docs:generate": "typedoc",
-    "docs:serve": "npx http-server docs -p 8080 -o",
+    "docs:serve": "npx http-server docs -s -c 0 -p 8080 -o",
     "fix": "npm run lint:fix && npm run format",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
