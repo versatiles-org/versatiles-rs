@@ -25,10 +25,7 @@ use napi::{
 };
 use napi_derive::napi;
 use std::{path::Path, sync::Arc};
-use versatiles_container::{
-	TileSource as RustTileSource, TilesConverterParameters,
-	runtime::{Event, TilesRuntime},
-};
+use versatiles_container::{TileSource as RustTileSource, TilesConverterParameters, runtime::Event};
 use versatiles_core::{GeoBBox, TileBBoxPyramid};
 
 /// Internal helper function to convert tiles with options and callbacks
@@ -96,7 +93,7 @@ pub(crate) async fn convert_tiles_with_options(
 	};
 
 	// Create a new runtime for this conversion with event bridging to JavaScript
-	let runtime = TilesRuntime::default();
+	let runtime = create_runtime();
 
 	// Bridge progress events to JavaScript callback
 	if let Some(cb) = on_progress {
