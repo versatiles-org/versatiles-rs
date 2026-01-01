@@ -16,7 +16,7 @@ jobs:
     name: Build and Deploy Documentation
     runs-on: ubuntu-latest
     # Only run for regular release versions (not pre-releases like v3.0.1-rc.3)
-    if: github.ref_type == 'tag' && !contains(github.ref_name, '-')
+    if: (github.ref_type == 'tag' && !contains(github.ref_name, '-')) || github.event_name == 'workflow_dispatch'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
