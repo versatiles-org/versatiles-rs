@@ -89,23 +89,23 @@ describe('TileServer', () => {
 		it('should start server', async () => {
 			await server.start();
 			await server.addTileSourceFromPath('berlin', MBTILES_PATH);
-			const port = await server.port;
+			const port = server.port;
 			expect(port).toBeGreaterThan(0);
 		});
 
 		it('should stop server', async () => {
 			await server.stop();
 			// Port getter should still work after stop
-			const port = await server.port;
+			const port = server.port;
 			expect(typeof port).toBe('number');
 		});
 
 		it('should restart server', async () => {
 			await server.start();
-			const port1 = await server.port;
+			const port1 = server.port;
 			await server.stop();
 			await server.start();
-			const port2 = await server.port;
+			const port2 = server.port;
 			// Ports might be different, just verify both are valid
 			expect(port1).toBeGreaterThan(0);
 			expect(port2).toBeGreaterThan(0);
@@ -126,7 +126,7 @@ describe('TileServer', () => {
 
 		it('should add MBTiles source', async () => {
 			await server.addTileSourceFromPath('berlin', MBTILES_PATH);
-			const port = await server.port;
+			const port = server.port;
 			expect(port).toBeGreaterThan(0);
 		});
 
@@ -140,7 +140,7 @@ describe('TileServer', () => {
 			await server2.start();
 			await server2.addTileSourceFromPath('source1', MBTILES_PATH);
 			await server2.addTileSourceFromPath('source2', PMTILES_PATH);
-			const port = await server2.port;
+			const port = server2.port;
 			expect(port).toBeGreaterThan(0);
 			await server2.stop();
 		});
@@ -163,7 +163,7 @@ describe('TileServer', () => {
 			await server.stop();
 			await server.start();
 
-			const port = await server.port;
+			const port = server.port;
 			baseUrl = `http://127.0.0.1:${port}`;
 		});
 
@@ -223,7 +223,7 @@ describe('TileServer', () => {
 			await server.stop();
 			await server.start();
 
-			const port = await server.port;
+			const port = server.port;
 			baseUrl = `http://127.0.0.1:${port}`;
 		});
 
@@ -257,7 +257,7 @@ describe('TileServer', () => {
 			await server.stop();
 			await server.start();
 
-			const port = await server.port;
+			const port = server.port;
 			baseUrl = `http://127.0.0.1:${port}`;
 		});
 
@@ -280,9 +280,9 @@ describe('TileServer', () => {
 	});
 
 	describe('port getter', () => {
-		it('should return 0 before server starts', async () => {
+		it('should return 0 before server starts', () => {
 			const server: TileServer = new TileServer({ port: 0 });
-			const port = await server.port;
+			const port = server.port;
 			expect(port).toBe(0);
 		});
 
@@ -291,7 +291,7 @@ describe('TileServer', () => {
 			await server.start();
 			await server.addTileSourceFromPath('berlin', MBTILES_PATH);
 
-			const port = await server.port;
+			const port = server.port;
 			expect(port).toBeGreaterThan(0);
 			expect(port).toBeLessThan(65536);
 
@@ -306,7 +306,7 @@ describe('TileServer', () => {
 		beforeAll(async () => {
 			server = new TileServer({ port: 0 });
 			await server.start();
-			const port = await server.port;
+			const port = server.port;
 			baseUrl = `http://127.0.0.1:${port}`;
 		});
 
@@ -375,7 +375,7 @@ describe('TileServer', () => {
 			await server.stop();
 			await server.start();
 
-			const port = await server.port;
+			const port = server.port;
 			baseUrl = `http://127.0.0.1:${port}`;
 
 			// Source should still be available after restart
@@ -394,7 +394,7 @@ describe('TileServer', () => {
 		beforeAll(async () => {
 			server = new TileServer({ port: 0 });
 			await server.start();
-			const port = await server.port;
+			const port = server.port;
 			baseUrl = `http://127.0.0.1:${port}`;
 		});
 
@@ -403,13 +403,13 @@ describe('TileServer', () => {
 		});
 
 		it('should hot-reload static source addition without restart', async () => {
-			const initialPort = await server.port;
+			const initialPort = server.port;
 
 			// Add static source while running
 			await server.addStaticSource(TESTDATA_DIR, '/files');
 
 			// Verify server still running (no restart) by checking port
-			const currentPort = await server.port;
+			const currentPort = server.port;
 			expect(currentPort).toBe(initialPort);
 
 			// Verify files are immediately accessible
@@ -426,14 +426,14 @@ describe('TileServer', () => {
 		});
 
 		it('should hot-reload static source removal without restart', async () => {
-			const initialPort = await server.port;
+			const initialPort = server.port;
 
 			// Remove while running
 			const removed = await server.removeStaticSource('/files');
 			expect(removed).toBe(true);
 
 			// Verify server still running (no restart)
-			const currentPort = await server.port;
+			const currentPort = server.port;
 			expect(currentPort).toBe(initialPort);
 
 			// Source should be immediately unavailable

@@ -28,7 +28,7 @@ log.title('VersaTiles Server Example');
 
 	// Start the server
 	await server.start();
-	const port = await server.port;
+	const port = server.port;
 
 	log.success('Server started successfully!');
 	console.log();
@@ -54,7 +54,7 @@ log.title('VersaTiles Server Example');
 	// await server.addTileSourceFromPath('terrain', './terrain.versatiles');
 
 	await server.start();
-	const port = await server.port;
+	const port = server.port;
 
 	log.success(`Multi-source server started on port ${port}`);
 	log.text('\nAvailable sources:');
@@ -80,7 +80,7 @@ log.title('VersaTiles Server Example');
 	// await server.addStaticSource('./static.tar', '/');
 
 	await server.start();
-	const port = await server.port;
+	const port = server.port;
 
 	log.success(`Server with static files started on port ${port}`);
 	log.text('\nURLs:');
@@ -98,7 +98,7 @@ log.title('VersaTiles Server Example');
 
 	const server = new TileServer({ port: 8080 });
 	await server.start();
-	const port = await server.port;
+	const port = server.port;
 
 	log.success(`Empty server started on port ${port}`);
 

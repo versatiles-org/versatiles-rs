@@ -21,7 +21,7 @@
 use crate::{napi_result, runtime::create_runtime, tile_source::TileSource, types::ServerOptions};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use tokio::sync::Mutex;
 use versatiles::{config::Config, server::TileServer as RustTileServer};
 use versatiles_container::{DataLocation, TileSource as RustTileSource, TilesRuntime};
@@ -58,7 +58,7 @@ type StaticSourceList = Mutex<Vec<(String, Option<String>)>>; // Vec of (path, u
 ///
 /// // Start the server
 /// await server.start();
-/// console.log(`Server running on port ${await server.port}`);
+/// console.log(`Server running on port ${server.port}`);
 ///
 /// // Hot reload: add more sources while running
 /// await server.addTileSource('satellite', 'tiles/satellite.pmtiles');
@@ -71,6 +71,7 @@ pub struct TileServer {
 	inner: Mutex<Option<RustTileServer>>,
 	runtime: TilesRuntime,
 	port: u16,
+	actual_port: Arc<RwLock<Option<u16>>>, // Cached actual bound port for sync access
 	ip: String,
 	minimal_recompression: Option<bool>,
 	// Track accumulated sources to rebuild config on start
@@ -125,6 +126,7 @@ impl TileServer {
 			inner: Mutex::new(None),
 			runtime,
 			port,
+			actual_port: Arc::new(RwLock::new(None)),
 			ip,
 			minimal_recompression,
 			tile_sources: Mutex::new(Vec::new()),
@@ -308,12 +310,9 @@ impl TileServer {
 			napi_result!(server.add_tile_source(name.clone(), tile_source.clone()).await)?;
 		}
 
-		// Update the actual port if we used 0 (ephemeral)
-		let actual_port = server.get_url_mapping().await;
-		if !actual_port.is_empty() {
-			// For now, we'll keep the port as configured
-			// A better implementation would extract the actual port from the server
-		}
+		// Cache the actual bound port for synchronous access
+		let bound_port = server.get_port();
+		*self.actual_port.write().unwrap() = Some(bound_port);
 
 		*server_lock = Some(server);
 
@@ -347,42 +346,39 @@ impl TileServer {
 			server.stop().await;
 		}
 
+		// Clear cached port when server stops
+		*self.actual_port.write().unwrap() = None;
+
 		Ok(())
 	}
 
-	/// Get the port the server is listening on
+	/// Get the server port
 	///
-	/// Returns the port number the server is configured to use or is currently
-	/// listening on. If the server was configured with port 0 (ephemeral port),
-	/// this will return the actual port assigned by the operating system after
-	/// the server has started.
+	/// Returns the actual bound port if the server is running, or the configured
+	/// port if the server hasn't been started yet.
+	///
+	/// For ephemeral ports (configured as 0), this will return the OS-assigned
+	/// port after `start()` is called.
 	///
 	/// # Returns
 	///
-	/// The port number (1-65535)
+	/// The port number as a 32-bit unsigned integer.
 	///
 	/// # Examples
 	///
 	/// ```javascript
-	/// const server = new TileServer({ port: 8080 });
-	/// console.log(`Configured port: ${await server.port}`); // 8080
-	///
+	/// const server = new TileServer({ port: 0 }); // Ephemeral port
+	/// console.log(server.port); // 0 (before starting)
 	/// await server.start();
-	/// console.log(`Server listening on port: ${await server.port}`); // 8080
+	/// console.log(server.port); // 54321 (actual assigned port, no await needed!)
 	/// ```
 	#[napi(getter)]
-	pub async fn port(&self) -> u32 {
-		let server_lock = self.inner.lock().await;
-
-		// If server is running, try to get the actual bound port from it
-		if let Some(server) = &*server_lock {
-			// The RustTileServer struct has a private port field, but we can access it
-			// by trying to get the URL mapping and parsing, or we just return the configured port
-			// after it's been updated by the start() method.
-			// For now, return the configured port which should be updated after binding
-			server.get_port() as u32
+	pub fn port(&self) -> u32 {
+		// Try to read cached actual port first (when server is running)
+		if let Some(actual) = *self.actual_port.read().unwrap() {
+			actual as u32
 		} else {
-			// If server isn't running, return the configured port
+			// Fallback to configured port (before server starts)
 			self.port as u32
 		}
 	}
@@ -408,10 +404,8 @@ mod tests {
 		};
 		let server = TileServer::new(Some(options)).unwrap();
 
-		// Verify custom port was set
-		let rt = tokio::runtime::Runtime::new().unwrap();
-		let port = rt.block_on(server.port());
-		assert_eq!(port, 3000);
+		// Verify custom port was set (now synchronous)
+		assert_eq!(server.port(), 3000);
 	}
 
 	#[test]
@@ -449,16 +443,14 @@ mod tests {
 		};
 		let server = TileServer::new(Some(options)).unwrap();
 
-		let rt = tokio::runtime::Runtime::new().unwrap();
-		let port = rt.block_on(server.port());
-
-		assert_eq!(port, 9999);
+		// Port is now synchronous
+		assert_eq!(server.port(), 9999);
 		assert_eq!(server.ip, "0.0.0.0");
 		assert_eq!(server.minimal_recompression, Some(false));
 	}
 
-	#[tokio::test]
-	async fn test_port_getter_before_start() {
+	#[test]
+	fn test_port_getter_before_start() {
 		let options = ServerOptions {
 			ip: None,
 			port: Some(8080),
@@ -466,9 +458,47 @@ mod tests {
 		};
 		let server = TileServer::new(Some(options)).unwrap();
 
-		// Port should return configured value even before server starts
-		let port = server.port().await;
-		assert_eq!(port, 8080);
+		// Port should return configured value even before server starts (synchronous)
+		assert_eq!(server.port(), 8080);
+	}
+
+	#[test]
+	fn test_port_getter_ephemeral_before_start() {
+		let options = ServerOptions {
+			ip: None,
+			port: Some(0), // Ephemeral port
+			minimal_recompression: None,
+		};
+		let server = TileServer::new(Some(options)).unwrap();
+
+		// Before start, ephemeral port should return 0
+		assert_eq!(server.port(), 0);
+	}
+
+	#[tokio::test]
+	async fn test_port_getter_ephemeral_after_start() {
+		let options = ServerOptions {
+			ip: None,
+			port: Some(0), // Ephemeral port
+			minimal_recompression: None,
+		};
+		let server = TileServer::new(Some(options)).unwrap();
+
+		// Before start
+		assert_eq!(server.port(), 0);
+
+		// Start server
+		server.start().await.unwrap();
+
+		// After start, should return actual assigned port
+		let actual_port = server.port();
+		assert!(actual_port > 0, "Ephemeral port should be assigned");
+
+		// Stop server
+		server.stop().await.unwrap();
+
+		// After stop, should return configured port (0)
+		assert_eq!(server.port(), 0);
 	}
 
 	#[tokio::test]
