@@ -70,7 +70,7 @@ type StaticSourceList = Mutex<Vec<(String, Option<String>)>>; // Vec of (path, u
 pub struct TileServer {
 	inner: Mutex<Option<RustTileServer>>,
 	runtime: TilesRuntime,
-	port: u16,
+	initial_port: u16,
 	actual_port: Arc<RwLock<Option<u16>>>, // Cached actual bound port for sync access
 	ip: String,
 	minimal_recompression: Option<bool>,
@@ -119,13 +119,13 @@ impl TileServer {
 
 		let runtime = create_runtime();
 		let ip = opts.ip.unwrap_or_else(|| "0.0.0.0".to_string());
-		let port = opts.port.unwrap_or(8080) as u16;
+		let initial_port = opts.port.unwrap_or(8080) as u16;
 		let minimal_recompression = opts.minimal_recompression;
 
 		Ok(Self {
 			inner: Mutex::new(None),
 			runtime,
-			port,
+			initial_port,
 			actual_port: Arc::new(RwLock::new(None)),
 			ip,
 			minimal_recompression,
@@ -285,7 +285,7 @@ impl TileServer {
 		// Build config with all accumulated sources
 		let mut config = Config::default();
 
-		config.server.port = Some(self.port);
+		config.server.port = Some(self.initial_port);
 		config.server.ip = Some(self.ip.clone());
 		config.server.minimal_recompression = self.minimal_recompression;
 
@@ -379,7 +379,7 @@ impl TileServer {
 			actual as u32
 		} else {
 			// Fallback to configured port (before server starts)
-			self.port as u32
+			self.initial_port as u32
 		}
 	}
 }
