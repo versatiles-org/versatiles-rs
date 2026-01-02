@@ -74,7 +74,6 @@ RUN mkdir -p /output/cli /output/node && \
 # Verify build outputs
 RUN echo "=== Build Output Verification ===" && \
     ls -lh /output/cli/versatiles /output/node/libversatiles_node.so && \
-    file /output/cli/versatiles /output/node/libversatiles_node.so && \
     # Verify files are non-empty (detect truncated builds)
     [ -s /output/cli/versatiles ] && \
     [ -s /output/node/libversatiles_node.so ] && \
