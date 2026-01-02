@@ -13,8 +13,7 @@
   "files": [
     "index.d.ts",
     "index.js",
-    "index.cjs",
-    "versatiles.*.node"
+    "index.cjs"
   ],
   "napi": {
     "binaryName": "versatiles",
