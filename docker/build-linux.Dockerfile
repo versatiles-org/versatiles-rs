@@ -3,8 +3,9 @@ ARG LIBC
 
 # CREATE BUILDER SYSTEM FOR MUSL
 FROM rust:alpine AS builder_musl
-# Enable static linking
-ENV RUSTFLAGS="-C target-feature=+crt-static"
+# NOTE: We use +crt-static for CLI binaries (fully static)
+# but -crt-static for cdylib (Node.js bindings) to enable dynamic linking
+# The RUSTFLAGS will be overridden per-build below
 # Install necessary packages
 RUN apk add --no-cache bash musl-dev
 
@@ -35,20 +36,29 @@ COPY . .
 
 # Run tests, build the project, and run self-tests
 RUN cargo test --target "$TARGET"
-RUN cargo build --package "versatiles" --bin "versatiles" --release --target "$TARGET"
+# Build CLI with static linking for musl (fully static binary)
+RUN if [ "$LIBC" = "musl" ]; then \
+        RUSTFLAGS="-C target-feature=+crt-static" \
+        cargo build --package "versatiles" --bin "versatiles" --release --target "$TARGET"; \
+    else \
+        cargo build --package "versatiles" --bin "versatiles" --release --target "$TARGET"; \
+    fi
 RUN ./scripts/selftest-versatiles.sh "/versatiles/target/$TARGET/release/versatiles"
 
-# Build NAPI binding for Node.js (only for GNU, musl doesn't support cdylib)
-RUN if [ "$LIBC" = "gnu" ]; then \
-    cargo build --package "versatiles_node" --release --target "$TARGET"; \
-fi
+# Build NAPI binding for Node.js
+# For musl: use dynamic linking to enable cdylib (-C target-feature=-crt-static)
+# For gnu: use default flags
+RUN if [ "$LIBC" = "musl" ]; then \
+        RUSTFLAGS="-C target-feature=-crt-static" \
+        cargo build --package "versatiles_node" --release --target "$TARGET"; \
+    else \
+        cargo build --package "versatiles_node" --release --target "$TARGET"; \
+    fi
 
 # Prepare output directory
 RUN mkdir -p /output/cli /output/node && \
     cp "/versatiles/target/$TARGET/release/versatiles" /output/cli/ && \
-    if [ "$LIBC" = "gnu" ]; then \
-        cp "/versatiles/target/$TARGET/release/libversatiles_node.so" /output/node/; \
-    fi
+    cp "/versatiles/target/$TARGET/release/libversatiles_node.so" /output/node/
 
 # Build .deb package if using GNU
 RUN if [ "$LIBC" = "gnu" ]; then \

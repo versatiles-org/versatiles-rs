@@ -147,7 +147,7 @@ jobs:
         run: ./scripts/workflow-pack-upload.sh "output" "linux-${{ matrix.libc }}-aarch64" "${{ needs.prepare.outputs.tag }}"
 
       - name: Upload NAPI binding as artifact
-        if: env.BUILD_ENABLED == 'true' && matrix.libc == 'gnu'
+        if: env.BUILD_ENABLED == 'true'
         uses: actions/upload-artifact@v6
         with:
           name: node-binding-linux-${{ matrix.libc }}-aarch64
@@ -205,7 +205,7 @@ jobs:
         run: ./scripts/workflow-pack-upload.sh "output" "linux-${{ matrix.libc }}-x86_64" "${{ needs.prepare.outputs.tag }}"
 
       - name: Upload NAPI binding as artifact
-        if: env.BUILD_ENABLED == 'true' && matrix.libc == 'gnu'
+        if: env.BUILD_ENABLED == 'true'
         uses: actions/upload-artifact@v6
         with:
           name: node-binding-linux-${{ matrix.libc }}-x86_64
@@ -398,11 +398,11 @@ jobs:
 
           # Linux x64
           rename_binary "artifacts/node-binding-linux-gnu-x86_64/libversatiles_node.so" "versatiles.linux-x64-gnu.node"
-          # Note: musl doesn't support cdylib, so no musl Node.js binding
+          rename_binary "artifacts/node-binding-linux-musl-x86_64/libversatiles_node.so" "versatiles.linux-x64-musl.node"
 
           # Linux ARM64
           rename_binary "artifacts/node-binding-linux-gnu-aarch64/libversatiles_node.so" "versatiles.linux-arm64-gnu.node"
-          # Note: musl doesn't support cdylib, so no musl Node.js binding
+          rename_binary "artifacts/node-binding-linux-musl-aarch64/libversatiles_node.so" "versatiles.linux-arm64-musl.node"
 
           # macOS
           rename_binary "artifacts/node-binding-macos-x86_64/libversatiles_node.dylib" "versatiles.darwin-x64.node"
@@ -423,7 +423,7 @@ jobs:
           npx napi create-npm-dirs
 
           # Copy .node files to their platform directories and pack them
-          for platform in darwin-arm64 darwin-x64 linux-arm64-gnu linux-x64-gnu win32-arm64-msvc win32-x64-msvc; do
+          for platform in darwin-arm64 darwin-x64 linux-arm64-gnu linux-arm64-musl linux-x64-gnu linux-x64-musl win32-arm64-msvc win32-x64-msvc; do
             if [ -f "versatiles.$platform.node" ]; then
               cp "versatiles.$platform.node" "npm/$platform/"
               (cd "npm/$platform" && npm pack)
