@@ -139,11 +139,11 @@ impl TileServer {
 	/// The tiles will be served at /tiles/{name}/...
 	///
 	/// This method supports all types of TileSources:
-	/// - File-based sources (MBTiles, PMTiles, VersaTiles, TAR, directories) - support hot reload and server restart
-	/// - VPL pipeline sources (e.g., filtered or transformed tiles) - must be added before server starts
+	/// - File-based sources (MBTiles, PMTiles, VersaTiles, TAR, directories)
+	/// - VPL pipeline sources (e.g., filtered or transformed tiles)
 	///
-	/// File-based sources can be added before or after starting the server (hot reload).
-	/// VPL sources must be added before calling start() and will be consumed when the server starts.
+	/// All sources support hot reload and can be added before or after starting the server.
+	/// Changes take effect immediately without requiring a server restart.
 	#[napi]
 	pub async fn add_tile_source(&self, name: String, source: &TileSource) -> Result<()> {
 		let reader = source.reader();
@@ -1015,6 +1015,36 @@ mod tests {
 			let server_lock = server.inner.lock().await;
 			assert!(server_lock.is_some());
 		}
+
+		// Clean up
+		server.stop().await.unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_vpl_hot_reload() {
+		// Test that VPL sources can be added after server starts (hot reload)
+		let server = TileServer::new(Some(ServerOptions {
+			ip: Some("127.0.0.1".to_string()),
+			port: Some(0),
+			minimal_recompression: None,
+		}))
+		.unwrap();
+
+		// Start server first
+		server.start().await.unwrap();
+
+		// Now add a VPL source after server has started (hot reload)
+		let vpl = r#"from_container filename="berlin.mbtiles" | filter level_min=5 level_max=10"#;
+		let tile_source = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
+			.await
+			.unwrap();
+
+		// This should succeed - VPL sources now support hot reload
+		let result = server
+			.add_tile_source("berlin_filtered".to_string(), &tile_source)
+			.await;
+
+		assert!(result.is_ok(), "VPL hot-reload should succeed");
 
 		// Clean up
 		server.stop().await.unwrap();

@@ -155,8 +155,8 @@ impl TileSource {
 	///
 	/// # Note
 	///
-	/// VPL sources cannot be converted using `convertTo()` since they may represent
-	/// complex pipelines. To convert VPL output, use the `convert()` function instead.
+	/// VPL sources can be converted using `convertTo()` just like any other tile source.
+	/// The conversion will process the pipeline and write the output tiles to the target format.
 	#[napi(factory)]
 	pub async fn from_vpl(vpl: String, dir: Option<String>) -> Result<Self> {
 		let runtime = create_runtime();
