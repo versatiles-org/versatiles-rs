@@ -321,10 +321,14 @@ impl TileSource {
 		let coord = napi_result!(RustTileCoord::new(z as u8, x, y))?;
 		let tile_opt = napi_result!(self.reader.get_tile(&coord).await)?;
 
-		Ok(tile_opt.map(|mut tile| {
-			let blob = tile.as_blob(versatiles_core::TileCompression::Uncompressed).unwrap();
-			Buffer::from(blob.as_slice())
-		}))
+		Ok(tile_opt
+			.map(|mut tile| {
+				tile
+					.as_blob(versatiles_core::TileCompression::Uncompressed)
+					.map(|blob| Buffer::from(blob.as_slice()))
+			})
+			.transpose()
+			.map_err(|e| Error::from_reason(format!("Failed to decompress tile: {}", e)))?)
 	}
 
 	/// Get TileJSON metadata as a JSON string
