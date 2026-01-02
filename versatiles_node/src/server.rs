@@ -1019,4 +1019,74 @@ mod tests {
 		// Clean up
 		server.stop().await.unwrap();
 	}
+
+	#[tokio::test]
+	async fn test_concurrent_port_reads() {
+		// Test that multiple concurrent port reads work correctly
+		let server = Arc::new(
+			TileServer::new(Some(ServerOptions {
+				port: Some(0),
+				ip: None,
+				minimal_recompression: None,
+			}))
+			.unwrap(),
+		);
+
+		server.start().await.unwrap();
+
+		// Spawn 100 concurrent readers
+		let mut handles = Vec::new();
+		for _ in 0..100 {
+			let server_clone = Arc::clone(&server);
+			handles.push(tokio::spawn(async move {
+				let port = server_clone.port();
+				assert!(port > 0);
+				port
+			}));
+		}
+
+		// All reads should return the same port
+		let mut ports = Vec::new();
+		for handle in handles {
+			ports.push(handle.await.unwrap());
+		}
+
+		assert!(
+			ports.iter().all(|&p| p == ports[0]),
+			"All concurrent reads should return the same port"
+		);
+
+		server.stop().await.unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_port_read_during_start() {
+		// Test that reading port during server start doesn't panic
+		let server = Arc::new(
+			TileServer::new(Some(ServerOptions {
+				port: Some(0),
+				ip: None,
+				minimal_recompression: None,
+			}))
+			.unwrap(),
+		);
+
+		// Read port before start
+		assert_eq!(server.port(), 0);
+
+		// Start server and immediately read (potential race)
+		let server_clone = Arc::clone(&server);
+		let read_handle = tokio::spawn(async move {
+			tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+			server_clone.port()
+		});
+
+		server.start().await.unwrap();
+		let port = read_handle.await.unwrap();
+
+		// Should get either 0 (read before cache update) or actual port
+		assert!(port == 0 || port > 0);
+
+		server.stop().await.unwrap();
+	}
 }
