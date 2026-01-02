@@ -3,6 +3,27 @@ use napi_derive::napi;
 /// Configuration options for the tile server
 ///
 /// All fields are optional and will use sensible defaults if not specified.
+///
+/// # Examples
+///
+/// ```javascript
+/// // Use all defaults (0.0.0.0:8080)
+/// const server1 = new TileServer();
+///
+/// // Custom port
+/// const server2 = new TileServer({ port: 3000 });
+///
+/// // Ephemeral port (automatically assigned)
+/// const server3 = new TileServer({ port: 0 });
+/// await server3.start();
+/// console.log(`Listening on port ${server3.port}`);
+///
+/// // Localhost only
+/// const server4 = new TileServer({ ip: '127.0.0.1' });
+///
+/// // Performance mode
+/// const server5 = new TileServer({ minimalRecompression: true });
+/// ```
 #[napi(object)]
 pub struct ServerOptions {
 	/// IP address or hostname to bind to
@@ -24,6 +45,19 @@ pub struct ServerOptions {
 	/// - Use `0` to let the OS assign an available port automatically (ephemeral port)
 	/// - Ports below 1024 typically require administrator/root privileges
 	/// - Common choices: 8080, 3000, 8000
+	///
+	/// **Ephemeral Ports:** Setting port to `0` enables automatic port assignment.
+	/// After calling `start()`, use `server.port` to get the actual assigned port.
+	/// This is particularly useful for testing and when running multiple server instances.
+	///
+	/// # Examples
+	///
+	/// ```javascript
+	/// // Ephemeral port example
+	/// const server = new TileServer({ port: 0 });
+	/// await server.start();
+	/// console.log(`Server listening on port ${server.port}`); // e.g., 54321
+	/// ```
 	///
 	/// **Default:** `8080`
 	pub port: Option<u32>,
