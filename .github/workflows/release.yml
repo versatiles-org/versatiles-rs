@@ -136,8 +136,8 @@ jobs:
             --build-arg="LIBC=${{ matrix.libc }}" \
             --build-arg="RUN_TESTS=false" \
             --progress="plain" \
-            --cache-from=type=gha \
-            --cache-to=type=gha,mode=max \
+            --cache-from=type=gha,scope=${{ matrix.libc }}-aarch64 \
+            --cache-to=type=gha,mode=max,scope=${{ matrix.libc }}-aarch64 \
             --output="type=local,dest=output/" \
             .
 
@@ -195,8 +195,8 @@ jobs:
             --build-arg="LIBC=${{ matrix.libc }}" \
             --build-arg="RUN_TESTS=false" \
             --progress="plain" \
-            --cache-from=type=gha \
-            --cache-to=type=gha,mode=max \
+            --cache-from=type=gha,scope=${{ matrix.libc }}-x86_64 \
+            --cache-to=type=gha,mode=max,scope=${{ matrix.libc }}-x86_64 \
             --output="type=local,dest=output/" \
             .
 
