@@ -17,6 +17,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update -y && apt install -y bash && rm -rf /var/lib/apt/lists/*
 
 # SELECT BUILDER BASED ON LIBC
+# NOTE: BuildKit warns about ${LIBC} interpolation below - this is expected.
+# The LIBC arg is always provided at build time by CI/release workflows.
+# The warning is harmless and can be ignored.
 FROM builder_${LIBC} AS builder
 
 # Set up build arguments
@@ -67,6 +70,15 @@ RUN if [ "$LIBC" = "musl" ]; then \
 RUN mkdir -p /output/cli /output/node && \
     cp "/versatiles/target/$TARGET/release/versatiles" /output/cli/ && \
     cp "/versatiles/target/$TARGET/release/libversatiles_node.so" /output/node/
+
+# Verify build outputs
+RUN echo "=== Build Output Verification ===" && \
+    ls -lh /output/cli/versatiles /output/node/libversatiles_node.so && \
+    file /output/cli/versatiles /output/node/libversatiles_node.so && \
+    # Verify files are non-empty (detect truncated builds)
+    [ -s /output/cli/versatiles ] && \
+    [ -s /output/node/libversatiles_node.so ] && \
+    echo "✓ Output verification passed"
 
 # Build .deb package if using GNU
 RUN if [ "$LIBC" = "gnu" ]; then \
