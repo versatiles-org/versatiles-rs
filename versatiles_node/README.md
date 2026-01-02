@@ -50,7 +50,7 @@ const server = new TileServer({ port: 8080 });
 await server.addTileSourceFromPath('osm', 'tiles.mbtiles');
 await server.start();
 
-console.log(`Server running at http://localhost:${await server.port}`);
+console.log(`Server running at http://localhost:${server.port}`);
 ```
 
 ### Read Tiles
@@ -299,7 +299,7 @@ Stop the HTTP server.
 
 Get server port (getter).
 
-**Returns:** `Promise<number>`
+**Returns:** `number`
 
 ### `class TileCoord`
 
