@@ -22,6 +22,7 @@ FROM builder_${LIBC} AS builder
 # Set up build arguments
 ARG ARCH
 ARG LIBC
+ARG RUN_TESTS=true
 
 # Set the target architecture
 ENV TARGET="${ARCH}-unknown-linux-${LIBC}"
@@ -35,7 +36,14 @@ WORKDIR /versatiles
 COPY . .
 
 # Run tests, build the project, and run self-tests
-RUN cargo test --target "$TARGET"
+# Note: Tests can be skipped for cross-compilation builds to avoid OOM
+# Set RUN_TESTS=false to skip (native platform tests run separately in CI)
+RUN if [ "$RUN_TESTS" = "true" ]; then \
+        echo "Running tests for $TARGET..."; \
+        cargo test --target "$TARGET"; \
+    else \
+        echo "Skipping tests (RUN_TESTS=false)"; \
+    fi
 # Build CLI with static linking for musl (fully static binary)
 RUN if [ "$LIBC" = "musl" ]; then \
         RUSTFLAGS="-C target-feature=+crt-static" \
