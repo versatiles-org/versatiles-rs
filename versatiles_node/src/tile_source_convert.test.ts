@@ -81,10 +81,14 @@ describe('TileSource.convertTo()', () => {
 		expect(validTypes).toBeTruthy();
 	});
 
-	it('should fail to convert VPL sources', async () => {
+	it('should convert VPL sources successfully', async () => {
 		const vpl = 'from_container filename="berlin.mbtiles" | filter level_min=5 level_max=10';
 		const source = await TileSource.fromVpl(vpl, TESTDATA_DIR);
 
-		await expect(source.convertTo(outputPath)).rejects.toThrow(/VPL/);
+		await source.convertTo(outputPath);
+
+		expect(fs.existsSync(outputPath)).toBeTruthy();
+		const stats = fs.statSync(outputPath);
+		expect(stats.size).toBeGreaterThan(0);
 	});
 });

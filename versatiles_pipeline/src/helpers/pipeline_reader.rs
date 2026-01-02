@@ -70,7 +70,11 @@ impl<'a> PipelineReader {
 			let runtime2 = runtime.clone();
 			let callback = Box::new(move |filename: String| -> BoxFuture<Result<Box<dyn TileSource>>> {
 				let runtime = runtime2.clone();
-				Box::pin(async move { runtime.clone().get_reader_from_str(&filename).await })
+				Box::pin(async move {
+					let arc_reader = runtime.clone().get_reader_from_str(&filename).await?;
+					Arc::try_unwrap(arc_reader)
+						.map_err(|_| anyhow::anyhow!("Cannot get exclusive access to reader for pipeline"))
+				})
 			});
 			let factory = PipelineFactory::new_default(dir, callback, runtime);
 			let operation: Box<dyn TileSource> = factory.operation_from_vpl(vpl).await?;

@@ -98,7 +98,7 @@ impl Default for TilesConverterParameters {
 /// See the module-level example.
 #[context("Converting tiles from reader to file")]
 pub async fn convert_tiles_container(
-	reader: Box<dyn TileSource>,
+	reader: Arc<Box<dyn TileSource>>,
 	cp: TilesConverterParameters,
 	path: &Path,
 	runtime: TilesRuntime,
@@ -106,7 +106,7 @@ pub async fn convert_tiles_container(
 	runtime.events().step("Starting conversion".to_string());
 
 	let converter = TilesConvertReader::new_from_reader(reader, cp)?;
-	runtime.write_to_path(Box::new(converter), path).await?;
+	runtime.write_to_path(Arc::new(Box::new(converter)), path).await?;
 
 	runtime.events().step("Conversion complete".to_string());
 	Ok(())
@@ -120,7 +120,7 @@ pub async fn convert_tiles_container(
 /// existing reader.
 #[derive(Debug)]
 pub struct TilesConvertReader {
-	reader: Box<dyn TileSource>,
+	reader: Arc<Box<dyn TileSource>>,
 	converter_parameters: TilesConverterParameters,
 	reader_metadata: TileSourceMetadata,
 	tilejson: TileJSON,
@@ -135,7 +135,10 @@ impl TilesConvertReader {
 	/// ### Errors
 	/// Propagates errors from querying/deriving parameters or updating metadata.
 	#[context("Creating converter reader from existing reader")]
-	pub fn new_from_reader(reader: Box<dyn TileSource>, cp: TilesConverterParameters) -> Result<TilesConvertReader> {
+	pub fn new_from_reader(
+		reader: Arc<Box<dyn TileSource>>,
+		cp: TilesConverterParameters,
+	) -> Result<TilesConvertReader> {
 		let rp: TileSourceMetadata = reader.metadata().to_owned();
 		let mut new_rp: TileSourceMetadata = rp.clone();
 
@@ -250,10 +253,10 @@ mod tests {
 		TileFormat::{self, *},
 	};
 
-	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> MockReader {
+	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> Arc<Box<dyn TileSource>> {
 		let bbox_pyramid = TileBBoxPyramid::new_full(4);
 		let reader_metadata = TileSourceMetadata::new(tf, tc, bbox_pyramid, Traversal::ANY);
-		MockReader::new_mock(reader_metadata).unwrap()
+		Arc::new(MockReader::new_mock(reader_metadata).unwrap().boxed())
 	}
 
 	#[tokio::test]
@@ -269,7 +272,7 @@ mod tests {
 			let pyramid_out = new_bbox(bbox_out);
 
 			let reader_metadata = TileSourceMetadata::new(JSON, Uncompressed, pyramid_in, Traversal::ANY);
-			let reader = MockReader::new_mock(reader_metadata)?;
+			let reader = Arc::new(MockReader::new_mock(reader_metadata)?.boxed());
 
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let runtime = TilesRuntime::default();
@@ -280,7 +283,7 @@ mod tests {
 				swap_xy,
 				tile_compression: None,
 			};
-			convert_tiles_container(reader.boxed(), cp, &temp_file, runtime.clone()).await?;
+			convert_tiles_container(reader, cp, &temp_file, runtime.clone()).await?;
 
 			let reader_out = VersaTilesReader::open_path(&temp_file, runtime).await?;
 			let parameters_out = reader_out.metadata();
@@ -345,7 +348,7 @@ mod tests {
 		let reader = get_mock_reader(MVT, Uncompressed);
 		let cp = TilesConverterParameters::default();
 
-		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
+		let tcr = TilesConvertReader::new_from_reader(reader, cp).unwrap();
 
 		assert_eq!(tcr.reader.source_type().to_string(), "container 'dummy' ('dummy')");
 		assert_eq!(tcr.source_type().to_string(), "processor 'TilesConvertReader'");
@@ -355,7 +358,7 @@ mod tests {
 	async fn test_get_tile() -> Result<()> {
 		let reader = get_mock_reader(MVT, Uncompressed);
 		let cp = TilesConverterParameters::default();
-		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp)?;
+		let tcr = TilesConvertReader::new_from_reader(reader, cp)?;
 
 		let coord = TileCoord::new(0, 0, 0)?;
 		let data = tcr.get_tile(&coord).await?;
@@ -372,7 +375,7 @@ mod tests {
 			swap_xy: true,
 			..Default::default()
 		};
-		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp)?;
+		let tcr = TilesConvertReader::new_from_reader(reader, cp)?;
 
 		let mut coord = TileCoord::new(4, 5, 6)?;
 		let data = tcr.get_tile(&coord).await?;

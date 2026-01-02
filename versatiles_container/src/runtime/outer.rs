@@ -93,15 +93,15 @@ impl TilesRuntime {
 		self.inner.max_memory
 	}
 
-	pub async fn write_to_path(&self, reader: Box<dyn TileSource>, path: &Path) -> Result<()> {
+	pub async fn write_to_path(&self, reader: Arc<Box<dyn TileSource>>, path: &Path) -> Result<()> {
 		self.inner.registry.write_to_path(reader, path, self.clone()).await
 	}
 
-	pub async fn get_reader_from_str(&self, filename: &str) -> Result<Box<dyn TileSource>> {
+	pub async fn get_reader_from_str(&self, filename: &str) -> Result<Arc<Box<dyn TileSource>>> {
 		self.inner.registry.get_reader_from_str(filename, self.clone()).await
 	}
 
-	pub async fn get_reader(&self, data_source: DataSource) -> Result<Box<dyn TileSource>> {
+	pub async fn get_reader(&self, data_source: DataSource) -> Result<Arc<Box<dyn TileSource>>> {
 		self.inner.registry.get_reader(data_source, self.clone()).await
 	}
 }

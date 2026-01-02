@@ -153,7 +153,7 @@ impl TileServer {
 
 		let reader = self.runtime.get_reader(tile_config.src.clone()).await?;
 
-		self.add_tile_source(name, Arc::new(reader)).await
+		self.add_tile_source(name, reader).await
 	}
 
 	/// Add a tile source dynamically while server is running.

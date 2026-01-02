@@ -186,6 +186,7 @@ mod tests {
 	use super::*;
 	use assert_fs::NamedTempFile;
 	use rstest::rstest;
+	use std::sync::Arc;
 	use versatiles_container::{
 		MockReader, MockReaderProfile, TileSource, TilesConverterParameters, TilesRuntime, convert_tiles_container,
 	};
@@ -193,7 +194,7 @@ mod tests {
 
 	pub async fn make_test_tar(compression: TileCompression) -> NamedTempFile {
 		// get dummy reader
-		let reader = MockReader::new_mock_profile(MockReaderProfile::Pbf).unwrap();
+		let reader = Arc::new(MockReader::new_mock_profile(MockReaderProfile::Pbf).unwrap().boxed());
 
 		// get to test container converter
 		let container_file = NamedTempFile::new("temp.tar").unwrap();
@@ -205,7 +206,7 @@ mod tests {
 		};
 		let runtime = TilesRuntime::default();
 
-		convert_tiles_container(reader.boxed(), parameters, &container_file, runtime)
+		convert_tiles_container(reader, parameters, &container_file, runtime)
 			.await
 			.unwrap();
 

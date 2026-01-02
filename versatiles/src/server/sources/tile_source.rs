@@ -206,7 +206,7 @@ mod tests {
 
 		let runtime = create_test_runtime();
 		let reader = runtime.get_reader_from_str(filename).await?;
-		let c = &mut ServerTileSource::from(Arc::new(reader), "prefix")?;
+		let c = &mut ServerTileSource::from(reader, "prefix")?;
 
 		assert_eq!(
 			&check_response(c, coord, Uncompressed, exp_mime).await?[0..4],

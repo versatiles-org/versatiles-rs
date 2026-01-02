@@ -14,6 +14,7 @@
 //! ```rust
 //! use versatiles_container::*;
 //! use versatiles_core::*;
+//! use std::sync::Arc;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
@@ -26,7 +27,7 @@
 //!         bbox_pyramid: Some(TileBBoxPyramid::new_full(8)),
 //!         ..Default::default()
 //!     };
-//!     let reader = Box::new(TilesConvertReader::new_from_reader(reader, params)?);
+//!     let reader = Arc::new(Box::new(TilesConvertReader::new_from_reader(reader, params)?) as Box<dyn TileSource>);
 //!
 //!     // Write to a target path; format is inferred from the extension
 //!     let output = std::env::temp_dir().join("example.versatiles");

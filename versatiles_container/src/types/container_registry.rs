@@ -44,11 +44,11 @@ use versatiles_core::{TileCompression, TileFormat};
 use versatiles_derive::context;
 
 /// Signature for async opener functions used by the registry.
-type ReadFuture = Pin<Box<dyn Future<Output = Result<Box<dyn TileSource>>> + Send>>;
+type ReadFuture = Pin<Box<dyn Future<Output = Result<Arc<Box<dyn TileSource>>>> + Send>>;
 type ReadData = Box<dyn Fn(DataReader, TilesRuntime) -> ReadFuture + Send + Sync + 'static>;
 type ReadFile = Box<dyn Fn(PathBuf, TilesRuntime) -> ReadFuture + Send + Sync + 'static>;
 type WriteFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
-type WriteFile = Box<dyn Fn(Box<dyn TileSource>, PathBuf, TilesRuntime) -> WriteFuture + Send + Sync + 'static>;
+type WriteFile = Box<dyn Fn(Arc<Box<dyn TileSource>>, PathBuf, TilesRuntime) -> WriteFuture + Send + Sync + 'static>;
 
 /// Registry mapping file extensions to async tile container readers and writers.
 ///
@@ -85,7 +85,7 @@ impl ContainerRegistry {
 	pub fn register_reader_file<F, Fut>(&mut self, ext: &str, read_file: F)
 	where
 		F: Fn(PathBuf, TilesRuntime) -> Fut + Send + Sync + 'static,
-		Fut: Future<Output = Result<Box<dyn TileSource>>> + Send + 'static,
+		Fut: Future<Output = Result<Arc<Box<dyn TileSource>>>> + Send + 'static,
 	{
 		self.file_readers.insert(
 			sanitize_extension(ext),
@@ -101,7 +101,7 @@ impl ContainerRegistry {
 	pub fn register_reader_data<F, Fut>(&mut self, ext: &str, read_data: F)
 	where
 		F: Fn(DataReader, TilesRuntime) -> Fut + Send + Sync + 'static,
-		Fut: Future<Output = Result<Box<dyn TileSource>>> + Send + 'static,
+		Fut: Future<Output = Result<Arc<Box<dyn TileSource>>>> + Send + 'static,
 	{
 		self.data_readers.insert(
 			sanitize_extension(ext),
@@ -117,7 +117,7 @@ impl ContainerRegistry {
 	///   and writes the tiles to the specified path.
 	pub fn register_writer_file<F, Fut>(&mut self, ext: &str, write_file: F)
 	where
-		F: Fn(Box<dyn TileSource>, PathBuf, TilesRuntime) -> Fut + Send + Sync + 'static,
+		F: Fn(Arc<Box<dyn TileSource>>, PathBuf, TilesRuntime) -> Fut + Send + Sync + 'static,
 		Fut: Future<Output = Result<()>> + Send + 'static,
 	{
 		self.file_writers.insert(
@@ -127,7 +127,11 @@ impl ContainerRegistry {
 	}
 
 	#[context("Failed to get reader from string '{data_source}'")]
-	pub async fn get_reader_from_str(&self, data_source: &str, runtime: TilesRuntime) -> Result<Box<dyn TileSource>> {
+	pub async fn get_reader_from_str(
+		&self,
+		data_source: &str,
+		runtime: TilesRuntime,
+	) -> Result<Arc<Box<dyn TileSource>>> {
 		self.get_reader(DataSource::parse(data_source)?, runtime).await
 	}
 
@@ -141,7 +145,7 @@ impl ContainerRegistry {
 	/// # Returns
 	/// A boxed `TileSource` for reading tiles.
 	#[context("Failed to get reader for '{data_source:?}'")]
-	pub async fn get_reader(&self, data_source: DataSource, runtime: TilesRuntime) -> Result<Box<dyn TileSource>> {
+	pub async fn get_reader(&self, data_source: DataSource, runtime: TilesRuntime) -> Result<Arc<Box<dyn TileSource>>> {
 		let mut data_source = data_source.clone();
 		data_source.resolve(&DataLocation::cwd()?)?;
 		let extension = sanitize_extension(data_source.container_type()?);
@@ -163,9 +167,11 @@ impl ContainerRegistry {
 				}
 
 				if path.is_dir() {
-					return Ok(DirectoryReader::open_path(&path)
-						.with_context(|| format!("Failed opening {path:?} as directory"))?
-						.boxed());
+					return Ok(Arc::new(
+						DirectoryReader::open_path(&path)
+							.with_context(|| format!("Failed opening {path:?} as directory"))?
+							.boxed(),
+					));
 				}
 
 				self
@@ -197,14 +203,16 @@ impl ContainerRegistry {
 	#[context("writing tiles to path '{path:?}'")]
 	pub async fn write_to_path(
 		&self,
-		mut reader: Box<dyn TileSource>,
+		reader: Arc<Box<dyn TileSource>>,
 		path: &Path,
 		runtime: TilesRuntime,
 	) -> Result<()> {
 		let path = env::current_dir()?.join(path);
 
 		if path.is_dir() {
-			return DirectoryWriter::write_to_path(reader.as_mut(), &path, runtime).await;
+			let mut boxed_reader = Arc::try_unwrap(reader)
+				.map_err(|_| anyhow!("Cannot get exclusive access to reader for directory write"))?;
+			return DirectoryWriter::write_to_path(boxed_reader.as_mut(), &path, runtime).await;
 		}
 
 		let extension = path
@@ -233,39 +241,48 @@ impl Default for ContainerRegistry {
 		let mut reg = Self::new_empty();
 
 		// MBTiles
-		reg.register_reader_file(
-			"mbtiles",
-			|p, r| async move { Ok(MBTilesReader::open_path(&p, r)?.boxed()) },
-		);
-		reg.register_writer_file("mbtiles", |mut r, p, rt| async move {
-			MBTilesWriter::write_to_path(r.as_mut(), &p, rt).await
+		reg.register_reader_file("mbtiles", |p, r| async move {
+			Ok(Arc::new(MBTilesReader::open_path(&p, r)?.boxed()))
+		});
+		reg.register_writer_file("mbtiles", |r, p, rt| async move {
+			let mut boxed =
+				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for MBTiles write"))?;
+			MBTilesWriter::write_to_path(boxed.as_mut(), &p, rt).await
 		});
 
 		// TAR
-		reg.register_reader_file("tar", |p, _r| async move { Ok(TarTilesReader::open_path(&p)?.boxed()) });
-		reg.register_writer_file("tar", |mut r, p, rt| async move {
-			TarTilesWriter::write_to_path(r.as_mut(), &p, rt).await
+		reg.register_reader_file("tar", |p, _r| async move {
+			Ok(Arc::new(TarTilesReader::open_path(&p)?.boxed()))
+		});
+		reg.register_writer_file("tar", |r, p, rt| async move {
+			let mut boxed =
+				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for TAR write"))?;
+			TarTilesWriter::write_to_path(boxed.as_mut(), &p, rt).await
 		});
 		// PMTiles
 		reg.register_reader_file("pmtiles", |p, r| async move {
-			Ok(PMTilesReader::open_path(&p, r).await?.boxed())
+			Ok(Arc::new(PMTilesReader::open_path(&p, r).await?.boxed()))
 		});
 		reg.register_reader_data("pmtiles", |p, r| async move {
-			Ok(PMTilesReader::open_reader(p, r).await?.boxed())
+			Ok(Arc::new(PMTilesReader::open_reader(p, r).await?.boxed()))
 		});
-		reg.register_writer_file("pmtiles", |mut r, p, rt| async move {
-			PMTilesWriter::write_to_path(r.as_mut(), &p, rt).await
+		reg.register_writer_file("pmtiles", |r, p, rt| async move {
+			let mut boxed =
+				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for PMTiles write"))?;
+			PMTilesWriter::write_to_path(boxed.as_mut(), &p, rt).await
 		});
 
 		// VersaTiles
 		reg.register_reader_file("versatiles", |p, r| async move {
-			Ok(VersaTilesReader::open_path(&p, r).await?.boxed())
+			Ok(Arc::new(VersaTilesReader::open_path(&p, r).await?.boxed()))
 		});
 		reg.register_reader_data("versatiles", |p, r| async move {
-			Ok(VersaTilesReader::open_reader(p, r).await?.boxed())
+			Ok(Arc::new(VersaTilesReader::open_reader(p, r).await?.boxed()))
 		});
-		reg.register_writer_file("versatiles", |mut r, p, rt| async move {
-			VersaTilesWriter::write_to_path(r.as_mut(), &p, rt).await
+		reg.register_writer_file("versatiles", |r, p, rt| async move {
+			let mut boxed =
+				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for VersaTiles write"))?;
+			VersaTilesWriter::write_to_path(boxed.as_mut(), &p, rt).await
 		});
 
 		reg
@@ -303,7 +320,11 @@ pub async fn make_test_file(
 
 	let registry = ContainerRegistry::default();
 	registry
-		.write_to_path(Box::new(reader), container_file.path(), TilesRuntime::default())
+		.write_to_path(
+			Arc::new(Box::new(reader)),
+			container_file.path(),
+			TilesRuntime::default(),
+		)
 		.await?;
 	Ok(container_file)
 }
@@ -359,12 +380,14 @@ pub mod tests {
 			let registry = ContainerRegistry::default();
 			let runtime = TilesRuntime::default();
 			registry
-				.write_to_path(Box::new(reader1), &path, runtime.clone())
+				.write_to_path(Arc::new(Box::new(reader1)), &path, runtime.clone())
 				.await?;
 
 			// get test container reader using the default registry (back-compat)
-			let mut reader2 = registry.get_reader_from_str(path.to_str().unwrap(), runtime).await?;
-			MockWriter::write(reader2.as_mut()).await?;
+			let reader2 = registry.get_reader_from_str(path.to_str().unwrap(), runtime).await?;
+			let mut boxed =
+				Arc::try_unwrap(reader2).map_err(|_| anyhow!("Cannot get exclusive access to reader for test"))?;
+			MockWriter::write(boxed.as_mut()).await?;
 
 			Ok(())
 		}

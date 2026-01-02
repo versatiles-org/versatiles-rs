@@ -85,10 +85,8 @@ impl TileSource {
 		Ok(Self::new(source))
 	}
 
-	fn new(source: Box<dyn RustTileSource>) -> Self {
-		Self {
-			reader: Arc::new(source),
-		}
+	fn new(source: Arc<Box<dyn RustTileSource>>) -> Self {
+		Self { reader: source }
 	}
 
 	/// Create a new reader from this TileSource (for server use)
@@ -168,7 +166,7 @@ impl TileSource {
 			std::env::current_dir()?
 		};
 		let source = napi_result!(PipelineReader::open_str(&vpl, &path, runtime).await)?;
-		Ok(Self::new(Box::new(source)))
+		Ok(Self::new(Arc::new(Box::new(source))))
 	}
 
 	/// Convert this tile source to another format
@@ -257,33 +255,9 @@ impl TileSource {
 		on_progress: Option<ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false, true>>,
 		on_message: Option<ThreadsafeFunction<MessageData, Unknown<'static>, MessageData, Status, false, true>>,
 	) -> Result<()> {
-		// Get a reader for conversion
-		// Try to unwrap the Arc if this is the only reference, otherwise recreate from URI
-		let reader = match Arc::try_unwrap(Arc::clone(&self.reader)) {
-			Ok(boxed_reader) => boxed_reader,
-			Err(arc_reader) => {
-				// Can't unwrap - there are multiple references
-				// Check if we can get a URI to recreate the reader
-				let source_type = arc_reader.source_type();
-				match source_type.as_ref() {
-					versatiles_container::SourceType::Container { input, .. } => {
-						// Recreate reader from URI
-						let runtime = create_runtime();
-						napi_result!(runtime.get_reader_from_str(input).await)?
-					}
-					_ => {
-						// VPL or composite source - can't easily recreate
-						return Err(Error::from_reason(
-							"Cannot convert VPL or composite sources. Please convert from the original file path.",
-						));
-					}
-				}
-			}
-		};
-
 		// Use shared conversion logic
 		let output_path = std::path::PathBuf::from(&output);
-		convert_tiles_with_options(reader, &output_path, options, on_progress, on_message).await
+		convert_tiles_with_options(self.reader.clone(), &output_path, options, on_progress, on_message).await
 	}
 
 	/// Get a single tile at the specified coordinates
@@ -321,14 +295,14 @@ impl TileSource {
 		let coord = napi_result!(RustTileCoord::new(z as u8, x, y))?;
 		let tile_opt = napi_result!(self.reader.get_tile(&coord).await)?;
 
-		Ok(tile_opt
+		tile_opt
 			.map(|mut tile| {
 				tile
 					.as_blob(versatiles_core::TileCompression::Uncompressed)
 					.map(|blob| Buffer::from(blob.as_slice()))
 			})
 			.transpose()
-			.map_err(|e| Error::from_reason(format!("Failed to decompress tile: {}", e)))?)
+			.map_err(|e| Error::from_reason(format!("Failed to decompress tile: {}", e)))
 	}
 
 	/// Get TileJSON metadata as a JSON string
@@ -1059,7 +1033,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_convert_to_vpl_source_fails() {
+	async fn test_convert_to_vpl_source() {
 		// Create a temp output file path
 		let output_path = std::env::temp_dir().join("test_convert_to_vpl.versatiles");
 
@@ -1069,15 +1043,11 @@ mod tests {
 			.await
 			.unwrap();
 
-		// Try to convert - should fail for VPL sources
-		let result = source
+		// Try to convert
+		source
 			.convert_to(output_path.to_str().unwrap().to_string(), None, None, None)
-			.await;
-
-		// Should fail with appropriate error
-		assert!(result.is_err(), "VPL source conversion should fail");
-		let err = result.unwrap_err();
-		assert!(err.to_string().contains("VPL"), "Error should mention VPL: {}", err);
+			.await
+			.unwrap();
 
 		// Clean up
 		let _ = std::fs::remove_file(&output_path);

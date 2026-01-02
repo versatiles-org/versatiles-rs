@@ -1085,7 +1085,7 @@ mod tests {
 		let port = read_handle.await.unwrap();
 
 		// Should get either 0 (read before cache update) or actual port
-		assert!(port == 0 || port > 0);
+		assert!(port > 0);
 
 		server.stop().await.unwrap();
 	}
