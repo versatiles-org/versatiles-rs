@@ -26,6 +26,16 @@ on:
         type: boolean
         required: false
         default: true
+      publish_npm:
+        description: "Publish to npm"
+        type: boolean
+        required: false
+        default: true
+      publish_crates:
+        description: "Publish to crates.io"
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: write
@@ -453,27 +463,38 @@ jobs:
       - prepare
       - package-npm-binaries
     runs-on: ubuntu-latest
+    env:
+      PUBLISH_ENABLED: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_npm }}
     steps:
+      - name: Gate — fast pass when deselected
+        if: env.PUBLISH_ENABLED != 'true'
+        run: echo "npm publish deselected via workflow_dispatch; fast-passing job."
+
       - name: Checkout code
+        if: env.PUBLISH_ENABLED == 'true'
         uses: actions/checkout@v6
 
       - name: Setup Node.js
+        if: env.PUBLISH_ENABLED == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
+        if: env.PUBLISH_ENABLED == 'true'
         working-directory: ./versatiles_node
         run: npm install
 
       - name: Download npm packages
+        if: env.PUBLISH_ENABLED == 'true'
         uses: actions/download-artifact@v7
         with:
           name: npm-packages
           path: versatiles_node/npm-downloaded
 
       - name: Move packages to correct location
+        if: env.PUBLISH_ENABLED == 'true'
         working-directory: ./versatiles_node
         run: |
           # The artifact download may flatten the directory structure
@@ -499,6 +520,7 @@ jobs:
           find npm -type f -name "*.tgz" || echo "No .tgz files in npm directory"
 
       - name: Validate package version
+        if: env.PUBLISH_ENABLED == 'true'
         working-directory: ./versatiles_node
         run: |
           TAG_VERSION="${{ needs.prepare.outputs.tag }}"
@@ -512,6 +534,7 @@ jobs:
           echo "✓ Version validated"
 
       - name: Download NAPI bindings for main package
+        if: env.PUBLISH_ENABLED == 'true'
         uses: actions/download-artifact@v7
         with:
           pattern: node-binding-*
@@ -519,6 +542,7 @@ jobs:
           merge-multiple: false
 
       - name: Copy native binding for build
+        if: env.PUBLISH_ENABLED == 'true'
         run: |
           # Copy any available native binding to enable the build
           # The actual platform-specific bindings will be downloaded by npm
@@ -532,6 +556,7 @@ jobs:
           echo "Native binding copied for build"
 
       - name: Build JavaScript wrappers
+        if: env.PUBLISH_ENABLED == 'true'
         working-directory: ./versatiles_node
         run: |
           echo "Building index.cjs and index.js..."
@@ -548,6 +573,7 @@ jobs:
           echo "✓ JavaScript wrappers built (native bindings removed)"
 
       - name: Validate package contents
+        if: env.PUBLISH_ENABLED == 'true'
         working-directory: ./versatiles_node
         run: |
           echo "Validating package contents..."
@@ -564,6 +590,7 @@ jobs:
           echo "✓ No native bindings in main package (correct)"
 
       - name: Publish platform packages
+        if: env.PUBLISH_ENABLED == 'true'
         working-directory: ./versatiles_node
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -593,6 +620,7 @@ jobs:
           echo "✓ All platform packages published"
 
       - name: Publish main package
+        if: env.PUBLISH_ENABLED == 'true'
         working-directory: ./versatiles_node
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -602,6 +630,7 @@ jobs:
           npm publish --access public --provenance --tag "$NPM_TAG"
 
       - name: Verify publication
+        if: env.PUBLISH_ENABLED == 'true'
         run: |
           sleep 60
           TAG_VERSION="${{ needs.prepare.outputs.tag }}"
@@ -619,23 +648,31 @@ jobs:
       - build-macos
       - build-windows
     runs-on: ubuntu-latest
-    # Only publish stable releases to crates.io (not pre-releases)
-    if: needs.prepare.outputs.is_prerelease == 'false'
+    env:
+      PUBLISH_ENABLED: ${{ (github.event_name != 'workflow_dispatch' || inputs.publish_crates) && needs.prepare.outputs.is_prerelease == 'false' }}
     steps:
+      - name: Gate — fast pass when deselected or prerelease
+        if: env.PUBLISH_ENABLED != 'true'
+        run: echo "crates.io publish deselected or is prerelease; fast-passing job."
+
       - name: Checkout code
+        if: env.PUBLISH_ENABLED == 'true'
         uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare.outputs.tag }}
 
       - name: Install Rust toolchain
+        if: env.PUBLISH_ENABLED == 'true'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Rust build artifacts
+        if: env.PUBLISH_ENABLED == 'true'
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: 'crates-publish'
 
       - name: Publish crates to crates.io
+        if: env.PUBLISH_ENABLED == 'true'
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
