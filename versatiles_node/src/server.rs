@@ -381,11 +381,19 @@ impl TileServer {
 	#[napi(getter)]
 	pub fn port(&self) -> u32 {
 		// Try to read cached actual port first (when server is running)
-		if let Some(actual) = *self.actual_port.read().unwrap() {
-			actual as u32
-		} else {
-			// Fallback to configured port (before server starts)
-			self.initial_port as u32
+		match self.actual_port.read() {
+			Ok(guard) => {
+				if let Some(actual) = *guard {
+					actual as u32
+				} else {
+					// Fallback to configured port (before server starts)
+					self.initial_port as u32
+				}
+			}
+			Err(_) => {
+				// Fallback to configured port if lock is poisoned
+				self.initial_port as u32
+			}
 		}
 	}
 }
