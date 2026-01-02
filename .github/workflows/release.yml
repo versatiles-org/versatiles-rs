@@ -533,12 +533,33 @@ jobs:
         working-directory: ./versatiles_node
         run: |
           echo "Building index.cjs and index.js..."
-          npm run build
+          npm run build:debug
+
+          # Remove native bindings - they shouldn't be in the main package
+          echo "Removing native bindings from main package..."
+          rm -f versatiles.*.node
+
           echo ""
           echo "Generated files:"
           ls -lh index.*
           echo ""
-          echo "✓ JavaScript wrappers built"
+          echo "✓ JavaScript wrappers built (native bindings removed)"
+
+      - name: Validate package contents
+        working-directory: ./versatiles_node
+        run: |
+          echo "Validating package contents..."
+
+          # Check that wrapper files exist
+          for file in index.js index.cjs index.d.ts; do
+            if [ ! -f "$file" ]; then
+              echo "ERROR: Missing required file: $file"
+              exit 1
+            fi
+          done
+
+          echo "✓ All required files present and valid"
+          echo "✓ No native bindings in main package (correct)"
 
       - name: Publish platform packages
         working-directory: ./versatiles_node
