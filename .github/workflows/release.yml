@@ -509,6 +509,37 @@ jobs:
           fi
           echo "✓ Version validated"
 
+      - name: Download NAPI bindings for main package
+        uses: actions/download-artifact@v7
+        with:
+          pattern: node-binding-*
+          path: node-bindings/
+          merge-multiple: false
+
+      - name: Copy native binding for build
+        run: |
+          # Copy any available native binding to enable the build
+          # The actual platform-specific bindings will be downloaded by npm
+          if [ -f "node-bindings/node-binding-linux-gnu-x86_64/libversatiles_node.so" ]; then
+            cp "node-bindings/node-binding-linux-gnu-x86_64/libversatiles_node.so" "versatiles_node/versatiles.linux-x64-gnu.node"
+          elif [ -f "node-bindings/node-binding-macos-x86_64/libversatiles_node.dylib" ]; then
+            cp "node-bindings/node-binding-macos-x86_64/libversatiles_node.dylib" "versatiles_node/versatiles.darwin-x64.node"
+          elif [ -f "node-bindings/node-binding-macos-aarch64/libversatiles_node.dylib" ]; then
+            cp "node-bindings/node-binding-macos-aarch64/libversatiles_node.dylib" "versatiles_node/versatiles.darwin-arm64.node"
+          fi
+          echo "Native binding copied for build"
+
+      - name: Build JavaScript wrappers
+        working-directory: ./versatiles_node
+        run: |
+          echo "Building index.cjs and index.js..."
+          npm run build
+          echo ""
+          echo "Generated files:"
+          ls -lh index.*
+          echo ""
+          echo "✓ JavaScript wrappers built"
+
       - name: Publish platform packages
         working-directory: ./versatiles_node
         env:
