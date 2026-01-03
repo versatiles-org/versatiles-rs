@@ -38,7 +38,7 @@
 use crate::{Blob, ConcurrencyLimits, TileCoord};
 use anyhow::Result;
 use futures::{
-	Future, Stream, StreamExt, TryStreamExt,
+	Future, Stream, StreamExt,
 	future::ready,
 	stream::{self, BoxStream},
 };
@@ -954,6 +954,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use futures::TryStreamExt;
 	use std::sync::atomic::{AtomicUsize, Ordering};
 	use tokio::sync::Mutex;
 
@@ -978,7 +979,12 @@ mod tests {
 		// Unwrap Results
 		let mut items: Vec<(TileCoord, String)> = flat
 			.inner
-			.map(|(coord, result)| result.map(|item| (coord, item)))
+			.filter_map(|(coord, result)| async move {
+				match result {
+					Ok(item) => Some(Ok((coord, item))),
+					Err(e) => Some(Err(e)),
+				}
+			})
 			.try_collect()
 			.await
 			.unwrap();
@@ -1095,7 +1101,12 @@ mod tests {
 		// Collect results, unwrapping the Results
 		let mut items: Vec<(TileCoord, Blob)> = transformed
 			.inner
-			.map(|(coord, result)| result.map(|item| (coord, item)))
+			.filter_map(|(coord, result)| async move {
+				match result {
+					Ok(item) => Some(Ok((coord, item))),
+					Err(e) => Some(Err(e)),
+				}
+			})
 			.try_collect()
 			.await
 			.unwrap();
@@ -1130,7 +1141,12 @@ mod tests {
 		// Collect results, unwrapping the Results
 		let items: Vec<(TileCoord, Blob)> = filtered
 			.inner
-			.map(|(coord, result)| result.map(|item| (coord, item)))
+			.filter_map(|(coord, result)| async move {
+				match result {
+					Ok(item) => Some(Ok((coord, item))),
+					Err(e) => Some(Err(e)),
+				}
+			})
 			.try_collect()
 			.await
 			.unwrap();
@@ -1271,7 +1287,12 @@ mod tests {
 		// Collect results, unwrapping the Results
 		let results: Vec<(TileCoord, u32)> = stream
 			.inner
-			.map(|(coord, result)| result.map(|item| (coord, item)))
+			.filter_map(|(coord, result)| async move {
+				match result {
+					Ok(item) => Some(Ok((coord, item))),
+					Err(e) => Some(Err(e)),
+				}
+			})
 			.try_collect()
 			.await
 			.unwrap();
@@ -1320,7 +1341,12 @@ mod tests {
 		// Collect results, unwrapping the Results
 		let results: Vec<(TileCoord, u32)> = stream
 			.inner
-			.map(|(coord, result)| result.map(|item| (coord, item)))
+			.filter_map(|(coord, result)| async move {
+				match result {
+					Ok(item) => Some(Ok((coord, item))),
+					Err(e) => Some(Err(e)),
+				}
+			})
 			.try_collect()
 			.await
 			.unwrap();
