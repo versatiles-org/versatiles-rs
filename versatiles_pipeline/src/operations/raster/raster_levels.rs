@@ -75,7 +75,7 @@ impl TileSource for Operation {
 				});
 				Ok(tile)
 			})
-		.unwrap_results())
+			.unwrap_results())
 	}
 }
 

@@ -160,11 +160,12 @@ impl TileSource for Operation {
 		let stream = self.source.get_tile_stream(bbox).await?;
 		let format: TileFormat = self.format.into();
 
-		Ok(stream.map_item_parallel(move |mut tile| {
-			tile.change_format(format, quality, speed)?;
-			Ok(tile)
-		})
-		.unwrap_results())
+		Ok(stream
+			.map_item_parallel(move |mut tile| {
+				tile.change_format(format, quality, speed)?;
+				Ok(tile)
+			})
+			.unwrap_results())
 	}
 }
 

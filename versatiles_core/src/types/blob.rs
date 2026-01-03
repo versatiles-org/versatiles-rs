@@ -807,10 +807,7 @@ mod tests {
 
 		// Invalid UTF-8
 		let invalid_utf8 = Blob::from(vec![0xC3, 0x28]); // invalid sequence
-		assert!(
-			invalid_utf8.try_as_str().is_err(),
-			"Expected error for invalid UTF-8"
-		);
+		assert!(invalid_utf8.try_as_str().is_err(), "Expected error for invalid UTF-8");
 
 		Ok(())
 	}
