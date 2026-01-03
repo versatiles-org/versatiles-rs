@@ -614,4 +614,268 @@ mod tests {
 		assert_eq!(progress_data1.eta, progress_data2.eta);
 		assert_eq!(progress_data1.message, progress_data2.message);
 	}
+
+	#[test]
+	fn test_emit_progress_no_listeners() {
+		// Verify emit_progress doesn't panic with no listeners
+		let progress = Progress::new();
+		let data = ProgressData {
+			position: 50.0,
+			total: 100.0,
+			percentage: 50.0,
+			speed: 10.5,
+			estimated_seconds_remaining: Some(5.0),
+			eta: Some(1234567890.0),
+			message: Some("Test".to_string()),
+		};
+
+		// Should not panic
+		progress.emit_progress(data);
+	}
+
+	#[test]
+	fn test_emit_step_no_listeners() {
+		// Verify emit_step doesn't panic with no listeners
+		let progress = Progress::new();
+
+		// Should not panic
+		progress.emit_step("Step 1: Processing tiles".to_string());
+	}
+
+	#[test]
+	fn test_emit_warning_no_listeners() {
+		// Verify emit_warning doesn't panic with no listeners
+		let progress = Progress::new();
+
+		// Should not panic
+		progress.emit_warning("Warning: Low memory".to_string());
+	}
+
+	#[test]
+	fn test_emit_error_no_listeners() {
+		// Verify emit_error doesn't panic with no listeners
+		let progress = Progress::new();
+
+		// Should not panic
+		progress.emit_error("Error: File not found".to_string());
+	}
+
+	#[test]
+	fn test_emit_multiple_progress_events() {
+		// Verify multiple emit_progress calls work correctly
+		let progress = Progress::new();
+
+		for i in 0..10 {
+			let data = ProgressData {
+				position: (i * 10) as f64,
+				total: 100.0,
+				percentage: (i * 10) as f64,
+				speed: 10.5,
+				estimated_seconds_remaining: Some(5.0),
+				eta: Some(1234567890.0),
+				message: Some(format!("Processing item {}", i)),
+			};
+
+			// Should not panic
+			progress.emit_progress(data);
+		}
+	}
+
+	#[test]
+	fn test_emit_multiple_message_types() {
+		// Verify multiple different message types can be emitted
+		let progress = Progress::new();
+
+		// Emit different message types in sequence
+		progress.emit_step("Step 1: Loading".to_string());
+		progress.emit_step("Step 2: Processing".to_string());
+		progress.emit_warning("Warning: Slow processing".to_string());
+		progress.emit_step("Step 3: Writing".to_string());
+		progress.emit_error("Error: Write failed".to_string());
+
+		// All should complete without panicking
+	}
+
+	#[test]
+	fn test_emit_with_empty_messages() {
+		// Verify empty strings are handled correctly
+		let progress = Progress::new();
+
+		progress.emit_step("".to_string());
+		progress.emit_warning("".to_string());
+		progress.emit_error("".to_string());
+
+		// Should not panic
+	}
+
+	#[test]
+	fn test_emit_with_special_characters() {
+		// Verify special characters in messages are handled correctly
+		let progress = Progress::new();
+
+		progress.emit_step("Step: Processing 中文 tiles".to_string());
+		progress.emit_warning("Warning: File 'test.txt' not found".to_string());
+		progress.emit_error("Error: Invalid char 🚀".to_string());
+
+		// Should not panic
+	}
+
+	#[test]
+	fn test_emit_with_long_messages() {
+		// Verify long messages are handled correctly
+		let progress = Progress::new();
+
+		let long_message = "A".repeat(10000);
+		progress.emit_step(long_message.clone());
+		progress.emit_warning(long_message.clone());
+		progress.emit_error(long_message);
+
+		// Should not panic
+	}
+
+	#[test]
+	fn test_emit_from_cloned_progress() {
+		// Verify emitting from cloned Progress instances works
+		let progress1 = Progress::new();
+		let progress2 = progress1.clone();
+
+		// Emit from both instances
+		progress1.emit_step("From progress1".to_string());
+		progress2.emit_warning("From progress2".to_string());
+
+		// Both should work without panicking since they share the same Arc
+	}
+
+	#[test]
+	fn test_emit_progress_with_various_percentages() {
+		// Test emitting progress at various completion levels
+		let progress = Progress::new();
+
+		let test_cases = vec![
+			(0.0, 0.0),
+			(25.0, 25.0),
+			(50.0, 50.0),
+			(75.0, 75.0),
+			(99.9, 99.9),
+			(100.0, 100.0),
+		];
+
+		for (position, percentage) in test_cases {
+			let data = ProgressData {
+				position,
+				total: 100.0,
+				percentage,
+				speed: 10.0,
+				estimated_seconds_remaining: None,
+				eta: None,
+				message: Some(format!("{}% complete", percentage)),
+			};
+
+			progress.emit_progress(data);
+		}
+	}
+
+	#[test]
+	fn test_emit_progress_with_none_values() {
+		// Test emitting progress with None optional fields
+		let progress = Progress::new();
+
+		let data = ProgressData {
+			position: 50.0,
+			total: 100.0,
+			percentage: 50.0,
+			speed: 0.0,
+			estimated_seconds_remaining: None,
+			eta: None,
+			message: None,
+		};
+
+		// Should not panic with None values
+		progress.emit_progress(data);
+	}
+
+	#[test]
+	fn test_emit_message_types_distinction() {
+		// Verify different message types are emitted correctly
+		let progress = Progress::new();
+
+		// Each type should be callable independently
+		progress.emit_step("This is a step".to_string());
+		progress.emit_warning("This is a warning".to_string());
+		progress.emit_error("This is an error".to_string());
+
+		// Verify we can mix them
+		for i in 0..5 {
+			match i % 3 {
+				0 => progress.emit_step(format!("Step {}", i)),
+				1 => progress.emit_warning(format!("Warning {}", i)),
+				_ => progress.emit_error(format!("Error {}", i)),
+			}
+		}
+	}
+
+	#[test]
+	fn test_concurrent_emits() {
+		use std::sync::Arc;
+		use std::thread;
+
+		// Test that Progress is thread-safe for emits
+		let progress = Arc::new(Progress::new());
+		let mut handles = vec![];
+
+		// Spawn multiple threads emitting different events
+		for i in 0..10 {
+			let progress_clone = Arc::clone(&progress);
+			let handle = thread::spawn(move || {
+				for j in 0..10 {
+					match (i + j) % 3 {
+						0 => progress_clone.emit_step(format!("Thread {} step {}", i, j)),
+						1 => progress_clone.emit_warning(format!("Thread {} warning {}", i, j)),
+						_ => progress_clone.emit_error(format!("Thread {} error {}", i, j)),
+					}
+				}
+			});
+			handles.push(handle);
+		}
+
+		// Wait for all threads to complete
+		for handle in handles {
+			handle.join().unwrap();
+		}
+
+		// If we get here, no panics occurred
+	}
+
+	#[test]
+	fn test_emit_progress_concurrent() {
+		use std::sync::Arc;
+		use std::thread;
+
+		// Test that emit_progress is thread-safe
+		let progress = Arc::new(Progress::new());
+		let mut handles = vec![];
+
+		for i in 0..10 {
+			let progress_clone = Arc::clone(&progress);
+			let handle = thread::spawn(move || {
+				for j in 0..100 {
+					let data = ProgressData {
+						position: (i * 100 + j) as f64,
+						total: 1000.0,
+						percentage: ((i * 100 + j) as f64 / 10.0),
+						speed: 50.0,
+						estimated_seconds_remaining: Some(10.0),
+						eta: Some(1234567890.0),
+						message: Some(format!("Thread {} item {}", i, j)),
+					};
+					progress_clone.emit_progress(data);
+				}
+			});
+			handles.push(handle);
+		}
+
+		for handle in handles {
+			handle.join().unwrap();
+		}
+	}
 }
