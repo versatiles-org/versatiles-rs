@@ -18,7 +18,7 @@ use versatiles_derive::context;
 /// # Errors
 ///
 /// * If the Brotli compression process fails.
-#[context("Compressing data using Brotli with highest quality settings")]
+#[context("Compressing blob ({} bytes) using Brotli with highest quality settings", blob.len())]
 pub fn compress_brotli(blob: &Blob) -> Result<Blob> {
 	let params = BrotliEncoderParams {
 		quality: 10, // Highest quality
@@ -48,7 +48,7 @@ pub fn compress_brotli(blob: &Blob) -> Result<Blob> {
 /// # Errors
 ///
 /// * If the Brotli compression process fails.
-#[context("Compressing data using Brotli with fast compression settings")]
+#[context("Compressing blob ({} bytes) using Brotli with fast compression settings", blob.len())]
 pub fn compress_brotli_fast(blob: &Blob) -> Result<Blob> {
 	let params = BrotliEncoderParams {
 		quality: 3, // Lower quality for faster compression
@@ -76,7 +76,7 @@ pub fn compress_brotli_fast(blob: &Blob) -> Result<Blob> {
 /// # Errors
 ///
 /// * If the Brotli decompression process fails.
-#[context("Decompressing data using Brotli")]
+#[context("Decompressing blob ({} bytes) using Brotli", blob.len())]
 pub fn decompress_brotli(blob: &Blob) -> Result<Blob> {
 	let mut cursor = Cursor::new(blob.as_slice());
 	let mut decompressed_data = Vec::new();

@@ -18,7 +18,7 @@ use versatiles_derive::context;
 /// # Errors
 ///
 /// * If the Gzip compression process fails.
-#[context("Compressing blob with algorithm: Gzip")]
+#[context("Compressing blob ({} bytes) using Gzip", blob.len())]
 pub fn compress_gzip(blob: &Blob) -> Result<Blob> {
 	let mut encoder = GzEncoder::new(blob.as_slice(), flate2::Compression::best());
 	let mut compressed_data = Vec::new();
@@ -42,7 +42,7 @@ pub fn compress_gzip(blob: &Blob) -> Result<Blob> {
 /// # Errors
 ///
 /// * If the Gzip decompression process fails.
-#[context("Decompressing data using Gzip")]
+#[context("Decompressing blob ({} bytes) using Gzip", blob.len())]
 pub fn decompress_gzip(blob: &Blob) -> Result<Blob> {
 	let mut decoder = GzDecoder::new(blob.as_slice());
 	let mut decompressed_data = Vec::new();
