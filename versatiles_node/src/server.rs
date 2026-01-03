@@ -21,13 +21,14 @@
 use crate::{napi_result, runtime::create_runtime, tile_source::TileSource, types::ServerOptions};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
+use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tokio::sync::Mutex;
 use versatiles::{config::Config, server::TileServer as RustTileServer};
 use versatiles_container::{DataLocation, TileSource as RustTileSource, TilesRuntime};
 
 // Type aliases for complex types
-type TileSourceList = Mutex<Vec<(String, Arc<Box<dyn RustTileSource>>)>>; // Vec of (name, TileSource)
+type TileSourceList = Mutex<HashMap<String, Arc<Box<dyn RustTileSource>>>>; // Map of name -> TileSource
 type StaticSourceList = Mutex<Vec<(String, Option<String>)>>; // Vec of (path, url_prefix)
 
 /// HTTP tile server for serving tiles and static content
@@ -75,7 +76,7 @@ pub struct TileServer {
 	ip: String,
 	minimal_recompression: Option<bool>,
 	// Track accumulated sources to rebuild config on start
-	tile_sources: TileSourceList,     // Vec of (name, TileSource) - file-based sources
+	tile_sources: TileSourceList,     // Map of name -> TileSource
 	static_sources: StaticSourceList, // Vec of (path, url_prefix)
 }
 
@@ -129,7 +130,7 @@ impl TileServer {
 			actual_port: Arc::new(RwLock::new(None)),
 			ip,
 			minimal_recompression,
-			tile_sources: Mutex::new(Vec::new()),
+			tile_sources: Mutex::new(HashMap::new()),
 			static_sources: Mutex::new(Vec::new()),
 		})
 	}
@@ -144,16 +145,28 @@ impl TileServer {
 	///
 	/// All sources support hot reload and can be added before or after starting the server.
 	/// Changes take effect immediately without requiring a server restart.
+	///
+	/// # Errors
+	///
+	/// Returns an error if a tile source with the given name already exists.
 	#[napi]
 	pub async fn add_tile_source(&self, name: String, source: &TileSource) -> Result<()> {
 		let reader = source.reader();
 
+		// Check for duplicate name and add to our map
+		let mut sources = self.tile_sources.lock().await;
+		if sources.contains_key(&name) {
+			return Err(Error::from_reason(format!(
+				"Tile source with name '{name}' already exists",
+			)));
+		}
+
+		// If server is running, add to it for hot reload
 		if let Some(server) = self.inner.lock().await.as_mut() {
 			napi_result!(server.add_tile_source(name.clone(), Arc::clone(&reader)).await)?;
 		}
 
-		let mut sources = self.tile_sources.lock().await;
-		sources.push((name, reader));
+		sources.insert(name, reader);
 
 		Ok(())
 	}
@@ -178,17 +191,17 @@ impl TileServer {
 	/// Returns true if the source was found and removed, false otherwise.
 	#[napi]
 	pub async fn remove_tile_source(&self, name: String) -> Result<bool> {
-		// Remove from our list (source of truth)
+		// Remove from our map (source of truth)
 		let mut sources = self.tile_sources.lock().await;
-		let initial_len = sources.len();
-		sources.retain(|(n, _)| n != &name);
-		let was_removed = sources.len() < initial_len;
+		let was_removed = sources.remove(&name).is_some();
 		drop(sources);
 
 		// If server is running, remove the source directly for hot reload
-		let mut server_lock = self.inner.lock().await;
-		if let Some(server) = server_lock.as_mut() {
-			napi_result!(server.remove_tile_source(&name).await)?;
+		if was_removed {
+			let mut server_lock = self.inner.lock().await;
+			if let Some(server) = server_lock.as_mut() {
+				napi_result!(server.remove_tile_source(&name).await)?;
+			}
 		}
 
 		Ok(was_removed)
@@ -540,10 +553,10 @@ mod tests {
 		// Should succeed
 		assert!(result.is_ok());
 
-		// Verify it was added to the list
+		// Verify it was added to the map
 		let sources = server.tile_sources.lock().await;
 		assert_eq!(sources.len(), 1);
-		assert_eq!(sources[0].0, "berlin");
+		assert!(sources.contains_key("berlin"));
 	}
 
 	#[tokio::test]
@@ -565,8 +578,37 @@ mod tests {
 		// Verify both were added
 		let sources = server.tile_sources.lock().await;
 		assert_eq!(sources.len(), 2);
-		assert_eq!(sources[0].0, "berlin1");
-		assert_eq!(sources[1].0, "berlin2");
+		assert!(sources.contains_key("berlin1"));
+		assert!(sources.contains_key("berlin2"));
+	}
+
+	#[tokio::test]
+	async fn test_add_duplicate_tile_source_name() {
+		let server = TileServer::new(None).unwrap();
+
+		// Add first source
+		server
+			.add_tile_source_from_path("berlin".to_string(), "../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+
+		// Try to add second source with same name
+		let result = server
+			.add_tile_source_from_path("berlin".to_string(), "../testdata/berlin.pmtiles".to_string())
+			.await;
+
+		// Should fail with duplicate name error
+		assert!(result.is_err());
+		let error_msg = result.unwrap_err().to_string();
+		assert!(
+			error_msg.contains("already exists"),
+			"Error message should mention duplicate name, got: {}",
+			error_msg
+		);
+
+		// Verify only one source exists
+		let sources = server.tile_sources.lock().await;
+		assert_eq!(sources.len(), 1);
 	}
 
 	#[tokio::test]
@@ -626,7 +668,8 @@ mod tests {
 		// Verify only berlin2 remains
 		let sources = server.tile_sources.lock().await;
 		assert_eq!(sources.len(), 1);
-		assert_eq!(sources[0].0, "berlin2");
+		assert!(sources.contains_key("berlin2"));
+		assert!(!sources.contains_key("berlin1"));
 	}
 
 	#[tokio::test]
@@ -876,13 +919,13 @@ mod tests {
 		// Should succeed
 		assert!(result.is_ok());
 
-		// Verify it was added to the list
+		// Verify it was added to the map
 		let sources = server.tile_sources.lock().await;
 		assert_eq!(sources.len(), 1);
-		assert_eq!(sources[0].0, "berlin");
+		assert!(sources.contains_key("berlin"));
 
 		// Verify the TileSource is stored
-		let stored_source = &sources[0].1;
+		let stored_source = sources.get("berlin").unwrap();
 		let metadata = stored_source.metadata();
 		assert_eq!(metadata.tile_format.as_str(), "mvt");
 	}
@@ -940,12 +983,12 @@ mod tests {
 		// Verify both were added
 		let sources = server.tile_sources.lock().await;
 		assert_eq!(sources.len(), 2);
-		assert_eq!(sources[0].0, "berlin1");
-		assert_eq!(sources[1].0, "berlin2");
+		assert!(sources.contains_key("berlin1"));
+		assert!(sources.contains_key("berlin2"));
 
 		// Verify both are TileSource objects
-		assert_eq!(sources[0].1.metadata().tile_format.as_str(), "mvt");
-		assert_eq!(sources[1].1.metadata().tile_format.as_str(), "mvt");
+		assert_eq!(sources.get("berlin1").unwrap().metadata().tile_format.as_str(), "mvt");
+		assert_eq!(sources.get("berlin2").unwrap().metadata().tile_format.as_str(), "mvt");
 	}
 
 	#[tokio::test]
