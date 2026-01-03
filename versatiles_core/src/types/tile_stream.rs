@@ -537,6 +537,7 @@ where
 	/// ```
 	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	/// # use anyhow::Result;
+	/// # use futures::{StreamExt, TryStreamExt};
 	/// # async fn test() -> Result<()> {
 	/// let stream = TileStream::from_vec(vec![
 	///     (TileCoord::new(0,0,0).unwrap(), Blob::from("data0")),
@@ -551,7 +552,12 @@ where
 	/// // Collect results, failing fast on first error
 	/// let items: Vec<(TileCoord, Blob)> = mapped
 	///     .inner
-	///     .map(|(coord, result)| result.map(|item| (coord, item)))
+	///     .filter_map(|(coord, result)| async move {
+	///         match result {
+	///             Ok(item) => Some(Ok((coord, item))),
+	///             Err(e) => Some(Err(e)),
+	///         }
+	///     })
 	///     .try_collect()
 	///     .await?;
 	/// # Ok(())
@@ -602,6 +608,7 @@ where
 	/// ```
 	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	/// # use anyhow::Result;
+	/// # use futures::{StreamExt, TryStreamExt};
 	/// # async fn example() -> Result<()> {
 	/// let stream = TileStream::from_vec(vec![
 	///     (TileCoord::new(1, 0, 0)?, Blob::from("tile")),
@@ -622,7 +629,12 @@ where
 	/// // Collect results, failing fast on first error
 	/// let tiles: Vec<(TileCoord, Blob)> = subdivided
 	///     .inner
-	///     .map(|(coord, result)| result.map(|item| (coord, item)))
+	///     .filter_map(|(coord, result)| async move {
+	///         match result {
+	///             Ok(item) => Some(Ok((coord, item))),
+	///             Err(e) => Some(Err(e)),
+	///         }
+	///     })
 	///     .try_collect()
 	///     .await?;
 	/// assert_eq!(tiles.len(), 4); // 1 input tile → 4 output tiles
@@ -679,6 +691,7 @@ where
 	/// ```
 	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	/// # use anyhow::Result;
+	/// # use futures::{StreamExt, TryStreamExt};
 	/// # async fn test() -> Result<()> {
 	/// let stream = TileStream::from_vec(vec![
 	///     (TileCoord::new(0,0,0).unwrap(), Blob::from("keep")),
@@ -696,7 +709,12 @@ where
 	/// // Collect results, failing fast on first error
 	/// let items: Vec<(TileCoord, Blob)> = filtered
 	///     .inner
-	///     .map(|(coord, result)| result.map(|item| (coord, item)))
+	///     .filter_map(|(coord, result)| async move {
+	///         match result {
+	///             Ok(item) => Some(Ok((coord, item))),
+	///             Err(e) => Some(Err(e)),
+	///         }
+	///     })
 	///     .try_collect()
 	///     .await?;
 	/// assert_eq!(items.len(), 1);

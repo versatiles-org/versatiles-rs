@@ -163,7 +163,8 @@ impl TileSource for Operation {
 		Ok(stream.map_item_parallel(move |mut tile| {
 			tile.change_format(format, quality, speed)?;
 			Ok(tile)
-		}))
+		})
+		.unwrap_results())
 	}
 }
 

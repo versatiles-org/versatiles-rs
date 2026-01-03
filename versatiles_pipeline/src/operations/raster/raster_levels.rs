@@ -74,7 +74,8 @@ impl TileSource for Operation {
 					v.round().clamp(0.0, 255.0) as u8
 				});
 				Ok(tile)
-			}))
+			})
+		.unwrap_results())
 	}
 }
 

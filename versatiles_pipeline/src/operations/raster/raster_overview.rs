@@ -204,7 +204,8 @@ impl TileSource for Operation {
 					.source
 					.get_tile_stream(bbox)
 					.await?
-					.map_item_parallel(|tile| tile.into_image()),
+					.map_item_parallel(|tile| tile.into_image())
+				.unwrap_results(),
 			)
 			.await?
 		} else {

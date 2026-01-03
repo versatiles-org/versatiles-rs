@@ -49,7 +49,8 @@ impl<R: RunnerTrait> TileSource for TransformOp<R> {
 				} else {
 					Ok(None)
 				}
-			}))
+			})
+		.unwrap_results())
 	}
 }
 

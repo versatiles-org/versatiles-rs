@@ -178,6 +178,7 @@ impl TileSource for Operation {
 						Ok(None) => Ok(None),
 						Err(err) => Err(err),
 					})
+				.unwrap_results()
 			},
 		)))
 	}
