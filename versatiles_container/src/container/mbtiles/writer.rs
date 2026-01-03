@@ -206,6 +206,7 @@ impl TilesWriter for MBTilesWriter {
 						let mut writer = writer_mutex.lock().await;
 						stream
 							.map_item_parallel(move |tile| tile.into_blob(tile_compression))
+							.unwrap_results()
 							.for_each_buffered(4096, |v| {
 								writer.add_tiles(&v).unwrap();
 							})
