@@ -213,16 +213,54 @@ impl Blob {
 	/// let blob = Blob::from("Xylofön");
 	/// assert_eq!(blob.as_str(), "Xylofön");
 	/// ```
+	///
+	/// # Panics
+	///
+	/// Panics if the underlying data is not valid UTF-8. For a non-panicking variant that returns
+	/// a `Result`, use [`try_as_str`](Self::try_as_str).
+	///
+	/// ```should_panic
+	/// # use versatiles_core::Blob;
+	/// let invalid_utf8 = Blob::from(vec![0xFF, 0xFE]);
+	/// let _ = invalid_utf8.as_str(); // Panics!
+	/// ```
 	#[must_use]
 	pub fn as_str(&self) -> &str {
 		std::str::from_utf8(&self.0).expect("Blob content was not valid UTF-8")
+	}
+
+	/// Tries to interpret the data inside this [`Blob`] as a UTF-8 string and returns a reference to it.
+	///
+	/// Returns an error if the underlying data is not valid UTF-8.
+	///
+	/// # Errors
+	///
+	/// Returns an error with context if the blob content is not valid UTF-8.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// # use versatiles_core::Blob;
+	/// # use anyhow::Result;
+	/// # fn example() -> Result<()> {
+	/// let blob = Blob::from("Xylofön");
+	/// assert_eq!(blob.try_as_str()?, "Xylofön");
+	///
+	/// let invalid_utf8 = Blob::from(vec![0xFF, 0xFE]);
+	/// assert!(invalid_utf8.try_as_str().is_err());
+	/// # Ok(())
+	/// # }
+	/// ```
+	pub fn try_as_str(&self) -> Result<&str> {
+		std::str::from_utf8(&self.0).map_err(|e| anyhow::anyhow!("Blob content is not valid UTF-8: {}", e))
 	}
 
 	/// Converts the [`Blob`] into a `String`, assuming it contains valid UTF-8 encoded text.
 	///
 	/// # Panics
 	///
-	/// Panics if the bytes are not valid UTF-8.
+	/// Panics if the bytes are not valid UTF-8. For a non-panicking variant that returns
+	/// a `Result`, use [`try_into_string`](Self::try_into_string).
 	///
 	/// # Examples
 	///
@@ -233,9 +271,42 @@ impl Blob {
 	/// let s = blob.into_string();
 	/// assert_eq!(s, "Hello");
 	/// ```
+	///
+	/// ```should_panic
+	/// # use versatiles_core::Blob;
+	/// let invalid_utf8 = Blob::from(vec![0xFF, 0xFE]);
+	/// let _ = invalid_utf8.into_string(); // Panics!
+	/// ```
 	#[must_use]
 	pub fn into_string(self) -> String {
 		String::from_utf8(self.0).expect("Blob content was not valid UTF-8")
+	}
+
+	/// Tries to convert the [`Blob`] into a `String`.
+	///
+	/// Returns an error if the underlying data is not valid UTF-8.
+	///
+	/// # Errors
+	///
+	/// Returns an error with context if the blob content is not valid UTF-8.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// # use versatiles_core::Blob;
+	/// # use anyhow::Result;
+	/// # fn example() -> Result<()> {
+	/// let blob = Blob::from("Hello");
+	/// let s = blob.try_into_string()?;
+	/// assert_eq!(s, "Hello");
+	///
+	/// let invalid_utf8 = Blob::from(vec![0xFF, 0xFE]);
+	/// assert!(invalid_utf8.try_into_string().is_err());
+	/// # Ok(())
+	/// # }
+	/// ```
+	pub fn try_into_string(self) -> Result<String> {
+		String::from_utf8(self.0).map_err(|e| anyhow::anyhow!("Blob content is not valid UTF-8: {}", e))
 	}
 
 	/// Returns a hexadecimal string representation of the underlying bytes, with each byte separated by a space.
@@ -725,5 +796,40 @@ mod tests {
 		let slice = blob.as_mut_slice();
 		slice[0] = b'z';
 		assert_eq!(blob.as_str(), "zbc");
+	}
+
+	/// Tests the fallible `try_as_str` method with valid and invalid UTF-8.
+	#[test]
+	fn test_try_as_str() -> Result<()> {
+		// Valid UTF-8
+		let valid = Blob::from("Xylofön");
+		assert_eq!(valid.try_as_str()?, "Xylofön");
+
+		// Invalid UTF-8
+		let invalid_utf8 = Blob::from(vec![0xC3, 0x28]); // invalid sequence
+		assert!(
+			invalid_utf8.try_as_str().is_err(),
+			"Expected error for invalid UTF-8"
+		);
+
+		Ok(())
+	}
+
+	/// Tests the fallible `try_into_string` method with valid and invalid UTF-8.
+	#[test]
+	fn test_try_into_string() -> Result<()> {
+		// Valid UTF-8
+		let valid = Blob::from("Heippa");
+		let converted = valid.try_into_string()?;
+		assert_eq!(converted, "Heippa");
+
+		// Invalid UTF-8
+		let invalid_utf8 = Blob::from(vec![0xFF, 0xFE, 0xFD]);
+		assert!(
+			invalid_utf8.try_into_string().is_err(),
+			"Expected error for invalid UTF-8"
+		);
+
+		Ok(())
 	}
 }
