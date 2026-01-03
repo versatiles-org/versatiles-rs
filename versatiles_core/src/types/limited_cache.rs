@@ -2,17 +2,17 @@
 //!
 //! The `LimitedCache` manages entries in a manner resembling an LRU cache, ensuring it does not exceed
 //! a predefined number of elements (derived from the byte size limit). Once the limit is reached,
-//! least-recently accessed items are removed using a custom cleanup method.
+//! least-recently accessed items are removed automatically.
 
 use anyhow::Result;
-use std::{collections::HashMap, fmt::Debug, hash::Hash, mem::size_of, ops::Div};
+use lru::LruCache;
+use std::{fmt::Debug, hash::Hash, mem::size_of, num::NonZeroUsize, ops::Div};
 use versatiles_derive::context;
 
 /// A generic cache that stores key-value pairs up to a specified total size limit (in bytes).
 ///
 /// The cache uses a least-recently-used (LRU) strategy when it needs to remove items.
-/// Specifically, when the cache is at capacity, it calls `cleanup` to evict
-/// entries whose access index is at or below the computed median.
+/// When the cache is at capacity, the least recently accessed item is automatically evicted.
 ///
 /// # Type Parameters
 /// - `K`: The type of the keys stored in the cache. Must implement `Eq + Hash + Clone`.
@@ -35,12 +35,8 @@ use versatiles_derive::context;
 /// assert_eq!(cache.get(&1), Some(42));
 /// ```
 pub struct LimitedCache<K, V> {
-	/// Internal map storing (value, "last access index") pairs.
-	cache: HashMap<K, (V, u64)>,
-	/// Derived maximum number of elements the cache can hold.
-	max_length: usize,
-	/// A monotonically increasing index to track access recency.
-	last_index: u64,
+	/// Internal LRU cache storing key-value pairs.
+	cache: LruCache<K, V>,
 }
 
 impl<K, V> LimitedCache<K, V>
@@ -78,17 +74,14 @@ where
 		);
 
 		Self {
-			cache: HashMap::new(),
-			max_length,
-			last_index: 0,
+			cache: LruCache::new(NonZeroUsize::new(max_length).unwrap()),
 		}
 	}
 
 	/// Retrieves a cloned value from the cache by its key, updating the last access time.
 	///
 	/// If the key exists:
-	/// - The method increments the internal `last_index`.
-	/// - Updates the stored access index to reflect this more recent use.
+	/// - The method marks this key as most recently used.
 	/// - Returns a copy of the stored value.
 	///
 	/// If the key does not exist, returns `None`.
@@ -104,13 +97,7 @@ where
 	/// assert_eq!(cache.get(&"bar"), None);
 	/// ```
 	pub fn get(&mut self, key: &K) -> Option<V> {
-		if let Some((value, old_index)) = self.cache.get_mut(key) {
-			self.last_index += 1;
-			*old_index = self.last_index;
-			Some(value.clone())
-		} else {
-			None
-		}
+		self.cache.get(key).cloned()
 	}
 
 	/// Gets the value corresponding to `key` if it exists; otherwise calls the given callback
@@ -158,9 +145,8 @@ where
 
 	/// Adds a new `key -> value` pair to the cache, returning the inserted value.
 	///
-	/// - Increments `last_index`.
-	/// - Stores `(value, last_index)` in the internal map.  
-	/// - If adding triggers the capacity limit, it runs `cleanup()` to evict items.
+	/// - If adding triggers the capacity limit, the least recently used item is automatically evicted.
+	/// - The newly added item becomes the most recently used item.
 	///
 	/// # Examples
 	///
@@ -172,50 +158,68 @@ where
 	/// assert_eq!(inserted, 123);
 	/// ```
 	pub fn add(&mut self, key: K, value: V) -> V {
-		if self.cache.len() >= self.max_length {
-			self.cleanup();
-		}
-
-		self.last_index += 1;
-		// Insert or replace. The 0.0 clone is just to ensure a consistent return type
-		self.cache.entry(key).or_insert((value, self.last_index)).0.clone()
+		let cloned_value = value.clone();
+		self.cache.put(key, value);
+		cloned_value
 	}
 
-	/// Removes the least recently accessed items if the cache has reached capacity.
+	/// Returns the current number of entries in the cache.
 	///
-	/// The current implementation:
-	/// 1. Collects all access indices into a `Vec`.
-	/// 2. Sorts them, and takes the median index.
-	/// 3. Removes any entries whose access index is ≤ that median.
+	/// # Examples
 	///
-	/// **Note**: The chosen median-based strategy is a compromise. It tries to remove
-	/// roughly half the entries (the older ones) at once, thereby avoiding multiple small
-	/// evictions. However, it’s not strictly LRU in a typical “remove one oldest item”
-	/// sense. If you want a more standard LRU, consider a different data structure or
-	/// approach (like `hash_linked::LRUCache`).
-	fn cleanup(&mut self) {
-		let mut indices: Vec<u64> = self.cache.values().map(|(_, i)| *i).collect();
-		indices.sort_unstable();
-		let median_index = indices[indices.len().div(2)];
+	/// ```rust
+	/// use versatiles_core::LimitedCache;
+	///
+	/// let mut cache = LimitedCache::with_maximum_size(1_000);
+	/// assert_eq!(cache.len(), 0);
+	/// cache.add("foo", 42);
+	/// assert_eq!(cache.len(), 1);
+	/// ```
+	pub fn len(&self) -> usize {
+		self.cache.len()
+	}
 
-		// Retain only those whose access index is greater than the median
-		self.cache.retain(|_, (_, idx)| {
-			if *idx <= median_index {
-				false
-			} else {
-				*idx = 0; // Not strictly necessary, but can reset for clarity
-				true
-			}
-		});
+	/// Returns true if the cache contains no entries.
+	///
+	/// # Examples
+	///
+	/// ```rust
+	/// use versatiles_core::LimitedCache;
+	///
+	/// let mut cache = LimitedCache::with_maximum_size(1_000);
+	/// assert!(cache.is_empty());
+	/// cache.add("foo", 42);
+	/// assert!(!cache.is_empty());
+	/// ```
+	pub fn is_empty(&self) -> bool {
+		self.cache.is_empty()
+	}
+
+	/// Returns the maximum capacity of the cache.
+	///
+	/// # Examples
+	///
+	/// ```rust
+	/// use versatiles_core::LimitedCache;
+	///
+	/// let cache: LimitedCache<u64, u64> = LimitedCache::with_maximum_size(1_000);
+	/// // Capacity depends on element size
+	/// assert!(cache.capacity() > 0);
+	/// ```
+	pub fn capacity(&self) -> usize {
+		self.cache.cap().get()
 	}
 }
 
-impl<K, V> Debug for LimitedCache<K, V> {
+impl<K, V> Debug for LimitedCache<K, V>
+where
+	K: Clone + Debug + Eq + Hash + PartialEq,
+	V: Clone,
+{
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("LimitedCache")
-			.field("length", &self.cache.len())
-			.field("max_length", &self.max_length)
-			.field("last_index", &self.last_index)
+			.field("length", &self.len())
+			.field("max_length", &self.capacity())
 			.finish()
 	}
 }
@@ -226,7 +230,7 @@ mod tests {
 	use anyhow::{Result, anyhow};
 	use std::mem::size_of;
 
-	/// Ensures that creation with a given `maximum_size` sets the derived `max_length` appropriately.
+	/// Ensures that creation with a given `maximum_size` sets the derived capacity appropriately.
 	#[test]
 	fn test_cache_initialization() {
 		// Each (u64, i32) pair consumes size_of::<u64>() + size_of::<i32>() bytes.
@@ -235,7 +239,7 @@ mod tests {
 		let maximum_size = 100;
 		let cache: LimitedCache<u64, i32> = LimitedCache::with_maximum_size(maximum_size);
 		let expected_max_len = maximum_size / element_size;
-		assert_eq!(cache.max_length, expected_max_len);
+		assert_eq!(cache.capacity(), expected_max_len);
 	}
 
 	/// Ensures that we can store and retrieve values, and `None` is returned for absent keys.
@@ -268,33 +272,59 @@ mod tests {
 		Ok(())
 	}
 
-	/// Verifies that the internal cleanup is triggered once the cache hits capacity,
-	/// and older items are evicted.
+	/// Verifies that the LRU eviction works correctly when the cache hits capacity.
 	#[test]
-	fn test_capacity_and_cleanup() {
-		let test = |max: u64, result: &[u64]| {
-			let mut cache: LimitedCache<u64, u64> = LimitedCache::with_maximum_size(10 * (std::mem::size_of::<u64>()));
-			for i in 0..=max {
-				cache.add(i, i * 100);
-				cache.get(&i);
-			}
-			let mut list: Vec<u64> = Vec::new();
-			for i in 0..=9 {
-				list.push(u64::from(cache.get(&i).is_some()));
-			}
-			assert_eq!(list.as_slice(), result, "error for test index {max}");
-		};
+	fn test_capacity_and_lru_eviction() {
+		// Create a cache that can hold exactly 5 u64 pairs
+		let mut cache: LimitedCache<u64, u64> = LimitedCache::with_maximum_size(5 * 2 * std::mem::size_of::<u64>());
 
-		test(0, &[1, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-		test(1, &[1, 1, 0, 0, 0, 0, 0, 0, 0, 0]);
-		test(2, &[1, 1, 1, 0, 0, 0, 0, 0, 0, 0]);
-		test(3, &[1, 1, 1, 1, 0, 0, 0, 0, 0, 0]);
-		test(4, &[1, 1, 1, 1, 1, 0, 0, 0, 0, 0]);
-		test(5, &[0, 0, 0, 1, 1, 1, 0, 0, 0, 0]);
-		test(6, &[0, 0, 0, 1, 1, 1, 1, 0, 0, 0]);
-		test(7, &[0, 0, 0, 1, 1, 1, 1, 1, 0, 0]);
-		test(8, &[0, 0, 0, 0, 0, 0, 1, 1, 1, 0]);
-		test(9, &[0, 0, 0, 0, 0, 0, 1, 1, 1, 1]);
+		// Add 5 items (0..4)
+		for i in 0..5 {
+			cache.add(i, i * 100);
+		}
+
+		// All 5 should be present
+		assert_eq!(cache.len(), 5);
+		for i in 0..5 {
+			assert_eq!(cache.get(&i), Some(i * 100));
+		}
+
+		// Access item 0 to make it most recently used
+		let _ = cache.get(&0);
+
+		// Add a new item (5), which should evict the LRU item (1, since 0 was just accessed)
+		cache.add(5, 500);
+
+		// Now we should have: 0, 2, 3, 4, 5 (1 was evicted)
+		assert_eq!(cache.len(), 5);
+		assert_eq!(cache.get(&0), Some(0)); // Still present (was accessed)
+		assert_eq!(cache.get(&1), None); // Evicted (was LRU)
+		assert_eq!(cache.get(&2), Some(200));
+		assert_eq!(cache.get(&3), Some(300));
+		assert_eq!(cache.get(&4), Some(400));
+		assert_eq!(cache.get(&5), Some(500));
+	}
+
+	/// Tests that accessing items updates their LRU position
+	#[test]
+	fn test_lru_updates_on_access() {
+		let mut cache: LimitedCache<u64, u64> = LimitedCache::with_maximum_size(3 * 2 * std::mem::size_of::<u64>());
+
+		// Add 3 items
+		cache.add(1, 100);
+		cache.add(2, 200);
+		cache.add(3, 300);
+
+		// Access item 1 to make it most recently used
+		let _ = cache.get(&1);
+
+		// Add a new item, should evict 2 (the LRU)
+		cache.add(4, 400);
+
+		assert_eq!(cache.get(&1), Some(100)); // Still present
+		assert_eq!(cache.get(&2), None); // Evicted
+		assert_eq!(cache.get(&3), Some(300)); // Still present
+		assert_eq!(cache.get(&4), Some(400)); // Newly added
 	}
 
 	/// Ensures that `with_maximum_size` panics if the size is too small to store even a single `(K, V)`.
@@ -311,10 +341,31 @@ mod tests {
 	fn test_debug_format() {
 		let cache: LimitedCache<u8, u8> = LimitedCache::with_maximum_size(10);
 		let debug_str = format!("{cache:?}");
-		// Example: "LimitedCache { length: 0, max_length: 5, last_index: 0 }"
+		// Example: "LimitedCache { length: 0, max_length: 5 }"
 		assert!(debug_str.contains("LimitedCache"));
 		assert!(debug_str.contains("length"));
 		assert!(debug_str.contains("max_length"));
-		assert!(debug_str.contains("last_index"));
+	}
+
+	/// Test that the cache properly handles capacity
+	#[test]
+	fn test_capacity_methods() {
+		let mut cache: LimitedCache<u64, u64> = LimitedCache::with_maximum_size(3 * 2 * std::mem::size_of::<u64>());
+
+		assert_eq!(cache.capacity(), 3);
+		assert_eq!(cache.len(), 0);
+		assert!(cache.is_empty());
+
+		cache.add(1, 100);
+		assert_eq!(cache.len(), 1);
+		assert!(!cache.is_empty());
+
+		cache.add(2, 200);
+		cache.add(3, 300);
+		assert_eq!(cache.len(), 3);
+
+		// Adding one more should evict the LRU
+		cache.add(4, 400);
+		assert_eq!(cache.len(), 3); // Still at capacity
 	}
 }
