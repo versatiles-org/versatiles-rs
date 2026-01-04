@@ -31,11 +31,7 @@ use super::DataReaderTrait;
 use crate::{Blob, ByteRange};
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use std::{
-	fs::File,
-	io::{Read, Seek, SeekFrom},
-	path::Path,
-};
+use std::{fs::File, io::Read, path::Path};
 use versatiles_derive::context;
 
 /// A struct that provides reading capabilities from a file.
@@ -85,22 +81,43 @@ impl DataReaderTrait for DataReaderFile {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with the read data or an error.
+	///
+	/// # Thread Safety
+	///
+	/// This method uses position-independent I/O (`pread` on Unix, `seek_read` on Windows)
+	/// which is thread-safe and allows concurrent reads without race conditions.
 	#[context("while reading range {range:?} from file '{}'", self.name)]
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
 		let mut buffer = vec![0; range.length as usize];
-		let mut file = self
-			.file
-			.try_clone()
-			.with_context(|| format!("failed to clone file '{}'", self.name))?;
-		file
-			.seek(SeekFrom::Start(range.offset))
-			.with_context(|| format!("failed to seek to offset {} in file '{}',", range.offset, self.name))?;
-		file.read_exact(&mut buffer).with_context(|| {
-			format!(
-				"failed to read {} bytes at offset {} in file '{}'",
-				range.length, range.offset, self.name
-			)
-		})?;
+
+		// Use position-independent I/O - thread-safe by design
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::FileExt;
+			self.file.read_exact_at(&mut buffer, range.offset).with_context(|| {
+				format!(
+					"failed to read {} bytes at offset {} in file '{}'",
+					range.length, range.offset, self.name
+				)
+			})?;
+		}
+
+		#[cfg(windows)]
+		{
+			use std::os::windows::fs::FileExt;
+			self.file.seek_read(&mut buffer, range.offset).with_context(|| {
+				format!(
+					"failed to read {} bytes at offset {} in file '{}'",
+					range.length, range.offset, self.name
+				)
+			})?;
+		}
+
+		#[cfg(not(any(unix, windows)))]
+		{
+			compile_error!("Platform not supported: need position-independent file I/O");
+		}
+
 		Ok(Blob::from(buffer))
 	}
 
@@ -109,19 +126,32 @@ impl DataReaderTrait for DataReaderFile {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with all the data or an error.
+	///
+	/// # Thread Safety
+	///
+	/// This method uses position-independent I/O which is thread-safe.
 	#[context("while reading all bytes from file '{}'", self.name)]
 	async fn read_all(&self) -> Result<Blob> {
 		let mut buffer = vec![0; self.size as usize];
-		let mut file = self
-			.file
-			.try_clone()
-			.with_context(|| format!("failed to clone file '{}'", self.name))?;
-		file
-			.seek(SeekFrom::Start(0))
-			.with_context(|| format!("failed to seek to start of file '{}'", self.name))?;
-		file
-			.read_exact(&mut buffer)
-			.with_context(|| format!("failed to read all {} bytes from file '{}'", self.size, self.name))?;
+
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::FileExt;
+			self
+				.file
+				.read_exact_at(&mut buffer, 0)
+				.with_context(|| format!("failed to read all {} bytes from file '{}'", self.size, self.name))?;
+		}
+
+		#[cfg(windows)]
+		{
+			use std::os::windows::fs::FileExt;
+			self
+				.file
+				.seek_read(&mut buffer, 0)
+				.with_context(|| format!("failed to read all {} bytes from file '{}'", self.size, self.name))?;
+		}
+
 		Ok(Blob::from(buffer))
 	}
 
@@ -255,6 +285,68 @@ mod tests {
 		let reader = DataReaderFile::open(temp_file.path())?;
 		let blob = reader.read_all().await?;
 		assert_eq!(blob.as_slice(), b"Async read all test");
+		Ok(())
+	}
+
+	// Test concurrent range reads to verify thread safety
+	#[tokio::test]
+	async fn concurrent_range_reads_return_correct_data() -> Result<()> {
+		use std::sync::Arc;
+		use tokio::task::JoinSet;
+
+		// Create test file with known pattern
+		let temp_file = NamedTempFile::new("concurrent_test.dat")?;
+		let mut file = File::create(&temp_file)?;
+
+		// Write 10KB of data with predictable pattern
+		// Each byte is (position % 256) so we can verify correctness
+		let mut data = Vec::new();
+		for i in 0..10240 {
+			data.push((i % 256) as u8);
+		}
+		file.write_all(&data)?;
+		drop(file);
+
+		let reader = Arc::new(DataReaderFile::open(temp_file.path())?);
+
+		// Spawn 100 concurrent tasks reading different ranges
+		let mut join_set = JoinSet::new();
+
+		for task_id in 0..100 {
+			let reader_clone = Arc::clone(&reader);
+
+			join_set.spawn(async move {
+				// Each task reads a different 100-byte range
+				let offset = (task_id * 100) % 10000;
+				let length = 100;
+				let range = ByteRange::new(offset, length);
+
+				let blob = reader_clone.read_range(&range).await?;
+
+				// Verify every byte is correct
+				for (i, &byte) in blob.as_slice().iter().enumerate() {
+					let expected = ((offset + i as u64) % 256) as u8;
+					assert_eq!(
+						byte,
+						expected,
+						"Task {}: Byte {} at offset {} is {} but expected {}",
+						task_id,
+						i,
+						offset + i as u64,
+						byte,
+						expected
+					);
+				}
+
+				Ok::<_, anyhow::Error>(())
+			});
+		}
+
+		// Wait for all tasks and check results
+		while let Some(result) = join_set.join_next().await {
+			result??;
+		}
+
 		Ok(())
 	}
 }
