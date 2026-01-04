@@ -56,3 +56,35 @@ pub use progress::{Progress, ProgressData};
 pub use server::TileServer;
 pub use tile_source::TileSource;
 pub use types::{ConvertOptions, ProbeResult, ServerOptions, SourceMetadata, TileCoord};
+
+/// Initialize logging when the module loads.
+/// This ensures that log messages from the Rust code are visible in the Node.js console.
+///
+/// The logger is configured to:
+/// - Output to stderr (so it doesn't interfere with stdout)
+/// - Use the log level from the `RUST_LOG` environment variable (default: INFO)
+/// - Format messages with a simple prefix (ERROR/WARN/INFO/DEBUG/TRACE)
+///
+/// Environment variable examples:
+/// - `RUST_LOG=debug` - Show debug and above
+/// - `RUST_LOG=warn` - Show warnings and errors only
+/// - `RUST_LOG=versatiles=debug,versatiles_core=trace` - Fine-grained control
+#[ctor::ctor]
+fn init_logger() {
+	use std::io::Write;
+
+	let _ = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+		.format(|buf, record| {
+			let level = record.level();
+			let prefix = match level {
+				log::Level::Error => "ERROR: ",
+				log::Level::Warn => "WARN: ",
+				log::Level::Info => "info: ",
+				log::Level::Debug => "debug: ",
+				log::Level::Trace => "trace: ",
+			};
+			writeln!(buf, "{}{}", prefix, record.args())
+		})
+		.target(env_logger::Target::Stderr)
+		.try_init();
+}
