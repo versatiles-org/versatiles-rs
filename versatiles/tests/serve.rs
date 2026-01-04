@@ -25,6 +25,62 @@ async fn serve_remote_url() {
 	);
 }
 
+#[tokio::test]
+async fn serve_concurrent_tile_requests_return_correct_data() {
+	use std::collections::HashMap;
+	use tokio::task::JoinSet;
+
+	let input = get_testdata("berlin.mbtiles");
+	let server = Server::new(&[&input]).await;
+
+	let host = server.host.clone();
+	// First, build a reference map by requesting each tile sequentially
+	let urls: Vec<String> = [(14, 8800, 5374), (14, 8800, 5375), (14, 8801, 5374), (14, 8801, 5375)]
+		.iter()
+		.map(|&(z, x, y)| format!("{host}/tiles/berlin/{z}/{x}/{y}"))
+		.collect::<Vec<_>>();
+
+	let mut reference_tiles: HashMap<usize, Vec<u8>> = HashMap::new();
+
+	println!("Building reference map of tiles...");
+	for (i, url) in urls.iter().enumerate() {
+		let resp = reqwest::get(url).await.unwrap();
+		assert_eq!(resp.status(), 200);
+		let bytes = resp.bytes().await.unwrap().to_vec();
+		reference_tiles.insert(i, bytes);
+	}
+
+	println!("Reference map built with {} tiles", reference_tiles.len());
+
+	// Now make concurrent requests multiple times to stress test
+	const CONCURRENT_ROUNDS: usize = 10;
+
+	for _ in 0..CONCURRENT_ROUNDS {
+		let mut join_set = JoinSet::new();
+
+		for (i, url) in urls.iter().enumerate() {
+			let url = url.clone();
+			join_set.spawn(async move {
+				let resp = reqwest::get(url).await?;
+				assert_eq!(resp.status(), 200);
+				let bytes = resp.bytes().await?.to_vec();
+				Ok::<_, anyhow::Error>((i, bytes))
+			});
+		}
+
+		let results = join_set.join_all().await;
+
+		for result in results {
+			let (i, bytes) = result.unwrap();
+			let expected_bytes = reference_tiles.get(&i).unwrap();
+			assert_eq!(bytes.len(), expected_bytes.len());
+			assert_eq!(bytes, *expected_bytes);
+		}
+	}
+
+	println!("All {} rounds completed successfully!", CONCURRENT_ROUNDS);
+}
+
 struct Server {
 	host: String,
 	child: Child,
