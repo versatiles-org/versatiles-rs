@@ -18,7 +18,7 @@ log.title('VersaTiles Server Example');
 
 	const server = new TileServer({
 		ip: '127.0.0.1',
-		port: 8080,
+		port: 0,
 		minimalRecompression: true,
 	});
 
@@ -45,7 +45,7 @@ log.title('VersaTiles Server Example');
 
 	log.section('Example 2: Server with multiple tile sources');
 
-	const server = new TileServer({ port: 8080 });
+	const server = new TileServer({ port: 0 });
 
 	// Add multiple tile sources
 	await server.addTileSourceFromPath('osm', new URL('../../testdata/berlin.pmtiles', import.meta.url).pathname);
@@ -71,7 +71,7 @@ log.title('VersaTiles Server Example');
 
 	log.section('Example 3: Server with tiles and static files');
 
-	const server = new TileServer({ port: 8080 });
+	const server = new TileServer({ port: 0 });
 
 	// Add tile sources
 	await server.addTileSourceFromPath('tiles', new URL('../../testdata/berlin.pmtiles', import.meta.url).pathname);
@@ -96,7 +96,7 @@ log.title('VersaTiles Server Example');
 
 	log.section('Example 4: Dynamic source management');
 
-	const server = new TileServer({ port: 8080 });
+	const server = new TileServer({ port: 0 });
 	await server.start();
 	const port = server.port;
 
