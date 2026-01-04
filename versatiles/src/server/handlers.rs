@@ -59,9 +59,7 @@ pub async fn serve_tile_from_source(
 		}
 	};
 
-	let response = tile_source
-		.get_data(&stripped_path, &target)
-		.await;
+	let response = tile_source.get_data(&stripped_path, &target).await;
 
 	match response {
 		Ok(Some(result)) => {

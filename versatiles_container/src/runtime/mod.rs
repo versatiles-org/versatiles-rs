@@ -14,7 +14,7 @@
 //! let runtime = TilesRuntime::builder()
 //!     .with_memory_cache()
 //!     .max_memory(2 * 1024 * 1024 * 1024)
-//!     .silent(true)
+//!     .silent_progress(true)
 //!     .build();
 //!
 //! // Subscribe to events

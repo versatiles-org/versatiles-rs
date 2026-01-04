@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 /// let runtime = TilesRuntime::builder()
 ///     .with_disk_cache()
 ///     .max_memory(2 * 1024 * 1024 * 1024)
-///     .silent(true)
+///     .silent_progress(true)
 ///     .build();
 /// ```
 pub struct RuntimeBuilder {
@@ -22,7 +22,7 @@ pub struct RuntimeBuilder {
 	max_memory: Option<usize>,
 	#[allow(clippy::type_complexity)]
 	registry_customizer: Vec<Box<dyn FnOnce(&mut ContainerRegistry)>>,
-	silent: bool,
+	silent_progress: bool,
 }
 
 impl RuntimeBuilder {
@@ -33,9 +33,9 @@ impl RuntimeBuilder {
 			max_memory: None,
 			registry_customizer: Vec::new(),
 			#[cfg(not(test))]
-			silent: false,
+			silent_progress: false,
 			#[cfg(test)]
-			silent: true,
+			silent_progress: true,
 		}
 	}
 
@@ -55,8 +55,8 @@ impl RuntimeBuilder {
 		self.cache_type(CacheType::new_disk())
 	}
 
-	pub fn silent(mut self, silent: bool) -> Self {
-		self.silent = silent;
+	pub fn silent_progress(mut self, silent: bool) -> Self {
+		self.silent_progress = silent;
 		self
 	}
 
@@ -84,7 +84,7 @@ impl RuntimeBuilder {
 	///     .customize_registry(|registry| {
 	///         // Register custom format handlers
 	///     })
-	///     .silent(true)
+	///     .silent_progress(true)
 	///     .build();
 	/// ```
 	pub fn customize_registry<F>(mut self, customizer: F) -> Self
@@ -102,7 +102,7 @@ impl RuntimeBuilder {
 		let cache_type = self.cache_type.unwrap_or_else(CacheType::new_memory);
 		let event_bus = EventBus::new();
 
-		let progress_factory = Mutex::new(ProgressFactory::new(event_bus.clone(), self.silent));
+		let progress_factory = Mutex::new(ProgressFactory::new(event_bus.clone(), self.silent_progress));
 
 		// Create registry with default format handlers
 		let mut registry = ContainerRegistry::default();
@@ -139,7 +139,7 @@ mod tests {
 		let builder = RuntimeBuilder::new();
 		assert!(builder.cache_type.is_none());
 		assert!(builder.max_memory.is_none());
-		assert!(builder.silent);
+		assert!(builder.silent_progress);
 		assert_eq!(builder.registry_customizer.len(), 0);
 	}
 
@@ -148,7 +148,7 @@ mod tests {
 		let builder = RuntimeBuilder::default();
 		assert!(builder.cache_type.is_none());
 		assert!(builder.max_memory.is_none());
-		assert!(builder.silent);
+		assert!(builder.silent_progress);
 	}
 
 	#[test]
@@ -172,10 +172,10 @@ mod tests {
 	#[test]
 	fn test_runtime_builder_silent() {
 		let mut builder = RuntimeBuilder::new();
-		builder = builder.silent(true);
-		assert!(builder.silent);
-		builder = builder.silent(false);
-		assert!(!builder.silent);
+		builder = builder.silent_progress(true);
+		assert!(builder.silent_progress);
+		builder = builder.silent_progress(false);
+		assert!(!builder.silent_progress);
 	}
 
 	#[test]
@@ -199,12 +199,12 @@ mod tests {
 		let builder = RuntimeBuilder::new()
 			.with_memory_cache()
 			.max_memory(2048)
-			.silent(true)
+			.silent_progress(true)
 			.customize_registry(|_| {});
 
 		assert!(builder.cache_type.is_some());
 		assert_eq!(builder.max_memory, Some(2048));
-		assert!(builder.silent);
+		assert!(builder.silent_progress);
 		assert_eq!(builder.registry_customizer.len(), 1);
 	}
 
@@ -235,7 +235,7 @@ mod tests {
 
 	#[test]
 	fn test_runtime_builder_build_silent() {
-		let runtime = RuntimeBuilder::new().silent(true).build();
+		let runtime = RuntimeBuilder::new().silent_progress(true).build();
 		// Create a progress and verify it works
 		let progress = runtime.create_progress("Test", 100);
 		progress.inc(10);
@@ -264,7 +264,7 @@ mod tests {
 		let runtime = RuntimeBuilder::new()
 			.with_disk_cache()
 			.max_memory(8 * 1024 * 1024)
-			.silent(true)
+			.silent_progress(true)
 			.customize_registry(|_| {})
 			.build();
 
