@@ -50,10 +50,10 @@ pub async fn serve_tile_from_source(
 		Ok(p) => p,
 		Err(err) => {
 			log::error!(
-				"Path prefix mismatch: path '{}' does not start with expected prefix '{}': {}",
+				"Path prefix mismatch: path '{}' does not start with expected prefix '{}':\n{}",
 				path,
 				tile_source.prefix,
-				err
+				format_error_chain(&err)
 			);
 			return error_500();
 		}
@@ -71,7 +71,10 @@ pub async fn serve_tile_from_source(
 			error_404()
 		}
 		Err(err) => {
-			log::warn!("send 500 for tile request: {path}. Reason: {err}");
+			log::warn!(
+				"send 500 for tile request: {path}. Error:\n{}",
+				format_error_chain(&err)
+			);
 			error_500()
 		}
 	}
@@ -105,6 +108,20 @@ pub async fn serve_static(uri: Uri, headers: HeaderMap, State(state): State<Stat
 }
 
 // --- small helpers -----------------------------------------------------------
+
+fn format_error_chain(err: &anyhow::Error) -> String {
+	let mut result = err.to_string();
+
+	// Iterate through the error chain
+	for (i, cause) in err.chain().skip(1).enumerate() {
+		if i == 0 {
+			result.push_str("\n  Caused by:");
+		}
+		result.push_str(&format!("\n    {}", cause));
+	}
+
+	result
+}
 
 fn error_with(status: u16, message: &str) -> Response<Body> {
 	Response::builder()
@@ -148,11 +165,11 @@ fn ok_data(result: SourceResponse, mut target: TargetCompression) -> Response<Bo
 		Ok(result) => result,
 		Err(err) => {
 			log::error!(
-				"Compression optimization failed for mime type '{}' (compression: {:?}, target: {:?}): {}",
+				"Compression optimization failed for mime type '{}' (compression: {:?}, target: {:?}):\n{}",
 				result.mime,
 				result.compression,
 				target,
-				err
+				format_error_chain(&err)
 			);
 			return error_500();
 		}
@@ -230,6 +247,39 @@ mod tests {
 
 		// Expect gzip because requester allowed it and source was uncompressed text
 		assert_eq!(headers.get(header::CONTENT_ENCODING).unwrap(), "gzip");
+	}
+
+	#[test]
+	fn format_error_chain_single_error() {
+		let err = anyhow::anyhow!("Simple error");
+		let formatted = super::format_error_chain(&err);
+		assert_eq!(formatted, "Simple error");
+	}
+
+	#[test]
+	fn format_error_chain_with_context() {
+		// Create a multi-level error chain
+		let err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+		let err = anyhow::Error::from(err)
+			.context("Failed to read configuration")
+			.context("Server startup failed");
+		let formatted = format_error_chain(&err);
+
+		// Should contain main error and all causes
+		assert!(formatted.contains("Server startup failed"));
+		assert!(formatted.contains("Caused by:"));
+		assert!(formatted.contains("Failed to read configuration"));
+		assert!(formatted.contains("file not found"));
+
+		// Should be multi-line
+		assert!(formatted.lines().count() > 1);
+
+		// Verify the format structure
+		let lines: Vec<&str> = formatted.lines().collect();
+		assert_eq!(lines[0], "Server startup failed");
+		assert_eq!(lines[1], "  Caused by:");
+		assert!(lines[2].starts_with("    "));
+		assert!(lines[3].starts_with("    "));
 	}
 
 	#[test]
