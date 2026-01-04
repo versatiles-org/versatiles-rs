@@ -138,8 +138,19 @@ fn ok_data(result: SourceResponse, mut target: TargetCompression) -> Response<Bo
 		target
 	);
 
-	let (blob, compression) =
-		optimize_compression(result.blob, result.compression, &target).expect("compression optimization should succeed");
+	let (blob, compression) = match optimize_compression(result.blob, result.compression, &target) {
+		Ok(result) => result,
+		Err(err) => {
+			log::error!(
+				"Compression optimization failed for mime type '{}' (compression: {:?}, target: {:?}): {}",
+				result.mime,
+				result.compression,
+				target,
+				err
+			);
+			return error_500();
+		}
+	};
 
 	use TileCompression::*;
 	match compression {
