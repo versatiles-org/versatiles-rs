@@ -46,13 +46,21 @@ pub async fn serve_tile_from_source(
 		target.set_fast_compression();
 	}
 
+	let stripped_path = match path.strip_prefix(&tile_source.prefix) {
+		Ok(p) => p,
+		Err(err) => {
+			log::error!(
+				"Path prefix mismatch: path '{}' does not start with expected prefix '{}': {}",
+				path,
+				tile_source.prefix,
+				err
+			);
+			return error_500();
+		}
+	};
+
 	let response = tile_source
-		.get_data(
-			&path
-				.strip_prefix(&tile_source.prefix)
-				.expect("request path should start with source prefix"),
-			&target,
-		)
+		.get_data(&stripped_path, &target)
 		.await;
 
 	match response {
