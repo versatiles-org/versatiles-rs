@@ -37,7 +37,7 @@
 //! ```
 
 use anyhow::{Result, bail};
-use std::{io::BufReader, path::Path};
+use std::{collections::HashSet, io::BufReader, path::Path};
 use versatiles_container::TilesRuntime;
 use versatiles_core::utils::read_csv_iter;
 use versatiles_derive::context;
@@ -81,6 +81,7 @@ pub struct CsvReader {
 
 	runtime: TilesRuntime,
 	path: std::path::PathBuf,
+	string_fields: HashSet<String>,
 }
 
 impl CsvReader {
@@ -116,6 +117,7 @@ impl CsvReader {
 			decimal_separator: None,
 			runtime,
 			path: path.to_path_buf(),
+			string_fields: HashSet::new(),
 		}
 	}
 
@@ -159,6 +161,12 @@ impl CsvReader {
 	#[must_use]
 	pub fn with_decimal_separator(mut self, sep: char) -> Self {
 		self.decimal_separator = if sep == '.' { None } else { Some(sep) };
+		self
+	}
+
+	#[must_use]
+	pub fn with_string_field(mut self, field_name: &str) -> Self {
+		self.string_fields.insert(field_name.to_string());
 		self
 	}
 
@@ -221,12 +229,15 @@ impl CsvReader {
 				e.map(|(fields, _line_pos, byte_pos)| {
 					progress.set_position(byte_pos as u64);
 
-					GeoProperties::from_iter(
-						fields
-							.into_iter()
-							.enumerate()
-							.map(|(col, value)| (header[col].clone(), self.convert_value(&value))),
-					)
+					GeoProperties::from_iter(fields.into_iter().enumerate().map(|(col, value)| {
+						let key = header[col].clone();
+						let value = if self.string_fields.contains(&key) {
+							GeoValue::from(value)
+						} else {
+							self.convert_value(&value)
+						};
+						(key, value)
+					}))
 				})
 				.map_err(|e| errors.push(e))
 				.ok()
