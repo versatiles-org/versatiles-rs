@@ -69,22 +69,20 @@ impl TileBBox {
 		let mut meta_bbox = *self;
 		meta_bbox.scale_down(size);
 
-		let iter = meta_bbox
-			.iter_coords()
-			.map(move |coord| {
-				let x = coord.x * size;
-				let y = coord.y * size;
+		Box::new(
+			meta_bbox
+				.into_iter_coords()
+				.map(move |coord| {
+					let x = coord.x * size;
+					let y = coord.y * size;
 
-				let mut bbox =
-					TileBBox::from_min_and_max(level, x, y, (x + size - 1).min(max), (y + size - 1).min(max)).unwrap();
-				bbox.intersect_with(self).unwrap();
-				bbox
-			})
-			.filter(|bbox| !bbox.is_empty())
-			.collect::<Vec<TileBBox>>()
-			.into_iter();
-
-		Box::new(iter)
+					let mut bbox =
+						TileBBox::from_min_and_max(level, x, y, (x + size - 1).min(max), (y + size - 1).min(max)).unwrap();
+					bbox.intersect_with(self).unwrap();
+					bbox
+				})
+				.filter(|bbox| !bbox.is_empty()),
+		)
 	}
 }
 
