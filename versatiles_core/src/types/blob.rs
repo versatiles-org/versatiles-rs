@@ -321,12 +321,19 @@ impl Blob {
 	/// ```
 	#[must_use]
 	pub fn as_hex(&self) -> String {
-		self
-			.0
-			.iter()
-			.map(|byte| format!("{byte:02x}"))
-			.collect::<Vec<_>>()
-			.join(" ")
+		use std::fmt::Write;
+		if self.0.is_empty() {
+			return String::new();
+		}
+		// Pre-allocate: 2 hex chars + 1 space per byte, minus trailing space
+		let mut result = String::with_capacity(self.0.len() * 3 - 1);
+		for (i, byte) in self.0.iter().enumerate() {
+			if i > 0 {
+				result.push(' ');
+			}
+			let _ = write!(result, "{byte:02x}");
+		}
+		result
 	}
 
 	/// Returns the length of the underlying byte slice.
