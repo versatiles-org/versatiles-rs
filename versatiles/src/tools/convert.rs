@@ -7,12 +7,14 @@ use versatiles_derive::context;
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
 pub struct Subcommand {
-	/// supported container formats: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory
-	#[arg()]
+	/// Input tile container (path, URL, or data source expression).
+	/// Run `versatiles help source` for syntax details.
+	#[arg(verbatim_doc_comment)]
 	input_file: String,
 
-	/// supported container formats: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory
-	#[arg()]
+	/// Output tile container path.
+	/// Supported formats: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory.
+	#[arg(verbatim_doc_comment)]
 	output_file: PathBuf,
 
 	/// minimum zoom level

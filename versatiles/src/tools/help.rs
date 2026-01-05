@@ -17,12 +17,19 @@ pub struct Subcommand {
 enum Topic {
 	Pipeline,
 	Config,
+	Source,
+}
+
+/// Returns markdown help text explaining data source syntax.
+fn data_source_help_md() -> String {
+	include_str!("help_source.md").to_string()
 }
 
 pub fn run(command: &Subcommand) -> Result<()> {
 	let md = match command.topic {
 		Topic::Pipeline => PipelineFactory::new_dummy().help_md(),
 		Topic::Config => Config::help_md(),
+		Topic::Source => data_source_help_md(),
 	};
 
 	if command.raw {
@@ -95,6 +102,18 @@ mod tests {
 	#[test]
 	fn test_help_config2() -> Result<()> {
 		run_command(vec!["versatiles", "help", "--raw", "config"])?;
+		Ok(())
+	}
+
+	#[test]
+	fn test_help_source1() -> Result<()> {
+		run_command(vec!["versatiles", "help", "source"])?;
+		Ok(())
+	}
+
+	#[test]
+	fn test_help_source2() -> Result<()> {
+		run_command(vec!["versatiles", "help", "--raw", "source"])?;
 		Ok(())
 	}
 }

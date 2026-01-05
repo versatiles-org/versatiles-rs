@@ -11,14 +11,15 @@ use versatiles_container::{DataLocation, DataSource, TilesRuntime};
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]
 pub struct Subcommand {
-	/// One or more tile containers you want to serve.
-	/// Supported container formats are: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory
-	/// Container files have to be on the local filesystem, except VersaTiles containers:
-	///    VersaTiles containers can also be served from http://... or https://...
-	/// The id used in the url (/tiles/$id/) will be generated automatically from the file id:
-	///    e.g. ".../ukraine.versatiles" will be served at url "/tiles/ukraine/..."
-	/// You can also configure a different id for each file using:
-	///    "[id]file", "file[id]" or "file#id"
+	/// One or more tile containers to serve (path, URL, or data source expression).
+	///
+	/// Supported formats: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory.
+	/// Only VersaTiles containers can be served from remote URLs (http/https).
+	/// The URL path (/tiles/{id}/) is derived from the source name:
+	///    e.g. "ukraine.versatiles" -> "/tiles/ukraine/..."
+	/// Override the name using bracket notation:
+	///    "[osm]tiles.versatiles"  or  "tiles.versatiles[osm]"
+	/// Run `versatiles help source` for full syntax details.
 	#[arg(verbatim_doc_comment)]
 	pub tile_sources: Vec<String>,
 
