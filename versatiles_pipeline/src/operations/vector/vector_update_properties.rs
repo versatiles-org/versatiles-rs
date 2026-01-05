@@ -179,7 +179,9 @@ impl TransformOperationFactoryTrait for Factory {
 	) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		let mut csv_reader = CsvReader::new(&factory.resolve_path(&args.data_source_path), factory.runtime());
+		let path = factory.resolve_path(&args.data_source_path);
+		let mut csv_reader = CsvReader::new(&path, factory.runtime()).with_string_field(&args.id_field_data);
+
 		if let Some(ref sep) = args.field_separator {
 			let sep_char = parse_separator_char(sep).with_context(|| format!("Invalid field_separator: '{sep}'"))?;
 			csv_reader = csv_reader.with_field_separator(sep_char);
@@ -355,7 +357,7 @@ mod tests {
 		let (props, json) = run_test(false, true).await.unwrap();
 		assert_eq!(
 			props,
-			"{\"char\": String(\":\"), \"data_id\": UInt(1), \"index\": UInt(1), \"value\": String(\"test\"), \"x\": Float(132.7017)}"
+			"{\"char\": String(\":\"), \"data_id\": String(\"1\"), \"index\": UInt(1), \"value\": String(\"test\"), \"x\": Float(132.7017)}"
 		);
 		assert_eq!(
 			json.split('\n').collect::<Vec<_>>(),
@@ -382,7 +384,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_run_replace_and_include_index() {
 		let (props, json) = run_test(true, true).await.unwrap();
-		assert_eq!(props, "{\"data_id\": UInt(1), \"value\": String(\"test\")}");
+		assert_eq!(props, "{\"data_id\": String(\"1\"), \"value\": String(\"test\")}");
 		assert_eq!(
 			json.split('\n').collect::<Vec<_>>(),
 			["data_id: automatically added field", "value: automatically added field",]
