@@ -89,8 +89,9 @@ pub fn parse_quoted_json_string(iter: &mut ByteIterator) -> Result<String> {
 					for i in &mut hex {
 						*i = iter.expect_next_byte()?;
 					}
-					let code_point = u16::from_str_radix(std::str::from_utf8(&hex).unwrap(), 16)
-						.map_err(|_| iter.format_error("invalid unicode code point"))?;
+					let hex_str = std::str::from_utf8(&hex).map_err(|_| iter.format_error("invalid hex escape sequence"))?;
+					let code_point =
+						u16::from_str_radix(hex_str, 16).map_err(|_| iter.format_error("invalid unicode code point"))?;
 					bytes.extend_from_slice(
 						&String::from_utf16(&[code_point])
 							.map_err(|_| iter.format_error("invalid unicode code point"))?

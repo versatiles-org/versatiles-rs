@@ -63,7 +63,7 @@ impl DataReaderFile {
 		let size = file.metadata()?.len();
 
 		Ok(Box::new(DataReaderFile {
-			name: path.to_str().unwrap().to_owned(),
+			name: path.to_string_lossy().into_owned(),
 			file,
 			size,
 		}))
