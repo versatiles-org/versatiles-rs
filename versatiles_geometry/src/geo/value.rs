@@ -7,7 +7,7 @@
 
 use anyhow::{Result, bail};
 use lazy_static::lazy_static;
-use regex::{Regex, RegexBuilder};
+use regex::Regex;
 use std::{
 	cmp::Ordering,
 	fmt::{Debug, Display},
@@ -219,12 +219,21 @@ impl GeoValue {
 
 	/// Parses a string into a `GeoValue` by detecting booleans, integers, unsigned integers,
 	/// and floating-point numbers; falls back to `String` (empty input yields empty string).
+	///
+	/// Numbers with leading zeros (except `0` itself or `0.x`) are treated as strings.
+	/// Supports exponential notation (e.g., `1.5e10`, `1E-3`).
 	#[must_use]
 	pub fn parse_str(value: &str) -> Self {
 		lazy_static! {
-			static ref REG_DOUBLE: Regex = RegexBuilder::new(r"^\-?\d*\.\d+$").build().unwrap();
-			static ref REG_INT: Regex = RegexBuilder::new(r"^\-\d+$").build().unwrap();
-			static ref REG_UINT: Regex = RegexBuilder::new(r"^\d+$").build().unwrap();
+			// Double: requires decimal point and/or exponent, no leading zeros
+			// Format: -?[0|1-9...](.[digits])([eE][+-]?digits) where . or e/E is required
+			static ref REG_DOUBLE: Regex = Regex::new(
+				r"^-?(?:0|[1-9]\d*)(?:(?:\.\d+)(?:[eE][+-]?\d+)?|[eE][+-]?\d+)$"
+			).unwrap();
+			// Signed integer (negative): -[0|1-9...]
+			static ref REG_INT: Regex = Regex::new(r"^-(?:0|[1-9]\d*)$").unwrap();
+			// Unsigned integer: 0 or [1-9...]
+			static ref REG_UINT: Regex = Regex::new(r"^(?:0|[1-9]\d*)$").unwrap();
 		}
 
 		match value {
@@ -331,18 +340,61 @@ mod tests {
 	}
 
 	#[rstest]
-	#[case(GeoValue::Bool(true), "true")]
+	// Booleans
 	#[case(GeoValue::Bool(false), "false")]
+	#[case(GeoValue::Bool(true), "true")]
+	// Doubles with decimal point
+	#[case(GeoValue::Double(-0.42), "-0.42")]
+	#[case(GeoValue::Double(-0.42), "-0.420")]
+	#[case(GeoValue::Double(-23.42), "-23.42")]
+	#[case(GeoValue::Double(0.0), "0.0")]
+	#[case(GeoValue::Double(0.42), "0.42")]
+	#[case(GeoValue::Double(0.42), "0.420")]
 	#[case(GeoValue::Double(23.42), "23.42")]
-	#[case(GeoValue::Double(-23.42),"-23.42")]
-	#[case(GeoValue::Int(-42),"-42")]
+	// Exponential notation
+	#[case(GeoValue::Double(-1.5e10), "-1.5e10")]
+	#[case(GeoValue::Double(0.0), "0.0e0")]
+	#[case(GeoValue::Double(0.0), "0e0")]
+	#[case(GeoValue::Double(1.23e-4), "1.23e-4")]
+	#[case(GeoValue::Double(1.23e4), "1.23e4")]
+	#[case(GeoValue::Double(1.5e-10), "1.5e-10")]
+	#[case(GeoValue::Double(1.5e10), "1.5e+10")]
+	#[case(GeoValue::Double(1.5e10), "1.5e10")]
+	#[case(GeoValue::Double(1.5e10), "1.5e10")]
+	#[case(GeoValue::Double(1.5e10), "1.5E10")]
+	#[case(GeoValue::Double(1e-3), "1e-3")]
+	#[case(GeoValue::Double(1e10), "1e10")]
+	#[case(GeoValue::Double(5e0), "5e0")]
+	// Signed integers
+	#[case(GeoValue::Int(-4), "-4")]
+	#[case(GeoValue::Int(-42), "-42")]
+	#[case(GeoValue::Int(0), "-0")]
+	// Unsigned integers
+	#[case(GeoValue::UInt(0), "0")]
 	#[case(GeoValue::UInt(42), "42")]
-	#[case(GeoValue::from("hello"), "hello")]
-	#[case(GeoValue::from("123abc"), "123abc")]
-	#[case(GeoValue::from(""), "")]
+	#[case(GeoValue::UInt(123456789), "123456789")]
+	// Strings (invalid number formats)
+	#[case(GeoValue::String(" 42".to_string()), " 42")]
+	#[case(GeoValue::String("-.42".to_string()), "-.42")]
+	#[case(GeoValue::String("-00.0".to_string()), "-00.0")]
+	#[case(GeoValue::String("-042".to_string()), "-042")]
+	#[case(GeoValue::String(".42".to_string()), ".42")]
+	#[case(GeoValue::String(".420".to_string()), ".420")]
+	#[case(GeoValue::String("".to_string()), "")]
+	#[case(GeoValue::String("+42".to_string()), "+42")]
+	#[case(GeoValue::String("00.0".to_string()), "00.0")]
+	#[case(GeoValue::String("00".to_string()), "00")]
+	#[case(GeoValue::String("01e5".to_string()), "01e5")]
+	#[case(GeoValue::String("042".to_string()), "042")]
+	#[case(GeoValue::String("1.2.3".to_string()), "1.2.3")]
+	#[case(GeoValue::String("123abc".to_string()), "123abc")]
+	#[case(GeoValue::String("1e".to_string()), "1e")]
+	#[case(GeoValue::String("1e1e1".to_string()), "1e1e1")]
+	#[case(GeoValue::String("42 ".to_string()), "42 ")]
+	#[case(GeoValue::String("e10".to_string()), "e10")]
+	#[case(GeoValue::String("hello".to_string()), "hello")]
 	fn test_parse_str(#[case] value: GeoValue, #[case] text: &str) {
 		assert_eq!(GeoValue::parse_str(text), value);
-		assert_eq!(format!("{}", value), text);
 	}
 
 	#[rstest]
