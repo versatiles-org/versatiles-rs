@@ -143,13 +143,17 @@ Filters properties based on a regular expressions.
 - *`invert`: bool (optional)* - If set, inverts the filter logic (i.e., keeps only properties matching the filter).
 
 ## vector_update_properties
-Updates properties of vector tile features using data from an external source (e.g., CSV file). Matches features based on an ID field.
+Arguments for the `vector_update_properties` operation.
+This operation joins vector tile features with external tabular data (CSV/TSV)
+based on matching ID fields, allowing you to enrich or update feature properties.
 ### Parameters:
-- **`data_source_path`: String (required)** - Path to the data source file, e.g., `data_source_path="data.csv"`.
-- **`layer_name`: String (required)** - Name of the vector layer to update.
-- **`id_field_tiles`: String (required)** - ID field name in the vector layer.
-- **`id_field_data`: String (required)** - ID field name in the data source.
-- *`replace_properties`: bool (optional)* - If set, old properties will be deleted before new ones are added.
-- *`remove_non_matching`: bool (optional)* - If set, removes all features (in the layer) that do not match.
-- *`include_id`: bool (optional)* - If set, includes the ID field in the updated properties.
+- **`data_source_path`: String (required)** - Path to the CSV/TSV data file: The file must have a header row. Each subsequent row will be matched to vector features using the ID fields.
+- **`layer_name`: String (required)** - Name of the vector layer to update: Only features in this layer will be modified. Other layers pass through unchanged.
+- **`id_field_tiles`: String (required)** - Field name in the vector tiles that contains the feature ID: This field is used to match features with rows in the data source.
+- **`id_field_data`: String (required)** - Column name in the data source that contains the matching ID: This column is used to look up data for each feature.
+- *`replace_properties`: bool (optional)* - If `true`, replaces all existing properties with the data source values. If `false` (default), merges new properties with existing ones.
+- *`remove_non_matching`: bool (optional)* - If `true`, removes features that don't have a matching row in the data source. If `false` (default), non-matching features are kept unchanged.
+- *`include_id`: bool (optional)* - If `true`, includes the ID field from the data source in the output properties. If `false` (default), the ID field is excluded from the merged properties.
+- *`field_separator`: String (optional)* - Field separator character for the data file: Default for `.csv` files is `,` (comma). Default for `.tsv` files is `\t` (tab, auto-detected)
+- *`decimal_separator`: String (optional)* - Decimal separator character for parsing numbers: Default is `.` (US/UK format). Use `,` (comma) e.g. for German/European number format like `1.234,56`
 

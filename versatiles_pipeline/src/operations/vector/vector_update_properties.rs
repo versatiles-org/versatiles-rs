@@ -1,6 +1,6 @@
 use crate::{
 	PipelineFactory,
-	helpers::read_csv_file,
+	helpers::CsvReader,
 	operations::vector::traits::{RunnerTrait, build_transform},
 	traits::{OperationFactoryTrait, TransformOperationFactoryTrait},
 	vpl::VPLNode,
@@ -13,29 +13,50 @@ use versatiles_core::TileJSON;
 use versatiles_derive::context;
 use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
 
+/// Arguments for the `vector_update_properties` operation.
+///
+/// This operation joins vector tile features with external tabular data (CSV/TSV)
+/// based on matching ID fields, allowing you to enrich or update feature properties.
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Updates properties of vector tile features using data from an external source (e.g., CSV file). Matches features based on an ID field.
 struct Args {
-	/// Path to the data source file, e.g., `data_source_path="data.csv"`.
+	/// Path to the CSV/TSV data file:
+	/// The file must have a header row. Each subsequent row will be matched
+	/// to vector features using the ID fields.
 	data_source_path: String,
 
-	/// Name of the vector layer to update.
+	/// Name of the vector layer to update:
+	/// Only features in this layer will be modified. Other layers pass through unchanged.
 	layer_name: String,
 
-	/// ID field name in the vector layer.
+	/// Field name in the vector tiles that contains the feature ID:
+	/// This field is used to match features with rows in the data source.
 	id_field_tiles: String,
 
-	/// ID field name in the data source.
+	/// Column name in the data source that contains the matching ID:
+	/// This column is used to look up data for each feature.
 	id_field_data: String,
 
-	/// If set, old properties will be deleted before new ones are added.
+	/// If `true`, replaces all existing properties with the data source values.
+	/// If `false` (default), merges new properties with existing ones.
 	replace_properties: Option<bool>,
 
-	/// If set, removes all features (in the layer) that do not match.
+	/// If `true`, removes features that don't have a matching row in the data source.
+	/// If `false` (default), non-matching features are kept unchanged.
 	remove_non_matching: Option<bool>,
 
-	/// If set, includes the ID field in the updated properties.
+	/// If `true`, includes the ID field from the data source in the output properties.
+	/// If `false` (default), the ID field is excluded from the merged properties.
 	include_id: Option<bool>,
+
+	/// Field separator character for the data file:
+	/// Default for `.csv` files is `,` (comma).
+	/// Default for `.tsv` files is `\t` (tab, auto-detected)
+	field_separator: Option<String>,
+
+	/// Decimal separator character for parsing numbers:
+	/// Default is `.` (US/UK format).
+	/// Use `,` (comma) e.g. for German/European number format like `1.234,56`
+	decimal_separator: Option<String>,
 }
 
 #[derive(Debug)]
@@ -158,12 +179,35 @@ impl TransformOperationFactoryTrait for Factory {
 	) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
+		let mut csv_reader = CsvReader::new(&factory.resolve_path(&args.data_source_path), factory.runtime());
+		if let Some(ref sep) = args.field_separator {
+			let sep_char = parse_separator_char(sep).with_context(|| format!("Invalid field_separator: '{sep}'"))?;
+			csv_reader = csv_reader.with_field_separator(sep_char);
+		}
+		if let Some(ref sep) = args.decimal_separator {
+			let sep_char = parse_separator_char(sep).with_context(|| format!("Invalid decimal_separator: '{sep}'"))?;
+			csv_reader = csv_reader.with_decimal_separator(sep_char);
+		}
+
 		// Load the CSV file referenced in the VPL.
-		let data = read_csv_file(&factory.resolve_path(&args.data_source_path), factory.runtime())
+		let data = csv_reader
+			.read()
 			.await
 			.with_context(|| format!("Failed to read CSV file from '{}'", args.data_source_path))?;
 
 		build_transform::<Runner>(source, Runner::from_args(args, data)?).await
+	}
+}
+
+/// Parses a separator string into a single character.
+/// Supports escape sequences like "\t" for tab.
+fn parse_separator_char(s: &str) -> Result<char> {
+	match s {
+		"\\t" | "\t" => Ok('\t'),
+		"\\n" | "\n" => Ok('\n'),
+		"\\r" | "\r" => Ok('\r'),
+		s if s.len() == 1 => Ok(s.chars().next().unwrap()),
+		_ => Err(anyhow!("Separator must be a single character, got '{s}'")),
 	}
 }
 
@@ -206,6 +250,8 @@ mod tests {
 				replace_properties: None,
 				remove_non_matching: None,
 				include_id: None,
+				field_separator: None,
+				decimal_separator: None,
 			},
 			properties_map,
 		};
