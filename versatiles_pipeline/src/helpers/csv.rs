@@ -232,7 +232,7 @@ impl CsvReader {
 					GeoProperties::from_iter(fields.into_iter().enumerate().map(|(col, value)| {
 						let key = header[col].clone();
 						let value = if self.string_fields.contains(&key) {
-							GeoValue::from(value)
+							GeoValue::String(value)
 						} else {
 							self.convert_value(&value)
 						};
