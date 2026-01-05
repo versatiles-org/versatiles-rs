@@ -178,6 +178,10 @@ impl DataLocation {
 			let mut buffer = Vec::new();
 			stdin.read_to_end(&mut buffer).context("Failed to read from stdin")?;
 			DataLocation::Blob(Blob::from(buffer))
+		} else if input.trim().starts_with('(') && input.trim().ends_with(')') {
+			// Treat as in-memory blob with ascii content
+			let content = &input.trim()[1..input.trim().len() - 1];
+			DataLocation::Blob(Blob::from(content.as_bytes().to_vec()))
 		} else if let Ok(url) = reqwest::Url::parse(input)
 			&& url.has_host()
 		{

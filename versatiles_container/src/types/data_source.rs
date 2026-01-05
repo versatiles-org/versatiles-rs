@@ -167,12 +167,19 @@ mod tests {
 	use std::path::PathBuf;
 
 	#[rstest]
+	#[case("(ascii)", "", "", "Blob(len=5)")]
+	#[case("(ascii)[,type]", "", "type", "Blob(len=5)")]
+	#[case("(ascii)[name,type]", "name", "type", "Blob(len=5)")]
+	#[case("(ascii)[name]", "name", "", "Blob(len=5)")]
 	#[case("[,]file.ext", "file", "ext", "Path(file.ext)")]
+	#[case("[,type](ascii)", "", "type", "Blob(len=5)")]
 	#[case("[,type]file.ext", "file", "type", "Path(file.ext)")]
 	#[case("[]file.ext", "file", "ext", "Path(file.ext)")]
 	#[case("[name,]file.ext", "name", "ext", "Path(file.ext)")]
+	#[case("[name,type](ascii)", "name", "type", "Blob(len=5)")]
 	#[case("[name,type]file.ext", "name", "type", "Path(file.ext)")]
 	#[case("[name,type]file", "name", "type", "Path(file)")]
+	#[case("[name](ascii)", "name", "", "Blob(len=5)")]
 	#[case("[name]file.ext", "name", "ext", "Path(file.ext)")]
 	#[case("[name]http://host/file.ext", "name", "ext", "Url(http://host/file.ext)")]
 	#[case("file.ext", "file", "ext", "Path(file.ext)")]
@@ -185,12 +192,12 @@ mod tests {
 	#[case("file[name,type]", "name", "type", "Path(file)")]
 	#[case("http://host/file.ext", "file", "ext", "Url(http://host/file.ext)")]
 	#[case("http://host/file.ext[name]", "name", "ext", "Url(http://host/file.ext)")]
+	#[case(r#"{"location":"c"}"#, "c", "", "Path(c)")]
+	#[case(r#"{"name":"a","location":"c"}"#, "a", "", "Path(c)")]
 	#[case(r#"{"name":"a","type":"b","content":"c"}"#, "a", "b", "Blob(len=1)")]
 	#[case(r#"{"name":"a","type":"b","location":"c"}"#, "a", "b", "Path(c)")]
-	#[case(r#"{"type":"b","location":"c"}"#, "c", "b", "Path(c)")]
-	#[case(r#"{"name":"a","location":"c"}"#, "a", "", "Path(c)")]
-	#[case(r#"{"location":"c"}"#, "c", "", "Path(c)")]
 	#[case(r#"{"name":"a","type":"b","location":"http://c"}"#, "a", "b", "Url(http://c/)")]
+	#[case(r#"{"type":"b","location":"c"}"#, "c", "b", "Path(c)")]
 	fn parse_with_prefixes(
 		#[case] input: &str,
 		#[case] exp_name: &str,
