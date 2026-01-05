@@ -60,20 +60,24 @@ pub fn stringify_pretty_multi_line(json: &JsonValue, max_width: usize, depth: us
 /// Handles quotes, backslashes, control characters (e.g., newline, tab), and other control codepoints.
 #[must_use]
 pub fn escape_json_string(input: &str) -> String {
-	input
-		.chars()
-		.map(|c| match c {
-			'"' => "\\\"".to_string(),
-			'\\' => "\\\\".to_string(),
-			'\n' => "\\n".to_string(),
-			'\r' => "\\r".to_string(),
-			'\t' => "\\t".to_string(),
-			'\u{08}' => "\\b".to_string(),
-			'\u{0c}' => "\\f".to_string(),
-			c if c.is_control() => format!("\\u{:04x}", c as u32),
-			c => c.to_string(),
-		})
-		.collect()
+	let mut result = String::with_capacity(input.len());
+	for c in input.chars() {
+		match c {
+			'"' => result.push_str("\\\""),
+			'\\' => result.push_str("\\\\"),
+			'\n' => result.push_str("\\n"),
+			'\r' => result.push_str("\\r"),
+			'\t' => result.push_str("\\t"),
+			'\u{08}' => result.push_str("\\b"),
+			'\u{0c}' => result.push_str("\\f"),
+			c if c.is_control() => {
+				use std::fmt::Write;
+				let _ = write!(result, "\\u{:04x}", c as u32);
+			}
+			c => result.push(c),
+		}
+	}
+	result
 }
 
 #[cfg(test)]
