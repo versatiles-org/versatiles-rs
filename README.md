@@ -26,10 +26,10 @@ VersaTiles is a Rust-based tool for processing and serving tile data efficiently
   - [Commands](#commands)
   - [VersaTiles Pipeline Language](#versatiles-pipeline-language)
 - [Configuration](#configuration)
-- [GDAL support](#gdal-support)
+- [GDAL Support](#gdal-support)
 - [Development](#development)
   - [Prerequisites](#prerequisites)
-  - [Quick Start](#quick-start-1)
+  - [Setup](#setup)
   - [Development Workflow](#development-workflow)
   - [Pre-commit Hooks (Recommended)](#pre-commit-hooks-recommended)
   - [Node.js Bindings Development](#nodejs-bindings-development)
@@ -38,7 +38,6 @@ VersaTiles is a Rust-based tool for processing and serving tile data efficiently
 - [Using as a Library](#using-as-a-library)
 - [Additional Information](#additional-information)
 - [For Maintainers](#for-maintainers)
-- [Contributing](#contributing)
 - [License](#license)
 
 ---
@@ -619,7 +618,7 @@ VersaTiles is built with Rust and includes Node.js bindings (NAPI-RS).
 - [Lefthook](https://github.com/evilmartians/lefthook) - Pre-commit hooks
 - GDAL 3.x - For GDAL support ([build instructions](#building-with-gdal-support))
 
-### Quick Start
+### Setup
 
 ```bash
 # Clone repository
