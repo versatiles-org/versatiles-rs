@@ -17,7 +17,7 @@ use super::info::DynamicImageTraitInfo;
 use anyhow::{Result, bail};
 use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 use image::{DynamicImage, Rgb, imageops::overlay};
-use imageproc::map::map_colors;
+use imageproc::map::map_pixels;
 use versatiles_derive::context;
 
 /// High-level convenience operations for modifying and transforming `DynamicImage`s.
@@ -132,7 +132,7 @@ where
 		match self {
 			DynamicImage::ImageRgba8(img) => {
 				let c = [u16::from(color[0]), u16::from(color[1]), u16::from(color[2])];
-				Ok(DynamicImage::from(map_colors(&img, |p| {
+				Ok(DynamicImage::from(map_pixels(&img, |p| {
 					if p[3] == 255 {
 						Rgb([p[0], p[1], p[2]])
 					} else {

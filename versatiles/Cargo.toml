@@ -70,11 +70,11 @@ lazy_static.workspace = true
 predicates.workspace = true
 pretty_assertions.workspace = true
 reqwest = { workspace = true, features = [
-	"rustls-tls",
-	"gzip",
 	"brotli",
-	"zstd",
+	"default-tls",
 	"deflate",
+	"gzip",
+	"zstd",
 ] }
 rstest.workspace = true
 tempfile.workspace = true

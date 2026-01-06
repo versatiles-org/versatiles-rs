@@ -91,10 +91,10 @@ regex = { version = "1.12.2", default-features = false, features = [
 	"unicode-perl",
 ] }
 serde = { version = "1.0.228", features = ["derive"] }
-tokio = { version = "1.48.0", features = ["rt-multi-thread", "sync"] }
+tokio = { version = "1.49.0", features = ["rt-multi-thread", "sync"] }
 
 # CLI dependencies
-clap = { version = "4.5.53", default-features = false,  features = ["derive"] }
+clap = { version = "4.5.54", default-features = false,  features = ["derive"] }
 colored = { version = "3.0.0", default-features = false }
 env_logger = { version = "0.11.8" }
 termimad = { version = "0.34.1" }
@@ -113,7 +113,7 @@ r2d2_sqlite = { version = "0.32.0", default-features = false }
 # HTTP/Server dependencies
 axum = { version = "0.8.8", default-features = false }
 mime_guess = { version = "2.0.5", default-features = false }
-reqwest = { version = "0.12.28", default-features = false, features = ["rustls-tls"] }
+reqwest = { version = "0.13.1", default-features = false, features = ["default-tls"] }
 tower = { version = "0.5.2" }
 tower-http = { version = "0.6.8" }
 
@@ -124,7 +124,7 @@ image = { version = "0.25.9", default-features = false, features = [
 	"png",
 	"webp",
 ] }
-imageproc = { version = "0.25.0", default-features = false }
+imageproc = { version = "0.26.0", default-features = false }
 webp = { version = "0.3.1" }
 
 # Geometry dependencies
