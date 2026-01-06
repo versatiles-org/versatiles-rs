@@ -40,7 +40,7 @@ on:
 permissions:
   contents: write
   packages: write
-  id-token: write  # Required for npm provenance attestations
+  id-token: write  # Required for npm trusted publishing with OIDC (no token needed)
 
 env:
   CARGO_TERM_COLOR: always
@@ -56,7 +56,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: Check version synchronization
         run: ./scripts/sync-version.sh
@@ -376,7 +376,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: Install dependencies
         working-directory: ./versatiles_node
@@ -478,8 +478,15 @@ jobs:
         if: env.PUBLISH_ENABLED == 'true'
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Ensure npm supports OIDC trusted publishing
+        if: env.PUBLISH_ENABLED == 'true'
+        run: |
+          echo "Current npm version: $(npm --version)"
+          npm install -g npm@latest
+          echo "Updated npm version: $(npm --version)"
 
       - name: Install dependencies
         if: env.PUBLISH_ENABLED == 'true'
@@ -609,7 +616,7 @@ jobs:
           echo "Found packages:"
           echo "$packages"
 
-          # Publish each platform package
+          # Publish each platform package with provenance attestation
           for pkg in $packages; do
             echo ""
             echo "Publishing $pkg with --tag $NPM_TAG"
