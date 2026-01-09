@@ -37,7 +37,7 @@ impl GeoProperties {
 	/// Merges another `GeoProperties` into this one, overwriting existing keys.
 	pub fn update(&mut self, new_properties: &GeoProperties) {
 		for (k, v) in new_properties.iter() {
-			self.0.insert(k.to_string(), v.clone());
+			self.0.insert(k.clone(), v.clone());
 		}
 	}
 

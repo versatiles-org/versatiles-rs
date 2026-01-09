@@ -45,7 +45,7 @@ pub fn build_cors_layer(allowed_origins: &[String], max_age_seconds: u64) -> Res
 				Box::new(move |origin: &str| re.is_match(origin))
 			} else {
 				// Exact match
-				let exact = pattern.to_string();
+				let exact = pattern.clone();
 				Box::new(move |origin: &str| origin == exact)
 			})
 		})

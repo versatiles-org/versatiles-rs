@@ -94,7 +94,7 @@ impl TileSource for DummyVectorSource {
 				feature.set_property("z".to_string(), coord.level);
 
 				for (key, value) in properties {
-					feature.set_property(key.to_string(), value);
+					feature.set_property(key.clone(), value);
 				}
 
 				features.push(feature);

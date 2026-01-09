@@ -109,7 +109,7 @@ impl TarFile {
 				log::trace!("Adding file from tar: {name} ({compression:?})");
 
 				let entry = lookup.entry(name);
-				let versions = entry.or_insert_with(|| FileEntry::new(mime.to_string()));
+				let versions = entry.or_insert_with(|| FileEntry::new(mime.clone()));
 				match compression {
 					Uncompressed => versions.un = Some(blob),
 					Gzip => versions.gz = Some(blob),

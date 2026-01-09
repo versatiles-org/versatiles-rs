@@ -85,7 +85,7 @@ impl VPLNode {
 	/// Optional string parameter accessor; clones the stored value when present.
 	#[context("Failed to get optional property string '{field}' from VPL node '{}'", self.name)]
 	pub fn get_property_string_option(&self, field: &str) -> Result<Option<String>> {
-		Ok(self.get_property(field)?.map(|v| v.to_string()))
+		Ok(self.get_property(field)?.cloned())
 	}
 
 	/// Required string parameter accessor; errors if the field is missing.

@@ -40,7 +40,7 @@ impl TileJSON {
 			.0
 			.iter()
 			.map(|(id, layer)| VectorLayer {
-				id: id.to_string(),
+				id: id.clone(),
 				fields: layer.fields.clone(),
 				description: layer.description.clone(),
 				minzoom: layer.minzoom.map(|z| z as f64),

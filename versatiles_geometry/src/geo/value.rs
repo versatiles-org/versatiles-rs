@@ -196,7 +196,7 @@ impl Display for GeoValue {
 				GeoValue::Float(v) => v.to_string(),
 				GeoValue::Int(v) => v.to_string(),
 				GeoValue::Null => "null".to_string(),
-				GeoValue::String(v) => v.to_string(),
+				GeoValue::String(v) => v.clone(),
 				GeoValue::UInt(v) => v.to_string(),
 			}
 		)

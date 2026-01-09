@@ -379,7 +379,7 @@ mod tests {
 			}
 			DataLocation::Path(p) => {
 				assert!(is_path, "expected a path case");
-				assert_eq!(p.to_path_buf(), PathBuf::from(input));
+				assert_eq!(p.clone(), PathBuf::from(input));
 			}
 			DataLocation::Blob(_) => {
 				bail!("Unexpected Blob variant");

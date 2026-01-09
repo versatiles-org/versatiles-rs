@@ -334,7 +334,7 @@ mod tests {
 	#[case("naïve café")] // Unicode with accents
 	#[case("a".repeat(1000))] // long string
 	fn string_roundtrips_ascii_and_unicode(#[case] payload: String) {
-		roundtrip::<String>(payload.to_string());
+		roundtrip::<String>(payload.clone());
 	}
 
 	#[test]
