@@ -78,29 +78,29 @@ impl HilbertIndex for TileCoord {
 /// The function is a direct port of the canonical Hilbert algorithm that
 /// traverses the curve iteratively while keeping an accumulator for the
 /// number of tiles contained in all previous zoom levels.
-fn coord_to_index(x: u32, y: u32, z: u8) -> Result<u64> {
+fn coord_to_index(x: u32, y: u32, level: u8) -> Result<u64> {
 	let x = i64::from(x);
 	let y = i64::from(y);
-	let z = i64::from(z);
+	let level = i64::from(level);
 
-	if z >= 32 {
+	if level >= 32 {
 		bail!("tile zoom exceeds 64-bit limit");
 	}
 
-	let n = 1i64 << z;
-	if x >= n || y >= n {
+	let size = 1i64 << level;
+	if x >= size || y >= size {
 		bail!("tile x/y outside zoom level bounds");
 	}
 
 	let mut acc = 0i64;
-	for t_z in 0..z {
+	for t_z in 0..level {
 		acc += 1i64 << (t_z * 2);
 	}
 
 	let mut tx = x;
 	let mut ty = y;
 	let mut d = 0i64;
-	let mut s = n / 2;
+	let mut s = size / 2;
 	while s > 0 {
 		let rx = i64::from((tx & s) > 0);
 		let ry = i64::from((ty & s) > 0);
