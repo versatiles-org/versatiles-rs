@@ -292,9 +292,10 @@ impl Chunk {
 	}
 	fn push(&mut self, entry: (TileCoord, ByteRange)) {
 		self.tiles.push(entry);
-		if entry.1.offset < self.range.offset {
-			panic!()
-		};
+		assert!(
+			entry.1.offset >= self.range.offset,
+			"entry offset must be >= range offset"
+		);
 		self.range.length = self
 			.range
 			.length

@@ -246,7 +246,7 @@ impl MBTilesReader {
 		for z in z0..=z1 {
 			let x0 = self.simple_query("MIN(tile_column)", &format!("zoom_level = {z}"))?;
 			let x1 = self.simple_query("MAX(tile_column)", &format!("zoom_level = {z}"))?;
-			let xc = (x0 + x1) / 2;
+			let xc = i32::midpoint(x0, x1);
 
 			/*
 				SQLite is not very fast. In particular, the following query is slow for very large tables:

@@ -81,8 +81,7 @@ impl HeaderV3 {
 		writer.write_u64(self.tile_contents_count)?;
 
 		// Serialize the boolean `clustered` as a byte
-		let clustered_val = if self.clustered { 1u8 } else { 0u8 };
-		writer.write_u8(clustered_val)?;
+		writer.write_u8(u8::from(self.clustered))?;
 
 		// Continue with the rest of the fields
 		writer.write_u8(self.internal_compression as u8)?;

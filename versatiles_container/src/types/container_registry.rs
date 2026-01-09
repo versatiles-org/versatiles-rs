@@ -177,7 +177,7 @@ impl ContainerRegistry {
 				self
 					.file_readers
 					.get(&extension)
-					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?(path.to_path_buf(), runtime)
+					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?(path.clone(), runtime)
 				.await
 			}
 			DataLocation::Blob(blob) => {
@@ -225,7 +225,7 @@ impl ContainerRegistry {
 			.file_writers
 			.get(&extension)
 			.ok_or_else(|| anyhow!("Error when reading: file extension '{extension}' unknown"))?;
-		writer(reader, path.to_path_buf(), runtime).await?;
+		writer(reader, path.clone(), runtime).await?;
 
 		Ok(())
 	}
