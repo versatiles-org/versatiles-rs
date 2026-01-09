@@ -93,6 +93,7 @@ impl TileProcessor {
 	/// Builder method to override the parameters.
 	///
 	/// Use this when the processor modifies spatial extent, compression, or format.
+	#[must_use]
 	pub fn with_parameters(mut self, parameters: TileSourceMetadata) -> Self {
 		self.parameters = parameters;
 		self
@@ -101,6 +102,7 @@ impl TileProcessor {
 	/// Builder method to override the TileJSON metadata.
 	///
 	/// Use this when the processor modifies metadata (e.g., updating attribution, bounds).
+	#[must_use]
 	pub fn with_tilejson(mut self, tilejson: TileJSON) -> Self {
 		self.tilejson = tilejson;
 		self
@@ -109,6 +111,7 @@ impl TileProcessor {
 	/// Builder method to override the traversal hint.
 	///
 	/// Use this when the processor has a preferred read order different from its source.
+	#[must_use]
 	pub fn with_traversal(mut self, traversal: Traversal) -> Self {
 		self.traversal = traversal;
 		self

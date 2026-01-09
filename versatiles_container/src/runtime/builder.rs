@@ -37,21 +37,26 @@ impl RuntimeBuilder {
 	}
 
 	/// Set cache type (InMemory or Disk)
+	#[must_use]
 	pub fn cache_type(mut self, cache_type: CacheType) -> Self {
 		self.cache_type = Some(cache_type);
 		self
 	}
 
 	/// Use in-memory cache (default)
+	#[must_use]
 	pub fn with_memory_cache(self) -> Self {
 		self.cache_type(CacheType::new_memory())
 	}
 
 	/// Use disk cache
+	#[must_use]
 	pub fn with_disk_cache(self, path: &std::path::Path) -> Self {
 		self.cache_type(CacheType::Disk(path.to_path_buf()))
 	}
 
+	/// Set whether progress output is silenced
+	#[must_use]
 	pub fn silent_progress(mut self, silent: bool) -> Self {
 		self.silent_progress = silent;
 		self
@@ -75,6 +80,7 @@ impl RuntimeBuilder {
 	///     .silent_progress(true)
 	///     .build();
 	/// ```
+	#[must_use]
 	pub fn customize_registry<F>(mut self, customizer: F) -> Self
 	where
 		F: Fn(&mut ContainerRegistry) + 'static,
