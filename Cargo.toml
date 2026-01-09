@@ -39,7 +39,7 @@ exclude = [
 
 [workspace.lints.clippy]
 # Enable pedantic lints for code quality
-pedantic = "allow"
+pedantic = { level = "deny", priority = -1 }
 
 # Allow noisy/stylistic lints that don't improve safety
 missing_errors_doc = "allow"
@@ -77,6 +77,30 @@ trivially_copy_pass_by_ref = "allow"
 unnecessary_wraps = "allow"
 cast_possible_wrap = "allow"
 match_wildcard_for_single_variants = "allow"
+comparison_chain = "allow"
+from_iter_instead_of_collect = "allow"
+implicit_clone = "allow"
+inline_always = "allow"
+many_single_char_names = "allow"
+match_same_arms = "allow"
+needless_continue = "allow"
+non_std_lazy_statics = "allow"
+return_self_not_must_use = "allow"
+inconsistent_struct_constructor = "allow"
+iter_without_into_iter = "allow"
+used_underscore_binding = "allow"
+unnested_or_patterns = "allow"
+unnecessary_literal_bound = "allow"
+unnecessary_semicolon = "allow"
+explicit_into_iter_loop = "allow"
+ignored_unit_patterns = "allow"
+flat_map_option = "allow"
+assigning_clones = "allow"
+format_push_string = "allow"
+single_match_else = "allow"
+map_unwrap_or = "allow"
+unused_async = "allow"
+needless_for_each = "allow"
 
 [workspace.metadata.release]
 allow-branch = ["main"]
