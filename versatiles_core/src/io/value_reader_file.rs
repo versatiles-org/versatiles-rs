@@ -39,7 +39,7 @@
 
 use super::{SeekRead, ValueReader, ValueReaderBlob};
 use crate::Blob;
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use std::{
 	fs::File,
@@ -137,7 +137,7 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderFile<E> {
 			bail!("sub-reader length exceeds file length");
 		}
 
-		let mut buffer = vec![0; length as usize];
+		let mut buffer = vec![0; usize::try_from(length).context("Sub-reader length too large for this platform")?];
 		self.reader.read_exact(&mut buffer)?;
 
 		Ok(Box::new(ValueReaderBlob::<E>::new(Blob::from(buffer))))

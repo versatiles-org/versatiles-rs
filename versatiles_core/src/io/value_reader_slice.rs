@@ -32,7 +32,7 @@
 #![allow(dead_code)]
 
 use super::{SeekRead, ValueReader};
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use std::{io::Cursor, marker::PhantomData};
 
@@ -160,6 +160,8 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderSlice<'a, E> {
 		}
 
 		self.cursor.set_position(end);
+		let start_usize = usize::try_from(start).context("Sub-reader start position too large for this platform")?;
+		let end_usize = usize::try_from(end).context("Sub-reader end position too large for this platform")?;
 		Ok(Box::new(ValueReaderSlice {
 			_phantom: PhantomData,
 			len: length,
@@ -167,7 +169,7 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderSlice<'a, E> {
 				self
 					.cursor
 					.get_ref()
-					.get(start as usize..end as usize)
+					.get(start_usize..end_usize)
 					.ok_or(anyhow!("out of bounds"))?,
 			),
 		}))

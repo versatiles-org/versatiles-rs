@@ -239,7 +239,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// # Errors
 	/// Returns an error if reading fails.
 	fn read_blob(&mut self, length: u64) -> Result<Blob> {
-		let mut blob = Blob::new_sized(length as usize);
+		let mut blob = Blob::new_sized(usize::try_from(length).context("Blob length too large for this platform")?);
 		self.get_reader().read_exact(blob.as_mut_slice())?;
 		Ok(blob)
 	}
@@ -255,7 +255,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// # Errors
 	/// Returns an error if reading fails or if the bytes are not valid UTF-8.
 	fn read_string(&mut self, length: u64) -> Result<String> {
-		let mut vec = vec![0u8; length as usize];
+		let mut vec = vec![0u8; usize::try_from(length).context("String length too large for this platform")?];
 		self.get_reader().read_exact(&mut vec)?;
 		Ok(String::from_utf8(vec)?)
 	}
@@ -283,7 +283,11 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// Returns an error if reading the varint fails.
 	fn read_pbf_key(&mut self) -> Result<(u32, u8)> {
 		let value = self.read_varint().context("Failed to read varint for PBF key")?;
-		Ok(((value >> 3) as u32, (value & 0x07) as u8))
+		let field_number = u32::try_from(value >> 3).context("PBF field number too large (exceeds u32::MAX)")?;
+		// Wire type is always 0-7, so masking with 0x07 guarantees it fits in u8
+		#[allow(clippy::cast_possible_truncation)]
+		let wire_type = (value & 0x07) as u8;
+		Ok((field_number, wire_type))
 	}
 
 	/// Returns a sub-reader limited to the given length.
@@ -335,9 +339,12 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 		let mut values = Vec::new();
 		while reader.has_remaining() {
 			values.push(
-				reader
-					.read_varint()
-					.context("Failed to read varint for packed uint32")? as u32,
+				u32::try_from(
+					reader
+						.read_varint()
+						.context("Failed to read varint for packed uint32")?,
+				)
+				.context("Packed uint32 value too large (exceeds u32::MAX)")?,
 			);
 		}
 		drop(reader);

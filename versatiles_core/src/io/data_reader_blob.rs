@@ -73,8 +73,8 @@ impl DataReaderTrait for DataReaderBlob {
 	/// * A Result containing a Blob with the read data or an error.
 	#[context("while reading range {range:?} from DataReaderBlob")]
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
-		let start = range.offset as usize;
-		let end = (range.offset + range.length) as usize;
+		let start = usize::try_from(range.offset).context("Offset too large for this platform")?;
+		let end = usize::try_from(range.offset + range.length).context("End offset too large for this platform")?;
 		let blob = self.blob.get_ref();
 		ensure!(
 			end <= blob.len(),

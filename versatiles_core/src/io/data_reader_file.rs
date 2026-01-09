@@ -88,7 +88,7 @@ impl DataReaderTrait for DataReaderFile {
 	/// which is thread-safe and allows concurrent reads without race conditions.
 	#[context("while reading range {range:?} from file '{}'", self.name)]
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
-		let mut buffer = vec![0; range.length as usize];
+		let mut buffer = vec![0; usize::try_from(range.length).context("Range length too large for this platform")?];
 
 		// Use position-independent I/O - thread-safe by design
 		#[cfg(unix)]
@@ -132,7 +132,7 @@ impl DataReaderTrait for DataReaderFile {
 	/// This method uses position-independent I/O which is thread-safe.
 	#[context("while reading all bytes from file '{}'", self.name)]
 	async fn read_all(&self) -> Result<Blob> {
-		let mut buffer = vec![0; self.size as usize];
+		let mut buffer = vec![0; usize::try_from(self.size).context("File size too large for this platform")?];
 
 		#[cfg(unix)]
 		{
