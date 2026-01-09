@@ -119,9 +119,7 @@ impl Geometry {
 			Geometry::Point(g) => Geometry::MultiPoint(g.into_multi()),
 			Geometry::LineString(g) => Geometry::MultiLineString(g.into_multi()),
 			Geometry::Polygon(g) => Geometry::MultiPolygon(g.into_multi()),
-			Geometry::MultiPoint(_) => self,
-			Geometry::MultiLineString(_) => self,
-			Geometry::MultiPolygon(_) => self,
+			Geometry::MultiPoint(_) | Geometry::MultiLineString(_) | Geometry::MultiPolygon(_) => self,
 		}
 	}
 
@@ -131,9 +129,7 @@ impl Geometry {
 	/// corresponding single variant; otherwise the original multi geometry is returned.
 	pub fn into_single_geometry(self) -> Self {
 		match self {
-			Geometry::Point(_) => self,
-			Geometry::LineString(_) => self,
-			Geometry::Polygon(_) => self,
+			Geometry::Point(_) | Geometry::LineString(_) | Geometry::Polygon(_) => self,
 			Geometry::MultiPoint(mut g) => {
 				if g.len() == 1 {
 					Geometry::Point(g.pop().unwrap())

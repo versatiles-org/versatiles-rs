@@ -143,8 +143,9 @@ fn get_formatted_value<V: Debug + ?Sized>(value: &V) -> ColoredString {
 	}
 	match type_name {
 		"f32" | "f64" => format!("{value:?}").bright_cyan(),
-		"i128" | "i16" | "i32" | "i64" | "i8" | "isize" => format_integer(value).bright_cyan(),
-		"u128" | "u16" | "u32" | "u64" | "u8" | "usize" => format_integer(value).bright_cyan(),
+		"i128" | "i16" | "i32" | "i64" | "i8" | "isize" | "u128" | "u16" | "u32" | "u64" | "u8" | "usize" => {
+			format_integer(value).bright_cyan()
+		}
 		"alloc::string::String" | "str" | "&str" => format!("{value:?}").bright_magenta(),
 		_ => format!("{value:?}").bright_green(),
 	}

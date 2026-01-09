@@ -433,9 +433,9 @@ impl SourceType {
 	#[napi(getter)]
 	pub fn name(&self) -> String {
 		match self.inner.as_ref() {
-			RustSourceType::Container { name, .. } => name.clone(),
-			RustSourceType::Processor { name, .. } => name.clone(),
-			RustSourceType::Composite { name, .. } => name.clone(),
+			RustSourceType::Container { name, .. }
+			| RustSourceType::Processor { name, .. }
+			| RustSourceType::Composite { name, .. } => name.clone(),
 		}
 	}
 

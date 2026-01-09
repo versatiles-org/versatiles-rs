@@ -4,8 +4,10 @@
 //! - `serve_static` serves files from a list of `StaticSource`s.
 //! - `ok_json` is a tiny helper used by the API routes.
 //!
-//! Note: CORS headers are handled exclusively by the `CorsLayer`. Don’t set
+//! Note: CORS headers are handled exclusively by the `CorsLayer`. Don't set
 //! `Access-Control-Allow-Origin` here; that avoids header drift.
+
+use std::fmt::Write;
 
 use super::{
 	encoding::get_encoding,
@@ -117,7 +119,7 @@ fn format_error_chain(err: &anyhow::Error) -> String {
 		if i == 0 {
 			result.push_str("\n  Caused by:");
 		}
-		result.push_str(&format!("\n    {cause}"));
+		write!(result, "\n    {cause}").unwrap();
 	}
 
 	result

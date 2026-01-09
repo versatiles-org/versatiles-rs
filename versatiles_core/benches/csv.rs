@@ -1,4 +1,5 @@
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
+use std::fmt::Write;
 use std::{hint::black_box, io::Cursor};
 use versatiles_core::utils::read_csv_iter;
 
@@ -9,7 +10,7 @@ fn large_csv_data() -> String {
 	let mut i: u64 = 0;
 	while csv_data.len() < DATA_SIZE {
 		i += 1;
-		csv_data.push_str(&format!("\"John, {} Doe\",{}\n", i, 20 + i % 50));
+		writeln!(csv_data, "\"John, {i} Doe\",{}", 20 + i % 50).unwrap();
 	}
 	csv_data
 }

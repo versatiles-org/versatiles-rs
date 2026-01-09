@@ -48,12 +48,11 @@ pub async fn serve_dynamic_tile(
 	let source_id = &parts[1];
 
 	// Lookup source (lock-free!)
-	let tile_source = match state.tile_sources.get(source_id) {
-		Some(entry) => Arc::clone(entry.value()),
-		None => {
-			log::debug!("tile source '{source_id}' not found");
-			return error_404();
-		}
+	let tile_source = if let Some(entry) = state.tile_sources.get(source_id) {
+		Arc::clone(entry.value())
+	} else {
+		log::debug!("tile source '{source_id}' not found");
+		return error_404();
 	};
 
 	// Delegate to core serving logic

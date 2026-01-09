@@ -147,12 +147,9 @@ impl TryFrom<&str> for TileCompression {
 
 	fn try_from(value: &str) -> Result<Self> {
 		Ok(match value.to_lowercase().trim() {
-			"br" => Brotli,
-			"brotli" => Brotli,
-			"gz" => Gzip,
-			"gzip" => Gzip,
-			"none" => Uncompressed,
-			"raw" => Uncompressed,
+			"br" | "brotli" => Brotli,
+			"gz" | "gzip" => Gzip,
+			"none" | "raw" => Uncompressed,
 			_ => bail!("Unknown tile compression. Expected brotli, gzip or none"),
 		})
 	}

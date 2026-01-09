@@ -310,26 +310,23 @@ mod tests {
 		assert!(img.is_opaque());
 		let after = img.as_bytes();
 
-		match alpha_layout {
-			Some((stride, aidx)) => {
-				assert!(has_alpha_before, "expected an alpha channel");
-				// Color bytes unchanged; alpha bytes set to 255
-				for (i, (&a, &b)) in after.iter().zip(before.iter()).enumerate() {
-					if i % stride == aidx {
-						assert_eq!(a, 255, "alpha not set to 255 at byte index {i}");
-					} else {
-						assert_eq!(a, b, "color byte changed at index {i}");
-					}
+		if let Some((stride, aidx)) = alpha_layout {
+			assert!(has_alpha_before, "expected an alpha channel");
+			// Color bytes unchanged; alpha bytes set to 255
+			for (i, (&a, &b)) in after.iter().zip(before.iter()).enumerate() {
+				if i % stride == aidx {
+					assert_eq!(a, 255, "alpha not set to 255 at byte index {i}");
+				} else {
+					assert_eq!(a, b, "color byte changed at index {i}");
 				}
-				// Color type should remain the same (still has an alpha channel)
-				assert!(img.has_alpha());
 			}
-			None => {
-				assert!(!has_alpha_before, "did not expect an alpha channel");
-				// No-op for images without alpha: data unchanged
-				assert_eq!(after, &before[..]);
-				assert!(img.is_opaque());
-			}
+			// Color type should remain the same (still has an alpha channel)
+			assert!(img.has_alpha());
+		} else {
+			assert!(!has_alpha_before, "did not expect an alpha channel");
+			// No-op for images without alpha: data unchanged
+			assert_eq!(after, &before[..]);
+			assert!(img.is_opaque());
 		}
 	}
 
