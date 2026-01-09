@@ -30,10 +30,7 @@ pub enum TraversalCache<V: CacheValue> {
 	/// In-memory cache using a concurrent hash map.
 	Memory(DashMap<usize, Vec<V>>),
 	/// Disk-backed cache storing values in binary files.
-	Disk {
-		path: PathBuf,
-		_marker: PhantomData<V>,
-	},
+	Disk { path: PathBuf, _marker: PhantomData<V> },
 }
 
 impl<V: CacheValue> TraversalCache<V> {
@@ -70,10 +67,7 @@ impl<V: CacheValue> TraversalCache<V> {
 				let file_path = path.join(format!("{index}.bin"));
 				let buffer = Self::values_to_buffer(&values)?;
 				if file_path.exists() {
-					OpenOptions::new()
-						.append(true)
-						.open(&file_path)?
-						.write_all(&buffer)?;
+					OpenOptions::new().append(true).open(&file_path)?.write_all(&buffer)?;
 				} else {
 					write(&file_path, buffer)?;
 				}
@@ -212,10 +206,7 @@ mod tests {
 		cache.append(0, vec![vec![0, 1, 2], vec![255, 254]])?;
 		cache.append(0, vec![vec![128]])?;
 
-		assert_eq!(
-			cache.take(0)?,
-			Some(vec![vec![0, 1, 2], vec![255, 254], vec![128]])
-		);
+		assert_eq!(cache.take(0)?, Some(vec![vec![0, 1, 2], vec![255, 254], vec![128]]));
 
 		Ok(())
 	}
