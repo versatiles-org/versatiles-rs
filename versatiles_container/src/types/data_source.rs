@@ -18,10 +18,10 @@ pub struct DataSource {
 	location: DataLocation,         // URL, filesystem path, or in-memory blob
 }
 
-lazy_static::lazy_static! {
-	static ref RE_PREFIX: Regex = Regex::new(r#"^\[([\w,]*)\](.*)"#).unwrap();
-	static ref RE_POSTFIX: Regex = Regex::new(r#"^(.*)\[([\w,]*)\]$"#).unwrap();
-}
+use std::sync::LazyLock;
+
+static RE_PREFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\[([\w,]*)\](.*)").unwrap());
+static RE_POSTFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(.*)\[([\w,]*)\]$").unwrap());
 
 impl DataSource {
 	/// Returns an optional reference to the container type, if specified.
