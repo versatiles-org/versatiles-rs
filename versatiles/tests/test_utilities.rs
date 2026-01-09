@@ -51,7 +51,7 @@ pub struct VersaTilesResult {
 pub fn versatiles_output(args: &str) -> VersaTilesResult {
 	let mut cmd = versatiles_cmd();
 	if !args.is_empty() {
-		cmd.args(args.split(" "));
+		cmd.args(args.split(' '));
 	}
 	let output = cmd.output().unwrap();
 	VersaTilesResult {
@@ -72,7 +72,7 @@ pub fn versatiles_run(args: &str) {
 pub fn versatiles_stdin(args: &str, stdin: &str) {
 	let mut cmd = versatiles_cmd();
 	if !args.is_empty() {
-		cmd.args(args.split(" "));
+		cmd.args(args.split(' '));
 	}
 
 	let mut child = cmd.spawn().expect("failed to spawn versatiles command");

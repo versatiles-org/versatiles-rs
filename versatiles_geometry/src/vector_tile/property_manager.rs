@@ -16,7 +16,7 @@ where
 	T: Clone + Debug + Eq + Hash,
 {
 	pub fn new(list: Vec<T>) -> VTLPMap<T> {
-		let map = HashMap::from_iter(list.iter().enumerate().map(|(i, e)| (e.clone(), i as u32)));
+		let map = list.iter().enumerate().map(|(i, e)| (e.clone(), i as u32)).collect();
 		VTLPMap { list, map }
 	}
 

@@ -229,15 +229,19 @@ impl CsvReader {
 				e.map(|(fields, _line_pos, byte_pos)| {
 					progress.set_position(byte_pos as u64);
 
-					GeoProperties::from_iter(fields.into_iter().enumerate().map(|(col, value)| {
-						let key = header[col].clone();
-						let value = if self.string_fields.contains(&key) {
-							GeoValue::String(value)
-						} else {
-							self.convert_value(&value)
-						};
-						(key, value)
-					}))
+					fields
+						.into_iter()
+						.enumerate()
+						.map(|(col, value)| {
+							let key = header[col].clone();
+							let value = if self.string_fields.contains(&key) {
+								GeoValue::String(value)
+							} else {
+								self.convert_value(&value)
+							};
+							(key, value)
+						})
+						.collect()
 				})
 				.map_err(|e| errors.push(e))
 				.ok()

@@ -167,7 +167,7 @@ mod tests {
 	async fn run_test(regex: &str, invert: &str) -> Result<(String, String)> {
 		let replace = |key: &str, value: &str| {
 			if value.is_empty() {
-				String::from("")
+				String::new()
 			} else {
 				format!("{key}=\"{value}\"")
 			}

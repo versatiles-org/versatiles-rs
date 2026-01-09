@@ -59,7 +59,7 @@ impl TileCoord {
 		let max = 2u32.pow(u32::from(level));
 		ensure!(x < max, "x ({x}) out of bounds for level {level}");
 		ensure!(y < max, "y ({y}) out of bounds for level {level}");
-		Ok(TileCoord { x, y, level })
+		Ok(TileCoord { level, x, y })
 	}
 
 	/// Create a new `TileCoord`, clamping the x and y indices to valid bounds for the given level.

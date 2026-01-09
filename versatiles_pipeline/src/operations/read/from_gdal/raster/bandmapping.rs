@@ -92,7 +92,7 @@ impl BandMapping {
 					Undefined => {
 						if band_index > &4 {
 							continue;
-						};
+						}
 						*band_index // 1 => red, 2 => green, 3 => blue, 4 => alpha
 					}
 					_ => bail!("GDAL band {band_index} has unsupported color interpretation: {ci:?}"),

@@ -444,7 +444,7 @@ mod tests {
 	])]
 	fn test_error_messages(#[case] vpl: &str, #[case] message: &[&str]) {
 		let error = parse_vpl(vpl).unwrap_err().chain().last().unwrap().to_string();
-		let lines = error.trim().split("\n").collect::<Vec<&str>>();
+		let lines = error.trim().lines().collect::<Vec<&str>>();
 		assert_eq!(lines, message, "for vpl: '{vpl}'");
 	}
 }

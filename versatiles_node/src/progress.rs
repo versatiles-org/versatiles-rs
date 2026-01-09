@@ -701,9 +701,9 @@ mod tests {
 		// Verify empty strings are handled correctly
 		let progress = Progress::new();
 
-		progress.emit_step("".to_string());
-		progress.emit_warning("".to_string());
-		progress.emit_error("".to_string());
+		progress.emit_step(String::new());
+		progress.emit_warning(String::new());
+		progress.emit_error(String::new());
 
 		// Should not panic
 	}

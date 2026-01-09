@@ -110,9 +110,9 @@ impl Operation {
 		log::trace!("from_gdal_raster::Operation built successfully");
 
 		Ok(Self {
-			tilejson,
-			metadata,
 			source,
+			metadata,
+			tilejson,
 			tile_size,
 		})
 	}

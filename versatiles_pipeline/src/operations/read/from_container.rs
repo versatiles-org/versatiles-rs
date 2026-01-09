@@ -43,7 +43,7 @@ impl ReadTileSource for Operation {
 		let mut tilejson = source.tilejson().clone();
 		source.metadata().update_tilejson(&mut tilejson);
 
-		Ok(Box::new(Self { tilejson, source }) as Box<dyn TileSource>)
+		Ok(Box::new(Self { source, tilejson }) as Box<dyn TileSource>)
 	}
 }
 

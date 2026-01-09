@@ -28,7 +28,9 @@ impl DummyImageSource {
 		ensure!(tile_size > 0, "tile_size must be greater than zero");
 
 		let color: Vec<u8> = color.to_vec();
-		let raw = Vec::from_iter(std::iter::repeat_n(color, (tile_size * tile_size) as usize).flatten());
+		let raw: Vec<u8> = std::iter::repeat_n(color, (tile_size * tile_size) as usize)
+			.flatten()
+			.collect();
 		let image = DynamicImage::from_raw(tile_size as usize, tile_size as usize, raw)?;
 
 		DummyImageSource::from_image(image, tile_format, pyramid)

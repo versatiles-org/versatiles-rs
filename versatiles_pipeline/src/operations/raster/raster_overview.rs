@@ -60,12 +60,12 @@ impl Operation {
 		metadata.traversal = Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?;
 
 		Ok(Self {
-			cache,
 			metadata,
 			source,
 			tilejson,
 			level_base,
 			tile_size,
+			cache,
 		})
 	}
 
@@ -76,7 +76,7 @@ impl Operation {
 		let bbox = container.bbox();
 		if bbox.level == 0 || bbox.level > self.level_base {
 			return Ok(());
-		};
+		}
 
 		if bbox.width() > BLOCK_TILE_COUNT || bbox.height() > BLOCK_TILE_COUNT {
 			bail!("Container bbox is too large: {:?}", bbox);

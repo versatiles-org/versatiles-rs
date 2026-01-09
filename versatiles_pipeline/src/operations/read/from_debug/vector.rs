@@ -227,8 +227,8 @@ mod tests {
 		let p1 = Point { x: 1.0, y: 1.0 };
 		let pts = draw_quad(p0, c0, p1);
 		assert!(pts.len() > 2, "Expected subdivision for curved quad");
-		assert_eq!(pts.first().cloned(), Some(p0));
-		assert_eq!(pts.last().cloned(), Some(p1));
+		assert_eq!(pts.first().copied(), Some(p0));
+		assert_eq!(pts.last().copied(), Some(p1));
 	}
 
 	#[test]
@@ -253,7 +253,7 @@ mod tests {
 		let p1 = Point { x: 1.0, y: 1.0 };
 		let pts = draw_cubic(p0, c0, c1, p1);
 		assert!(pts.len() > 2, "Expected subdivision for curved cubic");
-		assert_eq!(pts.first().cloned(), Some(p0));
-		assert_eq!(pts.last().cloned(), Some(p1));
+		assert_eq!(pts.first().copied(), Some(p0));
+		assert_eq!(pts.last().copied(), Some(p1));
 	}
 }

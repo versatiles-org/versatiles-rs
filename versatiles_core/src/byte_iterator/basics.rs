@@ -257,7 +257,7 @@ pub fn parse_object_entries<R>(
 
 				iter.skip_whitespace();
 				match iter.expect_next_byte()? {
-					b',' => continue,
+					b',' => {}
 					b'}' => break,
 					_ => return Err(iter.format_error("expected ',' or '}'")),
 				}

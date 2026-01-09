@@ -95,9 +95,9 @@ impl Operation {
 		metadata.update_tilejson(&mut tilejson);
 
 		Ok(Self {
-			tilejson,
 			metadata,
 			sources,
+			tilejson,
 		})
 	}
 }

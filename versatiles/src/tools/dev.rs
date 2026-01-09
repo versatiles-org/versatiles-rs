@@ -22,7 +22,7 @@ pub async fn run(command: &Subcommand, runtime: TilesRuntime) -> Result<()> {
 		DevCommands::MeasureTileSizes(args) => measure_tile_sizes::run(args, runtime).await?,
 		DevCommands::ExportOutline(args) => export_outline::run(args, runtime).await?,
 		DevCommands::PrintTilejson(args) => print_tilejson::run(args, runtime).await?,
-	};
+	}
 
 	Ok(())
 }

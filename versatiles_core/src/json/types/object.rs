@@ -182,11 +182,12 @@ where
 	JsonValue: From<T>,
 {
 	fn from(input: Vec<(&str, T)>) -> Self {
-		JsonObject(BTreeMap::from_iter(
+		JsonObject(
 			input
 				.into_iter()
-				.map(|(key, value)| (key.to_string(), JsonValue::from(value))),
-		))
+				.map(|(key, value)| (key.to_string(), JsonValue::from(value)))
+				.collect(),
+		)
 	}
 }
 

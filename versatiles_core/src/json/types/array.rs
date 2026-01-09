@@ -100,7 +100,7 @@ where
 	JsonValue: From<T>,
 {
 	fn from(input: Vec<T>) -> Self {
-		JsonArray(Vec::from_iter(input.into_iter().map(JsonValue::from)))
+		JsonArray(input.into_iter().map(JsonValue::from).collect())
 	}
 }
 
@@ -110,7 +110,7 @@ where
 	T: Clone,
 {
 	fn from(input: &Vec<T>) -> Self {
-		JsonArray(Vec::from_iter(input.iter().map(|v| JsonValue::from(v.clone()))))
+		JsonArray(input.iter().map(|v| JsonValue::from(v.clone())).collect())
 	}
 }
 
@@ -120,7 +120,7 @@ where
 	T: Clone,
 {
 	fn from(input: &[T; N]) -> Self {
-		JsonArray(Vec::from_iter(input.iter().map(|v| JsonValue::from(v.clone()))))
+		JsonArray(input.iter().map(|v| JsonValue::from(v.clone())).collect())
 	}
 }
 
@@ -130,7 +130,7 @@ where
 	T: Copy,
 {
 	fn from(input: [T; N]) -> Self {
-		JsonArray(Vec::from_iter(input.into_iter().map(|v| JsonValue::from(v))))
+		JsonArray(input.into_iter().map(JsonValue::from).collect())
 	}
 }
 

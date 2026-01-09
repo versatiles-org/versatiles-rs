@@ -105,9 +105,9 @@ impl ReadTileSource for Operation {
 		metadata.update_tilejson(&mut tilejson);
 
 		Ok(Box::new(Self {
-			tilejson,
 			metadata,
 			sources,
+			tilejson,
 		}) as Box<dyn TileSource>)
 	}
 }

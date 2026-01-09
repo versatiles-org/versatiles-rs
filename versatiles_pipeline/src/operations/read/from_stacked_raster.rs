@@ -62,7 +62,7 @@ fn stack_tiles(tiles: Vec<Tile>) -> Result<Option<Tile>> {
 		}
 		if let Some(mut image_fg) = tile {
 			tile_bg.as_image_mut()?.overlay(image_fg.as_image()?)?;
-		};
+		}
 		tile = Some(tile_bg);
 		if tile.as_mut().unwrap().as_image()?.is_opaque() {
 			break;
@@ -116,9 +116,9 @@ impl ReadTileSource for Operation {
 		metadata.update_tilejson(&mut tilejson);
 
 		Ok(Box::new(Self {
-			tilejson,
 			metadata,
 			sources,
+			tilejson,
 		}) as Box<dyn TileSource>)
 	}
 }
@@ -216,7 +216,11 @@ mod tests {
 	pub fn get_color(blob: &Blob) -> String {
 		let image = DynamicImage::from_blob(blob, TileFormat::PNG).unwrap();
 		let pixel = image.iter_pixels().next().unwrap();
-		pixel.iter().map(|v| format!("{v:02X}")).collect::<Vec<_>>().join("")
+		pixel.iter().fold(String::new(), |mut acc, v| {
+			use std::fmt::Write;
+			write!(acc, "{v:02X}").unwrap();
+			acc
+		})
 	}
 
 	#[tokio::test]
