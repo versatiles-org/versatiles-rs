@@ -206,8 +206,8 @@ impl TileBBox {
 		ensure!(index < self.count_tiles(), "index {index} out of bounds");
 
 		let width = u64::from(self.width());
-		let x = index.rem(width) as u32 + self.x_min()?;
-		let y = index.div(width) as u32 + self.y_min()?;
+		let x = u32::try_from(index.rem(width)).expect("index remainder must fit in u32") + self.x_min()?;
+		let y = u32::try_from(index.div(width)).expect("index quotient must fit in u32") + self.y_min()?;
 		TileCoord::new(self.level, x, y)
 	}
 }

@@ -237,9 +237,11 @@ impl TileBBox {
 		if self.is_empty() {
 			return Ok(()); // No-op for empty bboxes
 		}
-		let max = (self.max_count() - 1) as i64;
-		let x_min = (self.x_min()? as i64 + x).clamp(0, max) as u32;
-		let y_min = (self.y_min()? as i64 + y).clamp(0, max) as u32;
+		let max = i64::from(self.max_count() - 1);
+		let x_min = u32::try_from((i64::from(self.x_min()?) + x).clamp(0, max))
+			.expect("clamped value must fit in u32");
+		let y_min = u32::try_from((i64::from(self.y_min()?) + y).clamp(0, max))
+			.expect("clamped value must fit in u32");
 		self.set_min_and_size(
 			x_min,
 			y_min,

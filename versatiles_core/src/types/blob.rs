@@ -149,7 +149,7 @@ impl Blob {
 		if range.offset + range.length > self.0.len() as u64 {
 			bail!("read outside range")
 		}
-		Ok(Blob::from(&self.0[range.as_range_usize()]))
+		Ok(Blob::from(&self.0[range.as_range_usize()?]))
 	}
 
 	/// Returns a reference to the underlying byte slice.

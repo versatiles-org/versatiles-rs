@@ -49,10 +49,11 @@ impl TileBBoxPyramid {
 		// otherwise, create an empty bounding box.
 		TileBBoxPyramid {
 			level_bbox: from_fn(|z| {
+				let level = u8::try_from(z).expect("zoom level index exceeds u8::MAX");
 				if z <= max_zoom_level as usize {
-					TileBBox::new_full(z as u8).unwrap()
+					TileBBox::new_full(level).unwrap()
 				} else {
-					TileBBox::new_empty(z as u8).unwrap()
+					TileBBox::new_empty(level).unwrap()
 				}
 			}),
 		}
@@ -66,7 +67,9 @@ impl TileBBoxPyramid {
 	#[must_use]
 	pub fn new_empty() -> TileBBoxPyramid {
 		TileBBoxPyramid {
-			level_bbox: from_fn(|z| TileBBox::new_empty(z as u8).unwrap()),
+			level_bbox: from_fn(|z| {
+				TileBBox::new_empty(u8::try_from(z).expect("zoom level index exceeds u8::MAX")).unwrap()
+			}),
 		}
 	}
 
@@ -100,7 +103,8 @@ impl TileBBoxPyramid {
 	#[context("Failed to intersect {self} with {geo_bbox:?}")]
 	pub fn intersect_geo_bbox(&mut self, geo_bbox: &GeoBBox) -> Result<()> {
 		for (z, tile_bbox) in self.level_bbox.iter_mut().enumerate() {
-			tile_bbox.intersect_with(&TileBBox::from_geo(z as u8, geo_bbox)?)?;
+			let level = u8::try_from(z).expect("zoom level index exceeds u8::MAX");
+			tile_bbox.intersect_with(&TileBBox::from_geo(level, geo_bbox)?)?;
 		}
 		Ok(())
 	}
@@ -120,7 +124,8 @@ impl TileBBoxPyramid {
 	/// Each zoom level is intersected independently with the corresponding level in `other_bbox_pyramid`.
 	pub fn intersect(&mut self, other_bbox_pyramid: &TileBBoxPyramid) {
 		for (level, bbox) in self.level_bbox.iter_mut().enumerate() {
-			let other_bbox = other_bbox_pyramid.get_level_bbox(level as u8);
+			let level_u8 = u8::try_from(level).expect("zoom level index exceeds u8::MAX");
+			let other_bbox = other_bbox_pyramid.get_level_bbox(level_u8);
 			bbox.intersect_with(other_bbox).unwrap();
 		}
 	}
@@ -243,7 +248,8 @@ impl TileBBoxPyramid {
 	/// Clears bounding boxes for all levels < `zoom_level_min`.
 	pub fn set_level_min(&mut self, zoom_level_min: u8) {
 		for (index, bbox) in self.level_bbox.iter_mut().enumerate() {
-			if (index as u8) < zoom_level_min {
+			let level = u8::try_from(index).expect("zoom level index exceeds u8::MAX");
+			if level < zoom_level_min {
 				bbox.set_empty();
 			}
 		}
@@ -252,7 +258,8 @@ impl TileBBoxPyramid {
 	/// Clears bounding boxes for all levels > `zoom_level_max`.
 	pub fn set_level_max(&mut self, zoom_level_max: u8) {
 		for (index, bbox) in self.level_bbox.iter_mut().enumerate() {
-			if (index as u8) > zoom_level_max {
+			let level = u8::try_from(index).expect("zoom level index exceeds u8::MAX");
+			if level > zoom_level_max {
 				bbox.set_empty();
 			}
 		}

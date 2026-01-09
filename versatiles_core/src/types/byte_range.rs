@@ -15,10 +15,11 @@
 //! let range = ByteRange::new(23, 42);
 //! assert_eq!(range.offset, 23);
 //! assert_eq!(range.length, 42);
-//! assert_eq!(range.as_range_usize().start, 23);
-//! assert_eq!(range.as_range_usize().end, 65); // 23 + 42 = 65
+//! assert_eq!(range.as_range_usize().unwrap().start, 23);
+//! assert_eq!(range.as_range_usize().unwrap().end, 65); // 23 + 42 = 65
 //! ```
 
+use anyhow::{Context, Result};
 use std::fmt;
 use std::ops::Range;
 
@@ -182,16 +183,15 @@ impl ByteRange {
 	/// use versatiles_core::ByteRange;
 	///
 	/// let range = ByteRange::new(23, 42);
-	/// let usize_range = range.as_range_usize();
+	/// let usize_range = range.as_range_usize().unwrap();
 	/// assert_eq!(usize_range.start, 23);
 	/// assert_eq!(usize_range.end, 65);
 	/// ```
-	#[must_use]
-	pub fn as_range_usize(&self) -> Range<usize> {
-		Range {
-			start: self.offset as usize,
-			end: (self.offset + self.length) as usize,
-		}
+	pub fn as_range_usize(&self) -> Result<Range<usize>> {
+		Ok(Range {
+			start: usize::try_from(self.offset).context("ByteRange offset too large for this platform")?,
+			end: usize::try_from(self.offset + self.length).context("ByteRange end too large for this platform")?,
+		})
 	}
 }
 
@@ -231,7 +231,7 @@ mod tests {
 	#[test]
 	fn test_as_range_usize() {
 		let range = ByteRange::new(23, 42);
-		let range_usize = range.as_range_usize();
+		let range_usize = range.as_range_usize().unwrap();
 		assert_eq!(range_usize.start, 23, "start should match offset");
 		assert_eq!(range_usize.end, 65, "end should be offset + length = 65");
 	}

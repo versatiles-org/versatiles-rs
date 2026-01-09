@@ -291,8 +291,8 @@ impl TileCoord {
 	/// ```
 	pub fn shift_by(&mut self, dx: i64, dy: i64) {
 		let max_value = 2i64.pow(u32::from(self.level)) - 1;
-		self.x = (i64::from(self.x) + dx).max(0).min(max_value) as u32;
-		self.y = (i64::from(self.y) + dy).max(0).min(max_value) as u32;
+		self.x = u32::try_from((i64::from(self.x) + dx).max(0).min(max_value)).expect("clamped value must fit in u32");
+		self.y = u32::try_from((i64::from(self.y) + dy).max(0).min(max_value)).expect("clamped value must fit in u32");
 	}
 
 	/// Get the maximum valid x or y coordinate for this tile's zoom level.

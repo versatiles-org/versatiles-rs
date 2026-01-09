@@ -6,7 +6,7 @@
 //! transform or regroup values across levels.
 
 use crate::{TileBBox, TileCoord, TileStream};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::fmt::Debug;
 use versatiles_derive::context;
 
@@ -29,19 +29,18 @@ impl<I> TileBBoxMap<I> {
 	///
 	/// The vector is allocated to `bbox.count_tiles()` and filled by cloning
 	/// `item`.
-	pub fn new_prefilled_with(bbox: TileBBox, item: I) -> Self
+	pub fn new_prefilled_with(bbox: TileBBox, item: I) -> Result<Self>
 	where
 		I: Clone,
 	{
-		let n = bbox.count_tiles() as usize;
+		let n = usize::try_from(bbox.count_tiles()).context("Tile count too large for this platform")?;
 		let mut vec = Vec::with_capacity(n);
 		vec.resize(n, item);
-		Self { bbox, vec }
+		Ok(Self { bbox, vec })
 	}
 
 	/// Create a new container with all slots initialized using `Default`.
-	#[must_use]
-	pub fn new_default(bbox: TileBBox) -> Self
+	pub fn new_default(bbox: TileBBox) -> Result<Self>
 	where
 		I: Clone + Default,
 	{
@@ -56,7 +55,7 @@ impl<I> TileBBoxMap<I> {
 	/// use versatiles_core::{TileBBox, TileBBoxMap};
 	///
 	/// let bbox = TileBBox::from_min_and_size(5, 0, 0, 10, 10).unwrap();
-	/// let map: TileBBoxMap<u32> = TileBBoxMap::new_default(bbox);
+	/// let map: TileBBoxMap<u32> = TileBBoxMap::new_default(bbox).unwrap();
 	/// assert_eq!(map.len(), 100); // 10×10 tiles
 	/// ```
 	#[must_use]
@@ -74,7 +73,7 @@ impl<I> TileBBoxMap<I> {
 	/// use versatiles_core::{TileBBox, TileBBoxMap};
 	///
 	/// let empty_bbox = TileBBox::new_empty(5).unwrap();
-	/// let map: TileBBoxMap<u32> = TileBBoxMap::new_default(empty_bbox);
+	/// let map: TileBBoxMap<u32> = TileBBoxMap::new_default(empty_bbox).unwrap();
 	/// assert!(map.is_empty());
 	/// ```
 	#[must_use]
@@ -90,7 +89,7 @@ impl<I> TileBBoxMap<I> {
 	/// use versatiles_core::{TileBBox, TileBBoxMap};
 	///
 	/// let bbox = TileBBox::from_min_and_size(5, 10, 20, 5, 5).unwrap();
-	/// let map: TileBBoxMap<u32> = TileBBoxMap::new_default(bbox);
+	/// let map: TileBBoxMap<u32> = TileBBoxMap::new_default(bbox).unwrap();
 	/// assert_eq!(map.bbox().level, 5);
 	/// ```
 	#[must_use]
@@ -105,7 +104,8 @@ impl<I> TileBBoxMap<I> {
 	#[context("Failed to insert into TileBBoxMap at coord: {:?}", coord)]
 	pub fn insert(&mut self, coord: TileCoord, item: I) -> Result<()> {
 		let index = self.bbox.index_of(&coord)?;
-		self.vec[index as usize] = item;
+		let index_usize = usize::try_from(index).context("Tile index too large for this platform")?;
+		self.vec[index_usize] = item;
 		Ok(())
 	}
 
@@ -116,7 +116,8 @@ impl<I> TileBBoxMap<I> {
 	#[context("Failed to get from TileBBoxMap at coord: {:?}", coord)]
 	pub fn get(&self, coord: &TileCoord) -> Result<&I> {
 		let index = self.bbox.index_of(coord)?;
-		Ok(&self.vec[index as usize])
+		let index_usize = usize::try_from(index).context("Tile index too large for this platform")?;
+		Ok(&self.vec[index_usize])
 	}
 
 	/// Get a mutable reference to the value at `coord`.
@@ -126,7 +127,8 @@ impl<I> TileBBoxMap<I> {
 	#[context("Failed to get mutably from TileBBoxMap at coord: {:?}", coord)]
 	pub fn get_mut(&mut self, coord: &TileCoord) -> Result<&mut I> {
 		let index = self.bbox.index_of(coord)?;
-		Ok(&mut self.vec[index as usize])
+		let index_usize = usize::try_from(index).context("Tile index too large for this platform")?;
+		Ok(&mut self.vec[index_usize])
 	}
 
 	/// Iterate over `(coord, &value)` pairs in **row-major** order.
@@ -145,21 +147,18 @@ impl<I> TileBBoxMap<I> {
 	/// Returns a new container at `level-1` where each slot holds the
 	/// `(child_coord, value)` pairs that map to that parent tile. Useful for
 	/// downscaling or overview generation.
-	#[must_use]
-	pub fn into_decreased_level(self) -> TileBBoxMap<Vec<(TileCoord, I)>>
+	pub fn into_decreased_level(self) -> Result<TileBBoxMap<Vec<(TileCoord, I)>>>
 	where
 		I: Clone,
 	{
 		let bbox1 = self.bbox.leveled_down();
-		self.vec.into_iter().enumerate().fold(
-			TileBBoxMap::<Vec<(TileCoord, I)>>::new_default(bbox1),
-			|mut container1, (i, item)| {
-				let coord0 = self.bbox.coord_at_index(i as u64).unwrap();
-				let coord1 = coord0.at_level(self.bbox.level - 1);
-				container1.get_mut(&coord1).unwrap().push((coord0, item));
-				container1
-			},
-		)
+		let mut container1 = TileBBoxMap::<Vec<(TileCoord, I)>>::new_default(bbox1)?;
+		for (i, item) in self.vec.into_iter().enumerate() {
+			let coord0 = self.bbox.coord_at_index(i as u64).unwrap();
+			let coord1 = coord0.at_level(self.bbox.level - 1);
+			container1.get_mut(&coord1)?.push((coord0, item));
+		}
+		Ok(container1)
 	}
 
 	/// Transform all stored values with `f`, keeping the same bbox and order.
@@ -170,7 +169,7 @@ impl<I> TileBBoxMap<I> {
 	/// use versatiles_core::{TileBBox, TileBBoxMap};
 	///
 	/// let bbox = TileBBox::from_min_and_size(3, 0, 0, 2, 2).unwrap();
-	/// let map: TileBBoxMap<u32> = TileBBoxMap::new_prefilled_with(bbox, 10);
+	/// let map: TileBBoxMap<u32> = TileBBoxMap::new_prefilled_with(bbox, 10).unwrap();
 	/// let doubled = map.map(|x| x * 2);
 	/// assert_eq!(doubled.len(), 4);
 	/// ```
@@ -190,7 +189,7 @@ impl<I> TileBBoxMap<I> {
 	///
 	/// # async fn example() {
 	/// let bbox = TileBBox::from_min_and_size(3, 0, 0, 2, 2).unwrap();
-	/// let map: TileBBoxMap<u32> = TileBBoxMap::new_default(bbox);
+	/// let map: TileBBoxMap<u32> = TileBBoxMap::new_default(bbox).unwrap();
 	/// let stream = map.into_stream();
 	/// # }
 	/// ```
@@ -214,7 +213,7 @@ impl<I> TileBBoxMap<Option<I>> {
 	where
 		I: Clone + Send,
 	{
-		let mut container = TileBBoxMap::<Option<I>>::new_default(bbox);
+		let mut container = TileBBoxMap::<Option<I>>::new_default(bbox)?;
 		let vec = stream.to_vec().await;
 		for (coord, item) in vec {
 			container.insert(coord, Some(item))?;
@@ -230,7 +229,7 @@ impl<I> TileBBoxMap<Option<I>> {
 	where
 		I: Clone,
 	{
-		let mut container = TileBBoxMap::<Option<I>>::new_prefilled_with(bbox, None);
+		let mut container = TileBBoxMap::<Option<I>>::new_prefilled_with(bbox, None)?;
 		for (coord, item) in iter {
 			container.insert(coord, Some(item))?;
 		}
@@ -282,11 +281,11 @@ mod tests {
 	#[test]
 	fn construct_prefilled_and_default() {
 		let bbox = bb(4, 5, 6, 6, 7); // 2x2 tiles
-		let m = TileBBoxMap::<u32>::new_prefilled_with(bbox, 9);
+		let m = TileBBoxMap::<u32>::new_prefilled_with(bbox, 9).unwrap();
 		assert_eq!(m.len(), 4);
 		assert!(!m.is_empty());
 		// default fills with Default::default()
-		let m2 = TileBBoxMap::<Option<u8>>::new_default(bbox);
+		let m2 = TileBBoxMap::<Option<u8>>::new_default(bbox).unwrap();
 		assert_eq!(m2.len(), 4);
 		for (_, v) in m2.iter() {
 			assert_eq!(*v, None);
@@ -296,7 +295,7 @@ mod tests {
 	#[test]
 	fn insert_get_and_get_mut() -> Result<()> {
 		let bbox = bb(3, 1, 2, 2, 3); // 2x2
-		let mut m = TileBBoxMap::<i32>::new_prefilled_with(bbox, 0);
+		let mut m = TileBBoxMap::<i32>::new_prefilled_with(bbox, 0)?;
 		m.insert(c(3, 1, 2), 10)?;
 		m.insert(c(3, 2, 3), 20)?;
 		assert_eq!(*m.get(&c(3, 1, 2))?, 10);
@@ -309,7 +308,7 @@ mod tests {
 	#[test]
 	fn iter_and_into_iter_yield_coords_in_bbox_order() {
 		let bbox = bb(2, 0, 0, 1, 1); // coords: (0,0),(1,0),(0,1),(1,1)
-		let mut m = TileBBoxMap::<u8>::new_prefilled_with(bbox, 0);
+		let mut m = TileBBoxMap::<u8>::new_prefilled_with(bbox, 0).unwrap();
 		// mark positions with 1..=4
 		m.insert(c(2, 0, 0), 1).unwrap();
 		m.insert(c(2, 1, 0), 2).unwrap();
@@ -345,12 +344,12 @@ mod tests {
 	#[test]
 	fn into_decreased_level_groups_four_children() {
 		let bbox = bb(6, 8, 8, 9, 9); // 2x2 at level 6
-		let mut m = TileBBoxMap::<u8>::new_prefilled_with(bbox, 0);
+		let mut m = TileBBoxMap::<u8>::new_prefilled_with(bbox, 0).unwrap();
 		m.insert(c(6, 8, 8), 1).unwrap();
 		m.insert(c(6, 9, 8), 2).unwrap();
 		m.insert(c(6, 8, 9), 3).unwrap();
 		m.insert(c(6, 9, 9), 4).unwrap();
-		let grouped = m.into_decreased_level(); // level 5, single parent (4 children)
+		let grouped = m.into_decreased_level().unwrap(); // level 5, single parent (4 children)
 		assert_eq!(grouped.len(), 1);
 		let parent = c(5, 4, 4);
 		let v = grouped.get(&parent).unwrap();
@@ -368,7 +367,7 @@ mod tests {
 	#[test]
 	fn map_transforms_inner_items() {
 		let bbox = bb(3, 0, 0, 1, 1);
-		let m = TileBBoxMap::<u8>::new_prefilled_with(bbox, 5);
+		let m = TileBBoxMap::<u8>::new_prefilled_with(bbox, 5).unwrap();
 		let mapped = m.map(|v| u16::from(v) * 2);
 		for (_, v) in mapped.iter() {
 			assert_eq!(*v, 10);
