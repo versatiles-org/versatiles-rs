@@ -13,13 +13,11 @@ use std::sync::{Arc, Mutex};
 ///
 /// let runtime = TilesRuntime::builder()
 ///     .with_disk_cache(std::path::Path::new("/tmp/versatiles_cache"))
-///     .max_memory(2 * 1024 * 1024 * 1024)
 ///     .silent_progress(true)
 ///     .build();
 /// ```
 pub struct RuntimeBuilder {
 	cache_type: Option<CacheType>,
-	max_memory: Option<usize>,
 	#[allow(clippy::type_complexity)]
 	registry_customizer: Vec<Box<dyn FnOnce(&mut ContainerRegistry)>>,
 	silent_progress: bool,
@@ -30,7 +28,6 @@ impl RuntimeBuilder {
 	pub fn new() -> Self {
 		Self {
 			cache_type: None,
-			max_memory: None,
 			registry_customizer: Vec::new(),
 			#[cfg(not(test))]
 			silent_progress: false,
@@ -57,15 +54,6 @@ impl RuntimeBuilder {
 
 	pub fn silent_progress(mut self, silent: bool) -> Self {
 		self.silent_progress = silent;
-		self
-	}
-
-	/// Set maximum memory limit in bytes
-	///
-	/// This is a hint to processing operations about memory constraints.
-	/// Individual operations may or may not respect this limit.
-	pub fn max_memory(mut self, bytes: usize) -> Self {
-		self.max_memory = Some(bytes);
 		self
 	}
 
@@ -118,7 +106,6 @@ impl RuntimeBuilder {
 				registry,
 				event_bus,
 				progress_factory,
-				max_memory: self.max_memory,
 			}),
 		}
 	}
@@ -140,7 +127,6 @@ mod tests {
 	fn test_runtime_builder_new() {
 		let builder = RuntimeBuilder::new();
 		assert!(builder.cache_type.is_none());
-		assert!(builder.max_memory.is_none());
 		assert!(builder.silent_progress);
 		assert_eq!(builder.registry_customizer.len(), 0);
 	}
@@ -149,7 +135,6 @@ mod tests {
 	fn test_runtime_builder_default() {
 		let builder = RuntimeBuilder::default();
 		assert!(builder.cache_type.is_none());
-		assert!(builder.max_memory.is_none());
 		assert!(builder.silent_progress);
 	}
 
@@ -163,12 +148,6 @@ mod tests {
 	fn test_runtime_builder_with_disk_cache() {
 		let builder = RuntimeBuilder::new().with_disk_cache(Path::new("/tmp/cache"));
 		assert!(builder.cache_type.is_some());
-	}
-
-	#[test]
-	fn test_runtime_builder_max_memory() {
-		let builder = RuntimeBuilder::new().max_memory(1024 * 1024);
-		assert_eq!(builder.max_memory, Some(1024 * 1024));
 	}
 
 	#[test]
@@ -200,12 +179,10 @@ mod tests {
 	fn test_runtime_builder_chaining() {
 		let builder = RuntimeBuilder::new()
 			.with_memory_cache()
-			.max_memory(2048)
 			.silent_progress(true)
 			.customize_registry(|_| {});
 
 		assert!(builder.cache_type.is_some());
-		assert_eq!(builder.max_memory, Some(2048));
 		assert!(builder.silent_progress);
 		assert_eq!(builder.registry_customizer.len(), 1);
 	}
@@ -228,12 +205,6 @@ mod tests {
 		let path_buf = PathBuf::from("/tmp/test_cache");
 		let runtime = RuntimeBuilder::new().with_disk_cache(&path_buf).build();
 		assert_eq!(runtime.cache_type(), &CacheType::Disk(path_buf));
-	}
-
-	#[test]
-	fn test_runtime_builder_build_with_max_memory() {
-		let runtime = RuntimeBuilder::new().max_memory(4096).build();
-		assert_eq!(runtime.max_memory(), Some(4096));
 	}
 
 	#[test]
@@ -267,12 +238,10 @@ mod tests {
 		let path_buf = PathBuf::from("/tmp/full_config_cache");
 		let runtime = RuntimeBuilder::new()
 			.with_disk_cache(&path_buf)
-			.max_memory(8 * 1024 * 1024)
 			.silent_progress(true)
 			.customize_registry(|_| {})
 			.build();
 
 		assert_eq!(runtime.cache_type(), &CacheType::Disk(path_buf));
-		assert_eq!(runtime.max_memory(), Some(8 * 1024 * 1024));
 	}
 }

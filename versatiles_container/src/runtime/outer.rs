@@ -39,7 +39,6 @@ impl TilesRuntime {
 	///
 	/// let runtime = TilesRuntime::builder()
 	///     .with_disk_cache(std::path::Path::new("/tmp/versatiles_cache"))
-	///     .max_memory(2_000_000_000)
 	///     .silent_progress(true)
 	///     .build();
 	/// ```
@@ -85,14 +84,6 @@ impl TilesRuntime {
 		self.inner.progress_factory.lock().unwrap().create(message, total)
 	}
 
-	/// Get maximum memory limit (if configured)
-	///
-	/// Returns None if no memory limit was set, or Some(bytes) if a limit
-	/// was configured during runtime creation.
-	pub fn max_memory(&self) -> Option<usize> {
-		self.inner.max_memory
-	}
-
 	pub async fn write_to_path(&self, reader: Arc<Box<dyn TileSource>>, path: &Path) -> Result<()> {
 		self.inner.registry.write_to_path(reader, path, self.clone()).await
 	}
@@ -121,18 +112,17 @@ mod tests {
 	#[test]
 	fn test_runtime_creation() {
 		let runtime = TilesRuntime::new();
-		assert!(runtime.max_memory().is_none());
+		assert_eq!(runtime.cache_type(), &CacheType::InMemory);
 	}
 
 	#[test]
 	fn test_runtime_builder() {
 		let runtime = TilesRuntime::builder()
-			.max_memory(1024)
 			.with_memory_cache()
 			.silent_progress(true)
 			.build();
 
-		assert_eq!(runtime.max_memory(), Some(1024));
+		assert_eq!(runtime.cache_type(), &CacheType::InMemory);
 	}
 
 	#[test]
