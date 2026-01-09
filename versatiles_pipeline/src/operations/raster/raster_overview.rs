@@ -148,7 +148,7 @@ impl Operation {
 
 		let vec: Vec<(TileCoord, DynamicImage)> = map
 			.into_iter()
-			.flat_map(|(coord0, sub_entries)| {
+			.filter_map(|(coord0, sub_entries)| {
 				if sub_entries.is_empty() {
 					return None;
 				}

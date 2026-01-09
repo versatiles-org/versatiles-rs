@@ -156,7 +156,7 @@ impl TileSource for Operation {
 				}
 				let vec = tiles
 					.into_iter()
-					.flat_map(|(coord, item)| item.map(|tile| (coord, tile)))
+					.filter_map(|(coord, item)| item.map(|tile| (coord, tile)))
 					.collect::<Vec<_>>();
 				TileStream::from_vec(vec)
 			},
