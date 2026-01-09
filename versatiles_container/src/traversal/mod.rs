@@ -8,10 +8,10 @@ mod processing;
 mod size;
 mod traits;
 
-pub use order::*;
-pub use processing::*;
-pub use size::*;
-pub use traits::*;
+pub use order::TraversalOrder;
+pub use processing::{TraversalTranslationStep, translate_traversals};
+pub use size::TraversalSize;
+pub use traits::TileSourceTraverseExt;
 
 use anyhow::Result;
 use versatiles_core::{TileBBox, TileBBoxPyramid};

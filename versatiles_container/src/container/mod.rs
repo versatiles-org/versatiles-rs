@@ -15,21 +15,24 @@
 //! Depending on the enabled features, it supports different formats with corresponding read and write capabilities.
 
 mod mbtiles;
-pub use mbtiles::*;
+pub use mbtiles::{MBTilesReader, MBTilesWriter};
 
 #[cfg(any(test, feature = "test"))]
 mod mock;
 #[cfg(any(test, feature = "test"))]
-pub use mock::*;
+pub use mock::{
+	MockReader, MockReaderProfile, MockWriter, MOCK_BYTES_JPG, MOCK_BYTES_PBF, MOCK_BYTES_PNG,
+	MOCK_BYTES_WEBP,
+};
 
 mod pmtiles;
-pub use pmtiles::*;
+pub use pmtiles::{PMTilesReader, PMTilesWriter};
 
 mod tar;
-pub use tar::*;
+pub use tar::{TarTilesReader, TarTilesWriter};
 
 mod directory;
-pub use directory::*;
+pub use directory::{DirectoryReader, DirectoryWriter};
 
 mod versatiles;
-pub use versatiles::*;
+pub use versatiles::{VersaTilesReader, VersaTilesWriter};
