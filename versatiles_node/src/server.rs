@@ -200,7 +200,7 @@ impl TileServer {
 		if was_removed {
 			let mut server_lock = self.inner.lock().await;
 			if let Some(server) = server_lock.as_mut() {
-				napi_result!(server.remove_tile_source(&name).await)?;
+				napi_result!(server.remove_tile_source(&name))?;
 			}
 		}
 
@@ -255,7 +255,7 @@ impl TileServer {
 		// If server is running, remove the source directly for hot reload
 		let mut server_lock = self.inner.lock().await;
 		if let Some(server) = server_lock.as_mut() {
-			napi_result!(server.remove_static_source(&url_prefix).await)?;
+			napi_result!(server.remove_static_source(&url_prefix))?;
 		}
 
 		Ok(was_removed)

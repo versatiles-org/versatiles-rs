@@ -96,7 +96,6 @@ unnecessary_literal_bound = "allow"
 unnecessary_wraps = "allow"
 unnested_or_patterns = "allow"
 unreadable_literal = "allow"
-unused_async = "allow"
 used_underscore_binding = "allow"
 
 [workspace.metadata.release]

@@ -201,7 +201,7 @@ impl TileServer {
 	/// Returns true if the source was found and removed, false if not found.
 	/// In-flight requests to the removed source will complete successfully
 	/// due to Arc reference counting.
-	pub async fn remove_tile_source(&mut self, name: &str) -> Result<bool> {
+	pub fn remove_tile_source(&mut self, name: &str) -> Result<bool> {
 		let removed = self.tile_sources.remove(name);
 
 		if removed.is_some() {
@@ -235,7 +235,7 @@ impl TileServer {
 	/// Returns true if a source was removed, false if prefix not found.
 	/// In-flight requests to the removed source will complete successfully.
 	/// Uses read-copy-update (RCU) for lock-free hot-reload.
-	pub async fn remove_static_source(&mut self, url_prefix: &str) -> Result<bool> {
+	pub fn remove_static_source(&mut self, url_prefix: &str) -> Result<bool> {
 		let target_prefix = crate::server::Url::from(url_prefix).to_dir();
 
 		let initial_len = self.static_sources.load().len();
@@ -404,11 +404,11 @@ impl TileServer {
 		routes::add_api_to_app(app, Arc::clone(&self.tile_sources)).await
 	}
 
-	pub async fn get_url_mapping(&self) -> Vec<(super::Url, String)> {
+	pub fn get_url_mapping(&self) -> Vec<(super::Url, String)> {
 		let mut result = Vec::new();
 		for entry in self.tile_sources.iter() {
 			let tile_source = entry.value();
-			let source_name = tile_source.get_source_name().await;
+			let source_name = tile_source.get_source_name();
 			result.push((tile_source.prefix.clone(), source_name))
 		}
 		result
@@ -508,7 +508,7 @@ mod tests {
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 
 		assert_eq!(
-			server.get_url_mapping().await,
+			server.get_url_mapping(),
 			vec![(
 				crate::server::Url::from("/tiles/cheese/"),
 				"container 'dummy' ('dummy')".to_string()

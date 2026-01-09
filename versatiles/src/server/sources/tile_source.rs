@@ -32,7 +32,7 @@ impl ServerTileSource {
 		})
 	}
 
-	pub async fn get_source_name(&self) -> String {
+	pub fn get_source_name(&self) -> String {
 		self.reader.source_type().to_string() // Direct access!
 	}
 
