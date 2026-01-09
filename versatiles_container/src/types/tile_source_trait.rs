@@ -24,6 +24,15 @@ use std::{fmt::Debug, sync::Arc};
 use versatiles_core::{ProbeDepth, utils::PrettyPrint};
 use versatiles_core::{TileBBox, TileCoord, TileJSON, TileStream};
 
+/// Shared ownership of a tile source for concurrent access.
+///
+/// This type alias simplifies passing tile sources across async boundaries
+/// and between threads.
+///
+/// Note: The `Box` wrapper is required because writers use `Arc::try_unwrap`
+/// to get mutable access, which requires a sized inner type.
+pub type SharedTileSource = Arc<Box<dyn TileSource>>;
+
 /// Unified object-safe interface for reading or processing tiles.
 ///
 /// Implementors include:
@@ -181,6 +190,17 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		Self: Sized + 'static,
 	{
 		Box::new(self)
+	}
+
+	/// Converts `self` into a shared reference for concurrent access.
+	///
+	/// This is the preferred way to create a `SharedTileSource` from a concrete
+	/// tile source implementation.
+	fn into_shared(self) -> SharedTileSource
+	where
+		Self: Sized + 'static,
+	{
+		Arc::new(Box::new(self))
 	}
 }
 

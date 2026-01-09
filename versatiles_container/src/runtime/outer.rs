@@ -1,5 +1,5 @@
 use super::{EventBus, RuntimeBuilder, RuntimeInner};
-use crate::{CacheType, DataSource, ProgressHandle, TileSource};
+use crate::{CacheType, DataSource, ProgressHandle, SharedTileSource};
 use anyhow::Result;
 use std::{path::Path, sync::Arc};
 
@@ -90,15 +90,15 @@ impl TilesRuntime {
 		self.inner.progress_factory.lock().unwrap().create(message, total)
 	}
 
-	pub async fn write_to_path(&self, reader: Arc<Box<dyn TileSource>>, path: &Path) -> Result<()> {
+	pub async fn write_to_path(&self, reader: SharedTileSource, path: &Path) -> Result<()> {
 		self.inner.registry.write_to_path(reader, path, self.clone()).await
 	}
 
-	pub async fn get_reader_from_str(&self, filename: &str) -> Result<Arc<Box<dyn TileSource>>> {
+	pub async fn get_reader_from_str(&self, filename: &str) -> Result<SharedTileSource> {
 		self.inner.registry.get_reader_from_str(filename, self.clone()).await
 	}
 
-	pub async fn get_reader(&self, data_source: DataSource) -> Result<Arc<Box<dyn TileSource>>> {
+	pub async fn get_reader(&self, data_source: DataSource) -> Result<SharedTileSource> {
 		self.inner.registry.get_reader(data_source, self.clone()).await
 	}
 }

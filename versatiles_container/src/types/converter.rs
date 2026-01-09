@@ -40,7 +40,7 @@
 //! }
 //! ```
 
-use crate::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
+use crate::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{path::Path, sync::Arc};
@@ -98,7 +98,7 @@ impl Default for TilesConverterParameters {
 /// See the module-level example.
 #[context("Converting tiles from reader to file")]
 pub async fn convert_tiles_container(
-	reader: Arc<Box<dyn TileSource>>,
+	reader: SharedTileSource,
 	cp: TilesConverterParameters,
 	path: &Path,
 	runtime: TilesRuntime,
@@ -106,7 +106,7 @@ pub async fn convert_tiles_container(
 	runtime.events().step("Starting conversion".to_string());
 
 	let converter = TilesConvertReader::new_from_reader(reader, cp)?;
-	runtime.write_to_path(Arc::new(Box::new(converter)), path).await?;
+	runtime.write_to_path(converter.into_shared(), path).await?;
 
 	runtime.events().step("Conversion complete".to_string());
 	Ok(())
@@ -120,7 +120,7 @@ pub async fn convert_tiles_container(
 /// existing reader.
 #[derive(Debug)]
 pub struct TilesConvertReader {
-	reader: Arc<Box<dyn TileSource>>,
+	reader: SharedTileSource,
 	converter_parameters: TilesConverterParameters,
 	reader_metadata: TileSourceMetadata,
 	tilejson: TileJSON,
@@ -136,7 +136,7 @@ impl TilesConvertReader {
 	/// Propagates errors from querying/deriving parameters or updating metadata.
 	#[context("Creating converter reader from existing reader")]
 	pub fn new_from_reader(
-		reader: Arc<Box<dyn TileSource>>,
+		reader: SharedTileSource,
 		cp: TilesConverterParameters,
 	) -> Result<TilesConvertReader> {
 		let rp: TileSourceMetadata = reader.metadata().to_owned();
@@ -255,10 +255,10 @@ mod tests {
 		TileFormat::{self, *},
 	};
 
-	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> Arc<Box<dyn TileSource>> {
+	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> SharedTileSource {
 		let bbox_pyramid = TileBBoxPyramid::new_full(4);
 		let reader_metadata = TileSourceMetadata::new(tf, tc, bbox_pyramid, Traversal::ANY);
-		Arc::new(MockReader::new_mock(reader_metadata).unwrap().boxed())
+		MockReader::new_mock(reader_metadata).unwrap().into_shared()
 	}
 
 	#[tokio::test]
@@ -274,7 +274,7 @@ mod tests {
 			let pyramid_out = new_bbox(bbox_out);
 
 			let reader_metadata = TileSourceMetadata::new(JSON, Uncompressed, pyramid_in, Traversal::ANY);
-			let reader = Arc::new(MockReader::new_mock(reader_metadata)?.boxed());
+			let reader = MockReader::new_mock(reader_metadata)?.into_shared();
 
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let runtime = TilesRuntime::default();

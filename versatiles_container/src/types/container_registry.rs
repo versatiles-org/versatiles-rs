@@ -28,8 +28,8 @@
 
 use crate::{
 	DataSource, DirectoryReader, DirectoryWriter, MBTilesReader, MBTilesWriter, PMTilesReader, PMTilesWriter,
-	TarTilesReader, TarTilesWriter, TileSource, TilesRuntime, TilesWriter, VersaTilesReader, VersaTilesWriter,
-	types::data_location::DataLocation,
+	SharedTileSource, TarTilesReader, TarTilesWriter, TileSource, TilesRuntime, TilesWriter, VersaTilesReader,
+	VersaTilesWriter, types::data_location::DataLocation,
 };
 #[cfg(test)]
 use crate::{MockReader, TileSourceMetadata, Traversal};
@@ -50,11 +50,11 @@ use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat};
 use versatiles_derive::context;
 
 /// Signature for async opener functions used by the registry.
-type ReadFuture = Pin<Box<dyn Future<Output = Result<Arc<Box<dyn TileSource>>>> + Send>>;
+type ReadFuture = Pin<Box<dyn Future<Output = Result<SharedTileSource>> + Send>>;
 type ReadData = Box<dyn Fn(DataReader, TilesRuntime) -> ReadFuture + Send + Sync + 'static>;
 type ReadFile = Box<dyn Fn(PathBuf, TilesRuntime) -> ReadFuture + Send + Sync + 'static>;
 type WriteFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
-type WriteFile = Box<dyn Fn(Arc<Box<dyn TileSource>>, PathBuf, TilesRuntime) -> WriteFuture + Send + Sync + 'static>;
+type WriteFile = Box<dyn Fn(SharedTileSource, PathBuf, TilesRuntime) -> WriteFuture + Send + Sync + 'static>;
 
 /// Registry mapping file extensions to async tile container readers and writers.
 ///
@@ -88,11 +88,11 @@ impl ContainerRegistry {
 	///
 	/// # Arguments
 	/// * `ext` - The file extension to associate with the reader.
-	/// * `read_file` - Async function that takes a `PathBuf` and returns a boxed `TileSource`.
+	/// * `read_file` - Async function that takes a `PathBuf` and returns a `SharedTileSource`.
 	pub fn register_reader_file<F, Fut>(&mut self, ext: &str, read_file: F)
 	where
 		F: Fn(PathBuf, TilesRuntime) -> Fut + Send + Sync + 'static,
-		Fut: Future<Output = Result<Arc<Box<dyn TileSource>>>> + Send + 'static,
+		Fut: Future<Output = Result<SharedTileSource>> + Send + 'static,
 	{
 		self.file_readers.insert(
 			sanitize_extension(ext),
@@ -104,11 +104,11 @@ impl ContainerRegistry {
 	///
 	/// # Arguments
 	/// * `ext` - The file extension to associate with the reader.
-	/// * `read_data` - Async function that takes a `DataReader` and returns a boxed `TileSource`.
+	/// * `read_data` - Async function that takes a `DataReader` and returns a `SharedTileSource`.
 	pub fn register_reader_data<F, Fut>(&mut self, ext: &str, read_data: F)
 	where
 		F: Fn(DataReader, TilesRuntime) -> Fut + Send + Sync + 'static,
-		Fut: Future<Output = Result<Arc<Box<dyn TileSource>>>> + Send + 'static,
+		Fut: Future<Output = Result<SharedTileSource>> + Send + 'static,
 	{
 		self.data_readers.insert(
 			sanitize_extension(ext),
@@ -120,11 +120,11 @@ impl ContainerRegistry {
 	///
 	/// # Arguments
 	/// * `ext` - The file extension to associate with the writer.
-	/// * `write_file` - Async function that takes a boxed `TileSource`, a `PathBuf`, and a `TilesRuntime`,
+	/// * `write_file` - Async function that takes a `SharedTileSource`, a `PathBuf`, and a `TilesRuntime`,
 	///   and writes the tiles to the specified path.
 	pub fn register_writer_file<F, Fut>(&mut self, ext: &str, write_file: F)
 	where
-		F: Fn(Arc<Box<dyn TileSource>>, PathBuf, TilesRuntime) -> Fut + Send + Sync + 'static,
+		F: Fn(SharedTileSource, PathBuf, TilesRuntime) -> Fut + Send + Sync + 'static,
 		Fut: Future<Output = Result<()>> + Send + 'static,
 	{
 		self.file_writers.insert(
@@ -138,7 +138,7 @@ impl ContainerRegistry {
 		&self,
 		data_source: &str,
 		runtime: TilesRuntime,
-	) -> Result<Arc<Box<dyn TileSource>>> {
+	) -> Result<SharedTileSource> {
 		self.get_reader(DataSource::parse(data_source)?, runtime).await
 	}
 
@@ -150,9 +150,9 @@ impl ContainerRegistry {
 	/// * `url_path` - The file path or URL to read from.
 	///
 	/// # Returns
-	/// A boxed `TileSource` for reading tiles.
+	/// A `SharedTileSource` for reading tiles.
 	#[context("Failed to get reader for '{data_source:?}'")]
-	pub async fn get_reader(&self, data_source: DataSource, runtime: TilesRuntime) -> Result<Arc<Box<dyn TileSource>>> {
+	pub async fn get_reader(&self, data_source: DataSource, runtime: TilesRuntime) -> Result<SharedTileSource> {
 		let mut data_source = data_source.clone();
 		data_source.resolve(&DataLocation::cwd()?)?;
 		let extension = sanitize_extension(data_source.container_type()?);
@@ -174,11 +174,9 @@ impl ContainerRegistry {
 				}
 
 				if path.is_dir() {
-					return Ok(Arc::new(
-						DirectoryReader::open_path(&path)
-							.with_context(|| format!("Failed opening {path:?} as directory"))?
-							.boxed(),
-					));
+					return Ok(DirectoryReader::open_path(&path)
+						.with_context(|| format!("Failed opening {path:?} as directory"))?
+						.into_shared());
 				}
 
 				self
@@ -201,7 +199,7 @@ impl ContainerRegistry {
 	/// Write tiles with a custom runtime for progress monitoring and other options.
 	///
 	/// # Arguments
-	/// * `reader` - A boxed tile container reader providing tiles to write.
+	/// * `reader` - A shared tile source providing tiles to write.
 	/// * `path` - The output path to write tiles to.
 	/// * `runtime` - Runtime configuration (cache type, event bus, progress factory, etc.).
 	///
@@ -210,7 +208,7 @@ impl ContainerRegistry {
 	#[context("writing tiles to path '{path:?}'")]
 	pub async fn write_to_path(
 		&self,
-		reader: Arc<Box<dyn TileSource>>,
+		reader: SharedTileSource,
 		path: &Path,
 		runtime: TilesRuntime,
 	) -> Result<()> {
@@ -250,7 +248,7 @@ impl Default for ContainerRegistry {
 
 		// MBTiles
 		reg.register_reader_file("mbtiles", |p, r| async move {
-			Ok(Arc::new(MBTilesReader::open_path(&p, r)?.boxed()))
+			Ok(MBTilesReader::open_path(&p, r)?.into_shared())
 		});
 		reg.register_writer_file("mbtiles", |r, p, rt| async move {
 			let mut boxed =
@@ -260,7 +258,7 @@ impl Default for ContainerRegistry {
 
 		// TAR
 		reg.register_reader_file("tar", |p, _r| async move {
-			Ok(Arc::new(TarTilesReader::open_path(&p)?.boxed()))
+			Ok(TarTilesReader::open_path(&p)?.into_shared())
 		});
 		reg.register_writer_file("tar", |r, p, rt| async move {
 			let mut boxed =
@@ -269,10 +267,10 @@ impl Default for ContainerRegistry {
 		});
 		// PMTiles
 		reg.register_reader_file("pmtiles", |p, r| async move {
-			Ok(Arc::new(PMTilesReader::open_path(&p, r).await?.boxed()))
+			Ok(PMTilesReader::open_path(&p, r).await?.into_shared())
 		});
 		reg.register_reader_data("pmtiles", |p, r| async move {
-			Ok(Arc::new(PMTilesReader::open_reader(p, r).await?.boxed()))
+			Ok(PMTilesReader::open_reader(p, r).await?.into_shared())
 		});
 		reg.register_writer_file("pmtiles", |r, p, rt| async move {
 			let mut boxed =
@@ -282,10 +280,10 @@ impl Default for ContainerRegistry {
 
 		// VersaTiles
 		reg.register_reader_file("versatiles", |p, r| async move {
-			Ok(Arc::new(VersaTilesReader::open_path(&p, r).await?.boxed()))
+			Ok(VersaTilesReader::open_path(&p, r).await?.into_shared())
 		});
 		reg.register_reader_data("versatiles", |p, r| async move {
-			Ok(Arc::new(VersaTilesReader::open_reader(p, r).await?.boxed()))
+			Ok(VersaTilesReader::open_reader(p, r).await?.into_shared())
 		});
 		reg.register_writer_file("versatiles", |r, p, rt| async move {
 			let mut boxed =
