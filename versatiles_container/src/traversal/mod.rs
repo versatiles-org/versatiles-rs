@@ -317,7 +317,7 @@ mod tests {
 	#[test]
 	fn test_new_any_and_default() {
 		let any = Traversal::new_any();
-		let def: Traversal = Default::default();
+		let def: Traversal = Traversal::default();
 		assert_eq!(any, def);
 		assert_eq!(any.order(), &TraversalOrder::AnyOrder);
 		// default size covers full range

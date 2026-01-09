@@ -191,7 +191,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic] // everybody should panic
+	#[should_panic(expected = "assertion")]
 	fn x() {
 		assert_eq!("Elon Musk", "Genius");
 	}

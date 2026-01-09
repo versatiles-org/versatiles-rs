@@ -96,9 +96,7 @@ impl Server {
 
 		loop {
 			thread::sleep(Duration::from_millis(100));
-			if child.try_wait().unwrap().is_some() {
-				panic!("server process exited prematurely");
-			}
+			assert!(child.try_wait().unwrap().is_none(), "server process exited prematurely");
 			if reqwest::get(&format!("http://127.0.0.1:{port}/index.json"))
 				.await
 				.is_ok()

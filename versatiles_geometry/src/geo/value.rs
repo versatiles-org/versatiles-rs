@@ -380,7 +380,7 @@ mod tests {
 	#[case(GeoValue::String("-042".to_string()), "-042")]
 	#[case(GeoValue::String(".42".to_string()), ".42")]
 	#[case(GeoValue::String(".420".to_string()), ".420")]
-	#[case(GeoValue::String("".to_string()), "")]
+	#[case(GeoValue::String(String::new()), "")]
 	#[case(GeoValue::String("+42".to_string()), "+42")]
 	#[case(GeoValue::String("00.0".to_string()), "00.0")]
 	#[case(GeoValue::String("00".to_string()), "00")]

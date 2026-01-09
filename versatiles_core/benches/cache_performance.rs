@@ -58,7 +58,7 @@ impl MutexCache {
 		let mut cache = self.cache.lock().await;
 		if cache.len() >= self.max_entries {
 			// Simple eviction: remove first entry (not LRU, but simpler for benchmark)
-			if let Some(k) = cache.keys().next().cloned() {
+			if let Some(k) = cache.keys().next().copied() {
 				cache.remove(&k);
 			}
 		}

@@ -301,7 +301,7 @@ mod tests {
 				text = text
 					.replace("{\"z\":3,\"x\":", "")
 					.replace(",\"y\":", "")
-					.replace("}", "");
+					.replace('}', "");
 				tiles.push(text);
 			}
 			let tiles = tiles.join(" ");

@@ -463,7 +463,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	#[should_panic]
+	#[should_panic(expected = "already exists")]
 	async fn same_prefix_twice() {
 		let mut server = TileServer::new_test(IP, 0, true, false);
 
