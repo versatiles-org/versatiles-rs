@@ -7,11 +7,6 @@
 //! variable `VERSATILES_CACHE_DIR`. If unset, a random directory is created
 //! inside the system temporary folder.
 use std::path::PathBuf;
-use uuid::Uuid;
-
-lazy_static::lazy_static! {
-	pub static ref DEFAULT_CACHE_DIR: PathBuf = std::env::var("VERSATILES_CACHE_DIR").map_or_else(|_| std::env::temp_dir(), PathBuf::from).join(random_path());
-}
 
 /// Defines how temporary data is cached during tile or dataset processing.
 ///
@@ -35,8 +30,8 @@ impl CacheType {
 	///
 	/// The directory path is generated from `VERSATILES_CACHE_DIR` or, if unset,
 	/// a new random path inside the system’s temporary directory.
-	pub fn new_disk() -> Self {
-		Self::Disk(DEFAULT_CACHE_DIR.to_path_buf())
+	pub fn new_disk(path_buf: PathBuf) -> Self {
+		Self::Disk(path_buf)
 	}
 	#[must_use]
 	/// Create a [`CacheType::InMemory`] variant.
@@ -44,45 +39,5 @@ impl CacheType {
 	/// Use this for lightweight workloads that fit comfortably in RAM.
 	pub fn new_memory() -> Self {
 		Self::InMemory
-	}
-}
-
-/// Generate a unique, timestamped random directory name for temporary cache usage.
-///
-/// The name format is:
-/// `versatiles_YYYYMMDD_HHMMSS_XXXX`
-/// where `XXXX` is a short random suffix derived from a UUID.
-///
-/// This ensures that multiple processes or test runs do not collide on cache directories.
-fn random_path() -> String {
-	use ::time::{OffsetDateTime, format_description::parse};
-	let time = OffsetDateTime::now_local()
-		.unwrap_or_else(|_| OffsetDateTime::now_utc())
-		.format(&parse("[year][month][day]_[hour][minute][second]").unwrap())
-		.unwrap();
-	let mut rand = Uuid::new_v4().to_string();
-	rand = rand.split_off(rand.len().saturating_sub(4));
-	format!("versatiles_{time}_{rand}")
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use wildmatch::WildMatch;
-
-	#[test]
-	fn test_random_path_format() {
-		let path = random_path();
-		assert!(
-			WildMatch::new("versatiles_????????_??????_????").matches(&path),
-			"random_path format is incorrect: {path}"
-		);
-	}
-
-	#[test]
-	fn test_random_path_uniqueness() {
-		let path1 = random_path();
-		let path2 = random_path();
-		assert_ne!(path1, path2, "random_path should generate unique values");
 	}
 }

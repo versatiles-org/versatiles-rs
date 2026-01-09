@@ -27,12 +27,13 @@ mod tests {
 			progress_factory,
 		};
 
-		assert!(matches!(inner.cache_type, CacheType::InMemory));
+		assert_eq!(inner.cache_type, CacheType::InMemory);
 	}
 
 	#[test]
 	fn test_runtime_inner_with_disk_cache() {
-		let cache_type = CacheType::new_disk();
+		let path_buf = std::path::PathBuf::from("/tmp/versatiles_cache");
+		let cache_type = CacheType::new_disk(path_buf.clone());
 		let registry = ContainerRegistry::default();
 		let event_bus = EventBus::new();
 		let progress_factory = Mutex::new(ProgressFactory::new(event_bus.clone(), false));
@@ -44,7 +45,7 @@ mod tests {
 			progress_factory,
 		};
 
-		assert!(matches!(inner.cache_type, CacheType::Disk(_)));
+		assert_eq!(inner.cache_type, CacheType::Disk(path_buf));
 	}
 
 	#[test]
