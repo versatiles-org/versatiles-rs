@@ -66,3 +66,6 @@ pub use traversal::*;
 mod types;
 /// Re‑exports reader/writer traits, converters, and auxiliary types.
 pub use types::*;
+
+#[cfg(test)]
+pub(crate) mod testing;
