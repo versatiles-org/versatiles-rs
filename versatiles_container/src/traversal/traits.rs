@@ -139,3 +139,252 @@ pub trait TileSourceTraverseExt: TileSource {
 
 // Blanket implementation: all TileSource implementors get traversal support
 impl<T: TileSource + ?Sized> TileSourceTraverseExt for T {}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::{SourceType, TileSourceMetadata, TilesRuntime};
+	use anyhow::Result;
+	use async_trait::async_trait;
+	use std::sync::atomic::{AtomicU64, Ordering};
+	use versatiles_core::{Blob, TileBBoxPyramid, TileCompression, TileFormat, TileJSON};
+
+	/// Test reader that produces tiles with predictable content.
+	#[derive(Debug)]
+	struct TestReader {
+		metadata: TileSourceMetadata,
+		tilejson: TileJSON,
+	}
+
+	impl TestReader {
+		fn new(traversal: Traversal, max_level: u8) -> Self {
+			TestReader {
+				metadata: TileSourceMetadata {
+					bbox_pyramid: TileBBoxPyramid::new_full(max_level),
+					tile_compression: TileCompression::Uncompressed,
+					tile_format: TileFormat::PNG,
+					traversal,
+				},
+				tilejson: TileJSON::default(),
+			}
+		}
+	}
+
+	#[async_trait]
+	impl TileSource for TestReader {
+		fn source_type(&self) -> Arc<SourceType> {
+			SourceType::new_container("test", "test://")
+		}
+
+		fn metadata(&self) -> &TileSourceMetadata {
+			&self.metadata
+		}
+
+		fn tilejson(&self) -> &TileJSON {
+			&self.tilejson
+		}
+
+		async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+			let compression = self.metadata.tile_compression;
+			let format = self.metadata.tile_format;
+			Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |coord| {
+				// Create tile with coord encoded in data for verification
+				let data = format!("tile:{},{},{}", coord.level, coord.x, coord.y);
+				Some(Tile::from_blob(Blob::from(data), compression, format))
+			}))
+		}
+	}
+
+	#[tokio::test]
+	async fn test_traverse_streaming_mode() -> Result<()> {
+		// When source and write traversals are both ANY, tiles are streamed directly
+		let reader = TestReader::new(Traversal::ANY, 2);
+		let runtime = TilesRuntime::builder().with_memory_cache().build();
+
+		let tile_count = Arc::new(AtomicU64::new(0));
+		let count_clone = tile_count.clone();
+
+		reader
+			.traverse_all_tiles(
+				&Traversal::ANY,
+				|_bbox, stream| {
+					let count = count_clone.clone();
+					Box::pin(async move {
+						let tiles = stream.to_vec().await;
+						count.fetch_add(tiles.len() as u64, Ordering::SeqCst);
+						Ok(())
+					})
+				},
+				runtime,
+				Some("test streaming"),
+			)
+			.await?;
+
+		// Level 0: 1, Level 1: 4, Level 2: 16 = 21 tiles
+		assert_eq!(tile_count.load(Ordering::SeqCst), 21);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_traverse_with_reordering() -> Result<()> {
+		// DepthFirst source traversal to AnyOrder write traversal
+		// This tests the traversal translation without needing caching
+		let source_traversal = Traversal::new(super::super::TraversalOrder::DepthFirst, 1, 256)?;
+		let write_traversal = Traversal::new(super::super::TraversalOrder::AnyOrder, 1, 256)?;
+
+		let reader = TestReader::new(source_traversal, 2);
+		let runtime = TilesRuntime::builder().with_memory_cache().build();
+
+		let tile_count = Arc::new(AtomicU64::new(0));
+		let count_clone = tile_count.clone();
+
+		reader
+			.traverse_all_tiles(
+				&write_traversal,
+				|_bbox, stream| {
+					let count = count_clone.clone();
+					Box::pin(async move {
+						let tiles = stream.to_vec().await;
+						count.fetch_add(tiles.len() as u64, Ordering::SeqCst);
+						Ok(())
+					})
+				},
+				runtime,
+				None, // Test default progress message
+			)
+			.await?;
+
+		// Levels 0-2: 1 + 4 + 16 = 21 tiles
+		assert_eq!(tile_count.load(Ordering::SeqCst), 21);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_traverse_with_disk_cache() -> Result<()> {
+		// Test traversal with disk-backed cache
+		let source_traversal = Traversal::new(super::super::TraversalOrder::DepthFirst, 1, 256)?;
+		let write_traversal = Traversal::new(super::super::TraversalOrder::AnyOrder, 1, 256)?;
+
+		let reader = TestReader::new(source_traversal, 2);
+		let temp_dir = tempfile::TempDir::new()?;
+		let runtime = TilesRuntime::builder().with_disk_cache(temp_dir.path()).build();
+
+		let tile_count = Arc::new(AtomicU64::new(0));
+		let count_clone = tile_count.clone();
+
+		reader
+			.traverse_all_tiles(
+				&write_traversal,
+				|_bbox, stream| {
+					let count = count_clone.clone();
+					Box::pin(async move {
+						let tiles = stream.to_vec().await;
+						count.fetch_add(tiles.len() as u64, Ordering::SeqCst);
+						Ok(())
+					})
+				},
+				runtime,
+				Some("disk cache test"),
+			)
+			.await?;
+
+		// Levels 0-2: 1 + 4 + 16 = 21 tiles
+		assert_eq!(tile_count.load(Ordering::SeqCst), 21);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_traverse_verifies_tile_content() -> Result<()> {
+		let reader = TestReader::new(Traversal::ANY, 1);
+		let runtime = TilesRuntime::builder().with_memory_cache().build();
+
+		let received_coords = Arc::new(std::sync::Mutex::new(Vec::new()));
+		let coords_clone = received_coords.clone();
+
+		reader
+			.traverse_all_tiles(
+				&Traversal::ANY,
+				|_bbox, stream| {
+					let coords = coords_clone.clone();
+					Box::pin(async move {
+						let tiles = stream.to_vec().await;
+						for (coord, tile) in tiles {
+							// Verify tile data contains expected coord
+							let blob = tile.into_blob(TileCompression::Uncompressed)?;
+							let data = String::from_utf8_lossy(blob.as_slice());
+							let expected = format!("tile:{},{},{}", coord.level, coord.x, coord.y);
+							assert_eq!(data, expected);
+							coords.lock().unwrap().push(coord);
+						}
+						Ok(())
+					})
+				},
+				runtime,
+				None,
+			)
+			.await?;
+
+		let coords = received_coords.lock().unwrap();
+		assert_eq!(coords.len(), 5); // 1 + 4 tiles
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_traverse_empty_pyramid() -> Result<()> {
+		// Test with a very restricted pyramid (level 0 only, single tile)
+		let reader = TestReader::new(Traversal::ANY, 0);
+		let runtime = TilesRuntime::builder().with_memory_cache().build();
+
+		let tile_count = Arc::new(AtomicU64::new(0));
+		let count_clone = tile_count.clone();
+
+		reader
+			.traverse_all_tiles(
+				&Traversal::ANY,
+				|_bbox, stream| {
+					let count = count_clone.clone();
+					Box::pin(async move {
+						let tiles = stream.to_vec().await;
+						count.fetch_add(tiles.len() as u64, Ordering::SeqCst);
+						Ok(())
+					})
+				},
+				runtime,
+				None,
+			)
+			.await?;
+
+		assert_eq!(tile_count.load(Ordering::SeqCst), 1);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_traverse_callback_receives_correct_bbox() -> Result<()> {
+		let reader = TestReader::new(Traversal::ANY, 1);
+		let runtime = TilesRuntime::builder().with_memory_cache().build();
+
+		let bboxes_received = Arc::new(std::sync::Mutex::new(Vec::new()));
+		let bboxes_clone = bboxes_received.clone();
+
+		reader
+			.traverse_all_tiles(
+				&Traversal::ANY,
+				|bbox, stream| {
+					let bboxes = bboxes_clone.clone();
+					Box::pin(async move {
+						bboxes.lock().unwrap().push(bbox);
+						stream.drain_and_count().await;
+						Ok(())
+					})
+				},
+				runtime,
+				None,
+			)
+			.await?;
+
+		let bboxes = bboxes_received.lock().unwrap();
+		// Should have received bboxes for levels 0 and 1
+		assert!(!bboxes.is_empty());
+		Ok(())
+	}
+}
