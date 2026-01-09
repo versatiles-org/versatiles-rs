@@ -69,7 +69,6 @@ versatiles_pipeline = { workspace = true }
 [dev-dependencies]
 assert_cmd = { workspace = true, features = ["color"] }
 assert_fs.workspace = true
-lazy_static.workspace = true
 predicates.workspace = true
 pretty_assertions.workspace = true
 reqwest = { workspace = true, features = [

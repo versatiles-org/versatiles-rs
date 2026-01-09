@@ -28,7 +28,6 @@ enumset.workspace = true
 flate2.workspace = true
 futures.workspace = true
 itertools.workspace = true
-lazy_static.workspace = true
 log.workspace = true
 lru = "0.16"
 num_cpus.workspace = true

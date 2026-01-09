@@ -20,7 +20,6 @@ anyhow.workspace = true
 byteorder.workspace = true
 futures.workspace = true
 geo.workspace = true
-lazy_static.workspace = true
 log.workspace = true
 num_cpus.workspace = true
 regex.workspace = true
