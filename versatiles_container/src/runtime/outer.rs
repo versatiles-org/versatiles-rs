@@ -38,7 +38,7 @@ impl TilesRuntime {
 	/// use versatiles_container::TilesRuntime;
 	///
 	/// let runtime = TilesRuntime::builder()
-	///     .with_disk_cache()
+	///     .with_disk_cache(std::path::Path::new("/tmp/versatiles_cache"))
 	///     .max_memory(2_000_000_000)
 	///     .silent_progress(true)
 	///     .build();

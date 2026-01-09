@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 /// use versatiles_container::TilesRuntime;
 ///
 /// let runtime = TilesRuntime::builder()
-///     .with_disk_cache()
+///     .with_disk_cache(std::path::Path::new("/tmp/versatiles_cache"))
 ///     .max_memory(2 * 1024 * 1024 * 1024)
 ///     .silent_progress(true)
 ///     .build();
@@ -51,8 +51,8 @@ impl RuntimeBuilder {
 	}
 
 	/// Use disk cache
-	pub fn with_disk_cache(self) -> Self {
-		self.cache_type(CacheType::new_disk())
+	pub fn with_disk_cache(self, path: &std::path::Path) -> Self {
+		self.cache_type(CacheType::Disk(path.to_path_buf()))
 	}
 
 	pub fn silent_progress(mut self, silent: bool) -> Self {
@@ -132,6 +132,8 @@ impl Default for RuntimeBuilder {
 
 #[cfg(test)]
 mod tests {
+	use std::path::{Path, PathBuf};
+
 	use super::*;
 
 	#[test]
@@ -159,7 +161,7 @@ mod tests {
 
 	#[test]
 	fn test_runtime_builder_with_disk_cache() {
-		let builder = RuntimeBuilder::new().with_disk_cache();
+		let builder = RuntimeBuilder::new().with_disk_cache(Path::new("/tmp/cache"));
 		assert!(builder.cache_type.is_some());
 	}
 
@@ -218,13 +220,14 @@ mod tests {
 	#[test]
 	fn test_runtime_builder_build_with_memory_cache() {
 		let runtime = RuntimeBuilder::new().with_memory_cache().build();
-		assert!(matches!(runtime.cache_type(), CacheType::InMemory));
+		assert_eq!(runtime.cache_type(), &CacheType::InMemory);
 	}
 
 	#[test]
 	fn test_runtime_builder_build_with_disk_cache() {
-		let runtime = RuntimeBuilder::new().with_disk_cache().build();
-		assert!(matches!(runtime.cache_type(), CacheType::Disk(_)));
+		let path_buf = PathBuf::from("/tmp/test_cache");
+		let runtime = RuntimeBuilder::new().with_disk_cache(&path_buf).build();
+		assert_eq!(runtime.cache_type(), &CacheType::Disk(path_buf));
 	}
 
 	#[test]
@@ -246,7 +249,7 @@ mod tests {
 	fn test_runtime_builder_build_default_cache() {
 		let runtime = RuntimeBuilder::new().build();
 		// Default should be memory cache
-		assert!(matches!(runtime.cache_type(), CacheType::InMemory));
+		assert_eq!(runtime.cache_type(), &CacheType::InMemory);
 	}
 
 	#[test]
@@ -261,14 +264,15 @@ mod tests {
 
 	#[test]
 	fn test_runtime_builder_full_configuration() {
+		let path_buf = PathBuf::from("/tmp/full_config_cache");
 		let runtime = RuntimeBuilder::new()
-			.with_disk_cache()
+			.with_disk_cache(&path_buf)
 			.max_memory(8 * 1024 * 1024)
 			.silent_progress(true)
 			.customize_registry(|_| {})
 			.build();
 
-		assert!(matches!(runtime.cache_type(), CacheType::Disk(_)));
+		assert_eq!(runtime.cache_type(), &CacheType::Disk(path_buf));
 		assert_eq!(runtime.max_memory(), Some(8 * 1024 * 1024));
 	}
 }

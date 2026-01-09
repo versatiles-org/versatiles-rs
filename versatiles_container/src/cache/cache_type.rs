@@ -20,7 +20,7 @@ lazy_static::lazy_static! {
 ///
 /// The choice depends on workload and resource constraints. Disk caching is
 /// recommended for large datasets or multi-step pipelines.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum CacheType {
 	/// Store cache data in memory.
 	InMemory,
