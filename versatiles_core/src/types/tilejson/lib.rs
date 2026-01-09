@@ -32,7 +32,10 @@
 //! ```
 
 use super::{TileJsonValues, VectorLayers};
-use crate::{Blob, GeoBBox, GeoCenter, TileBBoxPyramid, TileFormat, TileSchema, TileSize, TileType, json::*};
+use crate::{
+	Blob, GeoBBox, GeoCenter, TileBBoxPyramid, TileFormat, TileSchema, TileSize, TileType,
+	json::{JsonObject, JsonValue, parse_json_str},
+};
 use anyhow::{Ok, Result, anyhow, ensure};
 use regex::Regex;
 use std::fmt::Debug;

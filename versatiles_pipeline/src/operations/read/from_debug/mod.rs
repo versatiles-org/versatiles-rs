@@ -17,14 +17,19 @@
 mod image;
 mod vector;
 
-use crate::{PipelineFactory, operations::read::traits::ReadTileSource, traits::*, vpl::VPLNode};
+use crate::{
+	PipelineFactory,
+	operations::read::traits::ReadTileSource,
+	traits::{OperationFactoryTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
+	vpl::VPLNode,
+};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use image::create_debug_image;
 use std::{fmt::Debug, sync::Arc};
 use vector::create_debug_vector_tile;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::*;
+use versatiles_core::{TileBBox, TileBBoxPyramid, TileCompression, TileFormat, TileJSON, TileStream, TileType};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Generates debug tiles that display their coordinates as text.
@@ -145,7 +150,7 @@ impl ReadOperationFactoryTrait for Factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use versatiles_core::TileCompression::Uncompressed;
+	use versatiles_core::{TileCompression::Uncompressed, TileCoord};
 
 	async fn test(format: &str, len: u64, tilejson: &[&str]) -> Result<()> {
 		let factory = PipelineFactory::new_dummy();

@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::{path::Path, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
-use versatiles_core::{io::DataReader, *};
+use versatiles_core::{TileBBox, TileCoord, TileJSON, TileStream, io::DataReader};
 use versatiles_derive::context;
 
 /// Tile reader that executes a VPL-defined operation pipeline and returns composed tiles.
@@ -147,6 +147,7 @@ mod tests {
 	use super::*;
 	use pretty_assertions::assert_eq;
 	use versatiles_container::MockWriter;
+	use versatiles_core::{TileCompression, TileCoord};
 
 	pub const VPL: &str = include_str!("../../../testdata/berlin.vpl");
 

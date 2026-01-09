@@ -1,4 +1,7 @@
-use crate::{json::*, types::TileSchema};
+use crate::{
+	json::{JsonObject, JsonValue},
+	types::TileSchema,
+};
 use anyhow::{Context, Result, anyhow, ensure};
 use std::{collections::BTreeMap, fmt::Debug};
 

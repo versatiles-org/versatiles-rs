@@ -3,7 +3,7 @@
 //! key/value pairs, warnings, and JSON data with indentation and color for better readability.
 
 use crate::json::{JsonValue, stringify_pretty_multi_line};
-use colored::*;
+use colored::{ColoredString, Colorize};
 use std::fmt::{Debug, Display};
 use std::io::Write;
 use std::sync::Arc;

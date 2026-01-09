@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::*;
+use versatiles_core::{TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream};
 use versatiles_geometry::{
 	geo::{GeoFeature, Geometry},
 	vector_tile::{VectorTile, VectorTileLayer},

@@ -27,7 +27,9 @@ use std::sync::Arc;
 use crate::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{utils::compress, *};
+use versatiles_core::{
+	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream, utils::compress,
+};
 use versatiles_derive::context;
 
 /// Enum representing different mock profiles for tile data.

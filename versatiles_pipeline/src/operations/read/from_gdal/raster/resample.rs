@@ -39,7 +39,9 @@ impl ResampleAlg {
 	/// Convert this [`ResampleAlg`] to its corresponding GDAL constant (`GDALResampleAlg`).
 	pub fn as_gdal(&self) -> u32 {
 		use ResampleAlg::*;
-		use gdal_sys::GDALResampleAlg::*;
+		use gdal_sys::GDALResampleAlg::{
+			GRA_Average, GRA_Bilinear, GRA_Cubic, GRA_CubicSpline, GRA_Lanczos, GRA_NearestNeighbour,
+		};
 		match self {
 			NearestNeighbour => GRA_NearestNeighbour,
 			Bilinear => GRA_Bilinear,

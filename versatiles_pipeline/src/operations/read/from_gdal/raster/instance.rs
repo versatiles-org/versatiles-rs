@@ -58,7 +58,11 @@ impl Instance {
 		let h_dst_ds = dst_ds.c_dataset();
 
 		unsafe {
-			use gdal_sys::*;
+			use gdal_sys::{
+				CPLErr, CPLGetLastErrorMsg, CSLSetNameValue, GDALChunkAndWarpMulti, GDALCreateGenImgProjTransformer2,
+				GDALCreateWarpOperation, GDALCreateWarpOptions, GDALDestroyGenImgProjTransformer, GDALDestroyWarpOperation,
+				GDALGenImgProjTransform, GDALWarpOperationH, GDALWarpOptions,
+			};
 
 			let mut options: GDALWarpOptions = *GDALCreateWarpOptions();
 			options.hSrcDS = h_src_ds;

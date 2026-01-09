@@ -1,12 +1,16 @@
-use crate::{PipelineFactory, traits::*, vpl::VPLNode};
+use crate::{
+	PipelineFactory,
+	traits::{OperationFactoryTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
+	vpl::VPLNode,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use imageproc::image::Rgb;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::*;
+use versatiles_core::{TileBBox, TileJSON, TileStream};
 use versatiles_derive::context;
-use versatiles_image::traits::*;
+use versatiles_image::traits::DynamicImageTraitOperation;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Flattens (translucent) raster tiles onto a background
@@ -102,6 +106,8 @@ impl TransformOperationFactoryTrait for Factory {
 mod tests {
 	use super::*;
 	use crate::PipelineFactory;
+	use versatiles_core::TileCoord;
+	use versatiles_image::DynamicImageTraitOperation;
 
 	#[tokio::test]
 	async fn test_raster_flatten() -> Result<()> {

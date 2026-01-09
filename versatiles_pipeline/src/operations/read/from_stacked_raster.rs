@@ -13,7 +13,7 @@
 use crate::{
 	PipelineFactory,
 	operations::read::traits::ReadTileSource,
-	traits::*,
+	traits::{OperationFactoryTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
 	vpl::{VPLNode, VPLPipeline},
 };
 use anyhow::{Result, ensure};
@@ -21,9 +21,9 @@ use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
 use std::{sync::Arc, vec};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::*;
+use versatiles_core::{TileBBox, TileBBoxMap, TileBBoxPyramid, TileCoord, TileFormat, TileJSON, TileStream, TileType};
 use versatiles_derive::context;
-use versatiles_image::traits::*;
+use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Overlays multiple raster tile sources on top of each other.
@@ -210,8 +210,8 @@ mod tests {
 	use imageproc::image::GenericImage;
 	use pretty_assertions::assert_eq;
 	use versatiles_container::TileSource;
-	use versatiles_core::TileCompression::Uncompressed;
-	use versatiles_image::DynamicImage;
+	use versatiles_core::{Blob, TileCompression, TileCompression::Uncompressed, TileFormat};
+	use versatiles_image::{DynamicImage, DynamicImageTraitConvert, DynamicImageTraitTest};
 
 	pub fn get_color(blob: &Blob) -> String {
 		let image = DynamicImage::from_blob(blob, TileFormat::PNG).unwrap();

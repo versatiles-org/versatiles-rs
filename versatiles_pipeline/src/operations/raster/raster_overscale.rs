@@ -1,12 +1,16 @@
-use crate::{PipelineFactory, traits::*, vpl::VPLNode};
+use crate::{
+	PipelineFactory,
+	traits::{OperationFactoryTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
+	vpl::VPLNode,
+};
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use moka::future::Cache;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::*;
+use versatiles_core::{TileBBox, TileCoord, TileJSON, TileStream};
 use versatiles_derive::context;
-use versatiles_image::{DynamicImage, traits::*};
+use versatiles_image::{DynamicImage, traits::DynamicImageTraitOperation};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Raster overscale operation - generates tiles beyond the source's native resolution.
@@ -261,7 +265,8 @@ mod tests {
 	use super::*;
 	use crate::helpers::dummy_image_source::DummyImageSource;
 	use rstest::rstest;
-	use versatiles_image::DynamicImage;
+	use versatiles_core::{TileCoord, TileFormat};
+	use versatiles_image::{DynamicImage, DynamicImageTraitConvert, DynamicImageTraitOperation, DynamicImageTraitTest};
 
 	fn make_gradient_image(channel_count: usize) -> DynamicImage {
 		let s = 256;

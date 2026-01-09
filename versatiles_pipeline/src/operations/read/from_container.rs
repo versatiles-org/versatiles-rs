@@ -6,12 +6,17 @@
 //! [`TileSource`] so that the rest of the pipeline can treat it like any
 //! other data source.
 
-use crate::{PipelineFactory, operations::read::traits::ReadTileSource, traits::*, vpl::VPLNode};
+use crate::{
+	PipelineFactory,
+	operations::read::traits::ReadTileSource,
+	traits::{OperationFactoryTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
+	vpl::VPLNode,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
 use versatiles_container::{Tile, TileSource, TileSourceMetadata};
-use versatiles_core::*;
+use versatiles_core::{TileBBox, TileJSON, TileStream};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]

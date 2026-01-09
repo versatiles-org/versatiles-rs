@@ -7,15 +7,22 @@
 //! other data source.
 
 use super::RasterSource;
-use crate::{PipelineFactory, operations::read::traits::ReadTileSource, traits::*, vpl::VPLNode};
+use crate::{
+	PipelineFactory,
+	operations::read::traits::ReadTileSource,
+	traits::{OperationFactoryTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
+	vpl::VPLNode,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use std::{fmt::Debug, sync::Arc, vec};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::*;
+use versatiles_core::{
+	GeoBBox, TileBBox, TileBBoxPyramid, TileCompression, TileFormat, TileJSON, TileSchema, TileStream,
+};
 use versatiles_derive::context;
-use versatiles_image::traits::*;
+use versatiles_image::traits::DynamicImageTraitInfo;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a GDAL raster dataset and exposes it as a tile source.
@@ -247,6 +254,8 @@ impl ReadOperationFactoryTrait for Factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use versatiles_core::TileCoord;
+	use versatiles_image::{DynamicImageTraitConvert, DynamicImageTraitOperation};
 
 	fn assert_same_vec(a: &[u8], b: &[u8]) {
 		assert_eq!(a.len(), b.len());

@@ -6,7 +6,7 @@ use imageproc::image::DynamicImage;
 use std::{path::Path, sync::Arc};
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
-use versatiles_image::traits::*;
+use versatiles_image::traits::DynamicImageTraitConvert;
 
 /// Web‑Mercator world circumference in meters (2πR, where R = 6,378,137 m).
 /// Used to compute the ground resolution at zoom 0 for a given tile size.
@@ -238,6 +238,7 @@ mod tests {
 	use imageproc::image::ColorType;
 	use rstest::rstest;
 	use std::vec;
+	use versatiles_image::{DynamicImageTraitTest, compare_marker_result};
 
 	struct DatasetFactory {
 		band_mapping: BandMapping,

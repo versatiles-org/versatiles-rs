@@ -1,9 +1,13 @@
-use crate::{PipelineFactory, traits::*, vpl::VPLNode};
+use crate::{
+	PipelineFactory,
+	traits::{OperationFactoryTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
+	vpl::VPLNode,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::*;
+use versatiles_core::{TileBBox, TileJSON, TileSchema, TileStream};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]

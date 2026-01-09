@@ -17,7 +17,7 @@
 use crate::{
 	PipelineFactory,
 	operations::read::traits::ReadTileSource,
-	traits::*,
+	traits::{OperationFactoryTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
 	vpl::{VPLNode, VPLPipeline},
 };
 use anyhow::{Result, ensure};
@@ -25,7 +25,7 @@ use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
 use std::{collections::HashMap, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::*;
+use versatiles_core::{TileBBox, TileBBoxMap, TileBBoxPyramid, TileJSON, TileStream, TileType};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
 
@@ -198,6 +198,7 @@ mod tests {
 	use itertools::Itertools;
 	use pretty_assertions::assert_eq;
 	use versatiles_container::TileSource;
+	use versatiles_core::{Blob, TileCompression, TileFormat};
 
 	pub fn check_tile(blob: &Blob) -> String {
 		let tile = VectorTile::from_blob(blob).unwrap();

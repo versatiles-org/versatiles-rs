@@ -4,7 +4,10 @@ use std::{f64::consts::PI, ops::Div, sync::LazyLock, vec};
 use versatiles_core::TileCoord;
 use versatiles_derive::context;
 use versatiles_geometry::{
-	geo::*,
+	geo::{
+		CompositeGeometryTrait, Coordinates, GeoFeature, GeoValue, Geometry, GeometryTrait, LineStringGeometry,
+		MultiLineStringGeometry, MultiPolygonGeometry, PolygonGeometry, RingGeometry,
+	},
 	vector_tile::{VectorTile, VectorTileLayer},
 };
 

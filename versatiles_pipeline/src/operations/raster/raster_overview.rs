@@ -1,13 +1,17 @@
-use crate::{PipelineFactory, traits::*, vpl::VPLNode};
+use crate::{
+	PipelineFactory,
+	traits::{OperationFactoryTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
+	vpl::VPLNode,
+};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use imageproc::image::{DynamicImage, GenericImage};
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal, TraversalOrder};
-use versatiles_core::*;
+use versatiles_core::{TileBBox, TileBBoxMap, TileCoord, TileJSON, TileStream};
 use versatiles_derive::context;
-use versatiles_image::traits::*;
+use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 
 static BLOCK_TILE_COUNT: u32 = 32;
 
@@ -268,6 +272,8 @@ mod tests {
 	use super::*;
 	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::GenericImageView;
+	use versatiles_core::{GeoBBox, TileBBoxPyramid, TileFormat};
+	use versatiles_image::DynamicImage;
 
 	async fn make_operation(tile_size: u32, level_base: u8) -> Operation {
 		let pyramid = TileBBoxPyramid::from_geo_bbox(

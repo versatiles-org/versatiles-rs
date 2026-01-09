@@ -1,9 +1,13 @@
-use crate::{PipelineFactory, traits::*, vpl::VPLNode};
+use crate::{
+	PipelineFactory,
+	traits::{OperationFactoryTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
+	vpl::VPLNode,
+};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::*;
+use versatiles_core::{GeoBBox, TileBBox, TileJSON, TileStream};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -125,6 +129,7 @@ impl TransformOperationFactoryTrait for Factory {
 mod tests {
 	use super::*;
 	use std::collections::HashSet;
+	use versatiles_core::TileCoord;
 
 	#[tokio::test]
 	async fn test_filter_inside() -> Result<()> {
