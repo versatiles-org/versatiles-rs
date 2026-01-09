@@ -17,6 +17,7 @@ pub struct ProgressHandle {
 }
 
 impl ProgressHandle {
+	#[must_use]
 	pub fn new(id: ProgressId, message: String, total: u64, event_bus: EventBus, silent: bool) -> Self {
 		let start = Instant::now();
 		let handle = Self {
@@ -85,6 +86,7 @@ impl ProgressHandle {
 	}
 
 	/// Get the progress ID
+	#[must_use]
 	pub fn id(&self) -> ProgressId {
 		self.state.lock().id.clone()
 	}

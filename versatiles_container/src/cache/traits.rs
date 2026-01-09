@@ -94,7 +94,7 @@ impl CacheValue for u32 {
 impl CacheValue for String {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
 		let bytes = self.as_bytes();
-		writer.write_u32::<LE>(bytes.len() as u32)?;
+		writer.write_u32::<LE>(u32::try_from(bytes.len())?)?;
 		writer.extend_from_slice(bytes);
 		Ok(())
 	}
@@ -114,7 +114,7 @@ impl CacheValue for String {
 /// - followed by each serialized element
 impl<T: CacheValue> CacheValue for Vec<T> {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
-		writer.write_u32::<LE>(self.len() as u32)?;
+		writer.write_u32::<LE>(u32::try_from(self.len())?)?;
 		for item in self {
 			item.write_to_cache(writer)?;
 		}
@@ -180,7 +180,7 @@ impl CacheValue for Blob {
 	}
 
 	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
-		let length = reader.read_u64::<LE>()? as usize;
+		let length = usize::try_from(reader.read_u64::<LE>()?)?;
 		let mut bytes = vec![0u8; length];
 		reader.read_exact(&mut bytes)?;
 		Ok(Blob::from(bytes))
@@ -263,7 +263,7 @@ impl CacheValue for DynamicImage {
 		writer.write_u32::<LE>(width)?;
 		writer.write_u32::<LE>(height)?;
 		let data = self.as_bytes();
-		writer.write_u32::<LE>(data.len() as u32)?;
+		writer.write_u32::<LE>(u32::try_from(data.len())?)?;
 		writer.extend_from_slice(data);
 		Ok(())
 	}

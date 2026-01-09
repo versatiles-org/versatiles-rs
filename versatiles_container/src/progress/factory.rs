@@ -13,6 +13,7 @@ pub struct ProgressFactory {
 
 impl ProgressFactory {
 	/// Create a new progress factory
+	#[must_use]
 	pub fn new(event_bus: EventBus, silent: bool) -> Self {
 		Self {
 			next_id: 0,

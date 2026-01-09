@@ -1,10 +1,10 @@
-//! Builder pattern for constructing TilesRuntime instances
+//! Builder pattern for constructing `TilesRuntime` instances
 
 use super::{EventBus, RuntimeInner, TilesRuntime};
 use crate::{CacheType, ContainerRegistry, ProgressFactory};
 use std::sync::{Arc, Mutex};
 
-/// Builder for creating customized TilesRuntime instances
+/// Builder for creating customized `TilesRuntime` instances
 ///
 /// # Examples
 ///
@@ -25,6 +25,7 @@ pub struct RuntimeBuilder {
 
 impl RuntimeBuilder {
 	/// Create a new runtime builder with default settings
+	#[must_use]
 	pub fn new() -> Self {
 		Self {
 			cache_type: None,
@@ -36,7 +37,7 @@ impl RuntimeBuilder {
 		}
 	}
 
-	/// Set cache type (InMemory or Disk)
+	/// Set cache type (`InMemory` or Disk)
 	#[must_use]
 	pub fn cache_type(mut self, cache_type: CacheType) -> Self {
 		self.cache_type = Some(cache_type);
@@ -91,7 +92,7 @@ impl RuntimeBuilder {
 
 	/// Build the runtime
 	///
-	/// Creates a new TilesRuntime with the configured settings.
+	/// Creates a new `TilesRuntime` with the configured settings.
 	pub fn build(self) -> TilesRuntime {
 		let cache_type = self.cache_type.unwrap_or_else(CacheType::new_memory);
 		let event_bus = EventBus::new();

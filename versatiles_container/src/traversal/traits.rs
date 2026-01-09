@@ -48,7 +48,7 @@ pub trait TileSourceTraverseExt: TileSource {
 				traversal_write,
 			)?;
 
-			use TraversalTranslationStep::*;
+			use TraversalTranslationStep::{Pop, Push, Stream};
 
 			let mut tn_read = 0;
 			let mut tn_write = 0;

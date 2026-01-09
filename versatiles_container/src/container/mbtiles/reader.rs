@@ -1,8 +1,8 @@
-//! Read tiles and metadata from an MBTiles (SQLite) database.
+//! Read tiles and metadata from an `MBTiles` (`SQLite`) database.
 //!
-//! The `MBTilesReader` loads TileJSON-style metadata from the MBTiles `metadata` table
+//! The `MBTilesReader` loads TileJSON-style metadata from the `MBTiles` `metadata` table
 //! and fetches tile blobs from the `tiles` table. It derives the tile **format** and
-//! **compression** primarily from the `format` field (per the Mapbox MBTiles 1.3 spec):
+//! **compression** primarily from the `format` field (per the Mapbox `MBTiles` 1.3 spec):
 //!
 //! - `format = "png"` → `TileFormat::PNG` + `TileCompression::Uncompressed`
 //! - `format = "jpg"` → `TileFormat::JPG` + `TileCompression::Uncompressed`
@@ -14,7 +14,7 @@
 //! The bounding-box pyramid is inferred from the `tiles` table to augment/validate metadata.
 //!
 //! ## Requirements
-//! - The MBTiles file **must be an absolute path** when opening with [`open_path`].
+//! - The `MBTiles` file **must be an absolute path** when opening with [`open_path`].
 //! - The database must include a `format` entry in `metadata` so that format & compression
 //!   can be determined.
 //!
@@ -56,12 +56,17 @@ use async_trait::async_trait;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use std::{path::Path, sync::Arc};
-use versatiles_core::{TileCompression::*, TileFormat::*, json::parse_json_str, types::*};
+use versatiles_core::{
+	TileCompression::{Gzip, Uncompressed},
+	TileFormat::{JPG, MVT, PNG, WEBP},
+	json::parse_json_str,
+	types::{Blob, GeoBBox, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream},
+};
 use versatiles_derive::context;
 
-/// Reader for MBTiles (SQLite) containers.
+/// Reader for `MBTiles` (`SQLite`) containers.
 ///
-/// Opens a SQLite database with `metadata` and `tiles` tables, merges metadata into
+/// Opens a `SQLite` database with `metadata` and `tiles` tables, merges metadata into
 /// [`TileJSON`], infers a bounding-box pyramid by scanning levels/rows/columns, and
 /// exposes tiles via the [`TileSource`] interface.
 pub struct MBTilesReader {
@@ -73,15 +78,15 @@ pub struct MBTilesReader {
 }
 
 impl MBTilesReader {
-	/// Opens the SQLite database and creates an `MBTilesReader` instance.
+	/// Opens the `SQLite` database and creates an `MBTilesReader` instance.
 	///
-	/// Open an MBTiles database from an **absolute** filesystem path.
+	/// Open an `MBTiles` database from an **absolute** filesystem path.
 	///
 	/// Validates existence and absoluteness of `path`, then initializes a connection pool
 	/// and loads metadata/parameters.
 	///
 	/// # Errors
-	/// Returns an error if the file does not exist, the path is not absolute, or SQLite cannot be opened.
+	/// Returns an error if the file does not exist, the path is not absolute, or `SQLite` cannot be opened.
 	#[context("opening MBTiles at '{}'", path.display())]
 	pub fn open_path(path: &Path, runtime: TilesRuntime) -> Result<MBTilesReader> {
 		log::debug!("open {path:?}");
@@ -92,7 +97,7 @@ impl MBTilesReader {
 		MBTilesReader::load_from_sqlite(path, runtime)
 	}
 
-	/// Internal loader that establishes the SQLite pool, sets default parameters,
+	/// Internal loader that establishes the `SQLite` pool, sets default parameters,
 	/// and then calls [`load_meta_data`] to populate `tilejson` and parameters.
 	///
 	/// # Errors
@@ -118,7 +123,7 @@ impl MBTilesReader {
 		Ok(reader)
 	}
 
-	/// Read and merge MBTiles metadata.
+	/// Read and merge `MBTiles` metadata.
 	///
 	/// Parses `format` to determine tile format & transport compression, reads `bounds`,
 	/// `minzoom`, `maxzoom`, and `json` (for `vector_layers`), then merges them into `tilejson`.
@@ -172,12 +177,12 @@ impl MBTilesReader {
 				"bounds" => {
 					let bounds = value
 						.split(',')
-						.map(|s| s.parse::<f64>())
+						.map(str::parse::<f64>)
 						.collect::<Result<Vec<f64>, _>>()?;
 					self.tilejson.limit_bbox(GeoBBox::try_from(bounds)?);
 				}
 				"name" | "attribution" | "author" | "description" | "license" | "type" | "version" => {
-					self.tilejson.set_string(key, value)?
+					self.tilejson.set_string(key, value)?;
 				}
 				"minzoom" | "maxzoom" => self.tilejson.set_byte(key, value.parse::<u8>()?)?,
 				"json" => {
@@ -307,7 +312,7 @@ impl TileSource for MBTilesReader {
 		SourceType::new_container("mbtiles", &self.name)
 	}
 
-	/// Return the TileJSON metadata view for this dataset.
+	/// Return the `TileJSON` metadata view for this dataset.
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
@@ -332,8 +337,8 @@ impl TileSource for MBTilesReader {
 		let mut stmt =
 			conn.prepare("SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")?;
 
-		let max_index = 2u32.pow(coord.level as u32) - 1;
-		if let Ok(vec) = stmt.query_row([coord.x, max_index - coord.y, coord.level as u32], |row| {
+		let max_index = 2u32.pow(u32::from(coord.level)) - 1;
+		if let Ok(vec) = stmt.query_row([coord.x, max_index - coord.y, u32::from(coord.level)], |row| {
 			row.get::<_, Vec<u8>>(0)
 		}) {
 			Ok(Some(Tile::from_blob(
@@ -355,7 +360,7 @@ impl TileSource for MBTilesReader {
 	/// Returns an error if the query fails.
 	#[context("streaming tiles for bbox {:?}", bbox)]
 	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_tile_stream {:?}", bbox);
+		log::debug!("get_tile_stream {bbox:?}");
 
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
@@ -379,7 +384,7 @@ impl TileSource for MBTilesReader {
 					bbox.x_max()?,
 					bbox.y_min()?,
 					bbox.y_max()?,
-					bbox.level as u32,
+					u32::from(bbox.level),
 				],
 				move |row| {
 					let x = row.get::<_, u32>(0)?;
@@ -393,7 +398,7 @@ impl TileSource for MBTilesReader {
 				},
 			)
 			.unwrap()
-			.filter_map(|r| r.ok())
+			.filter_map(std::result::Result::ok)
 			.collect();
 
 		log::trace!("got {} tiles", vec.len());
@@ -410,7 +415,7 @@ impl std::fmt::Debug for MBTilesReader {
 	}
 }
 
-/// A struct representing a metadata record in the MBTiles database.
+/// A struct representing a metadata record in the `MBTiles` database.
 struct RecordMetadata {
 	name: String,
 	value: String,

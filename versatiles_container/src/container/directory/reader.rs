@@ -49,12 +49,14 @@ use std::{
 	path::{Path, PathBuf},
 	sync::Arc,
 };
-use versatiles_core::{utils::*, *};
+use versatiles_core::{
+	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream, utils::decompress,
+};
 use versatiles_derive::context;
 
 /// A reader for tiles stored in a directory structure.
 ///
-/// This struct merges TileJSON metadata from recognized files such as `meta.json`, `tiles.json`, or `metadata.json` (and their compressed variants),
+/// This struct merges `TileJSON` metadata from recognized files such as `meta.json`, `tiles.json`, or `metadata.json` (and their compressed variants),
 /// and infers a bounding-box pyramid from the folder hierarchy to provide tile reading functionality.
 ///
 /// The directory structure is expected as:
@@ -76,7 +78,7 @@ impl DirectoryReader {
 	///
 	/// This function scans the directory structure for tiles and metadata files.
 	/// It requires that all tiles have a uniform tile format and compression type, otherwise it returns an error.
-	/// Metadata files (`meta.json`, `tiles.json`, `metadata.json` and their `.gz`/`.br` variants) are merged into the TileJSON.
+	/// Metadata files (`meta.json`, `tiles.json`, `metadata.json` and their `.gz`/`.br` variants) are merged into the `TileJSON`.
 	/// Bounds, minzoom, and maxzoom are inferred from the directory's tile pyramid and merged with metadata.
 	///
 	/// The returned `DirectoryReader` contains `TileSourceMetadata` which specify the tile format, compression, and bounding box pyramid.
@@ -153,7 +155,7 @@ impl DirectoryReader {
 							if form != file_form {
 								let mut r = [form, file_form];
 								r.sort();
-								bail!("found multiple tile formats: {:?}", r);
+								bail!("found multiple tile formats: {r:?}");
 							}
 						} else {
 							container_form = Some(file_form);
@@ -163,7 +165,7 @@ impl DirectoryReader {
 							if comp != file_comp {
 								let mut r = [comp, file_comp];
 								r.sort();
-								bail!("found multiple tile compressions: {:?}", r);
+								bail!("found multiple tile compressions: {r:?}");
 							}
 						} else {
 							container_comp = Some(file_comp);
@@ -223,7 +225,7 @@ impl DirectoryReader {
 /// Implements the `TileSource` for `DirectoryReader`.
 ///
 /// Provides the container name ("directory"), access to tile reading parameters,
-/// ability to override the tile compression, access to TileJSON metadata,
+/// ability to override the tile compression, access to `TileJSON` metadata,
 /// and asynchronous fetching of tile data by coordinate.
 #[async_trait]
 impl TileSource for DirectoryReader {
@@ -241,7 +243,7 @@ impl TileSource for DirectoryReader {
 
 	#[context("fetching tile {:?} from directory '{}'", coord, self.dir.display())]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		log::trace!("get_tile {:?}", coord);
+		log::trace!("get_tile {coord:?}");
 
 		if let Some(path) = self.tile_map.get(coord) {
 			Self::read(path).map(|blob| {

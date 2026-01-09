@@ -6,7 +6,10 @@
 
 use anyhow::{Result, ensure};
 use std::{fmt, ops::Div};
-use versatiles_core::{io::*, *};
+use versatiles_core::{
+	Blob, ByteRange, TileBBox, TileCoord,
+	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+};
 use versatiles_derive::context;
 
 /// A struct representing a block of tiles within a larger tile set.
@@ -69,16 +72,16 @@ impl BlockDefinition {
 		let x = reader.read_u32()?;
 		let y = reader.read_u32()?;
 
-		let x_min = reader.read_u8()? as u32;
-		let y_min = reader.read_u8()? as u32;
-		let x_max = reader.read_u8()? as u32;
-		let y_max = reader.read_u8()? as u32;
+		let x_min = u32::from(reader.read_u8()?);
+		let y_min = u32::from(reader.read_u8()?);
+		let x_max = u32::from(reader.read_u8()?);
+		let y_max = u32::from(reader.read_u8()?);
 
 		let tiles_bbox = TileBBox::from_min_and_max(level.min(8), x_min, y_min, x_max, y_max)?;
 
 		let offset = reader.read_u64()?;
 		let tiles_length = reader.read_u64()?;
-		let index_length = reader.read_u32()? as u64;
+		let index_length = u64::from(reader.read_u32()?);
 
 		let tiles_range = ByteRange::new(offset, tiles_length);
 		let index_range = ByteRange::new(offset + tiles_length, index_length);

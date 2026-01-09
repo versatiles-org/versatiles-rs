@@ -7,7 +7,11 @@
 use super::BlockDefinition;
 use anyhow::{Result, ensure};
 use std::{collections::HashMap, ops::Div};
-use versatiles_core::{io::*, utils::*, *};
+use versatiles_core::{
+	Blob, ByteRange, TileBBoxPyramid, TileCoord,
+	io::{ValueWriter, ValueWriterBlob},
+	utils::{compress_brotli_fast, decompress_brotli},
+};
 use versatiles_derive::context;
 
 const BLOCK_INDEX_LENGTH: u64 = 33;
@@ -39,8 +43,7 @@ impl BlockIndex {
 		let count = buf.len().div(BLOCK_INDEX_LENGTH);
 		ensure!(
 			count * BLOCK_INDEX_LENGTH == buf.len(),
-			"Block index is defective, because buffer length is not a multiple of {}",
-			BLOCK_INDEX_LENGTH
+			"Block index is defective, because buffer length is not a multiple of {BLOCK_INDEX_LENGTH}"
 		);
 
 		let mut block_index = Self::new_empty();
@@ -70,7 +73,7 @@ impl BlockIndex {
 	/// A `TileBBoxPyramid` representing the bounding boxes of the blocks.
 	pub fn get_bbox_pyramid(&self) -> TileBBoxPyramid {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		for (_coord, block) in self.lookup.iter() {
+		for block in self.lookup.values() {
 			pyramid.include_bbox(block.get_global_bbox());
 		}
 
@@ -95,7 +98,7 @@ impl BlockIndex {
 	#[context("Failed to create BlockIndex from blob")]
 	pub fn as_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_be();
-		for (_coord, block) in self.lookup.iter() {
+		for block in self.lookup.values() {
 			writer.write_blob(&block.as_blob()?)?;
 		}
 

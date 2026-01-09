@@ -5,7 +5,10 @@
 //! The `FileHeader` struct contains metadata about the file, including its tile format, compression, zoom range, bounding box, and byte ranges for metadata and blocks.
 
 use anyhow::{Result, bail, ensure};
-use versatiles_core::{io::*, *};
+use versatiles_core::{
+	Blob, ByteRange, GeoBBox, TileCompression, TileFormat,
+	io::{DataReader, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+};
 use versatiles_derive::context;
 
 const HEADER_LENGTH: u64 = 66;
@@ -77,8 +80,8 @@ impl FileHeader {
 	/// Returns an error if the conversion fails.
 	#[context("Failed to create FileHeader from blob")]
 	pub fn to_blob(&self) -> Result<Blob> {
-		use TileCompression::*;
-		use TileFormat::*;
+		use TileCompression::{Brotli, Gzip, Uncompressed};
+		use TileFormat::{AVIF, BIN, GEOJSON, JPG, JSON, MVT, PNG, SVG, TOPOJSON, WEBP};
 
 		let mut writer = ValueWriterBlob::new_be();
 		writer.write_slice(b"versatiles_v02")?;
@@ -136,8 +139,8 @@ impl FileHeader {
 	/// Returns an error if the binary data cannot be parsed correctly.
 	#[context("Failed to create FileHeader from blob")]
 	fn from_blob(blob: &Blob) -> Result<FileHeader> {
-		use TileCompression::*;
-		use TileFormat::*;
+		use TileCompression::{Brotli, Gzip, Uncompressed};
+		use TileFormat::{AVIF, BIN, GEOJSON, JPG, JSON, MVT, PNG, SVG, TOPOJSON, WEBP};
 
 		if blob.len() != HEADER_LENGTH {
 			bail!("'{blob:?}' is not a valid versatiles header. A header should be {HEADER_LENGTH} bytes long.");

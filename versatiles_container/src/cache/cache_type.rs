@@ -1,4 +1,4 @@
-//! Defines the cache type used by VersaTiles components.
+//! Defines the cache type used by `VersaTiles` components.
 //!
 //! This module provides an enum [`CacheType`] that determines how and where
 //! data is temporarily stored during processing — either in memory or on disk.

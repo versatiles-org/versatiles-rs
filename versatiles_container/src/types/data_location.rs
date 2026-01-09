@@ -167,12 +167,12 @@ impl DataLocation {
 		}
 	}
 
-	/// Create a DataLocation representing the current working directory.
+	/// Create a `DataLocation` representing the current working directory.
 	pub fn cwd() -> Result<Self> {
 		Ok(DataLocation::Path(std::env::current_dir()?))
 	}
 
-	/// Parse a DataLocation from a string, reading from `stdin` if input is `"-"`.
+	/// Parse a `DataLocation` from a string, reading from `stdin` if input is `"-"`.
 	pub fn parse_with_stdin<R: std::io::Read>(input: &str, mut stdin: R) -> Result<Self> {
 		Ok(if input == "-" {
 			let mut buffer = Vec::new();
@@ -191,7 +191,7 @@ impl DataLocation {
 		})
 	}
 
-	/// Parse a DataLocation from a string.
+	/// Parse a `DataLocation` from a string.
 	pub fn parse(input: &str) -> Result<Self> {
 		Self::parse_with_stdin(input, std::io::stdin().lock())
 	}
@@ -202,7 +202,7 @@ impl DataLocation {
 // is nothing left to pop. Used by `resolve` for Path+Path cases.
 fn normalize(path: &Path) -> PathBuf {
 	use std::ffi::OsString;
-	use std::path::Component::*;
+	use std::path::Component::{CurDir, Normal, ParentDir, Prefix, RootDir};
 
 	let mut prefix: Option<OsString> = None;
 	let mut is_abs = false;
@@ -352,7 +352,7 @@ impl From<Blob> for DataLocation {
 impl Debug for DataLocation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			DataLocation::Url(url) => write!(f, "Url({})", url),
+			DataLocation::Url(url) => write!(f, "Url({url})"),
 			DataLocation::Path(path) => write!(f, "Path({})", path.display()),
 			DataLocation::Blob(blob) => write!(f, "Blob(len={})", blob.len()),
 		}

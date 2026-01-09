@@ -1,20 +1,20 @@
-//! Read tiles and metadata from a PMTiles (v3) container.
+//! Read tiles and metadata from a `PMTiles` (v3) container.
 //!
-//! The `PMTilesReader` parses the PMTiles v3 header and directory structure, reads the
-//! embedded TileJSON metadata, and fetches tile blobs by translating XYZ tile coordinates
-//! into **Hilbert indices**. It supports internal compression used by PMTiles for
+//! The `PMTilesReader` parses the `PMTiles` v3 header and directory structure, reads the
+//! embedded `TileJSON` metadata, and fetches tile blobs by translating XYZ tile coordinates
+//! into **Hilbert indices**. It supports internal compression used by `PMTiles` for
 //! metadata/directories (e.g., gzip) as well as the **transport compression** of the tiles
 //! themselves (e.g., gzip for MVT tiles) as declared in the header.
 //!
 //! ## What it extracts
 //! - `header`: parsed [`HeaderV3`] with offsets and compression flags
-//! - `tilejson`: parsed TileJSON (from `metadata` range), merged into [`TileJSON`]
+//! - `tilejson`: parsed `TileJSON` (from `metadata` range), merged into [`TileJSON`]
 //! - `parameters`: [`TileSourceMetadata`] with `tile_format`, `tile_compression`, and a
 //!   computed **bbox pyramid** inferred from the directory tree
 //!
 //! ## Requirements
 //! - Use an **absolute** filesystem path when opening via [`open_path`].
-//! - The container must be a valid PMTiles v3 file with readable header, directories, and data.
+//! - The container must be a valid `PMTiles` v3 file with readable header, directories, and data.
 //!
 //! ## Usage
 //! ```rust,no_run
@@ -44,7 +44,7 @@
 //!
 //! ## Errors
 //! Returns errors when the path is not absolute, the file cannot be read, the
-//! PMTiles header/directories cannot be parsed or decompressed, or a requested tile is missing.
+//! `PMTiles` header/directories cannot be parsed or decompressed, or a requested tile is missing.
 
 use super::types::{EntriesV3, HeaderV3};
 use crate::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal, TraversalOrder, TraversalSize};
@@ -55,22 +55,22 @@ use std::{fmt::Debug, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
-	io::*,
+	Blob, ByteRange, LimitedCache, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileStream,
+	io::{DataReader, DataReaderFile},
 	utils::{HilbertIndex, decompress},
-	*,
 };
 use versatiles_derive::context;
 
-/// Reader for PMTiles v3 containers.
+/// Reader for `PMTiles` v3 containers.
 ///
-/// Parses the header and directory blobs, merges embedded TileJSON, computes a
+/// Parses the header and directory blobs, merges embedded `TileJSON`, computes a
 /// bounding-box pyramid by traversing directory entries, and exposes tiles via
 /// the [`TileSource`] interface.
 #[derive(Debug)]
 pub struct PMTilesReader {
 	/// Underlying byte source used to read header, directories, and tile data.
 	pub data_reader: DataReader,
-	/// Parsed PMTiles v3 header with byte ranges, counts, and compression flags.
+	/// Parsed `PMTiles` v3 header with byte ranges, counts, and compression flags.
 	pub header: HeaderV3,
 	/// Compression algorithm used for internal metadata/directories (e.g., gzip).
 	pub internal_compression: TileCompression,
@@ -78,7 +78,7 @@ pub struct PMTilesReader {
 	pub leaves_bytes: Blob,
 	/// Decompression cache mapping leaf directory byte ranges to parsed entries.
 	pub leaves_cache: Mutex<LimitedCache<ByteRange, Arc<EntriesV3>>>,
-	/// Merged TileJSON metadata extracted from the PMTiles `metadata` range.
+	/// Merged `TileJSON` metadata extracted from the `PMTiles` `metadata` range.
 	pub tilejson: TileJSON,
 	/// Runtime parameters (tile format, compression, bbox pyramid) advertised by this reader.
 	pub metadata: TileSourceMetadata,
@@ -89,7 +89,7 @@ pub struct PMTilesReader {
 }
 
 impl PMTilesReader {
-	/// Open a PMTiles container from an **absolute** filesystem path.
+	/// Open a `PMTiles` container from an **absolute** filesystem path.
 	///
 	/// Validates and opens a `DataReaderFile`, then delegates to [`PMTilesReader::open_reader`].
 	///
@@ -100,7 +100,7 @@ impl PMTilesReader {
 		PMTilesReader::open_reader(DataReaderFile::open(path)?, runtime).await
 	}
 
-	/// Open a PMTiles container from an existing [`DataReader`].
+	/// Open a `PMTiles` container from an existing [`DataReader`].
 	///
 	/// Reads the v3 header, decompresses and parses the metadata (`TileJSON`) and
 	/// root directory, prepares leaf directory bytes, computes the bbox pyramid, and
@@ -116,15 +116,15 @@ impl PMTilesReader {
 		log::debug!("Opening PMTilesReader for {}", data_reader.get_name());
 
 		let header = HeaderV3::deserialize(&data_reader.read_range(&ByteRange::new(0, HeaderV3::len())).await?)?;
-		log::trace!("Header: {:?}", header);
+		log::trace!("Header: {header:?}");
 
 		let internal_compression = header.internal_compression.as_value()?;
-		log::trace!("Internal compression: {:?}", internal_compression);
+		log::trace!("Internal compression: {internal_compression:?}");
 
 		let meta = data_reader.read_range(&header.metadata).await?;
 		let meta = decompress(meta, internal_compression)?;
 		let tilejson = TileJSON::try_from_blob_or_default(&meta);
-		log::trace!("TileJSON: {:?}", tilejson);
+		log::trace!("TileJSON: {tilejson:?}");
 
 		let root_bytes = data_reader.read_range(&header.root_dir).await?;
 		log::trace!("Root directory bytes length: {}", root_bytes.len());
@@ -144,7 +144,7 @@ impl PMTilesReader {
 			internal_compression,
 			runtime.clone(),
 		)?;
-		log::trace!("Bounding box pyramid: {:?}", bbox_pyramid);
+		log::trace!("Bounding box pyramid: {bbox_pyramid:?}");
 
 		let metadata = TileSourceMetadata::new(
 			header.tile_type.as_value()?,
@@ -155,7 +155,7 @@ impl PMTilesReader {
 				size: TraversalSize::new_default(),
 			},
 		);
-		log::trace!("Reader parameters: {:?}", metadata);
+		log::trace!("Reader parameters: {metadata:?}");
 
 		let root_entries = Arc::new(EntriesV3::from_blob(&root_bytes_uncompressed)?);
 
@@ -179,7 +179,7 @@ impl PMTilesReader {
 	}
 }
 
-/// Build the per‑zoom bounding box pyramid by traversing PMTiles directory entries.
+/// Build the per‑zoom bounding box pyramid by traversing `PMTiles` directory entries.
 ///
 /// Walks the root and leaf directory blobs, following entry ranges. For `run_length`
 /// entries, expands the run into individual tiles via Hilbert indices; for directory
@@ -225,18 +225,18 @@ fn calc_bbox_pyramid(
 			.map(|runtime| runtime.create_progress("Parsing PMTiles directories", entries.len() as u64));
 
 		let mut total_entries = 0;
-		for entry in entries.iter() {
+		for entry in &entries {
 			if let Some(progress) = &progress {
 				progress.inc(1);
 			}
 
 			if entry.range.length > 0 {
 				if entry.run_length > 0 {
-					for i in 0..entry.run_length as u64 {
+					for i in 0..u64::from(entry.run_length) {
 						let coord = TileCoord::from_hilbert_index(i + entry.tile_id)?;
 						bbox_pyramid.include_coord(&coord);
 					}
-					total_entries += entry.run_length as u64;
+					total_entries += u64::from(entry.run_length);
 				} else {
 					let range = entry.range;
 					let mut blob = leaves_bytes.read_range(&range)?;
@@ -248,7 +248,7 @@ fn calc_bbox_pyramid(
 
 		if let Some(progress) = progress {
 			progress.finish();
-			log::trace!("Found {} PMTiles entries", total_entries);
+			log::trace!("Found {total_entries} PMTiles entries");
 		}
 
 		Ok(total_entries)
@@ -268,7 +268,7 @@ impl TileSource for PMTilesReader {
 		&self.metadata
 	}
 
-	/// Returns the parsed and merged TileJSON metadata.
+	/// Returns the parsed and merged `TileJSON` metadata.
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
@@ -276,12 +276,12 @@ impl TileSource for PMTilesReader {
 	/// Fetch a tile by XYZ coordinate.
 	///
 	/// Converts the coordinate to a **Hilbert tile ID**, then traverses up to three levels
-	/// of PMTiles directories to locate the tile. Leaf directories are cached to avoid
+	/// of `PMTiles` directories to locate the tile. Leaf directories are cached to avoid
 	/// repeated decompression. Returns `Ok(None)` if the tile does not exist.
 	#[context("fetching tile {:?} from PMTiles", coord)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		// Log the requested tile coordinates for debugging purposes
-		log::trace!("get_tile {:?}", coord);
+		log::trace!("get_tile {coord:?}");
 
 		// Convert the tile coordinates into a unique tile ID
 		let tile_id: u64 = coord.get_hilbert_index()?;
@@ -312,19 +312,18 @@ impl TileSource for PMTilesReader {
 						self.metadata.tile_compression,
 						self.metadata.tile_format,
 					)));
-				} else {
-					// Otherwise, fetch the directory bytes for the next level
-					let range = entry.range;
-					let mut cache = self.leaves_cache.lock().await;
-					// Use the cache to avoid redundant decompression and reading
-					entries = cache.get_or_set(&range, || {
-						let mut blob = self.leaves_bytes.read_range(&range)?;
-						// Decompress the directory bytes
-						blob = decompress(blob, self.internal_compression)?;
-						let entries = EntriesV3::from_blob(&blob)?;
-						Ok(Arc::new(entries))
-					})?;
 				}
+				// Otherwise, fetch the directory bytes for the next level
+				let range = entry.range;
+				let mut cache = self.leaves_cache.lock().await;
+				// Use the cache to avoid redundant decompression and reading
+				entries = cache.get_or_set(&range, || {
+					let mut blob = self.leaves_bytes.read_range(&range)?;
+					// Decompress the directory bytes
+					blob = decompress(blob, self.internal_compression)?;
+					let entries = EntriesV3::from_blob(&blob)?;
+					Ok(Arc::new(entries))
+				})?;
 			} else {
 				// If the range is invalid, return None
 				return Ok(None);

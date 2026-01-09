@@ -5,7 +5,11 @@ use std::{
 	io::Write,
 	slice::{Iter, SliceIndex},
 };
-use versatiles_core::{io::*, utils::compress, *};
+use versatiles_core::{
+	Blob, ByteRange, TileCompression,
+	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+	utils::compress,
+};
 
 /// A collection of `EntryV3` that provides various utility functions
 /// for handling tile data entries, including serialization, deserialization,
@@ -49,11 +53,11 @@ impl EntriesV3 {
 			entries.push(EntryV3::new(last_id, ByteRange::empty(), 0));
 		}
 
-		for entry in entries.iter_mut() {
+		for entry in &mut entries {
 			entry.run_length = reader.read_varint()? as u32;
 		}
 
-		for entry in entries.iter_mut() {
+		for entry in &mut entries {
 			entry.range.length = reader.read_varint()?;
 		}
 
@@ -62,7 +66,7 @@ impl EntriesV3 {
 			if i > 0 && tmp == 0 {
 				entries[i].range.offset = entries[i - 1].range.offset + entries[i - 1].range.length;
 			} else {
-				entries[i].range.offset = tmp - 1
+				entries[i].range.offset = tmp - 1;
 			}
 		}
 
@@ -79,7 +83,7 @@ impl EntriesV3 {
 	/// # Arguments
 	/// * `entry` - The `EntryV3` to be added.
 	pub fn push(&mut self, entry: EntryV3) {
-		self.entries.push(entry)
+		self.entries.push(entry);
 	}
 
 	/// Returns a slice view into the entries.
@@ -117,7 +121,7 @@ impl EntriesV3 {
 			if self.entries[n as usize].run_length == 0 {
 				return Some(self.entries[n as usize]);
 			}
-			if tile_id - self.entries[n as usize].tile_id < self.entries[n as usize].run_length as u64 {
+			if tile_id - self.entries[n as usize].tile_id < u64::from(self.entries[n as usize].run_length) {
 				return Some(self.entries[n as usize]);
 			}
 		}
@@ -161,7 +165,7 @@ impl EntriesV3 {
 			if d.root_bytes.len() <= target_root_len {
 				return Ok(d);
 			}
-			leaf_size *= 1.2
+			leaf_size *= 1.2;
 		}
 
 		fn build_roots_leaves(
@@ -176,7 +180,7 @@ impl EntriesV3 {
 			while idx < entries.len() {
 				let mut end = idx + leaf_size;
 				if idx + leaf_size > entries.len() {
-					end = entries.len()
+					end = entries.len();
 				}
 				let serialized = compress(entries.slice(idx..end).serialize_entries()?, compression)?;
 
@@ -277,7 +281,7 @@ impl EntriesSliceV3<'_> {
 
 		// Serialize RunLengths
 		for entry in entries {
-			writer.write_varint(entry.run_length as u64)?;
+			writer.write_varint(u64::from(entry.run_length))?;
 		}
 
 		// Serialize Lengths

@@ -34,11 +34,11 @@ use crate::{TileSource, TilesRuntime};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::path::Path;
-use versatiles_core::io::*;
+use versatiles_core::io::{DataWriterFile, DataWriterTrait};
 
 /// Object‑safe interface for writing tiles from a reader into a container format.
 ///
-/// Writers implement serialization to a specific format (e.g., MBTiles, VersaTiles, TAR),
+/// Writers implement serialization to a specific format (e.g., `MBTiles`, `VersaTiles`, TAR),
 /// and can operate either on filesystem paths or any sink implementing [`DataWriterTrait`].
 ///
 /// Implementors should handle compression, metadata, and configuration from [`TilesRuntime`].

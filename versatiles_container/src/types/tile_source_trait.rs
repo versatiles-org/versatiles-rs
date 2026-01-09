@@ -5,9 +5,9 @@
 //!
 //! ## Design Philosophy
 //!
-//! Both container readers (e.g., MBTiles, VersaTiles) and tile processors (e.g., filters, format converters)
+//! Both container readers (e.g., `MBTiles`, `VersaTiles`) and tile processors (e.g., filters, format converters)
 //! share the same fundamental operations:
-//! - Provide metadata (TileJSON, metadata)
+//! - Provide metadata (`TileJSON`, metadata)
 //! - Stream tiles from a bounding box
 //! - Support runtime composition
 //!
@@ -52,7 +52,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	/// - `traversal`: Preferred tile traversal order
 	fn metadata(&self) -> &TileSourceMetadata;
 
-	/// Returns the TileJSON metadata for this tileset.
+	/// Returns the `TileJSON` metadata for this tileset.
 	fn tilejson(&self) -> &TileJSON;
 
 	/// Fetches a single tile at the given coordinate.
@@ -89,7 +89,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	/// based on the requested depth level.
 	#[cfg(feature = "cli")]
 	async fn probe(&self, level: ProbeDepth) -> Result<()> {
-		use ProbeDepth::*;
+		use ProbeDepth::{Container, TileContents, Tiles};
 
 		let mut print = PrettyPrint::new();
 

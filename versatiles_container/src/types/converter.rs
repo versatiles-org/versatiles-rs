@@ -221,10 +221,10 @@ impl TileSource for TilesConvertReader {
 		if flip_y || swap_xy {
 			stream = stream.map_coord(move |mut coord| {
 				if flip_y {
-					coord.flip_y()
+					coord.flip_y();
 				}
 				if swap_xy {
-					coord.swap_xy()
+					coord.swap_xy();
 				}
 				coord
 			});

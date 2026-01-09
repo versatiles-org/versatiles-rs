@@ -1,13 +1,13 @@
-//! Write tiles and metadata into a PMTiles v3 container.
+//! Write tiles and metadata into a `PMTiles` v3 container.
 //!
 //! The `PMTilesWriter` produces a valid [PMTiles v3](https://github.com/protomaps/PMTiles) archive
 //! from any [`TileSource`] source. It serializes tile data, compresses metadata and directories,
 //! and builds a compact Hilbert-ordered directory layout.
 //!
 //! ## Behavior
-//! - Compresses the metadata (TileJSON) and directory blocks with internal **gzip** compression.
+//! - Compresses the metadata (`TileJSON`) and directory blocks with internal **gzip** compression.
 //! - Stores tiles in **Hilbert order** for spatial locality.
-//! - Uses PMTiles v3 header fields to describe data offsets and compression types.
+//! - Uses `PMTiles` v3 header fields to describe data offsets and compression types.
 //! - Produces a single binary blob that can be read back by [`PMTilesReader`](crate::container::pmtiles::PMTilesReader).
 //!
 //! ## Requirements
@@ -40,21 +40,24 @@
 //! Returns errors if writing, compression, or serialization fails.
 
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression};
-use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, traversal::*};
+use crate::{
+	TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter,
+	traversal::{Traversal, TraversalOrder},
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::sync::Arc;
 use versatiles_core::{
 	io::DataWriterTrait,
-	types::*,
+	types::{Blob, ByteRange, TileCompression},
 	utils::{HilbertIndex, compress},
 };
 use versatiles_derive::context;
 
-/// Writer for PMTiles v3 archives.
+/// Writer for `PMTiles` v3 archives.
 ///
-/// Converts a [`TileSource`] source into a single PMTiles container by serializing
+/// Converts a [`TileSource`] source into a single `PMTiles` container by serializing
 /// tiles, compressing metadata, generating directory entries, and writing a final header
 /// with offsets and counts.
 ///
@@ -64,12 +67,12 @@ pub struct PMTilesWriter {}
 #[async_trait]
 impl TilesWriter for PMTilesWriter {
 	#[context("writing PMTiles to DataWriter")]
-	/// Write tiles and metadata from a [`TileSource`] to a [`DataWriterTrait`] as a PMTiles archive.
+	/// Write tiles and metadata from a [`TileSource`] to a [`DataWriterTrait`] as a `PMTiles` archive.
 	///
 	/// This method:
 	/// - Compresses metadata and directories with gzip (`INTERNAL_COMPRESSION`).
 	/// - Orders tiles by Hilbert index to preserve spatial proximity.
-	/// - Builds the PMTiles v3 header, directory blocks, and leaf entries.
+	/// - Builds the `PMTiles` v3 header, directory blocks, and leaf entries.
 	/// - Writes the final file in the correct binary layout (header + metadata + directories + tile data).
 	///
 	/// # Errors
@@ -159,7 +162,7 @@ mod tests {
 			pmtiles::PMTilesReader,
 		},
 	};
-	use versatiles_core::io::*;
+	use versatiles_core::{TileBBox, TileBBoxPyramid, TileFormat, io::*};
 	use versatiles_derive::context;
 
 	#[context("test: PMTiles read↔write roundtrip")]

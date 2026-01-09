@@ -1,7 +1,7 @@
 //! Write tiles and metadata into a `.versatiles` container.
 //!
 //! The `VersaTilesWriter` produces a valid `.versatiles` file from any [`TileSource`]
-//! source. It serializes TileJSON metadata, groups tiles into fixed **256×256 blocks**,
+//! source. It serializes `TileJSON` metadata, groups tiles into fixed **256×256 blocks**,
 //! compresses per-block tile indices and metadata, and writes a compact binary structure
 //! ready for fast random access by the [`VersaTilesReader`](crate::container::versatiles::VersaTilesReader).
 //!
@@ -53,7 +53,11 @@ use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::sync::Arc;
-use versatiles_core::{io::DataWriterTrait, types::*, utils::compress};
+use versatiles_core::{
+	io::DataWriterTrait,
+	types::{Blob, ByteRange, TileCompression},
+	utils::compress,
+};
 use versatiles_derive::context;
 
 /// Writer for `.versatiles` containers.
@@ -124,7 +128,7 @@ impl TilesWriter for VersaTilesWriter {
 }
 
 impl VersaTilesWriter {
-	/// Write the TileJSON metadata as a Brotli-compressed blob to the writer.
+	/// Write the `TileJSON` metadata as a Brotli-compressed blob to the writer.
 	///
 	/// Returns the byte range where the metadata was written.
 	#[context("Failed to write metadata")]

@@ -72,11 +72,13 @@ impl TileContent {
 	}
 
 	/// Construct raster content from a `DynamicImage`.
+	#[must_use]
 	pub fn from_image(image: DynamicImage) -> Self {
 		TileContent::Raster(image)
 	}
 
 	/// Construct vector content from a `VectorTile`.
+	#[must_use]
 	pub fn from_vector(vector: VectorTile) -> Self {
 		TileContent::Vector(vector)
 	}

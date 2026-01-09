@@ -1,7 +1,7 @@
 //! Read tiles and metadata from a `.tar` archive.
 //!
 //! The `TarTilesReader` scans a tarball for tiles arranged in a `{z}/{x}/{y}.<format>[.<compression>]`
-//! layout and optional TileJSON metadata files (`meta.json`, `tiles.json`, `metadata.json`)
+//! layout and optional `TileJSON` metadata files (`meta.json`, `tiles.json`, `metadata.json`)
 //! including their compressed variants (`.gz`, `.br`). Non-regular entries are ignored.
 //!
 //! ## Detected properties
@@ -36,12 +36,16 @@ use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path, sync::Arc};
 use tar::{Archive, EntryType};
-use versatiles_core::{io::*, utils::decompress, *};
+use versatiles_core::{
+	Blob, ByteRange, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream,
+	io::{DataReaderFile, DataReaderTrait},
+	utils::decompress,
+};
 use versatiles_derive::context;
 
 /// Reader for tiles stored inside a tar archive.
 ///
-/// Merges TileJSON from recognized metadata files, builds a map from `{z,x,y}` to
+/// Merges `TileJSON` from recognized metadata files, builds a map from `{z,x,y}` to
 /// byte ranges within the archive, infers uniform format/compression, and exposes
 /// tiles via [`TileSource`].
 pub struct TarTilesReader {
@@ -201,7 +205,7 @@ impl TileSource for TarTilesReader {
 		&self.metadata
 	}
 
-	/// Return the parsed TileJSON metadata for this archive.
+	/// Return the parsed `TileJSON` metadata for this archive.
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
@@ -215,7 +219,7 @@ impl TileSource for TarTilesReader {
 	/// Propagates I/O errors while reading the tar entry.
 	#[context("getting tile {:?}", coord)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		log::trace!("get_tile {:?}", coord);
+		log::trace!("get_tile {coord:?}");
 
 		let range = self.tile_map.get(coord);
 
@@ -248,6 +252,7 @@ impl Debug for TarTilesReader {
 pub mod tests {
 	use super::*;
 	use crate::{MOCK_BYTES_PBF, MockWriter, make_test_file};
+	use versatiles_core::assert_wildcard;
 
 	#[cfg(feature = "cli")]
 	use versatiles_core::utils::PrettyPrint;

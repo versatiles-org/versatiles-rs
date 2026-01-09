@@ -63,7 +63,7 @@ pub fn translate_traversals(
 			let write_size = traversal_write.size.min_size()?;
 			let read_bboxes = traversal_read.traverse_pyramid(pyramid)?;
 
-			use TraversalTranslationStep::*;
+			use TraversalTranslationStep::{Pop, Push};
 
 			let mut map_write = HashMap::<TileBBox, (usize, TileBBox)>::new();
 			let mut steps: Vec<TraversalTranslationStep> = vec![];
@@ -103,7 +103,7 @@ pub fn translate_traversals(
 /// # Errors
 /// Returns an error if the steps cannot be simplified due to invalid structure.
 fn simplify_steps(steps: &mut Vec<TraversalTranslationStep>) -> Result<()> {
-	use TraversalTranslationStep::*;
+	use TraversalTranslationStep::{Pop, Push, Stream};
 
 	// ----- Step 1: Merge neighbouring Pushes with the same index -----
 	*steps = {
@@ -206,7 +206,7 @@ fn verify_steps(
 	write_size: u32,
 	pyramid: &TileBBoxPyramid,
 ) -> Result<()> {
-	use TraversalTranslationStep::*;
+	use TraversalTranslationStep::{Pop, Push, Stream};
 
 	// Check order of Pushes and Pops
 	{

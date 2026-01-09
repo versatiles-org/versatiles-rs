@@ -6,7 +6,11 @@
 
 use anyhow::{Result, ensure};
 use std::ops::Div;
-use versatiles_core::{io::*, utils::*, *};
+use versatiles_core::{
+	Blob, ByteRange,
+	io::{ValueReader, ValueReaderBlob, ValueWriter, ValueWriterBlob},
+	utils::{compress_brotli_fast, decompress_brotli},
+};
 use versatiles_derive::context;
 
 const TILE_INDEX_LENGTH: u64 = 12;
@@ -41,14 +45,13 @@ impl TileIndex {
 		let count = blob.len().div(TILE_INDEX_LENGTH);
 		ensure!(
 			count * TILE_INDEX_LENGTH == blob.len(),
-			"Tile index is defective: buffer length is not a multiple of {}",
-			TILE_INDEX_LENGTH
+			"Tile index is defective: buffer length is not a multiple of {TILE_INDEX_LENGTH}"
 		);
 
 		let mut index = Vec::new();
 		let mut reader = ValueReaderBlob::new_be(blob);
 		for _ in 0..count {
-			index.push(ByteRange::new(reader.read_u64()?, reader.read_u32()? as u64));
+			index.push(ByteRange::new(reader.read_u64()?, u64::from(reader.read_u32()?)));
 		}
 
 		Ok(Self { index })

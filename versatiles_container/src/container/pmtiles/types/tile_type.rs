@@ -25,7 +25,7 @@ impl PMTilesType {
 		}
 	}
 	pub fn from_value(value: TileFormat) -> Result<Self> {
-		use TileFormat::*;
+		use TileFormat::{AVIF, BIN, GEOJSON, JPG, JSON, MVT, PNG, SVG, TOPOJSON, WEBP};
 		Ok(match value {
 			AVIF => PMTilesType::AVIF,
 			BIN => bail!("PMTiles does not support BIN"),
@@ -40,7 +40,7 @@ impl PMTilesType {
 		})
 	}
 	pub fn as_value(&self) -> Result<TileFormat> {
-		use TileFormat::*;
+		use TileFormat::{AVIF, BIN, JPG, MVT, PNG, WEBP};
 		Ok(match self {
 			PMTilesType::UNKNOWN => BIN,
 			PMTilesType::MVT => MVT,

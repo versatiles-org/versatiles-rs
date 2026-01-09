@@ -5,13 +5,14 @@ use std::{fmt::Debug, sync::Arc};
 pub enum SourceType {
 	/// Physical container format (e.g., "mbtiles", "versatiles", "pmtiles", "tar", "directory")
 	Container { name: String, input: String },
-	/// Tile processor/transformer (e.g., "filter", "raster_format", "converter")
+	/// Tile processor/transformer (e.g., "filter", "`raster_format`", "converter")
 	Processor { name: String, input: Arc<SourceType> },
 	/// Composite source combining multiple upstream sources (e.g., "stacked", "merged")
 	Composite { name: String, inputs: Vec<Arc<SourceType>> },
 }
 
 impl SourceType {
+	#[must_use]
 	pub fn new_container(name: &str, input: &str) -> Arc<SourceType> {
 		Arc::new(SourceType::Container {
 			name: name.to_string(),
@@ -19,6 +20,7 @@ impl SourceType {
 		})
 	}
 
+	#[must_use]
 	pub fn new_processor(name: &str, input: Arc<SourceType>) -> Arc<SourceType> {
 		Arc::new(SourceType::Processor {
 			name: name.to_string(),
@@ -26,6 +28,7 @@ impl SourceType {
 		})
 	}
 
+	#[must_use]
 	pub fn new_composite(name: &str, inputs: &[Arc<SourceType>]) -> Arc<SourceType> {
 		Arc::new(SourceType::Composite {
 			name: name.to_string(),

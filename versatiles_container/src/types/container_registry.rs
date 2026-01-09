@@ -26,7 +26,13 @@
 //! }
 //! ```
 
-use crate::{TilesRuntime, types::data_location::DataLocation, *};
+use crate::{
+	DataSource, DirectoryReader, DirectoryWriter, MBTilesReader, MBTilesWriter, PMTilesReader, PMTilesWriter,
+	TarTilesReader, TarTilesWriter, TileSource, TilesRuntime, TilesWriter, VersaTilesReader, VersaTilesWriter,
+	types::data_location::DataLocation,
+};
+#[cfg(test)]
+use crate::{MockReader, TileSourceMetadata, Traversal};
 use anyhow::{Result, anyhow, bail};
 #[cfg(test)]
 use assert_fs::NamedTempFile;
@@ -40,7 +46,7 @@ use std::{
 };
 use versatiles_core::io::{DataReader, DataReaderBlob, DataReaderHttp};
 #[cfg(test)]
-use versatiles_core::{TileCompression, TileFormat};
+use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat};
 use versatiles_derive::context;
 
 /// Signature for async opener functions used by the registry.
@@ -53,10 +59,10 @@ type WriteFile = Box<dyn Fn(Arc<Box<dyn TileSource>>, PathBuf, TilesRuntime) -> 
 /// Registry mapping file extensions to async tile container readers and writers.
 ///
 /// Supports reading and writing of tile containers in formats such as:
-/// - MBTiles
+/// - `MBTiles`
 /// - TAR
-/// - PMTiles
-/// - VersaTiles
+/// - `PMTiles`
+/// - `VersaTiles`
 /// - Directory-based containers
 #[derive(Clone)]
 pub struct ContainerRegistry {
@@ -69,6 +75,7 @@ impl ContainerRegistry {
 	/// Creates a new `ContainerRegistry` with the specified runtime.
 	///
 	/// Registers built-in readers and writers for supported container formats.
+	#[must_use]
 	pub fn new_empty() -> Self {
 		Self {
 			data_readers: HashMap::new(),
@@ -230,6 +237,7 @@ impl ContainerRegistry {
 		Ok(())
 	}
 
+	#[must_use]
 	pub fn supports_reader_extension(&self, ext: &str) -> bool {
 		let ext = sanitize_extension(ext);
 		self.data_readers.contains_key(&ext) || self.file_readers.contains_key(&ext)
@@ -302,8 +310,6 @@ pub async fn make_test_file(
 	extension: &str,
 ) -> Result<NamedTempFile> {
 	// get dummy reader
-
-	use versatiles_core::TileBBoxPyramid;
 	let reader = MockReader::new_mock(TileSourceMetadata::new(
 		tile_format,
 		compression,
@@ -333,6 +339,7 @@ pub async fn make_test_file(
 /// Integration tests for container readers and writers across supported formats.
 pub mod tests {
 	use super::*;
+	use crate::MockWriter;
 	use assert_fs::TempDir;
 	use std::time::Instant;
 	use versatiles_core::TileBBoxPyramid;

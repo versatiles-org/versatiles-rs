@@ -7,7 +7,7 @@
 //! ```
 //!
 //! where `<format>` is the tile format (e.g., `png`, `pbf`/`mvt`) and `<compression>` is optional (`br`, `gz`).
-//! A TileJSON file is written as `tiles.json[.<compression>]` using the same **compression** as the tiles.
+//! A `TileJSON` file is written as `tiles.json[.<compression>]` using the same **compression** as the tiles.
 //!
 //! ### Requirements
 //! - The output `path` **must be absolute**.
@@ -17,7 +17,7 @@
 //!
 //! ### Recognized outputs
 //! - Tiles at `<z>/<x>/<y>.<ext>[.<br|gz>]` (e.g., `2/3/1.pbf.gz`, `7/21/42.png`).
-//! - TileJSON at `tiles.json[.<br|gz>]`.
+//! - `TileJSON` at `tiles.json[.<br|gz>]`.
 //!
 //! ### Example
 //! ```rust,no_run
@@ -50,10 +50,10 @@ use std::{
 	fs,
 	path::{Path, PathBuf},
 };
-use versatiles_core::{io::DataWriterTrait, utils::compress, *};
+use versatiles_core::{Blob, io::DataWriterTrait, utils::compress};
 use versatiles_derive::context;
 
-/// Writes a directory-based tile pyramid along with a compressed TileJSON (`tiles.json[.<br|gz>]`).
+/// Writes a directory-based tile pyramid along with a compressed `TileJSON` (`tiles.json[.<br|gz>]`).
 ///
 /// Tiles are encoded using the format and compression from the source `TilesReader`. The
 /// writer creates intermediate directories on demand and preserves the `{z}/{x}/{y}` layout.
@@ -79,7 +79,7 @@ impl TilesWriter for DirectoryWriter {
 	///
 	/// * Validates that `path` is absolute.
 	/// * Encodes tiles using `reader.parameters().tile_format` and `reader.parameters().tile_compression`.
-	/// * Writes `tiles.json[.<compression>]` containing the reader's TileJSON, compressed to the same transport layer.
+	/// * Writes `tiles.json[.<compression>]` containing the reader's `TileJSON`, compressed to the same transport layer.
 	/// * Creates the `{z}/{x}/{y}` directory structure on demand.
 	///
 	/// # Errors
@@ -150,7 +150,7 @@ impl TilesWriter for DirectoryWriter {
 mod tests {
 	use super::*;
 	use crate::{MOCK_BYTES_PBF, MockReader, TileSourceMetadata};
-	use versatiles_core::utils::decompress_gzip;
+	use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat, utils::decompress_gzip};
 
 	/// Tests the functionality of writing tile data to a directory from a mock reader.
 	#[tokio::test]

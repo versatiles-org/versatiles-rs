@@ -22,10 +22,12 @@ impl TilesRuntime {
 	/// Create a new runtime with default settings
 	///
 	/// Equivalent to `TilesRuntime::builder().build()`
+	#[must_use]
 	pub fn new() -> Self {
 		Self::builder().build()
 	}
 
+	#[must_use]
 	pub fn new_silent() -> Self {
 		Self::builder().silent_progress(true).build()
 	}
@@ -42,11 +44,13 @@ impl TilesRuntime {
 	///     .silent_progress(true)
 	///     .build();
 	/// ```
+	#[must_use]
 	pub fn builder() -> RuntimeBuilder {
 		RuntimeBuilder::default()
 	}
 
 	/// Get the cache type configuration
+	#[must_use]
 	pub fn cache_type(&self) -> &CacheType {
 		&self.inner.cache_type
 	}
@@ -54,6 +58,7 @@ impl TilesRuntime {
 	/// Get the event bus
 	///
 	/// Use the event bus to subscribe to runtime events or emit custom events.
+	#[must_use]
 	pub fn events(&self) -> &EventBus {
 		&self.inner.event_bus
 	}
@@ -80,6 +85,7 @@ impl TilesRuntime {
 	///
 	/// progress.finish();
 	/// ```
+	#[must_use]
 	pub fn create_progress(&self, message: &str, total: u64) -> ProgressHandle {
 		self.inner.progress_factory.lock().unwrap().create(message, total)
 	}

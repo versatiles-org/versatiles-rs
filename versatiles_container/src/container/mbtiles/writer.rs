@@ -1,6 +1,6 @@
-//! Write tiles and metadata into an MBTiles (SQLite) database.
+//! Write tiles and metadata into an `MBTiles` (`SQLite`) database.
 //!
-//! The `MBTilesWriter` builds an MBTiles container compatible with the
+//! The `MBTilesWriter` builds an `MBTiles` container compatible with the
 //! [Mapbox MBTiles 1.3 specification](https://github.com/mapbox/mbtiles-spec).
 //! It writes both the `tiles` and `metadata` tables, ensuring proper
 //! coordinate flipping (XYZ → TMS), and creates required indices.
@@ -50,25 +50,25 @@ use futures::lock::Mutex;
 use r2d2::Pool;
 use r2d2_sqlite::{SqliteConnectionManager, rusqlite::params};
 use std::{fs::remove_file, path::Path, sync::Arc};
-use versatiles_core::{io::DataWriterTrait, json::JsonObject, *};
+use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, io::DataWriterTrait, json::JsonObject};
 use versatiles_derive::context;
 
-/// Writer for MBTiles (SQLite) containers.
+/// Writer for `MBTiles` (`SQLite`) containers.
 ///
-/// Creates a new SQLite database, initializes the `tiles` and `metadata` tables,
+/// Creates a new `SQLite` database, initializes the `tiles` and `metadata` tables,
 /// and writes all tile blobs and associated metadata from a `TilesReader`.
 /// Each tile is stored as one record with XYZ coordinates flipped to TMS indexing.
 ///
-/// This writer ensures MBTiles compatibility and writes a minimal, valid dataset
-/// ready for use in tools such as MapLibre, Mapbox GL, or GDAL.
+/// This writer ensures `MBTiles` compatibility and writes a minimal, valid dataset
+/// ready for use in tools such as `MapLibre`, Mapbox GL, or GDAL.
 pub struct MBTilesWriter {
 	pool: Pool<SqliteConnectionManager>,
 }
 
 impl MBTilesWriter {
-	/// Create a new MBTiles writer at the specified path.
+	/// Create a new `MBTiles` writer at the specified path.
 	///
-	/// If a file already exists, it is removed. The method initializes a new SQLite database,
+	/// If a file already exists, it is removed. The method initializes a new `SQLite` database,
 	/// creates the `tiles` and `metadata` tables, and adds a unique index on tile coordinates.
 	///
 	/// # Errors
@@ -91,10 +91,10 @@ impl MBTilesWriter {
 		Ok(MBTilesWriter { pool })
 	}
 
-	/// Add multiple tiles to the MBTiles file within a single transaction.
+	/// Add multiple tiles to the `MBTiles` file within a single transaction.
 	///
 	/// Converts tile coordinates from XYZ to TMS indexing (`tile_row = 2^z - 1 - y`)
-	/// before insertion, ensuring MBTiles compatibility.
+	/// before insertion, ensuring `MBTiles` compatibility.
 	///
 	/// # Errors
 	/// Returns an error if the transaction or any insertion fails.
@@ -103,7 +103,7 @@ impl MBTilesWriter {
 		let mut conn = self.pool.get()?;
 		let transaction = conn.transaction()?;
 		for (c, blob) in tiles {
-			let max_index = 2u32.pow(c.level as u32) - 1;
+			let max_index = 2u32.pow(u32::from(c.level)) - 1;
 			transaction.execute(
 				"INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?1, ?2, ?3, ?4)",
 				params![c.level, c.x, max_index - c.y, blob.as_slice()],
@@ -113,7 +113,7 @@ impl MBTilesWriter {
 		Ok(())
 	}
 
-	/// Insert or replace a metadata key-value pair in the MBTiles database.
+	/// Insert or replace a metadata key-value pair in the `MBTiles` database.
 	///
 	/// Used to populate the `metadata` table with dataset information such as
 	/// bounds, minzoom, maxzoom, and format.
@@ -132,10 +132,10 @@ impl MBTilesWriter {
 
 #[async_trait]
 impl TilesWriter for MBTilesWriter {
-	/// Write all tiles and metadata from the given reader into an MBTiles file.
+	/// Write all tiles and metadata from the given reader into an `MBTiles` file.
 	///
 	/// This method:
-	/// - Creates a new SQLite database at `path` (removing any existing file).
+	/// - Creates a new `SQLite` database at `path` (removing any existing file).
 	/// - Inserts metadata such as bounds, zoom range, and vector layers.
 	/// - Writes all tiles from `reader`, flipping coordinates from XYZ to TMS.
 	/// - Enforces MBTiles-compatible format and compression combinations.
@@ -145,8 +145,8 @@ impl TilesWriter for MBTilesWriter {
 	/// or if database insertion encounters an error.
 	#[context("writing MBTiles to '{}'", path.display())]
 	async fn write_to_path(reader: &mut dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
-		use TileCompression::*;
-		use TileFormat::*;
+		use TileCompression::{Gzip, Uncompressed};
+		use TileFormat::{JPG, MVT, PNG, WEBP};
 
 		let writer = MBTilesWriter::new(path)?;
 
@@ -222,7 +222,7 @@ impl TilesWriter for MBTilesWriter {
 		Ok(())
 	}
 
-	/// Not implemented: MBTiles cannot be streamed to a generic writer.
+	/// Not implemented: `MBTiles` cannot be streamed to a generic writer.
 	///
 	/// # Errors
 	/// Always returns `not implemented`.
@@ -241,6 +241,7 @@ mod tests {
 	use super::*;
 	use crate::{MBTilesReader, MockReader, MockWriter, TileSourceMetadata};
 	use assert_fs::NamedTempFile;
+	use versatiles_core::TileBBoxPyramid;
 
 	#[tokio::test]
 	async fn read_write() -> Result<()> {

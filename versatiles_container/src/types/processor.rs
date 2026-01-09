@@ -51,7 +51,7 @@ use versatiles_core::TileJSON;
 ///
 /// This struct provides:
 /// - Storage for the upstream source
-/// - Cloned metadata (parameters, TileJSON, traversal) from the source
+/// - Cloned metadata (parameters, `TileJSON`, traversal) from the source
 /// - Builder pattern for modifying metadata
 /// - Accessor methods for implementation convenience
 ///
@@ -69,7 +69,7 @@ pub struct TileProcessor {
 impl TileProcessor {
 	/// Creates a new processor wrapping the given source.
 	///
-	/// Clones metadata (parameters, TileJSON, traversal) from the source, which can
+	/// Clones metadata (parameters, `TileJSON`, traversal) from the source, which can
 	/// then be modified via builder methods.
 	///
 	/// # Arguments
@@ -99,7 +99,7 @@ impl TileProcessor {
 		self
 	}
 
-	/// Builder method to override the TileJSON metadata.
+	/// Builder method to override the `TileJSON` metadata.
 	///
 	/// Use this when the processor modifies metadata (e.g., updating attribution, bounds).
 	#[must_use]
@@ -118,11 +118,13 @@ impl TileProcessor {
 	}
 
 	/// Returns the processor's name.
+	#[must_use]
 	pub fn name(&self) -> &str {
 		&self.name
 	}
 
 	/// Returns the upstream source as a trait object reference.
+	#[must_use]
 	pub fn source(&self) -> &dyn TileSource {
 		&*self.source
 	}
@@ -135,16 +137,19 @@ impl TileProcessor {
 	}
 
 	/// Returns the (potentially modified) parameters.
+	#[must_use]
 	pub fn parameters(&self) -> &TileSourceMetadata {
 		&self.parameters
 	}
 
-	/// Returns the (potentially modified) TileJSON.
+	/// Returns the (potentially modified) `TileJSON`.
+	#[must_use]
 	pub fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
 	/// Returns the (potentially modified) traversal hint.
+	#[must_use]
 	pub fn traversal(&self) -> &Traversal {
 		&self.traversal
 	}
@@ -156,7 +161,7 @@ impl TileProcessor {
 		&mut self.parameters
 	}
 
-	/// Returns a mutable reference to the TileJSON.
+	/// Returns a mutable reference to the `TileJSON`.
 	///
 	/// Use this to modify metadata after construction.
 	pub fn tilejson_mut(&mut self) -> &mut TileJSON {

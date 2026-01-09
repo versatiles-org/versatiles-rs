@@ -1,4 +1,4 @@
-//! Caching subsystem for VersaTiles.
+//! Caching subsystem for `VersaTiles`.
 //!
 //! This module provides caching infrastructure for tile traversal operations.
 //! It supports both in-memory and on-disk cache backends via [`CacheType`].

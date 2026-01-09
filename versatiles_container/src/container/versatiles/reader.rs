@@ -3,13 +3,13 @@
 //! Read tiles and metadata from a `.versatiles` container.
 //!
 //! The `VersaTilesReader` parses the container header, decompresses the **block index**,
-//! reads embedded TileJSON metadata, and exposes tiles via [`TileSource`]. The
+//! reads embedded `TileJSON` metadata, and exposes tiles via [`TileSource`]. The
 //! file format organizes data into fixed **256×256 tile blocks**; each block stores
 //! a Brotli-compressed tile index (byte ranges), followed by a contiguous region of
 //! tile blobs. This reader lazily caches decoded tile indices for fast random access.
 //!
 //! ## Extracted artifacts
-//! - `tilejson`: parsed TileJSON from the `meta_range` (if present)
+//! - `tilejson`: parsed `TileJSON` from the `meta_range` (if present)
 //! - `parameters`: [`TileSourceMetadata`] with `tile_format`, `tile_compression`, and a
 //!   **bbox pyramid** computed from the block index
 //! - `block_index`: lightweight structure describing all block ranges
@@ -62,12 +62,16 @@ use futures::{lock::Mutex, stream::StreamExt};
 use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
-use versatiles_core::{io::*, utils::decompress, *};
+use versatiles_core::{
+	Blob, ByteRange, LimitedCache, TileBBox, TileCoord, TileJSON, TileStream,
+	io::{DataReader, DataReaderFile},
+	utils::decompress,
+};
 use versatiles_derive::context;
 
 /// Reader for `.versatiles` containers.
 ///
-/// Decompresses and parses the block index, merges embedded TileJSON, computes a
+/// Decompresses and parses the block index, merges embedded `TileJSON`, computes a
 /// per-zoom bounding-box pyramid, and serves tiles via lazy index lookups. Tile
 /// indices are cached (least-recently-used) to accelerate repeated random access.
 pub struct VersaTilesReader {
@@ -95,7 +99,7 @@ impl VersaTilesReader {
 
 	/// Open a `.versatiles` container from an existing [`DataReader`].
 	///
-	/// Reads the header, loads and (if present) decompresses the TileJSON metadata, then
+	/// Reads the header, loads and (if present) decompresses the `TileJSON` metadata, then
 	/// reads and decompresses the **block index** (Brotli). Finally, computes the bbox pyramid
 	/// from the block index and initializes the tile-index cache.
 	///
@@ -299,7 +303,7 @@ impl Chunk {
 		self.range.length = self
 			.range
 			.length
-			.max(entry.1.offset + entry.1.length - self.range.offset)
+			.max(entry.1.offset + entry.1.length - self.range.offset);
 	}
 	fn len(&self) -> usize {
 		self.tiles.len()
@@ -373,7 +377,7 @@ impl TileSource for VersaTilesReader {
 
 	#[context("streaming tiles for bbox {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_tile_stream {:?}", bbox);
+		log::debug!("get_tile_stream {bbox:?}");
 		let chunks = self.get_chunks(bbox).await;
 		Ok(TileStream::from_stream(
 			futures::stream::iter(chunks)
@@ -511,7 +515,7 @@ mod tests {
 	use super::*;
 	use crate::{MOCK_BYTES_PBF, MockReader, TilesRuntime, TilesWriter, VersaTilesWriter, make_test_file};
 	use assert_fs::NamedTempFile;
-	use versatiles_core::{assert_wildcard, io::DataWriterBlob};
+	use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat, assert_wildcard, io::DataWriterBlob};
 
 	// Helper to quickly create a test reader and bbox
 	async fn mk_reader() -> Result<(NamedTempFile, VersaTilesReader)> {

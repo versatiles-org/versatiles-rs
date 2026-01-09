@@ -1,14 +1,14 @@
 //! Write tiles and metadata into a `.tar` archive.
 //!
 //! The `TarTilesWriter` emits a directory-like tile pyramid into a tarball using the
-//! `{z}/{x}/{y}.<format>[.<compression>]` layout and writes TileJSON as `tiles.json[.<compression>]`.
+//! `{z}/{x}/{y}.<format>[.<compression>]` layout and writes `TileJSON` as `tiles.json[.<compression>]`.
 //! The transport **compression** (`.br`/`.gz` or none) follows the source reader’s
 //! [`TileSourceMetadata::tile_compression`].
 //!
 //! ## Behavior
 //! - Creates regular file entries with mode `0644`.
 //! - Uses the **same** tile `format` and `compression` for all files (as reported by the reader).
-//! - Writes TileJSON first, then streams all tiles from the reader (order is not significant).
+//! - Writes `TileJSON` first, then streams all tiles from the reader (order is not significant).
 //! - The output path can be relative or absolute; parent directories must exist or be creatable.
 //!
 //! ## Errors
@@ -30,7 +30,7 @@ use versatiles_derive::context;
 
 /// Writer for tiles packaged inside a tar archive.
 ///
-/// Serializes TileJSON as `tiles.json[.<br|gz>]` and each tile as `{z}/{x}/{y}.<ext>[.<br|gz>]`,
+/// Serializes `TileJSON` as `tiles.json[.<br|gz>]` and each tile as `{z}/{x}/{y}.<ext>[.<br|gz>]`,
 /// using the reader’s reported `tile_format` and `tile_compression`.
 ///
 /// Internally uses a mutex around the tar `Builder` to allow asynchronous streaming
@@ -39,9 +39,9 @@ pub struct TarTilesWriter {}
 
 #[async_trait]
 impl TilesWriter for TarTilesWriter {
-	/// Write all tiles and TileJSON from `reader` into a tarball at `path`.
+	/// Write all tiles and `TileJSON` from `reader` into a tarball at `path`.
 	///
-	/// * Encodes TileJSON to a blob using `reader.parameters().tile_compression` and writes it as `tiles.json[.<compression>]`.
+	/// * Encodes `TileJSON` to a blob using `reader.parameters().tile_compression` and writes it as `tiles.json[.<compression>]`.
 	/// * Streams all tiles from the reader and writes them to `{z}/{x}/{y}.<format>[.<compression>]`.
 	/// * Creates entries with mode `0644` and writes them as regular files.
 	///

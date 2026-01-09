@@ -73,6 +73,7 @@ impl Tile {
 	/// (e.g., `PNG`, `WEBP`, `MVT`).
 	///
 	/// This does **not** decode the blob. Decoding happens lazily when content is requested.
+	#[must_use]
 	pub fn from_blob(blob: Blob, compression: TileCompression, format: TileFormat) -> Self {
 		Self {
 			blob: Some(blob),
@@ -265,10 +266,12 @@ impl Tile {
 	}
 
 	/// Return the current tile **format** (e.g., `PNG`, `MVT`).
+	#[must_use]
 	pub fn format(&self) -> TileFormat {
 		self.format
 	}
 	/// Return the current transport **compression** (e.g., `Uncompressed`, `Gzip`).
+	#[must_use]
 	pub fn compression(&self) -> TileCompression {
 		self.compression
 	}
@@ -312,11 +315,13 @@ impl Tile {
 	}
 
 	/// Whether the tile currently holds an encoded blob.
+	#[must_use]
 	pub fn has_blob(&self) -> bool {
 		self.blob.is_some()
 	}
 
 	/// Whether the tile currently holds decoded content.
+	#[must_use]
 	pub fn has_content(&self) -> bool {
 		self.content.is_some()
 	}

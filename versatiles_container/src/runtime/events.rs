@@ -61,6 +61,7 @@ pub struct EventBus {
 
 impl EventBus {
 	/// Create a new event bus
+	#[must_use]
 	pub fn new() -> Self {
 		Self {
 			listeners: Arc::new(ArcSwap::from_pointee(Vec::new())),
@@ -144,6 +145,7 @@ pub struct LogAdapter {
 
 impl LogAdapter {
 	/// Create a new log adapter
+	#[must_use]
 	pub fn new(event_bus: EventBus) -> Self {
 		Self { event_bus }
 	}
@@ -171,6 +173,7 @@ impl log::Log for LogAdapter {
 
 impl EventBus {
 	/// Create a log adapter that forwards log crate events to the event bus
+	#[must_use]
 	pub fn create_log_adapter(&self) -> LogAdapter {
 		LogAdapter::new(self.clone())
 	}

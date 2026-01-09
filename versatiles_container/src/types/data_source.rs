@@ -25,11 +25,13 @@ static RE_POSTFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(.*)\[([\w,]
 
 impl DataSource {
 	/// Returns an optional reference to the container type, if specified.
+	#[must_use]
 	pub fn optional_container_type(&self) -> Option<&str> {
 		self.container_type.as_deref()
 	}
 
 	/// Returns an optional reference to the name, if specified.
+	#[must_use]
 	pub fn optional_name(&self) -> Option<&str> {
 		self.name.as_deref()
 	}
@@ -51,18 +53,20 @@ impl DataSource {
 	}
 
 	/// Returns a reference to the underlying `DataLocation`.
+	#[must_use]
 	pub fn location(&self) -> &DataLocation {
 		&self.location
 	}
 
 	/// Consumes the `DataSource` and returns the underlying `DataLocation`.
+	#[must_use]
 	pub fn into_location(self) -> DataLocation {
 		self.location
 	}
 
 	/// Parses a string specification into a `DataSource`.
 	///
-	/// The input grammar supports optional name and container_type prefixes (e.g., `[osm,mbtiles]`),
+	/// The input grammar supports optional name and `container_type` prefixes (e.g., `[osm,mbtiles]`),
 	/// standard input (`-`) which is resolved into a Blob (requiring an explicit extension),
 	/// and falls back to interpreting the string as a path or URL.
 	#[context("parsing data source from input string '{}'", input)]

@@ -29,7 +29,7 @@ impl TraversalOrder {
 	/// * `bboxes` – mutable slice of tile bounding boxes to sort.
 	/// * `size` – block size used to compute quadtree coordinates for `DepthFirst`.
 	pub fn sort_bboxes(&self, bboxes: &mut Vec<TileBBox>, size: u32) {
-		use TraversalOrder::*;
+		use TraversalOrder::{AnyOrder, DepthFirst, PMTiles};
 		match self {
 			AnyOrder => {}
 			DepthFirst => sort_depth_first(bboxes, size),
@@ -39,7 +39,7 @@ impl TraversalOrder {
 
 	#[must_use]
 	pub fn verify_order(&self, bboxes: &[TileBBox], size: u32) -> bool {
-		use TraversalOrder::*;
+		use TraversalOrder::{AnyOrder, DepthFirst, PMTiles};
 		let mut clone = bboxes.to_vec();
 		match self {
 			AnyOrder => return true,
@@ -54,7 +54,7 @@ impl TraversalOrder {
 	/// If either is `AnyOrder`, results in the other order.
 	/// Returns an error if both orders are concrete and different.
 	pub fn intersect(&mut self, other: &TraversalOrder) -> Result<()> {
-		use TraversalOrder::*;
+		use TraversalOrder::AnyOrder;
 		if self == other || other == &AnyOrder {
 			return Ok(());
 		}
@@ -85,7 +85,7 @@ impl std::fmt::Display for TraversalOrder {
 impl std::fmt::Debug for TraversalOrder {
 	/// Format the traversal order as a string.
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "TraversalOrder({})", self)
+		write!(f, "TraversalOrder({self})")
 	}
 }
 

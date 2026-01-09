@@ -49,10 +49,12 @@ impl TraversalSize {
 	}
 
 	/// Check whether the size range is empty (min > max).
+	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.min > self.max
 	}
 
+	#[must_use]
 	pub fn is_full_range(&self) -> bool {
 		self.min == MIN_TRAVERSAL_SIZE_BITS && self.max == MAX_TRAVERSAL_SIZE_BITS
 	}
@@ -118,7 +120,7 @@ impl std::fmt::Display for TraversalSize {
 
 impl std::fmt::Debug for TraversalSize {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "TraversalSize({})", self)
+		write!(f, "TraversalSize({self})")
 	}
 }
 
