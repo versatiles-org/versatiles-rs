@@ -65,7 +65,7 @@ pub struct ServerConfig {
 impl ServerConfig {
 	pub fn override_optional_ip(&mut self, ip: &Option<String>) {
 		if ip.is_some() {
-			self.ip = ip.clone();
+			self.ip.clone_from(ip);
 		}
 	}
 	pub fn override_optional_port(&mut self, port: &Option<u16>) {

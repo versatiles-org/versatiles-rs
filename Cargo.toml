@@ -63,7 +63,6 @@ cast_lossless = "allow"
 enum_glob_use = "allow"
 
 # Allow stylistic patterns used consistently in codebase
-assigning_clones = "allow"
 borrow_as_ptr = "allow"
 cast_possible_wrap = "allow"
 comparison_chain = "allow"
