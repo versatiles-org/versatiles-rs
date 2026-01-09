@@ -37,6 +37,9 @@ exclude = [
 	"/testdata",
 ]
 
+[workspace.lints.rust]
+unused_imports = "deny"
+
 [workspace.lints.clippy]
 # Enable pedantic lints for code quality
 pedantic = { level = "deny", priority = -1 }

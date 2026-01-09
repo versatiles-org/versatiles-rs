@@ -41,7 +41,7 @@ use std::{collections::HashSet, io::BufReader, path::Path};
 use versatiles_container::TilesRuntime;
 use versatiles_core::utils::read_csv_iter;
 use versatiles_derive::context;
-use versatiles_geometry::geo::{CompositeGeometryTrait, GeoProperties, GeoValue};
+use versatiles_geometry::geo::{GeoProperties, GeoValue};
 
 /// A configurable CSV/TSV file reader.
 ///

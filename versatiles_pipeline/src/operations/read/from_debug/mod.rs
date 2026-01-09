@@ -20,7 +20,7 @@ mod vector;
 use crate::{
 	PipelineFactory,
 	operations::read::traits::ReadTileSource,
-	traits::{OperationFactoryTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
+	traits::{OperationFactoryTrait, ReadOperationFactoryTrait},
 	vpl::VPLNode,
 };
 use anyhow::{Result, bail};

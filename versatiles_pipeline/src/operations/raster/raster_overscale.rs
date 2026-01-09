@@ -1,6 +1,6 @@
 use crate::{
 	PipelineFactory,
-	traits::{OperationFactoryTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
+	traits::{OperationFactoryTrait, TransformOperationFactoryTrait},
 	vpl::VPLNode,
 };
 use anyhow::{Result, ensure};
@@ -266,7 +266,7 @@ mod tests {
 	use crate::helpers::dummy_image_source::DummyImageSource;
 	use rstest::rstest;
 	use versatiles_core::{TileCoord, TileFormat};
-	use versatiles_image::{DynamicImage, DynamicImageTraitConvert, DynamicImageTraitOperation, DynamicImageTraitTest};
+	use versatiles_image::{DynamicImage, DynamicImageTraitConvert, DynamicImageTraitOperation};
 
 	fn make_gradient_image(channel_count: usize) -> DynamicImage {
 		let s = 256;

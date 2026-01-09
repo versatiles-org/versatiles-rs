@@ -1,6 +1,6 @@
 use crate::{
 	PipelineFactory,
-	traits::{OperationFactoryTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
+	traits::{OperationFactoryTrait, TransformOperationFactoryTrait},
 	vpl::VPLNode,
 };
 use anyhow::{Result, bail};

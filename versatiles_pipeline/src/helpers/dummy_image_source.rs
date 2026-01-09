@@ -5,7 +5,7 @@ use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream};
 use versatiles_derive::context;
-use versatiles_image::traits::{DynamicImageTraitConvert, DynamicImageTraitInfo};
+use versatiles_image::traits::DynamicImageTraitConvert;
 
 pub struct DummyImageSource {
 	#[allow(clippy::type_complexity)]
