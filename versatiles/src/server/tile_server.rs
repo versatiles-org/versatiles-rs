@@ -566,8 +566,7 @@ mod tests {
 
 		let content_encoding = headers
 			.get(header::CONTENT_ENCODING)
-			.map(|v| v.to_str().unwrap())
-			.unwrap_or("");
+			.map_or("", |v| v.to_str().unwrap());
 		assert_eq!(
 			content_encoding, expect_content_encoding,
 			"unexpected content-encoding '{content_encoding}', expected to be '{expect_content_encoding}'"

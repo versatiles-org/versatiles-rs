@@ -77,12 +77,11 @@ impl TarFile {
 			let compression = entry_path
 				.extension()
 				.and_then(OsStr::to_str)
-				.map(|ext| match ext {
+				.map_or(Uncompressed, |ext| match ext {
 					"br" => Brotli,
 					"gz" => Gzip,
 					_ => Uncompressed,
-				})
-				.unwrap_or(Uncompressed);
+				});
 
 			if compression != Uncompressed {
 				entry_path.set_extension("");
