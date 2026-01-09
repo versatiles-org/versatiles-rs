@@ -21,8 +21,7 @@ pub use mbtiles::{MBTilesReader, MBTilesWriter};
 mod mock;
 #[cfg(any(test, feature = "test"))]
 pub use mock::{
-	MockReader, MockReaderProfile, MockWriter, MOCK_BYTES_JPG, MOCK_BYTES_PBF, MOCK_BYTES_PNG,
-	MOCK_BYTES_WEBP,
+	MOCK_BYTES_JPG, MOCK_BYTES_PBF, MOCK_BYTES_PNG, MOCK_BYTES_WEBP, MockReader, MockReaderProfile, MockWriter,
 };
 
 mod pmtiles;

@@ -134,11 +134,7 @@ impl ContainerRegistry {
 	}
 
 	#[context("Failed to get reader from string '{data_source}'")]
-	pub async fn get_reader_from_str(
-		&self,
-		data_source: &str,
-		runtime: TilesRuntime,
-	) -> Result<SharedTileSource> {
+	pub async fn get_reader_from_str(&self, data_source: &str, runtime: TilesRuntime) -> Result<SharedTileSource> {
 		self.get_reader(DataSource::parse(data_source)?, runtime).await
 	}
 
@@ -206,12 +202,7 @@ impl ContainerRegistry {
 	/// # Returns
 	/// Result indicating success or failure.
 	#[context("writing tiles to path '{path:?}'")]
-	pub async fn write_to_path(
-		&self,
-		reader: SharedTileSource,
-		path: &Path,
-		runtime: TilesRuntime,
-	) -> Result<()> {
+	pub async fn write_to_path(&self, reader: SharedTileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
 		let path = env::current_dir()?.join(path);
 
 		if path.is_dir() {

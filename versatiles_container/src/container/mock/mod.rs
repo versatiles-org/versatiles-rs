@@ -12,7 +12,5 @@
 mod reader;
 mod writer;
 
-pub use reader::{
-	MockReader, MockReaderProfile, MOCK_BYTES_JPG, MOCK_BYTES_PBF, MOCK_BYTES_PNG, MOCK_BYTES_WEBP,
-};
+pub use reader::{MOCK_BYTES_JPG, MOCK_BYTES_PBF, MOCK_BYTES_PNG, MOCK_BYTES_WEBP, MockReader, MockReaderProfile};
 pub use writer::MockWriter;

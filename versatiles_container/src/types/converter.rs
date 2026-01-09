@@ -135,10 +135,7 @@ impl TilesConvertReader {
 	/// ### Errors
 	/// Propagates errors from querying/deriving parameters or updating metadata.
 	#[context("Creating converter reader from existing reader")]
-	pub fn new_from_reader(
-		reader: SharedTileSource,
-		cp: TilesConverterParameters,
-	) -> Result<TilesConvertReader> {
+	pub fn new_from_reader(reader: SharedTileSource, cp: TilesConverterParameters) -> Result<TilesConvertReader> {
 		let rp: TileSourceMetadata = reader.metadata().to_owned();
 		let mut new_rp: TileSourceMetadata = rp.clone();
 

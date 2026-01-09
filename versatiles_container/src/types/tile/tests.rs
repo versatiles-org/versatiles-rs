@@ -1,9 +1,9 @@
 //! Unit tests for Tile struct.
 
 use super::*;
-use anyhow::Result;
 use crate::testing::tiny_rgb_image;
 use crate::{CacheValue, TileContent};
+use anyhow::Result;
 use rstest::rstest;
 use std::io::Cursor;
 use versatiles_core::TileCompression::*;
@@ -14,10 +14,7 @@ use versatiles_image::{GenericImage, GenericImageView};
 
 #[rstest]
 #[case(Uncompressed, Uncompressed)]
-fn recompress_blob_noop_when_same(
-	#[case] start: TileCompression,
-	#[case] target: TileCompression,
-) -> Result<()> {
+fn recompress_blob_noop_when_same(#[case] start: TileCompression, #[case] target: TileCompression) -> Result<()> {
 	let mut tile = Tile::from_image(tiny_rgb_image(), PNG)?;
 	// materialize and set to the desired starting compression
 	let before = tile.as_blob(start)?.clone();
