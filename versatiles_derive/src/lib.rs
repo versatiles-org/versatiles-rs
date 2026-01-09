@@ -124,7 +124,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 
 	// Collect per‑field metadata used during YAML codegen.
 	struct Row {
-		ident: syn::Ident,
 		key: String,
 		ty: syn::Type,
 		doc: String,
@@ -168,14 +167,12 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		// Detect custom example values provided via #[config_demo].
 		let mut demo_value = None;
 		for attr in &f.attrs {
-			if attr.path().is_ident("config_demo") {
+			if attr.path().is_ident("config_demo")
+				&& demo_value.is_none()
+				&& let Ok(lit) = attr.parse_args::<syn::LitStr>()
+			{
 				// Prefer positional literal: #[config_demo("...")]
-				if demo_value.is_none()
-					&& let Ok(lit) = attr.parse_args::<syn::LitStr>()
-				{
-					demo_value = Some(lit.value());
-					continue;
-				}
+				demo_value = Some(lit.value());
 			}
 		}
 
@@ -184,7 +181,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			!is_option && !is_vec && !is_map && path_ident(&f.ty).is_some() && !is_primitive_like(&f.ty) && !is_url_path;
 
 		rows.push(Row {
-			ident,
 			key,
 			ty,
 			doc,
@@ -202,7 +198,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			use proc_macro2::TokenStream as TokenStream2;
 
 			// Start generating YAML lines for documentation and keys.
-			let _ident = &r.ident;
 			let key = &r.key;
 			let ty = &r.ty;
 			let doc = &r.doc;
@@ -368,7 +363,7 @@ pub fn context(args: TokenStream, input: TokenStream) -> TokenStream {
 				&return_type,
 				syn::ReturnType::Type(_, ty)
 					if matches!(ty.as_ref(),
-						syn::Type::Path(tp) if tp.path.segments.last().map(|s| s.ident == "Pin").unwrap_or(false)
+						syn::Type::Path(tp) if tp.path.segments.last().is_some_and(|s| s.ident == "Pin")
 					)
 			);
 
