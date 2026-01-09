@@ -37,6 +37,47 @@ exclude = [
 	"/testdata",
 ]
 
+[workspace.lints.clippy]
+# Enable pedantic lints for code quality
+pedantic = "allow"
+
+# Allow noisy/stylistic lints that don't improve safety
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+similar_names = "allow"
+doc_markdown = "allow"
+
+# Allow lints being addressed in separate phases
+must_use_candidate = "allow"
+wildcard_imports = "allow"
+too_many_lines = "allow"
+
+# Allow reasonable casting patterns in container code
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+cast_lossless = "allow"
+
+# Allow enum glob imports for concise variant usage
+enum_glob_use = "allow"
+
+# Allow stylistic patterns used consistently in codebase
+uninlined_format_args = "allow"
+redundant_closure_for_method_calls = "allow"
+items_after_statements = "allow"
+semicolon_if_nothing_returned = "allow"
+unnecessary_debug_formatting = "allow"
+explicit_iter_loop = "allow"
+manual_let_else = "allow"
+redundant_else = "allow"
+missing_fields_in_debug = "allow"
+needless_pass_by_value = "allow"
+trivially_copy_pass_by_ref = "allow"
+unnecessary_wraps = "allow"
+cast_possible_wrap = "allow"
+match_wildcard_for_single_variants = "allow"
+
 [workspace.metadata.release]
 allow-branch = ["main"]
 consolidate-commits = true

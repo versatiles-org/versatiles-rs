@@ -12,6 +12,9 @@ readme = "README.md"
 repository.workspace = true
 version.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 ab_glyph = { version = "0.2.32", default-features = false, features = ["std"] }
 anyhow.workspace = true
