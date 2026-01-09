@@ -163,7 +163,7 @@ impl TarTilesReader {
 						continue;
 					}
 					&_ => {}
-				};
+				}
 			}
 
 			log::warn!("unknown file in tar: {path_tmp_string:?}");

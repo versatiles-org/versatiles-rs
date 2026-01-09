@@ -192,7 +192,7 @@ impl DirectoryReader {
 						)?))?;
 					}
 					&_ => {}
-				};
+				}
 			}
 		}
 

@@ -9,7 +9,7 @@ use versatiles_core::{io::*, *};
 use versatiles_derive::context;
 
 const HEADER_LENGTH: u64 = 66;
-const BBOX_SCALE: f64 = 10000000.0;
+const BBOX_SCALE: f64 = 10_000_000.0;
 
 /// A struct representing the header of a versatiles file.
 #[derive(Debug, PartialEq)]
@@ -147,7 +147,7 @@ impl FileHeader {
 		let magic_word = reader.read_string(14)?;
 		if &magic_word != "versatiles_v02" {
 			bail!("'{blob:?}' is not a valid versatiles header. A header should start with 'versatiles_v02'");
-		};
+		}
 
 		let tile_format = match reader.read_u8()? {
 			0x00 => BIN,
