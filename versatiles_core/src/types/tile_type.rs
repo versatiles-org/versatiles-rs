@@ -36,7 +36,7 @@ impl TileType {
 	/// ```
 	#[must_use]
 	pub fn as_str(&self) -> &str {
-		use TileType::*;
+		use TileType::{Raster, Unknown, Vector};
 		match self {
 			Raster => "raster",
 			Vector => "vector",
@@ -77,7 +77,7 @@ impl TileType {
 	/// ```
 	#[must_use]
 	pub fn default_tile_schema(&self) -> Option<&'static str> {
-		use TileType::*;
+		use TileType::{Raster, Unknown, Vector};
 		match self {
 			Raster => Some("rgb"),
 			Vector => Some("other"),

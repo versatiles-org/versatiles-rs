@@ -65,7 +65,7 @@ pub fn optimize_compression(
 		bail!("'Uncompressed' must always be supported");
 	}
 
-	use CompressionGoal::*;
+	use CompressionGoal::{IsIncompressible, UseBestCompression};
 
 	// If the target is not seeking the best compression and the current compression is allowed,
 	// retain the current compression.

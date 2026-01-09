@@ -35,7 +35,7 @@ enum RasterTileFormat {
 impl RasterTileFormat {
 	#[context("Parsing raster tile format from string '{text}'")]
 	fn from_str(text: &str) -> Result<Self> {
-		use RasterTileFormat::*;
+		use RasterTileFormat::{Avif, Jpeg, Png, Webp};
 		Ok(match text.to_lowercase().trim() {
 			"avif" => Avif,
 			"jpg" | "jpeg" => Jpeg,
@@ -49,7 +49,7 @@ impl RasterTileFormat {
 impl TryFrom<TileFormat> for RasterTileFormat {
 	type Error = anyhow::Error;
 	fn try_from(value: TileFormat) -> std::result::Result<Self, Self::Error> {
-		use RasterTileFormat::*;
+		use RasterTileFormat::{Avif, Jpeg, Png, Webp};
 		Ok(match value {
 			TileFormat::AVIF => Avif,
 			TileFormat::JPG => Jpeg,
@@ -62,7 +62,7 @@ impl TryFrom<TileFormat> for RasterTileFormat {
 
 impl From<RasterTileFormat> for TileFormat {
 	fn from(value: RasterTileFormat) -> Self {
-		use RasterTileFormat::*;
+		use RasterTileFormat::{Avif, Jpeg, Png, Webp};
 		match value {
 			Avif => TileFormat::AVIF,
 			Jpeg => TileFormat::JPG,

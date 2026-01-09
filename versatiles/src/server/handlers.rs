@@ -175,7 +175,7 @@ fn ok_data(result: SourceResponse, mut target: TargetCompression) -> Response<Bo
 		}
 	};
 
-	use TileCompression::*;
+	use TileCompression::{Brotli, Gzip, Uncompressed};
 	match compression {
 		Uncompressed => {}
 		Gzip => response = response.header(header::CONTENT_ENCODING, "gzip"),

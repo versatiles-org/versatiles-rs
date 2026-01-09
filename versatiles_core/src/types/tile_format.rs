@@ -27,7 +27,7 @@
 //! ```
 
 use super::TileType;
-use TileFormat::*;
+use TileFormat::{AVIF, BIN, GEOJSON, JPG, JSON, MVT, PNG, SVG, TOPOJSON, WEBP};
 use anyhow::{Result, bail};
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
@@ -278,7 +278,7 @@ impl TileFormat {
 	/// assert_eq!(TileFormat::JSON.to_type(), TileType::Unknown);
 	/// ```
 	pub fn to_type(&self) -> TileType {
-		use TileType::*;
+		use TileType::{Raster, Unknown, Vector};
 		match self {
 			AVIF | PNG | JPG | WEBP => Raster,
 			MVT => Vector,

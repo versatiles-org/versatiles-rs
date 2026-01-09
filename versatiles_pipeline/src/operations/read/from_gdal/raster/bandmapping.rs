@@ -82,7 +82,7 @@ impl BandMapping {
 			let mut channels: [Option<usize>; 5] = [None, None, None, None, None];
 
 			for (band_index, ci) in bands.iter() {
-				use ColorInterpretation::*;
+				use ColorInterpretation::{AlphaBand, BlueBand, GrayIndex, GreenBand, RedBand, Undefined};
 				let channel_index = match ci {
 					GrayIndex => 0,
 					RedBand => 1,
@@ -182,7 +182,7 @@ impl BandMapping {
 			.context("Failed to create in-memory dataset")?;
 		dst.set_spatial_ref(&get_spatial_ref(3857)?)?;
 
-		use ColorInterpretation::*;
+		use ColorInterpretation::{AlphaBand, BlueBand, GrayIndex, GreenBand, RedBand};
 
 		match self.len() {
 			1 => dst.rasterband(1)?.set_color_interpretation(GrayIndex)?,

@@ -37,7 +37,7 @@ pub struct TarFile {
 impl TarFile {
 	#[context("loading static tar file from path: {path:?}")]
 	pub fn from(path: &Path) -> Result<Self> {
-		use TileCompression::*;
+		use TileCompression::{Brotli, Gzip, Uncompressed};
 
 		let path = current_dir()?.join(path).canonicalize()?;
 
@@ -142,7 +142,7 @@ impl StaticSourceTrait for TarFile {
 	}
 
 	fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse> {
-		use TileCompression::*;
+		use TileCompression::{Brotli, Gzip, Uncompressed};
 
 		let file_entry = self.lookup.get(&url.str[1..])?.to_owned();
 

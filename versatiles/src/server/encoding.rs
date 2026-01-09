@@ -60,7 +60,7 @@ use versatiles_core::{TileCompression, utils::TargetCompression};
 /// This function does **not** pick the final encoding; it only gates options.
 /// The compression optimizer (in `versatiles_core`) picks among allowed options.
 pub fn get_encoding(headers: &HeaderMap) -> TargetCompression {
-	use TileCompression::*;
+	use TileCompression::{Brotli, Gzip, Uncompressed};
 	let mut set = TargetCompression::from_none();
 
 	let Some(val) = headers.get(header::ACCEPT_ENCODING) else {

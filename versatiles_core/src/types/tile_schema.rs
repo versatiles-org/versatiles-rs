@@ -63,7 +63,10 @@ impl TileSchema {
 	/// ```
 	#[must_use]
 	pub fn as_str(&self) -> &str {
-		use TileSchema::*;
+		use TileSchema::{
+			RasterDEMMapbox, RasterDEMTerrarium, RasterDEMVersatiles, RasterRGB, RasterRGBA, Unknown, VectorOpenMapTiles,
+			VectorOther, VectorShortbread1_0,
+		};
 		match self {
 			RasterRGB => "rgb",
 			RasterRGBA => "rgba",
@@ -90,7 +93,10 @@ impl TileSchema {
 	/// ```
 	#[must_use]
 	pub fn tile_type(&self) -> TileType {
-		use TileSchema::*;
+		use TileSchema::{
+			RasterDEMMapbox, RasterDEMTerrarium, RasterDEMVersatiles, RasterRGB, RasterRGBA, Unknown, VectorOpenMapTiles,
+			VectorOther, VectorShortbread1_0,
+		};
 		match self {
 			RasterRGB | RasterRGBA | RasterDEMMapbox | RasterDEMTerrarium | RasterDEMVersatiles => TileType::Raster,
 			VectorOpenMapTiles | VectorShortbread1_0 | VectorOther => TileType::Vector,
@@ -109,7 +115,10 @@ impl TryFrom<&str> for TileSchema {
 	type Error = anyhow::Error;
 
 	fn try_from(value: &str) -> Result<Self, Self::Error> {
-		use TileSchema::*;
+		use TileSchema::{
+			RasterDEMMapbox, RasterDEMTerrarium, RasterDEMVersatiles, RasterRGB, RasterRGBA, VectorOpenMapTiles,
+			VectorOther, VectorShortbread1_0,
+		};
 		Ok(match value.to_lowercase().as_str() {
 			"rgb" => RasterRGB,
 			"rgba" => RasterRGBA,

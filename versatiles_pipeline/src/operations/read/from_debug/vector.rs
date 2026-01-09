@@ -1,4 +1,8 @@
-use ab_glyph::{Font, FontArc, Outline, OutlineCurve::*, Point};
+use ab_glyph::{
+	Font, FontArc, Outline,
+	OutlineCurve::{Cubic, Line, Quad},
+	Point,
+};
 use anyhow::Result;
 use std::{f64::consts::PI, ops::Div, sync::LazyLock, vec};
 use versatiles_core::TileCoord;

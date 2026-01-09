@@ -61,9 +61,6 @@ cast_precision_loss = "allow"
 cast_sign_loss = "allow"
 cast_lossless = "allow"
 
-# Allow enum glob imports for concise variant usage
-enum_glob_use = "allow"
-
 # Allow stylistic patterns used consistently in codebase
 borrow_as_ptr = "allow"
 cast_possible_wrap = "allow"

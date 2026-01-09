@@ -38,7 +38,7 @@ pub enum ResampleAlg {
 impl ResampleAlg {
 	/// Convert this [`ResampleAlg`] to its corresponding GDAL constant (`GDALResampleAlg`).
 	pub fn as_gdal(&self) -> u32 {
-		use ResampleAlg::*;
+		use ResampleAlg::{Average, Bilinear, Cubic, CubicSpline, Lanczos, NearestNeighbour};
 		use gdal_sys::GDALResampleAlg::{
 			GRA_Average, GRA_Bilinear, GRA_Cubic, GRA_CubicSpline, GRA_Lanczos, GRA_NearestNeighbour,
 		};

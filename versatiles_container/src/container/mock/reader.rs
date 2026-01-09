@@ -109,7 +109,7 @@ impl TileSource for MockReader {
 
 	#[context("fetching mock tile {:?} (format={:?}, compression={:?})", coord, self.metadata.tile_format, self.metadata.tile_compression)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		use TileFormat::*;
+		use TileFormat::{JPG, JSON, MVT, PNG, WEBP};
 
 		if !self.metadata.bbox_pyramid.contains_coord(coord) {
 			return Ok(None);

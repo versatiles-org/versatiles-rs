@@ -43,7 +43,7 @@ impl JsonValue {
 	/// Return the JSON type as a lowercase string (`"array"`, `"object"`, etc.).
 	#[must_use]
 	pub fn type_as_str(&self) -> &str {
-		use JsonValue::*;
+		use JsonValue::{Array, Boolean, Null, Number, Object, String};
 		match self {
 			Array(_) => "array",
 			Boolean(_) => "boolean",
