@@ -17,7 +17,7 @@
 //! - Clear separation between data sources and transformations
 
 use crate::{
-	CacheMap, SourceType, Tile, TileSourceMetadata, TilesRuntime,
+	SourceType, Tile, TileSourceMetadata, TilesRuntime, TraversalCache,
 	traversal::{Traversal, TraversalTranslationStep, translate_traversals},
 };
 use anyhow::Result;
@@ -255,7 +255,7 @@ pub trait TileSourceTraverseExt: TileSource {
 			let mut ti_read = 0;
 			let mut ti_write = 0;
 
-			let cache = Arc::new(CacheMap::<usize, (TileCoord, Tile)>::new(runtime.cache_type()));
+			let cache = Arc::new(TraversalCache::<(TileCoord, Tile)>::new(runtime.cache_type()));
 			for step in traversal_steps {
 				match step {
 					Push(bboxes, index) => {
@@ -273,7 +273,7 @@ pub trait TileSourceTraverseExt: TileSource {
 										.to_vec()
 										.await;
 
-									c.append(&index, vec)?;
+									c.append(index, vec)?;
 
 									Ok::<_, anyhow::Error>(())
 								}
@@ -287,7 +287,7 @@ pub trait TileSourceTraverseExt: TileSource {
 					}
 					Pop(index, bbox) => {
 						log::trace!("Uncache {bbox:?} at index {index}");
-						let vec = cache.remove(&index)?.unwrap();
+						let vec = cache.take(index)?.unwrap();
 						let progress = progress.clone();
 						let stream = TileStream::from_vec(vec).inspect(move || progress.inc(1));
 						callback(bbox, stream).await?;

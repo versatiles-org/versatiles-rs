@@ -23,7 +23,9 @@ mod cache_on_disk;
 mod cache_type;
 mod map;
 mod traits;
+mod traversal_cache;
 
 pub use cache_type::CacheType;
 pub use map::CacheMap;
 pub use traits::{Cache, CacheKey, CacheValue};
+pub use traversal_cache::TraversalCache;
