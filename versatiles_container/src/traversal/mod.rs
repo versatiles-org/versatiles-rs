@@ -40,6 +40,7 @@ impl Traversal {
 	///
 	/// # Errors
 	/// Returns an error if size parameters are invalid (not powers of two or out of range).
+	#[must_use = "this returns the new Traversal, it doesn't modify anything"]
 	#[context("while creating Traversal with order {order:?}, min_size {min_size}, max_size {max_size}")]
 	pub fn new(order: TraversalOrder, min_size: u32, max_size: u32) -> Result<Traversal> {
 		Ok(Traversal {
@@ -51,6 +52,7 @@ impl Traversal {
 	/// Create a `Traversal` with any order and the specified size range.
 	///
 	/// Uses `TraversalOrder::AnyOrder` with the same size validation as `new`.
+	#[must_use = "this returns the new Traversal, it doesn't modify anything"]
 	#[context("while creating Traversal::AnyOrder with min_size {min_size}, max_size {max_size}")]
 	pub fn new_any_size(min_size: u32, max_size: u32) -> Result<Traversal> {
 		Ok(Traversal {
@@ -103,6 +105,7 @@ impl Traversal {
 	}
 
 	/// Return a new `Traversal` that is the intersection of this and another, without modifying either.
+	#[must_use = "this returns the new Traversal, it doesn't modify either input"]
 	#[context("while computing intersected Traversal between {:?} and {:?}", self.order, other.order)]
 	pub fn get_intersected(&self, other: &Traversal) -> Result<Traversal> {
 		let mut result = self.clone();
@@ -120,6 +123,7 @@ impl Traversal {
 	///
 	/// # Errors
 	/// Returns an error if size computation or ordering fails.
+	#[must_use = "this returns the traversed bboxes, it doesn't modify anything"]
 	#[context("while traversing pyramid with Traversal {:?}", self.order)]
 	pub fn traverse_pyramid(&self, pyramid: &TileBBoxPyramid) -> Result<Vec<TileBBox>> {
 		let size = self.max_size()?;
@@ -128,6 +132,7 @@ impl Traversal {
 		Ok(bboxes)
 	}
 
+	#[must_use = "this returns the traversal steps, it doesn't modify anything"]
 	#[context("while computing traversal translation steps between {:?} and {:?}", self.order, other.order)]
 	pub fn get_traversal_steps(&self, other: &Self, pyramid: &TileBBoxPyramid) -> Result<Vec<TraversalTranslationStep>> {
 		translate_traversals(pyramid, self, other)

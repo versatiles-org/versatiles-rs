@@ -16,6 +16,7 @@ impl Tile {
 	/// `self.compression`, it is re-compressed to `compression`.
 	///
 	/// Returns a reference valid until the next mutating call.
+	#[must_use = "this returns the blob reference, it doesn't modify anything externally"]
 	#[context("getting blob (target_compression={:?})", compression)]
 	pub fn as_blob(&mut self, compression: TileCompression) -> Result<&Blob> {
 		self.materialize_blob()?;
@@ -32,6 +33,7 @@ impl Tile {
 	/// Borrow the raster image content, decoding the blob on demand.
 	///
 	/// Fails if the tile is not of a raster format.
+	#[must_use = "this returns the image reference, it doesn't modify anything externally"]
 	#[context("accessing raster image from tile")]
 	pub fn as_image(&mut self) -> Result<&DynamicImage> {
 		self.as_content()?.as_image()
@@ -40,6 +42,7 @@ impl Tile {
 	/// Borrow the vector tile content, decoding the blob on demand.
 	///
 	/// Fails if the tile is not of a vector format.
+	#[must_use = "this returns the vector reference, it doesn't modify anything externally"]
 	#[context("accessing vector data from tile")]
 	pub fn as_vector(&mut self) -> Result<&VectorTile> {
 		self.as_content()?.as_vector()
@@ -48,6 +51,7 @@ impl Tile {
 	/// Consume the tile and return an encoded blob with the requested compression.
 	///
 	/// This materializes content-to-blob if necessary and applies (re-)compression.
+	#[must_use = "this consumes the tile and returns the blob"]
 	#[context("converting tile into blob (target_compression={:?})", compression)]
 	pub fn into_blob(mut self, compression: TileCompression) -> Result<Blob> {
 		self.materialize_blob()?;
@@ -64,6 +68,7 @@ impl Tile {
 	/// Consume the tile and return the owned raster image.
 	///
 	/// Fails if the tile is not a raster format.
+	#[must_use = "this consumes the tile and returns the image"]
 	#[context("converting tile into raster image")]
 	pub fn into_image(self) -> Result<DynamicImage> {
 		self.into_content()?.into_image()
@@ -72,6 +77,7 @@ impl Tile {
 	/// Consume the tile and return the owned vector data.
 	///
 	/// Fails if the tile is not a vector format.
+	#[must_use = "this consumes the tile and returns the vector data"]
 	#[context("converting tile into vector data")]
 	pub fn into_vector(self) -> Result<VectorTile> {
 		self.into_content()?.into_vector()

@@ -43,6 +43,7 @@ impl Tile {
 	///
 	/// The `format` must be a raster format (e.g., `PNG`, `WEBP`). The tile starts with
 	/// decoded content and no blob; a blob is created on first call to `as_blob`/`into_blob`.
+	#[must_use = "this returns the new Tile, it doesn't modify anything"]
 	#[context("creating raster tile (format={:?})", format)]
 	pub fn from_image(image: DynamicImage, format: TileFormat) -> Result<Self> {
 		ensure!(format.to_type().is_raster());
@@ -52,6 +53,7 @@ impl Tile {
 	/// Construct a vector `Tile` from a `VectorTile`.
 	///
 	/// The `format` must be a vector format (e.g., `MVT`). The tile starts with decoded content.
+	#[must_use = "this returns the new Tile, it doesn't modify anything"]
 	#[context("creating vector tile (format={:?})", format)]
 	pub fn from_vector(vector_tile: VectorTile, format: TileFormat) -> Result<Self> {
 		ensure!(format.to_type().is_vector());
