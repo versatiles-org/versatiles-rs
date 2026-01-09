@@ -6,10 +6,12 @@
 mod order;
 mod processing;
 mod size;
+mod traits;
 
 pub use order::*;
 pub use processing::*;
 pub use size::*;
+pub use traits::*;
 
 use anyhow::Result;
 use versatiles_core::{TileBBox, TileBBoxPyramid};
