@@ -6,12 +6,12 @@
 //! parsing from strings, hashing/equality, and conversion to the crate’s `JsonValue`.
 
 use anyhow::{Result, bail};
-use lazy_static::lazy_static;
 use regex::Regex;
 use std::{
 	cmp::Ordering,
 	fmt::{Debug, Display},
 	hash::Hash,
+	sync::LazyLock,
 };
 use versatiles_core::json::JsonValue;
 
@@ -224,17 +224,14 @@ impl GeoValue {
 	/// Supports exponential notation (e.g., `1.5e10`, `1E-3`).
 	#[must_use]
 	pub fn parse_str(value: &str) -> Self {
-		lazy_static! {
-			// Double: requires decimal point and/or exponent, no leading zeros
-			// Format: -?[0|1-9...](.[digits])([eE][+-]?digits) where . or e/E is required
-			static ref REG_DOUBLE: Regex = Regex::new(
-				r"^-?(?:0|[1-9]\d*)(?:(?:\.\d+)(?:[eE][+-]?\d+)?|[eE][+-]?\d+)$"
-			).unwrap();
-			// Signed integer (negative): -[0|1-9...]
-			static ref REG_INT: Regex = Regex::new(r"^-(?:0|[1-9]\d*)$").unwrap();
-			// Unsigned integer: 0 or [1-9...]
-			static ref REG_UINT: Regex = Regex::new(r"^(?:0|[1-9]\d*)$").unwrap();
-		}
+		// Double: requires decimal point and/or exponent, no leading zeros
+		// Format: -?[0|1-9...](.[digits])([eE][+-]?digits) where . or e/E is required
+		static REG_DOUBLE: LazyLock<Regex> =
+			LazyLock::new(|| Regex::new(r"^-?(?:0|[1-9]\d*)(?:(?:\.\d+)(?:[eE][+-]?\d+)?|[eE][+-]?\d+)$").unwrap());
+		// Signed integer (negative): -[0|1-9...]
+		static REG_INT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^-(?:0|[1-9]\d*)$").unwrap());
+		// Unsigned integer: 0 or [1-9...]
+		static REG_UINT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?:0|[1-9]\d*)$").unwrap());
 
 		match value {
 			"" => GeoValue::String(String::new()),

@@ -33,9 +33,9 @@ use super::DataReaderTrait;
 use crate::{Blob, ByteRange};
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
-use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
 use reqwest::{Client, Method, Request, StatusCode, Url};
+use std::sync::LazyLock;
 use std::{str, time::Duration};
 use versatiles_derive::context;
 
@@ -114,12 +114,12 @@ impl DataReaderTrait for DataReaderHttp {
 			None => bail!("content-range header is not set in response headers, {}", ctx()),
 		};
 
-		lazy_static! {
-			static ref RE_RANGE: Regex = RegexBuilder::new(r"^bytes (\d+)-(\d+)/\d+$")
+		static RE_RANGE: LazyLock<Regex> = LazyLock::new(|| {
+			RegexBuilder::new(r"^bytes (\d+)-(\d+)/\d+$")
 				.case_insensitive(true)
 				.build()
-				.unwrap();
-		}
+				.unwrap()
+		});
 
 		// Extract "start" and "end" numbers from the Content‑Range header
 		let (content_range_start, content_range_end) = {

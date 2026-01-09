@@ -1,7 +1,6 @@
 use ab_glyph::{Font, FontArc, Outline, OutlineCurve::*, Point};
 use anyhow::Result;
-use lazy_static::lazy_static;
-use std::{f64::consts::PI, ops::Div, vec};
+use std::{f64::consts::PI, ops::Div, sync::LazyLock, vec};
 use versatiles_core::TileCoord;
 use versatiles_derive::context;
 use versatiles_geometry::{
@@ -9,9 +8,7 @@ use versatiles_geometry::{
 	vector_tile::{VectorTile, VectorTileLayer},
 };
 
-lazy_static! {
-	static ref FONT: FontArc = FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap();
-}
+static FONT: LazyLock<FontArc> = LazyLock::new(|| FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap());
 
 #[context("Creating debug vector tile for coord {:?}", coord)]
 pub fn create_debug_vector_tile(coord: &TileCoord) -> Result<VectorTile> {

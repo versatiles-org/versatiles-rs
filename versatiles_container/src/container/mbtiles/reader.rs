@@ -425,12 +425,9 @@ struct RecordMetadata {
 pub mod tests {
 	use super::*;
 	use crate::MockWriter;
-	use lazy_static::lazy_static;
-	use std::{env, path::PathBuf};
+	use std::{env, path::PathBuf, sync::LazyLock};
 
-	lazy_static! {
-		static ref PATH: PathBuf = env::current_dir().unwrap().join("../testdata/berlin.mbtiles");
-	}
+	static PATH: LazyLock<PathBuf> = LazyLock::new(|| env::current_dir().unwrap().join("../testdata/berlin.mbtiles"));
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {

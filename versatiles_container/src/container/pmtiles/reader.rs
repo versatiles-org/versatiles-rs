@@ -353,13 +353,10 @@ impl TileSource for PMTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use lazy_static::lazy_static;
-	use std::{env::current_dir, path::PathBuf};
+	use std::{env::current_dir, path::PathBuf, sync::LazyLock};
 	use versatiles_core::assert_wildcard;
 
-	lazy_static! {
-		static ref PATH: PathBuf = current_dir().unwrap().join("../testdata/berlin.pmtiles");
-	}
+	static PATH: LazyLock<PathBuf> = LazyLock::new(|| current_dir().unwrap().join("../testdata/berlin.pmtiles"));
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {

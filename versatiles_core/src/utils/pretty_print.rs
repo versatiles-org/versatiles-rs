@@ -41,12 +41,10 @@ impl PrettyPrinter {
 
 	#[cfg(any(test, feature = "test"))]
 	async fn as_string(&self) -> String {
-		use lazy_static::lazy_static;
 		use regex::{Regex, RegexBuilder};
+		use std::sync::LazyLock;
 
-		lazy_static! {
-			static ref RE_COLORS: Regex = RegexBuilder::new("\u{001b}\\[[0-9;]*m").build().unwrap();
-		}
+		static RE_COLORS: LazyLock<Regex> = LazyLock::new(|| RegexBuilder::new("\u{001b}\\[[0-9;]*m").build().unwrap());
 
 		let text: String = String::from_utf8(self.output.lock().await.to_vec()).unwrap();
 		RE_COLORS.replace_all(&text, "").to_string()

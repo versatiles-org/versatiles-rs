@@ -3,13 +3,10 @@
 //! and a set of typed properties. This module provides helpers to construct features,
 //! toggle between single/multi geometries, and serialize to GeoJSON-compatible JSON.
 use super::{GeoProperties, GeoValue, Geometry};
-use lazy_static::lazy_static;
-use std::{fmt::Debug, mem::swap};
+use std::{fmt::Debug, mem::swap, sync::LazyLock};
 use versatiles_core::json::{JsonObject, JsonValue};
 
-lazy_static! {
-	static ref DUMMY_GEOMETRY: Geometry = Geometry::new_multi_point::<Vec<(f64, f64)>>(vec![]);
-}
+static DUMMY_GEOMETRY: LazyLock<Geometry> = LazyLock::new(|| Geometry::new_multi_point::<Vec<(f64, f64)>>(vec![]));
 
 /// A single geographic feature consisting of an optional `id`, a `Geometry`, and `GeoProperties`.
 ///

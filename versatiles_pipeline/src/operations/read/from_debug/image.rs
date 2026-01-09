@@ -3,12 +3,10 @@ use imageproc::{
 	drawing::draw_text_mut,
 	image::{DynamicImage, Rgba, RgbaImage},
 };
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
 use versatiles_core::TileCoord;
 
-lazy_static! {
-	static ref FONT: FontArc = FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap();
-}
+static FONT: LazyLock<FontArc> = LazyLock::new(|| FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap());
 
 pub fn create_debug_image(coord: &TileCoord, use_alpha: bool) -> DynamicImage {
 	let br = ((coord.x + coord.y) % 2) as u8 * 255;
