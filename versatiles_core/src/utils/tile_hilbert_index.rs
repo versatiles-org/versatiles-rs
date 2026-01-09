@@ -120,7 +120,6 @@ fn coord_to_index(x: u32, y: u32, z: u8) -> Result<u64> {
 /// Hilbert orientation rules described in Hamilton (1996).
 ///
 /// Not part of the public API; exposed only for unit tests.
-#[inline(always)]
 fn rotate(s: i64, tx: &mut i64, ty: &mut i64, rx: i64, ry: i64) {
 	if ry == 0 {
 		if rx == 1 {
