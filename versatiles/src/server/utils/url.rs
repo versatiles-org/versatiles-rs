@@ -128,7 +128,7 @@ impl Url {
 	///
 	/// * `filename` - A filename to append to the `Url`.
 	pub fn push(&mut self, filename: &str) {
-		self.str = self.join_as_string(filename)
+		self.str = self.join_as_string(filename);
 	}
 
 	/// Joins a filename to the `Url` and returns the resulting string.

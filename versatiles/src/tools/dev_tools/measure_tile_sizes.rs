@@ -66,7 +66,7 @@ pub async fn run(args: &MeasureTileSizes, runtime: TilesRuntime) -> Result<()> {
 
 	log::debug!("Saving image");
 	let mut result: Vec<u64> = vec![0; width_scaled * width_scaled];
-	for (coord, size) in vec.iter() {
+	for (coord, size) in &vec {
 		let x = coord.x as usize / scale;
 		let y = coord.y as usize / scale;
 		if x >= width_scaled || y >= width_scaled {

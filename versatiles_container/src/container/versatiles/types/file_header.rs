@@ -301,7 +301,7 @@ mod tests {
 					FileHeader::new(tf, comp, zoom, &GeoBBox::try_from(&bbox).unwrap()).unwrap();
 				})
 				.is_err()
-			)
+			);
 		};
 
 		should_panic([14, 10], [0.0, 0.0, 0.0, 0.0]);

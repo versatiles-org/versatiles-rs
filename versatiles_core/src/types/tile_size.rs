@@ -39,7 +39,7 @@ impl TileSize {
 		match size {
 			256 => Ok(Self::Size256),
 			512 => Ok(Self::Size512),
-			_ => bail!("Invalid tile size: {}. Supported sizes are 256 or 512.", size),
+			_ => bail!("Invalid tile size: {size}. Supported sizes are 256 or 512."),
 		}
 	}
 
@@ -80,7 +80,7 @@ mod tests {
 		let ts = TileSize::new(size).expect("expected Ok for supported size");
 		assert_eq!(ts, expected);
 		assert_eq!(ts.size(), size);
-		assert_eq!(format!("{:?}", ts), format!("TileSize({:?})", size));
+		assert_eq!(format!("{ts:?}"), format!("TileSize({:?})", size));
 	}
 
 	#[rstest]
@@ -92,7 +92,7 @@ mod tests {
 	#[case(513)]
 	fn new_rejects_unsupported_sizes(#[case] input: u16) {
 		let err = TileSize::new(input).expect_err("expected Err for unsupported size");
-		let msg = format!("{}", err);
+		let msg = format!("{err}");
 		assert!(msg.contains("Invalid tile size"));
 	}
 

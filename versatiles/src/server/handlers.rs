@@ -117,7 +117,7 @@ fn format_error_chain(err: &anyhow::Error) -> String {
 		if i == 0 {
 			result.push_str("\n  Caused by:");
 		}
-		result.push_str(&format!("\n    {}", cause));
+		result.push_str(&format!("\n    {cause}"));
 	}
 
 	result

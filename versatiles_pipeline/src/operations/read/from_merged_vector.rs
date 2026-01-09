@@ -55,7 +55,7 @@ struct Operation {
 #[context("Failed to merge vector tiles")]
 fn merge_vector_tiles(tiles: Vec<VectorTile>) -> Result<VectorTile> {
 	let mut layers = HashMap::<String, VectorTileLayer>::new();
-	for tile in tiles.into_iter() {
+	for tile in tiles {
 		for new_layer in tile.layers {
 			if let Some(layer) = layers.get_mut(&new_layer.name) {
 				layer.add_from_layer(new_layer)?;
@@ -88,7 +88,7 @@ impl ReadTileSource for Operation {
 		let mut pyramid = TileBBoxPyramid::new_empty();
 		let mut traversal = Traversal::ANY;
 
-		for source in sources.iter() {
+		for source in &sources {
 			tilejson.merge(source.tilejson())?;
 
 			let metadata = source.metadata();
@@ -132,14 +132,14 @@ impl TileSource for Operation {
 	/// Stream merged vector tiles for every coordinate in `bbox`.
 	#[context("Failed to get merged tile stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_stream {:?}", bbox);
+		log::debug!("get_stream {bbox:?}");
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
 		Ok(TileStream::from_streams(stream::iter(bboxes).map(
 			move |bbox| async move {
 				let mut tiles = TileBBoxMap::<Vec<VectorTile>>::new_default(bbox);
 
-				for source in self.sources.iter() {
+				for source in &self.sources {
 					source
 						.get_tile_stream(bbox)
 						.await
@@ -232,7 +232,7 @@ mod tests {
 					.unwrap()
 					.to_string(),
 				"must have at least two sources"
-			)
+			);
 		};
 
 		error("from_merged_vector").await;
@@ -250,7 +250,7 @@ mod tests {
 				.await
 				.unwrap_err()
 				.chain()
-				.map(|e| e.to_string())
+				.map(std::string::ToString::to_string)
 				.collect::<Vec<_>>(),
 			[
 				"Failed to create reader from VPL",
@@ -309,7 +309,7 @@ mod tests {
 					"A.pbf" => "🟦",
 					"B.pbf" => "🟨",
 					"A.pbf,B.pbf" => "🟩",
-					e => panic!("Unexpected tile: {}", e),
+					e => panic!("Unexpected tile: {e}"),
 				}
 			}),
 			vec![

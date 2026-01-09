@@ -607,8 +607,8 @@ mod tests {
 		let url = DataLocation::try_from("https://example.org/a/b.txt")?;
 		let path = DataLocation::from(PathBuf::from("/data/c.txt"));
 
-		let d_url = format!("{:?}", url);
-		let d_path = format!("{:?}", path);
+		let d_url = format!("{url:?}");
+		let d_path = format!("{path:?}");
 
 		assert!(d_url.starts_with("Url(") && d_url.contains("https://example.org/a/b.txt"));
 		assert!(d_path.starts_with("Path(") && d_path.contains("c.txt"));

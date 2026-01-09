@@ -214,10 +214,10 @@ mod tests {
 	#[test]
 	fn test_debug_format() {
 		let mem_cache = TraversalCache::<String>::new(&CacheType::InMemory);
-		assert!(format!("{:?}", mem_cache).contains("Memory"));
+		assert!(format!("{mem_cache:?}").contains("Memory"));
 
 		let tmp = TempDir::new().unwrap();
 		let disk_cache = TraversalCache::<String>::new(&CacheType::Disk(tmp.path().to_path_buf()));
-		assert!(format!("{:?}", disk_cache).contains("Disk"));
+		assert!(format!("{disk_cache:?}").contains("Disk"));
 	}
 }

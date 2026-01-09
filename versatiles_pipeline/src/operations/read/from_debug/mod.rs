@@ -110,7 +110,7 @@ impl TileSource for Operation {
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_stream {:?}", bbox);
+		log::debug!("get_stream {bbox:?}");
 		let format = self.metadata.tile_format;
 		match self.metadata.tile_format.to_type() {
 			TileType::Raster => {

@@ -199,7 +199,11 @@ mod tests {
 	async fn test_no_args() {
 		let result = run_test("", "").await;
 		assert_eq!(
-			result.unwrap_err().chain().map(|e| e.to_string()).collect::<Vec<_>>(),
+			result
+				.unwrap_err()
+				.chain()
+				.map(std::string::ToString::to_string)
+				.collect::<Vec<_>>(),
 			[
 				"Failed to create reader from VPL",
 				"Failed to build pipeline from VPL",
@@ -211,7 +215,7 @@ mod tests {
 	}
 
 	fn split(s: String) -> Vec<String> {
-		s.split(';').map(|s| s.to_string()).collect()
+		s.split(';').map(std::string::ToString::to_string).collect()
 	}
 
 	#[tokio::test]

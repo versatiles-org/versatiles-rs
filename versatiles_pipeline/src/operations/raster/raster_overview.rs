@@ -83,7 +83,7 @@ impl Operation {
 		}
 
 		if bbox.width() > BLOCK_TILE_COUNT || bbox.height() > BLOCK_TILE_COUNT {
-			bail!("Container bbox is too large: {:?}", bbox);
+			bail!("Container bbox is too large: {bbox:?}");
 		}
 
 		let full_size = self.tile_size;
@@ -115,7 +115,7 @@ impl Operation {
 
 	#[context("Failed to build images from cache for bbox {bbox:?}")]
 	async fn build_images_from_cache(&self, bbox: TileBBox) -> Result<TileBBoxMap<Option<DynamicImage>>> {
-		log::trace!("build_images_from_cache: {:?}", bbox);
+		log::trace!("build_images_from_cache: {bbox:?}");
 
 		let size = bbox.max_count().min(BLOCK_TILE_COUNT);
 
@@ -188,7 +188,7 @@ impl TileSource for Operation {
 
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_stream {:?}", bbox);
+		log::debug!("get_stream {bbox:?}");
 
 		if bbox.level > self.level_base {
 			return self.source.get_tile_stream(bbox).await;
@@ -201,19 +201,19 @@ impl TileSource for Operation {
 		bbox0.intersect_with_pyramid(&self.metadata.bbox_pyramid);
 
 		let container: TileBBoxMap<Option<DynamicImage>> = if bbox.level == self.level_base {
-			log::trace!("Fetching images from source for bbox {:?}", bbox);
+			log::trace!("Fetching images from source for bbox {bbox:?}");
 			TileBBoxMap::<Option<DynamicImage>>::from_stream(
 				bbox,
 				self
 					.source
 					.get_tile_stream(bbox)
 					.await?
-					.map_item_parallel(|tile| tile.into_image())
+					.map_item_parallel(versatiles_container::Tile::into_image)
 					.unwrap_results(),
 			)
 			.await?
 		} else {
-			log::trace!("Building images from cache for bbox {:?}", bbox);
+			log::trace!("Building images from cache for bbox {bbox:?}");
 			self.build_images_from_cache(bbox0).await?
 		};
 
@@ -222,7 +222,7 @@ impl TileSource for Operation {
 
 		let format = self.source.metadata().tile_format;
 
-		log::trace!("Composing final stream for bbox {:?}", bbox);
+		log::trace!("Composing final stream for bbox {bbox:?}");
 		let vec = container
 			.into_iter()
 			.filter_map(move |(c, o)| {

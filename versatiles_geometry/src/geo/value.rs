@@ -404,7 +404,7 @@ mod tests {
 	#[case(GeoValue::UInt(42), "UInt(42)")]
 	#[case(GeoValue::Null, "Null")]
 	fn test_debug(#[case] value: GeoValue, #[case] text: &str) {
-		assert_eq!(format!("{:?}", value), text);
+		assert_eq!(format!("{value:?}"), text);
 	}
 
 	#[rstest]

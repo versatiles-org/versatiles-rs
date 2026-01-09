@@ -104,7 +104,7 @@ mod tests {
 			let suffix = layer
 				.name
 				.strip_prefix("test_layer")
-				.map(|s| s.to_string())
+				.map(std::string::ToString::to_string)
 				.ok_or_else(|| anyhow::anyhow!("Layer name does not start with 'test_layer': {}", layer.name))?;
 			Ok(suffix)
 		}
@@ -123,7 +123,7 @@ mod tests {
 
 	#[test]
 	fn test_args_from_vpl_node() {
-		let vpl_node = VPLNode::try_from_str(r##"vector_filter_layers filter="temp,tomp" invert=true"##).unwrap();
+		let vpl_node = VPLNode::try_from_str(r#"vector_filter_layers filter="temp,tomp" invert=true"#).unwrap();
 
 		let args = Args::from_vpl_node(&vpl_node).unwrap();
 		assert_eq!(args.filter, "temp,tomp");
@@ -171,7 +171,11 @@ mod tests {
 	async fn test_no_args() {
 		let result = run_test("", "").await;
 		assert_eq!(
-			result.unwrap_err().chain().map(|e| e.to_string()).collect::<Vec<_>>(),
+			result
+				.unwrap_err()
+				.chain()
+				.map(std::string::ToString::to_string)
+				.collect::<Vec<_>>(),
 			[
 				"Failed to create reader from VPL",
 				"Failed to build pipeline from VPL",

@@ -294,9 +294,7 @@ impl TileSource for PMTilesReader {
 			let entry = entries.find_tile(tile_id);
 
 			// If the entry is not found, return None
-			let entry = if let Some(entry) = entry {
-				entry
-			} else {
+			let Some(entry) = entry else {
 				return Ok(None);
 			};
 

@@ -22,7 +22,7 @@ use napi::Error as NapiError;
 ///
 /// A NAPI error containing the formatted error message
 pub fn anyhow_to_napi(err: anyhow::Error) -> NapiError {
-	NapiError::from_reason(format!("{:#}", err))
+	NapiError::from_reason(format!("{err:#}"))
 }
 
 /// Convert `Result<T, anyhow::Error>` to `Result<T, napi::Error>`

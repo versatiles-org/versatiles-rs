@@ -120,10 +120,10 @@ pub async fn run(arguments: &Subcommand, runtime: TilesRuntime) -> Result<()> {
 	server.start().await?;
 
 	if let Some(milliseconds) = arguments.auto_shutdown {
-		sleep(Duration::from_millis(milliseconds)).await
+		sleep(Duration::from_millis(milliseconds)).await;
 	} else {
 		loop {
-			sleep(Duration::from_secs(60)).await
+			sleep(Duration::from_secs(60)).await;
 		}
 	}
 

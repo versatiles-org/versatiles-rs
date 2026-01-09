@@ -81,7 +81,7 @@ impl BandMapping {
 			// gray, red, green, blue, alpha
 			let mut channels: [Option<usize>; 5] = [None, None, None, None, None];
 
-			for (band_index, ci) in bands.iter() {
+			for (band_index, ci) in &bands {
 				use ColorInterpretation::{AlphaBand, BlueBand, GrayIndex, GreenBand, RedBand, Undefined};
 				let channel_index = match ci {
 					GrayIndex => 0,
@@ -215,8 +215,8 @@ impl BandMapping {
 
 		unsafe {
 			let n = std::mem::size_of::<i32>() * self.len();
-			options.panSrcBands = gdal_sys::CPLMalloc(n) as *mut i32;
-			options.panDstBands = gdal_sys::CPLMalloc(n) as *mut i32;
+			options.panSrcBands = gdal_sys::CPLMalloc(n).cast::<i32>();
+			options.panDstBands = gdal_sys::CPLMalloc(n).cast::<i32>();
 
 			for (i, &band_index) in self.map.iter().enumerate() {
 				options.panSrcBands.add(i).write(band_index as i32);
@@ -321,7 +321,7 @@ mod tests {
 			.chain()
 			.rev()
 			.take(2)
-			.map(|e| e.to_string())
+			.map(std::string::ToString::to_string)
 			.collect::<Vec<_>>();
 		assert_eq!(err, [msg2, msg1]);
 		Ok(())
@@ -332,7 +332,7 @@ mod tests {
 		use ColorInterpretation::*;
 		let ds = mem_dataset_with_bands(vec![RedBand, GreenBand, BlueBand])?;
 		let bm = BandMapping::try_from(&ds)?;
-		assert_eq!(format!("{:?}", bm), "BandMapping { map: [1, 2, 3] }");
+		assert_eq!(format!("{bm:?}"), "BandMapping { map: [1, 2, 3] }");
 		Ok(())
 	}
 }

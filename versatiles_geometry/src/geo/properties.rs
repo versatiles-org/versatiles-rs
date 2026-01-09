@@ -201,7 +201,7 @@ mod tests {
 		let p = GeoProperties::from(vec![("name", gv("Berlin")), ("country", gv("DE"))]);
 		let obj = p.to_json();
 		// Smoke test: object should contain both keys after serialization
-		let s = format!("{}", obj);
+		let s = format!("{obj}");
 		assert!(s.contains("name"));
 		assert!(s.contains("Berlin"));
 		assert!(s.contains("country"));
@@ -237,7 +237,7 @@ mod tests {
 	#[test]
 	fn debug_includes_keys_and_values() {
 		let p = GeoProperties::from(vec![("city", gv("Berlin"))]);
-		let dbg = format!("{:?}", p);
+		let dbg = format!("{p:?}");
 		assert!(dbg.contains("city"));
 		assert!(dbg.contains("Berlin"));
 	}

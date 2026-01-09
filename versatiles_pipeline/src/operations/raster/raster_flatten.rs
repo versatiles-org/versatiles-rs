@@ -56,7 +56,7 @@ impl TileSource for Operation {
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_tile_stream {:?}", bbox);
+		log::debug!("get_tile_stream {bbox:?}");
 
 		let color = self.color;
 		Ok(self

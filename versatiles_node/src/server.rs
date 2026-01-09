@@ -219,10 +219,7 @@ impl TileServer {
 		let data_location = DataLocation::from(path.clone());
 		let path_buf = napi_result!(data_location.as_path())?;
 		if !path_buf.exists() {
-			return Err(Error::from_reason(format!(
-				"Static source path does not exist: {}",
-				path
-			)));
+			return Err(Error::from_reason(format!("Static source path does not exist: {path}")));
 		}
 
 		// Store the source in our list (source of truth)
@@ -602,8 +599,7 @@ mod tests {
 		let error_msg = result.unwrap_err().to_string();
 		assert!(
 			error_msg.contains("already exists"),
-			"Error message should mention duplicate name, got: {}",
-			error_msg
+			"Error message should mention duplicate name, got: {error_msg}"
 		);
 
 		// Verify only one source exists
@@ -1049,7 +1045,7 @@ mod tests {
 		// Start should succeed with VPL sources
 		let result = server.start().await;
 		if let Err(e) = &result {
-			eprintln!("Start failed: {:?}", e);
+			eprintln!("Start failed: {e:?}");
 		}
 		assert!(result.is_ok());
 

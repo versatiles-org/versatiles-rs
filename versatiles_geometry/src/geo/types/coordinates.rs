@@ -112,7 +112,7 @@ mod tests {
 	#[test]
 	fn debug_formats_like_array() {
 		let c = Coordinates::new(1.0, 2.0);
-		assert_eq!(format!("{:?}", c), "[1.0, 2.0]");
+		assert_eq!(format!("{c:?}"), "[1.0, 2.0]");
 	}
 
 	#[test]

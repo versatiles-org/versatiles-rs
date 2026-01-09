@@ -157,7 +157,7 @@ impl TileBBox {
 				self.y_min().unwrap().min(bbox.y_min().unwrap()),
 				self.x_max().unwrap().max(bbox.x_max().unwrap()),
 				self.y_max().unwrap().max(bbox.y_max().unwrap()),
-			)?
+			)?;
 		}
 
 		Ok(())
@@ -324,14 +324,14 @@ impl TileBBox {
 	pub fn level_up(&mut self) {
 		assert!(self.level < 31, "level must be less than 31");
 		self.level += 1;
-		self.scale_up(2).unwrap()
+		self.scale_up(2).unwrap();
 	}
 
 	/// Decrease the zoom level by one and divide coordinates by 2.
 	pub fn level_down(&mut self) {
 		assert!(self.level > 0, "level must be greater than 0");
 		self.level -= 1;
-		self.scale_down(2)
+		self.scale_down(2);
 	}
 
 	/// Return a copy of this bbox at the next zoom level (×2 coordinates).
@@ -380,7 +380,7 @@ impl TileBBox {
 				(self.x_max().unwrap() + 1).div_ceil(block_size) * block_size - 1,
 				(self.y_max().unwrap() + 1).div_ceil(block_size) * block_size - 1,
 			)
-			.unwrap()
+			.unwrap();
 	}
 
 	/// Return a copy rounded to `block_size` boundaries.

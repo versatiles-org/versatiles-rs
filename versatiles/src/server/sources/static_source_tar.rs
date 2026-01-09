@@ -64,9 +64,8 @@ impl TarFile {
 
 		let mut lookup: HashMap<String, FileEntry> = HashMap::new();
 		for file_result in archive.entries()? {
-			let mut file = match file_result {
-				Ok(file) => file,
-				Err(_) => continue,
+			let Ok(mut file) = file_result else {
+				continue;
 			};
 
 			if file.header().entry_type() != EntryType::Regular {

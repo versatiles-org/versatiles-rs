@@ -78,7 +78,7 @@ impl Instance {
 			options.pTransformerArg = GDALCreateGenImgProjTransformer2(h_src_ds, h_dst_ds, core::ptr::null_mut());
 			options.pfnTransformer = Some(GDALGenImgProjTransform);
 
-			let operation: GDALWarpOperationH = GDALCreateWarpOperation(&options);
+			let operation: GDALWarpOperationH = GDALCreateWarpOperation(&raw const options);
 
 			let rv = GDALChunkAndWarpMulti(operation, 0, 0, width as i32, height as i32);
 
@@ -103,7 +103,7 @@ impl Instance {
 			.geo_transform()
 			.context("Failed to get geo transform from GDAL dataset")?;
 
-		log::trace!("geo transform: {:?}", gt);
+		log::trace!("geo transform: {gt:?}");
 
 		ensure!(gt[2] == 0.0 || gt[4] == 0.0, "GDAL dataset must not be rotated");
 
@@ -114,7 +114,7 @@ impl Instance {
 			.spatial_ref()
 			.context("GDAL dataset must have a spatial reference (SRS) defined")?;
 
-		log::trace!("size: {}x{}", width, height);
+		log::trace!("size: {width}x{height}");
 		log::trace!("spatial reference: {:?}", &spatial_ref.to_pretty_wkt());
 
 		let coord_transform = CoordTransform::new(&spatial_ref, &get_spatial_ref(4326)?)
@@ -134,7 +134,7 @@ impl Instance {
 		let mut bbox = GeoBBox::new_normalized(bounds[0], bounds[1], bounds[2], bounds[3]);
 		bbox.limit_to_mercator();
 
-		log::trace!("bounding box: {:?}", bbox);
+		log::trace!("bounding box: {bbox:?}");
 		Ok(bbox)
 	}
 
@@ -200,7 +200,7 @@ impl Instance {
 			}
 		}
 
-		log::trace!("pixel_size: {:.6}", size_min);
+		log::trace!("pixel_size: {size_min:.6}");
 		ensure!(
 			size_min.is_finite() && size_min > 0.0,
 			"Invalid pixel size in meters computed"

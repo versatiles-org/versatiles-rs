@@ -78,7 +78,7 @@ impl Operation {
 		let mut pyramid = TileBBoxPyramid::new_empty();
 		let mut traversal = Traversal::default();
 
-		for source in sources.iter() {
+		for source in &sources {
 			tilejson.merge(source.tilejson())?;
 
 			let metadata = source.metadata();
@@ -122,7 +122,7 @@ impl TileSource for Operation {
 	/// Stream packed tiles intersecting `bbox` using the overlay strategy.
 	#[context("Failed to get stacked tile stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_stream {:?}", bbox);
+		log::debug!("get_stream {bbox:?}");
 		// We need the desired output compression inside the closure, so copy it.
 		let format = self.metadata.tile_format;
 
@@ -132,7 +132,7 @@ impl TileSource for Operation {
 			move |bbox| async move {
 				let mut tiles = TileBBoxMap::<Option<Tile>>::new_default(bbox);
 
-				for source in self.sources.iter() {
+				for source in &self.sources {
 					let mut bbox_left = TileBBox::new_empty(bbox.level).unwrap();
 					for (coord, slot) in tiles.iter() {
 						if slot.is_none() {
@@ -240,7 +240,7 @@ mod tests {
 					.unwrap()
 					.to_string(),
 				"must have at least two sources"
-			)
+			);
 		};
 
 		error("from_stacked").await;

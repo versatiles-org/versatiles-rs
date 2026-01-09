@@ -60,7 +60,7 @@ impl Operation {
 		let level_base = args
 			.level_base
 			.unwrap_or(source.as_ref().metadata().bbox_pyramid.get_level_max().unwrap());
-		log::trace!("level_base {}", level_base);
+		log::trace!("level_base {level_base}");
 
 		let level_max = args.level_max.unwrap_or(30).clamp(level_base, 30);
 
@@ -187,7 +187,7 @@ impl TileSource for Operation {
 
 	#[context("Failed to get stream for bbox: {:?}", bbox_dst)]
 	async fn get_tile_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_stream {:?}", bbox_dst);
+		log::debug!("get_stream {bbox_dst:?}");
 
 		if !self.metadata.bbox_pyramid.overlaps_bbox(&bbox_dst) {
 			log::trace!("get_stream outside bbox_pyramid");
@@ -206,9 +206,8 @@ impl TileSource for Operation {
 		let tile_format = self.metadata.tile_format;
 
 		let get_tile = async move |coord_dst: TileCoord| -> Result<Option<Tile>> {
-			let (coord_src, image_src) = match self_arc.find_tile(coord_dst, enable_climbing).await? {
-				Some(t) => t,
-				None => return Ok(None),
+			let Some((coord_src, image_src)) = self_arc.find_tile(coord_dst, enable_climbing).await? else {
+				return Ok(None);
 			};
 
 			Ok(Some(Tile::from_image(
@@ -224,7 +223,7 @@ impl TileSource for Operation {
 					Ok(Some(tile)) => Some((coord_dst, tile)),
 					Ok(None) => None,
 					Err(e) => {
-						log::error!("Error processing tile {:?}: {:?}", coord_dst, e);
+						log::error!("Error processing tile {coord_dst:?}: {e:?}");
 						None
 					}
 				}

@@ -138,7 +138,7 @@ mod tests {
 		let events_clone = events.clone();
 
 		runtime.events().subscribe(move |event| {
-			events_clone.lock().unwrap().push(format!("{:?}", event));
+			events_clone.lock().unwrap().push(format!("{event:?}"));
 		});
 
 		runtime.events().step("Test step".to_string());

@@ -102,9 +102,9 @@ fn get_multipolygon(mls: MultiLineStringGeometry) -> MultiPolygonGeometry {
 			continue;
 		}
 		if ring.area() > 0.0 {
-			multipolygon.push(PolygonGeometry::from(vec![ring]))
+			multipolygon.push(PolygonGeometry::from(vec![ring]));
 		} else {
-			multipolygon.last_mut().expect("first ring is missing").push(ring)
+			multipolygon.last_mut().expect("first ring is missing").push(ring);
 		}
 	}
 

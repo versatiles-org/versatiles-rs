@@ -104,9 +104,8 @@ impl TileServer {
 		let mut parsed_headers: Vec<(HeaderName, HeaderValue)> = Vec::new();
 		for (k, v) in &config.extra_response_headers {
 			let name =
-				HeaderName::from_bytes(k.as_bytes()).map_err(|e| anyhow::anyhow!("invalid header name {:?}: {}", k, e))?;
-			let value =
-				HeaderValue::from_str(v).map_err(|e| anyhow::anyhow!("invalid header value for {:?}: {}", k, e))?;
+				HeaderName::from_bytes(k.as_bytes()).map_err(|e| anyhow::anyhow!("invalid header name {k:?}: {e}"))?;
+			let value = HeaderValue::from_str(v).map_err(|e| anyhow::anyhow!("invalid header value for {k:?}: {e}"))?;
 			parsed_headers.push((name, value));
 		}
 
@@ -125,11 +124,11 @@ impl TileServer {
 			extra_response_headers: parsed_headers,
 		};
 
-		for tile_config in config.tile_sources.iter() {
+		for tile_config in &config.tile_sources {
 			server.add_tile_source_config(tile_config).await?;
 		}
 
-		for static_config in config.static_sources.iter() {
+		for static_config in &config.static_sources {
 			server
 				.add_static_source(
 					static_config.src.as_path()?,
@@ -170,7 +169,7 @@ impl TileServer {
 
 		// Check for ID collision
 		if self.tile_sources.contains_key(&name) {
-			bail!("tile source '{}' already exists", name);
+			bail!("tile source '{name}' already exists");
 		}
 
 		// Check URL prefix collision with existing sources
@@ -180,11 +179,7 @@ impl TileServer {
 			let other_prefix = &other_source.prefix;
 			if other_prefix.starts_with(&new_prefix) || new_prefix.starts_with(other_prefix) {
 				bail!(
-					"URL prefix collision: new source '{}' ({}) conflicts with existing source '{}' ({})",
-					name,
-					new_prefix,
-					other_id,
-					other_prefix
+					"URL prefix collision: new source '{name}' ({new_prefix}) conflicts with existing source '{other_id}' ({other_prefix})"
 				);
 			}
 		}
@@ -192,7 +187,7 @@ impl TileServer {
 		// Insert into DashMap (lock-free!)
 		self.tile_sources.insert(name.clone(), source_arc);
 
-		log::info!("added tile source: id='{}', prefix='{}'", name, new_prefix);
+		log::info!("added tile source: id='{name}', prefix='{new_prefix}'");
 		Ok(())
 	}
 
@@ -205,10 +200,10 @@ impl TileServer {
 		let removed = self.tile_sources.remove(name);
 
 		if removed.is_some() {
-			log::info!("removed tile source: id='{}'", name);
+			log::info!("removed tile source: id='{name}'");
 			Ok(true)
 		} else {
-			log::debug!("tile source '{}' not found for removal", name);
+			log::debug!("tile source '{name}' not found for removal");
 			Ok(false)
 		}
 	}
@@ -226,7 +221,7 @@ impl TileServer {
 			new.push(source.clone());
 			new
 		});
-		log::info!("added static source: path={:?}, url_prefix='{}'", path, url_prefix);
+		log::info!("added static source: path={path:?}, url_prefix='{url_prefix}'");
 		Ok(())
 	}
 
@@ -250,9 +245,9 @@ impl TileServer {
 		let was_removed = self.static_sources.load().len() < initial_len;
 
 		if was_removed {
-			log::info!("removed static source: url_prefix='{}'", url_prefix);
+			log::info!("removed static source: url_prefix='{url_prefix}'");
 		} else {
-			log::debug!("static source '{}' not found for removal", url_prefix);
+			log::debug!("static source '{url_prefix}' not found for removal");
 		}
 
 		Ok(was_removed)
@@ -409,7 +404,7 @@ impl TileServer {
 		for entry in self.tile_sources.iter() {
 			let tile_source = entry.value();
 			let source_name = tile_source.get_source_name();
-			result.push((tile_source.prefix.clone(), source_name))
+			result.push((tile_source.prefix.clone(), source_name));
 		}
 		result
 	}

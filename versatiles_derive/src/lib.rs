@@ -101,16 +101,13 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 	let name = &input.ident;
 
 	// Ensure the macro is only used on structs with named fields.
-	let data = match &input.data {
-		syn::Data::Struct(ds) => ds,
-		_ => {
-			return syn::Error::new(
-				input.span(),
-				"ConfigDoc can only be derived for structs with named fields",
-			)
-			.to_compile_error()
-			.into();
-		}
+	let syn::Data::Struct(data) = &input.data else {
+		return syn::Error::new(
+			input.span(),
+			"ConfigDoc can only be derived for structs with named fields",
+		)
+		.to_compile_error()
+		.into();
 	};
 
 	// Access the named fields of the struct; these drive the YAML generation.

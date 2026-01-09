@@ -22,7 +22,7 @@ fn convert_mbtiles_to_versatiles() {
 
 	versatiles_run(&format!("convert {input} {}", output.to_str().unwrap()));
 
-	assert!(output.exists(), "output file was not created: {:?}", output);
+	assert!(output.exists(), "output file was not created: {output:?}");
 }
 
 #[test]
@@ -36,7 +36,7 @@ fn convert_pmtiles_to_mbtiles_with_bbox_and_border() {
 		output.to_str().unwrap()
 	));
 
-	assert!(output.exists(), "output file was not created: {:?}", output);
+	assert!(output.exists(), "output file was not created: {output:?}");
 	assert_eq!(
 		get_tilejson(&output),
 		JsonValue::parse_str(
@@ -64,7 +64,7 @@ fn convert_vpl_via_stdin() {
 	let (_temp_dir, output) = get_temp_output("vpl.pmtiles");
 	versatiles_stdin(&format!("convert [,vpl]- {}", output.to_str().unwrap()), &stdin);
 
-	assert!(output.exists(), "output file was not created: {:?}", output);
+	assert!(output.exists(), "output file was not created: {output:?}");
 	assert_eq!(
 		get_tilejson(&output),
 		JsonValue::parse_str(

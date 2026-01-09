@@ -34,7 +34,7 @@ impl Manager for GdalManager {
 		match result {
 			Ok(Ok(instance)) => Ok(instance),
 			Ok(Err(e)) => Err(e),
-			Err(e) => Err(anyhow::anyhow!("spawn_blocking failed: {}", e)),
+			Err(e) => Err(anyhow::anyhow!("spawn_blocking failed: {e}")),
 		}
 	}
 
@@ -68,7 +68,7 @@ impl RasterSource {
 	pub async fn new(filename: &Path, reuse_limit: u32, concurrency_limit: usize) -> Result<RasterSource> {
 		let path = filename.to_path_buf();
 		let factory: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static> =
-			Arc::new(move || Dataset::open(&path).with_context(|| format!("failed to open GDAL dataset: {:?}", path)));
+			Arc::new(move || Dataset::open(&path).with_context(|| format!("failed to open GDAL dataset: {path:?}")));
 		Self::new_with_factory(factory, reuse_limit, concurrency_limit).await
 	}
 
@@ -97,8 +97,8 @@ impl RasterSource {
 		let bbox = instance.get_bbox()?;
 		let band_mapping = instance.get_band_mapping()?;
 		let pixel_size = instance.get_pixel_size()?;
-		log::trace!("Dataset pixel_size (m/px): {:.6}", pixel_size);
-		log::trace!("Dataset bbox (EPSG:4326): {:?}", bbox);
+		log::trace!("Dataset pixel_size (m/px): {pixel_size:.6}");
+		log::trace!("Dataset bbox (EPSG:4326): {bbox:?}");
 		log::trace!("Band mapping: {band_mapping:?}");
 
 		// Create deadpool manager and pool - single synchronization point!
@@ -129,7 +129,7 @@ impl RasterSource {
 			.pool
 			.get()
 			.await
-			.map_err(|e| anyhow::anyhow!("failed to get instance from pool: {}", e))?;
+			.map_err(|e| anyhow::anyhow!("failed to get instance from pool: {e}"))?;
 		let dst = instance.reproject_to_dataset(width, height, bbox, band_mapping)?;
 		// Instance automatically returned to pool when dropped
 
@@ -212,7 +212,7 @@ impl RasterSource {
 		// Initial resolution (meters per pixel at zoom 0)
 		let initial_res = EARTH_CIRCUMFERENCE / (tile_size as f64);
 		let zf = (initial_res / self.pixel_size).log2().ceil();
-		log::trace!("initial_res={:.6}, zf(raw)={:.6}", initial_res, zf);
+		log::trace!("initial_res={initial_res:.6}, zf(raw)={zf:.6}");
 		let z = if zf.is_finite() { zf as i32 } else { 0 };
 		log::trace!("Computed max level: {}", z.clamp(0, 31));
 		Ok(z.clamp(0, 31) as u8)

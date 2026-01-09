@@ -35,7 +35,7 @@ pub fn run(command: &Subcommand) -> Result<()> {
 	if command.raw {
 		println!("{md}");
 	} else {
-		print_markdown(md)
+		print_markdown(md);
 	}
 
 	Ok(())

@@ -157,7 +157,7 @@ impl TileSource for Operation {
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_tile_stream {:?}", bbox);
+		log::debug!("get_tile_stream {bbox:?}");
 
 		let quality = self.quality[bbox.level as usize];
 		let speed = self.speed;
@@ -233,7 +233,7 @@ mod tests {
 		let msg = super::parse_quality(Some(input.to_string()))
 			.unwrap_err()
 			.chain()
-			.map(|e| e.to_string())
+			.map(std::string::ToString::to_string)
 			.collect::<Vec<_>>()
 			.join("|");
 		assert!(msg.contains(needle), "error '{msg}' should contain '{needle}'");

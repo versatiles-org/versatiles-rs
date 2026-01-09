@@ -51,7 +51,7 @@ pub async fn serve_dynamic_tile(
 	let tile_source = match state.tile_sources.get(source_id) {
 		Some(entry) => Arc::clone(entry.value()),
 		None => {
-			log::debug!("tile source '{}' not found", source_id);
+			log::debug!("tile source '{source_id}' not found");
 			return error_404();
 		}
 	};
@@ -107,7 +107,7 @@ pub async fn add_api_to_app(app: Router, sources: Arc<DashMap<String, Arc<Server
 				ids.sort();
 				let tiles_index_json = format!(
 					"[{}]",
-					ids.iter().map(|id| format!("\"{}\"", id)).collect::<Vec<_>>().join(",")
+					ids.iter().map(|id| format!("\"{id}\"")).collect::<Vec<_>>().join(",")
 				);
 				ok_json(&tiles_index_json)
 			}

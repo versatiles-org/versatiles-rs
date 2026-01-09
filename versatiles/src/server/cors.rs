@@ -139,7 +139,7 @@ mod tests {
 			.headers()
 			.get(header::ACCESS_CONTROL_MAX_AGE)
 			.and_then(|h| h.to_str().ok())
-			.map(|s| s.to_string())
+			.map(std::string::ToString::to_string)
 	}
 
 	#[tokio::test]

@@ -127,7 +127,7 @@ fn parse_sources(input: &str) -> IResult<&str, Vec<VPLPipeline>, VerboseError<&s
 			separated_list0((ws0, char(','), ws0), parse_pipeline),
 			(ws0, cut(char(']'))),
 		))
-		.map(|r| r.unwrap_or_default()),
+		.map(std::option::Option::unwrap_or_default),
 	)
 	.parse(input)
 }
@@ -185,8 +185,8 @@ pub fn parse_vpl(input: &str) -> Result<VPLPipeline> {
 			);
 			Ok(pipeline)
 		}
-		Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(anyhow::anyhow!(convert_error(input, e))),
-		Err(e) => Err(anyhow::anyhow!("Error parsing VPL: {:?}", e)).context("Failed to parse VPL input"),
+		Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(anyhow::anyhow!(convert_error(input, e))),
+		Err(e) => Err(anyhow::anyhow!("Error parsing VPL: {e:?}")).context("Failed to parse VPL input"),
 	}
 }
 
@@ -198,7 +198,7 @@ mod tests {
 	#[test]
 	fn test_parse_bare_identifier() {
 		for input in ["foo", "foo123", "foo-bar", "foo_bar"] {
-			assert_eq!(parse_bare_identifier(input).unwrap().1, input)
+			assert_eq!(parse_bare_identifier(input).unwrap().1, input);
 		}
 
 		for input in ["123foo", "=a", "-foo"] {
@@ -216,8 +216,8 @@ mod tests {
 	}
 
 	#[rstest]
-	#[case(r#""foo""#, r#"foo"#)]
-	#[case(r#""foo bar""#, r#"foo bar"#)]
+	#[case(r#""foo""#, r"foo")]
+	#[case(r#""foo bar""#, r"foo bar")]
 	#[case(r#""foo\"bar""#, r#"foo"bar"#)]
 	#[case(r#""foo\"bar\"""#, r#"foo"bar""#)]
 	fn parse_double_quoted_string_ok(#[case] input: &str, #[case] expected: &str) {
@@ -233,10 +233,10 @@ mod tests {
 	}
 
 	#[rstest]
-	#[case(r#"'foo'"#, "", r#"foo"#)]
-	#[case(r#"'foo bar'"#, "", r#"foo bar"#)]
-	#[case(r#"'foo\'bar'"#, "bar'", r#"foo\"#)]
-	#[case(r#"'foo\\bar'"#, "", r#"foo\\bar"#)]
+	#[case(r"'foo'", "", r"foo")]
+	#[case(r"'foo bar'", "", r"foo bar")]
+	#[case(r"'foo\'bar'", "bar'", r"foo\")]
+	#[case(r"'foo\\bar'", "", r"foo\\bar")]
 	fn parse_single_quoted_string_ok(#[case] input: &str, #[case] rest: &str, #[case] expected: &str) {
 		assert_eq!(parse_single_quoted_string(input).unwrap(), (rest, expected.to_string()));
 	}
@@ -248,7 +248,7 @@ mod tests {
 				parse_property(a),
 				Ok(("", (b.to_string(), vec![c.to_string()]))),
 				"error on: {a}"
-			)
+			);
 		};
 		check("key=value", "key", "value");
 		check("key=\"value\"", "key", "value");
@@ -331,7 +331,7 @@ mod tests {
 	fn test_parse_unquoted_value() {
 		let inputs = ["value1", "value.1", "value-1", "value_1"];
 
-		for input in inputs.iter() {
+		for input in &inputs {
 			assert_eq!(parse_unquoted_value(input).unwrap().1, *input);
 		}
 	}

@@ -76,7 +76,7 @@ impl Operation {
 			args.level_max
 		);
 		let filename = factory.resolve_path(&args.filename);
-		log::trace!("Resolved filename: {:?}", filename);
+		log::trace!("Resolved filename: {filename:?}");
 		let source = RasterSource::new(
 			&filename,
 			args.gdal_reuse_limit.unwrap_or(100),
@@ -88,12 +88,7 @@ impl Operation {
 
 		let level_max = args.level_max.unwrap_or(source.level_max(tile_size)?);
 		let level_min = args.level_min.unwrap_or(level_max);
-		log::trace!(
-			"Building bbox pyramid: level_min={}, level_max={}, tile_size={}",
-			level_min,
-			level_max,
-			tile_size
-		);
+		log::trace!("Building bbox pyramid: level_min={level_min}, level_max={level_max}, tile_size={tile_size}");
 		let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(level_min, level_max, bbox);
 
 		let metadata = TileSourceMetadata::new(
@@ -131,12 +126,12 @@ impl Operation {
 		width: usize,
 		height: usize,
 	) -> Result<Option<DynamicImage>> {
-		log::debug!("get_image_data_from_gdal: bbox={:?}, size={}x{}", bbox, width, height);
+		log::debug!("get_image_data_from_gdal: bbox={bbox:?}, size={width}x{height}");
 		let res = self.source.get_image(bbox, width, height).await;
 		match &res {
-			Ok(Some(_)) => log::trace!("get_image_data_from_gdal: image available for bbox={:?}", bbox),
-			Ok(None) => log::trace!("get_image_data_from_gdal: no image for bbox={:?}", bbox),
-			Err(e) => log::trace!("get_image_data_from_gdal error for bbox={:?}: {}", bbox, e),
+			Ok(Some(_)) => log::trace!("get_image_data_from_gdal: image available for bbox={bbox:?}"),
+			Ok(None) => log::trace!("get_image_data_from_gdal: no image for bbox={bbox:?}"),
+			Err(e) => log::trace!("get_image_data_from_gdal error for bbox={bbox:?}: {e}"),
 		}
 		res
 	}
@@ -173,7 +168,7 @@ impl TileSource for Operation {
 	/// Stream decoded raster images for all tiles within the bounding box.
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_stream {:?}", bbox);
+		log::debug!("get_stream {bbox:?}");
 
 		let count = 8192u32.div_euclid(self.tile_size).max(1);
 

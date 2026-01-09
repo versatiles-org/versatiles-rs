@@ -99,7 +99,7 @@ mod tests {
 			let error = source
 				.err()
 				.iter()
-				.flat_map(|e| e.chain().map(|c| c.to_string()))
+				.flat_map(|e| e.chain().map(std::string::ToString::to_string))
 				.collect::<Vec<_>>()
 				.join(" -> ");
 			assert!(

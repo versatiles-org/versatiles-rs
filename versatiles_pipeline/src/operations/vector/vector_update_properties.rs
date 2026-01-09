@@ -87,7 +87,7 @@ impl Runner {
 					})?
 					.to_string();
 				if !args.include_id.unwrap_or(false) {
-					properties.remove(&args.id_field_data)
+					properties.remove(&args.id_field_data);
 				}
 				Ok((key, properties))
 			})
@@ -111,7 +111,7 @@ impl RunnerTrait for Runner {
 					all_keys.insert(k.clone());
 				}
 			}
-			for key in all_keys.into_iter() {
+			for key in all_keys {
 				layer.fields.insert(key, "automatically added field".to_string());
 			}
 		}
@@ -269,7 +269,7 @@ mod tests {
 	#[test]
 	fn test_args_from_vpl_node() {
 		let vpl_node = VPLNode::try_from_str(
-			r##"vector_update_properties data_source_path="data.csv" id_field_tiles=id id_field_data=id layer_name=test_layer replace_properties=true include_id=true"##,
+			r#"vector_update_properties data_source_path="data.csv" id_field_tiles=id id_field_data=id layer_name=test_layer replace_properties=true include_id=true"#,
 		)
 		.unwrap();
 

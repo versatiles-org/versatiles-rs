@@ -78,7 +78,7 @@ async fn serve_concurrent_tile_requests_return_correct_data() {
 		}
 	}
 
-	println!("All {} rounds completed successfully!", CONCURRENT_ROUNDS);
+	println!("All {CONCURRENT_ROUNDS} rounds completed successfully!");
 }
 
 struct Server {
@@ -89,7 +89,7 @@ struct Server {
 impl Server {
 	async fn new(input: &[&str]) -> Self {
 		let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
-		println!("Starting server on port {}", port);
+		println!("Starting server on port {port}");
 		let mut cmd = versatiles_cmd();
 		cmd.args([&["serve", "-p", &port.to_string()], input].concat());
 		let mut child = cmd.spawn().unwrap();
@@ -149,6 +149,6 @@ impl Server {
 
 impl Drop for Server {
 	fn drop(&mut self) {
-		self.shutdown()
+		self.shutdown();
 	}
 }

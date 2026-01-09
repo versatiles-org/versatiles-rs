@@ -342,7 +342,7 @@ fn bench_cache_read_heavy(c: &mut Criterion) {
 				for h in handles {
 					h.await.unwrap();
 				}
-			})
+			});
 		});
 	});
 
@@ -367,7 +367,7 @@ fn bench_cache_read_heavy(c: &mut Criterion) {
 				for h in handles {
 					h.await.unwrap();
 				}
-			})
+			});
 		});
 	});
 

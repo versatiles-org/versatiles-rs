@@ -66,11 +66,11 @@ impl PipelineFactory {
 		let mut factory = PipelineFactory::new_empty(dir, create_reader, runtime);
 
 		for f in get_read_operation_factories() {
-			factory.add_read_factory(f)
+			factory.add_read_factory(f);
 		}
 
 		for f in get_transform_operation_factories() {
-			factory.add_tran_factory(f)
+			factory.add_tran_factory(f);
 		}
 
 		factory

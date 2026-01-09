@@ -93,7 +93,7 @@ impl TileSource for DummyImageSource {
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_tile_stream {:?}", bbox);
+		log::debug!("get_tile_stream {bbox:?}");
 
 		let generate_tile = (self.generate_tile).clone();
 		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);

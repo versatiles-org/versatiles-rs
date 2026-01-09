@@ -252,7 +252,7 @@ impl Blob {
 	/// # }
 	/// ```
 	pub fn try_as_str(&self) -> Result<&str> {
-		std::str::from_utf8(&self.0).map_err(|e| anyhow::anyhow!("Blob content is not valid UTF-8: {}", e))
+		std::str::from_utf8(&self.0).map_err(|e| anyhow::anyhow!("Blob content is not valid UTF-8: {e}"))
 	}
 
 	/// Converts the [`Blob`] into a `String`, assuming it contains valid UTF-8 encoded text.
@@ -306,7 +306,7 @@ impl Blob {
 	/// # }
 	/// ```
 	pub fn try_into_string(self) -> Result<String> {
-		String::from_utf8(self.0).map_err(|e| anyhow::anyhow!("Blob content is not valid UTF-8: {}", e))
+		String::from_utf8(self.0).map_err(|e| anyhow::anyhow!("Blob content is not valid UTF-8: {e}"))
 	}
 
 	/// Returns a hexadecimal string representation of the underlying bytes, with each byte separated by a space.

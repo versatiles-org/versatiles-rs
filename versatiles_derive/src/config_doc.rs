@@ -83,7 +83,7 @@ pub fn angle_inner(ty: &syn::Type) -> Option<Vec<syn::Type>> {
 		&& let syn::PathArguments::AngleBracketed(args) = &seg.arguments
 	{
 		let mut v = Vec::new();
-		for a in args.args.iter() {
+		for a in &args.args {
 			if let syn::GenericArgument::Type(t) = a {
 				v.push(t.clone());
 			}

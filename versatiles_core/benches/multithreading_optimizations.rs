@@ -142,7 +142,7 @@ fn bench_concurrent_lookups(c: &mut Criterion) {
 	let mut group = c.benchmark_group("concurrent_lookups");
 
 	// Prepare test data
-	let data: Vec<(String, u64)> = (0..1000).map(|i| (format!("key_{}", i), i as u64)).collect();
+	let data: Vec<(String, u64)> = (0..1000).map(|i| (format!("key_{i}"), i as u64)).collect();
 
 	// DashMap (lock-free)
 	let dashmap = Arc::new(DashMap::new());
@@ -182,7 +182,7 @@ fn bench_concurrent_lookups(c: &mut Criterion) {
 				for h in handles {
 					h.await.unwrap();
 				}
-			})
+			});
 		});
 	});
 
@@ -207,7 +207,7 @@ fn bench_concurrent_lookups(c: &mut Criterion) {
 				for h in handles {
 					h.await.unwrap();
 				}
-			})
+			});
 		});
 	});
 
@@ -222,7 +222,7 @@ fn bench_arcswap_vs_rwlock(c: &mut Criterion) {
 	let rt = Runtime::new().unwrap();
 	let mut group = c.benchmark_group("arcswap_vs_rwlock");
 
-	let data: Vec<String> = (0..100).map(|i| format!("item_{}", i)).collect();
+	let data: Vec<String> = (0..100).map(|i| format!("item_{i}")).collect();
 
 	// ArcSwap
 	let arcswap = Arc::new(ArcSwap::from_pointee(data.clone()));
@@ -253,7 +253,7 @@ fn bench_arcswap_vs_rwlock(c: &mut Criterion) {
 				for h in handles {
 					h.await.unwrap();
 				}
-			})
+			});
 		});
 	});
 
@@ -277,7 +277,7 @@ fn bench_arcswap_vs_rwlock(c: &mut Criterion) {
 				for h in handles {
 					h.await.unwrap();
 				}
-			})
+			});
 		});
 	});
 

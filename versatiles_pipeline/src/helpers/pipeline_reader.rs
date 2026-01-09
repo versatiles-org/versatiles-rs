@@ -128,7 +128,7 @@ impl TileSource for PipelineReader {
 	/// Streams all tiles intersecting `bbox` by executing the pipeline's output operation.
 	#[context("streaming tiles for bbox {:?} via pipeline '{}'", bbox, self.name)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_tile_stream {:?}", bbox);
+		log::debug!("get_tile_stream {bbox:?}");
 		self.operation.get_tile_stream(bbox).await
 	}
 }
@@ -164,7 +164,11 @@ mod tests {
 		let path = Path::new("../testdata/pipeline.vpl");
 		let result = PipelineReader::open_path(path, TilesRuntime::new_silent()).await;
 		assert_eq!(
-			result.unwrap_err().chain().map(|e| e.to_string()).collect::<Vec<_>>()[0..2],
+			result
+				.unwrap_err()
+				.chain()
+				.map(std::string::ToString::to_string)
+				.collect::<Vec<_>>()[0..2],
 			[
 				"opening VPL path '../testdata/pipeline.vpl'",
 				"Failed to open \"../testdata/pipeline.vpl\"",

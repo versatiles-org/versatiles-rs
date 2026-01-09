@@ -223,7 +223,10 @@ mod tests {
 	fn parse_invalid_config() {
 		let cfg = Config::from_string("server:\n  pi: 3.14.15.9");
 		assert_eq!(
-			cfg.unwrap_err().chain().map(|e| e.to_string()).collect::<Vec<_>>(),
+			cfg.unwrap_err()
+				.chain()
+				.map(std::string::ToString::to_string)
+				.collect::<Vec<_>>(),
 			vec![
 				"parsing config from string (YAML)",
 				"server: unknown field `pi`, expected one of `ip`, `port`, `minimal_recompression`, `disable_api` at line 2 column 3"
@@ -258,6 +261,6 @@ mod tests {
 				static_sources: vec![StaticSourceConfig::from(("/", "./frontend.tar")),],
 				tile_sources: vec![TileSourceConfig::from(("osm", "osm.versatiles")),],
 			}
-		)
+		);
 	}
 }

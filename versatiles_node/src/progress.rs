@@ -673,7 +673,7 @@ mod tests {
 				speed: 10.5,
 				estimated_seconds_remaining: Some(5.0),
 				eta: Some(1234567890.0),
-				message: Some(format!("Processing item {}", i)),
+				message: Some(format!("Processing item {i}")),
 			};
 
 			// Should not panic
@@ -768,7 +768,7 @@ mod tests {
 				speed: 10.0,
 				estimated_seconds_remaining: None,
 				eta: None,
-				message: Some(format!("{}% complete", percentage)),
+				message: Some(format!("{percentage}% complete")),
 			};
 
 			progress.emit_progress(data);
@@ -807,9 +807,9 @@ mod tests {
 		// Verify we can mix them
 		for i in 0..5 {
 			match i % 3 {
-				0 => progress.emit_step(format!("Step {}", i)),
-				1 => progress.emit_warning(format!("Warning {}", i)),
-				_ => progress.emit_error(format!("Error {}", i)),
+				0 => progress.emit_step(format!("Step {i}")),
+				1 => progress.emit_warning(format!("Warning {i}")),
+				_ => progress.emit_error(format!("Error {i}")),
 			}
 		}
 	}
@@ -829,9 +829,9 @@ mod tests {
 			let handle = thread::spawn(move || {
 				for j in 0..10 {
 					match (i + j) % 3 {
-						0 => progress_clone.emit_step(format!("Thread {} step {}", i, j)),
-						1 => progress_clone.emit_warning(format!("Thread {} warning {}", i, j)),
-						_ => progress_clone.emit_error(format!("Thread {} error {}", i, j)),
+						0 => progress_clone.emit_step(format!("Thread {i} step {j}")),
+						1 => progress_clone.emit_warning(format!("Thread {i} warning {j}")),
+						_ => progress_clone.emit_error(format!("Thread {i} error {j}")),
 					}
 				}
 			});
@@ -866,7 +866,7 @@ mod tests {
 						speed: 50.0,
 						estimated_seconds_remaining: Some(10.0),
 						eta: Some(1234567890.0),
-						message: Some(format!("Thread {} item {}", i, j)),
+						message: Some(format!("Thread {i} item {j}")),
 					};
 					progress_clone.emit_progress(data);
 				}

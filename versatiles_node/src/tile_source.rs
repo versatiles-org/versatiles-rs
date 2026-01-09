@@ -302,7 +302,7 @@ impl TileSource {
 					.map(|blob| Buffer::from(blob.as_slice()))
 			})
 			.transpose()
-			.map_err(|e| Error::from_reason(format!("Failed to decompress tile: {}", e)))
+			.map_err(|e| Error::from_reason(format!("Failed to decompress tile: {e}")))
 	}
 
 	/// Get TileJSON metadata as a JSON string
@@ -944,7 +944,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_from_vpl_invalid_syntax() {
 		// Test that invalid VPL returns an error
-		let vpl = r#"invalid vpl syntax here"#;
+		let vpl = r"invalid vpl syntax here";
 		let result = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string())).await;
 		assert!(result.is_err());
 	}

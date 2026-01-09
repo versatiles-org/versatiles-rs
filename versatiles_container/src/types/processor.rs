@@ -478,7 +478,7 @@ mod tests {
 		let processor = TileProcessor::new("debug_test", source);
 
 		// Should be debuggable
-		let debug_str = format!("{:?}", processor);
+		let debug_str = format!("{processor:?}");
 		assert!(debug_str.contains("TileProcessor"));
 	}
 

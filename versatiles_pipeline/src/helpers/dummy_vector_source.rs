@@ -83,7 +83,7 @@ impl TileSource for DummyVectorSource {
 		let mut layers = vec![];
 
 		// Iterate over each layer and convert features
-		for (name, features_def) in self.data.iter() {
+		for (name, features_def) in &self.data {
 			let mut features: Vec<GeoFeature> = vec![];
 
 			// Create features for the current layer

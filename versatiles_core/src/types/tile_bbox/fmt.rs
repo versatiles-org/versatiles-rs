@@ -82,11 +82,11 @@ mod tests {
 		let bb = TileBBox::from_min_and_max(level, x0, y0, x1, y1)?;
 
 		// Display
-		let s_disp = format!("{}", bb);
+		let s_disp = format!("{bb}");
 		assert_eq!(s_disp, expect_display);
 
 		// Debug
-		let s_dbg = format!("{:?}", bb);
+		let s_dbg = format!("{bb:?}");
 		assert_eq!(s_dbg, expect_debug);
 		Ok(())
 	}
@@ -97,7 +97,7 @@ mod tests {
 		let bb = TileBBox::from_min_and_size(5, 10, 20, 6, 4)?;
 		assert_eq!(bb.width(), 6);
 		assert_eq!(bb.height(), 4);
-		let s_dbg = format!("{:?}", bb);
+		let s_dbg = format!("{bb:?}");
 		assert!(s_dbg.ends_with(" (6x4)"), "debug string lacks correct size: {s_dbg}");
 		Ok(())
 	}

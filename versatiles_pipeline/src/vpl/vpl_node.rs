@@ -244,7 +244,12 @@ impl Debug for VPLNode {
 fn make_properties(input: Vec<(&str, Vec<&str>)>) -> BTreeMap<String, Vec<String>> {
 	input
 		.into_iter()
-		.map(|(k, v)| (k.to_string(), v.into_iter().map(|f| f.to_string()).collect()))
+		.map(|(k, v)| {
+			(
+				k.to_string(),
+				v.into_iter().map(std::string::ToString::to_string).collect(),
+			)
+		})
 		.collect()
 }
 
@@ -363,7 +368,7 @@ mod tests {
 			node.get_property_number_array_required::<i32, 4>("key1").unwrap(),
 			[1, 2, 3, 4]
 		);
-		assert!(node.get_property_number_array_required::<i32, 4>("key2").is_err())
+		assert!(node.get_property_number_array_required::<i32, 4>("key2").is_err());
 	}
 
 	#[test]

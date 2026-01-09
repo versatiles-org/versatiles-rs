@@ -56,7 +56,7 @@ struct Operation {
 fn stack_tiles(tiles: Vec<Tile>) -> Result<Option<Tile>> {
 	let mut tile = Option::<Tile>::None;
 
-	for mut tile_bg in tiles.into_iter() {
+	for mut tile_bg in tiles {
 		if tile_bg.as_image()?.is_empty() {
 			continue;
 		}
@@ -99,7 +99,7 @@ impl ReadTileSource for Operation {
 		let mut pyramid = TileBBoxPyramid::new_empty();
 		let mut traversal = Traversal::new_any();
 
-		for source in sources.iter() {
+		for source in &sources {
 			tilejson.merge(source.tilejson())?;
 
 			let metadata = source.metadata();
@@ -143,7 +143,7 @@ impl TileSource for Operation {
 	/// Stream packed raster tiles intersecting `bbox`.
 	#[context("Failed to get stacked raster tile stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_stream {:?}", bbox);
+		log::debug!("get_stream {bbox:?}");
 
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(16).collect();
 		let sources = &self.sources;
@@ -159,8 +159,8 @@ impl TileSource for Operation {
 				});
 				let results: Vec<Vec<(TileCoord, Tile)>> = futures::future::join_all(streams).await;
 
-				for result in results.into_iter() {
-					for (coord, mut tile) in result.into_iter() {
+				for result in results {
+					for (coord, mut tile) in result {
 						let image = tile.as_image().unwrap();
 						if !image.is_empty() {
 							tiles.get_mut(&coord).unwrap().push(tile);
@@ -237,7 +237,7 @@ mod tests {
 					.unwrap()
 					.to_string(),
 				"must have at least one source"
-			)
+			);
 		};
 
 		error("from_stacked_raster").await;
@@ -404,7 +404,7 @@ mod tests {
 		let map_plain: HashMap<_, _> = plain_tiles.into_iter().collect();
 
 		// For every key present in the plain source, the stacked version must be byte-identical
-		for (coord, mut tile_plain) in map_plain.into_iter() {
+		for (coord, mut tile_plain) in map_plain {
 			if let Some(mut tile_stacked) = map_stacked.remove(&coord) {
 				assert_eq!(
 					tile_stacked.as_blob(Uncompressed).unwrap(),

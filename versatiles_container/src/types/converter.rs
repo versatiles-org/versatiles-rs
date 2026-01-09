@@ -193,7 +193,7 @@ impl TileSource for TilesConvertReader {
 
 		let tile = self.reader.get_tile(&coord).await?;
 
-		let mut tile = if let Some(tile) = tile { tile } else { return Ok(None) };
+		let Some(mut tile) = tile else { return Ok(None) };
 
 		if let Some(compression) = self.converter_parameters.tile_compression {
 			tile.change_compression(compression)?;
