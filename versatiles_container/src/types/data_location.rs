@@ -220,7 +220,7 @@ fn normalize(path: &Path) -> PathBuf {
 				prefix = Some(p.as_os_str().to_os_string());
 				#[cfg(windows)]
 				{
-					use std::path::Prefix::*;
+					use std::path::Prefix::{UNC, VerbatimUNC};
 					is_unc = matches!(p.kind(), UNC(_, _) | VerbatimUNC(_, _));
 				}
 			}
