@@ -590,6 +590,22 @@ Or run:
 versatiles help config
 ```
 
+### Environment Variables
+
+VersaTiles supports the following environment variables:
+
+- `VERSATILES_CACHE_DIR` - Enable disk-based tile caching. This is useful if you want to convert large tile sets with the `from_gdal_raster` VPL operation but have limited memory. Example: `VERSATILES_CACHE_DIR=/tmp/versatiles_cache`
+
+**Example usage:**
+```sh
+# In one line
+VERSATILES_CACHE_DIR=/var/cache/versatiles versatiles serve tiles.versatiles
+
+# or
+export VERSATILES_CACHE_DIR=/tmp/versatiles_cache
+versatiles serve https://download.versatiles.org/osm.versatiles
+```
+
 ---
 
 ## GDAL support
