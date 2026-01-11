@@ -94,6 +94,7 @@ impl PipelineFactory {
 					)) as Box<dyn TileSource>,
 					TileType::Raster => {
 						let color = if !name.is_empty() && name.len() <= 4 {
+							#[allow(clippy::cast_possible_truncation)]
 							name
 								.chars()
 								.filter_map(|c| c.to_digit(16).map(|d| (d * 17) as u8))

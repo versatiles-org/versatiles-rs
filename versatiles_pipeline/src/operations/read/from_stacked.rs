@@ -130,7 +130,7 @@ impl TileSource for Operation {
 
 		Ok(TileStream::from_streams(stream::iter(sub_bboxes).map(
 			move |bbox| async move {
-				let mut tiles = TileBBoxMap::<Option<Tile>>::new_default(bbox);
+				let mut tiles = TileBBoxMap::<Option<Tile>>::new_default(bbox).unwrap();
 
 				for source in &self.sources {
 					let mut bbox_left = TileBBox::new_empty(bbox.level).unwrap();

@@ -162,18 +162,22 @@ where
 	DynamicImage: DynamicImageTraitConvert,
 {
 	fn new_test_rgba() -> DynamicImage {
+		#[allow(clippy::cast_possible_truncation)]
 		DynamicImage::from_fn(256, 256, |x, y| [x as u8, (255 - x) as u8, y as u8, (255 - y) as u8])
 	}
 
 	fn new_test_rgb() -> DynamicImage {
+		#[allow(clippy::cast_possible_truncation)]
 		DynamicImage::from_fn(256, 256, |x, y| [x as u8, (255 - x) as u8, y as u8])
 	}
 
 	fn new_test_grey() -> DynamicImage {
+		#[allow(clippy::cast_possible_truncation)]
 		DynamicImage::from_fn(256, 256, |x, _y| [x as u8])
 	}
 
 	fn new_test_greya() -> DynamicImage {
+		#[allow(clippy::cast_possible_truncation)]
 		DynamicImage::from_fn(256, 256, |x, y| [x as u8, y as u8])
 	}
 
@@ -185,6 +189,7 @@ where
 			let xf = f64::from(x) - 128.0;
 			let yf = f64::from(y) - 128.0;
 
+			#[allow(clippy::cast_possible_truncation)]
 			parameters.map(|p| {
 				let angle_rad = p.angle.to_radians();
 				let v = angle_rad.cos() * xf + angle_rad.sin() * yf - p.offset;

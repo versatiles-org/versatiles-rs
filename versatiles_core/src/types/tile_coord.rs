@@ -128,8 +128,10 @@ impl TileCoord {
 
 		TileCoord::new(
 			z,
-			x.min(zoom - 1.0).max(0.0).floor() as u32,
-			y.min(zoom - 1.0).max(0.0).floor() as u32,
+			#[allow(clippy::cast_possible_truncation)] // Safe: clamped to valid tile range
+			u32::try_from(x.min(zoom - 1.0).max(0.0).floor() as i64)?,
+			#[allow(clippy::cast_possible_truncation)] // Safe: clamped to valid tile range
+			u32::try_from(y.min(zoom - 1.0).max(0.0).floor() as i64)?,
 		)
 	}
 

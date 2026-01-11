@@ -4,6 +4,7 @@ use std::{
 	sync::Arc,
 	time::{Duration, Instant},
 };
+use versatiles_core::utils::float_to_int;
 
 /// Handle for tracking progress of an operation
 ///
@@ -137,7 +138,7 @@ impl ProgressHandle {
 			0.0
 		};
 
-		let percent = (pos as f64 * 100.0 / total as f64).floor() as u64;
+		let percent = float_to_int::<f64, u64>((pos as f64 * 100.0 / total as f64).floor()).unwrap();
 		let per_sec_str = format_rate(per_sec);
 		let eta_str = format_eta(Duration::from_secs_f64(eta_secs));
 
@@ -205,6 +206,7 @@ fn terminal_width() -> usize {
 	80
 }
 
+#[allow(clippy::cast_possible_truncation)]
 fn make_bar(pos: u64, len: u64, width: usize) -> String {
 	let width = width.max(1);
 	let frac = (pos as f64 / len.max(1) as f64).clamp(0.0, 1.0);

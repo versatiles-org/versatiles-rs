@@ -8,6 +8,7 @@ use anyhow::{Result, bail, ensure};
 use versatiles_core::{
 	Blob, ByteRange, GeoBBox, TileCompression, TileFormat,
 	io::{DataReader, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+	utils::float_to_int,
 };
 use versatiles_derive::context;
 
@@ -52,7 +53,7 @@ impl FileHeader {
 
 		Ok(FileHeader {
 			zoom_range,
-			bbox: bbox.as_array().map(|v| (v * BBOX_SCALE) as i32),
+			bbox: bbox.as_array().map(|v| float_to_int(v * BBOX_SCALE).unwrap()),
 			tile_format,
 			compression,
 			meta_range: ByteRange::empty(),
@@ -199,6 +200,7 @@ impl FileHeader {
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_possible_truncation)]
 mod tests {
 	use super::*;
 	use TileCompression::*;

@@ -1,6 +1,7 @@
 use crate::{
 	json::{JsonObject, JsonValue},
 	types::TileSchema,
+	utils::float_to_int,
 };
 use anyhow::{Context, Result, anyhow, ensure};
 use std::{collections::BTreeMap, fmt::Debug};
@@ -45,8 +46,17 @@ impl VectorLayers {
 
 			// Optional: "description", "minzoom", "maxzoom"
 			let description = object.get_string("description")?;
-			let minzoom = object.get_number("minzoom")?.map(|v| v as u8);
-			let maxzoom = object.get_number("maxzoom")?.map(|v| v as u8);
+			let minzoom = if let Some(v) = object.get_number("minzoom")? {
+				Some(float_to_int(v)?)
+			} else {
+				None
+			};
+
+			let maxzoom = if let Some(v) = object.get_number("maxzoom")? {
+				Some(float_to_int(v)?)
+			} else {
+				None
+			};
 
 			// Required: "fields" object
 			let mut fields = BTreeMap::<String, String>::new();

@@ -73,9 +73,11 @@ impl TileSource for Operation {
 			.get_tile_stream(bbox)
 			.await?
 			.map_item_parallel(move |mut tile| {
+				#[allow(clippy::cast_possible_truncation)]
 				tile.as_image_mut()?.mut_color_values(|v| {
-					let v = ((v as f32 - 127.5) * contrast + 0.5 + brightness).powf(gamma) * 255.0;
-					v.round().clamp(0.0, 255.0) as u8
+					(((v as f32 - 127.5) * contrast + 0.5 + brightness).powf(gamma) * 255.0)
+						.round()
+						.clamp(0.0, 255.0) as u8
 				});
 				Ok(tile)
 			})

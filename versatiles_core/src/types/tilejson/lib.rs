@@ -114,7 +114,7 @@ impl TileJSON {
 					r.tile_schema = Some(TileSchema::try_from(v.as_str()?)?);
 				}
 				"tile_size" => {
-					r.tile_size = Some(TileSize::new(v.as_number()? as u16)?);
+					r.tile_size = Some(TileSize::try_from(v.as_number()?)?);
 				}
 				_ => {
 					// Everything else goes into `values`
@@ -335,12 +335,12 @@ impl TileJSON {
 		}
 
 		// 3. Merge minzoom/maxzoom
-		if let Some(omin) = other.values.get_byte("minzoom") {
-			let new_min = self.values.get_byte("minzoom").map_or(omin, |mz| mz.min(omin));
+		if let Some(omin) = other.values.get_integer("minzoom") {
+			let new_min = self.values.get_integer("minzoom").map_or(omin, |mz| mz.min(omin));
 			self.values.insert("minzoom", &JsonValue::from(new_min))?;
 		}
-		if let Some(omax) = other.values.get_byte("maxzoom") {
-			let new_max = self.values.get_byte("maxzoom").map_or(omax, |mz| mz.max(omax));
+		if let Some(omax) = other.values.get_integer("maxzoom") {
+			let new_max = self.values.get_integer("maxzoom").map_or(omax, |mz| mz.max(omax));
 			self.values.insert("maxzoom", &JsonValue::from(new_max))?;
 		}
 
@@ -396,7 +396,7 @@ impl TileJSON {
 		self.values.check_optional_string("description")?;
 
 		// 3.9 fillzoom - optional
-		self.values.check_optional_byte("fillzoom")?;
+		self.values.check_optional_integer("fillzoom")?;
 
 		// 3.10 grids - optional
 		self.values.check_optional_list("grids")?;
@@ -405,10 +405,10 @@ impl TileJSON {
 		self.values.check_optional_string("legend")?;
 
 		// 3.12 maxzoom - optional
-		self.values.check_optional_byte("maxzoom")?;
+		self.values.check_optional_integer("maxzoom")?;
 
 		// 3.13 minzoom - optional
-		self.values.check_optional_byte("minzoom")?;
+		self.values.check_optional_integer("minzoom")?;
 
 		// 3.14 name - optional
 		self.values.check_optional_string("name")?;
@@ -605,8 +605,8 @@ mod tests {
 
 		tj1.merge(&tj2)?;
 		// minzoom becomes min(5,2) => 2, maxzoom => max(15,20) => 20
-		assert_eq!(tj1.values.get_byte("minzoom"), Some(2));
-		assert_eq!(tj1.values.get_byte("maxzoom"), Some(20));
+		assert_eq!(tj1.values.get_integer("minzoom"), Some(2));
+		assert_eq!(tj1.values.get_integer("maxzoom"), Some(20));
 		Ok(())
 	}
 
@@ -640,8 +640,8 @@ mod tests {
 		);
 
 		// Zoom
-		assert_eq!(tj.values.get_byte("minzoom"), Some(2));
-		assert_eq!(tj.values.get_byte("maxzoom"), Some(12));
+		assert_eq!(tj.values.get_integer("minzoom"), Some(2));
+		assert_eq!(tj.values.get_integer("maxzoom"), Some(12));
 	}
 
 	#[test]
@@ -735,7 +735,7 @@ mod tests {
 	fn should_set_and_get_byte() -> Result<()> {
 		let mut tj = TileJSON::default();
 		tj.set_byte("byte_key", 42)?;
-		assert_eq!(tj.values.get_byte("byte_key"), Some(42));
+		assert_eq!(tj.values.get_integer("byte_key"), Some(42));
 		Ok(())
 	}
 
@@ -743,17 +743,17 @@ mod tests {
 	fn should_set_min_and_max_zoom_correctly() {
 		let mut tj = TileJSON::default();
 		tj.set_min_zoom(3);
-		assert_eq!(tj.values.get_byte("minzoom"), Some(3));
+		assert_eq!(tj.values.get_integer("minzoom"), Some(3));
 		// Lower minzoom should not decrease the value
 		tj.set_min_zoom(1);
-		assert_eq!(tj.values.get_byte("minzoom"), Some(1));
+		assert_eq!(tj.values.get_integer("minzoom"), Some(1));
 
 		let mut tj2 = TileJSON::default();
 		tj2.set_max_zoom(10);
-		assert_eq!(tj2.values.get_byte("maxzoom"), Some(10));
+		assert_eq!(tj2.values.get_integer("maxzoom"), Some(10));
 		// Higher maxzoom should not increase the value
 		tj2.set_max_zoom(20);
-		assert_eq!(tj2.values.get_byte("maxzoom"), Some(20));
+		assert_eq!(tj2.values.get_integer("maxzoom"), Some(20));
 	}
 
 	#[test]

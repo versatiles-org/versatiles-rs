@@ -120,7 +120,8 @@ impl TileServer {
 
 		let runtime = create_runtime();
 		let ip = opts.ip.unwrap_or_else(|| "0.0.0.0".to_string());
-		let initial_port = opts.port.unwrap_or(8080) as u16;
+		let initial_port = u16::try_from(opts.port.unwrap_or(8080))
+			.map_err(|_| Error::from_reason("Port number must be between 0 and 65535"))?;
 		let minimal_recompression = opts.minimal_recompression;
 
 		Ok(Self {

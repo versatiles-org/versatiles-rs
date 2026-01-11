@@ -302,7 +302,8 @@ mod tests {
 		// Each byte is (position % 256) so we can verify correctness
 		let mut data = Vec::new();
 		for i in 0..10240 {
-			data.push((i % 256) as u8);
+			#[allow(clippy::cast_possible_truncation)] // Safe: i & 0xFF always fits in u8
+			data.push((i & 0xFF) as u8);
 		}
 		file.write_all(&data)?;
 		drop(file);
@@ -325,7 +326,8 @@ mod tests {
 
 				// Verify every byte is correct
 				for (i, &byte) in blob.as_slice().iter().enumerate() {
-					let expected = ((offset + i as u64) % 256) as u8;
+					#[allow(clippy::cast_possible_truncation)] // Safe: & 0xFF always fits in u8
+					let expected = ((offset + i as u64) & 0xFF) as u8;
 					assert_eq!(
 						byte,
 						expected,

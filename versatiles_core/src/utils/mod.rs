@@ -9,10 +9,12 @@ mod compression;
 mod csv;
 #[cfg(feature = "cli")]
 mod pretty_print;
+mod primitives;
 mod tile_hilbert_index;
 
 pub use compression::*;
 pub use csv::*;
 #[cfg(feature = "cli")]
 pub use pretty_print::*;
+pub use primitives::*;
 pub use tile_hilbert_index::*;

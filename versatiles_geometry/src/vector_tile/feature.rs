@@ -10,6 +10,7 @@ use byteorder::LE;
 use versatiles_core::{
 	Blob,
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+	utils::float_to_int,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -217,8 +218,8 @@ impl VectorTileFeature {
 
 	pub fn from_geometry(id: Option<u64>, tag_ids: Vec<u32>, geometry: Geometry) -> Result<VectorTileFeature> {
 		fn write_coord(writer: &mut ValueWriterBlob<LE>, coord0: &mut (i64, i64), coord: &Coordinates) -> Result<()> {
-			let x = coord.x().round() as i64;
-			let y = coord.y().round() as i64;
+			let x = float_to_int(coord.x())?;
+			let y = float_to_int(coord.y())?;
 			writer.write_svarint(x - coord0.0)?;
 			writer.write_svarint(y - coord0.1)?;
 			coord0.0 = x;

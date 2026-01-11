@@ -4,6 +4,7 @@
 //! controlling how many tiles are grouped per traversal block.
 
 use anyhow::{Result, ensure};
+use versatiles_core::utils::float_to_int;
 use versatiles_derive::context;
 
 /// Represents allowed sizes of a block of tiles
@@ -131,7 +132,7 @@ impl std::fmt::Debug for TraversalSize {
 fn size_to_bits(size: u32) -> Result<u8> {
 	ensure!(size > 0, "Size must be greater than zero");
 	ensure!(size.is_power_of_two(), "Size must be a power of two, but is {size}");
-	let bits = f64::from(size).log2().floor() as u8;
+	let bits: u8 = float_to_int(f64::from(size).log2().floor()).unwrap();
 	ensure!(bits < 32, "Size {size} is too large");
 	Ok(bits)
 }

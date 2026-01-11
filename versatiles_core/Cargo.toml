@@ -30,6 +30,7 @@ futures.workspace = true
 itertools.workspace = true
 log.workspace = true
 lru = "0.16"
+num-traits = "0.2.19"
 num_cpus.workspace = true
 regex.workspace = true
 reqwest.workspace = true

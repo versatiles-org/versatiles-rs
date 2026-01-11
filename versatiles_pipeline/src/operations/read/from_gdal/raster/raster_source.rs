@@ -4,7 +4,7 @@ use deadpool::managed::{Manager, Object, Pool, RecycleResult};
 use gdal::{Dataset, config::set_config_option};
 use imageproc::image::DynamicImage;
 use std::{path::Path, sync::Arc};
-use versatiles_core::GeoBBox;
+use versatiles_core::{GeoBBox, utils::float_to_int};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitConvert;
 
@@ -213,7 +213,7 @@ impl RasterSource {
 		let initial_res = EARTH_CIRCUMFERENCE / (tile_size as f64);
 		let zf = (initial_res / self.pixel_size).log2().ceil();
 		log::trace!("initial_res={initial_res:.6}, zf(raw)={zf:.6}");
-		let z = if zf.is_finite() { zf as i32 } else { 0 };
+		let z: i32 = float_to_int(zf).unwrap_or(0);
 		log::trace!("Computed max level: {}", z.clamp(0, 31));
 		Ok(z.clamp(0, 31) as u8)
 	}

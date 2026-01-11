@@ -292,6 +292,10 @@ impl TileSource {
 	/// ```
 	#[napi]
 	pub async fn get_tile(&self, z: u32, x: u32, y: u32) -> Result<Option<Buffer>> {
+		if z > 30 {
+			return Err(Error::from_reason("Zoom level must be between 0 and 30"));
+		}
+		#[allow(clippy::cast_possible_truncation)]
 		let coord = napi_result!(RustTileCoord::new(z as u8, x, y))?;
 		let tile_opt = napi_result!(self.reader.get_tile(&coord).await)?;
 

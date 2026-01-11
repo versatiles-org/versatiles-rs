@@ -45,11 +45,14 @@ pub trait DynamicImageTraitConvert {
 
 impl DynamicImageTraitConvert for DynamicImage {
 	fn from_fn<const N: usize>(width: usize, height: usize, mut f: impl FnMut(u32, u32) -> [u8; N]) -> DynamicImage {
-		assert!((1..=4).contains(&N), "Unsupported channel count for from_fn: {N}");
+		assert!(N >= 1 && N <= 4, "Unsupported channel count for from_fn: {N}");
+		assert!(width > 0, "Width must be greater than 0");
+		assert!(height > 0, "Height must be greater than 0");
+
 		let px_count = width * height;
 		let mut data = Vec::with_capacity(px_count * N);
-		for y in 0..height as u32 {
-			for x in 0..width as u32 {
+		for y in 0..u32::try_from(height).expect("Height too large") {
+			for x in 0..u32::try_from(width).expect("Width too large") {
 				let p = f(x, y);
 				data.extend_from_slice(&p);
 			}
@@ -67,21 +70,23 @@ impl DynamicImageTraitConvert for DynamicImage {
 			data.len(),
 			channel_count * width * height
 		);
+		let w = u32::try_from(width)?;
+		let h = u32::try_from(height)?;
 		Ok(match channel_count {
 			1 => DynamicImage::ImageLuma8(
-				ImageBuffer::from_vec(width as u32, height as u32, data)
+				ImageBuffer::from_vec(w, h, data)
 					.ok_or_else(|| anyhow!("Failed to create Luma8 image buffer with provided data"))?,
 			),
 			2 => DynamicImage::ImageLumaA8(
-				ImageBuffer::from_vec(width as u32, height as u32, data)
+				ImageBuffer::from_vec(w, h, data)
 					.ok_or_else(|| anyhow!("Failed to create LumaA8 image buffer with provided data"))?,
 			),
 			3 => DynamicImage::ImageRgb8(
-				ImageBuffer::from_vec(width as u32, height as u32, data)
+				ImageBuffer::from_vec(w, h, data)
 					.ok_or_else(|| anyhow!("Failed to create RGB8 image buffer with provided data"))?,
 			),
 			4 => DynamicImage::ImageRgba8(
-				ImageBuffer::from_vec(width as u32, height as u32, data)
+				ImageBuffer::from_vec(w, h, data)
 					.ok_or_else(|| anyhow!("Failed to create RGBA8 image buffer with provided data"))?,
 			),
 			_ => bail!("Unsupported channel count: {channel_count}"),
@@ -142,18 +147,22 @@ mod tests {
 	use rstest::rstest;
 
 	fn sample_l8() -> DynamicImage {
+		#[allow(clippy::cast_possible_truncation)]
 		DynamicImage::from_fn(4, 3, |x, y| [((x + y) % 2) as u8])
 	}
 
 	fn sample_la8() -> DynamicImage {
+		#[allow(clippy::cast_possible_truncation)]
 		DynamicImage::from_fn(4, 3, |x, y| [((x * 2 + y) % 256) as u8, 255])
 	}
 
 	fn sample_rgb8() -> DynamicImage {
+		#[allow(clippy::cast_possible_truncation)]
 		DynamicImage::from_fn(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8])
 	}
 
 	fn sample_rgba8() -> DynamicImage {
+		#[allow(clippy::cast_possible_truncation)]
 		DynamicImage::from_fn(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8, 200])
 	}
 
@@ -191,7 +200,8 @@ mod tests {
 	fn from_raw_accepts_supported_channel_counts(#[case] channels: usize) {
 		let w = 4usize;
 		let h = 3usize; // 12 pixels
-		let data = (0..(w * h * channels)).map(|v| (v % 256) as u8).collect::<Vec<_>>();
+		#[allow(clippy::cast_possible_truncation)]
+		let data = (0..(w * h * channels)).map(|v| (v & 0xFF) as u8).collect::<Vec<_>>();
 
 		let img = DynamicImage::from_raw(w, h, data).expect("from_raw failed");
 		assert_eq!(img.color().channel_count() as usize, channels);

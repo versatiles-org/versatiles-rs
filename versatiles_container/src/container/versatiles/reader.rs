@@ -172,7 +172,7 @@ impl VersaTilesReader {
 			let mut tile_index = TileIndex::from_brotli_blob(blob)?;
 			tile_index.add_offset(block.get_tiles_range().offset);
 
-			assert_eq!(tile_index.len(), block.count_tiles() as usize);
+			assert_eq!(tile_index.len(), usize::try_from(block.count_tiles())?);
 
 			cache.add(*block_coord, Arc::new(tile_index))
 		})
@@ -355,7 +355,7 @@ impl TileSource for VersaTilesReader {
 		}
 
 		// Get the tile ID
-		let tile_id = bbox.index_of(coord).unwrap() as usize;
+		let tile_id = usize::try_from(bbox.index_of(coord)?)?;
 
 		// Retrieve the tile index from cache or read from the reader
 		let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await?;
@@ -390,11 +390,10 @@ impl TileSource for VersaTilesReader {
 						.map(|(coord, range)| {
 							assert!(bbox.contains(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
 
-							let start = range.offset - chunk.range.offset;
-							let end = start + range.length;
-							let tile_range = (start as usize)..(end as usize);
+							let start = usize::try_from(range.offset - chunk.range.offset).unwrap();
+							let end = start + usize::try_from(range.length).unwrap();
 
-							let blob = Blob::from(big_blob.range(tile_range));
+							let blob = Blob::from(big_blob.range(start..end));
 							let tile = Tile::from_blob(blob, self.metadata.tile_compression, self.metadata.tile_format);
 
 							(coord, tile)
@@ -511,6 +510,7 @@ impl PartialEq for VersaTilesReader {
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_possible_truncation)]
 mod tests {
 	use super::*;
 	use crate::{MOCK_BYTES_PBF, MockReader, TilesRuntime, TilesWriter, VersaTilesWriter, make_test_file};

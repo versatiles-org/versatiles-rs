@@ -127,7 +127,7 @@ impl Operation {
 		assert_eq!(bbox0.width(), size);
 		assert_eq!(bbox0.height(), size);
 
-		let mut map: TileBBoxMap<Vec<(TileCoord, DynamicImage)>> = TileBBoxMap::new_default(bbox);
+		let mut map: TileBBoxMap<Vec<(TileCoord, DynamicImage)>> = TileBBoxMap::new_default(bbox)?;
 
 		let full_size = self.tile_size;
 		let half_size = self.tile_size / 2;
@@ -268,6 +268,7 @@ impl TransformOperationFactoryTrait for Factory {
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_possible_truncation)]
 mod tests {
 	use super::*;
 	use crate::helpers::dummy_image_source::DummyImageSource;
@@ -306,7 +307,7 @@ mod tests {
 	async fn add_images_to_cache_inserts_half_tiles_under_floored_key() -> Result<()> {
 		let op = make_operation(2, 6).await;
 		let bbox = TileBBox::from_min_and_max(6, 0, 0, 31, 31)?; // 32x32 block at base level
-		let mut container = TileBBoxMap::new_default(bbox);
+		let mut container = TileBBoxMap::new_default(bbox)?;
 		// Populate with simple solid tiles (only a tiny subset to keep it cheap)
 		for y in 0..bbox.height() {
 			for x in 0..bbox.width() {
@@ -340,7 +341,7 @@ mod tests {
 
 		// Prepare cache content by adding a full 32x32 block at level 6
 		let bbox_lvl6 = TileBBox::from_min_and_size(6, 0, 0, 32, 32)?;
-		let mut cont6 = TileBBoxMap::new_default(bbox_lvl6);
+		let mut cont6 = TileBBoxMap::new_default(bbox_lvl6)?;
 		for y in 0..bbox_lvl6.height() {
 			for x in 0..bbox_lvl6.width() {
 				let c = TileCoord::new(6, x, y)?;

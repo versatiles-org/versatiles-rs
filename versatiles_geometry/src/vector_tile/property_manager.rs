@@ -16,6 +16,7 @@ where
 	T: Clone + Debug + Eq + Hash,
 {
 	pub fn new(list: Vec<T>) -> VTLPMap<T> {
+		#[allow(clippy::cast_possible_truncation)]
 		let map = list.iter().enumerate().map(|(i, e)| (e.clone(), i as u32)).collect();
 		VTLPMap { list, map }
 	}
@@ -24,6 +25,7 @@ where
 		if let Some(index) = self.map.get(&entry) {
 			return *index;
 		}
+		#[allow(clippy::cast_possible_truncation)]
 		let index = self.list.len() as u32;
 		self.map.insert(entry.clone(), index);
 		self.list.push(entry);

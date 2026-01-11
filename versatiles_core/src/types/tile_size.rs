@@ -1,8 +1,8 @@
 //! Defines the `TileSize` enum representing supported raster or vector tile sizes.
 
-use std::fmt::Debug;
-
+use crate::utils::float_to_int;
 use anyhow::{Result, bail};
+use std::fmt::Debug;
 
 /// Represents the pixel dimensions of a map tile.
 /// Currently supports 256×256 and 512×512 tiles.
@@ -65,6 +65,14 @@ impl TileSize {
 impl Debug for TileSize {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "TileSize({})", self.size())
+	}
+}
+
+impl TryFrom<f64> for TileSize {
+	type Error = anyhow::Error;
+
+	fn try_from(value: f64) -> Result<Self> {
+		TileSize::new(float_to_int(value)?)
 	}
 }
 

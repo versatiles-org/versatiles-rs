@@ -210,6 +210,7 @@ impl BandMapping {
 	/// Setup GDAL warp options to apply this band mapping during reprojection.
 	/// # Safety
 	/// This function modifies the provided `GDALWarpOptions` structure.
+	#[allow(clippy::cast_possible_truncation)]
 	pub unsafe fn setup_gdal_warp_options(&self, options: &mut gdal_sys::GDALWarpOptions) {
 		options.nBandCount = self.len() as i32;
 

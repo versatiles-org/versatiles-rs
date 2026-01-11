@@ -1,3 +1,5 @@
+#![allow(clippy::cast_possible_truncation)]
+
 use crate::{GeoBBox, TileBBox, TileBBoxPyramid, TileCoord};
 use anyhow::Result;
 use rstest::rstest;

@@ -241,8 +241,8 @@ impl MBTilesReader {
 
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
-		let z0 = self.simple_query("MIN(zoom_level)", "")?;
-		let z1 = self.simple_query("MAX(zoom_level)", "")?;
+		let z0 = u8::try_from(self.simple_query("MIN(zoom_level)", "")?)?;
+		let z1 = u8::try_from(self.simple_query("MAX(zoom_level)", "")?)?;
 
 		let progress = self
 			.runtime
@@ -288,7 +288,7 @@ impl MBTilesReader {
 			let max_value = 2i32.pow(z as u32) - 1;
 
 			bbox_pyramid.set_level_bbox(TileBBox::from_min_and_max(
-				z as u8,
+				z,
 				x0.clamp(0, max_value) as u32,
 				y0.clamp(0, max_value) as u32,
 				x1.clamp(0, max_value) as u32,

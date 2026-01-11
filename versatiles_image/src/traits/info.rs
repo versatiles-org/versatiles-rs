@@ -63,7 +63,7 @@ where
 	DynamicImage: DynamicImageTraitConvert,
 {
 	fn bits_per_value(&self) -> u8 {
-		(self.color().bits_per_pixel() / u16::from(self.color().channel_count())) as u8
+		u8::try_from(self.color().bits_per_pixel() / u16::from(self.color().channel_count())).unwrap()
 	}
 
 	fn channel_count(&self) -> u8 {
@@ -144,6 +144,7 @@ where
 
 /// Tests cover metadata queries, size/meta validation, empty/opaque logic and per-channel diffs.
 #[cfg(test)]
+#[allow(clippy::cast_possible_truncation)]
 mod tests {
 	use super::*;
 	use image::ExtendedColorType;
@@ -154,7 +155,7 @@ mod tests {
 		DynamicImage::from_fn(4, 3, |x, y| [((x + y) % 2) as u8])
 	}
 	fn sample_la8(alpha: u8) -> DynamicImage {
-		DynamicImage::from_fn(4, 3, |x, y| [((x * 2 + y) % 256) as u8, alpha])
+		DynamicImage::from_fn(4, 3, |x, y| [((x * 2 + y) & 0xFF) as u8, alpha])
 	}
 	fn sample_rgb8() -> DynamicImage {
 		DynamicImage::from_fn(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8])

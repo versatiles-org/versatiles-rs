@@ -104,8 +104,8 @@ impl VectorTileLayer {
 						.context("Failed to read GeoValue")?,
 					);
 				}
-				(5, 0) => extent = reader.read_varint().context("Failed to read extent")? as u32,
-				(15, 0) => version = reader.read_varint().context("Failed to read version")? as u32,
+				(5, 0) => extent = u32::try_from(reader.read_varint().context("Failed to read extent")?)?,
+				(15, 0) => version = u32::try_from(reader.read_varint().context("Failed to read version")?)?,
 				(f, w) => bail!("Unexpected combination of field number ({f}) and wire type ({w})"),
 			}
 		}

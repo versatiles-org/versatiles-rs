@@ -8,7 +8,7 @@ use std::{
 use versatiles_core::{
 	Blob, ByteRange, TileCompression,
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
-	utils::compress,
+	utils::{compress, float_to_int},
 };
 
 /// A collection of `EntryV3` that provides various utility functions
@@ -39,7 +39,7 @@ impl EntriesV3 {
 		let mut entries: Vec<EntryV3> = Vec::new();
 		let mut reader = ValueReaderSlice::new_le(data.as_slice());
 
-		let num_entries = reader.read_varint()? as usize;
+		let num_entries = usize::try_from(reader.read_varint()?)?;
 
 		if num_entries > 10_000_000_000 {
 			bail!("there is something wrong: PMTiles with more then 10 billion tiles?")
@@ -54,7 +54,7 @@ impl EntriesV3 {
 		}
 
 		for entry in &mut entries {
-			entry.run_length = reader.read_varint()? as u32;
+			entry.run_length = u32::try_from(reader.read_varint()?)?;
 		}
 
 		for entry in &mut entries {
@@ -118,11 +118,12 @@ impl EntriesV3 {
 
 		// at this point, m > n
 		if n >= 0 {
-			if self.entries[n as usize].run_length == 0 {
-				return Some(self.entries[n as usize]);
+			let entry = self.entries[usize::try_from(n).unwrap()];
+			if entry.run_length == 0 {
+				return Some(entry);
 			}
-			if tile_id - self.entries[n as usize].tile_id < u64::from(self.entries[n as usize].run_length) {
-				return Some(self.entries[n as usize]);
+			if tile_id - entry.tile_id < u64::from(entry.run_length) {
+				return Some(entry);
 			}
 		}
 
@@ -161,7 +162,7 @@ impl EntriesV3 {
 		let mut leaf_size: f32 = (entries.len() as f32 / 3500f32).max(4096f32);
 
 		loop {
-			let d = build_roots_leaves(entries, leaf_size as usize, compression)?;
+			let d = build_roots_leaves(entries, float_to_int(leaf_size)?, compression)?;
 			if d.root_bytes.len() <= target_root_len {
 				return Ok(d);
 			}

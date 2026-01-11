@@ -76,6 +76,8 @@ pub async fn run(args: &MeasureTileSizes, runtime: TilesRuntime) -> Result<()> {
 	}
 
 	let n = (scale * scale) as f64;
+
+	#[allow(clippy::cast_possible_truncation)]
 	let buffer = result
 		.into_iter()
 		.map(|v| ((v as f64 / n).max(1.0).log2() * 10.0).clamp(0.0, 255.0) as u8)

@@ -151,7 +151,7 @@ impl TileSource for Operation {
 
 		Ok(TileStream::from_streams(stream::iter(bboxes).map(
 			move |bbox| async move {
-				let mut tiles = TileBBoxMap::<Vec<Tile>>::new_default(bbox);
+				let mut tiles = TileBBoxMap::<Vec<Tile>>::new_default(bbox).unwrap();
 
 				let streams = sources.iter().map(async |source| {
 					let stream = source.get_tile_stream(bbox).await.unwrap();
@@ -203,6 +203,7 @@ impl ReadOperationFactoryTrait for Factory {
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_possible_truncation)]
 mod tests {
 	use super::*;
 	use crate::helpers::{arrange_tiles, dummy_image_source::DummyImageSource};

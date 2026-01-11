@@ -87,7 +87,7 @@ impl TileIndex {
 		let mut writer = ValueWriterBlob::new_be();
 		for range in &self.index {
 			writer.write_u64(range.offset)?;
-			writer.write_u32(range.length as u32)?;
+			writer.write_u32(u32::try_from(range.length)?)?;
 		}
 
 		Ok(writer.into_blob())
@@ -133,6 +133,7 @@ impl TileIndex {
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_possible_truncation)]
 mod tests {
 	use super::*;
 

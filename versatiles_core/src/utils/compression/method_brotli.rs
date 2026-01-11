@@ -23,7 +23,7 @@ pub fn compress_brotli(blob: &Blob) -> Result<Blob> {
 	let params = BrotliEncoderParams {
 		quality: 10, // Highest quality
 		lgwin: 19,   // Window size
-		size_hint: blob.len() as usize,
+		size_hint: usize::try_from(blob.len())?,
 		..Default::default()
 	};
 	let mut input = Cursor::new(blob.as_slice());
@@ -53,7 +53,7 @@ pub fn compress_brotli_fast(blob: &Blob) -> Result<Blob> {
 	let params = BrotliEncoderParams {
 		quality: 3, // Lower quality for faster compression
 		lgwin: 16,  // Smaller window size
-		size_hint: blob.len() as usize,
+		size_hint: usize::try_from(blob.len())?,
 		..Default::default()
 	};
 	let mut input = Cursor::new(blob.as_slice());

@@ -141,10 +141,10 @@ impl BlockDefinition {
 		writer.write_u32(self.offset.x)?;
 		writer.write_u32(self.offset.y)?;
 
-		writer.write_u8(self.tiles_coverage.x_min()? as u8)?;
-		writer.write_u8(self.tiles_coverage.y_min()? as u8)?;
-		writer.write_u8(self.tiles_coverage.x_max()? as u8)?;
-		writer.write_u8(self.tiles_coverage.y_max()? as u8)?;
+		writer.write_u8(u8::try_from(self.tiles_coverage.x_min()?)?)?;
+		writer.write_u8(u8::try_from(self.tiles_coverage.y_min()?)?)?;
+		writer.write_u8(u8::try_from(self.tiles_coverage.x_max()?)?)?;
+		writer.write_u8(u8::try_from(self.tiles_coverage.y_max()?)?)?;
 
 		ensure!(
 			self.tiles_range.offset + self.tiles_range.length == self.index_range.offset,
@@ -153,7 +153,7 @@ impl BlockDefinition {
 
 		writer.write_u64(self.tiles_range.offset)?;
 		writer.write_u64(self.tiles_range.length)?;
-		writer.write_u32(self.index_range.length as u32)?;
+		writer.write_u32(u32::try_from(self.index_range.length)?)?;
 
 		Ok(writer.into_blob())
 	}

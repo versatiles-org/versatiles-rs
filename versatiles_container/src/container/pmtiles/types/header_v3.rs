@@ -4,6 +4,7 @@ use anyhow::{Result, ensure};
 use versatiles_core::{
 	Blob, ByteRange,
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+	utils::float_to_int,
 };
 
 #[derive(Debug, PartialEq)]
@@ -52,13 +53,13 @@ impl HeaderV3 {
 			tile_type: PT::from_value(parameters.tile_format).unwrap_or(PT::UNKNOWN),
 			min_zoom: bbox_pyramid.get_level_min().unwrap_or(0),
 			max_zoom: bbox_pyramid.get_level_max().unwrap_or(14),
-			min_lon_e7: (bbox.x_min * 1e7) as i32,
-			min_lat_e7: (bbox.y_min * 1e7) as i32,
-			max_lon_e7: (bbox.x_max * 1e7) as i32,
-			max_lat_e7: (bbox.y_max * 1e7) as i32,
+			min_lon_e7: float_to_int(bbox.x_min * 1e7).unwrap(),
+			min_lat_e7: float_to_int(bbox.y_min * 1e7).unwrap(),
+			max_lon_e7: float_to_int(bbox.x_max * 1e7).unwrap(),
+			max_lat_e7: float_to_int(bbox.y_max * 1e7).unwrap(),
 			center_zoom: bbox_pyramid.get_good_level().unwrap_or(0),
-			center_lon_e7: ((bbox.x_min + bbox.x_max) * 5e6) as i32,
-			center_lat_e7: ((bbox.y_min + bbox.y_max) * 5e6) as i32,
+			center_lon_e7: float_to_int((bbox.x_min + bbox.x_max) * 5e6).unwrap(),
+			center_lat_e7: float_to_int((bbox.y_min + bbox.y_max) * 5e6).unwrap(),
 		}
 	}
 

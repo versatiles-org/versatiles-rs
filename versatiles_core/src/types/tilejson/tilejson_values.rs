@@ -39,9 +39,9 @@ impl TileJsonValues {
 		self.0.get(key).and_then(|v| v.get_str().map(ToOwned::to_owned))
 	}
 
-	/// Returns a `u8` if this key exists as a byte variant, otherwise returns `None`.
-	pub fn get_byte(&self, key: &str) -> Option<u8> {
-		self.0.get(key).and_then(TileJsonValue::get_byte)
+	/// Returns a `i64` if this key exists as an integer variant, otherwise returns `None`.
+	pub fn get_integer(&self, key: &str) -> Option<i64> {
+		self.0.get(key).and_then(TileJsonValue::get_integer)
 	}
 
 	/// Checks if the given `key` is either absent or references a list (`Vec<String>`).
@@ -66,13 +66,13 @@ impl TileJsonValues {
 		Ok(())
 	}
 
-	/// Checks if the given `key` is either absent or references a byte (`u8`).
-	/// Returns an error if it is present but not a byte.
-	pub fn check_optional_byte(&self, key: &str) -> Result<()> {
+	/// Checks if the given `key` is either absent or references a integer (`i64`).
+	/// Returns an error if it is present but not a integer.
+	pub fn check_optional_integer(&self, key: &str) -> Result<()> {
 		if let Some(value) = self.0.get(key)
-			&& !value.is_byte()
+			&& !value.is_integer()
 		{
-			bail!("Item '{key}' is '{}' and not a 'Byte'", value.get_type());
+			bail!("Item '{key}' is '{}' and not a 'Integer'", value.get_type());
 		}
 		Ok(())
 	}
@@ -87,13 +87,13 @@ impl TileJsonValues {
 
 	/// Updates or inserts a byte (`u8`) for the given `key`.
 	/// The provided `update` closure receives the current value (if any)
-	/// and returns the new byte value to be stored.
-	pub fn update_byte<F>(&mut self, key: &str, update: F)
+	/// and returns the new integer value to be stored.
+	pub fn update_integer<F>(&mut self, key: &str, update: F)
 	where
-		F: FnOnce(Option<u8>) -> u8,
+		F: FnOnce(Option<i64>) -> i64,
 	{
-		let new_val = update(self.0.get(key).and_then(TileJsonValue::get_byte));
-		self.0.insert(key.to_owned(), TileJsonValue::Byte(new_val));
+		let new_val = update(self.0.get(key).and_then(TileJsonValue::get_integer));
+		self.0.insert(key.to_owned(), TileJsonValue::Integer(new_val));
 	}
 
 	pub fn set<T>(&mut self, key: &str, value: T)
@@ -136,16 +136,8 @@ mod tests {
 	fn insert_and_retrieve_byte() -> Result<()> {
 		let mut tv = TileJsonValues::default();
 		tv.insert("maxzoom", &JsonValue::from(12.9_f64))?;
-		assert_eq!(tv.get_byte("maxzoom"), Some(12));
+		assert_eq!(tv.get_integer("maxzoom"), Some(13));
 		Ok(())
-	}
-
-	#[test]
-	fn insert_out_of_range_byte() {
-		let mut tv = TileJsonValues::default();
-		// 999.0 is out of byte range
-		let result = tv.insert("zoom", &JsonValue::from(999_f64));
-		assert!(result.is_err());
 	}
 
 	#[test]
@@ -190,23 +182,23 @@ mod tests {
 	fn check_optional_byte() {
 		let mut tv = TileJsonValues::default();
 		tv.insert("opacity", &JsonValue::from(123_f64)).unwrap();
-		assert!(tv.check_optional_byte("opacity").is_ok());
+		assert!(tv.check_optional_integer("opacity").is_ok());
 
 		// Overwrite with a string -> fails
 		tv.insert("opacity", &JsonValue::from("should be a number")).unwrap();
-		assert!(tv.check_optional_byte("opacity").is_err());
+		assert!(tv.check_optional_integer("opacity").is_err());
 	}
 
 	#[test]
 	fn update_byte_test() {
 		let mut tv = TileJsonValues::default();
 		// No existing value => default to 0
-		tv.update_byte("zoom", |maybe| maybe.unwrap_or(0).max(10));
-		assert_eq!(tv.get_byte("zoom"), Some(10));
+		tv.update_integer("zoom", |maybe| maybe.unwrap_or(0).max(10));
+		assert_eq!(tv.get_integer("zoom"), Some(10));
 
 		// Existing value => modify existing
-		tv.update_byte("zoom", |maybe| maybe.unwrap_or(0).max(20));
-		assert_eq!(tv.get_byte("zoom"), Some(20));
+		tv.update_integer("zoom", |maybe| maybe.unwrap_or(0).max(20));
+		assert_eq!(tv.get_integer("zoom"), Some(20));
 	}
 
 	#[test]

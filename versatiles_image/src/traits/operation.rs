@@ -125,6 +125,7 @@ where
 	}
 
 	#[context("flattening image onto RGB({:?})", color)]
+	#[allow(clippy::cast_possible_truncation)]
 	fn into_flattened(self, color: Rgb<u8>) -> Result<DynamicImage> {
 		if !self.has_alpha() {
 			return Ok(self);
@@ -241,6 +242,7 @@ where
 /// Tests: alpha handling (drop/flatten/opaque), average color, scaling/cropping, overlays, and
 /// color‑channel mutations using `rstest` parameterization where appropriate.
 #[cfg(test)]
+#[allow(clippy::cast_possible_truncation)]
 mod tests {
 	use super::*;
 	use crate::traits::*;
