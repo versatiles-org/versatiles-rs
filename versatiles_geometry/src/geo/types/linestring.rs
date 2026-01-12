@@ -68,3 +68,109 @@ impl Debug for LineStringGeometry {
 }
 
 crate::impl_from_array!(LineStringGeometry, Coordinates);
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	// Tests for impl_from_array! macro-generated From implementations
+
+	#[test]
+	fn test_from_vec() {
+		let coords: Vec<(f64, f64)> = vec![(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)];
+		let line = LineStringGeometry::from(coords);
+		assert_eq!(line.0.len(), 3);
+		assert_eq!(line.0[0].x(), 0.0);
+		assert_eq!(line.0[2].x(), 2.0);
+	}
+
+	#[test]
+	fn test_from_vec_ref() {
+		let coords: Vec<(f64, f64)> = vec![(0.0, 0.0), (1.0, 1.0)];
+		let line = LineStringGeometry::from(&coords);
+		assert_eq!(line.0.len(), 2);
+	}
+
+	#[test]
+	fn test_from_slice() {
+		let coords: [(f64, f64); 3] = [(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)];
+		let line = LineStringGeometry::from(&coords[..]);
+		assert_eq!(line.0.len(), 3);
+	}
+
+	#[test]
+	fn test_from_array_ref() {
+		let coords: [(f64, f64); 2] = [(0.0, 0.0), (1.0, 1.0)];
+		let line = LineStringGeometry::from(&coords);
+		assert_eq!(line.0.len(), 2);
+	}
+
+	// Tests for LineStringGeometry methods
+
+	#[test]
+	fn test_area() {
+		let line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0)]);
+		assert_eq!(line.area(), 0.0);
+	}
+
+	#[test]
+	fn test_verify_valid() {
+		let line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0)]);
+		assert!(line.verify().is_ok());
+	}
+
+	#[test]
+	fn test_verify_invalid() {
+		let line = LineStringGeometry::from(vec![(0.0, 0.0)]);
+		assert!(line.verify().is_err());
+	}
+
+	#[test]
+	fn test_to_coord_json() {
+		let line = LineStringGeometry::from(vec![(1.0, 2.0), (3.0, 4.0)]);
+		let json = line.to_coord_json(None);
+		let arr = json.as_array().unwrap();
+		assert_eq!(arr.len(), 2);
+	}
+
+	#[test]
+	fn test_new_and_as_vec() {
+		let line = LineStringGeometry::new();
+		assert!(line.as_vec().is_empty());
+	}
+
+	#[test]
+	fn test_as_mut_vec() {
+		let mut line = LineStringGeometry::new();
+		line.as_mut_vec().push(Coordinates::from((1.0, 2.0)));
+		assert_eq!(line.0.len(), 1);
+	}
+
+	#[test]
+	fn test_into_inner() {
+		let line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0)]);
+		let inner = line.into_inner();
+		assert_eq!(inner.len(), 2);
+	}
+
+	#[test]
+	fn test_into_multi() {
+		let line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0)]);
+		let multi = line.into_multi();
+		assert_eq!(multi.as_vec().len(), 1);
+	}
+
+	#[test]
+	fn test_debug() {
+		let line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0)]);
+		let debug_str = format!("{:?}", line);
+		assert!(debug_str.contains("["));
+	}
+
+	#[test]
+	fn test_clone_and_eq() {
+		let line1 = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0)]);
+		let line2 = line1.clone();
+		assert_eq!(line1, line2);
+	}
+}
