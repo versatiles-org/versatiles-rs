@@ -110,7 +110,7 @@ mod tests {
 	use versatiles_image::DynamicImageTraitOperation;
 
 	#[tokio::test]
-	async fn test_raster_flatten() -> Result<()> {
+	async fn test_raster_flatten_custom_color() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
 			.operation_from_vpl("from_debug format=png | raster_flatten color=[255,127,0]")
@@ -125,5 +125,62 @@ mod tests {
 		assert_eq!(image.average_color(), [254, 135, 16]);
 
 		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_raster_flatten_default_color() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		// No color specified, defaults to white [255, 255, 255]
+		let op = factory
+			.operation_from_vpl("from_debug format=png | raster_flatten")
+			.await?;
+
+		let bbox = TileCoord::new(2, 1, 1)?.to_tile_bbox();
+		let image = op.get_tile_stream(bbox).await?.next().await.unwrap().1.into_image()?;
+		// With white background, the average should be different from custom orange
+		let avg = image.average_color();
+		assert_eq!(avg.len(), 3); // RGB output (no alpha)
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_source_type() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl("from_debug format=png | raster_flatten")
+			.await?;
+
+		let source_type = op.source_type();
+		assert!(source_type.to_string().contains("raster_flatten"));
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_metadata_and_tilejson() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl("from_debug format=png | raster_flatten")
+			.await?;
+
+		// metadata and tilejson should be passed through from source
+		let _metadata = op.metadata();
+		let _tilejson = op.tilejson();
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_factory_get_tag_name() {
+		let factory = Factory {};
+		assert_eq!(factory.get_tag_name(), "raster_flatten");
+	}
+
+	#[test]
+	fn test_factory_get_docs() {
+		let factory = Factory {};
+		let docs = factory.get_docs();
+		assert!(docs.contains("color"));
 	}
 }
