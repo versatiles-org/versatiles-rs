@@ -68,7 +68,7 @@
     "pack:dry": "npm pack --dry-run",
     "prepublishOnly": "napi prepublish -t npm",
     "test:coverage": "vitest run --coverage",
-    "test:examples": "for file in examples/*.ts; do echo \"\\n=== Running $file ===\"; npx tsx \"$file\" || exit 1; done",
+    "test:examples": "npx tsx scripts/run-examples.ts",
     "test:ui": "vitest --ui",
     "test:watch": "vitest",
     "test": "vitest run",
