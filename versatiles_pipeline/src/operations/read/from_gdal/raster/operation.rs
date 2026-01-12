@@ -257,7 +257,7 @@ mod tests {
 		let max: i16 = 1;
 		let mut max_diff: i16 = 0;
 		for i in 0..a.len() {
-			max_diff = max_diff.max((a[i] as i16 - b[i] as i16).abs());
+			max_diff = max_diff.max((i16::from(a[i]) - i16::from(b[i])).abs());
 		}
 		assert!(
 			max_diff <= max,

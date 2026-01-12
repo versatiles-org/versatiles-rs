@@ -246,7 +246,7 @@ impl MBTilesReader {
 
 		let progress = self
 			.runtime
-			.create_progress("get mbtiles bbox pyramid", (z1 - z0 + 1) as u64);
+			.create_progress("get mbtiles bbox pyramid", u64::from(z1 - z0 + 1));
 
 		for z in z0..=z1 {
 			let x0 = self.simple_query("MIN(tile_column)", &format!("zoom_level = {z}"))?;
@@ -285,7 +285,7 @@ impl MBTilesReader {
 			y0 = self.simple_query("MIN(tile_row)", &format!("{sql_prefix} tile_row <= {y0}"))?;
 			y1 = self.simple_query("MAX(tile_row)", &format!("{sql_prefix} tile_row >= {y1}"))?;
 
-			let max_value = 2i32.pow(z as u32) - 1;
+			let max_value = 2i32.pow(u32::from(z)) - 1;
 
 			bbox_pyramid.set_level_bbox(TileBBox::from_min_and_max(
 				z,

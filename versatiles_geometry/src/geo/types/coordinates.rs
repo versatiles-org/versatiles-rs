@@ -33,7 +33,7 @@ impl Coordinates {
 	#[must_use]
 	pub fn to_json(&self, precision: Option<u8>) -> JsonValue {
 		if let Some(prec) = precision {
-			let factor = 10f64.powi(prec as i32);
+			let factor = 10f64.powi(i32::from(prec));
 			let x = (self.0[0] * factor).round() / factor;
 			let y = (self.0[1] * factor).round() / factor;
 			JsonValue::from([x, y])

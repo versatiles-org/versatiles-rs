@@ -594,14 +594,14 @@ mod tests {
 		let a = bb(8, 3, 4, 6, 7); // 4x4
 		let b = a.at_level(target);
 		if target >= 8 {
-			let scale = 2u32.pow((target - 8) as u32);
+			let scale = 2u32.pow(u32::from(target - 8));
 			assert_eq!(b.level, target);
 			assert_eq!(b.x_min()?, a.x_min()? * scale);
 			assert_eq!(b.y_min()?, a.y_min()? * scale);
 			assert_eq!(b.x_max()?, (a.x_max()? + 1) * scale - 1);
 			assert_eq!(b.y_max()?, (a.y_max()? + 1) * scale - 1);
 		} else {
-			let scale = 2u32.pow((8 - target) as u32);
+			let scale = 2u32.pow(u32::from(8 - target));
 			assert_eq!(b.level, target);
 			assert_eq!(b.x_min()?, a.x_min()? / scale);
 			assert_eq!(b.y_min()?, a.y_min()? / scale);

@@ -74,7 +74,7 @@ fn bench_cache_sequential(c: &mut Criterion) {
 	// Test data: 1000 unique tiles
 	let coords: Vec<TileCoord> = (0..10)
 		.flat_map(|z| {
-			let max = 2u32.pow(z as u32);
+			let max = 2u32.pow(u32::from(z));
 			(0..max.min(10)).flat_map(move |x| (0..max.min(10)).filter_map(move |y| TileCoord::new(z, x, y).ok()))
 		})
 		.take(1000)
@@ -127,7 +127,7 @@ fn bench_cache_concurrent_writes(c: &mut Criterion) {
 
 	let coords: Vec<TileCoord> = (0..10)
 		.flat_map(|z| {
-			let max = 2u32.pow(z as u32);
+			let max = 2u32.pow(u32::from(z));
 			(0..max.min(10)).flat_map(move |x| (0..max.min(10)).filter_map(move |y| TileCoord::new(z, x, y).ok()))
 		})
 		.take(100)
@@ -210,7 +210,7 @@ fn bench_cache_hit_performance(c: &mut Criterion) {
 	// Create a smaller set of coords that will fit in cache
 	let coords: Vec<TileCoord> = (0..5)
 		.flat_map(|z| {
-			let max = 2u32.pow(z as u32);
+			let max = 2u32.pow(u32::from(z));
 			(0..max.min(5)).flat_map(move |x| (0..max.min(5)).filter_map(move |y| TileCoord::new(z, x, y).ok()))
 		})
 		.take(50)
@@ -287,7 +287,7 @@ fn bench_cache_read_heavy(c: &mut Criterion) {
 
 	let coords: Vec<TileCoord> = (0..8)
 		.flat_map(|z| {
-			let max = 2u32.pow(z as u32);
+			let max = 2u32.pow(u32::from(z));
 			(0..max.min(8)).flat_map(move |x| (0..max.min(8)).filter_map(move |y| TileCoord::new(z, x, y).ok()))
 		})
 		.take(100)
@@ -381,7 +381,7 @@ fn bench_overview_cache(c: &mut Criterion) {
 
 	let coords: Vec<TileCoord> = (0..10)
 		.flat_map(|z| {
-			let max = 2u32.pow(z as u32);
+			let max = 2u32.pow(u32::from(z));
 			(0..max.min(10)).flat_map(move |x| (0..max.min(10)).filter_map(move |y| TileCoord::new(z, x, y).ok()))
 		})
 		.take(200)

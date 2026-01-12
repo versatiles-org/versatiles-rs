@@ -762,10 +762,10 @@ mod tests {
 	#[case((180, -90, -180, 90),   (-180, -90, 180, 90))] // wrap-like input
 	fn test_new_normalized_extensive(#[case] input: (i16, i16, i16, i16), #[case] expected: (i16, i16, i16, i16)) {
 		let (x0, y0, x1, y1) = input;
-		let bbox = GeoBBox::new_normalized(x0 as f64, y0 as f64, x1 as f64, y1 as f64);
-		assert_eq!(bbox.x_min, expected.0 as f64);
-		assert_eq!(bbox.y_min, expected.1 as f64);
-		assert_eq!(bbox.x_max, expected.2 as f64);
-		assert_eq!(bbox.y_max, expected.3 as f64);
+		let bbox = GeoBBox::new_normalized(f64::from(x0), f64::from(y0), f64::from(x1), f64::from(y1));
+		assert_eq!(bbox.x_min, f64::from(expected.0));
+		assert_eq!(bbox.y_min, f64::from(expected.1));
+		assert_eq!(bbox.x_max, f64::from(expected.2));
+		assert_eq!(bbox.y_max, f64::from(expected.3));
 	}
 }

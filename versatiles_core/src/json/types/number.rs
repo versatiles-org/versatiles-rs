@@ -12,10 +12,24 @@ impl From<f64> for JsonValue {
 	}
 }
 
-/// Implement `From<Number>` for `JsonValue` for many Rust numeric types at once.
-macro_rules! impl_from_number_for_jsonvalue {
+/// Implement `From<Number>` for `JsonValue` for types with lossless f64 conversion.
+macro_rules! impl_from_number_lossless {
 	($($t:ty),+ $(,)?) => {
 		$(
+			impl From<$t> for JsonValue {
+				fn from(input: $t) -> Self {
+					JsonValue::Number(f64::from(input))
+				}
+			}
+		)+
+	};
+}
+
+/// Implement `From<Number>` for `JsonValue` for types without lossless f64 conversion.
+macro_rules! impl_from_number_lossy {
+	($($t:ty),+ $(,)?) => {
+		$(
+			#[allow(clippy::cast_precision_loss)]
 			impl From<$t> for JsonValue {
 				fn from(input: $t) -> Self {
 					JsonValue::Number(input as f64)
@@ -25,12 +39,8 @@ macro_rules! impl_from_number_for_jsonvalue {
 	};
 }
 
-impl_from_number_for_jsonvalue!(
-	// floats
-	f32, // unsigned ints
-	u8, u16, u32, u64, u128, usize, // signed ints
-	i8, i16, i32, i64, i128, isize,
-);
+impl_from_number_lossless!(f32, u8, u16, u32, i8, i16, i32);
+impl_from_number_lossy!(u64, u128, usize, i64, i128, isize);
 
 #[cfg(test)]
 mod tests {
@@ -42,6 +52,7 @@ mod tests {
 		($($name:ident : $t:ty => [$($v:expr),+ $(,)?];)+) => {
 			$(
 				#[test]
+				#[allow(clippy::cast_lossless)]
 				fn $name() {
 					let vals: &[$t] = &[$($v),+];
 					for &v in vals {

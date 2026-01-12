@@ -243,14 +243,14 @@ where
 
 			for y in 0..height {
 				for x in 0..width {
-					let b = self.get_raw_pixel(x, y)[c as usize] as f64;
+					let b = f64::from(self.get_raw_pixel(x, y)[c as usize]);
 					// Ignore saturated pixels; those are clipped by generation and non-linear
 					if b <= 0.0 || b >= 255.0 {
 						continue;
 					}
 					let v = b - 128.0;
-					let xf = f64::from(x) - width as f64 / 2.0;
-					let yf = f64::from(y) - height as f64 / 2.0;
+					let xf = f64::from(x) - f64::from(width) / 2.0;
+					let yf = f64::from(y) - f64::from(height) / 2.0;
 
 					s_x += xf;
 					s_y += yf;
@@ -303,13 +303,13 @@ where
 			let mut n = 0.0;
 			for y in 0..height {
 				for x in 0..width {
-					let bb = self.get_raw_pixel(x, y)[c as usize] as f64;
+					let bb = f64::from(self.get_raw_pixel(x, y)[c as usize]);
 					if bb <= 0.0 || bb >= 255.0 {
 						continue;
 					}
 					let v = bb - 128.0;
-					let xf = f64::from(x) - width as f64 / 2.0;
-					let yf = f64::from(y) - height as f64 / 2.0;
+					let xf = f64::from(x) - f64::from(width) / 2.0;
+					let yf = f64::from(y) - f64::from(height) / 2.0;
 					let v_hat = a * xf + b2 * yf + c_hat;
 					error_sum += (v - v_hat).abs();
 					n += 1.0;
@@ -393,7 +393,8 @@ mod tests {
 	#[case::rgb([  ( 3,  14, 80), (-7, -54, 65), (12, 80, 75)])]
 	#[case::rgba([ ( 4,  34, 88), (-9, -68, 67), (15, 60, 72), (-20, -17, 93)])]
 	fn marker_gauge_roundtrip<const N: usize>(#[case] args: [(i32, i32, i32); N]) {
-		let params = args.map(|(offset, angle, scale)| MarkerParameters::new(offset as f64, angle as f64, scale as f64));
+		let params = args
+			.map(|(offset, angle, scale)| MarkerParameters::new(f64::from(offset), f64::from(angle), f64::from(scale)));
 		let img = DynamicImage::new_marker(&params);
 		assert_eq!(img.dimensions(), (256, 256));
 		assert_eq!(img.color().channel_count() as usize, N);

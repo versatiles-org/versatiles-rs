@@ -210,7 +210,7 @@ impl RasterSource {
 		);
 
 		// Initial resolution (meters per pixel at zoom 0)
-		let initial_res = EARTH_CIRCUMFERENCE / (tile_size as f64);
+		let initial_res = EARTH_CIRCUMFERENCE / f64::from(tile_size);
 		let zf = (initial_res / self.pixel_size).log2().ceil();
 		log::trace!("initial_res={initial_res:.6}, zf(raw)={zf:.6}");
 		let z: i32 = float_to_int(zf).unwrap_or(0);

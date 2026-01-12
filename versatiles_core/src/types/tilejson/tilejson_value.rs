@@ -65,7 +65,7 @@ impl TileJsonValue {
 
 impl From<u8> for TileJsonValue {
 	fn from(value: u8) -> Self {
-		TileJsonValue::Integer(value as i64)
+		TileJsonValue::Integer(i64::from(value))
 	}
 }
 

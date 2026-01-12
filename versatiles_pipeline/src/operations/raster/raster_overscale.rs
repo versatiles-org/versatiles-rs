@@ -151,7 +151,7 @@ impl Operation {
 
 #[context("extracting image for tile {:?}", coord_dst)]
 fn extract_image(image_src: &DynamicImage, coord_src: TileCoord, coord_dst: TileCoord) -> Result<DynamicImage> {
-	let level_diff = coord_dst.level as i32 - coord_src.level as i32;
+	let level_diff = i32::from(coord_dst.level) - i32::from(coord_src.level);
 
 	ensure!(level_diff >= 0, "difference in levels must be non-negative");
 
@@ -162,9 +162,9 @@ fn extract_image(image_src: &DynamicImage, coord_src: TileCoord, coord_dst: Tile
 	// Calculate extraction parameters
 	let scale = 1 << level_diff;
 	let tile_size = image_src.width(); // Assume square tiles
-	let sub_size = tile_size as f64 / scale as f64;
-	let tile_offset_x = (coord_dst.x % scale) as f64;
-	let tile_offset_y = (coord_dst.y % scale) as f64;
+	let sub_size = f64::from(tile_size) / f64::from(scale);
+	let tile_offset_x = f64::from(coord_dst.x % scale);
+	let tile_offset_y = f64::from(coord_dst.y % scale);
 	let x0 = tile_offset_x * sub_size;
 	let y0 = tile_offset_y * sub_size;
 
@@ -281,14 +281,16 @@ mod tests {
 
 	async fn get_avg(op: &Operation, coord: (u8, u8, u8), scale: u32) -> Vec<u8> {
 		let (level, x, y) = coord;
-		let coord = TileCoord::new(level, x as u32, y as u32).unwrap().to_tile_bbox();
+		let coord = TileCoord::new(level, u32::from(x), u32::from(y))
+			.unwrap()
+			.to_tile_bbox();
 		let mut tiles = op.get_tile_stream(coord).await.unwrap().to_vec().await;
 		assert_eq!(tiles.len(), 1);
 		let mut tile = tiles.pop().unwrap().1;
 		let image = tile.as_image().unwrap();
 		let avg = image.average_color();
 		avg.into_iter()
-			.map(|c| (c as f64 / scale as f64).round() as u8)
+			.map(|c| (f64::from(c) / f64::from(scale)).round() as u8)
 			.collect()
 	}
 

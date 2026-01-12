@@ -667,9 +667,9 @@ mod tests {
 
 		for i in 0..10 {
 			let data = ProgressData {
-				position: (i * 10) as f64,
+				position: f64::from(i * 10),
 				total: 100.0,
-				percentage: (i * 10) as f64,
+				percentage: f64::from(i * 10),
 				speed: 10.5,
 				estimated_seconds_remaining: Some(5.0),
 				eta: Some(1234567890.0),
@@ -860,9 +860,9 @@ mod tests {
 			let handle = thread::spawn(move || {
 				for j in 0..100 {
 					let data = ProgressData {
-						position: (i * 100 + j) as f64,
+						position: f64::from(i * 100 + j),
 						total: 1000.0,
-						percentage: ((i * 100 + j) as f64 / 10.0),
+						percentage: (f64::from(i * 100 + j) / 10.0),
 						speed: 50.0,
 						estimated_seconds_remaining: Some(10.0),
 						eta: Some(1234567890.0),

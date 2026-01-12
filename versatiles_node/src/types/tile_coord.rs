@@ -151,7 +151,7 @@ impl TileCoord {
 	/// Each zoom level doubles the number of tiles in each dimension.
 	#[napi(getter)]
 	pub fn z(&self) -> u32 {
-		self.inner.level as u32
+		u32::from(self.inner.level)
 	}
 
 	/// Get the tile column (x coordinate)

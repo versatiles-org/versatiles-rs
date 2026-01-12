@@ -395,15 +395,15 @@ impl TileServer {
 		match self.actual_port.read() {
 			Ok(guard) => {
 				if let Some(actual) = *guard {
-					actual as u32
+					u32::from(actual)
 				} else {
 					// Fallback to configured port (before server starts)
-					self.initial_port as u32
+					u32::from(self.initial_port)
 				}
 			}
 			Err(_) => {
 				// Fallback to configured port if lock is poisoned
-				self.initial_port as u32
+				u32::from(self.initial_port)
 			}
 		}
 	}

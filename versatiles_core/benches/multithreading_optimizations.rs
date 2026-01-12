@@ -32,7 +32,7 @@ fn bench_tile_stream_concurrency(c: &mut Criterion) {
 	// Create test data: 1000 tiles
 	let coords: Vec<TileCoord> = (0..10)
 		.flat_map(|z| {
-			let max = 2u32.pow(z as u32);
+			let max = 2u32.pow(u32::from(z));
 			(0..max.min(10)).flat_map(move |x| (0..max.min(10)).filter_map(move |y| TileCoord::new(z, x, y).ok()))
 		})
 		.take(1000)
@@ -43,7 +43,7 @@ fn bench_tile_stream_concurrency(c: &mut Criterion) {
 	// CPU-bound workload simulation
 	let cpu_work = Arc::new(|coord: TileCoord| {
 		// Simulate CPU work: compute hash
-		let hash = (coord.level as u64) * 1000000 + (coord.x as u64) * 1000 + (coord.y as u64);
+		let hash = u64::from(coord.level) * 1000000 + u64::from(coord.x) * 1000 + u64::from(coord.y);
 		for _ in 0..100 {
 			black_box(hash.wrapping_mul(31).wrapping_add(17));
 		}

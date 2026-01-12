@@ -43,14 +43,14 @@ impl TileJSON {
 				id: id.clone(),
 				fields: layer.fields.clone(),
 				description: layer.description.clone(),
-				minzoom: layer.minzoom.map(|z| z as f64),
-				maxzoom: layer.maxzoom.map(|z| z as f64),
+				minzoom: layer.minzoom.map(f64::from),
+				maxzoom: layer.maxzoom.map(f64::from),
 			})
 			.collect::<Vec<_>>();
 
 		TileJSON {
 			bounds: tj.bounds.map(|b| vec![b.x_min, b.y_min, b.x_max, b.y_max]),
-			center: tj.center.map(|c| vec![c.0, c.1, c.2 as f64]),
+			center: tj.center.map(|c| vec![c.0, c.1, f64::from(c.2)]),
 			vector_layers: if vector_layers.is_empty() {
 				None
 			} else {
@@ -59,9 +59,9 @@ impl TileJSON {
 			tile_type: tj.tile_type.map(|t| t.to_string()),
 			tile_format: tj.tile_format.map(|f| f.to_string()),
 			tile_schema: tj.tile_schema.map(|s| s.to_string()),
-			tile_size: tj.tile_size.map(|s| s.size() as f64),
-			minzoom: p.get_level_min().unwrap_or(0) as f64,
-			maxzoom: p.get_level_max().unwrap_or(0) as f64,
+			tile_size: tj.tile_size.map(|s| f64::from(s.size())),
+			minzoom: f64::from(p.get_level_min().unwrap_or(0)),
+			maxzoom: f64::from(p.get_level_max().unwrap_or(0)),
 			tilejson: String::from("3.0"),
 		}
 	}

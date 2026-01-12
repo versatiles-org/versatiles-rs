@@ -103,7 +103,7 @@ fn main() -> Result<()> {
 	let cli = Cli::parse();
 
 	// Initialize logger and set log level based on verbosity flag
-	let verbosity = cli.verbose as i16 - cli.quiet as i16;
+	let verbosity = i16::from(cli.verbose) - i16::from(cli.quiet);
 	let log_level = match verbosity {
 		i16::MIN..-2 => LevelFilter::Off,
 		-2 => LevelFilter::Error,

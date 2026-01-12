@@ -49,8 +49,8 @@ fn draw_text(name: &str, y: f32, text: String) -> VectorTileLayer {
 					.iter()
 					.map(|p| {
 						[
-							8.0 * (p.x * scale + position.x) as f64,
-							8.0 * ((height - p.y) * scale + position.y) as f64,
+							8.0 * f64::from(p.x * scale + position.x),
+							8.0 * f64::from((height - p.y) * scale + position.y),
 						]
 					})
 					.collect::<Vec<_>>(),
@@ -115,7 +115,7 @@ fn get_multipolygon(mls: MultiLineStringGeometry) -> MultiPolygonGeometry {
 fn get_background_layer() -> Result<VectorTileLayer> {
 	let mut circle = LineStringGeometry::new();
 	for i in 0..=100 {
-		let a = PI * i as f64 / 50.0;
+		let a = PI * f64::from(i) / 50.0;
 		circle.push(Coordinates::new((a.cos() + 1.0) * 2047.5, (a.sin() + 1.0) * 2047.5));
 	}
 
