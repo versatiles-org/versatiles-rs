@@ -325,6 +325,7 @@ pub fn parse_array_entries<R>(
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
 	use std::io::Cursor;

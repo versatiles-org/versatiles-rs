@@ -94,6 +94,7 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
 	/// WebP tests: lossy & lossless success cases, rejection of grey/greya inputs,
 	/// and verification that fully opaque RGBA is stored without alpha.

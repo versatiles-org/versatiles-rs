@@ -105,6 +105,7 @@ impl From<geo::Polygon<f64>> for PolygonGeometry {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
 

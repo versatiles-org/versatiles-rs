@@ -144,7 +144,7 @@ where
 
 /// Tests cover metadata queries, size/meta validation, empty/opaque logic and per-channel diffs.
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_truncation, clippy::float_cmp)]
 mod tests {
 	use super::*;
 	use image::ExtendedColorType;

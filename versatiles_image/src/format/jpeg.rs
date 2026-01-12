@@ -79,6 +79,7 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 /// Tests for JPEG encoding and decoding.
 /// Ensures correct behavior for both supported and unsupported (alpha) image types.
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
 	use crate::traits::DynamicImageTraitTest;

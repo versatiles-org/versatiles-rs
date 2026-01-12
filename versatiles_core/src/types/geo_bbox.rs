@@ -474,7 +474,7 @@ impl<T: Copy + Into<f64>> TryFrom<&[T; 4]> for GeoBBox {
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_truncation, clippy::float_cmp)]
 mod tests {
 	use super::*;
 	use rstest::rstest;

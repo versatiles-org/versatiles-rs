@@ -80,6 +80,7 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
 	/// PNG smoke tests: lossless round‑trip over all supported color types and
 	/// verification that fully opaque images are saved **without** an alpha channel.

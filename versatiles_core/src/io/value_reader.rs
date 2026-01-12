@@ -377,6 +377,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
 	use super::super::ValueReaderSlice;
 	use super::*;

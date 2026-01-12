@@ -537,6 +537,7 @@ impl From<Arc<RustSourceType>> for SourceType {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
 

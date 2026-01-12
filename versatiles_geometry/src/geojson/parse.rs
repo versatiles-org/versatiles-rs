@@ -301,6 +301,7 @@ fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordin
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
 

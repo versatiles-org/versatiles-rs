@@ -43,6 +43,7 @@ impl_from_number_lossless!(f32, u8, u16, u32, i8, i16, i32);
 impl_from_number_lossy!(u64, u128, usize, i64, i128, isize);
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
 

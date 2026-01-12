@@ -83,6 +83,7 @@ pub fn blob2image(_blob: &Blob) -> Result<DynamicImage> {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
 	/// AVIF encoding smoke tests: verify byte‑size ratios for our synthetic patterns
 	/// and validate the explicit error for the unsupported "lossless" path.
