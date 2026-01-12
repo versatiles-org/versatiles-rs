@@ -59,7 +59,6 @@ too_many_lines = "allow"
 cast_precision_loss = "allow"
 
 # Allow stylistic patterns used consistently in codebase
-comparison_chain = "allow"
 ignored_unit_patterns = "allow"
 items_after_statements = "allow"
 iter_without_into_iter = "allow"

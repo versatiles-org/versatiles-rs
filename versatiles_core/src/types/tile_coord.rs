@@ -216,23 +216,28 @@ impl TileCoord {
 	/// If `level` > current, x/y are multiplied; if lower, x/y are divided.
 	#[must_use]
 	pub fn at_level(&self, level: u8) -> TileCoord {
+		use std::cmp::Ordering::{Equal, Greater, Less};
 		assert!(level <= 31, "level ({level}) must be <= 31");
-		if level > self.level {
-			let scale = 2u32.pow(u32::from(level - self.level));
-			TileCoord {
-				x: self.x * scale,
-				y: self.y * scale,
-				level,
+		match level.cmp(&self.level) {
+			Greater => {
+				let scale = 2u32.pow(u32::from(level - self.level));
+				TileCoord {
+					x: self.x * scale,
+					y: self.y * scale,
+					level,
+				}
 			}
-		} else if level < self.level {
-			let scale = 2u32.pow(u32::from(self.level - level));
-			TileCoord {
-				x: self.x / scale,
-				y: self.y / scale,
-				level,
+			Less => {
+				let scale = 2u32.pow(u32::from(self.level - level));
+				TileCoord {
+					x: self.x / scale,
+					y: self.y / scale,
+					level,
+				}
 			}
-		} else {
-			*self // no change, same level
+			Equal => {
+				*self // no change, same level
+			}
 		}
 	}
 
