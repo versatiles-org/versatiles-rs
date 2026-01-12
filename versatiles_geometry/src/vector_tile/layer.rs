@@ -328,8 +328,45 @@ impl VectorTileLayer {
 
 #[cfg(test)]
 mod tests {
+	use super::super::geometry_type::GeomType;
 	use super::*;
 	use versatiles_core::io::ValueReaderSlice;
+
+	// ========================================================================
+	// Test Helpers
+	// ========================================================================
+
+	/// Creates a point feature with the given id and coordinates
+	fn point_feature(id: u64, x: f64, y: f64) -> GeoFeature {
+		GeoFeature {
+			id: Some(GeoValue::from(id)),
+			geometry: crate::geo::Geometry::new_point([x, y]),
+			properties: GeoProperties::default(),
+		}
+	}
+
+	/// Creates a point feature with the given id, coordinates, and properties
+	fn point_feature_with_props(id: u64, x: f64, y: f64, props: Vec<(&str, GeoValue)>) -> GeoFeature {
+		GeoFeature {
+			id: Some(GeoValue::from(id)),
+			geometry: crate::geo::Geometry::new_point([x, y]),
+			properties: GeoProperties::from(props),
+		}
+	}
+
+	/// Creates a standard test layer from features
+	fn make_layer(features: Vec<GeoFeature>) -> Result<VectorTileLayer> {
+		VectorTileLayer::from_features("test".to_string(), features, 4096, 1)
+	}
+
+	/// Creates a layer with a single example feature
+	fn make_example_layer() -> Result<VectorTileLayer> {
+		make_layer(vec![GeoFeature::new_example()])
+	}
+
+	// ========================================================================
+	// Core functionality tests
+	// ========================================================================
 
 	#[test]
 	fn test_read_vector_tile_layer() -> Result<()> {
@@ -414,6 +451,285 @@ mod tests {
 		);
 		assert_eq!(layer.extent, 4096);
 		assert_eq!(layer.version, 1);
+		Ok(())
+	}
+
+	// ========================================================================
+	// Tests for map_properties
+	// ========================================================================
+
+	#[test]
+	fn test_map_properties_add_property() -> Result<()> {
+		let mut layer = make_example_layer()?;
+
+		layer.map_properties(|mut props| {
+			props.insert("added".to_string(), GeoValue::from("new_value"));
+			props
+		})?;
+
+		let decoded_props = layer.decode_tag_ids(&layer.features[0].tag_ids)?;
+		assert_eq!(decoded_props.get("added"), Some(&GeoValue::from("new_value")));
+		assert_eq!(decoded_props.get("name"), Some(&GeoValue::from("Nice")));
+		Ok(())
+	}
+
+	#[test]
+	fn test_map_properties_modify_property() -> Result<()> {
+		let mut layer = make_example_layer()?;
+
+		layer.map_properties(|mut props| {
+			if let Some(GeoValue::String(s)) = props.get("name") {
+				props.insert("name".to_string(), GeoValue::from(format!("{s}_modified")));
+			}
+			props
+		})?;
+
+		let decoded_props = layer.decode_tag_ids(&layer.features[0].tag_ids)?;
+		assert_eq!(decoded_props.get("name"), Some(&GeoValue::from("Nice_modified")));
+		Ok(())
+	}
+
+	#[test]
+	fn test_map_properties_remove_property() -> Result<()> {
+		let mut layer = make_example_layer()?;
+
+		layer.map_properties(|mut props| {
+			props.remove("population");
+			props
+		})?;
+
+		let decoded_props = layer.decode_tag_ids(&layer.features[0].tag_ids)?;
+		assert!(decoded_props.get("population").is_none());
+		assert_eq!(decoded_props.get("name"), Some(&GeoValue::from("Nice")));
+		assert_eq!(decoded_props.get("is_nice"), Some(&GeoValue::from(true)));
+		Ok(())
+	}
+
+	#[test]
+	fn test_map_properties_multiple_features() -> Result<()> {
+		let mut layer = make_layer(vec![
+			point_feature_with_props(
+				1,
+				0.0,
+				0.0,
+				vec![("name", GeoValue::from("A")), ("value", GeoValue::from(10))],
+			),
+			point_feature_with_props(
+				2,
+				1.0,
+				1.0,
+				vec![("name", GeoValue::from("B")), ("value", GeoValue::from(20))],
+			),
+		])?;
+
+		layer.map_properties(|mut props| {
+			if let Some(GeoValue::UInt(v)) = props.get("value") {
+				props.insert("value".to_string(), GeoValue::from(v * 2));
+			}
+			props
+		})?;
+
+		assert_eq!(layer.features.len(), 2);
+		let props1 = layer.decode_tag_ids(&layer.features[0].tag_ids)?;
+		let props2 = layer.decode_tag_ids(&layer.features[1].tag_ids)?;
+		assert_eq!(props1.get("value"), Some(&GeoValue::from(20)));
+		assert_eq!(props2.get("value"), Some(&GeoValue::from(40)));
+		Ok(())
+	}
+
+	#[test]
+	fn test_map_properties_rebuilds_property_manager() -> Result<()> {
+		let mut layer = make_example_layer()?;
+
+		assert!(layer.property_manager.key.list.contains(&"name".to_string()));
+		assert!(layer.property_manager.key.list.contains(&"population".to_string()));
+
+		layer.map_properties(|props| {
+			let mut new_props = GeoProperties::default();
+			if let Some(name) = props.get("name") {
+				new_props.insert("name".to_string(), name.clone());
+			}
+			new_props
+		})?;
+
+		assert_eq!(layer.property_manager.key.list, vec!["name".to_string()]);
+		Ok(())
+	}
+
+	// ========================================================================
+	// Tests for retain_features
+	// ========================================================================
+
+	#[test]
+	fn test_retain_features_keep_all() -> Result<()> {
+		let mut layer = make_layer(vec![point_feature(1, 0.0, 0.0), point_feature(2, 1.0, 1.0)])?;
+
+		layer.retain_features(|_| true);
+
+		assert_eq!(layer.features.len(), 2);
+		Ok(())
+	}
+
+	#[test]
+	fn test_retain_features_remove_all() -> Result<()> {
+		let mut layer = make_layer(vec![point_feature(1, 0.0, 0.0), point_feature(2, 1.0, 1.0)])?;
+
+		layer.retain_features(|_| false);
+
+		assert_eq!(layer.features.len(), 0);
+		Ok(())
+	}
+
+	#[test]
+	fn test_retain_features_filter_by_id() -> Result<()> {
+		let mut layer = make_layer(vec![
+			point_feature(1, 0.0, 0.0),
+			point_feature(2, 1.0, 1.0),
+			point_feature(3, 2.0, 2.0),
+		])?;
+
+		layer.retain_features(|f| f.id.is_some_and(|id| id >= 2));
+
+		assert_eq!(layer.features.len(), 2);
+		assert_eq!(layer.features[0].id, Some(2));
+		assert_eq!(layer.features[1].id, Some(3));
+		Ok(())
+	}
+
+	#[test]
+	fn test_retain_features_filter_by_geometry_type() -> Result<()> {
+		let line_feature = GeoFeature {
+			id: Some(GeoValue::from(2)),
+			geometry: crate::geo::Geometry::new_line_string(vec![[0.0, 0.0], [1.0, 1.0]]),
+			properties: GeoProperties::default(),
+		};
+		let mut layer = make_layer(vec![point_feature(1, 0.0, 0.0), line_feature])?;
+
+		layer.retain_features(|f| f.geom_type == GeomType::MultiPoint);
+
+		assert_eq!(layer.features.len(), 1);
+		assert_eq!(layer.features[0].id, Some(1));
+		Ok(())
+	}
+
+	// ========================================================================
+	// Tests for filter_map_properties
+	// ========================================================================
+
+	#[test]
+	fn test_filter_map_properties_keep_all() -> Result<()> {
+		let mut layer = make_example_layer()?;
+
+		layer.filter_map_properties(Some)?;
+
+		assert_eq!(layer.features.len(), 1);
+		Ok(())
+	}
+
+	#[test]
+	fn test_filter_map_properties_remove_all() -> Result<()> {
+		let mut layer = make_example_layer()?;
+
+		layer.filter_map_properties(|_| None)?;
+
+		assert_eq!(layer.features.len(), 0);
+		Ok(())
+	}
+
+	#[test]
+	fn test_filter_map_properties_filter_by_property() -> Result<()> {
+		let mut layer = make_layer(vec![
+			point_feature_with_props(1, 0.0, 0.0, vec![("keep", GeoValue::from(true))]),
+			point_feature_with_props(2, 1.0, 1.0, vec![("keep", GeoValue::from(false))]),
+			point_feature_with_props(3, 2.0, 2.0, vec![("keep", GeoValue::from(true))]),
+		])?;
+
+		layer.filter_map_properties(|props| {
+			if props.get("keep") == Some(&GeoValue::from(true)) {
+				Some(props)
+			} else {
+				None
+			}
+		})?;
+
+		assert_eq!(layer.features.len(), 2);
+		assert_eq!(layer.features[0].id, Some(1));
+		assert_eq!(layer.features[1].id, Some(3));
+		Ok(())
+	}
+
+	#[test]
+	fn test_filter_map_properties_filter_and_transform() -> Result<()> {
+		let mut layer = make_layer(vec![
+			point_feature_with_props(1, 0.0, 0.0, vec![("value", GeoValue::from(10))]),
+			point_feature_with_props(2, 1.0, 1.0, vec![("value", GeoValue::from(5))]),
+			point_feature_with_props(3, 2.0, 2.0, vec![("value", GeoValue::from(15))]),
+		])?;
+
+		layer.filter_map_properties(|mut props| {
+			if let Some(GeoValue::UInt(v)) = props.get("value")
+				&& *v >= 10
+			{
+				props.insert("value".to_string(), GeoValue::from(v * 2));
+				return Some(props);
+			}
+			None
+		})?;
+
+		assert_eq!(layer.features.len(), 2);
+		let props1 = layer.decode_tag_ids(&layer.features[0].tag_ids)?;
+		let props2 = layer.decode_tag_ids(&layer.features[1].tag_ids)?;
+		assert_eq!(props1.get("value"), Some(&GeoValue::from(20))); // 10 * 2
+		assert_eq!(props2.get("value"), Some(&GeoValue::from(30))); // 15 * 2
+		Ok(())
+	}
+
+	#[test]
+	fn test_filter_map_properties_rebuilds_property_manager() -> Result<()> {
+		let mut layer = make_layer(vec![
+			point_feature_with_props(
+				1,
+				0.0,
+				0.0,
+				vec![
+					("common", GeoValue::from("shared")),
+					("only_in_first", GeoValue::from("value1")),
+				],
+			),
+			point_feature_with_props(
+				2,
+				1.0,
+				1.0,
+				vec![
+					("common", GeoValue::from("shared")),
+					("only_in_second", GeoValue::from("value2")),
+				],
+			),
+		])?;
+
+		layer.filter_map_properties(|props| {
+			if props.get("only_in_first").is_some() {
+				None
+			} else {
+				Some(props)
+			}
+		})?;
+
+		// Property manager should not contain "only_in_first" anymore
+		assert!(!layer.property_manager.key.list.contains(&"only_in_first".to_string()));
+		assert!(layer.property_manager.key.list.contains(&"common".to_string()));
+		assert!(layer.property_manager.key.list.contains(&"only_in_second".to_string()));
+		Ok(())
+	}
+
+	#[test]
+	fn test_filter_map_properties_empty_layer() -> Result<()> {
+		let mut layer = VectorTileLayer::new_standard("test");
+
+		// Should handle empty layer gracefully
+		layer.filter_map_properties(Some)?;
+
+		assert_eq!(layer.features.len(), 0);
 		Ok(())
 	}
 }
