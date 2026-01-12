@@ -568,11 +568,11 @@ mod tests {
 		let json = r#"{
 		"type":"FeatureCollection",
 		"features":[{
-			"type":"Feature","geometry":{"type":"Point","coordinates":[0,0]},"properties":{"val":3.14}
+			"type":"Feature","geometry":{"type":"Point","coordinates":[0,0]},"properties":{"val":47.11}
 		}]}"#;
 		let collection = parse_geojson(json)?;
 		let props = &collection.features[0].properties;
-		assert_eq!(props.get("val"), Some(&GeoValue::Double(3.14)));
+		assert_eq!(props.get("val"), Some(&GeoValue::Double(47.11)));
 		Ok(())
 	}
 
