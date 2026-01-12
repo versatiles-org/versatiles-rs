@@ -310,4 +310,96 @@ mod tests {
 		// No content-encoding because we avoid recompressing images
 		assert!(headers.get(header::CONTENT_ENCODING).is_none());
 	}
+
+	#[test]
+	fn error_404_returns_correct_response() {
+		let resp = error_404();
+		assert_eq!(resp.status(), 404);
+		let headers = resp.headers();
+		assert_eq!(headers.get(header::CONTENT_TYPE).unwrap(), "text/plain; charset=utf-8");
+	}
+
+	#[test]
+	fn error_500_returns_correct_response() {
+		let resp = error_500();
+		assert_eq!(resp.status(), 500);
+		let headers = resp.headers();
+		assert_eq!(headers.get(header::CONTENT_TYPE).unwrap(), "text/plain; charset=utf-8");
+	}
+
+	#[test]
+	fn ok_data_brotli_when_allowed() {
+		// Source is uncompressed text; client allows brotli
+		let src = SourceResponse {
+			blob: Blob::from("The quick brown fox jumps over the lazy dog"),
+			compression: TileCompression::Uncompressed,
+			mime: "text/plain".into(),
+		};
+		let mut target = TargetCompression::from_none();
+		target.insert(TileCompression::Brotli);
+
+		let resp = super::ok_data(src, target);
+		assert_eq!(resp.status(), 200);
+		let headers = resp.headers();
+
+		assert_eq!(headers.get(header::CONTENT_TYPE).unwrap(), "text/plain");
+		// Expect brotli because requester allowed it
+		assert_eq!(headers.get(header::CONTENT_ENCODING).unwrap(), "br");
+	}
+
+	#[test]
+	fn ok_data_jpeg_is_not_recompressed() {
+		let src = SourceResponse {
+			blob: Blob::from(vec![0xFF, 0xD8, 0xFF]), // JPEG signature
+			compression: TileCompression::Uncompressed,
+			mime: "image/jpeg".into(),
+		};
+		let mut target = TargetCompression::from_none();
+		target.insert(TileCompression::Gzip);
+
+		let resp = super::ok_data(src, target);
+		assert_eq!(resp.status(), 200);
+		// No content-encoding for incompressible images
+		assert!(resp.headers().get(header::CONTENT_ENCODING).is_none());
+	}
+
+	#[test]
+	fn ok_data_webp_is_not_recompressed() {
+		let src = SourceResponse {
+			blob: Blob::from(vec![0x52, 0x49, 0x46, 0x46]), // RIFF header
+			compression: TileCompression::Uncompressed,
+			mime: "image/webp".into(),
+		};
+		let mut target = TargetCompression::from_none();
+		target.insert(TileCompression::Gzip);
+
+		let resp = super::ok_data(src, target);
+		assert_eq!(resp.status(), 200);
+		assert!(resp.headers().get(header::CONTENT_ENCODING).is_none());
+	}
+
+	#[test]
+	fn ok_data_avif_is_not_recompressed() {
+		let src = SourceResponse {
+			blob: Blob::from(vec![0x00, 0x00, 0x00]), // AVIF placeholder
+			compression: TileCompression::Uncompressed,
+			mime: "image/avif".into(),
+		};
+		let mut target = TargetCompression::from_none();
+		target.insert(TileCompression::Brotli);
+
+		let resp = super::ok_data(src, target);
+		assert_eq!(resp.status(), 200);
+		assert!(resp.headers().get(header::CONTENT_ENCODING).is_none());
+	}
+
+	#[test]
+	fn static_handler_state_clone() {
+		let state = StaticHandlerState {
+			sources: Arc::new(arc_swap::ArcSwap::from_pointee(vec![])),
+			minimal_recompression: true,
+		};
+		let cloned = state.clone();
+		assert!(cloned.minimal_recompression);
+	}
 }
