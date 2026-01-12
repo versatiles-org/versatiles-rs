@@ -25,7 +25,7 @@ mod tests {
 			root_bytes: Blob::from(vec![1, 2, 3]),
 			leaves_bytes: Blob::from(vec![4, 5]),
 		};
-		let debug_str = format!("{:?}", dir);
+		let debug_str = format!("{dir:?}");
 		assert!(debug_str.contains("root_bytes: 3"));
 		assert!(debug_str.contains("leaves_bytes: 2"));
 	}

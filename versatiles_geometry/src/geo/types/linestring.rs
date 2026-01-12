@@ -163,8 +163,8 @@ mod tests {
 	#[test]
 	fn test_debug() {
 		let line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0)]);
-		let debug_str = format!("{:?}", line);
-		assert!(debug_str.contains("["));
+		let debug_str = format!("{line:?}");
+		assert!(debug_str.contains('['));
 	}
 
 	#[test]

@@ -118,14 +118,14 @@ mod tests {
 	#[test]
 	fn test_display_container() {
 		let source = SourceType::new_container("mbtiles", "/path/to/file.mbtiles");
-		assert_eq!(format!("{}", source), "container 'mbtiles' ('/path/to/file.mbtiles')");
+		assert_eq!(format!("{source}"), "container 'mbtiles' ('/path/to/file.mbtiles')");
 	}
 
 	#[test]
 	fn test_display_processor() {
 		let container = SourceType::new_container("mbtiles", "/path/to/file.mbtiles");
 		let processor = SourceType::new_processor("filter", container);
-		assert_eq!(format!("{}", processor), "processor 'filter'");
+		assert_eq!(format!("{processor}"), "processor 'filter'");
 	}
 
 	#[test]
@@ -133,13 +133,13 @@ mod tests {
 		let source1 = SourceType::new_container("mbtiles", "/path/to/file1.mbtiles");
 		let source2 = SourceType::new_container("pmtiles", "/path/to/file2.pmtiles");
 		let composite = SourceType::new_composite("stacked", &[source1, source2]);
-		assert_eq!(format!("{}", composite), "composite 'stacked'");
+		assert_eq!(format!("{composite}"), "composite 'stacked'");
 	}
 
 	#[test]
 	fn test_debug_container() {
 		let source = SourceType::new_container("mbtiles", "/path/to/file.mbtiles");
-		let debug_str = format!("{:?}", source);
+		let debug_str = format!("{source:?}");
 		assert!(debug_str.contains("Container"));
 		assert!(debug_str.contains("mbtiles"));
 		assert!(debug_str.contains("/path/to/file.mbtiles"));
@@ -149,7 +149,7 @@ mod tests {
 	fn test_debug_processor() {
 		let container = SourceType::new_container("mbtiles", "/path/to/file.mbtiles");
 		let processor = SourceType::new_processor("filter", container);
-		let debug_str = format!("{:?}", processor);
+		let debug_str = format!("{processor:?}");
 		assert!(debug_str.contains("Processor"));
 		assert!(debug_str.contains("filter"));
 	}
@@ -159,7 +159,7 @@ mod tests {
 		let source1 = SourceType::new_container("mbtiles", "/path/to/file1.mbtiles");
 		let source2 = SourceType::new_container("pmtiles", "/path/to/file2.pmtiles");
 		let composite = SourceType::new_composite("stacked", &[source1, source2]);
-		let debug_str = format!("{:?}", composite);
+		let debug_str = format!("{composite:?}");
 		assert!(debug_str.contains("Composite"));
 		assert!(debug_str.contains("stacked"));
 	}
