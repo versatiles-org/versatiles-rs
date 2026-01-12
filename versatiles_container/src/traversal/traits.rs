@@ -143,9 +143,10 @@ impl<T: TileSource + ?Sized> TileSourceTraverseExt for T {}
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{SourceType, TileSourceMetadata, TilesRuntime};
+	use crate::{SourceType, TileSourceMetadata, TilesRuntime, TraversalOrder};
 	use anyhow::Result;
 	use async_trait::async_trait;
+	use rstest::rstest;
 	use std::sync::atomic::{AtomicU64, Ordering};
 	use versatiles_core::{Blob, TileBBoxPyramid, TileCompression, TileFormat, TileJSON};
 
@@ -409,8 +410,6 @@ mod tests {
 		// - Read traversal: DepthFirst with small max_size (8)
 		// - Write traversal: AnyOrder with larger min_size (16)
 		// This forces tiles to be cached (Push) and then retrieved (Pop)
-		use super::super::TraversalOrder;
-
 		let source_traversal = Traversal::new(TraversalOrder::DepthFirst, 1, 8)?;
 		let write_traversal = Traversal::new(TraversalOrder::AnyOrder, 16, 16)?;
 
@@ -445,8 +444,6 @@ mod tests {
 	#[tokio::test]
 	async fn test_traverse_push_pop_with_disk_cache() -> Result<()> {
 		// Test Push/Pop path with disk-backed cache
-		use super::super::TraversalOrder;
-
 		let source_traversal = Traversal::new(TraversalOrder::DepthFirst, 1, 8)?;
 		let write_traversal = Traversal::new(TraversalOrder::AnyOrder, 16, 16)?;
 
@@ -482,8 +479,6 @@ mod tests {
 	#[tokio::test]
 	async fn test_traverse_push_pop_verifies_tile_content() -> Result<()> {
 		// Verify tiles retain correct content through Push/Pop caching
-		use super::super::TraversalOrder;
-
 		let source_traversal = Traversal::new(TraversalOrder::DepthFirst, 1, 8)?;
 		let write_traversal = Traversal::new(TraversalOrder::AnyOrder, 16, 16)?;
 
@@ -526,8 +521,6 @@ mod tests {
 	#[tokio::test]
 	async fn test_traverse_pmtiles_order_to_any() -> Result<()> {
 		// Test PMTiles traversal order with Push/Pop
-		use super::super::TraversalOrder;
-
 		let source_traversal = Traversal::new(TraversalOrder::PMTiles, 1, 8)?;
 		let write_traversal = Traversal::new(TraversalOrder::AnyOrder, 16, 16)?;
 
@@ -556,6 +549,130 @@ mod tests {
 
 		// Levels 4-5: 256 + 1024 = 1280 tiles
 		assert_eq!(tile_count.load(Ordering::SeqCst), 1280);
+		Ok(())
+	}
+
+	/// Test that verifies the callback receives bboxes in the correct write traversal order.
+	/// Uses rstest to test multiple combinations of source and write traversal orders.
+	///
+	/// Note: Only compatible traversal combinations are tested. Converting between
+	/// incompatible orders (e.g., DepthFirst to PMTiles) is not supported by the
+	/// traversal translation system.
+	#[rstest]
+	#[case::any_to_depthfirst(TraversalOrder::AnyOrder, 1, 256, TraversalOrder::DepthFirst, 1, 256, 2)]
+	#[case::any_to_pmtiles(TraversalOrder::AnyOrder, 1, 256, TraversalOrder::PMTiles, 1, 256, 2)]
+	#[case::depthfirst_to_depthfirst(TraversalOrder::DepthFirst, 1, 256, TraversalOrder::DepthFirst, 1, 256, 3)]
+	#[case::pmtiles_to_pmtiles(TraversalOrder::PMTiles, 1, 256, TraversalOrder::PMTiles, 1, 256, 3)]
+	#[case::depthfirst_to_any(TraversalOrder::DepthFirst, 1, 64, TraversalOrder::AnyOrder, 1, 64, 3)]
+	#[case::pmtiles_to_any(TraversalOrder::PMTiles, 1, 64, TraversalOrder::AnyOrder, 1, 64, 3)]
+	#[tokio::test]
+	async fn test_traverse_order_verification(
+		#[case] source_order: TraversalOrder,
+		#[case] source_min_size: u32,
+		#[case] source_max_size: u32,
+		#[case] write_order: TraversalOrder,
+		#[case] write_min_size: u32,
+		#[case] write_max_size: u32,
+		#[case] max_level: u8,
+	) -> Result<()> {
+		let source_traversal = Traversal::new(source_order, source_min_size, source_max_size)?;
+		let write_traversal = Traversal::new(write_order, write_min_size, write_max_size)?;
+
+		let reader = TestReader::new(source_traversal, max_level);
+		let runtime = TilesRuntime::builder().with_memory_cache().build();
+
+		let bboxes_received = Arc::new(std::sync::Mutex::new(Vec::new()));
+		let bboxes_clone = bboxes_received.clone();
+
+		reader
+			.traverse_all_tiles(
+				&write_traversal,
+				|bbox, stream| {
+					let bboxes = bboxes_clone.clone();
+					Box::pin(async move {
+						bboxes.lock().unwrap().push(bbox);
+						stream.drain_and_count().await;
+						Ok(())
+					})
+				},
+				runtime,
+				None,
+			)
+			.await?;
+
+		let bboxes = bboxes_received.lock().unwrap();
+
+		// Verify we received some bboxes
+		assert!(!bboxes.is_empty(), "Should receive at least one bbox");
+
+		// Verify the order matches the write traversal order
+		let write_size = write_traversal.max_size()?;
+		assert!(
+			write_order.verify_order(&bboxes, write_size),
+			"Bboxes should be in {write_order:?} order, but received: {:?}",
+			bboxes.iter().take(10).collect::<Vec<_>>()
+		);
+
+		Ok(())
+	}
+
+	/// Test order verification with Push/Pop caching path
+	/// When read max_size < write min_size, the Push/Pop path is used
+	#[rstest]
+	#[case::depthfirst_cached_to_any(TraversalOrder::DepthFirst, 1, 8, TraversalOrder::AnyOrder, 16, 16, 4, 5)]
+	#[case::pmtiles_cached_to_any(TraversalOrder::PMTiles, 1, 8, TraversalOrder::AnyOrder, 16, 16, 4, 5)]
+	#[tokio::test]
+	async fn test_traverse_order_with_push_pop_caching(
+		#[case] source_order: TraversalOrder,
+		#[case] source_min_size: u32,
+		#[case] source_max_size: u32,
+		#[case] write_order: TraversalOrder,
+		#[case] write_min_size: u32,
+		#[case] write_max_size: u32,
+		#[case] min_level: u8,
+		#[case] max_level: u8,
+	) -> Result<()> {
+		let source_traversal = Traversal::new(source_order, source_min_size, source_max_size)?;
+		let write_traversal = Traversal::new(write_order, write_min_size, write_max_size)?;
+
+		// Use level range to ensure write bbox sizes fit
+		let reader = TestReader::with_level_range(source_traversal, min_level, max_level);
+		let runtime = TilesRuntime::builder().with_memory_cache().build();
+
+		let bboxes_received = Arc::new(std::sync::Mutex::new(Vec::new()));
+		let bboxes_clone = bboxes_received.clone();
+
+		reader
+			.traverse_all_tiles(
+				&write_traversal,
+				|bbox, stream| {
+					let bboxes = bboxes_clone.clone();
+					Box::pin(async move {
+						bboxes.lock().unwrap().push(bbox);
+						stream.drain_and_count().await;
+						Ok(())
+					})
+				},
+				runtime,
+				None,
+			)
+			.await?;
+
+		let bboxes = bboxes_received.lock().unwrap();
+
+		// Verify we received some bboxes
+		assert!(!bboxes.is_empty(), "Should receive at least one bbox");
+
+		// For AnyOrder write traversal, any order is valid
+		// For other orders, verify the specific order
+		if write_order != TraversalOrder::AnyOrder {
+			let write_size = write_traversal.max_size()?;
+			assert!(
+				write_order.verify_order(&bboxes, write_size),
+				"Bboxes should be in {write_order:?} order with Push/Pop caching"
+			);
+		}
+
 		Ok(())
 	}
 }
