@@ -141,7 +141,7 @@ fn rotate(s: i64, tx: &mut i64, ty: &mut i64, rx: i64, ry: i64) {
 /// Returns **`"tile zoom exceeds 64-bit limit"`** when the index would
 /// require a zoom level ≥ 32.
 fn index_to_coord(index: u64) -> Result<TileCoord> {
-	let index = index as i64;
+	let index = i64::try_from(index)?;
 	let mut acc = 0;
 	for t_z in 0..32 {
 		let num_tiles = (1 << t_z) * (1 << t_z);

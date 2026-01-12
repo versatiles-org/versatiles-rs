@@ -81,7 +81,13 @@ impl Instance {
 			let operation: GDALWarpOperationH = GDALCreateWarpOperation(&raw const options);
 
 			#[allow(clippy::cast_possible_truncation)]
-			let rv = GDALChunkAndWarpMulti(operation, 0, 0, width as i32, height as i32);
+			let rv = GDALChunkAndWarpMulti(
+				operation,
+				0,
+				0,
+				i32::try_from(width).unwrap(),
+				i32::try_from(height).unwrap(),
+			);
 
 			GDALDestroyWarpOperation(operation);
 			GDALDestroyGenImgProjTransformer(options.pTransformerArg);

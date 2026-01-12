@@ -125,7 +125,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// # Errors
 	/// Returns an error if reading the underlying varint fails.
 	fn read_svarint(&mut self) -> Result<i64> {
-		let sint_value = self.read_varint()? as i64;
+		let sint_value = i64::try_from(self.read_varint()?)?;
 		Ok((sint_value >> 1) ^ -(sint_value & 1))
 	}
 

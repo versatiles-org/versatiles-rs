@@ -104,7 +104,7 @@ impl EntriesV3 {
 	/// Returns `Some(EntryV3)` if found, or `None` if no entry matches the tile ID.
 	pub fn find_tile(&self, tile_id: u64) -> Option<EntryV3> {
 		let mut m: i64 = 0;
-		let mut n: i64 = self.entries.len() as i64 - 1;
+		let mut n: i64 = i64::try_from(self.entries.len()).unwrap() - 1;
 
 		while m <= n {
 			let k = (n + m) >> 1;

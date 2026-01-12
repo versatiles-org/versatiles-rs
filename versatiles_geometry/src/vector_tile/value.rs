@@ -31,7 +31,9 @@ impl<'a> GeoValuePBF<'a> for GeoValue {
 				}
 				(2, 5) => Float(reader.read_f32().context("Failed to read f32 value")?),
 				(3, 1) => Double(reader.read_f64().context("Failed to read f64 value")?),
-				(4, 0) => Int(reader.read_varint().context("Failed to read varint for int value")? as i64),
+				(4, 0) => Int(i64::try_from(
+					reader.read_varint().context("Failed to read varint for int value")?,
+				)?),
 				(5, 0) => UInt(reader.read_varint().context("Failed to read varint for uint value")?),
 				(6, 0) => Int(reader.read_svarint().context("Failed to read svarint value")?),
 				(7, 0) => Bool(reader.read_varint().context("Failed to read varint for bool value")? != 0),

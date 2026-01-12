@@ -56,12 +56,11 @@ must_use_candidate = "allow"
 too_many_lines = "allow"
 
 # Allow reasonable casting patterns in container code
+cast_lossless = "allow"
 cast_precision_loss = "allow"
 cast_sign_loss = "allow"
-cast_lossless = "allow"
 
 # Allow stylistic patterns used consistently in codebase
-cast_possible_wrap = "allow"
 comparison_chain = "allow"
 float_cmp = "allow"
 ignored_unit_patterns = "allow"

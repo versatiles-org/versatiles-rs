@@ -212,7 +212,7 @@ impl BandMapping {
 	/// This function modifies the provided `GDALWarpOptions` structure.
 	#[allow(clippy::cast_possible_truncation)]
 	pub unsafe fn setup_gdal_warp_options(&self, options: &mut gdal_sys::GDALWarpOptions) {
-		options.nBandCount = self.len() as i32;
+		options.nBandCount = i32::try_from(self.len()).unwrap();
 
 		unsafe {
 			let n = std::mem::size_of::<i32>() * self.len();
@@ -220,8 +220,8 @@ impl BandMapping {
 			options.panDstBands = gdal_sys::CPLMalloc(n).cast::<i32>();
 
 			for (i, &band_index) in self.map.iter().enumerate() {
-				options.panSrcBands.add(i).write(band_index as i32);
-				options.panDstBands.add(i).write((i + 1) as i32);
+				options.panSrcBands.add(i).write(i32::try_from(band_index).unwrap());
+				options.panDstBands.add(i).write(i32::try_from(i + 1).unwrap());
 			}
 		}
 	}
