@@ -173,4 +173,98 @@ mod tests {
 		let line2 = line1.clone();
 		assert_eq!(line1, line2);
 	}
+
+	// Tests for CompositeGeometryTrait default methods (from traits.rs)
+
+	#[test]
+	fn test_into_iter() {
+		let line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)]);
+		let coords: Vec<_> = line.into_iter().collect();
+		assert_eq!(coords.len(), 3);
+		assert_eq!(coords[0].x(), 0.0);
+		assert_eq!(coords[2].x(), 2.0);
+	}
+
+	#[test]
+	fn test_into_first_and_rest() {
+		let line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)]);
+		let (first, rest) = line.into_first_and_rest().unwrap();
+		assert_eq!(first.x(), 0.0);
+		assert_eq!(rest.len(), 2);
+	}
+
+	#[test]
+	fn test_into_first_and_rest_empty() {
+		let line = LineStringGeometry::new();
+		assert!(line.into_first_and_rest().is_none());
+	}
+
+	#[test]
+	fn test_is_empty() {
+		let empty = LineStringGeometry::new();
+		assert!(empty.is_empty());
+
+		let non_empty = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0)]);
+		assert!(!non_empty.is_empty());
+	}
+
+	#[test]
+	fn test_len() {
+		let line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)]);
+		assert_eq!(line.len(), 3);
+	}
+
+	#[test]
+	fn test_push() {
+		let mut line = LineStringGeometry::new();
+		line.push(Coordinates::from((1.0, 2.0)));
+		line.push(Coordinates::from((3.0, 4.0)));
+		assert_eq!(line.len(), 2);
+	}
+
+	#[test]
+	fn test_pop() {
+		let mut line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0)]);
+		let popped = line.pop().unwrap();
+		assert_eq!(popped.x(), 1.0);
+		assert_eq!(line.len(), 1);
+	}
+
+	#[test]
+	fn test_pop_empty() {
+		let mut line = LineStringGeometry::new();
+		assert!(line.pop().is_none());
+	}
+
+	#[test]
+	fn test_first_and_last() {
+		let line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)]);
+		assert_eq!(line.first().unwrap().x(), 0.0);
+		assert_eq!(line.last().unwrap().x(), 2.0);
+	}
+
+	#[test]
+	fn test_first_and_last_empty() {
+		let line = LineStringGeometry::new();
+		assert!(line.first().is_none());
+		assert!(line.last().is_none());
+	}
+
+	#[test]
+	fn test_first_mut() {
+		let mut line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0)]);
+		if let Some(first) = line.first_mut() {
+			*first = Coordinates::from((9.0, 9.0));
+		}
+		assert_eq!(line.first().unwrap().x(), 9.0);
+	}
+
+	#[test]
+	fn test_last_mut() {
+		let mut line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0)]);
+		if let Some(last) = line.last_mut() {
+			*last = Coordinates::from((9.0, 9.0));
+		}
+		assert_eq!(line.last().unwrap().x(), 9.0);
+	}
 }
