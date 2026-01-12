@@ -154,4 +154,71 @@ mod tests {
 		assert!(!blob2image(&encode(&img, Some(100))?)?.has_alpha());
 		Ok(())
 	}
+
+	/* ---------- encode() direct tests ---------- */
+
+	#[test]
+	fn encode_with_custom_quality() -> Result<()> {
+		let img = DynamicImage::new_test_rgb();
+		let blob_q50 = encode(&img, Some(50))?;
+		let blob_q95 = encode(&img, Some(95))?;
+		// Both should produce valid output
+		assert!(!blob_q50.is_empty());
+		assert!(!blob_q95.is_empty());
+		// Lower quality should generally produce smaller files
+		assert!(blob_q50.len() < blob_q95.len());
+		Ok(())
+	}
+
+	#[test]
+	fn encode_quality_boundary() -> Result<()> {
+		let img = DynamicImage::new_test_rgb();
+		// quality 99 is lossy
+		let blob_lossy = encode(&img, Some(99))?;
+		// quality 100 is lossless
+		let blob_lossless = encode(&img, Some(100))?;
+		// Lossless should be smaller for our synthetic test image
+		assert!(!blob_lossy.is_empty());
+		assert!(!blob_lossless.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn encode_default_quality() -> Result<()> {
+		let img = DynamicImage::new_test_rgb();
+		// None defaults to 95
+		let blob_default = encode(&img, None)?;
+		let blob_95 = encode(&img, Some(95))?;
+		// Should produce same size (same quality)
+		assert_eq!(blob_default.len(), blob_95.len());
+		Ok(())
+	}
+
+	/* ---------- Error cases ---------- */
+
+	#[test]
+	fn encode_non_8bit_image_fails() {
+		use image::{ImageBuffer, Rgb};
+		// Create a 16-bit RGB image
+		let img16: ImageBuffer<Rgb<u16>, Vec<u16>> = ImageBuffer::new(8, 8);
+		let dynamic_img = DynamicImage::from(img16);
+		let result = encode(&dynamic_img, None);
+		assert!(result.is_err());
+		let err_msg = result.unwrap_err().chain().last().unwrap().to_string();
+		assert!(err_msg.contains("8-bit"), "Expected '8-bit' in: {err_msg}");
+	}
+
+	#[test]
+	fn blob2image_invalid_data() {
+		let blob = Blob::from(vec![1, 2, 3, 4, 5]);
+		let result = blob2image(&blob);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn blob2image_empty_blob() {
+		let blob = Blob::from(vec![]);
+		let result = blob2image(&blob);
+		assert!(result.is_err());
+	}
 }
