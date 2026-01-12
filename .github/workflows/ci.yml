@@ -227,11 +227,11 @@ jobs:
           verbose: true
 
   # ============================================================================
-  # Job 7: Windows Tests (Runs in parallel)
+  # Job 7: Windows Lint (Format + Clippy)
   # Runtime: ~4-6 minutes
   # ============================================================================
-  windows:
-    name: 'Test on Windows'
+  windows-lint:
+    name: 'Windows Lint'
     runs-on: windows-latest
     steps:
       - name: Configure Git EOL
@@ -251,7 +251,7 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "windows"
+          shared-key: "windows-lint"
           cache-targets: true
           cache-on-failure: true
 
@@ -261,8 +261,35 @@ jobs:
       - name: Clippy (all targets)
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+  # ============================================================================
+  # Job 8: Windows Tests (Runs in parallel with Windows Lint)
+  # Runtime: ~3-4 minutes
+  # ============================================================================
+  windows-test:
+    name: 'Windows Tests'
+    runs-on: windows-latest
+    steps:
+      - name: Configure Git EOL
+        shell: bash
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "windows-test"
+          cache-targets: true
+          cache-on-failure: true
+
       - name: Tests (all targets)
         run: cargo test --workspace --all-targets
 
-      - name: Doctests (all-features)
+      - name: Doctests
         run: cargo test --workspace --doc
