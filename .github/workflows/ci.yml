@@ -323,7 +323,7 @@ jobs:
 
       - name: Build
         working-directory: ./versatiles_node
-        run: npm run build
+        run: npm run build:debug
 
       - name: Typecheck
         working-directory: ./versatiles_node
