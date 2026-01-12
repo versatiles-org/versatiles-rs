@@ -126,7 +126,6 @@ jobs:
   linux-nodejs:
     name: "Linux: Node.js"
     runs-on: ubuntu-latest
-    needs: [linux-clippy]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -291,7 +290,6 @@ jobs:
   windows-nodejs:
     name: "Windows: Node.js"
     runs-on: windows-latest
-    needs: [windows-lint]
     steps:
       - name: Configure Git
         shell: bash
