@@ -125,15 +125,73 @@ mod tests {
 		Ok(())
 	}
 
-	//#[rstest]
-	//#[case::greya(DynamicImage::new_test_greya())]
-	//#[case::rgba(DynamicImage::new_test_rgba())]
-	//#[test]
-	//fn opaque_is_saved_without_alpha(#[case] mut img: DynamicImage) -> Result<()> {
-	//	assert!(img.has_alpha());
-	//	img.make_opaque()?;
-	//	assert!(!blob2image(&compress(&img, Some(80), None)?)?.has_alpha());
-	//	assert!(!blob2image(&compress(&img, Some(100), None)?)?.has_alpha());
-	//	Ok(())
-	//}
+	/* ---------- encode() direct tests ---------- */
+
+	#[test]
+	fn encode_with_custom_quality() -> Result<()> {
+		let img = DynamicImage::new_test_rgb();
+		let blob_q50 = encode(&img, Some(50), None)?;
+		let blob_q90 = encode(&img, Some(90), None)?;
+		// Lower quality should generally produce smaller files
+		assert!(blob_q50.len() < blob_q90.len());
+		Ok(())
+	}
+
+	#[test]
+	fn encode_with_custom_speed() -> Result<()> {
+		let img = DynamicImage::new_test_rgb();
+		// Speed 0 maps to encoder speed 1 (slowest)
+		let blob_slow = encode(&img, Some(80), Some(0))?;
+		// Speed 100 maps to encoder speed 10 (fastest)
+		let blob_fast = encode(&img, Some(80), Some(100))?;
+		// Both should produce valid output
+		assert!(!blob_slow.is_empty());
+		assert!(!blob_fast.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn encode_speed_edge_cases() -> Result<()> {
+		let img = DynamicImage::new_test_rgb();
+		// Test speed boundaries
+		assert!(encode(&img, Some(80), Some(0)).is_ok());
+		assert!(encode(&img, Some(80), Some(50)).is_ok());
+		assert!(encode(&img, Some(80), Some(100)).is_ok());
+		Ok(())
+	}
+
+	#[test]
+	fn encode_quality_boundary() {
+		let img = DynamicImage::new_test_rgb();
+		// quality 99 should work
+		assert!(encode(&img, Some(99), None).is_ok());
+		// quality 100 should fail
+		assert!(encode(&img, Some(100), None).is_err());
+	}
+
+	/* ---------- Error cases ---------- */
+
+	#[test]
+	fn encode_non_8bit_image_fails() {
+		use image::{ImageBuffer, Rgb};
+		// Create a 16-bit RGB image
+		let img16: ImageBuffer<Rgb<u16>, Vec<u16>> = ImageBuffer::new(8, 8);
+		let dynamic_img = DynamicImage::from(img16);
+		let result = encode(&dynamic_img, None, None);
+		assert!(result.is_err());
+		let err_msg = result.unwrap_err().chain().last().unwrap().to_string();
+		assert!(err_msg.contains("8-bit"), "Expected '8-bit' in: {err_msg}");
+	}
+
+	#[test]
+	fn blob2image_not_implemented() {
+		let blob = Blob::from(vec![1, 2, 3]);
+		let result = blob2image(&blob);
+		assert!(result.is_err());
+		let err_msg = result.unwrap_err().chain().last().unwrap().to_string();
+		assert!(
+			err_msg.contains("AVIF decoding not implemented"),
+			"Expected 'AVIF decoding not implemented' in: {err_msg}"
+		);
+	}
 }
