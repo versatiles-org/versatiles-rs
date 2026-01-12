@@ -225,3 +225,447 @@ impl Debug for Geometry {
 		f.debug_tuple(type_name).field(inner).finish()
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	// ========================================================================
+	// Constructor tests
+	// ========================================================================
+
+	#[test]
+	fn test_new_point() {
+		let geom = Geometry::new_point([1.0, 2.0]);
+		assert!(matches!(geom, Geometry::Point(_)));
+		assert_eq!(geom.type_name(), "Point");
+	}
+
+	#[test]
+	fn test_new_line_string() {
+		let geom = Geometry::new_line_string(vec![[0.0, 0.0], [1.0, 1.0]]);
+		assert!(matches!(geom, Geometry::LineString(_)));
+		assert_eq!(geom.type_name(), "LineString");
+	}
+
+	#[test]
+	fn test_new_polygon() {
+		let geom = Geometry::new_polygon(vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]);
+		assert!(matches!(geom, Geometry::Polygon(_)));
+		assert_eq!(geom.type_name(), "Polygon");
+	}
+
+	#[test]
+	fn test_new_multi_point() {
+		let geom = Geometry::new_multi_point(vec![[0.0, 0.0], [1.0, 1.0]]);
+		assert!(matches!(geom, Geometry::MultiPoint(_)));
+		assert_eq!(geom.type_name(), "MultiPoint");
+	}
+
+	#[test]
+	fn test_new_multi_line_string() {
+		let geom = Geometry::new_multi_line_string(vec![vec![[0.0, 0.0], [1.0, 1.0]], vec![[2.0, 2.0], [3.0, 3.0]]]);
+		assert!(matches!(geom, Geometry::MultiLineString(_)));
+		assert_eq!(geom.type_name(), "MultiLineString");
+	}
+
+	#[test]
+	fn test_new_multi_polygon() {
+		let geom = Geometry::new_multi_polygon(vec![vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]]);
+		assert!(matches!(geom, Geometry::MultiPolygon(_)));
+		assert_eq!(geom.type_name(), "MultiPolygon");
+	}
+
+	// ========================================================================
+	// Type check tests
+	// ========================================================================
+
+	#[test]
+	fn test_is_single_geometry() {
+		assert!(Geometry::new_point([0.0, 0.0]).is_single_geometry());
+		assert!(Geometry::new_line_string(vec![[0.0, 0.0], [1.0, 1.0]]).is_single_geometry());
+		assert!(Geometry::new_polygon(vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]).is_single_geometry());
+
+		assert!(!Geometry::new_multi_point(vec![[0.0, 0.0]]).is_single_geometry());
+		assert!(!Geometry::new_multi_line_string(vec![vec![[0.0, 0.0], [1.0, 1.0]]]).is_single_geometry());
+		assert!(
+			!Geometry::new_multi_polygon(vec![vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]])
+				.is_single_geometry()
+		);
+	}
+
+	#[test]
+	fn test_is_multi_geometry() {
+		assert!(!Geometry::new_point([0.0, 0.0]).is_multi_geometry());
+		assert!(!Geometry::new_line_string(vec![[0.0, 0.0], [1.0, 1.0]]).is_multi_geometry());
+		assert!(!Geometry::new_polygon(vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]).is_multi_geometry());
+
+		assert!(Geometry::new_multi_point(vec![[0.0, 0.0]]).is_multi_geometry());
+		assert!(Geometry::new_multi_line_string(vec![vec![[0.0, 0.0], [1.0, 1.0]]]).is_multi_geometry());
+		assert!(
+			Geometry::new_multi_polygon(vec![vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]])
+				.is_multi_geometry()
+		);
+	}
+
+	// ========================================================================
+	// type_name tests
+	// ========================================================================
+
+	#[test]
+	fn test_type_name_all_variants() {
+		assert_eq!(Geometry::new_point([0.0, 0.0]).type_name(), "Point");
+		assert_eq!(
+			Geometry::new_line_string(vec![[0.0, 0.0], [1.0, 1.0]]).type_name(),
+			"LineString"
+		);
+		assert_eq!(
+			Geometry::new_polygon(vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]).type_name(),
+			"Polygon"
+		);
+		assert_eq!(Geometry::new_multi_point(vec![[0.0, 0.0]]).type_name(), "MultiPoint");
+		assert_eq!(
+			Geometry::new_multi_line_string(vec![vec![[0.0, 0.0], [1.0, 1.0]]]).type_name(),
+			"MultiLineString"
+		);
+		assert_eq!(
+			Geometry::new_multi_polygon(vec![vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]]).type_name(),
+			"MultiPolygon"
+		);
+	}
+
+	// ========================================================================
+	// into_multi_geometry tests
+	// ========================================================================
+
+	#[test]
+	fn test_into_multi_geometry_from_point() {
+		let point = Geometry::new_point([1.0, 2.0]);
+		let multi = point.into_multi_geometry();
+		assert!(matches!(multi, Geometry::MultiPoint(_)));
+		assert_eq!(multi.type_name(), "MultiPoint");
+	}
+
+	#[test]
+	fn test_into_multi_geometry_from_line_string() {
+		let line = Geometry::new_line_string(vec![[0.0, 0.0], [1.0, 1.0]]);
+		let multi = line.into_multi_geometry();
+		assert!(matches!(multi, Geometry::MultiLineString(_)));
+		assert_eq!(multi.type_name(), "MultiLineString");
+	}
+
+	#[test]
+	fn test_into_multi_geometry_from_polygon() {
+		let polygon = Geometry::new_polygon(vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]);
+		let multi = polygon.into_multi_geometry();
+		assert!(matches!(multi, Geometry::MultiPolygon(_)));
+		assert_eq!(multi.type_name(), "MultiPolygon");
+	}
+
+	#[test]
+	fn test_into_multi_geometry_multi_unchanged() {
+		let multi_point = Geometry::new_multi_point(vec![[0.0, 0.0], [1.0, 1.0]]);
+		let result = multi_point.clone().into_multi_geometry();
+		assert_eq!(result, multi_point);
+
+		let multi_line = Geometry::new_multi_line_string(vec![vec![[0.0, 0.0], [1.0, 1.0]]]);
+		let result = multi_line.clone().into_multi_geometry();
+		assert_eq!(result, multi_line);
+
+		let multi_poly = Geometry::new_multi_polygon(vec![vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]]);
+		let result = multi_poly.clone().into_multi_geometry();
+		assert_eq!(result, multi_poly);
+	}
+
+	// ========================================================================
+	// into_single_geometry tests
+	// ========================================================================
+
+	#[test]
+	fn test_into_single_geometry_single_unchanged() {
+		let point = Geometry::new_point([1.0, 2.0]);
+		let result = point.clone().into_single_geometry();
+		assert_eq!(result, point);
+
+		let line = Geometry::new_line_string(vec![[0.0, 0.0], [1.0, 1.0]]);
+		let result = line.clone().into_single_geometry();
+		assert_eq!(result, line);
+
+		let polygon = Geometry::new_polygon(vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]);
+		let result = polygon.clone().into_single_geometry();
+		assert_eq!(result, polygon);
+	}
+
+	#[test]
+	fn test_into_single_geometry_multi_point_one_element() {
+		let multi = Geometry::new_multi_point(vec![[1.0, 2.0]]);
+		let single = multi.into_single_geometry();
+		assert!(matches!(single, Geometry::Point(_)));
+		assert_eq!(single.type_name(), "Point");
+	}
+
+	#[test]
+	fn test_into_single_geometry_multi_point_multiple_elements() {
+		let multi = Geometry::new_multi_point(vec![[1.0, 2.0], [3.0, 4.0]]);
+		let result = multi.clone().into_single_geometry();
+		assert!(matches!(result, Geometry::MultiPoint(_)));
+	}
+
+	#[test]
+	fn test_into_single_geometry_multi_line_string_one_element() {
+		let multi = Geometry::new_multi_line_string(vec![vec![[0.0, 0.0], [1.0, 1.0]]]);
+		let single = multi.into_single_geometry();
+		assert!(matches!(single, Geometry::LineString(_)));
+		assert_eq!(single.type_name(), "LineString");
+	}
+
+	#[test]
+	fn test_into_single_geometry_multi_line_string_multiple_elements() {
+		let multi = Geometry::new_multi_line_string(vec![vec![[0.0, 0.0], [1.0, 1.0]], vec![[2.0, 2.0], [3.0, 3.0]]]);
+		let result = multi.clone().into_single_geometry();
+		assert!(matches!(result, Geometry::MultiLineString(_)));
+	}
+
+	#[test]
+	fn test_into_single_geometry_multi_polygon_one_element() {
+		let multi = Geometry::new_multi_polygon(vec![vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]]);
+		let single = multi.into_single_geometry();
+		assert!(matches!(single, Geometry::Polygon(_)));
+		assert_eq!(single.type_name(), "Polygon");
+	}
+
+	#[test]
+	fn test_into_single_geometry_multi_polygon_multiple_elements() {
+		let multi = Geometry::new_multi_polygon(vec![
+			vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]],
+			vec![vec![[2.0, 2.0], [3.0, 2.0], [3.0, 3.0], [2.0, 2.0]]],
+		]);
+		let result = multi.clone().into_single_geometry();
+		assert!(matches!(result, Geometry::MultiPolygon(_)));
+	}
+
+	// ========================================================================
+	// verify tests
+	// ========================================================================
+
+	#[test]
+	fn test_verify_valid_geometries() {
+		assert!(Geometry::new_point([1.0, 2.0]).verify().is_ok());
+		assert!(Geometry::new_line_string(vec![[0.0, 0.0], [1.0, 1.0]]).verify().is_ok());
+		assert!(
+			Geometry::new_polygon(vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]])
+				.verify()
+				.is_ok()
+		);
+		assert!(Geometry::new_multi_point(vec![[0.0, 0.0], [1.0, 1.0]]).verify().is_ok());
+		assert!(
+			Geometry::new_multi_line_string(vec![vec![[0.0, 0.0], [1.0, 1.0]]])
+				.verify()
+				.is_ok()
+		);
+		assert!(
+			Geometry::new_multi_polygon(vec![vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]])
+				.verify()
+				.is_ok()
+		);
+	}
+
+	#[test]
+	fn test_verify_example_geometry() {
+		let geom = Geometry::new_example();
+		assert!(geom.verify().is_ok());
+	}
+
+	// ========================================================================
+	// to_json tests
+	// ========================================================================
+
+	#[test]
+	fn test_to_json_point() {
+		let geom = Geometry::new_point([1.5, 2.5]);
+		let json = geom.to_json(None);
+		assert_eq!(json.get("type").unwrap().as_str().unwrap(), "Point");
+		assert!(json.get("coordinates").is_some());
+	}
+
+	#[test]
+	fn test_to_json_line_string() {
+		let geom = Geometry::new_line_string(vec![[0.0, 0.0], [1.0, 1.0]]);
+		let json = geom.to_json(None);
+		assert_eq!(json.get("type").unwrap().as_str().unwrap(), "LineString");
+		assert!(json.get("coordinates").is_some());
+	}
+
+	#[test]
+	fn test_to_json_polygon() {
+		let geom = Geometry::new_polygon(vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]);
+		let json = geom.to_json(None);
+		assert_eq!(json.get("type").unwrap().as_str().unwrap(), "Polygon");
+		assert!(json.get("coordinates").is_some());
+	}
+
+	#[test]
+	fn test_to_json_multi_point() {
+		let geom = Geometry::new_multi_point(vec![[0.0, 0.0], [1.0, 1.0]]);
+		let json = geom.to_json(None);
+		assert_eq!(json.get("type").unwrap().as_str().unwrap(), "MultiPoint");
+		assert!(json.get("coordinates").is_some());
+	}
+
+	#[test]
+	fn test_to_json_multi_line_string() {
+		let geom = Geometry::new_multi_line_string(vec![vec![[0.0, 0.0], [1.0, 1.0]]]);
+		let json = geom.to_json(None);
+		assert_eq!(json.get("type").unwrap().as_str().unwrap(), "MultiLineString");
+		assert!(json.get("coordinates").is_some());
+	}
+
+	#[test]
+	fn test_to_json_multi_polygon() {
+		let geom = Geometry::new_multi_polygon(vec![vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]]);
+		let json = geom.to_json(None);
+		assert_eq!(json.get("type").unwrap().as_str().unwrap(), "MultiPolygon");
+		assert!(json.get("coordinates").is_some());
+	}
+
+	#[test]
+	fn test_to_json_with_precision() {
+		let geom = Geometry::new_point([1.123456789, 2.987654321]);
+		let json = geom.to_json(Some(2));
+		let coords = json.get("coordinates").unwrap();
+		let coords_str = format!("{coords:?}");
+		// With precision 2, coordinates should be rounded
+		assert!(coords_str.contains("1.12") || coords_str.contains("2.99"));
+	}
+
+	// ========================================================================
+	// From<geo::MultiPolygon<f64>> tests
+	// ========================================================================
+
+	#[test]
+	fn test_from_geo_multi_polygon() {
+		use geo::{MultiPolygon, Polygon, coord};
+
+		let exterior = vec![
+			coord! { x: 0.0, y: 0.0 },
+			coord! { x: 1.0, y: 0.0 },
+			coord! { x: 1.0, y: 1.0 },
+			coord! { x: 0.0, y: 0.0 },
+		];
+		let polygon = Polygon::new(exterior.into(), vec![]);
+		let multi_polygon = MultiPolygon::new(vec![polygon]);
+
+		let geom: Geometry = multi_polygon.into();
+		assert!(matches!(geom, Geometry::MultiPolygon(_)));
+		assert_eq!(geom.type_name(), "MultiPolygon");
+	}
+
+	// ========================================================================
+	// Debug tests
+	// ========================================================================
+
+	#[test]
+	fn test_debug_point() {
+		let geom = Geometry::new_point([1.0, 2.0]);
+		let debug_str = format!("{geom:?}");
+		assert!(debug_str.starts_with("Point("));
+	}
+
+	#[test]
+	fn test_debug_line_string() {
+		let geom = Geometry::new_line_string(vec![[0.0, 0.0], [1.0, 1.0]]);
+		let debug_str = format!("{geom:?}");
+		assert!(debug_str.starts_with("LineString("));
+	}
+
+	#[test]
+	fn test_debug_polygon() {
+		let geom = Geometry::new_polygon(vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]);
+		let debug_str = format!("{geom:?}");
+		assert!(debug_str.starts_with("Polygon("));
+	}
+
+	#[test]
+	fn test_debug_multi_point() {
+		let geom = Geometry::new_multi_point(vec![[0.0, 0.0]]);
+		let debug_str = format!("{geom:?}");
+		assert!(debug_str.starts_with("MultiPoint("));
+	}
+
+	#[test]
+	fn test_debug_multi_line_string() {
+		let geom = Geometry::new_multi_line_string(vec![vec![[0.0, 0.0], [1.0, 1.0]]]);
+		let debug_str = format!("{geom:?}");
+		assert!(debug_str.starts_with("MultiLineString("));
+	}
+
+	#[test]
+	fn test_debug_multi_polygon() {
+		let geom = Geometry::new_multi_polygon(vec![vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]]);
+		let debug_str = format!("{geom:?}");
+		assert!(debug_str.starts_with("MultiPolygon("));
+	}
+
+	// ========================================================================
+	// Clone and PartialEq tests
+	// ========================================================================
+
+	#[test]
+	fn test_clone() {
+		let geom = Geometry::new_point([1.0, 2.0]);
+		let cloned = geom.clone();
+		assert_eq!(geom, cloned);
+	}
+
+	#[test]
+	fn test_partial_eq() {
+		let geom1 = Geometry::new_point([1.0, 2.0]);
+		let geom2 = Geometry::new_point([1.0, 2.0]);
+		let geom3 = Geometry::new_point([3.0, 4.0]);
+
+		assert_eq!(geom1, geom2);
+		assert_ne!(geom1, geom3);
+	}
+
+	#[test]
+	fn test_partial_eq_different_types() {
+		let point = Geometry::new_point([1.0, 2.0]);
+		let multi_point = Geometry::new_multi_point(vec![[1.0, 2.0]]);
+
+		assert_ne!(point, multi_point);
+	}
+
+	// ========================================================================
+	// new_example test
+	// ========================================================================
+
+	#[test]
+	fn test_new_example() {
+		let geom = Geometry::new_example();
+		assert!(matches!(geom, Geometry::MultiPolygon(_)));
+		assert_eq!(geom.type_name(), "MultiPolygon");
+		assert!(geom.verify().is_ok());
+	}
+
+	// ========================================================================
+	// Roundtrip tests
+	// ========================================================================
+
+	#[test]
+	fn test_roundtrip_single_to_multi_to_single() {
+		let point = Geometry::new_point([1.0, 2.0]);
+		let multi = point.clone().into_multi_geometry();
+		let single_again = multi.into_single_geometry();
+		assert_eq!(point, single_again);
+
+		let line = Geometry::new_line_string(vec![[0.0, 0.0], [1.0, 1.0]]);
+		let multi = line.clone().into_multi_geometry();
+		let single_again = multi.into_single_geometry();
+		assert_eq!(line, single_again);
+
+		let polygon = Geometry::new_polygon(vec![vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]]);
+		let multi = polygon.clone().into_multi_geometry();
+		let single_again = multi.into_single_geometry();
+		assert_eq!(polygon, single_again);
+	}
+}
