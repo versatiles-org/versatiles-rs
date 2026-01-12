@@ -47,7 +47,7 @@ fi
 
 echo "cargo clippy"
 cd $PROJECT_DIR
-result=$(cargo clippy --workspace --all-features --all-targets 2>&1)
+result=$(cargo clippy --workspace --all-features --all-targets -- -D warnings 2>&1)
 if [ $? -ne 0 ]; then
    echo -e "$result\nERROR DURING: cargo clippy"
    exit 1
