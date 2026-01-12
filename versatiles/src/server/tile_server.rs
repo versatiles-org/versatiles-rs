@@ -745,11 +745,6 @@ mod tests {
 		let removed = server.remove_static_source("/static")?;
 		assert!(removed);
 
-		// Restart server to apply routing changes
-		server.stop().await;
-		server.start().await?;
-		let port = server.port;
-
 		// Verify source is no longer accessible
 		let resp = client.get(format!("http://{IP}:{port}/static/")).send().await?;
 		assert_eq!(resp.status().as_u16(), 404);
