@@ -141,6 +141,7 @@ pub trait TileSourceTraverseExt: TileSource {
 impl<T: TileSource + ?Sized> TileSourceTraverseExt for T {}
 
 #[cfg(test)]
+#[allow(clippy::too_many_arguments)]
 mod tests {
 	use super::*;
 	use crate::{SourceType, TileSourceMetadata, TilesRuntime, TraversalOrder};
