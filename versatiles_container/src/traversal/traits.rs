@@ -168,6 +168,21 @@ mod tests {
 				tilejson: TileJSON::default(),
 			}
 		}
+
+		fn with_level_range(traversal: Traversal, min_level: u8, max_level: u8) -> Self {
+			use versatiles_core::GeoBBox;
+			// Use full world bbox to get all tiles at each zoom level
+			let bbox = GeoBBox::new(-180.0, -85.05, 180.0, 85.05).unwrap();
+			TestReader {
+				metadata: TileSourceMetadata {
+					bbox_pyramid: TileBBoxPyramid::from_geo_bbox(min_level, max_level, &bbox),
+					tile_compression: TileCompression::Uncompressed,
+					tile_format: TileFormat::PNG,
+					traversal,
+				},
+				tilejson: TileJSON::default(),
+			}
+		}
 	}
 
 	#[async_trait]
@@ -385,6 +400,162 @@ mod tests {
 		let bboxes = bboxes_received.lock().unwrap();
 		// Should have received bboxes for levels 0 and 1
 		assert!(!bboxes.is_empty());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_traverse_push_pop_caching_path() -> Result<()> {
+		// This test exercises the Push/Pop caching path by using:
+		// - Read traversal: DepthFirst with small max_size (8)
+		// - Write traversal: AnyOrder with larger min_size (16)
+		// This forces tiles to be cached (Push) and then retrieved (Pop)
+		use super::super::TraversalOrder;
+
+		let source_traversal = Traversal::new(TraversalOrder::DepthFirst, 1, 8)?;
+		let write_traversal = Traversal::new(TraversalOrder::AnyOrder, 16, 16)?;
+
+		// Use zoom levels 4-6 (need at least level 4 for 16x16 bboxes)
+		let reader = TestReader::with_level_range(source_traversal, 4, 6);
+		let runtime = TilesRuntime::builder().with_memory_cache().build();
+
+		let tile_count = Arc::new(AtomicU64::new(0));
+		let count_clone = tile_count.clone();
+
+		reader
+			.traverse_all_tiles(
+				&write_traversal,
+				|_bbox, stream| {
+					let count = count_clone.clone();
+					Box::pin(async move {
+						let tiles = stream.to_vec().await;
+						count.fetch_add(tiles.len() as u64, Ordering::SeqCst);
+						Ok(())
+					})
+				},
+				runtime,
+				Some("push/pop cache test"),
+			)
+			.await?;
+
+		// Levels 4-6: 256 + 1024 + 4096 = 5376 tiles
+		assert_eq!(tile_count.load(Ordering::SeqCst), 5376);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_traverse_push_pop_with_disk_cache() -> Result<()> {
+		// Test Push/Pop path with disk-backed cache
+		use super::super::TraversalOrder;
+
+		let source_traversal = Traversal::new(TraversalOrder::DepthFirst, 1, 8)?;
+		let write_traversal = Traversal::new(TraversalOrder::AnyOrder, 16, 16)?;
+
+		// Use zoom levels 4-5 (need at least level 4 for 16x16 bboxes)
+		let reader = TestReader::with_level_range(source_traversal, 4, 5);
+		let temp_dir = tempfile::TempDir::new()?;
+		let runtime = TilesRuntime::builder().with_disk_cache(temp_dir.path()).build();
+
+		let tile_count = Arc::new(AtomicU64::new(0));
+		let count_clone = tile_count.clone();
+
+		reader
+			.traverse_all_tiles(
+				&write_traversal,
+				|_bbox, stream| {
+					let count = count_clone.clone();
+					Box::pin(async move {
+						let tiles = stream.to_vec().await;
+						count.fetch_add(tiles.len() as u64, Ordering::SeqCst);
+						Ok(())
+					})
+				},
+				runtime,
+				Some("push/pop disk cache test"),
+			)
+			.await?;
+
+		// Levels 4-5: 256 + 1024 = 1280 tiles
+		assert_eq!(tile_count.load(Ordering::SeqCst), 1280);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_traverse_push_pop_verifies_tile_content() -> Result<()> {
+		// Verify tiles retain correct content through Push/Pop caching
+		use super::super::TraversalOrder;
+
+		let source_traversal = Traversal::new(TraversalOrder::DepthFirst, 1, 8)?;
+		let write_traversal = Traversal::new(TraversalOrder::AnyOrder, 16, 16)?;
+
+		// Use zoom levels 4-5 (need at least level 4 for 16x16 bboxes)
+		let reader = TestReader::with_level_range(source_traversal, 4, 5);
+		let runtime = TilesRuntime::builder().with_memory_cache().build();
+
+		let received_coords = Arc::new(std::sync::Mutex::new(Vec::new()));
+		let coords_clone = received_coords.clone();
+
+		reader
+			.traverse_all_tiles(
+				&write_traversal,
+				|_bbox, stream| {
+					let coords = coords_clone.clone();
+					Box::pin(async move {
+						let tiles = stream.to_vec().await;
+						for (coord, tile) in tiles {
+							// Verify tile data contains expected coord after caching
+							let blob = tile.into_blob(TileCompression::Uncompressed)?;
+							let data = String::from_utf8_lossy(blob.as_slice());
+							let expected = format!("tile:{},{},{}", coord.level, coord.x, coord.y);
+							assert_eq!(data, expected, "Tile content mismatch after cache");
+							coords.lock().unwrap().push(coord);
+						}
+						Ok(())
+					})
+				},
+				runtime,
+				None,
+			)
+			.await?;
+
+		let coords = received_coords.lock().unwrap();
+		// Levels 4-5: 256 + 1024 = 1280 tiles
+		assert_eq!(coords.len(), 1280);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_traverse_pmtiles_order_to_any() -> Result<()> {
+		// Test PMTiles traversal order with Push/Pop
+		use super::super::TraversalOrder;
+
+		let source_traversal = Traversal::new(TraversalOrder::PMTiles, 1, 8)?;
+		let write_traversal = Traversal::new(TraversalOrder::AnyOrder, 16, 16)?;
+
+		// Use zoom levels 4-5 (need at least level 4 for 16x16 bboxes)
+		let reader = TestReader::with_level_range(source_traversal, 4, 5);
+		let runtime = TilesRuntime::builder().with_memory_cache().build();
+
+		let tile_count = Arc::new(AtomicU64::new(0));
+		let count_clone = tile_count.clone();
+
+		reader
+			.traverse_all_tiles(
+				&write_traversal,
+				|_bbox, stream| {
+					let count = count_clone.clone();
+					Box::pin(async move {
+						let tiles = stream.to_vec().await;
+						count.fetch_add(tiles.len() as u64, Ordering::SeqCst);
+						Ok(())
+					})
+				},
+				runtime,
+				Some("pmtiles to any"),
+			)
+			.await?;
+
+		// Levels 4-5: 256 + 1024 = 1280 tiles
+		assert_eq!(tile_count.load(Ordering::SeqCst), 1280);
 		Ok(())
 	}
 }
