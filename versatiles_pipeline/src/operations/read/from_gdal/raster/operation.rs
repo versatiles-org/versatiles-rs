@@ -350,4 +350,47 @@ mod tests {
 		assert_eq!(count, 4);
 		Ok(())
 	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_source_type() -> Result<()> {
+		let operation = get_operation(512).await;
+		let source_type = operation.source_type();
+		assert!(source_type.to_string().contains("gdal_raster"));
+		Ok(())
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_metadata() -> Result<()> {
+		let operation = get_operation(512).await;
+		let metadata = operation.metadata();
+		assert_eq!(metadata.tile_format, TileFormat::PNG);
+		assert_eq!(metadata.tile_compression, TileCompression::Uncompressed);
+		Ok(())
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_tilejson() -> Result<()> {
+		let operation = get_operation(512).await;
+		let tilejson = operation.tilejson();
+		assert!(tilejson.bounds.is_some());
+		assert_eq!(tilejson.tile_schema, Some(TileSchema::RasterRGBA));
+		Ok(())
+	}
+
+	#[test]
+	fn test_factory_get_tag_name() {
+		let factory = Factory {};
+		assert_eq!(factory.get_tag_name(), "from_gdal_raster");
+	}
+
+	#[test]
+	fn test_factory_get_docs() {
+		let factory = Factory {};
+		let docs = factory.get_docs();
+		assert!(docs.contains("filename"));
+		assert!(docs.contains("tile_size"));
+		assert!(docs.contains("tile_format"));
+		assert!(docs.contains("level_max"));
+		assert!(docs.contains("level_min"));
+	}
 }
