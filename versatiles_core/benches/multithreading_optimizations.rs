@@ -142,7 +142,7 @@ fn bench_concurrent_lookups(c: &mut Criterion) {
 	let mut group = c.benchmark_group("concurrent_lookups");
 
 	// Prepare test data
-	let data: Vec<(String, u64)> = (0..1000).map(|i| (format!("key_{i}"), i as u64)).collect();
+	let data: Vec<(String, u64)> = (0..1000).map(|i: u64| (format!("key_{i}"), i)).collect();
 
 	// DashMap (lock-free)
 	let dashmap = Arc::new(DashMap::new());

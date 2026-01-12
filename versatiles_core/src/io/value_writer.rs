@@ -122,7 +122,7 @@ pub trait ValueWriter<E: ByteOrder> {
 	///
 	/// Returns an error if writing to the underlying writer fails.
 	fn write_svarint(&mut self, value: i64) -> Result<()> {
-		self.write_varint(((value << 1) ^ (value >> 63)) as u64)
+		self.write_varint(((value << 1) ^ (value >> 63)).cast_unsigned())
 	}
 
 	/// Writes an 8-bit unsigned integer to the writer.

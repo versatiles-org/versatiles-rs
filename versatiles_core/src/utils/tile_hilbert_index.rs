@@ -109,7 +109,7 @@ fn coord_to_index(x: u32, y: u32, level: u8) -> Result<u64> {
 		s /= 2;
 	}
 
-	Ok((acc + d) as u64)
+	Ok(u64::try_from(acc + d)?)
 }
 
 #[doc(hidden)]
@@ -174,7 +174,7 @@ fn index_to_coord(index: u64) -> Result<TileCoord> {
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 mod tests {
 	use super::*;
 

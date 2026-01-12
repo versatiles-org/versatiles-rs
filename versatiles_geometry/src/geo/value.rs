@@ -87,7 +87,7 @@ impl From<i32> for GeoValue {
 		if value < 0 {
 			GeoValue::Int(i64::from(value))
 		} else {
-			GeoValue::UInt(value as u64)
+			GeoValue::UInt(u64::from(value.cast_unsigned()))
 		}
 	}
 }
@@ -251,10 +251,10 @@ impl GeoValue {
 		}
 	}
 
-	/// Returns the value as `u64` if it is `Int` or `UInt`; otherwise returns an error.
+	/// Returns the value as `u64` if it is `Int` (non-negative) or `UInt`; otherwise returns an error.
 	pub fn as_u64(&self) -> Result<u64> {
 		match self {
-			GeoValue::Int(v) => Ok(*v as u64),
+			GeoValue::Int(v) => Ok(u64::try_from(*v)?),
 			GeoValue::UInt(v) => Ok(*v),
 			_ => bail!("value is not an integer"),
 		}

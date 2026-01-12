@@ -57,7 +57,6 @@ too_many_lines = "allow"
 
 # Allow reasonable casting patterns in container code
 cast_precision_loss = "allow"
-cast_sign_loss = "allow"
 
 # Allow stylistic patterns used consistently in codebase
 comparison_chain = "allow"

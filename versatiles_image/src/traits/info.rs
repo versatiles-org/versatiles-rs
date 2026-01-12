@@ -80,7 +80,7 @@ where
 		for (p1, p2) in self.iter_pixels().zip(other.iter_pixels()) {
 			for i in 0..channels {
 				let d = i64::from(p1[i]) - i64::from(p2[i]);
-				sqr_sum[i] += (d * d) as u64;
+				sqr_sum[i] += (d * d).cast_unsigned(); // d*d is always non-negative
 			}
 		}
 

@@ -108,11 +108,12 @@ impl EntriesV3 {
 
 		while m <= n {
 			let k = (n + m) >> 1;
-			let entry_id = self.entries[k as usize].tile_id;
+			let k_idx = usize::try_from(k).unwrap();
+			let entry_id = self.entries[k_idx].tile_id;
 			match tile_id.cmp(&entry_id) {
 				Ordering::Greater => m = k + 1,
 				Ordering::Less => n = k - 1,
-				Ordering::Equal => return Some(self.entries[k as usize]),
+				Ordering::Equal => return Some(self.entries[k_idx]),
 			}
 		}
 

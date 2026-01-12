@@ -289,10 +289,10 @@ impl MBTilesReader {
 
 			bbox_pyramid.set_level_bbox(TileBBox::from_min_and_max(
 				z,
-				x0.clamp(0, max_value) as u32,
-				y0.clamp(0, max_value) as u32,
-				x1.clamp(0, max_value) as u32,
-				y1.clamp(0, max_value) as u32,
+				x0.clamp(0, max_value).cast_unsigned(),
+				y0.clamp(0, max_value).cast_unsigned(),
+				x1.clamp(0, max_value).cast_unsigned(),
+				y1.clamp(0, max_value).cast_unsigned(),
 			)?);
 
 			progress.inc(1);

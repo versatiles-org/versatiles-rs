@@ -215,7 +215,7 @@ impl RasterSource {
 		log::trace!("initial_res={initial_res:.6}, zf(raw)={zf:.6}");
 		let z: i32 = float_to_int(zf).unwrap_or(0);
 		log::trace!("Computed max level: {}", z.clamp(0, 31));
-		Ok(z.clamp(0, 31) as u8)
+		Ok(u8::try_from(z.clamp(0, 31))?)
 	}
 }
 

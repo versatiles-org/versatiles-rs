@@ -36,7 +36,8 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) -> R
 		bail!("Lossless AVIF encoding is not supported, quality must be less than 100");
 	}
 
-	#[allow(clippy::cast_possible_truncation)] // speed 1..=10 fits into u8
+	#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+	// speed 1..=10 fits into u8, clamp ensures positive
 	let speed = speed.map_or(10, |s| {
 		(f32::from(s) / 100.0 * 9.0 + 1.0).round().clamp(1.0, 10.0) as u8
 	});

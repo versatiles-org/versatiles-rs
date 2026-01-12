@@ -189,7 +189,7 @@ where
 			let xf = f64::from(x) - 128.0;
 			let yf = f64::from(y) - 128.0;
 
-			#[allow(clippy::cast_possible_truncation)]
+			#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // clamp ensures 0..=255
 			parameters.map(|p| {
 				let angle_rad = p.angle.to_radians();
 				let v = angle_rad.cos() * xf + angle_rad.sin() * yf - p.offset;

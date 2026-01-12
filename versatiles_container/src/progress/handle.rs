@@ -206,7 +206,7 @@ fn terminal_width() -> usize {
 	80
 }
 
-#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // values are clamped non-negative
 fn make_bar(pos: u64, len: u64, width: usize) -> String {
 	let width = width.max(1);
 	let frac = (pos as f64 / len.max(1) as f64).clamp(0.0, 1.0);

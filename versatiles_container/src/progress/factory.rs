@@ -107,8 +107,8 @@ mod tests {
 		let event_bus = EventBus::new();
 		let mut factory = ProgressFactory::new(event_bus, true);
 
-		let handles: Vec<_> = (0..10)
-			.map(|i| factory.create(&format!("Task {i}"), i as u64 * 100))
+		let handles: Vec<_> = (0u64..10)
+			.map(|i| factory.create(&format!("Task {i}"), i * 100))
 			.collect();
 
 		assert_eq!(handles.len(), 10);

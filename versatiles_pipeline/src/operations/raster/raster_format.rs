@@ -128,13 +128,13 @@ fn parse_quality(quality: Option<String>) -> Result<[Option<u8>; 32]> {
 			}
 			if let Some(idx) = part.find(':') {
 				zoom = part[0..idx].trim().parse()?;
-				ensure!(zoom <= 31, "Zoom level must be between 0 and 31");
+				ensure!((0..=31).contains(&zoom), "Zoom level must be between 0 and 31");
 				part = &part[(idx + 1)..];
 			}
 			let quality_val: u8 = part.trim().parse()?;
 			ensure!(quality_val <= 100, "Quality value must be between 0 and 100");
 			for z in zoom..32 {
-				result[z as usize] = Some(quality_val);
+				result[usize::try_from(z).unwrap()] = Some(quality_val);
 			}
 		}
 	}
