@@ -17,7 +17,7 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
-fast_image_resize = { version = "5.5.0", default-features = false, features = [
+fast_image_resize = { version = "5.6.0", default-features = false, features = [
 "image"] }
 image.workspace = true
 imageproc.workspace = true
