@@ -4396,6 +4396,7 @@ dependencies = [
  "napi-derive",
  "pretty_assertions",
  "rstest",
+ "tempfile",
  "tokio",
  "versatiles",
  "versatiles_container",

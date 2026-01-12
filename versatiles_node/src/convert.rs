@@ -578,4 +578,301 @@ mod tests {
 		assert!(compression.is_some());
 		assert_eq!(compression.unwrap().is_ok(), should_be_valid);
 	}
+
+	// ========================================================================
+	// Integration tests for convert_tiles_with_options
+	// ========================================================================
+
+	/// Test basic conversion from mbtiles to versatiles
+	#[tokio::test]
+	async fn test_convert_mbtiles_to_versatiles() {
+		let runtime = create_runtime();
+		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+
+		let temp_dir = tempfile::TempDir::new().unwrap();
+		let output_path = temp_dir.path().join("output.versatiles");
+
+		let result = convert_tiles_with_options(reader, &output_path, None, None, None).await;
+
+		assert!(result.is_ok());
+		assert!(output_path.exists());
+	}
+
+	/// Test conversion with zoom filtering
+	#[tokio::test]
+	async fn test_convert_with_zoom_filter() {
+		let runtime = create_runtime();
+		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+
+		let temp_dir = tempfile::TempDir::new().unwrap();
+		let output_path = temp_dir.path().join("output.versatiles");
+
+		let options = ConvertOptions {
+			min_zoom: Some(0),
+			max_zoom: Some(5),
+			bbox: None,
+			bbox_border: None,
+			compress: None,
+			flip_y: None,
+			swap_xy: None,
+		};
+
+		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+
+		assert!(result.is_ok());
+		assert!(output_path.exists());
+	}
+
+	/// Test conversion with bbox filter
+	#[tokio::test]
+	async fn test_convert_with_bbox_filter() {
+		let runtime = create_runtime();
+		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+
+		let temp_dir = tempfile::TempDir::new().unwrap();
+		let output_path = temp_dir.path().join("output.versatiles");
+
+		// Berlin area bbox
+		let options = ConvertOptions {
+			min_zoom: None,
+			max_zoom: None,
+			bbox: Some(vec![13.0, 52.0, 14.0, 53.0]),
+			bbox_border: None,
+			compress: None,
+			flip_y: None,
+			swap_xy: None,
+		};
+
+		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+
+		assert!(result.is_ok());
+		assert!(output_path.exists());
+	}
+
+	/// Test conversion with bbox and border
+	#[tokio::test]
+	async fn test_convert_with_bbox_and_border() {
+		let runtime = create_runtime();
+		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+
+		let temp_dir = tempfile::TempDir::new().unwrap();
+		let output_path = temp_dir.path().join("output.versatiles");
+
+		let options = ConvertOptions {
+			min_zoom: None,
+			max_zoom: None,
+			bbox: Some(vec![13.0, 52.0, 14.0, 53.0]),
+			bbox_border: Some(1),
+			compress: None,
+			flip_y: None,
+			swap_xy: None,
+		};
+
+		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+
+		assert!(result.is_ok());
+		assert!(output_path.exists());
+	}
+
+	/// Test conversion with compression change
+	#[tokio::test]
+	async fn test_convert_with_compression() {
+		let runtime = create_runtime();
+		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+
+		let temp_dir = tempfile::TempDir::new().unwrap();
+		let output_path = temp_dir.path().join("output.versatiles");
+
+		let options = ConvertOptions {
+			min_zoom: Some(0),
+			max_zoom: Some(3),
+			bbox: None,
+			bbox_border: None,
+			compress: Some("brotli".to_string()),
+			flip_y: None,
+			swap_xy: None,
+		};
+
+		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+
+		assert!(result.is_ok());
+		assert!(output_path.exists());
+	}
+
+	/// Test conversion with flip_y transformation
+	#[tokio::test]
+	async fn test_convert_with_flip_y() {
+		let runtime = create_runtime();
+		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+
+		let temp_dir = tempfile::TempDir::new().unwrap();
+		let output_path = temp_dir.path().join("output.versatiles");
+
+		let options = ConvertOptions {
+			min_zoom: Some(0),
+			max_zoom: Some(3),
+			bbox: None,
+			bbox_border: None,
+			compress: None,
+			flip_y: Some(true),
+			swap_xy: None,
+		};
+
+		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+
+		assert!(result.is_ok());
+		assert!(output_path.exists());
+	}
+
+	/// Test conversion with all options combined
+	#[tokio::test]
+	async fn test_convert_with_all_options() {
+		let runtime = create_runtime();
+		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+
+		let temp_dir = tempfile::TempDir::new().unwrap();
+		let output_path = temp_dir.path().join("output.versatiles");
+
+		let options = ConvertOptions {
+			min_zoom: Some(0),
+			max_zoom: Some(5),
+			bbox: Some(vec![13.0, 52.0, 14.0, 53.0]),
+			bbox_border: Some(1),
+			compress: Some("gzip".to_string()),
+			flip_y: Some(false),
+			swap_xy: Some(false),
+		};
+
+		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+
+		assert!(result.is_ok());
+		assert!(output_path.exists());
+	}
+
+	/// Test conversion with invalid bbox length returns error
+	#[tokio::test]
+	async fn test_convert_invalid_bbox_length_error() {
+		let runtime = create_runtime();
+		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+
+		let temp_dir = tempfile::TempDir::new().unwrap();
+		let output_path = temp_dir.path().join("output.versatiles");
+
+		// Invalid bbox - only 3 elements
+		let options = ConvertOptions {
+			min_zoom: None,
+			max_zoom: None,
+			bbox: Some(vec![13.0, 52.0, 14.0]), // Missing 4th element
+			bbox_border: None,
+			compress: None,
+			flip_y: None,
+			swap_xy: None,
+		};
+
+		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+
+		assert!(result.is_err());
+		let err_msg = result.unwrap_err().to_string();
+		assert!(err_msg.contains("bbox must contain exactly 4 numbers"));
+	}
+
+	/// Test conversion with invalid compression returns error
+	#[tokio::test]
+	async fn test_convert_invalid_compression_error() {
+		let runtime = create_runtime();
+		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+
+		let temp_dir = tempfile::TempDir::new().unwrap();
+		let output_path = temp_dir.path().join("output.versatiles");
+
+		let options = ConvertOptions {
+			min_zoom: None,
+			max_zoom: None,
+			bbox: None,
+			bbox_border: None,
+			compress: Some("invalid_compression".to_string()),
+			flip_y: None,
+			swap_xy: None,
+		};
+
+		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+
+		assert!(result.is_err());
+	}
+
+	/// Test conversion from pmtiles source
+	#[tokio::test]
+	async fn test_convert_pmtiles_to_versatiles() {
+		let runtime = create_runtime();
+		let reader = runtime.get_reader_from_str("../testdata/berlin.pmtiles").await.unwrap();
+
+		let temp_dir = tempfile::TempDir::new().unwrap();
+		let output_path = temp_dir.path().join("output.versatiles");
+
+		let result = convert_tiles_with_options(reader, &output_path, None, None, None).await;
+
+		assert!(result.is_ok());
+		assert!(output_path.exists());
+	}
+
+	/// Test conversion to different output formats
+	#[rstest]
+	#[case("output.versatiles")]
+	#[case("output.mbtiles")]
+	#[case("output.tar")]
+	#[tokio::test]
+	async fn test_convert_to_different_formats(#[case] output_filename: &str) {
+		let runtime = create_runtime();
+		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+
+		let temp_dir = tempfile::TempDir::new().unwrap();
+		let output_path = temp_dir.path().join(output_filename);
+
+		// Use small zoom range to speed up test
+		let options = ConvertOptions {
+			min_zoom: Some(0),
+			max_zoom: Some(3),
+			bbox: None,
+			bbox_border: None,
+			compress: None,
+			flip_y: None,
+			swap_xy: None,
+		};
+
+		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+
+		assert!(result.is_ok(), "Failed to convert to {output_filename}");
+		assert!(output_path.exists(), "Output file {output_filename} does not exist");
+	}
+
+	/// Test that converted file can be read back
+	#[tokio::test]
+	async fn test_convert_roundtrip_readable() {
+		let runtime = create_runtime();
+		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+
+		let temp_dir = tempfile::TempDir::new().unwrap();
+		let output_path = temp_dir.path().join("output.versatiles");
+
+		// Convert with small zoom range
+		let options = ConvertOptions {
+			min_zoom: Some(0),
+			max_zoom: Some(3),
+			bbox: None,
+			bbox_border: None,
+			compress: None,
+			flip_y: None,
+			swap_xy: None,
+		};
+
+		convert_tiles_with_options(reader, &output_path, Some(options), None, None)
+			.await
+			.unwrap();
+
+		// Try to read back the converted file
+		let runtime2 = create_runtime();
+		let result = runtime2.get_reader_from_str(output_path.to_str().unwrap()).await;
+
+		assert!(result.is_ok(), "Should be able to read back converted file");
+	}
 }
