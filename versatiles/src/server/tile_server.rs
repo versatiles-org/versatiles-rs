@@ -677,4 +677,84 @@ mod tests {
 		server.stop().await;
 		Ok(())
 	}
+
+	#[tokio::test]
+	async fn remove_static_source_returns_true_when_found() -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+
+		let static_path = Path::new("../testdata/static.tar.br");
+		server.add_static_source(static_path, "/static").await?;
+
+		assert_eq!(server.static_sources.load().len(), 1);
+
+		let removed = server.remove_static_source("/static")?;
+
+		assert!(removed, "should return true when source is removed");
+		assert_eq!(server.static_sources.load().len(), 0);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn remove_static_source_returns_false_when_not_found() -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+
+		let removed = server.remove_static_source("/nonexistent")?;
+
+		assert!(!removed, "should return false when source not found");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn remove_static_source_with_existing_sources() -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+
+		let static_path = Path::new("../testdata/static.tar.br");
+		server.add_static_source(static_path, "/first").await?;
+		server.add_static_source(static_path, "/second").await?;
+
+		assert_eq!(server.static_sources.load().len(), 2);
+
+		// Remove only the first one
+		let removed = server.remove_static_source("/first")?;
+
+		assert!(removed);
+		assert_eq!(server.static_sources.load().len(), 1);
+
+		// Verify the second one still exists
+		let sources = server.static_sources.load();
+		assert_eq!(sources[0].get_prefix().str, "/second/");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn remove_static_source_serves_404_after_removal() -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+
+		let static_path = Path::new("../testdata/static.tar.br");
+		server.add_static_source(static_path, "/static").await?;
+		server.start().await?;
+		let port = server.port;
+
+		let client = Client::builder().build().unwrap();
+
+		// Verify source is accessible before removal
+		let resp = client.get(format!("http://{IP}:{port}/static/")).send().await?;
+		assert_eq!(resp.status().as_u16(), 200);
+
+		// Remove the source
+		let removed = server.remove_static_source("/static")?;
+		assert!(removed);
+
+		// Restart server to apply routing changes
+		server.stop().await;
+		server.start().await?;
+		let port = server.port;
+
+		// Verify source is no longer accessible
+		let resp = client.get(format!("http://{IP}:{port}/static/")).send().await?;
+		assert_eq!(resp.status().as_u16(), 404);
+
+		server.stop().await;
+		Ok(())
+	}
 }
