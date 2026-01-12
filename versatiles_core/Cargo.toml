@@ -20,9 +20,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 brotli.workspace = true
 byteorder = { workspace = true, features = [] }
-clap = { workspace = true, default-features = false, optional = true, features = [
-	"derive",
-] }
+clap = { workspace = true, optional = true, features = ["derive"] }
 colored = { workspace = true, optional = true }
 enumset.workspace = true
 flate2.workspace = true
