@@ -183,4 +183,59 @@ mod tests {
 		assert_eq!(adj.average_color(), expected_color);
 		Ok(())
 	}
+
+	#[tokio::test]
+	async fn test_default_values() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		// No parameters specified - should use defaults (brightness=0, contrast=1, gamma=1)
+		let op = factory
+			.operation_from_vpl("from_debug format=png | raster_flatten color=[50,150,250] | raster_levels")
+			.await?;
+
+		let bbox = TileCoord::new(3, 2, 1)?.to_tile_bbox();
+		let image = op.get_tile_stream(bbox).await?.next().await.unwrap().1.into_image()?;
+		// With defaults, output should match the case (0, 1.0, 1.0) above
+		assert_eq!(image.average_color(), [63, 157, 249]);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_source_type() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl("from_debug format=png | raster_levels")
+			.await?;
+
+		let source_type = op.source_type();
+		assert!(source_type.to_string().contains("raster_levels"));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_metadata_and_tilejson() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl("from_debug format=png | raster_levels")
+			.await?;
+
+		// metadata and tilejson should be passed through from source
+		let _metadata = op.metadata();
+		let _tilejson = op.tilejson();
+		Ok(())
+	}
+
+	#[test]
+	fn test_factory_get_tag_name() {
+		let factory = Factory {};
+		assert_eq!(factory.get_tag_name(), "raster_levels");
+	}
+
+	#[test]
+	fn test_factory_get_docs() {
+		let factory = Factory {};
+		let docs = factory.get_docs();
+		assert!(docs.contains("brightness"));
+		assert!(docs.contains("contrast"));
+		assert!(docs.contains("gamma"));
+	}
 }
