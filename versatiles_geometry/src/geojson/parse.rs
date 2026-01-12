@@ -536,4 +536,168 @@ mod tests {
 		}
 		Ok(())
 	}
+
+	#[test]
+	fn test_parse_geojson_false_boolean() -> Result<()> {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"Point","coordinates":[0,0]},"properties":{"flag":false}
+		}]}"#;
+		let collection = parse_geojson(json)?;
+		let props = &collection.features[0].properties;
+		assert_eq!(props.get("flag"), Some(&GeoValue::Bool(false)));
+		Ok(())
+	}
+
+	#[test]
+	fn test_parse_geojson_negative_number_property() -> Result<()> {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"Point","coordinates":[0,0]},"properties":{"val":-42}
+		}]}"#;
+		let collection = parse_geojson(json)?;
+		let props = &collection.features[0].properties;
+		assert_eq!(props.get("val"), Some(&GeoValue::Int(-42)));
+		Ok(())
+	}
+
+	#[test]
+	fn test_parse_geojson_float_property() -> Result<()> {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"Point","coordinates":[0,0]},"properties":{"val":3.14}
+		}]}"#;
+		let collection = parse_geojson(json)?;
+		let props = &collection.features[0].properties;
+		assert_eq!(props.get("val"), Some(&GeoValue::Double(3.14)));
+		Ok(())
+	}
+
+	#[test]
+	fn test_parse_geojson_missing_feature_type() {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"geometry":{"type":"Point","coordinates":[0,0]},"properties":{}
+		}]}"#;
+		let result = parse_geojson(json);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_parse_geojson_missing_geometry_type() {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"coordinates":[0,0]},"properties":{}
+		}]}"#;
+		let result = parse_geojson(json);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_parse_geojson_missing_coordinates() {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"Point"},"properties":{}
+		}]}"#;
+		let result = parse_geojson(json);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_parse_geojson_empty_coordinates_array() {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"LineString","coordinates":[]},"properties":{}
+		}]}"#;
+		let result = parse_geojson(json);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_parse_geojson_wrong_point_dimensions() {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"Point","coordinates":[1,2,3]},"properties":{}
+		}]}"#;
+		let result = parse_geojson(json);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_parse_geojson_single_point_dimension() {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"Point","coordinates":[1]},"properties":{}
+		}]}"#;
+		let result = parse_geojson(json);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_parse_geojson_unknown_members_ignored() -> Result<()> {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"name":"test",
+		"crs":{"type":"name","properties":{}},
+		"features":[{
+			"type":"Feature",
+			"extra":"ignored",
+			"geometry":{"type":"Point","coordinates":[1,2],"bbox":[1,2,1,2]},
+			"properties":{}
+		}]}"#;
+		let collection = parse_geojson(json)?;
+		assert_eq!(collection.features.len(), 1);
+		Ok(())
+	}
+
+	#[test]
+	fn test_parse_geojson_invalid_id_character() {
+		use std::io::Cursor;
+		use versatiles_core::byte_iterator::ByteIterator;
+		let mut iter = ByteIterator::from_reader(Cursor::new("[1,2]"), true);
+		let result = parse_geojson_id(&mut iter);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_parse_geojson_invalid_value_character() {
+		use std::io::Cursor;
+		use versatiles_core::byte_iterator::ByteIterator;
+		let mut iter = ByteIterator::from_reader(Cursor::new("[1,2]"), true);
+		let result = parse_geojson_value(&mut iter);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_parse_geojson_invalid_coordinate_character() {
+		use std::io::Cursor;
+		use versatiles_core::byte_iterator::ByteIterator;
+		let mut iter = ByteIterator::from_reader(Cursor::new("\"invalid\""), true);
+		let result = parse_geojson_coordinates(&mut iter);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_parse_geojson_negative_float_coordinates() -> Result<()> {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"Point","coordinates":[-1.5,-2.5]},"properties":{}
+		}]}"#;
+		let collection = parse_geojson(json)?;
+		if let Geometry::Point(coords) = &collection.features[0].geometry {
+			assert_eq!(coords.x(), -1.5);
+			assert_eq!(coords.y(), -2.5);
+		}
+		Ok(())
+	}
 }
