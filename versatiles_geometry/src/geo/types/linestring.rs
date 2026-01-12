@@ -70,6 +70,7 @@ impl Debug for LineStringGeometry {
 crate::impl_from_array!(LineStringGeometry, Coordinates);
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
 
