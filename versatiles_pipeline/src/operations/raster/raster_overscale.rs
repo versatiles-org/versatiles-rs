@@ -392,4 +392,89 @@ mod tests {
 
 		Ok(())
 	}
+
+	#[tokio::test]
+	async fn test_source_type() -> Result<()> {
+		let op = build_op(3).await?;
+		let source_type = op.source_type();
+		assert!(source_type.to_string().contains("raster_overscale"));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_metadata_and_tilejson() -> Result<()> {
+		let op = build_op(3).await?;
+		// metadata and tilejson should be available
+		let metadata = op.metadata();
+		assert!(metadata.bbox_pyramid.get_level_max().is_some());
+		let _tilejson = op.tilejson();
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_level_max_parameter() -> Result<()> {
+		let image = make_gradient_image(3);
+		let source = Box::new(DummyImageSource::from_image(image, TileFormat::PNG, None)?);
+
+		// Build with custom level_max
+		let op = Operation::build(
+			VPLNode::try_from_str("raster_overscale level_base=2 level_max=5")?,
+			source,
+			&PipelineFactory::new_dummy(),
+		)
+		.await?;
+
+		// Should have extended max level
+		let metadata = op.metadata();
+		assert!(metadata.bbox_pyramid.get_level_max().unwrap() >= 5);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_level_below_base_passthrough() -> Result<()> {
+		let op = build_op(3).await?;
+
+		// Request at level below level_base should pass through to source
+		let coord = TileCoord::new(2, 1, 1)?.to_tile_bbox();
+		let tiles = op.get_tile_stream(coord).await?.to_vec().await;
+		assert_eq!(tiles.len(), 1, "Should passthrough to source for level <= level_base");
+		Ok(())
+	}
+
+	#[test]
+	fn test_factory_get_tag_name() {
+		let factory = Factory {};
+		assert_eq!(factory.get_tag_name(), "raster_overscale");
+	}
+
+	#[test]
+	fn test_factory_get_docs() {
+		let factory = Factory {};
+		let docs = factory.get_docs();
+		assert!(docs.contains("level_base"));
+		assert!(docs.contains("level_max"));
+		assert!(docs.contains("enable_climbing"));
+	}
+
+	#[test]
+	fn test_extract_image_same_level() -> Result<()> {
+		let image = make_gradient_image(3);
+		let coord = TileCoord::new(2, 1, 1)?;
+		let result = extract_image(&image, coord, coord)?;
+		assert_eq!(result.width(), image.width());
+		assert_eq!(result.height(), image.height());
+		Ok(())
+	}
+
+	#[test]
+	fn test_extract_image_higher_level() -> Result<()> {
+		let image = make_gradient_image(3);
+		let coord_src = TileCoord::new(2, 1, 1)?;
+		let coord_dst = TileCoord::new(3, 2, 2)?;
+		let result = extract_image(&image, coord_src, coord_dst)?;
+		// Result should be same size as source (upscaled extract)
+		assert_eq!(result.width(), image.width());
+		assert_eq!(result.height(), image.height());
+		Ok(())
+	}
 }
