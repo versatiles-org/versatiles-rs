@@ -293,3 +293,66 @@ jobs:
 
       - name: Doctests
         run: cargo test --workspace --doc
+
+  # ============================================================================
+  # Job 9: Windows Node.js Build & Test (Depends on windows-lint passing)
+  # Runtime: ~3-4 minutes
+  # ============================================================================
+  windows-nodejs:
+    name: 'Windows Node.js Build & Test'
+    runs-on: windows-latest
+    needs: [windows-lint]  # Ensure Rust code is valid before building native module
+    steps:
+      - name: Configure Git EOL
+        shell: bash
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "windows-nodejs"
+          cache-targets: true
+          cache-on-failure: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: versatiles_node/package-lock.json
+
+      - name: Install Node.js dependencies
+        working-directory: ./versatiles_node
+        run: npm install
+
+      - name: Build native module
+        working-directory: ./versatiles_node
+        run: npm run build
+
+      - name: TypeScript type check
+        working-directory: ./versatiles_node
+        run: npm run typecheck
+
+      - name: ESLint
+        working-directory: ./versatiles_node
+        run: npm run lint
+
+      - name: Prettier format check
+        working-directory: ./versatiles_node
+        run: npm run format:check
+
+      - name: Node.js tests
+        working-directory: ./versatiles_node
+        run: npm run test
+
+      - name: Node.js test examples
+        working-directory: ./versatiles_node
+        run: npm run test:examples
