@@ -333,4 +333,47 @@ mod tests {
 		});
 		compare_marker_result(&expected_results[0..channels], &results).unwrap();
 	}
+
+	#[test]
+	fn test_bbox() {
+		let bbox_in = GeoBBox::new(14.0, 49.0, 24.0, 55.0).unwrap();
+		let ds = RasterSource::from_testdata(bbox_in, 3).unwrap();
+		let bbox_out = ds.bbox();
+		assert!((bbox_out.x_min - 14.0).abs() < 0.001);
+		assert!((bbox_out.y_min - 49.0).abs() < 0.001);
+		assert!((bbox_out.x_max - 24.0).abs() < 0.001);
+		assert!((bbox_out.y_max - 55.0).abs() < 0.001);
+	}
+
+	#[test]
+	fn test_level_max() {
+		let bbox_in = GeoBBox::new(14.0, 49.0, 24.0, 55.0).unwrap();
+		let ds = RasterSource::from_testdata(bbox_in, 3).unwrap();
+		// Should return a reasonable zoom level
+		let level = ds.level_max(256).unwrap();
+		assert!(level > 0);
+		assert!(level <= 31);
+		// Smaller tile size should give higher max zoom
+		let level_512 = ds.level_max(512).unwrap();
+		assert!(level_512 <= level);
+	}
+
+	#[test]
+	fn test_level_max_zero_tile_size_fails() {
+		let bbox_in = GeoBBox::new(14.0, 49.0, 24.0, 55.0).unwrap();
+		let ds = RasterSource::from_testdata(bbox_in, 3).unwrap();
+		let result = ds.level_max(0);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_debug() {
+		let bbox_in = GeoBBox::new(14.0, 49.0, 24.0, 55.0).unwrap();
+		let ds = RasterSource::from_testdata(bbox_in, 3).unwrap();
+		let debug_str = format!("{ds:?}");
+		assert!(debug_str.contains("RasterSource"));
+		assert!(debug_str.contains("bbox"));
+		assert!(debug_str.contains("band_mapping"));
+		assert!(debug_str.contains("pixel_size"));
+	}
 }
