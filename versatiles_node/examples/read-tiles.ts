@@ -12,11 +12,12 @@ import { tmpdir } from 'os';
 import { TileSource, TileCoord } from '@versatiles/versatiles-rs';
 import fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { log } from './lib/logger.js';
 
 log.title('VersaTiles Tile Reading Example');
 
-const containerPath = new URL('../../testdata/berlin.mbtiles', import.meta.url).pathname;
+const containerPath = fileURLToPath(new URL('../../testdata/berlin.mbtiles', import.meta.url));
 
 {
 	// Example 1: Read a single tile

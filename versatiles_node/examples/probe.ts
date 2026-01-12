@@ -8,11 +8,12 @@
  */
 
 import { TileSource } from '@versatiles/versatiles-rs';
+import { fileURLToPath } from 'url';
 import { log } from './lib/logger.js';
 
 log.title('VersaTiles Probe Example');
 
-const containerPath = new URL('../../testdata/berlin.mbtiles', import.meta.url).pathname;
+const containerPath = fileURLToPath(new URL('../../testdata/berlin.mbtiles', import.meta.url));
 const source = await TileSource.open(containerPath);
 
 log.section('Container Information');

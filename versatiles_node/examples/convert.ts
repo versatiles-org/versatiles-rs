@@ -10,13 +10,14 @@
 import { tmpdir } from 'os';
 import { convert } from '@versatiles/versatiles-rs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { log } from './lib/logger.js';
 
 log.title('VersaTiles Conversion Example');
 
 // Example 1: Simple conversion
 log.section('Example 1: Convert MBTiles to VersaTiles');
-const inputPath = new URL('../../testdata/berlin.mbtiles', import.meta.url).pathname;
+const inputPath = fileURLToPath(new URL('../../testdata/berlin.mbtiles', import.meta.url));
 const outputPath = path.join(tmpdir(), 'output.versatiles');
 
 await convert(inputPath, outputPath);

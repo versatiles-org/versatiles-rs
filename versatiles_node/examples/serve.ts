@@ -8,9 +8,12 @@
  */
 
 import { TileServer } from '@versatiles/versatiles-rs';
+import { fileURLToPath } from 'url';
 import { log } from './lib/logger.js';
 
 log.title('VersaTiles Server Example');
+
+const testdataPath = (file: string) => fileURLToPath(new URL(`../../testdata/${file}`, import.meta.url));
 
 {
 	// Example 1: Simple server with one tile source
@@ -23,7 +26,7 @@ log.title('VersaTiles Server Example');
 	});
 
 	// Add a tile source
-	const tilesPath = new URL('../../testdata/berlin.pmtiles', import.meta.url).pathname;
+	const tilesPath = testdataPath('berlin.pmtiles');
 	await server.addTileSourceFromPath('berlin', tilesPath);
 
 	// Start the server
@@ -48,7 +51,7 @@ log.title('VersaTiles Server Example');
 	const server = new TileServer({ port: 0 });
 
 	// Add multiple tile sources
-	await server.addTileSourceFromPath('osm', new URL('../../testdata/berlin.pmtiles', import.meta.url).pathname);
+	await server.addTileSourceFromPath('osm', testdataPath('berlin.pmtiles'));
 	// Uncomment these if you have more test data:
 	// await server.addTileSourceFromPath('satellite', './satellite.pmtiles');
 	// await server.addTileSourceFromPath('terrain', './terrain.versatiles');
@@ -74,7 +77,7 @@ log.title('VersaTiles Server Example');
 	const server = new TileServer({ port: 0 });
 
 	// Add tile sources
-	await server.addTileSourceFromPath('tiles', new URL('../../testdata/berlin.pmtiles', import.meta.url).pathname);
+	await server.addTileSourceFromPath('tiles', testdataPath('berlin.pmtiles'));
 
 	// Add static files (if you have a static.tar file)
 	// await server.addStaticSource('./static.tar', '/');
@@ -104,7 +107,7 @@ log.title('VersaTiles Server Example');
 
 	// Add sources dynamically
 	log.text('\nAdding tile source "berlin"...');
-	await server.addTileSourceFromPath('berlin', new URL('../../testdata/berlin.pmtiles', import.meta.url).pathname);
+	await server.addTileSourceFromPath('berlin', testdataPath('berlin.pmtiles'));
 	log.success('Source added: /tiles/berlin/{z}/{x}/{y}');
 
 	await sleepForOneSecond();

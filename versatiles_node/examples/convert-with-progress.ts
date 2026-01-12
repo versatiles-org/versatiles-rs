@@ -11,11 +11,12 @@
 import { convert, type ProgressData } from '@versatiles/versatiles-rs';
 import path from 'path';
 import { tmpdir } from 'os';
+import { fileURLToPath } from 'url';
 import { log } from './lib/logger.js';
 
 log.title('VersaTiles Progress Monitoring Example');
 
-const inputPath = new URL('../../testdata/berlin.mbtiles', import.meta.url).pathname;
+const inputPath = fileURLToPath(new URL('../../testdata/berlin.mbtiles', import.meta.url));
 const outputPath = path.join(tmpdir(), 'output-with-progress.versatiles');
 
 log.path('Input', inputPath);
