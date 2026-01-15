@@ -90,7 +90,7 @@ Filter tiles by bounding box and/or zoom levels.
 - *`level_max`: u8 (optional)* - maximal zoom level
 
 ## meta_update
-Update metadata, see also https://github.com/mapbox/tilejson-spec/tree/master/3.0.0
+Update metadata, see also <https://github.com/mapbox/tilejson-spec/tree/master/3.0.0>
 ### Parameters:
 - *`attribution`: String (optional)* - Attribution text.
 - *`description`: String (optional)* - Description text.

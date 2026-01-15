@@ -11,7 +11,7 @@ use versatiles_core::{TileBBox, TileJSON, TileSchema, TileStream};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Update metadata, see also https://github.com/mapbox/tilejson-spec/tree/master/3.0.0
+/// Update metadata, see also <https://github.com/mapbox/tilejson-spec/tree/master/3.0.0>
 struct Args {
 	/// Attribution text.
 	attribution: Option<String>,
