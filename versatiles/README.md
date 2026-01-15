@@ -14,6 +14,7 @@ VersaTiles provides both a command-line interface and a Rust library for working
 For CLI usage, installation instructions, command documentation, and production deployment guides, see the main [VersaTiles README](https://github.com/versatiles-org/versatiles-rs).
 
 The CLI provides commands for:
+
 - **`convert`**: Convert between tile formats
 - **`probe`**: Inspect tile containers
 - **`serve`**: Run an HTTP tile server

@@ -11,6 +11,7 @@ Run all checks (Rust + Node.js):
 ```
 
 This runs:
+
 - Rust: `cargo check`, `cargo fmt --check`, `cargo clippy`, `cargo test`, `cargo doc`
 - Node.js: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`
 

@@ -46,17 +46,20 @@ from_overlayed [
 ## from_container
 Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*.tar` file.
 ### Parameters
+
 - **`filename`: String (required)** - The filename of the tile container. This is relative to the path of the VPL file. For example: `filename="world.versatiles"`.
 
 ## from_debug
 Generates debug tiles that display their coordinates as text.
 ### Parameters
+
 - *`format`: String (optional)* - Target tile format: one of `"mvt"` (default), `"avif"`, `"jpg"`, `"png"` or `"webp"`
 
 ## from_gdal_raster
 Reads a GDAL raster dataset and exposes it as a tile source.
 Hint: When using "gdalbuildvrt" to create a virtual raster, don't forget to set `-addalpha` option to include alpha channel.
 ### Parameters
+
 - **`filename`: String (required)** - The filename of the GDAL raster dataset to read. For example: `filename="world.tif"`.
 - *`tile_size`: u32 (optional)* - The size of the generated tiles in pixels. (default: 512)
 - *`tile_format`: TileFormat (optional)* - The tile format to use for the output tiles. (default: `PNG`)
@@ -69,18 +72,22 @@ Hint: When using "gdalbuildvrt" to create a virtual raster, don't forget to set 
 Merges multiple vector tile sources.
 Each resulting tile will contain all the features and properties from all the sources.
 ### Sources
+
 All tile sources must provide vector tiles.
 
 ## from_stacked
 Overlays multiple tile sources, using the tile from the first source that provides it.
 ### Sources
+
 All tile sources must have the same format.
 
 ## from_stacked_raster
 Overlays multiple raster tile sources on top of each other.
 ### Sources
+
 All tile sources must provide raster tiles in the same resolution. The first source overlays the others.
 ### Parameters
+
 - *`format`: TileFormat (optional)* - The tile format to use for the output tiles. Default: format of the first source.
 
 ---
@@ -89,6 +96,7 @@ All tile sources must provide raster tiles in the same resolution. The first sou
 ## filter
 Filter tiles by bounding box and/or zoom levels.
 ### Parameters
+
 - *`bbox`: [f64,f64,f64,f64] (optional)* - Bounding box in WGS84: [min lng, min lat, max lng, max lat].
 - *`level_min`: u8 (optional)* - minimal zoom level
 - *`level_max`: u8 (optional)* - maximal zoom level
@@ -96,6 +104,7 @@ Filter tiles by bounding box and/or zoom levels.
 ## meta_update
 Update metadata, see also <https://github.com/mapbox/tilejson-spec/tree/master/3.0.0>
 ### Parameters
+
 - *`attribution`: String (optional)* - Attribution text.
 - *`description`: String (optional)* - Description text.
 - *`fillzoom`: u8 (optional)* - Fill zoom level.
@@ -105,11 +114,13 @@ Update metadata, see also <https://github.com/mapbox/tilejson-spec/tree/master/3
 ## raster_flatten
 Flattens (translucent) raster tiles onto a background
 ### Parameters
+
 - *`color`: [u8,u8,u8] (optional)* - background color to use for the flattened tiles, in RGB format. Defaults to white.
 
 ## raster_format
 Filter tiles by bounding box and/or zoom levels.
 ### Parameters
+
 - *`format`: String (optional)* - The desired tile format. Allowed values are: AVIF, JPG, PNG or WEBP. If not specified, the source format will be used.
 - *`quality`: String (optional)* - Quality level for the tile compression (only AVIF, JPG or WEBP), between 0 (worst) and 100 (lossless). To allow different quality levels for different zoom levels, this can also be a comma-separated list like this: "80,70,14:50,15:20", where the first value is the default quality, and the other values specify the quality for the specified zoom level (and higher).
 - *`speed`: u8 (optional)* - Compression speed (only AVIF), between 0 (slowest) and 100 (fastest).
@@ -117,6 +128,7 @@ Filter tiles by bounding box and/or zoom levels.
 ## raster_levels
 Adjust brightness, contrast and gamma of raster tiles.
 ### Parameters
+
 - *`brightness`: f32 (optional)* - Brightness adjustment, between -255 and 255. Defaults to 0.0 (no change).
 - *`contrast`: f32 (optional)* - Contrast adjustment, between 0 and infinity. Defaults to 1.0 (no change).
 - *`gamma`: f32 (optional)* - Gamma adjustment, between 0 and infinity. Defaults to 1.0 (no change).
@@ -124,6 +136,7 @@ Adjust brightness, contrast and gamma of raster tiles.
 ## raster_overscale
 Raster overscale operation - generates tiles beyond the source's native resolution.
 ### Parameters
+
 - *`level_base`: u8 (optional)* - use this zoom level to build the overscale. Defaults to the maximum zoom level of the source.
 - *`level_max`: u8 (optional)* - use this as maximum zoom level. Defaults to 30.
 - *`enable_climbing`: bool (optional)* - Enable tile climbing when overscaling. Defaults to false.
@@ -131,18 +144,21 @@ Raster overscale operation - generates tiles beyond the source's native resoluti
 ## raster_overview
 Filter tiles by bounding box and/or zoom levels.
 ### Parameters
+
 - *`level`: u8 (optional)* - use this zoom level to build the overview. Defaults to the maximum zoom level of the source.
 - *`tile_size`: u32 (optional)* - Size of the tiles in pixels. Defaults to 512.
 
 ## vector_filter_layers
 Filters vector tile layers based on a comma-separated list of layer names.
 ### Parameters
+
 - **`filter`: String (required)** - Comma‑separated list of layer names that should be removed from the tiles, e.g.: filter="pois,ocean".
 - *`invert`: bool (optional)* - If set, inverts the filter logic (i.e., keeps only layers matching the filter).
 
 ## vector_filter_properties
 Filters properties based on a regular expressions.
 ### Parameters
+
 - **`regex`: String (required)** - A regular expression pattern that should match property names to be removed from all features. The property names contain the layer name as a prefix, e.g., `layer_name/property_name`, so an expression like `regex="^layer_name/"` will match all properties of that layer or `regex="/name_.*$"` will match all properties starting with `name_` in all layers.
 - *`invert`: bool (optional)* - If set, inverts the filter logic (i.e., keeps only properties matching the filter).
 
@@ -151,6 +167,7 @@ Arguments for the `vector_update_properties` operation.
 This operation joins vector tile features with external tabular data (CSV/TSV)
 based on matching ID fields, allowing you to enrich or update feature properties.
 ### Parameters
+
 - **`data_source_path`: String (required)** - Path to the CSV/TSV data file: The file must have a header row. Each subsequent row will be matched to vector features using the ID fields.
 - **`layer_name`: String (required)** - Name of the vector layer to update: Only features in this layer will be modified. Other layers pass through unchanged.
 - **`id_field_tiles`: String (required)** - Field name in the vector tiles that contains the feature ID: This field is used to match features with rows in the data source.

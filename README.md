@@ -205,6 +205,7 @@ versatiles convert --bbox=13.0,52.3,13.8,52.7 world.versatiles berlin.versatiles
 VersaTiles works with **tile containers** - files or directories containing map tiles organized by zoom level (z), column (x), and row (y).
 
 **Supported formats:**
+
 - `.versatiles` - Native format (best compression, fastest access)
 - `.mbtiles` - SQLite-based (widely compatible)
 - `.pmtiles` - Cloud-optimized single-file format
@@ -594,6 +595,7 @@ static:
 ### Full Reference
 
 For complete configuration documentation, see:
+
 - [versatiles/CONFIG.md](https://github.com/versatiles-org/versatiles-rs/blob/main/versatiles/CONFIG.md) - Full reference (auto-generated)
 
 Or run:
@@ -628,6 +630,7 @@ versatiles serve https://download.versatiles.org/osm.versatiles
 ### Building with GDAL support
 
 Due to the numerous combinations of operating systems, package managers and GDAL versions, we must streamline this ecosystem. If you require GDAL support, we recommend the following:
+
 1. Build GDAL locally by running `./scripts/install-gdal.sh`. This will build and install GDAL in the subfolder `./.toolchain/gdal`
 2. Build `versatiles` with the features `gdal`. We recommend using the scripts `./scripts/build_debug.sh` and `./scripts/build_release.sh`.
 
@@ -640,10 +643,12 @@ VersaTiles is built with Rust and includes Node.js bindings (NAPI-RS).
 ### Prerequisites
 
 **Required:**
+
 - Rust 1.92+ ([installation](https://www.rust-lang.org/tools/install))
 - Node.js 20+ (for Node.js bindings)
 
 **Optional:**
+
 - [Lefthook](https://github.com/evilmartians/lefthook) - Pre-commit hooks
 - GDAL 3.x - For GDAL support ([build instructions](#building-with-gdal-support))
 
@@ -675,6 +680,7 @@ Verify code quality before committing:
 ```
 
 This runs:
+
 - **Rust:** formatting (rustfmt), linting (clippy), type-checking, tests, doc tests
 - **Node.js:** formatting (Prettier), linting (ESLint), type-checking (TypeScript), tests (Vitest)
 
@@ -784,6 +790,7 @@ lefthook install
 ```
 
 **Hook behavior:**
+
 - **pre-commit:** Fast checks (formatting, basic linting)
 - **pre-push:** Full checks (all tests, clippy, type-checking)
 
@@ -851,6 +858,7 @@ We welcome contributions! Please:
    ```
 
 **Commit message format:**
+
 - `feat:` New feature
 - `fix:` Bug fix
 - `docs:` Documentation only
@@ -968,6 +976,7 @@ git push origin main --follow-tags
 ```
 
 The GitHub Actions workflow will automatically:
+
 - Build CLI binaries for 8 platforms (Linux gnu/musl x64/arm64, macOS x64/arm64, Windows x64/arm64)
 - Build NAPI-RS bindings for Node.js (8 platform-specific packages)
 - Publish to npmjs.com (@versatiles/versatiles-rs + 8 platform-specific packages)

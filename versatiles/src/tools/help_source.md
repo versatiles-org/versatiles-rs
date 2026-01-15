@@ -70,6 +70,7 @@ For programmatic use, data sources can be specified as JSON:
 ```
 
 JSON fields:
+
 - `location`: Path or URL to the data source
 - `name`: Optional name identifier (defaults to filename without extension)
 - `type`: Optional container type (defaults to file extension)

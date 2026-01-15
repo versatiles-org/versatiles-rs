@@ -11,6 +11,7 @@ Below is a complete example of a server configuration file with detailed explana
 ## Tile Sources
 
 Tile sources can be specified as:
+
 - **Local files**: `.versatiles`, `.mbtiles`, `.pmtiles`, or `.tar` containers
 - **Remote URLs**: HTTP/HTTPS URLs to tile containers
 - **VPL pipelines**: `.vpl` files for advanced tile processing (see `versatiles help pipeline`)

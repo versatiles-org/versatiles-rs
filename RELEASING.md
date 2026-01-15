@@ -100,6 +100,7 @@ You can either provide the release type as an argument, or run the script withou
 ```
 
 This script will:
+
 - Sync versions between Cargo.toml and package.json
 - Run tests
 - Execute cargo-release (updates Cargo.toml, creates commit and tag)
@@ -113,6 +114,7 @@ git push origin main --follow-tags
 ```
 
 This triggers GitHub Actions which will:
+
 - Validate version synchronization
 - Build CLI binaries for 8 platforms (Linux gnu/musl x64/arm64, macOS x64/arm64, Windows x64/arm64)
 - Build NAPI-RS bindings for Node.js (8 platform-specific .node files)
@@ -140,6 +142,7 @@ gh release view v2.3.2
 When you publish a prerelease version:
 
 ### npm Distribution
+
 - **Alpha**: Published with `--tag alpha`
   - Install: `npm install @versatiles/versatiles-rs@alpha`
 - **Beta**: Published with `--tag beta`
@@ -152,11 +155,13 @@ When you publish a prerelease version:
   - Install: `npm install @versatiles/versatiles-rs`
 
 ### GitHub Release
+
 - Marked as "Pre-release" (not "Latest")
 - CLI binaries available for download
 - Does not update "latest" release badge
 
 ### Docker & Homebrew
+
 - **Skipped for all prereleases**
 - Only triggered on stable releases
 
