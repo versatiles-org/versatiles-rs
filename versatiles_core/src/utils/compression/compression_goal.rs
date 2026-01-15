@@ -21,6 +21,13 @@ impl Debug for CompressionGoal {
 	}
 }
 
+impl Default for CompressionGoal {
+	/// Returns [`CompressionGoal::UseBestCompression`] as the default.
+	fn default() -> Self {
+		Self::UseBestCompression
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -38,5 +45,10 @@ mod tests {
 		let a = CompressionGoal::UseBestCompression;
 		let b = a;
 		assert_eq!(a, b);
+	}
+
+	#[test]
+	fn test_default() {
+		assert_eq!(CompressionGoal::default(), CompressionGoal::UseBestCompression);
 	}
 }
