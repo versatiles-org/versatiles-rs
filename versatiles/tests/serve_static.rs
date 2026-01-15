@@ -202,7 +202,7 @@ async fn serve_static_index_at_root() {
 /// Test static source with prefix via config file.
 #[tokio::test]
 async fn serve_static_with_prefix() {
-	let static_path = get_testdata("static.tar.gz");
+	let static_path = to_yaml_path(&get_testdata("static.tar.gz"));
 	let config = format!(
 		r#"
 static:
