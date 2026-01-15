@@ -21,8 +21,7 @@
 //! ```
 use super::{
 	compression_goal::CompressionGoal,
-	method_brotli::{compress_brotli, decompress_brotli},
-	method_gzip::{compress_gzip, decompress_gzip},
+	methods::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip},
 	target_compression::TargetCompression,
 };
 use crate::{Blob, TileCompression};

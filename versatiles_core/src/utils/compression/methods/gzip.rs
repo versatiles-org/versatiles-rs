@@ -80,7 +80,7 @@ pub fn decompress_gzip(blob: &Blob) -> Result<Blob> {
 
 #[cfg(test)]
 mod tests {
-	use super::super::tests::generate_test_data;
+	use super::super::super::tests::generate_test_data;
 	use super::*;
 
 	#[test]
