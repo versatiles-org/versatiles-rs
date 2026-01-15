@@ -78,8 +78,21 @@ async fn process_bbox_tiles(
 	sources: Arc<Vec<Box<dyn TileSource>>>,
 	bbox: TileBBox,
 	tile_format: TileFormat,
-) -> TileStream<'static, Tile> {
-	let mut tiles = TileBBoxMap::<Vec<Tile>>::new_default(bbox).unwrap();
+) -> Result<TileStream<'static, Tile>> {
+	#[derive(Clone)]
+	struct Slot {
+		tiles: Vec<Option<Tile>>,
+		has_data: bool,
+	}
+
+	let n = sources.len();
+	let mut tiles = TileBBoxMap::<Slot>::new_prefilled_with(
+		bbox,
+		Slot {
+			tiles: vec![None; n],
+			has_data: false,
+		},
+	)?;
 
 	let streams = sources.iter().map(async |source| {
 		let stream = source.get_tile_stream(bbox).await.unwrap();
@@ -87,26 +100,33 @@ async fn process_bbox_tiles(
 	});
 	let results: Vec<Vec<(TileCoord, Tile)>> = futures::future::join_all(streams).await;
 
-	for result in results {
+	for (i, result) in results.into_iter().enumerate() {
 		for (coord, mut tile) in result {
-			let image = tile.as_image().unwrap();
+			let image = tile.as_image()?;
 			if !image.is_empty() {
-				tiles.get_mut(&coord).unwrap().push(tile);
+				let slot = tiles.get_mut(&coord)?;
+				slot.tiles[i] = Some(tile);
+				slot.has_data = true;
 			}
 		}
 	}
 
-	tiles
+	let stream = tiles
 		.into_stream()
-		.filter_map_item_parallel(move |v| match stack_tiles(v) {
-			Ok(Some(mut tile)) => {
-				tile.change_format(tile_format, None, None).unwrap();
-				Ok(Some(tile))
+		.filter_map_item_parallel(move |s| {
+			let tiles = s.tiles.into_iter().flatten().collect::<Vec<_>>();
+			match stack_tiles(tiles) {
+				Ok(Some(mut tile)) => {
+					tile.change_format(tile_format, None, None).unwrap();
+					Ok(Some(tile))
+				}
+				Ok(None) => Ok(None),
+				Err(err) => Err(err),
 			}
-			Ok(None) => Ok(None),
-			Err(err) => Err(err),
 		})
-		.unwrap_results()
+		.unwrap_results();
+
+	Ok(stream)
 }
 
 impl ReadTileSource for Operation {
@@ -188,7 +208,7 @@ impl TileSource for Operation {
 
 		Ok(TileStream::from_streams(stream::iter(bboxes).map(move |bbox| {
 			let sources = sources.clone();
-			process_bbox_tiles(sources, bbox, tile_format)
+			async move { process_bbox_tiles(sources, bbox, tile_format).await.unwrap() }
 		})))
 	}
 }
