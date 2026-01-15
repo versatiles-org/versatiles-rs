@@ -36,7 +36,8 @@ pub struct TileSourceConfig {
 	pub name: Option<String>,
 
 	/// Path or URL to the tile data source
-	/// Can be a local file or remote URL.
+	/// Can be a local file (.versatiles, .mbtiles, .pmtiles, .tar),
+	/// a remote URL, or a VPL pipeline file (.vpl).
 	#[config_demo("osm.versatiles")]
 	pub src: DataSource,
 }
