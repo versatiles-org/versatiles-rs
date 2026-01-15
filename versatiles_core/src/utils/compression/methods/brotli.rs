@@ -36,6 +36,10 @@ pub fn compress_brotli(blob: &Blob) -> Result<Blob> {
 ///
 /// This variant uses lower quality settings for faster compression at the expense of compression ratio.
 ///
+/// **Note:** This function is provided for direct use by callers who need to prioritize
+/// compression speed over compression ratio. The [`optimize_compression`](super::super::optimize_compression)
+/// function uses [`compress_brotli`] internally for maximum compression ratio.
+///
 /// # Arguments
 ///
 /// * `blob` - The data blob to compress.

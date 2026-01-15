@@ -32,6 +32,10 @@ pub fn compress_gzip(blob: &Blob) -> Result<Blob> {
 ///
 /// This variant uses lower compression level for faster compression at the expense of compression ratio.
 ///
+/// **Note:** This function is provided for direct use by callers who need to prioritize
+/// compression speed over compression ratio. The [`optimize_compression`](super::super::optimize_compression)
+/// function uses [`compress_gzip`] internally for maximum compression ratio.
+///
 /// # Arguments
 ///
 /// * `blob` - The data blob to compress.
