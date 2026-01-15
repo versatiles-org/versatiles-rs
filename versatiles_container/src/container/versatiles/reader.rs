@@ -64,8 +64,8 @@ use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
 	Blob, ByteRange, LimitedCache, TileBBox, TileCoord, TileJSON, TileStream,
+	compression::decompress,
 	io::{DataReader, DataReaderFile},
-	utils::decompress,
 };
 use versatiles_derive::context;
 

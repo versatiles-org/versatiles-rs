@@ -4,7 +4,7 @@ use super::Tile;
 use anyhow::{Result, ensure};
 use versatiles_core::{
 	TileCompression,
-	utils::{decompress_ref, recompress},
+	compression::{decompress_ref, recompress},
 };
 use versatiles_derive::context;
 

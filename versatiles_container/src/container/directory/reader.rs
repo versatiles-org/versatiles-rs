@@ -50,7 +50,8 @@ use std::{
 	sync::Arc,
 };
 use versatiles_core::{
-	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream, utils::decompress,
+	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream,
+	compression::decompress,
 };
 use versatiles_derive::context;
 
@@ -280,7 +281,7 @@ mod tests {
 		fixture::{FileWriteStr, PathChild},
 	};
 	use std::fs::{self};
-	use versatiles_core::{assert_wildcard, utils::compress};
+	use versatiles_core::{assert_wildcard, compression::compress};
 
 	#[tokio::test]
 	async fn tile_reader_new() -> Result<()> {

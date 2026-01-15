@@ -7,8 +7,9 @@ use std::{
 };
 use versatiles_core::{
 	Blob, ByteRange, TileCompression,
+	compression::compress,
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
-	utils::{compress, float_to_int},
+	utils::float_to_int,
 };
 
 /// A collection of `EntryV3` that provides various utility functions

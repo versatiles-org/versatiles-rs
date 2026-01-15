@@ -23,7 +23,7 @@ use axum::{
 use std::sync::Arc;
 use versatiles_core::{
 	Blob, TileCompression,
-	utils::{TargetCompression, optimize_compression},
+	compression::{TargetCompression, optimize_compression},
 };
 
 /// State for static file requests across multiple `StaticSource`s.

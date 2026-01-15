@@ -15,7 +15,9 @@
 //! - **[`json`]**: JSON parsing, stringification, and NDJSON (newline-delimited JSON) support
 //!   with custom types (`JsonValue`, `JsonArray`, `JsonObject`).
 //!
-//! - **[`utils`]**: Utility modules for compression, CSV parsing, spatial indexing (Hilbert curves),
+//! - **[`compression`]**: Compression and decompression of tile data (Gzip, Brotli, Zstd).
+//!
+//! - **[`utils`]**: Utility modules for CSV parsing, spatial indexing (Hilbert curves),
 //!   and pretty-printing.
 //!
 //! - **[`concurrency`]**: Concurrency limit tuning for optimal I/O and CPU performance
@@ -40,6 +42,7 @@
 //! ```
 
 pub mod byte_iterator;
+pub mod compression;
 pub mod concurrency;
 pub use concurrency::*;
 pub mod io;

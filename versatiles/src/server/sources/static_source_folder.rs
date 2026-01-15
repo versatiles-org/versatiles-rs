@@ -12,7 +12,7 @@ use std::{
 	io::{BufReader, Read},
 	path::{Path, PathBuf},
 };
-use versatiles_core::{Blob, TileCompression, utils::TargetCompression};
+use versatiles_core::{Blob, TileCompression, compression::TargetCompression};
 use versatiles_derive::context;
 
 // Folder struct definition

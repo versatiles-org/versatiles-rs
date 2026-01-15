@@ -50,7 +50,7 @@ use std::{
 	fs,
 	path::{Path, PathBuf},
 };
-use versatiles_core::{Blob, io::DataWriterTrait, utils::compress};
+use versatiles_core::{Blob, compression::compress, io::DataWriterTrait};
 use versatiles_derive::context;
 
 /// Writes a directory-based tile pyramid along with a compressed `TileJSON` (`tiles.json[.<br|gz>]`).
@@ -150,7 +150,7 @@ impl TilesWriter for DirectoryWriter {
 mod tests {
 	use super::*;
 	use crate::{MOCK_BYTES_PBF, MockReader, TileSourceMetadata};
-	use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat, utils::decompress_gzip};
+	use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat, compression::decompress_gzip};
 
 	/// Tests the functionality of writing tile data to a directory from a mock reader.
 	#[tokio::test]

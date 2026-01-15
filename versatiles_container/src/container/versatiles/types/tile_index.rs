@@ -8,8 +8,8 @@ use anyhow::{Result, ensure};
 use std::ops::Div;
 use versatiles_core::{
 	Blob, ByteRange,
+	compression::{compress_brotli_fast, decompress_brotli},
 	io::{ValueReader, ValueReaderBlob, ValueWriter, ValueWriterBlob},
-	utils::{compress_brotli_fast, decompress_brotli},
 };
 use versatiles_derive::context;
 

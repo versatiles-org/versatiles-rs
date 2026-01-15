@@ -56,8 +56,9 @@ use std::{fmt::Debug, path::Path, sync::Arc};
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
 	Blob, ByteRange, LimitedCache, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileStream,
+	compression::decompress,
 	io::{DataReader, DataReaderFile},
-	utils::{HilbertIndex, decompress},
+	utils::HilbertIndex,
 };
 use versatiles_derive::context;
 

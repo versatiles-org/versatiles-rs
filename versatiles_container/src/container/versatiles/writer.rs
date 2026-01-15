@@ -54,9 +54,9 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::sync::Arc;
 use versatiles_core::{
+	compression::compress,
 	io::DataWriterTrait,
 	types::{Blob, ByteRange, TileCompression},
-	utils::compress,
 };
 use versatiles_derive::context;
 

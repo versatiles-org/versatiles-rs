@@ -11,7 +11,7 @@
 //!
 //! ## Usage
 //! ```rust
-//! use versatiles_core::{utils::*, *};
+//! use versatiles_core::{compression::*, Blob};
 //!
 //! let data = Blob::from(vec![1, 2, 3, 4, 5]);
 //! let compressed = compress_gzip(&data)?;

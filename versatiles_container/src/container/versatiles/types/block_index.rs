@@ -9,8 +9,8 @@ use anyhow::{Result, ensure};
 use std::{collections::HashMap, ops::Div};
 use versatiles_core::{
 	Blob, ByteRange, TileBBoxPyramid, TileCoord,
+	compression::{compress_brotli_fast, decompress_brotli},
 	io::{ValueWriter, ValueWriterBlob},
-	utils::{compress_brotli_fast, decompress_brotli},
 };
 use versatiles_derive::context;
 

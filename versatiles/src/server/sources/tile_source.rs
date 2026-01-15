@@ -2,7 +2,7 @@ use super::{super::utils::Url, SourceResponse};
 use anyhow::Result;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::TileSource;
-use versatiles_core::{Blob, TileCompression, TileCoord, utils::TargetCompression};
+use versatiles_core::{Blob, TileCompression, TileCoord, compression::TargetCompression};
 use versatiles_derive::context;
 
 // TileSource struct definition

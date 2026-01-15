@@ -17,7 +17,7 @@
 //! ### Examples
 //! ```rust
 //! use axum::http::{HeaderMap, header};
-//! use versatiles_core::{utils::TargetCompression, TileCompression as TC};
+//! use versatiles_core::{compression::TargetCompression, TileCompression as TC};
 //! use enumset::{enum_set, EnumSet};
 //! use versatiles::server::encoding::get_encoding;
 //!
@@ -43,7 +43,7 @@
 //! - This module is intentionally tiny; tests cover a matrix of realistic client headers.
 
 use axum::http::{HeaderMap, header};
-use versatiles_core::{TileCompression, utils::TargetCompression};
+use versatiles_core::{TileCompression, compression::TargetCompression};
 
 /// Convert `Accept-Encoding` into a set of **allowed** encodings.
 ///

@@ -38,8 +38,8 @@ use std::{collections::HashMap, fmt::Debug, io::Read, path::Path, sync::Arc};
 use tar::{Archive, EntryType};
 use versatiles_core::{
 	Blob, ByteRange, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream,
+	compression::decompress,
 	io::{DataReaderFile, DataReaderTrait},
-	utils::decompress,
 };
 use versatiles_derive::context;
 

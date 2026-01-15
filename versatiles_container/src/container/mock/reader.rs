@@ -28,7 +28,7 @@ use crate::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{
-	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream, utils::compress,
+	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream, compression::compress,
 };
 use versatiles_derive::context;
 

@@ -2,7 +2,7 @@ use super::{super::utils::Url, SourceResponse, static_source_folder::Folder, sta
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, path::Path, sync::Arc};
-use versatiles_core::utils::TargetCompression;
+use versatiles_core::compression::TargetCompression;
 use versatiles_derive::context;
 
 #[async_trait]
@@ -57,7 +57,7 @@ mod tests {
 	use super::*;
 	use async_trait::async_trait;
 	use std::{fs::File, io::Write, path::PathBuf};
-	use versatiles_core::{Blob, TileCompression, utils::compress};
+	use versatiles_core::{Blob, TileCompression, compression::compress};
 
 	#[derive(Debug)]
 	struct MockStaticSource;

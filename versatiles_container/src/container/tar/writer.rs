@@ -25,7 +25,7 @@ use std::{
 	sync::Arc,
 };
 use tar::{Builder, Header};
-use versatiles_core::{io::DataWriterTrait, utils::compress};
+use versatiles_core::{compression::compress, io::DataWriterTrait};
 use versatiles_derive::context;
 
 /// Writer for tiles packaged inside a tar archive.

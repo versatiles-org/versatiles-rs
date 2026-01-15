@@ -6,7 +6,7 @@ use std::{collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::Fi
 use tar::{Archive, EntryType};
 use versatiles_core::{
 	Blob, TileCompression,
-	utils::{TargetCompression, decompress_brotli, decompress_gzip, decompress_zstd},
+	compression::{TargetCompression, decompress_brotli, decompress_gzip, decompress_zstd},
 };
 use versatiles_derive::context;
 
