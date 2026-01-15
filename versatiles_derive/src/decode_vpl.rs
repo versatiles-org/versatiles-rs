@@ -60,7 +60,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 				(field_type_str == "Vec<VPLPipeline>"),
 				"type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'"
 			);
-			doc_sources = Some(format!("### Sources:\n{comment}"));
+			doc_sources = Some(format!("### Sources\n{comment}"));
 			parser_fields.push(quote! { sources: node.sources.clone() });
 		} else {
 			if !comment.is_empty() {
@@ -137,7 +137,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 	let doc_fields = if doc_fields.is_empty() {
 		String::new()
 	} else {
-		format!("### Parameters:\n{}", doc_fields.join("\n"))
+		format!("### Parameters\n{}", doc_fields.join("\n"))
 	};
 
 	let doc = vec![doc_struct, doc_sources.unwrap_or_default(), doc_fields]
@@ -225,7 +225,7 @@ mod tests {
 				"        })",
 				"    }",
 				"    pub fn get_docs() -> String {",
-				"        \"Struct documentation\\n### Parameters:\\n- **`field1`: String (required)** - Field documentation\"",
+				"        \"Struct documentation\\n### Parameters\\n- **`field1`: String (required)** - Field documentation\"",
 				"            .to_string()",
 				"    }",
 				"}",
@@ -366,7 +366,7 @@ mod tests {
 					"        })",
 					"    }",
 					"    pub fn get_docs() -> String {",
-					&format!("        \"### Parameters:\\n- {comment}\".to_string()"),
+					&format!("        \"### Parameters\\n- {comment}\".to_string()"),
 					"    }",
 					"}",
 					""
@@ -392,7 +392,7 @@ mod tests {
 		let ts = decode_struct(input.clone(), data_struct);
 		let code = ts.to_string();
 		// Ensure get_docs includes Sources section
-		assert!(code.contains("### Sources:"));
+		assert!(code.contains("### Sources"));
 		assert!(code.contains("List of sources"));
 	}
 }
