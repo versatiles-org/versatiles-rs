@@ -4,7 +4,7 @@ This directory contains both the Rust source code and TypeScript integration tes
 
 ## Structure
 
-```
+```text
 src/
 ├── lib.rs               # Main Rust module (napi entry point)
 ├── container.rs         # ContainerReader implementation

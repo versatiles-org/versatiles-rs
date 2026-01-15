@@ -224,7 +224,7 @@ We follow Semantic Versioning 2.0.0 with prerelease identifiers.
 
 ### Typical Prerelease Progression
 
-```
+```text
 2.3.1 (stable)
   ↓ alpha
 2.4.0-alpha.1

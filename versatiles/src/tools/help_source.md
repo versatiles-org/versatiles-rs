@@ -8,7 +8,7 @@ VersaTiles supports multiple ways to specify data sources for tile containers.
 
 Local file paths are resolved relative to the current directory:
 
-```
+```text
 tiles.versatiles
 ./data/world.mbtiles
 /absolute/path/to/tiles.pmtiles
@@ -18,7 +18,7 @@ tiles.versatiles
 
 HTTP and HTTPS URLs are supported (VersaTiles containers only for remote):
 
-```
+```text
 https://example.org/tiles.versatiles
 http://download.example.org/world.versatiles
 ```
@@ -31,7 +31,7 @@ You can override the auto-detected name and container type using bracket notatio
 
 Format: `[name,type]location`
 
-```
+```text
 [osm,mbtiles]tiles.db        # Set name to "osm", type to "mbtiles"
 [,mbtiles]tiles.db           # Set only type to "mbtiles"
 [osm]tiles.mbtiles           # Set only name to "osm"
@@ -42,7 +42,7 @@ Format: `[name,type]location`
 
 Format: `location[name,type]`
 
-```
+```text
 tiles.db[osm,mbtiles]        # Same as [osm,mbtiles]tiles.db
 tiles.db[,mbtiles]           # Same as [,mbtiles]tiles.db
 tiles.mbtiles[osm]           # Same as [osm]tiles.mbtiles
@@ -52,7 +52,7 @@ tiles.mbtiles[osm]           # Same as [osm]tiles.mbtiles
 
 Use `[,vpl]` prefix with parentheses to define a VPL pipeline directly:
 
-```
+```text
 [,vpl](from_mbtiles tiles.mbtiles)
 [osm,vpl](from_mbtiles tiles.mbtiles | filter_zoom 0-10)
 ```

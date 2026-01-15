@@ -28,7 +28,7 @@ npm run build        # For release
 
 ## Project Structure
 
-```
+```text
 versatiles_node/
 ├── src/                 # Rust source code
 │   ├── lib.rs          # Main module

@@ -222,7 +222,7 @@ versatiles serve https://download.versatiles.org/osm.versatiles
 
 Run `versatiles` to see available commands:
 
-```
+```text
 Usage: versatiles [OPTIONS] <COMMAND>
 
 Commands:

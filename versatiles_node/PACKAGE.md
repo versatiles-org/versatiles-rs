@@ -8,7 +8,7 @@ This document explains how the `@versatiles/versatiles-rs` package is structured
 
 When you install `@versatiles/versatiles-rs`, you get:
 
-```
+```text
 @versatiles/versatiles-rs/
 ├── index.js              # ESM JavaScript bindings
 ├── index.cjs             # CommonJS JavaScript bindings
@@ -26,7 +26,7 @@ When you install `@versatiles/versatiles-rs`, you get:
 
 These files exist in the repository but are **not** published:
 
-```
+```text
 ✗ src/                    # Rust source code (~20 KB)
 ✗ examples/               # Example files (~30 KB)
 ✗ __test__/               # Test files
@@ -151,7 +151,7 @@ See `.github/workflows/node-bindings.yml` for configuration.
 
 Typical NPM package contents:
 
-```
+```text
 5.2 MB  versatiles.darwin-arm64.node    # Native binary
   45 KB  index.js                        # ESM bindings
   45 KB  index.cjs                       # CommonJS bindings
