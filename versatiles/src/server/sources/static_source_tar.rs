@@ -6,7 +6,7 @@ use std::{collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::Fi
 use tar::{Archive, EntryType};
 use versatiles_core::{
 	Blob, TileCompression,
-	utils::{TargetCompression, decompress_brotli, decompress_gzip},
+	utils::{TargetCompression, decompress_brotli, decompress_gzip, decompress_zstd},
 };
 use versatiles_derive::context;
 
@@ -16,6 +16,7 @@ struct FileEntry {
 	un: Option<Blob>,
 	gz: Option<Blob>,
 	br: Option<Blob>,
+	zstd: Option<Blob>,
 }
 
 impl FileEntry {
@@ -25,6 +26,7 @@ impl FileEntry {
 			un: None,
 			gz: None,
 			br: None,
+			zstd: None,
 		}
 	}
 }
@@ -37,7 +39,7 @@ pub struct TarFile {
 impl TarFile {
 	#[context("loading static tar file from path: {path:?}")]
 	pub fn from(path: &Path) -> Result<Self> {
-		use TileCompression::{Brotli, Gzip, Uncompressed};
+		use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
 
 		let path = current_dir()?.join(path).canonicalize()?;
 
@@ -56,6 +58,7 @@ impl TarFile {
 				"tar" => break,
 				"gz" => buffer = decompress_gzip(&buffer)?,
 				"br" => buffer = decompress_brotli(&buffer)?,
+				"zst" => buffer = decompress_zstd(&buffer)?,
 				_ => bail!("{path:?} must be a name of a tar file"),
 			}
 		}
@@ -112,6 +115,7 @@ impl TarFile {
 					Uncompressed => versions.un = Some(blob),
 					Gzip => versions.gz = Some(blob),
 					Brotli => versions.br = Some(blob),
+					Zstd => versions.zstd = Some(blob),
 				}
 			};
 
@@ -141,7 +145,7 @@ impl StaticSourceTrait for TarFile {
 	}
 
 	fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse> {
-		use TileCompression::{Brotli, Gzip, Uncompressed};
+		use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
 
 		let file_entry = self.lookup.get(&url.str[1..])?.to_owned();
 
@@ -149,6 +153,12 @@ impl StaticSourceTrait for TarFile {
 			&& let Some(blob) = &file_entry.br
 		{
 			return SourceResponse::new_some(blob.to_owned(), Brotli, &file_entry.mime);
+		}
+
+		if accept.contains(Zstd)
+			&& let Some(blob) = &file_entry.zstd
+		{
+			return SourceResponse::new_some(blob.to_owned(), Zstd, &file_entry.mime);
 		}
 
 		if accept.contains(Gzip)
@@ -163,6 +173,10 @@ impl StaticSourceTrait for TarFile {
 
 		if let Some(blob) = &file_entry.br {
 			return SourceResponse::new_some(blob.to_owned(), Brotli, &file_entry.mime);
+		}
+
+		if let Some(blob) = &file_entry.zstd {
+			return SourceResponse::new_some(blob.to_owned(), Zstd, &file_entry.mime);
 		}
 
 		if let Some(blob) = &file_entry.gz {

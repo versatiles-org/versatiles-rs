@@ -5,7 +5,7 @@
 //!
 //! # Features
 //!
-//! - Supports `None`, `Gzip`, and `Brotli` compression algorithms.
+//! - Supports `None`, `Gzip`, `Brotli`, and `Zstd` compression algorithms.
 //! - Provides methods for getting file extensions and extracting compression type from filenames.
 //!
 //! # Examples
@@ -24,7 +24,7 @@
 //! assert_eq!(filename, "file.txt");
 //! ```
 
-use TileCompression::{Brotli, Gzip, Uncompressed};
+use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
 use anyhow::{Result, bail};
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
@@ -42,6 +42,8 @@ pub enum TileCompression {
 	Gzip,
 	/// Brotli compression.
 	Brotli,
+	/// Zstd compression.
+	Zstd,
 }
 
 impl TileCompression {
@@ -61,6 +63,7 @@ impl TileCompression {
 			Uncompressed => "none",
 			Gzip => "gzip",
 			Brotli => "brotli",
+			Zstd => "zstd",
 		}
 	}
 
@@ -74,10 +77,10 @@ impl TileCompression {
 	/// use versatiles_core::TileCompression;
 	///
 	/// let variants = TileCompression::variants();
-	/// assert_eq!(variants, &["none", "gzip", "brotli"]);
+	/// assert_eq!(variants, &["none", "gzip", "brotli", "zstd"]);
 	/// ```
 	pub fn variants() -> &'static [&'static str] {
-		&["none", "gzip", "brotli"]
+		&["none", "gzip", "brotli", "zstd"]
 	}
 }
 
@@ -105,6 +108,7 @@ impl TileCompression {
 			Uncompressed => "",
 			Gzip => ".gz",
 			Brotli => ".br",
+			Zstd => ".zst",
 		}
 	}
 
@@ -130,6 +134,7 @@ impl TileCompression {
 			let compression = match filename.get(index..).unwrap() {
 				".gz" => Gzip,
 				".br" => Brotli,
+				".zst" => Zstd,
 				_ => Uncompressed,
 			};
 
@@ -149,8 +154,9 @@ impl TryFrom<&str> for TileCompression {
 		Ok(match value.to_lowercase().trim() {
 			"br" | "brotli" => Brotli,
 			"gz" | "gzip" => Gzip,
+			"zst" | "zstd" => Zstd,
 			"none" | "raw" => Uncompressed,
-			_ => bail!("Unknown tile compression. Expected brotli, gzip or none"),
+			_ => bail!("Unknown tile compression. Expected brotli, gzip, zstd, or none"),
 		})
 	}
 }
@@ -163,6 +169,7 @@ impl TryFrom<u8> for TileCompression {
 			0 => Uncompressed,
 			1 => Gzip,
 			2 => Brotli,
+			3 => Zstd,
 			_ => bail!("Unknown tile compression"),
 		})
 	}
@@ -174,6 +181,7 @@ impl From<TileCompression> for u8 {
 			Uncompressed => 0,
 			Gzip => 1,
 			Brotli => 2,
+			Zstd => 3,
 		}
 	}
 }
@@ -204,6 +212,7 @@ mod tests {
 	#[case(Uncompressed, "")]
 	#[case(Gzip, ".gz")]
 	#[case(Brotli, ".br")]
+	#[case(Zstd, ".zst")]
 	fn test_compression_to_extension(#[case] compression: TileCompression, #[case] expected_extension: &str) {
 		assert_eq!(compression.as_extension(), expected_extension);
 	}
@@ -211,6 +220,7 @@ mod tests {
 	#[rstest]
 	#[case(Gzip, "file.txt.gz", "file.txt")]
 	#[case(Brotli, "archive.tar.br", "archive.tar")]
+	#[case(Zstd, "archive.tar.zst", "archive.tar")]
 	#[case(Uncompressed, "image.png", "image.png")]
 	#[case(Uncompressed, "document.pdf", "document.pdf")]
 	#[case(Uncompressed, "noextensionfile", "noextensionfile")]
@@ -231,8 +241,10 @@ mod tests {
 	#[case("none", Ok(TileCompression::Uncompressed))]
 	#[case("gzip", Ok(TileCompression::Gzip))]
 	#[case("brotli", Ok(TileCompression::Brotli))]
+	#[case("zstd", Ok(TileCompression::Zstd))]
 	#[case("br", Ok(TileCompression::Brotli))]
 	#[case("gz", Ok(TileCompression::Gzip))]
+	#[case("zst", Ok(TileCompression::Zstd))]
 	#[case("raw", Ok(TileCompression::Uncompressed))]
 	#[case("unknown", Err(anyhow::anyhow!("Unknown tile compression")))]
 	#[case("", Err(anyhow::anyhow!("Unknown tile compression")))]
@@ -250,6 +262,7 @@ mod tests {
 	#[case(Uncompressed, "none")]
 	#[case(Gzip, "gzip")]
 	#[case(Brotli, "brotli")]
+	#[case(Zstd, "zstd")]
 	fn test_display_trait(#[case] compression: TileCompression, #[case] expected_display: &str) {
 		assert_eq!(format!("{compression}"), expected_display);
 	}

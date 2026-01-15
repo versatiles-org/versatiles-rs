@@ -138,6 +138,7 @@ termimad = { version = "0.34.1" }
 # Compression dependencies
 brotli = { version = "8.0.2", default-features = false, features = ["std"] }
 flate2 = { version = "1.1.8", default-features = false, features = ["default"] }
+zstd = { version = "0.13.3", default-features = false }
 
 # Container/archive dependencies
 tar = { version = "0.4.44", default-features = false }

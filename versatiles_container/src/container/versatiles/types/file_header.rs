@@ -81,7 +81,7 @@ impl FileHeader {
 	/// Returns an error if the conversion fails.
 	#[context("Failed to create FileHeader from blob")]
 	pub fn to_blob(&self) -> Result<Blob> {
-		use TileCompression::{Brotli, Gzip, Uncompressed};
+		use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
 		use TileFormat::{AVIF, BIN, GEOJSON, JPG, JSON, MVT, PNG, SVG, TOPOJSON, WEBP};
 
 		let mut writer = ValueWriterBlob::new_be();
@@ -108,6 +108,7 @@ impl FileHeader {
 			Uncompressed => 0,
 			Gzip => 1,
 			Brotli => 2,
+			Zstd => 3,
 		})?;
 
 		writer.write_u8(self.zoom_range[0])?;
@@ -140,7 +141,7 @@ impl FileHeader {
 	/// Returns an error if the binary data cannot be parsed correctly.
 	#[context("Failed to create FileHeader from blob")]
 	fn from_blob(blob: &Blob) -> Result<FileHeader> {
-		use TileCompression::{Brotli, Gzip, Uncompressed};
+		use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
 		use TileFormat::{AVIF, BIN, GEOJSON, JPG, JSON, MVT, PNG, SVG, TOPOJSON, WEBP};
 
 		if blob.len() != HEADER_LENGTH {
@@ -173,6 +174,7 @@ impl FileHeader {
 			0 => Uncompressed,
 			1 => Gzip,
 			2 => Brotli,
+			3 => Zstd,
 			value => bail!("unknown compression value: {value}"),
 		};
 
@@ -341,7 +343,7 @@ mod tests {
 		let zoom_range = [0, 0];
 		let bbox = GeoBBox::new(0.0, 0.0, 0.0, 0.0).unwrap();
 
-		let compressions = vec![Uncompressed, Gzip, Brotli];
+		let compressions = vec![Uncompressed, Gzip, Brotli, Zstd];
 
 		for compression in compressions {
 			let header = FileHeader::new(tile_format, compression, zoom_range, &bbox).unwrap();

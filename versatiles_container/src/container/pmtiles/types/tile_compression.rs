@@ -1,5 +1,5 @@
 use anyhow::{Result, bail};
-use versatiles_core::TileCompression::{self, Brotli, Gzip, Uncompressed};
+use versatiles_core::TileCompression::{self, Brotli, Gzip, Uncompressed, Zstd};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PMTilesCompression {
@@ -26,6 +26,7 @@ impl PMTilesCompression {
 			Uncompressed => PMTilesCompression::None,
 			Gzip => PMTilesCompression::Gzip,
 			Brotli => PMTilesCompression::Brotli,
+			Zstd => PMTilesCompression::Zstd,
 		})
 	}
 	pub fn as_value(&self) -> Result<TileCompression> {
@@ -34,7 +35,7 @@ impl PMTilesCompression {
 			PMTilesCompression::None => Uncompressed,
 			PMTilesCompression::Gzip => Gzip,
 			PMTilesCompression::Brotli => Brotli,
-			PMTilesCompression::Zstd => bail!("Zstd not supported yet"),
+			PMTilesCompression::Zstd => Zstd,
 		})
 	}
 }
@@ -64,8 +65,7 @@ mod tests {
 			PMTilesCompression::from_value(Brotli).unwrap(),
 			PMTilesCompression::Brotli
 		);
-
-		// Zstd is not supported in TileCompression, so we don't test it here
+		assert_eq!(PMTilesCompression::from_value(Zstd).unwrap(), PMTilesCompression::Zstd);
 	}
 
 	#[test]
@@ -74,7 +74,7 @@ mod tests {
 		assert_eq!(PMTilesCompression::None.as_value().unwrap(), Uncompressed);
 		assert_eq!(PMTilesCompression::Gzip.as_value().unwrap(), Gzip);
 		assert_eq!(PMTilesCompression::Brotli.as_value().unwrap(), Brotli);
-		assert!(PMTilesCompression::Zstd.as_value().is_err());
+		assert_eq!(PMTilesCompression::Zstd.as_value().unwrap(), Zstd);
 	}
 
 	#[test]

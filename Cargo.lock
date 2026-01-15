@@ -4337,6 +4337,7 @@ dependencies = [
  "tokio",
  "versatiles_derive",
  "wildmatch",
+ "zstd",
 ]
 
 [[package]]

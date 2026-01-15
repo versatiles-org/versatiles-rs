@@ -24,6 +24,7 @@ clap = { workspace = true, optional = true, features = ["derive"] }
 colored = { workspace = true, optional = true }
 enumset.workspace = true
 flate2.workspace = true
+zstd.workspace = true
 futures.workspace = true
 itertools.workspace = true
 log.workspace = true

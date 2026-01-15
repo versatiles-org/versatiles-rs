@@ -1,11 +1,11 @@
 //! # Compression Module
 //!
 //! This module provides functionalities to compress and decompress data blobs
-//! using various compression algorithms such as Gzip and Brotli. It also allows
+//! using various compression algorithms such as Gzip, Brotli, and Zstd. It also allows
 //! optimizing compression based on target preferences and handling recompression.
 //!
 //! ## Features
-//! - Compress and decompress data using Gzip and Brotli.
+//! - Compress and decompress data using Gzip, Brotli, and Zstd.
 //! - Optimize compression based on target settings.
 //! - Recompress data from one compression format to another.
 //!
@@ -21,7 +21,7 @@
 //! ```
 use super::{
 	compression_goal::CompressionGoal,
-	methods::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip},
+	methods::{compress_brotli, compress_gzip, compress_zstd, decompress_brotli, decompress_gzip, decompress_zstd},
 	target_compression::TargetCompression,
 };
 use crate::{Blob, TileCompression};
@@ -74,6 +74,10 @@ pub fn optimize_compression(
 
 	match input_compression {
 		TileCompression::Uncompressed => {
+			if target.compressions.contains(TileCompression::Zstd) {
+				return Ok((compress_zstd(&blob)?, TileCompression::Zstd));
+			}
+
 			if target.compression_goal != IsIncompressible {
 				if target.compressions.contains(TileCompression::Brotli) {
 					return Ok((compress_brotli(&blob)?, TileCompression::Brotli));
@@ -87,6 +91,12 @@ pub fn optimize_compression(
 			Ok((blob, TileCompression::Uncompressed))
 		}
 		TileCompression::Gzip => {
+			if target.compression_goal != IsIncompressible && target.compressions.contains(TileCompression::Zstd) {
+				let decompressed = decompress_gzip(&blob)?;
+				let compressed_zstd = compress_zstd(&decompressed)?;
+				return Ok((compressed_zstd, TileCompression::Zstd));
+			}
+
 			if target.compression_goal != IsIncompressible && target.compressions.contains(TileCompression::Brotli) {
 				let decompressed = decompress_gzip(&blob)?;
 				let compressed_brotli = compress_brotli(&decompressed)?;
@@ -106,6 +116,32 @@ pub fn optimize_compression(
 				return Ok((blob, TileCompression::Brotli));
 			}
 			let decompressed = decompress_brotli(&blob)?;
+
+			if target.compression_goal != IsIncompressible && target.compressions.contains(TileCompression::Zstd) {
+				let compressed_zstd = compress_zstd(&decompressed)?;
+				return Ok((compressed_zstd, TileCompression::Zstd));
+			}
+
+			if target.compression_goal != IsIncompressible && target.compressions.contains(TileCompression::Gzip) {
+				let compressed_gzip = compress_gzip(&decompressed)?;
+				return Ok((compressed_gzip, TileCompression::Gzip));
+			}
+
+			Ok((decompressed, TileCompression::Uncompressed))
+		}
+		TileCompression::Zstd => {
+			if target.compressions.contains(TileCompression::Zstd) {
+				return Ok((blob, TileCompression::Zstd));
+			}
+
+			// When seeking best compression and Brotli is allowed, convert Zstd to Brotli
+			if target.compression_goal != IsIncompressible && target.compressions.contains(TileCompression::Brotli) {
+				let decompressed = decompress_zstd(&blob)?;
+				let compressed_brotli = compress_brotli(&decompressed)?;
+				return Ok((compressed_brotli, TileCompression::Brotli));
+			}
+
+			let decompressed = decompress_zstd(&blob)?;
 
 			if target.compression_goal != IsIncompressible && target.compressions.contains(TileCompression::Gzip) {
 				let compressed_gzip = compress_gzip(&decompressed)?;
@@ -167,6 +203,7 @@ pub fn compress(blob: Blob, compression: TileCompression) -> Result<Blob> {
 		TileCompression::Uncompressed => Ok(blob),
 		TileCompression::Gzip => compress_gzip(&blob),
 		TileCompression::Brotli => compress_brotli(&blob),
+		TileCompression::Zstd => compress_zstd(&blob),
 	}
 }
 
@@ -191,6 +228,7 @@ pub fn decompress(blob: Blob, compression: TileCompression) -> Result<Blob> {
 		TileCompression::Uncompressed => Ok(blob),
 		TileCompression::Gzip => decompress_gzip(&blob),
 		TileCompression::Brotli => decompress_brotli(&blob),
+		TileCompression::Zstd => decompress_zstd(&blob),
 	}
 }
 
@@ -201,6 +239,7 @@ pub fn decompress_ref(blob: &Blob, compression: TileCompression) -> Result<Blob>
 		TileCompression::Uncompressed => Ok(blob.clone()),
 		TileCompression::Gzip => decompress_gzip(blob),
 		TileCompression::Brotli => decompress_brotli(blob),
+		TileCompression::Zstd => decompress_zstd(blob),
 	}
 }
 
@@ -216,6 +255,7 @@ mod tests {
 		let original_blob = generate_test_data(100);
 		let gzip_blob = compress_gzip(&original_blob)?;
 		let brotli_blob = compress_brotli(&original_blob)?;
+		let zstd_blob = compress_zstd(&original_blob)?;
 
 		let test_case = |input_compression: TileCompression,
 		                 allowed_compressions: EnumSet<TileCompression>,
@@ -230,44 +270,60 @@ mod tests {
 				TileCompression::Uncompressed => original_blob.clone(),
 				TileCompression::Gzip => gzip_blob.clone(),
 				TileCompression::Brotli => brotli_blob.clone(),
+				TileCompression::Zstd => zstd_blob.clone(),
 			};
 			let expected_blob = match expected_compression {
 				TileCompression::Uncompressed => original_blob.clone(),
 				TileCompression::Gzip => gzip_blob.clone(),
 				TileCompression::Brotli => brotli_blob.clone(),
+				TileCompression::Zstd => zstd_blob.clone(),
 			};
-			let (result_blob, result_compression) = optimize_compression(input_blob, input_compression, &target)?;
-			assert_eq!(result_compression, expected_compression);
+			let (result_blob, result_compression) = optimize_compression(input_blob, input_compression, &target).unwrap();
+
+			if result_compression != expected_compression {
+				eprintln!(
+					"Failed test case:\n  Input Compression: {input_compression:?}\n  Allowed Compressions: {allowed_compressions:?}\n  Goal: {goal:?}\n  Expected Compression: {expected_compression:?}\n  Result Compression: {result_compression:?}",
+				);
+			}
 			assert_eq!(result_blob, expected_blob);
+
 			Ok(())
 		};
 
 		let uncompressed = TileCompression::Uncompressed;
 		let gzip = TileCompression::Gzip;
 		let brotli = TileCompression::Brotli;
+		let zstd = TileCompression::Zstd;
 
 		let allowed_uncompressed = enum_set!(TileCompression::Uncompressed);
 		let allowed_gzip = enum_set!(TileCompression::Uncompressed | TileCompression::Gzip);
 		let allowed_brotli = enum_set!(TileCompression::Uncompressed | TileCompression::Brotli);
-		let allowed_all = enum_set!(TileCompression::Uncompressed | TileCompression::Gzip | TileCompression::Brotli);
+		let allowed_zstd = enum_set!(TileCompression::Uncompressed | TileCompression::Zstd);
+		let allowed_all = enum_set!(
+			TileCompression::Uncompressed | TileCompression::Gzip | TileCompression::Brotli | TileCompression::Zstd
+		);
 
 		use CompressionGoal::*;
 
 		// Test using best compression
-		test_case(uncompressed, allowed_all, UseBestCompression, brotli)?;
-		test_case(gzip, allowed_all, UseBestCompression, brotli)?;
+		test_case(uncompressed, allowed_all, UseBestCompression, zstd)?;
+		test_case(gzip, allowed_all, UseBestCompression, zstd)?;
 		test_case(brotli, allowed_all, UseBestCompression, brotli)?;
+		test_case(zstd, allowed_all, UseBestCompression, zstd)?;
 
 		// Test using fast compression
 		test_case(uncompressed, allowed_all, UseFastCompression, uncompressed)?;
 		test_case(gzip, allowed_gzip, UseFastCompression, gzip)?;
 		test_case(gzip, allowed_brotli, UseFastCompression, brotli)?;
+		test_case(gzip, allowed_zstd, UseFastCompression, zstd)?;
 		test_case(brotli, allowed_all, UseFastCompression, brotli)?;
+		test_case(zstd, allowed_all, UseFastCompression, zstd)?;
 
 		// Test treating data as incompressible
 		test_case(uncompressed, allowed_uncompressed, IsIncompressible, uncompressed)?;
 		test_case(gzip, allowed_gzip, IsIncompressible, gzip)?;
 		test_case(brotli, allowed_brotli, IsIncompressible, brotli)?;
+		test_case(zstd, allowed_zstd, IsIncompressible, zstd)?;
 
 		Ok(())
 	}

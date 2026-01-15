@@ -177,11 +177,12 @@ fn ok_data(result: SourceResponse, mut target: TargetCompression) -> Response<Bo
 		}
 	};
 
-	use TileCompression::{Brotli, Gzip, Uncompressed};
+	use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
 	match compression {
 		Uncompressed => {}
 		Gzip => response = response.header(header::CONTENT_ENCODING, "gzip"),
 		Brotli => response = response.header(header::CONTENT_ENCODING, "br"),
+		Zstd => response = response.header(header::CONTENT_ENCODING, "zstd"),
 	}
 
 	log::trace!("send response with headers: {:?}", response.headers_ref());
