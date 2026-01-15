@@ -206,7 +206,7 @@ pub fn decompress_ref(blob: &Blob, compression: TileCompression) -> Result<Blob>
 
 #[cfg(test)]
 mod tests {
-	use super::super::tests::generate_test_data;
+	use super::super::test_utils::generate_test_data;
 	use super::*;
 	use enumset::{EnumSet, enum_set};
 

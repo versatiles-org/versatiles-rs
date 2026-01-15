@@ -86,7 +86,7 @@ pub fn decompress_brotli(blob: &Blob) -> Result<Blob> {
 
 #[cfg(test)]
 mod tests {
-	use super::super::super::tests::generate_test_data;
+	use super::super::super::test_utils::generate_test_data;
 	use super::*;
 
 	#[test]

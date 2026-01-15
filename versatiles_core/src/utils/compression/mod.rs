@@ -3,7 +3,7 @@ mod functions;
 mod methods;
 mod target_compression;
 #[cfg(test)]
-pub mod tests;
+pub mod test_utils;
 
 pub use compression_goal::*;
 pub use functions::*;
