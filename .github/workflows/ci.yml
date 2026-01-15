@@ -23,6 +23,25 @@ env:
 
 jobs:
   # ============================================================================
+  # Markdown Lint
+  # ============================================================================
+  markdown-lint:
+    name: "Markdown Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run markdownlint
+        uses: DavidAnson/markdownlint-cli2-action@v19
+        with:
+          globs: |
+            **/*.md
+            #node_modules
+            #versatiles_node/node_modules
+            #target
+
+  # ============================================================================
   # Linux: Format
   # ============================================================================
   linux-format:
