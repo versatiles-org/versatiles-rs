@@ -7,6 +7,13 @@ source scripts/env-gdal.sh
 
 set +e
 
+echo "cargo fmt"
+result=$(cargo fmt -- --check 2>&1)
+if [ $? -ne 0 ]; then
+   echo -e "$result\nERROR DURING: cargo fmt"
+   exit 1
+fi
+
 echo "cargo check"
 result=$(cargo check --workspace --no-default-features --all-targets 2>&1)
 if [ $? -ne 0 ]; then
@@ -35,13 +42,6 @@ echo "cargo check - all features"
 result=$(cargo check --workspace --all-features --all-targets 2>&1)
 if [ $? -ne 0 ]; then
    echo -e "$result\nERROR DURING: cargo check"
-   exit 1
-fi
-
-echo "cargo fmt"
-result=$(cargo fmt -- --check 2>&1)
-if [ $? -ne 0 ]; then
-   echo -e "$result\nERROR DURING: cargo fmt"
    exit 1
 fi
 
