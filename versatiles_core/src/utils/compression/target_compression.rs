@@ -98,6 +98,14 @@ impl From<TileCompression> for TargetCompression {
 	}
 }
 
+impl Default for TargetCompression {
+	/// Returns a `TargetCompression` allowing all compression algorithms
+	/// (Uncompressed, Gzip, Brotli) with [`CompressionGoal::UseBestCompression`].
+	fn default() -> Self {
+		Self::from_set(EnumSet::all())
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -152,5 +160,14 @@ mod tests {
 		assert!(s.starts_with("TargetCompression"));
 		assert!(s.contains("Gzip"));
 		assert!(s.contains("Use Best Compression"));
+	}
+
+	#[test]
+	fn test_default() {
+		let tc = TargetCompression::default();
+		assert!(tc.contains(TileCompression::Uncompressed));
+		assert!(tc.contains(TileCompression::Gzip));
+		assert!(tc.contains(TileCompression::Brotli));
+		assert_eq!(tc.compression_goal, CompressionGoal::UseBestCompression);
 	}
 }
