@@ -32,22 +32,6 @@ impl TargetCompression {
 		}
 	}
 
-	/// Creates a new `TargetCompression` allowing only the specified compression.
-	///
-	/// The compression goal is set to `UseBestCompression`.
-	///
-	/// # Arguments
-	///
-	/// * `compression` - A single compression algorithm to allow.
-	///
-	/// # Returns
-	///
-	/// * `TargetCompression` instance.
-	#[must_use]
-	pub fn from(compression: TileCompression) -> Self {
-		Self::from_set(EnumSet::only(compression))
-	}
-
 	/// Creates a new `TargetCompression` allowing no compression.
 	///
 	/// The compression goal is set to `UseBestCompression`, but since no compression is allowed,
@@ -102,6 +86,15 @@ impl Debug for TargetCompression {
 			.field("allowed_compressions", &self.compressions)
 			.field("compression_goal", &self.compression_goal)
 			.finish()
+	}
+}
+
+impl From<TileCompression> for TargetCompression {
+	/// Creates a new `TargetCompression` allowing only the specified compression.
+	///
+	/// The compression goal is set to `UseBestCompression`.
+	fn from(compression: TileCompression) -> Self {
+		Self::from_set(EnumSet::only(compression))
 	}
 }
 
