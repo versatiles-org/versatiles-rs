@@ -96,7 +96,24 @@ impl Server {
 
 		loop {
 			thread::sleep(Duration::from_millis(100));
-			assert!(child.try_wait().unwrap().is_none(), "server process exited prematurely");
+			if let Some(status) = child.try_wait().unwrap() {
+				use std::io::Read;
+				let mut stdout_str = String::new();
+				let mut stderr_str = String::new();
+				if let Some(ref mut stdout) = child.stdout {
+					let _ = stdout.read_to_string(&mut stdout_str);
+				}
+				if let Some(ref mut stderr) = child.stderr {
+					let _ = stderr.read_to_string(&mut stderr_str);
+				}
+				panic!(
+					"server process exited prematurely with status: {:?}\ninput: {:?}\nstdout:\n{}\nstderr:\n{}",
+					status.code(),
+					input,
+					stdout_str,
+					stderr_str
+				);
+			}
 			if reqwest::get(&format!("http://127.0.0.1:{port}/index.json"))
 				.await
 				.is_ok()

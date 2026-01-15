@@ -9,6 +9,12 @@ use std::{fs, net::TcpListener, process::Child, thread, time::Duration};
 use tempfile::TempDir;
 use test_utilities::*;
 
+/// Convert a path to use forward slashes for YAML compatibility on all platforms.
+/// Windows backslashes in YAML are interpreted as escape sequences, causing parsing errors.
+fn to_yaml_path(path: &str) -> String {
+	path.replace('\\', "/")
+}
+
 struct CorsTestServer {
 	host: String,
 	child: Child,
@@ -20,7 +26,7 @@ impl CorsTestServer {
 	async fn new(cors_origins: &[&str], max_age: Option<u64>) -> Self {
 		let temp_dir = tempfile::tempdir().unwrap();
 		let config_path = temp_dir.path().join("config.yml");
-		let tiles_path = get_testdata("berlin.mbtiles");
+		let tiles_path = to_yaml_path(&get_testdata("berlin.mbtiles"));
 
 		// Build CORS config
 		let origins_yaml = cors_origins
@@ -55,7 +61,25 @@ cors:
 		// Wait for server to be ready
 		loop {
 			thread::sleep(Duration::from_millis(100));
-			assert!(child.try_wait().unwrap().is_none(), "server process exited prematurely");
+			if let Some(status) = child.try_wait().unwrap() {
+				// Server exited - try to capture output for debugging
+				use std::io::Read;
+				let mut stdout_str = String::new();
+				let mut stderr_str = String::new();
+				if let Some(ref mut stdout) = child.stdout {
+					let _ = stdout.read_to_string(&mut stdout_str);
+				}
+				if let Some(ref mut stderr) = child.stderr {
+					let _ = stderr.read_to_string(&mut stderr_str);
+				}
+				panic!(
+					"server process exited prematurely with status: {:?}\nconfig:\n{}\nstdout:\n{}\nstderr:\n{}",
+					status.code(),
+					config,
+					stdout_str,
+					stderr_str
+				);
+			}
 			if reqwest::get(format!("http://127.0.0.1:{port}/tiles/index.json"))
 				.await
 				.is_ok()

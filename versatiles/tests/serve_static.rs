@@ -10,6 +10,12 @@ use std::{fs, net::TcpListener, process::Child, thread, time::Duration};
 use tempfile::TempDir;
 use test_utilities::*;
 
+/// Convert a path to use forward slashes for YAML compatibility on all platforms.
+/// Windows backslashes in YAML are interpreted as escape sequences, causing parsing errors.
+fn to_yaml_path(path: &str) -> String {
+	path.replace('\\', "/")
+}
+
 struct StaticTestServer {
 	host: String,
 	child: Child,
@@ -28,7 +34,24 @@ impl StaticTestServer {
 		// Wait for server to be ready
 		loop {
 			thread::sleep(Duration::from_millis(100));
-			assert!(child.try_wait().unwrap().is_none(), "server process exited prematurely");
+			if let Some(status) = child.try_wait().unwrap() {
+				use std::io::Read;
+				let mut stdout_str = String::new();
+				let mut stderr_str = String::new();
+				if let Some(ref mut stdout) = child.stdout {
+					let _ = stdout.read_to_string(&mut stdout_str);
+				}
+				if let Some(ref mut stderr) = child.stderr {
+					let _ = stderr.read_to_string(&mut stderr_str);
+				}
+				panic!(
+					"server process exited prematurely with status: {:?}\nstatic_source: {}\nstdout:\n{}\nstderr:\n{}",
+					status.code(),
+					static_source,
+					stdout_str,
+					stderr_str
+				);
+			}
 			// Try to connect - static server doesn't have /tiles/index.json
 			if reqwest::get(format!("http://127.0.0.1:{port}/")).await.is_ok() {
 				break;
@@ -56,7 +79,24 @@ impl StaticTestServer {
 		// Wait for server to be ready
 		loop {
 			thread::sleep(Duration::from_millis(100));
-			assert!(child.try_wait().unwrap().is_none(), "server process exited prematurely");
+			if let Some(status) = child.try_wait().unwrap() {
+				use std::io::Read;
+				let mut stdout_str = String::new();
+				let mut stderr_str = String::new();
+				if let Some(ref mut stdout) = child.stdout {
+					let _ = stdout.read_to_string(&mut stdout_str);
+				}
+				if let Some(ref mut stderr) = child.stderr {
+					let _ = stderr.read_to_string(&mut stderr_str);
+				}
+				panic!(
+					"server process exited prematurely with status: {:?}\nconfig:\n{}\nstdout:\n{}\nstderr:\n{}",
+					status.code(),
+					config_content,
+					stdout_str,
+					stderr_str
+				);
+			}
 			if reqwest::get(format!("http://127.0.0.1:{port}/")).await.is_ok() {
 				break;
 			}
@@ -189,8 +229,8 @@ static:
 /// Test multiple static sources with different prefixes.
 #[tokio::test]
 async fn serve_multiple_static_sources() {
-	let static_gz = get_testdata("static.tar.gz");
-	let static_br = get_testdata("static.tar.br");
+	let static_gz = to_yaml_path(&get_testdata("static.tar.gz"));
+	let static_br = to_yaml_path(&get_testdata("static.tar.br"));
 	let config = format!(
 		r#"
 static:
@@ -236,8 +276,8 @@ async fn serve_static_content_type_by_extension() {
 /// Test static serving alongside tile sources.
 #[tokio::test]
 async fn serve_static_with_tiles() {
-	let static_path = get_testdata("static.tar.gz");
-	let tiles_path = get_testdata("berlin.mbtiles");
+	let static_path = to_yaml_path(&get_testdata("static.tar.gz"));
+	let tiles_path = to_yaml_path(&get_testdata("berlin.mbtiles"));
 	let config = format!(
 		r#"
 static:
