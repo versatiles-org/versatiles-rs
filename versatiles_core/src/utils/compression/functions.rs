@@ -248,84 +248,79 @@ mod tests {
 	use super::super::test_utils::generate_test_data;
 	use super::*;
 	use enumset::{EnumSet, enum_set};
+	use rstest::{fixture, rstest};
 
-	#[test]
-	/// Tests the `optimize_compression` function across various compression scenarios.
-	fn should_optimize_compression_correctly() -> Result<()> {
-		let original_blob = generate_test_data(100);
-		let gzip_blob = compress_gzip(&original_blob)?;
-		let brotli_blob = compress_brotli(&original_blob)?;
-		let zstd_blob = compress_zstd(&original_blob)?;
+	use CompressionGoal::*;
+	use TileCompression::*;
 
-		let test_case = |input_compression: TileCompression,
-		                 allowed_compressions: EnumSet<TileCompression>,
-		                 goal: CompressionGoal,
-		                 expected_compression: TileCompression|
-		 -> Result<()> {
-			let target = TargetCompression {
-				compressions: allowed_compressions,
-				compression_goal: goal,
-			};
-			let input_blob = match input_compression {
-				TileCompression::Uncompressed => original_blob.clone(),
-				TileCompression::Gzip => gzip_blob.clone(),
-				TileCompression::Brotli => brotli_blob.clone(),
-				TileCompression::Zstd => zstd_blob.clone(),
-			};
-			let expected_blob = match expected_compression {
-				TileCompression::Uncompressed => original_blob.clone(),
-				TileCompression::Gzip => gzip_blob.clone(),
-				TileCompression::Brotli => brotli_blob.clone(),
-				TileCompression::Zstd => zstd_blob.clone(),
-			};
-			let (result_blob, result_compression) = optimize_compression(input_blob, input_compression, &target).unwrap();
+	/// Fixture providing pre-compressed test blobs for all compression types.
+	struct TestBlobs {
+		original: Blob,
+		gzip: Blob,
+		brotli: Blob,
+		zstd: Blob,
+	}
 
-			if result_compression != expected_compression {
-				eprintln!(
-					"Failed test case:\n  Input Compression: {input_compression:?}\n  Allowed Compressions: {allowed_compressions:?}\n  Goal: {goal:?}\n  Expected Compression: {expected_compression:?}\n  Result Compression: {result_compression:?}",
-				);
+	impl TestBlobs {
+		fn get(&self, compression: TileCompression) -> Blob {
+			match compression {
+				Uncompressed => self.original.clone(),
+				Gzip => self.gzip.clone(),
+				Brotli => self.brotli.clone(),
+				Zstd => self.zstd.clone(),
 			}
-			assert_eq!(result_blob, expected_blob);
+		}
+	}
 
-			Ok(())
+	#[fixture]
+	fn blobs() -> TestBlobs {
+		let original = generate_test_data(100);
+		TestBlobs {
+			gzip: compress_gzip(&original).unwrap(),
+			brotli: compress_brotli(&original).unwrap(),
+			zstd: compress_zstd(&original).unwrap(),
+			original,
+		}
+	}
+
+	fn allowed(types: &[TileCompression]) -> EnumSet<TileCompression> {
+		types.iter().copied().collect()
+	}
+
+	#[rstest]
+	// Best compression: prefers Zstd, keeps Brotli if already Brotli
+	#[case::best_from_uncompressed(Uncompressed, &[Uncompressed, Gzip, Brotli, Zstd], UseBestCompression, Zstd)]
+	#[case::best_from_gzip(Gzip, &[Uncompressed, Gzip, Brotli, Zstd], UseBestCompression, Zstd)]
+	#[case::best_from_brotli(Brotli, &[Uncompressed, Gzip, Brotli, Zstd], UseBestCompression, Brotli)]
+	#[case::best_from_zstd(Zstd, &[Uncompressed, Gzip, Brotli, Zstd], UseBestCompression, Zstd)]
+	// Fast compression: keeps current format if allowed
+	#[case::fast_from_uncompressed(Uncompressed, &[Uncompressed, Gzip, Brotli, Zstd], UseFastCompression, Uncompressed)]
+	#[case::fast_gzip_to_gzip(Gzip, &[Uncompressed, Gzip], UseFastCompression, Gzip)]
+	#[case::fast_gzip_to_brotli(Gzip, &[Uncompressed, Brotli], UseFastCompression, Brotli)]
+	#[case::fast_gzip_to_zstd(Gzip, &[Uncompressed, Zstd], UseFastCompression, Zstd)]
+	#[case::fast_from_brotli(Brotli, &[Uncompressed, Gzip, Brotli, Zstd], UseFastCompression, Brotli)]
+	#[case::fast_from_zstd(Zstd, &[Uncompressed, Gzip, Brotli, Zstd], UseFastCompression, Zstd)]
+	// Incompressible: keeps current format
+	#[case::incompressible_uncompressed(Uncompressed, &[Uncompressed], IsIncompressible, Uncompressed)]
+	#[case::incompressible_gzip(Gzip, &[Uncompressed, Gzip], IsIncompressible, Gzip)]
+	#[case::incompressible_brotli(Brotli, &[Uncompressed, Brotli], IsIncompressible, Brotli)]
+	#[case::incompressible_zstd(Zstd, &[Uncompressed, Zstd], IsIncompressible, Zstd)]
+	fn optimize_compression_scenarios(
+		blobs: TestBlobs,
+		#[case] input: TileCompression,
+		#[case] allowed_types: &[TileCompression],
+		#[case] goal: CompressionGoal,
+		#[case] expected: TileCompression,
+	) {
+		let target = TargetCompression {
+			compressions: allowed(allowed_types),
+			compression_goal: goal,
 		};
 
-		let uncompressed = TileCompression::Uncompressed;
-		let gzip = TileCompression::Gzip;
-		let brotli = TileCompression::Brotli;
-		let zstd = TileCompression::Zstd;
+		let (result_blob, result_compression) = optimize_compression(blobs.get(input), input, &target).unwrap();
 
-		let allowed_uncompressed = enum_set!(TileCompression::Uncompressed);
-		let allowed_gzip = enum_set!(TileCompression::Uncompressed | TileCompression::Gzip);
-		let allowed_brotli = enum_set!(TileCompression::Uncompressed | TileCompression::Brotli);
-		let allowed_zstd = enum_set!(TileCompression::Uncompressed | TileCompression::Zstd);
-		let allowed_all = enum_set!(
-			TileCompression::Uncompressed | TileCompression::Gzip | TileCompression::Brotli | TileCompression::Zstd
-		);
-
-		use CompressionGoal::*;
-
-		// Test using best compression
-		test_case(uncompressed, allowed_all, UseBestCompression, zstd)?;
-		test_case(gzip, allowed_all, UseBestCompression, zstd)?;
-		test_case(brotli, allowed_all, UseBestCompression, brotli)?;
-		test_case(zstd, allowed_all, UseBestCompression, zstd)?;
-
-		// Test using fast compression
-		test_case(uncompressed, allowed_all, UseFastCompression, uncompressed)?;
-		test_case(gzip, allowed_gzip, UseFastCompression, gzip)?;
-		test_case(gzip, allowed_brotli, UseFastCompression, brotli)?;
-		test_case(gzip, allowed_zstd, UseFastCompression, zstd)?;
-		test_case(brotli, allowed_all, UseFastCompression, brotli)?;
-		test_case(zstd, allowed_all, UseFastCompression, zstd)?;
-
-		// Test treating data as incompressible
-		test_case(uncompressed, allowed_uncompressed, IsIncompressible, uncompressed)?;
-		test_case(gzip, allowed_gzip, IsIncompressible, gzip)?;
-		test_case(brotli, allowed_brotli, IsIncompressible, brotli)?;
-		test_case(zstd, allowed_zstd, IsIncompressible, zstd)?;
-
-		Ok(())
+		assert_eq!(result_compression, expected);
+		assert_eq!(result_blob, blobs.get(expected));
 	}
 
 	#[test]
