@@ -22,12 +22,11 @@ This crate standardizes image operations used throughout the VersaTiles tile pro
 
 ## Usage
 
-Add this to your `Cargo.toml`:
-
-```toml
-[dependencies]
-versatiles_image = "2.3"
+```sh
+cargo add versatiles_image
 ```
+
+Or see [crates.io/crates/versatiles_image](https://crates.io/crates/versatiles_image) for version info and [docs.rs/versatiles_image](https://docs.rs/versatiles_image) for API documentation.
 
 ### Example
 

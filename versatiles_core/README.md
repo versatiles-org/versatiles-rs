@@ -21,12 +21,11 @@ This crate serves as the base dependency for all other VersaTiles components.
 
 ## Usage
 
-Add this to your `Cargo.toml`:
-
-```toml
-[dependencies]
-versatiles_core = "2.3"
+```sh
+cargo add versatiles_core
 ```
+
+Or see [crates.io/crates/versatiles_core](https://crates.io/crates/versatiles_core) for version info and [docs.rs/versatiles_core](https://docs.rs/versatiles_core) for API documentation.
 
 ### Example
 

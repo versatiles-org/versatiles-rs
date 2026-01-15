@@ -25,12 +25,11 @@ The `versatiles` crate can be used as a library to integrate tile processing int
 
 ### Installation
 
-Add this to your `Cargo.toml`:
-
-```toml
-[dependencies]
-versatiles = "2.3"
+```sh
+cargo add versatiles
 ```
+
+Or see [crates.io/crates/versatiles](https://crates.io/crates/versatiles) for version info and [docs.rs/versatiles](https://docs.rs/versatiles) for API documentation.
 
 ### Example
 

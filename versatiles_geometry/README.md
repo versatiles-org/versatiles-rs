@@ -21,12 +21,11 @@ This crate is essential for reading, transforming, and exporting geospatial vect
 
 ## Usage
 
-Add this to your `Cargo.toml`:
-
-```toml
-[dependencies]
-versatiles_geometry = "2.3"
+```sh
+cargo add versatiles_geometry
 ```
+
+Or see [crates.io/crates/versatiles_geometry](https://crates.io/crates/versatiles_geometry) for version info and [docs.rs/versatiles_geometry](https://docs.rs/versatiles_geometry) for API documentation.
 
 ### Example
 

@@ -19,12 +19,11 @@ This crate provides derive macros and attribute macros used internally by VersaT
 
 This crate is primarily for internal use within the VersaTiles project. If you're using VersaTiles as a library, you typically won't need to use this crate directly.
 
-Add this to your `Cargo.toml` if needed:
-
-```toml
-[dependencies]
-versatiles_derive = "2.3"
+```sh
+cargo add versatiles_derive
 ```
+
+Or see [crates.io/crates/versatiles_derive](https://crates.io/crates/versatiles_derive) for version info and [docs.rs/versatiles_derive](https://docs.rs/versatiles_derive) for API documentation.
 
 ### Example
 

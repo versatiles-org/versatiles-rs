@@ -29,13 +29,11 @@ This crate is designed for flexibility: readers are object-safe and can be wrapp
 
 ## Usage
 
-Add this to your `Cargo.toml`:
-
-```toml
-[dependencies]
-versatiles_container = "2.3"
-versatiles_core = "2.3"
+```sh
+cargo add versatiles_container versatiles_core
 ```
+
+Or see [crates.io/crates/versatiles_container](https://crates.io/crates/versatiles_container) for version info and [docs.rs/versatiles_container](https://docs.rs/versatiles_container) for API documentation.
 
 ### Example
 
