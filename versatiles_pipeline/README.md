@@ -15,6 +15,7 @@ versatiles serve pipeline.vpl
 To define a pipeline, create a .vpl file and descibe the pipeline using the VersaTiles Pipeline Language (VPL). Pipelines always begin with a read operation (name starts with "from_"), optionally followed by one or more transform operations, separated by the pipe symbol (`|`).
 
 Example:
+
 ```vpl
 from_container filename="world.versatiles" | do_some_filtering | do_some_processing
 ```
@@ -22,6 +23,7 @@ from_container filename="world.versatiles" | do_some_filtering | do_some_process
 ## Operation Format
 
 Each operation follows this structure:
+
 ```vpl
 operation_name parameter1="value1" parameter2="value2" ...
 ```
@@ -29,6 +31,7 @@ operation_name parameter1="value1" parameter2="value2" ...
 For read operations that combine multiple sources, use a comma-separated list within square brackets:
 
 Example:
+
 ```vpl
 from_overlayed [
    from_container filename="world.versatiles",
@@ -36,6 +39,7 @@ from_overlayed [
    from_container filename="germany.versatiles"
 ]
 ```
+
 ---
 # READ operations
 

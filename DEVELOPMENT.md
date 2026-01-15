@@ -139,11 +139,13 @@ node examples/read-tiles.js
 ### Install Lefthook
 
 **macOS:**
+
 ```bash
 brew install lefthook
 ```
 
 **Linux:**
+
 ```bash
 # Debian/Ubuntu
 curl -1sLf 'https://dl.cloudsmith.io/public/evilmartians/lefthook/setup.deb.sh' | sudo -E bash
@@ -151,6 +153,7 @@ sudo apt install lefthook
 ```
 
 **Windows:**
+
 ```powershell
 scoop install lefthook
 ```

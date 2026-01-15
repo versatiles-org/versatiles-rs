@@ -121,6 +121,7 @@ npm install @versatiles/versatiles-rs@rc
 ```
 
 See all available versions:
+
 ```sh
 npm view @versatiles/versatiles-rs versions
 ```
@@ -178,16 +179,19 @@ versatiles serve berlin.versatiles
 ### Common Workflows
 
 **Convert tile formats:**
+
 ```sh
 versatiles convert input.mbtiles output.versatiles
 ```
 
 **Filter by zoom level:**
+
 ```sh
 versatiles convert --min-zoom=5 --max-zoom=12 input.versatiles output.versatiles
 ```
 
 **Extract a region:**
+
 ```sh
 versatiles convert --bbox=13.0,52.3,13.8,52.7 world.versatiles berlin.versatiles
 ```
@@ -208,6 +212,7 @@ VersaTiles works with **tile containers** - files or directories containing map 
 - Directories - Folder structure: `z/x/y.ext`
 
 **Remote access:** VersaTiles can read remote `.versatiles` and `.pmtiles` files via HTTPS:
+
 ```sh
 versatiles serve https://download.versatiles.org/osm.versatiles
 ```
@@ -232,6 +237,7 @@ Commands:
 Convert tiles between formats, filter by region or zoom, and transform coordinates.
 
 **Basic conversion:**
+
 ```sh
 versatiles convert input.mbtiles output.versatiles
 ```
@@ -278,6 +284,7 @@ versatiles convert --min-zoom=1 --max-zoom=10 \
 Analyze tile containers to understand their contents and structure.
 
 **Basic usage:**
+
 ```sh
 versatiles probe tiles.versatiles
 ```
@@ -311,6 +318,7 @@ versatiles probe https://download.versatiles.org/osm.versatiles -d
 Run a local or production tile server with advanced configuration.
 
 **Basic usage:**
+
 ```sh
 versatiles serve tiles.versatiles
 # Access at http://localhost:8080
@@ -363,6 +371,7 @@ versatiles serve \
 **Supported static formats:** `.tar`, `.tar.gz`, `.tar.br`, directories
 
 **Remote serving:**
+
 ```sh
 # Serve remote tiles directly
 versatiles serve https://download.versatiles.org/osm.versatiles
@@ -382,6 +391,7 @@ versatiles serve -c production.yaml
 ```
 
 For a full description of all configuration options:
+
 ```sh
 versatiles help config
 ```
@@ -485,6 +495,7 @@ static:
 ```
 
 **Start with config:**
+
 ```sh
 versatiles serve -c config.yaml
 ```
@@ -586,6 +597,7 @@ For complete configuration documentation, see:
 - [versatiles/CONFIG.md](https://github.com/versatiles-org/versatiles-rs/blob/main/versatiles/CONFIG.md) - Full reference (auto-generated)
 
 Or run:
+
 ```sh
 versatiles help config
 ```
@@ -597,6 +609,7 @@ VersaTiles supports the following environment variables:
 - `VERSATILES_CACHE_DIR` - Enable disk-based tile caching. This is useful if you want to convert large tile sets with the `from_gdal_raster` VPL operation but have limited memory. Example: `VERSATILES_CACHE_DIR=/tmp/versatiles_cache`
 
 **Example usage:**
+
 ```sh
 # In one line
 VERSATILES_CACHE_DIR=/var/cache/versatiles versatiles serve tiles.versatiles
@@ -668,6 +681,7 @@ This runs:
 #### Quick Fixes
 
 **Rust:**
+
 ```bash
 # Auto-format
 cargo fmt
@@ -681,6 +695,7 @@ cargo test --package versatiles_pipeline
 ```
 
 **Node.js:**
+
 ```bash
 cd versatiles_node
 
@@ -697,18 +712,21 @@ npm test              # Vitest
 #### Building
 
 **Debug build (fast compilation, slow execution):**
+
 ```bash
 cargo build --bin versatiles
 # Output: ./target/debug/versatiles
 ```
 
 **Release build (slow compilation, fast execution):**
+
 ```bash
 cargo build --bin versatiles --release
 # Output: ./target/release/versatiles
 ```
 
 **With GDAL support:**
+
 ```bash
 # Build GDAL first
 ./scripts/install-gdal.sh
@@ -770,6 +788,7 @@ lefthook install
 - **pre-push:** Full checks (all tests, clippy, type-checking)
 
 **Skip hooks when needed:**
+
 ```bash
 # Skip pre-commit
 LEFTHOOK=0 git commit -m "message"
@@ -808,21 +827,25 @@ npm run check
 We welcome contributions! Please:
 
 1. **Fork and create a feature branch:**
+
    ```bash
    git checkout -b feature/my-feature
    ```
 
 2. **Make changes and test:**
+
    ```bash
    ./scripts/check.sh
    ```
 
 3. **Commit with clear messages:**
+
    ```bash
    git commit -m "feat: add new feature"
    ```
 
 4. **Push and create pull request:**
+
    ```bash
    git push origin feature/my-feature
    ```
@@ -851,6 +874,7 @@ We welcome contributions! Please:
 - **/versatiles_pipeline/** - VersaTiles Pipeline for efficient tile processing
 
 Dependencies of the versatiles packages:
+
 ```mermaid
 ---
 config:
@@ -931,6 +955,7 @@ For advanced usage, guides, and detailed documentation, visit the [official docu
 See [RELEASING.md](./RELEASING.md) for the complete release process.
 
 Quick version:
+
 ```bash
 # Interactive mode - select release type from menu
 ./scripts/release-package.sh

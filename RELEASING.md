@@ -3,6 +3,7 @@
 ## Automated Release (Recommended)
 
 ### 1. Prepare
+
 ```bash
 git checkout main
 git pull origin main
@@ -52,6 +53,7 @@ You can either provide the release type as an argument, or run the script withou
 ##### Prerelease Versions
 
 **Alpha releases** (early development, unstable):
+
 ```bash
 # First alpha from 2.3.1 → 2.4.0-alpha.1
 ./scripts/release-package.sh alpha
@@ -61,6 +63,7 @@ You can either provide the release type as an argument, or run the script withou
 ```
 
 **Beta releases** (feature complete, testing):
+
 ```bash
 # From alpha to beta: 2.4.0-alpha.2 → 2.4.0-beta.1
 ./scripts/release-package.sh beta
@@ -70,6 +73,7 @@ You can either provide the release type as an argument, or run the script withou
 ```
 
 **Release candidates** (final testing):
+
 ```bash
 # From beta to rc: 2.4.0-beta.2 → 2.4.0-rc.1
 ./scripts/release-package.sh rc
@@ -79,6 +83,7 @@ You can either provide the release type as an argument, or run the script withou
 ```
 
 **Dev releases** (daily builds, experiments):
+
 ```bash
 # Create dev release: 2.3.1 → 2.4.0-dev.1
 ./scripts/release-package.sh dev
@@ -88,6 +93,7 @@ You can either provide the release type as an argument, or run the script withou
 ```
 
 **Graduating to stable**:
+
 ```bash
 # From rc to stable: 2.4.0-rc.1 → 2.4.0
 ./scripts/release-package.sh patch
@@ -101,6 +107,7 @@ This script will:
 - Amend commit to include package.json
 
 ### 3. Push
+
 ```bash
 git push origin main --follow-tags
 ```
@@ -115,6 +122,7 @@ This triggers GitHub Actions which will:
 - Trigger Docker and Homebrew workflows
 
 ### 4. Verify
+
 ```bash
 # Check npm
 npm view @versatiles/versatiles-rs
@@ -240,6 +248,7 @@ git commit -m "chore: sync package.json version"
 ### npm Publish Failed
 
 Check what was published:
+
 ```bash
 npm view @versatiles/versatiles-rs versions
 npm view @versatiles/versatiles-rs-darwin-arm64 versions
@@ -250,12 +259,14 @@ Re-publish missing packages manually (see Manual npm Publish section above).
 ### Rollback a Release
 
 1. **Delete tag**:
+
    ```bash
    git push origin :refs/tags/vX.Y.Z
    git tag -d vX.Y.Z
    ```
 
 2. **Deprecate npm packages** (can't unpublish after 72 hours):
+
    ```bash
    npm deprecate @versatiles/versatiles-rs@X.Y.Z "This version was incorrectly published and should not be used"
    ```

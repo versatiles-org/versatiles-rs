@@ -16,6 +16,7 @@ Tile sources can be specified as:
 - **VPL pipelines**: `.vpl` files for advanced tile processing (see `versatiles help pipeline`)
 
 Example with different source types:
+
 ```yaml
 tiles:
   - name: osm

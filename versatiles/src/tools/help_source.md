@@ -5,7 +5,9 @@ VersaTiles supports multiple ways to specify data sources for tile containers.
 ## Basic Usage
 
 ### File Paths
+
 Local file paths are resolved relative to the current directory:
+
 ```
 tiles.versatiles
 ./data/world.mbtiles
@@ -13,7 +15,9 @@ tiles.versatiles
 ```
 
 ### URLs
+
 HTTP and HTTPS URLs are supported (VersaTiles containers only for remote):
+
 ```
 https://example.org/tiles.versatiles
 http://download.example.org/world.versatiles
@@ -24,7 +28,9 @@ http://download.example.org/world.versatiles
 You can override the auto-detected name and container type using bracket notation.
 
 ### Prefix Notation
+
 Format: `[name,type]location`
+
 ```
 [osm,mbtiles]tiles.db        # Set name to "osm", type to "mbtiles"
 [,mbtiles]tiles.db           # Set only type to "mbtiles"
@@ -33,7 +39,9 @@ Format: `[name,type]location`
 ```
 
 ### Postfix Notation
+
 Format: `location[name,type]`
+
 ```
 tiles.db[osm,mbtiles]        # Same as [osm,mbtiles]tiles.db
 tiles.db[,mbtiles]           # Same as [,mbtiles]tiles.db
@@ -43,6 +51,7 @@ tiles.mbtiles[osm]           # Same as [osm]tiles.mbtiles
 ## Inline VPL Pipelines
 
 Use `[,vpl]` prefix with parentheses to define a VPL pipeline directly:
+
 ```
 [,vpl](from_mbtiles tiles.mbtiles)
 [osm,vpl](from_mbtiles tiles.mbtiles | filter_zoom 0-10)
@@ -53,6 +62,7 @@ The content in parentheses is treated as VPL (VersaTiles Pipeline Language).
 ## JSON Format
 
 For programmatic use, data sources can be specified as JSON:
+
 ```json
 {"location": "tiles.mbtiles"}
 {"name": "osm", "type": "mbtiles", "location": "tiles.db"}
