@@ -3,7 +3,7 @@ use std::io::Write;
 use versatiles_container::TilesRuntime;
 
 #[derive(clap::Args, Debug)]
-#[command(arg_required_else_help = true, disable_help_flag = true, disable_version_flag = true)]
+#[command(arg_required_else_help = true, disable_version_flag = true)]
 /// Print the TileJSON metadata of a container to stdout.
 pub struct PrintTilejson {
 	/// Input file

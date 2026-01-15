@@ -5,7 +5,7 @@ use versatiles_core::{TileBBox, TileFormat};
 use versatiles_image::{DynamicImage, DynamicImageTraitConvert, encode};
 
 #[derive(clap::Args, Debug)]
-#[command(arg_required_else_help = true, disable_help_flag = true, disable_version_flag = true)]
+#[command(arg_required_else_help = true, disable_version_flag = true)]
 /// Measure file sizes of the tiles in a container and generate an image visualizing the sizes.
 ///
 /// The output image is a downscaled grayscale representation of the tile sizes at the specified zoom level.

@@ -3,7 +3,7 @@ use anyhow::Result;
 use versatiles_container::TilesRuntime;
 
 #[derive(clap::Args, Debug)]
-#[command(arg_required_else_help = true, disable_help_flag = true, disable_version_flag = true)]
+#[command(arg_required_else_help = true, disable_version_flag = true)]
 pub struct Subcommand {
 	#[command(subcommand)]
 	sub_command: DevCommands,
