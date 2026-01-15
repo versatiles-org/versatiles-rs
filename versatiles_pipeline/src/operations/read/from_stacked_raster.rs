@@ -37,14 +37,14 @@ struct Args {
 	format: Option<TileFormat>,
 }
 
-/// [`TileSource`] implementation that overlays raster tiles “on the fly.”
+/// [`TileSource`] implementation that overlays raster tiles "on the fly."
 ///
-/// * Caches only metadata (`TileJSON`, `TileSourceMetadata`).  
+/// * Caches only metadata (`TileJSON`, `TileSourceMetadata`).
 /// * Performs no disk I/O itself; all data come from the child pipelines.
 #[derive(Debug)]
 struct Operation {
 	metadata: TileSourceMetadata,
-	sources: Vec<Box<dyn TileSource>>,
+	sources: Arc<Vec<Box<dyn TileSource>>>,
 	tilejson: TileJSON,
 }
 
@@ -70,6 +70,43 @@ fn stack_tiles(tiles: Vec<Tile>) -> Result<Option<Tile>> {
 	}
 
 	Ok(tile)
+}
+
+/// Fetches tiles from all sources for a sub-bbox, collects them, stacks overlapping
+/// tiles, and returns a stream of the resulting tiles.
+async fn process_bbox_tiles(
+	sources: Arc<Vec<Box<dyn TileSource>>>,
+	bbox: TileBBox,
+	tile_format: TileFormat,
+) -> TileStream<'static, Tile> {
+	let mut tiles = TileBBoxMap::<Vec<Tile>>::new_default(bbox).unwrap();
+
+	let streams = sources.iter().map(async |source| {
+		let stream = source.get_tile_stream(bbox).await.unwrap();
+		stream.to_vec().await
+	});
+	let results: Vec<Vec<(TileCoord, Tile)>> = futures::future::join_all(streams).await;
+
+	for result in results {
+		for (coord, mut tile) in result {
+			let image = tile.as_image().unwrap();
+			if !image.is_empty() {
+				tiles.get_mut(&coord).unwrap().push(tile);
+			}
+		}
+	}
+
+	tiles
+		.into_stream()
+		.filter_map_item_parallel(move |v| match stack_tiles(v) {
+			Ok(Some(mut tile)) => {
+				tile.change_format(tile_format, None, None).unwrap();
+				Ok(Some(tile))
+			}
+			Ok(None) => Ok(None),
+			Err(err) => Err(err),
+		})
+		.unwrap_results()
 }
 
 impl ReadTileSource for Operation {
@@ -117,7 +154,7 @@ impl ReadTileSource for Operation {
 
 		Ok(Box::new(Self {
 			metadata,
-			sources,
+			sources: Arc::new(sources),
 			tilejson,
 		}) as Box<dyn TileSource>)
 	}
@@ -146,41 +183,13 @@ impl TileSource for Operation {
 		log::debug!("get_stream {bbox:?}");
 
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(16).collect();
-		let sources = &self.sources;
+		let sources = self.sources.clone();
 		let tile_format = self.metadata.tile_format;
 
-		Ok(TileStream::from_streams(stream::iter(bboxes).map(
-			move |bbox| async move {
-				let mut tiles = TileBBoxMap::<Vec<Tile>>::new_default(bbox).unwrap();
-
-				let streams = sources.iter().map(async |source| {
-					let stream = source.get_tile_stream(bbox).await.unwrap();
-					stream.to_vec().await
-				});
-				let results: Vec<Vec<(TileCoord, Tile)>> = futures::future::join_all(streams).await;
-
-				for result in results {
-					for (coord, mut tile) in result {
-						let image = tile.as_image().unwrap();
-						if !image.is_empty() {
-							tiles.get_mut(&coord).unwrap().push(tile);
-						}
-					}
-				}
-
-				tiles
-					.into_stream()
-					.filter_map_item_parallel(move |v| match stack_tiles(v) {
-						Ok(Some(mut tile)) => {
-							tile.change_format(tile_format, None, None).unwrap();
-							Ok(Some(tile))
-						}
-						Ok(None) => Ok(None),
-						Err(err) => Err(err),
-					})
-					.unwrap_results()
-			},
-		)))
+		Ok(TileStream::from_streams(stream::iter(bboxes).map(move |bbox| {
+			let sources = sources.clone();
+			process_bbox_tiles(sources, bbox, tile_format)
+		})))
 	}
 }
 
