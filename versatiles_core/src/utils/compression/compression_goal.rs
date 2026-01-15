@@ -1,7 +1,7 @@
 use std::fmt::{self, Debug};
 
 /// Defines the desired compression objective.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum CompressionGoal {
 	/// Prioritize speed over compression ratio.
 	UseFastCompression,
