@@ -541,4 +541,24 @@ mod tests {
 		assert!(code.contains("### Sources"));
 		assert!(code.contains("List of sources"));
 	}
+
+	#[test]
+	fn test_decode_struct_unsupported_type_error() {
+		// Struct with unsupported type should return error
+		let input: DeriveInput = parse_quote!(
+			struct T {
+				v: i128,
+			}
+		);
+		let data_struct = match &input.data {
+			syn::Data::Struct(ds) => ds.clone(),
+			_ => panic!("Expected struct data"),
+		};
+		let result = decode_struct(input, data_struct);
+		assert!(result.is_err());
+		let err = result.unwrap_err();
+		let msg = err.to_string();
+		assert!(msg.contains("unsupported type"));
+		assert!(msg.contains("i128"));
+	}
 }
