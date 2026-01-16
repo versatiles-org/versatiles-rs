@@ -101,3 +101,106 @@ pub fn is_url_path(ty: &syn::Type) -> bool {
 	}
 	false
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use syn::parse_quote;
+
+	#[test]
+	fn test_collect_doc() {
+		let attrs: Vec<syn::Attribute> = vec![
+			parse_quote!(#[doc = "First line"]),
+			parse_quote!(#[doc = "Second line"]),
+		];
+		assert_eq!(collect_doc(&attrs), "First line\nSecond line");
+	}
+
+	#[test]
+	fn test_collect_doc_empty() {
+		let attrs: Vec<syn::Attribute> = vec![];
+		assert_eq!(collect_doc(&attrs), "");
+	}
+
+	#[test]
+	fn test_collect_doc_ignores_non_doc() {
+		let attrs: Vec<syn::Attribute> = vec![parse_quote!(#[derive(Debug)]), parse_quote!(#[doc = "Only doc"])];
+		assert_eq!(collect_doc(&attrs), "Only doc");
+	}
+
+	#[test]
+	fn test_serde_rename() {
+		let attrs: Vec<syn::Attribute> = vec![parse_quote!(#[serde(rename = "new_name")])];
+		assert_eq!(serde_rename(&attrs), Some("new_name".to_string()));
+	}
+
+	#[test]
+	fn test_serde_rename_none() {
+		let attrs: Vec<syn::Attribute> = vec![parse_quote!(#[doc = "no rename here"])];
+		assert_eq!(serde_rename(&attrs), None);
+	}
+
+	#[test]
+	fn test_is_option() {
+		let ty: syn::Type = parse_quote!(Option<String>);
+		assert!(is_option(&ty));
+
+		let ty: syn::Type = parse_quote!(String);
+		assert!(!is_option(&ty));
+
+		let ty: syn::Type = parse_quote!(Vec<u8>);
+		assert!(!is_option(&ty));
+	}
+
+	#[test]
+	fn test_is_primitive_like() {
+		let primitives = ["bool", "u8", "u16", "u32", "u64", "i32", "f32", "f64", "String"];
+		for p in primitives {
+			let ty: syn::Type = syn::parse_str(p).unwrap();
+			assert!(is_primitive_like(&ty), "Expected {p} to be primitive-like");
+		}
+
+		let non_primitives = ["Vec<u8>", "Option<String>", "MyStruct"];
+		for p in non_primitives {
+			let ty: syn::Type = syn::parse_str(p).unwrap();
+			assert!(!is_primitive_like(&ty), "Expected {p} to NOT be primitive-like");
+		}
+	}
+
+	#[test]
+	fn test_path_ident() {
+		use std::string::ToString;
+
+		let ty: syn::Type = parse_quote!(Vec<String>);
+		assert_eq!(path_ident(&ty).map(ToString::to_string), Some("Vec".to_string()));
+
+		let ty: syn::Type = parse_quote!(std::vec::Vec<u8>);
+		assert_eq!(path_ident(&ty).map(ToString::to_string), Some("Vec".to_string()));
+
+		let ty: syn::Type = parse_quote!(String);
+		assert_eq!(path_ident(&ty).map(ToString::to_string), Some("String".to_string()));
+	}
+
+	#[test]
+	fn test_angle_inner() {
+		let ty: syn::Type = parse_quote!(Vec<String>);
+		let inner = angle_inner(&ty).unwrap();
+		assert_eq!(inner.len(), 1);
+
+		let ty: syn::Type = parse_quote!(HashMap<String, u32>);
+		let inner = angle_inner(&ty).unwrap();
+		assert_eq!(inner.len(), 2);
+
+		let ty: syn::Type = parse_quote!(String);
+		assert!(angle_inner(&ty).is_none());
+	}
+
+	#[test]
+	fn test_is_url_path() {
+		let ty: syn::Type = parse_quote!(DataLocation);
+		assert!(is_url_path(&ty));
+
+		let ty: syn::Type = parse_quote!(String);
+		assert!(!is_url_path(&ty));
+	}
+}
