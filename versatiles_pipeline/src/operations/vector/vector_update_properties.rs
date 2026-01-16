@@ -146,7 +146,7 @@ impl RunnerTrait for Runner {
 					if self.args.remove_non_matching.unwrap_or(false) {
 						return None;
 					}
-					log::warn!("id \"{id}\" not found in data source");
+					log::info!("id \"{id}\" not found in data source");
 				}
 			} else {
 				log::warn!("id field \"{}\" not found", &self.args.id_field_tiles);
