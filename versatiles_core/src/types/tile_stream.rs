@@ -1289,6 +1289,43 @@ mod tests {
 		assert_eq!(items[8].1.as_str(), "v4,2,2");
 	}
 
+	#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+	async fn test_from_bbox_parallel_parallelism() {
+		let bbox = TileBBox::from_min_and_max(4, 0, 0, 2, 1).unwrap(); // 3x2 = 6 tiles
+		let counter = Arc::new(AtomicUsize::new(0));
+		let max_parallel = Arc::new(AtomicUsize::new(0));
+		let current_parallel = Arc::new(AtomicUsize::new(0));
+
+		let counter_clone = counter.clone();
+		let max_parallel_clone = max_parallel.clone();
+		let current_parallel_clone = current_parallel.clone();
+
+		let stream = TileStream::from_bbox_parallel(bbox, move |coord| {
+			let counter = counter_clone.clone();
+			let max_parallel = max_parallel_clone.clone();
+			let current_parallel = current_parallel_clone.clone();
+
+			let prev = current_parallel.fetch_add(1, Ordering::SeqCst);
+			loop {
+				let max = max_parallel.load(Ordering::SeqCst);
+				if prev + 1 > max {
+					max_parallel.store(prev + 1, Ordering::SeqCst);
+				} else {
+					break;
+				}
+			}
+			std::thread::sleep(std::time::Duration::from_millis(10));
+			current_parallel.fetch_sub(1, Ordering::SeqCst);
+			counter.fetch_add(1, Ordering::SeqCst);
+			Some(Blob::from(format!("{}", coord.level)))
+		});
+
+		let results = stream.to_vec().await;
+		assert_eq!(results.len(), 6);
+		assert_eq!(counter.load(Ordering::SeqCst), 6);
+		assert!(max_parallel.load(Ordering::SeqCst) > 1, "Expected parallel execution");
+	}
+
 	#[tokio::test]
 	async fn should_create_from_coord_vec_async() {
 		let coords = vec![tc(0, 0, 0), tc(1, 1, 1)];
