@@ -115,15 +115,13 @@ impl TileSource for Operation {
 		match self.metadata.tile_format.to_type() {
 			TileType::Raster => {
 				let alpha = format != TileFormat::JPG;
-				Ok(TileStream::from_iter_coord_parallel(
-					bbox.into_iter_coords(),
-					move |c| Some(Tile::from_image(create_debug_image(&c, alpha), format).unwrap()),
-				))
+				Ok(TileStream::from_bbox_parallel(bbox, move |c| {
+					Some(Tile::from_image(create_debug_image(&c, alpha), format).unwrap())
+				}))
 			}
-			TileType::Vector => Ok(TileStream::from_iter_coord_parallel(
-				bbox.into_iter_coords(),
-				move |c| Some(Tile::from_vector(create_debug_vector_tile(&c).unwrap(), format).unwrap()),
-			)),
+			TileType::Vector => Ok(TileStream::from_bbox_parallel(bbox, move |c| {
+				Some(Tile::from_vector(create_debug_vector_tile(&c).unwrap(), format).unwrap())
+			})),
 			_ => bail!("tile format '{}' is not supported.", self.metadata.tile_format),
 		}
 	}
