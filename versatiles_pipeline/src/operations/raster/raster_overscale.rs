@@ -290,27 +290,27 @@ impl TileSource for Operation {
 		}
 
 		// Use tile climbing for all upscaling - process in parallel
-		let coords: Vec<TileCoord> = bbox_dst.into_iter_coords().collect();
 		let self_arc = Arc::new(self.clone()); // Share Operation across tasks
 		let enable_climbing = self.enable_climbing;
 		let tile_format = self.metadata.tile_format;
 
-		let get_tile = async move |coord_dst: TileCoord| -> Result<Option<Tile>> {
-			let Some((coord_src, image_src)) = self_arc.find_tile(coord_dst, enable_climbing).await? else {
-				return Ok(None);
-			};
-
-			Ok(Some(Tile::from_image(
-				extract_image(&image_src, coord_src, coord_dst)?,
-				tile_format,
-			)?))
-		};
-
-		let stream = TileStream::from_coord_vec_async(coords, move |coord_dst| {
-			let get_tile = get_tile.clone();
+		let stream = TileStream::from_bbox_async_parallel(bbox_dst, move |coord_dst| {
+			let self_arc = self_arc.clone();
 			async move {
-				match get_tile(coord_dst).await {
-					Ok(Some(tile)) => Some((coord_dst, tile)),
+				match self_arc.find_tile(coord_dst, enable_climbing).await {
+					Ok(Some((coord_src, image_src))) => match extract_image(&image_src, coord_src, coord_dst) {
+						Ok(img) => match Tile::from_image(img, tile_format) {
+							Ok(tile) => Some((coord_dst, tile)),
+							Err(e) => {
+								log::error!("Error creating tile {coord_dst:?}: {e:?}");
+								None
+							}
+						},
+						Err(e) => {
+							log::error!("Error extracting image {coord_dst:?}: {e:?}");
+							None
+						}
+					},
 					Ok(None) => None,
 					Err(e) => {
 						log::error!("Error processing tile {coord_dst:?}: {e:?}");
