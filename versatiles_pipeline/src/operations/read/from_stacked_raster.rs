@@ -195,6 +195,7 @@ mod tests {
 	use crate::helpers::{arrange_tiles, dummy_image_source::DummyImageSource};
 	use futures::future::BoxFuture;
 	use pretty_assertions::assert_eq;
+	use rstest::rstest;
 	use versatiles_container::TileSource;
 	use versatiles_core::{Blob, TileCompression, TileCompression::Uncompressed, TileFormat};
 	use versatiles_image::{DynamicImage, DynamicImageTraitConvert};
@@ -360,20 +361,50 @@ mod tests {
 		Ok(())
 	}
 
+	/// Tests tile blending with various layer configurations:
+	/// - Single source (opaque and semi-transparent)
+	/// - Two sources with transparent/semi-transparent/opaque foreground
+	/// - Three sources with layered blending and short-circuit behavior
+	#[rstest]
+	#[case(&["FF0000FF"], "FF0000FF")] // single opaque red
+	#[case(&["00FF0080"], "00FF0080")] // single semi-transparent green
+	#[case(&["FF000000", "00FF00FF"], "00FF00FF")] // transparent over opaque
+	#[case(&["FF000077", "00FF0077"], "A65800B6")] // semi-transparent blend
+	#[case(&["FF0000FF", "00FF00FF"], "FF0000FF")] // opaque short-circuits
+	#[case(&["FFFFFF80", "000000FF"], "808080FE")] // half-white over black
+	#[case(&["FF000080", "00FF0080", "0000FFFF"], "7F3E3FFF")] // three-layer blend
+	#[case(&["FF000080", "00FF00FF", "0000FFFF"], "7F7E00FF")] // middle opaque short-circuits
 	#[tokio::test]
-	async fn test_get_tile_multiple_layers() -> Result<()> {
+	async fn test_get_tile_multiple_layers(#[case] input: &[&str], #[case] expected: &str) {
 		use versatiles_core::TileFormat::PNG;
 
-		// Create two sources with different colors (semi-transparent)
-		let source1: Box<dyn TileSource> = Box::new(DummyImageSource::from_color(&[255, 0, 0, 128], 4, PNG, None)?);
-		let source2: Box<dyn TileSource> = Box::new(DummyImageSource::from_color(&[0, 255, 0, 128], 4, PNG, None)?);
-		let sources = Arc::new(vec![source1, source2]);
+		for s in input {
+			assert_eq!(s.len(), 8);
+		}
 
-		let coord = TileCoord::new(0, 0, 0)?;
-		let result = get_tile(coord, sources, PNG, false).await?;
+		let sources = Arc::new(
+			input
+				.iter()
+				.map(|s| {
+					// convert hex string to RGBA color
+					let c: Vec<u8> = (0..4)
+						.map(|i| u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).unwrap())
+						.collect();
+					Box::new(DummyImageSource::from_color(&c, 4, PNG, None).unwrap()) as Box<dyn TileSource>
+				})
+				.collect(),
+		);
 
-		assert!(result.is_some());
-		Ok(())
+		let coord = TileCoord::new(0, 0, 0).unwrap();
+		let result = get_tile(coord, sources, PNG, false).await.unwrap();
+		let color = result.unwrap().1.as_image().unwrap().average_color();
+		let color_string = color.iter().fold(String::new(), |mut acc, v| {
+			use std::fmt::Write;
+			write!(acc, "{v:02X}").unwrap();
+			acc
+		});
+
+		assert_eq!(color_string, expected);
 	}
 
 	#[tokio::test]
