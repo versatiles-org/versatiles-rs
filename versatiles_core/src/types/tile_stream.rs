@@ -35,7 +35,7 @@
 //! }).await;
 //! # }
 //! ```
-use crate::{Blob, ConcurrencyLimits, TileCoord};
+use crate::{Blob, ConcurrencyLimits, TileBBox, TileCoord};
 use anyhow::Result;
 use futures::{
 	Future, Stream, StreamExt,
@@ -162,6 +162,39 @@ where
 				}
 			});
 		TileStream { inner: s.boxed() }
+	}
+
+	/// Creates a `TileStream` by processing all coordinates in a `TileBBox` in parallel.
+	///
+	/// This is a convenience wrapper around [`from_iter_coord_parallel`](Self::from_iter_coord_parallel)
+	/// that accepts a [`TileBBox`] instead of an iterator. For each coordinate in the bounding box,
+	/// spawns a tokio task (buffered by CPU-bound concurrency limit) to call `callback`.
+	/// Returns only items where `callback(coord)` yields `Some(value)`.
+	///
+	/// Coordinates are processed in parallel without guaranteed order.
+	/// Uses CPU-bound concurrency limit since the callback runs in `spawn_blocking`.
+	///
+	/// # Arguments
+	/// * `bbox` - The bounding box defining the tile coordinates to process.
+	/// * `callback` - A shared closure returning `Option<T>` for each coordinate.
+	///
+	/// # Examples
+	/// ```
+	/// # use versatiles_core::{TileBBox, TileCoord, Blob, TileStream};
+	/// let bbox = TileBBox::from_min_and_max(4, 0, 0, 3, 3).unwrap();
+	/// let closure = |coord: TileCoord| {
+	///     // Data loading logic...
+	///     Some(Blob::from(format!("data for {:?}", coord)))
+	/// };
+	///
+	/// let tile_stream = TileStream::from_bbox_parallel(bbox, closure);
+	/// ```
+	pub fn from_bbox_parallel<F>(bbox: TileBBox, callback: F) -> Self
+	where
+		F: Fn(TileCoord) -> Option<T> + Send + Sync + 'static,
+		T: 'static,
+	{
+		Self::from_iter_coord_parallel(bbox.into_iter_coords(), callback)
 	}
 
 	/// Creates a `TileStream` by sequentially filtering and mapping coordinates from an iterator.
@@ -1234,6 +1267,26 @@ mod tests {
 		assert_eq!(items.len(), 2);
 		assert_eq!(items[0].1.as_str(), "v0");
 		assert_eq!(items[1].1.as_str(), "v1");
+	}
+
+	#[tokio::test]
+	async fn should_create_from_bbox_parallel() {
+		let bbox = TileBBox::from_min_and_max(4, 0, 0, 2, 2).unwrap();
+
+		let stream = TileStream::from_bbox_parallel(bbox, |coord| {
+			Some(Blob::from(format!("v{},{},{}", coord.level, coord.x, coord.y)))
+		});
+
+		let mut items = stream.to_vec().await;
+		// 3x3 = 9 tiles
+		assert_eq!(items.len(), 9);
+
+		// Sort for deterministic assertion on unordered parallel output
+		items.sort_by_key(|(coord, _)| (coord.y, coord.x));
+
+		// Verify first and last
+		assert_eq!(items[0].1.as_str(), "v4,0,0");
+		assert_eq!(items[8].1.as_str(), "v4,2,2");
 	}
 
 	#[tokio::test]
