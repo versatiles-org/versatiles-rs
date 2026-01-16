@@ -65,7 +65,7 @@ async fn get_tile(
 ) -> Result<Option<(TileCoord, Tile)>> {
 	let mut tile = Option::<Tile>::None;
 
-	for source in sources.iter() {
+	for source in &sources {
 		if let Some(mut tile_bg) = source.get_tile(&coord).await? {
 			if tile_bg.as_image()?.is_empty() {
 				continue;
