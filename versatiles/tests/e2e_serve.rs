@@ -5,7 +5,7 @@ use test_utilities::*;
 use versatiles_core::json::JsonValue;
 
 #[tokio::test]
-async fn serve_local_file() {
+async fn e2e_serve_local_file() {
 	let input = get_testdata("berlin.pmtiles");
 	let server = Server::new(&[&input]).await;
 	assert_eq!(server.get_index().await, ["berlin"]);
@@ -16,7 +16,7 @@ async fn serve_local_file() {
 }
 
 #[tokio::test]
-async fn serve_remote_url() {
+async fn e2e_serve_remote_url() {
 	let server = Server::new(&["https://download.versatiles.org/osm.versatiles"]).await;
 	assert_eq!(server.get_index().await, ["osm"]);
 	assert_eq!(
@@ -26,7 +26,7 @@ async fn serve_remote_url() {
 }
 
 #[tokio::test]
-async fn serve_concurrent_tile_requests_return_correct_data() {
+async fn e2e_serve_concurrent_tile_requests_return_correct_data() {
 	use std::collections::HashMap;
 	use tokio::task::JoinSet;
 

@@ -134,7 +134,7 @@ impl Drop for StaticTestServer {
 
 /// Test serving static content from a gzip-compressed tar archive.
 #[tokio::test]
-async fn serve_static_from_tar_gz() {
+async fn e2e_serve_static_from_tar_gz() {
 	let static_path = get_testdata("static.tar.gz");
 	let server = StaticTestServer::with_static_source(&static_path).await;
 
@@ -159,7 +159,7 @@ async fn serve_static_from_tar_gz() {
 
 /// Test serving static content from a brotli-compressed tar archive.
 #[tokio::test]
-async fn serve_static_from_tar_br() {
+async fn e2e_serve_static_from_tar_br() {
 	let static_path = get_testdata("static.tar.br");
 	let server = StaticTestServer::with_static_source(&static_path).await;
 
@@ -175,7 +175,7 @@ async fn serve_static_from_tar_br() {
 
 /// Test that non-existent files return 404.
 #[tokio::test]
-async fn serve_static_returns_404_for_missing_file() {
+async fn e2e_serve_static_returns_404_for_missing_file() {
 	let static_path = get_testdata("static.tar.gz");
 	let server = StaticTestServer::with_static_source(&static_path).await;
 
@@ -185,7 +185,7 @@ async fn serve_static_returns_404_for_missing_file() {
 
 /// Test serving index.html at root path.
 #[tokio::test]
-async fn serve_static_index_at_root() {
+async fn e2e_serve_static_index_at_root() {
 	let static_path = get_testdata("static.tar.gz");
 	let server = StaticTestServer::with_static_source(&static_path).await;
 
@@ -201,7 +201,7 @@ async fn serve_static_index_at_root() {
 
 /// Test static source with prefix via config file.
 #[tokio::test]
-async fn serve_static_with_prefix() {
+async fn e2e_serve_static_with_prefix() {
 	let static_path = to_yaml_path(&get_testdata("static.tar.gz"));
 	let config = format!(
 		r#"
@@ -228,7 +228,7 @@ static:
 
 /// Test multiple static sources with different prefixes.
 #[tokio::test]
-async fn serve_multiple_static_sources() {
+async fn e2e_serve_multiple_static_sources() {
 	let static_gz = to_yaml_path(&get_testdata("static.tar.gz"));
 	let static_br = to_yaml_path(&get_testdata("static.tar.br"));
 	let config = format!(
@@ -254,7 +254,7 @@ static:
 
 /// Test correct Content-Type for different file extensions.
 #[tokio::test]
-async fn serve_static_content_type_by_extension() {
+async fn e2e_serve_static_content_type_by_extension() {
 	let static_path = get_testdata("static.tar.gz");
 	let server = StaticTestServer::with_static_source(&static_path).await;
 
@@ -275,7 +275,7 @@ async fn serve_static_content_type_by_extension() {
 
 /// Test static serving alongside tile sources.
 #[tokio::test]
-async fn serve_static_with_tiles() {
+async fn e2e_serve_static_with_tiles() {
 	let static_path = to_yaml_path(&get_testdata("static.tar.gz"));
 	let tiles_path = to_yaml_path(&get_testdata("berlin.mbtiles"));
 	let config = format!(

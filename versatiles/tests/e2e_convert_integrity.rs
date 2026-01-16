@@ -54,7 +54,7 @@ async fn assert_tiles_equal(
 
 /// Test that tile data is preserved when converting mbtiles to versatiles.
 #[tokio::test]
-async fn tile_integrity_mbtiles_to_versatiles() {
+async fn e2e_tile_integrity_mbtiles_to_versatiles() {
 	let input = get_testdata("berlin.mbtiles");
 	let temp_dir = TempDir::new().unwrap();
 	let output = temp_dir.path().join("berlin.versatiles");
@@ -82,7 +82,7 @@ async fn tile_integrity_mbtiles_to_versatiles() {
 
 /// Test that tile data is preserved when converting mbtiles to pmtiles.
 #[tokio::test]
-async fn tile_integrity_mbtiles_to_pmtiles() {
+async fn e2e_tile_integrity_mbtiles_to_pmtiles() {
 	let input = get_testdata("berlin.mbtiles");
 	let temp_dir = TempDir::new().unwrap();
 	let output = temp_dir.path().join("berlin.pmtiles");
@@ -102,7 +102,7 @@ async fn tile_integrity_mbtiles_to_pmtiles() {
 
 /// Test that tile data is preserved through a chain of conversions.
 #[tokio::test]
-async fn tile_integrity_round_trip() {
+async fn e2e_tile_integrity_round_trip() {
 	let input = get_testdata("berlin.mbtiles");
 	let temp_dir = TempDir::new().unwrap();
 	let versatiles_path = temp_dir.path().join("step1.versatiles");
@@ -141,7 +141,7 @@ async fn tile_integrity_round_trip() {
 
 /// Test that tiles with different compression settings have same decompressed content.
 #[tokio::test]
-async fn tile_integrity_with_recompression() {
+async fn e2e_tile_integrity_with_recompression() {
 	let input = get_testdata("berlin.mbtiles");
 	let temp_dir = TempDir::new().unwrap();
 	let output_br = temp_dir.path().join("berlin_brotli.versatiles");
@@ -164,7 +164,7 @@ async fn tile_integrity_with_recompression() {
 
 /// Test that bbox filtering preserves tile content for included tiles.
 #[tokio::test]
-async fn tile_integrity_with_bbox_filter() {
+async fn e2e_tile_integrity_with_bbox_filter() {
 	let input = get_testdata("berlin.mbtiles");
 	let temp_dir = TempDir::new().unwrap();
 	let output = temp_dir.path().join("berlin_filtered.versatiles");

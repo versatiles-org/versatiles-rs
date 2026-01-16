@@ -134,7 +134,7 @@ impl Drop for CorsTestServer {
 
 /// Test that CORS headers are present for allowed origins.
 #[tokio::test]
-async fn cors_headers_for_allowed_origin() {
+async fn e2e_cors_headers_for_allowed_origin() {
 	let server = CorsTestServer::new(&["https://example.org"], Some(86400)).await;
 
 	let (status, headers) = server
@@ -152,7 +152,7 @@ async fn cors_headers_for_allowed_origin() {
 
 /// Test that CORS headers are NOT present for disallowed origins.
 #[tokio::test]
-async fn cors_headers_absent_for_disallowed_origin() {
+async fn e2e_cors_headers_absent_for_disallowed_origin() {
 	let server = CorsTestServer::new(&["https://example.org"], None).await;
 
 	let (status, headers) = server
@@ -170,7 +170,7 @@ async fn cors_headers_absent_for_disallowed_origin() {
 
 /// Test that wildcard origins work correctly.
 #[tokio::test]
-async fn cors_wildcard_subdomain() {
+async fn e2e_cors_wildcard_subdomain() {
 	let server = CorsTestServer::new(&["*.example.org"], None).await;
 
 	// Subdomain should be allowed
@@ -195,7 +195,7 @@ async fn cors_wildcard_subdomain() {
 
 /// Test preflight OPTIONS request handling.
 #[tokio::test]
-async fn cors_preflight_options() {
+async fn e2e_cors_preflight_options() {
 	let server = CorsTestServer::new(&["https://example.org"], Some(3600)).await;
 
 	let (status, headers) = server
@@ -220,7 +220,7 @@ async fn cors_preflight_options() {
 
 /// Test multiple allowed origins.
 #[tokio::test]
-async fn cors_multiple_origins() {
+async fn e2e_cors_multiple_origins() {
 	let server = CorsTestServer::new(&["https://first.example.org", "https://second.example.org"], None).await;
 
 	// First origin should be allowed
@@ -253,7 +253,7 @@ async fn cors_multiple_origins() {
 
 /// Test that tile endpoints include CORS headers.
 #[tokio::test]
-async fn cors_on_tile_endpoint() {
+async fn e2e_cors_on_tile_endpoint() {
 	let server = CorsTestServer::new(&["https://example.org"], None).await;
 
 	// Request an actual tile

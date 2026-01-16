@@ -4,7 +4,7 @@ use test_utilities::*;
 use versatiles_core::json::JsonValue;
 
 #[test]
-fn convert_requires_input_and_output() {
+fn e2e_convert_requires_input_and_output() {
 	let o = versatiles_output("convert");
 	assert!(!o.success);
 	assert_eq!(o.code, 2);
@@ -16,7 +16,7 @@ fn convert_requires_input_and_output() {
 }
 
 #[test]
-fn convert_mbtiles_to_versatiles() {
+fn e2e_convert_mbtiles_to_versatiles() {
 	let input = get_testdata("berlin.mbtiles");
 	let (_temp_dir, output) = get_temp_output("berlin.versatiles");
 
@@ -26,7 +26,7 @@ fn convert_mbtiles_to_versatiles() {
 }
 
 #[test]
-fn convert_pmtiles_to_mbtiles_with_bbox_and_border() {
+fn e2e_convert_pmtiles_to_mbtiles_with_bbox_and_border() {
 	let input = get_testdata("berlin.pmtiles");
 	let (_temp_dir, output) = get_temp_output("berlin-bbox.mbtiles");
 
@@ -46,7 +46,7 @@ fn convert_pmtiles_to_mbtiles_with_bbox_and_border() {
 }
 
 #[test]
-fn convert_vpl_via_stdin() {
+fn e2e_convert_vpl_via_stdin() {
 	let testdata_pmtiles = get_testdata("berlin.pmtiles");
 	let testdata_csv = get_testdata("cities.csv");
 	let stdin = format!(

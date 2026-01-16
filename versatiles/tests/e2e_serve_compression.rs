@@ -110,7 +110,7 @@ impl Drop for CompressionTestServer {
 
 /// Test that server returns uncompressed when no Accept-Encoding is sent.
 #[tokio::test]
-async fn no_accept_encoding_returns_uncompressed() {
+async fn e2e_no_accept_encoding_returns_uncompressed() {
 	let input = get_testdata("berlin.mbtiles");
 	let server = CompressionTestServer::new(&input).await;
 
@@ -127,7 +127,7 @@ async fn no_accept_encoding_returns_uncompressed() {
 
 /// Test that server returns gzip when Accept-Encoding: gzip is sent.
 #[tokio::test]
-async fn accept_gzip_returns_gzip() {
+async fn e2e_accept_gzip_returns_gzip() {
 	let input = get_testdata("berlin.mbtiles");
 	let server = CompressionTestServer::new(&input).await;
 
@@ -147,7 +147,7 @@ async fn accept_gzip_returns_gzip() {
 
 /// Test that server returns brotli when Accept-Encoding: br is sent.
 #[tokio::test]
-async fn accept_brotli_returns_brotli() {
+async fn e2e_accept_brotli_returns_brotli() {
 	let input = get_testdata("berlin.mbtiles");
 	let server = CompressionTestServer::new(&input).await;
 
@@ -167,7 +167,7 @@ async fn accept_brotli_returns_brotli() {
 
 /// Test that server handles wildcard Accept-Encoding.
 #[tokio::test]
-async fn accept_wildcard_encoding() {
+async fn e2e_accept_wildcard_encoding() {
 	let input = get_testdata("berlin.mbtiles");
 	let server = CompressionTestServer::new(&input).await;
 
@@ -187,7 +187,7 @@ async fn accept_wildcard_encoding() {
 
 /// Test that server handles multiple Accept-Encoding values.
 #[tokio::test]
-async fn accept_multiple_encodings() {
+async fn e2e_accept_multiple_encodings() {
 	let input = get_testdata("berlin.mbtiles");
 	let server = CompressionTestServer::new(&input).await;
 
@@ -207,7 +207,7 @@ async fn accept_multiple_encodings() {
 
 /// Test that server handles Accept-Encoding with quality values.
 #[tokio::test]
-async fn accept_encoding_with_quality() {
+async fn e2e_accept_encoding_with_quality() {
 	let input = get_testdata("berlin.mbtiles");
 	let server = CompressionTestServer::new(&input).await;
 
@@ -227,7 +227,7 @@ async fn accept_encoding_with_quality() {
 
 /// Test that tile data is valid regardless of encoding.
 #[tokio::test]
-async fn tile_data_valid_with_different_encodings() {
+async fn e2e_tile_data_valid_with_different_encodings() {
 	let input = get_testdata("berlin.mbtiles");
 	let server = CompressionTestServer::new(&input).await;
 
@@ -249,7 +249,7 @@ async fn tile_data_valid_with_different_encodings() {
 
 /// Test that JSON endpoints (tiles.json) also respect encoding.
 #[tokio::test]
-async fn json_endpoint_respects_encoding() {
+async fn e2e_json_endpoint_respects_encoding() {
 	let input = get_testdata("berlin.mbtiles");
 	let server = CompressionTestServer::new(&input).await;
 

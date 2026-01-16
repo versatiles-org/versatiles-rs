@@ -97,7 +97,7 @@ impl Drop for ConfigTestServer {
 
 /// Test that tile sources from config are accessible.
 #[tokio::test]
-async fn config_tile_sources_accessible() {
+async fn e2e_config_tile_sources_accessible() {
 	let tiles_path = to_yaml_path(&get_testdata("berlin.mbtiles"));
 	let config = format!(
 		r#"
@@ -122,7 +122,7 @@ tiles:
 
 /// Test that extra_response_headers are applied to responses.
 #[tokio::test]
-async fn config_extra_response_headers() {
+async fn e2e_config_extra_response_headers() {
 	let tiles_path = to_yaml_path(&get_testdata("berlin.mbtiles"));
 	let config = format!(
 		r#"
@@ -158,7 +158,7 @@ extra_response_headers:
 
 /// Test that CORS settings from config are applied.
 #[tokio::test]
-async fn config_cors_settings() {
+async fn e2e_config_cors_settings() {
 	let tiles_path = to_yaml_path(&get_testdata("berlin.mbtiles"));
 	let config = format!(
 		r#"
@@ -198,7 +198,7 @@ cors:
 
 /// Test that static sources from config work.
 #[tokio::test]
-async fn config_static_sources() {
+async fn e2e_config_static_sources() {
 	let static_path = to_yaml_path(&get_testdata("static.tar.gz"));
 	let config = format!(
 		r#"
@@ -224,7 +224,7 @@ static:
 
 /// Test combined static and tile sources from config.
 #[tokio::test]
-async fn config_combined_static_and_tiles() {
+async fn e2e_config_combined_static_and_tiles() {
 	let static_path = to_yaml_path(&get_testdata("static.tar.gz"));
 	let tiles_path = to_yaml_path(&get_testdata("berlin.mbtiles"));
 	let config = format!(
@@ -256,7 +256,7 @@ tiles:
 
 /// Test multiple tile sources from config.
 #[tokio::test]
-async fn config_multiple_tile_sources() {
+async fn e2e_config_multiple_tile_sources() {
 	let tiles_path = to_yaml_path(&get_testdata("berlin.mbtiles"));
 	let pmtiles_path = to_yaml_path(&get_testdata("berlin.pmtiles"));
 	let config = format!(
@@ -287,7 +287,7 @@ tiles:
 
 /// Test that disable_api option hides API endpoints.
 #[tokio::test]
-async fn config_disable_api() {
+async fn e2e_config_disable_api() {
 	let tiles_path = to_yaml_path(&get_testdata("berlin.mbtiles"));
 	let config = format!(
 		r#"
@@ -317,7 +317,7 @@ tiles:
 
 /// Test extra headers on tile responses.
 #[tokio::test]
-async fn config_extra_headers_on_tiles() {
+async fn e2e_config_extra_headers_on_tiles() {
 	let tiles_path = to_yaml_path(&get_testdata("berlin.mbtiles"));
 	let config = format!(
 		r#"
@@ -356,7 +356,7 @@ extra_response_headers:
 
 /// Test wildcard CORS origin from config.
 #[tokio::test]
-async fn config_cors_wildcard_origin() {
+async fn e2e_config_cors_wildcard_origin() {
 	let tiles_path = to_yaml_path(&get_testdata("berlin.mbtiles"));
 	let config = format!(
 		r#"
