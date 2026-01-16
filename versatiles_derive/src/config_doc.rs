@@ -1,6 +1,24 @@
+//! Helper functions for the ConfigDoc derive macro.
+//!
+//! These utilities extract type information and attributes from syn AST nodes
+//! to support YAML documentation generation.
+
 use quote::ToTokens;
 use syn::Type;
 
+/// Collects all doc comments from a list of attributes into a single string.
+///
+/// Each `#[doc = "..."]` attribute is extracted, trimmed, and joined with newlines.
+///
+/// # Example
+///
+/// ```ignore
+/// /// First line
+/// /// Second line
+/// struct Foo;
+/// ```
+///
+/// Would produce: `"First line\nSecond line"`
 pub fn collect_doc(attrs: &[syn::Attribute]) -> String {
 	let mut lines: Vec<String> = Vec::new();
 	for attr in attrs {
@@ -18,6 +36,18 @@ pub fn collect_doc(attrs: &[syn::Attribute]) -> String {
 	lines.join("\n")
 }
 
+/// Extracts a renamed field name from `#[serde(rename = "...")]` attribute.
+///
+/// Returns `Some(renamed)` if the attribute exists, `None` otherwise.
+///
+/// # Example
+///
+/// ```ignore
+/// #[serde(rename = "user_name")]
+/// name: String,
+/// ```
+///
+/// Would return `Some("user_name".to_string())`
 pub fn serde_rename(attrs: &[syn::Attribute]) -> Option<String> {
 	for attr in attrs {
 		if attr.path().is_ident("serde") {
@@ -39,6 +69,9 @@ pub fn serde_rename(attrs: &[syn::Attribute]) -> Option<String> {
 	None
 }
 
+/// Checks if a type is `Option<T>`.
+///
+/// Returns `true` if the type's last path segment is `Option`.
 pub fn is_option(ty: &Type) -> bool {
 	if let Type::Path(tp) = ty
 		&& let Some(seg) = tp.path.segments.last()
@@ -48,7 +81,10 @@ pub fn is_option(ty: &Type) -> bool {
 	false
 }
 
-// crude primitive-ish detection for deciding nested vs scalar
+/// Checks if a type should be rendered as a scalar (inline) value in YAML.
+///
+/// Primitive types like `bool`, integers, floats, `String`, and `&str` are
+/// considered "primitive-like" and rendered inline rather than as nested objects.
 pub fn is_primitive_like(ty: &syn::Type) -> bool {
 	let s = ty.to_token_stream().to_string();
 	matches!(
@@ -69,6 +105,10 @@ pub fn is_primitive_like(ty: &syn::Type) -> bool {
 	)
 }
 
+/// Extracts the last segment identifier from a type path.
+///
+/// For `std::vec::Vec<T>`, returns `Some(&Ident("Vec"))`.
+/// For non-path types, returns `None`.
 pub fn path_ident(ty: &syn::Type) -> Option<&syn::Ident> {
 	if let syn::Type::Path(tp) = ty {
 		tp.path.segments.last().map(|s| &s.ident)
@@ -77,6 +117,11 @@ pub fn path_ident(ty: &syn::Type) -> Option<&syn::Ident> {
 	}
 }
 
+/// Extracts the inner types from angle-bracketed generic arguments.
+///
+/// For `Vec<String>`, returns `Some(vec![String])`.
+/// For `HashMap<K, V>`, returns `Some(vec![K, V])`.
+/// For non-generic types, returns `None`.
 pub fn angle_inner(ty: &syn::Type) -> Option<Vec<syn::Type>> {
 	if let syn::Type::Path(tp) = ty
 		&& let Some(seg) = tp.path.segments.last()
@@ -93,6 +138,9 @@ pub fn angle_inner(ty: &syn::Type) -> Option<Vec<syn::Type>> {
 	None
 }
 
+/// Checks if a type is `DataLocation` (used for URL paths in configuration).
+///
+/// Returns `true` if the type's last path segment is `DataLocation`.
 pub fn is_url_path(ty: &syn::Type) -> bool {
 	if let syn::Type::Path(tp) = ty
 		&& let Some(seg) = tp.path.segments.last()

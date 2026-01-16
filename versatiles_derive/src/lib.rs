@@ -26,6 +26,19 @@ use syn::{Fields, parse_macro_input, spanned::Spanned};
 ///
 /// This macro can be applied to named-field structs to automatically generate decoding logic
 /// from VPL (VersaTiles Programming Language) data.
+///
+/// # Supported Field Types
+///
+/// Required fields:
+/// - `String`, `bool`, `u8`, `[f64; 4]`
+///
+/// Optional fields:
+/// - `Option<bool>`, `Option<String>`, `Option<f32>`, `Option<u8>`, `Option<u16>`, `Option<u32>`
+/// - `Option<[f64; 4]>`, `Option<[u8; 3]>`
+/// - `Option<TileCompression>`, `Option<TileSchema>`, `Option<TileFormat>`
+///
+/// Special fields:
+/// - `sources: Vec<VPLPipeline>` - for operations that accept child pipelines
 #[proc_macro_derive(VPLDecode)]
 pub fn decode_vpl(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as syn::DeriveInput);
