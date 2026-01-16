@@ -54,31 +54,6 @@ struct Operation {
 	auto_overscale: bool,
 }
 
-/// Blend a list of equally‑sized tiles using *source‑over* compositing.
-/// First tile is in the front
-///
-/// Returns `Ok(None)` when the input list is empty.
-#[context("Failed to stack tiles")]
-#[allow(dead_code)]
-fn stack_tiles(tiles: Vec<Tile>) -> Result<Option<Tile>> {
-	let mut tile = Option::<Tile>::None;
-
-	for mut tile_bg in tiles {
-		if tile_bg.as_image()?.is_empty() {
-			continue;
-		}
-		if let Some(mut image_fg) = tile {
-			tile_bg.as_image_mut()?.overlay(image_fg.as_image()?)?;
-		}
-		tile = Some(tile_bg);
-		if tile.as_mut().unwrap().as_image()?.is_opaque() {
-			break;
-		}
-	}
-
-	Ok(tile)
-}
-
 /// Fetches tiles from all sources for a sub-bbox, collects them, stacks overlapping
 /// tiles, and returns a stream of the resulting tiles.
 #[allow(unused_variables)]
@@ -219,11 +194,10 @@ mod tests {
 	use super::*;
 	use crate::helpers::{arrange_tiles, dummy_image_source::DummyImageSource};
 	use futures::future::BoxFuture;
-	use imageproc::image::GenericImage;
 	use pretty_assertions::assert_eq;
 	use versatiles_container::TileSource;
 	use versatiles_core::{Blob, TileCompression, TileCompression::Uncompressed, TileFormat};
-	use versatiles_image::{DynamicImage, DynamicImageTraitConvert, DynamicImageTraitTest};
+	use versatiles_image::{DynamicImage, DynamicImageTraitConvert};
 
 	pub fn get_color(blob: &Blob) -> String {
 		let image = DynamicImage::from_blob(blob, TileFormat::PNG).unwrap();
@@ -387,13 +361,18 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_merge_tiles_multiple_layers() -> Result<()> {
+	async fn test_get_tile_multiple_layers() -> Result<()> {
 		use versatiles_core::TileFormat::PNG;
-		let tile1 = Tile::from_image(DynamicImage::new_test_rgb(), PNG)?;
-		let tile2 = Tile::from_image(DynamicImage::new_test_rgba(), PNG)?;
 
-		let _merged_tile = stack_tiles(vec![tile1, tile2])?.unwrap();
+		// Create two sources with different colors (semi-transparent)
+		let source1: Box<dyn TileSource> = Box::new(DummyImageSource::from_color(&[255, 0, 0, 128], 4, PNG, None)?);
+		let source2: Box<dyn TileSource> = Box::new(DummyImageSource::from_color(&[0, 255, 0, 128], 4, PNG, None)?);
+		let sources = Arc::new(vec![source1, source2]);
 
+		let coord = TileCoord::new(0, 0, 0)?;
+		let result = get_tile(coord, sources, PNG, false).await?;
+
+		assert!(result.is_some());
 		Ok(())
 	}
 
@@ -461,36 +440,32 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn stack_tiles_empty_returns_none() {
-		let out = stack_tiles(Vec::new()).unwrap();
-		assert!(out.is_none());
+	#[tokio::test]
+	async fn test_get_tile_empty_sources_returns_none() {
+		let sources: Arc<Vec<Box<dyn TileSource>>> = Arc::new(vec![]);
+		let coord = TileCoord::new(0, 0, 0).unwrap();
+		let result = get_tile(coord, sources, TileFormat::PNG, false).await.unwrap();
+		assert!(result.is_none());
 	}
 
-	#[test]
-	fn stack_tiles_opaque_first_short_circuits() -> Result<()> {
+	#[tokio::test]
+	async fn test_get_tile_opaque_first_short_circuits() -> Result<()> {
 		use versatiles_core::TileFormat::PNG;
 
-		// First tile: fully opaque red 2x2
-		let mut a = DynamicImage::new_rgba8(2, 2);
-		for y in 0..2 {
-			for x in 0..2 {
-				a.put_pixel(x, y, imageproc::image::Rgba([255, 0, 0, 255]));
-			}
-		}
-		let mut a = Tile::from_image(a, PNG)?;
+		// First source: fully opaque red
+		let source1: Box<dyn TileSource> = Box::new(DummyImageSource::from_color(&[255, 0, 0, 255], 4, PNG, None)?);
+		// Second source: green; would change pixels if blended, but should be ignored due to early break
+		let source2: Box<dyn TileSource> = Box::new(DummyImageSource::from_color(&[0, 255, 0, 255], 4, PNG, None)?);
+		let sources = Arc::new(vec![source1, source2]);
 
-		// Second tile: green; would change pixels if blended, but should be ignored due to early break
-		let mut b = DynamicImage::new_rgba8(2, 2);
-		for y in 0..2 {
-			for x in 0..2 {
-				b.put_pixel(x, y, imageproc::image::Rgba([0, 255, 0, 255]));
-			}
-		}
-		let b = Tile::from_image(b, PNG)?;
+		// Get a reference tile from just the first source
+		let source_ref: Box<dyn TileSource> = Box::new(DummyImageSource::from_color(&[255, 0, 0, 255], 4, PNG, None)?);
 
-		let mut res = stack_tiles(vec![a.clone(), b])?.unwrap();
-		assert_eq!(res.as_blob(Uncompressed)?, a.as_blob(Uncompressed)?);
+		let coord = TileCoord::new(0, 0, 0)?;
+		let (_, mut result_tile) = get_tile(coord, sources, PNG, false).await?.unwrap();
+		let mut ref_tile = source_ref.get_tile(&coord).await?.unwrap();
+
+		assert_eq!(result_tile.as_blob(Uncompressed)?, ref_tile.as_blob(Uncompressed)?);
 
 		Ok(())
 	}
