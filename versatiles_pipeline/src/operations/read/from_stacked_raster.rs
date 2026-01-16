@@ -99,13 +99,13 @@ impl ReadTileSource for Operation {
 
 		let mut tilejson = TileJSON::default();
 
-		let first_parameters = sources.first().unwrap().metadata();
-		let tile_format = args.format.unwrap_or(first_parameters.tile_format);
+		let first_source_metadata = sources.first().unwrap().metadata();
+		let tile_format = args.format.unwrap_or(first_source_metadata.tile_format);
 		ensure!(
 			tile_format.to_type() == TileType::Raster,
 			"output format must be a raster format"
 		);
-		let tile_compression = first_parameters.tile_compression;
+		let tile_compression = first_source_metadata.tile_compression;
 
 		let mut pyramid = TileBBoxPyramid::new_empty();
 		let mut traversal = Traversal::new_any();
