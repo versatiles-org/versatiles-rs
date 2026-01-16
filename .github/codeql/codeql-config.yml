@@ -1,0 +1,17 @@
+# CodeQL configuration for versatiles-rs
+# See: https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning/customizing-your-advanced-setup-for-code-scanning
+
+name: "VersaTiles CodeQL Config"
+
+# Query filters to suppress known false positives
+query-filters:
+  # The versatiles_node crate uses napi-rs for FFI with JavaScript.
+  # CodeQL's "rust/access-invalid-pointer" query produces false positives
+  # for napi-rs structs because it doesn't understand how napi-rs safely
+  # manages memory at the FFI boundary using Rust's ownership model with Arc.
+  # All flagged structs (TileCoord, TileSource, SourceType, Progress, TileServer)
+  # use Arc for thread-safe reference counting, which is memory-safe.
+  - exclude:
+      id: rust/access-invalid-pointer
+      paths:
+        - "versatiles_node/src/**"
