@@ -197,6 +197,42 @@ where
 		Self::from_iter_coord_parallel(bbox.into_iter_coords(), callback)
 	}
 
+	/// Creates a `TileStream` by processing all coordinates in a `TileBBox` with async callbacks in parallel.
+	///
+	/// For each coordinate in the bounding box, calls the async `callback` concurrently up to the
+	/// mixed concurrency limit. Returns only items where `callback(coord)` yields `Some(value)`.
+	///
+	/// Coordinates are processed in parallel without guaranteed order.
+	/// Uses mixed concurrency limit (balanced between CPU and I/O workloads).
+	///
+	/// # Arguments
+	/// * `bbox` - The bounding box defining the tile coordinates to process.
+	/// * `callback` - An async closure returning `Option<(TileCoord, T)>` for each coordinate.
+	///
+	/// # Examples
+	/// ```
+	/// # use versatiles_core::{TileBBox, TileCoord, Blob, TileStream};
+	/// # async fn example() {
+	/// let bbox = TileBBox::from_min_and_max(4, 0, 0, 3, 3).unwrap();
+	/// let tile_stream = TileStream::from_bbox_async_parallel(bbox, |coord| async move {
+	///     // Async data loading logic...
+	///     Some((coord, Blob::from(format!("data for {:?}", coord))))
+	/// });
+	/// # }
+	/// ```
+	pub fn from_bbox_async_parallel<F, Fut>(bbox: TileBBox, callback: F) -> Self
+	where
+		F: FnMut(TileCoord) -> Fut + Send + 'a,
+		Fut: Future<Output = Option<(TileCoord, T)>> + Send + 'a,
+	{
+		let limits = ConcurrencyLimits::default();
+		let s = stream::iter(bbox.into_iter_coords())
+			.map(callback)
+			.buffer_unordered(limits.mixed)
+			.filter_map(|result| ready(result));
+		TileStream { inner: s.boxed() }
+	}
+
 	/// Creates a `TileStream` by sequentially filtering and mapping coordinates from an iterator.
 	///
 	/// For each coordinate in `iter`, calls `callback(coord)`. If the callback returns `Some(item)`,
@@ -1318,6 +1354,65 @@ mod tests {
 			current_parallel.fetch_sub(1, Ordering::SeqCst);
 			counter.fetch_add(1, Ordering::SeqCst);
 			Some(Blob::from(format!("{}", coord.level)))
+		});
+
+		let results = stream.to_vec().await;
+		assert_eq!(results.len(), 6);
+		assert_eq!(counter.load(Ordering::SeqCst), 6);
+		assert!(max_parallel.load(Ordering::SeqCst) > 1, "Expected parallel execution");
+	}
+
+	#[tokio::test]
+	async fn should_create_from_bbox_async_parallel() {
+		let bbox = TileBBox::from_min_and_max(4, 0, 0, 2, 2).unwrap();
+
+		let stream = TileStream::from_bbox_async_parallel(bbox, |coord| async move {
+			Some((coord, Blob::from(format!("v{},{},{}", coord.level, coord.x, coord.y))))
+		});
+
+		let mut items = stream.to_vec().await;
+		// 3x3 = 9 tiles
+		assert_eq!(items.len(), 9);
+
+		// Sort for deterministic assertion on unordered parallel output
+		items.sort_by_key(|(coord, _)| (coord.y, coord.x));
+
+		// Verify first and last
+		assert_eq!(items[0].1.as_str(), "v4,0,0");
+		assert_eq!(items[8].1.as_str(), "v4,2,2");
+	}
+
+	#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+	async fn test_from_bbox_async_parallel_parallelism() {
+		let bbox = TileBBox::from_min_and_max(4, 0, 0, 2, 1).unwrap(); // 3x2 = 6 tiles
+		let counter = Arc::new(AtomicUsize::new(0));
+		let max_parallel = Arc::new(AtomicUsize::new(0));
+		let current_parallel = Arc::new(AtomicUsize::new(0));
+
+		let counter_clone = counter.clone();
+		let max_parallel_clone = max_parallel.clone();
+		let current_parallel_clone = current_parallel.clone();
+
+		let stream = TileStream::from_bbox_async_parallel(bbox, move |coord| {
+			let counter = counter_clone.clone();
+			let max_parallel = max_parallel_clone.clone();
+			let current_parallel = current_parallel_clone.clone();
+
+			async move {
+				let prev = current_parallel.fetch_add(1, Ordering::SeqCst);
+				loop {
+					let max = max_parallel.load(Ordering::SeqCst);
+					if prev + 1 > max {
+						max_parallel.store(prev + 1, Ordering::SeqCst);
+					} else {
+						break;
+					}
+				}
+				tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+				current_parallel.fetch_sub(1, Ordering::SeqCst);
+				counter.fetch_add(1, Ordering::SeqCst);
+				Some((coord, Blob::from(format!("{}", coord.level))))
+			}
 		});
 
 		let results = stream.to_vec().await;
