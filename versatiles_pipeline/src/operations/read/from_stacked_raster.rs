@@ -18,10 +18,10 @@ use crate::{
 };
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use futures::{StreamExt, future::join_all, stream};
+use futures::future::join_all;
 use std::{sync::Arc, vec};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileBBoxMap, TileBBoxPyramid, TileCoord, TileFormat, TileJSON, TileStream, TileType};
+use versatiles_core::{TileBBox, TileBBoxPyramid, TileCoord, TileFormat, TileJSON, TileStream, TileType};
 use versatiles_derive::context;
 use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 
@@ -59,6 +59,7 @@ struct Operation {
 ///
 /// Returns `Ok(None)` when the input list is empty.
 #[context("Failed to stack tiles")]
+#[allow(dead_code)]
 fn stack_tiles(tiles: Vec<Tile>) -> Result<Option<Tile>> {
 	let mut tile = Option::<Tile>::None;
 
@@ -81,60 +82,30 @@ fn stack_tiles(tiles: Vec<Tile>) -> Result<Option<Tile>> {
 /// Fetches tiles from all sources for a sub-bbox, collects them, stacks overlapping
 /// tiles, and returns a stream of the resulting tiles.
 #[allow(unused_variables)]
-async fn process_bbox_tiles(
+async fn get_tile(
+	coord: TileCoord,
 	sources: Arc<Vec<Box<dyn TileSource>>>,
-	bbox: TileBBox,
 	tile_format: TileFormat,
 	auto_overscale: bool,
-) -> Result<TileStream<'static, Tile>> {
-	#[derive(Clone)]
-	struct Slot {
-		tiles: Vec<Option<Tile>>,
-		has_data: bool,
-	}
+) -> Result<Option<(TileCoord, Tile)>> {
+	let mut tile = Option::<Tile>::None;
 
-	let n = sources.len();
-	let mut tiles = TileBBoxMap::<Slot>::new_prefilled_with(
-		bbox,
-		Slot {
-			tiles: vec![None; n],
-			has_data: false,
-		},
-	)?;
-
-	let streams = sources.iter().map(async |source| {
-		let stream = source.get_tile_stream(bbox).await.unwrap();
-		stream.to_vec().await
-	});
-	let results: Vec<Vec<(TileCoord, Tile)>> = futures::future::join_all(streams).await;
-
-	for (i, result) in results.into_iter().enumerate() {
-		for (coord, mut tile) in result {
-			let image = tile.as_image()?;
-			if !image.is_empty() {
-				let slot = tiles.get_mut(&coord)?;
-				slot.tiles[i] = Some(tile);
-				slot.has_data = true;
+	for source in sources.iter() {
+		if let Some(mut tile_bg) = source.get_tile(&coord).await? {
+			if tile_bg.as_image()?.is_empty() {
+				continue;
+			}
+			if let Some(mut image_fg) = tile {
+				tile_bg.as_image_mut()?.overlay(image_fg.as_image()?)?;
+			}
+			tile = Some(tile_bg);
+			if tile.as_mut().unwrap().as_image()?.is_opaque() {
+				break;
 			}
 		}
 	}
 
-	let stream = tiles
-		.into_stream()
-		.filter_map_item_parallel(move |s| {
-			let tiles = s.tiles.into_iter().flatten().collect::<Vec<_>>();
-			match stack_tiles(tiles) {
-				Ok(Some(mut tile)) => {
-					tile.change_format(tile_format, None, None).unwrap();
-					Ok(Some(tile))
-				}
-				Ok(None) => Ok(None),
-				Err(err) => Err(err),
-			}
-		})
-		.unwrap_results();
-
-	Ok(stream)
+	Ok(tile.map(|t| (coord, t)))
 }
 
 impl ReadTileSource for Operation {
@@ -213,19 +184,14 @@ impl TileSource for Operation {
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {bbox:?}");
 
-		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(16).collect();
 		let sources = self.sources.clone();
 		let tile_format = self.metadata.tile_format;
 		let auto_overscale = self.auto_overscale;
 
-		Ok(TileStream::from_streams(stream::iter(bboxes).map(move |bbox| {
+		Ok(TileStream::from_bbox_async_parallel(bbox, move |c| {
 			let sources = sources.clone();
-			async move {
-				process_bbox_tiles(sources, bbox, tile_format, auto_overscale)
-					.await
-					.unwrap()
-			}
-		})))
+			async move { get_tile(c, sources, tile_format, auto_overscale).await.unwrap() }
+		}))
 	}
 }
 
