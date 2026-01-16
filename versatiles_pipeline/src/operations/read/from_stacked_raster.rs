@@ -61,11 +61,15 @@ async fn get_tile(
 	sources: Vec<(Arc<Box<dyn TileSource>>, bool)>,
 ) -> Result<Option<(TileCoord, Tile)>> {
 	let mut tile = Option::<Tile>::None;
+	let mut non_overscaled_sources_used = false;
 
 	for source in &sources {
 		if let Some(mut tile_bg) = source.0.get_tile(&coord).await? {
 			if tile_bg.as_image()?.is_empty() {
 				continue;
+			}
+			if !source.1 {
+				non_overscaled_sources_used = true;
 			}
 			if let Some(mut image_fg) = tile {
 				tile_bg.as_image_mut()?.overlay(image_fg.as_image()?)?;
@@ -75,6 +79,10 @@ async fn get_tile(
 				break;
 			}
 		}
+	}
+
+	if !non_overscaled_sources_used {
+		return Ok(None);
 	}
 
 	Ok(tile.map(|t| (coord, t)))
@@ -185,7 +193,7 @@ impl TileSource for Operation {
 			.iter()
 			.filter(|s| s.0.metadata().bbox_pyramid.overlaps_bbox(&bbox))
 			.cloned()
-			.map(|s| (s.0, s.1 <= bbox.level))
+			.map(|s| (s.0, s.1 < bbox.level))
 			.collect();
 
 		if sources.is_empty() {
