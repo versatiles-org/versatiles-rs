@@ -35,6 +35,11 @@ struct Args {
 	/// The tile format to use for the output tiles.
 	/// Default: format of the first source.
 	format: Option<TileFormat>,
+
+	/// Whether to automatically overscale tiles when a source does not
+	/// provide tiles at the requested zoom level.
+	/// Default: `false`.
+	auto_overscale: Option<bool>,
 }
 
 /// [`TileSource`] implementation that overlays raster tiles "on the fly."
@@ -46,6 +51,7 @@ struct Operation {
 	metadata: TileSourceMetadata,
 	sources: Arc<Vec<Box<dyn TileSource>>>,
 	tilejson: TileJSON,
+	auto_overscale: bool,
 }
 
 /// Blend a list of equally‑sized tiles using *source‑over* compositing.
@@ -74,10 +80,12 @@ fn stack_tiles(tiles: Vec<Tile>) -> Result<Option<Tile>> {
 
 /// Fetches tiles from all sources for a sub-bbox, collects them, stacks overlapping
 /// tiles, and returns a stream of the resulting tiles.
+#[allow(unused_variables)]
 async fn process_bbox_tiles(
 	sources: Arc<Vec<Box<dyn TileSource>>>,
 	bbox: TileBBox,
 	tile_format: TileFormat,
+	auto_overscale: bool,
 ) -> Result<TileStream<'static, Tile>> {
 	#[derive(Clone)]
 	struct Slot {
@@ -172,10 +180,13 @@ impl ReadTileSource for Operation {
 		let metadata = TileSourceMetadata::new(tile_format, tile_compression, pyramid, traversal);
 		metadata.update_tilejson(&mut tilejson);
 
+		let auto_overscale = args.auto_overscale.unwrap_or(false);
+
 		Ok(Box::new(Self {
 			metadata,
 			sources: Arc::new(sources),
 			tilejson,
+			auto_overscale,
 		}) as Box<dyn TileSource>)
 	}
 }
@@ -205,10 +216,15 @@ impl TileSource for Operation {
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(16).collect();
 		let sources = self.sources.clone();
 		let tile_format = self.metadata.tile_format;
+		let auto_overscale = self.auto_overscale;
 
 		Ok(TileStream::from_streams(stream::iter(bboxes).map(move |bbox| {
 			let sources = sources.clone();
-			async move { process_bbox_tiles(sources, bbox, tile_format).await.unwrap() }
+			async move {
+				process_bbox_tiles(sources, bbox, tile_format, auto_overscale)
+					.await
+					.unwrap()
+			}
 		})))
 	}
 }
