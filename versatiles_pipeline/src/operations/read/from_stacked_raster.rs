@@ -167,6 +167,10 @@ impl TileSource for Operation {
 			.cloned()
 			.collect();
 
+		if sources.is_empty() {
+			return Ok(TileStream::empty());
+		}
+
 		let tile_format = self.metadata.tile_format;
 		let auto_overscale = self.auto_overscale;
 
