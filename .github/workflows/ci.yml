@@ -228,7 +228,7 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Generate coverage
-        # Skip e2e tests (files prefixed with e2e_) during coverage
+        # Skip e2e tests (test functions prefixed with e2e_) during coverage
         run: cargo llvm-cov test --workspace --all-features --tests --lcov --output-path ./lcov.info -- --skip e2e_
 
       - name: Upload coverage
