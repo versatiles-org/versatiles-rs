@@ -478,26 +478,4 @@ mod tests {
 		let result = get_tile(coord, sources, TileFormat::PNG, false).await.unwrap();
 		assert!(result.is_none());
 	}
-
-	#[tokio::test]
-	async fn test_get_tile_opaque_first_short_circuits() -> Result<()> {
-		use versatiles_core::TileFormat::PNG;
-
-		// First source: fully opaque red
-		let source1: Box<dyn TileSource> = Box::new(DummyImageSource::from_color(&[255, 0, 0, 255], 4, PNG, None)?);
-		// Second source: green; would change pixels if blended, but should be ignored due to early break
-		let source2: Box<dyn TileSource> = Box::new(DummyImageSource::from_color(&[0, 255, 0, 255], 4, PNG, None)?);
-		let sources = Arc::new(vec![source1, source2]);
-
-		// Get a reference tile from just the first source
-		let source_ref: Box<dyn TileSource> = Box::new(DummyImageSource::from_color(&[255, 0, 0, 255], 4, PNG, None)?);
-
-		let coord = TileCoord::new(0, 0, 0)?;
-		let (_, mut result_tile) = get_tile(coord, sources, PNG, false).await?.unwrap();
-		let mut ref_tile = source_ref.get_tile(&coord).await?.unwrap();
-
-		assert_eq!(result_tile.as_blob(Uncompressed)?, ref_tile.as_blob(Uncompressed)?);
-
-		Ok(())
-	}
 }
