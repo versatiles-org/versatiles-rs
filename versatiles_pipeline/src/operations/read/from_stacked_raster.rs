@@ -49,7 +49,7 @@ struct Args {
 #[derive(Debug)]
 struct Operation {
 	metadata: TileSourceMetadata,
-	sources: Arc<Vec<Box<dyn TileSource>>>,
+	sources: Vec<Arc<Box<dyn TileSource>>>,
 	tilejson: TileJSON,
 	auto_overscale: bool,
 }
@@ -59,7 +59,7 @@ struct Operation {
 #[allow(unused_variables)]
 async fn get_tile(
 	coord: TileCoord,
-	sources: Arc<Vec<Box<dyn TileSource>>>,
+	sources: Vec<Arc<Box<dyn TileSource>>>,
 	tile_format: TileFormat,
 	auto_overscale: bool,
 ) -> Result<Option<(TileCoord, Tile)>> {
@@ -130,7 +130,7 @@ impl ReadTileSource for Operation {
 
 		Ok(Box::new(Self {
 			metadata,
-			sources: Arc::new(sources),
+			sources: sources.into_iter().map(Arc::new).collect(),
 			tilejson,
 			auto_overscale,
 		}) as Box<dyn TileSource>)
@@ -159,7 +159,14 @@ impl TileSource for Operation {
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {bbox:?}");
 
-		let sources = self.sources.clone();
+		// Filter sources to only those that overlap with the bbox
+		let sources: Vec<Arc<Box<dyn TileSource>>> = self
+			.sources
+			.iter()
+			.filter(|s| s.metadata().bbox_pyramid.overlaps_bbox(&bbox))
+			.cloned()
+			.collect();
+
 		let tile_format = self.metadata.tile_format;
 		let auto_overscale = self.auto_overscale;
 
@@ -382,18 +389,16 @@ mod tests {
 			assert_eq!(s.len(), 8);
 		}
 
-		let sources = Arc::new(
-			input
-				.iter()
-				.map(|s| {
-					// convert hex string to RGBA color
-					let c: Vec<u8> = (0..4)
-						.map(|i| u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).unwrap())
-						.collect();
-					Box::new(DummyImageSource::from_color(&c, 4, PNG, None).unwrap()) as Box<dyn TileSource>
-				})
-				.collect(),
-		);
+		let sources: Vec<Arc<Box<dyn TileSource>>> = input
+			.iter()
+			.map(|s| {
+				// convert hex string to RGBA color
+				let c: Vec<u8> = (0..4)
+					.map(|i| u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).unwrap())
+					.collect();
+				Arc::new(Box::new(DummyImageSource::from_color(&c, 4, PNG, None).unwrap()) as Box<dyn TileSource>)
+			})
+			.collect();
 
 		let coord = TileCoord::new(0, 0, 0).unwrap();
 		let result = get_tile(coord, sources, PNG, false).await.unwrap();
@@ -473,7 +478,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_tile_empty_sources_returns_none() {
-		let sources: Arc<Vec<Box<dyn TileSource>>> = Arc::new(vec![]);
+		let sources: Vec<Arc<Box<dyn TileSource>>> = vec![];
 		let coord = TileCoord::new(0, 0, 0).unwrap();
 		let result = get_tile(coord, sources, TileFormat::PNG, false).await.unwrap();
 		assert!(result.is_none());
