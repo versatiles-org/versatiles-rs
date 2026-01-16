@@ -66,7 +66,6 @@ impl DataReaderHttp {
 		let client = Client::builder()
 			.tcp_keepalive(Duration::from_secs(600))
 			.connection_verbose(true)
-			.danger_accept_invalid_certs(true)
 			.use_rustls_tls()
 			.build()?;
 
