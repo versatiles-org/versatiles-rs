@@ -1,7 +1,7 @@
 use crate::{
 	PipelineFactory,
+	factory::{OperationFactoryTrait, TransformOperationFactoryTrait},
 	operations::vector::traits::{RunnerTrait, build_transform},
-	traits::{OperationFactoryTrait, TransformOperationFactoryTrait},
 	vpl::VPLNode,
 };
 use anyhow::Result;

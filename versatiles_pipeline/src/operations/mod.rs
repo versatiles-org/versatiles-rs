@@ -1,9 +1,10 @@
 mod general;
+pub(crate) mod macros;
 mod raster;
 mod read;
 mod vector;
 
-use crate::traits::{ReadOperationFactoryTrait, TransformOperationFactoryTrait};
+use crate::factory::{ReadOperationFactoryTrait, TransformOperationFactoryTrait};
 
 pub fn get_transform_operation_factories() -> Vec<Box<dyn TransformOperationFactoryTrait>> {
 	vec![

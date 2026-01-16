@@ -6,12 +6,7 @@
 //! [`TileSource`] so that the rest of the pipeline can treat it like any
 //! other data source.
 
-use crate::{
-	PipelineFactory,
-	operations::read::traits::ReadTileSource,
-	traits::{OperationFactoryTrait, ReadOperationFactoryTrait},
-	vpl::VPLNode,
-};
+use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
@@ -79,23 +74,7 @@ impl TileSource for Operation {
 	}
 }
 
-pub struct Factory {}
-
-impl OperationFactoryTrait for Factory {
-	fn get_docs(&self) -> String {
-		Args::get_docs()
-	}
-	fn get_tag_name(&self) -> &str {
-		"from_container"
-	}
-}
-
-#[async_trait]
-impl ReadOperationFactoryTrait for Factory {
-	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSource>> {
-		Operation::build(vpl_node, factory).await
-	}
-}
+crate::operations::macros::define_read_factory!("from_container", Args, Operation);
 
 #[cfg(test)]
 pub fn operation_from_reader(reader: Box<dyn TileSource>) -> Box<dyn TileSource> {

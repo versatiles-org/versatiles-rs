@@ -17,7 +17,6 @@
 use crate::{
 	PipelineFactory,
 	operations::read::traits::ReadTileSource,
-	traits::{OperationFactoryTrait, ReadOperationFactoryTrait},
 	vpl::{VPLNode, VPLPipeline},
 };
 use anyhow::{Result, ensure};
@@ -172,23 +171,7 @@ impl TileSource for Operation {
 	}
 }
 
-pub struct Factory {}
-
-impl OperationFactoryTrait for Factory {
-	fn get_docs(&self) -> String {
-		Args::get_docs()
-	}
-	fn get_tag_name(&self) -> &str {
-		"from_merged_vector"
-	}
-}
-
-#[async_trait]
-impl ReadOperationFactoryTrait for Factory {
-	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSource>> {
-		Operation::build(vpl_node, factory).await
-	}
-}
+crate::operations::macros::define_read_factory!("from_merged_vector", Args, Operation);
 
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]

@@ -1,8 +1,4 @@
-use crate::{
-	PipelineFactory,
-	traits::{OperationFactoryTrait, TransformOperationFactoryTrait},
-	vpl::VPLNode,
-};
+use crate::{PipelineFactory, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
@@ -84,30 +80,7 @@ impl TileSource for Operation {
 	}
 }
 
-pub struct Factory {}
-
-impl OperationFactoryTrait for Factory {
-	fn get_docs(&self) -> String {
-		Args::get_docs()
-	}
-	fn get_tag_name(&self) -> &str {
-		"meta_update"
-	}
-}
-
-#[async_trait]
-impl TransformOperationFactoryTrait for Factory {
-	async fn build<'a>(
-		&self,
-		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
-		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn TileSource>> {
-		Operation::build(vpl_node, source, factory)
-			.await
-			.map(|op| Box::new(op) as Box<dyn TileSource>)
-	}
-}
+crate::operations::macros::define_transform_factory!("meta_update", Args, Operation);
 
 #[cfg(test)]
 #[allow(clippy::float_cmp)]

@@ -1,8 +1,8 @@
 use crate::{
 	PipelineFactory,
+	factory::{OperationFactoryTrait, TransformOperationFactoryTrait},
 	helpers::CsvReader,
 	operations::vector::traits::{RunnerTrait, build_transform},
-	traits::{OperationFactoryTrait, TransformOperationFactoryTrait},
 	vpl::VPLNode,
 };
 use anyhow::{Context, Result, anyhow};

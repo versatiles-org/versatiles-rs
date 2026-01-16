@@ -11,7 +11,6 @@
 mod factory;
 mod helpers;
 mod operations;
-mod traits;
 mod vpl;
 
 pub use factory::PipelineFactory;

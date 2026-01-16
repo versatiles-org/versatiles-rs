@@ -1,8 +1,4 @@
-use crate::{
-	PipelineFactory,
-	traits::{OperationFactoryTrait, TransformOperationFactoryTrait},
-	vpl::VPLNode,
-};
+use crate::{PipelineFactory, vpl::VPLNode};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use dashmap::DashMap;
@@ -242,35 +238,13 @@ impl TileSource for Operation {
 	}
 }
 
-pub struct Factory {}
-
-impl OperationFactoryTrait for Factory {
-	fn get_docs(&self) -> String {
-		Args::get_docs()
-	}
-	fn get_tag_name(&self) -> &str {
-		"raster_overview"
-	}
-}
-
-#[async_trait]
-impl TransformOperationFactoryTrait for Factory {
-	async fn build<'a>(
-		&self,
-		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
-		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn TileSource>> {
-		Operation::build(vpl_node, source, factory)
-			.await
-			.map(|op| Box::new(op) as Box<dyn TileSource>)
-	}
-}
+crate::operations::macros::define_transform_factory!("raster_overview", Args, Operation);
 
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
 	use super::*;
+	use crate::factory::OperationFactoryTrait;
 	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::GenericImageView;
 	use versatiles_core::{GeoBBox, TileBBoxPyramid, TileFormat};

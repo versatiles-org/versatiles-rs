@@ -34,11 +34,7 @@
 //! This significantly improves performance when generating multiple high-zoom tiles
 //! from the same parent tile, as the parent only needs to be fetched and decoded once.
 
-use crate::{
-	PipelineFactory,
-	traits::{OperationFactoryTrait, TransformOperationFactoryTrait},
-	vpl::VPLNode,
-};
+use crate::{PipelineFactory, vpl::VPLNode};
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use moka::future::Cache;
@@ -328,35 +324,13 @@ impl TileSource for Operation {
 	}
 }
 
-pub struct Factory {}
-
-impl OperationFactoryTrait for Factory {
-	fn get_docs(&self) -> String {
-		Args::get_docs()
-	}
-	fn get_tag_name(&self) -> &str {
-		"raster_overscale"
-	}
-}
-
-#[async_trait]
-impl TransformOperationFactoryTrait for Factory {
-	async fn build<'a>(
-		&self,
-		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
-		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn TileSource>> {
-		Operation::build(vpl_node, source, factory)
-			.await
-			.map(|op| Box::new(op) as Box<dyn TileSource>)
-	}
-}
+crate::operations::macros::define_transform_factory!("raster_overscale", Args, Operation);
 
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
 	use super::*;
+	use crate::factory::OperationFactoryTrait;
 	use crate::helpers::dummy_image_source::DummyImageSource;
 	use rstest::rstest;
 	use versatiles_core::{TileCoord, TileFormat};

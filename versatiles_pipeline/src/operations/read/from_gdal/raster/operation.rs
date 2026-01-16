@@ -9,8 +9,8 @@
 use super::RasterSource;
 use crate::{
 	PipelineFactory,
+	factory::{OperationFactoryTrait, ReadOperationFactoryTrait},
 	operations::read::traits::ReadTileSource,
-	traits::{OperationFactoryTrait, ReadOperationFactoryTrait},
 	vpl::VPLNode,
 };
 use anyhow::Result;

@@ -1,8 +1,4 @@
-use crate::{
-	PipelineFactory,
-	traits::{OperationFactoryTrait, TransformOperationFactoryTrait},
-	vpl::VPLNode,
-};
+use crate::{PipelineFactory, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use imageproc::image::Rgb;
@@ -77,35 +73,13 @@ impl TileSource for Operation {
 	}
 }
 
-pub struct Factory {}
-
-impl OperationFactoryTrait for Factory {
-	fn get_docs(&self) -> String {
-		Args::get_docs()
-	}
-	fn get_tag_name(&self) -> &str {
-		"raster_flatten"
-	}
-}
-
-#[async_trait]
-impl TransformOperationFactoryTrait for Factory {
-	async fn build<'a>(
-		&self,
-		vpl_node: VPLNode,
-		source: Box<dyn TileSource>,
-		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn TileSource>> {
-		Operation::build(vpl_node, source, factory)
-			.await
-			.map(|op| Box::new(op) as Box<dyn TileSource>)
-	}
-}
+crate::operations::macros::define_transform_factory!("raster_flatten", Args, Operation);
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::PipelineFactory;
+	use crate::factory::OperationFactoryTrait;
 	use versatiles_core::TileCoord;
 	use versatiles_image::DynamicImageTraitOperation;
 
