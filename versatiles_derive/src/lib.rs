@@ -31,8 +31,11 @@ pub fn decode_vpl(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as syn::DeriveInput);
 
 	let expanded = match input.data.clone() {
-		syn::Data::Struct(data_struct) => decode_struct(input, data_struct),
-		_ => panic!("VPLDecode can only be derived for structs, but: {:?}", input.data),
+		syn::Data::Struct(data_struct) => match decode_struct(input, data_struct) {
+			Ok(tokens) => tokens,
+			Err(err) => err.to_compile_error(),
+		},
+		_ => syn::Error::new_spanned(&input, "VPLDecode can only be derived for structs").to_compile_error(),
 	};
 
 	TokenStream::from(expanded)

@@ -1,7 +1,160 @@
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{Attribute, DataStruct, DeriveInput, Fields, Meta};
 
+/// Metadata for mapping a Rust type to its VPL parsing method and documentation.
+struct TypeMapping {
+	/// The type pattern as a string (e.g., "String", "Option<u8>")
+	pattern: &'static str,
+	/// Human-readable type name for documentation
+	display_name: &'static str,
+	/// The method name on VPLNode to call for parsing this type
+	method_name: &'static str,
+	/// Whether this is a required field (affects documentation formatting)
+	is_required: bool,
+	/// Optional generic type parameter (e.g., "u8" for get_property_number_option::<u8>)
+	generic_param: Option<&'static str>,
+	/// Optional second generic parameter (e.g., "4" for array lengths)
+	generic_param2: Option<&'static str>,
+}
+
+/// All supported type mappings for VPLDecode.
+const TYPE_MAPPINGS: &[TypeMapping] = &[
+	// Required types
+	TypeMapping {
+		pattern: "String",
+		display_name: "String",
+		method_name: "get_property_string_required",
+		is_required: true,
+		generic_param: None,
+		generic_param2: None,
+	},
+	TypeMapping {
+		pattern: "bool",
+		display_name: "Boolean",
+		method_name: "get_property_bool_required",
+		is_required: true,
+		generic_param: None,
+		generic_param2: None,
+	},
+	TypeMapping {
+		pattern: "u8",
+		display_name: "u8",
+		method_name: "get_property_number_required",
+		is_required: true,
+		generic_param: Some("u8"),
+		generic_param2: None,
+	},
+	TypeMapping {
+		pattern: "[f64;4]",
+		display_name: "[f64,f64,f64,f64]",
+		method_name: "get_property_number_array_required",
+		is_required: true,
+		generic_param: Some("f64"),
+		generic_param2: None,
+	},
+	// Optional types
+	TypeMapping {
+		pattern: "Option<bool>",
+		display_name: "bool",
+		method_name: "get_property_bool_option",
+		is_required: false,
+		generic_param: None,
+		generic_param2: None,
+	},
+	TypeMapping {
+		pattern: "Option<String>",
+		display_name: "String",
+		method_name: "get_property_string_option",
+		is_required: false,
+		generic_param: None,
+		generic_param2: None,
+	},
+	TypeMapping {
+		pattern: "Option<f32>",
+		display_name: "f32",
+		method_name: "get_property_number_option",
+		is_required: false,
+		generic_param: Some("f32"),
+		generic_param2: None,
+	},
+	TypeMapping {
+		pattern: "Option<u8>",
+		display_name: "u8",
+		method_name: "get_property_number_option",
+		is_required: false,
+		generic_param: Some("u8"),
+		generic_param2: None,
+	},
+	TypeMapping {
+		pattern: "Option<u16>",
+		display_name: "u16",
+		method_name: "get_property_number_option",
+		is_required: false,
+		generic_param: Some("u16"),
+		generic_param2: None,
+	},
+	TypeMapping {
+		pattern: "Option<u32>",
+		display_name: "u32",
+		method_name: "get_property_number_option",
+		is_required: false,
+		generic_param: Some("u32"),
+		generic_param2: None,
+	},
+	TypeMapping {
+		pattern: "Option<[f64;4]>",
+		display_name: "[f64,f64,f64,f64]",
+		method_name: "get_property_number_array_option",
+		is_required: false,
+		generic_param: Some("f64"),
+		generic_param2: Some("4"),
+	},
+	TypeMapping {
+		pattern: "Option<[u8;3]>",
+		display_name: "[u8,u8,u8]",
+		method_name: "get_property_number_array_option",
+		is_required: false,
+		generic_param: Some("u8"),
+		generic_param2: Some("3"),
+	},
+	TypeMapping {
+		pattern: "Option<TileCompression>",
+		display_name: "TileCompression",
+		method_name: "get_property_enum_option",
+		is_required: false,
+		generic_param: Some("TileCompression"),
+		generic_param2: None,
+	},
+	TypeMapping {
+		pattern: "Option<TileSchema>",
+		display_name: "TileSchema",
+		method_name: "get_property_enum_option",
+		is_required: false,
+		generic_param: Some("TileSchema"),
+		generic_param2: None,
+	},
+	TypeMapping {
+		pattern: "Option<TileFormat>",
+		display_name: "TileFormat",
+		method_name: "get_property_enum_option",
+		is_required: false,
+		generic_param: Some("TileFormat"),
+		generic_param2: None,
+	},
+];
+
+/// Find a type mapping by its pattern string.
+fn find_type_mapping(type_str: &str) -> Option<&'static TypeMapping> {
+	TYPE_MAPPINGS.iter().find(|m| m.pattern == type_str)
+}
+
+/// Generate the list of supported types for error messages.
+fn supported_types_list() -> String {
+	TYPE_MAPPINGS.iter().map(|m| m.pattern).collect::<Vec<_>>().join(", ")
+}
+
+/// Extract a doc comment from an attribute, if present.
 pub fn extract_comment(attr: &Attribute) -> Option<String> {
 	if attr.path().is_ident("doc")
 		&& let Meta::NameValue(meta) = &attr.meta
@@ -14,7 +167,11 @@ pub fn extract_comment(attr: &Attribute) -> Option<String> {
 	None
 }
 
-pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream {
+/// Decode a struct definition into VPL parsing code.
+///
+/// Returns `Ok(TokenStream)` on success, or `Err(syn::Error)` if the struct
+/// contains unsupported field types or is not a named-field struct.
+pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<TokenStream, syn::Error> {
 	let name = input.ident;
 
 	// Extract the doc comments from the struct attributes
@@ -27,10 +184,14 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 		.trim()
 		.to_string();
 
-	let fields = if let Fields::Named(fields_named) = data_struct.fields {
-		fields_named.named
-	} else {
-		panic!("VPLDecode can only be derived for structs with named fields");
+	let fields = match data_struct.fields {
+		Fields::Named(fields_named) => fields_named.named,
+		_ => {
+			return Err(syn::Error::new_spanned(
+				&name,
+				"VPLDecode can only be derived for structs with named fields",
+			));
+		}
 	};
 
 	let mut parser_fields: Vec<TokenStream> = Vec::new();
@@ -41,7 +202,10 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 	for field in fields {
 		let field_name = &field.ident;
 		let field_type = &field.ty;
-		let field_str = field_name.as_ref().expect("could not get field_name").to_string();
+		let field_str = field_name
+			.as_ref()
+			.ok_or_else(|| syn::Error::new_spanned(&field, "field must have a name"))?
+			.to_string();
 		let field_type_str = quote!(#field_type).to_string().replace(' ', "");
 
 		field_names.push(field_str.clone());
@@ -55,80 +219,62 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 			.to_string();
 
 		if field_str == "sources" {
-			assert!(doc_sources.is_none(), "'sources' are already defined: {doc_sources:?}");
-			assert!(
-				(field_type_str == "Vec<VPLPipeline>"),
-				"type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'"
-			);
+			if doc_sources.is_some() {
+				return Err(syn::Error::new_spanned(
+					field_name,
+					"'sources' field is already defined",
+				));
+			}
+			if field_type_str != "Vec<VPLPipeline>" {
+				return Err(syn::Error::new_spanned(
+					field_type,
+					format!("type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'"),
+				));
+			}
 			doc_sources = Some(format!("### Sources\n\n{comment}"));
 			parser_fields.push(quote! { sources: node.sources.clone() });
 		} else {
 			if !comment.is_empty() {
 				comment = format!(" - {comment}");
 			}
-			let (doc_field, parser_field) = match field_type_str.as_str() {
-				"String" => (
-					format!("- **`{field_str}`: String (required)**{comment}"),
-					quote! { #field_name: node.get_property_string_required(#field_str)? },
-				),
-				"bool" => (
-					format!("- **`{field_str}`: Boolean (required)**{comment}"),
-					quote! { #field_name: node.get_property_bool_required(#field_str)? },
-				),
-				"u8" => (
-					format!("- **`{field_str}`: u8 (required)**{comment}"),
-					quote! { #field_name: node.get_property_number_required::<u8>(#field_str)? },
-				),
-				"[f64;4]" => (
-					format!("- **`{field_str}`: [f64,f64,f64,f64] (required)**{comment}"),
-					quote! { #field_name: node.get_property_number_array_required::<f64>(#field_str)? },
-				),
-				"Option<bool>" => (
-					format!("- *`{field_str}`: bool (optional)*{comment}"),
-					quote! { #field_name: node.get_property_bool_option(#field_str)? },
-				),
-				"Option<String>" => (
-					format!("- *`{field_str}`: String (optional)*{comment}"),
-					quote! { #field_name: node.get_property_string_option(#field_str)? },
-				),
-				"Option<f32>" => (
-					format!("- *`{field_str}`: f32 (optional)*{comment}"),
-					quote! { #field_name: node.get_property_number_option::<f32>(#field_str)? },
-				),
-				"Option<u8>" => (
-					format!("- *`{field_str}`: u8 (optional)*{comment}"),
-					quote! { #field_name: node.get_property_number_option::<u8>(#field_str)? },
-				),
-				"Option<u16>" => (
-					format!("- *`{field_str}`: u16 (optional)*{comment}"),
-					quote! { #field_name: node.get_property_number_option::<u16>(#field_str)? },
-				),
-				"Option<u32>" => (
-					format!("- *`{field_str}`: u32 (optional)*{comment}"),
-					quote! { #field_name: node.get_property_number_option::<u32>(#field_str)? },
-				),
-				"Option<[f64;4]>" => (
-					format!("- *`{field_str}`: [f64,f64,f64,f64] (optional)*{comment}"),
-					quote! { #field_name: node.get_property_number_array_option::<f64, 4>(#field_str)? },
-				),
-				"Option<[u8;3]>" => (
-					format!("- *`{field_str}`: [u8,u8,u8] (optional)*{comment}"),
-					quote! { #field_name: node.get_property_number_array_option::<u8, 3>(#field_str)? },
-				),
-				"Option<TileCompression>" => (
-					format!("- *`{field_str}`: TileCompression (optional)*{comment}"),
-					quote! { #field_name: node.get_property_enum_option::<TileCompression>(#field_str)? },
-				),
-				"Option<TileSchema>" => (
-					format!("- *`{field_str}`: TileSchema (optional)*{comment}"),
-					quote! { #field_name: node.get_property_enum_option::<TileSchema>(#field_str)? },
-				),
-				"Option<TileFormat>" => (
-					format!("- *`{field_str}`: TileFormat (optional)*{comment}"),
-					quote! { #field_name: node.get_property_enum_option::<TileFormat>(#field_str)? },
-				),
-				_ => panic!("unknown type field: {field_type_str}"),
+
+			let (doc_field, parser_field) = if let Some(mapping) = find_type_mapping(&field_type_str) {
+				let method = format_ident!("{}", mapping.method_name);
+
+				// Build the method call with appropriate generic parameters
+				let call = match (mapping.generic_param, mapping.generic_param2) {
+					(Some(g1), Some(g2)) => {
+						let g1_ident = format_ident!("{}", g1);
+						let g2_lit: proc_macro2::TokenStream = g2.parse().unwrap();
+						quote! { node.#method::<#g1_ident, #g2_lit>(#field_str)? }
+					}
+					(Some(g1), None) => {
+						let g1_ident = format_ident!("{}", g1);
+						quote! { node.#method::<#g1_ident>(#field_str)? }
+					}
+					(None, _) => {
+						quote! { node.#method(#field_str)? }
+					}
+				};
+
+				let doc = if mapping.is_required {
+					format!("- **`{field_str}`: {} (required)**{comment}", mapping.display_name)
+				} else {
+					format!("- *`{field_str}`: {} (optional)*{comment}", mapping.display_name)
+				};
+
+				(doc, quote! { #field_name: #call })
+			} else {
+				return Err(syn::Error::new_spanned(
+					field_type,
+					format!(
+						"unsupported type `{}` for VPLDecode.\nSupported types: {}",
+						field_type_str,
+						supported_types_list()
+					),
+				));
 			};
+
 			doc_fields.push(doc_field.trim().to_string());
 			parser_fields.push(parser_field);
 		}
@@ -148,7 +294,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 		.trim()
 		.to_string();
 
-	quote! {
+	Ok(quote! {
 		impl #name {
 			pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {
 				// scan node.get_property_names to ensure, that all properties are also defined in field_names
@@ -174,7 +320,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 				#doc.to_string()
 			}
 		}
-	}
+	})
 }
 
 #[cfg(test)]
@@ -204,7 +350,7 @@ mod tests {
 			syn::Data::Struct(ds) => ds.clone(),
 			_ => panic!("Expected struct data"),
 		};
-		let ts = decode_struct(input.clone(), data_struct);
+		let ts = decode_struct(input.clone(), data_struct).unwrap();
 		assert_eq!(
 			pretty_tokens(ts),
 			[
@@ -345,7 +491,7 @@ mod tests {
 				syn::Data::Struct(ds) => ds.clone(),
 				_ => panic!("Expected struct data"),
 			};
-			let ts = decode_struct(input.clone(), data_struct);
+			let ts = decode_struct(input.clone(), data_struct).unwrap();
 			assert_eq!(
 				pretty_tokens(ts),
 				[
@@ -389,7 +535,7 @@ mod tests {
 			syn::Data::Struct(ds) => ds.clone(),
 			_ => panic!("Expected struct data"),
 		};
-		let ts = decode_struct(input.clone(), data_struct);
+		let ts = decode_struct(input.clone(), data_struct).unwrap();
 		let code = ts.to_string();
 		// Ensure get_docs includes Sources section
 		assert!(code.contains("### Sources"));
