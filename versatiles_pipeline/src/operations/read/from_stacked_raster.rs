@@ -567,4 +567,124 @@ mod tests {
 		let result = get_tile(coord, sources).await.unwrap();
 		assert!(result.is_none());
 	}
+
+	// ============================================================================
+	// Auto-overscale tests
+	// ============================================================================
+
+	#[test]
+	fn test_source_entry_is_overscaled() {
+		use versatiles_core::TileFormat::PNG;
+
+		let source = DummyImageSource::from_color(&[255, 0, 0], 4, PNG, None).unwrap();
+		let entry = SourceEntry {
+			source: Arc::new(Box::new(source) as Box<dyn TileSource>),
+			native_level_max: 8,
+		};
+
+		// At or below native level: not overscaled
+		assert!(!entry.is_overscaled(0));
+		assert!(!entry.is_overscaled(7));
+		assert!(!entry.is_overscaled(8));
+
+		// Above native level: overscaled
+		assert!(entry.is_overscaled(9));
+		assert!(entry.is_overscaled(15));
+	}
+
+	#[test]
+	fn test_source_entry_no_overscale_level() {
+		use versatiles_core::TileFormat::PNG;
+
+		let source = DummyImageSource::from_color(&[255, 0, 0], 4, PNG, None).unwrap();
+		let entry = SourceEntry {
+			source: Arc::new(Box::new(source) as Box<dyn TileSource>),
+			native_level_max: NO_OVERSCALE_LEVEL, // sentinel value
+		};
+
+		// With sentinel, nothing is ever overscaled
+		assert!(!entry.is_overscaled(0));
+		assert!(!entry.is_overscaled(30));
+		assert!(!entry.is_overscaled(254));
+	}
+
+	#[tokio::test]
+	async fn test_get_tile_returns_none_when_all_overscaled() {
+		use versatiles_core::TileFormat::PNG;
+
+		// Create sources where all are marked as overscaled
+		let source = DummyImageSource::from_color(&[255, 0, 0, 255], 4, PNG, None).unwrap();
+		let entries = vec![(Arc::new(Box::new(source) as Box<dyn TileSource>), true)]; // is_overscaled = true
+
+		let coord = TileCoord::new(0, 0, 0).unwrap();
+		let result = get_tile(coord, entries).await.unwrap();
+
+		// Should return None because no native source contributed
+		assert!(result.is_none());
+	}
+
+	#[tokio::test]
+	async fn test_get_tile_returns_tile_when_native_source_exists() {
+		use versatiles_core::TileFormat::PNG;
+
+		// Create a native source (is_overscaled = false)
+		let source = DummyImageSource::from_color(&[255, 0, 0, 255], 4, PNG, None).unwrap();
+		let entries = vec![(Arc::new(Box::new(source) as Box<dyn TileSource>), false)]; // is_overscaled = false
+
+		let coord = TileCoord::new(0, 0, 0).unwrap();
+		let result = get_tile(coord, entries).await.unwrap();
+
+		// Should return the tile
+		assert!(result.is_some());
+	}
+
+	#[tokio::test]
+	async fn test_get_tile_mixed_native_and_overscaled() {
+		use versatiles_core::TileFormat::PNG;
+
+		// Create two sources: one overscaled, one native
+		let source1 = DummyImageSource::from_color(&[255, 0, 0, 128], 4, PNG, None).unwrap(); // overscaled
+		let source2 = DummyImageSource::from_color(&[0, 255, 0, 255], 4, PNG, None).unwrap(); // native
+
+		let entries = vec![
+			(Arc::new(Box::new(source1) as Box<dyn TileSource>), true), // overscaled
+			(Arc::new(Box::new(source2) as Box<dyn TileSource>), false), // native
+		];
+
+		let coord = TileCoord::new(0, 0, 0).unwrap();
+		let result = get_tile(coord, entries).await.unwrap();
+
+		// Should return a blended tile because at least one native source exists
+		assert!(result.is_some());
+	}
+
+	#[tokio::test]
+	async fn test_auto_overscale_enabled_vpl() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+
+		// Test that auto_overscale=true parses correctly
+		let result = factory
+			.operation_from_vpl("from_stacked_raster auto_overscale=true [ from_container filename=07.png ]")
+			.await?;
+
+		// Should have valid metadata
+		assert_eq!(result.metadata().tile_format.to_type(), TileType::Raster);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_auto_overscale_disabled_vpl() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+
+		// Test that auto_overscale=false parses correctly
+		let result = factory
+			.operation_from_vpl("from_stacked_raster auto_overscale=false [ from_container filename=07.png ]")
+			.await?;
+
+		// Should have valid metadata
+		assert_eq!(result.metadata().tile_format.to_type(), TileType::Raster);
+
+		Ok(())
+	}
 }
