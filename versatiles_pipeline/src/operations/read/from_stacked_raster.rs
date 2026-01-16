@@ -18,7 +18,6 @@ use crate::{
 };
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use futures::future::join_all;
 use std::{sync::Arc, vec};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileBBoxPyramid, TileCoord, TileFormat, TileJSON, TileStream, TileType};
@@ -49,9 +48,9 @@ struct Args {
 #[derive(Debug)]
 struct Operation {
 	metadata: TileSourceMetadata,
-	sources: Vec<Arc<Box<dyn TileSource>>>,
+	sources: Vec<(Arc<Box<dyn TileSource>>, u8)>,
+	source_types: Vec<Arc<SourceType>>,
 	tilejson: TileJSON,
-	auto_overscale: bool,
 }
 
 /// Fetches tiles from all sources for a sub-bbox, collects them, stacks overlapping
@@ -59,13 +58,12 @@ struct Operation {
 #[allow(unused_variables)]
 async fn get_tile(
 	coord: TileCoord,
-	sources: Vec<Arc<Box<dyn TileSource>>>,
-	auto_overscale: bool,
+	sources: Vec<(Arc<Box<dyn TileSource>>, bool)>,
 ) -> Result<Option<(TileCoord, Tile)>> {
 	let mut tile = Option::<Tile>::None;
 
 	for source in &sources {
-		if let Some(mut tile_bg) = source.get_tile(&coord).await? {
+		if let Some(mut tile_bg) = source.0.get_tile(&coord).await? {
 			if tile_bg.as_image()?.is_empty() {
 				continue;
 			}
@@ -89,16 +87,20 @@ impl ReadTileSource for Operation {
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let sources = join_all(args.sources.into_iter().map(|c| factory.build_pipeline(c)))
-			.await
-			.into_iter()
-			.collect::<Result<Vec<_>>>()?;
 
-		ensure!(!sources.is_empty(), "must have at least one source");
+		let mut original_sources: Vec<Box<dyn TileSource>> = vec![];
+		let mut source_types: Vec<Arc<SourceType>> = vec![];
+		for source in args.sources {
+			let s = factory.build_pipeline(source).await?;
+			source_types.push(s.source_type());
+			original_sources.push(s);
+		}
+
+		ensure!(!original_sources.is_empty(), "must have at least one source");
 
 		let mut tilejson = TileJSON::default();
 
-		let first_source_metadata = sources.first().unwrap().metadata();
+		let first_source_metadata = original_sources.first().unwrap().metadata();
 		let tile_format = args.format.unwrap_or(first_source_metadata.tile_format);
 		ensure!(
 			tile_format.to_type() == TileType::Raster,
@@ -109,7 +111,7 @@ impl ReadTileSource for Operation {
 		let mut pyramid = TileBBoxPyramid::new_empty();
 		let mut traversal = Traversal::new_any();
 
-		for source in &sources {
+		for source in &original_sources {
 			tilejson.merge(source.tilejson())?;
 
 			let metadata = source.metadata();
@@ -124,14 +126,34 @@ impl ReadTileSource for Operation {
 
 		let metadata = TileSourceMetadata::new(tile_format, tile_compression, pyramid, traversal);
 		metadata.update_tilejson(&mut tilejson);
+		let level_max = metadata.bbox_pyramid.get_level_max().unwrap();
 
 		let auto_overscale = args.auto_overscale.unwrap_or(false);
+		let mut sources: Vec<(Arc<Box<dyn TileSource>>, u8)> = vec![];
+		if auto_overscale {
+			use crate::operations::raster::raster_overscale;
+
+			for source in original_sources {
+				let level_base = source.metadata().bbox_pyramid.get_level_max().unwrap();
+				let args = raster_overscale::Args {
+					level_base: Some(level_base),
+					level_max: Some(level_max),
+					enable_climbing: Some(false),
+				};
+				let operation = raster_overscale::Operation::new(source, args)?;
+				sources.push((Arc::new(Box::new(operation)), level_base));
+			}
+		} else {
+			for source in original_sources {
+				sources.push((Arc::new(source), 30));
+			}
+		}
 
 		Ok(Box::new(Self {
 			metadata,
-			sources: sources.into_iter().map(Arc::new).collect(),
+			sources,
+			source_types,
 			tilejson,
-			auto_overscale,
 		}) as Box<dyn TileSource>)
 	}
 }
@@ -149,8 +171,7 @@ impl TileSource for Operation {
 	}
 
 	fn source_type(&self) -> Arc<SourceType> {
-		let source_types: Vec<Arc<SourceType>> = self.sources.iter().map(|s| s.source_type()).collect();
-		SourceType::new_composite("from_stacked_raster", &source_types)
+		SourceType::new_composite("from_stacked_raster", &self.source_types)
 	}
 
 	/// Stream packed raster tiles intersecting `bbox`.
@@ -159,11 +180,12 @@ impl TileSource for Operation {
 		log::debug!("get_stream {bbox:?}");
 
 		// Filter sources to only those that overlap with the bbox
-		let sources: Vec<Arc<Box<dyn TileSource>>> = self
+		let sources: Vec<(Arc<Box<dyn TileSource>>, bool)> = self
 			.sources
 			.iter()
-			.filter(|s| s.metadata().bbox_pyramid.overlaps_bbox(&bbox))
+			.filter(|s| s.0.metadata().bbox_pyramid.overlaps_bbox(&bbox))
 			.cloned()
+			.map(|s| (s.0, s.1 <= bbox.level))
 			.collect();
 
 		if sources.is_empty() {
@@ -171,12 +193,11 @@ impl TileSource for Operation {
 		}
 
 		let tile_format = self.metadata.tile_format;
-		let auto_overscale = self.auto_overscale;
 
 		Ok(TileStream::from_bbox_async_parallel(bbox, move |c| {
 			let sources = sources.clone();
 			async move {
-				let tile = get_tile(c, sources, auto_overscale).await.unwrap();
+				let tile = get_tile(c, sources).await.unwrap();
 				if let Some((_coord, mut tile)) = tile {
 					tile.change_format(tile_format, None, None).unwrap();
 					return Some((c, tile));
@@ -399,19 +420,20 @@ mod tests {
 			assert_eq!(s.len(), 8);
 		}
 
-		let sources: Vec<Arc<Box<dyn TileSource>>> = input
+		let sources: Vec<(Arc<Box<dyn TileSource>>, bool)> = input
 			.iter()
 			.map(|s| {
 				// convert hex string to RGBA color
 				let c: Vec<u8> = (0..4)
 					.map(|i| u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).unwrap())
 					.collect();
-				Arc::new(Box::new(DummyImageSource::from_color(&c, 4, PNG, None).unwrap()) as Box<dyn TileSource>)
+				let source = DummyImageSource::from_color(&c, 4, PNG, None).unwrap();
+				(Arc::new(Box::new(source) as Box<dyn TileSource>), false)
 			})
 			.collect();
 
 		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let result = get_tile(coord, sources, false).await.unwrap();
+		let result = get_tile(coord, sources).await.unwrap();
 		let color = result.unwrap().1.as_image().unwrap().average_color();
 		let color_string = color.iter().fold(String::new(), |mut acc, v| {
 			use std::fmt::Write;
@@ -488,9 +510,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_tile_empty_sources_returns_none() {
-		let sources: Vec<Arc<Box<dyn TileSource>>> = vec![];
+		let sources: Vec<(Arc<Box<dyn TileSource>>, bool)> = vec![];
 		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let result = get_tile(coord, sources, false).await.unwrap();
+		let result = get_tile(coord, sources).await.unwrap();
 		assert!(result.is_none());
 	}
 }
