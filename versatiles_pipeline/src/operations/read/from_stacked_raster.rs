@@ -41,6 +41,31 @@ struct Args {
 	auto_overscale: Option<bool>,
 }
 
+/// When `auto_overscale` is disabled, this sentinel value indicates that
+/// all tiles are considered "native" (never overscaled). Using `u8::MAX`
+/// ensures the comparison `native_level_max < request_level` is always false.
+const NO_OVERSCALE_LEVEL: u8 = u8::MAX;
+
+/// A wrapped tile source with its native zoom level metadata.
+///
+/// Used to track whether tiles from this source are "native" (from the source's
+/// actual data) or "synthetic" (upscaled from a lower zoom level).
+#[derive(Clone, Debug)]
+struct SourceEntry {
+	/// The tile source (possibly wrapped with `raster_overscale`)
+	source: Arc<Box<dyn TileSource>>,
+	/// The maximum zoom level where this source has native (non-upscaled) tiles.
+	/// For requests above this level, tiles are considered "overscaled".
+	native_level_max: u8,
+}
+
+impl SourceEntry {
+	/// Returns `true` if a tile at the given `level` would be synthetic (overscaled).
+	fn is_overscaled(&self, level: u8) -> bool {
+		self.native_level_max < level
+	}
+}
+
 /// [`TileSource`] implementation that overlays raster tiles "on the fly."
 ///
 /// * Caches only metadata (`TileJSON`, `TileSourceMetadata`).
@@ -48,28 +73,34 @@ struct Args {
 #[derive(Debug)]
 struct Operation {
 	metadata: TileSourceMetadata,
-	sources: Vec<(Arc<Box<dyn TileSource>>, u8)>,
+	sources: Vec<SourceEntry>,
 	source_types: Vec<Arc<SourceType>>,
 	tilejson: TileJSON,
 }
 
-/// Fetches tiles from all sources for a sub-bbox, collects them, stacks overlapping
-/// tiles, and returns a stream of the resulting tiles.
-#[allow(unused_variables)]
+/// Fetches and blends tiles from all sources for a single coordinate.
+///
+/// Sources are processed in order (first source is background, later sources overlay).
+/// Returns `None` if no native (non-overscaled) source contributed a tile, preventing
+/// purely synthetic tiles from being generated where no real source data exists.
+///
+/// # Arguments
+/// * `coord` - The tile coordinate to fetch
+/// * `entries` - List of (source, is_overscaled) pairs for this request level
 async fn get_tile(
 	coord: TileCoord,
-	sources: Vec<(Arc<Box<dyn TileSource>>, bool)>,
+	entries: Vec<(Arc<Box<dyn TileSource>>, bool)>,
 ) -> Result<Option<(TileCoord, Tile)>> {
 	let mut tile = Option::<Tile>::None;
-	let mut non_overscaled_sources_used = false;
+	let mut has_native_tile = false;
 
-	for source in &sources {
-		if let Some(mut tile_bg) = source.0.get_tile(&coord).await? {
+	for (source, is_overscaled) in &entries {
+		if let Some(mut tile_bg) = source.get_tile(&coord).await? {
 			if tile_bg.as_image()?.is_empty() {
 				continue;
 			}
-			if !source.1 {
-				non_overscaled_sources_used = true;
+			if !is_overscaled {
+				has_native_tile = true;
 			}
 			if let Some(mut image_fg) = tile {
 				tile_bg.as_image_mut()?.overlay(image_fg.as_image()?)?;
@@ -81,7 +112,9 @@ async fn get_tile(
 		}
 	}
 
-	if !non_overscaled_sources_used {
+	// Only return a tile if at least one native (non-overscaled) source contributed.
+	// This prevents generating purely synthetic tiles where no real data exists.
+	if !has_native_tile {
 		return Ok(None);
 	}
 
@@ -136,24 +169,35 @@ impl ReadTileSource for Operation {
 		metadata.update_tilejson(&mut tilejson);
 		let level_max = metadata.bbox_pyramid.get_level_max().unwrap();
 
+		// Build source entries, optionally wrapping each source with raster_overscale
 		let auto_overscale = args.auto_overscale.unwrap_or(false);
-		let mut sources: Vec<(Arc<Box<dyn TileSource>>, u8)> = vec![];
+		let mut sources: Vec<SourceEntry> = vec![];
+
 		if auto_overscale {
 			use crate::operations::raster::raster_overscale;
 
 			for source in original_sources {
-				let level_base = source.metadata().bbox_pyramid.get_level_max().unwrap();
-				let args = raster_overscale::Args {
-					level_base: Some(level_base),
+				let native_level_max = source.metadata().bbox_pyramid.get_level_max().unwrap();
+				let overscale_args = raster_overscale::Args {
+					level_base: Some(native_level_max),
 					level_max: Some(level_max),
+					// Climbing is disabled: only use tiles at the exact native level,
+					// don't search parent tiles. This ensures predictable behavior.
 					enable_climbing: Some(false),
 				};
-				let operation = raster_overscale::Operation::new(source, args)?;
-				sources.push((Arc::new(Box::new(operation)), level_base));
+				let wrapped_source = raster_overscale::Operation::new(source, overscale_args)?;
+				sources.push(SourceEntry {
+					source: Arc::new(Box::new(wrapped_source)),
+					native_level_max,
+				});
 			}
 		} else {
+			// Without auto_overscale, all tiles are considered native
 			for source in original_sources {
-				sources.push((Arc::new(source), 30));
+				sources.push(SourceEntry {
+					source: Arc::new(source),
+					native_level_max: NO_OVERSCALE_LEVEL,
+				});
 			}
 		}
 
@@ -187,25 +231,25 @@ impl TileSource for Operation {
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {bbox:?}");
 
-		// Filter sources to only those that overlap with the bbox
-		let sources: Vec<(Arc<Box<dyn TileSource>>, bool)> = self
+		// Filter sources to only those that overlap with the bbox,
+		// and precompute whether each source is overscaled at this level
+		let entries: Vec<(Arc<Box<dyn TileSource>>, bool)> = self
 			.sources
 			.iter()
-			.filter(|s| s.0.metadata().bbox_pyramid.overlaps_bbox(&bbox))
-			.cloned()
-			.map(|s| (s.0, s.1 < bbox.level))
+			.filter(|entry| entry.source.metadata().bbox_pyramid.overlaps_bbox(&bbox))
+			.map(|entry| (entry.source.clone(), entry.is_overscaled(bbox.level)))
 			.collect();
 
-		if sources.is_empty() {
+		if entries.is_empty() {
 			return Ok(TileStream::empty());
 		}
 
 		let tile_format = self.metadata.tile_format;
 
 		Ok(TileStream::from_bbox_async_parallel(bbox, move |c| {
-			let sources = sources.clone();
+			let entries = entries.clone();
 			async move {
-				let tile = get_tile(c, sources).await.unwrap();
+				let tile = get_tile(c, entries).await.unwrap();
 				if let Some((_coord, mut tile)) = tile {
 					tile.change_format(tile_format, None, None).unwrap();
 					return Some((c, tile));
