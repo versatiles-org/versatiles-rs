@@ -60,7 +60,6 @@ struct Operation {
 async fn get_tile(
 	coord: TileCoord,
 	sources: Vec<Arc<Box<dyn TileSource>>>,
-	tile_format: TileFormat,
 	auto_overscale: bool,
 ) -> Result<Option<(TileCoord, Tile)>> {
 	let mut tile = Option::<Tile>::None;
@@ -176,7 +175,14 @@ impl TileSource for Operation {
 
 		Ok(TileStream::from_bbox_async_parallel(bbox, move |c| {
 			let sources = sources.clone();
-			async move { get_tile(c, sources, tile_format, auto_overscale).await.unwrap() }
+			async move {
+				let tile = get_tile(c, sources, auto_overscale).await.unwrap();
+				if let Some((_coord, mut tile)) = tile {
+					tile.change_format(tile_format, None, None).unwrap();
+					return Some((c, tile));
+				}
+				tile
+			}
 		}))
 	}
 }
@@ -405,7 +411,7 @@ mod tests {
 			.collect();
 
 		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let result = get_tile(coord, sources, PNG, false).await.unwrap();
+		let result = get_tile(coord, sources, false).await.unwrap();
 		let color = result.unwrap().1.as_image().unwrap().average_color();
 		let color_string = color.iter().fold(String::new(), |mut acc, v| {
 			use std::fmt::Write;
@@ -484,7 +490,7 @@ mod tests {
 	async fn test_get_tile_empty_sources_returns_none() {
 		let sources: Vec<Arc<Box<dyn TileSource>>> = vec![];
 		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let result = get_tile(coord, sources, TileFormat::PNG, false).await.unwrap();
+		let result = get_tile(coord, sources, false).await.unwrap();
 		assert!(result.is_none());
 	}
 }
