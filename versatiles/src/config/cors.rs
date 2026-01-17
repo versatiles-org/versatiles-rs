@@ -3,7 +3,11 @@
 //! This configuration determines which origins are allowed to make cross-origin requests
 //! to the API and static endpoints. It maps directly to HTTP `Access-Control-*` headers.
 //!
+//! By default, all origins are allowed (`*`). You can restrict access by specifying
+//! a list of allowed origins.
+//!
 //! Typical usage:
+//! - Allowing all origins (default): `["*"]`
 //! - Restricting to trusted domains (e.g., `https://example.org`)
 //! - Allowing wildcard subdomains (e.g., `*.example.org`)
 //! - Enabling short-lived preflight cache times during development
@@ -27,20 +31,20 @@ use versatiles_derive::ConfigDoc;
 /// origins can access resources via browser-based requests.
 ///
 /// - `allowed_origins`: A list of permitted origins, globs, or regular expressions.
+///   Defaults to `["*"]` (all origins allowed).
 /// - `max_age_seconds`: Duration that browsers should cache preflight responses.
-///
-/// This section is optional in the server config. If omitted, CORS is effectively disabled,
-/// allowing only same-origin requests.
-#[derive(Default, Debug, Clone, Deserialize, PartialEq, ConfigDoc)]
+#[derive(Debug, Clone, Deserialize, PartialEq, ConfigDoc)]
 #[serde(deny_unknown_fields)]
 pub struct CorsConfig {
 	/// Allowed origins for CORS requests
+	/// Defaults to `["*"]` (all origins allowed).
 	/// Supports:
+	/// - `*` to allow all origins
 	/// - Exact origins like `https://example.com`
 	/// - Globs at the start of the domain like `*.example.com`
 	/// - Globs at the end of the domain like `example.*`
 	/// - Regular expressions enclosed in slashes like `/domain\..*$/`
-	#[serde(default)]
+	#[serde(default = "default_allowed_origins")]
 	#[config_demo(
 		r#"
     - "https://example.org"
@@ -53,4 +57,17 @@ pub struct CorsConfig {
 	#[serde(default)]
 	#[config_demo("86400")]
 	pub max_age_seconds: Option<u64>,
+}
+
+fn default_allowed_origins() -> Vec<String> {
+	vec!["*".to_string()]
+}
+
+impl Default for CorsConfig {
+	fn default() -> Self {
+		Self {
+			allowed_origins: default_allowed_origins(),
+			max_age_seconds: None,
+		}
+	}
 }
