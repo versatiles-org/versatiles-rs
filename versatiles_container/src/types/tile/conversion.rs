@@ -84,6 +84,10 @@ impl Tile {
 		quality: Option<u8>,
 		speed: Option<u8>,
 	) -> Result<()> {
+		if self.format == format && quality.is_none() && speed.is_none() {
+			return Ok(());
+		}
+
 		assert_eq!(format.to_type(), self.format.to_type());
 		self.materialize_content()?;
 		self.delete_blob();
