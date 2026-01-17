@@ -89,7 +89,7 @@ impl TileServer {
 			minimal_recompression,
 			disable_api,
 			runtime,
-			cors_allowed_origins: Vec::new(),
+			cors_allowed_origins: crate::config::CorsConfig::default().allowed_origins,
 			cors_max_age_seconds: 3600,
 			extra_response_headers: Vec::new(),
 		}
