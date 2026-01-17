@@ -143,10 +143,10 @@ where
 	/// Creates a `TileStream` by processing all coordinates in a `TileBBox` with async callbacks in parallel.
 	///
 	/// For each coordinate in the bounding box, calls the async `callback` concurrently up to the
-	/// mixed concurrency limit. Returns only items where `callback(coord)` yields `Some(value)`.
+	/// cpu_bound concurrency limit. Returns only items where `callback(coord)` yields `Some(value)`.
 	///
 	/// Coordinates are processed in parallel without guaranteed order.
-	/// Uses mixed concurrency limit (balanced between CPU and I/O workloads).
+	/// Uses cpu_bound concurrency limit.
 	///
 	/// # Arguments
 	/// * `bbox` - The bounding box defining the tile coordinates to process.
@@ -171,7 +171,7 @@ where
 		let limits = ConcurrencyLimits::default();
 		let s = stream::iter(bbox.into_iter_coords())
 			.map(callback)
-			.buffer_unordered(limits.mixed)
+			.buffer_unordered(limits.cpu_bound)
 			.filter_map(ready);
 		TileStream { inner: s.boxed() }
 	}
