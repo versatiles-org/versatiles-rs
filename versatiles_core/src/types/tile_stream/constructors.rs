@@ -1,4 +1,4 @@
-use super::{Arc, ConcurrencyLimits, Future, Pin, Stream, StreamExt, TileBBox, TileCoord, TileStream, ready, stream};
+use super::{Arc, ConcurrencyLimits, Future, Pin, Stream, StreamExt, TileBBox, TileCoord, TileStream, stream};
 
 impl<'a, T> TileStream<'a, T>
 where
@@ -142,10 +142,11 @@ where
 
 	/// Creates a `TileStream` by processing all coordinates in a `TileBBox` with async callbacks in parallel.
 	///
-	/// For each coordinate in the bounding box, calls the async `callback` concurrently up to the
-	/// cpu_bound concurrency limit. Returns only items where `callback(coord)` yields `Some(value)`.
+	/// For each coordinate in the bounding box, spawns a tokio task to run the async `callback`,
+	/// with up to cpu_bound tasks running concurrently. Returns only items where `callback(coord)`
+	/// yields `Some(value)`.
 	///
-	/// Coordinates are processed in parallel without guaranteed order.
+	/// Coordinates are processed in parallel across multiple threads without guaranteed order.
 	/// Uses cpu_bound concurrency limit.
 	///
 	/// # Arguments
@@ -163,16 +164,25 @@ where
 	/// });
 	/// # }
 	/// ```
-	pub fn from_bbox_async_parallel<F, Fut>(bbox: TileBBox, callback: F) -> Self
+	pub fn from_bbox_async_parallel<F, Fut>(bbox: TileBBox, mut callback: F) -> Self
 	where
 		F: FnMut(TileCoord) -> Fut + Send + 'a,
-		Fut: Future<Output = Option<(TileCoord, T)>> + Send + 'a,
+		Fut: Future<Output = Option<(TileCoord, T)>> + Send + 'static,
+		T: 'static,
 	{
 		let limits = ConcurrencyLimits::default();
 		let s = stream::iter(bbox.into_iter_coords())
-			.map(callback)
+			.map(move |coord| tokio::spawn(callback(coord)))
 			.buffer_unordered(limits.cpu_bound)
-			.filter_map(ready);
+			.filter_map(|result| async {
+				match result {
+					Ok(item) => item,
+					Err(e) => {
+						log::error!("Task join error: {e:?}");
+						None
+					}
+				}
+			});
 		TileStream { inner: s.boxed() }
 	}
 
