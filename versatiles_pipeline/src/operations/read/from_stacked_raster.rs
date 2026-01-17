@@ -90,6 +90,18 @@ async fn get_tile(
 	coord: TileCoord,
 	entries: Vec<(Arc<Box<dyn TileSource>>, bool)>,
 ) -> Result<Option<(TileCoord, Tile)>> {
+	if entries.is_empty() {
+		return Ok(None);
+	}
+
+	if entries.len() == 1 {
+		let (source, is_overscaled) = &entries[0];
+		if *is_overscaled {
+			return Ok(None);
+		}
+		return Ok(source.get_tile(&coord).await?.map(|t| (coord, t)));
+	}
+
 	let mut tile = Option::<Tile>::None;
 	let mut has_native_tile = false;
 
