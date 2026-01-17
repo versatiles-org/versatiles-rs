@@ -84,7 +84,7 @@ impl Tile {
 		quality: Option<u8>,
 		speed: Option<u8>,
 	) -> Result<()> {
-		if self.format == format && quality.is_none() && speed.is_none() {
+		if self.format == format && quality.is_none() {
 			return Ok(());
 		}
 
