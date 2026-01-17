@@ -265,3 +265,118 @@ async fn e2e_cors_on_tile_endpoint() {
 		"CORS headers should be present on tile endpoints"
 	);
 }
+
+/// Helper to start a server without any CORS configuration (uses defaults).
+struct DefaultCorsTestServer {
+	host: String,
+	child: Child,
+	#[allow(dead_code)]
+	temp_dir: TempDir,
+}
+
+impl DefaultCorsTestServer {
+	async fn new() -> Self {
+		let temp_dir = tempfile::tempdir().unwrap();
+		let config_path = temp_dir.path().join("config.yml");
+		let tiles_path = to_yaml_path(&get_testdata("berlin.mbtiles"));
+
+		// Config without any CORS section - should use defaults (allow all origins)
+		let config = format!(
+			r#"
+tiles:
+  - name: test
+    src: "{tiles_path}"
+"#
+		);
+
+		fs::write(&config_path, &config).unwrap();
+
+		let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+
+		let mut cmd = versatiles_cmd();
+		cmd.args(["serve", "-c", config_path.to_str().unwrap(), "-p", &port.to_string()]);
+		let mut child = cmd.spawn().unwrap();
+
+		// Wait for server to be ready
+		loop {
+			thread::sleep(Duration::from_millis(100));
+			if let Some(status) = child.try_wait().unwrap() {
+				use std::io::Read;
+				let mut stdout_str = String::new();
+				let mut stderr_str = String::new();
+				if let Some(ref mut stdout) = child.stdout {
+					let _ = stdout.read_to_string(&mut stdout_str);
+				}
+				if let Some(ref mut stderr) = child.stderr {
+					let _ = stderr.read_to_string(&mut stderr_str);
+				}
+				panic!(
+					"server process exited prematurely with status: {:?}\nconfig:\n{}\nstdout:\n{}\nstderr:\n{}",
+					status.code(),
+					config,
+					stdout_str,
+					stderr_str
+				);
+			}
+			if reqwest::get(format!("http://127.0.0.1:{port}/tiles/index.json"))
+				.await
+				.is_ok()
+			{
+				break;
+			}
+		}
+
+		Self {
+			host: format!("http://127.0.0.1:{port}"),
+			child,
+			temp_dir,
+		}
+	}
+
+	fn shutdown(&mut self) {
+		let _ = self.child.kill();
+		let _ = self.child.wait();
+	}
+
+	async fn get_with_origin(&self, path: &str, origin: &str) -> (u16, HeaderMap) {
+		let client = reqwest::Client::new();
+		let resp = client
+			.get(format!("{}{path}", self.host))
+			.header(ORIGIN, origin)
+			.send()
+			.await
+			.unwrap();
+
+		(resp.status().as_u16(), resp.headers().clone())
+	}
+}
+
+impl Drop for DefaultCorsTestServer {
+	fn drop(&mut self) {
+		self.shutdown();
+	}
+}
+
+/// Test that all origins are allowed by default when no CORS config is specified.
+#[tokio::test]
+async fn e2e_cors_allows_all_origins_by_default() {
+	let server = DefaultCorsTestServer::new().await;
+
+	// Test with various arbitrary origins - all should be allowed
+	let test_origins = [
+		"https://example.org",
+		"https://random-domain.com",
+		"http://localhost:3000",
+		"https://any.subdomain.example.net",
+	];
+
+	for origin in test_origins {
+		let (status, headers) = server.get_with_origin("/tiles/test/tiles.json", origin).await;
+
+		assert_eq!(status, 200, "Request from {origin} should succeed");
+		assert!(
+			headers.get("access-control-allow-origin").is_some(),
+			"Access-Control-Allow-Origin should be present for {origin} (default allows all)"
+		);
+	}
+}
