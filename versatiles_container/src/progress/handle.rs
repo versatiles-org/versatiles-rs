@@ -58,6 +58,7 @@ impl ProgressHandle {
 	pub fn inc(&self, delta: u64) {
 		let mut state = self.state.lock();
 		state.position = state.position.saturating_add(delta).min(state.total);
+		self.redraw(&mut state);
 		drop(state);
 		self.emit_update();
 	}
