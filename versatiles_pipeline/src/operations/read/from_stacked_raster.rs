@@ -239,7 +239,8 @@ impl TileSource for Operation {
 			.map(|entry| (entry.source.clone(), entry.is_overscaled(bbox.level)))
 			.collect();
 
-		if entries.is_empty() {
+		// Return empty stream if no native (non-overscaled) source exists
+		if !entries.iter().any(|(_, is_overscaled)| !is_overscaled) {
 			return Ok(TileStream::empty());
 		}
 
