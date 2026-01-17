@@ -153,9 +153,6 @@ where
 	/// processes multiple items concurrently up to a concurrency limit. This is ideal for I/O-bound
 	/// operations like writing tiles to disk, uploading to remote storage, or making network requests.
 	///
-	/// The concurrency limit is set to `ConcurrencyLimits::default().mixed`, which balances between
-	/// CPU and I/O workloads.
-	///
 	/// # When to Use
 	///
 	/// - **I/O-bound operations**: Writing files, network requests, database operations
@@ -200,7 +197,7 @@ where
 		Fut: Future<Output = ()>,
 	{
 		let limits = ConcurrencyLimits::default();
-		self.inner.for_each_concurrent(limits.mixed, callback).await; // Mixed: async callback (I/O + CPU)
+		self.inner.for_each_concurrent(limits.cpu_bound, callback).await;
 	}
 
 	/// Applies a synchronous callback `callback` to each `(TileCoord, T)` item.
