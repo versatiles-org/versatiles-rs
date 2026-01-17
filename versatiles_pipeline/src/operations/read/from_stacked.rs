@@ -121,7 +121,7 @@ impl TileSource for Operation {
 	/// Stream packed tiles intersecting `bbox` using the overlay strategy.
 	#[context("Failed to get stacked tile stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_stream {bbox:?}");
+		log::debug!("get_tile_stream {bbox:?}");
 		// We need the desired output compression inside the closure, so copy it.
 		let format = self.metadata.tile_format;
 

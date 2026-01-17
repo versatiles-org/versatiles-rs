@@ -228,7 +228,7 @@ impl TileSource for Operation {
 	/// Stream packed raster tiles intersecting `bbox`.
 	#[context("Failed to get stacked raster tile stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_stream {bbox:?}");
+		log::debug!("get_tile_stream {bbox:?}");
 
 		// Filter sources to only those that overlap with the bbox,
 		// and precompute whether each source is overscaled at this level

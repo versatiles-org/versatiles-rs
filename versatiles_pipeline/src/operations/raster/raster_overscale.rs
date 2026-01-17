@@ -277,15 +277,15 @@ impl TileSource for Operation {
 
 	#[context("Failed to get stream for bbox: {:?}", bbox_dst)]
 	async fn get_tile_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<Tile>> {
-		log::debug!("get_stream {bbox_dst:?}");
+		log::debug!("get_tile_stream {bbox_dst:?}");
 
 		if !self.metadata.bbox_pyramid.overlaps_bbox(&bbox_dst) {
-			log::trace!("get_stream outside bbox_pyramid");
+			log::trace!("get_tile_stream outside bbox_pyramid");
 			return Ok(TileStream::empty());
 		}
 
 		if bbox_dst.level <= self.level_base {
-			log::trace!("get_stream level <= level_base");
+			log::trace!("get_tile_stream level <= level_base");
 			return self.source.as_ref().get_tile_stream(bbox_dst).await;
 		}
 
