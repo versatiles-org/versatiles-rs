@@ -89,6 +89,7 @@ All tile sources must provide raster tiles in the same resolution. The first sou
 ### Parameters
 
 - *`format`: TileFormat (optional)* - The tile format to use for the output tiles. Default: format of the first source.
+- *`auto_overscale`: bool (optional)* - Whether to automatically overscale tiles when a source does not provide tiles at the requested zoom level. Default: `false`.
 
 ---
 # TRANSFORM operations

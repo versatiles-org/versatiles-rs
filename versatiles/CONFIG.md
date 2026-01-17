@@ -54,7 +54,9 @@ server:
 cors: 
   
   # Allowed origins for CORS requests
+  # Defaults to `["*"]` (all origins allowed).
   # Supports:
+  # - `*` to allow all origins
   # - Exact origins like `https://example.com`
   # - Globs at the start of the domain like `*.example.com`
   # - Globs at the end of the domain like `example.*`
