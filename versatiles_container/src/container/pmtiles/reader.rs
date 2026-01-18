@@ -178,6 +178,54 @@ impl PMTilesReader {
 	pub fn get_tile_entries(&self) -> Result<EntriesV3> {
 		EntriesV3::from_blob(&self.root_bytes_uncompressed)
 	}
+
+	/// Internal helper to look up a tile by its Hilbert index.
+	///
+	/// Traverses up to three levels of PMTiles directories to locate the tile data.
+	/// Returns `Ok(None)` if the tile does not exist in the directory structure.
+	#[allow(clippy::too_many_arguments)]
+	async fn lookup_tile_by_id(
+		tile_id: u64,
+		data_reader: &DataReader,
+		root_entries: Arc<EntriesV3>,
+		leaves_cache: &Mutex<LimitedCache<ByteRange, Arc<EntriesV3>>>,
+		leaves_bytes: &Blob,
+		tile_data_offset: u64,
+		tile_compression: TileCompression,
+		tile_format: versatiles_core::TileFormat,
+		internal_compression: TileCompression,
+	) -> Result<Option<Tile>> {
+		let mut entries = root_entries;
+
+		for _depth in 0..3 {
+			let Some(entry) = entries.find_tile(tile_id) else {
+				return Ok(None);
+			};
+
+			if entry.range.length > 0 {
+				if entry.run_length > 0 {
+					return Ok(Some(Tile::from_blob(
+						data_reader
+							.read_range(&entry.range.shifted_forward(tile_data_offset))
+							.await?,
+						tile_compression,
+						tile_format,
+					)));
+				}
+				let range = entry.range;
+				let mut cache = leaves_cache.lock().await;
+				entries = cache.get_or_set(&range, || {
+					let mut blob = leaves_bytes.read_range(&range)?;
+					blob = decompress(blob, internal_compression)?;
+					let entries = EntriesV3::from_blob(&blob)?;
+					Ok(Arc::new(entries))
+				})?;
+			} else {
+				return Ok(None);
+			}
+		}
+		bail!("not found")
+	}
 }
 
 /// Build the per‑zoom bounding box pyramid by traversing `PMTiles` directory entries.
@@ -281,56 +329,20 @@ impl TileSource for PMTilesReader {
 	/// repeated decompression. Returns `Ok(None)` if the tile does not exist.
 	#[context("fetching tile {:?} from PMTiles", coord)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		// Log the requested tile coordinates for debugging purposes
 		log::trace!("get_tile {coord:?}");
-
-		// Convert the tile coordinates into a unique tile ID
-		let tile_id: u64 = coord.get_hilbert_index()?;
-		// Start with the root directory entries
-		let mut entries = self.root_entries.clone();
-
-		// Iterate through the directory depth (up to 3 levels)
-		for _depth in 0..3 {
-			// Find the entry corresponding to the requested tile ID
-			let entry = entries.find_tile(tile_id);
-
-			// If the entry is not found, return None
-			let Some(entry) = entry else {
-				return Ok(None);
-			};
-
-			// Check if the entry has a valid range
-			if entry.range.length > 0 {
-				// If the entry represents a run of tiles, directly fetch the tile data
-				if entry.run_length > 0 {
-					return Ok(Some(Tile::from_blob(
-						self
-							.data_reader
-							.read_range(&entry.range.shifted_forward(self.header.tile_data.offset))
-							.await?,
-						self.metadata.tile_compression,
-						self.metadata.tile_format,
-					)));
-				}
-				// Otherwise, fetch the directory bytes for the next level
-				let range = entry.range;
-				let mut cache = self.leaves_cache.lock().await;
-				// Use the cache to avoid redundant decompression and reading
-				entries = cache.get_or_set(&range, || {
-					let mut blob = self.leaves_bytes.read_range(&range)?;
-					// Decompress the directory bytes
-					blob = decompress(blob, self.internal_compression)?;
-					let entries = EntriesV3::from_blob(&blob)?;
-					Ok(Arc::new(entries))
-				})?;
-			} else {
-				// If the range is invalid, return None
-				return Ok(None);
-			}
-		}
-
-		// If the tile data is not found after traversing all levels, return an error
-		bail!("not found")
+		let tile_id = coord.get_hilbert_index()?;
+		Self::lookup_tile_by_id(
+			tile_id,
+			&self.data_reader,
+			Arc::clone(&self.root_entries),
+			&self.leaves_cache,
+			&self.leaves_bytes,
+			self.header.tile_data.offset,
+			self.metadata.tile_compression,
+			self.metadata.tile_format,
+			self.internal_compression,
+		)
+		.await
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
@@ -349,35 +361,21 @@ impl TileSource for PMTilesReader {
 			let leaves_cache = Arc::clone(&leaves_cache);
 			let leaves_bytes = Arc::clone(&leaves_bytes);
 			async move {
-				let tile_id: u64 = coord.get_hilbert_index().ok()?;
-				let mut entries = root_entries;
-
-				for _depth in 0..3 {
-					let entry = entries.find_tile(tile_id)?;
-
-					if entry.range.length > 0 {
-						if entry.run_length > 0 {
-							let blob = data_reader
-								.read_range(&entry.range.shifted_forward(tile_data_offset))
-								.await
-								.ok()?;
-							return Some((coord, Tile::from_blob(blob, tile_compression, tile_format)));
-						}
-						let range = entry.range;
-						let mut cache = leaves_cache.lock().await;
-						entries = cache
-							.get_or_set(&range, || {
-								let mut blob = leaves_bytes.read_range(&range)?;
-								blob = decompress(blob, internal_compression)?;
-								let entries = EntriesV3::from_blob(&blob)?;
-								Ok(Arc::new(entries))
-							})
-							.ok()?;
-					} else {
-						return None;
-					}
-				}
-				None
+				let tile_id = coord.get_hilbert_index().ok()?;
+				let tile = PMTilesReader::lookup_tile_by_id(
+					tile_id,
+					&data_reader,
+					root_entries,
+					&leaves_cache,
+					&leaves_bytes,
+					tile_data_offset,
+					tile_compression,
+					tile_format,
+					internal_compression,
+				)
+				.await
+				.ok()??;
+				Some((coord, tile))
 			}
 		}))
 	}
