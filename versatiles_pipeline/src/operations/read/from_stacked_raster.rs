@@ -18,7 +18,7 @@ use crate::{
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::{sync::Arc, vec};
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
+use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileBBoxPyramid, TileCoord, TileFormat, TileJSON, TileStream, TileType};
 use versatiles_derive::context;
 use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
@@ -52,7 +52,7 @@ const NO_OVERSCALE_LEVEL: u8 = u8::MAX;
 #[derive(Clone, Debug)]
 struct SourceEntry {
 	/// The tile source (possibly wrapped with `raster_overscale`)
-	source: Arc<Box<dyn TileSource>>,
+	source: SharedTileSource,
 	/// The maximum zoom level where this source has native (non-upscaled) tiles.
 	/// For requests above this level, tiles are considered "overscaled".
 	native_level_max: u8,
@@ -86,22 +86,7 @@ struct Operation {
 /// # Arguments
 /// * `coord` - The tile coordinate to fetch
 /// * `entries` - List of (source, is_overscaled) pairs for this request level
-async fn get_tile(
-	coord: TileCoord,
-	entries: Vec<(Arc<Box<dyn TileSource>>, bool)>,
-) -> Result<Option<(TileCoord, Tile)>> {
-	if entries.is_empty() {
-		return Ok(None);
-	}
-
-	if entries.len() == 1 {
-		let (source, is_overscaled) = &entries[0];
-		if *is_overscaled {
-			return Ok(None);
-		}
-		return Ok(source.get_tile(&coord).await?.map(|t| (coord, t)));
-	}
-
+async fn get_tile(coord: TileCoord, entries: Vec<(SharedTileSource, bool)>) -> Result<Option<(TileCoord, Tile)>> {
 	let mut tile = Option::<Tile>::None;
 	let mut has_native_tile = false;
 
@@ -244,16 +229,26 @@ impl TileSource for Operation {
 
 		// Filter sources to only those that overlap with the bbox,
 		// and precompute whether each source is overscaled at this level
-		let entries: Vec<(Arc<Box<dyn TileSource>>, bool)> = self
+		let mut entries: Vec<(SharedTileSource, bool)> = self
 			.sources
 			.iter()
 			.filter(|entry| entry.source.metadata().bbox_pyramid.overlaps_bbox(&bbox))
 			.map(|entry| (entry.source.clone(), entry.is_overscaled(bbox.level)))
 			.collect();
 
-		// Return empty stream if no native (non-overscaled) source exists
-		if !entries.iter().any(|(_, is_overscaled)| !is_overscaled) {
+		if entries.is_empty() {
 			return Ok(TileStream::empty());
+		}
+
+		// Return empty stream if no native (non-overscaled) source exists
+		if entries.iter().all(|(_, is_overscaled)| *is_overscaled) {
+			return Ok(TileStream::empty());
+		}
+
+		if entries.len() == 1 {
+			let source = entries.pop().unwrap().0;
+			let stream = source.get_tile_stream(bbox).await?;
+			return Ok(stream);
 		}
 
 		let tile_format = self.metadata.tile_format;
@@ -468,7 +463,7 @@ mod tests {
 			assert_eq!(s.len(), 8);
 		}
 
-		let sources: Vec<(Arc<Box<dyn TileSource>>, bool)> = input
+		let sources: Vec<(SharedTileSource, bool)> = input
 			.iter()
 			.map(|s| {
 				// convert hex string to RGBA color
@@ -558,7 +553,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_tile_empty_sources_returns_none() {
-		let sources: Vec<(Arc<Box<dyn TileSource>>, bool)> = vec![];
+		let sources: Vec<(SharedTileSource, bool)> = vec![];
 		let coord = TileCoord::new(0, 0, 0).unwrap();
 		let result = get_tile(coord, sources).await.unwrap();
 		assert!(result.is_none());
