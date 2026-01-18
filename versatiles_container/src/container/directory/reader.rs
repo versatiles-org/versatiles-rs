@@ -481,4 +481,39 @@ mod tests {
 
 		Ok(())
 	}
+
+	#[tokio::test]
+	async fn tile_stream_matches_individual_reads() -> Result<()> {
+		let dir = TempDir::new()?;
+		// Create a small grid of tiles
+		dir.child("2/0/0.png").write_str("tile_0_0")?;
+		dir.child("2/0/1.png").write_str("tile_0_1")?;
+		dir.child("2/1/0.png").write_str("tile_1_0")?;
+		dir.child("2/1/1.png").write_str("tile_1_1")?;
+
+		let reader = DirectoryReader::open_path(&dir)?;
+		let bbox = TileBBox::from_min_and_max(2, 0, 0, 1, 1)?;
+
+		// Get all tiles via stream
+		let stream = reader.get_tile_stream(bbox).await?;
+		let stream_tiles: Vec<_> = stream.to_vec().await;
+		assert_eq!(stream_tiles.len(), 4);
+
+		// Verify each streamed tile matches individual read
+		for (coord, mut tile) in stream_tiles {
+			let stream_blob = tile.as_blob(reader.metadata().tile_compression)?;
+			let single_blob = reader
+				.get_tile(&coord)
+				.await?
+				.expect("tile should exist")
+				.into_blob(reader.metadata().tile_compression)?;
+			assert_eq!(
+				stream_blob.as_slice(),
+				single_blob.as_slice(),
+				"blob mismatch at {coord:?}"
+			);
+		}
+
+		Ok(())
+	}
 }

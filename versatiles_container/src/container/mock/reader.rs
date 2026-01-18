@@ -212,4 +212,33 @@ mod tests {
 		MockWriter::write(&mut reader).await.unwrap();
 		Ok(())
 	}
+
+	#[tokio::test]
+	async fn tile_stream_matches_individual_reads() -> Result<()> {
+		let reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
+		// Use a bbox that intersects the mock reader's pyramid (level 4 is full)
+		let bbox = TileBBox::from_min_and_max(4, 0, 0, 3, 3)?;
+
+		// Get all tiles via stream
+		let stream = reader.get_tile_stream(bbox).await?;
+		let stream_tiles: Vec<_> = stream.to_vec().await;
+		assert_eq!(stream_tiles.len(), 16); // 4x4 grid
+
+		// Verify each streamed tile matches individual read
+		for (coord, mut tile) in stream_tiles {
+			let stream_blob = tile.as_blob(reader.metadata().tile_compression)?;
+			let single_blob = reader
+				.get_tile(&coord)
+				.await?
+				.expect("tile should exist")
+				.into_blob(reader.metadata().tile_compression)?;
+			assert_eq!(
+				stream_blob.as_slice(),
+				single_blob.as_slice(),
+				"blob mismatch at {coord:?}"
+			);
+		}
+
+		Ok(())
+	}
 }

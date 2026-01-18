@@ -491,4 +491,34 @@ pub mod tests {
 
 		Ok(())
 	}
+
+	#[tokio::test]
+	async fn tile_stream_matches_individual_reads() -> Result<()> {
+		let reader = MBTilesReader::open_path(&PATH, TilesRuntime::default())?;
+
+		// Use level 9 bbox which has 2x2 = 4 tiles according to the metadata
+		let bbox = TileBBox::from_min_and_max(9, 274, 167, 275, 168)?;
+
+		// Get all tiles via stream
+		let stream = reader.get_tile_stream(bbox).await?;
+		let stream_tiles: Vec<_> = stream.to_vec().await;
+		assert_eq!(stream_tiles.len(), 4);
+
+		// Verify each streamed tile matches individual read
+		for (coord, mut tile) in stream_tiles {
+			let stream_blob = tile.as_blob(reader.metadata().tile_compression)?;
+			let single_blob = reader
+				.get_tile(&coord)
+				.await?
+				.expect("tile should exist")
+				.into_blob(reader.metadata().tile_compression)?;
+			assert_eq!(
+				stream_blob.as_slice(),
+				single_blob.as_slice(),
+				"blob mismatch at {coord:?}"
+			);
+		}
+
+		Ok(())
+	}
 }

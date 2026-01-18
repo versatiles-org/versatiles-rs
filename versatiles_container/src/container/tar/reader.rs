@@ -403,4 +403,35 @@ pub mod tests {
 		);
 		Ok(())
 	}
+
+	#[tokio::test]
+	async fn tile_stream_matches_individual_reads() -> Result<()> {
+		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 2, "tar").await?;
+		let reader = TarTilesReader::open_path(&temp_file)?;
+
+		// Use level 2 bbox (4x4 = 16 tiles)
+		let bbox = TileBBox::new_full(2)?;
+
+		// Get all tiles via stream
+		let stream = reader.get_tile_stream(bbox).await?;
+		let stream_tiles: Vec<_> = stream.to_vec().await;
+		assert_eq!(stream_tiles.len(), 16);
+
+		// Verify each streamed tile matches individual read
+		for (coord, mut tile) in stream_tiles {
+			let stream_blob = tile.as_blob(reader.metadata().tile_compression)?;
+			let single_blob = reader
+				.get_tile(&coord)
+				.await?
+				.expect("tile should exist")
+				.into_blob(reader.metadata().tile_compression)?;
+			assert_eq!(
+				stream_blob.as_slice(),
+				single_blob.as_slice(),
+				"blob mismatch at {coord:?}"
+			);
+		}
+
+		Ok(())
+	}
 }
