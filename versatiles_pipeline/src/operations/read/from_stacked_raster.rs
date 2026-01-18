@@ -177,9 +177,7 @@ impl ReadTileSource for Operation {
 				let overscale_args = raster_overscale::Args {
 					level_base: Some(native_level_max),
 					level_max: Some(level_max),
-					// Climbing is disabled: only use tiles at the exact native level,
-					// don't search parent tiles. This ensures predictable behavior.
-					enable_climbing: Some(false),
+					enable_climbing: Some(true),
 				};
 				let wrapped_source = raster_overscale::Operation::new(source, overscale_args)?;
 				sources.push(SourceEntry {
