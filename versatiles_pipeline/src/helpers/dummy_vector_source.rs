@@ -11,7 +11,7 @@ use versatiles_geometry::{
 #[derive(Debug)]
 pub struct DummyVectorSource {
 	#[allow(clippy::type_complexity)]
-	data: Vec<(String, Vec<Vec<(String, String)>>)>,
+	data: Arc<Vec<(String, Vec<Vec<(String, String)>>)>>,
 	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 }
@@ -49,7 +49,7 @@ impl DummyVectorSource {
 		metadata.update_tilejson(&mut tilejson);
 
 		DummyVectorSource {
-			data,
+			data: Arc::new(data),
 			metadata,
 			tilejson,
 		}
@@ -83,7 +83,7 @@ impl TileSource for DummyVectorSource {
 		let mut layers = vec![];
 
 		// Iterate over each layer and convert features
-		for (name, features_def) in &self.data {
+		for (name, features_def) in self.data.as_ref() {
 			let mut features: Vec<GeoFeature> = vec![];
 
 			// Create features for the current layer
@@ -94,7 +94,7 @@ impl TileSource for DummyVectorSource {
 				feature.set_property("z".to_string(), coord.level);
 
 				for (key, value) in properties {
-					feature.set_property(key.clone(), value);
+					feature.set_property(key.clone(), value.clone());
 				}
 
 				features.push(feature);
@@ -111,8 +111,41 @@ impl TileSource for DummyVectorSource {
 		Ok(Some(tile))
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		self.stream_individual_tiles(bbox).await
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		let data = Arc::clone(&self.data);
+		let bbox_pyramid = self.metadata.bbox_pyramid.clone();
+
+		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
+			if !bbox_pyramid.contains_coord(&coord) {
+				return None;
+			}
+
+			let mut layers = vec![];
+
+			for (name, features_def) in data.as_ref() {
+				let mut features: Vec<GeoFeature> = vec![];
+
+				for properties in features_def {
+					let mut feature = GeoFeature::new(Geometry::new_point(&[1, 2]));
+					feature.set_property("x".to_string(), coord.x);
+					feature.set_property("y".to_string(), coord.y);
+					feature.set_property("z".to_string(), coord.level);
+
+					for (key, value) in properties {
+						feature.set_property(key.clone(), value.clone());
+					}
+
+					features.push(feature);
+				}
+
+				layers.push(VectorTileLayer::from_features(name.clone(), features, 4096, 1).ok()?);
+			}
+
+			let vector_tile = VectorTile::new(layers);
+			let tile = Tile::from_vector(vector_tile, TileFormat::MVT).ok()?;
+
+			Some(tile)
+		}))
 	}
 }
 

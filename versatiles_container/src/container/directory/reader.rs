@@ -68,7 +68,7 @@ use versatiles_derive::context;
 pub struct DirectoryReader {
 	tilejson: TileJSON,
 	dir: PathBuf,
-	tile_map: HashMap<TileCoord, PathBuf>,
+	tile_map: Arc<HashMap<TileCoord, PathBuf>>,
 	metadata: TileSourceMetadata,
 }
 
@@ -211,7 +211,7 @@ impl DirectoryReader {
 		Ok(DirectoryReader {
 			tilejson,
 			dir: dir.to_path_buf(),
-			tile_map,
+			tile_map: Arc::new(tile_map),
 			metadata: TileSourceMetadata::new(tile_format, tile_compression, bbox_pyramid, Traversal::ANY),
 		})
 	}
@@ -259,8 +259,16 @@ impl TileSource for DirectoryReader {
 		}
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		self.stream_individual_tiles(bbox).await
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		let tile_map = Arc::clone(&self.tile_map);
+		let tile_compression = self.metadata.tile_compression;
+		let tile_format = self.metadata.tile_format;
+
+		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
+			let path = tile_map.get(&coord)?;
+			let blob = Blob::from(fs::read(path).ok()?);
+			Some(Tile::from_blob(blob, tile_compression, tile_format))
+		}))
 	}
 }
 

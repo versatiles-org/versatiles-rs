@@ -70,15 +70,15 @@ use versatiles_derive::context;
 #[derive(Debug)]
 pub struct PMTilesReader {
 	/// Underlying byte source used to read header, directories, and tile data.
-	pub data_reader: DataReader,
+	pub data_reader: Arc<DataReader>,
 	/// Parsed `PMTiles` v3 header with byte ranges, counts, and compression flags.
 	pub header: HeaderV3,
 	/// Compression algorithm used for internal metadata/directories (e.g., gzip).
 	pub internal_compression: TileCompression,
 	/// Raw (compressed) concatenated blob of all leaf directories.
-	pub leaves_bytes: Blob,
+	pub leaves_bytes: Arc<Blob>,
 	/// Decompression cache mapping leaf directory byte ranges to parsed entries.
-	pub leaves_cache: Mutex<LimitedCache<ByteRange, Arc<EntriesV3>>>,
+	pub leaves_cache: Arc<Mutex<LimitedCache<ByteRange, Arc<EntriesV3>>>>,
 	/// Merged `TileJSON` metadata extracted from the `PMTiles` `metadata` range.
 	pub tilejson: TileJSON,
 	/// Runtime parameters (tile format, compression, bbox pyramid) advertised by this reader.
@@ -161,11 +161,11 @@ impl PMTilesReader {
 		let root_entries = Arc::new(EntriesV3::from_blob(&root_bytes_uncompressed)?);
 
 		Ok(PMTilesReader {
-			data_reader,
+			data_reader: Arc::new(data_reader),
 			header,
 			internal_compression,
-			leaves_bytes,
-			leaves_cache: Mutex::new(LimitedCache::with_maximum_size(100_000_000)),
+			leaves_bytes: Arc::new(leaves_bytes),
+			leaves_cache: Arc::new(Mutex::new(LimitedCache::with_maximum_size(100_000_000))),
 			tilejson,
 			metadata,
 			root_bytes_uncompressed,
@@ -333,8 +333,53 @@ impl TileSource for PMTilesReader {
 		bail!("not found")
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		self.stream_individual_tiles(bbox).await
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		let data_reader = Arc::clone(&self.data_reader);
+		let root_entries = Arc::clone(&self.root_entries);
+		let leaves_cache = Arc::clone(&self.leaves_cache);
+		let leaves_bytes = Arc::clone(&self.leaves_bytes);
+		let tile_data_offset = self.header.tile_data.offset;
+		let tile_compression = self.metadata.tile_compression;
+		let tile_format = self.metadata.tile_format;
+		let internal_compression = self.internal_compression;
+
+		Ok(TileStream::from_bbox_async_parallel(bbox, move |coord| {
+			let data_reader = Arc::clone(&data_reader);
+			let root_entries = Arc::clone(&root_entries);
+			let leaves_cache = Arc::clone(&leaves_cache);
+			let leaves_bytes = Arc::clone(&leaves_bytes);
+			async move {
+				let tile_id: u64 = coord.get_hilbert_index().ok()?;
+				let mut entries = root_entries;
+
+				for _depth in 0..3 {
+					let entry = entries.find_tile(tile_id)?;
+
+					if entry.range.length > 0 {
+						if entry.run_length > 0 {
+							let blob = data_reader
+								.read_range(&entry.range.shifted_forward(tile_data_offset))
+								.await
+								.ok()?;
+							return Some((coord, Tile::from_blob(blob, tile_compression, tile_format)));
+						}
+						let range = entry.range;
+						let mut cache = leaves_cache.lock().await;
+						entries = cache
+							.get_or_set(&range, || {
+								let mut blob = leaves_bytes.read_range(&range)?;
+								blob = decompress(blob, internal_compression)?;
+								let entries = EntriesV3::from_blob(&blob)?;
+								Ok(Arc::new(entries))
+							})
+							.ok()?;
+					} else {
+						return None;
+					}
+				}
+				None
+			}
+		}))
 	}
 
 	// deep probe of container meta

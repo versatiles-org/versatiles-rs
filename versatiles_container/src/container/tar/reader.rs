@@ -51,8 +51,8 @@ use versatiles_derive::context;
 pub struct TarTilesReader {
 	tilejson: TileJSON,
 	name: String,
-	reader: Box<DataReaderFile>,
-	tile_map: HashMap<TileCoord, ByteRange>,
+	reader: Arc<DataReaderFile>,
+	tile_map: Arc<HashMap<TileCoord, ByteRange>>,
 	metadata: TileSourceMetadata,
 }
 
@@ -188,8 +188,8 @@ impl TarTilesReader {
 			tilejson,
 			name: path.to_str().unwrap().to_string(),
 			metadata,
-			reader,
-			tile_map,
+			reader: Arc::new(*reader),
+			tile_map: Arc::new(tile_map),
 		})
 	}
 }
@@ -235,8 +235,21 @@ impl TileSource for TarTilesReader {
 		}
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		self.stream_individual_tiles(bbox).await
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		let reader = Arc::clone(&self.reader);
+		let tile_map = Arc::clone(&self.tile_map);
+		let tile_compression = self.metadata.tile_compression;
+		let tile_format = self.metadata.tile_format;
+
+		Ok(TileStream::from_bbox_async_parallel(bbox, move |coord| {
+			let reader = Arc::clone(&reader);
+			let tile_map = Arc::clone(&tile_map);
+			async move {
+				let range = tile_map.get(&coord)?;
+				let blob = reader.read_range(range).await.ok()?;
+				Some((coord, Tile::from_blob(blob, tile_compression, tile_format)))
+			}
+		}))
 	}
 }
 

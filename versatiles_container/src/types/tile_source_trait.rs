@@ -85,13 +85,6 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	/// Sources that can optimize bulk reads should override this.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>>;
 
-	async fn stream_individual_tiles(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		Ok(TileStream::from_coord_vec_async(
-			bbox.into_iter_coords().collect(),
-			async move |c| self.get_tile(&c).await.ok().flatten().map(|t| (c, t)),
-		))
-	}
-
 	/// Performs a hierarchical CLI probe at the specified depth.
 	///
 	/// Probes metadata, container specifics, tiles, and tile contents

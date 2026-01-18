@@ -129,8 +129,29 @@ impl TileSource for MockReader {
 		Ok(Some(Tile::from_blob(blob, self.metadata.tile_compression, format)))
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
-		self.stream_individual_tiles(bbox).await
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		use TileFormat::{JPG, JSON, MVT, PNG, WEBP};
+
+		let format = self.metadata.tile_format;
+		let compression = self.metadata.tile_compression;
+		let bbox_pyramid = self.metadata.bbox_pyramid.clone();
+
+		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
+			if !bbox_pyramid.contains_coord(&coord) {
+				return None;
+			}
+
+			let blob = match format {
+				JSON => Blob::from(coord.as_json()),
+				PNG => Blob::from(MOCK_BYTES_PNG.to_vec()),
+				MVT => Blob::from(MOCK_BYTES_PBF.to_vec()),
+				JPG => Blob::from(MOCK_BYTES_JPG.to_vec()),
+				WEBP => Blob::from(MOCK_BYTES_WEBP.to_vec()),
+				_ => return None,
+			};
+			let blob = compress(blob, compression).ok()?;
+			Some(Tile::from_blob(blob, compression, format))
+		}))
 	}
 }
 
