@@ -91,6 +91,31 @@ impl MockReader {
 		tilejson.set_string("type", "dummy")?;
 		Ok(MockReader { metadata, tilejson })
 	}
+
+	/// Internal helper to create a mock tile for the given coordinate.
+	fn create_mock_tile(
+		coord: &TileCoord,
+		bbox_pyramid: &TileBBoxPyramid,
+		format: TileFormat,
+		compression: TileCompression,
+	) -> Result<Option<Tile>> {
+		use TileFormat::{JPG, JSON, MVT, PNG, WEBP};
+
+		if !bbox_pyramid.contains_coord(coord) {
+			return Ok(None);
+		}
+
+		let mut blob = match format {
+			JSON => Blob::from(coord.as_json()),
+			PNG => Blob::from(MOCK_BYTES_PNG.to_vec()),
+			MVT => Blob::from(MOCK_BYTES_PBF.to_vec()),
+			JPG => Blob::from(MOCK_BYTES_JPG.to_vec()),
+			WEBP => Blob::from(MOCK_BYTES_WEBP.to_vec()),
+			_ => panic!("tile format {format:?} is not implemented for MockReader"),
+		};
+		blob = compress(blob, compression)?;
+		Ok(Some(Tile::from_blob(blob, compression, format)))
+	}
 }
 
 #[async_trait]
@@ -109,48 +134,21 @@ impl TileSource for MockReader {
 
 	#[context("fetching mock tile {:?} (format={:?}, compression={:?})", coord, self.metadata.tile_format, self.metadata.tile_compression)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		use TileFormat::{JPG, JSON, MVT, PNG, WEBP};
-
-		if !self.metadata.bbox_pyramid.contains_coord(coord) {
-			return Ok(None);
-		}
-
-		let format = self.metadata.tile_format;
-		let mut blob = match format {
-			JSON => Blob::from(coord.as_json()),
-			PNG => Blob::from(MOCK_BYTES_PNG.to_vec()),
-			MVT => Blob::from(MOCK_BYTES_PBF.to_vec()),
-			//AVIF => Blob::from(MOCK_BYTES_AVIF.to_vec()),
-			JPG => Blob::from(MOCK_BYTES_JPG.to_vec()),
-			WEBP => Blob::from(MOCK_BYTES_WEBP.to_vec()),
-			_ => panic!("tile format {format:?} is not implemented for MockReader"),
-		};
-		blob = compress(blob, self.metadata.tile_compression)?;
-		Ok(Some(Tile::from_blob(blob, self.metadata.tile_compression, format)))
+		Self::create_mock_tile(
+			coord,
+			&self.metadata.bbox_pyramid,
+			self.metadata.tile_format,
+			self.metadata.tile_compression,
+		)
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		use TileFormat::{JPG, JSON, MVT, PNG, WEBP};
-
 		let format = self.metadata.tile_format;
 		let compression = self.metadata.tile_compression;
 		let bbox_pyramid = self.metadata.bbox_pyramid.clone();
 
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
-			if !bbox_pyramid.contains_coord(&coord) {
-				return None;
-			}
-
-			let blob = match format {
-				JSON => Blob::from(coord.as_json()),
-				PNG => Blob::from(MOCK_BYTES_PNG.to_vec()),
-				MVT => Blob::from(MOCK_BYTES_PBF.to_vec()),
-				JPG => Blob::from(MOCK_BYTES_JPG.to_vec()),
-				WEBP => Blob::from(MOCK_BYTES_WEBP.to_vec()),
-				_ => return None,
-			};
-			let blob = compress(blob, compression).ok()?;
-			Some(Tile::from_blob(blob, compression, format))
+			MockReader::create_mock_tile(&coord, &bbox_pyramid, format, compression).ok()?
 		}))
 	}
 }

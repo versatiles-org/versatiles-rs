@@ -221,6 +221,20 @@ impl DirectoryReader {
 	fn read(path: &Path) -> Result<Blob> {
 		Ok(Blob::from(fs::read(path)?))
 	}
+
+	/// Internal helper to look up and read a tile by coordinate.
+	fn lookup_tile(
+		coord: &TileCoord,
+		tile_map: &HashMap<TileCoord, PathBuf>,
+		tile_compression: TileCompression,
+		tile_format: TileFormat,
+	) -> Result<Option<Tile>> {
+		if let Some(path) = tile_map.get(coord) {
+			Self::read(path).map(|blob| Some(Tile::from_blob(blob, tile_compression, tile_format)))
+		} else {
+			Ok(None)
+		}
+	}
 }
 
 /// Implements the `TileSource` for `DirectoryReader`.
@@ -245,18 +259,12 @@ impl TileSource for DirectoryReader {
 	#[context("fetching tile {:?} from directory '{}'", coord, self.dir.display())]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		log::trace!("get_tile {coord:?}");
-
-		if let Some(path) = self.tile_map.get(coord) {
-			Self::read(path).map(|blob| {
-				Some(Tile::from_blob(
-					blob,
-					self.metadata.tile_compression,
-					self.metadata.tile_format,
-				))
-			})
-		} else {
-			Ok(None)
-		}
+		Self::lookup_tile(
+			coord,
+			&self.tile_map,
+			self.metadata.tile_compression,
+			self.metadata.tile_format,
+		)
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
@@ -265,9 +273,7 @@ impl TileSource for DirectoryReader {
 		let tile_format = self.metadata.tile_format;
 
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
-			let path = tile_map.get(&coord)?;
-			let blob = Blob::from(fs::read(path).ok()?);
-			Some(Tile::from_blob(blob, tile_compression, tile_format))
+			DirectoryReader::lookup_tile(&coord, &tile_map, tile_compression, tile_format).ok()?
 		}))
 	}
 }

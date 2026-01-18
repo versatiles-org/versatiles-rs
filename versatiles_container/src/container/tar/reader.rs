@@ -192,6 +192,22 @@ impl TarTilesReader {
 			tile_map: Arc::new(tile_map),
 		})
 	}
+
+	/// Internal helper to look up and read a tile by coordinate.
+	async fn lookup_tile(
+		coord: &TileCoord,
+		tile_map: &HashMap<TileCoord, ByteRange>,
+		reader: &DataReaderFile,
+		tile_compression: TileCompression,
+		tile_format: TileFormat,
+	) -> Result<Option<Tile>> {
+		if let Some(range) = tile_map.get(coord) {
+			let blob = reader.read_range(range).await?;
+			Ok(Some(Tile::from_blob(blob, tile_compression, tile_format)))
+		} else {
+			Ok(None)
+		}
+	}
 }
 
 #[async_trait]
@@ -220,19 +236,14 @@ impl TileSource for TarTilesReader {
 	#[context("getting tile {:?}", coord)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		log::trace!("get_tile {coord:?}");
-
-		let range = self.tile_map.get(coord);
-
-		if let Some(range) = range {
-			let blob = self.reader.read_range(range).await?;
-			Ok(Some(Tile::from_blob(
-				blob,
-				self.metadata.tile_compression,
-				self.metadata.tile_format,
-			)))
-		} else {
-			Ok(None)
-		}
+		Self::lookup_tile(
+			coord,
+			&self.tile_map,
+			&self.reader,
+			self.metadata.tile_compression,
+			self.metadata.tile_format,
+		)
+		.await
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
@@ -245,9 +256,10 @@ impl TileSource for TarTilesReader {
 			let reader = Arc::clone(&reader);
 			let tile_map = Arc::clone(&tile_map);
 			async move {
-				let range = tile_map.get(&coord)?;
-				let blob = reader.read_range(range).await.ok()?;
-				Some((coord, Tile::from_blob(blob, tile_compression, tile_format)))
+				let tile = TarTilesReader::lookup_tile(&coord, &tile_map, &reader, tile_compression, tile_format)
+					.await
+					.ok()??;
+				Some((coord, tile))
 			}
 		}))
 	}
