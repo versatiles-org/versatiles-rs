@@ -92,7 +92,7 @@ impl TileSource for DummyImageSource {
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
+	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::debug!("get_tile_stream {bbox:?}");
 
 		let generate_tile = (self.generate_tile).clone();

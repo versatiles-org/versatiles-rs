@@ -83,7 +83,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	///
 	/// Default implementation wraps individual `get_tile` calls with internal synchronization.
 	/// Sources that can optimize bulk reads should override this.
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>>;
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>>;
 
 	async fn stream_individual_tiles(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		Ok(TileStream::from_coord_vec_async(
@@ -251,7 +251,7 @@ mod tests {
 			&self.tilejson
 		}
 
-		async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 			let tile_compression = self.metadata.tile_compression;
 			let tile_format = self.metadata.tile_format;
 			Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {

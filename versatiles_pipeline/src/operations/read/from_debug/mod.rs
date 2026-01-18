@@ -104,7 +104,7 @@ impl TileSource for Operation {
 		SourceType::new_container("debug", "debug")
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::debug!("get_tile_stream {bbox:?}");
 		let format = self.metadata.tile_format;
 		match self.metadata.tile_format.to_type() {

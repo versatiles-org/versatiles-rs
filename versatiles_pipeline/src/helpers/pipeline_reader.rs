@@ -127,7 +127,7 @@ impl TileSource for PipelineReader {
 
 	/// Streams all tiles intersecting `bbox` by executing the pipeline's output operation.
 	#[context("streaming tiles for bbox {:?} via pipeline '{}'", bbox, self.name)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::debug!("get_tile_stream {bbox:?}");
 		self.operation.get_tile_stream(bbox).await
 	}

@@ -36,14 +36,14 @@ struct Args {
 	sources: Vec<VPLPipeline>,
 }
 
-/// [`TileSource`] implementation that merges vector tiles “on the fly.”
+/// [`TileSource`] implementation that merges vector tiles "on the fly."
 ///
-/// * Keeps only metadata in memory; actual tile data stream straight through.  
+/// * Keeps only metadata in memory; actual tile data stream straight through.
 /// * Performs no disk I/O itself – it relies entirely on the child pipelines.
 #[derive(Debug)]
 struct Operation {
 	metadata: TileSourceMetadata,
-	sources: Vec<Box<dyn TileSource>>,
+	sources: Arc<Vec<Box<dyn TileSource>>>,
 	tilejson: TileJSON,
 }
 
@@ -105,7 +105,7 @@ impl ReadTileSource for Operation {
 
 		Ok(Box::new(Self {
 			metadata,
-			sources,
+			sources: Arc::new(sources),
 			tilejson,
 		}) as Box<dyn TileSource>)
 	}
@@ -130,15 +130,18 @@ impl TileSource for Operation {
 
 	/// Stream merged vector tiles for every coordinate in `bbox`.
 	#[context("Failed to get merged tile stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::debug!("get_tile_stream {bbox:?}");
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
+		let sources = Arc::clone(&self.sources);
+		let format = self.metadata.tile_format;
 
-		Ok(TileStream::from_streams(stream::iter(bboxes).map(
-			move |bbox| async move {
+		Ok(TileStream::from_streams(stream::iter(bboxes).map(move |bbox| {
+			let sources = Arc::clone(&sources);
+			async move {
 				let mut tiles = TileBBoxMap::<Vec<VectorTile>>::new_default(bbox).unwrap();
 
-				for source in &self.sources {
+				for source in sources.iter() {
 					source
 						.get_tile_stream(bbox)
 						.await
@@ -148,8 +151,6 @@ impl TileSource for Operation {
 						})
 						.await;
 				}
-
-				let format = self.metadata.tile_format;
 
 				TileStream::from_vec(
 					tiles
@@ -166,8 +167,8 @@ impl TileSource for Operation {
 						})
 						.collect(),
 				)
-			},
-		)))
+			}
+		})))
 	}
 }
 

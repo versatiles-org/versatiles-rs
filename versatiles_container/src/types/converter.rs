@@ -202,7 +202,7 @@ impl TileSource for TilesConvertReader {
 		Ok(Some(tile))
 	}
 
-	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
+	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		if self.converter_parameters.swap_xy {
 			bbox.swap_xy();
 		}

@@ -78,7 +78,7 @@ pub struct VersaTilesReader {
 	block_index: BlockIndex,
 	header: FileHeader,
 	metadata: TileSourceMetadata,
-	reader: DataReader,
+	reader: Arc<DataReader>,
 	tile_index_cache: Mutex<LimitedCache<TileCoord, Arc<TileIndex>>>,
 	tilejson: TileJSON,
 	runtime: TilesRuntime,
@@ -145,7 +145,7 @@ impl VersaTilesReader {
 			block_index,
 			header,
 			metadata,
-			reader,
+			reader: Arc::new(reader),
 			tile_index_cache: Mutex::new(LimitedCache::with_maximum_size(100_000_000)),
 			tilejson,
 			runtime,
@@ -376,31 +376,38 @@ impl TileSource for VersaTilesReader {
 	}
 
 	#[context("streaming tiles for bbox {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::debug!("get_tile_stream {bbox:?}");
 		let chunks = self.get_chunks(bbox).await;
+		let reader = Arc::clone(&self.reader);
+		let tile_compression = self.metadata.tile_compression;
+		let tile_format = self.metadata.tile_format;
+
 		Ok(TileStream::from_stream(
 			futures::stream::iter(chunks)
-				.then(move |chunk| async move {
-					let big_blob = self.reader.read_range(&chunk.range).await.unwrap();
+				.then(move |chunk| {
+					let reader = Arc::clone(&reader);
+					async move {
+						let big_blob = reader.read_range(&chunk.range).await.unwrap();
 
-					let entries: Vec<(TileCoord, Tile)> = chunk
-						.tiles
-						.into_iter()
-						.map(|(coord, range)| {
-							assert!(bbox.contains(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
+						let entries: Vec<(TileCoord, Tile)> = chunk
+							.tiles
+							.into_iter()
+							.map(|(coord, range)| {
+								assert!(bbox.contains(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
 
-							let start = usize::try_from(range.offset - chunk.range.offset).unwrap();
-							let end = start + usize::try_from(range.length).unwrap();
+								let start = usize::try_from(range.offset - chunk.range.offset).unwrap();
+								let end = start + usize::try_from(range.length).unwrap();
 
-							let blob = Blob::from(big_blob.range(start..end));
-							let tile = Tile::from_blob(blob, self.metadata.tile_compression, self.metadata.tile_format);
+								let blob = Blob::from(big_blob.range(start..end));
+								let tile = Tile::from_blob(blob, tile_compression, tile_format);
 
-							(coord, tile)
-						})
-						.collect();
+								(coord, tile)
+							})
+							.collect();
 
-					futures::stream::iter(entries)
+						futures::stream::iter(entries)
+					}
 				})
 				.flatten()
 				.boxed(),

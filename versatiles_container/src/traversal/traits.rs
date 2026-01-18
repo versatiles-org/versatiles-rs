@@ -201,7 +201,7 @@ mod tests {
 			&self.tilejson
 		}
 
-		async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 			let compression = self.metadata.tile_compression;
 			let format = self.metadata.tile_format;
 			Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |coord| {

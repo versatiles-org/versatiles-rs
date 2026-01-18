@@ -44,7 +44,7 @@ struct Args {
 /// contains them.
 struct Operation {
 	metadata: TileSourceMetadata,
-	sources: Vec<Box<dyn TileSource>>,
+	sources: Arc<Vec<Box<dyn TileSource>>>,
 	tilejson: TileJSON,
 }
 
@@ -95,7 +95,7 @@ impl Operation {
 
 		Ok(Self {
 			metadata,
-			sources,
+			sources: Arc::new(sources),
 			tilejson,
 		})
 	}
@@ -120,18 +120,20 @@ impl TileSource for Operation {
 
 	/// Stream packed tiles intersecting `bbox` using the overlay strategy.
 	#[context("Failed to get stacked tile stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::debug!("get_tile_stream {bbox:?}");
 		// We need the desired output compression inside the closure, so copy it.
 		let format = self.metadata.tile_format;
+		let sources = Arc::clone(&self.sources);
 
 		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
-		Ok(TileStream::from_streams(stream::iter(sub_bboxes).map(
-			move |bbox| async move {
+		Ok(TileStream::from_streams(stream::iter(sub_bboxes).map(move |bbox| {
+			let sources = Arc::clone(&sources);
+			async move {
 				let mut tiles = TileBBoxMap::<Option<Tile>>::new_default(bbox).unwrap();
 
-				for source in &self.sources {
+				for source in sources.iter() {
 					let mut bbox_left = TileBBox::new_empty(bbox.level).unwrap();
 					for (coord, slot) in tiles.iter() {
 						if slot.is_none() {
@@ -158,8 +160,8 @@ impl TileSource for Operation {
 					.filter_map(|(coord, item)| item.map(|tile| (coord, tile)))
 					.collect::<Vec<_>>();
 				TileStream::from_vec(vec)
-			},
-		)))
+			}
+		})))
 	}
 }
 

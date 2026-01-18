@@ -15,12 +15,9 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use imageproc::image::DynamicImage;
 use std::{fmt::Debug, sync::Arc, vec};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{
-	GeoBBox, TileBBox, TileBBoxPyramid, TileCompression, TileFormat, TileJSON, TileSchema, TileStream,
-};
+use versatiles_core::{TileBBox, TileBBoxPyramid, TileCompression, TileFormat, TileJSON, TileSchema, TileStream};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitInfo;
 
@@ -51,10 +48,10 @@ struct Args {
 #[derive(Debug)]
 /// Concrete [`TileSource`] that merely forwards every request to an
 /// underlying container [`TileSource`].  A cached copy of the
-/// container’s [`TileJSON`] metadata is kept so downstream stages can query
+/// container's [`TileJSON`] metadata is kept so downstream stages can query
 /// bounds and zoom levels without touching the reader again.
 struct Operation {
-	source: RasterSource,
+	source: Arc<RasterSource>,
 	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 	tile_size: u32,
@@ -112,20 +109,21 @@ impl Operation {
 		log::trace!("from_gdal_raster::Operation built successfully");
 
 		Ok(Self {
-			source,
+			source: Arc::new(source),
 			metadata,
 			tilejson,
 			tile_size,
 		})
 	}
 
+	#[cfg(test)]
 	#[context("Failed to get image data ({width}x{height}) for bbox ({bbox:?}) from GDAL dataset")]
 	async fn get_image_data_from_gdal(
 		&self,
-		bbox: &GeoBBox,
+		bbox: &versatiles_core::GeoBBox,
 		width: usize,
 		height: usize,
-	) -> Result<Option<DynamicImage>> {
+	) -> Result<Option<imageproc::image::DynamicImage>> {
 		log::debug!("get_image_data_from_gdal: bbox={bbox:?}, size={width}x{height}");
 		let res = self.source.get_image(bbox, width, height).await;
 		match &res {
@@ -167,7 +165,7 @@ impl TileSource for Operation {
 
 	/// Stream decoded raster images for all tiles within the bounding box.
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
+	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::debug!("get_tile_stream {bbox:?}");
 
 		let count = 8192u32.div_euclid(self.tile_size).max(1);
@@ -176,26 +174,25 @@ impl TileSource for Operation {
 
 		let bboxes: Vec<TileBBox> = bbox.iter_bbox_grid(count).collect();
 		let size = self.tile_size;
+		let tile_format = self.metadata.tile_format;
+		let source = Arc::clone(&self.source);
 
 		use futures::stream::{self, StreamExt};
 		let streams = stream::iter(bboxes).map(move |bbox| {
-			let size = size;
+			let source = Arc::clone(&source);
 			async move {
 				if bbox.is_empty() {
 					return TileStream::empty();
 				}
 
-				let image = self
-					.get_image_data_from_gdal(
-						&bbox.to_geo_bbox().unwrap(),
-						(size * bbox.width()) as usize,
-						(size * bbox.height()) as usize,
-					)
-					.await
-					.unwrap();
+				let geo_bbox = bbox.to_geo_bbox().unwrap();
+				let width = (size * bbox.width()) as usize;
+				let height = (size * bbox.height()) as usize;
+
+				log::debug!("get_image_data_from_gdal: bbox={geo_bbox:?}, size={width}x{height}");
+				let image = source.get_image(&geo_bbox, width, height).await.unwrap();
 
 				if let Some(image) = image {
-					let tile_format = self.metadata.tile_format;
 					// Crop into tiles on a blocking thread
 					let vec = tokio::task::spawn_blocking(move || {
 						bbox

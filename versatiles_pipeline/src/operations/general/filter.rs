@@ -86,7 +86,7 @@ impl TileSource for Operation {
 		&self.tilejson
 	}
 
-	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
+	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::debug!("get_tile_stream {bbox:?}");
 		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
 		if bbox.is_empty() {
