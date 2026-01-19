@@ -280,14 +280,18 @@ mod tests {
 	use versatiles_core::{Blob, TileCompression, TileCompression::Uncompressed, TileFormat};
 	use versatiles_image::{DynamicImage, DynamicImageTraitConvert};
 
-	pub fn get_color(blob: &Blob) -> String {
-		let image = DynamicImage::from_blob(blob, TileFormat::PNG).unwrap();
-		let pixel = image.iter_pixels().next().unwrap();
-		pixel.iter().fold(String::new(), |mut acc, v| {
-			use std::fmt::Write;
+	fn rgba_to_hex(rgba: &[u8]) -> String {
+		use std::fmt::Write;
+		rgba.iter().fold(String::new(), |mut acc, v| {
 			write!(acc, "{v:02X}").unwrap();
 			acc
 		})
+	}
+
+	pub fn get_color(blob: &Blob) -> String {
+		let image = DynamicImage::from_blob(blob, TileFormat::PNG).unwrap();
+		let pixel = image.iter_pixels().next().unwrap();
+		rgba_to_hex(pixel)
 	}
 
 	#[tokio::test]
@@ -477,13 +481,7 @@ mod tests {
 		let coord = TileCoord::new(0, 0, 0).unwrap();
 		let result = get_tile(coord, sources).await.unwrap();
 		let color = result.unwrap().1.as_image().unwrap().average_color();
-		let color_string = color.iter().fold(String::new(), |mut acc, v| {
-			use std::fmt::Write;
-			write!(acc, "{v:02X}").unwrap();
-			acc
-		});
-
-		assert_eq!(color_string, expected);
+		assert_eq!(rgba_to_hex(&color), expected);
 	}
 
 	#[tokio::test]
@@ -562,119 +560,62 @@ mod tests {
 	// Auto-overscale tests
 	// ============================================================================
 
+	#[rstest]
+	// native_level_max = 8: levels 0-8 are native, 9+ are overscaled
+	#[case(8, &[(0, false), (7, false), (8, false), (9, true), (15, true)])]
+	// sentinel value: nothing is ever overscaled
+	#[case(NO_OVERSCALE_LEVEL, &[(0, false), (30, false), (254, false)])]
 	#[test]
-	fn test_source_entry_is_overscaled() {
+	fn test_source_entry_is_overscaled(#[case] native_level_max: u8, #[case] expectations: &[(u8, bool)]) {
 		use versatiles_core::TileFormat::PNG;
 
 		let source = DummyImageSource::from_color(&[255, 0, 0], 4, PNG, None).unwrap();
 		let entry = SourceEntry {
 			source: Arc::new(Box::new(source) as Box<dyn TileSource>),
-			native_level_max: 8,
+			native_level_max,
 		};
 
-		// At or below native level: not overscaled
-		assert!(!entry.is_overscaled(0));
-		assert!(!entry.is_overscaled(7));
-		assert!(!entry.is_overscaled(8));
-
-		// Above native level: overscaled
-		assert!(entry.is_overscaled(9));
-		assert!(entry.is_overscaled(15));
+		for &(level, expected) in expectations {
+			assert_eq!(entry.is_overscaled(level), expected, "level {level}");
+		}
 	}
 
-	#[test]
-	fn test_source_entry_no_overscale_level() {
-		use versatiles_core::TileFormat::PNG;
-
-		let source = DummyImageSource::from_color(&[255, 0, 0], 4, PNG, None).unwrap();
-		let entry = SourceEntry {
-			source: Arc::new(Box::new(source) as Box<dyn TileSource>),
-			native_level_max: NO_OVERSCALE_LEVEL, // sentinel value
-		};
-
-		// With sentinel, nothing is ever overscaled
-		assert!(!entry.is_overscaled(0));
-		assert!(!entry.is_overscaled(30));
-		assert!(!entry.is_overscaled(254));
-	}
-
+	#[rstest]
+	#[case(&[true], false)] // all overscaled -> None
+	#[case(&[false], true)] // single native source -> Some
+	#[case(&[true, false], true)] // mixed (overscaled + native) -> Some
 	#[tokio::test]
-	async fn test_get_tile_returns_none_when_all_overscaled() {
+	async fn test_get_tile_native_overscale_behavior(#[case] overscaled_flags: &[bool], #[case] expect_some: bool) {
 		use versatiles_core::TileFormat::PNG;
 
-		// Create sources where all are marked as overscaled
-		let source = DummyImageSource::from_color(&[255, 0, 0, 255], 4, PNG, None).unwrap();
-		let entries = vec![(Arc::new(Box::new(source) as Box<dyn TileSource>), true)]; // is_overscaled = true
+		let entries: Vec<_> = overscaled_flags
+			.iter()
+			.enumerate()
+			.map(|(i, &is_overscaled)| {
+				// Use semi-transparent for non-last sources to avoid short-circuiting
+				let alpha = if i < overscaled_flags.len() - 1 { 128 } else { 255 };
+				let source = DummyImageSource::from_color(&[255, 0, 0, alpha], 4, PNG, None).unwrap();
+				(Arc::new(Box::new(source) as Box<dyn TileSource>), is_overscaled)
+			})
+			.collect();
 
 		let coord = TileCoord::new(0, 0, 0).unwrap();
 		let result = get_tile(coord, entries).await.unwrap();
-
-		// Should return None because no native source contributed
-		assert!(result.is_none());
+		assert_eq!(result.is_some(), expect_some);
 	}
 
+	#[rstest]
+	#[case("true")]
+	#[case("false")]
 	#[tokio::test]
-	async fn test_get_tile_returns_tile_when_native_source_exists() {
-		use versatiles_core::TileFormat::PNG;
-
-		// Create a native source (is_overscaled = false)
-		let source = DummyImageSource::from_color(&[255, 0, 0, 255], 4, PNG, None).unwrap();
-		let entries = vec![(Arc::new(Box::new(source) as Box<dyn TileSource>), false)]; // is_overscaled = false
-
-		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let result = get_tile(coord, entries).await.unwrap();
-
-		// Should return the tile
-		assert!(result.is_some());
-	}
-
-	#[tokio::test]
-	async fn test_get_tile_mixed_native_and_overscaled() {
-		use versatiles_core::TileFormat::PNG;
-
-		// Create two sources: one overscaled, one native
-		let source1 = DummyImageSource::from_color(&[255, 0, 0, 128], 4, PNG, None).unwrap(); // overscaled
-		let source2 = DummyImageSource::from_color(&[0, 255, 0, 255], 4, PNG, None).unwrap(); // native
-
-		let entries = vec![
-			(Arc::new(Box::new(source1) as Box<dyn TileSource>), true), // overscaled
-			(Arc::new(Box::new(source2) as Box<dyn TileSource>), false), // native
-		];
-
-		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let result = get_tile(coord, entries).await.unwrap();
-
-		// Should return a blended tile because at least one native source exists
-		assert!(result.is_some());
-	}
-
-	#[tokio::test]
-	async fn test_auto_overscale_enabled_vpl() -> Result<()> {
+	async fn test_auto_overscale_vpl(#[case] value: &str) -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
-
-		// Test that auto_overscale=true parses correctly
 		let result = factory
-			.operation_from_vpl("from_stacked_raster auto_overscale=true [ from_container filename=07.png ]")
+			.operation_from_vpl(&format!(
+				"from_stacked_raster auto_overscale={value} [ from_container filename=07.png ]"
+			))
 			.await?;
-
-		// Should have valid metadata
 		assert_eq!(result.metadata().tile_format.to_type(), TileType::Raster);
-
-		Ok(())
-	}
-
-	#[tokio::test]
-	async fn test_auto_overscale_disabled_vpl() -> Result<()> {
-		let factory = PipelineFactory::new_dummy();
-
-		// Test that auto_overscale=false parses correctly
-		let result = factory
-			.operation_from_vpl("from_stacked_raster auto_overscale=false [ from_container filename=07.png ]")
-			.await?;
-
-		// Should have valid metadata
-		assert_eq!(result.metadata().tile_format.to_type(), TileType::Raster);
-
 		Ok(())
 	}
 }
