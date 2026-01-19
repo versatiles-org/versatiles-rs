@@ -421,145 +421,146 @@ mod tests {
 		);
 	}
 
-	#[test]
-	fn test_decode_struct_all_field_types() {
-		use syn::parse_quote;
-		// Struct covering all supported field types
-		let cases: Vec<(DeriveInput, &str, &str)> = vec![
-			(
-				parse_quote!(
-					struct T {
-						v: String,
-					}
-				),
-				"get_property_string_required",
-				"**`v`: String (required)**",
-			),
-			(
-				parse_quote!(
-					struct T {
-						v: bool,
-					}
-				),
-				"get_property_bool_required",
-				"**`v`: Boolean (required)**",
-			),
-			(
-				parse_quote!(
-					struct T {
-						v: u8,
-					}
-				),
-				"get_property_number_required::<u8>",
-				"**`v`: u8 (required)**",
-			),
-			(
-				parse_quote!(
-					struct T {
-						v: [f64; 4],
-					}
-				),
-				"get_property_number_array_required::<f64>",
-				"**`v`: [f64,f64,f64,f64] (required)**",
-			),
-			(
-				parse_quote!(
-					struct T {
-						v: Option<bool>,
-					}
-				),
-				"get_property_bool_option",
-				"*`v`: bool (optional)*",
-			),
-			(
-				parse_quote!(
-					struct T {
-						v: Option<String>,
-					}
-				),
-				"get_property_string_option",
-				"*`v`: String (optional)*",
-			),
-			(
-				parse_quote!(
-					struct T {
-						v: Option<f32>,
-					}
-				),
-				"get_property_number_option::<f32>",
-				"*`v`: f32 (optional)*",
-			),
-			(
-				parse_quote!(
-					struct T {
-						v: Option<u8>,
-					}
-				),
-				"get_property_number_option::<u8>",
-				"*`v`: u8 (optional)*",
-			),
-			(
-				parse_quote!(
-					struct T {
-						v: Option<u32>,
-					}
-				),
-				"get_property_number_option::<u32>",
-				"*`v`: u32 (optional)*",
-			),
-			(
-				parse_quote!(
-					struct T {
-						v: Option<[f64; 4]>,
-					}
-				),
-				"get_property_number_array_option::<f64, 4>",
-				"*`v`: [f64,f64,f64,f64] (optional)*",
-			),
-			(
-				parse_quote!(
-					struct T {
-						v: Option<TileFormat>,
-					}
-				),
-				"get_property_enum_option::<TileFormat>",
-				"*`v`: TileFormat (optional)*",
-			),
-		];
+	/// Helper to verify decode_struct output for a single-field struct.
+	fn assert_field_type_decodes(input: DeriveInput, getter: &str, comment: &str) {
+		let data_struct = match &input.data {
+			syn::Data::Struct(ds) => ds.clone(),
+			_ => panic!("Expected struct data"),
+		};
+		let ts = decode_struct(input, data_struct).unwrap();
+		assert_eq!(
+			pretty_tokens(ts),
+			[
+				"impl T {",
+				"    pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {",
+				"        let argument_names: Vec<String> = vec![\"v\".to_string()];",
+				"        let property_names = node.get_property_names();",
+				"        for property_name in property_names {",
+				"            if !argument_names.contains(&property_name) {",
+				"                anyhow::bail!(",
+				"                    \"The '{}' operation does not support the argument '{}'.\\nOnly the following arguments are supported:\\n'{}'\",",
+				"                    node.name, property_name, argument_names.join(\"', '\")",
+				"                );",
+				"            }",
+				"        }",
+				"        Ok(Self {",
+				&format!("            v: node.{getter}(\"v\")?,"),
+				"        })",
+				"    }",
+				"    pub fn get_docs() -> String {",
+				&format!("        \"### Parameters\\n\\n- {comment}\".to_string()"),
+				"    }",
+				"}",
+				""
+			]
+		);
+	}
 
-		for (input, getter, comment) in cases {
-			let data_struct = match &input.data {
-				syn::Data::Struct(ds) => ds.clone(),
-				_ => panic!("Expected struct data"),
-			};
-			let ts = decode_struct(input.clone(), data_struct).unwrap();
-			assert_eq!(
-				pretty_tokens(ts),
-				[
-					"impl T {",
-					"    pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {",
-					"        let argument_names: Vec<String> = vec![\"v\".to_string()];",
-					"        let property_names = node.get_property_names();",
-					"        for property_name in property_names {",
-					"            if !argument_names.contains(&property_name) {",
-					"                anyhow::bail!(",
-					"                    \"The '{}' operation does not support the argument '{}'.\\nOnly the following arguments are supported:\\n'{}'\",",
-					"                    node.name, property_name, argument_names.join(\"', '\")",
-					"                );",
-					"            }",
-					"        }",
-					"        Ok(Self {",
-					&format!("            v: node.{getter}(\"v\")?,"),
-					"        })",
-					"    }",
-					"    pub fn get_docs() -> String {",
-					&format!("        \"### Parameters\\n\\n- {comment}\".to_string()"),
-					"    }",
-					"}",
-					""
-				]
-			);
-		}
+	#[test]
+	fn test_decode_struct_required_types() {
+		assert_field_type_decodes(
+			parse_quote!(
+				struct T {
+					v: String,
+				}
+			),
+			"get_property_string_required",
+			"**`v`: String (required)**",
+		);
+		assert_field_type_decodes(
+			parse_quote!(
+				struct T {
+					v: bool,
+				}
+			),
+			"get_property_bool_required",
+			"**`v`: Boolean (required)**",
+		);
+		assert_field_type_decodes(
+			parse_quote!(
+				struct T {
+					v: u8,
+				}
+			),
+			"get_property_number_required::<u8>",
+			"**`v`: u8 (required)**",
+		);
+		assert_field_type_decodes(
+			parse_quote!(
+				struct T {
+					v: [f64; 4],
+				}
+			),
+			"get_property_number_array_required::<f64>",
+			"**`v`: [f64,f64,f64,f64] (required)**",
+		);
+	}
+
+	#[test]
+	fn test_decode_struct_optional_types() {
+		assert_field_type_decodes(
+			parse_quote!(
+				struct T {
+					v: Option<bool>,
+				}
+			),
+			"get_property_bool_option",
+			"*`v`: bool (optional)*",
+		);
+		assert_field_type_decodes(
+			parse_quote!(
+				struct T {
+					v: Option<String>,
+				}
+			),
+			"get_property_string_option",
+			"*`v`: String (optional)*",
+		);
+		assert_field_type_decodes(
+			parse_quote!(
+				struct T {
+					v: Option<f32>,
+				}
+			),
+			"get_property_number_option::<f32>",
+			"*`v`: f32 (optional)*",
+		);
+		assert_field_type_decodes(
+			parse_quote!(
+				struct T {
+					v: Option<u8>,
+				}
+			),
+			"get_property_number_option::<u8>",
+			"*`v`: u8 (optional)*",
+		);
+		assert_field_type_decodes(
+			parse_quote!(
+				struct T {
+					v: Option<u32>,
+				}
+			),
+			"get_property_number_option::<u32>",
+			"*`v`: u32 (optional)*",
+		);
+		assert_field_type_decodes(
+			parse_quote!(
+				struct T {
+					v: Option<[f64; 4]>,
+				}
+			),
+			"get_property_number_array_option::<f64, 4>",
+			"*`v`: [f64,f64,f64,f64] (optional)*",
+		);
+		assert_field_type_decodes(
+			parse_quote!(
+				struct T {
+					v: Option<TileFormat>,
+				}
+			),
+			"get_property_enum_option::<TileFormat>",
+			"*`v`: TileFormat (optional)*",
+		);
 	}
 
 	#[test]
