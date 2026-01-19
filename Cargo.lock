@@ -4299,6 +4299,7 @@ dependencies = [
  "time",
  "tokio",
  "uuid",
+ "versatiles_container",
  "versatiles_core",
  "versatiles_derive",
  "versatiles_geometry",

@@ -49,6 +49,10 @@ wildmatch.workspace = true
 
 versatiles_core = { workspace = true, features = ["test"] }
 
+[dev-dependencies.versatiles_container]
+path = "."
+features = ["test"]
+
 [features]
 default = []
 cli = ["versatiles_core/cli"]
