@@ -157,3 +157,113 @@ impl<'a> BlockBuilder<'a> {
 		Ok(Some(block))
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use versatiles_core::io::DataWriterBlob;
+
+	fn coord(level: u8, x: u32, y: u32) -> TileCoord {
+		TileCoord::new(level, x, y).unwrap()
+	}
+
+	#[test]
+	fn empty_block_returns_none() {
+		let mut writer = DataWriterBlob::new().unwrap();
+		let builder = BlockBuilder::new(10, &mut writer).unwrap();
+		let result = builder.finalize().unwrap();
+		assert!(result.is_none());
+	}
+
+	#[test]
+	fn single_tile_creates_valid_block() {
+		let mut writer = DataWriterBlob::new().unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+
+		builder
+			.write_tile(coord(10, 100, 200), Blob::from("tile data"))
+			.unwrap();
+
+		let block = builder.finalize().unwrap().unwrap();
+		let bbox = block.get_global_bbox();
+
+		assert_eq!(bbox.level, 10);
+		assert_eq!(bbox.width(), 1);
+		assert_eq!(bbox.height(), 1);
+	}
+
+	#[test]
+	fn multiple_tiles_same_block_work() {
+		let mut writer = DataWriterBlob::new().unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+
+		// All tiles have same x/256=0, y/256=0
+		builder.write_tile(coord(10, 10, 20), Blob::from("tile1")).unwrap();
+		builder.write_tile(coord(10, 50, 100), Blob::from("tile2")).unwrap();
+		builder.write_tile(coord(10, 200, 255), Blob::from("tile3")).unwrap();
+
+		let block = builder.finalize().unwrap().unwrap();
+		let bbox = block.get_global_bbox();
+
+		// Bbox should span from (10,20) to (200,255)
+		assert_eq!(bbox.x_min().unwrap(), 10);
+		assert_eq!(bbox.y_min().unwrap(), 20);
+		assert_eq!(bbox.x_max().unwrap(), 200);
+		assert_eq!(bbox.y_max().unwrap(), 255);
+	}
+
+	#[test]
+	fn tiles_from_different_blocks_cause_error() {
+		let mut writer = DataWriterBlob::new().unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+
+		// First tile in block (0, 0)
+		builder.write_tile(coord(10, 100, 100), Blob::from("tile1")).unwrap();
+
+		// Second tile in block (1, 0) - different x/256
+		let result = builder.write_tile(coord(10, 256, 100), Blob::from("tile2"));
+		assert!(result.is_err());
+
+		// Check the error chain contains the block coords mismatch message
+		let err = result.unwrap_err();
+		let full_err = format!("{err:?}");
+		assert!(
+			full_err.contains("block coords") && full_err.contains("expected"),
+			"Error chain should mention block coords mismatch: {full_err}"
+		);
+	}
+
+	#[test]
+	fn deduplication_works_for_small_tiles() {
+		let mut writer = DataWriterBlob::new().unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+
+		let small_blob = Blob::from("small"); // < 1000 bytes
+
+		// Write the same small blob twice
+		builder.write_tile(coord(10, 10, 10), small_blob.clone()).unwrap();
+		builder.write_tile(coord(10, 11, 10), small_blob.clone()).unwrap();
+
+		let block = builder.finalize().unwrap().unwrap();
+
+		// The tiles_range should be smaller than 2x the blob size
+		// because the second tile reuses the first tile's data
+		let tiles_range = block.get_tiles_range();
+		assert!(tiles_range.length < 2 * small_blob.len());
+	}
+
+	#[test]
+	fn block_size_limited_to_256x256() {
+		// This is enforced by BlockDefinition::new() which checks bbox dimensions
+		let mut writer = DataWriterBlob::new().unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+
+		// Write tiles spanning more than 256 in one dimension would require
+		// tiles from different blocks, which is caught by block_coords validation
+		builder.write_tile(coord(10, 0, 0), Blob::from("tile")).unwrap();
+
+		// This would be in a different block (x/256 = 1)
+		let result = builder.write_tile(coord(10, 256, 0), Blob::from("tile2"));
+		assert!(result.is_err());
+	}
+}
