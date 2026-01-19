@@ -582,8 +582,11 @@ mod tests {
 
 	#[rstest]
 	#[case(&[true], false)] // all overscaled -> None
+	#[case(&[true, true], false)] // all overscaled -> None
 	#[case(&[false], true)] // single native source -> Some
+	#[case(&[false, true], true)] // mixed (overscaled + native) -> Some
 	#[case(&[true, false], true)] // mixed (overscaled + native) -> Some
+	#[case(&[false, false], true)] // all native -> Some
 	#[tokio::test]
 	async fn test_get_tile_native_overscale_behavior(#[case] overscaled_flags: &[bool], #[case] expect_some: bool) {
 		use versatiles_core::TileFormat::PNG;
