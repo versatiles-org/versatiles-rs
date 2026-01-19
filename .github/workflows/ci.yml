@@ -80,7 +80,7 @@ jobs:
         with:
           shared-key: "linux-docs"
           cache-targets: true
-          cache-on-failure: true
+          cache-on-failure: false
 
       - name: Build docs
         run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
@@ -106,7 +106,7 @@ jobs:
         with:
           shared-key: "linux-nodejs"
           cache-targets: true
-          cache-on-failure: true
+          cache-on-failure: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -168,7 +168,7 @@ jobs:
         with:
           shared-key: "linux-coverage"
           cache-targets: true
-          cache-on-failure: true
+          cache-on-failure: false
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
@@ -228,7 +228,7 @@ jobs:
         with:
           shared-key: "linux-feature-${{ matrix.name }}"
           cache-targets: true
-          cache-on-failure: true
+          cache-on-failure: false
 
       - name: Check compilation
         run: cargo check --workspace --all-targets ${{ matrix.features }}
@@ -265,7 +265,7 @@ jobs:
         with:
           shared-key: "windows-lint"
           cache-targets: true
-          cache-on-failure: true
+          cache-on-failure: false
 
       - name: Check format
         run: cargo fmt -- --check
@@ -297,7 +297,7 @@ jobs:
         with:
           shared-key: "windows-test"
           cache-targets: true
-          cache-on-failure: true
+          cache-on-failure: false
 
       - name: Test
         run: cargo test --workspace --all-targets
@@ -332,7 +332,7 @@ jobs:
         with:
           shared-key: "windows-nodejs"
           cache-targets: true
-          cache-on-failure: true
+          cache-on-failure: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
