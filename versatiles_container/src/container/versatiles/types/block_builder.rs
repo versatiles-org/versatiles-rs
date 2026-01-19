@@ -266,4 +266,254 @@ mod tests {
 		let result = builder.write_tile(coord(10, 256, 0), Blob::from("tile2"));
 		assert!(result.is_err());
 	}
+
+	#[test]
+	fn level_0_single_tile_block() {
+		// Level 0 has only one possible tile (0,0)
+		let mut writer = DataWriterBlob::new().unwrap();
+		let mut builder = BlockBuilder::new(0, &mut writer).unwrap();
+
+		builder.write_tile(coord(0, 0, 0), Blob::from("world tile")).unwrap();
+
+		let block = builder.finalize().unwrap().unwrap();
+		let bbox = block.get_global_bbox();
+
+		assert_eq!(bbox.level, 0);
+		assert_eq!(bbox.width(), 1);
+		assert_eq!(bbox.height(), 1);
+		assert_eq!(bbox.x_min().unwrap(), 0);
+		assert_eq!(bbox.y_min().unwrap(), 0);
+	}
+
+	#[test]
+	fn high_zoom_level_large_coordinates() {
+		// Level 14 has coordinates up to 16383
+		let mut writer = DataWriterBlob::new().unwrap();
+		let mut builder = BlockBuilder::new(14, &mut writer).unwrap();
+
+		// Block at (63, 63) - coordinates 16128-16383
+		builder
+			.write_tile(coord(14, 16128, 16128), Blob::from("tile1"))
+			.unwrap();
+		builder
+			.write_tile(coord(14, 16383, 16383), Blob::from("tile2"))
+			.unwrap();
+
+		let block = builder.finalize().unwrap().unwrap();
+		let bbox = block.get_global_bbox();
+
+		assert_eq!(bbox.x_min().unwrap(), 16128);
+		assert_eq!(bbox.y_min().unwrap(), 16128);
+		assert_eq!(bbox.x_max().unwrap(), 16383);
+		assert_eq!(bbox.y_max().unwrap(), 16383);
+	}
+
+	#[test]
+	fn block_boundary_tiles_255_and_256() {
+		// Tile at x=255 is in block 0, tile at x=256 is in block 1
+		let mut writer = DataWriterBlob::new().unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+
+		// Last tile in block (0, 0)
+		builder.write_tile(coord(10, 255, 255), Blob::from("tile")).unwrap();
+
+		let block = builder.finalize().unwrap().unwrap();
+		let bbox = block.get_global_bbox();
+
+		assert_eq!(bbox.x_min().unwrap(), 255);
+		assert_eq!(bbox.y_min().unwrap(), 255);
+		assert_eq!(bbox.x_max().unwrap(), 255);
+		assert_eq!(bbox.y_max().unwrap(), 255);
+	}
+
+	#[test]
+	fn tile_level_must_match_builder_level() {
+		let mut writer = DataWriterBlob::new().unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+
+		// Try to write a tile with wrong level
+		let result = builder.write_tile(coord(9, 100, 100), Blob::from("wrong level"));
+
+		// This should fail because include_coord checks the level
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn sparse_block_has_minimal_bbox() {
+		// Write only 2 tiles far apart within the same block
+		let mut writer = DataWriterBlob::new().unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+
+		builder.write_tile(coord(10, 5, 10), Blob::from("tile1")).unwrap();
+		builder.write_tile(coord(10, 200, 100), Blob::from("tile2")).unwrap();
+
+		let block = builder.finalize().unwrap().unwrap();
+		let bbox = block.get_global_bbox();
+
+		// Bbox should be exactly (5,10) to (200,100), not the full 256x256
+		assert_eq!(bbox.x_min().unwrap(), 5);
+		assert_eq!(bbox.y_min().unwrap(), 10);
+		assert_eq!(bbox.x_max().unwrap(), 200);
+		assert_eq!(bbox.y_max().unwrap(), 100);
+
+		// Total tiles in bbox: 196 * 91 = 17836
+		// But only 2 tiles were actually written
+		assert_eq!(bbox.count_tiles(), 196 * 91);
+	}
+
+	#[test]
+	fn tile_index_row_major_order() {
+		// Verify that tiles are indexed in row-major order (x varies fastest)
+		let mut writer = DataWriterBlob::new().unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+
+		// Write tiles in non-sequential order
+		let tiles = [
+			(coord(10, 2, 1), "tile_2_1"),
+			(coord(10, 0, 0), "tile_0_0"),
+			(coord(10, 1, 0), "tile_1_0"),
+			(coord(10, 0, 1), "tile_0_1"),
+			(coord(10, 2, 0), "tile_2_0"),
+			(coord(10, 1, 1), "tile_1_1"),
+		];
+
+		for (coord, data) in &tiles {
+			builder.write_tile(*coord, Blob::from(*data)).unwrap();
+		}
+
+		let block = builder.finalize().unwrap().unwrap();
+		let bbox = block.get_global_bbox();
+
+		// Verify bbox: (0,0) to (2,1) = 3x2 grid
+		assert_eq!(bbox.x_min().unwrap(), 0);
+		assert_eq!(bbox.y_min().unwrap(), 0);
+		assert_eq!(bbox.x_max().unwrap(), 2);
+		assert_eq!(bbox.y_max().unwrap(), 1);
+		assert_eq!(bbox.count_tiles(), 6);
+
+		// Row-major indices should be:
+		// (0,0)=0, (1,0)=1, (2,0)=2, (0,1)=3, (1,1)=4, (2,1)=5
+		assert_eq!(bbox.index_of(&coord(10, 0, 0)).unwrap(), 0);
+		assert_eq!(bbox.index_of(&coord(10, 1, 0)).unwrap(), 1);
+		assert_eq!(bbox.index_of(&coord(10, 2, 0)).unwrap(), 2);
+		assert_eq!(bbox.index_of(&coord(10, 0, 1)).unwrap(), 3);
+		assert_eq!(bbox.index_of(&coord(10, 1, 1)).unwrap(), 4);
+		assert_eq!(bbox.index_of(&coord(10, 2, 1)).unwrap(), 5);
+	}
+
+	#[test]
+	fn deduplication_boundary_1000_bytes() {
+		let mut writer = DataWriterBlob::new().unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+
+		// Exactly 999 bytes - should be deduplicated
+		let blob_999 = Blob::from(vec![0u8; 999]);
+		builder.write_tile(coord(10, 0, 0), blob_999.clone()).unwrap();
+		builder.write_tile(coord(10, 1, 0), blob_999.clone()).unwrap();
+
+		let block = builder.finalize().unwrap().unwrap();
+		let tiles_range_999 = block.get_tiles_range();
+
+		// Reset and test 1000 bytes - should NOT be deduplicated
+		let mut writer2 = DataWriterBlob::new().unwrap();
+		let mut builder2 = BlockBuilder::new(10, &mut writer2).unwrap();
+
+		let blob_1000 = Blob::from(vec![0u8; 1000]);
+		builder2.write_tile(coord(10, 0, 0), blob_1000.clone()).unwrap();
+		builder2.write_tile(coord(10, 1, 0), blob_1000.clone()).unwrap();
+
+		let block2 = builder2.finalize().unwrap().unwrap();
+		let tiles_range_1000 = block2.get_tiles_range();
+
+		// 999-byte blobs should be deduplicated (written once)
+		assert!(tiles_range_999.length < 2 * 999);
+
+		// 1000-byte blobs should NOT be deduplicated (written twice)
+		assert!(tiles_range_1000.length >= 2 * 1000);
+	}
+
+	#[test]
+	fn multiple_duplicate_small_tiles() {
+		let mut writer = DataWriterBlob::new().unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+
+		let small_blob = Blob::from("duplicate");
+
+		// Write the same blob 10 times
+		for i in 0..10 {
+			builder.write_tile(coord(10, i, 0), small_blob.clone()).unwrap();
+		}
+
+		let block = builder.finalize().unwrap().unwrap();
+		let tiles_range = block.get_tiles_range();
+
+		// All 10 tiles should reference the same data
+		// The tiles_range should be approximately the size of one blob
+		assert!(tiles_range.length < 2 * small_blob.len());
+	}
+
+	#[test]
+	fn mixed_duplicate_and_unique_tiles() {
+		let mut writer = DataWriterBlob::new().unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+
+		let dup_blob = Blob::from("duplicate");
+		let unique1 = Blob::from("unique1");
+		let unique2 = Blob::from("unique2");
+
+		builder.write_tile(coord(10, 0, 0), dup_blob.clone()).unwrap();
+		builder.write_tile(coord(10, 1, 0), unique1.clone()).unwrap();
+		builder.write_tile(coord(10, 2, 0), dup_blob.clone()).unwrap();
+		builder.write_tile(coord(10, 3, 0), unique2.clone()).unwrap();
+		builder.write_tile(coord(10, 4, 0), dup_blob.clone()).unwrap();
+
+		let block = builder.finalize().unwrap().unwrap();
+		let tiles_range = block.get_tiles_range();
+
+		// Should have: 1x dup_blob + 1x unique1 + 1x unique2 = 3 blobs stored
+		let expected_size = dup_blob.len() + unique1.len() + unique2.len();
+		assert_eq!(tiles_range.length, expected_size);
+	}
+
+	#[test]
+	fn block_in_second_block_row() {
+		// Test tiles in block (0, 1) - y coordinates 256-511
+		let mut writer = DataWriterBlob::new().unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+
+		builder.write_tile(coord(10, 100, 300), Blob::from("tile1")).unwrap();
+		builder.write_tile(coord(10, 150, 400), Blob::from("tile2")).unwrap();
+
+		let block = builder.finalize().unwrap().unwrap();
+		let bbox = block.get_global_bbox();
+
+		// Both tiles are in block (0, 1)
+		assert_eq!(bbox.x_min().unwrap(), 100);
+		assert_eq!(bbox.y_min().unwrap(), 300);
+		assert_eq!(bbox.x_max().unwrap(), 150);
+		assert_eq!(bbox.y_max().unwrap(), 400);
+	}
+
+	#[test]
+	fn verify_tiles_and_index_ranges_are_set() {
+		let mut writer = DataWriterBlob::new().unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+
+		builder.write_tile(coord(10, 0, 0), Blob::from("tile data")).unwrap();
+
+		let block = builder.finalize().unwrap().unwrap();
+
+		// Both ranges should be non-empty
+		let tiles_range = block.get_tiles_range();
+		let index_range = block.get_index_range();
+
+		assert!(tiles_range.length > 0, "tiles_range should not be empty");
+		assert!(index_range.length > 0, "index_range should not be empty");
+
+		// Tiles come before index in the file
+		assert_eq!(
+			tiles_range.offset, 0,
+			"tiles should start at offset 0 (relative to block)"
+		);
+	}
 }
