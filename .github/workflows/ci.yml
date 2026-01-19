@@ -239,6 +239,52 @@ jobs:
           verbose: true
 
   # ============================================================================
+  # Linux: Feature Matrix
+  # ============================================================================
+  linux-feature-matrix:
+    name: "Linux: Features (${{ matrix.name }})"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "no-default"
+            features: "--no-default-features"
+            needs-gdal: false
+          - name: "cli-only"
+            features: "--no-default-features --features cli"
+            needs-gdal: false
+          - name: "server-only"
+            features: "--no-default-features --features server"
+            needs-gdal: false
+          - name: "gdal"
+            features: "--features gdal"
+            needs-gdal: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup GDAL
+        if: matrix.needs-gdal
+        uses: ./.github/actions/setup-gdal
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "linux-feature-${{ matrix.name }}"
+          cache-targets: true
+          cache-on-failure: true
+
+      - name: Check compilation
+        run: cargo check --workspace ${{ matrix.features }}
+
+      - name: Run tests
+        run: cargo test --workspace ${{ matrix.features }}
+
+  # ============================================================================
   # Windows: Lint (Format + Clippy)
   # ============================================================================
   windows-lint:
@@ -303,6 +349,9 @@ jobs:
 
       - name: Test docs
         run: cargo test --workspace --doc
+
+      - name: Check no-default-features
+        run: cargo check --workspace --no-default-features
 
   # ============================================================================
   # Windows: Node.js
