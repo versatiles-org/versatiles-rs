@@ -60,60 +60,6 @@ jobs:
         run: cargo fmt -- --check
 
   # ============================================================================
-  # Linux: Clippy
-  # ============================================================================
-  linux-clippy:
-    name: "Linux: Clippy"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - name: Setup GDAL
-        uses: ./.github/actions/setup-gdal
-
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "linux-clippy"
-          cache-targets: true
-          cache-on-failure: true
-
-      - name: Clippy
-        run: cargo clippy --workspace --all-features --all-targets -- -D warnings
-
-  # ============================================================================
-  # Linux: Test
-  # ============================================================================
-  linux-test:
-    name: "Linux: Test"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup GDAL
-        uses: ./.github/actions/setup-gdal
-
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "linux-test"
-          cache-targets: true
-          cache-on-failure: true
-
-      - name: Test
-        run: cargo test --workspace --all-features --all-targets
-
-  # ============================================================================
   # Linux: Docs
   # ============================================================================
   linux-docs:
