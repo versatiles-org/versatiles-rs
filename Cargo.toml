@@ -53,7 +53,6 @@ doc_markdown = "allow"
 
 # Allow lints being addressed in separate phases
 must_use_candidate = "allow"
-too_many_lines = "allow"
 
 # Allow reasonable casting patterns in container code
 cast_precision_loss = "allow"
