@@ -56,6 +56,42 @@ pub struct TarTilesReader {
 	metadata: TileSourceMetadata,
 }
 
+/// Result of parsing a tile path.
+struct ParsedTile {
+	coord: TileCoord,
+	format: TileFormat,
+	compression: TileCompression,
+	offset: u64,
+	length: u64,
+}
+
+/// Try to parse a tile path like `{z}/{x}/{y}.<format>[.<compression>]`.
+fn try_parse_tile_path<R: std::io::Read>(entry: &tar::Entry<R>, path_vec: &[&str]) -> Result<Option<ParsedTile>> {
+	if path_vec.len() != 3 {
+		return Ok(None);
+	}
+
+	let level = path_vec[0].parse::<u8>()?;
+	let x = path_vec[1].parse::<u32>()?;
+
+	let mut filename = String::from(path_vec[2]);
+	let compression = TileCompression::from_filename(&mut filename);
+	let Some(format) = TileFormat::from_filename(&mut filename) else {
+		return Ok(None);
+	};
+
+	let y = filename.parse::<u32>()?;
+	let coord = TileCoord::new(level, x, y)?;
+
+	Ok(Some(ParsedTile {
+		coord,
+		format,
+		compression,
+		offset: entry.raw_file_position(),
+		length: entry.size(),
+	}))
+}
+
 impl TarTilesReader {
 	/// Open a tar archive and build an index of tiles and metadata.
 	///
@@ -98,45 +134,35 @@ impl TarTilesReader {
 			drop(path);
 			let path_vec: Vec<&str> = path_tmp_string.split('/').collect();
 
-			if path_vec.len() == 3 {
-				let level = path_vec[0].parse::<u8>()?;
-				let x = path_vec[1].parse::<u32>()?;
-
-				let mut filename: String = String::from(path_vec[2]);
-				let this_compression = TileCompression::from_filename(&mut filename);
-				let this_format = TileFormat::from_filename(&mut filename);
-
-				if this_format.is_none() {
-					continue;
-				}
-				let this_format = this_format.unwrap();
-
-				let y = filename.parse::<u32>()?;
-
+			if let Some(tile) = try_parse_tile_path(&entry, &path_vec)? {
 				if let Some(f) = &tile_format {
 					ensure!(
-						f == &this_format,
-						"mixed tile formats in tar, found both {f:?} and {this_format:?}"
+						f == &tile.format,
+						"mixed tile formats in tar, found both {f:?} and {:?}",
+						tile.format
 					);
 				} else {
-					tile_format = Some(this_format);
+					tile_format = Some(tile.format);
 				}
 
 				if let Some(c) = &tile_compression {
 					ensure!(
-						c == &this_compression,
-						"mixed tile compressions in tar, found both {c:?} and {this_compression:?}"
+						c == &tile.compression,
+						"mixed tile compressions in tar, found both {c:?} and {:?}",
+						tile.compression
 					);
 				} else {
-					tile_compression = Some(this_compression);
+					tile_compression = Some(tile.compression);
 				}
 
-				let offset = entry.raw_file_position();
-				let length = entry.size();
-
-				let coord = TileCoord::new(level, x, y)?;
-				bbox_pyramid.include_coord(&coord);
-				tile_map.insert(coord, ByteRange { offset, length });
+				bbox_pyramid.include_coord(&tile.coord);
+				tile_map.insert(
+					tile.coord,
+					ByteRange {
+						offset: tile.offset,
+						length: tile.length,
+					},
+				);
 				continue;
 			}
 
