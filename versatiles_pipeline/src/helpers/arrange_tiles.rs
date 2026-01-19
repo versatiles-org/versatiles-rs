@@ -5,7 +5,9 @@ pub fn arrange_tiles<T: ToString>(tiles: Vec<(TileCoord, Tile)>, cb: impl Fn(Til
 	use versatiles_core::TileBBox;
 
 	let mut bbox = TileBBox::new_empty(tiles.first().unwrap().0.level).unwrap();
-	tiles.iter().for_each(|t| bbox.include(t.0.x, t.0.y));
+	for t in &tiles {
+		bbox.include(t.0.x, t.0.y);
+	}
 
 	let mut result: Vec<Vec<String>> = (0..bbox.height())
 		.map(|_| (0..bbox.width()).map(|_| String::from("❌")).collect())
