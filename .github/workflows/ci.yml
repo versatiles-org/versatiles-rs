@@ -285,10 +285,13 @@ jobs:
           cache-on-failure: true
 
       - name: Check compilation
-        run: cargo check --workspace ${{ matrix.features }}
+        run: cargo check --workspace --all-targets ${{ matrix.features }}
+      
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets ${{ matrix.features }} -- -D warnings
 
       - name: Run tests
-        run: cargo test --workspace ${{ matrix.features }}
+        run: cargo test --workspace --all-targets ${{ matrix.features }}
 
   # ============================================================================
   # Windows: Lint (Format + Clippy)
