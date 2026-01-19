@@ -29,7 +29,7 @@ struct Runner {
 }
 
 impl Runner {
-	pub fn from_args(args: Args) -> Self {
+	pub fn from_args(args: &Args) -> Self {
 		let layer_set: HashSet<String> = args.filter.split(',').map(|s| s.trim().to_string()).collect();
 
 		Self {
@@ -77,7 +77,7 @@ impl TransformOperationFactoryTrait for Factory {
 	) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		build_transform::<Runner>(source, Runner::from_args(args)).await
+		build_transform::<Runner>(source, Runner::from_args(&args)).await
 	}
 }
 
@@ -109,7 +109,7 @@ mod tests {
 			Ok(suffix)
 		}
 
-		let runner = Runner::from_args(Args {
+		let runner = Runner::from_args(&Args {
 			filter: "test_layer1".to_string(),
 			invert: None,
 		});

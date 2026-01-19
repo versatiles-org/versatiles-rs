@@ -57,7 +57,7 @@ pub struct Subcommand {
 }
 
 #[tokio::main]
-pub async fn run(arguments: &Subcommand, runtime: TilesRuntime) -> Result<()> {
+pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	let mut config = if let Some(config_path) = &arguments.config {
 		Config::from_path(config_path)
 			.context("run `versatiles help config` to get more information about the config file format")?
@@ -109,7 +109,7 @@ pub async fn run(arguments: &Subcommand, runtime: TilesRuntime) -> Result<()> {
 	swap(&mut config.static_sources, &mut static_sources);
 	config.static_sources.extend(static_sources);
 
-	let mut server: TileServer = TileServer::from_config(config, runtime).await?;
+	let mut server: TileServer = TileServer::from_config(config, runtime.clone()).await?;
 
 	let mut list = server.get_url_mapping();
 	list.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());

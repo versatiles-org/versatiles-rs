@@ -122,13 +122,12 @@ impl VersaTilesReader {
 			TileJSON::default()
 		};
 
-		let block_index = BlockIndex::from_brotli_blob(
-			reader
-				.read_range(&header.blocks_range)
-				.await
-				.context("Failed reading the block index")?,
-		)
-		.context("Failed decompressing the block index")?;
+		let block_index_blob = reader
+			.read_range(&header.blocks_range)
+			.await
+			.context("Failed reading the block index")?;
+		let block_index =
+			BlockIndex::from_brotli_blob(&block_index_blob).context("Failed decompressing the block index")?;
 
 		let bbox_pyramid = block_index.get_bbox_pyramid();
 		let metadata = TileSourceMetadata::new(
@@ -169,7 +168,7 @@ impl VersaTilesReader {
 			value
 		} else {
 			let blob = self.reader.read_range(block.get_index_range()).await?;
-			let mut tile_index = TileIndex::from_brotli_blob(blob)?;
+			let mut tile_index = TileIndex::from_brotli_blob(&blob)?;
 			tile_index.add_offset(block.get_tiles_range().offset);
 
 			assert_eq!(tile_index.len(), usize::try_from(block.count_tiles())?);

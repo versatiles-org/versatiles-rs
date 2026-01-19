@@ -130,11 +130,12 @@ fn main() -> Result<()> {
 		})
 		.init();
 
-	run(cli, create_runtime())
+	let runtime = create_runtime();
+	run(&cli, &runtime)
 }
 
 /// Helper function for running subcommands
-fn run(cli: Cli, runtime: TilesRuntime) -> Result<()> {
+fn run(cli: &Cli, runtime: &TilesRuntime) -> Result<()> {
 	match &cli.command {
 		Commands::Convert(arguments) => tools::convert::run(arguments, runtime),
 		Commands::Help(arguments) => tools::help::run(arguments),
@@ -157,7 +158,7 @@ mod tests {
 		let cli = Cli::try_parse_from(arg_vec)?;
 		let msg = format!("{cli:?}");
 		let runtime = create_test_runtime();
-		run(cli, runtime)?;
+		run(&cli, &runtime)?;
 		Ok(msg)
 	}
 

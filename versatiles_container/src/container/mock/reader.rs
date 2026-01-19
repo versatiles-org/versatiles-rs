@@ -33,7 +33,7 @@ use versatiles_core::{
 use versatiles_derive::context;
 
 /// Enum representing different mock profiles for tile data.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum MockReaderProfile {
 	/// Mock profile for JSON format.
 	Json,

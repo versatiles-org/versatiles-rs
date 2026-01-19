@@ -35,13 +35,13 @@ pub fn run(command: &Subcommand) -> Result<()> {
 	if command.raw {
 		println!("{md}");
 	} else {
-		print_markdown(md);
+		print_markdown(&md);
 	}
 
 	Ok(())
 }
 
-fn print_markdown(md: String) {
+fn print_markdown(md: &str) {
 	use termimad::{
 		Area, MadSkin,
 		crossterm::style::{Attribute, Color},
@@ -72,7 +72,7 @@ fn print_markdown(md: String) {
 	area.width = area.width.max(50);
 	area.height = area.height.max(20);
 
-	let text = skin.area_text(&md, &area);
+	let text = skin.area_text(md, &area);
 	println!("{text}");
 }
 

@@ -17,7 +17,7 @@ enum DevCommands {
 }
 
 #[tokio::main]
-pub async fn run(command: &Subcommand, runtime: TilesRuntime) -> Result<()> {
+pub async fn run(command: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	match &command.sub_command {
 		DevCommands::MeasureTileSizes(args) => measure_tile_sizes::run(args, runtime).await?,
 		DevCommands::ExportOutline(args) => export_outline::run(args, runtime).await?,

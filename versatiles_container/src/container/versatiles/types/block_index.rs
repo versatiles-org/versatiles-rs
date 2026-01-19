@@ -39,7 +39,7 @@ impl BlockIndex {
 	/// # Errors
 	/// Returns an error if the binary data cannot be parsed correctly.
 	#[context("Failed to create BlockIndex from blob")]
-	pub fn from_blob(buf: Blob) -> Result<Self> {
+	pub fn from_blob(buf: &Blob) -> Result<Self> {
 		let count = buf.len().div(BLOCK_INDEX_LENGTH);
 		ensure!(
 			count * BLOCK_INDEX_LENGTH == buf.len(),
@@ -63,8 +63,8 @@ impl BlockIndex {
 	/// # Errors
 	/// Returns an error if the binary data cannot be decompressed or parsed correctly.
 	#[context("Failed to create BlockIndex from Brotli blob")]
-	pub fn from_brotli_blob(buf: Blob) -> Result<Self> {
-		Self::from_blob(decompress_brotli(&buf)?)
+	pub fn from_brotli_blob(buf: &Blob) -> Result<Self> {
+		Self::from_blob(&decompress_brotli(buf)?)
 	}
 
 	/// Returns a `TileBBoxPyramid` representing the bounding boxes of the blocks in the index.
@@ -154,7 +154,8 @@ mod tests {
 	fn conversion() -> Result<()> {
 		let mut index1 = BlockIndex::new_empty();
 		index1.add_block(BlockDefinition::new(&TileBBox::from_min_and_max(3, 1, 2, 3, 4)?)?);
-		let index2 = BlockIndex::from_brotli_blob(index1.as_brotli_blob()?)?;
+		let blob = index1.as_brotli_blob()?;
+		let index2 = BlockIndex::from_brotli_blob(&blob)?;
 		assert_eq!(index1, index2);
 		Ok(())
 	}

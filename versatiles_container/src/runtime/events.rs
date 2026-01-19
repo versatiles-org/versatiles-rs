@@ -92,19 +92,19 @@ impl EventBus {
 	/// Listeners are called synchronously in the order they were registered.
 	/// If a listener panics, the panic is caught and other listeners continue.
 	/// Lock-free load for optimal performance on frequent emissions.
-	pub fn emit(&self, event: Event) {
+	pub fn emit(&self, event: &Event) {
 		let listeners = self.listeners.load();
 		for listener in listeners.iter() {
 			// Catch panics to prevent one bad listener from breaking others
 			let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-				listener(&event);
+				listener(event);
 			}));
 		}
 	}
 
 	/// Emit a log event
 	pub fn log(&self, level: LogLevel, target: &str, message: String) {
-		self.emit(Event::Log {
+		self.emit(&Event::Log {
 			level,
 			target: target.to_string(),
 			message,
@@ -113,22 +113,22 @@ impl EventBus {
 
 	/// Emit a progress event
 	pub fn progress(&self, data: ProgressState) {
-		self.emit(Event::Progress { data });
+		self.emit(&Event::Progress { data });
 	}
 
 	/// Emit a step event
 	pub fn step(&self, message: String) {
-		self.emit(Event::Step { message });
+		self.emit(&Event::Step { message });
 	}
 
 	/// Emit a warning event
 	pub fn warn(&self, message: String) {
-		self.emit(Event::Warning { message });
+		self.emit(&Event::Warning { message });
 	}
 
 	/// Emit an error event
 	pub fn error(&self, message: String) {
-		self.emit(Event::Error { message });
+		self.emit(&Event::Error { message });
 	}
 }
 
@@ -207,7 +207,7 @@ mod tests {
 			*counter_clone.lock().unwrap() += 1;
 		});
 
-		bus.emit(Event::Step {
+		bus.emit(&Event::Step {
 			message: "Test".to_string(),
 		});
 
@@ -231,7 +231,7 @@ mod tests {
 			*counter2_clone.lock().unwrap() += 10;
 		});
 
-		bus.emit(Event::Step {
+		bus.emit(&Event::Step {
 			message: "Test".to_string(),
 		});
 

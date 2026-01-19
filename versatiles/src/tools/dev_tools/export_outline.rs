@@ -22,7 +22,7 @@ pub struct ExportOutline {
 	level: Option<u8>,
 }
 
-pub async fn run(args: &ExportOutline, runtime: TilesRuntime) -> Result<()> {
+pub async fn run(args: &ExportOutline, runtime: &TilesRuntime) -> Result<()> {
 	let input = &args.input;
 	let output = &args.output;
 

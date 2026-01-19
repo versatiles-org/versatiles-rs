@@ -57,7 +57,7 @@ pub struct Subcommand {
 }
 
 #[tokio::main]
-pub async fn run(arguments: &Subcommand, runtime: TilesRuntime) -> Result<()> {
+pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	log::info!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
 	let reader = runtime.get_reader_from_str(&arguments.input_file).await?;
@@ -69,7 +69,7 @@ pub async fn run(arguments: &Subcommand, runtime: TilesRuntime) -> Result<()> {
 		tile_compression: arguments.compress,
 	};
 
-	convert_tiles_container(reader, parameters, &arguments.output_file, runtime).await?;
+	convert_tiles_container(reader, parameters, &arguments.output_file, runtime.clone()).await?;
 
 	log::info!("finished converting tiles");
 

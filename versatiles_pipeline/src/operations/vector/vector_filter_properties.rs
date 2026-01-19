@@ -32,7 +32,7 @@ struct Runner {
 }
 
 impl Runner {
-	pub fn from_args(args: Args) -> Result<Self> {
+	pub fn from_args(args: &Args) -> Result<Self> {
 		let regex = Regex::new(&args.regex).context("Failed to compile regex")?;
 
 		Ok(Self {
@@ -87,7 +87,7 @@ impl TransformOperationFactoryTrait for Factory {
 	) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		build_transform::<Runner>(source, Runner::from_args(args)?).await
+		build_transform::<Runner>(source, Runner::from_args(&args)?).await
 	}
 }
 
@@ -144,7 +144,7 @@ mod tests {
 			VectorTileLayer::from_features(format!("test_layer{suffix}"), vec![feature], 4096, 1).unwrap()
 		}
 
-		let runner = Runner::from_args(Args {
+		let runner = Runner::from_args(&Args {
 			regex: "index$".to_string(),
 			invert: None,
 		})
@@ -214,7 +214,7 @@ mod tests {
 		);
 	}
 
-	fn split(s: String) -> Vec<String> {
+	fn split(s: &str) -> Vec<String> {
 		s.split(';').map(std::string::ToString::to_string).collect()
 	}
 
@@ -229,8 +229,8 @@ mod tests {
 			"debug_y/index",
 			"debug_y/x",
 		];
-		assert_eq!(split(layers), result);
-		assert_eq!(split(json), result);
+		assert_eq!(split(&layers), result);
+		assert_eq!(split(&json), result);
 	}
 
 	#[tokio::test]
@@ -244,15 +244,15 @@ mod tests {
 			"debug_z/char",
 			"debug_z/x",
 		];
-		assert_eq!(split(layers), result);
-		assert_eq!(split(json), result);
+		assert_eq!(split(&layers), result);
+		assert_eq!(split(&json), result);
 	}
 
 	#[tokio::test]
 	async fn test_filter_and_invert() {
 		let (layers, json) = run_test("/index$", "true").await.unwrap();
 		let result = ["debug_x/index", "debug_y/index", "debug_z/index"];
-		assert_eq!(split(layers), result);
-		assert_eq!(split(json), result);
+		assert_eq!(split(&layers), result);
+		assert_eq!(split(&json), result);
 	}
 }

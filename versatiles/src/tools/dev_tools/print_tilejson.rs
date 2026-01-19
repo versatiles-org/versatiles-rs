@@ -15,13 +15,13 @@ pub struct PrintTilejson {
 	pretty: bool,
 }
 
-pub async fn run(args: &PrintTilejson, runtime: TilesRuntime) -> Result<()> {
+pub async fn run(args: &PrintTilejson, runtime: &TilesRuntime) -> Result<()> {
 	let tilejson = fetch_tilejson(args, runtime).await?;
 	std::io::stdout().write_all(tilejson.as_bytes())?;
 	Ok(())
 }
 
-async fn fetch_tilejson(args: &PrintTilejson, runtime: TilesRuntime) -> Result<String> {
+async fn fetch_tilejson(args: &PrintTilejson, runtime: &TilesRuntime) -> Result<String> {
 	let reader = runtime.get_reader_from_str(&args.input).await?;
 
 	Ok(if args.pretty {
@@ -39,12 +39,13 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_print_tilejson() {
+		let runtime = create_test_runtime();
 		let output = fetch_tilejson(
 			&PrintTilejson {
 				input: "../testdata/berlin.mbtiles".into(),
 				pretty: false,
 			},
-			create_test_runtime(),
+			&runtime,
 		)
 		.await
 		.unwrap();
@@ -56,12 +57,13 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_pretty_print_tilejson() {
+		let runtime = create_test_runtime();
 		let output = fetch_tilejson(
 			&PrintTilejson {
 				input: "../testdata/berlin.mbtiles".into(),
 				pretty: true,
 			},
-			create_test_runtime(),
+			&runtime,
 		)
 		.await
 		.unwrap();

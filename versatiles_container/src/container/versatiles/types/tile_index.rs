@@ -65,8 +65,8 @@ impl TileIndex {
 	/// # Errors
 	/// Returns an error if the compressed binary data cannot be decompressed or parsed correctly.
 	#[context("Failed to create TileIndex from Brotli blob")]
-	pub fn from_brotli_blob(buf: Blob) -> Result<Self> {
-		Self::from_blob(decompress_brotli(&buf)?)
+	pub fn from_brotli_blob(buf: &Blob) -> Result<Self> {
+		Self::from_blob(decompress_brotli(buf)?)
 	}
 
 	/// Sets the byte range for a specific index.
@@ -163,7 +163,8 @@ mod tests {
 		for i in 0..100u64 {
 			index1.set(i as usize, ByteRange::new(i * 1000, i * 2000));
 		}
-		let index2 = TileIndex::from_brotli_blob(index1.as_brotli_blob()?)?;
+		let blob = index1.as_brotli_blob()?;
+		let index2 = TileIndex::from_brotli_blob(&blob)?;
 		assert_eq!(index1, index2);
 
 		Ok(())

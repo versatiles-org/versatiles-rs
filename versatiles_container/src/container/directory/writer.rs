@@ -46,10 +46,7 @@
 use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
-use std::{
-	fs,
-	path::{Path, PathBuf},
-};
+use std::{fs, path::Path};
 use versatiles_core::{Blob, compression::compress, io::DataWriterTrait};
 use versatiles_derive::context;
 
@@ -62,13 +59,13 @@ pub struct DirectoryWriter {}
 impl DirectoryWriter {
 	/// Write a `Blob` to `path`, creating missing parent directories.
 	#[context("writing file '{}'", path.display())]
-	fn write(path: PathBuf, blob: Blob) -> Result<()> {
+	fn write(path: &Path, blob: &Blob) -> Result<()> {
 		let parent = path.parent().unwrap();
 		if !parent.exists() {
 			fs::create_dir_all(parent)?;
 		}
 
-		fs::write(&path, blob.as_slice())?;
+		fs::write(path, blob.as_slice())?;
 		Ok(())
 	}
 }
@@ -100,7 +97,7 @@ impl TilesWriter for DirectoryWriter {
 		let tilejson = reader.tilejson();
 		let meta_data = compress(tilejson.into(), tile_compression)?;
 		let filename = format!("tiles.json{extension_compression}");
-		Self::write(path.join(filename), meta_data)?;
+		Self::write(&path.join(filename), &meta_data)?;
 
 		reader
 			.traverse_all_tiles(
@@ -119,7 +116,8 @@ impl TilesWriter for DirectoryWriter {
 							);
 
 							// Write blob to file
-							Self::write(path.join(filename), tile.into_blob(tile_compression)?)?;
+							let blob = tile.into_blob(tile_compression)?;
+							Self::write(&path.join(filename), &blob)?;
 						}
 						Ok(())
 					})

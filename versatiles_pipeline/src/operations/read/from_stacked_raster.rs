@@ -198,7 +198,7 @@ impl ReadTileSource for Operation {
 					level_max: Some(level_max),
 					enable_climbing: Some(true),
 				};
-				let wrapped_source = raster_overscale::Operation::new(source, overscale_args)?;
+				let wrapped_source = raster_overscale::Operation::new(source, &overscale_args)?;
 				sources.push(SourceEntry {
 					source: Arc::new(Box::new(wrapped_source)),
 					native_level_max,

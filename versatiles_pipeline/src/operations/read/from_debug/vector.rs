@@ -21,13 +21,13 @@ static FONT: LazyLock<FontArc> = LazyLock::new(|| FontArc::try_from_slice(includ
 pub fn create_debug_vector_tile(coord: &TileCoord) -> Result<VectorTile> {
 	Ok(VectorTile::new(vec![
 		get_background_layer()?,
-		draw_text("debug_z", 140.0, format!("z:{}", coord.level)),
-		draw_text("debug_x", 190.0, format!("x:{}", coord.x)),
-		draw_text("debug_y", 240.0, format!("y:{}", coord.y)),
+		draw_text("debug_z", 140.0, &format!("z:{}", coord.level)),
+		draw_text("debug_x", 190.0, &format!("x:{}", coord.x)),
+		draw_text("debug_y", 240.0, &format!("y:{}", coord.y)),
 	]))
 }
 
-fn draw_text(name: &str, y: f32, text: String) -> VectorTileLayer {
+fn draw_text(name: &str, y: f32, text: &str) -> VectorTileLayer {
 	let font: &FontArc = &FONT;
 
 	let mut features: Vec<GeoFeature> = Vec::new();

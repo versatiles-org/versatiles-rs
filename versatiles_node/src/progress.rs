@@ -196,7 +196,7 @@ impl Progress {
 
 impl Progress {
 	/// Emit a progress event to all registered listeners
-	pub fn emit_progress(&self, data: ProgressData) {
+	pub fn emit_progress(&self, data: &ProgressData) {
 		let listeners = self.progress_listeners.lock().unwrap();
 		for listener in listeners.iter() {
 			let _ = listener.call(data.clone(), ThreadsafeFunctionCallMode::NonBlocking);
@@ -204,28 +204,28 @@ impl Progress {
 	}
 
 	/// Emit a message event to all registered listeners
-	fn emit_message(&self, msg_type: &str, message: String) {
+	fn emit_message(&self, msg_type: &str, message: &str) {
 		let listeners = self.message_listeners.lock().unwrap();
 		for listener in listeners.iter() {
 			let _ = listener.call(
-				(msg_type.to_string(), message.clone()),
+				(msg_type.to_string(), message.to_string()),
 				ThreadsafeFunctionCallMode::NonBlocking,
 			);
 		}
 	}
 
 	/// Emit a step event
-	pub fn emit_step(&self, message: String) {
+	pub fn emit_step(&self, message: &str) {
 		self.emit_message("step", message);
 	}
 
 	/// Emit a warning event
-	pub fn emit_warning(&self, message: String) {
+	pub fn emit_warning(&self, message: &str) {
 		self.emit_message("warning", message);
 	}
 
 	/// Emit an error event
-	pub fn emit_error(&self, message: String) {
+	pub fn emit_error(&self, message: &str) {
 		self.emit_message("error", message);
 	}
 }
@@ -631,7 +631,7 @@ mod tests {
 		};
 
 		// Should not panic
-		progress.emit_progress(data);
+		progress.emit_progress(&data);
 	}
 
 	#[test]
@@ -640,7 +640,7 @@ mod tests {
 		let progress = Progress::new();
 
 		// Should not panic
-		progress.emit_step("Step 1: Processing tiles".to_string());
+		progress.emit_step("Step 1: Processing tiles");
 	}
 
 	#[test]
@@ -649,7 +649,7 @@ mod tests {
 		let progress = Progress::new();
 
 		// Should not panic
-		progress.emit_warning("Warning: Low memory".to_string());
+		progress.emit_warning("Warning: Low memory");
 	}
 
 	#[test]
@@ -658,7 +658,7 @@ mod tests {
 		let progress = Progress::new();
 
 		// Should not panic
-		progress.emit_error("Error: File not found".to_string());
+		progress.emit_error("Error: File not found");
 	}
 
 	#[test]
@@ -678,7 +678,7 @@ mod tests {
 			};
 
 			// Should not panic
-			progress.emit_progress(data);
+			progress.emit_progress(&data);
 		}
 	}
 
@@ -688,11 +688,11 @@ mod tests {
 		let progress = Progress::new();
 
 		// Emit different message types in sequence
-		progress.emit_step("Step 1: Loading".to_string());
-		progress.emit_step("Step 2: Processing".to_string());
-		progress.emit_warning("Warning: Slow processing".to_string());
-		progress.emit_step("Step 3: Writing".to_string());
-		progress.emit_error("Error: Write failed".to_string());
+		progress.emit_step("Step 1: Loading");
+		progress.emit_step("Step 2: Processing");
+		progress.emit_warning("Warning: Slow processing");
+		progress.emit_step("Step 3: Writing");
+		progress.emit_error("Error: Write failed");
 
 		// All should complete without panicking
 	}
@@ -702,9 +702,9 @@ mod tests {
 		// Verify empty strings are handled correctly
 		let progress = Progress::new();
 
-		progress.emit_step(String::new());
-		progress.emit_warning(String::new());
-		progress.emit_error(String::new());
+		progress.emit_step("");
+		progress.emit_warning("");
+		progress.emit_error("");
 
 		// Should not panic
 	}
@@ -714,9 +714,9 @@ mod tests {
 		// Verify special characters in messages are handled correctly
 		let progress = Progress::new();
 
-		progress.emit_step("Step: Processing 中文 tiles".to_string());
-		progress.emit_warning("Warning: File 'test.txt' not found".to_string());
-		progress.emit_error("Error: Invalid char 🚀".to_string());
+		progress.emit_step("Step: Processing 中文 tiles");
+		progress.emit_warning("Warning: File 'test.txt' not found");
+		progress.emit_error("Error: Invalid char 🚀");
 
 		// Should not panic
 	}
@@ -727,9 +727,9 @@ mod tests {
 		let progress = Progress::new();
 
 		let long_message = "A".repeat(10000);
-		progress.emit_step(long_message.clone());
-		progress.emit_warning(long_message.clone());
-		progress.emit_error(long_message);
+		progress.emit_step(&long_message);
+		progress.emit_warning(&long_message);
+		progress.emit_error(&long_message);
 
 		// Should not panic
 	}
@@ -741,8 +741,8 @@ mod tests {
 		let progress2 = progress1.clone();
 
 		// Emit from both instances
-		progress1.emit_step("From progress1".to_string());
-		progress2.emit_warning("From progress2".to_string());
+		progress1.emit_step("From progress1");
+		progress2.emit_warning("From progress2");
 
 		// Both should work without panicking since they share the same Arc
 	}
@@ -772,7 +772,7 @@ mod tests {
 				message: Some(format!("{percentage}% complete")),
 			};
 
-			progress.emit_progress(data);
+			progress.emit_progress(&data);
 		}
 	}
 
@@ -792,7 +792,7 @@ mod tests {
 		};
 
 		// Should not panic with None values
-		progress.emit_progress(data);
+		progress.emit_progress(&data);
 	}
 
 	#[test]
@@ -801,16 +801,21 @@ mod tests {
 		let progress = Progress::new();
 
 		// Each type should be callable independently
-		progress.emit_step("This is a step".to_string());
-		progress.emit_warning("This is a warning".to_string());
-		progress.emit_error("This is an error".to_string());
+		progress.emit_step("This is a step");
+		progress.emit_warning("This is a warning");
+		progress.emit_error("This is an error");
 
 		// Verify we can mix them
 		for i in 0..5 {
+			let msg = match i % 3 {
+				0 => format!("Step {i}"),
+				1 => format!("Warning {i}"),
+				_ => format!("Error {i}"),
+			};
 			match i % 3 {
-				0 => progress.emit_step(format!("Step {i}")),
-				1 => progress.emit_warning(format!("Warning {i}")),
-				_ => progress.emit_error(format!("Error {i}")),
+				0 => progress.emit_step(&msg),
+				1 => progress.emit_warning(&msg),
+				_ => progress.emit_error(&msg),
 			}
 		}
 	}
@@ -829,10 +834,15 @@ mod tests {
 			let progress_clone = Arc::clone(&progress);
 			let handle = thread::spawn(move || {
 				for j in 0..10 {
+					let msg = match (i + j) % 3 {
+						0 => format!("Thread {i} step {j}"),
+						1 => format!("Thread {i} warning {j}"),
+						_ => format!("Thread {i} error {j}"),
+					};
 					match (i + j) % 3 {
-						0 => progress_clone.emit_step(format!("Thread {i} step {j}")),
-						1 => progress_clone.emit_warning(format!("Thread {i} warning {j}")),
-						_ => progress_clone.emit_error(format!("Thread {i} error {j}")),
+						0 => progress_clone.emit_step(&msg),
+						1 => progress_clone.emit_warning(&msg),
+						_ => progress_clone.emit_error(&msg),
 					}
 				}
 			});
@@ -869,7 +879,7 @@ mod tests {
 						eta: Some(1234567890.0),
 						message: Some(format!("Thread {i} item {j}")),
 					};
-					progress_clone.emit_progress(data);
+					progress_clone.emit_progress(&data);
 				}
 			});
 			handles.push(handle);

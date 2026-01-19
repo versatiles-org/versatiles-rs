@@ -32,7 +32,7 @@ pub struct MeasureTileSizes {
 	scale: usize,
 }
 
-pub async fn run(args: &MeasureTileSizes, runtime: TilesRuntime) -> Result<()> {
+pub async fn run(args: &MeasureTileSizes, runtime: &TilesRuntime) -> Result<()> {
 	let input = &args.input;
 	let output_file = &args.output;
 	let level = args.level;

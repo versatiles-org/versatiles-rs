@@ -139,12 +139,7 @@ impl PMTilesReader {
 		let leaves_bytes = data_reader.read_range(&header.leaf_dirs).await?;
 		log::trace!("Leaf directories bytes length: {}", leaves_bytes.len());
 
-		let bbox_pyramid = calc_bbox_pyramid(
-			&root_bytes_uncompressed,
-			&leaves_bytes,
-			internal_compression,
-			runtime.clone(),
-		)?;
+		let bbox_pyramid = calc_bbox_pyramid(&root_bytes_uncompressed, &leaves_bytes, internal_compression, &runtime)?;
 		log::trace!("Bounding box pyramid: {bbox_pyramid:?}");
 
 		let metadata = TileSourceMetadata::new(
@@ -246,7 +241,7 @@ fn calc_bbox_pyramid(
 	root_bytes_uncompressed: &Blob,
 	leaves_bytes: &Blob,
 	compression: TileCompression,
-	runtime: TilesRuntime,
+	runtime: &TilesRuntime,
 ) -> Result<TileBBoxPyramid> {
 	let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
@@ -263,7 +258,7 @@ fn calc_bbox_pyramid(
 		dir: &Blob,
 		leaves_bytes: &Blob,
 		compression: TileCompression,
-		root_runtime: Option<TilesRuntime>,
+		root_runtime: Option<&TilesRuntime>,
 	) -> Result<u64> {
 		log::trace!("parse_directories");
 

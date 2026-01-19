@@ -105,10 +105,10 @@ impl Operation {
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		Self::new(source, args)
+		Self::new(source, &args)
 	}
 
-	pub fn new(source: Box<dyn TileSource>, args: Args) -> Result<Operation> {
+	pub fn new(source: Box<dyn TileSource>, args: &Args) -> Result<Operation> {
 		let mut metadata = source.as_ref().metadata().clone();
 
 		let level_base = args

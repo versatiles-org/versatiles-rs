@@ -35,7 +35,7 @@ impl Instance {
 		width: usize,
 		height: usize,
 		bbox: &GeoBBox,
-		band_mapping: Arc<BandMapping>,
+		band_mapping: &Arc<BandMapping>,
 	) -> Result<Dataset> {
 		log::trace!("reproject_image started for size={width}x{height}");
 

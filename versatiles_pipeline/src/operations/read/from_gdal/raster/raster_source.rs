@@ -130,7 +130,7 @@ impl RasterSource {
 			.get()
 			.await
 			.map_err(|e| anyhow::anyhow!("failed to get instance from pool: {e}"))?;
-		let dst = instance.reproject_to_dataset(width, height, bbox, band_mapping)?;
+		let dst = instance.reproject_to_dataset(width, height, bbox, &band_mapping)?;
 		// Instance automatically returned to pool when dropped
 
 		let band_mapping = self.band_mapping.clone();

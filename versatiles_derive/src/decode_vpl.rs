@@ -266,12 +266,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField), syn::Error> 
 }
 
 /// Build the final impl TokenStream for the struct.
-fn build_impl_tokens(
-	name: &Ident,
-	field_names: Vec<String>,
-	parser_fields: Vec<TokenStream>,
-	doc: String,
-) -> TokenStream {
+fn build_impl_tokens(name: &Ident, field_names: &[String], parser_fields: &[TokenStream], doc: &str) -> TokenStream {
 	quote! {
 		impl #name {
 			pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {
@@ -361,7 +356,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 		.trim()
 		.to_string();
 
-	Ok(build_impl_tokens(&name, field_names, parser_fields, doc))
+	Ok(build_impl_tokens(&name, &field_names, &parser_fields, &doc))
 }
 
 #[cfg(test)]
@@ -370,7 +365,7 @@ mod tests {
 	use pretty_assertions::assert_eq;
 	use syn::{DeriveInput, parse_quote};
 
-	fn pretty_tokens(ts: proc_macro2::TokenStream) -> Vec<String> {
+	fn pretty_tokens(ts: &proc_macro2::TokenStream) -> Vec<String> {
 		prettyplease::unparse(&syn::parse_file(&ts.to_string()).unwrap())
 			.split('\n')
 			.map(std::string::ToString::to_string)
@@ -393,7 +388,7 @@ mod tests {
 		};
 		let ts = decode_struct(input.clone(), data_struct).unwrap();
 		assert_eq!(
-			pretty_tokens(ts),
+			pretty_tokens(&ts),
 			[
 				"impl Test {",
 				"    pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {",
@@ -429,7 +424,7 @@ mod tests {
 		};
 		let ts = decode_struct(input, data_struct).unwrap();
 		assert_eq!(
-			pretty_tokens(ts),
+			pretty_tokens(&ts),
 			[
 				"impl T {",
 				"    pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {",

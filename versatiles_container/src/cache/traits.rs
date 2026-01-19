@@ -302,7 +302,7 @@ mod tests {
 	use super::*;
 	use rstest::rstest;
 
-	fn roundtrip<T>(value: T)
+	fn roundtrip<T>(value: &T)
 	where
 		T: CacheValue + PartialEq + core::fmt::Debug,
 	{
@@ -313,7 +313,7 @@ mod tests {
 		assert_eq!(cursor.position(), 0);
 
 		let decoded = T::read_from_cache(&mut cursor).unwrap();
-		assert_eq!(decoded, value);
+		assert_eq!(&decoded, value);
 		assert_eq!(cursor.position(), buf.len() as u64);
 	}
 
@@ -324,7 +324,7 @@ mod tests {
 	#[case(vec![255; 1024])] // 1KB of 0xFF bytes
 	#[case(vec![0, 255, 128, 10, 200, 0])] // include non-UTF8 bytes to ensure raw bytes are preserved
 	fn vec_u8_roundtrips_various_payloads(#[case] payload: Vec<u8>) {
-		roundtrip::<Vec<u8>>(payload);
+		roundtrip::<Vec<u8>>(&payload);
 	}
 
 	#[rstest]
@@ -334,7 +334,7 @@ mod tests {
 	#[case("naïve café")] // Unicode with accents
 	#[case("a".repeat(1000))] // long string
 	fn string_roundtrips_ascii_and_unicode(#[case] payload: String) {
-		roundtrip::<String>(payload.clone());
+		roundtrip::<String>(&payload);
 	}
 
 	#[test]
@@ -346,22 +346,22 @@ mod tests {
 
 	#[test]
 	fn u8_roundtrip() {
-		roundtrip::<u8>(0);
-		roundtrip::<u8>(1);
-		roundtrip::<u8>(255);
+		roundtrip::<u8>(&0);
+		roundtrip::<u8>(&1);
+		roundtrip::<u8>(&255);
 	}
 
 	#[test]
 	fn u32_roundtrip() {
-		roundtrip::<u32>(0);
-		roundtrip::<u32>(1);
-		roundtrip::<u32>(u32::MAX);
+		roundtrip::<u32>(&0);
+		roundtrip::<u32>(&1);
+		roundtrip::<u32>(&u32::MAX);
 	}
 
 	#[test]
 	fn tuple_roundtrip() {
 		let value: (u32, String) = (42, "life".to_string());
-		roundtrip::<(u32, String)>(value);
+		roundtrip::<(u32, String)>(&value);
 	}
 
 	#[test]
@@ -371,23 +371,23 @@ mod tests {
 			y: 654321,
 			level: 7,
 		};
-		roundtrip::<TileCoord>(tc);
+		roundtrip::<TileCoord>(&tc);
 	}
 
 	#[test]
 	fn blob_roundtrip() {
 		let data: Vec<u8> = (0..=255).collect();
 		let blob = Blob::from(data);
-		roundtrip::<Blob>(blob);
+		roundtrip::<Blob>(&blob);
 	}
 
 	#[test]
 	fn option_roundtrip_some_none() {
 		let some_v: Option<u32> = Some(1234567890);
-		roundtrip::<Option<u32>>(some_v);
+		roundtrip::<Option<u32>>(&some_v);
 
 		let none_v: Option<String> = None;
-		roundtrip::<Option<String>>(none_v);
+		roundtrip::<Option<String>>(&none_v);
 	}
 
 	#[test]
@@ -465,6 +465,6 @@ mod tests {
 	#[case("rgba")]
 	fn dynamic_image_roundtrips(#[case] kind: &str) {
 		let img = make_image_dynamic(kind);
-		roundtrip::<DynamicImage>(img);
+		roundtrip::<DynamicImage>(&img);
 	}
 }
