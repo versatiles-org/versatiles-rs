@@ -57,13 +57,13 @@ if [ $? -ne 0 ]; then
    exit 1
 fi
 
-echo "cargo test"
-cd $PROJECT_DIR
-result=$(cargo test 2>&1)
-if [ $? -ne 0 ]; then
-   echo -e "$result\nERROR DURING: cargo test"
-   exit 1
-fi
+# echo "cargo test"
+# cd $PROJECT_DIR
+# result=$(cargo test 2>&1)
+# if [ $? -ne 0 ]; then
+#    echo -e "$result\nERROR DURING: cargo test"
+#    exit 1
+# fi
 
 echo "cargo test all features"
 cd $PROJECT_DIR
