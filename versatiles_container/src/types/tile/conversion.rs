@@ -44,6 +44,7 @@ impl Tile {
 	pub(super) fn delete_blob(&mut self) {
 		self.blob = None;
 		self.compression = TileCompression::Uncompressed;
+		self.transparency_cache = None;
 	}
 
 	#[context("materializing blob from content (format={:?}, q={:?}, s={:?})", self.format, self.format_quality, self.format_speed)]

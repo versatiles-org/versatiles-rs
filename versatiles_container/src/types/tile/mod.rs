@@ -20,6 +20,7 @@ mod accessors;
 mod cache;
 mod constructors;
 mod conversion;
+mod transparency;
 
 #[cfg(test)]
 mod tests;
@@ -63,6 +64,9 @@ pub struct Tile {
 	pub(super) compression: TileCompression,
 	pub(super) format_quality: Option<u8>,
 	pub(super) format_speed: Option<u8>,
+	/// Cached transparency info: (is_empty, is_opaque).
+	/// Computed lazily and invalidated when content changes.
+	pub(super) transparency_cache: Option<(bool, bool)>,
 }
 
 impl Debug for Tile {

@@ -16,6 +16,7 @@ impl CacheValue for Tile {
 		self.compression.write_to_cache(writer)?;
 		self.format_quality.write_to_cache(writer)?;
 		self.format_speed.write_to_cache(writer)?;
+		self.transparency_cache.write_to_cache(writer)?;
 		Ok(())
 	}
 
@@ -27,6 +28,7 @@ impl CacheValue for Tile {
 		let compression = TileCompression::read_from_cache(reader)?;
 		let format_quality = Option::<u8>::read_from_cache(reader)?;
 		let format_speed = Option::<u8>::read_from_cache(reader)?;
+		let transparency_cache = Option::<(bool, bool)>::read_from_cache(reader)?;
 		Ok(Tile {
 			blob,
 			content,
@@ -34,6 +36,7 @@ impl CacheValue for Tile {
 			compression,
 			format_quality,
 			format_speed,
+			transparency_cache,
 		})
 	}
 }

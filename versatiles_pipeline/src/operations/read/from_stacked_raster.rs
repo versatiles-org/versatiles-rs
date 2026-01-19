@@ -21,7 +21,7 @@ use std::{sync::Arc, vec};
 use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileBBoxPyramid, TileCoord, TileFormat, TileJSON, TileStream, TileType};
 use versatiles_derive::context;
-use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
+use versatiles_image::traits::DynamicImageTraitOperation;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Overlays multiple raster tile sources on top of each other.
@@ -114,14 +114,14 @@ async fn get_tile(coord: TileCoord, entries: Vec<FilteredSourceEntry>) -> Result
 				has_native_tile = true;
 			}
 			if let Some(mut tile_fg) = tile {
-				if tile_bg.as_image()?.is_empty() {
+				if tile_bg.is_empty()? {
 					tile_bg = tile_fg;
 				} else {
 					tile_bg.as_image_mut()?.overlay(tile_fg.as_image()?)?;
 				}
 			}
 			tile = Some(tile_bg);
-			if tile.as_mut().unwrap().as_image()?.is_opaque() {
+			if tile.as_mut().unwrap().is_opaque()? {
 				break;
 			}
 		}
