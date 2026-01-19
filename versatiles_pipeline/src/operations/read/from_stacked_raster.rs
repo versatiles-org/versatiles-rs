@@ -63,6 +63,24 @@ impl SourceEntry {
 	fn is_overscaled(&self, level: u8) -> bool {
 		self.native_level_max < level
 	}
+
+	/// Creates a `FilteredSourceEntry` for use at a specific zoom level.
+	fn for_level(&self, level: u8) -> FilteredSourceEntry {
+		FilteredSourceEntry {
+			source: self.source.clone(),
+			is_overscaled: self.is_overscaled(level),
+		}
+	}
+}
+
+/// A tile source with precomputed overscale status for a specific zoom level.
+///
+/// Created from [`SourceEntry`] when processing tiles at a particular level.
+/// This avoids repeatedly computing the overscale status during tile iteration.
+#[derive(Clone)]
+struct FilteredSourceEntry {
+	source: SharedTileSource,
+	is_overscaled: bool,
 }
 
 /// [`TileSource`] implementation that overlays raster tiles "on the fly."
@@ -85,14 +103,14 @@ struct Operation {
 ///
 /// # Arguments
 /// * `coord` - The tile coordinate to fetch
-/// * `entries` - List of (source, is_overscaled) pairs for this request level
-async fn get_tile(coord: TileCoord, entries: Vec<(SharedTileSource, bool)>) -> Result<Option<(TileCoord, Tile)>> {
+/// * `entries` - Sources with precomputed overscale status for this request level
+async fn get_tile(coord: TileCoord, entries: Vec<FilteredSourceEntry>) -> Result<Option<(TileCoord, Tile)>> {
 	let mut tile = Option::<Tile>::None;
 	let mut has_native_tile = false;
 
-	for (source, is_overscaled) in &entries {
-		if let Some(mut tile_bg) = source.get_tile(&coord).await? {
-			if !is_overscaled {
+	for entry in &entries {
+		if let Some(mut tile_bg) = entry.source.get_tile(&coord).await? {
+			if !entry.is_overscaled {
 				has_native_tile = true;
 			}
 			if let Some(mut tile_fg) = tile {
@@ -228,11 +246,11 @@ impl TileSource for Operation {
 
 		// Filter sources to only those that overlap with the bbox,
 		// and precompute whether each source is overscaled at this level
-		let mut entries: Vec<(SharedTileSource, bool)> = self
+		let mut entries: Vec<FilteredSourceEntry> = self
 			.sources
 			.iter()
 			.filter(|entry| entry.source.metadata().bbox_pyramid.overlaps_bbox(&bbox))
-			.map(|entry| (entry.source.clone(), entry.is_overscaled(bbox.level)))
+			.map(|entry| entry.for_level(bbox.level))
 			.collect();
 
 		if entries.is_empty() {
@@ -240,12 +258,12 @@ impl TileSource for Operation {
 		}
 
 		// Return empty stream if no native (non-overscaled) source exists
-		if entries.iter().all(|(_, is_overscaled)| *is_overscaled) {
+		if entries.iter().all(|entry| entry.is_overscaled) {
 			return Ok(TileStream::empty());
 		}
 
 		if entries.len() == 1 {
-			let source = entries.pop().unwrap().0;
+			let source = entries.pop().unwrap().source;
 			let stream = source.get_tile_stream(bbox).await?;
 			return Ok(stream);
 		}
@@ -466,7 +484,7 @@ mod tests {
 			assert_eq!(s.len(), 8);
 		}
 
-		let sources: Vec<(SharedTileSource, bool)> = input
+		let entries: Vec<FilteredSourceEntry> = input
 			.iter()
 			.map(|s| {
 				// convert hex string to RGBA color
@@ -474,12 +492,15 @@ mod tests {
 					.map(|i| u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).unwrap())
 					.collect();
 				let source = DummyImageSource::from_color(&c, 4, PNG, None).unwrap();
-				(Arc::new(Box::new(source) as Box<dyn TileSource>), false)
+				FilteredSourceEntry {
+					source: Arc::new(Box::new(source) as Box<dyn TileSource>),
+					is_overscaled: false,
+				}
 			})
 			.collect();
 
 		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let result = get_tile(coord, sources).await.unwrap();
+		let result = get_tile(coord, entries).await.unwrap();
 		let color = result.unwrap().1.as_image().unwrap().average_color();
 		assert_eq!(rgba_to_hex(&color), expected);
 	}
@@ -550,9 +571,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_tile_empty_sources_returns_none() {
-		let sources: Vec<(SharedTileSource, bool)> = vec![];
+		let entries: Vec<FilteredSourceEntry> = vec![];
 		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let result = get_tile(coord, sources).await.unwrap();
+		let result = get_tile(coord, entries).await.unwrap();
 		assert!(result.is_none());
 	}
 
@@ -591,14 +612,17 @@ mod tests {
 	async fn test_get_tile_native_overscale_behavior(#[case] overscaled_flags: &[bool], #[case] expect_some: bool) {
 		use versatiles_core::TileFormat::PNG;
 
-		let entries: Vec<_> = overscaled_flags
+		let entries: Vec<FilteredSourceEntry> = overscaled_flags
 			.iter()
 			.enumerate()
 			.map(|(i, &is_overscaled)| {
 				// Use semi-transparent for non-last sources to avoid short-circuiting
 				let alpha = if i < overscaled_flags.len() - 1 { 128 } else { 255 };
 				let source = DummyImageSource::from_color(&[255, 0, 0, alpha], 4, PNG, None).unwrap();
-				(Arc::new(Box::new(source) as Box<dyn TileSource>), is_overscaled)
+				FilteredSourceEntry {
+					source: Arc::new(Box::new(source) as Box<dyn TileSource>),
+					is_overscaled,
+				}
 			})
 			.collect();
 
