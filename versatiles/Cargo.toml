@@ -107,8 +107,8 @@ cli = [
 	"dep:tokio",
 	"versatiles_container/cli",
 ]
-gdal = []
-bindgen = []
+gdal = ["versatiles_pipeline/gdal"]
+bindgen = ["versatiles_pipeline/bindgen"]
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["env_logger", "termimad"]
