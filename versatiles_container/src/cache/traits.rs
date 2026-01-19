@@ -84,6 +84,20 @@ impl CacheValue for u32 {
 	}
 }
 
+/// Implements binary serialization for `bool`.
+///
+/// Encodes as a single byte (0 = false, 1 = true).
+impl CacheValue for bool {
+	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+		writer.write_u8(u8::from(*self))?;
+		Ok(())
+	}
+
+	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+		Ok(reader.read_u8()? != 0)
+	}
+}
+
 /// Implements binary serialization for UTF-8 `String`s.
 ///
 /// Format:
