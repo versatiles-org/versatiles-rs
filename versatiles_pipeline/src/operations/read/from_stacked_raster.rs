@@ -92,14 +92,15 @@ async fn get_tile(coord: TileCoord, entries: Vec<(SharedTileSource, bool)>) -> R
 
 	for (source, is_overscaled) in &entries {
 		if let Some(mut tile_bg) = source.get_tile(&coord).await? {
-			if tile_bg.as_image()?.is_empty() {
-				continue;
-			}
 			if !is_overscaled {
 				has_native_tile = true;
 			}
-			if let Some(mut image_fg) = tile {
-				tile_bg.as_image_mut()?.overlay(image_fg.as_image()?)?;
+			if let Some(mut tile_fg) = tile {
+				if tile_bg.as_image()?.is_empty() {
+					tile_bg = tile_fg;
+				} else {
+					tile_bg.as_image_mut()?.overlay(tile_fg.as_image()?)?;
+				}
 			}
 			tile = Some(tile_bg);
 			if tile.as_mut().unwrap().as_image()?.is_opaque() {
