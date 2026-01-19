@@ -54,6 +54,134 @@ pub fn decode_vpl(input: TokenStream) -> TokenStream {
 	TokenStream::from(expanded)
 }
 
+/// Per-field metadata used during YAML codegen for ConfigDoc.
+struct ConfigDocRow {
+	key: String,
+	ty: syn::Type,
+	doc: String,
+	is_vec: bool,
+	inner_ty_vec: Option<syn::Type>,
+	is_nested_struct: bool,
+	demo_value: Option<String>,
+}
+
+/// Extract field metadata for ConfigDoc YAML generation.
+fn extract_config_doc_row(f: &syn::Field) -> ConfigDocRow {
+	let ident = f.ident.clone().expect("named field");
+	let key = serde_rename(&f.attrs).unwrap_or_else(|| ident.to_string());
+	let ty = f.ty.clone();
+	let doc = collect_doc(&f.attrs);
+	let is_opt = is_option(&f.ty);
+
+	let mut is_vec = false;
+	let mut is_map = false;
+	let mut inner_ty_vec = None;
+
+	if let Some(id) = path_ident(&f.ty) {
+		let id_s = id.to_string();
+		if id_s == "Vec" {
+			is_vec = true;
+			if let Some(mut inners) = angle_inner(&f.ty)
+				&& let Some(inner) = inners.pop()
+			{
+				inner_ty_vec = Some(inner.clone());
+			}
+		} else if id_s == "HashMap" {
+			is_map = true;
+		}
+	}
+
+	let is_url = is_url_path(&f.ty);
+
+	let mut demo_value = None;
+	for attr in &f.attrs {
+		if attr.path().is_ident("config_demo")
+			&& demo_value.is_none()
+			&& let Ok(lit) = attr.parse_args::<syn::LitStr>()
+		{
+			demo_value = Some(lit.value());
+		}
+	}
+
+	let is_nested_struct =
+		!is_opt && !is_vec && !is_map && path_ident(&f.ty).is_some() && !is_primitive_like(&f.ty) && !is_url;
+
+	ConfigDocRow {
+		key,
+		ty,
+		doc,
+		is_vec,
+		inner_ty_vec,
+		is_nested_struct,
+		demo_value,
+	}
+}
+
+/// Build YAML generation code for a single field.
+fn build_field_yaml_block(r: &ConfigDocRow) -> proc_macro2::TokenStream {
+	let key = &r.key;
+	let ty = &r.ty;
+	let doc = &r.doc;
+	let doc_lit = syn::LitStr::new(doc, Span::call_site());
+	let demo_lit = r.demo_value.as_ref().map(|d| syn::LitStr::new(d, Span::call_site()));
+	let key_lit = syn::LitStr::new(key, Span::call_site());
+
+	let mut output = quote! {
+		__s.push_str(&__sp(__indent));
+		__s.push('\n');
+		for line in #doc_lit.lines() {
+			__s.push_str(&__sp(__indent));
+			__s.push_str("# ");
+			__s.push_str(line);
+			__s.push('\n');
+		}
+		__s.push_str(&__sp(__indent));
+		__s.push_str(#key_lit);
+		__s.push_str(": ");
+	};
+
+	if let Some(demo_lit) = &demo_lit {
+		output = quote! {
+			#output
+			__s.push_str(#demo_lit);
+		};
+	} else if r.is_nested_struct {
+		output = quote! {
+			#output
+			__s.push_str("\n");
+			__s.push_str(&<#ty>::demo_yaml_with_indent(__indent + 2));
+		};
+	} else if r.is_vec
+		&& let Some(inner) = &r.inner_ty_vec
+	{
+		output = quote! {
+			#output
+			__s.push_str("\n");
+			let __inner = <#inner>::demo_yaml_with_indent(0);
+			let mut __first_line_printed = false;
+			for __line in __inner.lines() {
+				if !__first_line_printed {
+					if __line.trim().is_empty() { continue; }
+					__s.push_str(&__sp(__indent + 2));
+					__s.push_str("- ");
+					__first_line_printed = true;
+				} else {
+					__s.push_str(&__sp(__indent + 4));
+				}
+				__s.push_str(__line);
+				__s.push('\n');
+			}
+		};
+	}
+
+	quote! {
+		#output
+		if !__s.ends_with('\n') {
+			__s.push('\n');
+		}
+	}
+}
+
 /// Derive macro to generate YAML configuration documentation.
 ///
 /// `ConfigDoc` generates a YAML-formatted demo of the configuration struct, including documentation
@@ -112,11 +240,8 @@ pub fn decode_vpl(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(ConfigDoc, attributes(config, config_demo))]
 pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as syn::DeriveInput);
-	// Parse the input struct definition for generating YAML demo output.
-
 	let name = &input.ident;
 
-	// Ensure the macro is only used on structs with named fields.
 	let syn::Data::Struct(data) = &input.data else {
 		return syn::Error::new(
 			input.span(),
@@ -126,7 +251,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		.into();
 	};
 
-	// Access the named fields of the struct; these drive the YAML generation.
 	let fields = match &data.fields {
 		Fields::Named(named) => &named.named,
 		_ => {
@@ -139,151 +263,9 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		}
 	};
 
-	// Collect per‑field metadata used during YAML codegen.
-	struct Row {
-		key: String,
-		ty: syn::Type,
-		doc: String,
-		is_vec: bool,
-		inner_ty_vec: Option<syn::Type>, // Vec<T> -> T
-		// Heuristic: treat non-Option/Vec/Map path types as nested
-		is_nested_struct: bool,
-		demo_value: Option<String>,
-	}
+	let rows: Vec<_> = fields.iter().map(extract_config_doc_row).collect();
+	let field_yaml_blocks: Vec<_> = rows.iter().map(build_field_yaml_block).collect();
 
-	let mut rows = Vec::<Row>::new();
-	for f in fields {
-		// Process each field, extract its identifier, type, docs, and attributes.
-		let ident = f.ident.clone().expect("named field");
-		let key = serde_rename(&f.attrs).unwrap_or_else(|| ident.to_string());
-		let ty = f.ty.clone();
-		let doc = collect_doc(&f.attrs);
-		let is_option = is_option(&f.ty);
-
-		let mut is_vec = false;
-		let mut is_map = false;
-		let mut inner_ty_vec = None;
-
-		// Detect container types so YAML output can render lists or nested objects correctly.
-		if let Some(id) = path_ident(&f.ty) {
-			let id_s = id.to_string();
-			if id_s == "Vec" {
-				is_vec = true;
-				if let Some(mut inners) = angle_inner(&f.ty)
-					&& let Some(inner) = inners.pop()
-				{
-					inner_ty_vec = Some(inner.clone());
-				}
-			} else if id_s == "HashMap" {
-				is_map = true;
-			}
-		}
-
-		let is_url_path = is_url_path(&f.ty);
-
-		// Detect custom example values provided via #[config_demo].
-		let mut demo_value = None;
-		for attr in &f.attrs {
-			if attr.path().is_ident("config_demo")
-				&& demo_value.is_none()
-				&& let Ok(lit) = attr.parse_args::<syn::LitStr>()
-			{
-				// Prefer positional literal: #[config_demo("...")]
-				demo_value = Some(lit.value());
-			}
-		}
-
-		// Decide whether to treat this field as a nested struct (recursive YAML).
-		let is_nested_struct =
-			!is_option && !is_vec && !is_map && path_ident(&f.ty).is_some() && !is_primitive_like(&f.ty) && !is_url_path;
-
-		rows.push(Row {
-			key,
-			ty,
-			doc,
-			is_vec,
-			inner_ty_vec,
-			is_nested_struct,
-			demo_value,
-		});
-	}
-
-	// Build code fragments that emit YAML for each field, including indentation and comments.
-	let field_yaml_blocks: Vec<_> = rows
-		.iter()
-		.map(|r| {
-			use proc_macro2::TokenStream as TokenStream2;
-
-			// Start generating YAML lines for documentation and keys.
-			let key = &r.key;
-			let ty = &r.ty;
-			let doc = &r.doc;
-			let doc_lit = syn::LitStr::new(doc, Span::call_site());
-			let demo_value = r.demo_value.as_ref();
-			let demo_lit = demo_value.map(|d| syn::LitStr::new(d, Span::call_site()));
-			let key_lit = syn::LitStr::new(key, Span::call_site());
-
-			let mut output: TokenStream2 = quote! {
-				__s.push_str(&__sp(__indent));
-				__s.push('\n');
-				for line in #doc_lit.lines() {
-					__s.push_str(&__sp(__indent));
-					__s.push_str("# ");
-					__s.push_str(line);
-					__s.push('\n');
-				}
-				__s.push_str(&__sp(__indent));
-				__s.push_str(#key_lit);
-				__s.push_str(": ");
-			};
-
-			if let Some(demo_lit) = &demo_lit {
-				// If a demo value is provided, use it directly.
-				output = quote! {
-					#output
-					__s.push_str(#demo_lit);
-				};
-			} else if r.is_nested_struct {
-				// If the field is itself a struct, recurse into its `demo_yaml_with_indent`.
-				output = quote! {
-					#output
-					__s.push_str("\n");
-					__s.push_str(&<#ty>::demo_yaml_with_indent(__indent + 2));
-				};
-			} else if r.is_vec
-				&& let Some(inner) = &r.inner_ty_vec
-			{
-				// Vectors require iterating example YAML of the inner type and prefixing "- ".
-				output = quote! {
-					#output
-					__s.push_str("\n");
-					let __inner = <#inner>::demo_yaml_with_indent(0);
-					let mut __first_line_printed = false;
-					for __line in __inner.lines() {
-						if !__first_line_printed {
-							if __line.trim().is_empty() { continue; }
-							__s.push_str(&__sp(__indent + 2));
-							__s.push_str("- ");
-							__first_line_printed = true;
-						} else {
-							__s.push_str(&__sp(__indent + 4));
-						}
-						__s.push_str(__line);
-						__s.push('\n');
-					}
-				};
-			}
-			// Ensure each field's YAML block ends with a newline.
-			quote! {
-				#output
-				if !__s.ends_with('\n') {
-					__s.push('\n');
-				}
-			}
-		})
-		.collect();
-
-	// Generate the function that recursively walks fields and builds the final YAML string.
 	let expanded = quote! {
 		impl #name {
 			pub(crate) fn demo_yaml_with_indent(__indent: usize) -> String {
