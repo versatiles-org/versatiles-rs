@@ -6,6 +6,14 @@
 //! - **Read and Write**: Supports reading and writing various tile container formats.
 //! - **Convert**: Convert between different tile formats and compressions.
 //!
+//! ## Feature Flags
+//!
+//! - **cli** *(default)*: Enables command-line interface support with colored output and progress indicators.
+//! - **server** *(default)*: Enables HTTP tile server functionality using axum.
+//! - **gdal**: Enables GDAL raster data source support for reading geospatial formats like GeoTIFF.
+//!   Requires GDAL to be installed on the system.
+//! - **bindgen**: Compiles GDAL bindings from source instead of using pre-built bindings.
+//!
 //! ## Supported Formats
 //! - `*.versatiles`
 //! - `*.mbtiles` (requires `full` feature)
