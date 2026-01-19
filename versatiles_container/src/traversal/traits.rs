@@ -4,11 +4,69 @@
 //! traversal capabilities to any [`TileSource`] implementation.
 
 use super::{Traversal, TraversalTranslationStep, translate_traversals};
-use crate::{Tile, TileSource, TilesRuntime, TraversalCache};
+use crate::{ProgressHandle, Tile, TileSource, TilesRuntime, TraversalCache};
 use anyhow::Result;
 use futures::{StreamExt, future::BoxFuture, stream};
-use std::sync::Arc;
+use std::sync::{
+	Arc,
+	atomic::{AtomicU64, Ordering},
+};
 use versatiles_core::{TileBBox, TileCoord, TileStream};
+
+/// Helper for consistent progress tracking using midpoint of read/write operations.
+struct ProgressTracker {
+	progress: ProgressHandle,
+	ti_read: AtomicU64,
+	ti_write: AtomicU64,
+	ti_offset: AtomicU64,
+}
+
+impl ProgressTracker {
+	fn new(progress: ProgressHandle) -> Self {
+		Self {
+			progress,
+			ti_read: AtomicU64::new(0),
+			ti_write: AtomicU64::new(0),
+			ti_offset: AtomicU64::new(0),
+		}
+	}
+
+	fn inc(&self, count: u64) {
+		self.ti_offset.fetch_add(count, Ordering::Relaxed);
+		self.update_position();
+	}
+
+	fn inc_read(&self, value: u64) {
+		self.ti_read.fetch_add(value, Ordering::Relaxed);
+		self.ti_offset.store(0, Ordering::Relaxed);
+		self.update_position();
+	}
+
+	fn inc_write(&self, value: u64) {
+		self.ti_write.fetch_add(value, Ordering::Relaxed);
+		self.ti_offset.store(0, Ordering::Relaxed);
+		self.update_position();
+	}
+
+	fn inc_read_write(&self, read: u64, write: u64) {
+		self.ti_read.fetch_add(read, Ordering::Relaxed);
+		self.ti_write.fetch_add(write, Ordering::Relaxed);
+		self.ti_offset.store(0, Ordering::Relaxed);
+		self.update_position();
+	}
+
+	fn update_position(&self) {
+		let read = self.ti_read.load(Ordering::Relaxed);
+		let write = self.ti_write.load(Ordering::Relaxed);
+		let offset = self.ti_offset.load(Ordering::Relaxed);
+		self.progress.set_position((read + write + offset) / 2);
+	}
+
+	fn finish(&self) {
+		self.update_position();
+		self.progress.finish();
+	}
+}
 
 /// Extension trait providing traversal with higher-rank trait bounds (HRTBs).
 ///
@@ -68,9 +126,7 @@ pub trait TileSourceTraverseExt: TileSource {
 				}
 			}
 			let progress = runtime.create_progress(&progress_message, u64::midpoint(tn_read, tn_write));
-
-			let mut ti_read = 0;
-			let mut ti_write = 0;
+			let tracker = Arc::new(ProgressTracker::new(progress));
 
 			let cache = Arc::new(TraversalCache::<(TileCoord, Tile)>::new(runtime.cache_type()));
 			for step in traversal_steps {
@@ -78,15 +134,16 @@ pub trait TileSourceTraverseExt: TileSource {
 					Push(bboxes, index) => {
 						log::trace!("Cache {bboxes:?} at index {index}");
 						let limits = versatiles_core::ConcurrencyLimits::default();
-						stream::iter(bboxes.clone())
+						let read_operations = bboxes.iter().map(TileBBox::count_tiles).sum::<u64>();
+						stream::iter(bboxes)
 							.map(|bbox| {
-								let progress = progress.clone();
+								let tracker = tracker.clone();
 								let c = cache.clone();
 								async move {
 									let vec = self
 										.get_tile_stream(bbox)
 										.await?
-										.inspect(move || progress.inc(1))
+										.inspect(move || tracker.inc(1))
 										.to_vec()
 										.await;
 
@@ -100,38 +157,35 @@ pub trait TileSourceTraverseExt: TileSource {
 							.await
 							.into_iter()
 							.collect::<Result<Vec<_>>>()?;
-						ti_read += bboxes.iter().map(TileBBox::count_tiles).sum::<u64>();
+						tracker.inc_read(read_operations);
 					}
 					Pop(index, bbox) => {
 						log::trace!("Uncache {bbox:?} at index {index}");
 						let vec = cache.take(index)?.unwrap();
-						let progress = progress.clone();
-						let stream = TileStream::from_vec(vec).inspect(move || progress.inc(1));
+						let tracker2 = tracker.clone();
+						let stream = TileStream::from_vec(vec).inspect(move || tracker2.inc(1));
 						callback(bbox, stream).await?;
-						ti_write += bbox.count_tiles();
+						tracker.inc_write(bbox.count_tiles());
 					}
 					Stream(bboxes, bbox) => {
 						log::trace!("Stream {bbox:?}");
-						let progress = progress.clone();
-						let streams = stream::iter(bboxes.clone()).map(move |bbox| {
-							let progress = progress.clone();
+						let tracker2 = tracker.clone();
+						let read_operations = bboxes.iter().map(TileBBox::count_tiles).sum::<u64>();
+						let streams = stream::iter(bboxes).map(move |bbox| {
+							let tracker = tracker2.clone();
 							async move {
-								self
-									.get_tile_stream(bbox)
-									.await
-									.unwrap()
-									.inspect(move || progress.inc(2))
+								self.get_tile_stream(bbox).await.unwrap().inspect(move || {
+									tracker.inc(2);
+								})
 							}
 						});
 						callback(bbox, TileStream::from_streams(streams)).await?;
-						ti_read += bboxes.iter().map(TileBBox::count_tiles).sum::<u64>();
-						ti_write += bbox.count_tiles();
+						tracker.inc_read_write(read_operations, bbox.count_tiles());
 					}
 				}
-				progress.set_position(u64::midpoint(ti_read, ti_write));
 			}
 
-			progress.finish();
+			tracker.finish();
 			Ok(())
 		}
 	}
