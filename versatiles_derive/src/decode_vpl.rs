@@ -1,6 +1,6 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
-use syn::{Attribute, DataStruct, DeriveInput, Fields, Meta};
+use syn::{Attribute, DataStruct, DeriveInput, Field, Fields, Meta};
 
 /// Metadata for mapping a Rust type to its VPL parsing method and documentation.
 struct TypeMapping {
@@ -167,134 +167,112 @@ pub fn extract_comment(attr: &Attribute) -> Option<String> {
 	None
 }
 
-/// Decode a struct definition into VPL parsing code.
-///
-/// Returns `Ok(TokenStream)` on success, or `Err(syn::Error)` if the struct
-/// contains unsupported field types or is not a named-field struct.
-pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<TokenStream, syn::Error> {
-	let name = input.ident;
-
-	// Extract the doc comments from the struct attributes
-	let doc_struct = input
-		.attrs
+/// Extract doc comments from struct attributes.
+fn extract_struct_docs(attrs: &[Attribute]) -> String {
+	attrs
 		.iter()
 		.filter_map(extract_comment)
 		.collect::<Vec<String>>()
 		.join("\n")
 		.trim()
+		.to_string()
+}
+
+/// Processed field information returned by `process_field`.
+enum ProcessedField {
+	/// A regular property field with (doc_field, parser_field)
+	Property { doc: String, parser: TokenStream },
+	/// The special "sources" field with its doc string
+	Sources { doc: String, parser: TokenStream },
+}
+
+/// Process a single struct field into parsing code.
+fn process_field(field: &Field) -> Result<(String, ProcessedField), syn::Error> {
+	let field_name = &field.ident;
+	let field_type = &field.ty;
+	let field_str = field_name
+		.as_ref()
+		.ok_or_else(|| syn::Error::new_spanned(field, "field must have a name"))?
 		.to_string();
+	let field_type_str = quote!(#field_type).to_string().replace(' ', "");
 
-	let fields = match data_struct.fields {
-		Fields::Named(fields_named) => fields_named.named,
-		_ => {
-			return Err(syn::Error::new_spanned(
-				&name,
-				"VPLDecode can only be derived for structs with named fields",
-			));
-		}
-	};
-
-	let mut parser_fields: Vec<TokenStream> = Vec::new();
-	let mut doc_fields: Vec<String> = Vec::new();
-	let mut doc_sources: Option<String> = None;
-	let mut field_names: Vec<String> = Vec::new();
-
-	for field in fields {
-		let field_name = &field.ident;
-		let field_type = &field.ty;
-		let field_str = field_name
-			.as_ref()
-			.ok_or_else(|| syn::Error::new_spanned(&field, "field must have a name"))?
-			.to_string();
-		let field_type_str = quote!(#field_type).to_string().replace(' ', "");
-
-		field_names.push(field_str.clone());
-		let mut comment = field
-			.attrs
-			.iter()
-			.filter_map(extract_comment)
-			.collect::<Vec<String>>()
-			.join(" ")
-			.trim()
-			.to_string();
-
-		if field_str == "sources" {
-			if doc_sources.is_some() {
-				return Err(syn::Error::new_spanned(
-					field_name,
-					"'sources' field is already defined",
-				));
-			}
-			if field_type_str != "Vec<VPLPipeline>" {
-				return Err(syn::Error::new_spanned(
-					field_type,
-					format!("type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'"),
-				));
-			}
-			doc_sources = Some(format!("### Sources\n\n{comment}"));
-			parser_fields.push(quote! { sources: node.sources.clone() });
-		} else {
-			if !comment.is_empty() {
-				comment = format!(" - {comment}");
-			}
-
-			let (doc_field, parser_field) = if let Some(mapping) = find_type_mapping(&field_type_str) {
-				let method = format_ident!("{}", mapping.method_name);
-
-				// Build the method call with appropriate generic parameters
-				let call = match (mapping.generic_param, mapping.generic_param2) {
-					(Some(g1), Some(g2)) => {
-						let g1_ident = format_ident!("{}", g1);
-						let g2_lit: proc_macro2::TokenStream = g2.parse().unwrap();
-						quote! { node.#method::<#g1_ident, #g2_lit>(#field_str)? }
-					}
-					(Some(g1), None) => {
-						let g1_ident = format_ident!("{}", g1);
-						quote! { node.#method::<#g1_ident>(#field_str)? }
-					}
-					(None, _) => {
-						quote! { node.#method(#field_str)? }
-					}
-				};
-
-				let doc = if mapping.is_required {
-					format!("- **`{field_str}`: {} (required)**{comment}", mapping.display_name)
-				} else {
-					format!("- *`{field_str}`: {} (optional)*{comment}", mapping.display_name)
-				};
-
-				(doc, quote! { #field_name: #call })
-			} else {
-				return Err(syn::Error::new_spanned(
-					field_type,
-					format!(
-						"unsupported type `{}` for VPLDecode.\nSupported types: {}",
-						field_type_str,
-						supported_types_list()
-					),
-				));
-			};
-
-			doc_fields.push(doc_field.trim().to_string());
-			parser_fields.push(parser_field);
-		}
-	}
-
-	let doc_fields = if doc_fields.is_empty() {
-		String::new()
-	} else {
-		format!("### Parameters\n\n{}", doc_fields.join("\n"))
-	};
-
-	let doc = vec![doc_struct, doc_sources.unwrap_or_default(), doc_fields]
-		.into_iter()
-		.filter(|s| !s.is_empty())
+	let mut comment = field
+		.attrs
+		.iter()
+		.filter_map(extract_comment)
 		.collect::<Vec<String>>()
-		.join("\n")
+		.join(" ")
 		.trim()
 		.to_string();
 
-	Ok(quote! {
+	if field_str == "sources" {
+		if field_type_str != "Vec<VPLPipeline>" {
+			return Err(syn::Error::new_spanned(
+				field_type,
+				format!("type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'"),
+			));
+		}
+		let doc = format!("### Sources\n\n{comment}");
+		let parser = quote! { sources: node.sources.clone() };
+		return Ok((field_str, ProcessedField::Sources { doc, parser }));
+	}
+
+	if !comment.is_empty() {
+		comment = format!(" - {comment}");
+	}
+
+	let Some(mapping) = find_type_mapping(&field_type_str) else {
+		return Err(syn::Error::new_spanned(
+			field_type,
+			format!(
+				"unsupported type `{}` for VPLDecode.\nSupported types: {}",
+				field_type_str,
+				supported_types_list()
+			),
+		));
+	};
+
+	let method = format_ident!("{}", mapping.method_name);
+
+	// Build the method call with appropriate generic parameters
+	let call = match (mapping.generic_param, mapping.generic_param2) {
+		(Some(g1), Some(g2)) => {
+			let g1_ident = format_ident!("{}", g1);
+			let g2_lit: proc_macro2::TokenStream = g2.parse().unwrap();
+			quote! { node.#method::<#g1_ident, #g2_lit>(#field_str)? }
+		}
+		(Some(g1), None) => {
+			let g1_ident = format_ident!("{}", g1);
+			quote! { node.#method::<#g1_ident>(#field_str)? }
+		}
+		(None, _) => {
+			quote! { node.#method(#field_str)? }
+		}
+	};
+
+	let doc = if mapping.is_required {
+		format!("- **`{field_str}`: {} (required)**{comment}", mapping.display_name)
+	} else {
+		format!("- *`{field_str}`: {} (optional)*{comment}", mapping.display_name)
+	};
+
+	Ok((
+		field_str,
+		ProcessedField::Property {
+			doc: doc.trim().to_string(),
+			parser: quote! { #field_name: #call },
+		},
+	))
+}
+
+/// Build the final impl TokenStream for the struct.
+fn build_impl_tokens(
+	name: &Ident,
+	field_names: Vec<String>,
+	parser_fields: Vec<TokenStream>,
+	doc: String,
+) -> TokenStream {
+	quote! {
 		impl #name {
 			pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {
 				// scan node.get_property_names to ensure, that all properties are also defined in field_names
@@ -320,7 +298,70 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 				#doc.to_string()
 			}
 		}
-	})
+	}
+}
+
+/// Decode a struct definition into VPL parsing code.
+///
+/// Returns `Ok(TokenStream)` on success, or `Err(syn::Error)` if the struct
+/// contains unsupported field types or is not a named-field struct.
+pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<TokenStream, syn::Error> {
+	let name = input.ident;
+	let doc_struct = extract_struct_docs(&input.attrs);
+
+	let fields = match data_struct.fields {
+		Fields::Named(fields_named) => fields_named.named,
+		_ => {
+			return Err(syn::Error::new_spanned(
+				&name,
+				"VPLDecode can only be derived for structs with named fields",
+			));
+		}
+	};
+
+	let mut parser_fields: Vec<TokenStream> = Vec::new();
+	let mut doc_fields: Vec<String> = Vec::new();
+	let mut doc_sources: Option<String> = None;
+	let mut field_names: Vec<String> = Vec::new();
+
+	for field in fields {
+		let (field_str, processed) = process_field(&field)?;
+
+		if field_str == "sources" && doc_sources.is_some() {
+			return Err(syn::Error::new_spanned(
+				&field.ident,
+				"'sources' field is already defined",
+			));
+		}
+
+		field_names.push(field_str);
+		match processed {
+			ProcessedField::Sources { doc, parser } => {
+				doc_sources = Some(doc);
+				parser_fields.push(parser);
+			}
+			ProcessedField::Property { doc, parser } => {
+				doc_fields.push(doc);
+				parser_fields.push(parser);
+			}
+		}
+	}
+
+	let doc_fields_str = if doc_fields.is_empty() {
+		String::new()
+	} else {
+		format!("### Parameters\n\n{}", doc_fields.join("\n"))
+	};
+
+	let doc = vec![doc_struct, doc_sources.unwrap_or_default(), doc_fields_str]
+		.into_iter()
+		.filter(|s| !s.is_empty())
+		.collect::<Vec<String>>()
+		.join("\n")
+		.trim()
+		.to_string();
+
+	Ok(build_impl_tokens(&name, field_names, parser_fields, doc))
 }
 
 #[cfg(test)]
