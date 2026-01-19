@@ -1,3 +1,5 @@
+#![cfg(feature = "cli")]
+
 //! E2E tests for tile data integrity after format conversions.
 //!
 //! These tests verify that tile data is preserved byte-for-byte when converting

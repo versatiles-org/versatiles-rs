@@ -1,3 +1,5 @@
+#![cfg(all(feature = "cli", feature = "server"))]
+
 //! E2E tests for server configuration file integration.
 //!
 //! These tests verify that the server correctly loads and applies all settings

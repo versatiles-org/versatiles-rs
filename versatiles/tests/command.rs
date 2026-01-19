@@ -1,3 +1,5 @@
+#![cfg(feature = "cli")]
+
 mod test_utilities;
 use predicates::str;
 use rstest::rstest;

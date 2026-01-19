@@ -1,3 +1,5 @@
+#![cfg(feature = "cli")]
+
 mod test_utilities;
 use pretty_assertions::assert_eq;
 use test_utilities::*;

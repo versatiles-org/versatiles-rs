@@ -1,3 +1,5 @@
+#![cfg(all(feature = "cli", feature = "server"))]
+
 //! E2E tests for CORS header handling in the HTTP server.
 //!
 //! These tests verify that the server correctly sets CORS headers based on configuration.

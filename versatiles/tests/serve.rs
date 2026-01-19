@@ -1,3 +1,5 @@
+#![cfg(all(feature = "cli", feature = "server"))]
+
 mod test_utilities;
 
 use std::{net::TcpListener, process::Child, thread, time::Duration};

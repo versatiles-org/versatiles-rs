@@ -1,3 +1,5 @@
+#![cfg(all(feature = "cli", feature = "server"))]
+
 //! E2E tests for compression negotiation in the HTTP server.
 //!
 //! These tests verify that the server correctly handles Accept-Encoding headers

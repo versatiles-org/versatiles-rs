@@ -1,3 +1,5 @@
+#![cfg(all(feature = "cli", feature = "server"))]
+
 //! E2E tests for static content serving from TAR archives.
 //!
 //! These tests verify that the server correctly serves static files from
