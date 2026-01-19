@@ -13,14 +13,14 @@
 //! - `FileHeader`: Represents the header of a `versatiles` file, containing metadata about the tile format, compression, and ranges.
 //! - `TileIndex`: Manages the byte ranges of individual tiles within the container, allowing for efficient access and modifications.
 
+mod block_builder;
+pub use block_builder::BlockBuilder;
+
 mod block_definition;
 pub use block_definition::BlockDefinition;
 
 mod block_index;
 pub use block_index::BlockIndex;
-
-mod block_writer;
-pub use block_writer::BlockWriter;
 
 mod file_header;
 pub use file_header::FileHeader;
