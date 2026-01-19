@@ -248,6 +248,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: "default"
+            features: ""
+            needs-gdal: false
           - name: "no-default"
             features: "--no-default-features"
             needs-gdal: false
@@ -259,6 +262,9 @@ jobs:
             needs-gdal: false
           - name: "gdal"
             features: "--features gdal"
+            needs-gdal: true
+          - name: "all-features"
+            features: "--all-features"
             needs-gdal: true
     steps:
       - name: Checkout
