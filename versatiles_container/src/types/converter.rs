@@ -247,10 +247,17 @@ mod tests {
 	use super::*;
 	use crate::{MockReader, Traversal, VersaTilesReader};
 	use assert_fs::NamedTempFile;
+	use rstest::rstest;
 	use versatiles_core::{
 		TileCompression::*,
 		TileFormat::{self, *},
 	};
+
+	fn new_bbox(b: [u32; 4]) -> TileBBoxPyramid {
+		let mut pyramid = TileBBoxPyramid::new_empty();
+		pyramid.include_bbox(&TileBBox::from_min_and_max(3, b[0], b[1], b[2], b[3]).unwrap());
+		pyramid
+	}
 
 	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> SharedTileSource {
 		let bbox_pyramid = TileBBoxPyramid::new_full(4);
@@ -258,63 +265,58 @@ mod tests {
 		MockReader::new_mock(reader_metadata).unwrap().into_shared()
 	}
 
+	#[rstest]
+	#[case(false, false, [2, 3, 4, 5], "23 33 43 24 34 44 25 35 45")]
+	#[case(false, true, [2, 3, 5, 4], "32 33 34 35 42 43 44 45")]
+	#[case(true, false, [2, 3, 4, 6], "24 34 44 23 33 43 22 32 42 21 31 41")]
+	#[case(true, true, [2, 3, 6, 4], "35 34 33 32 31 45 44 43 42 41")]
 	#[tokio::test]
-	async fn bbox_and_tile_order() -> Result<()> {
-		test(false, false, [2, 3, 4, 5], "23 33 43 24 34 44 25 35 45").await?;
-		test(false, true, [2, 3, 5, 4], "32 33 34 35 42 43 44 45").await?;
-		test(true, false, [2, 3, 4, 6], "24 34 44 23 33 43 22 32 42 21 31 41").await?;
-		test(true, true, [2, 3, 6, 4], "35 34 33 32 31 45 44 43 42 41").await?;
+	async fn bbox_and_tile_order(
+		#[case] flip_y: bool,
+		#[case] swap_xy: bool,
+		#[case] bbox_out: [u32; 4],
+		#[case] tile_list: &str,
+	) -> Result<()> {
+		let pyramid_in = new_bbox([0, 1, 4, 5]);
+		let pyramid_convert = new_bbox([2, 3, 7, 7]);
+		let pyramid_out = new_bbox(bbox_out);
 
-		async fn test(flip_y: bool, swap_xy: bool, bbox_out: [u32; 4], tile_list: &str) -> Result<()> {
-			let pyramid_in = new_bbox([0, 1, 4, 5]);
-			let pyramid_convert = new_bbox([2, 3, 7, 7]);
-			let pyramid_out = new_bbox(bbox_out);
+		let reader_metadata = TileSourceMetadata::new(JSON, Uncompressed, pyramid_in, Traversal::ANY);
+		let reader = MockReader::new_mock(reader_metadata)?.into_shared();
 
-			let reader_metadata = TileSourceMetadata::new(JSON, Uncompressed, pyramid_in, Traversal::ANY);
-			let reader = MockReader::new_mock(reader_metadata)?.into_shared();
+		let temp_file = NamedTempFile::new("test.versatiles")?;
+		let runtime = TilesRuntime::default();
 
-			let temp_file = NamedTempFile::new("test.versatiles")?;
-			let runtime = TilesRuntime::default();
+		let cp = TilesConverterParameters {
+			bbox_pyramid: Some(pyramid_convert),
+			flip_y,
+			swap_xy,
+			tile_compression: None,
+		};
+		convert_tiles_container(reader, cp, &temp_file, runtime.clone()).await?;
 
-			let cp = TilesConverterParameters {
-				bbox_pyramid: Some(pyramid_convert),
-				flip_y,
-				swap_xy,
-				tile_compression: None,
-			};
-			convert_tiles_container(reader, cp, &temp_file, runtime.clone()).await?;
+		let reader_out = VersaTilesReader::open_path(&temp_file, runtime).await?;
+		let parameters_out = reader_out.metadata();
+		let tile_compression_out = parameters_out.tile_compression;
+		assert_eq!(parameters_out.bbox_pyramid, pyramid_out);
 
-			let reader_out = VersaTilesReader::open_path(&temp_file, runtime).await?;
-			let parameters_out = reader_out.metadata();
-			let tile_compression_out = parameters_out.tile_compression;
-			assert_eq!(parameters_out.bbox_pyramid, pyramid_out);
-
-			let bbox = pyramid_out.get_level_bbox(3);
-			let mut tiles: Vec<String> = Vec::new();
-			for coord in bbox.iter_coords() {
-				let mut text = reader_out
-					.get_tile(&coord)
-					.await?
-					.unwrap()
-					.into_blob(tile_compression_out)?
-					.to_string();
-				text = text
-					.replace("{\"z\":3,\"x\":", "")
-					.replace(",\"y\":", "")
-					.replace('}', "");
-				tiles.push(text);
-			}
-			let tiles = tiles.join(" ");
-			assert_eq!(tiles, tile_list);
-
-			Ok(())
+		let bbox = pyramid_out.get_level_bbox(3);
+		let mut tiles: Vec<String> = Vec::new();
+		for coord in bbox.iter_coords_zorder() {
+			let mut text = reader_out
+				.get_tile(&coord)
+				.await?
+				.unwrap()
+				.into_blob(tile_compression_out)?
+				.to_string();
+			text = text
+				.replace("{\"z\":3,\"x\":", "")
+				.replace(",\"y\":", "")
+				.replace('}', "");
+			tiles.push(text);
 		}
-
-		fn new_bbox(b: [u32; 4]) -> TileBBoxPyramid {
-			let mut pyramid = TileBBoxPyramid::new_empty();
-			pyramid.include_bbox(&TileBBox::from_min_and_max(3, b[0], b[1], b[2], b[3]).unwrap());
-			pyramid
-		}
+		let tiles = tiles.join(" ");
+		assert_eq!(tiles, tile_list);
 
 		Ok(())
 	}
