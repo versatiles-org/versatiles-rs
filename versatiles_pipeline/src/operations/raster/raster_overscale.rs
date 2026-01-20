@@ -81,7 +81,7 @@ pub struct Operation {
 	/// Whether to climb to parent tiles when source tile is missing
 	enable_climbing: bool,
 	/// LRU cache of decoded source images to avoid redundant decoding
-	cache: Arc<Cache<TileCoord, Arc<DynamicImage>>>,
+	cache: Arc<Cache<TileCoord, Option<Arc<DynamicImage>>>>,
 }
 
 impl Debug for Operation {
@@ -130,8 +130,8 @@ impl Operation {
 		let level_min = source.as_ref().metadata().bbox_pyramid.get_level_min().unwrap_or(0);
 		let cache = Cache::builder()
 			.max_capacity(512 * 1024 * 1024) // 512MB limit
-			.weigher(|_k: &TileCoord, v: &Arc<DynamicImage>| -> u32 {
-				v.width() * v.height() * 4 // RGBA bytes
+			.weigher(|_k: &TileCoord, v: &Option<Arc<DynamicImage>>| -> u32 {
+				v.as_ref().map_or(8, |image| image.width() * image.height() * 4) // RGBA bytes
 			})
 			.build();
 		let cache = Arc::new(cache);
@@ -192,25 +192,19 @@ impl Operation {
 	async fn try_fetch_tile(&self, coord: TileCoord) -> Result<Option<Arc<DynamicImage>>> {
 		// Check cache - no lock needed!
 		if let Some(cached_image) = self.cache.get(&coord).await {
-			return Ok(Some(cached_image));
+			return Ok(cached_image);
 		}
 
 		// Fetch from source
-		let bbox = coord.to_tile_bbox();
-		let mut stream = self.source.get_tile_stream(bbox).await?;
+		let image = self
+			.source
+			.get_tile(&coord)
+			.await?
+			.map(|t| t.into_image().map(Arc::new))
+			.transpose()?;
 
-		if let Some((found_coord, tile)) = stream.next().await
-			&& found_coord == coord
-		{
-			let image = Arc::new(tile.into_image()?);
-
-			// Cache it - no lock needed!
-			self.cache.insert(coord, image.clone()).await;
-
-			Ok(Some(image))
-		} else {
-			Ok(None)
-		}
+		self.cache.insert(coord, image.clone()).await;
+		Ok(image)
 	}
 }
 
