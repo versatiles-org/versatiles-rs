@@ -196,7 +196,7 @@ impl TileSource for Operation {
 					// Crop into tiles on a blocking thread
 					let vec = tokio::task::spawn_blocking(move || {
 						bbox
-							.iter_coords()
+							.iter_coords_zorder()
 							.filter_map(|coord| {
 								image
 									.crop_imm(

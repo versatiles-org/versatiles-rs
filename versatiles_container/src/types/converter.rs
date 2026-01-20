@@ -266,9 +266,9 @@ mod tests {
 	}
 
 	#[rstest]
-	#[case(false, false, [2, 3, 4, 5], "23 33 43 24 34 44 25 35 45")]
+	#[case(false, false, [2, 3, 4, 5], "23 33 43 24 34 25 35 44 45")]
 	#[case(false, true, [2, 3, 5, 4], "32 33 34 35 42 43 44 45")]
-	#[case(true, false, [2, 3, 4, 6], "24 34 44 23 33 43 22 32 42 21 31 41")]
+	#[case(true, false, [2, 3, 4, 6], "24 34 44 23 33 22 32 21 31 43 42 41")]
 	#[case(true, true, [2, 3, 6, 4], "35 34 33 32 31 45 44 43 42 41")]
 	#[tokio::test]
 	async fn bbox_and_tile_order(

@@ -137,7 +137,7 @@ where
 		F: Fn(TileCoord) -> Option<T> + Send + Sync + 'static,
 		T: 'static,
 	{
-		Self::from_iter_coord_parallel(bbox.into_iter_coords(), callback)
+		Self::from_iter_coord_parallel(bbox.into_iter_coords_zorder(), callback)
 	}
 
 	/// Creates a `TileStream` by processing all coordinates in a `TileBBox` with async callbacks in parallel.

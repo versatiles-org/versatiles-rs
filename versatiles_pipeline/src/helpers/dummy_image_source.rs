@@ -97,9 +97,10 @@ impl TileSource for DummyImageSource {
 
 		let generate_tile = (self.generate_tile).clone();
 		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
-		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |coord| {
-			(generate_tile)(&coord)
-		}))
+		Ok(TileStream::from_iter_coord(
+			bbox.into_iter_coords_zorder(),
+			move |coord| (generate_tile)(&coord),
+		))
 	}
 }
 
