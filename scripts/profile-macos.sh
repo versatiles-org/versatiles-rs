@@ -26,4 +26,4 @@ cd "$(dirname "$0")/.."
 #  container_reader::reader::tests::open_vpl_str \
 #  --exact --test-threads=1
 
-cargo instruments -t "CPU Profiler" --bin versatiles -- convert --max-zoom 5 ../../tiles/satellite/satellite.vpl ../../tiles/satellite/result.versatiles
+cargo instruments -t "CPU Profiler" --bin versatiles -- convert -b 11,51,15,54 --min-zoom 10 --max-zoom 14 ../../tiles/satellite/satellite.vpl ../../tiles/satellite/result.versatiles
