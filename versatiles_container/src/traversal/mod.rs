@@ -5,6 +5,7 @@
 
 mod order;
 mod processing;
+mod progress_tracker;
 mod size;
 mod traits;
 
