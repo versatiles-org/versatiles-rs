@@ -193,7 +193,7 @@ impl VersaTilesReader {
 	/// to minimize I/O calls during streaming.
 	async fn get_chunks(&self, bbox: TileBBox) -> Vec<Chunk> {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
-		const MAX_CHUNK_GAP: u64 = 32 * 1024;
+		const MAX_CHUNK_GAP: u64 = 256 * 1024;
 
 		let block_coords: Vec<TileCoord> = bbox.scaled_down(256).iter_coords().collect();
 
