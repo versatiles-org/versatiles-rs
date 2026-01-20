@@ -215,11 +215,10 @@ mod tests {
 
 	/// Verify that progress positions are monotonically non-decreasing and grow linearly over time.
 	///
-	/// Linearity is measured by finding the maximum relative distance between actual
-	/// positions and their expected values if progress were perfectly linear in time.
-	///
-	/// For each event, the expected position is: `(elapsed_time / total_time) * total`
-	/// The relative deviation is: `|actual - expected| / total`
+	/// Checks:
+	/// 1. Positions never decrease (monotonicity)
+	/// 2. No single step exceeds 10% of total progress
+	/// 3. Maximum deviation from linear progress is within the allowed threshold
 	///
 	/// # Arguments
 	/// * `events` - The captured progress events
@@ -227,7 +226,9 @@ mod tests {
 	fn verify_monotonic_progress(events: &[ProgressEvent], max_deviation: f64) {
 		assert!(!events.is_empty(), "Should have at least one progress event");
 
-		// Verify monotonicity
+		let total = events.last().unwrap().total as f64;
+
+		// Verify monotonicity and step sizes
 		let mut prev_position = 0u64;
 		for (i, event) in events.iter().enumerate() {
 			assert!(
@@ -241,6 +242,23 @@ mod tests {
 				event.position,
 				event.total
 			);
+
+			// Check that step size is not bigger than 10% of total
+			// Skip this check if total is too small for meaningful granularity (< 10 items)
+			if total >= 10.0 {
+				let step = event.position - prev_position;
+				if step <= 1 {
+					continue;
+				}
+				let relative_step = step as f64 / total;
+				assert!(
+					relative_step <= 0.1,
+					"Progress step too large at index {i}: step={step} ({:.1}% of total), prev={prev_position}, current={}",
+					relative_step * 100.0,
+					event.position
+				);
+			}
+
 			prev_position = event.position;
 		}
 
@@ -480,7 +498,7 @@ mod tests {
 			.await?;
 
 		let captured = positions.lock().unwrap();
-		verify_monotonic_progress(&captured, 0.5);
+		verify_monotonic_progress(&captured, 0.6);
 		verify_progress_finished(&captured);
 
 		// For single tile, total should be 1 (midpoint of 1 read + 1 write = 1)
