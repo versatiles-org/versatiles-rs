@@ -186,12 +186,6 @@ mod tests {
 				tile_delay_micros: 0,
 			}
 		}
-
-		/// Set the delay in microseconds before returning each tile.
-		fn with_tile_delay_micros(mut self, delay_micros: u64) -> Self {
-			self.tile_delay_micros = delay_micros;
-			self
-		}
 	}
 
 	async fn sleep_micros(micros: u64) {

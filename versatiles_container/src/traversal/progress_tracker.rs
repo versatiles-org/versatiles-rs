@@ -185,51 +185,108 @@ mod tests {
 		}
 	}
 
-	/// Helper to capture progress events and verify monotonic progress
-	fn setup_progress_capture(runtime: &TilesRuntime) -> Arc<std::sync::Mutex<Vec<(u64, u64, bool)>>> {
-		let positions = Arc::new(std::sync::Mutex::new(Vec::new()));
-		let positions_clone = positions.clone();
+	/// A captured progress event with timestamp.
+	#[derive(Debug, Clone)]
+	struct ProgressEvent {
+		position: u64,
+		total: u64,
+		finished: bool,
+		timestamp: std::time::Instant,
+	}
+
+	/// Helper to capture progress events with timestamps.
+	fn setup_progress_capture(runtime: &TilesRuntime) -> Arc<std::sync::Mutex<Vec<ProgressEvent>>> {
+		let events = Arc::new(std::sync::Mutex::new(Vec::new()));
+		let events_clone = events.clone();
 
 		runtime.events().subscribe(move |event| {
 			if let crate::Event::Progress { data } = event {
-				positions_clone
-					.lock()
-					.unwrap()
-					.push((data.position, data.total, data.finished));
+				events_clone.lock().unwrap().push(ProgressEvent {
+					position: data.position,
+					total: data.total,
+					finished: data.finished,
+					timestamp: std::time::Instant::now(),
+				});
 			}
 		});
 
-		positions
+		events
 	}
 
-	/// Verify that progress positions are monotonically non-decreasing
-	fn verify_monotonic_progress(positions: &[(u64, u64, bool)]) {
+	/// Verify that progress positions are monotonically non-decreasing and grow linearly over time.
+	///
+	/// Linearity is measured by finding the maximum relative distance between actual
+	/// positions and their expected values if progress were perfectly linear in time.
+	///
+	/// For each event, the expected position is: `(elapsed_time / total_time) * total`
+	/// The relative deviation is: `|actual - expected| / total`
+	///
+	/// # Arguments
+	/// * `events` - The captured progress events
+	/// * `max_deviation` - Maximum allowed relative deviation from linear (0.0 = perfect, 1.0 = can be anywhere)
+	fn verify_monotonic_progress(events: &[ProgressEvent], max_deviation: f64) {
+		assert!(!events.is_empty(), "Should have at least one progress event");
+
+		// Verify monotonicity
 		let mut prev_position = 0u64;
-		for (i, &(position, total, _finished)) in positions.iter().enumerate() {
+		for (i, event) in events.iter().enumerate() {
 			assert!(
-				position >= prev_position,
-				"Progress position decreased at index {i}: {prev_position} -> {position}"
+				event.position >= prev_position,
+				"Progress position decreased at index {i}: {prev_position} -> {}",
+				event.position
 			);
 			assert!(
-				position <= total,
-				"Progress position {position} exceeds total {total} at index {i}"
+				event.position <= event.total,
+				"Progress position {} exceeds total {} at index {i}",
+				event.position,
+				event.total
 			);
-			prev_position = position;
+			prev_position = event.position;
 		}
+
+		// Need at least 2 events to check linearity
+		if events.len() < 2 {
+			return;
+		}
+
+		let first = events.first().unwrap();
+		let last = events.last().unwrap();
+
+		let total_time = last.timestamp.duration_since(first.timestamp).as_secs_f64();
+		let total_progress = last.total as f64;
+
+		// Skip linearity check if total time is too short (< 1ms) or no progress
+		if total_time < 0.001 || total_progress == 0.0 {
+			return;
+		}
+
+		// Find maximum relative deviation from linear progress
+		let mut max_relative_deviation = 0.0f64;
+		for event in events {
+			let elapsed = event.timestamp.duration_since(first.timestamp).as_secs_f64();
+			let time_fraction = elapsed / total_time;
+			let expected_position = time_fraction * total_progress;
+			let actual_position = event.position as f64;
+			let relative_deviation = (actual_position - expected_position).abs() / total_progress;
+			max_relative_deviation = max_relative_deviation.max(relative_deviation);
+		}
+
+		assert!(
+			max_relative_deviation <= max_deviation,
+			"Progress deviates too much from linear: max_deviation={max_relative_deviation:.3} (allowed: {max_deviation:.3})"
+		);
 	}
 
 	/// Verify that progress finished correctly
-	fn verify_progress_finished(positions: &[(u64, u64, bool)]) {
-		assert!(
-			!positions.is_empty(),
-			"Should have received at least one progress event"
-		);
+	fn verify_progress_finished(events: &[ProgressEvent]) {
+		assert!(!events.is_empty(), "Should have received at least one progress event");
 
-		let &(final_position, final_total, finished) = positions.last().unwrap();
-		assert!(finished, "Final progress event should be marked as finished");
+		let last = events.last().unwrap();
+		assert!(last.finished, "Final progress event should be marked as finished");
 		assert_eq!(
-			final_position, final_total,
-			"Final position should equal total: {final_position} != {final_total}"
+			last.position, last.total,
+			"Final position should equal total: {} != {}",
+			last.position, last.total
 		);
 	}
 
@@ -263,7 +320,7 @@ mod tests {
 			.await?;
 
 		let captured = positions.lock().unwrap();
-		verify_monotonic_progress(&captured);
+		verify_monotonic_progress(&captured, 0.1);
 		verify_progress_finished(&captured);
 
 		// Verify we got multiple progress updates (not just start and finish)
@@ -306,7 +363,7 @@ mod tests {
 			.await?;
 
 		let captured = positions.lock().unwrap();
-		verify_monotonic_progress(&captured);
+		verify_monotonic_progress(&captured, 0.1);
 		verify_progress_finished(&captured);
 
 		Ok(())
@@ -342,7 +399,7 @@ mod tests {
 			.await?;
 
 		let captured = positions.lock().unwrap();
-		verify_monotonic_progress(&captured);
+		verify_monotonic_progress(&captured, 0.1);
 		verify_progress_finished(&captured);
 
 		Ok(())
@@ -391,7 +448,7 @@ mod tests {
 			.await?;
 
 		let captured = positions.lock().unwrap();
-		verify_monotonic_progress(&captured);
+		verify_monotonic_progress(&captured, 0.1);
 		verify_progress_finished(&captured);
 
 		Ok(())
@@ -400,7 +457,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_progress_tracking_single_tile() -> Result<()> {
 		// Test progress tracking with minimal tile count (level 0 only = 1 tile)
-		let reader = TestReader::new(Traversal::ANY, 0).with_tile_delay_micros(100000);
+		let reader = TestReader::new(Traversal::ANY, 0).with_tile_delay_micros(10000);
 		let runtime = TilesRuntime::builder()
 			.with_memory_cache()
 			.silent_progress(true)
@@ -413,7 +470,7 @@ mod tests {
 				&Traversal::ANY,
 				|_bbox, stream| {
 					Box::pin(async move {
-						stream.for_each_async(|_| sleep_micros(100000)).await;
+						stream.for_each_async(|_| sleep_micros(10000)).await;
 						Ok(())
 					})
 				},
@@ -423,12 +480,12 @@ mod tests {
 			.await?;
 
 		let captured = positions.lock().unwrap();
-		verify_monotonic_progress(&captured);
+		verify_monotonic_progress(&captured, 0.5);
 		verify_progress_finished(&captured);
 
 		// For single tile, total should be 1 (midpoint of 1 read + 1 write = 1)
-		let (_, total, _) = captured.last().unwrap();
-		assert_eq!(*total, 1, "Total for single tile should be 1");
+		let last = captured.last().unwrap();
+		assert_eq!(last.total, 1, "Total for single tile should be 1");
 
 		Ok(())
 	}
@@ -460,13 +517,13 @@ mod tests {
 			.await?;
 
 		let captured = positions.lock().unwrap();
-		verify_monotonic_progress(&captured);
+		verify_monotonic_progress(&captured, 0.1);
 		verify_progress_finished(&captured);
 
 		// Verify progress actually increased over time
 		if captured.len() >= 2 {
-			let first_pos = captured.first().unwrap().0;
-			let last_pos = captured.last().unwrap().0;
+			let first_pos = captured.first().unwrap().position;
+			let last_pos = captured.last().unwrap().position;
 			assert!(
 				last_pos > first_pos,
 				"Progress should have increased from first to last: {first_pos} -> {last_pos}"
@@ -506,11 +563,11 @@ mod tests {
 			.await?;
 
 		let captured = positions.lock().unwrap();
-		let (_, total, _) = captured.last().unwrap();
+		let last = captured.last().unwrap();
 
 		// Levels 0-2: 1 + 4 + 16 = 21 tiles
 		// For streaming mode: total = midpoint(21, 21) = 21
-		assert_eq!(*total, 21, "Total should be 21 for levels 0-2 in streaming mode");
+		assert_eq!(last.total, 21, "Total should be 21 for levels 0-2 in streaming mode");
 
 		Ok(())
 	}
@@ -547,14 +604,14 @@ mod tests {
 			.await?;
 
 		let captured = positions.lock().unwrap();
-		verify_monotonic_progress(&captured);
+		verify_monotonic_progress(&captured, 0.1);
 		verify_progress_finished(&captured);
 
 		// Level 4 has 256 tiles
 		// For Push/Pop: tn_read = 256, tn_write = 256
 		// total = midpoint(256, 256) = 256
-		let (_, total, _) = captured.last().unwrap();
-		assert_eq!(*total, 256, "Total should be 256 for level 4 Push/Pop path");
+		let last = captured.last().unwrap();
+		assert_eq!(last.total, 256, "Total should be 256 for level 4 Push/Pop path");
 
 		Ok(())
 	}
