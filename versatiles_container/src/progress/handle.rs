@@ -104,7 +104,7 @@ impl ProgressHandle {
 		if state.finished || now >= state.next_emit {
 			// Update next emit time
 			if !state.finished {
-				state.next_emit = now + Duration::from_millis(100);
+				state.next_emit = now + Duration::from_millis(10);
 			}
 
 			// Clone state and release lock before emitting
