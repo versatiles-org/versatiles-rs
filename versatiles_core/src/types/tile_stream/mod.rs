@@ -43,7 +43,7 @@ mod flat_map;
 mod for_each;
 mod inspect;
 mod map;
-mod transform;
+mod utility;
 
 #[cfg(test)]
 mod tests;

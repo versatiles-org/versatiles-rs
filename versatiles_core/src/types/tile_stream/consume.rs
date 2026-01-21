@@ -1,4 +1,4 @@
-use super::{ConcurrencyLimits, Future, HashMap, Stream, StreamExt, TileCoord, TileStream};
+use super::{ConcurrencyLimits, Future, HashMap, Result, Stream, StreamExt, TileCoord, TileStream};
 
 impl<'a, T> TileStream<'a, T>
 where
@@ -119,44 +119,54 @@ where
 	pub async fn next(&mut self) -> Option<(TileCoord, T)> {
 		self.inner.next().await
 	}
+}
 
-	/// Buffers items in chunks of size `buffer_size`, then calls `callback` with each full or final chunk.
+// -------------------------------------------------------------------------
+// Result Handling
+// -------------------------------------------------------------------------
+
+/// Methods specific to `TileStream<'a, Result<T>>`
+impl<'a, T> TileStream<'a, Result<T>>
+where
+	T: Send + 'a,
+{
+	/// Unwraps Results from a `TileStream<'a, Result<T>>`, panicking on errors.
 	///
-	/// Consumes the stream. Items are emitted in `(TileCoord, T)` form.
+	/// This is a convenience method for backward compatibility with code that doesn't need
+	/// fine-grained error handling. If any item in the stream is an `Err`, this will panic
+	/// with the error message.
+	///
+	/// For proper error handling, use the stream's `.inner` field directly with `try_collect()`,
+	/// `try_for_each()`, or similar methods from `TryStreamExt`.
+	///
+	/// # Panics
+	/// Panics if any item in the stream is an `Err`.
 	///
 	/// # Examples
 	/// ```
 	/// # use versatiles_core::{TileCoord, Blob, TileStream};
-	/// # async fn test() {
+	/// # async fn example() {
 	/// let stream = TileStream::from_vec(vec![
-	///     (TileCoord::new(0,0,0).unwrap(), Blob::from("data0")),
-	///     (TileCoord::new(1,1,1).unwrap(), Blob::from("data1")),
-	///     (TileCoord::new(2,2,2).unwrap(), Blob::from("data2")),
+	///     (TileCoord::new(0,0,0).unwrap(), Blob::from("data")),
 	/// ]);
 	///
-	/// stream.for_each_buffered(2, |chunk| {
-	///     println!("Processing chunk of size: {}", chunk.len());
-	/// }).await;
-	/// // Output:
-	/// // "Processing chunk of size: 2"
-	/// // "Processing chunk of size: 1"
+	/// // Process with parallel operation, then unwrap results
+	/// let processed = stream
+	///     .map_parallel_try(|_coord, blob| Ok(Blob::from(format!("processed-{}", blob.as_str()))))
+	///     .unwrap_results();
+	///
+	/// // Now `processed` is TileStream<'a, Blob>, not TileStream<'a, Result<Blob>>
 	/// # }
 	/// ```
-	pub async fn for_each_buffered<F>(mut self, buffer_size: usize, mut callback: F)
-	where
-		F: FnMut(Vec<(TileCoord, T)>),
-	{
-		let mut buffer = Vec::with_capacity(buffer_size);
-		while let Some(item) = self.inner.next().await {
-			buffer.push(item);
-
-			if buffer.len() >= buffer_size {
-				callback(buffer);
-				buffer = Vec::with_capacity(buffer_size);
-			}
-		}
-		if !buffer.is_empty() {
-			callback(buffer);
+	pub fn unwrap_results(self) -> TileStream<'a, T> {
+		TileStream {
+			inner: self
+				.inner
+				.map(|(coord, result)| {
+					let item = result.unwrap_or_else(|e| panic!("Stream contained error at {coord:?}: {e}"));
+					(coord, item)
+				})
+				.boxed(),
 		}
 	}
 }
