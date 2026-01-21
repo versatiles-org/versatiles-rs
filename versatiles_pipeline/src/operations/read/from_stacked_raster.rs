@@ -17,6 +17,7 @@ use crate::{
 };
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
+use futures::stream;
 use std::{sync::Arc, vec};
 use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileBBoxPyramid, TileCoord, TileFormat, TileJSON, TileStream, TileType};
@@ -298,6 +299,20 @@ impl TileSource for Operation {
 			return Ok(stream);
 		}
 
+		// If the bounding box is big, split into a grid and process each cell recursively
+		const MAX_BBOX_SIZE: u32 = 32;
+		if bbox.width() > MAX_BBOX_SIZE || bbox.height() > MAX_BBOX_SIZE {
+			let sub_bboxes: Vec<TileBBox> = bbox.iter_bbox_grid(MAX_BBOX_SIZE).collect();
+			let mut streams = Vec::with_capacity(sub_bboxes.len());
+			for sub_bbox in sub_bboxes {
+				streams.push(self.get_tile_stream(sub_bbox).await?);
+			}
+			return Ok(TileStream::from_streams(stream::iter(
+				streams.into_iter().map(futures::future::ready),
+			)));
+		}
+
+		// Default: process tile by tile
 		Ok(TileStream::from_bbox_async_parallel(bbox, move |c| {
 			let entries = entries.clone();
 			async move {
