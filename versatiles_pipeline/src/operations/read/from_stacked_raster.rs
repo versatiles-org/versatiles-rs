@@ -688,4 +688,336 @@ mod tests {
 		assert_eq!(result.metadata().tile_format.to_type(), TileType::Raster);
 		Ok(())
 	}
+
+	// ============================================================================
+	// Additional coverage tests
+	// ============================================================================
+
+	#[test]
+	fn test_source_entry_for_level() {
+		use versatiles_core::TileFormat::PNG;
+
+		let source = DummyImageSource::from_color(&[255, 0, 0], 4, PNG, None).unwrap();
+		let entry = SourceEntry {
+			source: Arc::new(Box::new(source) as Box<dyn TileSource>),
+			native_level_max: 5,
+		};
+
+		// Level 5 is native (not overscaled)
+		let filtered = entry.for_level(5);
+		assert!(!filtered.is_overscaled);
+
+		// Level 6 is overscaled
+		let filtered = entry.for_level(6);
+		assert!(filtered.is_overscaled);
+
+		// Level 0 is native
+		let filtered = entry.for_level(0);
+		assert!(!filtered.is_overscaled);
+	}
+
+	#[tokio::test]
+	async fn test_get_tile_with_empty_background() {
+		use versatiles_core::TileFormat::PNG;
+
+		// Create a source that produces empty (fully transparent) tiles
+		let empty_source = DummyImageSource::from_color(&[0, 0, 0, 0], 4, PNG, None).unwrap();
+		// Create a source that produces semi-transparent tiles
+		let fg_source = DummyImageSource::from_color(&[255, 0, 0, 128], 4, PNG, None).unwrap();
+
+		let entries = vec![
+			FilteredSourceEntry {
+				source: Arc::new(Box::new(empty_source) as Box<dyn TileSource>),
+				is_overscaled: false,
+			},
+			FilteredSourceEntry {
+				source: Arc::new(Box::new(fg_source) as Box<dyn TileSource>),
+				is_overscaled: false,
+			},
+		];
+
+		let coord = TileCoord::new(0, 0, 0).unwrap();
+		let result = get_tile(coord, entries).await.unwrap();
+
+		// Should return a tile (the foreground replaces the empty background)
+		assert!(result.is_some());
+		let color = result.unwrap().1.as_image().unwrap().average_color();
+		// The foreground tile should be used when background is empty
+		assert_eq!(rgba_to_hex(&color), "FF000080");
+	}
+
+	#[tokio::test]
+	async fn test_non_raster_output_format_error() {
+		let factory = PipelineFactory::new_dummy();
+		let result = factory
+			.operation_from_vpl("from_stacked_raster format=pbf [ from_container filename=07.png ]")
+			.await;
+
+		assert!(result.is_err());
+		let err_msg = result.unwrap_err().chain().last().unwrap().to_string();
+		assert_eq!(err_msg, "output format must be a raster format");
+	}
+
+	#[tokio::test]
+	async fn test_non_raster_source_error() {
+		use futures::future::BoxFuture;
+		use versatiles_container::TileSourceMetadata;
+
+		// Create a factory that returns a vector tile source
+		let factory = PipelineFactory::new_dummy_reader(Box::new(
+			|_filename: String| -> BoxFuture<Result<Box<dyn TileSource>>> {
+				Box::pin(async move {
+					// Create a mock vector tile source with MVT format
+					#[derive(Debug)]
+					struct VectorDummySource {
+						metadata: TileSourceMetadata,
+						tilejson: TileJSON,
+					}
+
+					#[async_trait]
+					impl TileSource for VectorDummySource {
+						fn metadata(&self) -> &TileSourceMetadata {
+							&self.metadata
+						}
+						fn tilejson(&self) -> &TileJSON {
+							&self.tilejson
+						}
+						fn source_type(&self) -> Arc<SourceType> {
+							SourceType::new_container("dummy_vector", "test")
+						}
+						async fn get_tile_stream(&self, _bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+							Ok(TileStream::empty())
+						}
+					}
+
+					let pyramid = TileBBoxPyramid::new_full(8);
+					let metadata = TileSourceMetadata::new(
+						TileFormat::MVT, // Vector tile format
+						TileCompression::Uncompressed,
+						pyramid,
+						Traversal::new_any(),
+					);
+					let tilejson = TileJSON::default();
+
+					Ok(Box::new(VectorDummySource { metadata, tilejson }) as Box<dyn TileSource>)
+				})
+			},
+		));
+
+		// Specify a raster output format to bypass the "output format must be raster" check
+		// and trigger the "all sources must be raster tiles" check
+		let result = factory
+			.operation_from_vpl("from_stacked_raster format=png [ from_container filename=vector.mvt ]")
+			.await;
+
+		assert!(result.is_err());
+		let err_msg = result.unwrap_err().chain().last().unwrap().to_string();
+		assert_eq!(err_msg, "all sources must be raster tiles");
+	}
+
+	#[tokio::test]
+	async fn test_source_type() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let result = factory
+			.operation_from_vpl("from_stacked_raster [ from_container filename=07.png, from_container filename=F7.png ]")
+			.await?;
+
+		let source_type = result.source_type();
+		// Verify it's a composite source type
+		assert!(source_type.to_string().contains("from_stacked_raster"));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_get_tile_stream_no_overlap() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		// Create a stacked raster with sources that have limited bbox
+		let result = factory
+			.operation_from_vpl(
+				r#"from_stacked_raster [
+					from_container filename="00F7.png" | filter bbox=[-180,-85,-90,0]
+				]"#,
+			)
+			.await?;
+
+		// Request a bbox that doesn't overlap with any source
+		let bbox = TileBBox::from_min_and_max(3, 6, 0, 7, 1)?; // right side of the world
+		let tiles: Vec<_> = result.get_tile_stream(bbox).await?.to_vec().await;
+
+		// Should return empty stream
+		assert!(tiles.is_empty());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_get_tile_stream_all_overscaled() -> Result<()> {
+		use futures::future::BoxFuture;
+
+		// Create a factory where the source only has data up to level 2
+		let factory = PipelineFactory::new_dummy_reader(Box::new(
+			|_filename: String| -> BoxFuture<Result<Box<dyn TileSource>>> {
+				Box::pin(async move {
+					let mut pyramid = TileBBoxPyramid::new_empty();
+					pyramid.include_bbox(&TileBBox::new_full(0)?);
+					pyramid.include_bbox(&TileBBox::new_full(1)?);
+					pyramid.include_bbox(&TileBBox::new_full(2)?);
+					Ok(
+						Box::new(DummyImageSource::from_color(&[255, 0, 0], 4, TileFormat::PNG, Some(pyramid)).unwrap())
+							as Box<dyn TileSource>,
+					)
+				})
+			},
+		));
+
+		let result = factory
+			.operation_from_vpl("from_stacked_raster auto_overscale=true [ from_container filename=test.png ]")
+			.await?;
+
+		// Request at level 5, which is beyond the source's native level (2)
+		// With auto_overscale, tiles would be synthetic, but there's only one source
+		// so all tiles at level 5 are overscaled -> empty stream
+		let bbox = TileBBox::new_full(5)?;
+		let tiles: Vec<_> = result.get_tile_stream(bbox).await?.to_vec().await;
+
+		// Should return empty stream since all sources are overscaled at this level
+		assert!(tiles.is_empty());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_first_source_non_overscaled_optimization() -> Result<()> {
+		use futures::future::BoxFuture;
+
+		// Create two sources: first has data at all levels, second only at lower levels
+		let factory =
+			PipelineFactory::new_dummy_reader(Box::new(|filename: String| -> BoxFuture<Result<Box<dyn TileSource>>> {
+				Box::pin(async move {
+					let mut pyramid = TileBBoxPyramid::new_empty();
+					if filename.contains("full") {
+						// Full source has all levels
+						for level in 0..=4 {
+							pyramid.include_bbox(&TileBBox::new_full(level)?);
+						}
+					} else {
+						// Limited source only has levels 0-2
+						for level in 0..=2 {
+							pyramid.include_bbox(&TileBBox::new_full(level)?);
+						}
+					}
+					let color = if filename.contains("full") {
+						[255, 0, 0, 128]
+					} else {
+						[0, 255, 0, 128]
+					};
+					Ok(
+						Box::new(DummyImageSource::from_color(&color, 4, TileFormat::PNG, Some(pyramid)).unwrap())
+							as Box<dyn TileSource>,
+					)
+				})
+			}));
+
+		let result = factory
+			.operation_from_vpl(
+				r"from_stacked_raster auto_overscale=true [
+					from_container filename=full.png,
+					from_container filename=limited.png
+				]",
+			)
+			.await?;
+
+		// Request at level 4 where first source is native but second is overscaled
+		// This should trigger the optimization path at line 270
+		let bbox = TileBBox::from_min_and_max(4, 0, 0, 3, 3)?;
+		let tiles: Vec<_> = result.get_tile_stream(bbox).await?.to_vec().await;
+
+		// Should return tiles (blended from first native + second overscaled)
+		assert!(!tiles.is_empty());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_large_bbox_splitting() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let result = factory
+			.operation_from_vpl(
+				r#"from_stacked_raster [
+					from_container filename="00F7.png",
+					from_container filename="FF07.png"
+				]"#,
+			)
+			.await?;
+
+		// Request a large bbox (> 32x32) to trigger the splitting logic at line 304
+		let bbox = TileBBox::from_min_and_max(6, 0, 0, 63, 63)?; // 64x64 bbox
+		let tiles: Vec<_> = result.get_tile_stream(bbox).await?.to_vec().await;
+
+		// Should still return tiles (the splitting is transparent to the caller)
+		// The exact count depends on the source data overlap
+		assert!(!tiles.is_empty());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_format_reencoding() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		// Request WEBP output format from PNG sources
+		let result = factory
+			.operation_from_vpl(
+				r#"from_stacked_raster format=webp [
+					from_container filename="00F7.png"
+				]"#,
+			)
+			.await?;
+
+		assert_eq!(result.metadata().tile_format, TileFormat::WEBP);
+
+		let bbox = TileBBox::new_full(3)?;
+		let tiles: Vec<_> = result.get_tile_stream(bbox).await?.to_vec().await;
+
+		// Verify tiles are in WEBP format
+		for (_coord, tile) in &tiles {
+			assert_eq!(tile.format(), TileFormat::WEBP);
+		}
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_format_reencoding_with_blend() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		// Request JPG output format with multiple sources (requires blending + format change)
+		let result = factory
+			.operation_from_vpl(
+				r#"from_stacked_raster format=jpg [
+					from_container filename="00F7.png",
+					from_container filename="FF07.png"
+				]"#,
+			)
+			.await?;
+
+		assert_eq!(result.metadata().tile_format, TileFormat::JPG);
+
+		let bbox = TileBBox::new_full(3)?;
+		let tiles: Vec<_> = result.get_tile_stream(bbox).await?.to_vec().await;
+
+		// Verify tiles are in JPG format
+		for (_coord, tile) in &tiles {
+			assert_eq!(tile.format(), TileFormat::JPG);
+		}
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_metadata_method() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let result = factory
+			.operation_from_vpl("from_stacked_raster [ from_container filename=07.png ]")
+			.await?;
+
+		let metadata = result.metadata();
+		assert_eq!(metadata.tile_format, TileFormat::PNG);
+		assert_eq!(metadata.tile_compression, TileCompression::Uncompressed);
+		Ok(())
+	}
 }
