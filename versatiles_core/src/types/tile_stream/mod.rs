@@ -38,6 +38,7 @@
 
 mod constructors;
 mod consume;
+mod map;
 mod transform;
 
 #[cfg(test)]
