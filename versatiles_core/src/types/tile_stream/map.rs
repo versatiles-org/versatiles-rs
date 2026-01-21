@@ -10,7 +10,7 @@
 //! | `map_parallel_try` | `Fn(TileCoord, T) -> Result<O>` | sync, parallel |
 //! | `map_async` | `FnMut(TileCoord, T) -> impl Future<Output = O>` | async, sequential |
 //! | `map_async_try` | `FnMut(TileCoord, T) -> impl Future<Output = Result<O>>` | async, sequential |
-//! | `map_parallel_async` | `FnMut(TileCoord, T) -> impl Future<Output = O>` | async, parallel (in transform.rs, to be moved here) |
+//! | `map_parallel_async` | `FnMut(TileCoord, T) -> impl Future<Output = O>` | async, parallel |
 //! | `map_parallel_async_try` | `FnMut(TileCoord, T) -> impl Future<Output = Result<O>>` | async, parallel |
 
 use super::{Arc, ConcurrencyLimits, Future, Result, StreamExt, TileCoord, TileStream};
@@ -288,7 +288,50 @@ where
 	// Async Parallel
 	// -------------------------------------------------------------------------
 
-	// Note: map_parallel_async is currently in transform.rs and will be moved here in Phase 3
+	/// Transforms each tile in parallel using an asynchronous callback.
+	///
+	/// Processes multiple tiles concurrently up to the CPU-bound concurrency limit.
+	/// Order of results is not guaranteed.
+	///
+	/// # Arguments
+	/// * `callback` - Async function that receives `(TileCoord, T)` and returns the transformed value.
+	///
+	/// # Examples
+	/// ```
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
+	/// # use anyhow::Result;
+	/// # use futures::StreamExt;
+	/// # async fn example() {
+	/// let stream = TileStream::from_vec(vec![
+	///     (TileCoord::new(0, 0, 0).unwrap(), Blob::from("data0")),
+	///     (TileCoord::new(1, 1, 1).unwrap(), Blob::from("data1")),
+	/// ]);
+	///
+	/// let mapped = stream.map_parallel_async(|coord, blob| async move {
+	///     tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+	///     Blob::from(format!("processed-{}-{}", coord.level, blob.as_str()))
+	/// });
+	///
+	/// let items = mapped.to_vec().await;
+	/// assert_eq!(items.len(), 2);
+	/// # }
+	/// ```
+	pub fn map_parallel_async<F, Fut, O>(self, mut callback: F) -> TileStream<'a, O>
+	where
+		F: FnMut(TileCoord, T) -> Fut + Send + 'a,
+		Fut: Future<Output = O> + Send + 'a,
+		O: Send + 'a,
+	{
+		let limits = ConcurrencyLimits::default();
+		let s = self
+			.inner
+			.map(move |(coord, item)| {
+				let fut = callback(coord, item);
+				async move { (coord, fut.await) }
+			})
+			.buffer_unordered(limits.cpu_bound);
+		TileStream { inner: s.boxed() }
+	}
 
 	/// Transforms each tile in parallel using a fallible asynchronous callback.
 	///
@@ -558,10 +601,38 @@ mod tests {
 	}
 
 	// -------------------------------------------------------------------------
-	// map_parallel_async (async, parallel) - tests in tests.rs (method in transform.rs)
+	// map_parallel_async (async, parallel)
 	// -------------------------------------------------------------------------
 
-	// Tests for map_parallel_async will be moved here in Phase 3
+	#[tokio::test]
+	async fn test_map_parallel_async_basic() {
+		let stream = TileStream::from_vec(vec![(tc(0, 0, 0), Blob::from("a")), (tc(1, 1, 1), Blob::from("b"))]);
+
+		let mapped = stream
+			.map_parallel_async(|coord, blob| async move { Blob::from(format!("{}:{}", coord.level, blob.as_str())) });
+
+		let mut items = mapped.to_vec().await;
+		items.sort_by_key(|(c, _)| c.level);
+		assert_eq!(items.len(), 2);
+		assert_eq!(items[0].1.as_str(), "0:a");
+		assert_eq!(items[1].1.as_str(), "1:b");
+	}
+
+	#[tokio::test]
+	async fn test_map_parallel_async_with_delay() {
+		let stream = TileStream::from_vec(vec![
+			(tc(0, 0, 0), Blob::from("data0")),
+			(tc(1, 1, 1), Blob::from("data1")),
+		]);
+
+		let mapped = stream.map_parallel_async(|coord, blob| async move {
+			tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+			Blob::from(format!("processed-{}-{}", coord.level, blob.as_str()))
+		});
+
+		let items = mapped.to_vec().await;
+		assert_eq!(items.len(), 2);
+	}
 
 	// -------------------------------------------------------------------------
 	// map_parallel_async_try (async, parallel, fallible)
