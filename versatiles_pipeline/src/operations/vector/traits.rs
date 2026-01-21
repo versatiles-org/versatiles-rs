@@ -42,7 +42,7 @@ impl<R: RunnerTrait> TileSource for TransformOp<R> {
 			.source
 			.get_tile_stream(bbox)
 			.await?
-			.filter_map_item_parallel(move |tile| {
+			.filter_map_parallel_try(move |_coord, tile| {
 				let vector = tile.into_vector()?;
 				if let Some(transformed_vector) = runner.run(vector)? {
 					Ok(Some(Tile::from_vector(transformed_vector, tile_format)?))

@@ -178,7 +178,7 @@ async fn should_parallel_filter_map_blob_correctly() {
 		(tc(2, 2, 2), Blob::from("keep2")),
 	];
 
-	let filtered = TileStream::from_vec(tile_data).filter_map_item_parallel(|blob| {
+	let filtered = TileStream::from_vec(tile_data).filter_map_parallel_try(|_coord, blob| {
 		Ok(if blob.as_str().starts_with("discard") {
 			None
 		} else {
@@ -466,7 +466,7 @@ async fn test_map_parallel_try_parallelism() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_filter_map_item_parallel_parallelism() {
+async fn test_filter_map_parallel_try_parallelism() {
 	let stream = TileStream::from_vec(
 		vec![Some(1), None, Some(3), None, Some(5), None]
 			.into_iter()
@@ -482,7 +482,7 @@ async fn test_filter_map_item_parallel_parallelism() {
 	let max_parallel_clone = max_parallel.clone();
 	let current_parallel_clone = current_parallel.clone();
 
-	let stream = stream.filter_map_item_parallel(move |item| {
+	let stream = stream.filter_map_parallel_try(move |_coord, item| {
 		let counter = counter_clone.clone();
 		let max_parallel = max_parallel_clone.clone();
 		let current_parallel = current_parallel_clone.clone();
