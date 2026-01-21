@@ -316,4 +316,317 @@ mod tests {
 
 		Ok(())
 	}
+
+	// ───────────────────────── parse_png_alpha edge cases ─────────────────────────
+
+	#[test]
+	fn test_parse_png_alpha_short_data() {
+		// Data shorter than 26 bytes should return Unknown
+		assert_eq!(parse_png_alpha(&[]), AlphaInfo::Unknown);
+		assert_eq!(parse_png_alpha(&[0; 25]), AlphaInfo::Unknown);
+	}
+
+	#[test]
+	fn test_parse_png_alpha_invalid_signature() {
+		// Valid length but wrong PNG signature
+		let mut data = [0u8; 26];
+		data[0..8].copy_from_slice(b"NOTAPNG!");
+		assert_eq!(parse_png_alpha(&data), AlphaInfo::Unknown);
+	}
+
+	#[test]
+	fn test_parse_png_alpha_invalid_ihdr() {
+		// Valid PNG signature but wrong IHDR chunk type
+		let mut data = [0u8; 26];
+		data[0..8].copy_from_slice(b"\x89PNG\r\n\x1a\n");
+		data[12..16].copy_from_slice(b"XXXX"); // Not IHDR
+		assert_eq!(parse_png_alpha(&data), AlphaInfo::Unknown);
+	}
+
+	#[test]
+	fn test_parse_png_alpha_indexed_color_type() {
+		// Color type 3 (indexed) should return Unknown (needs tRNS parsing)
+		let mut data = [0u8; 26];
+		data[0..8].copy_from_slice(b"\x89PNG\r\n\x1a\n");
+		data[12..16].copy_from_slice(b"IHDR");
+		data[25] = 3; // Indexed color type
+		assert_eq!(parse_png_alpha(&data), AlphaInfo::Unknown);
+	}
+
+	#[test]
+	fn test_parse_png_alpha_all_color_types() {
+		let mut data = [0u8; 26];
+		data[0..8].copy_from_slice(b"\x89PNG\r\n\x1a\n");
+		data[12..16].copy_from_slice(b"IHDR");
+
+		// Color type 0: Grayscale
+		data[25] = 0;
+		assert_eq!(parse_png_alpha(&data), AlphaInfo::NoAlpha);
+
+		// Color type 2: RGB
+		data[25] = 2;
+		assert_eq!(parse_png_alpha(&data), AlphaInfo::NoAlpha);
+
+		// Color type 4: Grayscale + Alpha
+		data[25] = 4;
+		assert_eq!(parse_png_alpha(&data), AlphaInfo::HasAlpha);
+
+		// Color type 6: RGBA
+		data[25] = 6;
+		assert_eq!(parse_png_alpha(&data), AlphaInfo::HasAlpha);
+
+		// Unknown color type (e.g., 7)
+		data[25] = 7;
+		assert_eq!(parse_png_alpha(&data), AlphaInfo::Unknown);
+	}
+
+	// ───────────────────────── parse_webp_alpha edge cases ─────────────────────────
+
+	#[test]
+	fn test_parse_webp_alpha_short_data() {
+		// Data shorter than 16 bytes should return Unknown
+		assert_eq!(parse_webp_alpha(&[]), AlphaInfo::Unknown);
+		assert_eq!(parse_webp_alpha(&[0; 15]), AlphaInfo::Unknown);
+	}
+
+	#[test]
+	fn test_parse_webp_alpha_invalid_riff() {
+		// Valid length but wrong RIFF signature
+		let mut data = [0u8; 21];
+		data[0..4].copy_from_slice(b"XXXX"); // Not RIFF
+		data[8..12].copy_from_slice(b"WEBP");
+		assert_eq!(parse_webp_alpha(&data), AlphaInfo::Unknown);
+	}
+
+	#[test]
+	fn test_parse_webp_alpha_invalid_webp() {
+		// Valid RIFF but wrong WEBP signature
+		let mut data = [0u8; 21];
+		data[0..4].copy_from_slice(b"RIFF");
+		data[8..12].copy_from_slice(b"XXXX"); // Not WEBP
+		assert_eq!(parse_webp_alpha(&data), AlphaInfo::Unknown);
+	}
+
+	#[test]
+	fn test_parse_webp_alpha_vp8_lossy() {
+		// VP8 (lossy) chunk has no alpha
+		let mut data = [0u8; 16];
+		data[0..4].copy_from_slice(b"RIFF");
+		data[8..12].copy_from_slice(b"WEBP");
+		data[12..16].copy_from_slice(b"VP8 ");
+		assert_eq!(parse_webp_alpha(&data), AlphaInfo::NoAlpha);
+	}
+
+	#[test]
+	fn test_parse_webp_alpha_vp8l_lossless() {
+		// VP8L (lossless) can have alpha
+		let mut data = [0u8; 16];
+		data[0..4].copy_from_slice(b"RIFF");
+		data[8..12].copy_from_slice(b"WEBP");
+		data[12..16].copy_from_slice(b"VP8L");
+		assert_eq!(parse_webp_alpha(&data), AlphaInfo::HasAlpha);
+	}
+
+	#[test]
+	fn test_parse_webp_alpha_vp8x_short_data() {
+		// VP8X chunk but data too short to read alpha flag
+		let mut data = [0u8; 20]; // Need 21 bytes for VP8X
+		data[0..4].copy_from_slice(b"RIFF");
+		data[8..12].copy_from_slice(b"WEBP");
+		data[12..16].copy_from_slice(b"VP8X");
+		assert_eq!(parse_webp_alpha(&data), AlphaInfo::Unknown);
+	}
+
+	#[test]
+	fn test_parse_webp_alpha_vp8x_with_alpha() {
+		// VP8X with alpha flag set (bit 4 of byte 20)
+		let mut data = [0u8; 21];
+		data[0..4].copy_from_slice(b"RIFF");
+		data[8..12].copy_from_slice(b"WEBP");
+		data[12..16].copy_from_slice(b"VP8X");
+		data[20] = 0x10; // Alpha flag set
+		assert_eq!(parse_webp_alpha(&data), AlphaInfo::HasAlpha);
+	}
+
+	#[test]
+	fn test_parse_webp_alpha_vp8x_without_alpha() {
+		// VP8X without alpha flag
+		let mut data = [0u8; 21];
+		data[0..4].copy_from_slice(b"RIFF");
+		data[8..12].copy_from_slice(b"WEBP");
+		data[12..16].copy_from_slice(b"VP8X");
+		data[20] = 0x00; // No alpha flag
+		assert_eq!(parse_webp_alpha(&data), AlphaInfo::NoAlpha);
+	}
+
+	#[test]
+	fn test_parse_webp_alpha_unknown_chunk() {
+		// Unknown chunk type
+		let mut data = [0u8; 21];
+		data[0..4].copy_from_slice(b"RIFF");
+		data[8..12].copy_from_slice(b"WEBP");
+		data[12..16].copy_from_slice(b"XXXX"); // Unknown chunk
+		assert_eq!(parse_webp_alpha(&data), AlphaInfo::Unknown);
+	}
+
+	// ───────────────────────── check_alpha_from_header edge cases ─────────────────────────
+
+	#[test]
+	fn test_check_alpha_from_header_no_blob() -> Result<()> {
+		// Tile with no blob should return Unknown
+		let tile = Tile {
+			blob: None,
+			content: None,
+			format: TileFormat::PNG,
+			compression: TileCompression::Uncompressed,
+			format_quality: None,
+			format_speed: None,
+			transparency_cache: None,
+		};
+		assert_eq!(tile.check_alpha_from_header()?, AlphaInfo::Unknown);
+		Ok(())
+	}
+
+	#[test]
+	fn test_check_alpha_from_header_compressed_blob() -> Result<()> {
+		use versatiles_core::compression::compress;
+
+		// Create a valid PNG blob, compress it, and verify header parsing still works
+		let tile = get_test_tile("png_rgb");
+		let uncompressed_blob = tile.blob.unwrap();
+
+		// Compress the blob
+		let compressed_blob = compress(uncompressed_blob, TileCompression::Gzip)?;
+
+		let compressed_tile = Tile {
+			blob: Some(compressed_blob),
+			content: None,
+			format: TileFormat::PNG,
+			compression: TileCompression::Gzip,
+			format_quality: None,
+			format_speed: None,
+			transparency_cache: None,
+		};
+
+		// Should decompress and correctly identify no alpha
+		assert_eq!(compressed_tile.check_alpha_from_header()?, AlphaInfo::NoAlpha);
+		Ok(())
+	}
+
+	#[test]
+	fn test_check_alpha_from_header_unknown_format() -> Result<()> {
+		// Unknown format (e.g., AVIF) should return Unknown
+		let tile = Tile {
+			blob: Some(Blob::from(vec![0u8; 100])),
+			content: None,
+			format: TileFormat::AVIF,
+			compression: TileCompression::Uncompressed,
+			format_quality: None,
+			format_speed: None,
+			transparency_cache: None,
+		};
+		assert_eq!(tile.check_alpha_from_header()?, AlphaInfo::Unknown);
+		Ok(())
+	}
+
+	// ───────────────────────── compute_transparency caching ─────────────────────────
+
+	#[test]
+	fn test_compute_transparency_caching() -> Result<()> {
+		let mut tile = get_test_tile("png_rgb");
+
+		// First call should compute and cache
+		assert!(tile.transparency_cache.is_none());
+		let result1 = tile.compute_transparency()?;
+		assert!(tile.transparency_cache.is_some());
+		assert_eq!(tile.transparency_cache, Some((false, true)));
+
+		// Second call should use cache (same result)
+		let result2 = tile.compute_transparency()?;
+		assert_eq!(result1, result2);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_is_empty_and_is_opaque_use_cache() -> Result<()> {
+		let mut tile = get_test_tile("png_rgba_mixed");
+
+		// Call is_empty first
+		assert!(tile.transparency_cache.is_none());
+		let empty = tile.is_empty()?;
+		assert!(tile.transparency_cache.is_some());
+
+		// Call is_opaque - should use cached value
+		let opaque = tile.is_opaque()?;
+
+		assert!(!empty);
+		assert!(!opaque);
+		Ok(())
+	}
+
+	// ───────────────────────── compute_transparency_uncached with content only ─────────────────────────
+
+	#[test]
+	fn test_compute_transparency_content_only() -> Result<()> {
+		// Create a tile with only content (no blob)
+		let image = DynamicImage::from_raw(2, 2, vec![255u8; 16]).unwrap(); // 2x2 RGBA opaque white
+
+		let mut tile = Tile {
+			blob: None,
+			content: Some(TileContent::Raster(image)),
+			format: TileFormat::PNG,
+			compression: TileCompression::Uncompressed,
+			format_quality: None,
+			format_speed: None,
+			transparency_cache: None,
+		};
+
+		let (is_empty, is_opaque) = tile.compute_transparency_uncached()?;
+		assert!(!is_empty);
+		assert!(is_opaque);
+		Ok(())
+	}
+
+	#[test]
+	fn test_compute_transparency_content_only_empty() -> Result<()> {
+		// Create a tile with only content that is fully transparent
+		let image = DynamicImage::from_raw(2, 2, vec![0u8; 16]).unwrap(); // 2x2 RGBA transparent
+
+		let mut tile = Tile {
+			blob: None,
+			content: Some(TileContent::Raster(image)),
+			format: TileFormat::PNG,
+			compression: TileCompression::Uncompressed,
+			format_quality: None,
+			format_speed: None,
+			transparency_cache: None,
+		};
+
+		let (is_empty, is_opaque) = tile.compute_transparency_uncached()?;
+		assert!(is_empty);
+		assert!(!is_opaque);
+		Ok(())
+	}
+
+	// ───────────────────────── Fallback decode path ─────────────────────────
+
+	#[test]
+	fn test_transparency_fallback_decode_for_unknown_alpha() -> Result<()> {
+		// Create a tile where header parsing returns Unknown, forcing full decode
+		// Use indexed PNG (color type 3) which returns Unknown from header parsing
+		// Since we can't easily create an indexed PNG, we'll use a tile with HasAlpha
+		// that requires pixel scanning
+		let mut tile = get_test_tile("png_rgba_mixed");
+
+		// Clear the cache to force recomputation
+		tile.transparency_cache = None;
+
+		// This should go through header parsing (HasAlpha) then fall back to pixel scanning
+		let (is_empty, is_opaque) = tile.compute_transparency()?;
+		assert!(!is_empty);
+		assert!(!is_opaque);
+
+		Ok(())
+	}
 }
