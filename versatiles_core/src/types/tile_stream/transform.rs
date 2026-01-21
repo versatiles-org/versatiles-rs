@@ -74,62 +74,6 @@ where
 		TileStream { inner: s }
 	}
 
-	/// Observes each item passing through the stream by calling a callback.
-	///
-	/// This method is useful for side effects like progress tracking, logging, or metrics collection.
-	/// The callback is invoked once per item but receives no arguments and cannot modify the items.
-	/// The stream passes through unchanged.
-	///
-	/// # Use Cases
-	///
-	/// - **Progress tracking**: Increment a counter to show processing progress
-	/// - **Logging**: Record that an item was processed without inspecting it
-	/// - **Metrics**: Count the total number of items in a stream
-	///
-	/// # Examples
-	///
-	/// ```
-	/// use versatiles_core::{TileCoord, TileStream, Blob};
-	/// use std::sync::atomic::{AtomicUsize, Ordering};
-	/// use std::sync::Arc;
-	///
-	/// # async fn example() {
-	/// let counter = Arc::new(AtomicUsize::new(0));
-	/// let counter_clone = Arc::clone(&counter);
-	///
-	/// let stream = TileStream::from_vec(vec![
-	///     (TileCoord::new(0, 0, 0).unwrap(), Blob::from("a")),
-	///     (TileCoord::new(1, 0, 0).unwrap(), Blob::from("b")),
-	///     (TileCoord::new(2, 0, 0).unwrap(), Blob::from("c")),
-	/// ]);
-	///
-	/// // Track progress as items are processed
-	/// let result = stream
-	///     .inspect(move || {
-	///         counter_clone.fetch_add(1, Ordering::Relaxed);
-	///     })
-	///     .to_vec()
-	///     .await;
-	///
-	/// assert_eq!(counter.load(Ordering::Relaxed), 3);
-	/// assert_eq!(result.len(), 3);
-	/// # }
-	/// ```
-	pub fn inspect<F>(self, mut callback: F) -> Self
-	where
-		F: FnMut() + Send + 'a,
-	{
-		TileStream {
-			inner: self
-				.inner
-				.map(move |item| {
-					callback();
-					item
-				})
-				.boxed(),
-		}
-	}
-
 	// -------------------------------------------------------------------------
 	// Utility
 	// -------------------------------------------------------------------------

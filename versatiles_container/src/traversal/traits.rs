@@ -86,7 +86,7 @@ pub trait TileSourceTraverseExt: TileSource {
 									let vec = self
 										.get_tile_stream(bbox)
 										.await?
-										.inspect(move || tracker.inc(1))
+										.inspect(move |_, _| tracker.inc(1))
 										.to_vec()
 										.await;
 
@@ -106,7 +106,7 @@ pub trait TileSourceTraverseExt: TileSource {
 						log::trace!("Uncache {bbox:?} at index {index}");
 						let vec = cache.take(index)?.unwrap();
 						let tracker2 = tracker.clone();
-						let stream = TileStream::from_vec(vec).inspect(move || tracker2.inc(1));
+						let stream = TileStream::from_vec(vec).inspect(move |_, _| tracker2.inc(1));
 						callback(bbox, stream).await?;
 						tracker.inc_write(bbox.count_tiles());
 					}
@@ -117,7 +117,7 @@ pub trait TileSourceTraverseExt: TileSource {
 						let streams = stream::iter(bboxes).map(move |bbox| {
 							let tracker = tracker2.clone();
 							async move {
-								self.get_tile_stream(bbox).await.unwrap().inspect(move || {
+								self.get_tile_stream(bbox).await.unwrap().inspect(move |_, _| {
 									tracker.inc(2);
 								})
 							}

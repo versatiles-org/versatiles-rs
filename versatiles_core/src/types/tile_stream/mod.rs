@@ -41,6 +41,7 @@ mod consume;
 mod filter_map;
 mod flat_map;
 mod for_each;
+mod inspect;
 mod map;
 mod transform;
 
