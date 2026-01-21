@@ -253,6 +253,7 @@ impl TileSource for Operation {
 			.map(|entry| entry.for_level(bbox.level))
 			.collect();
 
+		// Return empty stream if no sources remain after filtering
 		if entries.is_empty() {
 			return Ok(TileStream::empty());
 		}
@@ -262,13 +263,40 @@ impl TileSource for Operation {
 			return Ok(TileStream::empty());
 		}
 
-		if entries.len() == 1 {
-			let source = entries.pop().unwrap().source;
-			let stream = source.get_tile_stream(bbox).await?;
+		let tile_format = self.metadata.tile_format;
+
+		// If first source is the only non-overscaled one, stream from it and postprocess
+		if entries.iter().skip(1).all(|entry| entry.is_overscaled) {
+			let first_source = entries.remove(0).source;
+			let mut stream = first_source.get_tile_stream(bbox).await?;
+
+			// If there are other sources, overlay the tiles
+			if !entries.is_empty() {
+				stream = stream
+					.map_parallel_async(move |c, mut tile| {
+						let entries = entries.clone();
+						async move {
+							if let Some((_coord, mut tile_bg)) = get_tile(c, entries).await? {
+								tile.as_image_mut()?.overlay(tile_bg.as_image()?)?;
+							}
+							Ok(tile)
+						}
+					})
+					.unwrap_results();
+			}
+
+			// Re-encode only if format differs
+			if first_source.metadata().tile_format != tile_format {
+				stream = stream
+					.map_item_parallel(move |mut tile| {
+						tile.change_format(tile_format, None, None)?;
+						Ok(tile)
+					})
+					.unwrap_results();
+			}
+
 			return Ok(stream);
 		}
-
-		let tile_format = self.metadata.tile_format;
 
 		Ok(TileStream::from_bbox_async_parallel(bbox, move |c| {
 			let entries = entries.clone();
