@@ -73,7 +73,7 @@ async fn should_iterate_sync_over_items() {
 
 	let mut result = vec![];
 	tile_stream
-		.for_each_sync(|(coord, blob)| {
+		.for_each(|coord, blob| {
 			result.push(format!("{}, {}", coord.as_json(), blob.as_str()));
 		})
 		.await;
@@ -240,7 +240,7 @@ async fn should_process_async_for_each() {
 	let collected_mutex = Arc::new(Mutex::new(Vec::new()));
 
 	let collected_clone = Arc::clone(&collected_mutex);
-	s.for_each_async(move |(coord, blob)| {
+	s.for_each_async(move |coord, blob| {
 		let collected = Arc::clone(&collected_clone);
 		async move {
 			collected.lock().await.push((coord, blob));
@@ -531,7 +531,7 @@ async fn test_for_each_async_parallel_parallelism() {
 	let current_parallel_clone = current_parallel.clone();
 
 	stream
-		.for_each_async_parallel(move |_item| {
+		.for_each_parallel_async(move |_coord, _item| {
 			let counter = counter_clone.clone();
 			let max_parallel = max_parallel_clone.clone();
 			let current_parallel = current_parallel_clone.clone();

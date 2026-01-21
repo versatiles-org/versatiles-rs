@@ -146,7 +146,7 @@ impl TileSource for Operation {
 
 					let stream = source.get_tile_stream(bbox_left).await.unwrap();
 					stream
-						.for_each_sync(|(coord, mut tile)| {
+						.for_each(|coord, mut tile| {
 							let entry = tiles.get_mut(&coord).unwrap();
 							if entry.is_none() {
 								tile.change_format(format, None, None).unwrap();

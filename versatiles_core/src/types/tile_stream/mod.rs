@@ -30,7 +30,7 @@
 //! );
 //!
 //! // Process tiles asynchronously
-//! stream.for_each_async(|(coord, blob)| async move {
+//! stream.for_each_async(|coord, blob| async move {
 //!     println!("Processing tile {:?}, size: {}", coord, blob.len());
 //! }).await;
 //! # }
@@ -40,6 +40,7 @@ mod constructors;
 mod consume;
 mod filter_map;
 mod flat_map;
+mod for_each;
 mod map;
 mod transform;
 

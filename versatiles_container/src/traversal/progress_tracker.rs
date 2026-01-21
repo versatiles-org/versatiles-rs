@@ -328,7 +328,7 @@ mod tests {
 				&Traversal::ANY,
 				|_bbox, stream| {
 					Box::pin(async move {
-						stream.for_each_async(|_| sleep_micros(10000)).await;
+						stream.for_each_async(|_, _| sleep_micros(10000)).await;
 						Ok(())
 					})
 				},
@@ -371,7 +371,7 @@ mod tests {
 				&write_traversal,
 				|_bbox, stream| {
 					Box::pin(async move {
-						stream.for_each_async_parallel(|_| sleep_micros(1)).await;
+						stream.for_each_parallel_async(|_, _| sleep_micros(1)).await;
 						Ok(())
 					})
 				},
@@ -407,7 +407,7 @@ mod tests {
 				&write_traversal,
 				|_bbox, stream| {
 					Box::pin(async move {
-						stream.for_each_async_parallel(|_| sleep_micros(1)).await;
+						stream.for_each_parallel_async(|_, _| sleep_micros(1)).await;
 						Ok(())
 					})
 				},
@@ -456,7 +456,7 @@ mod tests {
 				&write_traversal,
 				|_bbox, stream| {
 					Box::pin(async move {
-						stream.for_each_async_parallel(|_| sleep_micros(1000)).await;
+						stream.for_each_parallel_async(|_, _| sleep_micros(1000)).await;
 						Ok(())
 					})
 				},
@@ -488,7 +488,7 @@ mod tests {
 				&Traversal::ANY,
 				|_bbox, stream| {
 					Box::pin(async move {
-						stream.for_each_async(|_| sleep_micros(10000)).await;
+						stream.for_each_async(|_, _| sleep_micros(10000)).await;
 						Ok(())
 					})
 				},
@@ -525,7 +525,7 @@ mod tests {
 				&Traversal::ANY,
 				|_bbox, stream| {
 					Box::pin(async move {
-						stream.for_each_async_parallel(|_| sleep_micros(1)).await;
+						stream.for_each_parallel_async(|_, _| sleep_micros(1)).await;
 						Ok(())
 					})
 				},
@@ -571,7 +571,7 @@ mod tests {
 				&Traversal::ANY,
 				|_bbox, stream| {
 					Box::pin(async move {
-						stream.for_each_async(|_| sleep_micros(100000)).await;
+						stream.for_each_async(|_, _| sleep_micros(100000)).await;
 						Ok(())
 					})
 				},
@@ -612,7 +612,7 @@ mod tests {
 				&write_traversal,
 				|_bbox, stream| {
 					Box::pin(async move {
-						stream.for_each_async(|_| sleep_micros(500)).await;
+						stream.for_each_async(|_, _| sleep_micros(500)).await;
 						Ok(())
 					})
 				},

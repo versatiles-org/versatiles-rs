@@ -146,7 +146,7 @@ impl TileSource for Operation {
 						.get_tile_stream(bbox)
 						.await
 						.unwrap()
-						.for_each_sync(|(coord, tile)| {
+						.for_each(|coord, tile| {
 							tiles.get_mut(&coord).unwrap().push(tile.into_vector().unwrap());
 						})
 						.await;

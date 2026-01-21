@@ -184,7 +184,7 @@ impl VersaTilesWriter {
 
 						// Stream compressed tiles to block builder
 						compressed_stream
-							.for_each_sync(|(coord, blob)| {
+							.for_each(|coord, blob| {
 								block_builder.write_tile(coord, blob).unwrap();
 							})
 							.await;
