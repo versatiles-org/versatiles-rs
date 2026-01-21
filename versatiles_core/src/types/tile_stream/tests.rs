@@ -11,12 +11,12 @@ fn tc(level: u8, x: u32, y: u32) -> TileCoord {
 }
 
 #[tokio::test]
-async fn should_flat_map_parallel_and_flatten_results() {
+async fn should_flat_map_parallel_try_and_flatten_results() {
 	// Base stream with two coords
 	let base = TileStream::from_vec(vec![(tc(1, 0, 0), 10u32), (tc(1, 1, 0), 20u32)]);
 
 	// Each item expands to a sub-stream with two entries
-	let flat = base.flat_map_parallel(|coord, val| {
+	let flat = base.flat_map_parallel_try(|coord, val| {
 		let out = vec![
 			(coord, format!("a:{val}")),
 			(tc(coord.level, coord.x, coord.y + 1), format!("b:{val}")),
