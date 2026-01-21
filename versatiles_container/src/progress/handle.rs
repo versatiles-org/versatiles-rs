@@ -83,6 +83,7 @@ impl ProgressHandle {
 		let mut state = self.state.lock();
 		state.position = state.total;
 		state.finished = true;
+		self.redraw(&mut state);
 		drop(state);
 		self.emit_update();
 	}
