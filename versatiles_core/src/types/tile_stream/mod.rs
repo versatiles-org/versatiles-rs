@@ -38,6 +38,7 @@
 
 mod constructors;
 mod consume;
+mod filter_map;
 mod map;
 mod transform;
 
