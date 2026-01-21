@@ -78,7 +78,6 @@ impl ProgressTracker {
 
 	/// Mark the progress as finished.
 	pub fn finish(&self) {
-		self.update_position();
 		self.progress.finish();
 	}
 }
