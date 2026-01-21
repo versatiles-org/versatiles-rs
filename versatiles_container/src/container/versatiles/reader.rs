@@ -564,7 +564,7 @@ mod tests {
 		let sizes = reader
 			.get_tile_stream(TileBBox::new_full(4)?)
 			.await?
-			.map_item_parallel(|mut tile| Ok(tile.as_blob(TileCompression::Gzip)?.len()))
+			.map_parallel_try(|_coord, mut tile| Ok(tile.as_blob(TileCompression::Gzip)?.len()))
 			.unwrap_results();
 		let sizes: Vec<(TileCoord, u64)> = sizes.to_vec().await;
 		assert_eq!(sizes.len(), 256);
@@ -581,7 +581,7 @@ mod tests {
 		let bbox = TileBBox::new_full(4)?;
 		let stream = reader.get_tile_stream(bbox).await?;
 		let mut all: Vec<(TileCoord, Blob)> = stream
-			.map_item_parallel(|tile| tile.into_blob(TileCompression::Uncompressed))
+			.map_parallel_try(|_coord, tile| tile.into_blob(TileCompression::Uncompressed))
 			.unwrap_results()
 			.to_vec()
 			.await;

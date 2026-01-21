@@ -229,7 +229,7 @@ impl TileSource for TilesConvertReader {
 
 		if let Some(tile_compression) = self.converter_parameters.tile_compression {
 			stream = stream
-				.map_item_parallel(move |mut tile| {
+				.map_parallel_try(move |_coord, mut tile| {
 					tile.change_compression(tile_compression)?;
 					Ok(tile)
 				})

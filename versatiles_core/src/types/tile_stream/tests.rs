@@ -144,7 +144,7 @@ async fn should_do_parallel_blob_mapping() {
 
 	// Apply parallel mapping
 	let transformed = TileStream::from_vec(tile_data.clone())
-		.map_item_parallel(|blob| Ok(Blob::from(format!("mapped-{}", blob.as_str()))));
+		.map_parallel_try(|_coord, blob| Ok(Blob::from(format!("mapped-{}", blob.as_str()))));
 
 	// Collect results, unwrapping the Results
 	let mut items: Vec<(TileCoord, Blob)> = transformed
@@ -418,7 +418,7 @@ async fn should_create_from_coord_vec_async() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_map_item_parallel_parallelism() {
+async fn test_map_parallel_try_parallelism() {
 	let stream = TileStream::from_vec((1..=6).map(|i| (tc(12, i, 0), i)).collect::<Vec<_>>());
 	let counter = Arc::new(AtomicUsize::new(0));
 	let max_parallel = Arc::new(AtomicUsize::new(0));
@@ -428,7 +428,7 @@ async fn test_map_item_parallel_parallelism() {
 	let max_parallel_clone = max_parallel.clone();
 	let current_parallel_clone = current_parallel.clone();
 
-	let stream = stream.map_item_parallel(move |item| {
+	let stream = stream.map_parallel_try(move |_coord, item| {
 		let counter = counter_clone.clone();
 		let max_parallel = max_parallel_clone.clone();
 		let current_parallel = current_parallel_clone.clone();

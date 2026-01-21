@@ -368,7 +368,7 @@ async fn versatiles_deduplicated_tiles_readable() -> Result<()> {
 	let original_tiles: Vec<(TileCoord, Blob)> = source
 		.get_tile_stream(bbox)
 		.await?
-		.map_item_parallel(|tile: Tile| tile.into_blob(TileCompression::Uncompressed))
+		.map_parallel_try(|_coord, tile: Tile| tile.into_blob(TileCompression::Uncompressed))
 		.unwrap_results()
 		.to_vec()
 		.await;

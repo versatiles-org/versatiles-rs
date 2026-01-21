@@ -8,71 +8,6 @@ where
 	// Parallel Transformations
 	// -------------------------------------------------------------------------
 
-	/// Transforms the **value of type `T`** for each tile in parallel using the provided closure `callback`.
-	///
-	/// Spawns tokio tasks with CPU-bound concurrency limit. Each item `(coord, value)` is mapped
-	/// to `(coord, Result<callback(value)>)`.
-	///
-	/// Uses CPU-bound concurrency limit since the callback runs in `spawn_blocking`.
-	///
-	/// Returns a stream of `Result<O>` values. If the callback returns an error for any tile,
-	/// that error is propagated as an item in the stream. Consumers can use `.try_for_each()`,
-	/// `.try_collect()`, or similar methods to fail fast on the first error, or handle errors
-	/// individually.
-	///
-	/// # Examples
-	/// ```
-	/// # use versatiles_core::{TileCoord, Blob, TileStream};
-	/// # use anyhow::Result;
-	/// # use futures::{StreamExt, TryStreamExt};
-	/// # async fn test() -> Result<()> {
-	/// let stream = TileStream::from_vec(vec![
-	///     (TileCoord::new(0,0,0).unwrap(), Blob::from("data0")),
-	///     (TileCoord::new(1,1,1).unwrap(), Blob::from("data1")),
-	/// ]);
-	///
-	/// let mapped = stream.map_item_parallel(|value| {
-	///     // Example transformation on the tile value
-	///     Ok(Blob::from(format!("mapped {}", value.as_str())))
-	/// });
-	///
-	/// // Collect results, failing fast on first error
-	/// let items: Vec<(TileCoord, Blob)> = mapped
-	///     .inner
-	///     .filter_map(|(coord, result)| async move {
-	///         match result {
-	///             Ok(item) => Some(Ok((coord, item))),
-	///             Err(e) => Some(Err(e)),
-	///         }
-	///     })
-	///     .try_collect()
-	///     .await?;
-	/// # Ok(())
-	/// # }
-	/// ```
-	pub fn map_item_parallel<F, O>(self, callback: F) -> TileStream<'a, Result<O>>
-	where
-		F: Fn(T) -> Result<O> + Send + Sync + 'static,
-		T: 'static,
-		O: Send + Sync + 'static,
-	{
-		let arc_cb = Arc::new(callback);
-		let limits = ConcurrencyLimits::default();
-		let s = self
-			.inner
-			.map(move |(coord, item)| {
-				let cb = Arc::clone(&arc_cb);
-				tokio::task::spawn_blocking(move || (coord, cb(item)))
-			})
-			.buffer_unordered(limits.cpu_bound) // CPU-bound: spawn_blocking
-			.map(|result| match result {
-				Ok((coord, Ok(item))) => (coord, Ok(item)),
-				Ok((coord, Err(e))) => (coord, Err(e.context(format!("Failed to process tile at {coord:?}")))),
-				Err(e) => panic!("Spawned task panicked: {e}"), // Task panic is still a panic (unexpected)
-			});
-		TileStream { inner: s.boxed() }
-	}
-
 	/// Transforms each tile into multiple tiles using parallel processing.
 	///
 	/// Each `(coord, value)` pair is mapped to a stream of tiles via the `callback` function.
@@ -467,7 +402,7 @@ where
 	///
 	/// // Process with parallel operation, then unwrap results
 	/// let processed = stream
-	///     .map_item_parallel(|blob| Ok(Blob::from(format!("processed-{}", blob.as_str()))))
+	///     .map_parallel_try(|_coord, blob| Ok(Blob::from(format!("processed-{}", blob.as_str()))))
 	///     .unwrap_results();
 	///
 	/// // Now `processed` is TileStream<'a, Blob>, not TileStream<'a, Result<Blob>>

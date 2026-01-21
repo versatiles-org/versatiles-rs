@@ -204,7 +204,7 @@ impl TileSource for Operation {
 					.source
 					.get_tile_stream(bbox)
 					.await?
-					.map_item_parallel(versatiles_container::Tile::into_image)
+					.map_parallel_try(|_coord, tile| versatiles_container::Tile::into_image(tile))
 					.unwrap_results(),
 			)
 			.await?

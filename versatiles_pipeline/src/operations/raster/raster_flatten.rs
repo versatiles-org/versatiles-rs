@@ -59,7 +59,7 @@ impl TileSource for Operation {
 			.source
 			.get_tile_stream(bbox)
 			.await?
-			.map_item_parallel(move |mut tile| {
+			.map_parallel_try(move |_coord, mut tile| {
 				if tile.as_image()?.has_alpha() {
 					let format = tile.format();
 					let image = tile.into_image()?.into_flattened(color)?;

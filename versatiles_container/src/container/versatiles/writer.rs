@@ -175,7 +175,7 @@ impl VersaTilesWriter {
 
 						// Compress tiles in parallel
 						let compressed_stream = stream
-							.map_item_parallel(move |tile| tile.into_blob(tile_compression))
+							.map_parallel_try(move |_coord, tile| tile.into_blob(tile_compression))
 							.unwrap_results();
 
 						// Acquire writer lock and create block builder

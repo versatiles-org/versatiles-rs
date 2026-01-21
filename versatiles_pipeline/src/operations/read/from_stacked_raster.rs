@@ -289,7 +289,7 @@ impl TileSource for Operation {
 			// Re-encode only if format differs
 			if first_source.metadata().tile_format != tile_format {
 				stream = stream
-					.map_item_parallel(move |mut tile| {
+					.map_parallel_try(move |_coord, mut tile| {
 						tile.change_format(tile_format, None, None)?;
 						Ok(tile)
 					})

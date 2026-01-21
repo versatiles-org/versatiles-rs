@@ -37,7 +37,7 @@
 //!     async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 //!         // Apply transformation to upstream stream
 //!         let stream = self.base.source().get_tile_stream(bbox).await?;
-//!         Ok(stream.map_item_parallel(|tile| /* transform tile */ Ok(tile)))
+//!         Ok(stream.map_parallel_try(|_coord, tile| /* transform tile */ Ok(tile)))
 //!     }
 //!
 //!     // ... other methods

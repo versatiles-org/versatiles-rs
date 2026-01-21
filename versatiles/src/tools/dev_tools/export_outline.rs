@@ -42,7 +42,7 @@ pub async fn run(args: &ExportOutline, runtime: &TilesRuntime) -> Result<()> {
 	let mut stream = reader
 		.get_tile_stream(bbox)
 		.await?
-		.map_item_parallel(move |mut tile| Ok(tile.as_blob(compression)?.len()));
+		.map_parallel_try(move |_coord, mut tile| Ok(tile.as_blob(compression)?.len()));
 
 	let progress = runtime.create_progress("Scanning tile sizes", bbox.count_tiles());
 	let mut outline = TileOutline::new();

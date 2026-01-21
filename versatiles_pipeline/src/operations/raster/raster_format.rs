@@ -161,7 +161,7 @@ impl TileSource for Operation {
 		let format: TileFormat = self.format.into();
 
 		Ok(stream
-			.map_item_parallel(move |mut tile| {
+			.map_parallel_try(move |_coord, mut tile| {
 				tile.change_format(format, quality, speed)?;
 				Ok(tile)
 			})
