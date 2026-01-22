@@ -179,6 +179,39 @@ impl TileCoord {
 		self.to_tile_bbox().to_geo_bbox().unwrap()
 	}
 
+	/// Return the Web Mercator bounding box of this tile as `[x_min, y_min, x_max, y_max]` in meters.
+	///
+	/// Uses EPSG:3857 Web Mercator projection coordinates.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileCoord;
+	///
+	/// let coord = TileCoord::new(0, 0, 0).unwrap();
+	/// let bbox = coord.to_mercator_bbox();
+	/// // Zoom 0 tile covers the entire world in Web Mercator
+	/// assert!(bbox[0] < -20_000_000.0); // x_min
+	/// assert!(bbox[2] > 20_000_000.0);  // x_max
+	/// ```
+	#[must_use]
+	pub fn to_mercator_bbox(&self) -> [f64; 4] {
+		const EARTH_RADIUS: f64 = 6378137.0;
+		const WORLD_SIZE: f64 = 2.0 * PI32 * EARTH_RADIUS; // ~40075016.686 meters
+
+		let tiles_per_side = 2u32.pow(u32::from(self.level)) as f64;
+		let tile_size = WORLD_SIZE / tiles_per_side;
+
+		let x_min = -WORLD_SIZE / 2.0 + f64::from(self.x) * tile_size;
+		let x_max = x_min + tile_size;
+
+		// Y is flipped in tile coordinates (0 at top)
+		let y_max = WORLD_SIZE / 2.0 - f64::from(self.y) * tile_size;
+		let y_min = y_max - tile_size;
+
+		[x_min, y_min, x_max, y_max]
+	}
+
 	/// Serialize this coordinate to a compact JSON-like string `{x:…,y:…,z:…}`.
 	#[must_use]
 	pub fn as_json(&self) -> String {
@@ -534,5 +567,21 @@ mod tests {
 		let mut coord = TileCoord::new(5, 3, 4).unwrap();
 		coord.swap_xy();
 		assert_eq!(coord, TileCoord::new(5, 4, 3).unwrap());
+	}
+
+	#[test]
+	fn tilecoord_to_mercator_bbox() {
+		// Zoom 0 should cover the entire world
+		let bbox = TileCoord::new(0, 0, 0).unwrap().to_mercator_bbox();
+		let world_half = PI32 * 6378137.0;
+		assert!((bbox[0] - (-world_half)).abs() < 1.0);
+		assert!((bbox[2] - world_half).abs() < 1.0);
+
+		// Higher zoom should have smaller tiles
+		let bbox_z1 = TileCoord::new(1, 0, 0).unwrap().to_mercator_bbox();
+		let bbox_z2 = TileCoord::new(2, 0, 0).unwrap().to_mercator_bbox();
+		let width_z1 = bbox_z1[2] - bbox_z1[0];
+		let width_z2 = bbox_z2[2] - bbox_z2[0];
+		assert!((width_z1 / 2.0 - width_z2).abs() < 1.0);
 	}
 }
