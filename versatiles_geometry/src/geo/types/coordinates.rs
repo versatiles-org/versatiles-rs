@@ -1,6 +1,13 @@
+use std::f64::consts::{FRAC_PI_2, FRAC_PI_4};
 use std::fmt::Debug;
 
 use versatiles_core::json::JsonValue;
+
+/// Earth radius in meters for Web Mercator projection (EPSG:3857)
+const EARTH_RADIUS: f64 = 6378137.0;
+
+/// Maximum latitude for Web Mercator projection (approximately 85.051129 degrees)
+const MAX_LATITUDE: f64 = 85.051129;
 
 /// A simple 2D coordinate pair `(x, y)`.
 ///
@@ -40,6 +47,37 @@ impl Coordinates {
 		} else {
 			JsonValue::from(&self.0)
 		}
+	}
+
+	/// Convert WGS84 coordinates (longitude, latitude) to Web Mercator (x, y) in meters.
+	///
+	/// Interprets this coordinate as (longitude, latitude) in degrees and returns
+	/// the equivalent Web Mercator (EPSG:3857) coordinates in meters.
+	///
+	/// # Note
+	/// Latitude is clamped to ±85.051129 degrees, the valid range for Web Mercator.
+	#[must_use]
+	pub fn to_mercator(&self) -> Coordinates {
+		let lon = self.x();
+		let lat = self.y().clamp(-MAX_LATITUDE, MAX_LATITUDE);
+
+		let x = lon.to_radians() * EARTH_RADIUS;
+		let y = (lat.to_radians() / 2.0 + FRAC_PI_4).tan().ln() * EARTH_RADIUS;
+		Coordinates::new(x, y)
+	}
+
+	/// Convert Web Mercator coordinates (x, y) in meters to WGS84 (longitude, latitude) in degrees.
+	///
+	/// Interprets this coordinate as Web Mercator (EPSG:3857) in meters and returns
+	/// the equivalent WGS84 coordinates (longitude, latitude) in degrees.
+	#[must_use]
+	pub fn from_mercator(&self) -> Coordinates {
+		let x = self.x();
+		let y = self.y();
+
+		let lon = (x / EARTH_RADIUS).to_degrees();
+		let lat = (2.0 * (y / EARTH_RADIUS).exp().atan() - FRAC_PI_2).to_degrees();
+		Coordinates::new(lon, lat)
 	}
 }
 
@@ -172,5 +210,49 @@ mod tests {
 		let a = Coordinates::new(1.0, 2.0);
 		let b = a.clone();
 		assert_eq!(a, b);
+	}
+
+	#[test]
+	fn to_mercator_origin() {
+		let wgs84 = Coordinates::new(0.0, 0.0);
+		let mercator = wgs84.to_mercator();
+		assert!((mercator.x() - 0.0).abs() < 1e-6);
+		assert!((mercator.y() - 0.0).abs() < 1e-6);
+	}
+
+	#[test]
+	fn to_mercator_positive_coords() {
+		// Berlin approximate
+		let wgs84 = Coordinates::new(13.4, 52.5);
+		let mercator = wgs84.to_mercator();
+		assert!(mercator.x() > 0.0);
+		assert!(mercator.y() > 0.0);
+	}
+
+	#[test]
+	fn to_mercator_negative_coords() {
+		// New York approximate
+		let wgs84 = Coordinates::new(-74.0, 40.7);
+		let mercator = wgs84.to_mercator();
+		assert!(mercator.x() < 0.0);
+		assert!(mercator.y() > 0.0);
+	}
+
+	#[test]
+	fn mercator_roundtrip() {
+		let original = Coordinates::new(10.0, 50.0);
+		let mercator = original.to_mercator();
+		let back = mercator.from_mercator();
+		assert!((original.x() - back.x()).abs() < 1e-6);
+		assert!((original.y() - back.y()).abs() < 1e-6);
+	}
+
+	#[test]
+	fn mercator_latitude_clamping() {
+		// Latitude beyond max should be clamped
+		let wgs84 = Coordinates::new(0.0, 90.0);
+		let mercator = wgs84.to_mercator();
+		// Should not be infinite
+		assert!(mercator.y().is_finite());
 	}
 }
