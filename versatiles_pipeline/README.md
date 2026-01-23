@@ -43,6 +43,14 @@ from_overlayed [
 ---
 # READ operations
 
+## from_color
+Generates solid-color tiles of the specified size and format.
+### Parameters
+
+- *`color`: String (optional)* - Hex color in RGB or RGBA format (e.g., "FF5733" or "FF573380"). Defaults to "000000" (black).
+- *`size`: u16 (optional)* - Tile size in pixels (256 or 512). Defaults to 512.
+- *`format`: String (optional)* - Tile format: one of "avif", "jpg", "png", or "webp". Defaults to "png".
+
 ## from_container
 Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*.tar` file.
 ### Parameters
@@ -90,6 +98,12 @@ All tile sources must provide raster tiles in the same resolution. The first sou
 
 - *`format`: TileFormat (optional)* - The tile format to use for the output tiles. Default: format of the first source.
 - *`auto_overscale`: bool (optional)* - Whether to automatically overscale tiles when a source does not provide tiles at the requested zoom level. Default: `false`.
+
+## from_tile
+Reads a single tile file and uses it as a template for all tile requests.
+### Parameters
+
+- **`filename`: String (required)** - The filename of the tile. Supported formats: png, jpg/jpeg, webp, avif, pbf/mvt. The format is automatically detected from the file extension.
 
 ---
 # TRANSFORM operations
