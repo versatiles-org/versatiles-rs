@@ -19,14 +19,18 @@ use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use itertools::Itertools;
+use regex::Regex;
 use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
+	sync::LazyLock,
 	vec,
 };
 use versatiles_container::{TileSource, TilesRuntime};
 use versatiles_core::{TileFormat, TileType};
 use versatiles_derive::context;
+
+static MULTIPLE_NEWLINES_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\n{3,}").unwrap());
 
 pub trait OperationFactoryTrait: Send + Sync {
 	fn get_tag_name(&self) -> &str;
@@ -228,24 +232,29 @@ impl PipelineFactory {
 
 	/// Returns rendered Markdown help listing all registered operations and their docs.
 	pub fn help_md(&self) -> String {
-		[
+		#[allow(clippy::borrowed_box, clippy::needless_pass_by_value)]
+		fn to_md<T>(vec: Vec<&Box<T>>) -> String
+		where
+			T: OperationFactoryTrait + ?Sized,
+		{
+			vec.iter()
+				.sorted_by_key(|f| f.get_tag_name())
+				.map(|f| format!("## {}\n\n{}", f.get_tag_name(), f.get_docs()))
+				.join("\n\n")
+		}
+
+		let doc = [
 			include_str!("help.md").to_string(),
-			String::from("---\n# READ operations"),
-			self
-				.read_ops
-				.values()
-				.sorted_by_key(|f| f.get_tag_name())
-				.map(|f| format!("\n## {}\n{}\n", f.get_tag_name(), f.get_docs()))
-				.join(""),
-			String::from("---\n# TRANSFORM operations"),
-			self
-				.tran_ops
-				.values()
-				.sorted_by_key(|f| f.get_tag_name())
-				.map(|f| format!("\n## {}\n{}\n", f.get_tag_name(), f.get_docs()))
-				.join(""),
+			String::from("---"),
+			String::from("# READ operations"),
+			to_md(self.read_ops.values().collect_vec()),
+			String::from("---"),
+			String::from("# TRANSFORM operations"),
+			to_md(self.tran_ops.values().collect_vec()),
 		]
-		.join("\n")
+		.join("\n\n");
+
+		MULTIPLE_NEWLINES_REGEX.replace_all(&doc, "\n\n").to_string()
 	}
 
 	/// Returns the runtime associated with this factory.

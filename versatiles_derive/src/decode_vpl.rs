@@ -352,7 +352,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 		.into_iter()
 		.filter(|s| !s.is_empty())
 		.collect::<Vec<String>>()
-		.join("\n")
+		.join("\n\n")
 		.trim()
 		.to_string();
 
@@ -407,7 +407,7 @@ mod tests {
 				"        })",
 				"    }",
 				"    pub fn get_docs() -> String {",
-				"        \"Struct documentation\\n### Parameters\\n\\n- **`field1`: String (required)** - Field documentation\"",
+				"        \"Struct documentation\\n\\n### Parameters\\n\\n- **`field1`: String (required)** - Field documentation\"",
 				"            .to_string()",
 				"    }",
 				"}",
