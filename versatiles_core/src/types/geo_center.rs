@@ -160,6 +160,7 @@ impl TryFrom<Vec<f64>> for GeoCenter {
 #[allow(clippy::float_cmp)]
 mod tests {
 	use super::GeoCenter;
+	use crate::MAX_ZOOM_LEVEL;
 	use anyhow::Result;
 	use std::convert::TryFrom;
 
@@ -229,8 +230,8 @@ mod tests {
 
 	#[test]
 	fn test_check_invalid_zoom() {
-		let gc_zoom = GeoCenter(0.0, 0.0, 31);
-		assert!(gc_zoom.check().is_err(), "Expected error for zoom > 30");
+		let gc_zoom = GeoCenter(0.0, 0.0, MAX_ZOOM_LEVEL + 1);
+		assert!(gc_zoom.check().is_err(), "Expected error for zoom > {MAX_ZOOM_LEVEL}");
 	}
 
 	#[test]

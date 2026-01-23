@@ -177,6 +177,7 @@ fn index_to_coord(index: u64) -> Result<TileCoord> {
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 mod tests {
 	use super::*;
+	use crate::MAX_ZOOM_LEVEL;
 
 	#[test]
 	fn test_coord_to_tile_id_basic_inputs() -> Result<()> {
@@ -217,7 +218,7 @@ mod tests {
 			let id1 = coord_to_index(coord.x, coord.y, coord.level)?;
 			assert_eq!(id0, id1);
 
-			if coord.level > 30 {
+			if coord.level >= 30 {
 				break;
 			}
 			f = f * 1.1 + 1.0;
@@ -228,13 +229,19 @@ mod tests {
 	#[test]
 	fn test_tile_id_to_coord_edge_cases() -> Result<()> {
 		// Test the smallest possible index
-		let coord = index_to_coord(0)?;
-		assert_eq!(coord_to_index(coord.x, coord.y, coord.level)?, 0);
 
-		// Test the largest possible index for zoom level 31
-		let max_index = coord_to_index((1 << 31) - 1, (1 << 31) - 1, 31)?;
-		let coord = index_to_coord(max_index)?;
-		assert_eq!(coord_to_index(coord.x, coord.y, coord.level)?, max_index);
+		assert_eq!(index_to_coord(0)?, TileCoord::new(0, 0, 0)?);
+		assert_eq!(coord_to_index(0, 0, 0)?, 0);
+
+		// Test the largest possible index for zoom level 30
+		let z = MAX_ZOOM_LEVEL;
+		let max_index = (1..=u32::from(z)).map(|l| 4u64.pow(l)).sum::<u64>();
+		let max_n = (1 << z) - 1;
+
+		assert_eq!(index_to_coord(max_index)?, TileCoord::new(z, max_n, 0)?);
+		assert_eq!(coord_to_index(max_n, 0, z)?, max_index);
+
+		assert!(index_to_coord(max_index + 1).is_err());
 
 		Ok(())
 	}

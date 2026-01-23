@@ -7,7 +7,7 @@
 //! `width = x_max − x_min + 1` and `height = y_max − y_min + 1`.
 //!
 //! ## Conventions
-//! - Zoom level `z` is in the range `0..=31`.
+//! - Zoom level `z` is in the range `0..=MAX_ZOOM_LEVEL`.
 //! - Tile coordinate range per axis is `0..(2^z − 1)`.
 //! - Y increases **downwards** (TMS/XYZ style, north‑up images have negative
 //!   pixel height in geotransforms).
@@ -38,7 +38,7 @@
 //! assert_eq!(bb.height(), 4);
 //! ```
 
-use crate::{GeoBBox, TileCoord};
+use crate::{GeoBBox, TileCoord, validate_zoom_level};
 use anyhow::{Result, ensure};
 use versatiles_derive::context;
 
@@ -49,7 +49,7 @@ use versatiles_derive::context;
 /// `width == 0` or `height == 0`.
 ///
 /// # Fields
-/// - `level` — zoom level (0..=31).
+/// - `level` — zoom level (0..=MAX_ZOOM_LEVEL).
 /// - `x_min`, `y_min` — minimum tile coordinates.
 /// - `width`, `height` — dimensions in tiles.
 ///
@@ -93,7 +93,7 @@ impl TileBBox {
 	/// ```
 	#[context("Failed to create TileBBox from min ({x_min}, {y_min}) and size ({width}, {height}) at level {level}")]
 	pub fn from_min_and_size(level: u8, x_min: u32, y_min: u32, width: u32, height: u32) -> Result<TileBBox> {
-		ensure!(level <= 31, "level ({level}) must be <= 31");
+		validate_zoom_level(level)?;
 
 		let size = 1u32 << level;
 
@@ -122,7 +122,7 @@ impl TileBBox {
 	///
 	/// # Arguments
 	///
-	/// * `level` - Zoom level of the bounding box (`0..=31`).
+	/// * `level` - Zoom level of the bounding box (`0..=MAX_ZOOM_LEVEL`).
 	/// * `x_min` - Minimum x-coordinate.
 	/// * `y_min` - Minimum y-coordinate.
 	/// * `x_max` - Maximum x-coordinate.
@@ -135,7 +135,7 @@ impl TileBBox {
 	///
 	/// # Errors
 	///
-	/// - If `level` > 31.
+	/// - If `level` > MAX_ZOOM_LEVEL.
 	/// - If any coordinate exceeds the maximum allowed by the zoom level.
 	/// - If `x_min > x_max` or `y_min > y_max`.
 	///
@@ -148,7 +148,7 @@ impl TileBBox {
 	/// ```
 	#[context("Failed to create TileBBox from min ({x_min}, {y_min}) and max ({x_max}, {y_max}) at level {level}")]
 	pub fn from_min_and_max(level: u8, x_min: u32, y_min: u32, x_max: u32, y_max: u32) -> Result<TileBBox> {
-		ensure!(level <= 31, "level ({level}) must be <= 31");
+		validate_zoom_level(level)?;
 
 		let max = (1u32 << level) - 1;
 
@@ -170,7 +170,7 @@ impl TileBBox {
 	///
 	/// # Arguments
 	///
-	/// * `level` - Zoom level (`0..=31`).
+	/// * `level` - Zoom level (`0..=MAX_ZOOM_LEVEL`).
 	///
 	/// # Returns
 	///
@@ -188,7 +188,7 @@ impl TileBBox {
 	/// ```
 	#[context("Failed to create full TileBBox at level {level}")]
 	pub fn new_full(level: u8) -> Result<TileBBox> {
-		ensure!(level <= 31, "level ({level}) must be <= 31");
+		validate_zoom_level(level)?;
 		let max = (1u32 << level) - 1;
 		Self::from_min_and_max(level, 0, 0, max, max)
 	}
@@ -199,7 +199,7 @@ impl TileBBox {
 	///
 	/// # Arguments
 	///
-	/// * `level` - Zoom level (`0..=31`).
+	/// * `level` - Zoom level (`0..=MAX_ZOOM_LEVEL`).
 	///
 	/// # Returns
 	///
@@ -215,7 +215,7 @@ impl TileBBox {
 	/// ```
 	#[context("Failed to create empty TileBBox at level {level}")]
 	pub fn new_empty(level: u8) -> Result<TileBBox> {
-		ensure!(level <= 31, "level ({level}) must be <= 31");
+		validate_zoom_level(level)?;
 		Ok(TileBBox {
 			level,
 			x_min: 0,
@@ -234,7 +234,7 @@ impl TileBBox {
 	///
 	/// # Arguments
 	///
-	/// * `level` - Zoom level (`0..=31`).
+	/// * `level` - Zoom level (`0..=MAX_ZOOM_LEVEL`).
 	/// * `bbox` - Geographical bounding box (`GeoBBox`).
 	///
 	/// # Returns
@@ -256,7 +256,7 @@ impl TileBBox {
 	/// ```
 	#[context("Failed to create TileBBox from GeoBBox {bbox:?} at level {level}")]
 	pub fn from_geo(level: u8, bbox: &GeoBBox) -> Result<TileBBox> {
-		ensure!(level <= 31, "level ({level}) must be <= 31");
+		validate_zoom_level(level)?;
 
 		// Convert geographical coordinates to tile coordinates
 		let p_min = TileCoord::from_geo(bbox.x_min + 1e-10, bbox.y_max - 1e-10, level)?;

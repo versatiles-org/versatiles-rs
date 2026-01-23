@@ -4,11 +4,9 @@
 use anyhow::Result;
 use versatiles_derive::context;
 
-use crate::{GeoBBox, GeoCenter, TileBBox, TileCoord};
+use crate::{GeoBBox, GeoCenter, MAX_ZOOM_LEVEL, TileBBox, TileCoord};
 use std::array::from_fn;
 use std::fmt;
-
-const MAX_ZOOM_LEVEL: u8 = 32;
 
 /// A struct that represents a pyramid of tile bounding boxes across multiple zoom levels.
 ///
@@ -21,7 +19,7 @@ pub struct TileBBoxPyramid {
 	/// An array of tile bounding boxes, one for each zoom level up to `MAX_ZOOM_LEVEL`.
 	///
 	/// Levels beyond your area of interest might remain empty.
-	pub level_bbox: [TileBBox; MAX_ZOOM_LEVEL as usize],
+	pub level_bbox: [TileBBox; (MAX_ZOOM_LEVEL + 1) as usize],
 }
 
 #[allow(dead_code)]
@@ -498,8 +496,8 @@ mod tests {
 
 		test(0);
 		test(1);
+		test(29);
 		test(30);
-		test(31);
 	}
 
 	#[test]

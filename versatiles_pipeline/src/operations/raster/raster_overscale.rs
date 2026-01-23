@@ -40,7 +40,7 @@ use async_trait::async_trait;
 use moka::future::Cache;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileCoord, TileJSON, TileStream};
+use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TileStream};
 use versatiles_derive::context;
 use versatiles_image::{DynamicImage, traits::DynamicImageTraitOperation};
 
@@ -116,10 +116,13 @@ impl Operation {
 			.unwrap_or(source.as_ref().metadata().bbox_pyramid.get_level_max().unwrap());
 		log::trace!("level_base {level_base}");
 
-		let level_max = args.level_max.unwrap_or(30).clamp(level_base, 30);
+		let level_max = args
+			.level_max
+			.unwrap_or(MAX_ZOOM_LEVEL)
+			.clamp(level_base, MAX_ZOOM_LEVEL);
 
 		let mut level_bbox = *metadata.bbox_pyramid.get_level_bbox(level_base);
-		while level_bbox.level <= level_max {
+		while level_bbox.level < level_max {
 			level_bbox.level_up();
 			metadata.bbox_pyramid.set_level_bbox(level_bbox);
 		}

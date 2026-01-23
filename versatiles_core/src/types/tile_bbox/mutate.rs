@@ -11,7 +11,7 @@
 //! * Methods that cannot fail are infallible; those that validate inputs
 //!   return `anyhow::Result<()>`.
 
-use crate::{TileBBox, TileBBoxPyramid, TileCoord};
+use crate::{MAX_ZOOM_LEVEL, TileBBox, TileBBoxPyramid, TileCoord, validate_zoom_level};
 use anyhow::{Result, ensure};
 use versatiles_derive::context;
 
@@ -322,7 +322,7 @@ impl TileBBox {
 
 	/// Increase the zoom level by one and multiply coordinates by 2.
 	pub fn level_up(&mut self) {
-		assert!(self.level < 31, "level must be less than 31");
+		assert!(self.level < MAX_ZOOM_LEVEL, "level must be less than {MAX_ZOOM_LEVEL}");
 		self.level += 1;
 		self.scale_up(2).unwrap();
 	}
@@ -353,7 +353,7 @@ impl TileBBox {
 	/// Convert this bbox to another zoom level, scaling coordinates appropriately.
 	#[must_use]
 	pub fn at_level(&self, level: u8) -> TileBBox {
-		assert!(level <= 31, "level ({level}) must be <= 31");
+		validate_zoom_level(level).unwrap();
 
 		let mut bbox = *self;
 		if level > self.level {

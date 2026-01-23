@@ -104,7 +104,7 @@ mod tests {
 		let reader_params = SourceMetadata::from(&params);
 
 		assert_eq!(reader_params.min_zoom, 0);
-		assert_eq!(reader_params.max_zoom, 31);
+		assert_eq!(reader_params.max_zoom, 30);
 	}
 
 	#[test]

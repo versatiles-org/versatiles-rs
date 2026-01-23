@@ -35,6 +35,13 @@ use std::{
 };
 use versatiles_derive::context;
 
+pub const MAX_ZOOM_LEVEL: u8 = 30;
+
+pub fn validate_zoom_level(level: u8) -> Result<()> {
+	ensure!(level <= MAX_ZOOM_LEVEL, "level ({level}) must be <= {MAX_ZOOM_LEVEL}");
+	Ok(())
+}
+
 /// A 3D tile coordinate in a Web Mercator tile pyramid, with zoom level, x, and y indices.
 ///
 /// Provides methods for geographic conversion, validation, indexing, and level transformations.
@@ -53,9 +60,9 @@ impl TileCoord {
 	/// Create a new `TileCoord` at the given zoom `level` and tile indices `x`, `y`.
 	///
 	/// # Errors
-	/// Returns an error if `level` > 31.
+	/// Returns an error if `level` > MAX_ZOOM_LEVEL.
 	pub fn new(level: u8, x: u32, y: u32) -> Result<TileCoord> {
-		ensure!(level <= 31, "level ({level}) must be <= 31");
+		validate_zoom_level(level)?;
 		let max = 2u32.pow(u32::from(level));
 		ensure!(x < max, "x ({x}) out of bounds for level {level}");
 		ensure!(y < max, "y ({y}) out of bounds for level {level}");
@@ -74,7 +81,7 @@ impl TileCoord {
 	///
 	/// # Errors
 	///
-	/// Returns an error if `level` > 31.
+	/// Returns an error if `level` > MAX_ZOOM_LEVEL.
 	///
 	/// # Examples
 	///
@@ -87,6 +94,7 @@ impl TileCoord {
 	/// assert_eq!(coord.y, 10);
 	/// ```
 	pub fn new_clamped(level: u8, x: u32, y: u32) -> Result<TileCoord> {
+		validate_zoom_level(level)?;
 		let max = 2u32.pow(u32::from(level)) - 1;
 		TileCoord::new(level, x.min(max), y.min(max))
 	}
@@ -99,7 +107,7 @@ impl TileCoord {
 	///
 	/// * `x` - Longitude in degrees, range `[-180, 180]`
 	/// * `y` - Latitude in degrees, range `[-90, 90]`
-	/// * `z` - Zoom level, range `[0, 31]`
+	/// * `z` - Zoom level, range `[0, MAX_ZOOM_LEVEL]`
 	///
 	/// # Errors
 	///
@@ -116,7 +124,7 @@ impl TileCoord {
 	/// ```
 	#[context("Failed to convert geo coordinates ({x}, {y}, {z}) to TileCoord")]
 	pub fn from_geo(x: f64, y: f64, z: u8) -> Result<TileCoord> {
-		ensure!(z <= 31, "z ({z}) must be <= 31");
+		validate_zoom_level(z)?;
 		ensure!(x >= -180., "x ({x}) must be >= -180");
 		ensure!(x <= 180., "x ({x}) must be <= 180");
 		ensure!(y >= -90., "y ({y}) must be >= -90");
@@ -160,6 +168,7 @@ impl TileCoord {
 	/// assert_eq!(format!("{lat:.5}"), "-84.92832");
 	/// ```
 	pub fn coord_to_geo(level: u8, x: u32, y: u32) -> [f64; 2] {
+		validate_zoom_level(level).unwrap();
 		let zoom: f64 = 2.0f64.powi(i32::from(level));
 		[
 			(f64::from(x) / zoom - 0.5) * 360.0,
@@ -250,7 +259,7 @@ impl TileCoord {
 	#[must_use]
 	pub fn at_level(&self, level: u8) -> TileCoord {
 		use std::cmp::Ordering::{Equal, Greater, Less};
-		assert!(level <= 31, "level ({level}) must be <= 31");
+		validate_zoom_level(level).unwrap();
 		match level.cmp(&self.level) {
 			Greater => {
 				let scale = 2u32.pow(u32::from(level - self.level));
@@ -518,8 +527,8 @@ mod tests {
 
 	#[test]
 	fn tilecoord_new_level_error() {
-		// Level > 31 should error
-		assert!(TileCoord::new(32, 0, 0).is_err());
+		// Level > MAX_ZOOM_LEVEL should error
+		assert!(TileCoord::new(MAX_ZOOM_LEVEL + 1, 0, 0).is_err());
 	}
 
 	#[test]

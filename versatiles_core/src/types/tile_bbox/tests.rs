@@ -38,7 +38,7 @@ fn from_geo_is_not_empty() {
 #[test]
 fn quarter_planet() {
 	let geo_bbox = GeoBBox::new(0.0, -85.05112877980659f64, 180.0, 0.0).unwrap();
-	for level in 1..32 {
+	for level in 1..30 {
 		let bbox = TileBBox::from_geo(level, &geo_bbox).unwrap();
 		assert_eq!(bbox.count_tiles(), 4u64.pow(u32::from(level) - 1));
 		assert_eq!(bbox.to_geo_bbox().unwrap(), geo_bbox);
@@ -48,7 +48,7 @@ fn quarter_planet() {
 #[test]
 fn sa_pacific() {
 	let geo_bbox = GeoBBox::new(-180.0, -66.51326044311186f64, -90.0, 0.0).unwrap();
-	for level in 2..32 {
+	for level in 2..30 {
 		let bbox = TileBBox::from_geo(level, &geo_bbox).unwrap();
 		assert_eq!(bbox.count_tiles(), 4u64.pow(u32::from(level) - 2));
 		assert_eq!(bbox.to_geo_bbox().unwrap(), geo_bbox);
