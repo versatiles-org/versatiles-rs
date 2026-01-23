@@ -6,12 +6,14 @@
 //!
 //! ### Features
 //! - Unified access to multiple codecs (`PNG`, `JPEG`, `WEBP`, `AVIF`).
+//! - Color parsing utilities (`color`)
 //! - Trait extensions for:
 //!   - Conversion and encoding (`traits::convert`)
 //!   - Metadata and pixel introspection (`traits::info`)
 //!   - Common transformations (scaling, flattening, cropping; `traits::operation`)
 //!   - Deterministic test image generation (`traits::test`)
 
+pub mod color;
 pub mod format;
 pub mod traits;
 
