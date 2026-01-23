@@ -44,21 +44,28 @@ impl GeometryTrait for MultiPolygonGeometry {
 		MultiPolygonGeometry(self.0.iter().map(PolygonGeometry::to_mercator).collect())
 	}
 
-	fn compute_bounds(&self) -> [f64; 4] {
+	fn compute_bounds(&self) -> Option<[f64; 4]> {
 		let mut x_min = f64::MAX;
 		let mut y_min = f64::MAX;
 		let mut x_max = f64::MIN;
 		let mut y_max = f64::MIN;
+		let mut has_bounds = false;
 
 		for poly in &self.0 {
-			let bounds = poly.compute_bounds();
-			x_min = x_min.min(bounds[0]);
-			y_min = y_min.min(bounds[1]);
-			x_max = x_max.max(bounds[2]);
-			y_max = y_max.max(bounds[3]);
+			if let Some(bounds) = poly.compute_bounds() {
+				has_bounds = true;
+				x_min = x_min.min(bounds[0]);
+				y_min = y_min.min(bounds[1]);
+				x_max = x_max.max(bounds[2]);
+				y_max = y_max.max(bounds[3]);
+			}
 		}
 
-		[x_min, y_min, x_max, y_max]
+		if has_bounds {
+			Some([x_min, y_min, x_max, y_max])
+		} else {
+			None
+		}
 	}
 }
 
@@ -154,7 +161,7 @@ mod tests {
 			[[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]],
 			[[[20, 5], [30, 5], [30, 15], [20, 15], [20, 5]]],
 		]);
-		let bounds = multi.compute_bounds();
+		let bounds = multi.compute_bounds().unwrap();
 
 		assert!((bounds[0] - 0.0).abs() < 1e-10); // x_min
 		assert!((bounds[1] - 0.0).abs() < 1e-10); // y_min
@@ -165,11 +172,6 @@ mod tests {
 	#[test]
 	fn test_compute_bounds_empty() {
 		let multi = MultiPolygonGeometry::new();
-		let bounds = multi.compute_bounds();
-
-		assert_eq!(bounds[0], f64::MAX);
-		assert_eq!(bounds[1], f64::MAX);
-		assert_eq!(bounds[2], f64::MIN);
-		assert_eq!(bounds[3], f64::MIN);
+		assert!(multi.compute_bounds().is_none());
 	}
 }

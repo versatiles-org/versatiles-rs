@@ -43,21 +43,28 @@ impl GeometryTrait for MultiLineStringGeometry {
 		MultiLineStringGeometry(self.0.iter().map(LineStringGeometry::to_mercator).collect())
 	}
 
-	fn compute_bounds(&self) -> [f64; 4] {
+	fn compute_bounds(&self) -> Option<[f64; 4]> {
 		let mut x_min = f64::MAX;
 		let mut y_min = f64::MAX;
 		let mut x_max = f64::MIN;
 		let mut y_max = f64::MIN;
+		let mut has_bounds = false;
 
 		for line in &self.0 {
-			let bounds = line.compute_bounds();
-			x_min = x_min.min(bounds[0]);
-			y_min = y_min.min(bounds[1]);
-			x_max = x_max.max(bounds[2]);
-			y_max = y_max.max(bounds[3]);
+			if let Some(bounds) = line.compute_bounds() {
+				has_bounds = true;
+				x_min = x_min.min(bounds[0]);
+				y_min = y_min.min(bounds[1]);
+				x_max = x_max.max(bounds[2]);
+				y_max = y_max.max(bounds[3]);
+			}
 		}
 
-		[x_min, y_min, x_max, y_max]
+		if has_bounds {
+			Some([x_min, y_min, x_max, y_max])
+		} else {
+			None
+		}
 	}
 }
 

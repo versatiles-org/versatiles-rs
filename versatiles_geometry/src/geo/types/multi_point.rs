@@ -44,21 +44,26 @@ impl GeometryTrait for MultiPointGeometry {
 		MultiPointGeometry(self.0.iter().map(PointGeometry::to_mercator).collect())
 	}
 
-	fn compute_bounds(&self) -> [f64; 4] {
+	fn compute_bounds(&self) -> Option<[f64; 4]> {
+		if self.0.is_empty() {
+			return None;
+		}
+
 		let mut x_min = f64::MAX;
 		let mut y_min = f64::MAX;
 		let mut x_max = f64::MIN;
 		let mut y_max = f64::MIN;
 
 		for point in &self.0 {
-			let bounds = point.compute_bounds();
+			// Points always have bounds, so unwrap is safe here
+			let bounds = point.compute_bounds().unwrap();
 			x_min = x_min.min(bounds[0]);
 			y_min = y_min.min(bounds[1]);
 			x_max = x_max.max(bounds[2]);
 			y_max = y_max.max(bounds[3]);
 		}
 
-		[x_min, y_min, x_max, y_max]
+		Some([x_min, y_min, x_max, y_max])
 	}
 }
 

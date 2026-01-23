@@ -39,7 +39,11 @@ impl GeometryTrait for LineStringGeometry {
 		LineStringGeometry(self.0.iter().map(Coordinates::to_mercator).collect())
 	}
 
-	fn compute_bounds(&self) -> [f64; 4] {
+	fn compute_bounds(&self) -> Option<[f64; 4]> {
+		if self.0.is_empty() {
+			return None;
+		}
+
 		let mut x_min = f64::MAX;
 		let mut y_min = f64::MAX;
 		let mut x_max = f64::MIN;
@@ -52,7 +56,7 @@ impl GeometryTrait for LineStringGeometry {
 			y_max = y_max.max(coord.y());
 		}
 
-		[x_min, y_min, x_max, y_max]
+		Some([x_min, y_min, x_max, y_max])
 	}
 }
 

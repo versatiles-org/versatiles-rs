@@ -199,7 +199,7 @@ impl TileCoord {
 		const EARTH_RADIUS: f64 = 6378137.0;
 		const WORLD_SIZE: f64 = 2.0 * PI32 * EARTH_RADIUS; // ~40075016.686 meters
 
-		let tiles_per_side = 2u32.pow(u32::from(self.level)) as f64;
+		let tiles_per_side = f64::from(2u32.pow(u32::from(self.level)));
 		let tile_size = WORLD_SIZE / tiles_per_side;
 
 		let x_min = -WORLD_SIZE / 2.0 + f64::from(self.x) * tile_size;

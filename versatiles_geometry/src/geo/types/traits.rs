@@ -35,11 +35,9 @@ pub trait GeometryTrait: Debug + Clone + Sized {
 
 	/// Compute the bounding box of this geometry.
 	///
-	/// Returns `[x_min, y_min, x_max, y_max]` representing the bounding box
-	/// of all coordinates in the geometry.
-	///
-	/// Returns `[MAX, MAX, MIN, MIN]` if the geometry is empty.
-	fn compute_bounds(&self) -> [f64; 4];
+	/// Returns `Some([x_min, y_min, x_max, y_max])` representing the bounding box
+	/// of all coordinates in the geometry, or `None` if the geometry is empty.
+	fn compute_bounds(&self) -> Option<[f64; 4]>;
 }
 
 /// Represents geometries that can be wrapped into a corresponding multi-geometry.

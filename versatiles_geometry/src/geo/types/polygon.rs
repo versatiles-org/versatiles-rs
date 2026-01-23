@@ -79,12 +79,8 @@ impl GeometryTrait for PolygonGeometry {
 		PolygonGeometry(self.0.iter().map(RingGeometry::to_mercator).collect())
 	}
 
-	fn compute_bounds(&self) -> [f64; 4] {
-		if let Some(exterior) = self.0.first() {
-			exterior.compute_bounds()
-		} else {
-			[f64::MAX, f64::MAX, f64::MIN, f64::MIN]
-		}
+	fn compute_bounds(&self) -> Option<[f64; 4]> {
+		self.0.first().and_then(GeometryTrait::compute_bounds)
 	}
 }
 

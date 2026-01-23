@@ -58,8 +58,8 @@ impl GeometryTrait for PointGeometry {
 		PointGeometry(self.0.to_mercator())
 	}
 
-	fn compute_bounds(&self) -> [f64; 4] {
-		[self.0.x(), self.0.y(), self.0.x(), self.0.y()]
+	fn compute_bounds(&self) -> Option<[f64; 4]> {
+		Some([self.0.x(), self.0.y(), self.0.x(), self.0.y()])
 	}
 }
 
