@@ -54,6 +54,38 @@ impl GeometryTrait for PolygonGeometry {
 				.collect::<Vec<_>>(),
 		)
 	}
+
+	fn contains_point(&self, x: f64, y: f64) -> bool {
+		if self.0.is_empty() {
+			return false;
+		}
+
+		// Must be inside the exterior ring (first ring)
+		if !self.0[0].contains_point(x, y) {
+			return false;
+		}
+
+		// Must not be inside any holes (subsequent rings)
+		for hole in self.0.iter().skip(1) {
+			if hole.contains_point(x, y) {
+				return false;
+			}
+		}
+
+		true
+	}
+
+	fn to_mercator(&self) -> PolygonGeometry {
+		PolygonGeometry(self.0.iter().map(RingGeometry::to_mercator).collect())
+	}
+
+	fn compute_bounds(&self) -> [f64; 4] {
+		if let Some(exterior) = self.0.first() {
+			exterior.compute_bounds()
+		} else {
+			[f64::MAX, f64::MAX, f64::MIN, f64::MIN]
+		}
+	}
 }
 
 impl SingleGeometryTrait<MultiPolygonGeometry> for PolygonGeometry {
@@ -114,5 +146,56 @@ mod tests {
 		let polygon = PolygonGeometry::from(&[[[0, 0], [5, 0], [5, 5], [0, 5], [0, 0]]]);
 		let area = polygon.area();
 		assert_eq!(area, 50.0);
+	}
+
+	#[test]
+	fn test_contains_point_simple() {
+		let polygon = PolygonGeometry::from(&[[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]]);
+
+		// Inside
+		assert!(polygon.contains_point(5.0, 5.0));
+
+		// Outside
+		assert!(!polygon.contains_point(-1.0, 5.0));
+		assert!(!polygon.contains_point(15.0, 5.0));
+	}
+
+	#[test]
+	fn test_contains_point_with_hole() {
+		// Outer ring: (0,0) to (20,20)
+		// Hole: (5,5) to (15,15)
+		let polygon = PolygonGeometry::from(&[
+			[[0, 0], [20, 0], [20, 20], [0, 20], [0, 0]],
+			[[5, 5], [15, 5], [15, 15], [5, 15], [5, 5]],
+		]);
+
+		// Outside outer ring
+		assert!(!polygon.contains_point(-1.0, 10.0));
+
+		// Inside outer ring, outside hole
+		assert!(polygon.contains_point(2.0, 2.0));
+		assert!(polygon.contains_point(18.0, 18.0));
+
+		// Inside hole (should be false)
+		assert!(!polygon.contains_point(10.0, 10.0));
+	}
+
+	#[test]
+	fn test_contains_point_empty() {
+		let polygon = PolygonGeometry::new();
+		assert!(!polygon.contains_point(0.0, 0.0));
+	}
+
+	#[test]
+	fn test_to_mercator() {
+		// Use integers only (the from impl expects integers)
+		let polygon = PolygonGeometry::from(&[[[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]]]);
+		let mercator = polygon.to_mercator();
+
+		// Check that we have the same number of rings
+		assert_eq!(mercator.0.len(), 1);
+
+		// Check that the coordinates are now in meters (much larger values)
+		assert!(mercator.0[0].0[0].x().abs() > 100_000.0);
 	}
 }

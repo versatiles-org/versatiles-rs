@@ -4,7 +4,7 @@ use versatiles_core::json::JsonValue;
 
 /// Defines the basic interface for geometric primitives, providing common functionality
 /// for all geometry types.
-pub trait GeometryTrait: Debug + Clone {
+pub trait GeometryTrait: Debug + Clone + Sized {
 	/// Returns the geometric area of the geometry.
 	/// For non-area geometries (e.g., points or lines), this returns 0.
 	fn area(&self) -> f64;
@@ -17,6 +17,29 @@ pub trait GeometryTrait: Debug + Clone {
 	/// Converts the geometry into a JSON representation of its coordinates.
 	/// Optionally rounds coordinate values to the given precision.
 	fn to_coord_json(&self, precision: Option<u8>) -> JsonValue;
+
+	/// Checks if a point is inside this geometry.
+	///
+	/// For closed geometries (rings, polygons, multi-polygons), returns `true` if the
+	/// point is inside the geometry. For non-closed geometries (points, lines),
+	/// returns `false`.
+	///
+	/// Points exactly on the boundary may return either value.
+	fn contains_point(&self, x: f64, y: f64) -> bool;
+
+	/// Transform this geometry from WGS84 to Web Mercator coordinates.
+	///
+	/// Each coordinate is treated as (longitude, latitude) in degrees and
+	/// converted to Web Mercator (EPSG:3857) coordinates in meters.
+	fn to_mercator(&self) -> Self;
+
+	/// Compute the bounding box of this geometry.
+	///
+	/// Returns `[x_min, y_min, x_max, y_max]` representing the bounding box
+	/// of all coordinates in the geometry.
+	///
+	/// Returns `[MAX, MAX, MIN, MIN]` if the geometry is empty.
+	fn compute_bounds(&self) -> [f64; 4];
 }
 
 /// Represents geometries that can be wrapped into a corresponding multi-geometry.

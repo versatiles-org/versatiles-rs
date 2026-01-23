@@ -29,6 +29,31 @@ impl GeometryTrait for LineStringGeometry {
 	fn to_coord_json(&self, precision: Option<u8>) -> JsonValue {
 		JsonValue::from(self.0.iter().map(|c| c.to_json(precision)).collect::<Vec<_>>())
 	}
+
+	/// Lines cannot contain points, so this always returns `false`.
+	fn contains_point(&self, _x: f64, _y: f64) -> bool {
+		false
+	}
+
+	fn to_mercator(&self) -> LineStringGeometry {
+		LineStringGeometry(self.0.iter().map(Coordinates::to_mercator).collect())
+	}
+
+	fn compute_bounds(&self) -> [f64; 4] {
+		let mut x_min = f64::MAX;
+		let mut y_min = f64::MAX;
+		let mut x_max = f64::MIN;
+		let mut y_max = f64::MIN;
+
+		for coord in &self.0 {
+			x_min = x_min.min(coord.x());
+			y_min = y_min.min(coord.y());
+			x_max = x_max.max(coord.x());
+			y_max = y_max.max(coord.y());
+		}
+
+		[x_min, y_min, x_max, y_max]
+	}
 }
 
 impl CompositeGeometryTrait<Coordinates> for LineStringGeometry {

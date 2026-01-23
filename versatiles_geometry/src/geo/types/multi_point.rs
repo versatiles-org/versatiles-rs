@@ -34,6 +34,32 @@ impl GeometryTrait for MultiPointGeometry {
 				.collect::<Vec<_>>(),
 		)
 	}
+
+	/// Points cannot contain other points, so this always returns `false`.
+	fn contains_point(&self, _x: f64, _y: f64) -> bool {
+		false
+	}
+
+	fn to_mercator(&self) -> MultiPointGeometry {
+		MultiPointGeometry(self.0.iter().map(PointGeometry::to_mercator).collect())
+	}
+
+	fn compute_bounds(&self) -> [f64; 4] {
+		let mut x_min = f64::MAX;
+		let mut y_min = f64::MAX;
+		let mut x_max = f64::MIN;
+		let mut y_max = f64::MIN;
+
+		for point in &self.0 {
+			let bounds = point.compute_bounds();
+			x_min = x_min.min(bounds[0]);
+			y_min = y_min.min(bounds[1]);
+			x_max = x_max.max(bounds[2]);
+			y_max = y_max.max(bounds[3]);
+		}
+
+		[x_min, y_min, x_max, y_max]
+	}
 }
 
 /// Provides methods to access and manage the internal vector of points for `MultiPointGeometry`.

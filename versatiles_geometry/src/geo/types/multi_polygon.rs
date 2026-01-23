@@ -35,6 +35,31 @@ impl GeometryTrait for MultiPolygonGeometry {
 				.collect::<Vec<_>>(),
 		)
 	}
+
+	fn contains_point(&self, x: f64, y: f64) -> bool {
+		self.0.iter().any(|poly| poly.contains_point(x, y))
+	}
+
+	fn to_mercator(&self) -> MultiPolygonGeometry {
+		MultiPolygonGeometry(self.0.iter().map(PolygonGeometry::to_mercator).collect())
+	}
+
+	fn compute_bounds(&self) -> [f64; 4] {
+		let mut x_min = f64::MAX;
+		let mut y_min = f64::MAX;
+		let mut x_max = f64::MIN;
+		let mut y_max = f64::MIN;
+
+		for poly in &self.0 {
+			let bounds = poly.compute_bounds();
+			x_min = x_min.min(bounds[0]);
+			y_min = y_min.min(bounds[1]);
+			x_max = x_max.max(bounds[2]);
+			y_max = y_max.max(bounds[3]);
+		}
+
+		[x_min, y_min, x_max, y_max]
+	}
 }
 
 /// Implementation of `CompositeGeometryTrait` for `MultiPolygonGeometry`.
@@ -70,3 +95,81 @@ impl Debug for MultiPolygonGeometry {
 }
 
 crate::impl_from_array!(MultiPolygonGeometry, PolygonGeometry);
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_contains_point_single_polygon() {
+		let multi = MultiPolygonGeometry::from(&[[[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]]]);
+
+		assert!(multi.contains_point(5.0, 5.0));
+		assert!(!multi.contains_point(-1.0, 5.0));
+	}
+
+	#[test]
+	fn test_contains_point_multiple_polygons() {
+		// Two separate squares
+		let multi = MultiPolygonGeometry::from(&[
+			[[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]],
+			[[[20, 0], [30, 0], [30, 10], [20, 10], [20, 0]]],
+		]);
+
+		// Inside first polygon
+		assert!(multi.contains_point(5.0, 5.0));
+
+		// Inside second polygon
+		assert!(multi.contains_point(25.0, 5.0));
+
+		// Between polygons (outside both)
+		assert!(!multi.contains_point(15.0, 5.0));
+	}
+
+	#[test]
+	fn test_contains_point_empty() {
+		let multi = MultiPolygonGeometry::new();
+		assert!(!multi.contains_point(0.0, 0.0));
+	}
+
+	#[test]
+	fn test_to_mercator() {
+		let multi = MultiPolygonGeometry::from(&[[[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]]);
+		let mercator = multi.to_mercator();
+
+		// Check that we have the same number of polygons
+		assert_eq!(mercator.0.len(), 1);
+
+		// Origin should still be at (0, 0) in mercator
+		assert!(mercator.0[0].0[0].0[0].x().abs() < 1.0);
+		assert!(mercator.0[0].0[0].0[0].y().abs() < 1.0);
+
+		// Non-origin points should be in meters (much larger values)
+		assert!(mercator.0[0].0[0].0[1].x().abs() > 100_000.0);
+	}
+
+	#[test]
+	fn test_compute_bounds() {
+		let multi = MultiPolygonGeometry::from(&[
+			[[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]],
+			[[[20, 5], [30, 5], [30, 15], [20, 15], [20, 5]]],
+		]);
+		let bounds = multi.compute_bounds();
+
+		assert!((bounds[0] - 0.0).abs() < 1e-10); // x_min
+		assert!((bounds[1] - 0.0).abs() < 1e-10); // y_min
+		assert!((bounds[2] - 30.0).abs() < 1e-10); // x_max
+		assert!((bounds[3] - 15.0).abs() < 1e-10); // y_max
+	}
+
+	#[test]
+	fn test_compute_bounds_empty() {
+		let multi = MultiPolygonGeometry::new();
+		let bounds = multi.compute_bounds();
+
+		assert_eq!(bounds[0], f64::MAX);
+		assert_eq!(bounds[1], f64::MAX);
+		assert_eq!(bounds[2], f64::MIN);
+		assert_eq!(bounds[3], f64::MIN);
+	}
+}

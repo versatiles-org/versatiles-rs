@@ -48,6 +48,19 @@ impl GeometryTrait for PointGeometry {
 	fn to_coord_json(&self, precision: Option<u8>) -> JsonValue {
 		self.0.to_json(precision)
 	}
+
+	/// Points cannot contain other points, so this always returns `false`.
+	fn contains_point(&self, _x: f64, _y: f64) -> bool {
+		false
+	}
+
+	fn to_mercator(&self) -> PointGeometry {
+		PointGeometry(self.0.to_mercator())
+	}
+
+	fn compute_bounds(&self) -> [f64; 4] {
+		[self.0.x(), self.0.y(), self.0.x(), self.0.y()]
+	}
 }
 
 impl SingleGeometryTrait<MultiPointGeometry> for PointGeometry {
