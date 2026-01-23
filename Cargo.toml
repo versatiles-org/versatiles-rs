@@ -163,6 +163,7 @@ webp = { version = "0.3.1" }
 
 # Geometry dependencies
 geo = { version = "0.32.0" }
+rstar = { version = "0.12.2", default-features = false }
 
 # Utility dependencies
 serde_yaml_ng = "0.10.0"

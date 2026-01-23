@@ -4433,6 +4433,7 @@ dependencies = [
  "nom-language",
  "pretty_assertions",
  "regex",
+ "rstar",
  "rstest",
  "tokio",
  "versatiles_container",
