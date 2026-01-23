@@ -497,7 +497,7 @@ mod tests {
 			.await?;
 
 		let captured = positions.lock().unwrap();
-		verify_monotonic_progress(&captured, 0.6);
+		verify_monotonic_progress(&captured, 0.7);
 		verify_progress_finished(&captured);
 
 		// For single tile, total should be 1 (midpoint of 1 read + 1 write = 1)
