@@ -44,7 +44,7 @@ pub trait HilbertIndex {
 
 impl HilbertIndex for TileBBox {
 	fn get_hilbert_index(&self) -> Result<u64> {
-		coord_to_index(self.x_min()?, self.y_min()?, self.level)
+		coord_to_index(self.level, self.x_min()?, self.y_min()?)
 	}
 	fn from_hilbert_index(index: u64) -> Result<Self> {
 		let coord = index_to_coord(index)?;
@@ -54,18 +54,18 @@ impl HilbertIndex for TileBBox {
 
 impl HilbertIndex for TileCoord {
 	fn get_hilbert_index(&self) -> Result<u64> {
-		coord_to_index(self.x, self.y, self.level)
+		coord_to_index(self.level, self.x, self.y)
 	}
 	fn from_hilbert_index(index: u64) -> Result<Self> {
 		index_to_coord(index)
 	}
 }
 
-/// Encodes a Web‑Mercator tile coordinate `(x, y, z)` into its position
+/// Encodes a Web‑Mercator tile coordinate `(z, x, y)` into its position
 /// along the 64‑bit Hilbert space‑filling curve used by this crate.
 ///
-/// * `x`, `y` – tile coordinates in the inclusive range `0..2ᶻ − 1`.
-/// * `z` – zoom level (`0‒31`).  
+/// * `level` – zoom level (`0‒31`).
+/// * `x`, `y` – tile coordinates in the inclusive range `0..2ᶻ − 1`.
 ///
 /// Lower zoom levels occupy the lower portion of the 64‑bit range so that
 /// indices remain strictly increasing with zoom.
@@ -78,7 +78,7 @@ impl HilbertIndex for TileCoord {
 /// The function is a direct port of the canonical Hilbert algorithm that
 /// traverses the curve iteratively while keeping an accumulator for the
 /// number of tiles contained in all previous zoom levels.
-fn coord_to_index(x: u32, y: u32, level: u8) -> Result<u64> {
+fn coord_to_index(level: u8, x: u32, y: u32) -> Result<u64> {
 	let x = i64::from(x);
 	let y = i64::from(y);
 	let level = i64::from(level);
@@ -184,11 +184,11 @@ mod tests {
 		assert_eq!(coord_to_index(1, 1, 1)?, 3);
 		assert_eq!(coord_to_index(0, 0, 0)?, 0);
 		assert_eq!(coord_to_index(2, 2, 2)?, 13);
-		assert_eq!(coord_to_index(5, 3, 3)?, 73);
-		assert_eq!(coord_to_index(7, 7, 3)?, 63);
+		assert_eq!(coord_to_index(3, 5, 3)?, 73);
+		assert_eq!(coord_to_index(3, 7, 7)?, 63);
 
-		assert_eq!(coord_to_index(0, 0, 31)?, 1537228672809129301);
-		assert_eq!(coord_to_index((1 << 31) - 1, (1 << 31) - 1, 31)?, 4611686018427387903);
+		assert_eq!(coord_to_index(31, 0, 0)?, 1537228672809129301);
+		assert_eq!(coord_to_index(31, (1 << 31) - 1, (1 << 31) - 1)?, 4611686018427387903);
 
 		Ok(())
 	}
@@ -196,7 +196,7 @@ mod tests {
 	#[test]
 	fn test_coord_to_tile_id_invalid_zoom() {
 		assert_eq!(
-			coord_to_index(1, 1, 32).unwrap_err().to_string(),
+			coord_to_index(32, 1, 1).unwrap_err().to_string(),
 			"tile zoom exceeds 64-bit limit"
 		);
 	}
@@ -204,7 +204,7 @@ mod tests {
 	#[test]
 	fn test_coord_to_tile_id_out_of_bounds() {
 		assert_eq!(
-			coord_to_index(1, 0, 0).unwrap_err().to_string(),
+			coord_to_index(0, 1, 0).unwrap_err().to_string(),
 			"tile x/y outside zoom level bounds"
 		);
 	}
@@ -215,7 +215,7 @@ mod tests {
 		loop {
 			let id0 = f as u64;
 			let coord = index_to_coord(id0).unwrap();
-			let id1 = coord_to_index(coord.x, coord.y, coord.level)?;
+			let id1 = coord_to_index(coord.level, coord.x, coord.y)?;
 			assert_eq!(id0, id1);
 
 			if coord.level >= 30 {
@@ -239,7 +239,7 @@ mod tests {
 		let max_n = (1 << z) - 1;
 
 		assert_eq!(index_to_coord(max_index)?, TileCoord::new(z, max_n, 0)?);
-		assert_eq!(coord_to_index(max_n, 0, z)?, max_index);
+		assert_eq!(coord_to_index(z, max_n, 0)?, max_index);
 
 		assert!(index_to_coord(max_index + 1).is_err());
 
@@ -284,22 +284,22 @@ mod tests {
 
 		let mut r = 0.1;
 
-		for z in 0..31 {
-			let n = 1 << z;
+		for z in 0u8..31 {
+			let n = 1u32 << z;
 			let x = (pseudo_random(&mut r) * f64::from(n)) as u32;
 			let y = (pseudo_random(&mut r) * f64::from(n)) as u32;
 
-			let coord = index_to_coord(coord_to_index(x, y, z)?)?;
+			let coord = index_to_coord(coord_to_index(z, x, y)?)?;
 			assert_eq!(coord.x, x);
 			assert_eq!(coord.y, y);
 			assert_eq!(coord.level, z);
 
-			let coord = index_to_coord(coord_to_index(0, 0, z)?)?;
+			let coord = index_to_coord(coord_to_index(z, 0, 0)?)?;
 			assert_eq!(coord.x, 0);
 			assert_eq!(coord.y, 0);
 			assert_eq!(coord.level, z);
 
-			let coord = index_to_coord(coord_to_index(n - 1, n - 1, z)?)?;
+			let coord = index_to_coord(coord_to_index(z, n - 1, n - 1)?)?;
 			assert_eq!(coord.x, n - 1);
 			assert_eq!(coord.y, n - 1);
 			assert_eq!(coord.level, z);
