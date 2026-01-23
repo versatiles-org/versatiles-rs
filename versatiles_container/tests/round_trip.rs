@@ -56,7 +56,7 @@ async fn mbtiles_to_tar_round_trip() -> Result<()> {
 	// Read source (limit to small subset for faster test)
 	let source = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
 	let params = TilesConverterParameters {
-		bbox_pyramid: Some(TileBBoxPyramid::new_full(5)), // Limit to levels 0-5
+		bbox_pyramid: Some(TileBBoxPyramid::new_full_up_to(5)), // Limit to levels 0-5
 		..Default::default()
 	};
 	let filtered = TilesConvertReader::new_from_reader(source, params)?;
@@ -80,7 +80,7 @@ async fn mbtiles_to_pmtiles_round_trip() -> Result<()> {
 	// Read source with filter
 	let source = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
 	let params = TilesConverterParameters {
-		bbox_pyramid: Some(TileBBoxPyramid::new_full(5)),
+		bbox_pyramid: Some(TileBBoxPyramid::new_full_up_to(5)),
 		..Default::default()
 	};
 	let filtered = TilesConvertReader::new_from_reader(source, params)?;
@@ -108,7 +108,7 @@ async fn converter_preserves_tile_format() -> Result<()> {
 
 	// Convert without changing format/compression
 	let params = TilesConverterParameters {
-		bbox_pyramid: Some(TileBBoxPyramid::new_full(3)),
+		bbox_pyramid: Some(TileBBoxPyramid::new_full_up_to(3)),
 		..Default::default()
 	};
 
@@ -134,7 +134,7 @@ async fn converter_changes_compression() -> Result<()> {
 
 	// Convert with Brotli compression
 	let params = TilesConverterParameters {
-		bbox_pyramid: Some(TileBBoxPyramid::new_full(3)),
+		bbox_pyramid: Some(TileBBoxPyramid::new_full_up_to(3)),
 		tile_compression: Some(TileCompression::Brotli),
 		..Default::default()
 	};
@@ -173,7 +173,7 @@ async fn metadata_consistency_after_conversion() -> Result<()> {
 	// Read and convert
 	let source = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
 	let params = TilesConverterParameters {
-		bbox_pyramid: Some(TileBBoxPyramid::new_full(3)),
+		bbox_pyramid: Some(TileBBoxPyramid::new_full_up_to(3)),
 		..Default::default()
 	};
 	convert_tiles_container(source, params, &output_path, runtime.clone()).await?;
@@ -253,7 +253,7 @@ async fn versatiles_tile_stream_complete_after_round_trip() -> Result<()> {
 	// Read source and limit to a small bbox for faster testing
 	let source = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
 	let params = TilesConverterParameters {
-		bbox_pyramid: Some(TileBBoxPyramid::new_full(4)), // Levels 0-4
+		bbox_pyramid: Some(TileBBoxPyramid::new_full_up_to(4)), // Levels 0-4
 		..Default::default()
 	};
 	let filtered = TilesConvertReader::new_from_reader(source, params)?;
@@ -261,7 +261,7 @@ async fn versatiles_tile_stream_complete_after_round_trip() -> Result<()> {
 	// Count tiles in source stream
 	let source_for_count = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
 	let params_for_count = TilesConverterParameters {
-		bbox_pyramid: Some(TileBBoxPyramid::new_full(4)),
+		bbox_pyramid: Some(TileBBoxPyramid::new_full_up_to(4)),
 		..Default::default()
 	};
 	let filtered_for_count = TilesConvertReader::new_from_reader(source_for_count, params_for_count)?;
@@ -359,7 +359,7 @@ async fn versatiles_deduplicated_tiles_readable() -> Result<()> {
 	let mut source = MockReader::new_mock(TileSourceMetadata::new(
 		TileFormat::MVT,
 		TileCompression::Uncompressed,
-		TileBBoxPyramid::new_full(2), // Small: 4x4 = 16 tiles at level 2
+		TileBBoxPyramid::new_full_up_to(2), // Small: 4x4 = 16 tiles at level 2
 		Traversal::ANY,
 	))?;
 

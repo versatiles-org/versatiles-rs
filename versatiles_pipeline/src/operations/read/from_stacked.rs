@@ -317,8 +317,8 @@ mod tests {
 	fn test_traversal_orders_overlay() {
 		use crate::operations::read::from_container::operation_from_reader;
 
-		let mut src1 = DummyVectorSource::new(&[], Some(TileBBoxPyramid::new_full(8)));
-		let mut src2 = DummyVectorSource::new(&[], Some(TileBBoxPyramid::new_full(8)));
+		let mut src1 = DummyVectorSource::new(&[], Some(TileBBoxPyramid::new_full_up_to(8)));
+		let mut src2 = DummyVectorSource::new(&[], Some(TileBBoxPyramid::new_full_up_to(8)));
 
 		src1.set_traversal(Traversal::new_any_size(1, 16).unwrap());
 		src2.set_traversal(Traversal::new(TraversalOrder::PMTiles, 4, 256).unwrap());

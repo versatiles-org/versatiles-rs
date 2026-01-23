@@ -60,7 +60,7 @@ impl Operation {
 		let metadata = TileSourceMetadata::new(
 			tile_format,
 			TileCompression::Uncompressed,
-			TileBBoxPyramid::new_full(30),
+			TileBBoxPyramid::new_full(),
 			Traversal::ANY,
 		);
 

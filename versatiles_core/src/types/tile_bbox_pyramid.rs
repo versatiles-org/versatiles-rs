@@ -41,7 +41,7 @@ impl TileBBoxPyramid {
 	///
 	/// May panic if `max_zoom_level` exceeds `MAX_ZOOM_LEVEL - 1`.
 	#[must_use]
-	pub fn new_full(max_zoom_level: u8) -> TileBBoxPyramid {
+	pub fn new_full_up_to(max_zoom_level: u8) -> TileBBoxPyramid {
 		// Create an array of tile bounding boxes via `from_fn`.
 		// If index <= max_zoom_level, create a full bounding box;
 		// otherwise, create an empty bounding box.
@@ -55,6 +55,18 @@ impl TileBBoxPyramid {
 				}
 			}),
 		}
+	}
+
+	/// Creates a new `TileBBoxPyramid` with "full coverage" for **all** zoom levels.
+	///
+	/// This is equivalent to `new_full_up_to(MAX_ZOOM_LEVEL)`.
+	///
+	/// # Returns
+	///
+	/// A `TileBBoxPyramid` where every level has a full bounding box.
+	#[must_use]
+	pub fn new_full() -> TileBBoxPyramid {
+		TileBBoxPyramid::new_full_up_to(MAX_ZOOM_LEVEL)
 	}
 
 	/// Creates a new `TileBBoxPyramid` with empty coverage for **all** zoom levels.
@@ -402,7 +414,7 @@ mod tests {
 
 	#[test]
 	fn test_full_pyramid() {
-		let pyramid = TileBBoxPyramid::new_full(8);
+		let pyramid = TileBBoxPyramid::new_full_up_to(8);
 		assert!(!pyramid.is_empty(), "A 'full' pyramid at level 8 is not empty.");
 		// For testing, we expect it to be 'full' up to level 8
 		assert!(pyramid.is_full(8));
@@ -413,27 +425,37 @@ mod tests {
 	}
 
 	#[test]
+	fn test_full_all_levels_pyramid() {
+		let pyramid = TileBBoxPyramid::new_full();
+		assert!(!pyramid.is_empty(), "A 'full all levels' pyramid is not empty.");
+		// All levels should be full
+		for lvl in 0..MAX_ZOOM_LEVEL {
+			assert!(pyramid.get_level_bbox(lvl).is_full(), "Level {lvl} should be full");
+		}
+	}
+
+	#[test]
 	fn test_intersections() {
 		let mut pyramid1 = TileBBoxPyramid::new_empty();
 		pyramid1.intersect(&TileBBoxPyramid::new_empty());
 		assert!(pyramid1.is_empty());
 
-		let mut pyramid1 = TileBBoxPyramid::new_full(8);
+		let mut pyramid1 = TileBBoxPyramid::new_full_up_to(8);
 		pyramid1.intersect(&TileBBoxPyramid::new_empty());
 		assert!(pyramid1.is_empty());
 
 		let mut pyramid1 = TileBBoxPyramid::new_empty();
-		pyramid1.intersect(&TileBBoxPyramid::new_full(8));
+		pyramid1.intersect(&TileBBoxPyramid::new_full_up_to(8));
 		assert!(pyramid1.is_empty());
 
-		let mut pyramid1 = TileBBoxPyramid::new_full(8);
-		pyramid1.intersect(&TileBBoxPyramid::new_full(8));
+		let mut pyramid1 = TileBBoxPyramid::new_full_up_to(8);
+		pyramid1.intersect(&TileBBoxPyramid::new_full_up_to(8));
 		assert!(pyramid1.is_full(8));
 	}
 
 	#[test]
 	fn test_limit_by_geo_bbox() {
-		let mut pyramid = TileBBoxPyramid::new_full(8);
+		let mut pyramid = TileBBoxPyramid::new_full_up_to(8);
 		pyramid
 			.intersect_geo_bbox(&GeoBBox::new(8.0653f64, 51.3563f64, 12.3528f64, 52.2564f64).unwrap())
 			.unwrap();
@@ -503,7 +525,7 @@ mod tests {
 	#[test]
 	fn test_zoom_min_max2() {
 		let test = |z0: u8, z1: u8| {
-			let mut pyramid = TileBBoxPyramid::new_full(z1);
+			let mut pyramid = TileBBoxPyramid::new_full_up_to(z1);
 			pyramid.set_level_min(z0);
 			assert_eq!(pyramid.get_level_min().unwrap(), z0);
 			assert_eq!(pyramid.get_level_max().unwrap(), z1);
@@ -520,7 +542,7 @@ mod tests {
 		pyramid.add_border(1, 2, 3, 4);
 		assert!(pyramid.is_empty());
 
-		let mut pyramid = TileBBoxPyramid::new_full(8);
+		let mut pyramid = TileBBoxPyramid::new_full_up_to(8);
 		pyramid
 			.intersect_geo_bbox(&GeoBBox::new(-9., -5., 5., 10.).unwrap())
 			.unwrap();
@@ -559,7 +581,7 @@ mod tests {
 
 	#[test]
 	fn test_intersect_geo_bbox() {
-		let mut pyramid = TileBBoxPyramid::new_full(5);
+		let mut pyramid = TileBBoxPyramid::new_full_up_to(5);
 		let geo_bbox = GeoBBox::new(-5.0, -2.0, 3.0, 4.0).unwrap();
 		pyramid.intersect_geo_bbox(&geo_bbox).unwrap();
 		// Now we have a partial coverage at each level up to 5
@@ -579,7 +601,7 @@ mod tests {
 		// If we create a partial pyramid and then add a border,
 		// each bounding box should expand. We'll rely on the internal tests
 		// of `TileBBox` to verify correctness.
-		let mut pyramid2 = TileBBoxPyramid::new_full(3);
+		let mut pyramid2 = TileBBoxPyramid::new_full_up_to(3);
 		pyramid2.add_border(2, 2, 4, 4);
 		// We can't easily test exact numeric outcomes without replicating tile logic,
 		// but we can check that it's still not empty.
@@ -588,7 +610,7 @@ mod tests {
 
 	#[test]
 	fn test_intersect() {
-		let mut p1 = TileBBoxPyramid::new_full(3);
+		let mut p1 = TileBBoxPyramid::new_full_up_to(3);
 		let p2 = TileBBoxPyramid::new_empty();
 
 		p1.intersect(&p2);
@@ -597,15 +619,15 @@ mod tests {
 			"Intersecting a full pyramid with an empty one yields empty."
 		);
 
-		let mut p3 = TileBBoxPyramid::new_full(3);
-		let p4 = TileBBoxPyramid::new_full(3);
+		let mut p3 = TileBBoxPyramid::new_full_up_to(3);
+		let p4 = TileBBoxPyramid::new_full_up_to(3);
 		p3.intersect(&p4);
 		assert!(p3.is_full(3), "Full ∩ full = full at the same levels.");
 	}
 
 	#[test]
 	fn test_get_level_bbox() {
-		let pyramid = TileBBoxPyramid::new_full(2);
+		let pyramid = TileBBoxPyramid::new_full_up_to(2);
 		// Level 0, 1, 2 are full, 3 is empty
 		assert!(pyramid.get_level_bbox(3).is_empty());
 	}
@@ -640,7 +662,7 @@ mod tests {
 	#[test]
 	fn test_include_bbox1_pyramid() {
 		let mut p1 = TileBBoxPyramid::new_empty();
-		let p2 = TileBBoxPyramid::new_full(2);
+		let p2 = TileBBoxPyramid::new_full_up_to(2);
 		p1.include_bbox_pyramid(&p2);
 		// Now p1 should have coverage at levels 0..=2
 		assert!(p1.get_level_bbox(0).is_full());
@@ -679,14 +701,14 @@ mod tests {
 
 	#[test]
 	fn test_iter_levels() {
-		let p = TileBBoxPyramid::new_full(2);
+		let p = TileBBoxPyramid::new_full_up_to(2);
 		let levels: Vec<u8> = p.iter_levels().map(|tb| tb.level).collect();
 		assert_eq!(levels, vec![0, 1, 2]);
 	}
 
 	#[test]
 	fn test_zoom_min_max1() {
-		let p = TileBBoxPyramid::new_full(3);
+		let p = TileBBoxPyramid::new_full_up_to(3);
 		assert_eq!(p.get_level_min(), Some(0));
 		assert_eq!(p.get_level_max(), Some(3));
 
@@ -697,7 +719,7 @@ mod tests {
 
 	#[test]
 	fn test_get_good_zoom() {
-		let p = TileBBoxPyramid::new_full(5);
+		let p = TileBBoxPyramid::new_full_up_to(5);
 		// Usually, full coverage at level 5 implies many tiles, so we'd find a "good" zoom near 5.
 		let good_zoom = p.get_good_level().unwrap();
 		// We can't say exactly which level (tile logic is in TileBBox), but typically it'd be 4 or 5
@@ -706,7 +728,7 @@ mod tests {
 
 	#[test]
 	fn test_set_zoom_min_max() {
-		let mut p = TileBBoxPyramid::new_full(5);
+		let mut p = TileBBoxPyramid::new_full_up_to(5);
 		// We remove coverage below level 2
 		p.set_level_min(2);
 		assert_eq!(p.get_level_min(), Some(2));
@@ -725,13 +747,13 @@ mod tests {
 
 		// Full coverage typically has many tiles, though exact counts are not trivial
 		// without replicating tile coverage logic. We'll just ensure it's not zero.
-		let p = TileBBoxPyramid::new_full(2);
+		let p = TileBBoxPyramid::new_full_up_to(2);
 		assert!(p.count_tiles() > 0);
 	}
 
 	#[test]
 	fn test_get_geo_bbox_and_center() {
-		let p = TileBBoxPyramid::new_full(2);
+		let p = TileBBoxPyramid::new_full_up_to(2);
 		// At a basic level, we expect a bounding box covering the globe
 		let maybe_bbox = p.get_geo_bbox();
 		assert!(maybe_bbox.is_some());

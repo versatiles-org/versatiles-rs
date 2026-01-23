@@ -302,7 +302,7 @@ pub async fn make_test_file(
 	let reader = MockReader::new_mock(TileSourceMetadata::new(
 		tile_format,
 		compression,
-		TileBBoxPyramid::new_full(max_zoom_level),
+		TileBBoxPyramid::new_full_up_to(max_zoom_level),
 		Traversal::ANY,
 	))?;
 
@@ -357,7 +357,7 @@ pub mod tests {
 			let reader1 = MockReader::new_mock(TileSourceMetadata::new(
 				tile_format,
 				compression,
-				TileBBoxPyramid::new_full(2),
+				TileBBoxPyramid::new_full_up_to(2),
 				Traversal::ANY,
 			))?;
 

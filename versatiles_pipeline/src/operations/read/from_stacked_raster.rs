@@ -790,7 +790,7 @@ mod tests {
 						}
 					}
 
-					let pyramid = TileBBoxPyramid::new_full(8);
+					let pyramid = TileBBoxPyramid::new_full_up_to(8);
 					let metadata = TileSourceMetadata::new(
 						TileFormat::MVT, // Vector tile format
 						TileCompression::Uncompressed,

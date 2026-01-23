@@ -38,7 +38,7 @@ mod tests {
 		min_zoom: u8,
 		max_zoom: u8,
 	) -> TileSourceMetadata {
-		let mut bbox_pyramid = TileBBoxPyramid::new_full(32);
+		let mut bbox_pyramid = TileBBoxPyramid::new_full();
 		bbox_pyramid.set_level_min(min_zoom);
 		bbox_pyramid.set_level_max(max_zoom);
 

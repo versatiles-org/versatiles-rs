@@ -638,7 +638,7 @@ mod tests {
 		let mut reader1 = MockReader::new_mock(TileSourceMetadata::new(
 			TileFormat::JSON,
 			TileCompression::Gzip,
-			TileBBoxPyramid::new_full(4),
+			TileBBoxPyramid::new_full_up_to(4),
 			Traversal::ANY,
 		))?;
 

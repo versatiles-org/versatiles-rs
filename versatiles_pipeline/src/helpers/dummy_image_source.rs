@@ -53,7 +53,7 @@ impl DummyImageSource {
 		let metadata = TileSourceMetadata::new(
 			tile_format,
 			TileCompression::Uncompressed,
-			pyramid.unwrap_or_else(|| TileBBoxPyramid::new_full(8)),
+			pyramid.unwrap_or_else(|| TileBBoxPyramid::new_full_up_to(8)),
 			Traversal::ANY,
 		);
 

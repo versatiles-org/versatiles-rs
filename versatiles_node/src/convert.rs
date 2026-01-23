@@ -52,7 +52,7 @@ pub(crate) async fn convert_tiles_with_options(
 	let mut bbox_pyramid: Option<TileBBoxPyramid> = None;
 
 	if opts.min_zoom.is_some() || opts.max_zoom.is_some() || opts.bbox.is_some() {
-		let mut pyramid = TileBBoxPyramid::new_full(32);
+		let mut pyramid = TileBBoxPyramid::new_full();
 
 		if let Some(min) = opts.min_zoom {
 			pyramid.set_level_min(min);
@@ -311,7 +311,7 @@ mod tests {
 	/// Test TileBBoxPyramid creation with zoom filtering
 	#[test]
 	fn test_pyramid_zoom_filtering() {
-		let mut pyramid = TileBBoxPyramid::new_full(32);
+		let mut pyramid = TileBBoxPyramid::new_full();
 
 		// Set zoom range 5-10
 		pyramid.set_level_min(5);
@@ -325,7 +325,7 @@ mod tests {
 	/// Test TileBBoxPyramid with geographic bbox
 	#[test]
 	fn test_pyramid_geo_bbox() {
-		let mut pyramid = TileBBoxPyramid::new_full(10);
+		let mut pyramid = TileBBoxPyramid::new_full_up_to(10);
 
 		// Europe bounding box
 		let geo_bbox = GeoBBox::new(-10.0, 35.0, 40.0, 70.0).unwrap();
@@ -334,13 +334,13 @@ mod tests {
 		// Pyramid should now be limited to the bbox area
 		// (exact tile counts depend on zoom level)
 		assert!(pyramid.count_tiles() > 0);
-		assert!(pyramid.count_tiles() < TileBBoxPyramid::new_full(10).count_tiles());
+		assert!(pyramid.count_tiles() < TileBBoxPyramid::new_full_up_to(10).count_tiles());
 	}
 
 	/// Test TileBBoxPyramid border addition
 	#[test]
 	fn test_pyramid_bbox_border() {
-		let mut pyramid = TileBBoxPyramid::new_full(5);
+		let mut pyramid = TileBBoxPyramid::new_full_up_to(5);
 		let geo_bbox = GeoBBox::new(0.0, 0.0, 10.0, 10.0).unwrap();
 		pyramid.intersect_geo_bbox(&geo_bbox).unwrap();
 
@@ -525,7 +525,7 @@ mod tests {
 		#[case] _desc: &str,
 	) {
 		let bbox_pyramid = if with_pyramid {
-			Some(TileBBoxPyramid::new_full(10))
+			Some(TileBBoxPyramid::new_full_up_to(10))
 		} else {
 			None
 		};

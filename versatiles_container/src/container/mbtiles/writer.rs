@@ -246,7 +246,7 @@ mod tests {
 	#[tokio::test]
 	async fn read_write() -> Result<()> {
 		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
-			bbox_pyramid: TileBBoxPyramid::new_full(5),
+			bbox_pyramid: TileBBoxPyramid::new_full_up_to(5),
 			tile_compression: TileCompression::Gzip,
 			tile_format: TileFormat::MVT,
 			traversal: Traversal::ANY,

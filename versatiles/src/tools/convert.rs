@@ -82,7 +82,7 @@ fn get_bbox_pyramid(arguments: &Subcommand) -> Result<Option<TileBBoxPyramid>> {
 		return Ok(None);
 	}
 
-	let mut bbox_pyramid = TileBBoxPyramid::new_full(32);
+	let mut bbox_pyramid = TileBBoxPyramid::new_full();
 
 	if let Some(level_min) = arguments.min_zoom {
 		bbox_pyramid.set_level_min(level_min);

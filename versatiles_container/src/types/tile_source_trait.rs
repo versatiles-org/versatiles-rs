@@ -220,7 +220,7 @@ mod tests {
 			tilejson.set_string("metadata", "test").unwrap();
 			TestReader {
 				metadata: TileSourceMetadata {
-					bbox_pyramid: TileBBoxPyramid::new_full(3),
+					bbox_pyramid: TileBBoxPyramid::new_full_up_to(3),
 					tile_compression: TileCompression::Gzip,
 					tile_format: TileFormat::MVT,
 					traversal: Traversal::ANY,

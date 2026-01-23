@@ -111,7 +111,7 @@ mod tests {
 		fn new(traversal: Traversal, max_level: u8) -> Self {
 			TestReader {
 				metadata: TileSourceMetadata {
-					bbox_pyramid: TileBBoxPyramid::new_full(max_level),
+					bbox_pyramid: TileBBoxPyramid::new_full_up_to(max_level),
 					tile_compression: TileCompression::Uncompressed,
 					tile_format: TileFormat::PNG,
 					traversal,

@@ -159,7 +159,7 @@ mod tests {
 		let mut mock_reader = MockReader::new_mock(TileSourceMetadata::new(
 			TileFormat::MVT,
 			TileCompression::Gzip,
-			TileBBoxPyramid::new_full(2),
+			TileBBoxPyramid::new_full_up_to(2),
 			Traversal::ANY,
 		))?;
 

@@ -186,7 +186,7 @@ mod tests {
 		let metadata = TileSourceMetadata::new(
 			TileFormat::PNG,
 			TileCompression::Uncompressed,
-			TileBBoxPyramid::new_full(10),
+			TileBBoxPyramid::new_full_up_to(10),
 			Traversal::new_any(),
 		);
 		MockReader::new_mock(metadata).unwrap().boxed()
@@ -290,7 +290,7 @@ mod tests {
 		let new_metadata = TileSourceMetadata::new(
 			TileFormat::JPG,
 			TileCompression::Gzip,
-			TileBBoxPyramid::new_full(5),
+			TileBBoxPyramid::new_full_up_to(5),
 			Traversal::new_any(),
 		);
 
@@ -329,7 +329,7 @@ mod tests {
 		let new_metadata = TileSourceMetadata::new(
 			TileFormat::WEBP,
 			TileCompression::Brotli,
-			TileBBoxPyramid::new_full(8),
+			TileBBoxPyramid::new_full_up_to(8),
 			Traversal::new_any(),
 		);
 		let new_tilejson = TileJSON::default();
@@ -415,7 +415,7 @@ mod tests {
 		let metadata_mvt = TileSourceMetadata::new(
 			TileFormat::MVT,
 			TileCompression::Gzip,
-			TileBBoxPyramid::new_full(14),
+			TileBBoxPyramid::new_full_up_to(14),
 			Traversal::new_any(),
 		);
 		let source_mvt = MockReader::new_mock(metadata_mvt).unwrap().boxed();
@@ -431,7 +431,7 @@ mod tests {
 		let metadata = TileSourceMetadata::new(
 			TileFormat::PNG,
 			TileCompression::Brotli,
-			TileBBoxPyramid::new_full(10),
+			TileBBoxPyramid::new_full_up_to(10),
 			Traversal::new_any(),
 		);
 		let source = MockReader::new_mock(metadata).unwrap().boxed();
@@ -443,7 +443,7 @@ mod tests {
 	#[test]
 	fn test_processor_with_custom_bbox() {
 		// Create a pyramid with specific bbox
-		let pyramid = TileBBoxPyramid::new_full(5);
+		let pyramid = TileBBoxPyramid::new_full_up_to(5);
 
 		let metadata = TileSourceMetadata::new(
 			TileFormat::PNG,
@@ -463,7 +463,7 @@ mod tests {
 		let metadata = TileSourceMetadata::new(
 			TileFormat::PNG,
 			TileCompression::Uncompressed,
-			TileBBoxPyramid::new_full(10),
+			TileBBoxPyramid::new_full_up_to(10),
 			traversal.clone(),
 		);
 		let source = MockReader::new_mock(metadata).unwrap().boxed();

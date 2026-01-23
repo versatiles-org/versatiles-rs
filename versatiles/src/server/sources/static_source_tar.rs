@@ -213,7 +213,7 @@ mod tests {
 
 		let parameters = TilesConverterParameters {
 			tile_compression: Some(compression),
-			bbox_pyramid: Some(TileBBoxPyramid::new_full(0)),
+			bbox_pyramid: Some(TileBBoxPyramid::new_full_up_to(0)),
 			..TilesConverterParameters::default()
 		};
 		let runtime = TilesRuntime::default();

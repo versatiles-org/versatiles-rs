@@ -58,7 +58,7 @@ impl TileSourceMetadata {
 		TileSourceMetadata {
 			tile_format,
 			tile_compression,
-			bbox_pyramid: TileBBoxPyramid::new_full(31),
+			bbox_pyramid: TileBBoxPyramid::new_full(),
 			traversal,
 		}
 	}
@@ -97,7 +97,7 @@ mod tests {
 
 	#[test]
 	fn test_tiles_reader_parameters_new() {
-		let bbox_pyramid = TileBBoxPyramid::new_full(10);
+		let bbox_pyramid = TileBBoxPyramid::new_full_up_to(10);
 		let tile_format = TileFormat::PNG;
 		let tile_compression = TileCompression::Gzip;
 
@@ -117,7 +117,7 @@ mod tests {
 
 		assert_eq!(params.tile_format, tile_format);
 		assert_eq!(params.tile_compression, tile_compression);
-		assert_eq!(params.bbox_pyramid, TileBBoxPyramid::new_full(31));
+		assert_eq!(params.bbox_pyramid, TileBBoxPyramid::new_full());
 	}
 
 	#[test]

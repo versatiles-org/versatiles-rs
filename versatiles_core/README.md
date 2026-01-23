@@ -39,7 +39,7 @@ let coord = TileCoord::new(5, 16, 10)?;
 let bbox = TileBBox::new(5, 10, 12, 15, 20)?;
 
 // Create a pyramid of bounding boxes across zoom levels
-let pyramid = TileBBoxPyramid::new_full(8);
+let pyramid = TileBBoxPyramid::new_full_up_to(8);
 
 // Convert coordinates
 let geo_bbox = bbox.get_geo_bbox();

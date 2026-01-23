@@ -27,7 +27,7 @@
 //!     // Limit to a bbox pyramid and keep source compression;
 //!     // you could also set `tile_compression: Some(TileCompression::Brotli)` to re-encode.
 //!     let converter_params = TilesConverterParameters {
-//!         bbox_pyramid: Some(TileBBoxPyramid::new_full(8)),
+//!         bbox_pyramid: Some(TileBBoxPyramid::new_full_up_to(8)),
 //!         ..Default::default()
 //!     };
 //!
@@ -260,7 +260,7 @@ mod tests {
 	}
 
 	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> SharedTileSource {
-		let bbox_pyramid = TileBBoxPyramid::new_full(4);
+		let bbox_pyramid = TileBBoxPyramid::new_full_up_to(4);
 		let reader_metadata = TileSourceMetadata::new(tf, tc, bbox_pyramid, Traversal::ANY);
 		MockReader::new_mock(reader_metadata).unwrap().into_shared()
 	}
@@ -324,7 +324,7 @@ mod tests {
 	#[test]
 	fn test_tiles_converter_parameters_new() {
 		let cp = TilesConverterParameters {
-			bbox_pyramid: Some(TileBBoxPyramid::new_full(1)),
+			bbox_pyramid: Some(TileBBoxPyramid::new_full_up_to(1)),
 			flip_y: true,
 			swap_xy: true,
 			tile_compression: None,
