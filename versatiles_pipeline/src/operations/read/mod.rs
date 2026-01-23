@@ -1,3 +1,4 @@
+pub mod from_color;
 pub mod from_container;
 pub mod from_debug;
 #[cfg(feature = "gdal")]

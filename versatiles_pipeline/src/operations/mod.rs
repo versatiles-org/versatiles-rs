@@ -23,6 +23,7 @@ pub fn get_transform_operation_factories() -> Vec<Box<dyn TransformOperationFact
 
 pub fn get_read_operation_factories() -> Vec<Box<dyn ReadOperationFactoryTrait>> {
 	vec![
+		Box::new(read::from_color::Factory {}),
 		Box::new(read::from_container::Factory {}),
 		Box::new(read::from_debug::Factory {}),
 		Box::new(read::from_stacked::Factory {}),

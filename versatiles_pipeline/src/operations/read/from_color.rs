@@ -1,0 +1,282 @@
+//! # Solid color tile generator
+//!
+//! This operation produces solid-color raster tiles. It creates a single
+//! template tile of the specified color, size, and format, and returns
+//! clones of this tile for all coordinates in the requested bounding box.
+//!
+//! ## Examples
+//!
+//! ```text
+//! from_color color=FF5733 size=512 format=png
+//! from_color color=FF573380 size=256 format=webp
+//! from_color  # defaults: color=000000 size=512 format=png
+//! ```
+
+use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
+use anyhow::{Result, bail, ensure};
+use async_trait::async_trait;
+use std::sync::Arc;
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
+use versatiles_core::{TileBBox, TileBBoxPyramid, TileCompression, TileFormat, TileJSON, TileStream};
+use versatiles_image::DynamicImageTraitConvert;
+
+#[derive(versatiles_derive::VPLDecode, Clone, Debug)]
+/// Generates solid-color tiles of the specified size and format.
+struct Args {
+	/// Hex color in RGB or RGBA format (e.g., "FF5733" or "FF573380"). Defaults to "000000" (black).
+	color: Option<String>,
+	/// Tile size in pixels (256 or 512). Defaults to 512.
+	size: Option<u16>,
+	/// Tile format: one of "avif", "jpg", "png", or "webp". Defaults to "png".
+	format: Option<String>,
+}
+
+/// Parses a hex color string into RGB or RGBA bytes.
+///
+/// Supports formats:
+/// - "RGB" (3 chars) -> expands to RRGGBB
+/// - "RGBA" (4 chars) -> expands to RRGGBBAA
+/// - "RRGGBB" (6 chars)
+/// - "RRGGBBAA" (8 chars)
+fn parse_hex_color(hex: &str) -> Result<Vec<u8>> {
+	let hex = hex.trim_start_matches('#');
+
+	let expanded = match hex.len() {
+		3 => {
+			// RGB -> RRGGBB
+			let chars: Vec<char> = hex.chars().collect();
+			format!(
+				"{}{}{}{}{}{}",
+				chars[0], chars[0], chars[1], chars[1], chars[2], chars[2]
+			)
+		}
+		4 => {
+			// RGBA -> RRGGBBAA
+			let chars: Vec<char> = hex.chars().collect();
+			format!(
+				"{}{}{}{}{}{}{}{}",
+				chars[0], chars[0], chars[1], chars[1], chars[2], chars[2], chars[3], chars[3]
+			)
+		}
+		6 | 8 => hex.to_string(),
+		_ => bail!("Invalid hex color '{hex}': expected 3, 4, 6, or 8 hex characters"),
+	};
+
+	let bytes: Result<Vec<u8>, _> = (0..expanded.len())
+		.step_by(2)
+		.map(|i| u8::from_str_radix(&expanded[i..i + 2], 16))
+		.collect();
+
+	bytes.map_err(|e| anyhow::anyhow!("Invalid hex color '{hex}': {e}"))
+}
+
+/// Implements [`TileSource`] by returning clones of a pre-generated solid-color tile.
+#[derive(Debug)]
+pub struct Operation {
+	tile: Tile,
+	metadata: TileSourceMetadata,
+	tilejson: TileJSON,
+}
+
+impl Operation {
+	pub fn from_parameters(color: &[u8], tile_size: u32, tile_format: TileFormat) -> Result<Self> {
+		ensure!(
+			tile_size == 256 || tile_size == 512,
+			"tile size must be 256 or 512, got {tile_size}"
+		);
+		ensure!(
+			tile_format.is_raster(),
+			"tile format must be a raster format (avif, jpg, png, webp), got {tile_format}"
+		);
+
+		let data = std::iter::repeat_n(color.to_vec(), (tile_size * tile_size) as usize)
+			.flatten()
+			.collect::<Vec<u8>>();
+		let image = versatiles_image::DynamicImage::from_raw(tile_size as usize, tile_size as usize, data)?;
+		let blob = Tile::from_image(image, tile_format)?.into_blob(TileCompression::Uncompressed)?;
+		let tile = Tile::from_blob(blob, TileCompression::Uncompressed, tile_format);
+
+		let metadata = TileSourceMetadata::new(
+			tile_format,
+			TileCompression::Uncompressed,
+			TileBBoxPyramid::new_full(30),
+			Traversal::ANY,
+		);
+
+		let tilejson = {
+			let mut tilejson = TileJSON::default();
+			metadata.update_tilejson(&mut tilejson);
+			tilejson
+		};
+
+		Ok(Self {
+			tile,
+			metadata,
+			tilejson,
+		})
+	}
+
+	pub fn from_vpl_node(vpl_node: &VPLNode) -> Result<Self> {
+		let args = Args::from_vpl_node(vpl_node)?;
+
+		let color = args.color.as_deref().unwrap_or("000000");
+		let color_bytes = parse_hex_color(color)?;
+
+		let tile_size = u32::from(args.size.unwrap_or(512));
+
+		let tile_format = args
+			.format
+			.map(|f| TileFormat::try_from_str(&f))
+			.transpose()?
+			.unwrap_or(TileFormat::PNG);
+
+		Self::from_parameters(&color_bytes, tile_size, tile_format)
+	}
+}
+
+impl ReadTileSource for Operation {
+	async fn build(vpl_node: VPLNode, _factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
+	where
+		Self: Sized + TileSource,
+	{
+		Operation::from_vpl_node(&vpl_node).map(|op| Box::new(op) as Box<dyn TileSource>)
+	}
+}
+
+#[async_trait]
+impl TileSource for Operation {
+	fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
+	}
+
+	fn tilejson(&self) -> &TileJSON {
+		&self.tilejson
+	}
+
+	fn source_type(&self) -> Arc<SourceType> {
+		SourceType::new_container("solid color", "color")
+	}
+
+	async fn get_tile(&self, _coord: &versatiles_core::TileCoord) -> Result<Option<Tile>> {
+		Ok(Some(self.tile.clone()))
+	}
+
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		let tile = self.tile.clone();
+		Ok(TileStream::from_bbox_parallel(bbox, move |_| Some(tile.clone())))
+	}
+}
+
+crate::operations::macros::define_read_factory!("from_color", Args, Operation);
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use versatiles_core::{TileCompression::Uncompressed, TileCoord};
+
+	#[test]
+	fn test_parse_hex_color_rgb_short() {
+		assert_eq!(parse_hex_color("F00").unwrap(), vec![255, 0, 0]);
+		assert_eq!(parse_hex_color("0F0").unwrap(), vec![0, 255, 0]);
+		assert_eq!(parse_hex_color("00F").unwrap(), vec![0, 0, 255]);
+	}
+
+	#[test]
+	fn test_parse_hex_color_rgba_short() {
+		assert_eq!(parse_hex_color("F00F").unwrap(), vec![255, 0, 0, 255]);
+		assert_eq!(parse_hex_color("0F08").unwrap(), vec![0, 255, 0, 136]);
+	}
+
+	#[test]
+	fn test_parse_hex_color_rgb() {
+		assert_eq!(parse_hex_color("FF5733").unwrap(), vec![255, 87, 51]);
+		assert_eq!(parse_hex_color("000000").unwrap(), vec![0, 0, 0]);
+		assert_eq!(parse_hex_color("FFFFFF").unwrap(), vec![255, 255, 255]);
+	}
+
+	#[test]
+	fn test_parse_hex_color_rgba() {
+		assert_eq!(parse_hex_color("FF573380").unwrap(), vec![255, 87, 51, 128]);
+		assert_eq!(parse_hex_color("000000FF").unwrap(), vec![0, 0, 0, 255]);
+	}
+
+	#[test]
+	fn test_parse_hex_color_with_hash() {
+		assert_eq!(parse_hex_color("#FF5733").unwrap(), vec![255, 87, 51]);
+		assert_eq!(parse_hex_color("#F00").unwrap(), vec![255, 0, 0]);
+	}
+
+	#[test]
+	fn test_parse_hex_color_invalid() {
+		assert!(parse_hex_color("GG0000").is_err());
+		assert!(parse_hex_color("FF").is_err()); // 2 chars - too short
+		assert!(parse_hex_color("FF5733FF0").is_err()); // 9 chars - too long
+		assert!(parse_hex_color("FFFFF").is_err()); // 5 chars - invalid length
+	}
+
+	#[test]
+	fn test_operation_default_parameters() {
+		let op = Operation::from_parameters(&[0, 0, 0], 512, TileFormat::PNG).unwrap();
+		assert_eq!(op.metadata().tile_format, TileFormat::PNG);
+	}
+
+	#[test]
+	fn test_operation_invalid_size() {
+		assert!(Operation::from_parameters(&[0, 0, 0], 128, TileFormat::PNG).is_err());
+		assert!(Operation::from_parameters(&[0, 0, 0], 1024, TileFormat::PNG).is_err());
+	}
+
+	#[test]
+	fn test_operation_invalid_format() {
+		assert!(Operation::from_parameters(&[0, 0, 0], 512, TileFormat::MVT).is_err());
+	}
+
+	#[tokio::test]
+	async fn test_operation_get_tile() {
+		let op = Operation::from_parameters(&[255, 0, 0], 256, TileFormat::PNG).unwrap();
+		let tile = op.get_tile(&TileCoord::new(0, 0, 0).unwrap()).await.unwrap();
+		assert!(tile.is_some());
+		let blob = tile.unwrap().into_blob(Uncompressed).unwrap();
+		assert!(!blob.is_empty());
+	}
+
+	#[tokio::test]
+	async fn test_from_vpl() {
+		let factory = PipelineFactory::new_dummy();
+
+		// Test with all parameters
+		let op = factory
+			.operation_from_vpl("from_color color=FF5733 size=256 format=webp")
+			.await
+			.unwrap();
+		assert_eq!(op.metadata().tile_format, TileFormat::WEBP);
+
+		// Test with defaults
+		let op = factory.operation_from_vpl("from_color").await.unwrap();
+		assert_eq!(op.metadata().tile_format, TileFormat::PNG);
+
+		// Test tile content
+		let coord = TileCoord::new(5, 10, 15).unwrap();
+		let tile = op
+			.get_tile_stream(coord.to_tile_bbox())
+			.await
+			.unwrap()
+			.next()
+			.await
+			.unwrap()
+			.1;
+		assert!(!tile.into_blob(Uncompressed).unwrap().is_empty());
+	}
+
+	#[tokio::test]
+	async fn test_tilejson() {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl("from_color color=00FF00 format=png")
+			.await
+			.unwrap();
+
+		let tilejson = op.tilejson();
+		assert!(tilejson.as_pretty_lines(100).join("\n").contains("image/png"));
+	}
+}
