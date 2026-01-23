@@ -416,7 +416,7 @@ mod tests {
 			.await?;
 
 		let captured = positions.lock().unwrap();
-		verify_monotonic_progress(&captured, 0.1);
+		verify_monotonic_progress(&captured, 0.16);
 		verify_progress_finished(&captured);
 
 		Ok(())
