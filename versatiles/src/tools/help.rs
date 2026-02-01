@@ -64,7 +64,6 @@ fn print_markdown(md: &str) {
 	// Set the other text styles
 	skin.bold.set_fg(Color::White);
 	skin.italic.set_fg(Color::White);
-	skin.inline_code.set_bg(Color::Reset);
 	skin.inline_code.set_fg(Color::Green);
 
 	// Ensure minimum dimensions for the area
