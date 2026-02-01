@@ -127,7 +127,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.49.0", features = ["rt-multi-thread", "sync"] }
 
 # CLI dependencies
-clap = { version = "4.5.54", features = ["default", "derive"] }
+clap = { version = "4.5.56", features = ["default", "derive"] }
 colored = { version = "3.1.1", default-features = false }
 env_logger = { version = "0.11.8" }
 termimad = { version = "0.34.1" }
@@ -167,8 +167,8 @@ geo = { version = "0.32.0" }
 # Utility dependencies
 serde_yaml_ng = "0.10.0"
 terminal_size = { version = "0.4.3" }
-time = { version = "0.3.45", default-features = false }
-uuid = { version = "1.19.0" }
+time = { version = "0.3.46", default-features = false }
+uuid = { version = "1.20.0" }
 wildmatch = { version = "2.6.1", default-features = false }
 
 # Multithreading optimization dependencies
