@@ -221,7 +221,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
 			.operation_from_vpl(&format!(
-				"from_debug format=png | raster_mask geojson=\"{geojson_path}\""
+				"from_debug format=png | raster_mask geojson='{geojson_path}'"
 			))
 			.await?;
 
@@ -245,7 +245,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
 			.operation_from_vpl(&format!(
-				"from_debug format=png | raster_mask geojson=\"{geojson_path}\" buffer=1000"
+				"from_debug format=png | raster_mask geojson='{geojson_path}' buffer=1000"
 			))
 			.await?;
 
@@ -264,7 +264,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
 			.operation_from_vpl(&format!(
-				"from_debug format=png | raster_mask geojson=\"{geojson_path}\" blur=500 blur_function=cosine"
+				"from_debug format=png | raster_mask geojson='{geojson_path}' blur=500 blur_function=cosine"
 			))
 			.await?;
 
@@ -284,7 +284,7 @@ mod tests {
 		// MVT is vector, not raster
 		let result = factory
 			.operation_from_vpl(&format!(
-				"from_debug format=mvt | raster_mask geojson=\"{geojson_path}\""
+				"from_debug format=mvt | raster_mask geojson='{geojson_path}'"
 			))
 			.await;
 
@@ -299,7 +299,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
 			.operation_from_vpl(&format!(
-				"from_debug format=png | raster_mask geojson=\"{geojson_path}\""
+				"from_debug format=png | raster_mask geojson='{geojson_path}'"
 			))
 			.await?;
 
@@ -317,7 +317,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
 			.operation_from_vpl(&format!(
-				"from_debug format=png | raster_mask geojson=\"{geojson_path}\""
+				"from_debug format=png | raster_mask geojson='{geojson_path}'"
 			))
 			.await?;
 
