@@ -220,9 +220,7 @@ mod tests {
 
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
-			.operation_from_vpl(&format!(
-				"from_debug format=png | raster_mask geojson='{geojson_path}'"
-			))
+			.operation_from_vpl(&format!("from_debug format=png | raster_mask geojson='{geojson_path}'"))
 			.await?;
 
 		// Get a tile that should be affected
@@ -283,9 +281,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		// MVT is vector, not raster
 		let result = factory
-			.operation_from_vpl(&format!(
-				"from_debug format=mvt | raster_mask geojson='{geojson_path}'"
-			))
+			.operation_from_vpl(&format!("from_debug format=mvt | raster_mask geojson='{geojson_path}'"))
 			.await;
 
 		assert!(result.is_err());
@@ -298,9 +294,7 @@ mod tests {
 
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
-			.operation_from_vpl(&format!(
-				"from_debug format=png | raster_mask geojson='{geojson_path}'"
-			))
+			.operation_from_vpl(&format!("from_debug format=png | raster_mask geojson='{geojson_path}'"))
 			.await?;
 
 		let source_type = op.source_type();
@@ -316,9 +310,7 @@ mod tests {
 
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
-			.operation_from_vpl(&format!(
-				"from_debug format=png | raster_mask geojson='{geojson_path}'"
-			))
+			.operation_from_vpl(&format!("from_debug format=png | raster_mask geojson='{geojson_path}'"))
 			.await?;
 
 		// Metadata should be passed through from source
