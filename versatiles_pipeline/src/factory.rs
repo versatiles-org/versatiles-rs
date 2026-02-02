@@ -239,7 +239,7 @@ impl PipelineFactory {
 		{
 			vec.iter()
 				.sorted_by_key(|f| f.get_tag_name())
-				.map(|f| format!("## {}\n\n{}", f.get_tag_name(), f.get_docs()))
+				.map(|f| format!("## `{}`\n\n{}", f.get_tag_name(), f.get_docs()))
 				.join("\n\n")
 		}
 
