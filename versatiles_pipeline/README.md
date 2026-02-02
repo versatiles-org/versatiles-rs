@@ -1,6 +1,6 @@
 # VersaTiles Pipeline
 
-VersaTiles Pipeline is a robust toolkit designed for efficiently generating and processing large volumes of tiles. It leverages multithreading to stream, process, and transform tiles from one or more sources in parallel, either storing them in a new tile container or delivering them in real-time through a server:
+VersaTiles Pipeline is a robust toolkit designed for efficiently generating and processing large volumes of tiles. It uses multithreading to stream, process, and transform tiles from one or more sources in parallel, either for storing them in a new tile container or delivering them in real-time through a server:
 
 ```bash
 # save the processed tiles in a container:
@@ -12,7 +12,7 @@ versatiles serve pipeline.vpl
 
 ## Defining a pipeline
 
-To define a pipeline, create a .vpl file and descibe the pipeline using the VersaTiles Pipeline Language (VPL). Pipelines always begin with a read operation (name starts with "from_"), optionally followed by one or more transform operations, separated by the pipe symbol (`|`).
+To define a pipeline, create a `.vpl` file and describe the pipeline using the **VersaTiles Pipeline Language (VPL)**. Pipelines always begin with a read operation (name starts with `from_`), optionally followed by one or more transform operations, separated by the pipe symbol (`|`).
 
 Example:
 
