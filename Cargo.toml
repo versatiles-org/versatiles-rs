@@ -118,7 +118,7 @@ futures = { version = "0.3.31", features = ["default"] }
 itertools = { version = "0.14.0", default-features = false }
 log = { version = "0.4.29", default-features = false }
 num_cpus = { version = "1.17.0", default-features = false }
-regex = { version = "1.12.2", default-features = false, features = [
+regex = { version = "1.12.3", default-features = false, features = [
 	"std",
 	"unicode-case",
 	"unicode-perl",
@@ -127,14 +127,14 @@ serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.49.0", features = ["rt-multi-thread", "sync"] }
 
 # CLI dependencies
-clap = { version = "4.5.56", features = ["default", "derive"] }
+clap = { version = "4.5.57", features = ["default", "derive"] }
 colored = { version = "3.1.1", default-features = false }
 env_logger = { version = "0.11.8" }
 termimad = { version = "0.34.1" }
 
 # Compression dependencies
 brotli = { version = "8.0.2", default-features = false, features = ["std"] }
-flate2 = { version = "1.1.8", default-features = false, features = ["default"] }
+flate2 = { version = "1.1.9", default-features = false, features = ["default"] }
 zstd = { version = "0.13.3", default-features = false }
 
 # Container/archive dependencies
