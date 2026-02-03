@@ -368,3 +368,28 @@ jobs:
       - name: Test examples
         working-directory: ./versatiles_node
         run: npm run test:examples
+
+  # ============================================================================
+  # CI Success - Summary job
+  # ============================================================================
+  ci-success:
+    name: "CI Success"
+    runs-on: ubuntu-latest
+    needs:
+      - markdown-lint
+      - linux-format
+      - linux-docs
+      - linux-nodejs
+      - linux-feature-matrix
+      - windows-lint
+      - windows-test
+      - windows-nodejs
+    if: always()
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "::error::Some jobs failed or were cancelled"
+            exit 1
+          fi
+          echo "All CI jobs passed successfully!"
