@@ -168,7 +168,7 @@ rstar = { version = "0.12.2", default-features = false }
 # Utility dependencies
 serde_yaml_ng = "0.10.0"
 terminal_size = { version = "0.4.3" }
-time = { version = "0.3.46", default-features = false }
+time = { version = "0.3.47", default-features = false }
 uuid = { version = "1.20.0" }
 wildmatch = { version = "2.6.1", default-features = false }
 
