@@ -3,7 +3,10 @@
 //! These tests verify that tiles can be written to and read from various formats
 //! without data loss or corruption.
 
+#![allow(clippy::float_cmp)]
+
 use anyhow::Result;
+use rstest::rstest;
 use tempfile::TempDir;
 use versatiles_container::*;
 use versatiles_core::*;
@@ -426,6 +429,61 @@ async fn versatiles_empty_source_fails_gracefully() -> Result<()> {
 		err_chain.contains("minzoom") || err_chain.contains("maxzoom"),
 		"Error should mention zoom range issue: {err_chain}"
 	);
+
+	Ok(())
+}
+
+/// Verifies that TileJSON values (bounds, center, minzoom, maxzoom) are preserved
+/// through a write-read round trip, even when they differ from pyramid-calculated values.
+#[rstest]
+#[case("output.versatiles")]
+#[case("output.pmtiles")]
+#[case("output.mbtiles")]
+#[case("output.tar")]
+#[tokio::test]
+async fn tilejson_metadata_preserved_over_pyramid(#[case] filename: &str) -> Result<()> {
+	let temp_dir = TempDir::new()?;
+	let output_path = temp_dir.path().join(filename);
+	let runtime = TilesRuntime::builder().silent_progress(true).build();
+
+	// Create a MockReader with a wide pyramid (zoom 0-4, full world, PNG format)
+	let mut source = MockReader::new_mock(TileSourceMetadata::new(
+		TileFormat::PNG,
+		TileCompression::Uncompressed,
+		TileBBoxPyramid::new_full_up_to(4),
+		Traversal::ANY,
+	))?;
+
+	// Set custom TileJSON values that intentionally differ from the pyramid
+	let tj = source.tilejson_mut();
+	tj.bounds = Some(GeoBBox::new(10.0, 20.0, 30.0, 40.0)?);
+	tj.center = Some(GeoCenter(20.0, 30.0, 2));
+	tj.set_min_zoom(1);
+	tj.set_max_zoom(3);
+
+	// Write to the target format
+	runtime.write_to_path(source.into_shared(), &output_path).await?;
+
+	// Read back
+	let reader = runtime.get_reader_from_str(output_path.to_str().unwrap()).await?;
+	let tj = reader.tilejson();
+
+	// Assert bounds match the custom values, not the pyramid
+	let bounds = tj.bounds.expect("bounds should be present");
+	assert_eq!(bounds.x_min, 10.0, "bounds x_min");
+	assert_eq!(bounds.y_min, 20.0, "bounds y_min");
+	assert_eq!(bounds.x_max, 30.0, "bounds x_max");
+	assert_eq!(bounds.y_max, 40.0, "bounds y_max");
+
+	// Assert minzoom/maxzoom match the custom values
+	assert_eq!(tj.get_integer("minzoom"), Some(1), "minzoom");
+	assert_eq!(tj.get_integer("maxzoom"), Some(3), "maxzoom");
+
+	// Assert center matches the custom value
+	let center = tj.center.expect("center should be present");
+	assert_eq!(center.0, 20.0, "center longitude");
+	assert_eq!(center.1, 30.0, "center latitude");
+	assert_eq!(center.2, 2, "center zoom");
 
 	Ok(())
 }
