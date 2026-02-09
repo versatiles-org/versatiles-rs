@@ -203,20 +203,28 @@ impl TileJSON {
 	// Pyramid Integration
 	// -------------------------------------------------------------------------
 
-	/// Updates this `TileJSON` based on a [`TileBBoxPyramid`].
+	/// Updates this `TileJSON` based on a [`TileBBoxPyramid`], using pyramid values only as fallback.
 	///
-	/// - If the pyramid includes a `GeoBBox`, intersects or sets `self.bounds` via [`TileJSON::limit_bbox`].
-	/// - If the pyramid includes `zoom_min`, calls [`TileJSON::set_min_zoom`].
-	/// - If the pyramid includes `zoom_max`, calls [`TileJSON::set_max_zoom`].
+	/// - Sets `bounds` from the pyramid only if `self.bounds` is `None`.
+	/// - Sets `center` from the pyramid only if `self.center` is `None`.
+	/// - Sets `minzoom` from the pyramid only if not already present in `self.values`.
+	/// - Sets `maxzoom` from the pyramid only if not already present in `self.values`.
 	pub fn update_from_pyramid(&mut self, pyramid: &TileBBoxPyramid) {
-		if let Some(bbox) = pyramid.get_geo_bbox() {
-			self.limit_bbox(bbox);
+		if self.bounds.is_none() {
+			self.bounds = pyramid.get_geo_bbox();
 		}
-		if let Some(z) = pyramid.get_level_min() {
-			self.set_min_zoom(z);
+		if self.center.is_none() {
+			self.center = pyramid.get_geo_center();
 		}
-		if let Some(z) = pyramid.get_level_max() {
-			self.set_max_zoom(z);
+		if self.values.get_integer("minzoom").is_none() {
+			if let Some(z) = pyramid.get_level_min() {
+				self.set_min_zoom(z);
+			}
+		}
+		if self.values.get_integer("maxzoom").is_none() {
+			if let Some(z) = pyramid.get_level_max() {
+				self.set_max_zoom(z);
+			}
 		}
 	}
 
