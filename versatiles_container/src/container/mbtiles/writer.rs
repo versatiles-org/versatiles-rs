@@ -167,11 +167,20 @@ impl TilesWriter for MBTilesWriter {
 		writer.set_metadata("format", format)?;
 		writer.set_metadata("type", "baselayer")?;
 		writer.set_metadata("version", "3.0")?;
+		let tilejson = reader.tilejson();
 		let pyramid = &reader.metadata().bbox_pyramid;
-		let bbox = pyramid.get_geo_bbox().unwrap();
-		let center = pyramid.get_geo_center().unwrap();
-		let zoom_min = pyramid.get_level_min().unwrap();
-		let zoom_max = pyramid.get_level_max().unwrap();
+		let bbox = tilejson.bounds.or_else(|| pyramid.get_geo_bbox()).unwrap();
+		let center = tilejson.center.or_else(|| pyramid.get_geo_center()).unwrap();
+		let zoom_min = tilejson
+			.get_integer("minzoom")
+			.map(|v| v as u8)
+			.or_else(|| pyramid.get_level_min())
+			.unwrap();
+		let zoom_max = tilejson
+			.get_integer("maxzoom")
+			.map(|v| v as u8)
+			.or_else(|| pyramid.get_level_max())
+			.unwrap();
 		writer.set_metadata(
 			"bounds",
 			&format!("{},{},{},{}", bbox.x_min, bbox.y_min, bbox.x_max, bbox.y_max),
@@ -179,8 +188,6 @@ impl TilesWriter for MBTilesWriter {
 		writer.set_metadata("center", &format!("{},{},{}", center.0, center.1, center.2))?;
 		writer.set_metadata("minzoom", &zoom_min.to_string())?;
 		writer.set_metadata("maxzoom", &zoom_max.to_string())?;
-
-		let tilejson = reader.tilejson();
 		if let Some(vector_layers) = tilejson.as_object().get("vector_layers") {
 			writer.set_metadata(
 				"json",
