@@ -84,6 +84,11 @@ impl MockReader {
 		})
 	}
 
+	/// Returns a mutable reference to the TileJSON metadata.
+	pub fn tilejson_mut(&mut self) -> &mut TileJSON {
+		&mut self.tilejson
+	}
+
 	/// Creates a new mock tiles reader with the specified parameters.
 	#[context("creating mock reader from parameters")]
 	pub fn new_mock(metadata: TileSourceMetadata) -> Result<MockReader> {
