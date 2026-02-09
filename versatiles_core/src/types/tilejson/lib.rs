@@ -236,6 +236,12 @@ impl TileJSON {
 		self.values.get_str(key)
 	}
 
+	/// Retrieves an `i64` value from `self.values` by `key`, if present and an integer.
+	#[must_use]
+	pub fn get_integer(&self, key: &str) -> Option<i64> {
+		self.values.get_integer(key)
+	}
+
 	/// Inserts or updates a byte (`u8`) value in `self.values`.
 	pub fn set_byte(&mut self, key: &str, value: u8) -> Result<()> {
 		self.values.insert(key, &JsonValue::from(value))
