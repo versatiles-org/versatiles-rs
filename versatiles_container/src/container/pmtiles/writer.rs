@@ -91,9 +91,10 @@ impl TilesWriter for PMTilesWriter {
 
 		writer.set_position(16384)?;
 
-		let mut header = HeaderV3::from_parameters(&parameters);
+		let tilejson = reader.tilejson();
+		let mut header = HeaderV3::from_parameters(&parameters, tilejson);
 
-		let mut metadata: Blob = reader.tilejson().into();
+		let mut metadata: Blob = tilejson.into();
 		metadata = compress(metadata, INTERNAL_COMPRESSION)?;
 		header.metadata = writer.append(&metadata)?;
 

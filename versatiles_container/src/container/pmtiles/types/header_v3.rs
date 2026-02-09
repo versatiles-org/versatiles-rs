@@ -2,7 +2,7 @@ use super::{PMTilesCompression, PMTilesType};
 use crate::TileSourceMetadata;
 use anyhow::{Result, ensure};
 use versatiles_core::{
-	Blob, ByteRange,
+	Blob, ByteRange, TileJSON,
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 	utils::float_to_int,
 };
@@ -32,12 +32,13 @@ pub struct HeaderV3 {
 }
 
 impl HeaderV3 {
-	pub fn from_parameters(parameters: &TileSourceMetadata) -> HeaderV3 {
+	pub fn from_parameters(parameters: &TileSourceMetadata, tilejson: &TileJSON) -> HeaderV3 {
 		use PMTilesCompression as PC;
 		use PMTilesType as PT;
 
 		let bbox_pyramid = &parameters.bbox_pyramid;
-		let bbox = bbox_pyramid.get_geo_bbox().unwrap();
+		let bbox = tilejson.bounds.or_else(|| bbox_pyramid.get_geo_bbox()).unwrap();
+		let center = tilejson.center.or_else(|| bbox_pyramid.get_geo_center());
 
 		Self {
 			root_dir: ByteRange::new(0, 0),
@@ -51,15 +52,30 @@ impl HeaderV3 {
 			internal_compression: PC::Gzip,
 			tile_compression: PC::from_value(parameters.tile_compression).unwrap_or(PC::Unknown),
 			tile_type: PT::from_value(parameters.tile_format).unwrap_or(PT::UNKNOWN),
-			min_zoom: bbox_pyramid.get_level_min().unwrap_or(0),
-			max_zoom: bbox_pyramid.get_level_max().unwrap_or(14),
+			min_zoom: tilejson
+				.get_integer("minzoom")
+				.map(|v| v as u8)
+				.or_else(|| bbox_pyramid.get_level_min())
+				.unwrap_or(0),
+			max_zoom: tilejson
+				.get_integer("maxzoom")
+				.map(|v| v as u8)
+				.or_else(|| bbox_pyramid.get_level_max())
+				.unwrap_or(14),
 			min_lon_e7: float_to_int(bbox.x_min * 1e7).unwrap(),
 			min_lat_e7: float_to_int(bbox.y_min * 1e7).unwrap(),
 			max_lon_e7: float_to_int(bbox.x_max * 1e7).unwrap(),
 			max_lat_e7: float_to_int(bbox.y_max * 1e7).unwrap(),
-			center_zoom: bbox_pyramid.get_good_level().unwrap_or(0),
-			center_lon_e7: float_to_int((bbox.x_min + bbox.x_max) * 5e6).unwrap(),
-			center_lat_e7: float_to_int((bbox.y_min + bbox.y_max) * 5e6).unwrap(),
+			center_zoom: center
+				.map(|c| c.2)
+				.or_else(|| bbox_pyramid.get_good_level())
+				.unwrap_or(0),
+			center_lon_e7: center
+				.map(|c| float_to_int(c.0 * 1e7).unwrap())
+				.unwrap_or_else(|| float_to_int((bbox.x_min + bbox.x_max) * 5e6).unwrap()),
+			center_lat_e7: center
+				.map(|c| float_to_int(c.1 * 1e7).unwrap())
+				.unwrap_or_else(|| float_to_int((bbox.y_min + bbox.y_max) * 5e6).unwrap()),
 		}
 	}
 
