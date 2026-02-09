@@ -60,8 +60,14 @@ impl TileJSON {
 			tile_format: tj.tile_format.map(|f| f.to_string()),
 			tile_schema: tj.tile_schema.map(|s| s.to_string()),
 			tile_size: tj.tile_size.map(|s| f64::from(s.size())),
-			minzoom: f64::from(p.get_level_min().unwrap_or(0)),
-			maxzoom: f64::from(p.get_level_max().unwrap_or(0)),
+			minzoom: tj
+				.get_integer("minzoom")
+				.map(|v| v as f64)
+				.unwrap_or_else(|| f64::from(p.get_level_min().unwrap_or(0))),
+			maxzoom: tj
+				.get_integer("maxzoom")
+				.map(|v| v as f64)
+				.unwrap_or_else(|| f64::from(p.get_level_max().unwrap_or(0))),
 			tilejson: String::from("3.0"),
 		}
 	}
