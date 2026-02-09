@@ -62,6 +62,20 @@ impl Operation {
 		}
 
 		let mut tilejson = source.tilejson().clone();
+
+		// Clear TileJSON values that the filter has overridden so update_tilejson
+		// recalculates them from the narrowed pyramid.
+		if args.bbox.is_some() {
+			tilejson.bounds = None;
+			tilejson.center = None;
+		}
+		if args.level_min.is_some() {
+			tilejson.remove("minzoom");
+		}
+		if args.level_max.is_some() {
+			tilejson.remove("maxzoom");
+		}
+
 		metadata.update_tilejson(&mut tilejson);
 
 		Ok(Self {

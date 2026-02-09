@@ -250,6 +250,11 @@ impl TileJSON {
 		self.values.get_integer(key)
 	}
 
+	/// Removes the value associated with `key` from `self.values`, returning `true` if it was present.
+	pub fn remove(&mut self, key: &str) -> bool {
+		self.values.remove(key)
+	}
+
 	/// Inserts or updates a byte (`u8`) value in `self.values`.
 	pub fn set_byte(&mut self, key: &str, value: u8) -> Result<()> {
 		self.values.insert(key, &JsonValue::from(value))

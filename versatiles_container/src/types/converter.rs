@@ -155,6 +155,11 @@ impl TilesConvertReader {
 		}
 
 		let mut tilejson = reader.tilejson().clone();
+		if cp.bbox_pyramid.is_some() || cp.flip_y || cp.swap_xy {
+			// Clear bounds and center so they are recalculated from the modified pyramid
+			tilejson.bounds = None;
+			tilejson.center = None;
+		}
 		new_rp.update_tilejson(&mut tilejson);
 
 		Ok(TilesConvertReader {

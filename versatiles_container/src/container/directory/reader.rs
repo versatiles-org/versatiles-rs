@@ -308,7 +308,7 @@ mod tests {
 
 		assert_eq!(
 			reader.tilejson().as_string(),
-			"{\"bounds\":[-90,66.51326,-45,79.171335],\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
+			"{\"bounds\":[-90,66.51326,-45,79.171335],\"center\":[-67.5,72.842298,3],\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 
 		let mut tile_data = reader.get_tile(&TileCoord::new(3, 2, 1)?).await?.unwrap();
@@ -371,7 +371,7 @@ mod tests {
 		let reader = DirectoryReader::open_path(&dir).unwrap();
 		assert_eq!(
 			reader.tilejson().as_string(),
-			"{\"bounds\":[-90,66.51326,0,85.051129],\"maxzoom\":2,\"minzoom\":2,\"tilejson\":\"3.0.0\",\"type\":\"dummy data\"}"
+			"{\"bounds\":[-90,66.51326,0,85.051129],\"center\":[-45,75.782195,2],\"maxzoom\":2,\"minzoom\":2,\"tilejson\":\"3.0.0\",\"type\":\"dummy data\"}"
 		);
 
 		Ok(())
@@ -476,7 +476,7 @@ mod tests {
 
 		assert_eq!(
 			reader.tilejson().as_string(),
-			"{\"bounds\":[-90,66.51326,-45,79.171335],\"key\":\"value\",\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\"}"
+			"{\"bounds\":[-90,66.51326,-45,79.171335],\"center\":[-67.5,72.842298,3],\"key\":\"value\",\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\"}"
 		);
 
 		Ok(())

@@ -102,6 +102,11 @@ impl TileJsonValues {
 	{
 		self.0.insert(key.to_owned(), TileJsonValue::from(value));
 	}
+
+	/// Removes the value associated with `key`, returning `true` if it was present.
+	pub fn remove(&mut self, key: &str) -> bool {
+		self.0.remove(key).is_some()
+	}
 }
 
 impl Default for TileJsonValues {

@@ -130,7 +130,7 @@ mod tests {
 		assert_eq!(container.prefix.str, "/tiles/prefix/");
 		assert_eq!(
 			container.build_tile_json().await?.as_str(),
-			"{\"bounds\":[-180,-85.051129,180,85.051129],\"maxzoom\":6,\"minzoom\":2,\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tile_type\":\"raster\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
+			"{\"bounds\":[-180,-85.051129,180,85.051129],\"center\":[0,0,4],\"maxzoom\":6,\"minzoom\":2,\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tile_type\":\"raster\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
 		);
 
 		Ok(())
