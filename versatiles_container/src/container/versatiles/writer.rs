@@ -95,16 +95,23 @@ impl TilesWriter for VersaTilesWriter {
 		let bbox_pyramid = reader.metadata().bbox_pyramid.clone();
 		log::trace!("convert_from - bbox_pyramid: {bbox_pyramid:#}");
 
-		// Create the file header
-		let mut header = FileHeader::new(
-			parameters.tile_format,
-			tile_compression,
-			[
-				bbox_pyramid.get_level_min().ok_or(anyhow!("invalid minzoom"))?,
-				bbox_pyramid.get_level_max().ok_or(anyhow!("invalid maxzoom"))?,
-			],
-			&bbox_pyramid.get_geo_bbox().ok_or(anyhow!("invalid geo bounding box"))?,
-		)?;
+		// Create the file header, preferring TileJSON values over pyramid-calculated ones
+		let tilejson = reader.tilejson();
+		let zoom_min = tilejson
+			.get_integer("minzoom")
+			.map(|v| v as u8)
+			.or_else(|| bbox_pyramid.get_level_min())
+			.ok_or(anyhow!("invalid minzoom"))?;
+		let zoom_max = tilejson
+			.get_integer("maxzoom")
+			.map(|v| v as u8)
+			.or_else(|| bbox_pyramid.get_level_max())
+			.ok_or(anyhow!("invalid maxzoom"))?;
+		let bbox = tilejson
+			.bounds
+			.or_else(|| bbox_pyramid.get_geo_bbox())
+			.ok_or(anyhow!("invalid geo bounding box"))?;
+		let mut header = FileHeader::new(parameters.tile_format, tile_compression, [zoom_min, zoom_max], &bbox)?;
 
 		// Convert the header to a blob and write it
 		let blob: Blob = header.to_blob()?;
