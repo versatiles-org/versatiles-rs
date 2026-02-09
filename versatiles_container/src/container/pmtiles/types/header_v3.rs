@@ -54,12 +54,12 @@ impl HeaderV3 {
 			tile_type: PT::from_value(parameters.tile_format).unwrap_or(PT::UNKNOWN),
 			min_zoom: tilejson
 				.get_integer("minzoom")
-				.map(|v| v as u8)
+				.and_then(|v| u8::try_from(v).ok())
 				.or_else(|| bbox_pyramid.get_level_min())
 				.unwrap_or(0),
 			max_zoom: tilejson
 				.get_integer("maxzoom")
-				.map(|v| v as u8)
+				.and_then(|v| u8::try_from(v).ok())
 				.or_else(|| bbox_pyramid.get_level_max())
 				.unwrap_or(14),
 			min_lon_e7: float_to_int(bbox.x_min * 1e7).unwrap(),
@@ -70,12 +70,14 @@ impl HeaderV3 {
 				.map(|c| c.2)
 				.or_else(|| bbox_pyramid.get_good_level())
 				.unwrap_or(0),
-			center_lon_e7: center
-				.map(|c| float_to_int(c.0 * 1e7).unwrap())
-				.unwrap_or_else(|| float_to_int((bbox.x_min + bbox.x_max) * 5e6).unwrap()),
-			center_lat_e7: center
-				.map(|c| float_to_int(c.1 * 1e7).unwrap())
-				.unwrap_or_else(|| float_to_int((bbox.y_min + bbox.y_max) * 5e6).unwrap()),
+			center_lon_e7: center.map_or_else(
+				|| float_to_int((bbox.x_min + bbox.x_max) * 5e6).unwrap(),
+				|c| float_to_int(c.0 * 1e7).unwrap(),
+			),
+			center_lat_e7: center.map_or_else(
+				|| float_to_int((bbox.y_min + bbox.y_max) * 5e6).unwrap(),
+				|c| float_to_int(c.1 * 1e7).unwrap(),
+			),
 		}
 	}
 

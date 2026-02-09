@@ -99,12 +99,12 @@ impl TilesWriter for VersaTilesWriter {
 		let tilejson = reader.tilejson();
 		let zoom_min = tilejson
 			.get_integer("minzoom")
-			.map(|v| v as u8)
+			.and_then(|v| u8::try_from(v).ok())
 			.or_else(|| bbox_pyramid.get_level_min())
 			.ok_or(anyhow!("invalid minzoom"))?;
 		let zoom_max = tilejson
 			.get_integer("maxzoom")
-			.map(|v| v as u8)
+			.and_then(|v| u8::try_from(v).ok())
 			.or_else(|| bbox_pyramid.get_level_max())
 			.ok_or(anyhow!("invalid maxzoom"))?;
 		let bbox = tilejson

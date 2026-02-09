@@ -173,12 +173,12 @@ impl TilesWriter for MBTilesWriter {
 		let center = tilejson.center.or_else(|| pyramid.get_geo_center()).unwrap();
 		let zoom_min = tilejson
 			.get_integer("minzoom")
-			.map(|v| v as u8)
+			.and_then(|v| u8::try_from(v).ok())
 			.or_else(|| pyramid.get_level_min())
 			.unwrap();
 		let zoom_max = tilejson
 			.get_integer("maxzoom")
-			.map(|v| v as u8)
+			.and_then(|v| u8::try_from(v).ok())
 			.or_else(|| pyramid.get_level_max())
 			.unwrap();
 		writer.set_metadata(

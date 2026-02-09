@@ -216,15 +216,15 @@ impl TileJSON {
 		if self.center.is_none() {
 			self.center = pyramid.get_geo_center();
 		}
-		if self.values.get_integer("minzoom").is_none() {
-			if let Some(z) = pyramid.get_level_min() {
-				self.set_min_zoom(z);
-			}
+		if self.values.get_integer("minzoom").is_none()
+			&& let Some(z) = pyramid.get_level_min()
+		{
+			self.set_min_zoom(z);
 		}
-		if self.values.get_integer("maxzoom").is_none() {
-			if let Some(z) = pyramid.get_level_max() {
-				self.set_max_zoom(z);
-			}
+		if self.values.get_integer("maxzoom").is_none()
+			&& let Some(z) = pyramid.get_level_max()
+		{
+			self.set_max_zoom(z);
 		}
 	}
 
