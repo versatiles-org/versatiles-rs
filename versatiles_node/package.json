@@ -79,7 +79,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@napi-rs/cli": "^3.5.1",
-    "@types/node": "^25.2.0",
+    "@types/node": "^25.2.2",
     "@vitest/ui": "^4.0.18",
     "chalk": "^5.6.2",
     "eslint": "^9.39.2",
@@ -88,7 +88,7 @@
     "prettier": "^3.8.1",
     "tsx": "^4.21.0",
     "typedoc": "^0.28.16",
-    "typedoc-plugin-markdown": "^4.9.0",
+    "typedoc-plugin-markdown": "^4.10.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.54.0",
     "vitest": "^4.0.18"
