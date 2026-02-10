@@ -50,7 +50,7 @@ impl VPLNode {
 		self.properties.get(field).map_or(Ok(None), |list| {
 			ensure!(
 				list.len() == 1,
-				"In operation '{}' the parameter '{field}' must have exactly one entry.",
+				"In operation '{}' the parameter '{field}' must be a single value, e.g. {field}=value",
 				self.name
 			);
 			Ok(list.first())
@@ -74,7 +74,7 @@ impl VPLNode {
 		self.get_property(field)?.map_or(Ok(None), move |v| {
 			T::try_from(v).map(Some).map_err(|e| {
 				anyhow!(
-					"In operation '{}' the parameter '{field}' must be a valid enum value: {}",
+					"In operation '{}' the parameter '{field}' has an invalid value: {}",
 					self.name,
 					e
 				)
@@ -115,9 +115,14 @@ impl VPLNode {
 		T: FromStr,
 		<T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
 	{
-		self
-			.get_property(field)?
-			.map_or(Ok(None), |v| v.parse::<T>().map(Some).map_err(Into::into))
+		self.get_property(field)?.map_or(Ok(None), |v| {
+			v.parse::<T>().map(Some).map_err(|_| {
+				anyhow!(
+					"In operation '{}' the parameter '{field}' must be a number, e.g. {field}=42 — got '{v}'",
+					self.name
+				)
+			})
+		})
 	}
 
 	/// Required numeric parameter accessor; errors when missing or when parsing fails.
@@ -140,12 +145,19 @@ impl VPLNode {
 		Ok(if let Some(vec) = self.get_property_vec(field) {
 			ensure!(
 				vec.len() == N,
-				"In operation '{}' the parameter '{field}' must be an array of {N} numbers.",
+				"In operation '{}' the parameter '{field}' must be an array of {N} numbers, e.g. {field}=[1,2,...,{N}]",
 				self.name
 			);
 			Some(
 				vec.iter()
-					.map(|s| s.parse::<T>().map_err(|e| anyhow!("{e}")))
+					.map(|s| {
+						s.parse::<T>().map_err(|_| {
+							anyhow!(
+								"In operation '{}' the parameter '{field}': failed to parse element '{s}' as a number",
+								self.name
+							)
+						})
+					})
 					.collect::<Result<Vec<_>>>()?
 					.try_into()
 					.unwrap(),
@@ -167,7 +179,13 @@ impl VPLNode {
 
 	/// Internal helper: converts `Ok(Some(_))` to the value or produces a standard "required" error.
 	fn required<T>(&self, field: &str, result: Result<Option<T>>) -> Result<T> {
-		result?.ok_or_else(|| anyhow!("In operation '{}' the parameter '{}' is required.", self.name, field))
+		result?.ok_or_else(|| {
+			anyhow!(
+				"In operation '{}' the parameter '{}' is required but missing.",
+				self.name,
+				field
+			)
+		})
 	}
 }
 

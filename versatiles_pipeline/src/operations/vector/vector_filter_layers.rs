@@ -181,7 +181,7 @@ mod tests {
 				"Failed to build pipeline from VPL",
 				"Failed to create transform operation from VPL node",
 				"Failed to get required property string 'filter' from VPL node 'vector_filter_layers'",
-				"In operation 'vector_filter_layers' the parameter 'filter' is required.",
+				"In operation 'vector_filter_layers' the parameter 'filter' is required but missing.",
 			]
 		);
 	}

@@ -284,7 +284,7 @@ fn build_impl_tokens(name: &Ident, field_names: &[String], parser_fields: &[Toke
 				for property_name in property_names {
 					if !argument_names.contains(&property_name) {
 						anyhow::bail!(
-							"The '{}' operation does not support the argument '{}'.\nOnly the following arguments are supported:\n'{}'",
+							"The '{}' operation does not have a parameter '{}'.\nSupported parameters: '{}'",
 							node.name,
 							property_name,
 							argument_names.join("', '")
@@ -405,7 +405,7 @@ mod tests {
 				"        for property_name in property_names {",
 				"            if !argument_names.contains(&property_name) {",
 				"                anyhow::bail!(",
-				"                    \"The '{}' operation does not support the argument '{}'.\\nOnly the following arguments are supported:\\n'{}'\",",
+				"                    \"The '{}' operation does not have a parameter '{}'.\\nSupported parameters: '{}'\",",
 				"                    node.name, property_name, argument_names.join(\"', '\")",
 				"                );",
 				"            }",
@@ -441,7 +441,7 @@ mod tests {
 				"        for property_name in property_names {",
 				"            if !argument_names.contains(&property_name) {",
 				"                anyhow::bail!(",
-				"                    \"The '{}' operation does not support the argument '{}'.\\nOnly the following arguments are supported:\\n'{}'\",",
+				"                    \"The '{}' operation does not have a parameter '{}'.\\nSupported parameters: '{}'\",",
 				"                    node.name, property_name, argument_names.join(\"', '\")",
 				"                );",
 				"            }",

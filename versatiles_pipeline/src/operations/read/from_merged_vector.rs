@@ -242,7 +242,7 @@ mod tests {
 				"Failed to build pipeline from VPL",
 				"Failed to create read operation from VPL node",
 				"Failed to build from_merged_vector operation",
-				"The 'from_merged_vector' operation does not support the argument 'color'.\nOnly the following arguments are supported:\n'sources'"
+				"The 'from_merged_vector' operation does not have a parameter 'color'.\nSupported parameters: 'sources'"
 			]
 		);
 	}
