@@ -117,14 +117,14 @@ mod tests {
 	async fn test_meta_update_sets_fields_and_preserves_others() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
-            .operation_from_vpl(
-                "from_debug format=mvt \
+			.operation_from_vpl(
+				"from_debug format=mvt \
                  | filter bbox=[0,0,10,10] level_min=2 level_max=7 \
                  | meta_update name=\"Test Layer\" description=\"My desc\" attribution=\"CC-BY\" \
                    bounds=[-10,-5,10,5] center=[1.5,2.5,8] fillzoom=12 legend=\"My legend\" \
                    schema=\"shortbread@1.0\"",
-            )
-            .await?;
+			)
+			.await?;
 
 		let tj = op.tilejson();
 
