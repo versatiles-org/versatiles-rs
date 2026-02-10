@@ -326,11 +326,11 @@ impl TileJSON {
 	}
 
 	pub fn max_zoom(&self) -> Option<u8> {
-		self.values.get_integer("maxzoom").map(|z| z as u8)
+		self.values.get_integer("maxzoom").and_then(|z| u8::try_from(z).ok())
 	}
 
 	pub fn min_zoom(&self) -> Option<u8> {
-		self.values.get_integer("minzoom").map(|z| z as u8)
+		self.values.get_integer("minzoom").and_then(|z| u8::try_from(z).ok())
 	}
 
 	// -------------------------------------------------------------------------
