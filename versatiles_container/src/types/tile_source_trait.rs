@@ -139,9 +139,6 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 			p.add_value(level).await;
 		}
 		print
-			.add_key_value("bbox", &format!("{:?}", metadata.bbox_pyramid.get_geo_bbox()))
-			.await;
-		print
 			.add_key_value("tile compression", &metadata.tile_compression)
 			.await;
 		print.add_key_value("tile format", &metadata.tile_format).await;
