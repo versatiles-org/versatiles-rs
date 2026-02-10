@@ -120,7 +120,9 @@ mod tests {
             .operation_from_vpl(
                 "from_debug format=mvt \
                  | filter bbox=[0,0,10,10] level_min=2 level_max=7 \
-                 | meta_update name=\"Test Layer\" description=\"My desc\" attribution=\"CC-BY\" fillzoom=12 schema=\"shortbread@1.0\"",
+                 | meta_update name=\"Test Layer\" description=\"My desc\" attribution=\"CC-BY\" \
+                   bounds=[-10,-5,10,5] center=[1.5,2.5,8] fillzoom=12 legend=\"My legend\" \
+                   schema=\"shortbread@1.0\"",
             )
             .await?;
 
@@ -131,6 +133,16 @@ mod tests {
 		assert_eq!(get_str(tj, "description").as_deref(), Some("My desc"));
 		assert_eq!(get_str(tj, "attribution").as_deref(), Some("CC-BY"));
 		assert_eq!(get_num(tj, "fillzoom"), Some(12.0));
+		assert_eq!(get_str(tj, "legend").as_deref(), Some("My legend"));
+
+		// Bounds
+		assert_eq!(tj.bounds.unwrap().as_tuple(), (-10.0, -5.0, 10.0, 5.0));
+
+		// Center
+		let center = tj.center.unwrap();
+		assert_eq!(center.0, 1.5);
+		assert_eq!(center.1, 2.5);
+		assert_eq!(center.2, 8);
 
 		// Tile Content was parsed into typed field
 		assert_eq!(tj.tile_schema, Some(TileSchema::try_from("shortbread@1.0")?));
