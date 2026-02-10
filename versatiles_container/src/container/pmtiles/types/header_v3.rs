@@ -52,16 +52,8 @@ impl HeaderV3 {
 			internal_compression: PC::Gzip,
 			tile_compression: PC::from_value(parameters.tile_compression).unwrap_or(PC::Unknown),
 			tile_type: PT::from_value(parameters.tile_format).unwrap_or(PT::UNKNOWN),
-			min_zoom: tilejson
-				.min_zoom()
-				.and_then(|v| u8::try_from(v).ok())
-				.or_else(|| bbox_pyramid.get_level_min())
-				.unwrap_or(0),
-			max_zoom: tilejson
-				.max_zoom()
-				.and_then(|v| u8::try_from(v).ok())
-				.or_else(|| bbox_pyramid.get_level_max())
-				.unwrap_or(14),
+			min_zoom: tilejson.min_zoom().or(bbox_pyramid.get_level_min()).unwrap_or(0),
+			max_zoom: tilejson.max_zoom().or(bbox_pyramid.get_level_max()).unwrap_or(14),
 			min_lon_e7: float_to_int(bbox.x_min * 1e7).unwrap(),
 			min_lat_e7: float_to_int(bbox.y_min * 1e7).unwrap(),
 			max_lon_e7: float_to_int(bbox.x_max * 1e7).unwrap(),

@@ -99,17 +99,15 @@ impl TilesWriter for VersaTilesWriter {
 		let tilejson = reader.tilejson();
 		let zoom_min = tilejson
 			.min_zoom()
-			.and_then(|v| u8::try_from(v).ok())
-			.or_else(|| bbox_pyramid.get_level_min())
+			.or(bbox_pyramid.get_level_min())
 			.ok_or(anyhow!("invalid minzoom"))?;
 		let zoom_max = tilejson
 			.max_zoom()
-			.and_then(|v| u8::try_from(v).ok())
-			.or_else(|| bbox_pyramid.get_level_max())
+			.or(bbox_pyramid.get_level_max())
 			.ok_or(anyhow!("invalid maxzoom"))?;
 		let bbox = tilejson
 			.bounds
-			.or_else(|| bbox_pyramid.get_geo_bbox())
+			.or(bbox_pyramid.get_geo_bbox())
 			.ok_or(anyhow!("invalid geo bounding box"))?;
 		let mut header = FileHeader::new(parameters.tile_format, tile_compression, [zoom_min, zoom_max], &bbox)?;
 

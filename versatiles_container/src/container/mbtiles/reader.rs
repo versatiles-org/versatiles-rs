@@ -193,7 +193,8 @@ impl MBTilesReader {
 						.collect::<Result<Vec<f64>, _>>()?;
 					self.tilejson.center = Some(GeoCenter::try_from(parts)?);
 				}
-				"minzoom" | "maxzoom" => self.tilejson.set_byte(key, value.parse::<u8>()?)?,
+				"minzoom" => self.tilejson.set_min_zoom(value.parse::<u8>()?),
+				"maxzoom" => self.tilejson.set_max_zoom(value.parse::<u8>()?),
 				"json" => {
 					let json = parse_json_str(value).with_context(|| format!("failed to parse JSON: {value}"))?;
 					let object = json.as_object().with_context(|| anyhow!("expected JSON object"))?;

@@ -299,7 +299,7 @@ impl TileJSON {
 		}
 	}
 
-	/// Raises the `minzoom` value to `z` if the current `minzoom` is lower or absent.
+	/// Sets the `minzoom` value to `z`.
 	///
 	/// # Examples
 	/// ```
@@ -312,7 +312,7 @@ impl TileJSON {
 		self.values.set("minzoom", z);
 	}
 
-	/// Lowers the `maxzoom` value to `z` if the current `maxzoom` is higher or absent.
+	/// Sets the `maxzoom` value to `z`.
 	///
 	/// # Examples
 	/// ```
@@ -623,12 +623,12 @@ mod tests {
 	#[test]
 	fn should_merge_minmaxzoom_correctly() -> Result<()> {
 		let mut tj1 = TileJSON::default();
-		tj1.set_byte("minzoom", 5)?;
-		tj1.set_byte("maxzoom", 15)?;
+		tj1.set_min_zoom(5);
+		tj1.set_max_zoom(15);
 
 		let mut tj2 = TileJSON::default();
-		tj2.set_byte("minzoom", 2)?;
-		tj2.set_byte("maxzoom", 20)?;
+		tj2.set_min_zoom(2);
+		tj2.set_max_zoom(20);
 
 		tj1.merge(&tj2)?;
 		// minzoom becomes min(5,2) => 2, maxzoom => max(15,20) => 20
