@@ -132,8 +132,8 @@ mod tests {
 		};
 		rp.update_tilejson(&mut tj);
 		// Bounds and zooms
-		assert_eq!(tj.values.get_integer("minzoom"), Some(1));
-		assert_eq!(tj.values.get_integer("maxzoom"), Some(4));
+		assert_eq!(tj.min_zoom(), Some(1));
+		assert_eq!(tj.max_zoom(), Some(4));
 		// Format, content, and schema
 		assert_eq!(tj.tile_format, Some(TileFormat::PNG));
 		assert_eq!(tj.tile_type, Some(TileType::Raster));

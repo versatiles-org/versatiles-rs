@@ -476,8 +476,8 @@ async fn tilejson_metadata_preserved_over_pyramid(#[case] filename: &str) -> Res
 	assert_eq!(bounds.y_max, 40.0, "bounds y_max");
 
 	// Assert minzoom/maxzoom match the custom values
-	assert_eq!(tj.get_integer("minzoom"), Some(1), "minzoom");
-	assert_eq!(tj.get_integer("maxzoom"), Some(3), "maxzoom");
+	assert_eq!(tj.min_zoom(), Some(1), "minzoom");
+	assert_eq!(tj.max_zoom(), Some(3), "maxzoom");
 
 	// Assert center matches the custom value
 	let center = tj.center.expect("center should be present");

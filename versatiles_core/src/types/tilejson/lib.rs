@@ -214,13 +214,13 @@ impl TileJSON {
 			self.bounds = pyramid.get_geo_bbox();
 		}
 
-		if self.values.get_integer("minzoom").is_none()
+		if self.min_zoom().is_none()
 			&& let Some(z) = pyramid.get_level_min()
 		{
 			self.set_min_zoom(z);
 		}
 
-		if self.values.get_integer("maxzoom").is_none()
+		if self.max_zoom().is_none()
 			&& let Some(z) = pyramid.get_level_max()
 		{
 			self.set_max_zoom(z);
@@ -325,6 +325,14 @@ impl TileJSON {
 		self.values.set("maxzoom", z);
 	}
 
+	pub fn max_zoom(&self) -> Option<u8> {
+		self.values.get_integer("maxzoom").map(|z| z as u8)
+	}
+
+	pub fn min_zoom(&self) -> Option<u8> {
+		self.values.get_integer("minzoom").map(|z| z as u8)
+	}
+
 	// -------------------------------------------------------------------------
 	// Merging
 	// -------------------------------------------------------------------------
@@ -353,13 +361,13 @@ impl TileJSON {
 		}
 
 		// 3. Merge minzoom/maxzoom
-		if let Some(omin) = other.values.get_integer("minzoom") {
-			let new_min = self.values.get_integer("minzoom").map_or(omin, |mz| mz.min(omin));
-			self.values.insert("minzoom", &JsonValue::from(new_min))?;
+		if let Some(omin) = other.min_zoom() {
+			let new_min = self.min_zoom().map_or(omin, |mz| mz.min(omin));
+			self.set_min_zoom(new_min);
 		}
-		if let Some(omax) = other.values.get_integer("maxzoom") {
-			let new_max = self.values.get_integer("maxzoom").map_or(omax, |mz| mz.max(omax));
-			self.values.insert("maxzoom", &JsonValue::from(new_max))?;
+		if let Some(omax) = other.max_zoom() {
+			let new_max = self.max_zoom().map_or(omax, |mz| mz.max(omax));
+			self.set_max_zoom(new_max);
 		}
 
 		// 4. Merge everything else
@@ -624,8 +632,8 @@ mod tests {
 
 		tj1.merge(&tj2)?;
 		// minzoom becomes min(5,2) => 2, maxzoom => max(15,20) => 20
-		assert_eq!(tj1.values.get_integer("minzoom"), Some(2));
-		assert_eq!(tj1.values.get_integer("maxzoom"), Some(20));
+		assert_eq!(tj1.min_zoom(), Some(2));
+		assert_eq!(tj1.max_zoom(), Some(20));
 		Ok(())
 	}
 
@@ -659,8 +667,8 @@ mod tests {
 		);
 
 		// Zoom
-		assert_eq!(tj.values.get_integer("minzoom"), Some(2));
-		assert_eq!(tj.values.get_integer("maxzoom"), Some(12));
+		assert_eq!(tj.min_zoom(), Some(2));
+		assert_eq!(tj.max_zoom(), Some(12));
 	}
 
 	#[test]
@@ -769,10 +777,10 @@ mod tests {
 
 		let mut tj2 = TileJSON::default();
 		tj2.set_max_zoom(10);
-		assert_eq!(tj2.values.get_integer("maxzoom"), Some(10));
+		assert_eq!(tj2.max_zoom(), Some(10));
 		// Higher maxzoom should not increase the value
 		tj2.set_max_zoom(20);
-		assert_eq!(tj2.values.get_integer("maxzoom"), Some(20));
+		assert_eq!(tj2.max_zoom(), Some(20));
 	}
 
 	#[test]

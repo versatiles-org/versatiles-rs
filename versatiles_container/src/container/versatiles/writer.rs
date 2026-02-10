@@ -98,12 +98,12 @@ impl TilesWriter for VersaTilesWriter {
 		// Create the file header, preferring TileJSON values over pyramid-calculated ones
 		let tilejson = reader.tilejson();
 		let zoom_min = tilejson
-			.get_integer("minzoom")
+			.min_zoom()
 			.and_then(|v| u8::try_from(v).ok())
 			.or_else(|| bbox_pyramid.get_level_min())
 			.ok_or(anyhow!("invalid minzoom"))?;
 		let zoom_max = tilejson
-			.get_integer("maxzoom")
+			.max_zoom()
 			.and_then(|v| u8::try_from(v).ok())
 			.or_else(|| bbox_pyramid.get_level_max())
 			.ok_or(anyhow!("invalid maxzoom"))?;

@@ -53,12 +53,12 @@ impl HeaderV3 {
 			tile_compression: PC::from_value(parameters.tile_compression).unwrap_or(PC::Unknown),
 			tile_type: PT::from_value(parameters.tile_format).unwrap_or(PT::UNKNOWN),
 			min_zoom: tilejson
-				.get_integer("minzoom")
+				.min_zoom()
 				.and_then(|v| u8::try_from(v).ok())
 				.or_else(|| bbox_pyramid.get_level_min())
 				.unwrap_or(0),
 			max_zoom: tilejson
-				.get_integer("maxzoom")
+				.max_zoom()
 				.and_then(|v| u8::try_from(v).ok())
 				.or_else(|| bbox_pyramid.get_level_max())
 				.unwrap_or(14),
