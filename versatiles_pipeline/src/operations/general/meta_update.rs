@@ -3,7 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileJSON, TileSchema, TileStream};
+use versatiles_core::{GeoBBox, GeoCenter, TileBBox, TileJSON, TileSchema, TileStream};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -11,10 +11,16 @@ use versatiles_derive::context;
 struct Args {
 	/// Attribution text.
 	attribution: Option<String>,
+	/// Geographic bounding box [west, south, east, north].
+	bounds: Option<[f64; 4]>,
+	/// Default center [longitude, latitude, zoom].
+	center: Option<[f64; 3]>,
 	/// Description text.
 	description: Option<String>,
 	/// Fill zoom level.
 	fillzoom: Option<u8>,
+	/// Legend text.
+	legend: Option<String>,
 	/// Name text.
 	name: Option<String>,
 	/// Tile schema, allowed values: "rgb", "rgba", "dem/mapbox", "dem/terrarium", "dem/versatiles", "openmaptiles", "shortbread@1.0", "other", "unknown"
@@ -40,12 +46,24 @@ impl Operation {
 			tilejson.set_string("attribution", &attribution)?;
 		}
 
+		if let Some(bounds) = args.bounds {
+			tilejson.bounds = Some(GeoBBox::try_from(&bounds)?);
+		}
+
+		if let Some(center) = args.center {
+			tilejson.center = Some(GeoCenter::try_from(center.to_vec())?);
+		}
+
 		if let Some(description) = args.description {
 			tilejson.set_string("description", &description)?;
 		}
 
 		if let Some(fillzoom) = args.fillzoom {
 			tilejson.set_byte("fillzoom", fillzoom)?;
+		}
+
+		if let Some(legend) = args.legend {
+			tilejson.set_string("legend", &legend)?;
 		}
 
 		if let Some(name) = args.name {
