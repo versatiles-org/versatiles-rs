@@ -144,8 +144,11 @@ Update metadata, see also <https://github.com/mapbox/tilejson-spec/tree/master/3
 ### Parameters
 
 - *`attribution`: String (optional)* - Attribution text.
+- *`bounds`: [f64,f64,f64,f64] (optional)* - Geographic bounding box [west, south, east, north].
+- *`center`: [f64,f64,f64] (optional)* - Default center [longitude, latitude, zoom].
 - *`description`: String (optional)* - Description text.
 - *`fillzoom`: u8 (optional)* - Fill zoom level.
+- *`legend`: String (optional)* - Legend text.
 - *`name`: String (optional)* - Name text.
 - *`schema`: TileSchema (optional)* - Tile schema, allowed values: "rgb", "rgba", "dem/mapbox", "dem/terrarium", "dem/versatiles", "openmaptiles", "shortbread@1.0", "other", "unknown"
 
