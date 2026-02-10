@@ -170,7 +170,7 @@ impl TilesWriter for MBTilesWriter {
 		let tilejson = reader.tilejson();
 		let pyramid = &reader.metadata().bbox_pyramid;
 		let bbox = tilejson.bounds.or(pyramid.get_geo_bbox()).unwrap();
-		let center = tilejson.center.unwrap();
+		let center = tilejson.center.or(pyramid.get_geo_center()).unwrap();
 		let zoom_min = tilejson.min_zoom().or(pyramid.get_level_min()).unwrap();
 		let zoom_max = tilejson.max_zoom().or(pyramid.get_level_max()).unwrap();
 		writer.set_metadata(
