@@ -103,6 +103,14 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param2: None,
 	},
 	TypeMapping {
+		pattern: "Option<[f64;3]>",
+		display_name: "[f64,f64,f64]",
+		method_name: "get_property_number_array_option",
+		is_required: false,
+		generic_param: Some("f64"),
+		generic_param2: Some("3"),
+	},
+	TypeMapping {
 		pattern: "Option<[f64;4]>",
 		display_name: "[f64,f64,f64,f64]",
 		method_name: "get_property_number_array_option",
