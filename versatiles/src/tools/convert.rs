@@ -62,8 +62,10 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 
 	let reader = runtime.get_reader_from_str(&arguments.input_file).await?;
 
+	let (bbox_pyramid, geo_bbox) = get_bbox_pyramid(arguments)?;
 	let parameters = TilesConverterParameters {
-		bbox_pyramid: get_bbox_pyramid(arguments)?,
+		bbox_pyramid,
+		geo_bbox,
 		flip_y: arguments.flip_y,
 		swap_xy: arguments.swap_xy,
 		tile_compression: arguments.compress,
@@ -77,12 +79,13 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 }
 
 #[context("Failed to get bounding box pyramid")]
-fn get_bbox_pyramid(arguments: &Subcommand) -> Result<Option<TileBBoxPyramid>> {
+fn get_bbox_pyramid(arguments: &Subcommand) -> Result<(Option<TileBBoxPyramid>, Option<GeoBBox>)> {
 	if arguments.min_zoom.is_none() && arguments.max_zoom.is_none() && arguments.bbox.is_none() {
-		return Ok(None);
+		return Ok((None, None));
 	}
 
 	let mut bbox_pyramid = TileBBoxPyramid::new_full();
+	let mut geo_bbox = None;
 
 	if let Some(level_min) = arguments.min_zoom {
 		bbox_pyramid.set_level_min(level_min);
@@ -104,14 +107,16 @@ fn get_bbox_pyramid(arguments: &Subcommand) -> Result<Option<TileBBoxPyramid>> {
 			bail!("bbox must contain exactly 4 numbers, but instead i'v got: {bbox:?}");
 		}
 
-		bbox_pyramid.intersect_geo_bbox(&GeoBBox::try_from(values)?)?;
+		let bbox = GeoBBox::try_from(values)?;
+		bbox_pyramid.intersect_geo_bbox(&bbox)?;
+		geo_bbox = Some(bbox);
 
 		if let Some(b) = arguments.bbox_border {
 			bbox_pyramid.add_border(b, b, b, b);
 		}
 	}
 
-	Ok(Some(bbox_pyramid))
+	Ok((Some(bbox_pyramid), geo_bbox))
 }
 
 #[cfg(test)]

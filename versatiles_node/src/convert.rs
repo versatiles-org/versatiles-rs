@@ -50,6 +50,7 @@ pub(crate) async fn convert_tiles_with_options(
 	});
 
 	let mut bbox_pyramid: Option<TileBBoxPyramid> = None;
+	let mut geo_bbox_filter: Option<GeoBBox> = None;
 
 	if opts.min_zoom.is_some() || opts.max_zoom.is_some() || opts.bbox.is_some() {
 		let mut pyramid = TileBBoxPyramid::new_full();
@@ -70,6 +71,7 @@ pub(crate) async fn convert_tiles_with_options(
 			}
 			let geo_bbox = napi_result!(GeoBBox::try_from(bbox_vec))?;
 			napi_result!(pyramid.intersect_geo_bbox(&geo_bbox))?;
+			geo_bbox_filter = Some(geo_bbox);
 
 			if let Some(border) = opts.bbox_border {
 				pyramid.add_border(border, border, border, border);
@@ -87,6 +89,7 @@ pub(crate) async fn convert_tiles_with_options(
 
 	let params = TilesConverterParameters {
 		bbox_pyramid,
+		geo_bbox: geo_bbox_filter,
 		tile_compression,
 		flip_y: opts.flip_y.unwrap_or(false),
 		swap_xy: opts.swap_xy.unwrap_or(false),
@@ -532,6 +535,7 @@ mod tests {
 
 		let params = TilesConverterParameters {
 			bbox_pyramid,
+			geo_bbox: None,
 			tile_compression: compression,
 			flip_y,
 			swap_xy,

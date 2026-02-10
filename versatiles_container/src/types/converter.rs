@@ -44,7 +44,7 @@ use crate::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, 
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{path::Path, sync::Arc};
-use versatiles_core::{TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileStream};
+use versatiles_core::{GeoBBox, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileStream};
 use versatiles_derive::context;
 
 /// Parameters that control how tiles are transformed during reading/conversion.
@@ -59,6 +59,9 @@ pub struct TilesConverterParameters {
 	/// Optional spatial/zoom restriction. When set, only tiles inside the given
 	/// [`TileBBoxPyramid`] are read/streamed. Existing bounds are intersected with this.
 	pub bbox_pyramid: Option<TileBBoxPyramid>,
+	/// Optional geographic bounding box filter. When set, existing tilejson bounds are
+	/// intersected with this bbox rather than being recalculated from the pyramid.
+	pub geo_bbox: Option<GeoBBox>,
 	/// Optional compression override. When set, tile payloads are re-encoded to this
 	/// [`TileCompression`] (e.g., Gzip → Brotli). If `None`, the source compression is kept.
 	pub tile_compression: Option<TileCompression>,
@@ -73,6 +76,7 @@ impl Default for TilesConverterParameters {
 	fn default() -> Self {
 		TilesConverterParameters {
 			bbox_pyramid: None,
+			geo_bbox: None,
 			tile_compression: None,
 			flip_y: false,
 			swap_xy: false,
@@ -155,9 +159,12 @@ impl TilesConvertReader {
 		}
 
 		let mut tilejson = reader.tilejson().clone();
-		if cp.bbox_pyramid.is_some() || cp.flip_y || cp.swap_xy {
-			// Clear bounds and center so they are recalculated from the modified pyramid
-			tilejson.bounds = None;
+
+		if let Some(ref geo_bbox) = cp.geo_bbox {
+			// Intersect existing tilejson bounds with the given geo bbox
+			if let Some(ref mut bounds) = tilejson.bounds {
+				bounds.intersect(geo_bbox);
+			}
 			tilejson.center = None;
 		}
 		new_rp.update_tilejson(&mut tilejson);
@@ -294,6 +301,7 @@ mod tests {
 
 		let cp = TilesConverterParameters {
 			bbox_pyramid: Some(pyramid_convert),
+			geo_bbox: None,
 			flip_y,
 			swap_xy,
 			tile_compression: None,
@@ -330,6 +338,7 @@ mod tests {
 	fn test_tiles_converter_parameters_new() {
 		let cp = TilesConverterParameters {
 			bbox_pyramid: Some(TileBBoxPyramid::new_full_up_to(1)),
+			geo_bbox: None,
 			flip_y: true,
 			swap_xy: true,
 			tile_compression: None,
@@ -393,5 +402,54 @@ mod tests {
 		assert_eq!(data, data_flipped);
 
 		Ok(())
+	}
+
+	#[test]
+	fn test_geo_bbox_intersects_existing_tilejson_bounds() {
+		// Source has bounds covering a wide area
+		let source_bounds = GeoBBox::new(10.0, 50.0, 15.0, 55.0).unwrap();
+		let bbox_pyramid = TileBBoxPyramid::new_full_up_to(4);
+		let reader_metadata = TileSourceMetadata::new(MVT, Uncompressed, bbox_pyramid, Traversal::ANY);
+		let mut reader = MockReader::new_mock(reader_metadata).unwrap();
+		reader.tilejson_mut().bounds = Some(source_bounds);
+		let reader = reader.into_shared();
+
+		// User specifies a bbox that partially overlaps
+		let filter_bbox = GeoBBox::new(12.0, 52.0, 20.0, 60.0).unwrap();
+		let mut filter_pyramid = TileBBoxPyramid::new_full();
+		filter_pyramid.intersect_geo_bbox(&filter_bbox).unwrap();
+
+		let cp = TilesConverterParameters {
+			bbox_pyramid: Some(filter_pyramid),
+			geo_bbox: Some(filter_bbox),
+			..Default::default()
+		};
+		let tcr = TilesConvertReader::new_from_reader(reader, cp).unwrap();
+		let bounds = tcr.tilejson().bounds.unwrap();
+
+		// Bounds should be the intersection: [12.0, 52.0, 15.0, 55.0]
+		assert_eq!(bounds.as_tuple(), (12.0, 52.0, 15.0, 55.0));
+	}
+
+	#[test]
+	fn test_geo_bbox_without_existing_bounds_uses_pyramid() {
+		// Source has NO explicit bounds in tilejson
+		let bbox_pyramid = TileBBoxPyramid::new_full_up_to(4);
+		let reader_metadata = TileSourceMetadata::new(MVT, Uncompressed, bbox_pyramid, Traversal::ANY);
+		let reader = MockReader::new_mock(reader_metadata).unwrap().into_shared();
+
+		let filter_bbox = GeoBBox::new(12.0, 52.0, 14.0, 54.0).unwrap();
+		let mut filter_pyramid = TileBBoxPyramid::new_full();
+		filter_pyramid.intersect_geo_bbox(&filter_bbox).unwrap();
+
+		let cp = TilesConverterParameters {
+			bbox_pyramid: Some(filter_pyramid),
+			geo_bbox: Some(filter_bbox),
+			..Default::default()
+		};
+		let tcr = TilesConvertReader::new_from_reader(reader, cp).unwrap();
+
+		// Bounds should be set from the pyramid (since no existing bounds to intersect)
+		assert!(tcr.tilejson().bounds.is_some());
 	}
 }
