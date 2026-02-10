@@ -173,7 +173,6 @@ mod tests {
 			[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 0, 0],",
-				"  \"center\": [-90, -42.525564, 5],",
 				"  \"maxzoom\": 15,",
 				"  \"minzoom\": 3,",
 				"  \"name\": \"dummy raster source\",",

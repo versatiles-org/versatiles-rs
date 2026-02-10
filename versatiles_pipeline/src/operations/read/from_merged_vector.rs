@@ -259,7 +259,6 @@ mod tests {
 			[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
-				"  \"center\": [0, 0, 2],",
 				"  \"maxzoom\": 8,",
 				"  \"minzoom\": 0,",
 				"  \"name\": \"dummy vector source\",",
@@ -312,8 +311,7 @@ mod tests {
 			result.tilejson().as_pretty_lines(100),
 			[
 				"{",
-				"  \"bounds\": [-130.78125, -70.140364, 130.78125, 70.140364],",
-				"  \"center\": [54.84375, -24.75379, 2],",
+				"  \"bounds\": [-130, -70, 130, 70],",
 				"  \"maxzoom\": 8,",
 				"  \"minzoom\": 0,",
 				"  \"name\": \"dummy vector source\",",
@@ -364,7 +362,6 @@ mod tests {
 			[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
-				"  \"center\": [0, 0, 3],",
 				"  \"maxzoom\": 3,",
 				"  \"minzoom\": 1,",
 				"  \"name\": \"dummy vector source\",",

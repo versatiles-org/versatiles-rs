@@ -172,7 +172,6 @@ mod tests {
 			&[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
-				"  \"center\": [0, 0, 2],",
 				"  \"maxzoom\": 30,",
 				"  \"minzoom\": 0,",
 				"  \"tile_format\": \"image/avif\",",
@@ -194,7 +193,6 @@ mod tests {
 			&[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
-				"  \"center\": [0, 0, 2],",
 				"  \"maxzoom\": 30,",
 				"  \"minzoom\": 0,",
 				"  \"tile_format\": \"image/jpeg\",",
@@ -216,7 +214,6 @@ mod tests {
 			&[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
-				"  \"center\": [0, 0, 2],",
 				"  \"maxzoom\": 30,",
 				"  \"minzoom\": 0,",
 				"  \"tile_format\": \"image/png\",",
@@ -238,7 +235,6 @@ mod tests {
 			&[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
-				"  \"center\": [0, 0, 2],",
 				"  \"maxzoom\": 30,",
 				"  \"minzoom\": 0,",
 				"  \"tile_format\": \"image/webp\",",
@@ -260,7 +256,6 @@ mod tests {
 			&[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
-				"  \"center\": [0, 0, 2],",
 				"  \"maxzoom\": 30,",
 				"  \"minzoom\": 0,",
 				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
