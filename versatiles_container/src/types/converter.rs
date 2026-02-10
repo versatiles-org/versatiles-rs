@@ -164,6 +164,8 @@ impl TilesConvertReader {
 			// Intersect existing tilejson bounds with the given geo bbox
 			if let Some(ref mut bounds) = tilejson.bounds {
 				bounds.intersect(geo_bbox);
+			} else {
+				tilejson.bounds = Some(*geo_bbox);
 			}
 			tilejson.center = None;
 		}
