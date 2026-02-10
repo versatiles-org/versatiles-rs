@@ -106,6 +106,26 @@ pub fn get_tilejson(filename: &Path) -> JsonValue {
 	JsonValue::parse_str(&String::from_utf8(output).unwrap()).unwrap()
 }
 
+/// Extract bounds from tilejson of an output file.
+pub fn get_tilejson_bounds(filename: &Path) -> [f64; 4] {
+	let tilejson = get_tilejson(filename);
+	let obj = tilejson.as_object().expect("tilejson should be an object");
+	let bounds = obj.get("bounds").expect("tilejson should have bounds");
+	bounds
+		.as_array()
+		.expect("bounds should be an array")
+		.as_number_array::<4>()
+		.expect("bounds should have 4 numbers")
+}
+
+/// Convert VPL via stdin to a temp file and return tilejson bounds.
+pub fn get_bounds_from_vpl(vpl: &str) -> (TempDir, [f64; 4]) {
+	let (temp_dir, output) = get_temp_output("vpl_output.mbtiles");
+	versatiles_stdin(&format!("convert [,vpl]- {}", output.to_str().unwrap()), vpl);
+	let bounds = get_tilejson_bounds(&output);
+	(temp_dir, bounds)
+}
+
 #[macro_export]
 macro_rules! assert_contains {
 	($left:expr, $right:expr$(,)?) => ({
