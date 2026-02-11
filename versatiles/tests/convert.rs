@@ -159,8 +159,8 @@ fn e2e_vpl_from_merged_vector_bbox() {
 	let input = get_testdata("berlin.mbtiles");
 	let vpl = format!(
 		"from_merged_vector [\n\
-		   from_container filename=\"{input}\" | filter bbox=[13.1,52.35,13.4,52.5],\n\
-		   from_container filename=\"{input}\" | filter bbox=[13.5,52.5,13.75,52.65]\n\
+		   from_container filename='{input}' | filter bbox=[13.1,52.35,13.4,52.5],\n\
+		   from_container filename='{input}' | filter bbox=[13.5,52.5,13.75,52.65]\n\
 		]"
 	);
 
@@ -173,8 +173,8 @@ fn e2e_vpl_from_stacked_bbox() {
 	let input = get_testdata("berlin.mbtiles");
 	let vpl = format!(
 		"from_stacked [\n\
-		   from_container filename=\"{input}\" | filter bbox=[13.1,52.35,13.4,52.5],\n\
-		   from_container filename=\"{input}\" | filter bbox=[13.5,52.5,13.75,52.65]\n\
+		   from_container filename='{input}' | filter bbox=[13.1,52.35,13.4,52.5],\n\
+		   from_container filename='{input}' | filter bbox=[13.5,52.5,13.75,52.65]\n\
 		]"
 	);
 
