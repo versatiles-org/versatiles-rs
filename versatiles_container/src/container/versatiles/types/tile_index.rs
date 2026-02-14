@@ -21,8 +21,6 @@ pub struct TileIndex {
 	index: Vec<ByteRange>,
 }
 
-unsafe impl Send for TileIndex {}
-
 impl TileIndex {
 	/// Creates a new empty `TileIndex` with a specified count.
 	///

@@ -275,9 +275,6 @@ impl VersaTilesReader {
 	}
 }
 
-unsafe impl Send for VersaTilesReader {}
-unsafe impl Sync for VersaTilesReader {}
-
 // Internal helper to group tile reads: collects (coord, range) pairs that can be served
 // from a single large read. `range` tracks the combined byte span in the container.
 #[derive(Debug)]
