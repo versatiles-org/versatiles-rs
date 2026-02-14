@@ -49,9 +49,15 @@ impl FileHeader {
 			zoom_range[1]
 		);
 
+		let arr = bbox.as_array();
 		Ok(FileHeader {
 			zoom_range,
-			bbox: bbox.as_array().map(|v| float_to_int(v * BBOX_SCALE).unwrap()),
+			bbox: [
+				float_to_int(arr[0] * BBOX_SCALE)?,
+				float_to_int(arr[1] * BBOX_SCALE)?,
+				float_to_int(arr[2] * BBOX_SCALE)?,
+				float_to_int(arr[3] * BBOX_SCALE)?,
+			],
 			tile_format,
 			compression,
 			meta_range: ByteRange::empty(),
