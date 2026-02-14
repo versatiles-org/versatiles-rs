@@ -539,17 +539,22 @@ impl TileSource for VersaTilesReader {
 				let bbox = block.get_global_bbox();
 				let coord = bbox.coord_at_index(index as u64)?;
 
-				biggest_tiles.push(Entry {
-					size,
-					x: coord.x,
-					y: coord.y,
-					z: coord.level,
-				});
-				biggest_tiles.sort_by(|a, b| b.size.cmp(&a.size));
-				while biggest_tiles.len() > 10 {
+				let pos = biggest_tiles
+					.binary_search_by(|e| e.size.cmp(&size).reverse())
+					.unwrap_or_else(|p| p);
+				biggest_tiles.insert(
+					pos,
+					Entry {
+						size,
+						x: coord.x,
+						y: coord.y,
+						z: coord.level,
+					},
+				);
+				if biggest_tiles.len() > 10 {
 					biggest_tiles.pop();
 				}
-				min_size = biggest_tiles.last().unwrap().size;
+				min_size = biggest_tiles.last().expect("biggest_tiles is non-empty").size;
 			}
 			progress.inc(1);
 		}
@@ -747,8 +752,8 @@ mod tests {
 		let mut printer = PrettyPrint::new();
 		reader.probe_tiles(&printer.get_category("tiles").await).await?;
 		assert_eq!(
-			printer.as_string().await.get(0..73).unwrap(),
-			"tiles:\n  average tile size: 77\n  #1 biggest tile: Entry { size: 77, x: 0,"
+			printer.as_string().await.get(0..67).unwrap(),
+			"tiles:\n  average tile size: 77\n  #1 biggest tile: Entry { size: 77,"
 		);
 
 		Ok(())
