@@ -192,7 +192,7 @@ impl VersaTilesReader {
 	///
 	/// Coalesces nearby ranges into at most ~64 MiB chunks (with a small gap tolerance)
 	/// to minimize I/O calls during streaming.
-	async fn get_chunks(&self, bbox: TileBBox) -> Vec<Chunk> {
+	async fn get_chunks(&self, bbox: TileBBox) -> Result<Vec<Chunk>> {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 256 * 1024;
 
@@ -201,13 +201,10 @@ impl VersaTilesReader {
 		let stream = futures::stream::iter(block_coords).then(|block_coord: TileCoord| {
 			async move {
 				// Get the block using the block coordinate
-				let block_option = self.block_index.get_block(&block_coord);
-				if block_option.is_none() {
-					return Vec::new();
-				}
-
-				// Get the block
-				let block: BlockDefinition = block_option.unwrap().to_owned();
+				let Some(block) = self.block_index.get_block(&block_coord) else {
+					return Ok(Vec::new());
+				};
+				let block = block.clone();
 				log::trace!("block {block:?}");
 
 				// Get the bounding box of all tiles defined in this block
@@ -216,26 +213,31 @@ impl VersaTilesReader {
 
 				// Get the bounding box of all tiles defined in this block
 				let mut tiles_bbox_used: TileBBox = bbox;
-				tiles_bbox_used.intersect_with(tiles_bbox_block).unwrap();
+				tiles_bbox_used.intersect_with(tiles_bbox_block)?;
 				log::trace!("tiles_bbox_used {tiles_bbox_used:?}");
 
-				assert_eq!(bbox.level, tiles_bbox_block.level);
-				assert_eq!(bbox.level, tiles_bbox_used.level);
+				debug_assert_eq!(bbox.level, tiles_bbox_block.level);
+				debug_assert_eq!(bbox.level, tiles_bbox_used.level);
 
 				// Get the tile index of this block
-				let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await.unwrap();
+				let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await?;
 				log::trace!("tile_index.len() {}", tile_index.len());
 
-				// let tile_range: &ByteRange = tile_index.get(tile_id);
 				let mut tile_ranges: Vec<(TileCoord, ByteRange)> = tile_index
 					.iter()
 					.enumerate()
-					.map(|(index, range)| (tiles_bbox_block.coord_at_index(index as u64).unwrap(), *range))
-					.filter(|(coord, range)| tiles_bbox_used.contains(coord) && (range.length > 0))
+					.filter_map(|(index, range)| {
+						let coord = tiles_bbox_block.coord_at_index(index as u64).ok()?;
+						if tiles_bbox_used.contains(&coord) && range.length > 0 {
+							Some((coord, *range))
+						} else {
+							None
+						}
+					})
 					.collect();
 
 				if tile_ranges.is_empty() {
-					return Vec::new();
+					return Ok(Vec::new());
 				}
 
 				tile_ranges.sort_by_key(|e| e.1.offset);
@@ -265,14 +267,19 @@ impl VersaTilesReader {
 					chunks.push(chunk);
 				}
 
-				chunks
+				Ok(chunks)
 			}
 		});
 
-		let chunks: Vec<Vec<Chunk>> = stream.collect().await;
+		let chunks: Vec<Result<Vec<Chunk>>> = stream.collect().await;
 
-		let chunks: Vec<Chunk> = chunks.into_iter().flatten().collect();
-		chunks
+		let chunks: Vec<Chunk> = chunks
+			.into_iter()
+			.collect::<Result<Vec<Vec<Chunk>>>>()?
+			.into_iter()
+			.flatten()
+			.collect();
+		Ok(chunks)
 	}
 }
 
@@ -335,12 +342,10 @@ impl TileSource for VersaTilesReader {
 		let block_coord = TileCoord::new(coord.level, coord.x.shr(8), coord.y.shr(8))?;
 
 		// Get the block using the block coordinate
-		let block = self.block_index.get_block(&block_coord);
-
-		if block.is_none() {
+		let Some(block) = self.block_index.get_block(&block_coord) else {
 			return Ok(None);
-		}
-		let block = block.unwrap().clone();
+		};
+		let block = block.clone();
 
 		// Get the block and its bounding box
 		let bbox = block.get_global_bbox();
@@ -394,8 +399,20 @@ impl TileSource for VersaTilesReader {
 				.then(move |(block_bbox, used_bbox, block)| {
 					let reader = Arc::clone(&reader);
 					async move {
-						let blob = reader.read_range(block.get_index_range()).await.unwrap();
-						let tile_index = TileIndex::from_brotli_blob(&blob).unwrap();
+						let blob = match reader.read_range(block.get_index_range()).await {
+							Ok(blob) => blob,
+							Err(e) => {
+								log::error!("failed to read block index range {:?}: {e}", block.get_index_range());
+								return futures::stream::iter(Vec::new());
+							}
+						};
+						let tile_index = match TileIndex::from_brotli_blob(&blob) {
+							Ok(idx) => idx,
+							Err(e) => {
+								log::error!("failed to decompress tile index: {e}");
+								return futures::stream::iter(Vec::new());
+							}
+						};
 
 						let entries: Vec<(TileCoord, u32)> = tile_index
 							.iter()
@@ -424,7 +441,7 @@ impl TileSource for VersaTilesReader {
 	#[context("streaming tiles for bbox {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::debug!("get_tile_stream {bbox:?}");
-		let chunks = self.get_chunks(bbox).await;
+		let chunks = self.get_chunks(bbox).await?;
 		let reader = Arc::clone(&self.reader);
 		let tile_compression = self.metadata.tile_compression;
 		let tile_format = self.metadata.tile_format;
@@ -434,16 +451,23 @@ impl TileSource for VersaTilesReader {
 				.then(move |chunk| {
 					let reader = Arc::clone(&reader);
 					async move {
-						let big_blob = reader.read_range(&chunk.range).await.unwrap();
+						let big_blob = match reader.read_range(&chunk.range).await {
+							Ok(blob) => blob,
+							Err(e) => {
+								log::error!("failed to read chunk range {:?}: {e}", chunk.range);
+								return futures::stream::iter(Vec::new());
+							}
+						};
 
 						let entries: Vec<(TileCoord, Tile)> = chunk
 							.tiles
 							.into_iter()
 							.map(|(coord, range)| {
-								assert!(bbox.contains(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
+								debug_assert!(bbox.contains(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
 
-								let start = usize::try_from(range.offset - chunk.range.offset).unwrap();
-								let end = start + usize::try_from(range.length).unwrap();
+								let start = usize::try_from(range.offset - chunk.range.offset)
+									.expect("range offset difference should fit in usize");
+								let end = start + usize::try_from(range.length).expect("range length should fit in usize");
 
 								let blob = Blob::from(big_blob.range(start..end));
 								let tile = Tile::from_blob(blob, tile_compression, tile_format);
