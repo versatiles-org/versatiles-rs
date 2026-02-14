@@ -44,7 +44,7 @@ impl TileIndex {
 			"Tile index is defective: buffer length is not a multiple of {TILE_INDEX_LENGTH}"
 		);
 
-		let mut index = Vec::new();
+		let mut index = Vec::with_capacity(usize::try_from(count)?);
 		let mut reader = ValueReaderBlob::new_be(blob);
 		for _ in 0..count {
 			index.push(ByteRange::new(reader.read_u64()?, u64::from(reader.read_u32()?)));

@@ -171,7 +171,7 @@ impl VersaTilesReader {
 			let mut tile_index = TileIndex::from_brotli_blob(&blob)?;
 			tile_index.add_offset(block.get_tiles_range().offset);
 
-			assert_eq!(tile_index.len(), usize::try_from(block.count_tiles())?);
+			debug_assert_eq!(tile_index.len(), usize::try_from(block.count_tiles())?);
 
 			cache.add(*block_coord, Arc::new(tile_index))
 		})
@@ -263,7 +263,7 @@ impl VersaTilesReader {
 					}
 				}
 
-				if chunk.len() > 0 {
+				if !chunk.tiles.is_empty() {
 					chunks.push(chunk);
 				}
 
@@ -308,9 +308,6 @@ impl Chunk {
 			.range
 			.length
 			.max(entry.1.offset + entry.1.length - self.range.offset);
-	}
-	fn len(&self) -> usize {
-		self.tiles.len()
 	}
 }
 
@@ -519,12 +516,11 @@ impl TileSource for VersaTilesReader {
 		let mut size_sum: u64 = 0;
 		let mut tile_count: u64 = 0;
 
-		let block_index = self.block_index.clone();
 		let progress = self
 			.runtime
-			.create_progress("scanning blocks", block_index.len() as u64);
+			.create_progress("scanning blocks", self.block_index.len() as u64);
 
-		for block in block_index.iter() {
+		for block in self.block_index.iter() {
 			let tile_index = self.get_block_tile_index(block).await?;
 			for (index, tile_range) in tile_index.iter().enumerate() {
 				let size = tile_range.length;

@@ -189,10 +189,8 @@ impl VersaTilesWriter {
 
 						// Stream compressed tiles to block builder
 						compressed_stream
-							.for_each(|coord, blob| {
-								block_builder.write_tile(coord, blob).unwrap();
-							})
-							.await;
+							.for_each_try(|coord, blob| block_builder.write_tile(coord, blob))
+							.await?;
 
 						// Finalize and add to block index if not empty
 						if let Some(block) = block_builder.finalize()? {
