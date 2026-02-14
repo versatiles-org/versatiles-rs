@@ -754,4 +754,86 @@ mod tests {
 
 		Ok(())
 	}
+
+	#[tokio::test]
+	async fn tile_size_stream_full_level() -> Result<()> {
+		let (_, reader) = mk_reader().await?;
+		let bbox = TileBBox::new_full(4)?;
+		let mut sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
+		sizes.sort_by_key(|(c, _)| (c.y, c.x));
+
+		assert_eq!(sizes.len(), 256);
+		for (_, size) in &sizes {
+			assert_eq!(*size, 77);
+		}
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn tile_size_stream_sub_bbox() -> Result<()> {
+		let (_, reader) = mk_reader().await?;
+		let bbox = TileBBox::from_min_and_max(4, 2, 3, 5, 6)?;
+		let sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
+
+		assert_eq!(sizes.len(), 16); // 4x4
+		for (coord, size) in &sizes {
+			assert!(bbox.contains(coord), "coord {coord:?} outside requested bbox");
+			assert_eq!(*size, 77);
+		}
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn tile_size_stream_single_tile() -> Result<()> {
+		let (_, reader) = mk_reader().await?;
+		let bbox = TileBBox::from_min_and_max(4, 15, 1, 15, 1)?;
+		let sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
+
+		assert_eq!(sizes.len(), 1);
+		assert_eq!(sizes[0].0, TileCoord::new(4, 15, 1)?);
+		assert_eq!(sizes[0].1, 77);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn tile_size_stream_matches_tile_stream() -> Result<()> {
+		let (_, reader) = mk_reader().await?;
+		let bbox = TileBBox::new_full(4)?;
+		let compression = reader.metadata().tile_compression;
+
+		let mut sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
+		sizes.sort_by_key(|(c, _)| (c.level, c.y, c.x));
+
+		let mut blob_sizes: Vec<(TileCoord, u32)> = reader
+			.get_tile_stream(bbox)
+			.await?
+			.map(move |_coord, tile| {
+				u32::try_from(tile.into_blob(compression).expect("tile should have blob").len()).expect("size fits u32")
+			})
+			.to_vec()
+			.await;
+		blob_sizes.sort_by_key(|(c, _)| (c.level, c.y, c.x));
+
+		assert_eq!(sizes.len(), blob_sizes.len());
+		for (a, b) in sizes.iter().zip(blob_sizes.iter()) {
+			assert_eq!(a.0, b.0, "coord mismatch");
+			assert_eq!(a.1, b.1, "size mismatch at {:?}", a.0);
+		}
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn tile_size_stream_out_of_range_is_empty() -> Result<()> {
+		let (_, reader) = mk_reader().await?;
+		let bbox = TileBBox::new_full(5)?;
+		let sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
+
+		assert!(sizes.is_empty());
+
+		Ok(())
+	}
 }
