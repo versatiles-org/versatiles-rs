@@ -85,6 +85,27 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	/// Sources that can optimize bulk reads should override this.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>>;
 
+	/// Streams the stored byte sizes of all tiles within the given bounding box.
+	///
+	/// Returns a [`TileStream`] of `(TileCoord, u32)` pairs, where the `u32`
+	/// is the size of the tile blob as stored in the container.
+	///
+	/// The default implementation reads tiles via [`get_tile_stream`](Self::get_tile_stream)
+	/// and maps each tile to its blob length. Container readers with index-based size
+	/// information should override this for better performance.
+	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+		let compression = self.metadata().tile_compression;
+		Ok(self.get_tile_stream(bbox).await?.map(move |_coord, tile| {
+			u32::try_from(
+				tile
+					.into_blob(compression)
+					.expect("tile from stream should have a blob")
+					.len(),
+			)
+			.expect("tile size should fit in u32")
+		}))
+	}
+
 	/// Performs a hierarchical CLI probe at the specified depth.
 	///
 	/// Probes metadata, container specifics, tiles, and tile contents
