@@ -61,7 +61,7 @@ impl DataReaderHttp {
 	pub fn from_url(url: Url) -> Result<Box<DataReaderHttp>> {
 		match url.scheme() {
 			"http" | "https" => (),
-			_ => bail!("url has wrong scheme {url}"),
+			other => bail!("unsupported URL scheme '{other}' in '{url}', expected 'http' or 'https'"),
 		}
 
 		let client = Client::builder()
@@ -95,47 +95,41 @@ impl DataReaderTrait for DataReaderHttp {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with the read data or an error.
-	#[context("while reading range {} from url '{}'", range, self.url)]
+	#[context("reading range {} from '{}'", range, self.url)]
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
-		let ctx = || format!("while reading range {range} of {}", self.url);
 		let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
 
 		for attempt in 0..=MAX_RETRIES {
 			if attempt > 0 {
 				let backoff = Duration::from_secs(1 << (attempt - 1));
 				log::warn!(
-					"retry attempt {attempt}/{MAX_RETRIES} for {}, waiting {backoff:?}",
-					ctx()
+					"retry attempt {attempt}/{MAX_RETRIES} reading range {range} from '{}', waiting {backoff:?}",
+					self.url
 				);
 				sleep(backoff).await;
 			}
 
 			let mut request = Request::new(Method::GET, self.url.clone());
-			request
-				.headers_mut()
-				.append("range", request_range.parse().with_context(ctx)?);
+			request.headers_mut().append("range", request_range.parse()?);
 
 			let response = match self.client.execute(request).await {
 				Ok(r) => r,
 				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
-					log::warn!("retryable error: {e}, {}", ctx());
+					log::warn!("retryable error: {e}");
 					continue;
 				}
 				Err(e) => return Err(e.into()),
 			};
 
 			if response.status() != StatusCode::PARTIAL_CONTENT {
-				let status_code = response.status();
-				bail!(
-					"expected 206 as a response to a range request. instead we got {status_code}, {}",
-					ctx()
-				);
+				bail!("expected HTTP 206 (Partial Content), got {}", response.status());
 			}
 
-			let content_range: &str = match response.headers().get("content-range") {
-				Some(header_value) => header_value.to_str().with_context(ctx)?,
-				None => bail!("content-range header is not set in response headers, {}", ctx()),
-			};
+			let content_range = response
+				.headers()
+				.get("content-range")
+				.ok_or_else(|| anyhow!("response is missing Content-Range header"))?
+				.to_str()?;
 
 			static RE_RANGE: LazyLock<Regex> = LazyLock::new(|| {
 				RegexBuilder::new(r"^bytes (\d+)-(\d+)/\d+$")
@@ -144,33 +138,28 @@ impl DataReaderTrait for DataReaderHttp {
 					.unwrap()
 			});
 
-			// Extract "start" and "end" numbers from the Content‑Range header
-			let (content_range_start, content_range_end) = {
-				let caps = RE_RANGE
-					.captures(content_range)
-					.ok_or_else(|| anyhow!("invalid content-range header: {content_range}"))
-					.with_context(ctx)?;
-				(
-					caps[1].parse::<u64>().with_context(ctx)?,
-					caps[2].parse::<u64>().with_context(ctx)?,
-				)
-			};
+			let caps = RE_RANGE.captures(content_range).ok_or_else(|| {
+				anyhow!("unexpected Content-Range format: '{content_range}', expected 'bytes <start>-<end>/<total>'")
+			})?;
+			let content_range_start: u64 = caps[1].parse()?;
+			let content_range_end: u64 = caps[2].parse()?;
 
 			if content_range_start != range.offset {
 				bail!(
-					"content-range-start {content_range_start} is not start of range, {}",
-					ctx()
+					"Content-Range start mismatch: expected {}, got {content_range_start}",
+					range.offset
 				);
 			}
 
-			if content_range_end != range.offset + range.length - 1 {
-				bail!("content-range-end {content_range_end} is not end of range, {}", ctx());
+			let expected_end = range.offset + range.length - 1;
+			if content_range_end != expected_end {
+				bail!("Content-Range end mismatch: expected {expected_end}, got {content_range_end}");
 			}
 
 			let bytes = match response.bytes().await {
 				Ok(b) => b,
 				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
-					log::warn!("retryable error reading body: {e}, {}", ctx());
+					log::warn!("retryable error reading response body: {e}");
 					continue;
 				}
 				Err(e) => return Err(e.into()),
@@ -179,7 +168,7 @@ impl DataReaderTrait for DataReaderHttp {
 			return Ok(Blob::from(&*bytes));
 		}
 
-		bail!("all {MAX_RETRIES} retries exhausted, {}", ctx())
+		bail!("request failed after {MAX_RETRIES} retries")
 	}
 
 	/// Reads all the data from the HTTP(S) endpoint.
@@ -187,16 +176,14 @@ impl DataReaderTrait for DataReaderHttp {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with all the data or an error.
-	#[context("while reading all data from url '{}'", self.url)]
+	#[context("reading all data from '{}'", self.url)]
 	async fn read_all(&self) -> Result<Blob> {
-		let ctx = || format!("while reading all data from {}", self.url);
-
 		for attempt in 0..=MAX_RETRIES {
 			if attempt > 0 {
 				let backoff = Duration::from_secs(1 << (attempt - 1));
 				log::warn!(
-					"retry attempt {attempt}/{MAX_RETRIES} for {}, waiting {backoff:?}",
-					ctx()
+					"retry attempt {attempt}/{MAX_RETRIES} reading from '{}', waiting {backoff:?}",
+					self.url
 				);
 				sleep(backoff).await;
 			}
@@ -204,21 +191,20 @@ impl DataReaderTrait for DataReaderHttp {
 			let response = match self.client.get(self.url.clone()).send().await {
 				Ok(r) => r,
 				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
-					log::warn!("retryable error: {e}, {}", ctx());
+					log::warn!("retryable error: {e}");
 					continue;
 				}
 				Err(e) => return Err(e.into()),
 			};
 
 			if !response.status().is_success() {
-				let status = response.status();
-				bail!("expected successful response, got {status}, {}", ctx());
+				bail!("HTTP request failed with status {}", response.status());
 			}
 
 			let bytes = match response.bytes().await {
 				Ok(b) => b,
 				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
-					log::warn!("retryable error reading body: {e}, {}", ctx());
+					log::warn!("retryable error reading response body: {e}");
 					continue;
 				}
 				Err(e) => return Err(e.into()),
@@ -227,7 +213,7 @@ impl DataReaderTrait for DataReaderHttp {
 			return Ok(Blob::from(&*bytes));
 		}
 
-		bail!("all {MAX_RETRIES} retries exhausted, {}", ctx())
+		bail!("request failed after {MAX_RETRIES} retries")
 	}
 
 	/// Gets the name of the data source.
