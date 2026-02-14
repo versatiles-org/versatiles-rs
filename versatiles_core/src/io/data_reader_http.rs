@@ -267,7 +267,7 @@ mod tests {
 	#[tokio::test]
 	async fn read_range_git() {
 		read_range_helper(
-			"https://raw.githubusercontent.com/versatiles-org/versatiles-rs/main/testdata/berlin.mbtiles",
+			"https://raw.githubusercontent.com/versatiles-org/versatiles-rs/refs/heads/main/testdata/berlin.mbtiles",
 			7,
 			8,
 			"format 3",
