@@ -47,7 +47,7 @@ impl BlockDefinition {
 		)?;
 
 		Ok(Self {
-			offset: TileCoord::new(level, x_min, y_min).unwrap(),
+			offset: TileCoord::new(level, x_min, y_min)?,
 			global_bbox,
 			tiles_coverage,
 			tiles_range: ByteRange::empty(),
