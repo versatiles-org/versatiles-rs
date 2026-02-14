@@ -374,6 +374,55 @@ impl TileSource for VersaTilesReader {
 		)))
 	}
 
+	#[context("streaming tile sizes for bbox {:?}", bbox)]
+	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+		let block_coords: Vec<TileCoord> = bbox.scaled_down(256).iter_coords().collect();
+
+		let mut blocks: Vec<(TileBBox, TileBBox, BlockDefinition)> = Vec::new();
+		for block_coord in block_coords {
+			let Some(block) = self.block_index.get_block(&block_coord) else {
+				continue;
+			};
+			let block_bbox = *block.get_global_bbox();
+			let mut used_bbox = bbox;
+			used_bbox.intersect_with(&block_bbox)?;
+			blocks.push((block_bbox, used_bbox, block.clone()));
+		}
+
+		let reader = Arc::clone(&self.reader);
+
+		Ok(TileStream::from_stream(
+			futures::stream::iter(blocks)
+				.then(move |(block_bbox, used_bbox, block)| {
+					let reader = Arc::clone(&reader);
+					async move {
+						let blob = reader.read_range(block.get_index_range()).await.unwrap();
+						let tile_index = TileIndex::from_brotli_blob(&blob).unwrap();
+
+						let entries: Vec<(TileCoord, u32)> = tile_index
+							.iter()
+							.enumerate()
+							.filter_map(|(index, range)| {
+								if range.length == 0 {
+									return None;
+								}
+								let coord = block_bbox.coord_at_index(index as u64).ok()?;
+								if used_bbox.contains(&coord) {
+									Some((coord, u32::try_from(range.length).ok()?))
+								} else {
+									None
+								}
+							})
+							.collect();
+
+						futures::stream::iter(entries)
+					}
+				})
+				.flatten()
+				.boxed(),
+		))
+	}
+
 	#[context("streaming tiles for bbox {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::debug!("get_tile_stream {bbox:?}");
