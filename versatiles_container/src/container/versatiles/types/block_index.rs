@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 //! This module defines the `BlockIndex` struct, which represents an index of blocks within a tile set.
 //!
 //! The `BlockIndex` struct contains metadata about the blocks, including their coordinates and bounding boxes, and provides methods to manipulate and query this data.
@@ -132,6 +130,7 @@ impl BlockIndex {
 	///
 	/// # Returns
 	/// The number of blocks in the index.
+	#[allow(dead_code)] // used under #[cfg(feature = "cli")]
 	pub fn len(&self) -> usize {
 		self.lookup.len()
 	}

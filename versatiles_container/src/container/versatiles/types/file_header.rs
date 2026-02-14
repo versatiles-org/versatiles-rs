@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 //! This module defines the `FileHeader` struct, which represents the header of a versatiles file.
 //!
 //! The `FileHeader` struct contains metadata about the file, including its tile format, compression, zoom range, bounding box, and byte ranges for metadata and blocks.

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 //! This module defines the `TileIndex` struct, which represents an index of tile byte ranges.
 //!
 //! The `TileIndex` struct is used to manage the byte ranges of tiles within a versatiles file. It provides methods to create, manipulate, and convert the index to and from binary blobs.

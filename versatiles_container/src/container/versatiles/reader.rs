@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 //! Read tiles and metadata from a `.versatiles` container.
 //!
 //! The `VersaTilesReader` parses the container header, decompresses the **block index**,
@@ -76,11 +74,13 @@ use versatiles_derive::context;
 /// indices are cached (least-recently-used) to accelerate repeated random access.
 pub struct VersaTilesReader {
 	block_index: BlockIndex,
+	#[allow(dead_code)] // used by probe_container under #[cfg(feature = "cli")]
 	header: FileHeader,
 	metadata: TileSourceMetadata,
 	reader: Arc<DataReader>,
 	tile_index_cache: Mutex<LimitedCache<TileCoord, Arc<TileIndex>>>,
 	tilejson: TileJSON,
+	#[allow(dead_code)] // used by probe_tiles under #[cfg(feature = "cli")]
 	runtime: TilesRuntime,
 }
 
@@ -178,6 +178,7 @@ impl VersaTilesReader {
 	}
 
 	/// Sum of all block index byte lengths.
+	#[cfg(feature = "cli")]
 	fn get_index_size(&self) -> u64 {
 		self.block_index.iter().map(|b| b.get_index_range().length).sum()
 	}

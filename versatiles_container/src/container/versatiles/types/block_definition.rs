@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 //! This module defines the `BlockDefinition` struct which represents a block of tiles within a larger tile set.
 //!
 //! The `BlockDefinition` struct contains metadata about the tile block, including its coordinates, bounding box, and byte ranges for tiles and index data.
@@ -162,7 +160,7 @@ impl BlockDefinition {
 	///
 	/// # Returns
 	/// The sort index for the block.
-	#[allow(dead_code)]
+	#[cfg(test)]
 	pub fn get_sort_index(&self) -> u64 {
 		self.offset.sort_index()
 	}
@@ -189,15 +187,6 @@ impl BlockDefinition {
 	/// A reference to the byte range for the index data.
 	pub fn get_index_range(&self) -> &ByteRange {
 		&self.index_range
-	}
-
-	/// Returns the zoom level of the block.
-	///
-	/// # Returns
-	/// The zoom level of the block.
-	#[allow(dead_code)]
-	pub fn get_z(&self) -> u8 {
-		self.offset.level
 	}
 
 	/// Returns the coordinate of the block.
@@ -249,7 +238,7 @@ mod tests {
 		assert_eq!(def.as_blob()?.len(), 33);
 		assert_eq!(def.get_sort_index(), 5596502);
 		assert_eq!(def.as_str(), "[12,[300,400],[320,450]]");
-		assert_eq!(def.get_z(), 12);
+		assert_eq!(def.get_coord().level, 12);
 		assert_eq!(def.get_coord(), &TileCoord::new(12, 1, 1)?);
 		assert_eq!(
 			def.get_global_bbox(),
