@@ -18,10 +18,16 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 fast_image_resize = { version = "6.0.0", default-features = false, features = [
-"image"] }
-image.workspace = true
+	"image",
+] }
+image = { version = "0.25.9", default-features = false, features = [
+	"avif",
+	"jpeg",
+	"png",
+	"webp",
+] }
 imageproc.workspace = true
-webp.workspace = true
+webp = { version = "0.3.1" }
 
 versatiles_core.workspace = true
 versatiles_derive.workspace = true
