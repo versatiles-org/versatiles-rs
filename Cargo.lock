@@ -4418,6 +4418,7 @@ dependencies = [
  "nom-language",
  "pretty_assertions",
  "regex",
+ "reqwest",
  "rstar",
  "rstest",
  "tokio",

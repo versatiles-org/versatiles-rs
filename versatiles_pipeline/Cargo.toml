@@ -32,6 +32,7 @@ nom = { version = "8.0.0" }
 nom-language = { version = "0.1.0" }
 regex.workspace = true
 rstar.workspace = true
+reqwest.workspace = true
 tokio.workspace = true
 
 versatiles_container.workspace = true
