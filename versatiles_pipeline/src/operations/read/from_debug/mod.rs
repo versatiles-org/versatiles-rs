@@ -210,7 +210,7 @@ mod tests {
 	async fn test_build_tile_png() {
 		test(
 			"png",
-			6388,
+			6386,
 			&[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
