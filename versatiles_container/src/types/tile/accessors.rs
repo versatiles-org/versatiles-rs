@@ -129,4 +129,18 @@ impl Tile {
 	pub fn has_content(&self) -> bool {
 		self.content.is_some()
 	}
+
+	/// Set the encoding quality hint (used when re-encoding content to blob).
+	///
+	/// Pass `None` to clear any previously stored hint and use the codec default.
+	pub fn set_format_quality(&mut self, quality: Option<u8>) {
+		self.format_quality = quality;
+	}
+
+	/// Set the encoding speed hint (used when re-encoding content to blob).
+	///
+	/// Pass `None` to clear any previously stored hint and use the codec default.
+	pub fn set_format_speed(&mut self, speed: Option<u8>) {
+		self.format_speed = speed;
+	}
 }
