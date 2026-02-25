@@ -1,8 +1,7 @@
 //! WebP encoder/decoder utilities for `DynamicImage`.
 //!
-//! This module bridges the [`image`] crate’s WebP codecs and the internal [`Blob`] type used by
-//! VersaTiles. It supports both **lossy** and **lossless** WebP. For lossy mode the `quality`
-//! parameter controls the libwebp encoder; for lossless mode pass `quality >= 100`.
+//! This module uses `libwebp-sys` (direct FFI bindings to libwebp) for both encoding and decoding.
+//! It supports both **lossy** and **lossless** WebP.
 //!
 //! Highlights:
 //! - Only **8‑bit** images are supported.
@@ -10,13 +9,17 @@
 //!   design to keep code paths explicit.
 //! - When an image has an alpha channel but is **fully opaque**, the encoder **drops alpha** before
 //!   encoding to reduce size.
-//! - Lossless path uses `image::codecs::webp::WebPEncoder::new_lossless`.
-//! - Lossy path uses `libwebp` via `webp::Encoder`.
+//! - Quality boundary: `< 100` = lossy, `>= 100` = lossless, `None` defaults to 95.
 
 use crate::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
-use anyhow::{Result, anyhow, bail};
-use image::{DynamicImage, ImageFormat, codecs::webp::WebPEncoder, load_from_memory_with_format};
-use std::vec;
+use anyhow::{Result, bail};
+use image::{DynamicImage, ImageBuffer};
+use libwebp_sys::{
+	VP8StatusCode, WebPBitstreamFeatures, WebPConfig, WebPDecodeRGB, WebPDecodeRGBA, WebPEncode,
+	WebPFree, WebPGetFeatures, WebPMemoryWrite, WebPMemoryWriter, WebPMemoryWriterClear,
+	WebPMemoryWriterInit, WebPPicture, WebPPictureFree, WebPPictureImportRGB,
+	WebPPictureImportRGBA,
+};
 use versatiles_core::Blob;
 use versatiles_derive::context;
 
@@ -48,26 +51,85 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	}
 
 	let quality = quality.unwrap_or(95);
+	#[allow(clippy::cast_possible_wrap)]
+	let width = image_ref.width() as i32;
+	#[allow(clippy::cast_possible_wrap)]
+	let height = image_ref.height() as i32;
+	let data = image_ref.as_bytes();
+	let has_alpha = image_ref.has_alpha();
 
 	if quality >= 100 {
-		let mut result: Vec<u8> = vec![];
-		let encoder = WebPEncoder::new_lossless(&mut result);
-		encoder.encode(
-			image_ref.as_bytes(),
-			image_ref.width(),
-			image_ref.height(),
-			image_ref.extended_color_type(),
-		)?;
-		Ok(Blob::from(result))
+		encode_lossless(data, width, height, has_alpha)
 	} else {
-		let encoder = webp::Encoder::from_image(image_ref).map_err(|e| anyhow!("{e}"))?;
-		Ok(Blob::from(
-			encoder
-				.encode_simple(false, f32::from(quality))
-				.map_err(|e| anyhow!("{e:?}"))?
-				.to_vec(),
-		))
+		encode_lossy(data, width, height, has_alpha, f32::from(quality))
 	}
+}
+
+/// Encode using the advanced API (WebPConfig + WebPPicture + WebPEncode).
+fn webp_encode_advanced(
+	data: &[u8],
+	width: i32,
+	height: i32,
+	has_alpha: bool,
+	config: &WebPConfig,
+) -> Result<Blob> {
+	unsafe {
+		let mut picture =
+			WebPPicture::new().map_err(|()| anyhow::anyhow!("WebPPictureInit failed"))?;
+		picture.use_argb = 1;
+		picture.width = width;
+		picture.height = height;
+
+		let stride = if has_alpha { width * 4 } else { width * 3 };
+		let import_ok = if has_alpha {
+			WebPPictureImportRGBA(&raw mut picture, data.as_ptr(), stride)
+		} else {
+			WebPPictureImportRGB(&raw mut picture, data.as_ptr(), stride)
+		};
+		if import_ok == 0 {
+			WebPPictureFree(&raw mut picture);
+			bail!("WebP picture import failed");
+		}
+
+		let mut writer: WebPMemoryWriter = std::mem::zeroed();
+		WebPMemoryWriterInit(&raw mut writer);
+		picture.writer = Some(WebPMemoryWrite);
+		picture.custom_ptr = (&raw mut writer).cast::<std::ffi::c_void>();
+
+		let ok = WebPEncode(config, &raw mut picture);
+		WebPPictureFree(&raw mut picture);
+
+		if ok == 0 {
+			WebPMemoryWriterClear(&raw mut writer);
+			bail!("WebP encoding failed");
+		}
+
+		let result = std::slice::from_raw_parts(writer.mem, writer.size).to_vec();
+		WebPFree(writer.mem.cast::<std::ffi::c_void>());
+		Ok(Blob::from(result))
+	}
+}
+
+fn encode_lossy(
+	data: &[u8],
+	width: i32,
+	height: i32,
+	has_alpha: bool,
+	quality: f32,
+) -> Result<Blob> {
+	let mut config =
+		WebPConfig::new().map_err(|()| anyhow::anyhow!("WebPConfigInit failed"))?;
+	config.lossless = 0;
+	config.quality = quality;
+	webp_encode_advanced(data, width, height, has_alpha, &config)
+}
+
+fn encode_lossless(data: &[u8], width: i32, height: i32, has_alpha: bool) -> Result<Blob> {
+	let mut config =
+		WebPConfig::new().map_err(|()| anyhow::anyhow!("WebPConfigInit failed"))?;
+	config.lossless = 1;
+	config.exact = 1;
+	webp_encode_advanced(data, width, height, has_alpha, &config)
 }
 
 #[context("encoding image {:?} as WebP (q={:?})", image.color(), quality)]
@@ -89,8 +151,61 @@ pub fn image2blob_lossless(image: &DynamicImage) -> Result<Blob> {
 ///
 /// Returns a decoding error if the blob is not valid WebP.
 pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
-	load_from_memory_with_format(blob.as_slice(), ImageFormat::WebP)
-		.map_err(|e| anyhow!("Failed to decode WebP image: {e}"))
+	let data = blob.as_slice();
+	if data.is_empty() {
+		bail!("Failed to decode WebP image: empty input");
+	}
+
+	unsafe {
+		let mut features: WebPBitstreamFeatures = std::mem::zeroed();
+		let status = WebPGetFeatures(data.as_ptr(), data.len(), &raw mut features);
+		if status != VP8StatusCode::VP8_STATUS_OK {
+			bail!("Failed to decode WebP image: invalid WebP data");
+		}
+
+		#[allow(clippy::cast_sign_loss)]
+		let width = features.width as u32;
+		#[allow(clippy::cast_sign_loss)]
+		let height = features.height as u32;
+
+		if features.has_alpha != 0 {
+			let mut out_width: i32 = 0;
+			let mut out_height: i32 = 0;
+			let ptr = WebPDecodeRGBA(
+				data.as_ptr(),
+				data.len(),
+				&raw mut out_width,
+				&raw mut out_height,
+			);
+			if ptr.is_null() {
+				bail!("Failed to decode WebP image: RGBA decoding failed");
+			}
+			let buf_size = (width as usize) * (height as usize) * 4;
+			let pixels = std::slice::from_raw_parts(ptr, buf_size).to_vec();
+			WebPFree(ptr.cast::<std::ffi::c_void>());
+			let buffer = ImageBuffer::from_raw(width, height, pixels)
+				.ok_or_else(|| anyhow::anyhow!("Failed to create RGBA image buffer"))?;
+			Ok(DynamicImage::ImageRgba8(buffer))
+		} else {
+			let mut out_width: i32 = 0;
+			let mut out_height: i32 = 0;
+			let ptr = WebPDecodeRGB(
+				data.as_ptr(),
+				data.len(),
+				&raw mut out_width,
+				&raw mut out_height,
+			);
+			if ptr.is_null() {
+				bail!("Failed to decode WebP image: RGB decoding failed");
+			}
+			let buf_size = (width as usize) * (height as usize) * 3;
+			let pixels = std::slice::from_raw_parts(ptr, buf_size).to_vec();
+			WebPFree(ptr.cast::<std::ffi::c_void>());
+			let buffer = ImageBuffer::from_raw(width, height, pixels)
+				.ok_or_else(|| anyhow::anyhow!("Failed to create RGB image buffer"))?;
+			Ok(DynamicImage::ImageRgb8(buffer))
+		}
+	}
 }
 
 #[cfg(test)]
@@ -105,8 +220,8 @@ mod tests {
 	#[rstest]
 	#[case::rgb(          DynamicImage::new_test_rgb(),  false, 0.96, vec![0.9, 0.5, 1.5]     )]
 	#[case::rgba(         DynamicImage::new_test_rgba(), false, 0.76, vec![0.9, 0.5, 1.6, 0.0])]
-	#[case::lossless_rgb( DynamicImage::new_test_rgb(),  true,  0.08, vec![0.0, 0.0, 0.0]     )]
-	#[case::lossless_rgba(DynamicImage::new_test_rgba(), true,  0.07, vec![0.0, 0.0, 0.0, 0.0])]
+	#[case::lossless_rgb( DynamicImage::new_test_rgb(),  true,  0.04, vec![0.0, 0.0, 0.0]     )]
+	#[case::lossless_rgba(DynamicImage::new_test_rgba(), true,  0.03, vec![0.0, 0.0, 0.0, 0.0])]
 	fn webp_ok(
 		#[case] img: DynamicImage,
 		#[case] lossless: bool,
