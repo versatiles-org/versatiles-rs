@@ -161,6 +161,7 @@ impl TileSource for Operation {
 					}
 					_ => bail!("raster_dem_quantize requires RGB8 or RGBA8 images"),
 				}
+				tile.set_format_quality(Some(100)); // max quality to preserve pixel values
 				Ok(tile)
 			})
 			.unwrap_results())
