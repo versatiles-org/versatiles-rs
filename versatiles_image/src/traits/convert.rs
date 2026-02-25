@@ -100,7 +100,7 @@ impl DynamicImageTraitConvert for DynamicImage {
 			AVIF => avif::encode(self, quality, speed),
 			JPG => jpeg::encode(self, quality),
 			PNG => png::encode(self, speed),
-			WEBP => webp::encode(self, quality),
+			WEBP => webp::encode(self, quality, speed),
 			_ => bail!("Unsupported image format for encoding: {format:?}"),
 		}
 	}

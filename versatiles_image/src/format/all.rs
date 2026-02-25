@@ -25,7 +25,7 @@ use versatiles_derive::context;
 /// - `AVIF` uses both `quality` and `speed`.
 /// - `JPG` uses only `quality`.
 /// - `PNG` uses only `speed`.
-/// - `WEBP` uses only `quality`.
+/// - `WEBP` uses both `quality` and `speed`.
 ///
 /// Returns an error if the format or color type is unsupported.
 pub fn encode(image: &DynamicImage, format: TileFormat, quality: Option<u8>, speed: Option<u8>) -> Result<Blob> {
@@ -33,7 +33,7 @@ pub fn encode(image: &DynamicImage, format: TileFormat, quality: Option<u8>, spe
 		TileFormat::AVIF => avif::encode(image, quality, speed),
 		TileFormat::JPG => jpeg::encode(image, quality),
 		TileFormat::PNG => png::encode(image, speed),
-		TileFormat::WEBP => webp::encode(image, quality),
+		TileFormat::WEBP => webp::encode(image, quality, speed),
 		_ => bail!("Unsupported format '{format}' for image encoding"),
 	}
 }

@@ -15,24 +15,25 @@ use crate::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 use anyhow::{Result, bail};
 use image::{DynamicImage, ImageBuffer};
 use libwebp_sys::{
-	VP8StatusCode, WebPBitstreamFeatures, WebPConfig, WebPDecodeRGB, WebPDecodeRGBA, WebPEncode,
-	WebPFree, WebPGetFeatures, WebPMemoryWrite, WebPMemoryWriter, WebPMemoryWriterClear,
-	WebPMemoryWriterInit, WebPPicture, WebPPictureFree, WebPPictureImportRGB,
-	WebPPictureImportRGBA,
+	VP8StatusCode, WebPBitstreamFeatures, WebPConfig, WebPDecodeRGB, WebPDecodeRGBA, WebPEncode, WebPFree,
+	WebPGetFeatures, WebPMemoryWrite, WebPMemoryWriter, WebPMemoryWriterClear, WebPMemoryWriterInit, WebPPicture,
+	WebPPictureFree, WebPPictureImportRGB, WebPPictureImportRGBA,
 };
 use versatiles_core::Blob;
 use versatiles_derive::context;
 
-#[context("encoding {}x{} {:?} as WebP (q={:?})", image.width(), image.height(), image.color(), quality)]
+#[context("encoding {}x{} {:?} as WebP (q={:?}, s={:?})", image.width(), image.height(), image.color(), quality, speed)]
 /// Encode a `DynamicImage` into a WebP [`Blob`].
 ///
 /// * `quality` — `Some(q)` selects **lossy** encoding for `q < 100` (0..=99), or **lossless** when
 ///   `q >= 100`. `None` defaults to **95** (lossy).
+/// * `speed` — optional 0..=100 hint (default **75**). Lower → better compression; higher → faster.
+///   Internally mapped to libwebp's `method` 0..=6 (6 = slowest/best, 0 = fastest).
 /// * Only 8‑bit `Rgb8`/`Rgba8` are accepted. If the input has an alpha channel but is fully opaque,
 ///   alpha is removed first.
 ///
 /// Returns an error for unsupported bit depth or color type.
-pub fn encode(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
+pub fn encode(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("webp only supports 8-bit images");
 	}
@@ -51,6 +52,10 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	}
 
 	let quality = quality.unwrap_or(95);
+	// Map user speed 0..=100 to libwebp method 6..=0 (inverted: lower speed → higher method)
+	#[allow(clippy::cast_possible_truncation)]
+	// method 0..=6 fits into i32, clamp ensures valid range
+	let method = speed.map_or(4, |s| (6.0 - f32::from(s) / 100.0 * 6.0).round() as i32);
 	#[allow(clippy::cast_possible_wrap)]
 	let width = image_ref.width() as i32;
 	#[allow(clippy::cast_possible_wrap)]
@@ -59,23 +64,16 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	let has_alpha = image_ref.has_alpha();
 
 	if quality >= 100 {
-		encode_lossless(data, width, height, has_alpha)
+		encode_lossless(data, width, height, has_alpha, method)
 	} else {
-		encode_lossy(data, width, height, has_alpha, f32::from(quality))
+		encode_lossy(data, width, height, has_alpha, f32::from(quality), method)
 	}
 }
 
 /// Encode using the advanced API (WebPConfig + WebPPicture + WebPEncode).
-fn webp_encode_advanced(
-	data: &[u8],
-	width: i32,
-	height: i32,
-	has_alpha: bool,
-	config: &WebPConfig,
-) -> Result<Blob> {
+fn webp_encode_advanced(data: &[u8], width: i32, height: i32, has_alpha: bool, config: &WebPConfig) -> Result<Blob> {
 	unsafe {
-		let mut picture =
-			WebPPicture::new().map_err(|()| anyhow::anyhow!("WebPPictureInit failed"))?;
+		let mut picture = WebPPicture::new().map_err(|()| anyhow::anyhow!("WebPPictureInit failed"))?;
 		picture.use_argb = 1;
 		picture.width = width;
 		picture.height = height;
@@ -110,25 +108,19 @@ fn webp_encode_advanced(
 	}
 }
 
-fn encode_lossy(
-	data: &[u8],
-	width: i32,
-	height: i32,
-	has_alpha: bool,
-	quality: f32,
-) -> Result<Blob> {
-	let mut config =
-		WebPConfig::new().map_err(|()| anyhow::anyhow!("WebPConfigInit failed"))?;
+fn encode_lossy(data: &[u8], width: i32, height: i32, has_alpha: bool, quality: f32, method: i32) -> Result<Blob> {
+	let mut config = WebPConfig::new().map_err(|()| anyhow::anyhow!("WebPConfigInit failed"))?;
 	config.lossless = 0;
 	config.quality = quality;
+	config.method = method;
 	webp_encode_advanced(data, width, height, has_alpha, &config)
 }
 
-fn encode_lossless(data: &[u8], width: i32, height: i32, has_alpha: bool) -> Result<Blob> {
-	let mut config =
-		WebPConfig::new().map_err(|()| anyhow::anyhow!("WebPConfigInit failed"))?;
+fn encode_lossless(data: &[u8], width: i32, height: i32, has_alpha: bool, method: i32) -> Result<Blob> {
+	let mut config = WebPConfig::new().map_err(|()| anyhow::anyhow!("WebPConfigInit failed"))?;
 	config.lossless = 1;
 	config.exact = 1;
+	config.method = method;
 	webp_encode_advanced(data, width, height, has_alpha, &config)
 }
 
@@ -137,13 +129,13 @@ fn encode_lossless(data: &[u8], width: i32, height: i32, has_alpha: bool) -> Res
 ///
 /// `quality = None` uses a default lossy quality of **95**.
 pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
-	encode(image, quality)
+	encode(image, quality, None)
 }
 
 #[context("encoding image {:?} as lossless WebP", image.color())]
-/// Convenience wrapper for **lossless** WebP encoding (equivalent to `encode(image, Some(100))`).
+/// Convenience wrapper for **lossless** WebP encoding (equivalent to `encode(image, Some(100), None)`).
 pub fn image2blob_lossless(image: &DynamicImage) -> Result<Blob> {
-	encode(image, Some(100))
+	encode(image, Some(100), None)
 }
 
 #[context("decoding WebP image ({} bytes)", blob.len())]
@@ -171,12 +163,7 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 		if features.has_alpha != 0 {
 			let mut out_width: i32 = 0;
 			let mut out_height: i32 = 0;
-			let ptr = WebPDecodeRGBA(
-				data.as_ptr(),
-				data.len(),
-				&raw mut out_width,
-				&raw mut out_height,
-			);
+			let ptr = WebPDecodeRGBA(data.as_ptr(), data.len(), &raw mut out_width, &raw mut out_height);
 			if ptr.is_null() {
 				bail!("Failed to decode WebP image: RGBA decoding failed");
 			}
@@ -189,12 +176,7 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 		} else {
 			let mut out_width: i32 = 0;
 			let mut out_height: i32 = 0;
-			let ptr = WebPDecodeRGB(
-				data.as_ptr(),
-				data.len(),
-				&raw mut out_width,
-				&raw mut out_height,
-			);
+			let ptr = WebPDecodeRGB(data.as_ptr(), data.len(), &raw mut out_width, &raw mut out_height);
 			if ptr.is_null() {
 				bail!("Failed to decode WebP image: RGB decoding failed");
 			}
@@ -265,8 +247,8 @@ mod tests {
 	fn opaque_is_saved_without_alpha(#[case] mut img: DynamicImage) -> Result<()> {
 		assert!(img.has_alpha());
 		img.make_opaque()?;
-		assert!(!blob2image(&encode(&img, Some(80))?)?.has_alpha());
-		assert!(!blob2image(&encode(&img, Some(100))?)?.has_alpha());
+		assert!(!blob2image(&encode(&img, Some(80), None)?)?.has_alpha());
+		assert!(!blob2image(&encode(&img, Some(100), None)?)?.has_alpha());
 		Ok(())
 	}
 
@@ -275,8 +257,8 @@ mod tests {
 	#[test]
 	fn encode_with_custom_quality() -> Result<()> {
 		let img = DynamicImage::new_test_rgb();
-		let blob_q50 = encode(&img, Some(50))?;
-		let blob_q95 = encode(&img, Some(95))?;
+		let blob_q50 = encode(&img, Some(50), None)?;
+		let blob_q95 = encode(&img, Some(95), None)?;
 		// Both should produce valid output
 		assert!(!blob_q50.is_empty());
 		assert!(!blob_q95.is_empty());
@@ -289,9 +271,9 @@ mod tests {
 	fn encode_quality_boundary() -> Result<()> {
 		let img = DynamicImage::new_test_rgb();
 		// quality 99 is lossy
-		let blob_lossy = encode(&img, Some(99))?;
+		let blob_lossy = encode(&img, Some(99), None)?;
 		// quality 100 is lossless
-		let blob_lossless = encode(&img, Some(100))?;
+		let blob_lossless = encode(&img, Some(100), None)?;
 		// Lossless should be smaller for our synthetic test image
 		assert!(!blob_lossy.is_empty());
 		assert!(!blob_lossless.is_empty());
@@ -302,8 +284,8 @@ mod tests {
 	fn encode_default_quality() -> Result<()> {
 		let img = DynamicImage::new_test_rgb();
 		// None defaults to 95
-		let blob_default = encode(&img, None)?;
-		let blob_95 = encode(&img, Some(95))?;
+		let blob_default = encode(&img, None, None)?;
+		let blob_95 = encode(&img, Some(95), None)?;
 		// Should produce same size (same quality)
 		assert_eq!(blob_default.len(), blob_95.len());
 		Ok(())
@@ -317,7 +299,7 @@ mod tests {
 		// Create a 16-bit RGB image
 		let img16: ImageBuffer<Rgb<u16>, Vec<u16>> = ImageBuffer::new(8, 8);
 		let dynamic_img = DynamicImage::from(img16);
-		let result = encode(&dynamic_img, None);
+		let result = encode(&dynamic_img, None, None);
 		assert!(result.is_err());
 		let err_msg = result.unwrap_err().chain().last().unwrap().to_string();
 		assert!(err_msg.contains("8-bit"), "Expected '8-bit' in: {err_msg}");
