@@ -110,11 +110,11 @@ strip = true
 
 [workspace.dependencies]
 # Core dependencies
-anyhow = { version = "1.0.101", default-features = false, features = ["std"] }
+anyhow = { version = "1.0.102", default-features = false, features = ["std"] }
 async-trait = { version = "0.1.89", default-features = false }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
 enumset = { version = "1.1.10", default-features = false }
-futures = { version = "0.3.31", features = ["default"] }
+futures = { version = "0.3.32", features = ["default"] }
 itertools = { version = "0.14.0", default-features = false }
 log = { version = "0.4.29", default-features = false }
 num_cpus = { version = "1.17.0", default-features = false }
@@ -127,7 +127,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.49.0", features = ["rt-multi-thread", "sync"] }
 
 # CLI dependencies
-clap = { version = "4.5.58", features = ["default", "derive"] }
+clap = { version = "4.5.60", features = ["default", "derive"] }
 colored = { version = "3.1.1", default-features = false }
 env_logger = { version = "0.11.9" }
 termimad = { version = "0.34.1" }
@@ -177,7 +177,7 @@ moka = { version = "0.12", features = ["future"] }  # Lock-free LRU cache
 dashmap = "6.1"                                     # Concurrent HashMap
 parking_lot = "0.12"                                # Fast synchronization
 arc-swap = "1.8"                                    # Lock-free updates
-deadpool = { version = "0.12", features = ["managed"] }  # Connection pooling
+deadpool = { version = "0.13", features = ["managed"] }  # Connection pooling
 
 # Development dependencies
 assert_cmd = { version = "2.1.2" }
@@ -186,7 +186,7 @@ criterion = { version = "0.8.2" }
 predicates = { version = "3.1.4" }
 pretty_assertions = "1.4.1"
 rstest = { version = "0.26.1", default-features = false }
-tempfile = "3.25.0"
+tempfile = "3.26.0"
 
 versatiles = { version = "3.6.2", path = "versatiles", default-features = false }
 versatiles_container = { version = "3.6.2", path = "versatiles_container", default-features = false }
