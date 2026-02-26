@@ -123,9 +123,34 @@ Reads a single tile file and uses it as a template for all tile requests.
 
 - **`filename`: String (required)** - The filename of the tile. Supported formats: png, jpg/jpeg, webp, avif, pbf/mvt. The format is automatically detected from the file extension.
 
+## `from_tilejson`
+
+Reads tiles from a remote tile server via a TileJSON endpoint.
+The TileJSON is fetched from the given URL, and tiles are loaded individually
+using the URL template from the TileJSON `tiles` array.
+
+### Parameters
+
+- **`url`: String (required)** - The URL of the TileJSON endpoint. For example: `url="https://example.com/tiles.json"`.
+- *`max_retries`: u16 (optional)* - Maximum number of retries per tile request (default: 3).
+- *`max_concurrent_requests`: u16 (optional)* - Maximum number of concurrent tile requests (default: io_bound concurrency limit).
+
 ---
 
 # TRANSFORM operations
+
+## `dem_quantize`
+
+Quantize DEM (elevation) raster tiles by zeroing unnecessary low bits.
+Scans each tile's elevation range, calculates how many bits of precision
+are needed for the requested accuracy, and zeros out the rest.
+This makes tiles much more compressible (PNG/WebP) without losing
+meaningful detail.
+
+### Parameters
+
+- *`bits`: u8 (optional)* - Number of bits of precision to retain within the tile's elevation range. 2^bits = number of distinct levels. Defaults to 8 (256 levels).
+- *`encoding`: String (optional)* - Override auto-detection of DEM encoding. Values: "mapbox", "terrarium".
 
 ## `filter`
 
