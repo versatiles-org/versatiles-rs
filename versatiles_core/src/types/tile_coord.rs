@@ -411,11 +411,8 @@ impl TileCoord {
 		let mercator_tile_size = WORLD_SIZE / f64::from(2u32.pow(u32::from(self.level)));
 
 		// Get center latitude of this tile
-		let [_lon_nw, lat_nw] = TileCoord::coord_to_geo(self.level, f64::from(self.x), f64::from(self.y));
-		let [_lon_se, lat_se] = TileCoord::coord_to_geo(self.level, f64::from(self.x + 1), f64::from(self.y + 1));
-		let center_lat = f64::midpoint(lat_nw, lat_se);
-
-		mercator_tile_size * center_lat.to_radians().cos()
+		let [_lon, lat] = TileCoord::coord_to_geo(self.level, f64::from(self.x) + 0.5, f64::from(self.y) + 0.5);
+		mercator_tile_size * lat.to_radians().cos()
 	}
 
 	/// Return a new coordinate at the parent zoom level (level - 1).
