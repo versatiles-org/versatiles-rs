@@ -142,14 +142,14 @@ using the URL template from the TileJSON `tiles` array.
 ## `dem_quantize`
 
 Quantize DEM (elevation) raster tiles by zeroing unnecessary low bits.
-Scans each tile's elevation range, calculates how many bits of precision
-are needed for the requested accuracy, and zeros out the rest.
-This makes tiles much more compressible (PNG/WebP) without losing
-meaningful detail.
+Computes a per-tile quantization mask from two physically meaningful criteria:
+resolution relative to tile size, and maximum gradient distortion.
+The stricter (smaller step) wins. Single-pass — no min/max scan needed.
 
 ### Parameters
 
-- *`bits`: u8 (optional)* - Number of bits of precision to retain within the tile's elevation range. 2^bits = number of distinct levels. Defaults to 8 (256 levels).
+- *`resolution_ratio`: f64 (optional)* - Minimum elevation resolution as fraction of tile ground size. E.g. 0.001 means for a 1000 m tile, keep 1 m resolution. Defaults to 0.001.
+- *`max_gradient_error`: f64 (optional)* - Maximum allowed gradient change in degrees due to quantization. Defaults to 1.0.
 - *`encoding`: String (optional)* - Override auto-detection of DEM encoding. Values: "mapbox", "terrarium".
 
 ## `filter`
