@@ -103,6 +103,14 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param2: None,
 	},
 	TypeMapping {
+		pattern: "Option<f64>",
+		display_name: "f64",
+		method_name: "get_property_number_option",
+		is_required: false,
+		generic_param: Some("f64"),
+		generic_param2: None,
+	},
+	TypeMapping {
 		pattern: "Option<[f64;3]>",
 		display_name: "[f64,f64,f64]",
 		method_name: "get_property_number_array_option",
@@ -545,6 +553,15 @@ mod tests {
 			),
 			"get_property_number_option::<u32>",
 			"*`v`: u32 (optional)*",
+		);
+		assert_field_type_decodes(
+			parse_quote!(
+				struct T {
+					v: Option<f64>,
+				}
+			),
+			"get_property_number_option::<f64>",
+			"*`v`: f64 (optional)*",
 		);
 		assert_field_type_decodes(
 			parse_quote!(
