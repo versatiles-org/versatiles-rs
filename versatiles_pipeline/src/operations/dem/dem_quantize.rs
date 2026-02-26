@@ -75,7 +75,7 @@ impl Operation {
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		let bits = args.bits.unwrap_or(8).min(24);
+		let bits = args.bits.unwrap_or(12).min(24);
 
 		let encoding = if let Some(ref enc_str) = args.encoding {
 			match enc_str.as_str() {
@@ -363,9 +363,7 @@ mod tests {
 	async fn test_build_with_terrarium_schema() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
-			.operation_from_vpl(
-				"from_debug format=png | meta_update schema=\"dem/terrarium\" | dem_quantize bits=8",
-			)
+			.operation_from_vpl("from_debug format=png | meta_update schema=\"dem/terrarium\" | dem_quantize bits=8")
 			.await?;
 		let _metadata = op.metadata();
 		Ok(())
