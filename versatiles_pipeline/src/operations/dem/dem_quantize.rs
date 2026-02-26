@@ -68,7 +68,7 @@ pub fn calculate_masks(v_min: u32, v_max: u32, bits: u8) -> (u8, u8, u8) {
 }
 
 impl Operation {
-	#[context("Building raster_dem_quantize operation in VPL node {:?}", vpl_node.name)]
+	#[context("Building dem_quantize operation in VPL node {:?}", vpl_node.name)]
 	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + TileSource,
@@ -100,7 +100,7 @@ impl Operation {
 #[async_trait]
 impl TileSource for Operation {
 	fn source_type(&self) -> Arc<SourceType> {
-		SourceType::new_processor("raster_dem_quantize", self.source.source_type())
+		SourceType::new_processor("dem_quantize", self.source.source_type())
 	}
 
 	fn metadata(&self) -> &TileSourceMetadata {
@@ -159,7 +159,7 @@ impl TileSource for Operation {
 							p[2] &= mask_b;
 						}
 					}
-					_ => bail!("raster_dem_quantize requires RGB8 or RGBA8 images"),
+					_ => bail!("dem_quantize requires RGB8 or RGBA8 images"),
 				}
 				tile.set_format_quality(Some(100)); // max quality to preserve pixel values
 				Ok(tile)
@@ -168,7 +168,7 @@ impl TileSource for Operation {
 	}
 }
 
-crate::operations::macros::define_transform_factory!("raster_dem_quantize", Args, Operation);
+crate::operations::macros::define_transform_factory!("dem_quantize", Args, Operation);
 
 #[cfg(test)]
 mod tests {
@@ -336,7 +336,7 @@ mod tests {
 	#[test]
 	fn test_factory_get_tag_name() {
 		let factory = Factory {};
-		assert_eq!(factory.get_tag_name(), "raster_dem_quantize");
+		assert_eq!(factory.get_tag_name(), "dem_quantize");
 	}
 
 	#[test]
@@ -353,7 +353,7 @@ mod tests {
 	async fn test_build_with_mapbox_schema() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
-			.operation_from_vpl("from_debug format=png | meta_update schema=\"dem/mapbox\" | raster_dem_quantize bits=8")
+			.operation_from_vpl("from_debug format=png | meta_update schema=\"dem/mapbox\" | dem_quantize bits=8")
 			.await?;
 		let _metadata = op.metadata();
 		Ok(())
@@ -364,7 +364,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
 			.operation_from_vpl(
-				"from_debug format=png | meta_update schema=\"dem/terrarium\" | raster_dem_quantize bits=8",
+				"from_debug format=png | meta_update schema=\"dem/terrarium\" | dem_quantize bits=8",
 			)
 			.await?;
 		let _metadata = op.metadata();
@@ -375,7 +375,7 @@ mod tests {
 	async fn test_build_with_encoding_override() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
-			.operation_from_vpl("from_debug format=png | raster_dem_quantize bits=8 encoding=mapbox")
+			.operation_from_vpl("from_debug format=png | dem_quantize bits=8 encoding=mapbox")
 			.await?;
 		let _metadata = op.metadata();
 		Ok(())
@@ -385,7 +385,7 @@ mod tests {
 	async fn test_build_fails_without_dem_schema() {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
-			.operation_from_vpl("from_debug format=png | raster_dem_quantize bits=8")
+			.operation_from_vpl("from_debug format=png | dem_quantize bits=8")
 			.await;
 		assert!(result.is_err());
 		let err_msg = format!("{:?}", result.unwrap_err());
@@ -399,7 +399,7 @@ mod tests {
 	async fn test_build_fails_with_invalid_encoding() {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
-			.operation_from_vpl("from_debug format=png | raster_dem_quantize encoding=invalid")
+			.operation_from_vpl("from_debug format=png | dem_quantize encoding=invalid")
 			.await;
 		assert!(result.is_err());
 	}
@@ -408,10 +408,10 @@ mod tests {
 	async fn test_source_type() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
-			.operation_from_vpl("from_debug format=png | raster_dem_quantize encoding=mapbox")
+			.operation_from_vpl("from_debug format=png | dem_quantize encoding=mapbox")
 			.await?;
 		let source_type = op.source_type();
-		assert!(source_type.to_string().contains("raster_dem_quantize"));
+		assert!(source_type.to_string().contains("dem_quantize"));
 		Ok(())
 	}
 
@@ -420,7 +420,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		// No bits parameter - should default to 8
 		let op = factory
-			.operation_from_vpl("from_debug format=png | raster_dem_quantize encoding=terrarium")
+			.operation_from_vpl("from_debug format=png | dem_quantize encoding=terrarium")
 			.await?;
 		let _metadata = op.metadata();
 		Ok(())

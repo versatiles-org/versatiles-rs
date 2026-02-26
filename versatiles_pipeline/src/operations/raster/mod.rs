@@ -1,4 +1,3 @@
-pub mod raster_dem_quantize;
 pub mod raster_flatten;
 pub mod raster_format;
 pub mod raster_levels;
