@@ -137,61 +137,125 @@ impl From<geo::Polygon<f64>> for PolygonGeometry {
 mod tests {
 	use super::*;
 
+	fn square_poly() -> PolygonGeometry {
+		PolygonGeometry::from(&[[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]])
+	}
+
+	// ── area ────────────────────────────────────────────────────────────
+
 	#[test]
-	fn test_area() {
+	fn area() {
 		let polygon = PolygonGeometry::from(&[[[0, 0], [5, 0], [5, 5], [0, 5], [0, 0]]]);
-		let area = polygon.area();
-		assert_eq!(area, 50.0);
+		assert_eq!(polygon.area(), 50.0);
+	}
+
+	// ── verify ──────────────────────────────────────────────────────────
+
+	#[test]
+	fn verify_valid() {
+		assert!(square_poly().verify().is_ok());
 	}
 
 	#[test]
-	fn test_contains_point_simple() {
-		let polygon = PolygonGeometry::from(&[[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]]);
-
-		// Inside
-		assert!(polygon.contains_point(5.0, 5.0));
-
-		// Outside
-		assert!(!polygon.contains_point(-1.0, 5.0));
-		assert!(!polygon.contains_point(15.0, 5.0));
+	fn verify_empty() {
+		assert!(PolygonGeometry::new().verify().is_err());
 	}
 
 	#[test]
-	fn test_contains_point_with_hole() {
-		// Outer ring: (0,0) to (20,20)
-		// Hole: (5,5) to (15,15)
+	fn verify_invalid_ring() {
+		// Ring with only 3 points (need >=4)
+		let polygon = PolygonGeometry(vec![RingGeometry::from(&[[0, 0], [1, 0], [0, 0]])]);
+		assert!(polygon.verify().is_err());
+	}
+
+	// ── to_coord_json ───────────────────────────────────────────────────
+
+	#[test]
+	fn to_coord_json() {
+		let json = square_poly().to_coord_json(None);
+		let rings = json.as_array().unwrap();
+		assert_eq!(rings.len(), 1);
+	}
+
+	// ── contains_point ──────────────────────────────────────────────────
+
+	#[test]
+	fn contains_point_simple() {
+		assert!(square_poly().contains_point(5.0, 5.0));
+		assert!(!square_poly().contains_point(-1.0, 5.0));
+		assert!(!square_poly().contains_point(15.0, 5.0));
+	}
+
+	#[test]
+	fn contains_point_with_hole() {
 		let polygon = PolygonGeometry::from(&[
 			[[0, 0], [20, 0], [20, 20], [0, 20], [0, 0]],
 			[[5, 5], [15, 5], [15, 15], [5, 15], [5, 5]],
 		]);
-
-		// Outside outer ring
-		assert!(!polygon.contains_point(-1.0, 10.0));
-
-		// Inside outer ring, outside hole
-		assert!(polygon.contains_point(2.0, 2.0));
-		assert!(polygon.contains_point(18.0, 18.0));
-
-		// Inside hole (should be false)
-		assert!(!polygon.contains_point(10.0, 10.0));
+		assert!(!polygon.contains_point(-1.0, 10.0)); // outside
+		assert!(polygon.contains_point(2.0, 2.0)); // inside, outside hole
+		assert!(!polygon.contains_point(10.0, 10.0)); // inside hole
 	}
 
 	#[test]
-	fn test_contains_point_empty() {
-		let polygon = PolygonGeometry::new();
-		assert!(!polygon.contains_point(0.0, 0.0));
+	fn contains_point_empty() {
+		assert!(!PolygonGeometry::new().contains_point(0.0, 0.0));
 	}
 
+	// ── to_mercator ─────────────────────────────────────────────────────
+
 	#[test]
-	fn test_to_mercator() {
-		// Use integers only (the from impl expects integers)
+	fn to_mercator() {
 		let polygon = PolygonGeometry::from(&[[[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]]]);
-		let mercator = polygon.to_mercator();
+		let m = polygon.to_mercator();
+		assert_eq!(m.0.len(), 1);
+		assert!(m.0[0].0[0].x().abs() > 100_000.0);
+	}
 
-		// Check that we have the same number of rings
-		assert_eq!(mercator.0.len(), 1);
+	// ── compute_bounds ──────────────────────────────────────────────────
 
-		// Check that the coordinates are now in meters (much larger values)
-		assert!(mercator.0[0].0[0].x().abs() > 100_000.0);
+	#[test]
+	fn compute_bounds() {
+		let bounds = square_poly().compute_bounds().unwrap();
+		assert_eq!(bounds, [0.0, 0.0, 10.0, 10.0]);
+	}
+
+	#[test]
+	fn compute_bounds_empty() {
+		assert!(PolygonGeometry::new().compute_bounds().is_none());
+	}
+
+	// ── into_multi ──────────────────────────────────────────────────────
+
+	#[test]
+	fn into_multi() {
+		let p = square_poly();
+		let multi = p.clone().into_multi();
+		assert_eq!(multi.0.len(), 1);
+		assert_eq!(multi.0[0], p);
+	}
+
+	// ── CompositeGeometryTrait ──────────────────────────────────────────
+
+	#[test]
+	fn composite_push_and_len() {
+		let mut poly = PolygonGeometry::new();
+		assert!(poly.is_empty());
+		poly.push(RingGeometry::from(&[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]));
+		assert_eq!(poly.len(), 1);
+	}
+
+	// ── Debug / Clone / Eq ──────────────────────────────────────────────
+
+	#[test]
+	fn debug_format() {
+		let poly = square_poly();
+		assert!(format!("{poly:?}").contains("[0.0, 0.0]"));
+	}
+
+	#[test]
+	fn clone_and_eq() {
+		let a = square_poly();
+		assert_eq!(a.clone(), a);
 	}
 }

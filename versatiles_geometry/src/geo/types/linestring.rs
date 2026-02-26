@@ -297,4 +297,32 @@ mod tests {
 		}
 		assert_eq!(line.last().unwrap().x(), 9.0);
 	}
+
+	#[test]
+	fn test_contains_point_always_false() {
+		let line = LineStringGeometry::from(vec![(0.0, 0.0), (10.0, 10.0)]);
+		assert!(!line.contains_point(5.0, 5.0));
+		assert!(!line.contains_point(0.0, 0.0));
+	}
+
+	#[test]
+	fn test_to_mercator() {
+		let line = LineStringGeometry::from(vec![(13.4, 52.5), (13.5, 52.6)]);
+		let m = line.to_mercator();
+		assert_eq!(m.len(), 2);
+		assert!(m.as_vec()[0].x() > 0.0);
+		assert!(m.as_vec()[0].y() > 0.0);
+	}
+
+	#[test]
+	fn test_compute_bounds() {
+		let line = LineStringGeometry::from(vec![(1.0, 2.0), (5.0, 8.0), (3.0, 4.0)]);
+		let bounds = line.compute_bounds().unwrap();
+		assert_eq!(bounds, [1.0, 2.0, 5.0, 8.0]);
+	}
+
+	#[test]
+	fn test_compute_bounds_empty() {
+		assert!(LineStringGeometry::new().compute_bounds().is_none());
+	}
 }

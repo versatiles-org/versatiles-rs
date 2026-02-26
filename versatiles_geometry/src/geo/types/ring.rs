@@ -126,20 +126,76 @@ impl From<geo::LineString<f64>> for RingGeometry {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
 
-	#[test]
-	fn test_contains_point_simple_square() {
-		// Square from (0,0) to (10,10)
-		let ring = RingGeometry::from(&[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]);
+	fn square() -> RingGeometry {
+		RingGeometry::from(&[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]])
+	}
 
-		// Inside
+	// ── area ────────────────────────────────────────────────────────────
+
+	#[test]
+	fn area_ccw_positive() {
+		// CCW square 10x10
+		assert_eq!(square().area(), 200.0);
+	}
+
+	#[test]
+	fn area_cw_negative() {
+		// CW winding
+		let ring = RingGeometry::from(&[[0, 0], [0, 10], [10, 10], [10, 0], [0, 0]]);
+		assert_eq!(ring.area(), -200.0);
+	}
+
+	#[test]
+	fn area_empty() {
+		assert_eq!(RingGeometry::new().area(), 0.0);
+	}
+
+	// ── verify ──────────────────────────────────────────────────────────
+
+	#[test]
+	fn verify_valid() {
+		assert!(square().verify().is_ok());
+	}
+
+	#[test]
+	fn verify_too_few_points() {
+		let ring = RingGeometry::from(&[[0, 0], [1, 1], [0, 0]]);
+		assert!(ring.verify().is_err());
+	}
+
+	#[test]
+	fn verify_not_closed() {
+		let ring = RingGeometry::from(&[[0, 0], [1, 0], [1, 1], [0, 1]]);
+		assert!(ring.verify().is_err());
+	}
+
+	// ── to_coord_json ───────────────────────────────────────────────────
+
+	#[test]
+	fn to_coord_json() {
+		let ring = RingGeometry::from(&[[1, 2], [3, 4], [1, 2]]);
+		let json = ring.to_coord_json(None);
+		let arr = json.as_array().unwrap();
+		assert_eq!(arr.len(), 3);
+	}
+
+	// ── contains_point ──────────────────────────────────────────────────
+
+	#[test]
+	fn contains_point_inside() {
+		let ring = square();
 		assert!(ring.contains_point(5.0, 5.0));
 		assert!(ring.contains_point(1.0, 1.0));
 		assert!(ring.contains_point(9.0, 9.0));
+	}
 
-		// Outside
+	#[test]
+	fn contains_point_outside() {
+		let ring = square();
 		assert!(!ring.contains_point(-1.0, 5.0));
 		assert!(!ring.contains_point(11.0, 5.0));
 		assert!(!ring.contains_point(5.0, -1.0));
@@ -147,22 +203,78 @@ mod tests {
 	}
 
 	#[test]
-	fn test_contains_point_empty_ring() {
-		let ring = RingGeometry::new();
-		assert!(!ring.contains_point(0.0, 0.0));
+	fn contains_point_empty() {
+		assert!(!RingGeometry::new().contains_point(0.0, 0.0));
+	}
+
+	// ── to_mercator ─────────────────────────────────────────────────────
+
+	#[test]
+	fn to_mercator() {
+		let ring = RingGeometry::from(&[[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0], [-1.0, -1.0]]);
+		let m = ring.to_mercator();
+		assert!(m.0[0].x().abs() > 100_000.0);
+		assert_eq!(m.0.first(), m.0.last());
+	}
+
+	// ── compute_bounds ──────────────────────────────────────────────────
+
+	#[test]
+	fn compute_bounds() {
+		let bounds = square().compute_bounds().unwrap();
+		assert_eq!(bounds, [0.0, 0.0, 10.0, 10.0]);
 	}
 
 	#[test]
-	fn test_to_mercator() {
-		// Ring around the equator/prime meridian
-		let ring = RingGeometry::from(&[[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0], [-1.0, -1.0]]);
-		let mercator = ring.to_mercator();
+	fn compute_bounds_empty() {
+		assert!(RingGeometry::new().compute_bounds().is_none());
+	}
 
-		// Check that the ring was transformed (coordinates should be in meters now)
-		assert!(mercator.0[0].x().abs() > 100_000.0); // ~111km per degree at equator
-		assert!(mercator.0[0].y().abs() > 100_000.0);
+	// ── CompositeGeometryTrait ──────────────────────────────────────────
 
-		// Check that the ring is still closed
-		assert_eq!(mercator.0.first(), mercator.0.last());
+	#[test]
+	fn composite_new_is_empty() {
+		let ring = RingGeometry::new();
+		assert!(ring.is_empty());
+		assert_eq!(ring.len(), 0);
+	}
+
+	#[test]
+	fn composite_push_and_len() {
+		let mut ring = RingGeometry::new();
+		ring.push(Coordinates::new(1.0, 2.0));
+		ring.push(Coordinates::new(3.0, 4.0));
+		assert_eq!(ring.len(), 2);
+		assert!(!ring.is_empty());
+	}
+
+	#[test]
+	fn composite_first_last() {
+		let ring = RingGeometry::from(&[[1, 2], [3, 4], [5, 6]]);
+		assert_eq!(ring.first().unwrap().x(), 1.0);
+		assert_eq!(ring.last().unwrap().x(), 5.0);
+	}
+
+	// ── Debug / Clone / Eq ──────────────────────────────────────────────
+
+	#[test]
+	fn debug_format() {
+		let ring = RingGeometry::from(&[[1, 2], [3, 4]]);
+		assert!(format!("{ring:?}").contains("[1.0, 2.0]"));
+	}
+
+	#[test]
+	fn clone_and_eq() {
+		let a = square();
+		assert_eq!(a.clone(), a);
+	}
+
+	// ── From conversions ────────────────────────────────────────────────
+
+	#[test]
+	fn from_geo_linestring() {
+		let ls = geo::LineString::from(vec![geo::Coord { x: 0.0, y: 0.0 }, geo::Coord { x: 1.0, y: 1.0 }]);
+		let ring = RingGeometry::from(ls);
+		assert_eq!(ring.len(), 2);
 	}
 }

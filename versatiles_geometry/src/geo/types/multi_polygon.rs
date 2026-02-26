@@ -104,74 +104,192 @@ impl Debug for MultiPolygonGeometry {
 crate::impl_from_array!(MultiPolygonGeometry, PolygonGeometry);
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
+	use super::super::RingGeometry;
 	use super::*;
 
-	#[test]
-	fn test_contains_point_single_polygon() {
-		let multi = MultiPolygonGeometry::from(&[[[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]]]);
-
-		assert!(multi.contains_point(5.0, 5.0));
-		assert!(!multi.contains_point(-1.0, 5.0));
+	fn single_square() -> MultiPolygonGeometry {
+		MultiPolygonGeometry::from(&[[[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]]])
 	}
 
-	#[test]
-	fn test_contains_point_multiple_polygons() {
-		// Two separate squares
-		let multi = MultiPolygonGeometry::from(&[
+	fn two_squares() -> MultiPolygonGeometry {
+		MultiPolygonGeometry::from(&[
 			[[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]],
 			[[[20, 0], [30, 0], [30, 10], [20, 10], [20, 0]]],
-		]);
+		])
+	}
 
-		// Inside first polygon
-		assert!(multi.contains_point(5.0, 5.0));
+	// ── GeometryTrait ───────────────────────────────────────────────────
 
-		// Inside second polygon
-		assert!(multi.contains_point(25.0, 5.0));
-
-		// Between polygons (outside both)
-		assert!(!multi.contains_point(15.0, 5.0));
+	#[test]
+	fn area_single() {
+		assert_eq!(single_square().area(), 200.0);
 	}
 
 	#[test]
-	fn test_contains_point_empty() {
-		let multi = MultiPolygonGeometry::new();
-		assert!(!multi.contains_point(0.0, 0.0));
+	fn area_multiple() {
+		// Two 10x10 squares
+		assert_eq!(two_squares().area(), 400.0);
 	}
 
 	#[test]
-	fn test_to_mercator() {
-		let multi = MultiPolygonGeometry::from(&[[[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]]);
-		let mercator = multi.to_mercator();
-
-		// Check that we have the same number of polygons
-		assert_eq!(mercator.0.len(), 1);
-
-		// Origin should still be at (0, 0) in mercator
-		assert!(mercator.0[0].0[0].0[0].x().abs() < 1.0);
-		assert!(mercator.0[0].0[0].0[0].y().abs() < 1.0);
-
-		// Non-origin points should be in meters (much larger values)
-		assert!(mercator.0[0].0[0].0[1].x().abs() > 100_000.0);
+	fn area_empty() {
+		assert_eq!(MultiPolygonGeometry::new().area(), 0.0);
 	}
 
 	#[test]
-	fn test_compute_bounds() {
-		let multi = MultiPolygonGeometry::from(&[
-			[[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]],
-			[[[20, 5], [30, 5], [30, 15], [20, 15], [20, 5]]],
-		]);
-		let bounds = multi.compute_bounds().unwrap();
-
-		assert!((bounds[0] - 0.0).abs() < 1e-10); // x_min
-		assert!((bounds[1] - 0.0).abs() < 1e-10); // y_min
-		assert!((bounds[2] - 30.0).abs() < 1e-10); // x_max
-		assert!((bounds[3] - 15.0).abs() < 1e-10); // y_max
+	fn verify_valid() {
+		assert!(two_squares().verify().is_ok());
 	}
 
 	#[test]
-	fn test_compute_bounds_empty() {
-		let multi = MultiPolygonGeometry::new();
-		assert!(multi.compute_bounds().is_none());
+	fn verify_empty_ok() {
+		assert!(MultiPolygonGeometry::new().verify().is_ok());
+	}
+
+	#[test]
+	fn verify_invalid_inner() {
+		// Polygon with an invalid ring (only 3 points)
+		let mut mp = MultiPolygonGeometry::new();
+		let mut bad_poly = PolygonGeometry::new();
+		bad_poly.push(RingGeometry::from(&[[0, 0], [1, 0], [0, 0]]));
+		mp.push(bad_poly);
+		assert!(mp.verify().is_err());
+	}
+
+	#[test]
+	fn to_coord_json() {
+		let json = two_squares().to_coord_json(None);
+		let arr = json.as_array().unwrap();
+		assert_eq!(arr.len(), 2);
+	}
+
+	#[test]
+	fn contains_point_single() {
+		assert!(single_square().contains_point(5.0, 5.0));
+		assert!(!single_square().contains_point(-1.0, 5.0));
+	}
+
+	#[test]
+	fn contains_point_multiple() {
+		let mp = two_squares();
+		assert!(mp.contains_point(5.0, 5.0)); // first polygon
+		assert!(mp.contains_point(25.0, 5.0)); // second polygon
+		assert!(!mp.contains_point(15.0, 5.0)); // between
+	}
+
+	#[test]
+	fn contains_point_empty() {
+		assert!(!MultiPolygonGeometry::new().contains_point(0.0, 0.0));
+	}
+
+	#[test]
+	fn to_mercator() {
+		let m = single_square().to_mercator();
+		assert_eq!(m.0.len(), 1);
+		// Non-origin points should be in meters
+		assert!(m.0[0].0[0].0[1].x().abs() > 100_000.0);
+	}
+
+	#[test]
+	fn compute_bounds() {
+		let bounds = two_squares().compute_bounds().unwrap();
+		assert_eq!(bounds, [0.0, 0.0, 30.0, 10.0]);
+	}
+
+	#[test]
+	fn compute_bounds_empty() {
+		assert!(MultiPolygonGeometry::new().compute_bounds().is_none());
+	}
+
+	// ── CompositeGeometryTrait ──────────────────────────────────────────
+
+	#[test]
+	fn composite_new_is_empty() {
+		let mp = MultiPolygonGeometry::new();
+		assert!(mp.is_empty());
+		assert_eq!(mp.len(), 0);
+	}
+
+	#[test]
+	fn composite_push_and_len() {
+		let mut mp = MultiPolygonGeometry::new();
+		mp.push(PolygonGeometry::from(&[[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]));
+		assert_eq!(mp.len(), 1);
+		assert!(!mp.is_empty());
+	}
+
+	#[test]
+	fn composite_first_last() {
+		let mp = two_squares();
+		assert_eq!(mp.first().unwrap().0[0].0[0].x(), 0.0);
+		assert_eq!(mp.last().unwrap().0[0].0[0].x(), 20.0);
+	}
+
+	#[test]
+	fn composite_pop() {
+		let mut mp = two_squares();
+		let popped = mp.pop().unwrap();
+		assert_eq!(popped.0[0].0[0].x(), 20.0);
+		assert_eq!(mp.len(), 1);
+	}
+
+	#[test]
+	fn composite_into_inner() {
+		let inner = two_squares().into_inner();
+		assert_eq!(inner.len(), 2);
+	}
+
+	#[test]
+	fn composite_into_iter() {
+		let polys: Vec<_> = two_squares().into_iter().collect();
+		assert_eq!(polys.len(), 2);
+	}
+
+	#[test]
+	fn composite_into_first_and_rest() {
+		let (first, rest) = two_squares().into_first_and_rest().unwrap();
+		assert_eq!(first.0[0].0[0].x(), 0.0);
+		assert_eq!(rest.len(), 1);
+	}
+
+	#[test]
+	fn composite_into_first_and_rest_empty() {
+		assert!(MultiPolygonGeometry::new().into_first_and_rest().is_none());
+	}
+
+	// ── Debug / Clone / Eq ──────────────────────────────────────────────
+
+	#[test]
+	fn debug_format() {
+		let mp = single_square();
+		assert!(format!("{mp:?}").contains("[0.0, 0.0]"));
+	}
+
+	#[test]
+	fn clone_and_eq() {
+		let a = two_squares();
+		assert_eq!(a.clone(), a);
+	}
+
+	#[test]
+	fn ne() {
+		assert_ne!(single_square(), two_squares());
+	}
+
+	// ── From conversions ────────────────────────────────────────────────
+
+	#[test]
+	fn from_vec() {
+		let mp = MultiPolygonGeometry::from(vec![vec![vec![(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 0.0)]]]);
+		assert_eq!(mp.len(), 1);
+	}
+
+	#[test]
+	fn from_slice() {
+		let data = [[[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 0.0)]]];
+		let mp = MultiPolygonGeometry::from(&data[..]);
+		assert_eq!(mp.len(), 1);
 	}
 }

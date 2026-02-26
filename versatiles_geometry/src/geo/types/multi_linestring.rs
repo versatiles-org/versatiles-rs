@@ -96,3 +96,172 @@ impl Debug for MultiLineStringGeometry {
 }
 
 crate::impl_from_array!(MultiLineStringGeometry, LineStringGeometry);
+
+#[cfg(test)]
+#[allow(clippy::float_cmp)]
+mod tests {
+	use super::*;
+
+	fn sample() -> MultiLineStringGeometry {
+		MultiLineStringGeometry::from(vec![
+			vec![(0.0, 0.0), (1.0, 1.0)],
+			vec![(2.0, 3.0), (4.0, 5.0), (6.0, 7.0)],
+		])
+	}
+
+	// ── GeometryTrait ───────────────────────────────────────────────────
+
+	#[test]
+	fn area_is_zero() {
+		assert_eq!(sample().area(), 0.0);
+	}
+
+	#[test]
+	fn verify_valid() {
+		assert!(sample().verify().is_ok());
+	}
+
+	#[test]
+	fn verify_empty_ok() {
+		assert!(MultiLineStringGeometry::new().verify().is_ok());
+	}
+
+	#[test]
+	fn verify_invalid_inner() {
+		// A line with only 1 point is invalid
+		let mut ml = MultiLineStringGeometry::new();
+		ml.push(LineStringGeometry::from(vec![(0.0, 0.0)]));
+		assert!(ml.verify().is_err());
+	}
+
+	#[test]
+	fn to_coord_json() {
+		let json = sample().to_coord_json(None);
+		let arr = json.as_array().unwrap();
+		assert_eq!(arr.len(), 2);
+	}
+
+	#[test]
+	fn contains_point_always_false() {
+		assert!(!sample().contains_point(0.0, 0.0));
+		assert!(!sample().contains_point(5.0, 5.0));
+	}
+
+	#[test]
+	fn to_mercator() {
+		let ml = MultiLineStringGeometry::from(&[[(13.0, 52.0), (13.5, 52.5)]]);
+		let m = ml.to_mercator();
+		assert_eq!(m.as_vec().len(), 1);
+		assert!(m.as_vec()[0].as_vec()[0].x() > 0.0);
+	}
+
+	#[test]
+	fn compute_bounds() {
+		let bounds = sample().compute_bounds().unwrap();
+		assert_eq!(bounds, [0.0, 0.0, 6.0, 7.0]);
+	}
+
+	#[test]
+	fn compute_bounds_empty() {
+		assert!(MultiLineStringGeometry::new().compute_bounds().is_none());
+	}
+
+	// ── CompositeGeometryTrait ──────────────────────────────────────────
+
+	#[test]
+	fn composite_new_is_empty() {
+		let ml = MultiLineStringGeometry::new();
+		assert!(ml.is_empty());
+		assert_eq!(ml.len(), 0);
+	}
+
+	#[test]
+	fn composite_push_and_len() {
+		let mut ml = MultiLineStringGeometry::new();
+		ml.push(LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0)]));
+		assert_eq!(ml.len(), 1);
+		assert!(!ml.is_empty());
+	}
+
+	#[test]
+	fn composite_first_last() {
+		let ml = sample();
+		assert_eq!(ml.first().unwrap().as_vec()[0].x(), 0.0);
+		assert_eq!(ml.last().unwrap().as_vec()[0].x(), 2.0);
+	}
+
+	#[test]
+	fn composite_first_last_empty() {
+		let ml = MultiLineStringGeometry::new();
+		assert!(ml.first().is_none());
+		assert!(ml.last().is_none());
+	}
+
+	#[test]
+	fn composite_pop() {
+		let mut ml = sample();
+		let popped = ml.pop().unwrap();
+		assert_eq!(popped.len(), 3);
+		assert_eq!(ml.len(), 1);
+	}
+
+	#[test]
+	fn composite_into_inner() {
+		let inner = sample().into_inner();
+		assert_eq!(inner.len(), 2);
+	}
+
+	#[test]
+	fn composite_into_iter() {
+		let lines: Vec<_> = sample().into_iter().collect();
+		assert_eq!(lines.len(), 2);
+	}
+
+	#[test]
+	fn composite_into_first_and_rest() {
+		let (first, rest) = sample().into_first_and_rest().unwrap();
+		assert_eq!(first.len(), 2);
+		assert_eq!(rest.len(), 1);
+	}
+
+	#[test]
+	fn composite_into_first_and_rest_empty() {
+		assert!(MultiLineStringGeometry::new().into_first_and_rest().is_none());
+	}
+
+	// ── Debug / Clone / Eq ──────────────────────────────────────────────
+
+	#[test]
+	fn debug_format() {
+		let ml = MultiLineStringGeometry::from(&[[(1.0, 2.0), (3.0, 4.0)]]);
+		assert!(format!("{ml:?}").contains("[1.0, 2.0]"));
+	}
+
+	#[test]
+	fn clone_and_eq() {
+		let a = sample();
+		assert_eq!(a.clone(), a);
+	}
+
+	#[test]
+	fn ne() {
+		let a = MultiLineStringGeometry::from(&[[(0.0, 0.0), (1.0, 1.0)]]);
+		let b = MultiLineStringGeometry::from(&[[(2.0, 2.0), (3.0, 3.0)]]);
+		assert_ne!(a, b);
+	}
+
+	// ── From conversions ────────────────────────────────────────────────
+
+	#[test]
+	fn from_vec() {
+		let ml = MultiLineStringGeometry::from(vec![vec![(0.0, 0.0), (1.0, 1.0)], vec![(2.0, 2.0), (3.0, 3.0)]]);
+		assert_eq!(ml.len(), 2);
+	}
+
+	#[test]
+	fn from_slice() {
+		let data = [[(0.0, 0.0), (1.0, 1.0)], [(2.0, 2.0), (3.0, 3.0)]];
+		let ml = MultiLineStringGeometry::from(&data[..]);
+		assert_eq!(ml.len(), 2);
+	}
+}
