@@ -194,6 +194,15 @@ fn extract_struct_docs(attrs: &[Attribute]) -> String {
 		.to_string()
 }
 
+/// Metadata for a single field, used for code generation.
+struct FieldMeta {
+	name: String,
+	rust_type: String,
+	is_required: bool,
+	is_sources: bool,
+	doc: String,
+}
+
 /// Processed field information returned by `process_field`.
 enum ProcessedField {
 	/// A regular property field with (doc_field, parser_field)
@@ -203,7 +212,7 @@ enum ProcessedField {
 }
 
 /// Process a single struct field into parsing code.
-fn process_field(field: &Field) -> Result<(String, ProcessedField), syn::Error> {
+fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), syn::Error> {
 	let field_name = &field.ident;
 	let field_type = &field.ty;
 	let field_str = field_name
@@ -212,7 +221,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField), syn::Error> 
 		.to_string();
 	let field_type_str = quote!(#field_type).to_string().replace(' ', "");
 
-	let mut comment = field
+	let raw_comment = field
 		.attrs
 		.iter()
 		.filter_map(extract_comment)
@@ -228,11 +237,19 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField), syn::Error> 
 				format!("type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'"),
 			));
 		}
-		let doc = format!("### Sources\n\n{comment}");
+		let doc = format!("### Sources\n\n{raw_comment}");
 		let parser = quote! { sources: node.sources.clone() };
-		return Ok((field_str, ProcessedField::Sources { doc, parser }));
+		let meta = FieldMeta {
+			name: field_str.clone(),
+			rust_type: field_type_str,
+			is_required: true,
+			is_sources: true,
+			doc: raw_comment,
+		};
+		return Ok((field_str, ProcessedField::Sources { doc, parser }, meta));
 	}
 
+	let mut comment = raw_comment.clone();
 	if !comment.is_empty() {
 		comment = format!(" - {comment}");
 	}
@@ -272,17 +289,52 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField), syn::Error> 
 		format!("- *`{field_str}`: {} (optional)*{comment}", mapping.display_name)
 	};
 
+	let meta = FieldMeta {
+		name: field_str.clone(),
+		rust_type: field_type_str,
+		is_required: mapping.is_required,
+		is_sources: false,
+		doc: raw_comment,
+	};
+
 	Ok((
 		field_str,
 		ProcessedField::Property {
 			doc: doc.trim().to_string(),
 			parser: quote! { #field_name: #call },
 		},
+		meta,
 	))
 }
 
 /// Build the final impl TokenStream for the struct.
-fn build_impl_tokens(name: &Ident, field_names: &[String], parser_fields: &[TokenStream], doc: &str) -> TokenStream {
+fn build_impl_tokens(
+	name: &Ident,
+	field_names: &[String],
+	parser_fields: &[TokenStream],
+	doc: &str,
+	field_metas: &[FieldMeta],
+) -> TokenStream {
+	let meta_entries: Vec<TokenStream> = field_metas
+		.iter()
+		.map(|m| {
+			let fname = &m.name;
+			let rtype = &m.rust_type;
+			let required = m.is_required;
+			let is_sources = m.is_sources;
+			let fdoc = &m.doc;
+			quote! {
+				crate::vpl::VPLFieldMeta {
+					name: #fname.to_string(),
+					rust_type: #rtype.to_string(),
+					is_required: #required,
+					is_sources: #is_sources,
+					doc: #fdoc.to_string(),
+				}
+			}
+		})
+		.collect();
+
 	quote! {
 		impl #name {
 			pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {
@@ -307,6 +359,10 @@ fn build_impl_tokens(name: &Ident, field_names: &[String], parser_fields: &[Toke
 
 			pub fn get_docs() -> String {
 				#doc.to_string()
+			}
+
+			pub fn get_field_metadata() -> Vec<crate::vpl::VPLFieldMeta> {
+				vec![#(#meta_entries),*]
 			}
 		}
 	}
@@ -334,9 +390,10 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 	let mut doc_fields: Vec<String> = Vec::new();
 	let mut doc_sources: Option<String> = None;
 	let mut field_names: Vec<String> = Vec::new();
+	let mut field_metas: Vec<FieldMeta> = Vec::new();
 
 	for field in fields {
-		let (field_str, processed) = process_field(&field)?;
+		let (field_str, processed, meta) = process_field(&field)?;
 
 		if field_str == "sources" && doc_sources.is_some() {
 			return Err(syn::Error::new_spanned(
@@ -346,6 +403,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 		}
 
 		field_names.push(field_str);
+		field_metas.push(meta);
 		match processed {
 			ProcessedField::Sources { doc, parser } => {
 				doc_sources = Some(doc);
@@ -372,7 +430,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 		.trim()
 		.to_string();
 
-	Ok(build_impl_tokens(&name, &field_names, &parser_fields, &doc))
+	Ok(build_impl_tokens(&name, &field_names, &parser_fields, &doc, &field_metas))
 }
 
 #[cfg(test)]
