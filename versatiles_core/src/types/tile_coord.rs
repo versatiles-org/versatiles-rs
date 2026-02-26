@@ -150,8 +150,8 @@ impl TileCoord {
 	/// # Arguments
 	///
 	/// * `level` - The zoom level
-	/// * `x` - The x tile index
-	/// * `y` - The y tile index
+	/// * `x` - The x tile coordinate (fractional values interpolate between tile edges)
+	/// * `y` - The y tile coordinate (fractional values interpolate between tile edges)
 	///
 	/// # Returns
 	///
@@ -162,24 +162,24 @@ impl TileCoord {
 	/// ```
 	/// use versatiles_core::TileCoord;
 	///
-	/// let [lon, lat] = TileCoord::coord_to_geo(10, 1, 1020);
+	/// let [lon, lat] = TileCoord::coord_to_geo(10, 1.0, 1020.0);
 	/// // Returns coordinates for the northwest corner of the tile
 	/// assert_eq!(format!("{lon:.5}"), "-179.64844");
 	/// assert_eq!(format!("{lat:.5}"), "-84.92832");
 	/// ```
-	pub fn coord_to_geo(level: u8, x: u32, y: u32) -> [f64; 2] {
+	pub fn coord_to_geo(level: u8, x: f64, y: f64) -> [f64; 2] {
 		validate_zoom_level(level).unwrap();
 		let zoom: f64 = 2.0f64.powi(i32::from(level));
 		[
-			(f64::from(x) / zoom - 0.5) * 360.0,
-			((PI32 * (1.0 - 2.0 * f64::from(y) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
+			(x / zoom - 0.5) * 360.0,
+			((PI32 * (1.0 - 2.0 * y / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
 		]
 	}
 
 	/// Convert this tile coordinate to geographic longitude/latitude in degrees.
 	#[must_use]
 	pub fn as_geo(&self) -> [f64; 2] {
-		TileCoord::coord_to_geo(self.level, self.x, self.y)
+		TileCoord::coord_to_geo(self.level, f64::from(self.x), f64::from(self.y))
 	}
 
 	/// Return the geographic bounding box of this tile as `[west, south, east, north]`.
@@ -411,8 +411,8 @@ impl TileCoord {
 		let mercator_tile_size = WORLD_SIZE / f64::from(2u32.pow(u32::from(self.level)));
 
 		// Get center latitude of this tile
-		let [_lon_nw, lat_nw] = TileCoord::coord_to_geo(self.level, self.x, self.y);
-		let [_lon_se, lat_se] = TileCoord::coord_to_geo(self.level, self.x + 1, self.y + 1);
+		let [_lon_nw, lat_nw] = TileCoord::coord_to_geo(self.level, f64::from(self.x), f64::from(self.y));
+		let [_lon_se, lat_se] = TileCoord::coord_to_geo(self.level, f64::from(self.x + 1), f64::from(self.y + 1));
 		let center_lat = f64::midpoint(lat_nw, lat_se);
 
 		mercator_tile_size * center_lat.to_radians().cos()

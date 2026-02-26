@@ -36,9 +36,17 @@ impl TileBBox {
 			return None;
 		}
 		// Bottom-left in geospatial terms is (x_min, y_max + 1)
-		let p_min = TileCoord::coord_to_geo(self.level, self.x_min().unwrap(), self.y_max().unwrap() + 1);
+		let p_min = TileCoord::coord_to_geo(
+			self.level,
+			f64::from(self.x_min().unwrap()),
+			f64::from(self.y_max().unwrap() + 1),
+		);
 		// Top-right in geospatial terms is (x_max + 1, y_min)
-		let p_max = TileCoord::coord_to_geo(self.level, self.x_max().unwrap() + 1, self.y_min().unwrap());
+		let p_max = TileCoord::coord_to_geo(
+			self.level,
+			f64::from(self.x_max().unwrap() + 1),
+			f64::from(self.y_min().unwrap()),
+		);
 
 		Some(GeoBBox::new(p_min[0], p_min[1], p_max[0], p_max[1]).unwrap())
 	}
