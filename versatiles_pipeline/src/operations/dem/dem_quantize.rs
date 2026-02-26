@@ -178,6 +178,7 @@ impl TileSource for Operation {
 					_ => bail!("dem_quantize requires RGB8 or RGBA8 images"),
 				}
 				tile.set_format_quality(Some(100)); // max quality to preserve pixel values
+				tile.set_format_speed(Some(0)); // max speed
 				Ok(tile)
 			})
 			.unwrap_results())
