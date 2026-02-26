@@ -2,12 +2,7 @@ use std::f64::consts::{FRAC_PI_2, FRAC_PI_4};
 use std::fmt::Debug;
 
 use versatiles_core::json::JsonValue;
-
-/// Earth radius in meters for Web Mercator projection (EPSG:3857)
-const EARTH_RADIUS: f64 = 6378137.0;
-
-/// Maximum latitude for Web Mercator projection (approximately 85.051129 degrees)
-const MAX_LATITUDE: f64 = 85.051129;
+use versatiles_core::{EARTH_RADIUS, MAX_LAT};
 
 /// A simple 2D coordinate pair `(x, y)`.
 ///
@@ -59,7 +54,7 @@ impl Coordinates {
 	#[must_use]
 	pub fn to_mercator(&self) -> Coordinates {
 		let lon = self.x();
-		let lat = self.y().clamp(-MAX_LATITUDE, MAX_LATITUDE);
+		let lat = self.y().clamp(-MAX_LAT, MAX_LAT);
 
 		let x = lon.to_radians() * EARTH_RADIUS;
 		let y = (lat.to_radians() / 2.0 + FRAC_PI_4).tan().ln() * EARTH_RADIUS;

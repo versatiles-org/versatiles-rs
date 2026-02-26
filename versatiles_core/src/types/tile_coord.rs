@@ -27,10 +27,11 @@
 //! assert_eq!(zoomed.level, 7);
 //! ```
 
+use super::constants::WORLD_SIZE;
 use crate::{GeoBBox, TileBBox};
 use anyhow::{Result, ensure};
 use std::{
-	f64::consts::PI as PI32,
+	f64::consts::PI,
 	fmt::{self, Debug},
 };
 use versatiles_derive::context;
@@ -132,7 +133,7 @@ impl TileCoord {
 
 		let zoom: f64 = 2.0f64.powi(i32::from(z));
 		let x = zoom * (x / 360.0 + 0.5);
-		let y = zoom * (0.5 - 0.5 * (y * PI32 / 360.0 + PI32 / 4.0).tan().ln() / PI32);
+		let y = zoom * (0.5 - 0.5 * (y * PI / 360.0 + PI / 4.0).tan().ln() / PI);
 
 		TileCoord::new(
 			z,
@@ -172,7 +173,7 @@ impl TileCoord {
 		let zoom: f64 = 2.0f64.powi(i32::from(level));
 		[
 			(x / zoom - 0.5) * 360.0,
-			((PI32 * (1.0 - 2.0 * y / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
+			((PI * (1.0 - 2.0 * y / zoom)).exp().atan() / PI - 0.25) * 360.0,
 		]
 	}
 
@@ -205,9 +206,6 @@ impl TileCoord {
 	/// ```
 	#[must_use]
 	pub fn to_mercator_bbox(&self) -> [f64; 4] {
-		const EARTH_RADIUS: f64 = 6378137.0;
-		const WORLD_SIZE: f64 = 2.0 * PI32 * EARTH_RADIUS; // ~40075016.686 meters
-
 		let tiles_per_side = f64::from(2u32.pow(u32::from(self.level)));
 		let tile_size = WORLD_SIZE / tiles_per_side;
 
@@ -405,9 +403,6 @@ impl TileCoord {
 	/// center latitude.
 	#[must_use]
 	pub fn ground_size_meters(&self) -> f64 {
-		const EARTH_RADIUS: f64 = 6378137.0;
-		const WORLD_SIZE: f64 = 2.0 * PI32 * EARTH_RADIUS;
-
 		let mercator_tile_size = WORLD_SIZE / f64::from(2u32.pow(u32::from(self.level)));
 
 		// Get center latitude of this tile
@@ -463,7 +458,7 @@ impl PartialOrd for TileCoord {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::float_cmp)]
 mod tests {
 	use super::*;
 	use rstest::rstest;
@@ -614,7 +609,7 @@ mod tests {
 	fn tilecoord_to_mercator_bbox() {
 		// Zoom 0 should cover the entire world
 		let bbox = TileCoord::new(0, 0, 0).unwrap().to_mercator_bbox();
-		let world_half = PI32 * 6378137.0;
+		let world_half = WORLD_SIZE / 2.0;
 		assert!((bbox[0] - (-world_half)).abs() < 1.0);
 		assert!((bbox[2] - world_half).abs() < 1.0);
 
