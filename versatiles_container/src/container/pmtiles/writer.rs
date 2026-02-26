@@ -111,10 +111,23 @@ impl TilesWriter for PMTilesWriter {
 					let writer_mutex = Arc::clone(&writer_mutex);
 					let entries_mutex = Arc::clone(&entries_mutex);
 					Box::pin(async move {
+						// Pre-encode blobs in parallel (CPU-intensive work happens here)
+						let stream = stream.map_parallel_try(move |_coord, mut tile| {
+							tile.as_blob(tile_compression)?;
+							Ok(tile)
+						});
+
+						// Collect results, propagating encoding errors
+						let mut tiles = Vec::new();
+						for (coord, result) in stream.to_vec().await {
+							tiles.push((coord, result?));
+						}
+
+						tiles.sort_by_key(|(coord, _)| coord.get_hilbert_index().unwrap());
+
+						// Lock AFTER parallel work — write is cheap (blobs already encoded)
 						let mut writer = writer_mutex.lock().await;
 						let mut entries = entries_mutex.lock().await;
-						let mut tiles = stream.to_vec().await;
-						tiles.sort_by_key(|(coord, _)| coord.get_hilbert_index().unwrap());
 						for (coord, mut tile) in tiles {
 							let id = coord.get_hilbert_index()?;
 							let range = writer.append(tile.as_blob(tile_compression)?)?;
