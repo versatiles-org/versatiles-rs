@@ -33,5 +33,7 @@ pub use tar::{TarTilesReader, TarTilesWriter};
 mod directory;
 pub use directory::{DirectoryReader, DirectoryWriter};
 
+mod tile_chunking;
+
 mod versatiles;
 pub use versatiles::{VersaTilesReader, VersaTilesWriter};

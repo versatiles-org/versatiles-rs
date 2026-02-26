@@ -53,7 +53,10 @@
 //! or when a requested tile is missing.
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
-use crate::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal, TraversalOrder, TraversalSize};
+use crate::{
+	SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal, TraversalOrder, TraversalSize,
+	container::tile_chunking::{Chunk, coalesce_into_chunks, stream_from_chunks},
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{lock::Mutex, stream::StreamExt};
@@ -61,7 +64,7 @@ use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
-	Blob, ByteRange, LimitedCache, TileBBox, TileCoord, TileJSON, TileStream,
+	ByteRange, LimitedCache, TileBBox, TileCoord, TileJSON, TileStream,
 	compression::decompress,
 	io::{DataReader, DataReaderFile},
 };
@@ -193,9 +196,6 @@ impl VersaTilesReader {
 	/// Coalesces nearby ranges into at most ~64 MiB chunks (with a small gap tolerance)
 	/// to minimize I/O calls during streaming.
 	async fn get_chunks(&self, bbox: TileBBox) -> Result<Vec<Chunk>> {
-		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
-		const MAX_CHUNK_GAP: u64 = 256 * 1024;
-
 		let block_coords: Vec<TileCoord> = bbox.scaled_down(256).iter_coords().collect();
 
 		let stream = futures::stream::iter(block_coords).then(|block_coord: TileCoord| {
@@ -223,7 +223,7 @@ impl VersaTilesReader {
 				let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await?;
 				log::trace!("tile_index.len() {}", tile_index.len());
 
-				let mut tile_ranges: Vec<(TileCoord, ByteRange)> = tile_index
+				let tile_ranges: Vec<(TileCoord, ByteRange)> = tile_index
 					.iter()
 					.enumerate()
 					.filter_map(|(index, range)| {
@@ -236,38 +236,7 @@ impl VersaTilesReader {
 					})
 					.collect();
 
-				if tile_ranges.is_empty() {
-					return Ok(Vec::new());
-				}
-
-				tile_ranges.sort_by_key(|e| e.1.offset);
-
-				let mut chunks: Vec<Chunk> = Vec::new();
-				let mut chunk = Chunk::new(tile_ranges[0].1.offset);
-
-				for entry in tile_ranges {
-					let chunk_start = chunk.range.offset;
-					let chunk_end = chunk.range.offset + chunk.range.length;
-
-					let tile_start = entry.1.offset;
-					let tile_end = entry.1.offset + entry.1.length;
-
-					if (chunk_start + MAX_CHUNK_SIZE > tile_end) && (chunk_end + MAX_CHUNK_GAP > tile_start) {
-						// chunk size is still inside the limits
-						chunk.push(entry);
-					} else {
-						// chunk becomes to big, create a new one
-						chunks.push(chunk);
-						chunk = Chunk::new(entry.1.offset);
-						chunk.push(entry);
-					}
-				}
-
-				if !chunk.tiles.is_empty() {
-					chunks.push(chunk);
-				}
-
-				Ok(chunks)
+				Ok(coalesce_into_chunks(tile_ranges))
 			}
 		});
 
@@ -280,34 +249,6 @@ impl VersaTilesReader {
 			.flatten()
 			.collect();
 		Ok(chunks)
-	}
-}
-
-// Internal helper to group tile reads: collects (coord, range) pairs that can be served
-// from a single large read. `range` tracks the combined byte span in the container.
-#[derive(Debug)]
-struct Chunk {
-	tiles: Vec<(TileCoord, ByteRange)>,
-	range: ByteRange,
-}
-
-impl Chunk {
-	fn new(start: u64) -> Self {
-		Self {
-			tiles: Vec::new(),
-			range: ByteRange::new(start, 0),
-		}
-	}
-	fn push(&mut self, entry: (TileCoord, ByteRange)) {
-		self.tiles.push(entry);
-		assert!(
-			entry.1.offset >= self.range.offset,
-			"entry offset must be >= range offset"
-		);
-		self.range.length = self
-			.range
-			.length
-			.max(entry.1.offset + entry.1.length - self.range.offset);
 	}
 }
 
@@ -439,45 +380,11 @@ impl TileSource for VersaTilesReader {
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::debug!("get_tile_stream {bbox:?}");
 		let chunks = self.get_chunks(bbox).await?;
-		let reader = Arc::clone(&self.reader);
-		let tile_compression = self.metadata.tile_compression;
-		let tile_format = self.metadata.tile_format;
-
-		Ok(TileStream::from_stream(
-			futures::stream::iter(chunks)
-				.then(move |chunk| {
-					let reader = Arc::clone(&reader);
-					async move {
-						let big_blob = match reader.read_range(&chunk.range).await {
-							Ok(blob) => blob,
-							Err(e) => {
-								log::error!("failed to read chunk range {:?}: {e}", chunk.range);
-								return futures::stream::iter(Vec::new());
-							}
-						};
-
-						let entries: Vec<(TileCoord, Tile)> = chunk
-							.tiles
-							.into_iter()
-							.map(|(coord, range)| {
-								debug_assert!(bbox.contains(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
-
-								let start = usize::try_from(range.offset - chunk.range.offset)
-									.expect("range offset difference should fit in usize");
-								let end = start + usize::try_from(range.length).expect("range length should fit in usize");
-
-								let blob = Blob::from(big_blob.range(start..end));
-								let tile = Tile::from_blob(blob, tile_compression, tile_format);
-
-								(coord, tile)
-							})
-							.collect();
-
-						futures::stream::iter(entries)
-					}
-				})
-				.flatten()
-				.boxed(),
+		Ok(stream_from_chunks(
+			chunks,
+			Arc::clone(&self.reader),
+			self.metadata.tile_compression,
+			self.metadata.tile_format,
 		))
 	}
 
@@ -593,7 +500,7 @@ mod tests {
 	use super::*;
 	use crate::{MOCK_BYTES_PBF, MockReader, TilesRuntime, TilesWriter, VersaTilesWriter, make_test_file};
 	use assert_fs::NamedTempFile;
-	use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat, assert_wildcard, io::DataWriterBlob};
+	use versatiles_core::{Blob, TileBBoxPyramid, TileCompression, TileFormat, assert_wildcard, io::DataWriterBlob};
 
 	// Helper to quickly create a test reader and bbox
 	async fn mk_reader() -> Result<(NamedTempFile, VersaTilesReader)> {
