@@ -36,5 +36,7 @@ pub fn get_read_operation_factories() -> Vec<Box<dyn ReadOperationFactoryTrait>>
 		Box::new(read::from_tilejson::Factory {}),
 		#[cfg(feature = "gdal")]
 		Box::new(read::from_gdal::raster::Factory {}),
+		#[cfg(feature = "gdal")]
+		Box::new(read::from_gdal::dem::Factory {}),
 	]
 }

@@ -1,3 +1,4 @@
+pub mod dem;
 pub mod raster;
 mod resample;
 mod spatial_ref;
