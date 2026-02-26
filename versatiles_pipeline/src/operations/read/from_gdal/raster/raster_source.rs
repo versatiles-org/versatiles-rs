@@ -92,32 +92,23 @@ impl RasterSource {
 	/// Create a `RasterSource` from a file path.
 	#[context("Failed to create RasterSource from file {:?}", filename)]
 	pub async fn new(filename: &Path, reuse_limit: u32, concurrency_limit: usize) -> Result<RasterSource> {
-		let pool = GdalPool::new(filename, reuse_limit, concurrency_limit).await?;
-
-		// Probe band mapping from one instance
-		let instance = pool.get_instance().await?;
-		let band_mapping = BandMapping::try_from(instance.dataset())?;
-		log::trace!("Band mapping: {band_mapping:?}");
-
-		Ok(RasterSource {
-			pool,
-			band_mapping: Arc::new(band_mapping),
-		})
+		let path = filename.to_path_buf();
+		let factory: Arc<dyn Fn() -> Result<gdal::Dataset> + Send + Sync + 'static> =
+			Arc::new(move || gdal::Dataset::open(&path).with_context(|| format!("failed to open GDAL dataset: {path:?}")));
+		Self::new_with_factory(factory, reuse_limit, concurrency_limit).await
 	}
 
 	/// Create a `RasterSource` from a factory that opens a fresh GDAL `Dataset` on demand.
-	#[cfg(test)]
 	#[context("Failed to create RasterSource via factory")]
 	pub async fn new_with_factory(
 		open_dataset: Arc<dyn Fn() -> Result<gdal::Dataset> + Send + Sync + 'static>,
 		reuse_limit: u32,
 		concurrency_limit: usize,
 	) -> Result<RasterSource> {
-		let pool = GdalPool::new_with_factory(open_dataset, reuse_limit, concurrency_limit).await?;
+		let (pool, probe) = GdalPool::new_with_factory(open_dataset, reuse_limit, concurrency_limit).await?;
 
-		// Probe band mapping from one instance
-		let instance = pool.get_instance().await?;
-		let band_mapping = BandMapping::try_from(instance.dataset())?;
+		// Probe band mapping from the probe dataset
+		let band_mapping = BandMapping::try_from(&probe)?;
 		log::trace!("Band mapping: {band_mapping:?}");
 
 		Ok(RasterSource {

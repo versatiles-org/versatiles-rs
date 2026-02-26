@@ -2,9 +2,7 @@ use super::{GdalPool, Instance, ResampleAlg, get_spatial_ref};
 use anyhow::{Context, Result, bail, ensure};
 use gdal::{Dataset, DriverManager, GeoTransform};
 use imageproc::image::{DynamicImage, RgbImage};
-use std::path::Path;
-#[cfg(test)]
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
 
@@ -124,18 +122,19 @@ unsafe impl Sync for DemSource {}
 impl DemSource {
 	#[context("Failed to create DemSource from file {:?}", filename)]
 	pub async fn new(filename: &Path, reuse_limit: u32, concurrency_limit: usize) -> Result<DemSource> {
-		let pool = GdalPool::new(filename, reuse_limit, concurrency_limit).await?;
-		Ok(DemSource { pool })
+		let path = filename.to_path_buf();
+		let factory: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static> =
+			Arc::new(move || Dataset::open(&path).with_context(|| format!("failed to open GDAL dataset: {path:?}")));
+		Self::new_with_factory(factory, reuse_limit, concurrency_limit).await
 	}
 
-	#[cfg(test)]
 	#[context("Failed to create DemSource via factory")]
 	pub async fn new_with_factory(
 		open_dataset: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static>,
 		reuse_limit: u32,
 		concurrency_limit: usize,
 	) -> Result<DemSource> {
-		let pool = GdalPool::new_with_factory(open_dataset, reuse_limit, concurrency_limit).await?;
+		let (pool, _) = GdalPool::new_with_factory(open_dataset, reuse_limit, concurrency_limit).await?;
 		Ok(DemSource { pool })
 	}
 

@@ -2,7 +2,7 @@ use super::Instance;
 use anyhow::{Result, ensure};
 use deadpool::managed::{Manager, Object, Pool, RecycleResult};
 use gdal::{Dataset, config::set_config_option};
-use std::{ops::Deref, path::Path, sync::Arc};
+use std::{ops::Deref, sync::Arc};
 use versatiles_core::{GeoBBox, WORLD_SIZE, utils::float_to_int};
 use versatiles_derive::context;
 
@@ -56,22 +56,17 @@ pub struct GdalPool {
 unsafe impl Sync for GdalPool {}
 
 impl GdalPool {
-	/// Create a `GdalPool` from a file path.
-	#[context("Failed to create GDAL dataset from file {:?}", filename)]
-	pub async fn new(filename: &Path, reuse_limit: u32, concurrency_limit: usize) -> Result<GdalPool> {
-		let path = filename.to_path_buf();
-		let factory: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static> =
-			Arc::new(move || Dataset::open(&path).with_context(|| format!("failed to open GDAL dataset: {path:?}")));
-		Self::new_with_factory(factory, reuse_limit, concurrency_limit).await
-	}
-
 	/// Create a `GdalPool` from a factory that opens a fresh GDAL `Dataset` on demand.
+	///
+	/// Returns the pool together with a probe `Dataset` that was opened during
+	/// construction. Callers can inspect this dataset for additional metadata
+	/// (e.g. band mapping) without going through the pool.
 	#[context("Failed to create GDAL dataset via factory")]
 	pub async fn new_with_factory(
 		open_dataset: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static>,
 		reuse_limit: u32,
 		concurrency_limit: usize,
-	) -> Result<GdalPool> {
+	) -> Result<(GdalPool, Dataset)> {
 		set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
 		log::trace!("GDAL_NUM_THREADS set to ALL_CPUS");
 
@@ -89,6 +84,10 @@ impl GdalPool {
 		log::trace!("Dataset pixel_size (m/px): {pixel_size:.6}");
 		log::trace!("Dataset bbox (EPSG:4326): {bbox:?}");
 
+		// Open a second probe dataset for callers to inspect
+		// (the first one was consumed by Instance::new above).
+		let probe = (open_dataset)()?;
+
 		// Create deadpool manager and pool - single synchronization point!
 		let manager = GdalManager {
 			open_dataset,
@@ -100,7 +99,7 @@ impl GdalPool {
 			.build()
 			.context("failed to build deadpool")?;
 
-		Ok(GdalPool { pool, bbox, pixel_size })
+		Ok((GdalPool { pool, bbox, pixel_size }, probe))
 	}
 
 	/// Get an instance from the pool.
