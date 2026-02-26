@@ -47,7 +47,10 @@
 //! `PMTiles` header/directories cannot be parsed or decompressed, or a requested tile is missing.
 
 use super::types::{EntriesV3, HeaderV3};
-use crate::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal, TraversalOrder, TraversalSize};
+use crate::{
+	SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal, TraversalOrder, TraversalSize,
+	container::tile_chunking::{coalesce_into_chunks, stream_from_chunks},
+};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -221,6 +224,73 @@ impl PMTilesReader {
 		}
 		bail!("not found")
 	}
+
+	/// Resolve a tile's byte range by Hilbert index without reading tile data.
+	///
+	/// Like `lookup_tile_by_id` but returns only the `ByteRange` (shifted to the
+	/// tile data section) instead of reading and wrapping the blob. Used by
+	/// `get_chunks` to collect ranges before coalescing into bulk reads.
+	async fn resolve_tile_range(
+		tile_id: u64,
+		root_entries: Arc<EntriesV3>,
+		leaves_cache: &Mutex<LimitedCache<ByteRange, Arc<EntriesV3>>>,
+		leaves_bytes: &Blob,
+		tile_data_offset: u64,
+		internal_compression: TileCompression,
+	) -> Result<Option<ByteRange>> {
+		let mut entries = root_entries;
+
+		for _depth in 0..3 {
+			let Some(entry) = entries.find_tile(tile_id) else {
+				return Ok(None);
+			};
+
+			if entry.range.length == 0 {
+				return Ok(None);
+			}
+
+			if entry.run_length > 0 {
+				return Ok(Some(entry.range.shifted_forward(tile_data_offset)));
+			}
+
+			let range = entry.range;
+			let mut cache = leaves_cache.lock().await;
+			entries = cache.get_or_set(&range, || {
+				let mut blob = leaves_bytes.read_range(&range)?;
+				blob = decompress(blob, internal_compression)?;
+				Ok(Arc::new(EntriesV3::from_blob(&blob)?))
+			})?;
+		}
+
+		Ok(None)
+	}
+
+	/// Build read chunks by resolving tile byte ranges and coalescing nearby ones.
+	async fn get_chunks(&self, bbox: TileBBox) -> Result<Vec<crate::container::tile_chunking::Chunk>> {
+		let mut tile_ranges: Vec<(TileCoord, ByteRange)> = Vec::new();
+
+		// Collect coords first so the non-Send iterator is not held across await.
+		let coords: Vec<TileCoord> = bbox.iter_coords().collect();
+		for coord in coords {
+			let Ok(tile_id) = coord.get_hilbert_index() else {
+				continue;
+			};
+			if let Some(range) = Self::resolve_tile_range(
+				tile_id,
+				Arc::clone(&self.root_entries),
+				&self.leaves_cache,
+				&self.leaves_bytes,
+				self.header.tile_data.offset,
+				self.internal_compression,
+			)
+			.await?
+			{
+				tile_ranges.push((coord, range));
+			}
+		}
+
+		Ok(coalesce_into_chunks(tile_ranges))
+	}
 }
 
 /// Build the per‑zoom bounding box pyramid by traversing `PMTiles` directory entries.
@@ -341,38 +411,13 @@ impl TileSource for PMTilesReader {
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		let data_reader = Arc::clone(&self.data_reader);
-		let root_entries = Arc::clone(&self.root_entries);
-		let leaves_cache = Arc::clone(&self.leaves_cache);
-		let leaves_bytes = Arc::clone(&self.leaves_bytes);
-		let tile_data_offset = self.header.tile_data.offset;
-		let tile_compression = self.metadata.tile_compression;
-		let tile_format = self.metadata.tile_format;
-		let internal_compression = self.internal_compression;
-
-		Ok(TileStream::from_bbox_async_parallel(bbox, move |coord| {
-			let data_reader = Arc::clone(&data_reader);
-			let root_entries = Arc::clone(&root_entries);
-			let leaves_cache = Arc::clone(&leaves_cache);
-			let leaves_bytes = Arc::clone(&leaves_bytes);
-			async move {
-				let tile_id = coord.get_hilbert_index().ok()?;
-				let tile = PMTilesReader::lookup_tile_by_id(
-					tile_id,
-					&data_reader,
-					root_entries,
-					&leaves_cache,
-					&leaves_bytes,
-					tile_data_offset,
-					tile_compression,
-					tile_format,
-					internal_compression,
-				)
-				.await
-				.ok()??;
-				Some((coord, tile))
-			}
-		}))
+		let chunks = self.get_chunks(bbox).await?;
+		Ok(stream_from_chunks(
+			chunks,
+			Arc::clone(&self.data_reader),
+			self.metadata.tile_compression,
+			self.metadata.tile_format,
+		))
 	}
 
 	// deep probe of container meta
