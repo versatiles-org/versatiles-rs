@@ -1,10 +1,11 @@
-use super::Instance;
-use anyhow::{Result, ensure};
-use deadpool::managed::{Manager, Object, Pool, RecycleResult};
-use gdal::{Dataset, config::set_config_option};
+use super::{GdalPool, Instance, ResampleAlg, get_spatial_ref};
+use anyhow::{Context, Result, bail, ensure};
+use gdal::{Dataset, DriverManager, GeoTransform};
 use imageproc::image::{DynamicImage, RgbImage};
-use std::{path::Path, sync::Arc};
-use versatiles_core::{GeoBBox, WORLD_SIZE, utils::float_to_int};
+use std::path::Path;
+#[cfg(test)]
+use std::sync::Arc;
+use versatiles_core::GeoBBox;
 use versatiles_derive::context;
 
 /// DEM encoding format.
@@ -34,85 +35,108 @@ pub fn encode_elevation(elevation: f32, encoding: DemEncoding) -> [u8; 3] {
 	]
 }
 
-struct GdalManager {
-	open_dataset: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static>,
-	reuse_limit: u32,
-}
+/// Reproject the source dataset into a 1-band Float32 in-memory dataset
+/// covering the given bbox in Web Mercator (EPSG:3857).
+fn reproject_to_float_dataset(instance: &Instance, width: usize, height: usize, bbox: &GeoBBox) -> Result<Dataset> {
+	log::trace!("reproject_to_float_dataset started for size={width}x{height}");
 
-impl Manager for GdalManager {
-	type Type = Instance;
-	type Error = anyhow::Error;
+	let bbox_mer = bbox.to_mercator();
 
-	async fn create(&self) -> Result<Self::Type, Self::Error> {
-		use anyhow::Context;
-		let open_dataset = self.open_dataset.clone();
-		let result = tokio::task::spawn_blocking(move || {
-			let ds = (open_dataset)().context("failed to open GDAL dataset via factory")?;
-			Ok(Instance::new(ds))
-		})
-		.await;
+	// Create 1-band Float32 MEM dataset
+	let driver = DriverManager::get_driver_by_name("MEM").context("Failed to get GDAL MEM driver")?;
+	let mut dst_ds = driver
+		.create_with_band_type::<f32, _>("mem", width, height, 1)
+		.context("Failed to create Float32 in-memory dataset")?;
+	dst_ds.set_spatial_ref(&get_spatial_ref(3857)?)?;
 
-		match result {
-			Ok(Ok(instance)) => Ok(instance),
-			Ok(Err(e)) => Err(e),
-			Err(e) => Err(anyhow::anyhow!("spawn_blocking failed: {e}")),
+	let geo_transform: GeoTransform = [
+		bbox_mer[0],
+		(bbox_mer[2] - bbox_mer[0]) / width as f64,
+		0.0,
+		bbox_mer[3],
+		0.0,
+		(bbox_mer[1] - bbox_mer[3]) / height as f64,
+	];
+	dst_ds.set_geo_transform(&geo_transform)?;
+
+	let h_src_ds = instance.dataset().c_dataset();
+	let h_dst_ds = dst_ds.c_dataset();
+
+	unsafe {
+		use gdal_sys::{
+			CPLErr, CPLGetLastErrorMsg, CPLMalloc, CSLSetNameValue, GDALChunkAndWarpMulti,
+			GDALCreateGenImgProjTransformer2, GDALCreateWarpOperation, GDALCreateWarpOptions,
+			GDALDestroyGenImgProjTransformer, GDALDestroyWarpOperation, GDALGenImgProjTransform, GDALWarpOperationH,
+			GDALWarpOptions,
+		};
+
+		let mut options: GDALWarpOptions = *GDALCreateWarpOptions();
+		options.hSrcDS = h_src_ds;
+		options.hDstDS = h_dst_ds;
+
+		CSLSetNameValue(options.papszWarpOptions, c"NUM_THREADS".as_ptr(), c"ALL_CPUS".as_ptr());
+
+		// Band mapping: source band 1 -> dest band 1
+		options.nBandCount = 1;
+		let n = std::mem::size_of::<i32>();
+		options.panSrcBands = CPLMalloc(n).cast::<i32>();
+		options.panDstBands = CPLMalloc(n).cast::<i32>();
+		options.panSrcBands.write(1);
+		options.panDstBands.write(1);
+
+		// Use Bilinear for DEM — preserves elevation values better than averaging
+		options.eResampleAlg = ResampleAlg::Bilinear.as_gdal();
+		options.dfWarpMemoryLimit = 512.0 * 1024.0 * 1024.0;
+
+		options.pTransformerArg = GDALCreateGenImgProjTransformer2(h_src_ds, h_dst_ds, core::ptr::null_mut());
+		options.pfnTransformer = Some(GDALGenImgProjTransform);
+
+		let operation: GDALWarpOperationH = GDALCreateWarpOperation(&raw const options);
+
+		#[allow(clippy::cast_possible_truncation)]
+		let rv = GDALChunkAndWarpMulti(
+			operation,
+			0,
+			0,
+			i32::try_from(width).unwrap(),
+			i32::try_from(height).unwrap(),
+		);
+
+		GDALDestroyWarpOperation(operation);
+		GDALDestroyGenImgProjTransformer(options.pTransformerArg);
+
+		if rv != CPLErr::CE_None {
+			bail!("{:?}", CPLGetLastErrorMsg());
 		}
 	}
 
-	async fn recycle(&self, obj: &mut Self::Type, _metrics: &deadpool::managed::Metrics) -> RecycleResult<Self::Error> {
-		use deadpool::managed::RecycleError;
-
-		if obj.age() > self.reuse_limit {
-			return Err(RecycleError::message("instance exceeded reuse limit"));
-		}
-
-		obj.cleanup();
-		Ok(())
-	}
+	log::trace!("reproject_to_float_dataset complete");
+	Ok(dst_ds)
 }
 
 #[derive(Clone)]
 pub struct DemSource {
-	pool: Pool<GdalManager>,
-	bbox: GeoBBox,
-	pixel_size: f64,
+	pool: GdalPool,
 }
 
 unsafe impl Sync for DemSource {}
 
 impl DemSource {
-	#[context("Failed to create GDAL DEM dataset from file {:?}", filename)]
+	#[context("Failed to create DemSource from file {:?}", filename)]
 	pub async fn new(filename: &Path, reuse_limit: u32, concurrency_limit: usize) -> Result<DemSource> {
-		let path = filename.to_path_buf();
-		let factory: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static> =
-			Arc::new(move || Dataset::open(&path).with_context(|| format!("failed to open GDAL dataset: {path:?}")));
-		Self::new_with_factory(factory, reuse_limit, concurrency_limit).await
+		let pool = GdalPool::new(filename, reuse_limit, concurrency_limit).await?;
+		Ok(DemSource { pool })
 	}
 
-	#[context("Failed to create GDAL DEM dataset via factory")]
+	#[cfg(test)]
+	#[context("Failed to create DemSource via factory")]
 	pub async fn new_with_factory(
 		open_dataset: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static>,
 		reuse_limit: u32,
 		concurrency_limit: usize,
 	) -> Result<DemSource> {
-		set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
-
-		let dataset = (open_dataset)()?;
-		let instance = Instance::new(dataset);
-		let bbox = instance.get_bbox()?;
-		let pixel_size = instance.get_pixel_size()?;
-
-		let manager = GdalManager {
-			open_dataset,
-			reuse_limit: reuse_limit.min(1024),
-		};
-
-		let pool = Pool::builder(manager)
-			.max_size(concurrency_limit.max(1))
-			.build()
-			.context("failed to build deadpool")?;
-
-		Ok(DemSource { pool, bbox, pixel_size })
+		let pool = GdalPool::new_with_factory(open_dataset, reuse_limit, concurrency_limit).await?;
+		Ok(DemSource { pool })
 	}
 
 	#[context("Failed to get elevation tile ({width}x{height}) for bbox ({bbox:?}) from GDAL DEM dataset")]
@@ -123,13 +147,9 @@ impl DemSource {
 		height: usize,
 		encoding: DemEncoding,
 	) -> Result<Option<DynamicImage>> {
-		let instance: Object<GdalManager> = self
-			.pool
-			.get()
-			.await
-			.map_err(|e| anyhow::anyhow!("failed to get instance from pool: {e}"))?;
+		let instance = self.pool.get_instance().await?;
 
-		let dst = instance.reproject_to_float_dataset(width, height, bbox)?;
+		let dst = reproject_to_float_dataset(&instance, width, height, bbox)?;
 
 		let image = tokio::task::spawn_blocking(move || -> Result<Option<DynamicImage>> {
 			let band = dst.rasterband(1)?.read_band_as::<f32>()?;
@@ -160,33 +180,23 @@ impl DemSource {
 	}
 
 	pub fn bbox(&self) -> &GeoBBox {
-		&self.bbox
+		self.pool.bbox()
 	}
 
-	#[context("Failed to compute max zoom level for tile size {tile_size}")]
 	pub fn level_max(&self, tile_size: u32) -> Result<u8> {
-		ensure!(tile_size > 0, "tile_size must be > 0");
-
-		let initial_res = WORLD_SIZE / f64::from(tile_size);
-		let zf = (initial_res / self.pixel_size).log2().ceil();
-		let z: i32 = float_to_int(zf).unwrap_or(0);
-		Ok(u8::try_from(z.clamp(0, 31))?)
+		self.pool.level_max(tile_size)
 	}
 }
 
 impl std::fmt::Debug for DemSource {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("DemSource")
-			.field("pool", &"<deadpool::Pool<GdalManager>>")
-			.field("bbox", &self.bbox)
-			.field("pixel_size", &self.pixel_size)
-			.finish()
+		f.debug_struct("DemSource").field("pool", &self.pool).finish()
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use super::super::super::get_spatial_ref;
+	use super::super::get_spatial_ref;
 	use super::*;
 	use gdal::DriverManager;
 	use rstest::rstest;
