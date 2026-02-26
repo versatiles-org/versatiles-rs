@@ -15,6 +15,9 @@ macro_rules! define_transform_factory {
 			fn get_tag_name(&self) -> &str {
 				$tag
 			}
+			fn get_field_metadata(&self) -> Vec<$crate::vpl::VPLFieldMeta> {
+				<$args>::get_field_metadata()
+			}
 		}
 
 		#[async_trait::async_trait]
@@ -49,6 +52,9 @@ macro_rules! define_read_factory {
 			}
 			fn get_tag_name(&self) -> &str {
 				$tag
+			}
+			fn get_field_metadata(&self) -> Vec<$crate::vpl::VPLFieldMeta> {
+				<$args>::get_field_metadata()
 			}
 		}
 

@@ -193,6 +193,9 @@ impl OperationFactoryTrait for Factory {
 	fn get_tag_name(&self) -> &str {
 		"from_gdal_dem"
 	}
+	fn get_field_metadata(&self) -> Vec<crate::vpl::VPLFieldMeta> {
+		Args::get_field_metadata()
+	}
 }
 
 #[async_trait]

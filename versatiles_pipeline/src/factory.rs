@@ -35,6 +35,7 @@ static MULTIPLE_NEWLINES_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"
 pub trait OperationFactoryTrait: Send + Sync {
 	fn get_tag_name(&self) -> &str;
 	fn get_docs(&self) -> String;
+	fn get_field_metadata(&self) -> Vec<crate::vpl::VPLFieldMeta>;
 }
 
 /// Factory trait for read operations that create tile sources from VPL nodes.
