@@ -1,6 +1,6 @@
-use super::super::{ResampleAlg, get_spatial_ref};
-use anyhow::{Context, Result, bail, ensure};
-use gdal::{Dataset, DriverManager, GeoTransform, spatial_ref::CoordTransform, vector::Geometry};
+use super::get_spatial_ref;
+use anyhow::{Result, ensure};
+use gdal::{Dataset, spatial_ref::CoordTransform, vector::Geometry};
 use std::fmt::Debug;
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
@@ -14,96 +14,25 @@ pub struct Instance {
 unsafe impl Sync for Instance {}
 
 impl Instance {
+	/// Create a new GDAL dataset instance wrapper.
 	pub fn new(dataset: Dataset) -> Self {
 		Self { dataset, age: 0 }
 	}
 
+	/// Get the current age of the GDAL dataset instance.
 	pub fn age(&self) -> u32 {
 		self.age
 	}
 
+	/// Cleanup the GDAL dataset instance, incrementing its age.
 	pub fn cleanup(&mut self) {
 		self.age = self.age.wrapping_add(1);
 		self.dataset.flush_cache().unwrap();
 	}
 
-	/// Reproject the source dataset into a 1-band Float32 in-memory dataset
-	/// covering the given bbox in Web Mercator (EPSG:3857).
-	pub fn reproject_to_float_dataset(&self, width: usize, height: usize, bbox: &GeoBBox) -> Result<Dataset> {
-		log::trace!("reproject_to_float_dataset started for size={width}x{height}");
-
-		let bbox_mer = bbox.to_mercator();
-
-		// Create 1-band Float32 MEM dataset
-		let driver = DriverManager::get_driver_by_name("MEM").context("Failed to get GDAL MEM driver")?;
-		let mut dst_ds = driver
-			.create_with_band_type::<f32, _>("mem", width, height, 1)
-			.context("Failed to create Float32 in-memory dataset")?;
-		dst_ds.set_spatial_ref(&get_spatial_ref(3857)?)?;
-
-		let geo_transform: GeoTransform = [
-			bbox_mer[0],
-			(bbox_mer[2] - bbox_mer[0]) / width as f64,
-			0.0,
-			bbox_mer[3],
-			0.0,
-			(bbox_mer[1] - bbox_mer[3]) / height as f64,
-		];
-		dst_ds.set_geo_transform(&geo_transform)?;
-
-		let h_src_ds = self.dataset.c_dataset();
-		let h_dst_ds = dst_ds.c_dataset();
-
-		unsafe {
-			use gdal_sys::{
-				CPLErr, CPLGetLastErrorMsg, CPLMalloc, CSLSetNameValue, GDALChunkAndWarpMulti,
-				GDALCreateGenImgProjTransformer2, GDALCreateWarpOperation, GDALCreateWarpOptions,
-				GDALDestroyGenImgProjTransformer, GDALDestroyWarpOperation, GDALGenImgProjTransform, GDALWarpOperationH,
-				GDALWarpOptions,
-			};
-
-			let mut options: GDALWarpOptions = *GDALCreateWarpOptions();
-			options.hSrcDS = h_src_ds;
-			options.hDstDS = h_dst_ds;
-
-			CSLSetNameValue(options.papszWarpOptions, c"NUM_THREADS".as_ptr(), c"ALL_CPUS".as_ptr());
-
-			// Band mapping: source band 1 → dest band 1
-			options.nBandCount = 1;
-			let n = std::mem::size_of::<i32>();
-			options.panSrcBands = CPLMalloc(n).cast::<i32>();
-			options.panDstBands = CPLMalloc(n).cast::<i32>();
-			options.panSrcBands.write(1);
-			options.panDstBands.write(1);
-
-			// Use Bilinear for DEM — preserves elevation values better than averaging
-			options.eResampleAlg = ResampleAlg::Bilinear.as_gdal();
-			options.dfWarpMemoryLimit = 512.0 * 1024.0 * 1024.0;
-
-			options.pTransformerArg = GDALCreateGenImgProjTransformer2(h_src_ds, h_dst_ds, core::ptr::null_mut());
-			options.pfnTransformer = Some(GDALGenImgProjTransform);
-
-			let operation: GDALWarpOperationH = GDALCreateWarpOperation(&raw const options);
-
-			#[allow(clippy::cast_possible_truncation)]
-			let rv = GDALChunkAndWarpMulti(
-				operation,
-				0,
-				0,
-				i32::try_from(width).unwrap(),
-				i32::try_from(height).unwrap(),
-			);
-
-			GDALDestroyWarpOperation(operation);
-			GDALDestroyGenImgProjTransformer(options.pTransformerArg);
-
-			if rv != CPLErr::CE_None {
-				bail!("{:?}", CPLGetLastErrorMsg());
-			}
-		}
-
-		log::trace!("reproject_to_float_dataset complete");
-		Ok(dst_ds)
+	/// Access the underlying GDAL dataset.
+	pub fn dataset(&self) -> &Dataset {
+		&self.dataset
 	}
 
 	#[context("Failed to compute bounding box for GDAL dataset")]
@@ -114,6 +43,8 @@ impl Instance {
 			.geo_transform()
 			.context("Failed to get geo transform from GDAL dataset")?;
 
+		log::trace!("geo transform: {gt:?}");
+
 		ensure!(gt[2] == 0.0 || gt[4] == 0.0, "GDAL dataset must not be rotated");
 
 		let width = self.dataset.raster_size().0;
@@ -122,6 +53,9 @@ impl Instance {
 			.dataset
 			.spatial_ref()
 			.context("GDAL dataset must have a spatial reference (SRS) defined")?;
+
+		log::trace!("size: {width}x{height}");
+		log::trace!("spatial reference: {:?}", &spatial_ref.to_pretty_wkt());
 
 		let coord_transform = CoordTransform::new(&spatial_ref, &get_spatial_ref(4326)?)
 			.context("Failed to create coordinate transform to EPSG:4326")?;
@@ -136,12 +70,21 @@ impl Instance {
 			21,
 		)?;
 
+		// Coordinates seem to be flipped in OGREnvelope
 		let mut bbox = GeoBBox::new_normalized(bounds[0], bounds[1], bounds[2], bounds[3]);
 		bbox.limit_to_mercator();
 
+		log::trace!("bounding box: {bbox:?}");
 		Ok(bbox)
 	}
 
+	/// Estimate the dataset's native pixel size **in meters/pixel (EPSG:3857)**.
+	///
+	/// Implementation details:
+	/// * Requires an unrotated GeoTransform.
+	/// * Samples the center pixel and its right/down neighbors, transforms those
+	///   three points to 3857, and takes the max of the two neighbor distances.
+	/// * Returns a strictly positive finite value or an error.
 	#[context("Failed to compute pixel size for GDAL dataset")]
 	pub fn get_pixel_size(&self) -> Result<f64> {
 		log::trace!("Computing dataset_pixel_size()");
@@ -150,6 +93,7 @@ impl Instance {
 			.geo_transform()
 			.context("Failed to get geo transform from GDAL dataset")?;
 
+		// We assume no rotation (consistent with `dataset_bbox`).
 		ensure!(gt[2] == 0.0 && gt[4] == 0.0, "GDAL dataset must not be rotated");
 
 		let srs = self
@@ -157,6 +101,7 @@ impl Instance {
 			.spatial_ref()
 			.context("GDAL dataset must have a spatial reference (SRS) defined")?;
 
+		// Helper to map pixel (col,row) to georeferenced coordinates
 		let pixel_to_size = |col: f64, row: f64| -> Result<f64> {
 			let point =
 				|x: f64, y: f64| -> (f64, f64, f64) { (gt[0] + x * gt[1] + y * gt[2], gt[3] + x * gt[4] + y * gt[5], 0.0) };
@@ -195,6 +140,7 @@ impl Instance {
 			}
 		}
 
+		log::trace!("pixel_size: {size_min:.6}");
 		ensure!(
 			size_min.is_finite() && size_min > 0.0,
 			"Invalid pixel size in meters computed"
@@ -209,16 +155,16 @@ mod tests {
 	use gdal::DriverManager;
 	use rstest::rstest;
 
-	fn mem_float_dataset(w: usize, h: usize) -> Dataset {
+	fn mem_dataset(w: usize, h: usize, bands: usize) -> Dataset {
 		let driver = DriverManager::get_driver_by_name("MEM").expect("MEM driver");
 		driver
-			.create_with_band_type::<f32, _>("", w, h, 1)
+			.create_with_band_type::<u8, _>("", w, h, bands)
 			.expect("create mem dataset")
 	}
 
 	#[test]
 	fn age_increments_monotonically() {
-		let ds = mem_float_dataset(1, 1);
+		let ds = mem_dataset(1, 1, 1);
 		let mut inst = Instance::new(ds);
 		assert_eq!(inst.age(), 0);
 		inst.cleanup();
@@ -232,7 +178,7 @@ mod tests {
 	#[case( 4326, [-10.0, -20.0, 30.0, 40.0], [-10.0, -20.0, 30.0, 40.0])]
 	#[case(25832, [186073.6, 2214294.0, 714984.2, 5542944.0], [4.623, 20.0, 12.0, 50.039])]
 	fn test_get_bbox(#[case] epsg: u32, #[case] bbox_in: [f64; 4], #[case] bbox_out: [f64; 4]) -> Result<()> {
-		let mut ds = mem_float_dataset(100, 100);
+		let mut ds = mem_dataset(100, 100, 1);
 		ds.set_spatial_ref(&get_spatial_ref(epsg)?)?;
 		ds.set_geo_transform(&[
 			bbox_in[0],
