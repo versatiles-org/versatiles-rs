@@ -397,6 +397,27 @@ impl TileCoord {
 		std::mem::swap(&mut self.x, &mut self.y);
 	}
 
+	/// Returns the approximate ground-level side length of this tile in meters.
+	///
+	/// Web Mercator tiles have a fixed size in projected coordinates at each zoom
+	/// level, but the actual ground distance varies with latitude by a factor of
+	/// cos(latitude). This method returns the ground-truth size using the tile's
+	/// center latitude.
+	#[must_use]
+	pub fn ground_size_meters(&self) -> f64 {
+		const EARTH_RADIUS: f64 = 6378137.0;
+		const WORLD_SIZE: f64 = 2.0 * PI32 * EARTH_RADIUS;
+
+		let mercator_tile_size = WORLD_SIZE / f64::from(2u32.pow(u32::from(self.level)));
+
+		// Get center latitude of this tile
+		let [_lon_nw, lat_nw] = TileCoord::coord_to_geo(self.level, self.x, self.y);
+		let [_lon_se, lat_se] = TileCoord::coord_to_geo(self.level, self.x + 1, self.y + 1);
+		let center_lat = f64::midpoint(lat_nw, lat_se);
+
+		mercator_tile_size * center_lat.to_radians().cos()
+	}
+
 	/// Return a new coordinate at the parent zoom level (level - 1).
 	///
 	/// The x and y coordinates are divided by 2 to move up one level in the tile pyramid.
@@ -576,6 +597,54 @@ mod tests {
 		let mut coord = TileCoord::new(5, 3, 4).unwrap();
 		coord.swap_xy();
 		assert_eq!(coord, TileCoord::new(5, 4, 3).unwrap());
+	}
+
+	#[test]
+	fn tilecoord_ground_size_meters_zoom0() {
+		// Zoom 0 equatorial tile should be approximately the Earth's circumference
+		let coord = TileCoord::new(0, 0, 0).unwrap();
+		let size = coord.ground_size_meters();
+		// At zoom 0 the single tile covers the whole world, center latitude ~0°
+		// cos(0) = 1.0, so ground size ≈ mercator tile size ≈ 40_075_017
+		assert!(size > 20_000_000.0, "zoom 0 ground size should be > 20M m, got {size}");
+		assert!(size < 45_000_000.0, "zoom 0 ground size should be < 45M m, got {size}");
+	}
+
+	#[test]
+	fn tilecoord_ground_size_meters_equator_zoom8() {
+		// Zoom 8 equatorial tile
+		let coord = TileCoord::new(8, 128, 128).unwrap();
+		let size = coord.ground_size_meters();
+		// Expected ~156_543 m (world / 256), but latitude may not be exactly 0
+		assert!(
+			size > 100_000.0 && size < 200_000.0,
+			"zoom 8 equatorial ground size unexpected: {size}"
+		);
+	}
+
+	#[test]
+	fn tilecoord_ground_size_meters_high_latitude() {
+		// Tile at ~60° latitude should have roughly half the ground size of equatorial
+		// At zoom 8, y≈64 is around 60°N
+		let equator = TileCoord::new(8, 128, 128).unwrap();
+		let high_lat = TileCoord::new(8, 128, 64).unwrap();
+		let ratio = high_lat.ground_size_meters() / equator.ground_size_meters();
+		// cos(60°) ≈ 0.5, so ratio should be roughly 0.5
+		assert!(
+			ratio > 0.3 && ratio < 0.7,
+			"high latitude ratio should be ~0.5, got {ratio}"
+		);
+	}
+
+	#[test]
+	fn tilecoord_ground_size_meters_higher_zoom_smaller() {
+		// Higher zoom should produce smaller tiles
+		let z8 = TileCoord::new(8, 128, 128).unwrap().ground_size_meters();
+		let z12 = TileCoord::new(12, 2048, 2048).unwrap().ground_size_meters();
+		assert!(z12 < z8, "zoom 12 should be smaller than zoom 8");
+		// Should be roughly 1/16th (2^4 difference)
+		let ratio = z8 / z12;
+		assert!(ratio > 14.0 && ratio < 18.0, "z8/z12 ratio should be ~16, got {ratio}");
 	}
 
 	#[test]
