@@ -286,92 +286,170 @@ crate::operations::macros::define_read_factory!("from_tilejson", Args, Operation
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use rstest::rstest;
+
+	// ── detect_tile_format ──────────────────────────────────────────────
+
+	#[rstest]
+	#[case(".pbf", TileFormat::MVT)]
+	#[case(".png", TileFormat::PNG)]
+	#[case(".webp", TileFormat::WEBP)]
+	#[case(".jpg", TileFormat::JPG)]
+	#[case(".jpeg", TileFormat::JPG)]
+	#[case(".avif", TileFormat::AVIF)]
+	#[case(".geojson", TileFormat::GEOJSON)]
+	#[case(".json", TileFormat::JSON)]
+	#[case(".svg", TileFormat::SVG)]
+	#[case(".topojson", TileFormat::TOPOJSON)]
+	#[case(".PNG", TileFormat::PNG)]
+	#[test]
+	fn detect_format_from_url_extension(#[case] ext: &str, #[case] expected: TileFormat) {
+		let url = format!("https://example.com/{{z}}/{{x}}/{{y}}{ext}");
+		assert_eq!(detect_tile_format(&TileJSON::default(), &url).unwrap(), expected);
+	}
+
+	#[rstest]
+	#[case("https://example.com/{z}/{x}/{y}")]
+	#[case("https://example.com/{z}/{x}/{y}.xyz")]
+	#[case("https://example.com/{z}/{x}/{y}?format=png")]
+	#[test]
+	fn detect_format_from_url_fails(#[case] url: &str) {
+		assert!(detect_tile_format(&TileJSON::default(), url).is_err());
+	}
 
 	#[test]
-	fn test_detect_tile_format_from_tilejson_field() {
+	fn detect_format_from_tilejson_field() {
 		let tilejson = TileJSON {
 			tile_format: Some(TileFormat::MVT),
 			..Default::default()
 		};
-		let result = detect_tile_format(&tilejson, "https://example.com/{z}/{x}/{y}");
-		assert_eq!(result.unwrap(), TileFormat::MVT);
+		assert_eq!(
+			detect_tile_format(&tilejson, "https://example.com/{z}/{x}/{y}").unwrap(),
+			TileFormat::MVT,
+		);
 	}
 
 	#[test]
-	fn test_detect_tile_format_from_url_pbf() {
-		let tilejson = TileJSON::default();
-		let result = detect_tile_format(&tilejson, "https://example.com/{z}/{x}/{y}.pbf");
-		assert_eq!(result.unwrap(), TileFormat::MVT);
-	}
-
-	#[test]
-	fn test_detect_tile_format_from_url_png() {
-		let tilejson = TileJSON::default();
-		let result = detect_tile_format(&tilejson, "https://example.com/{z}/{x}/{y}.png");
-		assert_eq!(result.unwrap(), TileFormat::PNG);
-	}
-
-	#[test]
-	fn test_detect_tile_format_missing() {
-		let tilejson = TileJSON::default();
-		let result = detect_tile_format(&tilejson, "https://example.com/{z}/{x}/{y}");
-		assert!(result.is_err());
-	}
-
-	#[test]
-	fn test_detect_tile_format_tilejson_takes_precedence() {
+	fn detect_format_tilejson_takes_precedence_over_url() {
 		let tilejson = TileJSON {
 			tile_format: Some(TileFormat::JPG),
 			..Default::default()
 		};
-		let result = detect_tile_format(&tilejson, "https://example.com/{z}/{x}/{y}.png");
-		assert_eq!(result.unwrap(), TileFormat::JPG);
+		assert_eq!(
+			detect_tile_format(&tilejson, "https://example.com/{z}/{x}/{y}.png").unwrap(),
+			TileFormat::JPG,
+		);
 	}
 
+	// ── extract_tile_url ────────────────────────────────────────────────
+
+	#[rstest]
+	#[case(
+		r#"{"tilejson":"3.0.0","tiles":["https://example.com/{z}/{x}/{y}.pbf"]}"#,
+		"https://example.com/{z}/{x}/{y}.pbf"
+	)]
+	#[case(
+		r#"{"tilejson":"3.0.0","tiles":["https://a.example.com/{z}/{x}/{y}.pbf","https://b.example.com/{z}/{x}/{y}.pbf"]}"#,
+		"https://a.example.com/{z}/{x}/{y}.pbf"
+	)]
+	#[case(
+		r#"{"tilejson":"3.0.0","tiles":["https://tiles.example.com/v1/{z}/{x}/{y}.mvt?token=abc123"]}"#,
+		"https://tiles.example.com/v1/{z}/{x}/{y}.mvt?token=abc123"
+	)]
 	#[test]
-	fn test_extract_tile_url_valid() -> Result<()> {
-		let tilejson = TileJSON::try_from(r#"{"tilejson":"3.0.0","tiles":["https://example.com/{z}/{x}/{y}.pbf"]}"#)?;
-		let url = extract_tile_url(&tilejson)?;
-		assert_eq!(url, "https://example.com/{z}/{x}/{y}.pbf");
+	fn extract_url_valid(#[case] json: &str, #[case] expected: &str) -> Result<()> {
+		let tilejson = TileJSON::try_from(json)?;
+		assert_eq!(extract_tile_url(&tilejson)?, expected);
 		Ok(())
 	}
 
 	#[test]
-	fn test_extract_tile_url_missing_tiles() {
-		let tilejson = TileJSON::default();
-		let result = extract_tile_url(&tilejson);
-		assert!(result.is_err());
+	fn extract_url_missing_tiles() {
+		assert!(extract_tile_url(&TileJSON::default()).is_err());
 	}
 
 	#[test]
-	fn test_extract_tile_url_empty_tiles() -> Result<()> {
+	fn extract_url_empty_tiles() -> Result<()> {
 		let tilejson = TileJSON::try_from(r#"{"tilejson":"3.0.0","tiles":[]}"#)?;
-		let result = extract_tile_url(&tilejson);
-		assert!(result.is_err());
+		assert!(extract_tile_url(&tilejson).is_err());
 		Ok(())
 	}
 
+	// ── build_tile_url ──────────────────────────────────────────────────
+
+	#[rstest]
+	#[case("https://example.com/{z}/{x}/{y}.pbf", 3, 5, 7, "https://example.com/3/5/7.pbf")]
+	#[case(
+		"https://tiles.example.com/data/{z}/{x}/{y}.png",
+		0,
+		0,
+		0,
+		"https://tiles.example.com/data/0/0/0.png"
+	)]
+	#[case(
+		"https://example.com/{z}/{x}/{y}.pbf",
+		18,
+		131072,
+		262143,
+		"https://example.com/18/131072/262143.pbf"
+	)]
+	#[case(
+		"https://example.com/{z}/{x}/{y}.pbf?token=secret&v=2",
+		5,
+		10,
+		20,
+		"https://example.com/5/10/20.pbf?token=secret&v=2"
+	)]
+	#[case(
+		"https://{z}.tiles.example.com/{x}/{y}.png",
+		4,
+		8,
+		12,
+		"https://4.tiles.example.com/8/12.png"
+	)]
+	#[case(
+		"https://example.com/{z}/{x}/{y}?zoom={z}",
+		7,
+		100,
+		50,
+		"https://example.com/7/100/50?zoom=7"
+	)]
 	#[test]
-	fn test_build_tile_url() {
-		let template = "https://example.com/{z}/{x}/{y}.pbf";
-		let coord = TileCoord::new(3, 5, 7).unwrap();
-		let url = build_tile_url(template, &coord);
-		assert_eq!(url, "https://example.com/3/5/7.pbf");
+	fn build_url(#[case] template: &str, #[case] z: u8, #[case] x: u32, #[case] y: u32, #[case] expected: &str) {
+		let coord = TileCoord::new(z, x, y).unwrap();
+		assert_eq!(build_tile_url(template, &coord), expected);
 	}
 
-	#[test]
-	fn test_build_tile_url_origin() {
-		let template = "https://tiles.example.com/data/{z}/{x}/{y}.png";
-		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let url = build_tile_url(template, &coord);
-		assert_eq!(url, "https://tiles.example.com/data/0/0/0.png");
+	// ── fetch_tile ──────────────────────────────────────────────────────
+
+	#[tokio::test]
+	async fn fetch_tile_404_returns_none() {
+		let client = reqwest::Client::new();
+		let result = fetch_tile(
+			client,
+			"https://httpbin.org/status/404".to_string(),
+			TileCoord::new(0, 0, 0).unwrap(),
+			TileFormat::PNG,
+			0,
+		)
+		.await;
+		assert!(result.is_none());
 	}
 
-	#[test]
-	fn test_build_tile_url_high_zoom() {
-		let template = "https://example.com/{z}/{x}/{y}.pbf";
-		let coord = TileCoord::new(18, 131072, 262143).unwrap();
-		let url = build_tile_url(template, &coord);
-		assert_eq!(url, "https://example.com/18/131072/262143.pbf");
+	#[tokio::test]
+	async fn fetch_tile_connection_refused_returns_none() {
+		let client = reqwest::Client::builder()
+			.timeout(Duration::from_millis(500))
+			.build()
+			.unwrap();
+		let result = fetch_tile(
+			client,
+			"http://127.0.0.1:1/{z}/{x}/{y}.pbf".to_string(),
+			TileCoord::new(0, 0, 0).unwrap(),
+			TileFormat::MVT,
+			0,
+		)
+		.await;
+		assert!(result.is_none());
 	}
 }
