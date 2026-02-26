@@ -4,13 +4,9 @@ use deadpool::managed::{Manager, Object, Pool, RecycleResult};
 use gdal::{Dataset, config::set_config_option};
 use imageproc::image::DynamicImage;
 use std::{path::Path, sync::Arc};
-use versatiles_core::{GeoBBox, utils::float_to_int};
+use versatiles_core::{GeoBBox, WORLD_SIZE, utils::float_to_int};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitConvert;
-
-/// Web‑Mercator world circumference in meters (2πR, where R = 6,378,137 m).
-/// Used to compute the ground resolution at zoom 0 for a given tile size.
-const EARTH_CIRCUMFERENCE: f64 = 2.0 * std::f64::consts::PI * 6_378_137.0;
 
 /// Manager for deadpool that creates and recycles GDAL dataset instances
 struct GdalManager {
@@ -210,7 +206,7 @@ impl RasterSource {
 		);
 
 		// Initial resolution (meters per pixel at zoom 0)
-		let initial_res = EARTH_CIRCUMFERENCE / f64::from(tile_size);
+		let initial_res = WORLD_SIZE / f64::from(tile_size);
 		let zf = (initial_res / self.pixel_size).log2().ceil();
 		log::trace!("initial_res={initial_res:.6}, zf(raw)={zf:.6}");
 		let z: i32 = float_to_int(zf).unwrap_or(0);
