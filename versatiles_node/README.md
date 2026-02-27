@@ -366,6 +366,8 @@ See the [examples](./examples) directory for more usage examples:
 - [probe.ts](./examples/probe.ts) - Container inspection
 - [serve.ts](./examples/serve.ts) - HTTP tile server
 - [read-tiles.ts](./examples/read-tiles.ts) - Reading tiles and coordinate conversion
+- [vpl-pipeline.ts](./examples/vpl-pipeline.ts) - Building VPL pipelines programmatically
+- [vpl-multi-source.ts](./examples/vpl-multi-source.ts) - Combining multiple tile sources with VPL
 
 All examples use TypeScript and can be run with:
 
@@ -396,11 +398,11 @@ flowchart TD
     end
 ```
 
-| Step | Script | What it does |
-|------|--------|-------------|
-| Build native CJS | `build:cjs` | Compiles Rust to a native `.node` binary and generates `index.cjs` |
-| Build native ESM | `build:esm` | Generates `index.js` and `index.d.ts` (ESM wrapper + type declarations) |
-| Generate VPL TS | `build:vpl` | Runs `scripts/generate-vpl.ts` which calls the native `generateVplTypescript()` function to produce `vpl.ts`, then compiles it with `tsc` to `vpl.js` + `vpl.d.ts` |
+| Step             | Script      | What it does                                                                                                                                                       |
+| ---------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Build native CJS | `build:cjs` | Compiles Rust to a native `.node` binary and generates `index.cjs`                                                                                                 |
+| Build native ESM | `build:esm` | Generates `index.js` and `index.d.ts` (ESM wrapper + type declarations)                                                                                            |
+| Generate VPL TS  | `build:vpl` | Runs `scripts/generate-vpl.ts` which calls the native `generateVplTypescript()` function to produce `vpl.ts`, then compiles it with `tsc` to `vpl.js` + `vpl.d.ts` |
 
 ### Building from Source
 
