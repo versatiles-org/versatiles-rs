@@ -26,9 +26,7 @@ describe('VPL Builder', () => {
 			const vpl = VPL.fromContainer({ filename: 'test.versatiles' }).filter({
 				bbox: [13.0, 52.0, 14.0, 53.0],
 			});
-			expect(vpl.toString()).toBe(
-				'from_container filename=test.versatiles | filter bbox=[13,52,14,53]',
-			);
+			expect(vpl.toString()).toBe('from_container filename=test.versatiles | filter bbox=[13,52,14,53]');
 		});
 
 		it('should serialize boolean values', () => {
@@ -67,9 +65,7 @@ describe('VPL Builder', () => {
 		it('should handle nested pipeline in sources', () => {
 			const source = VPL.fromContainer({ filename: 'a.versatiles' }).filter({ levelMax: 10 });
 			const stacked = VPL.fromStacked([source]);
-			expect(stacked.toString()).toBe(
-				'from_stacked [ from_container filename=a.versatiles | filter level_max=10 ]',
-			);
+			expect(stacked.toString()).toBe('from_stacked [ from_container filename=a.versatiles | filter level_max=10 ]');
 		});
 
 		it('should escape double quotes in string values', () => {
@@ -87,9 +83,7 @@ describe('VPL Builder', () => {
 			const base = VPL.fromContainer({ filename: 'test.versatiles' });
 			const filtered = base.filter({ levelMax: 10 });
 			expect(base.toString()).toBe('from_container filename=test.versatiles');
-			expect(filtered.toString()).toBe(
-				'from_container filename=test.versatiles | filter level_max=10',
-			);
+			expect(filtered.toString()).toBe('from_container filename=test.versatiles | filter level_max=10');
 		});
 	});
 
