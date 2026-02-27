@@ -387,13 +387,12 @@ The package has two outputs: a **native N-API module** (Rust compiled to a `.nod
 ```mermaid
 flowchart TD
     subgraph "1. Native Module"
-        RS[Rust source] -->|"napi build"| CJS["index.cjs"]
-        RS -->|"napi build --esm"| ESM["index.js\nindex.d.ts"]
+        RS[Rust source] -->|"npm run build:cjs"| CJS["index.cjs"]
+        RS -->|"npm run build:esm"| ESM["index.js<br/>index.d.ts"]
     end
 
     subgraph "2. VPL Library"
-        ESM -->|"generate-vpl.ts calls\ngenerateVplTypescript()"| VTS["vpl.ts"]
-        VTS -->|"tsc"| VJS["vpl.js\nvpl.d.ts"]
+        ESM -->|"npm run build:vpl"| VJS["vpl.js<br/>vpl.d.ts"]
     end
 ```
 
