@@ -476,8 +476,9 @@ mod tests {
 		assert!(code.contains("pub fn get_field_metadata()"));
 		assert!(code.contains("\"field1\".to_string()"));
 		assert!(code.contains("\"String\""));
-		assert!(code.contains("is_required : true"));
-		assert!(code.contains("is_sources : false"));
+		let code_no_spaces = code.replace(' ', "");
+		assert!(code_no_spaces.contains("is_required:true"));
+		assert!(code_no_spaces.contains("is_sources:false"));
 	}
 
 	/// Helper to verify decode_struct output for a single-field struct.
@@ -685,6 +686,7 @@ mod tests {
 
 		assert!(code.contains("\"sources\".to_string()"));
 		assert!(code.contains("\"Vec<VPLPipeline>\""));
-		assert!(code.contains("is_sources : true"));
+		let code_no_spaces = code.replace(' ', "");
+		assert!(code_no_spaces.contains("is_sources:true"));
 	}
 }
