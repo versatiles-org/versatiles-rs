@@ -10,6 +10,9 @@ index.js
 index.d.ts
 index.cjs
 index.d.cts
+vpl.js
+vpl.d.ts
+vpl.ts
 *.node
 
 # napi-rs artifacts

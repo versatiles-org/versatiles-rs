@@ -43,6 +43,7 @@
 
 #![deny(clippy::all)]
 
+mod codegen;
 mod convert;
 mod macros;
 mod progress;

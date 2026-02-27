@@ -1,0 +1,15 @@
+{
+	"compilerOptions": {
+		"target": "esnext",
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"strict": true,
+		"declaration": true,
+		"outDir": ".",
+		"rootDir": ".",
+		"skipLibCheck": true,
+		"esModuleInterop": true
+	},
+	"include": ["vpl.ts"],
+	"exclude": ["node_modules", "dist", "src"]
+}

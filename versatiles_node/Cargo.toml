@@ -22,6 +22,7 @@ napi = { version = "3.8.3", features = ["async"] }
 napi-derive = "3.5.2"
 tokio.workspace = true
 versatiles = { workspace = true, default-features = false, features = [
+	"codegen",
 	"server",
 ] }
 versatiles_container.workspace = true

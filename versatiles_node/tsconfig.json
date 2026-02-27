@@ -17,5 +17,5 @@
 		"types": ["node", "vitest/globals"]
 	},
 	"include": ["src/**/*.ts", "examples/**/*.ts", "index.d.ts", "vitest.config.ts", "scripts/*.ts"],
-	"exclude": ["node_modules", "dist", "target", "__test__", "index.js", "index.cjs"]
+	"exclude": ["node_modules", "dist", "target", "__test__", "index.js", "index.cjs", "src/vpl.ts", "vpl.ts", "vpl.js", "vpl.d.ts"]
 }
