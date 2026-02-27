@@ -1,6 +1,6 @@
 use super::{VPLNode, parse_vpl};
 use anyhow::{Result, ensure};
-use std::fmt::Debug;
+use std::{fmt::Debug, str::FromStr};
 use versatiles_derive::context;
 
 #[derive(Clone, Default, PartialEq)]
@@ -11,10 +11,6 @@ pub struct VPLPipeline {
 impl VPLPipeline {
 	pub fn new(pipeline: Vec<VPLNode>) -> Self {
 		VPLPipeline { pipeline }
-	}
-
-	pub fn from_str(vpl: &str) -> Self {
-		parse_vpl(vpl).unwrap()
 	}
 
 	pub fn len(&self) -> usize {
@@ -34,6 +30,14 @@ impl VPLPipeline {
 		ensure!(!self.pipeline.is_empty(), "pipeline is empty");
 		let first_element = self.pipeline.remove(0);
 		Ok((first_element, self.pipeline))
+	}
+}
+
+impl FromStr for VPLPipeline {
+	type Err = anyhow::Error;
+
+	fn from_str(vpl: &str) -> Result<Self, Self::Err> {
+		parse_vpl(vpl)
 	}
 }
 
@@ -72,7 +76,7 @@ mod tests {
 
 	#[test]
 	fn test_from_str() {
-		let pipeline = VPLPipeline::from_str("foo | bar | baz");
+		let pipeline = VPLPipeline::from_str("foo | bar | baz").unwrap();
 		assert_eq!(pipeline.len(), 3);
 	}
 
@@ -93,7 +97,7 @@ mod tests {
 
 	#[test]
 	fn test_pop() {
-		let mut pipeline = VPLPipeline::from_str("first | second | third");
+		let mut pipeline = VPLPipeline::from_str("first | second | third").unwrap();
 		let popped = pipeline.pop();
 		assert!(popped.is_some());
 		assert_eq!(popped.unwrap().name, "third");
@@ -108,7 +112,7 @@ mod tests {
 
 	#[test]
 	fn test_split() {
-		let pipeline = VPLPipeline::from_str("first | second | third");
+		let pipeline = VPLPipeline::from_str("first | second | third").unwrap();
 		let (first, rest) = pipeline.split().unwrap();
 		assert_eq!(first.name, "first");
 		assert_eq!(rest.len(), 2);
@@ -147,7 +151,7 @@ mod tests {
 
 	#[test]
 	fn test_clone() {
-		let pipeline = VPLPipeline::from_str("foo | bar");
+		let pipeline = VPLPipeline::from_str("foo | bar").unwrap();
 		let cloned = pipeline.clone();
 		assert_eq!(pipeline, cloned);
 	}
@@ -160,9 +164,9 @@ mod tests {
 
 	#[test]
 	fn test_partial_eq() {
-		let pipeline1 = VPLPipeline::from_str("foo | bar");
-		let pipeline2 = VPLPipeline::from_str("foo | bar");
-		let pipeline3 = VPLPipeline::from_str("foo | baz");
+		let pipeline1 = VPLPipeline::from_str("foo | bar").unwrap();
+		let pipeline2 = VPLPipeline::from_str("foo | bar").unwrap();
+		let pipeline3 = VPLPipeline::from_str("foo | baz").unwrap();
 		assert_eq!(pipeline1, pipeline2);
 		assert_ne!(pipeline1, pipeline3);
 	}
