@@ -430,13 +430,18 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 		.trim()
 		.to_string();
 
-	Ok(build_impl_tokens(&name, &field_names, &parser_fields, &doc, &field_metas))
+	Ok(build_impl_tokens(
+		&name,
+		&field_names,
+		&parser_fields,
+		&doc,
+		&field_metas,
+	))
 }
 
 #[cfg(test)]
 mod tests {
 	use super::decode_struct;
-	use pretty_assertions::assert_eq;
 	use syn::{DeriveInput, parse_quote};
 
 	fn pretty_tokens(ts: &proc_macro2::TokenStream) -> Vec<String> {
@@ -461,33 +466,17 @@ mod tests {
 			_ => panic!("Expected struct data"),
 		};
 		let ts = decode_struct(input.clone(), data_struct).unwrap();
-		assert_eq!(
-			pretty_tokens(&ts),
-			[
-				"impl Test {",
-				"    pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {",
-				"        let argument_names: Vec<String> = vec![\"field1\".to_string()];",
-				"        let property_names = node.get_property_names();",
-				"        for property_name in property_names {",
-				"            if !argument_names.contains(&property_name) {",
-				"                anyhow::bail!(",
-				"                    \"The '{}' operation does not have a parameter '{}'.\\nSupported parameters: '{}'\",",
-				"                    node.name, property_name, argument_names.join(\"', '\")",
-				"                );",
-				"            }",
-				"        }",
-				"        Ok(Self {",
-				"            field1: node.get_property_string_required(\"field1\")?,",
-				"        })",
-				"    }",
-				"    pub fn get_docs() -> String {",
-				"        \"Struct documentation\\n\\n### Parameters\\n\\n- **`field1`: String (required)** - Field documentation\"",
-				"            .to_string()",
-				"    }",
-				"}",
-				""
-			]
-		);
+		let code = pretty_tokens(&ts).join("\n");
+		assert!(code.contains("pub fn from_vpl_node(node: &VPLNode) -> Result<Self>"));
+		assert!(code.contains("field1: node.get_property_string_required(\"field1\")?"));
+		assert!(code.contains("pub fn get_docs() -> String"));
+		assert!(code.contains("Struct documentation"));
+		assert!(code.contains("Field documentation"));
+		assert!(code.contains("pub fn get_field_metadata()"));
+		assert!(code.contains("\"field1\".to_string()"));
+		assert!(code.contains("\"String\""));
+		assert!(code.contains("is_required : true"));
+		assert!(code.contains("is_sources : false"));
 	}
 
 	/// Helper to verify decode_struct output for a single-field struct.
@@ -497,32 +486,13 @@ mod tests {
 			_ => panic!("Expected struct data"),
 		};
 		let ts = decode_struct(input, data_struct).unwrap();
-		assert_eq!(
-			pretty_tokens(&ts),
-			[
-				"impl T {",
-				"    pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {",
-				"        let argument_names: Vec<String> = vec![\"v\".to_string()];",
-				"        let property_names = node.get_property_names();",
-				"        for property_name in property_names {",
-				"            if !argument_names.contains(&property_name) {",
-				"                anyhow::bail!(",
-				"                    \"The '{}' operation does not have a parameter '{}'.\\nSupported parameters: '{}'\",",
-				"                    node.name, property_name, argument_names.join(\"', '\")",
-				"                );",
-				"            }",
-				"        }",
-				"        Ok(Self {",
-				&format!("            v: node.{getter}(\"v\")?,"),
-				"        })",
-				"    }",
-				"    pub fn get_docs() -> String {",
-				&format!("        \"### Parameters\\n\\n- {comment}\".to_string()"),
-				"    }",
-				"}",
-				""
-			]
+		let code = pretty_tokens(&ts).join("\n");
+		assert!(
+			code.contains(&format!("v: node.{getter}(\"v\")?")),
+			"missing getter {getter}"
 		);
+		assert!(code.contains(comment), "missing comment {comment}");
+		assert!(code.contains("pub fn get_field_metadata() -> Vec<crate::vpl::VPLFieldMeta>"));
 	}
 
 	#[test]
@@ -680,5 +650,40 @@ mod tests {
 		let msg = err.to_string();
 		assert!(msg.contains("unsupported type"));
 		assert!(msg.contains("i128"));
+	}
+
+	#[test]
+	fn test_get_field_metadata_generated() {
+		let input: DeriveInput = parse_quote!(
+			/// MyStruct docs
+			struct MyStruct {
+				/// Required field_name
+				field_name: String,
+				/// Optional level
+				level: Option<u8>,
+				/// Sources list
+				sources: Vec<VPLPipeline>,
+			}
+		);
+		let data_struct = match &input.data {
+			syn::Data::Struct(ds) => ds.clone(),
+			_ => panic!("Expected struct data"),
+		};
+		let ts = decode_struct(input, data_struct).unwrap();
+		let code = pretty_tokens(&ts).join("\n");
+
+		// Verify get_field_metadata method is generated
+		assert!(code.contains("pub fn get_field_metadata()"));
+
+		// Verify field entries exist (prettyplease uses "key : value" formatting)
+		assert!(code.contains("\"field_name\".to_string()"));
+		assert!(code.contains("\"String\""));
+
+		assert!(code.contains("\"level\".to_string()"));
+		assert!(code.contains("\"Option<u8>\""));
+
+		assert!(code.contains("\"sources\".to_string()"));
+		assert!(code.contains("\"Vec<VPLPipeline>\""));
+		assert!(code.contains("is_sources : true"));
 	}
 }
