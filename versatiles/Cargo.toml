@@ -107,6 +107,7 @@ cli = [
 	"dep:tokio",
 	"versatiles_container/cli",
 ]
+codegen = ["versatiles_pipeline/codegen"]
 gdal = ["versatiles_pipeline/gdal"]
 bindgen = ["versatiles_pipeline/bindgen"]
 

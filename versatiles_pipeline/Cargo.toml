@@ -55,5 +55,6 @@ versatiles_image = { workspace = true, features = ["test"] }
 
 [features]
 default = []
+codegen = []
 gdal = ["dep:gdal", "dep:gdal-sys", "dep:deadpool"]
 bindgen = ["gdal/bindgen"]

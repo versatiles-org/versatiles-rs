@@ -11,8 +11,10 @@
 mod factory;
 mod helpers;
 mod operations;
-mod vpl;
+pub mod vpl;
 
 pub use factory::PipelineFactory;
+#[cfg(feature = "codegen")]
+pub use factory::{OperationMeta, get_all_operation_metadata};
 pub use helpers::{PipelineReader, register_pipeline_readers};
-pub use vpl::VPLNode;
+pub use vpl::{VPLNode, VPLPipeline};

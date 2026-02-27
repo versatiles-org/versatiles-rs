@@ -35,6 +35,7 @@ static MULTIPLE_NEWLINES_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"
 pub trait OperationFactoryTrait: Send + Sync {
 	fn get_tag_name(&self) -> &str;
 	fn get_docs(&self) -> String;
+	#[cfg(feature = "codegen")]
 	fn get_field_metadata(&self) -> Vec<crate::vpl::VPLFieldMeta>;
 }
 
@@ -268,6 +269,7 @@ unsafe impl Sync for PipelineFactory {}
 unsafe impl Send for PipelineFactory {}
 
 /// Metadata about a single VPL operation, used for code generation.
+#[cfg(feature = "codegen")]
 pub struct OperationMeta {
 	pub tag_name: String,
 	pub kind: &'static str,
@@ -276,6 +278,7 @@ pub struct OperationMeta {
 }
 
 /// Returns metadata for all registered operations (both read and transform).
+#[cfg(feature = "codegen")]
 pub fn get_all_operation_metadata() -> Vec<OperationMeta> {
 	use crate::operations::{get_read_operation_factories, get_transform_operation_factories};
 

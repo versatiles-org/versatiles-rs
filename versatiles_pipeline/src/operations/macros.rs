@@ -15,6 +15,7 @@ macro_rules! define_transform_factory {
 			fn get_tag_name(&self) -> &str {
 				$tag
 			}
+			#[cfg(feature = "codegen")]
 			fn get_field_metadata(&self) -> Vec<$crate::vpl::VPLFieldMeta> {
 				<$args>::get_field_metadata()
 			}
@@ -53,6 +54,7 @@ macro_rules! define_read_factory {
 			fn get_tag_name(&self) -> &str {
 				$tag
 			}
+			#[cfg(feature = "codegen")]
 			fn get_field_metadata(&self) -> Vec<$crate::vpl::VPLFieldMeta> {
 				<$args>::get_field_metadata()
 			}

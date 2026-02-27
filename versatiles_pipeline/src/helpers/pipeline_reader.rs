@@ -7,6 +7,7 @@
 //! executes the configured operations, and streams tiles for a given bbox.
 
 use crate::PipelineFactory;
+use crate::vpl::{VPLPipeline, parse_vpl};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
@@ -58,8 +59,34 @@ impl<'a> PipelineReader {
 		Self::from_str(vpl, "from str", dir, runtime).await
 	}
 
-	/// Internal constructor that parses VPL and wires up the callback used by `PipelineFactory`
-	/// to resolve nested readers via `ContainerRegistry`.
+	/// Constructs a `PipelineReader` from a pre-parsed [`VPLPipeline`].
+	///
+	/// Useful for building pipelines programmatically without going through VPL text format.
+	#[context("building pipeline")]
+	pub async fn from_pipeline(
+		pipeline: VPLPipeline,
+		name: &str,
+		dir: &Path,
+		runtime: TilesRuntime,
+	) -> Result<PipelineReader> {
+		let runtime2 = runtime.clone();
+		let callback = Box::new(move |filename: String| -> BoxFuture<Result<Box<dyn TileSource>>> {
+			let runtime = runtime2.clone();
+			Box::pin(async move {
+				let arc_reader = runtime.clone().get_reader_from_str(&filename).await?;
+				Arc::try_unwrap(arc_reader)
+					.map_err(|_| anyhow::anyhow!("Cannot get exclusive access to reader for pipeline"))
+			})
+		});
+		let factory = PipelineFactory::new_default(dir, callback, runtime);
+		let operation = factory.build_pipeline(pipeline).await?;
+		Ok(PipelineReader {
+			name: name.to_string(),
+			operation,
+		})
+	}
+
+	/// Internal constructor that parses VPL and delegates to [`from_pipeline`](Self::from_pipeline).
 	fn from_str(
 		vpl: &'a str,
 		name: &'a str,
@@ -67,22 +94,8 @@ impl<'a> PipelineReader {
 		runtime: TilesRuntime,
 	) -> BoxFuture<'a, Result<PipelineReader>> {
 		Box::pin(async move {
-			let runtime2 = runtime.clone();
-			let callback = Box::new(move |filename: String| -> BoxFuture<Result<Box<dyn TileSource>>> {
-				let runtime = runtime2.clone();
-				Box::pin(async move {
-					let arc_reader = runtime.clone().get_reader_from_str(&filename).await?;
-					Arc::try_unwrap(arc_reader)
-						.map_err(|_| anyhow::anyhow!("Cannot get exclusive access to reader for pipeline"))
-				})
-			});
-			let factory = PipelineFactory::new_default(dir, callback, runtime);
-			let operation: Box<dyn TileSource> = factory.operation_from_vpl(vpl).await?;
-
-			Ok(PipelineReader {
-				name: name.to_string(),
-				operation,
-			})
+			let pipeline = parse_vpl(vpl)?;
+			Self::from_pipeline(pipeline, name, dir, runtime).await
 		})
 	}
 }

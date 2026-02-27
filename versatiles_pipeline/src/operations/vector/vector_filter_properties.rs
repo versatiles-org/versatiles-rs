@@ -75,6 +75,7 @@ impl OperationFactoryTrait for Factory {
 	fn get_tag_name(&self) -> &str {
 		"vector_filter_properties"
 	}
+	#[cfg(feature = "codegen")]
 	fn get_field_metadata(&self) -> Vec<crate::vpl::VPLFieldMeta> {
 		Args::get_field_metadata()
 	}
