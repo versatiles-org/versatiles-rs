@@ -266,3 +266,38 @@ impl PipelineFactory {
 
 unsafe impl Sync for PipelineFactory {}
 unsafe impl Send for PipelineFactory {}
+
+/// Metadata about a single VPL operation, used for code generation.
+pub struct OperationMeta {
+	pub tag_name: String,
+	pub kind: &'static str,
+	pub doc: String,
+	pub fields: Vec<crate::vpl::VPLFieldMeta>,
+}
+
+/// Returns metadata for all registered operations (both read and transform).
+pub fn get_all_operation_metadata() -> Vec<OperationMeta> {
+	use crate::operations::{get_read_operation_factories, get_transform_operation_factories};
+
+	let mut ops = Vec::new();
+
+	for f in get_read_operation_factories() {
+		ops.push(OperationMeta {
+			tag_name: f.get_tag_name().to_string(),
+			kind: "read",
+			doc: f.get_docs(),
+			fields: f.get_field_metadata(),
+		});
+	}
+
+	for f in get_transform_operation_factories() {
+		ops.push(OperationMeta {
+			tag_name: f.get_tag_name().to_string(),
+			kind: "transform",
+			doc: f.get_docs(),
+			fields: f.get_field_metadata(),
+		});
+	}
+
+	ops
+}
