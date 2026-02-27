@@ -26,6 +26,8 @@ versatiles = { workspace = true, default-features = false, features = [
 ] }
 versatiles_container.workspace = true
 versatiles_core = { workspace = true, default-features = false }
+serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true

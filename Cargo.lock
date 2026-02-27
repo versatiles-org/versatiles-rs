@@ -4384,6 +4384,8 @@ dependencies = [
  "napi-derive",
  "pretty_assertions",
  "rstest",
+ "serde",
+ "serde_json",
  "tempfile",
  "tokio",
  "versatiles",
