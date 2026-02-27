@@ -76,11 +76,11 @@
     "lint": "eslint .",
     "pack:dry": "npm pack --dry-run",
     "prepublishOnly": "napi prepublish -t npm",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "RUST_LOG=warn vitest run --coverage",
     "test:examples": "npx tsx scripts/run-examples.ts",
     "test:ui": "vitest --ui",
     "test:watch": "vitest",
-    "test": "vitest run",
+    "test": "RUST_LOG=warn vitest run",
     "typecheck": "tsc --noEmit",
     "upgrade": "npm-check-updates -u && npm install",
     "version": "napi version"
