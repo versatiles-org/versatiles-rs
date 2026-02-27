@@ -375,26 +375,49 @@ npx tsx examples/<filename>.ts
 
 ## Development
 
+### Requirements
+
+- Node.js >= 16
+- Rust toolchain (for building from source)
+
+### Build Process
+
+The package has two outputs: a **native N-API module** (Rust compiled to a `.node` binary) and a **VPL TypeScript library** (generated from Rust operation metadata, then compiled to JS). The VPL generation step calls into the native module, so it must be built first.
+
+```mermaid
+flowchart TD
+    subgraph "1. Native Module"
+        RS[Rust source] -->|"napi build"| CJS["index.cjs"]
+        RS -->|"napi build --esm"| ESM["index.js\nindex.d.ts"]
+    end
+
+    subgraph "2. VPL Library"
+        ESM -->|"generate-vpl.ts calls\ngenerateVplTypescript()"| VTS["vpl.ts"]
+        VTS -->|"tsc"| VJS["vpl.js\nvpl.d.ts"]
+    end
+```
+
+| Step | Script | What it does |
+|------|--------|-------------|
+| Build native CJS | `build:cjs` | Compiles Rust to a native `.node` binary and generates `index.cjs` |
+| Build native ESM | `build:esm` | Generates `index.js` and `index.d.ts` (ESM wrapper + type declarations) |
+| Generate VPL TS | `build:vpl` | Runs `scripts/generate-vpl.ts` which calls the native `generateVplTypescript()` function to produce `vpl.ts`, then compiles it with `tsc` to `vpl.js` + `vpl.d.ts` |
+
 ### Building from Source
 
 ```bash
 # Install dependencies
 npm install
 
-# Build debug version
+# Build debug version (native module + VPL)
 npm run build:debug
 
-# Build release version
+# Build release version (native module + VPL)
 npm run build
 
 # Run tests
 npm test
 ```
-
-### Requirements
-
-- Node.js >= 16
-- Rust toolchain (for building from source)
 
 ## License
 
