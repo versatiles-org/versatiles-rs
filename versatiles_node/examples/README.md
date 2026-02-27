@@ -118,6 +118,20 @@ npx tsx examples/read-tiles.ts
 - Prints tile information to the console
 - Saves a sample tile as `/tmp/tile-10-550-335.png`
 
+### 6. vpl-pipeline.ts - VPL Pipelines
+
+Shows how to build tile processing pipelines programmatically using the fluent VPL API.
+
+```bash
+npx tsx examples/vpl-pipeline.ts
+```
+
+**Features shown:**
+
+- Reading from a container and chaining transforms (filter, vectorFilterLayers)
+- Stacking sources with fallback (`fromStacked`)
+- Merging vector tile layers from different sources (`fromMergedVector`)
+
 ## Example Data
 
 All examples use test data files from `../testdata/`:

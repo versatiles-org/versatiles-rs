@@ -367,7 +367,6 @@ See the [examples](./examples) directory for more usage examples:
 - [serve.ts](./examples/serve.ts) - HTTP tile server
 - [read-tiles.ts](./examples/read-tiles.ts) - Reading tiles and coordinate conversion
 - [vpl-pipeline.ts](./examples/vpl-pipeline.ts) - Building VPL pipelines programmatically
-- [vpl-multi-source.ts](./examples/vpl-multi-source.ts) - Combining multiple tile sources with VPL
 
 All examples use TypeScript and can be run with:
 
