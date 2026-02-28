@@ -437,8 +437,7 @@ impl TileSource for PMTilesReader {
 				self.header.tile_data.offset,
 				self.internal_compression,
 			)
-			.await?
-				&& let Ok(size) = u32::try_from(range.length)
+			.await? && let Ok(size) = u32::try_from(range.length)
 			{
 				tile_sizes.push((coord, size));
 			}
@@ -534,11 +533,7 @@ mod tests {
 				.await?
 				.expect("tile should exist")
 				.into_blob(compression)?;
-			assert_eq!(
-				*size,
-				blob.len() as u32,
-				"size mismatch at {coord:?}"
-			);
+			assert_eq!(*size, blob.len() as u32, "size mismatch at {coord:?}");
 		}
 
 		Ok(())
