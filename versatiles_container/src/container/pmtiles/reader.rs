@@ -420,6 +420,33 @@ impl TileSource for PMTilesReader {
 		))
 	}
 
+	#[context("streaming tile sizes for bbox {:?}", bbox)]
+	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+		let mut tile_sizes: Vec<(TileCoord, u32)> = Vec::new();
+
+		let coords: Vec<TileCoord> = bbox.iter_coords().collect();
+		for coord in coords {
+			let Ok(tile_id) = coord.get_hilbert_index() else {
+				continue;
+			};
+			if let Some(range) = Self::resolve_tile_range(
+				tile_id,
+				Arc::clone(&self.root_entries),
+				&self.leaves_cache,
+				&self.leaves_bytes,
+				self.header.tile_data.offset,
+				self.internal_compression,
+			)
+			.await?
+				&& let Ok(size) = u32::try_from(range.length)
+			{
+				tile_sizes.push((coord, size));
+			}
+		}
+
+		Ok(TileStream::from_vec(tile_sizes))
+	}
+
 	// deep probe of container meta
 	#[cfg(feature = "cli")]
 	/// Adds PMTiles‑specific container metadata (the v3 header) to the CLI probe output.
@@ -485,6 +512,60 @@ mod tests {
 		);
 
 		assert!(reader.get_tile(&TileCoord::new(16, 0, 0)?).await?.is_none());
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn tile_size_stream_matches_tile_reads() -> Result<()> {
+		let reader = PMTilesReader::open_path(&PATH, TilesRuntime::default()).await?;
+
+		let bbox = TileBBox::from_min_and_max(9, 274, 167, 275, 168)?;
+		let compression = reader.metadata().tile_compression;
+
+		let mut sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
+		sizes.sort_by_key(|(c, _)| (c.y, c.x));
+
+		assert_eq!(sizes.len(), 4);
+
+		for (coord, size) in &sizes {
+			let blob = reader
+				.get_tile(coord)
+				.await?
+				.expect("tile should exist")
+				.into_blob(compression)?;
+			assert_eq!(
+				*size,
+				blob.len() as u32,
+				"size mismatch at {coord:?}"
+			);
+		}
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn tile_size_stream_single_tile() -> Result<()> {
+		let reader = PMTilesReader::open_path(&PATH, TilesRuntime::default()).await?;
+
+		let bbox = TileBBox::from_min_and_max(0, 0, 0, 0, 0)?;
+		let sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
+
+		assert_eq!(sizes.len(), 1);
+		assert_eq!(sizes[0].0, TileCoord::new(0, 0, 0)?);
+		assert_eq!(sizes[0].1, 20);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn tile_size_stream_empty_for_missing_zoom() -> Result<()> {
+		let reader = PMTilesReader::open_path(&PATH, TilesRuntime::default()).await?;
+
+		let bbox = TileBBox::from_min_and_max(20, 0, 0, 3, 3)?;
+		let sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
+
+		assert!(sizes.is_empty());
 
 		Ok(())
 	}
