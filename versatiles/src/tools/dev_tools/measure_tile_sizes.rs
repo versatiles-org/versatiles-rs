@@ -24,19 +24,22 @@ pub struct MeasureTileSizes {
 	output: PathBuf,
 
 	/// Zoom level to analyze
-	#[arg(default_value = "14")]
-	level: u8,
+	#[arg(long)]
+	level: Option<u8>,
 
 	/// Scale down factor
-	#[arg(default_value = "4")]
-	scale: usize,
+	#[arg(long)]
+	scale: Option<usize>,
 }
 
 pub async fn run(args: &MeasureTileSizes, runtime: &TilesRuntime) -> Result<()> {
 	let input = &args.input;
+	let reader = runtime.get_reader_from_str(input).await?;
+	let metadata = reader.metadata();
+
 	let output_file = &args.output;
-	let level = args.level;
-	let scale = args.scale;
+	let level = args.level.or(metadata.bbox_pyramid.get_level_max()).unwrap_or(10);
+	let scale = args.scale.unwrap_or(1);
 	let width_original = 1 << level;
 	let width_scaled = width_original / scale;
 
@@ -50,18 +53,11 @@ pub async fn run(args: &MeasureTileSizes, runtime: &TilesRuntime) -> Result<()> 
 		output_file.extension().unwrap_or_default()
 	);
 
-	let reader = runtime.get_reader_from_str(input).await?;
 	let bbox = TileBBox::new_full(level)?;
-	let stream = reader.get_tile_stream(bbox).await?;
 
 	let progress = runtime.create_progress("Scanning tile sizes", (width_original * width_original) as u64);
-	let compression = reader.metadata().tile_compression;
-	let vec = stream
-		.map_parallel_try(move |_coord, mut tile| Ok(tile.as_blob(compression)?.len()))
-		.unwrap_results()
-		.inspect(|_, _| progress.inc(1))
-		.to_vec()
-		.await;
+	let stream = reader.get_tile_size_stream(bbox).await?;
+	let vec = stream.inspect(|_, _| progress.inc(1)).to_vec().await;
 	progress.finish();
 
 	log::debug!("Saving image");
@@ -72,7 +68,7 @@ pub async fn run(args: &MeasureTileSizes, runtime: &TilesRuntime) -> Result<()> 
 		if x >= width_scaled || y >= width_scaled {
 			continue;
 		}
-		result[y * width_scaled + x] += *size;
+		result[y * width_scaled + x] += u64::from(*size);
 	}
 
 	let n = (scale * scale) as f64;
