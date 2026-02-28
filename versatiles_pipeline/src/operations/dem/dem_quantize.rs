@@ -33,6 +33,7 @@ enum DemEncoding {
 #[derive(Debug)]
 struct Operation {
 	source: Box<dyn TileSource>,
+	tilejson: TileJSON,
 	resolution_ratio: f64,
 	max_gradient_error: f64,
 	encoding: DemEncoding,
@@ -120,8 +121,15 @@ impl Operation {
 			}
 		};
 
+		let mut tilejson = source.tilejson().clone();
+		tilejson.tile_schema = Some(match encoding {
+			DemEncoding::Mapbox => TileSchema::RasterDEMMapbox,
+			DemEncoding::Terrarium => TileSchema::RasterDEMTerrarium,
+		});
+
 		Ok(Self {
 			source,
+			tilejson,
 			resolution_ratio,
 			max_gradient_error,
 			encoding,
@@ -140,7 +148,7 @@ impl TileSource for Operation {
 	}
 
 	fn tilejson(&self) -> &TileJSON {
-		self.source.tilejson()
+		&self.tilejson
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
@@ -334,8 +342,11 @@ mod tests {
 		let image = DynamicImage::from_raw(2, 2, raw_data)?;
 
 		let source = DummyImageSource::from_image(image, TileFormat::PNG, None)?;
+		let mut tilejson = source.tilejson().clone();
+		tilejson.tile_schema = Some(TileSchema::RasterDEMMapbox);
 		let op = Operation {
 			source: Box::new(source),
+			tilejson,
 			resolution_ratio: 0.001,
 			max_gradient_error: 1.0,
 			encoding: DemEncoding::Mapbox,
@@ -374,8 +385,11 @@ mod tests {
 		let image = DynamicImage::from_raw(2, 2, raw_data)?;
 
 		let source = DummyImageSource::from_image(image, TileFormat::PNG, None)?;
+		let mut tilejson = source.tilejson().clone();
+		tilejson.tile_schema = Some(TileSchema::RasterDEMMapbox);
 		let op = Operation {
 			source: Box::new(source),
+			tilejson,
 			resolution_ratio: 0.001,
 			max_gradient_error: 1.0,
 			encoding: DemEncoding::Mapbox,
