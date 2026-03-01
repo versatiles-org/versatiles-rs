@@ -533,7 +533,7 @@ mod tests {
 				.await?
 				.expect("tile should exist")
 				.into_blob(compression)?;
-			assert_eq!(*size, blob.len() as u32, "size mismatch at {coord:?}");
+			assert_eq!(u64::from(*size), blob.len(), "size mismatch at {coord:?}");
 		}
 
 		Ok(())
