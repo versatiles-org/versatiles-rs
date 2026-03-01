@@ -159,7 +159,7 @@ jobs:
 
       - name: Upload NAPI binding as artifact
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: node-binding-linux-${{ matrix.libc }}-aarch64
           path: output/node/libversatiles_node.so
@@ -218,7 +218,7 @@ jobs:
 
       - name: Upload NAPI binding as artifact
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: node-binding-linux-${{ matrix.libc }}-x86_64
           path: output/node/libversatiles_node.so
@@ -285,7 +285,7 @@ jobs:
 
       - name: Upload NAPI binding as artifact
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: node-binding-macos-${{ matrix.arch }}
           path: target/${{ matrix.arch }}-apple-darwin/release/node/libversatiles_node.dylib
@@ -354,7 +354,7 @@ jobs:
 
       - name: Upload NAPI binding as artifact
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: node-binding-windows-${{ matrix.arch }}
           path: target\${{ matrix.arch }}-pc-windows-msvc\release\node\versatiles_node.dll
@@ -383,7 +383,7 @@ jobs:
         run: npm install
 
       - name: Download NAPI bindings from workflow artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: node-binding-*
           path: artifacts/
@@ -451,7 +451,7 @@ jobs:
           ls -lah npm/*/*.tgz
 
       - name: Upload npm packages as artifacts
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: npm-packages
           path: versatiles_node/npm/*/*.tgz
@@ -495,7 +495,7 @@ jobs:
 
       - name: Download npm packages
         if: env.PUBLISH_ENABLED == 'true'
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: npm-packages
           path: versatiles_node/npm-downloaded
@@ -542,7 +542,7 @@ jobs:
 
       - name: Download NAPI bindings for main package
         if: env.PUBLISH_ENABLED == 'true'
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: node-binding-*
           path: node-bindings/
