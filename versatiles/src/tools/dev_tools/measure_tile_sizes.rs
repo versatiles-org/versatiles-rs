@@ -106,6 +106,8 @@ mod tests {
 			"versatiles",
 			"dev",
 			"measure-tile-sizes",
+			"--scale",
+			"4",
 			"../testdata/berlin.mbtiles",
 			&temp_file.display().to_string(),
 		])?;
