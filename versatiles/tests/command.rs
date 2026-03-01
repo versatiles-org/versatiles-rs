@@ -17,7 +17,7 @@ fn e2e_command() {
 #[rstest]
 #[case("convert", "[OPTIONS] <INPUT_FILE> <OUTPUT_FILE>")]
 #[case("dev export-outline", "[OPTIONS] <INPUT_FILE> <OUTPUT_FILE>")]
-#[case("dev measure-tile-sizes", "[OPTIONS] <INPUT_FILE> <OUTPUT_FILE> [LEVEL] [SCALE]")]
+#[case("dev measure-tile-sizes", "[OPTIONS] <INPUT_FILE> <OUTPUT_FILE>")]
 #[case("dev print-tilejson", "[OPTIONS] <INPUT_FILE>")]
 #[case("dev", "[OPTIONS] <COMMAND>")]
 #[case("help", "[OPTIONS] <COMMAND>")]
