@@ -12,7 +12,7 @@ use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation
 static BLOCK_TILE_COUNT: u32 = 32;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Filter tiles by bounding box and/or zoom levels.
+/// Generate lower-zoom overview tiles by downscaling from a base zoom level.
 struct Args {
 	/// use this zoom level to build the overview. Defaults to the maximum zoom level of the source.
 	level: Option<u8>,

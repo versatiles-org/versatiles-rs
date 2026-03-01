@@ -7,7 +7,7 @@ use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TileStrea
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Filter tiles by bounding box and/or zoom levels.
+/// Convert raster tiles to a different image format and/or adjust quality/speed settings.
 struct Args {
 	/// The desired tile format. Allowed values are: AVIF, JPG, PNG or WEBP.
 	/// If not specified, the source format will be used.
@@ -16,7 +16,7 @@ struct Args {
 	/// To allow different quality levels for different zoom levels, this can also be a comma-separated list like this:
 	/// "80,70,14:50,15:20", where the first value is the default quality, and the other values specify the quality for the specified zoom level (and higher).
 	quality: Option<String>,
-	/// Compression speed (only AVIF), between 0 (slowest) and 100 (fastest).
+	/// Compression speed, between 0 (slowest) and 100 (fastest).
 	speed: Option<u8>,
 }
 
