@@ -152,7 +152,7 @@ tower = { version = "0.5.3" }
 tower-http = { version = "0.6.8" }
 
 # Image processing dependencies
-imageproc = { version = "0.26.0", default-features = false }
+imageproc = { version = "0.26.1", default-features = false }
 
 # Geometry dependencies
 geo = { version = "0.32.0" }
