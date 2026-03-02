@@ -55,11 +55,7 @@ cors:
 		fs::write(&config_path, &config).unwrap();
 
 		let (host, child) = spawn_server(&["-c", config_path.to_str().unwrap()], "/tiles/index.json").await;
-		Self {
-			host,
-			child,
-			temp_dir,
-		}
+		Self { host, child, temp_dir }
 	}
 
 	fn shutdown(&mut self) {
@@ -259,11 +255,7 @@ tiles:
 		fs::write(&config_path, &config).unwrap();
 
 		let (host, child) = spawn_server(&["-c", config_path.to_str().unwrap()], "/tiles/index.json").await;
-		Self {
-			host,
-			child,
-			temp_dir,
-		}
+		Self { host, child, temp_dir }
 	}
 
 	fn shutdown(&mut self) {

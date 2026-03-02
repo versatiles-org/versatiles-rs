@@ -32,11 +32,7 @@ impl ConfigTestServer {
 		fs::write(&config_path, config_content).unwrap();
 
 		let (host, child) = spawn_server(&["-c", config_path.to_str().unwrap()], "/").await;
-		Self {
-			host,
-			child,
-			temp_dir,
-		}
+		Self { host, child, temp_dir }
 	}
 
 	fn shutdown(&mut self) {
