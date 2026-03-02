@@ -56,11 +56,11 @@ fn print_markdown(md: &str) {
 			.chunks(1)
 			.map(|char| u8::from_str_radix(std::str::from_utf8(char).unwrap(), 16).unwrap() * 17)
 			.collect::<Vec<u8>>();
-		return Color::Rgb {
+		Color::Rgb {
 			r: rgb[0],
 			g: rgb[1],
 			b: rgb[2],
-		};
+		}
 	};
 
 	// Configure header level 1
