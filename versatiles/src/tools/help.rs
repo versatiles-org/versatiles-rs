@@ -49,22 +49,37 @@ fn print_markdown(md: &str) {
 
 	let mut skin = MadSkin::default();
 
+	let color = |s: &str| {
+		let rgb = s
+			.trim_start_matches('#')
+			.as_bytes()
+			.chunks(1)
+			.map(|char| u8::from_str_radix(std::str::from_utf8(char).unwrap(), 16).unwrap() * 17)
+			.collect::<Vec<u8>>();
+		return Color::Rgb {
+			r: rgb[0],
+			g: rgb[1],
+			b: rgb[2],
+		};
+	};
+
 	// Configure header level 1
-	skin.headers.get_mut(0).unwrap().set_fg(Color::Yellow);
+	skin.headers.get_mut(0).unwrap().set_fg(color("#D33"));
 
 	// Configure header level 2
 	let h2 = skin.headers.get_mut(1).unwrap();
-	h2.set_fg(Color::Yellow);
+	h2.set_fg(color("#D63"));
 	h2.compound_style.add_attr(Attribute::Bold);
-	h2.compound_style.remove_attr(Attribute::Underlined);
+	h2.compound_style.style_char('#');
 
 	// Configure header level 3
-	skin.headers.get_mut(2).unwrap().set_fg(Color::White);
+	skin.headers.get_mut(2).unwrap().set_fg(color("#DD8"));
 
 	// Set the other text styles
-	skin.bold.set_fg(Color::White);
-	skin.italic.set_fg(Color::White);
-	skin.inline_code.set_fg(Color::Green);
+	skin.bold.set_fg(color("#FFF"));
+	skin.italic.set_fg(color("#FFF"));
+	skin.inline_code.set_fgbg(color("#DDF"), color("#002"));
+	skin.code_block.set_fgbg(color("#DDF"), color("#002"));
 
 	// Ensure minimum dimensions for the area
 	let mut area = Area::full_screen();
