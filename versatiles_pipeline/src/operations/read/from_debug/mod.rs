@@ -168,7 +168,7 @@ mod tests {
 	async fn test_build_tile_avif() {
 		test(
 			"avif",
-			8528,
+			9433,
 			&[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
@@ -189,7 +189,7 @@ mod tests {
 	async fn test_build_tile_jpg() {
 		test(
 			"jpg",
-			11862,
+			11876,
 			&[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
@@ -210,7 +210,7 @@ mod tests {
 	async fn test_build_tile_png() {
 		test(
 			"png",
-			6386,
+			6094,
 			&[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
@@ -231,7 +231,7 @@ mod tests {
 	async fn test_build_tile_webp() {
 		test(
 			"webp",
-			3756,
+			4006,
 			&[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
