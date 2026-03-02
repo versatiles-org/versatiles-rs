@@ -322,6 +322,7 @@ impl TileServer {
 		// If we asked for an ephemeral port (0), record the actual assigned port for test URLs.
 		if self.port == 0 {
 			self.port = listener.local_addr()?.port();
+			println!("VERSATILES_PORT={}", self.port);
 		}
 		let (tx, rx) = oneshot::channel::<()>();
 

@@ -7,7 +7,7 @@
 mod test_utilities;
 
 use reqwest::header::{HeaderMap, ORIGIN};
-use std::{fs, net::TcpListener, process::Child, thread, time::Duration};
+use std::{fs, process::Child};
 use tempfile::TempDir;
 use test_utilities::*;
 
@@ -54,44 +54,9 @@ cors:
 
 		fs::write(&config_path, &config).unwrap();
 
-		let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
-
-		let mut cmd = versatiles_cmd();
-		cmd.args(["serve", "-c", config_path.to_str().unwrap(), "-p", &port.to_string()]);
-		let mut child = cmd.spawn().unwrap();
-
-		// Wait for server to be ready
-		loop {
-			thread::sleep(Duration::from_millis(100));
-			if let Some(status) = child.try_wait().unwrap() {
-				// Server exited - try to capture output for debugging
-				use std::io::Read;
-				let mut stdout_str = String::new();
-				let mut stderr_str = String::new();
-				if let Some(ref mut stdout) = child.stdout {
-					let _ = stdout.read_to_string(&mut stdout_str);
-				}
-				if let Some(ref mut stderr) = child.stderr {
-					let _ = stderr.read_to_string(&mut stderr_str);
-				}
-				panic!(
-					"server process exited prematurely with status: {:?}\nconfig:\n{}\nstdout:\n{}\nstderr:\n{}",
-					status.code(),
-					config,
-					stdout_str,
-					stderr_str
-				);
-			}
-			if reqwest::get(format!("http://127.0.0.1:{port}/tiles/index.json"))
-				.await
-				.is_ok()
-			{
-				break;
-			}
-		}
-
+		let (host, child) = spawn_server(&["-c", config_path.to_str().unwrap()], "/tiles/index.json").await;
 		Self {
-			host: format!("http://127.0.0.1:{port}"),
+			host,
 			child,
 			temp_dir,
 		}
@@ -293,43 +258,9 @@ tiles:
 
 		fs::write(&config_path, &config).unwrap();
 
-		let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
-
-		let mut cmd = versatiles_cmd();
-		cmd.args(["serve", "-c", config_path.to_str().unwrap(), "-p", &port.to_string()]);
-		let mut child = cmd.spawn().unwrap();
-
-		// Wait for server to be ready
-		loop {
-			thread::sleep(Duration::from_millis(100));
-			if let Some(status) = child.try_wait().unwrap() {
-				use std::io::Read;
-				let mut stdout_str = String::new();
-				let mut stderr_str = String::new();
-				if let Some(ref mut stdout) = child.stdout {
-					let _ = stdout.read_to_string(&mut stdout_str);
-				}
-				if let Some(ref mut stderr) = child.stderr {
-					let _ = stderr.read_to_string(&mut stderr_str);
-				}
-				panic!(
-					"server process exited prematurely with status: {:?}\nconfig:\n{}\nstdout:\n{}\nstderr:\n{}",
-					status.code(),
-					config,
-					stdout_str,
-					stderr_str
-				);
-			}
-			if reqwest::get(format!("http://127.0.0.1:{port}/tiles/index.json"))
-				.await
-				.is_ok()
-			{
-				break;
-			}
-		}
-
+		let (host, child) = spawn_server(&["-c", config_path.to_str().unwrap()], "/tiles/index.json").await;
 		Self {
-			host: format!("http://127.0.0.1:{port}"),
+			host,
 			child,
 			temp_dir,
 		}

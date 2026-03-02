@@ -126,6 +126,69 @@ pub fn get_bounds_from_vpl(vpl: &str) -> (TempDir, [f64; 4]) {
 	(temp_dir, bounds)
 }
 
+/// Spawn the server with `-p 0`, read the actual port from stdout,
+/// poll the health-check URL, and return `(host, child)`.
+pub async fn spawn_server(extra_args: &[&str], health_path: &str) -> (String, std::process::Child) {
+	use std::io::BufRead;
+
+	let mut cmd = versatiles_cmd();
+	cmd.args([&["serve", "-p", "0"], extra_args].concat());
+	let mut child = cmd.spawn().expect("failed to spawn server");
+
+	// Read stdout lines until we find VERSATILES_PORT=<N>
+	let stdout = child.stdout.take().expect("stdout should be piped");
+	let mut reader = std::io::BufReader::new(stdout);
+	let mut port: Option<u16> = None;
+
+	loop {
+		let mut line = String::new();
+		let n = reader.read_line(&mut line).expect("failed to read stdout line");
+		if n == 0 {
+			// EOF before finding port – server probably crashed
+			let _ = child.kill();
+			let _ = child.wait();
+			panic!("server closed stdout before printing VERSATILES_PORT");
+		}
+		if let Some(val) = line.trim().strip_prefix("VERSATILES_PORT=") {
+			port = Some(val.parse().expect("invalid port number in VERSATILES_PORT"));
+			break;
+		}
+	}
+
+	let port = port.unwrap();
+
+	// Drain remaining stdout in background so the server doesn't get SIGPIPE
+	std::thread::spawn(move || {
+		let mut sink = std::io::sink();
+		let _ = std::io::copy(&mut reader, &mut sink);
+	});
+
+	// Poll the health-check URL until the server is ready
+	let host = format!("http://127.0.0.1:{port}");
+	let health_url = format!("{host}{health_path}");
+	loop {
+		std::thread::sleep(std::time::Duration::from_millis(50));
+		if let Some(status) = child.try_wait().unwrap() {
+			use std::io::Read;
+			let mut stderr_str = String::new();
+			if let Some(ref mut stderr) = child.stderr {
+				let _ = stderr.read_to_string(&mut stderr_str);
+			}
+			panic!(
+				"server process exited prematurely with status: {:?}\nargs: {:?}\nstderr:\n{}",
+				status.code(),
+				extra_args,
+				stderr_str
+			);
+		}
+		if reqwest::get(&health_url).await.is_ok() {
+			break;
+		}
+	}
+
+	(host, child)
+}
+
 #[macro_export]
 macro_rules! assert_contains {
 	($left:expr, $right:expr$(,)?) => ({

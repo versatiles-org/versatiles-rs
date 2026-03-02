@@ -2,7 +2,7 @@
 
 mod test_utilities;
 
-use std::{net::TcpListener, process::Child, thread, time::Duration};
+use std::process::Child;
 use test_utilities::*;
 use versatiles_core::json::JsonValue;
 
@@ -90,44 +90,8 @@ struct Server {
 
 impl Server {
 	async fn new(input: &[&str]) -> Self {
-		let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
-		println!("Starting server on port {port}");
-		let mut cmd = versatiles_cmd();
-		cmd.args([&["serve", "-p", &port.to_string()], input].concat());
-		let mut child = cmd.spawn().unwrap();
-
-		loop {
-			thread::sleep(Duration::from_millis(100));
-			if let Some(status) = child.try_wait().unwrap() {
-				use std::io::Read;
-				let mut stdout_str = String::new();
-				let mut stderr_str = String::new();
-				if let Some(ref mut stdout) = child.stdout {
-					let _ = stdout.read_to_string(&mut stdout_str);
-				}
-				if let Some(ref mut stderr) = child.stderr {
-					let _ = stderr.read_to_string(&mut stderr_str);
-				}
-				panic!(
-					"server process exited prematurely with status: {:?}\ninput: {:?}\nstdout:\n{}\nstderr:\n{}",
-					status.code(),
-					input,
-					stdout_str,
-					stderr_str
-				);
-			}
-			if reqwest::get(&format!("http://127.0.0.1:{port}/index.json"))
-				.await
-				.is_ok()
-			{
-				break;
-			}
-		}
-
-		Self {
-			host: format!("http://127.0.0.1:{port}"),
-			child,
-		}
+		let (host, child) = spawn_server(input, "/index.json").await;
+		Self { host, child }
 	}
 
 	fn shutdown(&mut self) {
