@@ -44,7 +44,9 @@ from_stacked [
 
 # READ operations
 
-## `from_color`
+---
+
+## from_color
 
 Generates solid-color tiles of the specified size and format.
 
@@ -54,7 +56,9 @@ Generates solid-color tiles of the specified size and format.
 - *`size`: u16 (optional)* - Tile size in pixels (256 or 512). Defaults to 512.
 - *`format`: String (optional)* - Tile format: one of "avif", "jpg", "png", or "webp". Defaults to "png".
 
-## `from_container`
+---
+
+## from_container
 
 Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*.tar` file.
 
@@ -62,7 +66,9 @@ Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*
 
 - **`filename`: String (required)** - The filename of the tile container. This is relative to the path of the VPL file. For example: `filename="world.versatiles"`.
 
-## `from_debug`
+---
+
+## from_debug
 
 Generates debug tiles that display their coordinates as text.
 
@@ -70,7 +76,25 @@ Generates debug tiles that display their coordinates as text.
 
 - *`format`: String (optional)* - Target tile format: one of `"mvt"` (default), `"avif"`, `"jpg"`, `"png"` or `"webp"`
 
-## `from_gdal_raster`
+---
+
+## from_gdal_dem
+
+Reads a GDAL DEM dataset and produces terrain RGB tiles (Mapbox or Terrarium encoding).
+
+### Parameters
+
+- **`filename`: String (required)** - The filename of the GDAL DEM dataset to read. For example: `filename="dem.tif"`.
+- *`encoding`: String (optional)* - The DEM encoding format: `"mapbox"` or `"terrarium"`. (default: `"mapbox"`)
+- *`tile_size`: u32 (optional)* - The size of the generated tiles in pixels. (default: 512)
+- *`level_max`: u8 (optional)* - The maximum zoom level to generate tiles for. (default: the maximum zoom level based on the dataset's native resolution)
+- *`level_min`: u8 (optional)* - The minimum zoom level to generate tiles for. (default: level_max)
+- *`gdal_reuse_limit`: u32 (optional)* - How often to reuse a GDAL instance. (default: 100) Set to a lower value if you have problems like memory leaks in GDAL.
+- *`gdal_concurrency_limit`: u8 (optional)* - The number of maximum concurrent GDAL instances to allow. (default: 4) Set to a higher value if you have enough system resources and want to increase throughput.
+
+---
+
+## from_gdal_raster
 
 Reads a GDAL raster dataset and exposes it as a tile source.
 Hint: When using "gdalbuildvrt" to create a virtual raster, don't forget to set `-addalpha` option to include alpha channel.
@@ -85,7 +109,9 @@ Hint: When using "gdalbuildvrt" to create a virtual raster, don't forget to set 
 - *`gdal_reuse_limit`: u32 (optional)* - How often to reuse an GDAL instances. (default: 100) Set to a lower value if you have problems like memory leaks in GDAL.
 - *`gdal_concurrency_limit`: u8 (optional)* - The number of maximum concurrent GDAL instances to allow. (default: 4) Set to a higher value if you have enough system resources and want to increase throughput.
 
-## `from_merged_vector`
+---
+
+## from_merged_vector
 
 Merges multiple vector tile sources.
 Each resulting tile will contain all the features and properties from all the sources.
@@ -94,7 +120,9 @@ Each resulting tile will contain all the features and properties from all the so
 
 All tile sources must provide vector tiles.
 
-## `from_stacked`
+---
+
+## from_stacked
 
 Overlays multiple tile sources, using the tile from the first source that provides it.
 
@@ -102,7 +130,9 @@ Overlays multiple tile sources, using the tile from the first source that provid
 
 All tile sources must have the same format.
 
-## `from_stacked_raster`
+---
+
+## from_stacked_raster
 
 Overlays multiple raster tile sources on top of each other.
 
@@ -115,7 +145,9 @@ All tile sources must provide raster tiles in the same resolution. The first sou
 - *`format`: TileFormat (optional)* - The tile format to use for the output tiles. Default: format of the first source.
 - *`auto_overscale`: bool (optional)* - Whether to automatically overscale tiles when a source does not provide tiles at the requested zoom level. Default: `false`.
 
-## `from_tile`
+---
+
+## from_tile
 
 Reads a single tile file and uses it as a template for all tile requests.
 
@@ -123,7 +155,9 @@ Reads a single tile file and uses it as a template for all tile requests.
 
 - **`filename`: String (required)** - The filename of the tile. Supported formats: png, jpg/jpeg, webp, avif, pbf/mvt. The format is automatically detected from the file extension.
 
-## `from_tilejson`
+---
+
+## from_tilejson
 
 Reads tiles from a remote tile server via a TileJSON endpoint.
 The TileJSON is fetched from the given URL, and tiles are loaded individually
@@ -139,7 +173,9 @@ using the URL template from the TileJSON `tiles` array.
 
 # TRANSFORM operations
 
-## `dem_quantize`
+---
+
+## dem_quantize
 
 Quantize DEM (elevation) raster tiles by zeroing unnecessary low bits.
 Computes a per-tile quantization mask from two physically meaningful criteria:
@@ -152,7 +188,9 @@ The stricter (smaller step) wins. Single-pass — no min/max scan needed.
 - *`max_gradient_error`: f64 (optional)* - Maximum allowed gradient change in degrees due to quantization. Defaults to 1.0.
 - *`encoding`: String (optional)* - Override auto-detection of DEM encoding. Values: "mapbox", "terrarium".
 
-## `filter`
+---
+
+## filter
 
 Filter tiles by bounding box and/or zoom levels.
 
@@ -162,7 +200,9 @@ Filter tiles by bounding box and/or zoom levels.
 - *`level_min`: u8 (optional)* - minimal zoom level
 - *`level_max`: u8 (optional)* - maximal zoom level
 
-## `meta_update`
+---
+
+## meta_update
 
 Update metadata, see also <https://github.com/mapbox/tilejson-spec/tree/master/3.0.0>
 
@@ -177,7 +217,9 @@ Update metadata, see also <https://github.com/mapbox/tilejson-spec/tree/master/3
 - *`name`: String (optional)* - Name text.
 - *`schema`: TileSchema (optional)* - Tile schema, allowed values: "rgb", "rgba", "dem/mapbox", "dem/terrarium", "dem/versatiles", "openmaptiles", "shortbread@1.0", "other", "unknown"
 
-## `raster_flatten`
+---
+
+## raster_flatten
 
 Flattens (translucent) raster tiles onto a background
 
@@ -185,17 +227,21 @@ Flattens (translucent) raster tiles onto a background
 
 - *`color`: [u8,u8,u8] (optional)* - background color to use for the flattened tiles, in RGB format. Defaults to white.
 
-## `raster_format`
+---
 
-Filter tiles by bounding box and/or zoom levels.
+## raster_format
+
+Convert raster tiles to a different image format and/or adjust quality/speed settings.
 
 ### Parameters
 
 - *`format`: String (optional)* - The desired tile format. Allowed values are: AVIF, JPG, PNG or WEBP. If not specified, the source format will be used.
 - *`quality`: String (optional)* - Quality level for the tile compression (only AVIF, JPG or WEBP), between 0 (worst) and 100 (lossless). To allow different quality levels for different zoom levels, this can also be a comma-separated list like this: "80,70,14:50,15:20", where the first value is the default quality, and the other values specify the quality for the specified zoom level (and higher).
-- *`speed`: u8 (optional)* - Compression speed (only AVIF), between 0 (slowest) and 100 (fastest).
+- *`speed`: u8 (optional)* - Compression speed, between 0 (slowest) and 100 (fastest).
 
-## `raster_levels`
+---
+
+## raster_levels
 
 Adjust brightness, contrast and gamma of raster tiles.
 
@@ -205,7 +251,9 @@ Adjust brightness, contrast and gamma of raster tiles.
 - *`contrast`: f32 (optional)* - Contrast adjustment, between 0 and infinity. Defaults to 1.0 (no change).
 - *`gamma`: f32 (optional)* - Gamma adjustment, between 0 and infinity. Defaults to 1.0 (no change).
 
-## `raster_mask`
+---
+
+## raster_mask
 
 Apply a polygon mask from GeoJSON to raster tiles.
 Pixels outside the polygon become transparent.
@@ -217,7 +265,9 @@ Pixels outside the polygon become transparent.
 - *`blur`: f32 (optional)* - Edge blur distance in meters. Creates a soft transition at the mask edge. Default: 0
 - *`blur_function`: String (optional)* - Blur falloff function: "linear" or "cosine". Default: "linear"
 
-## `raster_overscale`
+---
+
+## raster_overscale
 
 Raster overscale operation - generates tiles beyond the source's native resolution.
 
@@ -227,16 +277,20 @@ Raster overscale operation - generates tiles beyond the source's native resoluti
 - *`level_max`: u8 (optional)* - The maximum zoom level to support. Defaults to 30. Requests above this level will not return tiles.
 - *`enable_climbing`: bool (optional)* - Enable tile climbing when the expected source tile doesn't exist. When true, the operation will search parent tiles at lower zoom levels until it finds an existing tile, then extract and upscale from there. Defaults to false.
 
-## `raster_overview`
+---
 
-Filter tiles by bounding box and/or zoom levels.
+## raster_overview
+
+Generate lower-zoom overview tiles by downscaling from a base zoom level.
 
 ### Parameters
 
 - *`level`: u8 (optional)* - use this zoom level to build the overview. Defaults to the maximum zoom level of the source.
 - *`tile_size`: u32 (optional)* - Size of the tiles in pixels. Defaults to 512.
 
-## `vector_filter_layers`
+---
+
+## vector_filter_layers
 
 Filters vector tile layers based on a comma-separated list of layer names.
 
@@ -245,7 +299,9 @@ Filters vector tile layers based on a comma-separated list of layer names.
 - **`filter`: String (required)** - Comma‑separated list of layer names that should be removed from the tiles, e.g.: filter="pois,ocean".
 - *`invert`: bool (optional)* - If set, inverts the filter logic (i.e., keeps only layers matching the filter).
 
-## `vector_filter_properties`
+---
+
+## vector_filter_properties
 
 Filters properties based on a regular expressions.
 
@@ -254,7 +310,9 @@ Filters properties based on a regular expressions.
 - **`regex`: String (required)** - A regular expression pattern that should match property names to be removed from all features. The property names contain the layer name as a prefix, e.g., `layer_name/property_name`, so an expression like `regex="^layer_name/"` will match all properties of that layer or `regex="/name_.*$"` will match all properties starting with `name_` in all layers.
 - *`invert`: bool (optional)* - If set, inverts the filter logic (i.e., keeps only properties matching the filter).
 
-## `vector_update_properties`
+---
+
+## vector_update_properties
 
 Arguments for the `vector_update_properties` operation.
 This operation joins vector tile features with external tabular data (CSV/TSV)
