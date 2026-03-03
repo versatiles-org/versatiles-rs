@@ -407,6 +407,7 @@ impl TileBBox {
 }
 
 #[cfg(test)]
+#[allow(clippy::too_many_arguments)]
 mod tests {
 	use super::*;
 	use anyhow::Result;
