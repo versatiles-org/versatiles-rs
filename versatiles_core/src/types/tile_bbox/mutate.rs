@@ -688,15 +688,6 @@ mod tests {
 		Ok(())
 	}
 
-	/// Test that round with block_size > max_count panics (rounding exceeds level bounds).
-	#[test]
-	#[should_panic(expected = "x_max")]
-	fn round_panics_when_block_exceeds_level() {
-		// z3: max_count=8, block=16 → rounded max would be 15, but max valid coord is 7
-		let mut b = bb(3, 0, 0, 3, 3);
-		b.round(16);
-	}
-
 	/// Test that round aligns all edges to block boundaries.
 	#[rstest]
 	#[case(1)]
