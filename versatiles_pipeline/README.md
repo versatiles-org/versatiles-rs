@@ -175,6 +175,21 @@ using the URL template from the TileJSON `tiles` array.
 
 ---
 
+## dem_overview
+
+Generate lower-zoom DEM overview tiles by averaging 24-bit elevation values.
+Unlike raster_overview which averages RGB channels independently,
+this operation decodes each pixel to its 24-bit raw elevation value,
+averages the values correctly, and re-encodes back to RGB.
+
+### Parameters
+
+- *`level`: u8 (optional)* - Use this zoom level to build the overview. Defaults to the maximum zoom level of the source.
+- *`tile_size`: u32 (optional)* - Size of the tiles in pixels. Defaults to 512.
+- *`encoding`: String (optional)* - Override auto-detection of DEM encoding. Values: "mapbox", "terrarium".
+
+---
+
 ## dem_quantize
 
 Quantize DEM (elevation) raster tiles by zeroing unnecessary low bits.
