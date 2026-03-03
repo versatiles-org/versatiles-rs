@@ -1,9 +1,10 @@
+use super::encoding::{DemEncoding, raw_unit_meters, resolve_encoding, to_tile_schema};
 use crate::{PipelineFactory, vpl::VPLNode};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileCoord, TileJSON, TileSchema, TileStream};
+use versatiles_core::{TileBBox, TileCoord, TileJSON, TileStream};
 use versatiles_derive::context;
 use versatiles_image::DynamicImage;
 
@@ -24,12 +25,6 @@ struct Args {
 	encoding: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum DemEncoding {
-	Mapbox,
-	Terrarium,
-}
-
 #[derive(Debug)]
 struct Operation {
 	source: Box<dyn TileSource>,
@@ -37,14 +32,6 @@ struct Operation {
 	resolution_ratio: f64,
 	max_gradient_error: f64,
 	encoding: DemEncoding,
-}
-
-/// Returns the number of meters per raw DEM unit for the given encoding.
-fn raw_unit_meters(encoding: DemEncoding) -> f64 {
-	match encoding {
-		DemEncoding::Mapbox => 0.1,            // 1 raw unit = 0.1 m
-		DemEncoding::Terrarium => 1.0 / 256.0, // 1 raw unit = 1/256 m
-	}
 }
 
 /// Compute per-channel bit masks for a tile based on its coordinates and quantization parameters.
@@ -105,27 +92,10 @@ impl Operation {
 		let resolution_ratio = args.resolution_ratio.unwrap_or(0.001);
 		let max_gradient_error = args.max_gradient_error.unwrap_or(1.0);
 
-		let encoding = if let Some(ref enc_str) = args.encoding {
-			match enc_str.as_str() {
-				"mapbox" => DemEncoding::Mapbox,
-				"terrarium" => DemEncoding::Terrarium,
-				other => bail!("Unknown DEM encoding '{other}'; expected 'mapbox' or 'terrarium'"),
-			}
-		} else {
-			match source.tilejson().tile_schema {
-				Some(TileSchema::RasterDEMMapbox) => DemEncoding::Mapbox,
-				Some(TileSchema::RasterDEMTerrarium) => DemEncoding::Terrarium,
-				_ => bail!(
-					"tile_schema is not a DEM encoding (mapbox/terrarium); use the 'encoding' parameter to specify one"
-				),
-			}
-		};
+		let encoding = resolve_encoding(&args.encoding, &source.tilejson().tile_schema)?;
 
 		let mut tilejson = source.tilejson().clone();
-		tilejson.tile_schema = Some(match encoding {
-			DemEncoding::Mapbox => TileSchema::RasterDEMMapbox,
-			DemEncoding::Terrarium => TileSchema::RasterDEMTerrarium,
-		});
+		tilejson.tile_schema = Some(to_tile_schema(encoding));
 
 		Ok(Self {
 			source,
@@ -200,7 +170,7 @@ mod tests {
 	use super::*;
 	use crate::factory::OperationFactoryTrait;
 	use crate::helpers::dummy_image_source::DummyImageSource;
-	use versatiles_core::{TileBBox, TileCoord, TileFormat};
+	use versatiles_core::{TileBBox, TileCoord, TileFormat, TileSchema};
 	use versatiles_image::DynamicImage;
 	use versatiles_image::traits::DynamicImageTraitConvert;
 
