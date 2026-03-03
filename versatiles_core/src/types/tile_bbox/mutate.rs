@@ -617,25 +617,132 @@ mod tests {
 	}
 
 	// ------------------------------ round / rounded ------------------------------
+
+	/// Test that round aligns edges to multiples of block_size.
+	#[rstest]
+	// basic block sizes on a mid-level bbox
+	#[case(6, 10, 10, 17, 21, 1, 10, 10, 17, 21)] // block=1 → no-op
+	#[case(6, 10, 10, 17, 21, 2, 10, 10, 17, 21)] // already aligned to 2
+	#[case(6, 10, 10, 17, 21, 4, 8, 8, 19, 23)] // expands to 4-boundaries
+	#[case(6, 10, 10, 17, 21, 8, 8, 8, 23, 23)] // expands to 8-boundaries
+	#[case(6, 10, 10, 17, 21, 16, 0, 0, 31, 31)] // expands to 16-boundaries
+	#[case(6, 10, 10, 17, 21, 32, 0, 0, 31, 31)] // expands to 32-boundaries (== level extent at z6: 64 tiles, fits)
+	#[case(6, 10, 10, 17, 21, 64, 0, 0, 63, 63)] // expands to 64-boundaries (exceeds level extent → clamps to level)
+	#[case(6, 10, 10, 17, 21, 128, 0, 0, 63, 63)] // expands to 128-boundaries (exceeds level extent → clamps to level)
+	// single-pixel bbox
+	#[case(6, 0, 0, 0, 0, 4, 0, 0, 3, 3)] // single pixel at origin → expands to 4x4
+	#[case(6, 3, 5, 3, 5, 4, 0, 4, 3, 7)] // single pixel mid-range → aligns to 4
+	#[case(6, 63, 63, 63, 63, 4, 60, 60, 63, 63)] // single pixel at max_coord → stays at boundary
+	// already aligned bbox → no change
+	#[case(6, 0, 0, 31, 31, 32, 0, 0, 31, 31)]
+	#[case(6, 32, 0, 63, 31, 32, 32, 0, 63, 31)]
+	// bbox at level edge
+	#[case(6, 48, 48, 63, 63, 16, 48, 48, 63, 63)] // top-right corner, aligned
+	#[case(6, 50, 50, 63, 63, 16, 48, 48, 63, 63)] // top-right corner, not aligned → expands down
+	// block_size equals max_count (whole level in one block)
+	#[case(3, 2, 3, 5, 6, 8, 0, 0, 7, 7)] // z3 has 8 tiles; block=8 → full level
+	#[case(2, 1, 1, 2, 2, 4, 0, 0, 3, 3)] // z2 has 4 tiles; block=4 → full level
+	#[case(1, 0, 0, 1, 1, 2, 0, 0, 1, 1)] // z1 has 2 tiles; block=2 → full level
+	// small levels
+	#[case(0, 0, 0, 0, 0, 1, 0, 0, 0, 0)] // z0: single tile, block=1 → no-op
+	#[case(1, 0, 0, 0, 0, 2, 0, 0, 1, 1)] // z1: single tile, block=2 → full level
+	// asymmetric bbox
+	#[case(6, 0, 10, 3, 21, 4, 0, 8, 3, 23)] // narrow in x, wider in y
+	#[case(6, 10, 0, 21, 3, 4, 8, 0, 23, 3)] // wider in x, narrow in y
+	fn round_edge_cases(
+		#[case] level: u8,
+		#[case] x0: u32,
+		#[case] y0: u32,
+		#[case] x1: u32,
+		#[case] y1: u32,
+		#[case] block: u32,
+		#[case] exp_x0: u32,
+		#[case] exp_y0: u32,
+		#[case] exp_x1: u32,
+		#[case] exp_y1: u32,
+	) -> Result<()> {
+		let mut b = bb(level, x0, y0, x1, y1);
+		b.round(block);
+		assert_eq!(b.as_array()?, [exp_x0, exp_y0, exp_x1, exp_y1]);
+		Ok(())
+	}
+
+	/// Test that rounded() is a pure copy — original unchanged.
+	#[test]
+	fn rounded_is_pure() -> Result<()> {
+		let original = bb(6, 10, 10, 17, 21);
+		let rounded = original.rounded(8);
+		assert_eq!(rounded.as_array()?, [8, 8, 23, 23]);
+		// original is unchanged
+		assert_eq!(original.as_array()?, [10, 10, 17, 21]);
+		Ok(())
+	}
+
+	/// Test that round is a no-op on empty bboxes.
+	#[test]
+	fn round_noop_on_empty() -> Result<()> {
+		let mut b = TileBBox::new_empty(6)?;
+		b.round(4);
+		assert!(b.is_empty());
+		Ok(())
+	}
+
+	/// Test that round with block_size > max_count panics (rounding exceeds level bounds).
+	#[test]
+	#[should_panic(expected = "x_max")]
+	fn round_panics_when_block_exceeds_level() {
+		// z3: max_count=8, block=16 → rounded max would be 15, but max valid coord is 7
+		let mut b = bb(3, 0, 0, 3, 3);
+		b.round(16);
+	}
+
+	/// Test that round aligns all edges to block boundaries.
 	#[rstest]
 	#[case(1)]
 	#[case(2)]
 	#[case(4)]
-	fn round_to_block_sizes(#[case] block: u32) -> Result<()> {
-		let mut b = bb(6, 10, 10, 17, 21); // width=8,height=12
+	#[case(8)]
+	#[case(16)]
+	#[case(32)]
+	fn round_edges_align_to_block(#[case] block: u32) -> Result<()> {
+		// Use z8 (256 tiles) to have room for all block sizes
+		let mut b = bb(8, 10, 10, 77, 99);
 		b.round(block);
-		// Edges should align to multiples of block (inclusive max)
-		assert_eq!(b.x_min()? % block, 0);
-		assert_eq!(b.y_min()? % block, 0);
-		assert_eq!((b.x_max()? + 1) % block, 0);
-		assert_eq!((b.y_max()? + 1) % block, 0);
+		if block > 1 {
+			assert_eq!(b.x_min()? % block, 0, "x_min not aligned to {block}");
+			assert_eq!(b.y_min()? % block, 0, "y_min not aligned to {block}");
+			assert_eq!((b.x_max()? + 1) % block, 0, "x_max+1 not aligned to {block}");
+			assert_eq!((b.y_max()? + 1) % block, 0, "y_max+1 not aligned to {block}");
+		}
+		// round never shrinks
+		assert!(b.x_min()? <= 10);
+		assert!(b.y_min()? <= 10);
+		assert!(b.x_max()? >= 77);
+		assert!(b.y_max()? >= 99);
+		Ok(())
+	}
 
-		let a = bb(6, 3, 5, 3, 5); // 1x1
-		let r = a.rounded(block);
-		assert_eq!(r.x_min()? % block, 0);
-		assert_eq!(r.y_min()? % block, 0);
-		assert_eq!((r.x_max()? + 1) % block, 0);
-		assert_eq!((r.y_max()? + 1) % block, 0);
+	/// Test that round always contains the original bbox.
+	#[rstest]
+	#[case(6, 0, 0, 0, 0, 4)]
+	#[case(6, 15, 15, 15, 15, 16)]
+	#[case(8, 100, 200, 150, 250, 32)]
+	#[case(8, 0, 0, 255, 255, 256)]
+	fn round_always_contains_original(
+		#[case] level: u8,
+		#[case] x0: u32,
+		#[case] y0: u32,
+		#[case] x1: u32,
+		#[case] y1: u32,
+		#[case] block: u32,
+	) -> Result<()> {
+		let original = bb(level, x0, y0, x1, y1);
+		let rounded = original.rounded(block);
+		assert!(rounded.x_min()? <= original.x_min()?);
+		assert!(rounded.y_min()? <= original.y_min()?);
+		assert!(rounded.x_max()? >= original.x_max()?);
+		assert!(rounded.y_max()? >= original.y_max()?);
+		assert_eq!(rounded.level, original.level);
 		Ok(())
 	}
 
