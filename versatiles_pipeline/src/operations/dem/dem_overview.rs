@@ -150,7 +150,7 @@ mod tests {
 	use crate::factory::OperationFactoryTrait;
 	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::{GenericImage, Pixel};
-	use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCoord, TileFormat, TileSchema};
+	use versatiles_core::{GeoBBox, TileBBoxPyramid, TileFormat, TileSchema};
 
 	fn raw_to_rgb(v: u32) -> Rgb<u8> {
 		Rgb([((v >> 16) & 0xFF) as u8, ((v >> 8) & 0xFF) as u8, (v & 0xFF) as u8])
@@ -333,17 +333,30 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_build_succeeds_with_terrarium_encoding() -> Result<()> {
+	async fn test_streaming_generates_lower_zoom_tiles() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
-		let result = factory
+		let op = factory
 			.operation_from_vpl(
-				"from_debug format=png | filter level_min=12 level_max=12 bbox=[-180,-85,180,84] | dem_overview encoding=terrarium",
+				"from_debug format=png | filter level_min=4 level_max=4 bbox=[2,48,3,49] | dem_overview encoding=terrarium",
 			)
 			.await?;
-		// Request at base level (12) — tiles pass through from the source.
-		// Lower levels only work via streaming (cache must be populated first).
-		let tile = result.get_tile(&TileCoord::new(12, 1000, 1000)?).await?;
-		assert!(tile.is_some(), "tile at base level should exist");
+
+		// Stream tiles level-by-level from highest to lowest (as the traversal does).
+		// This populates the cache at each level so lower levels can build from it.
+		let traversal = op.metadata().traversal.clone();
+		let bboxes = traversal.traverse_pyramid(&op.metadata().bbox_pyramid)?;
+
+		let mut tiles_at_2 = Vec::new();
+		for bbox in &bboxes {
+			let tiles: Vec<_> = op.get_tile_stream(*bbox).await?.to_vec().await;
+			for (coord, tile) in &tiles {
+				if coord.level == 2 {
+					tiles_at_2.push((coord.clone(), tile.clone()));
+				}
+			}
+		}
+
+		assert!(!tiles_at_2.is_empty(), "overview should generate tiles at level 2");
 		Ok(())
 	}
 
