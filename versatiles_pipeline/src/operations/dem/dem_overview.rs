@@ -349,9 +349,9 @@ mod tests {
 		let mut tiles_at_2 = Vec::new();
 		for bbox in &bboxes {
 			let tiles: Vec<_> = op.get_tile_stream(*bbox).await?.to_vec().await;
-			for (coord, tile) in &tiles {
+			for (coord, tile) in tiles {
 				if coord.level == 2 {
-					tiles_at_2.push((coord.clone(), tile.clone()));
+					tiles_at_2.push((coord, tile));
 				}
 			}
 		}
