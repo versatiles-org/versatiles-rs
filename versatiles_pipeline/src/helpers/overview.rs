@@ -170,7 +170,7 @@ impl OverviewCore {
 
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
 	pub async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::debug!("get_tile_stream {bbox:?}");
+		log::trace!("overview::get_tile_stream {bbox:?}");
 
 		if bbox.level > self.level_base {
 			return self.source.get_tile_stream(bbox).await;

@@ -131,7 +131,7 @@ impl TileSource for Operation {
 	/// Stream merged vector tiles for every coordinate in `bbox`.
 	#[context("Failed to get merged tile stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::debug!("get_tile_stream {bbox:?}");
+		log::trace!("from_merged_vector::get_tile_stream {bbox:?}");
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 		let sources = Arc::clone(&self.sources);
 		let format = self.metadata.tile_format;

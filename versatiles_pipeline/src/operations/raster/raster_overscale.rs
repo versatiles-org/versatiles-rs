@@ -274,7 +274,7 @@ impl TileSource for Operation {
 
 	#[context("Failed to get stream for bbox: {:?}", bbox_dst)]
 	async fn get_tile_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::debug!("get_tile_stream {bbox_dst:?}");
+		log::trace!("raster_overscale::get_tile_stream {bbox_dst:?}");
 
 		if !self.metadata.bbox_pyramid.overlaps_bbox(&bbox_dst) {
 			log::trace!("get_tile_stream outside bbox_pyramid");

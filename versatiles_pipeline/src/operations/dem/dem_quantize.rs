@@ -123,7 +123,7 @@ impl TileSource for Operation {
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::debug!("get_tile_stream {bbox:?}");
+		log::trace!("dem_quantize::get_tile_stream {bbox:?}");
 
 		let resolution_ratio = self.resolution_ratio;
 		let max_gradient_error = self.max_gradient_error;

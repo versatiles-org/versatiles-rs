@@ -370,7 +370,7 @@ impl TileSource for MBTilesReader {
 	/// Returns an error if the query fails.
 	#[context("streaming tiles for bbox {:?}", bbox)]
 	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::debug!("get_tile_stream {bbox:?}");
+		log::trace!("mbtiles::get_tile_stream {bbox:?}");
 
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());

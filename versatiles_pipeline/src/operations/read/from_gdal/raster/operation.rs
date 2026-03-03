@@ -166,7 +166,7 @@ impl TileSource for Operation {
 	/// Stream decoded raster images for all tiles within the bounding box.
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::debug!("get_tile_stream {bbox:?}");
+		log::trace!("from_gdal_raster::get_tile_stream {bbox:?}");
 
 		let count = 8192u32.div_euclid(self.tile_size).max(1);
 

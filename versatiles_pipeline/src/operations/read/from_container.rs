@@ -69,7 +69,7 @@ impl TileSource for Operation {
 	/// `TileSource::get_tile_stream`.
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::debug!("get_tile_stream {bbox:?}");
+		log::trace!("from_container::get_tile_stream {bbox:?}");
 		self.source.get_tile_stream(bbox).await
 	}
 }

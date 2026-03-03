@@ -268,6 +268,7 @@ impl TileSource for DirectoryReader {
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("directory::get_tile_stream {bbox:?}");
 		let tile_map = Arc::clone(&self.tile_map);
 		let tile_compression = self.metadata.tile_compression;
 		let tile_format = self.metadata.tile_format;

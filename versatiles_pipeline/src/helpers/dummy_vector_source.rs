@@ -112,6 +112,7 @@ impl TileSource for DummyVectorSource {
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("dummy_vector_source::get_tile_stream {bbox:?}");
 		let data = Arc::clone(&self.data);
 		let bbox_pyramid = self.metadata.bbox_pyramid.clone();
 

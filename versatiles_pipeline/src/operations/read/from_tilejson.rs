@@ -253,7 +253,7 @@ impl TileSource for Operation {
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::debug!("get_tile_stream {bbox:?}");
+		log::trace!("from_tilejson::get_tile_stream {bbox:?}");
 		let client = self.client.clone();
 		let template = self.tile_url_template.clone();
 		let tile_format = self.tile_format;

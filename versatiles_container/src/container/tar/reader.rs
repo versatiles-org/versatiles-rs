@@ -273,6 +273,7 @@ impl TileSource for TarTilesReader {
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("tar::get_tile_stream {bbox:?}");
 		let reader = Arc::clone(&self.reader);
 		let tile_map = Arc::clone(&self.tile_map);
 		let tile_compression = self.metadata.tile_compression;

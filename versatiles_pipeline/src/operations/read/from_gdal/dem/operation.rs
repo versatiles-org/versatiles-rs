@@ -127,6 +127,7 @@ impl TileSource for Operation {
 
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("from_gdal_dem::get_tile_stream {bbox:?}");
 		let count = 8192u32.div_euclid(self.tile_size).max(1);
 
 		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);

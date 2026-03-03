@@ -263,6 +263,7 @@ mod tests {
 		}
 
 		async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+			log::trace!("test_source::get_tile_stream {bbox:?}");
 			let tile_compression = self.metadata.tile_compression;
 			let tile_format = self.metadata.tile_format;
 			Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {

@@ -411,6 +411,7 @@ impl TileSource for PMTilesReader {
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("pmtiles::get_tile_stream {bbox:?}");
 		let chunks = self.get_chunks(bbox).await?;
 		Ok(stream_from_chunks(
 			chunks,

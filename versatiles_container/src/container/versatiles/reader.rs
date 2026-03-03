@@ -378,7 +378,7 @@ impl TileSource for VersaTilesReader {
 
 	#[context("streaming tiles for bbox {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::debug!("get_tile_stream {bbox:?}");
+		log::trace!("versatiles::get_tile_stream {bbox:?}");
 		let chunks = self.get_chunks(bbox).await?;
 		Ok(stream_from_chunks(
 			chunks,

@@ -148,6 +148,7 @@ impl TileSource for MockReader {
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("mock::get_tile_stream {bbox:?}");
 		let format = self.metadata.tile_format;
 		let compression = self.metadata.tile_compression;
 		let bbox_pyramid = self.metadata.bbox_pyramid.clone();
