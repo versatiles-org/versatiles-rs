@@ -13,6 +13,7 @@
 
 use crate::{MAX_ZOOM_LEVEL, TileBBox, TileBBoxPyramid, TileCoord, validate_zoom_level};
 use anyhow::{Result, ensure};
+use std::ops::Div;
 use versatiles_derive::context;
 
 impl TileBBox {
@@ -369,16 +370,20 @@ impl TileBBox {
 	}
 
 	/// Expand the bbox to align its edges to multiples of `block_size` (inclusive max).
+	///
+	/// The result is clamped to the level's valid coordinate range, so rounding
+	/// with a `block_size` larger than `max_count` will not exceed the level bounds.
 	pub fn round(&mut self, block_size: u32) {
 		if self.is_empty() || block_size <= 1 {
 			return; // No-op for empty bboxes
 		}
+		let max_coord = self.max_count() - 1;
 		self
 			.set_min_and_max(
-				(self.x_min().unwrap() / block_size) * block_size,
-				(self.y_min().unwrap() / block_size) * block_size,
-				(self.x_max().unwrap() + 1).div_ceil(block_size) * block_size - 1,
-				(self.y_max().unwrap() + 1).div_ceil(block_size) * block_size - 1,
+				(self.x_min().unwrap().div(block_size)) * block_size,
+				(self.y_min().unwrap().div(block_size)) * block_size,
+				((self.x_max().unwrap() + 1).div_ceil(block_size) * block_size - 1).min(max_coord),
+				((self.y_max().unwrap() + 1).div_ceil(block_size) * block_size - 1).min(max_coord),
 			)
 			.unwrap();
 	}
