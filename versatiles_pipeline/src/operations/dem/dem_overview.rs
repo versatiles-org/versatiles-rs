@@ -150,7 +150,7 @@ mod tests {
 	use crate::factory::OperationFactoryTrait;
 	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::{GenericImage, Pixel};
-	use versatiles_core::{GeoBBox, TileBBoxPyramid, TileFormat, TileSchema};
+	use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCoord, TileFormat, TileSchema};
 
 	fn raw_to_rgb(v: u32) -> Rgb<u8> {
 		Rgb([((v >> 16) & 0xFF) as u8, ((v >> 8) & 0xFF) as u8, (v & 0xFF) as u8])
@@ -330,6 +330,21 @@ mod tests {
 			.operation_from_vpl("from_debug format=png | dem_overview encoding=invalid")
 			.await;
 		assert!(result.is_err());
+	}
+
+	#[tokio::test]
+	async fn test_build_succeeds_with_terrarium_encoding() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let result = factory
+			.operation_from_vpl(
+				"from_debug format=png | filter level_min=12 level_max=12 bbox=[-180,-85,180,84] | dem_overview encoding=terrarium",
+			)
+			.await?;
+		// Request at base level (12) — tiles pass through from the source.
+		// Lower levels only work via streaming (cache must be populated first).
+		let tile = result.get_tile(&TileCoord::new(12, 1000, 1000)?).await?;
+		assert!(tile.is_some(), "tile at base level should exist");
+		Ok(())
 	}
 
 	#[test]
