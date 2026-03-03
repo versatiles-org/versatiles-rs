@@ -10,7 +10,7 @@ use versatiles_image::traits::DynamicImageTraitInfo;
 static BLOCK_TILE_COUNT: u32 = 32;
 
 /// Scaling function type used to downscale tiles by a factor of 2.
-pub type ScaleDownFn = Arc<dyn Fn(DynamicImage) -> Result<DynamicImage> + Send + Sync>;
+pub type ScaleDownFn = Arc<dyn Fn(&DynamicImage) -> Result<DynamicImage> + Send + Sync>;
 
 /// Shared overview core that generates lower-zoom tiles by downscaling from a base zoom level.
 ///
@@ -33,7 +33,7 @@ impl OverviewCore {
 	/// - `level`: zoom level to build the overview from (defaults to source max zoom)
 	/// - `tile_size`: pixel size of tiles (defaults to 512)
 	/// - `scale_fn`: function that downscales an image by factor 2
-	pub async fn new(
+	pub fn new(
 		source: Box<dyn TileSource>,
 		level: Option<u8>,
 		tile_size: Option<u32>,
@@ -93,7 +93,7 @@ impl OverviewCore {
 					if let Some(image) = item {
 						assert_eq!(image.width(), full_size);
 						assert_eq!(image.height(), full_size);
-						(coord, Some(scale_fn(image).unwrap()))
+						(coord, Some(scale_fn(&image).unwrap()))
 					} else {
 						(coord, None)
 					}

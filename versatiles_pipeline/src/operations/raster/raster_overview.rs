@@ -21,6 +21,7 @@ struct Operation {
 }
 
 impl Operation {
+	#[allow(clippy::unused_async)] // must be async for the factory macro
 	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + TileSource,
@@ -31,8 +32,7 @@ impl Operation {
 			args.level,
 			args.tile_size,
 			Arc::new(|img| img.get_scaled_down(2)),
-		)
-		.await?;
+		)?;
 
 		Ok(Self { core })
 	}

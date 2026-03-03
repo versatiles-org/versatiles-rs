@@ -11,6 +11,7 @@ pub fn get_transform_operation_factories() -> Vec<Box<dyn TransformOperationFact
 	vec![
 		Box::new(general::filter::Factory {}),
 		Box::new(general::meta_update::Factory {}),
+		Box::new(dem::dem_overview::Factory {}),
 		Box::new(dem::dem_quantize::Factory {}),
 		Box::new(raster::raster_flatten::Factory {}),
 		Box::new(raster::raster_format::Factory {}),

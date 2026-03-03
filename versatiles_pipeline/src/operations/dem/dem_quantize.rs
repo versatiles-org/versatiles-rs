@@ -92,7 +92,7 @@ impl Operation {
 		let resolution_ratio = args.resolution_ratio.unwrap_or(0.001);
 		let max_gradient_error = args.max_gradient_error.unwrap_or(1.0);
 
-		let encoding = resolve_encoding(&args.encoding, &source.tilejson().tile_schema)?;
+		let encoding = resolve_encoding(args.encoding.as_ref(), source.tilejson().tile_schema.as_ref())?;
 
 		let mut tilejson = source.tilejson().clone();
 		tilejson.tile_schema = Some(to_tile_schema(encoding));

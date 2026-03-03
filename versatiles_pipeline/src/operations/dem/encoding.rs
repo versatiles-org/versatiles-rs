@@ -24,7 +24,7 @@ pub fn raw_unit_meters(encoding: DemEncoding) -> f64 {
 }
 
 /// Detect `DemEncoding` from a `TileSchema`.
-pub fn from_tile_schema(schema: &Option<TileSchema>) -> Result<DemEncoding> {
+pub fn from_tile_schema(schema: Option<&TileSchema>) -> Result<DemEncoding> {
 	match schema {
 		Some(TileSchema::RasterDEMMapbox) => Ok(DemEncoding::Mapbox),
 		Some(TileSchema::RasterDEMTerrarium) => Ok(DemEncoding::Terrarium),
@@ -53,7 +53,7 @@ pub fn parse_encoding(s: &str) -> Result<DemEncoding> {
 ///
 /// If `encoding_str` is provided, it is parsed directly.
 /// Otherwise, the encoding is auto-detected from the tile schema.
-pub fn resolve_encoding(encoding_str: &Option<String>, schema: &Option<TileSchema>) -> Result<DemEncoding> {
+pub fn resolve_encoding(encoding_str: Option<&String>, schema: Option<&TileSchema>) -> Result<DemEncoding> {
 	if let Some(enc_str) = encoding_str {
 		parse_encoding(enc_str)
 	} else {
@@ -74,15 +74,15 @@ mod tests {
 	#[test]
 	fn test_from_tile_schema() {
 		assert_eq!(
-			from_tile_schema(&Some(TileSchema::RasterDEMMapbox)).unwrap(),
+			from_tile_schema(Some(&TileSchema::RasterDEMMapbox)).unwrap(),
 			DemEncoding::Mapbox
 		);
 		assert_eq!(
-			from_tile_schema(&Some(TileSchema::RasterDEMTerrarium)).unwrap(),
+			from_tile_schema(Some(&TileSchema::RasterDEMTerrarium)).unwrap(),
 			DemEncoding::Terrarium
 		);
-		assert!(from_tile_schema(&None).is_err());
-		assert!(from_tile_schema(&Some(TileSchema::RasterRGB)).is_err());
+		assert!(from_tile_schema(None).is_err());
+		assert!(from_tile_schema(Some(&TileSchema::RasterRGB)).is_err());
 	}
 
 	#[test]
@@ -100,19 +100,23 @@ mod tests {
 
 	#[test]
 	fn test_resolve_encoding_with_override() {
-		let result = resolve_encoding(&Some("terrarium".to_string()), &None);
+		let enc = "terrarium".to_string();
+		let result = resolve_encoding(Some(&enc), None);
 		assert_eq!(result.unwrap(), DemEncoding::Terrarium);
 	}
 
 	#[test]
 	fn test_resolve_encoding_from_schema() {
-		let result = resolve_encoding(&None, &Some(TileSchema::RasterDEMMapbox));
+		let schema = TileSchema::RasterDEMMapbox;
+		let result = resolve_encoding(None, Some(&schema));
 		assert_eq!(result.unwrap(), DemEncoding::Mapbox);
 	}
 
 	#[test]
 	fn test_resolve_encoding_override_takes_priority() {
-		let result = resolve_encoding(&Some("terrarium".to_string()), &Some(TileSchema::RasterDEMMapbox));
+		let enc = "terrarium".to_string();
+		let schema = TileSchema::RasterDEMMapbox;
+		let result = resolve_encoding(Some(&enc), Some(&schema));
 		assert_eq!(result.unwrap(), DemEncoding::Terrarium);
 	}
 }
