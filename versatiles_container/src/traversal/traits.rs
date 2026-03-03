@@ -83,14 +83,9 @@ pub trait TileSourceTraverseExt: TileSource {
 								let tracker = tracker.clone();
 								let c = cache.clone();
 								async move {
-									let vec = self
-										.get_tile_stream(bbox)
-										.await?
-										.inspect(move |_, _| tracker.inc(1))
-										.to_vec()
-										.await;
+									let tile_stream = self.get_tile_stream(bbox).await?.inspect(move |_, _| tracker.inc(1));
 
-									c.append(index, vec)?;
+									c.append_stream(index, tile_stream.inner).await?;
 
 									Ok::<_, anyhow::Error>(())
 								}

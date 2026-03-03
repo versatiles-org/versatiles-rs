@@ -12,6 +12,7 @@
 use crate::cache::{cache_type::CacheType, traits::CacheValue};
 use anyhow::Result;
 use dashmap::DashMap;
+use futures::{Stream, StreamExt};
 use std::{
 	fmt::Debug,
 	fs::{File, OpenOptions, create_dir_all, remove_dir_all, remove_file, write},
@@ -70,6 +71,38 @@ impl<V: CacheValue> TraversalCache<V> {
 					OpenOptions::new().append(true).open(&file_path)?.write_all(&buffer)?;
 				} else {
 					write(&file_path, buffer)?;
+				}
+				Ok(())
+			}
+		}
+	}
+
+	/// Append values from a stream to the cache entry at `index`.
+	///
+	/// Unlike [`append`](Self::append), this consumes a stream directly, avoiding
+	/// intermediate `Vec` allocation for the disk variant.
+	#[context("Failed to append stream to traversal cache at index {}", index)]
+	pub async fn append_stream<S>(&self, index: usize, stream: S) -> Result<()>
+	where
+		S: Stream<Item = V> + Send + Unpin,
+	{
+		match self {
+			Self::Memory(map) => {
+				let values: Vec<V> = stream.collect().await;
+				map.entry(index).or_default().extend(values);
+				Ok(())
+			}
+			Self::Disk { path, .. } => {
+				let file_path = path.join(format!("{index}.bin"));
+				let mut buf = Vec::new();
+				futures::pin_mut!(stream);
+				while let Some(value) = stream.next().await {
+					value.write_to_cache(&mut buf)?;
+				}
+				if file_path.exists() {
+					OpenOptions::new().append(true).open(&file_path)?.write_all(&buf)?;
+				} else {
+					write(&file_path, &buf)?;
 				}
 				Ok(())
 			}
@@ -207,6 +240,38 @@ mod tests {
 		cache.append(0, vec![vec![128]])?;
 
 		assert_eq!(cache.take(0)?, Some(vec![vec![0, 1, 2], vec![255, 254], vec![128]]));
+
+		Ok(())
+	}
+
+	#[rstest]
+	#[case::mem("mem")]
+	#[case::disk("disk")]
+	#[tokio::test]
+	async fn test_append_stream(#[case] case: &str) -> Result<()> {
+		let cache_type = match case {
+			"mem" => CacheType::InMemory,
+			"disk" => CacheType::Disk(TempDir::new()?.path().to_path_buf()),
+			_ => panic!("unknown case"),
+		};
+		let cache = TraversalCache::<String>::new(&cache_type);
+
+		// Append via stream
+		let stream = futures::stream::iter(vec!["a".to_string(), "b".to_string()]);
+		cache.append_stream(0, stream).await?;
+
+		// Append more via stream to same index
+		let stream2 = futures::stream::iter(vec!["c".to_string()]);
+		cache.append_stream(0, stream2).await?;
+
+		// Take preserves order across stream appends
+		assert_eq!(
+			cache.take(0)?,
+			Some(vec!["a".to_string(), "b".to_string(), "c".to_string()])
+		);
+
+		// After take, index is empty
+		assert_eq!(cache.take(0)?, None);
 
 		Ok(())
 	}
