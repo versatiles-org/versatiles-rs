@@ -214,7 +214,7 @@ mod tests {
 
 		// Channel-wise average would give: R=(1+0+1+0)/4=0, G=(0+254+0+254)/4=127, B=(0+192+0+192)/4=96
 		// → raw = 0*65536 + 127*256 + 96 = 32608 (WRONG!)
-		let channel_avg_raw = (0u32 << 16) | (127 << 8) | 96;
+		let channel_avg_raw = 32608;
 		assert_ne!(
 			dem_raw, channel_avg_raw,
 			"DEM averaging should differ from channel-wise averaging"
