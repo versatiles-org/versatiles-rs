@@ -165,8 +165,9 @@ impl<V: CacheValue> TraversalCache<V> {
 
 	/// Take all values at `index` as a stream, removing them from the cache.
 	///
-	/// Files are read concurrently on blocking threads, with up to 8 files
-	/// in flight at a time.
+	/// Files are read concurrently on blocking threads. Values are streamed
+	/// through a bounded channel so only a small number of values are in
+	/// memory at a time, regardless of total data size.
 	///
 	/// Returns `Ok(None)` if no entry exists at the index.
 	#[context("Failed to take stream from traversal cache at index {}", index)]
@@ -181,18 +182,28 @@ impl<V: CacheValue> TraversalCache<V> {
 					return Ok(None);
 				};
 				let dir_path = path.join(index.to_string());
-				let stream = futures::stream::iter(files)
-					.map(|file_path| {
-						tokio::task::spawn_blocking(move || -> Vec<V> {
-							Self::iter_values_from_file(&file_path)
-								.into_iter()
-								.flatten()
-								.filter_map(Result::ok)
-								.collect()
-						})
-					})
-					.buffer_unordered(8)
-					.flat_map(|result| futures::stream::iter(result.unwrap_or_default()));
+				let (tx, rx) = tokio::sync::mpsc::channel::<V>(64);
+				for file_path in files {
+					let tx = tx.clone();
+					tokio::task::spawn_blocking(move || {
+						if let Ok(iter) = Self::iter_values_from_file(&file_path) {
+							for result in iter {
+								match result {
+									Ok(value) => {
+										if tx.blocking_send(value).is_err() {
+											break;
+										}
+									}
+									Err(_) => break,
+								}
+							}
+						}
+					});
+				}
+				drop(tx);
+				let stream = futures::stream::unfold(rx, |mut rx| async move {
+					rx.recv().await.map(|v| (v, rx))
+				});
 				let cleanup = futures::stream::once(async move {
 					let _ = remove_dir_all(dir_path);
 				})
@@ -386,9 +397,10 @@ mod tests {
 		cache.append(0, vec!["a".to_string(), "b".to_string()])?;
 		cache.append(0, vec!["c".to_string()])?;
 
-		// take_stream and collect
+		// take_stream and collect (order across files is non-deterministic)
 		let stream = cache.take_stream(0)?.unwrap();
-		let collected: Vec<String> = stream.collect().await;
+		let mut collected: Vec<String> = stream.collect().await;
+		collected.sort();
 		assert_eq!(collected, vec!["a".to_string(), "b".to_string(), "c".to_string()]);
 
 		// After take_stream, index is empty
