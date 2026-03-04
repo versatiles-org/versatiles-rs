@@ -30,8 +30,8 @@ mod tools;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use log::LevelFilter;
-use std::io::Write;
-use versatiles::runtime::create_runtime;
+use std::{io::Write, path::PathBuf};
+use versatiles::runtime::{create_runtime, create_runtime_builder};
 use versatiles_container::TilesRuntime;
 
 /// Command-line interface for VersaTiles
@@ -74,6 +74,15 @@ struct Cli {
 		display_order = 100,
 	)]
 	verbose: u8,
+
+	#[arg(
+		long,
+		value_name = "DIR",
+		global = true,
+		display_order = 99,
+		help = "Directory for temporary cache files (overrides VERSATILES_CACHE_DIR)"
+	)]
+	cache_dir: Option<PathBuf>,
 }
 
 /// Define subcommands for the command-line interface
@@ -130,7 +139,12 @@ fn main() -> Result<()> {
 		})
 		.init();
 
-	let runtime = create_runtime();
+	let runtime = if let Some(cache_dir) = &cli.cache_dir {
+		create_runtime_builder().with_disk_cache(cache_dir).build()
+	} else {
+		create_runtime()
+	};
+
 	run(&cli, &runtime)
 }
 
