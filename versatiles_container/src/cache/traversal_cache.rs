@@ -15,10 +15,11 @@ use dashmap::DashMap;
 use futures::{Stream, StreamExt, stream::BoxStream};
 use std::{
 	fmt::Debug,
-	fs::{File, OpenOptions, create_dir_all, remove_dir_all, remove_file},
+	fs::{File, create_dir_all, read_dir, remove_dir_all},
 	io::{BufWriter, Cursor, Read, Write},
 	marker::PhantomData,
-	path::PathBuf,
+	path::{Path, PathBuf},
+	sync::atomic::{AtomicUsize, Ordering},
 };
 use uuid::Uuid;
 use versatiles_derive::context;
@@ -31,7 +32,15 @@ pub enum TraversalCache<V: CacheValue> {
 	/// In-memory cache using a concurrent hash map.
 	Memory(DashMap<usize, Vec<V>>),
 	/// Disk-backed cache storing values in binary files.
-	Disk { path: PathBuf, _marker: PhantomData<V> },
+	///
+	/// Each index gets its own subdirectory. Each `append`/`append_stream` call
+	/// writes to a unique file within that subdirectory, so concurrent writers
+	/// never touch the same file.
+	Disk {
+		path: PathBuf,
+		next_writer_id: AtomicUsize,
+		_marker: PhantomData<V>,
+	},
 }
 
 impl<V: CacheValue> TraversalCache<V> {
@@ -48,6 +57,7 @@ impl<V: CacheValue> TraversalCache<V> {
 				create_dir_all(&path).ok();
 				Self::Disk {
 					path,
+					next_writer_id: AtomicUsize::new(0),
 					_marker: PhantomData,
 				}
 			}
@@ -64,9 +74,14 @@ impl<V: CacheValue> TraversalCache<V> {
 				map.entry(index).or_default().extend(values);
 				Ok(())
 			}
-			Self::Disk { path, .. } => {
-				let file_path = path.join(format!("{index}.bin"));
-				let file = OpenOptions::new().create(true).append(true).open(&file_path)?;
+			Self::Disk {
+				path, next_writer_id, ..
+			} => {
+				let writer_id = next_writer_id.fetch_add(1, Ordering::Relaxed);
+				let dir_path = path.join(index.to_string());
+				create_dir_all(&dir_path)?;
+				let file_path = dir_path.join(format!("{writer_id:012}.bin"));
+				let file = File::create(&file_path)?;
 				let mut writer = BufWriter::new(file);
 				for value in &values {
 					value.write_to_cache(&mut writer)?;
@@ -79,8 +94,8 @@ impl<V: CacheValue> TraversalCache<V> {
 
 	/// Append values from a stream to the cache entry at `index`.
 	///
-	/// Unlike [`append`](Self::append), this consumes a stream directly, avoiding
-	/// intermediate `Vec` allocation for the disk variant.
+	/// Each call writes to its own file, so concurrent callers appending to the
+	/// same index will never interleave their data.
 	#[context("Failed to append stream to traversal cache at index {}", index)]
 	pub async fn append_stream<S>(&self, index: usize, stream: S) -> Result<()>
 	where
@@ -92,9 +107,14 @@ impl<V: CacheValue> TraversalCache<V> {
 				map.entry(index).or_default().extend(values);
 				Ok(())
 			}
-			Self::Disk { path, .. } => {
-				let file_path = path.join(format!("{index}.bin"));
-				let file = OpenOptions::new().create(true).append(true).open(&file_path)?;
+			Self::Disk {
+				path, next_writer_id, ..
+			} => {
+				let writer_id = next_writer_id.fetch_add(1, Ordering::Relaxed);
+				let dir_path = path.join(index.to_string());
+				create_dir_all(&dir_path)?;
+				let file_path = dir_path.join(format!("{writer_id:012}.bin"));
+				let file = File::create(&file_path)?;
 				let mut writer = BufWriter::new(file);
 				futures::pin_mut!(stream);
 				while let Some(value) = stream.next().await {
@@ -114,15 +134,16 @@ impl<V: CacheValue> TraversalCache<V> {
 		match self {
 			Self::Memory(map) => Ok(map.remove(&index).map(|(_, v)| v)),
 			Self::Disk { path, .. } => {
-				let file_path = path.join(format!("{index}.bin"));
-				if file_path.exists() {
-					let mut file = File::open(&file_path)?;
-					let mut data = Vec::new();
-					file.read_to_end(&mut data)?;
-					remove_file(&file_path)?;
-					Ok(Some(Self::buffer_to_values(&data)?))
-				} else {
+				let dir_path = path.join(index.to_string());
+				if !dir_path.exists() {
+					return Ok(None);
+				}
+				let data = Self::read_index_dir(&dir_path)?;
+				remove_dir_all(&dir_path)?;
+				if data.is_empty() {
 					Ok(None)
+				} else {
+					Ok(Some(Self::buffer_to_values(&data)?))
 				}
 			}
 		}
@@ -139,27 +160,35 @@ impl<V: CacheValue> TraversalCache<V> {
 		match self {
 			Self::Memory(map) => Ok(map.remove(&index).map(|(_, v)| futures::stream::iter(v).boxed())),
 			Self::Disk { path, .. } => {
-				let file_path = path.join(format!("{index}.bin"));
-				if file_path.exists() {
-					let mut file = File::open(&file_path)?;
-					let mut data = Vec::new();
-					file.read_to_end(&mut data)?;
-					remove_file(&file_path)?;
-					let len = data.len() as u64;
-					let mut cursor = Cursor::new(data);
-					let iter = std::iter::from_fn(move || {
-						if cursor.position() >= len {
-							None
-						} else {
-							Some(V::read_from_cache(&mut cursor).expect("failed to deserialize from traversal cache"))
-						}
-					});
-					Ok(Some(futures::stream::iter(iter).boxed()))
-				} else {
+				let dir_path = path.join(index.to_string());
+				if !dir_path.exists() {
+					return Ok(None);
+				}
+				let data = Self::read_index_dir(&dir_path)?;
+				remove_dir_all(&dir_path)?;
+				if data.is_empty() {
 					Ok(None)
+				} else {
+					let values = Self::buffer_to_values(&data)?;
+					Ok(Some(futures::stream::iter(values).boxed()))
 				}
 			}
 		}
+	}
+
+	/// Read all cache files for an index directory, sorted by filename to
+	/// preserve insertion order.
+	fn read_index_dir(dir_path: &Path) -> Result<Vec<u8>> {
+		let mut entries: Vec<_> = read_dir(dir_path)?
+			.filter_map(std::result::Result::ok)
+			.filter(|e| e.path().extension().is_some_and(|ext| ext == "bin"))
+			.collect();
+		entries.sort_by_key(std::fs::DirEntry::file_name);
+		let mut data = Vec::new();
+		for entry in entries {
+			File::open(entry.path())?.read_to_end(&mut data)?;
+		}
+		Ok(data)
 	}
 
 	/// Deserialize values from a binary buffer.
