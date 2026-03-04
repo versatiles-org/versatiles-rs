@@ -18,7 +18,7 @@ use std::{
 	fs::{File, create_dir_all, remove_dir_all},
 	io::{BufWriter, Cursor, Read, Write},
 	marker::PhantomData,
-	path::PathBuf,
+	path::{Path, PathBuf},
 	sync::atomic::{AtomicUsize, Ordering},
 };
 use uuid::Uuid;
@@ -82,12 +82,7 @@ impl<V: CacheValue> TraversalCache<V> {
 				file_index,
 				..
 			} => {
-				let writer_id = next_writer_id.fetch_add(1, Ordering::Relaxed);
-				let dir_path = path.join(index.to_string());
-				create_dir_all(&dir_path)?;
-				let file_path = dir_path.join(format!("{writer_id:012}.bin"));
-				let file = File::create(&file_path)?;
-				let mut writer = BufWriter::new(file);
+				let (mut writer, file_path) = Self::create_cache_file(path, index, next_writer_id)?;
 				for value in &values {
 					value.write_to_cache(&mut writer)?;
 				}
@@ -119,12 +114,7 @@ impl<V: CacheValue> TraversalCache<V> {
 				file_index,
 				..
 			} => {
-				let writer_id = next_writer_id.fetch_add(1, Ordering::Relaxed);
-				let dir_path = path.join(index.to_string());
-				create_dir_all(&dir_path)?;
-				let file_path = dir_path.join(format!("{writer_id:012}.bin"));
-				let file = File::create(&file_path)?;
-				let mut writer = BufWriter::new(file);
+				let (mut writer, file_path) = Self::create_cache_file(path, index, next_writer_id)?;
 				futures::pin_mut!(stream);
 				while let Some(value) = stream.next().await {
 					value.write_to_cache(&mut writer)?;
@@ -144,9 +134,8 @@ impl<V: CacheValue> TraversalCache<V> {
 		match self {
 			Self::Memory(map) => Ok(map.remove(&index).map(|(_, v)| v)),
 			Self::Disk { path, file_index, .. } => {
-				let files = match file_index.remove(&index) {
-					Some((_, files)) if !files.is_empty() => files,
-					_ => return Ok(None),
+				let Some(files) = Self::take_index_files(file_index, index) else {
+					return Ok(None);
 				};
 				// Read and deserialize one file at a time to avoid loading all
 				// raw bytes into memory simultaneously.
@@ -176,9 +165,8 @@ impl<V: CacheValue> TraversalCache<V> {
 		match self {
 			Self::Memory(map) => Ok(map.remove(&index).map(|(_, v)| futures::stream::iter(v).boxed())),
 			Self::Disk { path, file_index, .. } => {
-				let files = match file_index.remove(&index) {
-					Some((_, files)) if !files.is_empty() => files,
-					_ => return Ok(None),
+				let Some(files) = Self::take_index_files(file_index, index) else {
+					return Ok(None);
 				};
 				let dir_path = path.join(index.to_string());
 				let mut file_iter = files.into_iter();
@@ -204,6 +192,36 @@ impl<V: CacheValue> TraversalCache<V> {
 				.flatten();
 				Ok(Some(futures::stream::iter(iter.chain(cleanup)).boxed()))
 			}
+		}
+	}
+
+	/// Create a new uniquely-named cache file for writing at `index`.
+	///
+	/// Returns a buffered writer and the file path (for later registration
+	/// in `file_index`).
+	fn create_cache_file(
+		path: &Path,
+		index: usize,
+		next_writer_id: &AtomicUsize,
+	) -> Result<(BufWriter<File>, PathBuf)> {
+		let writer_id = next_writer_id.fetch_add(1, Ordering::Relaxed);
+		let dir_path = path.join(index.to_string());
+		create_dir_all(&dir_path)?;
+		let file_path = dir_path.join(format!("{writer_id:012}.bin"));
+		let file = File::create(&file_path)?;
+		Ok((BufWriter::new(file), file_path))
+	}
+
+	/// Remove and return the tracked file list for the given index.
+	///
+	/// Returns `None` if no files were registered for this index.
+	fn take_index_files(
+		file_index: &DashMap<usize, Vec<PathBuf>>,
+		index: usize,
+	) -> Option<Vec<PathBuf>> {
+		match file_index.remove(&index) {
+			Some((_, files)) if !files.is_empty() => Some(files),
+			_ => None,
 		}
 	}
 
