@@ -118,8 +118,10 @@ impl<V: CacheValue> TraversalCache<V> {
 	{
 		match self {
 			Self::Memory(map) => {
-				let values: Vec<V> = stream.collect().await;
-				map.entry(index).or_default().extend(values);
+				futures::pin_mut!(stream);
+				while let Some(value) = stream.next().await {
+					map.entry(index).or_default().push(value);
+				}
 				Ok(())
 			}
 			Self::Disk {
@@ -201,9 +203,7 @@ impl<V: CacheValue> TraversalCache<V> {
 					});
 				}
 				drop(tx);
-				let stream = futures::stream::unfold(rx, |mut rx| async move {
-					rx.recv().await.map(|v| (v, rx))
-				});
+				let stream = futures::stream::unfold(rx, |mut rx| async move { rx.recv().await.map(|v| (v, rx)) });
 				let cleanup = futures::stream::once(async move {
 					let _ = remove_dir_all(dir_path);
 				})
