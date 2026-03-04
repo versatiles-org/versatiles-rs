@@ -102,33 +102,6 @@ impl<V: CacheValue> TraversalCache<V> {
 		})
 	}
 
-	/// Append values to the cache entry at `index`.
-	///
-	/// In Disk mode, writes all values to a single new file.
-	#[context("Failed to append to traversal cache at index {}", index)]
-	pub fn append(&self, index: usize, values: Vec<V>) -> Result<()> {
-		match self {
-			Self::Memory(map) => {
-				map.entry(index).or_default().extend(values);
-				Ok(())
-			}
-			Self::Disk {
-				path,
-				next_writer_id,
-				file_index,
-				..
-			} => {
-				let (mut writer, file_path) = Self::create_cache_file(path, index, next_writer_id)?;
-				for value in &values {
-					value.write_to_cache(&mut writer)?;
-				}
-				writer.flush()?;
-				file_index.entry(index).or_default().push(file_path);
-				Ok(())
-			}
-		}
-	}
-
 	/// Append values from a stream to the cache entry at `index`.
 	///
 	/// Values are consumed one at a time, so peak memory usage is independent
@@ -159,30 +132,6 @@ impl<V: CacheValue> TraversalCache<V> {
 				writer.flush()?;
 				file_index.entry(index).or_default().push(file_path);
 				Ok(())
-			}
-		}
-	}
-
-	/// Take and return all values at `index`, removing them from the cache.
-	///
-	/// In Disk mode, reads all files for this index sequentially and collects
-	/// all values into a single `Vec`. Returns `Ok(None)` if no entry exists.
-	#[context("Failed to take from traversal cache at index {}", index)]
-	pub fn take(&self, index: usize) -> Result<Option<Vec<V>>> {
-		match self {
-			Self::Memory(map) => Ok(map.remove(&index).map(|(_, v)| v)),
-			Self::Disk { path, file_index, .. } => {
-				let Some(files) = Self::take_index_files(file_index, index) else {
-					return Ok(None);
-				};
-				let mut values = Vec::new();
-				for file_path in &files {
-					for result in Self::iter_values_from_file(file_path)? {
-						values.push(result?);
-					}
-				}
-				remove_dir_all(path.join(index.to_string())).ok();
-				Ok(Some(values))
 			}
 		}
 	}
@@ -330,98 +279,8 @@ mod tests {
 	#[rstest]
 	#[case::mem("mem")]
 	#[case::disk("disk")]
-	fn test_append_and_take(#[case] case: &str) -> Result<()> {
-		let cache_type = match case {
-			"mem" => CacheType::InMemory,
-			"disk" => CacheType::Disk(TempDir::new()?.path().to_path_buf()),
-			_ => panic!("unknown case"),
-		};
-		let cache = TraversalCache::<String>::new(&cache_type)?;
-
-		// Initially empty
-		assert_eq!(cache.take(0)?, None);
-		assert_eq!(cache.take(1)?, None);
-
-		// Append to index 0
-		cache.append(0, vec!["a".to_string(), "b".to_string()])?;
-
-		// Append more to index 0
-		cache.append(0, vec!["c".to_string()])?;
-
-		// Append to different index
-		cache.append(1, vec!["x".to_string()])?;
-
-		// Take preserves order
-		assert_eq!(
-			cache.take(0)?,
-			Some(vec!["a".to_string(), "b".to_string(), "c".to_string()])
-		);
-
-		// After take, index is empty
-		assert_eq!(cache.take(0)?, None);
-
-		// Other index still has data
-		assert_eq!(cache.take(1)?, Some(vec!["x".to_string()]));
-
-		Ok(())
-	}
-
-	#[rstest]
-	#[case::mem("mem")]
-	#[case::disk("disk")]
-	fn test_binary_values(#[case] case: &str) -> Result<()> {
-		let cache_type = match case {
-			"mem" => CacheType::InMemory,
-			"disk" => CacheType::Disk(TempDir::new()?.path().to_path_buf()),
-			_ => panic!("unknown case"),
-		};
-		let cache = TraversalCache::<Vec<u8>>::new(&cache_type)?;
-
-		cache.append(0, vec![vec![0, 1, 2], vec![255, 254]])?;
-		cache.append(0, vec![vec![128]])?;
-
-		assert_eq!(cache.take(0)?, Some(vec![vec![0, 1, 2], vec![255, 254], vec![128]]));
-
-		Ok(())
-	}
-
-	#[rstest]
-	#[case::mem("mem")]
-	#[case::disk("disk")]
 	#[tokio::test]
-	async fn test_append_stream(#[case] case: &str) -> Result<()> {
-		let cache_type = match case {
-			"mem" => CacheType::InMemory,
-			"disk" => CacheType::Disk(TempDir::new()?.path().to_path_buf()),
-			_ => panic!("unknown case"),
-		};
-		let cache = TraversalCache::<String>::new(&cache_type)?;
-
-		// Append via stream
-		let stream = futures::stream::iter(vec!["a".to_string(), "b".to_string()]);
-		cache.append_stream(0, stream).await?;
-
-		// Append more via stream to same index
-		let stream2 = futures::stream::iter(vec!["c".to_string()]);
-		cache.append_stream(0, stream2).await?;
-
-		// Take preserves order across stream appends
-		assert_eq!(
-			cache.take(0)?,
-			Some(vec!["a".to_string(), "b".to_string(), "c".to_string()])
-		);
-
-		// After take, index is empty
-		assert_eq!(cache.take(0)?, None);
-
-		Ok(())
-	}
-
-	#[rstest]
-	#[case::mem("mem")]
-	#[case::disk("disk")]
-	#[tokio::test]
-	async fn test_take_stream(#[case] case: &str) -> Result<()> {
+	async fn test_append_and_take_stream(#[case] case: &str) -> Result<()> {
 		use futures::StreamExt;
 
 		let cache_type = match case {
@@ -431,11 +290,26 @@ mod tests {
 		};
 		let cache = TraversalCache::<String>::new(&cache_type)?;
 
-		// Append data
-		cache.append(0, vec!["a".to_string(), "b".to_string()])?;
-		cache.append(0, vec!["c".to_string()])?;
+		// Initially empty
+		assert!(cache.take_stream(0)?.is_none());
+		assert!(cache.take_stream(1)?.is_none());
 
-		// take_stream and collect (order across files is non-deterministic)
+		// Append via stream to index 0
+		cache
+			.append_stream(0, futures::stream::iter(vec!["a".to_string(), "b".to_string()]))
+			.await?;
+
+		// Append more via stream to same index
+		cache
+			.append_stream(0, futures::stream::iter(vec!["c".to_string()]))
+			.await?;
+
+		// Append to different index
+		cache
+			.append_stream(1, futures::stream::iter(vec!["x".to_string()]))
+			.await?;
+
+		// take_stream and collect (order across files is non-deterministic in Disk mode)
 		let stream = cache.take_stream(0)?.unwrap();
 		let mut collected: Vec<String> = stream.collect().await;
 		collected.sort();
@@ -444,8 +318,40 @@ mod tests {
 		// After take_stream, index is empty
 		assert!(cache.take_stream(0)?.is_none());
 
+		// Other index still has data
+		let stream1 = cache.take_stream(1)?.unwrap();
+		let collected1: Vec<String> = stream1.collect().await;
+		assert_eq!(collected1, vec!["x".to_string()]);
+
 		// Non-existent index returns None
 		assert!(cache.take_stream(99)?.is_none());
+
+		Ok(())
+	}
+
+	#[rstest]
+	#[case::mem("mem")]
+	#[case::disk("disk")]
+	#[tokio::test]
+	async fn test_binary_values_stream(#[case] case: &str) -> Result<()> {
+		use futures::StreamExt;
+
+		let cache_type = match case {
+			"mem" => CacheType::InMemory,
+			"disk" => CacheType::Disk(TempDir::new()?.path().to_path_buf()),
+			_ => panic!("unknown case"),
+		};
+		let cache = TraversalCache::<Vec<u8>>::new(&cache_type)?;
+
+		cache
+			.append_stream(0, futures::stream::iter(vec![vec![0, 1, 2], vec![255, 254]]))
+			.await?;
+		cache.append_stream(0, futures::stream::iter(vec![vec![128]])).await?;
+
+		let stream = cache.take_stream(0)?.unwrap();
+		let mut collected: Vec<Vec<u8>> = stream.collect().await;
+		collected.sort();
+		assert_eq!(collected, vec![vec![0, 1, 2], vec![128], vec![255, 254]]);
 
 		Ok(())
 	}
