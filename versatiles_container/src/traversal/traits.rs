@@ -71,7 +71,7 @@ pub trait TileSourceTraverseExt: TileSource {
 			let progress = runtime.create_progress(&progress_message, u64::midpoint(tn_read, tn_write));
 			let tracker = Arc::new(ProgressTracker::new(progress));
 
-			let cache = Arc::new(TraversalCache::<(TileCoord, Tile)>::new(runtime.cache_type()));
+			let cache = Arc::new(TraversalCache::<(TileCoord, Tile)>::new(runtime.cache_type())?);
 			for step in traversal_steps {
 				match step {
 					Push(bboxes, index) => {

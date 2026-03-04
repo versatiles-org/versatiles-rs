@@ -63,13 +63,12 @@ impl<V: CacheValue> TraversalCache<V> {
 	///
 	/// * `InMemory` -> uses an in-process concurrent map.
 	/// * `Disk(path)` -> creates a unique subdirectory under `path`.
-	#[must_use]
-	pub fn new(cache_type: &CacheType) -> Self {
-		match cache_type {
+	pub fn new(cache_type: &CacheType) -> Result<Self> {
+		Ok(match cache_type {
 			CacheType::InMemory => Self::Memory(DashMap::new()),
 			CacheType::Disk(base_path) => {
 				let path = base_path.join(format!("traversal_{}", Uuid::new_v4()));
-				create_dir_all(&path).ok();
+				create_dir_all(&path)?;
 				Self::Disk {
 					path,
 					next_writer_id: AtomicUsize::new(0),
@@ -77,7 +76,7 @@ impl<V: CacheValue> TraversalCache<V> {
 					_marker: PhantomData,
 				}
 			}
-		}
+		})
 	}
 
 	/// Append values to the cache entry at `index`.
@@ -305,7 +304,7 @@ mod tests {
 			"disk" => CacheType::Disk(TempDir::new()?.path().to_path_buf()),
 			_ => panic!("unknown case"),
 		};
-		let cache = TraversalCache::<String>::new(&cache_type);
+		let cache = TraversalCache::<String>::new(&cache_type)?;
 
 		// Initially empty
 		assert_eq!(cache.take(0)?, None);
@@ -344,7 +343,7 @@ mod tests {
 			"disk" => CacheType::Disk(TempDir::new()?.path().to_path_buf()),
 			_ => panic!("unknown case"),
 		};
-		let cache = TraversalCache::<Vec<u8>>::new(&cache_type);
+		let cache = TraversalCache::<Vec<u8>>::new(&cache_type)?;
 
 		cache.append(0, vec![vec![0, 1, 2], vec![255, 254]])?;
 		cache.append(0, vec![vec![128]])?;
@@ -364,7 +363,7 @@ mod tests {
 			"disk" => CacheType::Disk(TempDir::new()?.path().to_path_buf()),
 			_ => panic!("unknown case"),
 		};
-		let cache = TraversalCache::<String>::new(&cache_type);
+		let cache = TraversalCache::<String>::new(&cache_type)?;
 
 		// Append via stream
 		let stream = futures::stream::iter(vec!["a".to_string(), "b".to_string()]);
@@ -398,7 +397,7 @@ mod tests {
 			"disk" => CacheType::Disk(TempDir::new()?.path().to_path_buf()),
 			_ => panic!("unknown case"),
 		};
-		let cache = TraversalCache::<String>::new(&cache_type);
+		let cache = TraversalCache::<String>::new(&cache_type)?;
 
 		// Append data
 		cache.append(0, vec!["a".to_string(), "b".to_string()])?;
@@ -421,11 +420,11 @@ mod tests {
 
 	#[test]
 	fn test_debug_format() {
-		let mem_cache = TraversalCache::<String>::new(&CacheType::InMemory);
+		let mem_cache = TraversalCache::<String>::new(&CacheType::InMemory).unwrap();
 		assert!(format!("{mem_cache:?}").contains("Memory"));
 
 		let tmp = TempDir::new().unwrap();
-		let disk_cache = TraversalCache::<String>::new(&CacheType::Disk(tmp.path().to_path_buf()));
+		let disk_cache = TraversalCache::<String>::new(&CacheType::Disk(tmp.path().to_path_buf())).unwrap();
 		assert!(format!("{disk_cache:?}").contains("Disk"));
 	}
 }
