@@ -4231,7 +4231,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "versatiles"
-version = "3.7.1"
+version = "3.8.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -4268,7 +4268,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_container"
-version = "3.7.1"
+version = "3.8.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -4302,7 +4302,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_core"
-version = "3.7.1"
+version = "3.8.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -4336,7 +4336,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_derive"
-version = "3.7.1"
+version = "3.8.0"
 dependencies = [
  "anyhow",
  "pretty_assertions",
@@ -4348,7 +4348,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_geometry"
-version = "3.7.1"
+version = "3.8.0"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -4365,7 +4365,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_image"
-version = "3.7.1"
+version = "3.8.0"
 dependencies = [
  "anyhow",
  "fast_image_resize",
@@ -4379,7 +4379,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_node"
-version = "3.7.1"
+version = "3.8.0"
 dependencies = [
  "anyhow",
  "ctor",
@@ -4401,7 +4401,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_pipeline"
-version = "3.7.1"
+version = "3.8.0"
 dependencies = [
  "ab_glyph",
  "anyhow",
