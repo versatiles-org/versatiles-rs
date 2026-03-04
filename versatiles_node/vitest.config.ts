@@ -2,6 +2,9 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
 	test: {
+		// Set RUST_LOG to suppress verbose output during tests
+		env: { RUST_LOG: 'warn' },
+
 		// Test file patterns
 		include: ['src/**/*.test.ts'],
 
