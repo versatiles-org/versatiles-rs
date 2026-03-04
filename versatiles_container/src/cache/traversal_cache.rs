@@ -148,14 +148,24 @@ impl<V: CacheValue> TraversalCache<V> {
 					Some((_, files)) if !files.is_empty() => files,
 					_ => return Ok(None),
 				};
-				let data = Self::read_files(&files)?;
+				// Read and deserialize one file at a time to avoid loading all
+				// raw bytes into memory simultaneously.
+				let mut values = Vec::new();
+				for file_path in &files {
+					let mut data = Vec::new();
+					File::open(file_path)?.read_to_end(&mut data)?;
+					values.extend(Self::buffer_to_values(&data)?);
+				}
 				remove_dir_all(path.join(index.to_string())).ok();
-				Ok(Some(Self::buffer_to_values(&data)?))
+				Ok(Some(values))
 			}
 		}
 	}
 
 	/// Take all values at `index` as a stream, removing them from the cache.
+	///
+	/// Files are read lazily one at a time, so only one file's worth of data
+	/// is in memory at any point.
 	///
 	/// Returns `Ok(None)` if no entry exists at the index.
 	#[context("Failed to take stream from traversal cache at index {}", index)]
@@ -170,21 +180,31 @@ impl<V: CacheValue> TraversalCache<V> {
 					Some((_, files)) if !files.is_empty() => files,
 					_ => return Ok(None),
 				};
-				let data = Self::read_files(&files)?;
-				remove_dir_all(path.join(index.to_string())).ok();
-				let values = Self::buffer_to_values(&data)?;
-				Ok(Some(futures::stream::iter(values).boxed()))
+				let dir_path = path.join(index.to_string());
+				let mut file_iter = files.into_iter();
+				let mut current_values: std::vec::IntoIter<V> = Vec::new().into_iter();
+				let iter = std::iter::from_fn(move || {
+					loop {
+						if let Some(v) = current_values.next() {
+							return Some(v);
+						}
+						let file_path = file_iter.next()?;
+						let mut data = Vec::new();
+						File::open(&file_path).ok()?.read_to_end(&mut data).ok()?;
+						std::fs::remove_file(&file_path).ok();
+						current_values = Self::buffer_to_values(&data).ok()?.into_iter();
+					}
+				});
+				// Append a cleanup action that removes the now-empty directory
+				// after the last value has been yielded.
+				let cleanup = std::iter::once_with(move || {
+					remove_dir_all(&dir_path).ok();
+					None
+				})
+				.flatten();
+				Ok(Some(futures::stream::iter(iter.chain(cleanup)).boxed()))
 			}
 		}
-	}
-
-	/// Read and concatenate all given cache files in order.
-	fn read_files(files: &[PathBuf]) -> Result<Vec<u8>> {
-		let mut data = Vec::new();
-		for file_path in files {
-			File::open(file_path)?.read_to_end(&mut data)?;
-		}
-		Ok(data)
 	}
 
 	/// Deserialize values from a binary buffer.
