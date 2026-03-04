@@ -11,7 +11,7 @@
 use crate::CacheValue;
 use anyhow::{Result, bail};
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use std::io::Cursor;
+use std::io::{Read, Write};
 use versatiles_core::{Blob, TileFormat, TileType};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
@@ -143,8 +143,8 @@ impl TileContent {
 /// - `1` = `Vector(VectorTile)`
 impl CacheValue for TileContent {
 	/// Write a compact binary representation of the content to `writer`.
-	#[context("serializing tile to cache buffer (pre-len={})", writer.len())]
-	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+	#[context("serializing tile to cache buffer")]
+	fn write_to_cache(&self, writer: &mut impl Write) -> Result<()> {
 		match self {
 			TileContent::Raster(image) => {
 				writer.write_u8(0)?; // Type identifier for Raster
@@ -159,7 +159,7 @@ impl CacheValue for TileContent {
 
 	/// Read content from the compact binary representation produced by `write_to_cache`.
 	#[context("deserializing tile from cache buffer")]
-	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
+	fn read_from_cache(reader: &mut impl Read) -> Result<Self> {
 		let content_type = reader.read_u8()?;
 		match content_type {
 			0 => {

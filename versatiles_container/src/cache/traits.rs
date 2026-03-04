@@ -21,7 +21,9 @@
 
 use anyhow::{Result, anyhow, bail};
 use byteorder::{LittleEndian as LE, ReadBytesExt, WriteBytesExt};
-use std::io::{Cursor, Read};
+#[cfg(test)]
+use std::io::Cursor;
+use std::io::{Read, Write};
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat};
 use versatiles_image::{DynamicImage, ImageBuffer};
 
@@ -43,7 +45,7 @@ pub trait CacheValue: Clone {
 	///
 	/// # Errors
 	/// Returns an error if the underlying write operation fails.
-	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()>;
+	fn write_to_cache(&self, writer: &mut impl Write) -> Result<()>;
 
 	/// Deserializes a value previously written by [`CacheValue::write_to_cache`].
 	///
@@ -53,19 +55,19 @@ pub trait CacheValue: Clone {
 	///
 	/// # Errors
 	/// Returns an error if reading or decoding fails.
-	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self>;
+	fn read_from_cache(reader: &mut impl Read) -> Result<Self>;
 }
 
 /// Implements binary serialization for `u8`.
 ///
 /// Encodes as a single byte.
 impl CacheValue for u8 {
-	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+	fn write_to_cache(&self, writer: &mut impl Write) -> Result<()> {
 		writer.write_u8(*self)?;
 		Ok(())
 	}
 
-	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
+	fn read_from_cache(reader: &mut impl Read) -> Result<Self> {
 		let value = reader.read_u8()?;
 		Ok(value)
 	}
@@ -73,12 +75,12 @@ impl CacheValue for u8 {
 
 /// Implements binary serialization for `u32` using little-endian encoding.
 impl CacheValue for u32 {
-	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+	fn write_to_cache(&self, writer: &mut impl Write) -> Result<()> {
 		writer.write_u32::<LE>(*self)?;
 		Ok(())
 	}
 
-	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
+	fn read_from_cache(reader: &mut impl Read) -> Result<Self> {
 		let value = reader.read_u32::<LE>()?;
 		Ok(value)
 	}
@@ -88,12 +90,12 @@ impl CacheValue for u32 {
 ///
 /// Encodes as a single byte (0 = false, 1 = true).
 impl CacheValue for bool {
-	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+	fn write_to_cache(&self, writer: &mut impl Write) -> Result<()> {
 		writer.write_u8(u8::from(*self))?;
 		Ok(())
 	}
 
-	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
+	fn read_from_cache(reader: &mut impl Read) -> Result<Self> {
 		Ok(reader.read_u8()? != 0)
 	}
 }
@@ -106,14 +108,14 @@ impl CacheValue for bool {
 ///
 /// Errors if UTF-8 decoding fails when reading.
 impl CacheValue for String {
-	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+	fn write_to_cache(&self, writer: &mut impl Write) -> Result<()> {
 		let bytes = self.as_bytes();
 		writer.write_u32::<LE>(u32::try_from(bytes.len())?)?;
-		writer.extend_from_slice(bytes);
+		writer.write_all(bytes)?;
 		Ok(())
 	}
 
-	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
+	fn read_from_cache(reader: &mut impl Read) -> Result<Self> {
 		let length = reader.read_u32::<LE>()? as usize;
 		let mut bytes = vec![0u8; length];
 		reader.read_exact(&mut bytes)?;
@@ -127,7 +129,7 @@ impl CacheValue for String {
 /// - 4 bytes: element count
 /// - followed by each serialized element
 impl<T: CacheValue> CacheValue for Vec<T> {
-	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+	fn write_to_cache(&self, writer: &mut impl Write) -> Result<()> {
 		writer.write_u32::<LE>(u32::try_from(self.len())?)?;
 		for item in self {
 			item.write_to_cache(writer)?;
@@ -135,7 +137,7 @@ impl<T: CacheValue> CacheValue for Vec<T> {
 		Ok(())
 	}
 
-	fn read_from_cache<U: AsRef<[u8]>>(reader: &mut Cursor<U>) -> Result<Self> {
+	fn read_from_cache(reader: &mut impl Read) -> Result<Self> {
 		let length = reader.read_u32::<LE>()? as usize;
 		let mut vec = Vec::with_capacity(length);
 		for _ in 0..length {
@@ -147,12 +149,12 @@ impl<T: CacheValue> CacheValue for Vec<T> {
 
 /// Implements serialization for pairs `(A, B)`, storing elements sequentially.
 impl<A: CacheValue, B: CacheValue> CacheValue for (A, B) {
-	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+	fn write_to_cache(&self, writer: &mut impl Write) -> Result<()> {
 		self.0.write_to_cache(writer)?;
 		self.1.write_to_cache(writer)
 	}
 
-	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
+	fn read_from_cache(reader: &mut impl Read) -> Result<Self> {
 		let a = A::read_from_cache(reader)?;
 		let b = B::read_from_cache(reader)?;
 		Ok((a, b))
@@ -166,14 +168,14 @@ impl<A: CacheValue, B: CacheValue> CacheValue for (A, B) {
 /// - 4 bytes: x coordinate
 /// - 4 bytes: y coordinate
 impl CacheValue for TileCoord {
-	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+	fn write_to_cache(&self, writer: &mut impl Write) -> Result<()> {
 		writer.write_u8(self.level)?;
 		writer.write_u32::<LE>(self.x)?;
 		writer.write_u32::<LE>(self.y)?;
 		Ok(())
 	}
 
-	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
+	fn read_from_cache(reader: &mut impl Read) -> Result<Self> {
 		let level = reader.read_u8()?;
 		let x = reader.read_u32::<LE>()?;
 		let y = reader.read_u32::<LE>()?;
@@ -187,13 +189,13 @@ impl CacheValue for TileCoord {
 /// - 8 bytes: blob length (`u64`, little-endian)
 /// - N bytes: raw blob data
 impl CacheValue for Blob {
-	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+	fn write_to_cache(&self, writer: &mut impl Write) -> Result<()> {
 		writer.write_u64::<LE>(self.len())?;
-		writer.extend_from_slice(self.as_slice());
+		writer.write_all(self.as_slice())?;
 		Ok(())
 	}
 
-	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
+	fn read_from_cache(reader: &mut impl Read) -> Result<Self> {
 		let length = usize::try_from(reader.read_u64::<LE>()?)?;
 		let mut bytes = vec![0u8; length];
 		reader.read_exact(&mut bytes)?;
@@ -204,12 +206,12 @@ impl CacheValue for Blob {
 /// Implements serialization for [`TileFormat`](versatiles_core::TileFormat)
 /// by storing its numeric discriminant as a single byte.
 impl CacheValue for TileFormat {
-	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+	fn write_to_cache(&self, writer: &mut impl Write) -> Result<()> {
 		writer.write_u8((*self).into())?;
 		Ok(())
 	}
 
-	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
+	fn read_from_cache(reader: &mut impl Read) -> Result<Self> {
 		let value = reader.read_u8()?;
 		TileFormat::try_from(value)
 	}
@@ -218,12 +220,12 @@ impl CacheValue for TileFormat {
 /// Implements serialization for [`TileCompression`](versatiles_core::TileCompression)
 /// by storing its numeric discriminant as a single byte.
 impl CacheValue for TileCompression {
-	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+	fn write_to_cache(&self, writer: &mut impl Write) -> Result<()> {
 		writer.write_u8((*self).into())?;
 		Ok(())
 	}
 
-	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
+	fn read_from_cache(reader: &mut impl Read) -> Result<Self> {
 		let value = reader.read_u8()?;
 		TileCompression::try_from(value)
 	}
@@ -237,7 +239,7 @@ impl CacheValue for TileCompression {
 ///
 /// Errors if the presence flag is invalid.
 impl<V: CacheValue> CacheValue for Option<V> {
-	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+	fn write_to_cache(&self, writer: &mut impl Write) -> Result<()> {
 		if let Some(value) = self {
 			writer.write_u8(1)?; // Indicate presence
 			value.write_to_cache(writer)
@@ -247,7 +249,7 @@ impl<V: CacheValue> CacheValue for Option<V> {
 		}
 	}
 
-	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
+	fn read_from_cache(reader: &mut impl Read) -> Result<Self> {
 		let flag = reader.read_u8()?;
 		if flag == 1 {
 			let value = V::read_from_cache(reader)?;
@@ -271,18 +273,18 @@ impl<V: CacheValue> CacheValue for Option<V> {
 /// On decoding, the image type is inferred from channel count.
 /// Returns an error if the buffer cannot form a valid image.
 impl CacheValue for DynamicImage {
-	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+	fn write_to_cache(&self, writer: &mut impl Write) -> Result<()> {
 		let width = self.width();
 		let height = self.height();
 		writer.write_u32::<LE>(width)?;
 		writer.write_u32::<LE>(height)?;
 		let data = self.as_bytes();
 		writer.write_u32::<LE>(u32::try_from(data.len())?)?;
-		writer.extend_from_slice(data);
+		writer.write_all(data)?;
 		Ok(())
 	}
 
-	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
+	fn read_from_cache(reader: &mut impl Read) -> Result<Self> {
 		let width = reader.read_u32::<LE>()?;
 		let height = reader.read_u32::<LE>()?;
 		let data_length = reader.read_u32::<LE>()? as usize;

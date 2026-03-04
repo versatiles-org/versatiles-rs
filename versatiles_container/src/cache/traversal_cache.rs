@@ -15,7 +15,7 @@ use dashmap::DashMap;
 use futures::{Stream, StreamExt, stream::BoxStream};
 use std::{
 	fmt::Debug,
-	fs::{File, OpenOptions, create_dir_all, remove_dir_all, remove_file, write},
+	fs::{File, OpenOptions, create_dir_all, remove_dir_all, remove_file},
 	io::{BufWriter, Cursor, Read, Write},
 	marker::PhantomData,
 	path::PathBuf,
@@ -66,12 +66,12 @@ impl<V: CacheValue> TraversalCache<V> {
 			}
 			Self::Disk { path, .. } => {
 				let file_path = path.join(format!("{index}.bin"));
-				let buffer = Self::values_to_buffer(&values)?;
-				if file_path.exists() {
-					OpenOptions::new().append(true).open(&file_path)?.write_all(&buffer)?;
-				} else {
-					write(&file_path, buffer)?;
+				let file = OpenOptions::new().create(true).append(true).open(&file_path)?;
+				let mut writer = BufWriter::new(file);
+				for value in &values {
+					value.write_to_cache(&mut writer)?;
 				}
+				writer.flush()?;
 				Ok(())
 			}
 		}
@@ -96,12 +96,9 @@ impl<V: CacheValue> TraversalCache<V> {
 				let file_path = path.join(format!("{index}.bin"));
 				let file = OpenOptions::new().create(true).append(true).open(&file_path)?;
 				let mut writer = BufWriter::new(file);
-				let mut buf = Vec::new();
 				futures::pin_mut!(stream);
 				while let Some(value) = stream.next().await {
-					buf.clear();
-					value.write_to_cache(&mut buf)?;
-					writer.write_all(&buf)?;
+					value.write_to_cache(&mut writer)?;
 				}
 				writer.flush()?;
 				Ok(())
@@ -154,10 +151,7 @@ impl<V: CacheValue> TraversalCache<V> {
 						if cursor.position() >= len {
 							None
 						} else {
-							Some(
-								V::read_from_cache(&mut cursor)
-									.expect("failed to deserialize from traversal cache"),
-							)
+							Some(V::read_from_cache(&mut cursor).expect("failed to deserialize from traversal cache"))
 						}
 					});
 					Ok(Some(futures::stream::iter(iter).boxed()))
@@ -166,15 +160,6 @@ impl<V: CacheValue> TraversalCache<V> {
 				}
 			}
 		}
-	}
-
-	/// Serialize values into a binary buffer.
-	fn values_to_buffer(values: &[V]) -> Result<Vec<u8>> {
-		let mut buf = Vec::new();
-		for value in values {
-			value.write_to_cache(&mut buf)?;
-		}
-		Ok(buf)
 	}
 
 	/// Deserialize values from a binary buffer.
