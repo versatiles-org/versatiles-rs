@@ -165,8 +165,8 @@ impl<V: CacheValue> TraversalCache<V> {
 
 	/// Take all values at `index` as a stream, removing them from the cache.
 	///
-	/// Files are read lazily one at a time via buffered I/O, so only one
-	/// value is deserialized at a time.
+	/// Files are read concurrently on blocking threads, with up to 8 files
+	/// in flight at a time.
 	///
 	/// Returns `Ok(None)` if no entry exists at the index.
 	#[context("Failed to take stream from traversal cache at index {}", index)]
@@ -181,29 +181,23 @@ impl<V: CacheValue> TraversalCache<V> {
 					return Ok(None);
 				};
 				let dir_path = path.join(index.to_string());
-				let mut file_iter = files.into_iter();
-				let mut current: Box<dyn Iterator<Item = V> + Send> = Box::new(std::iter::empty());
-				let iter = std::iter::from_fn(move || {
-					loop {
-						if let Some(v) = current.next() {
-							return Some(v);
-						}
-						let file_path = file_iter.next()?;
-						current = Box::new(
+				let stream = futures::stream::iter(files)
+					.map(|file_path| {
+						tokio::task::spawn_blocking(move || -> Vec<V> {
 							Self::iter_values_from_file(&file_path)
 								.into_iter()
 								.flatten()
-								.map_while(Result::ok),
-						);
-					}
-				});
-				let cleanup =
-					std::iter::once_with(move || {
-						remove_dir_all(&dir_path).ok();
-						None
+								.filter_map(Result::ok)
+								.collect()
+						})
 					})
-					.flatten();
-				Ok(Some(futures::stream::iter(iter.chain(cleanup)).boxed()))
+					.buffer_unordered(8)
+					.flat_map(|result| futures::stream::iter(result.unwrap_or_default()));
+				let cleanup = futures::stream::once(async move {
+					let _ = remove_dir_all(dir_path);
+				})
+				.filter_map(|()| futures::future::ready(None));
+				Ok(Some(stream.chain(cleanup).boxed()))
 			}
 		}
 	}
@@ -212,11 +206,7 @@ impl<V: CacheValue> TraversalCache<V> {
 	///
 	/// Returns a buffered writer and the file path (for later registration
 	/// in `file_index`).
-	fn create_cache_file(
-		path: &Path,
-		index: usize,
-		next_writer_id: &AtomicUsize,
-	) -> Result<(BufWriter<File>, PathBuf)> {
+	fn create_cache_file(path: &Path, index: usize, next_writer_id: &AtomicUsize) -> Result<(BufWriter<File>, PathBuf)> {
 		let writer_id = next_writer_id.fetch_add(1, Ordering::Relaxed);
 		let dir_path = path.join(index.to_string());
 		create_dir_all(&dir_path)?;
@@ -228,10 +218,7 @@ impl<V: CacheValue> TraversalCache<V> {
 	/// Remove and return the tracked file list for the given index.
 	///
 	/// Returns `None` if no files were registered for this index.
-	fn take_index_files(
-		file_index: &DashMap<usize, Vec<PathBuf>>,
-		index: usize,
-	) -> Option<Vec<PathBuf>> {
+	fn take_index_files(file_index: &DashMap<usize, Vec<PathBuf>>, index: usize) -> Option<Vec<PathBuf>> {
 		match file_index.remove(&index) {
 			Some((_, files)) if !files.is_empty() => Some(files),
 			_ => None,
