@@ -99,9 +99,9 @@ pub trait TileSourceTraverseExt: TileSource {
 					}
 					Pop(index, bbox) => {
 						log::trace!("Uncache {bbox:?} at index {index}");
-						let vec = cache.take(index)?.unwrap();
+						let inner = cache.take_stream(index)?.unwrap();
 						let tracker2 = tracker.clone();
-						let stream = TileStream::from_vec(vec).inspect(move |_, _| tracker2.inc(1));
+						let stream = TileStream::from_stream(inner).inspect(move |_, _| tracker2.inc(1));
 						callback(bbox, stream).await?;
 						tracker.inc_write(bbox.count_tiles());
 					}

@@ -12,7 +12,7 @@
 use crate::cache::{cache_type::CacheType, traits::CacheValue};
 use anyhow::Result;
 use dashmap::DashMap;
-use futures::{Stream, StreamExt};
+use futures::{Stream, StreamExt, stream::BoxStream};
 use std::{
 	fmt::Debug,
 	fs::{File, OpenOptions, create_dir_all, remove_dir_all, remove_file, write},
@@ -124,6 +124,32 @@ impl<V: CacheValue> TraversalCache<V> {
 					file.read_to_end(&mut data)?;
 					remove_file(&file_path)?;
 					Ok(Some(Self::buffer_to_values(&data)?))
+				} else {
+					Ok(None)
+				}
+			}
+		}
+	}
+
+	/// Take all values at `index` as a stream, removing them from the cache.
+	///
+	/// Returns `Ok(None)` if no entry exists at the index.
+	#[context("Failed to take stream from traversal cache at index {}", index)]
+	pub fn take_stream(&self, index: usize) -> Result<Option<BoxStream<'static, V>>>
+	where
+		V: Send + 'static,
+	{
+		match self {
+			Self::Memory(map) => Ok(map.remove(&index).map(|(_, v)| futures::stream::iter(v).boxed())),
+			Self::Disk { path, .. } => {
+				let file_path = path.join(format!("{index}.bin"));
+				if file_path.exists() {
+					let mut file = File::open(&file_path)?;
+					let mut data = Vec::new();
+					file.read_to_end(&mut data)?;
+					remove_file(&file_path)?;
+					let values = Self::buffer_to_values(&data)?;
+					Ok(Some(futures::stream::iter(values).boxed()))
 				} else {
 					Ok(None)
 				}
@@ -272,6 +298,38 @@ mod tests {
 
 		// After take, index is empty
 		assert_eq!(cache.take(0)?, None);
+
+		Ok(())
+	}
+
+	#[rstest]
+	#[case::mem("mem")]
+	#[case::disk("disk")]
+	#[tokio::test]
+	async fn test_take_stream(#[case] case: &str) -> Result<()> {
+		use futures::StreamExt;
+
+		let cache_type = match case {
+			"mem" => CacheType::InMemory,
+			"disk" => CacheType::Disk(TempDir::new()?.path().to_path_buf()),
+			_ => panic!("unknown case"),
+		};
+		let cache = TraversalCache::<String>::new(&cache_type);
+
+		// Append data
+		cache.append(0, vec!["a".to_string(), "b".to_string()])?;
+		cache.append(0, vec!["c".to_string()])?;
+
+		// take_stream and collect
+		let stream = cache.take_stream(0)?.unwrap();
+		let collected: Vec<String> = stream.collect().await;
+		assert_eq!(collected, vec!["a".to_string(), "b".to_string(), "c".to_string()]);
+
+		// After take_stream, index is empty
+		assert!(cache.take_stream(0)?.is_none());
+
+		// Non-existent index returns None
+		assert!(cache.take_stream(99)?.is_none());
 
 		Ok(())
 	}
