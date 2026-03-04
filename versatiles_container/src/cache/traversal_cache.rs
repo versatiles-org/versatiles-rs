@@ -1,13 +1,22 @@
 //! Specialized cache for tile traversal reordering.
 //!
-//! `TraversalCache<V>` provides a simple append-and-take cache optimized for the
-//! tile traversal use case, where tiles are temporarily cached during Push phases
-//! and retrieved during Pop phases.
+//! [`TraversalCache<V>`] temporarily stores tiles during the Push phase of a
+//! traversal and retrieves them during the Pop phase, allowing tiles to be
+//! reordered across zoom-level boundaries.
 //!
-//! Unlike the generic `CacheMap`, this cache:
-//! - Uses `usize` keys directly (no string conversion)
-//! - Only provides `append` and `take` operations
-//! - Uses simpler filenames for disk storage
+//! Two storage backends are available, selected at runtime via [`CacheType`]:
+//!
+//! - **`InMemory`** — concurrent [`DashMap`] backed by RAM. Fast, but memory
+//!   usage grows with the number of cached tiles.
+//! - **`Disk`** — each `append`/`append_stream` call writes to its own
+//!   uniquely-named file, so concurrent writers never interleave data. An
+//!   in-memory index tracks which files belong to each cache entry.
+//!
+//! # Thread safety
+//!
+//! All public methods are safe to call concurrently from multiple tasks.
+//! Concurrent writes to the same index are isolated via per-call files (Disk)
+//! or [`DashMap`] sharding (Memory).
 
 use crate::cache::{cache_type::CacheType, traits::CacheValue};
 use anyhow::Result;
@@ -24,7 +33,7 @@ use std::{
 use uuid::Uuid;
 use versatiles_derive::context;
 
-/// A thin `Read` wrapper that tracks the number of bytes consumed.
+/// A thin [`Read`] wrapper that tracks the number of bytes consumed.
 struct CountingReader<R> {
 	inner: R,
 	position: u64,
@@ -38,31 +47,45 @@ impl<R: Read> Read for CountingReader<R> {
 	}
 }
 
-/// A cache for temporarily storing tiles during traversal reordering.
+/// A cache for temporarily storing values during traversal reordering.
 ///
 /// Supports both in-memory and disk-backed storage, selected at runtime
 /// via [`CacheType`].
+///
+/// # Disk layout
+///
+/// ```text
+/// <base_path>/traversal_<uuid>/
+///   <index>/
+///     000000000000.bin   ← one file per append/append_stream call
+///     000000000001.bin
+///     ...
+/// ```
+///
+/// Files are cleaned up when values are taken or when the cache is dropped.
 pub enum TraversalCache<V: CacheValue> {
 	/// In-memory cache using a concurrent hash map.
 	Memory(DashMap<usize, Vec<V>>),
 	/// Disk-backed cache storing values in binary files.
-	///
-	/// Each `append`/`append_stream` call writes to a unique file, so concurrent
-	/// writers never touch the same file. An in-memory index tracks which files
-	/// belong to each cache entry, so stale files on disk are ignored.
 	Disk {
+		/// Root directory for this cache instance.
 		path: PathBuf,
+		/// Atomic counter for generating unique file names.
 		next_writer_id: AtomicUsize,
+		/// Tracks which files belong to each cache index.
 		file_index: DashMap<usize, Vec<PathBuf>>,
 		_marker: PhantomData<V>,
 	},
 }
 
 impl<V: CacheValue> TraversalCache<V> {
-	/// Create a new cache using the specified cache type.
+	/// Create a new cache backed by the given [`CacheType`].
 	///
-	/// * `InMemory` -> uses an in-process concurrent map.
-	/// * `Disk(path)` -> creates a unique subdirectory under `path`.
+	/// For [`CacheType::Disk`], a unique subdirectory is created immediately.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the cache directory cannot be created (Disk mode).
 	pub fn new(cache_type: &CacheType) -> Result<Self> {
 		Ok(match cache_type {
 			CacheType::InMemory => Self::Memory(DashMap::new()),
@@ -81,7 +104,7 @@ impl<V: CacheValue> TraversalCache<V> {
 
 	/// Append values to the cache entry at `index`.
 	///
-	/// Creates a new entry if the index doesn't exist yet.
+	/// In Disk mode, writes all values to a single new file.
 	#[context("Failed to append to traversal cache at index {}", index)]
 	pub fn append(&self, index: usize, values: Vec<V>) -> Result<()> {
 		match self {
@@ -108,16 +131,16 @@ impl<V: CacheValue> TraversalCache<V> {
 
 	/// Append values from a stream to the cache entry at `index`.
 	///
-	/// Each call writes to its own file, so concurrent callers appending to the
-	/// same index will never interleave their data.
+	/// Values are consumed one at a time, so peak memory usage is independent
+	/// of the stream length. In Disk mode, each call writes to its own file,
+	/// so concurrent callers appending to the same index never interleave data.
 	#[context("Failed to append stream to traversal cache at index {}", index)]
-	pub async fn append_stream<S>(&self, index: usize, stream: S) -> Result<()>
+	pub async fn append_stream<S>(&self, index: usize, mut stream: S) -> Result<()>
 	where
 		S: Stream<Item = V> + Send + Unpin,
 	{
 		match self {
 			Self::Memory(map) => {
-				futures::pin_mut!(stream);
 				while let Some(value) = stream.next().await {
 					map.entry(index).or_default().push(value);
 				}
@@ -130,7 +153,6 @@ impl<V: CacheValue> TraversalCache<V> {
 				..
 			} => {
 				let (mut writer, file_path) = Self::create_cache_file(path, index, next_writer_id)?;
-				futures::pin_mut!(stream);
 				while let Some(value) = stream.next().await {
 					value.write_to_cache(&mut writer)?;
 				}
@@ -143,7 +165,8 @@ impl<V: CacheValue> TraversalCache<V> {
 
 	/// Take and return all values at `index`, removing them from the cache.
 	///
-	/// Returns `Ok(None)` if no entry exists at the index.
+	/// In Disk mode, reads all files for this index sequentially and collects
+	/// all values into a single `Vec`. Returns `Ok(None)` if no entry exists.
 	#[context("Failed to take from traversal cache at index {}", index)]
 	pub fn take(&self, index: usize) -> Result<Option<Vec<V>>> {
 		match self {
@@ -166,11 +189,20 @@ impl<V: CacheValue> TraversalCache<V> {
 
 	/// Take all values at `index` as a stream, removing them from the cache.
 	///
-	/// Files are read concurrently on blocking threads. Values are streamed
-	/// through a bounded channel so only a small number of values are in
-	/// memory at a time, regardless of total data size.
+	/// In Disk mode, files are read concurrently on blocking threads and
+	/// values are streamed through a bounded channel (capacity 64), so only
+	/// a small number of values are in memory at a time regardless of total
+	/// data size.
+	///
+	/// **Ordering:** In Disk mode, values from different files (i.e. different
+	/// `append`/`append_stream` calls) may arrive in any order. Values within
+	/// a single file preserve their original order.
 	///
 	/// Returns `Ok(None)` if no entry exists at the index.
+	///
+	/// # Panics
+	///
+	/// Panics if called outside a Tokio runtime (Disk mode only).
 	#[context("Failed to take stream from traversal cache at index {}", index)]
 	pub fn take_stream(&self, index: usize) -> Result<Option<BoxStream<'static, V>>>
 	where
@@ -219,10 +251,10 @@ impl<V: CacheValue> TraversalCache<V> {
 		}
 	}
 
-	/// Create a new uniquely-named cache file for writing at `index`.
+	/// Create a uniquely-named cache file for writing at `index`.
 	///
-	/// Returns a buffered writer and the file path (for later registration
-	/// in `file_index`).
+	/// Returns a buffered writer and the file path for later registration
+	/// in `file_index`.
 	fn create_cache_file(path: &Path, index: usize, next_writer_id: &AtomicUsize) -> Result<(BufWriter<File>, PathBuf)> {
 		let writer_id = next_writer_id.fetch_add(1, Ordering::Relaxed);
 		let dir_path = path.join(index.to_string());
@@ -243,7 +275,7 @@ impl<V: CacheValue> TraversalCache<V> {
 	}
 
 	/// Open a cache file and return an iterator that deserializes values
-	/// incrementally using buffered I/O. Only one value at a time is in memory.
+	/// one at a time using buffered I/O.
 	fn iter_values_from_file(path: &Path) -> Result<impl Iterator<Item = Result<V>> + use<V>> {
 		let file = File::open(path)?;
 		let file_len = file.metadata()?.len();
@@ -259,7 +291,7 @@ impl<V: CacheValue> TraversalCache<V> {
 		}))
 	}
 
-	/// Clean up cache resources.
+	/// Clean up all cache resources (files and directories).
 	fn clean_up(&self) {
 		match self {
 			Self::Memory(map) => map.clear(),
