@@ -16,13 +16,27 @@ use futures::{Stream, StreamExt, stream::BoxStream};
 use std::{
 	fmt::Debug,
 	fs::{File, create_dir_all, remove_dir_all},
-	io::{BufWriter, Cursor, Read, Write},
+	io::{BufReader, BufWriter, Read, Write},
 	marker::PhantomData,
 	path::{Path, PathBuf},
 	sync::atomic::{AtomicUsize, Ordering},
 };
 use uuid::Uuid;
 use versatiles_derive::context;
+
+/// A thin `Read` wrapper that tracks the number of bytes consumed.
+struct CountingReader<R> {
+	inner: R,
+	position: u64,
+}
+
+impl<R: Read> Read for CountingReader<R> {
+	fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+		let n = self.inner.read(buf)?;
+		self.position += n as u64;
+		Ok(n)
+	}
+}
 
 /// A cache for temporarily storing tiles during traversal reordering.
 ///
@@ -137,13 +151,11 @@ impl<V: CacheValue> TraversalCache<V> {
 				let Some(files) = Self::take_index_files(file_index, index) else {
 					return Ok(None);
 				};
-				// Read and deserialize one file at a time to avoid loading all
-				// raw bytes into memory simultaneously.
 				let mut values = Vec::new();
 				for file_path in &files {
-					let mut data = Vec::new();
-					File::open(file_path)?.read_to_end(&mut data)?;
-					values.extend(Self::buffer_to_values(&data)?);
+					for result in Self::iter_values_from_file(file_path)? {
+						values.push(result?);
+					}
 				}
 				remove_dir_all(path.join(index.to_string())).ok();
 				Ok(Some(values))
@@ -153,8 +165,8 @@ impl<V: CacheValue> TraversalCache<V> {
 
 	/// Take all values at `index` as a stream, removing them from the cache.
 	///
-	/// Files are read lazily one at a time, so only one file's worth of data
-	/// is in memory at any point.
+	/// Files are read lazily one at a time via buffered I/O, so only one
+	/// value is deserialized at a time.
 	///
 	/// Returns `Ok(None)` if no entry exists at the index.
 	#[context("Failed to take stream from traversal cache at index {}", index)]
@@ -170,26 +182,27 @@ impl<V: CacheValue> TraversalCache<V> {
 				};
 				let dir_path = path.join(index.to_string());
 				let mut file_iter = files.into_iter();
-				let mut current_values: std::vec::IntoIter<V> = Vec::new().into_iter();
+				let mut current: Box<dyn Iterator<Item = V> + Send> = Box::new(std::iter::empty());
 				let iter = std::iter::from_fn(move || {
 					loop {
-						if let Some(v) = current_values.next() {
+						if let Some(v) = current.next() {
 							return Some(v);
 						}
 						let file_path = file_iter.next()?;
-						let mut data = Vec::new();
-						File::open(&file_path).ok()?.read_to_end(&mut data).ok()?;
-						std::fs::remove_file(&file_path).ok();
-						current_values = Self::buffer_to_values(&data).ok()?.into_iter();
+						current = Box::new(
+							Self::iter_values_from_file(&file_path)
+								.into_iter()
+								.flatten()
+								.map_while(Result::ok),
+						);
 					}
 				});
-				// Append a cleanup action that removes the now-empty directory
-				// after the last value has been yielded.
-				let cleanup = std::iter::once_with(move || {
-					remove_dir_all(&dir_path).ok();
-					None
-				})
-				.flatten();
+				let cleanup =
+					std::iter::once_with(move || {
+						remove_dir_all(&dir_path).ok();
+						None
+					})
+					.flatten();
 				Ok(Some(futures::stream::iter(iter.chain(cleanup)).boxed()))
 			}
 		}
@@ -225,14 +238,21 @@ impl<V: CacheValue> TraversalCache<V> {
 		}
 	}
 
-	/// Deserialize values from a binary buffer.
-	fn buffer_to_values(buf: &[u8]) -> Result<Vec<V>> {
-		let mut reader = Cursor::new(buf);
-		let mut vec = Vec::new();
-		while reader.position() < buf.len() as u64 {
-			vec.push(V::read_from_cache(&mut reader)?);
-		}
-		Ok(vec)
+	/// Open a cache file and return an iterator that deserializes values
+	/// incrementally using buffered I/O. Only one value at a time is in memory.
+	fn iter_values_from_file(path: &Path) -> Result<impl Iterator<Item = Result<V>> + use<V>> {
+		let file = File::open(path)?;
+		let file_len = file.metadata()?.len();
+		let mut reader = CountingReader {
+			inner: BufReader::new(file),
+			position: 0,
+		};
+		Ok(std::iter::from_fn(move || {
+			if reader.position >= file_len {
+				return None;
+			}
+			Some(V::read_from_cache(&mut reader))
+		}))
 	}
 
 	/// Clean up cache resources.
