@@ -15,10 +15,10 @@ use dashmap::DashMap;
 use futures::{Stream, StreamExt, stream::BoxStream};
 use std::{
 	fmt::Debug,
-	fs::{File, create_dir_all, read_dir, remove_dir_all},
+	fs::{File, create_dir_all, remove_dir_all},
 	io::{BufWriter, Cursor, Read, Write},
 	marker::PhantomData,
-	path::{Path, PathBuf},
+	path::PathBuf,
 	sync::atomic::{AtomicUsize, Ordering},
 };
 use uuid::Uuid;
@@ -33,12 +33,13 @@ pub enum TraversalCache<V: CacheValue> {
 	Memory(DashMap<usize, Vec<V>>),
 	/// Disk-backed cache storing values in binary files.
 	///
-	/// Each index gets its own subdirectory. Each `append`/`append_stream` call
-	/// writes to a unique file within that subdirectory, so concurrent writers
-	/// never touch the same file.
+	/// Each `append`/`append_stream` call writes to a unique file, so concurrent
+	/// writers never touch the same file. An in-memory index tracks which files
+	/// belong to each cache entry, so stale files on disk are ignored.
 	Disk {
 		path: PathBuf,
 		next_writer_id: AtomicUsize,
+		file_index: DashMap<usize, Vec<PathBuf>>,
 		_marker: PhantomData<V>,
 	},
 }
@@ -58,6 +59,7 @@ impl<V: CacheValue> TraversalCache<V> {
 				Self::Disk {
 					path,
 					next_writer_id: AtomicUsize::new(0),
+					file_index: DashMap::new(),
 					_marker: PhantomData,
 				}
 			}
@@ -75,7 +77,10 @@ impl<V: CacheValue> TraversalCache<V> {
 				Ok(())
 			}
 			Self::Disk {
-				path, next_writer_id, ..
+				path,
+				next_writer_id,
+				file_index,
+				..
 			} => {
 				let writer_id = next_writer_id.fetch_add(1, Ordering::Relaxed);
 				let dir_path = path.join(index.to_string());
@@ -87,6 +92,7 @@ impl<V: CacheValue> TraversalCache<V> {
 					value.write_to_cache(&mut writer)?;
 				}
 				writer.flush()?;
+				file_index.entry(index).or_default().push(file_path);
 				Ok(())
 			}
 		}
@@ -108,7 +114,10 @@ impl<V: CacheValue> TraversalCache<V> {
 				Ok(())
 			}
 			Self::Disk {
-				path, next_writer_id, ..
+				path,
+				next_writer_id,
+				file_index,
+				..
 			} => {
 				let writer_id = next_writer_id.fetch_add(1, Ordering::Relaxed);
 				let dir_path = path.join(index.to_string());
@@ -121,6 +130,7 @@ impl<V: CacheValue> TraversalCache<V> {
 					value.write_to_cache(&mut writer)?;
 				}
 				writer.flush()?;
+				file_index.entry(index).or_default().push(file_path);
 				Ok(())
 			}
 		}
@@ -133,18 +143,14 @@ impl<V: CacheValue> TraversalCache<V> {
 	pub fn take(&self, index: usize) -> Result<Option<Vec<V>>> {
 		match self {
 			Self::Memory(map) => Ok(map.remove(&index).map(|(_, v)| v)),
-			Self::Disk { path, .. } => {
-				let dir_path = path.join(index.to_string());
-				if !dir_path.exists() {
-					return Ok(None);
-				}
-				let data = Self::read_index_dir(&dir_path)?;
-				remove_dir_all(&dir_path)?;
-				if data.is_empty() {
-					Ok(None)
-				} else {
-					Ok(Some(Self::buffer_to_values(&data)?))
-				}
+			Self::Disk { path, file_index, .. } => {
+				let files = match file_index.remove(&index) {
+					Some((_, files)) if !files.is_empty() => files,
+					_ => return Ok(None),
+				};
+				let data = Self::read_files(&files)?;
+				remove_dir_all(path.join(index.to_string())).ok();
+				Ok(Some(Self::buffer_to_values(&data)?))
 			}
 		}
 	}
@@ -159,34 +165,24 @@ impl<V: CacheValue> TraversalCache<V> {
 	{
 		match self {
 			Self::Memory(map) => Ok(map.remove(&index).map(|(_, v)| futures::stream::iter(v).boxed())),
-			Self::Disk { path, .. } => {
-				let dir_path = path.join(index.to_string());
-				if !dir_path.exists() {
-					return Ok(None);
-				}
-				let data = Self::read_index_dir(&dir_path)?;
-				remove_dir_all(&dir_path)?;
-				if data.is_empty() {
-					Ok(None)
-				} else {
-					let values = Self::buffer_to_values(&data)?;
-					Ok(Some(futures::stream::iter(values).boxed()))
-				}
+			Self::Disk { path, file_index, .. } => {
+				let files = match file_index.remove(&index) {
+					Some((_, files)) if !files.is_empty() => files,
+					_ => return Ok(None),
+				};
+				let data = Self::read_files(&files)?;
+				remove_dir_all(path.join(index.to_string())).ok();
+				let values = Self::buffer_to_values(&data)?;
+				Ok(Some(futures::stream::iter(values).boxed()))
 			}
 		}
 	}
 
-	/// Read all cache files for an index directory, sorted by filename to
-	/// preserve insertion order.
-	fn read_index_dir(dir_path: &Path) -> Result<Vec<u8>> {
-		let mut entries: Vec<_> = read_dir(dir_path)?
-			.filter_map(std::result::Result::ok)
-			.filter(|e| e.path().extension().is_some_and(|ext| ext == "bin"))
-			.collect();
-		entries.sort_by_key(std::fs::DirEntry::file_name);
+	/// Read and concatenate all given cache files in order.
+	fn read_files(files: &[PathBuf]) -> Result<Vec<u8>> {
 		let mut data = Vec::new();
-		for entry in entries {
-			File::open(entry.path())?.read_to_end(&mut data)?;
+		for file_path in files {
+			File::open(file_path)?.read_to_end(&mut data)?;
 		}
 		Ok(data)
 	}
