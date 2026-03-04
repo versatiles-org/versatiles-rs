@@ -21,7 +21,7 @@ impl CacheValue for Tile {
 	}
 
 	#[context("deserializing Tile from cache")]
-	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
 		let blob = Option::<Blob>::read_from_cache(reader)?;
 		let content = Option::<TileContent>::read_from_cache(reader)?;
 		let format = TileFormat::read_from_cache(reader)?;

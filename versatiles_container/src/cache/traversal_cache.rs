@@ -16,7 +16,7 @@ use futures::{Stream, StreamExt, stream::BoxStream};
 use std::{
 	fmt::Debug,
 	fs::{File, OpenOptions, create_dir_all, remove_dir_all, remove_file, write},
-	io::{Cursor, Read, Write},
+	io::{BufWriter, Cursor, Read, Write},
 	marker::PhantomData,
 	path::PathBuf,
 };
@@ -94,16 +94,16 @@ impl<V: CacheValue> TraversalCache<V> {
 			}
 			Self::Disk { path, .. } => {
 				let file_path = path.join(format!("{index}.bin"));
+				let file = OpenOptions::new().create(true).append(true).open(&file_path)?;
+				let mut writer = BufWriter::new(file);
 				let mut buf = Vec::new();
 				futures::pin_mut!(stream);
 				while let Some(value) = stream.next().await {
+					buf.clear();
 					value.write_to_cache(&mut buf)?;
+					writer.write_all(&buf)?;
 				}
-				if file_path.exists() {
-					OpenOptions::new().append(true).open(&file_path)?.write_all(&buf)?;
-				} else {
-					write(&file_path, &buf)?;
-				}
+				writer.flush()?;
 				Ok(())
 			}
 		}
@@ -148,8 +148,19 @@ impl<V: CacheValue> TraversalCache<V> {
 					let mut data = Vec::new();
 					file.read_to_end(&mut data)?;
 					remove_file(&file_path)?;
-					let values = Self::buffer_to_values(&data)?;
-					Ok(Some(futures::stream::iter(values).boxed()))
+					let len = data.len() as u64;
+					let mut cursor = Cursor::new(data);
+					let iter = std::iter::from_fn(move || {
+						if cursor.position() >= len {
+							None
+						} else {
+							Some(
+								V::read_from_cache(&mut cursor)
+									.expect("failed to deserialize from traversal cache"),
+							)
+						}
+					});
+					Ok(Some(futures::stream::iter(iter).boxed()))
 				} else {
 					Ok(None)
 				}

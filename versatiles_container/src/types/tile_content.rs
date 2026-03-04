@@ -159,7 +159,7 @@ impl CacheValue for TileContent {
 
 	/// Read content from the compact binary representation produced by `write_to_cache`.
 	#[context("deserializing tile from cache buffer")]
-	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
 		let content_type = reader.read_u8()?;
 		match content_type {
 			0 => {

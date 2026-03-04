@@ -53,7 +53,7 @@ pub trait CacheValue: Clone {
 	///
 	/// # Errors
 	/// Returns an error if reading or decoding fails.
-	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self>;
+	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self>;
 }
 
 /// Implements binary serialization for `u8`.
@@ -65,7 +65,7 @@ impl CacheValue for u8 {
 		Ok(())
 	}
 
-	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
 		let value = reader.read_u8()?;
 		Ok(value)
 	}
@@ -78,7 +78,7 @@ impl CacheValue for u32 {
 		Ok(())
 	}
 
-	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
 		let value = reader.read_u32::<LE>()?;
 		Ok(value)
 	}
@@ -93,7 +93,7 @@ impl CacheValue for bool {
 		Ok(())
 	}
 
-	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
 		Ok(reader.read_u8()? != 0)
 	}
 }
@@ -113,7 +113,7 @@ impl CacheValue for String {
 		Ok(())
 	}
 
-	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
 		let length = reader.read_u32::<LE>()? as usize;
 		let mut bytes = vec![0u8; length];
 		reader.read_exact(&mut bytes)?;
@@ -135,7 +135,7 @@ impl<T: CacheValue> CacheValue for Vec<T> {
 		Ok(())
 	}
 
-	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+	fn read_from_cache<U: AsRef<[u8]>>(reader: &mut Cursor<U>) -> Result<Self> {
 		let length = reader.read_u32::<LE>()? as usize;
 		let mut vec = Vec::with_capacity(length);
 		for _ in 0..length {
@@ -152,7 +152,7 @@ impl<A: CacheValue, B: CacheValue> CacheValue for (A, B) {
 		self.1.write_to_cache(writer)
 	}
 
-	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
 		let a = A::read_from_cache(reader)?;
 		let b = B::read_from_cache(reader)?;
 		Ok((a, b))
@@ -173,7 +173,7 @@ impl CacheValue for TileCoord {
 		Ok(())
 	}
 
-	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
 		let level = reader.read_u8()?;
 		let x = reader.read_u32::<LE>()?;
 		let y = reader.read_u32::<LE>()?;
@@ -193,7 +193,7 @@ impl CacheValue for Blob {
 		Ok(())
 	}
 
-	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
 		let length = usize::try_from(reader.read_u64::<LE>()?)?;
 		let mut bytes = vec![0u8; length];
 		reader.read_exact(&mut bytes)?;
@@ -209,7 +209,7 @@ impl CacheValue for TileFormat {
 		Ok(())
 	}
 
-	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
 		let value = reader.read_u8()?;
 		TileFormat::try_from(value)
 	}
@@ -223,7 +223,7 @@ impl CacheValue for TileCompression {
 		Ok(())
 	}
 
-	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
 		let value = reader.read_u8()?;
 		TileCompression::try_from(value)
 	}
@@ -247,7 +247,7 @@ impl<V: CacheValue> CacheValue for Option<V> {
 		}
 	}
 
-	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
 		let flag = reader.read_u8()?;
 		if flag == 1 {
 			let value = V::read_from_cache(reader)?;
@@ -282,7 +282,7 @@ impl CacheValue for DynamicImage {
 		Ok(())
 	}
 
-	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+	fn read_from_cache<T: AsRef<[u8]>>(reader: &mut Cursor<T>) -> Result<Self> {
 		let width = reader.read_u32::<LE>()?;
 		let height = reader.read_u32::<LE>()?;
 		let data_length = reader.read_u32::<LE>()? as usize;
