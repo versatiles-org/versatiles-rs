@@ -187,8 +187,9 @@ impl<V: CacheValue> TraversalCache<V> {
 				let (tx, rx) = tokio::sync::mpsc::channel::<V>(64);
 				for file_path in files {
 					let tx = tx.clone();
-					tokio::task::spawn_blocking(move || {
-						if let Ok(iter) = Self::iter_values_from_file(&file_path) {
+					tokio::task::spawn_blocking(move || match Self::iter_values_from_file(&file_path) {
+						Err(e) => log::warn!("failed to open cache file {}: {e}", file_path.display()),
+						Ok(iter) => {
 							for result in iter {
 								match result {
 									Ok(value) => {
@@ -196,7 +197,13 @@ impl<V: CacheValue> TraversalCache<V> {
 											break;
 										}
 									}
-									Err(_) => break,
+									Err(e) => {
+										log::warn!(
+											"failed to deserialize value from cache file {}: {e}",
+											file_path.display()
+										);
+										break;
+									}
 								}
 							}
 						}
