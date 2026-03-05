@@ -1,4 +1,4 @@
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, ensure};
 use dashmap::DashMap;
 use imageproc::image::{DynamicImage, GenericImage};
 use std::sync::Arc;
@@ -69,47 +69,6 @@ impl OverviewCore {
 		})
 	}
 
-	#[context("Failed to add images to cache from container {container:?}")]
-	pub async fn add_images_to_cache(&self, container: &TileBBoxMap<Option<DynamicImage>>) -> Result<()> {
-		log::trace!("add_images_to_cache: {:?}", container.bbox());
-
-		let bbox = container.bbox();
-		if bbox.level == 0 || bbox.level > self.level_base {
-			return Ok(());
-		}
-
-		if bbox.width() > BLOCK_TILE_COUNT || bbox.height() > BLOCK_TILE_COUNT {
-			bail!("Container bbox is too large: {bbox:?}");
-		}
-
-		let full_size = self.tile_size;
-		let scale_fn = self.scale_fn.clone();
-
-		let images: Vec<(TileCoord, Option<DynamicImage>)> =
-			futures::future::join_all(container.iter().map(|(coord, item)| {
-				let item = item.clone();
-				let scale_fn = scale_fn.clone();
-				tokio::task::spawn_blocking(move || {
-					if let Some(image) = item {
-						assert_eq!(image.width(), full_size);
-						assert_eq!(image.height(), full_size);
-						(coord, Some(scale_fn(&image).unwrap()))
-					} else {
-						(coord, None)
-					}
-				})
-			}))
-			.await
-			.into_iter()
-			.collect::<Result<Vec<_>, _>>()?;
-
-		let mut coord = bbox.min_corner()?;
-		coord.floor(BLOCK_TILE_COUNT);
-		self.cache.insert(coord, images);
-
-		Ok(())
-	}
-
 	#[context("Failed to build images from cache for bbox {bbox:?}")]
 	pub async fn build_images_from_cache(&self, bbox: TileBBox) -> Result<TileBBoxMap<Option<DynamicImage>>> {
 		log::trace!("build_images_from_cache: {bbox:?}");
@@ -169,6 +128,55 @@ impl OverviewCore {
 		TileBBoxMap::<Option<DynamicImage>>::from_iter(bbox, vec.into_iter())
 	}
 
+	/// Consume the container: scale each image down for the cache and wrap
+	/// the original in a [`Tile`] — all in parallel, with zero image clones.
+	#[context("Failed to scale and encode tiles for bbox {bbox:?}")]
+	async fn scale_cache_and_encode(
+		&self,
+		container: TileBBoxMap<Option<DynamicImage>>,
+		bbox: TileBBox,
+	) -> Result<Vec<(TileCoord, Tile)>> {
+		let container_bbox = *container.bbox();
+		let format = self.source.metadata().tile_format;
+		let full_size = self.tile_size;
+		let scale_fn = self.scale_fn.clone();
+		let need_cache = container_bbox.level > 0 && container_bbox.level <= self.level_base;
+
+		let results: Vec<_> = futures::future::join_all(container.into_iter().map(|(coord, image_opt)| {
+			let scale_fn = scale_fn.clone();
+			tokio::task::spawn_blocking(move || {
+				let scaled = if need_cache {
+					image_opt.as_ref().map(|img| {
+						assert_eq!(img.width(), full_size);
+						assert_eq!(img.height(), full_size);
+						scale_fn(img).unwrap()
+					})
+				} else {
+					None
+				};
+				let tile = if bbox.contains(&coord) {
+					image_opt.map(|img| (coord, Tile::from_image(img, format).unwrap()))
+				} else {
+					None
+				};
+				((coord, scaled), tile)
+			})
+		}))
+		.await
+		.into_iter()
+		.collect::<Result<Vec<_>, _>>()?;
+
+		let (cache_entries, tiles): (Vec<_>, Vec<_>) = results.into_iter().unzip();
+
+		if need_cache {
+			let mut key = container_bbox.min_corner()?;
+			key.floor(BLOCK_TILE_COUNT);
+			self.cache.insert(key, cache_entries);
+		}
+
+		Ok(tiles.into_iter().flatten().collect())
+	}
+
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
 	pub async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("overview::get_tile_stream {bbox:?}");
@@ -200,26 +208,8 @@ impl OverviewCore {
 			self.build_images_from_cache(bbox0).await?
 		};
 
-		log::trace!("Adding images to cache for bbox {:?}", container.bbox());
-		self.add_images_to_cache(&container).await?;
-
-		let format = self.source.metadata().tile_format;
-
-		log::trace!("Composing final stream for bbox {bbox:?}");
-		let vec = container
-			.into_iter()
-			.filter_map(move |(c, o)| {
-				if let Some(image) = o {
-					if bbox.contains(&c) {
-						Some((c, Tile::from_image(image, format).unwrap()))
-					} else {
-						None
-					}
-				} else {
-					None
-				}
-			})
-			.collect();
+		log::trace!("Scaling, caching, and encoding tiles for bbox {bbox:?}");
+		let vec = self.scale_cache_and_encode(container, bbox).await?;
 
 		Ok(TileStream::from_vec(vec))
 	}

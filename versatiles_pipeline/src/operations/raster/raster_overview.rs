@@ -67,7 +67,7 @@ mod tests {
 	use crate::factory::OperationFactoryTrait;
 	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::{DynamicImage, GenericImage, GenericImageView, Rgba};
-	use versatiles_core::{GeoBBox, TileBBoxMap, TileBBoxPyramid, TileCoord, TileFormat};
+	use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCoord, TileFormat};
 
 	async fn make_operation(tile_size: u32, level_base: u8) -> Operation {
 		let pyramid = TileBBoxPyramid::from_geo_bbox(
@@ -85,81 +85,107 @@ mod tests {
 		.unwrap();
 	}
 
-	fn solid_rgba(size: u32, r: u8, g: u8, b: u8, a: u8) -> DynamicImage {
-		let color = Rgba([r, g, b, a]);
-		let mut img = DynamicImage::new_rgba8(size, size);
-		for y in 0..size {
-			for x in 0..size {
-				img.put_pixel(x, y, color);
-			}
-		}
-		img
-	}
-
 	#[tokio::test]
-	async fn add_images_to_cache_inserts_half_tiles_under_floored_key() -> Result<()> {
-		let op = make_operation(2, 6).await;
-		let bbox = TileBBox::from_min_and_max(6, 0, 0, 31, 31)?; // 32x32 block at base level
-		let mut container = TileBBoxMap::new_default(bbox)?;
-		// Populate with simple solid tiles (only a tiny subset to keep it cheap)
-		for y in 0..bbox.height() {
-			for x in 0..bbox.width() {
-				let c = TileCoord::new(6, bbox.x_min()? + x, bbox.y_min()? + y)?;
-				container.insert(c, Some(solid_rgba(2, x as u8, y as u8, 32, 255)))?;
+	async fn get_tile_stream_at_base_populates_cache() -> Result<()> {
+		let op = make_operation(256, 6).await;
+		let metadata = op.metadata();
+		let level_bbox = metadata.bbox_pyramid.get_level_bbox(6);
+		let bbox = TileBBox::from_min_and_size(6, level_bbox.x_min()?, level_bbox.y_min()?, 1, 1)?;
+
+		// Fetch at base level — should populate the cache with scaled-down entries
+		let tiles = op.get_tile_stream(bbox).await?.to_vec().await;
+		assert_eq!(tiles.len(), 1);
+
+		// Cache should now contain entries for the base-level block
+		assert!(
+			!op.core.cache.is_empty(),
+			"cache should be populated after base-level fetch"
+		);
+
+		// Verify cached images are half-size (128 for tile_size=256)
+		let half_size = op.core.tile_size / 2;
+		for entry in op.core.cache.iter() {
+			for (coord, img_opt) in entry.value() {
+				assert_eq!(coord.level, 6);
+				if let Some(img) = img_opt {
+					assert_eq!(img.width(), half_size);
+					assert_eq!(img.height(), half_size);
+				}
 			}
-		}
-
-		op.core.add_images_to_cache(&container).await?;
-
-		// Cache key should be the floored corner of the container bbox at level 6
-		let key = TileCoord::new(6, 0, 0)?;
-		assert!(op.core.cache.contains_key(&key));
-
-		let (_key, stored) = op.core.cache.remove(&key).expect("value stored");
-		// Stored entries are (coord, Option<img>) with half-size images (1x1 at tile_size=2)
-		assert!(!stored.is_empty());
-
-		for (coord, img_opt) in stored {
-			assert_eq!(coord.level, 6);
-			assert_eq!(img_opt.unwrap().dimensions(), (1, 1));
 		}
 
 		Ok(())
 	}
 
 	#[tokio::test]
-	async fn build_images_from_cache_composes_quadrants() -> Result<()> {
+	async fn get_tile_stream_builds_lower_zoom_from_cache() -> Result<()> {
+		let op = make_operation(256, 6).await;
+		let metadata = op.metadata().clone();
+		let level_bbox = metadata.bbox_pyramid.get_level_bbox(6);
+
+		// First, fetch all base-level tiles to populate the cache
+		let base_bbox = *level_bbox;
+		let _base_tiles = op.get_tile_stream(base_bbox).await?.to_vec().await;
+		assert!(!op.core.cache.is_empty(), "cache should be populated");
+
+		// Now fetch at level 5 — should compose from cached half-size images
+		let lvl5_bbox = metadata.bbox_pyramid.get_level_bbox(5);
+		let tiles_lvl5 = op.get_tile_stream(*lvl5_bbox).await?.to_vec().await;
+		// Should produce at least one tile at level 5
+		assert!(!tiles_lvl5.is_empty(), "should produce tiles at level 5 from cache");
+
+		for (coord, _tile) in &tiles_lvl5 {
+			assert_eq!(coord.level, 5);
+		}
+
+		Ok(())
+	}
+
+	/// Helper: create a solid 1×1 RGBA image (half-size for tile_size=2).
+	fn pixel(r: u8, g: u8, b: u8, a: u8) -> DynamicImage {
+		let mut img = DynamicImage::new_rgba8(1, 1);
+		img.put_pixel(0, 0, Rgba([r, g, b, a]));
+		img
+	}
+
+	#[tokio::test]
+	async fn build_images_from_cache_composes_quadrants_with_correct_pixels() -> Result<()> {
 		let op = make_operation(2, 6).await;
 
-		// Prepare cache content by adding a full 32x32 block at level 6
-		let bbox_lvl6 = TileBBox::from_min_and_size(6, 0, 0, 32, 32)?;
-		let mut cont6 = TileBBoxMap::new_default(bbox_lvl6)?;
-		for y in 0..bbox_lvl6.height() {
-			for x in 0..bbox_lvl6.width() {
-				let c = TileCoord::new(6, x, y)?;
-				cont6.insert(c, Some(solid_rgba(2, x as u8, y as u8, 0, 255)))?;
+		// Manually populate the cache with known half-size (1×1) images for a 32×32 block at level 6.
+		// Each tile at (x, y) gets a unique color: R=x, G=y, B=42, A=255.
+		let block_key = TileCoord::new(6, 0, 0)?;
+		let mut entries: Vec<(TileCoord, Option<DynamicImage>)> = Vec::new();
+		for y in 0u32..32 {
+			for x in 0u32..32 {
+				let coord = TileCoord::new(6, x, y)?;
+				entries.push((coord, Some(pixel(x as u8, y as u8, 42, 255))));
 			}
 		}
-		op.core.add_images_to_cache(&cont6).await?;
+		op.core.cache.insert(block_key, entries);
 
-		// Now request composed images at level 5 for a tiny bbox (2x2 tiles)
+		// Request composed images at level 5 for a 2×2 bbox
 		let bbox_lvl5 = TileBBox::from_min_and_size(5, 0, 0, 2, 2)?;
 		let result = op.core.build_images_from_cache(bbox_lvl5).await?;
-		let items: Vec<_> = result.into_iter().collect();
-		// We expect at least one composed tile present (others may be missing if cache quadrants absent)
+		let items: Vec<_> = result.into_iter().filter(|(_, img)| img.is_some()).collect();
 		assert!(!items.is_empty());
 
 		for (coord, img_opt) in items {
 			assert_eq!(coord.level, 5);
 			let img = img_opt.unwrap();
 			assert_eq!(img.dimensions(), (2, 2));
-			// Check pixel colors to verify correct quadrant composition
-			let r0 = coord.x as u8 * 2;
-			let g0 = coord.y as u8 * 2;
-			assert_eq!(img.get_pixel(0, 0).0, [r0, g0, 0, 255]);
-			assert_eq!(img.get_pixel(0, 1).0, [r0, g0 + 1, 0, 255]);
-			assert_eq!(img.get_pixel(1, 0).0, [r0 + 1, g0, 0, 255]);
-			assert_eq!(img.get_pixel(1, 1).0, [r0 + 1, g0 + 1, 0, 255]);
+
+			// Level-5 tile at (x0, y0) is composed from level-6 children:
+			//   (2*x0,   2*y0)   → quadrant (0, 0)
+			//   (2*x0+1, 2*y0)   → quadrant (1, 0)
+			//   (2*x0,   2*y0+1) → quadrant (0, 1)
+			//   (2*x0+1, 2*y0+1) → quadrant (1, 1)
+			let x0 = coord.x as u8;
+			let y0 = coord.y as u8;
+			assert_eq!(img.get_pixel(0, 0).0, [x0 * 2, y0 * 2, 42, 255]);
+			assert_eq!(img.get_pixel(1, 0).0, [x0 * 2 + 1, y0 * 2, 42, 255]);
+			assert_eq!(img.get_pixel(0, 1).0, [x0 * 2, y0 * 2 + 1, 42, 255]);
+			assert_eq!(img.get_pixel(1, 1).0, [x0 * 2 + 1, y0 * 2 + 1, 42, 255]);
 		}
 
 		Ok(())
