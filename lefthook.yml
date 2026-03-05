@@ -44,12 +44,8 @@ pre-push:
 
     # Full Rust checks before push
     rust-check:
-      run: |
-        source scripts/env-gdal.sh
-        cargo clippy --workspace --all-targets -- -D warnings
+      run: cargo clippy --workspace --all-targets -- -D warnings
 
     # All tests before push
     test:
-      run: |
-        source scripts/env-gdal.sh
-        cargo test --workspace --all-targets
+      run: cargo test --workspace --all-targets
