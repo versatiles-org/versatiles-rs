@@ -3,6 +3,12 @@
 
 name: "VersaTiles CodeQL Config"
 
+paths-ignore:
+  - node_modules
+  - target
+  - dist
+  - "**/*.test.ts"
+
 # Query filters to suppress known false positives
 query-filters:
   # The versatiles_node crate uses napi-rs for FFI with JavaScript.
