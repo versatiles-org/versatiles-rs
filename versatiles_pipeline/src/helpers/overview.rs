@@ -191,7 +191,7 @@ impl OverviewCore {
 					.source
 					.get_tile_stream(bbox)
 					.await?
-					.map_parallel_try(|_coord, tile| versatiles_container::Tile::into_image(tile))
+					.map_parallel_try(|_coord, tile| tile.into_image())
 					.unwrap_results(),
 			)
 			.await?
