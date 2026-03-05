@@ -341,6 +341,32 @@ jobs:
         run: npm run test:examples
 
   # ============================================================================
+  # macOS: GDAL
+  # ============================================================================
+  macos-gdal:
+    name: "macOS: GDAL"
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup GDAL
+        uses: ./.github/actions/setup-gdal
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "macos-gdal"
+          cache-targets: true
+          cache-on-failure: false
+
+      - name: Test with GDAL
+        run: cargo test --workspace --all-targets --features gdal
+
+  # ============================================================================
   # CI Success - Summary job
   # ============================================================================
   ci-success:
@@ -352,7 +378,7 @@ jobs:
       - linux-docs
       - linux-nodejs
       - linux-feature-matrix
-      - windows-lint
+      - macos-gdal
       - windows-test
       - windows-nodejs
     if: always()
