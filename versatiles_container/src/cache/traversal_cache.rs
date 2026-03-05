@@ -24,7 +24,7 @@ use dashmap::DashMap;
 use futures::{Stream, StreamExt, stream::BoxStream};
 use std::{
 	fmt::Debug,
-	fs::{File, create_dir_all, remove_dir_all},
+	fs::{File, create_dir_all, remove_dir_all, remove_file},
 	io::{BufReader, BufWriter, Read, Write},
 	marker::PhantomData,
 	path::{Path, PathBuf},
@@ -44,6 +44,18 @@ impl<R: Read> Read for CountingReader<R> {
 		let n = self.inner.read(buf)?;
 		self.position += n as u64;
 		Ok(n)
+	}
+}
+
+/// Guard that removes a directory tree when dropped.
+///
+/// Ensures per-index cache directories are cleaned up regardless of whether
+/// the stream returned by [`TraversalCache::take_stream`] is fully consumed.
+struct DirCleanupGuard(PathBuf);
+
+impl Drop for DirCleanupGuard {
+	fn drop(&mut self) {
+		let _ = remove_dir_all(&self.0);
 	}
 }
 
@@ -167,35 +179,41 @@ impl<V: CacheValue> TraversalCache<V> {
 				let (tx, rx) = tokio::sync::mpsc::channel::<V>(64);
 				for file_path in files {
 					let tx = tx.clone();
-					tokio::task::spawn_blocking(move || match Self::iter_values_from_file(&file_path) {
-						Err(e) => log::warn!("failed to open cache file {}: {e}", file_path.display()),
-						Ok(iter) => {
-							for result in iter {
-								match result {
-									Ok(value) => {
-										if tx.blocking_send(value).is_err() {
+					tokio::task::spawn_blocking(move || {
+						match Self::iter_values_from_file(&file_path) {
+							Err(e) => log::warn!("failed to open cache file {}: {e}", file_path.display()),
+							Ok(iter) => {
+								for result in iter {
+									match result {
+										Ok(value) => {
+											if tx.blocking_send(value).is_err() {
+												break;
+											}
+										}
+										Err(e) => {
+											log::warn!(
+												"failed to deserialize value from cache file {}: {e}",
+												file_path.display()
+											);
 											break;
 										}
-									}
-									Err(e) => {
-										log::warn!(
-											"failed to deserialize value from cache file {}: {e}",
-											file_path.display()
-										);
-										break;
 									}
 								}
 							}
 						}
+						// Iterator (and file handle) is dropped; delete the individual file.
+						let _ = remove_file(&file_path);
 					});
 				}
 				drop(tx);
-				let stream = futures::stream::unfold(rx, |mut rx| async move { rx.recv().await.map(|v| (v, rx)) });
-				let cleanup = futures::stream::once(async move {
-					let _ = remove_dir_all(dir_path);
-				})
-				.filter_map(|()| futures::future::ready(None));
-				Ok(Some(stream.chain(cleanup).boxed()))
+				// The DirCleanupGuard lives inside the unfold state, so the per-index
+				// directory is removed when the stream is dropped — whether fully
+				// consumed or abandoned early.
+				let guard = DirCleanupGuard(dir_path);
+				let stream = futures::stream::unfold((rx, guard), |(mut rx, guard)| async move {
+					rx.recv().await.map(|v| (v, (rx, guard)))
+				});
+				Ok(Some(stream.boxed()))
 			}
 		}
 	}
@@ -283,9 +301,10 @@ mod tests {
 	async fn test_append_and_take_stream(#[case] case: &str) -> Result<()> {
 		use futures::StreamExt;
 
+		let temp_dir = TempDir::new()?;
 		let cache_type = match case {
 			"mem" => CacheType::InMemory,
-			"disk" => CacheType::Disk(TempDir::new()?.path().to_path_buf()),
+			"disk" => CacheType::Disk(temp_dir.path().to_path_buf()),
 			_ => panic!("unknown case"),
 		};
 		let cache = TraversalCache::<String>::new(&cache_type)?;
@@ -336,9 +355,10 @@ mod tests {
 	async fn test_binary_values_stream(#[case] case: &str) -> Result<()> {
 		use futures::StreamExt;
 
+		let temp_dir = TempDir::new()?;
 		let cache_type = match case {
 			"mem" => CacheType::InMemory,
-			"disk" => CacheType::Disk(TempDir::new()?.path().to_path_buf()),
+			"disk" => CacheType::Disk(temp_dir.path().to_path_buf()),
 			_ => panic!("unknown case"),
 		};
 		let cache = TraversalCache::<Vec<u8>>::new(&cache_type)?;
