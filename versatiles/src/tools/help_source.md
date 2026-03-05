@@ -54,7 +54,7 @@ Use `[,vpl]` prefix with parentheses to define a VPL pipeline directly:
 
 ```text
 [,vpl](from_mbtiles tiles.mbtiles)
-[osm,vpl](from_mbtiles tiles.mbtiles | filter_zoom 0-10)
+[osm,vpl](from_mbtiles tiles.mbtiles | filter level_max=10)
 ```
 
 The content in parentheses is treated as VPL (VersaTiles Pipeline Language).
@@ -98,7 +98,7 @@ versatiles probe https://download.versatiles.org/osm.versatiles
 versatiles serve [osm]tiles.versatiles [satellite]imagery.mbtiles
 
 # Inline VPL pipeline
-versatiles convert "[,vpl](from_mbtiles in.mbtiles | filter_zoom 0-12)" out.versatiles
+versatiles convert "[,vpl](from_mbtiles in.mbtiles | filter level_max=12)" out.versatiles
 
 # Override container type
 versatiles probe tiles.db[,mbtiles]

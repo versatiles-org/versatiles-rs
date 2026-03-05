@@ -484,7 +484,7 @@ This also enables **inline VPL pipelines** — define a pipeline directly on the
 
 ```sh
 versatiles convert \
-  "[,vpl](from_container filename='input.versatiles' | filter_zoom 0-12)" \
+  "[,vpl](from_container filename='input.versatiles' | filter level_max=12)" \
   output.versatiles
 ```
 
