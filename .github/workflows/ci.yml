@@ -240,40 +240,6 @@ jobs:
         run: cargo test --workspace --all-targets ${{ matrix.features }}
 
   # ============================================================================
-  # Windows: Lint (Format + Clippy)
-  # ============================================================================
-  windows-lint:
-    name: "Windows: Lint"
-    runs-on: windows-latest
-    steps:
-      - name: Configure Git
-        shell: bash
-        run: |
-          git config --global core.autocrlf false
-          git config --global core.eol lf
-
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "windows-lint"
-          cache-targets: true
-          cache-on-failure: false
-
-      - name: Check format
-        run: cargo fmt -- --check
-
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
-  # ============================================================================
   # Windows: Test
   # ============================================================================
   windows-test:
