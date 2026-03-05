@@ -147,22 +147,23 @@ impl OverviewCore {
 			}
 		}
 
-		let vec: Vec<(TileCoord, DynamicImage)> = map
+		let vec: Vec<(TileCoord, DynamicImage)> =
+			futures::future::join_all(map.into_iter().filter(|(_, sub_entries)| !sub_entries.is_empty()).map(
+				|(coord0, sub_entries)| {
+					tokio::task::spawn_blocking(move || {
+						let mut image_tmp = DynamicImage::new_rgba8(full_size, full_size);
+						for (coord1, image1) in sub_entries {
+							image_tmp
+								.copy_from(&image1, (coord1.x % 2) * half_size, (coord1.y % 2) * half_size)
+								.unwrap();
+						}
+						image_tmp.into_optional().map(|image| (coord0, image))
+					})
+				},
+			))
+			.await
 			.into_iter()
-			.filter_map(|(coord0, sub_entries)| {
-				if sub_entries.is_empty() {
-					return None;
-				}
-
-				let mut image_tmp = DynamicImage::new_rgba8(full_size, full_size);
-				for (coord1, image1) in sub_entries {
-					image_tmp
-						.copy_from(&image1, (coord1.x % 2) * half_size, (coord1.y % 2) * half_size)
-						.unwrap();
-				}
-
-				image_tmp.into_optional().map(|image| (coord0, image))
-			})
+			.filter_map(|r| r.unwrap())
 			.collect();
 
 		TileBBoxMap::<Option<DynamicImage>>::from_iter(bbox, vec.into_iter())
