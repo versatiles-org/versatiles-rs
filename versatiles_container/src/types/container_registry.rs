@@ -33,7 +33,7 @@ use crate::{
 };
 #[cfg(test)]
 use crate::{MockReader, TileSourceMetadata, Traversal};
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail};
 #[cfg(test)]
 use assert_fs::NamedTempFile;
 use std::{
@@ -136,6 +136,19 @@ impl ContainerRegistry {
 	#[context("Failed to get reader from string '{data_source}'")]
 	pub async fn get_reader_from_str(&self, data_source: &str, runtime: TilesRuntime) -> Result<SharedTileSource> {
 		self.get_reader(DataSource::parse(data_source)?, runtime).await
+	}
+
+	/// Get a tile container reader for a given [`DataLocation`] (path or URL).
+	pub async fn get_reader_from_location(
+		&self,
+		location: DataLocation,
+		runtime: TilesRuntime,
+	) -> Result<SharedTileSource> {
+		let debug = format!("{location:?}");
+		self
+			.get_reader(DataSource::try_from(location)?, runtime)
+			.await
+			.with_context(|| format!("Failed to get reader from location '{debug}'"))
 	}
 
 	/// Get a tile container reader for a given filename or URL.

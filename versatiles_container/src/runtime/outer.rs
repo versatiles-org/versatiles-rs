@@ -1,5 +1,5 @@
 use super::{EventBus, RuntimeBuilder, RuntimeInner};
-use crate::{CacheType, DataSource, ProgressHandle, SharedTileSource};
+use crate::{CacheType, DataLocation, DataSource, ProgressHandle, SharedTileSource};
 use anyhow::Result;
 use std::{path::Path, sync::Arc};
 
@@ -96,6 +96,15 @@ impl TilesRuntime {
 
 	pub async fn get_reader_from_str(&self, filename: &str) -> Result<SharedTileSource> {
 		self.inner.registry.get_reader_from_str(filename, self.clone()).await
+	}
+
+	/// Open a tile container reader from a [`DataLocation`] (path or URL).
+	pub async fn get_reader_from_location(&self, location: DataLocation) -> Result<SharedTileSource> {
+		self
+			.inner
+			.registry
+			.get_reader_from_location(location, self.clone())
+			.await
 	}
 
 	pub async fn get_reader(&self, data_source: DataSource) -> Result<SharedTileSource> {

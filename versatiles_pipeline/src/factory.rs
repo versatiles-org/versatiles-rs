@@ -20,13 +20,8 @@ use async_trait::async_trait;
 use futures::future::BoxFuture;
 use itertools::Itertools;
 use regex::Regex;
-use std::{
-	collections::HashMap,
-	path::{Path, PathBuf},
-	sync::LazyLock,
-	vec,
-};
-use versatiles_container::{TileSource, TilesRuntime};
+use std::{collections::HashMap, path::PathBuf, sync::LazyLock, vec};
+use versatiles_container::{DataLocation, TileSource, TilesRuntime};
 use versatiles_core::{TileFormat, TileType};
 use versatiles_derive::context;
 
@@ -74,7 +69,7 @@ pub trait TransformOperationFactoryTrait: OperationFactoryTrait {
 ///
 /// The factory invokes this to open external containers referenced by VPL `read` nodes.
 /// It receives the resolved path (relative to `dir`) and returns a boxed reader.
-type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TileSource>>>>;
+type Callback = Box<dyn Fn(DataLocation) -> BoxFuture<'static, Result<Box<dyn TileSource>>>>;
 
 /// Builder that registers read/transform operation factories and produces an operation graph.
 ///
@@ -86,25 +81,25 @@ type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TileSour
 pub struct PipelineFactory {
 	read_ops: HashMap<String, Box<dyn ReadOperationFactoryTrait>>,
 	tran_ops: HashMap<String, Box<dyn TransformOperationFactoryTrait>>,
-	dir: PathBuf,
+	dir: DataLocation,
 	create_reader: Callback,
 	runtime: TilesRuntime,
 }
 
 impl PipelineFactory {
 	/// Creates an empty factory with no registered operations.
-	pub fn new_empty(dir: &Path, create_reader: Callback, runtime: TilesRuntime) -> Self {
+	pub fn new_empty(dir: DataLocation, create_reader: Callback, runtime: TilesRuntime) -> Self {
 		PipelineFactory {
 			read_ops: HashMap::new(),
 			tran_ops: HashMap::new(),
-			dir: dir.to_path_buf(),
+			dir,
 			create_reader,
 			runtime,
 		}
 	}
 
 	/// Creates a factory pre-loaded with all built-in read and transform operation factories.
-	pub fn new_default(dir: &Path, create_reader: Callback, runtime: TilesRuntime) -> Self {
+	pub fn new_default(dir: DataLocation, create_reader: Callback, runtime: TilesRuntime) -> Self {
 		let mut factory = PipelineFactory::new_empty(dir, create_reader, runtime);
 
 		for f in get_read_operation_factories() {
@@ -123,33 +118,35 @@ impl PipelineFactory {
 	/// Useful for examples and tests: resolves vector sources to `DummyVectorSource` and
 	/// raster sources to `DummyImageSource` based on the filename’s extension/color code.
 	pub fn new_dummy() -> Self {
-		PipelineFactory::new_dummy_reader(Box::new(|filename: String| -> BoxFuture<Result<Box<dyn TileSource>>> {
-			Box::pin(async move {
-				let mut name = filename.clone();
-				let format = TileFormat::from_filename(&mut name)
-					.ok_or_else(|| anyhow!("cannot determine tile format from filename '{filename}'"))?;
+		PipelineFactory::new_dummy_reader(Box::new(
+			|location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
+				Box::pin(async move {
+					let mut name = location.to_string();
+					let format = TileFormat::from_filename(&mut name)
+						.ok_or_else(|| anyhow!("cannot determine tile format from filename '{location}'"))?;
 
-				Ok(match format.to_type() {
-					TileType::Vector => Box::new(DummyVectorSource::new(
-						&[("dummy", &[&[("filename", &filename)]])],
-						None,
-					)) as Box<dyn TileSource>,
-					TileType::Raster => {
-						let color = if !name.is_empty() && name.len() <= 4 {
-							#[allow(clippy::cast_possible_truncation)]
-							name
-								.chars()
-								.filter_map(|c| c.to_digit(16).map(|d| (d * 17) as u8))
-								.collect()
-						} else {
-							vec![50, 150, 250]
-						};
-						Box::new(DummyImageSource::from_color(&color, 4, format, None).unwrap()) as Box<dyn TileSource>
-					}
-					_ => bail!("unsupported tile type for dummy reader in filename '{filename}'"),
+					Ok(match format.to_type() {
+						TileType::Vector => Box::new(DummyVectorSource::new(
+							&[("dummy", &[&[("filename", &location.to_string())]])],
+							None,
+						)) as Box<dyn TileSource>,
+						TileType::Raster => {
+							let color = if !name.is_empty() && name.len() <= 4 {
+								#[allow(clippy::cast_possible_truncation)]
+								name
+									.chars()
+									.filter_map(|c| c.to_digit(16).map(|d| (d * 17) as u8))
+									.collect()
+							} else {
+								vec![50, 150, 250]
+							};
+							Box::new(DummyImageSource::from_color(&color, 4, format, None).unwrap()) as Box<dyn TileSource>
+						}
+						_ => bail!("unsupported tile type for dummy reader in filename '{location}'"),
+					})
 				})
-			})
-		}))
+			},
+		))
 	}
 
 	/// Creates a default-registered factory using the provided custom reader callback.
@@ -159,7 +156,7 @@ impl PipelineFactory {
 		#[cfg(test)]
 		let runtime = TilesRuntime::new_silent();
 
-		PipelineFactory::new_default(Path::new(""), create_reader, runtime)
+		PipelineFactory::new_default(DataLocation::from(PathBuf::new()), create_reader, runtime)
 	}
 
 	/// Registers a read operation factory under its VPL tag name.
@@ -172,10 +169,11 @@ impl PipelineFactory {
 		self.tran_ops.insert(factory.get_tag_name().to_string(), factory);
 	}
 
-	/// Resolves `filename` relative to `dir` and invokes `create_reader` to open a container.
-	#[context("Failed to get reader for file '{}'", filename)]
-	pub async fn get_reader(&self, filename: &str) -> Result<Box<dyn TileSource>> {
-		(self.create_reader.as_ref())(self.dir.join(filename).to_string_lossy().to_string()).await
+	/// Invokes `create_reader` to open a container. Callers must resolve first.
+	#[context("Failed to get reader for file '{}'", location)]
+	pub async fn get_reader(&self, location: DataLocation) -> Result<Box<dyn TileSource>> {
+		let location = location.resolved(&self.dir)?;
+		(self.create_reader.as_ref())(location).await
 	}
 
 	/// Parses VPL text and builds the corresponding operation graph.
@@ -222,14 +220,10 @@ impl PipelineFactory {
 		factory.build(node, source, self).await
 	}
 
-	/// Returns the absolute/normalized string path for a VPL-referenced `filename`.
-	pub fn resolve_filename(&self, filename: &str) -> String {
-		String::from(self.resolve_path(filename).to_str().unwrap())
-	}
-
-	/// Resolves a VPL-referenced `filename` against `dir` and returns a `PathBuf`.
-	pub fn resolve_path(&self, filename: &str) -> PathBuf {
-		self.dir.join(filename)
+	/// Resolves a VPL-referenced location against `dir` and returns a new `DataLocation`.
+	#[context("Failed to resolve location '{location:?}' against base dir")]
+	pub fn resolve_location(&self, location: &DataLocation) -> Result<DataLocation> {
+		location.resolved(&self.dir)
 	}
 
 	/// Returns rendered Markdown help listing all registered operations and their docs.

@@ -61,6 +61,17 @@ impl DataLocation {
 		}
 	}
 
+	/// Clone the underlying filesystem path as a `PathBuf`.
+	///
+	/// Returns an error if this value is a URL or Blob.
+	#[context("Getting filesystem PathBuf from DataLocation {self:?}")]
+	pub fn to_path_buf(&self) -> Result<PathBuf> {
+		match self {
+			DataLocation::Path(path) => Ok(path.clone()),
+			_ => Err(anyhow!("{self:?} is not a Path")),
+		}
+	}
+
 	/// Borrow the underlying URL.
 	///
 	/// Returns an error if this value is a Path or Blob.
@@ -98,6 +109,16 @@ impl DataLocation {
 			(_, _) => {}
 		}
 		Ok(())
+	}
+
+	/// Return a new `DataLocation` resolved against `base`, leaving `self` unchanged.
+	///
+	/// This is the non-mutating counterpart of [`resolve`](Self::resolve).
+	#[context("Resolving DataLocation {self:?} against base {base:?}")]
+	pub fn resolved(&self, base: &DataLocation) -> Result<Self> {
+		let mut clone = self.clone();
+		clone.resolve(base)?;
+		Ok(clone)
 	}
 
 	/// Return the last path segment (e.g., `file.tar.gz`).
@@ -303,6 +324,13 @@ impl std::fmt::Display for DataLocation {
 impl From<String> for DataLocation {
 	fn from(s: String) -> Self {
 		DataLocation::try_from(s.as_str()).unwrap()
+	}
+}
+
+impl TryFrom<&String> for DataLocation {
+	type Error = anyhow::Error;
+	fn try_from(s: &String) -> Result<Self> {
+		DataLocation::parse(s)
 	}
 }
 

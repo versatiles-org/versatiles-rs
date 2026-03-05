@@ -17,7 +17,7 @@ use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLN
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{path::Path, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
+use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileFormat, TileJSON, TileStream};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -69,7 +69,9 @@ impl ReadTileSource for Operation {
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let path = factory.resolve_path(&args.filename);
+		let path = factory
+			.resolve_location(&DataLocation::try_from(&args.filename)?)?
+			.to_path_buf()?;
 		Operation::from_file(&path).map(|op| Box::new(op) as Box<dyn TileSource>)
 	}
 }

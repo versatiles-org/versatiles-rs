@@ -337,7 +337,7 @@ mod tests {
 	use futures::future::BoxFuture;
 	use pretty_assertions::assert_eq;
 	use rstest::rstest;
-	use versatiles_container::TileSource;
+	use versatiles_container::{DataLocation, TileSource};
 	use versatiles_core::{Blob, TileCompression, TileCompression::Uncompressed, TileFormat};
 	use versatiles_image::{DynamicImage, DynamicImageTraitConvert};
 
@@ -458,10 +458,11 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_operation_parameters() -> Result<()> {
-		let factory =
-			PipelineFactory::new_dummy_reader(Box::new(|filename: String| -> BoxFuture<Result<Box<dyn TileSource>>> {
+		let factory = PipelineFactory::new_dummy_reader(Box::new(
+			|location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
 					let mut pyramide = TileBBoxPyramid::new_empty();
+					let filename = location.to_string();
 					for c in filename[0..filename.len() - 4].chars() {
 						pyramide.include_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?);
 					}
@@ -470,7 +471,8 @@ mod tests {
 							as Box<dyn TileSource>,
 					)
 				})
-			}));
+			},
+		));
 
 		let result = factory
 			.operation_from_vpl(
@@ -765,7 +767,7 @@ mod tests {
 
 		// Create a factory that returns a vector tile source
 		let factory = PipelineFactory::new_dummy_reader(Box::new(
-			|_filename: String| -> BoxFuture<Result<Box<dyn TileSource>>> {
+			|_location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
 					// Create a mock vector tile source with MVT format
 					#[derive(Debug)]
@@ -855,7 +857,7 @@ mod tests {
 
 		// Create a factory where the source only has data up to level 2
 		let factory = PipelineFactory::new_dummy_reader(Box::new(
-			|_filename: String| -> BoxFuture<Result<Box<dyn TileSource>>> {
+			|_location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
 					let mut pyramid = TileBBoxPyramid::new_empty();
 					pyramid.include_bbox(&TileBBox::new_full(0)?);
@@ -889,10 +891,11 @@ mod tests {
 		use futures::future::BoxFuture;
 
 		// Create two sources: first has data at all levels, second only at lower levels
-		let factory =
-			PipelineFactory::new_dummy_reader(Box::new(|filename: String| -> BoxFuture<Result<Box<dyn TileSource>>> {
+		let factory = PipelineFactory::new_dummy_reader(Box::new(
+			|location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
 					let mut pyramid = TileBBoxPyramid::new_empty();
+					let filename = location.to_string();
 					if filename.contains("full") {
 						// Full source has all levels
 						for level in 0..=4 {
@@ -914,7 +917,8 @@ mod tests {
 							as Box<dyn TileSource>,
 					)
 				})
-			}));
+			},
+		));
 
 		let result = factory
 			.operation_from_vpl(

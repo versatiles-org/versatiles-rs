@@ -8,7 +8,7 @@ use crate::{
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
-use versatiles_container::TileSource;
+use versatiles_container::{DataLocation, TileSource};
 use versatiles_core::TileJSON;
 use versatiles_derive::context;
 use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
@@ -183,7 +183,9 @@ impl TransformOperationFactoryTrait for Factory {
 	) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		let path = factory.resolve_path(&args.data_source_path);
+		let path = factory
+			.resolve_location(&DataLocation::try_from(&args.data_source_path)?)?
+			.to_path_buf()?;
 		let mut csv_reader = CsvReader::new(&path, factory.runtime()).with_string_field(&args.id_field_data);
 
 		if let Some(ref sep) = args.field_separator {

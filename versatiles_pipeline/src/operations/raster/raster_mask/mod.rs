@@ -18,7 +18,7 @@ use async_trait::async_trait;
 use blur_function::BlurFunction;
 use mask_geometry::{MaskGeometry, TileClassification};
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
+use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileFormat, TileJSON, TileStream};
 use versatiles_derive::context;
 use versatiles_image::DynamicImage;
@@ -76,7 +76,9 @@ impl Operation {
 		};
 
 		// Resolve GeoJSON path relative to the factory's base path
-		let geojson_path = factory.resolve_path(&args.geojson);
+		let geojson_path = factory
+			.resolve_location(&DataLocation::try_from(&args.geojson)?)?
+			.to_path_buf()?;
 
 		// Load mask geometry
 		let mask = MaskGeometry::from_geojson(

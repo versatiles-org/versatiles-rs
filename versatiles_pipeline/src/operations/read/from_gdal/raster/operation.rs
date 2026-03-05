@@ -16,7 +16,7 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc, vec};
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
+use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileBBoxPyramid, TileCompression, TileFormat, TileJSON, TileSchema, TileStream};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitInfo;
@@ -72,7 +72,10 @@ impl Operation {
 			args.level_min,
 			args.level_max
 		);
-		let filename = factory.resolve_path(&args.filename);
+		let filename = factory
+			.resolve_location(&DataLocation::try_from(&args.filename)?)?
+			.to_path_buf()?;
+
 		log::trace!("Resolved filename: {filename:?}");
 		let source = RasterSource::new(
 			&filename,

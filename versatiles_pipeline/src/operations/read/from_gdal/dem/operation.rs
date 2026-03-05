@@ -8,7 +8,7 @@ use crate::{
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
+use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileBBoxPyramid, TileCompression, TileFormat, TileJSON, TileSchema, TileStream};
 use versatiles_derive::context;
 
@@ -58,7 +58,10 @@ impl Operation {
 			Some(other) => bail!("Unknown DEM encoding: \"{other}\". Expected \"mapbox\" or \"terrarium\"."),
 		};
 
-		let filename = factory.resolve_path(&args.filename);
+		let filename = factory
+			.resolve_location(&DataLocation::try_from(&args.filename)?)?
+			.to_path_buf()?;
+
 		let source = DemSource::new(
 			&filename,
 			args.gdal_reuse_limit.unwrap_or(100),

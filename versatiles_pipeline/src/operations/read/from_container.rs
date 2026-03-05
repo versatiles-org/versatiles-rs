@@ -10,15 +10,15 @@ use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLN
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
-use versatiles_container::{Tile, TileSource, TileSourceMetadata};
+use versatiles_container::{DataLocation, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileJSON, TileStream};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*.tar` file.
 struct Args {
-	/// The filename of the tile container. This is relative to the path of the VPL file.
-	/// For example: `filename="world.versatiles"`.
+	/// The filename of the tile container (relative to the VPL file path), or a URL (http/https).
+	/// For example: `filename="world.versatiles"` or `filename="https://example.com/world.versatiles"`.
 	filename: String,
 }
 
@@ -39,7 +39,7 @@ impl ReadTileSource for Operation {
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let source = factory.get_reader(&factory.resolve_filename(&args.filename)).await?;
+		let source = factory.get_reader(DataLocation::try_from(&args.filename)?).await?;
 		let mut tilejson = source.tilejson().clone();
 		source.metadata().update_tilejson(&mut tilejson);
 
