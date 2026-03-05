@@ -23,6 +23,7 @@ VersaTiles is a Rust-based tool for processing and serving tile data efficiently
   - [Core Concepts](#core-concepts)
   - [Commands](#commands)
   - [VersaTiles Pipeline Language](#versatiles-pipeline-language)
+  - [Data Source Syntax](#data-source-syntax)
 - [Configuration](#configuration)
 - [GDAL Support](#gdal-support)
 - [Development](#development)
@@ -447,6 +448,9 @@ versatiles help pipeline
 # Configuration file reference
 versatiles help config
 
+# Data source syntax (bracket notation, inline VPL, JSON)
+versatiles help source
+
 # Raw markdown output (for documentation)
 versatiles help pipeline --raw
 ```
@@ -466,6 +470,25 @@ from_merged_vector [
 ```
 
 More details can be found in [versatiles_pipeline/README.md](https://github.com/versatiles-org/versatiles-rs/blob/main/versatiles_pipeline/README.md).
+
+### Data Source Syntax
+
+All commands accept flexible data source expressions. You can override the auto-detected name and container type using bracket notation:
+
+```text
+[name,type]path     # prefix notation
+path[name,type]     # postfix notation
+```
+
+This also enables **inline VPL pipelines** — define a pipeline directly on the command line without creating a `.vpl` file:
+
+```sh
+versatiles convert \
+  "[,vpl](from_container filename='input.versatiles' | filter_zoom 0-12)" \
+  output.versatiles
+```
+
+Run `versatiles help source` for the full syntax reference including JSON format.
 
 ---
 
