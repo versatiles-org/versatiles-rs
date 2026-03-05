@@ -650,10 +650,11 @@ versatiles serve https://download.versatiles.org/osm.versatiles
 
 ### Building with GDAL support
 
-Due to the numerous combinations of operating systems, package managers and GDAL versions, we must streamline this ecosystem. If you require GDAL support, we recommend the following:
+If you require GDAL support:
 
-1. Build GDAL locally by running `./scripts/install-gdal.sh`. This will build and install GDAL in the subfolder `./.toolchain/gdal`
-2. Build `versatiles` with the features `gdal`. We recommend using the scripts `./scripts/build_debug.sh` and `./scripts/build_release.sh`.
+1. Install GDAL via your system package manager: `./scripts/install-gdal.sh`
+   (Supports Debian/Ubuntu, Alpine, and macOS via Homebrew)
+2. Build with the `gdal` feature: `cargo build -F gdal --release`
 
 ---
 
@@ -755,11 +756,11 @@ cargo build --bin versatiles --release
 **With GDAL support:**
 
 ```bash
-# Build GDAL first
+# Install GDAL (via system package manager)
 ./scripts/install-gdal.sh
 
-# Build with GDAL features
-./scripts/build_release.sh
+# Build with GDAL feature
+cargo build --bin versatiles --release -F gdal
 ```
 
 #### Testing
@@ -943,10 +944,10 @@ flowchart TB
 
 | Script                 | Purpose                                                        |
 |------------------------|----------------------------------------------------------------|
-| **`build-debug.sh`**   | **Build debug binary with GDAL**                               |
-| **`build-release.sh`** | **Build release binary with GDAL support**                     |
+| **`build-debug-with-gdal.sh`**   | **Build debug binary with GDAL**                               |
+| **`build-release-with-gdal.sh`** | **Build release binary with GDAL support**                     |
 | **`check.sh`**         | **Run all checks (formatting, linting, tests Rust + Node.js)** |
-| **`install-gdal.sh`**  | **Install GDAL from source into `.toolchain/gdal`**            |
+| **`install-gdal.sh`**  | **Install GDAL via system package manager**                    |
 | `audit-unused-deps.sh` | Find unused dependencies                                       |
 | `build-docker-*.sh`    | Build Docker images (GDAL, multi-platform)                     |
 | `build-docs*.sh`       | Generate documentation                                         |
@@ -961,7 +962,7 @@ flowchart TB
 | `upgrade-deps.sh`      | Update Rust dependencies to latest versions                    |
 | `workflow-*.sh/ps1`    | CI/CD workflow automation                                      |
 
-**Most commonly used:** `check.sh`, `build-release.sh`, `release-package.sh`
+**Most commonly used:** `check.sh`, `build-release-with-gdal.sh`, `release-package.sh`
 
 ---
 

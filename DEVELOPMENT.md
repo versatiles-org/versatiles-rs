@@ -36,7 +36,6 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo build --release
 
 # Build with GDAL support (requires GDAL installation)
-source scripts/env-gdal.sh
 cargo build --release --features gdal
 ```
 
@@ -255,11 +254,10 @@ npm run build:debug
 
 ### GDAL Errors
 
-Make sure GDAL is installed and environment is set:
+Make sure GDAL is installed via your system package manager:
 
 ```bash
 ./scripts/install-gdal.sh
-source scripts/env-gdal.sh
 ```
 
 ### Clippy Warnings
