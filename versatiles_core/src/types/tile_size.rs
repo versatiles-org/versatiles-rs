@@ -76,6 +76,20 @@ impl TryFrom<f64> for TileSize {
 	}
 }
 
+impl TryFrom<u16> for TileSize {
+	type Error = anyhow::Error;
+	fn try_from(value: u16) -> Result<Self> {
+		TileSize::new(value)
+	}
+}
+
+impl TryFrom<u32> for TileSize {
+	type Error = anyhow::Error;
+	fn try_from(value: u32) -> Result<Self> {
+		TileSize::new(value.try_into()?)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
