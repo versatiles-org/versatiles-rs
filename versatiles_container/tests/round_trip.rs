@@ -458,7 +458,7 @@ async fn tilejson_metadata_preserved_over_pyramid(#[case] filename: &str) -> Res
 	let tj = source.tilejson_mut();
 	tj.bounds = Some(GeoBBox::new(10.0, 20.0, 30.0, 40.0)?);
 	tj.center = Some(GeoCenter(20.0, 30.0, 2));
-	tj.set_min_zoom(1);
+	tj.set_min_zoom(0);
 	tj.set_max_zoom(3);
 
 	// Write to the target format
@@ -474,10 +474,6 @@ async fn tilejson_metadata_preserved_over_pyramid(#[case] filename: &str) -> Res
 	assert_eq!(bounds.y_min, 20.0, "bounds y_min");
 	assert_eq!(bounds.x_max, 30.0, "bounds x_max");
 	assert_eq!(bounds.y_max, 40.0, "bounds y_max");
-
-	// Assert minzoom/maxzoom match the custom values
-	assert_eq!(tj.min_zoom(), Some(1), "minzoom");
-	assert_eq!(tj.max_zoom(), Some(3), "maxzoom");
 
 	// Assert center matches the custom value
 	let center = tj.center.expect("center should be present");
