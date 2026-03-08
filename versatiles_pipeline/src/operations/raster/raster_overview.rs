@@ -141,25 +141,31 @@ mod tests {
 		Ok(())
 	}
 
-	/// Helper: create a solid 1×1 RGBA image (half-size for tile_size=2).
-	fn pixel(r: u8, g: u8, b: u8, a: u8) -> DynamicImage {
-		let mut img = DynamicImage::new_rgba8(1, 1);
-		img.put_pixel(0, 0, Rgba([r, g, b, a]));
+	/// Helper: create a solid half-size RGBA image where every pixel has the same color.
+	fn solid_half(size: u32, r: u8, g: u8, b: u8, a: u8) -> DynamicImage {
+		let color = Rgba([r, g, b, a]);
+		let mut img = DynamicImage::new_rgba8(size, size);
+		for y in 0..size {
+			for x in 0..size {
+				img.put_pixel(x, y, color);
+			}
+		}
 		img
 	}
 
 	#[tokio::test]
 	async fn build_images_from_cache_composes_quadrants_with_correct_pixels() -> Result<()> {
-		let op = make_operation(2, 6).await;
+		let op = make_operation(256, 6).await;
+		let half_size = op.core.tile_size / 2; // 128
 
-		// Manually populate the cache with known half-size (1×1) images for a 32×32 block at level 6.
-		// Each tile at (x, y) gets a unique color: R=x, G=y, B=42, A=255.
+		// Manually populate the cache with known half-size (128×128) images for a 32×32 block at level 6.
+		// Each tile at (x, y) gets a unique solid color: R=x, G=y, B=42, A=255.
 		let block_key = TileCoord::new(6, 0, 0)?;
 		let mut entries: Vec<(TileCoord, Option<DynamicImage>)> = Vec::new();
 		for y in 0u32..32 {
 			for x in 0u32..32 {
 				let coord = TileCoord::new(6, x, y)?;
-				entries.push((coord, Some(pixel(x as u8, y as u8, 42, 255))));
+				entries.push((coord, Some(solid_half(half_size, x as u8, y as u8, 42, 255))));
 			}
 		}
 		op.core.cache.insert(block_key, entries);
@@ -173,19 +179,19 @@ mod tests {
 		for (coord, img_opt) in items {
 			assert_eq!(coord.level, 5);
 			let img = img_opt.unwrap();
-			assert_eq!(img.dimensions(), (2, 2));
+			assert_eq!(img.dimensions(), (256, 256));
 
-			// Level-5 tile at (x0, y0) is composed from level-6 children:
-			//   (2*x0,   2*y0)   → quadrant (0, 0)
-			//   (2*x0+1, 2*y0)   → quadrant (1, 0)
-			//   (2*x0,   2*y0+1) → quadrant (0, 1)
-			//   (2*x0+1, 2*y0+1) → quadrant (1, 1)
+			// Level-5 tile at (x0, y0) is composed from level-6 children placed in quadrants:
+			//   (2*x0,   2*y0)   → top-left     (0..128, 0..128)
+			//   (2*x0+1, 2*y0)   → top-right    (128..256, 0..128)
+			//   (2*x0,   2*y0+1) → bottom-left  (0..128, 128..256)
+			//   (2*x0+1, 2*y0+1) → bottom-right (128..256, 128..256)
 			let x0 = coord.x as u8;
 			let y0 = coord.y as u8;
 			assert_eq!(img.get_pixel(0, 0).0, [x0 * 2, y0 * 2, 42, 255]);
-			assert_eq!(img.get_pixel(1, 0).0, [x0 * 2 + 1, y0 * 2, 42, 255]);
-			assert_eq!(img.get_pixel(0, 1).0, [x0 * 2, y0 * 2 + 1, 42, 255]);
-			assert_eq!(img.get_pixel(1, 1).0, [x0 * 2 + 1, y0 * 2 + 1, 42, 255]);
+			assert_eq!(img.get_pixel(128, 0).0, [x0 * 2 + 1, y0 * 2, 42, 255]);
+			assert_eq!(img.get_pixel(0, 128).0, [x0 * 2, y0 * 2 + 1, 42, 255]);
+			assert_eq!(img.get_pixel(128, 128).0, [x0 * 2 + 1, y0 * 2 + 1, 42, 255]);
 		}
 
 		Ok(())
@@ -193,7 +199,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_source_type() -> Result<()> {
-		let op = make_operation(2, 6).await;
+		let op = make_operation(256, 6).await;
 		let source_type = op.source_type();
 		assert!(source_type.to_string().contains("raster_overview"));
 		Ok(())
@@ -201,7 +207,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_metadata_and_tilejson() -> Result<()> {
-		let op = make_operation(2, 6).await;
+		let op = make_operation(256, 6).await;
 		// metadata and tilejson should be available
 		let metadata = op.metadata();
 		// After building overview, pyramid should extend to level 0
