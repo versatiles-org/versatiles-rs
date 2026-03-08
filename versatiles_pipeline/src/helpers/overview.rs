@@ -43,7 +43,6 @@ impl OverviewCore {
 
 		let mut metadata = source.metadata().clone();
 		let mut tilejson = source.tilejson().clone();
-		metadata.update_tilejson(&mut tilejson);
 
 		let level_base = level.unwrap_or_else(|| source.metadata().bbox_pyramid.get_level_max().unwrap());
 
@@ -52,12 +51,12 @@ impl OverviewCore {
 			level_bbox.level_down();
 			metadata.bbox_pyramid.set_level_bbox(level_bbox);
 		}
+		metadata.update_tilejson(&mut tilejson);
 
 		let tile_size = tile_size.unwrap_or(512);
 		let cache = Arc::new(DashMap::new());
 		metadata.traversal = Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?;
 
-		tilejson.set_min_zoom(0);
 		tilejson.set_tile_size(tile_size)?;
 
 		Ok(Self {
