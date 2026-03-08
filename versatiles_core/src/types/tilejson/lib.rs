@@ -206,23 +206,18 @@ impl TileJSON {
 	/// Updates this `TileJSON` based on a [`TileBBoxPyramid`], using pyramid values only as fallback.
 	///
 	/// - Sets `bounds` from the pyramid only if `self.bounds` is `None`.
-	/// - Sets `center` from the pyramid only if `self.center` is `None`.
-	/// - Sets `minzoom` from the pyramid only if not already present in `self.values`.
-	/// - Sets `maxzoom` from the pyramid only if not already present in `self.values`.
+	/// - Sets `minzoom` from the pyramid.
+	/// - Sets `maxzoom` from the pyramid.
 	pub fn update_from_pyramid(&mut self, pyramid: &TileBBoxPyramid) {
 		if self.bounds.is_none() {
 			self.bounds = pyramid.get_geo_bbox();
 		}
 
-		if self.min_zoom().is_none()
-			&& let Some(z) = pyramid.get_level_min()
-		{
+		if let Some(z) = pyramid.get_level_min() {
 			self.set_min_zoom(z);
 		}
 
-		if self.max_zoom().is_none()
-			&& let Some(z) = pyramid.get_level_max()
-		{
+		if let Some(z) = pyramid.get_level_max() {
 			self.set_max_zoom(z);
 		}
 	}
