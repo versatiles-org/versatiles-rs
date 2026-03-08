@@ -294,6 +294,10 @@ impl TileJSON {
 		}
 	}
 
+	pub fn min_zoom(&self) -> Option<u8> {
+		self.values.get_integer("minzoom").and_then(|z| u8::try_from(z).ok())
+	}
+
 	/// Sets the `minzoom` value to `z`.
 	///
 	/// # Examples
@@ -307,9 +311,8 @@ impl TileJSON {
 		self.values.set("minzoom", z);
 	}
 
-	pub fn set_tile_size(&mut self, size: u32) -> Result<()> {
-		self.tile_size = Some(TileSize::try_from(size)?);
-		Ok(())
+	pub fn max_zoom(&self) -> Option<u8> {
+		self.values.get_integer("maxzoom").and_then(|z| u8::try_from(z).ok())
 	}
 
 	/// Sets the `maxzoom` value to `z`.
@@ -325,12 +328,9 @@ impl TileJSON {
 		self.values.set("maxzoom", z);
 	}
 
-	pub fn max_zoom(&self) -> Option<u8> {
-		self.values.get_integer("maxzoom").and_then(|z| u8::try_from(z).ok())
-	}
-
-	pub fn min_zoom(&self) -> Option<u8> {
-		self.values.get_integer("minzoom").and_then(|z| u8::try_from(z).ok())
+	pub fn set_tile_size(&mut self, size: u32) -> Result<()> {
+		self.tile_size = Some(TileSize::try_from(size)?);
+		Ok(())
 	}
 
 	// -------------------------------------------------------------------------
