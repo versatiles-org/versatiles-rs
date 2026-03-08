@@ -307,6 +307,11 @@ impl TileJSON {
 		self.values.set("minzoom", z);
 	}
 
+	pub fn set_tile_size(&mut self, size: u32) -> Result<()> {
+		self.tile_size = Some(TileSize::try_from(size)?);
+		Ok(())
+	}
+
 	/// Sets the `maxzoom` value to `z`.
 	///
 	/// # Examples
