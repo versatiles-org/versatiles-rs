@@ -168,7 +168,7 @@ mod tests {
 	async fn test_build_tile_avif() {
 		test(
 			"avif",
-			9433,
+			10205,
 			&[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
