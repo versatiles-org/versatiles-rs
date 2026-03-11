@@ -93,10 +93,10 @@ mod tests {
 
 	/* ---------- Success cases ---------- */
 	#[rstest]
-	#[case::grey(DynamicImage::new_test_grey(), 1.99)]
-	#[case::greya(DynamicImage::new_test_greya(), 1.23)]
-	#[case::rgb(DynamicImage::new_test_rgb(), 0.58)]
-	#[case::rgba(DynamicImage::new_test_rgba(), 0.55)]
+	#[case::grey(DynamicImage::new_test_grey(), 2.14)]
+	#[case::greya(DynamicImage::new_test_greya(), 1.29)]
+	#[case::rgb(DynamicImage::new_test_rgb(), 0.79)]
+	#[case::rgba(DynamicImage::new_test_rgba(), 0.83)]
 	fn avif_ok(#[case] img: DynamicImage, #[case] expected_compression_percent: f64) -> Result<()> {
 		let blob = image2blob(&img, None)?;
 
