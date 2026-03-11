@@ -232,7 +232,7 @@ fn as_vector_on_vector_content_returns_ref() -> Result<()> {
 	assert!(tile.has_content());
 	let got = tile.as_vector()?;
 	// Can't compare references directly; make sure we can read without panic and content stays
-	let _ = got as *const _; // use it
+	let _ = std::ptr::from_ref(got); // use it
 	assert!(tile.has_content());
 	Ok(())
 }
