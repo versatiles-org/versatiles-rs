@@ -64,7 +64,7 @@ Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*
 
 ### Parameters
 
-- **`filename`: String (required)** - The filename of the tile container. This is relative to the path of the VPL file. For example: `filename="world.versatiles"`.
+- **`filename`: String (required)** - The filename of the tile container (relative to the VPL file path), or a URL (http/https). For example: `filename="world.versatiles"` or `filename="https://example.com/world.versatiles"`.
 
 ---
 
