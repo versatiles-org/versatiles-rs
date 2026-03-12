@@ -31,6 +31,7 @@ log.workspace = true
 lru = "0.16"
 num-traits = "0.2.19"
 num_cpus.workspace = true
+percent-encoding = "2"
 regex.workspace = true
 reqwest.workspace = true
 tokio.workspace = true

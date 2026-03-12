@@ -33,8 +33,9 @@ use super::DataReaderTrait;
 use crate::{Blob, ByteRange};
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
+use percent_encoding::percent_decode_str;
 use regex::{Regex, RegexBuilder};
-use reqwest::{Client, Method, Request, StatusCode, Url};
+use reqwest::{Client, RequestBuilder, StatusCode, Url};
 use std::sync::LazyLock;
 use std::{str, time::Duration};
 use tokio::time::sleep;
@@ -46,6 +47,8 @@ pub struct DataReaderHttp {
 	client: Client,
 	name: String,
 	url: Url,
+	username: Option<String>,
+	password: Option<String>,
 }
 
 impl DataReaderHttp {
@@ -58,11 +61,24 @@ impl DataReaderHttp {
 	/// # Returns
 	///
 	/// * A Result containing a boxed `DataReaderHttp` or an error.
-	pub fn from_url(url: Url) -> Result<Box<DataReaderHttp>> {
+	pub fn from_url(mut url: Url) -> Result<Box<DataReaderHttp>> {
 		match url.scheme() {
 			"http" | "https" => (),
 			other => bail!("unsupported URL scheme '{other}' in '{url}', expected 'http' or 'https'"),
 		}
+
+		let username = if url.username().is_empty() {
+			None
+		} else {
+			Some(percent_decode_str(url.username()).decode_utf8()?.into_owned())
+		};
+		let password: Option<String> = url
+			.password()
+			.map(|p| percent_decode_str(p).decode_utf8().map(std::borrow::Cow::into_owned))
+			.transpose()?;
+
+		url.set_username("").ok();
+		url.set_password(None).ok();
 
 		let client = Client::builder()
 			.tcp_keepalive(Duration::from_secs(600))
@@ -74,7 +90,17 @@ impl DataReaderHttp {
 			client,
 			name: url.to_string(),
 			url,
+			username,
+			password,
 		}))
+	}
+
+	fn apply_auth(&self, builder: RequestBuilder) -> RequestBuilder {
+		if let Some(username) = &self.username {
+			builder.basic_auth(username, self.password.as_deref())
+		} else {
+			builder
+		}
 	}
 }
 
@@ -109,10 +135,12 @@ impl DataReaderTrait for DataReaderHttp {
 				sleep(backoff).await;
 			}
 
-			let mut request = Request::new(Method::GET, self.url.clone());
-			request.headers_mut().append("range", request_range.parse()?);
-
-			let response = match self.client.execute(request).await {
+			let response = match self
+				.apply_auth(self.client.get(self.url.clone()))
+				.header("range", &request_range)
+				.send()
+				.await
+			{
 				Ok(r) => r,
 				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
 					log::warn!("retryable error: {e}");
@@ -188,7 +216,7 @@ impl DataReaderTrait for DataReaderHttp {
 				sleep(backoff).await;
 			}
 
-			let response = match self.client.get(self.url.clone()).send().await {
+			let response = match self.apply_auth(self.client.get(self.url.clone())).send().await {
 				Ok(r) => r,
 				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
 					log::warn!("retryable error: {e}");
@@ -291,6 +319,32 @@ mod tests {
 
 		// Check if the name matches the original URL
 		assert_eq!(data_reader_http.get_name(), url);
+
+		Ok(())
+	}
+
+	#[test]
+	fn from_url_with_credentials() -> Result<()> {
+		let url = Url::parse("https://user:p%40ss@example.com/data.bin").unwrap();
+		let reader = DataReaderHttp::from_url(url)?;
+
+		assert_eq!(reader.username.as_deref(), Some("user"));
+		assert_eq!(reader.password.as_deref(), Some("p@ss"));
+		assert_eq!(reader.get_name(), "https://example.com/data.bin");
+		assert_eq!(reader.url.username(), "");
+		assert_eq!(reader.url.password(), None);
+
+		Ok(())
+	}
+
+	#[test]
+	fn from_url_without_credentials() -> Result<()> {
+		let url = Url::parse("https://example.com/data.bin").unwrap();
+		let reader = DataReaderHttp::from_url(url)?;
+
+		assert_eq!(reader.username, None);
+		assert_eq!(reader.password, None);
+		assert_eq!(reader.get_name(), "https://example.com/data.bin");
 
 		Ok(())
 	}

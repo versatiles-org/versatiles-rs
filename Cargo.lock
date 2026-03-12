@@ -4362,6 +4362,7 @@ dependencies = [
  "num-traits",
  "num_cpus",
  "parking_lot",
+ "percent-encoding",
  "regex",
  "reqwest",
  "rstest",
