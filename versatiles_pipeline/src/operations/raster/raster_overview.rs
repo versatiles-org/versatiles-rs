@@ -11,8 +11,6 @@ use versatiles_image::traits::DynamicImageTraitOperation;
 struct Args {
 	/// use this zoom level to build the overview. Defaults to the maximum zoom level of the source.
 	level: Option<u8>,
-	/// Size of the tiles in pixels. Defaults to 512.
-	tile_size: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -27,12 +25,7 @@ impl Operation {
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let core = OverviewCore::new(
-			source,
-			args.level,
-			args.tile_size,
-			Arc::new(|img| img.get_scaled_down(2)),
-		)?;
+		let core = OverviewCore::new(source, args.level, Arc::new(|img| img.get_scaled_down(2)))?;
 
 		Ok(Self { core })
 	}
@@ -77,7 +70,7 @@ mod tests {
 		);
 
 		return Operation::build(
-			VPLNode::try_from_str(&format!("raster_overview level={level_base} tile_size={tile_size}")).unwrap(),
+			VPLNode::try_from_str(&format!("raster_overview level={level_base}")).unwrap(),
 			Box::new(DummyImageSource::from_color(&[255, 0, 0], tile_size, TileFormat::PNG, Some(pyramid)).unwrap()),
 			&PipelineFactory::new_dummy(),
 		)
@@ -254,7 +247,6 @@ mod tests {
 		let factory = Factory {};
 		let docs = factory.get_docs();
 		assert!(docs.contains("level"));
-		assert!(docs.contains("tile_size"));
 	}
 
 	#[tokio::test]

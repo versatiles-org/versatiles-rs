@@ -31,14 +31,10 @@ impl OverviewCore {
 	/// Build an overview core from a tile source.
 	///
 	/// - `level`: zoom level to build the overview from (defaults to source max zoom)
-	/// - `tile_size`: pixel size of tiles (defaults to 512)
 	/// - `scale_fn`: function that downscales an image by factor 2
-	pub fn new(
-		source: Box<dyn TileSource>,
-		level: Option<u8>,
-		tile_size: Option<u32>,
-		scale_fn: ScaleDownFn,
-	) -> Result<Self> {
+	///
+	/// The tile size is read from the source's TileJSON (defaults to 512 if not set).
+	pub fn new(source: Box<dyn TileSource>, level: Option<u8>, scale_fn: ScaleDownFn) -> Result<Self> {
 		ensure!(source.metadata().traversal.is_any());
 
 		let mut metadata = source.metadata().clone();
@@ -53,11 +49,9 @@ impl OverviewCore {
 		}
 		metadata.update_tilejson(&mut tilejson);
 
-		let tile_size = tile_size.unwrap_or(512);
+		let tile_size = tilejson.tile_size.map_or(512, |ts| u32::from(ts.size()));
 		let cache = Arc::new(DashMap::new());
 		metadata.traversal = Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?;
-
-		tilejson.set_tile_size(tile_size)?;
 
 		Ok(Self {
 			metadata,

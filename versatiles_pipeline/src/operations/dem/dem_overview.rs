@@ -16,8 +16,6 @@ use versatiles_core::{TileBBox, TileJSON, TileStream};
 struct Args {
 	/// Use this zoom level to build the overview. Defaults to the maximum zoom level of the source.
 	level: Option<u8>,
-	/// Size of the tiles in pixels. Defaults to 512.
-	tile_size: Option<u32>,
 	/// Override auto-detection of DEM encoding. Values: "mapbox", "terrarium".
 	encoding: Option<String>,
 }
@@ -113,7 +111,7 @@ impl Operation {
 
 		let encoding = resolve_encoding(args.encoding.as_ref(), source.tilejson().tile_schema.as_ref())?;
 
-		let mut core = OverviewCore::new(source, args.level, args.tile_size, Arc::new(dem_scale_down))?;
+		let mut core = OverviewCore::new(source, args.level, Arc::new(dem_scale_down))?;
 
 		core.tilejson.tile_schema = Some(to_tile_schema(encoding));
 
@@ -371,7 +369,6 @@ mod tests {
 		let factory = Factory {};
 		let docs = factory.get_docs();
 		assert!(docs.contains("level"));
-		assert!(docs.contains("tile_size"));
 		assert!(docs.contains("encoding"));
 	}
 
@@ -406,7 +403,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
 			.operation_from_vpl(&format!(
-				"from_debug format=png | meta_update schema=\"dem/mapbox\" | dem_overview level={level_base} tile_size={tile_size}"
+				"from_debug format=png | meta_update schema=\"dem/mapbox\" | dem_overview level={level_base}"
 			))
 			.await?;
 
