@@ -108,6 +108,7 @@ impl Operation {
 		};
 		metadata.update_tilejson(&mut tilejson);
 		tilejson.tile_schema = Some(TileSchema::RasterRGBA);
+		tilejson.set_tile_size(tile_size)?;
 		log::trace!("TileJSON bounds set to {:?}", tilejson.bounds);
 		log::trace!("from_gdal_raster::Operation built successfully");
 
@@ -333,13 +334,13 @@ mod tests {
 
 	#[tokio::test(flavor = "multi_thread")]
 	async fn test_get_image_stream_returns_images() -> Result<()> {
-		let operation = get_operation(16).await;
+		let operation = get_operation(256).await;
 		let mut stream = operation.get_tile_stream(TileBBox::new_full(1)?).await?;
 		let mut count = 0;
 		while let Some((coord_out, tile)) = stream.next().await {
 			let image = tile.into_image()?;
-			assert_eq!(image.width(), 16);
-			assert_eq!(image.height(), 16);
+			assert_eq!(image.width(), 256);
+			assert_eq!(image.height(), 256);
 			let color_is = image.average_color();
 			let color_should = match (coord_out.x, coord_out.y) {
 				(0, 0) => [63, 43, 0],

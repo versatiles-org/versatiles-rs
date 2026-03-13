@@ -93,6 +93,7 @@ impl Operation {
 		};
 		metadata.update_tilejson(&mut tilejson);
 		tilejson.tile_schema = Some(tile_schema);
+		tilejson.set_tile_size(tile_size)?;
 
 		Ok(Self {
 			source: Arc::new(source),
