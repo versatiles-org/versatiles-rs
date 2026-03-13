@@ -52,21 +52,18 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) -> R
 	}
 
 	let quality = quality.unwrap_or(95);
-	// Map user speed 0..=100 to libwebp method 6..=0 (inverted: lower speed → higher method)
-	#[allow(clippy::cast_possible_truncation)]
-	// method 0..=6 fits into i32, clamp ensures valid range
-	let method = speed.map_or(4, |s| (6.0 - f32::from(s) / 100.0 * 6.0).round() as i32);
 	#[allow(clippy::cast_possible_wrap)]
 	let width = image_ref.width() as i32;
 	#[allow(clippy::cast_possible_wrap)]
 	let height = image_ref.height() as i32;
 	let data = image_ref.as_bytes();
 	let has_alpha = image_ref.has_alpha();
+	let speed = speed.unwrap_or(20);
 
 	if quality >= 100 {
-		encode_lossless(data, width, height, has_alpha, method)
+		encode_lossless(data, width, height, has_alpha, speed)
 	} else {
-		encode_lossy(data, width, height, has_alpha, f32::from(quality), method)
+		encode_lossy(data, width, height, has_alpha, quality, speed)
 	}
 }
 
@@ -108,19 +105,44 @@ fn webp_encode_advanced(data: &[u8], width: i32, height: i32, has_alpha: bool, c
 	}
 }
 
-fn encode_lossy(data: &[u8], width: i32, height: i32, has_alpha: bool, quality: f32, method: i32) -> Result<Blob> {
+fn encode_lossy(data: &[u8], width: i32, height: i32, has_alpha: bool, quality: u8, speed: u8) -> Result<Blob> {
 	let mut config = WebPConfig::new().map_err(|()| anyhow::anyhow!("WebPConfigInit failed"))?;
 	config.lossless = 0;
-	config.quality = quality;
-	config.method = method;
+	config.quality = f32::from(quality);
+	// Map speed 0..=100 to libwebp method 6..=0 (inverted: lower speed → higher method)
+	#[allow(clippy::cast_possible_truncation)]
+	{
+		config.method = (6.0 - f32::from(speed.clamp(0, 100)) / 100.0 * 6.0).round() as i32;
+	}
 	webp_encode_advanced(data, width, height, has_alpha, &config)
 }
 
-fn encode_lossless(data: &[u8], width: i32, height: i32, has_alpha: bool, method: i32) -> Result<Blob> {
+fn encode_lossless(data: &[u8], width: i32, height: i32, has_alpha: bool, speed: u8) -> Result<Blob> {
 	let mut config = WebPConfig::new().map_err(|()| anyhow::anyhow!("WebPConfigInit failed"))?;
 	config.lossless = 1;
 	config.exact = 1;
+
+	// Map speed (0=best compression, 100=fastest) to libwebp method and quality.
+	let (method, quality) = if speed == 0 {
+		(6, 100.0)
+	} else if speed <= 10 {
+		(5, 80.0)
+	} else if speed <= 20 {
+		(4, 70.0)
+	} else if speed <= 40 {
+		(2, 40.0)
+	} else if speed <= 60 {
+		(1, 30.0)
+	} else if speed <= 80 {
+		(1, 0.0)
+	} else if speed <= 90 {
+		(0, 50.0)
+	} else {
+		(0, 0.0)
+	};
 	config.method = method;
+	config.quality = quality;
+
 	webp_encode_advanced(data, width, height, has_alpha, &config)
 }
 
@@ -200,8 +222,8 @@ mod tests {
 	use rstest::rstest;
 
 	#[rstest]
-	#[case::rgb(          DynamicImage::new_test_rgb(),  false, 0.96, vec![0.9, 0.5, 1.5]     )]
-	#[case::rgba(         DynamicImage::new_test_rgba(), false, 0.76, vec![0.9, 0.5, 1.6, 0.0])]
+	#[case::rgb(          DynamicImage::new_test_rgb(),  false, 0.95, vec![0.9, 0.5, 1.5]     )]
+	#[case::rgba(         DynamicImage::new_test_rgba(), false, 0.75, vec![0.9, 0.5, 1.5, 0.0])]
 	#[case::lossless_rgb( DynamicImage::new_test_rgb(),  true,  0.04, vec![0.0, 0.0, 0.0]     )]
 	#[case::lossless_rgba(DynamicImage::new_test_rgba(), true,  0.03, vec![0.0, 0.0, 0.0, 0.0])]
 	fn webp_ok(

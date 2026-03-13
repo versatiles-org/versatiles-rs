@@ -231,7 +231,7 @@ mod tests {
 	async fn test_build_tile_webp() {
 		test(
 			"webp",
-			4006,
+			4176,
 			&[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
