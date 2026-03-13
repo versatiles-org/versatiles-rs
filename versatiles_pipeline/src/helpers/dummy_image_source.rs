@@ -34,7 +34,7 @@ impl DummyImageSource {
 		let image = DynamicImage::from_raw(tile_size as usize, tile_size as usize, raw)?;
 
 		let mut source = DummyImageSource::from_image(image, tile_format, pyramid)?;
-		source.tilejson.set_tile_size(tile_size)?;
+		let _ = source.tilejson.set_tile_size(tile_size);
 		Ok(source)
 	}
 
