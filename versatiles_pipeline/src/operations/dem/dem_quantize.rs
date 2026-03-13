@@ -12,15 +12,15 @@ use versatiles_image::DynamicImage;
 /// Quantize DEM (elevation) raster tiles by zeroing unnecessary low bits.
 ///
 /// Computes a per-tile quantization mask from two physically meaningful criteria:
-/// resolution relative to tile size, and maximum gradient distortion.
+/// elevation error relative to pixel size, and maximum slope distortion.
 /// The stricter (smaller step) wins. Single-pass — no min/max scan needed.
 struct Args {
-	/// Minimum elevation resolution as fraction of tile ground size.
-	/// E.g. 0.001 means for a 1000 m tile, keep 1 m resolution. Defaults to 0.001.
-	resolution_ratio: Option<f64>,
-	/// Maximum allowed gradient change in degrees due to quantization.
+	/// Allowed elevation error as fraction of pixel ground size.
+	/// E.g. 0.5 means for a 10 m pixel, allow up to 5 m elevation error. Defaults to 0.5.
+	elevation_error: Option<f64>,
+	/// Maximum allowed slope change in degrees due to quantization.
 	/// Defaults to 1.0.
-	max_gradient_error: Option<f64>,
+	slope_error: Option<f64>,
 	/// Override auto-detection of DEM encoding. Values: "mapbox", "terrarium".
 	encoding: Option<String>,
 }
@@ -29,8 +29,8 @@ struct Args {
 struct Operation {
 	source: Box<dyn TileSource>,
 	tilejson: TileJSON,
-	resolution_ratio: f64,
-	max_gradient_error: f64,
+	elevation_error: f64,
+	slope_error: f64,
 	encoding: DemEncoding,
 }
 
@@ -39,18 +39,18 @@ struct Operation {
 /// Returns `(mask_r, mask_g, mask_b)` to be applied via bitwise AND to each pixel channel.
 fn compute_masks_for_tile(
 	coord: &TileCoord,
-	resolution_ratio: f64,
-	max_gradient_error: f64,
+	elevation_error: f64,
+	slope_error: f64,
 	encoding: DemEncoding,
 ) -> (u8, u8, u8) {
 	let tile_ground_meters = coord.ground_size_meters();
 	let pixel_meters = tile_ground_meters / 256.0;
 
-	// Criterion 1: resolution ratio
-	let max_step_resolution = resolution_ratio * tile_ground_meters;
+	// Criterion 1: elevation error
+	let max_step_resolution = elevation_error * pixel_meters;
 
-	// Criterion 2: gradient limit
-	let max_step_gradient = pixel_meters * f64::tan(max_gradient_error.to_radians());
+	// Criterion 2: slope error
+	let max_step_gradient = pixel_meters * f64::tan(slope_error.to_radians());
 
 	// Pick the stricter constraint
 	let max_step_meters = max_step_resolution.min(max_step_gradient);
@@ -89,8 +89,8 @@ impl Operation {
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		let resolution_ratio = args.resolution_ratio.unwrap_or(0.001);
-		let max_gradient_error = args.max_gradient_error.unwrap_or(1.0);
+		let elevation_error = args.elevation_error.unwrap_or(0.5);
+		let slope_error = args.slope_error.unwrap_or(1.0);
 
 		let encoding = resolve_encoding(args.encoding.as_ref(), source.tilejson().tile_schema.as_ref())?;
 
@@ -100,8 +100,8 @@ impl Operation {
 		Ok(Self {
 			source,
 			tilejson,
-			resolution_ratio,
-			max_gradient_error,
+			elevation_error,
+			slope_error,
 			encoding,
 		})
 	}
@@ -125,8 +125,8 @@ impl TileSource for Operation {
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("dem_quantize::get_tile_stream {bbox:?}");
 
-		let resolution_ratio = self.resolution_ratio;
-		let max_gradient_error = self.max_gradient_error;
+		let elevation_error = self.elevation_error;
+		let slope_error = self.slope_error;
 		let encoding = self.encoding;
 
 		Ok(self
@@ -134,8 +134,7 @@ impl TileSource for Operation {
 			.get_tile_stream(bbox)
 			.await?
 			.map_parallel_try(move |coord, mut tile| {
-				let (mask_r, mask_g, mask_b) =
-					compute_masks_for_tile(&coord, resolution_ratio, max_gradient_error, encoding);
+				let (mask_r, mask_g, mask_b) = compute_masks_for_tile(&coord, elevation_error, slope_error, encoding);
 
 				let image = tile.as_image_mut()?;
 				match image {
@@ -183,12 +182,12 @@ mod tests {
 	#[test]
 	fn test_masks_zoom0_equator_mapbox() {
 		// Zoom 0 equatorial tile: ground ≈ 40M m, pixel ≈ 156K m
-		// With ratio=0.001: step ≈ 40K m → raw ≈ 400K → zero_bits ≈ 18
+		// With ratio=0.5: step ≈ 78K m → raw ≈ 780K → zero_bits ≈ 19
 		// With gradient=1°: step ≈ 2.7K m → raw ≈ 27K → zero_bits ≈ 14
 		// Gradient is stricter → zero_bits ≈ 14
 		// 14 zero bits: B fully zeroed (bits 0-7), G partially (bits 8-13), R preserved (bits 16-23)
 		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let (mr, mg, mb) = compute_masks_for_tile(&coord, 0.001, 1.0, DemEncoding::Mapbox);
+		let (mr, mg, mb) = compute_masks_for_tile(&coord, 0.5, 1.0, DemEncoding::Mapbox);
 		assert_eq!(mr, 0xFF, "R should be preserved at zoom 0 (only 14 bits zeroed)");
 		assert_ne!(mg, 0xFF, "G should be partially masked at zoom 0");
 		assert_eq!(mb, 0x00, "B should be fully zeroed at zoom 0");
@@ -197,11 +196,11 @@ mod tests {
 	#[test]
 	fn test_masks_zoom14_equator_mapbox() {
 		// Zoom 14 equatorial: ground ≈ 2446 m, pixel ≈ 9.56 m
-		// ratio=0.001: step ≈ 2.45 m → raw ≈ 24.5 → zero_bits ≈ 4
+		// ratio=0.5: step ≈ 4.78 m → raw ≈ 47.8 → zero_bits ≈ 5
 		// gradient=1°: step ≈ 0.167 m → raw ≈ 1.67 → zero_bits = 1
 		// Gradient is stricter → zero_bits ≈ 1
 		let coord = TileCoord::new(14, 8192, 8192).unwrap();
-		let (mr, mg, mb) = compute_masks_for_tile(&coord, 0.001, 1.0, DemEncoding::Mapbox);
+		let (mr, mg, mb) = compute_masks_for_tile(&coord, 0.5, 1.0, DemEncoding::Mapbox);
 		// Very few bits zeroed — masks should be close to 0xFF
 		assert_eq!(mr, 0xFF, "R should be unmasked at zoom 14");
 		assert_eq!(mg, 0xFF, "G should be unmasked at zoom 14");
@@ -212,11 +211,11 @@ mod tests {
 	#[test]
 	fn test_masks_zoom18_full_precision() {
 		// Zoom 18: ground ≈ 153 m, pixel ≈ 0.6 m
-		// ratio=0.001: step ≈ 0.15 m → raw ≈ 1.5 → zero_bits = 1
+		// ratio=0.5: step ≈ 0.3 m → raw ≈ 3.0 → zero_bits = 2
 		// gradient=1°: step ≈ 0.01 m → raw ≈ 0.1 → zero_bits = 0
 		// Gradient needs full precision → zero_bits = 0
 		let coord = TileCoord::new(18, 131072, 131072).unwrap();
-		let (mr, mg, mb) = compute_masks_for_tile(&coord, 0.001, 1.0, DemEncoding::Mapbox);
+		let (mr, mg, mb) = compute_masks_for_tile(&coord, 0.5, 1.0, DemEncoding::Mapbox);
 		assert_eq!(
 			(mr, mg, mb),
 			(0xFF, 0xFF, 0xFF),
@@ -229,8 +228,8 @@ mod tests {
 		// Terrarium has finer raw units (1/256 m vs 0.1 m), so same step allows
 		// more zero bits in terrarium than mapbox
 		let coord = TileCoord::new(8, 128, 128).unwrap();
-		let (mr_m, mg_m, mb_m) = compute_masks_for_tile(&coord, 0.001, 1.0, DemEncoding::Mapbox);
-		let (mr_t, mg_t, mb_t) = compute_masks_for_tile(&coord, 0.001, 1.0, DemEncoding::Terrarium);
+		let (mr_m, mg_m, mb_m) = compute_masks_for_tile(&coord, 0.5, 1.0, DemEncoding::Mapbox);
+		let (mr_t, mg_t, mb_t) = compute_masks_for_tile(&coord, 0.5, 1.0, DemEncoding::Terrarium);
 		// Terrarium raw unit is ~25.6x smaller than Mapbox, so max_step_raw is ~25.6x larger
 		// This means more zero_bits for Terrarium
 		let mapbox_mask = pixel_to_raw(mr_m, mg_m, mb_m);
@@ -247,8 +246,8 @@ mod tests {
 		let equator = TileCoord::new(8, 128, 128).unwrap();
 		let high_lat = TileCoord::new(8, 128, 16).unwrap(); // near pole
 
-		let (mr_eq, mg_eq, mb_eq) = compute_masks_for_tile(&equator, 0.001, 1.0, DemEncoding::Mapbox);
-		let (mr_hl, mg_hl, mb_hl) = compute_masks_for_tile(&high_lat, 0.001, 1.0, DemEncoding::Mapbox);
+		let (mr_eq, mg_eq, mb_eq) = compute_masks_for_tile(&equator, 0.5, 1.0, DemEncoding::Mapbox);
+		let (mr_hl, mg_hl, mb_hl) = compute_masks_for_tile(&high_lat, 0.5, 1.0, DemEncoding::Mapbox);
 
 		let mask_eq = pixel_to_raw(mr_eq, mg_eq, mb_eq);
 		let mask_hl = pixel_to_raw(mr_hl, mg_hl, mb_hl);
@@ -261,23 +260,23 @@ mod tests {
 	#[test]
 	fn test_masks_stricter_ratio_preserves_more() {
 		let coord = TileCoord::new(8, 128, 128).unwrap();
-		let (mr1, mg1, mb1) = compute_masks_for_tile(&coord, 0.001, 1.0, DemEncoding::Mapbox);
-		let (mr2, mg2, mb2) = compute_masks_for_tile(&coord, 0.0001, 1.0, DemEncoding::Mapbox);
+		let (mr1, mg1, mb1) = compute_masks_for_tile(&coord, 0.5, 1.0, DemEncoding::Mapbox);
+		let (mr2, mg2, mb2) = compute_masks_for_tile(&coord, 0.05, 1.0, DemEncoding::Mapbox);
 
 		let mask1 = pixel_to_raw(mr1, mg1, mb1);
 		let mask2 = pixel_to_raw(mr2, mg2, mb2);
-		assert!(mask2 >= mask1, "Stricter resolution_ratio should preserve more bits");
+		assert!(mask2 >= mask1, "Smaller elevation_error should preserve more bits");
 	}
 
 	#[test]
 	fn test_masks_stricter_gradient_preserves_more() {
 		let coord = TileCoord::new(8, 128, 128).unwrap();
-		let (mr1, mg1, mb1) = compute_masks_for_tile(&coord, 0.001, 2.0, DemEncoding::Mapbox);
-		let (mr2, mg2, mb2) = compute_masks_for_tile(&coord, 0.001, 0.5, DemEncoding::Mapbox);
+		let (mr1, mg1, mb1) = compute_masks_for_tile(&coord, 0.5, 2.0, DemEncoding::Mapbox);
+		let (mr2, mg2, mb2) = compute_masks_for_tile(&coord, 0.5, 0.5, DemEncoding::Mapbox);
 
 		let mask1 = pixel_to_raw(mr1, mg1, mb1);
 		let mask2 = pixel_to_raw(mr2, mg2, mb2);
-		assert!(mask2 >= mask1, "Stricter max_gradient_error should preserve more bits");
+		assert!(mask2 >= mask1, "Smaller slope_error should preserve more bits");
 	}
 
 	// ── pixel_to_raw unit test ──────────────────────────────────────────
@@ -316,8 +315,8 @@ mod tests {
 		let op = Operation {
 			source: Box::new(source),
 			tilejson,
-			resolution_ratio: 0.001,
-			max_gradient_error: 1.0,
+			elevation_error: 0.5,
+			slope_error: 1.0,
 			encoding: DemEncoding::Mapbox,
 		};
 
@@ -331,7 +330,7 @@ mod tests {
 			DynamicImage::ImageRgb8(img) => {
 				// Compute expected masks for tile (8, 56, 56)
 				let coord = TileCoord::new(8, 56, 56).unwrap();
-				let (_mr, _mg, mb) = compute_masks_for_tile(&coord, 0.001, 1.0, DemEncoding::Mapbox);
+				let (_mr, _mg, mb) = compute_masks_for_tile(&coord, 0.5, 1.0, DemEncoding::Mapbox);
 				let zeroed_bits = !mb;
 				for p in img.pixels() {
 					assert_eq!(p[2] & zeroed_bits, 0, "Low bits of B channel should be zeroed");
@@ -359,8 +358,8 @@ mod tests {
 		let op = Operation {
 			source: Box::new(source),
 			tilejson,
-			resolution_ratio: 0.001,
-			max_gradient_error: 1.0,
+			elevation_error: 0.5,
+			slope_error: 1.0,
 			encoding: DemEncoding::Mapbox,
 		};
 
@@ -372,7 +371,7 @@ mod tests {
 		match result_image {
 			DynamicImage::ImageRgba8(img) => {
 				let coord = TileCoord::new(8, 56, 56).unwrap();
-				let (_mr, _mg, mb) = compute_masks_for_tile(&coord, 0.001, 1.0, DemEncoding::Mapbox);
+				let (_mr, _mg, mb) = compute_masks_for_tile(&coord, 0.5, 1.0, DemEncoding::Mapbox);
 				let zeroed_bits = !mb;
 				for p in img.pixels() {
 					assert_eq!(p[2] & zeroed_bits, 0, "Low bits of B channel should be zeroed");
@@ -396,8 +395,8 @@ mod tests {
 	fn test_factory_get_docs() {
 		let factory = Factory {};
 		let docs = factory.get_docs();
-		assert!(docs.contains("resolution_ratio"));
-		assert!(docs.contains("max_gradient_error"));
+		assert!(docs.contains("elevation_error"));
+		assert!(docs.contains("slope_error"));
 		assert!(docs.contains("encoding"));
 	}
 
@@ -408,7 +407,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
 			.operation_from_vpl(
-				"from_debug format=png | meta_update schema=\"dem/mapbox\" | dem_quantize resolution_ratio=0.001",
+				"from_debug format=png | meta_update schema=\"dem/mapbox\" | dem_quantize elevation_error=0.5",
 			)
 			.await?;
 		let _metadata = op.metadata();
@@ -420,7 +419,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
 			.operation_from_vpl(
-				"from_debug format=png | meta_update schema=\"dem/terrarium\" | dem_quantize max_gradient_error=0.5",
+				"from_debug format=png | meta_update schema=\"dem/terrarium\" | dem_quantize slope_error=0.5",
 			)
 			.await?;
 		let _metadata = op.metadata();
