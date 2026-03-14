@@ -104,7 +104,7 @@ fn get_bbox_pyramid(arguments: &Subcommand) -> Result<(Option<TileBBoxPyramid>, 
 			.collect();
 
 		if values.len() != 4 {
-			bail!("bbox must contain exactly 4 numbers, but instead i'v got: {bbox:?}");
+			bail!("bbox must contain exactly 4 values, got {}: {bbox:?}", values.len());
 		}
 
 		let bbox = GeoBBox::try_from(values)?;
