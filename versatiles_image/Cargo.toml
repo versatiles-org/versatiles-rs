@@ -32,6 +32,7 @@ versatiles_core.workspace = true
 versatiles_derive.workspace = true
 
 [dev-dependencies]
+reqwest = { workspace = true, features = ["blocking"] }
 rstest.workspace = true
 
 [features]

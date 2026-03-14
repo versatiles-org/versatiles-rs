@@ -3335,7 +3335,9 @@ checksum = "ab3f43e3283ab1488b624b44b0e988d0acea0b3214e694730a055cb6b2efa801"
 dependencies = [
  "base64",
  "bytes",
+ "futures-channel",
  "futures-core",
+ "futures-util",
  "http",
  "http-body",
  "http-body-util",
@@ -4411,6 +4413,7 @@ dependencies = [
  "image",
  "imageproc",
  "libwebp-sys",
+ "reqwest",
  "rstest",
  "versatiles_core",
  "versatiles_derive",
