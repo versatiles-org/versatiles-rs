@@ -95,14 +95,9 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	/// information should override this for better performance.
 	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
 		let compression = self.metadata().tile_compression;
-		Ok(self.get_tile_stream(bbox).await?.map(move |_coord, tile| {
-			u32::try_from(
-				tile
-					.into_blob(compression)
-					.expect("tile from stream should have a blob")
-					.len(),
-			)
-			.expect("tile size should fit in u32")
+		Ok(self.get_tile_stream(bbox).await?.filter_map(move |_coord, tile| {
+			let blob = tile.into_blob(compression).ok()?;
+			u32::try_from(blob.len()).ok()
 		}))
 	}
 
