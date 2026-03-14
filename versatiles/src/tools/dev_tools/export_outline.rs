@@ -9,8 +9,9 @@ use versatiles_geometry::{geo::GeoCollection, tile_outline::TileOutline};
 ///
 /// The output GeoJSON contains a single Feature with a Polygon geometry representing the outline of all tiles.
 pub struct ExportOutline {
-	/// Input file
-	#[arg(value_name = "INPUT_FILE")]
+	/// Tile container to read (path, URL, or data source expression).
+	/// Run `versatiles help source` for syntax details.
+	#[arg(value_name = "INPUT_FILE", verbatim_doc_comment)]
 	input: String,
 
 	/// Output image file (should end in .geojson)

@@ -6,8 +6,9 @@ use versatiles_container::TilesRuntime;
 #[command(arg_required_else_help = true, disable_version_flag = true)]
 /// Print the TileJSON metadata of a container to stdout.
 pub struct PrintTilejson {
-	/// Input file
-	#[arg(value_name = "INPUT_FILE")]
+	/// Tile container to read (path, URL, or data source expression).
+	/// Run `versatiles help source` for syntax details.
+	#[arg(value_name = "INPUT_FILE", verbatim_doc_comment)]
 	input: String,
 
 	/// Pretty-print the output

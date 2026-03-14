@@ -15,8 +15,9 @@ use versatiles_image::{DynamicImage, DynamicImageTraitConvert, encode};
 /// - A value of 100 means an average tile size of about 1 KB (2^10)
 /// - A value of 200 means an average tile size of about 1 MB (2^20)
 pub struct MeasureTileSizes {
-	/// Input file
-	#[arg(value_name = "INPUT_FILE")]
+	/// Tile container to read (path, URL, or data source expression).
+	/// Run `versatiles help source` for syntax details.
+	#[arg(value_name = "INPUT_FILE", verbatim_doc_comment)]
 	input: String,
 
 	/// Output image file (should end in .png)
