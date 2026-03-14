@@ -144,6 +144,25 @@ cargo build --bin versatiles --release
 cp ./target/release/versatiles /usr/local/bin/
 ```
 
+### Building from Source on Debian/Ubuntu (with GDAL)
+
+```sh
+# Install system dependencies and Rust
+sudo apt-get update
+sudo apt-get install -y build-essential pkg-config libssl-dev git curl
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source "$HOME/.cargo/env"
+
+# Clone, install GDAL, and build
+git clone https://github.com/versatiles-org/versatiles-rs.git
+cd versatiles-rs
+./scripts/install-gdal.sh
+cargo build --bin versatiles --release -F gdal
+
+# Add to PATH
+sudo ln -sf "$(pwd)/target/release/versatiles" /usr/local/bin/versatiles
+```
+
 ---
 
 ## Quick Start
