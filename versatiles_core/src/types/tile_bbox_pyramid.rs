@@ -22,7 +22,6 @@ pub struct TileBBoxPyramid {
 	pub level_bbox: [TileBBox; (MAX_ZOOM_LEVEL + 1) as usize],
 }
 
-#[allow(dead_code)]
 impl TileBBoxPyramid {
 	/// Creates a new `TileBBoxPyramid` with "full coverage" up to the specified `max_zoom_level`.
 	///
