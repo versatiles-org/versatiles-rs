@@ -207,7 +207,28 @@ impl EntriesV3 {
 	}
 
 	pub fn tile_count(&self) -> u64 {
-		self.entries.len() as u64
+		self.entries.iter().map(|e| u64::from(e.run_length.max(1))).sum()
+	}
+
+	/// Merges consecutive entries that point to the same byte range into
+	/// single entries with accumulated `run_length`. Entries must be sorted
+	/// by `tile_id` before calling this method.
+	pub fn merge_runs(&mut self) {
+		if self.entries.len() <= 1 {
+			return;
+		}
+		let mut merged = Vec::with_capacity(self.entries.len());
+		let mut current = self.entries[0];
+		for &entry in &self.entries[1..] {
+			if entry.range == current.range && entry.tile_id == current.tile_id + u64::from(current.run_length) {
+				current.run_length += entry.run_length;
+			} else {
+				merged.push(current);
+				current = entry;
+			}
+		}
+		merged.push(current);
+		self.entries = merged;
 	}
 }
 
@@ -402,6 +423,77 @@ mod tests {
 			EntriesV3::from_blob(&blob).unwrap_err().to_string(),
 			"there is something wrong: PMTiles with more then 10 billion tiles?"
 		);
+	}
+
+	#[test]
+	fn test_tile_count_sums_run_lengths() {
+		let mut entries = EntriesV3::new();
+		entries.push(EntryV3::new(0, ByteRange::new(0, 100), 3));
+		entries.push(EntryV3::new(3, ByteRange::new(100, 100), 5));
+		entries.push(EntryV3::new(8, ByteRange::new(200, 100), 1));
+		assert_eq!(entries.tile_count(), 9);
+		assert_eq!(entries.len(), 3);
+	}
+
+	#[test]
+	fn test_tile_count_run_length_zero_counts_as_one() {
+		let mut entries = EntriesV3::new();
+		entries.push(EntryV3::new(0, ByteRange::new(0, 100), 0));
+		assert_eq!(entries.tile_count(), 1);
+	}
+
+	#[test]
+	fn test_merge_runs_consecutive_same_range() {
+		let mut entries = EntriesV3::new();
+		entries.push(EntryV3::new(0, ByteRange::new(0, 100), 1));
+		entries.push(EntryV3::new(1, ByteRange::new(0, 100), 1));
+		entries.push(EntryV3::new(2, ByteRange::new(0, 100), 1));
+		entries.merge_runs();
+		assert_eq!(entries.len(), 1);
+		assert_eq!(entries.entries[0].run_length, 3);
+		assert_eq!(entries.tile_count(), 3);
+	}
+
+	#[test]
+	fn test_merge_runs_different_ranges_stay_separate() {
+		let mut entries = EntriesV3::new();
+		entries.push(EntryV3::new(0, ByteRange::new(0, 100), 1));
+		entries.push(EntryV3::new(1, ByteRange::new(100, 100), 1));
+		entries.push(EntryV3::new(2, ByteRange::new(200, 100), 1));
+		entries.merge_runs();
+		assert_eq!(entries.len(), 3);
+	}
+
+	#[test]
+	fn test_merge_runs_empty_and_single() {
+		let mut empty = EntriesV3::new();
+		empty.merge_runs();
+		assert_eq!(empty.len(), 0);
+
+		let mut single = EntriesV3::new();
+		single.push(EntryV3::new(0, ByteRange::new(0, 100), 1));
+		single.merge_runs();
+		assert_eq!(single.len(), 1);
+	}
+
+	#[test]
+	fn test_merge_runs_mixed() {
+		let mut entries = EntriesV3::new();
+		// Run of 3 with same range
+		entries.push(EntryV3::new(0, ByteRange::new(0, 100), 1));
+		entries.push(EntryV3::new(1, ByteRange::new(0, 100), 1));
+		entries.push(EntryV3::new(2, ByteRange::new(0, 100), 1));
+		// Different range
+		entries.push(EntryV3::new(3, ByteRange::new(100, 50), 1));
+		// Run of 2 with same range
+		entries.push(EntryV3::new(4, ByteRange::new(0, 100), 1));
+		entries.push(EntryV3::new(5, ByteRange::new(0, 100), 1));
+		entries.merge_runs();
+		assert_eq!(entries.len(), 3);
+		assert_eq!(entries.entries[0].run_length, 3);
+		assert_eq!(entries.entries[1].run_length, 1);
+		assert_eq!(entries.entries[2].run_length, 2);
+		assert_eq!(entries.tile_count(), 6);
 	}
 
 	/// Tests the as_directory function for correct directory structure creation

@@ -47,7 +47,11 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use std::sync::Arc;
+use std::{
+	collections::HashMap,
+	hash::{DefaultHasher, Hash, Hasher},
+	sync::Arc,
+};
 use versatiles_core::{
 	compression::compress,
 	io::DataWriterTrait,
@@ -102,6 +106,7 @@ impl TilesWriter for PMTilesWriter {
 
 		let writer_mutex = Arc::new(Mutex::new(writer));
 		let entries_mutex = Arc::new(Mutex::new(entries));
+		let dedup_map: Arc<Mutex<HashMap<u64, ByteRange>>> = Arc::new(Mutex::new(HashMap::new()));
 		let tile_compression = reader.metadata().tile_compression;
 
 		reader
@@ -110,6 +115,7 @@ impl TilesWriter for PMTilesWriter {
 				|_bbox, stream| {
 					let writer_mutex = Arc::clone(&writer_mutex);
 					let entries_mutex = Arc::clone(&entries_mutex);
+					let dedup_map = Arc::clone(&dedup_map);
 					Box::pin(async move {
 						// Pre-encode blobs in parallel (CPU-intensive work happens here)
 						let stream = stream.map_parallel_try(move |_coord, mut tile| {
@@ -128,10 +134,24 @@ impl TilesWriter for PMTilesWriter {
 						// Lock AFTER parallel work — write is cheap (blobs already encoded)
 						let mut writer = writer_mutex.lock().await;
 						let mut entries = entries_mutex.lock().await;
+						let mut dedup = dedup_map.lock().await;
 						for (coord, mut tile) in tiles {
 							let id = coord.get_hilbert_index()?;
-							let range = writer.append(tile.as_blob(tile_compression)?)?;
-							entries.push(EntryV3::new(id, range.shifted_backward(tile_data_start), 1));
+							let blob = tile.as_blob(tile_compression)?;
+
+							let mut hasher = DefaultHasher::new();
+							blob.as_slice().hash(&mut hasher);
+							let hash = hasher.finish();
+
+							let range = if let Some(&existing) = dedup.get(&hash) {
+								existing
+							} else {
+								let range = writer.append(blob)?.shifted_backward(tile_data_start);
+								dedup.insert(hash, range);
+								range
+							};
+
+							entries.push(EntryV3::new(id, range, 1));
 						}
 						Ok(())
 					})
@@ -143,10 +163,13 @@ impl TilesWriter for PMTilesWriter {
 
 		let mut entries = entries_mutex.lock().await;
 		let mut writer = writer_mutex.lock().await;
+		let tile_contents_count = dedup_map.lock().await.len() as u64;
 
 		let tile_data_end = writer.get_position()?;
 
 		header.tile_data = ByteRange::new(tile_data_start, tile_data_end - tile_data_start);
+
+		entries.merge_runs();
 
 		writer.set_position(HeaderV3::len())?;
 		let directory = entries.as_directory(16384 - HeaderV3::len(), INTERNAL_COMPRESSION)?;
@@ -159,7 +182,7 @@ impl TilesWriter for PMTilesWriter {
 		header.internal_compression = PMTilesCompression::from_value(INTERNAL_COMPRESSION)?;
 		header.addressed_tiles_count = entries.tile_count();
 		header.tile_entries_count = entries.len() as u64;
-		header.tile_contents_count = entries.len() as u64;
+		header.tile_contents_count = tile_contents_count;
 
 		writer.write_start(&header.serialize()?)?;
 
@@ -225,16 +248,26 @@ mod tests {
 		let reader = PMTilesReader::open_reader(Box::new(data_reader), runtime).await?;
 
 		let entries = reader.get_tile_entries()?;
-		let entries = entries.iter().collect::<Vec<_>>();
-		assert_eq!(entries.len(), 203);
-		let mut tile_id = 0;
-		let mut offset = 0;
-		for entry in entries {
-			assert!(entry.tile_id > tile_id, "Tile IDs are not in order");
-			assert!(entry.range.offset >= offset, "Tile ranges are not in order");
-			tile_id = entry.tile_id;
-			offset = entry.range.offset + entry.range.length;
+		let entries_vec = entries.iter().collect::<Vec<_>>();
+
+		// With dedup + merge_runs, all identical MVT tiles share one blob
+		// and consecutive Hilbert-indexed entries are merged into runs.
+		// Verify tile IDs are in ascending order.
+		let mut prev_tile_id = 0;
+		for (i, entry) in entries_vec.iter().enumerate() {
+			if i > 0 {
+				assert!(
+					entry.tile_id > prev_tile_id,
+					"Tile IDs are not in order: {} <= {}",
+					entry.tile_id,
+					prev_tile_id
+				);
+			}
+			prev_tile_id = entry.tile_id + u64::from(entry.run_length.max(1)) - 1;
 		}
+
+		// Total addressed tiles should match the original tile count
+		assert_eq!(entries.tile_count(), 830042);
 		Ok(())
 	}
 }
