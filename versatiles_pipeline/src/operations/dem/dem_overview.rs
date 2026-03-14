@@ -32,7 +32,7 @@ struct Operation {
 /// This is correct for all linear DEM encodings (Mapbox, Terrarium) because
 /// `avg(elevation) = decode(avg(raw))` when the encoding is linear.
 #[allow(clippy::many_single_char_names)]
-fn dem_scale_down(image: &DynamicImage) -> Result<DynamicImage> {
+pub(super) fn dem_scale_down(image: &DynamicImage) -> Result<DynamicImage> {
 	let half_w = image.width() / 2;
 	let half_h = image.height() / 2;
 

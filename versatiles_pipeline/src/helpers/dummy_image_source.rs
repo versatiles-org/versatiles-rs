@@ -15,6 +15,11 @@ pub struct DummyImageSource {
 }
 
 impl DummyImageSource {
+	#[cfg(test)]
+	pub fn tilejson_mut(&mut self) -> &mut TileJSON {
+		&mut self.tilejson
+	}
+
 	#[context("Creating DummyImageSource, tile_format='{tile_format}', tile_size={tile_size}")]
 	pub fn from_color(
 		color: &[u8],

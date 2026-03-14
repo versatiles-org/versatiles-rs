@@ -4,3 +4,4 @@ pub mod raster_levels;
 pub mod raster_mask;
 pub mod raster_overscale;
 pub mod raster_overview;
+pub mod raster_tile_resize;
