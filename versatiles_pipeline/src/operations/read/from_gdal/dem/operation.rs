@@ -33,6 +33,9 @@ struct Args {
 	/// The number of maximum concurrent GDAL instances to allow. (default: 4)
 	/// Set to a higher value if you have enough system resources and want to increase throughput.
 	gdal_concurrency_limit: Option<u8>,
+	/// Optional path to a GeoJSON file with Polygon/MultiPolygon geometry.
+	/// Only pixels inside the polygon will be rendered; everything outside becomes nodata.
+	cutline: Option<String>,
 }
 
 #[derive(Debug)]
@@ -62,13 +65,28 @@ impl Operation {
 			.resolve_location(&DataLocation::try_from(&args.filename)?)?
 			.to_path_buf()?;
 
+		let cutline_path = args
+			.cutline
+			.as_ref()
+			.map(|c| {
+				factory
+					.resolve_location(&DataLocation::try_from(c.as_str())?)
+					.and_then(|l| l.to_path_buf())
+			})
+			.transpose()?;
+
 		let source = DemSource::new(
 			&filename,
 			args.gdal_reuse_limit.unwrap_or(100),
 			args.gdal_concurrency_limit.unwrap_or(4) as usize,
+			cutline_path.as_deref(),
 		)
 		.await?;
-		let bbox = source.bbox();
+		let mut bbox = *source.bbox();
+		if let Some(cutline_bbox) = source.cutline_bbox() {
+			bbox.intersect(cutline_bbox);
+		}
+		let bbox = &bbox;
 		let tile_size = args.tile_size.unwrap_or(512);
 
 		let level_max = args.level_max.unwrap_or(source.level_max(tile_size)?);

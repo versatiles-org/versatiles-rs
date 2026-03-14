@@ -1,4 +1,4 @@
-use super::{GdalPool, Instance, ResampleAlg, get_spatial_ref};
+use super::{Cutline, GdalPool, Instance, ResampleAlg, get_spatial_ref};
 use anyhow::{Context, Result, bail, ensure};
 use gdal::{Dataset, DriverManager, GeoTransform};
 use imageproc::image::{DynamicImage, RgbImage};
@@ -35,7 +35,13 @@ pub fn encode_elevation(elevation: f32, encoding: DemEncoding) -> [u8; 3] {
 
 /// Reproject the source dataset into a 1-band Float32 in-memory dataset
 /// covering the given bbox in Web Mercator (EPSG:3857).
-fn reproject_to_float_dataset(instance: &Instance, width: usize, height: usize, bbox: &GeoBBox) -> Result<Dataset> {
+fn reproject_to_float_dataset(
+	instance: &Instance,
+	width: usize,
+	height: usize,
+	bbox: &GeoBBox,
+	cutline: Option<&Cutline>,
+) -> Result<Dataset> {
 	log::trace!("reproject_to_float_dataset started for size={width}x{height}");
 
 	let bbox_mer = bbox.to_mercator();
@@ -59,6 +65,9 @@ fn reproject_to_float_dataset(instance: &Instance, width: usize, height: usize, 
 
 	let h_src_ds = instance.dataset().c_dataset();
 	let h_dst_ds = dst_ds.c_dataset();
+
+	// Create cutline geometry from WKT — must live until after warp completes
+	let cutline_geom = cutline.map(Cutline::create_ogr_geometry).transpose()?;
 
 	unsafe {
 		use gdal_sys::{
@@ -86,6 +95,10 @@ fn reproject_to_float_dataset(instance: &Instance, width: usize, height: usize, 
 		options.eResampleAlg = ResampleAlg::Bilinear.as_gdal();
 		options.dfWarpMemoryLimit = 512.0 * 1024.0 * 1024.0;
 
+		if let Some(ref geom) = cutline_geom {
+			options.hCutline = geom.c_geometry();
+		}
+
 		options.pTransformerArg = GDALCreateGenImgProjTransformer2(h_src_ds, h_dst_ds, core::ptr::null_mut());
 		options.pfnTransformer = Some(GDALGenImgProjTransform);
 
@@ -107,6 +120,7 @@ fn reproject_to_float_dataset(instance: &Instance, width: usize, height: usize, 
 			bail!("{:?}", CPLGetLastErrorMsg());
 		}
 	}
+	// cutline_geom dropped here — GDAL only borrows hCutline during warp
 
 	log::trace!("reproject_to_float_dataset complete");
 	Ok(dst_ds)
@@ -115,17 +129,23 @@ fn reproject_to_float_dataset(instance: &Instance, width: usize, height: usize, 
 #[derive(Clone)]
 pub struct DemSource {
 	pool: GdalPool,
+	cutline: Option<Cutline>,
 }
 
 unsafe impl Sync for DemSource {}
 
 impl DemSource {
 	#[context("Failed to create DemSource from file {:?}", filename)]
-	pub async fn new(filename: &Path, reuse_limit: u32, concurrency_limit: usize) -> Result<DemSource> {
+	pub async fn new(
+		filename: &Path,
+		reuse_limit: u32,
+		concurrency_limit: usize,
+		cutline_path: Option<&Path>,
+	) -> Result<DemSource> {
 		let path = filename.to_path_buf();
 		let factory: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static> =
 			Arc::new(move || Dataset::open(&path).with_context(|| format!("failed to open GDAL dataset: {path:?}")));
-		Self::new_with_factory(factory, reuse_limit, concurrency_limit).await
+		Self::new_with_factory(factory, reuse_limit, concurrency_limit, cutline_path).await
 	}
 
 	#[context("Failed to create DemSource via factory")]
@@ -133,9 +153,20 @@ impl DemSource {
 		open_dataset: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static>,
 		reuse_limit: u32,
 		concurrency_limit: usize,
+		cutline_path: Option<&Path>,
 	) -> Result<DemSource> {
-		let (pool, _) = GdalPool::new_with_factory(open_dataset, reuse_limit, concurrency_limit).await?;
-		Ok(DemSource { pool })
+		let (pool, probe) = GdalPool::new_with_factory(open_dataset, reuse_limit, concurrency_limit).await?;
+
+		let cutline = if let Some(path) = cutline_path {
+			let srs = probe
+				.spatial_ref()
+				.context("GDAL dataset must have a spatial reference for cutline support")?;
+			Some(Cutline::from_geojson(path, &srs)?)
+		} else {
+			None
+		};
+
+		Ok(DemSource { pool, cutline })
 	}
 
 	#[context("Failed to get elevation tile ({width}x{height}) for bbox ({bbox:?}) from GDAL DEM dataset")]
@@ -148,7 +179,7 @@ impl DemSource {
 	) -> Result<Option<DynamicImage>> {
 		let instance = self.pool.get_instance().await?;
 
-		let dst = reproject_to_float_dataset(&instance, width, height, bbox)?;
+		let dst = reproject_to_float_dataset(&instance, width, height, bbox, self.cutline.as_ref())?;
 
 		let image = tokio::task::spawn_blocking(move || -> Result<Option<DynamicImage>> {
 			let band = dst.rasterband(1)?.read_band_as::<f32>()?;
@@ -184,6 +215,10 @@ impl DemSource {
 
 	pub fn level_max(&self, tile_size: u32) -> Result<u8> {
 		self.pool.level_max(tile_size)
+	}
+
+	pub fn cutline_bbox(&self) -> Option<&GeoBBox> {
+		self.cutline.as_ref().map(Cutline::bbox_wgs84)
 	}
 }
 
@@ -245,7 +280,7 @@ mod tests {
 	impl DemSource {
 		pub fn from_testdata(bbox: GeoBBox) -> Result<DemSource> {
 			let factory = DemDatasetFactory::new(bbox).get_factory();
-			futures::executor::block_on(DemSource::new_with_factory(factory, 1, 2))
+			futures::executor::block_on(DemSource::new_with_factory(factory, 1, 2, None))
 		}
 	}
 

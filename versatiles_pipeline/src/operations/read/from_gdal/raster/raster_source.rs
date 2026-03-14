@@ -1,4 +1,4 @@
-use super::{BandMapping, BandMappingItem, GdalPool, Instance, ResampleAlg};
+use super::{BandMapping, BandMappingItem, Cutline, GdalPool, Instance, ResampleAlg};
 use anyhow::{Result, ensure};
 use gdal::{Dataset, GeoTransform};
 use imageproc::image::DynamicImage;
@@ -14,6 +14,7 @@ fn reproject_to_dataset(
 	height: usize,
 	bbox: &GeoBBox,
 	band_mapping: &Arc<BandMapping>,
+	cutline: Option<&Cutline>,
 ) -> Result<Dataset> {
 	log::trace!("reproject_image started for size={width}x{height}");
 
@@ -35,6 +36,9 @@ fn reproject_to_dataset(
 	let h_src_ds = instance.dataset().c_dataset();
 	let h_dst_ds = dst_ds.c_dataset();
 
+	// Create cutline geometry from WKT — must live until after warp completes
+	let cutline_geom = cutline.map(Cutline::create_ogr_geometry).transpose()?;
+
 	unsafe {
 		use gdal_sys::{
 			CPLErr, CPLGetLastErrorMsg, CSLSetNameValue, GDALChunkAndWarpMulti, GDALCreateGenImgProjTransformer2,
@@ -52,6 +56,10 @@ fn reproject_to_dataset(
 
 		options.eResampleAlg = ResampleAlg::default().as_gdal();
 		options.dfWarpMemoryLimit = 512.0 * 1024.0 * 1024.0; // 512 MB
+
+		if let Some(ref geom) = cutline_geom {
+			options.hCutline = geom.c_geometry();
+		}
 
 		options.pTransformerArg = GDALCreateGenImgProjTransformer2(h_src_ds, h_dst_ds, core::ptr::null_mut());
 		options.pfnTransformer = Some(GDALGenImgProjTransform);
@@ -74,6 +82,7 @@ fn reproject_to_dataset(
 			anyhow::bail!("{:?}", CPLGetLastErrorMsg());
 		}
 	}
+	// cutline_geom dropped here — GDAL only borrows hCutline during warp
 
 	log::trace!("reproject_image complete");
 
@@ -84,6 +93,7 @@ fn reproject_to_dataset(
 pub struct RasterSource {
 	pool: GdalPool,
 	band_mapping: Arc<BandMapping>,
+	cutline: Option<Cutline>,
 }
 
 unsafe impl Sync for RasterSource {}
@@ -91,11 +101,16 @@ unsafe impl Sync for RasterSource {}
 impl RasterSource {
 	/// Create a `RasterSource` from a file path.
 	#[context("Failed to create RasterSource from file {:?}", filename)]
-	pub async fn new(filename: &Path, reuse_limit: u32, concurrency_limit: usize) -> Result<RasterSource> {
+	pub async fn new(
+		filename: &Path,
+		reuse_limit: u32,
+		concurrency_limit: usize,
+		cutline_path: Option<&Path>,
+	) -> Result<RasterSource> {
 		let path = filename.to_path_buf();
 		let factory: Arc<dyn Fn() -> Result<gdal::Dataset> + Send + Sync + 'static> =
 			Arc::new(move || gdal::Dataset::open(&path).with_context(|| format!("failed to open GDAL dataset: {path:?}")));
-		Self::new_with_factory(factory, reuse_limit, concurrency_limit).await
+		Self::new_with_factory(factory, reuse_limit, concurrency_limit, cutline_path).await
 	}
 
 	/// Create a `RasterSource` from a factory that opens a fresh GDAL `Dataset` on demand.
@@ -104,6 +119,7 @@ impl RasterSource {
 		open_dataset: Arc<dyn Fn() -> Result<gdal::Dataset> + Send + Sync + 'static>,
 		reuse_limit: u32,
 		concurrency_limit: usize,
+		cutline_path: Option<&Path>,
 	) -> Result<RasterSource> {
 		let (pool, probe) = GdalPool::new_with_factory(open_dataset, reuse_limit, concurrency_limit).await?;
 
@@ -111,9 +127,19 @@ impl RasterSource {
 		let band_mapping = BandMapping::try_from(&probe)?;
 		log::trace!("Band mapping: {band_mapping:?}");
 
+		let cutline = if let Some(path) = cutline_path {
+			let srs = probe
+				.spatial_ref()
+				.context("GDAL dataset must have a spatial reference for cutline support")?;
+			Some(Cutline::from_geojson(path, &srs)?)
+		} else {
+			None
+		};
+
 		Ok(RasterSource {
 			pool,
 			band_mapping: Arc::new(band_mapping),
+			cutline,
 		})
 	}
 
@@ -123,7 +149,7 @@ impl RasterSource {
 
 		// Get instance from pool - single synchronization point!
 		let instance = self.pool.get_instance().await?;
-		let dst = reproject_to_dataset(&instance, width, height, bbox, &band_mapping)?;
+		let dst = reproject_to_dataset(&instance, width, height, bbox, &band_mapping, self.cutline.as_ref())?;
 		// Instance automatically returned to pool when dropped
 
 		let band_mapping = self.band_mapping.clone();
@@ -164,6 +190,10 @@ impl RasterSource {
 
 	pub fn level_max(&self, tile_size: u32) -> Result<u8> {
 		self.pool.level_max(tile_size)
+	}
+
+	pub fn cutline_bbox(&self) -> Option<&GeoBBox> {
+		self.cutline.as_ref().map(Cutline::bbox_wgs84)
 	}
 }
 
@@ -247,7 +277,7 @@ mod tests {
 		pub fn from_testdata(bbox: GeoBBox, channel_count: usize) -> Result<RasterSource> {
 			let factory = DatasetFactory::new(bbox, channel_count).get_factory();
 			// Construct via the factory (seed one instance inside new_with_factory)
-			futures::executor::block_on(RasterSource::new_with_factory(factory, 1, 2))
+			futures::executor::block_on(RasterSource::new_with_factory(factory, 1, 2, None))
 		}
 	}
 
