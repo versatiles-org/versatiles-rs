@@ -294,6 +294,7 @@ impl TileJSON {
 		}
 	}
 
+	#[must_use]
 	pub fn min_zoom(&self) -> Option<u8> {
 		self.values.get_integer("minzoom").and_then(|z| u8::try_from(z).ok())
 	}
@@ -311,6 +312,7 @@ impl TileJSON {
 		self.values.set("minzoom", z);
 	}
 
+	#[must_use]
 	pub fn max_zoom(&self) -> Option<u8> {
 		self.values.get_integer("maxzoom").and_then(|z| u8::try_from(z).ok())
 	}

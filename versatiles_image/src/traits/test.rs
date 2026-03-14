@@ -47,6 +47,7 @@ pub struct MarkerParameters {
 }
 
 impl MarkerParameters {
+	#[must_use]
 	pub fn new(offset: f64, angle: f64, scale: f64) -> Self {
 		Self { offset, angle, scale }
 	}

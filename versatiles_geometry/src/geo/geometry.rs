@@ -83,6 +83,7 @@ impl Geometry {
 	}
 
 	/// Returns `true` if this is a single-geometry variant (`Point`, `LineString`, or `Polygon`).
+	#[must_use]
 	pub fn is_single_geometry(&self) -> bool {
 		matches!(
 			self,
@@ -91,6 +92,7 @@ impl Geometry {
 	}
 
 	/// Returns `true` if this is a multi-geometry variant (`MultiPoint`, `MultiLineString`, or `MultiPolygon`).
+	#[must_use]
 	pub fn is_multi_geometry(&self) -> bool {
 		matches!(
 			self,
@@ -99,6 +101,7 @@ impl Geometry {
 	}
 
 	/// Returns the GeoJSON-like type name for this geometry (e.g., "Polygon", "MultiPoint").
+	#[must_use]
 	pub fn type_name(&self) -> &str {
 		match self {
 			Geometry::Point(_) => "Point",
@@ -114,6 +117,7 @@ impl Geometry {
 	///
 	/// `Point`→`MultiPoint`, `LineString`→`MultiLineString`, `Polygon`→`MultiPolygon`.
 	/// Multi variants are returned unchanged.
+	#[must_use]
 	pub fn into_multi_geometry(self) -> Self {
 		match self {
 			Geometry::Point(g) => Geometry::MultiPoint(g.into_multi()),
@@ -127,6 +131,7 @@ impl Geometry {
 	///
 	/// If the multi geometry contains exactly one element, it is unwrapped to the
 	/// corresponding single variant; otherwise the original multi geometry is returned.
+	#[must_use]
 	pub fn into_single_geometry(self) -> Self {
 		match self {
 			Geometry::Point(_) | Geometry::LineString(_) | Geometry::Polygon(_) => self,
@@ -156,6 +161,7 @@ impl Geometry {
 
 	/// Test helper: returns a deterministic example `MultiPolygon` geometry with holes.
 	#[cfg(any(test, feature = "test"))]
+	#[must_use]
 	pub fn new_example() -> Self {
 		Self::new_multi_polygon(vec![
 			vec![
@@ -184,6 +190,7 @@ impl Geometry {
 
 	/// Serializes the geometry into a GeoJSON-compatible object with `type` and `coordinates`.
 	/// Coordinates may be rounded to `precision` fractional digits if provided.
+	#[must_use]
 	pub fn to_json(&self, precision: Option<u8>) -> JsonObject {
 		let mut obj = JsonObject::new();
 		let type_name = self.type_name();

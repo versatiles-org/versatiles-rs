@@ -59,6 +59,7 @@ impl ConcurrencyLimits {
 	/// * `io_bound` - Limit for I/O-bound operations
 	/// * `cpu_bound` - Limit for CPU-bound operations
 	/// * `mixed` - Limit for mixed workloads
+	#[must_use]
 	pub fn new(io_bound: usize, cpu_bound: usize, mixed: usize) -> Self {
 		Self {
 			io_bound: io_bound.max(1),
@@ -68,6 +69,7 @@ impl ConcurrencyLimits {
 	}
 
 	/// Get the number of logical CPUs available
+	#[must_use]
 	pub fn cpu_count() -> usize {
 		num_cpus::get()
 	}

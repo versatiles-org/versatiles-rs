@@ -286,6 +286,7 @@ impl TileBBox {
 	}
 
 	/// Return a downscaled **copy** of this bbox by an integer power-of-two factor.
+	#[must_use]
 	pub fn scaled_down(&self, scale: u32) -> TileBBox {
 		if self.is_empty() {
 			return TileBBox::new_empty(self.level).unwrap();

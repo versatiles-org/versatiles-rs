@@ -168,6 +168,7 @@ impl TileCoord {
 	/// assert_eq!(format!("{lon:.5}"), "-179.64844");
 	/// assert_eq!(format!("{lat:.5}"), "-84.92832");
 	/// ```
+	#[must_use]
 	pub fn coord_to_geo(level: u8, x: f64, y: f64) -> [f64; 2] {
 		validate_zoom_level(level).unwrap();
 		let zoom: f64 = 2.0f64.powi(i32::from(level));
@@ -247,6 +248,7 @@ impl TileCoord {
 	///
 	/// # Errors
 	/// Returns an error if bounding coordinates overflow.
+	#[must_use]
 	pub fn to_tile_bbox(&self) -> TileBBox {
 		TileBBox::from_min_and_size(self.level, self.x, self.y, 1, 1).unwrap()
 	}

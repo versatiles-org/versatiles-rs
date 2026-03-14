@@ -115,6 +115,7 @@ impl TileCoord {
 	/// const [lon, lat] = tile.toGeo();
 	/// console.log(`Center: ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E`);
 	/// ```
+	#[must_use]
 	#[napi]
 	pub fn to_geo(&self) -> Vec<f64> {
 		let [lon, lat] = self.inner.as_geo();
@@ -140,6 +141,7 @@ impl TileCoord {
 	/// const [west, south, east, north] = tile.toGeoBbox();
 	/// console.log(`Bbox: ${west},${south},${east},${north}`);
 	/// ```
+	#[must_use]
 	#[napi]
 	pub fn to_geo_bbox(&self) -> Vec<f64> {
 		self.inner.to_geo_bbox().as_array().to_vec()
@@ -149,6 +151,7 @@ impl TileCoord {
 	///
 	/// Returns the tile's zoom level. At zoom 0, the entire world is one tile.
 	/// Each zoom level doubles the number of tiles in each dimension.
+	#[must_use]
 	#[napi(getter)]
 	pub fn z(&self) -> u32 {
 		u32::from(self.inner.level)
@@ -158,6 +161,7 @@ impl TileCoord {
 	///
 	/// Returns the horizontal position in the tile grid (0 to 2^z - 1).
 	/// Lower values are further west, higher values are further east.
+	#[must_use]
 	#[napi(getter)]
 	pub fn x(&self) -> u32 {
 		self.inner.x
@@ -167,6 +171,7 @@ impl TileCoord {
 	///
 	/// Returns the vertical position in the tile grid (0 to 2^z - 1).
 	/// In XYZ convention: lower values are further north, higher values are further south.
+	#[must_use]
 	#[napi(getter)]
 	pub fn y(&self) -> u32 {
 		self.inner.y
@@ -182,6 +187,7 @@ impl TileCoord {
 	/// const tile = new TileCoord(10, 550, 335);
 	/// console.log(tile.toJson());  // '{"z":10,"x":550,"y":335}'
 	/// ```
+	#[must_use]
 	#[napi]
 	pub fn to_json(&self) -> String {
 		self.inner.as_json()

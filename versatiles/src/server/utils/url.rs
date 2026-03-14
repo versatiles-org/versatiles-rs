@@ -40,6 +40,7 @@ impl Url {
 	/// # Returns
 	///
 	/// A new `Url` instance starting with `/`.
+	#[must_use]
 	pub fn new(url: String) -> Url {
 		let str = if url.starts_with('/') { url } else { format!("/{url}") };
 		Url { str }
@@ -54,6 +55,7 @@ impl Url {
 	/// # Returns
 	///
 	/// `true` if the current `Url` starts with the prefix, otherwise `false`.
+	#[must_use]
 	pub fn starts_with(&self, url: &Url) -> bool {
 		self.str.starts_with(&url.str)
 	}
@@ -63,6 +65,7 @@ impl Url {
 	/// # Returns
 	///
 	/// `true` if the `Url` ends with `/`, otherwise `false`.
+	#[must_use]
 	pub fn is_dir(&self) -> bool {
 		self.str.ends_with('/')
 	}
@@ -72,6 +75,7 @@ impl Url {
 	/// # Returns
 	///
 	/// A `Url` guaranteed to represent a directory path.
+	#[must_use]
 	pub fn to_dir(&self) -> Url {
 		if self.str.ends_with('/') {
 			self.clone()
@@ -101,6 +105,7 @@ impl Url {
 	/// # Returns
 	///
 	/// A `Vec<String>` containing the path components.
+	#[must_use]
 	pub fn as_vec(&self) -> Vec<String> {
 		self
 			.str
@@ -118,6 +123,7 @@ impl Url {
 	/// # Returns
 	///
 	/// A `PathBuf` representing the combined path.
+	#[must_use]
 	pub fn to_pathbug(&self, base: &Path) -> PathBuf {
 		base.join(&self.str[1..])
 	}
@@ -140,6 +146,7 @@ impl Url {
 	/// # Returns
 	///
 	/// A `String` representing the joined path.
+	#[must_use]
 	pub fn join_as_string(&self, filename: &str) -> String {
 		if self.is_dir() {
 			format!("{}{}", self.str, filename)

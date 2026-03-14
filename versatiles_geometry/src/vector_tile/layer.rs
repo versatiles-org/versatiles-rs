@@ -321,6 +321,7 @@ impl VectorTileLayer {
 
 	/// Test helper that constructs a deterministic example layer with one example feature.
 	#[cfg(test)]
+	#[must_use]
 	pub fn new_example() -> Self {
 		VectorTileLayer::from_features(String::from("layer1"), vec![GeoFeature::new_example()], 4096, 1).unwrap()
 	}

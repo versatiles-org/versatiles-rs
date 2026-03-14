@@ -156,6 +156,7 @@ impl Config {
 	/// Render Markdown help: the prose from `help.md` followed by a fenced YAML demo block.
 	///
 	/// This is consumed by UIs or `--help` outputs that want embedded examples.
+	#[must_use]
 	pub fn help_md() -> String {
 		[
 			include_str!("help.md").trim(),

@@ -88,6 +88,7 @@ pub struct PipelineFactory {
 
 impl PipelineFactory {
 	/// Creates an empty factory with no registered operations.
+	#[must_use]
 	pub fn new_empty(dir: DataLocation, create_reader: Callback, runtime: TilesRuntime) -> Self {
 		PipelineFactory {
 			read_ops: HashMap::new(),
@@ -99,6 +100,7 @@ impl PipelineFactory {
 	}
 
 	/// Creates a factory pre-loaded with all built-in read and transform operation factories.
+	#[must_use]
 	pub fn new_default(dir: DataLocation, create_reader: Callback, runtime: TilesRuntime) -> Self {
 		let mut factory = PipelineFactory::new_empty(dir, create_reader, runtime);
 
@@ -117,6 +119,7 @@ impl PipelineFactory {
 	///
 	/// Useful for examples and tests: resolves vector sources to `DummyVectorSource` and
 	/// raster sources to `DummyImageSource` based on the filename’s extension/color code.
+	#[must_use]
 	pub fn new_dummy() -> Self {
 		PipelineFactory::new_dummy_reader(Box::new(
 			|location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
@@ -150,6 +153,7 @@ impl PipelineFactory {
 	}
 
 	/// Creates a default-registered factory using the provided custom reader callback.
+	#[must_use]
 	pub fn new_dummy_reader(create_reader: Callback) -> Self {
 		#[cfg(not(test))]
 		let runtime = TilesRuntime::default();
@@ -254,6 +258,7 @@ impl PipelineFactory {
 	}
 
 	/// Returns the runtime associated with this factory.
+	#[must_use]
 	pub fn runtime(&self) -> TilesRuntime {
 		self.runtime.clone()
 	}
@@ -272,6 +277,7 @@ pub struct OperationMeta {
 }
 
 /// Returns metadata for all registered operations (both read and transform).
+#[must_use]
 #[cfg(feature = "codegen")]
 pub fn get_all_operation_metadata() -> Vec<OperationMeta> {
 	use crate::operations::{get_read_operation_factories, get_transform_operation_factories};

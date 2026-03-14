@@ -20,6 +20,7 @@ impl GeoCollection {
 	/// # Arguments
 	///
 	/// * `features` - A vector of `GeoFeature` instances to include in the collection.
+	#[must_use]
 	pub fn from(features: Vec<GeoFeature>) -> Self {
 		Self { features }
 	}
@@ -46,6 +47,7 @@ impl GeoCollection {
 	/// # Returns
 	///
 	/// A `JsonObject` representing the GeoJSON FeatureCollection.
+	#[must_use]
 	pub fn to_json(&self, precision: Option<u8>) -> JsonObject {
 		let mut obj = JsonObject::new();
 		obj.set("type", JsonValue::from("FeatureCollection"));

@@ -92,6 +92,7 @@ impl GeoFeature {
 	/// The output object contains `type: "Feature"`, an optional `id`, a `geometry` member,
 	/// and the `properties` object. If `precision` is provided, coordinate values in the
 	/// geometry are rounded to that many fractional digits.
+	#[must_use]
 	pub fn to_json(&self, precision: Option<u8>) -> JsonObject {
 		let mut json = JsonObject::new();
 		json.set("type", JsonValue::from("Feature"));
@@ -104,6 +105,7 @@ impl GeoFeature {
 	}
 
 	#[cfg(test)]
+	#[must_use]
 	/// Test helper that returns a deterministic example feature.
 	pub fn new_example() -> Self {
 		Self {

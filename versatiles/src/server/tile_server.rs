@@ -77,6 +77,7 @@ pub struct TileServer {
 
 impl TileServer {
 	#[cfg(test)]
+	#[must_use]
 	pub fn new_test(ip: &str, port: u16, minimal_recompression: bool, disable_api: bool) -> TileServer {
 		let runtime = crate::runtime::create_test_runtime();
 		TileServer {
@@ -380,6 +381,7 @@ impl TileServer {
 	///
 	/// If the server was started with port 0, this returns the actual ephemeral port
 	/// assigned after binding.
+	#[must_use]
 	pub fn get_port(&self) -> u16 {
 		self.port
 	}
@@ -400,6 +402,7 @@ impl TileServer {
 		routes::add_api_to_app(app, Arc::clone(&self.tile_sources)).await
 	}
 
+	#[must_use]
 	pub fn get_url_mapping(&self) -> Vec<(super::Url, String)> {
 		let mut result = Vec::new();
 		for entry in self.tile_sources.iter() {

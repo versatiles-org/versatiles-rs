@@ -277,6 +277,7 @@ impl TileFormat {
 	/// assert_eq!(TileFormat::MVT.to_type(), TileType::Vector);
 	/// assert_eq!(TileFormat::JSON.to_type(), TileType::Unknown);
 	/// ```
+	#[must_use]
 	pub fn to_type(&self) -> TileType {
 		use TileType::{Raster, Unknown, Vector};
 		match self {
@@ -299,6 +300,7 @@ impl TileFormat {
 	/// assert!(TileFormat::WEBP.is_raster());
 	/// assert!(!TileFormat::MVT.is_raster());
 	/// ```
+	#[must_use]
 	pub fn is_raster(&self) -> bool {
 		self.to_type() == TileType::Raster
 	}
@@ -316,6 +318,7 @@ impl TileFormat {
 	/// assert!(!TileFormat::PNG.is_vector());
 	/// assert!(!TileFormat::GEOJSON.is_vector());
 	/// ```
+	#[must_use]
 	pub fn is_vector(&self) -> bool {
 		self.to_type() == TileType::Vector
 	}

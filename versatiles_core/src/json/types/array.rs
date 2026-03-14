@@ -76,10 +76,12 @@ impl JsonArray {
 			.map_err(|e: Vec<f64>| anyhow!("vector length mismatch {} != {}", e.len(), N))
 	}
 
+	#[must_use]
 	pub fn len(&self) -> usize {
 		self.0.len()
 	}
 
+	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.0.is_empty()
 	}

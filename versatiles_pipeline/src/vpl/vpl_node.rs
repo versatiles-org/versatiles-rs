@@ -58,6 +58,7 @@ impl VPLNode {
 	}
 
 	/// Returns all property names present on this node.
+	#[must_use]
 	pub fn get_property_names(&self) -> Vec<String> {
 		self.properties.keys().cloned().collect()
 	}

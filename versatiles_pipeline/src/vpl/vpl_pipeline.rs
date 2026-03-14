@@ -9,14 +9,17 @@ pub struct VPLPipeline {
 }
 
 impl VPLPipeline {
+	#[must_use]
 	pub fn new(pipeline: Vec<VPLNode>) -> Self {
 		VPLPipeline { pipeline }
 	}
 
+	#[must_use]
 	pub fn len(&self) -> usize {
 		self.pipeline.len()
 	}
 
+	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.pipeline.is_empty()
 	}

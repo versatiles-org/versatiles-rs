@@ -13,6 +13,7 @@ pub const BINARY_NAME: &str = "versatiles.exe";
 pub const BINARY_NAME: &str = "versatiles";
 
 /// Helper to get a testdata file path.
+#[must_use]
 pub fn get_testdata(filename: &str) -> String {
 	PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 		.parent()
@@ -25,6 +26,7 @@ pub fn get_testdata(filename: &str) -> String {
 }
 
 /// Helper to get a temp output file path.
+#[must_use]
 pub fn get_temp_output(filename: &str) -> (TempDir, PathBuf) {
 	let dir = tempdir().expect("failed to create temp dir");
 	let path = dir.path().join(filename);
@@ -32,6 +34,7 @@ pub fn get_temp_output(filename: &str) -> (TempDir, PathBuf) {
 }
 
 /// Helper to create a Command for the versatiles binary.
+#[must_use]
 pub fn versatiles_cmd() -> Command {
 	let path = assert_cmd::cargo::cargo_bin!();
 	let mut cmd = Command::new(path);
@@ -48,6 +51,7 @@ pub struct VersaTilesResult {
 	pub stderr: String,
 }
 
+#[must_use]
 pub fn versatiles_output(args: &str) -> VersaTilesResult {
 	let mut cmd = versatiles_cmd();
 	if !args.is_empty() {
@@ -95,6 +99,7 @@ pub fn versatiles_stdin(args: &str, stdin: &str) {
 }
 
 /// Helper to get tilejson metadata from a file using the CLI.
+#[must_use]
 pub fn get_tilejson(filename: &Path) -> JsonValue {
 	let mut cmd = versatiles_cmd();
 	let output = cmd
@@ -107,6 +112,7 @@ pub fn get_tilejson(filename: &Path) -> JsonValue {
 }
 
 /// Extract bounds from tilejson of an output file.
+#[must_use]
 pub fn get_tilejson_bounds(filename: &Path) -> [f64; 4] {
 	let tilejson = get_tilejson(filename);
 	let obj = tilejson.as_object().expect("tilejson should be an object");
@@ -119,6 +125,7 @@ pub fn get_tilejson_bounds(filename: &Path) -> [f64; 4] {
 }
 
 /// Convert VPL via stdin to a temp file and return tilejson bounds.
+#[must_use]
 pub fn get_bounds_from_vpl(vpl: &str) -> (TempDir, [f64; 4]) {
 	let (temp_dir, output) = get_temp_output("vpl_output.mbtiles");
 	versatiles_stdin(&format!("convert [,vpl]- {}", output.to_str().unwrap()), vpl);

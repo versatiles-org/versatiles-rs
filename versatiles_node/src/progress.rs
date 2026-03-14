@@ -148,6 +148,7 @@ pub struct Progress {
 #[napi]
 impl Progress {
 	/// Create a new Progress instance
+	#[must_use]
 	pub fn new() -> Self {
 		Progress {
 			progress_listeners: Arc::new(Mutex::new(Vec::new())),

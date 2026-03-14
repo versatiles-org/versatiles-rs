@@ -193,6 +193,7 @@ impl<I> TileBBoxMap<I> {
 	/// let stream = map.into_stream();
 	/// # }
 	/// ```
+	#[must_use]
 	pub fn into_stream(self) -> TileStream<'static, I>
 	where
 		I: Send + 'static,

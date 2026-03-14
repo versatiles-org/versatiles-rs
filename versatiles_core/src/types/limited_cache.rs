@@ -175,6 +175,7 @@ where
 	/// cache.add("foo", 42);
 	/// assert_eq!(cache.len(), 1);
 	/// ```
+	#[must_use]
 	pub fn len(&self) -> usize {
 		self.cache.len()
 	}
@@ -191,6 +192,7 @@ where
 	/// cache.add("foo", 42);
 	/// assert!(!cache.is_empty());
 	/// ```
+	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.cache.is_empty()
 	}
@@ -206,6 +208,7 @@ where
 	/// // Capacity depends on element size
 	/// assert!(cache.capacity() > 0);
 	/// ```
+	#[must_use]
 	pub fn capacity(&self) -> usize {
 		self.cache.cap().get()
 	}

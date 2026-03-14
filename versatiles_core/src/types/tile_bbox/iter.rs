@@ -33,6 +33,7 @@ impl TileBBox {
 	/// # Returns
 	///
 	/// An iterator yielding `TileCoord` instances.
+	#[must_use]
 	pub fn into_iter_coords(self) -> Box<dyn Iterator<Item = TileCoord> + Send> {
 		if self.is_empty() {
 			return Box::new(std::iter::empty());

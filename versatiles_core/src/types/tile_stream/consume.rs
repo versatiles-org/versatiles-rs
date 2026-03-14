@@ -158,6 +158,7 @@ where
 	/// // Now `processed` is TileStream<'a, Blob>, not TileStream<'a, Result<Blob>>
 	/// # }
 	/// ```
+	#[must_use]
 	pub fn unwrap_results(self) -> TileStream<'a, T> {
 		TileStream {
 			inner: self

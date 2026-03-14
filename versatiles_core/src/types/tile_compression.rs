@@ -58,6 +58,7 @@ impl TileCompression {
 	/// assert_eq!(TileCompression::Brotli.as_str(), "brotli");
 	/// assert_eq!(TileCompression::Uncompressed.as_str(), "none");
 	/// ```
+	#[must_use]
 	pub fn as_str(&self) -> &str {
 		match self {
 			Uncompressed => "none",
@@ -79,6 +80,7 @@ impl TileCompression {
 	/// let variants = TileCompression::variants();
 	/// assert_eq!(variants, &["none", "gzip", "brotli", "zstd"]);
 	/// ```
+	#[must_use]
 	pub fn variants() -> &'static [&'static str] {
 		&["none", "gzip", "brotli", "zstd"]
 	}

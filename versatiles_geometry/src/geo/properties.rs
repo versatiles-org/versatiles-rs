@@ -25,6 +25,7 @@ impl Default for GeoProperties {
 
 impl GeoProperties {
 	/// Creates an empty `GeoProperties` map.
+	#[must_use]
 	pub fn new() -> GeoProperties {
 		GeoProperties(BTreeMap::new())
 	}
@@ -52,16 +53,19 @@ impl GeoProperties {
 	}
 
 	/// Returns the number of properties.
+	#[must_use]
 	pub fn len(&self) -> usize {
 		self.0.len()
 	}
 
 	/// Returns `true` if there are no properties.
+	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.0.is_empty()
 	}
 
 	/// Returns a reference to a property value if it exists.
+	#[must_use]
 	pub fn get(&self, key: &str) -> Option<&GeoValue> {
 		self.0.get(key)
 	}
@@ -80,6 +84,7 @@ impl GeoProperties {
 	}
 
 	/// Converts the properties map to a JSON object.
+	#[must_use]
 	pub fn to_json(&self) -> JsonObject {
 		let mut obj = JsonObject::new();
 		for (k, v) in &self.0 {

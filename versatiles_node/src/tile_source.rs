@@ -352,6 +352,7 @@ impl TileSource {
 	/// const metadata = JSON.parse(tileJson);
 	/// console.log(`Zoom range: ${metadata.minzoom} - ${metadata.maxzoom}`);
 	/// ```
+	#[must_use]
 	#[napi]
 	pub fn tile_json(&self) -> TileJSON {
 		TileJSON::build(self.reader.tilejson(), &self.reader.metadata().bbox_pyramid)
@@ -378,6 +379,7 @@ impl TileSource {
 	/// console.log(`Compression: ${metadata.tileCompression}`);
 	/// console.log(`Zoom: ${metadata.minZoom}-${metadata.maxZoom}`);
 	/// ```
+	#[must_use]
 	#[napi]
 	pub fn metadata(&self) -> SourceMetadata {
 		SourceMetadata::from(self.reader.metadata())
@@ -401,6 +403,7 @@ impl TileSource {
 	///   console.log(sourceType.uri);  // file path or URL
 	/// }
 	/// ```
+	#[must_use]
 	#[napi]
 	pub fn source_type(&self) -> SourceType {
 		self.reader.source_type().as_ref().into()

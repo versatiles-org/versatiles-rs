@@ -113,6 +113,7 @@ impl GeoBBox {
 	/// let bbox = GeoBBox::new_normalized(190.0, 12.0, -200.0, 15.0);
 	/// assert_eq!(bbox.as_tuple(), (-180.0, 12.0, 180.0, 15.0));
 	/// ```
+	#[must_use]
 	pub fn new_normalized(x0: f64, y0: f64, x1: f64, y1: f64) -> GeoBBox {
 		GeoBBox {
 			x_min: x0.min(x1).clamp(-180.0, 180.0),
@@ -373,6 +374,7 @@ impl GeoBBox {
 	/// let [minx, miny, maxx, maxy] = bbox.to_mercator();
 	/// assert!(minx < maxx && miny < maxy);
 	/// ```
+	#[must_use]
 	pub fn to_mercator(self: &GeoBBox) -> [f64; 4] {
 		// Spherical Mercator radius (WGS84 semi-major axis)
 		fn x_from_lon(lon_deg: f64) -> f64 {

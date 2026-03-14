@@ -51,8 +51,8 @@ module_name_repetitions = "allow"
 similar_names = "allow"
 doc_markdown = "allow"
 
-# Allow lints being addressed in separate phases
-must_use_candidate = "allow"
+# Warn when return values should have #[must_use]
+must_use_candidate = "deny"
 
 # Allow reasonable casting patterns in container code
 cast_precision_loss = "allow"

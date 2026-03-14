@@ -100,6 +100,7 @@ impl TileBBox {
 	/// // Z-order: (0,0), (1,0), (0,1), (1,1)
 	/// assert_eq!(coords.len(), 4);
 	/// ```
+	#[must_use]
 	pub fn iter_coords_zorder(&self) -> ZOrderIterator {
 		ZOrderIterator::new(self)
 	}
@@ -112,6 +113,7 @@ impl TileBBox {
 	/// # Returns
 	///
 	/// A boxed iterator yielding `TileCoord` instances in Z-order sequence.
+	#[must_use]
 	pub fn into_iter_coords_zorder(self) -> Box<dyn Iterator<Item = TileCoord> + Send> {
 		Box::new(ZOrderIterator::new(&self))
 	}

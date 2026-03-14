@@ -13,10 +13,12 @@ pub fn create_runtime_builder() -> RuntimeBuilder {
 	builder
 }
 
+#[must_use]
 pub fn create_runtime() -> TilesRuntime {
 	create_runtime_builder().build()
 }
 
+#[must_use]
 pub fn create_test_runtime() -> TilesRuntime {
 	create_runtime_builder().silent_progress(true).build()
 }
