@@ -100,8 +100,11 @@ fn get_bbox_pyramid(arguments: &Subcommand) -> Result<(Option<TileBBoxPyramid>, 
 		let values: Vec<f64> = bbox
 			.split(&[' ', ',', ';'])
 			.filter(|s| !s.is_empty())
-			.map(|s| s.parse::<f64>().expect("bbox value is not a number"))
-			.collect();
+			.map(|s| {
+				s.parse::<f64>()
+					.map_err(|_| anyhow::anyhow!("bbox value '{s}' is not a valid number"))
+			})
+			.collect::<Result<Vec<f64>>>()?;
 
 		if values.len() != 4 {
 			bail!("bbox must contain exactly 4 values, got {}: {bbox:?}", values.len());
