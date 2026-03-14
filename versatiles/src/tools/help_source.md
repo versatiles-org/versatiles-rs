@@ -23,6 +23,23 @@ https://example.org/tiles.versatiles
 http://download.example.org/world.versatiles
 ```
 
+### URLs with Basic Authentication
+
+To access sources that require HTTP Basic Authentication (e.g., WebDAV servers or private file servers), embed credentials directly in the URL:
+
+```text
+https://user:password@example.org/tiles.versatiles
+https://admin:s3cret@webdav.example.org/data/world.versatiles
+```
+
+Special characters in the username or password must be percent-encoded (e.g., `@` → `%40`, `:` → `%3A`):
+
+```text
+https://user%40company:p%40ssw0rd@example.org/tiles.versatiles
+```
+
+Credentials are extracted from the URL and sent as an `Authorization` header. They are never stored in the URL itself.
+
 ## Name and Type Prefixes
 
 You can override the auto-detected name and container type using bracket notation.
@@ -102,4 +119,7 @@ versatiles convert "[,vpl](from_mbtiles in.mbtiles | filter level_max=12)" out.v
 
 # Override container type
 versatiles probe tiles.db[,mbtiles]
+
+# Remote source with basic auth (e.g., WebDAV)
+versatiles serve https://user:password@webdav.example.org/tiles.versatiles
 ```
