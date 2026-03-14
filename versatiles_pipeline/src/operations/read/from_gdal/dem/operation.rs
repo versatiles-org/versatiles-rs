@@ -231,6 +231,64 @@ impl ReadOperationFactoryTrait for Factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use assert_fs::TempDir;
+	use gdal::DriverManager;
+	use rstest::rstest;
+	use std::path::Path;
+	use versatiles_core::GeoBBox;
+
+	/// Creates a temporary single-band float32 GeoTIFF with a gradient of elevation values.
+	fn create_test_dem(path: &Path, bbox: &GeoBBox) {
+		let size = 256;
+		let driver = DriverManager::get_driver_by_name("GTiff").unwrap();
+		let mut ds = driver
+			.create_with_band_type::<f32, _>(path.to_str().unwrap(), size, size, 1)
+			.unwrap();
+		ds.set_spatial_ref(&super::super::get_spatial_ref(4326).unwrap())
+			.unwrap();
+		ds.set_geo_transform(&[
+			bbox.x_min,
+			(bbox.x_max - bbox.x_min) / size as f64,
+			0.0,
+			bbox.y_max,
+			0.0,
+			(bbox.y_min - bbox.y_max) / size as f64,
+		])
+		.unwrap();
+
+		let mut elev_data = vec![0.0f32; size * size];
+		for row in 0..size {
+			for col in 0..size {
+				elev_data[row * size + col] = (col as f32 / size as f32) * 8848.0;
+			}
+		}
+		let mut buffer = gdal::raster::Buffer::new((size, size), elev_data);
+		ds.rasterband(1)
+			.unwrap()
+			.write((0, 0), (size, size), &mut buffer)
+			.unwrap();
+	}
+
+	fn create_temp_dem() -> (TempDir, String) {
+		let tmp = TempDir::new().unwrap();
+		let dem_path = tmp.path().join("test_dem.tif");
+		let bbox = GeoBBox::new(14.0, 49.0, 24.0, 55.0).unwrap();
+		create_test_dem(&dem_path, &bbox);
+		let path_str = dem_path.to_str().unwrap().to_string();
+		(tmp, path_str)
+	}
+
+	async fn get_operation(dem_path: &str, extra_args: &str) -> Operation {
+		Operation::new(
+			VPLNode::try_from_str(&format!(
+				"from_gdal_dem filename=\"{dem_path}\" tile_size=\"256\" level_min=\"0\" level_max=\"2\" {extra_args}"
+			))
+			.unwrap(),
+			&PipelineFactory::new_dummy(),
+		)
+		.await
+		.unwrap()
+	}
 
 	#[test]
 	fn test_factory_get_tag_name() {
@@ -247,5 +305,126 @@ mod tests {
 		assert!(docs.contains("tile_size"));
 		assert!(docs.contains("level_max"));
 		assert!(docs.contains("level_min"));
+		assert!(docs.contains("cutline"));
+		assert!(docs.contains("gdal_reuse_limit"));
+		assert!(docs.contains("gdal_concurrency_limit"));
+	}
+
+	#[rstest]
+	#[case("", DemEncoding::Mapbox)]
+	#[case("encoding=\"mapbox\"", DemEncoding::Mapbox)]
+	#[case("encoding=\"terrarium\"", DemEncoding::Terrarium)]
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_operation_encoding(#[case] extra_args: &str, #[case] expected_encoding: DemEncoding) {
+		let (_tmp, dem_path) = create_temp_dem();
+		let op = get_operation(&dem_path, extra_args).await;
+		assert_eq!(op.encoding, expected_encoding);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_operation_invalid_encoding() {
+		let (_tmp, dem_path) = create_temp_dem();
+		let result = Operation::new(
+			VPLNode::try_from_str(&format!("from_gdal_dem filename=\"{dem_path}\" encoding=\"invalid\"")).unwrap(),
+			&PipelineFactory::new_dummy(),
+		)
+		.await;
+		assert!(result.is_err());
+		let err = format!("{:#}", result.unwrap_err());
+		assert!(err.contains("Unknown DEM encoding"), "got: {err}");
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_operation_metadata() {
+		let (_tmp, dem_path) = create_temp_dem();
+		let op = get_operation(&dem_path, "").await;
+		assert_eq!(op.metadata.tile_format, TileFormat::PNG);
+		assert_eq!(op.metadata.tile_compression, TileCompression::Uncompressed);
+		assert_eq!(op.metadata.bbox_pyramid.get_level_min(), Some(0));
+		assert_eq!(op.metadata.bbox_pyramid.get_level_max(), Some(2));
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_operation_tilejson() {
+		let (_tmp, dem_path) = create_temp_dem();
+		let op = get_operation(&dem_path, "").await;
+		let tilejson = op.tilejson();
+		assert!(tilejson.bounds.is_some());
+		let bounds = tilejson.bounds.unwrap();
+		assert!((bounds.x_min - 14.0).abs() < 0.1);
+		assert!((bounds.y_min - 49.0).abs() < 0.1);
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_operation_source_type() {
+		let (_tmp, dem_path) = create_temp_dem();
+		let op = get_operation(&dem_path, "").await;
+		assert_eq!(op.source_type().to_string(), "container 'gdal_dem' ('gdal_dem')");
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_operation_tile_size() {
+		let (_tmp, dem_path) = create_temp_dem();
+		let op = get_operation(&dem_path, "").await;
+		assert_eq!(op.tile_size, 256);
+	}
+
+	#[rstest]
+	#[case("")]
+	#[case("encoding=\"terrarium\"")]
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_get_tile_stream(#[case] extra_args: &str) -> Result<()> {
+		let (_tmp, dem_path) = create_temp_dem();
+		let op = get_operation(&dem_path, extra_args).await;
+		let bbox = TileBBox::new_full(1)?;
+		let stream = op.get_tile_stream(bbox).await?;
+		let tiles = stream.to_vec().await;
+		assert!(!tiles.is_empty(), "stream should produce tiles");
+		for (coord, tile) in &tiles {
+			assert!(coord.level == 1);
+			let image = tile.clone().into_image()?;
+			assert_eq!(image.width(), 256);
+			assert_eq!(image.height(), 256);
+		}
+		Ok(())
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_get_tile_stream_empty_bbox() -> Result<()> {
+		let (_tmp, dem_path) = create_temp_dem();
+		let op = get_operation(&dem_path, "").await;
+		// Use a bbox that doesn't overlap the data (data is at lon 14-24, lat 49-55)
+		let bbox = TileBBox::from_geo(1, &GeoBBox::new(-180.0, -85.0, -170.0, -80.0).unwrap())?;
+		let stream = op.get_tile_stream(bbox).await?;
+		let tiles = stream.to_vec().await;
+		assert!(tiles.is_empty(), "stream should be empty for non-overlapping bbox");
+		Ok(())
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_mapbox_tilejson_schema() {
+		let (_tmp, dem_path) = create_temp_dem();
+		let op = get_operation(&dem_path, "encoding=\"mapbox\"").await;
+		assert_eq!(op.tilejson().tile_schema, Some(TileSchema::RasterDEMMapbox));
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_terrarium_tilejson_schema() {
+		let (_tmp, dem_path) = create_temp_dem();
+		let op = get_operation(&dem_path, "encoding=\"terrarium\"").await;
+		assert_eq!(op.tilejson().tile_schema, Some(TileSchema::RasterDEMTerrarium));
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_build_via_factory_trait() -> Result<()> {
+		let (_tmp, dem_path) = create_temp_dem();
+		let factory = PipelineFactory::new_dummy();
+		let vpl_node = VPLNode::try_from_str(&format!(
+			"from_gdal_dem filename=\"{dem_path}\" level_min=\"0\" level_max=\"1\""
+		))
+		.unwrap();
+		let source = Operation::build(vpl_node, &factory).await?;
+		assert_eq!(source.metadata().tile_format, TileFormat::PNG);
+		Ok(())
 	}
 }
