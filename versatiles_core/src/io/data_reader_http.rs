@@ -36,8 +36,7 @@ use async_trait::async_trait;
 use percent_encoding::percent_decode_str;
 use regex::{Regex, RegexBuilder};
 use reqwest::{Client, RequestBuilder, StatusCode, Url};
-use std::sync::LazyLock;
-use std::{str, time::Duration};
+use std::{fmt, str, sync::LazyLock, time::Duration};
 use tokio::time::sleep;
 use versatiles_derive::context;
 
@@ -50,12 +49,11 @@ pub struct DataReaderHttp {
 	password: Option<String>,
 }
 
-impl std::fmt::Debug for DataReaderHttp {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for DataReaderHttp {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("DataReaderHttp")
-			.field("client", &"Client { .. }")
-			.field("name", &self.name)
-			.field("url", &self.url)
+			.field("url", &self.url.as_str())
+			.field("has_credentials", &self.username.is_some())
 			.finish()
 	}
 }
