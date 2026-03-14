@@ -74,10 +74,16 @@ impl DataReaderHttp {
 		} else {
 			Some(percent_decode_str(url.username()).decode_utf8()?.into_owned())
 		};
-		let password: Option<String> = url
-			.password()
-			.map(|p| percent_decode_str(p).decode_utf8().map(std::borrow::Cow::into_owned))
-			.transpose()?;
+
+		let password: Option<String> = if let Some(p) = url.password() {
+			Some(if let Ok(v) = percent_decode_str(p).decode_utf8() {
+				v.into_owned()
+			} else {
+				bail!("failed to decode password");
+			})
+		} else {
+			None
+		};
 
 		// Strip credentials from the URL before any logging or error messages
 		url.set_username("").ok();
