@@ -71,11 +71,6 @@ impl DataReaderHttp {
 	///
 	/// * A Result containing a boxed `DataReaderHttp` or an error.
 	pub fn from_url(mut url: Url) -> Result<Box<DataReaderHttp>> {
-		match url.scheme() {
-			"http" | "https" => (),
-			other => bail!("unsupported URL scheme '{other}' in '{url}', expected 'http' or 'https'"),
-		}
-
 		let username = if url.username().is_empty() {
 			None
 		} else {
@@ -86,8 +81,14 @@ impl DataReaderHttp {
 			.map(|p| percent_decode_str(p).decode_utf8().map(std::borrow::Cow::into_owned))
 			.transpose()?;
 
+		// Strip credentials from the URL before any logging or error messages
 		url.set_username("").ok();
 		url.set_password(None).ok();
+
+		match url.scheme() {
+			"http" | "https" => (),
+			other => bail!("unsupported URL scheme '{other}' in '{url}', expected 'http' or 'https'"),
+		}
 
 		let client = Client::builder()
 			.tcp_keepalive(Duration::from_secs(600))
