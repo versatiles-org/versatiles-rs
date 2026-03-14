@@ -269,17 +269,13 @@ fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordin
 					bail!("empty arrays are not allowed in coordinates")
 				}
 
-				let list = match list.first().unwrap() {
+				let list = match list.first().expect("checked non-empty above") {
 					V(_) => {
 						if list.len() != 2 {
 							bail!("points in coordinates must have exactly two values")
 						}
-						C0(list
-							.into_iter()
-							.map(TemporaryCoordinates::unwrap_v)
-							.collect::<Vec<f64>>()
-							.try_into()
-							.unwrap_or_else(|v: Vec<f64>| panic!("Expected a Vec of length {} but it was {}", 2, v.len())))
+						let values: Vec<f64> = list.into_iter().map(TemporaryCoordinates::unwrap_v).collect();
+						C0([values[0], values[1]])
 					}
 					C0(_) => C1(list.into_iter().map(TemporaryCoordinates::unwrap_c0).collect()),
 					C1(_) => C2(list.into_iter().map(TemporaryCoordinates::unwrap_c1).collect()),
