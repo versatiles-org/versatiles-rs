@@ -42,13 +42,22 @@ use tokio::time::sleep;
 use versatiles_derive::context;
 
 /// A struct that provides reading capabilities from an HTTP(S) endpoint.
-#[derive(Debug)]
 pub struct DataReaderHttp {
 	client: Client,
 	name: String,
 	url: Url,
 	username: Option<String>,
 	password: Option<String>,
+}
+
+impl std::fmt::Debug for DataReaderHttp {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("DataReaderHttp")
+			.field("client", &"Client { .. }")
+			.field("name", &self.name)
+			.field("url", &self.url)
+			.finish()
+	}
 }
 
 impl DataReaderHttp {
