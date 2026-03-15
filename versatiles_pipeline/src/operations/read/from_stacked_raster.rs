@@ -98,22 +98,22 @@ struct Operation {
 
 /// Fetches and blends tiles from all sources for a single coordinate.
 ///
-/// Sources are processed in order (first source is background, later sources overlay).
-/// Returns `None` if no native (non-overscaled) source contributed a tile, preventing
-/// purely synthetic tiles from being generated where no real source data exists.
+/// Sources are processed in order (first source is foreground/top, later sources are background).
+/// Returns `None` only if no source produced a tile at all.
+///
+/// **Note:** The caller is responsible for ensuring that at least one native (non-overscaled)
+/// source exists at the requested level. This function performs pure blending and does not
+/// filter based on overscale status. The `get_tile_stream` method enforces this policy
+/// before calling this function.
 ///
 /// # Arguments
 /// * `coord` - The tile coordinate to fetch
 /// * `entries` - Sources with precomputed overscale status for this request level
 async fn get_tile(coord: TileCoord, entries: Vec<FilteredSourceEntry>) -> Result<Option<(TileCoord, Tile)>> {
 	let mut tile = Option::<Tile>::None;
-	let mut has_native_tile = false;
 
 	for entry in &entries {
 		if let Some(mut tile_bg) = entry.source.get_tile(&coord).await? {
-			if !entry.is_overscaled {
-				has_native_tile = true;
-			}
 			if let Some(mut tile_fg) = tile {
 				if tile_bg.is_empty()? {
 					tile_bg = tile_fg;
@@ -126,12 +126,6 @@ async fn get_tile(coord: TileCoord, entries: Vec<FilteredSourceEntry>) -> Result
 				break;
 			}
 		}
-	}
-
-	// Only return a tile if at least one native (non-overscaled) source contributed.
-	// This prevents generating purely synthetic tiles where no real data exists.
-	if !has_native_tile {
-		return Ok(None);
 	}
 
 	Ok(tile.map(|t| (coord, t)))
@@ -271,12 +265,17 @@ impl TileSource for Operation {
 			let first_source = entries.remove(0).source;
 			let mut stream = first_source.get_tile_stream(bbox).await?;
 
-			// If there are other sources, overlay the tiles
+			// If there are other sources, overlay the tiles — but skip when the
+			// foreground tile is already opaque (avoids unnecessary decode/blend/re-encode).
 			if !entries.is_empty() {
+				let needs_reencode = first_source.metadata().tile_format != tile_format;
 				stream = stream
 					.map_parallel_async(move |c, mut tile| {
 						let entries = entries.clone();
 						async move {
+							if tile.is_opaque()? {
+								return Ok(tile);
+							}
 							if let Some((_coord, mut tile_bg)) = get_tile(c, entries).await? {
 								tile.as_image_mut()?.overlay(tile_bg.as_image()?)?;
 							}
@@ -284,10 +283,16 @@ impl TileSource for Operation {
 						}
 					})
 					.unwrap_results();
-			}
 
-			// Re-encode only if format differs
-			if first_source.metadata().tile_format != tile_format {
+				if needs_reencode {
+					stream = stream
+						.map_parallel_try(move |_coord, mut tile| {
+							tile.change_format(tile_format, None, None)?;
+							Ok(tile)
+						})
+						.unwrap_results();
+				}
+			} else if first_source.metadata().tile_format != tile_format {
 				stream = stream
 					.map_parallel_try(move |_coord, mut tile| {
 						tile.change_format(tile_format, None, None)?;
@@ -647,8 +652,8 @@ mod tests {
 	}
 
 	#[rstest]
-	#[case(&[true], false)] // all overscaled -> None
-	#[case(&[true, true], false)] // all overscaled -> None
+	#[case(&[true], true)] // all overscaled -> Some (caller enforces native policy)
+	#[case(&[true, true], true)] // all overscaled -> Some (caller enforces native policy)
 	#[case(&[false], true)] // single native source -> Some
 	#[case(&[false, true], true)] // mixed (overscaled + native) -> Some
 	#[case(&[true, false], true)] // mixed (overscaled + native) -> Some
