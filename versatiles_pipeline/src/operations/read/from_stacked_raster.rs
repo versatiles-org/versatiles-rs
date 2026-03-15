@@ -1079,12 +1079,7 @@ mod tests {
 			});
 		}
 
-		let metadata = TileSourceMetadata::new(
-			TileFormat::PNG,
-			TileCompression::Uncompressed,
-			pyramid,
-			traversal,
-		);
+		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, pyramid, traversal);
 		let tilejson = TileJSON::default();
 
 		let op = Operation {
@@ -1250,6 +1245,141 @@ mod tests {
 		let c = color.unwrap();
 		// Pure semi-transparent blue means overscaled layers were dropped
 		assert_ne!(c, "0000FF80", "overscaled layers were not blended in");
+	}
+
+	/// Helper: build an Operation from SourceEntries and collect a single tile.
+	/// Returns `(tile_from_operation, tile_from_first_source_alone)` for blob comparison.
+	async fn get_tiles_for_blob_comparison(
+		layers: &[(&[u8], u8)], // (RGBA color, max zoom level)
+		request_level: u8,
+	) -> (Tile, Tile) {
+		let mut sources: Vec<SourceEntry> = Vec::new();
+		let mut pyramid = TileBBoxPyramid::new_empty();
+		let mut traversal = Traversal::new_any();
+
+		let mut original_sources: Vec<Box<dyn TileSource>> = Vec::new();
+		for &(color, max_level) in layers {
+			let mut src_pyramid = TileBBoxPyramid::new_empty();
+			for level in 0..=max_level {
+				src_pyramid.include_bbox(&TileBBox::new_full(level).unwrap());
+			}
+			pyramid.include_bbox_pyramid(&src_pyramid);
+			let source = DummyImageSource::from_color(color, 4, TileFormat::PNG, Some(src_pyramid)).unwrap();
+			traversal.intersect(&source.metadata().traversal).unwrap();
+			original_sources.push(Box::new(source));
+		}
+
+		let level_max = pyramid.get_level_max().unwrap();
+
+		// Build a standalone copy of the first source for comparison
+		let first_color = layers[0].0;
+		let first_max = layers[0].1;
+		let mut first_pyramid = TileBBoxPyramid::new_empty();
+		for level in 0..=first_max {
+			first_pyramid.include_bbox(&TileBBox::new_full(level).unwrap());
+		}
+		let first_source_standalone =
+			DummyImageSource::from_color(first_color, 4, TileFormat::PNG, Some(first_pyramid)).unwrap();
+
+		use crate::operations::raster::raster_overscale;
+		for source in original_sources {
+			let native_level_max = source.metadata().bbox_pyramid.get_level_max().unwrap();
+			let overscale_args = raster_overscale::Args {
+				level_base: Some(native_level_max),
+				level_max: Some(level_max),
+				enable_climbing: Some(true),
+			};
+			let wrapped_source = raster_overscale::Operation::new(source, &overscale_args).unwrap();
+			sources.push(SourceEntry {
+				source: Arc::new(Box::new(wrapped_source)),
+				native_level_max,
+			});
+		}
+
+		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, pyramid, traversal);
+		let tilejson = TileJSON::default();
+
+		let op = Operation {
+			metadata,
+			sources,
+			source_types: vec![],
+			tilejson,
+		};
+
+		let coord = TileCoord::new(request_level, 0, 0).unwrap();
+		let bbox = coord.to_tile_bbox();
+
+		let mut op_tiles = op.get_tile_stream(bbox).await.unwrap().to_vec().await;
+		assert_eq!(op_tiles.len(), 1, "expected exactly one tile");
+		let (_, op_tile) = op_tiles.remove(0);
+
+		let standalone_tile = first_source_standalone.get_tile(&coord).await.unwrap().unwrap();
+
+		(op_tile, standalone_tile)
+	}
+
+	/// When the foreground (first source) is opaque (RGB, no alpha) and covers everything,
+	/// the blob should be preserved byte-for-byte — no decode/blend/re-encode.
+	#[tokio::test]
+	async fn test_opaque_foreground_preserves_blob() {
+		let (mut op_tile, mut standalone_tile) = get_tiles_for_blob_comparison(
+			&[
+				(&[255, 0, 0], 5),      // red opaque RGB foreground (native at level 3)
+				(&[0, 255, 0, 128], 3), // green semi-transparent background (overscaled at level 3)
+			],
+			3,
+		)
+		.await;
+
+		// The operation tile should be byte-identical to the standalone first source tile
+		assert_eq!(
+			op_tile.as_blob(Uncompressed).unwrap(),
+			standalone_tile.as_blob(Uncompressed).unwrap(),
+			"opaque foreground tile was re-encoded when it should have been preserved"
+		);
+	}
+
+	/// When the foreground is semi-transparent (RGBA with alpha < 255), blending with
+	/// background layers must happen, so the blob will differ from the standalone source.
+	#[tokio::test]
+	async fn test_semitransparent_foreground_triggers_reencoding() {
+		let (mut op_tile, mut standalone_tile) = get_tiles_for_blob_comparison(
+			&[
+				(&[255, 0, 0, 128], 5), // red semi-transparent foreground (native at level 3)
+				(&[0, 255, 0, 255], 3), // green opaque background (overscaled at level 3)
+			],
+			3,
+		)
+		.await;
+
+		// The operation tile should differ because blending happened
+		assert_ne!(
+			op_tile.as_blob(Uncompressed).unwrap(),
+			standalone_tile.as_blob(Uncompressed).unwrap(),
+			"semi-transparent foreground tile was NOT re-encoded — blending didn't happen"
+		);
+	}
+
+	/// When the foreground is opaque RGBA (all pixels alpha=255), the header reports HasAlpha
+	/// but pixel scanning reveals full opacity. The blob should still be preserved.
+	#[tokio::test]
+	async fn test_opaque_rgba_foreground_preserves_blob() {
+		let (mut op_tile, mut standalone_tile) = get_tiles_for_blob_comparison(
+			&[
+				(&[255, 0, 0, 255], 5), // red opaque RGBA foreground (native at level 3)
+				(&[0, 255, 0, 128], 3), // green semi-transparent background (overscaled at level 3)
+			],
+			3,
+		)
+		.await;
+
+		// Even though the format has an alpha channel, the tile is fully opaque,
+		// so it should be preserved without re-encoding
+		assert_eq!(
+			op_tile.as_blob(Uncompressed).unwrap(),
+			standalone_tile.as_blob(Uncompressed).unwrap(),
+			"opaque RGBA foreground tile was re-encoded when it should have been preserved"
+		);
 	}
 
 	/// Opaque overscaled foreground should completely cover native background.
