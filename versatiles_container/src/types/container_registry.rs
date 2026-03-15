@@ -61,6 +61,18 @@ use versatiles_core::io::DataWriterTrait;
 type WriteData =
 	Box<dyn Fn(SharedTileSource, Box<dyn DataWriterTrait>, TilesRuntime) -> WriteFuture + Send + Sync + 'static>;
 
+#[derive(Clone)]
+struct ReaderEntry {
+	open_path: Arc<ReadFile>,
+	open_reader: Option<Arc<ReadData>>,
+}
+
+#[derive(Clone)]
+struct WriterEntry {
+	write_to_path: Arc<WriteFile>,
+	write_to_writer: Option<Arc<WriteData>>,
+}
+
 /// Registry mapping file extensions to async tile container readers and writers.
 ///
 /// Supports reading and writing of tile containers in formats such as:
@@ -71,10 +83,8 @@ type WriteData =
 /// - Directory-based containers
 #[derive(Clone)]
 pub struct ContainerRegistry {
-	data_readers: HashMap<String, Arc<ReadData>>,
-	file_readers: HashMap<String, Arc<ReadFile>>,
-	file_writers: HashMap<String, Arc<WriteFile>>,
-	data_writers: HashMap<String, Arc<WriteData>>,
+	readers: HashMap<String, ReaderEntry>,
+	writers: HashMap<String, WriterEntry>,
 }
 
 impl ContainerRegistry {
@@ -84,75 +94,9 @@ impl ContainerRegistry {
 	#[must_use]
 	pub fn new_empty() -> Self {
 		Self {
-			data_readers: HashMap::new(),
-			file_readers: HashMap::new(),
-			file_writers: HashMap::new(),
-			data_writers: HashMap::new(),
+			readers: HashMap::new(),
+			writers: HashMap::new(),
 		}
-	}
-
-	/// Register an async file-based reader for a given file extension.
-	///
-	/// # Arguments
-	/// * `ext` - The file extension to associate with the reader.
-	/// * `read_file` - Async function that takes a `PathBuf` and returns a `SharedTileSource`.
-	fn register_reader_file<F, Fut>(&mut self, ext: &str, read_file: F)
-	where
-		F: Fn(PathBuf, TilesRuntime) -> Fut + Send + Sync + 'static,
-		Fut: Future<Output = Result<SharedTileSource>> + Send + 'static,
-	{
-		self.file_readers.insert(
-			sanitize_extension(ext),
-			Arc::new(Box::new(move |p, r| Box::pin(read_file(p, r)))),
-		);
-	}
-
-	/// Register an async data-based reader for a given file extension.
-	///
-	/// # Arguments
-	/// * `ext` - The file extension to associate with the reader.
-	/// * `read_data` - Async function that takes a `DataReader` and returns a `SharedTileSource`.
-	fn register_reader_data<F, Fut>(&mut self, ext: &str, read_data: F)
-	where
-		F: Fn(DataReader, TilesRuntime) -> Fut + Send + Sync + 'static,
-		Fut: Future<Output = Result<SharedTileSource>> + Send + 'static,
-	{
-		self.data_readers.insert(
-			sanitize_extension(ext),
-			Arc::new(Box::new(move |p, r| Box::pin(read_data(p, r)))),
-		);
-	}
-
-	/// Register an async file-based writer for a given file extension.
-	///
-	/// # Arguments
-	/// * `ext` - The file extension to associate with the writer.
-	/// * `write_file` - Async function that takes a `SharedTileSource`, a `PathBuf`, and a `TilesRuntime`,
-	///   and writes the tiles to the specified path.
-	fn register_writer_file<F, Fut>(&mut self, ext: &str, write_file: F)
-	where
-		F: Fn(SharedTileSource, PathBuf, TilesRuntime) -> Fut + Send + Sync + 'static,
-		Fut: Future<Output = Result<()>> + Send + 'static,
-	{
-		self.file_writers.insert(
-			sanitize_extension(ext),
-			Arc::new(Box::new(move |r, p, rt| Box::pin(write_file(r, p, rt)))),
-		);
-	}
-
-	/// Register an async data-based writer for a given file extension.
-	///
-	/// Data writers accept a boxed `DataWriterTrait` sink instead of a file path,
-	/// enabling writing to remote destinations such as SFTP.
-	fn register_writer_data<F, Fut>(&mut self, ext: &str, write_data: F)
-	where
-		F: Fn(SharedTileSource, Box<dyn DataWriterTrait>, TilesRuntime) -> Fut + Send + Sync + 'static,
-		Fut: Future<Output = Result<()>> + Send + 'static,
-	{
-		self.data_writers.insert(
-			sanitize_extension(ext),
-			Arc::new(Box::new(move |r, w, rt| Box::pin(write_data(r, w, rt)))),
-		);
 	}
 
 	#[context("Failed to get reader from string '{data_source}'")]
@@ -193,11 +137,15 @@ impl ContainerRegistry {
 				let reader = DataReaderHttp::from_url(url.clone())
 					.with_context(|| format!("Failed to create HTTP data reader for URL '{url}'"))?;
 
-				self
-					.data_readers
+				let entry = self
+					.readers
 					.get(&extension)
-					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?(reader, runtime)
-				.await
+					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?;
+				let open_reader = entry
+					.open_reader
+					.as_ref()
+					.ok_or_else(|| anyhow!("file extension '{extension}' does not support URL reading"))?;
+				open_reader(reader, runtime).await
 			}
 			DataLocation::Path(path) => {
 				if !path.exists() {
@@ -210,19 +158,23 @@ impl ContainerRegistry {
 						.into_shared());
 				}
 
-				self
-					.file_readers
+				let entry = self
+					.readers
 					.get(&extension)
-					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?(path.clone(), runtime)
-				.await
+					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?;
+				(entry.open_path)(path.clone(), runtime).await
 			}
 			DataLocation::Blob(blob) => {
 				let reader = Box::new(DataReaderBlob::from(blob));
-				self
-					.data_readers
+				let entry = self
+					.readers
 					.get(&extension)
-					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?(reader, runtime)
-				.await
+					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?;
+				let open_reader = entry
+					.open_reader
+					.as_ref()
+					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?;
+				open_reader(reader, runtime).await
 			}
 		}
 	}
@@ -252,11 +204,11 @@ impl ContainerRegistry {
 			.to_string_lossy()
 			.to_ascii_lowercase();
 
-		let writer = self
-			.file_writers
+		let entry = self
+			.writers
 			.get(&extension)
 			.ok_or_else(|| anyhow!("Error when reading: file extension '{extension}' unknown"))?;
-		writer(reader, path.clone(), runtime).await?;
+		(entry.write_to_path)(reader, path.clone(), runtime).await?;
 
 		Ok(())
 	}
@@ -289,13 +241,17 @@ impl ContainerRegistry {
 
 		let writer = DataWriterSftp::from_url(url)?;
 
-		let data_writer = self.data_writers.get(&extension).ok_or_else(|| {
+		let entry = self
+			.writers
+			.get(&extension)
+			.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?;
+		let write_to_writer = entry.write_to_writer.as_ref().ok_or_else(|| {
 			anyhow!(
 				"file extension '{extension}' does not support writing to SFTP \
 					 (only formats with data writers are supported, e.g. versatiles, pmtiles)"
 			)
 		})?;
-		data_writer(reader, Box::new(writer), runtime).await
+		write_to_writer(reader, Box::new(writer), runtime).await
 	}
 
 	/// Register both file and (optionally) data readers for a [`TilesReader`] implementation.
@@ -303,11 +259,20 @@ impl ContainerRegistry {
 	/// The file reader is always registered. The data reader is only registered when
 	/// `R::supports_data_reader()` returns `true`.
 	pub fn register_reader<R: TilesReader + 'static>(&mut self, ext: &str) {
-		self.register_reader_file(ext, |p, rt| async move { R::open_path(&p, rt).await });
-
-		if R::supports_data_reader() {
-			self.register_reader_data(ext, |r, rt| async move { R::open_reader(r, rt).await });
-		}
+		let open_reader = if R::supports_data_reader() {
+			Some(Arc::new(
+				Box::new(|r, rt| Box::pin(R::open_reader(r, rt)) as ReadFuture) as ReadData,
+			))
+		} else {
+			None
+		};
+		self.readers.insert(
+			sanitize_extension(ext),
+			ReaderEntry {
+				open_path: Arc::new(Box::new(|p, rt| Box::pin(async move { R::open_path(&p, rt).await }))),
+				open_reader,
+			},
+		);
 	}
 
 	/// Register both file and (optionally) data writers for a [`TilesWriter`] implementation.
@@ -315,23 +280,36 @@ impl ContainerRegistry {
 	/// The file writer is always registered. The data writer is only registered when
 	/// `W::supports_data_writer()` returns `true`.
 	pub fn register_writer<W: TilesWriter + 'static>(&mut self, ext: &str) {
-		self.register_writer_file(ext, |r, p, rt| async move {
-			let mut boxed = Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader"))?;
-			W::write_to_path(boxed.as_mut(), &p, rt).await
-		});
-
-		if W::supports_data_writer() {
-			self.register_writer_data(ext, |r, mut w, rt| async move {
-				let mut boxed = Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader"))?;
-				W::write_to_writer(boxed.as_mut(), w.as_mut(), rt).await
-			});
-		}
+		let write_to_writer = if W::supports_data_writer() {
+			Some(Arc::new(
+				Box::new(|r: SharedTileSource, mut w: Box<dyn DataWriterTrait>, rt| {
+					Box::pin(async move {
+						let mut boxed = Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader"))?;
+						W::write_to_writer(boxed.as_mut(), w.as_mut(), rt).await
+					}) as WriteFuture
+				}) as WriteData,
+			))
+		} else {
+			None
+		};
+		self.writers.insert(
+			sanitize_extension(ext),
+			WriterEntry {
+				write_to_path: Arc::new(Box::new(|r, p, rt| {
+					Box::pin(async move {
+						let mut boxed = Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader"))?;
+						W::write_to_path(boxed.as_mut(), &p, rt).await
+					})
+				})),
+				write_to_writer,
+			},
+		);
 	}
 
 	#[must_use]
 	pub fn supports_reader_extension(&self, ext: &str) -> bool {
 		let ext = sanitize_extension(ext);
-		self.data_readers.contains_key(&ext) || self.file_readers.contains_key(&ext)
+		self.readers.contains_key(&ext)
 	}
 }
 
