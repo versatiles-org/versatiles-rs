@@ -128,6 +128,25 @@ pub async fn convert_tiles_container(
 	Ok(())
 }
 
+/// Converts tiles from the given reader and writes them to a string destination.
+///
+/// The destination can be a file path or an SFTP URL (`sftp://...`).
+#[context("Converting tiles from reader to destination")]
+pub async fn convert_tiles_container_to_str(
+	reader: SharedTileSource,
+	cp: TilesConverterParameters,
+	destination: &str,
+	runtime: TilesRuntime,
+) -> Result<()> {
+	runtime.events().step("Starting conversion".to_string());
+
+	let converter = TilesConvertReader::new_from_reader(reader, cp)?;
+	runtime.write_to_str(converter.into_shared(), destination).await?;
+
+	runtime.events().step("Conversion complete".to_string());
+	Ok(())
+}
+
 /// Reader adapter that applies coordinate transforms, bbox filtering, and optional
 /// compression changes on-the-fly.
 ///

@@ -94,6 +94,15 @@ impl TilesRuntime {
 		self.inner.registry.write_to_path(reader, path, self.clone()).await
 	}
 
+	/// Write tiles to a destination specified as a string (path or SFTP URL).
+	pub async fn write_to_str(&self, reader: SharedTileSource, destination: &str) -> Result<()> {
+		self
+			.inner
+			.registry
+			.write_to_str(reader, destination, self.clone())
+			.await
+	}
+
 	pub async fn get_reader_from_str(&self, filename: &str) -> Result<SharedTileSource> {
 		self.inner.registry.get_reader_from_str(filename, self.clone()).await
 	}

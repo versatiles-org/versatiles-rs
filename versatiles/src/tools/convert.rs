@@ -1,6 +1,5 @@
 use anyhow::{Result, bail};
-use std::path::PathBuf;
-use versatiles_container::{TilesConverterParameters, TilesRuntime, convert_tiles_container};
+use versatiles_container::{TilesConverterParameters, TilesRuntime, convert_tiles_container_to_str};
 use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCompression, TileFormat};
 use versatiles_derive::context;
 
@@ -55,10 +54,11 @@ pub struct Subcommand {
 	#[arg(verbatim_doc_comment)]
 	input_file: String,
 
-	/// Output tile container path.
+	/// Output tile container path or SFTP URL.
 	/// Supported formats: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory.
+	/// SFTP URLs: sftp://[user[:pass]@]host[:port]/path (requires ssh2 feature)
 	#[arg(verbatim_doc_comment)]
-	output_file: PathBuf,
+	output_file: String,
 
 	/// minimum zoom level
 	#[arg(long, value_name = "int", display_order = 1)]
@@ -125,7 +125,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		format_effort,
 	};
 
-	convert_tiles_container(reader, parameters, &arguments.output_file, runtime.clone()).await?;
+	convert_tiles_container_to_str(reader, parameters, &arguments.output_file, runtime.clone()).await?;
 
 	log::info!("finished converting tiles");
 

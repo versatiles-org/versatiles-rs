@@ -86,7 +86,7 @@ versatiles_container = { workspace = true, features = ["test"] }
 versatiles_core = { workspace = true, features = ["test"] }
 
 [features]
-default = ["cli", "server"]
+default = ["cli", "server", "ssh2"]
 server = [
 	"dep:arc-swap",
 	"dep:axum",
@@ -110,6 +110,7 @@ cli = [
 codegen = ["versatiles_pipeline/codegen"]
 gdal = ["versatiles_pipeline/gdal"]
 bindgen = ["versatiles_pipeline/bindgen"]
+ssh2 = ["versatiles_container/ssh2"]
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["env_logger", "termimad"]

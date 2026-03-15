@@ -44,6 +44,8 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
+#[cfg(feature = "ssh2")]
+use versatiles_core::io::DataWriterSftp;
 use versatiles_core::io::{DataReader, DataReaderBlob, DataReaderHttp};
 #[cfg(test)]
 use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat};
@@ -55,6 +57,9 @@ type ReadData = Box<dyn Fn(DataReader, TilesRuntime) -> ReadFuture + Send + Sync
 type ReadFile = Box<dyn Fn(PathBuf, TilesRuntime) -> ReadFuture + Send + Sync + 'static>;
 type WriteFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 type WriteFile = Box<dyn Fn(SharedTileSource, PathBuf, TilesRuntime) -> WriteFuture + Send + Sync + 'static>;
+use versatiles_core::io::DataWriterTrait;
+type WriteData =
+	Box<dyn Fn(SharedTileSource, Box<dyn DataWriterTrait>, TilesRuntime) -> WriteFuture + Send + Sync + 'static>;
 
 /// Registry mapping file extensions to async tile container readers and writers.
 ///
@@ -69,6 +74,7 @@ pub struct ContainerRegistry {
 	data_readers: HashMap<String, Arc<ReadData>>,
 	file_readers: HashMap<String, Arc<ReadFile>>,
 	file_writers: HashMap<String, Arc<WriteFile>>,
+	data_writers: HashMap<String, Arc<WriteData>>,
 }
 
 impl ContainerRegistry {
@@ -81,6 +87,7 @@ impl ContainerRegistry {
 			data_readers: HashMap::new(),
 			file_readers: HashMap::new(),
 			file_writers: HashMap::new(),
+			data_writers: HashMap::new(),
 		}
 	}
 
@@ -130,6 +137,21 @@ impl ContainerRegistry {
 		self.file_writers.insert(
 			sanitize_extension(ext),
 			Arc::new(Box::new(move |r, p, rt| Box::pin(write_file(r, p, rt)))),
+		);
+	}
+
+	/// Register an async data-based writer for a given file extension.
+	///
+	/// Data writers accept a boxed `DataWriterTrait` sink instead of a file path,
+	/// enabling writing to remote destinations such as SFTP.
+	pub fn register_writer_data<F, Fut>(&mut self, ext: &str, write_data: F)
+	where
+		F: Fn(SharedTileSource, Box<dyn DataWriterTrait>, TilesRuntime) -> Fut + Send + Sync + 'static,
+		Fut: Future<Output = Result<()>> + Send + 'static,
+	{
+		self.data_writers.insert(
+			sanitize_extension(ext),
+			Arc::new(Box::new(move |r, w, rt| Box::pin(write_data(r, w, rt)))),
 		);
 	}
 
@@ -239,6 +261,43 @@ impl ContainerRegistry {
 		Ok(())
 	}
 
+	/// Write tiles to a destination specified as a string (path or SFTP URL).
+	///
+	/// Detects `sftp://` URLs and writes via SFTP when the `ssh2` feature is enabled.
+	/// Otherwise falls back to path-based writing.
+	pub async fn write_to_str(&self, reader: SharedTileSource, destination: &str, runtime: TilesRuntime) -> Result<()> {
+		#[cfg(feature = "ssh2")]
+		if destination.starts_with("sftp://") {
+			return self.write_to_sftp(reader, destination, runtime).await;
+		}
+
+		let path = Path::new(destination);
+		self.write_to_path(reader, path, runtime).await
+	}
+
+	/// Write tiles to a remote SFTP destination.
+	#[cfg(feature = "ssh2")]
+	#[context("writing tiles to SFTP '{url}'")]
+	async fn write_to_sftp(&self, reader: SharedTileSource, url: &str, runtime: TilesRuntime) -> Result<()> {
+		let remote_path = DataWriterSftp::path_from_url(url).ok_or_else(|| anyhow!("invalid SFTP URL: {url}"))?;
+
+		let extension = remote_path
+			.extension()
+			.unwrap_or_default()
+			.to_string_lossy()
+			.to_ascii_lowercase();
+
+		let writer = DataWriterSftp::from_url(url)?;
+
+		let data_writer = self.data_writers.get(&extension).ok_or_else(|| {
+			anyhow!(
+				"file extension '{extension}' does not support writing to SFTP \
+					 (only formats with data writers are supported, e.g. versatiles, pmtiles)"
+			)
+		})?;
+		data_writer(reader, Box::new(writer), runtime).await
+	}
+
 	#[must_use]
 	pub fn supports_reader_extension(&self, ext: &str) -> bool {
 		let ext = sanitize_extension(ext);
@@ -281,6 +340,11 @@ impl Default for ContainerRegistry {
 				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for PMTiles write"))?;
 			PMTilesWriter::write_to_path(boxed.as_mut(), &p, rt).await
 		});
+		reg.register_writer_data("pmtiles", |r, mut w, rt| async move {
+			let mut boxed =
+				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for PMTiles write"))?;
+			PMTilesWriter::write_to_writer(boxed.as_mut(), w.as_mut(), rt).await
+		});
 
 		// VersaTiles
 		reg.register_reader_file("versatiles", |p, r| async move {
@@ -293,6 +357,11 @@ impl Default for ContainerRegistry {
 			let mut boxed =
 				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for VersaTiles write"))?;
 			VersaTilesWriter::write_to_path(boxed.as_mut(), &p, rt).await
+		});
+		reg.register_writer_data("versatiles", |r, mut w, rt| async move {
+			let mut boxed =
+				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for VersaTiles write"))?;
+			VersaTilesWriter::write_to_writer(boxed.as_mut(), w.as_mut(), rt).await
 		});
 
 		reg
