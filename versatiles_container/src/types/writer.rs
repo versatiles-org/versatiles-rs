@@ -31,7 +31,7 @@
 //! ```
 
 use crate::{TileSource, TilesRuntime};
-use anyhow::Result;
+use anyhow::{Result, bail};
 use async_trait::async_trait;
 use std::path::Path;
 use versatiles_core::io::{DataWriterFile, DataWriterTrait};
@@ -44,6 +44,13 @@ use versatiles_core::io::{DataWriterFile, DataWriterTrait};
 /// Implementors should handle compression, metadata, and configuration from [`TilesRuntime`].
 #[async_trait]
 pub trait TilesWriter: Send {
+	/// Returns `true` when the writer can serialize to a generic [`DataWriterTrait`] sink
+	/// (e.g. for SFTP output). File-only writers (MBTiles, Directory) return `false`.
+	#[must_use]
+	fn supports_data_writer() -> bool {
+		true
+	}
+
 	/// Writes all tile data from `reader` into the file or directory at `path`.
 	///
 	/// The default implementation wraps `path` in a [`DataWriterFile`] and calls
@@ -58,19 +65,16 @@ pub trait TilesWriter: Send {
 
 	/// Writes tile data from `reader` to the provided [`DataWriterTrait`] sink.
 	///
-	/// Implementations must serialize tiles according to their format and use the
-	/// [`TilesRuntime`] to control parallelism, buffering, compression, and emit events.
-	///
-	/// # Arguments
-	/// - `reader`: Source tile reader providing tile data.
-	/// - `writer`: Output sink implementing [`DataWriterTrait`].
-	/// - `runtime`: Runtime configuration (cache type, event bus, progress factory, etc.).
+	/// The default implementation bails with "not supported". Writers that support generic
+	/// output sinks should override this method.
 	///
 	/// # Errors
-	/// Returns an error if reading from the source or writing to the sink fails.
+	/// Returns an error if the format does not support generic writers, or if I/O fails.
 	async fn write_to_writer(
-		reader: &mut dyn TileSource,
-		writer: &mut dyn DataWriterTrait,
-		runtime: TilesRuntime,
-	) -> Result<()>;
+		_reader: &mut dyn TileSource,
+		_writer: &mut dyn DataWriterTrait,
+		_runtime: TilesRuntime,
+	) -> Result<()> {
+		bail!("this format does not support writing to a generic data writer")
+	}
 }

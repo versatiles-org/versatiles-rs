@@ -44,10 +44,10 @@
 //! Returns errors if the destination path is not absolute, if file I/O fails, or if compression/encoding fails.
 
 use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::{fs, path::Path};
-use versatiles_core::{Blob, compression::compress, io::DataWriterTrait};
+use versatiles_core::{Blob, compression::compress};
 use versatiles_derive::context;
 
 /// Writes a directory-based tile pyramid along with a compressed `TileJSON` (`tiles.json[.<br|gz>]`).
@@ -72,6 +72,10 @@ impl DirectoryWriter {
 
 #[async_trait]
 impl TilesWriter for DirectoryWriter {
+	fn supports_data_writer() -> bool {
+		false
+	}
+
 	/// Write all tiles and metadata from `reader` into the absolute directory `path`.
 	///
 	/// * Validates that `path` is absolute.
@@ -130,18 +134,6 @@ impl TilesWriter for DirectoryWriter {
 		Ok(())
 	}
 
-	/// Writes the tile data from the given `TilesReader` to the specified `DataWriterTrait`.
-	///
-	/// # Errors
-	/// Always returns an error (`not implemented`).
-	#[context("writing tiles to external writer")]
-	async fn write_to_writer(
-		_reader: &mut dyn TileSource,
-		_writer: &mut dyn DataWriterTrait,
-		_runtime: TilesRuntime,
-	) -> Result<()> {
-		bail!("not implemented")
-	}
 }
 
 #[cfg(test)]

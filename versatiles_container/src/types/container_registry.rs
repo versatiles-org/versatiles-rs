@@ -298,6 +298,24 @@ impl ContainerRegistry {
 		data_writer(reader, Box::new(writer), runtime).await
 	}
 
+	/// Register both file and (optionally) data writers for a [`TilesWriter`] implementation.
+	///
+	/// The file writer is always registered. The data writer is only registered when
+	/// `W::supports_data_writer()` returns `true`.
+	pub fn register_writer<W: TilesWriter + 'static>(&mut self, ext: &str) {
+		self.register_writer_file(ext, |r, p, rt| async move {
+			let mut boxed = Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader"))?;
+			W::write_to_path(boxed.as_mut(), &p, rt).await
+		});
+
+		if W::supports_data_writer() {
+			self.register_writer_data(ext, |r, mut w, rt| async move {
+				let mut boxed = Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader"))?;
+				W::write_to_writer(boxed.as_mut(), w.as_mut(), rt).await
+			});
+		}
+	}
+
 	#[must_use]
 	pub fn supports_reader_extension(&self, ext: &str) -> bool {
 		let ext = sanitize_extension(ext);
@@ -313,26 +331,13 @@ impl Default for ContainerRegistry {
 		reg.register_reader_file("mbtiles", |p, r| async move {
 			Ok(MBTilesReader::open_path(&p, r)?.into_shared())
 		});
-		reg.register_writer_file("mbtiles", |r, p, rt| async move {
-			let mut boxed =
-				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for MBTiles write"))?;
-			MBTilesWriter::write_to_path(boxed.as_mut(), &p, rt).await
-		});
+		reg.register_writer::<MBTilesWriter>("mbtiles");
 
 		// TAR
 		reg.register_reader_file("tar", |p, _r| async move {
 			Ok(TarTilesReader::open_path(&p)?.into_shared())
 		});
-		reg.register_writer_file("tar", |r, p, rt| async move {
-			let mut boxed =
-				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for TAR write"))?;
-			TarTilesWriter::write_to_path(boxed.as_mut(), &p, rt).await
-		});
-		reg.register_writer_data("tar", |r, mut w, rt| async move {
-			let mut boxed =
-				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for TAR write"))?;
-			TarTilesWriter::write_to_writer(boxed.as_mut(), w.as_mut(), rt).await
-		});
+		reg.register_writer::<TarTilesWriter>("tar");
 
 		// PMTiles
 		reg.register_reader_file("pmtiles", |p, r| async move {
@@ -341,16 +346,7 @@ impl Default for ContainerRegistry {
 		reg.register_reader_data("pmtiles", |p, r| async move {
 			Ok(PMTilesReader::open_reader(p, r).await?.into_shared())
 		});
-		reg.register_writer_file("pmtiles", |r, p, rt| async move {
-			let mut boxed =
-				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for PMTiles write"))?;
-			PMTilesWriter::write_to_path(boxed.as_mut(), &p, rt).await
-		});
-		reg.register_writer_data("pmtiles", |r, mut w, rt| async move {
-			let mut boxed =
-				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for PMTiles write"))?;
-			PMTilesWriter::write_to_writer(boxed.as_mut(), w.as_mut(), rt).await
-		});
+		reg.register_writer::<PMTilesWriter>("pmtiles");
 
 		// VersaTiles
 		reg.register_reader_file("versatiles", |p, r| async move {
@@ -359,16 +355,7 @@ impl Default for ContainerRegistry {
 		reg.register_reader_data("versatiles", |p, r| async move {
 			Ok(VersaTilesReader::open_reader(p, r).await?.into_shared())
 		});
-		reg.register_writer_file("versatiles", |r, p, rt| async move {
-			let mut boxed =
-				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for VersaTiles write"))?;
-			VersaTilesWriter::write_to_path(boxed.as_mut(), &p, rt).await
-		});
-		reg.register_writer_data("versatiles", |r, mut w, rt| async move {
-			let mut boxed =
-				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for VersaTiles write"))?;
-			VersaTilesWriter::write_to_writer(boxed.as_mut(), w.as_mut(), rt).await
-		});
+		reg.register_writer::<VersaTilesWriter>("versatiles");
 
 		reg
 	}

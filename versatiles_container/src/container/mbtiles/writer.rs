@@ -50,7 +50,7 @@ use futures::lock::Mutex;
 use r2d2::Pool;
 use r2d2_sqlite::{SqliteConnectionManager, rusqlite::params};
 use std::{fs::remove_file, path::Path, sync::Arc};
-use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, io::DataWriterTrait, json::JsonObject};
+use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, json::JsonObject};
 use versatiles_derive::context;
 
 /// Writer for `MBTiles` (`SQLite`) containers.
@@ -132,6 +132,10 @@ impl MBTilesWriter {
 
 #[async_trait]
 impl TilesWriter for MBTilesWriter {
+	fn supports_data_writer() -> bool {
+		false
+	}
+
 	/// Write all tiles and metadata from the given reader into an `MBTiles` file.
 	///
 	/// This method:
@@ -221,18 +225,6 @@ impl TilesWriter for MBTilesWriter {
 		Ok(())
 	}
 
-	/// Not implemented: `MBTiles` cannot be streamed to a generic writer.
-	///
-	/// # Errors
-	/// Always returns `not implemented`.
-	#[context("writing MBTiles to generic writer")]
-	async fn write_to_writer(
-		_reader: &mut dyn TileSource,
-		_writer: &mut dyn DataWriterTrait,
-		_runtime: TilesRuntime,
-	) -> Result<()> {
-		bail!("not implemented")
-	}
 }
 
 #[cfg(test)]
