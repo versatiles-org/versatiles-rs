@@ -20,7 +20,7 @@
 //!     let runtime = TilesRuntime::default();
 //!
 //!     // Create a mbtiles reader
-//!     let mut reader = MBTilesReader::open_path(&path_mbtiles, runtime.clone())?;
+//!     let mut reader = MBTilesReader::open(&path_mbtiles, runtime.clone())?;
 //!
 //!     // Write the tiles to the .versatiles file
 //!     VersaTilesWriter::write_to_path(
@@ -32,7 +32,7 @@
 //!     println!("Tiles have been successfully written to {path_versatiles:?}");
 //!
 //!     // Read the tiles back from the .versatiles file
-//!     let mut reader = VersaTilesReader::open_path(&path_versatiles, runtime).await?;
+//!     let mut reader = VersaTilesReader::open(&path_versatiles, runtime).await?;
 //!
 //!     // Get tile data
 //!     if let Some(tile) = reader.get_tile(&TileCoord::new(12, 2200, 1345)?).await? {

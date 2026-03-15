@@ -25,7 +25,7 @@
 //!     // Open a .versatiles container (relative or absolute path)
 //!     let runtime = TilesRuntime::default();
 //!     let path = Path::new("./data/world.versatiles");
-//!     let mut reader = VersaTilesReader::open_path(&path, runtime).await?;
+//!     let mut reader = VersaTilesReader::open(&path, runtime).await?;
 //!
 //!     // Inspect parameters & TileJSON
 //!     let metadata = reader.metadata();
@@ -54,7 +54,8 @@
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 use crate::{
-	SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal, TraversalOrder, TraversalSize,
+	SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal,
+	TraversalOrder, TraversalSize,
 	container::tile_chunking::{Chunk, coalesce_into_chunks, stream_from_chunks},
 };
 use anyhow::Result;
@@ -90,14 +91,14 @@ pub struct VersaTilesReader {
 impl VersaTilesReader {
 	/// Open a `.versatiles` container from a filesystem path.
 	///
-	/// Creates a `DataReaderFile` and delegates to [`VersaTilesReader::open_reader`]. The path may be
+	/// Creates a `DataReaderFile` and delegates to [`VersaTilesReader::open_data`]. The path may be
 	/// relative or absolute.
 	///
 	/// # Errors
 	/// Returns an error if the file cannot be opened.
 	#[context("Failed to open versatiles file at '{path:?}'")]
-	pub async fn open_path(path: &Path, runtime: TilesRuntime) -> Result<VersaTilesReader> {
-		VersaTilesReader::open_reader(DataReaderFile::open(path)?, runtime).await
+	pub async fn open(path: &Path, runtime: TilesRuntime) -> Result<VersaTilesReader> {
+		VersaTilesReader::open_data(DataReaderFile::open(path)?, runtime).await
 	}
 
 	/// Open a `.versatiles` container from an existing [`DataReader`].
@@ -109,7 +110,7 @@ impl VersaTilesReader {
 	/// # Errors
 	/// Returns an error if header/metadata/index reads or decompressions fail.
 	#[context("Failed to open versatiles reader")]
-	pub async fn open_reader(mut reader: DataReader, runtime: TilesRuntime) -> Result<VersaTilesReader> {
+	pub async fn open_data(mut reader: DataReader, runtime: TilesRuntime) -> Result<VersaTilesReader> {
 		let header = FileHeader::from_reader(&mut reader)
 			.await
 			.context("Failed reading the header")?;
@@ -249,6 +250,13 @@ impl VersaTilesReader {
 			.flatten()
 			.collect();
 		Ok(chunks)
+	}
+}
+
+#[async_trait]
+impl TilesReader for VersaTilesReader {
+	async fn open_reader(reader: DataReader, runtime: TilesRuntime) -> Result<SharedTileSource> {
+		Ok(Self::open_data(reader, runtime).await?.into_shared())
 	}
 }
 
@@ -506,7 +514,7 @@ mod tests {
 	async fn mk_reader() -> Result<(NamedTempFile, VersaTilesReader)> {
 		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 4, "versatiles").await?;
 		let runtime = TilesRuntime::default();
-		let reader = VersaTilesReader::open_path(&temp_file, runtime).await?;
+		let reader = VersaTilesReader::open(&temp_file, runtime).await?;
 		Ok((temp_file, reader))
 	}
 
@@ -627,13 +635,13 @@ mod tests {
 		VersaTilesWriter::write_to_writer(&mut reader1, &mut data_writer1, runtime.clone()).await?;
 
 		let data_reader1 = data_writer1.to_reader();
-		let mut reader2 = VersaTilesReader::open_reader(Box::new(data_reader1), runtime.clone()).await?;
+		let mut reader2 = VersaTilesReader::open_data(Box::new(data_reader1), runtime.clone()).await?;
 
 		let mut data_writer2 = DataWriterBlob::new()?;
 		VersaTilesWriter::write_to_writer(&mut reader2, &mut data_writer2, runtime.clone()).await?;
 
 		let data_reader2 = data_writer2.to_reader();
-		let reader3 = VersaTilesReader::open_reader(Box::new(data_reader2), runtime).await?;
+		let reader3 = VersaTilesReader::open_data(Box::new(data_reader2), runtime).await?;
 
 		assert_eq!(reader2, reader3);
 

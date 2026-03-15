@@ -19,7 +19,7 @@
 //! async fn main() -> Result<()> {
 //!     // Reading from a tar archive
 //!     let tar_path = Path::new("path/to/your/tarfile.tar");
-//!     let mut reader = TarTilesReader::open_path(tar_path)?;
+//!     let mut reader = TarTilesReader::open(tar_path)?;
 //!     let tile_coord = TileCoord::new(1, 2, 3)?;
 //!     let tile = reader.get_tile(&tile_coord).await?;
 //!     if let Some(mut tile) = tile {

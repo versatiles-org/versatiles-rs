@@ -32,7 +32,7 @@
 //!
 //!     // Open an MBTiles source
 //!     let path_in = Path::new("../testdata/berlin.mbtiles");
-//!     let mut reader = MBTilesReader::open_path(&path_in, runtime.clone())?;
+//!     let mut reader = MBTilesReader::open(&path_in, runtime.clone())?;
 //!
 //!     // Write as a .versatiles container
 //!     let path_out = std::env::temp_dir().join("berlin.versatiles");

@@ -18,7 +18,7 @@
 //! use std::path::Path;
 //! # async fn demo() -> anyhow::Result<()> {
 //! let path = Path::new("/absolute/path/to/tiles.tar");
-//! let mut reader = TarTilesReader::open_path(path)?;
+//! let mut reader = TarTilesReader::open(path)?;
 //!
 //! // Read one tile
 //! if let Some(mut tile) = reader.get_tile(&TileCoord::new(3, 6, 2)?).await? {
@@ -31,7 +31,7 @@
 //! Returns errors when the tar cannot be opened or read, when no tiles are found,
 //! or when mixed formats/compressions are detected.
 
-use crate::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
+use crate::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path, sync::Arc};
@@ -106,7 +106,7 @@ impl TarTilesReader {
 	/// Returns an error if the file cannot be opened, if **no tiles** are found, or if mixed
 	/// formats/compressions are encountered.
 	#[context("opening tar from path '{}'", path.display())]
-	pub fn open_path(path: &Path) -> Result<TarTilesReader> {
+	pub fn open(path: &Path) -> Result<TarTilesReader> {
 		let mut reader = DataReaderFile::open(path)?;
 		let mut archive = Archive::new(&mut reader);
 
@@ -237,6 +237,17 @@ impl TarTilesReader {
 }
 
 #[async_trait]
+impl TilesReader for TarTilesReader {
+	fn supports_data_reader() -> bool {
+		false
+	}
+
+	async fn open_path(path: &Path, _runtime: TilesRuntime) -> Result<SharedTileSource> {
+		Ok(Self::open(path)?.into_shared())
+	}
+}
+
+#[async_trait]
 impl TileSource for TarTilesReader {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_container("tar", &self.name)
@@ -314,7 +325,7 @@ pub mod tests {
 		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 3, "tar").await?;
 
 		// get tar reader
-		let reader = TarTilesReader::open_path(&temp_file)?;
+		let reader = TarTilesReader::open(&temp_file)?;
 
 		assert_eq!(
 			format!("{reader:?}"),
@@ -348,7 +359,7 @@ pub mod tests {
 			let temp_file = make_test_file(TileFormat::MVT, compression, 2, "tar").await?;
 
 			// get tar reader
-			let mut reader = TarTilesReader::open_path(&temp_file)?;
+			let mut reader = TarTilesReader::open(&temp_file)?;
 
 			MockWriter::write(&mut reader).await?;
 			Ok(())
@@ -366,7 +377,7 @@ pub mod tests {
 	async fn probe() -> Result<()> {
 		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 4, "tar").await?;
 
-		let reader = TarTilesReader::open_path(&temp_file)?;
+		let reader = TarTilesReader::open(&temp_file)?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(&printer.get_category("container").await).await?;
@@ -393,7 +404,7 @@ pub mod tests {
 		a.finish()?;
 
 		assert_eq!(
-			TarTilesReader::open_path(&filename)
+			TarTilesReader::open(&filename)
 				.unwrap_err()
 				.chain()
 				.last()
@@ -415,7 +426,7 @@ pub mod tests {
 		a.append_data(&mut header, "3/1/2.bin", [3, 1, 4, 1, 5, 9].as_ref())?;
 		a.finish()?;
 
-		let reader = TarTilesReader::open_path(&filename)?;
+		let reader = TarTilesReader::open(&filename)?;
 		assert_eq!(reader.metadata().tile_format, TileFormat::BIN);
 		assert_eq!(reader.metadata().tile_compression, TileCompression::Uncompressed);
 		assert_eq!(reader.metadata().bbox_pyramid.count_tiles(), 1);
@@ -434,7 +445,7 @@ pub mod tests {
 	#[tokio::test]
 	async fn tile_stream_matches_individual_reads() -> Result<()> {
 		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 2, "tar").await?;
-		let reader = TarTilesReader::open_path(&temp_file)?;
+		let reader = TarTilesReader::open(&temp_file)?;
 
 		// Use level 2 bbox (4x4 = 16 tiles)
 		let bbox = TileBBox::new_full(2)?;

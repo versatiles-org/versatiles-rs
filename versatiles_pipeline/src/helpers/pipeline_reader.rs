@@ -12,7 +12,9 @@ use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::{path::Path, sync::Arc};
-use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
+use versatiles_container::{
+	DataLocation, SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime,
+};
 use versatiles_core::{TileBBox, TileCoord, TileJSON, TileStream, io::DataReader};
 use versatiles_derive::context;
 
@@ -35,7 +37,7 @@ impl<'a> PipelineReader {
 	/// Reads the file, builds the operation graph with [`PipelineFactory::new_default`],
 	/// and returns a ready-to-use reader. Errors include contextual messages via `#[context]`.
 	#[context("opening VPL path '{}'", path.display())]
-	pub async fn open_path(path: &Path, runtime: TilesRuntime) -> Result<PipelineReader> {
+	pub async fn open(path: &Path, runtime: TilesRuntime) -> Result<PipelineReader> {
 		let vpl = std::fs::read_to_string(path).with_context(|| anyhow!("Failed to open {path:?}"))?;
 		Self::from_str(&vpl, path.to_str().unwrap(), path.parent().unwrap(), runtime)
 			.await
@@ -46,7 +48,7 @@ impl<'a> PipelineReader {
 	///
 	/// Useful when VPL is packaged in other containers or fetched over the network.
 	#[context("opening VPL from reader '{}'", reader.get_name())]
-	pub async fn open_reader(reader: DataReader, dir: &Path, runtime: TilesRuntime) -> Result<PipelineReader> {
+	pub async fn open_data(reader: DataReader, dir: &Path, runtime: TilesRuntime) -> Result<PipelineReader> {
 		let vpl = reader.read_all().await?.into_string();
 		Self::from_str(&vpl, reader.get_name(), dir, runtime)
 			.await
@@ -99,6 +101,18 @@ impl<'a> PipelineReader {
 			let pipeline = parse_vpl(vpl)?;
 			Self::from_pipeline(pipeline, name, dir, runtime).await
 		})
+	}
+}
+
+#[async_trait]
+impl TilesReader for PipelineReader {
+	async fn open_path(path: &Path, runtime: TilesRuntime) -> Result<SharedTileSource> {
+		Ok(Self::open(path, runtime).await?.into_shared())
+	}
+
+	async fn open_reader(reader: DataReader, runtime: TilesRuntime) -> Result<SharedTileSource> {
+		let dir = std::env::current_dir()?;
+		Ok(Self::open_data(reader, &dir, runtime).await?.into_shared())
 	}
 }
 
@@ -177,7 +191,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_tile_pipeline_reader_open_path() -> Result<()> {
 		let path = Path::new("../testdata/pipeline.vpl");
-		let result = PipelineReader::open_path(path, TilesRuntime::new_silent()).await;
+		let result = PipelineReader::open(path, TilesRuntime::new_silent()).await;
 		assert_eq!(
 			result
 				.unwrap_err()

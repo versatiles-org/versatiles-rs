@@ -31,7 +31,7 @@
 //!
 //!     // Open any reader, e.g. MBTiles
 //!     let mbtiles_path = Path::new("/absolute/path/to/berlin.mbtiles");
-//!     let mut reader = MBTilesReader::open_path(mbtiles_path, runtime.clone())?;
+//!     let mut reader = MBTilesReader::open(mbtiles_path, runtime.clone())?;
 //!
 //!     // Choose an absolute output directory
 //!     let out_dir = std::env::temp_dir().join("versatiles_demo_out");
@@ -133,7 +133,6 @@ impl TilesWriter for DirectoryWriter {
 
 		Ok(())
 	}
-
 }
 
 #[cfg(test)]

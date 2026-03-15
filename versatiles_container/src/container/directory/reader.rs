@@ -30,7 +30,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let mut reader = DirectoryReader::open_path(Path::new("/absolute/path/to/tiles")).unwrap();
+//!     let mut reader = DirectoryReader::open(Path::new("/absolute/path/to/tiles")).unwrap();
 //!     let tile_data = reader.get_tile(&TileCoord::new(3, 1, 2).unwrap()).await.unwrap();
 //! }
 //! ```
@@ -92,7 +92,7 @@ impl DirectoryReader {
 	///
 	/// Returns an error if the directory does not exist, is not a directory, contains no tiles, or contains inconsistent tile formats or compressions.
 	#[context("opening tiles directory {:?}", dir)]
-	pub fn open_path(dir: &Path) -> Result<DirectoryReader>
+	pub fn open(dir: &Path) -> Result<DirectoryReader>
 	where
 		Self: Sized,
 	{
@@ -305,7 +305,7 @@ mod tests {
 		dir.child("3/2/1.png").write_str("test tile data")?;
 		dir.child("meta.json").write_str(r#"{"type":"dummy"}"#)?;
 
-		let reader = DirectoryReader::open_path(&dir)?;
+		let reader = DirectoryReader::open(&dir)?;
 
 		assert_eq!(
 			reader.tilejson().as_string(),
@@ -327,7 +327,7 @@ mod tests {
 	async fn open_path_with_nonexistent_directory() -> Result<()> {
 		let dir = TempDir::new()?;
 
-		let msg = DirectoryReader::open_path(&dir.join("dont_exist"))
+		let msg = DirectoryReader::open(&dir.join("dont_exist"))
 			.unwrap_err()
 			.chain()
 			.last()
@@ -344,7 +344,7 @@ mod tests {
 		dir.child("3/2/1.unknown").write_str("unsupported format")?;
 
 		assert_eq!(
-			DirectoryReader::open_path(dir.path())
+			DirectoryReader::open(dir.path())
 				.unwrap_err()
 				.chain()
 				.last()
@@ -369,7 +369,7 @@ mod tests {
 		fs::create_dir_all(dir.path().join("2/1")).unwrap();
 		fs::write(dir.path().join("2/1/0.png"), "tile at 2/1/0").unwrap();
 
-		let reader = DirectoryReader::open_path(&dir).unwrap();
+		let reader = DirectoryReader::open(&dir).unwrap();
 		assert_eq!(
 			reader.tilejson().as_string(),
 			"{\"bounds\":[-90,66.51326,0,85.051129],\"maxzoom\":2,\"minzoom\":2,\"tilejson\":\"3.0.0\",\"type\":\"dummy data\"}"
@@ -385,7 +385,7 @@ mod tests {
 		fs::write(dir.path().join("3/2/1.png"), "tile at 3/2/1").unwrap();
 		fs::write(dir.path().join("meta.json"), r#"{"type":"dummy data"}"#).unwrap();
 
-		let reader = DirectoryReader::open_path(&dir).unwrap();
+		let reader = DirectoryReader::open(&dir).unwrap();
 		let coord = TileCoord::new(3, 2, 1).unwrap();
 		let blob = reader
 			.get_tile(&coord)
@@ -406,7 +406,7 @@ mod tests {
 		fs::write(dir.path().join("3/2/1.txt"), "wrong format").unwrap();
 
 		assert_eq!(
-			&DirectoryReader::open_path(&dir)
+			&DirectoryReader::open(&dir)
 				.unwrap_err()
 				.chain()
 				.last()
@@ -426,7 +426,7 @@ mod tests {
 		dir.child("4/2/1.jpg").write_str("test tile data")?;
 
 		assert_eq!(
-			DirectoryReader::open_path(&dir)
+			DirectoryReader::open(&dir)
 				.unwrap_err()
 				.chain()
 				.last()
@@ -445,7 +445,7 @@ mod tests {
 		dir.child("4/2/1.pbf.br").write_str("test tile data")?;
 
 		assert_eq!(
-			DirectoryReader::open_path(&dir)
+			DirectoryReader::open(&dir)
 				.unwrap_err()
 				.chain()
 				.last()
@@ -463,7 +463,7 @@ mod tests {
 		dir.child("meta.json").write_str("{\"key\": \"value\"}")?;
 		dir.child("3/2/1.png.br").write_str("tile data")?;
 
-		let reader = DirectoryReader::open_path(dir.path())?;
+		let reader = DirectoryReader::open(dir.path())?;
 
 		assert_eq!(
 			reader.source_type().to_string(),
@@ -492,7 +492,7 @@ mod tests {
 		dir.child("2/1/0.png").write_str("tile_1_0")?;
 		dir.child("2/1/1.png").write_str("tile_1_1")?;
 
-		let reader = DirectoryReader::open_path(&dir)?;
+		let reader = DirectoryReader::open(&dir)?;
 		let bbox = TileBBox::from_min_and_max(2, 0, 0, 1, 1)?;
 
 		// Get all tiles via stream

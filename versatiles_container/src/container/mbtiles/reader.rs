@@ -14,7 +14,7 @@
 //! The bounding-box pyramid is inferred from the `tiles` table to augment/validate metadata.
 //!
 //! ## Requirements
-//! - The `MBTiles` file **must be an absolute path** when opening with [`open_path`].
+//! - The `MBTiles` file **must be an absolute path** when opening with [`open`].
 //! - The database must include a `format` entry in `metadata` so that format & compression
 //!   can be determined.
 //!
@@ -31,7 +31,7 @@
 //!
 //!     // Use an absolute path
 //!     let path = Path::new("/absolute/path/to/berlin.mbtiles");
-//!     let mut reader = MBTilesReader::open_path(path, runtime)?;
+//!     let mut reader = MBTilesReader::open(path, runtime)?;
 //!
 //!     // Inspect metadata
 //!     let tj: &TileJSON = reader.tilejson();
@@ -50,7 +50,7 @@
 //! - Returns errors if the database is unreadable, the `format` is missing/unknown,
 //!   or queries fail.
 
-use crate::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
+use crate::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use r2d2::Pool;
@@ -90,7 +90,7 @@ impl MBTilesReader {
 	/// # Errors
 	/// Returns an error if the file does not exist, the path is not absolute, or `SQLite` cannot be opened.
 	#[context("opening MBTiles at '{}'", path.display())]
-	pub fn open_path(path: &Path, runtime: TilesRuntime) -> Result<MBTilesReader> {
+	pub fn open(path: &Path, runtime: TilesRuntime) -> Result<MBTilesReader> {
 		log::debug!("open {path:?}");
 
 		ensure!(path.exists(), "file {path:?} does not exist");
@@ -317,6 +317,17 @@ impl MBTilesReader {
 }
 
 #[async_trait]
+impl TilesReader for MBTilesReader {
+	fn supports_data_reader() -> bool {
+		false
+	}
+
+	async fn open_path(path: &Path, runtime: TilesRuntime) -> Result<SharedTileSource> {
+		Ok(Self::open(path, runtime)?.into_shared())
+	}
+}
+
+#[async_trait]
 impl TileSource for MBTilesReader {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_container("mbtiles", &self.name)
@@ -442,7 +453,7 @@ pub mod tests {
 	#[tokio::test]
 	async fn reader() -> Result<()> {
 		// get test container reader
-		let mut reader = MBTilesReader::open_path(&PATH, TilesRuntime::default())?;
+		let mut reader = MBTilesReader::open(&PATH, TilesRuntime::default())?;
 
 		assert_eq!(
 			format!("{reader:?}"),
@@ -483,7 +494,7 @@ pub mod tests {
 	async fn probe() -> Result<()> {
 		use versatiles_core::utils::PrettyPrint;
 
-		let reader = MBTilesReader::open_path(&PATH, TilesRuntime::default())?;
+		let reader = MBTilesReader::open(&PATH, TilesRuntime::default())?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(&printer.get_category("container").await).await?;
@@ -504,7 +515,7 @@ pub mod tests {
 
 	#[tokio::test]
 	async fn tile_stream_matches_individual_reads() -> Result<()> {
-		let reader = MBTilesReader::open_path(&PATH, TilesRuntime::default())?;
+		let reader = MBTilesReader::open(&PATH, TilesRuntime::default())?;
 
 		// Use level 9 bbox which has 2x2 = 4 tiles according to the metadata
 		let bbox = TileBBox::from_min_and_max(9, 274, 167, 275, 168)?;

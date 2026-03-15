@@ -27,7 +27,7 @@
 //!
 //!     // Open an existing MBTiles file
 //!     let path = Path::new("/absolute/path/to/berlin.mbtiles");
-//!     let mut reader = MBTilesReader::open_path(&path, runtime.clone())?;
+//!     let mut reader = MBTilesReader::open(&path, runtime.clone())?;
 //!
 //!     // Convert it to PMTiles format
 //!     let temp_path = std::env::temp_dir().join("berlin.pmtiles");
@@ -219,7 +219,7 @@ mod tests {
 		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, runtime.clone()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
-		let mut reader = PMTilesReader::open_reader(Box::new(data_reader), runtime).await?;
+		let mut reader = PMTilesReader::open_data(Box::new(data_reader), runtime).await?;
 		MockWriter::write(&mut reader).await?;
 
 		Ok(())
@@ -245,7 +245,7 @@ mod tests {
 		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, runtime.clone()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
-		let reader = PMTilesReader::open_reader(Box::new(data_reader), runtime).await?;
+		let reader = PMTilesReader::open_data(Box::new(data_reader), runtime).await?;
 
 		let entries = reader.get_tile_entries()?;
 		let entries_vec = entries.iter().collect::<Vec<_>>();

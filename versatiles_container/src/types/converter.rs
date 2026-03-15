@@ -366,7 +366,7 @@ mod tests {
 		};
 		convert_tiles_container(reader, cp, &temp_file, runtime.clone()).await?;
 
-		let reader_out = VersaTilesReader::open_path(&temp_file, runtime).await?;
+		let reader_out = VersaTilesReader::open(&temp_file, runtime).await?;
 		let parameters_out = reader_out.metadata();
 		let tile_compression_out = parameters_out.tile_compression;
 		assert_eq!(parameters_out.bbox_pyramid, pyramid_out);

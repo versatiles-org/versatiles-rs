@@ -34,7 +34,7 @@
 //!     // Read any existing source (e.g. PMTiles, Directory)
 //!     let runtime = TilesRuntime::default();
 //!     let source_path = Path::new("/absolute/path/to/berlin.pmtiles");
-//!     let mut reader = PMTilesReader::open_path(&source_path, runtime.clone()).await?;
+//!     let mut reader = PMTilesReader::open(&source_path, runtime.clone()).await?;
 //!
 //!     // Write to an MBTiles file
 //!     let out_file = std::env::temp_dir().join("berlin.mbtiles");
@@ -224,7 +224,6 @@ impl TilesWriter for MBTilesWriter {
 
 		Ok(())
 	}
-
 }
 
 #[cfg(test)]
@@ -246,7 +245,7 @@ mod tests {
 		let filename = NamedTempFile::new("temp.mbtiles")?;
 		MBTilesWriter::write_to_path(&mut mock_reader, &filename, TilesRuntime::default()).await?;
 
-		let mut reader = MBTilesReader::open_path(&filename, TilesRuntime::default())?;
+		let mut reader = MBTilesReader::open(&filename, TilesRuntime::default())?;
 
 		MockWriter::write(&mut reader).await?;
 

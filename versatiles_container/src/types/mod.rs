@@ -3,6 +3,7 @@ mod converter;
 mod data_location;
 mod data_source;
 mod processor;
+mod reader;
 mod tile;
 mod tile_content;
 mod tile_source_metadata;
@@ -19,6 +20,7 @@ pub use converter::{
 pub use data_location::DataLocation;
 pub use data_source::DataSource;
 pub use processor::TileProcessor;
+pub use reader::TilesReader;
 pub use tile::Tile;
 pub use tile_content::TileContent;
 pub use tile_source_metadata::TileSourceMetadata;

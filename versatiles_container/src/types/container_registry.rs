@@ -28,8 +28,8 @@
 
 use crate::{
 	DataSource, DirectoryReader, DirectoryWriter, MBTilesReader, MBTilesWriter, PMTilesReader, PMTilesWriter,
-	SharedTileSource, TarTilesReader, TarTilesWriter, TileSource, TilesRuntime, TilesWriter, VersaTilesReader,
-	VersaTilesWriter, types::data_location::DataLocation,
+	SharedTileSource, TarTilesReader, TarTilesWriter, TileSource, TilesReader, TilesRuntime, TilesWriter,
+	VersaTilesReader, VersaTilesWriter, types::data_location::DataLocation,
 };
 #[cfg(test)]
 use crate::{MockReader, TileSourceMetadata, Traversal};
@@ -96,7 +96,7 @@ impl ContainerRegistry {
 	/// # Arguments
 	/// * `ext` - The file extension to associate with the reader.
 	/// * `read_file` - Async function that takes a `PathBuf` and returns a `SharedTileSource`.
-	pub fn register_reader_file<F, Fut>(&mut self, ext: &str, read_file: F)
+	fn register_reader_file<F, Fut>(&mut self, ext: &str, read_file: F)
 	where
 		F: Fn(PathBuf, TilesRuntime) -> Fut + Send + Sync + 'static,
 		Fut: Future<Output = Result<SharedTileSource>> + Send + 'static,
@@ -112,7 +112,7 @@ impl ContainerRegistry {
 	/// # Arguments
 	/// * `ext` - The file extension to associate with the reader.
 	/// * `read_data` - Async function that takes a `DataReader` and returns a `SharedTileSource`.
-	pub fn register_reader_data<F, Fut>(&mut self, ext: &str, read_data: F)
+	fn register_reader_data<F, Fut>(&mut self, ext: &str, read_data: F)
 	where
 		F: Fn(DataReader, TilesRuntime) -> Fut + Send + Sync + 'static,
 		Fut: Future<Output = Result<SharedTileSource>> + Send + 'static,
@@ -129,7 +129,7 @@ impl ContainerRegistry {
 	/// * `ext` - The file extension to associate with the writer.
 	/// * `write_file` - Async function that takes a `SharedTileSource`, a `PathBuf`, and a `TilesRuntime`,
 	///   and writes the tiles to the specified path.
-	pub fn register_writer_file<F, Fut>(&mut self, ext: &str, write_file: F)
+	fn register_writer_file<F, Fut>(&mut self, ext: &str, write_file: F)
 	where
 		F: Fn(SharedTileSource, PathBuf, TilesRuntime) -> Fut + Send + Sync + 'static,
 		Fut: Future<Output = Result<()>> + Send + 'static,
@@ -144,7 +144,7 @@ impl ContainerRegistry {
 	///
 	/// Data writers accept a boxed `DataWriterTrait` sink instead of a file path,
 	/// enabling writing to remote destinations such as SFTP.
-	pub fn register_writer_data<F, Fut>(&mut self, ext: &str, write_data: F)
+	fn register_writer_data<F, Fut>(&mut self, ext: &str, write_data: F)
 	where
 		F: Fn(SharedTileSource, Box<dyn DataWriterTrait>, TilesRuntime) -> Fut + Send + Sync + 'static,
 		Fut: Future<Output = Result<()>> + Send + 'static,
@@ -205,7 +205,7 @@ impl ContainerRegistry {
 				}
 
 				if path.is_dir() {
-					return Ok(DirectoryReader::open_path(&path)
+					return Ok(DirectoryReader::open(&path)
 						.with_context(|| format!("Failed opening {path:?} as directory"))?
 						.into_shared());
 				}
@@ -298,6 +298,18 @@ impl ContainerRegistry {
 		data_writer(reader, Box::new(writer), runtime).await
 	}
 
+	/// Register both file and (optionally) data readers for a [`TilesReader`] implementation.
+	///
+	/// The file reader is always registered. The data reader is only registered when
+	/// `R::supports_data_reader()` returns `true`.
+	pub fn register_reader<R: TilesReader + 'static>(&mut self, ext: &str) {
+		self.register_reader_file(ext, |p, rt| async move { R::open_path(&p, rt).await });
+
+		if R::supports_data_reader() {
+			self.register_reader_data(ext, |r, rt| async move { R::open_reader(r, rt).await });
+		}
+	}
+
 	/// Register both file and (optionally) data writers for a [`TilesWriter`] implementation.
 	///
 	/// The file writer is always registered. The data writer is only registered when
@@ -327,34 +339,16 @@ impl Default for ContainerRegistry {
 	fn default() -> Self {
 		let mut reg = Self::new_empty();
 
-		// MBTiles
-		reg.register_reader_file("mbtiles", |p, r| async move {
-			Ok(MBTilesReader::open_path(&p, r)?.into_shared())
-		});
+		reg.register_reader::<MBTilesReader>("mbtiles");
 		reg.register_writer::<MBTilesWriter>("mbtiles");
 
-		// TAR
-		reg.register_reader_file("tar", |p, _r| async move {
-			Ok(TarTilesReader::open_path(&p)?.into_shared())
-		});
+		reg.register_reader::<TarTilesReader>("tar");
 		reg.register_writer::<TarTilesWriter>("tar");
 
-		// PMTiles
-		reg.register_reader_file("pmtiles", |p, r| async move {
-			Ok(PMTilesReader::open_path(&p, r).await?.into_shared())
-		});
-		reg.register_reader_data("pmtiles", |p, r| async move {
-			Ok(PMTilesReader::open_reader(p, r).await?.into_shared())
-		});
+		reg.register_reader::<PMTilesReader>("pmtiles");
 		reg.register_writer::<PMTilesWriter>("pmtiles");
 
-		// VersaTiles
-		reg.register_reader_file("versatiles", |p, r| async move {
-			Ok(VersaTilesReader::open_path(&p, r).await?.into_shared())
-		});
-		reg.register_reader_data("versatiles", |p, r| async move {
-			Ok(VersaTilesReader::open_reader(p, r).await?.into_shared())
-		});
+		reg.register_reader::<VersaTilesReader>("versatiles");
 		reg.register_writer::<VersaTilesWriter>("versatiles");
 
 		reg

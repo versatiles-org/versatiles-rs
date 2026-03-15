@@ -13,7 +13,7 @@
 //!   computed **bbox pyramid** inferred from the directory tree
 //!
 //! ## Requirements
-//! - Use an **absolute** filesystem path when opening via [`open_path`].
+//! - Use an **absolute** filesystem path when opening via [`open`].
 //! - The container must be a valid `PMTiles` v3 file with readable header, directories, and data.
 //!
 //! ## Usage
@@ -27,7 +27,7 @@
 //!     // Open PMTiles via absolute path
 //!     let runtime = TilesRuntime::default();
 //!     let path = Path::new("/absolute/path/to/berlin.pmtiles");
-//!     let mut reader = PMTilesReader::open_path(path, runtime).await?;
+//!     let mut reader = PMTilesReader::open(path, runtime).await?;
 //!
 //!     // Inspect metadata
 //!     let tj = reader.tilejson();
@@ -48,7 +48,8 @@
 
 use super::types::{EntriesV3, HeaderV3};
 use crate::{
-	SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal, TraversalOrder, TraversalSize,
+	SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal,
+	TraversalOrder, TraversalSize,
 	container::tile_chunking::{coalesce_into_chunks, stream_from_chunks},
 };
 use anyhow::{Result, bail};
@@ -95,13 +96,13 @@ pub struct PMTilesReader {
 impl PMTilesReader {
 	/// Open a `PMTiles` container from an **absolute** filesystem path.
 	///
-	/// Validates and opens a `DataReaderFile`, then delegates to [`PMTilesReader::open_reader`].
+	/// Validates and opens a `DataReaderFile`, then delegates to [`PMTilesReader::open_data`].
 	///
 	/// # Errors
 	/// Returns an error if the file cannot be opened.
 	#[context("opening PMTiles at '{}'", path.display())]
-	pub async fn open_path(path: &Path, runtime: TilesRuntime) -> Result<PMTilesReader> {
-		PMTilesReader::open_reader(DataReaderFile::open(path)?, runtime).await
+	pub async fn open(path: &Path, runtime: TilesRuntime) -> Result<PMTilesReader> {
+		PMTilesReader::open_data(DataReaderFile::open(path)?, runtime).await
 	}
 
 	/// Open a `PMTiles` container from an existing [`DataReader`].
@@ -113,7 +114,7 @@ impl PMTilesReader {
 	/// # Errors
 	/// Returns an error if reading or decompression fails, or if the header/dirs are invalid.
 	#[context("opening PMTiles from reader")]
-	pub async fn open_reader(data_reader: DataReader, runtime: TilesRuntime) -> Result<PMTilesReader>
+	pub async fn open_data(data_reader: DataReader, runtime: TilesRuntime) -> Result<PMTilesReader>
 	where
 		Self: Sized,
 	{
@@ -372,6 +373,13 @@ fn calc_bbox_pyramid(
 }
 
 #[async_trait]
+impl TilesReader for PMTilesReader {
+	async fn open_reader(reader: DataReader, runtime: TilesRuntime) -> Result<SharedTileSource> {
+		Ok(Self::open_data(reader, runtime).await?.into_shared())
+	}
+}
+
+#[async_trait]
 impl TileSource for PMTilesReader {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_container("pmtiles", self.data_reader.get_name())
@@ -469,7 +477,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let reader = PMTilesReader::open_path(&PATH, TilesRuntime::default()).await?;
+		let reader = PMTilesReader::open(&PATH, TilesRuntime::default()).await?;
 
 		assert_wildcard!(
 			reader.source_type().to_string(),
@@ -518,7 +526,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn tile_size_stream_matches_tile_reads() -> Result<()> {
-		let reader = PMTilesReader::open_path(&PATH, TilesRuntime::default()).await?;
+		let reader = PMTilesReader::open(&PATH, TilesRuntime::default()).await?;
 
 		let bbox = TileBBox::from_min_and_max(9, 274, 167, 275, 168)?;
 		let compression = reader.metadata().tile_compression;
@@ -542,7 +550,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn tile_size_stream_single_tile() -> Result<()> {
-		let reader = PMTilesReader::open_path(&PATH, TilesRuntime::default()).await?;
+		let reader = PMTilesReader::open(&PATH, TilesRuntime::default()).await?;
 
 		let bbox = TileBBox::from_min_and_max(0, 0, 0, 0, 0)?;
 		let sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
@@ -556,7 +564,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn tile_size_stream_empty_for_missing_zoom() -> Result<()> {
-		let reader = PMTilesReader::open_path(&PATH, TilesRuntime::default()).await?;
+		let reader = PMTilesReader::open(&PATH, TilesRuntime::default()).await?;
 
 		let bbox = TileBBox::from_min_and_max(20, 0, 0, 3, 3)?;
 		let sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
@@ -568,7 +576,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn tile_stream_matches_individual_reads() -> Result<()> {
-		let reader = PMTilesReader::open_path(&PATH, TilesRuntime::default()).await?;
+		let reader = PMTilesReader::open(&PATH, TilesRuntime::default()).await?;
 
 		// Use level 9 bbox which has 2x2 = 4 tiles according to the metadata
 		let bbox = TileBBox::from_min_and_max(9, 274, 167, 275, 168)?;

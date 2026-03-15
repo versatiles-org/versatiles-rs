@@ -150,7 +150,7 @@ mod tests {
 		let temp_path = NamedTempFile::new("test_output.tar")?;
 		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, TilesRuntime::default()).await?;
 
-		let mut reader = TarTilesReader::open_path(&temp_path)?;
+		let mut reader = TarTilesReader::open(&temp_path)?;
 		MockWriter::write(&mut reader).await?;
 
 		Ok(())
@@ -168,7 +168,7 @@ mod tests {
 		let temp_path = NamedTempFile::new("test_meta_output.tar")?;
 		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, TilesRuntime::default()).await?;
 
-		let reader = TarTilesReader::open_path(&temp_path)?;
+		let reader = TarTilesReader::open(&temp_path)?;
 		assert_eq!(
 			reader.tilejson().as_string(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
@@ -190,7 +190,7 @@ mod tests {
 		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, TilesRuntime::default()).await?;
 
 		assert_eq!(
-			TarTilesReader::open_path(&temp_path)
+			TarTilesReader::open(&temp_path)
 				.unwrap_err()
 				.chain()
 				.last()
@@ -230,7 +230,7 @@ mod tests {
 		let temp_path = NamedTempFile::new("test_large_tiles.tar")?;
 		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, TilesRuntime::default()).await?;
 
-		let reader = TarTilesReader::open_path(&temp_path)?;
+		let reader = TarTilesReader::open(&temp_path)?;
 		assert_eq!(reader.metadata().bbox_pyramid.count_tiles(), 21845);
 
 		Ok(())
@@ -255,7 +255,7 @@ mod tests {
 			let temp_path = NamedTempFile::new(format!("test_compression_{tile_compression:?}.tar"))?;
 			TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, TilesRuntime::default()).await?;
 
-			let reader = TarTilesReader::open_path(&temp_path)?;
+			let reader = TarTilesReader::open(&temp_path)?;
 			assert_eq!(reader.metadata().tile_compression, tile_compression);
 		}
 
