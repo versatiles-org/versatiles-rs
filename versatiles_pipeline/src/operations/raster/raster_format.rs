@@ -7,7 +7,7 @@ use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TileStrea
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Convert raster tiles to a different image format and/or adjust quality/speed settings.
+/// Convert raster tiles to a different image format and/or adjust quality/effort settings.
 struct Args {
 	/// The desired tile format. Allowed values are: AVIF, JPG, PNG or WEBP.
 	/// If not specified, the source format will be used.
@@ -16,8 +16,8 @@ struct Args {
 	/// To allow different quality levels for different zoom levels, this can also be a comma-separated list like this:
 	/// "80,70,14:50,15:20", where the first value is the default quality, and the other values specify the quality for the specified zoom level (and higher).
 	quality: Option<String>,
-	/// Compression speed, between 0 (slowest) and 100 (fastest).
-	speed: Option<u8>,
+	/// Compression effort, between 0 (fastest) and 100 (slowest/best).
+	effort: Option<u8>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,7 +75,7 @@ struct Operation {
 	tilejson: TileJSON,
 	format: RasterTileFormat,
 	quality: [Option<u8>; 32],
-	speed: Option<u8>,
+	effort: Option<u8>,
 }
 
 impl Operation {
@@ -103,7 +103,7 @@ impl Operation {
 		Ok(Self {
 			format,
 			quality: parse_quality(args.quality)?,
-			speed: args.speed,
+			effort: args.effort,
 			metadata,
 			source,
 			tilejson,
@@ -156,13 +156,13 @@ impl TileSource for Operation {
 		log::trace!("raster_format::get_tile_stream {bbox:?}");
 
 		let quality = self.quality[bbox.level as usize];
-		let speed = self.speed;
+		let effort = self.effort;
 		let stream = self.source.get_tile_stream(bbox).await?;
 		let format: TileFormat = self.format.into();
 
 		Ok(stream
 			.map_parallel_try(move |_coord, mut tile| {
-				tile.change_format(format, quality, speed)?;
+				tile.change_format(format, quality, effort)?;
 				Ok(tile)
 			})
 			.unwrap_results())
@@ -248,7 +248,7 @@ mod tests {
 	async fn test_raster_format() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
-			.operation_from_vpl("from_debug format=png | raster_format format=webp quality=80 speed=60")
+			.operation_from_vpl("from_debug format=png | raster_format format=webp quality=80 effort=40")
 			.await?;
 
 		// Parameters must reflect the target format and uncompressed tile_compression

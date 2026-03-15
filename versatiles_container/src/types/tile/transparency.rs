@@ -220,7 +220,7 @@ mod tests {
 					format,
 					compression: U,
 					format_quality: None,
-					format_speed: None,
+					format_effort: None,
 					transparency_cache: None,
 				};
 				m.insert(format!("{format}_{name}"), tile);
@@ -480,7 +480,7 @@ mod tests {
 			format: TileFormat::PNG,
 			compression: TileCompression::Uncompressed,
 			format_quality: None,
-			format_speed: None,
+			format_effort: None,
 			transparency_cache: None,
 		};
 		assert_eq!(tile.check_alpha_from_header()?, AlphaInfo::Unknown);
@@ -504,7 +504,7 @@ mod tests {
 			format: TileFormat::PNG,
 			compression: TileCompression::Gzip,
 			format_quality: None,
-			format_speed: None,
+			format_effort: None,
 			transparency_cache: None,
 		};
 
@@ -522,7 +522,7 @@ mod tests {
 			format: TileFormat::AVIF,
 			compression: TileCompression::Uncompressed,
 			format_quality: None,
-			format_speed: None,
+			format_effort: None,
 			transparency_cache: None,
 		};
 		assert_eq!(tile.check_alpha_from_header()?, AlphaInfo::Unknown);
@@ -578,7 +578,7 @@ mod tests {
 			format: TileFormat::PNG,
 			compression: TileCompression::Uncompressed,
 			format_quality: None,
-			format_speed: None,
+			format_effort: None,
 			transparency_cache: None,
 		};
 
@@ -599,7 +599,7 @@ mod tests {
 			format: TileFormat::PNG,
 			compression: TileCompression::Uncompressed,
 			format_quality: None,
-			format_speed: None,
+			format_effort: None,
 			transparency_cache: None,
 		};
 

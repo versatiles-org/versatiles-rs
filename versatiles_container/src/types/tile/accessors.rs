@@ -12,7 +12,7 @@ impl Tile {
 	/// Get a reference to the encoded blob, re-(de)compressing as needed.
 	///
 	/// If no blob exists, the current content is encoded according to `self.format`,
-	/// using any stored quality/speed hints. If a blob exists with a different
+	/// using any stored quality/effort hints. If a blob exists with a different
 	/// `self.compression`, it is re-compressed to `compression`.
 	///
 	/// Returns a reference valid until the next mutating call.
@@ -137,10 +137,10 @@ impl Tile {
 		self.format_quality = quality;
 	}
 
-	/// Set the encoding speed hint (used when re-encoding content to blob).
+	/// Set the encoding effort hint (used when re-encoding content to blob).
 	///
 	/// Pass `None` to clear any previously stored hint and use the codec default.
-	pub fn set_format_speed(&mut self, speed: Option<u8>) {
-		self.format_speed = speed;
+	pub fn set_format_effort(&mut self, effort: Option<u8>) {
+		self.format_effort = effort;
 	}
 }

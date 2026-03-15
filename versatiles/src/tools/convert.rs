@@ -5,11 +5,11 @@ use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCompression, TileFormat};
 use versatiles_derive::context;
 
 /// Parse a tile format string like "webp", "webp,80", or "avif,90,50"
-/// into (TileFormat, Option<quality>, Option<speed>).
+/// into (TileFormat, Option<quality>, Option<effort>).
 fn parse_tile_format(s: &str) -> Result<(TileFormat, Option<u8>, Option<u8>)> {
 	let parts: Vec<&str> = s.split(',').collect();
 	if parts.is_empty() || parts.len() > 3 {
-		bail!("Invalid tile format '{s}': expected format[,quality][,speed]");
+		bail!("Invalid tile format '{s}': expected format[,quality][,effort]");
 	}
 
 	let format = TileFormat::try_from_str(parts[0])?;
@@ -32,19 +32,19 @@ fn parse_tile_format(s: &str) -> Result<(TileFormat, Option<u8>, Option<u8>)> {
 		None
 	};
 
-	let speed = if parts.len() >= 3 {
-		let s: u8 = parts[2]
+	let effort = if parts.len() >= 3 {
+		let e: u8 = parts[2]
 			.parse()
-			.map_err(|_| anyhow::anyhow!("Invalid speed value '{}': must be 0-100", parts[2]))?;
-		if s > 100 {
-			bail!("Speed value {s} out of range: must be 0-100");
+			.map_err(|_| anyhow::anyhow!("Invalid effort value '{}': must be 0-100", parts[2]))?;
+		if e > 100 {
+			bail!("Effort value {e} out of range: must be 0-100");
 		}
-		Some(s)
+		Some(e)
 	} else {
 		None
 	};
 
-	Ok((format, quality, speed))
+	Ok((format, quality, effort))
 }
 
 #[derive(clap::Args, Debug)]
@@ -95,7 +95,7 @@ pub struct Subcommand {
 	flip_y: bool,
 
 	/// set the output tile format, e.g. "webp", "webp,80", "avif,90,50"
-	#[arg(long, value_name = "format[,quality][,speed]", display_order = 3)]
+	#[arg(long, value_name = "format[,quality][,effort]", display_order = 3)]
 	tile_format: Option<String>,
 }
 
@@ -107,7 +107,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 
 	let (bbox_pyramid, geo_bbox) = get_bbox_pyramid(arguments)?;
 
-	let (tile_format, format_quality, format_speed) = if let Some(ref tf) = arguments.tile_format {
+	let (tile_format, format_quality, format_effort) = if let Some(ref tf) = arguments.tile_format {
 		let (fmt, q, s) = parse_tile_format(tf)?;
 		(Some(fmt), q, s)
 	} else {
@@ -122,7 +122,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		tile_compression: arguments.compress,
 		tile_format,
 		format_quality,
-		format_speed,
+		format_effort,
 	};
 
 	convert_tiles_container(reader, parameters, &arguments.output_file, runtime.clone()).await?;
@@ -193,12 +193,12 @@ mod tests {
 		#[case] input: &str,
 		#[case] expected_format: TileFormat,
 		#[case] expected_quality: Option<u8>,
-		#[case] expected_speed: Option<u8>,
+		#[case] expected_effort: Option<u8>,
 	) {
-		let (fmt, q, s) = parse_tile_format(input).unwrap();
+		let (fmt, q, e) = parse_tile_format(input).unwrap();
 		assert_eq!(fmt, expected_format);
 		assert_eq!(q, expected_quality);
-		assert_eq!(s, expected_speed);
+		assert_eq!(e, expected_effort);
 	}
 
 	#[test]
@@ -209,8 +209,8 @@ mod tests {
 
 	#[test]
 	fn test_parse_tile_format_rejects_invalid() {
-		assert!(parse_tile_format("webp,abc").is_err());
-		assert!(parse_tile_format("webp,80,abc").is_err());
+		assert!(parse_tile_format("webp,abc").is_err()); // invalid quality
+		assert!(parse_tile_format("webp,80,abc").is_err()); // invalid effort
 		assert!(parse_tile_format("unknown").is_err());
 	}
 

@@ -5,9 +5,9 @@
 //! implementation based on [`TileFormat`].
 //!
 //! ### Supported formats
-//! - **AVIF** — lossy 8‑bit encoding, optional quality/speed.
+//! - **AVIF** — lossy 8‑bit encoding, optional quality/effort.
 //! - **JPEG** — lossy 8‑bit RGB/L images, no alpha support.
-//! - **PNG** — lossless 8‑bit L/LA/RGB/RGBA, optional speed tuning.
+//! - **PNG** — lossless 8‑bit L/LA/RGB/RGBA, optional effort tuning.
 //! - **WebP** — lossy or lossless 8‑bit RGB/RGBA.
 //!
 //! Any unsupported `TileFormat` will return a `bail!` error.
@@ -17,23 +17,23 @@ use image::DynamicImage;
 use versatiles_core::{Blob, TileFormat};
 use versatiles_derive::context;
 
-#[context("encoding {}x{} {:?} as {:?} (q={:?}, s={:?})", image.width(), image.height(), image.color(), format, quality, speed)]
+#[context("encoding {}x{} {:?} as {:?} (q={:?}, e={:?})", image.width(), image.height(), image.color(), format, quality, effort)]
 /// Encode a [`DynamicImage`] into the given [`TileFormat`].
 ///
 /// Dispatches to the corresponding codec module based on `format`.
-/// Each codec interprets `quality` and `speed` slightly differently:
-/// - `AVIF` uses both `quality` and `speed`.
+/// Each codec interprets `quality` and `effort` slightly differently:
+/// - `AVIF` uses both `quality` and `effort`.
 /// - `JPG` uses only `quality`.
-/// - `PNG` uses only `speed`.
-/// - `WEBP` uses both `quality` and `speed`.
+/// - `PNG` uses only `effort`.
+/// - `WEBP` uses both `quality` and `effort`.
 ///
 /// Returns an error if the format or color type is unsupported.
-pub fn encode(image: &DynamicImage, format: TileFormat, quality: Option<u8>, speed: Option<u8>) -> Result<Blob> {
+pub fn encode(image: &DynamicImage, format: TileFormat, quality: Option<u8>, effort: Option<u8>) -> Result<Blob> {
 	match format {
-		TileFormat::AVIF => avif::encode(image, quality, speed),
+		TileFormat::AVIF => avif::encode(image, quality, effort),
 		TileFormat::JPG => jpeg::encode(image, quality),
-		TileFormat::PNG => png::encode(image, speed),
-		TileFormat::WEBP => webp::encode(image, quality, speed),
+		TileFormat::PNG => png::encode(image, effort),
+		TileFormat::WEBP => webp::encode(image, quality, effort),
 		_ => bail!("Unsupported format '{format}' for image encoding"),
 	}
 }

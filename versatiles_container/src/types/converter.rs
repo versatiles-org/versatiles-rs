@@ -72,8 +72,8 @@ pub struct TilesConverterParameters {
 	pub tile_format: Option<TileFormat>,
 	/// Optional quality parameter (0–100) for format conversion.
 	pub format_quality: Option<u8>,
-	/// Optional speed parameter (0–100) for format conversion.
-	pub format_speed: Option<u8>,
+	/// Optional effort parameter (0–100) for format conversion.
+	pub format_effort: Option<u8>,
 	/// If `true`, flip the Y coordinate within the zoom level (TMS ↔ XYZ-like).
 	pub flip_y: bool,
 	/// If `true`, swap X and Y coordinates.
@@ -89,7 +89,7 @@ impl Default for TilesConverterParameters {
 			tile_compression: None,
 			tile_format: None,
 			format_quality: None,
-			format_speed: None,
+			format_effort: None,
 			flip_y: false,
 			swap_xy: false,
 		}
@@ -229,7 +229,7 @@ impl TileSource for TilesConvertReader {
 			tile.change_format(
 				tile_format,
 				self.converter_parameters.format_quality,
-				self.converter_parameters.format_speed,
+				self.converter_parameters.format_effort,
 			)?;
 		}
 
@@ -268,10 +268,10 @@ impl TileSource for TilesConvertReader {
 
 		if let Some(tile_format) = self.converter_parameters.tile_format {
 			let quality = self.converter_parameters.format_quality;
-			let speed = self.converter_parameters.format_speed;
+			let effort = self.converter_parameters.format_effort;
 			stream = stream
 				.map_parallel_try(move |_coord, mut tile| {
-					tile.change_format(tile_format, quality, speed)?;
+					tile.change_format(tile_format, quality, effort)?;
 					Ok(tile)
 				})
 				.unwrap_results();

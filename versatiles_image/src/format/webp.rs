@@ -22,18 +22,18 @@ use libwebp_sys::{
 use versatiles_core::Blob;
 use versatiles_derive::context;
 
-#[context("encoding {}x{} {:?} as WebP (q={:?}, s={:?})", image.width(), image.height(), image.color(), quality, speed)]
+#[context("encoding {}x{} {:?} as WebP (q={:?}, e={:?})", image.width(), image.height(), image.color(), quality, effort)]
 /// Encode a `DynamicImage` into a WebP [`Blob`].
 ///
 /// * `quality` — `Some(q)` selects **lossy** encoding for `q < 100` (0..=99), or **lossless** when
 ///   `q >= 100`. `None` defaults to **95** (lossy).
-/// * `speed` — optional 0..=100 hint (default **75**). Lower → better compression; higher → faster.
-///   Internally mapped to libwebp's `method` 0..=6 (6 = slowest/best, 0 = fastest).
+/// * `effort` — optional 0..=100 hint (default **80**). Higher → better compression; lower → faster.
+///   Internally mapped to libwebp's `method` 0..=6 (0 = fastest, 6 = slowest/best).
 /// * Only 8‑bit `Rgb8`/`Rgba8` are accepted. If the input has an alpha channel but is fully opaque,
 ///   alpha is removed first.
 ///
 /// Returns an error for unsupported bit depth or color type.
-pub fn encode(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) -> Result<Blob> {
+pub fn encode(image: &DynamicImage, quality: Option<u8>, effort: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("webp only supports 8-bit images");
 	}
@@ -58,12 +58,12 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) -> R
 	let height = image_ref.height() as i32;
 	let data = image_ref.as_bytes();
 	let has_alpha = image_ref.has_alpha();
-	let speed = speed.unwrap_or(20);
+	let effort = effort.unwrap_or(80);
 
 	if quality >= 100 {
-		encode_lossless(data, width, height, has_alpha, speed)
+		encode_lossless(data, width, height, has_alpha, effort)
 	} else {
-		encode_lossy(data, width, height, has_alpha, quality, speed)
+		encode_lossy(data, width, height, has_alpha, quality, effort)
 	}
 }
 
@@ -105,37 +105,37 @@ fn webp_encode_advanced(data: &[u8], width: i32, height: i32, has_alpha: bool, c
 	}
 }
 
-fn encode_lossy(data: &[u8], width: i32, height: i32, has_alpha: bool, quality: u8, speed: u8) -> Result<Blob> {
+fn encode_lossy(data: &[u8], width: i32, height: i32, has_alpha: bool, quality: u8, effort: u8) -> Result<Blob> {
 	let mut config = WebPConfig::new().map_err(|()| anyhow::anyhow!("WebPConfigInit failed"))?;
 	config.lossless = 0;
 	config.quality = f32::from(quality);
-	// Map speed 0..=100 to libwebp method 6..=0 (inverted: lower speed → higher method)
+	// Map effort 0..=100 to libwebp method 0..=6 (effort 0 → fastest, effort 100 → best)
 	#[allow(clippy::cast_possible_truncation)]
 	{
-		config.method = (6.0 - f32::from(speed.clamp(0, 100)) / 100.0 * 6.0).round() as i32;
+		config.method = (f32::from(effort.clamp(0, 100)) / 100.0 * 6.0).round() as i32;
 	}
 	webp_encode_advanced(data, width, height, has_alpha, &config)
 }
 
-fn encode_lossless(data: &[u8], width: i32, height: i32, has_alpha: bool, speed: u8) -> Result<Blob> {
+fn encode_lossless(data: &[u8], width: i32, height: i32, has_alpha: bool, effort: u8) -> Result<Blob> {
 	let mut config = WebPConfig::new().map_err(|()| anyhow::anyhow!("WebPConfigInit failed"))?;
 	config.lossless = 1;
 	config.exact = 1;
 
-	// Map speed (0=best compression, 100=fastest) to libwebp method and quality.
-	let (method, quality) = if speed == 0 {
+	// Map effort (0=fastest, 100=best compression) to libwebp method and quality.
+	let (method, quality) = if effort == 100 {
 		(6, 100.0)
-	} else if speed <= 10 {
+	} else if effort >= 90 {
 		(5, 80.0)
-	} else if speed <= 20 {
+	} else if effort >= 80 {
 		(4, 70.0)
-	} else if speed <= 40 {
+	} else if effort >= 60 {
 		(2, 40.0)
-	} else if speed <= 60 {
+	} else if effort >= 40 {
 		(1, 30.0)
-	} else if speed <= 80 {
+	} else if effort >= 20 {
 		(1, 0.0)
-	} else if speed <= 90 {
+	} else if effort >= 10 {
 		(0, 50.0)
 	} else {
 		(0, 0.0)

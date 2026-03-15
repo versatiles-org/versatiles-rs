@@ -2,13 +2,13 @@
 //!
 //! This module bridges the [`image`] crate’s PNG codec and the internal [`Blob`] type used by
 //! VersaTiles. PNG here is treated as a **lossless** (predictor + entropy) format for tiles, with
-//! an optional **speed** knob that trades compression time for file size.
+//! an optional **effort** knob that trades compression time for file size.
 //!
 //! Highlights:
 //! - Supports only **8‑bit** images.
 //! - Accepts **L8, LA8, RGB8, RGBA8** (1–4 channels). Other layouts are rejected.
 //! - If an image **has alpha but is fully opaque**, the encoder will **drop alpha** to save bytes.
-//! - Uses `image::codecs::png::PngEncoder` with a speed → (compression, filter) mapping.
+//! - Uses `image::codecs::png::PngEncoder` with an effort → (compression, filter) mapping.
 
 use crate::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 use anyhow::{Result, anyhow, bail};
@@ -16,14 +16,14 @@ use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::png, load_from_memo
 use versatiles_core::Blob;
 use versatiles_derive::context;
 
-#[context("encoding {}x{} {:?} as PNG (s={:?})", image.width(), image.height(), image.color(), speed)]
+#[context("encoding {}x{} {:?} as PNG (e={:?})", image.width(), image.height(), image.color(), effort)]
 /// Encode a `DynamicImage` into a PNG [`Blob`].
 ///
-/// * `speed` — optional 0..=100 hint (default **10**). Lower → stronger compression; higher → faster.
+/// * `effort` — optional 0..=100 hint (default **90**). Higher → stronger compression; lower → faster.
 ///   Internally mapped to `(CompressionType, FilterType)` buckets.
 /// * If the image has an alpha channel but is **fully opaque**, alpha is **removed** before encoding.
 /// * Errors if the image is not 8‑bit or the channel count is not in `1..=4`.
-pub fn encode(image: &DynamicImage, speed: Option<u8>) -> Result<Blob> {
+pub fn encode(image: &DynamicImage, effort: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("png only supports 8-bit images");
 	}
@@ -32,16 +32,16 @@ pub fn encode(image: &DynamicImage, speed: Option<u8>) -> Result<Blob> {
 		bail!("png only supports Grey, GreyA, RGB or RGBA");
 	}
 
-	let speed = speed.unwrap_or(10).clamp(0, 100);
+	let effort = effort.unwrap_or(90).clamp(0, 100);
 
 	use png::{CompressionType, FilterType};
-	let (compression_type, filter_type) = match speed {
-		0..20 => (CompressionType::Best, FilterType::Adaptive),
-		20..40 => (CompressionType::Default, FilterType::Adaptive),
+	let (compression_type, filter_type) = match effort {
+		0..10 => (CompressionType::Fast, FilterType::NoFilter),
+		10..20 => (CompressionType::Fast, FilterType::Avg),
+		20..40 => (CompressionType::Default, FilterType::Avg),
 		40..60 => (CompressionType::Default, FilterType::Paeth),
-		60..80 => (CompressionType::Default, FilterType::Avg),
-		80..90 => (CompressionType::Fast, FilterType::Avg),
-		_ => (CompressionType::Fast, FilterType::NoFilter),
+		60..80 => (CompressionType::Default, FilterType::Adaptive),
+		_ => (CompressionType::Best, FilterType::Adaptive),
 	};
 
 	let mut image_ref = image;
@@ -65,7 +65,7 @@ pub fn encode(image: &DynamicImage, speed: Option<u8>) -> Result<Blob> {
 }
 
 #[context("encoding image {:?} as PNG", image.color())]
-/// Convenience wrapper for [`encode`] with default speed.
+/// Convenience wrapper for [`encode`] with default effort.
 pub fn image2blob(image: &DynamicImage) -> Result<Blob> {
 	encode(image, None)
 }

@@ -6,7 +6,7 @@
 //!   and transparently materializes the other representation on demand.
 //!
 //! The type keeps track of the tile **format** (e.g. `PNG`, `MVT`) and the transport
-//! **compression** (e.g. `Gzip`, `Uncompressed`). Quality and speed hints are stored
+//! **compression** (e.g. `Gzip`, `Uncompressed`). Quality and effort hints are stored
 //! for formats that support them and are applied when (re-)encoding.
 //!
 //! All expensive conversions are performed lazily and are wrapped with contextual error
@@ -63,7 +63,7 @@ pub struct Tile {
 	pub(super) format: TileFormat,
 	pub(super) compression: TileCompression,
 	pub(super) format_quality: Option<u8>,
-	pub(super) format_speed: Option<u8>,
+	pub(super) format_effort: Option<u8>,
 	/// Cached transparency info: (is_empty, is_opaque).
 	/// Computed lazily and invalidated when content changes.
 	pub(super) transparency_cache: Option<(bool, bool)>,

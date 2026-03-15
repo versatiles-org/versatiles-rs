@@ -92,7 +92,7 @@ fn change_format_sets_flags() -> Result<()> {
 	assert_eq!(tile.format(), PNG);
 	let _ = tile.as_blob(Uncompressed)?;
 
-	// change only speed afterwards
+	// change only effort afterwards
 	tile.change_format(PNG, None, Some(5))?;
 	let _ = tile.as_blob(Uncompressed)?;
 	Ok(())
@@ -188,8 +188,8 @@ fn cache_roundtrip_with_content_only() -> Result<()> {
 	Ok(())
 }
 
-// Helper that peeks format/quality/speed written by CacheValue without rehydrating the Tile
-fn read_format_quality_speed(buf: &[u8]) -> (TileFormat, TileCompression, Option<u8>, Option<u8>) {
+// Helper that peeks format/quality/effort written by CacheValue without rehydrating the Tile
+fn read_format_quality_effort(buf: &[u8]) -> (TileFormat, TileCompression, Option<u8>, Option<u8>) {
 	let mut cur = Cursor::new(buf);
 	// Skip blob and content
 	let _ = Option::<Blob>::read_from_cache(&mut cur).unwrap();
@@ -197,30 +197,30 @@ fn read_format_quality_speed(buf: &[u8]) -> (TileFormat, TileCompression, Option
 	let fmt = TileFormat::read_from_cache(&mut cur).unwrap();
 	let comp = TileCompression::read_from_cache(&mut cur).unwrap();
 	let q = Option::<u8>::read_from_cache(&mut cur).unwrap();
-	let s = Option::<u8>::read_from_cache(&mut cur).unwrap();
-	(fmt, comp, q, s)
+	let e = Option::<u8>::read_from_cache(&mut cur).unwrap();
+	(fmt, comp, q, e)
 }
 
 #[test]
-fn change_format_none_keeps_existing_quality_and_speed() -> Result<()> {
+fn change_format_none_keeps_existing_quality_and_effort() -> Result<()> {
 	let mut tile = Tile::from_image(tiny_rgb_image(), PNG)?;
 	// Set initial flags
 	tile.change_format(PNG, Some(50), Some(10))?;
 	let mut buf = Vec::new();
 	tile.write_to_cache(&mut buf).unwrap();
-	let (fmt1, _c1, q1, s1) = read_format_quality_speed(&buf);
+	let (fmt1, _c1, q1, e1) = read_format_quality_effort(&buf);
 	assert_eq!(fmt1, PNG);
 	assert_eq!(q1, Some(50));
-	assert_eq!(s1, Some(10));
+	assert_eq!(e1, Some(10));
 
 	// Now call with None/None so flags should remain
 	tile.change_format(PNG, None, None)?;
 	buf.clear();
 	tile.write_to_cache(&mut buf).unwrap();
-	let (fmt2, _c2, q2, s2) = read_format_quality_speed(&buf);
+	let (fmt2, _c2, q2, e2) = read_format_quality_effort(&buf);
 	assert_eq!(fmt2, PNG);
 	assert_eq!(q2, Some(50));
-	assert_eq!(s2, Some(10));
+	assert_eq!(e2, Some(10));
 	Ok(())
 }
 

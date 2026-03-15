@@ -33,7 +33,7 @@ pub trait DynamicImageTraitConvert {
 
 	/// Encodes the image into a binary blob in the specified `TileFormat`.
 	/// Returns an error if encoding fails or if the format is unsupported.
-	fn to_blob(&self, format: TileFormat, quality: Option<u8>, speed: Option<u8>) -> Result<Blob>;
+	fn to_blob(&self, format: TileFormat, quality: Option<u8>, effort: Option<u8>) -> Result<Blob>;
 
 	/// Returns an iterator over the pixel data as byte slices.
 	/// Each slice represents one pixel, with the slice length corresponding to the image's channel count.
@@ -93,14 +93,14 @@ impl DynamicImageTraitConvert for DynamicImage {
 		})
 	}
 
-	#[context("encoding {}x{} {:?} as {:?} (q={:?}, s={:?})", self.width(), self.height(), self.color(), format, quality, speed)]
-	fn to_blob(&self, format: TileFormat, quality: Option<u8>, speed: Option<u8>) -> Result<Blob> {
+	#[context("encoding {}x{} {:?} as {:?} (q={:?}, e={:?})", self.width(), self.height(), self.color(), format, quality, effort)]
+	fn to_blob(&self, format: TileFormat, quality: Option<u8>, effort: Option<u8>) -> Result<Blob> {
 		use TileFormat::{AVIF, JPG, PNG, WEBP};
 		match format {
-			AVIF => avif::encode(self, quality, speed),
+			AVIF => avif::encode(self, quality, effort),
 			JPG => jpeg::encode(self, quality),
-			PNG => png::encode(self, speed),
-			WEBP => webp::encode(self, quality, speed),
+			PNG => png::encode(self, effort),
+			WEBP => webp::encode(self, quality, effort),
 			_ => bail!("Unsupported image format for encoding: {format:?}"),
 		}
 	}

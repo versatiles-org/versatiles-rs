@@ -47,14 +47,14 @@ impl Tile {
 		self.transparency_cache = None;
 	}
 
-	#[context("materializing blob from content (format={:?}, q={:?}, s={:?})", self.format, self.format_quality, self.format_speed)]
+	#[context("materializing blob from content (format={:?}, q={:?}, e={:?})", self.format, self.format_quality, self.format_effort)]
 	pub(super) fn materialize_blob(&mut self) -> Result<()> {
 		if self.blob.is_none() {
 			ensure!(self.content.is_some(), "Cannot materialize blob without content");
 			self.blob = Some(self.content.as_ref().unwrap().to_blob(
 				self.format,
 				self.format_quality,
-				self.format_speed,
+				self.format_effort,
 			)?);
 			self.compression = TileCompression::Uncompressed;
 		}
@@ -74,16 +74,16 @@ impl Tile {
 	/// Change the tile's **format** (e.g., `PNG` → `WEBP`) while preserving the content type.
 	///
 	/// The tile's content is materialized; the existing blob is dropped; and optional
-	/// `quality`/`speed` hints are updated if provided (passed as `Some`).
+	/// `quality`/`effort` hints are updated if provided (passed as `Some`).
 	/// Passing `None` keeps the previous hint value.
 	///
 	/// The `format` must have the same type (raster vs. vector) as the current format.
-	#[context("changing format: {:?} -> {:?} (q={:?}, s={:?})", self.format, format, quality, speed)]
+	#[context("changing format: {:?} -> {:?} (q={:?}, e={:?})", self.format, format, quality, effort)]
 	pub fn change_format(
 		&mut self,
 		format: versatiles_core::TileFormat,
 		quality: Option<u8>,
-		speed: Option<u8>,
+		effort: Option<u8>,
 	) -> Result<()> {
 		if self.format == format && quality.is_none() {
 			return Ok(());
@@ -98,8 +98,8 @@ impl Tile {
 		if quality.is_some() {
 			self.format_quality = quality;
 		}
-		if speed.is_some() {
-			self.format_speed = speed;
+		if effort.is_some() {
+			self.format_effort = effort;
 		}
 		Ok(())
 	}

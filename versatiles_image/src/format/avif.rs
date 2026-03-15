@@ -1,14 +1,14 @@
 //! AVIF (AV1 Image File Format) encoder bridges for `DynamicImage`.
 //!
 //! This module exposes small helpers to encode images into AVIF blobs with configurable
-//! **quality** (lossy) and **speed**. Decoding is intentionally **not implemented** here; the
+//! **quality** (lossy) and **effort**. Decoding is intentionally **not implemented** here; the
 //! rest of the crate treats AVIF as a write-only target for web tile pipelines.
 //!
 //! Notes:
 //! - Only **8‑bit** images are supported; higher bit depths are rejected early.
 //! - "Lossless" AVIF (quality ≥ 100) is not supported by the encoder binding used here.
-//! - The optional `speed` argument (0–100) is mapped linearly to the encoder range **1..=10**
-//!   (1 = slow/best, 10 = fast).
+//! - The optional `effort` argument (0–100) is mapped linearly to the encoder range **1..=10**
+//!   (1 = slow/best, 10 = fast). Higher effort → slower/better compression.
 
 use crate::traits::DynamicImageTraitInfo;
 use anyhow::{Result, bail};
@@ -22,11 +22,12 @@ use versatiles_derive::context;
 /// Encode a `DynamicImage` into an AVIF [`Blob`].
 ///
 /// * `quality` — 0..=99 (higher means better quality & larger size). `None` defaults to **90**.
-/// * `speed` — 0..=100 user scale (mapped to encoder 1..=10). `None` defaults to **10** (fastest).
+/// * `effort` — 0..=100 user scale (mapped to encoder 1..=10). `None` defaults to **10** (fastest).
+///   Higher effort → slower/better compression.
 ///
 /// Returns an error if the image is not 8‑bit per channel or if `quality >= 100`.
-#[context("encoding {}x{} {:?} as AVIF (q={:?}, s={:?})", image.width(), image.height(), image.color(), quality, speed)]
-pub fn encode(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) -> Result<Blob> {
+#[context("encoding {}x{} {:?} as AVIF (q={:?}, e={:?})", image.width(), image.height(), image.color(), quality, effort)]
+pub fn encode(image: &DynamicImage, quality: Option<u8>, effort: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("avif only supports 8-bit images");
 	}
@@ -37,13 +38,13 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) -> R
 	}
 
 	#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-	// speed 1..=10 fits into u8, clamp ensures positive
-	let speed = speed.map_or(10, |s| {
-		(f32::from(s) / 100.0 * 9.0 + 1.0).round().clamp(1.0, 10.0) as u8
+	// effort 0=fastest (encoder speed 10), effort 100=slowest/best (encoder speed 1)
+	let encoder_speed = effort.map_or(10, |e| {
+		(10.0 - f32::from(e) / 100.0 * 9.0).round().clamp(1.0, 10.0) as u8
 	});
 
 	let mut result: Vec<u8> = vec![];
-	let encoder = AvifEncoder::new_with_speed_quality(&mut result, speed, quality)
+	let encoder = AvifEncoder::new_with_speed_quality(&mut result, encoder_speed, quality)
 		.with_colorspace(ColorSpace::Srgb)
 		.with_num_threads(Some(1));
 
@@ -57,7 +58,7 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) -> R
 	Ok(Blob::from(result))
 }
 
-/// Convenience wrapper around [`encode`] with a `speed` chosen automatically (fast).
+/// Convenience wrapper around [`encode`] with an `effort` chosen automatically (fast).
 ///
 /// Use `quality = None` for the default (90).
 #[context("encoding image {:?} as AVIF (q={:?})", image.color(), quality)]
@@ -138,12 +139,12 @@ mod tests {
 	}
 
 	#[test]
-	fn encode_with_custom_speed() -> Result<()> {
+	fn encode_with_custom_effort() -> Result<()> {
 		let img = DynamicImage::new_test_rgb();
-		// Speed 0 maps to encoder speed 1 (slowest)
-		let blob_slow = encode(&img, Some(80), Some(0))?;
-		// Speed 100 maps to encoder speed 10 (fastest)
-		let blob_fast = encode(&img, Some(80), Some(100))?;
+		// Effort 100 maps to encoder speed 1 (slowest/best)
+		let blob_slow = encode(&img, Some(80), Some(100))?;
+		// Effort 0 maps to encoder speed 10 (fastest)
+		let blob_fast = encode(&img, Some(80), Some(0))?;
 		// Both should produce valid output
 		assert!(!blob_slow.is_empty());
 		assert!(!blob_fast.is_empty());
@@ -151,9 +152,9 @@ mod tests {
 	}
 
 	#[test]
-	fn encode_speed_edge_cases() -> Result<()> {
+	fn encode_effort_edge_cases() -> Result<()> {
 		let img = DynamicImage::new_test_rgb();
-		// Test speed boundaries
+		// Test effort boundaries
 		assert!(encode(&img, Some(80), Some(0)).is_ok());
 		assert!(encode(&img, Some(80), Some(50)).is_ok());
 		assert!(encode(&img, Some(80), Some(100)).is_ok());

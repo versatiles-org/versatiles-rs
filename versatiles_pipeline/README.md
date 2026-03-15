@@ -246,13 +246,13 @@ Flattens (translucent) raster tiles onto a background
 
 ## raster_format
 
-Convert raster tiles to a different image format and/or adjust quality/speed settings.
+Convert raster tiles to a different image format and/or adjust quality/effort settings.
 
 ### Parameters
 
 - *`format`: String (optional)* - The desired tile format. Allowed values are: AVIF, JPG, PNG or WEBP. If not specified, the source format will be used.
 - *`quality`: String (optional)* - Quality level for the tile compression (only AVIF, JPG or WEBP), between 0 (worst) and 100 (lossless). To allow different quality levels for different zoom levels, this can also be a comma-separated list like this: "80,70,14:50,15:20", where the first value is the default quality, and the other values specify the quality for the specified zoom level (and higher).
-- *`speed`: u8 (optional)* - Compression speed, between 0 (slowest) and 100 (fastest).
+- *`effort`: u8 (optional)* - Compression effort, between 0 (fastest) and 100 (slowest/best).
 
 ---
 

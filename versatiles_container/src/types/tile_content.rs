@@ -42,12 +42,12 @@ pub enum TileContent {
 impl TileContent {
 	/// Encode this content into a blob in the given `format`.
 	///
-	/// For raster content, optional `quality` and `speed` hints are honored when supported by the encoder.
-	/// Vector content ignores `quality`/`speed` and uses its native encoder.
-	#[context("converting tile to blob: format={:?}, q={:?}, s={:?}", format, quality, speed)]
-	pub fn to_blob(&self, format: TileFormat, quality: Option<u8>, speed: Option<u8>) -> Result<Blob> {
+	/// For raster content, optional `quality` and `effort` hints are honored when supported by the encoder.
+	/// Vector content ignores `quality`/`effort` and uses its native encoder.
+	#[context("converting tile to blob: format={:?}, q={:?}, e={:?}", format, quality, effort)]
+	pub fn to_blob(&self, format: TileFormat, quality: Option<u8>, effort: Option<u8>) -> Result<Blob> {
 		match self {
-			TileContent::Raster(image) => image.to_blob(format, quality, speed),
+			TileContent::Raster(image) => image.to_blob(format, quality, effort),
 			TileContent::Vector(vector) => vector.to_blob(),
 		}
 	}

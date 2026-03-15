@@ -24,7 +24,7 @@ impl Tile {
 			format,
 			compression,
 			format_quality: None,
-			format_speed: None,
+			format_effort: None,
 			transparency_cache: None,
 		}
 	}
@@ -36,7 +36,7 @@ impl Tile {
 			format,
 			compression: TileCompression::Uncompressed,
 			format_quality: None,
-			format_speed: None,
+			format_effort: None,
 			transparency_cache: None,
 		}
 	}
