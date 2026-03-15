@@ -1024,4 +1024,242 @@ mod tests {
 		assert_eq!(metadata.tile_compression, TileCompression::Uncompressed);
 		Ok(())
 	}
+
+	// ============================================================================
+	// Auto-overscale integration tests
+	//
+	// These tests verify that layers with auto_overscale are correctly blended
+	// by checking actual pixel colors across multiple source/level combinations.
+	// ============================================================================
+
+	/// Helper: build a from_stacked_raster operation from DummyImageSources with
+	/// specified colors, zoom ranges, and auto_overscale setting, then collect tiles
+	/// at a target zoom level and return the pixel color of the first tile.
+	async fn auto_overscale_color_test(
+		layers: &[(&[u8], u8)], // (RGBA color, max zoom level)
+		request_level: u8,
+	) -> Option<String> {
+		let mut sources: Vec<SourceEntry> = Vec::new();
+		let mut pyramid = TileBBoxPyramid::new_empty();
+		let mut traversal = Traversal::new_any();
+
+		// Build original sources
+		let mut original_sources: Vec<Box<dyn TileSource>> = Vec::new();
+		for &(color, max_level) in layers {
+			let mut src_pyramid = TileBBoxPyramid::new_empty();
+			for level in 0..=max_level {
+				src_pyramid.include_bbox(&TileBBox::new_full(level).unwrap());
+			}
+			pyramid.include_bbox_pyramid(&src_pyramid);
+			let source = DummyImageSource::from_color(color, 4, TileFormat::PNG, Some(src_pyramid)).unwrap();
+			traversal.intersect(&source.metadata().traversal).unwrap();
+			original_sources.push(Box::new(source));
+		}
+
+		let level_max = pyramid.get_level_max().unwrap();
+
+		// Wrap each source with raster_overscale (like auto_overscale=true does)
+		use crate::operations::raster::raster_overscale;
+		for source in original_sources {
+			let native_level_max = source.metadata().bbox_pyramid.get_level_max().unwrap();
+			let overscale_args = raster_overscale::Args {
+				level_base: Some(native_level_max),
+				level_max: Some(level_max),
+				enable_climbing: Some(true),
+			};
+			let wrapped_source = raster_overscale::Operation::new(source, &overscale_args).unwrap();
+			sources.push(SourceEntry {
+				source: Arc::new(Box::new(wrapped_source)),
+				native_level_max,
+			});
+		}
+
+		let metadata = TileSourceMetadata::new(
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			pyramid,
+			traversal,
+		);
+		let tilejson = TileJSON::default();
+
+		let op = Operation {
+			metadata,
+			sources,
+			source_types: vec![],
+			tilejson,
+		};
+
+		let coord = TileCoord::new(request_level, 0, 0).unwrap();
+		let result = op.get_tile_stream(coord.to_tile_bbox()).await.unwrap().to_vec().await;
+
+		if result.is_empty() {
+			return None;
+		}
+		let (_, mut tile) = result.into_iter().next().unwrap();
+		let color = tile.as_image().unwrap().average_color();
+		Some(rgba_to_hex(&color))
+	}
+
+	// Note on layer ordering in `get_tile()`:
+	// - entries[0] is the TOP/foreground layer (overlaid on top of others)
+	// - entries[N-1] is the BOTTOM/background layer
+	// The function iterates entries in order; each new entry becomes the
+	// background onto which the accumulated foreground is composited.
+
+	/// Single source at native level — should return source color.
+	#[tokio::test]
+	async fn test_auto_overscale_single_source_native_level() {
+		let color = auto_overscale_color_test(
+			&[(&[255, 0, 0, 255], 3)], // red, max level 3
+			3,
+		)
+		.await;
+		assert_eq!(color.as_deref(), Some("FF0000FF"));
+	}
+
+	/// Single source at overscaled level — all overscaled, should return None.
+	#[tokio::test]
+	async fn test_auto_overscale_single_source_overscaled_level() {
+		let color = auto_overscale_color_test(
+			&[(&[255, 0, 0, 255], 3)], // red, max level 3
+			5,
+		)
+		.await;
+		assert_eq!(color, None);
+	}
+
+	/// Two sources both overscaled — should return None.
+	#[tokio::test]
+	async fn test_auto_overscale_all_overscaled_returns_none() {
+		let color = auto_overscale_color_test(
+			&[
+				(&[255, 0, 0, 255], 2), // red, level 0-2
+				(&[0, 255, 0, 255], 3), // green, level 0-3
+			],
+			5, // both overscaled at level 5
+		)
+		.await;
+		assert_eq!(color, None);
+	}
+
+	/// Two semi-transparent sources, both native — should blend.
+	/// entries[0] = semi-transparent foreground (top), entries[1] = opaque background (bottom).
+	#[tokio::test]
+	async fn test_auto_overscale_two_native_layers_blend() {
+		let color = auto_overscale_color_test(
+			&[
+				(&[0, 255, 0, 128], 5), // green semi-transparent foreground (top)
+				(&[255, 0, 0, 255], 5), // red opaque background (bottom)
+			],
+			3,
+		)
+		.await;
+		assert!(color.is_some());
+		let c = color.unwrap();
+		// Should be a blend of green over red, not pure red or pure green
+		assert_ne!(c, "FF0000FF", "background should have been modified by foreground");
+		assert_ne!(c, "00FF0080", "foreground should have been composited onto background");
+	}
+
+	/// Foreground (top layer, entries[0]) is native, background (bottom, entries[1]) is overscaled.
+	/// The overscaled background should still be blended underneath the native foreground.
+	/// BUG: The optimization path at line 270 uses get_tile() for the overscaled entries,
+	///      but get_tile() returns None when has_native_tile is false, dropping the background.
+	#[tokio::test]
+	async fn test_auto_overscale_top_native_bottom_overscaled() {
+		let color = auto_overscale_color_test(
+			&[
+				(&[0, 0, 255, 128], 5), // blue semi-transparent foreground (top, native at level 5)
+				(&[255, 0, 0, 255], 3), // red opaque background (bottom, overscaled at level 5)
+			],
+			5,
+		)
+		.await;
+		// Foreground is native → tile should exist
+		assert!(color.is_some(), "tile should exist because foreground is native");
+		let c = color.unwrap();
+		// Blue semi-transparent over red opaque should produce a blended color
+		// If the bug exists, background is dropped and we get only semi-transparent blue "0000FF80"
+		assert_ne!(c, "0000FF80", "overscaled background was not blended in");
+	}
+
+	/// Foreground (top, entries[0]) is overscaled, background (bottom, entries[1]) is native.
+	/// The overscaled foreground should still be composited onto the native background.
+	/// BUG: The optimization path streams from the first entry when it's the only native one.
+	///      When entries[1] is native, the default path is used. But since entries[0] is
+	///      overscaled and listed first in get_tile(), the result might still be correct
+	///      IF the default path handles mixed native/overscaled correctly.
+	#[tokio::test]
+	async fn test_auto_overscale_top_overscaled_bottom_native() {
+		let color = auto_overscale_color_test(
+			&[
+				(&[0, 255, 0, 128], 3), // green semi-transparent foreground (top, overscaled at level 5)
+				(&[255, 0, 0, 255], 5), // red opaque background (bottom, native at level 5)
+			],
+			5,
+		)
+		.await;
+		// Background is native → tile should exist
+		assert!(color.is_some(), "tile should exist because background is native");
+		let c = color.unwrap();
+		// Green semi-transparent over red opaque should produce a blended color
+		// If the bug exists, the overscaled foreground is dropped → pure red
+		assert_ne!(c, "FF0000FF", "overscaled foreground was not blended in");
+	}
+
+	/// Three layers at different zoom levels: bottom=native, middle=overscaled, top=overscaled.
+	/// All three should be blended.
+	#[tokio::test]
+	async fn test_auto_overscale_three_layers_bottom_native() {
+		let color = auto_overscale_color_test(
+			&[
+				(&[0, 0, 255, 128], 2), // blue semi-transparent (top, overscaled at level 5)
+				(&[0, 255, 0, 128], 3), // green semi-transparent (middle, overscaled at level 5)
+				(&[255, 0, 0, 255], 5), // red opaque (bottom, native at level 5)
+			],
+			5,
+		)
+		.await;
+		// Bottom source is native → should produce a tile
+		assert!(color.is_some(), "tile should exist because bottom layer is native");
+		let c = color.unwrap();
+		// Pure red means overscaled layers were dropped
+		assert_ne!(c, "FF0000FF", "overscaled layers were not blended in");
+	}
+
+	/// Three layers at different zoom levels: bottom=overscaled, middle=overscaled, top=native.
+	/// All three should be blended.
+	#[tokio::test]
+	async fn test_auto_overscale_three_layers_top_native() {
+		let color = auto_overscale_color_test(
+			&[
+				(&[0, 0, 255, 128], 5), // blue semi-transparent (top, native at level 5)
+				(&[0, 255, 0, 128], 3), // green semi-transparent (middle, overscaled at level 5)
+				(&[255, 0, 0, 255], 2), // red opaque (bottom, overscaled at level 5)
+			],
+			5,
+		)
+		.await;
+		// Top source is native → should produce a tile
+		assert!(color.is_some(), "tile should exist because top layer is native");
+		let c = color.unwrap();
+		// Pure semi-transparent blue means overscaled layers were dropped
+		assert_ne!(c, "0000FF80", "overscaled layers were not blended in");
+	}
+
+	/// Opaque overscaled foreground should completely cover native background.
+	#[tokio::test]
+	async fn test_auto_overscale_opaque_overscaled_foreground() {
+		let color = auto_overscale_color_test(
+			&[
+				(&[0, 255, 0, 255], 3), // green opaque foreground (top, overscaled at level 5)
+				(&[255, 0, 0, 255], 5), // red opaque background (bottom, native at level 5)
+			],
+			5,
+		)
+		.await;
+		assert!(color.is_some(), "tile should exist because background is native");
+		// Opaque green foreground should completely cover red background
+		assert_eq!(color.unwrap(), "00FF00FF");
+	}
 }
