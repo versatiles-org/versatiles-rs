@@ -93,6 +93,7 @@ pub(crate) async fn convert_tiles_with_options(
 		tile_compression,
 		flip_y: opts.flip_y.unwrap_or(false),
 		swap_xy: opts.swap_xy.unwrap_or(false),
+		..Default::default()
 	};
 
 	// Create a new runtime for this conversion with event bridging to JavaScript
@@ -539,6 +540,7 @@ mod tests {
 			tile_compression: compression,
 			flip_y,
 			swap_xy,
+			..Default::default()
 		};
 
 		assert_eq!(params.tile_compression.is_some(), compression.is_some());

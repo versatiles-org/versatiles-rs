@@ -44,7 +44,9 @@ use crate::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, 
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{path::Path, sync::Arc};
-use versatiles_core::{GeoBBox, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileStream};
+use versatiles_core::{
+	GeoBBox, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream,
+};
 use versatiles_derive::context;
 
 /// Parameters that control how tiles are transformed during reading/conversion.
@@ -65,6 +67,13 @@ pub struct TilesConverterParameters {
 	/// Optional compression override. When set, tile payloads are re-encoded to this
 	/// [`TileCompression`] (e.g., Gzip → Brotli). If `None`, the source compression is kept.
 	pub tile_compression: Option<TileCompression>,
+	/// Optional tile format override. When set, tiles are re-encoded to this format
+	/// (e.g., PNG → WEBP). Only raster formats (AVIF, JPG, PNG, WEBP) are supported.
+	pub tile_format: Option<TileFormat>,
+	/// Optional quality parameter (0–100) for format conversion.
+	pub format_quality: Option<u8>,
+	/// Optional speed parameter (0–100) for format conversion.
+	pub format_speed: Option<u8>,
 	/// If `true`, flip the Y coordinate within the zoom level (TMS ↔ XYZ-like).
 	pub flip_y: bool,
 	/// If `true`, swap X and Y coordinates.
@@ -78,6 +87,9 @@ impl Default for TilesConverterParameters {
 			bbox_pyramid: None,
 			geo_bbox: None,
 			tile_compression: None,
+			tile_format: None,
+			format_quality: None,
+			format_speed: None,
 			flip_y: false,
 			swap_xy: false,
 		}
@@ -154,6 +166,10 @@ impl TilesConvertReader {
 			new_rp.bbox_pyramid.intersect(bbox_pyramid);
 		}
 
+		if let Some(tile_format) = cp.tile_format {
+			new_rp.tile_format = tile_format;
+		}
+
 		if let Some(tile_compression) = cp.tile_compression {
 			new_rp.tile_compression = tile_compression;
 		}
@@ -209,6 +225,14 @@ impl TileSource for TilesConvertReader {
 
 		let Some(mut tile) = tile else { return Ok(None) };
 
+		if let Some(tile_format) = self.converter_parameters.tile_format {
+			tile.change_format(
+				tile_format,
+				self.converter_parameters.format_quality,
+				self.converter_parameters.format_speed,
+			)?;
+		}
+
 		if let Some(compression) = self.converter_parameters.tile_compression {
 			tile.change_compression(compression)?;
 		}
@@ -240,6 +264,17 @@ impl TileSource for TilesConvertReader {
 				}
 				coord
 			});
+		}
+
+		if let Some(tile_format) = self.converter_parameters.tile_format {
+			let quality = self.converter_parameters.format_quality;
+			let speed = self.converter_parameters.format_speed;
+			stream = stream
+				.map_parallel_try(move |_coord, mut tile| {
+					tile.change_format(tile_format, quality, speed)?;
+					Ok(tile)
+				})
+				.unwrap_results();
 		}
 
 		if let Some(tile_compression) = self.converter_parameters.tile_compression {
@@ -308,6 +343,7 @@ mod tests {
 			flip_y,
 			swap_xy,
 			tile_compression: None,
+			..Default::default()
 		};
 		convert_tiles_container(reader, cp, &temp_file, runtime.clone()).await?;
 
@@ -345,6 +381,7 @@ mod tests {
 			flip_y: true,
 			swap_xy: true,
 			tile_compression: None,
+			..Default::default()
 		};
 
 		assert!(cp.bbox_pyramid.is_some());
@@ -454,5 +491,46 @@ mod tests {
 
 		// Bounds should be set from the pyramid (since no existing bounds to intersect)
 		assert!(tcr.tilejson().bounds.is_some());
+	}
+
+	#[tokio::test]
+	async fn test_format_conversion() -> Result<()> {
+		let reader = get_mock_reader(PNG, Uncompressed);
+		let cp = TilesConverterParameters {
+			tile_format: Some(WEBP),
+			format_quality: Some(80),
+			..Default::default()
+		};
+		let tcr = TilesConvertReader::new_from_reader(reader, cp)?;
+
+		assert_eq!(tcr.metadata().tile_format, WEBP);
+		assert_eq!(tcr.metadata().tile_compression, Uncompressed);
+
+		let coord = TileCoord::new(0, 0, 0)?;
+		let tile = tcr.get_tile(&coord).await?.unwrap();
+		assert_eq!(tile.format(), WEBP);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_format_conversion_with_compression() -> Result<()> {
+		let reader = get_mock_reader(PNG, Uncompressed);
+		let cp = TilesConverterParameters {
+			tile_format: Some(WEBP),
+			format_quality: Some(80),
+			tile_compression: Some(Gzip),
+			..Default::default()
+		};
+		let tcr = TilesConvertReader::new_from_reader(reader, cp)?;
+
+		assert_eq!(tcr.metadata().tile_format, WEBP);
+		assert_eq!(tcr.metadata().tile_compression, Gzip);
+
+		let coord = TileCoord::new(0, 0, 0)?;
+		let tile = tcr.get_tile(&coord).await?.unwrap();
+		assert_eq!(tile.format(), WEBP);
+
+		Ok(())
 	}
 }
