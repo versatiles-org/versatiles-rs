@@ -16,11 +16,12 @@
 //! tiles/TileJSON fails while streaming from the reader.
 
 use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
-use anyhow::{Result, bail};
+use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::{
 	fs::File,
+	io::Write,
 	path::{Path, PathBuf},
 	sync::Arc,
 };
@@ -35,23 +36,29 @@ use versatiles_derive::context;
 ///
 /// Internally uses a mutex around the tar `Builder` to allow asynchronous streaming
 /// of tiles while maintaining a single-writer model.
+/// Adapter that implements `std::io::Write` for a `&mut dyn DataWriterTrait`.
+struct DataWriterAdapter<'a>(&'a mut dyn DataWriterTrait);
+
+impl Write for DataWriterAdapter<'_> {
+	fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+		let blob = versatiles_core::Blob::from(buf.to_vec());
+		self
+			.0
+			.append(&blob)
+			.and_then(|range| usize::try_from(range.length).map_err(Into::into))
+			.map_err(std::io::Error::other)
+	}
+
+	fn flush(&mut self) -> std::io::Result<()> {
+		Ok(())
+	}
+}
+
 pub struct TarTilesWriter {}
 
-#[async_trait]
-impl TilesWriter for TarTilesWriter {
-	/// Write all tiles and `TileJSON` from `reader` into a tarball at `path`.
-	///
-	/// * Encodes `TileJSON` to a blob using `reader.parameters().tile_compression` and writes it as `tiles.json[.<compression>]`.
-	/// * Streams all tiles from the reader and writes them to `{z}/{x}/{y}.<format>[.<compression>]`.
-	/// * Creates entries with mode `0644` and writes them as regular files.
-	///
-	/// # Errors
-	/// Returns an error if the output file cannot be created, or if any tile/metadata
-	/// serialization or compression fails.
-	#[context("writing tar to path '{}'", path.display())]
-	async fn write_to_path(reader: &mut dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
-		let file = File::create(path)?;
-		let mut builder = Builder::new(file);
+impl TarTilesWriter {
+	async fn write_tar<W: Write + Send>(reader: &mut dyn TileSource, sink: W, runtime: TilesRuntime) -> Result<()> {
+		let mut builder = Builder::new(sink);
 
 		let parameters = reader.metadata();
 		let tile_format = &parameters.tile_format.clone();
@@ -85,12 +92,10 @@ impl TilesWriter for TarTilesWriter {
 
 							let blob = tile.into_blob(tile_compression)?;
 
-							// Build header
 							let mut header = Header::new_gnu();
 							header.set_size(blob.len());
 							header.set_mode(0o644);
 
-							// Write blob to file
 							builder.append_data(&mut header, path, blob.as_slice())?;
 						}
 						Ok(())
@@ -105,18 +110,24 @@ impl TilesWriter for TarTilesWriter {
 
 		Ok(())
 	}
+}
 
-	/// Not implemented: streaming a tar archive to an abstract `DataWriterTrait`.
-	///
-	/// # Errors
-	/// Always returns `not implemented`.
+#[async_trait]
+impl TilesWriter for TarTilesWriter {
+	#[context("writing tar to path '{}'", path.display())]
+	async fn write_to_path(reader: &mut dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
+		let file = File::create(path)?;
+		Self::write_tar(reader, file, runtime).await
+	}
+
 	#[context("writing tar to DataWriter")]
 	async fn write_to_writer(
-		_reader: &mut dyn TileSource,
-		_writer: &mut dyn DataWriterTrait,
-		_runtime: TilesRuntime,
+		reader: &mut dyn TileSource,
+		writer: &mut dyn DataWriterTrait,
+		runtime: TilesRuntime,
 	) -> Result<()> {
-		bail!("not implemented")
+		let adapter = DataWriterAdapter(writer);
+		Self::write_tar(reader, adapter, runtime).await
 	}
 }
 

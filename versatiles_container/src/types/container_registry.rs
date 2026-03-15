@@ -328,6 +328,12 @@ impl Default for ContainerRegistry {
 				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for TAR write"))?;
 			TarTilesWriter::write_to_path(boxed.as_mut(), &p, rt).await
 		});
+		reg.register_writer_data("tar", |r, mut w, rt| async move {
+			let mut boxed =
+				Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader for TAR write"))?;
+			TarTilesWriter::write_to_writer(boxed.as_mut(), w.as_mut(), rt).await
+		});
+
 		// PMTiles
 		reg.register_reader_file("pmtiles", |p, r| async move {
 			Ok(PMTilesReader::open_path(&p, r).await?.into_shared())
