@@ -61,6 +61,7 @@ async fn main() -> anyhow::Result<()> {
 - **`cli`** (default): Command-line interface
 - **`server`** (default): HTTP tile server
 - **`gdal`** (optional): GDAL raster support for reading GeoTIFF and other raster formats
+- **`ssh2`** (optional): SFTP support for writing tiles to remote servers
 
 ## Component Crates
 
@@ -86,6 +87,7 @@ VersaTiles is built from several focused crates that can be used independently:
 - `.pmtiles` - PMTiles (cloud-optimized)
 - `.tar` - TAR archives
 - Tile directories
+- SFTP remote destinations (`sftp://[user[:pass]@]host[:port]/path`, requires `ssh2` feature)
 
 ## License
 

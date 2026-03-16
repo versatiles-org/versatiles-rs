@@ -230,7 +230,7 @@ VersaTiles works with **tile containers** - files or directories containing map 
 - `.tar` - Simple archive format
 - Directories - Folder structure: `z/x/y.ext`
 
-**Remote access:** VersaTiles can read remote `.versatiles` and `.pmtiles` files via HTTPS:
+**Remote access:** VersaTiles can read remote `.versatiles` and `.pmtiles` files via HTTPS, and write to remote servers via SFTP (requires `ssh2` feature):
 
 ```sh
 versatiles serve https://download.versatiles.org/osm.versatiles
@@ -273,6 +273,8 @@ versatiles convert input.mbtiles output.versatiles
 | `--swap-xy`                | Swap X/Y coordinates (z/x/y → z/y/x)             | `--swap-xy`                  |
 | `--flip-y`                 | Flip tiles vertically                            | `--flip-y`                   |
 
+The output path can also be an SFTP URL (`sftp://[user[:pass]@]host[:port]/path`) to write directly to a remote server. This requires the `ssh2` feature. Only formats that support streaming writes (`.versatiles`, `.pmtiles`) are supported over SFTP.
+
 **Real-world examples:**
 
 ```sh
@@ -296,6 +298,10 @@ versatiles convert --flip-y \
 versatiles convert --min-zoom=1 --max-zoom=10 \
   https://download.versatiles.org/osm.versatiles \
   local-osm-filtered.versatiles
+
+# Write directly to a remote server via SFTP (requires ssh2 feature)
+versatiles convert tiles.mbtiles \
+  sftp://user@host/path/to/output.versatiles
 ```
 
 #### probe - Inspect Tile Containers
