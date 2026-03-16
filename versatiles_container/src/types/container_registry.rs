@@ -46,7 +46,7 @@ use std::{
 };
 #[cfg(feature = "ssh2")]
 use versatiles_core::io::DataWriterSftp;
-use versatiles_core::io::{DataReader, DataReaderBlob, DataReaderHttp};
+use versatiles_core::io::{DataReader, DataReaderBlob, DataReaderHttp, DataWriterTrait};
 #[cfg(test)]
 use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat};
 use versatiles_derive::context;
@@ -57,7 +57,6 @@ type ReadData = Box<dyn Fn(DataReader, TilesRuntime) -> ReadFuture + Send + Sync
 type ReadFile = Box<dyn Fn(PathBuf, TilesRuntime) -> ReadFuture + Send + Sync + 'static>;
 type WriteFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 type WriteFile = Box<dyn Fn(SharedTileSource, PathBuf, TilesRuntime) -> WriteFuture + Send + Sync + 'static>;
-use versatiles_core::io::DataWriterTrait;
 type WriteData =
 	Box<dyn Fn(SharedTileSource, Box<dyn DataWriterTrait>, TilesRuntime) -> WriteFuture + Send + Sync + 'static>;
 
@@ -198,11 +197,7 @@ impl ContainerRegistry {
 			return DirectoryWriter::write_to_path(boxed_reader.as_mut(), &path, runtime).await;
 		}
 
-		let extension = path
-			.extension()
-			.unwrap_or_default()
-			.to_string_lossy()
-			.to_ascii_lowercase();
+		let extension = sanitize_extension(&path.extension().unwrap_or_default().to_string_lossy());
 
 		let entry = self
 			.writers
@@ -233,11 +228,7 @@ impl ContainerRegistry {
 	async fn write_to_sftp(&self, reader: SharedTileSource, url: &str, runtime: TilesRuntime) -> Result<()> {
 		let remote_path = DataWriterSftp::path_from_url(url).ok_or_else(|| anyhow!("invalid SFTP URL: {url}"))?;
 
-		let extension = remote_path
-			.extension()
-			.unwrap_or_default()
-			.to_string_lossy()
-			.to_ascii_lowercase();
+		let extension = sanitize_extension(&remote_path.extension().unwrap_or_default().to_string_lossy());
 
 		let writer = DataWriterSftp::from_url(url)?;
 
