@@ -69,6 +69,7 @@ struct ReaderEntry {
 #[derive(Clone)]
 struct WriterEntry {
 	write_to_path: Arc<WriteFile>,
+	#[cfg_attr(not(feature = "ssh2"), allow(dead_code))]
 	write_to_writer: Option<Arc<WriteData>>,
 }
 
