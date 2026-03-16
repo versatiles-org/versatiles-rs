@@ -302,6 +302,12 @@ impl ContainerRegistry {
 		let ext = sanitize_extension(ext);
 		self.readers.contains_key(&ext)
 	}
+
+	#[must_use]
+	pub fn supports_writer_extension(&self, ext: &str) -> bool {
+		let ext = sanitize_extension(ext);
+		self.writers.contains_key(&ext)
+	}
 }
 
 impl Default for ContainerRegistry {
