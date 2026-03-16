@@ -1,11 +1,34 @@
 //! # from_stacked_raster operation
 //!
 //! Combines *multiple* raster tile sources by **alpha‑blending** the tiles for
-//! each coordinate.  
-//!  
-//! * Sources are evaluated **in the order given** – later sources overlay
-//!   earlier ones.  
-//! * Every source **must** produce raster tiles in the *same* resolution.  
+//! each coordinate.
+//!
+//! * Sources are evaluated **in the order given** – earlier (first-listed)
+//!   sources overlay later ones (the first source is the top/foreground).
+//! * Every source **must** produce raster tiles in the *same* resolution.
+//!
+//! ## `auto_overscale`
+//!
+//! When enabled, each source is automatically wrapped with [`raster_overscale`]
+//! so that sources missing native tiles at a requested zoom level still
+//! contribute via upscaled tiles from lower zoom levels.
+//!
+//! **"All overscaled → empty" policy:** After spatially filtering sources
+//! to those that overlap the requested bbox, if *every* remaining source
+//! would be overscaled (none have native data at this zoom level),
+//! `get_tile_stream` returns an empty stream instead of blending N upscaled
+//! tiles. This includes the edge case where some sources are native at the
+//! zoom level but don't cover the requested tile — they are removed by the
+//! spatial filter first, leaving only overscaled sources. This is
+//! intentional — a downstream `raster_overscale` on the *blended* output is
+//! more efficient (it upscales one blended tile instead of N individual
+//! tiles) and produces identical visual results.
+//!
+//! ## Code paths in `get_tile_stream`
+//!
+//! 1. **All overscaled** → returns an empty stream (see policy above).
+//! 2. **Default** → fetches and blends tiles coordinate-by-coordinate. For
+//!    large bounding boxes (> 32×32), the bbox is split into a grid first.
 //!
 //! This file contains both the [`Args`] struct used by the VPL parser and the
 //! [`Operation`] implementation that performs the blending.
@@ -35,8 +58,16 @@ struct Args {
 	/// Default: format of the first source.
 	format: Option<TileFormat>,
 
-	/// Whether to automatically overscale tiles when a source does not
-	/// provide tiles at the requested zoom level.
+	/// Whether to automatically wrap each source with `raster_overscale` so
+	/// that sources missing native tiles at the requested zoom level still
+	/// contribute via upscaled tiles.
+	///
+	/// When all sources overlapping a requested bbox are overscaled (none
+	/// have native data), this operation returns an empty stream. Place a
+	/// `raster_overscale` *after* `from_stacked_raster` in the pipeline to
+	/// cover those tiles — it is more efficient to upscale one blended tile
+	/// than N individual tiles.
+	///
 	/// Default: `false`.
 	auto_overscale: Option<bool>,
 }
@@ -99,12 +130,9 @@ struct Operation {
 /// Fetches and blends tiles from all sources for a single coordinate.
 ///
 /// Sources are processed in order (first source is foreground/top, later sources are background).
-/// Returns `None` only if no source produced a tile at all.
-///
-/// **Note:** The caller is responsible for ensuring that at least one native (non-overscaled)
-/// source exists at the requested level. This function performs pure blending and does not
-/// filter based on overscale status. The `get_tile_stream` method enforces this policy
-/// before calling this function.
+/// Returns `None` if no source produced a tile, or if all sources that contributed a tile
+/// are overscaled (none have native data for this coordinate). The latter enforces the
+/// "all overscaled → empty" policy at per-tile granularity.
 ///
 /// # Arguments
 /// * `coord` - The tile coordinate to fetch
@@ -261,7 +289,10 @@ impl TileSource for Operation {
 			return Ok(TileStream::empty());
 		}
 
-		// Return empty stream if no native (non-overscaled) source exists
+		// All remaining sources (after spatial filtering) are overscaled — return an
+		// empty stream. A downstream `raster_overscale` on the blended output handles
+		// these tiles more efficiently by upscaling one blended tile instead of N
+		// individual tiles, producing identical results.
 		if entries.iter().all(|entry| entry.is_overscaled) {
 			return Ok(TileStream::empty());
 		}
