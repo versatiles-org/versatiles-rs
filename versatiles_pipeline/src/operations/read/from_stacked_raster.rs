@@ -249,7 +249,7 @@ impl TileSource for Operation {
 
 		// Filter sources to only those that overlap with the bbox,
 		// and precompute whether each source is overscaled at this level
-		let mut entries: Vec<FilteredSourceEntry> = self
+		let entries: Vec<FilteredSourceEntry> = self
 			.sources
 			.iter()
 			.filter(|entry| entry.source.metadata().bbox_pyramid.overlaps_bbox(&bbox))
@@ -267,50 +267,6 @@ impl TileSource for Operation {
 		}
 
 		let tile_format = self.metadata.tile_format;
-
-		// If first source is the only non-overscaled one, stream from it and postprocess
-		if entries.iter().skip(1).all(|entry| entry.is_overscaled) {
-			let first_source = entries.remove(0).source;
-			let mut stream = first_source.get_tile_stream(bbox).await?;
-
-			// If there are other sources, overlay the tiles — but skip when the
-			// foreground tile is already opaque (avoids unnecessary decode/blend/re-encode).
-			if !entries.is_empty() {
-				let needs_reencode = first_source.metadata().tile_format != tile_format;
-				stream = stream
-					.map_parallel_async(move |c, mut tile| {
-						let entries = entries.clone();
-						async move {
-							if tile.is_opaque()? {
-								return Ok(tile);
-							}
-							if let Some((_coord, mut tile_bg)) = get_tile(c, entries).await? {
-								tile.as_image_mut()?.overlay(tile_bg.as_image()?)?;
-							}
-							Ok(tile)
-						}
-					})
-					.unwrap_results();
-
-				if needs_reencode {
-					stream = stream
-						.map_parallel_try(move |_coord, mut tile| {
-							tile.change_format(tile_format, None, None)?;
-							Ok(tile)
-						})
-						.unwrap_results();
-				}
-			} else if first_source.metadata().tile_format != tile_format {
-				stream = stream
-					.map_parallel_try(move |_coord, mut tile| {
-						tile.change_format(tile_format, None, None)?;
-						Ok(tile)
-					})
-					.unwrap_results();
-			}
-
-			return Ok(stream);
-		}
 
 		// If the bounding box is big, split into a grid and process each cell recursively
 		const MAX_BBOX_SIZE: u32 = 32;
@@ -660,10 +616,10 @@ mod tests {
 	}
 
 	#[rstest]
-	#[case(&[true], true)] // all overscaled -> Some (caller enforces native policy)
-	#[case(&[true, true], true)] // all overscaled -> Some (caller enforces native policy)
+	#[case(&[true], false)] // all overscaled -> None
+	#[case(&[true, true], false)] // all overscaled -> None
 	#[case(&[false], true)] // single native source -> Some
-	#[case(&[false, true], true)] // mixed (overscaled + native) -> Some
+	#[case(&[false, true], true)] // mixed (native + overscaled) -> Some
 	#[case(&[true, false], true)] // mixed (overscaled + native) -> Some
 	#[case(&[false, false], true)] // all native -> Some
 	#[tokio::test]
@@ -1390,7 +1346,9 @@ mod tests {
 		);
 	}
 
-	/// Opaque overscaled foreground should completely cover native background.
+	/// Opaque overscaled foreground short-circuits the loop before reaching the
+	/// native background. Since all contributing sources are overscaled, the
+	/// per-tile policy returns None — a downstream `raster_overscale` handles it.
 	#[tokio::test]
 	async fn test_auto_overscale_opaque_overscaled_foreground() {
 		let color = auto_overscale_color_test(
@@ -1401,8 +1359,83 @@ mod tests {
 			5,
 		)
 		.await;
-		assert!(color.is_some(), "tile should exist because background is native");
-		// Opaque green foreground should completely cover red background
-		assert_eq!(color.unwrap(), "00FF00FF");
+		// Opaque overscaled foreground breaks the loop before the native source is
+		// reached, so all contributing tiles are overscaled → returns None.
+		assert_eq!(color, None);
+	}
+
+	// ============================================================================
+	// Boundary tests: native vs overscaled at exact transition levels
+	// ============================================================================
+
+	/// Single source: verify exact boundary between native and overscaled.
+	#[rstest]
+	#[case(3, 2, true)] // request below native_max → returns tile
+	#[case(3, 3, true)] // request == native_max → returns tile
+	#[case(3, 4, false)] // request == native_max + 1 → all overscaled, returns None
+	#[case(3, 5, false)] // request > native_max + 1 → returns None
+	#[tokio::test]
+	async fn test_boundary_single_source(#[case] native_max: u8, #[case] request_level: u8, #[case] expect_tile: bool) {
+		let result = auto_overscale_color_test(&[(&[255, 0, 0, 255], native_max)], request_level).await;
+		assert_eq!(
+			result.is_some(),
+			expect_tile,
+			"native_max={native_max}, request_level={request_level}"
+		);
+	}
+
+	/// Two sources at different native levels: verify the transition where one
+	/// becomes overscaled but the other is still native.
+	#[rstest]
+	#[case(3, true)] // both native → returns tile
+	#[case(4, true)] // first overscaled (max=3), second still native (max=5) → returns tile
+	#[case(5, true)] // first overscaled, second at boundary (max=5) → returns tile
+	#[case(6, false)] // both overscaled → returns None
+	#[tokio::test]
+	async fn test_boundary_two_sources(#[case] request_level: u8, #[case] expect_tile: bool) {
+		let result = auto_overscale_color_test(
+			&[
+				(&[255, 0, 0, 128], 3), // source A: native up to level 3
+				(&[0, 255, 0, 255], 5), // source B: native up to level 5
+			],
+			request_level,
+		)
+		.await;
+		assert_eq!(result.is_some(), expect_tile, "request_level={request_level}");
+	}
+
+	/// "All overscaled returns None" regardless of source count (1, 2, 3).
+	#[rstest]
+	#[case(1)]
+	#[case(2)]
+	#[case(3)]
+	#[tokio::test]
+	async fn test_all_overscaled_returns_none_any_count(#[case] source_count: usize) {
+		// All sources have native data up to level 2; request at level 4.
+		let layers: Vec<(&[u8], u8)> = (0..source_count).map(|_| (&[255, 0, 0, 128][..], 2u8)).collect();
+		let result = auto_overscale_color_test(&layers, 4).await;
+		assert_eq!(
+			result, None,
+			"expected None for {source_count} source(s) all overscaled"
+		);
+	}
+
+	/// With 3 sources, having ANY single one native should produce a tile.
+	#[rstest]
+	#[case(0)] // only source 0 is native
+	#[case(1)] // only source 1 is native
+	#[case(2)] // only source 2 is native
+	#[tokio::test]
+	async fn test_mixed_any_native_produces_tile(#[case] native_index: usize) {
+		let mut layers: Vec<(&[u8], u8)> = vec![
+			(&[255, 0, 0, 128], 2), // overscaled at level 5
+			(&[0, 255, 0, 128], 2), // overscaled at level 5
+			(&[0, 0, 255, 255], 2), // overscaled at level 5
+		];
+		// Make exactly one source native at the request level
+		layers[native_index].1 = 5;
+
+		let result = auto_overscale_color_test(&layers, 5).await;
+		assert!(result.is_some(), "expected tile when source {native_index} is native");
 	}
 }
