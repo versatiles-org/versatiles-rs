@@ -377,6 +377,122 @@ pub mod tests {
 	use std::time::Instant;
 	use versatiles_core::TileBBoxPyramid;
 
+	#[test]
+	fn sanitize_extension_handles_dots_and_case() {
+		assert_eq!(sanitize_extension("TAR"), "tar");
+		assert_eq!(sanitize_extension(".tar"), "tar");
+		assert_eq!(sanitize_extension(".TAR"), "tar");
+		assert_eq!(sanitize_extension("...Versatiles..."), "versatiles");
+		assert_eq!(sanitize_extension(""), "");
+	}
+
+	#[test]
+	fn supports_reader_extension_known_and_unknown() {
+		let reg = ContainerRegistry::default();
+		assert!(reg.supports_reader_extension("tar"));
+		assert!(reg.supports_reader_extension("TAR"));
+		assert!(reg.supports_reader_extension(".tar"));
+		assert!(reg.supports_reader_extension("versatiles"));
+		assert!(!reg.supports_reader_extension("unknown"));
+		assert!(!reg.supports_reader_extension(""));
+	}
+
+	#[test]
+	fn supports_writer_extension_known_and_unknown() {
+		let reg = ContainerRegistry::default();
+		assert!(reg.supports_writer_extension("tar"));
+		assert!(reg.supports_writer_extension("versatiles"));
+		assert!(!reg.supports_writer_extension("unknown"));
+		assert!(!reg.supports_writer_extension(""));
+	}
+
+	#[test]
+	fn empty_registry_rejects_all_extensions() {
+		let reg = ContainerRegistry::new_empty();
+		assert!(!reg.supports_reader_extension("tar"));
+		assert!(!reg.supports_reader_extension("versatiles"));
+		assert!(!reg.supports_writer_extension("tar"));
+		assert!(!reg.supports_writer_extension("versatiles"));
+	}
+
+	#[test]
+	fn unknown_extension_read_error() {
+		#[tokio::main]
+		async fn inner() -> Result<()> {
+			let reg = ContainerRegistry::default();
+			let runtime = TilesRuntime::default();
+			let err = reg.get_reader_from_str("file.unknown_ext", runtime).await.unwrap_err();
+			assert!(err.to_string().contains("unknown"), "unexpected error: {err}");
+			Ok(())
+		}
+		inner().unwrap();
+	}
+
+	#[test]
+	fn unknown_extension_write_error() {
+		#[tokio::main]
+		async fn inner() -> Result<()> {
+			let reg = ContainerRegistry::default();
+			let runtime = TilesRuntime::default();
+			let reader = MockReader::new_mock(TileSourceMetadata::new(
+				TileFormat::PNG,
+				TileCompression::Uncompressed,
+				TileBBoxPyramid::new_full_up_to(0),
+				Traversal::ANY,
+			))?;
+			let path = std::env::temp_dir().join("file.unknown_ext");
+			let err = reg
+				.write_to_path(Arc::new(Box::new(reader)), &path, runtime)
+				.await
+				.unwrap_err();
+			assert!(err.to_string().contains("unknown"), "unexpected error: {err}");
+			Ok(())
+		}
+		inner().unwrap();
+	}
+
+	#[test]
+	fn register_same_extension_overwrites() {
+		let mut reg = ContainerRegistry::new_empty();
+		reg.register_reader::<VersaTilesReader>("custom");
+		reg.register_reader::<TarTilesReader>("custom");
+		// Should still work — the second registration replaces the first
+		assert!(reg.supports_reader_extension("custom"));
+	}
+
+	#[test]
+	fn blob_reading() {
+		#[tokio::main]
+		async fn inner() -> Result<()> {
+			// Create a versatiles file via temp file, then read it back as a blob
+			let reader = MockReader::new_mock(TileSourceMetadata::new(
+				TileFormat::PNG,
+				TileCompression::Uncompressed,
+				TileBBoxPyramid::new_full_up_to(1),
+				Traversal::ANY,
+			))?;
+
+			let temp = assert_fs::NamedTempFile::new("blob_test.versatiles")?;
+			let reg = ContainerRegistry::default();
+			let runtime = TilesRuntime::default();
+			reg.write_to_path(Arc::new(Box::new(reader)), temp.path(), runtime.clone())
+				.await?;
+
+			// Read the file into a blob and open it via the data reader path
+			let blob: Vec<u8> = std::fs::read(temp.path())?;
+			let data_reader: DataReader = Box::new(DataReaderBlob::from(blob));
+			let entry = reg.readers.get("versatiles").expect("versatiles reader must exist");
+			let open_reader = entry
+				.open_reader
+				.as_ref()
+				.expect("versatiles must support data reading");
+			let _tile_source = open_reader(data_reader, runtime).await?;
+
+			Ok(())
+		}
+		inner().unwrap();
+	}
+
 	/// Test writers and readers for various formats.
 	#[test]
 	fn writers_and_readers() -> Result<()> {
