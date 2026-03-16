@@ -111,9 +111,13 @@ struct Operation {
 /// * `entries` - Sources with precomputed overscale status for this request level
 async fn get_tile(coord: TileCoord, entries: Vec<FilteredSourceEntry>) -> Result<Option<(TileCoord, Tile)>> {
 	let mut tile = Option::<Tile>::None;
+	let mut has_native = false;
 
 	for entry in &entries {
 		if let Some(mut tile_bg) = entry.source.get_tile(&coord).await? {
+			if !entry.is_overscaled {
+				has_native = true;
+			}
 			if let Some(mut tile_fg) = tile {
 				if tile_bg.is_empty()? {
 					tile_bg = tile_fg;
@@ -126,6 +130,10 @@ async fn get_tile(coord: TileCoord, entries: Vec<FilteredSourceEntry>) -> Result
 				break;
 			}
 		}
+	}
+
+	if !has_native {
+		return Ok(None);
 	}
 
 	Ok(tile.map(|t| (coord, t)))
