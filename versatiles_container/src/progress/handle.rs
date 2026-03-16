@@ -216,9 +216,8 @@ fn make_bar(pos: u64, len: u64, width: usize) -> String {
 	let whole = exact.floor() as usize;
 	let rem = exact - whole as f64;
 
-	// 7 partial steps + space (so 8 levels).
-	// Highest density first to match original visuals.
-	let partials = ["█", "▉", "▊", "▋", "▌", "▍", "▎", "▏"]; // last is thinnest
+	// 8 partial steps from thinnest to fullest (index 0 = empty, 7 = nearly full).
+	let partials = ["▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"];
 
 	let mut s = String::with_capacity(width);
 	// Full cells
