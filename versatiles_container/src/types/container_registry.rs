@@ -173,7 +173,7 @@ impl ContainerRegistry {
 				let open_reader = entry
 					.open_reader
 					.as_ref()
-					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?;
+					.ok_or_else(|| anyhow!("file extension '{extension}' does not support blob reading"))?;
 				open_reader(reader, runtime).await
 			}
 		}
@@ -207,7 +207,7 @@ impl ContainerRegistry {
 		let entry = self
 			.writers
 			.get(&extension)
-			.ok_or_else(|| anyhow!("Error when reading: file extension '{extension}' unknown"))?;
+			.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?;
 		(entry.write_to_path)(reader, path.clone(), runtime).await?;
 
 		Ok(())
