@@ -136,7 +136,7 @@ impl ContainerRegistry {
 			DataLocation::Url(url) => {
 				let reader: DataReader = match url.scheme() {
 					#[cfg(feature = "ssh2")]
-					"sftp" => DataReaderSftp::from_url(url.as_str())
+					"sftp" => DataReaderSftp::from_url(&url)
 						.with_context(|| format!("Failed to create SFTP data reader for URL '{url}'"))?,
 					"http" | "https" => DataReaderHttp::from_url(url.clone())
 						.with_context(|| format!("Failed to create HTTP data reader for URL '{url}'"))?,
@@ -233,11 +233,12 @@ impl ContainerRegistry {
 	#[cfg(feature = "ssh2")]
 	#[context("writing tiles to SFTP '{url}'")]
 	async fn write_to_sftp(&self, reader: SharedTileSource, url: &str, runtime: TilesRuntime) -> Result<()> {
-		let remote_path = DataWriterSftp::path_from_url(url).ok_or_else(|| anyhow!("invalid SFTP URL: {url}"))?;
+		let url = reqwest::Url::parse(url).with_context(|| format!("invalid SFTP URL: {url}"))?;
+		let remote_path = DataWriterSftp::path_from_url(&url);
 
 		let extension = sanitize_extension(&remote_path.extension().unwrap_or_default().to_string_lossy());
 
-		let writer = DataWriterSftp::from_url(url)?;
+		let writer = DataWriterSftp::from_url(&url)?;
 
 		let entry = self
 			.writers

@@ -1,13 +1,13 @@
-use super::DataReaderTrait;
+use super::{DataReaderTrait, sftp_utils};
 use crate::{Blob, ByteRange};
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use ssh2::Session;
 use std::{
 	io::{Read, Seek, SeekFrom},
-	net::TcpStream,
 	sync::Mutex,
 };
+use reqwest::Url;
 
 /// A struct that provides reading capabilities from a remote file via SFTP.
 pub struct DataReaderSftp {
@@ -28,66 +28,22 @@ impl DataReaderSftp {
 	/// Opens a remote file for reading via SFTP.
 	///
 	/// # Arguments
-	/// * `url` - An SFTP URL of the form `sftp://[user[:pass]@]host[:port]/path`
+	/// * `url` - A parsed SFTP URL
 	///
 	/// # Authentication priority
 	/// 1. Credentials in URL (password auth)
 	/// 2. SSH agent
 	/// 3. Default key files (~/.ssh/id_ed25519, id_rsa, id_ecdsa)
-	pub fn from_url(url: &str) -> Result<Box<Self>> {
-		// Reuse the shared URL parser and auth helpers from the writer module
-		let parsed = super::data_writer_sftp::parse_sftp_url(url)?;
-		let username = parsed.user.as_deref().unwrap_or("root");
+	pub fn from_url(url: &Url) -> Result<Box<Self>> {
+		let session = sftp_utils::open_session(url)?;
+		let path = sftp_utils::remote_path(url);
+		let name = sftp_utils::display_name(url);
 
-		// Connect TCP
-		let tcp = TcpStream::connect((&*parsed.host, parsed.port))
-			.with_context(|| format!("failed to connect to {}:{}", parsed.host, parsed.port))?;
-
-		// SSH handshake
-		let mut session = Session::new()?;
-		session.set_tcp_stream(tcp);
-		session.handshake()?;
-
-		// Authenticate
-		let auth_result = if let Some(ref password) = parsed.password {
-			session.userauth_password(username, password)
-		} else {
-			Err(ssh2::Error::from_errno(ssh2::ErrorCode::Session(-1)))
-		};
-
-		if auth_result.is_err() {
-			let agent_result = super::data_writer_sftp::try_agent_auth(&session, username);
-			if agent_result.is_err() {
-				super::data_writer_sftp::try_key_auth(&session, username).with_context(|| {
-					format!(
-						"all authentication methods failed for {username}@{}:{}",
-						parsed.host, parsed.port
-					)
-				})?;
-			}
-		}
-
-		if !session.authenticated() {
-			bail!(
-				"SSH authentication failed for {username}@{}:{}",
-				parsed.host,
-				parsed.port
-			);
-		}
-
-		// Open SFTP channel and open file for reading
 		let sftp = session.sftp()?;
-		let stat = sftp
-			.stat(&parsed.path)
-			.with_context(|| format!("failed to stat remote file {:?}", parsed.path))?;
+		let stat = sftp.stat(&path).with_context(|| format!("failed to stat remote file {:?}", path))?;
 		let size = stat.size.unwrap_or(0);
 
-		let file = sftp
-			.open(&parsed.path)
-			.with_context(|| format!("failed to open remote file {:?}", parsed.path))?;
-
-		// Build a sanitized name (without credentials)
-		let name = format!("sftp://{}:{}{}", parsed.host, parsed.port, parsed.path.display());
+		let file = sftp.open(&path).with_context(|| format!("failed to open remote file {:?}", path))?;
 
 		Ok(Box::new(DataReaderSftp {
 			file: Mutex::new(file),
@@ -95,12 +51,6 @@ impl DataReaderSftp {
 			name,
 			_session: session,
 		}))
-	}
-
-	/// Returns the remote path extracted from an SFTP URL (for extension detection).
-	#[must_use]
-	pub fn path_from_url(url: &str) -> Option<std::path::PathBuf> {
-		super::data_writer_sftp::parse_sftp_url(url).ok().map(|u| u.path)
 	}
 }
 
@@ -125,23 +75,5 @@ impl DataReaderTrait for DataReaderSftp {
 
 	fn get_name(&self) -> &str {
 		&self.name
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn test_path_from_url() {
-		assert_eq!(
-			DataReaderSftp::path_from_url("sftp://host/data/tiles.versatiles"),
-			Some(std::path::PathBuf::from("/data/tiles.versatiles"))
-		);
-	}
-
-	#[test]
-	fn test_path_from_url_invalid() {
-		assert_eq!(DataReaderSftp::path_from_url("not-sftp"), None);
 	}
 }

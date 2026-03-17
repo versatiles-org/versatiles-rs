@@ -28,6 +28,8 @@ mod data_writer_file;
 mod data_reader_sftp;
 #[cfg(feature = "ssh2")]
 mod data_writer_sftp;
+#[cfg(feature = "ssh2")]
+mod sftp_utils;
 mod value_reader;
 mod value_reader_blob;
 mod value_reader_file;
