@@ -17,15 +17,15 @@ pub struct DataWriterSftp {
 }
 
 /// Parsed components of an SFTP URL.
-struct SftpUrl {
-	user: Option<String>,
-	password: Option<String>,
-	host: String,
-	port: u16,
-	path: PathBuf,
+pub(super) struct SftpUrl {
+	pub(super) user: Option<String>,
+	pub(super) password: Option<String>,
+	pub(super) host: String,
+	pub(super) port: u16,
+	pub(super) path: PathBuf,
 }
 
-fn parse_sftp_url(url: &str) -> Result<SftpUrl> {
+pub(super) fn parse_sftp_url(url: &str) -> Result<SftpUrl> {
 	let rest = url.strip_prefix("sftp://").context("URL must start with sftp://")?;
 
 	// Split into authority and path at the first '/'
@@ -73,7 +73,7 @@ fn parse_sftp_url(url: &str) -> Result<SftpUrl> {
 }
 
 /// Try authenticating with the SSH agent.
-fn try_agent_auth(session: &Session, username: &str) -> Result<()> {
+pub(super) fn try_agent_auth(session: &Session, username: &str) -> Result<()> {
 	let mut agent = session.agent()?;
 	agent.connect()?;
 	agent.list_identities()?;
@@ -86,7 +86,7 @@ fn try_agent_auth(session: &Session, username: &str) -> Result<()> {
 }
 
 /// Try authenticating with default key files.
-fn try_key_auth(session: &Session, username: &str) -> Result<()> {
+pub(super) fn try_key_auth(session: &Session, username: &str) -> Result<()> {
 	let home = dirs_home()?;
 	let key_files = [
 		home.join(".ssh/id_ed25519"),

@@ -25,6 +25,8 @@ mod data_writer;
 mod data_writer_blob;
 mod data_writer_file;
 #[cfg(feature = "ssh2")]
+mod data_reader_sftp;
+#[cfg(feature = "ssh2")]
 mod data_writer_sftp;
 mod value_reader;
 mod value_reader_blob;
@@ -41,6 +43,8 @@ pub use data_reader_http::*;
 pub use data_writer::*;
 pub use data_writer_blob::*;
 pub use data_writer_file::*;
+#[cfg(feature = "ssh2")]
+pub use data_reader_sftp::*;
 #[cfg(feature = "ssh2")]
 pub use data_writer_sftp::*;
 pub use value_reader::*;

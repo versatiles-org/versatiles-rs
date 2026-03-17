@@ -45,7 +45,7 @@ use std::{
 	sync::Arc,
 };
 #[cfg(feature = "ssh2")]
-use versatiles_core::io::DataWriterSftp;
+use versatiles_core::io::{DataReaderSftp, DataWriterSftp};
 use versatiles_core::io::{DataReader, DataReaderBlob, DataReaderHttp, DataWriterTrait};
 #[cfg(test)]
 use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat};
@@ -134,8 +134,14 @@ impl ContainerRegistry {
 
 		match data_source.into_location() {
 			DataLocation::Url(url) => {
-				let reader = DataReaderHttp::from_url(url.clone())
-					.with_context(|| format!("Failed to create HTTP data reader for URL '{url}'"))?;
+				let reader: DataReader = match url.scheme() {
+					#[cfg(feature = "ssh2")]
+					"sftp" => DataReaderSftp::from_url(url.as_str())
+						.with_context(|| format!("Failed to create SFTP data reader for URL '{url}'"))?,
+					"http" | "https" => DataReaderHttp::from_url(url.clone())
+						.with_context(|| format!("Failed to create HTTP data reader for URL '{url}'"))?,
+					scheme => bail!("unsupported URL scheme '{scheme}' in '{url}'"),
+				};
 
 				let entry = self
 					.readers
