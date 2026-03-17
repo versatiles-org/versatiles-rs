@@ -2,12 +2,12 @@ use super::{DataReaderTrait, sftp_utils};
 use crate::{Blob, ByteRange};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use reqwest::Url;
 use ssh2::Session;
 use std::{
 	io::{Read, Seek, SeekFrom},
 	sync::Mutex,
 };
-use reqwest::Url;
 
 /// A struct that provides reading capabilities from a remote file via SFTP.
 pub struct DataReaderSftp {
@@ -24,33 +24,36 @@ impl std::fmt::Debug for DataReaderSftp {
 	}
 }
 
-impl DataReaderSftp {
+impl TryFrom<&Url> for DataReaderSftp {
+	type Error = anyhow::Error;
+
 	/// Opens a remote file for reading via SFTP.
-	///
-	/// # Arguments
-	/// * `url` - A parsed SFTP URL
 	///
 	/// # Authentication priority
 	/// 1. Credentials in URL (password auth)
 	/// 2. SSH agent
 	/// 3. Default key files (~/.ssh/id_ed25519, id_rsa, id_ecdsa)
-	pub fn from_url(url: &Url) -> Result<Box<Self>> {
+	fn try_from(url: &Url) -> Result<DataReaderSftp> {
 		let session = sftp_utils::open_session(url)?;
 		let path = sftp_utils::remote_path(url);
 		let name = sftp_utils::display_name(url);
 
 		let sftp = session.sftp()?;
-		let stat = sftp.stat(&path).with_context(|| format!("failed to stat remote file {:?}", path))?;
+		let stat = sftp
+			.stat(&path)
+			.with_context(|| format!("failed to stat remote file {:?}", path))?;
 		let size = stat.size.unwrap_or(0);
 
-		let file = sftp.open(&path).with_context(|| format!("failed to open remote file {:?}", path))?;
+		let file = sftp
+			.open(&path)
+			.with_context(|| format!("failed to open remote file {:?}", path))?;
 
-		Ok(Box::new(DataReaderSftp {
+		Ok(DataReaderSftp {
 			file: Mutex::new(file),
 			size,
 			name,
 			_session: session,
-		}))
+		})
 	}
 }
 

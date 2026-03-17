@@ -16,7 +16,7 @@
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     let url = Url::parse("https://example.com/data.bin").unwrap();
-//!     let mut reader = DataReaderHttp::from_url(url)?;
+//!     let mut reader: Box<DataReaderHttp> = url.try_into()?;
 //!
 //!     // Reading a range of data
 //!     let range = ByteRange::new(0, 15);
@@ -58,17 +58,11 @@ impl fmt::Debug for DataReaderHttp {
 	}
 }
 
-impl DataReaderHttp {
-	/// Creates a `DataReaderHttp` from a URL.
-	///
-	/// # Arguments
-	///
-	/// * `url` - The URL of the HTTP(S) endpoint.
-	///
-	/// # Returns
-	///
-	/// * A Result containing a boxed `DataReaderHttp` or an error.
-	pub fn from_url(mut url: Url) -> Result<Box<DataReaderHttp>> {
+impl TryFrom<&Url> for DataReaderHttp {
+	type Error = anyhow::Error;
+
+	fn try_from(url: &Url) -> Result<DataReaderHttp> {
+		let mut url = url.clone();
 		let username = if url.username().is_empty() {
 			None
 		} else {
@@ -86,8 +80,8 @@ impl DataReaderHttp {
 		};
 
 		// Strip credentials from the URL before any logging or error messages
-		url.set_username("").ok();
-		url.set_password(None).ok();
+		url.set_username("").map_err(|_| anyhow!("failed to set username"))?;
+		url.set_password(None).map_err(|_| anyhow!("failed to set password"))?;
 
 		match url.scheme() {
 			"http" | "https" => (),
@@ -99,15 +93,17 @@ impl DataReaderHttp {
 			.use_rustls_tls()
 			.build()?;
 
-		Ok(Box::new(DataReaderHttp {
+		Ok(DataReaderHttp {
 			client,
 			name: url.to_string(),
 			url,
 			username,
 			password,
-		}))
+		})
 	}
+}
 
+impl DataReaderHttp {
 	fn apply_auth(&self, builder: RequestBuilder) -> RequestBuilder {
 		if let Some(username) = &self.username {
 			builder.basic_auth(username, self.password.as_deref())
@@ -278,17 +274,17 @@ mod tests {
 		let invalid_url = Url::parse("ftp://www.example.com").unwrap();
 
 		// Test with a valid URL
-		let data_reader_http = DataReaderHttp::from_url(valid_url);
+		let data_reader_http = DataReaderHttp::try_from(&valid_url);
 		assert!(data_reader_http.is_ok());
 
 		// Test with an invalid URL
-		let data_reader_http = DataReaderHttp::from_url(invalid_url);
+		let data_reader_http = DataReaderHttp::try_from(&invalid_url);
 		assert!(data_reader_http.is_err());
 	}
 
 	async fn read_range_helper(url: &str, offset: u64, length: u64, expected: &str) -> Result<()> {
 		let url = Url::parse(url).unwrap();
-		let data_reader_http = DataReaderHttp::from_url(url)?;
+		let data_reader_http = DataReaderHttp::try_from(&url)?;
 
 		// Define a range to read
 		let range = ByteRange { offset, length };
@@ -328,7 +324,7 @@ mod tests {
 	#[test]
 	fn get_name() -> Result<()> {
 		let url = "https://www.example.com/";
-		let data_reader_http = DataReaderHttp::from_url(Url::parse(url).unwrap())?;
+		let data_reader_http = DataReaderHttp::try_from(&Url::parse(url).unwrap())?;
 
 		// Check if the name matches the original URL
 		assert_eq!(data_reader_http.get_name(), url);
@@ -339,7 +335,7 @@ mod tests {
 	#[test]
 	fn from_url_with_credentials() -> Result<()> {
 		let url = Url::parse("https://user:p%40ss@example.com/data.bin").unwrap();
-		let reader = DataReaderHttp::from_url(url)?;
+		let reader = DataReaderHttp::try_from(&url)?;
 
 		assert_eq!(reader.username.as_deref(), Some("user"));
 		assert_eq!(reader.password.as_deref(), Some("p@ss"));
@@ -353,7 +349,7 @@ mod tests {
 	#[test]
 	fn from_url_without_credentials() -> Result<()> {
 		let url = Url::parse("https://example.com/data.bin").unwrap();
-		let reader = DataReaderHttp::from_url(url)?;
+		let reader = DataReaderHttp::try_from(&url)?;
 
 		assert_eq!(reader.username, None);
 		assert_eq!(reader.password, None);

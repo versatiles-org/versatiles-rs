@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail};
+use reqwest::Url;
 use ssh2::Session;
 use std::{net::TcpStream, path::PathBuf};
-use reqwest::Url;
 
 /// Opens an authenticated SSH session from an SFTP URL.
 ///
@@ -12,7 +12,11 @@ use reqwest::Url;
 pub(super) fn open_session(url: &Url) -> Result<Session> {
 	let host = url.host_str().context("SFTP URL has no host")?;
 	let port = url.port().unwrap_or(22);
-	let username = if url.username().is_empty() { "root" } else { url.username() };
+	let username = if url.username().is_empty() {
+		"root"
+	} else {
+		url.username()
+	};
 
 	// Connect TCP
 	let tcp = TcpStream::connect((host, port)).with_context(|| format!("failed to connect to {host}:{port}"))?;

@@ -1,12 +1,12 @@
 use super::{DataWriterTrait, sftp_utils};
 use crate::{Blob, ByteRange};
 use anyhow::{Context, Result};
+use reqwest::Url;
 use ssh2::Session;
 use std::{
 	io::{Seek, SeekFrom, Write},
 	path::PathBuf,
 };
-use reqwest::Url;
 
 /// A struct that provides writing capabilities to a remote file via SFTP.
 pub struct DataWriterSftp {
@@ -84,6 +84,9 @@ mod tests {
 	#[test]
 	fn test_path_from_url() {
 		let url = Url::parse("sftp://host/data/out.versatiles").unwrap();
-		assert_eq!(DataWriterSftp::path_from_url(&url), PathBuf::from("/data/out.versatiles"));
+		assert_eq!(
+			DataWriterSftp::path_from_url(&url),
+			PathBuf::from("/data/out.versatiles")
+		);
 	}
 }

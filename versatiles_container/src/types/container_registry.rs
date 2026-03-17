@@ -44,9 +44,9 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
+use versatiles_core::io::{DataReader, DataReaderBlob, DataReaderHttp, DataWriterTrait};
 #[cfg(feature = "ssh2")]
 use versatiles_core::io::{DataReaderSftp, DataWriterSftp};
-use versatiles_core::io::{DataReader, DataReaderBlob, DataReaderHttp, DataWriterTrait};
 #[cfg(test)]
 use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat};
 use versatiles_derive::context;
@@ -136,10 +136,14 @@ impl ContainerRegistry {
 			DataLocation::Url(url) => {
 				let reader: DataReader = match url.scheme() {
 					#[cfg(feature = "ssh2")]
-					"sftp" => DataReaderSftp::from_url(&url)
-						.with_context(|| format!("Failed to create SFTP data reader for URL '{url}'"))?,
-					"http" | "https" => DataReaderHttp::from_url(url.clone())
-						.with_context(|| format!("Failed to create HTTP data reader for URL '{url}'"))?,
+					"sftp" => Box::new(
+						DataReaderSftp::try_from(&url)
+							.with_context(|| format!("Failed to create SFTP data reader for URL '{url}'"))?,
+					),
+					"http" | "https" => Box::new(
+						DataReaderHttp::try_from(&url)
+							.with_context(|| format!("Failed to create HTTP data reader for URL '{url}'"))?,
+					),
 					scheme => bail!("unsupported URL scheme '{scheme}' in '{url}'"),
 				};
 
