@@ -33,7 +33,7 @@ impl DataWriterSftp {
 		let sftp = session.sftp()?;
 		let file = sftp
 			.create(&path)
-			.with_context(|| format!("failed to create remote file {:?}", path))?;
+			.with_context(|| format!("failed to create remote file {path:?}"))?;
 
 		Ok(DataWriterSftp {
 			file,

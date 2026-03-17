@@ -16,7 +16,7 @@
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     let url = Url::parse("https://example.com/data.bin").unwrap();
-//!     let mut reader: Box<DataReaderHttp> = url.try_into()?;
+//!     let mut reader = DataReaderHttp::try_from(&url)?;
 //!
 //!     // Reading a range of data
 //!     let range = ByteRange::new(0, 15);

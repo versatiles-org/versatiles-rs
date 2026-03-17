@@ -41,12 +41,12 @@ impl TryFrom<&Url> for DataReaderSftp {
 		let sftp = session.sftp()?;
 		let stat = sftp
 			.stat(&path)
-			.with_context(|| format!("failed to stat remote file {:?}", path))?;
+			.with_context(|| format!("failed to stat remote file {path:?}"))?;
 		let size = stat.size.unwrap_or(0);
 
 		let file = sftp
 			.open(&path)
-			.with_context(|| format!("failed to open remote file {:?}", path))?;
+			.with_context(|| format!("failed to open remote file {path:?}"))?;
 
 		Ok(DataReaderSftp {
 			file: Mutex::new(file),
@@ -62,7 +62,7 @@ impl DataReaderTrait for DataReaderSftp {
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
 		let mut file = self.file.lock().map_err(|e| anyhow::anyhow!("lock poisoned: {e}"))?;
 		file.seek(SeekFrom::Start(range.offset))?;
-		let mut buffer = vec![0u8; range.length as usize];
+		let mut buffer = vec![0u8; usize::try_from(range.length)?];
 		file.read_exact(&mut buffer).with_context(|| {
 			format!(
 				"failed to read {} bytes at offset {} from '{}'",
