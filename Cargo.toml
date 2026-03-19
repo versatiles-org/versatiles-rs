@@ -105,7 +105,7 @@ debug-assertions = false
 codegen-units = 1
 panic = "unwind"
 incremental = false
-overflow-checks = true
+overflow-checks = false
 strip = true
 
 [workspace.dependencies]
