@@ -108,7 +108,7 @@ enum Commands {
 }
 
 /// Main function for running the command-line interface
-fn main() -> Result<()> {
+fn main() {
 	let cli = Cli::parse();
 
 	// Initialize logger and set log level based on verbosity flag
@@ -145,7 +145,13 @@ fn main() -> Result<()> {
 		create_runtime()
 	};
 
-	run(&cli, &runtime)
+	if let Err(err) = run(&cli, &runtime) {
+		eprintln!("\nError: {err}");
+		for cause in err.chain().skip(1) {
+			eprintln!("  Caused by: {cause}");
+		}
+		std::process::exit(1);
+	}
 }
 
 /// Helper function for running subcommands
