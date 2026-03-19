@@ -73,36 +73,40 @@ fn reproject_to_float_dataset(
 		use gdal_sys::{
 			CPLErr, CPLGetLastErrorMsg, CPLMalloc, CSLSetNameValue, GDALChunkAndWarpMulti,
 			GDALCreateGenImgProjTransformer2, GDALCreateWarpOperation, GDALCreateWarpOptions,
-			GDALDestroyGenImgProjTransformer, GDALDestroyWarpOperation, GDALGenImgProjTransform, GDALWarpOperationH,
-			GDALWarpOptions,
+			GDALDestroyGenImgProjTransformer, GDALDestroyWarpOperation, GDALDestroyWarpOptions, GDALGenImgProjTransform,
+			GDALWarpOperationH,
 		};
 
-		let mut options: GDALWarpOptions = *GDALCreateWarpOptions();
-		options.hSrcDS = h_src_ds;
-		options.hDstDS = h_dst_ds;
+		let options_ptr = GDALCreateWarpOptions();
+		(*options_ptr).hSrcDS = h_src_ds;
+		(*options_ptr).hDstDS = h_dst_ds;
 
-		CSLSetNameValue(options.papszWarpOptions, c"NUM_THREADS".as_ptr(), c"ALL_CPUS".as_ptr());
+		(*options_ptr).papszWarpOptions = CSLSetNameValue(
+			(*options_ptr).papszWarpOptions,
+			c"NUM_THREADS".as_ptr(),
+			c"ALL_CPUS".as_ptr(),
+		);
 
 		// Band mapping: source band 1 -> dest band 1
-		options.nBandCount = 1;
+		(*options_ptr).nBandCount = 1;
 		let n = std::mem::size_of::<i32>();
-		options.panSrcBands = CPLMalloc(n).cast::<i32>();
-		options.panDstBands = CPLMalloc(n).cast::<i32>();
-		options.panSrcBands.write(1);
-		options.panDstBands.write(1);
+		(*options_ptr).panSrcBands = CPLMalloc(n).cast::<i32>();
+		(*options_ptr).panDstBands = CPLMalloc(n).cast::<i32>();
+		(*options_ptr).panSrcBands.write(1);
+		(*options_ptr).panDstBands.write(1);
 
 		// Use Bilinear for DEM — preserves elevation values better than averaging
-		options.eResampleAlg = ResampleAlg::Bilinear.as_gdal();
-		options.dfWarpMemoryLimit = 512.0 * 1024.0 * 1024.0;
+		(*options_ptr).eResampleAlg = ResampleAlg::Bilinear.as_gdal();
+		(*options_ptr).dfWarpMemoryLimit = 512.0 * 1024.0 * 1024.0;
 
 		if let Some(ref geom) = cutline_geom {
-			options.hCutline = geom.c_geometry();
+			(*options_ptr).hCutline = geom.c_geometry();
 		}
 
-		options.pTransformerArg = GDALCreateGenImgProjTransformer2(h_src_ds, h_dst_ds, core::ptr::null_mut());
-		options.pfnTransformer = Some(GDALGenImgProjTransform);
+		(*options_ptr).pTransformerArg = GDALCreateGenImgProjTransformer2(h_src_ds, h_dst_ds, core::ptr::null_mut());
+		(*options_ptr).pfnTransformer = Some(GDALGenImgProjTransform);
 
-		let operation: GDALWarpOperationH = GDALCreateWarpOperation(&raw const options);
+		let operation: GDALWarpOperationH = GDALCreateWarpOperation(options_ptr);
 
 		#[allow(clippy::cast_possible_truncation)]
 		let rv = GDALChunkAndWarpMulti(
@@ -114,7 +118,8 @@ fn reproject_to_float_dataset(
 		);
 
 		GDALDestroyWarpOperation(operation);
-		GDALDestroyGenImgProjTransformer(options.pTransformerArg);
+		GDALDestroyGenImgProjTransformer((*options_ptr).pTransformerArg);
+		GDALDestroyWarpOptions(options_ptr);
 
 		if rv != CPLErr::CE_None {
 			bail!("{:?}", CPLGetLastErrorMsg());
