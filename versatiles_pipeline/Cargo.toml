@@ -27,7 +27,6 @@ imageproc = { workspace = true, features = ["text"] }
 itertools = { workspace = true, features = ["use_alloc"] }
 log.workspace = true
 moka.workspace = true
-dashmap.workspace = true
 nom = { version = "8.0.0" }
 nom-language = { version = "0.1.0" }
 regex.workspace = true

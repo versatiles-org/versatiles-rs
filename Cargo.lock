@@ -4524,7 +4524,6 @@ dependencies = [
  "anyhow",
  "assert_fs",
  "async-trait",
- "dashmap",
  "deadpool",
  "futures",
  "gdal",
