@@ -158,9 +158,11 @@ impl RasterSource {
 		// Instance automatically returned to pool when dropped
 
 		let band_mapping = self.band_mapping.clone();
-		let channel_count = band_mapping.len();
+		let channel_count = band_mapping.len(); // color bands + alpha
 		let image = tokio::task::spawn_blocking(move || -> Result<Option<DynamicImage>> {
 			let mut buf = vec![0u8; width * height * channel_count];
+
+			// Read color bands
 			for BandMappingItem {
 				channel_index,
 				band_index,
@@ -179,6 +181,22 @@ impl RasterSource {
 					buf[i * channel_count + channel_index] = px;
 				}
 			}
+
+			// Read alpha band (always the last band in the destination)
+			let alpha_channel_index = band_mapping.color_band_count();
+			let alpha_band_index = band_mapping.color_band_count() + 1;
+			let band = dst.rasterband(alpha_band_index)?.read_band_as::<u8>()?;
+			let data = band.data();
+			ensure!(
+				data.len() == width * height,
+				"Alpha band data length mismatch: expected {} but got {}",
+				width * height,
+				data.len()
+			);
+			for (i, &px) in data.iter().enumerate() {
+				buf[i * channel_count + alpha_channel_index] = px;
+			}
+
 			log::trace!("Filled image buffer ({} bytes)", buf.len());
 			let img =
 				DynamicImage::from_raw(width, height, buf).context("Failed to create DynamicImage from GDAL dataset")?;
@@ -219,10 +237,11 @@ mod tests {
 	use imageproc::image::ColorType;
 	use rstest::rstest;
 	use std::vec;
-	use versatiles_image::{DynamicImageTraitTest, compare_marker_result};
+	use versatiles_image::{DynamicImageTraitOperation, DynamicImageTraitTest, compare_marker_result};
 
 	struct DatasetFactory {
-		band_mapping: BandMapping,
+		/// Number of source bands (as the GDAL dataset would have).
+		src_band_count: usize,
 		geotransform: [f64; 6],
 		size: usize,
 	}
@@ -230,7 +249,6 @@ mod tests {
 	impl DatasetFactory {
 		pub fn new(bbox: GeoBBox, channel_count: usize) -> DatasetFactory {
 			let size = 256;
-			let band_mapping = BandMapping::new((0..channel_count).map(|i| i + 1).collect());
 
 			let geotransform = [
 				bbox.x_min,
@@ -242,25 +260,24 @@ mod tests {
 			];
 
 			DatasetFactory {
-				band_mapping,
+				src_band_count: channel_count,
 				geotransform,
 				size,
 			}
 		}
 
 		pub fn get_factory(&self) -> Arc<dyn Fn() -> Result<gdal::Dataset> + Send + Sync + 'static> {
-			let band_mapping_c = self.band_mapping.clone();
+			let src_band_count = self.src_band_count;
 			let geotransform_c = self.geotransform;
 			let size = self.size;
 			Arc::new(move || -> Result<gdal::Dataset> {
 				let driver = DriverManager::get_driver_by_name("MEM")?;
-				let mut ds =
-					driver.create_with_band_type::<u8, _>("in memory dataset", size, size, band_mapping_c.len())?;
+				let mut ds = driver.create_with_band_type::<u8, _>("in memory dataset", size, size, src_band_count)?;
 				ds.set_spatial_ref(&get_spatial_ref(4326)?)?;
 				ds.set_geo_transform(&geotransform_c)?;
 
 				let mut parameters = vec![];
-				for band_index in 1..=band_mapping_c.len() {
+				for band_index in 1..=src_band_count {
 					parameters.push(versatiles_image::MarkerParameters {
 						offset: 0.0,
 						scale: 200.0,
@@ -268,7 +285,7 @@ mod tests {
 					});
 				}
 				let image = DynamicImage::new_marker(&parameters);
-				for c in 1..=band_mapping_c.len() {
+				for c in 1..=src_band_count {
 					let data = image.iter_pixels().map(|p| p[c - 1]).collect();
 					let mut buffer = gdal::raster::Buffer::new((size, size), data);
 					ds.rasterband(c)?.write((0, 0), (size, size), &mut buffer)?;
@@ -287,19 +304,26 @@ mod tests {
 	}
 
 	#[rstest]
-	#[case(1, ColorType::L8)]
-	#[case(2, ColorType::La8)]
-	#[case(3, ColorType::Rgb8)]
-	#[case(4, ColorType::Rgba8)]
+	// color_channels: number of color channels in the output (excluding alpha)
+	#[case(1, ColorType::La8, 1)]
+	#[case(2, ColorType::La8, 1)] // 2 Undefined bands → grey + alpha, so 1 color channel
+	#[case(3, ColorType::Rgba8, 3)]
+	#[case(4, ColorType::Rgba8, 3)] // 4 bands → RGB + alpha, so 3 color channels
 	#[tokio::test(flavor = "multi_thread")]
-	async fn test_dataset_get_image2(#[case] channels: usize, #[case] expected_color: ColorType) {
+	async fn test_dataset_get_image2(
+		#[case] channels: usize,
+		#[case] expected_color: ColorType,
+		#[case] color_channels: usize,
+	) {
 		let bbox_in = GeoBBox::new(14.0, 49.0, 24.0, 55.0).unwrap();
 		let ds = RasterSource::from_testdata(bbox_in, channels).unwrap();
 		let image = ds.get_image(&bbox_in, 256, 256).await.unwrap().unwrap();
 		assert_eq!(image.width(), 256);
 		assert_eq!(image.height(), 256);
 		assert_eq!(image.color(), expected_color);
-		let results = image.gauge_marker();
+		// Strip alpha before gauging marker pattern (alpha is always added by BandMapping)
+		let image_no_alpha = image.as_no_alpha().unwrap();
+		let results = image_no_alpha.gauge_marker();
 
 		let expected_results = [
 			(2.8, 200.0, 80.0),
@@ -312,7 +336,7 @@ mod tests {
 			scale: p.1,
 			angle: p.2,
 		});
-		compare_marker_result(&expected_results[0..channels], &results).unwrap();
+		compare_marker_result(&expected_results[0..color_channels], &results).unwrap();
 	}
 
 	#[test]

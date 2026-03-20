@@ -360,11 +360,11 @@ mod tests {
 			assert_eq!(image.width(), 256);
 			assert_eq!(image.height(), 256);
 			let color_is = image.average_color();
-			let color_should = match (coord_out.x, coord_out.y) {
-				(0, 0) => [63, 43, 0],
-				(1, 0) => [192, 43, 0],
-				(0, 1) => [63, 212, 0],
-				(1, 1) => [192, 212, 0],
+			let color_should: Vec<u8> = match (coord_out.x, coord_out.y) {
+				(0, 0) => vec![63, 43, 0, 255],
+				(1, 0) => vec![192, 43, 0, 255],
+				(0, 1) => vec![63, 212, 0, 255],
+				(1, 1) => vec![192, 212, 0, 255],
 				_ => panic!("Unexpected tile coordinate: {coord_out:?}"),
 			};
 			assert_same_vec(&color_is, &color_should);

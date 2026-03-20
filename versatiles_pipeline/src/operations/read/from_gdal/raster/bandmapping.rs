@@ -42,14 +42,20 @@ pub struct BandMappingItem {
 /// dataset suitable for reprojection or raster operations.
 #[derive(Clone)]
 pub struct BandMapping {
+	/// Source band indices for color channels (does NOT include alpha).
 	map: Vec<usize>,
+	/// Source alpha band index (1-based), or `None` if the source has no alpha.
+	src_alpha_band: Option<usize>,
 }
 
 impl BandMapping {
-	/// Create a new empty band mapping.
+	/// Create a new band mapping without alpha.
 	#[allow(dead_code)]
 	pub fn new(map: Vec<usize>) -> Self {
-		Self { map }
+		Self {
+			map,
+			src_alpha_band: None,
+		}
 	}
 
 	/// Analyze the color interpretations of `dataset` bands and infer a mapping.
@@ -110,47 +116,61 @@ impl BandMapping {
 		})()
 		.with_context(|| format!("Failed to compute channel mapping from bands [{band_string}]",))?;
 
-		let map: Vec<usize> = match channels {
+		let (map, src_alpha_band): (Vec<usize>, Option<usize>) = match channels {
 			[None, Some(red), Some(green), Some(blue), Some(alpha)] => {
 				log::trace!("Found RGBA bands: red={red}, green={green}, blue={blue}, alpha={alpha}");
-				vec![red, green, blue, alpha]
+				(vec![red, green, blue], Some(alpha))
 			}
 			[None, Some(red), Some(green), Some(blue), None] => {
 				log::trace!("Found RGB  band: red={red}, green={green}, blue={blue}");
-				vec![red, green, blue]
+				(vec![red, green, blue], None)
 			}
 			[Some(gray), None, None, None, Some(alpha)]
 			| [None, Some(gray), None, None, Some(alpha)]
 			| [None, Some(gray), Some(alpha), None, None] => {
 				log::trace!("Found gray + alpha band: gray={gray}, alpha={alpha}");
-				vec![gray, alpha]
+				(vec![gray], Some(alpha))
 			}
 			[Some(gray), None, None, None, None] | [None, Some(gray), None, None, None] => {
 				log::trace!("Found gray band: gray={gray}");
-				vec![gray]
+				(vec![gray], None)
 			}
 			_ => {
 				bail!("The found bands ({channels:?}) cannot be interpreted as grey/RGB (+alpha)",);
 			}
 		};
-		log::trace!("Band mapping result: {map:?}");
+		log::trace!("Band mapping result: color_bands={map:?}, src_alpha_band={src_alpha_band:?}");
 
-		Ok(BandMapping { map })
+		Ok(BandMapping { map, src_alpha_band })
 	}
 
-	/// Number of output channels (1–4) in this mapping.
+	/// Number of output channels including the alpha channel.
+	/// The output always has alpha (Grey→La, RGB→RGBA, La→La, RGBA→RGBA).
 	pub fn len(&self) -> usize {
+		// color channels + 1 alpha channel
+		self.map.len() + 1
+	}
+
+	/// Number of color bands (excluding alpha).
+	pub fn color_band_count(&self) -> usize {
 		self.map.len()
+	}
+
+	/// Whether the source dataset has an alpha band.
+	#[cfg(test)]
+	pub fn has_src_alpha(&self) -> bool {
+		self.src_alpha_band.is_some()
 	}
 
 	/// Maximum GDAL band index referenced by this mapping.
 	#[allow(dead_code)]
 	pub fn max_band_index(&self) -> usize {
-		*self.map.iter().max().unwrap()
+		let color_max = *self.map.iter().max().unwrap();
+		self.src_alpha_band.map_or(color_max, |a| color_max.max(a))
 	}
 
-	/// Iterate over the mapping entries, yielding [`BandMappingItem`] values in
-	/// output channel order.
+	/// Iterate over the color band mapping entries (excluding alpha),
+	/// yielding [`BandMappingItem`] values in output channel order.
 	pub fn iter(&self) -> impl Iterator<Item = BandMappingItem> + '_ {
 		self
 			.map
@@ -162,31 +182,32 @@ impl BandMapping {
 			})
 	}
 
-	/// Create an in-memory GDAL dataset (using the `MEM` driver) with the same
-	/// channel layout as this mapping.
+	/// Create an in-memory GDAL dataset (using the `MEM` driver) with color bands
+	/// plus an alpha band.
+	///
+	/// The destination always has an alpha channel so that areas outside the source
+	/// image become transparent (alpha=0) rather than black.
 	///
 	/// The dataset is initialized with the Web Mercator (EPSG:3857) spatial
-	/// reference. The number of bands and their [`ColorInterpretation`] values
-	/// mirror the mapping’s channel configuration.
+	/// reference.
 	///
 	/// # Errors
-	/// Returns an error if the mapping length is not one of the supported values
-	/// (1, 2, 3, or 4) or if the in-memory dataset cannot be created.
+	/// Returns an error if the in-memory dataset cannot be created.
 	#[context("Failed to create in-memory GDAL dataset ({width}x{height}) for band mapping")]
 	pub fn create_mem_dataset(&self, width: usize, height: usize) -> Result<gdal::Dataset> {
 		let driver = DriverManager::get_driver_by_name("MEM").context("Failed to get GDAL MEM driver")?;
 
-		// Create destination dataset in EPSG:3857 for the requested bbox
+		// Always create with color bands + alpha
+		let total_bands = self.len(); // color_band_count + 1
 		let mut dst = driver
-			.create_with_band_type::<u8, _>("mem", width, height, self.len())
+			.create_with_band_type::<u8, _>("mem", width, height, total_bands)
 			.context("Failed to create in-memory dataset")?;
 		dst.set_spatial_ref(&get_spatial_ref(3857)?)?;
 
 		use ColorInterpretation::{AlphaBand, BlueBand, GrayIndex, GreenBand, RedBand};
 
-		match self.len() {
-			1 => dst.rasterband(1)?.set_color_interpretation(GrayIndex)?,
-			2 => {
+		match self.color_band_count() {
+			1 => {
 				dst.rasterband(1)?.set_color_interpretation(GrayIndex)?;
 				dst.rasterband(2)?.set_color_interpretation(AlphaBand)?;
 			}
@@ -194,28 +215,31 @@ impl BandMapping {
 				dst.rasterband(1)?.set_color_interpretation(RedBand)?;
 				dst.rasterband(2)?.set_color_interpretation(GreenBand)?;
 				dst.rasterband(3)?.set_color_interpretation(BlueBand)?;
-			}
-			4 => {
-				dst.rasterband(1)?.set_color_interpretation(RedBand)?;
-				dst.rasterband(2)?.set_color_interpretation(GreenBand)?;
-				dst.rasterband(3)?.set_color_interpretation(BlueBand)?;
 				dst.rasterband(4)?.set_color_interpretation(AlphaBand)?;
 			}
-			_ => bail!("Unsupported number of bands in band mapping: {}", self.len()),
+			_ => bail!(
+				"Unsupported number of color bands in band mapping: {}",
+				self.color_band_count()
+			),
 		}
 
 		Ok(dst)
 	}
 
 	/// Setup GDAL warp options to apply this band mapping during reprojection.
+	///
+	/// Configures color band mapping and alpha band indices. The destination
+	/// alpha band is always set so that areas outside the source become transparent.
+	///
 	/// # Safety
 	/// This function modifies the provided `GDALWarpOptions` structure.
 	#[allow(clippy::cast_possible_truncation)]
 	pub unsafe fn setup_gdal_warp_options(&self, options: &mut gdal_sys::GDALWarpOptions) {
-		options.nBandCount = i32::try_from(self.len()).unwrap();
+		let color_count = self.color_band_count();
+		options.nBandCount = i32::try_from(color_count).unwrap();
 
 		unsafe {
-			let n = std::mem::size_of::<i32>() * self.len();
+			let n = std::mem::size_of::<i32>() * color_count;
 			options.panSrcBands = gdal_sys::CPLMalloc(n).cast::<i32>();
 			options.panDstBands = gdal_sys::CPLMalloc(n).cast::<i32>();
 
@@ -224,12 +248,25 @@ impl BandMapping {
 				options.panDstBands.add(i).write(i32::try_from(i + 1).unwrap());
 			}
 		}
+
+		// Tell GDAL about alpha bands so outside areas get alpha=0.
+		// The destination alpha band is always the last band.
+		let dst_alpha_band = i32::try_from(color_count + 1).unwrap();
+		options.nDstAlphaBand = dst_alpha_band;
+
+		if let Some(src_alpha) = self.src_alpha_band {
+			options.nSrcAlphaBand = i32::try_from(src_alpha).unwrap();
+		}
 	}
 }
 
 impl Debug for BandMapping {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "BandMapping {{ map: {:?} }}", self.map)
+		write!(
+			f,
+			"BandMapping {{ map: {:?}, src_alpha_band: {:?} }}",
+			self.map, self.src_alpha_band
+		)
 	}
 }
 
@@ -268,16 +305,25 @@ mod tests {
 	}
 
 	#[rstest]
-	#[case("Grey", "Grey", &[1])]
-	#[case("Grey,A", "Grey,A", &[1,2])]
-	#[case("R,G,B", "R,G,B", &[1,2,3])]
-	#[case("B,G,R", "R,G,B", &[3,2,1])]
-	#[case("R,G,B,A", "R,G,B,A", &[1,2,3,4])]
-	#[case("A,R,G,B", "R,G,B,A", &[2,3,4,1])]
-	fn bandmapping_ok_cases(#[case] colors_in: &str, #[case] colors_out: &str, #[case] mapping: &[usize]) -> Result<()> {
+	// color_bands: source band indices for color channels only (no alpha)
+	// colors_out: expected color interpretations in destination (always includes alpha)
+	#[case("Grey", "Grey,A", &[1], false)]
+	#[case("Grey,A", "Grey,A", &[1], true)]
+	#[case("R,G,B", "R,G,B,A", &[1,2,3], false)]
+	#[case("B,G,R", "R,G,B,A", &[3,2,1], false)]
+	#[case("R,G,B,A", "R,G,B,A", &[1,2,3], true)]
+	#[case("A,R,G,B", "R,G,B,A", &[2,3,4], true)]
+	fn bandmapping_ok_cases(
+		#[case] colors_in: &str,
+		#[case] colors_out: &str,
+		#[case] color_bands: &[usize],
+		#[case] has_src_alpha: bool,
+	) -> Result<()> {
 		let ds = mem_dataset_with_bands(parse_color_interpretations(colors_in))?;
 		let bm = BandMapping::try_from(&ds)?;
-		assert_eq!(bm.len(), mapping.len());
+		assert_eq!(bm.color_band_count(), color_bands.len());
+		assert_eq!(bm.len(), color_bands.len() + 1); // always +1 for alpha
+		assert_eq!(bm.has_src_alpha(), has_src_alpha);
 
 		let got: Vec<_> = bm
 			.iter()
@@ -287,9 +333,9 @@ mod tests {
 				it.band_index
 			})
 			.collect();
-		assert_eq!(got, mapping);
+		assert_eq!(got, color_bands);
 
-		// create_mem_dataset mirrors color interpretation layout
+		// create_mem_dataset always includes alpha band
 		let out = bm.create_mem_dataset(8, 8)?;
 		let expected_colors = parse_color_interpretations(colors_out);
 		assert_eq!(out.raster_count() as usize, expected_colors.len());
@@ -333,7 +379,10 @@ mod tests {
 		use ColorInterpretation::*;
 		let ds = mem_dataset_with_bands(vec![RedBand, GreenBand, BlueBand])?;
 		let bm = BandMapping::try_from(&ds)?;
-		assert_eq!(format!("{bm:?}"), "BandMapping { map: [1, 2, 3] }");
+		assert_eq!(
+			format!("{bm:?}"),
+			"BandMapping { map: [1, 2, 3], src_alpha_band: None }"
+		);
 		Ok(())
 	}
 }
