@@ -16,6 +16,10 @@ struct Args {
 	/// To allow different quality levels for different zoom levels, this can also be a comma-separated list like this:
 	/// "80,70,14:50,15:20", where the first value is the default quality, and the other values specify the quality for the specified zoom level (and higher).
 	quality: Option<String>,
+	/// Quality level for translucent (semi-transparent) tiles, using the same zoom-dependent syntax as quality.
+	/// When set, tiles are checked for opacity: opaque tiles use the normal quality setting,
+	/// while translucent tiles use this value (typically 100 for lossless).
+	quality_translucent: Option<String>,
 	/// Compression effort, between 0 (fastest) and 100 (slowest/best).
 	effort: Option<u8>,
 }
@@ -75,6 +79,7 @@ struct Operation {
 	tilejson: TileJSON,
 	format: RasterTileFormat,
 	quality: [Option<u8>; 32],
+	quality_translucent: Option<[Option<u8>; 32]>,
 	effort: Option<u8>,
 }
 
@@ -100,9 +105,16 @@ impl Operation {
 		let mut tilejson = source.tilejson().clone();
 		metadata.update_tilejson(&mut tilejson);
 
+		let quality_translucent = if let Some(qt) = args.quality_translucent {
+			Some(parse_quality(Some(qt))?)
+		} else {
+			None
+		};
+
 		Ok(Self {
 			format,
 			quality: parse_quality(args.quality)?,
+			quality_translucent,
 			effort: args.effort,
 			metadata,
 			source,
@@ -156,13 +168,19 @@ impl TileSource for Operation {
 		log::trace!("raster_format::get_tile_stream {bbox:?}");
 
 		let quality = self.quality[bbox.level as usize];
+		let quality_translucent = self.quality_translucent.map(|qt| qt[bbox.level as usize]);
 		let effort = self.effort;
 		let stream = self.source.get_tile_stream(bbox).await?;
 		let format: TileFormat = self.format.into();
 
 		Ok(stream
 			.map_parallel_try(move |_coord, mut tile| {
-				tile.change_format(format, quality, effort)?;
+				let effective_quality = if let Some(qt) = quality_translucent {
+					if tile.is_opaque()? { quality } else { qt }
+				} else {
+					quality
+				};
+				tile.change_format(format, effective_quality, effort)?;
 				Ok(tile)
 			})
 			.unwrap_results())
@@ -260,6 +278,27 @@ mod tests {
 		let bbox = TileCoord::new(3, 2, 2)?.to_tile_bbox();
 		let mut items = op.get_tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(items.len(), 1, "expected exactly one tile at z=3, x=2, y=2");
+		let (_coord, tile) = items.remove(0);
+		assert_eq!(tile.format(), TileFormat::WEBP);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_raster_format_with_quality_translucent() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		// Test that quality_translucent parameter is accepted and the pipeline builds successfully
+		let op = factory
+			.operation_from_vpl("from_debug format=png | raster_format format=webp quality=80 quality_translucent=100")
+			.await?;
+
+		let params = op.metadata().clone();
+		assert_eq!(params.tile_format, TileFormat::WEBP);
+		assert_eq!(params.tile_compression, TileCompression::Uncompressed);
+
+		// Stream should yield tiles
+		let bbox = TileCoord::new(3, 2, 2)?.to_tile_bbox();
+		let mut items = op.get_tile_stream(bbox).await?.to_vec().await;
+		assert_eq!(items.len(), 1);
 		let (_coord, tile) = items.remove(0);
 		assert_eq!(tile.format(), TileFormat::WEBP);
 		Ok(())
