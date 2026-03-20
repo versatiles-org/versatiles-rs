@@ -258,6 +258,8 @@ where
 					let a_b = u16::from(base_px[3]);
 					let a_t = u16::from(top_px[3]);
 					let a_out = (a_b + a_t).min(255);
+					// Snap near-opaque alpha to fully opaque to compensate for rounding
+					let a_out = if a_out >= 250 { 255 } else { a_out };
 					if a_out == 0 {
 						continue;
 					}
