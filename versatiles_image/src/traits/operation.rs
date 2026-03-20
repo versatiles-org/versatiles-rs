@@ -564,6 +564,28 @@ mod tests {
 	}
 
 	#[test]
+	fn overlay_additive_near_opaque_snaps_to_255() {
+		// A: alpha=125, B: alpha=125 → sum=250 → snapped to 255
+		let mut base = DynamicImage::from_raw(1, 1, vec![100u8, 100, 100, 125]).unwrap();
+		let top = DynamicImage::from_raw(1, 1, vec![100u8, 100, 100, 125]).unwrap();
+
+		base.overlay_additive(&top).unwrap();
+		let px = base.get_pixel(0, 0).0;
+		assert_eq!(px[3], 255); // 250 snapped to 255
+	}
+
+	#[test]
+	fn overlay_additive_below_threshold_stays() {
+		// A: alpha=124, B: alpha=125 → sum=249 → stays at 249 (below threshold)
+		let mut base = DynamicImage::from_raw(1, 1, vec![100u8, 100, 100, 124]).unwrap();
+		let top = DynamicImage::from_raw(1, 1, vec![100u8, 100, 100, 125]).unwrap();
+
+		base.overlay_additive(&top).unwrap();
+		let px = base.get_pixel(0, 0).0;
+		assert_eq!(px[3], 249); // below 250, not snapped
+	}
+
+	#[test]
 	fn overlay_additive_size_mismatch_errors() {
 		let mut base = DynamicImage::from_raw(2, 2, vec![0u8; 16]).unwrap();
 		let top = DynamicImage::from_raw(3, 3, vec![0u8; 36]).unwrap();
