@@ -90,9 +90,8 @@ mod tests {
 		assert_eq!(tiles.len(), 1);
 
 		// Cache should now contain entries for the base-level block
-		op.core.cache.run_pending_tasks().await;
 		assert!(
-			op.core.cache.entry_count() > 0,
+			!op.core.cache.is_empty(),
 			"cache should be populated after base-level fetch"
 		);
 
@@ -108,8 +107,7 @@ mod tests {
 		// First, fetch all base-level tiles to populate the cache
 		let base_bbox = *level_bbox;
 		let _base_tiles = op.get_tile_stream(base_bbox).await?.to_vec().await;
-		op.core.cache.run_pending_tasks().await;
-		assert!(op.core.cache.entry_count() > 0, "cache should be populated");
+		assert!(!op.core.cache.is_empty(), "cache should be populated");
 
 		// Now fetch at level 5 — should compose from cached half-size images
 		let lvl5_bbox = metadata.bbox_pyramid.get_level_bbox(5);
@@ -151,7 +149,7 @@ mod tests {
 				entries.push((coord, Some(solid_half(half_size, x as u8, y as u8, 42, 255))));
 			}
 		}
-		op.core.cache.insert(block_key, entries).await;
+		op.core.cache.insert(block_key, entries);
 
 		// Request composed images at level 5 for a 2×2 bbox
 		let bbox_lvl5 = TileBBox::from_min_and_size(5, 0, 0, 2, 2)?;

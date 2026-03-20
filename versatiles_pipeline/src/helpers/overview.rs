@@ -1,7 +1,10 @@
 use anyhow::{Result, ensure};
+use dashmap::DashMap;
 use imageproc::image::{DynamicImage, GenericImage};
-use moka::future::Cache;
-use std::sync::Arc;
+use std::sync::{
+	Arc,
+	atomic::{AtomicUsize, Ordering},
+};
 use versatiles_container::{Tile, TileSource, TileSourceMetadata, Traversal, TraversalOrder};
 use versatiles_core::{TileBBox, TileBBoxMap, TileCoord, TileJSON, TileStream};
 use versatiles_derive::context;
@@ -23,7 +26,8 @@ pub struct OverviewCore {
 	pub level_base: u8,
 	pub tile_size: u32,
 	#[allow(clippy::type_complexity)]
-	pub cache: Arc<Cache<TileCoord, Vec<(TileCoord, Option<DynamicImage>)>>>,
+	pub cache: Arc<DashMap<TileCoord, Vec<(TileCoord, Option<DynamicImage>)>>>,
+	cache_bytes: Arc<AtomicUsize>,
 	scale_fn: ScaleDownFn,
 }
 
@@ -50,19 +54,8 @@ impl OverviewCore {
 		metadata.update_tilejson(&mut tilejson);
 
 		let tile_size = tilejson.tile_size.map_or(512, |ts| u32::from(ts.size()));
-		let cache = Arc::new(
-			Cache::builder()
-				.max_capacity(4 * 1024 * 1024 * 1024) // 4GB limit
-				.weigher(
-					|_key: &TileCoord, value: &Vec<(TileCoord, Option<DynamicImage>)>| -> u32 {
-						value
-							.iter()
-							.map(|(_, img)| img.as_ref().map_or(16, |i| i.width() * i.height() * 4))
-							.sum::<u32>()
-					},
-				)
-				.build(),
-		);
+		let cache = Arc::new(DashMap::new());
+		let cache_bytes = Arc::new(AtomicUsize::new(0));
 		metadata.traversal = Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?;
 
 		Ok(Self {
@@ -72,6 +65,7 @@ impl OverviewCore {
 			level_base,
 			tile_size,
 			cache,
+			cache_bytes,
 			scale_fn,
 		})
 	}
@@ -99,7 +93,9 @@ impl OverviewCore {
 		for q in &[0, 1, 2, 3] {
 			let bbox1 = bbox0.leveled_up().get_quadrant(*q)?;
 
-			if let Some(images1) = self.cache.remove(&bbox1.min_corner()?).await {
+			if let Some((_, images1)) = self.cache.remove(&bbox1.min_corner()?) {
+				let entry_bytes = estimate_entry_bytes(&images1);
+				self.cache_bytes.fetch_sub(entry_bytes, Ordering::Relaxed);
 				for (coord1, image1) in images1 {
 					if let Some(image1) = image1 {
 						assert_eq!(image1.width(), half_size);
@@ -178,7 +174,13 @@ impl OverviewCore {
 		if need_cache {
 			let mut key = container_bbox.min_corner()?;
 			key.floor(BLOCK_TILE_COUNT);
-			self.cache.insert(key, cache_entries).await;
+			let entry_bytes = estimate_entry_bytes(&cache_entries);
+			let total = self.cache_bytes.fetch_add(entry_bytes, Ordering::Relaxed) + entry_bytes;
+			let gb = total as f64 / (1024.0 * 1024.0 * 1024.0);
+			if gb > 2.0 {
+				log::warn!("Overview staging area using {gb:.1} GB — consider reducing dataset size or base zoom level");
+			}
+			self.cache.insert(key, cache_entries);
 		}
 
 		Ok(tiles.into_iter().flatten().collect())
@@ -220,6 +222,13 @@ impl OverviewCore {
 
 		Ok(TileStream::from_vec(vec))
 	}
+}
+
+fn estimate_entry_bytes(entries: &[(TileCoord, Option<DynamicImage>)]) -> usize {
+	entries
+		.iter()
+		.map(|(_, img)| img.as_ref().map_or(16, |i| (i.width() * i.height() * 4) as usize))
+		.sum()
 }
 
 impl std::fmt::Debug for OverviewCore {
