@@ -7,7 +7,7 @@ use versatiles_core::{TileBBox, TileBBoxMap, TileCoord, TileJSON, TileStream};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitInfo;
 
-static BLOCK_TILE_COUNT: u32 = 32;
+static BLOCK_TILE_COUNT: u32 = 16;
 
 /// Scaling function type used to downscale tiles by a factor of 2.
 pub type ScaleDownFn = Arc<dyn Fn(&DynamicImage) -> Result<DynamicImage> + Send + Sync>;
