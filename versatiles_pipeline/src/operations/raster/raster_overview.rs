@@ -254,4 +254,180 @@ mod tests {
 		assert_eq!(op.core.level_base, 6);
 		Ok(())
 	}
+
+	#[tokio::test]
+	async fn cache_bytes_tracks_insert_and_remove() -> Result<()> {
+		use std::sync::atomic::Ordering;
+
+		let op = make_operation(256, 6).await;
+		assert_eq!(op.core.cache_bytes.load(Ordering::Relaxed), 0);
+
+		// Fetch at base level to populate cache
+		let metadata = op.metadata().clone();
+		let base_bbox = *metadata.bbox_pyramid.get_level_bbox(6);
+		let _tiles = op.get_tile_stream(base_bbox).await?.to_vec().await;
+
+		// cache_bytes should be non-zero after populating
+		let bytes_after_insert = op.core.cache_bytes.load(Ordering::Relaxed);
+		assert!(bytes_after_insert > 0, "cache_bytes should increase after insert");
+
+		// Walk all the way down to level 0 to fully drain the cache
+		for level in (0..6).rev() {
+			let lvl_bbox = metadata.bbox_pyramid.get_level_bbox(level);
+			let _tiles = op.get_tile_stream(*lvl_bbox).await?.to_vec().await;
+		}
+
+		// After draining everything, cache_bytes should be 0
+		let bytes_after_drain = op.core.cache_bytes.load(Ordering::Relaxed);
+		assert_eq!(bytes_after_drain, 0, "cache_bytes should be 0 after full drain");
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn cache_is_drained_after_full_overview_build() -> Result<()> {
+		let op = make_operation(256, 6).await;
+		let metadata = op.metadata().clone();
+
+		// Fetch all base-level tiles
+		let base_bbox = *metadata.bbox_pyramid.get_level_bbox(6);
+		let _base_tiles = op.get_tile_stream(base_bbox).await?.to_vec().await;
+		assert!(!op.core.cache.is_empty(), "cache should be populated");
+
+		// Walk down through all zoom levels to drain the cache
+		for level in (0..6).rev() {
+			let lvl_bbox = metadata.bbox_pyramid.get_level_bbox(level);
+			let _tiles = op.get_tile_stream(*lvl_bbox).await?.to_vec().await;
+		}
+
+		// After consuming all levels the cache should be empty
+		assert!(op.core.cache.is_empty(), "cache should be fully drained after building all levels");
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn build_images_from_cache_with_empty_cache() -> Result<()> {
+		let op = make_operation(256, 6).await;
+
+		// Request from cache without populating it — should return empty/transparent tiles
+		let bbox = TileBBox::from_min_and_size(5, 0, 0, 1, 1)?;
+		let result = op.core.build_images_from_cache(bbox).await?;
+		let items: Vec<_> = result.into_iter().filter(|(_, img)| img.is_some()).collect();
+		assert!(items.is_empty(), "empty cache should produce no composed images");
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn build_images_from_cache_with_none_entries() -> Result<()> {
+		let op = make_operation(256, 6).await;
+		let half_size = op.core.tile_size / 2;
+
+		// Insert entries where some are None (missing tiles)
+		let block_key = TileCoord::new(6, 0, 0)?;
+		let mut entries: Vec<(TileCoord, Option<DynamicImage>)> = Vec::new();
+		for y in 0u32..16 {
+			for x in 0u32..16 {
+				let coord = TileCoord::new(6, x, y)?;
+				// Only populate even x,y tiles; odd ones are None
+				let img = if x % 2 == 0 && y % 2 == 0 {
+					Some(solid_half(half_size, x as u8, y as u8, 42, 255))
+				} else {
+					None
+				};
+				entries.push((coord, img));
+			}
+		}
+		op.core.cache.insert(block_key, entries);
+
+		let bbox = TileBBox::from_min_and_size(5, 0, 0, 8, 8)?;
+		let result = op.core.build_images_from_cache(bbox).await?;
+
+		// Should still produce some composed tiles without errors
+		let items: Vec<_> = result.into_iter().collect();
+		assert!(!items.is_empty(), "should produce results even with None entries");
+
+		Ok(())
+	}
+
+	#[test]
+	fn estimate_entry_bytes_with_images_and_nones() {
+		use crate::helpers::overview::estimate_entry_bytes;
+
+		let coord = TileCoord::new(6, 0, 0).unwrap();
+
+		// None entries = 16 bytes each
+		let entries_none: Vec<(TileCoord, Option<DynamicImage>)> = vec![(coord, None), (coord, None)];
+		assert_eq!(estimate_entry_bytes(&entries_none), 32);
+
+		// 4x4 RGBA image = 4*4*4 = 64 bytes
+		let img = DynamicImage::new_rgba8(4, 4);
+		let entries_img: Vec<(TileCoord, Option<DynamicImage>)> = vec![(coord, Some(img))];
+		assert_eq!(estimate_entry_bytes(&entries_img), 64);
+
+		// Mixed
+		let img2 = DynamicImage::new_rgba8(2, 2);
+		let entries_mixed: Vec<(TileCoord, Option<DynamicImage>)> =
+			vec![(coord, None), (coord, Some(img2))];
+		assert_eq!(estimate_entry_bytes(&entries_mixed), 16 + 16); // 16 for None + 2*2*4 for image
+
+		// Empty
+		let entries_empty: Vec<(TileCoord, Option<DynamicImage>)> = vec![];
+		assert_eq!(estimate_entry_bytes(&entries_empty), 0);
+	}
+
+	#[tokio::test]
+	async fn full_pipeline_produces_tiles_at_every_level() -> Result<()> {
+		let op = make_operation(256, 6).await;
+		let metadata = op.metadata().clone();
+
+		// Fetch base level
+		let base_bbox = *metadata.bbox_pyramid.get_level_bbox(6);
+		let base_tiles = op.get_tile_stream(base_bbox).await?.to_vec().await;
+		assert!(!base_tiles.is_empty(), "base level should have tiles");
+
+		// Walk every level from 5 down to 0 and verify tiles are produced
+		for level in (0..6).rev() {
+			let lvl_bbox = metadata.bbox_pyramid.get_level_bbox(level);
+			let tiles = op.get_tile_stream(*lvl_bbox).await?.to_vec().await;
+			assert!(
+				!tiles.is_empty(),
+				"level {level} should produce at least one tile"
+			);
+			for (coord, _) in &tiles {
+				assert_eq!(coord.level, level, "tile should be at level {level}");
+			}
+		}
+
+		Ok(())
+	}
+
+	#[test]
+	fn debug_format_includes_fields() {
+		let rt = tokio::runtime::Runtime::new().unwrap();
+		let op = rt.block_on(make_operation(256, 6));
+		let debug = format!("{op:?}");
+		assert!(debug.contains("level_base"), "debug should include level_base");
+		assert!(debug.contains("tile_size"), "debug should include tile_size");
+	}
+
+	#[tokio::test]
+	async fn tile_512_overview_produces_tiles() -> Result<()> {
+		// Test with a different tile size (512) to ensure it's not hardcoded
+		let op = make_operation(512, 4).await;
+		assert_eq!(op.core.tile_size, 512);
+
+		let metadata = op.metadata().clone();
+		let base_bbox = *metadata.bbox_pyramid.get_level_bbox(4);
+		let base_tiles = op.get_tile_stream(base_bbox).await?.to_vec().await;
+		assert!(!base_tiles.is_empty());
+
+		// Build level 3 from cache
+		let lvl3_bbox = metadata.bbox_pyramid.get_level_bbox(3);
+		let tiles = op.get_tile_stream(*lvl3_bbox).await?.to_vec().await;
+		assert!(!tiles.is_empty(), "should produce overview tiles with tile_size=512");
+
+		Ok(())
+	}
 }

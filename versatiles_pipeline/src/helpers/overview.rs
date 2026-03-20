@@ -27,7 +27,7 @@ pub struct OverviewCore {
 	pub tile_size: u32,
 	#[allow(clippy::type_complexity)]
 	pub cache: Arc<DashMap<TileCoord, Vec<(TileCoord, Option<DynamicImage>)>>>,
-	cache_bytes: Arc<AtomicUsize>,
+	pub(crate) cache_bytes: Arc<AtomicUsize>,
 	scale_fn: ScaleDownFn,
 }
 
@@ -224,7 +224,7 @@ impl OverviewCore {
 	}
 }
 
-fn estimate_entry_bytes(entries: &[(TileCoord, Option<DynamicImage>)]) -> usize {
+pub(crate) fn estimate_entry_bytes(entries: &[(TileCoord, Option<DynamicImage>)]) -> usize {
 	entries
 		.iter()
 		.map(|(_, img)| img.as_ref().map_or(16, |i| (i.width() * i.height() * 4) as usize))
