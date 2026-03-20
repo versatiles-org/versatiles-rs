@@ -82,6 +82,16 @@ pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
 	///
 	/// Ensures the images have identical dimensions. Returns an error if sizes differ.
 	fn overlay(&mut self, top: &DynamicImage) -> Result<()>;
+
+	/// Composite `top` onto `self` using additive alpha blending.
+	///
+	/// Assumes translucent pixels represent non-overlapping spatial coverage (e.g. orthoimagery edges).
+	/// ```text
+	/// alpha_out = min(1.0, alpha_A + alpha_B)
+	/// color_out = (color_A * alpha_A + color_B * alpha_B) / alpha_out
+	/// ```
+	/// Ensures the images have identical dimensions. Returns an error if sizes differ.
+	fn overlay_additive(&mut self, top: &DynamicImage) -> Result<()>;
 }
 
 impl DynamicImageTraitOperation for DynamicImage
@@ -236,6 +246,43 @@ where
 		self.ensure_same_size(top)?;
 		overlay(self, top, 0, 0);
 		Ok(())
+	}
+
+	#[allow(clippy::cast_possible_truncation)]
+	fn overlay_additive(&mut self, top: &DynamicImage) -> Result<()> {
+		self.ensure_same_size(top)?;
+
+		match (self, top) {
+			(DynamicImage::ImageRgba8(base_img), DynamicImage::ImageRgba8(top_img)) => {
+				for (base_px, top_px) in base_img.pixels_mut().zip(top_img.pixels()) {
+					let a_b = u16::from(base_px[3]);
+					let a_t = u16::from(top_px[3]);
+					let a_out = (a_b + a_t).min(255);
+					if a_out == 0 {
+						continue;
+					}
+					base_px[0] = ((u16::from(base_px[0]) * a_b + u16::from(top_px[0]) * a_t + a_out / 2) / a_out) as u8;
+					base_px[1] = ((u16::from(base_px[1]) * a_b + u16::from(top_px[1]) * a_t + a_out / 2) / a_out) as u8;
+					base_px[2] = ((u16::from(base_px[2]) * a_b + u16::from(top_px[2]) * a_t + a_out / 2) / a_out) as u8;
+					base_px[3] = a_out as u8;
+				}
+				Ok(())
+			}
+			(DynamicImage::ImageRgb8(base_img), DynamicImage::ImageRgb8(top_img)) => {
+				// No alpha: top overwrites base (both fully opaque)
+				for (base_px, top_px) in base_img.pixels_mut().zip(top_img.pixels()) {
+					*base_px = *top_px;
+				}
+				Ok(())
+			}
+			(base, top) => {
+				bail!(
+					"overlay_additive requires matching RGBA8 or RGB8 images, got base {:?} and top {:?}",
+					base.color(),
+					top.color()
+				);
+			}
+		}
 	}
 }
 
@@ -445,5 +492,79 @@ mod tests {
 		for &(x, y) in &[(0, 0), (8, 8), (15, 15)] {
 			assert_eq!(bottom.get_pixel(x, y).0, [255, 0, 0, 255]);
 		}
+	}
+
+	#[test]
+	fn overlay_additive_non_overlapping_halves() {
+		// Pixel A has alpha 128, pixel B has alpha 127 → together 255 (clamped)
+		// color_A = 200, color_B = 100
+		// color_out = (200*128 + 100*127 + 127) / 255 = (25600 + 12700 + 127) / 255 = 150
+		let mut base = DynamicImage::from_raw(1, 1, vec![100u8, 100, 100, 127]).unwrap();
+		let top = DynamicImage::from_raw(1, 1, vec![200u8, 200, 200, 128]).unwrap();
+
+		base.overlay_additive(&top).unwrap();
+		let px = base.get_pixel(0, 0).0;
+		assert_eq!(px[3], 255); // alpha_out = min(255, 127 + 128) = 255
+		// color_out = (100*127 + 200*128 + 127) / 255 = (12700 + 25600 + 127) / 255 = 150
+		assert_eq!(px[0], 150);
+		assert_eq!(px[1], 150);
+		assert_eq!(px[2], 150);
+	}
+
+	#[test]
+	fn overlay_additive_both_transparent() {
+		// Both pixels fully transparent → result is transparent
+		let mut base = DynamicImage::from_raw(1, 1, vec![100u8, 0, 0, 0]).unwrap();
+		let top = DynamicImage::from_raw(1, 1, vec![200u8, 0, 0, 0]).unwrap();
+
+		base.overlay_additive(&top).unwrap();
+		let px = base.get_pixel(0, 0).0;
+		// alpha_out = 0, colors should be unchanged (we skip when alpha_out == 0)
+		assert_eq!(px[3], 0);
+	}
+
+	#[test]
+	fn overlay_additive_partial_alpha() {
+		// A: alpha=128 (0.502), B: alpha=64 (0.251) → alpha_out = 192 (0.753)
+		// color_A = [255, 0, 0], color_B = [0, 0, 255]
+		// r_out = (255*128 + 0*64 + 96) / 192 = (32640 + 96) / 192 = 170
+		// b_out = (0*128 + 255*64 + 96) / 192 = (16320 + 96) / 192 = 85
+		let mut base = DynamicImage::from_raw(1, 1, vec![0u8, 0, 255, 64]).unwrap();
+		let top = DynamicImage::from_raw(1, 1, vec![255u8, 0, 0, 128]).unwrap();
+
+		base.overlay_additive(&top).unwrap();
+		let px = base.get_pixel(0, 0).0;
+		assert_eq!(px[3], 192);
+		assert_eq!(px[0], 170); // (255*128 + 0*64 + 96) / 192
+		assert_eq!(px[1], 0);
+		assert_eq!(px[2], 85); // (0*128 + 255*64 + 96) / 192
+	}
+
+	#[test]
+	fn overlay_additive_alpha_clamps_at_255() {
+		// A: alpha=200, B: alpha=200 → alpha_out = min(400, 255) = 255
+		let mut base = DynamicImage::from_raw(1, 1, vec![100u8, 100, 100, 200]).unwrap();
+		let top = DynamicImage::from_raw(1, 1, vec![100u8, 100, 100, 200]).unwrap();
+
+		base.overlay_additive(&top).unwrap();
+		let px = base.get_pixel(0, 0).0;
+		assert_eq!(px[3], 255);
+	}
+
+	#[test]
+	fn overlay_additive_rgb_copies_top() {
+		let mut base = DynamicImage::from_fn(4, 4, |_x, _y| [0, 0, 0]);
+		let top = DynamicImage::from_fn(4, 4, |_x, _y| [255, 128, 64]);
+
+		base.overlay_additive(&top).unwrap();
+		let px = base.get_pixel(0, 0).0;
+		assert_eq!(px, [255, 128, 64, 255]);
+	}
+
+	#[test]
+	fn overlay_additive_size_mismatch_errors() {
+		let mut base = DynamicImage::from_raw(2, 2, vec![0u8; 16]).unwrap();
+		let top = DynamicImage::from_raw(3, 3, vec![0u8; 36]).unwrap();
+		assert!(base.overlay_additive(&top).is_err());
 	}
 }
