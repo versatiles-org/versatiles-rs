@@ -6,7 +6,7 @@ use std::sync::{
 	atomic::{AtomicUsize, Ordering},
 };
 use versatiles_container::{Tile, TileSource, TileSourceMetadata, Traversal, TraversalOrder};
-use versatiles_core::{TileBBox, TileBBoxMap, TileCoord, TileJSON, TileStream};
+use versatiles_core::{Blob, TileBBox, TileBBoxMap, TileCoord, TileJSON, TileStream};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitInfo;
 
@@ -26,7 +26,7 @@ pub struct OverviewCore {
 	pub level_base: u8,
 	pub tile_size: u32,
 	#[allow(clippy::type_complexity)]
-	pub cache: Arc<DashMap<TileCoord, Vec<(TileCoord, Option<DynamicImage>)>>>,
+	pub cache: Arc<DashMap<TileCoord, Vec<(TileCoord, Option<Blob>)>>>,
 	pub(crate) cache_bytes: Arc<AtomicUsize>,
 	scale_fn: ScaleDownFn,
 }
@@ -93,11 +93,12 @@ impl OverviewCore {
 		for q in &[0, 1, 2, 3] {
 			let bbox1 = bbox0.leveled_up().get_quadrant(*q)?;
 
-			if let Some((_, images1)) = self.cache.remove(&bbox1.min_corner()?) {
-				let entry_bytes = estimate_entry_bytes(&images1);
+			if let Some((_, blobs1)) = self.cache.remove(&bbox1.min_corner()?) {
+				let entry_bytes = estimate_entry_bytes(&blobs1);
 				self.cache_bytes.fetch_sub(entry_bytes, Ordering::Relaxed);
-				for (coord1, image1) in images1 {
-					if let Some(image1) = image1 {
+				for (coord1, blob1) in blobs1 {
+					if let Some(blob1) = blob1 {
+						let image1 = versatiles_image::format::png::blob2image(&blob1)?;
 						assert_eq!(image1.width(), half_size);
 						assert_eq!(image1.height(), half_size);
 						let coord0 = coord1.to_level_decreased()?;
@@ -148,11 +149,12 @@ impl OverviewCore {
 		let results: Vec<_> = futures::future::join_all(container.into_iter().map(|(coord, image_opt)| {
 			let scale_fn = scale_fn.clone();
 			tokio::task::spawn_blocking(move || {
-				let scaled = if need_cache {
+				let cached = if need_cache {
 					image_opt.as_ref().map(|img| {
 						assert_eq!(img.width(), full_size);
 						assert_eq!(img.height(), full_size);
-						scale_fn(img).unwrap()
+						let scaled = scale_fn(img).unwrap();
+						versatiles_image::format::png::encode(&scaled, Some(0)).unwrap()
 					})
 				} else {
 					None
@@ -162,7 +164,7 @@ impl OverviewCore {
 				} else {
 					None
 				};
-				((coord, scaled), tile)
+				((coord, cached), tile)
 			})
 		}))
 		.await
@@ -224,10 +226,11 @@ impl OverviewCore {
 	}
 }
 
-pub(crate) fn estimate_entry_bytes(entries: &[(TileCoord, Option<DynamicImage>)]) -> usize {
+#[allow(clippy::cast_possible_truncation)]
+pub(crate) fn estimate_entry_bytes(entries: &[(TileCoord, Option<Blob>)]) -> usize {
 	entries
 		.iter()
-		.map(|(_, img)| img.as_ref().map_or(16, |i| (i.width() * i.height() * 4) as usize))
+		.map(|(_, blob)| blob.as_ref().map_or(16, |b| b.len() as usize))
 		.sum()
 }
 

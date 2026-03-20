@@ -60,7 +60,7 @@ mod tests {
 	use crate::factory::OperationFactoryTrait;
 	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::{DynamicImage, GenericImage, GenericImageView, Rgba};
-	use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCoord, TileFormat};
+	use versatiles_core::{Blob, GeoBBox, TileBBoxPyramid, TileCoord, TileFormat};
 
 	async fn make_operation(tile_size: u32, level_base: u8) -> Operation {
 		let pyramid = TileBBoxPyramid::from_geo_bbox(
@@ -142,11 +142,13 @@ mod tests {
 		// Manually populate the cache with known half-size (128×128) images for a 32×32 block at level 6.
 		// Each tile at (x, y) gets a unique solid color: R=x, G=y, B=42, A=255.
 		let block_key = TileCoord::new(6, 0, 0)?;
-		let mut entries: Vec<(TileCoord, Option<DynamicImage>)> = Vec::new();
+		let mut entries: Vec<(TileCoord, Option<Blob>)> = Vec::new();
 		for y in 0u32..32 {
 			for x in 0u32..32 {
 				let coord = TileCoord::new(6, x, y)?;
-				entries.push((coord, Some(solid_half(half_size, x as u8, y as u8, 42, 255))));
+				let img = solid_half(half_size, x as u8, y as u8, 42, 255);
+				let blob = versatiles_image::format::png::encode(&img, Some(0))?;
+				entries.push((coord, Some(blob)));
 			}
 		}
 		op.core.cache.insert(block_key, entries);
@@ -301,7 +303,10 @@ mod tests {
 		}
 
 		// After consuming all levels the cache should be empty
-		assert!(op.core.cache.is_empty(), "cache should be fully drained after building all levels");
+		assert!(
+			op.core.cache.is_empty(),
+			"cache should be fully drained after building all levels"
+		);
 
 		Ok(())
 	}
@@ -326,17 +331,20 @@ mod tests {
 
 		// Insert entries where some are None (missing tiles)
 		let block_key = TileCoord::new(6, 0, 0)?;
-		let mut entries: Vec<(TileCoord, Option<DynamicImage>)> = Vec::new();
+		let mut entries: Vec<(TileCoord, Option<Blob>)> = Vec::new();
 		for y in 0u32..16 {
 			for x in 0u32..16 {
 				let coord = TileCoord::new(6, x, y)?;
 				// Only populate even x,y tiles; odd ones are None
-				let img = if x % 2 == 0 && y % 2 == 0 {
-					Some(solid_half(half_size, x as u8, y as u8, 42, 255))
+				let blob = if x % 2 == 0 && y % 2 == 0 {
+					Some(versatiles_image::format::png::encode(
+						&solid_half(half_size, x as u8, y as u8, 42, 255),
+						Some(0),
+					)?)
 				} else {
 					None
 				};
-				entries.push((coord, img));
+				entries.push((coord, blob));
 			}
 		}
 		op.core.cache.insert(block_key, entries);
@@ -352,28 +360,27 @@ mod tests {
 	}
 
 	#[test]
-	fn estimate_entry_bytes_with_images_and_nones() {
+	fn estimate_entry_bytes_with_blobs_and_nones() {
 		use crate::helpers::overview::estimate_entry_bytes;
 
 		let coord = TileCoord::new(6, 0, 0).unwrap();
 
 		// None entries = 16 bytes each
-		let entries_none: Vec<(TileCoord, Option<DynamicImage>)> = vec![(coord, None), (coord, None)];
+		let entries_none: Vec<(TileCoord, Option<Blob>)> = vec![(coord, None), (coord, None)];
 		assert_eq!(estimate_entry_bytes(&entries_none), 32);
 
-		// 4x4 RGBA image = 4*4*4 = 64 bytes
-		let img = DynamicImage::new_rgba8(4, 4);
-		let entries_img: Vec<(TileCoord, Option<DynamicImage>)> = vec![(coord, Some(img))];
-		assert_eq!(estimate_entry_bytes(&entries_img), 64);
+		// Blob with known length
+		let blob = Blob::from(vec![0u8; 100]);
+		let entries_blob: Vec<(TileCoord, Option<Blob>)> = vec![(coord, Some(blob))];
+		assert_eq!(estimate_entry_bytes(&entries_blob), 100);
 
 		// Mixed
-		let img2 = DynamicImage::new_rgba8(2, 2);
-		let entries_mixed: Vec<(TileCoord, Option<DynamicImage>)> =
-			vec![(coord, None), (coord, Some(img2))];
-		assert_eq!(estimate_entry_bytes(&entries_mixed), 16 + 16); // 16 for None + 2*2*4 for image
+		let blob2 = Blob::from(vec![0u8; 50]);
+		let entries_mixed: Vec<(TileCoord, Option<Blob>)> = vec![(coord, None), (coord, Some(blob2))];
+		assert_eq!(estimate_entry_bytes(&entries_mixed), 16 + 50);
 
 		// Empty
-		let entries_empty: Vec<(TileCoord, Option<DynamicImage>)> = vec![];
+		let entries_empty: Vec<(TileCoord, Option<Blob>)> = vec![];
 		assert_eq!(estimate_entry_bytes(&entries_empty), 0);
 	}
 
@@ -391,10 +398,7 @@ mod tests {
 		for level in (0..6).rev() {
 			let lvl_bbox = metadata.bbox_pyramid.get_level_bbox(level);
 			let tiles = op.get_tile_stream(*lvl_bbox).await?.to_vec().await;
-			assert!(
-				!tiles.is_empty(),
-				"level {level} should produce at least one tile"
-			);
+			assert!(!tiles.is_empty(), "level {level} should produce at least one tile");
 			for (coord, _) in &tiles {
 				assert_eq!(coord.level, level, "tile should be at level {level}");
 			}
