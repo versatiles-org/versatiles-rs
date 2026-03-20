@@ -4357,6 +4357,7 @@ dependencies = [
  "dashmap",
  "enumset",
  "env_logger",
+ "futures",
  "log",
  "mime_guess",
  "predicates",
