@@ -139,11 +139,11 @@ flate2 = { version = "1.1.9", default-features = false, features = ["default"] }
 zstd = { version = "0.13.3", default-features = false }
 
 # Container/archive dependencies
-tar = { version = "0.4.44", default-features = false }
+tar = { version = "0.4.45", default-features = false }
 
 # Database dependencies
 r2d2 = { version = "0.8.10", default-features = false }
-r2d2_sqlite = { version = "0.32.0", default-features = false }
+r2d2_sqlite = { version = "0.33.0", default-features = false }
 
 # HTTP/Server dependencies
 axum = { version = "0.8.8", default-features = false }
