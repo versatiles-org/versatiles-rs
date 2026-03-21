@@ -102,8 +102,8 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 	let mut tilejson = TileJSON::default();
 	let mut traversal = Traversal::default();
 
+	let progress = runtime.create_progress("scanning containers", paths.len() as u64);
 	for path in &paths {
-		log::info!("scanning container: {path}");
 		let reader = runtime
 			.get_reader_from_str(path)
 			.await
@@ -124,7 +124,9 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 			pyramid: metadata.bbox_pyramid.clone(),
 		});
 		// reader is dropped here, closing the file handle
+		progress.inc(1);
 	}
+	progress.finish();
 
 	let tile_format = first_tile_format.unwrap();
 	let tile_compression = first_tile_compression.unwrap();
