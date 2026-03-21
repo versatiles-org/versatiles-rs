@@ -2,7 +2,10 @@
 
 use super::{EventBus, RuntimeInner, TilesRuntime};
 use crate::{CacheType, ContainerRegistry, ProgressFactory};
-use std::sync::{Arc, Mutex};
+use std::{
+	path::PathBuf,
+	sync::{Arc, Mutex},
+};
 
 /// Builder for creating customized `TilesRuntime` instances
 ///
@@ -18,6 +21,7 @@ use std::sync::{Arc, Mutex};
 /// ```
 pub struct RuntimeBuilder {
 	cache_type: Option<CacheType>,
+	ssh_identity: Option<PathBuf>,
 	#[allow(clippy::type_complexity)]
 	registry_customizer: Vec<Box<dyn FnOnce(&mut ContainerRegistry)>>,
 	silent_progress: bool,
@@ -29,6 +33,7 @@ impl RuntimeBuilder {
 	pub fn new() -> Self {
 		Self {
 			cache_type: None,
+			ssh_identity: None,
 			registry_customizer: Vec::new(),
 			#[cfg(not(test))]
 			silent_progress: false,
@@ -54,6 +59,13 @@ impl RuntimeBuilder {
 	#[must_use]
 	pub fn with_disk_cache(self, path: &std::path::Path) -> Self {
 		self.cache_type(CacheType::Disk(path.to_path_buf()))
+	}
+
+	/// Set the SSH identity file path for SFTP authentication
+	#[must_use]
+	pub fn ssh_identity(mut self, path: PathBuf) -> Self {
+		self.ssh_identity = Some(path);
+		self
 	}
 
 	/// Set whether progress output is silenced
@@ -110,6 +122,7 @@ impl RuntimeBuilder {
 		TilesRuntime {
 			inner: Arc::new(RuntimeInner {
 				cache_type,
+				ssh_identity: self.ssh_identity,
 				registry,
 				event_bus,
 				progress_factory,
@@ -134,6 +147,7 @@ mod tests {
 	fn test_runtime_builder_new() {
 		let builder = RuntimeBuilder::new();
 		assert!(builder.cache_type.is_none());
+		assert!(builder.ssh_identity.is_none());
 		assert!(builder.silent_progress);
 		assert_eq!(builder.registry_customizer.len(), 0);
 	}
@@ -142,6 +156,7 @@ mod tests {
 	fn test_runtime_builder_default() {
 		let builder = RuntimeBuilder::default();
 		assert!(builder.cache_type.is_none());
+		assert!(builder.ssh_identity.is_none());
 		assert!(builder.silent_progress);
 	}
 

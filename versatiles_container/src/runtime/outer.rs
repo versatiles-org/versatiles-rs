@@ -55,6 +55,12 @@ impl TilesRuntime {
 		&self.inner.cache_type
 	}
 
+	/// Get the SSH identity file path, if configured
+	#[must_use]
+	pub fn ssh_identity(&self) -> Option<&Path> {
+		self.inner.ssh_identity.as_deref()
+	}
+
 	/// Get the event bus
 	///
 	/// Use the event bus to subscribe to runtime events or emit custom events.

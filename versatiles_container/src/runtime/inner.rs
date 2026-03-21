@@ -1,9 +1,10 @@
 use super::EventBus;
 use crate::{CacheType, ContainerRegistry, ProgressFactory};
-use std::sync::Mutex;
+use std::{path::PathBuf, sync::Mutex};
 
 pub struct RuntimeInner {
 	pub cache_type: CacheType,
+	pub ssh_identity: Option<PathBuf>,
 	pub registry: ContainerRegistry,
 	pub event_bus: EventBus,
 	pub progress_factory: Mutex<ProgressFactory>,
@@ -22,6 +23,7 @@ mod tests {
 
 		let inner = RuntimeInner {
 			cache_type,
+			ssh_identity: None,
 			registry,
 			event_bus,
 			progress_factory,
@@ -40,6 +42,7 @@ mod tests {
 
 		let inner = RuntimeInner {
 			cache_type,
+			ssh_identity: None,
 			registry,
 			event_bus,
 			progress_factory,
@@ -57,6 +60,7 @@ mod tests {
 
 		let inner = RuntimeInner {
 			cache_type,
+			ssh_identity: None,
 			registry,
 			event_bus,
 			progress_factory,
@@ -77,6 +81,7 @@ mod tests {
 
 		let inner = RuntimeInner {
 			cache_type,
+			ssh_identity: None,
 			registry,
 			event_bus: event_bus.clone(),
 			progress_factory,
