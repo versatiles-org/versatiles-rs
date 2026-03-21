@@ -255,7 +255,7 @@ impl TileSource for MergeSource {
 						Ok(tiles)
 					}
 				})
-				.buffered(8)
+				.buffered((1024u64 / sub_bbox.count_tiles()) as usize)
 				.collect()
 				.await;
 
