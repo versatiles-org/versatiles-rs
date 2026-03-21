@@ -233,34 +233,49 @@ impl TileSource for MergeSource {
 				cache.overlapping_sources(&bbox)
 			};
 
+			// Fetch tiles from all overlapping sources concurrently
+			let cache = Arc::clone(&self.cache);
+			let fetched: Vec<Result<Vec<(TileCoord, Tile)>>> = stream::iter(indices.iter().copied())
+				.map(|idx| {
+					let cache = Arc::clone(&cache);
+					async move {
+						let reader = {
+							let mut cache = cache.lock().await;
+							cache.get_reader(idx).await?
+						};
+						let mut tiles = Vec::new();
+						if let Ok(tile_stream) = reader.get_tile_stream(sub_bbox).await {
+							tile_stream
+								.for_each(|coord, tile| {
+									tiles.push((coord, tile));
+								})
+								.await;
+						}
+						// reader (Arc clone) dropped here — file closes if evicted from cache
+						Ok(tiles)
+					}
+				})
+				.buffered(8)
+				.collect()
+				.await;
+
+			// Merge sequentially in correct order:
 			// Sources listed earlier have higher priority (overlay on top)
 			// We process in reverse order so earlier sources get composited on top
-			for &idx in indices.iter().rev() {
-				let reader = {
-					let mut cache = self.cache.lock().await;
-					cache.get_reader(idx).await?
-				};
-
-				if let Ok(stream) = reader.get_tile_stream(sub_bbox).await {
-					stream
-						.for_each(|coord, tile| {
-							let entry = result_tiles.get_mut(&coord).unwrap();
-							match entry {
-								None => {
-									// No tile yet at this coord - just store it
-									*entry = Some(tile);
-								}
-								Some(existing) => {
-									// Composite: new tile (from earlier source) goes on top
-									if let Ok(merged) = merge_two_tiles(existing, &tile, q, lossless) {
-										*entry = Some(merged);
-									}
-								}
+			for result in fetched.into_iter().rev() {
+				for (coord, tile) in result? {
+					let entry = result_tiles.get_mut(&coord).unwrap();
+					match entry {
+						None => {
+							*entry = Some(tile);
+						}
+						Some(existing) => {
+							if let Ok(merged) = merge_two_tiles(existing, &tile, q, lossless) {
+								*entry = Some(merged);
 							}
-						})
-						.await;
+						}
+					}
 				}
-				// reader (Arc clone) dropped here — file closes if evicted from cache
 			}
 
 			all_tiles.extend(
