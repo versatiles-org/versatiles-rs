@@ -1,13 +1,18 @@
 use anyhow::{Context, Result, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, stream};
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use versatiles_container::{
 	SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesConverterParameters, TilesRuntime,
 	Traversal, convert_tiles_container_to_str,
 };
 use versatiles_core::{TileBBox, TileBBoxMap, TileBBoxPyramid, TileFormat, TileJSON, TileStream};
 use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
+
+/// Maximum number of container readers kept open simultaneously.
+const MAX_OPEN_READERS: usize = 200;
 
 /// Merge multiple .versatiles containers into a single output container.
 ///
@@ -89,22 +94,56 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 
 	log::info!("merging {} containers", paths.len());
 
-	// Open all containers
-	let mut sources: Vec<SharedTileSource> = Vec::new();
+	// Open all containers to collect metadata, then drop the readers
+	let mut source_infos: Vec<SourceInfo> = Vec::new();
+	let mut first_tile_format = None;
+	let mut first_tile_compression = None;
+	let mut pyramid = TileBBoxPyramid::new_empty();
+	let mut tilejson = TileJSON::default();
+	let mut traversal = Traversal::default();
+
 	for path in &paths {
-		log::info!("opening container: {path}");
+		log::info!("scanning container: {path}");
 		let reader = runtime
 			.get_reader_from_str(path)
 			.await
 			.with_context(|| format!("Failed to open container: {path}"))?;
-		sources.push(reader);
+
+		let metadata = reader.metadata();
+		if first_tile_format.is_none() {
+			first_tile_format = Some(metadata.tile_format);
+			first_tile_compression = Some(metadata.tile_compression);
+		}
+
+		tilejson.merge(reader.tilejson())?;
+		traversal.intersect(&metadata.traversal)?;
+		pyramid.include_bbox_pyramid(&metadata.bbox_pyramid);
+
+		source_infos.push(SourceInfo {
+			path: path.clone(),
+			pyramid: metadata.bbox_pyramid.clone(),
+		});
+		// reader is dropped here, closing the file handle
 	}
+
+	let tile_format = first_tile_format.unwrap();
+	let tile_compression = first_tile_compression.unwrap();
 
 	// Parse quality
 	let quality = parse_quality(&args.quality)?;
 
-	// Create the merge source
-	let merge_source = MergeSource::new(sources, quality, args.lossless)?;
+	let metadata = TileSourceMetadata::new(tile_format, tile_compression, pyramid, traversal);
+	metadata.update_tilejson(&mut tilejson);
+
+	// Create the merge source with lazy reader cache
+	let cache = ReaderCache::new(source_infos, MAX_OPEN_READERS, runtime.clone());
+	let merge_source = MergeSource {
+		metadata,
+		tilejson,
+		quality,
+		lossless: args.lossless,
+		cache: Arc::new(Mutex::new(cache)),
+	};
 	let shared: SharedTileSource = merge_source.into_shared();
 
 	let params = TilesConverterParameters::default();
@@ -114,53 +153,119 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 	Ok(())
 }
 
-/// A custom TileSource that merges tiles from multiple containers.
+/// Metadata stored per source container (kept in memory even when reader is closed).
 #[derive(Debug)]
+struct SourceInfo {
+	path: String,
+	pyramid: TileBBoxPyramid,
+}
+
+/// LRU cache of open container readers with a maximum capacity.
+struct ReaderCache {
+	sources: Vec<SourceInfo>,
+	readers: HashMap<usize, SharedTileSource>,
+	usage_order: VecDeque<usize>,
+	max_open: usize,
+	runtime: TilesRuntime,
+}
+
+impl std::fmt::Debug for ReaderCache {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("ReaderCache")
+			.field("sources", &self.sources)
+			.field("open_readers", &self.readers.len())
+			.field("max_open", &self.max_open)
+			.finish_non_exhaustive()
+	}
+}
+
+impl ReaderCache {
+	fn new(sources: Vec<SourceInfo>, max_open: usize, runtime: TilesRuntime) -> Self {
+		Self {
+			sources,
+			readers: HashMap::new(),
+			usage_order: VecDeque::new(),
+			max_open,
+			runtime,
+		}
+	}
+
+	/// Returns indices of sources whose pyramids overlap the given bbox.
+	fn overlapping_sources(&self, bbox: &TileBBox) -> Vec<usize> {
+		self.sources
+			.iter()
+			.enumerate()
+			.filter(|(_, info)| info.pyramid.overlaps_bbox(bbox))
+			.map(|(i, _)| i)
+			.collect()
+	}
+
+	/// Get or open a reader for the source at `index`, evicting LRU readers if at capacity.
+	async fn get_reader(&mut self, index: usize) -> Result<SharedTileSource> {
+		if let Some(reader) = self.readers.get(&index) {
+			// Move to back of usage_order (most recently used)
+			self.usage_order.retain(|&i| i != index);
+			self.usage_order.push_back(index);
+			return Ok(Arc::clone(reader));
+		}
+
+		// Evict LRU readers if at capacity
+		while self.readers.len() >= self.max_open {
+			if let Some(evict_idx) = self.usage_order.pop_front() {
+				self.readers.remove(&evict_idx);
+				log::trace!("evicted reader for source {evict_idx}");
+			} else {
+				break;
+			}
+		}
+
+		// Open a new reader
+		let path = &self.sources[index].path;
+		log::trace!("opening reader for source {index}: {path}");
+		let reader = self
+			.runtime
+			.get_reader_from_str(path)
+			.await
+			.with_context(|| format!("Failed to reopen container: {path}"))?;
+		self.readers.insert(index, Arc::clone(&reader));
+		self.usage_order.push_back(index);
+		Ok(reader)
+	}
+
+	/// Get readers for all sources that overlap the given bbox.
+	async fn get_overlapping_readers(&mut self, bbox: &TileBBox) -> Result<Vec<SharedTileSource>> {
+		let indices = self.overlapping_sources(bbox);
+		let mut readers = Vec::with_capacity(indices.len());
+		for idx in indices {
+			readers.push(self.get_reader(idx).await?);
+		}
+		Ok(readers)
+	}
+}
+
+/// A custom TileSource that merges tiles from multiple containers.
 struct MergeSource {
 	metadata: TileSourceMetadata,
-	sources: Arc<Vec<SharedTileSource>>,
 	tilejson: TileJSON,
 	quality: [Option<u8>; 32],
 	lossless: bool,
+	cache: Arc<Mutex<ReaderCache>>,
 }
 
-impl MergeSource {
-	fn new(sources: Vec<SharedTileSource>, quality: [Option<u8>; 32], lossless: bool) -> Result<Self> {
-		ensure!(!sources.is_empty(), "must have at least one source");
-
-		let first_metadata = sources[0].metadata();
-		let tile_format = first_metadata.tile_format;
-		let tile_compression = first_metadata.tile_compression;
-
-		let mut pyramid = TileBBoxPyramid::new_empty();
-		let mut tilejson = TileJSON::default();
-		let mut traversal = Traversal::default();
-
-		for source in &sources {
-			tilejson.merge(source.tilejson())?;
-			let metadata = source.metadata();
-			traversal.intersect(&metadata.traversal)?;
-			pyramid.include_bbox_pyramid(&metadata.bbox_pyramid);
-		}
-
-		let metadata = TileSourceMetadata::new(tile_format, tile_compression, pyramid, traversal);
-		metadata.update_tilejson(&mut tilejson);
-
-		Ok(Self {
-			metadata,
-			sources: Arc::new(sources),
-			tilejson,
-			quality,
-			lossless,
-		})
+impl std::fmt::Debug for MergeSource {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("MergeSource")
+			.field("metadata", &self.metadata)
+			.field("quality", &self.quality)
+			.field("lossless", &self.lossless)
+			.finish_non_exhaustive()
 	}
 }
 
 #[async_trait]
 impl TileSource for MergeSource {
 	fn source_type(&self) -> Arc<SourceType> {
-		let source_types: Vec<Arc<SourceType>> = self.sources.iter().map(|s| s.source_type()).collect();
-		SourceType::new_composite("raster_merge", &source_types)
+		SourceType::new_container("raster_merge", "merge")
 	}
 
 	fn metadata(&self) -> &TileSourceMetadata {
@@ -174,7 +279,13 @@ impl TileSource for MergeSource {
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("raster_merge::get_tile_stream {bbox:?}");
 
-		let sources = Arc::clone(&self.sources);
+		// Get only the readers that overlap this bbox
+		let sources = {
+			let mut cache = self.cache.lock().await;
+			cache.get_overlapping_readers(&bbox).await?
+		};
+
+		let sources = Arc::new(sources);
 		let quality = self.quality;
 		let lossless = self.lossless;
 
