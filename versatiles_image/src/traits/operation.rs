@@ -252,39 +252,57 @@ where
 	fn overlay_additive(&mut self, top: &DynamicImage) -> Result<()> {
 		self.ensure_same_size(top)?;
 
-		match (self, top) {
-			(DynamicImage::ImageRgba8(base_img), DynamicImage::ImageRgba8(top_img)) => {
-				for (base_px, top_px) in base_img.pixels_mut().zip(top_img.pixels()) {
-					let a_b = u16::from(base_px[3]);
-					let a_t = u16::from(top_px[3]);
-					let a_out = (a_b + a_t).min(255);
-					// Snap near-opaque alpha to fully opaque to compensate for rounding
-					let a_out = if a_out >= 250 { 255 } else { a_out };
-					if a_out == 0 {
-						continue;
-					}
-					base_px[0] = ((u16::from(base_px[0]) * a_b + u16::from(top_px[0]) * a_t + a_out / 2) / a_out) as u8;
-					base_px[1] = ((u16::from(base_px[1]) * a_b + u16::from(top_px[1]) * a_t + a_out / 2) / a_out) as u8;
-					base_px[2] = ((u16::from(base_px[2]) * a_b + u16::from(top_px[2]) * a_t + a_out / 2) / a_out) as u8;
-					base_px[3] = a_out as u8;
-				}
-				Ok(())
+		// Helper: blend a single pixel given base (r,g,b,a) and top (r,g,b,a)
+		fn blend(base_px: &[u8; 4], top_px: &[u8; 4]) -> [u8; 4] {
+			let a_b = u16::from(base_px[3]);
+			let a_t = u16::from(top_px[3]);
+			let a_out = (a_b + a_t).min(255);
+			// Snap near-opaque alpha to fully opaque to compensate for rounding
+			let a_out = if a_out >= 250 { 255 } else { a_out };
+			if a_out == 0 {
+				return [0, 0, 0, 0];
 			}
-			(DynamicImage::ImageRgb8(base_img), DynamicImage::ImageRgb8(top_img)) => {
-				// No alpha: top overwrites base (both fully opaque)
+			[
+				((u16::from(base_px[0]) * a_b + u16::from(top_px[0]) * a_t + a_out / 2) / a_out) as u8,
+				((u16::from(base_px[1]) * a_b + u16::from(top_px[1]) * a_t + a_out / 2) / a_out) as u8,
+				((u16::from(base_px[2]) * a_b + u16::from(top_px[2]) * a_t + a_out / 2) / a_out) as u8,
+				a_out as u8,
+			]
+		}
+
+		// RGB top is fully opaque and replaces base entirely
+		if let DynamicImage::ImageRgb8(top_img) = top {
+			*self = DynamicImage::ImageRgb8(top_img.clone());
+			return Ok(());
+		}
+
+		let DynamicImage::ImageRgba8(top_img) = top else {
+			bail!(
+				"overlay_additive: unsupported top image type {:?}, expected RGB8 or RGBA8",
+				top.color()
+			);
+		};
+
+		match self {
+			DynamicImage::ImageRgba8(base_img) => {
 				for (base_px, top_px) in base_img.pixels_mut().zip(top_img.pixels()) {
-					*base_px = *top_px;
+					*base_px = image::Rgba(blend(&base_px.0, &top_px.0));
 				}
-				Ok(())
 			}
-			(base, top) => {
+			DynamicImage::ImageRgb8(base_img) => {
+				for (base_px, top_px) in base_img.pixels_mut().zip(top_img.pixels()) {
+					let p = blend(&[base_px.0[0], base_px.0[1], base_px.0[2], 255], &top_px.0);
+					*base_px = image::Rgb([p[0], p[1], p[2]]);
+				}
+			}
+			_ => {
 				bail!(
-					"overlay_additive requires matching RGBA8 or RGB8 images, got base {:?} and top {:?}",
-					base.color(),
-					top.color()
+					"overlay_additive: unsupported base image type {:?}, expected RGB8 or RGBA8",
+					self.color()
 				);
 			}
 		}
+		Ok(())
 	}
 }
 
@@ -561,6 +579,36 @@ mod tests {
 		base.overlay_additive(&top).unwrap();
 		let px = base.get_pixel(0, 0).0;
 		assert_eq!(px, [255, 128, 64, 255]);
+	}
+
+	#[test]
+	fn overlay_additive_rgba_base_rgb_top() {
+		// RGBA base with partial alpha, RGB top (fully opaque) → top dominates
+		let mut base = DynamicImage::from_raw(1, 1, vec![0u8, 0, 255, 100]).unwrap();
+		let top = DynamicImage::from_fn(1, 1, |_x, _y| [255, 0, 0]);
+
+		base.overlay_additive(&top).unwrap();
+		let px = base.get_pixel(0, 0).0;
+		assert_eq!(px[3], 255); // 100 + 255 = 355 → clamped to 255
+		// color_out = (0*100 + 255*255 + 127) / 255 ≈ 255
+		assert_eq!(px[0], 255);
+	}
+
+	#[test]
+	fn overlay_additive_rgb_base_rgba_top() {
+		// RGB base (fully opaque) overlayed by RGBA top with partial alpha
+		// Base stays RGB (alpha is dropped since base has no alpha channel)
+		let mut base = DynamicImage::from_fn(1, 1, |_x, _y| [0, 0, 255]);
+		let top = DynamicImage::from_raw(1, 1, vec![255u8, 0, 0, 128]).unwrap();
+
+		base.overlay_additive(&top).unwrap();
+		assert!(base.as_rgb8().is_some());
+		let px = base.get_pixel(0, 0).0;
+		// blend treats base as alpha=255: a_out = min(255+128, 255) = 255
+		// r = (0*255 + 255*128 + 127) / 255 = 128
+		// b = (255*255 + 0*128 + 127) / 255 = 255
+		assert_eq!(px[0], 128);
+		assert_eq!(px[2], 255);
 	}
 
 	#[test]
