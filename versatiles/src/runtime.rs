@@ -10,6 +10,11 @@ pub fn create_runtime_builder() -> RuntimeBuilder {
 		builder = builder.with_disk_cache(&PathBuf::from(cache_dir));
 	}
 
+	// Allow setting SSH identity file via environment variable
+	if let Ok(ssh_identity) = std::env::var("VERSATILES_SSH_IDENTITY") {
+		builder = builder.ssh_identity(PathBuf::from(ssh_identity));
+	}
+
 	builder
 }
 

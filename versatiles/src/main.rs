@@ -31,7 +31,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use log::LevelFilter;
 use std::{io::Write, path::PathBuf};
-use versatiles::runtime::{create_runtime, create_runtime_builder};
+use versatiles::runtime::create_runtime_builder;
 use versatiles_container::TilesRuntime;
 
 /// Command-line interface for VersaTiles
@@ -83,6 +83,15 @@ struct Cli {
 		help = "Directory for temporary cache files (overrides VERSATILES_CACHE_DIR)"
 	)]
 	cache_dir: Option<PathBuf>,
+
+	#[arg(
+		long,
+		value_name = "FILE",
+		global = true,
+		display_order = 99,
+		help = "SSH identity file for SFTP authentication (overrides VERSATILES_SSH_IDENTITY)"
+	)]
+	ssh_identity: Option<PathBuf>,
 }
 
 /// Define subcommands for the command-line interface
@@ -142,10 +151,15 @@ fn main() {
 		})
 		.init();
 
-	let runtime = if let Some(cache_dir) = &cli.cache_dir {
-		create_runtime_builder().with_disk_cache(cache_dir).build()
-	} else {
-		create_runtime()
+	let runtime = {
+		let mut builder = create_runtime_builder();
+		if let Some(cache_dir) = &cli.cache_dir {
+			builder = builder.with_disk_cache(cache_dir);
+		}
+		if let Some(ssh_identity) = &cli.ssh_identity {
+			builder = builder.ssh_identity(ssh_identity.clone());
+		}
+		builder.build()
 	};
 
 	if let Err(err) = run(&cli, &runtime) {

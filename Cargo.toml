@@ -185,6 +185,7 @@ tempfile = "3.27.0"
 versatiles = { version = "3.8.1", path = "versatiles", default-features = false }
 versatiles_container = { version = "3.8.1", path = "versatiles_container", default-features = false }
 versatiles_core = { version = "3.8.1", path = "versatiles_core", default-features = false }
+ssh2-config = { version = "0.2", default-features = false }
 versatiles_derive = { version = "3.8.1", path = "versatiles_derive", default-features = false }
 versatiles_geometry = { version = "3.8.1", path = "versatiles_geometry", default-features = false }
 versatiles_image = { version = "3.8.1", path = "versatiles_image", default-features = false }
