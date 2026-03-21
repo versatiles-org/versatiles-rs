@@ -1,5 +1,5 @@
 use super::reader_cache::{ReaderCache, SourceInfo};
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::{StreamExt, stream};
 use std::sync::Arc;
@@ -147,8 +147,8 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 		source_infos.push(info);
 	}
 
-	let tile_format = first_tile_format.unwrap();
-	let tile_compression = first_tile_compression.unwrap();
+	let tile_format = first_tile_format.ok_or(anyhow!("No tile format found"))?;
+	let tile_compression = first_tile_compression.ok_or(anyhow!("No tile compression found"))?;
 
 	// Parse quality
 	let quality = parse_quality(&args.quality)?;
