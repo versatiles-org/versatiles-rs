@@ -31,6 +31,10 @@ pub struct Merge {
 	/// (e.g. "80,70,14:50,15:20"). Default: 75.
 	#[arg(long, value_name = "str", default_value = "75")]
 	quality: String,
+
+	/// Encode translucent tiles as lossless WebP instead of using the lossy --quality setting
+	#[arg(long)]
+	lossless: bool,
 }
 
 /// Parse a quality string using the same syntax as raster_format.
@@ -100,7 +104,7 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 	let quality = parse_quality(&args.quality)?;
 
 	// Create the merge source
-	let merge_source = MergeSource::new(sources, quality)?;
+	let merge_source = MergeSource::new(sources, quality, args.lossless)?;
 	let shared: SharedTileSource = merge_source.into_shared();
 
 	let params = TilesConverterParameters::default();
@@ -117,10 +121,11 @@ struct MergeSource {
 	sources: Arc<Vec<SharedTileSource>>,
 	tilejson: TileJSON,
 	quality: [Option<u8>; 32],
+	lossless: bool,
 }
 
 impl MergeSource {
-	fn new(sources: Vec<SharedTileSource>, quality: [Option<u8>; 32]) -> Result<Self> {
+	fn new(sources: Vec<SharedTileSource>, quality: [Option<u8>; 32], lossless: bool) -> Result<Self> {
 		ensure!(!sources.is_empty(), "must have at least one source");
 
 		let first_metadata = sources[0].metadata();
@@ -146,6 +151,7 @@ impl MergeSource {
 			sources: Arc::new(sources),
 			tilejson,
 			quality,
+			lossless,
 		})
 	}
 }
@@ -170,6 +176,7 @@ impl TileSource for MergeSource {
 
 		let sources = Arc::clone(&self.sources);
 		let quality = self.quality;
+		let lossless = self.lossless;
 
 		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
@@ -199,7 +206,7 @@ impl TileSource for MergeSource {
 								}
 								Some(existing) => {
 									// Composite: new tile (from earlier source) goes on top
-									if let Ok(merged) = merge_two_tiles(existing, &tile, q) {
+									if let Ok(merged) = merge_two_tiles(existing, &tile, q, lossless) {
 										*entry = Some(merged);
 									}
 								}
@@ -220,7 +227,7 @@ impl TileSource for MergeSource {
 
 /// Merge two tiles: `base` (bottom) and `top` (overlay on top).
 /// Returns the merged tile.
-fn merge_two_tiles(base: &mut Tile, top: &Tile, quality: Option<u8>) -> Result<Tile> {
+fn merge_two_tiles(base: &mut Tile, top: &Tile, quality: Option<u8>, lossless: bool) -> Result<Tile> {
 	// Check if top tile is opaque - if so, it completely covers the base
 	let mut top_clone = top.clone();
 	if top_clone.is_opaque()? {
@@ -240,11 +247,7 @@ fn merge_two_tiles(base: &mut Tile, top: &Tile, quality: Option<u8>) -> Result<T
 	let is_opaque = result.is_opaque();
 
 	// Encode as WebP
-	let effective_quality = if is_opaque {
-		quality
-	} else {
-		Some(100) // lossless for translucent
-	};
+	let effective_quality = if !is_opaque && lossless { Some(100) } else { quality };
 
 	let tile = Tile::from_image(result, TileFormat::WEBP)?;
 	let mut tile = tile;
