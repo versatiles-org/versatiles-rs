@@ -220,7 +220,7 @@ impl TileSource for MergeSource {
 		// Readers are briefly borrowed from the cache per source, then dropped,
 		// so file handles don't accumulate across concurrent streams.
 		let mut all_tiles: Vec<(TileCoord, Tile)> = Vec::new();
-		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
+		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(16).collect();
 
 		for sub_bbox in sub_bboxes {
 			let level = sub_bbox.level;
