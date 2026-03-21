@@ -235,7 +235,7 @@ impl TileSource for MergeSource {
 
 			// Fetch tiles from all overlapping sources concurrently
 			let cache = Arc::clone(&self.cache);
-			let fetched: Vec<Result<Vec<(TileCoord, Tile)>>> = stream::iter(indices.iter().copied())
+			let fetched: Vec<Result<Vec<(TileCoord, Tile)>>> = stream::iter(indices)
 				.map(|idx| {
 					let cache = Arc::clone(&cache);
 					async move {
