@@ -1,15 +1,20 @@
 use anyhow::{Context, Result, bail};
 use reqwest::Url;
 use ssh2::Session;
-use std::{net::TcpStream, path::PathBuf};
+use std::{
+	net::TcpStream,
+	path::{Path, PathBuf},
+};
 
 /// Opens an authenticated SSH session from an SFTP URL.
 ///
 /// # Authentication priority
 /// 1. Credentials in URL (password auth)
-/// 2. SSH agent
-/// 3. Default key files (~/.ssh/id_ed25519, id_rsa, id_ecdsa)
-pub(super) fn open_session(url: &Url) -> Result<Session> {
+/// 2. Explicit identity file (if provided)
+/// 3. SSH agent
+/// 4. `~/.ssh/config` `IdentityFile` for the target host
+/// 5. Default key files (~/.ssh/id_ed25519, id_rsa, id_ecdsa)
+pub(super) fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Session> {
 	let host = url.host_str().context("SFTP URL has no host")?;
 	let port = url.port().unwrap_or(22);
 	let username = if url.username().is_empty() {
@@ -34,11 +39,21 @@ pub(super) fn open_session(url: &Url) -> Result<Session> {
 		Err(ssh2::Error::from_errno(ssh2::ErrorCode::Session(-1)))
 	};
 
-	if auth_result.is_err() {
+	if auth_result.is_err()
+		&& let Some(identity) = identity_file
+		&& identity.exists()
+	{
+		let _ = session.userauth_pubkey_file(username, None, identity, None);
+	}
+
+	if !session.authenticated() {
 		let agent_result = try_agent_auth(&session, username);
 		if agent_result.is_err() {
-			try_key_auth(&session, username)
-				.with_context(|| format!("all authentication methods failed for {username}@{host}:{port}"))?;
+			let _ = try_config_key_auth(&session, username, host);
+			if !session.authenticated() {
+				try_key_auth(&session, username)
+					.with_context(|| format!("all authentication methods failed for {username}@{host}:{port}"))?;
+			}
 		}
 	}
 
@@ -72,6 +87,39 @@ fn try_agent_auth(session: &Session, username: &str) -> Result<()> {
 		}
 	}
 	bail!("SSH agent has no suitable identities for user '{username}'")
+}
+
+/// Try authenticating with identity files from `~/.ssh/config`.
+fn try_config_key_auth(session: &Session, username: &str, host: &str) -> Result<()> {
+	use ssh2_config::{ParseRule, SshConfig};
+	use std::fs::File;
+	use std::io::BufReader;
+
+	let home = dirs_home()?;
+	let config_path = home.join(".ssh/config");
+	if !config_path.exists() {
+		bail!("no ~/.ssh/config found");
+	}
+
+	let file = File::open(&config_path).with_context(|| format!("failed to open {config_path:?}"))?;
+	let mut reader = BufReader::new(file);
+	let config = SshConfig::default().parse(&mut reader, ParseRule::ALLOW_UNKNOWN_FIELDS)?;
+
+	let params = config.query(host);
+	let identity_files = params.identity_file.unwrap_or_default();
+
+	for identity in &identity_files {
+		// Expand ~ in paths
+		let expanded = if identity.starts_with("~") {
+			home.join(identity.strip_prefix("~").unwrap_or(identity))
+		} else {
+			identity.clone()
+		};
+		if expanded.exists() && session.userauth_pubkey_file(username, None, &expanded, None).is_ok() {
+			return Ok(());
+		}
+	}
+	bail!("no suitable SSH key found in ~/.ssh/config for {host}")
 }
 
 /// Try authenticating with default key files.
