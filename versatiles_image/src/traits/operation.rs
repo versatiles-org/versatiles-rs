@@ -639,4 +639,18 @@ mod tests {
 		let top = DynamicImage::from_raw(3, 3, vec![0u8; 36]).unwrap();
 		assert!(base.overlay_additive(&top).is_err());
 	}
+
+	#[test]
+	fn overlay_additive_unsupported_top_type_errors() {
+		let mut base = DynamicImage::from_raw(2, 2, vec![0u8; 16]).unwrap(); // RGBA
+		let top = DynamicImage::new_luma8(2, 2); // L8
+		assert!(base.overlay_additive(&top).is_err());
+	}
+
+	#[test]
+	fn overlay_additive_unsupported_base_type_errors() {
+		let mut base = DynamicImage::new_luma8(2, 2); // L8
+		let top = DynamicImage::from_raw(2, 2, vec![0u8; 16]).unwrap(); // RGBA
+		assert!(base.overlay_additive(&top).is_err());
+	}
 }
