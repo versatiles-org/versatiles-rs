@@ -8,7 +8,7 @@ use versatiles_container::{
 	SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesConverterParameters, TilesRuntime,
 	Traversal, convert_tiles_container_to_str,
 };
-use versatiles_core::{TileBBox, TileBBoxMap, TileBBoxPyramid, TileFormat, TileJSON, TileStream};
+use versatiles_core::{TileBBox, TileBBoxMap, TileBBoxPyramid, TileCoord, TileFormat, TileJSON, TileStream};
 use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 
 /// Maximum number of container readers kept open simultaneously.
@@ -210,34 +210,35 @@ impl TileSource for MergeSource {
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("raster_merge::get_tile_stream {bbox:?}");
 
-		// Get only the readers that overlap this bbox
-		let sources = {
-			let mut cache = self.cache.lock().await;
-			cache.get_overlapping_readers(&bbox).await?
-		};
-
-		let sources = Arc::new(sources);
 		let quality = self.quality;
 		let lossless = self.lossless;
 
+		// Eagerly fetch and merge tiles for each sub_bbox.
+		// Readers are briefly borrowed from the cache per source, then dropped,
+		// so file handles don't accumulate across concurrent streams.
+		let mut all_tiles: Vec<(TileCoord, Tile)> = Vec::new();
 		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
-		Ok(TileStream::from_streams(stream::iter(sub_bboxes).map(move |bbox| {
-			let sources = Arc::clone(&sources);
-			async move {
-				let level = bbox.level;
-				let q = quality[level as usize];
+		for sub_bbox in sub_bboxes {
+			let level = sub_bbox.level;
+			let q = quality[level as usize];
+			let mut result_tiles: TileBBoxMap<Option<Tile>> = TileBBoxMap::new_default(sub_bbox)?;
 
-				let mut result_tiles: TileBBoxMap<Option<Tile>> = TileBBoxMap::new_default(bbox).unwrap();
+			// Get overlapping source indices (no readers opened yet)
+			let indices: Vec<usize> = {
+				let cache = self.cache.lock().await;
+				cache.overlapping_sources(&bbox)
+			};
 
-				// Collect tiles from all sources for each coordinate
-				// Sources listed earlier have higher priority (overlay on top)
-				// We process in reverse order so earlier sources get composited on top
-				for source in sources.iter().rev() {
-					let Ok(stream) = source.get_tile_stream(bbox).await else {
-						continue;
-					};
+			// Sources listed earlier have higher priority (overlay on top)
+			// We process in reverse order so earlier sources get composited on top
+			for &idx in indices.iter().rev() {
+				let reader = {
+					let mut cache = self.cache.lock().await;
+					cache.get_reader(idx).await?
+				};
 
+				if let Ok(stream) = reader.get_tile_stream(sub_bbox).await {
 					stream
 						.for_each(|coord, tile| {
 							let entry = result_tiles.get_mut(&coord).unwrap();
@@ -256,14 +257,17 @@ impl TileSource for MergeSource {
 						})
 						.await;
 				}
-
-				let vec = result_tiles
-					.into_iter()
-					.filter_map(|(coord, item)| item.map(|tile| (coord, tile)))
-					.collect::<Vec<_>>();
-				TileStream::from_vec(vec)
+				// reader (Arc clone) dropped here — file closes if evicted from cache
 			}
-		})))
+
+			all_tiles.extend(
+				result_tiles
+					.into_iter()
+					.filter_map(|(coord, item)| item.map(|tile| (coord, tile))),
+			);
+		}
+
+		Ok(TileStream::from_vec(all_tiles))
 	}
 }
 

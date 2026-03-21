@@ -46,7 +46,7 @@ impl ReaderCache {
 	}
 
 	/// Returns indices of sources whose pyramids overlap the given bbox.
-	fn overlapping_sources(&self, bbox: &TileBBox) -> Vec<usize> {
+	pub fn overlapping_sources(&self, bbox: &TileBBox) -> Vec<usize> {
 		self
 			.sources
 			.iter()
@@ -57,7 +57,7 @@ impl ReaderCache {
 	}
 
 	/// Get or open a reader for the source at `index`, evicting LRU readers if at capacity.
-	async fn get_reader(&mut self, index: usize) -> Result<SharedTileSource> {
+	pub async fn get_reader(&mut self, index: usize) -> Result<SharedTileSource> {
 		if let Some(reader) = self.readers.get(&index) {
 			// Move to back of usage_order (most recently used)
 			self.usage_order.retain(|&i| i != index);
@@ -86,15 +86,5 @@ impl ReaderCache {
 		self.readers.insert(index, Arc::clone(&reader));
 		self.usage_order.push_back(index);
 		Ok(reader)
-	}
-
-	/// Get readers for all sources that overlap the given bbox.
-	pub async fn get_overlapping_readers(&mut self, bbox: &TileBBox) -> Result<Vec<SharedTileSource>> {
-		let indices = self.overlapping_sources(bbox);
-		let mut readers = Vec::with_capacity(indices.len());
-		for idx in indices {
-			readers.push(self.get_reader(idx).await?);
-		}
-		Ok(readers)
 	}
 }
