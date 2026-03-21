@@ -47,7 +47,8 @@ impl ReaderCache {
 
 	/// Returns indices of sources whose pyramids overlap the given bbox.
 	fn overlapping_sources(&self, bbox: &TileBBox) -> Vec<usize> {
-		self.sources
+		self
+			.sources
 			.iter()
 			.enumerate()
 			.filter(|(_, info)| info.pyramid.overlaps_bbox(bbox))

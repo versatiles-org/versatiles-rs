@@ -94,7 +94,40 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 
 	log::info!("merging {} containers", paths.len());
 
-	// Open all containers to collect metadata, then drop the readers
+	// Scan all containers in parallel to collect metadata, then drop the readers
+	let progress = runtime.create_progress("scanning containers", paths.len() as u64);
+	let scan_results: Vec<Result<_>> = stream::iter(&paths)
+		.map(|path| {
+			let runtime = runtime.clone();
+			let progress = &progress;
+			async move {
+				let reader = runtime
+					.get_reader_from_str(path)
+					.await
+					.with_context(|| format!("Failed to open container: {path}"))?;
+				let metadata = reader.metadata();
+				let result = (
+					SourceInfo {
+						path: path.clone(),
+						pyramid: metadata.bbox_pyramid.clone(),
+					},
+					metadata.tile_format,
+					metadata.tile_compression,
+					reader.tilejson().clone(),
+					metadata.traversal.clone(),
+					metadata.bbox_pyramid.clone(),
+				);
+				// reader is dropped here, closing the file handle
+				progress.inc(1);
+				Ok(result)
+			}
+		})
+		.buffered(64)
+		.collect()
+		.await;
+	progress.finish();
+
+	// Merge results sequentially (order matters for source priority)
 	let mut source_infos: Vec<SourceInfo> = Vec::new();
 	let mut first_tile_format = None;
 	let mut first_tile_compression = None;
@@ -102,31 +135,17 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 	let mut tilejson = TileJSON::default();
 	let mut traversal = Traversal::default();
 
-	let progress = runtime.create_progress("scanning containers", paths.len() as u64);
-	for path in &paths {
-		let reader = runtime
-			.get_reader_from_str(path)
-			.await
-			.with_context(|| format!("Failed to open container: {path}"))?;
-
-		let metadata = reader.metadata();
+	for result in scan_results {
+		let (info, tile_format, tile_compression, tj, trav, pyr) = result?;
 		if first_tile_format.is_none() {
-			first_tile_format = Some(metadata.tile_format);
-			first_tile_compression = Some(metadata.tile_compression);
+			first_tile_format = Some(tile_format);
+			first_tile_compression = Some(tile_compression);
 		}
-
-		tilejson.merge(reader.tilejson())?;
-		traversal.intersect(&metadata.traversal)?;
-		pyramid.include_bbox_pyramid(&metadata.bbox_pyramid);
-
-		source_infos.push(SourceInfo {
-			path: path.clone(),
-			pyramid: metadata.bbox_pyramid.clone(),
-		});
-		// reader is dropped here, closing the file handle
-		progress.inc(1);
+		tilejson.merge(&tj)?;
+		traversal.intersect(&trav)?;
+		pyramid.include_bbox_pyramid(&pyr);
+		source_infos.push(info);
 	}
-	progress.finish();
 
 	let tile_format = first_tile_format.unwrap();
 	let tile_compression = first_tile_compression.unwrap();
