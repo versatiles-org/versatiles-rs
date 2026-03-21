@@ -6,6 +6,7 @@ use reqwest::Url;
 use ssh2::Session;
 use std::{
 	io::{Read, Seek, SeekFrom},
+	path::Path,
 	sync::Mutex,
 };
 
@@ -24,17 +25,10 @@ impl std::fmt::Debug for DataReaderSftp {
 	}
 }
 
-impl TryFrom<&Url> for DataReaderSftp {
-	type Error = anyhow::Error;
-
-	/// Opens a remote file for reading via SFTP.
-	///
-	/// # Authentication priority
-	/// 1. Credentials in URL (password auth)
-	/// 2. SSH agent
-	/// 3. Default key files (~/.ssh/id_ed25519, id_rsa, id_ecdsa)
-	fn try_from(url: &Url) -> Result<DataReaderSftp> {
-		let session = sftp_utils::open_session(url)?;
+impl DataReaderSftp {
+	/// Opens a remote file for reading via SFTP with an optional identity file.
+	pub fn open(url: &Url, identity_file: Option<&Path>) -> Result<DataReaderSftp> {
+		let session = sftp_utils::open_session(url, identity_file)?;
 		let path = sftp_utils::remote_path(url);
 		let name = sftp_utils::display_name(url);
 
@@ -54,6 +48,15 @@ impl TryFrom<&Url> for DataReaderSftp {
 			name,
 			_session: session,
 		})
+	}
+}
+
+impl TryFrom<&Url> for DataReaderSftp {
+	type Error = anyhow::Error;
+
+	/// Opens a remote file for reading via SFTP (no explicit identity file).
+	fn try_from(url: &Url) -> Result<DataReaderSftp> {
+		Self::open(url, None)
 	}
 }
 

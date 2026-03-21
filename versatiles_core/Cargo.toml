@@ -36,6 +36,7 @@ regex.workspace = true
 reqwest.workspace = true
 tokio.workspace = true
 ssh2 = { version = "0.9", optional = true }
+ssh2-config = { workspace = true, optional = true }
 
 versatiles_derive.workspace = true
 
@@ -60,7 +61,7 @@ moka.workspace = true
 [features]
 default = []
 cli = ["dep:colored", "dep:clap"]
-ssh2 = ["dep:ssh2"]
+ssh2 = ["dep:ssh2", "dep:ssh2-config"]
 test = []
 
 [[bench]]

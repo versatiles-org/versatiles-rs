@@ -5,7 +5,7 @@ use reqwest::Url;
 use ssh2::Session;
 use std::{
 	io::{Seek, SeekFrom, Write},
-	path::PathBuf,
+	path::{Path, PathBuf},
 };
 
 /// A struct that provides writing capabilities to a remote file via SFTP.
@@ -26,8 +26,8 @@ impl DataWriterSftp {
 	/// 1. Credentials in URL (password auth)
 	/// 2. SSH agent
 	/// 3. Default key files (~/.ssh/id_ed25519, id_rsa, id_ecdsa)
-	pub fn from_url(url: &Url) -> Result<Self> {
-		let session = sftp_utils::open_session(url)?;
+	pub fn from_url(url: &Url, identity_file: Option<&Path>) -> Result<Self> {
+		let session = sftp_utils::open_session(url, identity_file)?;
 		let path = sftp_utils::remote_path(url);
 
 		let sftp = session.sftp()?;

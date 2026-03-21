@@ -137,7 +137,7 @@ impl ContainerRegistry {
 				let reader: DataReader = match url.scheme() {
 					#[cfg(feature = "ssh2")]
 					"sftp" => Box::new(
-						DataReaderSftp::try_from(&url)
+						DataReaderSftp::open(&url, runtime.ssh_identity())
 							.with_context(|| format!("Failed to create SFTP data reader for URL '{url}'"))?,
 					),
 					"http" | "https" => Box::new(
@@ -242,7 +242,7 @@ impl ContainerRegistry {
 
 		let extension = sanitize_extension(&remote_path.extension().unwrap_or_default().to_string_lossy());
 
-		let writer = DataWriterSftp::from_url(&url)?;
+		let writer = DataWriterSftp::from_url(&url, runtime.ssh_identity())?;
 
 		let entry = self
 			.writers
