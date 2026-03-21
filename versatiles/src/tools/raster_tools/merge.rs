@@ -135,7 +135,6 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 	let mut tilejson = TileJSON::default();
 	let mut traversal = Traversal::default();
 
-	let progress = runtime.create_progress("merging metadata", scan_results.len() as u64);
 	for result in scan_results {
 		let (info, tile_format, tile_compression, tj, trav, pyr) = result?;
 		if first_tile_format.is_none() {
@@ -146,9 +145,7 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 		traversal.intersect(&trav)?;
 		pyramid.include_bbox_pyramid(&pyr);
 		source_infos.push(info);
-		progress.inc(1);
 	}
-	progress.finish();
 
 	let tile_format = first_tile_format.ok_or(anyhow!("No tile format found"))?;
 	let tile_compression = first_tile_compression.ok_or(anyhow!("No tile compression found"))?;
