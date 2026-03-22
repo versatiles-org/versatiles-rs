@@ -20,6 +20,28 @@ use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation
 /// semi-transparent images using additive alpha blending.
 ///
 /// Tiles from containers listed earlier in the input file overlay tiles from containers listed later.
+///
+/// # Tile processing paths
+///
+/// Each tile coordinate follows one of these paths:
+///
+/// 1. **Opaque, no overlap** — The first tile seen at a coordinate is opaque.
+///    Written to the TAR as-is (original encoding preserved, no re-encoding).
+///
+/// 2. **Opaque after merge** — A translucent tile in the buffer is composited with a
+///    new tile and the result is fully opaque. The merged image is re-encoded as lossy
+///    WebP at the configured `--quality` and written to the TAR.
+///
+/// 3. **Still translucent after merge** — Compositing produces a translucent result.
+///    The merged image is re-encoded as WebP (lossy at `--quality`, or lossless if
+///    `--lossless` is set) and kept in the buffer for further compositing.
+///
+/// 4. **Translucent, never overlapped** — A translucent tile that is never covered by
+///    another source. At flush time it is re-encoded as lossy WebP at `--quality`
+///    (or lossless WebP if `--lossless` is set) before writing to the TAR.
+///
+/// In short: opaque tiles pass through unchanged, while every translucent tile that
+/// reaches the output is re-encoded with the user's quality/lossless settings.
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
 pub struct Merge {
@@ -180,10 +202,14 @@ fn build_sweep_order(num_sources: usize, pyramids: &[TileBBoxPyramid]) -> (Vec<u
 }
 
 /// Flush translucent tiles whose x-column is no longer covered by any remaining source.
+/// Each tile is re-encoded with the configured quality/lossless settings before writing.
+#[allow(clippy::too_many_arguments)]
 fn sweep_flush<W: Write>(
 	remaining_min_x: &[Option<u32>; NUM_LEVELS],
 	translucent_buffer: &Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>>,
 	builder: &Arc<Mutex<Builder<W>>>,
+	quality: &[Option<u8>; 32],
+	lossless: bool,
 	tile_compression: TileCompression,
 	ext_format: &str,
 	ext_compression: &str,
@@ -209,6 +235,7 @@ fn sweep_flush<W: Write>(
 	log::debug!("sweep-line flush: writing {} translucent tiles", to_flush.len());
 	let mut b = builder.lock().unwrap();
 	for (_, (coord, tile)) in to_flush {
+		let tile = reencode_translucent_tile(tile, quality[coord.level as usize], lossless)?;
 		let (filename, blob) = prepare_tile_entry(&coord, tile, tile_compression, ext_format, ext_compression)?;
 		append_blob_to_tar(&mut b, &filename, &blob)?;
 	}
@@ -311,6 +338,8 @@ async fn merge_to_tar(
 				&suffix[pos + 1],
 				&translucent_buffer,
 				&builder,
+				quality,
+				lossless,
 				tc,
 				&ext_format,
 				&ext_compression,
@@ -336,6 +365,8 @@ async fn merge_to_tar(
 	flush_translucent_tiles(
 		&mut builder,
 		translucent_buffer,
+		quality,
+		lossless,
 		tc,
 		ext_format,
 		ext_compression,
@@ -425,10 +456,13 @@ async fn process_tile_stream<W: Write + Send + 'static>(
 	Ok(())
 }
 
-/// Flush remaining translucent tiles to the TAR.
+/// Flush remaining translucent tiles to the TAR, re-encoding each with quality/lossless settings.
+#[allow(clippy::too_many_arguments)]
 fn flush_translucent_tiles<W: Write>(
 	builder: &mut Builder<W>,
 	translucent_buffer: HashMap<u64, (TileCoord, Tile)>,
+	quality: &[Option<u8>; 32],
+	lossless: bool,
 	tile_compression: TileCompression,
 	extension_format: &str,
 	extension_compression: &str,
@@ -439,6 +473,7 @@ fn flush_translucent_tiles<W: Write>(
 	}
 	let progress = runtime.create_progress("flushing translucent tiles", translucent_buffer.len() as u64);
 	for (_, (coord, tile)) in translucent_buffer {
+		let tile = reencode_translucent_tile(tile, quality[coord.level as usize], lossless)?;
 		let (filename, blob) =
 			prepare_tile_entry(&coord, tile, tile_compression, extension_format, extension_compression)?;
 		append_blob_to_tar(builder, &filename, &blob)?;
@@ -462,6 +497,20 @@ fn write_tilejson_to_tar<W: Write>(
 	header.set_mode(0o644);
 	builder.append_data(&mut header, Path::new(&filename), meta_blob.as_slice())?;
 	Ok(())
+}
+
+/// Re-encode a translucent tile as WebP with the configured quality/lossless settings.
+///
+/// When `lossless` is true the tile is encoded as lossless WebP (quality 100).
+/// Otherwise it is encoded as lossy WebP at the given `quality` for its zoom level.
+fn reencode_translucent_tile(
+	mut tile: Tile,
+	quality: Option<u8>,
+	lossless: bool,
+) -> Result<Tile> {
+	let effective_quality = if lossless { Some(100) } else { quality };
+	tile.change_format(TileFormat::WEBP, effective_quality, None)?;
+	Ok(tile)
 }
 
 /// Prepare a tile for writing: compress into a blob and build the filename.
