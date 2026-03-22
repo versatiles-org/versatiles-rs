@@ -321,12 +321,20 @@ async fn merge_to_tar(
 		.await
 		.with_context(|| format!("Failed to open container: {first_path}"))?;
 	let first_metadata = first_reader.metadata();
+	let first_tilejson = first_reader.tilejson();
 	let config = MergeConfig {
 		quality: *quality,
 		lossless,
 		tile_format: first_metadata.tile_format,
 		tile_compression: first_metadata.tile_compression,
 	};
+
+	// Capture tile metadata fields from the first source for the output tilejson
+	tilejson.tile_format = Some(config.tile_format);
+	tilejson.tile_type = Some(config.tile_format.to_type());
+	tilejson.tile_schema = first_tilejson.tile_schema;
+	tilejson.tile_size = first_tilejson.tile_size;
+
 	drop(first_reader);
 
 	let progress = runtime.create_progress("merging tiles", paths.len() as u64);
