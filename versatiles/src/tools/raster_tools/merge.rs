@@ -214,7 +214,7 @@ impl TileSource for MergeSource {
 		let lossless = self.lossless;
 
 		let mut all_tiles: Vec<(TileCoord, Tile)> = Vec::new();
-		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(16).collect();
+		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
 		for sub_bbox in sub_bboxes {
 			let level = sub_bbox.level;
@@ -232,13 +232,8 @@ impl TileSource for MergeSource {
 			// Once all coordinates have an opaque tile, skip remaining sources.
 			#[allow(clippy::cast_possible_truncation)]
 			let batch_size = (1024u64 / total_coords).max(1) as usize;
-			let mut opaque_count = 0u64;
 
 			for batch in indices.chunks(batch_size) {
-				if opaque_count >= total_coords {
-					break;
-				}
-
 				// Fetch this batch concurrently
 				let cache = Arc::clone(&self.cache);
 				let fetched: Vec<Result<Vec<(TileCoord, Tile)>>> = stream::iter(batch.iter().copied())
@@ -272,10 +267,6 @@ impl TileSource for MergeSource {
 						let entry = result_tiles.get_mut(&coord).unwrap();
 						match entry {
 							None => {
-								// First tile at this coord — check if opaque
-								if tile.is_opaque().unwrap_or(false) {
-									opaque_count += 1;
-								}
 								*entry = Some(tile);
 							}
 							Some(existing) => {
