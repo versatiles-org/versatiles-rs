@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, anyhow, ensure};
-use futures::{StreamExt, stream};
+use futures::{StreamExt, future::ready, stream};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -8,8 +8,8 @@ use std::sync::{Arc, Mutex};
 use tar::{Builder, Header};
 use versatiles_container::{Tile, TilesRuntime};
 use versatiles_core::{
-	Blob, MAX_ZOOM_LEVEL, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, compression::compress,
-	utils::HilbertIndex,
+	Blob, ConcurrencyLimits, MAX_ZOOM_LEVEL, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON,
+	TileStream, compression::compress, utils::HilbertIndex,
 };
 use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 
@@ -233,7 +233,17 @@ fn sweep_flush<W: Write>(
 	drop(buf);
 
 	log::debug!("sweep-line flush: writing {} translucent tiles", tiles.len());
-	write_translucent_tiles(&mut builder.lock().unwrap(), tiles, config)
+
+	// Phase 1: Re-encode in parallel
+	let prepared = reencode_tiles_parallel(tiles, config);
+
+	// Phase 2: Write sequentially
+	let mut builder = builder.lock().unwrap();
+	for result in prepared {
+		let (filename, blob) = result?;
+		append_blob_to_tar(&mut builder, &filename, &blob)?;
+	}
+	Ok(())
 }
 
 /// Compute the normalized western edge of a pyramid as the minimum fractional x across all levels.
@@ -322,9 +332,7 @@ async fn merge_to_tar(
 
 		let pyramid = prescanned_pyramids.map_or(&metadata.bbox_pyramid, |p| &p[idx]);
 
-		for level_bbox in pyramid.iter_levels() {
-			process_tile_stream(&reader, *level_bbox, &builder, &done, &translucent_buffer, &config).await?;
-		}
+		process_source_tiles(&reader, pyramid, &builder, &done, &translucent_buffer, &config).await?;
 		// reader dropped here — file handle closed
 
 		// Sweep-line flush: remove translucent tiles that no remaining source can cover
@@ -353,62 +361,90 @@ async fn merge_to_tar(
 	Ok(())
 }
 
-/// Process all tiles from a single level bbox of a source reader.
-async fn process_tile_stream<W: Write + Send + 'static>(
+/// Process all tiles from all levels of a source reader in a single parallel batch.
+///
+/// Flattens all level streams into one combined stream (Step 3) and uses
+/// `cpu_count * 2` concurrency to keep CPUs saturated when task durations vary (Step 1).
+async fn process_source_tiles<W: Write + Send + 'static>(
 	reader: &versatiles_container::SharedTileSource,
-	level_bbox: versatiles_core::TileBBox,
+	pyramid: &TileBBoxPyramid,
 	builder: &Arc<Mutex<Builder<W>>>,
 	done: &Arc<Mutex<HashSet<u64>>>,
 	translucent_buffer: &Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>>,
 	config: &MergeConfig,
 ) -> Result<()> {
-	let tile_stream = reader.get_tile_stream(level_bbox).await?;
+	// Step 3: Flatten all level streams into one combined stream
+	let level_bboxes: Vec<_> = pyramid.iter_levels().filter(|b| !b.is_empty()).copied().collect();
+	let streams: Vec<TileStream<'static, Tile>> =
+		futures::future::try_join_all(level_bboxes.into_iter().map(|bbox| reader.get_tile_stream(bbox))).await?;
+	let combined = streams
+		.into_iter()
+		.reduce(TileStream::chain)
+		.unwrap_or_else(TileStream::empty);
+
+	// Step 1: Custom parallel loop with cpu_count * 2 concurrency
+	let concurrency = ConcurrencyLimits::default().cpu_bound * 2;
 
 	let builder = Arc::clone(builder);
 	let done = Arc::clone(done);
 	let translucent_buffer = Arc::clone(translucent_buffer);
 	let config = config.clone();
 
-	tile_stream
-		.for_each_parallel_try(move |coord, mut tile| {
-			let key = coord.get_hilbert_index()?;
+	let callback = Arc::new(move |coord: TileCoord, mut tile: Tile| -> Result<()> {
+		let key = coord.get_hilbert_index()?;
 
-			if done.lock().unwrap().contains(&key) {
-				return Ok(());
-			}
+		if done.lock().unwrap().contains(&key) {
+			return Ok(());
+		}
 
-			let existing = translucent_buffer.lock().unwrap().remove(&key);
+		let existing = translucent_buffer.lock().unwrap().remove(&key);
 
-			if let Some((_, existing)) = existing {
-				// existing is higher priority (top), tile is lower priority (base)
-				match merge_two_tiles(tile, existing, config.quality[coord.level as usize], config.lossless) {
-					Ok((merged, is_opaque)) => {
-						if is_opaque {
-							// Prepare blob without lock, then briefly lock for I/O
-							let (filename, blob) = prepare_tile_blob(&coord, merged, &config)?;
-							append_blob_to_tar(&mut builder.lock().unwrap(), &filename, &blob)?;
-							done.lock().unwrap().insert(key);
-						} else {
-							translucent_buffer.lock().unwrap().insert(key, (coord, merged));
-						}
-					}
-					Err(e) => {
-						log::warn!("Failed to merge tile at {coord:?}: {e}");
+		if let Some((_, existing)) = existing {
+			match merge_two_tiles(tile, existing, config.quality[coord.level as usize], config.lossless) {
+				Ok((merged, is_opaque)) => {
+					if is_opaque {
+						let (filename, blob) = prepare_tile_blob(&coord, merged, &config)?;
+						append_blob_to_tar(&mut builder.lock().unwrap(), &filename, &blob)?;
+						done.lock().unwrap().insert(key);
+					} else {
+						translucent_buffer.lock().unwrap().insert(key, (coord, merged));
 					}
 				}
-			} else if tile.is_opaque().unwrap_or(false) {
-				// Prepare blob without lock, then briefly lock for I/O
-				let (filename, blob) = prepare_tile_blob(&coord, tile, &config)?;
-				append_blob_to_tar(&mut builder.lock().unwrap(), &filename, &blob)?;
-				done.lock().unwrap().insert(key);
-			} else {
-				translucent_buffer.lock().unwrap().insert(key, (coord, tile));
+				Err(e) => {
+					log::warn!("Failed to merge tile at {coord:?}: {e}");
+				}
 			}
+		} else if tile.is_opaque().unwrap_or(false) {
+			let (filename, blob) = prepare_tile_blob(&coord, tile, &config)?;
+			append_blob_to_tar(&mut builder.lock().unwrap(), &filename, &blob)?;
+			done.lock().unwrap().insert(key);
+		} else {
+			translucent_buffer.lock().unwrap().insert(key, (coord, tile));
+		}
 
-			Ok(())
+		Ok(())
+	});
+
+	let mut result = Ok(());
+	combined
+		.inner
+		.map(move |(coord, item)| {
+			let cb = Arc::clone(&callback);
+			tokio::task::spawn_blocking(move || (coord, cb(coord, item)))
 		})
-		.await?;
-	Ok(())
+		.buffer_unordered(concurrency)
+		.for_each(|task_result| {
+			match task_result {
+				Ok((coord, Err(e))) if result.is_ok() => {
+					result = Err(e.context(format!("Failed to process tile at {coord:?}")));
+				}
+				Err(e) => panic!("Spawned task panicked: {e}"),
+				_ => {}
+			}
+			ready(())
+		})
+		.await;
+	result
 }
 
 /// Flush remaining translucent tiles to the TAR.
@@ -423,30 +459,43 @@ fn flush_translucent_tiles<W: Write>(
 	}
 	let tiles: Vec<_> = translucent_buffer.into_values().collect();
 	let progress = runtime.create_progress("flushing translucent tiles", tiles.len() as u64);
-	write_translucent_tiles(builder, tiles, config)?;
+
+	// Phase 1: Re-encode in parallel
+	let prepared = reencode_tiles_parallel(tiles, config);
+
+	// Phase 2: Write sequentially
+	for result in prepared {
+		let (filename, blob) = result?;
+		append_blob_to_tar(builder, &filename, &blob)?;
+		progress.inc(1);
+	}
 	progress.finish();
 	Ok(())
 }
 
-/// Re-encode and write translucent tiles to the TAR.
+/// Re-encode translucent tiles in parallel using scoped threads.
 ///
-/// Each tile is re-encoded as WebP (lossy at `quality`, or lossless if configured)
-/// before being compressed and appended.
-fn write_translucent_tiles<W: Write>(
-	builder: &mut Builder<W>,
-	tiles: Vec<(TileCoord, Tile)>,
-	config: &MergeConfig,
-) -> Result<()> {
-	for (coord, mut tile) in tiles {
-		let quality = if config.lossless {
-			Some(100)
-		} else {
-			config.quality[coord.level as usize]
-		};
-		tile.change_format(TileFormat::WEBP, quality, None)?;
-		write_tile_to_tar(builder, &coord, tile, config)?;
-	}
-	Ok(())
+/// Returns a vec of prepared (filename, blob) results ready for sequential TAR writing.
+fn reencode_tiles_parallel(tiles: Vec<(TileCoord, Tile)>, config: &MergeConfig) -> Vec<Result<(String, Blob)>> {
+	let config = config.clone();
+	std::thread::scope(|s| {
+		let handles: Vec<_> = tiles
+			.into_iter()
+			.map(|(coord, mut tile)| {
+				let cfg = &config;
+				s.spawn(move || {
+					let quality = if cfg.lossless {
+						Some(100)
+					} else {
+						cfg.quality[coord.level as usize]
+					};
+					tile.change_format(TileFormat::WEBP, quality, None)?;
+					prepare_tile_blob(&coord, tile, cfg)
+				})
+			})
+			.collect();
+		handles.into_iter().map(|h| h.join().unwrap()).collect()
+	})
 }
 
 /// Write the tiles.json metadata entry to the TAR.
@@ -482,18 +531,6 @@ fn append_blob_to_tar<W: Write>(builder: &mut Builder<W>, filename: &str, blob: 
 	header.set_mode(0o644);
 	builder.append_data(&mut header, Path::new(filename), blob.as_slice())?;
 	Ok(())
-}
-
-/// Compress a tile and append it to the TAR in one step.
-/// Convenience wrapper for non-parallel paths where lock contention is not a concern.
-fn write_tile_to_tar<W: Write>(
-	builder: &mut Builder<W>,
-	coord: &TileCoord,
-	tile: Tile,
-	config: &MergeConfig,
-) -> Result<()> {
-	let (filename, blob) = prepare_tile_blob(coord, tile, config)?;
-	append_blob_to_tar(builder, &filename, &blob)
 }
 
 /// Merge two tiles: `base` (bottom) and `top` (overlay on top).
