@@ -2,7 +2,7 @@ use anyhow::{Context, Result, anyhow, ensure};
 use futures::{StreamExt, stream};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::path::Path;
 use tar::{Builder, Header};
 use versatiles_container::{Tile, TilesRuntime};
@@ -159,7 +159,7 @@ async fn merge_to_tar(
 	runtime: &TilesRuntime,
 ) -> Result<()> {
 	let file = File::create(output).with_context(|| format!("Failed to create output file: {output}"))?;
-	let mut builder = Builder::new(file);
+	let mut builder = Builder::new(BufWriter::new(file));
 
 	let mut tile_format: Option<TileFormat> = None;
 	let mut tile_compression: Option<TileCompression> = None;
