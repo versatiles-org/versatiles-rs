@@ -74,6 +74,7 @@ pub struct Merge {
 struct MergeConfig {
 	quality: [Option<u8>; 32],
 	lossless: bool,
+	tile_format: TileFormat,
 	tile_compression: TileCompression,
 	ext_format: String,
 	ext_compression: String,
@@ -256,6 +257,27 @@ fn western_edge(pyramid: &TileBBoxPyramid) -> f64 {
 		.unwrap_or(0.0)
 }
 
+/// Validate that a source's format and compression match the expected config.
+fn validate_source_format(
+	path: &str,
+	metadata: &versatiles_container::TileSourceMetadata,
+	config: &MergeConfig,
+) -> Result<()> {
+	ensure!(
+		metadata.tile_format == config.tile_format,
+		"Source {path} has tile format {:?}, expected {:?}",
+		metadata.tile_format,
+		config.tile_format
+	);
+	ensure!(
+		metadata.tile_compression == config.tile_compression,
+		"Source {path} has tile compression {:?}, expected {:?}",
+		metadata.tile_compression,
+		config.tile_compression
+	);
+	Ok(())
+}
+
 /// Merge sources into a TAR file. If `prescanned_pyramids` is provided, uses those
 /// instead of reading pyramids from each source during the merge.
 async fn merge_to_tar(
@@ -270,10 +292,6 @@ async fn merge_to_tar(
 	let builder = Arc::new(Mutex::new(Builder::new(BufWriter::new(file))));
 	let done: Arc<Mutex<HashSet<u64>>> = Arc::default();
 	let translucent_buffer: Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>> = Arc::default();
-
-	let mut tile_format: Option<TileFormat> = None;
-	let mut tile_compression: Option<TileCompression> = None;
-	let mut config: Option<MergeConfig> = None;
 	let mut tilejson = TileJSON::default();
 
 	// When prescan data is available, sort sources west-to-east and precompute
@@ -285,6 +303,24 @@ async fn merge_to_tar(
 		((0..paths.len()).collect(), None)
 	};
 
+	// Open the first source to establish tile format and compression.
+	let first_idx = source_order[0];
+	let first_path = &paths[first_idx];
+	let first_reader = runtime
+		.get_reader_from_str(first_path)
+		.await
+		.with_context(|| format!("Failed to open container: {first_path}"))?;
+	let first_metadata = first_reader.metadata();
+	let config = MergeConfig {
+		quality: *quality,
+		lossless,
+		tile_format: first_metadata.tile_format,
+		tile_compression: first_metadata.tile_compression,
+		ext_format: first_metadata.tile_format.as_extension().to_string(),
+		ext_compression: first_metadata.tile_compression.as_extension().to_string(),
+	};
+	drop(first_reader);
+
 	let progress = runtime.create_progress("merging tiles", paths.len() as u64);
 
 	for (pos, &idx) in source_order.iter().enumerate() {
@@ -295,50 +331,24 @@ async fn merge_to_tar(
 			.with_context(|| format!("Failed to open container: {path}"))?;
 
 		let metadata = reader.metadata();
-		if let Some(tf) = tile_format {
-			ensure!(
-				metadata.tile_format == tf,
-				"Source {path} has tile format {:?}, expected {:?}",
-				metadata.tile_format,
-				tf
-			);
-			ensure!(
-				metadata.tile_compression == tile_compression.unwrap(),
-				"Source {path} has tile compression {:?}, expected {:?}",
-				metadata.tile_compression,
-				tile_compression.unwrap()
-			);
-		} else {
-			tile_format = Some(metadata.tile_format);
-			tile_compression = Some(metadata.tile_compression);
-			config = Some(MergeConfig {
-				quality: *quality,
-				lossless,
-				tile_compression: metadata.tile_compression,
-				ext_format: metadata.tile_format.as_extension().to_string(),
-				ext_compression: metadata.tile_compression.as_extension().to_string(),
-			});
-		}
+		validate_source_format(path, metadata, &config)?;
 		tilejson.merge(reader.tilejson())?;
 
-		let cfg = config.as_ref().unwrap();
 		let pyramid = prescanned_pyramids.map_or(&metadata.bbox_pyramid, |p| &p[idx]);
 
 		for level_bbox in pyramid.iter_levels() {
-			process_tile_stream(&reader, *level_bbox, &builder, &done, &translucent_buffer, cfg).await?;
+			process_tile_stream(&reader, *level_bbox, &builder, &done, &translucent_buffer, &config).await?;
 		}
 		// reader dropped here — file handle closed
 
 		// Sweep-line flush: remove translucent tiles that no remaining source can cover
 		if let Some(ref suffix) = suffix_min_x {
-			sweep_flush(&suffix[pos + 1], &translucent_buffer, &builder, cfg)?;
+			sweep_flush(&suffix[pos + 1], &translucent_buffer, &builder, &config)?;
 		}
 
 		progress.inc(1);
 	}
 	progress.finish();
-
-	let cfg = config.ok_or(anyhow!("No sources were processed"))?;
 
 	let mut builder = Arc::try_unwrap(builder)
 		.map_err(|_| anyhow!("builder still has references"))?
@@ -347,10 +357,10 @@ async fn merge_to_tar(
 		.map_err(|_| anyhow!("translucent_buffer still has references"))?
 		.into_inner()?;
 
-	flush_translucent_tiles(&mut builder, translucent_buffer, &cfg, runtime)?;
+	flush_translucent_tiles(&mut builder, translucent_buffer, &config, runtime)?;
 
 	// Write tiles.json at the end (metadata was accumulated during merge)
-	write_tilejson_to_tar(&mut builder, &tilejson, &cfg)?;
+	write_tilejson_to_tar(&mut builder, &tilejson, &config)?;
 
 	builder.finish()?;
 	log::info!("finished raster merge");
