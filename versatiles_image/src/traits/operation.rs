@@ -256,17 +256,18 @@ where
 		fn blend(base_px: &[u8; 4], top_px: &[u8; 4]) -> [u8; 4] {
 			let a_b = u16::from(base_px[3]);
 			let a_t = u16::from(top_px[3]);
-			let a_sum = (a_b + a_t);
+			let a_sum = a_b + a_t;
 			if a_sum == 0 {
 				return [0, 0, 0, 0];
 			}
 
 			// Snap near-opaque alpha to fully opaque to compensate for rounding
 			let a_out = if a_sum >= 250 { 255 } else { a_sum };
+			let a_b = a_out - a_t; // adjust base alpha to match snapped output
 			[
-				((u16::from(base_px[0]) * a_b + u16::from(top_px[0]) * a_t + a_sum / 2) / a_sum).min(255) as u8,
-				((u16::from(base_px[1]) * a_b + u16::from(top_px[1]) * a_t + a_sum / 2) / a_sum).min(255) as u8,
-				((u16::from(base_px[2]) * a_b + u16::from(top_px[2]) * a_t + a_sum / 2) / a_sum).min(255) as u8,
+				((u16::from(base_px[0]) * a_b + u16::from(top_px[0]) * a_t + a_out / 2) / a_out).min(255) as u8,
+				((u16::from(base_px[1]) * a_b + u16::from(top_px[1]) * a_t + a_out / 2) / a_out).min(255) as u8,
+				((u16::from(base_px[2]) * a_b + u16::from(top_px[2]) * a_t + a_out / 2) / a_out).min(255) as u8,
 				a_out as u8,
 			]
 		}
@@ -595,43 +596,19 @@ mod tests {
 		assert_eq!(px[0], 255);
 	}
 
-	#[test]
-	fn overlay_additive_rgb_base_rgba_top() {
-		// RGB base (fully opaque) overlayed by RGBA top with partial alpha
-		// Base stays RGB (alpha is dropped since base has no alpha channel)
-		let mut base = DynamicImage::from_fn(1, 1, |_x, _y| [0, 0, 255]);
-		let top = DynamicImage::from_raw(1, 1, vec![255u8, 0, 0, 128]).unwrap();
+	#[rstest]
+	#[case::rgba_rgb(&[0, 0, 255, 100], &[255, 0, 0], &[255, 0, 0])]
+	#[case::rgb_rgba(&[0, 0, 255], &[255, 0, 0, 100], &[100, 0, 155])]
+	#[case::rgba_rgba(&[0, 0, 255, 100], &[255, 0, 0, 100], &[128, 0, 128, 200])]
+	#[case::near_opaque_snaps_to_255(&[100, 100, 100, 125], &[100, 100, 100, 125], &[100, 100, 100, 255])]
+	#[case::below_threshold_stays(&[100, 100, 100, 124], &[100, 100, 100, 125], &[100, 100, 100, 249])]
+	fn overlay_additive(#[case] base_bytes: &[u8], #[case] top_bytes: &[u8], #[case] expect_color: &[u8]) {
+		let mut base = DynamicImage::from_raw(1, 1, base_bytes.to_vec()).unwrap();
+		let top = DynamicImage::from_raw(1, 1, top_bytes.to_vec()).unwrap();
 
 		base.overlay_additive(&top).unwrap();
-		assert!(base.as_rgb8().is_some());
-		let px = base.get_pixel(0, 0).0;
-		// blend treats base as alpha=255: a_out = min(255+128, 255) = 255
-		// r = (0*255 + 255*128 + 127) / 255 = 128
-		// b = (255*255 + 0*128 + 127) / 255 = 255
-		assert_eq!(px[0], 128);
-		assert_eq!(px[2], 255);
-	}
-
-	#[test]
-	fn overlay_additive_near_opaque_snaps_to_255() {
-		// A: alpha=125, B: alpha=125 → sum=250 → snapped to 255
-		let mut base = DynamicImage::from_raw(1, 1, vec![100u8, 100, 100, 125]).unwrap();
-		let top = DynamicImage::from_raw(1, 1, vec![100u8, 100, 100, 125]).unwrap();
-
-		base.overlay_additive(&top).unwrap();
-		let px = base.get_pixel(0, 0).0;
-		assert_eq!(px[3], 255); // 250 snapped to 255
-	}
-
-	#[test]
-	fn overlay_additive_below_threshold_stays() {
-		// A: alpha=124, B: alpha=125 → sum=249 → stays at 249 (below threshold)
-		let mut base = DynamicImage::from_raw(1, 1, vec![100u8, 100, 100, 124]).unwrap();
-		let top = DynamicImage::from_raw(1, 1, vec![100u8, 100, 100, 125]).unwrap();
-
-		base.overlay_additive(&top).unwrap();
-		let px = base.get_pixel(0, 0).0;
-		assert_eq!(px[3], 249); // below 250, not snapped
+		let px = base.get_raw_pixel(0, 0);
+		assert_eq!(px, expect_color);
 	}
 
 	#[test]
