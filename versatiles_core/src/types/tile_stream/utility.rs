@@ -9,6 +9,7 @@
 //! | `filter_coord` | Filter tiles by coordinate using async predicate |
 //! | `for_each_buffered` | Process tiles in buffered chunks |
 //! | `drain_and_count` | Consume stream and return count |
+//! | `chain` | Concatenate two streams end-to-end |
 
 use super::{Future, StreamExt, TileCoord, TileStream, ready};
 
@@ -173,6 +174,23 @@ where
 			})
 			.await;
 		count
+	}
+
+	// -------------------------------------------------------------------------
+	// Stream Combination
+	// -------------------------------------------------------------------------
+
+	/// Concatenates another `TileStream` to the end of this one.
+	///
+	/// The resulting stream yields all items from `self` first, then all items from `other`.
+	///
+	/// # Arguments
+	/// * `other` - The stream to append after this one.
+	#[must_use]
+	pub fn chain(self, other: TileStream<'a, T>) -> Self {
+		TileStream {
+			inner: self.inner.chain(other.inner).boxed(),
+		}
 	}
 }
 
