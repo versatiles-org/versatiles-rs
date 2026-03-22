@@ -384,7 +384,9 @@ async fn process_tile_stream<W: Write + Send + 'static>(
 				match merge_two_tiles(tile, existing, config.quality[coord.level as usize], config.lossless) {
 					Ok((merged, is_opaque)) => {
 						if is_opaque {
-							write_tile_to_tar(&mut builder.lock().unwrap(), &coord, merged, &config)?;
+							// Prepare blob without lock, then briefly lock for I/O
+							let (filename, blob) = prepare_tile_blob(&coord, merged, &config)?;
+							append_blob_to_tar(&mut builder.lock().unwrap(), &filename, &blob)?;
 							done.lock().unwrap().insert(key);
 						} else {
 							translucent_buffer.lock().unwrap().insert(key, (coord, merged));
@@ -395,7 +397,9 @@ async fn process_tile_stream<W: Write + Send + 'static>(
 					}
 				}
 			} else if tile.is_opaque().unwrap_or(false) {
-				write_tile_to_tar(&mut builder.lock().unwrap(), &coord, tile, &config)?;
+				// Prepare blob without lock, then briefly lock for I/O
+				let (filename, blob) = prepare_tile_blob(&coord, tile, &config)?;
+				append_blob_to_tar(&mut builder.lock().unwrap(), &filename, &blob)?;
 				done.lock().unwrap().insert(key);
 			} else {
 				translucent_buffer.lock().unwrap().insert(key, (coord, tile));
@@ -456,14 +460,9 @@ fn write_tilejson_to_tar<W: Write>(builder: &mut Builder<W>, tilejson: &TileJSON
 	Ok(())
 }
 
-/// Compress a tile into a blob, build the TAR filename, and append it to the archive.
-/// The compression step is CPU-heavy — call without holding locks when possible.
-fn write_tile_to_tar<W: Write>(
-	builder: &mut Builder<W>,
-	coord: &TileCoord,
-	tile: Tile,
-	config: &MergeConfig,
-) -> Result<()> {
+/// Compress a tile into a blob and build the TAR filename.
+/// This is the CPU-heavy part — call without holding any locks.
+fn prepare_tile_blob(coord: &TileCoord, tile: Tile, config: &MergeConfig) -> Result<(String, Blob)> {
 	let filename = format!(
 		"./{}/{}/{}{}{}",
 		coord.level,
@@ -473,11 +472,28 @@ fn write_tile_to_tar<W: Write>(
 		config.tile_compression.as_extension()
 	);
 	let blob = tile.into_blob(config.tile_compression)?;
+	Ok((filename, blob))
+}
+
+/// Append a pre-compressed blob to the TAR archive. Brief I/O only.
+fn append_blob_to_tar<W: Write>(builder: &mut Builder<W>, filename: &str, blob: &Blob) -> Result<()> {
 	let mut header = Header::new_gnu();
 	header.set_size(blob.len());
 	header.set_mode(0o644);
-	builder.append_data(&mut header, Path::new(&filename), blob.as_slice())?;
+	builder.append_data(&mut header, Path::new(filename), blob.as_slice())?;
 	Ok(())
+}
+
+/// Compress a tile and append it to the TAR in one step.
+/// Convenience wrapper for non-parallel paths where lock contention is not a concern.
+fn write_tile_to_tar<W: Write>(
+	builder: &mut Builder<W>,
+	coord: &TileCoord,
+	tile: Tile,
+	config: &MergeConfig,
+) -> Result<()> {
+	let (filename, blob) = prepare_tile_blob(coord, tile, config)?;
+	append_blob_to_tar(builder, &filename, &blob)
 }
 
 /// Merge two tiles: `base` (bottom) and `top` (overlay on top).
