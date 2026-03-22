@@ -38,8 +38,9 @@ pub struct Merge {
 	#[arg(long)]
 	lossless: bool,
 
-	/// Scan all sources first to collect metadata and calculate optimal processing order.
-	/// Without this flag, sources are processed sequentially in file-list order.
+	/// Scan all sources in parallel before merging to validate accessibility
+	/// and collect metadata upfront. Without this flag, sources are opened
+	/// and processed one at a time in file-list order.
 	#[arg(long)]
 	prescan: bool,
 }
@@ -104,23 +105,28 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 
 	log::info!("merging {} containers", paths.len());
 
-	if args.prescan {
-		run_with_prescan(&args.output, &paths, &quality, args.lossless, runtime).await
+	// Optionally prescan all sources in parallel to validate accessibility and collect pyramids
+	let prescanned_pyramids = if args.prescan {
+		Some(prescan_sources(&paths, runtime).await?)
 	} else {
-		merge_to_tar(&args.output, &paths, &quality, args.lossless, runtime).await
-	}
+		None
+	};
+
+	merge_to_tar(
+		&args.output,
+		&paths,
+		prescanned_pyramids.as_deref(),
+		&quality,
+		args.lossless,
+		runtime,
+	)
+	.await
 }
 
-/// Prescan all sources in parallel, then merge using collected metadata.
-async fn run_with_prescan(
-	output: &str,
-	paths: &[String],
-	quality: &[Option<u8>; 32],
-	lossless: bool,
-	runtime: &TilesRuntime,
-) -> Result<()> {
+/// Scan all sources in parallel, returning their pyramids in source order.
+async fn prescan_sources(paths: &[String], runtime: &TilesRuntime) -> Result<Vec<TileBBoxPyramid>> {
 	let progress = runtime.create_progress("scanning containers", paths.len() as u64);
-	let scan_results: Vec<Result<_>> = stream::iter(paths)
+	let scan_results: Vec<Result<TileBBoxPyramid>> = stream::iter(paths)
 		.map(|path| {
 			let runtime = runtime.clone();
 			let progress = &progress;
@@ -129,16 +135,9 @@ async fn run_with_prescan(
 					.get_reader_from_str(path)
 					.await
 					.with_context(|| format!("Failed to open container: {path}"))?;
-				let metadata = reader.metadata();
-				let result = (
-					path.clone(),
-					metadata.bbox_pyramid.clone(),
-					metadata.tile_format,
-					metadata.tile_compression,
-					reader.tilejson().clone(),
-				);
+				let pyramid = reader.metadata().bbox_pyramid.clone();
 				progress.inc(1);
-				Ok(result)
+				Ok(pyramid)
 			}
 		})
 		.buffered(64)
@@ -146,81 +145,15 @@ async fn run_with_prescan(
 		.await;
 	progress.finish();
 
-	let mut prescanned: Vec<(String, TileBBoxPyramid)> = Vec::new();
-	let mut first_tile_format = None;
-	let mut first_tile_compression = None;
-	let mut tilejson = TileJSON::default();
-
-	for result in scan_results {
-		let (path, pyramid, tile_format, tile_compression, tj) = result?;
-		if first_tile_format.is_none() {
-			first_tile_format = Some(tile_format);
-			first_tile_compression = Some(tile_compression);
-		}
-		tilejson.merge(&tj)?;
-		prescanned.push((path, pyramid));
-	}
-
-	let tile_format = first_tile_format.ok_or(anyhow!("No tile format found"))?;
-	let tile_compression = first_tile_compression.ok_or(anyhow!("No tile compression found"))?;
-
-	let extension_format = tile_format.as_extension();
-	let extension_compression = tile_compression.as_extension();
-
-	let file = File::create(output).with_context(|| format!("Failed to create output file: {output}"))?;
-	let mut builder = Builder::new(file);
-
-	// Write tiles.json upfront (we have all metadata from prescan)
-	write_tilejson_to_tar(&mut builder, &tilejson, tile_compression, extension_compression)?;
-
-	let mut done: HashSet<u64> = HashSet::new();
-	let mut translucent_buffer: HashMap<u64, (TileCoord, Tile)> = HashMap::new();
-
-	let progress = runtime.create_progress("merging tiles", prescanned.len() as u64);
-
-	for (path, pyramid) in &prescanned {
-		let reader = runtime
-			.get_reader_from_str(path)
-			.await
-			.with_context(|| format!("Failed to open container: {path}"))?;
-
-		for level_bbox in pyramid.iter_levels() {
-			process_tile_stream(
-				&reader,
-				*level_bbox,
-				&mut builder,
-				&mut done,
-				&mut translucent_buffer,
-				quality,
-				lossless,
-				tile_compression,
-				extension_format,
-				extension_compression,
-			)
-			.await?;
-		}
-		progress.inc(1);
-	}
-	progress.finish();
-
-	flush_translucent_tiles(
-		&mut builder,
-		translucent_buffer,
-		tile_compression,
-		extension_format,
-		extension_compression,
-		runtime,
-	)?;
-
-	builder.finish()?;
-	log::info!("finished raster merge");
-	Ok(())
+	scan_results.into_iter().collect()
 }
 
-/// Default merge: process sources sequentially in file-list order, no pre-scan.
+/// Merge sources into a TAR file. If `prescanned_pyramids` is provided, uses those
+/// instead of reading pyramids from each source during the merge.
 async fn merge_to_tar(
 	output: &str,
 	paths: &[String],
+	prescanned_pyramids: Option<&[TileBBoxPyramid]>,
 	quality: &[Option<u8>; 32],
 	lossless: bool,
 	runtime: &TilesRuntime,
@@ -236,7 +169,7 @@ async fn merge_to_tar(
 
 	let progress = runtime.create_progress("merging tiles", paths.len() as u64);
 
-	for path in paths {
+	for (i, path) in paths.iter().enumerate() {
 		let reader = runtime
 			.get_reader_from_str(path)
 			.await
@@ -251,8 +184,12 @@ async fn merge_to_tar(
 
 		let tf = tile_format.unwrap();
 		let tc = tile_compression.unwrap();
+		let ext_format = tf.as_extension();
+		let ext_compression = tc.as_extension();
 
-		for level_bbox in metadata.bbox_pyramid.iter_levels() {
+		let pyramid = prescanned_pyramids.map_or(&metadata.bbox_pyramid, |p| &p[i]);
+
+		for level_bbox in pyramid.iter_levels() {
 			process_tile_stream(
 				&reader,
 				*level_bbox,
@@ -262,8 +199,8 @@ async fn merge_to_tar(
 				quality,
 				lossless,
 				tc,
-				tf.as_extension(),
-				tc.as_extension(),
+				ext_format,
+				ext_compression,
 			)
 			.await?;
 		}
@@ -272,19 +209,22 @@ async fn merge_to_tar(
 	}
 	progress.finish();
 
-	let tc = tile_compression.ok_or(anyhow!("No tile format found — input list may be empty"))?;
+	let tf = tile_format.ok_or(anyhow!("No sources were processed"))?;
+	let tc = tile_compression.unwrap();
+	let ext_format = tf.as_extension();
+	let ext_compression = tc.as_extension();
 
 	flush_translucent_tiles(
 		&mut builder,
 		translucent_buffer,
 		tc,
-		tile_format.unwrap().as_extension(),
-		tc.as_extension(),
+		ext_format,
+		ext_compression,
 		runtime,
 	)?;
 
 	// Write tiles.json at the end (metadata was accumulated during merge)
-	write_tilejson_to_tar(&mut builder, &tilejson, tc, tc.as_extension())?;
+	write_tilejson_to_tar(&mut builder, &tilejson, tc, ext_compression)?;
 
 	builder.finish()?;
 	log::info!("finished raster merge");
