@@ -104,6 +104,7 @@ cli = [
 	"dep:clap",
 	"dep:env_logger",
 	"dep:enumset",
+	"dep:tar",
 	"dep:termimad",
 	"dep:tokio",
 	"versatiles_container/cli",

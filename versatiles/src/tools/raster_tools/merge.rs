@@ -1,23 +1,29 @@
-use super::reader_cache::{ReaderCache, SourceInfo};
 use anyhow::{Context, Result, anyhow, ensure};
-use async_trait::async_trait;
 use futures::{StreamExt, stream};
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use versatiles_container::{
-	SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesConverterParameters, TilesRuntime,
-	Traversal, convert_tiles_container_to_str,
+use std::collections::{HashMap, HashSet};
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
+use tar::{Builder, Header};
+use versatiles_container::{Tile, TilesRuntime};
+use versatiles_core::{
+	Blob, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON,
+	compression::compress,
+	utils::HilbertIndex,
 };
-use versatiles_core::{TileBBox, TileBBoxMap, TileBBoxPyramid, TileCoord, TileFormat, TileJSON, TileStream};
 use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 
-/// Maximum number of container readers kept open simultaneously.
-const MAX_OPEN_READERS: usize = 200;
+/// Metadata stored per source container (kept in memory even when reader is closed).
+#[derive(Debug)]
+struct SourceInfo {
+	path: String,
+	pyramid: TileBBoxPyramid,
+}
 
-/// Merge multiple .versatiles containers into a single output container.
+/// Merge multiple .versatiles containers into a single output TAR.
 ///
 /// Reads a list of .versatiles containers (local paths or URLs), reads their tile indices,
-/// and merges them into a single output container. Handles overlapping tiles by compositing
+/// and merges them into a single output TAR file. Handles overlapping tiles by compositing
 /// semi-transparent images using additive alpha blending.
 ///
 /// Tiles from containers listed earlier in the input file overlay tiles from containers listed later.
@@ -29,7 +35,7 @@ pub struct Merge {
 	/// Containers listed earlier overlay containers listed later.
 	input_list: String,
 
-	/// Output merged .versatiles container path.
+	/// Output merged .tar container path.
 	output: String,
 
 	/// Lossy WebP quality for the final output tiles, using zoom-dependent syntax
@@ -86,6 +92,13 @@ fn parse_input_list(content: &str) -> Vec<String> {
 pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 	log::info!("raster merge from {:?} to {:?}", args.input_list, args.output);
 
+	ensure!(
+		std::path::Path::new(&args.output)
+			.extension()
+			.is_some_and(|ext| ext.eq_ignore_ascii_case("tar")),
+		"Output path must have .tar extension (use `versatiles convert` to convert to other formats afterward)"
+	);
+
 	// Read and parse input list
 	let list_content = std::fs::read_to_string(&args.input_list)
 		.with_context(|| format!("Failed to read input list file: {}", args.input_list))?;
@@ -94,7 +107,7 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 
 	log::info!("merging {} containers", paths.len());
 
-	// Scan all containers in parallel to collect metadata, then drop the readers
+	// Phase 1: Scan all containers in parallel to collect metadata
 	let progress = runtime.create_progress("scanning containers", paths.len() as u64);
 	let scan_results: Vec<Result<_>> = stream::iter(&paths)
 		.map(|path| {
@@ -114,7 +127,6 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 					metadata.tile_format,
 					metadata.tile_compression,
 					reader.tilejson().clone(),
-					metadata.traversal.clone(),
 					metadata.bbox_pyramid.clone(),
 				);
 				// reader is dropped here, closing the file handle
@@ -133,16 +145,14 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 	let mut first_tile_compression = None;
 	let mut pyramid = TileBBoxPyramid::new_empty();
 	let mut tilejson = TileJSON::default();
-	let mut traversal = Traversal::default();
 
 	for result in scan_results {
-		let (info, tile_format, tile_compression, tj, trav, pyr) = result?;
+		let (info, tile_format, tile_compression, tj, pyr) = result?;
 		if first_tile_format.is_none() {
 			first_tile_format = Some(tile_format);
 			first_tile_compression = Some(tile_compression);
 		}
 		tilejson.merge(&tj)?;
-		traversal.intersect(&trav)?;
 		pyramid.include_bbox_pyramid(&pyr);
 		source_infos.push(info);
 	}
@@ -153,142 +163,148 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 	// Parse quality
 	let quality = parse_quality(&args.quality)?;
 
-	let metadata = TileSourceMetadata::new(tile_format, tile_compression, pyramid, traversal);
-	metadata.update_tilejson(&mut tilejson);
-
-	// Create the merge source with lazy reader cache
-	let cache = ReaderCache::new(source_infos, MAX_OPEN_READERS, runtime.clone());
-	let merge_source = MergeSource {
-		metadata,
-		tilejson,
-		quality,
-		lossless: args.lossless,
-		cache: Arc::new(Mutex::new(cache)),
-	};
-	let shared: SharedTileSource = merge_source.into_shared();
-
-	let params = TilesConverterParameters::default();
-	convert_tiles_container_to_str(shared, params, &args.output, runtime.clone()).await?;
+	merge_to_tar(
+		&args.output,
+		&source_infos,
+		&tilejson,
+		tile_format,
+		tile_compression,
+		&quality,
+		args.lossless,
+		runtime,
+	)
+	.await?;
 
 	log::info!("finished raster merge");
 	Ok(())
 }
 
-/// A custom TileSource that merges tiles from multiple containers.
-struct MergeSource {
-	metadata: TileSourceMetadata,
-	tilejson: TileJSON,
-	quality: [Option<u8>; 32],
+/// Phase 2+3: Push-based merge into TAR, source by source.
+#[allow(clippy::too_many_arguments)]
+async fn merge_to_tar(
+	output: &str,
+	source_infos: &[SourceInfo],
+	tilejson: &TileJSON,
+	tile_format: TileFormat,
+	tile_compression: TileCompression,
+	quality: &[Option<u8>; 32],
 	lossless: bool,
-	cache: Arc<Mutex<ReaderCache>>,
-}
+	runtime: &TilesRuntime,
+) -> Result<()> {
+	let extension_format = tile_format.as_extension();
+	let extension_compression = tile_compression.as_extension();
 
-impl std::fmt::Debug for MergeSource {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("MergeSource")
-			.field("metadata", &self.metadata)
-			.field("quality", &self.quality)
-			.field("lossless", &self.lossless)
-			.finish_non_exhaustive()
-	}
-}
+	let file = File::create(output)
+		.with_context(|| format!("Failed to create output file: {output}"))?;
+	let mut builder = Builder::new(file);
 
-#[async_trait]
-impl TileSource for MergeSource {
-	fn source_type(&self) -> Arc<SourceType> {
-		SourceType::new_container("raster_merge", "merge")
-	}
+	// Write tiles.json header
+	let meta_blob = compress(Blob::from(tilejson), tile_compression)?;
+	let filename = format!("tiles.json{extension_compression}");
+	let mut header = Header::new_gnu();
+	header.set_size(meta_blob.len());
+	header.set_mode(0o644);
+	builder.append_data(&mut header, Path::new(&filename), meta_blob.as_slice())?;
 
-	fn metadata(&self) -> &TileSourceMetadata {
-		&self.metadata
-	}
+	// Tracking state
+	let mut done: HashSet<u64> = HashSet::new();
+	let mut translucent_buffer: HashMap<u64, (TileCoord, Tile)> = HashMap::new();
 
-	fn tilejson(&self) -> &TileJSON {
-		&self.tilejson
-	}
+	let progress = runtime.create_progress("merging tiles", source_infos.len() as u64);
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("raster_merge::get_tile_stream {bbox:?}");
+	for source_info in source_infos {
+		let reader = runtime
+			.get_reader_from_str(&source_info.path)
+			.await
+			.with_context(|| format!("Failed to open container: {}", source_info.path))?;
 
-		let quality = self.quality;
-		let lossless = self.lossless;
+		for level_bbox in source_info.pyramid.iter_levels() {
+			let tile_stream = reader.get_tile_stream(*level_bbox).await?;
+			let mut tiles: Vec<(TileCoord, Tile)> = Vec::new();
+			tile_stream
+				.for_each(|coord, tile| {
+					tiles.push((coord, tile));
+				})
+				.await;
 
-		let mut all_tiles: Vec<(TileCoord, Tile)> = Vec::new();
-		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
+			for (coord, mut tile) in tiles {
+				let key = coord.get_hilbert_index()?;
 
-		for sub_bbox in sub_bboxes {
-			let level = sub_bbox.level;
-			let q = quality[level as usize];
-			let total_coords = sub_bbox.count_tiles();
-			let mut result_tiles: TileBBoxMap<Option<Tile>> = TileBBoxMap::new_default(sub_bbox)?;
+				if done.contains(&key) {
+					continue;
+				}
 
-			// Get overlapping source indices (no readers opened yet)
-			let indices: Vec<usize> = {
-				let cache = self.cache.lock().await;
-				cache.overlapping_sources(&bbox)
-			};
-
-			// Process sources in forward order (highest priority first).
-			// Once all coordinates have an opaque tile, skip remaining sources.
-			#[allow(clippy::cast_possible_truncation)]
-			let batch_size = (1024u64 / total_coords).max(1) as usize;
-
-			for batch in indices.chunks(batch_size) {
-				// Fetch this batch concurrently
-				let cache = Arc::clone(&self.cache);
-				let fetched: Vec<Result<Vec<(TileCoord, Tile)>>> = stream::iter(batch.iter().copied())
-					.map(|idx| {
-						let cache = Arc::clone(&cache);
-						async move {
-							let reader = {
-								let mut cache = cache.lock().await;
-								cache.get_reader(idx).await?
-							};
-							let mut tiles = Vec::new();
-							if let Ok(tile_stream) = reader.get_tile_stream(sub_bbox).await {
-								tile_stream
-									.for_each(|coord, tile| {
-										tiles.push((coord, tile));
-									})
-									.await;
+				if let Some((_, existing)) = translucent_buffer.remove(&key) {
+					// existing is higher priority (top), tile is lower priority (base)
+					match merge_two_tiles(&mut tile, &existing, quality[coord.level as usize], lossless) {
+						Ok(mut merged) => {
+							if merged.is_opaque().unwrap_or(false) {
+								write_tile_to_tar(
+									&mut builder, &coord, merged, tile_compression,
+									extension_format, extension_compression,
+								)?;
+								done.insert(key);
+							} else {
+								translucent_buffer.insert(key, (coord, merged));
 							}
-							Ok(tiles)
 						}
-					})
-					.buffered(batch_size)
-					.collect()
-					.await;
-
-				// Merge in forward order:
-				// existing = accumulated from higher-priority sources (overlay on top)
-				// tile = new lower-priority source (base layer underneath)
-				for result in fetched {
-					for (coord, mut tile) in result? {
-						let entry = result_tiles.get_mut(&coord).unwrap();
-						match entry {
-							None => {
-								*entry = Some(tile);
-							}
-							Some(existing) => {
-								// existing is higher priority (top), tile is lower priority (base)
-								if let Ok(merged) = merge_two_tiles(&mut tile, existing, q, lossless) {
-									*entry = Some(merged);
-								}
-							}
+						Err(e) => {
+							log::warn!("Failed to merge tile at {coord:?}: {e}");
+							translucent_buffer.insert(key, (coord, existing));
 						}
 					}
+				} else if tile.is_opaque().unwrap_or(false) {
+					write_tile_to_tar(
+						&mut builder, &coord, tile, tile_compression,
+						extension_format, extension_compression,
+					)?;
+					done.insert(key);
+				} else {
+					translucent_buffer.insert(key, (coord, tile));
 				}
 			}
-
-			all_tiles.extend(
-				result_tiles
-					.into_iter()
-					.filter_map(|(coord, item)| item.map(|tile| (coord, tile))),
-			);
 		}
-
-		Ok(TileStream::from_vec(all_tiles))
+		// reader dropped here — file handle closed
+		progress.inc(1);
 	}
+	progress.finish();
+
+	// Phase 3: Flush remaining translucent tiles
+	if !translucent_buffer.is_empty() {
+		let progress = runtime.create_progress("flushing translucent tiles", translucent_buffer.len() as u64);
+		for (_, (coord, tile)) in translucent_buffer {
+			write_tile_to_tar(
+				&mut builder, &coord, tile, tile_compression,
+				extension_format, extension_compression,
+			)?;
+			progress.inc(1);
+		}
+		progress.finish();
+	}
+
+	builder.finish()?;
+	Ok(())
+}
+
+/// Write a single tile entry to the TAR archive.
+fn write_tile_to_tar<W: Write>(
+	builder: &mut Builder<W>,
+	coord: &TileCoord,
+	tile: Tile,
+	tile_compression: TileCompression,
+	extension_format: &str,
+	extension_compression: &str,
+) -> Result<()> {
+	let filename = format!(
+		"./{}/{}/{}{}{}",
+		coord.level, coord.x, coord.y, extension_format, extension_compression
+	);
+	let blob = tile.into_blob(tile_compression)?;
+	let mut header = Header::new_gnu();
+	header.set_size(blob.len());
+	header.set_mode(0o644);
+	builder.append_data(&mut header, Path::new(&filename), blob.as_slice())?;
+	Ok(())
 }
 
 /// Merge two tiles: `base` (bottom) and `top` (overlay on top).
