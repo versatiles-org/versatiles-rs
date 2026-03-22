@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use tar::{Builder, Header};
 use versatiles_container::{Tile, TilesRuntime};
 use versatiles_core::{
@@ -159,13 +160,13 @@ async fn merge_to_tar(
 	runtime: &TilesRuntime,
 ) -> Result<()> {
 	let file = File::create(output).with_context(|| format!("Failed to create output file: {output}"))?;
-	let mut builder = Builder::new(BufWriter::new(file));
+	let builder = Arc::new(Mutex::new(Builder::new(BufWriter::new(file))));
+	let done: Arc<Mutex<HashSet<u64>>> = Arc::default();
+	let translucent_buffer: Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>> = Arc::default();
 
 	let mut tile_format: Option<TileFormat> = None;
 	let mut tile_compression: Option<TileCompression> = None;
 	let mut tilejson = TileJSON::default();
-	let mut done: HashSet<u64> = HashSet::new();
-	let mut translucent_buffer: HashMap<u64, (TileCoord, Tile)> = HashMap::new();
 
 	let progress = runtime.create_progress("merging tiles", paths.len() as u64);
 
@@ -184,8 +185,8 @@ async fn merge_to_tar(
 
 		let tf = tile_format.unwrap();
 		let tc = tile_compression.unwrap();
-		let ext_format = tf.as_extension();
-		let ext_compression = tc.as_extension();
+		let ext_format = tf.as_extension().to_string();
+		let ext_compression = tc.as_extension().to_string();
 
 		let pyramid = prescanned_pyramids.map_or(&metadata.bbox_pyramid, |p| &p[i]);
 
@@ -193,14 +194,14 @@ async fn merge_to_tar(
 			process_tile_stream(
 				&reader,
 				*level_bbox,
-				&mut builder,
-				&mut done,
-				&mut translucent_buffer,
+				&builder,
+				&done,
+				&translucent_buffer,
 				quality,
 				lossless,
 				tc,
-				ext_format,
-				ext_compression,
+				&ext_format,
+				&ext_compression,
 			)
 			.await?;
 		}
@@ -213,6 +214,13 @@ async fn merge_to_tar(
 	let tc = tile_compression.unwrap();
 	let ext_format = tf.as_extension();
 	let ext_compression = tc.as_extension();
+
+	let mut builder = Arc::try_unwrap(builder)
+		.map_err(|_| anyhow!("builder still has references"))?
+		.into_inner()?;
+	let translucent_buffer = Arc::try_unwrap(translucent_buffer)
+		.map_err(|_| anyhow!("translucent_buffer still has references"))?
+		.into_inner()?;
 
 	flush_translucent_tiles(
 		&mut builder,
@@ -233,12 +241,12 @@ async fn merge_to_tar(
 
 /// Process all tiles from a single level bbox of a source reader.
 #[allow(clippy::too_many_arguments)]
-async fn process_tile_stream<W: Write>(
+async fn process_tile_stream<W: Write + Send + 'static>(
 	reader: &versatiles_container::SharedTileSource,
 	level_bbox: versatiles_core::TileBBox,
-	builder: &mut Builder<W>,
-	done: &mut HashSet<u64>,
-	translucent_buffer: &mut HashMap<u64, (TileCoord, Tile)>,
+	builder: &Arc<Mutex<Builder<W>>>,
+	done: &Arc<Mutex<HashSet<u64>>>,
+	translucent_buffer: &Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>>,
 	quality: &[Option<u8>; 32],
 	lossless: bool,
 	tile_compression: TileCompression,
@@ -246,30 +254,40 @@ async fn process_tile_stream<W: Write>(
 	extension_compression: &str,
 ) -> Result<()> {
 	let tile_stream = reader.get_tile_stream(level_bbox).await?;
+
+	let builder = Arc::clone(builder);
+	let done = Arc::clone(done);
+	let translucent_buffer = Arc::clone(translucent_buffer);
+	let quality = *quality;
+	let extension_format = extension_format.to_string();
+	let extension_compression = extension_compression.to_string();
+
 	tile_stream
-		.for_each_try(|coord, mut tile| {
+		.for_each_parallel_try(move |coord, mut tile| {
 			let key = coord.get_hilbert_index()?;
 
-			if done.contains(&key) {
+			if done.lock().unwrap().contains(&key) {
 				return Ok(());
 			}
 
-			if let Some((_, existing)) = translucent_buffer.remove(&key) {
+			let existing = translucent_buffer.lock().unwrap().remove(&key);
+
+			if let Some((_, existing)) = existing {
 				// existing is higher priority (top), tile is lower priority (base)
 				match merge_two_tiles(tile, existing, quality[coord.level as usize], lossless) {
 					Ok((merged, is_opaque)) => {
 						if is_opaque {
 							write_tile_to_tar(
-								builder,
+								&mut builder.lock().unwrap(),
 								&coord,
 								merged,
 								tile_compression,
-								extension_format,
-								extension_compression,
+								&extension_format,
+								&extension_compression,
 							)?;
-							done.insert(key);
+							done.lock().unwrap().insert(key);
 						} else {
-							translucent_buffer.insert(key, (coord, merged));
+							translucent_buffer.lock().unwrap().insert(key, (coord, merged));
 						}
 					}
 					Err(e) => {
@@ -278,16 +296,16 @@ async fn process_tile_stream<W: Write>(
 				}
 			} else if tile.is_opaque().unwrap_or(false) {
 				write_tile_to_tar(
-					builder,
+					&mut builder.lock().unwrap(),
 					&coord,
 					tile,
 					tile_compression,
-					extension_format,
-					extension_compression,
+					&extension_format,
+					&extension_compression,
 				)?;
-				done.insert(key);
+				done.lock().unwrap().insert(key);
 			} else {
-				translucent_buffer.insert(key, (coord, tile));
+				translucent_buffer.lock().unwrap().insert(key, (coord, tile));
 			}
 
 			Ok(())
