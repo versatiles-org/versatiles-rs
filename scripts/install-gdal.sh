@@ -12,10 +12,16 @@
 # Options:
 #   --testing   On Debian stable, add the testing repo as a pin-priority
 #               source and install GDAL from there (for a newer version).
+#
+# The script tries to install GDAL GDAL_PREFERRED first. If that version is
+# not available, it falls back to whatever the package manager provides and
+# prints a warning instead of failing.
 set -euo pipefail
 
-# ── Required GDAL version (major.minor) ──
-GDAL_REQUIRED="3.12"
+# ── GDAL versions ──
+GDAL_PREFERRED="3.12"   # try this version first
+GDAL_MIN_MAJOR=3         # minimum acceptable: 3.4
+GDAL_MIN_MINOR=4
 
 USE_TESTING=0
 while [[ $# -gt 0 ]]; do
@@ -30,12 +36,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 info()  { printf "\033[1;36m==> %s\033[0m\n" "$*"; }
+warn()  { printf "\033[1;33m[!] %s\033[0m\n" "$*"; }
 ok()    { printf "\033[1;32m[+] %s\033[0m\n" "$*"; }
 die()   { printf "\033[1;31m[x] %s\033[0m\n" "$*" >&2; exit 1; }
 
 install_debian() {
-  info "Installing GDAL ${GDAL_REQUIRED}.* via apt…"
-
   if [[ "$USE_TESTING" == "1" ]]; then
     info "Adding Debian testing repo with low pin priority…"
     sudo apt-get install -y debian-archive-keyring
@@ -48,34 +53,38 @@ install_debian() {
 
   sudo apt-get update
 
-  if ! sudo apt-get install -y "libgdal-dev=${GDAL_REQUIRED}.*" "gdal-bin=${GDAL_REQUIRED}.*" 2>/dev/null; then
-    AVAILABLE="$(apt-cache policy libgdal-dev 2>/dev/null | head -5 || true)"
-    die "GDAL ${GDAL_REQUIRED}.* is not available via apt.
-Available versions:
-${AVAILABLE}
-
-Hints:
-  - On Debian stable, try:  $0 --testing
-  - On Ubuntu, you may need the 'ubuntugis' PPA."
+  # Try preferred version first
+  info "Trying to install GDAL ${GDAL_PREFERRED}.* via apt…"
+  if sudo apt-get install -y "libgdal-dev=${GDAL_PREFERRED}.*" "gdal-bin=${GDAL_PREFERRED}.*" 2>/dev/null; then
+    return 0
   fi
+
+  # Fall back to whatever is available
+  warn "GDAL ${GDAL_PREFERRED}.* not available via apt, installing default version…"
+  sudo apt-get install -y libgdal-dev gdal-bin
 }
 
 install_alpine() {
-  info "Installing GDAL ${GDAL_REQUIRED}.* via apk…"
-  if ! apk add --no-cache "gdal-dev~${GDAL_REQUIRED}" 2>/dev/null; then
-    AVAILABLE="$(apk policy gdal-dev 2>/dev/null || true)"
-    die "GDAL ${GDAL_REQUIRED}.* is not available via apk.
-Available versions:
-${AVAILABLE}"
+  # Try preferred version first
+  info "Trying to install GDAL ${GDAL_PREFERRED}.* via apk…"
+  if apk add --no-cache "gdal-dev~${GDAL_PREFERRED}" 2>/dev/null; then
+    return 0
   fi
+
+  # Fall back to whatever is available
+  warn "GDAL ${GDAL_PREFERRED}.* not available via apk, installing default version…"
+  apk add --no-cache gdal-dev
 }
 
 install_macos() {
-  info "Installing GDAL ${GDAL_REQUIRED}.* via Homebrew…"
-  if ! brew install "gdal@${GDAL_REQUIRED}" 2>/dev/null; then
-    info "Versioned formula gdal@${GDAL_REQUIRED} not found, trying 'gdal'…"
-    brew install gdal
+  info "Trying to install GDAL ${GDAL_PREFERRED}.* via Homebrew…"
+  if brew install "gdal@${GDAL_PREFERRED}" 2>/dev/null; then
+    return 0
   fi
+
+  # Fall back to unversioned formula
+  warn "gdal@${GDAL_PREFERRED} not available, installing default gdal…"
+  brew install gdal
 }
 
 # Detect platform and install
@@ -86,7 +95,7 @@ case "$(uname -s)" in
     elif command -v apt-get >/dev/null 2>&1; then
       install_debian
     else
-      die "Unsupported Linux distribution. Install libgdal-dev ${GDAL_REQUIRED}.* manually."
+      die "Unsupported Linux distribution. Install libgdal-dev manually."
     fi
     ;;
   Darwin)
@@ -97,9 +106,20 @@ case "$(uname -s)" in
     ;;
 esac
 
+# Verify minimum version
 GDAL_VERSION="$(gdal-config --version 2>/dev/null || echo 'unknown')"
+if [[ "$GDAL_VERSION" == "unknown" ]]; then
+  die "gdal-config not found after installation."
+fi
+
+MAJOR="$(echo "$GDAL_VERSION" | cut -d. -f1)"
+MINOR="$(echo "$GDAL_VERSION" | cut -d. -f2)"
+if [[ "$MAJOR" -lt "$GDAL_MIN_MAJOR" ]] || { [[ "$MAJOR" -eq "$GDAL_MIN_MAJOR" ]] && [[ "$MINOR" -lt "$GDAL_MIN_MINOR" ]]; }; then
+  die "GDAL >= ${GDAL_MIN_MAJOR}.${GDAL_MIN_MINOR} required, but got ${GDAL_VERSION}."
+fi
+
 case "$GDAL_VERSION" in
-  "${GDAL_REQUIRED}".*) ;;
-  *) die "Expected GDAL ${GDAL_REQUIRED}.*, but got ${GDAL_VERSION}." ;;
+  "${GDAL_PREFERRED}".*) ok "GDAL installed successfully (${GDAL_VERSION})" ;;
+  *) warn "Wanted GDAL ${GDAL_PREFERRED}.*, but got ${GDAL_VERSION}. Continuing anyway."
+     ok "GDAL installed (${GDAL_VERSION})" ;;
 esac
-ok "GDAL installed successfully (${GDAL_VERSION})"
