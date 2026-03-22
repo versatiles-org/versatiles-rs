@@ -38,7 +38,8 @@ install_debian() {
 
   if [[ "$USE_TESTING" == "1" ]]; then
     info "Adding Debian testing repo with low pin priority…"
-    echo 'deb http://deb.debian.org/debian testing main' \
+    sudo apt-get install -y debian-archive-keyring
+    echo 'deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://deb.debian.org/debian testing main' \
       | sudo tee /etc/apt/sources.list.d/testing.list >/dev/null
     printf 'Package: *\nPin: release a=testing\nPin-Priority: 100\n' \
       | sudo tee /etc/apt/preferences.d/testing.pref >/dev/null
