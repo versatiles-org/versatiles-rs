@@ -170,7 +170,7 @@ wildmatch = { version = "2.6.1", default-features = false }
 moka = { version = "0.12", features = ["future"] }  # Lock-free LRU cache
 dashmap = "6.1"                                     # Concurrent HashMap
 parking_lot = "0.12"                                # Fast synchronization
-arc-swap = "1.8"                                    # Lock-free updates
+arc-swap = "1.9"                                    # Lock-free updates
 deadpool = { version = "0.13", features = ["managed"] }  # Connection pooling
 
 # Development dependencies
@@ -185,7 +185,7 @@ tempfile = "3.27.0"
 versatiles = { version = "3.8.1", path = "versatiles", default-features = false }
 versatiles_container = { version = "3.8.1", path = "versatiles_container", default-features = false }
 versatiles_core = { version = "3.8.1", path = "versatiles_core", default-features = false }
-ssh2-config = { version = "0.2", default-features = false }
+ssh2-config = { version = "0.7", default-features = false }
 versatiles_derive = { version = "3.8.1", path = "versatiles_derive", default-features = false }
 versatiles_geometry = { version = "3.8.1", path = "versatiles_geometry", default-features = false }
 versatiles_image = { version = "3.8.1", path = "versatiles_image", default-features = false }
