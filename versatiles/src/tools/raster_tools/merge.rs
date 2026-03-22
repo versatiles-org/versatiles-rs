@@ -69,6 +69,16 @@ pub struct Merge {
 	prescan: bool,
 }
 
+/// Encoding configuration shared across all tile-writing functions.
+#[derive(Clone)]
+struct MergeConfig {
+	quality: [Option<u8>; 32],
+	lossless: bool,
+	tile_compression: TileCompression,
+	ext_format: String,
+	ext_compression: String,
+}
+
 /// Parse a quality string using the same syntax as raster_format.
 fn parse_quality(quality: &str) -> Result<[Option<u8>; 32]> {
 	let mut result: [Option<u8>; 32] = [None; 32];
@@ -203,16 +213,11 @@ fn build_sweep_order(num_sources: usize, pyramids: &[TileBBoxPyramid]) -> (Vec<u
 
 /// Flush translucent tiles whose x-column is no longer covered by any remaining source.
 /// Each tile is re-encoded with the configured quality/lossless settings before writing.
-#[allow(clippy::too_many_arguments)]
 fn sweep_flush<W: Write>(
 	remaining_min_x: &[Option<u32>; NUM_LEVELS],
 	translucent_buffer: &Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>>,
 	builder: &Arc<Mutex<Builder<W>>>,
-	quality: &[Option<u8>; 32],
-	lossless: bool,
-	tile_compression: TileCompression,
-	ext_format: &str,
-	ext_compression: &str,
+	config: &MergeConfig,
 ) -> Result<()> {
 	let mut buf = translucent_buffer.lock().unwrap();
 	let flush_keys: Vec<u64> = buf
@@ -235,8 +240,8 @@ fn sweep_flush<W: Write>(
 	log::debug!("sweep-line flush: writing {} translucent tiles", to_flush.len());
 	let mut b = builder.lock().unwrap();
 	for (_, (coord, tile)) in to_flush {
-		let tile = reencode_translucent_tile(tile, quality[coord.level as usize], lossless)?;
-		let (filename, blob) = prepare_tile_entry(&coord, tile, tile_compression, ext_format, ext_compression)?;
+		let tile = reencode_translucent_tile(tile, config.quality[coord.level as usize], config.lossless)?;
+		let (filename, blob) = prepare_tile_entry(&coord, tile, config)?;
 		append_blob_to_tar(&mut b, &filename, &blob)?;
 	}
 	Ok(())
@@ -268,6 +273,7 @@ async fn merge_to_tar(
 
 	let mut tile_format: Option<TileFormat> = None;
 	let mut tile_compression: Option<TileCompression> = None;
+	let mut config: Option<MergeConfig> = None;
 	let mut tilejson = TileJSON::default();
 
 	// When prescan data is available, sort sources west-to-east and precompute
@@ -305,55 +311,34 @@ async fn merge_to_tar(
 		} else {
 			tile_format = Some(metadata.tile_format);
 			tile_compression = Some(metadata.tile_compression);
+			config = Some(MergeConfig {
+				quality: *quality,
+				lossless,
+				tile_compression: metadata.tile_compression,
+				ext_format: metadata.tile_format.as_extension().to_string(),
+				ext_compression: metadata.tile_compression.as_extension().to_string(),
+			});
 		}
 		tilejson.merge(reader.tilejson())?;
 
-		let tf = tile_format.unwrap();
-		let tc = tile_compression.unwrap();
-		let ext_format = tf.as_extension().to_string();
-		let ext_compression = tc.as_extension().to_string();
-
+		let cfg = config.as_ref().unwrap();
 		let pyramid = prescanned_pyramids.map_or(&metadata.bbox_pyramid, |p| &p[idx]);
 
 		for level_bbox in pyramid.iter_levels() {
-			process_tile_stream(
-				&reader,
-				*level_bbox,
-				&builder,
-				&done,
-				&translucent_buffer,
-				quality,
-				lossless,
-				tc,
-				&ext_format,
-				&ext_compression,
-			)
-			.await?;
+			process_tile_stream(&reader, *level_bbox, &builder, &done, &translucent_buffer, cfg).await?;
 		}
 		// reader dropped here — file handle closed
 
 		// Sweep-line flush: remove translucent tiles that no remaining source can cover
 		if let Some(ref suffix) = suffix_min_x {
-			sweep_flush(
-				&suffix[pos + 1],
-				&translucent_buffer,
-				&builder,
-				quality,
-				lossless,
-				tc,
-				&ext_format,
-				&ext_compression,
-			)?;
+			sweep_flush(&suffix[pos + 1], &translucent_buffer, &builder, cfg)?;
 		}
 
 		progress.inc(1);
 	}
 	progress.finish();
 
-	let tf = tile_format.ok_or(anyhow!("No sources were processed"))?;
-	let tc = tile_compression.unwrap();
-	let ext_format = tf.as_extension();
-	let ext_compression = tc.as_extension();
+	let cfg = config.ok_or(anyhow!("No sources were processed"))?;
 
 	let mut builder = Arc::try_unwrap(builder)
 		.map_err(|_| anyhow!("builder still has references"))?
@@ -362,19 +347,10 @@ async fn merge_to_tar(
 		.map_err(|_| anyhow!("translucent_buffer still has references"))?
 		.into_inner()?;
 
-	flush_translucent_tiles(
-		&mut builder,
-		translucent_buffer,
-		quality,
-		lossless,
-		tc,
-		ext_format,
-		ext_compression,
-		runtime,
-	)?;
+	flush_translucent_tiles(&mut builder, translucent_buffer, &cfg, runtime)?;
 
 	// Write tiles.json at the end (metadata was accumulated during merge)
-	write_tilejson_to_tar(&mut builder, &tilejson, tc, ext_compression)?;
+	write_tilejson_to_tar(&mut builder, &tilejson, &cfg)?;
 
 	builder.finish()?;
 	log::info!("finished raster merge");
@@ -382,27 +358,20 @@ async fn merge_to_tar(
 }
 
 /// Process all tiles from a single level bbox of a source reader.
-#[allow(clippy::too_many_arguments)]
 async fn process_tile_stream<W: Write + Send + 'static>(
 	reader: &versatiles_container::SharedTileSource,
 	level_bbox: versatiles_core::TileBBox,
 	builder: &Arc<Mutex<Builder<W>>>,
 	done: &Arc<Mutex<HashSet<u64>>>,
 	translucent_buffer: &Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>>,
-	quality: &[Option<u8>; 32],
-	lossless: bool,
-	tile_compression: TileCompression,
-	extension_format: &str,
-	extension_compression: &str,
+	config: &MergeConfig,
 ) -> Result<()> {
 	let tile_stream = reader.get_tile_stream(level_bbox).await?;
 
 	let builder = Arc::clone(builder);
 	let done = Arc::clone(done);
 	let translucent_buffer = Arc::clone(translucent_buffer);
-	let quality = *quality;
-	let extension_format = extension_format.to_string();
-	let extension_compression = extension_compression.to_string();
+	let config = config.clone();
 
 	tile_stream
 		.for_each_parallel_try(move |coord, mut tile| {
@@ -416,16 +385,10 @@ async fn process_tile_stream<W: Write + Send + 'static>(
 
 			if let Some((_, existing)) = existing {
 				// existing is higher priority (top), tile is lower priority (base)
-				match merge_two_tiles(tile, existing, quality[coord.level as usize], lossless) {
+				match merge_two_tiles(tile, existing, config.quality[coord.level as usize], config.lossless) {
 					Ok((merged, is_opaque)) => {
 						if is_opaque {
-							let (filename, blob) = prepare_tile_entry(
-								&coord,
-								merged,
-								tile_compression,
-								&extension_format,
-								&extension_compression,
-							)?;
+							let (filename, blob) = prepare_tile_entry(&coord, merged, &config)?;
 							append_blob_to_tar(&mut builder.lock().unwrap(), &filename, &blob)?;
 							done.lock().unwrap().insert(key);
 						} else {
@@ -437,13 +400,7 @@ async fn process_tile_stream<W: Write + Send + 'static>(
 					}
 				}
 			} else if tile.is_opaque().unwrap_or(false) {
-				let (filename, blob) = prepare_tile_entry(
-					&coord,
-					tile,
-					tile_compression,
-					&extension_format,
-					&extension_compression,
-				)?;
+				let (filename, blob) = prepare_tile_entry(&coord, tile, &config)?;
 				append_blob_to_tar(&mut builder.lock().unwrap(), &filename, &blob)?;
 				done.lock().unwrap().insert(key);
 			} else {
@@ -457,15 +414,10 @@ async fn process_tile_stream<W: Write + Send + 'static>(
 }
 
 /// Flush remaining translucent tiles to the TAR, re-encoding each with quality/lossless settings.
-#[allow(clippy::too_many_arguments)]
 fn flush_translucent_tiles<W: Write>(
 	builder: &mut Builder<W>,
 	translucent_buffer: HashMap<u64, (TileCoord, Tile)>,
-	quality: &[Option<u8>; 32],
-	lossless: bool,
-	tile_compression: TileCompression,
-	extension_format: &str,
-	extension_compression: &str,
+	config: &MergeConfig,
 	runtime: &TilesRuntime,
 ) -> Result<()> {
 	if translucent_buffer.is_empty() {
@@ -473,9 +425,8 @@ fn flush_translucent_tiles<W: Write>(
 	}
 	let progress = runtime.create_progress("flushing translucent tiles", translucent_buffer.len() as u64);
 	for (_, (coord, tile)) in translucent_buffer {
-		let tile = reencode_translucent_tile(tile, quality[coord.level as usize], lossless)?;
-		let (filename, blob) =
-			prepare_tile_entry(&coord, tile, tile_compression, extension_format, extension_compression)?;
+		let tile = reencode_translucent_tile(tile, config.quality[coord.level as usize], config.lossless)?;
+		let (filename, blob) = prepare_tile_entry(&coord, tile, config)?;
 		append_blob_to_tar(builder, &filename, &blob)?;
 		progress.inc(1);
 	}
@@ -484,14 +435,9 @@ fn flush_translucent_tiles<W: Write>(
 }
 
 /// Write the tiles.json metadata entry to the TAR.
-fn write_tilejson_to_tar<W: Write>(
-	builder: &mut Builder<W>,
-	tilejson: &TileJSON,
-	tile_compression: TileCompression,
-	extension_compression: &str,
-) -> Result<()> {
-	let meta_blob = compress(Blob::from(tilejson), tile_compression)?;
-	let filename = format!("tiles.json{extension_compression}");
+fn write_tilejson_to_tar<W: Write>(builder: &mut Builder<W>, tilejson: &TileJSON, config: &MergeConfig) -> Result<()> {
+	let meta_blob = compress(Blob::from(tilejson), config.tile_compression)?;
+	let filename = format!("tiles.json{}", config.ext_compression);
 	let mut header = Header::new_gnu();
 	header.set_size(meta_blob.len());
 	header.set_mode(0o644);
@@ -503,11 +449,7 @@ fn write_tilejson_to_tar<W: Write>(
 ///
 /// When `lossless` is true the tile is encoded as lossless WebP (quality 100).
 /// Otherwise it is encoded as lossy WebP at the given `quality` for its zoom level.
-fn reencode_translucent_tile(
-	mut tile: Tile,
-	quality: Option<u8>,
-	lossless: bool,
-) -> Result<Tile> {
+fn reencode_translucent_tile(mut tile: Tile, quality: Option<u8>, lossless: bool) -> Result<Tile> {
 	let effective_quality = if lossless { Some(100) } else { quality };
 	tile.change_format(TileFormat::WEBP, effective_quality, None)?;
 	Ok(tile)
@@ -515,18 +457,12 @@ fn reencode_translucent_tile(
 
 /// Prepare a tile for writing: compress into a blob and build the filename.
 /// This is the CPU-heavy part and should be called without holding any locks.
-fn prepare_tile_entry(
-	coord: &TileCoord,
-	tile: Tile,
-	tile_compression: TileCompression,
-	extension_format: &str,
-	extension_compression: &str,
-) -> Result<(String, Blob)> {
+fn prepare_tile_entry(coord: &TileCoord, tile: Tile, config: &MergeConfig) -> Result<(String, Blob)> {
 	let filename = format!(
 		"./{}/{}/{}{}{}",
-		coord.level, coord.x, coord.y, extension_format, extension_compression
+		coord.level, coord.x, coord.y, config.ext_format, config.ext_compression
 	);
-	let blob = tile.into_blob(tile_compression)?;
+	let blob = tile.into_blob(config.tile_compression)?;
 	Ok((filename, blob))
 }
 
