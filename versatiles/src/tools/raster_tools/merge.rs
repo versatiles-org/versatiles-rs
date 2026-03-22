@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, anyhow, ensure};
-use futures::{StreamExt, future::ready, stream};
+use futures::{StreamExt, future::ready};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -157,28 +157,40 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 }
 
 /// Scan all sources in parallel, returning their pyramids in source order.
+///
+/// Limits concurrency to avoid exhausting file descriptors on systems with low `ulimit -n`.
 async fn prescan_sources(paths: &[String], runtime: &TilesRuntime) -> Result<Vec<TileBBoxPyramid>> {
 	let progress = runtime.create_progress("scanning containers", paths.len() as u64);
-	let scan_results: Vec<Result<TileBBoxPyramid>> = stream::iter(paths)
-		.map(|path| {
+	let concurrency = ConcurrencyLimits::default().io_bound;
+
+	let results: Vec<Result<(usize, TileBBoxPyramid)>> = futures::stream::iter(paths.iter().enumerate())
+		.map(|(idx, path)| {
 			let runtime = runtime.clone();
-			let progress = &progress;
+			let path = path.clone();
+			let progress = progress.clone();
 			async move {
 				let reader = runtime
-					.get_reader_from_str(path)
+					.get_reader_from_str(&path)
 					.await
 					.with_context(|| format!("Failed to open container: {path}"))?;
 				let pyramid = reader.metadata().bbox_pyramid.clone();
 				progress.inc(1);
-				Ok(pyramid)
+				Ok((idx, pyramid))
 			}
 		})
-		.buffered(64)
+		.buffer_unordered(concurrency)
 		.collect()
 		.await;
+
 	progress.finish();
 
-	scan_results.into_iter().collect()
+	// Restore original order
+	let mut pyramids = vec![TileBBoxPyramid::default(); paths.len()];
+	for result in results {
+		let (idx, pyramid) = result?;
+		pyramids[idx] = pyramid;
+	}
+	Ok(pyramids)
 }
 
 const NUM_LEVELS: usize = (MAX_ZOOM_LEVEL + 1) as usize;
