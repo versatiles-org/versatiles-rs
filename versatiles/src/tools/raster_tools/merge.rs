@@ -306,56 +306,53 @@ async fn process_tile_stream<W: Write>(
 	extension_compression: &str,
 ) -> Result<()> {
 	let tile_stream = reader.get_tile_stream(level_bbox).await?;
-	let mut tiles: Vec<(TileCoord, Tile)> = Vec::new();
 	tile_stream
-		.for_each(|coord, tile| {
-			tiles.push((coord, tile));
-		})
-		.await;
+		.for_each_try(|coord, mut tile| {
+			let key = coord.get_hilbert_index()?;
 
-	for (coord, mut tile) in tiles {
-		let key = coord.get_hilbert_index()?;
+			if done.contains(&key) {
+				return Ok(());
+			}
 
-		if done.contains(&key) {
-			continue;
-		}
-
-		if let Some((_, existing)) = translucent_buffer.remove(&key) {
-			// existing is higher priority (top), tile is lower priority (base)
-			match merge_two_tiles(tile, existing, quality[coord.level as usize], lossless) {
-				Ok((merged, is_opaque)) => {
-					if is_opaque {
-						write_tile_to_tar(
-							builder,
-							&coord,
-							merged,
-							tile_compression,
-							extension_format,
-							extension_compression,
-						)?;
-						done.insert(key);
-					} else {
-						translucent_buffer.insert(key, (coord, merged));
+			if let Some((_, existing)) = translucent_buffer.remove(&key) {
+				// existing is higher priority (top), tile is lower priority (base)
+				match merge_two_tiles(tile, existing, quality[coord.level as usize], lossless) {
+					Ok((merged, is_opaque)) => {
+						if is_opaque {
+							write_tile_to_tar(
+								builder,
+								&coord,
+								merged,
+								tile_compression,
+								extension_format,
+								extension_compression,
+							)?;
+							done.insert(key);
+						} else {
+							translucent_buffer.insert(key, (coord, merged));
+						}
+					}
+					Err(e) => {
+						log::warn!("Failed to merge tile at {coord:?}: {e}");
 					}
 				}
-				Err(e) => {
-					log::warn!("Failed to merge tile at {coord:?}: {e}");
-				}
+			} else if tile.is_opaque().unwrap_or(false) {
+				write_tile_to_tar(
+					builder,
+					&coord,
+					tile,
+					tile_compression,
+					extension_format,
+					extension_compression,
+				)?;
+				done.insert(key);
+			} else {
+				translucent_buffer.insert(key, (coord, tile));
 			}
-		} else if tile.is_opaque().unwrap_or(false) {
-			write_tile_to_tar(
-				builder,
-				&coord,
-				tile,
-				tile_compression,
-				extension_format,
-				extension_compression,
-			)?;
-			done.insert(key);
-		} else {
-			translucent_buffer.insert(key, (coord, tile));
-		}
-	}
+
+			Ok(())
+		})
+		.await?;
 	Ok(())
 }
 
