@@ -256,16 +256,17 @@ where
 		fn blend(base_px: &[u8; 4], top_px: &[u8; 4]) -> [u8; 4] {
 			let a_b = u16::from(base_px[3]);
 			let a_t = u16::from(top_px[3]);
-			let a_out = (a_b + a_t).min(255);
-			// Snap near-opaque alpha to fully opaque to compensate for rounding
-			let a_out = if a_out >= 250 { 255 } else { a_out };
-			if a_out == 0 {
+			let a_sum = (a_b + a_t);
+			if a_sum == 0 {
 				return [0, 0, 0, 0];
 			}
+
+			// Snap near-opaque alpha to fully opaque to compensate for rounding
+			let a_out = if a_sum >= 250 { 255 } else { a_sum };
 			[
-				((u16::from(base_px[0]) * a_b + u16::from(top_px[0]) * a_t + a_out / 2) / a_out) as u8,
-				((u16::from(base_px[1]) * a_b + u16::from(top_px[1]) * a_t + a_out / 2) / a_out) as u8,
-				((u16::from(base_px[2]) * a_b + u16::from(top_px[2]) * a_t + a_out / 2) / a_out) as u8,
+				((u16::from(base_px[0]) * a_b + u16::from(top_px[0]) * a_t + a_sum / 2) / a_sum).min(255) as u8,
+				((u16::from(base_px[1]) * a_b + u16::from(top_px[1]) * a_t + a_sum / 2) / a_sum).min(255) as u8,
+				((u16::from(base_px[2]) * a_b + u16::from(top_px[2]) * a_t + a_sum / 2) / a_sum).min(255) as u8,
 				a_out as u8,
 			]
 		}
