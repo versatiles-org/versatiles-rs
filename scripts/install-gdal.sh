@@ -41,17 +41,14 @@ install_debian() {
     sudo apt-get install -y debian-archive-keyring
     echo 'deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://deb.debian.org/debian testing main' \
       | sudo tee /etc/apt/sources.list.d/testing.list >/dev/null
-    printf 'Package: *\nPin: release a=testing\nPin-Priority: 100\n' \
+    # Pin testing packages below default so only explicitly requested packages come from testing
+    printf 'Package: *\nPin: release a=testing\nPin-Priority: 10\n' \
       | sudo tee /etc/apt/preferences.d/testing.pref >/dev/null
-    sudo apt-get update
-    APT_FLAGS="-t testing"
-  else
-    sudo apt-get update
-    APT_FLAGS=""
   fi
 
-  # shellcheck disable=SC2086
-  if ! sudo apt-get install -y $APT_FLAGS "libgdal-dev=${GDAL_REQUIRED}.*" "gdal-bin=${GDAL_REQUIRED}.*" 2>/dev/null; then
+  sudo apt-get update
+
+  if ! sudo apt-get install -y "libgdal-dev=${GDAL_REQUIRED}.*" "gdal-bin=${GDAL_REQUIRED}.*" 2>/dev/null; then
     AVAILABLE="$(apt-cache policy libgdal-dev 2>/dev/null | head -5 || true)"
     die "GDAL ${GDAL_REQUIRED}.* is not available via apt.
 Available versions:
