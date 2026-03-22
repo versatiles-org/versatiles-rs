@@ -14,6 +14,9 @@
 #               source and install GDAL from there (for a newer version).
 set -euo pipefail
 
+# ── Required GDAL version (major.minor) ──
+GDAL_REQUIRED="3.12"
+
 USE_TESTING=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -31,7 +34,7 @@ ok()    { printf "\033[1;32m[+] %s\033[0m\n" "$*"; }
 die()   { printf "\033[1;31m[x] %s\033[0m\n" "$*" >&2; exit 1; }
 
 install_debian() {
-  info "Installing GDAL via apt…"
+  info "Installing GDAL ${GDAL_REQUIRED}.* via apt…"
 
   if [[ "$USE_TESTING" == "1" ]]; then
     info "Adding Debian testing repo with low pin priority…"
@@ -40,21 +43,41 @@ install_debian() {
     printf 'Package: *\nPin: release a=testing\nPin-Priority: 100\n' \
       | sudo tee /etc/apt/preferences.d/testing.pref >/dev/null
     sudo apt-get update
-    sudo apt-get install -y -t testing libgdal-dev gdal-bin
+    APT_FLAGS="-t testing"
   else
     sudo apt-get update
-    sudo apt-get install -y libgdal-dev gdal-bin
+    APT_FLAGS=""
+  fi
+
+  # shellcheck disable=SC2086
+  if ! sudo apt-get install -y $APT_FLAGS "libgdal-dev=${GDAL_REQUIRED}.*" "gdal-bin=${GDAL_REQUIRED}.*" 2>/dev/null; then
+    AVAILABLE="$(apt-cache policy libgdal-dev 2>/dev/null | head -5 || true)"
+    die "GDAL ${GDAL_REQUIRED}.* is not available via apt.
+Available versions:
+${AVAILABLE}
+
+Hints:
+  - On Debian stable, try:  $0 --testing
+  - On Ubuntu, you may need the 'ubuntugis' PPA."
   fi
 }
 
 install_alpine() {
-  info "Installing GDAL via apk…"
-  apk add --no-cache gdal-dev
+  info "Installing GDAL ${GDAL_REQUIRED}.* via apk…"
+  if ! apk add --no-cache "gdal-dev~${GDAL_REQUIRED}" 2>/dev/null; then
+    AVAILABLE="$(apk policy gdal-dev 2>/dev/null || true)"
+    die "GDAL ${GDAL_REQUIRED}.* is not available via apk.
+Available versions:
+${AVAILABLE}"
+  fi
 }
 
 install_macos() {
-  info "Installing GDAL via Homebrew…"
-  brew install gdal
+  info "Installing GDAL ${GDAL_REQUIRED}.* via Homebrew…"
+  if ! brew install "gdal@${GDAL_REQUIRED}" 2>/dev/null; then
+    info "Versioned formula gdal@${GDAL_REQUIRED} not found, trying 'gdal'…"
+    brew install gdal
+  fi
 }
 
 # Detect platform and install
@@ -65,7 +88,7 @@ case "$(uname -s)" in
     elif command -v apt-get >/dev/null 2>&1; then
       install_debian
     else
-      die "Unsupported Linux distribution. Install libgdal-dev manually."
+      die "Unsupported Linux distribution. Install libgdal-dev ${GDAL_REQUIRED}.* manually."
     fi
     ;;
   Darwin)
@@ -76,4 +99,9 @@ case "$(uname -s)" in
     ;;
 esac
 
-ok "GDAL installed successfully ($(gdal-config --version 2>/dev/null || echo 'version unknown'))"
+GDAL_VERSION="$(gdal-config --version 2>/dev/null || echo 'unknown')"
+case "$GDAL_VERSION" in
+  "${GDAL_REQUIRED}".*) ;;
+  *) die "Expected GDAL ${GDAL_REQUIRED}.*, but got ${GDAL_VERSION}." ;;
+esac
+ok "GDAL installed successfully (${GDAL_VERSION})"
