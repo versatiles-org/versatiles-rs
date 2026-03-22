@@ -8,7 +8,8 @@ use std::sync::{Arc, Mutex};
 use tar::{Builder, Header};
 use versatiles_container::{Tile, TilesRuntime};
 use versatiles_core::{
-	Blob, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, compression::compress, utils::HilbertIndex,
+	Blob, MAX_ZOOM_LEVEL, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, compression::compress,
+	utils::HilbertIndex,
 };
 use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 
@@ -149,6 +150,80 @@ async fn prescan_sources(paths: &[String], runtime: &TilesRuntime) -> Result<Vec
 	scan_results.into_iter().collect()
 }
 
+const NUM_LEVELS: usize = (MAX_ZOOM_LEVEL + 1) as usize;
+
+type SuffixMinX = Vec<[Option<u32>; NUM_LEVELS]>;
+
+/// Build source processing order (west-to-east) and per-level suffix minimum x arrays.
+fn build_sweep_order(num_sources: usize, pyramids: &[TileBBoxPyramid]) -> (Vec<usize>, SuffixMinX) {
+	let mut order: Vec<usize> = (0..num_sources).collect();
+	order.sort_by(|&a, &b| western_edge(&pyramids[a]).total_cmp(&western_edge(&pyramids[b])));
+
+	let mut suffix: SuffixMinX = vec![[None; NUM_LEVELS]; order.len() + 1];
+	for pos in (0..order.len()).rev() {
+		let idx = order[pos];
+		suffix[pos] = suffix[pos + 1];
+		for level in 0..=(MAX_ZOOM_LEVEL) {
+			let bbox = pyramids[idx].get_level_bbox(level);
+			if !bbox.is_empty()
+				&& let Ok(x) = bbox.x_min()
+			{
+				let l = level as usize;
+				suffix[pos][l] = Some(match suffix[pos][l] {
+					Some(existing) => existing.min(x),
+					None => x,
+				});
+			}
+		}
+	}
+	(order, suffix)
+}
+
+/// Flush translucent tiles whose x-column is no longer covered by any remaining source.
+fn sweep_flush<W: Write>(
+	remaining_min_x: &[Option<u32>; NUM_LEVELS],
+	translucent_buffer: &Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>>,
+	builder: &Arc<Mutex<Builder<W>>>,
+	tile_compression: TileCompression,
+	ext_format: &str,
+	ext_compression: &str,
+) -> Result<()> {
+	let mut buf = translucent_buffer.lock().unwrap();
+	let flush_keys: Vec<u64> = buf
+		.iter()
+		.filter(|(_, (coord, _))| match remaining_min_x[coord.level as usize] {
+			Some(min_x) => coord.x < min_x,
+			None => true,
+		})
+		.map(|(&key, _)| key)
+		.collect();
+	if flush_keys.is_empty() {
+		return Ok(());
+	}
+	let to_flush: Vec<_> = flush_keys
+		.iter()
+		.filter_map(|k| buf.remove(k).map(|v| (*k, v)))
+		.collect();
+	drop(buf);
+
+	log::debug!("sweep-line flush: writing {} translucent tiles", to_flush.len());
+	let mut b = builder.lock().unwrap();
+	for (_, (coord, tile)) in to_flush {
+		let (filename, blob) = prepare_tile_entry(&coord, tile, tile_compression, ext_format, ext_compression)?;
+		append_blob_to_tar(&mut b, &filename, &blob)?;
+	}
+	Ok(())
+}
+
+/// Compute the normalized western edge of a pyramid as the minimum fractional x across all levels.
+fn western_edge(pyramid: &TileBBoxPyramid) -> f64 {
+	pyramid
+		.iter_levels()
+		.filter_map(|bbox| bbox.x_min().ok().map(|x| f64::from(x) / f64::from(1u32 << bbox.level)))
+		.reduce(f64::min)
+		.unwrap_or(0.0)
+}
+
 /// Merge sources into a TAR file. If `prescanned_pyramids` is provided, uses those
 /// instead of reading pyramids from each source during the merge.
 async fn merge_to_tar(
@@ -168,9 +243,19 @@ async fn merge_to_tar(
 	let mut tile_compression: Option<TileCompression> = None;
 	let mut tilejson = TileJSON::default();
 
+	// When prescan data is available, sort sources west-to-east and precompute
+	// per-level suffix minimum x so we can flush translucent tiles early.
+	let (source_order, suffix_min_x): (Vec<usize>, Option<SuffixMinX>) = if let Some(pyramids) = prescanned_pyramids {
+		let (order, suffix) = build_sweep_order(paths.len(), pyramids);
+		(order, Some(suffix))
+	} else {
+		((0..paths.len()).collect(), None)
+	};
+
 	let progress = runtime.create_progress("merging tiles", paths.len() as u64);
 
-	for (i, path) in paths.iter().enumerate() {
+	for (pos, &idx) in source_order.iter().enumerate() {
+		let path = &paths[idx];
 		let reader = runtime
 			.get_reader_from_str(path)
 			.await
@@ -201,7 +286,7 @@ async fn merge_to_tar(
 		let ext_format = tf.as_extension().to_string();
 		let ext_compression = tc.as_extension().to_string();
 
-		let pyramid = prescanned_pyramids.map_or(&metadata.bbox_pyramid, |p| &p[i]);
+		let pyramid = prescanned_pyramids.map_or(&metadata.bbox_pyramid, |p| &p[idx]);
 
 		for level_bbox in pyramid.iter_levels() {
 			process_tile_stream(
@@ -219,6 +304,19 @@ async fn merge_to_tar(
 			.await?;
 		}
 		// reader dropped here — file handle closed
+
+		// Sweep-line flush: remove translucent tiles that no remaining source can cover
+		if let Some(ref suffix) = suffix_min_x {
+			sweep_flush(
+				&suffix[pos + 1],
+				&translucent_buffer,
+				&builder,
+				tc,
+				&ext_format,
+				&ext_compression,
+			)?;
+		}
+
 		progress.inc(1);
 	}
 	progress.finish();
