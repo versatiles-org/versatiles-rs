@@ -177,7 +177,20 @@ async fn merge_to_tar(
 			.with_context(|| format!("Failed to open container: {path}"))?;
 
 		let metadata = reader.metadata();
-		if tile_format.is_none() {
+		if let Some(tf) = tile_format {
+			ensure!(
+				metadata.tile_format == tf,
+				"Source {path} has tile format {:?}, expected {:?}",
+				metadata.tile_format,
+				tf
+			);
+			ensure!(
+				metadata.tile_compression == tile_compression.unwrap(),
+				"Source {path} has tile compression {:?}, expected {:?}",
+				metadata.tile_compression,
+				tile_compression.unwrap()
+			);
+		} else {
 			tile_format = Some(metadata.tile_format);
 			tile_compression = Some(metadata.tile_compression);
 		}
