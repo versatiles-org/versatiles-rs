@@ -6,7 +6,7 @@ runs:
   steps:
     - name: Install GDAL
       shell: bash
-      run: ./scripts/install-gdal.sh
+      run: ./scripts/install-gdal.sh --testing
 
     - name: Verify GDAL installation
       shell: bash
