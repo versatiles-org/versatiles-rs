@@ -322,9 +322,9 @@ async fn process_tile_stream<W: Write>(
 
 		if let Some((_, existing)) = translucent_buffer.remove(&key) {
 			// existing is higher priority (top), tile is lower priority (base)
-			match merge_two_tiles(&mut tile, &existing, quality[coord.level as usize], lossless) {
-				Ok(mut merged) => {
-					if merged.is_opaque().unwrap_or(false) {
+			match merge_two_tiles(tile, existing, quality[coord.level as usize], lossless) {
+				Ok((merged, is_opaque)) => {
+					if is_opaque {
 						write_tile_to_tar(
 							builder,
 							&coord,
@@ -340,7 +340,6 @@ async fn process_tile_stream<W: Write>(
 				}
 				Err(e) => {
 					log::warn!("Failed to merge tile at {coord:?}: {e}");
-					translucent_buffer.insert(key, (coord, existing));
 				}
 			}
 		} else if tile.is_opaque().unwrap_or(false) {
@@ -426,33 +425,24 @@ fn write_tile_to_tar<W: Write>(
 }
 
 /// Merge two tiles: `base` (bottom) and `top` (overlay on top).
-/// Returns the merged tile.
-fn merge_two_tiles(base: &mut Tile, top: &Tile, quality: Option<u8>, lossless: bool) -> Result<Tile> {
-	// Check if top tile is opaque - if so, it completely covers the base
-	let mut top_clone = top.clone();
-	if top_clone.is_opaque()? {
-		return Ok(top.clone());
+/// Returns the merged tile and whether it is opaque.
+fn merge_two_tiles(base: Tile, mut top: Tile, quality: Option<u8>, lossless: bool) -> Result<(Tile, bool)> {
+	if top.is_opaque()? {
+		return Ok((top, true));
 	}
 
-	// Both tiles need compositing
-	let base_image = base.as_image()?.clone();
-	let top_image = top_clone.into_image()?;
+	let base_image = base.into_image()?;
+	let top_image = top.into_image()?;
 
 	let mut result = base_image;
-
-	// Use additive alpha compositing
 	result.overlay_additive(&top_image)?;
 
-	// Check if result is opaque
 	let is_opaque = result.is_opaque();
-
-	// Encode as WebP
 	let effective_quality = if !is_opaque && lossless { Some(100) } else { quality };
 
-	let tile = Tile::from_image(result, TileFormat::WEBP)?;
-	let mut tile = tile;
+	let mut tile = Tile::from_image(result, TileFormat::WEBP)?;
 	tile.change_format(TileFormat::WEBP, effective_quality, None)?;
-	Ok(tile)
+	Ok((tile, is_opaque))
 }
 
 #[cfg(test)]
