@@ -76,8 +76,6 @@ struct MergeConfig {
 	lossless: bool,
 	tile_format: TileFormat,
 	tile_compression: TileCompression,
-	ext_format: String,
-	ext_compression: String,
 }
 
 /// Parse a quality string using the same syntax as raster_format.
@@ -306,8 +304,6 @@ async fn merge_to_tar(
 		lossless,
 		tile_format: first_metadata.tile_format,
 		tile_compression: first_metadata.tile_compression,
-		ext_format: first_metadata.tile_format.as_extension().to_string(),
-		ext_compression: first_metadata.tile_compression.as_extension().to_string(),
 	};
 	drop(first_reader);
 
@@ -429,13 +425,21 @@ fn flush_translucent_tiles<W: Write>(
 }
 
 /// Re-encode and write translucent tiles to the TAR.
+///
+/// Each tile is re-encoded as WebP (lossy at `quality`, or lossless if configured)
+/// before being compressed and appended.
 fn write_translucent_tiles<W: Write>(
 	builder: &mut Builder<W>,
 	tiles: Vec<(TileCoord, Tile)>,
 	config: &MergeConfig,
 ) -> Result<()> {
-	for (coord, tile) in tiles {
-		let tile = reencode_translucent_tile(tile, config.quality[coord.level as usize], config.lossless)?;
+	for (coord, mut tile) in tiles {
+		let quality = if config.lossless {
+			Some(100)
+		} else {
+			config.quality[coord.level as usize]
+		};
+		tile.change_format(TileFormat::WEBP, quality, None)?;
 		write_tile_to_tar(builder, &coord, tile, config)?;
 	}
 	Ok(())
@@ -444,22 +448,12 @@ fn write_translucent_tiles<W: Write>(
 /// Write the tiles.json metadata entry to the TAR.
 fn write_tilejson_to_tar<W: Write>(builder: &mut Builder<W>, tilejson: &TileJSON, config: &MergeConfig) -> Result<()> {
 	let meta_blob = compress(Blob::from(tilejson), config.tile_compression)?;
-	let filename = format!("tiles.json{}", config.ext_compression);
+	let filename = format!("tiles.json{}", config.tile_compression.as_extension());
 	let mut header = Header::new_gnu();
 	header.set_size(meta_blob.len());
 	header.set_mode(0o644);
 	builder.append_data(&mut header, Path::new(&filename), meta_blob.as_slice())?;
 	Ok(())
-}
-
-/// Re-encode a translucent tile as WebP with the configured quality/lossless settings.
-///
-/// When `lossless` is true the tile is encoded as lossless WebP (quality 100).
-/// Otherwise it is encoded as lossy WebP at the given `quality` for its zoom level.
-fn reencode_translucent_tile(mut tile: Tile, quality: Option<u8>, lossless: bool) -> Result<Tile> {
-	let effective_quality = if lossless { Some(100) } else { quality };
-	tile.change_format(TileFormat::WEBP, effective_quality, None)?;
-	Ok(tile)
 }
 
 /// Compress a tile into a blob, build the TAR filename, and append it to the archive.
@@ -472,7 +466,11 @@ fn write_tile_to_tar<W: Write>(
 ) -> Result<()> {
 	let filename = format!(
 		"./{}/{}/{}{}{}",
-		coord.level, coord.x, coord.y, config.ext_format, config.ext_compression
+		coord.level,
+		coord.x,
+		coord.y,
+		config.tile_format.as_extension(),
+		config.tile_compression.as_extension()
 	);
 	let blob = tile.into_blob(config.tile_compression)?;
 	let mut header = Header::new_gnu();
