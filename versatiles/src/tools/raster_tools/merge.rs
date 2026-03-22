@@ -242,8 +242,7 @@ fn sweep_flush<W: Write>(
 	let mut b = builder.lock().unwrap();
 	for (_, (coord, tile)) in to_flush {
 		let tile = reencode_translucent_tile(tile, config.quality[coord.level as usize], config.lossless)?;
-		let (filename, blob) = prepare_tile_entry(&coord, tile, config)?;
-		append_blob_to_tar(&mut b, &filename, &blob)?;
+		write_tile_to_tar(&mut b, &coord, tile, config)?;
 	}
 	Ok(())
 }
@@ -398,8 +397,7 @@ async fn process_tile_stream<W: Write + Send + 'static>(
 				match merge_two_tiles(tile, existing, config.quality[coord.level as usize], config.lossless) {
 					Ok((merged, is_opaque)) => {
 						if is_opaque {
-							let (filename, blob) = prepare_tile_entry(&coord, merged, &config)?;
-							append_blob_to_tar(&mut builder.lock().unwrap(), &filename, &blob)?;
+							write_tile_to_tar(&mut builder.lock().unwrap(), &coord, merged, &config)?;
 							done.lock().unwrap().insert(key);
 						} else {
 							translucent_buffer.lock().unwrap().insert(key, (coord, merged));
@@ -410,8 +408,7 @@ async fn process_tile_stream<W: Write + Send + 'static>(
 					}
 				}
 			} else if tile.is_opaque().unwrap_or(false) {
-				let (filename, blob) = prepare_tile_entry(&coord, tile, &config)?;
-				append_blob_to_tar(&mut builder.lock().unwrap(), &filename, &blob)?;
+				write_tile_to_tar(&mut builder.lock().unwrap(), &coord, tile, &config)?;
 				done.lock().unwrap().insert(key);
 			} else {
 				translucent_buffer.lock().unwrap().insert(key, (coord, tile));
@@ -436,8 +433,7 @@ fn flush_translucent_tiles<W: Write>(
 	let progress = runtime.create_progress("flushing translucent tiles", translucent_buffer.len() as u64);
 	for (_, (coord, tile)) in translucent_buffer {
 		let tile = reencode_translucent_tile(tile, config.quality[coord.level as usize], config.lossless)?;
-		let (filename, blob) = prepare_tile_entry(&coord, tile, config)?;
-		append_blob_to_tar(builder, &filename, &blob)?;
+		write_tile_to_tar(builder, &coord, tile, config)?;
 		progress.inc(1);
 	}
 	progress.finish();
@@ -465,23 +461,23 @@ fn reencode_translucent_tile(mut tile: Tile, quality: Option<u8>, lossless: bool
 	Ok(tile)
 }
 
-/// Prepare a tile for writing: compress into a blob and build the filename.
-/// This is the CPU-heavy part and should be called without holding any locks.
-fn prepare_tile_entry(coord: &TileCoord, tile: Tile, config: &MergeConfig) -> Result<(String, Blob)> {
+/// Compress a tile into a blob, build the TAR filename, and append it to the archive.
+/// The compression step is CPU-heavy — call without holding locks when possible.
+fn write_tile_to_tar<W: Write>(
+	builder: &mut Builder<W>,
+	coord: &TileCoord,
+	tile: Tile,
+	config: &MergeConfig,
+) -> Result<()> {
 	let filename = format!(
 		"./{}/{}/{}{}{}",
 		coord.level, coord.x, coord.y, config.ext_format, config.ext_compression
 	);
 	let blob = tile.into_blob(config.tile_compression)?;
-	Ok((filename, blob))
-}
-
-/// Append a prepared blob to the TAR archive. This is brief I/O only.
-fn append_blob_to_tar<W: Write>(builder: &mut Builder<W>, filename: &str, blob: &Blob) -> Result<()> {
 	let mut header = Header::new_gnu();
 	header.set_size(blob.len());
 	header.set_mode(0o644);
-	builder.append_data(&mut header, Path::new(filename), blob.as_slice())?;
+	builder.append_data(&mut header, Path::new(&filename), blob.as_slice())?;
 	Ok(())
 }
 
