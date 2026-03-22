@@ -213,7 +213,6 @@ fn build_sweep_order(num_sources: usize, pyramids: &[TileBBoxPyramid]) -> (Vec<u
 }
 
 /// Flush translucent tiles whose x-column is no longer covered by any remaining source.
-/// Each tile is re-encoded with the configured quality/lossless settings before writing.
 fn sweep_flush<W: Write>(
 	remaining_min_x: &[Option<u32>; NUM_LEVELS],
 	translucent_buffer: &Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>>,
@@ -232,19 +231,11 @@ fn sweep_flush<W: Write>(
 	if flush_keys.is_empty() {
 		return Ok(());
 	}
-	let to_flush: Vec<_> = flush_keys
-		.iter()
-		.filter_map(|k| buf.remove(k).map(|v| (*k, v)))
-		.collect();
+	let tiles: Vec<_> = flush_keys.iter().filter_map(|k| buf.remove(k)).collect();
 	drop(buf);
 
-	log::debug!("sweep-line flush: writing {} translucent tiles", to_flush.len());
-	let mut b = builder.lock().unwrap();
-	for (_, (coord, tile)) in to_flush {
-		let tile = reencode_translucent_tile(tile, config.quality[coord.level as usize], config.lossless)?;
-		write_tile_to_tar(&mut b, &coord, tile, config)?;
-	}
-	Ok(())
+	log::debug!("sweep-line flush: writing {} translucent tiles", tiles.len());
+	write_translucent_tiles(&mut builder.lock().unwrap(), tiles, config)
 }
 
 /// Compute the normalized western edge of a pyramid as the minimum fractional x across all levels.
@@ -420,7 +411,7 @@ async fn process_tile_stream<W: Write + Send + 'static>(
 	Ok(())
 }
 
-/// Flush remaining translucent tiles to the TAR, re-encoding each with quality/lossless settings.
+/// Flush remaining translucent tiles to the TAR.
 fn flush_translucent_tiles<W: Write>(
 	builder: &mut Builder<W>,
 	translucent_buffer: HashMap<u64, (TileCoord, Tile)>,
@@ -430,13 +421,23 @@ fn flush_translucent_tiles<W: Write>(
 	if translucent_buffer.is_empty() {
 		return Ok(());
 	}
-	let progress = runtime.create_progress("flushing translucent tiles", translucent_buffer.len() as u64);
-	for (_, (coord, tile)) in translucent_buffer {
+	let tiles: Vec<_> = translucent_buffer.into_values().collect();
+	let progress = runtime.create_progress("flushing translucent tiles", tiles.len() as u64);
+	write_translucent_tiles(builder, tiles, config)?;
+	progress.finish();
+	Ok(())
+}
+
+/// Re-encode and write translucent tiles to the TAR.
+fn write_translucent_tiles<W: Write>(
+	builder: &mut Builder<W>,
+	tiles: Vec<(TileCoord, Tile)>,
+	config: &MergeConfig,
+) -> Result<()> {
+	for (coord, tile) in tiles {
 		let tile = reencode_translucent_tile(tile, config.quality[coord.level as usize], config.lossless)?;
 		write_tile_to_tar(builder, &coord, tile, config)?;
-		progress.inc(1);
 	}
-	progress.finish();
 	Ok(())
 }
 
