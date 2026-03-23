@@ -77,7 +77,7 @@ impl TileSink for VersaTilesSink {
 		Ok(())
 	}
 
-	fn finish(self: Box<Self>, tilejson: &TileJSON) -> Result<()> {
+	fn finish(self: Box<Self>, tilejson: &TileJSON, runtime: &crate::TilesRuntime) -> Result<()> {
 		// 1. Flush and close all block writers, collect block keys
 		let block_keys: Vec<BlockKey> = {
 			let mut writers = self.block_writers.lock().unwrap();
@@ -121,8 +121,9 @@ impl TileSink for VersaTilesSink {
 		let compressed_meta = compress(meta_blob, self.tile_compression)?;
 		header.meta_range = writer.append(&compressed_meta)?;
 
-		// 7. Write blocks
+		// 7. Write blocks with progress reporting
 		let mut block_index = BlockIndex::new_empty();
+		let progress = runtime.create_progress("finalizing versatiles", sorted_keys.len() as u64);
 
 		for key in &sorted_keys {
 			let path = self.block_path(key);
@@ -144,7 +145,15 @@ impl TileSink for VersaTilesSink {
 			if let Some(block) = block_builder.finalize()? {
 				block_index.add_block(block);
 			}
+
+			// Delete temp file immediately to free disk space
+			drop(reader);
+			fs::remove_file(&path)?;
+
+			progress.inc(1);
 		}
+
+		progress.finish();
 
 		// 8. Write block index
 		header.blocks_range = writer.append(&block_index.as_brotli_blob()?)?;
@@ -152,7 +161,7 @@ impl TileSink for VersaTilesSink {
 		// 9. Rewrite header with final ranges
 		writer.write_start(&header.to_blob()?)?;
 
-		// 10. Cleanup temp directory
+		// 10. Remove the now-empty temp directory
 		fs::remove_dir_all(&self.temp_dir)?;
 
 		Ok(())
@@ -193,7 +202,7 @@ mod tests {
 		tilejson.set_string("tilejson", "3.0.0")?;
 		tilejson.set_min_zoom(10);
 		tilejson.set_max_zoom(10);
-		Box::new(sink).finish(&tilejson)?;
+		Box::new(sink).finish(&tilejson, &TilesRuntime::default())?;
 
 		// Read back
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
@@ -232,7 +241,7 @@ mod tests {
 		tilejson.set_string("tilejson", "3.0.0")?;
 		tilejson.set_min_zoom(0);
 		tilejson.set_max_zoom(1);
-		Box::new(sink).finish(&tilejson)?;
+		Box::new(sink).finish(&tilejson, &TilesRuntime::default())?;
 
 		// Read back and verify
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
@@ -269,7 +278,7 @@ mod tests {
 		tilejson.set_string("tilejson", "3.0.0")?;
 		tilejson.set_min_zoom(10);
 		tilejson.set_max_zoom(10);
-		Box::new(sink).finish(&tilejson)?;
+		Box::new(sink).finish(&tilejson, &TilesRuntime::default())?;
 
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
 		for (coord, expected_blob) in &tiles {
@@ -290,7 +299,7 @@ mod tests {
 		let sink = VersaTilesSink::new(output.clone(), TileFormat::PNG, TileCompression::Uncompressed)?;
 
 		let tilejson = TileJSON::default();
-		Box::new(sink).finish(&tilejson)?;
+		Box::new(sink).finish(&tilejson, &TilesRuntime::default())?;
 
 		assert!(output.exists());
 		Ok(())

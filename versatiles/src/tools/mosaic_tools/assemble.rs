@@ -387,7 +387,7 @@ async fn assemble_tiles(
 
 	// Finalize: write metadata and close the container
 	let sink = Arc::try_unwrap(sink).map_err(|_| anyhow!("sink still has references"))?;
-	sink.finish(&tilejson)?;
+	sink.finish(&tilejson, runtime)?;
 
 	log::info!("finished mosaic assemble");
 	Ok(())

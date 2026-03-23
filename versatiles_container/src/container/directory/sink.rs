@@ -64,7 +64,7 @@ impl TileSink for DirectoryTileSink {
 		Ok(())
 	}
 
-	fn finish(self: Box<Self>, tilejson: &TileJSON) -> Result<()> {
+	fn finish(self: Box<Self>, tilejson: &TileJSON, _runtime: &crate::TilesRuntime) -> Result<()> {
 		let meta_blob = compress(Blob::from(tilejson), self.tile_compression)?;
 		let filename = format!("tiles.json{}", self.tile_compression.as_extension());
 		let path = self.base_path.join(filename);
@@ -98,7 +98,7 @@ mod tests {
 		// Finish and verify metadata
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
-		Box::new(sink).finish(&tilejson)?;
+		Box::new(sink).finish(&tilejson, &crate::TilesRuntime::default())?;
 
 		let meta_path = base.join("tiles.json");
 		assert!(meta_path.exists());
@@ -130,7 +130,7 @@ mod tests {
 		// Finish and verify metadata has compression extension
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
-		Box::new(sink).finish(&tilejson)?;
+		Box::new(sink).finish(&tilejson, &crate::TilesRuntime::default())?;
 
 		let meta_path = base.join("tiles.json.gz");
 		assert!(meta_path.exists());

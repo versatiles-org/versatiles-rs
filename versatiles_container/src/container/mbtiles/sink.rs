@@ -158,7 +158,7 @@ impl TileSink for MBTilesTileSink {
 		Ok(())
 	}
 
-	fn finish(self: Box<Self>, tilejson: &TileJSON) -> Result<()> {
+	fn finish(self: Box<Self>, tilejson: &TileJSON, _runtime: &crate::TilesRuntime) -> Result<()> {
 		// Flush remaining tiles
 		let remaining: Vec<_> = self.buffer.lock().unwrap().drain(..).collect();
 		self.flush_buffer(&remaining)?;
@@ -189,7 +189,7 @@ mod tests {
 		tilejson.set_string("tilejson", "3.0.0")?;
 		tilejson.set_min_zoom(3);
 		tilejson.set_max_zoom(3);
-		Box::new(sink).finish(&tilejson)?;
+		Box::new(sink).finish(&tilejson, &crate::TilesRuntime::default())?;
 
 		let reader = MBTilesReader::open(&temp, TilesRuntime::default())?;
 		assert_eq!(reader.metadata().tile_format, TileFormat::PNG);
@@ -224,7 +224,7 @@ mod tests {
 		tilejson.set_string("tilejson", "3.0.0")?;
 		tilejson.set_min_zoom(2);
 		tilejson.set_max_zoom(2);
-		Box::new(sink).finish(&tilejson)?;
+		Box::new(sink).finish(&tilejson, &crate::TilesRuntime::default())?;
 
 		let reader = MBTilesReader::open(&temp, TilesRuntime::default())?;
 		assert_eq!(reader.metadata().tile_format, TileFormat::WEBP);

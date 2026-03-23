@@ -1,4 +1,4 @@
-use crate::{DirectoryTileSink, MBTilesTileSink, TarTileSink, VersaTilesSink};
+use crate::{DirectoryTileSink, MBTilesTileSink, TarTileSink, TilesRuntime, VersaTilesSink};
 use anyhow::{Result, bail};
 use std::path::Path;
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, TileJSON};
@@ -27,9 +27,10 @@ pub trait TileSink: Send + Sync {
 	///
 	/// Consumes the sink to prevent use-after-close. The `tilejson` parameter
 	/// provides the final accumulated metadata for the output container.
+	/// The `runtime` provides access to progress reporting and other services.
 	///
 	/// Uses `Box<Self>` instead of `self` for object safety.
-	fn finish(self: Box<Self>, tilejson: &TileJSON) -> Result<()>;
+	fn finish(self: Box<Self>, tilejson: &TileJSON, runtime: &TilesRuntime) -> Result<()>;
 }
 
 /// Open a tile sink based on the output path's file extension.

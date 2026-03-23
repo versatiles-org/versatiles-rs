@@ -71,7 +71,7 @@ impl<W: Write + Send> TileSink for TarTileSink<W> {
 		Ok(())
 	}
 
-	fn finish(self: Box<Self>, tilejson: &TileJSON) -> Result<()> {
+	fn finish(self: Box<Self>, tilejson: &TileJSON, _runtime: &crate::TilesRuntime) -> Result<()> {
 		let mut builder = self.builder.into_inner().unwrap();
 
 		// Write tiles.json metadata entry
@@ -104,7 +104,7 @@ mod tests {
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
-		Box::new(sink).finish(&tilejson)?;
+		Box::new(sink).finish(&tilejson, &crate::TilesRuntime::default())?;
 
 		let reader = TarTilesReader::open(&temp)?;
 		assert_eq!(reader.metadata().tile_format, TileFormat::PNG);
@@ -131,7 +131,7 @@ mod tests {
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
-		Box::new(sink).finish(&tilejson)?;
+		Box::new(sink).finish(&tilejson, &crate::TilesRuntime::default())?;
 
 		let reader = TarTilesReader::open(&temp)?;
 		assert_eq!(reader.metadata().tile_format, TileFormat::WEBP);
