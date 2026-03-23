@@ -77,14 +77,15 @@ install_alpine() {
 }
 
 install_macos() {
-  info "Trying to install GDAL ${GDAL_PREFERRED}.* via Homebrew…"
-  if brew install "gdal@${GDAL_PREFERRED}" 2>/dev/null; then
-    return 0
+  # Homebrew typically only provides an unversioned "gdal" formula.
+  # Check if a versioned formula exists before trying it.
+  if brew info "gdal@${GDAL_PREFERRED}" &>/dev/null; then
+    info "Installing GDAL ${GDAL_PREFERRED} via Homebrew…"
+    brew install "gdal@${GDAL_PREFERRED}"
+  else
+    info "Installing GDAL via Homebrew…"
+    brew install gdal
   fi
-
-  # Fall back to unversioned formula
-  warn "gdal@${GDAL_PREFERRED} not available, installing default gdal…"
-  brew install gdal
 }
 
 # Detect platform and install
