@@ -123,6 +123,7 @@ mod tests {
 		for y in 0..4 {
 			for x in 0..4 {
 				let coord = TileCoord::new(2, x, y)?;
+				#[allow(clippy::cast_possible_truncation)]
 				let blob = Blob::from(vec![x as u8; 8]);
 				sink.write_tile(&coord, &blob)?;
 			}

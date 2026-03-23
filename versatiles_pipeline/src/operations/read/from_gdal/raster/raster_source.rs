@@ -65,8 +65,7 @@ fn reproject_to_dataset(
 				c"UNIFIED_SRC_NODATA".as_ptr(),
 				c"YES".as_ptr(),
 			);
-			let n_bands = nodata.len();
-			let nodata_arr = gdal_sys::CPLMalloc(std::mem::size_of::<f64>() * n_bands).cast::<f64>();
+			let nodata_arr = gdal_sys::CPLMalloc(std::mem::size_of_val(nodata)).cast::<f64>();
 			for (i, &val) in nodata.iter().enumerate() {
 				nodata_arr.add(i).write(val);
 			}
