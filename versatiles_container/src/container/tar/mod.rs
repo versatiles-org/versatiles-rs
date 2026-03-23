@@ -43,7 +43,9 @@
 //! and how to write tile data to a new tar archive using `TarTilesReader` and `TarTilesWriter` respectively.
 
 mod reader;
+mod sink;
 mod writer;
 
 pub use reader::TarTilesReader;
+pub use sink::TarTileSink;
 pub use writer::TarTilesWriter;

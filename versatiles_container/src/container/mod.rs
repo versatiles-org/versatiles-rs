@@ -28,7 +28,7 @@ mod pmtiles;
 pub use pmtiles::{PMTilesReader, PMTilesWriter};
 
 mod tar;
-pub use tar::{TarTilesReader, TarTilesWriter};
+pub use tar::{TarTileSink, TarTilesReader, TarTilesWriter};
 
 mod directory;
 pub use directory::{DirectoryReader, DirectoryWriter};
