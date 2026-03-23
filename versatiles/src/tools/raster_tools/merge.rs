@@ -64,15 +64,25 @@ pub struct Merge {
 	/// and processed one at a time in file-list order.
 	#[arg(long)]
 	prescan: bool,
+
+	/// Minimum zoom level to include in the output (default: include all).
+	#[arg(long, value_name = "int")]
+	min_zoom: Option<u8>,
+
+	/// Maximum zoom level to include in the output (default: include all).
+	#[arg(long, value_name = "int")]
+	max_zoom: Option<u8>,
 }
 
-/// Encoding configuration shared across all tile-writing functions.
+/// Encoding and filtering configuration shared across merge functions.
 #[derive(Clone)]
 struct MergeConfig {
 	quality: [Option<u8>; 32],
 	lossless: bool,
 	tile_format: TileFormat,
 	tile_compression: TileCompression,
+	min_zoom: Option<u8>,
+	max_zoom: Option<u8>,
 }
 
 /// Parse a quality string using the same syntax as raster_format.
@@ -141,6 +151,8 @@ pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 		prescanned_pyramids.as_deref(),
 		&quality,
 		args.lossless,
+		args.min_zoom,
+		args.max_zoom,
 		runtime,
 	)
 	.await
@@ -279,12 +291,15 @@ fn validate_source_format(
 
 /// Merge sources into an output container. If `prescanned_pyramids` is provided, uses those
 /// instead of reading pyramids from each source during the merge.
+#[allow(clippy::too_many_arguments)]
 async fn merge_tiles(
 	output: &str,
 	paths: &[String],
 	prescanned_pyramids: Option<&[TileBBoxPyramid]>,
 	quality: &[Option<u8>; 32],
 	lossless: bool,
+	min_zoom: Option<u8>,
+	max_zoom: Option<u8>,
 	runtime: &TilesRuntime,
 ) -> Result<()> {
 	let done: Arc<Mutex<HashSet<u64>>> = Arc::default();
@@ -314,6 +329,8 @@ async fn merge_tiles(
 		lossless,
 		tile_format: first_metadata.tile_format,
 		tile_compression: first_metadata.tile_compression,
+		min_zoom,
+		max_zoom,
 	};
 
 	// Capture tile metadata fields from the first source for the output tilejson
@@ -344,9 +361,15 @@ async fn merge_tiles(
 		validate_source_format(path, metadata, &config)?;
 		tilejson.merge(reader.tilejson())?;
 
-		let pyramid = prescanned_pyramids.map_or(&metadata.bbox_pyramid, |p| &p[idx]);
+		let mut pyramid = prescanned_pyramids.map_or(&metadata.bbox_pyramid, |p| &p[idx]).clone();
+		if let Some(min) = config.min_zoom {
+			pyramid.set_level_min(min);
+		}
+		if let Some(max) = config.max_zoom {
+			pyramid.set_level_max(max);
+		}
 
-		process_source_tiles(&reader, pyramid, &sink, &done, &translucent_buffer, &config).await?;
+		process_source_tiles(&reader, &pyramid, &sink, &done, &translucent_buffer, &config).await?;
 		// reader dropped here — file handle closed
 
 		// Sweep-line flush: remove translucent tiles that no remaining source can cover
