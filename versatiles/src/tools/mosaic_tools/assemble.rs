@@ -12,8 +12,8 @@ use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation
 
 /// Assemble multiple tile containers into a single output file.
 ///
-/// Reads a list of .versatiles containers (local paths or URLs), reads their tile indices,
-/// and merges them into a single output container. Handles overlapping tiles by compositing
+/// Reads a list of tile containers (local paths or URLs), reads their tile indices,
+/// and assembles them into a single output container. Handles overlapping tiles by compositing
 /// semi-transparent images using additive alpha blending.
 ///
 /// Tiles from containers listed earlier in the input file overlay tiles from containers listed later.
@@ -47,11 +47,11 @@ pub struct Assemble {
 	/// Containers listed earlier overlay containers listed later.
 	input_list: String,
 
-	/// Output merged container path (currently supports .tar).
+	/// Output container path (currently supports .tar, directory, or .mbtiles).
 	output: String,
 
 	/// Lossy WebP quality for the final output tiles, using zoom-dependent syntax
-	/// (e.g. "80,70,14:50,15:20"). Default: 75.
+	/// (e.g. "70,14:50,15:20"). Default: 75.
 	#[arg(long, value_name = "str", default_value = "75")]
 	quality: String,
 
@@ -59,9 +59,7 @@ pub struct Assemble {
 	#[arg(long)]
 	lossless: bool,
 
-	/// Scan all sources in parallel before merging to validate accessibility
-	/// and collect metadata upfront. Without this flag, sources are opened
-	/// and processed one at a time in file-list order.
+	/// Scan all sources upfront and optimize their processing order. This can greatly reduce the number of memory allocations and improve performance.
 	#[arg(long)]
 	prescan: bool,
 
@@ -74,7 +72,7 @@ pub struct Assemble {
 	max_zoom: Option<u8>,
 }
 
-/// Encoding and filtering configuration shared across merge functions.
+/// Encoding and filtering configuration shared across assemble functions.
 #[derive(Clone)]
 struct AssembleConfig {
 	quality: [Option<u8>; 32],
@@ -85,7 +83,7 @@ struct AssembleConfig {
 	max_zoom: Option<u8>,
 }
 
-/// Parse a quality string using the same syntax as raster_format.
+/// Parse a quality string (e.g. "70,14:50,15:20") into per-zoom-level values.
 fn parse_quality(quality: &str) -> Result<[Option<u8>; 32]> {
 	let mut result: [Option<u8>; 32] = [None; 32];
 	let mut zoom: i32 = -1;
@@ -136,7 +134,7 @@ pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 
 	let quality = parse_quality(&args.quality)?;
 
-	log::info!("merging {} containers", paths.len());
+	log::info!("assembling {} containers", paths.len());
 
 	// Optionally prescan all sources in parallel to validate accessibility and collect pyramids
 	let prescanned_pyramids = if args.prescan {
@@ -289,8 +287,8 @@ fn validate_source_format(
 	Ok(())
 }
 
-/// Merge sources into an output container. If `prescanned_pyramids` is provided, uses those
-/// instead of reading pyramids from each source during the merge.
+/// Assemble sources into an output container. If `prescanned_pyramids` is provided, uses those
+/// instead of reading pyramids from each source during assembly.
 #[allow(clippy::too_many_arguments)]
 async fn assemble_tiles(
 	output: &str,
@@ -348,7 +346,7 @@ async fn assemble_tiles(
 		config.tile_compression,
 	)?);
 
-	let progress = runtime.create_progress("merging tiles", paths.len() as u64);
+	let progress = runtime.create_progress("assembling tiles", paths.len() as u64);
 
 	for (pos, &idx) in source_order.iter().enumerate() {
 		let path = &paths[idx];

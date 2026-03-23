@@ -14,7 +14,7 @@ struct Args {
 	format: Option<String>,
 	/// Quality level for the tile compression (only AVIF, JPG or WEBP), between 0 (worst) and 100 (lossless).
 	/// To allow different quality levels for different zoom levels, this can also be a comma-separated list like this:
-	/// "80,70,14:50,15:20", where the first value is the default quality, and the other values specify the quality for the specified zoom level (and higher).
+	/// "70,14:50,15:20", where the first value is the default quality, and the other values specify the quality for the specified zoom level (and higher).
 	quality: Option<String>,
 	/// Quality level for translucent (semi-transparent) tiles, using the same zoom-dependent syntax as quality.
 	/// When set, tiles are checked for opacity: opaque tiles use the normal quality setting,

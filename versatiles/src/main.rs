@@ -112,7 +112,7 @@ enum Commands {
 	/// Show detailed help
 	Help(tools::help::Subcommand),
 
-	/// Mosaic tools: tile a raster image or assemble tile containers
+	/// Tile and assemble image mosaics
 	Mosaic(tools::mosaic::Subcommand),
 
 	/// Some unstable developer tools

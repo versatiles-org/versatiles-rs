@@ -3,10 +3,10 @@ use std::collections::BTreeMap;
 use versatiles_container::{TileSource, TilesConverterParameters, TilesRuntime, convert_tiles_container_to_str};
 use versatiles_pipeline::{PipelineReader, VPLNode, VPLPipeline};
 
-/// Process a single georeferenced raster image into a .versatiles container.
+/// Tile a single georeferenced raster image into a tile container.
 ///
 /// Reads a georeferenced raster (GeoTIFF, etc.) via GDAL, tiles it at a base zoom level,
-/// generates overview tiles down to a minimum zoom, and writes a .versatiles container
+/// generates overview tiles down to a minimum zoom, and writes a tile container
 /// with smart WebP compression (lossy for opaque, lossless for translucent).
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -17,16 +17,16 @@ pub struct Tile {
 	/// Output .versatiles container path.
 	output: String,
 
-	/// Base zoom level for tiling (auto-detected from image resolution if omitted).
-	#[arg(long, value_name = "int")]
-	max_zoom: Option<u8>,
-
 	/// Lowest overview zoom level to generate (default: 0).
 	#[arg(long, value_name = "int", default_value = "0")]
 	min_zoom: u8,
 
+	/// Base zoom level for tiling (auto-detected from image resolution if omitted).
+	#[arg(long, value_name = "int")]
+	max_zoom: Option<u8>,
+
 	/// Lossy WebP quality for opaque tiles, using zoom-dependent syntax
-	/// (e.g. "80,70,14:50,15:20"). Default: 75.
+	/// (e.g. "70,14:50,15:20"). Default: 75.
 	#[arg(long, value_name = "str", default_value = "75")]
 	quality: String,
 
