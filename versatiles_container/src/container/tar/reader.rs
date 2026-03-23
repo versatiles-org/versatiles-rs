@@ -31,7 +31,10 @@
 //! Returns errors when the tar cannot be opened or read, when no tiles are found,
 //! or when mixed formats/compressions are detected.
 
-use crate::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal};
+use crate::{
+	ProgressHandle, SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime,
+	Traversal,
+};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path, sync::Arc};
@@ -107,7 +110,24 @@ impl TarTilesReader {
 	/// formats/compressions are encountered.
 	#[context("opening tar from path '{}'", path.display())]
 	pub fn open(path: &Path) -> Result<TarTilesReader> {
+		Self::open_with_progress(path, None)
+	}
+
+	/// Open a tar archive and build an index of tiles and metadata, with optional progress reporting.
+	///
+	/// When a `ProgressHandle` is provided, progress is reported in bytes scanned.
+	#[context("opening tar from path '{}'", path.display())]
+	#[allow(clippy::too_many_lines)]
+	fn open_with_progress(path: &Path, progress: Option<&ProgressHandle>) -> Result<TarTilesReader> {
 		let mut reader = DataReaderFile::open(path)?;
+
+		// Set progress total to file size if available
+		if let Some(progress) = &progress
+			&& let Ok(file_meta) = std::fs::metadata(path)
+		{
+			progress.set_max_value(file_meta.len());
+		}
+
 		let mut archive = Archive::new(&mut reader);
 
 		let mut tilejson = TileJSON::default();
@@ -121,6 +141,11 @@ impl TarTilesReader {
 			let header = entry.header();
 			if header.entry_type() != EntryType::Regular {
 				continue;
+			}
+
+			// Update progress with current position in the archive
+			if let Some(progress) = &progress {
+				progress.set_position(entry.raw_file_position());
 			}
 
 			let path = entry.path()?.clone();
@@ -199,6 +224,10 @@ impl TarTilesReader {
 			log::warn!("unknown file in tar: {path_tmp_string:?}");
 		}
 
+		if let Some(progress) = &progress {
+			progress.finish();
+		}
+
 		if tile_map.is_empty() {
 			return Err(anyhow!("no tiles found in tar"));
 		}
@@ -242,8 +271,9 @@ impl TilesReader for TarTilesReader {
 		false
 	}
 
-	async fn open_path(path: &Path, _runtime: TilesRuntime) -> Result<SharedTileSource> {
-		Ok(Self::open(path)?.into_shared())
+	async fn open_path(path: &Path, runtime: TilesRuntime) -> Result<SharedTileSource> {
+		let progress = runtime.create_progress("scanning tar", 0);
+		Ok(Self::open_with_progress(path, Some(&progress))?.into_shared())
 	}
 }
 
