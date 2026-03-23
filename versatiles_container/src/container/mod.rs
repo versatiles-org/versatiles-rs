@@ -15,7 +15,7 @@
 //! Depending on the enabled features, it supports different formats with corresponding read and write capabilities.
 
 mod mbtiles;
-pub use mbtiles::{MBTilesReader, MBTilesWriter};
+pub use mbtiles::{MBTilesReader, MBTilesTileSink, MBTilesWriter};
 
 #[cfg(any(test, feature = "test"))]
 mod mock;

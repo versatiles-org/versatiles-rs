@@ -7,7 +7,9 @@
 //! - `MBTilesWriter`: Writes tiles to an `MBTiles` `SQLite` database.
 
 mod reader;
+mod sink;
 mod writer;
 
 pub use reader::MBTilesReader;
+pub use sink::MBTilesTileSink;
 pub use writer::MBTilesWriter;
