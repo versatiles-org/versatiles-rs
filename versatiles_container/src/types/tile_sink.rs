@@ -1,4 +1,4 @@
-use crate::{DirectoryTileSink, MBTilesTileSink, TarTileSink};
+use crate::{DirectoryTileSink, MBTilesTileSink, TarTileSink, VersaTilesSink};
 use anyhow::{Result, bail};
 use std::path::Path;
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, TileJSON};
@@ -37,6 +37,7 @@ pub trait TileSink: Send + Sync {
 /// Dispatches to the appropriate sink implementation:
 /// - `.tar` → [`TarTileSink`]
 /// - `.mbtiles` → [`MBTilesTileSink`]
+/// - `.versatiles` → [`VersaTilesSink`]
 /// - directory (no extension or existing directory) → [`DirectoryTileSink`]
 ///
 /// # Arguments
@@ -51,6 +52,9 @@ pub fn open_tile_sink(path: &Path, format: TileFormat, compression: TileCompress
 		Some(ext) if ext.eq_ignore_ascii_case("tar") => Ok(Box::new(TarTileSink::new(path, format, compression)?)),
 		Some(ext) if ext.eq_ignore_ascii_case("mbtiles") => {
 			Ok(Box::new(MBTilesTileSink::new(path, format, compression)?))
+		}
+		Some(ext) if ext.eq_ignore_ascii_case("versatiles") => {
+			Ok(Box::new(VersaTilesSink::new(path.to_path_buf(), format, compression)?))
 		}
 		_ if path.is_dir() || path.extension().is_none() => Ok(Box::new(DirectoryTileSink::new(
 			path.to_path_buf(),

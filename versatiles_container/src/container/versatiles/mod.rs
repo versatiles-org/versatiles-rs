@@ -50,5 +50,8 @@ mod types;
 mod reader;
 pub use reader::VersaTilesReader;
 
+mod sink;
+pub use sink::VersaTilesSink;
+
 mod writer;
 pub use writer::VersaTilesWriter;
