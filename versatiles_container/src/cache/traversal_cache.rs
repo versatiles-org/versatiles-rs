@@ -159,21 +159,25 @@ impl<V: CacheValue> TraversalCache<V> {
 	/// `append`/`append_stream` calls) may arrive in any order. Values within
 	/// a single file preserve their original order.
 	///
-	/// Returns `Ok(None)` if no entry exists at the index.
+	/// Returns an empty stream if no entry exists at the index (e.g. when
+	/// a Push produced no tiles for this index).
 	///
 	/// # Panics
 	///
 	/// Panics if called outside a Tokio runtime (Disk mode only).
 	#[context("Failed to take stream from traversal cache at index {}", index)]
-	pub fn take_stream(&self, index: usize) -> Result<Option<BoxStream<'static, V>>>
+	pub fn take_stream(&self, index: usize) -> Result<BoxStream<'static, V>>
 	where
 		V: Send + 'static,
 	{
 		match self {
-			Self::Memory(map) => Ok(map.remove(&index).map(|(_, v)| futures::stream::iter(v).boxed())),
+			Self::Memory(map) => Ok(map.remove(&index).map_or_else(
+				|| futures::stream::empty().boxed(),
+				|(_, v)| futures::stream::iter(v).boxed(),
+			)),
 			Self::Disk { path, file_index, .. } => {
 				let Some(files) = Self::take_index_files(file_index, index) else {
-					return Ok(None);
+					return Ok(futures::stream::empty().boxed());
 				};
 				let dir_path = path.join(index.to_string());
 				let (tx, rx) = tokio::sync::mpsc::channel::<V>(64);
@@ -213,7 +217,7 @@ impl<V: CacheValue> TraversalCache<V> {
 				let stream = futures::stream::unfold((rx, guard), |(mut rx, guard)| async move {
 					rx.recv().await.map(|v| (v, (rx, guard)))
 				});
-				Ok(Some(stream.boxed()))
+				Ok(stream.boxed())
 			}
 		}
 	}
@@ -309,9 +313,11 @@ mod tests {
 		};
 		let cache = TraversalCache::<String>::new(&cache_type)?;
 
-		// Initially empty
-		assert!(cache.take_stream(0)?.is_none());
-		assert!(cache.take_stream(1)?.is_none());
+		// Initially empty — returns empty stream
+		let empty: Vec<String> = cache.take_stream(0)?.collect().await;
+		assert!(empty.is_empty());
+		let empty: Vec<String> = cache.take_stream(1)?.collect().await;
+		assert!(empty.is_empty());
 
 		// Append via stream to index 0
 		cache
@@ -329,21 +335,21 @@ mod tests {
 			.await?;
 
 		// take_stream and collect (order across files is non-deterministic in Disk mode)
-		let stream = cache.take_stream(0)?.unwrap();
-		let mut collected: Vec<String> = stream.collect().await;
+		let mut collected: Vec<String> = cache.take_stream(0)?.collect().await;
 		collected.sort();
 		assert_eq!(collected, vec!["a".to_string(), "b".to_string(), "c".to_string()]);
 
 		// After take_stream, index is empty
-		assert!(cache.take_stream(0)?.is_none());
+		let empty: Vec<String> = cache.take_stream(0)?.collect().await;
+		assert!(empty.is_empty());
 
 		// Other index still has data
-		let stream1 = cache.take_stream(1)?.unwrap();
-		let collected1: Vec<String> = stream1.collect().await;
+		let collected1: Vec<String> = cache.take_stream(1)?.collect().await;
 		assert_eq!(collected1, vec!["x".to_string()]);
 
-		// Non-existent index returns None
-		assert!(cache.take_stream(99)?.is_none());
+		// Non-existent index returns empty stream
+		let empty: Vec<String> = cache.take_stream(99)?.collect().await;
+		assert!(empty.is_empty());
 
 		Ok(())
 	}
@@ -368,8 +374,7 @@ mod tests {
 			.await?;
 		cache.append_stream(0, futures::stream::iter(vec![vec![128]])).await?;
 
-		let stream = cache.take_stream(0)?.unwrap();
-		let mut collected: Vec<Vec<u8>> = stream.collect().await;
+		let mut collected: Vec<Vec<u8>> = cache.take_stream(0)?.collect().await;
 		collected.sort();
 		assert_eq!(collected, vec![vec![0, 1, 2], vec![128], vec![255, 254]]);
 
