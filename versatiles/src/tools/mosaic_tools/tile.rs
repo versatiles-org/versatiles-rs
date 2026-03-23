@@ -10,7 +10,7 @@ use versatiles_pipeline::{PipelineReader, VPLNode, VPLPipeline};
 /// with smart WebP compression (lossy for opaque, lossless for translucent).
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
-pub struct Convert {
+pub struct Tile {
 	/// Path to a georeferenced raster image (GeoTIFF, etc.) readable by GDAL.
 	input_image: String,
 
@@ -42,8 +42,8 @@ pub struct Convert {
 	nodata: Option<String>,
 }
 
-pub async fn run(args: &Convert, runtime: &TilesRuntime) -> Result<()> {
-	log::info!("raster convert from {:?} to {:?}", args.input_image, args.output);
+pub async fn run(args: &Tile, runtime: &TilesRuntime) -> Result<()> {
+	log::info!("mosaic tile from {:?} to {:?}", args.input_image, args.output);
 
 	// Build from_gdal_raster node
 	let mut gdal_props = BTreeMap::new();
@@ -92,12 +92,12 @@ pub async fn run(args: &Convert, runtime: &TilesRuntime) -> Result<()> {
 	let input_path = std::path::Path::new(&args.input_image);
 	let dir = input_path.parent().unwrap_or(std::path::Path::new("."));
 
-	let reader = PipelineReader::from_pipeline(pipeline, "raster_convert", dir, runtime.clone()).await?;
+	let reader = PipelineReader::from_pipeline(pipeline, "mosaic_tile", dir, runtime.clone()).await?;
 	let source = reader.into_shared();
 
 	let params = TilesConverterParameters::default();
 	convert_tiles_container_to_str(source, params, &args.output, runtime.clone()).await?;
 
-	log::info!("finished raster convert");
+	log::info!("finished mosaic tile");
 	Ok(())
 }

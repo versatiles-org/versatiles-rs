@@ -1,4 +1,4 @@
-use super::raster_tools::{convert, merge};
+use super::mosaic_tools::{assemble, tile};
 use anyhow::Result;
 use versatiles_container::TilesRuntime;
 
@@ -6,20 +6,20 @@ use versatiles_container::TilesRuntime;
 #[command(arg_required_else_help = true, disable_version_flag = true)]
 pub struct Subcommand {
 	#[command(subcommand)]
-	sub_command: RasterCommands,
+	sub_command: MosaicCommands,
 }
 
 #[derive(clap::Subcommand, Debug)]
-enum RasterCommands {
-	Convert(convert::Convert),
-	Merge(merge::Merge),
+enum MosaicCommands {
+	Tile(tile::Tile),
+	Assemble(assemble::Assemble),
 }
 
 #[tokio::main]
 pub async fn run(command: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	match &command.sub_command {
-		RasterCommands::Convert(args) => convert::run(args, runtime).await?,
-		RasterCommands::Merge(args) => merge::run(args, runtime).await?,
+		MosaicCommands::Tile(args) => tile::run(args, runtime).await?,
+		MosaicCommands::Assemble(args) => assemble::run(args, runtime).await?,
 	}
 
 	Ok(())

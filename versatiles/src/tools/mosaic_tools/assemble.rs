@@ -10,7 +10,7 @@ use versatiles_core::{
 };
 use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 
-/// Merge multiple .versatiles containers into a single output file.
+/// Assemble multiple tile containers into a single output file.
 ///
 /// Reads a list of .versatiles containers (local paths or URLs), reads their tile indices,
 /// and merges them into a single output container. Handles overlapping tiles by compositing
@@ -41,7 +41,7 @@ use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation
 /// reaches the output is re-encoded with the user's quality/lossless settings.
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
-pub struct Merge {
+pub struct Assemble {
 	/// Text file listing container paths or URLs, one per line.
 	/// Empty lines and # comments are skipped. Whitespace is trimmed.
 	/// Containers listed earlier overlay containers listed later.
@@ -126,8 +126,8 @@ fn parse_input_list(content: &str) -> Vec<String> {
 		.collect()
 }
 
-pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
-	log::info!("raster merge from {:?} to {:?}", args.input_list, args.output);
+pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
+	log::info!("mosaic assemble from {:?} to {:?}", args.input_list, args.output);
 
 	let list_content = std::fs::read_to_string(&args.input_list)
 		.with_context(|| format!("Failed to read input list file: {}", args.input_list))?;
@@ -391,7 +391,7 @@ async fn merge_tiles(
 	let sink = Arc::try_unwrap(sink).map_err(|_| anyhow!("sink still has references"))?;
 	sink.finish(&tilejson)?;
 
-	log::info!("finished raster merge");
+	log::info!("finished mosaic assemble");
 	Ok(())
 }
 

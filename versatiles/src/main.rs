@@ -112,8 +112,8 @@ enum Commands {
 	/// Show detailed help
 	Help(tools::help::Subcommand),
 
-	/// Raster image processing tools (convert, merge)
-	Raster(tools::raster::Subcommand),
+	/// Mosaic tools: tile a raster image or assemble tile containers
+	Mosaic(tools::mosaic::Subcommand),
 
 	/// Some unstable developer tools
 	Dev(tools::dev::Subcommand),
@@ -179,7 +179,7 @@ fn run(cli: &Cli, runtime: &TilesRuntime) -> Result<()> {
 		Commands::Probe(arguments) => tools::probe::run(arguments, runtime),
 		#[cfg(feature = "server")]
 		Commands::Serve(arguments) => tools::serve::run(arguments, runtime),
-		Commands::Raster(arguments) => tools::raster::run(arguments, runtime),
+		Commands::Mosaic(arguments) => tools::mosaic::run(arguments, runtime),
 		Commands::Dev(arguments) => tools::dev::run(arguments, runtime),
 	}
 }
