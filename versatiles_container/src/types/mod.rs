@@ -24,7 +24,7 @@ pub use processor::TileProcessor;
 pub use reader::TilesReader;
 pub use tile::Tile;
 pub use tile_content::TileContent;
-pub use tile_sink::TileSink;
+pub use tile_sink::{TileSink, open_tile_sink};
 pub use tile_source_metadata::TileSourceMetadata;
 pub use tile_source_trait::{SharedTileSource, TileSource};
 pub use tile_source_type::SourceType;

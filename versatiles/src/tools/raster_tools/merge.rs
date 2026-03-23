@@ -3,7 +3,7 @@ use futures::{StreamExt, future::ready};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use versatiles_container::{TarTileSink, Tile, TileSink, TilesRuntime};
+use versatiles_container::{Tile, TileSink, TilesRuntime, open_tile_sink};
 use versatiles_core::{
 	Blob, ConcurrencyLimits, MAX_ZOOM_LEVEL, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON,
 	TileStream, utils::HilbertIndex,
@@ -118,13 +118,6 @@ fn parse_input_list(content: &str) -> Vec<String> {
 
 pub async fn run(args: &Merge, runtime: &TilesRuntime) -> Result<()> {
 	log::info!("raster merge from {:?} to {:?}", args.input_list, args.output);
-
-	ensure!(
-		std::path::Path::new(&args.output)
-			.extension()
-			.is_some_and(|ext| ext.eq_ignore_ascii_case("tar")),
-		"Output path must have .tar extension (use `versatiles convert` to convert to other formats afterward)"
-	);
 
 	let list_content = std::fs::read_to_string(&args.input_list)
 		.with_context(|| format!("Failed to read input list file: {}", args.input_list))?;
@@ -331,12 +324,12 @@ async fn merge_tiles(
 
 	drop(first_reader);
 
-	// Create the output sink
-	let sink: Arc<Box<dyn TileSink>> = Arc::new(Box::new(TarTileSink::new(
+	// Create the output sink (dispatches by file extension)
+	let sink: Arc<Box<dyn TileSink>> = Arc::new(open_tile_sink(
 		Path::new(output),
 		config.tile_format,
 		config.tile_compression,
-	)?));
+	)?);
 
 	let progress = runtime.create_progress("merging tiles", paths.len() as u64);
 

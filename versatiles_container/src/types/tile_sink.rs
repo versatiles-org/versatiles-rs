@@ -1,5 +1,7 @@
-use anyhow::Result;
-use versatiles_core::{Blob, TileCoord, TileJSON};
+use crate::{DirectoryTileSink, MBTilesTileSink, TarTileSink};
+use anyhow::{Result, bail};
+use std::path::Path;
+use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, TileJSON};
 
 /// Push-model interface for writing individual tiles to a container in any order.
 ///
@@ -28,4 +30,34 @@ pub trait TileSink: Send + Sync {
 	///
 	/// Uses `Box<Self>` instead of `self` for object safety.
 	fn finish(self: Box<Self>, tilejson: &TileJSON) -> Result<()>;
+}
+
+/// Open a tile sink based on the output path's file extension.
+///
+/// Dispatches to the appropriate sink implementation:
+/// - `.tar` → [`TarTileSink`]
+/// - `.mbtiles` → [`MBTilesTileSink`]
+/// - directory (no extension or existing directory) → [`DirectoryTileSink`]
+///
+/// # Arguments
+/// * `path` — Output path. Extension determines the container format.
+/// * `format` — Tile format (e.g., PNG, WEBP, MVT).
+/// * `compression` — Tile compression (e.g., Uncompressed, Gzip, Brotli).
+///
+/// # Errors
+/// Returns an error if the extension is unsupported, or if the sink cannot be created.
+pub fn open_tile_sink(path: &Path, format: TileFormat, compression: TileCompression) -> Result<Box<dyn TileSink>> {
+	match path.extension().and_then(|e| e.to_str()) {
+		Some(ext) if ext.eq_ignore_ascii_case("tar") => Ok(Box::new(TarTileSink::new(path, format, compression)?)),
+		Some(ext) if ext.eq_ignore_ascii_case("mbtiles") => {
+			Ok(Box::new(MBTilesTileSink::new(path, format, compression)?))
+		}
+		_ if path.is_dir() || path.extension().is_none() => Ok(Box::new(DirectoryTileSink::new(
+			path.to_path_buf(),
+			format,
+			compression,
+		)?)),
+		Some(ext) => bail!("unsupported tile sink format: .{ext}"),
+		None => bail!("output path has no extension and is not a directory"),
+	}
 }
