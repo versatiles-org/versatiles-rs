@@ -29,6 +29,17 @@ pub struct Convert {
 	/// (e.g. "80,70,14:50,15:20"). Default: 75.
 	#[arg(long, value_name = "str", default_value = "75")]
 	quality: String,
+
+	/// Comma-separated 1-based band indices for color channels (e.g. "4,3,2" for RGB).
+	/// Defaults to auto-detection from the source's color interpretation metadata.
+	#[arg(long, value_name = "str")]
+	bands: Option<String>,
+
+	/// NoData value(s) to treat as transparent. Either a single value (e.g. "0")
+	/// or comma-separated per-band values (e.g. "0,0,0").
+	/// If not specified, uses the source dataset's nodata value (if any).
+	#[arg(long, value_name = "str")]
+	nodata: Option<String>,
 }
 
 pub async fn run(args: &Convert, runtime: &TilesRuntime) -> Result<()> {
@@ -42,6 +53,12 @@ pub async fn run(args: &Convert, runtime: &TilesRuntime) -> Result<()> {
 		gdal_props.insert("level_max".to_string(), vec![max_zoom.to_string()]);
 	}
 	gdal_props.insert("level_min".to_string(), vec![args.min_zoom.to_string()]);
+	if let Some(ref bands) = args.bands {
+		gdal_props.insert("bands".to_string(), vec![bands.clone()]);
+	}
+	if let Some(ref nodata) = args.nodata {
+		gdal_props.insert("nodata".to_string(), vec![nodata.clone()]);
+	}
 
 	let gdal_node = VPLNode {
 		name: "from_gdal_raster".to_string(),

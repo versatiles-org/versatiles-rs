@@ -15,6 +15,7 @@ fn reproject_to_dataset(
 	bbox: &GeoBBox,
 	band_mapping: &Arc<BandMapping>,
 	cutline: Option<&Cutline>,
+	nodata: &[f64],
 ) -> Result<Dataset> {
 	log::trace!("reproject_image started for size={width}x{height}");
 
@@ -58,6 +59,20 @@ fn reproject_to_dataset(
 
 		band_mapping.setup_gdal_warp_options(&mut *options_ptr);
 
+		if !nodata.is_empty() {
+			(*options_ptr).papszWarpOptions = CSLSetNameValue(
+				(*options_ptr).papszWarpOptions,
+				c"UNIFIED_SRC_NODATA".as_ptr(),
+				c"YES".as_ptr(),
+			);
+			let n_bands = nodata.len();
+			let nodata_arr = gdal_sys::CPLMalloc(std::mem::size_of::<f64>() * n_bands).cast::<f64>();
+			for (i, &val) in nodata.iter().enumerate() {
+				nodata_arr.add(i).write(val);
+			}
+			(*options_ptr).padfSrcNoDataReal = nodata_arr;
+		}
+
 		(*options_ptr).eResampleAlg = ResampleAlg::default().as_gdal();
 		(*options_ptr).dfWarpMemoryLimit = 512.0 * 1024.0 * 1024.0; // 512 MB
 
@@ -99,6 +114,8 @@ pub struct RasterSource {
 	pool: GdalPool,
 	band_mapping: Arc<BandMapping>,
 	cutline: Option<Cutline>,
+	/// Per-band nodata values (one per color band), or empty if no nodata.
+	nodata: Vec<f64>,
 }
 
 unsafe impl Sync for RasterSource {}
@@ -111,11 +128,21 @@ impl RasterSource {
 		reuse_limit: u32,
 		concurrency_limit: usize,
 		cutline_path: Option<&Path>,
+		explicit_bands: Option<Vec<usize>>,
+		nodata: Option<Vec<f64>>,
 	) -> Result<RasterSource> {
 		let path = filename.to_path_buf();
 		let factory: Arc<dyn Fn() -> Result<gdal::Dataset> + Send + Sync + 'static> =
 			Arc::new(move || gdal::Dataset::open(&path).with_context(|| format!("failed to open GDAL dataset: {path:?}")));
-		Self::new_with_factory(factory, reuse_limit, concurrency_limit, cutline_path).await
+		Self::new_with_factory(
+			factory,
+			reuse_limit,
+			concurrency_limit,
+			cutline_path,
+			explicit_bands,
+			nodata,
+		)
+		.await
 	}
 
 	/// Create a `RasterSource` from a factory that opens a fresh GDAL `Dataset` on demand.
@@ -125,12 +152,46 @@ impl RasterSource {
 		reuse_limit: u32,
 		concurrency_limit: usize,
 		cutline_path: Option<&Path>,
+		explicit_bands: Option<Vec<usize>>,
+		nodata: Option<Vec<f64>>,
 	) -> Result<RasterSource> {
 		let (pool, probe) = GdalPool::new_with_factory(open_dataset, reuse_limit, concurrency_limit).await?;
 
-		// Probe band mapping from the probe dataset
-		let band_mapping = BandMapping::try_from(&probe)?;
+		// Use explicit bands if provided, otherwise auto-detect from color interpretation
+		let band_mapping = if let Some(bands) = explicit_bands {
+			BandMapping::from_bands(bands)?
+		} else {
+			BandMapping::try_from(&probe)?
+		};
 		log::trace!("Band mapping: {band_mapping:?}");
+
+		let n_color_bands = band_mapping.color_band_count();
+
+		// Resolve per-band nodata values:
+		// - Explicit per-band values from user → use as-is (must match band count)
+		// - Single explicit value → replicate to all color bands
+		// - No explicit value → read from source dataset bands
+		let effective_nodata: Vec<f64> = if let Some(vals) = nodata {
+			if vals.len() == 1 {
+				vec![vals[0]; n_color_bands]
+			} else {
+				ensure!(
+					vals.len() == n_color_bands,
+					"nodata has {} values but band mapping has {} color bands",
+					vals.len(),
+					n_color_bands
+				);
+				vals
+			}
+		} else {
+			// Auto-detect from source bands
+			let auto: Vec<f64> = band_mapping
+				.iter()
+				.filter_map(|item| probe.rasterband(item.band_index).ok().and_then(|b| b.no_data_value()))
+				.collect();
+			// Only use auto-detected values if every color band has one
+			if auto.len() == n_color_bands { auto } else { vec![] }
+		};
 
 		let cutline = if let Some(path) = cutline_path {
 			let srs = probe
@@ -145,6 +206,7 @@ impl RasterSource {
 			pool,
 			band_mapping: Arc::new(band_mapping),
 			cutline,
+			nodata: effective_nodata,
 		})
 	}
 
@@ -154,7 +216,15 @@ impl RasterSource {
 
 		// Get instance from pool - single synchronization point!
 		let instance = self.pool.get_instance().await?;
-		let dst = reproject_to_dataset(&instance, width, height, bbox, &band_mapping, self.cutline.as_ref())?;
+		let dst = reproject_to_dataset(
+			&instance,
+			width,
+			height,
+			bbox,
+			&band_mapping,
+			self.cutline.as_ref(),
+			&self.nodata,
+		)?;
 		// Instance automatically returned to pool when dropped
 
 		let band_mapping = self.band_mapping.clone();
@@ -299,7 +369,7 @@ mod tests {
 		pub fn from_testdata(bbox: GeoBBox, channel_count: usize) -> Result<RasterSource> {
 			let factory = DatasetFactory::new(bbox, channel_count).get_factory();
 			// Construct via the factory (seed one instance inside new_with_factory)
-			futures::executor::block_on(RasterSource::new_with_factory(factory, 1, 2, None))
+			futures::executor::block_on(RasterSource::new_with_factory(factory, 1, 2, None, None, None))
 		}
 	}
 

@@ -58,6 +58,22 @@ impl BandMapping {
 		}
 	}
 
+	/// Create a band mapping from explicit 1-based band indices.
+	/// `bands` contains the color channel band indices (e.g. [4,3,2] for RGB from bands 4,3,2).
+	/// The alpha band is NOT included in `bands` — it's always added as an extra output channel.
+	pub fn from_bands(bands: Vec<usize>) -> Result<Self> {
+		ensure!(!bands.is_empty(), "band list must not be empty");
+		ensure!(bands.len() <= 3, "at most 3 color bands (Grey or RGB)");
+		ensure!(
+			bands.len() != 2,
+			"exactly 1 (Grey) or 3 (RGB) color bands required, got 2"
+		);
+		Ok(BandMapping {
+			map: bands,
+			src_alpha_band: None,
+		})
+	}
+
 	/// Analyze the color interpretations of `dataset` bands and infer a mapping.
 	///
 	/// # Errors

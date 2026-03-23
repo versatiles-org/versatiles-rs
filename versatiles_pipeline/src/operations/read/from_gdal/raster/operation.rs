@@ -46,6 +46,14 @@ struct Args {
 	/// Optional path to a GeoJSON file with Polygon/MultiPolygon geometry.
 	/// Only pixels inside the polygon will be rendered; everything outside becomes transparent.
 	cutline: Option<String>,
+	/// Comma-separated list of 1-based band indices to use as color channels.
+	/// E.g. "4,3,2" maps band 4→Red, band 3→Green, band 2→Blue.
+	/// "1" maps band 1→Grey. Defaults to auto-detection from color interpretation.
+	bands: Option<String>,
+	/// NoData value(s) to treat as transparent. Either a single value applied
+	/// to all bands (e.g. "0") or comma-separated per-band values (e.g. "0,0,0").
+	/// If not specified, the source dataset's per-band nodata value is used (if any).
+	nodata: Option<String>,
 }
 
 #[derive(Debug)]
@@ -89,12 +97,36 @@ impl Operation {
 			})
 			.transpose()?;
 
+		let bands: Option<Vec<usize>> = args
+			.bands
+			.as_ref()
+			.map(|s| {
+				s.split(',')
+					.map(|b| b.trim().parse::<usize>())
+					.collect::<std::result::Result<Vec<_>, _>>()
+			})
+			.transpose()
+			.context("Failed to parse band indices")?;
+
+		let nodata: Option<Vec<f64>> = args
+			.nodata
+			.as_ref()
+			.map(|s| {
+				s.split(',')
+					.map(|v| v.trim().parse::<f64>())
+					.collect::<std::result::Result<Vec<_>, _>>()
+			})
+			.transpose()
+			.context("Failed to parse nodata values")?;
+
 		log::trace!("Resolved filename: {filename:?}");
 		let source = RasterSource::new(
 			&filename,
 			args.gdal_reuse_limit.unwrap_or(100),
 			args.gdal_concurrency_limit.unwrap_or(4) as usize,
 			cutline_path.as_deref(),
+			bands,
+			nodata,
 		)
 		.await?;
 		let mut bbox = *source.bbox();
