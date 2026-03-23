@@ -76,7 +76,7 @@ pub struct Assemble {
 
 /// Encoding and filtering configuration shared across merge functions.
 #[derive(Clone)]
-struct MergeConfig {
+struct AssembleConfig {
 	quality: [Option<u8>; 32],
 	lossless: bool,
 	tile_format: TileFormat,
@@ -145,7 +145,7 @@ pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 		None
 	};
 
-	merge_tiles(
+	assemble_tiles(
 		&args.output,
 		&paths,
 		prescanned_pyramids.as_deref(),
@@ -229,7 +229,7 @@ fn sweep_flush(
 	remaining_min_x: &[Option<u32>; NUM_LEVELS],
 	translucent_buffer: &Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>>,
 	sink: &Arc<Box<dyn TileSink>>,
-	config: &MergeConfig,
+	config: &AssembleConfig,
 ) -> Result<()> {
 	let mut buf = translucent_buffer.lock().unwrap();
 	let flush_keys: Vec<u64> = buf
@@ -272,7 +272,7 @@ fn western_edge(pyramid: &TileBBoxPyramid) -> f64 {
 fn validate_source_format(
 	path: &str,
 	metadata: &versatiles_container::TileSourceMetadata,
-	config: &MergeConfig,
+	config: &AssembleConfig,
 ) -> Result<()> {
 	ensure!(
 		metadata.tile_format == config.tile_format,
@@ -292,7 +292,7 @@ fn validate_source_format(
 /// Merge sources into an output container. If `prescanned_pyramids` is provided, uses those
 /// instead of reading pyramids from each source during the merge.
 #[allow(clippy::too_many_arguments)]
-async fn merge_tiles(
+async fn assemble_tiles(
 	output: &str,
 	paths: &[String],
 	prescanned_pyramids: Option<&[TileBBoxPyramid]>,
@@ -324,7 +324,7 @@ async fn merge_tiles(
 		.with_context(|| format!("Failed to open container: {first_path}"))?;
 	let first_metadata = first_reader.metadata();
 	let first_tilejson = first_reader.tilejson();
-	let config = MergeConfig {
+	let config = AssembleConfig {
 		quality: *quality,
 		lossless,
 		tile_format: first_metadata.tile_format,
@@ -405,7 +405,7 @@ async fn process_source_tiles(
 	sink: &Arc<Box<dyn TileSink>>,
 	done: &Arc<Mutex<HashSet<u64>>>,
 	translucent_buffer: &Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>>,
-	config: &MergeConfig,
+	config: &AssembleConfig,
 ) -> Result<()> {
 	// Flatten all level streams into one combined stream
 	let level_bboxes: Vec<_> = pyramid.iter_levels().filter(|b| !b.is_empty()).copied().collect();
@@ -485,7 +485,7 @@ async fn process_source_tiles(
 fn flush_translucent_tiles(
 	sink: &Arc<Box<dyn TileSink>>,
 	translucent_buffer: HashMap<u64, (TileCoord, Tile)>,
-	config: &MergeConfig,
+	config: &AssembleConfig,
 	runtime: &TilesRuntime,
 ) -> Result<()> {
 	if translucent_buffer.is_empty() {
@@ -510,7 +510,7 @@ fn flush_translucent_tiles(
 /// Re-encode translucent tiles in parallel using scoped threads.
 ///
 /// Returns a vec of prepared (coord, blob) results ready for sequential writing.
-fn reencode_tiles_parallel(tiles: Vec<(TileCoord, Tile)>, config: &MergeConfig) -> Vec<Result<(TileCoord, Blob)>> {
+fn reencode_tiles_parallel(tiles: Vec<(TileCoord, Tile)>, config: &AssembleConfig) -> Vec<Result<(TileCoord, Blob)>> {
 	let config = config.clone();
 	std::thread::scope(|s| {
 		let handles: Vec<_> = tiles
@@ -535,7 +535,7 @@ fn reencode_tiles_parallel(tiles: Vec<(TileCoord, Tile)>, config: &MergeConfig) 
 
 /// Compress a tile into a blob.
 /// This is the CPU-heavy part — call without holding any locks.
-fn prepare_tile_blob(tile: Tile, config: &MergeConfig) -> Result<Blob> {
+fn prepare_tile_blob(tile: Tile, config: &AssembleConfig) -> Result<Blob> {
 	tile.into_blob(config.tile_compression)
 }
 
