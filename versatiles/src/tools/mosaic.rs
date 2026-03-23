@@ -1,4 +1,6 @@
-use super::mosaic_tools::{assemble, tile};
+use super::mosaic_tools::assemble;
+#[cfg(feature = "gdal")]
+use super::mosaic_tools::tile;
 use anyhow::Result;
 use versatiles_container::TilesRuntime;
 
@@ -11,6 +13,7 @@ pub struct Subcommand {
 
 #[derive(clap::Subcommand, Debug)]
 enum MosaicCommands {
+	#[cfg(feature = "gdal")]
 	Tile(tile::Tile),
 	Assemble(assemble::Assemble),
 }
@@ -18,6 +21,7 @@ enum MosaicCommands {
 #[tokio::main]
 pub async fn run(command: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	match &command.sub_command {
+		#[cfg(feature = "gdal")]
 		MosaicCommands::Tile(args) => tile::run(args, runtime).await?,
 		MosaicCommands::Assemble(args) => assemble::run(args, runtime).await?,
 	}
