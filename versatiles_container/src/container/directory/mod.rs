@@ -7,7 +7,9 @@
 //! - `DirectoryWriter`: Writes tiles to a directory structure.
 
 mod reader;
+mod sink;
 mod writer;
 
 pub use reader::DirectoryReader;
+pub use sink::DirectoryTileSink;
 pub use writer::DirectoryWriter;

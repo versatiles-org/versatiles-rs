@@ -31,7 +31,7 @@ mod tar;
 pub use tar::{TarTileSink, TarTilesReader, TarTilesWriter};
 
 mod directory;
-pub use directory::{DirectoryReader, DirectoryWriter};
+pub use directory::{DirectoryReader, DirectoryTileSink, DirectoryWriter};
 
 mod tile_chunking;
 
