@@ -45,6 +45,12 @@ pub struct Tile {
 	/// Use this when the input image has no embedded CRS or an incorrect one.
 	#[arg(long, value_name = "EPSG")]
 	crs: Option<String>,
+
+	/// Number of concurrent GDAL instances for parallel decoding.
+	/// Higher values use more memory but improve throughput for slow codecs (e.g. JPEG2000).
+	/// Default: number of CPU cores.
+	#[arg(long, value_name = "int")]
+	gdal_concurrency: Option<u8>,
 }
 
 pub async fn run(args: &Tile, runtime: &TilesRuntime) -> Result<()> {
@@ -66,6 +72,9 @@ pub async fn run(args: &Tile, runtime: &TilesRuntime) -> Result<()> {
 	}
 	if let Some(ref crs) = args.crs {
 		gdal_props.insert("crs".to_string(), vec![crs.clone()]);
+	}
+	if let Some(concurrency) = args.gdal_concurrency {
+		gdal_props.insert("gdal_concurrency_limit".to_string(), vec![concurrency.to_string()]);
 	}
 
 	let gdal_node = VPLNode {
