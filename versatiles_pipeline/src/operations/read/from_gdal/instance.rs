@@ -60,13 +60,15 @@ impl Instance {
 		let coord_transform = CoordTransform::new(&spatial_ref, &get_spatial_ref(4326)?)
 			.context("Failed to create coordinate transform to EPSG:4326")?;
 
+		// Compute corner coordinates from the GeoTransform
+		let x0 = gt[0];
+		let y0 = gt[3];
+		let x1 = gt[0] + gt[1] * width as f64;
+		let y1 = gt[3] + gt[5] * height as f64;
+
+		// transform_bounds expects [min_x, min_y, max_x, max_y]
 		let bounds = coord_transform.transform_bounds(
-			&[
-				gt[0],
-				gt[3],
-				gt[0] + gt[1] * width as f64,
-				gt[3] + gt[5] * height as f64,
-			],
+			&[x0.min(x1), y0.min(y1), x0.max(x1), y0.max(y1)],
 			21,
 		)?;
 
