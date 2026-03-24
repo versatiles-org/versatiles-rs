@@ -220,23 +220,29 @@ impl RasterSource {
 	#[context("Failed to get image data ({width}x{height}) for bbox ({bbox:?}) from GDAL dataset")]
 	pub async fn get_image(&self, bbox: &GeoBBox, width: usize, height: usize) -> Result<Option<DynamicImage>> {
 		let band_mapping = self.band_mapping.clone();
+		let cutline = self.cutline.clone();
+		let nodata = self.nodata.clone();
 
 		// Get instance from pool - single synchronization point!
 		let instance = self.pool.get_instance().await?;
-		let dst = reproject_to_dataset(
-			&instance,
-			width,
-			height,
-			bbox,
-			&band_mapping,
-			self.cutline.as_ref(),
-			&self.nodata,
-		)?;
-		// Instance automatically returned to pool when dropped
 
-		let band_mapping = self.band_mapping.clone();
-		let channel_count = band_mapping.len(); // color bands + alpha
+		// Run GDAL reprojection + pixel reading on a blocking thread so we
+		// don't block the async executor.  This is the CPU/IO-heavy part.
+		let band_mapping2 = self.band_mapping.clone();
+		let channel_count = band_mapping2.len(); // color bands + alpha
+		let bbox = *bbox;
 		let image = tokio::task::spawn_blocking(move || -> Result<Option<DynamicImage>> {
+			let dst = reproject_to_dataset(
+				&instance,
+				width,
+				height,
+				&bbox,
+				&band_mapping,
+				cutline.as_ref(),
+				&nodata,
+			)?;
+			// Instance automatically returned to pool when `instance` is dropped
+			let band_mapping = band_mapping2;
 			let mut buf = vec![0u8; width * height * channel_count];
 
 			// Read color bands
