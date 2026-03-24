@@ -86,17 +86,16 @@ impl VersaTilesSink {
 			#[cfg(feature = "ssh2")]
 			{
 				let url = reqwest::Url::parse(&self.destination)?;
-				Ok(Box::new(versatiles_core::io::DataWriterSftp::from_url(
+				return Ok(Box::new(versatiles_core::io::DataWriterSftp::from_url(
 					&url,
 					self.ssh_identity.as_deref(),
-				)?))
+				)?));
 			}
 			#[cfg(not(feature = "ssh2"))]
 			bail!("SFTP support requires the 'ssh2' feature")
-		} else {
-			let path = env::current_dir()?.join(&self.destination);
-			Ok(Box::new(DataWriterFile::from_path(&path)?))
 		}
+		let path = env::current_dir()?.join(&self.destination);
+		Ok(Box::new(DataWriterFile::from_path(&path)?))
 	}
 }
 
