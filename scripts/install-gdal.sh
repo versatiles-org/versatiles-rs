@@ -60,19 +60,19 @@ install_debian() {
   if [[ "$USE_TESTING" == "1" ]]; then
     # Use -t testing so apt resolves the full dependency tree from testing
     info "Installing GDAL ${GDAL_PREFERRED}.* from testing (including dependencies)…"
-    if sudo apt-get install -y -t testing "libgdal-dev=${GDAL_PREFERRED}.*" "gdal-bin=${GDAL_PREFERRED}.*" 2>/dev/null; then
+    if sudo apt-get install -y -t testing "libgdal-dev=${GDAL_PREFERRED}.*" "gdal-bin=${GDAL_PREFERRED}.*" libclang-dev 2>/dev/null; then
       return 0
     fi
   else
     info "Trying to install GDAL ${GDAL_PREFERRED}.* via apt…"
-    if sudo apt-get install -y "libgdal-dev=${GDAL_PREFERRED}.*" "gdal-bin=${GDAL_PREFERRED}.*" 2>/dev/null; then
+    if sudo apt-get install -y "libgdal-dev=${GDAL_PREFERRED}.*" "gdal-bin=${GDAL_PREFERRED}.*" libclang-dev 2>/dev/null; then
       return 0
     fi
   fi
 
   # Fall back to whatever is available
   warn "GDAL ${GDAL_PREFERRED}.* not available via apt, installing default version…"
-  sudo apt-get install -y libgdal-dev gdal-bin
+  sudo apt-get install -y libgdal-dev gdal-bin libclang-dev
 }
 
 install_alpine() {
