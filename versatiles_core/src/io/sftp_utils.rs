@@ -14,7 +14,7 @@ use std::{
 /// 3. SSH agent
 /// 4. `~/.ssh/config` `IdentityFile` for the target host
 /// 5. Default key files (~/.ssh/id_ed25519, id_rsa, id_ecdsa)
-pub(super) fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Session> {
+pub fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Session> {
 	let host = url.host_str().context("SFTP URL has no host")?;
 	let port = url.port().unwrap_or(22);
 	let username = if url.username().is_empty() {
@@ -65,12 +65,14 @@ pub(super) fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Se
 }
 
 /// Extract the remote file path from an SFTP URL.
-pub(super) fn remote_path(url: &Url) -> PathBuf {
+#[must_use]
+pub fn remote_path(url: &Url) -> PathBuf {
 	PathBuf::from(url.path())
 }
 
 /// Build a sanitized display name (without credentials).
-pub(super) fn display_name(url: &Url) -> String {
+#[must_use]
+pub fn display_name(url: &Url) -> String {
 	let host = url.host_str().unwrap_or("unknown");
 	let port = url.port().unwrap_or(22);
 	format!("sftp://{host}:{port}{}", url.path())

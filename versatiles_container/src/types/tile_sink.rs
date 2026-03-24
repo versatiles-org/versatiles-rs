@@ -33,36 +33,79 @@ pub trait TileSink: Send + Sync {
 	fn finish(self: Box<Self>, tilejson: &TileJSON, runtime: &TilesRuntime) -> Result<()>;
 }
 
-/// Open a tile sink based on the output path's file extension.
+/// Open a tile sink based on the destination's file extension.
+///
+/// The destination can be a local path or an `sftp://` URL.
 ///
 /// Dispatches to the appropriate sink implementation:
 /// - `.tar` → [`TarTileSink`]
-/// - `.mbtiles` → [`MBTilesTileSink`]
+/// - `.mbtiles` → [`MBTilesTileSink`] (local only)
 /// - `.versatiles` → [`VersaTilesSink`]
 /// - directory (no extension or existing directory) → [`DirectoryTileSink`]
 ///
 /// # Arguments
-/// * `path` — Output path. Extension determines the container format.
+/// * `destination` — Output path or URL. Extension determines the container format.
 /// * `format` — Tile format (e.g., PNG, WEBP, MVT).
 /// * `compression` — Tile compression (e.g., Uncompressed, Gzip, Brotli).
+/// * `runtime` — Runtime for SSH identity and other services.
 ///
 /// # Errors
 /// Returns an error if the extension is unsupported, or if the sink cannot be created.
-pub fn open_tile_sink(path: &Path, format: TileFormat, compression: TileCompression) -> Result<Box<dyn TileSink>> {
-	match path.extension().and_then(|e| e.to_str()) {
-		Some(ext) if ext.eq_ignore_ascii_case("tar") => Ok(Box::new(TarTileSink::new(path, format, compression)?)),
-		Some(ext) if ext.eq_ignore_ascii_case("mbtiles") => {
-			Ok(Box::new(MBTilesTileSink::new(path, format, compression)?))
-		}
-		Some(ext) if ext.eq_ignore_ascii_case("versatiles") => {
-			Ok(Box::new(VersaTilesSink::new(path.to_path_buf(), format, compression)?))
-		}
-		_ if path.is_dir() || path.extension().is_none() => Ok(Box::new(DirectoryTileSink::new(
-			path.to_path_buf(),
+pub fn open_tile_sink(
+	destination: &str,
+	format: TileFormat,
+	compression: TileCompression,
+	runtime: &TilesRuntime,
+) -> Result<Box<dyn TileSink>> {
+	// Extract extension from destination (handles both local paths and sftp:// URLs)
+	let extension = if destination.starts_with("sftp://") {
+		extract_extension_from_url(destination)
+	} else {
+		Path::new(destination)
+			.extension()
+			.and_then(|e| e.to_str())
+			.map(str::to_ascii_lowercase)
+	};
+
+	match extension.as_deref() {
+		Some("tar") => TarTileSink::open(destination, format, compression, runtime),
+		Some("mbtiles") => Ok(Box::new(MBTilesTileSink::open(
+			destination,
 			format,
 			compression,
+			runtime,
 		)?)),
-		Some(ext) => bail!("unsupported tile sink format: .{ext}"),
-		None => bail!("output path has no extension and is not a directory"),
+		Some("versatiles") => Ok(Box::new(VersaTilesSink::open(
+			destination,
+			format,
+			compression,
+			runtime,
+		)?)),
+		_ => {
+			let is_dir = !destination.starts_with("sftp://") && {
+				let path = Path::new(destination);
+				path.is_dir() || path.extension().is_none()
+			};
+			if destination.starts_with("sftp://") || is_dir {
+				Ok(Box::new(DirectoryTileSink::open(
+					destination,
+					format,
+					compression,
+					runtime,
+				)?))
+			} else {
+				bail!(
+					"unsupported tile sink format: .{}",
+					Path::new(destination).extension().unwrap().to_string_lossy()
+				)
+			}
+		}
 	}
+}
+
+/// Extract the file extension from an SFTP URL.
+fn extract_extension_from_url(url: &str) -> Option<String> {
+	let path_part = url.rsplit_once('/')?.1;
+	let ext = path_part.rsplit_once('.')?.1;
+	Some(ext.to_ascii_lowercase())
 }

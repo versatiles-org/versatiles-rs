@@ -4,12 +4,18 @@
 //! They are buffered to per-block temporary files on disk, grouped by block key
 //! `(level, x/256, y/256)`. On [`finish`](TileSink::finish), blocks are assembled
 //! in sorted order using [`BlockBuilder`] and written to the final `.versatiles` file.
+//!
+//! Supports both local paths and `sftp://` URLs as output destinations.
 
 use super::types::{BlockBuilder, BlockIndex, FileHeader};
 use crate::{TileSink, cache::CacheValue};
-use anyhow::{Result, anyhow};
+use anyhow::Result;
+use anyhow::anyhow;
+#[cfg(not(feature = "ssh2"))]
+use anyhow::bail;
 use std::{
 	collections::HashMap,
+	env,
 	fs::{self, File},
 	io::{BufReader, BufWriter, Write},
 	path::PathBuf,
@@ -26,38 +32,71 @@ type BlockKey = (u8, u32, u32);
 
 /// A tile sink that buffers tiles to temporary files and assembles a `.versatiles`
 /// container on [`finish`](TileSink::finish).
+///
+/// Supports both local file paths and `sftp://` URLs as output destinations.
 pub struct VersaTilesSink {
-	output_path: PathBuf,
+	destination: String,
 	tile_format: TileFormat,
 	tile_compression: TileCompression,
 	temp_dir: PathBuf,
 	/// Per-block buffer files keyed by (level, block_x, block_y).
 	block_writers: Mutex<HashMap<BlockKey, BufWriter<File>>>,
+	#[cfg(feature = "ssh2")]
+	ssh_identity: Option<PathBuf>,
 }
 
 impl VersaTilesSink {
-	/// Create a new `VersaTilesSink`.
+	/// Create a new `VersaTilesSink` from a destination string.
 	///
-	/// # Arguments
-	/// * `output_path` — destination `.versatiles` file (must be absolute).
-	/// * `tile_format` — format of every tile blob passed to `write_tile`.
-	/// * `tile_compression` — compression of every tile blob passed to `write_tile`.
-	pub fn new(output_path: PathBuf, tile_format: TileFormat, tile_compression: TileCompression) -> Result<Self> {
-		let temp_dir = output_path.with_extension("versatiles.tmp");
+	/// The destination can be a local path or an `sftp://` URL.
+	pub fn open(
+		destination: &str,
+		tile_format: TileFormat,
+		tile_compression: TileCompression,
+		runtime: &crate::TilesRuntime,
+	) -> Result<Self> {
+		let _ = runtime; // used only with ssh2 feature
+
+		let temp_dir = if destination.starts_with("sftp://") {
+			env::temp_dir().join(format!("versatiles_sink_{}", std::process::id()))
+		} else {
+			PathBuf::from(destination).with_extension("versatiles.tmp")
+		};
 		fs::create_dir_all(&temp_dir)?;
 
 		Ok(Self {
-			output_path,
+			destination: destination.to_string(),
 			tile_format,
 			tile_compression,
 			temp_dir,
 			block_writers: Mutex::new(HashMap::new()),
+			#[cfg(feature = "ssh2")]
+			ssh_identity: runtime.ssh_identity().map(PathBuf::from),
 		})
 	}
 
 	/// Path for a block's temporary file.
 	fn block_path(&self, key: &BlockKey) -> PathBuf {
 		self.temp_dir.join(format!("{}_{}_{}.bin", key.0, key.1, key.2))
+	}
+
+	/// Create the appropriate DataWriter for the destination.
+	fn create_writer(&self) -> Result<Box<dyn DataWriterTrait>> {
+		if self.destination.starts_with("sftp://") {
+			#[cfg(feature = "ssh2")]
+			{
+				let url = reqwest::Url::parse(&self.destination)?;
+				Ok(Box::new(versatiles_core::io::DataWriterSftp::from_url(
+					&url,
+					self.ssh_identity.as_deref(),
+				)?))
+			}
+			#[cfg(not(feature = "ssh2"))]
+			bail!("SFTP support requires the 'ssh2' feature")
+		} else {
+			let path = env::current_dir()?.join(&self.destination);
+			Ok(Box::new(DataWriterFile::from_path(&path)?))
+		}
 	}
 }
 
@@ -92,7 +131,7 @@ impl TileSink for VersaTilesSink {
 			// No tiles — write an empty file with just the header
 			let bbox = GeoBBox::new(0.0, 0.0, 0.0, 0.0)?;
 			let header = FileHeader::new(self.tile_format, self.tile_compression, [0, 0], &bbox)?;
-			let mut writer = DataWriterFile::from_path(&self.output_path)?;
+			let mut writer = self.create_writer()?;
 			writer.append(&header.to_blob()?)?;
 			fs::remove_dir_all(&self.temp_dir)?;
 			return Ok(());
@@ -112,7 +151,7 @@ impl TileSink for VersaTilesSink {
 			.unwrap_or_else(|| GeoBBox::new(-180.0, -85.051_13, 180.0, 85.051_13).unwrap());
 
 		// 5. Create output writer and write initial header
-		let mut writer = DataWriterFile::from_path(&self.output_path)?;
+		let mut writer = self.create_writer()?;
 		let mut header = FileHeader::new(self.tile_format, self.tile_compression, [zoom_min, zoom_max], &bbox)?;
 		writer.append(&header.to_blob()?)?;
 
@@ -130,7 +169,7 @@ impl TileSink for VersaTilesSink {
 			let file = File::open(&path)?;
 			let mut reader = BufReader::new(file);
 
-			let mut block_builder = BlockBuilder::new(key.0, &mut writer)?;
+			let mut block_builder = BlockBuilder::new(key.0, writer.as_mut())?;
 
 			// Read all (TileCoord, Blob) pairs from the temp file
 			loop {
@@ -184,10 +223,15 @@ mod tests {
 	async fn write_and_read_back() -> Result<()> {
 		let temp_dir = assert_fs::TempDir::new()?;
 		let output = temp_dir.path().join("test.versatiles");
+		let runtime = TilesRuntime::default();
 
-		let sink = VersaTilesSink::new(output.clone(), TileFormat::PNG, TileCompression::Uncompressed)?;
+		let sink = VersaTilesSink::open(
+			output.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		)?;
 
-		// Write tiles across two blocks at level 10
 		let tiles = vec![
 			(TileCoord::new(10, 0, 0)?, Blob::from(vec![1u8; 16])),
 			(TileCoord::new(10, 1, 0)?, Blob::from(vec![2u8; 16])),
@@ -202,13 +246,11 @@ mod tests {
 		tilejson.set_string("tilejson", "3.0.0")?;
 		tilejson.set_min_zoom(10);
 		tilejson.set_max_zoom(10);
-		Box::new(sink).finish(&tilejson, &TilesRuntime::default())?;
+		Box::new(sink).finish(&tilejson, &runtime)?;
 
-		// Read back
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
 		assert_eq!(reader.metadata().tile_format, TileFormat::PNG);
 
-		// Verify tiles
 		for (coord, expected_blob) in &tiles {
 			let tile = reader.get_tile(coord).await?;
 			assert!(tile.is_some(), "tile at {coord:?} should exist");
@@ -223,10 +265,15 @@ mod tests {
 	async fn write_multiple_levels() -> Result<()> {
 		let temp_dir = assert_fs::TempDir::new()?;
 		let output = temp_dir.path().join("multi_level.versatiles");
+		let runtime = TilesRuntime::default();
 
-		let sink = VersaTilesSink::new(output.clone(), TileFormat::MVT, TileCompression::Gzip)?;
+		let sink = VersaTilesSink::open(
+			output.to_str().unwrap(),
+			TileFormat::MVT,
+			TileCompression::Gzip,
+			&runtime,
+		)?;
 
-		// Write tiles at different zoom levels
 		let tiles = vec![
 			(TileCoord::new(0, 0, 0)?, Blob::from(vec![10u8; 32])),
 			(TileCoord::new(1, 0, 0)?, Blob::from(vec![20u8; 32])),
@@ -241,9 +288,8 @@ mod tests {
 		tilejson.set_string("tilejson", "3.0.0")?;
 		tilejson.set_min_zoom(0);
 		tilejson.set_max_zoom(1);
-		Box::new(sink).finish(&tilejson, &TilesRuntime::default())?;
+		Box::new(sink).finish(&tilejson, &runtime)?;
 
-		// Read back and verify
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
 		assert_eq!(reader.metadata().tile_format, TileFormat::MVT);
 
@@ -261,10 +307,15 @@ mod tests {
 	async fn write_across_block_boundaries() -> Result<()> {
 		let temp_dir = assert_fs::TempDir::new()?;
 		let output = temp_dir.path().join("cross_block.versatiles");
+		let runtime = TilesRuntime::default();
 
-		let sink = VersaTilesSink::new(output.clone(), TileFormat::PNG, TileCompression::Uncompressed)?;
+		let sink = VersaTilesSink::open(
+			output.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		)?;
 
-		// Tiles in different blocks: (x/256=0, y/256=0) and (x/256=1, y/256=0)
 		let tiles = vec![
 			(TileCoord::new(10, 100, 50)?, Blob::from(vec![1u8; 8])),
 			(TileCoord::new(10, 300, 50)?, Blob::from(vec![2u8; 8])),
@@ -278,7 +329,7 @@ mod tests {
 		tilejson.set_string("tilejson", "3.0.0")?;
 		tilejson.set_min_zoom(10);
 		tilejson.set_max_zoom(10);
-		Box::new(sink).finish(&tilejson, &TilesRuntime::default())?;
+		Box::new(sink).finish(&tilejson, &runtime)?;
 
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
 		for (coord, expected_blob) in &tiles {
@@ -295,11 +346,17 @@ mod tests {
 	fn empty_sink_produces_valid_file() -> Result<()> {
 		let temp_dir = assert_fs::TempDir::new()?;
 		let output = temp_dir.path().join("empty.versatiles");
+		let runtime = TilesRuntime::default();
 
-		let sink = VersaTilesSink::new(output.clone(), TileFormat::PNG, TileCompression::Uncompressed)?;
+		let sink = VersaTilesSink::open(
+			output.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		)?;
 
 		let tilejson = TileJSON::default();
-		Box::new(sink).finish(&tilejson, &TilesRuntime::default())?;
+		Box::new(sink).finish(&tilejson, &runtime)?;
 
 		assert!(output.exists());
 		Ok(())

@@ -1,7 +1,6 @@
 use anyhow::{Context, Result, anyhow, ensure};
 use futures::{StreamExt, future::ready};
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 use versatiles_container::{Tile, TileSink, TilesRuntime, open_tile_sink};
 use versatiles_core::{
@@ -341,9 +340,10 @@ async fn assemble_tiles(
 
 	// Create the output sink (dispatches by file extension)
 	let sink: Arc<Box<dyn TileSink>> = Arc::new(open_tile_sink(
-		Path::new(output),
+		output,
 		config.tile_format,
 		config.tile_compression,
+		runtime,
 	)?);
 
 	let progress = runtime.create_progress("assembling tiles", paths.len() as u64);

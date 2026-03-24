@@ -2,6 +2,8 @@
 //!
 //! Uses the same `{z}/{x}/{y}.<format>[.<compression>]` layout as [`TarTilesWriter`](super::TarTilesWriter).
 //! Thread-safe via an internal `Mutex` around the `tar::Builder`.
+//!
+//! Supports both local paths and `sftp://` URLs as output destinations.
 
 use crate::TileSink;
 use anyhow::{Context, Result};
@@ -30,10 +32,40 @@ pub struct TarTileSink<W: Write + Send> {
 }
 
 impl TarTileSink<BufWriter<File>> {
-	/// Create a new `TarTileSink` that writes to a file at `path`.
+	/// Create a new `TarTileSink` that writes to a local file at `path`.
 	pub fn new(path: &Path, tile_format: TileFormat, tile_compression: TileCompression) -> Result<Self> {
 		let file = File::create(path).with_context(|| format!("Failed to create output file: {}", path.display()))?;
 		Ok(Self::from_writer(BufWriter::new(file), tile_format, tile_compression))
+	}
+
+	/// Open a tar tile sink from a destination string (local path or `sftp://` URL).
+	pub fn open(
+		destination: &str,
+		tile_format: TileFormat,
+		tile_compression: TileCompression,
+		runtime: &crate::TilesRuntime,
+	) -> Result<Box<dyn TileSink>> {
+		if destination.starts_with("sftp://") {
+			#[cfg(feature = "ssh2")]
+			{
+				let url = reqwest::Url::parse(destination)?;
+				let stream = versatiles_core::io::SftpWriteStream::from_url(&url, runtime.ssh_identity())?;
+				return Ok(Box::new(TarTileSink::from_writer(
+					BufWriter::new(stream),
+					tile_format,
+					tile_compression,
+				)));
+			}
+			#[cfg(not(feature = "ssh2"))]
+			{
+				let _ = runtime;
+				anyhow::bail!("SFTP support requires the 'ssh2' feature");
+			}
+		}
+
+		let _ = runtime;
+		let path = std::env::current_dir()?.join(destination);
+		Ok(Box::new(Self::new(&path, tile_format, tile_compression)?))
 	}
 }
 
@@ -90,7 +122,7 @@ impl<W: Write + Send> TileSink for TarTileSink<W> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{TarTilesReader, TileSource};
+	use crate::{TarTilesReader, TileSource, TilesRuntime};
 
 	#[test]
 	fn write_and_read_back() -> Result<()> {
@@ -104,7 +136,7 @@ mod tests {
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
-		Box::new(sink).finish(&tilejson, &crate::TilesRuntime::default())?;
+		Box::new(sink).finish(&tilejson, &TilesRuntime::default())?;
 
 		let reader = TarTilesReader::open(&temp)?;
 		assert_eq!(reader.metadata().tile_format, TileFormat::PNG);
@@ -131,7 +163,7 @@ mod tests {
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
-		Box::new(sink).finish(&tilejson, &crate::TilesRuntime::default())?;
+		Box::new(sink).finish(&tilejson, &TilesRuntime::default())?;
 
 		let reader = TarTilesReader::open(&temp)?;
 		assert_eq!(reader.metadata().tile_format, TileFormat::WEBP);

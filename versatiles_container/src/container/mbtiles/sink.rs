@@ -43,8 +43,24 @@ impl MBTilesTileSink {
 	/// # Errors
 	/// Returns an error if the format/compression combination is unsupported or if
 	/// database creation fails.
+	/// Open an MBTiles tile sink from a destination string.
+	///
+	/// MBTiles requires a local filesystem path (SFTP is not supported).
+	pub fn open(
+		destination: &str,
+		tile_format: TileFormat,
+		tile_compression: TileCompression,
+		_runtime: &crate::TilesRuntime,
+	) -> Result<Self> {
+		if destination.starts_with("sftp://") {
+			bail!("MBTiles does not support SFTP output (SQLite requires local filesystem)");
+		}
+		let path = std::env::current_dir()?.join(destination);
+		Self::new(&path, tile_format, tile_compression)
+	}
+
 	#[context("creating MBTilesTileSink for '{}'", path.display())]
-	pub fn new(path: &Path, tile_format: TileFormat, tile_compression: TileCompression) -> Result<Self> {
+	fn new(path: &Path, tile_format: TileFormat, tile_compression: TileCompression) -> Result<Self> {
 		use TileCompression::{Gzip, Uncompressed};
 		use TileFormat::{JPG, MVT, PNG, WEBP};
 
@@ -178,8 +194,14 @@ mod tests {
 	#[test]
 	fn write_and_read_back() -> Result<()> {
 		let temp = assert_fs::NamedTempFile::new("test_sink.mbtiles")?;
+		let runtime = TilesRuntime::default();
 
-		let sink = MBTilesTileSink::new(&temp, TileFormat::PNG, TileCompression::Uncompressed)?;
+		let sink = MBTilesTileSink::open(
+			temp.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		)?;
 
 		let coord = TileCoord::new(3, 1, 2)?;
 		let blob = Blob::from(vec![0u8; 16]);
@@ -201,15 +223,27 @@ mod tests {
 	#[test]
 	fn rejects_unsupported_format() {
 		let temp = assert_fs::NamedTempFile::new("test_sink_bad.mbtiles").unwrap();
-		let result = MBTilesTileSink::new(&temp, TileFormat::PNG, TileCompression::Brotli);
+		let runtime = TilesRuntime::default();
+		let result = MBTilesTileSink::open(
+			temp.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Brotli,
+			&runtime,
+		);
 		assert!(result.is_err());
 	}
 
 	#[tokio::test]
 	async fn write_multiple_and_read_back() -> Result<()> {
 		let temp = assert_fs::NamedTempFile::new("test_sink_multi.mbtiles")?;
+		let runtime = TilesRuntime::default();
 
-		let sink = MBTilesTileSink::new(&temp, TileFormat::WEBP, TileCompression::Uncompressed)?;
+		let sink = MBTilesTileSink::open(
+			temp.to_str().unwrap(),
+			TileFormat::WEBP,
+			TileCompression::Uncompressed,
+			&runtime,
+		)?;
 
 		for y in 0..4 {
 			for x in 0..4 {

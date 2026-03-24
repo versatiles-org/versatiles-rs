@@ -29,7 +29,11 @@ mod data_writer_file;
 #[cfg(feature = "ssh2")]
 mod data_writer_sftp;
 #[cfg(feature = "ssh2")]
-mod sftp_utils;
+pub mod sftp_utils;
+#[cfg(feature = "ssh2")]
+mod sftp_wrappers;
+#[cfg(feature = "ssh2")]
+pub use sftp_wrappers::*;
 mod value_reader;
 mod value_reader_blob;
 mod value_reader_file;
