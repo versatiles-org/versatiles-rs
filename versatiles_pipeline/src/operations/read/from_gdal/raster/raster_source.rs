@@ -73,7 +73,7 @@ fn reproject_to_dataset(
 		}
 
 		(*options_ptr).eResampleAlg = ResampleAlg::default().as_gdal();
-		(*options_ptr).dfWarpMemoryLimit = 512.0 * 1024.0 * 1024.0; // 512 MB
+		(*options_ptr).dfWarpMemoryLimit = 64.0 * 1024.0 * 1024.0; // 64 MB per warp
 
 		if let Some(ref geom) = cutline_geom {
 			(*options_ptr).hCutline = geom.c_geometry();
