@@ -129,10 +129,18 @@ impl RasterSource {
 		cutline_path: Option<&Path>,
 		explicit_bands: Option<Vec<usize>>,
 		nodata: Option<Vec<f64>>,
+		crs_override: Option<u32>,
 	) -> Result<RasterSource> {
 		let path = filename.to_path_buf();
-		let factory: Arc<dyn Fn() -> Result<gdal::Dataset> + Send + Sync + 'static> =
-			Arc::new(move || gdal::Dataset::open(&path).with_context(|| format!("failed to open GDAL dataset: {path:?}")));
+		let factory: Arc<dyn Fn() -> Result<gdal::Dataset> + Send + Sync + 'static> = Arc::new(move || {
+			let mut ds = gdal::Dataset::open(&path).with_context(|| format!("failed to open GDAL dataset: {path:?}"))?;
+			if let Some(epsg) = crs_override {
+				let srs = super::get_spatial_ref(epsg)?;
+				ds.set_spatial_ref(&srs)
+					.with_context(|| format!("failed to set CRS override to EPSG:{epsg}"))?;
+			}
+			Ok(ds)
+		});
 		Self::new_with_factory(
 			factory,
 			reuse_limit,

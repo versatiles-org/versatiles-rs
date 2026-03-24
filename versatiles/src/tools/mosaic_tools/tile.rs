@@ -40,6 +40,11 @@ pub struct Tile {
 	/// If not specified, uses the source dataset's nodata value (if any).
 	#[arg(long, value_name = "str")]
 	nodata: Option<String>,
+
+	/// Override the source CRS with an EPSG code (e.g. "4326" or "25832").
+	/// Use this when the input image has no embedded CRS or an incorrect one.
+	#[arg(long, value_name = "EPSG")]
+	crs: Option<String>,
 }
 
 pub async fn run(args: &Tile, runtime: &TilesRuntime) -> Result<()> {
@@ -58,6 +63,9 @@ pub async fn run(args: &Tile, runtime: &TilesRuntime) -> Result<()> {
 	}
 	if let Some(ref nodata) = args.nodata {
 		gdal_props.insert("nodata".to_string(), vec![nodata.clone()]);
+	}
+	if let Some(ref crs) = args.crs {
+		gdal_props.insert("crs".to_string(), vec![crs.clone()]);
 	}
 
 	let gdal_node = VPLNode {

@@ -54,6 +54,9 @@ struct Args {
 	/// to all bands (e.g. "0") or comma-separated per-band values (e.g. "0,0,0").
 	/// If not specified, the source dataset's per-band nodata value is used (if any).
 	nodata: Option<String>,
+	/// Override the source CRS with an EPSG code (e.g. "4326" or "25832").
+	/// Use this when the input image has no embedded CRS or an incorrect one.
+	crs: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -127,6 +130,7 @@ impl Operation {
 			cutline_path.as_deref(),
 			bands,
 			nodata,
+			args.crs,
 		)
 		.await?;
 		let mut bbox = *source.bbox();
