@@ -10,8 +10,11 @@
 #   ./scripts/install-gdal.sh [--testing]
 #
 # Options:
-#   --testing   On Debian stable, add the testing repo as a pin-priority
-#               source and install GDAL from there (for a newer version).
+#   --testing   On Debian stable, add the testing repo and install GDAL
+#               (+ its dependencies) from there. This may upgrade core
+#               system libraries (libc, libstdc++, etc.) to testing
+#               versions. Safe for CI containers; use with care on
+#               persistent dev machines.
 #
 # The script tries to install GDAL GDAL_PREFERRED first. If that version is
 # not available, it falls back to whatever the package manager provides and
@@ -42,11 +45,11 @@ die()   { printf "\033[1;31m[x] %s\033[0m\n" "$*" >&2; exit 1; }
 
 install_debian() {
   if [[ "$USE_TESTING" == "1" ]]; then
-    info "Adding Debian testing repo with low pin priority…"
+    info "Adding Debian testing repo…"
     sudo apt-get install -y debian-archive-keyring
     echo 'deb [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://deb.debian.org/debian testing main' \
       | sudo tee /etc/apt/sources.list.d/testing.list >/dev/null
-    # Pin testing packages below default so only explicitly requested packages come from testing
+    # Pin testing below default so nothing upgrades automatically
     printf 'Package: *\nPin: release a=testing\nPin-Priority: 10\n' \
       | sudo tee /etc/apt/preferences.d/testing.pref >/dev/null
   fi
@@ -54,9 +57,17 @@ install_debian() {
   sudo apt-get update
 
   # Try preferred version first
-  info "Trying to install GDAL ${GDAL_PREFERRED}.* via apt…"
-  if sudo apt-get install -y "libgdal-dev=${GDAL_PREFERRED}.*" "gdal-bin=${GDAL_PREFERRED}.*" 2>/dev/null; then
-    return 0
+  if [[ "$USE_TESTING" == "1" ]]; then
+    # Use -t testing so apt resolves the full dependency tree from testing
+    info "Installing GDAL ${GDAL_PREFERRED}.* from testing (including dependencies)…"
+    if sudo apt-get install -y -t testing "libgdal-dev=${GDAL_PREFERRED}.*" "gdal-bin=${GDAL_PREFERRED}.*" 2>/dev/null; then
+      return 0
+    fi
+  else
+    info "Trying to install GDAL ${GDAL_PREFERRED}.* via apt…"
+    if sudo apt-get install -y "libgdal-dev=${GDAL_PREFERRED}.*" "gdal-bin=${GDAL_PREFERRED}.*" 2>/dev/null; then
+      return 0
+    fi
   fi
 
   # Fall back to whatever is available
