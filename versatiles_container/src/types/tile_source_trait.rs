@@ -172,12 +172,80 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
-	/// Writes tile-level probing output or a placeholder if not implemented.
+	/// Scans all tiles, reporting average size and the top-10 biggest tiles.
 	#[cfg(feature = "cli")]
 	async fn probe_tiles(&self, print: &PrettyPrint) -> Result<()> {
-		print
-			.add_warning("deep tiles probing is not implemented for this source")
-			.await;
+		#[derive(Debug)]
+		#[allow(dead_code)]
+		struct Entry {
+			size: u64,
+			x: u32,
+			y: u32,
+			z: u8,
+		}
+
+		let mut biggest_tiles: Vec<Entry> = Vec::new();
+		let mut min_size: u64 = 0;
+		let mut size_sum: u64 = 0;
+		let mut tile_count: u64 = 0;
+
+		let total_tiles = self.metadata().bbox_pyramid.count_tiles();
+		let progress = crate::ProgressHandle::new(
+			crate::ProgressId(0),
+			"scanning tiles".to_string(),
+			total_tiles,
+			crate::EventBus::new(),
+			false,
+		);
+
+		for bbox in self.metadata().bbox_pyramid.iter_levels() {
+			let mut stream = self.get_tile_size_stream(bbox.clone()).await?;
+			while let Some((coord, size_u32)) = stream.next().await {
+				let size = size_u32 as u64;
+
+				tile_count += 1;
+				size_sum += size;
+				progress.inc(1);
+
+				if size < min_size {
+					continue;
+				}
+
+				let pos = biggest_tiles
+					.binary_search_by(|e| e.size.cmp(&size).reverse())
+					.unwrap_or_else(|p| p);
+				biggest_tiles.insert(
+					pos,
+					Entry {
+						size,
+						x: coord.x,
+						y: coord.y,
+						z: coord.level,
+					},
+				);
+				if biggest_tiles.len() > 10 {
+					biggest_tiles.pop();
+				}
+				min_size = biggest_tiles.last().expect("biggest_tiles is non-empty").size;
+			}
+		}
+		progress.finish();
+
+		if tile_count > 0 {
+			print.add_key_value("tile count", &tile_count).await;
+			print
+				.add_key_value("average tile size", &size_sum.div_euclid(tile_count))
+				.await;
+
+			for (index, entry) in biggest_tiles.iter().enumerate() {
+				print
+					.add_key_value(&format!("#{} biggest tile", index + 1), entry)
+					.await;
+			}
+		} else {
+			print.add_warning("no tiles found").await;
+		}
+
 		Ok(())
 	}
 
