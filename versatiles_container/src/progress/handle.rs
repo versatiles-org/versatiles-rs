@@ -36,7 +36,8 @@ impl ProgressHandle {
 			silent,
 		};
 
-		// Emit initial progress event
+		// Draw and emit initial progress event
+		handle.redraw(&mut handle.state.lock());
 		handle.emit_update();
 		handle
 	}
