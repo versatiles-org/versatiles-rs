@@ -67,10 +67,7 @@ impl Instance {
 		let y1 = gt[3] + gt[5] * height as f64;
 
 		// transform_bounds expects [min_x, min_y, max_x, max_y]
-		let bounds = coord_transform.transform_bounds(
-			&[x0.min(x1), y0.min(y1), x0.max(x1), y0.max(y1)],
-			21,
-		)?;
+		let bounds = coord_transform.transform_bounds(&[x0.min(x1), y0.min(y1), x0.max(x1), y0.max(y1)], 21)?;
 
 		// Coordinates seem to be flipped in OGREnvelope
 		let mut bbox = GeoBBox::new_normalized(bounds[0], bounds[1], bounds[2], bounds[3]);
