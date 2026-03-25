@@ -228,7 +228,10 @@ fn sweep_flush(
 	sink: &Arc<Box<dyn TileSink>>,
 	config: &AssembleConfig,
 ) -> Result<()> {
-	log::debug!("sweep-line flush: remaining_min_x={:?}", remaining_min_x);
+	log::debug!(
+		"sweep-line flush: remaining_min_x={:?}",
+		remaining_min_x.map(|x| x.map(|v| v.to_string()).unwrap_or_else(|| "-".to_string()))
+	);
 
 	let mut buf = translucent_buffer.lock().unwrap();
 	let flush_keys: Vec<u64> = buf
