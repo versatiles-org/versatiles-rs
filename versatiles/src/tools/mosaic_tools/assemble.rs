@@ -303,6 +303,10 @@ async fn assemble_tiles(
 	// per-level suffix minimum x so we can flush translucent tiles early.
 	let (source_order, suffix_min_x): (Vec<usize>, Option<SuffixMinX>) = if let Some(pyramids) = prescanned_pyramids {
 		let (order, suffix) = build_sweep_order(paths.len(), pyramids);
+		log::debug!(
+			"source processing order (west to east): {:?}",
+			order.iter().map(|&i| &paths[i]).collect::<Vec<_>>()
+		);
 		(order, Some(suffix))
 	} else {
 		((0..paths.len()).collect(), None)
@@ -376,7 +380,7 @@ async fn assemble_tiles(
 			let done_count = done.lock().unwrap().len();
 			let total_heap: usize = buf.values().map(|(_, t)| t.estimated_heap_size()).sum();
 			log::info!(
-				"after source {}/{}: translucent_buffer={} tiles, ~{}MB estimated heap, done={}",
+				"after source {}/{}: translucent_buffer={} tiles, ~{}MB estimated heap, done={} tiles",
 				pos + 1,
 				source_order.len(),
 				buf.len(),
