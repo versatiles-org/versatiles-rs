@@ -257,4 +257,21 @@ mod tests {
 
 		Ok(())
 	}
+
+	#[cfg(feature = "cli")]
+	#[tokio::test]
+	async fn probe() -> Result<()> {
+		use versatiles_core::utils::PrettyPrint;
+
+		let reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
+		let runtime = crate::TilesRuntime::default();
+
+		let mut printer = PrettyPrint::new();
+		reader
+			.probe_container(&mut printer.get_category("container").await, &runtime)
+			.await?;
+		assert_eq!(printer.as_string().await, "container:\n  type: \"mock\"\n");
+
+		Ok(())
+	}
 }

@@ -591,6 +591,29 @@ mod tests {
 		Ok(())
 	}
 
+	#[cfg(feature = "cli")]
+	#[tokio::test]
+	async fn probe() -> Result<()> {
+		use versatiles_core::utils::PrettyPrint;
+
+		let reader = PMTilesReader::open(&PATH, TilesRuntime::default()).await?;
+		let runtime = TilesRuntime::default();
+
+		let mut printer = PrettyPrint::new();
+		reader
+			.probe_container(&mut printer.get_category("container").await, &runtime)
+			.await?;
+		let output = printer.as_string().await;
+		assert!(
+			output.contains("addressed tiles count: 878"),
+			"unexpected output: {output}"
+		);
+		assert!(output.contains("clustered: true"), "unexpected output: {output}");
+		assert!(output.contains("tile data size:"), "unexpected output: {output}");
+
+		Ok(())
+	}
+
 	#[tokio::test]
 	async fn tile_stream_matches_individual_reads() -> Result<()> {
 		let reader = PMTilesReader::open(&PATH, TilesRuntime::default()).await?;

@@ -504,6 +504,50 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn tile_size_stream() -> Result<()> {
+		let dir = TempDir::new()?;
+		dir.child("2/0/0.png").write_str("short")?;
+		dir.child("2/0/1.png").write_str("a longer tile")?;
+		dir.child("2/1/0.png").write_str("medium tile")?;
+
+		let reader = DirectoryReader::open(&dir)?;
+		let bbox = TileBBox::from_min_and_max(2, 0, 0, 1, 1)?;
+
+		let mut sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
+		sizes.sort_by_key(|(c, _)| (c.y, c.x));
+
+		assert_eq!(sizes.len(), 3);
+		assert_eq!(sizes[0].1, 5); // "short"
+		assert_eq!(sizes[1].1, 11); // "medium tile"
+		assert_eq!(sizes[2].1, 13); // "a longer tile"
+
+		Ok(())
+	}
+
+	#[cfg(feature = "cli")]
+	#[tokio::test]
+	async fn probe() -> Result<()> {
+		use versatiles_core::utils::PrettyPrint;
+
+		let dir = TempDir::new()?;
+		dir.child("2/0/0.png").write_str("tile data")?;
+		dir.child("2/1/0.png").write_str("tile data")?;
+
+		let reader = DirectoryReader::open(&dir)?;
+		let runtime = crate::TilesRuntime::default();
+
+		let mut printer = PrettyPrint::new();
+		reader
+			.probe_container(&mut printer.get_category("container").await, &runtime)
+			.await?;
+		let output = printer.as_string().await;
+		assert!(output.contains("tile count: 2"), "unexpected output: {output}");
+		assert!(output.contains("directory:"), "unexpected output: {output}");
+
+		Ok(())
+	}
+
+	#[tokio::test]
 	async fn tile_stream_matches_individual_reads() -> Result<()> {
 		let dir = TempDir::new()?;
 		// Create a small grid of tiles
