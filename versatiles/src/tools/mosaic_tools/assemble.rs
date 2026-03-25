@@ -199,7 +199,7 @@ type SuffixMinX = Vec<[Option<u32>; NUM_LEVELS]>;
 /// Build source processing order (west-to-east) and per-level suffix minimum x arrays.
 fn build_sweep_order(num_sources: usize, pyramids: &[TileBBoxPyramid]) -> (Vec<usize>, SuffixMinX) {
 	let mut order: Vec<usize> = (0..num_sources).collect();
-	order.sort_by(|&a, &b| western_edge(&pyramids[a]).total_cmp(&western_edge(&pyramids[b])));
+	order.sort_unstable_by(|&a, &b| western_edge(&pyramids[a]).total_cmp(&western_edge(&pyramids[b])));
 
 	let mut suffix: SuffixMinX = vec![[None; NUM_LEVELS]; order.len() + 1];
 	for pos in (0..order.len()).rev() {
@@ -258,11 +258,7 @@ fn sweep_flush(
 
 /// Compute the normalized western edge of a pyramid as the minimum fractional x across all levels.
 fn western_edge(pyramid: &TileBBoxPyramid) -> f64 {
-	pyramid
-		.iter_levels()
-		.filter_map(|bbox| bbox.x_min().ok().map(|x| f64::from(x) / f64::from(1u32 << bbox.level)))
-		.reduce(f64::min)
-		.unwrap_or(0.0)
+	pyramid.weighted_bbox().unwrap().x_min
 }
 
 /// Validate that a source's format and compression match the expected config.
@@ -444,6 +440,10 @@ async fn process_source_tiles(
 		}
 
 		let existing = translucent_buffer.lock().unwrap().remove(&key);
+
+		if tile.is_empty()? {
+			log::info!("skipping empty tile at {coord:?}");
+		}
 
 		if let Some((_, existing)) = existing {
 			match merge_two_tiles(tile, existing, config.quality[coord.level as usize], config.lossless) {
