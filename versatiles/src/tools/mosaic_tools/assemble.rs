@@ -457,7 +457,7 @@ async fn process_source_tiles(
 					}
 				}
 				Err(e) => {
-					log::warn!("Failed to merge tile at {coord:?}: {e}");
+					return Err(e.context(format!("Failed to merge tile at {coord:?}")));
 				}
 			}
 		} else if tile.is_opaque().unwrap_or(false) {
