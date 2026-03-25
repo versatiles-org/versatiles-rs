@@ -228,6 +228,8 @@ fn sweep_flush(
 	sink: &Arc<Box<dyn TileSink>>,
 	config: &AssembleConfig,
 ) -> Result<()> {
+	log::trace!("sweep-line flush: remaining_min_x={:?}", remaining_min_x);
+
 	let mut buf = translucent_buffer.lock().unwrap();
 	let flush_keys: Vec<u64> = buf
 		.iter()
@@ -237,9 +239,11 @@ fn sweep_flush(
 		})
 		.map(|(&key, _)| key)
 		.collect();
+
 	if flush_keys.is_empty() {
 		return Ok(());
 	}
+
 	let tiles: Vec<_> = flush_keys.iter().filter_map(|k| buf.remove(k)).collect();
 	drop(buf);
 
@@ -354,6 +358,8 @@ async fn assemble_tiles(
 			.get_reader_from_str(path)
 			.await
 			.with_context(|| format!("Failed to open container: {path}"))?;
+
+		log::debug!("processing source {}/{}: {path}", pos + 1, source_order.len());
 
 		let metadata = reader.metadata();
 		validate_source_format(path, metadata, &config)?;
