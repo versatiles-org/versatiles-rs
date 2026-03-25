@@ -375,6 +375,23 @@ async fn assemble_tiles(
 			sweep_flush(&suffix[pos + 1], &translucent_buffer, &sink, &config)?;
 		}
 
+		{
+			let buf = translucent_buffer.lock().unwrap();
+			let done_count = done.lock().unwrap().len();
+			let (with_content, with_blob) = buf.values().fold((0usize, 0usize), |(c, b), (_, t)| {
+				(c + usize::from(t.has_content()), b + usize::from(t.has_blob()))
+			});
+			log::info!(
+				"after source {}/{}: translucent_buffer={} (content={}, blob={}), done={}",
+				pos + 1,
+				source_order.len(),
+				buf.len(),
+				with_content,
+				with_blob,
+				done_count,
+			);
+		}
+
 		progress.inc(1);
 	}
 	progress.finish();
