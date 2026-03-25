@@ -1,12 +1,11 @@
 //! This module defines the `TileBBoxPyramid` struct, which represents a pyramid of tile bounding boxes
 //! across multiple zoom levels. It provides methods to create, manipulate, and query these bounding boxes.
 
-use anyhow::Result;
-use versatiles_derive::context;
-
 use crate::{GeoBBox, GeoCenter, MAX_ZOOM_LEVEL, TileBBox, TileCoord};
+use anyhow::{Result, ensure};
 use std::array::from_fn;
 use std::fmt;
+use versatiles_derive::context;
 
 /// A struct that represents a pyramid of tile bounding boxes across multiple zoom levels.
 ///
@@ -325,15 +324,42 @@ impl TileBBoxPyramid {
 		let center_lat = f64::midpoint(bbox.y_min, bbox.y_max);
 		Some(GeoCenter(center_lon, center_lat, zoom))
 	}
+
 	pub fn swap_xy(&mut self) {
 		self.level_bbox.iter_mut().for_each(|b| {
 			b.swap_xy();
 		});
 	}
+
 	pub fn flip_y(&mut self) {
 		self.level_bbox.iter_mut().for_each(|b| {
 			b.flip_y();
 		});
+	}
+
+	pub fn weighted_bbox(&self) -> Result<GeoBBox> {
+		let mut x_min_sum: f64 = 0.0;
+		let mut y_min_sum: f64 = 0.0;
+		let mut x_max_sum: f64 = 0.0;
+		let mut y_max_sum: f64 = 0.0;
+		let mut weight_sum: f64 = 0.0;
+		for l in self.level_bbox.iter() {
+			if let Some(bbox) = l.to_geo_bbox() {
+				let weight = l.count_tiles() as f64;
+				x_min_sum += bbox.x_min * weight;
+				y_min_sum += bbox.y_min * weight;
+				x_max_sum += bbox.x_max * weight;
+				y_max_sum += bbox.y_max * weight;
+				weight_sum += weight;
+			}
+		}
+		ensure!(weight_sum > 0.0, "Cannot compute weighted bbox for an empty pyramid");
+		GeoBBox::new(
+			x_min_sum / weight_sum,
+			y_min_sum / weight_sum,
+			x_max_sum / weight_sum,
+			y_max_sum / weight_sum,
+		)
 	}
 }
 
