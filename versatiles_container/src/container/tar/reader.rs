@@ -39,6 +39,8 @@ use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path, sync::Arc};
 use tar::{Archive, EntryType};
+#[cfg(feature = "cli")]
+use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
 	Blob, ByteRange, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream,
 	compression::decompress,
@@ -331,6 +333,14 @@ impl TileSource for TarTilesReader {
 			}
 		}))
 	}
+
+	#[cfg(feature = "cli")]
+	async fn probe_container(&self, print: &mut PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
+		print.add_key_value("tile count", &self.tile_map.len()).await;
+		let total_size: u64 = self.tile_map.values().map(|r| r.length).sum();
+		print.add_key_value("total stored size", &total_size).await;
+		Ok(())
+	}
 }
 
 impl Debug for TarTilesReader {
@@ -415,8 +425,8 @@ pub mod tests {
 			.probe_container(&mut printer.get_category("container").await, &runtime)
 			.await?;
 		assert_eq!(
-			printer.as_string().await,
-			"container:\n  deep container probing is not implemented for this source\n"
+			printer.as_string().await.split('\n').collect::<Vec<_>>(),
+			["container:", "  tile count: 341", "  total stored size: 26_257", ""]
 		);
 
 		let mut printer = PrettyPrint::new();

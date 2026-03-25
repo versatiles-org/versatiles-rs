@@ -462,7 +462,24 @@ impl TileSource for PMTilesReader {
 	/// Printed under the `"header"` key for human‑readable inspection.
 	#[context("probing PMTiles container metadata")]
 	async fn probe_container(&self, print: &mut PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
-		print.add_key_value("header", &self.header).await;
+		let h = &self.header;
+		print
+			.add_key_value("addressed tiles count", &h.addressed_tiles_count)
+			.await;
+		print.add_key_value("tile entries count", &h.tile_entries_count).await;
+		print.add_key_value("tile contents count", &h.tile_contents_count).await;
+		print.add_key_value("clustered", &h.clustered).await;
+		print
+			.add_key_value("internal compression", &h.internal_compression)
+			.await;
+		print.add_key_value("tile type", &h.tile_type).await;
+		print
+			.add_key_value("zoom range", &format!("{}..{}", h.min_zoom, h.max_zoom))
+			.await;
+		print.add_key_value("root dir size", &h.root_dir.length).await;
+		print.add_key_value("metadata size", &h.metadata.length).await;
+		print.add_key_value("leaf dirs size", &h.leaf_dirs.length).await;
+		print.add_key_value("tile data size", &h.tile_data.length).await;
 		Ok(())
 	}
 }

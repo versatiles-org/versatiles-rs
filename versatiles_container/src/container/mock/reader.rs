@@ -24,9 +24,13 @@
 
 use std::sync::Arc;
 
+#[cfg(feature = "cli")]
+use crate::TilesRuntime;
 use crate::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use anyhow::Result;
 use async_trait::async_trait;
+#[cfg(feature = "cli")]
+use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
 	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream, compression::compress,
 };
@@ -156,6 +160,12 @@ impl TileSource for MockReader {
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			MockReader::create_mock_tile(&coord, &bbox_pyramid, format, compression).ok()?
 		}))
+	}
+
+	#[cfg(feature = "cli")]
+	async fn probe_container(&self, print: &mut PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
+		print.add_key_value("type", &"mock").await;
+		Ok(())
 	}
 }
 

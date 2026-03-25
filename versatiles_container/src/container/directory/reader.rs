@@ -38,6 +38,8 @@
 //! ## Errors
 //! Errors are returned if the directory is not absolute, does not exist, is not a directory, contains no tiles, or if tiles have inconsistent formats or compressions.
 
+#[cfg(feature = "cli")]
+use crate::TilesRuntime;
 use crate::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
@@ -49,6 +51,8 @@ use std::{
 	path::{Path, PathBuf},
 	sync::Arc,
 };
+#[cfg(feature = "cli")]
+use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
 	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream,
 	compression::decompress,
@@ -276,6 +280,13 @@ impl TileSource for DirectoryReader {
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			DirectoryReader::lookup_tile(&coord, &tile_map, tile_compression, tile_format).ok()?
 		}))
+	}
+
+	#[cfg(feature = "cli")]
+	async fn probe_container(&self, print: &mut PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
+		print.add_key_value("directory", &self.dir.display().to_string()).await;
+		print.add_key_value("tile count", &self.tile_map.len()).await;
+		Ok(())
 	}
 }
 

@@ -66,6 +66,9 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
+#[cfg(feature = "cli")]
+use versatiles_core::utils::PrettyPrint;
+
 /// Reader for `MBTiles` (`SQLite`) containers.
 ///
 /// Opens a `SQLite` database with `metadata` and `tiles` tables, merges metadata into
@@ -343,6 +346,56 @@ impl TileSource for MBTilesReader {
 		&self.metadata
 	}
 
+	#[cfg(feature = "cli")]
+	async fn probe_container(&self, print: &mut PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
+		// Collect all SQLite data synchronously (Connection is not Send)
+		let tile_count: i64;
+		let total_size: i64;
+		let zoom_levels: String;
+		let entries: Vec<(String, String)>;
+		{
+			let conn = self.pool.get()?;
+			tile_count = conn.query_row("SELECT COUNT(*) FROM tiles", [], |row| row.get(0))?;
+			total_size = conn.query_row("SELECT COALESCE(SUM(LENGTH(tile_data)), 0) FROM tiles", [], |row| {
+				row.get(0)
+			})?;
+			zoom_levels = {
+				let mut stmt = conn.prepare("SELECT DISTINCT zoom_level FROM tiles ORDER BY zoom_level")?;
+				let levels: Vec<String> = stmt
+					.query_map([], |row| row.get::<_, i32>(0))?
+					.filter_map(std::result::Result::ok)
+					.map(|z| z.to_string())
+					.collect();
+				levels.join(", ")
+			};
+			entries = {
+				let mut stmt = conn.prepare("SELECT name, value FROM metadata ORDER BY name")?;
+				stmt
+					.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+					.filter_map(std::result::Result::ok)
+					.collect()
+			};
+		}
+
+		print.add_key_value("tile count", &tile_count).await;
+		print.add_key_value("total data size", &total_size).await;
+		print.add_key_value("zoom levels", &zoom_levels).await;
+
+		if !entries.is_empty() {
+			let p = print.get_list("metadata").await;
+			for (name, value) in &entries {
+				let display_value = if value.len() > 100 {
+					format!("{}...", &value[..100])
+				} else {
+					value.clone()
+				};
+				p.add_key_value(name, &display_value).await;
+			}
+		}
+
+		Ok(())
+	}
+
 	/// Fetch a single tile by XYZ coordinate.
 	///
 	/// Coordinates are converted to TMS row indexing internally (via `y' = 2^z - 1 - y`).
@@ -502,8 +555,27 @@ pub mod tests {
 			.probe_container(&mut printer.get_category("container").await, &runtime)
 			.await?;
 		assert_eq!(
-			printer.as_string().await,
-			"container:\n  deep container probing is not implemented for this source\n"
+			printer.as_string().await.split('\n').collect::<Vec<_>>(),
+			[
+				"container:",
+				"  tile count: 878",
+				"  total data size: 25_869_046",
+				"  zoom levels: \"0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14\"",
+				"  metadata:",
+				"    author: \"OpenStreetMap contributors, Geofabrik GmbH\"",
+				"    bounds: \"13.082830,52.334460,13.762245,52.678300\"",
+				"    center: \"13.422538,52.506380,7\"",
+				"    description: \"Tile config for simple vector tiles schema\"",
+				"    format: \"pbf\"",
+				"    json: \"{\\\"vector_layers\\\":[{\\\"id\\\":\\\"place_labels\\\",\\\"fields\\\":{\\\"kind\\\":\\\"String\\\",\\\"name\\\":\\\"String\\\",\\\"name_de\\\":\\\"String\\\",...\"",
+				"    license: \"Open Database License 1.0\"",
+				"    maxzoom: \"14\"",
+				"    minzoom: \"0\"",
+				"    name: \"Tilemaker to Geofabrik Vector Tiles schema\"",
+				"    type: \"baselayer\"",
+				"    version: \"3.0\"",
+				""
+			]
 		);
 
 		let mut printer = PrettyPrint::new();

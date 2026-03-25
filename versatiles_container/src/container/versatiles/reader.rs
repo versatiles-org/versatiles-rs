@@ -400,6 +400,14 @@ impl TileSource for VersaTilesReader {
 	#[cfg(feature = "cli")]
 	#[context("probing versatiles container metadata")]
 	async fn probe_container(&self, print: &mut PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
+		print.add_key_value("tile format", &self.header.tile_format).await;
+		print.add_key_value("compression", &self.header.compression).await;
+		print
+			.add_key_value(
+				"zoom range",
+				&format!("{}..{}", self.header.zoom_range[0], self.header.zoom_range[1]),
+			)
+			.await;
 		print.add_key_value("meta size", &self.header.meta_range.length).await;
 		print.add_key_value("block count", &self.block_index.len()).await;
 
@@ -591,6 +599,9 @@ mod tests {
 			printer.as_string().await.split('\n').collect::<Vec<_>>(),
 			[
 				"container:",
+				"  tile format: MVT",
+				"  compression: Gzip",
+				"  zoom range: \"0..4\"",
 				"  meta size: 58",
 				"  block count: 5",
 				"  sum of block index sizes: 70",
