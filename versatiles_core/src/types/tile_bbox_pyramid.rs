@@ -343,7 +343,7 @@ impl TileBBoxPyramid {
 		let mut x_max_sum: f64 = 0.0;
 		let mut y_max_sum: f64 = 0.0;
 		let mut weight_sum: f64 = 0.0;
-		for l in self.level_bbox.iter() {
+		for l in &self.level_bbox {
 			if let Some(bbox) = l.to_geo_bbox() {
 				let weight = l.count_tiles() as f64;
 				x_min_sum += bbox.x_min * weight;
