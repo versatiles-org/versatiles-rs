@@ -499,7 +499,7 @@ pub mod tests {
 
 		let mut printer = PrettyPrint::new();
 		reader
-			.probe_container(&printer.get_category("container").await, &runtime)
+			.probe_container(&mut printer.get_category("container").await, &runtime)
 			.await?;
 		assert_eq!(
 			printer.as_string().await,
@@ -508,7 +508,7 @@ pub mod tests {
 
 		let mut printer = PrettyPrint::new();
 		reader
-			.probe_tiles(&printer.get_category("tiles").await, &runtime)
+			.probe_tiles(&mut printer.get_category("tiles").await, &runtime)
 			.await?;
 
 		Ok(())

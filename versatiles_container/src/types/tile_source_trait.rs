@@ -123,7 +123,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		if matches!(level, Container | Tiles | TileContents) {
 			log::debug!("probing source {:?} at depth {:?}", self.source_type(), level);
 			self
-				.probe_container(&print.get_category("container").await, runtime)
+				.probe_container(&mut print.get_category("container").await, runtime)
 				.await?;
 		}
 
@@ -133,7 +133,9 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 				self.tilejson().as_json_value(),
 				level
 			);
-			self.probe_tiles(&print.get_category("tiles").await, runtime).await?;
+			self
+				.probe_tiles(&mut print.get_category("tiles").await, runtime)
+				.await?;
 		}
 
 		if matches!(level, TileContents) {
@@ -143,7 +145,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 				level
 			);
 			self
-				.probe_tile_contents(&print.get_category("tile contents").await, runtime)
+				.probe_tile_contents(&mut print.get_category("tile contents").await, runtime)
 				.await?;
 		}
 
@@ -169,7 +171,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	///
 	/// Container readers may override to provide format-specific details.
 	#[cfg(feature = "cli")]
-	async fn probe_container(&self, print: &PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
+	async fn probe_container(&self, print: &mut PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
 		print
 			.add_warning("deep container probing is not implemented for this source")
 			.await;
@@ -178,7 +180,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 
 	/// Scans all tiles, reporting average size and the top-10 biggest tiles.
 	#[cfg(feature = "cli")]
-	async fn probe_tiles(&self, print: &PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
+	async fn probe_tiles(&self, print: &mut PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
 		#[derive(Debug)]
 		#[allow(dead_code)]
 		struct Entry {
@@ -192,17 +194,22 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		let mut min_size: u64 = 0;
 		let mut size_sum: u64 = 0;
 		let mut tile_count: u64 = 0;
+		let mut level_stats: Vec<(u8, u64, u64)> = Vec::new();
 
 		let total_tiles = self.metadata().bbox_pyramid.count_tiles();
 		let progress = runtime.create_progress("scanning tiles", total_tiles);
 
 		for bbox in self.metadata().bbox_pyramid.iter_levels() {
+			let mut level_size_sum: u64 = 0;
+			let mut level_count: u64 = 0;
 			let mut stream = self.get_tile_size_stream(*bbox).await?;
 			while let Some((coord, size_u32)) = stream.next().await {
 				let size = u64::from(size_u32);
 
 				tile_count += 1;
 				size_sum += size;
+				level_size_sum += size;
+				level_count += 1;
 				progress.inc(1);
 
 				if size < min_size {
@@ -226,6 +233,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 				}
 				min_size = biggest_tiles.last().expect("biggest_tiles is non-empty").size;
 			}
+			level_stats.push((bbox.level, level_count, level_size_sum));
 		}
 		progress.finish();
 
@@ -235,9 +243,15 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 				.add_key_value("average tile size", &size_sum.div_euclid(tile_count))
 				.await;
 
+			let p = print.get_list("biggest tiles").await;
 			for (index, entry) in biggest_tiles.iter().enumerate() {
-				print
-					.add_key_value(&format!("#{} biggest tile", index + 1), entry)
+				p.add_key_value(&format!("#{}", index + 1), entry).await;
+			}
+
+			let p = print.get_list("levels").await;
+			for (level, count, size) in &level_stats {
+				let avg = if *count > 0 { size / count } else { 0 };
+				p.add_key_value(level, &format!("count={count}, size_sum={size}, avg_size={avg}"))
 					.await;
 			}
 		} else {
@@ -249,7 +263,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 
 	/// Writes sample tile content diagnostics or a placeholder if not implemented.
 	#[cfg(feature = "cli")]
-	async fn probe_tile_contents(&self, print: &PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
+	async fn probe_tile_contents(&self, print: &mut PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
 		print
 			.add_warning("deep tile contents probing is not implemented for this source")
 			.await;
@@ -379,7 +393,7 @@ mod tests {
 			let mut print = PrettyPrint::new();
 			let runtime = TilesRuntime::default();
 			reader
-				.probe_tile_contents(&print.get_category("tile contents").await, &runtime)
+				.probe_tile_contents(&mut print.get_category("tile contents").await, &runtime)
 				.await?;
 		}
 		Ok(())
@@ -398,9 +412,9 @@ mod tests {
 	#[tokio::test]
 	async fn test_probe_container() -> Result<()> {
 		let reader = TestReader::new_dummy();
-		let print = PrettyPrint::new();
+		let mut print = PrettyPrint::new();
 		let runtime = TilesRuntime::default();
-		reader.probe_container(&print, &runtime).await?;
+		reader.probe_container(&mut print, &runtime).await?;
 		Ok(())
 	}
 
@@ -408,9 +422,9 @@ mod tests {
 	#[tokio::test]
 	async fn test_probe_tiles() -> Result<()> {
 		let reader = TestReader::new_dummy();
-		let print = PrettyPrint::new();
+		let mut print = PrettyPrint::new();
 		let runtime = TilesRuntime::default();
-		reader.probe_tiles(&print, &runtime).await?;
+		reader.probe_tiles(&mut print, &runtime).await?;
 		Ok(())
 	}
 

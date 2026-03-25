@@ -399,7 +399,7 @@ impl TileSource for VersaTilesReader {
 	// deep probe of container meta
 	#[cfg(feature = "cli")]
 	#[context("probing versatiles container metadata")]
-	async fn probe_container(&self, print: &PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
+	async fn probe_container(&self, print: &mut PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
 		print.add_key_value("meta size", &self.header.meta_range.length).await;
 		print.add_key_value("block count", &self.block_index.len()).await;
 
@@ -585,21 +585,50 @@ mod tests {
 
 		let mut printer = PrettyPrint::new();
 		reader
-			.probe_container(&printer.get_category("container").await, &runtime)
+			.probe_container(&mut printer.get_category("container").await, &runtime)
 			.await?;
 		assert_eq!(
-			printer.as_string().await,
-			"container:\n  meta size: 58\n  block count: 5\n  sum of block index sizes: 70\n  sum of block tiles sizes: 385\n"
+			printer.as_string().await.split('\n').collect::<Vec<_>>(),
+			[
+				"container:",
+				"  meta size: 58",
+				"  block count: 5",
+				"  sum of block index sizes: 70",
+				"  sum of block tiles sizes: 385",
+				""
+			]
 		);
 
 		let mut printer = PrettyPrint::new();
 		reader
-			.probe_tiles(&printer.get_category("tiles").await, &runtime)
+			.probe_tiles(&mut printer.get_category("tiles").await, &runtime)
 			.await?;
 		let output = printer.as_string().await;
-		assert!(
-			output.starts_with("tiles:\n  tile count: 341\n  average tile size: 77\n  #1 biggest tile:"),
-			"unexpected probe_tiles output: {output}"
+		assert_eq!(
+			output.split('\n').collect::<Vec<_>>(),
+			[
+				"tiles:",
+				"  tile count: 341",
+				"  average tile size: 77",
+				"  biggest tiles:",
+				"    #1: Entry { size: 77, x: 0, y: 0, z: 1 }",
+				"    #2: Entry { size: 77, x: 1, y: 0, z: 1 }",
+				"    #3: Entry { size: 77, x: 0, y: 1, z: 1 }",
+				"    #4: Entry { size: 77, x: 1, y: 1, z: 1 }",
+				"    #5: Entry { size: 77, x: 0, y: 0, z: 2 }",
+				"    #6: Entry { size: 77, x: 1, y: 0, z: 2 }",
+				"    #7: Entry { size: 77, x: 2, y: 0, z: 2 }",
+				"    #8: Entry { size: 77, x: 3, y: 0, z: 2 }",
+				"    #9: Entry { size: 77, x: 0, y: 1, z: 2 }",
+				"    #10: Entry { size: 77, x: 15, y: 15, z: 4 }",
+				"  levels:",
+				"    0: \"count=1, size_sum=77, avg_size=77\"",
+				"    1: \"count=4, size_sum=308, avg_size=77\"",
+				"    2: \"count=16, size_sum=1232, avg_size=77\"",
+				"    3: \"count=64, size_sum=4928, avg_size=77\"",
+				"    4: \"count=256, size_sum=19712, avg_size=77\"",
+				""
+			]
 		);
 
 		Ok(())
