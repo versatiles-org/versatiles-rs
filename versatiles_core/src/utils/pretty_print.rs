@@ -115,6 +115,50 @@ impl PrettyPrint {
 		self.write_line(get_formatted_value(value)).await;
 	}
 
+	/// Writes a named table with column separators and a header separator line.
+	///
+	/// Each row is a `Vec<String>` of cell values. Columns are right-aligned and
+	/// padded to the widest value in each column. Headers are displayed in white bold.
+	pub async fn add_table(&self, name: &str, headers: &[&str], rows: &[Vec<String>]) {
+		let col_count = headers.len();
+
+		// Compute column widths from headers and rows
+		let mut widths: Vec<usize> = headers.iter().map(|h| h.len()).collect();
+		for row in rows {
+			for (i, cell) in row.iter().enumerate().take(col_count) {
+				widths[i] = widths[i].max(cell.len());
+			}
+		}
+
+		// Table name
+		self.write_line(name.white().to_string() + ":").await;
+
+		// Format header
+		let header_cells: Vec<String> = headers
+			.iter()
+			.enumerate()
+			.map(|(i, h)| format!("{:>width$}", h, width = widths[i]))
+			.collect();
+		self
+			.write_line(format!("  {}", header_cells.join(" │ ").white().bold()))
+			.await;
+
+		// Separator line
+		let sep_cells: Vec<String> = widths.iter().map(|w| "─".repeat(*w)).collect();
+		self.write_line(format!("  {}", sep_cells.join("─┼─"))).await;
+
+		// Format rows
+		for row in rows {
+			let cells: Vec<String> = row
+				.iter()
+				.enumerate()
+				.take(col_count)
+				.map(|(i, cell)| format!("{:>width$}", cell, width = widths[i]))
+				.collect();
+			self.write_line(format!("  {}", cells.join(" │ ").bright_cyan())).await;
+		}
+	}
+
 	async fn write_line<T: Display>(&self, line: T) {
 		self
 			.printer
@@ -186,6 +230,33 @@ mod tests {
 		assert_eq!(
 			&result,
 			"test_warning_1\ntest_category_1:\n  test_list_1:\n    string_1: 4\n  test_warning_2\ntest_warning_3\n"
+		);
+	}
+
+	#[tokio::test]
+	async fn test_add_table() {
+		let printer = PrettyPrint::new();
+		printer
+			.add_table(
+				"data",
+				&["name", "count"],
+				&[
+					vec!["a".to_string(), "1".to_string()],
+					vec!["bb".to_string(), "200".to_string()],
+				],
+			)
+			.await;
+		let result = printer.as_string().await;
+		assert_eq!(
+			result.split('\n').collect::<Vec<_>>(),
+			[
+				"data:",
+				"  name │ count",
+				"  ─────┼──────",
+				"     a │     1",
+				"    bb │   200",
+				""
+			]
 		);
 	}
 

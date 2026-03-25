@@ -180,7 +180,20 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 
 	/// Scans all tiles, reporting average size and the top-10 biggest tiles.
 	#[cfg(feature = "cli")]
+	#[allow(clippy::too_many_lines)]
 	async fn probe_tiles(&self, print: &mut PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
+		fn format_integer_str(value: u64) -> String {
+			let s = value.to_string();
+			let mut result = String::new();
+			for (i, c) in s.chars().enumerate() {
+				if i > 0 && (s.len() - i).is_multiple_of(3) {
+					result.push('_');
+				}
+				result.push(c);
+			}
+			result
+		}
+
 		#[derive(Debug)]
 		#[allow(dead_code)]
 		struct Entry {
@@ -243,17 +256,42 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 				.add_key_value("average tile size", &size_sum.div_euclid(tile_count))
 				.await;
 
-			let p = print.get_list("biggest tiles").await;
-			for (index, entry) in biggest_tiles.iter().enumerate() {
-				p.add_key_value(&format!("#{}", index + 1), entry).await;
-			}
+			let rows: Vec<Vec<String>> = biggest_tiles
+				.iter()
+				.enumerate()
+				.map(|(i, e)| {
+					vec![
+						format!("{}", i + 1),
+						format!("{}", e.z),
+						format!("{}", e.x),
+						format!("{}", e.y),
+						format_integer_str(e.size),
+					]
+				})
+				.collect();
+			print
+				.add_table("biggest tiles", &["#", "z", "x", "y", "size"], &rows)
+				.await;
 
-			let p = print.get_list("levels").await;
-			for (level, count, size) in &level_stats {
-				let avg = if *count > 0 { size / count } else { 0 };
-				p.add_key_value(level, &format!("count={count}, size_sum={size}, avg_size={avg}"))
-					.await;
-			}
+			let rows: Vec<Vec<String>> = level_stats
+				.iter()
+				.map(|(level, count, size)| {
+					let avg = if *count > 0 { size / count } else { 0 };
+					vec![
+						format!("{level}"),
+						format_integer_str(*count),
+						format_integer_str(*size),
+						format_integer_str(avg),
+					]
+				})
+				.collect();
+			print
+				.add_table(
+					"tile size analysis per level",
+					&["level", "count", "size_sum", "avg_size"],
+					&rows,
+				)
+				.await;
 		} else {
 			print.add_warning("no tiles found").await;
 		}
