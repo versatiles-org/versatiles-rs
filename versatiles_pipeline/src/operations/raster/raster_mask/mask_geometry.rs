@@ -322,24 +322,35 @@ impl MaskGeometry {
 		raw_signed + self.buffer_meters
 	}
 
-	/// Convert signed distance to alpha value for pixel masking.
+	/// Convert signed distance to alpha value using the configured blur.
+	#[must_use]
+	#[cfg(test)]
+	pub fn distance_to_alpha(&self, signed_dist: f64) -> u8 {
+		self.distance_to_alpha_with_blur(signed_dist, self.blur_meters)
+	}
+
+	/// Convert signed distance to alpha value with an explicit blur distance.
+	///
+	/// Used by `compute_alpha_grid` to apply per-tile antialiasing
+	/// (effective blur = max of configured blur and 1 pixel size).
 	///
 	/// # Arguments
 	/// * `signed_dist` - Signed distance in meters
+	/// * `blur` - Blur distance in meters
 	///
 	/// # Returns
 	/// Alpha value in range [0, 255]
 	#[must_use]
-	pub fn distance_to_alpha(&self, signed_dist: f64) -> u8 {
-		if self.blur_meters <= 0.0 {
+	fn distance_to_alpha_with_blur(&self, signed_dist: f64, blur: f64) -> u8 {
+		if blur <= 0.0 {
 			return if signed_dist > 0.0 { 255 } else { 0 };
 		}
 
 		// Normalize to [0, 1] over blur range
-		// At signed_dist = blur_meters: t = 1.0 (fully inside)
+		// At signed_dist = blur: t = 1.0 (fully inside)
 		// At signed_dist = 0: t = 0.5 (halfway)
-		// At signed_dist = -blur_meters: t = 0.0 (fully outside, but this is actually beyond blur)
-		let t = f64::midpoint(signed_dist / self.blur_meters, 1.0);
+		// At signed_dist = -blur: t = 0.0 (fully outside)
+		let t = f64::midpoint(signed_dist / blur, 1.0);
 		let t = t.clamp(0.0, 1.0);
 
 		let alpha = self.blur_function.interpolate(t);
@@ -393,6 +404,9 @@ impl MaskGeometry {
 	/// as fully inside, fully outside, or partial, and only computes per-pixel
 	/// values for partial regions.
 	///
+	/// Applies automatic antialiasing: the effective blur is at least 1 pixel wide,
+	/// producing smooth edges even when no explicit blur is configured.
+	///
 	/// # Arguments
 	/// * `tile_bbox` - Tile bounding box in Mercator meters [x_min, y_min, x_max, y_max]
 	/// * `width` - Tile width in pixels
@@ -405,6 +419,10 @@ impl MaskGeometry {
 		let [x_min, y_min, x_max, y_max] = tile_bbox;
 		let px_width = (x_max - x_min) / f64::from(width);
 		let px_height = (y_max - y_min) / f64::from(height);
+
+		// Use at least 1 pixel of blur for antialiasing
+		let pixel_size = px_width.max(px_height);
+		let effective_blur = self.blur_meters.max(pixel_size);
 
 		let mut alpha = vec![0u8; (width * height) as usize];
 
@@ -457,7 +475,8 @@ impl MaskGeometry {
 								let merc_y = y_max - (f64::from(py) + 0.5) * px_height;
 
 								let signed_dist = self.signed_distance([merc_x, merc_y]);
-								alpha[(py * width + px) as usize] = self.distance_to_alpha(signed_dist);
+								alpha[(py * width + px) as usize] =
+									self.distance_to_alpha_with_blur(signed_dist, effective_blur);
 							}
 						}
 					}
