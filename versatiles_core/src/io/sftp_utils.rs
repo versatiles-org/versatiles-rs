@@ -31,30 +31,53 @@ pub fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Session> 
 	session.set_tcp_stream(tcp);
 	session.handshake()?;
 
-	// Authenticate
+	// Authenticate — try methods in priority order, stop on first success
 	let password = url.password();
-	let auth_result = if let Some(password) = password {
-		session.userauth_password(username, password)
-	} else {
-		Err(ssh2::Error::from_errno(ssh2::ErrorCode::Session(-1)))
-	};
-
-	if auth_result.is_err()
-		&& let Some(identity) = identity_file
-		&& identity.exists()
-	{
-		let _ = session.userauth_pubkey_file(username, None, identity, None);
+	if let Some(password) = password {
+		log::debug!("SFTP auth: trying password for {username}@{host}:{port}");
+		if session.userauth_password(username, password).is_ok() && session.authenticated() {
+			log::debug!("SFTP auth: password succeeded");
+			return Ok(session);
+		}
+		log::debug!("SFTP auth: password failed");
 	}
 
-	if !session.authenticated() {
-		let agent_result = try_agent_auth(&session, username);
-		if agent_result.is_err() {
-			let _ = try_config_key_auth(&session, username, host);
-			if !session.authenticated() {
-				try_key_auth(&session, username)
-					.with_context(|| format!("all authentication methods failed for {username}@{host}:{port}"))?;
+	if let Some(identity) = identity_file {
+		log::debug!("SFTP auth: trying identity file {identity:?} for {username}@{host}:{port}");
+		if identity.exists() {
+			match session.userauth_pubkey_file(username, None, identity, None) {
+				Ok(()) if session.authenticated() => {
+					log::debug!("SFTP auth: identity file succeeded");
+					return Ok(session);
+				}
+				Ok(()) => log::debug!("SFTP auth: identity file returned Ok but not authenticated"),
+				Err(e) => log::debug!("SFTP auth: identity file failed: {e}"),
 			}
+		} else {
+			log::debug!("SFTP auth: identity file {identity:?} does not exist");
 		}
+	}
+
+	log::debug!("SFTP auth: trying SSH agent for {username}@{host}:{port}");
+	if try_agent_auth(&session, username).is_ok() && session.authenticated() {
+		log::debug!("SFTP auth: agent succeeded");
+		return Ok(session);
+	}
+	log::debug!("SFTP auth: agent failed");
+
+	log::debug!("SFTP auth: trying ~/.ssh/config keys for {username}@{host}:{port}");
+	if try_config_key_auth(&session, username, host).is_ok() && session.authenticated() {
+		log::debug!("SFTP auth: config key succeeded");
+		return Ok(session);
+	}
+	log::debug!("SFTP auth: config key failed");
+
+	log::debug!("SFTP auth: trying default key files for {username}@{host}:{port}");
+	try_key_auth(&session, username)
+		.with_context(|| format!("all authentication methods failed for {username}@{host}:{port}"))?;
+
+	if !session.authenticated() {
+		bail!("SSH authentication failed for {username}@{host}:{port}");
 	}
 
 	if !session.authenticated() {
