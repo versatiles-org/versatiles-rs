@@ -228,7 +228,7 @@ fn sweep_flush(
 	sink: &Arc<Box<dyn TileSink>>,
 	config: &AssembleConfig,
 ) -> Result<()> {
-	log::trace!("sweep-line flush: remaining_min_x={:?}", remaining_min_x);
+	log::debug!("sweep-line flush: remaining_min_x={:?}", remaining_min_x);
 
 	let mut buf = translucent_buffer.lock().unwrap();
 	let flush_keys: Vec<u64> = buf
@@ -385,7 +385,7 @@ async fn assemble_tiles(
 			let buf = translucent_buffer.lock().unwrap();
 			let done_count = done.lock().unwrap().len();
 			let total_heap: usize = buf.values().map(|(_, t)| t.estimated_heap_size()).sum();
-			log::trace!(
+			log::debug!(
 				"after source {}/{}: translucent_buffer={} tiles, ~{}MB estimated heap, done={} tiles",
 				pos + 1,
 				source_order.len(),
