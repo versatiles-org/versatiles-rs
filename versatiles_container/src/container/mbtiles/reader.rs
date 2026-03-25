@@ -425,6 +425,48 @@ impl TileSource for MBTilesReader {
 		}
 	}
 
+	#[context("streaming tile sizes for bbox {:?}", bbox)]
+	async fn get_tile_size_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+		if bbox.is_empty() {
+			return Ok(TileStream::empty());
+		}
+
+		bbox.flip_y();
+
+		let conn = self.pool.get().unwrap();
+		let mut stmt = conn
+			.prepare(
+				"SELECT tile_column, tile_row, zoom_level, LENGTH(tile_data) FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?",
+			)
+			.unwrap();
+
+		let vec: Vec<(TileCoord, u32)> = stmt
+			.query_map(
+				[
+					bbox.x_min()?,
+					bbox.x_max()?,
+					bbox.y_min()?,
+					bbox.y_max()?,
+					u32::from(bbox.level),
+				],
+				move |row| {
+					let x = row.get::<_, u32>(0)?;
+					let y = row.get::<_, u32>(1)?;
+					let level = row.get::<_, u8>(2)?;
+					let mut coord = TileCoord::new(level, x, y).unwrap();
+					coord.flip_y();
+					let size = row.get::<_, i64>(3)?.max(0);
+					#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+					Ok((coord, size as u32))
+				},
+			)
+			.unwrap()
+			.filter_map(std::result::Result::ok)
+			.collect();
+
+		Ok(TileStream::from_vec(vec))
+	}
+
 	/// Stream tiles within a single-zoom bounding box.
 	///
 	/// The input bbox is XYZ; rows are flipped to TMS for the query and flipped back on output.

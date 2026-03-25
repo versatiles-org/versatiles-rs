@@ -334,6 +334,14 @@ impl TileSource for TarTilesReader {
 		}))
 	}
 
+	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+		let tile_map = Arc::clone(&self.tile_map);
+		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
+			let range = tile_map.get(&coord)?;
+			u32::try_from(range.length).ok()
+		}))
+	}
+
 	#[cfg(feature = "cli")]
 	async fn probe_container(&self, print: &mut PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
 		print.add_key_value("tile count", &self.tile_map.len()).await;

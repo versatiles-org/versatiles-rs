@@ -282,6 +282,15 @@ impl TileSource for DirectoryReader {
 		}))
 	}
 
+	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+		let tile_map = Arc::clone(&self.tile_map);
+		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
+			let path = tile_map.get(&coord)?;
+			let size = std::fs::metadata(path).ok()?.len();
+			u32::try_from(size).ok()
+		}))
+	}
+
 	#[cfg(feature = "cli")]
 	async fn probe_container(&self, print: &mut PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
 		print.add_key_value("directory", &self.dir.display().to_string()).await;
