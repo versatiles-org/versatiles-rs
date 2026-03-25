@@ -399,7 +399,7 @@ impl TileSource for VersaTilesReader {
 	// deep probe of container meta
 	#[cfg(feature = "cli")]
 	#[context("probing versatiles container metadata")]
-	async fn probe_container(&self, print: &PrettyPrint) -> Result<()> {
+	async fn probe_container(&self, print: &PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
 		print.add_key_value("meta size", &self.header.meta_range.length).await;
 		print.add_key_value("block count", &self.block_index.len()).await;
 
@@ -581,19 +581,25 @@ mod tests {
 	#[cfg(feature = "cli")]
 	async fn probe() -> Result<()> {
 		let (_, reader) = mk_reader().await?;
+		let runtime = TilesRuntime::default();
 
 		let mut printer = PrettyPrint::new();
-		reader.probe_container(&printer.get_category("container").await).await?;
+		reader
+			.probe_container(&printer.get_category("container").await, &runtime)
+			.await?;
 		assert_eq!(
 			printer.as_string().await,
 			"container:\n  meta size: 58\n  block count: 5\n  sum of block index sizes: 70\n  sum of block tiles sizes: 385\n"
 		);
 
 		let mut printer = PrettyPrint::new();
-		reader.probe_tiles(&printer.get_category("tiles").await).await?;
-		assert_eq!(
-			printer.as_string().await.get(0..67).unwrap(),
-			"tiles:\n  average tile size: 77\n  #1 biggest tile: Entry { size: 77,"
+		reader
+			.probe_tiles(&printer.get_category("tiles").await, &runtime)
+			.await?;
+		let output = printer.as_string().await;
+		assert!(
+			output.starts_with("tiles:\n  tile count: 341\n  average tile size: 77\n  #1 biggest tile:"),
+			"unexpected probe_tiles output: {output}"
 		);
 
 		Ok(())

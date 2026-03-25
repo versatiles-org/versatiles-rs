@@ -32,7 +32,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	};
 
 	log::debug!("probing {:?} at depth {:?}", arguments.filename, level);
-	reader.probe(level).await?;
+	reader.probe(level, runtime).await?;
 
 	Ok(())
 }

@@ -16,6 +16,8 @@
 //! - Type-safe pipeline construction
 //! - Clear separation between data sources and transformations
 
+#[cfg(feature = "cli")]
+use crate::TilesRuntime;
 use crate::{SourceType, Tile, TileSourceMetadata};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -106,7 +108,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	/// Probes metadata, container specifics, tiles, and tile contents
 	/// based on the requested depth level.
 	#[cfg(feature = "cli")]
-	async fn probe(&self, level: ProbeDepth) -> Result<()> {
+	async fn probe(&self, level: ProbeDepth, runtime: &TilesRuntime) -> Result<()> {
 		use ProbeDepth::{Container, TileContents, Tiles};
 
 		let mut print = PrettyPrint::new();
@@ -120,7 +122,9 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 
 		if matches!(level, Container | Tiles | TileContents) {
 			log::debug!("probing source {:?} at depth {:?}", self.source_type(), level);
-			self.probe_container(&print.get_category("container").await).await?;
+			self
+				.probe_container(&print.get_category("container").await, runtime)
+				.await?;
 		}
 
 		if matches!(level, Tiles | TileContents) {
@@ -129,7 +133,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 				self.tilejson().as_json_value(),
 				level
 			);
-			self.probe_tiles(&print.get_category("tiles").await).await?;
+			self.probe_tiles(&print.get_category("tiles").await, runtime).await?;
 		}
 
 		if matches!(level, TileContents) {
@@ -139,7 +143,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 				level
 			);
 			self
-				.probe_tile_contents(&print.get_category("tile contents").await)
+				.probe_tile_contents(&print.get_category("tile contents").await, runtime)
 				.await?;
 		}
 
@@ -165,7 +169,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	///
 	/// Container readers may override to provide format-specific details.
 	#[cfg(feature = "cli")]
-	async fn probe_container(&self, print: &PrettyPrint) -> Result<()> {
+	async fn probe_container(&self, print: &PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
 		print
 			.add_warning("deep container probing is not implemented for this source")
 			.await;
@@ -174,7 +178,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 
 	/// Scans all tiles, reporting average size and the top-10 biggest tiles.
 	#[cfg(feature = "cli")]
-	async fn probe_tiles(&self, print: &PrettyPrint) -> Result<()> {
+	async fn probe_tiles(&self, print: &PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
 		#[derive(Debug)]
 		#[allow(dead_code)]
 		struct Entry {
@@ -190,18 +194,12 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		let mut tile_count: u64 = 0;
 
 		let total_tiles = self.metadata().bbox_pyramid.count_tiles();
-		let progress = crate::ProgressHandle::new(
-			crate::ProgressId(0),
-			"scanning tiles".to_string(),
-			total_tiles,
-			crate::EventBus::new(),
-			false,
-		);
+		let progress = runtime.create_progress("scanning tiles", total_tiles);
 
 		for bbox in self.metadata().bbox_pyramid.iter_levels() {
-			let mut stream = self.get_tile_size_stream(bbox.clone()).await?;
+			let mut stream = self.get_tile_size_stream(*bbox).await?;
 			while let Some((coord, size_u32)) = stream.next().await {
-				let size = size_u32 as u64;
+				let size = u64::from(size_u32);
 
 				tile_count += 1;
 				size_sum += size;
@@ -251,7 +249,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 
 	/// Writes sample tile content diagnostics or a placeholder if not implemented.
 	#[cfg(feature = "cli")]
-	async fn probe_tile_contents(&self, print: &PrettyPrint) -> Result<()> {
+	async fn probe_tile_contents(&self, print: &PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
 		print
 			.add_warning("deep tile contents probing is not implemented for this source")
 			.await;
@@ -284,6 +282,8 @@ mod tests {
 	#[cfg(feature = "cli")]
 	use super::ProbeDepth;
 	use super::*;
+	#[cfg(feature = "cli")]
+	use crate::TilesRuntime;
 	use crate::Traversal;
 	#[cfg(feature = "cli")]
 	use versatiles_core::utils::PrettyPrint;
@@ -377,8 +377,9 @@ mod tests {
 
 			let reader = TestReader::new_dummy();
 			let mut print = PrettyPrint::new();
+			let runtime = TilesRuntime::default();
 			reader
-				.probe_tile_contents(&print.get_category("tile contents").await)
+				.probe_tile_contents(&print.get_category("tile contents").await, &runtime)
 				.await?;
 		}
 		Ok(())
@@ -398,7 +399,8 @@ mod tests {
 	async fn test_probe_container() -> Result<()> {
 		let reader = TestReader::new_dummy();
 		let print = PrettyPrint::new();
-		reader.probe_container(&print).await?;
+		let runtime = TilesRuntime::default();
+		reader.probe_container(&print, &runtime).await?;
 		Ok(())
 	}
 
@@ -407,7 +409,8 @@ mod tests {
 	async fn test_probe_tiles() -> Result<()> {
 		let reader = TestReader::new_dummy();
 		let print = PrettyPrint::new();
-		reader.probe_tiles(&print).await?;
+		let runtime = TilesRuntime::default();
+		reader.probe_tiles(&print, &runtime).await?;
 		Ok(())
 	}
 
@@ -415,9 +418,10 @@ mod tests {
 	#[tokio::test]
 	async fn test_probe_all_levels() -> Result<()> {
 		let reader = TestReader::new_dummy();
-		reader.probe(ProbeDepth::Container).await?;
-		reader.probe(ProbeDepth::Tiles).await?;
-		reader.probe(ProbeDepth::TileContents).await?;
+		let runtime = TilesRuntime::default();
+		reader.probe(ProbeDepth::Container, &runtime).await?;
+		reader.probe(ProbeDepth::Tiles, &runtime).await?;
+		reader.probe(ProbeDepth::TileContents, &runtime).await?;
 		Ok(())
 	}
 }

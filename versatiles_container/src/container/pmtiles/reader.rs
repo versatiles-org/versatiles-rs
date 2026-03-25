@@ -461,7 +461,7 @@ impl TileSource for PMTilesReader {
 	///
 	/// Printed under the `"header"` key for human‑readable inspection.
 	#[context("probing PMTiles container metadata")]
-	async fn probe_container(&self, print: &PrettyPrint) -> Result<()> {
+	async fn probe_container(&self, print: &PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
 		print.add_key_value("header", &self.header).await;
 		Ok(())
 	}

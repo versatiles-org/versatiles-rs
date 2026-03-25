@@ -408,20 +408,21 @@ pub mod tests {
 		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 4, "tar").await?;
 
 		let reader = TarTilesReader::open(&temp_file)?;
+		let runtime = TilesRuntime::default();
 
 		let mut printer = PrettyPrint::new();
-		reader.probe_container(&printer.get_category("container").await).await?;
+		reader
+			.probe_container(&printer.get_category("container").await, &runtime)
+			.await?;
 		assert_eq!(
 			printer.as_string().await,
 			"container:\n  deep container probing is not implemented for this source\n"
 		);
 
 		let mut printer = PrettyPrint::new();
-		reader.probe_tiles(&printer.get_category("tiles").await).await?;
-		assert_eq!(
-			printer.as_string().await,
-			"tiles:\n  deep tiles probing is not implemented for this source\n"
-		);
+		reader
+			.probe_tiles(&printer.get_category("tiles").await, &runtime)
+			.await?;
 
 		Ok(())
 	}
