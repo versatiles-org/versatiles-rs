@@ -248,7 +248,10 @@ impl TileSource for Operation {
 				let height = (size * bbox.height()) as usize;
 
 				log::debug!("get_image_data_from_gdal: bbox={geo_bbox:?}, size={width}x{height}");
-				let image = source.get_image(&geo_bbox, width, height).await.unwrap();
+				let image = source
+					.get_image(&geo_bbox, width, height)
+					.await
+					.unwrap_or_else(|e| panic!("GDAL failed to read image chunk at {geo_bbox:?} ({width}x{height}): {e}"));
 
 				if let Some(image) = image {
 					// Crop into tiles on a blocking thread
