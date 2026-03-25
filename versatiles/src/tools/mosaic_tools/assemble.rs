@@ -378,16 +378,13 @@ async fn assemble_tiles(
 		{
 			let buf = translucent_buffer.lock().unwrap();
 			let done_count = done.lock().unwrap().len();
-			let (with_content, with_blob) = buf.values().fold((0usize, 0usize), |(c, b), (_, t)| {
-				(c + usize::from(t.has_content()), b + usize::from(t.has_blob()))
-			});
+			let total_heap: usize = buf.values().map(|(_, t)| t.estimated_heap_size()).sum();
 			log::info!(
-				"after source {}/{}: translucent_buffer={} (content={}, blob={}), done={}",
+				"after source {}/{}: translucent_buffer={} tiles, ~{}MB estimated heap, done={}",
 				pos + 1,
 				source_order.len(),
 				buf.len(),
-				with_content,
-				with_blob,
+				total_heap / 1_000_000,
 				done_count,
 			);
 		}

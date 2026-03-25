@@ -130,6 +130,20 @@ impl Tile {
 		self.content.is_some()
 	}
 
+	/// Estimate the heap memory used by this tile in bytes.
+	#[must_use]
+	pub fn estimated_heap_size(&self) -> usize {
+		let blob_size = self.blob.as_ref().map_or(0, |b| usize::try_from(b.len()).unwrap_or(0));
+		let content_size = if self.content.is_some() {
+			// 512×512×4 RGBA = 1MB is typical; use a rough estimate
+			// since DynamicImage doesn't expose its buffer size directly
+			512 * 512 * 4
+		} else {
+			0
+		};
+		blob_size + content_size
+	}
+
 	/// Set the encoding quality hint (used when re-encoding content to blob).
 	///
 	/// Pass `None` to clear any previously stored hint and use the codec default.
