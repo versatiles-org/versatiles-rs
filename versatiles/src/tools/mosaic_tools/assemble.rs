@@ -598,6 +598,11 @@ async fn assemble_tiles(
 
 			// Eviction: if buffer exceeds limit, evict northern tiles
 			let buf_len = translucent_buffer.lock().unwrap().len();
+			log::trace!(
+				"after source {}/{}: buffer={buf_len} tiles",
+				pos + 1,
+				source_order.len()
+			);
 			if buf_len > max_buffer_tiles
 				&& let Some(ref mut rp) = remaining_pyramid
 			{
@@ -611,24 +616,17 @@ async fn assemble_tiles(
 				}
 			}
 
-			{
-				let buf = translucent_buffer.lock().unwrap();
-				let heap_mb = buf.values().map(|(_, t)| t.estimated_heap_size()).sum::<usize>() / 1_000_000;
-				log::debug!(
-					"after source {}/{}: buffer={} tiles, ~{heap_mb}MB heap",
-					pos + 1,
-					source_order.len(),
-					buf.len()
-				);
-			}
-
 			progress.inc(1);
 		}
 		progress.finish();
 
 		// Flush remaining translucent tiles for this pass
-		let remaining: HashMap<_, _> = translucent_buffer.lock().unwrap().drain().collect();
-		flush_translucent_tiles(&sink, remaining, &config, runtime)?;
+		flush_translucent_tiles(
+			&sink,
+			translucent_buffer.lock().unwrap().drain().collect(),
+			&config,
+			runtime,
+		)?;
 
 		if cut_y == 0 {
 			break;
