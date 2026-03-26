@@ -14,7 +14,7 @@ use anyhow::anyhow;
 #[cfg(not(feature = "ssh2"))]
 use anyhow::bail;
 use std::{
-	collections::{HashMap, HashSet},
+	collections::HashMap,
 	env,
 	fs::{self, File},
 	io::{BufReader, BufWriter, Write},
@@ -41,7 +41,6 @@ pub struct VersaTilesSink {
 	temp_dir: PathBuf,
 	/// Per-block buffer files keyed by (level, block_x, block_y).
 	block_writers: Mutex<HashMap<BlockKey, BufWriter<File>>>,
-	written: Mutex<HashSet<TileCoord>>,
 	#[cfg(feature = "ssh2")]
 	ssh_identity: Option<PathBuf>,
 }
@@ -55,7 +54,7 @@ impl VersaTilesSink {
 		tile_format: TileFormat,
 		tile_compression: TileCompression,
 		runtime: &crate::TilesRuntime,
-	) -> Result<Self> {
+	) -> Result<Box<dyn TileSink>> {
 		let _ = runtime; // used only with ssh2 feature
 
 		let temp_dir = if destination.starts_with("sftp://") {
@@ -65,16 +64,15 @@ impl VersaTilesSink {
 		};
 		fs::create_dir_all(&temp_dir)?;
 
-		Ok(Self {
+		Ok(Box::new(Self {
 			destination: destination.to_string(),
 			tile_format,
 			tile_compression,
 			temp_dir,
 			block_writers: Mutex::new(HashMap::new()),
-			written: Mutex::new(HashSet::new()),
 			#[cfg(feature = "ssh2")]
 			ssh_identity: runtime.ssh_identity().map(PathBuf::from),
-		})
+		}))
 	}
 
 	/// Path for a block's temporary file.
@@ -103,9 +101,6 @@ impl VersaTilesSink {
 
 impl TileSink for VersaTilesSink {
 	fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
-		if !self.written.lock().unwrap().insert(*coord) {
-			return Ok(());
-		}
 		let block_key: BlockKey = (coord.level, coord.x / 256, coord.y / 256);
 
 		let mut writers = self.block_writers.lock().unwrap();

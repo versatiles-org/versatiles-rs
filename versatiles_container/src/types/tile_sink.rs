@@ -1,6 +1,8 @@
 use crate::{DirectoryTileSink, MBTilesTileSink, TarTileSink, TilesRuntime, VersaTilesSink};
 use anyhow::{Result, bail};
+use std::collections::HashSet;
 use std::path::Path;
+use std::sync::Mutex;
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, TileJSON};
 
 /// Push-model interface for writing individual tiles to a container in any order.
@@ -31,6 +33,36 @@ pub trait TileSink: Send + Sync {
 	///
 	/// Uses `Box<Self>` instead of `self` for object safety.
 	fn finish(self: Box<Self>, tilejson: &TileJSON, runtime: &TilesRuntime) -> Result<()>;
+}
+
+/// Wrapper that ensures each tile coordinate is written at most once.
+///
+/// Silently drops duplicate writes. Delegates all other operations to the inner sink.
+struct DeduplicatingSink {
+	inner: Box<dyn TileSink>,
+	written: Mutex<HashSet<TileCoord>>,
+}
+
+impl TileSink for DeduplicatingSink {
+	fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
+		if !self.written.lock().unwrap().insert(*coord) {
+			return Ok(());
+		}
+		self.inner.write_tile(coord, blob)
+	}
+
+	fn finish(self: Box<Self>, tilejson: &TileJSON, runtime: &TilesRuntime) -> Result<()> {
+		self.inner.finish(tilejson, runtime)
+	}
+}
+
+/// Wrap a tile sink so that each coordinate is written at most once.
+#[must_use]
+pub fn deduplicating_tile_sink(sink: Box<dyn TileSink>) -> Box<dyn TileSink> {
+	Box::new(DeduplicatingSink {
+		inner: sink,
+		written: Mutex::new(HashSet::new()),
+	})
 }
 
 /// Open a tile sink based on the destination's file extension.
@@ -67,32 +99,17 @@ pub fn open_tile_sink(
 			.map(str::to_ascii_lowercase)
 	};
 
-	match extension.as_deref() {
-		Some("tar") => TarTileSink::open(destination, format, compression, runtime),
-		Some("mbtiles") => Ok(Box::new(MBTilesTileSink::open(
-			destination,
-			format,
-			compression,
-			runtime,
-		)?)),
-		Some("versatiles") => Ok(Box::new(VersaTilesSink::open(
-			destination,
-			format,
-			compression,
-			runtime,
-		)?)),
+	let sink = match extension.as_deref() {
+		Some("tar") => TarTileSink::open(destination, format, compression, runtime)?,
+		Some("mbtiles") => MBTilesTileSink::open(destination, format, compression, runtime)?,
+		Some("versatiles") => VersaTilesSink::open(destination, format, compression, runtime)?,
 		_ => {
 			let is_dir = !destination.starts_with("sftp://") && {
 				let path = Path::new(destination);
 				path.is_dir() || path.extension().is_none()
 			};
 			if destination.starts_with("sftp://") || is_dir {
-				Ok(Box::new(DirectoryTileSink::open(
-					destination,
-					format,
-					compression,
-					runtime,
-				)?))
+				DirectoryTileSink::open(destination, format, compression, runtime)?
 			} else {
 				bail!(
 					"unsupported tile sink format: .{}",
@@ -100,7 +117,8 @@ pub fn open_tile_sink(
 				)
 			}
 		}
-	}
+	};
+	Ok(deduplicating_tile_sink(sink))
 }
 
 /// Extract the file extension from an SFTP URL.

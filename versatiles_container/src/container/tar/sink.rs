@@ -7,7 +7,6 @@
 
 use crate::TileSink;
 use anyhow::{Context, Result};
-use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
@@ -30,7 +29,6 @@ pub struct TarTileSink<W: Write + Send> {
 	builder: Mutex<Builder<W>>,
 	tile_format: TileFormat,
 	tile_compression: TileCompression,
-	written: Mutex<HashSet<TileCoord>>,
 }
 
 impl TarTileSink<BufWriter<File>> {
@@ -78,16 +76,12 @@ impl<W: Write + Send> TarTileSink<W> {
 			builder: Mutex::new(Builder::new(writer)),
 			tile_format,
 			tile_compression,
-			written: Mutex::new(HashSet::new()),
 		}
 	}
 }
 
 impl<W: Write + Send> TileSink for TarTileSink<W> {
 	fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
-		if !self.written.lock().unwrap().insert(*coord) {
-			return Ok(());
-		}
 		let filename = format!(
 			"./{}/{}/{}{}{}",
 			coord.level,
