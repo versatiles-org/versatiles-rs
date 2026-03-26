@@ -500,7 +500,7 @@ fn validate_source_format(
 
 /// Assemble sources into an output container. If `prescanned_pyramids` is provided, uses those
 /// instead of reading pyramids from each source during assembly.
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 async fn assemble_tiles(
 	output: &str,
 	paths: &[String],
