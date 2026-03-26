@@ -1,7 +1,10 @@
+mod translucent_buffer;
+
 use anyhow::{Context, Result, anyhow, ensure};
 use futures::{StreamExt, future::ready};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use translucent_buffer::TranslucentBuffer;
 use versatiles_container::{Tile, TileSink, TilesRuntime, open_tile_sink};
 use versatiles_core::{
 	Blob, ConcurrencyLimits, MAX_ZOOM_LEVEL, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat,
@@ -311,7 +314,7 @@ fn build_sweep_order(num_sources: usize, pyramids: &[TileBBoxPyramid]) -> (Vec<u
 /// Flush translucent tiles whose x-column is no longer covered by any remaining source.
 fn sweep_flush(
 	remaining_min_x: &[Option<u32>; NUM_LEVELS],
-	translucent_buffer: &Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>>,
+	buffer: &Arc<TranslucentBuffer>,
 	sink: &Arc<Box<dyn TileSink>>,
 	config: &AssembleConfig,
 ) -> Result<()> {
@@ -322,29 +325,18 @@ fn sweep_flush(
 			.join(", ")
 	);
 
-	let mut buf = translucent_buffer.lock().unwrap();
-	let flush_keys: Vec<u64> = buf
-		.iter()
-		.filter(|(_, (coord, _))| match remaining_min_x[coord.level as usize] {
-			Some(min_x) => coord.x < min_x,
-			None => true,
-		})
-		.map(|(&key, _)| key)
-		.collect();
+	let tiles = buffer.remove_tiles_where(|coord| match remaining_min_x[coord.level as usize] {
+		Some(min_x) => coord.x < min_x,
+		None => true,
+	});
 
-	if flush_keys.is_empty() {
+	if tiles.is_empty() {
 		return Ok(());
 	}
 
-	let tiles: Vec<_> = flush_keys.iter().filter_map(|k| buf.remove(k)).collect();
-	drop(buf);
-
 	log::debug!("sweep-line flush: writing {} translucent tiles", tiles.len());
 
-	// Phase 1: Re-encode in parallel
 	let prepared = reencode_tiles_parallel(tiles, config);
-
-	// Phase 2: Write sequentially
 	for result in prepared {
 		let (coord, blob) = result?;
 		sink.write_tile(&coord, &blob)?;
@@ -419,28 +411,16 @@ fn build_union_pyramid(pyramids: &[TileBBoxPyramid], min_zoom: Option<u8>, max_z
 /// Tiles at levels where `level_cut_y == 0` are not evicted because they
 /// cannot be reprocessed in a subsequent pass.
 fn evict_northern_tiles(
-	buffer: &mut HashMap<u64, (TileCoord, Tile)>,
+	buffer: &TranslucentBuffer,
 	remaining_pyramid: &mut TileBBoxPyramid,
 	cut_y: u32,
 	max_level: u8,
 ) {
-	// Remove tiles north of the cut from buffer
-	let evict_keys: Vec<u64> = buffer
-		.iter()
-		.filter(|(_, (coord, _))| {
-			let level_cut_y = cut_y >> (max_level - coord.level);
-			level_cut_y > 0 && coord.y < level_cut_y
-		})
-		.map(|(&k, _)| k)
-		.collect();
-	for k in &evict_keys {
-		buffer.remove(k);
-	}
-	log::debug!(
-		"evicted {} tiles, {} remaining in buffer",
-		evict_keys.len(),
-		buffer.len()
-	);
+	let evicted = buffer.remove_tiles_where(|coord| {
+		let level_cut_y = cut_y >> (max_level - coord.level);
+		level_cut_y > 0 && coord.y < level_cut_y
+	});
+	log::debug!("evicted {} tiles, {} remaining in buffer", evicted.len(), buffer.len());
 
 	// Clip remaining_pyramid so subsequent sources skip evicted region
 	for level in 0..=max_level {
@@ -512,7 +492,7 @@ async fn assemble_tiles(
 	max_buffer_size: u64,
 	runtime: &TilesRuntime,
 ) -> Result<()> {
-	let translucent_buffer: Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>> = Arc::default();
+	let buffer = Arc::new(TranslucentBuffer::new());
 
 	// When prescan data is available, sort sources west-to-east and precompute
 	// per-level suffix minimum x so we can flush translucent tiles early.
@@ -558,7 +538,7 @@ async fn assemble_tiles(
 
 	loop {
 		let mut cut_y: u32 = 0;
-		translucent_buffer.lock().unwrap().clear();
+		buffer.clear();
 
 		let progress = runtime.create_progress("assembling tiles", paths.len() as u64);
 
@@ -590,14 +570,14 @@ async fn assemble_tiles(
 				continue;
 			}
 
-			process_source_tiles(&reader, &pyramid, &sink, &translucent_buffer, &config).await?;
+			process_source_tiles(&reader, &pyramid, &sink, &buffer, &config).await?;
 
 			if let Some(ref suffix) = suffix_min_x {
-				sweep_flush(&suffix[pos + 1], &translucent_buffer, &sink, &config)?;
+				sweep_flush(&suffix[pos + 1], &buffer, &sink, &config)?;
 			}
 
 			// Eviction: if buffer exceeds limit, evict northern tiles
-			let buf_len = translucent_buffer.lock().unwrap().len();
+			let buf_len = buffer.len();
 			log::trace!(
 				"after source {}/{}: buffer={buf_len} tiles",
 				pos + 1,
@@ -606,13 +586,13 @@ async fn assemble_tiles(
 			if buf_len > max_buffer_tiles
 				&& let Some(ref mut rp) = remaining_pyramid
 			{
-				let new_cut_y = compute_new_cut_y(&translucent_buffer.lock().unwrap(), max_buffer_tiles, max_level);
+				let new_cut_y = buffer.compute_cut_y(max_buffer_tiles, max_level);
 				if new_cut_y > cut_y {
 					cut_y = new_cut_y;
 					log::debug!(
 						"buffer exceeded limit ({buf_len} > {max_buffer_tiles}), evicting tiles north of cut_y={cut_y}"
 					);
-					evict_northern_tiles(&mut translucent_buffer.lock().unwrap(), rp, cut_y, max_level);
+					evict_northern_tiles(&buffer, rp, cut_y, max_level);
 				}
 			}
 
@@ -621,12 +601,7 @@ async fn assemble_tiles(
 		progress.finish();
 
 		// Flush remaining translucent tiles for this pass
-		flush_translucent_tiles(
-			&sink,
-			translucent_buffer.lock().unwrap().drain().collect(),
-			&config,
-			runtime,
-		)?;
+		flush_translucent_tiles(&sink, buffer.drain(), &config, runtime)?;
 
 		if cut_y == 0 {
 			break;
@@ -646,22 +621,6 @@ async fn assemble_tiles(
 	Ok(())
 }
 
-/// Compute the new cut_y value to keep approximately `max_tiles` southern tiles in the buffer.
-/// Returns the projected y coordinate (at max_level) below which tiles should be evicted.
-fn compute_new_cut_y(buffer: &HashMap<u64, (TileCoord, Tile)>, max_tiles: usize, max_level: u8) -> u32 {
-	let mut projected_ys: Vec<u32> = buffer
-		.values()
-		.map(|(coord, _)| coord.y << (max_level - coord.level))
-		.collect();
-	projected_ys.sort_unstable();
-	// Keep max_tiles entries with the highest y values (southernmost)
-	if projected_ys.len() > max_tiles {
-		projected_ys[projected_ys.len() - max_tiles]
-	} else {
-		0
-	}
-}
-
 /// Process all tiles from all levels of a source reader in a single parallel batch.
 ///
 /// Flattens all level streams into one combined stream and uses
@@ -670,7 +629,7 @@ async fn process_source_tiles(
 	reader: &versatiles_container::SharedTileSource,
 	pyramid: &TileBBoxPyramid,
 	sink: &Arc<Box<dyn TileSink>>,
-	translucent_buffer: &Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>>,
+	buffer: &Arc<TranslucentBuffer>,
 	config: &AssembleConfig,
 ) -> Result<()> {
 	// Flatten all level streams into one combined stream
@@ -686,13 +645,13 @@ async fn process_source_tiles(
 	let concurrency = ConcurrencyLimits::default().cpu_bound * 2;
 
 	let sink = Arc::clone(sink);
-	let translucent_buffer = Arc::clone(translucent_buffer);
+	let buffer = Arc::clone(buffer);
 	let config = config.clone();
 
 	let callback = Arc::new(move |coord: TileCoord, mut tile: Tile| -> Result<()> {
 		let key = coord.get_hilbert_index()?;
 
-		let existing = translucent_buffer.lock().unwrap().remove(&key);
+		let existing = buffer.remove(key);
 
 		if tile.is_empty()? {
 			log::trace!("skipping empty tile at {coord:?}");
@@ -705,7 +664,7 @@ async fn process_source_tiles(
 						let blob = prepare_tile_blob(merged, &config)?;
 						sink.write_tile(&coord, &blob)?;
 					} else {
-						translucent_buffer.lock().unwrap().insert(key, (coord, merged));
+						buffer.insert(coord, merged)?;
 					}
 				}
 				Err(e) => {
@@ -716,7 +675,7 @@ async fn process_source_tiles(
 			let blob = prepare_tile_blob(tile, &config)?;
 			sink.write_tile(&coord, &blob)?;
 		} else {
-			translucent_buffer.lock().unwrap().insert(key, (coord, tile));
+			buffer.insert(coord, tile)?;
 		}
 
 		Ok(())
