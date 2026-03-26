@@ -70,11 +70,11 @@ pub struct Assemble {
 	#[arg(long, value_name = "int")]
 	max_zoom: Option<u8>,
 
-	/// Maximum memory (in MB) for the translucent tile buffer.
-	/// When exceeded, tiles are evicted and deferred to a subsequent pass.
-	/// 0 means unlimited (default).
-	#[arg(long, value_name = "MB", default_value = "0")]
-	max_buffer_size: u64,
+	/// Maximum memory for the tile buffer.
+	/// Supports units: k, m, g, t (e.g. "4g") and % of system memory (e.g. "50%").
+	/// Plain number is interpreted as bytes. 0 means unlimited (default).
+	#[arg(long, value_name = "size", default_value = "0")]
+	max_buffer_size: String,
 }
 
 /// Encoding and filtering configuration shared across assemble functions.
@@ -129,6 +129,83 @@ fn parse_input_list(content: &str) -> Vec<String> {
 		.collect()
 }
 
+/// Parse a buffer size string into bytes.
+///
+/// Accepts plain numbers (bytes), numbers with unit suffix (k, m, g, t),
+/// or a percentage of total system memory (e.g. "50%").
+/// Case-insensitive. Whitespace between number and unit is allowed.
+fn parse_buffer_size(s: &str) -> Result<u64> {
+	let s = s.trim();
+	if s == "0" {
+		return Ok(0);
+	}
+
+	if let Some(pct) = s.strip_suffix('%') {
+		let pct: f64 = pct
+			.trim()
+			.parse()
+			.with_context(|| format!("Invalid percentage in buffer size: {s}"))?;
+		ensure!(
+			(0.0..=100.0).contains(&pct),
+			"Buffer size percentage must be between 0 and 100, got {pct}"
+		);
+		let total = total_system_memory()?;
+		#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+		return Ok((total as f64 * pct / 100.0) as u64);
+	}
+
+	let s_lower = s.to_ascii_lowercase();
+	let (num_str, multiplier) = if let Some(n) = s_lower.strip_suffix('t') {
+		(n, 1_000_000_000_000u64)
+	} else if let Some(n) = s_lower.strip_suffix('g') {
+		(n, 1_000_000_000)
+	} else if let Some(n) = s_lower.strip_suffix('m') {
+		(n, 1_000_000)
+	} else if let Some(n) = s_lower.strip_suffix('k') {
+		(n, 1_000)
+	} else {
+		(s_lower.as_str(), 1)
+	};
+
+	let num: f64 = num_str
+		.trim()
+		.parse()
+		.with_context(|| format!("Invalid buffer size: {s}"))?;
+	ensure!(num >= 0.0, "Buffer size must not be negative: {s}");
+	#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+	Ok((num * multiplier as f64) as u64)
+}
+
+/// Return total physical memory in bytes.
+fn total_system_memory() -> Result<u64> {
+	#[cfg(target_os = "macos")]
+	{
+		let output = std::process::Command::new("sysctl")
+			.args(["-n", "hw.memsize"])
+			.output()
+			.context("failed to run sysctl")?;
+		ensure!(output.status.success(), "sysctl hw.memsize failed");
+		let s = String::from_utf8_lossy(&output.stdout);
+		s.trim().parse::<u64>().context("failed to parse hw.memsize")
+	}
+	#[cfg(target_os = "linux")]
+	{
+		let content = std::fs::read_to_string("/proc/meminfo").context("failed to read /proc/meminfo")?;
+		for line in content.lines() {
+			if let Some(rest) = line.strip_prefix("MemTotal:") {
+				let kb_str = rest.trim().trim_end_matches("kB").trim();
+				let kb: u64 = kb_str.parse().context("failed to parse MemTotal")?;
+				return Ok(kb * 1024);
+			}
+		}
+		anyhow::bail!("MemTotal not found in /proc/meminfo")
+	}
+	#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+	{
+		anyhow::bail!("Cannot detect system memory on this platform; use an absolute size instead of %")
+	}
+}
+
 pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 	log::info!("mosaic assemble from {:?} to {:?}", args.input_list, args.output);
 
@@ -138,11 +215,12 @@ pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 	ensure!(!paths.is_empty(), "Input list file contains no container paths");
 
 	let quality = parse_quality(&args.quality)?;
+	let max_buffer_size = parse_buffer_size(&args.max_buffer_size)?;
 
 	log::info!("assembling {} containers", paths.len());
 
 	// Optionally prescan all sources in parallel to validate accessibility and collect pyramids
-	let do_prescan = args.prescan || args.max_buffer_size > 0;
+	let do_prescan = args.prescan || max_buffer_size > 0;
 	let prescanned_pyramids = if do_prescan {
 		Some(prescan_sources(&paths, runtime).await?)
 	} else {
@@ -157,7 +235,7 @@ pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 		args.lossless,
 		args.min_zoom,
 		args.max_zoom,
-		args.max_buffer_size * 1_000_000,
+		max_buffer_size,
 		runtime,
 	)
 	.await
@@ -788,6 +866,39 @@ https://example.com/tiles/004.versatiles
 		let content = "\n# only comments\n  \n";
 		let paths = parse_input_list(content);
 		assert!(paths.is_empty());
+	}
+
+	#[test]
+	fn test_parse_buffer_size() {
+		// Plain bytes
+		assert_eq!(parse_buffer_size("0").unwrap(), 0);
+		assert_eq!(parse_buffer_size("1024").unwrap(), 1024);
+
+		// Units (case-insensitive)
+		assert_eq!(parse_buffer_size("1k").unwrap(), 1_000);
+		assert_eq!(parse_buffer_size("1K").unwrap(), 1_000);
+		assert_eq!(parse_buffer_size("2m").unwrap(), 2_000_000);
+		assert_eq!(parse_buffer_size("2M").unwrap(), 2_000_000);
+		assert_eq!(parse_buffer_size("3g").unwrap(), 3_000_000_000);
+		assert_eq!(parse_buffer_size("3G").unwrap(), 3_000_000_000);
+		assert_eq!(parse_buffer_size("1t").unwrap(), 1_000_000_000_000);
+
+		// Fractional with unit
+		assert_eq!(parse_buffer_size("1.5g").unwrap(), 1_500_000_000);
+		assert_eq!(parse_buffer_size("0.5m").unwrap(), 500_000);
+
+		// Whitespace
+		assert_eq!(parse_buffer_size("  4g  ").unwrap(), 4_000_000_000);
+		assert_eq!(parse_buffer_size("2 m").unwrap(), 2_000_000);
+
+		// Percentage
+		let result = parse_buffer_size("50%").unwrap();
+		assert!(result > 0, "50% of system memory should be > 0");
+
+		// Errors
+		assert!(parse_buffer_size("abc").is_err());
+		assert!(parse_buffer_size("-1g").is_err());
+		assert!(parse_buffer_size("101%").is_err());
 	}
 
 	#[test]
