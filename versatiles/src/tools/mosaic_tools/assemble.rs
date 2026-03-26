@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, anyhow, ensure};
 use futures::{StreamExt, future::ready};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use versatiles_container::{Tile, TileSink, TilesRuntime, open_tile_sink};
 use versatiles_core::{
@@ -313,7 +313,6 @@ fn sweep_flush(
 	remaining_min_x: &[Option<u32>; NUM_LEVELS],
 	translucent_buffer: &Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>>,
 	sink: &Arc<Box<dyn TileSink>>,
-	done: &Arc<Mutex<HashSet<u64>>>,
 	config: &AssembleConfig,
 ) -> Result<()> {
 	log::debug!(
@@ -341,14 +340,6 @@ fn sweep_flush(
 	drop(buf);
 
 	log::debug!("sweep-line flush: writing {} translucent tiles", tiles.len());
-
-	// Record flushed tiles in done to prevent duplicate writes in subsequent passes
-	{
-		let mut done_set = done.lock().unwrap();
-		for &key in &flush_keys {
-			done_set.insert(key);
-		}
-	}
 
 	// Phase 1: Re-encode in parallel
 	let prepared = reencode_tiles_parallel(tiles, config);
@@ -401,7 +392,6 @@ async fn assemble_tiles(
 	max_buffer_size: u64,
 	runtime: &TilesRuntime,
 ) -> Result<()> {
-	let done: Arc<Mutex<HashSet<u64>>> = Arc::default();
 	let translucent_buffer: Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>> = Arc::default();
 	let mut tilejson = TileJSON::default();
 
@@ -519,12 +509,12 @@ async fn assemble_tiles(
 				continue;
 			}
 
-			process_source_tiles(&reader, &pyramid, &sink, &done, &translucent_buffer, &config).await?;
+			process_source_tiles(&reader, &pyramid, &sink, &translucent_buffer, &config).await?;
 			// reader dropped here — file handle closed
 
 			// Sweep-line flush: remove translucent tiles that no remaining source can cover
 			if let Some(ref suffix) = suffix_min_x {
-				sweep_flush(&suffix[pos + 1], &translucent_buffer, &sink, &done, &config)?;
+				sweep_flush(&suffix[pos + 1], &translucent_buffer, &sink, &config)?;
 			}
 
 			// Eviction check: if buffer exceeds limit, evict northern tiles
@@ -581,15 +571,13 @@ async fn assemble_tiles(
 
 			{
 				let buf = translucent_buffer.lock().unwrap();
-				let done_count = done.lock().unwrap().len();
 				let total_heap: usize = buf.values().map(|(_, t)| t.estimated_heap_size()).sum();
 				log::debug!(
-					"after source {}/{}: translucent_buffer={} tiles, ~{}MB estimated heap, done={} tiles",
+					"after source {}/{}: translucent_buffer={} tiles, ~{}MB estimated heap",
 					pos + 1,
 					source_order.len(),
 					buf.len(),
 					total_heap / 1_000_000,
-					done_count,
 				);
 			}
 
@@ -599,13 +587,6 @@ async fn assemble_tiles(
 
 		// Flush remaining translucent tiles for this pass
 		let remaining: HashMap<_, _> = translucent_buffer.lock().unwrap().drain().collect();
-		// Record flushed tiles in done so they aren't reprocessed in subsequent passes
-		if cut_y > 0 {
-			let mut done_set = done.lock().unwrap();
-			for &key in remaining.keys() {
-				done_set.insert(key);
-			}
-		}
 		flush_translucent_tiles(&sink, remaining, &config, runtime)?;
 
 		if cut_y == 0 {
@@ -667,7 +648,6 @@ async fn process_source_tiles(
 	reader: &versatiles_container::SharedTileSource,
 	pyramid: &TileBBoxPyramid,
 	sink: &Arc<Box<dyn TileSink>>,
-	done: &Arc<Mutex<HashSet<u64>>>,
 	translucent_buffer: &Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>>,
 	config: &AssembleConfig,
 ) -> Result<()> {
@@ -684,16 +664,11 @@ async fn process_source_tiles(
 	let concurrency = ConcurrencyLimits::default().cpu_bound * 2;
 
 	let sink = Arc::clone(sink);
-	let done = Arc::clone(done);
 	let translucent_buffer = Arc::clone(translucent_buffer);
 	let config = config.clone();
 
 	let callback = Arc::new(move |coord: TileCoord, mut tile: Tile| -> Result<()> {
 		let key = coord.get_hilbert_index()?;
-
-		if done.lock().unwrap().contains(&key) {
-			return Ok(());
-		}
 
 		let existing = translucent_buffer.lock().unwrap().remove(&key);
 
@@ -707,7 +682,6 @@ async fn process_source_tiles(
 					if is_opaque {
 						let blob = prepare_tile_blob(merged, &config)?;
 						sink.write_tile(&coord, &blob)?;
-						done.lock().unwrap().insert(key);
 					} else {
 						translucent_buffer.lock().unwrap().insert(key, (coord, merged));
 					}
@@ -719,7 +693,6 @@ async fn process_source_tiles(
 		} else if tile.is_opaque().unwrap_or(false) {
 			let blob = prepare_tile_blob(tile, &config)?;
 			sink.write_tile(&coord, &blob)?;
-			done.lock().unwrap().insert(key);
 		} else {
 			translucent_buffer.lock().unwrap().insert(key, (coord, tile));
 		}

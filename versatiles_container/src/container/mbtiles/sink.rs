@@ -8,6 +8,7 @@ use crate::TileSink;
 use anyhow::{Result, bail};
 use r2d2::Pool;
 use r2d2_sqlite::{SqliteConnectionManager, rusqlite::params};
+use std::collections::HashSet;
 use std::fs::remove_file;
 use std::path::Path;
 use std::sync::Mutex;
@@ -33,6 +34,7 @@ pub struct MBTilesTileSink {
 	pool: Pool<SqliteConnectionManager>,
 	format_str: String,
 	buffer: Mutex<Vec<(TileCoord, Vec<u8>)>>,
+	written: Mutex<HashSet<TileCoord>>,
 }
 
 impl MBTilesTileSink {
@@ -92,6 +94,7 @@ impl MBTilesTileSink {
 			pool,
 			format_str: format_str.to_string(),
 			buffer: Mutex::new(Vec::with_capacity(BUFFER_SIZE)),
+			written: Mutex::new(HashSet::new()),
 		})
 	}
 
@@ -162,6 +165,9 @@ impl MBTilesTileSink {
 
 impl TileSink for MBTilesTileSink {
 	fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
+		if !self.written.lock().unwrap().insert(*coord) {
+			return Ok(());
+		}
 		let mut buf = self.buffer.lock().unwrap();
 		buf.push((*coord, blob.as_slice().to_vec()));
 

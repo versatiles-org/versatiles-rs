@@ -5,8 +5,10 @@
 
 use crate::TileSink;
 use anyhow::{Context, Result};
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, TileJSON, compression::compress};
 
 /// Backend abstraction for writing files (local or SFTP).
@@ -48,6 +50,7 @@ pub struct DirectoryTileSink {
 	tile_format: TileFormat,
 	tile_compression: TileCompression,
 	backend: Backend,
+	written: Mutex<HashSet<TileCoord>>,
 }
 
 impl DirectoryTileSink {
@@ -67,6 +70,7 @@ impl DirectoryTileSink {
 					tile_format,
 					tile_compression,
 					backend: Backend::Sftp(std::sync::Mutex::new(sftp_fs)),
+					written: Mutex::new(HashSet::new()),
 				});
 			}
 			#[cfg(not(feature = "ssh2"))]
@@ -87,12 +91,16 @@ impl DirectoryTileSink {
 			tile_format,
 			tile_compression,
 			backend: Backend::Local { base_path },
+			written: Mutex::new(HashSet::new()),
 		})
 	}
 }
 
 impl TileSink for DirectoryTileSink {
 	fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
+		if !self.written.lock().unwrap().insert(*coord) {
+			return Ok(());
+		}
 		let rel_path = format!(
 			"{}/{}/{}{}{}",
 			coord.level,
