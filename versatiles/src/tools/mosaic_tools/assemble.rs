@@ -230,7 +230,9 @@ fn sweep_flush(
 ) -> Result<()> {
 	log::debug!(
 		"sweep-line flush: remaining_min_x={:?}",
-		remaining_min_x.map(|x| x.map(|v| v.to_string()).unwrap_or_else(|| "-".to_string()))
+		remaining_min_x
+			.map(|x| x.map(|v| v.to_string()).unwrap_or_else(|| "-".to_string()))
+			.join(", ")
 	);
 
 	let mut buf = translucent_buffer.lock().unwrap();
