@@ -173,7 +173,7 @@ impl TileBBoxPyramid {
 	/// Includes all bounding boxes from another `TileBBoxPyramid` into this pyramid.
 	///
 	/// Each zoom level from `pyramid` is included into the corresponding level in `self`.
-	pub fn include_bbox_pyramid(&mut self, pyramid: &TileBBoxPyramid) {
+	pub fn include_pyramid(&mut self, pyramid: &TileBBoxPyramid) {
 		for bbox in pyramid.iter_levels() {
 			self.level_bbox[bbox.level as usize].include_bbox(bbox).unwrap();
 		}
@@ -181,35 +181,59 @@ impl TileBBoxPyramid {
 
 	/// Checks if the pyramid contains the given `(x, y, z)` tile coordinate.
 	#[must_use]
-	pub fn contains_coord(&self, coord: &TileCoord) -> bool {
+	pub fn includes_coord(&self, coord: &TileCoord) -> bool {
 		if let Some(bbox) = self.level_bbox.get(coord.level as usize) {
-			bbox.contains(coord)
+			bbox.includes_coord(coord)
 		} else {
 			false
 		}
+	}
+
+	/// Checks if the pyramid completely includes the specified bounding box at the bounding box’s zoom level.
+	#[must_use]
+	pub fn includes_bbox(&self, bbox: &TileBBox) -> bool {
+		if let Some(local_bbox) = self.level_bbox.get(bbox.level as usize) {
+			local_bbox.includes_bbox(bbox)
+		} else {
+			false
+		}
+	}
+
+	/// Checks if this pyramid completely includes another pyramid at all zoom levels.
+	#[must_use]
+	pub fn includes_pyramid(&self, other: &TileBBoxPyramid) -> bool {
+		for bbox_other in other.iter_levels() {
+			let bbox_self = self.get_level_bbox(bbox_other.level);
+			if !bbox_self.includes_bbox(bbox_other) {
+				return false;
+			}
+		}
+		true
 	}
 
 	/// Checks if the pyramid overlaps the specified bounding box at the bounding box’s zoom level.
 	#[must_use]
-	pub fn overlaps_bbox(&self, bbox: &TileBBox) -> bool {
+	pub fn intersects_bbox(&self, bbox: &TileBBox) -> bool {
 		if let Some(local_bbox) = self.level_bbox.get(bbox.level as usize) {
-			local_bbox.overlaps_bbox(bbox).unwrap_or(false)
+			local_bbox.intersects_bbox(bbox)
 		} else {
 			false
 		}
 	}
 
+	/// Checks if this pyramid intersects (overlaps) another pyramid at any level.
+	#[must_use]
+	pub fn intersects_pyramid(&self, other: &TileBBoxPyramid) -> bool {
+		for bbox1 in self.iter_levels() {
+			let bbox2 = other.get_level_bbox(bbox1.level);
+			if bbox1.intersects_bbox(bbox2) {
+				return true;
+			}
+		}
+		false
+	}
+
 	/// Returns an iterator over all **non-empty** bounding boxes in this pyramid.
-	///
-	/// # Examples
-	///
-	/// ```
-	/// # use versatiles_core::TileBBoxPyramid;
-	/// // Suppose `pyramid` is a filled pyramid...
-	/// // for bbox in pyramid.iter_levels() {
-	/// //     println!("Level {} has some tiles", bbox.level);
-	/// // }
-	/// ```
 	pub fn iter_levels(&self) -> impl Iterator<Item = &TileBBox> {
 		self.level_bbox.iter().filter(|bbox| !bbox.is_empty())
 	}
@@ -688,7 +712,7 @@ mod tests {
 	fn test_include_bbox1_pyramid() {
 		let mut p1 = TileBBoxPyramid::new_empty();
 		let p2 = TileBBoxPyramid::new_full_up_to(2);
-		p1.include_bbox_pyramid(&p2);
+		p1.include_pyramid(&p2);
 		// Now p1 should have coverage at levels 0..=2
 		assert!(p1.get_level_bbox(0).is_full());
 		assert!(p1.get_level_bbox(1).is_full());
@@ -708,20 +732,55 @@ mod tests {
 	fn test_contains_coord(#[case] level: u8, #[case] x: u32, #[case] y: u32, #[case] expected: bool) {
 		let mut p = TileBBoxPyramid::new_empty();
 		p.include_bbox(&TileBBox::from_min_and_max(10, 100, 200, 300, 400).unwrap());
-		assert_eq!(p.contains_coord(&TileCoord::new(level, x, y).unwrap()), expected);
+		assert_eq!(p.includes_coord(&TileCoord::new(level, x, y).unwrap()), expected);
 	}
 
 	#[test]
 	fn test_overlaps_bbox() {
 		let mut p = TileBBoxPyramid::new_empty();
 		p.include_bbox(&TileBBox::from_min_and_max(10, 100, 200, 300, 400).unwrap());
-		assert!(!p.overlaps_bbox(&TileBBox::from_min_and_max(10, 0, 0, 99, 200).unwrap()));
-		assert!(!p.overlaps_bbox(&TileBBox::from_min_and_max(10, 0, 0, 100, 199).unwrap()));
-		assert!(p.overlaps_bbox(&TileBBox::from_min_and_max(10, 0, 0, 100, 200).unwrap()));
-		assert!(p.overlaps_bbox(&TileBBox::from_min_and_max(10, 300, 400, 500, 600).unwrap()));
-		assert!(!p.overlaps_bbox(&TileBBox::from_min_and_max(10, 300, 401, 500, 600).unwrap()));
-		assert!(!p.overlaps_bbox(&TileBBox::from_min_and_max(10, 301, 400, 500, 600).unwrap()));
-		assert!(!p.overlaps_bbox(&TileBBox::from_min_and_max(11, 300, 400, 500, 600).unwrap()));
+		assert!(!p.intersects_bbox(&TileBBox::from_min_and_max(10, 0, 0, 99, 200).unwrap()));
+		assert!(!p.intersects_bbox(&TileBBox::from_min_and_max(10, 0, 0, 100, 199).unwrap()));
+		assert!(p.intersects_bbox(&TileBBox::from_min_and_max(10, 0, 0, 100, 200).unwrap()));
+		assert!(p.intersects_bbox(&TileBBox::from_min_and_max(10, 300, 400, 500, 600).unwrap()));
+		assert!(!p.intersects_bbox(&TileBBox::from_min_and_max(10, 300, 401, 500, 600).unwrap()));
+		assert!(!p.intersects_bbox(&TileBBox::from_min_and_max(10, 301, 400, 500, 600).unwrap()));
+		assert!(!p.intersects_bbox(&TileBBox::from_min_and_max(11, 300, 400, 500, 600).unwrap()));
+	}
+
+	#[test]
+	fn test_intersects_pyramid() {
+		// Two empty pyramids don't intersect
+		let p1 = TileBBoxPyramid::new_empty();
+		let p2 = TileBBoxPyramid::new_empty();
+		assert!(!p1.intersects_pyramid(&p2));
+
+		// Empty and full don't intersect
+		assert!(!p1.intersects_pyramid(&TileBBoxPyramid::new_full()));
+
+		// Two full pyramids intersect
+		let full1 = TileBBoxPyramid::new_full();
+		let full2 = TileBBoxPyramid::new_full();
+		assert!(full1.intersects_pyramid(&full2));
+
+		// Non-overlapping at same level
+		let mut pa = TileBBoxPyramid::new_empty();
+		pa.include_bbox(&TileBBox::from_min_and_max(10, 0, 0, 50, 50).unwrap());
+		let mut pb = TileBBoxPyramid::new_empty();
+		pb.include_bbox(&TileBBox::from_min_and_max(10, 100, 100, 200, 200).unwrap());
+		assert!(!pa.intersects_pyramid(&pb));
+
+		// Overlapping at same level
+		let mut pc = TileBBoxPyramid::new_empty();
+		pc.include_bbox(&TileBBox::from_min_and_max(10, 40, 40, 150, 150).unwrap());
+		assert!(pa.intersects_pyramid(&pc));
+
+		// Different levels only — no intersection
+		let mut pd = TileBBoxPyramid::new_empty();
+		pd.include_bbox(&TileBBox::from_min_and_max(5, 0, 0, 10, 10).unwrap());
+		let mut pe = TileBBoxPyramid::new_empty();
+		pe.include_bbox(&TileBBox::from_min_and_max(8, 0, 0, 10, 10).unwrap());
+		assert!(!pd.intersects_pyramid(&pe));
 	}
 
 	#[test]

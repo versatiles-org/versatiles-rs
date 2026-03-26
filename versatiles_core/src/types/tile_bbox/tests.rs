@@ -214,10 +214,10 @@ fn test_intersect_bbox() {
 fn test_overlaps_bbox() {
 	let bbox1 = TileBBox::from_min_and_max(4, 0, 11, 2, 13).unwrap();
 	let bbox2 = TileBBox::from_min_and_max(4, 1, 10, 3, 12).unwrap();
-	assert!(bbox1.overlaps_bbox(&bbox2).unwrap());
+	assert!(bbox1.intersects_bbox(&bbox2));
 
 	let bbox3 = TileBBox::from_min_and_max(4, 8, 8, 9, 9).unwrap();
-	assert!(!bbox1.overlaps_bbox(&bbox3).unwrap());
+	assert!(!bbox1.intersects_bbox(&bbox3));
 }
 
 #[rstest]
@@ -248,9 +248,9 @@ fn test_as_geo_bbox() {
 #[test]
 fn test_contains() {
 	let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12).unwrap();
-	assert!(bbox.contains(&TileCoord::new(4, 6, 11).unwrap()));
-	assert!(!bbox.contains(&TileCoord::new(4, 4, 9).unwrap()));
-	assert!(!bbox.contains(&TileCoord::new(5, 6, 11).unwrap()));
+	assert!(bbox.includes_coord(&TileCoord::new(4, 6, 11).unwrap()));
+	assert!(!bbox.includes_coord(&TileCoord::new(4, 4, 9).unwrap()));
+	assert!(!bbox.includes_coord(&TileCoord::new(5, 6, 11).unwrap()));
 }
 
 #[test]
@@ -429,16 +429,11 @@ fn should_correctly_determine_bbox_overlap() -> Result<()> {
 	let bbox1 = TileBBox::from_min_and_max(6, 5, 10, 15, 20)?;
 	let bbox2 = TileBBox::from_min_and_max(6, 10, 15, 20, 25)?;
 	let bbox3 = TileBBox::from_min_and_max(6, 16, 21, 20, 25)?;
-	let bbox4 = TileBBox::from_min_and_max(5, 10, 15, 15, 20)?;
 
-	assert!(bbox1.overlaps_bbox(&bbox2)?);
-	assert!(!bbox1.overlaps_bbox(&bbox3)?);
-	assert!(bbox1.overlaps_bbox(&bbox1)?);
-	assert!(bbox1.overlaps_bbox(&bbox1.clone())?);
-
-	// Overlaps with a bounding box of different zoom level
-	let result = bbox1.overlaps_bbox(&bbox4);
-	assert!(result.is_err());
+	assert!(bbox1.intersects_bbox(&bbox2));
+	assert!(!bbox1.intersects_bbox(&bbox3));
+	assert!(bbox1.intersects_bbox(&bbox1));
+	assert!(bbox1.intersects_bbox(&bbox1.clone()));
 
 	Ok(())
 }
@@ -507,9 +502,9 @@ fn should_determine_contains3_correctly() -> Result<()> {
 	let invalid_coord_zoom = TileCoord::new(5, 6, 11).unwrap();
 	let invalid_coord_outside = TileCoord::new(4, 4, 9).unwrap();
 
-	assert!(bbox.contains(&valid_coord));
-	assert!(!bbox.contains(&invalid_coord_zoom));
-	assert!(!bbox.contains(&invalid_coord_outside));
+	assert!(bbox.includes_coord(&valid_coord));
+	assert!(!bbox.includes_coord(&invalid_coord_zoom));
+	assert!(!bbox.includes_coord(&invalid_coord_outside));
 
 	Ok(())
 }
@@ -645,17 +640,17 @@ fn should_handle_bbox_overlap_edge_cases() -> Result<()> {
 	let bbox4 = TileBBox::from_min_and_max(4, 0, 0, 5, 5)?;
 
 	// Overlapping at the edge
-	assert!(bbox1.overlaps_bbox(&bbox2)?);
+	assert!(bbox1.intersects_bbox(&bbox2));
 
 	// No overlapping
-	assert!(!bbox1.overlaps_bbox(&bbox3)?);
+	assert!(!bbox1.intersects_bbox(&bbox3));
 
 	// Completely overlapping
-	assert!(bbox1.overlaps_bbox(&bbox4)?);
+	assert!(bbox1.intersects_bbox(&bbox4));
 
 	// One empty bounding box
 	let empty_bbox = TileBBox::new_empty(4)?;
-	assert!(!bbox1.overlaps_bbox(&empty_bbox)?);
+	assert!(!bbox1.intersects_bbox(&empty_bbox));
 
 	Ok(())
 }
@@ -925,20 +920,20 @@ fn test_try_contains_bbox() -> Result<()> {
 	let bbox_diff_level = TileBBox::from_min_and_max(6, 12, 12, 18, 18)?;
 
 	// Fully contained
-	assert!(bbox_outer.try_contains_bbox(&bbox_inner)?);
+	assert!(bbox_outer.try_includes_bbox(&bbox_inner)?);
 	// Not fully contained (partial overlap)
-	assert!(!bbox_outer.try_contains_bbox(&bbox_partial)?);
+	assert!(!bbox_outer.try_includes_bbox(&bbox_partial)?);
 	// Not contained (no overlap)
-	assert!(!bbox_outer.try_contains_bbox(&bbox_non_overlap)?);
+	assert!(!bbox_outer.try_includes_bbox(&bbox_non_overlap)?);
 
 	// Empty bboxes always false
 	let empty_outer = TileBBox::new_empty(5)?;
 	let empty_inner = TileBBox::new_empty(5)?;
-	assert!(!empty_outer.try_contains_bbox(&bbox_inner)?);
-	assert!(!bbox_outer.try_contains_bbox(&empty_inner)?);
+	assert!(!empty_outer.try_includes_bbox(&bbox_inner)?);
+	assert!(!bbox_outer.try_includes_bbox(&empty_inner)?);
 
 	// Different zoom levels → error
-	assert!(bbox_outer.try_contains_bbox(&bbox_diff_level).is_err());
+	assert!(bbox_outer.try_includes_bbox(&bbox_diff_level).is_err());
 
 	Ok(())
 }

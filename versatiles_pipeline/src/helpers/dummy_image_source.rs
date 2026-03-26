@@ -92,7 +92,7 @@ impl TileSource for DummyImageSource {
 
 	#[context("Getting tile for coord: {:?}", coord)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		if !self.metadata.bbox_pyramid.contains_coord(coord) {
+		if !self.metadata.bbox_pyramid.includes_coord(coord) {
 			return Ok(None);
 		}
 		Ok((self.generate_tile)(coord))

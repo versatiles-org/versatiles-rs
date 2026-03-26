@@ -152,7 +152,7 @@ mod tests {
 		for coord in bb.iter_bbox_grid(size) {
 			cols.entry(coord.x_min()?).and_modify(|c| *c += 1).or_insert(1);
 			rows.entry(coord.y_min()?).and_modify(|c| *c += 1).or_insert(1);
-			assert!(bb.try_contains_bbox(&coord)?);
+			assert!(bb.try_includes_bbox(&coord)?);
 			assert!(coord.width() <= size);
 			assert!(coord.height() <= size);
 		}

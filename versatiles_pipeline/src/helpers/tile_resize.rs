@@ -179,7 +179,7 @@ impl TileResizeCore {
 	}
 
 	pub fn get_tile_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<'static, Tile>> {
-		if !self.metadata.bbox_pyramid.overlaps_bbox(&bbox_dst) {
+		if !self.metadata.bbox_pyramid.intersects_bbox(&bbox_dst) {
 			return Ok(TileStream::empty());
 		}
 

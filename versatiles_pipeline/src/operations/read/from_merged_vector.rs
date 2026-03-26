@@ -92,7 +92,7 @@ impl ReadTileSource for Operation {
 
 			let metadata = source.metadata();
 			traversal.intersect(&metadata.traversal)?;
-			pyramid.include_bbox_pyramid(&metadata.bbox_pyramid);
+			pyramid.include_pyramid(&metadata.bbox_pyramid);
 
 			ensure!(
 				metadata.tile_format.to_type() == TileType::Vector,

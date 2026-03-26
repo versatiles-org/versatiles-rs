@@ -229,7 +229,7 @@ impl VersaTilesReader {
 					.enumerate()
 					.filter_map(|(index, range)| {
 						let coord = tiles_bbox_block.coord_at_index(index as u64).ok()?;
-						if tiles_bbox_used.contains(&coord) && range.length > 0 {
+						if tiles_bbox_used.includes_coord(&coord) && range.length > 0 {
 							Some((coord, *range))
 						} else {
 							None
@@ -297,7 +297,7 @@ impl TileSource for VersaTilesReader {
 		let bbox = block.get_global_bbox();
 
 		// Check if the tile is within the block definition
-		if !bbox.contains(coord) {
+		if !bbox.includes_coord(coord) {
 			log::trace!("tile {coord:?} outside block definition");
 			return Ok(None);
 		}
@@ -368,7 +368,7 @@ impl TileSource for VersaTilesReader {
 									return None;
 								}
 								let coord = block_bbox.coord_at_index(index as u64).ok()?;
-								if used_bbox.contains(&coord) {
+								if used_bbox.includes_coord(&coord) {
 									Some((coord, u32::try_from(range.length).ok()?))
 								} else {
 									None
@@ -672,7 +672,7 @@ mod tests {
 
 		assert_eq!(sizes.len(), 16); // 4x4
 		for (coord, size) in &sizes {
-			assert!(bbox.contains(coord), "coord {coord:?} outside requested bbox");
+			assert!(bbox.includes_coord(coord), "coord {coord:?} outside requested bbox");
 			assert_eq!(*size, 77);
 		}
 

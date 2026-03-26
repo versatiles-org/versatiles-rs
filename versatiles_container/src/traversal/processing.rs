@@ -224,7 +224,7 @@ fn verify_steps(
 					for push_bbox in pushes.get(idx).unwrap() {
 						ensure!(!push_bbox.is_empty(), "Pushed BBox {push_bbox:?} is empty");
 						ensure!(
-							bbox.try_contains_bbox(push_bbox)?,
+							bbox.try_includes_bbox(push_bbox)?,
 							"Pushed BBox {push_bbox:?} not contained in Pop {bbox:?}"
 						);
 					}

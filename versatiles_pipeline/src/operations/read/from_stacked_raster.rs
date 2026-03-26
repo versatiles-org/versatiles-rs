@@ -203,7 +203,7 @@ impl ReadTileSource for Operation {
 
 			let metadata = source.metadata();
 			traversal.intersect(&metadata.traversal)?;
-			pyramid.include_bbox_pyramid(&metadata.bbox_pyramid);
+			pyramid.include_pyramid(&metadata.bbox_pyramid);
 
 			ensure!(
 				metadata.tile_format.to_type() == TileType::Raster,
@@ -280,7 +280,7 @@ impl TileSource for Operation {
 		let entries: Vec<FilteredSourceEntry> = self
 			.sources
 			.iter()
-			.filter(|entry| entry.source.metadata().bbox_pyramid.overlaps_bbox(&bbox))
+			.filter(|entry| entry.source.metadata().bbox_pyramid.intersects_bbox(&bbox))
 			.map(|entry| entry.for_level(bbox.level))
 			.collect();
 
@@ -1050,7 +1050,7 @@ mod tests {
 			for level in 0..=max_level {
 				src_pyramid.include_bbox(&TileBBox::new_full(level).unwrap());
 			}
-			pyramid.include_bbox_pyramid(&src_pyramid);
+			pyramid.include_pyramid(&src_pyramid);
 			let source = DummyImageSource::from_color(color, 4, TileFormat::PNG, Some(src_pyramid)).unwrap();
 			traversal.intersect(&source.metadata().traversal).unwrap();
 			original_sources.push(Box::new(source));
@@ -1258,7 +1258,7 @@ mod tests {
 			for level in 0..=max_level {
 				src_pyramid.include_bbox(&TileBBox::new_full(level).unwrap());
 			}
-			pyramid.include_bbox_pyramid(&src_pyramid);
+			pyramid.include_pyramid(&src_pyramid);
 			let source = DummyImageSource::from_color(color, 4, TileFormat::PNG, Some(src_pyramid)).unwrap();
 			traversal.intersect(&source.metadata().traversal).unwrap();
 			original_sources.push(Box::new(source));

@@ -76,7 +76,7 @@ impl TileSource for DummyVectorSource {
 	}
 
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		if !self.metadata.bbox_pyramid.contains_coord(coord) {
+		if !self.metadata.bbox_pyramid.includes_coord(coord) {
 			return Ok(None);
 		}
 
@@ -117,7 +117,7 @@ impl TileSource for DummyVectorSource {
 		let bbox_pyramid = self.metadata.bbox_pyramid.clone();
 
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
-			if !bbox_pyramid.contains_coord(&coord) {
+			if !bbox_pyramid.includes_coord(&coord) {
 				return None;
 			}
 
@@ -170,7 +170,7 @@ mod tests {
 			source
 				.metadata()
 				.bbox_pyramid
-				.contains_coord(&TileCoord::new(8, 0, 200).unwrap())
+				.includes_coord(&TileCoord::new(8, 0, 200).unwrap())
 		);
 
 		let coord = TileCoord::new(8, 0, 150).unwrap();

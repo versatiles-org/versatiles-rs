@@ -110,7 +110,7 @@ impl MockReader {
 	) -> Result<Option<Tile>> {
 		use TileFormat::{JPG, JSON, MVT, PNG, WEBP};
 
-		if !bbox_pyramid.contains_coord(coord) {
+		if !bbox_pyramid.includes_coord(coord) {
 			return Ok(None);
 		}
 
