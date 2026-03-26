@@ -357,6 +357,126 @@ fn western_edge(pyramid: &TileBBoxPyramid) -> f64 {
 	pyramid.weighted_bbox().unwrap().x_min
 }
 
+/// Open the first source to discover tile format, compression, and metadata.
+/// Returns the config and tilejson fields to populate the output.
+async fn discover_config(
+	paths: &[String],
+	source_order: &[usize],
+	quality: &[Option<u8>; 32],
+	lossless: bool,
+	min_zoom: Option<u8>,
+	max_zoom: Option<u8>,
+	runtime: &TilesRuntime,
+) -> Result<(AssembleConfig, TileJSON, u64)> {
+	let first_idx = source_order[0];
+	let first_path = &paths[first_idx];
+	let first_reader = runtime
+		.get_reader_from_str(first_path)
+		.await
+		.with_context(|| format!("Failed to open container: {first_path}"))?;
+	let first_metadata = first_reader.metadata();
+	let first_tilejson = first_reader.tilejson();
+
+	let config = AssembleConfig {
+		quality: *quality,
+		lossless,
+		tile_format: first_metadata.tile_format,
+		tile_compression: first_metadata.tile_compression,
+		min_zoom,
+		max_zoom,
+	};
+
+	let tile_dim: u64 = first_tilejson.tile_size.map_or(256, |ts| u64::from(ts.size()));
+
+	let tilejson = TileJSON {
+		tile_format: Some(config.tile_format),
+		tile_type: Some(config.tile_format.to_type()),
+		tile_schema: first_tilejson.tile_schema,
+		tile_size: first_tilejson.tile_size,
+		..TileJSON::default()
+	};
+
+	Ok((config, tilejson, tile_dim))
+}
+
+/// Build a union pyramid from all prescanned pyramids, clipped to zoom range.
+fn build_union_pyramid(pyramids: &[TileBBoxPyramid], min_zoom: Option<u8>, max_zoom: Option<u8>) -> TileBBoxPyramid {
+	let mut u = TileBBoxPyramid::new_empty();
+	for p in pyramids {
+		u.include_pyramid(p);
+	}
+	if let Some(min) = min_zoom {
+		u.set_level_min(min);
+	}
+	if let Some(max) = max_zoom {
+		u.set_level_max(max);
+	}
+	u
+}
+
+/// Evict northern tiles from the buffer and clip the remaining pyramid.
+///
+/// Tiles at levels where `level_cut_y == 0` are not evicted because they
+/// cannot be reprocessed in a subsequent pass.
+fn evict_northern_tiles(
+	buffer: &mut HashMap<u64, (TileCoord, Tile)>,
+	remaining_pyramid: &mut TileBBoxPyramid,
+	cut_y: u32,
+	max_level: u8,
+) {
+	// Remove tiles north of the cut from buffer
+	let evict_keys: Vec<u64> = buffer
+		.iter()
+		.filter(|(_, (coord, _))| {
+			let level_cut_y = cut_y >> (max_level - coord.level);
+			level_cut_y > 0 && coord.y < level_cut_y
+		})
+		.map(|(&k, _)| k)
+		.collect();
+	for k in &evict_keys {
+		buffer.remove(k);
+	}
+	log::debug!(
+		"evicted {} tiles, {} remaining in buffer",
+		evict_keys.len(),
+		buffer.len()
+	);
+
+	// Clip remaining_pyramid so subsequent sources skip evicted region
+	for level in 0..=max_level {
+		let level_cut_y = cut_y >> (max_level - level);
+		let bbox = remaining_pyramid.get_level_bbox(level);
+		if !bbox.is_empty()
+			&& let Ok(y_min) = bbox.y_min()
+			&& y_min < level_cut_y
+		{
+			let mut new_bbox = *bbox;
+			let _ = new_bbox.set_y_min(level_cut_y);
+			remaining_pyramid.set_level_bbox(new_bbox);
+		}
+	}
+}
+
+/// Create a pyramid covering only tiles north of `cut_y` (for the next pass).
+fn clip_pyramid_to_north(union_pyramid: &TileBBoxPyramid, cut_y: u32, max_level: u8) -> TileBBoxPyramid {
+	let mut next = union_pyramid.clone();
+	for level in 0..=max_level {
+		let shift = max_level - level;
+		let level_cut_y = cut_y >> shift;
+		let bbox = next.get_level_bbox(level);
+		if !bbox.is_empty() {
+			if level_cut_y == 0 {
+				next.set_level_bbox(TileBBox::new_empty(level).unwrap());
+			} else {
+				let mut new_bbox = *bbox;
+				let _ = new_bbox.set_y_max(level_cut_y - 1);
+				next.set_level_bbox(new_bbox);
+			}
+		}
+	}
+	next
+}
+
 /// Validate that a source's format and compression match the expected config.
 fn validate_source_format(
 	path: &str,
@@ -380,7 +500,7 @@ fn validate_source_format(
 
 /// Assemble sources into an output container. If `prescanned_pyramids` is provided, uses those
 /// instead of reading pyramids from each source during assembly.
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
 async fn assemble_tiles(
 	output: &str,
 	paths: &[String],
@@ -393,7 +513,6 @@ async fn assemble_tiles(
 	runtime: &TilesRuntime,
 ) -> Result<()> {
 	let translucent_buffer: Arc<Mutex<HashMap<u64, (TileCoord, Tile)>>> = Arc::default();
-	let mut tilejson = TileJSON::default();
 
 	// When prescan data is available, sort sources west-to-east and precompute
 	// per-level suffix minimum x so we can flush translucent tiles early.
@@ -408,59 +527,23 @@ async fn assemble_tiles(
 		((0..paths.len()).collect(), None)
 	};
 
-	// Open the first source to establish tile format and compression.
-	let first_idx = source_order[0];
-	let first_path = &paths[first_idx];
-	let first_reader = runtime
-		.get_reader_from_str(first_path)
-		.await
-		.with_context(|| format!("Failed to open container: {first_path}"))?;
-	let first_metadata = first_reader.metadata();
-	let first_tilejson = first_reader.tilejson();
-	let config = AssembleConfig {
-		quality: *quality,
-		lossless,
-		tile_format: first_metadata.tile_format,
-		tile_compression: first_metadata.tile_compression,
-		min_zoom,
-		max_zoom,
-	};
+	let (config, mut tilejson, tile_dim) =
+		discover_config(paths, &source_order, quality, lossless, min_zoom, max_zoom, runtime).await?;
 
-	// Compute max_buffer_tiles from tile dimensions
-	let tile_dim: u64 = first_tilejson.tile_size.map_or(512, |ts| u64::from(ts.size()));
 	let max_buffer_tiles: usize = if max_buffer_size > 0 {
 		usize::try_from(max_buffer_size / (tile_dim * tile_dim * 4)).unwrap_or(usize::MAX)
 	} else {
 		usize::MAX
 	};
 
-	// Capture tile metadata fields from the first source for the output tilejson
-	tilejson.tile_format = Some(config.tile_format);
-	tilejson.tile_type = Some(config.tile_format.to_type());
-	tilejson.tile_schema = first_tilejson.tile_schema;
-	tilejson.tile_size = first_tilejson.tile_size;
-
-	drop(first_reader);
-
-	// Build union pyramid when prescan data is available
 	let (union_pyramid, max_level): (Option<TileBBoxPyramid>, u8) = if let Some(pyramids) = prescanned_pyramids {
-		let mut u = TileBBoxPyramid::new_empty();
-		for p in pyramids {
-			u.include_pyramid(p);
-		}
-		if let Some(min) = min_zoom {
-			u.set_level_min(min);
-		}
-		if let Some(max) = max_zoom {
-			u.set_level_max(max);
-		}
+		let u = build_union_pyramid(pyramids, min_zoom, max_zoom);
 		let ml = u.get_level_max().unwrap_or(0);
 		(Some(u), ml)
 	} else {
 		(None, 0)
 	};
 
-	// Create the output sink (dispatches by file extension)
 	let sink: Arc<Box<dyn TileSink>> = Arc::new(open_tile_sink(
 		output,
 		config.tile_format,
@@ -499,8 +582,6 @@ async fn assemble_tiles(
 			if let Some(max) = config.max_zoom {
 				pyramid.set_level_max(max);
 			}
-
-			// Clip source pyramid to remaining region
 			if let Some(ref rp) = remaining_pyramid {
 				pyramid.intersect(rp);
 			}
@@ -510,74 +591,34 @@ async fn assemble_tiles(
 			}
 
 			process_source_tiles(&reader, &pyramid, &sink, &translucent_buffer, &config).await?;
-			// reader dropped here — file handle closed
 
-			// Sweep-line flush: remove translucent tiles that no remaining source can cover
 			if let Some(ref suffix) = suffix_min_x {
 				sweep_flush(&suffix[pos + 1], &translucent_buffer, &sink, &config)?;
 			}
 
-			// Eviction check: if buffer exceeds limit, evict northern tiles
+			// Eviction: if buffer exceeds limit, evict northern tiles
+			let buf_len = translucent_buffer.lock().unwrap().len();
+			if buf_len > max_buffer_tiles
+				&& let Some(ref mut rp) = remaining_pyramid
 			{
-				let buf_len = translucent_buffer.lock().unwrap().len();
-				if buf_len > max_buffer_tiles
-					&& let Some(ref mut rp) = remaining_pyramid
-				{
-					let new_cut_y = {
-						let buf = translucent_buffer.lock().unwrap();
-						compute_new_cut_y(&buf, max_buffer_tiles, max_level)
-					};
-					if new_cut_y > cut_y {
-						cut_y = new_cut_y;
-						log::info!(
-							"buffer exceeded limit ({buf_len} > {max_buffer_tiles}), evicting tiles north of cut_y={cut_y}"
-						);
-
-						// Evict tiles north of cut from buffer.
-						// Use level-native coordinates to match remaining_pyramid clipping.
-						// Don't evict tiles at levels where level_cut_y == 0 — they can't
-						// be reprocessed in a subsequent pass.
-						let mut buf = translucent_buffer.lock().unwrap();
-						let evict_keys: Vec<u64> = buf
-							.iter()
-							.filter(|(_, (coord, _))| {
-								let level_cut_y = cut_y >> (max_level - coord.level);
-								level_cut_y > 0 && coord.y < level_cut_y
-							})
-							.map(|(&k, _)| k)
-							.collect();
-						for k in &evict_keys {
-							buf.remove(k);
-						}
-						log::info!("evicted {} tiles, {} remaining in buffer", evict_keys.len(), buf.len());
-						drop(buf);
-
-						// Clip remaining_pyramid so subsequent sources skip evicted region
-						for level in 0..=max_level {
-							let level_cut_y = cut_y >> (max_level - level);
-							let bbox = rp.get_level_bbox(level);
-							if !bbox.is_empty()
-								&& let Ok(y_min) = bbox.y_min()
-								&& y_min < level_cut_y
-							{
-								let mut new_bbox = *bbox;
-								let _ = new_bbox.set_y_min(level_cut_y);
-								rp.set_level_bbox(new_bbox);
-							}
-						}
-					}
+				let new_cut_y = compute_new_cut_y(&translucent_buffer.lock().unwrap(), max_buffer_tiles, max_level);
+				if new_cut_y > cut_y {
+					cut_y = new_cut_y;
+					log::debug!(
+						"buffer exceeded limit ({buf_len} > {max_buffer_tiles}), evicting tiles north of cut_y={cut_y}"
+					);
+					evict_northern_tiles(&mut translucent_buffer.lock().unwrap(), rp, cut_y, max_level);
 				}
 			}
 
 			{
 				let buf = translucent_buffer.lock().unwrap();
-				let total_heap: usize = buf.values().map(|(_, t)| t.estimated_heap_size()).sum();
+				let heap_mb = buf.values().map(|(_, t)| t.estimated_heap_size()).sum::<usize>() / 1_000_000;
 				log::debug!(
-					"after source {}/{}: translucent_buffer={} tiles, ~{}MB estimated heap",
+					"after source {}/{}: buffer={} tiles, ~{heap_mb}MB heap",
 					pos + 1,
 					source_order.len(),
-					buf.len(),
-					total_heap / 1_000_000,
+					buf.len()
 				);
 			}
 
@@ -593,27 +634,10 @@ async fn assemble_tiles(
 			break;
 		}
 
-		// Prepare for next pass: only tiles north of the cut (y < cut_y)
 		if let Some(ref up) = union_pyramid {
-			let mut next = up.clone();
-			for level in 0..=max_level {
-				let shift = max_level - level;
-				let level_cut_y = cut_y >> shift;
-				let bbox = next.get_level_bbox(level);
-				if !bbox.is_empty() {
-					if level_cut_y == 0 {
-						next.set_level_bbox(TileBBox::new_empty(level).unwrap());
-					} else {
-						let mut new_bbox = *bbox;
-						let _ = new_bbox.set_y_max(level_cut_y - 1);
-						next.set_level_bbox(new_bbox);
-					}
-				}
-			}
-			remaining_pyramid = Some(next);
+			remaining_pyramid = Some(clip_pyramid_to_north(up, cut_y, max_level));
 		}
-
-		log::info!("pass complete, restarting for remaining tiles above cut_y={cut_y}");
+		log::debug!("pass complete, restarting for remaining tiles above cut_y={cut_y}");
 	}
 
 	// Finalize: write metadata and close the container
@@ -673,7 +697,7 @@ async fn process_source_tiles(
 		let existing = translucent_buffer.lock().unwrap().remove(&key);
 
 		if tile.is_empty()? {
-			log::info!("skipping empty tile at {coord:?}");
+			log::trace!("skipping empty tile at {coord:?}");
 		}
 
 		if let Some((_, existing)) = existing {
