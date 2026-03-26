@@ -58,9 +58,10 @@ pub struct Assemble {
 	#[arg(long)]
 	lossless: bool,
 
-	/// Scan all sources upfront and optimize their processing order. This can greatly reduce the number of memory allocations and improve performance.
+	/// Allow reordering input files to optimize processing speed.
+	/// Scans all sources upfront and sorts them west-to-east for efficient sweep-line flushing.
 	#[arg(long)]
-	prescan: bool,
+	optimize_order: bool,
 
 	/// Minimum zoom level to include in the output (default: include all).
 	#[arg(long, value_name = "int")]
@@ -220,7 +221,7 @@ pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 	log::info!("assembling {} containers", paths.len());
 
 	// Optionally prescan all sources in parallel to validate accessibility and collect pyramids
-	let do_prescan = args.prescan || max_buffer_size > 0;
+	let do_prescan = args.optimize_order || max_buffer_size > 0;
 	let prescanned_pyramids = if do_prescan {
 		Some(prescan_sources(&paths, runtime).await?)
 	} else {
