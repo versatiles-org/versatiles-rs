@@ -21,8 +21,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use versatiles_container::{Tile, TileSink, TilesRuntime, open_tile_sink};
 use versatiles_core::{
-	Blob, ConcurrencyLimits, TileCompression, TileCoord, TileFormat, TileJSON, TileStream,
-	utils::HilbertIndex,
+	Blob, ConcurrencyLimits, TileCompression, TileCoord, TileFormat, TileJSON, TileStream, utils::HilbertIndex,
 };
 use versatiles_image::traits::DynamicImageTraitOperation;
 
@@ -284,7 +283,17 @@ pub async fn run(args: &Assemble2, runtime: &TilesRuntime) -> Result<()> {
 
 	log::info!("assembling {} containers (two-pass)", paths.len());
 
-	assemble_two_pass(&args.output, &paths, &quality, args.lossless, args.min_zoom, args.max_zoom, max_buffer_size, runtime).await
+	assemble_two_pass(
+		&args.output,
+		&paths,
+		&quality,
+		args.lossless,
+		args.min_zoom,
+		args.max_zoom,
+		max_buffer_size,
+		runtime,
+	)
+	.await
 }
 
 // ─── Two-pass pipeline ───
@@ -344,7 +353,12 @@ async fn assemble_two_pass(
 				tile_size: reader_tilejson.tile_size,
 				..TileJSON::default()
 			});
-			sink = Some(Arc::new(open_tile_sink(output, cfg.tile_format, cfg.tile_compression, runtime)?));
+			sink = Some(Arc::new(open_tile_sink(
+				output,
+				cfg.tile_format,
+				cfg.tile_compression,
+				runtime,
+			)?));
 			config = Some(cfg.clone());
 			cfg
 		};
