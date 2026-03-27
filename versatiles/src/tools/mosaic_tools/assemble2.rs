@@ -576,6 +576,9 @@ async fn assemble_two_pass(
 		// Pre-fetch tiles for the first source while we set up
 		let mut prefetched: Option<Vec<(TileCoord, Tile)>> = None;
 
+		let batch_arc = Arc::new(batch.to_vec());
+		let paths_arc = Arc::new(paths.to_vec());
+
 		for (pos, &source_idx) in sources_needed.iter().enumerate() {
 			// Use pre-fetched tiles if available, otherwise fetch now
 			let fetched_tiles = if let Some(tiles) = prefetched.take() {
@@ -587,11 +590,11 @@ async fn assemble_two_pass(
 			// Kick off pre-fetch for the NEXT source in the background while
 			// we composite the current one. This overlaps I/O with CPU work.
 			let prefetch_handle = if let Some(&next_idx) = sources_needed.get(pos + 1) {
-				let batch_owned: Vec<(TileCoord, Vec<usize>)> = batch.to_vec();
-				let paths_owned: Vec<String> = paths.to_vec();
+				let batch_clone = Arc::clone(&batch_arc);
+				let paths_clone = Arc::clone(&paths_arc);
 				let runtime = runtime.clone();
 				Some(tokio::spawn(async move {
-					fetch_source_tiles(next_idx, &batch_owned, &paths_owned, &runtime).await
+					fetch_source_tiles(next_idx, &batch_clone, &paths_clone, &runtime).await
 				}))
 			} else {
 				None
