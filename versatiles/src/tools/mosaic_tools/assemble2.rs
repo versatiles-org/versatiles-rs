@@ -595,7 +595,7 @@ async fn assemble_two_pass(
 				let key = coord.get_hilbert_index()?;
 				let existing = buffer_ref.remove(key);
 				if let Some((_, existing_tile)) = existing {
-					let merged = composite_two_tiles(existing_tile, tile)?;
+					let merged = composite_two_tiles(tile, existing_tile)?;
 					buffer_ref.insert(coord, merged)?;
 				} else {
 					buffer_ref.insert(coord, tile)?;
