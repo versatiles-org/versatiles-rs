@@ -21,7 +21,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use versatiles_container::{Tile, TileSink, TilesRuntime, open_tile_sink};
 use versatiles_core::{
-	Blob, ConcurrencyLimits, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream,
+	Blob, ConcurrencyLimits, TileCompression, TileCoord, TileFormat, TileJSON, TileStream,
 	utils::HilbertIndex,
 };
 use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
@@ -266,64 +266,7 @@ pub async fn run(args: &Assemble2, runtime: &TilesRuntime) -> Result<()> {
 
 	log::info!("assembling {} containers (two-pass)", paths.len());
 
-	// Prescan all sources to get pyramids
-	let mut pyramids = prescan_sources(&paths, runtime).await?;
-
-	// Clip pyramids to requested zoom range
-	for p in &mut pyramids {
-		if let Some(min) = args.min_zoom {
-			p.set_level_min(min);
-		}
-		if let Some(max) = args.max_zoom {
-			p.set_level_max(max);
-		}
-	}
-
-	assemble_two_pass(
-		&args.output,
-		&paths,
-		&pyramids,
-		&quality,
-		args.lossless,
-		max_buffer_size,
-		runtime,
-	)
-	.await
-}
-
-// ─── Prescan ───
-
-async fn prescan_sources(paths: &[String], runtime: &TilesRuntime) -> Result<Vec<TileBBoxPyramid>> {
-	let progress = runtime.create_progress("scanning containers", paths.len() as u64);
-	let concurrency = ConcurrencyLimits::default().io_bound;
-
-	let results: Vec<Result<(usize, TileBBoxPyramid)>> = futures::stream::iter(paths.iter().enumerate())
-		.map(|(idx, path)| {
-			let runtime = runtime.clone();
-			let path = path.clone();
-			let progress = progress.clone();
-			async move {
-				let reader = runtime
-					.get_reader_from_str(&path)
-					.await
-					.with_context(|| format!("Failed to open container: {path}"))?;
-				let pyramid = reader.metadata().bbox_pyramid.clone();
-				progress.inc(1);
-				Ok((idx, pyramid))
-			}
-		})
-		.buffer_unordered(concurrency)
-		.collect()
-		.await;
-
-	progress.finish();
-
-	let mut pyramids = vec![TileBBoxPyramid::default(); paths.len()];
-	for result in results {
-		let (idx, pyramid) = result?;
-		pyramids[idx] = pyramid;
-	}
-	Ok(pyramids)
+	assemble_two_pass(&args.output, &paths, &quality, args.lossless, args.min_zoom, args.max_zoom, max_buffer_size, runtime).await
 }
 
 // ─── Two-pass pipeline ───
@@ -332,45 +275,23 @@ async fn prescan_sources(paths: &[String], runtime: &TilesRuntime) -> Result<Vec
 async fn assemble_two_pass(
 	output: &str,
 	paths: &[String],
-	pyramids: &[TileBBoxPyramid],
 	quality: &[Option<u8>; 32],
 	lossless: bool,
+	min_zoom: Option<u8>,
+	max_zoom: Option<u8>,
 	max_buffer_size: u64,
 	runtime: &TilesRuntime,
 ) -> Result<()> {
-	// Discover config from first source
-	let first_reader = runtime
-		.get_reader_from_str(&paths[0])
-		.await
-		.with_context(|| format!("Failed to open container: {}", paths[0]))?;
-	let first_metadata = first_reader.metadata();
-	let first_tilejson = first_reader.tilejson();
+	// ─── First pass: scan sources + write opaque tiles ───
+	//
+	// Each source is opened once. We extract its pyramid (for tilejson metadata
+	// and zoom clipping) and stream its tiles in the same iteration—no separate
+	// prescan needed.
 
-	let config = AssembleConfig {
-		quality: *quality,
-		lossless,
-		tile_format: first_metadata.tile_format,
-		tile_compression: first_metadata.tile_compression,
-	};
-
-	let tile_dim: u64 = first_tilejson.tile_size.map_or(256, |ts| u64::from(ts.size()));
-
-	let mut tilejson = TileJSON {
-		tile_format: Some(config.tile_format),
-		tile_type: Some(config.tile_format.to_type()),
-		tile_schema: first_tilejson.tile_schema,
-		tile_size: first_tilejson.tile_size,
-		..TileJSON::default()
-	};
-
-	let sink: Arc<Box<dyn TileSink>> = Arc::new(open_tile_sink(
-		output,
-		config.tile_format,
-		config.tile_compression,
-		runtime,
-	)?);
-
-	// ─── First pass: scan + write opaque ───
+	let mut config: Option<AssembleConfig> = None;
+	let mut tilejson: Option<TileJSON> = None;
+	let mut tile_dim: u64 = 256;
+	let mut sink: Option<Arc<Box<dyn TileSink>>> = None;
 
 	let mut translucent_map: HashMap<TileCoord, Vec<usize>> = HashMap::new();
 	let done: Arc<Mutex<HashSet<TileCoord>>> = Arc::default();
@@ -384,14 +305,48 @@ async fn assemble_two_pass(
 			.with_context(|| format!("Failed to open container: {path}"))?;
 
 		let metadata = reader.metadata();
-		validate_source_format(path, metadata, &config)?;
-		tilejson.merge(reader.tilejson())?;
+		let reader_tilejson = reader.tilejson();
 
-		let pyramid = &pyramids[idx];
+		// First source: discover format and open sink
+		let cfg = if let Some(ref cfg) = config {
+			validate_source_format(path, metadata, cfg)?;
+			cfg.clone()
+		} else {
+			let cfg = AssembleConfig {
+				quality: *quality,
+				lossless,
+				tile_format: metadata.tile_format,
+				tile_compression: metadata.tile_compression,
+			};
+			tile_dim = reader_tilejson.tile_size.map_or(256, |ts| u64::from(ts.size()));
+			tilejson = Some(TileJSON {
+				tile_format: Some(cfg.tile_format),
+				tile_type: Some(cfg.tile_format.to_type()),
+				tile_schema: reader_tilejson.tile_schema,
+				tile_size: reader_tilejson.tile_size,
+				..TileJSON::default()
+			});
+			sink = Some(Arc::new(open_tile_sink(output, cfg.tile_format, cfg.tile_compression, runtime)?));
+			config = Some(cfg.clone());
+			cfg
+		};
+
+		tilejson.as_mut().unwrap().merge(reader_tilejson)?;
+
+		// Get pyramid and clip to zoom range
+		let mut pyramid = metadata.bbox_pyramid.clone();
+		if let Some(min) = min_zoom {
+			pyramid.set_level_min(min);
+		}
+		if let Some(max) = max_zoom {
+			pyramid.set_level_max(max);
+		}
 		if pyramid.is_empty() {
 			progress.inc(1);
 			continue;
 		}
+
+		let sink_arc = sink.as_ref().unwrap();
 
 		// Stream all tiles from this source
 		let level_bboxes: Vec<_> = pyramid.iter_levels().filter(|b| !b.is_empty()).copied().collect();
@@ -404,9 +359,9 @@ async fn assemble_two_pass(
 
 		// Classify tiles: opaque → write, empty → skip, translucent → record
 		let concurrency = ConcurrencyLimits::default().cpu_bound * 2;
-		let sink_ref = Arc::clone(&sink);
+		let sink_ref = Arc::clone(sink_arc);
 		let done_ref = Arc::clone(&done);
-		let config_clone = config.clone();
+		let config_clone = cfg;
 		let translucent_coords: Arc<Mutex<Vec<TileCoord>>> = Arc::default();
 		let translucent_coords_ref = Arc::clone(&translucent_coords);
 
@@ -462,6 +417,10 @@ async fn assemble_two_pass(
 	}
 
 	progress.finish();
+
+	let config = config.ok_or_else(|| anyhow!("no sources found"))?;
+	let tilejson = tilejson.unwrap();
+	let sink = sink.unwrap();
 
 	// ─── Between passes: prepare batches ───
 
