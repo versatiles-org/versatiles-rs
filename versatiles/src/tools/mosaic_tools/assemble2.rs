@@ -314,7 +314,7 @@ async fn assemble_two_pass(
 	let mut translucent_map: HashMap<TileCoord, Vec<usize>> = HashMap::new();
 	let done: Arc<Mutex<HashSet<TileCoord>>> = Arc::default();
 
-	let progress = runtime.create_progress("scanning sources", paths.len() as u64);
+	let progress = runtime.create_progress("pass 1/2: scanning sources", paths.len() as u64);
 
 	for (idx, path) in paths.iter().enumerate() {
 		let reader = runtime
@@ -485,7 +485,7 @@ async fn assemble_two_pass(
 		})
 		.sum();
 
-	let progress = runtime.create_progress("compositing tiles", total_source_reads);
+	let progress = runtime.create_progress("pass 2/2: compositing tiles", total_source_reads);
 
 	for batch in &batches {
 		let sources_needed: BTreeSet<usize> = batch.iter().flat_map(|(_, srcs)| srcs).copied().collect();
