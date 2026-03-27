@@ -1,4 +1,5 @@
 use super::mosaic_tools::assemble;
+use super::mosaic_tools::assemble2;
 #[cfg(feature = "gdal")]
 use super::mosaic_tools::tile;
 use anyhow::Result;
@@ -16,6 +17,7 @@ enum MosaicCommands {
 	#[cfg(feature = "gdal")]
 	Tile(tile::Tile),
 	Assemble(assemble::Assemble),
+	Assemble2(assemble2::Assemble2),
 }
 
 #[tokio::main]
@@ -24,6 +26,7 @@ pub async fn run(command: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		#[cfg(feature = "gdal")]
 		MosaicCommands::Tile(args) => tile::run(args, runtime).await?,
 		MosaicCommands::Assemble(args) => assemble::run(args, runtime).await?,
+		MosaicCommands::Assemble2(args) => assemble2::run(args, runtime).await?,
 	}
 
 	Ok(())

@@ -38,7 +38,7 @@
 
 mod pass_state;
 mod pipeline;
-mod translucent_buffer;
+pub(crate) mod translucent_buffer;
 
 use anyhow::{Context, Result, ensure};
 use versatiles_container::TilesRuntime;
