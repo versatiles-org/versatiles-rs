@@ -28,10 +28,12 @@ impl TranslucentBuffer {
 		}
 	}
 
+	#[cfg(test)]
 	pub fn len(&self) -> usize {
 		self.inner.lock().unwrap().len()
 	}
 
+	#[cfg(test)]
 	pub fn clear(&self) {
 		self.inner.lock().unwrap().clear();
 	}
@@ -51,35 +53,6 @@ impl TranslucentBuffer {
 		let key = coord.get_hilbert_index()?;
 		self.inner.lock().unwrap().insert(key, (coord, tile));
 		Ok(())
-	}
-
-	/// Remove all tiles matching the predicate and return them.
-	pub fn remove_tiles_where(&self, mut pred: impl FnMut(&TileCoord) -> bool) -> Vec<(TileCoord, Tile)> {
-		let mut buf = self.inner.lock().unwrap();
-		let keys: Vec<u64> = buf
-			.iter()
-			.filter(|(_, (coord, _))| pred(coord))
-			.map(|(&k, _)| k)
-			.collect();
-		keys.iter().filter_map(|k| buf.remove(k)).collect()
-	}
-
-	/// Compute the `cut_y` value (at `max_level` resolution) that would keep
-	/// approximately `max_tiles` southern (highest-y) tiles in the buffer.
-	///
-	/// Returns 0 if all tiles fit within `max_tiles`.
-	pub fn compute_cut_y(&self, max_tiles: usize, max_level: u8) -> u32 {
-		let buf = self.inner.lock().unwrap();
-		let mut projected_ys: Vec<u32> = buf
-			.values()
-			.map(|(coord, _)| coord.y << (max_level - coord.level))
-			.collect();
-		projected_ys.sort_unstable();
-		if projected_ys.len() > max_tiles {
-			projected_ys[projected_ys.len() - max_tiles]
-		} else {
-			0
-		}
 	}
 }
 
@@ -163,77 +136,6 @@ mod tests {
 		let drained = buf.drain();
 		assert_eq!(drained.len(), 3);
 		assert_eq!(buf.len(), 0);
-		Ok(())
-	}
-
-	#[test]
-	fn remove_tiles_where_filters_correctly() -> anyhow::Result<()> {
-		let buf = TranslucentBuffer::new();
-		buf.insert(coord(5, 0, 0), dummy_tile())?;
-		buf.insert(coord(5, 1, 0), dummy_tile())?;
-		buf.insert(coord(5, 2, 0), dummy_tile())?;
-		buf.insert(coord(5, 3, 0), dummy_tile())?;
-
-		// Remove tiles with x < 2
-		let removed = buf.remove_tiles_where(|c| c.x < 2);
-		assert_eq!(removed.len(), 2);
-		assert_eq!(buf.len(), 2);
-		Ok(())
-	}
-
-	#[test]
-	fn remove_tiles_where_none_match() -> anyhow::Result<()> {
-		let buf = TranslucentBuffer::new();
-		buf.insert(coord(5, 10, 10), dummy_tile())?;
-
-		let removed = buf.remove_tiles_where(|c| c.x > 100);
-		assert_eq!(removed.len(), 0);
-		assert_eq!(buf.len(), 1);
-		Ok(())
-	}
-
-	#[test]
-	fn compute_cut_y_all_fit() -> anyhow::Result<()> {
-		let buf = TranslucentBuffer::new();
-		// 3 tiles at level 10
-		buf.insert(coord(10, 0, 100), dummy_tile())?;
-		buf.insert(coord(10, 0, 200), dummy_tile())?;
-		buf.insert(coord(10, 0, 300), dummy_tile())?;
-
-		// max_tiles=5 > 3 tiles, so all fit
-		assert_eq!(buf.compute_cut_y(5, 10), 0);
-		Ok(())
-	}
-
-	#[test]
-	fn compute_cut_y_eviction_needed() -> anyhow::Result<()> {
-		let buf = TranslucentBuffer::new();
-		// 4 tiles at level 10, y values: 100, 200, 300, 400
-		buf.insert(coord(10, 0, 100), dummy_tile())?;
-		buf.insert(coord(10, 0, 200), dummy_tile())?;
-		buf.insert(coord(10, 0, 300), dummy_tile())?;
-		buf.insert(coord(10, 0, 400), dummy_tile())?;
-
-		// Keep 2 tiles (southern = highest y). cut_y should be at projected_ys[4-2] = projected_ys[2]
-		// All at level 10 with max_level=10, so projected_y = y. Sorted: [100, 200, 300, 400]
-		// cut_y = projected_ys[2] = 300
-		let cut_y = buf.compute_cut_y(2, 10);
-		assert_eq!(cut_y, 300);
-		Ok(())
-	}
-
-	#[test]
-	fn compute_cut_y_with_level_projection() -> anyhow::Result<()> {
-		let buf = TranslucentBuffer::new();
-		// Tile at level 8, y=5. With max_level=10, projected_y = 5 << 2 = 20
-		buf.insert(coord(8, 0, 5), dummy_tile())?;
-		// Tile at level 10, y=100. projected_y = 100 << 0 = 100
-		buf.insert(coord(10, 0, 100), dummy_tile())?;
-
-		// Keep 1 tile (highest y = southernmost). Sorted projected: [20, 100].
-		// cut_y = projected_ys[2-1] = 100. Tiles with projected_y < 100 are evicted.
-		let cut_y = buf.compute_cut_y(1, 10);
-		assert_eq!(cut_y, 100);
 		Ok(())
 	}
 }

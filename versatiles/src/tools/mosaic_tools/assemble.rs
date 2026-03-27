@@ -14,7 +14,7 @@
 //! composited onto a `TranslucentBuffer` and flushed to the sink once the batch is
 //! complete.
 
-use super::assemble::translucent_buffer::TranslucentBuffer;
+use super::translucent_buffer::TranslucentBuffer;
 use anyhow::{Context, Result, anyhow, ensure};
 use futures::{StreamExt, future::ready};
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -25,10 +25,10 @@ use versatiles_core::{
 };
 use versatiles_image::traits::DynamicImageTraitOperation;
 
-/// CLI arguments for `mosaic assemble2`.
+/// CLI arguments for `mosaic assemble`.
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
-pub struct Assemble2 {
+pub struct Assemble {
 	/// Text file listing container paths or URLs, one per line.
 	/// Empty lines and # comments are skipped. Whitespace is trimmed.
 	/// Containers listed earlier overlay containers listed later.
@@ -61,7 +61,7 @@ pub struct Assemble2 {
 	max_buffer_size: String,
 }
 
-/// Encoding configuration shared across assemble2 functions.
+/// Encoding configuration shared across assemble functions.
 #[derive(Clone)]
 struct AssembleConfig {
 	quality: [Option<u8>; 32],
@@ -70,7 +70,7 @@ struct AssembleConfig {
 	tile_compression: TileCompression,
 }
 
-// ─── CLI parsing helpers (duplicated from assemble to keep modules independent) ───
+// ─── CLI parsing helpers ───
 
 fn parse_quality(quality: &str) -> Result<[Option<u8>; 32]> {
 	let mut result: [Option<u8>; 32] = [None; 32];
@@ -182,7 +182,7 @@ fn total_system_memory() -> Result<u64> {
 	}
 }
 
-// ─── Tile processing helpers (duplicated from assemble::pipeline) ───
+// ─── Tile processing helpers ───
 //
 // Encoding requirements:
 //
@@ -278,8 +278,8 @@ fn encode_tiles_parallel(tiles: Vec<(TileCoord, Tile)>, config: &AssembleConfig)
 
 // ─── Entry point ───
 
-pub async fn run(args: &Assemble2, runtime: &TilesRuntime) -> Result<()> {
-	log::info!("mosaic assemble2 from {:?} to {:?}", args.input_list, args.output);
+pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
+	log::info!("mosaic assemble from {:?} to {:?}", args.input_list, args.output);
 
 	let list_content = std::fs::read_to_string(&args.input_list)
 		.with_context(|| format!("Failed to read input list file: {}", args.input_list))?;
@@ -528,7 +528,7 @@ async fn assemble_two_pass(
 		// All tiles were opaque — we're done
 		let sink = Arc::try_unwrap(sink).map_err(|_| anyhow!("sink still has references"))?;
 		sink.finish(&tilejson, runtime)?;
-		log::info!("finished mosaic assemble2 (all tiles opaque, no second pass needed)");
+		log::info!("finished mosaic assemble (all tiles opaque, no second pass needed)");
 		return Ok(());
 	}
 
@@ -660,6 +660,105 @@ async fn assemble_two_pass(
 	let sink = Arc::try_unwrap(sink).map_err(|_| anyhow!("sink still has references"))?;
 	sink.finish(&tilejson, runtime)?;
 
-	log::info!("finished mosaic assemble2");
+	log::info!("finished mosaic assemble");
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_parse_input_list() {
+		let content = "
+# This is a comment
+tiles/001.versatiles
+tiles/002.versatiles
+
+  tiles/003.versatiles
+# Another comment
+https://example.com/tiles/004.versatiles
+";
+		let paths = parse_input_list(content);
+		assert_eq!(
+			paths,
+			vec![
+				"tiles/001.versatiles",
+				"tiles/002.versatiles",
+				"tiles/003.versatiles",
+				"https://example.com/tiles/004.versatiles",
+			]
+		);
+	}
+
+	#[test]
+	fn test_parse_input_list_inline_comments() {
+		let content = "tiles/001.versatiles # first container\ntiles/002.versatiles";
+		let paths = parse_input_list(content);
+		assert_eq!(paths, vec!["tiles/001.versatiles", "tiles/002.versatiles"]);
+	}
+
+	#[test]
+	fn test_parse_input_list_empty() {
+		let content = "\n# only comments\n  \n";
+		let paths = parse_input_list(content);
+		assert!(paths.is_empty());
+	}
+
+	#[test]
+	fn test_parse_buffer_size() {
+		// Plain bytes
+		assert_eq!(parse_buffer_size("0").unwrap(), 0);
+		assert_eq!(parse_buffer_size("1024").unwrap(), 1024);
+
+		// Units (case-insensitive)
+		assert_eq!(parse_buffer_size("1k").unwrap(), 1_000);
+		assert_eq!(parse_buffer_size("1K").unwrap(), 1_000);
+		assert_eq!(parse_buffer_size("1Kb").unwrap(), 1_000);
+		assert_eq!(parse_buffer_size("1t").unwrap(), 1_000_000_000_000);
+		assert_eq!(parse_buffer_size("2m").unwrap(), 2_000_000);
+		assert_eq!(parse_buffer_size("2M").unwrap(), 2_000_000);
+		assert_eq!(parse_buffer_size("2mB").unwrap(), 2_000_000);
+		assert_eq!(parse_buffer_size("3g").unwrap(), 3_000_000_000);
+		assert_eq!(parse_buffer_size("3G").unwrap(), 3_000_000_000);
+		assert_eq!(parse_buffer_size("3gb").unwrap(), 3_000_000_000);
+
+		// Fractional with unit
+		assert_eq!(parse_buffer_size("1.5g").unwrap(), 1_500_000_000);
+		assert_eq!(parse_buffer_size("0.5m").unwrap(), 500_000);
+
+		// Whitespace
+		assert_eq!(parse_buffer_size("  4g  ").unwrap(), 4_000_000_000);
+		assert_eq!(parse_buffer_size("2 m").unwrap(), 2_000_000);
+
+		// Percentage (only on platforms where total_system_memory() works)
+		#[cfg(any(target_os = "macos", target_os = "linux"))]
+		{
+			let result = parse_buffer_size("50%").unwrap();
+			assert!(result > 0, "50% of system memory should be > 0");
+		}
+		#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+		{
+			assert!(parse_buffer_size("50%").is_err());
+		}
+
+		// Errors
+		assert!(parse_buffer_size("abc").is_err());
+		assert!(parse_buffer_size("-1g").is_err());
+		assert!(parse_buffer_size("101%").is_err());
+	}
+
+	#[test]
+	fn test_parse_quality() {
+		let q = parse_quality("80").unwrap();
+		assert_eq!(q[0], Some(80));
+		assert_eq!(q[15], Some(80));
+
+		let q = parse_quality("80,70,14:50,15:20").unwrap();
+		assert_eq!(q[0], Some(80));
+		assert_eq!(q[1], Some(70));
+		assert_eq!(q[13], Some(70));
+		assert_eq!(q[14], Some(50));
+		assert_eq!(q[15], Some(20));
+	}
 }
