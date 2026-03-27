@@ -296,6 +296,60 @@ pub async fn run(args: &Assemble2, runtime: &TilesRuntime) -> Result<()> {
 	.await
 }
 
+// ─── Tile fetching ───
+
+/// Read all tiles for a given source that are relevant to the batch.
+///
+/// Returns `(coord, tile)` pairs with empty tiles already filtered out.
+/// Used both for direct fetching and for pre-fetching the next source.
+async fn fetch_source_tiles(
+	source_idx: usize,
+	batch: &[(TileCoord, Vec<usize>)],
+	paths: &[String],
+	runtime: &TilesRuntime,
+) -> Result<Vec<(TileCoord, Tile)>> {
+	let path = &paths[source_idx];
+	let reader = runtime
+		.get_reader_from_str(path)
+		.await
+		.with_context(|| format!("Failed to open container: {path}"))?;
+
+	let coords: Vec<TileCoord> = batch
+		.iter()
+		.filter(|(_, srcs)| srcs.contains(&source_idx))
+		.map(|(coord, _)| *coord)
+		.collect();
+
+	let concurrency = ConcurrencyLimits::default().io_bound;
+	let tiles: Vec<Result<Option<(TileCoord, Tile)>>> = futures::stream::iter(coords)
+		.map(|coord| {
+			let reader = reader.clone();
+			async move {
+				match reader.get_tile(&coord).await? {
+					Some(mut tile) => {
+						if tile.is_empty()? {
+							Ok(None)
+						} else {
+							Ok(Some((coord, tile)))
+						}
+					}
+					None => Ok(None),
+				}
+			}
+		})
+		.buffer_unordered(concurrency)
+		.collect()
+		.await;
+
+	let mut result = Vec::with_capacity(tiles.len());
+	for tile_result in tiles {
+		if let Some(pair) = tile_result? {
+			result.push(pair);
+		}
+	}
+	Ok(result)
+}
+
 // ─── Two-pass pipeline ───
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -504,29 +558,39 @@ async fn assemble_two_pass(
 	let concurrency = ConcurrencyLimits::default().cpu_bound;
 
 	for batch in &batches {
-		let sources_needed: BTreeSet<usize> = batch.iter().flat_map(|(_, srcs)| srcs).copied().collect();
+		let sources_needed: Vec<usize> = {
+			let set: BTreeSet<usize> = batch.iter().flat_map(|(_, srcs)| srcs).copied().collect();
+			set.into_iter().collect()
+		};
 
 		let buffer = Arc::new(TranslucentBuffer::new());
 
-		for &source_idx in &sources_needed {
-			let path = &paths[source_idx];
-			let reader = runtime
-				.get_reader_from_str(path)
-				.await
-				.with_context(|| format!("Failed to open container: {path}"))?;
+		// Pre-fetch tiles for the first source while we set up
+		let mut prefetched: Option<Vec<(TileCoord, Tile)>> = None;
 
-			// Collect coords this source covers in the current batch
-			let coords: Vec<TileCoord> = batch
-				.iter()
-				.filter(|(_, srcs)| srcs.contains(&source_idx))
-				.map(|(coord, _)| *coord)
-				.collect();
+		for (pos, &source_idx) in sources_needed.iter().enumerate() {
+			// Use pre-fetched tiles if available, otherwise fetch now
+			let fetched_tiles = if let Some(tiles) = prefetched.take() {
+				tiles
+			} else {
+				fetch_source_tiles(source_idx, batch, paths, runtime).await?
+			};
 
-			// Parallel reads + compositing, mirroring the first-pass pattern.
-			// Coords within a batch are unique, so concurrent compositing on
-			// different coords does not conflict in the TranslucentBuffer.
+			// Kick off pre-fetch for the NEXT source in the background while
+			// we composite the current one. This overlaps I/O with CPU work.
+			let prefetch_handle = if let Some(&next_idx) = sources_needed.get(pos + 1) {
+				let batch_owned: Vec<(TileCoord, Vec<usize>)> = batch.to_vec();
+				let paths_owned: Vec<String> = paths.to_vec();
+				let runtime = runtime.clone();
+				Some(tokio::spawn(async move {
+					fetch_source_tiles(next_idx, &batch_owned, &paths_owned, &runtime).await
+				}))
+			} else {
+				None
+			};
+
+			// Composite fetched tiles into the buffer in parallel
 			let buffer_ref = Arc::clone(&buffer);
-
 			let callback = Arc::new(move |coord: TileCoord, tile: Tile| -> Result<()> {
 				let key = coord.get_hilbert_index()?;
 				let existing = buffer_ref.remove(key);
@@ -540,28 +604,13 @@ async fn assemble_two_pass(
 			});
 
 			let mut result = Ok(());
-			futures::stream::iter(coords)
-				.map(|coord| {
-					let reader = reader.clone();
-					async move {
-						let tile = reader.get_tile(&coord).await?;
-						Ok::<_, anyhow::Error>((coord, tile))
-					}
-				})
-				.buffer_unordered(concurrency)
-				.map(|read_result| {
+			futures::stream::iter(fetched_tiles)
+				.map(|(coord, tile)| {
 					let cb = Arc::clone(&callback);
-					match read_result {
-						Ok((coord, Some(mut tile))) => tokio::task::spawn_blocking(move || {
-							if tile.is_empty()? {
-								return Ok(None);
-							}
-							cb(coord, tile)?;
-							Ok(Some(coord))
-						}),
-						Ok((coord, None)) => tokio::task::spawn_blocking(move || Ok(Some(coord))),
-						Err(e) => tokio::task::spawn_blocking(move || Err(e)),
-					}
+					tokio::task::spawn_blocking(move || {
+						cb(coord, tile)?;
+						Ok::<_, anyhow::Error>(())
+					})
 				})
 				.buffer_unordered(concurrency)
 				.for_each(|task_result| {
@@ -576,6 +625,11 @@ async fn assemble_two_pass(
 				})
 				.await;
 			result?;
+
+			// Await the pre-fetched tiles for the next source
+			if let Some(handle) = prefetch_handle {
+				prefetched = Some(handle.await.map_err(|e| anyhow!("prefetch task panicked: {e}"))??);
+			}
 
 			progress.inc(1);
 		}
