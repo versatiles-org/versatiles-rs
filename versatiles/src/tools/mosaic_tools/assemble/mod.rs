@@ -165,7 +165,7 @@ fn parse_input_list(content: &str) -> Vec<String> {
 
 /// Parse a buffer size string into bytes.
 ///
-/// Accepts plain numbers (bytes), numbers with unit suffix (k, m, g, t),
+/// Accepts plain numbers (bytes), numbers with unit suffix (k, m, g, t or kb, mb, gb, tb),
 /// or a percentage of total system memory (e.g. "50%").
 /// Case-insensitive. Whitespace between number and unit is allowed.
 fn parse_buffer_size(s: &str) -> Result<u64> {
@@ -189,13 +189,15 @@ fn parse_buffer_size(s: &str) -> Result<u64> {
 	}
 
 	let s_lower = s.to_ascii_lowercase();
-	let (num_str, multiplier) = if let Some(n) = s_lower.strip_suffix('t') {
+	// Strip optional trailing "b" (e.g. "kb", "mb", "gb", "tb")
+	let s_unit = s_lower.strip_suffix('b').unwrap_or(&s_lower);
+	let (num_str, multiplier) = if let Some(n) = s_unit.strip_suffix('t') {
 		(n, 1_000_000_000_000u64)
-	} else if let Some(n) = s_lower.strip_suffix('g') {
+	} else if let Some(n) = s_unit.strip_suffix('g') {
 		(n, 1_000_000_000)
-	} else if let Some(n) = s_lower.strip_suffix('m') {
+	} else if let Some(n) = s_unit.strip_suffix('m') {
 		(n, 1_000_000)
-	} else if let Some(n) = s_lower.strip_suffix('k') {
+	} else if let Some(n) = s_unit.strip_suffix('k') {
 		(n, 1_000)
 	} else {
 		(s_lower.as_str(), 1)
@@ -290,11 +292,14 @@ https://example.com/tiles/004.versatiles
 		// Units (case-insensitive)
 		assert_eq!(parse_buffer_size("1k").unwrap(), 1_000);
 		assert_eq!(parse_buffer_size("1K").unwrap(), 1_000);
+		assert_eq!(parse_buffer_size("1Kb").unwrap(), 1_000);
+		assert_eq!(parse_buffer_size("1t").unwrap(), 1_000_000_000_000);
 		assert_eq!(parse_buffer_size("2m").unwrap(), 2_000_000);
 		assert_eq!(parse_buffer_size("2M").unwrap(), 2_000_000);
+		assert_eq!(parse_buffer_size("2mB").unwrap(), 2_000_000);
 		assert_eq!(parse_buffer_size("3g").unwrap(), 3_000_000_000);
 		assert_eq!(parse_buffer_size("3G").unwrap(), 3_000_000_000);
-		assert_eq!(parse_buffer_size("1t").unwrap(), 1_000_000_000_000);
+		assert_eq!(parse_buffer_size("3gb").unwrap(), 3_000_000_000);
 
 		// Fractional with unit
 		assert_eq!(parse_buffer_size("1.5g").unwrap(), 1_500_000_000);
