@@ -334,13 +334,7 @@ async fn fetch_source_tiles(
 			let reader = reader.clone();
 			async move {
 				match reader.get_tile(&coord).await? {
-					Some(mut tile) => {
-						if tile.is_empty()? {
-							Ok(None)
-						} else {
-							Ok(Some((coord, tile)))
-						}
-					}
+					Some(tile) => Ok(Some((coord, tile))),
 					None => Ok(None),
 				}
 			}
@@ -349,10 +343,13 @@ async fn fetch_source_tiles(
 		.collect()
 		.await;
 
+	// Filter empty tiles outside the async executor to avoid blocking on potential image decode
 	let mut result = Vec::with_capacity(tiles.len());
 	for tile_result in tiles {
-		if let Some(pair) = tile_result? {
-			result.push(pair);
+		if let Some((coord, mut tile)) = tile_result?
+			&& !tile.is_empty()?
+		{
+			result.push((coord, tile));
 		}
 	}
 	Ok(result)
