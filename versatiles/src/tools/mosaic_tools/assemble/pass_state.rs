@@ -54,15 +54,9 @@ pub struct PassState {
 }
 
 impl PassState {
-	/// Create a new `PassState` from prescanned pyramids.
-	pub fn new(
-		pyramids: &[TileBBoxPyramid],
-		min_zoom: Option<u8>,
-		max_zoom: Option<u8>,
-		max_buffer_size: u64,
-		tile_dim: u64,
-	) -> Self {
-		let union_pyramid = build_union_pyramid(pyramids, min_zoom, max_zoom);
+	/// Create a new `PassState` from prescanned, zoom-clipped pyramids.
+	pub fn new(pyramids: &[TileBBoxPyramid], max_buffer_size: u64, tile_dim: u64) -> Self {
+		let union_pyramid = build_union_pyramid(pyramids);
 		let max_level = union_pyramid.get_level_max().unwrap_or(0);
 		let remaining_pyramid = union_pyramid.clone();
 
@@ -72,20 +66,7 @@ impl PassState {
 			usize::MAX
 		};
 
-		// Pre-compute zoom-clipped source pyramids for progress calculation
-		let source_pyramids: Vec<TileBBoxPyramid> = pyramids
-			.iter()
-			.map(|p| {
-				let mut clipped = p.clone();
-				if let Some(min) = min_zoom {
-					clipped.set_level_min(min);
-				}
-				if let Some(max) = max_zoom {
-					clipped.set_level_max(max);
-				}
-				clipped
-			})
-			.collect();
+		let source_pyramids = pyramids.to_vec();
 		let total_tiles: u64 = source_pyramids.iter().map(TileBBoxPyramid::count_tiles).sum();
 
 		Self {
@@ -218,17 +199,11 @@ fn count_tiles_south_of(pyramid: &TileBBoxPyramid, cut_y: u32, max_level: u8) ->
 	clipped.count_tiles()
 }
 
-/// Build a union pyramid from all prescanned pyramids, clipped to zoom range.
-fn build_union_pyramid(pyramids: &[TileBBoxPyramid], min_zoom: Option<u8>, max_zoom: Option<u8>) -> TileBBoxPyramid {
+/// Build a union pyramid from all prescanned (already zoom-clipped) pyramids.
+fn build_union_pyramid(pyramids: &[TileBBoxPyramid]) -> TileBBoxPyramid {
 	let mut u = TileBBoxPyramid::new_empty();
 	for p in pyramids {
 		u.include_pyramid(p);
-	}
-	if let Some(min) = min_zoom {
-		u.set_level_min(min);
-	}
-	if let Some(max) = max_zoom {
-		u.set_level_max(max);
 	}
 	u
 }
@@ -280,21 +255,24 @@ mod tests {
 	fn build_union_pyramid_merges_levels() {
 		let p1 = full_pyramid_at(5);
 		let p2 = full_pyramid_at(8);
-		let union = build_union_pyramid(&[p1, p2], None, None);
+		let union = build_union_pyramid(&[p1, p2]);
 		assert!(!union.get_level_bbox(5).is_empty());
 		assert!(!union.get_level_bbox(8).is_empty());
 		assert!(union.get_level_bbox(3).is_empty());
 	}
 
 	#[test]
-	fn build_union_pyramid_clips_zoom() {
+	fn build_union_pyramid_from_pre_clipped() {
 		let mut p = TileBBoxPyramid::new_empty();
 		p.set_level_bbox(TileBBox::new_full(5).unwrap());
 		p.set_level_bbox(TileBBox::new_full(8).unwrap());
 		p.set_level_bbox(TileBBox::new_full(10).unwrap());
 
-		let union = build_union_pyramid(&[p], Some(8), Some(10));
-		// Level 5 should be clipped away (below min_zoom=8)
+		// Pre-clip to zoom 8..=10 (as mod.rs now does before calling PassState)
+		p.set_level_min(8);
+		p.set_level_max(10);
+
+		let union = build_union_pyramid(&[p]);
 		assert!(union.get_level_bbox(5).is_empty());
 		assert!(!union.get_level_bbox(8).is_empty());
 		assert!(!union.get_level_bbox(10).is_empty());
@@ -336,7 +314,7 @@ mod tests {
 	#[test]
 	fn new_with_no_buffer_limit() {
 		let p = full_pyramid_at(8);
-		let ps = PassState::new(&[p], None, None, 0, 256);
+		let ps = PassState::new(&[p], 0, 256);
 		// max_buffer_size=0 → max_buffer_tiles=usize::MAX
 		assert_eq!(ps.max_buffer_tiles, usize::MAX);
 		assert_eq!(ps.max_level, 8);
@@ -348,7 +326,7 @@ mod tests {
 		let p = full_pyramid_at(10);
 		// 256x256 tiles, 4 bytes per pixel = 262144 bytes per tile
 		// max_buffer_size = 1_000_000 → max_buffer_tiles = 1_000_000 / 262144 = 3
-		let ps = PassState::new(&[p], None, None, 1_000_000, 256);
+		let ps = PassState::new(&[p], 1_000_000, 256);
 		assert_eq!(ps.max_buffer_tiles, 3);
 	}
 
@@ -357,7 +335,7 @@ mod tests {
 	#[test]
 	fn start_pass_resets_cut_y() {
 		let p = full_pyramid_at(10);
-		let mut ps = PassState::new(&[p], None, None, 1_000_000, 256);
+		let mut ps = PassState::new(&[p], 1_000_000, 256);
 		ps.cut_y = 42;
 		ps.start_pass();
 		assert_eq!(ps.cut_y, 0);
@@ -369,7 +347,7 @@ mod tests {
 	#[test]
 	fn clip_source_pyramid_intersects() {
 		let p = full_pyramid_at(10);
-		let ps = PassState::new(&[p], None, None, 0, 256);
+		let ps = PassState::new(&[p], 0, 256);
 		// Simulate eviction having clipped remaining_pyramid
 		let _ = ps.remaining_pyramid.get_level_bbox(10);
 		let mut source = full_pyramid_at(10);
@@ -383,7 +361,7 @@ mod tests {
 	#[test]
 	fn check_eviction_no_op_when_under_limit() -> anyhow::Result<()> {
 		let p = full_pyramid_at(10);
-		let mut ps = PassState::new(&[p], None, None, 100_000_000, 256);
+		let mut ps = PassState::new(&[p], 100_000_000, 256);
 		let buf = TranslucentBuffer::new();
 		buf.insert(coord(10, 0, 0), dummy_tile())?;
 
@@ -397,7 +375,7 @@ mod tests {
 	fn check_eviction_triggers_when_over_limit() -> anyhow::Result<()> {
 		let p = full_pyramid_at(10);
 		// max_buffer_tiles = 2 (very small)
-		let mut ps = PassState::new(&[p], None, None, 2 * 256 * 256 * 4, 256);
+		let mut ps = PassState::new(&[p], 2 * 256 * 256 * 4, 256);
 		assert_eq!(ps.max_buffer_tiles, 2);
 
 		let buf = TranslucentBuffer::new();
@@ -419,7 +397,7 @@ mod tests {
 	#[test]
 	fn prepare_next_pass_restricts_to_north() -> anyhow::Result<()> {
 		let p = full_pyramid_at(10);
-		let mut ps = PassState::new(&[p], None, None, 2 * 256 * 256 * 4, 256);
+		let mut ps = PassState::new(&[p], 2 * 256 * 256 * 4, 256);
 
 		// Simulate eviction
 		let buf = TranslucentBuffer::new();
@@ -444,7 +422,7 @@ mod tests {
 	#[test]
 	fn is_pass_complete_without_eviction() {
 		let p = full_pyramid_at(5);
-		let ps = PassState::new(&[p], None, None, 0, 256);
+		let ps = PassState::new(&[p], 0, 256);
 		assert!(ps.is_pass_complete());
 	}
 
@@ -476,7 +454,7 @@ mod tests {
 		// Two sources, each with a small pyramid at level 2 (4x4 = 16 tiles)
 		let p1 = full_pyramid_at(2);
 		let p2 = full_pyramid_at(2);
-		let ps = PassState::new(&[p1, p2], None, None, 0, 256);
+		let ps = PassState::new(&[p1, p2], 0, 256);
 		let order = vec![0, 1];
 
 		assert_eq!(ps.total_tiles(), 32); // 16 + 16
@@ -492,7 +470,7 @@ mod tests {
 	fn compute_progress_with_eviction() -> anyhow::Result<()> {
 		let p = full_pyramid_at(4); // 16x16 = 256 tiles
 		// max_buffer_tiles = 2, very small → eviction guaranteed
-		let mut ps = PassState::new(&[p.clone(), p], None, None, 2 * 256 * 256 * 4, 256);
+		let mut ps = PassState::new(&[p.clone(), p], 2 * 256 * 256 * 4, 256);
 		let order = vec![0, 1];
 
 		let total = ps.total_tiles();
@@ -523,7 +501,7 @@ mod tests {
 	#[test]
 	fn compute_progress_after_prepare_next_pass() -> anyhow::Result<()> {
 		let p = full_pyramid_at(4); // 256 tiles
-		let mut ps = PassState::new(&[p.clone(), p], None, None, 2 * 256 * 256 * 4, 256);
+		let mut ps = PassState::new(&[p.clone(), p], 2 * 256 * 256 * 4, 256);
 		let order = vec![0, 1];
 
 		// Trigger eviction

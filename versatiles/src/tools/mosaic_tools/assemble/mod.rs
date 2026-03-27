@@ -97,16 +97,24 @@ pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 
 	log::info!("assembling {} containers", paths.len());
 
-	let pyramids = pipeline::prescan_sources(&paths, runtime).await?;
+	let mut pyramids = pipeline::prescan_sources(&paths, runtime).await?;
+
+	// Clip pyramids to requested zoom range once, so downstream code doesn't repeat it.
+	for p in &mut pyramids {
+		if let Some(min) = args.min_zoom {
+			p.set_level_min(min);
+		}
+		if let Some(max) = args.max_zoom {
+			p.set_level_max(max);
+		}
+	}
 
 	pipeline::assemble_tiles(
 		&args.output,
 		&paths,
-		&pyramids,
+		pyramids,
 		&quality,
 		args.lossless,
-		args.min_zoom,
-		args.max_zoom,
 		max_buffer_size,
 		args.optimize_order,
 		runtime,

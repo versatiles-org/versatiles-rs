@@ -42,8 +42,6 @@ struct AssembleConfig {
 	lossless: bool,
 	tile_format: TileFormat,
 	tile_compression: TileCompression,
-	min_zoom: Option<u8>,
-	max_zoom: Option<u8>,
 }
 
 const NUM_LEVELS: usize = (MAX_ZOOM_LEVEL + 1) as usize;
@@ -168,8 +166,6 @@ async fn discover_config(
 	source_order: &[usize],
 	quality: &[Option<u8>; 32],
 	lossless: bool,
-	min_zoom: Option<u8>,
-	max_zoom: Option<u8>,
 	runtime: &TilesRuntime,
 ) -> Result<(AssembleConfig, TileJSON, u64)> {
 	let first_idx = source_order[0];
@@ -186,8 +182,6 @@ async fn discover_config(
 		lossless,
 		tile_format: first_metadata.tile_format,
 		tile_compression: first_metadata.tile_compression,
-		min_zoom,
-		max_zoom,
 	};
 
 	let tile_dim: u64 = first_tilejson.tile_size.map_or(256, |ts| u64::from(ts.size()));
@@ -225,15 +219,15 @@ fn validate_source_format(
 }
 
 /// Assemble sources into an output container.
+///
+/// `pyramids` must already be zoom-clipped to the desired min/max zoom range.
 #[allow(clippy::too_many_arguments)]
 pub async fn assemble_tiles(
 	output: &str,
 	paths: &[String],
-	pyramids: &[TileBBoxPyramid],
+	pyramids: Vec<TileBBoxPyramid>,
 	quality: &[Option<u8>; 32],
 	lossless: bool,
-	min_zoom: Option<u8>,
-	max_zoom: Option<u8>,
 	max_buffer_size: u64,
 	optimize_order: bool,
 	runtime: &TilesRuntime,
@@ -243,7 +237,7 @@ pub async fn assemble_tiles(
 	// Sort sources west-to-east and precompute per-level suffix minimum x
 	// so we can flush translucent tiles early via sweep-line.
 	let (source_order, suffix_min_x): (Vec<usize>, Option<SuffixMinX>) = if optimize_order {
-		let (order, suffix) = build_sweep_order(paths.len(), pyramids);
+		let (order, suffix) = build_sweep_order(paths.len(), &pyramids);
 		log::debug!(
 			"source processing order (west to east): {:?}",
 			order.iter().map(|&i| &paths[i]).collect::<Vec<_>>()
@@ -253,10 +247,9 @@ pub async fn assemble_tiles(
 		((0..paths.len()).collect(), None)
 	};
 
-	let (config, mut tilejson, tile_dim) =
-		discover_config(paths, &source_order, quality, lossless, min_zoom, max_zoom, runtime).await?;
+	let (config, mut tilejson, tile_dim) = discover_config(paths, &source_order, quality, lossless, runtime).await?;
 
-	let mut pass_state = PassState::new(pyramids, min_zoom, max_zoom, max_buffer_size, tile_dim);
+	let mut pass_state = PassState::new(&pyramids, max_buffer_size, tile_dim);
 
 	let sink: Arc<Box<dyn TileSink>> = Arc::new(open_tile_sink(
 		output,
@@ -285,12 +278,6 @@ pub async fn assemble_tiles(
 			tilejson.merge(reader.tilejson())?;
 
 			let mut pyramid = pyramids[idx].clone();
-			if let Some(min) = config.min_zoom {
-				pyramid.set_level_min(min);
-			}
-			if let Some(max) = config.max_zoom {
-				pyramid.set_level_max(max);
-			}
 			pass_state.clip_source_pyramid(&mut pyramid);
 			if pyramid.is_empty() {
 				progress.set_position(pass_state.compute_progress(&source_order, pos));
