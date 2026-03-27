@@ -501,10 +501,12 @@ async fn assemble_two_pass(
 
 	let progress = runtime.create_progress("pass 2/2: compositing tiles", total_source_reads);
 
+	let concurrency = ConcurrencyLimits::default().cpu_bound;
+
 	for batch in &batches {
 		let sources_needed: BTreeSet<usize> = batch.iter().flat_map(|(_, srcs)| srcs).copied().collect();
 
-		let buffer = TranslucentBuffer::new();
+		let buffer = Arc::new(TranslucentBuffer::new());
 
 		for &source_idx in &sources_needed {
 			let path = &paths[source_idx];
@@ -513,33 +515,73 @@ async fn assemble_two_pass(
 				.await
 				.with_context(|| format!("Failed to open container: {path}"))?;
 
-			// For each coord in the batch that this source covers, get the tile
-			for &(coord, ref srcs) in *batch {
-				if !srcs.contains(&source_idx) {
-					continue;
-				}
+			// Collect coords this source covers in the current batch
+			let coords: Vec<TileCoord> = batch
+				.iter()
+				.filter(|(_, srcs)| srcs.contains(&source_idx))
+				.map(|(coord, _)| *coord)
+				.collect();
 
-				if let Some(mut tile) = reader.get_tile(&coord).await? {
-					if tile.is_empty()? {
-						continue;
-					}
+			// Parallel reads + compositing, mirroring the first-pass pattern.
+			// Coords within a batch are unique, so concurrent compositing on
+			// different coords does not conflict in the TranslucentBuffer.
+			let buffer_ref = Arc::clone(&buffer);
 
-					// Composite with buffer (no encoding — deferred to flush)
-					let key = coord.get_hilbert_index()?;
-					let existing = buffer.remove(key);
-					if let Some((_, existing_tile)) = existing {
-						let merged = composite_two_tiles(existing_tile, tile)?;
-						buffer.insert(coord, merged)?;
-					} else {
-						buffer.insert(coord, tile)?;
-					}
+			let callback = Arc::new(move |coord: TileCoord, tile: Tile| -> Result<()> {
+				let key = coord.get_hilbert_index()?;
+				let existing = buffer_ref.remove(key);
+				if let Some((_, existing_tile)) = existing {
+					let merged = composite_two_tiles(existing_tile, tile)?;
+					buffer_ref.insert(coord, merged)?;
+				} else {
+					buffer_ref.insert(coord, tile)?;
 				}
-			}
+				Ok(())
+			});
+
+			let mut result = Ok(());
+			futures::stream::iter(coords)
+				.map(|coord| {
+					let reader = reader.clone();
+					async move {
+						let tile = reader.get_tile(&coord).await?;
+						Ok::<_, anyhow::Error>((coord, tile))
+					}
+				})
+				.buffer_unordered(concurrency)
+				.map(|read_result| {
+					let cb = Arc::clone(&callback);
+					match read_result {
+						Ok((coord, Some(mut tile))) => tokio::task::spawn_blocking(move || {
+							if tile.is_empty()? {
+								return Ok(None);
+							}
+							cb(coord, tile)?;
+							Ok(Some(coord))
+						}),
+						Ok((coord, None)) => tokio::task::spawn_blocking(move || Ok(Some(coord))),
+						Err(e) => tokio::task::spawn_blocking(move || Err(e)),
+					}
+				})
+				.buffer_unordered(concurrency)
+				.for_each(|task_result| {
+					match task_result {
+						Ok(Err(e)) if result.is_ok() => {
+							result = Err(e);
+						}
+						Err(e) => panic!("Spawned task panicked: {e}"),
+						_ => {}
+					}
+					ready(())
+				})
+				.await;
+			result?;
 
 			progress.inc(1);
 		}
 
 		// Flush buffer: encode translucent tiles to WebP (single encoding step)
+		let buffer = Arc::try_unwrap(buffer).map_err(|_| anyhow!("buffer still has references"))?;
 		let tiles: Vec<_> = buffer.drain().into_values().collect();
 		if !tiles.is_empty() {
 			let prepared = encode_tiles_parallel(tiles, &config);
