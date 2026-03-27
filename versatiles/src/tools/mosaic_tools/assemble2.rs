@@ -183,7 +183,21 @@ fn total_system_memory() -> Result<u64> {
 	}
 }
 
-// ─── Tile compositing helpers (duplicated from assemble::pipeline) ───
+// ─── Tile processing helpers (duplicated from assemble::pipeline) ───
+//
+// Encoding requirements:
+//
+// - **Opaque tiles** must never be re-encoded. Their original blob is written
+//   to the sink byte-for-byte (only recompressed if the container compression
+//   differs, which `into_blob` handles as a no-op when it already matches).
+//
+// - **Translucent tiles** are re-encoded exactly once as lossy WebP (or
+//   lossless when `--lossless` is set). The single encoding happens during
+//   the flush step in `encode_tiles_parallel`, which calls `change_format`
+//   to set format + quality, followed by `into_blob` → `materialize_blob`
+//   to produce the blob. Compositing in `composite_two_tiles` deliberately
+//   does NOT encode — it keeps the merged image as raw content so that the
+//   flush step is the only place where lossy compression is applied.
 
 fn validate_source_format(
 	path: &str,
