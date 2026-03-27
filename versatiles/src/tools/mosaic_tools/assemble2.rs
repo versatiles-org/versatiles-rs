@@ -24,7 +24,7 @@ use versatiles_core::{
 	Blob, ConcurrencyLimits, TileCompression, TileCoord, TileFormat, TileJSON, TileStream,
 	utils::HilbertIndex,
 };
-use versatiles_image::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
+use versatiles_image::traits::DynamicImageTraitOperation;
 
 /// CLI arguments for `mosaic assemble2`.
 #[derive(clap::Args, Debug)]
@@ -219,30 +219,35 @@ fn validate_source_format(
 	Ok(())
 }
 
-fn merge_two_tiles(base: Tile, mut top: Tile, quality: Option<u8>, lossless: bool) -> Result<(Tile, bool)> {
-	if top.is_opaque()? {
-		return Ok((top, true));
-	}
-
+/// Composite two tiles using additive alpha blending (`base` on bottom, `top` on top).
+///
+/// Returns the merged tile with raw image content (no blob, no encoding).
+/// Encoding is deferred to `encode_tiles_parallel` so that lossy compression
+/// is applied exactly once.
+fn composite_two_tiles(base: Tile, top: Tile) -> Result<Tile> {
 	let base_image = base.into_image()?;
 	let top_image = top.into_image()?;
 
 	let mut result = base_image;
 	result.overlay_additive(&top_image)?;
 
-	let is_opaque = result.is_opaque();
-	let effective_quality = if !is_opaque && lossless { Some(100) } else { quality };
-
-	let mut tile = Tile::from_image(result, TileFormat::WEBP)?;
-	tile.change_format(TileFormat::WEBP, effective_quality, None)?;
-	Ok((tile, is_opaque))
+	// Keep as raw image — `encode_tiles_parallel` will set format + quality later.
+	Tile::from_image(result, TileFormat::WEBP)
 }
 
-fn prepare_tile_blob(tile: Tile, config: &AssembleConfig) -> Result<Blob> {
+/// Write an opaque tile's original blob to the sink without re-encoding.
+fn write_opaque_blob(tile: Tile, config: &AssembleConfig) -> Result<Blob> {
 	tile.into_blob(config.tile_compression)
 }
 
-fn reencode_tiles_parallel(tiles: Vec<(TileCoord, Tile)>, config: &AssembleConfig) -> Vec<Result<(TileCoord, Blob)>> {
+/// Re-encode translucent tiles as WebP in parallel and compress for the output container.
+///
+/// This is the single place where lossy (or lossless) WebP compression is applied.
+/// Tiles coming from `composite_two_tiles` carry raw image content (no blob),
+/// so `change_format` + `into_blob` produces the one-and-only encoded blob.
+/// Single-source tiles still hold their original source blob, which is decoded
+/// and re-encoded here as well.
+fn encode_tiles_parallel(tiles: Vec<(TileCoord, Tile)>, config: &AssembleConfig) -> Vec<Result<(TileCoord, Blob)>> {
 	let config = config.clone();
 	std::thread::scope(|s| {
 		let handles: Vec<_> = tiles
@@ -256,8 +261,7 @@ fn reencode_tiles_parallel(tiles: Vec<(TileCoord, Tile)>, config: &AssembleConfi
 						cfg.quality[coord.level as usize]
 					};
 					tile.change_format(TileFormat::WEBP, quality, None)?;
-					let blob = prepare_tile_blob(tile, cfg)?;
-					Ok((coord, blob))
+					Ok((coord, tile.into_blob(cfg.tile_compression)?))
 				})
 			})
 			.collect();
@@ -390,10 +394,12 @@ async fn assemble_two_pass(
 			}
 
 			if tile.is_opaque()? {
-				let blob = prepare_tile_blob(tile, &config_clone)?;
+				// Opaque: write original blob without re-encoding.
+				let blob = write_opaque_blob(tile, &config_clone)?;
 				sink_ref.write_tile(&coord, &blob)?;
 				done_ref.lock().unwrap().insert(coord);
 			} else {
+				// Translucent: record for second-pass compositing.
 				translucent_coords_ref.lock().unwrap().push(coord);
 			}
 
@@ -504,16 +510,11 @@ async fn assemble_two_pass(
 						continue;
 					}
 
-					// Composite with buffer
+					// Composite with buffer (no encoding — deferred to flush)
 					let key = coord.get_hilbert_index()?;
 					let existing = buffer.remove(key);
 					if let Some((_, existing_tile)) = existing {
-						let (merged, _is_opaque) = merge_two_tiles(
-							existing_tile,
-							tile,
-							config.quality[coord.level as usize],
-							config.lossless,
-						)?;
+						let merged = composite_two_tiles(existing_tile, tile)?;
 						buffer.insert(coord, merged)?;
 					} else {
 						buffer.insert(coord, tile)?;
@@ -524,10 +525,10 @@ async fn assemble_two_pass(
 			progress.inc(1);
 		}
 
-		// Flush buffer to sink
+		// Flush buffer: encode translucent tiles to WebP (single encoding step)
 		let tiles: Vec<_> = buffer.drain().into_values().collect();
 		if !tiles.is_empty() {
-			let prepared = reencode_tiles_parallel(tiles, &config);
+			let prepared = encode_tiles_parallel(tiles, &config);
 			for result in prepared {
 				let (coord, blob) = result?;
 				sink.write_tile(&coord, &blob)?;
