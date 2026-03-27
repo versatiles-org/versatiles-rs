@@ -224,25 +224,25 @@ fn validate_source_format(
 	Ok(())
 }
 
-/// Assemble sources into an output container. If `prescanned_pyramids` is provided, uses those
-/// instead of reading pyramids from each source during assembly.
+/// Assemble sources into an output container.
 #[allow(clippy::too_many_arguments)]
 pub async fn assemble_tiles(
 	output: &str,
 	paths: &[String],
-	prescanned_pyramids: Option<&[TileBBoxPyramid]>,
+	pyramids: &[TileBBoxPyramid],
 	quality: &[Option<u8>; 32],
 	lossless: bool,
 	min_zoom: Option<u8>,
 	max_zoom: Option<u8>,
 	max_buffer_size: u64,
+	optimize_order: bool,
 	runtime: &TilesRuntime,
 ) -> Result<()> {
 	let buffer = Arc::new(TranslucentBuffer::new());
 
-	// When prescan data is available, sort sources west-to-east and precompute
-	// per-level suffix minimum x so we can flush translucent tiles early.
-	let (source_order, suffix_min_x): (Vec<usize>, Option<SuffixMinX>) = if let Some(pyramids) = prescanned_pyramids {
+	// Sort sources west-to-east and precompute per-level suffix minimum x
+	// so we can flush translucent tiles early via sweep-line.
+	let (source_order, suffix_min_x): (Vec<usize>, Option<SuffixMinX>) = if optimize_order {
 		let (order, suffix) = build_sweep_order(paths.len(), pyramids);
 		log::debug!(
 			"source processing order (west to east): {:?}",
@@ -256,8 +256,7 @@ pub async fn assemble_tiles(
 	let (config, mut tilejson, tile_dim) =
 		discover_config(paths, &source_order, quality, lossless, min_zoom, max_zoom, runtime).await?;
 
-	let mut pass_state =
-		prescanned_pyramids.map(|pyramids| PassState::new(pyramids, min_zoom, max_zoom, max_buffer_size, tile_dim));
+	let mut pass_state = PassState::new(pyramids, min_zoom, max_zoom, max_buffer_size, tile_dim);
 
 	let sink: Arc<Box<dyn TileSink>> = Arc::new(open_tile_sink(
 		output,
@@ -266,13 +265,11 @@ pub async fn assemble_tiles(
 		runtime,
 	)?);
 
-	loop {
-		if let Some(ref mut ps) = pass_state {
-			ps.start_pass();
-		}
-		buffer.clear();
+	let progress = runtime.create_progress("assembling tiles", pass_state.total_tiles());
 
-		let progress = runtime.create_progress("assembling tiles", paths.len() as u64);
+	loop {
+		pass_state.start_pass();
+		buffer.clear();
 
 		for (pos, &idx) in source_order.iter().enumerate() {
 			let path = &paths[idx];
@@ -287,18 +284,16 @@ pub async fn assemble_tiles(
 			validate_source_format(path, metadata, &config)?;
 			tilejson.merge(reader.tilejson())?;
 
-			let mut pyramid = prescanned_pyramids.map_or(&metadata.bbox_pyramid, |p| &p[idx]).clone();
+			let mut pyramid = pyramids[idx].clone();
 			if let Some(min) = config.min_zoom {
 				pyramid.set_level_min(min);
 			}
 			if let Some(max) = config.max_zoom {
 				pyramid.set_level_max(max);
 			}
-			if let Some(ref ps) = pass_state {
-				ps.clip_source_pyramid(&mut pyramid);
-			}
+			pass_state.clip_source_pyramid(&mut pyramid);
 			if pyramid.is_empty() {
-				progress.inc(1);
+				progress.set_position(pass_state.compute_progress(&source_order, pos));
 				continue;
 			}
 
@@ -308,21 +303,20 @@ pub async fn assemble_tiles(
 				sweep_flush(&suffix[pos + 1], &buffer, &sink, &config)?;
 			}
 
-			if let Some(ref mut ps) = pass_state {
-				ps.check_eviction(&buffer);
-			}
+			pass_state.check_eviction(&buffer);
 
-			progress.inc(1);
+			progress.set_position(pass_state.compute_progress(&source_order, pos));
 		}
-		progress.finish();
 
-		flush_translucent_tiles(&sink, buffer.drain(), &config, runtime)?;
+		flush_translucent_tiles(&sink, buffer.drain(), &config)?;
 
-		match pass_state {
-			Some(ref mut ps) if !ps.is_pass_complete() => ps.prepare_next_pass(),
-			_ => break,
+		if pass_state.is_pass_complete() {
+			break;
 		}
+		pass_state.prepare_next_pass();
 	}
+
+	progress.finish();
 
 	let sink = Arc::try_unwrap(sink).map_err(|_| anyhow!("sink still has references"))?;
 	sink.finish(&tilejson, runtime)?;
@@ -418,21 +412,18 @@ fn flush_translucent_tiles(
 	sink: &Arc<Box<dyn TileSink>>,
 	translucent_buffer: HashMap<u64, (TileCoord, Tile)>,
 	config: &AssembleConfig,
-	runtime: &TilesRuntime,
 ) -> Result<()> {
 	if translucent_buffer.is_empty() {
 		return Ok(());
 	}
 	let tiles: Vec<_> = translucent_buffer.into_values().collect();
-	let progress = runtime.create_progress("flushing translucent tiles", tiles.len() as u64);
+	log::debug!("flushing {} remaining translucent tiles", tiles.len());
 
 	let prepared = reencode_tiles_parallel(tiles, config);
 	for result in prepared {
 		let (coord, blob) = result?;
 		sink.write_tile(&coord, &blob)?;
-		progress.inc(1);
 	}
-	progress.finish();
 	Ok(())
 }
 

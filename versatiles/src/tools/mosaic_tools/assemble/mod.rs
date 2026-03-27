@@ -97,23 +97,18 @@ pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 
 	log::info!("assembling {} containers", paths.len());
 
-	// Optionally prescan all sources in parallel to validate accessibility and collect pyramids
-	let do_prescan = args.optimize_order || max_buffer_size > 0;
-	let prescanned_pyramids = if do_prescan {
-		Some(pipeline::prescan_sources(&paths, runtime).await?)
-	} else {
-		None
-	};
+	let pyramids = pipeline::prescan_sources(&paths, runtime).await?;
 
 	pipeline::assemble_tiles(
 		&args.output,
 		&paths,
-		prescanned_pyramids.as_deref(),
+		&pyramids,
 		&quality,
 		args.lossless,
 		args.min_zoom,
 		args.max_zoom,
 		max_buffer_size,
+		args.optimize_order,
 		runtime,
 	)
 	.await
