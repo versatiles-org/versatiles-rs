@@ -309,9 +309,16 @@ https://example.com/tiles/004.versatiles
 		assert_eq!(parse_buffer_size("  4g  ").unwrap(), 4_000_000_000);
 		assert_eq!(parse_buffer_size("2 m").unwrap(), 2_000_000);
 
-		// Percentage
-		let result = parse_buffer_size("50%").unwrap();
-		assert!(result > 0, "50% of system memory should be > 0");
+		// Percentage (only on platforms where total_system_memory() works)
+		#[cfg(any(target_os = "macos", target_os = "linux"))]
+		{
+			let result = parse_buffer_size("50%").unwrap();
+			assert!(result > 0, "50% of system memory should be > 0");
+		}
+		#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+		{
+			assert!(parse_buffer_size("50%").is_err());
+		}
 
 		// Errors
 		assert!(parse_buffer_size("abc").is_err());
