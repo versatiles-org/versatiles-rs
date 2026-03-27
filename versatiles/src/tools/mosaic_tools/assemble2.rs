@@ -525,6 +525,7 @@ async fn assemble_two_pass(
 		let done_set = done.lock().unwrap();
 		translucent_map.retain(|coord, _| !done_set.contains(coord));
 	}
+	drop(done);
 
 	if translucent_map.is_empty() {
 		// All tiles were opaque — we're done
