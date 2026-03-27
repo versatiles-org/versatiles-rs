@@ -26,8 +26,8 @@ use super::pass_state::PassState;
 use super::translucent_buffer::TranslucentBuffer;
 use anyhow::{Context, Result, anyhow, ensure};
 use futures::{StreamExt, future::ready};
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 use versatiles_container::{Tile, TileSink, TilesRuntime, open_tile_sink};
 use versatiles_core::{
 	Blob, ConcurrencyLimits, MAX_ZOOM_LEVEL, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON,
@@ -233,6 +233,7 @@ pub async fn assemble_tiles(
 	runtime: &TilesRuntime,
 ) -> Result<()> {
 	let buffer = Arc::new(TranslucentBuffer::new());
+	let done: Arc<Mutex<HashSet<u64>>> = Arc::default();
 
 	// Sort sources west-to-east and precompute per-level suffix minimum x
 	// so we can flush translucent tiles early via sweep-line.
@@ -284,7 +285,7 @@ pub async fn assemble_tiles(
 				continue;
 			}
 
-			process_source_tiles(&reader, &pyramid, &sink, &buffer, &config).await?;
+			process_source_tiles(&reader, &pyramid, &sink, &buffer, &done, &config).await?;
 
 			if let Some(ref suffix) = suffix_min_x {
 				sweep_flush(&suffix[pos + 1], &buffer, &sink, &config)?;
@@ -321,6 +322,7 @@ async fn process_source_tiles(
 	pyramid: &TileBBoxPyramid,
 	sink: &Arc<Box<dyn TileSink>>,
 	buffer: &Arc<TranslucentBuffer>,
+	done: &Arc<Mutex<HashSet<u64>>>,
 	config: &AssembleConfig,
 ) -> Result<()> {
 	// Flatten all level streams into one combined stream
@@ -337,10 +339,16 @@ async fn process_source_tiles(
 
 	let sink = Arc::clone(sink);
 	let buffer = Arc::clone(buffer);
+	let done = Arc::clone(done);
 	let config = config.clone();
 
 	let callback = Arc::new(move |coord: TileCoord, mut tile: Tile| -> Result<()> {
 		let key = coord.get_hilbert_index()?;
+
+		// Skip tiles that have already been written to the sink
+		if done.lock().unwrap().contains(&key) {
+			return Ok(());
+		}
 
 		let existing = buffer.remove(key);
 
@@ -354,6 +362,7 @@ async fn process_source_tiles(
 					if is_opaque {
 						let blob = prepare_tile_blob(merged, &config)?;
 						sink.write_tile(&coord, &blob)?;
+						done.lock().unwrap().insert(key);
 					} else {
 						buffer.insert(coord, merged)?;
 					}
@@ -365,6 +374,7 @@ async fn process_source_tiles(
 		} else if tile.is_opaque().unwrap_or(false) {
 			let blob = prepare_tile_blob(tile, &config)?;
 			sink.write_tile(&coord, &blob)?;
+			done.lock().unwrap().insert(key);
 		} else {
 			buffer.insert(coord, tile)?;
 		}
