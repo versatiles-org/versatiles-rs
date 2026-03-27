@@ -176,3 +176,199 @@ fn clip_pyramid_to_north(union_pyramid: &TileBBoxPyramid, cut_y: u32, max_level:
 	}
 	next
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use versatiles_container::Tile;
+	use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat};
+
+	fn dummy_tile() -> Tile {
+		Tile::from_blob(Blob::from(vec![0u8; 4]), TileCompression::Uncompressed, TileFormat::PNG)
+	}
+
+	fn coord(level: u8, x: u32, y: u32) -> TileCoord {
+		TileCoord::new(level, x, y).unwrap()
+	}
+
+	/// Create a pyramid covering (0,0)-(max,max) at the given level.
+	fn full_pyramid_at(level: u8) -> TileBBoxPyramid {
+		let mut p = TileBBoxPyramid::new_empty();
+		p.set_level_bbox(TileBBox::new_full(level).unwrap());
+		p
+	}
+
+	// --- build_union_pyramid ---
+
+	#[test]
+	fn build_union_pyramid_merges_levels() {
+		let p1 = full_pyramid_at(5);
+		let p2 = full_pyramid_at(8);
+		let union = build_union_pyramid(&[p1, p2], None, None);
+		assert!(!union.get_level_bbox(5).is_empty());
+		assert!(!union.get_level_bbox(8).is_empty());
+		assert!(union.get_level_bbox(3).is_empty());
+	}
+
+	#[test]
+	fn build_union_pyramid_clips_zoom() {
+		let mut p = TileBBoxPyramid::new_empty();
+		p.set_level_bbox(TileBBox::new_full(5).unwrap());
+		p.set_level_bbox(TileBBox::new_full(8).unwrap());
+		p.set_level_bbox(TileBBox::new_full(10).unwrap());
+
+		let union = build_union_pyramid(&[p], Some(8), Some(10));
+		// Level 5 should be clipped away (below min_zoom=8)
+		assert!(union.get_level_bbox(5).is_empty());
+		assert!(!union.get_level_bbox(8).is_empty());
+		assert!(!union.get_level_bbox(10).is_empty());
+	}
+
+	// --- clip_pyramid_to_north ---
+
+	#[test]
+	fn clip_pyramid_to_north_restricts_y() {
+		let p = full_pyramid_at(10);
+		let max_level = 10;
+		let cut_y = 512; // at level 10
+
+		let north = clip_pyramid_to_north(&p, cut_y, max_level);
+		let bbox = north.get_level_bbox(10);
+		assert!(!bbox.is_empty());
+		// y_max should be cut_y - 1 = 511
+		assert_eq!(bbox.y_max().unwrap(), 511);
+	}
+
+	#[test]
+	fn clip_pyramid_to_north_empties_coarse_levels() {
+		// At level 0, there's only tile (0,0). cut_y >> 10 = 0 for any cut_y < 1024.
+		// level_cut_y == 0 means the level should be emptied.
+		let mut p = TileBBoxPyramid::new_empty();
+		p.set_level_bbox(TileBBox::new_full(0).unwrap());
+		p.set_level_bbox(TileBBox::new_full(10).unwrap());
+
+		let north = clip_pyramid_to_north(&p, 512, 10);
+		assert!(
+			north.get_level_bbox(0).is_empty(),
+			"level 0 should be empty when level_cut_y == 0"
+		);
+		assert!(!north.get_level_bbox(10).is_empty());
+	}
+
+	// --- PassState::new ---
+
+	#[test]
+	fn new_with_no_buffer_limit() {
+		let p = full_pyramid_at(8);
+		let ps = PassState::new(&[p], None, None, 0, 256);
+		// max_buffer_size=0 → max_buffer_tiles=usize::MAX
+		assert_eq!(ps.max_buffer_tiles, usize::MAX);
+		assert_eq!(ps.max_level, 8);
+		assert!(ps.is_pass_complete());
+	}
+
+	#[test]
+	fn new_with_buffer_limit() {
+		let p = full_pyramid_at(10);
+		// 256x256 tiles, 4 bytes per pixel = 262144 bytes per tile
+		// max_buffer_size = 1_000_000 → max_buffer_tiles = 1_000_000 / 262144 = 3
+		let ps = PassState::new(&[p], None, None, 1_000_000, 256);
+		assert_eq!(ps.max_buffer_tiles, 3);
+	}
+
+	// --- PassState::start_pass ---
+
+	#[test]
+	fn start_pass_resets_cut_y() {
+		let p = full_pyramid_at(10);
+		let mut ps = PassState::new(&[p], None, None, 1_000_000, 256);
+		ps.cut_y = 42;
+		ps.start_pass();
+		assert_eq!(ps.cut_y, 0);
+		assert!(ps.is_pass_complete());
+	}
+
+	// --- PassState::clip_source_pyramid ---
+
+	#[test]
+	fn clip_source_pyramid_intersects() {
+		let p = full_pyramid_at(10);
+		let ps = PassState::new(&[p], None, None, 0, 256);
+		// Simulate eviction having clipped remaining_pyramid
+		let _ = ps.remaining_pyramid.get_level_bbox(10);
+		let mut source = full_pyramid_at(10);
+		ps.clip_source_pyramid(&mut source);
+		// After intersection with full remaining_pyramid, source should still be full
+		assert!(!source.get_level_bbox(10).is_empty());
+	}
+
+	// --- PassState::check_eviction ---
+
+	#[test]
+	fn check_eviction_no_op_when_under_limit() -> anyhow::Result<()> {
+		let p = full_pyramid_at(10);
+		let mut ps = PassState::new(&[p], None, None, 100_000_000, 256);
+		let buf = TranslucentBuffer::new();
+		buf.insert(coord(10, 0, 0), dummy_tile())?;
+
+		ps.check_eviction(&buf);
+		assert!(ps.is_pass_complete(), "no eviction should happen when buffer is small");
+		assert_eq!(buf.len(), 1);
+		Ok(())
+	}
+
+	#[test]
+	fn check_eviction_triggers_when_over_limit() -> anyhow::Result<()> {
+		let p = full_pyramid_at(10);
+		// max_buffer_tiles = 2 (very small)
+		let mut ps = PassState::new(&[p], None, None, 2 * 256 * 256 * 4, 256);
+		assert_eq!(ps.max_buffer_tiles, 2);
+
+		let buf = TranslucentBuffer::new();
+		// Insert 4 tiles at level 10 with increasing y
+		buf.insert(coord(10, 0, 100), dummy_tile())?;
+		buf.insert(coord(10, 0, 200), dummy_tile())?;
+		buf.insert(coord(10, 0, 300), dummy_tile())?;
+		buf.insert(coord(10, 0, 400), dummy_tile())?;
+
+		ps.check_eviction(&buf);
+		assert!(!ps.is_pass_complete(), "eviction should have set cut_y > 0");
+		// Northern tiles should have been evicted, keeping ~2 southern tiles
+		assert!(buf.len() <= 2, "buffer should be at or below limit after eviction");
+		Ok(())
+	}
+
+	// --- PassState::prepare_next_pass ---
+
+	#[test]
+	fn prepare_next_pass_restricts_to_north() -> anyhow::Result<()> {
+		let p = full_pyramid_at(10);
+		let mut ps = PassState::new(&[p], None, None, 2 * 256 * 256 * 4, 256);
+
+		// Simulate eviction
+		let buf = TranslucentBuffer::new();
+		for y in 0..10 {
+			buf.insert(coord(10, 0, y * 100), dummy_tile())?;
+		}
+		ps.check_eviction(&buf);
+		assert!(!ps.is_pass_complete());
+
+		let cut_y = ps.cut_y;
+		ps.prepare_next_pass();
+
+		// After prepare_next_pass, remaining_pyramid at level 10 should only cover y < cut_y
+		let bbox = ps.remaining_pyramid.get_level_bbox(10);
+		assert!(!bbox.is_empty());
+		assert_eq!(bbox.y_max().unwrap(), (cut_y - 1).min(bbox.y_max().unwrap()));
+		Ok(())
+	}
+
+	// --- is_pass_complete ---
+
+	#[test]
+	fn is_pass_complete_without_eviction() {
+		let p = full_pyramid_at(5);
+		let ps = PassState::new(&[p], None, None, 0, 256);
+		assert!(ps.is_pass_complete());
+	}
+}

@@ -82,3 +82,158 @@ impl TranslucentBuffer {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use versatiles_core::{Blob, TileCompression, TileFormat};
+
+	fn dummy_tile() -> Tile {
+		Tile::from_blob(Blob::from(vec![0u8; 4]), TileCompression::Uncompressed, TileFormat::PNG)
+	}
+
+	fn coord(level: u8, x: u32, y: u32) -> TileCoord {
+		TileCoord::new(level, x, y).unwrap()
+	}
+
+	#[test]
+	fn new_buffer_is_empty() {
+		let buf = TranslucentBuffer::new();
+		assert_eq!(buf.len(), 0);
+	}
+
+	#[test]
+	fn insert_and_len() -> anyhow::Result<()> {
+		let buf = TranslucentBuffer::new();
+		buf.insert(coord(5, 1, 2), dummy_tile())?;
+		assert_eq!(buf.len(), 1);
+		buf.insert(coord(5, 3, 4), dummy_tile())?;
+		assert_eq!(buf.len(), 2);
+		Ok(())
+	}
+
+	#[test]
+	fn insert_same_coord_overwrites() -> anyhow::Result<()> {
+		let buf = TranslucentBuffer::new();
+		buf.insert(coord(5, 1, 2), dummy_tile())?;
+		buf.insert(coord(5, 1, 2), dummy_tile())?;
+		assert_eq!(buf.len(), 1);
+		Ok(())
+	}
+
+	#[test]
+	fn remove_existing_key() -> anyhow::Result<()> {
+		let buf = TranslucentBuffer::new();
+		let c = coord(5, 1, 2);
+		buf.insert(c, dummy_tile())?;
+		let key = c.get_hilbert_index()?;
+
+		let removed = buf.remove(key);
+		assert!(removed.is_some());
+		assert_eq!(removed.unwrap().0, c);
+		assert_eq!(buf.len(), 0);
+		Ok(())
+	}
+
+	#[test]
+	fn remove_missing_key() {
+		let buf = TranslucentBuffer::new();
+		assert!(buf.remove(12345).is_none());
+	}
+
+	#[test]
+	fn clear_empties_buffer() -> anyhow::Result<()> {
+		let buf = TranslucentBuffer::new();
+		buf.insert(coord(3, 0, 0), dummy_tile())?;
+		buf.insert(coord(3, 1, 1), dummy_tile())?;
+		assert_eq!(buf.len(), 2);
+
+		buf.clear();
+		assert_eq!(buf.len(), 0);
+		Ok(())
+	}
+
+	#[test]
+	fn drain_returns_all_and_empties() -> anyhow::Result<()> {
+		let buf = TranslucentBuffer::new();
+		buf.insert(coord(4, 0, 0), dummy_tile())?;
+		buf.insert(coord(4, 1, 0), dummy_tile())?;
+		buf.insert(coord(4, 0, 1), dummy_tile())?;
+
+		let drained = buf.drain();
+		assert_eq!(drained.len(), 3);
+		assert_eq!(buf.len(), 0);
+		Ok(())
+	}
+
+	#[test]
+	fn remove_tiles_where_filters_correctly() -> anyhow::Result<()> {
+		let buf = TranslucentBuffer::new();
+		buf.insert(coord(5, 0, 0), dummy_tile())?;
+		buf.insert(coord(5, 1, 0), dummy_tile())?;
+		buf.insert(coord(5, 2, 0), dummy_tile())?;
+		buf.insert(coord(5, 3, 0), dummy_tile())?;
+
+		// Remove tiles with x < 2
+		let removed = buf.remove_tiles_where(|c| c.x < 2);
+		assert_eq!(removed.len(), 2);
+		assert_eq!(buf.len(), 2);
+		Ok(())
+	}
+
+	#[test]
+	fn remove_tiles_where_none_match() -> anyhow::Result<()> {
+		let buf = TranslucentBuffer::new();
+		buf.insert(coord(5, 10, 10), dummy_tile())?;
+
+		let removed = buf.remove_tiles_where(|c| c.x > 100);
+		assert_eq!(removed.len(), 0);
+		assert_eq!(buf.len(), 1);
+		Ok(())
+	}
+
+	#[test]
+	fn compute_cut_y_all_fit() -> anyhow::Result<()> {
+		let buf = TranslucentBuffer::new();
+		// 3 tiles at level 10
+		buf.insert(coord(10, 0, 100), dummy_tile())?;
+		buf.insert(coord(10, 0, 200), dummy_tile())?;
+		buf.insert(coord(10, 0, 300), dummy_tile())?;
+
+		// max_tiles=5 > 3 tiles, so all fit
+		assert_eq!(buf.compute_cut_y(5, 10), 0);
+		Ok(())
+	}
+
+	#[test]
+	fn compute_cut_y_eviction_needed() -> anyhow::Result<()> {
+		let buf = TranslucentBuffer::new();
+		// 4 tiles at level 10, y values: 100, 200, 300, 400
+		buf.insert(coord(10, 0, 100), dummy_tile())?;
+		buf.insert(coord(10, 0, 200), dummy_tile())?;
+		buf.insert(coord(10, 0, 300), dummy_tile())?;
+		buf.insert(coord(10, 0, 400), dummy_tile())?;
+
+		// Keep 2 tiles (southern = highest y). cut_y should be at projected_ys[4-2] = projected_ys[2]
+		// All at level 10 with max_level=10, so projected_y = y. Sorted: [100, 200, 300, 400]
+		// cut_y = projected_ys[2] = 300
+		let cut_y = buf.compute_cut_y(2, 10);
+		assert_eq!(cut_y, 300);
+		Ok(())
+	}
+
+	#[test]
+	fn compute_cut_y_with_level_projection() -> anyhow::Result<()> {
+		let buf = TranslucentBuffer::new();
+		// Tile at level 8, y=5. With max_level=10, projected_y = 5 << 2 = 20
+		buf.insert(coord(8, 0, 5), dummy_tile())?;
+		// Tile at level 10, y=100. projected_y = 100 << 0 = 100
+		buf.insert(coord(10, 0, 100), dummy_tile())?;
+
+		// Keep 1 tile (highest y = southernmost). Sorted projected: [20, 100].
+		// cut_y = projected_ys[2-1] = 100. Tiles with projected_y < 100 are evicted.
+		let cut_y = buf.compute_cut_y(1, 10);
+		assert_eq!(cut_y, 100);
+		Ok(())
+	}
+}
