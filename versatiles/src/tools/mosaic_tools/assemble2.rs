@@ -54,10 +54,10 @@ pub struct Assemble2 {
 	#[arg(long, value_name = "int")]
 	max_zoom: Option<u8>,
 
-	/// Maximum memory for the tile buffer.
+	/// Maximum memory for the tile buffer (default: 4g).
 	/// Supports units: k, m, g, t (e.g. "4g") and % of system memory (e.g. "50%").
-	/// Plain number is interpreted as bytes. 0 means unlimited (default).
-	#[arg(long, value_name = "size", default_value = "0")]
+	/// Plain number is interpreted as bytes. 0 means unlimited.
+	#[arg(long, value_name = "size", default_value = "4g")]
 	max_buffer_size: String,
 }
 
