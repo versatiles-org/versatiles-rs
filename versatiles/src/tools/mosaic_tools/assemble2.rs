@@ -248,24 +248,32 @@ fn write_opaque_blob(tile: Tile, config: &AssembleConfig) -> Result<Blob> {
 /// and re-encoded here as well.
 fn encode_tiles_parallel(tiles: Vec<(TileCoord, Tile)>, config: &AssembleConfig) -> Vec<Result<(TileCoord, Blob)>> {
 	let config = config.clone();
-	std::thread::scope(|s| {
-		let handles: Vec<_> = tiles
-			.into_iter()
-			.map(|(coord, mut tile)| {
-				let cfg = &config;
-				s.spawn(move || {
-					let quality = if cfg.lossless {
-						Some(100)
-					} else {
-						cfg.quality[coord.level as usize]
-					};
-					tile.change_format(TileFormat::WEBP, quality, None)?;
-					Ok((coord, tile.into_blob(cfg.tile_compression)?))
+	let chunk_size = ConcurrencyLimits::default().cpu_bound;
+	let mut results = Vec::with_capacity(tiles.len());
+	let mut iter = tiles.into_iter().peekable();
+	while iter.peek().is_some() {
+		let chunk: Vec<_> = iter.by_ref().take(chunk_size).collect();
+		let chunk_results: Vec<_> = std::thread::scope(|s| {
+			let handles: Vec<_> = chunk
+				.into_iter()
+				.map(|(coord, mut tile)| {
+					let cfg = &config;
+					s.spawn(move || {
+						let quality = if cfg.lossless {
+							Some(100)
+						} else {
+							cfg.quality[coord.level as usize]
+						};
+						tile.change_format(TileFormat::WEBP, quality, None)?;
+						Ok((coord, tile.into_blob(cfg.tile_compression)?))
+					})
 				})
-			})
-			.collect();
-		handles.into_iter().map(|h| h.join().unwrap()).collect()
-	})
+				.collect();
+			handles.into_iter().map(|h| h.join().unwrap()).collect()
+		});
+		results.extend(chunk_results);
+	}
+	results
 }
 
 // ─── Entry point ───
