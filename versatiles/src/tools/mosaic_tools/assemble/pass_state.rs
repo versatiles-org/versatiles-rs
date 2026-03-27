@@ -1,16 +1,48 @@
+//! Multi-pass eviction state for memory-bounded assembly.
+//!
+//! When `--max-buffer-size` is set, the translucent tile buffer has a finite capacity.
+//! If it fills up during a pass, [`PassState`] computes a horizontal cutline (`cut_y`)
+//! in tile-coordinate space at the highest zoom level. Tiles north of (y < `cut_y`) are
+//! evicted from the buffer and skipped by remaining sources in the current pass. After
+//! the pass, a new pass processes only the evicted (northern) region.
+//!
+//! # Coordinate projection
+//!
+//! Tiles exist at different zoom levels with different coordinate ranges. To compare
+//! them, tile y-coordinates are projected to the highest zoom level:
+//! `projected_y = coord.y << (max_level - coord.level)`.
+//! The cutline `cut_y` is defined at this highest resolution.
+//!
+//! When clipping pyramids or evicting tiles at a specific zoom level, `cut_y` is
+//! projected back: `level_cut_y = cut_y >> (max_level - level)`. Due to integer
+//! division, this projection is lossy at lower zoom levels. Tiles at levels where
+//! `level_cut_y == 0` are never evicted because they cannot be assigned to a single
+//! pass and would be lost.
+
 use super::translucent_buffer::TranslucentBuffer;
 use versatiles_core::{TileBBox, TileBBoxPyramid};
 
 /// Manages multi-pass eviction state for memory-bounded assembly.
 ///
-/// When the translucent tile buffer exceeds `max_buffer_tiles`, northern tiles
-/// are evicted and deferred to subsequent passes. `PassState` tracks the
-/// horizontal cutline (`cut_y`) and the remaining tile region across passes.
+/// Created only when prescanned pyramids are available (either via `--optimize-order`
+/// or implicitly via `--max-buffer-size`). When `max_buffer_size == 0`,
+/// `max_buffer_tiles` is `usize::MAX` and eviction never triggers — the assembly
+/// completes in a single pass.
 pub struct PassState {
+	/// Union of all source pyramids, clipped to the requested zoom range.
+	/// Immutable after construction — used as the starting point for each pass.
 	union_pyramid: TileBBoxPyramid,
+	/// The region still to be processed in the current pass. Starts as a clone of
+	/// `union_pyramid` and gets clipped southward during eviction, then clipped
+	/// northward between passes.
 	remaining_pyramid: TileBBoxPyramid,
+	/// Highest zoom level in `union_pyramid`. Used to project coordinates.
 	max_level: u8,
+	/// Maximum number of tiles allowed in the translucent buffer before eviction.
 	max_buffer_tiles: usize,
+	/// Current horizontal cutline (at `max_level` resolution). Tiles with
+	/// `projected_y < cut_y` are excluded from the current pass.
+	/// Reset to 0 at the start of each pass.
 	cut_y: u32,
 }
 

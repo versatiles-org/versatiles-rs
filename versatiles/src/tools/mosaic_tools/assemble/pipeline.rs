@@ -1,3 +1,27 @@
+//! Assembly pipeline: tile processing, compositing, and output.
+//!
+//! The main entry point is [`assemble_tiles`], which runs the outer pass loop:
+//!
+//! ```text
+//! loop {
+//!     for each source:
+//!         stream tiles → composite with buffer → write opaque tiles
+//!         sweep-flush tiles in completed columns
+//!         evict northern tiles if buffer exceeds limit
+//!     flush remaining buffer
+//!     if no eviction happened → done
+//!     else → prepare next pass for northern tiles, repeat
+//! }
+//! ```
+//!
+//! Tile compositing happens in [`process_source_tiles`] via parallel `spawn_blocking`
+//! tasks. Each tile follows one of these paths:
+//!
+//! 1. **Opaque, no overlap** — written as-is (original encoding preserved).
+//! 2. **Opaque after merge** — composited result is opaque, re-encoded as lossy WebP.
+//! 3. **Still translucent** — stays in the buffer for further compositing.
+//! 4. **Translucent, never overlapped** — flushed at end of pass, re-encoded as WebP.
+
 use super::pass_state::PassState;
 use super::translucent_buffer::TranslucentBuffer;
 use anyhow::{Context, Result, anyhow, ensure};
@@ -64,6 +88,11 @@ pub async fn prescan_sources(paths: &[String], runtime: &TilesRuntime) -> Result
 }
 
 /// Build source processing order (west-to-east) and per-level suffix minimum x arrays.
+///
+/// Returns `(order, suffix)` where:
+/// - `order[i]` is the index into `paths` of the i-th source to process.
+/// - `suffix[i][level]` is the minimum x coordinate across all sources at positions `i..`
+///   at the given zoom level. Used by [`sweep_flush`] to determine which columns are complete.
 fn build_sweep_order(num_sources: usize, pyramids: &[TileBBoxPyramid]) -> (Vec<usize>, SuffixMinX) {
 	let mut order: Vec<usize> = (0..num_sources).collect();
 	order.sort_unstable_by(|&a, &b| western_edge(&pyramids[a]).total_cmp(&western_edge(&pyramids[b])));
@@ -94,6 +123,12 @@ fn western_edge(pyramid: &TileBBoxPyramid) -> f64 {
 }
 
 /// Flush translucent tiles whose x-column is no longer covered by any remaining source.
+///
+/// After processing source at position `pos`, `remaining_min_x[level]` holds the minimum
+/// x coordinate of all sources still to come at that zoom level. Any buffered tile whose
+/// x < remaining_min_x is guaranteed to never be overlaid again, so it can be written now.
+/// This is the key optimization of the sweep-line approach: it bounds memory by flushing
+/// tiles as soon as they are complete, rather than waiting until all sources are processed.
 fn sweep_flush(
 	remaining_min_x: &[Option<u32>; NUM_LEVELS],
 	buffer: &Arc<TranslucentBuffer>,

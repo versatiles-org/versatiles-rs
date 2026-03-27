@@ -1,3 +1,13 @@
+//! Thread-safe buffer for translucent tiles awaiting further compositing.
+//!
+//! Tiles that are not yet fully opaque are stored here, keyed by their Hilbert index
+//! (a space-filling curve that maps `(level, x, y)` to a single `u64`). When a new
+//! tile arrives at the same coordinate, it is composited with the buffered tile.
+//! Once opaque or when no more sources can contribute, the tile is flushed to the sink.
+//!
+//! The buffer is shared across `spawn_blocking` tasks via `Arc<TranslucentBuffer>`.
+//! All methods acquire the internal `Mutex` for the duration of their operation.
+
 use std::collections::HashMap;
 use std::sync::Mutex;
 use versatiles_container::Tile;
@@ -5,8 +15,8 @@ use versatiles_core::{TileCoord, utils::HilbertIndex};
 
 /// Thread-safe buffer for translucent tiles awaiting further compositing.
 ///
-/// Wraps a `Mutex<HashMap>` keyed by Hilbert index, providing named operations
-/// that hide locking from callers.
+/// Provides named operations over a `Mutex<HashMap<u64, (TileCoord, Tile)>>`,
+/// hiding lock management from callers. The `u64` key is the tile's Hilbert index.
 pub struct TranslucentBuffer {
 	inner: Mutex<HashMap<u64, (TileCoord, Tile)>>,
 }

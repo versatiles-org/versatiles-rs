@@ -1,3 +1,41 @@
+//! Assemble multiple tile containers into a single output by compositing overlapping tiles.
+//!
+//! # Architecture
+//!
+//! This module is split into four files:
+//!
+//! - **`mod.rs`** (this file) — CLI definition, argument parsing, and entry point ([`run`]).
+//! - **[`pipeline`]** — The assembly pipeline: opens sources, streams tiles, composites
+//!   overlapping images, and writes the output. Contains the main [`pipeline::assemble_tiles`]
+//!   loop and all tile-processing functions.
+//! - **[`translucent_buffer`]** — Thread-safe buffer holding translucent tiles that are
+//!   waiting for further compositing. Keyed by Hilbert index for fast lookup.
+//! - **[`pass_state`]** — Multi-pass eviction state. When `--max-buffer-size` is set and the
+//!   buffer grows too large, northern tiles are evicted and deferred to subsequent passes.
+//!
+//! # How assembly works
+//!
+//! Sources are processed one at a time. Each tile from a source is looked up in the
+//! [`TranslucentBuffer`](translucent_buffer::TranslucentBuffer):
+//!
+//! - **No existing entry + opaque tile** — written directly to the output sink.
+//! - **No existing entry + translucent tile** — stored in the buffer for later compositing.
+//! - **Existing entry** — the new tile is composited on top of the buffered tile using
+//!   additive alpha blending. If the result is opaque, it is written immediately;
+//!   otherwise it stays in the buffer.
+//!
+//! After all sources are processed, remaining buffered tiles are flushed to the output.
+//!
+//! # Optimizations
+//!
+//! - **Sweep-line flushing** (`--optimize-order`): Sources are sorted west-to-east. After
+//!   each source, tiles in columns that no remaining source can cover are flushed early,
+//!   reducing peak memory.
+//! - **Multi-pass eviction** (`--max-buffer-size`): When the buffer exceeds the memory
+//!   limit, a horizontal cutline (`cut_y`) is computed. Tiles north of the cut are evicted
+//!   and the remaining sources only process tiles south of it. After the pass completes, a
+//!   new pass processes the evicted (northern) region from scratch. See [`PassState`](pass_state::PassState).
+
 mod pass_state;
 mod pipeline;
 mod translucent_buffer;
@@ -5,35 +43,7 @@ mod translucent_buffer;
 use anyhow::{Context, Result, ensure};
 use versatiles_container::TilesRuntime;
 
-/// Assemble multiple tile containers into a single output file.
-///
-/// Reads a list of tile containers (local paths or URLs), reads their tile indices,
-/// and assembles them into a single output container. Handles overlapping tiles by compositing
-/// semi-transparent images using additive alpha blending.
-///
-/// Tiles from containers listed earlier in the input file overlay tiles from containers listed later.
-///
-/// # Tile processing paths
-///
-/// Each tile coordinate follows one of these paths:
-///
-/// 1. **Opaque, no overlap** — The first tile seen at a coordinate is opaque.
-///    Written as-is (original encoding preserved, no re-encoding).
-///
-/// 2. **Opaque after merge** — A translucent tile in the buffer is composited with a
-///    new tile and the result is fully opaque. The merged image is re-encoded as lossy
-///    WebP at the configured `--quality` and written.
-///
-/// 3. **Still translucent after merge** — Compositing produces a translucent result.
-///    The merged image is re-encoded as WebP (lossy at `--quality`, or lossless if
-///    `--lossless` is set) and kept in the buffer for further compositing.
-///
-/// 4. **Translucent, never overlapped** — A translucent tile that is never covered by
-///    another source. At flush time it is re-encoded as lossy WebP at `--quality`
-///    (or lossless WebP if `--lossless` is set) before writing.
-///
-/// In short: opaque tiles pass through unchanged, while every translucent tile that
-/// reaches the output is re-encoded with the user's quality/lossless settings.
+/// CLI arguments for `mosaic assemble`.
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
 pub struct Assemble {
