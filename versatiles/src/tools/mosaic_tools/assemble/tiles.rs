@@ -313,4 +313,98 @@ mod tests {
 		assert!(!blob.is_empty());
 		Ok(())
 	}
+
+	#[test]
+	fn write_opaque_blob_with_gzip_compression() -> Result<()> {
+		let config = AssembleConfig {
+			tile_compression: TileCompression::Gzip,
+			..test_config()
+		};
+		let tile = opaque_rgb_tile();
+		let blob = write_opaque_blob(tile, &config)?;
+		assert!(!blob.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn composite_opaque_over_translucent() -> Result<()> {
+		let base = translucent_rgba_tile(128);
+		let top = opaque_rgb_tile();
+		let result = composite_two_tiles(base, top)?;
+		let img = result.into_image()?;
+		assert_eq!(img.width(), 2);
+		assert_eq!(img.height(), 2);
+		Ok(())
+	}
+
+	#[test]
+	fn composite_translucent_over_opaque() -> Result<()> {
+		let base = opaque_rgb_tile();
+		let top = translucent_rgba_tile(128);
+		let result = composite_two_tiles(base, top)?;
+		let img = result.into_image()?;
+		assert_eq!(img.width(), 2);
+		assert_eq!(img.height(), 2);
+		Ok(())
+	}
+
+	#[test]
+	fn composite_fully_transparent_over_opaque() -> Result<()> {
+		let base = opaque_rgb_tile();
+		let top = translucent_rgba_tile(0); // fully transparent
+		let result = composite_two_tiles(base, top)?;
+		let img = result.into_image()?;
+		assert_eq!((img.width(), img.height()), (2, 2));
+		Ok(())
+	}
+
+	#[test]
+	fn encode_tiles_parallel_preserves_coords() -> Result<()> {
+		let config = test_config();
+		let coords = [coord(3, 5, 7), coord(8, 100, 200), coord(0, 0, 0)];
+		let tiles: Vec<_> = coords.iter().map(|c| (*c, opaque_rgb_tile())).collect();
+
+		let results = encode_tiles_parallel(tiles, &config);
+		let result_coords: Vec<TileCoord> = results.into_iter().map(|r| r.unwrap().0).collect();
+		assert_eq!(result_coords, coords);
+		Ok(())
+	}
+
+	#[test]
+	fn encode_tiles_parallel_with_gzip() -> Result<()> {
+		let config = AssembleConfig {
+			tile_compression: TileCompression::Gzip,
+			..test_config()
+		};
+		let tiles = vec![(coord(0, 0, 0), opaque_rgb_tile())];
+		let results = encode_tiles_parallel(tiles, &config);
+		assert_eq!(results.len(), 1);
+		let (_, blob) = results.into_iter().next().unwrap()?;
+		assert!(!blob.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn validate_source_format_both_mismatched() {
+		let config = test_config();
+		let metadata = versatiles_container::TileSourceMetadata {
+			tile_format: TileFormat::PNG,
+			tile_compression: TileCompression::Gzip,
+			..Default::default()
+		};
+		// First check fires (format), so error mentions format
+		let err = validate_source_format("bad.versatiles", &metadata, &config).unwrap_err();
+		assert!(err.to_string().contains("tile format"));
+	}
+
+	#[test]
+	fn validate_source_format_includes_path_in_error() {
+		let config = test_config();
+		let metadata = versatiles_container::TileSourceMetadata {
+			tile_format: TileFormat::PNG,
+			..Default::default()
+		};
+		let err = validate_source_format("my/special/path.versatiles", &metadata, &config).unwrap_err();
+		assert!(err.to_string().contains("my/special/path.versatiles"));
+	}
 }

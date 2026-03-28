@@ -138,4 +138,86 @@ mod tests {
 		assert_eq!(buf.len(), 0);
 		Ok(())
 	}
+
+	#[test]
+	fn drain_on_empty_buffer() {
+		let buf = TranslucentBuffer::new();
+		let drained = buf.drain();
+		assert!(drained.is_empty());
+	}
+
+	#[test]
+	fn insert_then_drain_preserves_coords() -> anyhow::Result<()> {
+		let buf = TranslucentBuffer::new();
+		let c1 = coord(3, 1, 2);
+		let c2 = coord(3, 3, 4);
+		buf.insert(c1, dummy_tile())?;
+		buf.insert(c2, dummy_tile())?;
+
+		let drained = buf.drain();
+		let coords: std::collections::HashSet<TileCoord> = drained.values().map(|(c, _)| *c).collect();
+		assert!(coords.contains(&c1));
+		assert!(coords.contains(&c2));
+		Ok(())
+	}
+
+	#[test]
+	fn multiple_independent_buffers() -> anyhow::Result<()> {
+		let buf1 = TranslucentBuffer::new();
+		let buf2 = TranslucentBuffer::new();
+
+		buf1.insert(coord(1, 0, 0), dummy_tile())?;
+		buf1.insert(coord(1, 1, 0), dummy_tile())?;
+		buf2.insert(coord(2, 0, 0), dummy_tile())?;
+
+		assert_eq!(buf1.len(), 2);
+		assert_eq!(buf2.len(), 1);
+
+		buf1.clear();
+		assert_eq!(buf1.len(), 0);
+		assert_eq!(buf2.len(), 1); // buf2 unaffected
+		Ok(())
+	}
+
+	#[test]
+	fn remove_after_drain_returns_none() -> anyhow::Result<()> {
+		let buf = TranslucentBuffer::new();
+		let c = coord(5, 1, 2);
+		buf.insert(c, dummy_tile())?;
+		let key = c.get_hilbert_index()?;
+
+		let _ = buf.drain();
+		assert!(buf.remove(key).is_none());
+		Ok(())
+	}
+
+	#[test]
+	fn insert_after_clear() -> anyhow::Result<()> {
+		let buf = TranslucentBuffer::new();
+		buf.insert(coord(1, 0, 0), dummy_tile())?;
+		buf.clear();
+		assert_eq!(buf.len(), 0);
+
+		buf.insert(coord(2, 0, 0), dummy_tile())?;
+		assert_eq!(buf.len(), 1);
+		Ok(())
+	}
+
+	#[test]
+	fn concurrent_insert_from_threads() -> anyhow::Result<()> {
+		use std::sync::Arc;
+		let buf = Arc::new(TranslucentBuffer::new());
+		let mut handles = Vec::new();
+
+		for i in 0..10u32 {
+			let buf = Arc::clone(&buf);
+			handles.push(std::thread::spawn(move || buf.insert(coord(5, i, 0), dummy_tile())));
+		}
+
+		for h in handles {
+			h.join().unwrap()?;
+		}
+		assert_eq!(buf.len(), 10);
+		Ok(())
+	}
 }

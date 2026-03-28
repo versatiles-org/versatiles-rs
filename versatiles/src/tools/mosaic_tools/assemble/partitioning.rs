@@ -320,4 +320,160 @@ mod tests {
 		let total: usize = batches.iter().flat_map(|b| b.iter()).map(|g| g.coords.len()).sum();
 		assert_eq!(total, 150);
 	}
+
+	#[test]
+	fn test_collapse_empty_map() {
+		let map: HashMap<TileCoord, Vec<usize>> = HashMap::new();
+		let groups = collapse_into_signature_groups(map);
+		assert!(groups.is_empty());
+	}
+
+	#[test]
+	fn test_collapse_single_tile() {
+		let mut map = HashMap::new();
+		map.insert(tc(0, 0, 0), vec![5, 3, 1]);
+		let groups = collapse_into_signature_groups(map);
+		assert_eq!(groups.len(), 1);
+		assert_eq!(groups[0].sources, vec![1, 3, 5]); // sorted
+		assert_eq!(groups[0].coords.len(), 1);
+	}
+
+	#[test]
+	fn test_collapse_many_unique_signatures() {
+		let mut map = HashMap::new();
+		for i in 0..10u32 {
+			map.insert(tc(0, i, 0), vec![i as usize]);
+		}
+		let groups = collapse_into_signature_groups(map);
+		assert_eq!(groups.len(), 10);
+	}
+
+	#[test]
+	fn test_collapse_all_same_signature() {
+		let mut map = HashMap::new();
+		for i in 0..5u32 {
+			map.insert(tc(0, i, 0), vec![0, 1]);
+		}
+		let groups = collapse_into_signature_groups(map);
+		assert_eq!(groups.len(), 1);
+		assert_eq!(groups[0].coords.len(), 5);
+	}
+
+	#[test]
+	fn test_partition_batch_size_one() {
+		let groups = vec![
+			SignatureGroup {
+				sources: vec![0],
+				coords: vec![tc(0, 0, 0), tc(0, 1, 0)],
+			},
+			SignatureGroup {
+				sources: vec![1],
+				coords: vec![tc(1, 0, 0)],
+			},
+		];
+
+		let batches = partition_into_batches(groups, 2, 1);
+		assert_eq!(batches.len(), 3); // each tile in its own batch
+
+		for batch in &batches {
+			let tiles: usize = batch.iter().map(|g| g.coords.len()).sum();
+			assert_eq!(tiles, 1);
+		}
+	}
+
+	#[test]
+	fn test_partition_exact_fit() {
+		// 6 tiles, batch_size=6 → should be 1 batch
+		let groups = vec![
+			SignatureGroup {
+				sources: vec![0],
+				coords: vec![tc(0, 0, 0), tc(0, 1, 0), tc(0, 2, 0)],
+			},
+			SignatureGroup {
+				sources: vec![1],
+				coords: vec![tc(1, 0, 0), tc(1, 1, 0), tc(1, 2, 0)],
+			},
+		];
+
+		let batches = partition_into_batches(groups, 2, 6);
+		assert_eq!(batches.len(), 1);
+		let total: usize = batches[0].iter().map(|g| g.coords.len()).sum();
+		assert_eq!(total, 6);
+	}
+
+	#[test]
+	fn test_partition_single_tile_single_source() {
+		let groups = vec![SignatureGroup {
+			sources: vec![0],
+			coords: vec![tc(0, 0, 0)],
+		}];
+
+		let batches = partition_into_batches(groups, 1, 100);
+		assert_eq!(batches.len(), 1);
+		assert_eq!(batches[0][0].coords.len(), 1);
+	}
+
+	#[test]
+	fn test_partition_overlapping_sources_grouped() {
+		// Groups with overlapping sources should tend to land in the same batch
+		let groups = vec![
+			SignatureGroup {
+				sources: vec![0, 1, 2],
+				coords: vec![tc(0, 0, 0), tc(0, 1, 0)],
+			},
+			SignatureGroup {
+				sources: vec![0, 1],
+				coords: vec![tc(0, 2, 0), tc(0, 3, 0)],
+			},
+			SignatureGroup {
+				sources: vec![3, 4, 5],
+				coords: vec![tc(1, 0, 0), tc(1, 1, 0)],
+			},
+			SignatureGroup {
+				sources: vec![3, 4],
+				coords: vec![tc(1, 2, 0), tc(1, 3, 0)],
+			},
+		];
+
+		let batches = partition_into_batches(groups, 6, 4);
+		assert_eq!(batches.len(), 2);
+
+		// Each batch should have 4 tiles
+		for batch in &batches {
+			let tiles: usize = batch.iter().map(|g| g.coords.len()).sum();
+			assert_eq!(tiles, 4);
+		}
+
+		// Check that overlapping sources end up together
+		for batch in &batches {
+			let all_sources: BTreeSet<usize> = batch.iter().flat_map(|g| g.sources.iter().copied()).collect();
+			// Should be either {0,1,2} or {3,4,5} dominant
+			assert!(
+				all_sources.is_subset(&[0, 1, 2].into_iter().collect())
+					|| all_sources.is_subset(&[3, 4, 5].into_iter().collect()),
+				"batch has mixed source groups: {all_sources:?}"
+			);
+		}
+	}
+
+	#[test]
+	fn test_partition_many_small_groups() {
+		// 20 groups with 1 tile each, 4 distinct source sets
+		let mut groups = Vec::new();
+		for i in 0..20u32 {
+			groups.push(SignatureGroup {
+				sources: vec![(i % 4) as usize],
+				coords: vec![tc(0, i, 0)],
+			});
+		}
+
+		let batches = partition_into_batches(groups, 4, 5);
+		let total: usize = batches.iter().flat_map(|b| b.iter()).map(|g| g.coords.len()).sum();
+		assert_eq!(total, 20);
+
+		for batch in &batches {
+			let tiles: usize = batch.iter().map(|g| g.coords.len()).sum();
+			assert!(tiles <= 5);
+		}
+	}
 }

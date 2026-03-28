@@ -324,4 +324,112 @@ https://example.com/tiles/004.versatiles
 		let args = vec!["/nonexistent_dir_xyz/*.versatiles".to_string()];
 		assert!(resolve_inputs(&args).is_err());
 	}
+
+	#[test]
+	fn test_resolve_inputs_at_file_missing() {
+		let args = vec!["@/nonexistent/path.txt".to_string()];
+		assert!(resolve_inputs(&args).is_err());
+	}
+
+	#[test]
+	fn test_resolve_inputs_mixed_args() {
+		let dir = tempfile::tempdir().unwrap();
+		std::fs::write(dir.path().join("a.versatiles"), "").unwrap();
+		let list_path = dir.path().join("list.txt");
+		std::fs::write(&list_path, "from_list.versatiles\n").unwrap();
+
+		let args = vec![
+			"literal.versatiles".to_string(),
+			format!("@{}", list_path.display()),
+			format!("{}/*.versatiles", dir.path().display()),
+		];
+		let result = resolve_inputs(&args).unwrap();
+		assert_eq!(result.len(), 3);
+		assert_eq!(result[0], "literal.versatiles");
+		assert_eq!(result[1], "from_list.versatiles");
+		assert!(result[2].ends_with("a.versatiles"));
+	}
+
+	#[test]
+	fn test_parse_quality_single_value_fills_all_zooms() {
+		let q = parse_quality("60").unwrap();
+		for i in &q {
+			assert_eq!(*i, Some(60));
+		}
+	}
+
+	#[test]
+	fn test_parse_quality_zoom_override_cascades() {
+		// "90,5:40" → zooms 0=90, 1-4=90 (no override), 5-31=40
+		let q = parse_quality("90,5:40").unwrap();
+		assert_eq!(q[0], Some(90));
+		assert_eq!(q[4], Some(90));
+		assert_eq!(q[5], Some(40));
+		assert_eq!(q[31], Some(40));
+	}
+
+	#[test]
+	fn test_parse_quality_boundary_values() {
+		assert!(parse_quality("0").is_ok());
+		assert!(parse_quality("100").is_ok());
+		assert!(parse_quality("101").is_err());
+	}
+
+	#[test]
+	fn test_parse_quality_invalid_zoom() {
+		assert!(parse_quality("32:50").is_err());
+	}
+
+	#[test]
+	fn test_parse_quality_non_numeric() {
+		assert!(parse_quality("abc").is_err());
+	}
+
+	#[test]
+	fn test_parse_quality_empty_parts() {
+		// "80,,70" → zoom 0=80, zoom 1 skipped, zoom 2=70
+		let q = parse_quality("80,,70").unwrap();
+		assert_eq!(q[0], Some(80));
+		assert_eq!(q[2], Some(70));
+		assert_eq!(q[31], Some(70));
+	}
+
+	#[test]
+	fn test_parse_input_list_whitespace_only_lines() {
+		let content = "  \n\t\npath.versatiles\n   \n";
+		let paths = parse_input_list(content);
+		assert_eq!(paths, vec!["path.versatiles"]);
+	}
+
+	#[test]
+	fn test_parse_input_list_comment_at_start_of_line() {
+		let content = "# comment\nfoo.versatiles\n#bar.versatiles";
+		let paths = parse_input_list(content);
+		assert_eq!(paths, vec!["foo.versatiles"]);
+	}
+
+	#[test]
+	fn test_parse_buffer_size_zero_with_unit() {
+		// "0" is special-cased, but "0g" goes through the normal path
+		assert_eq!(parse_buffer_size("0g").unwrap(), 0);
+		assert_eq!(parse_buffer_size("0k").unwrap(), 0);
+	}
+
+	#[test]
+	fn test_parse_buffer_size_boundary_percentage() {
+		assert!(parse_buffer_size("0%").is_ok());
+		assert!(parse_buffer_size("100%").is_ok());
+		assert!(parse_buffer_size("-1%").is_err());
+	}
+
+	#[test]
+	fn test_resolve_inputs_empty_list_file() {
+		let dir = tempfile::tempdir().unwrap();
+		let list_path = dir.path().join("empty.txt");
+		std::fs::write(&list_path, "# only comments\n\n").unwrap();
+
+		let args = vec![list_path.to_string_lossy().into_owned()];
+		let result = resolve_inputs(&args).unwrap();
+		assert!(result.is_empty());
+	}
 }

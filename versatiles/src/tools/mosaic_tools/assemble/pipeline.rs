@@ -467,4 +467,69 @@ mod tests {
 			assert!(batch.len() <= 5, "batch has {} tiles, expected <= 5", batch.len());
 		}
 	}
+
+	#[test]
+	fn prepare_batches_single_tile() {
+		let map = make_translucent_map(&[(tc(0, 0, 0), &[0])]);
+		let batches = prepare_batches(map, HashSet::new(), 256, 0, 1).unwrap();
+		assert_eq!(batches.len(), 1);
+		assert_eq!(batches[0].len(), 1);
+		assert_eq!(batches[0][0].0, tc(0, 0, 0));
+		assert_eq!(batches[0][0].1, vec![0]);
+	}
+
+	#[test]
+	fn prepare_batches_large_tile_dim() {
+		// tile_dim=512, each tile = 512*512*4 = 1048576 bytes
+		// max_buffer_size=2000000 → batch_size=1
+		let map = make_translucent_map(&[(tc(0, 0, 0), &[0]), (tc(1, 0, 0), &[1])]);
+		let batches = prepare_batches(map, HashSet::new(), 512, 2_000_000, 2).unwrap();
+		assert_eq!(batches.len(), 2);
+	}
+
+	#[test]
+	fn prepare_batches_small_tile_dim() {
+		// tile_dim=64, each tile = 64*64*4 = 16384 bytes
+		// max_buffer_size=50000 → batch_size=3
+		let map = make_translucent_map(&[
+			(tc(0, 0, 0), &[0]),
+			(tc(1, 0, 0), &[1]),
+			(tc(2, 0, 0), &[2]),
+			(tc(3, 0, 0), &[3]),
+			(tc(3, 1, 0), &[3]),
+			(tc(3, 2, 0), &[3]),
+			(tc(3, 3, 0), &[3]),
+		]);
+		let batches = prepare_batches(map, HashSet::new(), 64, 50_000, 4).unwrap();
+		let total: usize = batches.iter().map(Vec::len).sum();
+		assert_eq!(total, 7);
+		for batch in &batches {
+			assert!(batch.len() <= 3);
+		}
+	}
+
+	#[test]
+	fn prepare_batches_partial_done_overlap() {
+		// Some coords in done, some not
+		let map = make_translucent_map(&[
+			(tc(0, 0, 0), &[0]),
+			(tc(0, 1, 0), &[0]),
+			(tc(1, 0, 0), &[1]),
+			(tc(1, 1, 0), &[1]),
+		]);
+		let done: HashSet<TileCoord> = [tc(0, 0, 0), tc(1, 1, 0)].into_iter().collect();
+		let batches = prepare_batches(map, done, 256, 0, 2).unwrap();
+		let total: usize = batches.iter().map(Vec::len).sum();
+		assert_eq!(total, 2);
+	}
+
+	#[test]
+	fn prepare_batches_done_not_in_map_ignored() {
+		// Done set has coords not in map — should not cause issues
+		let map = make_translucent_map(&[(tc(0, 0, 0), &[0])]);
+		let done: HashSet<TileCoord> = [tc(5, 5, 5), tc(10, 10, 10)].into_iter().collect();
+		let batches = prepare_batches(map, done, 256, 0, 1).unwrap();
+		assert_eq!(batches.len(), 1);
+		assert_eq!(batches[0].len(), 1);
+	}
 }
