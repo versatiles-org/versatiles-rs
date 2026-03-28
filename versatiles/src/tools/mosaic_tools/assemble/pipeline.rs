@@ -13,7 +13,22 @@ use std::sync::{Arc, Mutex};
 use versatiles_container::{Tile, TileSink, TilesRuntime, open_tile_sink};
 use versatiles_core::{ConcurrencyLimits, TileCoord, TileJSON, TileStream, utils::HilbertIndex};
 
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+/// A batch of tiles, each annotated with the source indices that contribute to it.
+type TileBatch = Vec<(TileCoord, Vec<usize>)>;
+
+/// Results collected during the first pass (source scanning).
+struct FirstPassResult {
+	config: AssembleConfig,
+	tilejson: TileJSON,
+	tile_dim: u64,
+	sink: Arc<Box<dyn TileSink>>,
+	translucent_map: HashMap<TileCoord, Vec<usize>>,
+	done: HashSet<TileCoord>,
+}
+
+// ─── Orchestrator ───
+
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn assemble_two_pass(
 	output: &str,
 	paths: &[String],
@@ -24,12 +39,43 @@ pub(super) async fn assemble_two_pass(
 	max_buffer_size: u64,
 	runtime: &TilesRuntime,
 ) -> Result<()> {
-	// ─── First pass: scan sources + write opaque tiles ───
-	//
-	// Each source is opened once. We extract its pyramid (for tilejson metadata
-	// and zoom clipping) and stream its tiles in the same iteration—no separate
-	// prescan needed.
+	let first = scan_sources(output, paths, quality, lossless, min_zoom, max_zoom, runtime).await?;
 
+	let Some(batches) = prepare_batches(
+		first.translucent_map,
+		first.done,
+		first.tile_dim,
+		max_buffer_size,
+		paths.len(),
+	) else {
+		let sink = Arc::try_unwrap(first.sink).map_err(|_| anyhow!("sink still has references"))?;
+		sink.finish(&first.tilejson, runtime)?;
+		log::debug!("finished mosaic assemble (all tiles opaque, no second pass needed)");
+		return Ok(());
+	};
+
+	composite_batches(&batches, paths, &first.config, &first.sink, runtime).await?;
+
+	let sink = Arc::try_unwrap(first.sink).map_err(|_| anyhow!("sink still has references"))?;
+	sink.finish(&first.tilejson, runtime)?;
+
+	log::info!("finished mosaic assemble");
+	Ok(())
+}
+
+// ─── First pass: scan sources + write opaque tiles ───
+
+/// Stream every source once: write opaque tiles directly, record translucent coords.
+#[allow(clippy::too_many_arguments)]
+async fn scan_sources(
+	output: &str,
+	paths: &[String],
+	quality: &[Option<u8>; 32],
+	lossless: bool,
+	min_zoom: Option<u8>,
+	max_zoom: Option<u8>,
+	runtime: &TilesRuntime,
+) -> Result<FirstPassResult> {
 	let mut config: Option<AssembleConfig> = None;
 	let mut tilejson: Option<TileJSON> = None;
 	let mut tile_dim: u64 = 256;
@@ -104,61 +150,8 @@ pub(super) async fn assemble_two_pass(
 			.reduce(TileStream::chain)
 			.unwrap_or_else(TileStream::empty);
 
-		// Classify tiles: opaque → write, empty → skip, translucent → record
-		let concurrency = ConcurrencyLimits::default().cpu_bound * 2;
-		let sink_ref = Arc::clone(sink_arc);
-		let done_ref = Arc::clone(&done);
-		let config_clone = cfg;
-		let translucent_coords: Arc<Mutex<Vec<TileCoord>>> = Arc::default();
-		let translucent_coords_ref = Arc::clone(&translucent_coords);
-
-		let callback = Arc::new(move |coord: TileCoord, mut tile: Tile| -> Result<()> {
-			// Skip tiles already written
-			if done_ref.lock().unwrap().contains(&coord) {
-				return Ok(());
-			}
-
-			if tile.is_empty()? {
-				return Ok(());
-			}
-
-			if tile.is_opaque()? {
-				// Opaque: write original blob without re-encoding.
-				let blob = write_opaque_blob(tile, &config_clone)?;
-				sink_ref.write_tile(&coord, &blob)?;
-				done_ref.lock().unwrap().insert(coord);
-			} else {
-				// Translucent: record for second-pass compositing.
-				translucent_coords_ref.lock().unwrap().push(coord);
-			}
-
-			Ok(())
-		});
-
-		let mut result = Ok(());
-		combined
-			.inner
-			.map(move |(coord, item)| {
-				let cb = Arc::clone(&callback);
-				tokio::task::spawn_blocking(move || (coord, cb(coord, item)))
-			})
-			.buffer_unordered(concurrency)
-			.for_each(|task_result| {
-				match task_result {
-					Ok((coord, Err(e))) if result.is_ok() => {
-						result = Err(e.context(format!("Failed to process tile at {coord:?}")));
-					}
-					Err(e) => panic!("Spawned task panicked: {e}"),
-					_ => {}
-				}
-				ready(())
-			})
-			.await;
-		result?;
-
-		// Record translucent coords for this source
-		let coords = std::mem::take(&mut *translucent_coords.lock().unwrap());
-		for coord in coords {
+		let new_translucent = classify_and_stream_tiles(combined, cfg, Arc::clone(sink_arc), Arc::clone(&done)).await?;
+		for coord in new_translucent {
 			translucent_map.entry(coord).or_default().push(idx);
 		}
 
@@ -168,30 +161,91 @@ pub(super) async fn assemble_two_pass(
 	progress.finish();
 
 	let config = config.ok_or_else(|| anyhow!("no sources found"))?;
-	let tilejson = tilejson.unwrap();
-	let sink = sink.unwrap();
+	let done = Arc::try_unwrap(done).map_err(|_| anyhow!("done set still has references"))?;
 
-	// ─── Between passes: prepare batches ───
+	Ok(FirstPassResult {
+		config,
+		tilejson: tilejson.unwrap(),
+		tile_dim,
+		sink: sink.unwrap(),
+		translucent_map,
+		done: done.into_inner().unwrap(),
+	})
+}
 
-	// Remove coords already written as opaque
-	{
-		let done_set = done.lock().unwrap();
-		translucent_map.retain(|coord, _| !done_set.contains(coord));
-	}
+/// Classify tiles from a single source: write opaque, skip empty, collect translucent coords.
+async fn classify_and_stream_tiles(
+	stream: TileStream<'static, Tile>,
+	config: AssembleConfig,
+	sink: Arc<Box<dyn TileSink>>,
+	done: Arc<Mutex<HashSet<TileCoord>>>,
+) -> Result<Vec<TileCoord>> {
+	let concurrency = ConcurrencyLimits::default().cpu_bound * 2;
+	let translucent_coords: Arc<Mutex<Vec<TileCoord>>> = Arc::default();
+	let translucent_coords_ref = Arc::clone(&translucent_coords);
+
+	let callback = Arc::new(move |coord: TileCoord, mut tile: Tile| -> Result<()> {
+		if done.lock().unwrap().contains(&coord) {
+			return Ok(());
+		}
+		if tile.is_empty()? {
+			return Ok(());
+		}
+		if tile.is_opaque()? {
+			let blob = write_opaque_blob(tile, &config)?;
+			sink.write_tile(&coord, &blob)?;
+			done.lock().unwrap().insert(coord);
+		} else {
+			translucent_coords_ref.lock().unwrap().push(coord);
+		}
+		Ok(())
+	});
+
+	let mut result = Ok(());
+	stream
+		.inner
+		.map(move |(coord, item)| {
+			let cb = Arc::clone(&callback);
+			tokio::task::spawn_blocking(move || (coord, cb(coord, item)))
+		})
+		.buffer_unordered(concurrency)
+		.for_each(|task_result| {
+			match task_result {
+				Ok((coord, Err(e))) if result.is_ok() => {
+					result = Err(e.context(format!("Failed to process tile at {coord:?}")));
+				}
+				Err(e) => panic!("Spawned task panicked: {e}"),
+				_ => {}
+			}
+			ready(())
+		})
+		.await;
+	result?;
+
+	Ok(std::mem::take(&mut *translucent_coords.lock().unwrap()))
+}
+
+// ─── Between passes: prepare batches ───
+
+/// Prune already-done coords, collapse into signature groups, partition into batches.
+///
+/// Returns `None` if all tiles were opaque (no second pass needed).
+fn prepare_batches(
+	mut translucent_map: HashMap<TileCoord, Vec<usize>>,
+	done: HashSet<TileCoord>,
+	tile_dim: u64,
+	max_buffer_size: u64,
+	num_sources: usize,
+) -> Option<Vec<TileBatch>> {
+	translucent_map.retain(|coord, _| !done.contains(coord));
 	drop(done);
 
 	if translucent_map.is_empty() {
-		// All tiles were opaque — we're done
-		let sink = Arc::try_unwrap(sink).map_err(|_| anyhow!("sink still has references"))?;
-		sink.finish(&tilejson, runtime)?;
-		log::debug!("finished mosaic assemble (all tiles opaque, no second pass needed)");
-		return Ok(());
+		return None;
 	}
 
-	// Collapse into signature groups and partition via PCA-based recursive bisection
 	let total_tiles = translucent_map.len();
 	let groups = collapse_into_signature_groups(translucent_map);
-	let num_sources = paths.len();
 
 	let batch_size = if max_buffer_size > 0 {
 		usize::try_from((max_buffer_size / (tile_dim * tile_dim * 4)).max(1)).unwrap_or(usize::MAX)
@@ -201,8 +255,7 @@ pub(super) async fn assemble_two_pass(
 
 	let batch_groups = partition_into_batches(groups, num_sources, batch_size);
 
-	// Convert back to the format the second pass expects
-	let batches: Vec<Vec<(TileCoord, Vec<usize>)>> = batch_groups
+	let batches: Vec<TileBatch> = batch_groups
 		.into_iter()
 		.map(|batch| {
 			batch
@@ -215,8 +268,6 @@ pub(super) async fn assemble_two_pass(
 		})
 		.collect();
 
-	// ─── Second pass: composite translucent batches ───
-
 	let total_source_opens: usize = batches
 		.iter()
 		.map(|b| b.iter().flat_map(|(_, s)| s).collect::<BTreeSet<_>>().len())
@@ -228,6 +279,19 @@ pub(super) async fn assemble_two_pass(
 		total_source_opens
 	);
 
+	Some(batches)
+}
+
+// ─── Second pass: composite translucent batches ───
+
+/// For each batch, open only the needed sources, composite tiles, encode and flush.
+async fn composite_batches(
+	batches: &[TileBatch],
+	paths: &[String],
+	config: &AssembleConfig,
+	sink: &Arc<Box<dyn TileSink>>,
+	runtime: &TilesRuntime,
+) -> Result<()> {
 	let total_source_reads: u64 = batches
 		.iter()
 		.map(|batch| {
@@ -237,106 +301,113 @@ pub(super) async fn assemble_two_pass(
 		.sum();
 
 	let progress = runtime.create_progress("pass 2/2: compositing tiles", total_source_reads);
-
 	let concurrency = ConcurrencyLimits::default().cpu_bound;
 
-	for batch in &batches {
-		let sources_needed: Vec<usize> = {
-			let set: BTreeSet<usize> = batch.iter().flat_map(|(_, srcs)| srcs).copied().collect();
-			set.into_iter().collect()
-		};
-
-		let buffer = Arc::new(TranslucentBuffer::new());
-
-		// Pre-fetch tiles for the first source while we set up
-		let mut prefetched: Option<Vec<(TileCoord, Tile)>> = None;
-
-		let batch_arc = Arc::new(batch.clone());
-		let paths_arc = Arc::new(paths.to_vec());
-
-		for (pos, &source_idx) in sources_needed.iter().enumerate() {
-			// Use pre-fetched tiles if available, otherwise fetch now
-			let fetched_tiles = if let Some(tiles) = prefetched.take() {
-				tiles
-			} else {
-				fetch_source_tiles(source_idx, batch, paths, runtime).await?
-			};
-
-			// Kick off pre-fetch for the NEXT source in the background while
-			// we composite the current one. This overlaps I/O with CPU work.
-			let prefetch_handle = if let Some(&next_idx) = sources_needed.get(pos + 1) {
-				let batch_clone = Arc::clone(&batch_arc);
-				let paths_clone = Arc::clone(&paths_arc);
-				let runtime = runtime.clone();
-				Some(tokio::spawn(async move {
-					fetch_source_tiles(next_idx, &batch_clone, &paths_clone, &runtime).await
-				}))
-			} else {
-				None
-			};
-
-			// Composite fetched tiles into the buffer in parallel
-			let buffer_ref = Arc::clone(&buffer);
-			let callback = Arc::new(move |coord: TileCoord, tile: Tile| -> Result<()> {
-				let key = coord.get_hilbert_index()?;
-				let existing = buffer_ref.remove(key);
-				if let Some((_, existing_tile)) = existing {
-					let merged = composite_two_tiles(tile, existing_tile)?;
-					buffer_ref.insert(coord, merged)?;
-				} else {
-					buffer_ref.insert(coord, tile)?;
-				}
-				Ok(())
-			});
-
-			let mut result = Ok(());
-			futures::stream::iter(fetched_tiles)
-				.map(|(coord, tile)| {
-					let cb = Arc::clone(&callback);
-					tokio::task::spawn_blocking(move || {
-						cb(coord, tile)?;
-						Ok::<_, anyhow::Error>(())
-					})
-				})
-				.buffer_unordered(concurrency)
-				.for_each(|task_result| {
-					match task_result {
-						Ok(Err(e)) if result.is_ok() => {
-							result = Err(e);
-						}
-						Err(e) => panic!("Spawned task panicked: {e}"),
-						_ => {}
-					}
-					ready(())
-				})
-				.await;
-			result?;
-
-			// Await the pre-fetched tiles for the next source
-			if let Some(handle) = prefetch_handle {
-				prefetched = Some(handle.await.map_err(|e| anyhow!("prefetch task panicked: {e}"))??);
-			}
-
-			progress.inc(1);
-		}
-
-		// Flush buffer: encode translucent tiles to WebP (single encoding step)
-		let buffer = Arc::try_unwrap(buffer).map_err(|_| anyhow!("buffer still has references"))?;
-		let tiles: Vec<_> = buffer.drain().into_values().collect();
-		if !tiles.is_empty() {
-			let prepared = encode_tiles_parallel(tiles, &config);
-			for result in prepared {
-				let (coord, blob) = result?;
-				sink.write_tile(&coord, &blob)?;
-			}
-		}
+	for batch in batches {
+		composite_one_batch(batch, paths, config, sink, runtime, concurrency, &progress).await?;
 	}
 
 	progress.finish();
+	Ok(())
+}
 
-	let sink = Arc::try_unwrap(sink).map_err(|_| anyhow!("sink still has references"))?;
-	sink.finish(&tilejson, runtime)?;
+/// Composite a single batch: fetch tiles from each needed source, composite, encode, flush.
+async fn composite_one_batch(
+	batch: &[(TileCoord, Vec<usize>)],
+	paths: &[String],
+	config: &AssembleConfig,
+	sink: &Arc<Box<dyn TileSink>>,
+	runtime: &TilesRuntime,
+	concurrency: usize,
+	progress: &versatiles_container::ProgressHandle,
+) -> Result<()> {
+	let sources_needed: Vec<usize> = {
+		let set: BTreeSet<usize> = batch.iter().flat_map(|(_, srcs)| srcs).copied().collect();
+		set.into_iter().collect()
+	};
 
-	log::info!("finished mosaic assemble");
+	let buffer = Arc::new(TranslucentBuffer::new());
+
+	let mut prefetched: Option<Vec<(TileCoord, Tile)>> = None;
+
+	let batch_arc = Arc::new(batch.to_vec());
+	let paths_arc = Arc::new(paths.to_vec());
+
+	for (pos, &source_idx) in sources_needed.iter().enumerate() {
+		// Use pre-fetched tiles if available, otherwise fetch now
+		let fetched_tiles = if let Some(tiles) = prefetched.take() {
+			tiles
+		} else {
+			fetch_source_tiles(source_idx, batch, paths, runtime).await?
+		};
+
+		// Kick off pre-fetch for the NEXT source in the background
+		let prefetch_handle = if let Some(&next_idx) = sources_needed.get(pos + 1) {
+			let batch_clone = Arc::clone(&batch_arc);
+			let paths_clone = Arc::clone(&paths_arc);
+			let runtime = runtime.clone();
+			Some(tokio::spawn(async move {
+				fetch_source_tiles(next_idx, &batch_clone, &paths_clone, &runtime).await
+			}))
+		} else {
+			None
+		};
+
+		// Composite fetched tiles into the buffer in parallel
+		let buffer_ref = Arc::clone(&buffer);
+		let callback = Arc::new(move |coord: TileCoord, tile: Tile| -> Result<()> {
+			let key = coord.get_hilbert_index()?;
+			let existing = buffer_ref.remove(key);
+			if let Some((_, existing_tile)) = existing {
+				let merged = composite_two_tiles(tile, existing_tile)?;
+				buffer_ref.insert(coord, merged)?;
+			} else {
+				buffer_ref.insert(coord, tile)?;
+			}
+			Ok(())
+		});
+
+		let mut result = Ok(());
+		futures::stream::iter(fetched_tiles)
+			.map(|(coord, tile)| {
+				let cb = Arc::clone(&callback);
+				tokio::task::spawn_blocking(move || {
+					cb(coord, tile)?;
+					Ok::<_, anyhow::Error>(())
+				})
+			})
+			.buffer_unordered(concurrency)
+			.for_each(|task_result| {
+				match task_result {
+					Ok(Err(e)) if result.is_ok() => {
+						result = Err(e);
+					}
+					Err(e) => panic!("Spawned task panicked: {e}"),
+					_ => {}
+				}
+				ready(())
+			})
+			.await;
+		result?;
+
+		// Await the pre-fetched tiles for the next source
+		if let Some(handle) = prefetch_handle {
+			prefetched = Some(handle.await.map_err(|e| anyhow!("prefetch task panicked: {e}"))??);
+		}
+
+		progress.inc(1);
+	}
+
+	// Flush buffer: encode translucent tiles to WebP (single encoding step)
+	let buffer = Arc::try_unwrap(buffer).map_err(|_| anyhow!("buffer still has references"))?;
+	let tiles: Vec<_> = buffer.drain().into_values().collect();
+	if !tiles.is_empty() {
+		let prepared = encode_tiles_parallel(tiles, config);
+		for result in prepared {
+			let (coord, blob) = result?;
+			sink.write_tile(&coord, &blob)?;
+		}
+	}
+
 	Ok(())
 }
