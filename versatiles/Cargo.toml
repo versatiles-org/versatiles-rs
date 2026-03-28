@@ -38,6 +38,7 @@ dashmap = { workspace = true, optional = true }
 enumset = { workspace = true, optional = true }
 env_logger = { workspace = true, optional = true }
 futures.workspace = true
+glob.workspace = true
 log.workspace = true
 mime_guess = { workspace = true, optional = true }
 regex = { workspace = true, optional = true, features = ["unicode"] }

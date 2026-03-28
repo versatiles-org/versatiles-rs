@@ -164,6 +164,7 @@ serde_yaml_ng = "0.10.0"
 terminal_size = { version = "0.4.4" }
 time = { version = "0.3.47", default-features = false }
 uuid = { version = "1.23.0" }
+glob = { version = "0.3", default-features = false }
 wildmatch = { version = "2.6.1", default-features = false }
 
 # Multithreading optimization dependencies
