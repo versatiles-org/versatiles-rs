@@ -32,8 +32,9 @@ pub struct Assemble {
 	/// Input container paths, URLs, or glob patterns, followed by the output path.
 	/// The last argument is always the output; all preceding arguments are inputs.
 	/// Glob patterns (*, ?, [) are expanded. Containers listed earlier overlay
-	/// containers listed later. Use @filename.txt to read paths from a list file
-	/// (one per line, # comments supported).
+	/// containers listed later. Arguments ending in .txt are read as list files
+	/// (one path per line, # comments supported). Use @filename to read any file
+	/// as a list regardless of extension.
 	#[arg(required = true, num_args = 2..)]
 	paths: Vec<String>,
 
@@ -116,6 +117,13 @@ fn resolve_inputs(args: &[String]) -> Result<Vec<String>> {
 		if let Some(file_path) = arg.strip_prefix('@') {
 			let content = std::fs::read_to_string(file_path)
 				.with_context(|| format!("Failed to read input list file: {file_path}"))?;
+			result.extend(parse_input_list(&content));
+		} else if std::path::Path::new(arg)
+			.extension()
+			.is_some_and(|ext| ext.eq_ignore_ascii_case("txt"))
+		{
+			let content =
+				std::fs::read_to_string(arg).with_context(|| format!("Failed to read input list file: {arg}"))?;
 			result.extend(parse_input_list(&content));
 		} else if arg.contains('*') || arg.contains('?') || arg.contains('[') {
 			let mut matches: Vec<String> = Vec::new();
@@ -818,6 +826,17 @@ https://example.com/tiles/004.versatiles
 		assert_eq!(result.len(), 2);
 		assert!(result[0].ends_with("a.versatiles"));
 		assert!(result[1].ends_with("b.versatiles"));
+	}
+
+	#[test]
+	fn test_resolve_inputs_txt_file() {
+		let dir = tempfile::tempdir().unwrap();
+		let list_path = dir.path().join("sources.txt");
+		std::fs::write(&list_path, "alpha.versatiles\n# skip\nbeta.versatiles\n").unwrap();
+
+		let args = vec![list_path.to_string_lossy().into_owned()];
+		let result = resolve_inputs(&args).unwrap();
+		assert_eq!(result, vec!["alpha.versatiles", "beta.versatiles"]);
 	}
 
 	#[test]
