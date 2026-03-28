@@ -374,3 +374,97 @@ async fn composite_one_batch(
 
 	Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn tc(level: u8, x: u32, y: u32) -> TileCoord {
+		TileCoord { level, x, y }
+	}
+
+	fn make_translucent_map(entries: &[(TileCoord, &[usize])]) -> HashMap<TileCoord, Vec<usize>> {
+		entries.iter().map(|(c, s)| (*c, s.to_vec())).collect()
+	}
+
+	#[test]
+	fn prepare_batches_returns_none_when_empty() {
+		let map = HashMap::new();
+		let done = HashSet::new();
+		assert!(prepare_batches(map, done, 256, 1_000_000, 3).is_none());
+	}
+
+	#[test]
+	fn prepare_batches_returns_none_when_all_done() {
+		let map = make_translucent_map(&[(tc(0, 0, 0), &[0, 1]), (tc(1, 0, 0), &[1, 2])]);
+		let done: HashSet<TileCoord> = [tc(0, 0, 0), tc(1, 0, 0)].into_iter().collect();
+		assert!(prepare_batches(map, done, 256, 1_000_000, 3).is_none());
+	}
+
+	#[test]
+	fn prepare_batches_prunes_done_coords() {
+		let map = make_translucent_map(&[(tc(0, 0, 0), &[0]), (tc(1, 0, 0), &[1]), (tc(2, 0, 0), &[2])]);
+		let done: HashSet<TileCoord> = [tc(0, 0, 0)].into_iter().collect();
+		let batches = prepare_batches(map, done, 256, 0, 3).unwrap();
+		let total_tiles: usize = batches.iter().map(Vec::len).sum();
+		assert_eq!(total_tiles, 2);
+	}
+
+	#[test]
+	fn prepare_batches_unlimited_buffer_single_batch() {
+		let map = make_translucent_map(&[(tc(0, 0, 0), &[0]), (tc(1, 0, 0), &[1]), (tc(2, 0, 0), &[2])]);
+		let batches = prepare_batches(map, HashSet::new(), 256, 0, 3).unwrap();
+		// max_buffer_size=0 means unlimited → single batch
+		assert_eq!(batches.len(), 1);
+		assert_eq!(batches[0].len(), 3);
+	}
+
+	#[test]
+	fn prepare_batches_respects_buffer_size() {
+		// tile_dim=256, so each tile = 256*256*4 = 262144 bytes
+		// max_buffer_size=300000 → batch_size=1
+		let map = make_translucent_map(&[(tc(0, 0, 0), &[0]), (tc(1, 0, 0), &[1]), (tc(1, 1, 0), &[2])]);
+		let batches = prepare_batches(map, HashSet::new(), 256, 300_000, 3).unwrap();
+		assert_eq!(batches.len(), 3);
+		for batch in &batches {
+			assert_eq!(batch.len(), 1);
+		}
+	}
+
+	#[test]
+	fn prepare_batches_preserves_source_indices() {
+		let map = make_translucent_map(&[(tc(0, 0, 0), &[0, 2]), (tc(1, 0, 0), &[1, 3])]);
+		let batches = prepare_batches(map, HashSet::new(), 256, 0, 4).unwrap();
+		let all_tiles: Vec<_> = batches.into_iter().flatten().collect();
+		assert_eq!(all_tiles.len(), 2);
+
+		for (coord, sources) in &all_tiles {
+			if *coord == tc(0, 0, 0) {
+				assert_eq!(sources, &[0, 2]);
+			} else if *coord == tc(1, 0, 0) {
+				assert_eq!(sources, &[1, 3]);
+			} else {
+				panic!("unexpected coord: {coord:?}");
+			}
+		}
+	}
+
+	#[test]
+	fn prepare_batches_all_tiles_present_after_batching() {
+		let coords: Vec<TileCoord> = (0..20).map(|i| tc(0, i, 0)).collect();
+		let mut map = HashMap::new();
+		for (i, c) in coords.iter().enumerate() {
+			map.insert(*c, vec![i % 3]);
+		}
+		// tile_dim=256, max_buffer_size=256*256*4*5 = 5 tiles per batch
+		let max_buffer = 256 * 256 * 4 * 5;
+		let batches = prepare_batches(map, HashSet::new(), 256, max_buffer, 3).unwrap();
+
+		let total_tiles: usize = batches.iter().map(Vec::len).sum();
+		assert_eq!(total_tiles, 20);
+
+		for batch in &batches {
+			assert!(batch.len() <= 5, "batch has {} tiles, expected <= 5", batch.len());
+		}
+	}
+}

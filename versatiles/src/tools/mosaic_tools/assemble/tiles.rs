@@ -150,3 +150,167 @@ pub(super) async fn fetch_source_tiles(
 	}
 	Ok(result)
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use versatiles_core::TileCompression;
+	use versatiles_image::{DynamicImage, ImageBuffer};
+
+	fn test_config() -> AssembleConfig {
+		AssembleConfig {
+			quality: [Some(75); 32],
+			lossless: false,
+			tile_format: TileFormat::WEBP,
+			tile_compression: TileCompression::Uncompressed,
+		}
+	}
+
+	fn opaque_rgb_tile() -> Tile {
+		// 2x2 RGB image (no alpha → opaque)
+		let data = vec![255, 0, 0, 0, 255, 0, 0, 0, 255, 128, 128, 128];
+		let img = DynamicImage::ImageRgb8(ImageBuffer::from_vec(2, 2, data).unwrap());
+		Tile::from_image(img, TileFormat::PNG).unwrap()
+	}
+
+	fn translucent_rgba_tile(alpha: u8) -> Tile {
+		// 2x2 RGBA image with given alpha
+		let data = vec![
+			255, 0, 0, alpha, 0, 255, 0, alpha, 0, 0, 255, alpha, 128, 128, 128, alpha,
+		];
+		let img = DynamicImage::ImageRgba8(ImageBuffer::from_vec(2, 2, data).unwrap());
+		Tile::from_image(img, TileFormat::PNG).unwrap()
+	}
+
+	fn coord(level: u8, x: u32, y: u32) -> TileCoord {
+		TileCoord::new(level, x, y).unwrap()
+	}
+
+	#[test]
+	fn validate_source_format_matching() {
+		let config = test_config();
+		let metadata = versatiles_container::TileSourceMetadata {
+			tile_format: TileFormat::WEBP,
+			tile_compression: TileCompression::Uncompressed,
+			..Default::default()
+		};
+		assert!(validate_source_format("test.versatiles", &metadata, &config).is_ok());
+	}
+
+	#[test]
+	fn validate_source_format_mismatched_format() {
+		let config = test_config();
+		let metadata = versatiles_container::TileSourceMetadata {
+			tile_format: TileFormat::PNG,
+			tile_compression: TileCompression::Uncompressed,
+			..Default::default()
+		};
+		let err = validate_source_format("bad.versatiles", &metadata, &config).unwrap_err();
+		assert!(err.to_string().contains("tile format"));
+	}
+
+	#[test]
+	fn validate_source_format_mismatched_compression() {
+		let config = test_config();
+		let metadata = versatiles_container::TileSourceMetadata {
+			tile_format: TileFormat::WEBP,
+			tile_compression: TileCompression::Gzip,
+			..Default::default()
+		};
+		let err = validate_source_format("bad.versatiles", &metadata, &config).unwrap_err();
+		assert!(err.to_string().contains("tile compression"));
+	}
+
+	#[test]
+	fn write_opaque_blob_produces_data() -> Result<()> {
+		let config = test_config();
+		let tile = opaque_rgb_tile();
+		let blob = write_opaque_blob(tile, &config)?;
+		assert!(!blob.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn composite_two_tiles_produces_result() -> Result<()> {
+		let base = translucent_rgba_tile(128);
+		let top = translucent_rgba_tile(128);
+		let result = composite_two_tiles(base, top)?;
+		// Result should be a tile with image content
+		let img = result.into_image()?;
+		assert_eq!(img.width(), 2);
+		assert_eq!(img.height(), 2);
+		Ok(())
+	}
+
+	#[test]
+	fn composite_preserves_dimensions() -> Result<()> {
+		let base = translucent_rgba_tile(64);
+		let top = translucent_rgba_tile(200);
+		let result = composite_two_tiles(base, top)?;
+		let img = result.into_image()?;
+		assert_eq!(img.width(), 2);
+		assert_eq!(img.height(), 2);
+		Ok(())
+	}
+
+	#[test]
+	fn encode_tiles_parallel_produces_blobs() -> Result<()> {
+		let config = test_config();
+		let tiles = vec![
+			(coord(0, 0, 0), opaque_rgb_tile()),
+			(coord(1, 0, 0), opaque_rgb_tile()),
+			(coord(1, 1, 0), opaque_rgb_tile()),
+		];
+
+		let results = encode_tiles_parallel(tiles, &config);
+		assert_eq!(results.len(), 3);
+		for result in results {
+			let (_, blob) = result?;
+			assert!(!blob.is_empty());
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn encode_tiles_parallel_lossless() -> Result<()> {
+		let config = AssembleConfig {
+			lossless: true,
+			..test_config()
+		};
+		let tiles = vec![(coord(0, 0, 0), opaque_rgb_tile())];
+
+		let results = encode_tiles_parallel(tiles, &config);
+		assert_eq!(results.len(), 1);
+		let (c, blob) = results.into_iter().next().unwrap()?;
+		assert_eq!(c, coord(0, 0, 0));
+		assert!(!blob.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn encode_tiles_parallel_empty_input() {
+		let config = test_config();
+		let results = encode_tiles_parallel(vec![], &config);
+		assert!(results.is_empty());
+	}
+
+	#[test]
+	fn encode_tiles_parallel_uses_zoom_quality() -> Result<()> {
+		let mut quality = [None; 32];
+		quality[5] = Some(50);
+		let config = AssembleConfig {
+			quality,
+			lossless: false,
+			tile_format: TileFormat::WEBP,
+			tile_compression: TileCompression::Uncompressed,
+		};
+
+		let tiles = vec![(coord(5, 0, 0), opaque_rgb_tile())];
+		let results = encode_tiles_parallel(tiles, &config);
+		assert_eq!(results.len(), 1);
+		let (c, blob) = results.into_iter().next().unwrap()?;
+		assert_eq!(c.level, 5);
+		assert!(!blob.is_empty());
+		Ok(())
+	}
+}
