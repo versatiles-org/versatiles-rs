@@ -532,4 +532,56 @@ mod tests {
 		assert_eq!(batches.len(), 1);
 		assert_eq!(batches[0].len(), 1);
 	}
+
+	#[test]
+	fn prepare_batches_many_sources_many_tiles() {
+		// Larger scenario: 100 tiles across 10 sources
+		let mut map = HashMap::new();
+		for i in 0..100u32 {
+			let sources = vec![(i % 10) as usize, ((i + 1) % 10) as usize];
+			map.insert(tc(0, i, 0), sources);
+		}
+		// batch_size fits ~25 tiles
+		let max_buffer = 256 * 256 * 4 * 25;
+		let batches = prepare_batches(map, HashSet::new(), 256, max_buffer, 10).unwrap();
+
+		let total: usize = batches.iter().map(Vec::len).sum();
+		assert_eq!(total, 100);
+
+		for batch in &batches {
+			assert!(batch.len() <= 25);
+		}
+	}
+
+	#[test]
+	fn prepare_batches_batch_size_equals_total() {
+		// Exact boundary: batch_size == total_tiles
+		let map = make_translucent_map(&[
+			(tc(0, 0, 0), &[0]),
+			(tc(0, 1, 0), &[1]),
+			(tc(0, 2, 0), &[2]),
+		]);
+		// tile_dim=256, max_buffer_size = exactly 3 tiles
+		let max_buffer = 256 * 256 * 4 * 3;
+		let batches = prepare_batches(map, HashSet::new(), 256, max_buffer, 3).unwrap();
+		assert_eq!(batches.len(), 1);
+		assert_eq!(batches[0].len(), 3);
+	}
+
+	#[test]
+	fn prepare_batches_sources_sorted_in_output() {
+		// Source indices should remain sorted after collapse + partition
+		let map = make_translucent_map(&[(tc(0, 0, 0), &[3, 1, 2])]);
+		let batches = prepare_batches(map, HashSet::new(), 256, 0, 5).unwrap();
+		assert_eq!(batches[0][0].1, vec![1, 2, 3]); // sorted by collapse_into_signature_groups
+	}
+
+	#[test]
+	fn prepare_batches_max_buffer_one_byte() {
+		// Absurdly small buffer → batch_size=1 (clamped to at least 1)
+		let map = make_translucent_map(&[(tc(0, 0, 0), &[0]), (tc(1, 0, 0), &[1])]);
+		let batches = prepare_batches(map, HashSet::new(), 256, 1, 2).unwrap();
+		// Each tile gets its own batch
+		assert_eq!(batches.len(), 2);
+	}
 }

@@ -407,4 +407,95 @@ mod tests {
 		let err = validate_source_format("my/special/path.versatiles", &metadata, &config).unwrap_err();
 		assert!(err.to_string().contains("my/special/path.versatiles"));
 	}
+
+	#[test]
+	fn encode_tiles_parallel_many_tiles_chunked() -> Result<()> {
+		// More tiles than typical cpu_bound limit to exercise the chunking loop
+		let config = test_config();
+		let tiles: Vec<_> = (0..50u32).map(|i| (coord(8, i, 0), opaque_rgb_tile())).collect();
+
+		let results = encode_tiles_parallel(tiles, &config);
+		assert_eq!(results.len(), 50);
+		for r in &results {
+			assert!(r.is_ok());
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn composite_two_opaque_tiles() -> Result<()> {
+		let base = opaque_rgb_tile();
+		let top = opaque_rgb_tile();
+		let result = composite_two_tiles(base, top)?;
+		let img = result.into_image()?;
+		assert_eq!((img.width(), img.height()), (2, 2));
+		Ok(())
+	}
+
+	#[test]
+	fn composite_result_produces_blob() -> Result<()> {
+		let base = translucent_rgba_tile(100);
+		let top = translucent_rgba_tile(100);
+		let result = composite_two_tiles(base, top)?;
+		// The result should be producible as a blob
+		let blob = result.into_blob(TileCompression::Uncompressed)?;
+		assert!(!blob.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn encode_tiles_parallel_single_tile() -> Result<()> {
+		let config = test_config();
+		let tiles = vec![(coord(0, 0, 0), opaque_rgb_tile())];
+		let results = encode_tiles_parallel(tiles, &config);
+		assert_eq!(results.len(), 1);
+		let (c, blob) = results.into_iter().next().unwrap()?;
+		assert_eq!(c, coord(0, 0, 0));
+		assert!(!blob.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn write_opaque_blob_with_brotli() -> Result<()> {
+		let config = AssembleConfig {
+			tile_compression: TileCompression::Brotli,
+			..test_config()
+		};
+		let tile = opaque_rgb_tile();
+		let blob = write_opaque_blob(tile, &config)?;
+		assert!(!blob.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn validate_all_format_combinations() {
+		// Test several format combinations to verify the validation logic
+		for fmt in [TileFormat::PNG, TileFormat::WEBP, TileFormat::JPG] {
+			for comp in [
+				TileCompression::Uncompressed,
+				TileCompression::Gzip,
+				TileCompression::Brotli,
+			] {
+				let config = AssembleConfig {
+					tile_format: fmt,
+					tile_compression: comp,
+					..test_config()
+				};
+				let matching = versatiles_container::TileSourceMetadata {
+					tile_format: fmt,
+					tile_compression: comp,
+					..Default::default()
+				};
+				assert!(validate_source_format("test", &matching, &config).is_ok());
+
+				// Mismatched format should fail
+				let wrong_fmt = versatiles_container::TileSourceMetadata {
+					tile_format: if fmt == TileFormat::PNG { TileFormat::WEBP } else { TileFormat::PNG },
+					tile_compression: comp,
+					..Default::default()
+				};
+				assert!(validate_source_format("test", &wrong_fmt, &config).is_err());
+			}
+		}
+	}
 }

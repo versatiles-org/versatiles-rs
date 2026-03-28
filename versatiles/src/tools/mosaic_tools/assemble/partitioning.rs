@@ -476,4 +476,299 @@ mod tests {
 			assert!(tiles <= 5);
 		}
 	}
+
+	// ─── initial_vector ───
+
+	#[test]
+	fn test_initial_vector_is_normalized() {
+		let v = initial_vector(5);
+		assert_eq!(v.len(), 5);
+		let norm: f64 = v.iter().map(|x| x * x).sum::<f64>().sqrt();
+		assert!((norm - 1.0).abs() < 1e-10, "norm should be 1.0, got {norm}");
+	}
+
+	#[test]
+	fn test_initial_vector_single_source() {
+		let v = initial_vector(1);
+		assert_eq!(v.len(), 1);
+		assert!((v[0] - 1.0).abs() < 1e-10);
+	}
+
+	#[test]
+	fn test_initial_vector_large() {
+		let v = initial_vector(100);
+		assert_eq!(v.len(), 100);
+		let norm: f64 = v.iter().map(|x| x * x).sum::<f64>().sqrt();
+		assert!((norm - 1.0).abs() < 1e-10);
+		// Values should be monotonically increasing (since input is [1,2,3,...])
+		for i in 1..v.len() {
+			assert!(v[i] > v[i - 1]);
+		}
+	}
+
+	// ─── power_iteration_step ───
+
+	#[test]
+	fn test_power_iteration_produces_unit_vector() {
+		let groups = vec![
+			SignatureGroup {
+				sources: vec![0, 1],
+				coords: vec![tc(0, 0, 0)],
+			},
+			SignatureGroup {
+				sources: vec![2, 3],
+				coords: vec![tc(1, 0, 0)],
+			},
+		];
+		let source_sets: Vec<HashSet<usize>> = groups.iter().map(|g| g.sources.iter().copied().collect()).collect();
+		let mean = vec![0.5, 0.5, 0.5, 0.5]; // uniform mean
+		let mut v = initial_vector(4);
+
+		power_iteration_step(&groups, &source_sets, &mean, &mut v, 4);
+
+		let norm: f64 = v.iter().map(|x| x * x).sum::<f64>().sqrt();
+		assert!((norm - 1.0).abs() < 1e-10, "output should be normalized, got norm={norm}");
+	}
+
+	#[test]
+	fn test_power_iteration_converges() {
+		// Two clearly separable groups: {0,1} vs {2,3}
+		let groups = vec![
+			SignatureGroup {
+				sources: vec![0, 1],
+				coords: vec![tc(0, 0, 0), tc(0, 1, 0), tc(0, 2, 0)],
+			},
+			SignatureGroup {
+				sources: vec![2, 3],
+				coords: vec![tc(1, 0, 0), tc(1, 1, 0), tc(1, 2, 0)],
+			},
+		];
+		let source_sets: Vec<HashSet<usize>> = groups.iter().map(|g| g.sources.iter().copied().collect()).collect();
+		let mean = vec![0.5, 0.5, 0.5, 0.5];
+		let mut v = initial_vector(4);
+
+		// Run several iterations
+		for _ in 0..15 {
+			power_iteration_step(&groups, &source_sets, &mean, &mut v, 4);
+		}
+
+		// The principal component should separate {0,1} from {2,3}
+		// v[0] and v[1] should have the same sign, v[2] and v[3] the opposite
+		assert!(
+			(v[0].signum() == v[1].signum()) && (v[2].signum() == v[3].signum()),
+			"PCA should group correlated sources: v={v:?}"
+		);
+		assert!(
+			v[0].signum() != v[2].signum(),
+			"PCA should separate disjoint groups: v={v:?}"
+		);
+	}
+
+	#[test]
+	fn test_power_iteration_weighted_by_tile_count() {
+		// Group with more tiles should have more influence
+		let groups = vec![
+			SignatureGroup {
+				sources: vec![0],
+				coords: (0..100).map(|i| tc(0, i, 0)).collect(), // 100 tiles
+			},
+			SignatureGroup {
+				sources: vec![1],
+				coords: vec![tc(1, 0, 0)], // 1 tile
+			},
+		];
+		let source_sets: Vec<HashSet<usize>> = groups.iter().map(|g| g.sources.iter().copied().collect()).collect();
+		let total_w: f64 = 101.0;
+		let mean = vec![100.0 / total_w, 1.0 / total_w];
+		let mut v = initial_vector(2);
+
+		for _ in 0..15 {
+			power_iteration_step(&groups, &source_sets, &mean, &mut v, 2);
+		}
+
+		// Both components should be non-zero (there's variance in both dimensions)
+		assert!(v[0].abs() > 0.01, "v[0] too small: {v:?}");
+		assert!(v[1].abs() > 0.01, "v[1] too small: {v:?}");
+	}
+
+	// ─── pca_bisect ───
+
+	#[test]
+	fn test_pca_bisect_two_disjoint_groups() {
+		let groups = vec![
+			SignatureGroup {
+				sources: vec![0, 1],
+				coords: vec![tc(0, 0, 0), tc(0, 1, 0)],
+			},
+			SignatureGroup {
+				sources: vec![2, 3],
+				coords: vec![tc(1, 0, 0), tc(1, 1, 0)],
+			},
+		];
+
+		let (left, right) = pca_bisect(groups, 4);
+		assert_eq!(left.len(), 1);
+		assert_eq!(right.len(), 1);
+
+		// Each side should have one group with 2 tiles
+		assert_eq!(left[0].coords.len(), 2);
+		assert_eq!(right[0].coords.len(), 2);
+
+		// Sources should be separated
+		let left_src: BTreeSet<usize> = left.iter().flat_map(|g| g.sources.iter().copied()).collect();
+		let right_src: BTreeSet<usize> = right.iter().flat_map(|g| g.sources.iter().copied()).collect();
+		assert!(left_src.is_disjoint(&right_src));
+	}
+
+	#[test]
+	fn test_pca_bisect_balanced_split() {
+		// 4 groups of 5 tiles each → bisect should give ~10 tiles per side
+		let groups = vec![
+			SignatureGroup {
+				sources: vec![0],
+				coords: (0..5).map(|i| tc(0, i, 0)).collect(),
+			},
+			SignatureGroup {
+				sources: vec![1],
+				coords: (0..5).map(|i| tc(1, i, 0)).collect(),
+			},
+			SignatureGroup {
+				sources: vec![2],
+				coords: (0..5).map(|i| tc(2, i, 0)).collect(),
+			},
+			SignatureGroup {
+				sources: vec![3],
+				coords: (0..5).map(|i| tc(3, i, 0)).collect(),
+			},
+		];
+
+		let (left, right) = pca_bisect(groups, 4);
+		let left_tiles: usize = left.iter().map(|g| g.coords.len()).sum();
+		let right_tiles: usize = right.iter().map(|g| g.coords.len()).sum();
+		assert_eq!(left_tiles + right_tiles, 20);
+
+		// Both sides should have at least 1 group
+		assert!(!left.is_empty());
+		assert!(!right.is_empty());
+	}
+
+	#[test]
+	fn test_pca_bisect_unequal_weights() {
+		// One big group (90 tiles) and one small (10 tiles)
+		let groups = vec![
+			SignatureGroup {
+				sources: vec![0],
+				coords: (0..90).map(|i| tc(0, i, 0)).collect(),
+			},
+			SignatureGroup {
+				sources: vec![1],
+				coords: (0..10).map(|i| tc(1, i, 0)).collect(),
+			},
+		];
+
+		let (left, right) = pca_bisect(groups, 2);
+		let left_tiles: usize = left.iter().map(|g| g.coords.len()).sum();
+		let right_tiles: usize = right.iter().map(|g| g.coords.len()).sum();
+		assert_eq!(left_tiles + right_tiles, 100);
+		// Both sides must have at least 1 group (clamped split)
+		assert!(!left.is_empty());
+		assert!(!right.is_empty());
+	}
+
+	// ─── split_single_group ───
+
+	#[test]
+	fn test_split_single_group_exact_division() {
+		let g = SignatureGroup {
+			sources: vec![0, 1],
+			coords: (0..9).map(|i| tc(0, i, 0)).collect(),
+		};
+		let batches = split_single_group(g, 3);
+		assert_eq!(batches.len(), 3);
+		for batch in &batches {
+			assert_eq!(batch.len(), 1); // one SignatureGroup per batch
+			assert_eq!(batch[0].coords.len(), 3);
+			assert_eq!(batch[0].sources, vec![0, 1]);
+		}
+	}
+
+	#[test]
+	fn test_split_single_group_with_remainder() {
+		let g = SignatureGroup {
+			sources: vec![5],
+			coords: (0..7).map(|i| tc(0, i, 0)).collect(),
+		};
+		let batches = split_single_group(g, 3);
+		assert_eq!(batches.len(), 3); // 3+3+1
+		assert_eq!(batches[0][0].coords.len(), 3);
+		assert_eq!(batches[1][0].coords.len(), 3);
+		assert_eq!(batches[2][0].coords.len(), 1);
+	}
+
+	#[test]
+	fn test_split_single_group_one_tile() {
+		let g = SignatureGroup {
+			sources: vec![0],
+			coords: vec![tc(0, 0, 0)],
+		};
+		let batches = split_single_group(g, 5);
+		assert_eq!(batches.len(), 1);
+		assert_eq!(batches[0][0].coords.len(), 1);
+	}
+
+	#[test]
+	fn test_split_single_group_sorts_spatially() {
+		let g = SignatureGroup {
+			sources: vec![0],
+			// Coords in reverse order
+			coords: vec![tc(0, 3, 0), tc(0, 1, 0), tc(0, 2, 0), tc(0, 0, 0)],
+		};
+		let batches = split_single_group(g, 2);
+		assert_eq!(batches.len(), 2);
+		// First batch should have the lowest x values
+		let first_xs: Vec<u32> = batches[0][0].coords.iter().map(|c| c.x).collect();
+		let second_xs: Vec<u32> = batches[1][0].coords.iter().map(|c| c.x).collect();
+		assert_eq!(first_xs, vec![0, 1]);
+		assert_eq!(second_xs, vec![2, 3]);
+	}
+
+	// ─── partition edge cases via integration ───
+
+	#[test]
+	fn test_partition_deep_recursion() {
+		// Many groups that require multiple levels of PCA bisection
+		let groups: Vec<SignatureGroup> = (0..16)
+			.map(|i| SignatureGroup {
+				sources: vec![i],
+				coords: (0..10).map(|j| tc(i as u8, j, 0)).collect(),
+			})
+			.collect();
+
+		let batches = partition_into_batches(groups, 16, 20);
+		let total: usize = batches.iter().flat_map(|b| b.iter()).map(|g| g.coords.len()).sum();
+		assert_eq!(total, 160);
+
+		for batch in &batches {
+			let tiles: usize = batch.iter().map(|g| g.coords.len()).sum();
+			assert!(tiles <= 20);
+		}
+	}
+
+	#[test]
+	fn test_partition_two_groups_one_tile_each() {
+		let groups = vec![
+			SignatureGroup {
+				sources: vec![0],
+				coords: vec![tc(0, 0, 0)],
+			},
+			SignatureGroup {
+				sources: vec![1],
+				coords: vec![tc(1, 0, 0)],
+			},
+		];
+
+		// batch_size=1 forces split
+		let batches = partition_into_batches(groups, 2, 1);
+		assert_eq!(batches.len(), 2);
+	}
 }
