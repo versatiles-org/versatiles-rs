@@ -184,7 +184,7 @@ pub(super) async fn assemble_two_pass(
 		// All tiles were opaque — we're done
 		let sink = Arc::try_unwrap(sink).map_err(|_| anyhow!("sink still has references"))?;
 		sink.finish(&tilejson, runtime)?;
-		log::info!("finished mosaic assemble (all tiles opaque, no second pass needed)");
+		log::debug!("finished mosaic assemble (all tiles opaque, no second pass needed)");
 		return Ok(());
 	}
 
@@ -221,7 +221,7 @@ pub(super) async fn assemble_two_pass(
 		.iter()
 		.map(|b| b.iter().flat_map(|(_, s)| s).collect::<BTreeSet<_>>().len())
 		.sum();
-	log::info!(
+	log::debug!(
 		"partitioned {} tiles into {} batches ({} total source-opens)",
 		total_tiles,
 		batches.len(),
