@@ -19,6 +19,7 @@ mod cli;
 mod partitioning;
 mod pipeline;
 mod tiles;
+mod translucent_buffer;
 
 pub use cli::Assemble;
 

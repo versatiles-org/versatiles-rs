@@ -5,7 +5,7 @@ use super::partitioning::{collapse_into_signature_groups, partition_into_batches
 use super::tiles::{
 	composite_two_tiles, encode_tiles_parallel, fetch_source_tiles, validate_source_format, write_opaque_blob,
 };
-use crate::tools::mosaic_tools::translucent_buffer::TranslucentBuffer;
+use super::translucent_buffer::TranslucentBuffer;
 use anyhow::{Context, Result, anyhow};
 use futures::{StreamExt, future::ready};
 use std::collections::{BTreeSet, HashMap, HashSet};
