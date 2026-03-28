@@ -153,7 +153,13 @@ impl ProgressHandle {
 
 		use std::io::Write;
 		let mut output = std::io::stderr();
-		write!(output, "\r\x1b[2K{line}").unwrap();
+		if state.finished {
+			// Clear terminal progress indicator
+			write!(output, "\r\x1b[2K{line}\x1b]9;4;0;\x07").unwrap();
+		} else {
+			// Set terminal progress indicator (OSC 9;4)
+			write!(output, "\r\x1b[2K{line}\x1b]9;4;1;{percent}\x07").unwrap();
+		}
 		output.flush().unwrap();
 	}
 }
