@@ -113,8 +113,11 @@ pub struct RasterSource {
 	pool: GdalPool,
 	band_mapping: Arc<BandMapping>,
 	cutline: Option<Cutline>,
-	/// Per-band nodata values (one per color band), or empty if no nodata.
+	/// Primary per-band nodata values passed to GDAL warp (one per color band), or empty.
 	nodata: Vec<f64>,
+	/// Additional nodata value sets applied as post-warp alpha masking.
+	/// Each inner Vec has one u8 per color band.
+	extra_nodata: Vec<Vec<u8>>,
 }
 
 unsafe impl Sync for RasterSource {}
@@ -128,7 +131,7 @@ impl RasterSource {
 		concurrency_limit: usize,
 		cutline_path: Option<&Path>,
 		explicit_bands: Option<Vec<usize>>,
-		nodata: Option<Vec<f64>>,
+		nodata: Option<Vec<Vec<f64>>>,
 		crs_override: Option<u32>,
 	) -> Result<RasterSource> {
 		let path = filename.to_path_buf();
@@ -160,7 +163,7 @@ impl RasterSource {
 		concurrency_limit: usize,
 		cutline_path: Option<&Path>,
 		explicit_bands: Option<Vec<usize>>,
-		nodata: Option<Vec<f64>>,
+		nodata: Option<Vec<Vec<f64>>>,
 	) -> Result<RasterSource> {
 		let (pool, probe) = GdalPool::new_with_factory(open_dataset, reuse_limit, concurrency_limit).await?;
 
@@ -174,13 +177,10 @@ impl RasterSource {
 
 		let n_color_bands = band_mapping.color_band_count();
 
-		// Resolve per-band nodata values:
-		// - Explicit per-band values from user → use as-is (must match band count)
-		// - Single explicit value → replicate to all color bands
-		// - No explicit value → read from source dataset bands
-		let effective_nodata: Vec<f64> = if let Some(vals) = nodata {
+		/// Resolve a single nodata value set to per-band f64 values.
+		fn resolve_nodata_set(vals: Vec<f64>, n_color_bands: usize) -> Result<Vec<f64>> {
 			if vals.len() == 1 {
-				vec![vals[0]; n_color_bands]
+				Ok(vec![vals[0]; n_color_bands])
 			} else {
 				ensure!(
 					vals.len() == n_color_bands,
@@ -188,8 +188,24 @@ impl RasterSource {
 					vals.len(),
 					n_color_bands
 				);
-				vals
+				Ok(vals)
 			}
+		}
+
+		// Resolve nodata values:
+		// - Multiple sets separated by ';' → first set for GDAL warp, rest for post-warp masking
+		// - No explicit value → auto-detect from source dataset bands
+		let (effective_nodata, extra_nodata) = if let Some(sets) = nodata {
+			let mut iter = sets.into_iter();
+			let primary = resolve_nodata_set(iter.next().unwrap(), n_color_bands)?;
+			let extra: Vec<Vec<u8>> = iter
+				.map(|vals| {
+					let resolved = resolve_nodata_set(vals, n_color_bands)?;
+					#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+					Ok(resolved.into_iter().map(|v| v.round() as u8).collect())
+				})
+				.collect::<Result<_>>()?;
+			(primary, extra)
 		} else {
 			// Auto-detect from source bands
 			let auto: Vec<f64> = band_mapping
@@ -197,7 +213,8 @@ impl RasterSource {
 				.filter_map(|item| probe.rasterband(item.band_index).ok().and_then(|b| b.no_data_value()))
 				.collect();
 			// Only use auto-detected values if every color band has one
-			if auto.len() == n_color_bands { auto } else { vec![] }
+			let primary = if auto.len() == n_color_bands { auto } else { vec![] };
+			(primary, vec![])
 		};
 
 		let cutline = if let Some(path) = cutline_path {
@@ -214,6 +231,7 @@ impl RasterSource {
 			band_mapping: Arc::new(band_mapping),
 			cutline,
 			nodata: effective_nodata,
+			extra_nodata,
 		})
 	}
 
@@ -222,6 +240,7 @@ impl RasterSource {
 		let band_mapping = self.band_mapping.clone();
 		let cutline = self.cutline.clone();
 		let nodata = self.nodata.clone();
+		let extra_nodata = self.extra_nodata.clone();
 
 		// Get instance from pool - single synchronization point!
 		let instance = self.pool.get_instance().await?;
@@ -278,6 +297,25 @@ impl RasterSource {
 			);
 			for (i, &px) in data.iter().enumerate() {
 				buf[i * channel_count + alpha_channel_index] = px;
+			}
+
+			// Apply extra nodata masks: zero alpha for pixels matching any additional nodata set.
+			// The first nodata set was already handled by GDAL during warp; these are the rest.
+			if !extra_nodata.is_empty() {
+				let n_color = alpha_channel_index; // number of color channels
+				for i in 0..width * height {
+					let base = i * channel_count;
+					if buf[base + alpha_channel_index] == 0 {
+						continue; // already transparent
+					}
+					for nd in &extra_nodata {
+						let matches = (0..n_color).all(|c| buf[base + c] == nd[c]);
+						if matches {
+							buf[base + alpha_channel_index] = 0;
+							break;
+						}
+					}
+				}
 			}
 
 			log::trace!("Filled image buffer ({} bytes)", buf.len());

@@ -35,8 +35,10 @@ pub struct Tile {
 	#[arg(long, value_name = "str")]
 	bands: Option<String>,
 
-	/// NoData value(s) to treat as transparent. Either a single value (e.g. "0")
-	/// or comma-separated per-band values (e.g. "0,0,0").
+	/// NoData value(s) to treat as transparent. Multiple values can be
+	/// separated by semicolons (e.g. "0;255" treats both 0 and 255 as nodata).
+	/// Each value can be a single number applied to all bands or
+	/// comma-separated per-band values (e.g. "0,0,0;255,255,255").
 	/// If not specified, uses the source dataset's nodata value (if any).
 	#[arg(long, value_name = "str")]
 	nodata: Option<String>,

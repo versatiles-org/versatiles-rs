@@ -50,8 +50,12 @@ struct Args {
 	/// E.g. "4,3,2" maps band 4→Red, band 3→Green, band 2→Blue.
 	/// "1" maps band 1→Grey. Defaults to auto-detection from color interpretation.
 	bands: Option<String>,
-	/// NoData value(s) to treat as transparent. Either a single value applied
-	/// to all bands (e.g. "0") or comma-separated per-band values (e.g. "0,0,0").
+	/// NoData value(s) to treat as transparent. Multiple values can be
+	/// separated by semicolons (e.g. "0;255" treats both 0 and 255 as nodata).
+	/// Each value can be a single number applied to all bands or
+	/// comma-separated per-band values (e.g. "0,0,0;255,255,255").
+	/// The first value is handled natively by GDAL during reprojection;
+	/// additional values are applied as a post-warp alpha mask.
 	/// If not specified, the source dataset's per-band nodata value is used (if any).
 	nodata: Option<String>,
 	/// Override the source CRS with an EPSG code (e.g. "4326" or "25832").
@@ -111,12 +115,17 @@ impl Operation {
 			.transpose()
 			.context("Failed to parse band indices")?;
 
-		let nodata: Option<Vec<f64>> = args
+		let nodata: Option<Vec<Vec<f64>>> = args
 			.nodata
 			.as_ref()
 			.map(|s| {
-				s.split(',')
-					.map(|v| v.trim().parse::<f64>())
+				s.split(';')
+					.map(|group| {
+						group
+							.split(',')
+							.map(|v| v.trim().parse::<f64>())
+							.collect::<std::result::Result<Vec<_>, _>>()
+					})
 					.collect::<std::result::Result<Vec<_>, _>>()
 			})
 			.transpose()
