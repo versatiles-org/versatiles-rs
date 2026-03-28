@@ -23,10 +23,10 @@ mod translucent_buffer;
 
 pub use cli::Assemble;
 
-use anyhow::{Result, ensure};
+use anyhow::{Result, anyhow, ensure};
+use std::sync::Arc;
 use versatiles_container::TilesRuntime;
-use versatiles_core::TileCompression;
-use versatiles_core::TileFormat;
+use versatiles_core::{TileCompression, TileFormat};
 
 /// Encoding configuration shared across assemble functions.
 #[derive(Clone)]
@@ -52,15 +52,35 @@ pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 
 	log::info!("assembling {} containers (two-pass)", paths.len());
 
-	pipeline::assemble_two_pass(
+	let first = pipeline::scan_sources(
 		output,
 		&paths,
 		&quality,
 		args.lossless,
 		args.min_zoom,
 		args.max_zoom,
-		max_buffer_size,
 		runtime,
 	)
-	.await
+	.await?;
+
+	let Some(batches) = pipeline::prepare_batches(
+		first.translucent_map,
+		first.done,
+		first.tile_dim,
+		max_buffer_size,
+		paths.len(),
+	) else {
+		let sink = Arc::try_unwrap(first.sink).map_err(|_| anyhow!("sink still has references"))?;
+		sink.finish(&first.tilejson, runtime)?;
+		log::debug!("finished mosaic assemble (all tiles opaque, no second pass needed)");
+		return Ok(());
+	};
+
+	pipeline::composite_batches(&batches, &paths, &first.config, &first.sink, runtime).await?;
+
+	let sink = Arc::try_unwrap(first.sink).map_err(|_| anyhow!("sink still has references"))?;
+	sink.finish(&first.tilejson, runtime)?;
+
+	log::info!("finished mosaic assemble");
+	Ok(())
 }

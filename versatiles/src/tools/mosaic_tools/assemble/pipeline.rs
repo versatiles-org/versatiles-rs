@@ -17,57 +17,20 @@ use versatiles_core::{ConcurrencyLimits, TileCoord, TileJSON, TileStream, utils:
 type TileBatch = Vec<(TileCoord, Vec<usize>)>;
 
 /// Results collected during the first pass (source scanning).
-struct FirstPassResult {
-	config: AssembleConfig,
-	tilejson: TileJSON,
-	tile_dim: u64,
-	sink: Arc<Box<dyn TileSink>>,
-	translucent_map: HashMap<TileCoord, Vec<usize>>,
-	done: HashSet<TileCoord>,
-}
-
-// ─── Orchestrator ───
-
-#[allow(clippy::too_many_arguments)]
-pub(super) async fn assemble_two_pass(
-	output: &str,
-	paths: &[String],
-	quality: &[Option<u8>; 32],
-	lossless: bool,
-	min_zoom: Option<u8>,
-	max_zoom: Option<u8>,
-	max_buffer_size: u64,
-	runtime: &TilesRuntime,
-) -> Result<()> {
-	let first = scan_sources(output, paths, quality, lossless, min_zoom, max_zoom, runtime).await?;
-
-	let Some(batches) = prepare_batches(
-		first.translucent_map,
-		first.done,
-		first.tile_dim,
-		max_buffer_size,
-		paths.len(),
-	) else {
-		let sink = Arc::try_unwrap(first.sink).map_err(|_| anyhow!("sink still has references"))?;
-		sink.finish(&first.tilejson, runtime)?;
-		log::debug!("finished mosaic assemble (all tiles opaque, no second pass needed)");
-		return Ok(());
-	};
-
-	composite_batches(&batches, paths, &first.config, &first.sink, runtime).await?;
-
-	let sink = Arc::try_unwrap(first.sink).map_err(|_| anyhow!("sink still has references"))?;
-	sink.finish(&first.tilejson, runtime)?;
-
-	log::info!("finished mosaic assemble");
-	Ok(())
+pub(super) struct FirstPassResult {
+	pub(super) config: AssembleConfig,
+	pub(super) tilejson: TileJSON,
+	pub(super) tile_dim: u64,
+	pub(super) sink: Arc<Box<dyn TileSink>>,
+	pub(super) translucent_map: HashMap<TileCoord, Vec<usize>>,
+	pub(super) done: HashSet<TileCoord>,
 }
 
 // ─── First pass: scan sources + write opaque tiles ───
 
 /// Stream every source once: write opaque tiles directly, record translucent coords.
 #[allow(clippy::too_many_arguments)]
-async fn scan_sources(
+pub(super) async fn scan_sources(
 	output: &str,
 	paths: &[String],
 	quality: &[Option<u8>; 32],
@@ -230,7 +193,7 @@ async fn classify_and_stream_tiles(
 /// Prune already-done coords, collapse into signature groups, partition into batches.
 ///
 /// Returns `None` if all tiles were opaque (no second pass needed).
-fn prepare_batches(
+pub(super) fn prepare_batches(
 	mut translucent_map: HashMap<TileCoord, Vec<usize>>,
 	done: HashSet<TileCoord>,
 	tile_dim: u64,
@@ -285,7 +248,7 @@ fn prepare_batches(
 // ─── Second pass: composite translucent batches ───
 
 /// For each batch, open only the needed sources, composite tiles, encode and flush.
-async fn composite_batches(
+pub(super) async fn composite_batches(
 	batches: &[TileBatch],
 	paths: &[String],
 	config: &AssembleConfig,
