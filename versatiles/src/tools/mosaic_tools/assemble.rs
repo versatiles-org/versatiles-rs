@@ -388,6 +388,162 @@ async fn fetch_source_tiles(
 	Ok(result)
 }
 
+// ─── PCA-based batch partitioning ───
+
+/// A group of tiles sharing the same source-set signature.
+struct SignatureGroup {
+	sources: Vec<usize>,    // sorted source indices (the signature)
+	coords: Vec<TileCoord>, // all tiles with this signature
+}
+
+/// Collapse `translucent_map` into signature groups by grouping on the source list.
+fn collapse_into_signature_groups(translucent_map: HashMap<TileCoord, Vec<usize>>) -> Vec<SignatureGroup> {
+	let mut sig_map: HashMap<Vec<usize>, Vec<TileCoord>> = HashMap::new();
+	for (coord, mut sources) in translucent_map {
+		sources.sort_unstable();
+		sig_map.entry(sources).or_default().push(coord);
+	}
+	sig_map
+		.into_iter()
+		.map(|(sources, coords)| SignatureGroup { sources, coords })
+		.collect()
+}
+
+/// Recursively partition signature groups into batches of at most `batch_size` tiles.
+fn partition_into_batches(
+	groups: Vec<SignatureGroup>,
+	num_sources: usize,
+	batch_size: usize,
+) -> Vec<Vec<SignatureGroup>> {
+	let total_tiles: usize = groups.iter().map(|g| g.coords.len()).sum();
+
+	// Base case: fits in one batch
+	if total_tiles <= batch_size {
+		return vec![groups];
+	}
+
+	// Special case: single group that exceeds batch_size — split coords spatially
+	if groups.len() == 1 {
+		let g = groups.into_iter().next().unwrap();
+		let mut coords = g.coords;
+		// Sort spatially for locality
+		coords.sort_by(|a, b| a.level.cmp(&b.level).then(a.x.cmp(&b.x)).then(a.y.cmp(&b.y)));
+		let mut batches = Vec::new();
+		for chunk in coords.chunks(batch_size) {
+			batches.push(vec![SignatureGroup {
+				sources: g.sources.clone(),
+				coords: chunk.to_vec(),
+			}]);
+		}
+		return batches;
+	}
+
+	// PCA step: find the principal component via power iteration
+
+	// Build source membership sets for efficient lookup
+	let source_sets: Vec<HashSet<usize>> = groups.iter().map(|g| g.sources.iter().copied().collect()).collect();
+
+	// Compute weighted mean
+	let total_weight: f64 = groups.iter().map(|g| g.coords.len() as f64).sum();
+	let mut mean = vec![0.0f64; num_sources];
+	for (i, g) in groups.iter().enumerate() {
+		let w = g.coords.len() as f64;
+		for (s, m) in mean.iter_mut().enumerate() {
+			if source_sets[i].contains(&s) {
+				*m += w;
+			}
+		}
+	}
+	for m in &mut mean {
+		*m /= total_weight;
+	}
+
+	// Power iteration to find PC1
+	let mut v: Vec<f64> = (1..=num_sources).map(|i| i as f64).collect();
+	let norm = v.iter().map(|x| x * x).sum::<f64>().sqrt();
+	for x in &mut v {
+		*x /= norm;
+	}
+
+	for _ in 0..15 {
+		let mut new_v = vec![0.0f64; num_sources];
+		for (i, g) in groups.iter().enumerate() {
+			let w = g.coords.len() as f64;
+			// dot = (x_i - μ) · v
+			let dot: f64 = (0..num_sources)
+				.map(|s| {
+					let x = if source_sets[i].contains(&s) { 1.0 } else { 0.0 };
+					(x - mean[s]) * v[s]
+				})
+				.sum();
+			// accumulate: new_v += w * dot * (x_i - μ)
+			for s in 0..num_sources {
+				let x = if source_sets[i].contains(&s) { 1.0 } else { 0.0 };
+				new_v[s] += w * dot * (x - mean[s]);
+			}
+		}
+		let n = new_v.iter().map(|x| x * x).sum::<f64>().sqrt();
+		if n > 0.0 {
+			for x in &mut new_v {
+				*x /= n;
+			}
+		}
+		v = new_v;
+	}
+
+	// Project each group onto PC1 and sort by score
+	let mut scored: Vec<(f64, usize)> = groups
+		.iter()
+		.enumerate()
+		.map(|(i, _)| {
+			let score: f64 = (0..num_sources)
+				.map(|s| {
+					let x = if source_sets[i].contains(&s) { 1.0 } else { 0.0 };
+					(x - mean[s]) * v[s]
+				})
+				.sum();
+			(score, i)
+		})
+		.collect();
+	scored.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+	// Find the split point: balanced by tile count
+	let half = total_tiles / 2;
+	let mut acc = 0usize;
+	let mut split_pos = 1; // at least 1 group on the left
+	for (pos, &(_, idx)) in scored.iter().enumerate() {
+		acc += groups[idx].coords.len();
+		if acc >= half {
+			split_pos = pos + 1;
+			break;
+		}
+	}
+	// Ensure at least one group on each side
+	split_pos = split_pos.clamp(1, scored.len() - 1);
+
+	// Split into two halves
+	let indices_left: Vec<usize> = scored[..split_pos].iter().map(|&(_, i)| i).collect();
+	let indices_right: Vec<usize> = scored[split_pos..].iter().map(|&(_, i)| i).collect();
+
+	// Move groups into left/right by index
+	// We need to consume `groups`, so collect into an indexed structure
+	let mut groups_by_idx: Vec<Option<SignatureGroup>> = groups.into_iter().map(Some).collect();
+
+	let left: Vec<SignatureGroup> = indices_left
+		.into_iter()
+		.map(|i| groups_by_idx[i].take().unwrap())
+		.collect();
+	let right: Vec<SignatureGroup> = indices_right
+		.into_iter()
+		.map(|i| groups_by_idx[i].take().unwrap())
+		.collect();
+
+	// Recurse
+	let mut batches = partition_into_batches(left, num_sources, batch_size);
+	batches.extend(partition_into_batches(right, num_sources, batch_size));
+	batches
+}
+
 // ─── Two-pass pipeline ───
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -565,24 +721,45 @@ async fn assemble_two_pass(
 		return Ok(());
 	}
 
-	// Sort by (level, x, y)
-	let mut tile_list: Vec<(TileCoord, Vec<usize>)> = translucent_map.into_iter().collect();
-	tile_list.sort_by(|a, b| {
-		a.0.level
-			.cmp(&b.0.level)
-			.then(a.0.x.cmp(&b.0.x))
-			.then(a.0.y.cmp(&b.0.y))
-	});
+	// Collapse into signature groups and partition via PCA-based recursive bisection
+	let total_tiles = translucent_map.len();
+	let groups = collapse_into_signature_groups(translucent_map);
+	let num_sources = paths.len();
 
-	// Split into batches
 	let batch_size = if max_buffer_size > 0 {
 		usize::try_from((max_buffer_size / (tile_dim * tile_dim * 4)).max(1)).unwrap_or(usize::MAX)
 	} else {
-		tile_list.len()
+		total_tiles
 	};
-	let batches: Vec<&[(TileCoord, Vec<usize>)]> = tile_list.chunks(batch_size).collect();
+
+	let batch_groups = partition_into_batches(groups, num_sources, batch_size);
+
+	// Convert back to the format the second pass expects
+	let batches: Vec<Vec<(TileCoord, Vec<usize>)>> = batch_groups
+		.into_iter()
+		.map(|batch| {
+			batch
+				.into_iter()
+				.flat_map(|g| {
+					let sources = g.sources;
+					g.coords.into_iter().map(move |c| (c, sources.clone()))
+				})
+				.collect()
+		})
+		.collect();
 
 	// ─── Second pass: composite translucent batches ───
+
+	let total_source_opens: usize = batches
+		.iter()
+		.map(|b| b.iter().flat_map(|(_, s)| s).collect::<BTreeSet<_>>().len())
+		.sum();
+	log::info!(
+		"partitioned {} tiles into {} batches ({} total source-opens)",
+		total_tiles,
+		batches.len(),
+		total_source_opens
+	);
 
 	let total_source_reads: u64 = batches
 		.iter()
@@ -607,7 +784,7 @@ async fn assemble_two_pass(
 		// Pre-fetch tiles for the first source while we set up
 		let mut prefetched: Option<Vec<(TileCoord, Tile)>> = None;
 
-		let batch_arc = Arc::new(batch.to_vec());
+		let batch_arc = Arc::new(batch.clone());
 		let paths_arc = Arc::new(paths.to_vec());
 
 		for (pos, &source_idx) in sources_needed.iter().enumerate() {
@@ -843,5 +1020,138 @@ https://example.com/tiles/004.versatiles
 	fn test_resolve_inputs_glob_no_match() {
 		let args = vec!["/nonexistent_dir_xyz/*.versatiles".to_string()];
 		assert!(resolve_inputs(&args).is_err());
+	}
+
+	fn tc(level: u8, x: u32, y: u32) -> TileCoord {
+		TileCoord { level, x, y }
+	}
+
+	#[test]
+	fn test_collapse_into_signature_groups() {
+		let mut map: HashMap<TileCoord, Vec<usize>> = HashMap::new();
+		map.insert(tc(0, 0, 0), vec![1, 0]);
+		map.insert(tc(0, 1, 0), vec![0, 1]);
+		map.insert(tc(0, 2, 0), vec![2, 3]);
+
+		let groups = collapse_into_signature_groups(map);
+		// Two unique signatures: [0,1] and [2,3]
+		assert_eq!(groups.len(), 2);
+
+		for g in &groups {
+			if g.sources == vec![0, 1] {
+				assert_eq!(g.coords.len(), 2);
+			} else if g.sources == vec![2, 3] {
+				assert_eq!(g.coords.len(), 1);
+			} else {
+				panic!("unexpected signature: {:?}", g.sources);
+			}
+		}
+	}
+
+	#[test]
+	fn test_partition_single_group_over_batch_size() {
+		let coords: Vec<TileCoord> = (0..10).map(|i| tc(0, i, 0)).collect();
+		let groups = vec![SignatureGroup {
+			sources: vec![0, 1],
+			coords,
+		}];
+
+		let batches = partition_into_batches(groups, 4, 3);
+		// 10 tiles, batch_size=3 → 4 batches (3+3+3+1)
+		assert_eq!(batches.len(), 4);
+
+		let total: usize = batches.iter().flat_map(|b| b.iter()).map(|g| g.coords.len()).sum();
+		assert_eq!(total, 10);
+
+		for batch in &batches {
+			let batch_tiles: usize = batch.iter().map(|g| g.coords.len()).sum();
+			assert!(batch_tiles <= 3);
+		}
+	}
+
+	#[test]
+	fn test_partition_separates_disjoint_sources() {
+		// Two groups with completely disjoint sources
+		let groups = vec![
+			SignatureGroup {
+				sources: vec![0, 1],
+				coords: vec![tc(0, 0, 0), tc(0, 1, 0), tc(0, 2, 0)],
+			},
+			SignatureGroup {
+				sources: vec![2, 3],
+				coords: vec![tc(1, 0, 0), tc(1, 1, 0), tc(1, 2, 0)],
+			},
+		];
+
+		let batches = partition_into_batches(groups, 4, 3);
+		// Each group has 3 tiles and batch_size=3, so they should land in separate batches
+		assert_eq!(batches.len(), 2);
+
+		for batch in &batches {
+			let batch_tiles: usize = batch.iter().map(|g| g.coords.len()).sum();
+			assert_eq!(batch_tiles, 3);
+			// Each batch should only use sources from one group
+			let all_sources: BTreeSet<usize> = batch.iter().flat_map(|g| g.sources.iter().copied()).collect();
+			assert!(
+				all_sources == [0, 1].into_iter().collect::<BTreeSet<_>>()
+					|| all_sources == [2, 3].into_iter().collect::<BTreeSet<_>>()
+			);
+		}
+	}
+
+	#[test]
+	fn test_partition_merges_identical_sources() {
+		// Multiple groups with the same source set should stay together
+		let groups = vec![
+			SignatureGroup {
+				sources: vec![0, 1],
+				coords: vec![tc(0, 0, 0)],
+			},
+			SignatureGroup {
+				sources: vec![0, 1],
+				coords: vec![tc(0, 1, 0)],
+			},
+			SignatureGroup {
+				sources: vec![0, 1],
+				coords: vec![tc(0, 2, 0)],
+			},
+		];
+
+		let batches = partition_into_batches(groups, 4, 10);
+		// 3 tiles total, batch_size=10, should be one batch
+		assert_eq!(batches.len(), 1);
+		let total: usize = batches[0].iter().map(|g| g.coords.len()).sum();
+		assert_eq!(total, 3);
+	}
+
+	#[test]
+	fn test_partition_respects_batch_size() {
+		let groups = vec![
+			SignatureGroup {
+				sources: vec![0],
+				coords: (0..50).map(|i| tc(0, i, 0)).collect(),
+			},
+			SignatureGroup {
+				sources: vec![1],
+				coords: (0..50).map(|i| tc(1, i, 0)).collect(),
+			},
+			SignatureGroup {
+				sources: vec![2],
+				coords: (0..50).map(|i| tc(2, i, 0)).collect(),
+			},
+		];
+
+		let batches = partition_into_batches(groups, 3, 40);
+		// 150 tiles total, batch_size=40 → should have at least 4 batches
+		assert!(batches.len() >= 4);
+
+		for batch in &batches {
+			let batch_tiles: usize = batch.iter().map(|g| g.coords.len()).sum();
+			assert!(batch_tiles <= 40, "batch has {} tiles, exceeds limit of 40", batch_tiles);
+		}
+
+		// All tiles present
+		let total: usize = batches.iter().flat_map(|b| b.iter()).map(|g| g.coords.len()).sum();
+		assert_eq!(total, 150);
 	}
 }
