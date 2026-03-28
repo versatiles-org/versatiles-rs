@@ -89,4 +89,29 @@ mod tests {
 			PathBuf::from("/data/out.versatiles")
 		);
 	}
+
+	#[test]
+	fn test_path_from_url_with_credentials() {
+		let url = Url::parse("sftp://user:pass@host:2222/output/tiles.tar").unwrap();
+		assert_eq!(DataWriterSftp::path_from_url(&url), PathBuf::from("/output/tiles.tar"));
+	}
+
+	#[test]
+	fn test_path_from_url_root() {
+		let url = Url::parse("sftp://host/file.versatiles").unwrap();
+		assert_eq!(DataWriterSftp::path_from_url(&url), PathBuf::from("/file.versatiles"));
+	}
+
+	#[test]
+	fn test_path_from_url_nested() {
+		let url = Url::parse("sftp://host/a/b/c/d.tar").unwrap();
+		assert_eq!(DataWriterSftp::path_from_url(&url), PathBuf::from("/a/b/c/d.tar"));
+	}
+
+	#[test]
+	fn test_from_url_unreachable_host() {
+		let url = Url::parse("sftp://192.0.2.1:22222/path/file.versatiles").unwrap();
+		let result = DataWriterSftp::from_url(&url, None);
+		assert!(result.is_err());
+	}
 }

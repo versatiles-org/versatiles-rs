@@ -83,3 +83,29 @@ impl DataReaderTrait for DataReaderSftp {
 		&self.name
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_open_unreachable_host() {
+		let url = Url::parse("sftp://192.0.2.1:22222/path/file.versatiles").unwrap();
+		let result = DataReaderSftp::open(&url, None);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_try_from_unreachable_host() {
+		let url = Url::parse("sftp://192.0.2.1:22222/path/file.versatiles").unwrap();
+		let result = DataReaderSftp::try_from(&url);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_open_with_identity_file_unreachable() {
+		let url = Url::parse("sftp://192.0.2.1:22222/path/file.versatiles").unwrap();
+		let result = DataReaderSftp::open(&url, Some(Path::new("/nonexistent/key")));
+		assert!(result.is_err());
+	}
+}

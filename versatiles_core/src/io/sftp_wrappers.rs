@@ -105,3 +105,29 @@ impl SftpFileSystem {
 		let _ = self.sftp.mkdir(path, 0o755);
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_sftp_write_stream_unreachable_host() {
+		let url = Url::parse("sftp://192.0.2.1:22222/path/file.versatiles").unwrap();
+		let result = SftpWriteStream::from_url(&url, None);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_sftp_write_stream_with_identity_file() {
+		let url = Url::parse("sftp://192.0.2.1:22222/path/file.versatiles").unwrap();
+		let result = SftpWriteStream::from_url(&url, Some(Path::new("/nonexistent/key")));
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_sftp_filesystem_unreachable_host() {
+		let url = Url::parse("sftp://192.0.2.1:22222/path/").unwrap();
+		let result = SftpFileSystem::from_url(&url, None);
+		assert!(result.is_err());
+	}
+}

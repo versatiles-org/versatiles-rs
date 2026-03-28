@@ -189,6 +189,30 @@ mod tests {
 	}
 
 	#[test]
+	fn test_remote_path_root() {
+		let url = Url::parse("sftp://host/").unwrap();
+		assert_eq!(remote_path(&url), PathBuf::from("/"));
+	}
+
+	#[test]
+	fn test_remote_path_nested() {
+		let url = Url::parse("sftp://host/a/b/c/d/file.tar").unwrap();
+		assert_eq!(remote_path(&url), PathBuf::from("/a/b/c/d/file.tar"));
+	}
+
+	#[test]
+	fn test_remote_path_with_credentials() {
+		let url = Url::parse("sftp://user:pass@host/data/file.versatiles").unwrap();
+		assert_eq!(remote_path(&url), PathBuf::from("/data/file.versatiles"));
+	}
+
+	#[test]
+	fn test_remote_path_with_port() {
+		let url = Url::parse("sftp://host:2222/data/file.versatiles").unwrap();
+		assert_eq!(remote_path(&url), PathBuf::from("/data/file.versatiles"));
+	}
+
+	#[test]
 	fn test_display_name_strips_credentials() {
 		let url = Url::parse("sftp://user:secret@host:2222/data/tiles.versatiles").unwrap();
 		assert_eq!(display_name(&url), "sftp://host:2222/data/tiles.versatiles");
@@ -198,5 +222,52 @@ mod tests {
 	fn test_display_name_default_port() {
 		let url = Url::parse("sftp://host/path/file.tar").unwrap();
 		assert_eq!(display_name(&url), "sftp://host:22/path/file.tar");
+	}
+
+	#[test]
+	fn test_display_name_custom_port() {
+		let url = Url::parse("sftp://host:9922/file.tar").unwrap();
+		assert_eq!(display_name(&url), "sftp://host:9922/file.tar");
+	}
+
+	#[test]
+	fn test_display_name_username_only() {
+		let url = Url::parse("sftp://admin@host/path").unwrap();
+		// Should strip the username too
+		assert_eq!(display_name(&url), "sftp://host:22/path");
+	}
+
+	#[test]
+	fn test_display_name_no_path() {
+		let url = Url::parse("sftp://host").unwrap();
+		assert_eq!(display_name(&url), "sftp://host:22");
+	}
+
+	#[test]
+	fn test_home_dir_returns_some() {
+		// HOME (unix) or USERPROFILE (windows) should be set in CI and dev
+		assert!(home_dir().is_some());
+	}
+
+	#[test]
+	fn test_dirs_home_returns_ok() {
+		assert!(dirs_home().is_ok());
+	}
+
+	#[test]
+	fn test_open_session_missing_host() {
+		// A URL with no host should fail
+		let url = Url::parse("sftp:///path/file").unwrap();
+		let result = open_session(&url, None);
+		let err = result.err().expect("expected error for missing host");
+		assert!(err.to_string().contains("no host"));
+	}
+
+	#[test]
+	fn test_open_session_unreachable_host() {
+		// Connection to a non-routable IP should fail with a TCP error
+		let url = Url::parse("sftp://192.0.2.1:22222/path").unwrap();
+		let result = open_session(&url, None);
+		assert!(result.is_err());
 	}
 }
