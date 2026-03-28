@@ -29,13 +29,13 @@ use versatiles_image::traits::DynamicImageTraitOperation;
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
 pub struct Assemble {
-	/// Text file listing container paths or URLs, one per line.
-	/// Empty lines and # comments are skipped. Whitespace is trimmed.
-	/// Containers listed earlier overlay containers listed later.
-	input_list: String,
-
-	/// Output container path (currently supports .tar, directory, or .mbtiles).
-	output: String,
+	/// Input container paths, URLs, or glob patterns, followed by the output path.
+	/// The last argument is always the output; all preceding arguments are inputs.
+	/// Glob patterns (*, ?, [) are expanded. Containers listed earlier overlay
+	/// containers listed later. Use @filename.txt to read paths from a list file
+	/// (one per line, # comments supported).
+	#[arg(required = true, num_args = 2..)]
+	paths: Vec<String>,
 
 	/// Lossy WebP quality for the final output tiles, using zoom-dependent syntax
 	/// (e.g. "70,14:50,15:20"). Default: 75.
@@ -108,6 +108,29 @@ fn parse_input_list(content: &str) -> Vec<String> {
 		})
 		.filter(|line| !line.is_empty())
 		.collect()
+}
+
+fn resolve_inputs(args: &[String]) -> Result<Vec<String>> {
+	let mut result = Vec::new();
+	for arg in args {
+		if let Some(file_path) = arg.strip_prefix('@') {
+			let content = std::fs::read_to_string(file_path)
+				.with_context(|| format!("Failed to read input list file: {file_path}"))?;
+			result.extend(parse_input_list(&content));
+		} else if arg.contains('*') || arg.contains('?') || arg.contains('[') {
+			let mut matches: Vec<String> = Vec::new();
+			for entry in glob::glob(arg).with_context(|| format!("Invalid glob pattern: {arg}"))? {
+				let path = entry.with_context(|| format!("Error reading glob result for: {arg}"))?;
+				matches.push(path.to_string_lossy().into_owned());
+			}
+			ensure!(!matches.is_empty(), "Glob pattern matched no files: {arg}");
+			matches.sort();
+			result.extend(matches);
+		} else {
+			result.push(arg.clone());
+		}
+	}
+	Ok(result)
 }
 
 fn parse_buffer_size(s: &str) -> Result<u64> {
@@ -279,12 +302,14 @@ fn encode_tiles_parallel(tiles: Vec<(TileCoord, Tile)>, config: &AssembleConfig)
 // ─── Entry point ───
 
 pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
-	log::info!("mosaic assemble from {:?} to {:?}", args.input_list, args.output);
+	ensure!(args.paths.len() >= 2, "Need at least one input and one output path");
+	let (input_args, output) = args.paths.split_at(args.paths.len() - 1);
+	let output = &output[0];
 
-	let list_content = std::fs::read_to_string(&args.input_list)
-		.with_context(|| format!("Failed to read input list file: {}", args.input_list))?;
-	let paths = parse_input_list(&list_content);
-	ensure!(!paths.is_empty(), "Input list file contains no container paths");
+	log::info!("mosaic assemble to {output:?}");
+
+	let paths = resolve_inputs(input_args)?;
+	ensure!(!paths.is_empty(), "No input container paths resolved");
 
 	let quality = parse_quality(&args.quality)?;
 	let max_buffer_size = parse_buffer_size(&args.max_buffer_size)?;
@@ -292,7 +317,7 @@ pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 	log::info!("assembling {} containers (two-pass)", paths.len());
 
 	assemble_two_pass(
-		&args.output,
+		output,
 		&paths,
 		&quality,
 		args.lossless,
@@ -760,5 +785,44 @@ https://example.com/tiles/004.versatiles
 		assert_eq!(q[13], Some(70));
 		assert_eq!(q[14], Some(50));
 		assert_eq!(q[15], Some(20));
+	}
+
+	#[test]
+	fn test_resolve_inputs_literal() {
+		let args = vec!["a.versatiles".to_string(), "b.versatiles".to_string()];
+		let result = resolve_inputs(&args).unwrap();
+		assert_eq!(result, vec!["a.versatiles", "b.versatiles"]);
+	}
+
+	#[test]
+	fn test_resolve_inputs_at_file() {
+		let dir = tempfile::tempdir().unwrap();
+		let list_path = dir.path().join("inputs.txt");
+		std::fs::write(&list_path, "one.versatiles\ntwo.versatiles\n# comment\n").unwrap();
+
+		let args = vec![format!("@{}", list_path.display())];
+		let result = resolve_inputs(&args).unwrap();
+		assert_eq!(result, vec!["one.versatiles", "two.versatiles"]);
+	}
+
+	#[test]
+	fn test_resolve_inputs_glob() {
+		let dir = tempfile::tempdir().unwrap();
+		std::fs::write(dir.path().join("a.versatiles"), "").unwrap();
+		std::fs::write(dir.path().join("b.versatiles"), "").unwrap();
+		std::fs::write(dir.path().join("c.txt"), "").unwrap();
+
+		let pattern = format!("{}/*.versatiles", dir.path().display());
+		let args = vec![pattern];
+		let result = resolve_inputs(&args).unwrap();
+		assert_eq!(result.len(), 2);
+		assert!(result[0].ends_with("a.versatiles"));
+		assert!(result[1].ends_with("b.versatiles"));
+	}
+
+	#[test]
+	fn test_resolve_inputs_glob_no_match() {
+		let args = vec!["/nonexistent_dir_xyz/*.versatiles".to_string()];
+		assert!(resolve_inputs(&args).is_err());
 	}
 }
