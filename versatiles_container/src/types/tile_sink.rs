@@ -127,3 +127,307 @@ fn extract_extension_from_url(url: &str) -> Option<String> {
 	let ext = path_part.rsplit_once('.')?.1;
 	Some(ext.to_ascii_lowercase())
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::sync::atomic::{AtomicUsize, Ordering};
+
+	/// A mock TileSink that counts write_tile calls and records coords.
+	struct MockSink {
+		writes: AtomicUsize,
+		coords: Mutex<Vec<TileCoord>>,
+		finished: Mutex<bool>,
+	}
+
+	impl MockSink {
+		fn new() -> Self {
+			Self {
+				writes: AtomicUsize::new(0),
+				coords: Mutex::new(Vec::new()),
+				finished: Mutex::new(false),
+			}
+		}
+	}
+
+	impl TileSink for MockSink {
+		fn write_tile(&self, coord: &TileCoord, _blob: &Blob) -> Result<()> {
+			self.writes.fetch_add(1, Ordering::Relaxed);
+			self.coords.lock().unwrap().push(*coord);
+			Ok(())
+		}
+
+		fn finish(self: Box<Self>, _tilejson: &TileJSON, _runtime: &TilesRuntime) -> Result<()> {
+			*self.finished.lock().unwrap() = true;
+			Ok(())
+		}
+	}
+
+	fn coord(level: u8, x: u32, y: u32) -> TileCoord {
+		TileCoord::new(level, x, y).unwrap()
+	}
+
+	fn blob(data: &[u8]) -> Blob {
+		Blob::from(data.to_vec())
+	}
+
+	// ─── extract_extension_from_url ───
+
+	#[test]
+	fn test_extract_extension_tar() {
+		assert_eq!(
+			extract_extension_from_url("sftp://host/path/file.tar"),
+			Some("tar".to_string())
+		);
+	}
+
+	#[test]
+	fn test_extract_extension_versatiles() {
+		assert_eq!(
+			extract_extension_from_url("sftp://host/data/tiles.versatiles"),
+			Some("versatiles".to_string())
+		);
+	}
+
+	#[test]
+	fn test_extract_extension_mbtiles() {
+		assert_eq!(
+			extract_extension_from_url("sftp://user:pass@host:22/out.mbtiles"),
+			Some("mbtiles".to_string())
+		);
+	}
+
+	#[test]
+	fn test_extract_extension_uppercase() {
+		assert_eq!(
+			extract_extension_from_url("sftp://host/FILE.TAR"),
+			Some("tar".to_string())
+		);
+	}
+
+	#[test]
+	fn test_extract_extension_no_extension() {
+		assert_eq!(extract_extension_from_url("sftp://host/path/directory"), None);
+	}
+
+	#[test]
+	fn test_extract_extension_no_path() {
+		assert_eq!(extract_extension_from_url("sftp://host"), None);
+	}
+
+	#[test]
+	fn test_extract_extension_trailing_slash() {
+		assert_eq!(extract_extension_from_url("sftp://host/path/"), None);
+	}
+
+	#[test]
+	fn test_extract_extension_dotfile() {
+		assert_eq!(
+			extract_extension_from_url("sftp://host/.hidden"),
+			Some("hidden".to_string())
+		);
+	}
+
+	// ─── deduplicating_tile_sink ───
+
+	#[test]
+	fn test_dedup_sink_passes_first_write() -> Result<()> {
+		let mock = MockSink::new();
+		let sink = deduplicating_tile_sink(Box::new(mock));
+		let c = coord(5, 1, 2);
+		sink.write_tile(&c, &blob(b"data"))?;
+		// Can't inspect mock directly after wrapping, but it should not error
+		Ok(())
+	}
+
+	#[test]
+	fn test_dedup_sink_drops_duplicate_writes() -> Result<()> {
+		// We need a way to observe writes. Use Arc<MockSink> pattern via shared state.
+		let write_count = std::sync::Arc::new(AtomicUsize::new(0));
+		let count_clone = write_count.clone();
+
+		struct CountingSink {
+			count: std::sync::Arc<AtomicUsize>,
+		}
+		impl TileSink for CountingSink {
+			fn write_tile(&self, _coord: &TileCoord, _blob: &Blob) -> Result<()> {
+				self.count.fetch_add(1, Ordering::Relaxed);
+				Ok(())
+			}
+			fn finish(self: Box<Self>, _: &TileJSON, _: &TilesRuntime) -> Result<()> {
+				Ok(())
+			}
+		}
+
+		let sink = deduplicating_tile_sink(Box::new(CountingSink { count: count_clone }));
+		let c = coord(3, 0, 0);
+		sink.write_tile(&c, &blob(b"first"))?;
+		sink.write_tile(&c, &blob(b"second"))?;
+		sink.write_tile(&c, &blob(b"third"))?;
+		assert_eq!(write_count.load(Ordering::Relaxed), 1);
+		Ok(())
+	}
+
+	#[test]
+	fn test_dedup_sink_allows_different_coords() -> Result<()> {
+		let write_count = std::sync::Arc::new(AtomicUsize::new(0));
+		let count_clone = write_count.clone();
+
+		struct CountingSink {
+			count: std::sync::Arc<AtomicUsize>,
+		}
+		impl TileSink for CountingSink {
+			fn write_tile(&self, _coord: &TileCoord, _blob: &Blob) -> Result<()> {
+				self.count.fetch_add(1, Ordering::Relaxed);
+				Ok(())
+			}
+			fn finish(self: Box<Self>, _: &TileJSON, _: &TilesRuntime) -> Result<()> {
+				Ok(())
+			}
+		}
+
+		let sink = deduplicating_tile_sink(Box::new(CountingSink { count: count_clone }));
+		sink.write_tile(&coord(0, 0, 0), &blob(b"a"))?;
+		sink.write_tile(&coord(1, 0, 0), &blob(b"b"))?;
+		sink.write_tile(&coord(1, 1, 0), &blob(b"c"))?;
+		assert_eq!(write_count.load(Ordering::Relaxed), 3);
+		Ok(())
+	}
+
+	#[test]
+	fn test_dedup_sink_finish_delegates() -> Result<()> {
+		let finished = std::sync::Arc::new(Mutex::new(false));
+		let finished_clone = finished.clone();
+
+		struct FinishSink {
+			finished: std::sync::Arc<Mutex<bool>>,
+		}
+		impl TileSink for FinishSink {
+			fn write_tile(&self, _: &TileCoord, _: &Blob) -> Result<()> {
+				Ok(())
+			}
+			fn finish(self: Box<Self>, _: &TileJSON, _: &TilesRuntime) -> Result<()> {
+				*self.finished.lock().unwrap() = true;
+				Ok(())
+			}
+		}
+
+		let sink = deduplicating_tile_sink(Box::new(FinishSink {
+			finished: finished_clone,
+		}));
+		let runtime = TilesRuntime::new();
+		sink.finish(&TileJSON::default(), &runtime)?;
+		assert!(*finished.lock().unwrap());
+		Ok(())
+	}
+
+	// ─── open_tile_sink ───
+
+	#[test]
+	fn test_open_tile_sink_tar() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let path = dir.path().join("out.tar");
+		let runtime = TilesRuntime::new();
+		let sink = open_tile_sink(
+			path.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		)?;
+		// Should succeed and be writable
+		sink.write_tile(&coord(0, 0, 0), &blob(b"data"))?;
+		Ok(())
+	}
+
+	#[test]
+	fn test_open_tile_sink_versatiles() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let path = dir.path().join("out.versatiles");
+		let runtime = TilesRuntime::new();
+		let sink = open_tile_sink(
+			path.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		)?;
+		sink.write_tile(&coord(0, 0, 0), &blob(b"tile"))?;
+		Ok(())
+	}
+
+	#[test]
+	fn test_open_tile_sink_directory() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let out = dir.path().join("tiles");
+		std::fs::create_dir(&out)?;
+		let runtime = TilesRuntime::new();
+		let _sink = open_tile_sink(
+			out.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		)?;
+		Ok(())
+	}
+
+	#[test]
+	fn test_open_tile_sink_no_extension_creates_directory() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let out = dir.path().join("output_tiles");
+		let runtime = TilesRuntime::new();
+		let _sink = open_tile_sink(
+			out.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		)?;
+		Ok(())
+	}
+
+	#[test]
+	fn test_open_tile_sink_unsupported_extension() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("out.xyz");
+		let runtime = TilesRuntime::new();
+		let result = open_tile_sink(
+			path.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		);
+		let err = result.err().expect("should fail for unsupported extension");
+		assert!(err.to_string().contains("unsupported"));
+	}
+
+	#[test]
+	fn test_open_tile_sink_deduplicates() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let path = dir.path().join("out.tar");
+		let runtime = TilesRuntime::new();
+		let sink = open_tile_sink(
+			path.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		)?;
+		// Writing the same coord twice should silently drop the second
+		let c = coord(5, 3, 4);
+		sink.write_tile(&c, &blob(b"first"))?;
+		sink.write_tile(&c, &blob(b"second"))?; // should be dropped, no error
+		Ok(())
+	}
+
+	#[test]
+	fn test_open_tile_sink_mbtiles() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let path = dir.path().join("out.mbtiles");
+		let runtime = TilesRuntime::new();
+		let sink = open_tile_sink(
+			path.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		)?;
+		sink.write_tile(&coord(0, 0, 0), &blob(b"tile"))?;
+		Ok(())
+	}
+}
