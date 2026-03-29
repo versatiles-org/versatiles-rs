@@ -490,7 +490,11 @@ mod tests {
 
 				// Mismatched format should fail
 				let wrong_fmt = versatiles_container::TileSourceMetadata {
-					tile_format: if fmt == TileFormat::PNG { TileFormat::WEBP } else { TileFormat::PNG },
+					tile_format: if fmt == TileFormat::PNG {
+						TileFormat::WEBP
+					} else {
+						TileFormat::PNG
+					},
 					tile_compression: comp,
 					..Default::default()
 				};

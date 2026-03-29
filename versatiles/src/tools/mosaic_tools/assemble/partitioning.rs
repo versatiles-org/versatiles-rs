@@ -527,7 +527,10 @@ mod tests {
 		power_iteration_step(&groups, &source_sets, &mean, &mut v, 4);
 
 		let norm: f64 = v.iter().map(|x| x * x).sum::<f64>().sqrt();
-		assert!((norm - 1.0).abs() < 1e-10, "output should be normalized, got norm={norm}");
+		assert!(
+			(norm - 1.0).abs() < 1e-10,
+			"output should be normalized, got norm={norm}"
+		);
 	}
 
 	#[test]

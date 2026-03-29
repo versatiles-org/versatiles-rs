@@ -556,11 +556,7 @@ mod tests {
 	#[test]
 	fn prepare_batches_batch_size_equals_total() {
 		// Exact boundary: batch_size == total_tiles
-		let map = make_translucent_map(&[
-			(tc(0, 0, 0), &[0]),
-			(tc(0, 1, 0), &[1]),
-			(tc(0, 2, 0), &[2]),
-		]);
+		let map = make_translucent_map(&[(tc(0, 0, 0), &[0]), (tc(0, 1, 0), &[1]), (tc(0, 2, 0), &[2])]);
 		// tile_dim=256, max_buffer_size = exactly 3 tiles
 		let max_buffer = 256 * 256 * 4 * 3;
 		let batches = prepare_batches(map, HashSet::new(), 256, max_buffer, 3).unwrap();
