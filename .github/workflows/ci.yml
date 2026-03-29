@@ -351,21 +351,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache Homebrew GDAL
-        id: cache-gdal
-        uses: actions/cache@v4
-        with:
-          path: |
-            /opt/homebrew/opt/gdal
-            /opt/homebrew/lib/libgdal*
-            /opt/homebrew/include/gdal
-            /opt/homebrew/bin/gdal*
-            /opt/homebrew/bin/ogr*
-            /opt/homebrew/share/gdal
-          key: macos-gdal-${{ runner.arch }}-v1
-
       - name: Setup GDAL
-        if: steps.cache-gdal.outputs.cache-hit != 'true'
         uses: ./.github/actions/setup-gdal
 
       - name: Cache Rust
