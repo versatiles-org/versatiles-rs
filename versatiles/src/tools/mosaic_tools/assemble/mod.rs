@@ -63,18 +63,14 @@ pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 	)
 	.await?;
 
-	let Some(batches) = pipeline::prepare_batches(
+	let batches = pipeline::prepare_batches(
 		first.translucent_map,
 		first.done,
 		first.tile_dim,
 		max_buffer_size,
 		paths.len(),
-	) else {
-		let sink = Arc::try_unwrap(first.sink).map_err(|_| anyhow!("sink still has references"))?;
-		sink.finish(&first.tilejson, runtime)?;
-		log::debug!("finished mosaic assemble (all tiles opaque, no second pass needed)");
-		return Ok(());
-	};
+	)
+	.unwrap_or(vec![]);
 
 	pipeline::composite_batches(&batches, &paths, &first.config, &first.sink, runtime).await?;
 
