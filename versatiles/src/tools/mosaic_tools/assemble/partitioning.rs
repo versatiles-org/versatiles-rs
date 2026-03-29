@@ -5,7 +5,7 @@
 //! This minimizes `Σ |unique_sources(batch)|` — the total number of source-opens
 //! across all batches.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use versatiles_core::TileCoord;
 
 /// A group of tiles sharing the same source-set signature.
@@ -72,21 +72,22 @@ fn split_single_group(g: SignatureGroup, batch_size: usize) -> Vec<Vec<Signature
 /// Bisect groups using PCA projection onto the first principal component.
 ///
 /// Returns (left_half, right_half) split at the median tile count.
+///
+/// All inner loops exploit sparsity: instead of iterating all `num_sources`
+/// dimensions per group, we only touch the sources actually present in each
+/// group and apply dense corrections once.  This makes the cost
+/// `O(Σ|sources_i| + num_sources)` per iteration instead of
+/// `O(groups × num_sources)`.
 fn pca_bisect(groups: Vec<SignatureGroup>, num_sources: usize) -> (Vec<SignatureGroup>, Vec<SignatureGroup>) {
 	let total_tiles: usize = groups.iter().map(|g| g.coords.len()).sum();
 
-	// Build source membership sets for efficient lookup
-	let source_sets: Vec<HashSet<usize>> = groups.iter().map(|g| g.sources.iter().copied().collect()).collect();
-
-	// Compute weighted mean
+	// Compute weighted mean (sparse: only touch sources present in each group)
 	let total_weight: f64 = groups.iter().map(|g| g.coords.len() as f64).sum();
 	let mut mean = vec![0.0f64; num_sources];
-	for (i, g) in groups.iter().enumerate() {
+	for g in &groups {
 		let w = g.coords.len() as f64;
-		for (s, m) in mean.iter_mut().enumerate() {
-			if source_sets[i].contains(&s) {
-				*m += w;
-			}
+		for &s in &g.sources {
+			mean[s] += w;
 		}
 	}
 	for m in &mut mean {
@@ -97,21 +98,18 @@ fn pca_bisect(groups: Vec<SignatureGroup>, num_sources: usize) -> (Vec<Signature
 	let mut v = initial_vector(num_sources);
 
 	for _ in 0..15 {
-		power_iteration_step(&groups, &source_sets, &mean, &mut v, num_sources);
+		power_iteration_step(&groups, &mean, &mut v, num_sources);
 	}
 
-	// Project each group onto PC1 and sort by score
+	// Project each group onto PC1 and sort by score (sparse dot product)
+	// score_i = Σ_{s ∈ sources_i} v[s] - mean_dot_v
+	let mean_dot_v: f64 = mean.iter().zip(v.iter()).map(|(m, vi)| m * vi).sum();
 	let mut scored: Vec<(f64, usize)> = groups
 		.iter()
 		.enumerate()
-		.map(|(i, _)| {
-			let score: f64 = (0..num_sources)
-				.map(|s| {
-					let x = if source_sets[i].contains(&s) { 1.0 } else { 0.0 };
-					(x - mean[s]) * v[s]
-				})
-				.sum();
-			(score, i)
+		.map(|(i, g)| {
+			let sparse_sum: f64 = g.sources.iter().map(|&s| v[s]).sum();
+			(sparse_sum - mean_dot_v, i)
 		})
 		.collect();
 	scored.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -157,30 +155,36 @@ fn initial_vector(num_sources: usize) -> Vec<f64> {
 	v
 }
 
-/// One iteration of the power method, applied implicitly (no matrix allocation).
-fn power_iteration_step(
-	groups: &[SignatureGroup],
-	source_sets: &[HashSet<usize>],
-	mean: &[f64],
-	v: &mut Vec<f64>,
-	num_sources: usize,
-) {
+/// One iteration of the power method, exploiting sparsity.
+///
+/// Decomposes `new_v[s] = Σ_i w_i * dot_i * (x_is - mean[s])` into:
+/// - sparse part: for each group, add `w * dot` only to its source dimensions
+/// - dense correction: subtract `mean[s] * Σ(w_i * dot_i)` once at the end
+fn power_iteration_step(groups: &[SignatureGroup], mean: &[f64], v: &mut Vec<f64>, num_sources: usize) {
+	// Precompute mean · v for sparse dot products
+	let mean_dot_v: f64 = mean.iter().zip(v.iter()).map(|(m, vi)| m * vi).sum();
+
 	let mut new_v = vec![0.0f64; num_sources];
-	for (i, g) in groups.iter().enumerate() {
+	let mut sum_w_dot = 0.0f64;
+
+	for g in groups {
 		let w = g.coords.len() as f64;
-		// dot = (x_i - μ) · v
-		let dot: f64 = (0..num_sources)
-			.map(|s| {
-				let x = if source_sets[i].contains(&s) { 1.0 } else { 0.0 };
-				(x - mean[s]) * v[s]
-			})
-			.sum();
-		// accumulate: new_v += w * dot * (x_i - μ)
-		for s in 0..num_sources {
-			let x = if source_sets[i].contains(&s) { 1.0 } else { 0.0 };
-			new_v[s] += w * dot * (x - mean[s]);
+		// dot = Σ_{s ∈ sources} v[s] - mean_dot_v
+		let sparse_sum: f64 = g.sources.iter().map(|&s| v[s]).sum();
+		let dot = sparse_sum - mean_dot_v;
+		let w_dot = w * dot;
+		sum_w_dot += w_dot;
+		// Sparse accumulate: new_v[s] += w * dot for s ∈ sources
+		for &s in &g.sources {
+			new_v[s] += w_dot;
 		}
 	}
+
+	// Dense correction: new_v[s] -= mean[s] * sum_w_dot
+	for (s, nv) in new_v.iter_mut().enumerate() {
+		*nv -= mean[s] * sum_w_dot;
+	}
+
 	let n = new_v.iter().map(|x| x * x).sum::<f64>().sqrt();
 	if n > 0.0 {
 		for x in &mut new_v {
@@ -521,11 +525,10 @@ mod tests {
 				coords: vec![tc(1, 0, 0)],
 			},
 		];
-		let source_sets: Vec<HashSet<usize>> = groups.iter().map(|g| g.sources.iter().copied().collect()).collect();
 		let mean = vec![0.5, 0.5, 0.5, 0.5]; // uniform mean
 		let mut v = initial_vector(4);
 
-		power_iteration_step(&groups, &source_sets, &mean, &mut v, 4);
+		power_iteration_step(&groups, &mean, &mut v, 4);
 
 		let norm: f64 = v.iter().map(|x| x * x).sum::<f64>().sqrt();
 		assert!(
@@ -547,13 +550,12 @@ mod tests {
 				coords: vec![tc(1, 0, 0), tc(1, 1, 0), tc(1, 2, 0)],
 			},
 		];
-		let source_sets: Vec<HashSet<usize>> = groups.iter().map(|g| g.sources.iter().copied().collect()).collect();
 		let mean = vec![0.5, 0.5, 0.5, 0.5];
 		let mut v = initial_vector(4);
 
 		// Run several iterations
 		for _ in 0..15 {
-			power_iteration_step(&groups, &source_sets, &mean, &mut v, 4);
+			power_iteration_step(&groups, &mean, &mut v, 4);
 		}
 
 		// The principal component should separate {0,1} from {2,3}
@@ -581,13 +583,12 @@ mod tests {
 				coords: vec![tc(1, 0, 0)], // 1 tile
 			},
 		];
-		let source_sets: Vec<HashSet<usize>> = groups.iter().map(|g| g.sources.iter().copied().collect()).collect();
 		let total_w: f64 = 101.0;
 		let mean = vec![100.0 / total_w, 1.0 / total_w];
 		let mut v = initial_vector(2);
 
 		for _ in 0..15 {
-			power_iteration_step(&groups, &source_sets, &mean, &mut v, 2);
+			power_iteration_step(&groups, &mean, &mut v, 2);
 		}
 
 		// Both components should be non-zero (there's variance in both dimensions)
