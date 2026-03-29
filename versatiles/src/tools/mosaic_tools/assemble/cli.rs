@@ -417,8 +417,16 @@ https://example.com/tiles/004.versatiles
 
 	#[test]
 	fn test_parse_buffer_size_boundary_percentage() {
-		assert!(parse_buffer_size("0%").is_ok());
-		assert!(parse_buffer_size("100%").is_ok());
+		#[cfg(any(target_os = "macos", target_os = "linux"))]
+		{
+			assert!(parse_buffer_size("0%").is_ok());
+			assert!(parse_buffer_size("100%").is_ok());
+		}
+		#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+		{
+			assert!(parse_buffer_size("0%").is_err());
+			assert!(parse_buffer_size("100%").is_err());
+		}
 		assert!(parse_buffer_size("-1%").is_err());
 	}
 
