@@ -196,22 +196,22 @@ jobs:
         include:
           - name: "default"
             features: ""
-            needs-gdal: false
+            run-tests: true
           - name: "no-default"
             features: "--no-default-features"
-            needs-gdal: false
           - name: "cli-only"
             features: "--no-default-features --features cli"
-            needs-gdal: false
           - name: "server-only"
             features: "--no-default-features --features server"
-            needs-gdal: false
           - name: "gdal"
             features: "--features gdal"
             needs-gdal: true
+            run-tests: true
           - name: "all-features"
             features: "--all-features"
             needs-gdal: true
+            run-clippy: true
+            run-tests: true
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -231,12 +231,15 @@ jobs:
           cache-on-failure: false
 
       - name: Check compilation
+        if: ${{ !matrix.run-tests }}
         run: cargo check --workspace --all-targets ${{ matrix.features }}
-      
+
       - name: Clippy
+        if: matrix.run-clippy
         run: cargo clippy --workspace --all-targets ${{ matrix.features }} -- -D warnings
 
       - name: Run tests
+        if: matrix.run-tests
         run: cargo test --workspace --all-targets ${{ matrix.features }}
 
   # ============================================================================
@@ -257,8 +260,6 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
@@ -266,9 +267,6 @@ jobs:
           shared-key: "windows-test"
           cache-targets: true
           cache-on-failure: false
-
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Test
         run: cargo test --workspace --all-targets
@@ -353,7 +351,21 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Homebrew GDAL
+        id: cache-gdal
+        uses: actions/cache@v4
+        with:
+          path: |
+            /opt/homebrew/opt/gdal
+            /opt/homebrew/lib/libgdal*
+            /opt/homebrew/include/gdal
+            /opt/homebrew/bin/gdal*
+            /opt/homebrew/bin/ogr*
+            /opt/homebrew/share/gdal
+          key: macos-gdal-${{ runner.arch }}-v1
+
       - name: Setup GDAL
+        if: steps.cache-gdal.outputs.cache-hit != 'true'
         uses: ./.github/actions/setup-gdal
 
       - name: Cache Rust
