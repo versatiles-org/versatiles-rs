@@ -90,6 +90,30 @@ impl TileBBox {
 			&& self.y_max().unwrap() >= bbox.y_min().unwrap()
 	}
 
+	pub fn intersected_bbox(&self, bbox: &TileBBox) -> Result<TileBBox> {
+		ensure!(
+			self.level == bbox.level,
+			"Cannot compare TileBBox with level={} with TileBBox with level={}",
+			bbox.level,
+			self.level
+		);
+
+		if self.is_empty() || bbox.is_empty() {
+			return TileBBox::new_empty(self.level);
+		}
+
+		let x_min = self.x_min()?.max(bbox.x_min()?);
+		let y_min = self.y_min()?.max(bbox.y_min()?);
+		let x_max = self.x_max()?.min(bbox.x_max()?);
+		let y_max = self.y_max()?.min(bbox.y_max()?);
+
+		if x_min > x_max || y_min > y_max {
+			return TileBBox::new_empty(self.level); // No intersection
+		}
+
+		TileBBox::from_min_and_max(self.level, x_min, y_min, x_max, y_max)
+	}
+
 	pub fn min_corner(&self) -> Result<TileCoord> {
 		ensure!(!self.is_empty(), "cannot get min corner of an empty TileBBox");
 		TileCoord::new(self.level, self.x_min()?, self.y_min()?)
