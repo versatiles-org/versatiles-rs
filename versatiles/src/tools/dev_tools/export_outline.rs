@@ -29,7 +29,6 @@ pub async fn run(args: &ExportOutline, runtime: &TilesRuntime) -> Result<()> {
 
 	let reader = runtime.get_reader_from_str(input).await?;
 
-	let compression = reader.metadata().tile_compression;
 	let bbox_pyramid = reader.metadata().bbox_pyramid.clone();
 	let level = args.level.unwrap_or_else(|| bbox_pyramid.get_level_max().unwrap());
 
@@ -40,15 +39,12 @@ pub async fn run(args: &ExportOutline, runtime: &TilesRuntime) -> Result<()> {
 	}
 
 	let bbox = *bbox_pyramid.get_level_bbox(level);
-	let mut stream = reader
-		.get_tile_stream(bbox)
-		.await?
-		.map_parallel_try(move |_coord, mut tile| Ok(tile.as_blob(compression)?.len()));
+	let mut stream = reader.get_tile_size_stream(bbox).await?;
 
 	let progress = runtime.create_progress("Scanning tile sizes", bbox.count_tiles());
 	let mut outline = TileOutline::new();
-	while let Some(entry) = stream.next().await {
-		outline.add_coord(entry.0);
+	while let Some((coord, _)) = stream.next().await {
+		outline.add_coord(coord);
 		progress.inc(1);
 	}
 
