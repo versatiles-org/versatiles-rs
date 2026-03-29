@@ -191,6 +191,7 @@ fn power_iteration_step(
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_possible_truncation)]
 mod tests {
 	use super::*;
 	use std::collections::BTreeSet;
