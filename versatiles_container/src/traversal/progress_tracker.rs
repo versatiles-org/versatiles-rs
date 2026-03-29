@@ -211,6 +211,7 @@ mod tests {
 					})
 				},
 				runtime,
+				false,
 			)
 			.await?;
 

@@ -218,6 +218,7 @@ impl TilesWriter for MBTilesWriter {
 					})
 				},
 				runtime.clone(),
+				true,
 			)
 			.await?;
 

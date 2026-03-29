@@ -425,6 +425,46 @@ impl TileSource for MBTilesReader {
 		}
 	}
 
+	#[context("streaming tile coords for bbox {:?}", bbox)]
+	async fn get_tile_coord_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		if bbox.is_empty() {
+			return Ok(TileStream::empty());
+		}
+
+		bbox.flip_y();
+
+		let conn = self.pool.get().unwrap();
+		let mut stmt = conn
+			.prepare(
+				"SELECT tile_column, tile_row, zoom_level FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?",
+			)
+			.unwrap();
+
+		let vec: Vec<(TileCoord, ())> = stmt
+			.query_map(
+				[
+					bbox.x_min()?,
+					bbox.x_max()?,
+					bbox.y_min()?,
+					bbox.y_max()?,
+					u32::from(bbox.level),
+				],
+				move |row| {
+					let x = row.get::<_, u32>(0)?;
+					let y = row.get::<_, u32>(1)?;
+					let level = row.get::<_, u8>(2)?;
+					let mut coord = TileCoord::new(level, x, y).unwrap();
+					coord.flip_y();
+					Ok((coord, ()))
+				},
+			)
+			.unwrap()
+			.filter_map(std::result::Result::ok)
+			.collect();
+
+		Ok(TileStream::from_vec(vec))
+	}
+
 	#[context("streaming tile sizes for bbox {:?}", bbox)]
 	async fn get_tile_size_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, u32>> {
 		if bbox.is_empty() {

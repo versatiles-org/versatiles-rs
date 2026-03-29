@@ -154,6 +154,10 @@ impl TileSource for PipelineReader {
 		}
 	}
 
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.operation.get_tile_coord_stream(bbox).await
+	}
+
 	/// Streams all tiles intersecting `bbox` by executing the pipeline's output operation.
 	#[context("streaming tiles for bbox {:?} via pipeline '{}'", bbox, self.name)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {

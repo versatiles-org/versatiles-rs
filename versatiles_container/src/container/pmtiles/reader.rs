@@ -455,6 +455,10 @@ impl TileSource for PMTilesReader {
 		Ok(TileStream::from_vec(tile_sizes))
 	}
 
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		Ok(self.get_tile_size_stream(bbox).await?.filter_map(|_, _| Some(())))
+	}
+
 	// deep probe of container meta
 	#[cfg(feature = "cli")]
 	/// Adds PMTiles‑specific container metadata (the v3 header) to the CLI probe output.

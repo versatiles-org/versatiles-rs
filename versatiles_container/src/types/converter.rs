@@ -259,6 +259,34 @@ impl TileSource for TilesConvertReader {
 		Ok(Some(tile))
 	}
 
+	async fn get_tile_coord_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		if self.converter_parameters.swap_xy {
+			bbox.swap_xy();
+		}
+		if self.converter_parameters.flip_y {
+			bbox.flip_y();
+		}
+
+		let mut stream = self.reader.get_tile_coord_stream(bbox).await?;
+
+		let flip_y = self.converter_parameters.flip_y;
+		let swap_xy = self.converter_parameters.swap_xy;
+
+		if flip_y || swap_xy {
+			stream = stream.map_coord(move |mut coord| {
+				if flip_y {
+					coord.flip_y();
+				}
+				if swap_xy {
+					coord.swap_xy();
+				}
+				coord
+			});
+		}
+
+		Ok(stream)
+	}
+
 	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("converter::get_tile_stream {bbox:?}");
 		if self.converter_parameters.swap_xy {

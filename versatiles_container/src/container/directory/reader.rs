@@ -282,6 +282,13 @@ impl TileSource for DirectoryReader {
 		}))
 	}
 
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		let tile_map = Arc::clone(&self.tile_map);
+		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
+			tile_map.get(&coord).map(|_| ())
+		}))
+	}
+
 	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
 		let tile_map = Arc::clone(&self.tile_map);
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {

@@ -384,6 +384,10 @@ impl TileSource for VersaTilesReader {
 		))
 	}
 
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		Ok(self.get_tile_size_stream(bbox).await?.filter_map(|_, _| Some(())))
+	}
+
 	#[context("streaming tiles for bbox {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("versatiles::get_tile_stream {bbox:?}");

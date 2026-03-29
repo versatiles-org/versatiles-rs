@@ -87,6 +87,19 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	/// Sources that can optimize bulk reads should override this.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>>;
 
+	/// Streams which tile coordinates exist within the given bounding box.
+	///
+	/// Returns a [`TileStream`] of `(TileCoord, ())` pairs — one entry per tile
+	/// that actually exists. The default reads full tiles via [`get_tile_stream`](Self::get_tile_stream)
+	/// and discards the data. Container readers with index structures should override
+	/// this for a cheaper enumeration.
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		Ok(self
+			.get_tile_stream(bbox)
+			.await?
+			.filter_map(move |_coord, _tile| Some(())))
+	}
+
 	/// Streams the stored byte sizes of all tiles within the given bounding box.
 	///
 	/// Returns a [`TileStream`] of `(TileCoord, u32)` pairs, where the `u32`
@@ -418,6 +431,21 @@ mod tests {
 		let stream = reader.get_tile_stream(bbox).await?;
 
 		assert_eq!(stream.drain_and_count().await, 4); // Assuming 4 tiles in a 2x2 bbox
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_get_tile_coord_stream() -> Result<()> {
+		let reader = TestReader::new_dummy();
+		let bbox = TileBBox::from_min_and_max(1, 0, 0, 1, 1)?;
+		let coord_count = reader.get_tile_coord_stream(bbox).await?.drain_and_count().await;
+		let tile_count = reader
+			.get_tile_stream(TileBBox::from_min_and_max(1, 0, 0, 1, 1)?)
+			.await?
+			.drain_and_count()
+			.await;
+		assert_eq!(coord_count, tile_count);
+		assert_eq!(coord_count, 4);
 		Ok(())
 	}
 

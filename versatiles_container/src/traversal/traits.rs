@@ -33,6 +33,7 @@ pub trait TileSourceTraverseExt: TileSource {
 		traversal_write: &'s Traversal,
 		mut callback: C,
 		runtime: TilesRuntime,
+		precount_tiles: bool,
 	) -> impl core::future::Future<Output = Result<()>> + Send + 'a
 	where
 		C: FnMut(TileBBox, TileStream<'a, Tile>) -> BoxFuture<'a, Result<()>> + Send + 'a,
@@ -47,23 +48,38 @@ pub trait TileSourceTraverseExt: TileSource {
 
 			use TraversalTranslationStep::{Pop, Push, Stream};
 
-			let mut tn_read = 0;
-			let mut tn_write = 0;
-
-			for step in &traversal_steps {
-				match step {
-					Push(bboxes_in, _) => {
-						tn_read += bboxes_in.iter().map(TileBBox::count_tiles).sum::<u64>();
-					}
-					Pop(_, bbox_out) => {
-						tn_write += bbox_out.count_tiles();
-					}
-					Stream(bboxes_in, bbox_out) => {
-						tn_read += bboxes_in.iter().map(TileBBox::count_tiles).sum::<u64>();
-						tn_write += bbox_out.count_tiles();
+			let (tn_read, tn_write) = if precount_tiles {
+				let mut count = 0u64;
+				for step in &traversal_steps {
+					match step {
+						Push(bboxes_in, _) | Stream(bboxes_in, _) => {
+							for bbox in bboxes_in {
+								count += self.get_tile_coord_stream(*bbox).await?.drain_and_count().await;
+							}
+						}
+						Pop(_, _) => {}
 					}
 				}
-			}
+				(count, count)
+			} else {
+				let mut tn_read = 0u64;
+				let mut tn_write = 0u64;
+				for step in &traversal_steps {
+					match step {
+						Push(bboxes_in, _) => {
+							tn_read += bboxes_in.iter().map(TileBBox::count_tiles).sum::<u64>();
+						}
+						Pop(_, bbox_out) => {
+							tn_write += bbox_out.count_tiles();
+						}
+						Stream(bboxes_in, bbox_out) => {
+							tn_read += bboxes_in.iter().map(TileBBox::count_tiles).sum::<u64>();
+							tn_write += bbox_out.count_tiles();
+						}
+					}
+				}
+				(tn_read, tn_write)
+			};
 			let progress = runtime.create_progress("processing tiles", u64::midpoint(tn_read, tn_write));
 			let tracker = Arc::new(ProgressTracker::new(progress));
 
@@ -241,6 +257,7 @@ mod tests {
 					})
 				},
 				runtime,
+				false,
 			)
 			.await?;
 
@@ -274,6 +291,7 @@ mod tests {
 					})
 				},
 				runtime,
+				false,
 			)
 			.await?;
 
@@ -307,6 +325,7 @@ mod tests {
 					})
 				},
 				runtime,
+				false,
 			)
 			.await?;
 
@@ -342,6 +361,7 @@ mod tests {
 					})
 				},
 				runtime,
+				false,
 			)
 			.await?;
 
@@ -371,6 +391,7 @@ mod tests {
 					})
 				},
 				runtime,
+				false,
 			)
 			.await?;
 
@@ -398,6 +419,7 @@ mod tests {
 					})
 				},
 				runtime,
+				false,
 			)
 			.await?;
 
@@ -435,6 +457,7 @@ mod tests {
 					})
 				},
 				runtime,
+				false,
 			)
 			.await?;
 
@@ -469,6 +492,7 @@ mod tests {
 					})
 				},
 				runtime,
+				false,
 			)
 			.await?;
 
@@ -509,6 +533,7 @@ mod tests {
 					})
 				},
 				runtime,
+				false,
 			)
 			.await?;
 
@@ -543,6 +568,7 @@ mod tests {
 					})
 				},
 				runtime,
+				false,
 			)
 			.await?;
 
@@ -595,6 +621,7 @@ mod tests {
 					})
 				},
 				runtime,
+				false,
 			)
 			.await?;
 
@@ -652,6 +679,7 @@ mod tests {
 					})
 				},
 				runtime,
+				false,
 			)
 			.await?;
 
