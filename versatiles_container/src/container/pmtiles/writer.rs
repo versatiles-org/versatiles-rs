@@ -157,7 +157,7 @@ impl TilesWriter for PMTilesWriter {
 					})
 				},
 				runtime.clone(),
-				true,
+				false,
 			)
 			.await?;
 

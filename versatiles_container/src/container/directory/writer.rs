@@ -127,7 +127,7 @@ impl TilesWriter for DirectoryWriter {
 					})
 				},
 				runtime.clone(),
-				true,
+				false,
 			)
 			.await?;
 

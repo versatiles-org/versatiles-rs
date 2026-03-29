@@ -55,7 +55,7 @@ impl MockWriter {
 					})
 				},
 				TilesRuntime::default(),
-				true,
+				false,
 			)
 			.await
 	}
