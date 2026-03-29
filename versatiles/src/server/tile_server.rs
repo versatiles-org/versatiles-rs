@@ -475,9 +475,8 @@ mod tests {
 
 	#[tokio::test]
 	async fn tile_server_new() {
-		let mut server = TileServer::new_test(IP, 50003, true, false);
+		let mut server = TileServer::new_test(IP, 0, true, false);
 		assert_eq!(server.ip, IP);
-		assert_eq!(server.port, 50003);
 		assert_eq!(server.tile_sources.len(), 0);
 		assert_eq!(server.static_sources.load().len(), 0);
 		assert!(server.exit_signal.is_none());
