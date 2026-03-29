@@ -468,6 +468,162 @@ mod tests {
 	}
 
 	#[test]
+	fn composite_verifies_pixel_blending() -> Result<()> {
+		// Base: red at alpha=128, Top: blue at alpha=127
+		// Expected additive blend: alpha_out = 128+127 = 255 (snapped from 255≥250)
+		// r = (255*128 + 0*127 + 127) / 255 = 128
+		// b = (0*128 + 255*127 + 127) / 255 = 127
+		let base_data = vec![255, 0, 0, 128, 255, 0, 0, 128, 255, 0, 0, 128, 255, 0, 0, 128];
+		let top_data = vec![0, 0, 255, 127, 0, 0, 255, 127, 0, 0, 255, 127, 0, 0, 255, 127];
+		let base_img = DynamicImage::ImageRgba8(ImageBuffer::from_vec(2, 2, base_data).unwrap());
+		let top_img = DynamicImage::ImageRgba8(ImageBuffer::from_vec(2, 2, top_data).unwrap());
+		let base = Tile::from_image(base_img, TileFormat::PNG)?;
+		let top = Tile::from_image(top_img, TileFormat::PNG)?;
+
+		let result = composite_two_tiles(base, top)?;
+		let img = result.into_image()?;
+		use versatiles_image::traits::DynamicImageTraitConvert;
+		let px = img.get_raw_pixel(0, 0);
+		assert_eq!(px[3], 255); // alpha snapped to 255
+		assert_eq!(px[0], 128); // red component
+		assert_eq!(px[2], 127); // blue component
+		Ok(())
+	}
+
+	#[test]
+	fn composite_result_format_is_webp() -> Result<()> {
+		let base = translucent_rgba_tile(128);
+		let top = translucent_rgba_tile(64);
+		let result = composite_two_tiles(base, top)?;
+		assert_eq!(result.format(), TileFormat::WEBP);
+		Ok(())
+	}
+
+	#[test]
+	fn composite_transparent_over_transparent() -> Result<()> {
+		let base = translucent_rgba_tile(0);
+		let top = translucent_rgba_tile(0);
+		let result = composite_two_tiles(base, top)?;
+		let img = result.into_image()?;
+		use versatiles_image::traits::DynamicImageTraitConvert;
+		// Both fully transparent → result should be transparent
+		let px = img.get_raw_pixel(0, 0);
+		assert_eq!(px[3], 0);
+		Ok(())
+	}
+
+	#[test]
+	fn encode_tiles_parallel_with_composited_tiles() -> Result<()> {
+		// Encode tiles that went through composite (the real pipeline path)
+		let base = translucent_rgba_tile(128);
+		let top = translucent_rgba_tile(64);
+		let composited = composite_two_tiles(base, top)?;
+
+		let config = test_config();
+		let tiles = vec![(coord(3, 1, 2), composited)];
+		let results = encode_tiles_parallel(tiles, &config);
+		assert_eq!(results.len(), 1);
+		let (c, blob) = results.into_iter().next().unwrap()?;
+		assert_eq!(c, coord(3, 1, 2));
+		assert!(!blob.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn encode_tiles_parallel_none_quality() -> Result<()> {
+		// Quality set to None for a zoom level — should still encode
+		let mut quality = [None; 32];
+		// level 3 has None quality explicitly
+		quality[3] = None;
+		let config = AssembleConfig {
+			quality,
+			lossless: false,
+			tile_format: TileFormat::WEBP,
+			tile_compression: TileCompression::Uncompressed,
+		};
+
+		let tiles = vec![(coord(3, 0, 0), opaque_rgb_tile())];
+		let results = encode_tiles_parallel(tiles, &config);
+		assert_eq!(results.len(), 1);
+		let (c, blob) = results.into_iter().next().unwrap()?;
+		assert_eq!(c.level, 3);
+		assert!(!blob.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn encode_tiles_parallel_with_brotli() -> Result<()> {
+		let config = AssembleConfig {
+			tile_compression: TileCompression::Brotli,
+			..test_config()
+		};
+		let tiles = vec![(coord(0, 0, 0), opaque_rgb_tile())];
+		let results = encode_tiles_parallel(tiles, &config);
+		assert_eq!(results.len(), 1);
+		let (_, blob) = results.into_iter().next().unwrap()?;
+		assert!(!blob.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn encode_tiles_parallel_mixed_zoom_levels() -> Result<()> {
+		// Different zoom levels use different quality entries
+		let mut quality = [None; 32];
+		quality[0] = Some(50);
+		quality[5] = Some(90);
+		quality[10] = Some(30);
+		let config = AssembleConfig {
+			quality,
+			lossless: false,
+			tile_format: TileFormat::WEBP,
+			tile_compression: TileCompression::Uncompressed,
+		};
+
+		let tiles = vec![
+			(coord(0, 0, 0), opaque_rgb_tile()),
+			(coord(5, 3, 4), opaque_rgb_tile()),
+			(coord(10, 100, 200), opaque_rgb_tile()),
+		];
+		let results = encode_tiles_parallel(tiles, &config);
+		assert_eq!(results.len(), 3);
+		for r in results {
+			let (_, blob) = r?;
+			assert!(!blob.is_empty());
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn encode_tiles_parallel_translucent_tiles() -> Result<()> {
+		let config = test_config();
+		let tiles = vec![
+			(coord(0, 0, 0), translucent_rgba_tile(128)),
+			(coord(1, 0, 0), translucent_rgba_tile(64)),
+			(coord(2, 0, 0), translucent_rgba_tile(255)),
+		];
+		let results = encode_tiles_parallel(tiles, &config);
+		assert_eq!(results.len(), 3);
+		for r in results {
+			let (_, blob) = r?;
+			assert!(!blob.is_empty());
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn write_opaque_blob_uncompressed_roundtrip() -> Result<()> {
+		let config = test_config();
+		let tile = opaque_rgb_tile();
+		let original_format = tile.format();
+		let blob = write_opaque_blob(tile, &config)?;
+		// The blob preserves the original format (not re-encoded)
+		let restored = Tile::from_blob(blob, config.tile_compression, original_format);
+		let img = restored.into_image()?;
+		assert_eq!((img.width(), img.height()), (2, 2));
+		Ok(())
+	}
+
+	#[test]
 	fn validate_all_format_combinations() {
 		// Test several format combinations to verify the validation logic
 		for fmt in [TileFormat::PNG, TileFormat::WEBP, TileFormat::JPG] {
