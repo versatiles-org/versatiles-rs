@@ -185,6 +185,10 @@ impl TileSource for Operation {
 			})
 			.unwrap_results())
 	}
+
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.source.get_tile_coord_stream(bbox).await
+	}
 }
 
 crate::operations::macros::define_transform_factory!("raster_format", Args, Operation);

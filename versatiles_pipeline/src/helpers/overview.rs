@@ -188,6 +188,31 @@ impl OverviewCore {
 		Ok(tiles.into_iter().flatten().collect())
 	}
 
+	pub async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		if bbox.level >= self.level_base {
+			return self.source.get_tile_coord_stream(bbox).await;
+		}
+		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		if bbox.is_empty() {
+			return Ok(TileStream::empty());
+		}
+
+		let mut source_bbox = bbox.at_level(self.level_base);
+		source_bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
+
+		let mut coords = std::collections::HashSet::new();
+		let mut stream = self.source.get_tile_coord_stream(source_bbox).await?;
+		while let Some((coord, _)) = stream.next().await {
+			let c = coord.at_level(bbox.level);
+			if bbox.includes_coord(&c) {
+				coords.insert(c);
+			}
+		}
+
+		let vec: Vec<(TileCoord, ())> = coords.into_iter().map(|c| (c, ())).collect();
+		Ok(TileStream::from_vec(vec))
+	}
+
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
 	pub async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("overview::get_tile_stream {bbox:?}");

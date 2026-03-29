@@ -158,6 +158,10 @@ impl TileSource for PipelineReader {
 		self.operation.get_tile_coord_stream(bbox).await
 	}
 
+	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+		self.operation.get_tile_size_stream(bbox).await
+	}
+
 	/// Streams all tiles intersecting `bbox` by executing the pipeline's output operation.
 	#[context("streaming tiles for bbox {:?} via pipeline '{}'", bbox, self.name)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {

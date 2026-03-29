@@ -317,6 +317,7 @@ impl TileSource for TarTilesReader {
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("tar::get_tile_stream {bbox:?}");
+		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		let reader = Arc::clone(&self.reader);
 		let tile_map = Arc::clone(&self.tile_map);
 		let tile_compression = self.metadata.tile_compression;
@@ -335,6 +336,7 @@ impl TileSource for TarTilesReader {
 	}
 
 	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		let tile_map = Arc::clone(&self.tile_map);
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			tile_map.get(&coord).map(|_| ())
@@ -342,6 +344,7 @@ impl TileSource for TarTilesReader {
 	}
 
 	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		let tile_map = Arc::clone(&self.tile_map);
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			let range = tile_map.get(&coord)?;

@@ -293,6 +293,13 @@ impl TileSource for Operation {
 
 		Ok(TileStream::from_streams(streams))
 	}
+
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
+			Some(())
+		}))
+	}
 }
 
 pub struct Factory {}

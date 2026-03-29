@@ -426,7 +426,9 @@ impl TileSource for MBTilesReader {
 	}
 
 	#[context("streaming tile coords for bbox {:?}", bbox)]
-	async fn get_tile_coord_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		let mut bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
@@ -466,7 +468,9 @@ impl TileSource for MBTilesReader {
 	}
 
 	#[context("streaming tile sizes for bbox {:?}", bbox)]
-	async fn get_tile_size_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+		let mut bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
@@ -515,8 +519,10 @@ impl TileSource for MBTilesReader {
 	/// # Errors
 	/// Returns an error if the query fails.
 	#[context("streaming tiles for bbox {:?}", bbox)]
-	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("mbtiles::get_tile_stream {bbox:?}");
+
+		let mut bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());

@@ -109,6 +109,14 @@ impl TileSource for DummyImageSource {
 			move |coord| (generate_tile)(&coord),
 		))
 	}
+
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		Ok(TileStream::from_iter_coord(
+			bbox.into_iter_coords_zorder(),
+			move |_coord| Some(()),
+		))
+	}
 }
 
 impl std::fmt::Debug for DummyImageSource {

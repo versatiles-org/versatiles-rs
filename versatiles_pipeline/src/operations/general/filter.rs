@@ -109,6 +109,14 @@ impl TileSource for Operation {
 		}
 		self.source.get_tile_stream(bbox).await
 	}
+
+	async fn get_tile_coord_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
+		if bbox.is_empty() {
+			return Ok(TileStream::empty());
+		}
+		self.source.get_tile_coord_stream(bbox).await
+	}
 }
 
 crate::operations::macros::define_transform_factory!("filter", Args, Operation);

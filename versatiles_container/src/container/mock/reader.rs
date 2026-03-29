@@ -153,6 +153,8 @@ impl TileSource for MockReader {
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("mock::get_tile_stream {bbox:?}");
+
+		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		let format = self.metadata.tile_format;
 		let compression = self.metadata.tile_compression;
 		let bbox_pyramid = self.metadata.bbox_pyramid.clone();
@@ -160,6 +162,12 @@ impl TileSource for MockReader {
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			MockReader::create_mock_tile(&coord, &bbox_pyramid, format, compression).ok()?
 		}))
+	}
+
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+
+		Ok(TileStream::from_bbox_parallel(bbox, move |_coord| Some(())))
 	}
 
 	#[cfg(feature = "cli")]

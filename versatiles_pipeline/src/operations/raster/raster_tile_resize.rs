@@ -54,6 +54,10 @@ impl TileSource for Operation {
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		self.core.get_tile_stream(bbox)
 	}
+
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.core.get_tile_coord_stream(bbox).await
+	}
 }
 
 crate::operations::macros::define_transform_factory!("raster_tile_resize", Args, Operation);

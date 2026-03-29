@@ -127,6 +127,13 @@ impl TileSource for Operation {
 		let tile = self.tile.clone();
 		Ok(TileStream::from_bbox_parallel(bbox, move |_| Some(tile.clone())))
 	}
+
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
+			Some(())
+		}))
+	}
 }
 
 crate::operations::macros::define_read_factory!("from_color", Args, Operation);

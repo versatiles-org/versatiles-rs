@@ -95,7 +95,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	/// this for a cheaper enumeration.
 	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		Ok(self
-			.get_tile_stream(bbox)
+			.get_tile_size_stream(bbox)
 			.await?
 			.filter_map(move |_coord, _tile| Some(())))
 	}

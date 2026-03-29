@@ -178,6 +178,57 @@ impl TileResizeCore {
 		Ok(Some(canvas))
 	}
 
+	pub async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		if bbox.is_empty() {
+			return Ok(TileStream::empty());
+		}
+
+		let is_split = self.source_tile_size == 512;
+		let mut coords = std::collections::HashSet::new();
+
+		if is_split {
+			// 512→256: each source tile at (level-1, x, y) produces up to 4
+			// output tiles at (level, 2x..2x+1, 2y..2y+1), plus level 0 special case.
+			if bbox.level == 0 {
+				// Level 0 output exists if source has (0,0,0)
+				let mut stream = self.source.get_tile_coord_stream(TileBBox::new_full(0)?).await?;
+				if stream.next().await.is_some() {
+					coords.insert(TileCoord::new(0, 0, 0)?);
+				}
+			} else {
+				let source_bbox = bbox.leveled_down();
+				let mut stream = self.source.get_tile_coord_stream(source_bbox).await?;
+				while let Some((src_coord, _)) = stream.next().await {
+					// Each source coord produces up to 4 children
+					for dy in 0..2u32 {
+						for dx in 0..2u32 {
+							let child = TileCoord::new(src_coord.level + 1, src_coord.x * 2 + dx, src_coord.y * 2 + dy)?;
+							if bbox.includes_coord(&child) {
+								coords.insert(child);
+							}
+						}
+					}
+				}
+			}
+		} else {
+			// 256→512: each source tile at (level+1, x, y) contributes to
+			// output tile at (level, x/2, y/2). An output tile exists if any
+			// of its 4 children exist.
+			let source_bbox = bbox.leveled_up();
+			let mut stream = self.source.get_tile_coord_stream(source_bbox).await?;
+			while let Some((src_coord, _)) = stream.next().await {
+				let parent = src_coord.to_level_decreased()?;
+				if bbox.includes_coord(&parent) {
+					coords.insert(parent);
+				}
+			}
+		}
+
+		let vec: Vec<(TileCoord, ())> = coords.into_iter().map(|c| (c, ())).collect();
+		Ok(TileStream::from_vec(vec))
+	}
+
 	pub fn get_tile_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<'static, Tile>> {
 		if !self.metadata.bbox_pyramid.intersects_bbox(&bbox_dst) {
 			return Ok(TileStream::empty());

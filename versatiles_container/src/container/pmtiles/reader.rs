@@ -420,6 +420,7 @@ impl TileSource for PMTilesReader {
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("pmtiles::get_tile_stream {bbox:?}");
+		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		let chunks = self.get_chunks(bbox).await?;
 		Ok(stream_from_chunks(
 			chunks,
@@ -431,6 +432,7 @@ impl TileSource for PMTilesReader {
 
 	#[context("streaming tile sizes for bbox {:?}", bbox)]
 	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		let mut tile_sizes: Vec<(TileCoord, u32)> = Vec::new();
 
 		let coords: Vec<TileCoord> = bbox.iter_coords().collect();

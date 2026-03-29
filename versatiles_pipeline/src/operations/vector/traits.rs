@@ -53,6 +53,10 @@ impl<R: RunnerTrait> TileSource for TransformOp<R> {
 			})
 			.unwrap_results())
 	}
+
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.source.get_tile_coord_stream(bbox).await
+	}
 }
 
 // transform_factory.rs

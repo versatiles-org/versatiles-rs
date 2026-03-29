@@ -325,6 +325,7 @@ impl TileSource for VersaTilesReader {
 
 	#[context("streaming tile sizes for bbox {:?}", bbox)]
 	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		let block_coords: Vec<TileCoord> = bbox.scaled_down(256).iter_coords().collect();
 
 		let mut blocks: Vec<(TileBBox, TileBBox, BlockDefinition)> = Vec::new();

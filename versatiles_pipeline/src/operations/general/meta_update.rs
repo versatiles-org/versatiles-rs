@@ -97,6 +97,10 @@ impl TileSource for Operation {
 		log::trace!("meta_update::get_tile_stream {bbox:?}");
 		self.source.get_tile_stream(bbox).await
 	}
+
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.source.get_tile_coord_stream(bbox).await
+	}
 }
 
 crate::operations::macros::define_transform_factory!("meta_update", Args, Operation);

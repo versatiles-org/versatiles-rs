@@ -120,6 +120,13 @@ impl TileSource for Operation {
 			_ => bail!("tile format '{}' is not supported.", self.metadata.tile_format),
 		}
 	}
+
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
+			Some(())
+		}))
+	}
 }
 
 crate::operations::macros::define_read_factory!("from_debug", Args, Operation);

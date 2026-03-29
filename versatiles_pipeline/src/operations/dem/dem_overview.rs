@@ -137,6 +137,10 @@ impl TileSource for Operation {
 		log::trace!("dem_overview::get_tile_stream {bbox:?}");
 		self.core.get_tile_stream(bbox).await
 	}
+
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.core.get_tile_coord_stream(bbox).await
+	}
 }
 
 crate::operations::macros::define_transform_factory!("dem_overview", Args, Operation);

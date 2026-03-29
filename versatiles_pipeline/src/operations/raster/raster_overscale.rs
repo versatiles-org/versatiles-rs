@@ -319,6 +319,49 @@ impl TileSource for Operation {
 
 		Ok(stream)
 	}
+
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		if !self.metadata.bbox_pyramid.intersects_bbox(&bbox) {
+			return Ok(TileStream::empty());
+		}
+		if bbox.level <= self.level_base {
+			return self.source.as_ref().get_tile_coord_stream(bbox).await;
+		}
+
+		// Above level_base: a tile exists if a source tile covers it.
+		// Query source coords and map each up to the requested level.
+		let mut coords = std::collections::HashSet::new();
+
+		// Without climbing, only level_base is checked.
+		// With climbing, check from level_base down to level_min.
+		let level_stop = if self.enable_climbing {
+			self.level_min
+		} else {
+			self.level_base
+		};
+
+		for src_level in (level_stop..=self.level_base).rev() {
+			let source_bbox = bbox.at_level(src_level);
+			let mut stream = self.source.as_ref().get_tile_coord_stream(source_bbox).await?;
+			while let Some((src_coord, _)) = stream.next().await {
+				// Each source coord at src_level covers a block of output coords
+				let scale = 1u32 << (bbox.level - src_coord.level);
+				let base_x = src_coord.x * scale;
+				let base_y = src_coord.y * scale;
+				for dy in 0..scale {
+					for dx in 0..scale {
+						let coord = TileCoord::new(bbox.level, base_x + dx, base_y + dy)?;
+						if bbox.includes_coord(&coord) {
+							coords.insert(coord);
+						}
+					}
+				}
+			}
+		}
+
+		let vec: Vec<(TileCoord, ())> = coords.into_iter().map(|c| (c, ())).collect();
+		Ok(TileStream::from_vec(vec))
+	}
 }
 
 crate::operations::macros::define_transform_factory!("raster_overscale", Args, Operation);

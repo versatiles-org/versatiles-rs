@@ -270,6 +270,19 @@ impl TileSource for Operation {
 		SourceType::new_composite("from_stacked_raster", &self.source_types)
 	}
 
+	#[context("Failed to get stacked raster tile coord stream for bbox: {:?}", bbox)]
+	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		let mut coords = std::collections::HashSet::new();
+		for entry in &self.sources {
+			let mut stream = entry.source.get_tile_coord_stream(bbox).await?;
+			while let Some((coord, _)) = stream.next().await {
+				coords.insert(coord);
+			}
+		}
+		let vec: Vec<(TileCoord, ())> = coords.into_iter().map(|c| (c, ())).collect();
+		Ok(TileStream::from_vec(vec))
+	}
+
 	/// Stream packed raster tiles intersecting `bbox`.
 	#[context("Failed to get stacked raster tile stream for bbox: {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
