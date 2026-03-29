@@ -28,20 +28,16 @@ pub trait TileSourceTraverseExt: TileSource {
 	/// * `traversal_write` - Desired traversal order for consumption
 	/// * `callback` - Async function called for each (bbox, stream) pair
 	/// * `runtime` - Runtime configuration for caching and progress tracking
-	/// * `progress_message` - Optional progress bar label
 	fn traverse_all_tiles<'s, 'a, C>(
 		&'s self,
 		traversal_write: &'s Traversal,
 		mut callback: C,
 		runtime: TilesRuntime,
-		progress_message: Option<&str>,
 	) -> impl core::future::Future<Output = Result<()>> + Send + 'a
 	where
 		C: FnMut(TileBBox, TileStream<'a, Tile>) -> BoxFuture<'a, Result<()>> + Send + 'a,
 		's: 'a,
 	{
-		let progress_message = progress_message.unwrap_or("processing tiles").to_string();
-
 		async move {
 			let traversal_steps = translate_traversals(
 				&self.metadata().bbox_pyramid,
@@ -68,7 +64,7 @@ pub trait TileSourceTraverseExt: TileSource {
 					}
 				}
 			}
-			let progress = runtime.create_progress(&progress_message, u64::midpoint(tn_read, tn_write));
+			let progress = runtime.create_progress("processing tiles", u64::midpoint(tn_read, tn_write));
 			let tracker = Arc::new(ProgressTracker::new(progress));
 
 			let cache = Arc::new(TraversalCache::<(TileCoord, Tile)>::new(runtime.cache_type())?);
@@ -245,7 +241,6 @@ mod tests {
 					})
 				},
 				runtime,
-				Some("test streaming"),
 			)
 			.await?;
 
@@ -279,7 +274,6 @@ mod tests {
 					})
 				},
 				runtime,
-				None, // Test default progress message
 			)
 			.await?;
 
@@ -313,7 +307,6 @@ mod tests {
 					})
 				},
 				runtime,
-				Some("disk cache test"),
 			)
 			.await?;
 
@@ -349,7 +342,6 @@ mod tests {
 					})
 				},
 				runtime,
-				None,
 			)
 			.await?;
 
@@ -379,7 +371,6 @@ mod tests {
 					})
 				},
 				runtime,
-				None,
 			)
 			.await?;
 
@@ -407,7 +398,6 @@ mod tests {
 					})
 				},
 				runtime,
-				None,
 			)
 			.await?;
 
@@ -445,7 +435,6 @@ mod tests {
 					})
 				},
 				runtime,
-				Some("push/pop cache test"),
 			)
 			.await?;
 
@@ -480,7 +469,6 @@ mod tests {
 					})
 				},
 				runtime,
-				Some("push/pop disk cache test"),
 			)
 			.await?;
 
@@ -521,7 +509,6 @@ mod tests {
 					})
 				},
 				runtime,
-				None,
 			)
 			.await?;
 
@@ -556,7 +543,6 @@ mod tests {
 					})
 				},
 				runtime,
-				Some("pmtiles to any"),
 			)
 			.await?;
 
@@ -609,7 +595,6 @@ mod tests {
 					})
 				},
 				runtime,
-				None,
 			)
 			.await?;
 
@@ -667,7 +652,6 @@ mod tests {
 					})
 				},
 				runtime,
-				None,
 			)
 			.await?;
 
