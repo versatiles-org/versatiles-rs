@@ -287,6 +287,14 @@ impl TileBBoxPyramid {
 		}
 	}
 
+	pub fn intersected_bbox(&self, bbox: &TileBBox) -> Result<TileBBox> {
+		if let Some(level_bbox) = self.level_bbox.get(bbox.level as usize) {
+			level_bbox.intersected_bbox(bbox)
+		} else {
+			TileBBox::new_empty(bbox.level)
+		}
+	}
+
 	/// Clears bounding boxes for all levels > `zoom_level_max`.
 	pub fn set_level_max(&mut self, zoom_level_max: u8) {
 		for (index, bbox) in self.level_bbox.iter_mut().enumerate() {
