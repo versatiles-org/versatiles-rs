@@ -234,6 +234,11 @@ mod tests {
 				}))
 			}
 		}
+
+		async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+			log::trace!("test_reader::get_tile_coord_stream {bbox:?}");
+			Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), |_coord| Some(())))
+		}
 	}
 
 	#[tokio::test]
