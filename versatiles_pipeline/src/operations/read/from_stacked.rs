@@ -25,7 +25,7 @@ use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
 use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileBBoxMap, TileBBoxPyramid, TileCoord, TileJSON, TileStream};
+use versatiles_core::{TileBBox, TileBBoxMap, TileBBoxPyramid, TileJSON, TileStream};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -120,15 +120,8 @@ impl TileSource for Operation {
 
 	#[context("Failed to get stacked tile coord stream for bbox: {:?}", bbox)]
 	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let mut coords = std::collections::HashSet::new();
-		for source in self.sources.iter() {
-			let mut stream = source.get_tile_coord_stream(bbox).await?;
-			while let Some((coord, _)) = stream.next().await {
-				coords.insert(coord);
-			}
-		}
-		let vec: Vec<(TileCoord, ())> = coords.into_iter().map(|c| (c, ())).collect();
-		Ok(TileStream::from_vec(vec))
+		let refs: Vec<&dyn TileSource> = self.sources.iter().map(|s| s.as_ref() as &dyn TileSource).collect();
+		super::traits::union_tile_coord_streams(&refs, bbox).await
 	}
 
 	/// Stream packed tiles intersecting `bbox` using the overlay strategy.

@@ -192,13 +192,12 @@ impl OverviewCore {
 		if bbox.level >= self.level_base {
 			return self.source.get_tile_coord_stream(bbox).await;
 		}
-		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
-		if bbox.is_empty() {
-			return Ok(TileStream::empty());
-		}
 
 		let mut source_bbox = bbox.at_level(self.level_base);
 		source_bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
+		if source_bbox.is_empty() {
+			return Ok(TileStream::empty());
+		}
 
 		let mut coords = std::collections::HashSet::new();
 		let mut stream = self.source.get_tile_coord_stream(source_bbox).await?;
