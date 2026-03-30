@@ -10,7 +10,7 @@ use futures::stream::StreamExt;
 use std::sync::Arc;
 use versatiles_core::{Blob, ByteRange, TileCompression, TileCoord, TileFormat, TileStream, io::DataReader};
 
-const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
+const MAX_CHUNK_SIZE: u64 = 256 * 1024 * 1024;
 const MAX_CHUNK_GAP: u64 = 256 * 1024;
 
 /// A group of tile byte ranges that can be served from a single large read.
