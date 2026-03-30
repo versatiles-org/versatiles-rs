@@ -25,6 +25,7 @@ pub struct RuntimeBuilder {
 	#[allow(clippy::type_complexity)]
 	registry_customizer: Vec<Box<dyn FnOnce(&mut ContainerRegistry)>>,
 	silent_progress: bool,
+	precount_tiles: bool,
 }
 
 impl RuntimeBuilder {
@@ -39,6 +40,7 @@ impl RuntimeBuilder {
 			silent_progress: false,
 			#[cfg(test)]
 			silent_progress: true,
+			precount_tiles: false,
 		}
 	}
 
@@ -72,6 +74,17 @@ impl RuntimeBuilder {
 	#[must_use]
 	pub fn silent_progress(mut self, silent: bool) -> Self {
 		self.silent_progress = silent;
+		self
+	}
+
+	/// Set whether tiles should be pre-counted before processing
+	///
+	/// When enabled, the exact number of tiles is counted before processing starts,
+	/// which provides accurate progress bars. This requires an additional pass over
+	/// the tile source, which may be slow for large datasets.
+	#[must_use]
+	pub fn precount_tiles(mut self, precount: bool) -> Self {
+		self.precount_tiles = precount;
 		self
 	}
 
@@ -126,6 +139,7 @@ impl RuntimeBuilder {
 				registry,
 				event_bus,
 				progress_factory,
+				precount_tiles: self.precount_tiles,
 			}),
 		}
 	}

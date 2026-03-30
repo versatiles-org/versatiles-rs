@@ -8,6 +8,7 @@ pub struct RuntimeInner {
 	pub registry: ContainerRegistry,
 	pub event_bus: EventBus,
 	pub progress_factory: Mutex<ProgressFactory>,
+	pub precount_tiles: bool,
 }
 
 #[cfg(test)]
@@ -27,6 +28,7 @@ mod tests {
 			registry,
 			event_bus,
 			progress_factory,
+			precount_tiles: false,
 		};
 
 		assert_eq!(inner.cache_type, CacheType::InMemory);
@@ -46,6 +48,7 @@ mod tests {
 			registry,
 			event_bus,
 			progress_factory,
+			precount_tiles: false,
 		};
 
 		assert_eq!(inner.cache_type, CacheType::Disk(path_buf));
@@ -64,6 +67,7 @@ mod tests {
 			registry,
 			event_bus,
 			progress_factory,
+			precount_tiles: false,
 		};
 
 		// Verify we can lock and access the progress factory
@@ -85,6 +89,7 @@ mod tests {
 			registry,
 			event_bus: event_bus.clone(),
 			progress_factory,
+			precount_tiles: false,
 		};
 
 		// Verify event bus works

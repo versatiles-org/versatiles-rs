@@ -33,7 +33,6 @@ pub trait TileSourceTraverseExt: TileSource {
 		traversal_write: &'s Traversal,
 		mut callback: C,
 		runtime: TilesRuntime,
-		precount_tiles: bool,
 	) -> impl core::future::Future<Output = Result<()>> + Send + 'a
 	where
 		C: FnMut(TileBBox, TileStream<'a, Tile>) -> BoxFuture<'a, Result<()>> + Send + 'a,
@@ -48,7 +47,7 @@ pub trait TileSourceTraverseExt: TileSource {
 
 			use TraversalTranslationStep::{Pop, Push, Stream};
 
-			let (tn_read, tn_write) = if precount_tiles {
+			let (tn_read, tn_write) = if runtime.precount_tiles() {
 				let mut count = 0u64;
 				for step in &traversal_steps {
 					match step {
@@ -262,7 +261,6 @@ mod tests {
 					})
 				},
 				runtime,
-				false,
 			)
 			.await?;
 
@@ -296,7 +294,6 @@ mod tests {
 					})
 				},
 				runtime,
-				false,
 			)
 			.await?;
 
@@ -330,7 +327,6 @@ mod tests {
 					})
 				},
 				runtime,
-				false,
 			)
 			.await?;
 
@@ -366,7 +362,6 @@ mod tests {
 					})
 				},
 				runtime,
-				false,
 			)
 			.await?;
 
@@ -396,7 +391,6 @@ mod tests {
 					})
 				},
 				runtime,
-				false,
 			)
 			.await?;
 
@@ -424,7 +418,6 @@ mod tests {
 					})
 				},
 				runtime,
-				false,
 			)
 			.await?;
 
@@ -462,7 +455,6 @@ mod tests {
 					})
 				},
 				runtime,
-				false,
 			)
 			.await?;
 
@@ -497,7 +489,6 @@ mod tests {
 					})
 				},
 				runtime,
-				false,
 			)
 			.await?;
 
@@ -538,7 +529,6 @@ mod tests {
 					})
 				},
 				runtime,
-				false,
 			)
 			.await?;
 
@@ -573,7 +563,6 @@ mod tests {
 					})
 				},
 				runtime,
-				false,
 			)
 			.await?;
 
@@ -626,7 +615,6 @@ mod tests {
 					})
 				},
 				runtime,
-				false,
 			)
 			.await?;
 
@@ -684,7 +672,6 @@ mod tests {
 					})
 				},
 				runtime,
-				false,
 			)
 			.await?;
 

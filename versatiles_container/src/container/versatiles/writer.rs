@@ -204,7 +204,6 @@ impl VersaTilesWriter {
 					})
 				},
 				runtime.clone(),
-				false,
 			)
 			.await?;
 

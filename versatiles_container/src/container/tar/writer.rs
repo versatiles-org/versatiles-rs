@@ -102,7 +102,6 @@ impl TarTilesWriter {
 					})
 				},
 				runtime.clone(),
-				false,
 			)
 			.await?;
 
