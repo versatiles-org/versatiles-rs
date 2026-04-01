@@ -1,4 +1,4 @@
-use super::{DataWriterTrait, sftp_utils};
+use super::{DataWriterTrait, network_writer::NetworkWriter, sftp_utils};
 use crate::{Blob, ByteRange};
 use anyhow::{Context, Result};
 use reqwest::Url;
@@ -6,11 +6,7 @@ use ssh2::{OpenFlags, OpenType, Session};
 use std::{
 	io::{Seek, SeekFrom, Write},
 	path::{Path, PathBuf},
-	thread,
-	time::Duration,
 };
-
-const MAX_RETRIES: u32 = 2;
 
 /// A struct that provides writing capabilities to a remote file via SFTP.
 pub struct DataWriterSftp {
@@ -18,6 +14,7 @@ pub struct DataWriterSftp {
 	position: u64,
 	url: Url,
 	identity_file: Option<PathBuf>,
+	name: String,
 	// Keep session alive for the lifetime of the writer
 	_session: Session,
 }
@@ -46,6 +43,7 @@ impl DataWriterSftp {
 			position: 0,
 			url: url.clone(),
 			identity_file: identity_file.map(Path::to_path_buf),
+			name: sftp_utils::display_name(url),
 			_session: session,
 		})
 	}
@@ -55,12 +53,47 @@ impl DataWriterSftp {
 	pub fn path_from_url(url: &Url) -> PathBuf {
 		sftp_utils::remote_path(url)
 	}
+}
 
-	/// Reconnect the SFTP session and reopen the file for writing at `self.position`.
+impl NetworkWriter for DataWriterSftp {
+	fn try_append(&mut self, blob: &Blob) -> Result<ByteRange> {
+		let pos = self.position;
+		self.file.write_all(blob.as_slice())?;
+		self.position += blob.len();
+		Ok(ByteRange::new(pos, blob.len()))
+	}
+
+	fn try_write_at(&mut self, offset: u64, blob: &Blob, restore_pos: u64) -> Result<()> {
+		self
+			.file
+			.seek(SeekFrom::Start(offset))
+			.with_context(|| format!("failed to seek to offset {offset} in '{}'", self.name))?;
+		self.file.write_all(blob.as_slice()).with_context(|| {
+			format!(
+				"failed to write {} bytes at offset {offset} in '{}'",
+				blob.len(),
+				self.name
+			)
+		})?;
+		self
+			.file
+			.seek(SeekFrom::Start(restore_pos))
+			.with_context(|| format!("failed to seek back to position {restore_pos} in '{}'", self.name))?;
+		Ok(())
+	}
+
+	fn try_seek(&mut self, position: u64) -> Result<()> {
+		self
+			.file
+			.seek(SeekFrom::Start(position))
+			.with_context(|| format!("failed to seek to position {position} in '{}'", self.name))?;
+		self.position = position;
+		Ok(())
+	}
+
 	fn reconnect(&mut self) -> Result<()> {
-		let name = sftp_utils::display_name(&self.url);
 		let path = sftp_utils::remote_path(&self.url);
-		log::info!("reconnecting SFTP writer to '{name}'");
+		log::info!("reconnecting SFTP writer to '{}'", self.name);
 
 		let session = sftp_utils::open_session(&self.url, self.identity_file.as_deref())?;
 		let sftp = session.sftp()?;
@@ -75,71 +108,23 @@ impl DataWriterSftp {
 		self._session = session;
 		Ok(())
 	}
+
+	fn writer_name(&self) -> &str {
+		&self.name
+	}
+
+	fn tracked_position(&self) -> u64 {
+		self.position
+	}
 }
 
 impl DataWriterTrait for DataWriterSftp {
 	fn append(&mut self, blob: &Blob) -> Result<ByteRange> {
-		let pos = self.position;
-		let name = sftp_utils::display_name(&self.url);
-		let blob_len = blob.len();
-		let total_attempts = MAX_RETRIES + 1;
-
-		for attempt in 0..=MAX_RETRIES {
-			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
-
-			if attempt > 0 {
-				let backoff = Duration::from_secs(1 << (attempt - 1));
-				log::warn!("SFTP write to '{name}' at position {pos}: retrying ({attempt_label}, waiting {backoff:?})");
-				thread::sleep(backoff);
-
-				if let Err(e) = self.reconnect() {
-					log::warn!("SFTP write to '{name}' at position {pos}: reconnect failed ({attempt_label}): {e}");
-					if attempt >= MAX_RETRIES {
-						return Err(e).with_context(|| {
-							format!("could not write {blob_len} bytes at position {pos} to '{name}': reconnect failed — gave up after {total_attempts} attempts")
-						});
-					}
-					continue;
-				}
-			}
-
-			match self.file.write_all(blob.as_slice()) {
-				Ok(()) => {
-					self.position += blob_len;
-					return Ok(ByteRange::new(pos, blob_len));
-				}
-				Err(e) if attempt < MAX_RETRIES => {
-					log::warn!("SFTP write to '{name}' at position {pos}: {e} ({attempt_label}), will retry");
-				}
-				Err(e) => {
-					return Err(e).with_context(|| {
-						format!(
-							"could not write {blob_len} bytes at position {pos} to '{name}' — gave up after {total_attempts} attempts"
-						)
-					});
-				}
-			}
-		}
-
-		unreachable!()
+		self.network_append(blob)
 	}
 
 	fn write_start(&mut self, blob: &Blob) -> Result<()> {
-		let name = sftp_utils::display_name(&self.url);
-		let saved = self.position;
-		self
-			.file
-			.seek(SeekFrom::Start(0))
-			.with_context(|| format!("failed to seek to start of '{name}'"))?;
-		self
-			.file
-			.write_all(blob.as_slice())
-			.with_context(|| format!("failed to write {} bytes at start of '{name}'", blob.len()))?;
-		self
-			.file
-			.seek(SeekFrom::Start(saved))
-			.with_context(|| format!("failed to seek back to position {saved} in '{name}'"))?;
-		Ok(())
+		self.network_write_start(blob)
 	}
 
 	fn get_position(&mut self) -> Result<u64> {
@@ -147,13 +132,7 @@ impl DataWriterTrait for DataWriterSftp {
 	}
 
 	fn set_position(&mut self, position: u64) -> Result<()> {
-		let name = sftp_utils::display_name(&self.url);
-		self
-			.file
-			.seek(SeekFrom::Start(position))
-			.with_context(|| format!("failed to seek to position {position} in '{name}'"))?;
-		self.position = position;
-		Ok(())
+		self.network_set_position(position)
 	}
 }
 

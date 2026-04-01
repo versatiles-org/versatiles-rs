@@ -30,6 +30,8 @@ mod data_writer_file;
 mod data_writer_sftp;
 mod network_reader;
 #[cfg(feature = "ssh2")]
+mod network_writer;
+#[cfg(feature = "ssh2")]
 pub mod sftp_utils;
 #[cfg(feature = "ssh2")]
 mod sftp_wrappers;
