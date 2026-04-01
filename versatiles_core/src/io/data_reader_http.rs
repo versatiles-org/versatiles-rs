@@ -29,7 +29,7 @@
 //! }
 //! ```
 
-use super::DataReaderTrait;
+use super::{DataReaderTrait, network_reader::NetworkReader};
 use crate::{Blob, ByteRange};
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
@@ -38,10 +38,7 @@ use regex::{Regex, RegexBuilder};
 use reqwest::{Client, RequestBuilder, StatusCode, Url};
 use std::{
 	fmt, str,
-	sync::{
-		LazyLock,
-		atomic::{AtomicU64, Ordering},
-	},
+	sync::{LazyLock, atomic::AtomicU64},
 	time::Duration,
 };
 use tokio::time::sleep;
@@ -131,9 +128,8 @@ fn is_retryable_error(err: &reqwest::Error) -> bool {
 }
 
 impl DataReaderHttp {
-	/// Single-range read with retry/backoff. Called by the trait `read_range`,
-	/// which adds divide-and-conquer splitting on top.
-	async fn try_read_range(&self, range: &ByteRange) -> Result<Blob> {
+	/// Single-range read with retry/backoff.
+	async fn try_read_range_impl(&self, range: &ByteRange) -> Result<Blob> {
 		let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
 		let total_attempts = MAX_RETRIES + 1;
 		let url = &self.url;
@@ -226,50 +222,23 @@ impl DataReaderHttp {
 
 		bail!("could not read {range} ({len} bytes) from '{url}' — gave up after {total_attempts} attempts")
 	}
+}
 
-	async fn split_and_read(&self, range: &ByteRange) -> Result<Blob> {
-		let mid = range.offset + range.length / 2;
-		let left = ByteRange::new(range.offset, mid - range.offset);
-		let right = ByteRange::new(mid, range.offset + range.length - mid);
-		let blob_left = self.read_range(&left).await?;
-		let blob_right = self.read_range(&right).await?;
-		let mut data = blob_left.into_vec();
-		data.extend_from_slice(blob_right.as_slice());
-		Ok(Blob::from(data))
+#[async_trait]
+impl NetworkReader for DataReaderHttp {
+	async fn try_read_range(&self, range: &ByteRange) -> Result<Blob> {
+		self.try_read_range_impl(range).await
+	}
+
+	fn max_request_bytes(&self) -> &AtomicU64 {
+		&self.max_request_bytes
 	}
 }
 
 #[async_trait]
 impl DataReaderTrait for DataReaderHttp {
-	/// Reads a specific range of bytes from the HTTP(S) endpoint.
-	///
-	/// Proactively splits ranges that exceed a learned size limit.
-	/// On failure, splits the range in half and reads each half separately.
-	/// This recurses until the pieces are small enough to succeed on a flaky
-	/// connection.
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
-		// Proactive split: skip try_read_range entirely for ranges we know are too large
-		if range.length > self.max_request_bytes.load(Ordering::Relaxed) && range.length > 1 {
-			log::info!(
-				"proactively splitting range {range} ({} bytes) based on previous failures",
-				range.length
-			);
-			return self.split_and_read(range).await;
-		}
-
-		match self.try_read_range(range).await {
-			Ok(blob) => Ok(blob),
-			Err(e) if range.length <= 1 => Err(e),
-			Err(e) => {
-				// Learn from failure: future ranges this large should split proactively
-				self.max_request_bytes.fetch_min(range.length / 2, Ordering::Relaxed);
-				log::warn!(
-					"splitting failed range {range} ({} bytes) into two halves: {e}",
-					range.length
-				);
-				self.split_and_read(range).await
-			}
-		}
+		self.network_read_range(range).await
 	}
 
 	/// Reads all the data from the HTTP(S) endpoint.

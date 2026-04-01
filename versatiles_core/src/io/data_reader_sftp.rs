@@ -1,4 +1,4 @@
-use super::{DataReaderTrait, sftp_utils};
+use super::{DataReaderTrait, network_reader::NetworkReader, sftp_utils};
 use crate::{Blob, ByteRange};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -7,10 +7,7 @@ use ssh2::Session;
 use std::{
 	io::{Read, Seek, SeekFrom},
 	path::{Path, PathBuf},
-	sync::{
-		Mutex,
-		atomic::{AtomicU64, Ordering},
-	},
+	sync::{Mutex, atomic::AtomicU64},
 	thread,
 	time::Duration,
 };
@@ -94,9 +91,8 @@ impl TryFrom<&Url> for DataReaderSftp {
 }
 
 impl DataReaderSftp {
-	/// Single-range read with retry/backoff/reconnect. Called by the trait
-	/// `read_range`, which adds divide-and-conquer splitting on top.
-	fn try_read_range(&self, range: &ByteRange) -> Result<Blob> {
+	/// Single-range read with retry/backoff/reconnect.
+	fn try_read_range_impl(&self, range: &ByteRange) -> Result<Blob> {
 		let total_attempts = MAX_RETRIES + 1;
 		let name = &self.name;
 		let len = range.length;
@@ -160,50 +156,23 @@ impl DataReaderSftp {
 
 		unreachable!()
 	}
+}
 
-	async fn split_and_read(&self, range: &ByteRange) -> Result<Blob> {
-		let mid = range.offset + range.length / 2;
-		let left = ByteRange::new(range.offset, mid - range.offset);
-		let right = ByteRange::new(mid, range.offset + range.length - mid);
-		let blob_left = self.read_range(&left).await?;
-		let blob_right = self.read_range(&right).await?;
-		let mut data = blob_left.into_vec();
-		data.extend_from_slice(blob_right.as_slice());
-		Ok(Blob::from(data))
+#[async_trait]
+impl NetworkReader for DataReaderSftp {
+	async fn try_read_range(&self, range: &ByteRange) -> Result<Blob> {
+		self.try_read_range_impl(range)
+	}
+
+	fn max_request_bytes(&self) -> &AtomicU64 {
+		&self.max_request_bytes
 	}
 }
 
 #[async_trait]
 impl DataReaderTrait for DataReaderSftp {
-	/// Reads a specific range of bytes from the SFTP endpoint.
-	///
-	/// Proactively splits ranges that exceed a learned size limit.
-	/// On failure, splits the range in half and reads each half separately.
-	/// This recurses until the pieces are small enough to succeed on a flaky
-	/// connection.
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
-		// Proactive split: skip try_read_range entirely for ranges we know are too large
-		if range.length > self.max_request_bytes.load(Ordering::Relaxed) && range.length > 1 {
-			log::info!(
-				"proactively splitting range {range} ({} bytes) based on previous failures",
-				range.length
-			);
-			return self.split_and_read(range).await;
-		}
-
-		match self.try_read_range(range) {
-			Ok(blob) => Ok(blob),
-			Err(e) if range.length <= 1 => Err(e),
-			Err(e) => {
-				// Learn from failure: future ranges this large should split proactively
-				self.max_request_bytes.fetch_min(range.length / 2, Ordering::Relaxed);
-				log::warn!(
-					"splitting failed range {range} ({} bytes) into two halves: {e}",
-					range.length
-				);
-				self.split_and_read(range).await
-			}
-		}
+		self.network_read_range(range).await
 	}
 
 	async fn read_all(&self) -> Result<Blob> {
