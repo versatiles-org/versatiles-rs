@@ -36,7 +36,14 @@ use async_trait::async_trait;
 use percent_encoding::percent_decode_str;
 use regex::{Regex, RegexBuilder};
 use reqwest::{Client, RequestBuilder, StatusCode, Url};
-use std::{fmt, str, sync::LazyLock, time::Duration};
+use std::{
+	fmt, str,
+	sync::{
+		LazyLock,
+		atomic::{AtomicU64, Ordering},
+	},
+	time::Duration,
+};
 use tokio::time::sleep;
 
 /// A struct that provides reading capabilities from an HTTP(S) endpoint.
@@ -46,6 +53,7 @@ pub struct DataReaderHttp {
 	url: Url,
 	username: Option<String>,
 	password: Option<String>,
+	max_request_bytes: AtomicU64,
 }
 
 impl fmt::Debug for DataReaderHttp {
@@ -101,6 +109,7 @@ impl TryFrom<&Url> for DataReaderHttp {
 			url,
 			username,
 			password,
+			max_request_bytes: AtomicU64::new(u64::MAX),
 		})
 	}
 }
@@ -115,7 +124,7 @@ impl DataReaderHttp {
 	}
 }
 
-const MAX_RETRIES: u32 = 5;
+const MAX_RETRIES: u32 = 2;
 
 fn is_retryable_error(err: &reqwest::Error) -> bool {
 	err.is_connect() || err.is_timeout() || err.is_body() || err.is_request()
@@ -134,7 +143,7 @@ impl DataReaderHttp {
 			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
 
 			if attempt > 0 {
-				let backoff = Duration::from_secs(2 << (attempt - 1));
+				let backoff = Duration::from_secs(1 << attempt);
 				log::warn!("HTTP read {range} from '{url}': retrying ({attempt_label}, waiting {backoff:?})");
 				sleep(backoff).await;
 			}
@@ -217,32 +226,48 @@ impl DataReaderHttp {
 
 		bail!("could not read {range} ({len} bytes) from '{url}' — gave up after {total_attempts} attempts")
 	}
+
+	async fn split_and_read(&self, range: &ByteRange) -> Result<Blob> {
+		let mid = range.offset + range.length / 2;
+		let left = ByteRange::new(range.offset, mid - range.offset);
+		let right = ByteRange::new(mid, range.offset + range.length - mid);
+		let blob_left = self.read_range(&left).await?;
+		let blob_right = self.read_range(&right).await?;
+		let mut data = blob_left.into_vec();
+		data.extend_from_slice(blob_right.as_slice());
+		Ok(Blob::from(data))
+	}
 }
 
 #[async_trait]
 impl DataReaderTrait for DataReaderHttp {
 	/// Reads a specific range of bytes from the HTTP(S) endpoint.
 	///
+	/// Proactively splits ranges that exceed a learned size limit.
 	/// On failure, splits the range in half and reads each half separately.
 	/// This recurses until the pieces are small enough to succeed on a flaky
 	/// connection.
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
+		// Proactive split: skip try_read_range entirely for ranges we know are too large
+		if range.length > self.max_request_bytes.load(Ordering::Relaxed) && range.length > 1 {
+			log::info!(
+				"proactively splitting range {range} ({} bytes) based on previous failures",
+				range.length
+			);
+			return self.split_and_read(range).await;
+		}
+
 		match self.try_read_range(range).await {
 			Ok(blob) => Ok(blob),
 			Err(e) if range.length <= 1 => Err(e),
 			Err(e) => {
+				// Learn from failure: future ranges this large should split proactively
+				self.max_request_bytes.fetch_min(range.length / 2, Ordering::Relaxed);
 				log::warn!(
 					"splitting failed range {range} ({} bytes) into two halves: {e}",
 					range.length
 				);
-				let mid = range.offset + range.length / 2;
-				let left = ByteRange::new(range.offset, mid - range.offset);
-				let right = ByteRange::new(mid, range.offset + range.length - mid);
-				let blob_left = self.read_range(&left).await?;
-				let blob_right = self.read_range(&right).await?;
-				let mut data = blob_left.into_vec();
-				data.extend_from_slice(blob_right.as_slice());
-				Ok(Blob::from(data))
+				self.split_and_read(range).await
 			}
 		}
 	}
@@ -260,7 +285,7 @@ impl DataReaderTrait for DataReaderHttp {
 			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
 
 			if attempt > 0 {
-				let backoff = Duration::from_secs(2 << (attempt - 1));
+				let backoff = Duration::from_secs(1 << attempt);
 				log::warn!("HTTP read from '{url}': retrying ({attempt_label}, waiting {backoff:?})");
 				sleep(backoff).await;
 			}
