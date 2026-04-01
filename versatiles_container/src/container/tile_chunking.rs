@@ -97,12 +97,7 @@ pub fn stream_from_chunks(
 						Err(e) => {
 							// Abort: silently skipping tiles would produce a corrupt output file.
 							// A panic here unwinds the conversion and prevents the output from being finalized.
-							panic!(
-								"aborting — could not read {} ({} bytes) from '{}': {e:#}",
-								chunk.range,
-								chunk.range.length,
-								reader.get_name(),
-							);
+							panic!("aborting to prevent corrupt output — {e:#}");
 						}
 					};
 
