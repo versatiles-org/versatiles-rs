@@ -24,14 +24,62 @@
 //! more efficient (it upscales one blended tile instead of N individual
 //! tiles) and produces identical visual results.
 //!
-//! ## Code paths in `get_tile_stream`
+//! ## Per-tile code paths
 //!
-//! 1. **All overscaled** → returns an empty stream (see policy above).
-//! 2. **Default** → fetches and blends tiles coordinate-by-coordinate. For
-//!    large bounding boxes (> 32×32), the bbox is split into a grid first.
+//! For each coordinate, sources are iterated front-to-back (first = foreground).
+//! The outcome depends on how many sources produce a tile and their transparency:
 //!
-//! This file contains both the [`Args`] struct used by the VPL parser and the
-//! [`Operation`] implementation that performs the blending.
+//! ### 1. No source has a tile → `None`
+//! No output tile is emitted. No processing occurs.
+//!
+//! ### 2. All contributing sources are overscaled → `None`
+//! Even if overscaled sources produce tiles, the result is discarded when no
+//! native source contributed. A downstream `raster_overscale` handles these
+//! coordinates more efficiently.
+//!
+//! ### 3. Exactly one source has a tile (passthrough)
+//! The tile passes through **without decoding or re-encoding** as long as
+//! the source format matches the output format (the `change_format` call is
+//! a no-op when format matches and no quality override is set).
+//!
+//! ### 4. First source tile is opaque (short-circuit)
+//! When the first (foreground) tile is detected as opaque via `is_opaque()`,
+//! iteration stops immediately — no further sources are fetched. The tile is
+//! then passed through `change_format` (no-op if formats match).
+//! Opacity detection uses fast paths (JPEG is always opaque; PNG/WebP check
+//! the header before decoding).
+//!
+//! ### 5. Multiple sources, foreground is semi-transparent (blending)
+//! Each subsequent source tile becomes the background. Blending works
+//! bottom-up: the background tile's image is decoded, the accumulated
+//! foreground is overlaid onto it via `overlay()`, and the result becomes
+//! the new foreground. This **always decodes images** for the blend.
+//! Iteration stops early if the accumulated result becomes opaque.
+//! After blending, `change_format` re-encodes the tile into the output format.
+//!
+//! ### 6. Background tile is fully empty (transparent)
+//! If a background tile's `is_empty()` returns true, it is skipped and the
+//! existing foreground is kept without decoding the background.
+//!
+//! ## When re-encoding happens
+//!
+//! `change_format(tile_format, None, None)` is called on every output tile.
+//! It is a **no-op** when the tile's current format already matches
+//! `tile_format` and no quality override is set — the encoded blob passes
+//! through untouched. Re-encoding only happens when:
+//! - The output `format` differs from the source format, or
+//! - Blending occurred (the tile now holds a decoded image, not a blob).
+//!
+//! ## `get_tile_stream` flow
+//!
+//! 1. **Spatial filter** — sources whose pyramid doesn't intersect the bbox
+//!    are removed.
+//! 2. **All-overscaled check** — if every remaining source is overscaled,
+//!    return an empty stream.
+//! 3. **Large bbox splitting** — bboxes larger than 32×32 are split into a
+//!    grid and each cell is processed separately.
+//! 4. **Per-tile dispatch** — each coordinate is processed in parallel via
+//!    `get_tile`, then passed through `change_format`.
 
 use crate::{
 	PipelineFactory,
