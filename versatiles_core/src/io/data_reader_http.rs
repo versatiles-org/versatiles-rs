@@ -124,7 +124,7 @@ impl DataReaderHttp {
 const MAX_RETRIES: u32 = 2;
 
 fn is_retryable_error(err: &reqwest::Error) -> bool {
-	err.is_connect() || err.is_timeout() || err.is_body() || err.is_request()
+	err.is_connect() || err.is_timeout() || err.is_body()
 }
 
 impl DataReaderHttp {
