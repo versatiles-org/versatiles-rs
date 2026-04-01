@@ -89,6 +89,8 @@ impl TryFrom<&Url> for DataReaderHttp {
 		}
 
 		let client = Client::builder()
+			.connect_timeout(Duration::from_secs(30))
+			.timeout(Duration::from_secs(300))
 			.tcp_keepalive(Duration::from_secs(600))
 			.use_rustls_tls()
 			.build()?;
@@ -152,14 +154,35 @@ impl DataReaderTrait for DataReaderHttp {
 			{
 				Ok(r) => r,
 				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
-					log::warn!("retryable error: {e}");
+					log::warn!("retryable error (attempt {}/{MAX_RETRIES}): {e}", attempt + 1);
 					continue;
 				}
-				Err(e) => return Err(e.into()),
+				Err(e) => bail!(
+					"HTTP request to '{}' failed (attempt {}/{MAX_RETRIES}): {e}",
+					self.url,
+					attempt + 1,
+					MAX_RETRIES = MAX_RETRIES + 1
+				),
 			};
 
-			if response.status() != StatusCode::PARTIAL_CONTENT {
-				bail!("expected HTTP 206 (Partial Content), got {}", response.status());
+			let status = response.status();
+			if status.is_server_error() && attempt < MAX_RETRIES {
+				log::warn!(
+					"HTTP {status} from '{}' (attempt {}/{}), retrying",
+					self.url,
+					attempt + 1,
+					MAX_RETRIES + 1
+				);
+				continue;
+			}
+
+			if status != StatusCode::PARTIAL_CONTENT {
+				bail!(
+					"expected HTTP 206 (Partial Content), got {status} from '{}' (attempt {}/{})",
+					self.url,
+					attempt + 1,
+					MAX_RETRIES + 1
+				);
 			}
 
 			let content_range = response
@@ -228,14 +251,35 @@ impl DataReaderTrait for DataReaderHttp {
 			let response = match self.apply_auth(self.client.get(self.url.clone())).send().await {
 				Ok(r) => r,
 				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
-					log::warn!("retryable error: {e}");
+					log::warn!("retryable error (attempt {}/{MAX_RETRIES}): {e}", attempt + 1);
 					continue;
 				}
-				Err(e) => return Err(e.into()),
+				Err(e) => bail!(
+					"HTTP request to '{}' failed (attempt {}/{MAX_RETRIES}): {e}",
+					self.url,
+					attempt + 1,
+					MAX_RETRIES = MAX_RETRIES + 1
+				),
 			};
 
-			if !response.status().is_success() {
-				bail!("HTTP request failed with status {}", response.status());
+			let status = response.status();
+			if status.is_server_error() && attempt < MAX_RETRIES {
+				log::warn!(
+					"HTTP {status} from '{}' (attempt {}/{}), retrying",
+					self.url,
+					attempt + 1,
+					MAX_RETRIES + 1
+				);
+				continue;
+			}
+
+			if !status.is_success() {
+				bail!(
+					"HTTP request to '{}' failed with status {status} (attempt {}/{})",
+					self.url,
+					attempt + 1,
+					MAX_RETRIES + 1
+				);
 			}
 
 			let bytes = match response.bytes().await {
