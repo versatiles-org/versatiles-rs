@@ -2,8 +2,9 @@ use anyhow::{Context, Result, bail};
 use reqwest::Url;
 use ssh2::Session;
 use std::{
-	net::TcpStream,
+	net::{TcpStream, ToSocketAddrs},
 	path::{Path, PathBuf},
+	time::Duration,
 };
 
 /// Opens an authenticated SSH session from an SFTP URL.
@@ -23,13 +24,21 @@ pub fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Session> 
 		url.username()
 	};
 
-	// Connect TCP
-	let tcp = TcpStream::connect((host, port)).with_context(|| format!("failed to connect to {host}:{port}"))?;
+	// Connect TCP with timeout
+	let addr = (host, port)
+		.to_socket_addrs()
+		.with_context(|| format!("failed to resolve {host}:{port}"))?
+		.next()
+		.with_context(|| format!("no addresses found for {host}:{port}"))?;
+	let tcp = TcpStream::connect_timeout(&addr, Duration::from_secs(30))
+		.with_context(|| format!("failed to connect to {host}:{port}"))?;
 
 	// SSH handshake
 	let mut session = Session::new()?;
 	session.set_tcp_stream(tcp);
+	session.set_timeout(30_000);
 	session.handshake()?;
+	session.set_keepalive(true, 60);
 
 	// Sanitized target for log messages (no credentials)
 	let target = display_name(url);
