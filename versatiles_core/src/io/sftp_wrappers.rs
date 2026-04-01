@@ -4,12 +4,16 @@
 //! depending on the `ssh2` crate directly.
 
 use super::sftp_utils;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use reqwest::Url;
 use std::{
 	io::Write,
 	path::{Path, PathBuf},
+	thread,
+	time::Duration,
 };
+
+const MAX_RETRIES: u32 = 2;
 
 /// A [`Write`] stream to a remote file via SFTP.
 ///
@@ -68,8 +72,13 @@ impl SftpFileSystem {
 		let base_path = sftp_utils::remote_path(url);
 		let sftp = session.sftp()?;
 
-		// Create base directory (ignore error if exists)
-		let _ = sftp.mkdir(&base_path, 0o755);
+		// Create base directory (ignore error if it already exists)
+		if let Err(e) = sftp.mkdir(&base_path, 0o755) {
+			match sftp.stat(&base_path) {
+				Ok(stat) if stat.is_dir() => {}
+				_ => return Err(e).with_context(|| format!("failed to create base directory {base_path:?}")),
+			}
+		}
 
 		Ok(Self {
 			sftp,
@@ -80,29 +89,67 @@ impl SftpFileSystem {
 
 	/// Write a file at `rel_path` relative to the base directory.
 	///
-	/// Creates parent directories as needed.
+	/// Creates parent directories as needed. Retries on error since
+	/// `write_file` is idempotent (creates/overwrites a complete file).
 	pub fn write_file(&self, rel_path: &str, data: &[u8]) -> Result<()> {
 		let full_path = self.base_path.join(rel_path);
 
 		// Create parent directories
 		if let Some(parent) = full_path.parent() {
-			self.mkdir_p(parent);
+			self.mkdir_p(parent)?;
 		}
 
+		for attempt in 0..=MAX_RETRIES {
+			if attempt > 0 {
+				let backoff = Duration::from_secs(1 << (attempt - 1));
+				log::warn!("SFTP write_file retry attempt {attempt}/{MAX_RETRIES} for {full_path:?}, waiting {backoff:?}");
+				thread::sleep(backoff);
+			}
+
+			match self.try_write_file(&full_path, data) {
+				Ok(()) => return Ok(()),
+				Err(e) if attempt < MAX_RETRIES => {
+					log::warn!(
+						"SFTP write_file error for {full_path:?} (attempt {}/{}): {e}",
+						attempt + 1,
+						MAX_RETRIES + 1
+					);
+				}
+				Err(e) => {
+					return Err(e)
+						.with_context(|| format!("failed to write file {full_path:?} after {} attempts", MAX_RETRIES + 1));
+				}
+			}
+		}
+
+		unreachable!()
+	}
+
+	fn try_write_file(&self, full_path: &Path, data: &[u8]) -> Result<()> {
 		let mut file = self
 			.sftp
-			.create(&full_path)
+			.create(full_path)
 			.with_context(|| format!("failed to create remote file {full_path:?}"))?;
 		file.write_all(data)?;
 		Ok(())
 	}
 
-	/// Recursively create directories, ignoring errors for existing dirs.
-	fn mkdir_p(&self, path: &Path) {
+	/// Recursively create directories.
+	///
+	/// Returns an error if a path component cannot be created and does not
+	/// already exist as a directory.
+	fn mkdir_p(&self, path: &Path) -> Result<()> {
 		if let Some(parent) = path.parent() {
-			self.mkdir_p(parent);
+			self.mkdir_p(parent)?;
 		}
-		let _ = self.sftp.mkdir(path, 0o755);
+		if let Err(e) = self.sftp.mkdir(path, 0o755) {
+			// Check whether the directory already exists
+			match self.sftp.stat(path) {
+				Ok(stat) if stat.is_dir() => {}
+				_ => bail!("failed to create directory {path:?}: {e}"),
+			}
+		}
+		Ok(())
 	}
 }
 
