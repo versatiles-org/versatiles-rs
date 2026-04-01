@@ -58,6 +58,8 @@ impl Write for SftpWriteStream {
 pub struct SftpFileSystem {
 	sftp: ssh2::Sftp,
 	base_path: PathBuf,
+	url: Url,
+	identity_file: Option<PathBuf>,
 	_session: ssh2::Session,
 }
 
@@ -83,15 +85,26 @@ impl SftpFileSystem {
 		Ok(Self {
 			sftp,
 			base_path,
+			url: url.clone(),
+			identity_file: identity_file.map(Path::to_path_buf),
 			_session: session,
 		})
+	}
+
+	/// Reconnect the SFTP session (e.g. after a network error).
+	fn reconnect(&mut self) -> Result<()> {
+		let session = sftp_utils::open_session(&self.url, self.identity_file.as_deref())?;
+		let sftp = session.sftp()?;
+		self.sftp = sftp;
+		self._session = session;
+		Ok(())
 	}
 
 	/// Write a file at `rel_path` relative to the base directory.
 	///
 	/// Creates parent directories as needed. Retries on error since
 	/// `write_file` is idempotent (creates/overwrites a complete file).
-	pub fn write_file(&self, rel_path: &str, data: &[u8]) -> Result<()> {
+	pub fn write_file(&mut self, rel_path: &str, data: &[u8]) -> Result<()> {
 		let full_path = self.base_path.join(rel_path);
 
 		// Create parent directories
@@ -108,6 +121,15 @@ impl SftpFileSystem {
 				let backoff = Duration::from_secs(1 << (attempt - 1));
 				log::warn!("SFTP write file {full_path:?}: retrying ({attempt_label}, waiting {backoff:?})");
 				thread::sleep(backoff);
+				if let Err(e) = self.reconnect() {
+					log::warn!("SFTP write file {full_path:?}: reconnect failed: {e} ({attempt_label})");
+					if attempt >= MAX_RETRIES {
+						return Err(e).with_context(|| {
+							format!("could not write file {full_path:?} — reconnect failed after {total_attempts} attempts")
+						});
+					}
+					continue;
+				}
 			}
 
 			match self.try_write_file(&full_path, data) {
