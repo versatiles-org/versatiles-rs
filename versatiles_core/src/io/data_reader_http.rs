@@ -139,7 +139,7 @@ impl DataReaderHttp {
 			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
 
 			if attempt > 0 {
-				let backoff = Duration::from_secs(1 << attempt);
+				let backoff = Duration::from_secs(1 << (attempt - 1));
 				log::warn!("HTTP read {range} from '{url}': retrying ({attempt_label}, waiting {backoff:?})");
 				sleep(backoff).await;
 			}
@@ -254,7 +254,7 @@ impl DataReaderTrait for DataReaderHttp {
 			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
 
 			if attempt > 0 {
-				let backoff = Duration::from_secs(1 << attempt);
+				let backoff = Duration::from_secs(1 << (attempt - 1));
 				log::warn!("HTTP read from '{url}': retrying ({attempt_label}, waiting {backoff:?})");
 				sleep(backoff).await;
 			}
