@@ -95,14 +95,14 @@ pub fn stream_from_chunks(
 					let big_blob = match reader.read_range(&chunk.range).await {
 						Ok(blob) => blob,
 						Err(e) => {
-							log::error!(
-								"skipping {} tiles: could not read chunk {} ({} bytes) from '{}': {e:#}",
-								chunk.tiles.len(),
+							// Abort: silently skipping tiles would produce a corrupt output file.
+							// A panic here unwinds the conversion and prevents the output from being finalized.
+							panic!(
+								"aborting — could not read {} ({} bytes) from '{}': {e:#}",
 								chunk.range,
 								chunk.range.length,
 								reader.get_name(),
 							);
-							return futures::stream::iter(Vec::new());
 						}
 					};
 
