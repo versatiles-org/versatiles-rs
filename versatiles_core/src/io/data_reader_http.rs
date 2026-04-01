@@ -89,8 +89,9 @@ impl TryFrom<&Url> for DataReaderHttp {
 
 		let client = Client::builder()
 			.connect_timeout(Duration::from_secs(30))
-			.timeout(Duration::from_secs(300))
-			.tcp_keepalive(Duration::from_secs(600))
+			// No overall timeout — large range reads (100+ MB) can take minutes.
+			// Dead connections are caught by TCP keepalive and connect_timeout.
+			.tcp_keepalive(Duration::from_secs(60))
 			.use_rustls_tls()
 			.build()?;
 
@@ -114,10 +115,10 @@ impl DataReaderHttp {
 	}
 }
 
-const MAX_RETRIES: u32 = 3;
+const MAX_RETRIES: u32 = 5;
 
 fn is_retryable_error(err: &reqwest::Error) -> bool {
-	err.is_connect() || err.is_timeout() || err.is_body()
+	err.is_connect() || err.is_timeout() || err.is_body() || err.is_request()
 }
 
 #[async_trait]
@@ -141,7 +142,7 @@ impl DataReaderTrait for DataReaderHttp {
 			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
 
 			if attempt > 0 {
-				let backoff = Duration::from_secs(1 << (attempt - 1));
+				let backoff = Duration::from_secs(2 << (attempt - 1));
 				log::warn!("HTTP read {range} from '{url}': retrying ({attempt_label}, waiting {backoff:?})");
 				sleep(backoff).await;
 			}
@@ -238,7 +239,7 @@ impl DataReaderTrait for DataReaderHttp {
 			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
 
 			if attempt > 0 {
-				let backoff = Duration::from_secs(1 << (attempt - 1));
+				let backoff = Duration::from_secs(2 << (attempt - 1));
 				log::warn!("HTTP read from '{url}': retrying ({attempt_label}, waiting {backoff:?})");
 				sleep(backoff).await;
 			}
