@@ -55,8 +55,7 @@
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 use crate::{
 	SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal,
-	TraversalOrder, TraversalSize,
-	container::tile_chunking::{Chunk, coalesce_into_chunks, stream_from_chunks},
+	TraversalOrder, TraversalSize, container::tile_chunking::Chunks,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -196,14 +195,14 @@ impl VersaTilesReader {
 	///
 	/// Coalesces nearby ranges into at most ~64 MiB chunks (with a small gap tolerance)
 	/// to minimize I/O calls during streaming.
-	async fn get_chunks(&self, bbox: TileBBox) -> Result<Vec<Chunk>> {
+	async fn get_chunks(&self, bbox: TileBBox) -> Result<Chunks> {
 		let block_coords: Vec<TileCoord> = bbox.scaled_down(256).iter_coords().collect();
 
 		let stream = futures::stream::iter(block_coords).then(|block_coord: TileCoord| {
 			async move {
 				// Get the block using the block coordinate
 				let Some(block) = self.block_index.get_block(&block_coord) else {
-					return Ok(Vec::new());
+					return Ok(Chunks::new_empty());
 				};
 				let block = block.clone();
 				log::trace!("block {block:?}");
@@ -237,15 +236,15 @@ impl VersaTilesReader {
 					})
 					.collect();
 
-				Ok(coalesce_into_chunks(tile_ranges))
+				Ok(Chunks::from_tile_ranges(tile_ranges))
 			}
 		});
 
-		let chunks: Vec<Result<Vec<Chunk>>> = stream.collect().await;
+		let chunks: Vec<Result<Chunks>> = stream.collect().await;
 
-		let chunks: Vec<Chunk> = chunks
+		let chunks: Chunks = chunks
 			.into_iter()
-			.collect::<Result<Vec<Vec<Chunk>>>>()?
+			.collect::<Result<Vec<Chunks>>>()?
 			.into_iter()
 			.flatten()
 			.collect();
@@ -393,8 +392,7 @@ impl TileSource for VersaTilesReader {
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("versatiles::get_tile_stream {bbox:?}");
 		let chunks = self.get_chunks(bbox).await?;
-		Ok(stream_from_chunks(
-			chunks,
+		Ok(chunks.stream(
 			Arc::clone(&self.reader),
 			self.metadata.tile_compression,
 			self.metadata.tile_format,

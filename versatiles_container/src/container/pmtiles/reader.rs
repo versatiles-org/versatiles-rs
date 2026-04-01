@@ -49,8 +49,7 @@
 use super::types::{EntriesV3, HeaderV3};
 use crate::{
 	SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal,
-	TraversalOrder, TraversalSize,
-	container::tile_chunking::{coalesce_into_chunks, stream_from_chunks},
+	TraversalOrder, TraversalSize, container::tile_chunking::Chunks,
 };
 use anyhow::{Result, bail};
 use async_trait::async_trait;
@@ -267,7 +266,7 @@ impl PMTilesReader {
 	}
 
 	/// Build read chunks by resolving tile byte ranges and coalescing nearby ones.
-	async fn get_chunks(&self, bbox: TileBBox) -> Result<Vec<crate::container::tile_chunking::Chunk>> {
+	async fn get_chunks(&self, bbox: TileBBox) -> Result<Chunks> {
 		let mut tile_ranges: Vec<(TileCoord, ByteRange)> = Vec::new();
 
 		// Collect coords first so the non-Send iterator is not held across await.
@@ -290,7 +289,7 @@ impl PMTilesReader {
 			}
 		}
 
-		Ok(coalesce_into_chunks(tile_ranges))
+		Ok(Chunks::from_tile_ranges(tile_ranges))
 	}
 }
 
@@ -422,8 +421,7 @@ impl TileSource for PMTilesReader {
 		log::trace!("pmtiles::get_tile_stream {bbox:?}");
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		let chunks = self.get_chunks(bbox).await?;
-		Ok(stream_from_chunks(
-			chunks,
+		Ok(chunks.stream(
 			Arc::clone(&self.data_reader),
 			self.metadata.tile_compression,
 			self.metadata.tile_format,
