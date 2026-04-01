@@ -91,13 +91,16 @@ impl TryFrom<&Url> for DataReaderSftp {
 #[async_trait]
 impl DataReaderTrait for DataReaderSftp {
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
+		let total_attempts = MAX_RETRIES + 1;
+		let name = &self.name;
+		let len = range.length;
+
 		for attempt in 0..=MAX_RETRIES {
+			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
+
 			if attempt > 0 {
 				let backoff = Duration::from_secs(1 << (attempt - 1));
-				log::warn!(
-					"SFTP retry attempt {attempt}/{MAX_RETRIES} reading range {range} from '{}', waiting {backoff:?}",
-					self.name
-				);
+				log::warn!("SFTP read {range} from '{name}': retrying ({attempt_label}, waiting {backoff:?})");
 				thread::sleep(backoff);
 
 				match self.reconnect() {
@@ -109,10 +112,12 @@ impl DataReaderTrait for DataReaderSftp {
 						*conn = new_conn;
 					}
 					Err(e) => {
-						log::warn!("SFTP reconnect failed (attempt {attempt}/{MAX_RETRIES}): {e}");
+						log::warn!("SFTP read {range} from '{name}': reconnect failed ({attempt_label}): {e}");
 						if attempt >= MAX_RETRIES {
 							return Err(e).with_context(|| {
-								format!("failed to reconnect to '{}' after {MAX_RETRIES} attempts", self.name)
+								format!(
+									"could not read {range} ({len} bytes) from '{name}': reconnect failed — gave up after {total_attempts} attempts"
+								)
 							});
 						}
 						continue;
@@ -120,14 +125,14 @@ impl DataReaderTrait for DataReaderSftp {
 				}
 			}
 
-			let len = usize::try_from(range.length)?;
+			let buf_len = usize::try_from(range.length)?;
 			let result = {
 				let mut conn = self
 					.connection
 					.lock()
 					.map_err(|e| anyhow::anyhow!("lock poisoned: {e}"))?;
 				conn.file.seek(SeekFrom::Start(range.offset)).and_then(|_| {
-					let mut buffer = vec![0u8; len];
+					let mut buffer = vec![0u8; buf_len];
 					conn.file.read_exact(&mut buffer).map(|_| buffer)
 				})
 			};
@@ -135,23 +140,12 @@ impl DataReaderTrait for DataReaderSftp {
 			match result {
 				Ok(buffer) => return Ok(Blob::from(buffer)),
 				Err(e) if attempt < MAX_RETRIES => {
-					log::warn!(
-						"SFTP read error at offset {} len {} from '{}' (attempt {}/{}): {e}",
-						range.offset,
-						range.length,
-						self.name,
-						attempt + 1,
-						MAX_RETRIES + 1
-					);
+					log::warn!("SFTP read {range} from '{name}': {e} ({attempt_label}), will retry");
 				}
 				Err(e) => {
 					return Err(e).with_context(|| {
 						format!(
-							"failed to read {} bytes at offset {} from '{}' after {} attempts",
-							range.length,
-							range.offset,
-							self.name,
-							MAX_RETRIES + 1
+							"could not read {range} ({len} bytes) from '{name}' — gave up after {total_attempts} attempts"
 						)
 					});
 				}

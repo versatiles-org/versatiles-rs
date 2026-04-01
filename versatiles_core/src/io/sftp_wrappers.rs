@@ -99,25 +99,26 @@ impl SftpFileSystem {
 			self.mkdir_p(parent)?;
 		}
 
+		let total_attempts = MAX_RETRIES + 1;
+
 		for attempt in 0..=MAX_RETRIES {
+			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
+
 			if attempt > 0 {
 				let backoff = Duration::from_secs(1 << (attempt - 1));
-				log::warn!("SFTP write_file retry attempt {attempt}/{MAX_RETRIES} for {full_path:?}, waiting {backoff:?}");
+				log::warn!("SFTP write file {full_path:?}: retrying ({attempt_label}, waiting {backoff:?})");
 				thread::sleep(backoff);
 			}
 
 			match self.try_write_file(&full_path, data) {
 				Ok(()) => return Ok(()),
 				Err(e) if attempt < MAX_RETRIES => {
-					log::warn!(
-						"SFTP write_file error for {full_path:?} (attempt {}/{}): {e}",
-						attempt + 1,
-						MAX_RETRIES + 1
-					);
+					log::warn!("SFTP write file {full_path:?}: {e} ({attempt_label}), will retry");
 				}
 				Err(e) => {
-					return Err(e)
-						.with_context(|| format!("failed to write file {full_path:?} after {} attempts", MAX_RETRIES + 1));
+					return Err(e).with_context(|| {
+						format!("could not write file {full_path:?} — gave up after {total_attempts} attempts")
+					});
 				}
 			}
 		}

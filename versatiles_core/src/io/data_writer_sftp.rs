@@ -81,20 +81,23 @@ impl DataWriterTrait for DataWriterSftp {
 	fn append(&mut self, blob: &Blob) -> Result<ByteRange> {
 		let pos = self.position;
 		let name = sftp_utils::display_name(&self.url);
+		let blob_len = blob.len();
+		let total_attempts = MAX_RETRIES + 1;
 
 		for attempt in 0..=MAX_RETRIES {
+			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
+
 			if attempt > 0 {
 				let backoff = Duration::from_secs(1 << (attempt - 1));
-				log::warn!(
-					"SFTP write retry attempt {attempt}/{MAX_RETRIES} for '{name}' at position {pos}, waiting {backoff:?}"
-				);
+				log::warn!("SFTP write to '{name}' at position {pos}: retrying ({attempt_label}, waiting {backoff:?})");
 				thread::sleep(backoff);
 
 				if let Err(e) = self.reconnect() {
-					log::warn!("SFTP reconnect failed (attempt {attempt}/{MAX_RETRIES}): {e}");
+					log::warn!("SFTP write to '{name}' at position {pos}: reconnect failed ({attempt_label}): {e}");
 					if attempt >= MAX_RETRIES {
-						return Err(e)
-							.with_context(|| format!("failed to reconnect to '{name}' for append at position {pos}"));
+						return Err(e).with_context(|| {
+							format!("could not write {blob_len} bytes at position {pos} to '{name}': reconnect failed — gave up after {total_attempts} attempts")
+						});
 					}
 					continue;
 				}
@@ -102,23 +105,16 @@ impl DataWriterTrait for DataWriterSftp {
 
 			match self.file.write_all(blob.as_slice()) {
 				Ok(()) => {
-					let len = blob.len();
-					self.position += len;
-					return Ok(ByteRange::new(pos, len));
+					self.position += blob_len;
+					return Ok(ByteRange::new(pos, blob_len));
 				}
 				Err(e) if attempt < MAX_RETRIES => {
-					log::warn!(
-						"SFTP write error at position {pos} in '{name}' (attempt {}/{}): {e}",
-						attempt + 1,
-						MAX_RETRIES + 1
-					);
+					log::warn!("SFTP write to '{name}' at position {pos}: {e} ({attempt_label}), will retry");
 				}
 				Err(e) => {
 					return Err(e).with_context(|| {
 						format!(
-							"failed to write {} bytes at position {pos} to '{name}' after {} attempts",
-							blob.len(),
-							MAX_RETRIES + 1
+							"could not write {blob_len} bytes at position {pos} to '{name}' — gave up after {total_attempts} attempts"
 						)
 					});
 				}

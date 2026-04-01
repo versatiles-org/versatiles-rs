@@ -38,7 +38,6 @@ use regex::{Regex, RegexBuilder};
 use reqwest::{Client, RequestBuilder, StatusCode, Url};
 use std::{fmt, str, sync::LazyLock, time::Duration};
 use tokio::time::sleep;
-use versatiles_derive::context;
 
 /// A struct that provides reading capabilities from an HTTP(S) endpoint.
 pub struct DataReaderHttp {
@@ -132,17 +131,18 @@ impl DataReaderTrait for DataReaderHttp {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with the read data or an error.
-	#[context("reading range {} from '{}'", range, self.url)]
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
 		let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
+		let total_attempts = MAX_RETRIES + 1;
+		let url = &self.url;
+		let len = range.length;
 
 		for attempt in 0..=MAX_RETRIES {
+			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
+
 			if attempt > 0 {
 				let backoff = Duration::from_secs(1 << (attempt - 1));
-				log::warn!(
-					"retry attempt {attempt}/{MAX_RETRIES} reading range {range} from '{}', waiting {backoff:?}",
-					self.url
-				);
+				log::warn!("HTTP read {range} from '{url}': retrying ({attempt_label}, waiting {backoff:?})");
 				sleep(backoff).await;
 			}
 
@@ -154,35 +154,27 @@ impl DataReaderTrait for DataReaderHttp {
 			{
 				Ok(r) => r,
 				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
-					log::warn!("retryable error (attempt {}/{MAX_RETRIES}): {e}", attempt + 1);
+					log::warn!("HTTP read {range} from '{url}': {e} ({attempt_label}), will retry");
 					continue;
 				}
-				Err(e) => bail!(
-					"HTTP request to '{}' failed (attempt {}/{MAX_RETRIES}): {e}",
-					self.url,
-					attempt + 1,
-					MAX_RETRIES = MAX_RETRIES + 1
-				),
+				Err(e) => {
+					bail!("could not read {range} ({len} bytes) from '{url}': {e} — gave up after {total_attempts} attempts")
+				}
 			};
 
 			let status = response.status();
 			if status.is_server_error() && attempt < MAX_RETRIES {
-				log::warn!(
-					"HTTP {status} from '{}' (attempt {}/{}), retrying",
-					self.url,
-					attempt + 1,
-					MAX_RETRIES + 1
-				);
+				log::warn!("HTTP read {range} from '{url}': server returned {status} ({attempt_label}), will retry");
 				continue;
 			}
 
 			if status != StatusCode::PARTIAL_CONTENT {
-				bail!(
-					"expected HTTP 206 (Partial Content), got {status} from '{}' (attempt {}/{})",
-					self.url,
-					attempt + 1,
-					MAX_RETRIES + 1
-				);
+				if status.is_server_error() {
+					bail!(
+						"could not read {range} ({len} bytes) from '{url}': server returned {status} — gave up after {total_attempts} attempts"
+					);
+				}
+				bail!("could not read {range} ({len} bytes) from '{url}': expected HTTP 206, got {status}");
 			}
 
 			let content_range = response
@@ -219,16 +211,18 @@ impl DataReaderTrait for DataReaderHttp {
 			let bytes = match response.bytes().await {
 				Ok(b) => b,
 				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
-					log::warn!("retryable error reading response body: {e}");
+					log::warn!("HTTP read {range} from '{url}': error reading body: {e} ({attempt_label}), will retry");
 					continue;
 				}
-				Err(e) => return Err(e.into()),
+				Err(e) => bail!(
+					"could not read {range} ({len} bytes) from '{url}': error reading body: {e} — gave up after {total_attempts} attempts"
+				),
 			};
 
 			return Ok(Blob::from(&*bytes));
 		}
 
-		bail!("request failed after {MAX_RETRIES} retries")
+		bail!("could not read {range} ({len} bytes) from '{url}' — gave up after {total_attempts} attempts")
 	}
 
 	/// Reads all the data from the HTTP(S) endpoint.
@@ -236,65 +230,56 @@ impl DataReaderTrait for DataReaderHttp {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with all the data or an error.
-	#[context("reading all data from '{}'", self.url)]
 	async fn read_all(&self) -> Result<Blob> {
+		let total_attempts = MAX_RETRIES + 1;
+		let url = &self.url;
+
 		for attempt in 0..=MAX_RETRIES {
+			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
+
 			if attempt > 0 {
 				let backoff = Duration::from_secs(1 << (attempt - 1));
-				log::warn!(
-					"retry attempt {attempt}/{MAX_RETRIES} reading from '{}', waiting {backoff:?}",
-					self.url
-				);
+				log::warn!("HTTP read from '{url}': retrying ({attempt_label}, waiting {backoff:?})");
 				sleep(backoff).await;
 			}
 
 			let response = match self.apply_auth(self.client.get(self.url.clone())).send().await {
 				Ok(r) => r,
 				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
-					log::warn!("retryable error (attempt {}/{MAX_RETRIES}): {e}", attempt + 1);
+					log::warn!("HTTP read from '{url}': {e} ({attempt_label}), will retry");
 					continue;
 				}
-				Err(e) => bail!(
-					"HTTP request to '{}' failed (attempt {}/{MAX_RETRIES}): {e}",
-					self.url,
-					attempt + 1,
-					MAX_RETRIES = MAX_RETRIES + 1
-				),
+				Err(e) => bail!("could not read from '{url}': {e} — gave up after {total_attempts} attempts"),
 			};
 
 			let status = response.status();
 			if status.is_server_error() && attempt < MAX_RETRIES {
-				log::warn!(
-					"HTTP {status} from '{}' (attempt {}/{}), retrying",
-					self.url,
-					attempt + 1,
-					MAX_RETRIES + 1
-				);
+				log::warn!("HTTP read from '{url}': server returned {status} ({attempt_label}), will retry");
 				continue;
 			}
 
 			if !status.is_success() {
-				bail!(
-					"HTTP request to '{}' failed with status {status} (attempt {}/{})",
-					self.url,
-					attempt + 1,
-					MAX_RETRIES + 1
-				);
+				if status.is_server_error() {
+					bail!("could not read from '{url}': server returned {status} — gave up after {total_attempts} attempts");
+				}
+				bail!("could not read from '{url}': server returned {status}");
 			}
 
 			let bytes = match response.bytes().await {
 				Ok(b) => b,
 				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
-					log::warn!("retryable error reading response body: {e}");
+					log::warn!("HTTP read from '{url}': error reading body: {e} ({attempt_label}), will retry");
 					continue;
 				}
-				Err(e) => return Err(e.into()),
+				Err(e) => {
+					bail!("could not read from '{url}': error reading body: {e} — gave up after {total_attempts} attempts")
+				}
 			};
 
 			return Ok(Blob::from(&*bytes));
 		}
 
-		bail!("request failed after {MAX_RETRIES} retries")
+		bail!("could not read from '{url}' — gave up after {total_attempts} attempts")
 	}
 
 	/// Gets the name of the data source.
