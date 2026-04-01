@@ -88,9 +88,10 @@ impl TryFrom<&Url> for DataReaderSftp {
 	}
 }
 
-#[async_trait]
-impl DataReaderTrait for DataReaderSftp {
-	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
+impl DataReaderSftp {
+	/// Single-range read with retry/backoff/reconnect. Called by the trait
+	/// `read_range`, which adds divide-and-conquer splitting on top.
+	fn try_read_range(&self, range: &ByteRange) -> Result<Blob> {
 		let total_attempts = MAX_RETRIES + 1;
 		let name = &self.name;
 		let len = range.length;
@@ -153,6 +154,35 @@ impl DataReaderTrait for DataReaderSftp {
 		}
 
 		unreachable!()
+	}
+}
+
+#[async_trait]
+impl DataReaderTrait for DataReaderSftp {
+	/// Reads a specific range of bytes from the SFTP endpoint.
+	///
+	/// On failure, splits the range in half and reads each half separately.
+	/// This recurses until the pieces are small enough to succeed on a flaky
+	/// connection.
+	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
+		match self.try_read_range(range) {
+			Ok(blob) => Ok(blob),
+			Err(e) if range.length <= 1 => Err(e),
+			Err(e) => {
+				log::warn!(
+					"splitting failed range {range} ({} bytes) into two halves: {e}",
+					range.length
+				);
+				let mid = range.offset + range.length / 2;
+				let left = ByteRange::new(range.offset, mid - range.offset);
+				let right = ByteRange::new(mid, range.offset + range.length - mid);
+				let blob_left = self.read_range(&left).await?;
+				let blob_right = self.read_range(&right).await?;
+				let mut data = blob_left.into_vec();
+				data.extend_from_slice(blob_right.as_slice());
+				Ok(Blob::from(data))
+			}
+		}
 	}
 
 	async fn read_all(&self) -> Result<Blob> {

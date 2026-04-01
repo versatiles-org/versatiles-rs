@@ -121,18 +121,10 @@ fn is_retryable_error(err: &reqwest::Error) -> bool {
 	err.is_connect() || err.is_timeout() || err.is_body() || err.is_request()
 }
 
-#[async_trait]
-impl DataReaderTrait for DataReaderHttp {
-	/// Reads a specific range of bytes from the HTTP(S) endpoint.
-	///
-	/// # Arguments
-	///
-	/// * `range` - A `ByteRange` struct specifying the offset and length of the range to read.
-	///
-	/// # Returns
-	///
-	/// * A Result containing a Blob with the read data or an error.
-	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
+impl DataReaderHttp {
+	/// Single-range read with retry/backoff. Called by the trait `read_range`,
+	/// which adds divide-and-conquer splitting on top.
+	async fn try_read_range(&self, range: &ByteRange) -> Result<Blob> {
 		let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
 		let total_attempts = MAX_RETRIES + 1;
 		let url = &self.url;
@@ -224,6 +216,35 @@ impl DataReaderTrait for DataReaderHttp {
 		}
 
 		bail!("could not read {range} ({len} bytes) from '{url}' — gave up after {total_attempts} attempts")
+	}
+}
+
+#[async_trait]
+impl DataReaderTrait for DataReaderHttp {
+	/// Reads a specific range of bytes from the HTTP(S) endpoint.
+	///
+	/// On failure, splits the range in half and reads each half separately.
+	/// This recurses until the pieces are small enough to succeed on a flaky
+	/// connection.
+	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
+		match self.try_read_range(range).await {
+			Ok(blob) => Ok(blob),
+			Err(e) if range.length <= 1 => Err(e),
+			Err(e) => {
+				log::warn!(
+					"splitting failed range {range} ({} bytes) into two halves: {e}",
+					range.length
+				);
+				let mid = range.offset + range.length / 2;
+				let left = ByteRange::new(range.offset, mid - range.offset);
+				let right = ByteRange::new(mid, range.offset + range.length - mid);
+				let blob_left = self.read_range(&left).await?;
+				let blob_right = self.read_range(&right).await?;
+				let mut data = blob_left.into_vec();
+				data.extend_from_slice(blob_right.as_slice());
+				Ok(Blob::from(data))
+			}
+		}
 	}
 
 	/// Reads all the data from the HTTP(S) endpoint.

@@ -157,11 +157,11 @@ impl Chunks {
 				.then(move |chunk| {
 					let reader = Arc::clone(&reader);
 					async move {
-						if let Ok(entries) = chunk.read(&reader, tile_compression, tile_format).await {
-							futures::stream::iter(entries)
-						} else {
-							panic!("chunk read failed, but retry logic is not implemented yet");
-						}
+						let entries = chunk
+							.read(&reader, tile_compression, tile_format)
+							.await
+							.unwrap_or_else(|e| panic!("aborting to prevent corrupt output — {e:#}"));
+						futures::stream::iter(entries)
 					}
 				})
 				.flatten()
