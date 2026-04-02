@@ -26,7 +26,7 @@ pub(crate) trait NetworkReader: DataReaderTrait {
 	async fn network_read_range(&self, range: &ByteRange) -> Result<Blob> {
 		// Proactive split: skip try_read_range entirely for ranges we know are too large
 		if range.length > self.max_request_bytes().load(Ordering::Relaxed) && range.length > 1 {
-			log::info!(
+			log::trace!(
 				"proactively splitting range {range} ({} bytes) based on previous failures",
 				range.length
 			);
@@ -39,7 +39,7 @@ pub(crate) trait NetworkReader: DataReaderTrait {
 			Err(e) => {
 				// Learn from failure: future ranges this large should split proactively
 				self.max_request_bytes().fetch_min(range.length / 2, Ordering::Relaxed);
-				log::warn!(
+				log::debug!(
 					"splitting failed range {range} ({} bytes) into two halves: {e}",
 					range.length
 				);
