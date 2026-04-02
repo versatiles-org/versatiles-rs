@@ -1,6 +1,7 @@
 use crate::{PipelineFactory, vpl::VPLNode};
 use anyhow::Result;
 use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use std::collections::HashSet;
 use versatiles_container::TileSource;
 use versatiles_core::{TileBBox, TileCoord, TileStream};
@@ -13,18 +14,33 @@ pub trait ReadTileSource: TileSource {
 
 /// Collect the union of tile coordinates from multiple sources into a single stream.
 ///
-/// All sources are queried concurrently for their tile coordinates within `bbox`.
-/// The results are deduplicated so that each coordinate appears at most once.
+/// Each source is drained into its own `HashSet` concurrently. As each completes,
+/// its set is merged into a running accumulator and then dropped, so at most two
+/// `HashSet`s are in memory at any time (the accumulator and the one being merged).
 pub async fn union_tile_coord_streams(sources: &[&dyn TileSource], bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-	let streams: Vec<TileStream<'_, ()>> =
-		futures::future::try_join_all(sources.iter().map(|s| s.get_tile_coord_stream(bbox))).await?;
+	let futures: FuturesUnordered<_> = sources
+		.iter()
+		.map(|s| async {
+			let mut stream = s.get_tile_coord_stream(bbox).await?;
+			let mut coords = HashSet::new();
+			while let Some((coord, ())) = stream.next().await {
+				coords.insert(coord);
+			}
+			Ok::<_, anyhow::Error>(coords)
+		})
+		.collect();
 
-	let mut coords = HashSet::new();
-	let mut merged = futures::stream::select_all(streams.into_iter().map(|s| s.inner));
-	while let Some((coord, _)) = merged.next().await {
-		coords.insert(coord);
+	let mut union: HashSet<TileCoord> = HashSet::new();
+	futures::pin_mut!(futures);
+	while let Some(result) = futures.next().await {
+		let coords = result?;
+		if union.is_empty() {
+			union = coords;
+		} else {
+			union.extend(coords);
+		}
 	}
 
-	let vec: Vec<(TileCoord, ())> = coords.into_iter().map(|c| (c, ())).collect();
+	let vec: Vec<(TileCoord, ())> = union.into_iter().map(|c| (c, ())).collect();
 	Ok(TileStream::from_vec(vec))
 }
