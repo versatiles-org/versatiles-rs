@@ -89,7 +89,7 @@ use crate::{
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::stream;
-use std::{sync::Arc, vec};
+use std::{collections::HashSet, sync::Arc, vec};
 use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileBBoxPyramid, TileCoord, TileFormat, TileJSON, TileStream, TileType};
 use versatiles_derive::context;
@@ -366,7 +366,42 @@ impl TileSource for Operation {
 			)));
 		}
 
-		// Default: process tile by tile
+		// If any source is overscaled, pre-compute which coordinates have native tiles
+		// to avoid expensive blending work for coordinates with only overscaled coverage.
+		if entries.iter().any(|e| e.is_overscaled) {
+			let mut native_coords = HashSet::new();
+			for entry in &entries {
+				if !entry.is_overscaled {
+					let mut stream = entry.source.get_tile_coord_stream(bbox).await?;
+					while let Some((coord, ())) = stream.next().await {
+						native_coords.insert(coord);
+					}
+				}
+			}
+
+			if native_coords.is_empty() {
+				return Ok(TileStream::empty());
+			}
+
+			let native_coords = Arc::new(native_coords);
+			return Ok(TileStream::from_bbox_async_parallel(bbox, move |c| {
+				let entries = entries.clone();
+				let native_coords = Arc::clone(&native_coords);
+				async move {
+					if !native_coords.contains(&c) {
+						return None;
+					}
+					let tile = get_tile(c, entries).await.unwrap();
+					if let Some((_coord, mut tile)) = tile {
+						tile.change_format(tile_format, None, None).unwrap();
+						return Some((c, tile));
+					}
+					tile
+				}
+			}));
+		}
+
+		// Default: process tile by tile (all-native path)
 		Ok(TileStream::from_bbox_async_parallel(bbox, move |c| {
 			let entries = entries.clone();
 			async move {
