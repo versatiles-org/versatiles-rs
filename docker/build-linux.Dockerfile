@@ -7,14 +7,16 @@ FROM rust:alpine AS builder_musl
 # but -crt-static for cdylib (Node.js bindings) to enable dynamic linking
 # The RUSTFLAGS will be overridden per-build below
 # Install necessary packages
-RUN apk add --no-cache bash musl-dev
+# pkgconf + openssl-dev: required by openssl-sys (pulled in by ssh2/libssh2-sys)
+RUN apk add --no-cache bash musl-dev pkgconf openssl-dev
 
 # CREATE BUILDER SYSTEM FOR GNU
 FROM rust:slim AS builder_gnu
 # Avoid prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 # Install necessary packages
-RUN apt update -y && apt install -y bash && rm -rf /var/lib/apt/lists/*
+# pkg-config + libssl-dev: required by openssl-sys (pulled in by ssh2/libssh2-sys)
+RUN apt update -y && apt install -y bash pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 
 # SELECT BUILDER BASED ON LIBC
 # NOTE: BuildKit warns about ${LIBC} interpolation below - this is expected.
