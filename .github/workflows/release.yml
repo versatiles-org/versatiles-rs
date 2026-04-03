@@ -230,6 +230,9 @@ jobs:
     needs: prepare
     env:
       BUILD_ENABLED: ${{ github.event_name != 'workflow_dispatch' || inputs.build_macos }}
+      # openssl-sys cannot use pkg-config for cross-compilation (e.g. aarch64 host → x86_64 target).
+      # OPENSSL_VENDORED=1 builds OpenSSL from source for the exact target, bypassing pkg-config.
+      OPENSSL_VENDORED: 1
     strategy:
       fail-fast: false
       matrix:
