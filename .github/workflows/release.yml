@@ -226,17 +226,19 @@ jobs:
 
   build-macos:
     name: Build MacOS
-    runs-on: macos-latest
+    runs-on: ${{ matrix.runner }}
     needs: prepare
     env:
       BUILD_ENABLED: ${{ github.event_name != 'workflow_dispatch' || inputs.build_macos }}
-      # openssl-sys cannot use pkg-config for cross-compilation (e.g. aarch64 host → x86_64 target).
-      # OPENSSL_VENDORED=1 builds OpenSSL from source for the exact target, bypassing pkg-config.
-      OPENSSL_VENDORED: 1
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86_64, aarch64]
+        include:
+          # Use native runners to avoid cross-compilation; pkg-config finds OpenSSL without extra setup.
+          - arch: x86_64
+            runner: macos-13
+          - arch: aarch64
+            runner: macos-latest
     steps:
       - name: Gate — fast pass when deselected
         if: env.BUILD_ENABLED != 'true'
