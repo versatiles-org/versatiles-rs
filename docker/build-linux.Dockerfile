@@ -8,7 +8,8 @@ FROM rust:alpine AS builder_musl
 # The RUSTFLAGS will be overridden per-build below
 # Install necessary packages
 # pkgconf + openssl-dev: required by openssl-sys (pulled in by ssh2/libssh2-sys)
-RUN apk add --no-cache bash musl-dev pkgconf openssl-dev
+# openssl-libs-static: required for static linking (-C target-feature=+crt-static)
+RUN apk add --no-cache bash musl-dev pkgconf openssl-dev openssl-libs-static
 
 # CREATE BUILDER SYSTEM FOR GNU
 FROM rust:slim AS builder_gnu
