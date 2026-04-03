@@ -271,7 +271,7 @@ jobs:
           cache-on-failure: false
 
       - name: Test
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace
 
       - name: Test docs
         run: cargo test --workspace --doc
