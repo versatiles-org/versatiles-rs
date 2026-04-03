@@ -1,4 +1,4 @@
-use anyhow::{Result, ensure};
+use anyhow::{Result, anyhow, ensure};
 use imageproc::image::DynamicImage;
 use moka::future::Cache;
 use std::{fmt::Debug, sync::Arc};
@@ -35,7 +35,7 @@ impl TileResizeCore {
 			.tilejson()
 			.tile_size
 			.map(|ts| u32::from(ts.size()))
-			.ok_or_else(|| anyhow::anyhow!("source tile_size is not set"))?;
+			.ok_or_else(|| anyhow!("source tile_size is not set"))?;
 
 		ensure!(
 			target_tile_size == 256 || target_tile_size == 512,
@@ -49,41 +49,51 @@ impl TileResizeCore {
 		let source_pyramid = &source.metadata().bbox_pyramid;
 		let mut output_pyramid = TileBBoxPyramid::new_empty();
 
-		if source_tile_size == 512 && target_tile_size == 256 {
-			// 512→256: split
-			let source_max = source_pyramid
-				.get_level_max()
-				.ok_or_else(|| anyhow::anyhow!("source has no zoom levels"))?;
-			ensure!(
-				source_max < MAX_ZOOM_LEVEL,
-				"source max zoom level ({source_max}) must be below {MAX_ZOOM_LEVEL} for 512→256 conversion"
-			);
+		let source_max = source_pyramid
+			.get_level_max()
+			.ok_or_else(|| anyhow!("source has no zoom levels"))?;
 
-			for level in 0..=MAX_ZOOM_LEVEL {
-				let bbox = source_pyramid.get_level_bbox(level);
-				if !bbox.is_empty() {
-					if level == 0 {
-						output_pyramid.set_level_bbox(TileBBox::new_full(0)?);
+		match target_tile_size {
+			256 => {
+				// 512→256: split
+				ensure!(
+					source_tile_size == 512,
+					"source tile_size must be 512 for 256 target (only 512→256 split supported)"
+				);
+				ensure!(
+					source_max < MAX_ZOOM_LEVEL,
+					"source max zoom level ({source_max}) must be below {MAX_ZOOM_LEVEL} for 512→256 conversion"
+				);
+
+				for level in 0..=source_max {
+					let bbox = source_pyramid.get_level_bbox(level);
+					if !bbox.is_empty() {
+						if level == 0 {
+							output_pyramid.set_level_bbox(TileBBox::new_full(0)?);
+						}
+						output_pyramid.set_level_bbox(bbox.leveled_up());
 					}
-					output_pyramid.set_level_bbox(bbox.leveled_up());
 				}
 			}
-		} else {
-			// 256→512: merge
-			let source_max = source_pyramid
-				.get_level_max()
-				.ok_or_else(|| anyhow::anyhow!("source has no zoom levels"))?;
-			ensure!(
-				source_max >= 1,
-				"source must have zoom levels >= 1 for 256→512 merge (need children to merge)"
-			);
+			512 => {
+				// 256→512: merge
+				ensure!(
+					source_tile_size == 256,
+					"source tile_size must be 256 for 512 target (only 256→512 merge supported)"
+				);
+				ensure!(
+					source_max >= 1,
+					"source must have zoom levels >= 1 for 256→512 merge (need children to merge)"
+				);
 
-			for level in 1..=MAX_ZOOM_LEVEL {
-				let bbox = source_pyramid.get_level_bbox(level);
-				if !bbox.is_empty() {
-					output_pyramid.set_level_bbox(bbox.leveled_down());
+				for level in 1..=source_max {
+					let bbox = source_pyramid.get_level_bbox(level);
+					if !bbox.is_empty() {
+						output_pyramid.set_level_bbox(bbox.leveled_down());
+					}
 				}
 			}
+			_ => unreachable!(),
 		}
 
 		let mut metadata = source.metadata().clone();
