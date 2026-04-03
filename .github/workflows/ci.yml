@@ -240,7 +240,7 @@ jobs:
 
       - name: Run tests
         if: matrix.run-tests
-        run: cargo test --workspace --all-targets ${{ matrix.features }}
+        run: cargo test --workspace ${{ matrix.features }}
 
   # ============================================================================
   # Windows: Test
@@ -364,7 +364,7 @@ jobs:
           cache-on-failure: false
 
       - name: Test with GDAL
-        run: cargo test --workspace --all-targets --features gdal
+        run: cargo test --workspace --features gdal
 
   # ============================================================================
   # CI Success - Summary job
