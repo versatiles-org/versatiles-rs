@@ -8,14 +8,11 @@ use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitOperation;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Convert tile size between 256px and 512px by splitting or merging tiles.
-///
-/// - **512→256 (split):** Each 512px source tile is split into 4× 256px output tiles
-///   at the next higher zoom level. Level 0 is downscaled instead.
-/// - **256→512 (merge):** Four 256px source tiles are composed into one 512px output tile
-///   at the next lower zoom level.
+/// Convert the size of tiles by splitting or merging them to a width of 256px or 512px.
 pub struct Args {
-	/// Target tile size in pixels. Must be 256 or 512.
+	/// Target tile size in pixels.
+	/// A value of `256` expects source tiles of 512px, which will be split into four 256px output tiles at the next higher zoom level. Level 0 is downscaled instead.
+	/// A value of `512` expects source tiles measuring 256px, which will be merged into 512px output tiles at the next lower zoom level.
 	pub tile_size: Option<u32>,
 }
 
