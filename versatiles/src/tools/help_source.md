@@ -14,31 +14,82 @@ tiles.versatiles
 /absolute/path/to/tiles.pmtiles
 ```
 
-### URLs
+### HTTP and HTTPS URLs
 
-HTTP and HTTPS URLs are supported (VersaTiles containers only for remote):
+HTTP and HTTPS URLs are supported for reading. Only formats that support
+range-requests can be read remotely: `versatiles` and `pmtiles`.
 
 ```text
 https://example.org/tiles.versatiles
-http://download.example.org/world.versatiles
+http://download.example.org/world.pmtiles
 ```
 
-### URLs with Basic Authentication
+Connection details:
 
-To access sources that require HTTP Basic Authentication (e.g., WebDAV servers or private file servers), embed credentials directly in the URL:
+- Connect timeout: 30 s
+- TCP keepalive: 60 s (no overall timeout — large range reads can take minutes)
+- Automatic retry on transient failures (up to 2 retries with backoff)
+- Adaptive range splitting when the server rejects oversized requests
+
+### HTTP and HTTPS with Basic Authentication
+
+Embed credentials directly in the URL to access password-protected servers
+(e.g., WebDAV servers or private file hosts):
 
 ```text
 https://user:password@example.org/tiles.versatiles
 https://admin:s3cret@webdav.example.org/data/world.versatiles
 ```
 
-Special characters in the username or password must be percent-encoded (e.g., `@` → `%40`, `:` → `%3A`):
+Credentials are extracted from the URL, percent-decoded, and sent as an
+`Authorization: Basic` header. They are never passed as part of the URL to the
+server.
+
+Special characters in the username or password must be percent-encoded
+(e.g., `@` → `%40`, `:` → `%3A`):
 
 ```text
 https://user%40company:p%40ssw0rd@example.org/tiles.versatiles
 ```
 
-Credentials are extracted from the URL and sent as an `Authorization` header. They are never stored in the URL itself.
+### WebDAV
+
+WebDAV servers speak HTTP/HTTPS, so no special syntax is needed.
+Use a plain `https://` URL with basic auth if the server requires it:
+
+```text
+https://webdav.example.org/tiles/world.versatiles
+https://user:password@webdav.example.org/tiles/world.versatiles
+```
+
+### SFTP
+
+SFTP URLs are supported for both **reading** and **writing** when VersaTiles
+is built with the `ssh2` feature. Only formats with data-reader/writer support
+are available over SFTP: `versatiles` and `pmtiles`.
+
+```text
+sftp://fileserver.example.org/data/world.versatiles
+sftp://user@fileserver.example.org/data/world.versatiles
+sftp://user:password@fileserver.example.org/data/world.versatiles
+sftp://fileserver.example.org:2222/data/world.versatiles
+```
+
+Default port is **22**. Connect timeout is 30 s; SSH keepalive fires every 60 s.
+
+**Authentication** is tried in this order:
+
+1. Password embedded in the URL (`sftp://user:password@host/…`)
+2. Explicit identity file passed via `--ssh-identity`
+3. SSH agent
+4. `IdentityFile` entries in `~/.ssh/config` for the target host
+5. Default key files: `~/.ssh/id_ed25519`, `~/.ssh/id_rsa`, `~/.ssh/id_ecdsa`
+
+Writing to SFTP:
+
+```bash
+versatiles convert world.mbtiles sftp://user@fileserver.example.org/tiles/world.versatiles
+```
 
 ## Name and Type Prefixes
 
@@ -84,6 +135,7 @@ For programmatic use, data sources can be specified as JSON:
 {"location": "tiles.mbtiles"}
 {"name": "osm", "type": "mbtiles", "location": "tiles.db"}
 {"name": "inline", "type": "vpl", "content": "from_debug"}
+{"name": "remote", "type": "versatiles", "location": "https://example.org/tiles.versatiles"}
 ```
 
 JSON fields:
@@ -95,10 +147,10 @@ JSON fields:
 
 ## Supported Container Types
 
-- `versatiles` - VersaTiles format (*.versatiles)
-- `mbtiles` - MBTiles SQLite format (*.mbtiles)
-- `pmtiles` - PMTiles format (*.pmtiles)
-- `tar` - Tar archive (*.tar)
+- `versatiles` - VersaTiles format (*.versatiles) — supports HTTP, HTTPS, SFTP
+- `pmtiles` - PMTiles format (*.pmtiles) — supports HTTP, HTTPS, SFTP
+- `mbtiles` - MBTiles SQLite format (*.mbtiles) — local files only
+- `tar` - Tar archive (*.tar) — local files only
 - `vpl` - VersaTiles Pipeline Language (*.vpl)
 - Directory containing tiles in `{z}/{x}/{y}.{ext}` structure
 
@@ -108,8 +160,11 @@ JSON fields:
 # Basic file
 versatiles convert tiles.mbtiles output.versatiles
 
-# Remote VersaTiles container
+# Remote VersaTiles container over HTTPS
 versatiles probe https://download.versatiles.org/osm.versatiles
+
+# Remote PMTiles container over HTTPS
+versatiles probe https://example.org/world.pmtiles
 
 # Named tile source for serving
 versatiles serve [osm]tiles.versatiles [satellite]imagery.mbtiles
@@ -120,6 +175,18 @@ versatiles convert "[,vpl](from_mbtiles in.mbtiles | filter level_max=12)" out.v
 # Override container type
 versatiles probe tiles.db[,mbtiles]
 
-# Remote source with basic auth (e.g., WebDAV)
-versatiles serve https://user:password@webdav.example.org/tiles.versatiles
+# HTTPS with basic auth (e.g., WebDAV)
+versatiles probe https://user:password@webdav.example.org/tiles.versatiles
+
+# SFTP read with password auth
+versatiles probe sftp://user:password@fileserver.example.org/data/tiles.versatiles
+
+# SFTP read with SSH agent or key (no password in URL)
+versatiles probe sftp://user@fileserver.example.org/data/tiles.versatiles
+
+# SFTP write
+versatiles convert world.mbtiles sftp://user@fileserver.example.org/tiles/world.versatiles
+
+# SFTP with non-standard port
+versatiles probe sftp://user@fileserver.example.org:2222/data/tiles.versatiles
 ```
