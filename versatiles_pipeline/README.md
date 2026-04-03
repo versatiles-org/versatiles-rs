@@ -91,6 +91,7 @@ Reads a GDAL DEM dataset and produces terrain RGB tiles (Mapbox or Terrarium enc
 - *`level_min`: u8 (optional)* - The minimum zoom level to generate tiles for. (default: level_max)
 - *`gdal_reuse_limit`: u32 (optional)* - How often to reuse a GDAL instance. (default: 100) Set to a lower value if you have problems like memory leaks in GDAL.
 - *`gdal_concurrency_limit`: u8 (optional)* - The number of maximum concurrent GDAL instances to allow. (default: 4) Set to a higher value if you have enough system resources and want to increase throughput.
+- *`cutline`: String (optional)* - Optional path to a GeoJSON file with Polygon/MultiPolygon geometry. Only pixels inside the polygon will be rendered; everything outside becomes nodata.
 
 ---
 
@@ -108,6 +109,10 @@ Hint: When using "gdalbuildvrt" to create a virtual raster, don't forget to set 
 - *`level_min`: u8 (optional)* - The minimum zoom level to generate tiles for. (default: level_max)
 - *`gdal_reuse_limit`: u32 (optional)* - How often to reuse an GDAL instances. (default: 100) Set to a lower value if you have problems like memory leaks in GDAL.
 - *`gdal_concurrency_limit`: u8 (optional)* - The number of maximum concurrent GDAL instances to allow. (default: 4) Set to a higher value if you have enough system resources and want to increase throughput.
+- *`cutline`: String (optional)* - Optional path to a GeoJSON file with Polygon/MultiPolygon geometry. Only pixels inside the polygon will be rendered; everything outside becomes transparent.
+- *`bands`: String (optional)* - Comma-separated list of 1-based band indices to use as color channels. E.g. "4,3,2" maps band 4→Red, band 3→Green, band 2→Blue. "1" maps band 1→Grey. Defaults to auto-detection from color interpretation.
+- *`nodata`: String (optional)* - NoData value(s) to treat as transparent. Multiple values can be separated by semicolons (e.g. "0;255" treats both 0 and 255 as nodata). Each value can be a single number applied to all bands or comma-separated per-band values (e.g. "0,0,0;255,255,255"). The first value is handled natively by GDAL during reprojection; additional values are applied as a post-warp alpha mask. If not specified, the source dataset's per-band nodata value is used (if any).
+- *`crs`: u32 (optional)* - Override the source CRS with an EPSG code (e.g. "4326" or "25832"). Use this when the input image has no embedded CRS or an incorrect one.
 
 ---
 
@@ -143,7 +148,7 @@ All tile sources must provide raster tiles in the same resolution. The first sou
 ### Parameters
 
 - *`format`: TileFormat (optional)* - The tile format to use for the output tiles. Default: format of the first source.
-- *`auto_overscale`: bool (optional)* - Whether to automatically overscale tiles when a source does not provide tiles at the requested zoom level. Default: `false`.
+- *`auto_overscale`: bool (optional)* - Whether to automatically wrap each source with `raster_overscale` so that sources missing native tiles at the requested zoom level still contribute via upscaled tiles. When all sources overlapping a requested bbox are overscaled (none have native data), this operation returns an empty stream. Place a `raster_overscale` *after* `from_stacked_raster` in the pipeline to cover those tiles — it is more efficient to upscale one blended tile than N individual tiles. Default: `false`.
 
 ---
 
@@ -185,7 +190,6 @@ averages the values correctly, and re-encodes back to RGB.
 ### Parameters
 
 - *`level`: u8 (optional)* - Use this zoom level to build the overview. Defaults to the maximum zoom level of the source.
-- *`tile_size`: u32 (optional)* - Size of the tiles in pixels. Defaults to 512.
 - *`encoding`: String (optional)* - Override auto-detection of DEM encoding. Values: "mapbox", "terrarium".
 
 ---
@@ -194,13 +198,26 @@ averages the values correctly, and re-encodes back to RGB.
 
 Quantize DEM (elevation) raster tiles by zeroing unnecessary low bits.
 Computes a per-tile quantization mask from two physically meaningful criteria:
-resolution relative to tile size, and maximum gradient distortion.
+elevation error relative to pixel size, and maximum slope distortion.
 The stricter (smaller step) wins. Single-pass — no min/max scan needed.
 
 ### Parameters
 
-- *`resolution_ratio`: f64 (optional)* - Minimum elevation resolution as fraction of tile ground size. E.g. 0.001 means for a 1000 m tile, keep 1 m resolution. Defaults to 0.001.
-- *`max_gradient_error`: f64 (optional)* - Maximum allowed gradient change in degrees due to quantization. Defaults to 1.0.
+- *`elevation_error`: f64 (optional)* - Allowed elevation error as fraction of pixel ground size. E.g. 0.5 means for a 10 m pixel, allow up to 5 m elevation error. Defaults to 0.5.
+- *`slope_error`: f64 (optional)* - Maximum allowed slope change in degrees due to quantization. Defaults to 1.0.
+- *`encoding`: String (optional)* - Override auto-detection of DEM encoding. Values: "mapbox", "terrarium".
+
+---
+
+## dem_tile_resize
+
+Convert DEM tile size between 256px and 512px by splitting or merging tiles.
+Like raster_tile_resize, but uses 24-bit raw value averaging for downscaling
+(level 0, 512→256) instead of channel-wise averaging.
+
+### Parameters
+
+- *`tile_size`: u32 (optional)* - Target tile size in pixels. Must be 256 or 512.
 - *`encoding`: String (optional)* - Override auto-detection of DEM encoding. Values: "mapbox", "terrarium".
 
 ---
@@ -252,6 +269,7 @@ Convert raster tiles to a different image format and/or adjust quality/effort se
 
 - *`format`: String (optional)* - The desired tile format. Allowed values are: AVIF, JPG, PNG or WEBP. If not specified, the source format will be used.
 - *`quality`: String (optional)* - Quality level for the tile compression (only AVIF, JPG or WEBP), between 0 (worst) and 100 (lossless). To allow different quality levels for different zoom levels, this can also be a comma-separated list like this: "70,14:50,15:20", where the first value is the default quality, and the other values specify the quality for the specified zoom level (and higher).
+- *`quality_translucent`: String (optional)* - Quality level for translucent (semi-transparent) tiles, using the same zoom-dependent syntax as quality. When set, tiles are checked for opacity: opaque tiles use the normal quality setting, while translucent tiles use this value (typically 100 for lossless).
 - *`effort`: u8 (optional)* - Compression effort, between 0 (fastest) and 100 (slowest/best).
 
 ---
@@ -301,7 +319,20 @@ Generate lower-zoom overview tiles by downscaling from a base zoom level.
 ### Parameters
 
 - *`level`: u8 (optional)* - use this zoom level to build the overview. Defaults to the maximum zoom level of the source.
-- *`tile_size`: u32 (optional)* - Size of the tiles in pixels. Defaults to 512.
+
+---
+
+## raster_tile_resize
+
+Convert tile size between 256px and 512px by splitting or merging tiles.
+- **512→256 (split):** Each 512px source tile is split into 4× 256px output tiles
+at the next higher zoom level. Level 0 is downscaled instead.
+- **256→512 (merge):** Four 256px source tiles are composed into one 512px output tile
+at the next lower zoom level.
+
+### Parameters
+
+- *`tile_size`: u32 (optional)* - Target tile size in pixels. Must be 256 or 512.
 
 ---
 
