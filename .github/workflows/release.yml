@@ -236,7 +236,7 @@ jobs:
         include:
           # Use native runners to avoid cross-compilation; pkg-config finds OpenSSL without extra setup.
           - arch: x86_64
-            runner: macos-13
+            runner: macos-26-intel
           - arch: aarch64
             runner: macos-latest
     steps:
