@@ -1,18 +1,49 @@
 use crate::{EventBus, ProgressId, ProgressState};
 use parking_lot::Mutex;
 use std::{
-	sync::{Arc, Once},
+	sync::{
+		Arc, Once,
+		atomic::{AtomicBool, Ordering},
+	},
 	time::{Duration, Instant},
 };
 use versatiles_core::utils::float_to_int;
 
+/// Set to `true` once we detect we are running inside a tmux session.
+/// Written once in `install_osc_reset_hooks`; read (with Relaxed ordering)
+/// from both normal code and the async-signal-safe signal handler.
+static IN_TMUX: AtomicBool = AtomicBool::new(false);
+
+/// Return `true` when the process is running inside a tmux session.
+#[inline]
+fn in_tmux() -> bool {
+	IN_TMUX.load(Ordering::Relaxed)
+}
+
+/// Wrap an OSC sequence for the current terminal environment.
+///
+/// When inside tmux, the terminal multiplexer intercepts escape sequences
+/// before they reach the outer terminal. The DCS passthrough prefix
+/// `\x1bPtmux;\x1b` … `\x1b\\` tells tmux to forward the inner sequence
+/// verbatim. Every `ESC` (`\x1b`) inside the payload must be doubled so
+/// tmux does not misinterpret it as the end of the DCS string.
+fn osc_wrap(seq: &str) -> String {
+	if in_tmux() {
+		// Double every ESC inside the payload, then wrap in DCS passthrough.
+		let escaped = seq.replace('\x1b', "\x1b\x1b");
+		format!("\x1bPtmux;\x1b{escaped}\x1b\\")
+	} else {
+		seq.to_string()
+	}
+}
+
 /// Write the OSC 9;4 "clear progress" escape sequence to stderr.
 ///
-/// Uses the raw `write` syscall on Unix (async-signal-safe) so this function
-/// can be called safely from both a panic hook and a signal handler.
+/// Wraps the sequence for tmux when necessary.
 fn osc_reset() {
 	use std::io::Write;
-	let _ = write!(std::io::stderr(), "\x1b]9;4;0;\x07");
+	let seq = osc_wrap("\x1b]9;4;0;\x07");
+	let _ = write!(std::io::stderr(), "{seq}");
 	let _ = std::io::stderr().flush();
 }
 
@@ -25,6 +56,12 @@ fn osc_reset() {
 fn install_osc_reset_hooks() {
 	static ONCE: Once = Once::new();
 	ONCE.call_once(|| {
+		// Detect tmux once and cache the result in a static AtomicBool so
+		// the signal handler (which must be allocation-free) can read it.
+		if std::env::var_os("TMUX").is_some() {
+			IN_TMUX.store(true, Ordering::Relaxed);
+		}
+
 		// Chain with any existing panic hook so existing behaviour is preserved.
 		let prev = std::panic::take_hook();
 		std::panic::set_hook(Box::new(move |info| {
@@ -39,10 +76,16 @@ fn install_osc_reset_hooks() {
 		#[cfg(unix)]
 		{
 			// SAFETY: signal handlers must be async-signal-safe.  We only call
-			// `libc::write` (which is async-signal-safe), then restore the
-			// default handler and re-raise.  No Rust allocations or locks.
+			// `libc::write` (which is async-signal-safe) and `AtomicBool::load`
+			// (a plain memory load), then restore the default handler and
+			// re-raise.  No Rust allocations or locks are used.
 			unsafe extern "C" fn handle_signal(sig: libc::c_int) {
-				let seq = b"\x1b]9;4;0;\x07";
+				// Static byte sequences; choose at runtime based on IN_TMUX.
+				// Both sequences terminate the OSC 9;4 progress indicator.
+				const PLAIN: &[u8] = b"\x1b]9;4;0;\x07";
+				// DCS passthrough: ESC P tmux; ESC ESC ] 9;4;0; BEL ESC \
+				const TMUX: &[u8] = b"\x1bPtmux;\x1b\x1b]9;4;0;\x07\x1b\\";
+				let seq = if IN_TMUX.load(Ordering::Relaxed) { TMUX } else { PLAIN };
 				// SAFETY: fd 2 is always open; seq is a valid byte slice.
 				unsafe {
 					libc::write(2, seq.as_ptr().cast(), seq.len());
@@ -210,10 +253,12 @@ impl ProgressHandle {
 		let mut output = std::io::stderr();
 		if state.finished {
 			// Clear terminal progress indicator
-			write!(output, "\r\x1b[2K{line}\x1b]9;4;0;\x07").unwrap();
+			let osc = osc_wrap("\x1b]9;4;0;\x07");
+			write!(output, "\r\x1b[2K{line}{osc}").unwrap();
 		} else {
 			// Set terminal progress indicator (OSC 9;4)
-			write!(output, "\r\x1b[2K{line}\x1b]9;4;1;{percent}\x07").unwrap();
+			let osc = osc_wrap(&format!("\x1b]9;4;1;{percent}\x07"));
+			write!(output, "\r\x1b[2K{line}{osc}").unwrap();
 		}
 		output.flush().unwrap();
 	}
