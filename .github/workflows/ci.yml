@@ -370,14 +370,15 @@ jobs:
     name: "CI Success"
     runs-on: ubuntu-latest
     needs:
-      - markdown-lint
-      - linux-format
+      - linux-coverage
       - linux-docs
-      - linux-nodejs
       - linux-feature-matrix
+      - linux-format
+      - linux-nodejs
       - macos-gdal
-      - windows-test
+      - markdown-lint
       - windows-nodejs
+      - windows-test
     if: always()
     steps:
       - name: Check all jobs passed
