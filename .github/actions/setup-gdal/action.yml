@@ -1,12 +1,30 @@
 name: 'Setup GDAL'
-description: 'Install GDAL via system package manager'
+description: 'Install GDAL via system package manager, with Homebrew Cellar caching on macOS'
 
 runs:
   using: 'composite'
   steps:
+    - name: Cache Homebrew Cellar
+      if: runner.os == 'macOS'
+      id: cache-gdal
+      uses: actions/cache@v4
+      with:
+        path: /opt/homebrew/Cellar
+        key: macos-gdal-${{ runner.arch }}-${{ hashFiles('scripts/install-gdal.sh') }}
+
     - name: Install GDAL
+      if: runner.os != 'macOS' || steps.cache-gdal.outputs.cache-hit != 'true'
       shell: bash
+      env:
+        HOMEBREW_NO_AUTO_UPDATE: "1"
       run: ./scripts/install-gdal.sh --testing
+
+    - name: Relink GDAL from cache
+      if: runner.os == 'macOS' && steps.cache-gdal.outputs.cache-hit == 'true'
+      shell: bash
+      env:
+        HOMEBREW_NO_AUTO_UPDATE: "1"
+      run: brew link gdal --overwrite
 
     - name: Verify GDAL installation
       shell: bash
