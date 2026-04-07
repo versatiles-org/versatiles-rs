@@ -338,6 +338,35 @@ jobs:
         run: npm run test:examples
 
   # ============================================================================
+  # Windows ARM: Test
+  # ============================================================================
+  windows-arm-test:
+    name: "Windows ARM: Test"
+    runs-on: windows-11-arm
+    steps:
+      - name: Configure Git
+        shell: bash
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "windows-arm-test"
+          cache-targets: true
+          cache-on-failure: false
+
+      - name: Test
+        run: cargo test --workspace
+
+  # ============================================================================
   # macOS: GDAL
   # ============================================================================
   macos-gdal:
@@ -377,6 +406,7 @@ jobs:
       - linux-nodejs
       - macos-gdal
       - markdown-lint
+      - windows-arm-test
       - windows-nodejs
       - windows-test
     if: always()
