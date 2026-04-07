@@ -56,7 +56,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '22'
 
       - name: Check version synchronization
         run: ./scripts/sync-version.sh
@@ -379,7 +379,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '22'
 
       - name: Install dependencies
         working-directory: ./versatiles_node
@@ -481,7 +481,7 @@ jobs:
         if: env.PUBLISH_ENABLED == 'true'
         uses: actions/setup-node@v6
         with:
-          node-version: '24'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Ensure npm supports OIDC trusted publishing
