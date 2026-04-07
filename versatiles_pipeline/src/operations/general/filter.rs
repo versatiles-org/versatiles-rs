@@ -1,13 +1,13 @@
 use crate::{PipelineFactory, vpl::VPLNode};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
-use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
+use std::{collections::HashSet, fmt::Debug, sync::Arc};
+use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{GeoBBox, TileBBox, TileJSON, TileStream};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Filter tiles by bounding box and/or zoom levels.
+/// Filter tiles by bounding box, zoom levels, and/or the tile coordinates present in another container.
 struct Args {
 	/// Bounding box in WGS84: [min lng, min lat, max lng, max lat].
 	bbox: Option<[f64; 4]>,
@@ -15,18 +15,24 @@ struct Args {
 	level_min: Option<u8>,
 	/// maximal zoom level
 	level_max: Option<u8>,
+	/// Path to a tile container used as a coordinate allow-list.
+	/// Only tiles whose coordinates exist in this container are passed through.
+	/// Accepts the same path/URL syntax as `from_container`.
+	/// Note: opening the container and building the allow-list requires I/O at pipeline build time.
+	filename: Option<String>,
 }
 
 #[derive(Debug)]
 struct Operation {
 	metadata: TileSourceMetadata,
 	source: Box<dyn TileSource>,
+	mask: Option<Box<dyn TileSource>>,
 	tilejson: TileJSON,
 }
 
 impl Operation {
 	#[context("Building filter operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + TileSource,
 	{
@@ -70,6 +76,14 @@ impl Operation {
 			tilejson.center = None; // Center may no longer be valid after bbox intersection, so clear it to avoid confusion
 		}
 
+		let mask = if let Some(filename) = args.filename {
+			let mask = factory.get_reader(DataLocation::try_from(&filename)?).await?;
+			metadata.bbox_pyramid.intersect(&mask.metadata().bbox_pyramid);
+			Some(mask)
+		} else {
+			None
+		};
+
 		if metadata.bbox_pyramid.is_empty() {
 			log::warn!(
 				"Filter operation in VPL node {:?} results in empty bbox_pyramid",
@@ -82,6 +96,7 @@ impl Operation {
 		Ok(Self {
 			metadata,
 			source,
+			mask,
 			tilejson,
 		})
 	}
@@ -107,7 +122,21 @@ impl TileSource for Operation {
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
-		self.source.get_tile_stream(bbox).await
+
+		if let Some(mask) = &self.mask {
+			let mut coord_stream = mask.get_tile_coord_stream(bbox).await?;
+			let mut allowed = HashSet::new();
+			while let Some((coord, _)) = coord_stream.next().await {
+				allowed.insert(coord);
+			}
+			let source_stream = self.source.get_tile_stream(bbox).await?;
+			Ok(source_stream.filter_coord(move |coord| {
+				let contains = allowed.contains(&coord);
+				async move { contains }
+			}))
+		} else {
+			self.source.get_tile_stream(bbox).await
+		}
 	}
 
 	async fn get_tile_coord_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, ()>> {
@@ -115,7 +144,11 @@ impl TileSource for Operation {
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
-		self.source.get_tile_coord_stream(bbox).await
+		if let Some(mask) = &self.mask {
+			mask.get_tile_coord_stream(bbox).await
+		} else {
+			self.source.get_tile_coord_stream(bbox).await
+		}
 	}
 }
 
@@ -233,7 +266,7 @@ mod tests {
 		assert_eq!(o.get_number("minzoom")?.unwrap(), 3.0);
 		assert_eq!(o.get_number("maxzoom")?.unwrap(), 25.0);
 
-		// Sanity: tiles outside the final bbox shouldn’t pass
+		// Sanity: tiles outside the final bbox shouldn't pass
 		let outside = TileCoord::new(4, 0, 0)?.to_tile_bbox();
 		let n_out = op.get_tile_stream(outside).await?.to_vec().await.len();
 		assert_eq!(n_out, 0);
@@ -242,6 +275,54 @@ mod tests {
 		let inside = TileCoord::new(4, 8, 7)?.to_tile_bbox(); // somewhere within [10,5,40,20]
 		let n_in = op.get_tile_stream(inside).await?.to_vec().await.len();
 		assert_eq!(n_in, 1);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_filter_filename_passes_matching_tiles() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		// Both from_debug and the dummy "test.pbf" cover the full world, so all tiles pass.
+		let op = factory
+			.operation_from_vpl("from_debug format=mvt | filter filename=\"test.pbf\"")
+			.await?;
+
+		assert!(!op.metadata().bbox_pyramid.is_empty());
+
+		let bbox = TileBBox::from_min_and_max(3, 1, 1, 2, 2)?;
+		let count = op.get_tile_stream(bbox).await?.drain_and_count().await;
+		assert!(count > 0, "Expected tiles to pass through filename filter");
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_filter_filename_and_bbox_combined() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl("from_debug format=mvt | filter bbox=[0,0,10,10] filename=\"test.pbf\"")
+			.await?;
+
+		assert!(!op.metadata().bbox_pyramid.is_empty());
+
+		// A tile far outside the bbox should not pass even though the mask is full-world.
+		let far = TileCoord::new(3, 7, 7)?.to_tile_bbox();
+		let count = op.get_tile_stream(far).await?.drain_and_count().await;
+		assert_eq!(count, 0, "Expected no tiles outside filtered bbox");
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_filter_filename_coord_stream_delegates_to_mask() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl("from_debug format=mvt | filter filename=\"test.pbf\"")
+			.await?;
+
+		let bbox = TileBBox::from_min_and_max(2, 0, 0, 3, 3)?;
+		let count = op.get_tile_coord_stream(bbox).await?.drain_and_count().await;
+		assert!(count > 0);
 
 		Ok(())
 	}
