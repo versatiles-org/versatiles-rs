@@ -262,9 +262,7 @@ jobs:
 
       - name: Run Tests
         if: env.BUILD_ENABLED == 'true'
-        run: |
-          cargo test --bins
-          cargo test --lib
+        run: cargo test
 
       - name: Build CLI Binary
         if: env.BUILD_ENABLED == 'true'
