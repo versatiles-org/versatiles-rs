@@ -9,7 +9,9 @@ runs:
       id: cache-gdal
       uses: actions/cache@v4
       with:
-        path: /opt/homebrew/Cellar
+        path: |
+          /opt/homebrew/Cellar
+          /opt/homebrew/opt
         key: macos-gdal-${{ runner.arch }}-${{ hashFiles('scripts/install-gdal.sh') }}
 
     - name: Install GDAL
