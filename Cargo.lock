@@ -4515,6 +4515,7 @@ dependencies = [
  "enumset",
  "futures",
  "itertools 0.14.0",
+ "libc",
  "log",
  "parking_lot",
  "r2d2",

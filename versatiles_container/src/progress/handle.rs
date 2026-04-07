@@ -1,10 +1,62 @@
 use crate::{EventBus, ProgressId, ProgressState};
 use parking_lot::Mutex;
 use std::{
-	sync::Arc,
+	sync::{Arc, Once},
 	time::{Duration, Instant},
 };
 use versatiles_core::utils::float_to_int;
+
+/// Write the OSC 9;4 "clear progress" escape sequence to stderr.
+///
+/// Uses the raw `write` syscall on Unix (async-signal-safe) so this function
+/// can be called safely from both a panic hook and a signal handler.
+fn osc_reset() {
+	use std::io::Write;
+	let _ = write!(std::io::stderr(), "\x1b]9;4;0;\x07");
+	let _ = std::io::stderr().flush();
+}
+
+/// Install the panic hook and (on Unix) signal handlers that reset the
+/// OSC progress indicator before the process terminates abnormally.
+///
+/// Safe to call multiple times — the setup runs exactly once.
+/// Note: SIGKILL cannot be caught by any process; only SIGTERM and SIGINT
+/// (Ctrl+C) are covered here.
+fn install_osc_reset_hooks() {
+	static ONCE: Once = Once::new();
+	ONCE.call_once(|| {
+		// Chain with any existing panic hook so existing behaviour is preserved.
+		let prev = std::panic::take_hook();
+		std::panic::set_hook(Box::new(move |info| {
+			osc_reset();
+			prev(info);
+		}));
+
+		// On Unix, install signal handlers for SIGTERM and SIGINT.
+		// The handler writes the OSC reset directly via the async-signal-safe
+		// `write(2)` syscall, then restores the default handler and re-raises
+		// the signal so the process exits with the correct status/core dump.
+		#[cfg(unix)]
+		{
+			// SAFETY: signal handlers must be async-signal-safe.  We only call
+			// `libc::write` (which is async-signal-safe), then restore the
+			// default handler and re-raise.  No Rust allocations or locks.
+			unsafe extern "C" fn handle_signal(sig: libc::c_int) {
+				let seq = b"\x1b]9;4;0;\x07";
+				// SAFETY: fd 2 is always open; seq is a valid byte slice.
+				unsafe {
+					libc::write(2, seq.as_ptr().cast(), seq.len());
+					libc::signal(sig, libc::SIG_DFL);
+					libc::raise(sig);
+				}
+			}
+			unsafe {
+				libc::signal(libc::SIGTERM, handle_signal as *const () as libc::sighandler_t);
+				libc::signal(libc::SIGINT, handle_signal as *const () as libc::sighandler_t);
+			}
+		}
+	});
+}
 
 /// Handle for tracking progress of an operation
 ///
@@ -20,6 +72,9 @@ pub struct ProgressHandle {
 impl ProgressHandle {
 	#[must_use]
 	pub fn new(id: ProgressId, message: String, total: u64, event_bus: EventBus, silent: bool) -> Self {
+		if !silent {
+			install_osc_reset_hooks();
+		}
 		let start = Instant::now();
 		let handle = Self {
 			state: Arc::new(Mutex::new(ProgressState {
