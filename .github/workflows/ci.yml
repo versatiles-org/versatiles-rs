@@ -273,9 +273,6 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
-      - name: Test docs
-        run: cargo test --workspace --doc
-
       - name: Check no-default-features
         run: cargo check --workspace --no-default-features
 
