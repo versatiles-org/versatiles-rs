@@ -33,7 +33,7 @@
 
 use super::{TileJsonValues, VectorLayers};
 use crate::{
-	Blob, GeoBBox, GeoCenter, TileBBoxPyramid, TileFormat, TileSchema, TileSize, TileType,
+	Blob, GeoBBox, GeoCenter, PyramidInfo, TileFormat, TileSchema, TileSize, TileType,
 	json::{JsonObject, JsonValue, parse_json_str},
 };
 use anyhow::{Ok, Result, anyhow, ensure};
@@ -203,21 +203,25 @@ impl TileJSON {
 	// Pyramid Integration
 	// -------------------------------------------------------------------------
 
-	/// Updates this `TileJSON` based on a [`TileBBoxPyramid`], using pyramid values only as fallback.
+	/// Updates this `TileJSON` based on any type implementing [`PyramidInfo`],
+	/// using pyramid values only as fallback.
 	///
 	/// - Sets `bounds` from the pyramid only if `self.bounds` is `None`.
 	/// - Sets `minzoom` from the pyramid.
 	/// - Sets `maxzoom` from the pyramid.
-	pub fn update_from_pyramid(&mut self, pyramid: &TileBBoxPyramid) {
+	///
+	/// Both [`crate::TileBBoxPyramid`] and [`crate::TileQuadtreePyramid`]
+	/// implement [`PyramidInfo`], so either can be passed here.
+	pub fn update_from_pyramid<P: PyramidInfo>(&mut self, pyramid: &P) {
 		if self.bounds.is_none() {
 			self.bounds = pyramid.get_geo_bbox();
 		}
 
-		if let Some(z) = pyramid.get_level_min() {
+		if let Some(z) = pyramid.get_zoom_min() {
 			self.set_min_zoom(z);
 		}
 
-		if let Some(z) = pyramid.get_level_max() {
+		if let Some(z) = pyramid.get_zoom_max() {
 			self.set_max_zoom(z);
 		}
 	}
@@ -582,6 +586,7 @@ impl Debug for TileJSON {
 #[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use crate::TileBBoxPyramid;
 
 	/// Creates a minimal valid `TileJSON` object in the form of `JsonObject`.
 	fn make_test_json_object() -> JsonObject {

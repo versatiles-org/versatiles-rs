@@ -1,4 +1,4 @@
-use crate::{GeoBBox, GeoCenter, TileBBoxPyramid};
+use crate::{GeoBBox, GeoCenter, PyramidInfo, TileBBoxPyramid};
 use anyhow::{Result, ensure};
 
 impl TileBBoxPyramid {
@@ -24,6 +24,16 @@ impl TileBBoxPyramid {
 		Some(GeoCenter(center_lon, center_lat, zoom))
 	}
 
+	#[must_use]
+	pub fn get_zoom_min(&self) -> Option<u8> {
+		self.get_level_min()
+	}
+
+	#[must_use]
+	pub fn get_zoom_max(&self) -> Option<u8> {
+		self.get_level_max()
+	}
+
 	pub fn weighted_bbox(&self) -> Result<GeoBBox> {
 		let mut x_min_sum: f64 = 0.0;
 		let mut y_min_sum: f64 = 0.0;
@@ -47,5 +57,19 @@ impl TileBBoxPyramid {
 			x_max_sum / weight_sum,
 			y_max_sum / weight_sum,
 		)
+	}
+}
+
+impl PyramidInfo for TileBBoxPyramid {
+	fn get_geo_bbox(&self) -> Option<GeoBBox> {
+		self.get_geo_bbox()
+	}
+
+	fn get_zoom_min(&self) -> Option<u8> {
+		self.get_zoom_min()
+	}
+
+	fn get_zoom_max(&self) -> Option<u8> {
+		self.get_zoom_max()
 	}
 }

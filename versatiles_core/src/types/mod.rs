@@ -71,6 +71,9 @@ pub use limited_cache::*;
 mod probe_depth;
 pub use probe_depth::*;
 
+mod pyramid_info;
+pub use pyramid_info::*;
+
 mod tile_bbox;
 pub use tile_bbox::*;
 

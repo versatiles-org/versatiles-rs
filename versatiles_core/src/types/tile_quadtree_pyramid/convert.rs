@@ -1,7 +1,7 @@
 //! Conversion methods for [`TileQuadtreePyramid`].
 
 use super::TileQuadtreePyramid;
-use crate::{MAX_ZOOM_LEVEL, TileBBoxPyramid};
+use crate::{GeoBBox, MAX_ZOOM_LEVEL, PyramidInfo, TileBBoxPyramid};
 
 impl TileQuadtreePyramid {
 	/// Converts this pyramid to a [`TileBBoxPyramid`] by computing the bounding box
@@ -21,5 +21,19 @@ impl TileQuadtreePyramid {
 			}
 		}
 		pyramid
+	}
+}
+
+impl PyramidInfo for TileQuadtreePyramid {
+	fn get_geo_bbox(&self) -> Option<GeoBBox> {
+		self.get_geo_bbox()
+	}
+
+	fn get_zoom_min(&self) -> Option<u8> {
+		self.get_zoom_min()
+	}
+
+	fn get_zoom_max(&self) -> Option<u8> {
+		self.get_zoom_max()
 	}
 }
