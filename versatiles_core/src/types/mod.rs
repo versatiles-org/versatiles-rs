@@ -83,6 +83,9 @@ pub use tile_bbox_map::*;
 mod tile_bbox_pyramid;
 pub use tile_bbox_pyramid::*;
 
+mod tile_quadtree_pyramid;
+pub use tile_quadtree_pyramid::*;
+
 mod tile_compression;
 pub use tile_compression::*;
 
