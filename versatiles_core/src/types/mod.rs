@@ -74,6 +74,9 @@ pub use probe_depth::*;
 mod tile_bbox;
 pub use tile_bbox::*;
 
+mod tile_quadtree;
+pub use tile_quadtree::*;
+
 mod tile_bbox_map;
 pub use tile_bbox_map::*;
 
