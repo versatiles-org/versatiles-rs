@@ -59,6 +59,17 @@ impl Node {
 	}
 }
 
+/// A compact axis-aligned bounding box used internally by recursive quadtree helpers.
+///
+/// All coordinates are in tile-space and the max values are exclusive.
+#[derive(Clone, Copy)]
+pub(crate) struct BBox {
+	pub x_min: u64,
+	pub y_min: u64,
+	pub x_max: u64,
+	pub y_max: u64,
+}
+
 /// A set of tiles at a single zoom level, backed by a quadtree.
 ///
 /// # Examples

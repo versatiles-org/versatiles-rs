@@ -15,7 +15,7 @@ impl TileQuadtree {
 	/// Split the quadtree into a grid of sub-quadtrees, each covering at most
 	/// `size × size` tiles at the current zoom level.
 	///
-	/// This is analogous to [`TileBBox::iter_bbox_grid`].
+	/// This is analogous to `TileBBox::iter_bbox_grid`.
 	pub fn iter_bbox_grid(&self, size: u32) -> impl Iterator<Item = TileQuadtree> + '_ {
 		assert!(size > 0, "grid size must be > 0");
 		let zoom = self.zoom;

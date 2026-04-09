@@ -1,7 +1,7 @@
 //! Mutation methods for [`TileQuadtree`].
 
 use super::constructors::{check_bbox_zoom, check_coord_zoom};
-use super::{Node, TileQuadtree};
+use super::{BBox, Node, TileQuadtree};
 use crate::{TileBBox, TileCoord};
 use anyhow::Result;
 
@@ -20,7 +20,6 @@ impl TileQuadtree {
 			size,
 			u64::from(coord.x),
 			u64::from(coord.y),
-			self.zoom,
 		);
 		self.root = new_root;
 		Ok(())
@@ -45,10 +44,12 @@ impl TileQuadtree {
 			0,
 			0,
 			size,
-			bx_min,
-			by_min,
-			bx_max,
-			by_max,
+			BBox {
+				x_min: bx_min,
+				y_min: by_min,
+				x_max: bx_max,
+				y_max: by_max,
+			},
 		);
 		self.root = new_root;
 		Ok(())
@@ -68,7 +69,6 @@ impl TileQuadtree {
 			size,
 			u64::from(coord.x),
 			u64::from(coord.y),
-			self.zoom,
 		);
 		self.root = new_root;
 		Ok(())
@@ -93,17 +93,19 @@ impl TileQuadtree {
 			0,
 			0,
 			size,
-			bx_min,
-			by_min,
-			bx_max,
-			by_max,
+			BBox {
+				x_min: bx_min,
+				y_min: by_min,
+				x_max: bx_max,
+				y_max: by_max,
+			},
 		);
 		self.root = new_root;
 		Ok(())
 	}
 }
 
-fn node_insert_tile(node: Node, x_off: u64, y_off: u64, size: u64, tx: u64, ty: u64, remaining_depth: u8) -> Node {
+fn node_insert_tile(node: Node, x_off: u64, y_off: u64, size: u64, tx: u64, ty: u64) -> Node {
 	match node {
 		Node::Full => Node::Full,
 		Node::Empty => {
@@ -113,34 +115,25 @@ fn node_insert_tile(node: Node, x_off: u64, y_off: u64, size: u64, tx: u64, ty: 
 				// Expand to Partial and recurse
 				let mut children = [Node::Empty, Node::Empty, Node::Empty, Node::Empty];
 				let (idx, cx, cy, half) = child_quadrant(x_off, y_off, size, tx, ty);
-				children[idx] = node_insert_tile(Node::Empty, cx, cy, half, tx, ty, remaining_depth - 1);
+				children[idx] = node_insert_tile(Node::Empty, cx, cy, half, tx, ty);
 				Node::normalize(children)
 			}
 		}
 		Node::Partial(mut children) => {
 			let (idx, cx, cy, half) = child_quadrant(x_off, y_off, size, tx, ty);
 			let child = std::mem::replace(&mut children[idx], Node::Empty);
-			children[idx] = node_insert_tile(child, cx, cy, half, tx, ty, remaining_depth - 1);
+			children[idx] = node_insert_tile(child, cx, cy, half, tx, ty);
 			Node::normalize(*children)
 		}
 	}
 }
 
-fn node_insert_bbox(
-	node: Node,
-	x_off: u64,
-	y_off: u64,
-	size: u64,
-	bx_min: u64,
-	by_min: u64,
-	bx_max: u64,
-	by_max: u64,
-) -> Node {
+fn node_insert_bbox(node: Node, x_off: u64, y_off: u64, size: u64, bbox: BBox) -> Node {
 	// Intersection of bbox with this cell
-	let ix_min = bx_min.max(x_off);
-	let iy_min = by_min.max(y_off);
-	let ix_max = bx_max.min(x_off + size);
-	let iy_max = by_max.min(y_off + size);
+	let ix_min = bbox.x_min.max(x_off);
+	let iy_min = bbox.y_min.max(y_off);
+	let ix_max = bbox.x_max.min(x_off + size);
+	let iy_max = bbox.y_max.min(y_off + size);
 
 	if ix_min >= ix_max || iy_min >= iy_max {
 		return node; // bbox doesn't touch this cell
@@ -161,10 +154,10 @@ fn node_insert_bbox(
 				let mid_x = x_off + half;
 				let mid_y = y_off + half;
 				let children = [
-					node_insert_bbox(Node::Empty, x_off, y_off, half, bx_min, by_min, bx_max, by_max),
-					node_insert_bbox(Node::Empty, mid_x, y_off, half, bx_min, by_min, bx_max, by_max),
-					node_insert_bbox(Node::Empty, x_off, mid_y, half, bx_min, by_min, bx_max, by_max),
-					node_insert_bbox(Node::Empty, mid_x, mid_y, half, bx_min, by_min, bx_max, by_max),
+					node_insert_bbox(Node::Empty, x_off, y_off, half, bbox),
+					node_insert_bbox(Node::Empty, mid_x, y_off, half, bbox),
+					node_insert_bbox(Node::Empty, x_off, mid_y, half, bbox),
+					node_insert_bbox(Node::Empty, mid_x, mid_y, half, bbox),
 				];
 				Node::normalize(children)
 			}
@@ -175,17 +168,17 @@ fn node_insert_bbox(
 			let mid_y = y_off + half;
 			let [nw, ne, sw, se] = *children;
 			let children = [
-				node_insert_bbox(nw, x_off, y_off, half, bx_min, by_min, bx_max, by_max),
-				node_insert_bbox(ne, mid_x, y_off, half, bx_min, by_min, bx_max, by_max),
-				node_insert_bbox(sw, x_off, mid_y, half, bx_min, by_min, bx_max, by_max),
-				node_insert_bbox(se, mid_x, mid_y, half, bx_min, by_min, bx_max, by_max),
+				node_insert_bbox(nw, x_off, y_off, half, bbox),
+				node_insert_bbox(ne, mid_x, y_off, half, bbox),
+				node_insert_bbox(sw, x_off, mid_y, half, bbox),
+				node_insert_bbox(se, mid_x, mid_y, half, bbox),
 			];
 			Node::normalize(children)
 		}
 	}
 }
 
-fn node_remove_tile(node: Node, x_off: u64, y_off: u64, size: u64, tx: u64, ty: u64, remaining_depth: u8) -> Node {
+fn node_remove_tile(node: Node, x_off: u64, y_off: u64, size: u64, tx: u64, ty: u64) -> Node {
 	match node {
 		Node::Empty => Node::Empty,
 		Node::Full => {
@@ -195,33 +188,24 @@ fn node_remove_tile(node: Node, x_off: u64, y_off: u64, size: u64, tx: u64, ty: 
 				// Expand to Partial([Full; 4]) and recurse
 				let mut children = [Node::Full, Node::Full, Node::Full, Node::Full];
 				let (idx, cx, cy, half) = child_quadrant(x_off, y_off, size, tx, ty);
-				children[idx] = node_remove_tile(Node::Full, cx, cy, half, tx, ty, remaining_depth - 1);
+				children[idx] = node_remove_tile(Node::Full, cx, cy, half, tx, ty);
 				Node::normalize(children)
 			}
 		}
 		Node::Partial(mut children) => {
 			let (idx, cx, cy, half) = child_quadrant(x_off, y_off, size, tx, ty);
 			let child = std::mem::replace(&mut children[idx], Node::Empty);
-			children[idx] = node_remove_tile(child, cx, cy, half, tx, ty, remaining_depth - 1);
+			children[idx] = node_remove_tile(child, cx, cy, half, tx, ty);
 			Node::normalize(*children)
 		}
 	}
 }
 
-fn node_remove_bbox(
-	node: Node,
-	x_off: u64,
-	y_off: u64,
-	size: u64,
-	bx_min: u64,
-	by_min: u64,
-	bx_max: u64,
-	by_max: u64,
-) -> Node {
-	let ix_min = bx_min.max(x_off);
-	let iy_min = by_min.max(y_off);
-	let ix_max = bx_max.min(x_off + size);
-	let iy_max = by_max.min(y_off + size);
+fn node_remove_bbox(node: Node, x_off: u64, y_off: u64, size: u64, bbox: BBox) -> Node {
+	let ix_min = bbox.x_min.max(x_off);
+	let iy_min = bbox.y_min.max(y_off);
+	let ix_max = bbox.x_max.min(x_off + size);
+	let iy_max = bbox.y_max.min(y_off + size);
 
 	if ix_min >= ix_max || iy_min >= iy_max {
 		return node;
@@ -241,10 +225,10 @@ fn node_remove_bbox(
 				let mid_x = x_off + half;
 				let mid_y = y_off + half;
 				let children = [
-					node_remove_bbox(Node::Full, x_off, y_off, half, bx_min, by_min, bx_max, by_max),
-					node_remove_bbox(Node::Full, mid_x, y_off, half, bx_min, by_min, bx_max, by_max),
-					node_remove_bbox(Node::Full, x_off, mid_y, half, bx_min, by_min, bx_max, by_max),
-					node_remove_bbox(Node::Full, mid_x, mid_y, half, bx_min, by_min, bx_max, by_max),
+					node_remove_bbox(Node::Full, x_off, y_off, half, bbox),
+					node_remove_bbox(Node::Full, mid_x, y_off, half, bbox),
+					node_remove_bbox(Node::Full, x_off, mid_y, half, bbox),
+					node_remove_bbox(Node::Full, mid_x, mid_y, half, bbox),
 				];
 				Node::normalize(children)
 			}
@@ -255,10 +239,10 @@ fn node_remove_bbox(
 			let mid_y = y_off + half;
 			let [nw, ne, sw, se] = *children;
 			let children = [
-				node_remove_bbox(nw, x_off, y_off, half, bx_min, by_min, bx_max, by_max),
-				node_remove_bbox(ne, mid_x, y_off, half, bx_min, by_min, bx_max, by_max),
-				node_remove_bbox(sw, x_off, mid_y, half, bx_min, by_min, bx_max, by_max),
-				node_remove_bbox(se, mid_x, mid_y, half, bx_min, by_min, bx_max, by_max),
+				node_remove_bbox(nw, x_off, y_off, half, bbox),
+				node_remove_bbox(ne, mid_x, y_off, half, bbox),
+				node_remove_bbox(sw, x_off, mid_y, half, bbox),
+				node_remove_bbox(se, mid_x, mid_y, half, bbox),
 			];
 			Node::normalize(children)
 		}

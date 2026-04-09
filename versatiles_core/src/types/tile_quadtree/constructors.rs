@@ -1,6 +1,6 @@
 //! Constructors for [`TileQuadtree`].
 
-use super::{Node, TileQuadtree};
+use super::{BBox, Node, TileQuadtree};
 use crate::{GeoBBox, TileBBox, validate_zoom_level};
 use anyhow::{Result, ensure};
 
@@ -52,7 +52,18 @@ impl TileQuadtree {
 		let x_max = u64::from(bbox.x_max()?) + 1; // exclusive
 		let y_max = u64::from(bbox.y_max()?) + 1; // exclusive
 
-		let root = build_node(zoom, 0, 0, size, x_min, y_min, x_max, y_max);
+		let root = build_node(
+			zoom,
+			0,
+			0,
+			size,
+			BBox {
+				x_min,
+				y_min,
+				x_max,
+				y_max,
+			},
+		);
 		Ok(TileQuadtree { zoom, root })
 	}
 
@@ -69,22 +80,13 @@ impl TileQuadtree {
 
 /// Recursively build a quadtree node for the cell covering
 /// `[x_off, x_off+size) × [y_off, y_off+size)` against the bbox
-/// `[bx_min, bx_max) × [by_min, by_max)` (all exclusive on max side).
-fn build_node(
-	depth: u8,
-	x_off: u64,
-	y_off: u64,
-	size: u64,
-	bx_min: u64,
-	by_min: u64,
-	bx_max: u64,
-	by_max: u64,
-) -> Node {
+/// `[bbox.x_min, bbox.x_max) × [bbox.y_min, bbox.y_max)` (all exclusive on max side).
+fn build_node(depth: u8, x_off: u64, y_off: u64, size: u64, bbox: BBox) -> Node {
 	// Intersection of bbox with this cell
-	let ix_min = bx_min.max(x_off);
-	let iy_min = by_min.max(y_off);
-	let ix_max = bx_max.min(x_off + size);
-	let iy_max = by_max.min(y_off + size);
+	let ix_min = bbox.x_min.max(x_off);
+	let iy_min = bbox.y_min.max(y_off);
+	let ix_max = bbox.x_max.min(x_off + size);
+	let iy_max = bbox.y_max.min(y_off + size);
 
 	if ix_min >= ix_max || iy_min >= iy_max {
 		return Node::Empty;
@@ -103,10 +105,10 @@ fn build_node(
 	let mid_x = x_off + half;
 	let mid_y = y_off + half;
 
-	let nw = build_node(depth - 1, x_off, y_off, half, bx_min, by_min, bx_max, by_max);
-	let ne = build_node(depth - 1, mid_x, y_off, half, bx_min, by_min, bx_max, by_max);
-	let sw = build_node(depth - 1, x_off, mid_y, half, bx_min, by_min, bx_max, by_max);
-	let se = build_node(depth - 1, mid_x, mid_y, half, bx_min, by_min, bx_max, by_max);
+	let nw = build_node(depth - 1, x_off, y_off, half, bbox);
+	let ne = build_node(depth - 1, mid_x, y_off, half, bbox);
+	let sw = build_node(depth - 1, x_off, mid_y, half, bbox);
+	let se = build_node(depth - 1, mid_x, mid_y, half, bbox);
 
 	Node::normalize([nw, ne, sw, se])
 }

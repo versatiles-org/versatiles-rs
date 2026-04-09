@@ -1,7 +1,7 @@
 //! Query methods for [`TileQuadtree`].
 
 use super::constructors::{check_bbox_zoom, check_coord_zoom};
-use super::{Node, TileQuadtree};
+use super::{BBox, Node, TileQuadtree};
 use crate::{GeoBBox, TileBBox, TileCoord};
 use anyhow::Result;
 
@@ -86,7 +86,16 @@ impl TileQuadtree {
 		let bx_max = u64::from(bbox.x_max()?) + 1;
 		let by_max = u64::from(bbox.y_max()?) + 1;
 		Ok(node_contains_bbox(
-			&self.root, 0, 0, size, bx_min, by_min, bx_max, by_max,
+			&self.root,
+			0,
+			0,
+			size,
+			BBox {
+				x_min: bx_min,
+				y_min: by_min,
+				x_max: bx_max,
+				y_max: by_max,
+			},
 		))
 	}
 
@@ -171,16 +180,7 @@ fn node_contains_tile(node: &Node, x_off: u64, y_off: u64, size: u64, tx: u64, t
 	}
 }
 
-fn node_contains_bbox(
-	node: &Node,
-	x_off: u64,
-	y_off: u64,
-	size: u64,
-	bx_min: u64,
-	by_min: u64,
-	bx_max: u64,
-	by_max: u64,
-) -> bool {
+fn node_contains_bbox(node: &Node, x_off: u64, y_off: u64, size: u64, bbox: BBox) -> bool {
 	match node {
 		Node::Empty => false,
 		Node::Full => true,
@@ -194,13 +194,13 @@ fn node_contains_bbox(
 				let cx_max = cx + half;
 				let cy_max = cy + half;
 				// Check if bbox intersects this child's region
-				let ix_min = bx_min.max(cx);
-				let iy_min = by_min.max(cy);
-				let ix_max = bx_max.min(cx_max);
-				let iy_max = by_max.min(cy_max);
+				let ix_min = bbox.x_min.max(cx);
+				let iy_min = bbox.y_min.max(cy);
+				let ix_max = bbox.x_max.min(cx_max);
+				let iy_max = bbox.y_max.min(cy_max);
 				if ix_min < ix_max && iy_min < iy_max {
 					// bbox intersects this child — child must fully contain that intersection
-					if !node_contains_bbox(child, cx, cy, half, bx_min, by_min, bx_max, by_max) {
+					if !node_contains_bbox(child, cx, cy, half, bbox) {
 						return false;
 					}
 				}
