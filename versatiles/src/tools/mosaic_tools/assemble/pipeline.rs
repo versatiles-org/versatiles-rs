@@ -92,10 +92,10 @@ pub(super) async fn scan_sources(
 		// Get pyramid and clip to zoom range
 		let mut pyramid = metadata.bbox_pyramid.clone();
 		if let Some(min) = min_zoom {
-			pyramid.set_level_min(min);
+			pyramid.set_zoom_min(min);
 		}
 		if let Some(max) = max_zoom {
-			pyramid.set_level_max(max);
+			pyramid.set_zoom_max(max);
 		}
 		if pyramid.is_empty() {
 			progress.inc(1);
@@ -105,7 +105,7 @@ pub(super) async fn scan_sources(
 		let sink_arc = sink.as_ref().unwrap();
 
 		// Stream all tiles from this source
-		let level_bboxes: Vec<_> = pyramid.iter_levels().filter(|b| !b.is_empty()).copied().collect();
+		let level_bboxes: Vec<_> = pyramid.iter_levels().filter(|b| !b.is_empty()).collect();
 		let streams: Vec<TileStream<'static, Tile>> =
 			futures::future::try_join_all(level_bboxes.into_iter().map(|bbox| reader.get_tile_stream(bbox))).await?;
 		let combined = streams

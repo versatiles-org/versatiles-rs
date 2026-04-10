@@ -171,7 +171,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		let metadata = self.metadata();
 		let p = print.get_list("bbox_pyramid").await;
 		for level in metadata.bbox_pyramid.iter_levels() {
-			p.add_value(level).await;
+			p.add_value(&level).await;
 		}
 		print
 			.add_key_value("tile compression", &metadata.tile_compression)
@@ -228,7 +228,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		for bbox in self.metadata().bbox_pyramid.iter_levels() {
 			let mut level_size_sum: u64 = 0;
 			let mut level_count: u64 = 0;
-			let mut stream = self.get_tile_size_stream(*bbox).await?;
+			let mut stream = self.get_tile_size_stream(bbox).await?;
 			while let Some((coord, size_u32)) = stream.next().await {
 				let size = u64::from(size_u32);
 
@@ -352,7 +352,7 @@ mod tests {
 	use crate::Traversal;
 	#[cfg(feature = "cli")]
 	use versatiles_core::utils::PrettyPrint;
-	use versatiles_core::{Blob, TileBBoxPyramid, TileCompression, TileFormat};
+	use versatiles_core::{Blob, TileBBoxPyramid, TileCompression, TileFormat, TileQuadtreePyramid};
 
 	#[derive(Debug)]
 	struct TestReader {
@@ -366,7 +366,7 @@ mod tests {
 			tilejson.set_string("metadata", "test").unwrap();
 			TestReader {
 				metadata: TileSourceMetadata {
-					bbox_pyramid: TileBBoxPyramid::new_full_up_to(3),
+					bbox_pyramid: TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(3)).unwrap(),
 					tile_compression: TileCompression::Gzip,
 					tile_format: TileFormat::MVT,
 					traversal: Traversal::ANY,

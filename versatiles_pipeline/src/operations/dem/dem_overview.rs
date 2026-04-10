@@ -346,7 +346,7 @@ mod tests {
 		// Stream tiles level-by-level from highest to lowest (as the traversal does).
 		// This populates the cache at each level so lower levels can build from it.
 		let traversal = op.metadata().traversal.clone();
-		let bboxes = traversal.traverse_pyramid(&op.metadata().bbox_pyramid)?;
+		let bboxes = traversal.traverse_pyramid(&op.metadata().bbox_pyramid.to_bbox_pyramid())?;
 
 		let mut tiles_at_2 = Vec::new();
 		for bbox in &bboxes {

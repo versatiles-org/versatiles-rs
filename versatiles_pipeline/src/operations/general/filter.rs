@@ -50,18 +50,18 @@ impl Operation {
 		}
 
 		if let Some(mut level_min) = args.level_min {
-			if let Some(existing_level_min) = metadata.bbox_pyramid.get_level_min() {
+			if let Some(existing_level_min) = metadata.bbox_pyramid.get_zoom_min() {
 				level_min = level_min.max(existing_level_min);
 			}
-			metadata.bbox_pyramid.set_level_min(level_min);
+			metadata.bbox_pyramid.set_zoom_min(level_min);
 			tilejson.set_min_zoom(level_min);
 		}
 
 		if let Some(mut level_max) = args.level_max {
-			if let Some(existing_level_max) = metadata.bbox_pyramid.get_level_max() {
+			if let Some(existing_level_max) = metadata.bbox_pyramid.get_zoom_max() {
 				level_max = level_max.min(existing_level_max);
 			}
-			metadata.bbox_pyramid.set_level_max(level_max);
+			metadata.bbox_pyramid.set_zoom_max(level_max);
 			tilejson.set_max_zoom(level_max);
 		}
 
@@ -78,7 +78,7 @@ impl Operation {
 
 		let mask = if let Some(filename) = args.filename {
 			let mask = factory.get_reader(DataLocation::try_from(&filename)?).await?;
-			metadata.bbox_pyramid.intersect(&mask.metadata().bbox_pyramid);
+			metadata.bbox_pyramid.intersect(&mask.metadata().bbox_pyramid)?;
 			Some(mask)
 		} else {
 			None
@@ -118,7 +118,7 @@ impl TileSource for Operation {
 
 	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("filter::get_tile_stream {bbox:?}");
-		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
+		bbox.intersect_with_quadtree_pyramid(&self.metadata.bbox_pyramid);
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
@@ -140,7 +140,7 @@ impl TileSource for Operation {
 	}
 
 	async fn get_tile_coord_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
+		bbox.intersect_with_quadtree_pyramid(&self.metadata.bbox_pyramid);
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}

@@ -40,7 +40,7 @@ pub trait TileSourceTraverseExt: TileSource {
 	{
 		async move {
 			let traversal_steps = translate_traversals(
-				&self.metadata().bbox_pyramid,
+				&self.metadata().bbox_pyramid.to_bbox_pyramid(),
 				&self.metadata().traversal,
 				traversal_write,
 			)?;
@@ -152,7 +152,7 @@ mod tests {
 	use async_trait::async_trait;
 	use rstest::rstest;
 	use std::sync::atomic::{AtomicU64, Ordering};
-	use versatiles_core::{Blob, TileBBoxPyramid, TileCompression, TileFormat, TileJSON};
+	use versatiles_core::{Blob, TileBBoxPyramid, TileCompression, TileFormat, TileJSON, TileQuadtreePyramid};
 
 	/// Test reader that produces tiles with predictable content.
 	#[derive(Debug)]
@@ -167,7 +167,8 @@ mod tests {
 		fn new(traversal: Traversal, max_level: u8) -> Self {
 			TestReader {
 				metadata: TileSourceMetadata {
-					bbox_pyramid: TileBBoxPyramid::new_full_up_to(max_level),
+					bbox_pyramid: TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(max_level))
+						.unwrap(),
 					tile_compression: TileCompression::Uncompressed,
 					tile_format: TileFormat::PNG,
 					traversal,
@@ -183,7 +184,10 @@ mod tests {
 			let bbox = GeoBBox::new(-180.0, -85.05, 180.0, 85.05).unwrap();
 			TestReader {
 				metadata: TileSourceMetadata {
-					bbox_pyramid: TileBBoxPyramid::from_geo_bbox(min_level, max_level, &bbox),
+					bbox_pyramid: TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::from_geo_bbox(
+						min_level, max_level, &bbox,
+					))
+					.unwrap(),
 					tile_compression: TileCompression::Uncompressed,
 					tile_format: TileFormat::PNG,
 					traversal,

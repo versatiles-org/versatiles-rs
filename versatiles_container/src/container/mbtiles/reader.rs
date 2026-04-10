@@ -61,7 +61,8 @@ use versatiles_core::{
 	TileFormat::{JPG, MVT, PNG, WEBP},
 	json::parse_json_str,
 	types::{
-		Blob, GeoBBox, GeoCenter, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream,
+		Blob, GeoBBox, GeoCenter, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON,
+		TileQuadtreePyramid, TileStream,
 	},
 };
 use versatiles_derive::context;
@@ -113,7 +114,7 @@ impl MBTilesReader {
 
 		let manager = SqliteConnectionManager::file(path);
 		let pool = Pool::builder().max_size(10).build(manager)?;
-		let metadata = TileSourceMetadata::new(MVT, Uncompressed, TileBBoxPyramid::new_empty(), Traversal::ANY);
+		let metadata = TileSourceMetadata::new(MVT, Uncompressed, TileQuadtreePyramid::new_empty(), Traversal::ANY);
 
 		let mut reader = MBTilesReader {
 			name: String::from(path.to_str().unwrap()),
@@ -213,7 +214,7 @@ impl MBTilesReader {
 		self.tilejson.update_from_pyramid(&pyramid);
 		self.metadata.tile_format = tile_format?;
 		self.metadata.tile_compression = compression?;
-		self.metadata.bbox_pyramid = pyramid;
+		self.metadata.bbox_pyramid = TileQuadtreePyramid::from_bbox_pyramid(&pyramid)?;
 
 		Ok(())
 	}

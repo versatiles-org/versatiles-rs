@@ -44,12 +44,13 @@ impl OverviewCore {
 		let mut metadata = source.metadata().clone();
 		let mut tilejson = source.tilejson().clone();
 
-		let level_base = level.unwrap_or_else(|| source.metadata().bbox_pyramid.get_level_max().unwrap());
+		let level_base = level.unwrap_or_else(|| source.metadata().bbox_pyramid.get_zoom_max().unwrap());
 
-		let mut level_bbox = *metadata.bbox_pyramid.get_level_bbox(level_base);
-		while level_bbox.level > 0 {
-			level_bbox.level_down();
-			metadata.bbox_pyramid.set_level_bbox(level_bbox);
+		if let Some(mut level_bbox) = metadata.bbox_pyramid.get_level(level_base).bounds() {
+			while level_bbox.level > 0 {
+				level_bbox.level_down();
+				metadata.bbox_pyramid.include_bbox(&level_bbox)?;
+			}
 		}
 		metadata.update_tilejson(&mut tilejson);
 
@@ -194,7 +195,7 @@ impl OverviewCore {
 		}
 
 		let mut source_bbox = bbox.at_level(self.level_base);
-		source_bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
+		source_bbox.intersect_with_quadtree_pyramid(&self.metadata.bbox_pyramid);
 		if source_bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
@@ -224,7 +225,7 @@ impl OverviewCore {
 		let mut bbox0 = bbox.rounded(size);
 		assert_eq!(bbox0.width(), size);
 		assert_eq!(bbox0.height(), size);
-		bbox0.intersect_with_pyramid(&self.metadata.bbox_pyramid);
+		bbox0.intersect_with_quadtree_pyramid(&self.metadata.bbox_pyramid);
 
 		let container: TileBBoxMap<Option<DynamicImage>> = if bbox.level == self.level_base {
 			log::trace!("Fetching images from source for bbox {bbox:?}");

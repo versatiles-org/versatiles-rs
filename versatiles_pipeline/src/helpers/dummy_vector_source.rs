@@ -2,7 +2,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream};
+use versatiles_core::{
+	TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileQuadtreePyramid, TileStream,
+};
 use versatiles_geometry::{
 	geo::{GeoFeature, Geometry},
 	vector_tile::{VectorTile, VectorTileLayer},
@@ -17,7 +19,7 @@ pub struct DummyVectorSource {
 }
 
 impl DummyVectorSource {
-	#[allow(clippy::type_complexity)]
+	#[allow(clippy::type_complexity, clippy::needless_pass_by_value)]
 	pub fn new(layers: &[(&str, &[&[(&str, &str)]])], pyramid: Option<TileBBoxPyramid>) -> Self {
 		// Convert the layers input into the required data structure
 		let data: Vec<(String, Vec<Vec<(String, String)>>)> = layers
@@ -37,10 +39,16 @@ impl DummyVectorSource {
 			.collect();
 
 		// Initialize the parameters with the given bounding box or a default one
+		let quad_pyramid = pyramid
+			.as_ref()
+			.map(TileQuadtreePyramid::from_bbox_pyramid)
+			.transpose()
+			.unwrap()
+			.unwrap_or_else(|| TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(8)).unwrap());
 		let metadata = TileSourceMetadata::new(
 			TileFormat::MVT,
 			TileCompression::Uncompressed,
-			pyramid.unwrap_or_else(|| TileBBoxPyramid::new_full_up_to(8)),
+			quad_pyramid,
 			Traversal::ANY,
 		);
 

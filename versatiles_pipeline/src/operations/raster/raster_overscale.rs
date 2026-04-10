@@ -121,10 +121,11 @@ impl Operation {
 			.unwrap_or(MAX_ZOOM_LEVEL)
 			.clamp(level_base, MAX_ZOOM_LEVEL);
 
-		let mut level_bbox = *metadata.bbox_pyramid.get_level_bbox(level_base);
-		while level_bbox.level < level_max {
-			level_bbox.level_up();
-			metadata.bbox_pyramid.set_level_bbox(level_bbox);
+		if let Some(mut level_bbox) = metadata.bbox_pyramid.get_level(level_base).bounds() {
+			while level_bbox.level < level_max {
+				level_bbox.level_up();
+				metadata.bbox_pyramid.include_bbox(&level_bbox)?;
+			}
 		}
 
 		let mut tilejson = source.as_ref().tilejson().clone();

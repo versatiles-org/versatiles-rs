@@ -25,7 +25,7 @@ use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
 use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileBBoxMap, TileBBoxPyramid, TileJSON, TileStream};
+use versatiles_core::{TileBBox, TileBBoxMap, TileJSON, TileQuadtreePyramid, TileStream};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -74,7 +74,7 @@ impl Operation {
 		let tile_format = parameters.tile_format;
 		let tile_compression = parameters.tile_compression;
 
-		let mut pyramid = TileBBoxPyramid::new_empty();
+		let mut pyramid = TileQuadtreePyramid::new_empty();
 		let mut traversal = Traversal::default();
 
 		for source in &sources {
@@ -179,6 +179,7 @@ mod tests {
 	use super::*;
 	use crate::helpers::{arrange_tiles, dummy_vector_source::DummyVectorSource};
 	use std::sync::LazyLock;
+	use versatiles_core::TileBBoxPyramid;
 
 	static RESULT_PATTERN: LazyLock<Vec<String>> = LazyLock::new(|| {
 		vec![

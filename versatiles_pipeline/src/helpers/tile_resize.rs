@@ -3,7 +3,9 @@ use imageproc::image::DynamicImage;
 use moka::future::Cache;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileBBoxPyramid, TileCoord, TileJSON, TileStream};
+use versatiles_core::{
+	MAX_ZOOM_LEVEL, TileBBox, TileBBoxPyramid, TileCoord, TileJSON, TileQuadtreePyramid, TileStream,
+};
 use versatiles_image::GenericImage;
 
 pub type ScaleDownFn = Arc<dyn Fn(&DynamicImage) -> Result<DynamicImage> + Send + Sync>;
@@ -46,7 +48,7 @@ impl TileResizeCore {
 			"source tile_size ({source_tile_size}) must differ from target ({target_tile_size})"
 		);
 
-		let source_pyramid = &source.metadata().bbox_pyramid;
+		let source_pyramid = source.metadata().bbox_pyramid.to_bbox_pyramid();
 		let mut output_pyramid = TileBBoxPyramid::new_empty();
 
 		let source_max = source_pyramid
@@ -97,7 +99,7 @@ impl TileResizeCore {
 		}
 
 		let mut metadata = source.metadata().clone();
-		metadata.bbox_pyramid = output_pyramid;
+		metadata.bbox_pyramid = TileQuadtreePyramid::from_bbox_pyramid(&output_pyramid)?;
 
 		let mut tilejson = source.tilejson().clone();
 		tilejson.set_tile_size(target_tile_size)?;

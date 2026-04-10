@@ -140,7 +140,7 @@ mod tests {
 	#[tokio::test]
 	async fn read_write() -> Result<()> {
 		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
-			bbox_pyramid: TileBBoxPyramid::new_full_up_to(4),
+			bbox_pyramid: TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(4)).unwrap(),
 			tile_compression: TileCompression::Gzip,
 			tile_format: TileFormat::MVT,
 			traversal: Traversal::ANY,
@@ -158,7 +158,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_meta_data() -> Result<()> {
 		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
-			bbox_pyramid: TileBBoxPyramid::new_full_up_to(1),
+			bbox_pyramid: TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(1)).unwrap(),
 			tile_compression: TileCompression::Uncompressed,
 			tile_format: TileFormat::JSON,
 			traversal: Traversal::ANY,
@@ -179,7 +179,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_empty_tiles() -> Result<()> {
 		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
-			bbox_pyramid: TileBBoxPyramid::new_empty(),
+			bbox_pyramid: TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_empty()).unwrap(),
 			tile_compression: TileCompression::Uncompressed,
 			tile_format: TileFormat::JSON,
 			traversal: Traversal::ANY,
@@ -204,7 +204,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_invalid_path() -> Result<()> {
 		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
-			bbox_pyramid: TileBBoxPyramid::new_full_up_to(2),
+			bbox_pyramid: TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(2)).unwrap(),
 			tile_compression: TileCompression::Gzip,
 			tile_format: TileFormat::MVT,
 			traversal: Traversal::ANY,
@@ -220,7 +220,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_large_tile_set() -> Result<()> {
 		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
-			bbox_pyramid: TileBBoxPyramid::new_full_up_to(7),
+			bbox_pyramid: TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(7)).unwrap(),
 			tile_compression: TileCompression::Uncompressed,
 			tile_format: TileFormat::PNG,
 			traversal: Traversal::ANY,
@@ -245,7 +245,7 @@ mod tests {
 
 		for tile_compression in compressions {
 			let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
-				bbox_pyramid: TileBBoxPyramid::new_full_up_to(2),
+				bbox_pyramid: TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(2)).unwrap(),
 				tile_compression,
 				tile_format: TileFormat::MVT,
 				traversal: Traversal::ANY,
@@ -263,8 +263,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_correct_zxy_scheme() -> Result<()> {
-		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
-		bbox_pyramid.include_coord(&TileCoord::new(3, 1, 2)?);
+		let mut bbox_pyramid_raw = TileBBoxPyramid::new_empty();
+		bbox_pyramid_raw.include_coord(&TileCoord::new(3, 1, 2)?);
+		let bbox_pyramid = TileQuadtreePyramid::from_bbox_pyramid(&bbox_pyramid_raw)?;
 		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
 			bbox_pyramid,
 			tile_compression: TileCompression::Uncompressed,

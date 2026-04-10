@@ -24,7 +24,7 @@ use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
 use std::{collections::HashMap, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileBBoxMap, TileBBoxPyramid, TileJSON, TileStream, TileType};
+use versatiles_core::{TileBBox, TileBBoxMap, TileJSON, TileQuadtreePyramid, TileStream, TileType};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
 
@@ -84,7 +84,7 @@ impl ReadTileSource for Operation {
 		let first_parameters = sources.first().unwrap().metadata();
 		let tile_format = first_parameters.tile_format;
 		let tile_compression = first_parameters.tile_compression;
-		let mut pyramid = TileBBoxPyramid::new_empty();
+		let mut pyramid = TileQuadtreePyramid::new_empty();
 		let mut traversal = Traversal::ANY;
 
 		for source in &sources {
@@ -189,7 +189,7 @@ mod tests {
 	use itertools::Itertools;
 	use pretty_assertions::assert_eq;
 	use versatiles_container::{DataLocation, TileSource};
-	use versatiles_core::{Blob, TileCompression, TileFormat};
+	use versatiles_core::{Blob, TileBBoxPyramid, TileCompression, TileFormat};
 
 	pub fn check_tile(blob: &Blob) -> String {
 		let tile = VectorTile::from_blob(blob).unwrap();

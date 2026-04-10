@@ -34,7 +34,7 @@ use crate::{MAX_ZOOM_LEVEL, TileQuadtree};
 /// assert_eq!(full.get_zoom_min(), Some(0));
 /// assert_eq!(full.get_zoom_max(), Some(30));
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TileQuadtreePyramid {
 	levels: [TileQuadtree; (MAX_ZOOM_LEVEL + 1) as usize],
 }

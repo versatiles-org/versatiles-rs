@@ -58,7 +58,8 @@ use std::{fmt::Debug, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
-	Blob, ByteRange, LimitedCache, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileStream,
+	Blob, ByteRange, LimitedCache, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileQuadtreePyramid,
+	TileStream,
 	compression::decompress,
 	io::{DataReader, DataReaderFile},
 	utils::HilbertIndex,
@@ -312,7 +313,7 @@ fn calc_bbox_pyramid(
 	leaves_bytes: &Blob,
 	compression: TileCompression,
 	runtime: &TilesRuntime,
-) -> Result<TileBBoxPyramid> {
+) -> Result<TileQuadtreePyramid> {
 	let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
 	parse_directories(
@@ -368,7 +369,7 @@ fn calc_bbox_pyramid(
 		Ok(total_entries)
 	}
 
-	Ok(bbox_pyramid)
+	TileQuadtreePyramid::from_bbox_pyramid(&bbox_pyramid)
 }
 
 #[async_trait]

@@ -362,7 +362,7 @@ async fn versatiles_deduplicated_tiles_readable() -> Result<()> {
 	let mut source = MockReader::new_mock(TileSourceMetadata::new(
 		TileFormat::MVT,
 		TileCompression::Uncompressed,
-		TileBBoxPyramid::new_full_up_to(2), // Small: 4x4 = 16 tiles at level 2
+		TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(2)).unwrap(), // Small: 4x4 = 16 tiles at level 2
 		Traversal::ANY,
 	))?;
 
@@ -412,7 +412,7 @@ async fn versatiles_empty_source_fails_gracefully() -> Result<()> {
 	let mut source = MockReader::new_mock(TileSourceMetadata::new(
 		TileFormat::MVT,
 		TileCompression::Uncompressed,
-		TileBBoxPyramid::new_empty(),
+		TileQuadtreePyramid::new_empty(),
 		Traversal::ANY,
 	))?;
 
@@ -450,7 +450,7 @@ async fn tilejson_metadata_preserved_over_pyramid(#[case] filename: &str) -> Res
 	let mut source = MockReader::new_mock(TileSourceMetadata::new(
 		TileFormat::PNG,
 		TileCompression::Uncompressed,
-		TileBBoxPyramid::new_full_up_to(4),
+		TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(4)).unwrap(),
 		Traversal::ANY,
 	))?;
 

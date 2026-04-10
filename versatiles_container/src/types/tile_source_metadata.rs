@@ -1,7 +1,7 @@
 //! This module defines metadata describing tile source output characteristics.
 
 use crate::Traversal;
-use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat, TileJSON, TileSchema, TileType};
+use versatiles_core::{TileCompression, TileFormat, TileJSON, TileQuadtreePyramid, TileSchema, TileType};
 
 /// Metadata describing the output characteristics of a tile source.
 ///
@@ -12,7 +12,7 @@ use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat, TileJSON, Ti
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct TileSourceMetadata {
 	/// The bounding box and zoom pyramid defining the tile coverage.
-	pub bbox_pyramid: TileBBoxPyramid,
+	pub bbox_pyramid: TileQuadtreePyramid,
 	/// The compression algorithm applied to tiles (e.g., gzip, brotli).
 	pub tile_compression: TileCompression,
 	/// The format of the tiles (e.g., PNG, JPEG, PBF).
@@ -35,7 +35,7 @@ impl TileSourceMetadata {
 	pub fn new(
 		tile_format: TileFormat,
 		tile_compression: TileCompression,
-		bbox_pyramid: TileBBoxPyramid,
+		bbox_pyramid: TileQuadtreePyramid,
 		traversal: Traversal,
 	) -> TileSourceMetadata {
 		TileSourceMetadata {
@@ -58,7 +58,7 @@ impl TileSourceMetadata {
 		TileSourceMetadata {
 			tile_format,
 			tile_compression,
-			bbox_pyramid: TileBBoxPyramid::new_full(),
+			bbox_pyramid: TileQuadtreePyramid::new_full(),
 			traversal,
 		}
 	}
@@ -97,7 +97,8 @@ mod tests {
 
 	#[test]
 	fn test_tiles_reader_parameters_new() {
-		let bbox_pyramid = TileBBoxPyramid::new_full_up_to(10);
+		let bbox_pyramid =
+			TileQuadtreePyramid::from_geo_bbox(0, 10, &GeoBBox::new(-180.0, -90.0, 180.0, 90.0).unwrap()).unwrap();
 		let tile_format = TileFormat::PNG;
 		let tile_compression = TileCompression::Gzip;
 
@@ -117,14 +118,14 @@ mod tests {
 
 		assert_eq!(params.tile_format, tile_format);
 		assert_eq!(params.tile_compression, tile_compression);
-		assert_eq!(params.bbox_pyramid, TileBBoxPyramid::new_full());
+		assert_eq!(params.bbox_pyramid, TileQuadtreePyramid::new_full());
 	}
 
 	#[test]
 	fn should_update_tile_json() -> Result<()> {
 		let mut tj = TileJSON::default();
 		// Prepare reader parameters
-		let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(1, 4, &GeoBBox::new(-180.0, -90.0, 180.0, 90.0).unwrap());
+		let bbox_pyramid = TileQuadtreePyramid::from_geo_bbox(1, 4, &GeoBBox::new(-180.0, -90.0, 180.0, 90.0).unwrap())?;
 		let rp = TileSourceMetadata {
 			bbox_pyramid,
 			tile_format: TileFormat::PNG,

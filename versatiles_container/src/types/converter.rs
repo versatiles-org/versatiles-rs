@@ -45,7 +45,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::{path::Path, sync::Arc};
 use versatiles_core::{
-	GeoBBox, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream,
+	GeoBBox, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileQuadtreePyramid,
+	TileStream,
 };
 use versatiles_derive::context;
 
@@ -182,7 +183,9 @@ impl TilesConvertReader {
 		}
 
 		if let Some(bbox_pyramid) = &cp.bbox_pyramid {
-			new_rp.bbox_pyramid.intersect(bbox_pyramid);
+			new_rp
+				.bbox_pyramid
+				.intersect(&TileQuadtreePyramid::from_bbox_pyramid(bbox_pyramid)?)?;
 		}
 
 		if let Some(tile_format) = cp.tile_format {
@@ -356,8 +359,12 @@ mod tests {
 		pyramid
 	}
 
+	fn new_quad_bbox(b: [u32; 4]) -> TileQuadtreePyramid {
+		TileQuadtreePyramid::from_bbox_pyramid(&new_bbox(b)).unwrap()
+	}
+
 	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> SharedTileSource {
-		let bbox_pyramid = TileBBoxPyramid::new_full_up_to(4);
+		let bbox_pyramid = TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(4)).unwrap();
 		let reader_metadata = TileSourceMetadata::new(tf, tc, bbox_pyramid, Traversal::ANY);
 		MockReader::new_mock(reader_metadata).unwrap().into_shared()
 	}
@@ -374,9 +381,9 @@ mod tests {
 		#[case] bbox_out: [u32; 4],
 		#[case] tile_list: &str,
 	) -> Result<()> {
-		let pyramid_in = new_bbox([0, 1, 4, 5]);
+		let pyramid_in = new_quad_bbox([0, 1, 4, 5]);
 		let pyramid_convert = new_bbox([2, 3, 7, 7]);
-		let pyramid_out = new_bbox(bbox_out);
+		let pyramid_out = new_quad_bbox(bbox_out);
 
 		let reader_metadata = TileSourceMetadata::new(JSON, Uncompressed, pyramid_in, Traversal::ANY);
 		let reader = MockReader::new_mock(reader_metadata)?.into_shared();
@@ -399,7 +406,7 @@ mod tests {
 		let tile_compression_out = parameters_out.tile_compression;
 		assert_eq!(parameters_out.bbox_pyramid, pyramid_out);
 
-		let bbox = pyramid_out.get_level_bbox(3);
+		let bbox = pyramid_out.get_level(3).bounds().unwrap();
 		let mut tiles: Vec<String> = Vec::new();
 		for coord in bbox.iter_coords_zorder() {
 			let mut text = reader_out
@@ -495,7 +502,7 @@ mod tests {
 	fn test_geo_bbox_intersects_existing_tilejson_bounds() {
 		// Source has bounds covering a wide area
 		let source_bounds = GeoBBox::new(10.0, 50.0, 15.0, 55.0).unwrap();
-		let bbox_pyramid = TileBBoxPyramid::new_full_up_to(4);
+		let bbox_pyramid = TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(4)).unwrap();
 		let reader_metadata = TileSourceMetadata::new(MVT, Uncompressed, bbox_pyramid, Traversal::ANY);
 		let mut reader = MockReader::new_mock(reader_metadata).unwrap();
 		reader.tilejson_mut().bounds = Some(source_bounds);
@@ -521,7 +528,7 @@ mod tests {
 	#[test]
 	fn test_geo_bbox_without_existing_bounds_uses_pyramid() {
 		// Source has NO explicit bounds in tilejson
-		let bbox_pyramid = TileBBoxPyramid::new_full_up_to(4);
+		let bbox_pyramid = TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(4)).unwrap();
 		let reader_metadata = TileSourceMetadata::new(MVT, Uncompressed, bbox_pyramid, Traversal::ANY);
 		let reader = MockReader::new_mock(reader_metadata).unwrap().into_shared();
 

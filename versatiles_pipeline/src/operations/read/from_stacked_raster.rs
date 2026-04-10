@@ -91,7 +91,7 @@ use async_trait::async_trait;
 use futures::stream;
 use std::{collections::HashSet, sync::Arc, vec};
 use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileBBoxPyramid, TileCoord, TileFormat, TileJSON, TileStream, TileType};
+use versatiles_core::{TileBBox, TileCoord, TileFormat, TileJSON, TileQuadtreePyramid, TileStream, TileType};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitOperation;
 
@@ -243,7 +243,7 @@ impl ReadTileSource for Operation {
 		);
 		let tile_compression = first_source_metadata.tile_compression;
 
-		let mut pyramid = TileBBoxPyramid::new_empty();
+		let mut pyramid = TileQuadtreePyramid::new_empty();
 		let mut traversal = Traversal::new_any();
 
 		for source in &original_sources {
@@ -427,7 +427,7 @@ mod tests {
 	use pretty_assertions::assert_eq;
 	use rstest::rstest;
 	use versatiles_container::{DataLocation, TileSource};
-	use versatiles_core::{Blob, TileCompression, TileCompression::Uncompressed, TileFormat};
+	use versatiles_core::{Blob, TileBBoxPyramid, TileCompression, TileCompression::Uncompressed, TileFormat};
 	use versatiles_image::{DynamicImage, DynamicImageTraitConvert};
 
 	fn rgba_to_hex(rgba: &[u8]) -> String {
@@ -881,7 +881,7 @@ mod tests {
 						}
 					}
 
-					let pyramid = TileBBoxPyramid::new_full_up_to(8);
+					let pyramid = TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(8)).unwrap();
 					let metadata = TileSourceMetadata::new(
 						TileFormat::MVT, // Vector tile format
 						TileCompression::Uncompressed,
@@ -1129,7 +1129,7 @@ mod tests {
 		request_level: u8,
 	) -> Option<String> {
 		let mut sources: Vec<SourceEntry> = Vec::new();
-		let mut pyramid = TileBBoxPyramid::new_empty();
+		let mut pyramid_raw = TileBBoxPyramid::new_empty();
 		let mut traversal = Traversal::new_any();
 
 		// Build original sources
@@ -1139,13 +1139,13 @@ mod tests {
 			for level in 0..=max_level {
 				src_pyramid.include_bbox(&TileBBox::new_full(level).unwrap());
 			}
-			pyramid.include_pyramid(&src_pyramid);
+			pyramid_raw.include_pyramid(&src_pyramid);
 			let source = DummyImageSource::from_color(color, 4, TileFormat::PNG, Some(src_pyramid)).unwrap();
 			traversal.intersect(&source.metadata().traversal).unwrap();
 			original_sources.push(Box::new(source));
 		}
 
-		let level_max = pyramid.get_level_max().unwrap();
+		let level_max = pyramid_raw.get_level_max().unwrap();
 
 		// Wrap each source with raster_overscale (like auto_overscale=true does)
 		use crate::operations::raster::raster_overscale;
@@ -1163,6 +1163,7 @@ mod tests {
 			});
 		}
 
+		let pyramid = TileQuadtreePyramid::from_bbox_pyramid(&pyramid_raw).unwrap();
 		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, pyramid, traversal);
 		let tilejson = TileJSON::default();
 
@@ -1338,7 +1339,7 @@ mod tests {
 		request_level: u8,
 	) -> (Tile, Tile) {
 		let mut sources: Vec<SourceEntry> = Vec::new();
-		let mut pyramid = TileBBoxPyramid::new_empty();
+		let mut pyramid_raw = TileBBoxPyramid::new_empty();
 		let mut traversal = Traversal::new_any();
 
 		let mut original_sources: Vec<Box<dyn TileSource>> = Vec::new();
@@ -1347,13 +1348,13 @@ mod tests {
 			for level in 0..=max_level {
 				src_pyramid.include_bbox(&TileBBox::new_full(level).unwrap());
 			}
-			pyramid.include_pyramid(&src_pyramid);
+			pyramid_raw.include_pyramid(&src_pyramid);
 			let source = DummyImageSource::from_color(color, 4, TileFormat::PNG, Some(src_pyramid)).unwrap();
 			traversal.intersect(&source.metadata().traversal).unwrap();
 			original_sources.push(Box::new(source));
 		}
 
-		let level_max = pyramid.get_level_max().unwrap();
+		let level_max = pyramid_raw.get_level_max().unwrap();
 
 		// Build a standalone copy of the first source for comparison
 		let first_color = layers[0].0;
@@ -1380,6 +1381,7 @@ mod tests {
 			});
 		}
 
+		let pyramid = TileQuadtreePyramid::from_bbox_pyramid(&pyramid_raw).unwrap();
 		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, pyramid, traversal);
 		let tilejson = TileJSON::default();
 
