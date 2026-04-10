@@ -57,7 +57,7 @@ impl Operation {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		// Validate source format is raster
-		let metadata = source.metadata().clone();
+		let mut metadata = source.metadata().clone();
 		if !matches!(
 			metadata.tile_format,
 			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP
@@ -87,6 +87,12 @@ impl Operation {
 			f64::from(args.blur.unwrap_or(0.0)),
 			blur_function,
 		)?;
+
+		// Clip bbox_pyramid to the mask geometry's geographic bounds so that tiles
+		// entirely outside the mask are never requested from the source.
+		if let Some(geo_bbox) = mask.get_geo_bbox() {
+			metadata.bbox_pyramid.intersect_geo_bbox(&geo_bbox)?;
+		}
 
 		let tilejson = source.tilejson().clone();
 

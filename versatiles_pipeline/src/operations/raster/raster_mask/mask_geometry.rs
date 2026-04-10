@@ -13,6 +13,7 @@ use rstar::{AABB, RTree, RTreeObject};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+use versatiles_core::{EARTH_RADIUS, GeoBBox};
 use versatiles_derive::context;
 use versatiles_geometry::geo::{Geometry, GeometryTrait, MultiPolygonGeometry, PolygonGeometry, RingGeometry};
 use versatiles_geometry::geojson::read_geojson;
@@ -366,6 +367,26 @@ impl MaskGeometry {
 	#[allow(dead_code)]
 	pub fn bounds_mercator(&self) -> [f64; 4] {
 		self.bounds_mercator
+	}
+
+	/// Get the mask bounds as a WGS84 geographic bounding box.
+	///
+	/// Converts the stored Mercator bounds back to longitude/latitude degrees.
+	/// Returns `None` if the inverse projection produces invalid coordinates.
+	#[must_use]
+	pub fn get_geo_bbox(&self) -> Option<GeoBBox> {
+		let [mx_min, my_min, mx_max, my_max] = self.bounds_mercator;
+
+		// Inverse spherical Mercator: x (meters) → longitude (degrees)
+		let lon_min = (mx_min / EARTH_RADIUS).to_degrees();
+		let lon_max = (mx_max / EARTH_RADIUS).to_degrees();
+
+		// Inverse spherical Mercator: y (meters) → latitude (degrees)
+		// lat = 2 * atan(exp(y / R)) - PI/2
+		let lat_min = (2.0 * (my_min / EARTH_RADIUS).exp().atan() - std::f64::consts::FRAC_PI_2).to_degrees();
+		let lat_max = (2.0 * (my_max / EARTH_RADIUS).exp().atan() - std::f64::consts::FRAC_PI_2).to_degrees();
+
+		GeoBBox::new(lon_min, lat_min, lon_max, lat_max).ok()
 	}
 
 	/// Check if a point is inside the polygon using R-tree accelerated ray casting.
