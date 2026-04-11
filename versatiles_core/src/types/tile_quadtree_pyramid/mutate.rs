@@ -102,36 +102,44 @@ impl TileQuadtreePyramid {
 	}
 
 	/// Clears (sets to empty) all zoom levels below `zoom_min`.
+	#[allow(clippy::cast_possible_truncation)] // z ≤ MAX_ZOOM_LEVEL (30) < u8::MAX
 	pub fn set_zoom_min(&mut self, zoom_min: u8) {
 		for z in 0..zoom_min as usize {
-			self.levels[z] = TileQuadtree::new_empty(u8::try_from(z).expect("zoom level index exceeds u8::MAX"));
+			self.levels[z] = TileQuadtree::new_empty(z as u8);
 		}
 	}
 
 	/// Clears (sets to empty) all zoom levels above `zoom_max`.
+	#[allow(clippy::cast_possible_truncation)] // z ≤ MAX_ZOOM_LEVEL (30) < u8::MAX
 	pub fn set_zoom_max(&mut self, zoom_max: u8) {
 		for z in (zoom_max as usize + 1)..=MAX_ZOOM_LEVEL as usize {
-			self.levels[z] = TileQuadtree::new_empty(u8::try_from(z).expect("zoom level index exceeds u8::MAX"));
+			self.levels[z] = TileQuadtree::new_empty(z as u8);
 		}
 	}
 
 	/// Applies a Y-flip to all levels' bounding boxes, then rebuilds the quadtrees from
 	/// those flipped bboxes (lossy: non-rectangular coverage becomes rectangular).
-	pub fn flip_y(&mut self) {
+	///
+	/// # Errors
+	///
+	/// Returns an error if rebuilding the quadtree pyramid from the flipped bboxes fails.
+	pub fn flip_y(&mut self) -> Result<()> {
 		let mut bbox_pyramid = self.to_bbox_pyramid();
 		bbox_pyramid.flip_y();
-		if let Ok(new_pyramid) = Self::from_bbox_pyramid(&bbox_pyramid) {
-			*self = new_pyramid;
-		}
+		*self = Self::from_bbox_pyramid(&bbox_pyramid)?;
+		Ok(())
 	}
 
 	/// Applies an X/Y swap to all levels' bounding boxes, then rebuilds the quadtrees from
 	/// those swapped bboxes (lossy: non-rectangular coverage becomes rectangular).
-	pub fn swap_xy(&mut self) {
+	///
+	/// # Errors
+	///
+	/// Returns an error if rebuilding the quadtree pyramid from the swapped bboxes fails.
+	pub fn swap_xy(&mut self) -> Result<()> {
 		let mut bbox_pyramid = self.to_bbox_pyramid();
 		bbox_pyramid.swap_xy();
-		if let Ok(new_pyramid) = Self::from_bbox_pyramid(&bbox_pyramid) {
-			*self = new_pyramid;
-		}
+		*self = Self::from_bbox_pyramid(&bbox_pyramid)?;
+		Ok(())
 	}
 }

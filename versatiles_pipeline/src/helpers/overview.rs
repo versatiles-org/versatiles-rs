@@ -44,7 +44,7 @@ impl OverviewCore {
 		let mut metadata = source.metadata().clone();
 		let mut tilejson = source.tilejson().clone();
 
-		let level_base = level.unwrap_or_else(|| source.metadata().bbox_pyramid.get_zoom_max().unwrap());
+		let level_base = level.unwrap_or_else(|| source.metadata().bbox_pyramid.get_level_max().unwrap());
 
 		if let Some(mut level_bbox) = metadata.bbox_pyramid.get_level(level_base).bounds() {
 			while level_bbox.level > 0 {

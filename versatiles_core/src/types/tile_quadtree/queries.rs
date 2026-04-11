@@ -1,7 +1,7 @@
 //! Query methods for [`TileQuadtree`].
 
 use super::constructors::{check_bbox_zoom, check_coord_zoom};
-use super::{BBox, Node, TileQuadtree};
+use super::{BBox, Node, TileQuadtree, child_quadrant};
 use crate::{GeoBBox, TileBBox, TileCoord};
 use anyhow::Result;
 
@@ -159,22 +159,7 @@ fn node_contains_tile(node: &Node, x_off: u64, y_off: u64, size: u64, tx: u64, t
 		Node::Empty => false,
 		Node::Full => true,
 		Node::Partial(children) => {
-			let half = size / 2;
-			let mid_x = x_off + half;
-			let mid_y = y_off + half;
-			let (idx, cx, cy) = if tx < mid_x {
-				if ty < mid_y {
-					(0, x_off, y_off)
-				} else {
-					(2, x_off, mid_y)
-				}
-			} else {
-				if ty < mid_y {
-					(1, mid_x, y_off)
-				} else {
-					(3, mid_x, mid_y)
-				}
-			};
+			let (idx, cx, cy, half) = child_quadrant(x_off, y_off, size, tx, ty);
 			node_contains_tile(&children[idx], cx, cy, half, tx, ty)
 		}
 	}
@@ -193,14 +178,20 @@ fn node_contains_bbox(node: &Node, x_off: u64, y_off: u64, size: u64, bbox: BBox
 				let (cx, cy) = child_offsets[i];
 				let cx_max = cx + half;
 				let cy_max = cy + half;
-				// Check if bbox intersects this child's region
+				// Clip bbox against this child's region
 				let ix_min = bbox.x_min.max(cx);
 				let iy_min = bbox.y_min.max(cy);
 				let ix_max = bbox.x_max.min(cx_max);
 				let iy_max = bbox.y_max.min(cy_max);
 				if ix_min < ix_max && iy_min < iy_max {
-					// bbox intersects this child — child must fully contain that intersection
-					if !node_contains_bbox(child, cx, cy, half, bbox) {
+					// Pass the clipped sub-bbox so children don't re-clip unnecessarily
+					let child_bbox = BBox {
+						x_min: ix_min,
+						y_min: iy_min,
+						x_max: ix_max,
+						y_max: iy_max,
+					};
+					if !node_contains_bbox(child, cx, cy, half, child_bbox) {
 						return false;
 					}
 				}

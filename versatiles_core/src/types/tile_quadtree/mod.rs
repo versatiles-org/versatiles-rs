@@ -27,7 +27,7 @@ mod zoom;
 /// - `Full`  — all tiles covered in this subtree.
 /// - `Partial` — some tiles covered; children are `[NW, NE, SW, SE]`.
 #[derive(Clone, Debug, PartialEq)]
-pub enum Node {
+pub(crate) enum Node {
 	Empty,
 	Full,
 	Partial(Box<[Node; 4]>),
@@ -48,13 +48,13 @@ impl Node {
 
 	/// Return true if all tiles in this node's subtree are covered.
 	#[must_use]
-	pub fn is_full(&self) -> bool {
+	pub(crate) fn is_full(&self) -> bool {
 		matches!(self, Node::Full)
 	}
 
 	/// Return true if no tiles in this node's subtree are covered.
 	#[must_use]
-	pub fn is_empty(&self) -> bool {
+	pub(crate) fn is_empty(&self) -> bool {
 		matches!(self, Node::Empty)
 	}
 }
@@ -68,6 +68,27 @@ pub(crate) struct BBox {
 	pub y_min: u64,
 	pub x_max: u64,
 	pub y_max: u64,
+}
+
+/// Determine which child quadrant contains `(tx, ty)` and return
+/// `(child_index, child_x_off, child_y_off, half_size)`.
+///
+/// Child indices follow `[NW, NE, SW, SE]` order (index 0..3).
+pub(crate) fn child_quadrant(x_off: u64, y_off: u64, size: u64, tx: u64, ty: u64) -> (usize, u64, u64, u64) {
+	let half = size / 2;
+	let mid_x = x_off + half;
+	let mid_y = y_off + half;
+	if tx < mid_x {
+		if ty < mid_y {
+			(0, x_off, y_off, half)
+		} else {
+			(2, x_off, mid_y, half)
+		}
+	} else if ty < mid_y {
+		(1, mid_x, y_off, half)
+	} else {
+		(3, mid_x, mid_y, half)
+	}
 }
 
 /// A set of tiles at a single zoom level, backed by a quadtree.

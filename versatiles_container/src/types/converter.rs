@@ -176,10 +176,10 @@ impl TilesConvertReader {
 		let mut new_rp: TileSourceMetadata = rp.clone();
 
 		if cp.flip_y {
-			new_rp.bbox_pyramid.flip_y();
+			new_rp.bbox_pyramid.flip_y()?;
 		}
 		if cp.swap_xy {
-			new_rp.bbox_pyramid.swap_xy();
+			new_rp.bbox_pyramid.swap_xy()?;
 		}
 
 		if let Some(bbox_pyramid) = &cp.bbox_pyramid {

@@ -1,7 +1,7 @@
 //! Mutation methods for [`TileQuadtree`].
 
 use super::constructors::{check_bbox_zoom, check_coord_zoom};
-use super::{BBox, Node, TileQuadtree};
+use super::{BBox, Node, TileQuadtree, child_quadrant};
 use crate::{TileBBox, TileCoord};
 use anyhow::Result;
 
@@ -246,24 +246,5 @@ fn node_remove_bbox(node: Node, x_off: u64, y_off: u64, size: u64, bbox: BBox) -
 			];
 			Node::normalize(children)
 		}
-	}
-}
-
-/// Determine which child quadrant contains `(tx, ty)` and return
-/// `(child_index, child_x_off, child_y_off, half_size)`.
-fn child_quadrant(x_off: u64, y_off: u64, size: u64, tx: u64, ty: u64) -> (usize, u64, u64, u64) {
-	let half = size / 2;
-	let mid_x = x_off + half;
-	let mid_y = y_off + half;
-	if tx < mid_x {
-		if ty < mid_y {
-			(0, x_off, y_off, half)
-		} else {
-			(2, x_off, mid_y, half)
-		}
-	} else if ty < mid_y {
-		(1, mid_x, y_off, half)
-	} else {
-		(3, mid_x, mid_y, half)
 	}
 }

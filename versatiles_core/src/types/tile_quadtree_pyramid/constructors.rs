@@ -12,9 +12,10 @@ impl TileQuadtreePyramid {
 	///
 	/// A `TileQuadtreePyramid` where each level is an empty quadtree.
 	#[must_use]
+	#[allow(clippy::cast_possible_truncation)] // z ≤ MAX_ZOOM_LEVEL (30) < u8::MAX
 	pub fn new_empty() -> Self {
 		TileQuadtreePyramid {
-			levels: from_fn(|z| TileQuadtree::new_empty(u8::try_from(z).expect("zoom level index exceeds u8::MAX"))),
+			levels: from_fn(|z| TileQuadtree::new_empty(z as u8)),
 		}
 	}
 
@@ -24,9 +25,10 @@ impl TileQuadtreePyramid {
 	///
 	/// A `TileQuadtreePyramid` where each level is a full quadtree.
 	#[must_use]
+	#[allow(clippy::cast_possible_truncation)] // z ≤ MAX_ZOOM_LEVEL (30) < u8::MAX
 	pub fn new_full() -> Self {
 		TileQuadtreePyramid {
-			levels: from_fn(|z| TileQuadtree::new_full(u8::try_from(z).expect("zoom level index exceeds u8::MAX"))),
+			levels: from_fn(|z| TileQuadtree::new_full(z as u8)),
 		}
 	}
 

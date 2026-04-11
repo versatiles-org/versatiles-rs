@@ -50,7 +50,7 @@ impl Operation {
 		}
 
 		if let Some(mut level_min) = args.level_min {
-			if let Some(existing_level_min) = metadata.bbox_pyramid.get_zoom_min() {
+			if let Some(existing_level_min) = metadata.bbox_pyramid.get_level_min() {
 				level_min = level_min.max(existing_level_min);
 			}
 			metadata.bbox_pyramid.set_zoom_min(level_min);
@@ -58,7 +58,7 @@ impl Operation {
 		}
 
 		if let Some(mut level_max) = args.level_max {
-			if let Some(existing_level_max) = metadata.bbox_pyramid.get_zoom_max() {
+			if let Some(existing_level_max) = metadata.bbox_pyramid.get_level_max() {
 				level_max = level_max.min(existing_level_max);
 			}
 			metadata.bbox_pyramid.set_zoom_max(level_max);

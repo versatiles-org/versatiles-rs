@@ -10,8 +10,8 @@ fn make_bbox(zoom: u8, x_min: u32, y_min: u32, x_max: u32, y_max: u32) -> TileBB
 fn test_new_empty() {
 	let pyramid = TileQuadtreePyramid::new_empty();
 	assert!(pyramid.is_empty());
-	assert_eq!(pyramid.get_zoom_min(), None);
-	assert_eq!(pyramid.get_zoom_max(), None);
+	assert_eq!(pyramid.get_level_min(), None);
+	assert_eq!(pyramid.get_level_max(), None);
 	assert_eq!(pyramid.count_tiles(), 0);
 	assert_eq!(pyramid.get_geo_bbox(), None);
 }
@@ -20,8 +20,8 @@ fn test_new_empty() {
 fn test_new_full() {
 	let pyramid = TileQuadtreePyramid::new_full();
 	assert!(!pyramid.is_empty());
-	assert_eq!(pyramid.get_zoom_min(), Some(0));
-	assert_eq!(pyramid.get_zoom_max(), Some(30));
+	assert_eq!(pyramid.get_level_min(), Some(0));
+	assert_eq!(pyramid.get_level_max(), Some(30));
 	// At zoom 0 there is 1 tile; total is sum of 4^z for z in 0..=30
 	let expected: u64 = (0u32..=30).map(|z| 4u64.pow(z)).sum();
 	assert_eq!(pyramid.count_tiles(), expected);
@@ -121,7 +121,7 @@ fn test_set_zoom_min() {
 	// Level 5 and above should remain full
 	assert!(pyramid.get_level(5).is_full());
 	assert!(pyramid.get_level(10).is_full());
-	assert_eq!(pyramid.get_zoom_min(), Some(5));
+	assert_eq!(pyramid.get_level_min(), Some(5));
 }
 
 #[test]
@@ -136,7 +136,7 @@ fn test_set_zoom_max() {
 	// Levels 0-5 should remain full
 	assert!(pyramid.get_level(0).is_full());
 	assert!(pyramid.get_level(5).is_full());
-	assert_eq!(pyramid.get_zoom_max(), Some(5));
+	assert_eq!(pyramid.get_level_max(), Some(5));
 }
 
 #[test]
@@ -177,8 +177,8 @@ fn test_from_geo_bbox() {
 		assert!(pyramid.get_level(z).is_empty(), "Expected level {z} to be empty");
 	}
 
-	assert_eq!(pyramid.get_zoom_min(), Some(0));
-	assert_eq!(pyramid.get_zoom_max(), Some(5));
+	assert_eq!(pyramid.get_level_min(), Some(0));
+	assert_eq!(pyramid.get_level_max(), Some(5));
 }
 
 #[test]

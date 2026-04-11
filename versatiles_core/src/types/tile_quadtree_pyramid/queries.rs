@@ -1,5 +1,8 @@
 //! Query methods for [`TileQuadtreePyramid`].
 
+/// Minimum tile count for a zoom level to be considered "good" for display.
+const MIN_TILES_FOR_GOOD_LEVEL: u64 = 10;
+
 use super::TileQuadtreePyramid;
 use crate::{GeoBBox, GeoCenter, TileBBox, TileCoord, TileQuadtree};
 use anyhow::Result;
@@ -38,13 +41,19 @@ impl TileQuadtreePyramid {
 	}
 
 	/// Alias for [`get_level_min`](Self::get_level_min).
+	///
+	/// Deprecated: use [`get_level_min`](Self::get_level_min) instead.
 	#[must_use]
+	#[deprecated(since = "0.0.0", note = "use `get_level_min` instead")]
 	pub fn get_zoom_min(&self) -> Option<u8> {
 		self.get_level_min()
 	}
 
 	/// Alias for [`get_level_max`](Self::get_level_max).
+	///
+	/// Deprecated: use [`get_level_max`](Self::get_level_max) instead.
 	#[must_use]
+	#[deprecated(since = "0.0.0", note = "use `get_level_max` instead")]
 	pub fn get_zoom_max(&self) -> Option<u8> {
 		self.get_level_max()
 	}
@@ -96,16 +105,17 @@ impl TileQuadtreePyramid {
 			.filter_map(TileQuadtree::bounds)
 	}
 
-	/// Returns a "good" zoom level heuristically — the highest level with more than 10 tiles.
+	/// Returns a "good" zoom level heuristically — the highest level with more than
+	/// `MIN_TILES_FOR_GOOD_LEVEL` (10) tiles.
 	///
-	/// Returns `None` if no level has more than 10 tiles.
+	/// Returns `None` if no level meets the threshold.
 	#[must_use]
 	pub fn get_good_level(&self) -> Option<u8> {
 		self
 			.levels
 			.iter()
 			.rev()
-			.find(|qt| qt.tile_count() > 10)
+			.find(|qt| qt.tile_count() > MIN_TILES_FOR_GOOD_LEVEL)
 			.map(TileQuadtree::zoom)
 	}
 
@@ -152,6 +162,10 @@ impl TileQuadtreePyramid {
 	/// Checks whether the pyramid intersects (overlaps) the given bounding box.
 	///
 	/// Returns `false` if the bbox's zoom level is out of range.
+	///
+	/// Note: this is an approximate check based on the bounding rectangle of the
+	/// quadtree level, not an exact tile-level intersection. It may return `true`
+	/// for bboxes that overlap the bounds but not any covered tile.
 	#[must_use]
 	pub fn intersects_bbox(&self, bbox: &TileBBox) -> bool {
 		if let Some(qt) = self.levels.get(bbox.level as usize)

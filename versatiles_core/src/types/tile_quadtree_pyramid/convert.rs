@@ -30,10 +30,10 @@ impl PyramidInfo for TileQuadtreePyramid {
 	}
 
 	fn get_zoom_min(&self) -> Option<u8> {
-		self.get_zoom_min()
+		self.get_level_min()
 	}
 
 	fn get_zoom_max(&self) -> Option<u8> {
-		self.get_zoom_max()
+		self.get_level_max()
 	}
 }

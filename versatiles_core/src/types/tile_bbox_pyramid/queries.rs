@@ -1,3 +1,6 @@
+/// Minimum tile count for a zoom level to be considered "good" for display.
+const MIN_TILES_FOR_GOOD_LEVEL: u64 = 10;
+
 use crate::{TileBBox, TileBBoxPyramid, TileCoord};
 use anyhow::Result;
 
@@ -96,17 +99,17 @@ impl TileBBoxPyramid {
 			.map(|bbox| bbox.level)
 	}
 
-	/// Returns a "good" zoom level, heuristically one that has more than 10 tiles.
+	/// Returns a "good" zoom level, heuristically the highest level with more than
+	/// `MIN_TILES_FOR_GOOD_LEVEL` (10) tiles.
 	///
-	/// This scans from the highest zoom level downward, returning the first that meets
-	/// a threshold of `> 10` tiles. Returns `None` if none meet that threshold.
+	/// Returns `None` if no level meets the threshold.
 	#[must_use]
 	pub fn get_good_level(&self) -> Option<u8> {
 		self
 			.level_bbox
 			.iter()
 			.rev()
-			.find(|bbox| bbox.count_tiles() > 10)
+			.find(|bbox| bbox.count_tiles() > MIN_TILES_FOR_GOOD_LEVEL)
 			.map(|bbox| bbox.level)
 	}
 
