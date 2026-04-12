@@ -24,7 +24,7 @@ use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
 use std::{collections::HashMap, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileBBoxMap, TileJSON, TileQuadtreePyramid, TileStream, TileType};
+use versatiles_core::{TileBBox, TileBBoxMap, TileJSON, TilePyramid, TileStream, TileType};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
 
@@ -84,7 +84,7 @@ impl ReadTileSource for Operation {
 		let first_parameters = sources.first().unwrap().metadata();
 		let tile_format = first_parameters.tile_format;
 		let tile_compression = first_parameters.tile_compression;
-		let mut pyramid = TileQuadtreePyramid::new_empty();
+		let mut pyramid = TilePyramid::new_empty();
 		let mut traversal = Traversal::ANY;
 
 		for source in &sources {
@@ -189,7 +189,7 @@ mod tests {
 	use itertools::Itertools;
 	use pretty_assertions::assert_eq;
 	use versatiles_container::{DataLocation, TileSource};
-	use versatiles_core::{Blob, TileBBoxPyramid, TileCompression, TileFormat};
+	use versatiles_core::{Blob, TileCompression, TileFormat, TilePyramid};
 
 	pub fn check_tile(blob: &Blob) -> String {
 		let tile = VectorTile::from_blob(blob).unwrap();
@@ -337,10 +337,10 @@ mod tests {
 		let factory = PipelineFactory::new_dummy_reader(Box::new(
 			|location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
-					let mut pyramide = TileBBoxPyramid::new_empty();
+					let mut pyramide = TilePyramid::new_empty();
 					let filename = location.to_string();
 					for c in filename[0..filename.len() - 4].chars() {
-						pyramide.include_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?);
+						pyramide.include_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?)?;
 					}
 					Ok(Box::new(DummyVectorSource::new(
 						&[("dummy", &[&[("filename", &filename)]])],

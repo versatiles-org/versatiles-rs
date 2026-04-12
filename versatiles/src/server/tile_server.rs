@@ -425,7 +425,7 @@ mod tests {
 	use rstest::rstest;
 	use std::sync::Arc;
 	use versatiles_container::{MockReader, MockReaderProfile as MRP, TileSourceMetadata, Traversal};
-	use versatiles_core::{TileBBoxPyramid, TileCompression as TC, TileFormat as TF, TileQuadtreePyramid};
+	use versatiles_core::{TileCompression as TC, TileFormat as TF, TilePyramid};
 
 	const IP: &str = "127.0.0.1";
 
@@ -546,12 +546,7 @@ mod tests {
 
 		let mut server = TileServer::new_test(IP, 0, true, false);
 
-		let parameters = TileSourceMetadata::new(
-			format,
-			compression,
-			TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(8)).unwrap(),
-			Traversal::ANY,
-		);
+		let parameters = TileSourceMetadata::new(format, compression, TilePyramid::new_full_up_to(8), Traversal::ANY);
 		let reader = Arc::new(MockReader::new_mock(parameters).unwrap().boxed());
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 		server.start().await.unwrap();

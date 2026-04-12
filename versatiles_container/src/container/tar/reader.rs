@@ -42,7 +42,7 @@ use tar::{Archive, EntryType};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
-	Blob, ByteRange, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TileQuadtreePyramid, TileStream,
+	Blob, ByteRange, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream,
 	compression::decompress,
 	io::{DataReaderFile, DataReaderTrait},
 };
@@ -136,7 +136,7 @@ impl TarTilesReader {
 		let mut tile_map = HashMap::new();
 		let mut tile_format: Option<TileFormat> = None;
 		let mut tile_compression: Option<TileCompression> = None;
-		let mut bbox_pyramid = TileQuadtreePyramid::new_empty();
+		let mut bbox_pyramid = TilePyramid::new_empty();
 
 		for entry in archive.entries()? {
 			let mut entry = entry?;

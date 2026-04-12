@@ -64,14 +64,15 @@ mod tests {
 	use crate::factory::OperationFactoryTrait;
 	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::{DynamicImage, GenericImage, GenericImageView, Rgba};
-	use versatiles_core::{Blob, GeoBBox, TileBBoxPyramid, TileCoord, TileFormat};
+	use versatiles_core::{Blob, GeoBBox, TileCoord, TileFormat, TilePyramid};
 
 	async fn make_operation(tile_size: u32, level_base: u8) -> Operation {
-		let pyramid = TileBBoxPyramid::from_geo_bbox(
+		let pyramid = TilePyramid::from_geo_bbox(
 			level_base,
 			level_base,
 			&GeoBBox::new(2.224, 48.815, 2.47, 48.903).unwrap(),
-		);
+		)
+		.unwrap();
 
 		return Operation::build(
 			VPLNode::try_from_str(&format!("raster_overview level={level_base}")).unwrap(),
@@ -246,7 +247,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_default_parameters() -> Result<()> {
 		// Test with default parameters (no level or tile_size specified)
-		let pyramid = TileBBoxPyramid::from_geo_bbox(6, 6, &GeoBBox::new(2.224, 48.815, 2.47, 48.903).unwrap());
+		let pyramid = TilePyramid::from_geo_bbox(6, 6, &GeoBBox::new(2.224, 48.815, 2.47, 48.903).unwrap()).unwrap();
 
 		let op = Operation::build(
 			VPLNode::try_from_str("raster_overview").unwrap(),

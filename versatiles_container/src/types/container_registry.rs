@@ -48,7 +48,7 @@ use versatiles_core::io::{DataReader, DataReaderBlob, DataReaderHttp, DataWriter
 #[cfg(feature = "ssh2")]
 use versatiles_core::io::{DataReaderSftp, DataWriterSftp};
 #[cfg(test)]
-use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat, TileQuadtreePyramid};
+use versatiles_core::{TileCompression, TileFormat, TilePyramid};
 use versatiles_derive::context;
 
 /// Signature for async opener functions used by the registry.
@@ -358,7 +358,7 @@ pub async fn make_test_file(
 	let reader = MockReader::new_mock(TileSourceMetadata::new(
 		tile_format,
 		compression,
-		TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(max_zoom_level)).unwrap(),
+		TilePyramid::new_full_up_to(max_zoom_level),
 		Traversal::ANY,
 	))?;
 
@@ -387,7 +387,6 @@ pub mod tests {
 	use crate::MockWriter;
 	use assert_fs::TempDir;
 	use std::time::Instant;
-	use versatiles_core::TileBBoxPyramid;
 
 	#[test]
 	fn sanitize_extension_handles_dots_and_case() {
@@ -449,7 +448,7 @@ pub mod tests {
 			let reader = MockReader::new_mock(TileSourceMetadata::new(
 				TileFormat::PNG,
 				TileCompression::Uncompressed,
-				TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(0)).unwrap(),
+				TilePyramid::new_full_up_to(0),
 				Traversal::ANY,
 			))?;
 			let path = std::env::temp_dir().join("file.unknown_ext");
@@ -480,7 +479,7 @@ pub mod tests {
 			let reader = MockReader::new_mock(TileSourceMetadata::new(
 				TileFormat::PNG,
 				TileCompression::Uncompressed,
-				TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(1)).unwrap(),
+				TilePyramid::new_full_up_to(1),
 				Traversal::ANY,
 			))?;
 
@@ -529,7 +528,7 @@ pub mod tests {
 			let reader1 = MockReader::new_mock(TileSourceMetadata::new(
 				tile_format,
 				compression,
-				TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(2)).unwrap(),
+				TilePyramid::new_full_up_to(2),
 				Traversal::ANY,
 			))?;
 

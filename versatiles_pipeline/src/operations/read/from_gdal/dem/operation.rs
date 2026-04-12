@@ -9,9 +9,7 @@ use anyhow::{Result, bail};
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{
-	TileBBox, TileBBoxPyramid, TileCompression, TileFormat, TileJSON, TileQuadtreePyramid, TileSchema, TileStream,
-};
+use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileStream};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -93,8 +91,7 @@ impl Operation {
 
 		let level_max = args.level_max.unwrap_or(source.level_max(tile_size)?);
 		let level_min = args.level_min.unwrap_or(level_max);
-		let bbox_pyramid_raw = TileBBoxPyramid::from_geo_bbox(level_min, level_max, bbox);
-		let bbox_pyramid = TileQuadtreePyramid::from_bbox_pyramid(&bbox_pyramid_raw)?;
+		let bbox_pyramid = TilePyramid::from_geo_bbox(level_min, level_max, bbox)?;
 
 		let metadata = TileSourceMetadata::new(
 			TileFormat::PNG,
@@ -155,7 +152,7 @@ impl TileSource for Operation {
 		log::trace!("from_gdal_dem::get_tile_stream {bbox:?}");
 		let count = 8192u32.div_euclid(self.tile_size).max(1);
 
-		bbox.intersect_with_quadtree_pyramid(&self.metadata.bbox_pyramid);
+		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
 
 		let bboxes: Vec<TileBBox> = bbox.iter_bbox_grid(count).collect();
 		let size = self.tile_size;

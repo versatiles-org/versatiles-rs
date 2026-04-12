@@ -74,7 +74,7 @@ mod tests {
 	use crate::factory::OperationFactoryTrait;
 	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::{DynamicImage, GenericImageView, Rgb, RgbImage};
-	use versatiles_core::{TileBBox, TileBBoxPyramid, TileCoord, TileFormat, TileSchema};
+	use versatiles_core::{TileBBox, TileCoord, TileFormat, TilePyramid, TileSchema};
 
 	fn raw_to_rgb(v: u32) -> Rgb<u8> {
 		Rgb([((v >> 16) & 0xFF) as u8, ((v >> 8) & 0xFF) as u8, (v & 0xFF) as u8])
@@ -143,7 +143,7 @@ mod tests {
 			}
 		}
 		let image = DynamicImage::ImageRgb8(img);
-		let pyramid = TileBBoxPyramid::new_full_up_to(4);
+		let pyramid = TilePyramid::new_full_up_to(4);
 		let mut source = DummyImageSource::from_image(image, TileFormat::PNG, Some(pyramid)).unwrap();
 		source.tilejson_mut().set_tile_size(512).unwrap();
 		source.tilejson_mut().tile_schema = Some(TileSchema::RasterDEMMapbox);
@@ -205,7 +205,7 @@ mod tests {
 			}
 		}
 		let image = DynamicImage::ImageRgb8(img);
-		let pyramid = TileBBoxPyramid::new_full_up_to(4);
+		let pyramid = TilePyramid::new_full_up_to(4);
 		let mut source = DummyImageSource::from_image(image, TileFormat::PNG, Some(pyramid))?;
 		source.tilejson_mut().set_tile_size(512)?;
 
@@ -251,7 +251,7 @@ mod tests {
 			}
 			Some(Tile::from_image(DynamicImage::ImageRgb8(img), TileFormat::PNG).unwrap())
 		};
-		let pyramid = TileBBoxPyramid::new_full_up_to(8);
+		let pyramid = TilePyramid::new_full_up_to(8);
 		let mut source = DummyImageSource::new(tile_fn, TileFormat::PNG, Some(pyramid))?;
 		source.tilejson_mut().set_tile_size(256)?;
 

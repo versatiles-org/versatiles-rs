@@ -32,8 +32,7 @@ use async_trait::async_trait;
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
-	Blob, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TileQuadtreePyramid, TileStream,
-	compression::compress,
+	Blob, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream, compression::compress,
 };
 use versatiles_derive::context;
 
@@ -63,7 +62,7 @@ impl MockReader {
 	/// Creates a new mock tiles reader with the specified profile.
 	#[context("creating mock reader with profile {:?}", profile)]
 	pub fn new_mock_profile(profile: MockReaderProfile) -> Result<MockReader> {
-		let mut bbox_pyramid = TileQuadtreePyramid::new_empty();
+		let mut bbox_pyramid = TilePyramid::new_empty();
 		bbox_pyramid.include_bbox(&TileBBox::from_min_and_max(2, 0, 1, 2, 3)?)?;
 		bbox_pyramid.include_bbox(&TileBBox::from_min_and_max(3, 0, 2, 4, 6)?)?;
 		bbox_pyramid.include_bbox(&TileBBox::new_full(4)?)?;
@@ -105,7 +104,7 @@ impl MockReader {
 	/// Internal helper to create a mock tile for the given coordinate.
 	fn create_mock_tile(
 		coord: &TileCoord,
-		bbox_pyramid: &TileQuadtreePyramid,
+		bbox_pyramid: &TilePyramid,
 		format: TileFormat,
 		compression: TileCompression,
 	) -> Result<Option<Tile>> {

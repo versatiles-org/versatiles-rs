@@ -8,7 +8,7 @@ use std::{
 	collections::{HashMap, HashSet},
 	vec,
 };
-use versatiles_core::{TileBBox, TileBBoxPyramid};
+use versatiles_core::{TileBBox, TilePyramid};
 use versatiles_derive::context;
 
 /// Represents a single operation during traversal translation from one traversal configuration to another.
@@ -45,7 +45,7 @@ pub enum TraversalTranslationStep {
 /// # Errors
 /// Returns an error if no valid translation can be found between the provided traversals.
 pub fn translate_traversals(
-	pyramid: &TileBBoxPyramid,
+	pyramid: &TilePyramid,
 	traversal_read: &Traversal,
 	traversal_write: &Traversal,
 ) -> Result<Vec<TraversalTranslationStep>> {
@@ -204,7 +204,7 @@ fn verify_steps(
 	read_size: u32,
 	write_order: TraversalOrder,
 	write_size: u32,
-	pyramid: &TileBBoxPyramid,
+	pyramid: &TilePyramid,
 ) -> Result<()> {
 	use TraversalTranslationStep::{Pop, Push, Stream};
 
@@ -239,7 +239,7 @@ fn verify_steps(
 	}
 
 	#[context("Could not verify traversal translation step order")]
-	fn check_order(step_bboxes: &[TileBBox], order: TraversalOrder, size: u32, pyramid: &TileBBoxPyramid) -> Result<()> {
+	fn check_order(step_bboxes: &[TileBBox], order: TraversalOrder, size: u32, pyramid: &TilePyramid) -> Result<()> {
 		let mut lookup = HashMap::<(u8, u32, u32), bool>::new();
 
 		// verify sizes
@@ -324,7 +324,7 @@ mod tests {
 		size_write_min: u32,
 		size_write_max: u32,
 	) -> Vec<String> {
-		let pyramid = TileBBoxPyramid::from_geo_bbox(13, 15, &GeoBBox::new(12.0, 13.0, 14.0, 15.0).unwrap());
+		let pyramid = TilePyramid::from_geo_bbox(13, 15, &GeoBBox::new(12.0, 13.0, 14.0, 15.0).unwrap()).unwrap();
 		let read = Traversal::new(order_read, size_read_min, size_read_max).unwrap();
 		let write = Traversal::new(order_write, size_write_min, size_write_max).unwrap();
 		let steps = translate_traversals(&pyramid, &read, &write).unwrap();

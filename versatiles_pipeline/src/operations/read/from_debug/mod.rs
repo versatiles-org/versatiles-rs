@@ -24,7 +24,7 @@ use image::create_debug_image;
 use std::{fmt::Debug, sync::Arc};
 use vector::create_debug_vector_tile;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TileQuadtreePyramid, TileStream, TileType};
+use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream, TileType};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Generates debug tiles that display their coordinates as text.
@@ -46,7 +46,7 @@ impl Operation {
 		let metadata = TileSourceMetadata::new(
 			tile_format,
 			TileCompression::Uncompressed,
-			TileQuadtreePyramid::new_full(),
+			TilePyramid::new_full(),
 			Traversal::ANY,
 		);
 

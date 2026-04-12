@@ -230,12 +230,12 @@ mod tests {
 	use super::*;
 	use crate::{MBTilesReader, MockReader, MockWriter, TileSourceMetadata};
 	use assert_fs::NamedTempFile;
-	use versatiles_core::{TileBBoxPyramid, TileQuadtreePyramid};
+	use versatiles_core::TilePyramid;
 
 	#[tokio::test]
 	async fn read_write() -> Result<()> {
 		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
-			bbox_pyramid: TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(5)).unwrap(),
+			bbox_pyramid: TilePyramid::new_full_up_to(5),
 			tile_compression: TileCompression::Gzip,
 			tile_format: TileFormat::MVT,
 			traversal: Traversal::ANY,

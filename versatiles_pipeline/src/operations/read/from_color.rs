@@ -17,7 +17,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TileQuadtreePyramid, TileStream};
+use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_image::{DynamicImageTraitConvert, color::parse_hex_color};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -60,7 +60,7 @@ impl Operation {
 		let metadata = TileSourceMetadata::new(
 			tile_format,
 			TileCompression::Uncompressed,
-			TileQuadtreePyramid::new_full(),
+			TilePyramid::new_full(),
 			Traversal::ANY,
 		);
 

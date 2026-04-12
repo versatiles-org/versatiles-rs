@@ -6,7 +6,7 @@ use super::BlockDefinition;
 use anyhow::{Result, ensure};
 use std::{collections::HashMap, ops::Div};
 use versatiles_core::{
-	Blob, ByteRange, TileBBoxPyramid, TileCoord,
+	Blob, ByteRange, TileCoord, TilePyramid,
 	compression::{compress_brotli_fast, decompress_brotli},
 	io::{ValueWriter, ValueWriterBlob},
 };
@@ -65,16 +65,14 @@ impl BlockIndex {
 		Self::from_blob(&decompress_brotli(buf)?)
 	}
 
-	/// Returns a `TileBBoxPyramid` representing the bounding boxes of the blocks in the index.
-	///
-	/// # Returns
-	/// A `TileBBoxPyramid` representing the bounding boxes of the blocks.
-	pub fn get_bbox_pyramid(&self) -> TileBBoxPyramid {
-		let mut pyramid = TileBBoxPyramid::new_empty();
+	/// Returns a [`TilePyramid`] representing the bounding boxes of the blocks in the index.
+	pub fn get_bbox_pyramid(&self) -> TilePyramid {
+		let mut pyramid = TilePyramid::new_empty();
 		for block in self.lookup.values() {
-			pyramid.include_bbox(block.get_global_bbox());
+			pyramid
+				.include_bbox(block.get_global_bbox())
+				.expect("include_bbox failed");
 		}
-
 		pyramid
 	}
 

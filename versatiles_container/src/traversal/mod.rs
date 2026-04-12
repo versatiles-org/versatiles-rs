@@ -15,7 +15,7 @@ pub use size::TraversalSize;
 pub use traits::TileSourceTraverseExt;
 
 use anyhow::Result;
-use versatiles_core::{TileBBox, TileBBoxPyramid};
+use versatiles_core::{TileBBox, TilePyramid};
 use versatiles_derive::context;
 
 #[derive(Clone, PartialEq)]
@@ -23,7 +23,7 @@ use versatiles_derive::context;
 ///
 /// A `Traversal` combines a `TraversalOrder` (ordering of blocks)
 /// and a `TraversalSize` (range of block sizes) to generate
-/// an ordered sequence of `TileBBox` instances from a `TileBBoxPyramid`.
+/// an ordered sequence of `TileBBox` instances from a `TilePyramid`.
 pub struct Traversal {
 	/// The block ordering strategy.
 	pub order: TraversalOrder,
@@ -120,22 +120,25 @@ impl Traversal {
 	/// applies the traversal order, and returns a flat vector.
 	///
 	/// # Parameters
-	/// - `pyramid`: the `TileBBoxPyramid` defining the tile grid per zoom level.
+	/// - `pyramid`: the [`TilePyramid`] defining the tile grid per zoom level.
 	///
 	/// # Errors
 	/// Returns an error if size computation or ordering fails.
 	#[must_use = "this returns the traversed bboxes, it doesn't modify anything"]
 	#[context("while traversing pyramid with Traversal {:?}", self.order)]
-	pub fn traverse_pyramid(&self, pyramid: &TileBBoxPyramid) -> Result<Vec<TileBBox>> {
+	pub fn traverse_pyramid(&self, pyramid: &TilePyramid) -> Result<Vec<TileBBox>> {
 		let size = self.max_size()?;
-		let mut bboxes: Vec<TileBBox> = pyramid.level_bbox.iter().flat_map(|b| b.iter_bbox_grid(size)).collect();
+		let mut bboxes: Vec<TileBBox> = pyramid
+			.iter_all_level_bboxes()
+			.flat_map(|b| b.iter_bbox_grid(size).collect::<Vec<_>>())
+			.collect();
 		self.order.sort_bboxes(&mut bboxes, size);
 		Ok(bboxes)
 	}
 
 	#[must_use = "this returns the traversal steps, it doesn't modify anything"]
 	#[context("while computing traversal translation steps between {:?} and {:?}", self.order, other.order)]
-	pub fn get_traversal_steps(&self, other: &Self, pyramid: &TileBBoxPyramid) -> Result<Vec<TraversalTranslationStep>> {
+	pub fn get_traversal_steps(&self, other: &Self, pyramid: &TilePyramid) -> Result<Vec<TraversalTranslationStep>> {
 		translate_traversals(pyramid, self, other)
 	}
 
@@ -165,7 +168,7 @@ mod tests {
 	use versatiles_core::GeoBBox;
 
 	fn traverse_test(order: TraversalOrder, size: u32, bbox: [i16; 4], min_level: u8, max_level: u8) -> Vec<String> {
-		let pyramid = TileBBoxPyramid::from_geo_bbox(min_level, max_level, &GeoBBox::try_from(&bbox).unwrap());
+		let pyramid = TilePyramid::from_geo_bbox(min_level, max_level, &GeoBBox::try_from(&bbox).unwrap()).unwrap();
 		let traversal = Traversal {
 			order,
 			size: TraversalSize::new(1, size).unwrap(),

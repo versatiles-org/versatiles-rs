@@ -199,14 +199,14 @@ mod tests {
 			pmtiles::PMTilesReader,
 		},
 	};
-	use versatiles_core::{TileBBox, TileBBoxPyramid, TileFormat, TileQuadtreePyramid, io::*};
+	use versatiles_core::{TileBBox, TileFormat, TilePyramid, io::*};
 	use versatiles_derive::context;
 
 	#[context("test: PMTiles read↔write roundtrip")]
 	#[tokio::test]
 	async fn read_write() -> Result<()> {
 		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
-			bbox_pyramid: TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(4)).unwrap(),
+			bbox_pyramid: TilePyramid::new_full_up_to(4),
 			tile_compression: TileCompression::Gzip,
 			tile_format: TileFormat::MVT,
 			traversal: Traversal::ANY,
@@ -227,10 +227,9 @@ mod tests {
 	#[context("test: PMTiles tile ordering (Hilbert & offsets)")]
 	#[tokio::test]
 	async fn tiles_written_in_order() -> Result<()> {
-		let mut bbox_pyramid_raw = TileBBoxPyramid::new_empty();
-		bbox_pyramid_raw.include_bbox(&TileBBox::from_min_and_max(15, 4090, 4090, 4139, 4139)?);
-		bbox_pyramid_raw.include_bbox(&TileBBox::from_min_and_max(14, 250, 250, 260, 260)?);
-		let bbox_pyramid = TileQuadtreePyramid::from_bbox_pyramid(&bbox_pyramid_raw)?;
+		let mut bbox_pyramid = TilePyramid::new_empty();
+		bbox_pyramid.include_bbox(&TileBBox::from_min_and_max(15, 4090, 4090, 4139, 4139)?)?;
+		bbox_pyramid.include_bbox(&TileBBox::from_min_and_max(14, 250, 250, 260, 260)?)?;
 
 		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
 			bbox_pyramid,

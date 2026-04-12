@@ -91,7 +91,7 @@ use async_trait::async_trait;
 use futures::stream;
 use std::{collections::HashSet, sync::Arc, vec};
 use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileCoord, TileFormat, TileJSON, TileQuadtreePyramid, TileStream, TileType};
+use versatiles_core::{TileBBox, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream, TileType};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitOperation;
 
@@ -243,7 +243,7 @@ impl ReadTileSource for Operation {
 		);
 		let tile_compression = first_source_metadata.tile_compression;
 
-		let mut pyramid = TileQuadtreePyramid::new_empty();
+		let mut pyramid = TilePyramid::new_empty();
 		let mut traversal = Traversal::new_any();
 
 		for source in &original_sources {
@@ -427,7 +427,7 @@ mod tests {
 	use pretty_assertions::assert_eq;
 	use rstest::rstest;
 	use versatiles_container::{DataLocation, TileSource};
-	use versatiles_core::{Blob, TileBBoxPyramid, TileCompression, TileCompression::Uncompressed, TileFormat};
+	use versatiles_core::{Blob, TileCompression, TileCompression::Uncompressed, TileFormat, TilePyramid};
 	use versatiles_image::{DynamicImage, DynamicImageTraitConvert};
 
 	fn rgba_to_hex(rgba: &[u8]) -> String {
@@ -550,10 +550,10 @@ mod tests {
 		let factory = PipelineFactory::new_dummy_reader(Box::new(
 			|location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
-					let mut pyramide = TileBBoxPyramid::new_empty();
+					let mut pyramide = TilePyramid::new_empty();
 					let filename = location.to_string();
 					for c in filename[0..filename.len() - 4].chars() {
-						pyramide.include_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?);
+						pyramide.include_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?)?;
 					}
 					Ok(
 						Box::new(DummyImageSource::from_color(&[0, 0, 0], 4, TileFormat::PNG, Some(pyramide)).unwrap())
@@ -881,7 +881,7 @@ mod tests {
 						}
 					}
 
-					let pyramid = TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(8)).unwrap();
+					let pyramid = TilePyramid::new_full_up_to(8);
 					let metadata = TileSourceMetadata::new(
 						TileFormat::MVT, // Vector tile format
 						TileCompression::Uncompressed,
@@ -948,10 +948,10 @@ mod tests {
 		let factory = PipelineFactory::new_dummy_reader(Box::new(
 			|_location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
-					let mut pyramid = TileBBoxPyramid::new_empty();
-					pyramid.include_bbox(&TileBBox::new_full(0)?);
-					pyramid.include_bbox(&TileBBox::new_full(1)?);
-					pyramid.include_bbox(&TileBBox::new_full(2)?);
+					let mut pyramid = TilePyramid::new_empty();
+					pyramid.include_bbox(&TileBBox::new_full(0)?)?;
+					pyramid.include_bbox(&TileBBox::new_full(1)?)?;
+					pyramid.include_bbox(&TileBBox::new_full(2)?)?;
 					Ok(
 						Box::new(DummyImageSource::from_color(&[255, 0, 0], 4, TileFormat::PNG, Some(pyramid)).unwrap())
 							as Box<dyn TileSource>,
@@ -983,17 +983,17 @@ mod tests {
 		let factory = PipelineFactory::new_dummy_reader(Box::new(
 			|location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
-					let mut pyramid = TileBBoxPyramid::new_empty();
+					let mut pyramid = TilePyramid::new_empty();
 					let filename = location.to_string();
 					if filename.contains("full") {
 						// Full source has all levels
 						for level in 0..=4 {
-							pyramid.include_bbox(&TileBBox::new_full(level)?);
+							pyramid.include_bbox(&TileBBox::new_full(level)?)?;
 						}
 					} else {
 						// Limited source only has levels 0-2
 						for level in 0..=2 {
-							pyramid.include_bbox(&TileBBox::new_full(level)?);
+							pyramid.include_bbox(&TileBBox::new_full(level)?)?;
 						}
 					}
 					let color = if filename.contains("full") {
@@ -1129,15 +1129,15 @@ mod tests {
 		request_level: u8,
 	) -> Option<String> {
 		let mut sources: Vec<SourceEntry> = Vec::new();
-		let mut pyramid_raw = TileBBoxPyramid::new_empty();
+		let mut pyramid_raw = TilePyramid::new_empty();
 		let mut traversal = Traversal::new_any();
 
 		// Build original sources
 		let mut original_sources: Vec<Box<dyn TileSource>> = Vec::new();
 		for &(color, max_level) in layers {
-			let mut src_pyramid = TileBBoxPyramid::new_empty();
+			let mut src_pyramid = TilePyramid::new_empty();
 			for level in 0..=max_level {
-				src_pyramid.include_bbox(&TileBBox::new_full(level).unwrap());
+				src_pyramid.include_bbox(&TileBBox::new_full(level).unwrap()).unwrap();
 			}
 			pyramid_raw.include_pyramid(&src_pyramid);
 			let source = DummyImageSource::from_color(color, 4, TileFormat::PNG, Some(src_pyramid)).unwrap();
@@ -1163,8 +1163,7 @@ mod tests {
 			});
 		}
 
-		let pyramid = TileQuadtreePyramid::from_bbox_pyramid(&pyramid_raw).unwrap();
-		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, pyramid, traversal);
+		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, pyramid_raw, traversal);
 		let tilejson = TileJSON::default();
 
 		let op = Operation {
@@ -1339,14 +1338,14 @@ mod tests {
 		request_level: u8,
 	) -> (Tile, Tile) {
 		let mut sources: Vec<SourceEntry> = Vec::new();
-		let mut pyramid_raw = TileBBoxPyramid::new_empty();
+		let mut pyramid_raw = TilePyramid::new_empty();
 		let mut traversal = Traversal::new_any();
 
 		let mut original_sources: Vec<Box<dyn TileSource>> = Vec::new();
 		for &(color, max_level) in layers {
-			let mut src_pyramid = TileBBoxPyramid::new_empty();
+			let mut src_pyramid = TilePyramid::new_empty();
 			for level in 0..=max_level {
-				src_pyramid.include_bbox(&TileBBox::new_full(level).unwrap());
+				src_pyramid.include_bbox(&TileBBox::new_full(level).unwrap()).unwrap();
 			}
 			pyramid_raw.include_pyramid(&src_pyramid);
 			let source = DummyImageSource::from_color(color, 4, TileFormat::PNG, Some(src_pyramid)).unwrap();
@@ -1359,9 +1358,9 @@ mod tests {
 		// Build a standalone copy of the first source for comparison
 		let first_color = layers[0].0;
 		let first_max = layers[0].1;
-		let mut first_pyramid = TileBBoxPyramid::new_empty();
+		let mut first_pyramid = TilePyramid::new_empty();
 		for level in 0..=first_max {
-			first_pyramid.include_bbox(&TileBBox::new_full(level).unwrap());
+			first_pyramid.include_bbox(&TileBBox::new_full(level).unwrap()).unwrap();
 		}
 		let first_source_standalone =
 			DummyImageSource::from_color(first_color, 4, TileFormat::PNG, Some(first_pyramid)).unwrap();
@@ -1381,8 +1380,7 @@ mod tests {
 			});
 		}
 
-		let pyramid = TileQuadtreePyramid::from_bbox_pyramid(&pyramid_raw).unwrap();
-		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, pyramid, traversal);
+		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, pyramid_raw, traversal);
 		let tilejson = TileJSON::default();
 
 		let op = Operation {

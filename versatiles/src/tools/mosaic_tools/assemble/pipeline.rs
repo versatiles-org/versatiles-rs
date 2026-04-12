@@ -92,10 +92,10 @@ pub(super) async fn scan_sources(
 		// Get pyramid and clip to zoom range
 		let mut pyramid = metadata.bbox_pyramid.clone();
 		if let Some(min) = min_zoom {
-			pyramid.set_zoom_min(min);
+			pyramid.set_level_min(min);
 		}
 		if let Some(max) = max_zoom {
-			pyramid.set_zoom_max(max);
+			pyramid.set_level_max(max);
 		}
 		if pyramid.is_empty() {
 			progress.inc(1);

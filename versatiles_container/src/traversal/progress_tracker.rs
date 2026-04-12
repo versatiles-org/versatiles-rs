@@ -89,9 +89,7 @@ mod tests {
 	use anyhow::Result;
 	use async_trait::async_trait;
 	use std::sync::Arc;
-	use versatiles_core::{
-		Blob, TileBBox, TileBBoxPyramid, TileCompression, TileFormat, TileJSON, TileQuadtreePyramid, TileStream,
-	};
+	use versatiles_core::{Blob, TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
 
 	use super::super::{TileSourceTraverseExt, Traversal};
 
@@ -112,8 +110,7 @@ mod tests {
 		fn new(traversal: Traversal, max_level: u8) -> Self {
 			TestReader {
 				metadata: TileSourceMetadata {
-					bbox_pyramid: TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(max_level))
-						.unwrap(),
+					bbox_pyramid: TilePyramid::new_full_up_to(max_level),
 					tile_compression: TileCompression::Uncompressed,
 					tile_format: TileFormat::PNG,
 					traversal,

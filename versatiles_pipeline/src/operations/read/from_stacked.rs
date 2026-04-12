@@ -25,7 +25,7 @@ use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
 use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileBBoxMap, TileJSON, TileQuadtreePyramid, TileStream};
+use versatiles_core::{TileBBox, TileBBoxMap, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -74,7 +74,7 @@ impl Operation {
 		let tile_format = parameters.tile_format;
 		let tile_compression = parameters.tile_compression;
 
-		let mut pyramid = TileQuadtreePyramid::new_empty();
+		let mut pyramid = TilePyramid::new_empty();
 		let mut traversal = Traversal::default();
 
 		for source in &sources {
@@ -179,7 +179,7 @@ mod tests {
 	use super::*;
 	use crate::helpers::{arrange_tiles, dummy_vector_source::DummyVectorSource};
 	use std::sync::LazyLock;
-	use versatiles_core::TileBBoxPyramid;
+	use versatiles_core::TilePyramid;
 
 	static RESULT_PATTERN: LazyLock<Vec<String>> = LazyLock::new(|| {
 		vec![
@@ -324,8 +324,8 @@ mod tests {
 	fn test_traversal_orders_overlay() {
 		use crate::operations::read::from_container::operation_from_reader;
 
-		let mut src1 = DummyVectorSource::new(&[], Some(TileBBoxPyramid::new_full_up_to(8)));
-		let mut src2 = DummyVectorSource::new(&[], Some(TileBBoxPyramid::new_full_up_to(8)));
+		let mut src1 = DummyVectorSource::new(&[], Some(TilePyramid::new_full_up_to(8)));
+		let mut src2 = DummyVectorSource::new(&[], Some(TilePyramid::new_full_up_to(8)));
 
 		src1.set_traversal(Traversal::new_any_size(1, 16).unwrap());
 		src2.set_traversal(Traversal::new(TraversalOrder::PMTiles, 4, 256).unwrap());

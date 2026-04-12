@@ -152,7 +152,7 @@ mod tests {
 	use crate::factory::OperationFactoryTrait;
 	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::{GenericImage, Pixel};
-	use versatiles_core::{GeoBBox, TileBBoxPyramid, TileFormat, TileSchema};
+	use versatiles_core::{GeoBBox, TileFormat, TilePyramid, TileSchema};
 
 	fn raw_to_rgb(v: u32) -> Rgb<u8> {
 		Rgb([((v >> 16) & 0xFF) as u8, ((v >> 8) & 0xFF) as u8, (v & 0xFF) as u8])
@@ -346,7 +346,7 @@ mod tests {
 		// Stream tiles level-by-level from highest to lowest (as the traversal does).
 		// This populates the cache at each level so lower levels can build from it.
 		let traversal = op.metadata().traversal.clone();
-		let bboxes = traversal.traverse_pyramid(&op.metadata().bbox_pyramid.to_bbox_pyramid())?;
+		let bboxes = traversal.traverse_pyramid(&op.metadata().bbox_pyramid)?;
 
 		let mut tiles_at_2 = Vec::new();
 		for bbox in &bboxes {
@@ -386,11 +386,12 @@ mod tests {
 		let tile_size = 256u32;
 		let level_base = 6u8;
 
-		let pyramid = TileBBoxPyramid::from_geo_bbox(
+		let pyramid = TilePyramid::from_geo_bbox(
 			level_base,
 			level_base,
 			&GeoBBox::new(2.224, 48.815, 2.47, 48.903).unwrap(),
-		);
+		)
+		.unwrap();
 
 		let mut img = DynamicImage::new_rgb8(tile_size, tile_size);
 		for y in 0..tile_size {

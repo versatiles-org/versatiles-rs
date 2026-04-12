@@ -34,7 +34,7 @@ pub struct TileJSON {
 }
 
 impl TileJSON {
-	pub fn build(tj: &versatiles_core::TileJSON, p: &versatiles_core::TileQuadtreePyramid) -> Self {
+	pub fn build(tj: &versatiles_core::TileJSON, p: &versatiles_core::TilePyramid) -> Self {
 		let vector_layers = tj
 			.vector_layers
 			.0

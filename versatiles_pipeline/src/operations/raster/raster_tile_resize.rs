@@ -65,7 +65,7 @@ mod tests {
 	use super::*;
 	use crate::factory::OperationFactoryTrait;
 	use crate::helpers::dummy_image_source::DummyImageSource;
-	use versatiles_core::{TileBBox, TileBBoxPyramid, TileCoord, TileFormat};
+	use versatiles_core::{TileBBox, TileCoord, TileFormat, TilePyramid};
 	use versatiles_image::{DynamicImage, GenericImageView, traits::DynamicImageTraitConvert};
 
 	#[test]
@@ -97,7 +97,7 @@ mod tests {
 
 	fn make_512_gradient_source() -> DummyImageSource {
 		let image = DynamicImage::from_fn(512, 512, |x, y| [x as u8, y as u8, 255u8.wrapping_sub(x as u8)]);
-		let pyramid = TileBBoxPyramid::new_full_up_to(4);
+		let pyramid = TilePyramid::new_full_up_to(4);
 		let mut source = DummyImageSource::from_image(image, TileFormat::PNG, Some(pyramid)).unwrap();
 		source.tilejson_mut().set_tile_size(512).unwrap();
 		source
@@ -115,7 +115,7 @@ mod tests {
 			let image = DynamicImage::from_fn(256, 256, |_, _| [r, g, b]);
 			Some(Tile::from_image(image, TileFormat::PNG).unwrap())
 		};
-		let pyramid = TileBBoxPyramid::new_full_up_to(8);
+		let pyramid = TilePyramid::new_full_up_to(8);
 		let mut source = DummyImageSource::new(tile_fn, TileFormat::PNG, Some(pyramid)).unwrap();
 		source.tilejson_mut().set_tile_size(256).unwrap();
 		source
@@ -237,7 +237,7 @@ mod tests {
 			let image = DynamicImage::from_fn(256, 256, |_, _| [200u8, 100, 50]);
 			Some(Tile::from_image(image, TileFormat::PNG).unwrap())
 		};
-		let pyramid = TileBBoxPyramid::new_full_up_to(4);
+		let pyramid = TilePyramid::new_full_up_to(4);
 		let mut source = DummyImageSource::new(tile_fn, TileFormat::PNG, Some(pyramid)).unwrap();
 		source.tilejson_mut().set_tile_size(256).unwrap();
 

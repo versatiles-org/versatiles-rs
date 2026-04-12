@@ -27,7 +27,7 @@
 //!     // Limit to a bbox pyramid and keep source compression;
 //!     // you could also set `tile_compression: Some(TileCompression::Brotli)` to re-encode.
 //!     let converter_params = TilesConverterParameters {
-//!         bbox_pyramid: Some(TileBBoxPyramid::new_full_up_to(8)),
+//!         bbox_pyramid: Some(TilePyramid::new_full_up_to(8)),
 //!         ..Default::default()
 //!     };
 //!
@@ -44,10 +44,7 @@ use crate::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, 
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{path::Path, sync::Arc};
-use versatiles_core::{
-	GeoBBox, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileQuadtreePyramid,
-	TileStream,
-};
+use versatiles_core::{GeoBBox, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 
 /// Parameters that control how tiles are transformed during reading/conversion.
@@ -60,8 +57,8 @@ use versatiles_derive::context;
 #[derive(Debug)]
 pub struct TilesConverterParameters {
 	/// Optional spatial/zoom restriction. When set, only tiles inside the given
-	/// [`TileBBoxPyramid`] are read/streamed. Existing bounds are intersected with this.
-	pub bbox_pyramid: Option<TileBBoxPyramid>,
+	/// [`TilePyramid`] are read/streamed. Existing bounds are intersected with this.
+	pub bbox_pyramid: Option<TilePyramid>,
 	/// Optional geographic bounding box filter. When set, existing tilejson bounds are
 	/// intersected with this bbox rather than being recalculated from the pyramid.
 	pub geo_bbox: Option<GeoBBox>,
@@ -183,9 +180,7 @@ impl TilesConvertReader {
 		}
 
 		if let Some(bbox_pyramid) = &cp.bbox_pyramid {
-			new_rp
-				.bbox_pyramid
-				.intersect(&TileQuadtreePyramid::from_bbox_pyramid(bbox_pyramid)?)?;
+			new_rp.bbox_pyramid.intersect(bbox_pyramid)?;
 		}
 
 		if let Some(tile_format) = cp.tile_format {
@@ -349,22 +344,18 @@ mod tests {
 	use assert_fs::NamedTempFile;
 	use rstest::rstest;
 	use versatiles_core::{
+		GeoBBox, TileBBox,
 		TileCompression::*,
 		TileFormat::{self, *},
+		TilePyramid,
 	};
 
-	fn new_bbox(b: [u32; 4]) -> TileBBoxPyramid {
-		let mut pyramid = TileBBoxPyramid::new_empty();
-		pyramid.include_bbox(&TileBBox::from_min_and_max(3, b[0], b[1], b[2], b[3]).unwrap());
-		pyramid
-	}
-
-	fn new_quad_bbox(b: [u32; 4]) -> TileQuadtreePyramid {
-		TileQuadtreePyramid::from_bbox_pyramid(&new_bbox(b)).unwrap()
+	fn new_pyramid(b: [u32; 4]) -> TilePyramid {
+		TilePyramid::from([TileBBox::from_min_and_max(3, b[0], b[1], b[2], b[3]).unwrap()].as_slice())
 	}
 
 	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> SharedTileSource {
-		let bbox_pyramid = TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(4)).unwrap();
+		let bbox_pyramid = TilePyramid::new_full_up_to(4);
 		let reader_metadata = TileSourceMetadata::new(tf, tc, bbox_pyramid, Traversal::ANY);
 		MockReader::new_mock(reader_metadata).unwrap().into_shared()
 	}
@@ -381,9 +372,9 @@ mod tests {
 		#[case] bbox_out: [u32; 4],
 		#[case] tile_list: &str,
 	) -> Result<()> {
-		let pyramid_in = new_quad_bbox([0, 1, 4, 5]);
-		let pyramid_convert = new_bbox([2, 3, 7, 7]);
-		let pyramid_out = new_quad_bbox(bbox_out);
+		let pyramid_in = new_pyramid([0, 1, 4, 5]);
+		let pyramid_convert = new_pyramid([2, 3, 7, 7]);
+		let pyramid_out = new_pyramid(bbox_out);
 
 		let reader_metadata = TileSourceMetadata::new(JSON, Uncompressed, pyramid_in, Traversal::ANY);
 		let reader = MockReader::new_mock(reader_metadata)?.into_shared();
@@ -430,7 +421,7 @@ mod tests {
 	#[test]
 	fn test_tiles_converter_parameters_new() {
 		let cp = TilesConverterParameters {
-			bbox_pyramid: Some(TileBBoxPyramid::new_full_up_to(1)),
+			bbox_pyramid: Some(TilePyramid::new_full_up_to(1)),
 			geo_bbox: None,
 			flip_y: true,
 			swap_xy: true,
@@ -502,7 +493,7 @@ mod tests {
 	fn test_geo_bbox_intersects_existing_tilejson_bounds() {
 		// Source has bounds covering a wide area
 		let source_bounds = GeoBBox::new(10.0, 50.0, 15.0, 55.0).unwrap();
-		let bbox_pyramid = TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(4)).unwrap();
+		let bbox_pyramid = TilePyramid::new_full_up_to(4);
 		let reader_metadata = TileSourceMetadata::new(MVT, Uncompressed, bbox_pyramid, Traversal::ANY);
 		let mut reader = MockReader::new_mock(reader_metadata).unwrap();
 		reader.tilejson_mut().bounds = Some(source_bounds);
@@ -510,7 +501,7 @@ mod tests {
 
 		// User specifies a bbox that partially overlaps
 		let filter_bbox = GeoBBox::new(12.0, 52.0, 20.0, 60.0).unwrap();
-		let mut filter_pyramid = TileBBoxPyramid::new_full();
+		let mut filter_pyramid = TilePyramid::new_full();
 		filter_pyramid.intersect_geo_bbox(&filter_bbox).unwrap();
 
 		let cp = TilesConverterParameters {
@@ -528,12 +519,12 @@ mod tests {
 	#[test]
 	fn test_geo_bbox_without_existing_bounds_uses_pyramid() {
 		// Source has NO explicit bounds in tilejson
-		let bbox_pyramid = TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(4)).unwrap();
+		let bbox_pyramid = TilePyramid::new_full_up_to(4);
 		let reader_metadata = TileSourceMetadata::new(MVT, Uncompressed, bbox_pyramid, Traversal::ANY);
 		let reader = MockReader::new_mock(reader_metadata).unwrap().into_shared();
 
 		let filter_bbox = GeoBBox::new(12.0, 52.0, 14.0, 54.0).unwrap();
-		let mut filter_pyramid = TileBBoxPyramid::new_full();
+		let mut filter_pyramid = TilePyramid::new_full();
 		filter_pyramid.intersect_geo_bbox(&filter_bbox).unwrap();
 
 		let cp = TilesConverterParameters {

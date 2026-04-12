@@ -3,9 +3,7 @@ use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{
-	TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileQuadtreePyramid, TileStream,
-};
+use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitConvert;
 
@@ -27,7 +25,7 @@ impl DummyImageSource {
 		color: &[u8],
 		tile_size: u32,
 		tile_format: TileFormat,
-		pyramid: Option<TileBBoxPyramid>,
+		pyramid: Option<TilePyramid>,
 	) -> Result<Self> {
 		ensure!(tile_format.is_raster(), "tile_format must be a raster format");
 		ensure!(!color.is_empty(), "color vector must not be empty");
@@ -46,7 +44,7 @@ impl DummyImageSource {
 	}
 
 	#[context("Creating DummyImageSource from image, tile_format='{tile_format}'")]
-	pub fn from_image(image: DynamicImage, tile_format: TileFormat, pyramid: Option<TileBBoxPyramid>) -> Result<Self> {
+	pub fn from_image(image: DynamicImage, tile_format: TileFormat, pyramid: Option<TilePyramid>) -> Result<Self> {
 		ensure!(tile_format.is_raster(), "tile_format must be a raster format");
 		let tile = Arc::new(Tile::from_image(image, tile_format)?);
 		Self::new(move |_coord| Some((*tile).clone()), tile_format, pyramid)
@@ -54,17 +52,13 @@ impl DummyImageSource {
 
 	#[context("Creating DummyImageSource from image, tile_format='{tile_format}'")]
 	#[allow(clippy::needless_pass_by_value)]
-	pub fn new<F>(generate_tile: F, tile_format: TileFormat, pyramid: Option<TileBBoxPyramid>) -> Result<Self>
+	pub fn new<F>(generate_tile: F, tile_format: TileFormat, pyramid: Option<TilePyramid>) -> Result<Self>
 	where
 		F: Fn(&TileCoord) -> Option<Tile> + Send + Sync + 'static,
 	{
 		ensure!(tile_format.is_raster(), "tile_format must be a raster format");
 
-		let bbox_pyramid = pyramid
-			.as_ref()
-			.map(TileQuadtreePyramid::from_bbox_pyramid)
-			.transpose()?
-			.unwrap_or_else(|| TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(8)).unwrap());
+		let bbox_pyramid = pyramid.unwrap_or_else(|| TilePyramid::new_full_up_to(8));
 		let metadata = TileSourceMetadata::new(tile_format, TileCompression::Uncompressed, bbox_pyramid, Traversal::ANY);
 
 		let mut tilejson = TileJSON::default();
@@ -106,7 +100,7 @@ impl TileSource for DummyImageSource {
 		log::trace!("dummy_image_source::get_tile_stream {bbox:?}");
 
 		let generate_tile = (self.generate_tile).clone();
-		bbox.intersect_with_quadtree_pyramid(&self.metadata.bbox_pyramid);
+		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
 		Ok(TileStream::from_iter_coord(
 			bbox.into_iter_coords_zorder(),
 			move |coord| (generate_tile)(&coord),
@@ -159,11 +153,7 @@ mod tests {
 			&[0, 100, 200],
 			4,
 			PNG,
-			Some(TileBBoxPyramid::from_geo_bbox(
-				0,
-				8,
-				&GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap(),
-			)),
+			Some(TilePyramid::from_geo_bbox(0, 8, &GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap()).unwrap()),
 		)
 		.unwrap();
 		let tile_data = source.get_tile(&TileCoord::new(8, 0, 255).unwrap()).await.unwrap();
@@ -179,11 +169,7 @@ mod tests {
 			&[0, 100, 200],
 			4,
 			PNG,
-			Some(TileBBoxPyramid::from_geo_bbox(
-				3,
-				15,
-				&GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap(),
-			)),
+			Some(TilePyramid::from_geo_bbox(3, 15, &GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap()).unwrap()),
 		)
 		.unwrap();
 		assert_eq!(

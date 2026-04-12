@@ -58,8 +58,7 @@ use std::{fmt::Debug, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
-	Blob, ByteRange, LimitedCache, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileQuadtreePyramid,
-	TileStream,
+	Blob, ByteRange, LimitedCache, TileBBox, TileCompression, TileCoord, TileJSON, TilePyramid, TileStream,
 	compression::decompress,
 	io::{DataReader, DataReaderFile},
 	utils::HilbertIndex,
@@ -298,7 +297,7 @@ impl PMTilesReader {
 ///
 /// Walks the root and leaf directory blobs, following entry ranges. For `run_length`
 /// entries, expands the run into individual tiles via Hilbert indices; for directory
-/// entries, decompresses and recurses. Returns the accumulated [`TileBBoxPyramid`].
+/// entries, decompresses and recurses. Returns the accumulated [`TilePyramid`].
 ///
 /// ### Parameters
 /// - `root_bytes_uncompressed`: uncompressed root directory bytes.
@@ -313,8 +312,8 @@ fn calc_bbox_pyramid(
 	leaves_bytes: &Blob,
 	compression: TileCompression,
 	runtime: &TilesRuntime,
-) -> Result<TileQuadtreePyramid> {
-	let mut bbox_pyramid = TileBBoxPyramid::new_empty();
+) -> Result<TilePyramid> {
+	let mut bbox_pyramid = TilePyramid::new_empty();
 
 	parse_directories(
 		&mut bbox_pyramid,
@@ -325,7 +324,7 @@ fn calc_bbox_pyramid(
 	)?;
 
 	fn parse_directories(
-		bbox_pyramid: &mut TileBBoxPyramid,
+		bbox_pyramid: &mut TilePyramid,
 		dir: &Blob,
 		leaves_bytes: &Blob,
 		compression: TileCompression,
@@ -369,7 +368,7 @@ fn calc_bbox_pyramid(
 		Ok(total_entries)
 	}
 
-	TileQuadtreePyramid::from_bbox_pyramid(&bbox_pyramid)
+	Ok(bbox_pyramid)
 }
 
 #[async_trait]

@@ -2,9 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{
-	TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileQuadtreePyramid, TileStream,
-};
+use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_geometry::{
 	geo::{GeoFeature, Geometry},
 	vector_tile::{VectorTile, VectorTileLayer},
@@ -20,7 +18,7 @@ pub struct DummyVectorSource {
 
 impl DummyVectorSource {
 	#[allow(clippy::type_complexity, clippy::needless_pass_by_value)]
-	pub fn new(layers: &[(&str, &[&[(&str, &str)]])], pyramid: Option<TileBBoxPyramid>) -> Self {
+	pub fn new(layers: &[(&str, &[&[(&str, &str)]])], pyramid: Option<TilePyramid>) -> Self {
 		// Convert the layers input into the required data structure
 		let data: Vec<(String, Vec<Vec<(String, String)>>)> = layers
 			.iter()
@@ -39,16 +37,11 @@ impl DummyVectorSource {
 			.collect();
 
 		// Initialize the parameters with the given bounding box or a default one
-		let quad_pyramid = pyramid
-			.as_ref()
-			.map(TileQuadtreePyramid::from_bbox_pyramid)
-			.transpose()
-			.unwrap()
-			.unwrap_or_else(|| TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(8)).unwrap());
+		let bbox_pyramid = pyramid.unwrap_or_else(|| TilePyramid::new_full_up_to(8));
 		let metadata = TileSourceMetadata::new(
 			TileFormat::MVT,
 			TileCompression::Uncompressed,
-			quad_pyramid,
+			bbox_pyramid,
 			Traversal::ANY,
 		);
 
@@ -175,11 +168,7 @@ mod tests {
 	async fn test_get_tile() {
 		let source = DummyVectorSource::new(
 			&[("layer1", &[&[("key1", "value1"), ("key2", "value2")]])],
-			Some(TileBBoxPyramid::from_geo_bbox(
-				0,
-				8,
-				&GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap(),
-			)),
+			Some(TilePyramid::from_geo_bbox(0, 8, &GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap()).unwrap()),
 		);
 
 		assert!(
@@ -204,11 +193,7 @@ mod tests {
 	fn test_dummy_vector_source_tilejson() {
 		let source = DummyVectorSource::new(
 			&[("layer1", &[&[("key1", "value1")]])],
-			Some(TileBBoxPyramid::from_geo_bbox(
-				3,
-				15,
-				&GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap(),
-			)),
+			Some(TilePyramid::from_geo_bbox(3, 15, &GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap()).unwrap()),
 		);
 		assert_eq!(
 			source.tilejson().as_pretty_lines(100),

@@ -1,6 +1,6 @@
 use anyhow::{Result, bail};
 use versatiles_container::{TilesConverterParameters, TilesRuntime, convert_tiles_container_to_str};
-use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCompression, TileFormat};
+use versatiles_core::{GeoBBox, TileCompression, TileFormat, TilePyramid};
 use versatiles_derive::context;
 
 /// Parse a tile format string like "webp", "webp,80", or "avif,90,50"
@@ -133,12 +133,12 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 }
 
 #[context("Failed to get bounding box pyramid")]
-fn get_bbox_pyramid(arguments: &Subcommand) -> Result<(Option<TileBBoxPyramid>, Option<GeoBBox>)> {
+fn get_bbox_pyramid(arguments: &Subcommand) -> Result<(Option<TilePyramid>, Option<GeoBBox>)> {
 	if arguments.min_zoom.is_none() && arguments.max_zoom.is_none() && arguments.bbox.is_none() {
 		return Ok((None, None));
 	}
 
-	let mut bbox_pyramid = TileBBoxPyramid::new_full();
+	let mut bbox_pyramid = TilePyramid::new_full();
 	let mut geo_bbox = None;
 
 	if let Some(level_min) = arguments.min_zoom {

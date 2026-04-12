@@ -64,7 +64,7 @@ use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
-	ByteRange, LimitedCache, TileBBox, TileCoord, TileJSON, TileQuadtreePyramid, TileStream,
+	ByteRange, LimitedCache, TileBBox, TileCoord, TileJSON, TileStream,
 	compression::decompress,
 	io::{DataReader, DataReaderFile},
 };
@@ -132,7 +132,7 @@ impl VersaTilesReader {
 		let block_index =
 			BlockIndex::from_brotli_blob(&block_index_blob).context("Failed decompressing the block index")?;
 
-		let bbox_pyramid = TileQuadtreePyramid::from_bbox_pyramid(&block_index.get_bbox_pyramid())?;
+		let bbox_pyramid = block_index.get_bbox_pyramid();
 		let metadata = TileSourceMetadata::new(
 			header.tile_format,
 			header.compression,
@@ -448,7 +448,7 @@ mod tests {
 	use super::*;
 	use crate::{MOCK_BYTES_PBF, MockReader, TilesRuntime, TilesWriter, VersaTilesWriter, make_test_file};
 	use assert_fs::NamedTempFile;
-	use versatiles_core::{Blob, TileCompression, TileFormat, TileQuadtreePyramid, assert_wildcard, io::DataWriterBlob};
+	use versatiles_core::{Blob, TileCompression, TileFormat, TilePyramid, assert_wildcard, io::DataWriterBlob};
 
 	// Helper to quickly create a test reader and bbox
 	async fn mk_reader() -> Result<(NamedTempFile, VersaTilesReader)> {
@@ -565,7 +565,7 @@ mod tests {
 		let mut reader1 = MockReader::new_mock(TileSourceMetadata::new(
 			TileFormat::JSON,
 			TileCompression::Gzip,
-			TileQuadtreePyramid::from_bbox_pyramid(&versatiles_core::TileBBoxPyramid::new_full_up_to(4))?,
+			TilePyramid::new_full_up_to(4),
 			Traversal::ANY,
 		))?;
 

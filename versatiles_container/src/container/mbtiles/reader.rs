@@ -61,8 +61,7 @@ use versatiles_core::{
 	TileFormat::{JPG, MVT, PNG, WEBP},
 	json::parse_json_str,
 	types::{
-		Blob, GeoBBox, GeoCenter, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON,
-		TileQuadtreePyramid, TileStream,
+		Blob, GeoBBox, GeoCenter, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream,
 	},
 };
 use versatiles_derive::context;
@@ -114,7 +113,7 @@ impl MBTilesReader {
 
 		let manager = SqliteConnectionManager::file(path);
 		let pool = Pool::builder().max_size(10).build(manager)?;
-		let metadata = TileSourceMetadata::new(MVT, Uncompressed, TileQuadtreePyramid::new_empty(), Traversal::ANY);
+		let metadata = TileSourceMetadata::new(MVT, Uncompressed, TilePyramid::new_empty(), Traversal::ANY);
 
 		let mut reader = MBTilesReader {
 			name: String::from(path.to_str().unwrap()),
@@ -214,7 +213,7 @@ impl MBTilesReader {
 		self.tilejson.update_from_pyramid(&pyramid);
 		self.metadata.tile_format = tile_format?;
 		self.metadata.tile_compression = compression?;
-		self.metadata.bbox_pyramid = TileQuadtreePyramid::from_bbox_pyramid(&pyramid)?;
+		self.metadata.bbox_pyramid = pyramid;
 
 		Ok(())
 	}
@@ -250,10 +249,10 @@ impl MBTilesReader {
 	/// # Errors
 	/// Returns an error if queries fail.
 	#[context("computing bbox pyramid from MBTiles")]
-	fn get_bbox_pyramid(&self) -> Result<TileBBoxPyramid> {
+	fn get_bbox_pyramid(&self) -> Result<TilePyramid> {
 		log::debug!("get_bbox_pyramid");
 
-		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
+		let mut bbox_pyramid = TilePyramid::new_empty();
 
 		let z0 = u8::try_from(self.simple_query("MIN(zoom_level)", "")?)?;
 		let z1 = u8::try_from(self.simple_query("MAX(zoom_level)", "")?)?;
@@ -314,7 +313,7 @@ impl MBTilesReader {
 
 		progress.finish();
 
-		bbox_pyramid.flip_y();
+		bbox_pyramid.flip_y()?;
 
 		Ok(bbox_pyramid)
 	}

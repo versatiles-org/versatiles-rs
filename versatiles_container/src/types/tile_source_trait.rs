@@ -352,7 +352,7 @@ mod tests {
 	use crate::Traversal;
 	#[cfg(feature = "cli")]
 	use versatiles_core::utils::PrettyPrint;
-	use versatiles_core::{Blob, TileBBoxPyramid, TileCompression, TileFormat, TileQuadtreePyramid};
+	use versatiles_core::{Blob, TileCompression, TileFormat, TilePyramid};
 
 	#[derive(Debug)]
 	struct TestReader {
@@ -366,7 +366,7 @@ mod tests {
 			tilejson.set_string("metadata", "test").unwrap();
 			TestReader {
 				metadata: TileSourceMetadata {
-					bbox_pyramid: TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(3)).unwrap(),
+					bbox_pyramid: TilePyramid::new_full_up_to(3),
 					tile_compression: TileCompression::Gzip,
 					tile_format: TileFormat::MVT,
 					traversal: Traversal::ANY,

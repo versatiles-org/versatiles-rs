@@ -18,7 +18,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::{path::Path, sync::Arc};
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{Blob, TileBBox, TileCompression, TileFormat, TileJSON, TileQuadtreePyramid, TileStream};
+use versatiles_core::{Blob, TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a single tile file and uses it as a template for all tile requests.
@@ -45,7 +45,7 @@ impl Operation {
 		let metadata = TileSourceMetadata::new(
 			tile_format,
 			TileCompression::Uncompressed,
-			TileQuadtreePyramid::new_full(),
+			TilePyramid::new_full(),
 			Traversal::ANY,
 		);
 

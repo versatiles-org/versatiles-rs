@@ -202,7 +202,7 @@ mod tests {
 	use versatiles_container::{
 		MockReader, MockReaderProfile, TileSource, TilesConverterParameters, TilesRuntime, convert_tiles_container,
 	};
-	use versatiles_core::TileBBoxPyramid;
+	use versatiles_core::TilePyramid;
 
 	pub async fn make_test_tar(compression: TileCompression) -> NamedTempFile {
 		// get dummy reader
@@ -213,7 +213,7 @@ mod tests {
 
 		let parameters = TilesConverterParameters {
 			tile_compression: Some(compression),
-			bbox_pyramid: Some(TileBBoxPyramid::new_full_up_to(0)),
+			bbox_pyramid: Some(TilePyramid::new_full_up_to(0)),
 			..TilesConverterParameters::default()
 		};
 		let runtime = TilesRuntime::default();

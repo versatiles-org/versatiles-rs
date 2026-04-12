@@ -195,7 +195,7 @@ impl OverviewCore {
 		}
 
 		let mut source_bbox = bbox.at_level(self.level_base);
-		source_bbox.intersect_with_quadtree_pyramid(&self.metadata.bbox_pyramid);
+		source_bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
 		if source_bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
@@ -225,7 +225,7 @@ impl OverviewCore {
 		let mut bbox0 = bbox.rounded(size);
 		assert_eq!(bbox0.width(), size);
 		assert_eq!(bbox0.height(), size);
-		bbox0.intersect_with_quadtree_pyramid(&self.metadata.bbox_pyramid);
+		bbox0.intersect_with_pyramid(&self.metadata.bbox_pyramid);
 
 		let container: TileBBoxMap<Option<DynamicImage>> = if bbox.level == self.level_base {
 			log::trace!("Fetching images from source for bbox {bbox:?}");

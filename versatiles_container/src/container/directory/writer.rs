@@ -138,9 +138,7 @@ impl TilesWriter for DirectoryWriter {
 mod tests {
 	use super::*;
 	use crate::{MOCK_BYTES_PBF, MockReader, TileSourceMetadata};
-	use versatiles_core::{
-		TileBBoxPyramid, TileCompression, TileFormat, TileQuadtreePyramid, compression::decompress_gzip,
-	};
+	use versatiles_core::{TileCompression, TileFormat, TilePyramid, compression::decompress_gzip};
 
 	/// Tests the functionality of writing tile data to a directory from a mock reader.
 	#[tokio::test]
@@ -151,7 +149,7 @@ mod tests {
 		let mut mock_reader = MockReader::new_mock(TileSourceMetadata::new(
 			TileFormat::MVT,
 			TileCompression::Gzip,
-			TileQuadtreePyramid::from_bbox_pyramid(&TileBBoxPyramid::new_full_up_to(2)).unwrap(),
+			TilePyramid::new_full_up_to(2),
 			Traversal::ANY,
 		))?;
 

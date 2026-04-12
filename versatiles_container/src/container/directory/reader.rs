@@ -54,8 +54,7 @@ use std::{
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
-	Blob, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TileQuadtreePyramid, TileStream,
-	compression::decompress,
+	Blob, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream, compression::decompress,
 };
 use versatiles_derive::context;
 
@@ -110,7 +109,7 @@ impl DirectoryReader {
 		let mut tile_map = HashMap::new();
 		let mut container_form: Option<TileFormat> = None;
 		let mut container_comp: Option<TileCompression> = None;
-		let mut bbox_pyramid = TileQuadtreePyramid::new_empty();
+		let mut bbox_pyramid = TilePyramid::new_empty();
 
 		for result1 in fs::read_dir(dir)? {
 			// z level

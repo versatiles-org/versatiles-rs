@@ -30,7 +30,7 @@ impl From<&TileSourceMetadata> for SourceMetadata {
 mod tests {
 	use super::*;
 	use versatiles_container::Traversal;
-	use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat, TileQuadtreePyramid};
+	use versatiles_core::{TileCompression, TileFormat, TilePyramid};
 
 	fn create_test_parameters(
 		format: TileFormat,
@@ -38,16 +38,11 @@ mod tests {
 		min_zoom: u8,
 		max_zoom: u8,
 	) -> TileSourceMetadata {
-		let mut bbox_pyramid = TileBBoxPyramid::new_full();
+		let mut bbox_pyramid = TilePyramid::new_full();
 		bbox_pyramid.set_level_min(min_zoom);
 		bbox_pyramid.set_level_max(max_zoom);
 
-		TileSourceMetadata::new(
-			format,
-			compression,
-			TileQuadtreePyramid::from_bbox_pyramid(&bbox_pyramid).unwrap(),
-			Traversal::ANY,
-		)
+		TileSourceMetadata::new(format, compression, bbox_pyramid, Traversal::ANY)
 	}
 
 	#[test]

@@ -19,7 +19,7 @@ use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{
-	Blob, GeoBBox, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TileQuadtreePyramid, TileStream,
+	Blob, GeoBBox, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream,
 };
 use versatiles_derive::context;
 
@@ -89,7 +89,7 @@ impl ReadTileSource for Operation {
 		let geo_bbox = tilejson
 			.bounds
 			.unwrap_or_else(|| GeoBBox::new(-180.0, -85.05112878, 180.0, 85.05112878).unwrap());
-		let bbox_pyramid = TileQuadtreePyramid::from_geo_bbox(min_zoom, max_zoom, &geo_bbox)?;
+		let bbox_pyramid = TilePyramid::from_geo_bbox(min_zoom, max_zoom, &geo_bbox)?;
 
 		let metadata = TileSourceMetadata::new(
 			tile_format,
