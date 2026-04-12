@@ -346,11 +346,9 @@ Tile coverage used to be described with `TileBBox` — a rectangular `(x_min, y_
 
 `TileQuadtree` represents an **arbitrary set of tiles** at a single zoom level using a quadtree. Each node is one of:
 
-```
-Empty   — no tiles covered in this subtree
-Full    — all tiles covered in this subtree
-Partial — children are [NW, NE, SW, SE], each also a node
-```
+- `Empty`: no tiles covered in this subtree
+- `Full`: all tiles covered in this subtree
+- `Partial`: children are [NW, NE, SW, SE], each also a node
 
 Uniform regions (fully covered or fully empty) collapse to a single node regardless of size, so a fully covered continent at zoom 14 is still just one `Full` node. Non-rectangular or scattered coverage is represented exactly without approximation.
 
@@ -404,11 +402,11 @@ pub trait PyramidInfo {
 
 ### What Uses What
 
-| Type | Used for |
-|---|---|
-| `TileQuadtree` / `TileQuadtreePyramid` | Coverage tracking — which tiles actually exist |
-| `TileBBox` | Rectangular geometry — image dimensions, request shapes, container block layout |
-| `TileBBoxPyramid` | Legacy / backward compatibility; `to_bbox_pyramid()` converts from quadtree |
+| Type                                   | Used for                                                                        |
+|----------------------------------------|---------------------------------------------------------------------------------|
+| `TileQuadtree` / `TileQuadtreePyramid` | Coverage tracking — which tiles actually exist                                  |
+| `TileBBox`                             | Rectangular geometry — image dimensions, request shapes, container block layout |
+| `TileBBoxPyramid`                      | Legacy / backward compatibility; `to_bbox_pyramid()` converts from quadtree     |
 
 `TileBBox` is kept for anything that is inherently rectangular: requesting a range of tiles from a container, describing image dimensions, wire format block indices. `TileQuadtreePyramid` is used wherever the question is "does this tile exist in this data source?"
 
