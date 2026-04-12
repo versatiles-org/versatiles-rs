@@ -86,8 +86,17 @@ impl TileQuadtreePyramid {
 
 	/// Counts the total number of tiles across all zoom levels.
 	#[must_use]
-	pub fn count_tiles(&self) -> u64 {
+	pub fn tile_count(&self) -> u64 {
 		self.levels.iter().map(TileQuadtree::tile_count).sum()
+	}
+
+	/// Counts the total number of internal (Partial) nodes across all zoom levels.
+	///
+	/// `Full` and `Empty` terminal nodes are not counted; only `Partial` nodes that
+	/// subdivide their region into four children contribute to this total.
+	#[must_use]
+	pub fn node_count(&self) -> u64 {
+		self.levels.iter().map(TileQuadtree::node_count).sum()
 	}
 
 	/// Returns `true` if all zoom levels are empty.
