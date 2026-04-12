@@ -30,13 +30,21 @@ pub fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Session> 
 		.with_context(|| format!("failed to resolve {host}:{port}"))?
 		.next()
 		.with_context(|| format!("no addresses found for {host}:{port}"))?;
-	let tcp = TcpStream::connect_timeout(&addr, Duration::from_secs(30))
+	// Use a short timeout in tests so unreachable-host tests complete in milliseconds.
+	#[cfg(not(test))]
+	let connect_timeout = Duration::from_secs(30);
+	#[cfg(test)]
+	let connect_timeout = Duration::from_secs(1);
+	let tcp = TcpStream::connect_timeout(&addr, connect_timeout)
 		.with_context(|| format!("failed to connect to {host}:{port}"))?;
 
 	// SSH handshake
 	let mut session = Session::new()?;
 	session.set_tcp_stream(tcp);
+	#[cfg(not(test))]
 	session.set_timeout(30_000);
+	#[cfg(test)]
+	session.set_timeout(1_000);
 	session.handshake()?;
 	session.set_keepalive(true, 60);
 
