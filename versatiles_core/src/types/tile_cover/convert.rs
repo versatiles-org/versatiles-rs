@@ -57,4 +57,15 @@ impl TileCover {
 			*self = TileCover::Tree(tree);
 		}
 	}
+
+	/// Returns a mutable reference to the inner [`TileQuadtree`], upgrading from
+	/// `Bbox` if necessary. Used internally to avoid repeated `upgrade_to_tree` +
+	/// nested-match patterns.
+	pub(super) fn as_tree_mut(&mut self) -> &mut TileQuadtree {
+		self.upgrade_to_tree();
+		match self {
+			TileCover::Tree(t) => t,
+			TileCover::Bbox(_) => unreachable!(),
+		}
+	}
 }
