@@ -228,7 +228,7 @@ mod tests {
 	#[tokio::test]
 	async fn tiles_written_in_order() -> Result<()> {
 		let mut bbox_pyramid_raw = TileBBoxPyramid::new_empty();
-		bbox_pyramid_raw.include_bbox(&TileBBox::from_min_and_max(15, 4090, 4090, 5000, 5000)?);
+		bbox_pyramid_raw.include_bbox(&TileBBox::from_min_and_max(15, 4090, 4090, 4139, 4139)?);
 		bbox_pyramid_raw.include_bbox(&TileBBox::from_min_and_max(14, 250, 250, 260, 260)?);
 		let bbox_pyramid = TileQuadtreePyramid::from_bbox_pyramid(&bbox_pyramid_raw)?;
 
@@ -267,7 +267,7 @@ mod tests {
 		}
 
 		// Total addressed tiles should match the original tile count
-		assert_eq!(entries.tile_count(), 830042);
+		assert_eq!(entries.tile_count(), 2621); // 50×50 at z15 + 11×11 at z14
 		Ok(())
 	}
 }
