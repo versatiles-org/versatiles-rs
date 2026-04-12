@@ -23,7 +23,7 @@ impl TilePyramid {
 
 	/// Includes a single tile coordinate (expands coverage at its zoom level).
 	pub fn include_coord(&mut self, coord: &TileCoord) {
-		self.levels[coord.level as usize].insert_coord(*coord).unwrap();
+		self.levels[coord.level as usize].include_coord(*coord).unwrap();
 	}
 
 	/// Includes all tiles in `bbox` (expands coverage at `bbox`'s zoom level).
@@ -31,7 +31,7 @@ impl TilePyramid {
 	/// # Errors
 	/// Returns an error if the zoom level is invalid or insertion fails.
 	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
-		self.levels[bbox.level as usize].insert_bbox(bbox)
+		self.levels[bbox.level as usize].include_bbox(bbox)
 	}
 
 	/// Includes all coverage from `other` into this pyramid (union per level).

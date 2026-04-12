@@ -57,7 +57,7 @@ impl TilePyramid {
 	#[must_use]
 	pub fn includes_coord(&self, coord: &TileCoord) -> bool {
 		if let Some(cover) = self.levels.get(coord.level as usize) {
-			cover.contains_tile(*coord).unwrap_or(false)
+			cover.includes_coord(*coord).unwrap_or(false)
 		} else {
 			false
 		}
@@ -69,7 +69,7 @@ impl TilePyramid {
 	/// Returns an error if `bbox`'s level is out of range.
 	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
 		if let Some(cover) = self.levels.get(bbox.level as usize) {
-			cover.contains_bbox(bbox)
+			cover.includes_bbox(bbox)
 		} else {
 			Ok(false)
 		}

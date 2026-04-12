@@ -10,7 +10,7 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's zoom level doesn't match.
-	pub fn insert_coord(&mut self, coord: TileCoord) -> Result<()> {
+	pub fn include_coord(&mut self, coord: TileCoord) -> Result<()> {
 		check_coord_zoom(coord, self.zoom)?;
 		let size = 1u64 << self.zoom;
 		let new_root =
@@ -23,7 +23,7 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if the bbox's zoom level doesn't match.
-	pub fn insert_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
+	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		check_bbox_zoom(bbox, self.zoom)?;
 		if bbox.is_empty() {
 			return Ok(());
@@ -33,7 +33,7 @@ impl TileQuadtree {
 		let by_min = u64::from(bbox.y_min()?);
 		let bx_max = u64::from(bbox.x_max()?) + 1;
 		let by_max = u64::from(bbox.y_max()?) + 1;
-		let new_root = std::mem::replace(&mut self.root, Node::Empty).insert_bbox(
+		let new_root = std::mem::replace(&mut self.root, Node::Empty).include_bbox(
 			0,
 			0,
 			size,

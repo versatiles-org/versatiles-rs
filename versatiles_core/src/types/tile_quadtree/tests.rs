@@ -99,24 +99,24 @@ fn bounds_partial() -> Result<()> {
 #[test]
 fn contains_tile() -> Result<()> {
 	let t = TileQuadtree::from_bbox(&bbox(3, 2, 2, 4, 4))?;
-	assert!(t.contains_tile(coord(3, 2, 2))?);
-	assert!(t.contains_tile(coord(3, 4, 4))?);
-	assert!(!t.contains_tile(coord(3, 0, 0))?);
-	assert!(!t.contains_tile(coord(3, 5, 5))?);
+	assert!(t.includes_coord(coord(3, 2, 2))?);
+	assert!(t.includes_coord(coord(3, 4, 4))?);
+	assert!(!t.includes_coord(coord(3, 0, 0))?);
+	assert!(!t.includes_coord(coord(3, 5, 5))?);
 	// Wrong zoom
-	assert!(t.contains_tile(coord(4, 2, 2)).is_err());
+	assert!(t.includes_coord(coord(4, 2, 2)).is_err());
 	Ok(())
 }
 
 #[test]
 fn contains_bbox() -> Result<()> {
 	let full = TileQuadtree::new_full(3);
-	assert!(full.contains_bbox(&TileBBox::new_full(3)?)?);
-	assert!(full.contains_bbox(&bbox(3, 0, 0, 3, 3))?);
+	assert!(full.includes_bbox(&TileBBox::new_full(3)?)?);
+	assert!(full.includes_bbox(&bbox(3, 0, 0, 3, 3))?);
 
 	let t = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3))?;
-	assert!(t.contains_bbox(&bbox(3, 0, 0, 2, 2))?);
-	assert!(!t.contains_bbox(&TileBBox::new_full(3)?)?);
+	assert!(t.includes_bbox(&bbox(3, 0, 0, 2, 2))?);
+	assert!(!t.includes_bbox(&TileBBox::new_full(3)?)?);
 	Ok(())
 }
 
@@ -125,10 +125,10 @@ fn intersects() -> Result<()> {
 	let a = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3))?;
 	let b = TileQuadtree::from_bbox(&bbox(3, 3, 3, 7, 7))?;
 	let c = TileQuadtree::from_bbox(&bbox(3, 4, 4, 7, 7))?;
-	assert!(a.intersects(&b)?);
-	assert!(!a.intersects(&c)?);
-	assert!(a.intersects(&TileQuadtree::new_full(3))?);
-	assert!(!a.intersects(&TileQuadtree::new_empty(3))?);
+	assert!(a.intersects_tree(&b)?);
+	assert!(!a.intersects_tree(&c)?);
+	assert!(a.intersects_tree(&TileQuadtree::new_full(3))?);
+	assert!(!a.intersects_tree(&TileQuadtree::new_empty(3))?);
 	Ok(())
 }
 
@@ -139,10 +139,10 @@ fn intersects() -> Result<()> {
 #[test]
 fn insert_tile() -> Result<()> {
 	let mut t = TileQuadtree::new_empty(3);
-	t.insert_coord(coord(3, 0, 0))?;
+	t.include_coord(coord(3, 0, 0))?;
 	assert_eq!(t.count_tiles(), 1);
-	assert!(t.contains_tile(coord(3, 0, 0))?);
-	assert!(!t.contains_tile(coord(3, 1, 0))?);
+	assert!(t.includes_coord(coord(3, 0, 0))?);
+	assert!(!t.includes_coord(coord(3, 1, 0))?);
 	Ok(())
 }
 
@@ -150,10 +150,10 @@ fn insert_tile() -> Result<()> {
 fn insert_tile_collapses_to_full() -> Result<()> {
 	// At zoom 1, there are only 4 tiles. Insert all 4.
 	let mut t = TileQuadtree::new_empty(1);
-	t.insert_coord(coord(1, 0, 0))?;
-	t.insert_coord(coord(1, 1, 0))?;
-	t.insert_coord(coord(1, 0, 1))?;
-	t.insert_coord(coord(1, 1, 1))?;
+	t.include_coord(coord(1, 0, 0))?;
+	t.include_coord(coord(1, 1, 0))?;
+	t.include_coord(coord(1, 0, 1))?;
+	t.include_coord(coord(1, 1, 1))?;
 	assert!(t.is_full());
 	Ok(())
 }
@@ -161,7 +161,7 @@ fn insert_tile_collapses_to_full() -> Result<()> {
 #[test]
 fn insert_bbox() -> Result<()> {
 	let mut t = TileQuadtree::new_empty(4);
-	t.insert_bbox(&bbox(4, 0, 0, 7, 7))?;
+	t.include_bbox(&bbox(4, 0, 0, 7, 7))?;
 	assert_eq!(t.count_tiles(), 64);
 	Ok(())
 }
@@ -172,8 +172,8 @@ fn remove_tile() -> Result<()> {
 	t.remove_coord(coord(2, 0, 0))?;
 	assert!(!t.is_full());
 	assert_eq!(t.count_tiles(), 15);
-	assert!(!t.contains_tile(coord(2, 0, 0))?);
-	assert!(t.contains_tile(coord(2, 1, 0))?);
+	assert!(!t.includes_coord(coord(2, 0, 0))?);
+	assert!(t.includes_coord(coord(2, 1, 0))?);
 	Ok(())
 }
 

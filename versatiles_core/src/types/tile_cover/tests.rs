@@ -57,15 +57,15 @@ fn bounds_empty_and_nonempty() {
 #[test]
 fn contains_tile() {
 	let c = TileCover::from(bbox(5, 3, 4, 10, 15));
-	assert!(c.contains_tile(coord(5, 5, 7)).unwrap());
-	assert!(!c.contains_tile(coord(5, 0, 0)).unwrap());
+	assert!(c.includes_coord(coord(5, 5, 7)).unwrap());
+	assert!(!c.includes_coord(coord(5, 0, 0)).unwrap());
 }
 
 #[test]
 fn contains_bbox() {
 	let c = TileCover::from(bbox(5, 0, 0, 15, 15));
-	assert!(c.contains_bbox(&bbox(5, 2, 2, 8, 8)).unwrap());
-	assert!(!c.contains_bbox(&bbox(5, 0, 0, 16, 16)).unwrap_or(false));
+	assert!(c.includes_bbox(&bbox(5, 2, 2, 8, 8)).unwrap());
+	assert!(!c.includes_bbox(&bbox(5, 0, 0, 16, 16)).unwrap_or(false));
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn intersects_bbox() {
 #[test]
 fn insert_tile_expands_bbox() {
 	let mut c = TileCover::new_empty(4).unwrap();
-	c.insert_coord(coord(4, 3, 3)).unwrap();
+	c.include_coord(coord(4, 3, 3)).unwrap();
 	assert!(!c.is_empty());
 	assert_eq!(c.count_tiles(), 1);
 }
@@ -88,7 +88,7 @@ fn insert_tile_expands_bbox() {
 #[test]
 fn insert_bbox() {
 	let mut c = TileCover::new_empty(4).unwrap();
-	c.insert_bbox(&bbox(4, 2, 2, 5, 5)).unwrap();
+	c.include_bbox(&bbox(4, 2, 2, 5, 5)).unwrap();
 	assert_eq!(c.count_tiles(), 16);
 }
 

@@ -12,7 +12,7 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's level does not match this cover's level.
-	pub fn insert_coord(&mut self, coord: TileCoord) -> Result<()> {
+	pub fn include_coord(&mut self, coord: TileCoord) -> Result<()> {
 		match self {
 			TileCover::Bbox(b) => {
 				if b.includes_coord(&coord) {
@@ -20,12 +20,12 @@ impl TileCover {
 				} else {
 					self.upgrade_to_tree();
 					match self {
-						TileCover::Tree(t) => t.insert_coord(coord),
+						TileCover::Tree(t) => t.include_coord(coord),
 						TileCover::Bbox(_) => unreachable!(),
 					}
 				}
 			}
-			TileCover::Tree(t) => t.insert_coord(coord),
+			TileCover::Tree(t) => t.include_coord(coord),
 		}
 	}
 
@@ -36,7 +36,7 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if `bbox`'s level does not match this cover's level.
-	pub fn insert_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
+	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		match self {
 			TileCover::Bbox(b) => {
 				if b.includes_bbox(bbox) {
@@ -44,12 +44,12 @@ impl TileCover {
 				} else {
 					self.upgrade_to_tree();
 					match self {
-						TileCover::Tree(t) => t.insert_bbox(bbox),
+						TileCover::Tree(t) => t.include_bbox(bbox),
 						TileCover::Bbox(_) => unreachable!(),
 					}
 				}
 			}
-			TileCover::Tree(t) => t.insert_bbox(bbox),
+			TileCover::Tree(t) => t.include_bbox(bbox),
 		}
 	}
 

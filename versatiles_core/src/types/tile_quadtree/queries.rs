@@ -70,19 +70,19 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's level doesn't match this quadtree's zoom.
-	pub fn contains_tile(&self, coord: TileCoord) -> Result<bool> {
+	pub fn includes_coord(&self, coord: TileCoord) -> Result<bool> {
 		check_coord_zoom(coord, self.zoom)?;
 		let size = 1u64 << self.zoom;
 		Ok(self
 			.root
-			.contains_tile(0, 0, size, u64::from(coord.x), u64::from(coord.y)))
+			.includes_coord(0, 0, size, u64::from(coord.x), u64::from(coord.y)))
 	}
 
 	/// Check whether all tiles in `bbox` are in this quadtree.
 	///
 	/// # Errors
 	/// Returns an error if the bbox's level doesn't match this quadtree's zoom.
-	pub fn contains_bbox(&self, bbox: &TileBBox) -> Result<bool> {
+	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
 		check_bbox_zoom(bbox, self.zoom)?;
 		if bbox.is_empty() {
 			return Ok(true);
@@ -92,7 +92,7 @@ impl TileQuadtree {
 		let by_min = u64::from(bbox.y_min()?);
 		let bx_max = u64::from(bbox.x_max()?) + 1;
 		let by_max = u64::from(bbox.y_max()?) + 1;
-		Ok(self.root.contains_bbox(
+		Ok(self.root.includes_bbox(
 			0,
 			0,
 			size,
@@ -109,13 +109,13 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if the zoom levels don't match.
-	pub fn intersects(&self, other: &TileQuadtree) -> Result<bool> {
+	pub fn intersects_tree(&self, other: &TileQuadtree) -> Result<bool> {
 		anyhow::ensure!(
 			self.zoom == other.zoom,
 			"Cannot intersect quadtrees with different zoom levels: {} vs {}",
 			self.zoom,
 			other.zoom
 		);
-		Ok(self.root.intersects(&other.root))
+		Ok(self.root.intersects_tree(&other.root))
 	}
 }

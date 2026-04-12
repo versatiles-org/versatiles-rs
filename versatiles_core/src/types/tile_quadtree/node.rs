@@ -84,18 +84,18 @@ impl Node {
 		}
 	}
 
-	pub fn contains_tile(&self, x_off: u64, y_off: u64, size: u64, tx: u64, ty: u64) -> bool {
+	pub fn includes_coord(&self, x_off: u64, y_off: u64, size: u64, tx: u64, ty: u64) -> bool {
 		match self {
 			Node::Empty => false,
 			Node::Full => true,
 			Node::Partial(children) => {
 				let (idx, cx, cy, half) = child_quadrant(x_off, y_off, size, tx, ty);
-				children[idx].contains_tile(cx, cy, half, tx, ty)
+				children[idx].includes_coord(cx, cy, half, tx, ty)
 			}
 		}
 	}
 
-	pub fn contains_bbox(&self, x_off: u64, y_off: u64, size: u64, bbox: BBox) -> bool {
+	pub fn includes_bbox(&self, x_off: u64, y_off: u64, size: u64, bbox: BBox) -> bool {
 		match self {
 			Node::Empty => false,
 			Node::Full => true,
@@ -121,7 +121,7 @@ impl Node {
 							x_max: ix_max,
 							y_max: iy_max,
 						};
-						if !child.contains_bbox(cx, cy, half, child_bbox) {
+						if !child.includes_bbox(cx, cy, half, child_bbox) {
 							return false;
 						}
 					}
@@ -131,11 +131,11 @@ impl Node {
 		}
 	}
 
-	pub fn intersects(&self, b: &Node) -> bool {
+	pub fn intersects_tree(&self, b: &Node) -> bool {
 		match (self, b) {
 			(Node::Empty, _) | (_, Node::Empty) => false,
 			(Node::Full, _) | (_, Node::Full) => true,
-			(Node::Partial(ac), Node::Partial(bc)) => ac.iter().zip(bc.iter()).any(|(ac, bc)| ac.intersects(bc)),
+			(Node::Partial(ac), Node::Partial(bc)) => ac.iter().zip(bc.iter()).any(|(ac, bc)| ac.intersects_tree(bc)),
 		}
 	}
 
@@ -162,7 +162,7 @@ impl Node {
 		}
 	}
 
-	pub fn insert_bbox(self, x_off: u64, y_off: u64, size: u64, bbox: BBox) -> Node {
+	pub fn include_bbox(self, x_off: u64, y_off: u64, size: u64, bbox: BBox) -> Node {
 		// Intersection of bbox with this cell
 		let ix_min = bbox.x_min.max(x_off);
 		let iy_min = bbox.y_min.max(y_off);
@@ -188,10 +188,10 @@ impl Node {
 					let mid_x = x_off + half;
 					let mid_y = y_off + half;
 					let children = [
-						Node::Empty.insert_bbox(x_off, y_off, half, bbox),
-						Node::Empty.insert_bbox(mid_x, y_off, half, bbox),
-						Node::Empty.insert_bbox(x_off, mid_y, half, bbox),
-						Node::Empty.insert_bbox(mid_x, mid_y, half, bbox),
+						Node::Empty.include_bbox(x_off, y_off, half, bbox),
+						Node::Empty.include_bbox(mid_x, y_off, half, bbox),
+						Node::Empty.include_bbox(x_off, mid_y, half, bbox),
+						Node::Empty.include_bbox(mid_x, mid_y, half, bbox),
 					];
 					Node::normalize(children)
 				}
@@ -202,10 +202,10 @@ impl Node {
 				let mid_y = y_off + half;
 				let [nw, ne, sw, se] = *children;
 				let children = [
-					nw.insert_bbox(x_off, y_off, half, bbox),
-					ne.insert_bbox(mid_x, y_off, half, bbox),
-					sw.insert_bbox(x_off, mid_y, half, bbox),
-					se.insert_bbox(mid_x, mid_y, half, bbox),
+					nw.include_bbox(x_off, y_off, half, bbox),
+					ne.include_bbox(mid_x, y_off, half, bbox),
+					sw.include_bbox(x_off, mid_y, half, bbox),
+					se.include_bbox(mid_x, mid_y, half, bbox),
 				];
 				Node::normalize(children)
 			}

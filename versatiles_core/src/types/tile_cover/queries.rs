@@ -70,10 +70,10 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's level does not match this cover's level.
-	pub fn contains_tile(&self, coord: TileCoord) -> Result<bool> {
+	pub fn includes_coord(&self, coord: TileCoord) -> Result<bool> {
 		match self {
 			TileCover::Bbox(b) => Ok(b.includes_coord(&coord)),
-			TileCover::Tree(t) => t.contains_tile(coord),
+			TileCover::Tree(t) => t.includes_coord(coord),
 		}
 	}
 
@@ -81,10 +81,10 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if `bbox`'s level does not match this cover's level.
-	pub fn contains_bbox(&self, bbox: &TileBBox) -> Result<bool> {
+	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
 		match self {
 			TileCover::Bbox(b) => Ok(b.includes_bbox(bbox)),
-			TileCover::Tree(t) => t.contains_bbox(bbox),
+			TileCover::Tree(t) => t.includes_bbox(bbox),
 		}
 	}
 
