@@ -5,6 +5,6 @@ use std::fmt;
 
 impl fmt::Display for TileQuadtree {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "TileQuadtree(zoom={}, tiles={})", self.zoom, self.tile_count())
+		write!(f, "TileQuadtree(zoom={}, tiles={})", self.zoom, self.count_tiles())
 	}
 }

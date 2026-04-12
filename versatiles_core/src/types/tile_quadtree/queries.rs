@@ -23,28 +23,24 @@ impl TileQuadtree {
 	/// # Examples
 	/// ```
 	/// use versatiles_core::TileQuadtree;
-	/// assert_eq!(TileQuadtree::new_full(2).tile_count(), 16);
-	/// assert_eq!(TileQuadtree::new_empty(2).tile_count(), 0);
+	/// assert_eq!(TileQuadtree::new_full(2).count_tiles(), 16);
+	/// assert_eq!(TileQuadtree::new_empty(2).count_tiles(), 0);
 	/// ```
 	#[must_use]
-	pub fn tile_count(&self) -> u64 {
-		self.root.count(self.zoom)
+	pub fn count_tiles(&self) -> u64 {
+		self.root.count_tiles(self.zoom)
 	}
 
 	/// Count the number of internal (Partial) nodes in the quadtree.
-	///
-	/// `Full` and `Empty` nodes are terminal and not counted; only `Partial`
-	/// nodes that subdivide their region into four children are counted.
-	///
 	/// # Examples
 	/// ```
 	/// use versatiles_core::TileQuadtree;
-	/// assert_eq!(TileQuadtree::new_full(5).node_count(), 0);
-	/// assert_eq!(TileQuadtree::new_empty(5).node_count(), 0);
+	/// assert_eq!(TileQuadtree::new_full(5).count_nodes(), 1);
+	/// assert_eq!(TileQuadtree::new_empty(5).count_nodes(), 1);
 	/// ```
 	#[must_use]
-	pub fn node_count(&self) -> u64 {
-		self.root.count_partial()
+	pub fn count_nodes(&self) -> u64 {
+		self.root.count_nodes()
 	}
 
 	/// Return the tightest axis-aligned [`TileBBox`] containing all tiles,

@@ -46,7 +46,7 @@ pub(crate) struct BBox {
 ///
 /// let full = TileQuadtree::new_full(3);
 /// assert!(full.is_full());
-/// assert_eq!(full.tile_count(), 64); // 8×8 tiles at zoom 3
+/// assert_eq!(full.count_tiles(), 64); // 8×8 tiles at zoom 3
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct TileQuadtree {

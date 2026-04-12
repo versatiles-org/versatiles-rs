@@ -22,13 +22,13 @@ fn new_empty_and_full() {
 	assert!(e.is_empty());
 	assert!(!e.is_full());
 	assert_eq!(e.zoom(), 4);
-	assert_eq!(e.tile_count(), 0);
+	assert_eq!(e.count_tiles(), 0);
 
 	let f = TileQuadtree::new_full(3);
 	assert!(!f.is_empty());
 	assert!(f.is_full());
 	assert_eq!(f.zoom(), 3);
-	assert_eq!(f.tile_count(), 64); // 8×8
+	assert_eq!(f.count_tiles(), 64); // 8×8
 }
 
 #[test]
@@ -44,7 +44,7 @@ fn from_bbox_full() -> Result<()> {
 	let b = TileBBox::new_full(3)?;
 	let t = TileQuadtree::from_bbox(&b)?;
 	assert!(t.is_full());
-	assert_eq!(t.tile_count(), 64);
+	assert_eq!(t.count_tiles(), 64);
 	Ok(())
 }
 
@@ -55,7 +55,7 @@ fn from_bbox_partial() -> Result<()> {
 	let t = TileQuadtree::from_bbox(&b)?;
 	assert!(!t.is_empty());
 	assert!(!t.is_full());
-	assert_eq!(t.tile_count(), 4);
+	assert_eq!(t.count_tiles(), 4);
 	Ok(())
 }
 
@@ -75,7 +75,7 @@ fn from_geo() -> Result<()> {
 fn tile_count_full() {
 	for z in 0u8..=5 {
 		let expected = 1u64 << (2 * u32::from(z));
-		assert_eq!(TileQuadtree::new_full(z).tile_count(), expected);
+		assert_eq!(TileQuadtree::new_full(z).count_tiles(), expected);
 	}
 }
 
@@ -140,7 +140,7 @@ fn intersects() -> Result<()> {
 fn insert_tile() -> Result<()> {
 	let mut t = TileQuadtree::new_empty(3);
 	t.insert_tile(coord(3, 0, 0))?;
-	assert_eq!(t.tile_count(), 1);
+	assert_eq!(t.count_tiles(), 1);
 	assert!(t.contains_tile(coord(3, 0, 0))?);
 	assert!(!t.contains_tile(coord(3, 1, 0))?);
 	Ok(())
@@ -162,7 +162,7 @@ fn insert_tile_collapses_to_full() -> Result<()> {
 fn insert_bbox() -> Result<()> {
 	let mut t = TileQuadtree::new_empty(4);
 	t.insert_bbox(&bbox(4, 0, 0, 7, 7))?;
-	assert_eq!(t.tile_count(), 64);
+	assert_eq!(t.count_tiles(), 64);
 	Ok(())
 }
 
@@ -171,7 +171,7 @@ fn remove_tile() -> Result<()> {
 	let mut t = TileQuadtree::new_full(2);
 	t.remove_tile(coord(2, 0, 0))?;
 	assert!(!t.is_full());
-	assert_eq!(t.tile_count(), 15);
+	assert_eq!(t.count_tiles(), 15);
 	assert!(!t.contains_tile(coord(2, 0, 0))?);
 	assert!(t.contains_tile(coord(2, 1, 0))?);
 	Ok(())
@@ -182,7 +182,7 @@ fn remove_bbox() -> Result<()> {
 	let mut t = TileQuadtree::new_full(3);
 	t.remove_bbox(&bbox(3, 0, 0, 3, 7))?;
 	assert!(!t.is_full());
-	assert_eq!(t.tile_count(), 32); // half the tiles removed
+	assert_eq!(t.count_tiles(), 32); // half the tiles removed
 	Ok(())
 }
 
@@ -205,7 +205,7 @@ fn intersection() -> Result<()> {
 	let b = TileQuadtree::from_bbox(&bbox(3, 3, 3, 7, 7))?;
 	let i = a.intersection(&b)?;
 	// Overlap is [3,3] to [5,5] = 3x3 = 9 tiles
-	assert_eq!(i.tile_count(), 9);
+	assert_eq!(i.count_tiles(), 9);
 	Ok(())
 }
 
@@ -214,7 +214,7 @@ fn difference() -> Result<()> {
 	let a = TileQuadtree::new_full(2);
 	let b = TileQuadtree::from_bbox(&bbox(2, 0, 0, 1, 1))?; // 4 tiles
 	let d = a.difference(&b)?;
-	assert_eq!(d.tile_count(), 12);
+	assert_eq!(d.count_tiles(), 12);
 	Ok(())
 }
 
@@ -259,7 +259,7 @@ fn at_level_roundtrip() -> Result<()> {
 	let down = t.at_level(5);
 	assert_eq!(down.zoom(), 5);
 	// Going up should have fewer or equal tiles
-	assert!(up.tile_count() <= t.tile_count());
+	assert!(up.count_tiles() <= t.count_tiles());
 	Ok(())
 }
 
@@ -271,7 +271,7 @@ fn at_level_roundtrip() -> Result<()> {
 fn iter_tiles_count() -> Result<()> {
 	let t = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3))?;
 	let tiles: Vec<_> = t.iter_tiles().collect();
-	assert_eq!(tiles.len() as u64, t.tile_count());
+	assert_eq!(tiles.len() as u64, t.count_tiles());
 	assert_eq!(tiles.len(), 16);
 	Ok(())
 }
@@ -299,9 +299,9 @@ fn iter_bbox_grid_covers_all() -> Result<()> {
 	let t = TileQuadtree::from_bbox(&bbox(4, 0, 0, 15, 15))?;
 	let mut total = 0u64;
 	for cell in t.iter_bbox_grid(4) {
-		total += cell.tile_count();
+		total += cell.count_tiles();
 	}
-	assert_eq!(total, t.tile_count());
+	assert_eq!(total, t.count_tiles());
 	Ok(())
 }
 
@@ -333,7 +333,7 @@ fn serialize_roundtrip_partial() -> Result<()> {
 	let bytes = t.serialize();
 	let t2 = TileQuadtree::deserialize(4, &bytes)?;
 	assert_eq!(t, t2);
-	assert_eq!(t.tile_count(), t2.tile_count());
+	assert_eq!(t.count_tiles(), t2.count_tiles());
 	Ok(())
 }
 

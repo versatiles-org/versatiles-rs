@@ -488,7 +488,7 @@ pub mod tests {
 		let reader = TarTilesReader::open(&filename)?;
 		assert_eq!(reader.metadata().tile_format, TileFormat::BIN);
 		assert_eq!(reader.metadata().tile_compression, TileCompression::Uncompressed);
-		assert_eq!(reader.metadata().bbox_pyramid.tile_count(), 1);
+		assert_eq!(reader.metadata().bbox_pyramid.count_tiles(), 1);
 		assert_eq!(
 			reader
 				.get_tile(&TileCoord::new(3, 1, 2)?)

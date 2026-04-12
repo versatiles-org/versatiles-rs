@@ -13,7 +13,7 @@ fn test_new_empty() {
 	assert!(pyramid.is_empty());
 	assert_eq!(pyramid.get_level_min(), None);
 	assert_eq!(pyramid.get_level_max(), None);
-	assert_eq!(pyramid.tile_count(), 0);
+	assert_eq!(pyramid.count_tiles(), 0);
 	assert_eq!(pyramid.get_geo_bbox(), None);
 }
 
@@ -25,7 +25,7 @@ fn test_new_full() {
 	assert_eq!(pyramid.get_level_max(), Some(30));
 	// At zoom 0 there is 1 tile; total is sum of 4^z for z in 0..=30
 	let expected: u64 = (0u32..=30).map(|z| 4u64.pow(z)).sum();
-	assert_eq!(pyramid.tile_count(), expected);
+	assert_eq!(pyramid.count_tiles(), expected);
 }
 
 #[test]
@@ -104,8 +104,8 @@ fn test_intersect_geo_bbox() {
 	assert!(!pyramid.get_level(0).is_empty());
 
 	// At higher zoom levels only a small area should be covered
-	let tiles_at_10 = pyramid.get_level(10).tile_count();
-	let full_at_10 = TileQuadtree::new_full(10).tile_count();
+	let tiles_at_10 = pyramid.get_level(10).count_tiles();
+	let full_at_10 = TileQuadtree::new_full(10).count_tiles();
 	assert!(tiles_at_10 < full_at_10);
 	assert!(tiles_at_10 > 0);
 }
@@ -145,11 +145,11 @@ fn test_count_tiles() {
 	let mut pyramid = TileQuadtreePyramid::new_empty();
 	// At zoom 2: 4^2 = 16 tiles total when full
 	pyramid.set_level(TileQuadtree::new_full(2));
-	assert_eq!(pyramid.tile_count(), 16);
+	assert_eq!(pyramid.count_tiles(), 16);
 
 	// Add zoom 3: 4^3 = 64 tiles
 	pyramid.set_level(TileQuadtree::new_full(3));
-	assert_eq!(pyramid.tile_count(), 80);
+	assert_eq!(pyramid.count_tiles(), 80);
 }
 
 #[test]
@@ -280,6 +280,6 @@ fn test_geo_bbox_tile_and_node_counts(
 	let (x_min, y_min, x_max, y_max) = bbox;
 	let geo_bbox = GeoBBox::new(x_min, y_min, x_max, y_max).unwrap();
 	let pyramid = TileQuadtreePyramid::from_geo_bbox(0, max_zoom, &geo_bbox).unwrap();
-	assert_eq!(pyramid.node_count(), expected_nodes);
-	assert_eq!(pyramid.tile_count(), expected_tiles);
+	assert_eq!(pyramid.count_nodes(), expected_nodes);
+	assert_eq!(pyramid.count_tiles(), expected_tiles);
 }

@@ -230,7 +230,7 @@ mod tests {
 		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, TilesRuntime::default()).await?;
 
 		let reader = TarTilesReader::open(&temp_path)?;
-		assert_eq!(reader.metadata().bbox_pyramid.tile_count(), 21845);
+		assert_eq!(reader.metadata().bbox_pyramid.count_tiles(), 21845);
 
 		Ok(())
 	}

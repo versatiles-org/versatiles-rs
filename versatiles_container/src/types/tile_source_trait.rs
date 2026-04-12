@@ -222,7 +222,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		let mut tile_count: u64 = 0;
 		let mut level_stats: Vec<(u8, u64, u64)> = Vec::new();
 
-		let total_tiles = self.metadata().bbox_pyramid.tile_count();
+		let total_tiles = self.metadata().bbox_pyramid.count_tiles();
 		let progress = runtime.create_progress("scanning tiles", total_tiles);
 
 		for bbox in self.metadata().bbox_pyramid.iter_levels() {

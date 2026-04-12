@@ -141,7 +141,7 @@ mod tests {
 		let reader = TarTilesReader::open(&temp)?;
 		assert_eq!(reader.metadata().tile_format, TileFormat::PNG);
 		assert_eq!(reader.metadata().tile_compression, TileCompression::Uncompressed);
-		assert_eq!(reader.metadata().bbox_pyramid.tile_count(), 1);
+		assert_eq!(reader.metadata().bbox_pyramid.count_tiles(), 1);
 
 		Ok(())
 	}
@@ -168,7 +168,7 @@ mod tests {
 		let reader = TarTilesReader::open(&temp)?;
 		assert_eq!(reader.metadata().tile_format, TileFormat::WEBP);
 		assert_eq!(reader.metadata().tile_compression, TileCompression::Brotli);
-		assert_eq!(reader.metadata().bbox_pyramid.tile_count(), 16);
+		assert_eq!(reader.metadata().bbox_pyramid.count_tiles(), 16);
 
 		Ok(())
 	}

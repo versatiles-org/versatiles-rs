@@ -215,7 +215,7 @@ mod tests {
 
 		let reader = MBTilesReader::open(&temp, TilesRuntime::default())?;
 		assert_eq!(reader.metadata().tile_format, TileFormat::PNG);
-		assert_eq!(reader.metadata().bbox_pyramid.tile_count(), 1);
+		assert_eq!(reader.metadata().bbox_pyramid.count_tiles(), 1);
 
 		Ok(())
 	}
@@ -262,7 +262,7 @@ mod tests {
 
 		let reader = MBTilesReader::open(&temp, TilesRuntime::default())?;
 		assert_eq!(reader.metadata().tile_format, TileFormat::WEBP);
-		assert_eq!(reader.metadata().bbox_pyramid.tile_count(), 16);
+		assert_eq!(reader.metadata().bbox_pyramid.count_tiles(), 16);
 
 		// Verify a specific tile via get_tile
 		let tile = reader.get_tile(&TileCoord::new(2, 1, 1)?).await?;
