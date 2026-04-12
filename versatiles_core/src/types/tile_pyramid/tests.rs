@@ -126,13 +126,6 @@ fn count_tiles_and_count_nodes() {
 }
 
 #[test]
-fn get_good_level() {
-	let mut p = TilePyramid::new_empty();
-	p.include_bbox(&bbox(3, 0, 0, 3, 3)).unwrap(); // 16 tiles > 10
-	assert_eq!(p.get_good_level(), Some(3));
-}
-
-#[test]
 fn get_geo_bbox_and_center() {
 	let mut p = TilePyramid::new_empty();
 	assert!(p.get_geo_bbox().is_none());

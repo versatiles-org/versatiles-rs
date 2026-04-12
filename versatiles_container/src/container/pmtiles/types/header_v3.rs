@@ -58,10 +58,7 @@ impl HeaderV3 {
 			min_lat_e7: float_to_int(bbox.y_min * 1e7).unwrap(),
 			max_lon_e7: float_to_int(bbox.x_max * 1e7).unwrap(),
 			max_lat_e7: float_to_int(bbox.y_max * 1e7).unwrap(),
-			center_zoom: center
-				.map(|c| c.2)
-				.or_else(|| bbox_pyramid.get_good_level())
-				.unwrap_or(0),
+			center_zoom: center.map_or(5, |c| c.2),
 			center_lon_e7: center.map_or_else(
 				|| float_to_int((bbox.x_min + bbox.x_max) * 5e6).unwrap(),
 				|c| float_to_int(c.0 * 1e7).unwrap(),

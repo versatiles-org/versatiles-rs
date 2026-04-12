@@ -4,9 +4,6 @@ use super::TilePyramid;
 use crate::{GeoBBox, GeoCenter, TileBBox, TileCoord, TileCover};
 use anyhow::Result;
 
-/// Minimum tile count for a zoom level to be considered "good" for display.
-const MIN_TILES_FOR_GOOD_LEVEL: u64 = 10;
-
 impl TilePyramid {
 	/// Returns a reference to the [`TileCover`] at the given zoom level.
 	#[must_use]
@@ -37,20 +34,6 @@ impl TilePyramid {
 	#[must_use]
 	pub fn get_level_max(&self) -> Option<u8> {
 		self.levels.iter().rev().find(|c| !c.is_empty()).map(TileCover::level)
-	}
-
-	/// Returns a "good" display zoom level — the highest level with more than
-	/// 10 tiles.
-	///
-	/// Returns `None` if no level meets the threshold.
-	#[must_use]
-	pub fn get_good_level(&self) -> Option<u8> {
-		self
-			.levels
-			.iter()
-			.rev()
-			.find(|c| c.count_tiles() > MIN_TILES_FOR_GOOD_LEVEL)
-			.map(TileCover::level)
 	}
 
 	/// Returns `true` if this pyramid contains the given tile coordinate.
