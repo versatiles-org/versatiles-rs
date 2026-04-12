@@ -53,10 +53,11 @@ impl TileBBox {
 			return Ok(false);
 		}
 
-		Ok(self.x_min().unwrap() <= bbox.x_min().unwrap()
-			&& self.x_max().unwrap() >= bbox.x_max().unwrap()
-			&& self.y_min().unwrap() <= bbox.y_min().unwrap()
-			&& self.y_max().unwrap() >= bbox.y_max().unwrap())
+		// Safety: is_empty() checked above; getters are valid.
+		Ok(self.x_min()? <= bbox.x_min()?
+			&& self.x_max()? >= bbox.x_max()?
+			&& self.y_min()? <= bbox.y_min()?
+			&& self.y_max()? >= bbox.y_max()?)
 	}
 
 	/// Returns whether this bbox completely includes another bbox at the same level.
@@ -84,6 +85,7 @@ impl TileBBox {
 			return false;
 		}
 
+		// Safety: is_empty() checked above; getters are valid.
 		self.x_min().unwrap() <= bbox.x_max().unwrap()
 			&& self.x_max().unwrap() >= bbox.x_min().unwrap()
 			&& self.y_min().unwrap() <= bbox.y_max().unwrap()
@@ -148,7 +150,6 @@ impl TileBBox {
 		}
 
 		ensure!(quadrant < 4, "quadrant must be in 0..3");
-		ensure!(!self.is_empty(), "cannot get quadrant of an empty TileBBox");
 		ensure!(
 			self.width().is_multiple_of(2),
 			"cannot get quadrant of a TileBBox with odd width"
