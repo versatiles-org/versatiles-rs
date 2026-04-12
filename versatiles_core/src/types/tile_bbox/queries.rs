@@ -30,11 +30,11 @@ impl TileBBox {
 	/// * `false` otherwise.
 	#[must_use]
 	pub fn includes_coord(&self, coord: &TileCoord) -> bool {
-		if self.is_empty() {
+		if self.is_empty() || coord.level != self.level {
 			return false;
 		}
-		coord.level == self.level
-			&& coord.x >= self.x_min().unwrap()
+		// Safety: is_empty() checked above; x_min/y_min/x_max/y_max are valid.
+		coord.x >= self.x_min().unwrap()
 			&& coord.x <= self.x_max().unwrap()
 			&& coord.y >= self.y_min().unwrap()
 			&& coord.y <= self.y_max().unwrap()
