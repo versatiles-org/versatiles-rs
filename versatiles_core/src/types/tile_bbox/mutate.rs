@@ -11,7 +11,7 @@
 //! * Methods that cannot fail are infallible; those that validate inputs
 //!   return `anyhow::Result<()>`.
 
-use crate::{MAX_ZOOM_LEVEL, TileBBox, TileBBoxPyramid, TileCoord, TileQuadtreePyramid, validate_zoom_level};
+use crate::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TilePyramid, TileQuadtreePyramid, validate_zoom_level};
 use anyhow::{Result, ensure};
 use std::ops::Div;
 use versatiles_derive::context;
@@ -214,11 +214,15 @@ impl TileBBox {
 		Ok(())
 	}
 
-	/// Intersect with the pyramid’s bbox at this bbox’s zoom level.
+	/// Intersect this bbox with the coverage of a [`TilePyramid`] at this bbox’s zoom level.
 	///
-	/// Equivalent to `self.intersect_with(pyramid.get_level_bbox(self.level))`.
-	pub fn intersect_with_pyramid(&mut self, pyramid: &TileBBoxPyramid) {
-		self.intersect_with(pyramid.get_level_bbox(self.level)).unwrap();
+	/// If the pyramid has no tiles at this zoom level, the bbox is set to empty.
+	pub fn intersect_with_pyramid(&mut self, pyramid: &TilePyramid) {
+		if let Some(level_bbox) = pyramid.get_level(self.level).bounds() {
+			self.intersect_with(&level_bbox).unwrap_or(());
+		} else {
+			self.set_empty();
+		}
 	}
 
 	/// Intersect this bbox with the bounding box of a [`TileQuadtreePyramid`] at this bbox’s zoom level.
@@ -514,14 +518,15 @@ mod tests {
 
 	#[test]
 	fn intersect_with_pyramid_shrinks() -> Result<()> {
+		use crate::TilePyramid;
 		let full = TileBBox::new_full(5)?;
-		let pyramid = TileBBoxPyramid::from(&[full]);
+		let pyramid = TilePyramid::from([full].as_slice());
 		let mut b = bb(5, 12, 12, 20, 20);
 		b.intersect_with_pyramid(&pyramid);
 		assert_eq!(b, bb(5, 12, 12, 20, 20)); // full pyramid covers all
 
 		let small = bb(5, 14, 15, 16, 18);
-		let py_small = TileBBoxPyramid::from(&[small]);
+		let py_small = TilePyramid::from([small].as_slice());
 		let mut b2 = bb(5, 12, 12, 20, 20);
 		b2.intersect_with_pyramid(&py_small);
 		assert_eq!(b2, small);

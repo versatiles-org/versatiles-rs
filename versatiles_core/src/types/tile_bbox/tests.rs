@@ -1,6 +1,6 @@
 #![allow(clippy::cast_possible_truncation)]
 
-use crate::{GeoBBox, TileBBox, TileBBoxPyramid, TileCoord};
+use crate::{GeoBBox, TileBBox, TileCoord, TilePyramid};
 use anyhow::Result;
 use rstest::rstest;
 
@@ -890,7 +890,7 @@ fn test_scaled_up_cases(
 #[test]
 fn test_intersect_with_pyramid() -> Result<()> {
 	// Create a pyramid with a known full bbox at level 5
-	let pyramid = TileBBoxPyramid::from(&[TileBBox::new_full(5)?]);
+	let pyramid = TilePyramid::from([TileBBox::new_full(5)?].as_slice());
 
 	// Create a bbox partially overlapping the full bbox
 	let mut bbox = TileBBox::from_min_and_max(5, 10, 10, 20, 20)?;
@@ -901,7 +901,7 @@ fn test_intersect_with_pyramid() -> Result<()> {
 
 	// Now create a pyramid with a smaller bbox (subset)
 	let smaller_bbox = TileBBox::from_min_and_max(5, 12, 12, 18, 18)?;
-	let pyramid_small = TileBBoxPyramid::from(&[smaller_bbox]);
+	let pyramid_small = TilePyramid::from([smaller_bbox].as_slice());
 	let mut bbox = TileBBox::from_min_and_max(5, 10, 10, 20, 20)?;
 	bbox.intersect_with_pyramid(&pyramid_small);
 
