@@ -345,6 +345,110 @@ fn deserialize_zoom_mismatch() {
 }
 
 // -------------------------------------------------------------------------
+// count_nodes
+// -------------------------------------------------------------------------
+
+#[test]
+fn count_nodes_empty_and_full() {
+	// An empty tree has 1 node (the root Empty node).
+	assert_eq!(TileQuadtree::new_empty(4).count_nodes(), 1);
+	// A full tree has 1 node (the root Full node).
+	assert_eq!(TileQuadtree::new_full(5).count_nodes(), 1);
+}
+
+#[test]
+fn count_nodes_partial_tree() -> Result<()> {
+	// A tree with a partial subtree has more than 1 node.
+	let mut t = TileQuadtree::new_empty(3);
+	t.include_coord(coord(3, 0, 0))?;
+	assert!(t.count_nodes() > 1, "partial tree should have more than one node");
+	Ok(())
+}
+
+// -------------------------------------------------------------------------
+// to_geo_bbox
+// -------------------------------------------------------------------------
+
+#[test]
+fn to_geo_bbox_empty_is_none() {
+	assert!(TileQuadtree::new_empty(4).to_geo_bbox().is_none());
+}
+
+#[test]
+fn to_geo_bbox_full_covers_world() {
+	let geo = TileQuadtree::new_full(0).to_geo_bbox().unwrap();
+	assert!(geo.x_min <= -179.0);
+	assert!(geo.x_max >= 179.0);
+}
+
+// -------------------------------------------------------------------------
+// Zoom-mismatch errors
+// -------------------------------------------------------------------------
+
+#[test]
+fn zoom_mismatch_includes_bbox() {
+	let t = TileQuadtree::new_full(3);
+	assert!(t.includes_bbox(&bbox(4, 0, 0, 1, 1)).is_err());
+}
+
+#[test]
+fn zoom_mismatch_include_coord() {
+	let mut t = TileQuadtree::new_empty(3);
+	assert!(t.include_coord(coord(4, 0, 0)).is_err());
+}
+
+#[test]
+fn zoom_mismatch_include_bbox() {
+	let mut t = TileQuadtree::new_empty(3);
+	assert!(t.include_bbox(&bbox(4, 0, 0, 1, 1)).is_err());
+}
+
+#[test]
+fn zoom_mismatch_remove_coord() {
+	let mut t = TileQuadtree::new_full(3);
+	assert!(t.remove_coord(coord(4, 0, 0)).is_err());
+}
+
+#[test]
+fn zoom_mismatch_remove_bbox() {
+	let mut t = TileQuadtree::new_full(3);
+	assert!(t.remove_bbox(&bbox(4, 0, 0, 1, 1)).is_err());
+}
+
+// -------------------------------------------------------------------------
+// Empty-bbox no-ops
+// -------------------------------------------------------------------------
+
+#[test]
+fn include_empty_bbox_is_noop() -> Result<()> {
+	let mut t = TileQuadtree::new_empty(4);
+	t.include_bbox(&TileBBox::new_empty(4)?)?;
+	assert!(t.is_empty());
+	Ok(())
+}
+
+#[test]
+fn remove_empty_bbox_is_noop() -> Result<()> {
+	let mut t = TileQuadtree::new_full(3);
+	let count_before = t.count_tiles();
+	t.remove_bbox(&TileBBox::new_empty(3)?)?;
+	assert_eq!(t.count_tiles(), count_before);
+	Ok(())
+}
+
+// -------------------------------------------------------------------------
+// includes_bbox with empty input
+// -------------------------------------------------------------------------
+
+#[test]
+fn includes_empty_bbox_returns_true() -> Result<()> {
+	// An empty bbox is trivially contained in any tree.
+	let t = TileQuadtree::new_empty(4);
+	assert!(t.includes_bbox(&TileBBox::new_empty(4)?)?);
+	Ok(())
+}
+
+// -------------------------------------------------------------------------
 // Display
 // -------------------------------------------------------------------------
 

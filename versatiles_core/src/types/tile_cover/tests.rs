@@ -199,6 +199,130 @@ fn neq_different_levels() {
 	assert_ne!(a, b);
 }
 
+// --- to_geo_bbox ---
+
+#[test]
+fn to_geo_bbox_empty_is_none() {
+	assert!(TileCover::new_empty(4).unwrap().to_geo_bbox().is_none());
+}
+
+#[test]
+fn to_geo_bbox_nonempty() {
+	let c = TileCover::from(bbox(4, 0, 0, 15, 15));
+	assert!(c.to_geo_bbox().is_some());
+}
+
+// --- is_full for Tree variant ---
+
+#[test]
+fn is_full_tree_variant() {
+	let c = TileCover::from(TileQuadtree::new_full(3));
+	assert!(c.is_full());
+	let c2 = TileCover::from(TileQuadtree::new_empty(3));
+	assert!(!c2.is_full());
+}
+
+// --- intersects_bbox with Tree variant ---
+
+#[test]
+fn intersects_bbox_tree_variant() {
+	let c = TileCover::from(TileQuadtree::from_bbox(&bbox(4, 0, 0, 7, 7)).unwrap());
+	assert!(c.intersects_bbox(&bbox(4, 5, 5, 10, 10)));
+	assert!(!c.intersects_bbox(&bbox(4, 10, 10, 15, 15)));
+}
+
+// --- level mismatch errors (Tree variant errors; Bbox variant returns Ok(false)) ---
+
+#[test]
+fn includes_coord_level_mismatch_tree_errors() {
+	// Tree variant errors on zoom mismatch.
+	let c = TileCover::from(TileQuadtree::new_full(4));
+	assert!(c.includes_coord(coord(5, 0, 0)).is_err());
+}
+
+#[test]
+fn includes_coord_level_mismatch_bbox_returns_false() {
+	// Bbox variant silently returns Ok(false) for level mismatch.
+	let c = TileCover::from(bbox(4, 0, 0, 15, 15));
+	assert!(!c.includes_coord(coord(5, 0, 0)).unwrap());
+}
+
+#[test]
+fn includes_bbox_level_mismatch_tree_errors() {
+	// Tree variant errors on zoom mismatch.
+	let c = TileCover::from(TileQuadtree::new_full(4));
+	assert!(c.includes_bbox(&bbox(5, 0, 0, 15, 15)).is_err());
+}
+
+#[test]
+fn includes_bbox_level_mismatch_bbox_returns_false() {
+	// Bbox variant silently returns Ok(false) for level mismatch.
+	let c = TileCover::from(bbox(4, 0, 0, 15, 15));
+	assert!(!c.includes_bbox(&bbox(5, 0, 0, 15, 15)).unwrap());
+}
+
+// --- mutation no-ops ---
+
+#[test]
+fn include_coord_noop_when_already_covered() {
+	let mut c = TileCover::from(bbox(4, 0, 0, 15, 15));
+	// Already covered; stays Bbox and count unchanged.
+	c.include_coord(coord(4, 5, 5)).unwrap();
+	assert!(matches!(c, TileCover::Bbox(_)));
+	assert_eq!(c.count_tiles(), 256);
+}
+
+#[test]
+fn include_bbox_noop_when_already_covered() {
+	let mut c = TileCover::from(bbox(4, 0, 0, 15, 15));
+	c.include_bbox(&bbox(4, 2, 2, 8, 8)).unwrap();
+	assert!(matches!(c, TileCover::Bbox(_)));
+	assert_eq!(c.count_tiles(), 256);
+}
+
+#[test]
+fn remove_coord_noop_when_not_in_bbox() {
+	let mut c = TileCover::from(bbox(4, 5, 5, 10, 10));
+	// coord outside bbox → no-op, stays Bbox
+	c.remove_coord(coord(4, 0, 0)).unwrap();
+	assert!(matches!(c, TileCover::Bbox(_)));
+}
+
+#[test]
+fn remove_bbox_noop_when_no_overlap() {
+	let mut c = TileCover::from(bbox(4, 5, 5, 10, 10));
+	// non-overlapping bbox → no-op, stays Bbox
+	c.remove_bbox(&bbox(4, 12, 12, 15, 15)).unwrap();
+	assert!(matches!(c, TileCover::Bbox(_)));
+}
+
+// --- set-ops zoom-mismatch errors ---
+
+#[test]
+fn set_ops_zoom_mismatch_errors() {
+	let a = TileCover::from(bbox(3, 0, 0, 7, 7));
+	let b = TileCover::from(bbox(4, 0, 0, 15, 15));
+	assert!(a.union(&b).is_err());
+	assert!(a.intersection(&b).is_err());
+	assert!(a.difference(&b).is_err());
+}
+
+// --- Display / Debug ---
+
+#[test]
+fn display_bbox_variant() {
+	let c = TileCover::from(bbox(3, 0, 0, 7, 7));
+	let s = format!("{c}");
+	assert!(!s.is_empty());
+}
+
+#[test]
+fn display_tree_variant() {
+	let c = TileCover::from(TileQuadtree::new_full(3));
+	let s = format!("{c}");
+	assert!(s.contains("zoom=3"));
+}
+
 // --- iteration ---
 
 #[test]

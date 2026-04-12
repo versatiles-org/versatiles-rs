@@ -227,6 +227,107 @@ fn weighted_bbox_nonempty() {
 	assert!(p.weighted_bbox().is_ok());
 }
 
+// --- set_level_bbox ---
+
+#[test]
+fn set_level_bbox() {
+	let mut p = TilePyramid::new_empty();
+	p.set_level_bbox(bbox(5, 3, 4, 10, 15));
+	assert_eq!(p.get_level_bbox(5), bbox(5, 3, 4, 10, 15));
+	assert!(p.get_level(4).is_empty());
+}
+
+// --- get_level_bbox for empty level ---
+
+#[test]
+fn get_level_bbox_empty_level() {
+	let p = TilePyramid::new_empty();
+	let b = p.get_level_bbox(5);
+	assert!(b.is_empty());
+}
+
+// --- include_coord ---
+
+#[test]
+fn include_coord() {
+	let mut p = TilePyramid::new_empty();
+	p.include_coord(&coord(5, 7, 9));
+	assert!(p.includes_coord(&coord(5, 7, 9)));
+	assert!(!p.includes_coord(&coord(5, 0, 0)));
+}
+
+// --- add_border ---
+
+#[test]
+fn add_border() {
+	// Use set_level_bbox to ensure the level stays a Bbox variant
+	// (include_bbox on an empty cover upgrades to Tree, which add_border skips).
+	let mut p = TilePyramid::new_empty();
+	p.set_level_bbox(bbox(5, 5, 5, 10, 10));
+	p.add_border(1, 1, 1, 1);
+	let b = p.get_level_bbox(5);
+	assert_eq!(b.x_min().unwrap(), 4);
+	assert_eq!(b.y_min().unwrap(), 4);
+	assert_eq!(b.x_max().unwrap(), 11);
+	assert_eq!(b.y_max().unwrap(), 11);
+}
+
+#[test]
+fn add_border_empty_level_unaffected() {
+	let mut p = TilePyramid::new_empty();
+	p.add_border(5, 5, 5, 5);
+	assert!(p.is_empty());
+}
+
+// --- flip_y and swap_xy exact verification ---
+
+#[test]
+fn flip_y_changes_coordinates() {
+	let mut p = TilePyramid::new_empty();
+	// z=1: 2x2 grid; top-left tile (0,0) flips to bottom-left (0,1)
+	p.include_bbox(&bbox(1, 0, 0, 0, 0)).unwrap();
+	p.flip_y().unwrap();
+	assert!(p.includes_coord(&coord(1, 0, 1)));
+	assert!(!p.includes_coord(&coord(1, 0, 0)));
+}
+
+#[test]
+fn swap_xy_changes_coordinates() {
+	let mut p = TilePyramid::new_empty();
+	// bbox with x=[2..4], y=[0..1] → after swap: x=[0..1], y=[2..4]
+	p.include_bbox(&bbox(4, 2, 0, 4, 1)).unwrap();
+	p.swap_xy().unwrap();
+	let b = p.get_level_bbox(4);
+	assert_eq!(b.x_min().unwrap(), 0);
+	assert_eq!(b.y_min().unwrap(), 2);
+}
+
+// --- includes_pyramid with empty other ---
+
+#[test]
+fn includes_empty_pyramid() {
+	let p = TilePyramid::new_full_up_to(5);
+	// Every pyramid includes an empty pyramid.
+	assert!(p.includes_pyramid(&TilePyramid::new_empty()));
+}
+
+// --- Display / Debug ---
+
+#[test]
+fn display_empty_pyramid() {
+	let p = TilePyramid::new_empty();
+	assert_eq!(format!("{p}"), "[]");
+}
+
+#[test]
+fn display_nonempty_pyramid() {
+	let mut p = TilePyramid::new_empty();
+	p.set_level_bbox(bbox(3, 0, 0, 3, 3));
+	let s = format!("{p}");
+	// TileBBox Debug format: "3: [0,0,3,3] (4x4)"
+	assert!(s.contains("3:"), "expected level 3 in pyramid display, got: {s}");
+}
+
 // --- equality ---
 
 #[test]
