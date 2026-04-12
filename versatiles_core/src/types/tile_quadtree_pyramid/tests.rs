@@ -1,6 +1,7 @@
 //! Tests for [`TileQuadtreePyramid`].
 
-use crate::{GeoBBox, TileBBox, TileBBoxPyramid, TileCoord, TileQuadtree, TileQuadtreePyramid};
+use crate::{GeoBBox, MAX_LAT, TileBBox, TileBBoxPyramid, TileCoord, TileQuadtree, TileQuadtreePyramid};
+use rstest::rstest;
 
 fn make_bbox(zoom: u8, x_min: u32, y_min: u32, x_max: u32, y_max: u32) -> TileBBox {
 	TileBBox::from_min_and_max(zoom, x_min, y_min, x_max, y_max).unwrap()
@@ -12,7 +13,7 @@ fn test_new_empty() {
 	assert!(pyramid.is_empty());
 	assert_eq!(pyramid.get_level_min(), None);
 	assert_eq!(pyramid.get_level_max(), None);
-	assert_eq!(pyramid.count_tiles(), 0);
+	assert_eq!(pyramid.tile_count(), 0);
 	assert_eq!(pyramid.get_geo_bbox(), None);
 }
 
@@ -24,7 +25,7 @@ fn test_new_full() {
 	assert_eq!(pyramid.get_level_max(), Some(30));
 	// At zoom 0 there is 1 tile; total is sum of 4^z for z in 0..=30
 	let expected: u64 = (0u32..=30).map(|z| 4u64.pow(z)).sum();
-	assert_eq!(pyramid.count_tiles(), expected);
+	assert_eq!(pyramid.tile_count(), expected);
 }
 
 #[test]
@@ -144,11 +145,11 @@ fn test_count_tiles() {
 	let mut pyramid = TileQuadtreePyramid::new_empty();
 	// At zoom 2: 4^2 = 16 tiles total when full
 	pyramid.set_level(TileQuadtree::new_full(2));
-	assert_eq!(pyramid.count_tiles(), 16);
+	assert_eq!(pyramid.tile_count(), 16);
 
 	// Add zoom 3: 4^3 = 64 tiles
 	pyramid.set_level(TileQuadtree::new_full(3));
-	assert_eq!(pyramid.count_tiles(), 80);
+	assert_eq!(pyramid.tile_count(), 80);
 }
 
 #[test]
@@ -231,4 +232,54 @@ fn test_set_level() {
 	pyramid.set_level(qt);
 	assert!(pyramid.get_level(7).is_full());
 	assert!(pyramid.get_level(6).is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// Parametrized tile-count and node-count checks for geo-bbox pyramids
+//
+// Cases are (geo_bbox as (x_min,y_min,x_max,y_max), max_zoom, expected_tiles, expected_nodes).
+//
+// "world"   = full Web-Mercator extent → every level is Full → 0 partial nodes.
+// "germany" = (5.9, 47.3, 15.0, 55.1), small Central-European box.
+// "europe"  = (-10.0, 35.0, 40.0, 72.0), wider European box.
+// ---------------------------------------------------------------------------
+#[rstest]
+// world: every zoom level is a Full node, so nodes always 0
+//   tile total = sum(4^z for z in 0..=max_zoom)
+#[case::global_0((-180.0, -MAX_LAT, 180.0, MAX_LAT), 0, 31,    1)]
+#[case::global_1((-180.0, -MAX_LAT, 180.0, MAX_LAT), 1, 31,    5)]
+#[case::global_2((-180.0, -MAX_LAT, 180.0, MAX_LAT), 2, 31,   21)]
+#[case::global_3((-180.0, -MAX_LAT, 180.0, MAX_LAT), 3, 31,   85)]
+#[case::global_4((-180.0, -MAX_LAT, 180.0, MAX_LAT), 4, 31, 341)]
+#[case::global_5((-180.0, -MAX_LAT, 180.0, MAX_LAT), 5, 31, 1365)]
+#[case::global_10((-180.0, -MAX_LAT, 180.0, MAX_LAT), 10, 31, 1398101)]
+#[case::global_20((-180.0, -MAX_LAT, 180.0, MAX_LAT), 20, 31, 1466015503701)]
+#[case::global_30((-180.0, -MAX_LAT, 180.0, MAX_LAT), 30, 31, 1537228672809129301)]
+// europe: more complex shape, so we get a mix of Full, Empty, and Partial nodes → nonzero node count
+#[case::europe_0((-10.0, 35.0, 40.0, 72.0), 0, 31,  1)]
+#[case::europe_1((-10.0, 35.0, 40.0, 72.0), 1, 35,  3)]
+#[case::europe_2((-10.0, 35.0, 40.0, 72.0), 2, 47,  7)]
+#[case::europe_4((-10.0, 35.0, 40.0, 72.0), 4, 123, 25)]
+#[case::europe_8((-10.0, 35.0, 40.0, 72.0), 8, 875, 2515)]
+#[case::europe_16((-10.0, 35.0, 40.0, 72.0), 16, 272699, 150667447)]
+// berlin: smaller box, so fewer tiles and nodes than europe
+#[case::berlin_0((13.1, 52.3, 13.8, 52.7), 0, 31, 1)]
+#[case::berlin_1((13.1, 52.3, 13.8, 52.7), 1, 35, 2)]
+#[case::berlin_2((13.1, 52.3, 13.8, 52.7), 2, 43, 3)]
+#[case::berlin_3((13.1, 52.3, 13.8, 52.7), 3, 55, 4)]
+#[case::berlin_4((13.1, 52.3, 13.8, 52.7), 4, 71, 5)]
+#[case::berlin_8((13.1, 52.3, 13.8, 52.7), 8, 187, 12)]
+#[case::berlin_10((13.1, 52.3, 13.8, 52.7), 10, 295, 25)]
+#[case::berlin_20((13.1, 52.3, 13.8, 52.7), 20, 42771, 5211256)]
+fn test_geo_bbox_tile_and_node_counts(
+	#[case] bbox: (f64, f64, f64, f64),
+	#[case] max_zoom: u8,
+	#[case] expected_nodes: u64,
+	#[case] expected_tiles: u64,
+) {
+	let (x_min, y_min, x_max, y_max) = bbox;
+	let geo_bbox = GeoBBox::new(x_min, y_min, x_max, y_max).unwrap();
+	let pyramid = TileQuadtreePyramid::from_geo_bbox(0, max_zoom, &geo_bbox).unwrap();
+	assert_eq!(pyramid.node_count(), expected_nodes);
+	assert_eq!(pyramid.tile_count(), expected_tiles);
 }
