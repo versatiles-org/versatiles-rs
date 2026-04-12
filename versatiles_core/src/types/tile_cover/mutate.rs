@@ -7,97 +7,58 @@ use anyhow::Result;
 impl TileCover {
 	/// Inserts a single tile coordinate into this cover.
 	///
-	/// For the `Bbox` variant the bounding rectangle is expanded to include the
-	/// coordinate (same semantics as [`TileBBox::include_coord`]).
+	/// If the coordinate is already covered (Bbox contains it), this is a no-op.
+	/// Otherwise the cover is upgraded to a `Tree` for exact representation and
+	/// the coordinate is inserted.
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's level does not match this cover's level.
 	pub fn include_coord(&mut self, coord: TileCoord) -> Result<()> {
-		match self {
-			TileCover::Bbox(b) => {
-				if b.includes_coord(&coord) {
-					Ok(())
-				} else {
-					self.upgrade_to_tree();
-					match self {
-						TileCover::Tree(t) => t.include_coord(coord),
-						TileCover::Bbox(_) => unreachable!(),
-					}
-				}
-			}
-			TileCover::Tree(t) => t.include_coord(coord),
+		if matches!(self, TileCover::Bbox(b) if b.includes_coord(&coord)) {
+			return Ok(());
 		}
+		self.as_tree_mut().include_coord(coord)
 	}
 
 	/// Inserts all tiles in `bbox` into this cover.
 	///
-	/// For the `Bbox` variant the bounding rectangle is expanded (same semantics
-	/// as [`TileBBox::include_bbox`]).
+	/// If the bbox is already fully covered (Bbox contains it), this is a no-op.
+	/// Otherwise the cover is upgraded to a `Tree` for exact representation.
 	///
 	/// # Errors
 	/// Returns an error if `bbox`'s level does not match this cover's level.
 	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
-		match self {
-			TileCover::Bbox(b) => {
-				if b.includes_bbox(bbox) {
-					Ok(())
-				} else {
-					self.upgrade_to_tree();
-					match self {
-						TileCover::Tree(t) => t.include_bbox(bbox),
-						TileCover::Bbox(_) => unreachable!(),
-					}
-				}
-			}
-			TileCover::Tree(t) => t.include_bbox(bbox),
+		if matches!(self, TileCover::Bbox(b) if b.includes_bbox(bbox)) {
+			return Ok(());
 		}
+		self.as_tree_mut().include_bbox(bbox)
 	}
 
 	/// Removes a single tile coordinate from this cover.
 	///
-	/// If this cover is the `Bbox` variant, it is first converted to a `Tree`
-	/// to allow exact subtraction.
+	/// If the coordinate is not covered (Bbox does not contain it), this is a no-op.
+	/// Otherwise the cover is upgraded to a `Tree` for exact subtraction.
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's level does not match this cover's level.
 	pub fn remove_coord(&mut self, coord: TileCoord) -> Result<()> {
-		match self {
-			TileCover::Tree(t) => t.remove_coord(coord),
-			TileCover::Bbox(b) => {
-				if b.includes_coord(&coord) {
-					self.upgrade_to_tree();
-					match self {
-						TileCover::Tree(t) => t.remove_coord(coord),
-						TileCover::Bbox(_) => unreachable!(),
-					}
-				} else {
-					Ok(())
-				}
-			}
+		if matches!(self, TileCover::Bbox(b) if !b.includes_coord(&coord)) {
+			return Ok(());
 		}
+		self.as_tree_mut().remove_coord(coord)
 	}
 
 	/// Removes all tiles in `bbox` from this cover.
 	///
-	/// If this cover is the `Bbox` variant, it is first converted to a `Tree`
-	/// to allow exact subtraction.
+	/// If there is no overlap (Bbox does not intersect it), this is a no-op.
+	/// Otherwise the cover is upgraded to a `Tree` for exact subtraction.
 	///
 	/// # Errors
 	/// Returns an error if `bbox`'s level does not match this cover's level.
 	pub fn remove_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
-		match self {
-			TileCover::Tree(t) => t.remove_bbox(bbox),
-			TileCover::Bbox(b) => {
-				if b.intersects_bbox(bbox) {
-					self.upgrade_to_tree();
-					match self {
-						TileCover::Tree(t) => t.remove_bbox(bbox),
-						TileCover::Bbox(_) => unreachable!(),
-					}
-				} else {
-					Ok(())
-				}
-			}
+		if matches!(self, TileCover::Bbox(b) if !b.intersects_bbox(bbox)) {
+			return Ok(());
 		}
+		self.as_tree_mut().remove_bbox(bbox)
 	}
 }
