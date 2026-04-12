@@ -1,10 +1,9 @@
 //! The [`PyramidInfo`] trait provides a common interface for querying
 //! geographic and zoom-level metadata from pyramid types.
 //!
-//! Both [`TileBBoxPyramid`](crate::TileBBoxPyramid) and
-//! [`TileQuadtreePyramid`](crate::TileQuadtreePyramid) implement this trait,
+//! [`TilePyramid`](crate::TilePyramid) implements this trait,
 //! allowing code such as [`TileJSON::update_from_pyramid`](crate::TileJSON) to
-//! accept either type without modification.
+//! accept it generically.
 
 use crate::GeoBBox;
 

@@ -45,8 +45,7 @@ impl TilePyramid {
 	/// Intersects each zoom level with the coverage derived from a geographic
 	/// bounding box.
 	///
-	/// Uses the same cap-zoom strategy as [`TileQuadtreePyramid`](crate::TileQuadtreePyramid):
-	/// levels ≤ 16 get an exact quadtree; higher levels reuse the cap tree scaled
+	/// Levels ≤ 16 get an exact quadtree; higher levels reuse the cap tree scaled
 	/// via `at_level` (O(1)).
 	///
 	/// # Errors
@@ -114,8 +113,7 @@ impl TilePyramid {
 	/// Applies a Y-flip to every level.
 	///
 	/// For `Bbox` levels this is exact. For `Tree` levels it is lossy (rounds
-	/// through the bounding rectangle), matching the behaviour of
-	/// [`TileQuadtreePyramid::flip_y`](crate::TileQuadtreePyramid::flip_y).
+	/// through the bounding rectangle).
 	///
 	/// # Errors
 	/// Returns an error if rebuilding any flipped level fails.
@@ -138,8 +136,7 @@ impl TilePyramid {
 	/// Applies an X/Y swap to every level.
 	///
 	/// For `Bbox` levels this is exact. For `Tree` levels it is lossy (rounds
-	/// through the bounding rectangle), matching the behaviour of
-	/// [`TileQuadtreePyramid::swap_xy`](crate::TileQuadtreePyramid::swap_xy).
+	/// through the bounding rectangle).
 	///
 	/// # Errors
 	/// Returns an error if rebuilding any swapped level fails.

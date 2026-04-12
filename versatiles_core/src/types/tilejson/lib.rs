@@ -210,8 +210,7 @@ impl TileJSON {
 	/// - Sets `minzoom` from the pyramid.
 	/// - Sets `maxzoom` from the pyramid.
 	///
-	/// Both [`crate::TileBBoxPyramid`] and [`crate::TileQuadtreePyramid`]
-	/// implement [`PyramidInfo`], so either can be passed here.
+	/// Any type implementing [`PyramidInfo`] can be passed here (e.g. [`crate::TilePyramid`]).
 	pub fn update_from_pyramid<P: PyramidInfo>(&mut self, pyramid: &P) {
 		if self.bounds.is_none() {
 			self.bounds = pyramid.get_geo_bbox();
@@ -586,7 +585,7 @@ impl Debug for TileJSON {
 #[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
-	use crate::TileBBoxPyramid;
+	use crate::TilePyramid;
 
 	/// Creates a minimal valid `TileJSON` object in the form of `JsonObject`.
 	fn make_test_json_object() -> JsonObject {
@@ -661,13 +660,13 @@ mod tests {
 	fn should_update_from_pyramid_and_set_bounds_and_zoom() {
 		let mut tj = TileJSON::default();
 		// If we have no bounds, it should set them. If we have no minzoom/maxzoom, it sets them.
-		let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(2, 12, &GeoBBox::new(-180.0, -90.0, 180.0, 90.0).unwrap());
+		let bbox_pyramid = TilePyramid::from_geo_bbox(2, 12, &GeoBBox::new(-180.0, -90.0, 180.0, 90.0).unwrap()).unwrap();
 		tj.update_from_pyramid(&bbox_pyramid);
 
 		// Bounds
 		let bounds = tj.bounds.expect("Should have updated bounds");
 		// Typically from_geo_bbox can clamp lat/long (like -85.051...), adjust test if relevant
-		// This depends on the implementation within `TileBBoxPyramid`.
+		// This depends on the implementation within `TilePyramid`.
 		assert_eq!(
 			bounds.as_array(),
 			[-180.0, -85.05112877980659, 180.0, 85.05112877980659]

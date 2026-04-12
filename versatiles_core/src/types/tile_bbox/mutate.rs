@@ -11,7 +11,7 @@
 //! * Methods that cannot fail are infallible; those that validate inputs
 //!   return `anyhow::Result<()>`.
 
-use crate::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TilePyramid, TileQuadtreePyramid, validate_zoom_level};
+use crate::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TilePyramid, validate_zoom_level};
 use anyhow::{Result, ensure};
 use std::ops::Div;
 use versatiles_derive::context;
@@ -220,17 +220,6 @@ impl TileBBox {
 	pub fn intersect_with_pyramid(&mut self, pyramid: &TilePyramid) {
 		if let Some(level_bbox) = pyramid.get_level(self.level).bounds() {
 			self.intersect_with(&level_bbox).unwrap_or(());
-		} else {
-			self.set_empty();
-		}
-	}
-
-	/// Intersect this bbox with the bounding box of a [`TileQuadtreePyramid`] at this bbox’s zoom level.
-	///
-	/// If the pyramid has no tiles at this zoom level, the bbox is set to empty.
-	pub fn intersect_with_quadtree_pyramid(&mut self, pyramid: &TileQuadtreePyramid) {
-		if let Some(qt_bbox) = pyramid.get_level(self.level).bounds() {
-			self.intersect_with(&qt_bbox).unwrap_or(());
 		} else {
 			self.set_empty();
 		}

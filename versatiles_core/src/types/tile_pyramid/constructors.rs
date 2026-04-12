@@ -1,7 +1,7 @@
 //! Constructors for [`TilePyramid`].
 
 use super::TilePyramid;
-use crate::{GeoBBox, TileBBox, TileBBoxPyramid, TileCover, TileQuadtreePyramid};
+use crate::{GeoBBox, TileBBox, TileCover};
 use anyhow::Result;
 use std::array::from_fn;
 
@@ -50,26 +50,6 @@ impl TilePyramid {
 			pyramid.levels[z as usize] = TileCover::from_geo(z, geo_bbox)?;
 		}
 		Ok(pyramid)
-	}
-
-	/// Converts a [`TileBBoxPyramid`] into a `TilePyramid` (each level becomes
-	/// a `TileCover::Bbox`).
-	#[must_use]
-	#[allow(clippy::cast_possible_truncation)]
-	pub fn from_bbox_pyramid(pyramid: &TileBBoxPyramid) -> Self {
-		TilePyramid {
-			levels: from_fn(|z| TileCover::from(*pyramid.get_level_bbox(z as u8))),
-		}
-	}
-
-	/// Converts a [`TileQuadtreePyramid`] into a `TilePyramid` (each level
-	/// becomes a `TileCover::Tree`).
-	#[must_use]
-	#[allow(clippy::cast_possible_truncation)]
-	pub fn from_quadtree_pyramid(pyramid: &TileQuadtreePyramid) -> Self {
-		TilePyramid {
-			levels: from_fn(|z| TileCover::from(pyramid.get_level(z as u8).clone())),
-		}
 	}
 }
 

@@ -21,7 +21,7 @@
 //! - [`TileStream`]: Asynchronous tile data streaming
 //!
 //! # Utilities
-//! - [`TileBBoxPyramid`]: Multi-level tile pyramid structure
+//! - [`TilePyramid`]: Multi-level tile pyramid structure (unified, replaces old TileBBoxPyramid/TileQuadtreePyramid)
 //! - [`TileBBoxMap`]: Sparse storage for tile bounding boxes
 //! - [`LimitedCache`]: Size-limited LRU cache
 //! - [`ProbeDepth`]: Tile container inspection depth levels
@@ -88,12 +88,6 @@ pub use tile_pyramid::*;
 
 mod tile_bbox_map;
 pub use tile_bbox_map::*;
-
-mod tile_bbox_pyramid;
-pub use tile_bbox_pyramid::*;
-
-mod tile_quadtree_pyramid;
-pub use tile_quadtree_pyramid::*;
 
 mod tile_compression;
 pub use tile_compression::*;

@@ -1,9 +1,7 @@
 //! A unified multi-zoom tile coverage pyramid.
 //!
 //! [`TilePyramid`] holds one [`TileCover`] per zoom level (0 through
-//! [`MAX_ZOOM_LEVEL`](crate::MAX_ZOOM_LEVEL)), replacing both
-//! [`TileBBoxPyramid`](crate::TileBBoxPyramid) and
-//! [`TileQuadtreePyramid`](crate::TileQuadtreePyramid).
+//! [`MAX_ZOOM_LEVEL`](crate::MAX_ZOOM_LEVEL)).
 //!
 //! Each level defaults to `TileCover::Bbox(empty)`. Levels automatically
 //! upgrade to `TileCover::Tree` when non-rectangular operations (e.g.
