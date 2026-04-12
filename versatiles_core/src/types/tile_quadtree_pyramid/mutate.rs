@@ -24,7 +24,7 @@ impl TileQuadtreePyramid {
 	/// Includes a single tile coordinate in the pyramid by inserting it into the
 	/// quadtree at the coordinate's zoom level.
 	pub fn include_coord(&mut self, coord: &TileCoord) {
-		self.levels[coord.level as usize].insert_tile(*coord).unwrap();
+		self.levels[coord.level as usize].insert_coord(*coord).unwrap();
 	}
 
 	/// Includes all tiles in the given bounding box in the pyramid.

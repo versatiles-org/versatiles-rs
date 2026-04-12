@@ -308,7 +308,6 @@ impl TileBBox {
 	/// # Note
 	///
 	/// This method is primarily used for testing purposes.
-	#[cfg(test)]
 	#[must_use]
 	pub fn is_full(&self) -> bool {
 		let max = self.max_count();

@@ -10,7 +10,7 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's zoom level doesn't match.
-	pub fn insert_tile(&mut self, coord: TileCoord) -> Result<()> {
+	pub fn insert_coord(&mut self, coord: TileCoord) -> Result<()> {
 		check_coord_zoom(coord, self.zoom)?;
 		let size = 1u64 << self.zoom;
 		let new_root =
@@ -52,7 +52,7 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's zoom level doesn't match.
-	pub fn remove_tile(&mut self, coord: TileCoord) -> Result<()> {
+	pub fn remove_coord(&mut self, coord: TileCoord) -> Result<()> {
 		check_coord_zoom(coord, self.zoom)?;
 		let size = 1u64 << self.zoom;
 		let new_root =

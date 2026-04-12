@@ -139,7 +139,7 @@ fn intersects() -> Result<()> {
 #[test]
 fn insert_tile() -> Result<()> {
 	let mut t = TileQuadtree::new_empty(3);
-	t.insert_tile(coord(3, 0, 0))?;
+	t.insert_coord(coord(3, 0, 0))?;
 	assert_eq!(t.count_tiles(), 1);
 	assert!(t.contains_tile(coord(3, 0, 0))?);
 	assert!(!t.contains_tile(coord(3, 1, 0))?);
@@ -150,10 +150,10 @@ fn insert_tile() -> Result<()> {
 fn insert_tile_collapses_to_full() -> Result<()> {
 	// At zoom 1, there are only 4 tiles. Insert all 4.
 	let mut t = TileQuadtree::new_empty(1);
-	t.insert_tile(coord(1, 0, 0))?;
-	t.insert_tile(coord(1, 1, 0))?;
-	t.insert_tile(coord(1, 0, 1))?;
-	t.insert_tile(coord(1, 1, 1))?;
+	t.insert_coord(coord(1, 0, 0))?;
+	t.insert_coord(coord(1, 1, 0))?;
+	t.insert_coord(coord(1, 0, 1))?;
+	t.insert_coord(coord(1, 1, 1))?;
 	assert!(t.is_full());
 	Ok(())
 }
@@ -169,7 +169,7 @@ fn insert_bbox() -> Result<()> {
 #[test]
 fn remove_tile() -> Result<()> {
 	let mut t = TileQuadtree::new_full(2);
-	t.remove_tile(coord(2, 0, 0))?;
+	t.remove_coord(coord(2, 0, 0))?;
 	assert!(!t.is_full());
 	assert_eq!(t.count_tiles(), 15);
 	assert!(!t.contains_tile(coord(2, 0, 0))?);
@@ -270,7 +270,7 @@ fn at_level_roundtrip() -> Result<()> {
 #[test]
 fn iter_tiles_count() -> Result<()> {
 	let t = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3))?;
-	let tiles: Vec<_> = t.iter_tiles().collect();
+	let tiles: Vec<_> = t.iter_coords().collect();
 	assert_eq!(tiles.len() as u64, t.count_tiles());
 	assert_eq!(tiles.len(), 16);
 	Ok(())
@@ -279,7 +279,7 @@ fn iter_tiles_count() -> Result<()> {
 #[test]
 fn iter_tiles_full() {
 	let t = TileQuadtree::new_full(2);
-	let mut tiles: Vec<_> = t.iter_tiles().collect();
+	let mut tiles: Vec<_> = t.iter_coords().collect();
 	tiles.sort_by_key(|c| (c.y, c.x));
 	let mut expected: Vec<_> = (0..4)
 		.flat_map(|y| (0..4u32).map(move |x| TileCoord::new(2, x, y).unwrap()))
@@ -291,7 +291,7 @@ fn iter_tiles_full() {
 #[test]
 fn iter_tiles_empty() {
 	let t = TileQuadtree::new_empty(3);
-	assert_eq!(t.iter_tiles().count(), 0);
+	assert_eq!(t.iter_coords().count(), 0);
 }
 
 #[test]

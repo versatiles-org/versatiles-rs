@@ -80,6 +80,12 @@ pub use tile_bbox::*;
 mod tile_quadtree;
 pub use tile_quadtree::*;
 
+mod tile_cover;
+pub use tile_cover::*;
+
+mod tile_pyramid;
+pub use tile_pyramid::*;
+
 mod tile_bbox_map;
 pub use tile_bbox_map::*;
 

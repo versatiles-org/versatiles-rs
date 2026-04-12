@@ -7,7 +7,7 @@ impl TileQuadtree {
 	/// Iterate over all tile coordinates covered by this quadtree.
 	///
 	/// Tiles are yielded in DFS order (NW first, then NE, SW, SE).
-	pub fn iter_tiles(&self) -> impl Iterator<Item = TileCoord> + '_ {
+	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord> + '_ {
 		let size = 1u64 << self.zoom;
 		TileIter::new(&self.root, 0, 0, size, self.zoom)
 	}
