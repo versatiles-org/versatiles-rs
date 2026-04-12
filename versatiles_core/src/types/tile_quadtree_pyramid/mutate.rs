@@ -5,8 +5,9 @@ use crate::{GeoBBox, MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileQuadtree};
 use anyhow::Result;
 use versatiles_derive::context;
 
-/// Above this zoom level, building a full quadtree from a geo bbox becomes
-/// prohibitively expensive (O(perimeter_tiles) nodes). Use fast bbox arithmetic instead.
+/// Zoom level at which the geo-quadtree is materialised exactly.
+/// For higher zoom levels, the tree built at this cap is scaled up via `level_down`
+/// (O(1) per step) rather than building a new O(perimeter_tiles) tree at each level.
 const MAX_QUADTREE_INTERSECT_ZOOM: u8 = 16;
 
 impl TileQuadtreePyramid {
@@ -48,40 +49,38 @@ impl TileQuadtreePyramid {
 	/// Intersects each zoom level with the coverage derived from the given geographic
 	/// bounding box.
 	///
-	/// For zoom levels up to `MAX_QUADTREE_INTERSECT_ZOOM` (currently 16), a full quadtree is built
-	/// from the geo bbox and intersected precisely. For higher zoom levels, a fast
-	/// rectangular bbox intersection is used instead to avoid the O(perimeter_tiles)
-	/// memory cost of building a quadtree at high zoom levels.
+	/// For zoom levels up to `MAX_QUADTREE_INTERSECT_ZOOM` (16), a full quadtree is built
+	/// at that zoom and intersected precisely. For higher zoom levels the cap-zoom tree is
+	/// scaled up via `level_down` — which is O(1) per step because it only increments the
+	/// zoom counter without touching the node structure. This avoids materialising an
+	/// O(perimeter_tiles) tree at each high zoom level (which was the old "fast-path" bug:
+	/// at zoom 28 a 60° bbox has ~44 M boundary tiles, producing ~hundreds of MB of nodes).
+	///
+	/// The scaled tree is a slight over-approximation at the finest levels (each leaf of
+	/// the cap-zoom tree represents 2^(z − cap) actual tiles), but this is intentional and
+	/// acceptable — exact tile-level precision is only maintained up to zoom 16.
 	///
 	/// # Errors
 	///
 	/// Returns an error if the geographic coordinates are invalid.
 	#[context("Failed to intersect {self} with {geo_bbox:?}")]
 	pub fn intersect_geo_bbox(&mut self, geo_bbox: &GeoBBox) -> Result<()> {
+		// Build the geo-quadtree once at the cap zoom; reuse for all higher levels.
+		let cap_geo_qt = TileQuadtree::from_geo(MAX_QUADTREE_INTERSECT_ZOOM, geo_bbox)?;
+
 		for z in 0..=MAX_ZOOM_LEVEL {
 			if self.levels[z as usize].is_empty() {
 				continue;
 			}
-			if z <= MAX_QUADTREE_INTERSECT_ZOOM {
-				let geo_qt = TileQuadtree::from_geo(z, geo_bbox)?;
-				let intersected = self.levels[z as usize].intersection(&geo_qt)?;
-				self.levels[z as usize] = intersected;
+			let geo_qt = if z <= MAX_QUADTREE_INTERSECT_ZOOM {
+				TileQuadtree::from_geo(z, geo_bbox)?
 			} else {
-				// Fast path: use rectangular bbox intersection to avoid O(2^z) quadtree nodes
-				let tile_bbox = TileBBox::from_geo(z, geo_bbox)?;
-				if tile_bbox.is_empty() {
-					self.levels[z as usize] = TileQuadtree::new_empty(z);
-				} else if let Some(current_bounds) = self.levels[z as usize].bounds() {
-					match current_bounds.intersected_bbox(&tile_bbox) {
-						Ok(intersected_bbox) if !intersected_bbox.is_empty() => {
-							self.levels[z as usize] = TileQuadtree::from_bbox(&intersected_bbox)?;
-						}
-						_ => {
-							self.levels[z as usize] = TileQuadtree::new_empty(z);
-						}
-					}
-				}
-			}
+				// Scale the cap tree up to zoom z.  level_down is O(1) (increments zoom
+				// counter only), so this is O((z − cap) + clone_of_cap_tree).
+				cap_geo_qt.at_level(z)
+			};
+			let intersected = self.levels[z as usize].intersection(&geo_qt)?;
+			self.levels[z as usize] = intersected;
 		}
 		Ok(())
 	}
