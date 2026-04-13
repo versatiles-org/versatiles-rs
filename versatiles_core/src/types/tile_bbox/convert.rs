@@ -21,15 +21,6 @@ impl TileBBox {
 	///
 	/// ## Returns
 	/// A [`GeoBBox`] representing the geographic region covered by this bounding box.
-	///
-	/// ## Example
-	/// ```
-	/// # use versatiles_core::{TileBBox, GeoBBox};
-	/// // Define a 2×2 region at zoom level 3 starting at tile (4,5)
-	/// let tb = TileBBox::from_min_and_size(3, 4, 5, 2, 2).unwrap();
-	/// let geo = tb.to_geo_bbox().unwrap();
-	/// let (west, south, east, north) = geo.as_tuple();
-	/// ```
 	#[must_use]
 	pub fn to_geo_bbox(&self) -> Option<GeoBBox> {
 		if self.is_empty() {

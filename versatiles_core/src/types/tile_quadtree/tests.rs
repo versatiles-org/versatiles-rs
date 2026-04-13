@@ -18,13 +18,13 @@ fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 
 #[test]
 fn new_empty_and_full() {
-	let e = TileQuadtree::new_empty(4);
+	let e = TileQuadtree::new_empty(4).unwrap();
 	assert!(e.is_empty());
 	assert!(!e.is_full());
 	assert_eq!(e.zoom(), 4);
 	assert_eq!(e.count_tiles(), 0);
 
-	let f = TileQuadtree::new_full(3);
+	let f = TileQuadtree::new_full(3).unwrap();
 	assert!(!f.is_empty());
 	assert!(f.is_full());
 	assert_eq!(f.zoom(), 3);
@@ -75,14 +75,14 @@ fn from_geo() -> Result<()> {
 fn tile_count_full() {
 	for z in 0u8..=5 {
 		let expected = 1u64 << (2 * u32::from(z));
-		assert_eq!(TileQuadtree::new_full(z).count_tiles(), expected);
+		assert_eq!(TileQuadtree::new_full(z).unwrap().count_tiles(), expected);
 	}
 }
 
 #[test]
 fn bounds_empty_and_full() -> Result<()> {
-	assert!(TileQuadtree::new_empty(3).bounds().is_none());
-	let full_bounds = TileQuadtree::new_full(2).bounds().unwrap();
+	assert!(TileQuadtree::new_empty(3).unwrap().bounds().is_none());
+	let full_bounds = TileQuadtree::new_full(2).unwrap().bounds().unwrap();
 	assert_eq!(full_bounds, TileBBox::new_full(2)?);
 	Ok(())
 }
@@ -110,7 +110,7 @@ fn contains_tile() -> Result<()> {
 
 #[test]
 fn contains_bbox() -> Result<()> {
-	let full = TileQuadtree::new_full(3);
+	let full = TileQuadtree::new_full(3).unwrap();
 	assert!(full.includes_bbox(&TileBBox::new_full(3)?)?);
 	assert!(full.includes_bbox(&bbox(3, 0, 0, 3, 3))?);
 
@@ -127,8 +127,8 @@ fn intersects() -> Result<()> {
 	let c = TileQuadtree::from_bbox(&bbox(3, 4, 4, 7, 7))?;
 	assert!(a.intersects_tree(&b)?);
 	assert!(!a.intersects_tree(&c)?);
-	assert!(a.intersects_tree(&TileQuadtree::new_full(3))?);
-	assert!(!a.intersects_tree(&TileQuadtree::new_empty(3))?);
+	assert!(a.intersects_tree(&TileQuadtree::new_full(3).unwrap())?);
+	assert!(!a.intersects_tree(&TileQuadtree::new_empty(3).unwrap())?);
 	Ok(())
 }
 
@@ -138,7 +138,7 @@ fn intersects() -> Result<()> {
 
 #[test]
 fn insert_tile() -> Result<()> {
-	let mut t = TileQuadtree::new_empty(3);
+	let mut t = TileQuadtree::new_empty(3).unwrap();
 	t.include_coord(&coord(3, 0, 0))?;
 	assert_eq!(t.count_tiles(), 1);
 	assert!(t.includes_coord(&coord(3, 0, 0))?);
@@ -149,7 +149,7 @@ fn insert_tile() -> Result<()> {
 #[test]
 fn insert_tile_collapses_to_full() -> Result<()> {
 	// At zoom 1, there are only 4 tiles. Insert all 4.
-	let mut t = TileQuadtree::new_empty(1);
+	let mut t = TileQuadtree::new_empty(1).unwrap();
 	t.include_coord(&coord(1, 0, 0))?;
 	t.include_coord(&coord(1, 1, 0))?;
 	t.include_coord(&coord(1, 0, 1))?;
@@ -160,7 +160,7 @@ fn insert_tile_collapses_to_full() -> Result<()> {
 
 #[test]
 fn insert_bbox() -> Result<()> {
-	let mut t = TileQuadtree::new_empty(4);
+	let mut t = TileQuadtree::new_empty(4).unwrap();
 	t.include_bbox(&bbox(4, 0, 0, 7, 7))?;
 	assert_eq!(t.count_tiles(), 64);
 	Ok(())
@@ -168,7 +168,7 @@ fn insert_bbox() -> Result<()> {
 
 #[test]
 fn remove_tile() -> Result<()> {
-	let mut t = TileQuadtree::new_full(2);
+	let mut t = TileQuadtree::new_full(2).unwrap();
 	t.remove_coord(&coord(2, 0, 0))?;
 	assert!(!t.is_full());
 	assert_eq!(t.count_tiles(), 15);
@@ -179,7 +179,7 @@ fn remove_tile() -> Result<()> {
 
 #[test]
 fn remove_bbox() -> Result<()> {
-	let mut t = TileQuadtree::new_full(3);
+	let mut t = TileQuadtree::new_full(3).unwrap();
 	t.remove_bbox(&bbox(3, 0, 0, 3, 7))?;
 	assert!(!t.is_full());
 	assert_eq!(t.count_tiles(), 32); // half the tiles removed
@@ -211,7 +211,7 @@ fn intersection() -> Result<()> {
 
 #[test]
 fn difference() -> Result<()> {
-	let a = TileQuadtree::new_full(2);
+	let a = TileQuadtree::new_full(2).unwrap();
 	let b = TileQuadtree::from_bbox(&bbox(2, 0, 0, 1, 1))?; // 4 tiles
 	let d = a.difference(&b)?;
 	assert_eq!(d.count_tiles(), 12);
@@ -220,8 +220,8 @@ fn difference() -> Result<()> {
 
 #[test]
 fn set_ops_zoom_mismatch() {
-	let a = TileQuadtree::new_full(3);
-	let b = TileQuadtree::new_full(4);
+	let a = TileQuadtree::new_full(3).unwrap();
+	let b = TileQuadtree::new_full(4).unwrap();
 	assert!(a.union(&b).is_err());
 	assert!(a.intersection(&b).is_err());
 	assert!(a.difference(&b).is_err());
@@ -233,20 +233,20 @@ fn set_ops_zoom_mismatch() {
 
 #[test]
 fn level_up_full_empty() {
-	assert!(TileQuadtree::new_full(5).level_up().is_full());
-	assert!(TileQuadtree::new_empty(5).level_up().is_empty());
+	assert!(TileQuadtree::new_full(5).unwrap().level_up().is_full());
+	assert!(TileQuadtree::new_empty(5).unwrap().level_up().is_empty());
 }
 
 #[test]
 fn level_down_full_empty() {
-	let f = TileQuadtree::new_full(3).level_down();
+	let f = TileQuadtree::new_full(3).unwrap().level_down();
 	assert_eq!(f.zoom(), 4);
 	assert!(f.is_full());
 }
 
 #[test]
 fn level_up_zoom0_unchanged() {
-	let t = TileQuadtree::new_full(0);
+	let t = TileQuadtree::new_full(0).unwrap();
 	let up = t.level_up();
 	assert_eq!(up.zoom(), 0);
 }
@@ -278,7 +278,7 @@ fn iter_tiles_count() -> Result<()> {
 
 #[test]
 fn iter_tiles_full() {
-	let t = TileQuadtree::new_full(2);
+	let t = TileQuadtree::new_full(2).unwrap();
 	let mut tiles: Vec<_> = t.iter_coords().collect();
 	tiles.sort_by_key(|c| (c.y, c.x));
 	let mut expected: Vec<_> = (0..4)
@@ -290,7 +290,7 @@ fn iter_tiles_full() {
 
 #[test]
 fn iter_tiles_empty() {
-	let t = TileQuadtree::new_empty(3);
+	let t = TileQuadtree::new_empty(3).unwrap();
 	assert_eq!(t.iter_coords().count(), 0);
 }
 
@@ -311,7 +311,7 @@ fn iter_bbox_grid_covers_all() -> Result<()> {
 
 #[test]
 fn serialize_roundtrip_empty() -> Result<()> {
-	let t = TileQuadtree::new_empty(5);
+	let t = TileQuadtree::new_empty(5).unwrap();
 	let bytes = t.serialize();
 	let t2 = TileQuadtree::deserialize(5, &bytes)?;
 	assert_eq!(t, t2);
@@ -320,7 +320,7 @@ fn serialize_roundtrip_empty() -> Result<()> {
 
 #[test]
 fn serialize_roundtrip_full() -> Result<()> {
-	let t = TileQuadtree::new_full(4);
+	let t = TileQuadtree::new_full(4).unwrap();
 	let bytes = t.serialize();
 	let t2 = TileQuadtree::deserialize(4, &bytes)?;
 	assert_eq!(t, t2);
@@ -339,7 +339,7 @@ fn serialize_roundtrip_partial() -> Result<()> {
 
 #[test]
 fn deserialize_zoom_mismatch() {
-	let t = TileQuadtree::new_full(3);
+	let t = TileQuadtree::new_full(3).unwrap();
 	let bytes = t.serialize();
 	assert!(TileQuadtree::deserialize(4, &bytes).is_err());
 }
@@ -351,15 +351,15 @@ fn deserialize_zoom_mismatch() {
 #[test]
 fn count_nodes_empty_and_full() {
 	// An empty tree has 1 node (the root Empty node).
-	assert_eq!(TileQuadtree::new_empty(4).count_nodes(), 1);
+	assert_eq!(TileQuadtree::new_empty(4).unwrap().count_nodes(), 1);
 	// A full tree has 1 node (the root Full node).
-	assert_eq!(TileQuadtree::new_full(5).count_nodes(), 1);
+	assert_eq!(TileQuadtree::new_full(5).unwrap().count_nodes(), 1);
 }
 
 #[test]
 fn count_nodes_partial_tree() -> Result<()> {
 	// A tree with a partial subtree has more than 1 node.
-	let mut t = TileQuadtree::new_empty(3);
+	let mut t = TileQuadtree::new_empty(3).unwrap();
 	t.include_coord(&coord(3, 0, 0))?;
 	assert!(t.count_nodes() > 1, "partial tree should have more than one node");
 	Ok(())
@@ -371,12 +371,12 @@ fn count_nodes_partial_tree() -> Result<()> {
 
 #[test]
 fn to_geo_bbox_empty_is_none() {
-	assert!(TileQuadtree::new_empty(4).to_geo_bbox().is_none());
+	assert!(TileQuadtree::new_empty(4).unwrap().to_geo_bbox().is_none());
 }
 
 #[test]
 fn to_geo_bbox_full_covers_world() {
-	let geo = TileQuadtree::new_full(0).to_geo_bbox().unwrap();
+	let geo = TileQuadtree::new_full(0).unwrap().to_geo_bbox().unwrap();
 	assert!(geo.x_min <= -179.0);
 	assert!(geo.x_max >= 179.0);
 }
@@ -387,31 +387,31 @@ fn to_geo_bbox_full_covers_world() {
 
 #[test]
 fn zoom_mismatch_includes_bbox() {
-	let t = TileQuadtree::new_full(3);
+	let t = TileQuadtree::new_full(3).unwrap();
 	assert!(t.includes_bbox(&bbox(4, 0, 0, 1, 1)).is_err());
 }
 
 #[test]
 fn zoom_mismatch_include_coord() {
-	let mut t = TileQuadtree::new_empty(3);
+	let mut t = TileQuadtree::new_empty(3).unwrap();
 	assert!(t.include_coord(&coord(4, 0, 0)).is_err());
 }
 
 #[test]
 fn zoom_mismatch_include_bbox() {
-	let mut t = TileQuadtree::new_empty(3);
+	let mut t = TileQuadtree::new_empty(3).unwrap();
 	assert!(t.include_bbox(&bbox(4, 0, 0, 1, 1)).is_err());
 }
 
 #[test]
 fn zoom_mismatch_remove_coord() {
-	let mut t = TileQuadtree::new_full(3);
+	let mut t = TileQuadtree::new_full(3).unwrap();
 	assert!(t.remove_coord(&coord(4, 0, 0)).is_err());
 }
 
 #[test]
 fn zoom_mismatch_remove_bbox() {
-	let mut t = TileQuadtree::new_full(3);
+	let mut t = TileQuadtree::new_full(3).unwrap();
 	assert!(t.remove_bbox(&bbox(4, 0, 0, 1, 1)).is_err());
 }
 
@@ -421,7 +421,7 @@ fn zoom_mismatch_remove_bbox() {
 
 #[test]
 fn include_empty_bbox_is_noop() -> Result<()> {
-	let mut t = TileQuadtree::new_empty(4);
+	let mut t = TileQuadtree::new_empty(4).unwrap();
 	t.include_bbox(&TileBBox::new_empty(4)?)?;
 	assert!(t.is_empty());
 	Ok(())
@@ -429,7 +429,7 @@ fn include_empty_bbox_is_noop() -> Result<()> {
 
 #[test]
 fn remove_empty_bbox_is_noop() -> Result<()> {
-	let mut t = TileQuadtree::new_full(3);
+	let mut t = TileQuadtree::new_full(3).unwrap();
 	let count_before = t.count_tiles();
 	t.remove_bbox(&TileBBox::new_empty(3)?)?;
 	assert_eq!(t.count_tiles(), count_before);
@@ -443,7 +443,7 @@ fn remove_empty_bbox_is_noop() -> Result<()> {
 #[test]
 fn includes_empty_bbox_returns_true() -> Result<()> {
 	// An empty bbox is trivially contained in any tree.
-	let t = TileQuadtree::new_empty(4);
+	let t = TileQuadtree::new_empty(4).unwrap();
 	assert!(t.includes_bbox(&TileBBox::new_empty(4)?)?);
 	Ok(())
 }
@@ -454,7 +454,7 @@ fn includes_empty_bbox_returns_true() -> Result<()> {
 
 #[test]
 fn display() {
-	let t = TileQuadtree::new_full(3);
+	let t = TileQuadtree::new_full(3).unwrap();
 	let s = format!("{t}");
 	assert!(s.contains("zoom=3"));
 	assert!(s.contains("tiles=64"));

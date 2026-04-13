@@ -63,7 +63,7 @@ fn from_slice_of_bboxes() {
 #[test]
 fn get_level_and_set_level() {
 	let mut p = TilePyramid::new_empty();
-	let qt = TileQuadtree::new_full(4);
+	let qt = TileQuadtree::new_full(4).unwrap();
 	p.set_level(TileCover::from(qt));
 	assert!(!p.get_level(4).is_empty());
 	assert!(p.get_level(3).is_empty());
@@ -188,9 +188,7 @@ fn intersect_geo_bbox() {
 	let geo = GeoBBox::new(10.0, 50.0, 15.0, 55.0).unwrap();
 	p.intersect_geo_bbox(&geo).unwrap();
 	assert!(!p.is_empty());
-	let tiles_at_10 = p.get_level(10).count_tiles();
-	assert!(tiles_at_10 > 0);
-	assert!(tiles_at_10 < TileQuadtree::new_full(10).count_tiles());
+	assert_eq!(p.get_level(10).count_tiles(), 375);
 }
 
 #[test]

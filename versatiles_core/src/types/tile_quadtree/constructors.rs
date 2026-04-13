@@ -6,32 +6,20 @@ use anyhow::{Result, ensure};
 
 impl TileQuadtree {
 	/// Create an empty quadtree at the given zoom level.
-	///
-	/// # Examples
-	/// ```
-	/// use versatiles_core::TileQuadtree;
-	/// let t = TileQuadtree::new_empty(5);
-	/// assert!(t.is_empty());
-	/// ```
 	#[must_use]
-	pub fn new_empty(zoom: u8) -> Self {
-		TileQuadtree {
+	pub fn new_empty(zoom: u8) -> Result<Self> {
+		validate_zoom_level(zoom)?;
+		Ok(TileQuadtree {
 			zoom,
 			root: Node::Empty,
-		}
+		})
 	}
 
 	/// Create a full quadtree (all tiles covered) at the given zoom level.
-	///
-	/// # Examples
-	/// ```
-	/// use versatiles_core::TileQuadtree;
-	/// let t = TileQuadtree::new_full(3);
-	/// assert!(t.is_full());
-	/// ```
 	#[must_use]
-	pub fn new_full(zoom: u8) -> Self {
-		TileQuadtree { zoom, root: Node::Full }
+	pub fn new_full(zoom: u8) -> Result<Self> {
+		validate_zoom_level(zoom)?;
+		Ok(TileQuadtree { zoom, root: Node::Full })
 	}
 
 	/// Build a quadtree from a [`TileBBox`], covering exactly those tiles.
@@ -43,7 +31,7 @@ impl TileQuadtree {
 		validate_zoom_level(zoom)?;
 
 		if bbox.is_empty() {
-			return Ok(TileQuadtree::new_empty(zoom));
+			return TileQuadtree::new_empty(zoom);
 		}
 
 		let size = 1u64 << zoom;

@@ -33,7 +33,7 @@ fn from_bbox_and_from_tree() {
 	assert!(matches!(cb, TileCover::Bbox(_)));
 	assert_eq!(cb.count_tiles(), 16);
 
-	let t = TileQuadtree::new_full(3);
+	let t = TileQuadtree::new_full(3).unwrap();
 	let ct = TileCover::from(t);
 	assert!(matches!(ct, TileCover::Tree(_)));
 	assert!(ct.is_full());
@@ -44,7 +44,7 @@ fn from_bbox_and_from_tree() {
 #[test]
 fn level() {
 	assert_eq!(TileCover::new_empty(7).unwrap().level(), 7);
-	assert_eq!(TileCover::from(TileQuadtree::new_empty(5)).level(), 5);
+	assert_eq!(TileCover::from(TileQuadtree::new_empty(5).unwrap()).level(), 5);
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn union_bbox_bbox_stays_bbox() {
 #[test]
 fn union_with_tree_gives_tree() {
 	let a = TileCover::from(bbox(3, 0, 0, 3, 3));
-	let b = TileCover::from(TileQuadtree::new_full(3));
+	let b = TileCover::from(TileQuadtree::new_full(3).unwrap());
 	let u = a.union(&b).unwrap();
 	assert!(matches!(u, TileCover::Tree(_)));
 	assert!(u.is_full());
@@ -163,7 +163,7 @@ fn as_bbox_and_as_tree() {
 	assert!(cb.as_bbox().is_some());
 	assert!(cb.as_tree().is_none());
 
-	let ct = TileCover::from(TileQuadtree::new_empty(2));
+	let ct = TileCover::from(TileQuadtree::new_empty(2).unwrap());
 	assert!(ct.as_bbox().is_none());
 	assert!(ct.as_tree().is_some());
 }
@@ -216,9 +216,9 @@ fn to_geo_bbox_nonempty() {
 
 #[test]
 fn is_full_tree_variant() {
-	let c = TileCover::from(TileQuadtree::new_full(3));
+	let c = TileCover::from(TileQuadtree::new_full(3).unwrap());
 	assert!(c.is_full());
-	let c2 = TileCover::from(TileQuadtree::new_empty(3));
+	let c2 = TileCover::from(TileQuadtree::new_empty(3).unwrap());
 	assert!(!c2.is_full());
 }
 
@@ -236,7 +236,7 @@ fn intersects_bbox_tree_variant() {
 #[test]
 fn includes_coord_level_mismatch_tree_errors() {
 	// Tree variant errors on zoom mismatch.
-	let c = TileCover::from(TileQuadtree::new_full(4));
+	let c = TileCover::from(TileQuadtree::new_full(4).unwrap());
 	assert!(c.includes_coord(&coord(5, 0, 0)).is_err());
 }
 
@@ -244,13 +244,13 @@ fn includes_coord_level_mismatch_tree_errors() {
 fn includes_coord_level_mismatch_bbox_returns_false() {
 	// Bbox variant silently returns Ok(false) for level mismatch.
 	let c = TileCover::from(bbox(4, 0, 0, 15, 15));
-	assert!(!c.includes_coord(&coord(5, 0, 0)).unwrap());
+	assert!(c.includes_coord(&coord(5, 0, 0)).is_err());
 }
 
 #[test]
 fn includes_bbox_level_mismatch_tree_errors() {
 	// Tree variant errors on zoom mismatch.
-	let c = TileCover::from(TileQuadtree::new_full(4));
+	let c = TileCover::from(TileQuadtree::new_full(4).unwrap());
 	assert!(c.includes_bbox(&bbox(5, 0, 0, 15, 15)).is_err());
 }
 
@@ -258,7 +258,7 @@ fn includes_bbox_level_mismatch_tree_errors() {
 fn includes_bbox_level_mismatch_bbox_returns_false() {
 	// Bbox variant silently returns Ok(false) for level mismatch.
 	let c = TileCover::from(bbox(4, 0, 0, 15, 15));
-	assert!(!c.includes_bbox(&bbox(5, 0, 0, 15, 15)).unwrap());
+	assert!(c.includes_bbox(&bbox(5, 0, 0, 15, 15)).is_err());
 }
 
 // --- mutation no-ops ---
@@ -318,7 +318,7 @@ fn display_bbox_variant() {
 
 #[test]
 fn display_tree_variant() {
-	let c = TileCover::from(TileQuadtree::new_full(3));
+	let c = TileCover::from(TileQuadtree::new_full(3).unwrap());
 	let s = format!("{c}");
 	assert!(s.contains("zoom=3"));
 }

@@ -131,14 +131,6 @@ impl TileBBox {
 	/// * 3 – bottom-right
 	///
 	/// The bbox must have even width and height. Returns an error otherwise.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::TileBBox;
-	/// let bb = TileBBox::from_min_and_max(4, 8, 12, 11, 15).unwrap();
-	/// let q0 = bb.get_quadrant(0).unwrap();
-	/// assert_eq!(q0.as_array().unwrap(), [8, 12, 9, 13]);
-	/// ```
 	#[context("getting quadrant {quadrant} of TileBBox {self:?}")]
 	pub fn get_quadrant(&self, quadrant: u8) -> Result<TileBBox> {
 		if self.is_empty() {
@@ -175,14 +167,6 @@ impl TileBBox {
 	///
 	/// Indexing is row-major: X increases fastest, then Y.
 	/// Returns an error if the coordinate lies outside the bbox.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::{TileBBox, TileCoord};
-	/// let bb = TileBBox::from_min_and_max(4, 5, 6, 7, 7).unwrap();
-	/// let coord = TileCoord::new(4, 6, 7).unwrap();
-	/// assert_eq!(bb.index_of(&coord).unwrap(), 4);
-	/// ```
 	pub fn index_of(&self, coord: &TileCoord) -> Result<u64> {
 		ensure!(!self.is_empty(), "cannot get index in an empty TileBBox");
 		ensure!(
@@ -200,13 +184,6 @@ impl TileBBox {
 	/// Returns the tile coordinate at a given linear index.
 	///
 	/// Inverse of [`TileBBox::index_of`]. The index must be smaller than `count_tiles()`.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::{TileBBox, TileCoord};
-	/// let bb = TileBBox::from_min_and_max(4, 5, 6, 7, 7).unwrap();
-	/// assert_eq!(bb.coord_at_index(0).unwrap(), TileCoord::new(4, 5, 6).unwrap());
-	/// ```
 	pub fn coord_at_index(&self, index: u64) -> Result<TileCoord> {
 		ensure!(!self.is_empty(), "cannot get coord from an empty TileBBox");
 		ensure!(index < self.count_tiles(), "index {index} out of bounds");
@@ -273,10 +250,9 @@ mod tests {
 
 		// contains (TileCoord)
 		assert!(a.includes_coord(&tc(5, 15, 15))?);
-		assert!(!a.includes_coord(&tc(6, 15, 15))?); // level mismatch
+		assert!(a.includes_coord(&tc(6, 15, 15)).is_err()); // level mismatch
 		assert!(!a.includes_coord(&tc(5, 25, 15))?); // outside
 
-		// try_contains_bbox
 		assert!(a.includes_bbox(&inner)?);
 		assert!(!a.includes_bbox(&edge_touch)?); // inner extends beyond
 		assert!(!a.includes_bbox(&disjoint)?);

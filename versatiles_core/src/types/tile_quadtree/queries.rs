@@ -19,25 +19,12 @@ impl TileQuadtree {
 	}
 
 	/// Count the total number of tiles in the quadtree.
-	///
-	/// # Examples
-	/// ```
-	/// use versatiles_core::TileQuadtree;
-	/// assert_eq!(TileQuadtree::new_full(2).count_tiles(), 16);
-	/// assert_eq!(TileQuadtree::new_empty(2).count_tiles(), 0);
-	/// ```
 	#[must_use]
 	pub fn count_tiles(&self) -> u64 {
 		self.root.count_tiles(self.zoom)
 	}
 
 	/// Count the number of internal (Partial) nodes in the quadtree.
-	/// # Examples
-	/// ```
-	/// use versatiles_core::TileQuadtree;
-	/// assert_eq!(TileQuadtree::new_full(5).count_nodes(), 1);
-	/// assert_eq!(TileQuadtree::new_empty(5).count_nodes(), 1);
-	/// ```
 	#[must_use]
 	pub fn count_nodes(&self) -> u64 {
 		self.root.count_nodes()

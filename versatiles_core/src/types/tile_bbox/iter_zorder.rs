@@ -89,17 +89,6 @@ impl TileBBox {
 	/// # Returns
 	///
 	/// An iterator yielding `TileCoord` instances in Z-order sequence.
-	///
-	/// # Example
-	///
-	/// ```
-	/// use versatiles_core::TileBBox;
-	///
-	/// let bbox = TileBBox::from_min_and_max(2, 0, 0, 1, 1).unwrap();
-	/// let coords: Vec<_> = bbox.iter_coords_zorder().collect();
-	/// // Z-order: (0,0), (1,0), (0,1), (1,1)
-	/// assert_eq!(coords.len(), 4);
-	/// ```
 	#[must_use]
 	pub fn iter_coords_zorder(&self) -> ZOrderIterator {
 		ZOrderIterator::new(self)

@@ -4,6 +4,10 @@ use crate::{GeoBBox, TileBBox, TileCoord, TilePyramid};
 use anyhow::Result;
 use rstest::rstest;
 
+fn tc(z: u8, x: u32, y: u32) -> TileCoord {
+	TileCoord::new(z, x, y).unwrap()
+}
+
 #[rstest]
 #[case((4, 5, 12, 5, 12), 1)]
 #[case((4, 5, 12, 7, 15), 12)]
@@ -110,10 +114,10 @@ fn iter_coords() -> Result<()> {
 	let bbox = TileBBox::from_min_and_max(16, 1, 5, 2, 6)?;
 	let vec: Vec<TileCoord> = bbox.iter_coords().collect();
 	assert_eq!(vec.len(), 4);
-	assert_eq!(vec[0], TileCoord::new(16, 1, 5)?);
-	assert_eq!(vec[1], TileCoord::new(16, 2, 5)?);
-	assert_eq!(vec[2], TileCoord::new(16, 1, 6)?);
-	assert_eq!(vec[3], TileCoord::new(16, 2, 6)?);
+	assert_eq!(vec[0], tc(16, 1, 5));
+	assert_eq!(vec[1], tc(16, 2, 5));
+	assert_eq!(vec[2], tc(16, 1, 6));
+	assert_eq!(vec[3], tc(16, 2, 6));
 	Ok(())
 }
 
@@ -259,7 +263,7 @@ fn get_tile_index_cases(
 	let (l, x0, y0, x1, y1) = bbox;
 	let bbox = TileBBox::from_min_and_max(l, x0, y0, x1, y1)?;
 	let (cl, cx, cy) = coord;
-	let tc = TileCoord::new(cl, cx, cy)?;
+	let tc = tc(cl, cx, cy);
 	assert_eq!(bbox.index_of(&tc)?, expected);
 	Ok(())
 }
@@ -278,9 +282,9 @@ fn test_as_geo_bbox() -> Result<()> {
 #[test]
 fn test_contains() -> Result<()> {
 	let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12)?;
-	assert!(bbox.includes_coord(&TileCoord::new(4, 6, 11)?)?);
-	assert!(!bbox.includes_coord(&TileCoord::new(4, 4, 9)?)?);
-	assert!(!bbox.includes_coord(&TileCoord::new(5, 6, 11)?)?);
+	assert!(bbox.includes_coord(&tc(4, 6, 11))?);
+	assert!(!bbox.includes_coord(&tc(4, 4, 9))?);
+	assert!(bbox.includes_coord(&tc(5, 6, 11)).is_err()); // level mismatch
 	Ok(())
 }
 
@@ -385,16 +389,16 @@ fn test_include() -> Result<()> {
 #[test]
 fn test_include_coord() -> Result<()> {
 	let mut bbox = TileBBox::new_empty(6)?;
-	let coord = TileCoord::new(6, 5, 10)?;
+	let coord = tc(6, 5, 10);
 	bbox.include_coord(&coord)?;
 	assert_eq!(bbox, TileBBox::from_min_and_max(6, 5, 10, 5, 10)?);
 
-	let coord = TileCoord::new(6, 15, 20)?;
+	let coord = tc(6, 15, 20);
 	bbox.include_coord(&coord)?;
 	assert_eq!(bbox, TileBBox::from_min_and_max(6, 5, 10, 15, 20)?);
 
 	// Attempt to include a coordinate with a different zoom level
-	let coord_invalid = TileCoord::new(5, 10, 15)?;
+	let coord_invalid = tc(5, 10, 15);
 	let result = bbox.include_coord(&coord_invalid);
 	assert!(result.is_err());
 
@@ -485,19 +489,19 @@ fn should_correctly_determine_bbox_overlap() -> Result<()> {
 fn should_get_correct_tile_index() -> Result<()> {
 	let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12)?;
 
-	assert_eq!(bbox.index_of(&TileCoord::new(4, 5, 10)?)?, 0);
-	assert_eq!(bbox.index_of(&TileCoord::new(4, 6, 10)?)?, 1);
-	assert_eq!(bbox.index_of(&TileCoord::new(4, 7, 10)?)?, 2);
-	assert_eq!(bbox.index_of(&TileCoord::new(4, 5, 11)?)?, 3);
-	assert_eq!(bbox.index_of(&TileCoord::new(4, 7, 12)?)?, 8);
+	assert_eq!(bbox.index_of(&tc(4, 5, 10))?, 0);
+	assert_eq!(bbox.index_of(&tc(4, 6, 10))?, 1);
+	assert_eq!(bbox.index_of(&tc(4, 7, 10))?, 2);
+	assert_eq!(bbox.index_of(&tc(4, 5, 11))?, 3);
+	assert_eq!(bbox.index_of(&tc(4, 7, 12))?, 8);
 
 	// Attempt to get index of a coordinate outside the bounding box
-	let coord_outside = TileCoord::new(4, 4, 9)?;
+	let coord_outside = tc(4, 4, 9);
 	let result = bbox.index_of(&coord_outside);
 	assert!(result.is_err());
 
 	// Attempt to get index with mismatched zoom level
-	let coord_diff_level = TileCoord::new(5, 5, 10)?;
+	let coord_diff_level = tc(5, 5, 10);
 	let result = bbox.index_of(&coord_diff_level);
 	assert!(result.is_err());
 
@@ -513,7 +517,7 @@ fn should_get_correct_tile_index() -> Result<()> {
 fn get_coord_by_index_cases(#[case] index: u64, #[case] coord: (u8, u32, u32)) -> Result<()> {
 	let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12)?;
 	let (l, x, y) = coord;
-	assert_eq!(bbox.coord_at_index(index)?, TileCoord::new(l, x, y)?);
+	assert_eq!(bbox.coord_at_index(index)?, tc(l, x, y));
 	Ok(())
 }
 
@@ -543,12 +547,12 @@ fn should_convert_to_geo_bbox_correctly() -> Result<()> {
 #[test]
 fn should_determine_contains3_correctly() -> Result<()> {
 	let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12)?;
-	let valid_coord = TileCoord::new(4, 6, 11)?;
-	let invalid_coord_zoom = TileCoord::new(5, 6, 11)?;
-	let invalid_coord_outside = TileCoord::new(4, 4, 9)?;
+	let valid_coord = tc(4, 6, 11);
+	let invalid_coord_zoom = tc(5, 6, 11);
+	let invalid_coord_outside = tc(4, 4, 9);
 
 	assert!(bbox.includes_coord(&valid_coord)?);
-	assert!(!bbox.includes_coord(&invalid_coord_zoom)?);
+	assert!(bbox.includes_coord(&invalid_coord_zoom).is_err());
 	assert!(!bbox.includes_coord(&invalid_coord_outside)?);
 
 	Ok(())
@@ -558,12 +562,7 @@ fn should_determine_contains3_correctly() -> Result<()> {
 fn should_iterate_over_coords_correctly() -> Result<()> {
 	let bbox = TileBBox::from_min_and_max(4, 5, 10, 6, 11)?;
 	let coords: Vec<TileCoord> = bbox.iter_coords().collect();
-	let expected_coords = vec![
-		TileCoord::new(4, 5, 10)?,
-		TileCoord::new(4, 6, 10)?,
-		TileCoord::new(4, 5, 11)?,
-		TileCoord::new(4, 6, 11)?,
-	];
+	let expected_coords = vec![tc(4, 5, 10), tc(4, 6, 10), tc(4, 5, 11), tc(4, 6, 11)];
 	assert_eq!(coords, expected_coords);
 
 	Ok(())
@@ -573,12 +572,7 @@ fn should_iterate_over_coords_correctly() -> Result<()> {
 fn should_iterate_over_coords_correctly_when_consumed() -> Result<()> {
 	let bbox = TileBBox::from_min_and_max(4, 5, 10, 6, 11)?;
 	let coords: Vec<TileCoord> = bbox.into_iter_coords().collect();
-	let expected_coords = vec![
-		TileCoord::new(4, 5, 10)?,
-		TileCoord::new(4, 6, 10)?,
-		TileCoord::new(4, 5, 11)?,
-		TileCoord::new(4, 6, 11)?,
-	];
+	let expected_coords = vec![tc(4, 5, 10), tc(4, 6, 10), tc(4, 5, 11), tc(4, 6, 11)];
 	assert_eq!(coords, expected_coords);
 
 	Ok(())
@@ -857,8 +851,8 @@ fn corners_and_dimensions(
 	#[case] height: u32,
 ) -> Result<()> {
 	let bbox = TileBBox::from_min_and_max(level, x0, y0, x1, y1)?;
-	assert_eq!(bbox.min_corner()?, TileCoord::new(level, x0, y0)?);
-	assert_eq!(bbox.max_corner()?, TileCoord::new(level, x1, y1)?);
+	assert_eq!(bbox.min_corner()?, tc(level, x0, y0));
+	assert_eq!(bbox.max_corner()?, tc(level, x1, y1));
 	assert_eq!(bbox.dimensions(), (width, height));
 	Ok(())
 }

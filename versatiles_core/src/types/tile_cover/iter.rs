@@ -23,10 +23,7 @@ impl TileCover {
 	pub fn iter_bbox_grid(&self, size: u32) -> impl Iterator<Item = TileBBox> + Send {
 		let vec: Vec<TileBBox> = match self {
 			TileCover::Bbox(b) => b.iter_bbox_grid(size).collect(),
-			TileCover::Tree(t) => t
-				.iter_bbox_grid(size)
-				.filter_map(|t| t.bounds().map(|b| b.rounded(size)))
-				.collect(),
+			TileCover::Tree(t) => t.iter_bbox_grid(size).filter_map(|b| b.bounds()).collect(),
 		};
 		vec.into_iter()
 	}

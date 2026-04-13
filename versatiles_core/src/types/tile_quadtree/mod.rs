@@ -41,10 +41,10 @@ pub(crate) struct BBox {
 /// ```
 /// use versatiles_core::TileQuadtree;
 ///
-/// let tree = TileQuadtree::new_empty(5);
+/// let tree = TileQuadtree::new_empty(5).unwrap();
 /// assert!(tree.is_empty());
 ///
-/// let full = TileQuadtree::new_full(3);
+/// let full = TileQuadtree::new_full(3).unwrap();
 /// assert!(full.is_full());
 /// assert_eq!(full.count_tiles(), 64); // 8×8 tiles at zoom 3
 /// ```

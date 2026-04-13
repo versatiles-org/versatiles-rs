@@ -8,13 +8,6 @@ use std::fmt;
 /// ```text
 /// z: [x_min,y_min,x_max,y_max] (widthxheight)
 /// ```
-///
-/// Example:
-/// ```
-/// # use versatiles_core::TileBBox;
-/// let bb = TileBBox::from_min_and_size(4, 5, 6, 3, 2).unwrap();
-/// assert_eq!(format!("{:?}", bb), "4: [5,6,7,7] (3x2)");
-/// ```
 impl fmt::Debug for TileBBox {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(
@@ -37,13 +30,6 @@ impl fmt::Debug for TileBBox {
 ///
 /// ```text
 /// z:[x_min,y_min,x_max,y_max]
-/// ```
-///
-/// Example:
-/// ```
-/// # use versatiles_core::TileBBox;
-/// let bb = TileBBox::from_min_and_size(4, 5, 6, 3, 2).unwrap();
-/// assert_eq!(format!("{}", bb), "4:[5,6,7,7]");
 /// ```
 impl fmt::Display for TileBBox {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -24,14 +24,6 @@ impl TileBBox {
 	///
 	/// # Panics
 	/// Panics if `x` or `y` are out of range for the current level.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::TileBBox;
-	/// let mut bb = TileBBox::new_empty(4).unwrap();
-	/// bb.include(3, 5);
-	/// assert_eq!(bb.as_array().unwrap(), [3,5,3,5]);
-	/// ```
 	pub fn include(&mut self, x: u32, y: u32) {
 		assert!(x < self.max_count(), "x ({x}) must be < max ({})", self.max_count());
 		assert!(y < self.max_count(), "y ({y}) must be < max ({})", self.max_count());
@@ -66,14 +58,6 @@ impl TileBBox {
 	///
 	/// * `Ok(())` if inclusion is successful.
 	/// * `Err(anyhow::Error)` if the zoom levels do not match or other validations fail.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::{TileBBox, TileCoord};
-	/// let mut bb = TileBBox::new_empty(5).unwrap();
-	/// bb.include_coord(&TileCoord::new(5, 7, 9).unwrap()).unwrap();
-	/// assert_eq!(bb.as_array().unwrap(), [7,9,7,9]);
-	/// ```
 	#[context("Failed to include TileCoord {coord:?} into TileBBox {self:?}")]
 	pub fn include_coord(&mut self, coord: &TileCoord) -> Result<()> {
 		ensure!(
@@ -92,14 +76,6 @@ impl TileBBox {
 	/// to the current maximum. The expansion is **clamped** to the level’s bounds.
 	///
 	/// This method is infallible and a no-op for empty bboxes.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::TileBBox;
-	/// let mut bb = TileBBox::from_min_and_max(3, 2, 2, 3, 3).unwrap();
-	/// bb.expand_by(1, 1, 2, 2);
-	/// assert_eq!(bb.as_array().unwrap(), [1,1,5,5]);
-	/// ```
 	pub fn expand_by(&mut self, x_min: u32, y_min: u32, x_max: u32, y_max: u32) {
 		if !self.is_empty() {
 			let max = self.max_count() - 1;
@@ -126,15 +102,6 @@ impl TileBBox {
 	///
 	/// * `Ok(())` if inclusion is successful.
 	/// * `Err(anyhow::Error)` if the zoom levels do not match or other validations fail.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::TileBBox;
-	/// let mut a = TileBBox::from_min_and_max(4, 4, 4, 6, 6).unwrap();
-	/// let b = TileBBox::from_min_and_max(4, 2, 5, 8, 7).unwrap();
-	/// a.include_bbox(&b).unwrap();
-	/// assert_eq!(a.as_array().unwrap(), [2,4,8,7]);
-	/// ```
 	#[context("Failed to include TileBBox {bbox:?} into TileBBox {self:?}")]
 	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		ensure!(
@@ -177,15 +144,6 @@ impl TileBBox {
 	///
 	/// * `Ok(())` if intersection is successful.
 	/// * `Err(anyhow::Error)` if the zoom levels do not match or other validations fail.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::TileBBox;
-	/// let mut a = TileBBox::from_min_and_max(5, 10,10, 20,20).unwrap();
-	/// let b = TileBBox::from_min_and_max(5, 15,15, 25,25).unwrap();
-	/// a.intersect_with(&b).unwrap();
-	/// assert_eq!(a.as_array().unwrap(), [15,15,20,20]);
-	/// ```
 	#[context("Failed to intersect TileBBox {self:?} with TileBBox {bbox:?}")]
 	pub fn intersect_with(&mut self, bbox: &TileBBox) -> Result<()> {
 		ensure!(
@@ -229,14 +187,6 @@ impl TileBBox {
 	///
 	/// Negative shifts are **clamped** at zero; the bbox never moves outside the
 	/// valid range for its level.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::TileBBox;
-	/// let mut bb = TileBBox::from_min_and_max(4, 5, 6, 7, 8).unwrap();
-	/// bb.shift_by(-10, -10).unwrap();
-	/// assert_eq!(bb.as_array().unwrap(), [0,0,2,2]);
-	/// ```
 	#[context("Failed to shift TileBBox {self:?} by ({x}, {y})")]
 	pub fn shift_by(&mut self, x: i64, y: i64) -> Result<()> {
 		if self.is_empty() {

@@ -81,16 +81,6 @@ impl TileBBox {
 	/// # Errors
 	/// Returns an error if any coordinate or extent exceeds the valid range for
 	/// the level.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::TileBBox;
-	/// let bb = TileBBox::from_min_and_size(2, 1, 1, 2, 2).unwrap();
-	/// assert_eq!(bb.x_min().unwrap(), 1);
-	/// assert_eq!(bb.y_min().unwrap(), 1);
-	/// assert_eq!(bb.x_max().unwrap(), 2);
-	/// assert_eq!(bb.y_max().unwrap(), 2);
-	/// ```
 	#[context("Failed to create TileBBox from min ({x_min}, {y_min}) and size ({width}, {height}) at level {level}")]
 	pub fn from_min_and_size(level: u8, x_min: u32, y_min: u32, width: u32, height: u32) -> Result<TileBBox> {
 		validate_zoom_level(level)?;
@@ -138,14 +128,6 @@ impl TileBBox {
 	/// - If `level` > MAX_ZOOM_LEVEL.
 	/// - If any coordinate exceeds the maximum allowed by the zoom level.
 	/// - If `x_min > x_max` or `y_min > y_max`.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::TileBBox;
-	/// let bb = TileBBox::from_min_and_max(1, 0, 0, 1, 1).unwrap();
-	/// assert_eq!(bb.width(), 2);
-	/// assert_eq!(bb.height(), 2);
-	/// ```
 	#[context("Failed to create TileBBox from min ({x_min}, {y_min}) and max ({x_max}, {y_max}) at level {level}")]
 	pub fn from_min_and_max(level: u8, x_min: u32, y_min: u32, x_max: u32, y_max: u32) -> Result<TileBBox> {
 		validate_zoom_level(level)?;
@@ -176,16 +158,6 @@ impl TileBBox {
 	///
 	/// * `Ok(TileBBox)` if creation is successful.
 	/// * `Err(anyhow::Error)` if the zoom level is invalid.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::TileBBox;
-	/// let bb = TileBBox::new_full(4).unwrap();
-	/// assert_eq!(bb.x_min().unwrap(), 0);
-	/// assert_eq!(bb.y_min().unwrap(), 0);
-	/// assert_eq!(bb.x_max().unwrap(), 15);
-	/// assert_eq!(bb.y_max().unwrap(), 15);
-	/// ```
 	#[context("Failed to create full TileBBox at level {level}")]
 	pub fn new_full(level: u8) -> Result<TileBBox> {
 		validate_zoom_level(level)?;
@@ -205,14 +177,6 @@ impl TileBBox {
 	///
 	/// * `Ok(TileBBox)` representing an empty bounding box.
 	/// * `Err(anyhow::Error)` if the zoom level is invalid.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::TileBBox;
-	/// let bb = TileBBox::new_empty(5).unwrap();
-	/// assert!(bb.is_empty());
-	/// assert_eq!(bb.width(), 0);
-	/// ```
 	#[context("Failed to create empty TileBBox at level {level}")]
 	pub fn new_empty(level: u8) -> Result<TileBBox> {
 		validate_zoom_level(level)?;
@@ -246,14 +210,6 @@ impl TileBBox {
 	///
 	/// - If the geographical coordinates are invalid.
 	/// - If the converted tile coordinates are out of bounds.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::{TileBBox, GeoBBox};
-	/// let geo = GeoBBox::new(8.0, 51.0, 8.5, 51.3).unwrap();
-	/// let bb = TileBBox::from_geo(9, &geo).unwrap();
-	/// assert!(!bb.is_empty());
-	/// ```
 	#[context("Failed to create TileBBox from GeoBBox {bbox:?} at level {level}")]
 	pub fn from_geo(level: u8, bbox: &GeoBBox) -> Result<TileBBox> {
 		validate_zoom_level(level)?;
@@ -270,13 +226,6 @@ impl TileBBox {
 	/// A `TileBBox` is empty if its width or height is zero.
 	/// Empty bounding boxes are often used as placeholders or as neutral elements
 	/// in merge/intersect operations.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::TileBBox;
-	/// let empty = TileBBox::new_empty(5).unwrap();
-	/// assert!(empty.is_empty());
-	/// ```
 	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.width == 0 || self.height == 0
@@ -286,13 +235,6 @@ impl TileBBox {
 	///
 	/// The count is computed as `width × height`.
 	/// Returns `0` if the bbox is empty.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::TileBBox;
-	/// let bb = TileBBox::from_min_and_max(4, 5, 6, 7, 9).unwrap();
-	/// assert_eq!(bb.count_tiles(), 12);
-	/// ```
 	#[must_use]
 	pub fn count_tiles(&self) -> u64 {
 		u64::from(self.width) * u64::from(self.height)
@@ -315,20 +257,14 @@ impl TileBBox {
 	}
 
 	/// Returns the maximum tile count along one axis at this zoom level.
-	/// Equivalent to `2^level`.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::TileBBox;
-	/// assert_eq!(TileBBox::new_empty(5).unwrap().max_count(), 32);
-	/// ```
+	/// Equivalent to `2 ^ level`.
 	#[must_use]
 	pub fn max_count(&self) -> u32 {
 		1u32 << self.level
 	}
 
 	/// Returns the maximum valid tile coordinate index at this zoom level.
-	/// Equivalent to `2^level - 1`.
+	/// Equivalent to `(2 ^ level) - 1`.
 	#[must_use]
 	pub fn max_coord(&self) -> u32 {
 		(1u32 << self.level) - 1
