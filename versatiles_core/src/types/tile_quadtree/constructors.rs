@@ -1,7 +1,7 @@
 //! Constructors for [`TileQuadtree`].
 
 use super::{BBox, Node, TileQuadtree};
-use crate::{GeoBBox, TileBBox, validate_zoom_level};
+use crate::{GeoBBox, TileBBox, TileCoord, validate_zoom_level};
 use anyhow::{Result, ensure};
 
 impl TileQuadtree {
@@ -114,7 +114,7 @@ fn build_node(depth: u8, x_off: u64, y_off: u64, size: u64, bbox: BBox) -> Node 
 }
 
 /// Validate that a TileCoord belongs to the given zoom level.
-pub(crate) fn check_coord_zoom(coord: crate::TileCoord, zoom: u8) -> Result<()> {
+pub(crate) fn check_coord_zoom(coord: &TileCoord, zoom: u8) -> Result<()> {
 	ensure!(
 		coord.level == zoom,
 		"TileCoord level {} does not match quadtree zoom {}",

@@ -57,8 +57,8 @@ fn bounds_empty_and_nonempty() {
 #[test]
 fn contains_tile() {
 	let c = TileCover::from(bbox(5, 3, 4, 10, 15));
-	assert!(c.includes_coord(coord(5, 5, 7)).unwrap());
-	assert!(!c.includes_coord(coord(5, 0, 0)).unwrap());
+	assert!(c.includes_coord(&coord(5, 5, 7)).unwrap());
+	assert!(!c.includes_coord(&coord(5, 0, 0)).unwrap());
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn intersects_bbox() {
 #[test]
 fn insert_tile_expands_bbox() {
 	let mut c = TileCover::new_empty(4).unwrap();
-	c.include_coord(coord(4, 3, 3)).unwrap();
+	c.include_coord(&coord(4, 3, 3)).unwrap();
 	assert!(!c.is_empty());
 	assert_eq!(c.count_tiles(), 1);
 }
@@ -96,7 +96,7 @@ fn insert_bbox() {
 fn remove_tile_upgrades_to_tree() {
 	let mut c = TileCover::from(bbox(3, 0, 0, 3, 3)); // 16 tiles
 	assert!(matches!(c, TileCover::Bbox(_)));
-	c.remove_coord(coord(3, 0, 0)).unwrap();
+	c.remove_coord(&coord(3, 0, 0)).unwrap();
 	assert!(matches!(c, TileCover::Tree(_)));
 	assert_eq!(c.count_tiles(), 15);
 }
@@ -237,14 +237,14 @@ fn intersects_bbox_tree_variant() {
 fn includes_coord_level_mismatch_tree_errors() {
 	// Tree variant errors on zoom mismatch.
 	let c = TileCover::from(TileQuadtree::new_full(4));
-	assert!(c.includes_coord(coord(5, 0, 0)).is_err());
+	assert!(c.includes_coord(&coord(5, 0, 0)).is_err());
 }
 
 #[test]
 fn includes_coord_level_mismatch_bbox_returns_false() {
 	// Bbox variant silently returns Ok(false) for level mismatch.
 	let c = TileCover::from(bbox(4, 0, 0, 15, 15));
-	assert!(!c.includes_coord(coord(5, 0, 0)).unwrap());
+	assert!(!c.includes_coord(&coord(5, 0, 0)).unwrap());
 }
 
 #[test]
@@ -267,7 +267,7 @@ fn includes_bbox_level_mismatch_bbox_returns_false() {
 fn include_coord_noop_when_already_covered() {
 	let mut c = TileCover::from(bbox(4, 0, 0, 15, 15));
 	// Already covered; stays Bbox and count unchanged.
-	c.include_coord(coord(4, 5, 5)).unwrap();
+	c.include_coord(&coord(4, 5, 5)).unwrap();
 	assert!(matches!(c, TileCover::Bbox(_)));
 	assert_eq!(c.count_tiles(), 256);
 }
@@ -284,7 +284,7 @@ fn include_bbox_noop_when_already_covered() {
 fn remove_coord_noop_when_not_in_bbox() {
 	let mut c = TileCover::from(bbox(4, 5, 5, 10, 10));
 	// coord outside bbox → no-op, stays Bbox
-	c.remove_coord(coord(4, 0, 0)).unwrap();
+	c.remove_coord(&coord(4, 0, 0)).unwrap();
 	assert!(matches!(c, TileCover::Bbox(_)));
 }
 

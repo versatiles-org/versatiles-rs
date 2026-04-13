@@ -99,12 +99,12 @@ fn bounds_partial() -> Result<()> {
 #[test]
 fn contains_tile() -> Result<()> {
 	let t = TileQuadtree::from_bbox(&bbox(3, 2, 2, 4, 4))?;
-	assert!(t.includes_coord(coord(3, 2, 2))?);
-	assert!(t.includes_coord(coord(3, 4, 4))?);
-	assert!(!t.includes_coord(coord(3, 0, 0))?);
-	assert!(!t.includes_coord(coord(3, 5, 5))?);
+	assert!(t.includes_coord(&coord(3, 2, 2))?);
+	assert!(t.includes_coord(&coord(3, 4, 4))?);
+	assert!(!t.includes_coord(&coord(3, 0, 0))?);
+	assert!(!t.includes_coord(&coord(3, 5, 5))?);
 	// Wrong zoom
-	assert!(t.includes_coord(coord(4, 2, 2)).is_err());
+	assert!(t.includes_coord(&coord(4, 2, 2)).is_err());
 	Ok(())
 }
 
@@ -139,10 +139,10 @@ fn intersects() -> Result<()> {
 #[test]
 fn insert_tile() -> Result<()> {
 	let mut t = TileQuadtree::new_empty(3);
-	t.include_coord(coord(3, 0, 0))?;
+	t.include_coord(&coord(3, 0, 0))?;
 	assert_eq!(t.count_tiles(), 1);
-	assert!(t.includes_coord(coord(3, 0, 0))?);
-	assert!(!t.includes_coord(coord(3, 1, 0))?);
+	assert!(t.includes_coord(&coord(3, 0, 0))?);
+	assert!(!t.includes_coord(&coord(3, 1, 0))?);
 	Ok(())
 }
 
@@ -150,10 +150,10 @@ fn insert_tile() -> Result<()> {
 fn insert_tile_collapses_to_full() -> Result<()> {
 	// At zoom 1, there are only 4 tiles. Insert all 4.
 	let mut t = TileQuadtree::new_empty(1);
-	t.include_coord(coord(1, 0, 0))?;
-	t.include_coord(coord(1, 1, 0))?;
-	t.include_coord(coord(1, 0, 1))?;
-	t.include_coord(coord(1, 1, 1))?;
+	t.include_coord(&coord(1, 0, 0))?;
+	t.include_coord(&coord(1, 1, 0))?;
+	t.include_coord(&coord(1, 0, 1))?;
+	t.include_coord(&coord(1, 1, 1))?;
 	assert!(t.is_full());
 	Ok(())
 }
@@ -169,11 +169,11 @@ fn insert_bbox() -> Result<()> {
 #[test]
 fn remove_tile() -> Result<()> {
 	let mut t = TileQuadtree::new_full(2);
-	t.remove_coord(coord(2, 0, 0))?;
+	t.remove_coord(&coord(2, 0, 0))?;
 	assert!(!t.is_full());
 	assert_eq!(t.count_tiles(), 15);
-	assert!(!t.includes_coord(coord(2, 0, 0))?);
-	assert!(t.includes_coord(coord(2, 1, 0))?);
+	assert!(!t.includes_coord(&coord(2, 0, 0))?);
+	assert!(t.includes_coord(&coord(2, 1, 0))?);
 	Ok(())
 }
 
@@ -360,7 +360,7 @@ fn count_nodes_empty_and_full() {
 fn count_nodes_partial_tree() -> Result<()> {
 	// A tree with a partial subtree has more than 1 node.
 	let mut t = TileQuadtree::new_empty(3);
-	t.include_coord(coord(3, 0, 0))?;
+	t.include_coord(&coord(3, 0, 0))?;
 	assert!(t.count_nodes() > 1, "partial tree should have more than one node");
 	Ok(())
 }
@@ -394,7 +394,7 @@ fn zoom_mismatch_includes_bbox() {
 #[test]
 fn zoom_mismatch_include_coord() {
 	let mut t = TileQuadtree::new_empty(3);
-	assert!(t.include_coord(coord(4, 0, 0)).is_err());
+	assert!(t.include_coord(&coord(4, 0, 0)).is_err());
 }
 
 #[test]
@@ -406,7 +406,7 @@ fn zoom_mismatch_include_bbox() {
 #[test]
 fn zoom_mismatch_remove_coord() {
 	let mut t = TileQuadtree::new_full(3);
-	assert!(t.remove_coord(coord(4, 0, 0)).is_err());
+	assert!(t.remove_coord(&coord(4, 0, 0)).is_err());
 }
 
 #[test]

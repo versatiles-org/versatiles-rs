@@ -70,7 +70,7 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's level doesn't match this quadtree's zoom.
-	pub fn includes_coord(&self, coord: TileCoord) -> Result<bool> {
+	pub fn includes_coord(&self, coord: &TileCoord) -> Result<bool> {
 		check_coord_zoom(coord, self.zoom)?;
 		let size = 1u64 << self.zoom;
 		Ok(self

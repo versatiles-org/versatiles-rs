@@ -13,9 +13,15 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's level does not match this cover's level.
-	pub fn include_coord(&mut self, coord: TileCoord) -> Result<()> {
-		if matches!(self, TileCover::Bbox(b) if b.includes_coord(&coord)) {
-			return Ok(());
+	pub fn include_coord(&mut self, coord: &TileCoord) -> Result<()> {
+		if let TileCover::Bbox(b) = self {
+			if b.is_empty() {
+				return b.include_coord(coord);
+			}
+			if b.includes_coord(coord) {
+				return Ok(());
+			}
+			self.upgrade_to_tree();
 		}
 		self.as_tree_mut().include_coord(coord)
 	}
@@ -28,8 +34,14 @@ impl TileCover {
 	/// # Errors
 	/// Returns an error if `bbox`'s level does not match this cover's level.
 	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
-		if matches!(self, TileCover::Bbox(b) if b.includes_bbox(bbox)) {
-			return Ok(());
+		if let TileCover::Bbox(b) = self {
+			if b.is_empty() {
+				return b.include_bbox(bbox);
+			}
+			if b.includes_bbox(bbox) {
+				return Ok(());
+			}
+			self.upgrade_to_tree();
 		}
 		self.as_tree_mut().include_bbox(bbox)
 	}
@@ -41,9 +53,12 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's level does not match this cover's level.
-	pub fn remove_coord(&mut self, coord: TileCoord) -> Result<()> {
-		if matches!(self, TileCover::Bbox(b) if !b.includes_coord(&coord)) {
-			return Ok(());
+	pub fn remove_coord(&mut self, coord: &TileCoord) -> Result<()> {
+		if let TileCover::Bbox(b) = self {
+			if b.is_empty() || !b.includes_coord(coord) {
+				return Ok(());
+			}
+			self.upgrade_to_tree();
 		}
 		self.as_tree_mut().remove_coord(coord)
 	}
@@ -56,8 +71,11 @@ impl TileCover {
 	/// # Errors
 	/// Returns an error if `bbox`'s level does not match this cover's level.
 	pub fn remove_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
-		if matches!(self, TileCover::Bbox(b) if !b.intersects_bbox(bbox)) {
-			return Ok(());
+		if let TileCover::Bbox(b) = self {
+			if b.is_empty() || !b.intersects_bbox(bbox) {
+				return Ok(());
+			}
+			self.upgrade_to_tree();
 		}
 		self.as_tree_mut().remove_bbox(bbox)
 	}

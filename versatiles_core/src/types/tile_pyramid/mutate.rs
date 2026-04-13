@@ -23,7 +23,7 @@ impl TilePyramid {
 
 	/// Includes a single tile coordinate (expands coverage at its zoom level).
 	pub fn include_coord(&mut self, coord: &TileCoord) {
-		self.levels[coord.level as usize].include_coord(*coord).unwrap();
+		self.levels[coord.level as usize].include_coord(coord).unwrap();
 	}
 
 	/// Includes all tiles in `bbox` (expands coverage at `bbox`'s zoom level).

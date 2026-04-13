@@ -40,7 +40,7 @@ impl TilePyramid {
 	#[must_use]
 	pub fn includes_coord(&self, coord: &TileCoord) -> bool {
 		if let Some(cover) = self.levels.get(coord.level as usize) {
-			cover.includes_coord(*coord).unwrap_or(false)
+			cover.includes_coord(coord).unwrap()
 		} else {
 			false
 		}
@@ -64,7 +64,7 @@ impl TilePyramid {
 		for cover_other in other.levels.iter().filter(|c| !c.is_empty()) {
 			if cover_other
 				.bounds()
-				.is_some_and(|bounds| !self.includes_bbox(&bounds).unwrap_or(false))
+				.is_some_and(|bounds| !self.includes_bbox(&bounds).unwrap())
 			{
 				return false;
 			}

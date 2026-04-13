@@ -70,9 +70,9 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's level does not match this cover's level.
-	pub fn includes_coord(&self, coord: TileCoord) -> Result<bool> {
+	pub fn includes_coord(&self, coord: &TileCoord) -> Result<bool> {
 		match self {
-			TileCover::Bbox(b) => Ok(b.includes_coord(&coord)),
+			TileCover::Bbox(b) => Ok(b.includes_coord(coord)),
 			TileCover::Tree(t) => t.includes_coord(coord),
 		}
 	}
