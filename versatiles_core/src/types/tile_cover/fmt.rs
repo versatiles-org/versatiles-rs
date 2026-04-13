@@ -29,11 +29,12 @@ impl PartialEq for TileCover {
 		match (self, other) {
 			(TileCover::Bbox(a), TileCover::Bbox(b)) => a == b,
 			(TileCover::Tree(a), TileCover::Tree(b)) => a == b,
-			// Mixed: convert both to trees for exact comparison.
-			_ => match (self.to_tree(), other.to_tree()) {
-				(Ok(a), Ok(b)) => a == b,
-				_ => false,
-			},
+			_ => {
+				if self.count_tiles() != other.count_tiles() {
+					return false;
+				}
+				self.bounds() == other.bounds()
+			}
 		}
 	}
 }

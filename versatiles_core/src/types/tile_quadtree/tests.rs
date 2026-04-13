@@ -34,7 +34,7 @@ fn new_empty_and_full() {
 #[test]
 fn from_bbox_empty() -> Result<()> {
 	let b = TileBBox::new_empty(5)?;
-	let t = TileQuadtree::from_bbox(&b)?;
+	let t = TileQuadtree::from_bbox(&b);
 	assert!(t.is_empty());
 	Ok(())
 }
@@ -42,7 +42,7 @@ fn from_bbox_empty() -> Result<()> {
 #[test]
 fn from_bbox_full() -> Result<()> {
 	let b = TileBBox::new_full(3)?;
-	let t = TileQuadtree::from_bbox(&b)?;
+	let t = TileQuadtree::from_bbox(&b);
 	assert!(t.is_full());
 	assert_eq!(t.count_tiles(), 64);
 	Ok(())
@@ -52,7 +52,7 @@ fn from_bbox_full() -> Result<()> {
 fn from_bbox_partial() -> Result<()> {
 	// z=2: 4×4 grid, bbox covers x=0..1, y=0..1 (2×2 = 4 tiles)
 	let b = bbox(2, 0, 0, 1, 1);
-	let t = TileQuadtree::from_bbox(&b)?;
+	let t = TileQuadtree::from_bbox(&b);
 	assert!(!t.is_empty());
 	assert!(!t.is_full());
 	assert_eq!(t.count_tiles(), 4);
@@ -90,7 +90,7 @@ fn bounds_empty_and_full() -> Result<()> {
 #[test]
 fn bounds_partial() -> Result<()> {
 	let b = bbox(4, 3, 5, 7, 9);
-	let t = TileQuadtree::from_bbox(&b)?;
+	let t = TileQuadtree::from_bbox(&b);
 	let bounds = t.bounds().unwrap();
 	assert_eq!(bounds, b);
 	Ok(())
@@ -98,7 +98,7 @@ fn bounds_partial() -> Result<()> {
 
 #[test]
 fn contains_tile() -> Result<()> {
-	let t = TileQuadtree::from_bbox(&bbox(3, 2, 2, 4, 4))?;
+	let t = TileQuadtree::from_bbox(&bbox(3, 2, 2, 4, 4));
 	assert!(t.includes_coord(&coord(3, 2, 2))?);
 	assert!(t.includes_coord(&coord(3, 4, 4))?);
 	assert!(!t.includes_coord(&coord(3, 0, 0))?);
@@ -114,7 +114,7 @@ fn contains_bbox() -> Result<()> {
 	assert!(full.includes_bbox(&TileBBox::new_full(3)?)?);
 	assert!(full.includes_bbox(&bbox(3, 0, 0, 3, 3))?);
 
-	let t = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3))?;
+	let t = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3));
 	assert!(t.includes_bbox(&bbox(3, 0, 0, 2, 2))?);
 	assert!(!t.includes_bbox(&TileBBox::new_full(3)?)?);
 	Ok(())
@@ -122,9 +122,9 @@ fn contains_bbox() -> Result<()> {
 
 #[test]
 fn intersects() -> Result<()> {
-	let a = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3))?;
-	let b = TileQuadtree::from_bbox(&bbox(3, 3, 3, 7, 7))?;
-	let c = TileQuadtree::from_bbox(&bbox(3, 4, 4, 7, 7))?;
+	let a = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3));
+	let b = TileQuadtree::from_bbox(&bbox(3, 3, 3, 7, 7));
+	let c = TileQuadtree::from_bbox(&bbox(3, 4, 4, 7, 7));
 	assert!(a.intersects_tree(&b)?);
 	assert!(!a.intersects_tree(&c)?);
 	assert!(a.intersects_tree(&TileQuadtree::new_full(3).unwrap())?);
@@ -192,8 +192,8 @@ fn remove_bbox() -> Result<()> {
 
 #[test]
 fn union() -> Result<()> {
-	let a = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 7))?;
-	let b = TileQuadtree::from_bbox(&bbox(3, 4, 0, 7, 7))?;
+	let a = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 7));
+	let b = TileQuadtree::from_bbox(&bbox(3, 4, 0, 7, 7));
 	let u = a.union(&b)?;
 	assert!(u.is_full());
 	Ok(())
@@ -201,8 +201,8 @@ fn union() -> Result<()> {
 
 #[test]
 fn intersection() -> Result<()> {
-	let a = TileQuadtree::from_bbox(&bbox(3, 0, 0, 5, 5))?;
-	let b = TileQuadtree::from_bbox(&bbox(3, 3, 3, 7, 7))?;
+	let a = TileQuadtree::from_bbox(&bbox(3, 0, 0, 5, 5));
+	let b = TileQuadtree::from_bbox(&bbox(3, 3, 3, 7, 7));
 	let i = a.intersection(&b)?;
 	// Overlap is [3,3] to [5,5] = 3x3 = 9 tiles
 	assert_eq!(i.count_tiles(), 9);
@@ -212,7 +212,7 @@ fn intersection() -> Result<()> {
 #[test]
 fn difference() -> Result<()> {
 	let a = TileQuadtree::new_full(2).unwrap();
-	let b = TileQuadtree::from_bbox(&bbox(2, 0, 0, 1, 1))?; // 4 tiles
+	let b = TileQuadtree::from_bbox(&bbox(2, 0, 0, 1, 1));
 	let d = a.difference(&b)?;
 	assert_eq!(d.count_tiles(), 12);
 	Ok(())
@@ -253,7 +253,7 @@ fn level_up_zoom0_unchanged() {
 
 #[test]
 fn at_level_roundtrip() -> Result<()> {
-	let t = TileQuadtree::from_bbox(&bbox(4, 4, 4, 11, 11))?;
+	let t = TileQuadtree::from_bbox(&bbox(4, 4, 4, 11, 11));
 	let up = t.at_level(3);
 	assert_eq!(up.zoom(), 3);
 	let down = t.at_level(5);
@@ -269,7 +269,7 @@ fn at_level_roundtrip() -> Result<()> {
 
 #[test]
 fn iter_tiles_count() -> Result<()> {
-	let t = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3))?;
+	let t = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3));
 	let tiles: Vec<_> = t.iter_coords().collect();
 	assert_eq!(tiles.len() as u64, t.count_tiles());
 	assert_eq!(tiles.len(), 16);
@@ -296,7 +296,7 @@ fn iter_tiles_empty() {
 
 #[test]
 fn iter_bbox_grid_covers_all() -> Result<()> {
-	let t = TileQuadtree::from_bbox(&bbox(4, 0, 0, 15, 15))?;
+	let t = TileQuadtree::from_bbox(&bbox(4, 0, 0, 15, 15));
 	let mut total = 0u64;
 	for cell in t.iter_bbox_grid(4) {
 		total += cell.count_tiles();
@@ -329,7 +329,7 @@ fn serialize_roundtrip_full() -> Result<()> {
 
 #[test]
 fn serialize_roundtrip_partial() -> Result<()> {
-	let t = TileQuadtree::from_bbox(&bbox(4, 3, 5, 11, 12))?;
+	let t = TileQuadtree::from_bbox(&bbox(4, 3, 5, 11, 12));
 	let bytes = t.serialize();
 	let t2 = TileQuadtree::deserialize(4, &bytes)?;
 	assert_eq!(t, t2);

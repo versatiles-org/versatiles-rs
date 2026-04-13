@@ -2,7 +2,6 @@
 
 use super::TileCover;
 use crate::{TileBBox, TileQuadtree};
-use anyhow::Result;
 
 impl TileCover {
 	/// Returns a reference to the inner [`TileBBox`], or `None` if this is the
@@ -31,10 +30,11 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if quadtree construction from the bbox fails.
-	pub fn to_tree(&self) -> Result<TileQuadtree> {
+	#[must_use]
+	pub fn to_tree(&self) -> TileQuadtree {
 		match self {
 			TileCover::Bbox(b) => TileQuadtree::from_bbox(b),
-			TileCover::Tree(t) => Ok(t.clone()),
+			TileCover::Tree(t) => t.clone(),
 		}
 	}
 
@@ -53,8 +53,7 @@ impl TileCover {
 	/// operations.
 	pub(super) fn upgrade_to_tree(&mut self) {
 		if let TileCover::Bbox(b) = self {
-			let tree = TileQuadtree::from_bbox(b).expect("TileQuadtree::from_bbox should not fail for a valid TileBBox");
-			*self = TileCover::Tree(tree);
+			*self = TileCover::Tree(TileQuadtree::from_bbox(b));
 		}
 	}
 

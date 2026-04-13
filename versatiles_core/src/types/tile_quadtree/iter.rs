@@ -41,7 +41,7 @@ impl TileQuadtree {
 					u32::try_from(y_max - 1).unwrap(),
 				)
 				.ok()?;
-				let cell_tree = TileQuadtree::from_bbox(&bbox).ok()?;
+				let cell_tree = TileQuadtree::from_bbox(&bbox);
 				let result = self.intersection(&cell_tree).ok()?;
 				if result.is_empty() { None } else { Some(result) }
 			})

@@ -171,7 +171,7 @@ fn as_bbox_and_as_tree() {
 #[test]
 fn to_tree_from_bbox() {
 	let c = TileCover::from(bbox(3, 1, 1, 4, 4));
-	let tree = c.to_tree().unwrap();
+	let tree = c.to_tree();
 	assert_eq!(tree.count_tiles(), 16);
 }
 
@@ -188,7 +188,7 @@ fn eq_bbox_bbox() {
 fn eq_bbox_tree_same_coverage() {
 	let b = bbox(3, 0, 0, 7, 7);
 	let cb = TileCover::from(b);
-	let ct = TileCover::from(TileQuadtree::from_bbox(&b).unwrap());
+	let ct = TileCover::from(TileQuadtree::from_bbox(&b));
 	assert_eq!(cb, ct);
 }
 
@@ -226,7 +226,7 @@ fn is_full_tree_variant() {
 
 #[test]
 fn intersects_bbox_tree_variant() {
-	let c = TileCover::from(TileQuadtree::from_bbox(&bbox(4, 0, 0, 7, 7)).unwrap());
+	let c = TileCover::from(TileQuadtree::from_bbox(&bbox(4, 0, 0, 7, 7)));
 	assert!(c.intersects_bbox(&bbox(4, 5, 5, 10, 10)));
 	assert!(!c.intersects_bbox(&bbox(4, 10, 10, 15, 15)));
 }

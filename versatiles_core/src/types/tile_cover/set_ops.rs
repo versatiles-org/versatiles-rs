@@ -17,8 +17,8 @@ impl TileCover {
 			result.include_bbox(b)?;
 			return Ok(TileCover::Bbox(result));
 		}
-		let a = self.to_tree()?;
-		let b = other.to_tree()?;
+		let a = self.to_tree();
+		let b = other.to_tree();
 		Ok(TileCover::Tree(a.union(&b)?))
 	}
 
@@ -35,8 +35,8 @@ impl TileCover {
 			result.intersect_with(b)?;
 			return Ok(TileCover::Bbox(result));
 		}
-		let a = self.to_tree()?;
-		let b = other.to_tree()?;
+		let a = self.to_tree();
+		let b = other.to_tree();
 		Ok(TileCover::Tree(a.intersection(&b)?))
 	}
 
@@ -48,8 +48,8 @@ impl TileCover {
 	/// # Errors
 	/// Returns an error if the zoom levels differ or a quadtree operation fails.
 	pub fn difference(&self, other: &TileCover) -> Result<TileCover> {
-		let a = self.to_tree()?;
-		let b = other.to_tree()?;
+		let a = self.to_tree();
+		let b = other.to_tree();
 		Ok(TileCover::Tree(a.difference(&b)?))
 	}
 }

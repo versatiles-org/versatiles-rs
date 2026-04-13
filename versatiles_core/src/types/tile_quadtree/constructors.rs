@@ -6,7 +6,6 @@ use anyhow::{Result, ensure};
 
 impl TileQuadtree {
 	/// Create an empty quadtree at the given zoom level.
-	#[must_use]
 	pub fn new_empty(zoom: u8) -> Result<Self> {
 		validate_zoom_level(zoom)?;
 		Ok(TileQuadtree {
@@ -16,7 +15,6 @@ impl TileQuadtree {
 	}
 
 	/// Create a full quadtree (all tiles covered) at the given zoom level.
-	#[must_use]
 	pub fn new_full(zoom: u8) -> Result<Self> {
 		validate_zoom_level(zoom)?;
 		Ok(TileQuadtree { zoom, root: Node::Full })
@@ -26,19 +24,20 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if the bbox zoom level exceeds `MAX_ZOOM_LEVEL`.
-	pub fn from_bbox(bbox: &TileBBox) -> Result<Self> {
+	#[must_use]
+	pub fn from_bbox(bbox: &TileBBox) -> Self {
 		let zoom = bbox.level;
-		validate_zoom_level(zoom)?;
+		validate_zoom_level(zoom).expect("TileBBox level should have been validated on construction");
 
 		if bbox.is_empty() {
-			return TileQuadtree::new_empty(zoom);
+			return TileQuadtree::new_empty(zoom).unwrap();
 		}
 
 		let size = 1u64 << zoom;
-		let x_min = u64::from(bbox.x_min()?);
-		let y_min = u64::from(bbox.y_min()?);
-		let x_max = u64::from(bbox.x_max()?) + 1; // exclusive
-		let y_max = u64::from(bbox.y_max()?) + 1; // exclusive
+		let x_min = u64::from(bbox.x_min().unwrap());
+		let y_min = u64::from(bbox.y_min().unwrap());
+		let x_max = u64::from(bbox.x_max().unwrap()) + 1; // exclusive
+		let y_max = u64::from(bbox.y_max().unwrap()) + 1; // exclusive
 
 		let root = build_node(
 			zoom,
@@ -52,7 +51,7 @@ impl TileQuadtree {
 				y_max,
 			},
 		);
-		Ok(TileQuadtree { zoom, root })
+		TileQuadtree { zoom, root }
 	}
 
 	/// Build a quadtree from a geographic bounding box at the given zoom level.
@@ -62,7 +61,7 @@ impl TileQuadtree {
 	pub fn from_geo(zoom: u8, bbox: &GeoBBox) -> Result<Self> {
 		validate_zoom_level(zoom)?;
 		let tile_bbox = TileBBox::from_geo(zoom, bbox)?;
-		Self::from_bbox(&tile_bbox)
+		Ok(Self::from_bbox(&tile_bbox))
 	}
 }
 

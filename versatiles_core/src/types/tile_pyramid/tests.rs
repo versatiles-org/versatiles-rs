@@ -119,7 +119,7 @@ fn count_tiles_and_count_nodes() {
 	assert_eq!(p.count_nodes(), 0);
 
 	// Insert a tree level
-	let qt = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3)).unwrap();
+	let qt = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3));
 	p.set_level(TileCover::from(qt));
 	assert_eq!(p.count_tiles(), 16 + 16);
 	// tree has some nodes
