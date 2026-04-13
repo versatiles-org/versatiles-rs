@@ -6,19 +6,19 @@ use anyhow::{Result, ensure};
 
 impl TileQuadtree {
 	/// Create an empty quadtree at the given zoom level.
-	pub fn new_empty(zoom: u8) -> Result<Self> {
-		validate_zoom_level(zoom)?;
+	pub fn new_empty(level: u8) -> Result<Self> {
+		validate_zoom_level(level)?;
 		Ok(TileQuadtree {
-			level: zoom,
+			level,
 			root: Node::Empty,
 		})
 	}
 
 	/// Create a full quadtree (all tiles covered) at the given zoom level.
-	pub fn new_full(zoom: u8) -> Result<Self> {
-		validate_zoom_level(zoom)?;
+	pub fn new_full(level: u8) -> Result<Self> {
+		validate_zoom_level(level)?;
 		Ok(TileQuadtree {
-			level: zoom,
+			level,
 			root: Node::Full,
 		})
 	}
@@ -29,21 +29,21 @@ impl TileQuadtree {
 	/// Returns an error if the bbox zoom level exceeds `MAX_ZOOM_LEVEL`.
 	#[must_use]
 	pub fn from_bbox(bbox: &TileBBox) -> Self {
-		let zoom = bbox.level;
-		validate_zoom_level(zoom).expect("TileBBox level should have been validated on construction");
+		let level = bbox.level;
+		validate_zoom_level(level).expect("TileBBox level should have been validated on construction");
 
 		if bbox.is_empty() {
-			return TileQuadtree::new_empty(zoom).unwrap();
+			return TileQuadtree::new_empty(level).unwrap();
 		}
 
-		let size = 1u64 << zoom;
+		let size = 1u64 << level;
 		let x_min = u64::from(bbox.x_min().unwrap());
 		let y_min = u64::from(bbox.y_min().unwrap());
 		let x_max = u64::from(bbox.x_max().unwrap()) + 1; // exclusive
 		let y_max = u64::from(bbox.y_max().unwrap()) + 1; // exclusive
 
 		let root = build_node(
-			zoom,
+			level,
 			0,
 			0,
 			size,
@@ -54,16 +54,16 @@ impl TileQuadtree {
 				y_max,
 			},
 		);
-		TileQuadtree { level: zoom, root }
+		TileQuadtree { level, root }
 	}
 
 	/// Build a quadtree from a geographic bounding box at the given zoom level.
 	///
 	/// # Errors
 	/// Returns an error if the zoom level or geographic coordinates are invalid.
-	pub fn from_geo(zoom: u8, bbox: &GeoBBox) -> Result<Self> {
-		validate_zoom_level(zoom)?;
-		let tile_bbox = TileBBox::from_geo(zoom, bbox)?;
+	pub fn from_geo(level: u8, bbox: &GeoBBox) -> Result<Self> {
+		validate_zoom_level(level)?;
+		let tile_bbox = TileBBox::from_geo(level, bbox)?;
 		Ok(Self::from_bbox(&tile_bbox))
 	}
 }
