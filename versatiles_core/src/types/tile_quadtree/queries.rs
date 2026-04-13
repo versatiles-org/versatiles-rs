@@ -72,9 +72,7 @@ impl TileQuadtree {
 	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
 		check_bbox_zoom(bbox, self.level)?;
 		let size = 1u64 << self.level;
-		let bbox = if let Some(bbox) = BBox::new(bbox) {
-			bbox
-		} else {
+		let Some(bbox) = BBox::new(bbox) else {
 			return Ok(true);
 		};
 		Ok(self.root.includes_bbox(0, 0, size, bbox))

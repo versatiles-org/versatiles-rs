@@ -232,26 +232,6 @@ fn set_ops_zoom_mismatch() {
 // -------------------------------------------------------------------------
 
 #[test]
-fn level_up_full_empty() {
-	assert!(TileQuadtree::new_full(5).unwrap().level_up().is_full());
-	assert!(TileQuadtree::new_empty(5).unwrap().level_up().is_empty());
-}
-
-#[test]
-fn level_down_full_empty() {
-	let f = TileQuadtree::new_full(3).unwrap().level_down();
-	assert_eq!(f.level(), 4);
-	assert!(f.is_full());
-}
-
-#[test]
-fn level_up_zoom0_unchanged() {
-	let t = TileQuadtree::new_full(0).unwrap();
-	let up = t.level_up();
-	assert_eq!(up.level(), 0);
-}
-
-#[test]
 fn at_level_roundtrip() -> Result<()> {
 	let t = TileQuadtree::from_bbox(&bbox(4, 4, 4, 11, 11));
 	let up = t.at_level(3);

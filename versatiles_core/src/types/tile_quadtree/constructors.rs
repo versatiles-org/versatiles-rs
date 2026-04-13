@@ -32,9 +32,7 @@ impl TileQuadtree {
 		let level = bbox.level;
 		validate_zoom_level(level).expect("TileBBox level should have been validated on construction");
 
-		let bbox = if let Some(bbox) = BBox::new(bbox) {
-			bbox
-		} else {
+		let Some(bbox) = BBox::new(bbox) else {
 			return TileQuadtree::new_empty(level).unwrap();
 		};
 		let size = 1u64 << level;

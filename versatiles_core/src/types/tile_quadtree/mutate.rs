@@ -26,9 +26,7 @@ impl TileQuadtree {
 	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		check_bbox_zoom(bbox, self.level)?;
 		let size = 1u64 << self.level;
-		let bbox = if let Some(bbox) = BBox::new(bbox) {
-			bbox
-		} else {
+		let Some(bbox) = BBox::new(bbox) else {
 			return Ok(());
 		};
 		self.root.include_bbox((0, 0), size, &bbox);
@@ -54,9 +52,7 @@ impl TileQuadtree {
 	/// Returns an error if the bbox's zoom level doesn't match.
 	pub fn remove_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		check_bbox_zoom(bbox, self.level)?;
-		let bbox = if let Some(bbox) = BBox::new(bbox) {
-			bbox
-		} else {
+		let Some(bbox) = BBox::new(bbox) else {
 			return Ok(());
 		};
 		self.root.remove_bbox((0, 0), 1u64 << self.level, &bbox);
