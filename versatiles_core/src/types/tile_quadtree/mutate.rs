@@ -36,7 +36,7 @@ impl TileQuadtree {
 		self.root.include_bbox(
 			(0, 0),
 			size,
-			BBox {
+			&BBox {
 				x_min: bx_min,
 				y_min: by_min,
 				x_max: bx_max,
@@ -76,7 +76,7 @@ impl TileQuadtree {
 		self.root.remove_bbox(
 			(0, 0),
 			size,
-			BBox {
+			&BBox {
 				x_min,
 				y_min,
 				x_max,

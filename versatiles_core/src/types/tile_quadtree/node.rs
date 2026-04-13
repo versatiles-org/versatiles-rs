@@ -171,7 +171,7 @@ impl Node {
 		}
 	}
 
-	pub fn include_bbox(&mut self, (x_off, y_off): (u64, u64), size: u64, bbox: BBox) {
+	pub fn include_bbox(&mut self, (x_off, y_off): (u64, u64), size: u64, bbox: &BBox) {
 		// Intersection of bbox with this cell
 		let ix_min = bbox.x_min.max(x_off);
 		let iy_min = bbox.y_min.max(y_off);
@@ -228,7 +228,7 @@ impl Node {
 		}
 	}
 
-	pub fn remove_bbox(&mut self, (x_off, y_off): (u64, u64), size: u64, bbox: BBox) {
+	pub fn remove_bbox(&mut self, (x_off, y_off): (u64, u64), size: u64, bbox: &BBox) {
 		let ix_min = bbox.x_min.max(x_off);
 		let iy_min = bbox.y_min.max(y_off);
 		let ix_max = bbox.x_max.min(x_off + size);
