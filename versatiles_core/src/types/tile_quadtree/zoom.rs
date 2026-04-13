@@ -76,13 +76,12 @@ fn node_level_up(node: &Node, remaining_depth: u8) -> Node {
 				let any_covered = children.iter().any(|c| !matches!(c, Node::Empty));
 				if any_covered { Node::Full } else { Node::Empty }
 			} else {
-				let new_children = [
+				Node::new_partial([
 					node_level_up(&children[0], remaining_depth - 1),
 					node_level_up(&children[1], remaining_depth - 1),
 					node_level_up(&children[2], remaining_depth - 1),
 					node_level_up(&children[3], remaining_depth - 1),
-				];
-				Node::normalize(new_children)
+				])
 			}
 		}
 	}

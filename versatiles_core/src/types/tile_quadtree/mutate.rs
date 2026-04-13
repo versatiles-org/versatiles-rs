@@ -1,7 +1,7 @@
 //! Mutation methods for [`TileQuadtree`].
 
 use super::constructors::{check_bbox_zoom, check_coord_zoom};
-use super::{BBox, Node, TileQuadtree};
+use super::{BBox, TileQuadtree};
 use crate::{TileBBox, TileCoord};
 use anyhow::Result;
 
@@ -13,9 +13,9 @@ impl TileQuadtree {
 	pub fn include_coord(&mut self, coord: &TileCoord) -> Result<()> {
 		check_coord_zoom(coord, self.zoom)?;
 		let size = 1u64 << self.zoom;
-		let new_root =
-			std::mem::replace(&mut self.root, Node::Empty).insert_tile(0, 0, size, u64::from(coord.x), u64::from(coord.y));
-		self.root = new_root;
+		self
+			.root
+			.insert_tile(0, 0, size, u64::from(coord.x), u64::from(coord.y));
 		Ok(())
 	}
 
@@ -33,7 +33,7 @@ impl TileQuadtree {
 		let by_min = u64::from(bbox.y_min()?);
 		let bx_max = u64::from(bbox.x_max()?) + 1;
 		let by_max = u64::from(bbox.y_max()?) + 1;
-		let new_root = std::mem::replace(&mut self.root, Node::Empty).include_bbox(
+		self.root.include_bbox(
 			0,
 			0,
 			size,
@@ -44,7 +44,6 @@ impl TileQuadtree {
 				y_max: by_max,
 			},
 		);
-		self.root = new_root;
 		Ok(())
 	}
 
@@ -55,9 +54,9 @@ impl TileQuadtree {
 	pub fn remove_coord(&mut self, coord: &TileCoord) -> Result<()> {
 		check_coord_zoom(coord, self.zoom)?;
 		let size = 1u64 << self.zoom;
-		let new_root =
-			std::mem::replace(&mut self.root, Node::Empty).remove_tile(0, 0, size, u64::from(coord.x), u64::from(coord.y));
-		self.root = new_root;
+		self
+			.root
+			.remove_tile(0, 0, size, u64::from(coord.x), u64::from(coord.y));
 		Ok(())
 	}
 
@@ -71,22 +70,21 @@ impl TileQuadtree {
 			return Ok(());
 		}
 		let size = 1u64 << self.zoom;
-		let bx_min = u64::from(bbox.x_min()?);
-		let by_min = u64::from(bbox.y_min()?);
-		let bx_max = u64::from(bbox.x_max()?) + 1;
-		let by_max = u64::from(bbox.y_max()?) + 1;
-		let new_root = std::mem::replace(&mut self.root, Node::Empty).remove_bbox(
+		let x_min = u64::from(bbox.x_min()?);
+		let y_min = u64::from(bbox.y_min()?);
+		let x_max = u64::from(bbox.x_max()?) + 1;
+		let y_max = u64::from(bbox.y_max()?) + 1;
+		self.root.remove_bbox(
 			0,
 			0,
 			size,
 			BBox {
-				x_min: bx_min,
-				y_min: by_min,
-				x_max: bx_max,
-				y_max: by_max,
+				x_min,
+				y_min,
+				x_max,
+				y_max,
 			},
 		);
-		self.root = new_root;
 		Ok(())
 	}
 }

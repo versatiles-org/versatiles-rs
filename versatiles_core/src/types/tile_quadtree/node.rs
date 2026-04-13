@@ -14,15 +14,28 @@ pub(crate) enum Node {
 
 impl Node {
 	/// Normalize: collapse `Partial` where all children are the same.
-	#[must_use]
-	pub(crate) fn normalize(children: [Node; 4]) -> Node {
-		if children.iter().all(|c| matches!(c, Node::Full)) {
-			return Node::Full;
+	pub(crate) fn normalize(&mut self) {
+		if let Node::Partial(children) = self {
+			if children.iter().all(|c| matches!(c, Node::Full)) {
+				*self = Node::Full;
+			} else if children.iter().all(|c| matches!(c, Node::Empty)) {
+				*self = Node::Empty;
+			}
 		}
-		if children.iter().all(|c| matches!(c, Node::Empty)) {
-			return Node::Empty;
-		}
-		Node::Partial(Box::new(children))
+	}
+
+	pub(super) fn new_partial(children: [Node; 4]) -> Node {
+		let mut node = Node::Partial(Box::new(children));
+		node.normalize();
+		node
+	}
+
+	pub(super) fn new_partial_empty() -> Node {
+		Node::Partial(Box::new([Node::Empty, Node::Empty, Node::Empty, Node::Empty]))
+	}
+
+	pub(super) fn new_partial_full() -> Node {
+		Node::Partial(Box::new([Node::Full, Node::Full, Node::Full, Node::Full]))
 	}
 
 	/// Return true if all tiles in this node's subtree are covered.
@@ -139,30 +152,26 @@ impl Node {
 		}
 	}
 
-	pub fn insert_tile(self, x_off: u64, y_off: u64, size: u64, tx: u64, ty: u64) -> Node {
+	pub fn insert_tile(&mut self, x_off: u64, y_off: u64, size: u64, tx: u64, ty: u64) {
 		match self {
-			Node::Full => Node::Full,
+			Node::Full => (),
 			Node::Empty => {
 				if size == 1 {
-					Node::Full
+					*self = Node::Full;
 				} else {
-					// Expand to Partial and recurse
-					let mut children = [Node::Empty, Node::Empty, Node::Empty, Node::Empty];
-					let (idx, cx, cy, half) = child_quadrant(x_off, y_off, size, tx, ty);
-					children[idx] = Node::Empty.insert_tile(cx, cy, half, tx, ty);
-					Node::normalize(children)
+					*self = Node::new_partial_empty();
+					self.insert_tile(x_off, y_off, size, tx, ty);
 				}
 			}
-			Node::Partial(mut children) => {
+			Node::Partial(children) => {
 				let (idx, cx, cy, half) = child_quadrant(x_off, y_off, size, tx, ty);
-				let child = std::mem::replace(&mut children[idx], Node::Empty);
-				children[idx] = child.insert_tile(cx, cy, half, tx, ty);
-				Node::normalize(*children)
+				children[idx].insert_tile(cx, cy, half, tx, ty);
+				self.normalize();
 			}
 		}
 	}
 
-	pub fn include_bbox(self, x_off: u64, y_off: u64, size: u64, bbox: BBox) -> Node {
+	pub fn include_bbox(&mut self, x_off: u64, y_off: u64, size: u64, bbox: BBox) {
 		// Intersection of bbox with this cell
 		let ix_min = bbox.x_min.max(x_off);
 		let iy_min = bbox.y_min.max(y_off);
@@ -170,116 +179,91 @@ impl Node {
 		let iy_max = bbox.y_max.min(y_off + size);
 
 		if ix_min >= ix_max || iy_min >= iy_max {
-			return self; // bbox doesn't touch this cell
+			return; // bbox doesn't touch this cell
 		}
 
 		// If bbox covers the full cell, mark Full
 		if ix_min == x_off && iy_min == y_off && ix_max == x_off + size && iy_max == y_off + size {
-			return Node::Full;
+			*self = Node::Full;
+			return;
 		}
 
-		match self {
-			Node::Full => Node::Full,
-			Node::Empty => {
-				if size == 1 {
-					Node::Full
-				} else {
-					let half = size / 2;
-					let mid_x = x_off + half;
-					let mid_y = y_off + half;
-					let children = [
-						Node::Empty.include_bbox(x_off, y_off, half, bbox),
-						Node::Empty.include_bbox(mid_x, y_off, half, bbox),
-						Node::Empty.include_bbox(x_off, mid_y, half, bbox),
-						Node::Empty.include_bbox(mid_x, mid_y, half, bbox),
-					];
-					Node::normalize(children)
-				}
+		if self == &Node::Full {
+			return;
+		}
+		if self == &Node::Empty {
+			if size == 1 {
+				*self = Node::Full;
+				return;
 			}
-			Node::Partial(children) => {
-				let half = size / 2;
-				let mid_x = x_off + half;
-				let mid_y = y_off + half;
-				let [nw, ne, sw, se] = *children;
-				let children = [
-					nw.include_bbox(x_off, y_off, half, bbox),
-					ne.include_bbox(mid_x, y_off, half, bbox),
-					sw.include_bbox(x_off, mid_y, half, bbox),
-					se.include_bbox(mid_x, mid_y, half, bbox),
-				];
-				Node::normalize(children)
-			}
+			*self = Node::new_partial_empty();
+		}
+		if let Node::Partial(children) = self {
+			let half = size / 2;
+			let mid_x = x_off + half;
+			let mid_y = y_off + half;
+			children[0].include_bbox(x_off, y_off, half, bbox);
+			children[1].include_bbox(mid_x, y_off, half, bbox);
+			children[2].include_bbox(x_off, mid_y, half, bbox);
+			children[3].include_bbox(mid_x, mid_y, half, bbox);
+			self.normalize();
 		}
 	}
 
-	pub fn remove_tile(self, x_off: u64, y_off: u64, size: u64, tx: u64, ty: u64) -> Node {
-		match self {
-			Node::Empty => Node::Empty,
-			Node::Full => {
-				if size == 1 {
-					Node::Empty
-				} else {
-					// Expand to Partial([Full; 4]) and recurse
-					let mut children = [Node::Full, Node::Full, Node::Full, Node::Full];
-					let (idx, cx, cy, half) = child_quadrant(x_off, y_off, size, tx, ty);
-					children[idx] = Node::Full.remove_tile(cx, cy, half, tx, ty);
-					Node::normalize(children)
-				}
+	pub fn remove_tile(&mut self, x_off: u64, y_off: u64, size: u64, tx: u64, ty: u64) {
+		if self == &Node::Empty {
+			return;
+		}
+		if self == &Node::Full {
+			if size == 1 {
+				*self = Node::Empty;
+				return;
 			}
-			Node::Partial(mut children) => {
-				let (idx, cx, cy, half) = child_quadrant(x_off, y_off, size, tx, ty);
-				let child = std::mem::replace(&mut children[idx], Node::Empty);
-				children[idx] = child.remove_tile(cx, cy, half, tx, ty);
-				Node::normalize(*children)
-			}
+			*self = Node::new_partial_full();
+		}
+		if let Node::Partial(children) = self {
+			let (idx, cx, cy, half) = child_quadrant(x_off, y_off, size, tx, ty);
+			children[idx].remove_tile(cx, cy, half, tx, ty);
+			self.normalize();
 		}
 	}
 
-	pub fn remove_bbox(self, x_off: u64, y_off: u64, size: u64, bbox: BBox) -> Node {
+	pub fn remove_bbox(&mut self, x_off: u64, y_off: u64, size: u64, bbox: BBox) {
 		let ix_min = bbox.x_min.max(x_off);
 		let iy_min = bbox.y_min.max(y_off);
 		let ix_max = bbox.x_max.min(x_off + size);
 		let iy_max = bbox.y_max.min(y_off + size);
 
 		if ix_min >= ix_max || iy_min >= iy_max {
-			return self;
+			return;
 		}
 
 		if ix_min == x_off && iy_min == y_off && ix_max == x_off + size && iy_max == y_off + size {
-			return Node::Empty;
+			*self = Node::Empty;
+			return;
 		}
 
-		match self {
-			Node::Empty => Node::Empty,
-			Node::Full => {
-				if size == 1 {
-					Node::Empty
-				} else {
-					let half = size / 2;
-					let mid_x = x_off + half;
-					let mid_y = y_off + half;
-					let children = [
-						Node::Full.remove_bbox(x_off, y_off, half, bbox),
-						Node::Full.remove_bbox(mid_x, y_off, half, bbox),
-						Node::Full.remove_bbox(x_off, mid_y, half, bbox),
-						Node::Full.remove_bbox(mid_x, mid_y, half, bbox),
-					];
-					Node::normalize(children)
-				}
+		if self == &Node::Empty {
+			return;
+		}
+
+		if self == &Node::Full {
+			if size == 1 {
+				*self = Node::Empty;
+				return;
 			}
-			Node::Partial(children) => {
-				let half = size / 2;
-				let mid_x = x_off + half;
-				let mid_y = y_off + half;
-				let [nw, ne, sw, se] = *children;
-				let children = [
-					nw.remove_bbox(x_off, y_off, half, bbox),
-					ne.remove_bbox(mid_x, y_off, half, bbox),
-					sw.remove_bbox(x_off, mid_y, half, bbox),
-					se.remove_bbox(mid_x, mid_y, half, bbox),
-				];
-				Node::normalize(children)
-			}
+			*self = Node::new_partial_full();
+		}
+
+		if let Node::Partial(children) = self {
+			let half = size / 2;
+			let mid_x = x_off + half;
+			let mid_y = y_off + half;
+			children[0].remove_bbox(x_off, y_off, half, bbox);
+			children[1].remove_bbox(mid_x, y_off, half, bbox);
+			children[2].remove_bbox(x_off, mid_y, half, bbox);
+			children[3].remove_bbox(mid_x, mid_y, half, bbox);
+			self.normalize();
 		}
 	}
 }

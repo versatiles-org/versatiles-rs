@@ -91,13 +91,12 @@ fn build_node(depth: u8, x_off: u64, y_off: u64, size: u64, bbox: BBox) -> Node 
 	let half = size / 2;
 	let mid_x = x_off + half;
 	let mid_y = y_off + half;
-
-	let nw = build_node(depth - 1, x_off, y_off, half, bbox);
-	let ne = build_node(depth - 1, mid_x, y_off, half, bbox);
-	let sw = build_node(depth - 1, x_off, mid_y, half, bbox);
-	let se = build_node(depth - 1, mid_x, mid_y, half, bbox);
-
-	Node::normalize([nw, ne, sw, se])
+	Node::new_partial([
+		build_node(depth - 1, x_off, y_off, half, bbox),
+		build_node(depth - 1, mid_x, y_off, half, bbox),
+		build_node(depth - 1, x_off, mid_y, half, bbox),
+		build_node(depth - 1, mid_x, mid_y, half, bbox),
+	])
 }
 
 /// Validate that a TileCoord belongs to the given zoom level.

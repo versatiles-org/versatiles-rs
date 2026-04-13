@@ -54,15 +54,12 @@ fn node_union(a: &Node, b: &Node) -> Node {
 	match (a, b) {
 		(Node::Full, _) | (_, Node::Full) => Node::Full,
 		(Node::Empty, x) | (x, Node::Empty) => x.clone(),
-		(Node::Partial(ac), Node::Partial(bc)) => {
-			let children = [
-				node_union(&ac[0], &bc[0]),
-				node_union(&ac[1], &bc[1]),
-				node_union(&ac[2], &bc[2]),
-				node_union(&ac[3], &bc[3]),
-			];
-			Node::normalize(children)
-		}
+		(Node::Partial(ac), Node::Partial(bc)) => Node::new_partial([
+			node_union(&ac[0], &bc[0]),
+			node_union(&ac[1], &bc[1]),
+			node_union(&ac[2], &bc[2]),
+			node_union(&ac[3], &bc[3]),
+		]),
 	}
 }
 
@@ -70,15 +67,12 @@ fn node_intersection(a: &Node, b: &Node) -> Node {
 	match (a, b) {
 		(Node::Empty, _) | (_, Node::Empty) => Node::Empty,
 		(Node::Full, x) | (x, Node::Full) => x.clone(),
-		(Node::Partial(ac), Node::Partial(bc)) => {
-			let children = [
-				node_intersection(&ac[0], &bc[0]),
-				node_intersection(&ac[1], &bc[1]),
-				node_intersection(&ac[2], &bc[2]),
-				node_intersection(&ac[3], &bc[3]),
-			];
-			Node::normalize(children)
-		}
+		(Node::Partial(ac), Node::Partial(bc)) => Node::new_partial([
+			node_intersection(&ac[0], &bc[0]),
+			node_intersection(&ac[1], &bc[1]),
+			node_intersection(&ac[2], &bc[2]),
+			node_intersection(&ac[3], &bc[3]),
+		]),
 	}
 }
 
@@ -88,22 +82,18 @@ fn node_difference(a: &Node, b: &Node) -> Node {
 		(a, Node::Empty) => a.clone(),
 		(Node::Full, Node::Partial(bc)) => {
 			// Full minus partial: invert the partial
-			let children = [
+			Node::new_partial([
 				node_difference(&Node::Full, &bc[0]),
 				node_difference(&Node::Full, &bc[1]),
 				node_difference(&Node::Full, &bc[2]),
 				node_difference(&Node::Full, &bc[3]),
-			];
-			Node::normalize(children)
+			])
 		}
-		(Node::Partial(ac), Node::Partial(bc)) => {
-			let children = [
-				node_difference(&ac[0], &bc[0]),
-				node_difference(&ac[1], &bc[1]),
-				node_difference(&ac[2], &bc[2]),
-				node_difference(&ac[3], &bc[3]),
-			];
-			Node::normalize(children)
-		}
+		(Node::Partial(ac), Node::Partial(bc)) => Node::new_partial([
+			node_difference(&ac[0], &bc[0]),
+			node_difference(&ac[1], &bc[1]),
+			node_difference(&ac[2], &bc[2]),
+			node_difference(&ac[3], &bc[3]),
+		]),
 	}
 }
