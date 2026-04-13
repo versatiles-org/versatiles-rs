@@ -97,6 +97,30 @@ impl Node {
 		}
 	}
 
+	/// Collect the bounding rectangle of every `Full` subtree into `out`.
+	///
+	/// Each entry uses exclusive upper bounds, matching the internal [`BBox`]
+	/// convention used throughout this module.
+	pub(crate) fn collect_full_rects(&self, (x_off, y_off): (u64, u64), size: u64, out: &mut Vec<super::BBox>) {
+		match self {
+			Node::Empty => {}
+			Node::Full => out.push(super::BBox {
+				x_min: x_off,
+				y_min: y_off,
+				x_max: x_off + size,
+				y_max: y_off + size,
+			}),
+			Node::Partial(children) => {
+				let half = size / 2;
+				let (mid_x, mid_y) = (x_off + half, y_off + half);
+				children[0].collect_full_rects((x_off, y_off), half, out); // NW
+				children[1].collect_full_rects((mid_x, y_off), half, out); // NE
+				children[2].collect_full_rects((x_off, mid_y), half, out); // SW
+				children[3].collect_full_rects((mid_x, mid_y), half, out); // SE
+			}
+		}
+	}
+
 	pub fn includes_coord(&self, (x_off, y_off): (u64, u64), size: u64, (tx, ty): (u64, u64)) -> bool {
 		match self {
 			Node::Empty => false,

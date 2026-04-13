@@ -169,7 +169,7 @@ fn get_bbox_pyramid(arguments: &Subcommand) -> Result<(Option<TilePyramid>, Opti
 		geo_bbox = Some(bbox);
 
 		if let Some(b) = arguments.bbox_border {
-			bbox_pyramid.add_border(b, b, b, b);
+			bbox_pyramid.buffer(b);
 		}
 	}
 

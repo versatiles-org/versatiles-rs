@@ -187,6 +187,69 @@ fn remove_bbox() -> Result<()> {
 }
 
 // -------------------------------------------------------------------------
+// Buffer
+// -------------------------------------------------------------------------
+
+#[test]
+fn buffer_zero_is_noop() {
+	let t = TileQuadtree::from_bbox(&bbox(4, 3, 3, 8, 8));
+	let mut t2 = t.clone();
+	t2.buffer(0);
+	assert_eq!(t2, t);
+	assert_eq!(t2.count_tiles(), t.count_tiles());
+}
+
+#[test]
+fn buffer_empty_is_noop() {
+	let mut t = TileQuadtree::new_empty(4).unwrap();
+	t.buffer(2);
+	assert!(t.is_empty());
+}
+
+#[test]
+fn buffer_full_stays_full() {
+	let mut t = TileQuadtree::new_full(3).unwrap();
+	t.buffer(5);
+	assert!(t.is_full());
+}
+
+#[test]
+fn buffer_single_tile_expands_to_square() -> Result<()> {
+	// Single tile at (4, 4) at zoom 4; buffer(2) expands to (2..6, 2..6) = 5×5 = 25 tiles
+	let mut t = TileQuadtree::new_empty(4).unwrap();
+	t.include_coord(&coord(4, 4, 4))?;
+	t.buffer(2);
+	assert_eq!(t.count_tiles(), 25);
+	assert!(t.includes_coord(&coord(4, 2, 2))?); // top-left corner added
+	assert!(t.includes_coord(&coord(4, 6, 6))?); // bottom-right corner added
+	assert!(!t.includes_coord(&coord(4, 1, 4))?); // just outside
+	Ok(())
+}
+
+#[test]
+fn buffer_clamps_at_boundary() -> Result<()> {
+	// Tile at (0, 0); buffer(3) clamped at x=0, y=0 → (0..3, 0..3) = 4×4 = 16 tiles
+	let mut t = TileQuadtree::new_empty(4).unwrap();
+	t.include_coord(&coord(4, 0, 0))?;
+	t.buffer(3);
+	assert_eq!(t.count_tiles(), 16);
+	assert!(t.includes_coord(&coord(4, 3, 3))?); // far corner
+	assert!(!t.includes_coord(&coord(4, 4, 0))?); // just outside buffer
+	Ok(())
+}
+
+#[test]
+fn buffer_rectangular_region() -> Result<()> {
+	// 3×3 block at (2,2)–(4,4); buffer(1) → (1,1)–(5,5) = 5×5 = 25 tiles
+	let mut t = TileQuadtree::new_empty(4).unwrap();
+	t.include_bbox(&bbox(4, 2, 2, 4, 4))?;
+	assert_eq!(t.count_tiles(), 9);
+	t.buffer(1);
+	assert_eq!(t.count_tiles(), 25);
+	Ok(())
+}
+
+// -------------------------------------------------------------------------
 // Set operations
 // -------------------------------------------------------------------------
 

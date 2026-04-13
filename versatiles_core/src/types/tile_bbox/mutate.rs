@@ -70,21 +70,21 @@ impl TileBBox {
 		Ok(())
 	}
 
-	/// Add a border to the bbox by expanding its min/max.
+	/// Adds a buffer to the bbox by expanding its min/max.
 	///
-	/// Subtracts `(x_min, y_min)` from the current minimum and adds `(x_max, y_max)`
-	/// to the current maximum. The expansion is **clamped** to the level’s bounds.
+	/// Subtracts `size` from the current minimum and adds `size` to the current maximum.
+	/// The expansion is **clamped** to the level’s bounds.
 	///
 	/// This method is infallible and a no-op for empty bboxes.
-	pub fn expand_by(&mut self, x_min: u32, y_min: u32, x_max: u32, y_max: u32) {
+	pub fn buffer(&mut self, size: u32) {
 		if !self.is_empty() {
 			let max = self.max_count() - 1;
 			self
 				.set_min_and_max(
-					self.x_min().unwrap().saturating_sub(x_min),
-					self.y_min().unwrap().saturating_sub(y_min),
-					self.x_max().unwrap().saturating_add(x_max).min(max),
-					self.y_max().unwrap().saturating_add(y_max).min(max),
+					self.x_min().unwrap().saturating_sub(size),
+					self.y_min().unwrap().saturating_sub(size),
+					self.x_max().unwrap().saturating_add(size).min(max),
+					self.y_max().unwrap().saturating_add(size).min(max),
 				)
 				.unwrap();
 		}
@@ -403,20 +403,19 @@ mod tests {
 
 	// ------------------------------ expand_by ------------------------------
 	#[rstest]
-	#[case(bb(3, 1, 1, 2, 2), [1,1,1,1], [0,0,3,3])] // expand in all directions, clamp at bounds
-	#[case(bb(3, 6, 6, 7, 7), [5,5,5,5], [1,1,7,7])] // subtract saturates at 0
-	#[case(bb(3, 2, 2, 3, 3), [0,0,0,0], [2,2,3,3])] // no-op
-	fn expand_by_behaviour(#[case] mut b: TileBBox, #[case] off: [u32; 4], #[case] expected: [u32; 4]) {
-		b.expand_by(off[0], off[1], off[2], off[3]);
+	#[case(bb(3, 1, 1, 2, 2), 1, [0,0,3,3])] // expand in all directions, clamp at bounds
+	#[case(bb(3, 6, 6, 7, 7), 5, [1,1,7,7])] // subtract saturates at 0
+	#[case(bb(3, 2, 2, 3, 3), 0, [2,2,3,3])] // no-op
+	fn expand_by_behaviour(#[case] mut b: TileBBox, #[case] size: u32, #[case] expected: [u32; 4]) {
+		b.buffer(size);
 		assert_eq!(b.as_array().unwrap(), expected);
 	}
 
 	#[test]
-	fn expand_by_noop_on_empty() -> Result<()> {
-		let mut b = TileBBox::new_empty(5)?;
-		b.expand_by(10, 10, 10, 10);
+	fn expand_by_noop_on_empty() {
+		let mut b = TileBBox::new_empty(5).unwrap();
+		b.buffer(10);
 		assert!(b.is_empty());
-		Ok(())
 	}
 
 	// ------------------------------ include_bbox ------------------------------

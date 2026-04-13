@@ -74,7 +74,7 @@ pub(crate) async fn convert_tiles_with_options(
 			geo_bbox_filter = Some(geo_bbox);
 
 			if let Some(border) = opts.bbox_border {
-				pyramid.add_border(border, border, border, border);
+				pyramid.buffer(border);
 			}
 		}
 
@@ -351,7 +351,7 @@ mod tests {
 		let count_without_border = pyramid.count_tiles();
 
 		// Add 1-tile border on all sides
-		pyramid.add_border(1, 1, 1, 1);
+		pyramid.buffer(1);
 
 		let count_with_border = pyramid.count_tiles();
 

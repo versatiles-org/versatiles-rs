@@ -79,4 +79,11 @@ impl TileCover {
 		}
 		self.as_tree_mut().remove_bbox(bbox)
 	}
+
+	pub fn buffer(&mut self, size: u32) {
+		match self {
+			TileCover::Bbox(b) => b.buffer(size),
+			TileCover::Tree(t) => t.buffer(size),
+		}
+	}
 }

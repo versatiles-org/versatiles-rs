@@ -155,25 +155,31 @@ fn iter_bbox_grid_cases(
 fn add_border() -> Result<()> {
 	let mut bbox = TileBBox::from_min_and_max(8, 5, 10, 20, 30)?;
 
-	// Border of (1, 1, 1, 1) should increase the size of the bbox by 1 in all directions
-	bbox.expand_by(1, 1, 1, 1);
+	// Border of 1should increase the size of the bbox by 1 in all directions
+	bbox.buffer(1);
 	assert_eq!(bbox, TileBBox::from_min_and_max(8, 4, 9, 21, 31)?);
 
-	// Border of (2, 3, 4, 5) should further increase the size of the bbox
-	bbox.expand_by(2, 3, 4, 5);
-	assert_eq!(bbox, TileBBox::from_min_and_max(8, 2, 6, 25, 36)?);
-
-	// Border of (0, 0, 0, 0) should not change the size of the bbox
-	bbox.expand_by(0, 0, 0, 0);
-	assert_eq!(bbox, TileBBox::from_min_and_max(8, 2, 6, 25, 36)?);
+	// Border of 0 should not change the size of the bbox
+	bbox.buffer(0);
+	assert_eq!(bbox, TileBBox::from_min_and_max(8, 4, 9, 21, 31)?);
 
 	// Large border should saturate at max=255 for level=8
-	bbox.expand_by(999, 999, 999, 999);
+	bbox.buffer(999);
 	assert_eq!(bbox, TileBBox::from_min_and_max(8, 0, 0, 255, 255)?);
+
+	let mut bbox = TileBBox::from_min_and_max(6, 5, 10, 15, 20)?;
+
+	// Attempt to add a border with zero values
+	bbox.buffer(0);
+	assert_eq!(bbox, TileBBox::from_min_and_max(6, 5, 10, 15, 20)?);
+
+	// Add a border that exceeds bounds, should clamp to max
+	bbox.buffer(10);
+	assert_eq!(bbox, TileBBox::from_min_and_max(6, 0, 0, 25, 30)?);
 
 	// If bbox is empty, add_border should have no effect
 	let mut empty_bbox = TileBBox::new_empty(8)?;
-	empty_bbox.expand_by(1, 2, 3, 4);
+	empty_bbox.buffer(1);
 	assert_eq!(empty_bbox, TileBBox::new_empty(8)?);
 
 	Ok(())
@@ -401,30 +407,6 @@ fn test_include_coord() -> Result<()> {
 	let coord_invalid = tc(5, 10, 15);
 	let result = bbox.include_coord(&coord_invalid);
 	assert!(result.is_err());
-
-	Ok(())
-}
-
-#[test]
-fn test_add_border() -> Result<()> {
-	let mut bbox = TileBBox::from_min_and_max(6, 5, 10, 15, 20)?;
-
-	// Add a border within bounds
-	bbox.expand_by(2, 3, 2, 3);
-	assert_eq!(bbox, TileBBox::from_min_and_max(6, 3, 7, 17, 23)?);
-
-	// Add a border that exceeds bounds, should clamp to max
-	bbox.expand_by(10, 10, 10, 10);
-	assert_eq!(bbox, TileBBox::from_min_and_max(6, 0, 0, 27, 33)?);
-
-	// Add border to an empty bounding box, should have no effect
-	let mut empty_bbox = TileBBox::new_empty(6)?;
-	empty_bbox.expand_by(1, 1, 1, 1);
-	assert!(empty_bbox.is_empty());
-
-	// Attempt to add a border with zero values
-	bbox.expand_by(0, 0, 0, 0);
-	assert_eq!(bbox, TileBBox::from_min_and_max(6, 0, 0, 27, 33)?);
 
 	Ok(())
 }

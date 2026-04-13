@@ -1,7 +1,7 @@
 //! Mutation methods for [`TileQuadtree`].
 
 use super::constructors::{check_bbox_zoom, check_coord_zoom};
-use super::{BBox, TileQuadtree};
+use super::{BBox, Node, TileQuadtree};
 use crate::{TileBBox, TileCoord};
 use anyhow::Result;
 
@@ -31,6 +31,38 @@ impl TileQuadtree {
 		};
 		self.root.include_bbox((0, 0), size, &bbox);
 		Ok(())
+	}
+
+	/// Expands coverage outward by `size` tiles in all directions.
+	///
+	/// Uses Full-node decomposition: dilation distributes over union, so each
+	/// `Full` subtree (an exact rectangle) can be expanded independently and
+	/// re-inserted. Complexity is O(N · zoom) where N is the number of tree nodes,
+	/// far better than the O(T · zoom) per-tile alternative.
+	pub fn buffer(&mut self, size: u32) {
+		if size == 0 || self.is_empty() {
+			return;
+		}
+		let tree_size = 1u64 << self.level;
+		let n = u64::from(size);
+
+		let mut rects: Vec<BBox> = Vec::new();
+		self.root.collect_full_rects((0, 0), tree_size, &mut rects);
+
+		let mut new_root = Node::Empty;
+		for rect in rects {
+			new_root.include_bbox(
+				(0, 0),
+				tree_size,
+				&BBox {
+					x_min: rect.x_min.saturating_sub(n),
+					y_min: rect.y_min.saturating_sub(n),
+					x_max: (rect.x_max + n).min(tree_size),
+					y_max: (rect.y_max + n).min(tree_size),
+				},
+			);
+		}
+		self.root = new_root;
 	}
 
 	/// Remove a single tile from the quadtree.

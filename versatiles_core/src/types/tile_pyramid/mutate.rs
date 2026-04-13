@@ -98,15 +98,10 @@ impl TilePyramid {
 		}
 	}
 
-	/// Expands `Bbox` levels by `(x_min, y_min, x_max, y_max)` tiles.
-	///
-	/// `Tree` levels are unaffected (exact subtraction would require converting
-	/// back to bbox, which is lossy).
-	pub fn add_border(&mut self, x_min: u32, y_min: u32, x_max: u32, y_max: u32) {
+	/// Expands tile coverage by `size` tiles in all directions on all levels.
+	pub fn buffer(&mut self, size: u32) {
 		for cover in &mut self.levels {
-			if let TileCover::Bbox(b) = cover {
-				b.expand_by(x_min, y_min, x_max, y_max);
-			}
+			cover.buffer(size);
 		}
 	}
 

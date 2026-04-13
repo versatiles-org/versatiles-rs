@@ -262,7 +262,7 @@ fn add_border() {
 	// (include_bbox on an empty cover upgrades to Tree, which add_border skips).
 	let mut p = TilePyramid::new_empty();
 	p.set_level_bbox(bbox(5, 5, 5, 10, 10));
-	p.add_border(1, 1, 1, 1);
+	p.buffer(1);
 	let b = p.get_level_bbox(5);
 	assert_eq!(b.x_min().unwrap(), 4);
 	assert_eq!(b.y_min().unwrap(), 4);
@@ -273,7 +273,7 @@ fn add_border() {
 #[test]
 fn add_border_empty_level_unaffected() {
 	let mut p = TilePyramid::new_empty();
-	p.add_border(5, 5, 5, 5);
+	p.buffer(5);
 	assert!(p.is_empty());
 }
 
