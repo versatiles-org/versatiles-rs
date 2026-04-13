@@ -24,15 +24,31 @@ mod zoom;
 
 use node::Node;
 
+use crate::TileBBox;
+
 /// A compact axis-aligned bounding box used internally by recursive quadtree helpers.
 ///
 /// All coordinates are in tile-space and the max values are exclusive.
 #[derive(Clone, Copy)]
-pub(crate) struct BBox {
+pub(super) struct BBox {
 	pub x_min: u64,
 	pub y_min: u64,
 	pub x_max: u64,
 	pub y_max: u64,
+}
+
+impl BBox {
+	fn new(bbox: &TileBBox) -> Option<Self> {
+		if bbox.is_empty() {
+			return None;
+		}
+		Some(Self {
+			x_min: u64::from(bbox.x_min().unwrap()),
+			y_min: u64::from(bbox.y_min().unwrap()),
+			x_max: u64::from(bbox.x_max().unwrap()) + 1,
+			y_max: u64::from(bbox.y_max().unwrap()) + 1,
+		})
+	}
 }
 
 /// A set of tiles at a single zoom level, backed by a quadtree.

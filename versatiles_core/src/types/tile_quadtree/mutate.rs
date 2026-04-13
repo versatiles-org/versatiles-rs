@@ -25,24 +25,13 @@ impl TileQuadtree {
 	/// Returns an error if the bbox's zoom level doesn't match.
 	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		check_bbox_zoom(bbox, self.level)?;
-		if bbox.is_empty() {
-			return Ok(());
-		}
 		let size = 1u64 << self.level;
-		let bx_min = u64::from(bbox.x_min()?);
-		let by_min = u64::from(bbox.y_min()?);
-		let bx_max = u64::from(bbox.x_max()?) + 1;
-		let by_max = u64::from(bbox.y_max()?) + 1;
-		self.root.include_bbox(
-			(0, 0),
-			size,
-			&BBox {
-				x_min: bx_min,
-				y_min: by_min,
-				x_max: bx_max,
-				y_max: by_max,
-			},
-		);
+		let bbox = if let Some(bbox) = BBox::new(bbox) {
+			bbox
+		} else {
+			return Ok(());
+		};
+		self.root.include_bbox((0, 0), size, &bbox);
 		Ok(())
 	}
 
@@ -65,24 +54,12 @@ impl TileQuadtree {
 	/// Returns an error if the bbox's zoom level doesn't match.
 	pub fn remove_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		check_bbox_zoom(bbox, self.level)?;
-		if bbox.is_empty() {
+		let bbox = if let Some(bbox) = BBox::new(bbox) {
+			bbox
+		} else {
 			return Ok(());
-		}
-		let size = 1u64 << self.level;
-		let x_min = u64::from(bbox.x_min()?);
-		let y_min = u64::from(bbox.y_min()?);
-		let x_max = u64::from(bbox.x_max()?) + 1;
-		let y_max = u64::from(bbox.y_max()?) + 1;
-		self.root.remove_bbox(
-			(0, 0),
-			size,
-			&BBox {
-				x_min,
-				y_min,
-				x_max,
-				y_max,
-			},
-		);
+		};
+		self.root.remove_bbox((0, 0), 1u64 << self.level, &bbox);
 		Ok(())
 	}
 }

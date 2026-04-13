@@ -71,25 +71,13 @@ impl TileQuadtree {
 	/// Returns an error if the bbox's level doesn't match this quadtree's zoom.
 	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
 		check_bbox_zoom(bbox, self.level)?;
-		if bbox.is_empty() {
-			return Ok(true);
-		}
 		let size = 1u64 << self.level;
-		let bx_min = u64::from(bbox.x_min()?);
-		let by_min = u64::from(bbox.y_min()?);
-		let bx_max = u64::from(bbox.x_max()?) + 1;
-		let by_max = u64::from(bbox.y_max()?) + 1;
-		Ok(self.root.includes_bbox(
-			0,
-			0,
-			size,
-			BBox {
-				x_min: bx_min,
-				y_min: by_min,
-				x_max: bx_max,
-				y_max: by_max,
-			},
-		))
+		let bbox = if let Some(bbox) = BBox::new(bbox) {
+			bbox
+		} else {
+			return Ok(true);
+		};
+		Ok(self.root.includes_bbox(0, 0, size, bbox))
 	}
 
 	/// Check whether this quadtree has any tiles in common with `other`.

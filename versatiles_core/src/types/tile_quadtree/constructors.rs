@@ -1,6 +1,6 @@
 //! Constructors for [`TileQuadtree`].
 
-use super::{Node, TileQuadtree};
+use super::{BBox, Node, TileQuadtree};
 use crate::{GeoBBox, TileBBox, TileCoord, validate_zoom_level};
 use anyhow::{Result, ensure};
 
@@ -32,27 +32,22 @@ impl TileQuadtree {
 		let level = bbox.level;
 		validate_zoom_level(level).expect("TileBBox level should have been validated on construction");
 
-		if bbox.is_empty() {
+		let bbox = if let Some(bbox) = BBox::new(bbox) {
+			bbox
+		} else {
 			return TileQuadtree::new_empty(level).unwrap();
-		}
-
+		};
 		let size = 1u64 << level;
-		let bbox = [
-			u64::from(bbox.x_min().unwrap()),
-			u64::from(bbox.y_min().unwrap()),
-			u64::from(bbox.x_max().unwrap()) + 1, // exclusive
-			u64::from(bbox.y_max().unwrap()) + 1, // exclusive
-		];
 
 		/// Recursively build a quadtree node for the cell covering
 		/// `[x_off, x_off+size) × [y_off, y_off+size)` against the bbox
 		/// `[bbox.x_min, bbox.x_max) × [bbox.y_min, bbox.y_max)` (all exclusive on max side).
-		fn build_node(depth: u8, (x_off, y_off): (u64, u64), size: u64, bbox: &[u64; 4]) -> Node {
+		fn build_node(depth: u8, (x_off, y_off): (u64, u64), size: u64, bbox: &BBox) -> Node {
 			// Intersection of bbox with this cell
-			let ix_min = bbox[0].max(x_off);
-			let iy_min = bbox[1].max(y_off);
-			let ix_max = bbox[2].min(x_off + size);
-			let iy_max = bbox[3].min(y_off + size);
+			let ix_min = bbox.x_min.max(x_off);
+			let iy_min = bbox.y_min.max(y_off);
+			let ix_max = bbox.x_max.min(x_off + size);
+			let iy_max = bbox.y_max.min(y_off + size);
 
 			if ix_min >= ix_max || iy_min >= iy_max {
 				return Node::Empty;
