@@ -21,7 +21,7 @@ impl TileQuadtree {
 	/// Count the total number of tiles in the quadtree.
 	#[must_use]
 	pub fn count_tiles(&self) -> u64 {
-		self.root.count_tiles(self.zoom)
+		self.root.count_tiles(self.level)
 	}
 
 	/// Count the number of internal (Partial) nodes in the quadtree.
@@ -34,10 +34,10 @@ impl TileQuadtree {
 	/// or `None` if the quadtree is empty.
 	#[must_use]
 	pub fn bounds(&self) -> Option<TileBBox> {
-		let size = 1u64 << self.zoom;
+		let size = 1u64 << self.level;
 		self.root.bounds(0, 0, size).map(|(x0, y0, x1, y1)| {
 			TileBBox::from_min_and_max(
-				self.zoom,
+				self.level,
 				u32::try_from(x0).unwrap(),
 				u32::try_from(y0).unwrap(),
 				u32::try_from(x1 - 1).unwrap(),
@@ -58,8 +58,8 @@ impl TileQuadtree {
 	/// # Errors
 	/// Returns an error if the coordinate's level doesn't match this quadtree's zoom.
 	pub fn includes_coord(&self, coord: &TileCoord) -> Result<bool> {
-		check_coord_zoom(coord, self.zoom)?;
-		let size = 1u64 << self.zoom;
+		check_coord_zoom(coord, self.level)?;
+		let size = 1u64 << self.level;
 		Ok(self
 			.root
 			.includes_coord(0, 0, size, u64::from(coord.x), u64::from(coord.y)))
@@ -70,11 +70,11 @@ impl TileQuadtree {
 	/// # Errors
 	/// Returns an error if the bbox's level doesn't match this quadtree's zoom.
 	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
-		check_bbox_zoom(bbox, self.zoom)?;
+		check_bbox_zoom(bbox, self.level)?;
 		if bbox.is_empty() {
 			return Ok(true);
 		}
-		let size = 1u64 << self.zoom;
+		let size = 1u64 << self.level;
 		let bx_min = u64::from(bbox.x_min()?);
 		let by_min = u64::from(bbox.y_min()?);
 		let bx_max = u64::from(bbox.x_max()?) + 1;
@@ -98,10 +98,10 @@ impl TileQuadtree {
 	/// Returns an error if the zoom levels don't match.
 	pub fn intersects_tree(&self, other: &TileQuadtree) -> Result<bool> {
 		anyhow::ensure!(
-			self.zoom == other.zoom,
+			self.level == other.level,
 			"Cannot intersect quadtrees with different zoom levels: {} vs {}",
-			self.zoom,
-			other.zoom
+			self.level,
+			other.level
 		);
 		Ok(self.root.intersects_tree(&other.root))
 	}

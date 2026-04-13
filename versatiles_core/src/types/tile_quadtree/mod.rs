@@ -50,14 +50,14 @@ pub(crate) struct BBox {
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct TileQuadtree {
-	zoom: u8,
+	level: u8,
 	root: Node,
 }
 
 impl TileQuadtree {
 	/// Return the zoom level of this quadtree.
 	#[must_use]
-	pub fn zoom(&self) -> u8 {
-		self.zoom
+	pub fn level(&self) -> u8 {
+		self.level
 	}
 }

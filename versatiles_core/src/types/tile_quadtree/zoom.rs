@@ -11,12 +11,12 @@ impl TileQuadtree {
 	/// If this quadtree is already at zoom 0, returns a clone unchanged.
 	#[must_use]
 	pub fn level_up(&self) -> TileQuadtree {
-		if self.zoom == 0 {
+		if self.level == 0 {
 			return self.clone();
 		}
-		let root = node_level_up(&self.root, self.zoom);
+		let root = node_level_up(&self.root, self.level);
 		TileQuadtree {
-			zoom: self.zoom - 1,
+			level: self.level - 1,
 			root,
 		}
 	}
@@ -31,9 +31,9 @@ impl TileQuadtree {
 	/// Panics if zoom == 30 (would overflow u8).
 	#[must_use]
 	pub fn level_down(&self) -> TileQuadtree {
-		assert!(self.zoom < 30, "Cannot level_down from zoom 30");
+		assert!(self.level < 30, "Cannot level_down from zoom 30");
 		TileQuadtree {
-			zoom: self.zoom + 1,
+			level: self.level + 1,
 			root: self.root.clone(),
 		}
 	}
@@ -43,18 +43,18 @@ impl TileQuadtree {
 	#[must_use]
 	pub fn at_level(&self, zoom: u8) -> TileQuadtree {
 		use std::cmp::Ordering::{Equal, Greater, Less};
-		match zoom.cmp(&self.zoom) {
+		match zoom.cmp(&self.level) {
 			Equal => self.clone(),
 			Less => {
 				let mut result = self.clone();
-				while result.zoom > zoom {
+				while result.level > zoom {
 					result = result.level_up();
 				}
 				result
 			}
 			Greater => {
 				let mut result = self.clone();
-				while result.zoom < zoom {
+				while result.level < zoom {
 					result = result.level_down();
 				}
 				result

@@ -10,7 +10,7 @@ impl TileCover {
 	pub fn level(&self) -> u8 {
 		match self {
 			TileCover::Bbox(b) => b.level,
-			TileCover::Tree(t) => t.zoom(),
+			TileCover::Tree(t) => t.level(),
 		}
 	}
 

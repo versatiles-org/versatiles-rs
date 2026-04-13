@@ -19,7 +19,7 @@ impl TileQuadtree {
 	/// bitstream in DFS order.
 	#[must_use]
 	pub fn serialize(&self) -> Vec<u8> {
-		let mut out = vec![self.zoom]; // header
+		let mut out = vec![self.level]; // header
 		let mut byte: u8 = 0;
 		let mut bit_pos: u8 = 0;
 		write_node(&self.root, &mut out, &mut byte, &mut bit_pos);
@@ -51,7 +51,7 @@ impl TileQuadtree {
 		};
 		let root = read_node(&mut reader)?;
 
-		Ok(TileQuadtree { zoom, root })
+		Ok(TileQuadtree { level: zoom, root })
 	}
 }
 

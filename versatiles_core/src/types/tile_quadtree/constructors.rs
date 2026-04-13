@@ -9,7 +9,7 @@ impl TileQuadtree {
 	pub fn new_empty(zoom: u8) -> Result<Self> {
 		validate_zoom_level(zoom)?;
 		Ok(TileQuadtree {
-			zoom,
+			level: zoom,
 			root: Node::Empty,
 		})
 	}
@@ -17,7 +17,10 @@ impl TileQuadtree {
 	/// Create a full quadtree (all tiles covered) at the given zoom level.
 	pub fn new_full(zoom: u8) -> Result<Self> {
 		validate_zoom_level(zoom)?;
-		Ok(TileQuadtree { zoom, root: Node::Full })
+		Ok(TileQuadtree {
+			level: zoom,
+			root: Node::Full,
+		})
 	}
 
 	/// Build a quadtree from a [`TileBBox`], covering exactly those tiles.
@@ -51,7 +54,7 @@ impl TileQuadtree {
 				y_max,
 			},
 		);
-		TileQuadtree { zoom, root }
+		TileQuadtree { level: zoom, root }
 	}
 
 	/// Build a quadtree from a geographic bounding box at the given zoom level.

@@ -8,8 +8,8 @@ impl TileQuadtree {
 	///
 	/// Tiles are yielded in DFS order (NW first, then NE, SW, SE).
 	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord> + '_ {
-		let size = 1u64 << self.zoom;
-		TileIter::new(&self.root, 0, 0, size, self.zoom)
+		let size = 1u64 << self.level;
+		TileIter::new(&self.root, 0, 0, size, self.level)
 	}
 
 	/// Split the quadtree into a grid of sub-quadtrees, each covering at most
@@ -18,7 +18,7 @@ impl TileQuadtree {
 	/// This is analogous to `TileBBox::iter_bbox_grid`.
 	pub fn iter_bbox_grid(&self, size: u32) -> impl Iterator<Item = TileQuadtree> + '_ {
 		assert!(size > 0, "grid size must be > 0");
-		let zoom = self.zoom;
+		let zoom = self.level;
 		let total = 1u64 << zoom;
 		let s = u64::from(size);
 		let cols = total.div_ceil(s);

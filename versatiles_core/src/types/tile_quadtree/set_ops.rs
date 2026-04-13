@@ -10,13 +10,16 @@ impl TileQuadtree {
 	/// Returns an error if zoom levels differ.
 	pub fn union(&self, other: &TileQuadtree) -> Result<TileQuadtree> {
 		ensure!(
-			self.zoom == other.zoom,
+			self.level == other.level,
 			"Cannot union quadtrees with different zoom levels: {} vs {}",
-			self.zoom,
-			other.zoom
+			self.level,
+			other.level
 		);
 		let root = node_union(&self.root, &other.root);
-		Ok(TileQuadtree { zoom: self.zoom, root })
+		Ok(TileQuadtree {
+			level: self.level,
+			root,
+		})
 	}
 
 	/// Return the intersection of `self` and `other` (tiles in both).
@@ -25,13 +28,16 @@ impl TileQuadtree {
 	/// Returns an error if zoom levels differ.
 	pub fn intersection(&self, other: &TileQuadtree) -> Result<TileQuadtree> {
 		ensure!(
-			self.zoom == other.zoom,
+			self.level == other.level,
 			"Cannot intersect quadtrees with different zoom levels: {} vs {}",
-			self.zoom,
-			other.zoom
+			self.level,
+			other.level
 		);
 		let root = node_intersection(&self.root, &other.root);
-		Ok(TileQuadtree { zoom: self.zoom, root })
+		Ok(TileQuadtree {
+			level: self.level,
+			root,
+		})
 	}
 
 	/// Return the difference of `self` minus `other` (tiles in self but not other).
@@ -40,13 +46,16 @@ impl TileQuadtree {
 	/// Returns an error if zoom levels differ.
 	pub fn difference(&self, other: &TileQuadtree) -> Result<TileQuadtree> {
 		ensure!(
-			self.zoom == other.zoom,
+			self.level == other.level,
 			"Cannot difference quadtrees with different zoom levels: {} vs {}",
-			self.zoom,
-			other.zoom
+			self.level,
+			other.level
 		);
 		let root = node_difference(&self.root, &other.root);
-		Ok(TileQuadtree { zoom: self.zoom, root })
+		Ok(TileQuadtree {
+			level: self.level,
+			root,
+		})
 	}
 }
 

@@ -21,13 +21,13 @@ fn new_empty_and_full() {
 	let e = TileQuadtree::new_empty(4).unwrap();
 	assert!(e.is_empty());
 	assert!(!e.is_full());
-	assert_eq!(e.zoom(), 4);
+	assert_eq!(e.level(), 4);
 	assert_eq!(e.count_tiles(), 0);
 
 	let f = TileQuadtree::new_full(3).unwrap();
 	assert!(!f.is_empty());
 	assert!(f.is_full());
-	assert_eq!(f.zoom(), 3);
+	assert_eq!(f.level(), 3);
 	assert_eq!(f.count_tiles(), 64); // 8×8
 }
 
@@ -240,7 +240,7 @@ fn level_up_full_empty() {
 #[test]
 fn level_down_full_empty() {
 	let f = TileQuadtree::new_full(3).unwrap().level_down();
-	assert_eq!(f.zoom(), 4);
+	assert_eq!(f.level(), 4);
 	assert!(f.is_full());
 }
 
@@ -248,16 +248,16 @@ fn level_down_full_empty() {
 fn level_up_zoom0_unchanged() {
 	let t = TileQuadtree::new_full(0).unwrap();
 	let up = t.level_up();
-	assert_eq!(up.zoom(), 0);
+	assert_eq!(up.level(), 0);
 }
 
 #[test]
 fn at_level_roundtrip() -> Result<()> {
 	let t = TileQuadtree::from_bbox(&bbox(4, 4, 4, 11, 11));
 	let up = t.at_level(3);
-	assert_eq!(up.zoom(), 3);
+	assert_eq!(up.level(), 3);
 	let down = t.at_level(5);
-	assert_eq!(down.zoom(), 5);
+	assert_eq!(down.level(), 5);
 	// Going up should have fewer or equal tiles
 	assert!(up.count_tiles() <= t.count_tiles());
 	Ok(())
