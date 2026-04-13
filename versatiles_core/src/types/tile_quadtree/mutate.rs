@@ -15,7 +15,7 @@ impl TileQuadtree {
 		let size = 1u64 << self.level;
 		self
 			.root
-			.insert_tile((0, 0), size, (u64::from(coord.x), u64::from(coord.y)));
+			.insert_coord((0, 0), size, (u64::from(coord.x), u64::from(coord.y)));
 		Ok(())
 	}
 
@@ -42,7 +42,7 @@ impl TileQuadtree {
 		let size = 1u64 << self.level;
 		self
 			.root
-			.remove_tile((0, 0), size, (u64::from(coord.x), u64::from(coord.y)));
+			.remove_coord((0, 0), size, (u64::from(coord.x), u64::from(coord.y)));
 		Ok(())
 	}
 

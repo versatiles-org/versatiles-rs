@@ -152,7 +152,7 @@ impl Node {
 		}
 	}
 
-	pub fn insert_tile(&mut self, (x_off, y_off): (u64, u64), size: u64, (tx, ty): (u64, u64)) {
+	pub fn insert_coord(&mut self, (x_off, y_off): (u64, u64), size: u64, (tx, ty): (u64, u64)) {
 		match self {
 			Node::Full => (),
 			Node::Empty => {
@@ -160,12 +160,12 @@ impl Node {
 					*self = Node::Full;
 				} else {
 					*self = Node::new_partial_empty();
-					self.insert_tile((x_off, y_off), size, (tx, ty));
+					self.insert_coord((x_off, y_off), size, (tx, ty));
 				}
 			}
 			Node::Partial(children) => {
 				let (idx, cx, cy, half) = child_quadrant((x_off, y_off), size, (tx, ty));
-				children[idx].insert_tile((cx, cy), half, (tx, ty));
+				children[idx].insert_coord((cx, cy), half, (tx, ty));
 				self.normalize();
 			}
 		}
@@ -210,7 +210,7 @@ impl Node {
 		}
 	}
 
-	pub fn remove_tile(&mut self, (x_off, y_off): (u64, u64), size: u64, (tx, ty): (u64, u64)) {
+	pub fn remove_coord(&mut self, (x_off, y_off): (u64, u64), size: u64, (tx, ty): (u64, u64)) {
 		if self == &Node::Empty {
 			return;
 		}
@@ -223,7 +223,7 @@ impl Node {
 		}
 		if let Node::Partial(children) = self {
 			let (idx, cx, cy, half) = child_quadrant((x_off, y_off), size, (tx, ty));
-			children[idx].remove_tile((cx, cy), half, (tx, ty));
+			children[idx].remove_coord((cx, cy), half, (tx, ty));
 			self.normalize();
 		}
 	}

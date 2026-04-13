@@ -97,7 +97,7 @@ fn bounds_partial() -> Result<()> {
 }
 
 #[test]
-fn contains_tile() -> Result<()> {
+fn includes_coord() -> Result<()> {
 	let t = TileQuadtree::from_bbox(&bbox(3, 2, 2, 4, 4));
 	assert!(t.includes_coord(&coord(3, 2, 2))?);
 	assert!(t.includes_coord(&coord(3, 4, 4))?);
@@ -109,7 +109,7 @@ fn contains_tile() -> Result<()> {
 }
 
 #[test]
-fn contains_bbox() -> Result<()> {
+fn includes_bbox() -> Result<()> {
 	let full = TileQuadtree::new_full(3).unwrap();
 	assert!(full.includes_bbox(&TileBBox::new_full(3)?)?);
 	assert!(full.includes_bbox(&bbox(3, 0, 0, 3, 3))?);
@@ -137,7 +137,7 @@ fn intersects() -> Result<()> {
 // -------------------------------------------------------------------------
 
 #[test]
-fn insert_tile() -> Result<()> {
+fn include_coord() -> Result<()> {
 	let mut t = TileQuadtree::new_empty(3).unwrap();
 	t.include_coord(&coord(3, 0, 0))?;
 	assert_eq!(t.count_tiles(), 1);
@@ -167,7 +167,7 @@ fn insert_bbox() -> Result<()> {
 }
 
 #[test]
-fn remove_tile() -> Result<()> {
+fn remove_coord() -> Result<()> {
 	let mut t = TileQuadtree::new_full(2).unwrap();
 	t.remove_coord(&coord(2, 0, 0))?;
 	assert!(!t.is_full());
