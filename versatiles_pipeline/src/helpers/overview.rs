@@ -103,7 +103,7 @@ impl OverviewCore {
 						assert_eq!(image1.width(), half_size);
 						assert_eq!(image1.height(), half_size);
 						let coord0 = coord1.to_level_decreased()?;
-						if bbox.includes_coord(&coord0) {
+						if bbox.includes_coord(&coord0)? {
 							map.get_mut(&coord0)?.push((coord1, image1));
 						}
 					}
@@ -160,7 +160,7 @@ impl OverviewCore {
 				} else {
 					None
 				};
-				let tile = if bbox.includes_coord(&coord) {
+				let tile = if bbox.includes_coord(&coord).unwrap() {
 					image_opt.map(|img| (coord, Tile::from_image(img, format).unwrap()))
 				} else {
 					None
@@ -204,7 +204,7 @@ impl OverviewCore {
 		let mut stream = self.source.get_tile_coord_stream(source_bbox).await?;
 		while let Some((coord, _)) = stream.next().await {
 			let c = coord.at_level(bbox.level);
-			if bbox.includes_coord(&c) {
+			if bbox.includes_coord(&c)? {
 				coords.insert(c);
 			}
 		}

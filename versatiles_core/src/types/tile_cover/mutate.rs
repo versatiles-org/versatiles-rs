@@ -18,7 +18,7 @@ impl TileCover {
 			if b.is_empty() {
 				return b.include_coord(coord);
 			}
-			if b.includes_coord(coord) {
+			if b.includes_coord(coord)? {
 				return Ok(());
 			}
 			self.upgrade_to_tree();
@@ -38,7 +38,7 @@ impl TileCover {
 			if b.is_empty() {
 				return b.include_bbox(bbox);
 			}
-			if b.includes_bbox(bbox) {
+			if b.includes_bbox(bbox)? {
 				return Ok(());
 			}
 			self.upgrade_to_tree();
@@ -55,7 +55,7 @@ impl TileCover {
 	/// Returns an error if the coordinate's level does not match this cover's level.
 	pub fn remove_coord(&mut self, coord: &TileCoord) -> Result<()> {
 		if let TileCover::Bbox(b) = self {
-			if b.is_empty() || !b.includes_coord(coord) {
+			if b.is_empty() || !b.includes_coord(coord)? {
 				return Ok(());
 			}
 			self.upgrade_to_tree();
@@ -72,7 +72,7 @@ impl TileCover {
 	/// Returns an error if `bbox`'s level does not match this cover's level.
 	pub fn remove_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		if let TileCover::Bbox(b) = self {
-			if b.is_empty() || !b.intersects_bbox(bbox) {
+			if b.is_empty() || !b.intersects_bbox(bbox)? {
 				return Ok(());
 			}
 			self.upgrade_to_tree();

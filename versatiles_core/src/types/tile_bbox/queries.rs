@@ -28,25 +28,27 @@ impl TileBBox {
 	///
 	/// * `true` if the coordinate is within the bounding box and at the same zoom level.
 	/// * `false` otherwise.
-	#[must_use]
-	pub fn includes_coord(&self, coord: &TileCoord) -> bool {
-		if self.is_empty() || coord.level != self.level {
-			return false;
+	pub fn includes_coord(&self, coord: &TileCoord) -> Result<bool> {
+		ensure!(
+			self.level == coord.level,
+			"Cannot compare TileBBox with level={} with TileCoord with level={}",
+			self.level,
+			coord.level
+		);
+		if self.is_empty() {
+			return Ok(false);
 		}
 		// Safety: is_empty() checked above; x_min/y_min/x_max/y_max are valid.
-		coord.x >= self.x_min().unwrap()
-			&& coord.x <= self.x_max().unwrap()
-			&& coord.y >= self.y_min().unwrap()
-			&& coord.y <= self.y_max().unwrap()
+		Ok(coord.x >= self.x_min()? && coord.x <= self.x_max()? && coord.y >= self.y_min()? && coord.y <= self.y_max()?)
 	}
 
 	/// Returns whether this bbox completely includes another bbox at the same level.
-	pub fn try_includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
+	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
 		ensure!(
 			self.level == bbox.level,
 			"Cannot compare TileBBox with level={} with TileBBox with level={}",
+			self.level,
 			bbox.level,
-			self.level
 		);
 
 		if self.is_empty() || bbox.is_empty() {
@@ -60,12 +62,6 @@ impl TileBBox {
 			&& self.y_max()? >= bbox.y_max()?)
 	}
 
-	/// Returns whether this bbox completely includes another bbox at the same level.
-	#[must_use]
-	pub fn includes_bbox(&self, bbox: &TileBBox) -> bool {
-		self.try_includes_bbox(bbox).unwrap_or(false)
-	}
-
 	// -------------------------------------------------------------------------
 	// Include and Intersect Operations
 	// -------------------------------------------------------------------------
@@ -73,23 +69,23 @@ impl TileBBox {
 	/// Checks if two bounding boxes overlap in tile space.
 	///
 	/// Overlap is defined as having at least one tile coordinate in common.
-	#[must_use]
-	pub fn intersects_bbox(&self, bbox: &TileBBox) -> bool {
-		assert_eq!(
-			self.level, bbox.level,
+	pub fn intersects_bbox(&self, bbox: &TileBBox) -> Result<bool> {
+		ensure!(
+			self.level == bbox.level,
 			"Cannot compare TileBBox with level={} with TileBBox with level={}",
-			bbox.level, self.level
+			self.level,
+			bbox.level,
 		);
 
 		if self.is_empty() || bbox.is_empty() {
-			return false;
+			return Ok(false);
 		}
 
 		// Safety: is_empty() checked above; getters are valid.
-		self.x_min().unwrap() <= bbox.x_max().unwrap()
-			&& self.x_max().unwrap() >= bbox.x_min().unwrap()
-			&& self.y_min().unwrap() <= bbox.y_max().unwrap()
-			&& self.y_max().unwrap() >= bbox.y_min().unwrap()
+		Ok(self.x_min()? <= bbox.x_max()?
+			&& self.x_max()? >= bbox.x_min()?
+			&& self.y_min()? <= bbox.y_max()?
+			&& self.y_max()? >= bbox.y_min()?)
 	}
 
 	pub fn intersected_bbox(&self, bbox: &TileBBox) -> Result<TileBBox> {
@@ -190,7 +186,7 @@ impl TileBBox {
 	pub fn index_of(&self, coord: &TileCoord) -> Result<u64> {
 		ensure!(!self.is_empty(), "cannot get index in an empty TileBBox");
 		ensure!(
-			self.includes_coord(coord),
+			self.includes_coord(coord)?,
 			"Coordinate {coord:?} is not within the bounding box {self:?}",
 		);
 
@@ -276,21 +272,21 @@ mod tests {
 		let disjoint = bb(5, 30, 30, 31, 31);
 
 		// contains (TileCoord)
-		assert!(a.includes_coord(&tc(5, 15, 15)));
-		assert!(!a.includes_coord(&tc(6, 15, 15))); // level mismatch
-		assert!(!a.includes_coord(&tc(5, 25, 15))); // outside
+		assert!(a.includes_coord(&tc(5, 15, 15))?);
+		assert!(!a.includes_coord(&tc(6, 15, 15))?); // level mismatch
+		assert!(!a.includes_coord(&tc(5, 25, 15))?); // outside
 
 		// try_contains_bbox
-		assert!(a.try_includes_bbox(&inner)?);
-		assert!(!a.try_includes_bbox(&edge_touch)?); // inner extends beyond
-		assert!(!a.try_includes_bbox(&disjoint)?);
-		assert!(!a.try_includes_bbox(&TileBBox::new_empty(5)?)?);
-		assert!(a.try_includes_bbox(&bb(6, 12, 12, 18, 18)).is_err()); // level mismatch
+		assert!(a.includes_bbox(&inner)?);
+		assert!(!a.includes_bbox(&edge_touch)?); // inner extends beyond
+		assert!(!a.includes_bbox(&disjoint)?);
+		assert!(!a.includes_bbox(&TileBBox::new_empty(5)?)?);
+		assert!(a.includes_bbox(&bb(6, 12, 12, 18, 18)).is_err()); // level mismatch
 
 		// overlaps_bbox (inclusive on shared edge)
-		assert!(a.intersects_bbox(&inner));
-		assert!(a.intersects_bbox(&edge_touch)); // edge contact counts as overlap by implementation
-		assert!(!a.intersects_bbox(&disjoint));
+		assert!(a.intersects_bbox(&inner)?);
+		assert!(a.intersects_bbox(&edge_touch)?); // edge contact counts as overlap by implementation
+		assert!(!a.intersects_bbox(&disjoint)?);
 		Ok(())
 	}
 

@@ -352,7 +352,7 @@ impl TileSource for Operation {
 				for dy in 0..scale {
 					for dx in 0..scale {
 						let coord = TileCoord::new(bbox.level, base_x + dx, base_y + dy)?;
-						if bbox.includes_coord(&coord) {
+						if bbox.includes_coord(&coord)? {
 							coords.insert(coord);
 						}
 					}

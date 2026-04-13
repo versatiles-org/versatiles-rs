@@ -72,7 +72,7 @@ impl TileCover {
 	/// Returns an error if the coordinate's level does not match this cover's level.
 	pub fn includes_coord(&self, coord: &TileCoord) -> Result<bool> {
 		match self {
-			TileCover::Bbox(b) => Ok(b.includes_coord(coord)),
+			TileCover::Bbox(b) => b.includes_coord(coord),
 			TileCover::Tree(t) => t.includes_coord(coord),
 		}
 	}
@@ -83,7 +83,7 @@ impl TileCover {
 	/// Returns an error if `bbox`'s level does not match this cover's level.
 	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
 		match self {
-			TileCover::Bbox(b) => Ok(b.includes_bbox(bbox)),
+			TileCover::Bbox(b) => b.includes_bbox(bbox),
 			TileCover::Tree(t) => t.includes_bbox(bbox),
 		}
 	}
@@ -94,8 +94,8 @@ impl TileCover {
 	#[must_use]
 	pub fn intersects_bbox(&self, bbox: &TileBBox) -> bool {
 		match self {
-			TileCover::Bbox(b) => b.intersects_bbox(bbox),
-			TileCover::Tree(t) => t.bounds().is_some_and(|b| b.intersects_bbox(bbox)),
+			TileCover::Bbox(b) => b.intersects_bbox(bbox).unwrap(),
+			TileCover::Tree(t) => t.bounds().is_some_and(|b| b.intersects_bbox(bbox).unwrap()),
 		}
 	}
 }
