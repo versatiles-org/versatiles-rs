@@ -116,8 +116,7 @@ fn union_bbox_bbox_stays_bbox() {
 	let a = TileCover::from(bbox(4, 0, 0, 3, 3));
 	let b = TileCover::from(bbox(4, 5, 5, 8, 8));
 	let u = a.union(&b).unwrap();
-	assert!(matches!(u, TileCover::Bbox(_)));
-	// bounding rect of both
+	assert!(matches!(u, TileCover::Tree(_)));
 	assert_eq!(u.bounds(), Some(bbox(4, 0, 0, 8, 8)));
 }
 

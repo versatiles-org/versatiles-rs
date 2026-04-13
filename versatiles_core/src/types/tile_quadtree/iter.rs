@@ -8,8 +8,7 @@ impl TileQuadtree {
 	///
 	/// Tiles are yielded in DFS order (NW first, then NE, SW, SE).
 	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord> + '_ {
-		let size = 1u64 << self.level;
-		TileIter::new(&self.root, 0, 0, size, self.level)
+		TileIter::new(&self.root, 0, 0, self.level)
 	}
 
 	/// Split the quadtree into a grid of sub-quadtrees, each covering at most
@@ -62,15 +61,16 @@ struct IterFrame<'a> {
 }
 
 impl<'a> TileIter<'a> {
-	fn new(root: &'a Node, x_off: u64, y_off: u64, size: u64, zoom: u8) -> Self {
+	fn new(node: &'a Node, x_off: u64, y_off: u64, level: u8) -> Self {
+		let size = 1u64 << level;
 		TileIter {
 			stack: vec![IterFrame {
-				node: root,
+				node,
 				x_off,
 				y_off,
 				size,
 			}],
-			zoom,
+			zoom: level,
 		}
 	}
 }
