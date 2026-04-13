@@ -15,7 +15,7 @@ impl TileQuadtree {
 		let size = 1u64 << self.level;
 		self
 			.root
-			.insert_tile(0, 0, size, u64::from(coord.x), u64::from(coord.y));
+			.insert_tile((0, 0), size, (u64::from(coord.x), u64::from(coord.y)));
 		Ok(())
 	}
 
@@ -34,8 +34,7 @@ impl TileQuadtree {
 		let bx_max = u64::from(bbox.x_max()?) + 1;
 		let by_max = u64::from(bbox.y_max()?) + 1;
 		self.root.include_bbox(
-			0,
-			0,
+			(0, 0),
 			size,
 			BBox {
 				x_min: bx_min,
@@ -56,7 +55,7 @@ impl TileQuadtree {
 		let size = 1u64 << self.level;
 		self
 			.root
-			.remove_tile(0, 0, size, u64::from(coord.x), u64::from(coord.y));
+			.remove_tile((0, 0), size, (u64::from(coord.x), u64::from(coord.y)));
 		Ok(())
 	}
 
@@ -75,8 +74,7 @@ impl TileQuadtree {
 		let x_max = u64::from(bbox.x_max()?) + 1;
 		let y_max = u64::from(bbox.y_max()?) + 1;
 		self.root.remove_bbox(
-			0,
-			0,
+			(0, 0),
 			size,
 			BBox {
 				x_min,

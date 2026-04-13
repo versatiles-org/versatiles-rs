@@ -152,7 +152,7 @@ impl Node {
 		}
 	}
 
-	pub fn insert_tile(&mut self, x_off: u64, y_off: u64, size: u64, tx: u64, ty: u64) {
+	pub fn insert_tile(&mut self, (x_off, y_off): (u64, u64), size: u64, (tx, ty): (u64, u64)) {
 		match self {
 			Node::Full => (),
 			Node::Empty => {
@@ -160,18 +160,18 @@ impl Node {
 					*self = Node::Full;
 				} else {
 					*self = Node::new_partial_empty();
-					self.insert_tile(x_off, y_off, size, tx, ty);
+					self.insert_tile((x_off, y_off), size, (tx, ty));
 				}
 			}
 			Node::Partial(children) => {
 				let (idx, cx, cy, half) = child_quadrant(x_off, y_off, size, tx, ty);
-				children[idx].insert_tile(cx, cy, half, tx, ty);
+				children[idx].insert_tile((cx, cy), half, (tx, ty));
 				self.normalize();
 			}
 		}
 	}
 
-	pub fn include_bbox(&mut self, x_off: u64, y_off: u64, size: u64, bbox: BBox) {
+	pub fn include_bbox(&mut self, (x_off, y_off): (u64, u64), size: u64, bbox: BBox) {
 		// Intersection of bbox with this cell
 		let ix_min = bbox.x_min.max(x_off);
 		let iy_min = bbox.y_min.max(y_off);
@@ -202,15 +202,15 @@ impl Node {
 			let half = size / 2;
 			let mid_x = x_off + half;
 			let mid_y = y_off + half;
-			children[0].include_bbox(x_off, y_off, half, bbox);
-			children[1].include_bbox(mid_x, y_off, half, bbox);
-			children[2].include_bbox(x_off, mid_y, half, bbox);
-			children[3].include_bbox(mid_x, mid_y, half, bbox);
+			children[0].include_bbox((x_off, y_off), half, bbox);
+			children[1].include_bbox((mid_x, y_off), half, bbox);
+			children[2].include_bbox((x_off, mid_y), half, bbox);
+			children[3].include_bbox((mid_x, mid_y), half, bbox);
 			self.normalize();
 		}
 	}
 
-	pub fn remove_tile(&mut self, x_off: u64, y_off: u64, size: u64, tx: u64, ty: u64) {
+	pub fn remove_tile(&mut self, (x_off, y_off): (u64, u64), size: u64, (tx, ty): (u64, u64)) {
 		if self == &Node::Empty {
 			return;
 		}
@@ -223,12 +223,12 @@ impl Node {
 		}
 		if let Node::Partial(children) = self {
 			let (idx, cx, cy, half) = child_quadrant(x_off, y_off, size, tx, ty);
-			children[idx].remove_tile(cx, cy, half, tx, ty);
+			children[idx].remove_tile((cx, cy), half, (tx, ty));
 			self.normalize();
 		}
 	}
 
-	pub fn remove_bbox(&mut self, x_off: u64, y_off: u64, size: u64, bbox: BBox) {
+	pub fn remove_bbox(&mut self, (x_off, y_off): (u64, u64), size: u64, bbox: BBox) {
 		let ix_min = bbox.x_min.max(x_off);
 		let iy_min = bbox.y_min.max(y_off);
 		let ix_max = bbox.x_max.min(x_off + size);
@@ -259,10 +259,10 @@ impl Node {
 			let half = size / 2;
 			let mid_x = x_off + half;
 			let mid_y = y_off + half;
-			children[0].remove_bbox(x_off, y_off, half, bbox);
-			children[1].remove_bbox(mid_x, y_off, half, bbox);
-			children[2].remove_bbox(x_off, mid_y, half, bbox);
-			children[3].remove_bbox(mid_x, mid_y, half, bbox);
+			children[0].remove_bbox((x_off, y_off), half, bbox);
+			children[1].remove_bbox((mid_x, y_off), half, bbox);
+			children[2].remove_bbox((x_off, mid_y), half, bbox);
+			children[3].remove_bbox((mid_x, mid_y), half, bbox);
 			self.normalize();
 		}
 	}
