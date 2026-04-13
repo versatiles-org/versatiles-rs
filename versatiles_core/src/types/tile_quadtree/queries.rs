@@ -35,7 +35,7 @@ impl TileQuadtree {
 	#[must_use]
 	pub fn bounds(&self) -> Option<TileBBox> {
 		let size = 1u64 << self.level;
-		self.root.bounds(0, 0, size).map(|(x0, y0, x1, y1)| {
+		self.root.bounds((0, 0), size).map(|(x0, y0, x1, y1)| {
 			TileBBox::from_min_and_max(
 				self.level,
 				u32::try_from(x0).unwrap(),

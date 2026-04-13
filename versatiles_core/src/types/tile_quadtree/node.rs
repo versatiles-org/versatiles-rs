@@ -73,7 +73,7 @@ impl Node {
 	}
 
 	/// Returns the bounding box `(x_min, y_min, x_max_excl, y_max_excl)` of non-empty tiles.
-	pub fn bounds(&self, x_off: u64, y_off: u64, size: u64) -> Option<(u64, u64, u64, u64)> {
+	pub fn bounds(&self, (x_off, y_off): (u64, u64), size: u64) -> Option<(u64, u64, u64, u64)> {
 		match self {
 			Node::Empty => None,
 			Node::Full => Some((x_off, y_off, x_off + size, y_off + size)),
@@ -85,7 +85,7 @@ impl Node {
 				let mut result: Option<(u64, u64, u64, u64)> = None;
 				for (i, child) in children.iter().enumerate() {
 					let (cx, cy) = child_offsets[i];
-					if let Some(b) = child.bounds(cx, cy, half) {
+					if let Some(b) = child.bounds((cx, cy), half) {
 						result = Some(match result {
 							None => b,
 							Some(r) => (r.0.min(b.0), r.1.min(b.1), r.2.max(b.2), r.3.max(b.3)),
