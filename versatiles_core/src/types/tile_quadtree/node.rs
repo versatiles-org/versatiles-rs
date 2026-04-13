@@ -97,13 +97,13 @@ impl Node {
 		}
 	}
 
-	pub fn includes_coord(&self, x_off: u64, y_off: u64, size: u64, tx: u64, ty: u64) -> bool {
+	pub fn includes_coord(&self, (x_off, y_off): (u64, u64), size: u64, (tx, ty): (u64, u64)) -> bool {
 		match self {
 			Node::Empty => false,
 			Node::Full => true,
 			Node::Partial(children) => {
-				let (idx, cx, cy, half) = child_quadrant(x_off, y_off, size, tx, ty);
-				children[idx].includes_coord(cx, cy, half, tx, ty)
+				let (idx, cx, cy, half) = child_quadrant((x_off, y_off), size, (tx, ty));
+				children[idx].includes_coord((cx, cy), half, (tx, ty))
 			}
 		}
 	}
@@ -164,7 +164,7 @@ impl Node {
 				}
 			}
 			Node::Partial(children) => {
-				let (idx, cx, cy, half) = child_quadrant(x_off, y_off, size, tx, ty);
+				let (idx, cx, cy, half) = child_quadrant((x_off, y_off), size, (tx, ty));
 				children[idx].insert_tile((cx, cy), half, (tx, ty));
 				self.normalize();
 			}
@@ -222,7 +222,7 @@ impl Node {
 			*self = Node::new_partial_full();
 		}
 		if let Node::Partial(children) = self {
-			let (idx, cx, cy, half) = child_quadrant(x_off, y_off, size, tx, ty);
+			let (idx, cx, cy, half) = child_quadrant((x_off, y_off), size, (tx, ty));
 			children[idx].remove_tile((cx, cy), half, (tx, ty));
 			self.normalize();
 		}
@@ -272,7 +272,7 @@ impl Node {
 /// `(child_index, child_x_off, child_y_off, half_size)`.
 ///
 /// Child indices follow `[NW, NE, SW, SE]` order (index 0..3).
-pub(crate) fn child_quadrant(x_off: u64, y_off: u64, size: u64, tx: u64, ty: u64) -> (usize, u64, u64, u64) {
+pub(crate) fn child_quadrant((x_off, y_off): (u64, u64), size: u64, (tx, ty): (u64, u64)) -> (usize, u64, u64, u64) {
 	let half = size / 2;
 	let mid_x = x_off + half;
 	let mid_y = y_off + half;

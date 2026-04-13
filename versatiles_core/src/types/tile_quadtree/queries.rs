@@ -62,7 +62,7 @@ impl TileQuadtree {
 		let size = 1u64 << self.level;
 		Ok(self
 			.root
-			.includes_coord(0, 0, size, u64::from(coord.x), u64::from(coord.y)))
+			.includes_coord((0, 0), size, (u64::from(coord.x), u64::from(coord.y))))
 	}
 
 	/// Check whether all tiles in `bbox` are in this quadtree.
