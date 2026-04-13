@@ -91,11 +91,13 @@ impl TileCover {
 	/// Returns `true` if this cover overlaps the given `bbox`.
 	///
 	/// For the `Tree` variant this is an approximate check via [`bounds`](Self::bounds).
-	#[must_use]
-	pub fn intersects_bbox(&self, bbox: &TileBBox) -> bool {
+	pub fn intersects_bbox(&self, bbox: &TileBBox) -> Result<bool> {
 		match self {
-			TileCover::Bbox(b) => b.intersects_bbox(bbox).unwrap(),
-			TileCover::Tree(t) => t.bounds().is_some_and(|b| b.intersects_bbox(bbox).unwrap()),
+			TileCover::Bbox(b) => b.intersects_bbox(bbox),
+			TileCover::Tree(t) => match t.bounds() {
+				Some(b) => b.intersects_bbox(bbox),
+				None => Ok(false),
+			},
 		}
 	}
 }

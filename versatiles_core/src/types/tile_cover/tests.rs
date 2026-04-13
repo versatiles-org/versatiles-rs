@@ -71,8 +71,8 @@ fn contains_bbox() {
 #[test]
 fn intersects_bbox() {
 	let c = TileCover::from(bbox(4, 0, 0, 7, 7));
-	assert!(c.intersects_bbox(&bbox(4, 5, 5, 10, 10)));
-	assert!(!c.intersects_bbox(&bbox(4, 10, 10, 15, 15)));
+	assert!(c.intersects_bbox(&bbox(4, 5, 5, 10, 10)).unwrap());
+	assert!(!c.intersects_bbox(&bbox(4, 10, 10, 15, 15)).unwrap());
 }
 
 // --- mutations ---
@@ -227,8 +227,8 @@ fn is_full_tree_variant() {
 #[test]
 fn intersects_bbox_tree_variant() {
 	let c = TileCover::from(TileQuadtree::from_bbox(&bbox(4, 0, 0, 7, 7)));
-	assert!(c.intersects_bbox(&bbox(4, 5, 5, 10, 10)));
-	assert!(!c.intersects_bbox(&bbox(4, 10, 10, 15, 15)));
+	assert!(c.intersects_bbox(&bbox(4, 5, 5, 10, 10)).unwrap());
+	assert!(!c.intersects_bbox(&bbox(4, 10, 10, 15, 15)).unwrap());
 }
 
 // --- level mismatch errors (Tree variant errors; Bbox variant returns Ok(false)) ---

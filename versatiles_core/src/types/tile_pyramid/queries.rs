@@ -76,7 +76,7 @@ impl TilePyramid {
 	#[must_use]
 	pub fn intersects_bbox(&self, bbox: &TileBBox) -> bool {
 		if let Some(cover) = self.levels.get(bbox.level as usize) {
-			cover.intersects_bbox(bbox)
+			cover.intersects_bbox(bbox).unwrap()
 		} else {
 			false
 		}
