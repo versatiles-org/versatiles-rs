@@ -12,11 +12,6 @@ impl TileCover {
 	/// # Errors
 	/// Returns an error if the zoom levels differ or a quadtree operation fails.
 	pub fn union(&self, other: &TileCover) -> Result<TileCover> {
-		if let (TileCover::Bbox(a), TileCover::Bbox(b)) = (self, other) {
-			let mut result = *a;
-			result.include_bbox(b)?;
-			return Ok(TileCover::Bbox(result));
-		}
 		let a = self.to_tree();
 		let b = other.to_tree();
 		Ok(TileCover::Tree(a.union(&b)?))
