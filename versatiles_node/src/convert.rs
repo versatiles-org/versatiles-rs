@@ -312,7 +312,7 @@ mod tests {
 		assert_eq!(opts.swap_xy, Some(true));
 	}
 
-	/// Test TileBBoxPyramid creation with zoom filtering
+	/// Test TilePyramid creation with zoom filtering
 	#[test]
 	fn test_pyramid_zoom_filtering() {
 		let mut pyramid = TilePyramid::new_full();
@@ -326,7 +326,7 @@ mod tests {
 		assert_eq!(pyramid.get_level_max(), Some(10));
 	}
 
-	/// Test TileBBoxPyramid with geographic bbox
+	/// Test TilePyramid with geographic bbox
 	#[test]
 	fn test_pyramid_geo_bbox() {
 		let mut pyramid = TilePyramid::new_full_up_to(10);
@@ -341,7 +341,7 @@ mod tests {
 		assert!(pyramid.count_tiles() < TilePyramid::new_full_up_to(10).count_tiles());
 	}
 
-	/// Test TileBBoxPyramid border addition
+	/// Test TilePyramid border addition
 	#[test]
 	fn test_pyramid_bbox_border() {
 		let mut pyramid = TilePyramid::new_full_up_to(5);
