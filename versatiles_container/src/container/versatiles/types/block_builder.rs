@@ -187,7 +187,7 @@ mod tests {
 		let block = builder.finalize().unwrap().unwrap();
 		let bbox = block.get_global_bbox();
 
-		assert_eq!(bbox.level, 10);
+		assert_eq!(bbox.level(), 10);
 		assert_eq!(bbox.width(), 1);
 		assert_eq!(bbox.height(), 1);
 	}
@@ -278,7 +278,7 @@ mod tests {
 		let block = builder.finalize().unwrap().unwrap();
 		let bbox = block.get_global_bbox();
 
-		assert_eq!(bbox.level, 0);
+		assert_eq!(bbox.level(), 0);
 		assert_eq!(bbox.width(), 1);
 		assert_eq!(bbox.height(), 1);
 		assert_eq!(bbox.x_min().unwrap(), 0);

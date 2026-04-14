@@ -9,7 +9,7 @@ impl TileCover {
 	#[must_use]
 	pub fn level(&self) -> u8 {
 		match self {
-			TileCover::Bbox(b) => b.level,
+			TileCover::Bbox(b) => b.level(),
 			TileCover::Tree(t) => t.level(),
 		}
 	}

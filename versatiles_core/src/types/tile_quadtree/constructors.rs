@@ -29,7 +29,7 @@ impl TileQuadtree {
 	/// Returns an error if the bbox zoom level exceeds `MAX_ZOOM_LEVEL`.
 	#[must_use]
 	pub fn from_bbox(bbox: &TileBBox) -> Self {
-		let level = bbox.level;
+		let level = bbox.level();
 		validate_zoom_level(level).expect("TileBBox level should have been validated on construction");
 
 		let Some(bbox) = BBox::new(bbox) else {
@@ -100,9 +100,9 @@ pub(crate) fn check_coord_zoom(coord: &TileCoord, zoom: u8) -> Result<()> {
 /// Validate that a TileBBox belongs to the given zoom level.
 pub(crate) fn check_bbox_zoom(bbox: &TileBBox, zoom: u8) -> Result<()> {
 	ensure!(
-		bbox.level == zoom,
+		bbox.level() == zoom,
 		"TileBBox level {} does not match quadtree zoom {}",
-		bbox.level,
+		bbox.level(),
 		zoom
 	);
 	Ok(())

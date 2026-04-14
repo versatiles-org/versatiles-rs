@@ -103,8 +103,8 @@ fn sort_depth_first(bboxes: &mut Vec<TileBBox>, size: u32) {
 	// Sort by quadtree path key
 	bboxes.sort_by_cached_key(|b| {
 		// Build a depth-first key: quadtree path (MSB first) plus sentinel 4
-		let mut k = Vec::with_capacity(b.level as usize + 1);
-		for i in (0..b.level).rev() {
+		let mut k = Vec::with_capacity(b.level() as usize + 1);
+		for i in (0..b.level()).rev() {
 			let bit_x = (((b.x_min().unwrap() / size) >> i) & 1) as u8;
 			let bit_y = (((b.y_min().unwrap() / size) >> i) & 1) as u8;
 			k.push(bit_x | (bit_y << 1));

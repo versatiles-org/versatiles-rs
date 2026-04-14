@@ -167,8 +167,8 @@ impl TileSource for Operation {
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("raster_format::get_tile_stream {bbox:?}");
 
-		let quality = self.quality[bbox.level as usize];
-		let quality_translucent = self.quality_translucent.map(|qt| qt[bbox.level as usize]);
+		let quality = self.quality[bbox.level() as usize];
+		let quality_translucent = self.quality_translucent.map(|qt| qt[bbox.level() as usize]);
 		let effort = self.effort;
 		let stream = self.source.get_tile_stream(bbox).await?;
 		let format: TileFormat = self.format.into();

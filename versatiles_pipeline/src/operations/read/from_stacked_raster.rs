@@ -335,7 +335,7 @@ impl TileSource for Operation {
 			.sources
 			.iter()
 			.filter(|entry| entry.source.metadata().bbox_pyramid.intersects_bbox(&bbox))
-			.map(|entry| entry.for_level(bbox.level))
+			.map(|entry| entry.for_level(bbox.level()))
 			.collect();
 
 		// Return empty stream if no sources remain after filtering

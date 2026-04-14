@@ -35,7 +35,7 @@ impl BlockDefinition {
 
 		let x_min = bbox.x_min()?.div(256);
 		let y_min = bbox.y_min()?.div(256);
-		let level = bbox.level;
+		let level = bbox.level();
 		let global_bbox: TileBBox = *bbox;
 
 		let tiles_coverage = TileBBox::from_min_and_size(

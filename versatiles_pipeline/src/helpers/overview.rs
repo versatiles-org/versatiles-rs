@@ -47,7 +47,7 @@ impl OverviewCore {
 		let level_base = level.unwrap_or_else(|| source.metadata().bbox_pyramid.get_level_max().unwrap());
 
 		if let Some(mut level_bbox) = metadata.bbox_pyramid.get_level(level_base).bounds() {
-			while level_bbox.level > 0 {
+			while level_bbox.level() > 0 {
 				level_bbox.level_down();
 				metadata.bbox_pyramid.include_bbox(&level_bbox)?;
 			}
@@ -77,7 +77,7 @@ impl OverviewCore {
 
 		let size = bbox.max_count().min(BLOCK_TILE_COUNT);
 
-		ensure!(bbox.level < self.level_base, "Invalid level");
+		ensure!(bbox.level() < self.level_base, "Invalid level");
 		ensure!(bbox.width() <= size, "Invalid width");
 		ensure!(bbox.height() <= size, "Invalid height");
 
@@ -145,7 +145,7 @@ impl OverviewCore {
 		let format = self.source.metadata().tile_format;
 		let full_size = self.tile_size;
 		let scale_fn = self.scale_fn.clone();
-		let need_cache = container_bbox.level > 0 && container_bbox.level <= self.level_base;
+		let need_cache = container_bbox.level() > 0 && container_bbox.level() <= self.level_base;
 
 		let results: Vec<_> = futures::future::join_all(container.into_iter().map(|(coord, image_opt)| {
 			let scale_fn = scale_fn.clone();
@@ -190,7 +190,7 @@ impl OverviewCore {
 	}
 
 	pub async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		if bbox.level >= self.level_base {
+		if bbox.level() >= self.level_base {
 			return self.source.get_tile_coord_stream(bbox).await;
 		}
 
@@ -203,7 +203,7 @@ impl OverviewCore {
 		let mut coords = std::collections::HashSet::new();
 		let mut stream = self.source.get_tile_coord_stream(source_bbox).await?;
 		while let Some((coord, _)) = stream.next().await {
-			let c = coord.at_level(bbox.level);
+			let c = coord.at_level(bbox.level());
 			if bbox.includes_coord(&c)? {
 				coords.insert(c);
 			}
@@ -217,7 +217,7 @@ impl OverviewCore {
 	pub async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("overview::get_tile_stream {bbox:?}");
 
-		if bbox.level > self.level_base {
+		if bbox.level() > self.level_base {
 			return self.source.get_tile_stream(bbox).await;
 		}
 
@@ -227,7 +227,7 @@ impl OverviewCore {
 		assert_eq!(bbox0.height(), size);
 		bbox0.intersect_with_pyramid(&self.metadata.bbox_pyramid);
 
-		let container: TileBBoxMap<Option<DynamicImage>> = if bbox.level == self.level_base {
+		let container: TileBBoxMap<Option<DynamicImage>> = if bbox.level() == self.level_base {
 			log::trace!("Fetching images from source for bbox {bbox:?}");
 			TileBBoxMap::<Option<DynamicImage>>::from_stream(
 				bbox,

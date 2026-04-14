@@ -185,7 +185,7 @@ impl VersaTilesWriter {
 
 						// Acquire writer lock and create block builder
 						let mut writer = writer_mutex.lock().await;
-						let mut block_builder = BlockBuilder::new(bbox.level, &mut **writer)?;
+						let mut block_builder = BlockBuilder::new(bbox.level(), &mut **writer)?;
 
 						// Stream compressed tiles to block builder
 						compressed_stream

@@ -129,7 +129,7 @@ impl Traversal {
 	pub fn traverse_pyramid(&self, pyramid: &TilePyramid) -> Result<Vec<TileBBox>> {
 		let size = self.max_size()?;
 		let mut bboxes: Vec<TileBBox> = pyramid
-			.iter_all_level_bboxes()
+			.iter_levels()
 			.flat_map(|b| b.iter_bbox_grid(size).collect::<Vec<_>>())
 			.collect();
 		self.order.sort_bboxes(&mut bboxes, size);

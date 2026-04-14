@@ -13,7 +13,7 @@ impl TilePyramid {
 
 	/// Sets the cover at `bbox`'s zoom level to the given bounding box.
 	pub fn set_level_bbox(&mut self, bbox: TileBBox) {
-		self.levels[bbox.level as usize] = TileCover::from(bbox);
+		self.levels[bbox.level() as usize] = TileCover::from(bbox);
 	}
 
 	/// Includes a single tile coordinate (expands coverage at its zoom level).
@@ -26,7 +26,7 @@ impl TilePyramid {
 	/// # Errors
 	/// Returns an error if the zoom level is invalid or insertion fails.
 	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
-		self.levels[bbox.level as usize].include_bbox(bbox)
+		self.levels[bbox.level() as usize].include_bbox(bbox)
 	}
 
 	/// Includes all coverage from `other` into this pyramid (union per level).

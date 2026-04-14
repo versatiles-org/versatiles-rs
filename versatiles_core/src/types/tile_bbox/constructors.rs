@@ -64,15 +64,15 @@ use versatiles_derive::context;
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub struct TileBBox {
 	/// Zoom level of the bounding box.
-	pub level: u8,
+	pub(super) level: u8,
 	/// Minimum x-coordinate.
-	x_min: u32,
+	pub(super) x_min: u32,
 	/// Minimum y-coordinate.
-	y_min: u32,
+	pub(super) y_min: u32,
 	/// Width of the bounding box.
-	width: u32,
+	pub(super) width: u32,
 	/// Height of the bounding box.
-	height: u32,
+	pub(super) height: u32,
 }
 
 impl TileBBox {

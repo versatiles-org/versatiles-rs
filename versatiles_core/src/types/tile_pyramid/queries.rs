@@ -51,7 +51,7 @@ impl TilePyramid {
 	/// # Errors
 	/// Returns an error if `bbox`'s level is out of range.
 	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
-		if let Some(cover) = self.levels.get(bbox.level as usize) {
+		if let Some(cover) = self.levels.get(bbox.level() as usize) {
 			cover.includes_bbox(bbox)
 		} else {
 			Ok(false)
@@ -75,7 +75,7 @@ impl TilePyramid {
 	/// Returns `true` if the given `bbox` overlaps the coverage at its zoom level.
 	#[must_use]
 	pub fn intersects_bbox(&self, bbox: &TileBBox) -> bool {
-		if let Some(cover) = self.levels.get(bbox.level as usize) {
+		if let Some(cover) = self.levels.get(bbox.level() as usize) {
 			cover.intersects_bbox(bbox).unwrap()
 		} else {
 			false
@@ -100,10 +100,10 @@ impl TilePyramid {
 	/// Returns an error if creating an empty bbox fails (should not happen for
 	/// valid inputs).
 	pub fn intersected_bbox(&self, bbox: &TileBBox) -> Result<TileBBox> {
-		if let Some(level_bounds) = self.levels.get(bbox.level as usize).and_then(TileCover::bounds) {
+		if let Some(level_bounds) = self.levels.get(bbox.level() as usize).and_then(TileCover::bounds) {
 			return level_bounds.intersected_bbox(bbox);
 		}
-		TileBBox::new_empty(bbox.level)
+		TileBBox::new_empty(bbox.level())
 	}
 
 	/// Counts the total number of tiles across all zoom levels.
@@ -131,24 +131,15 @@ impl TilePyramid {
 	}
 
 	/// Returns an iterator over the bounding boxes of all non-empty zoom levels.
-	pub fn iter_levels(&self) -> impl Iterator<Item = TileBBox> + '_ {
+	pub fn iter_levels(&self) -> impl Iterator<Item = TileCover> + '_ {
 		self
 			.levels
 			.iter()
-			.filter(|c| !c.is_empty())
-			.filter_map(TileCover::bounds)
+			.filter_map(|c| if c.is_empty() { None } else { Some(c.clone()) })
 	}
 
-	/// Returns an iterator over the bounding box for **every** zoom level
-	/// (0–MAX_ZOOM_LEVEL), including empty ones.
-	///
-	/// Empty levels yield an empty [`TileBBox`] at that level. Used by the
-	/// tile-container traversal logic.
-	pub fn iter_all_level_bboxes(&self) -> impl Iterator<Item = TileBBox> + '_ {
-		self.levels.iter().map(|c| {
-			c.bounds()
-				.unwrap_or_else(|| TileBBox::new_empty(c.level()).expect("level must be ≤ MAX_ZOOM_LEVEL"))
-		})
+	pub fn iter_bboxes(&self) -> impl Iterator<Item = TileBBox> + '_ {
+		self.iter_levels().filter_map(|l| l.bounds())
 	}
 
 	/// Returns a geographic bounding box covering the union of all non-empty

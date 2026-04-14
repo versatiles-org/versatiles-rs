@@ -225,7 +225,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		let total_tiles = self.metadata().bbox_pyramid.count_tiles();
 		let progress = runtime.create_progress("scanning tiles", total_tiles);
 
-		for bbox in self.metadata().bbox_pyramid.iter_levels() {
+		for bbox in self.metadata().bbox_pyramid.iter_bboxes() {
 			let mut level_size_sum: u64 = 0;
 			let mut level_count: u64 = 0;
 			let mut stream = self.get_tile_size_stream(bbox).await?;
@@ -259,7 +259,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 				}
 				min_size = biggest_tiles.last().expect("biggest_tiles is non-empty").size;
 			}
-			level_stats.push((bbox.level, level_count, level_size_sum));
+			level_stats.push((bbox.level(), level_count, level_size_sum));
 		}
 		progress.finish();
 

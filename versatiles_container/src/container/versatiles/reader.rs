@@ -216,8 +216,8 @@ impl VersaTilesReader {
 				tiles_bbox_used.intersect_bbox(tiles_bbox_block)?;
 				log::trace!("tiles_bbox_used {tiles_bbox_used:?}");
 
-				debug_assert_eq!(bbox.level, tiles_bbox_block.level);
-				debug_assert_eq!(bbox.level, tiles_bbox_used.level);
+				debug_assert_eq!(bbox.level(), tiles_bbox_block.level());
+				debug_assert_eq!(bbox.level(), tiles_bbox_used.level());
 
 				// Get the tile index of this block
 				let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await?;

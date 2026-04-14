@@ -200,7 +200,7 @@ impl TileResizeCore {
 		if is_split {
 			// 512→256: each source tile at (level-1, x, y) produces up to 4
 			// output tiles at (level, 2x..2x+1, 2y..2y+1), plus level 0 special case.
-			if bbox.level == 0 {
+			if bbox.level() == 0 {
 				// Level 0 output exists if source has (0,0,0)
 				let mut stream = self.source.get_tile_coord_stream(TileBBox::new_full(0)?).await?;
 				if stream.next().await.is_some() {

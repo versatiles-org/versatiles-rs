@@ -42,6 +42,11 @@ impl TileBBox {
 		Ok(coord.x >= self.x_min()? && coord.x <= self.x_max()? && coord.y >= self.y_min()? && coord.y <= self.y_max()?)
 	}
 
+	#[must_use]
+	pub fn level(&self) -> u8 {
+		self.level
+	}
+
 	/// Returns whether this bbox completely includes another bbox at the same level.
 	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
 		ensure!(

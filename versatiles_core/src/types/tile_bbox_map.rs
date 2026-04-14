@@ -90,7 +90,7 @@ impl<I> TileBBoxMap<I> {
 	///
 	/// let bbox = TileBBox::from_min_and_size(5, 10, 20, 5, 5).unwrap();
 	/// let map: TileBBoxMap<u32> = TileBBoxMap::new_default(bbox).unwrap();
-	/// assert_eq!(map.bbox().level, 5);
+	/// assert_eq!(map.bbox().level(), 5);
 	/// ```
 	#[must_use]
 	pub fn bbox(&self) -> &TileBBox {
@@ -155,7 +155,7 @@ impl<I> TileBBoxMap<I> {
 		let mut container1 = TileBBoxMap::<Vec<(TileCoord, I)>>::new_default(bbox1)?;
 		for (i, item) in self.vec.into_iter().enumerate() {
 			let coord0 = self.bbox.coord_at_index(i as u64).unwrap();
-			let coord1 = coord0.at_level(self.bbox.level - 1);
+			let coord1 = coord0.at_level(self.bbox.level() - 1);
 			container1.get_mut(&coord1)?.push((coord0, item));
 		}
 		Ok(container1)

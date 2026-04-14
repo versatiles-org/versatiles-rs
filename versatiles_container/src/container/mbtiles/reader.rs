@@ -449,7 +449,7 @@ impl TileSource for MBTilesReader {
 					bbox.x_max()?,
 					bbox.y_min()?,
 					bbox.y_max()?,
-					u32::from(bbox.level),
+					u32::from(bbox.level()),
 				],
 				move |row| {
 					let x = row.get::<_, u32>(0)?;
@@ -491,7 +491,7 @@ impl TileSource for MBTilesReader {
 					bbox.x_max()?,
 					bbox.y_min()?,
 					bbox.y_max()?,
-					u32::from(bbox.level),
+					u32::from(bbox.level()),
 				],
 				move |row| {
 					let x = row.get::<_, u32>(0)?;
@@ -546,7 +546,7 @@ impl TileSource for MBTilesReader {
 					bbox.x_max()?,
 					bbox.y_min()?,
 					bbox.y_max()?,
-					u32::from(bbox.level),
+					u32::from(bbox.level()),
 				],
 				move |row| {
 					let x = row.get::<_, u32>(0)?;

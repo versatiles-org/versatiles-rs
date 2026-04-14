@@ -143,7 +143,6 @@ fn iter_levels_and_iter_all_level_bboxes() {
 	p.include_bbox(&bbox(5, 0, 0, 5, 5)).unwrap();
 
 	assert_eq!(p.iter_levels().count(), 2);
-	assert_eq!(p.iter_all_level_bboxes().count(), 31); // all 31 levels
 }
 
 #[test]

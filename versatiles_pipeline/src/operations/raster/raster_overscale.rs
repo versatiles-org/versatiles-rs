@@ -122,7 +122,7 @@ impl Operation {
 			.clamp(level_base, MAX_ZOOM_LEVEL);
 
 		if let Some(mut level_bbox) = metadata.bbox_pyramid.get_level(level_base).bounds() {
-			while level_bbox.level < level_max {
+			while level_bbox.level() < level_max {
 				level_bbox.level_up();
 				metadata.bbox_pyramid.include_bbox(&level_bbox)?;
 			}
@@ -282,7 +282,7 @@ impl TileSource for Operation {
 			return Ok(TileStream::empty());
 		}
 
-		if bbox_dst.level <= self.level_base {
+		if bbox_dst.level() <= self.level_base {
 			log::trace!("get_tile_stream level <= level_base");
 			return self.source.as_ref().get_tile_stream(bbox_dst).await;
 		}
@@ -325,7 +325,7 @@ impl TileSource for Operation {
 		if !self.metadata.bbox_pyramid.intersects_bbox(&bbox) {
 			return Ok(TileStream::empty());
 		}
-		if bbox.level <= self.level_base {
+		if bbox.level() <= self.level_base {
 			return self.source.as_ref().get_tile_coord_stream(bbox).await;
 		}
 
@@ -346,12 +346,12 @@ impl TileSource for Operation {
 			let mut stream = self.source.as_ref().get_tile_coord_stream(source_bbox).await?;
 			while let Some((src_coord, _)) = stream.next().await {
 				// Each source coord at src_level covers a block of output coords
-				let scale = 1u32 << (bbox.level - src_coord.level);
+				let scale = 1u32 << (bbox.level() - src_coord.level);
 				let base_x = src_coord.x * scale;
 				let base_y = src_coord.y * scale;
 				for dy in 0..scale {
 					for dx in 0..scale {
-						let coord = TileCoord::new(bbox.level, base_x + dx, base_y + dy)?;
+						let coord = TileCoord::new(bbox.level(), base_x + dx, base_y + dy)?;
 						if bbox.includes_coord(&coord)? {
 							coords.insert(coord);
 						}
