@@ -3,9 +3,11 @@
 use super::{BBox, Node, TileQuadtree};
 use crate::{GeoBBox, TileBBox, TileCoord, validate_zoom_level};
 use anyhow::{Result, ensure};
+use versatiles_derive::context;
 
 impl TileQuadtree {
 	/// Create an empty quadtree at the given zoom level.
+	#[context("Failed to create empty TileQuadtree at level {level}")]
 	pub fn new_empty(level: u8) -> Result<Self> {
 		validate_zoom_level(level)?;
 		Ok(TileQuadtree {
@@ -15,6 +17,7 @@ impl TileQuadtree {
 	}
 
 	/// Create a full quadtree (all tiles covered) at the given zoom level.
+	#[context("Failed to create full TileQuadtree at level {level}")]
 	pub fn new_full(level: u8) -> Result<Self> {
 		validate_zoom_level(level)?;
 		Ok(TileQuadtree {
@@ -79,6 +82,7 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if the zoom level or geographic coordinates are invalid.
+	#[context("Failed to create TileQuadtree from GeoBBox {bbox:?} at level {level}")]
 	pub fn from_geo(level: u8, bbox: &GeoBBox) -> Result<Self> {
 		validate_zoom_level(level)?;
 		let tile_bbox = TileBBox::from_geo(level, bbox)?;

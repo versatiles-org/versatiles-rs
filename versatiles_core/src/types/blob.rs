@@ -30,6 +30,7 @@ use anyhow::{Result, bail};
 use std::fmt::Debug;
 use std::ops::Range;
 use std::path::Path;
+use versatiles_derive::context;
 
 /// A simple wrapper around [`Vec<u8>`] that provides additional methods for working with byte data.
 ///
@@ -145,6 +146,7 @@ impl Blob {
 	///     Ok(())
 	/// }
 	/// ```
+	#[context("Failed to read {range:?} from Blob of length {}", self.0.len())]
 	pub fn read_range(&self, range: &ByteRange) -> Result<Blob> {
 		if range.offset + range.length > self.0.len() as u64 {
 			bail!("read outside range")
@@ -392,6 +394,7 @@ impl Blob {
 	/// # Ok(())
 	/// # }
 	/// ```
+	#[context("Failed to save Blob to {path:?}")]
 	pub fn save_to_file(&self, path: &Path) -> Result<()> {
 		std::fs::write(path, &self.0)?;
 		Ok(())
@@ -426,6 +429,7 @@ impl Blob {
 	/// # Ok(())
 	/// # }
 	/// ```
+	#[context("Failed to load Blob from {path:?}")]
 	pub fn load_from_file(path: &Path) -> Result<Self> {
 		Ok(Blob::from(std::fs::read(path)?))
 	}

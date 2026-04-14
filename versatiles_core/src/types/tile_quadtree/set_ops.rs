@@ -2,12 +2,14 @@
 
 use super::{Node, TileQuadtree};
 use anyhow::{Result, ensure};
+use versatiles_derive::context;
 
 impl TileQuadtree {
 	/// Return the union of `self` and `other` (tiles in either).
 	///
 	/// # Errors
 	/// Returns an error if zoom levels differ.
+	#[context("Failed to union TileQuadtrees at levels {} and {}", self.level, other.level)]
 	pub fn union(&self, other: &TileQuadtree) -> Result<TileQuadtree> {
 		ensure!(
 			self.level == other.level,
@@ -26,6 +28,7 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if zoom levels differ.
+	#[context("Failed to intersect TileQuadtrees at levels {} and {}", self.level, other.level)]
 	pub fn intersection(&self, other: &TileQuadtree) -> Result<TileQuadtree> {
 		ensure!(
 			self.level == other.level,
@@ -44,6 +47,7 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if zoom levels differ.
+	#[context("Failed to compute difference of TileQuadtrees at levels {} and {}", self.level, other.level)]
 	pub fn difference(&self, other: &TileQuadtree) -> Result<TileQuadtree> {
 		ensure!(
 			self.level == other.level,

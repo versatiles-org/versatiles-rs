@@ -3,6 +3,7 @@
 use super::TileCover;
 use crate::{TileBBox, TileCoord};
 use anyhow::Result;
+use versatiles_derive::context;
 
 impl TileCover {
 	/// Inserts a single tile coordinate into this cover.
@@ -13,6 +14,7 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's level does not match this cover's level.
+	#[context("Failed to include TileCoord {coord:?} into TileCover at level {}", self.level())]
 	pub fn include_coord(&mut self, coord: &TileCoord) -> Result<()> {
 		if let TileCover::Bbox(b) = self {
 			if b.is_empty() {
@@ -33,6 +35,7 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if `bbox`'s level does not match this cover's level.
+	#[context("Failed to include TileBBox {bbox:?} into TileCover at level {}", self.level())]
 	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		if let TileCover::Bbox(b) = self {
 			if b.is_empty() {
@@ -53,6 +56,7 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's level does not match this cover's level.
+	#[context("Failed to remove TileCoord {coord:?} from TileCover at level {}", self.level())]
 	pub fn remove_coord(&mut self, coord: &TileCoord) -> Result<()> {
 		if let TileCover::Bbox(b) = self {
 			if b.is_empty() || !b.includes_coord(coord)? {
@@ -70,6 +74,7 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if `bbox`'s level does not match this cover's level.
+	#[context("Failed to remove TileBBox {bbox:?} from TileCover at level {}", self.level())]
 	pub fn remove_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		if let TileCover::Bbox(b) = self {
 			if b.is_empty() || !b.intersects_bbox(bbox)? {
@@ -96,6 +101,7 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if `bbox`'s level does not match this cover's level.
+	#[context("Failed to intersect TileCover at level {} with TileBBox {bbox:?}", self.level())]
 	pub fn intersect_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		match self {
 			TileCover::Bbox(b) => b.intersect_bbox(bbox),

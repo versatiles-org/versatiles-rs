@@ -4,6 +4,7 @@ use super::constructors::{check_bbox_zoom, check_coord_zoom};
 use super::{BBox, TileQuadtree};
 use crate::{GeoBBox, TileBBox, TileCoord};
 use anyhow::Result;
+use versatiles_derive::context;
 
 impl TileQuadtree {
 	/// Return true if the quadtree contains no tiles.
@@ -57,6 +58,7 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's level doesn't match this quadtree's zoom.
+	#[context("Failed to check TileCoord {coord:?} against TileQuadtree at level {}", self.level)]
 	pub fn includes_coord(&self, coord: &TileCoord) -> Result<bool> {
 		check_coord_zoom(coord, self.level)?;
 		let size = 1u64 << self.level;
@@ -69,6 +71,7 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if the bbox's level doesn't match this quadtree's zoom.
+	#[context("Failed to check TileBBox {bbox:?} against TileQuadtree at level {}", self.level)]
 	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
 		check_bbox_zoom(bbox, self.level)?;
 		let size = 1u64 << self.level;
@@ -82,6 +85,7 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if the zoom levels don't match.
+	#[context("Failed to check intersection of TileQuadtrees at levels {} and {}", self.level, other.level)]
 	pub fn intersects_tree(&self, other: &TileQuadtree) -> Result<bool> {
 		anyhow::ensure!(
 			self.level == other.level,

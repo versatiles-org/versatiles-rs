@@ -62,6 +62,7 @@ impl TileCoord {
 	///
 	/// # Errors
 	/// Returns an error if `level` > MAX_ZOOM_LEVEL.
+	#[context("Failed to create TileCoord({level}, {x}, {y})")]
 	pub fn new(level: u8, x: u32, y: u32) -> Result<TileCoord> {
 		validate_zoom_level(level)?;
 		let max = 2u32.pow(u32::from(level));
@@ -94,6 +95,7 @@ impl TileCoord {
 	/// assert_eq!(coord.x, 31);
 	/// assert_eq!(coord.y, 10);
 	/// ```
+	#[context("Failed to create clamped TileCoord at level {level} from ({x}, {y})")]
 	pub fn new_clamped(level: u8, x: u32, y: u32) -> Result<TileCoord> {
 		validate_zoom_level(level)?;
 		let max = 2u32.pow(u32::from(level)) - 1;
@@ -431,6 +433,7 @@ impl TileCoord {
 	/// assert_eq!(parent.x, 8);
 	/// assert_eq!(parent.y, 10);
 	/// ```
+	#[context("Failed to decrease level of TileCoord {self:?}")]
 	pub fn to_level_decreased(&self) -> Result<TileCoord> {
 		ensure!(self.level > 0, "cannot decrease level below 0");
 		TileCoord::new(self.level - 1, self.x / 2, self.y / 2)

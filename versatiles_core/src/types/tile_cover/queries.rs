@@ -3,6 +3,7 @@
 use super::TileCover;
 use crate::{GeoBBox, TileBBox, TileCoord};
 use anyhow::Result;
+use versatiles_derive::context;
 
 impl TileCover {
 	/// Returns the zoom level of this cover.
@@ -70,6 +71,7 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's level does not match this cover's level.
+	#[context("Failed to check TileCoord {coord:?} against TileCover at level {}", self.level())]
 	pub fn includes_coord(&self, coord: &TileCoord) -> Result<bool> {
 		match self {
 			TileCover::Bbox(b) => b.includes_coord(coord),
@@ -81,6 +83,7 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if `bbox`'s level does not match this cover's level.
+	#[context("Failed to check TileBBox {bbox:?} against TileCover at level {}", self.level())]
 	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
 		match self {
 			TileCover::Bbox(b) => b.includes_bbox(bbox),
@@ -91,6 +94,10 @@ impl TileCover {
 	/// Returns `true` if this cover overlaps the given `bbox`.
 	///
 	/// For the `Tree` variant this is an approximate check via [`bounds`](Self::bounds).
+	///
+	/// # Errors
+	/// Returns an error if `bbox`'s level does not match this cover's level.
+	#[context("Failed to check intersection of TileCover at level {} with TileBBox {bbox:?}", self.level())]
 	pub fn intersects_bbox(&self, bbox: &TileBBox) -> Result<bool> {
 		match self {
 			TileCover::Bbox(b) => b.intersects_bbox(bbox),

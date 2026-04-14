@@ -2,6 +2,7 @@
 
 use super::TileCover;
 use anyhow::Result;
+use versatiles_derive::context;
 
 impl TileCover {
 	/// Returns the union of this cover and `other`.
@@ -11,6 +12,7 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if the zoom levels differ or a quadtree operation fails.
+	#[context("Failed to union TileCovers at levels {} and {}", self.level(), other.level())]
 	pub fn union(&self, other: &TileCover) -> Result<TileCover> {
 		let a = self.to_tree();
 		let b = other.to_tree();
@@ -24,6 +26,7 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if the zoom levels differ or a quadtree operation fails.
+	#[context("Failed to intersect TileCovers at levels {} and {}", self.level(), other.level())]
 	pub fn intersection(&self, other: &TileCover) -> Result<TileCover> {
 		if let (TileCover::Bbox(a), TileCover::Bbox(b)) = (self, other) {
 			let mut result = *a;
@@ -42,6 +45,7 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if the zoom levels differ or a quadtree operation fails.
+	#[context("Failed to compute difference of TileCovers at levels {} and {}", self.level(), other.level())]
 	pub fn difference(&self, other: &TileCover) -> Result<TileCover> {
 		let a = self.to_tree();
 		let b = other.to_tree();

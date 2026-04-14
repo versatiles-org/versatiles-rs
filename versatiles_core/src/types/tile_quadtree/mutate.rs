@@ -4,12 +4,14 @@ use super::constructors::{check_bbox_zoom, check_coord_zoom};
 use super::{BBox, Node, TileQuadtree};
 use crate::{TileBBox, TileCoord};
 use anyhow::Result;
+use versatiles_derive::context;
 
 impl TileQuadtree {
 	/// Insert a single tile into the quadtree.
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's zoom level doesn't match.
+	#[context("Failed to include TileCoord {coord:?} into TileQuadtree at level {}", self.level)]
 	pub fn include_coord(&mut self, coord: &TileCoord) -> Result<()> {
 		check_coord_zoom(coord, self.level)?;
 		let size = 1u64 << self.level;
@@ -23,6 +25,7 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if the bbox's zoom level doesn't match.
+	#[context("Failed to include TileBBox {bbox:?} into TileQuadtree at level {}", self.level)]
 	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		check_bbox_zoom(bbox, self.level)?;
 		let size = 1u64 << self.level;
@@ -69,6 +72,7 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if the coordinate's zoom level doesn't match.
+	#[context("Failed to remove TileCoord {coord:?} from TileQuadtree at level {}", self.level)]
 	pub fn remove_coord(&mut self, coord: &TileCoord) -> Result<()> {
 		check_coord_zoom(coord, self.level)?;
 		let size = 1u64 << self.level;
@@ -82,6 +86,7 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if the bbox's zoom level doesn't match.
+	#[context("Failed to remove TileBBox {bbox:?} from TileQuadtree at level {}", self.level)]
 	pub fn remove_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		check_bbox_zoom(bbox, self.level)?;
 		let Some(bbox) = BBox::new(bbox) else {
@@ -114,6 +119,7 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if `bbox`'s zoom level doesn't match.
+	#[context("Failed to intersect TileQuadtree at level {} with TileBBox {bbox:?}", self.level)]
 	pub fn intersect_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		check_bbox_zoom(bbox, self.level)?;
 		let Some(bbox) = BBox::new(bbox) else {

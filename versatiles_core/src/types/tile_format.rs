@@ -124,6 +124,7 @@ impl TileFormat {
 		})
 	}
 
+	#[context("Failed to get TileFormat from path {path:?}")]
 	pub fn try_from_path(path: &Path) -> Result<Self> {
 		Self::try_from_str(path.extension().and_then(|s| s.to_str()).unwrap_or_default())
 	}
@@ -173,6 +174,7 @@ impl TileFormat {
 		}
 	}
 
+	#[context("Failed to get TileFormat from MIME type '{mime}'")]
 	pub fn try_from_mime(mime: &str) -> Result<Self> {
 		Ok(match mime.to_lowercase().as_str() {
 			"application/octet-stream" => BIN,

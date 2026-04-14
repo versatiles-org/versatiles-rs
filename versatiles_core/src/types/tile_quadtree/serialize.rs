@@ -11,6 +11,7 @@
 
 use super::{Node, TileQuadtree};
 use anyhow::{Result, bail, ensure};
+use versatiles_derive::context;
 
 impl TileQuadtree {
 	/// Serialize this quadtree to bytes.
@@ -35,6 +36,7 @@ impl TileQuadtree {
 	///
 	/// # Errors
 	/// Returns an error if the byte stream is malformed or zoom levels mismatch.
+	#[context("Failed to deserialize TileQuadtree at zoom {zoom}")]
 	pub fn deserialize(zoom: u8, bytes: &[u8]) -> Result<Self> {
 		ensure!(!bytes.is_empty(), "empty byte slice");
 		ensure!(
