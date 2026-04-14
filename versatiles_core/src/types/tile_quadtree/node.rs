@@ -289,6 +289,41 @@ impl Node {
 		}
 	}
 
+	/// Flip all tile coordinates vertically: `y → (level_size − 1 − y)`.
+	///
+	/// At each `Partial` node the two top quadrants are swapped with the two
+	/// bottom quadrants (`NW↔SW`, `NE↔SE`), then every child is recursed.
+	/// `Full` and `Empty` nodes are symmetric — no-op.
+	pub(crate) fn flip_y(&mut self) {
+		if let Node::Partial(children) = self {
+			{
+				let s: &mut [Node] = &mut **children;
+				s.swap(0, 2); // NW ↔ SW
+				s.swap(1, 3); // NE ↔ SE
+			}
+			for child in children.iter_mut() {
+				child.flip_y();
+			}
+		}
+	}
+
+	/// Swap x and y coordinates for all tiles: `(x, y) → (y, x)`.
+	///
+	/// At each `Partial` node the NE and SW quadrants are exchanged
+	/// (`[1]↔[2]`), then every child is recursed.
+	/// `Full` and `Empty` nodes are symmetric — no-op.
+	pub(crate) fn swap_xy(&mut self) {
+		if let Node::Partial(children) = self {
+			{
+				let s: &mut [Node] = &mut **children;
+				s.swap(1, 2); // NE ↔ SW
+			}
+			for child in children.iter_mut() {
+				child.swap_xy();
+			}
+		}
+	}
+
 	pub fn remove_bbox(&mut self, (x_off, y_off): (u64, u64), size: u64, bbox: &BBox) {
 		let ix_min = bbox.x_min.max(x_off);
 		let iy_min = bbox.y_min.max(y_off);

@@ -93,20 +93,13 @@ impl TilePyramid {
 	/// through the bounding rectangle).
 	///
 	/// This method is infallible and always returns `Ok(())`.
-	pub fn flip_y(&mut self) -> Result<()> {
+	pub fn flip_y(&mut self) {
 		for cover in &mut self.levels {
 			match cover {
 				TileCover::Bbox(b) => b.flip_y(),
-				TileCover::Tree(t) => {
-					// Lossy: round-trip through bounding box.
-					if let Some(mut bbox) = t.bounds() {
-						bbox.flip_y();
-						*cover = TileCover::from(bbox);
-					}
-				}
+				TileCover::Tree(t) => t.flip_y(),
 			}
 		}
-		Ok(())
 	}
 
 	/// Applies an X/Y swap to every level.
@@ -115,19 +108,12 @@ impl TilePyramid {
 	/// through the bounding rectangle).
 	///
 	/// This method is infallible and always returns `Ok(())`.
-	pub fn swap_xy(&mut self) -> Result<()> {
+	pub fn swap_xy(&mut self) {
 		for cover in &mut self.levels {
 			match cover {
 				TileCover::Bbox(b) => b.swap_xy(),
-				TileCover::Tree(t) => {
-					// Lossy: round-trip through bounding box.
-					if let Some(mut bbox) = t.bounds() {
-						bbox.swap_xy();
-						*cover = TileCover::from(bbox);
-					}
-				}
+				TileCover::Tree(t) => t.swap_xy(),
 			}
 		}
-		Ok(())
 	}
 }

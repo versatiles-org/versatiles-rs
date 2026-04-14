@@ -91,6 +91,22 @@ impl TileQuadtree {
 		Ok(())
 	}
 
+	/// Flips all tile coordinates vertically: `y → (2^level − 1 − y)`.
+	///
+	/// Recurses through the tree, swapping top and bottom quadrant pairs at
+	/// each `Partial` node. `Full` and `Empty` nodes are unaffected.
+	pub fn flip_y(&mut self) {
+		self.root.flip_y();
+	}
+
+	/// Swaps x and y coordinates for all tiles: `(x, y) → (y, x)`.
+	///
+	/// Recurses through the tree, exchanging the NE and SW quadrants at each
+	/// `Partial` node. `Full` and `Empty` nodes are unaffected.
+	pub fn swap_xy(&mut self) {
+		self.root.swap_xy();
+	}
+
 	/// Intersects the quadtree with a [`TileBBox`], removing any tiles outside it.
 	///
 	/// If `bbox` is empty, the entire tree is cleared. Otherwise, each branch of

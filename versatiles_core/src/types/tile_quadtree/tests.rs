@@ -502,3 +502,95 @@ fn display() {
 	assert!(s.contains("zoom=3"));
 	assert!(s.contains("tiles=64"));
 }
+
+// -------------------------------------------------------------------------
+// flip_y
+// -------------------------------------------------------------------------
+
+#[test]
+fn flip_y_empty_noop() {
+	let mut t = TileQuadtree::new_empty(4).unwrap();
+	t.flip_y();
+	assert!(t.is_empty());
+}
+
+#[test]
+fn flip_y_full_stays_full() {
+	let mut t = TileQuadtree::new_full(3).unwrap();
+	t.flip_y();
+	assert!(t.is_full());
+	assert_eq!(t.count_tiles(), 64);
+}
+
+#[test]
+fn flip_y_moves_tile_to_mirrored_position() -> Result<()> {
+	// z=3: 8×8 grid; tile (2, 1) should flip to (2, 8−1−1) = (2, 6)
+	let mut t = TileQuadtree::new_empty(3).unwrap();
+	t.include_coord(&coord(3, 2, 1))?;
+	t.flip_y();
+	assert!(!t.includes_coord(&coord(3, 2, 1))?);
+	assert!(t.includes_coord(&coord(3, 2, 6))?);
+	assert_eq!(t.count_tiles(), 1);
+	Ok(())
+}
+
+#[test]
+fn flip_y_is_involution() -> Result<()> {
+	// Two applications should return the original tree.
+	let mut t = TileQuadtree::new_empty(3).unwrap();
+	t.include_coord(&coord(3, 2, 1))?;
+	t.include_coord(&coord(3, 5, 6))?;
+	let count = t.count_tiles();
+	t.flip_y();
+	t.flip_y();
+	assert!(t.includes_coord(&coord(3, 2, 1))?);
+	assert!(t.includes_coord(&coord(3, 5, 6))?);
+	assert_eq!(t.count_tiles(), count);
+	Ok(())
+}
+
+// -------------------------------------------------------------------------
+// swap_xy
+// -------------------------------------------------------------------------
+
+#[test]
+fn swap_xy_empty_noop() {
+	let mut t = TileQuadtree::new_empty(4).unwrap();
+	t.swap_xy();
+	assert!(t.is_empty());
+}
+
+#[test]
+fn swap_xy_full_stays_full() {
+	let mut t = TileQuadtree::new_full(3).unwrap();
+	t.swap_xy();
+	assert!(t.is_full());
+	assert_eq!(t.count_tiles(), 64);
+}
+
+#[test]
+fn swap_xy_moves_tile_to_transposed_position() -> Result<()> {
+	// z=3: 8×8 grid; tile (2, 5) should swap to (5, 2)
+	let mut t = TileQuadtree::new_empty(3).unwrap();
+	t.include_coord(&coord(3, 2, 5))?;
+	t.swap_xy();
+	assert!(!t.includes_coord(&coord(3, 2, 5))?);
+	assert!(t.includes_coord(&coord(3, 5, 2))?);
+	assert_eq!(t.count_tiles(), 1);
+	Ok(())
+}
+
+#[test]
+fn swap_xy_is_involution() -> Result<()> {
+	// Two applications should return the original tree.
+	let mut t = TileQuadtree::new_empty(3).unwrap();
+	t.include_coord(&coord(3, 2, 5))?;
+	t.include_coord(&coord(3, 0, 7))?;
+	let count = t.count_tiles();
+	t.swap_xy();
+	t.swap_xy();
+	assert!(t.includes_coord(&coord(3, 2, 5))?);
+	assert!(t.includes_coord(&coord(3, 0, 7))?);
+	assert_eq!(t.count_tiles(), count);
+	Ok(())
+}
