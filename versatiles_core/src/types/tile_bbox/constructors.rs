@@ -211,7 +211,7 @@ impl TileBBox {
 	/// - If the geographical coordinates are invalid.
 	/// - If the converted tile coordinates are out of bounds.
 	#[context("Failed to create TileBBox from GeoBBox {bbox:?} at level {level}")]
-	pub fn from_geo(level: u8, bbox: &GeoBBox) -> Result<TileBBox> {
+	pub fn from_geo_bbox(level: u8, bbox: &GeoBBox) -> Result<TileBBox> {
 		validate_zoom_level(level)?;
 
 		// Convert geographical coordinates to tile coordinates
@@ -494,19 +494,19 @@ mod tests {
 	}
 
 	#[test]
-	fn from_geo() {
-		let bbox1 = TileBBox::from_geo(9, &GeoBBox::new(8.0653, 51.3563, 12.3528, 52.2564).unwrap()).unwrap();
+	fn from_geo_bbox() {
+		let bbox1 = TileBBox::from_geo_bbox(9, &GeoBBox::new(8.0653, 51.3563, 12.3528, 52.2564).unwrap()).unwrap();
 		let bbox2 = TileBBox::from_min_and_max(9, 267, 168, 273, 170).unwrap();
 		assert_eq!(bbox1, bbox2);
 	}
 
 	#[test]
 	fn from_geo_is_not_empty() {
-		let bbox1 = TileBBox::from_geo(0, &GeoBBox::new(8.0, 51.0, 8.000001f64, 51.0).unwrap()).unwrap();
+		let bbox1 = TileBBox::from_geo_bbox(0, &GeoBBox::new(8.0, 51.0, 8.000001f64, 51.0).unwrap()).unwrap();
 		assert_eq!(bbox1.count_tiles(), 1);
 		assert!(!bbox1.is_empty());
 
-		let bbox2 = TileBBox::from_geo(14, &GeoBBox::new(-132.000001, -40.0, -132.0, -40.0).unwrap()).unwrap();
+		let bbox2 = TileBBox::from_geo_bbox(14, &GeoBBox::new(-132.000001, -40.0, -132.0, -40.0).unwrap()).unwrap();
 		assert_eq!(bbox2.count_tiles(), 1);
 		assert!(!bbox2.is_empty());
 	}

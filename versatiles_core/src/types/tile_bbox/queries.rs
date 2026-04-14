@@ -291,10 +291,10 @@ mod tests {
 		let q1 = b.get_quadrant(1)?; // top-right
 		let q2 = b.get_quadrant(2)?; // bottom-left
 		let q3 = b.get_quadrant(3)?; // bottom-right
-		assert_eq!(q0.as_array()?, [8, 12, 9, 13]);
-		assert_eq!(q1.as_array()?, [10, 12, 11, 13]);
-		assert_eq!(q2.as_array()?, [8, 14, 9, 15]);
-		assert_eq!(q3.as_array()?, [10, 14, 11, 15]);
+		assert_eq!(q0.to_array()?, [8, 12, 9, 13]);
+		assert_eq!(q1.to_array()?, [10, 12, 11, 13]);
+		assert_eq!(q2.to_array()?, [8, 14, 9, 15]);
+		assert_eq!(q3.to_array()?, [10, 14, 11, 15]);
 		Ok(())
 	}
 
@@ -355,7 +355,7 @@ mod tests {
 	#[test]
 	fn as_array_matches_minmax() -> Result<()> {
 		let b = bb(6, 10, 20, 30, 40);
-		assert_eq!(b.as_array()?, [10, 20, 30, 40]);
+		assert_eq!(b.to_array()?, [10, 20, 30, 40]);
 		Ok(())
 	}
 }

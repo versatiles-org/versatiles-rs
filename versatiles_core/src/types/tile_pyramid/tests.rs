@@ -2,8 +2,8 @@
 
 use crate::{GeoBBox, MAX_LAT, TileBBox, TileCoord, TileCover, TilePyramid, TileQuadtree};
 
-fn bbox(zoom: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
-	TileBBox::from_min_and_max(zoom, x0, y0, x1, y1).unwrap()
+fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
+	TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()
 }
 fn coord(z: u8, x: u32, y: u32) -> TileCoord {
 	TileCoord::new(z, x, y).unwrap()
@@ -15,8 +15,8 @@ fn coord(z: u8, x: u32, y: u32) -> TileCoord {
 fn new_empty() {
 	let p = TilePyramid::new_empty();
 	assert!(p.is_empty());
-	assert_eq!(p.get_level_min(), None);
-	assert_eq!(p.get_level_max(), None);
+	assert_eq!(p.level_min(), None);
+	assert_eq!(p.level_max(), None);
 	assert_eq!(p.count_tiles(), 0);
 }
 
@@ -24,15 +24,15 @@ fn new_empty() {
 fn new_full() {
 	let p = TilePyramid::new_full();
 	assert!(!p.is_empty());
-	assert_eq!(p.get_level_min(), Some(0));
-	assert_eq!(p.get_level_max(), Some(30));
+	assert_eq!(p.level_min(), Some(0));
+	assert_eq!(p.level_max(), Some(30));
 }
 
 #[test]
 fn new_full_up_to() {
 	let p = TilePyramid::new_full_up_to(5);
-	assert_eq!(p.get_level_min(), Some(0));
-	assert_eq!(p.get_level_max(), Some(5));
+	assert_eq!(p.level_min(), Some(0));
+	assert_eq!(p.level_max(), Some(5));
 	assert!(p.get_level(6).is_empty());
 }
 
@@ -45,8 +45,8 @@ fn default_is_empty() {
 fn from_geo_bbox() {
 	let geo = GeoBBox::new(-180.0, -MAX_LAT, 180.0, MAX_LAT).unwrap();
 	let p = TilePyramid::from_geo_bbox(0, 3, &geo).unwrap();
-	assert_eq!(p.get_level_min(), Some(0));
-	assert_eq!(p.get_level_max(), Some(3));
+	assert_eq!(p.level_min(), Some(0));
+	assert_eq!(p.level_max(), Some(3));
 	assert!(p.get_level(4).is_empty());
 }
 
@@ -72,7 +72,7 @@ fn get_level_and_set_level() {
 #[test]
 fn includes_coord() {
 	let mut p = TilePyramid::new_empty();
-	p.include_bbox(&bbox(5, 3, 4, 10, 15)).unwrap();
+	p.insert_bbox(&bbox(5, 3, 4, 10, 15)).unwrap();
 	assert!(p.includes_coord(&coord(5, 5, 7)));
 	assert!(!p.includes_coord(&coord(5, 0, 0)));
 	assert!(!p.includes_coord(&coord(6, 5, 7)));
@@ -81,7 +81,7 @@ fn includes_coord() {
 #[test]
 fn includes_bbox() {
 	let mut p = TilePyramid::new_empty();
-	p.include_bbox(&bbox(5, 0, 0, 15, 15)).unwrap();
+	p.insert_bbox(&bbox(5, 0, 0, 15, 15)).unwrap();
 	assert!(p.includes_bbox(&bbox(5, 2, 2, 8, 8)).unwrap());
 	assert!(!p.includes_bbox(&bbox(5, 0, 0, 20, 20)).unwrap());
 }
@@ -89,7 +89,7 @@ fn includes_bbox() {
 #[test]
 fn intersects_bbox() {
 	let mut p = TilePyramid::new_empty();
-	p.include_bbox(&bbox(4, 0, 0, 7, 7)).unwrap();
+	p.insert_bbox(&bbox(4, 0, 0, 7, 7)).unwrap();
 	assert!(p.intersects_bbox(&bbox(4, 5, 5, 10, 10)));
 	assert!(!p.intersects_bbox(&bbox(4, 10, 10, 15, 15)));
 }
@@ -97,17 +97,17 @@ fn intersects_bbox() {
 #[test]
 fn includes_pyramid_and_intersects_pyramid() {
 	let mut a = TilePyramid::new_empty();
-	a.include_bbox(&bbox(5, 0, 0, 15, 15)).unwrap();
+	a.insert_bbox(&bbox(5, 0, 0, 15, 15)).unwrap();
 
 	let mut b = TilePyramid::new_empty();
-	b.include_bbox(&bbox(5, 2, 2, 8, 8)).unwrap();
+	b.insert_bbox(&bbox(5, 2, 2, 8, 8)).unwrap();
 
 	assert!(a.includes_pyramid(&b));
 	assert!(!b.includes_pyramid(&a));
 	assert!(a.intersects_pyramid(&b));
 
 	let mut c = TilePyramid::new_empty();
-	c.include_bbox(&bbox(5, 20, 20, 25, 25)).unwrap();
+	c.insert_bbox(&bbox(5, 20, 20, 25, 25)).unwrap();
 	assert!(!a.intersects_pyramid(&c));
 }
 
@@ -131,7 +131,7 @@ fn get_geo_bbox_and_center() {
 	assert!(p.get_geo_bbox().is_none());
 	assert!(p.get_geo_center().is_none());
 
-	p.include_bbox(&bbox(5, 10, 10, 20, 20)).unwrap();
+	p.insert_bbox(&bbox(5, 10, 10, 20, 20)).unwrap();
 	assert!(p.get_geo_bbox().is_some());
 	assert!(p.get_geo_center().is_some());
 }
@@ -139,8 +139,8 @@ fn get_geo_bbox_and_center() {
 #[test]
 fn iter_levels_and_iter_all_level_bboxes() {
 	let mut p = TilePyramid::new_empty();
-	p.include_bbox(&bbox(3, 0, 0, 3, 3)).unwrap();
-	p.include_bbox(&bbox(5, 0, 0, 5, 5)).unwrap();
+	p.insert_bbox(&bbox(3, 0, 0, 3, 3)).unwrap();
+	p.insert_bbox(&bbox(5, 0, 0, 5, 5)).unwrap();
 
 	assert_eq!(p.iter_levels().count(), 2);
 }
@@ -148,7 +148,7 @@ fn iter_levels_and_iter_all_level_bboxes() {
 #[test]
 fn intersected_bbox() {
 	let mut p = TilePyramid::new_empty();
-	p.include_bbox(&bbox(4, 0, 0, 7, 7)).unwrap();
+	p.insert_bbox(&bbox(4, 0, 0, 7, 7)).unwrap();
 	let result = p.intersected_bbox(&bbox(4, 4, 4, 11, 11)).unwrap();
 	assert_eq!(result, bbox(4, 4, 4, 7, 7));
 }
@@ -156,14 +156,14 @@ fn intersected_bbox() {
 // --- mutations ---
 
 #[test]
-fn include_pyramid() {
+fn union() {
 	let mut a = TilePyramid::new_empty();
-	a.include_bbox(&bbox(5, 0, 0, 5, 5)).unwrap();
+	a.insert_bbox(&bbox(5, 0, 0, 5, 5)).unwrap();
 
 	let mut b = TilePyramid::new_empty();
-	b.include_bbox(&bbox(5, 10, 10, 15, 15)).unwrap();
+	b.insert_bbox(&bbox(5, 10, 10, 15, 15)).unwrap();
 
-	a.include_pyramid(&b);
+	a.union(&b);
 	assert!(a.includes_coord(&coord(5, 2, 2)));
 	assert!(a.includes_coord(&coord(5, 12, 12)));
 }
@@ -171,10 +171,10 @@ fn include_pyramid() {
 #[test]
 fn intersect_pyramid() {
 	let mut a = TilePyramid::new_empty();
-	a.include_bbox(&bbox(5, 0, 0, 15, 15)).unwrap();
+	a.insert_bbox(&bbox(5, 0, 0, 15, 15)).unwrap();
 
 	let mut b = TilePyramid::new_empty();
-	b.include_bbox(&bbox(5, 10, 10, 25, 25)).unwrap();
+	b.insert_bbox(&bbox(5, 10, 10, 25, 25)).unwrap();
 
 	a.intersect(&b).unwrap();
 	assert!(a.includes_coord(&coord(5, 12, 12)));
@@ -205,7 +205,7 @@ fn set_level_min_and_max() {
 #[test]
 fn flip_y_and_swap_xy() {
 	let mut p = TilePyramid::new_empty();
-	p.include_bbox(&bbox(3, 0, 0, 3, 3)).unwrap();
+	p.insert_bbox(&bbox(3, 0, 0, 3, 3)).unwrap();
 	// Just verify they don't panic
 	p.flip_y();
 	p.swap_xy();
@@ -220,7 +220,7 @@ fn weighted_bbox_empty_errors() {
 #[test]
 fn weighted_bbox_nonempty() {
 	let mut p = TilePyramid::new_empty();
-	p.include_bbox(&bbox(5, 10, 10, 20, 20)).unwrap();
+	p.insert_bbox(&bbox(5, 10, 10, 20, 20)).unwrap();
 	assert!(p.weighted_bbox().is_ok());
 }
 
@@ -248,7 +248,7 @@ fn get_level_bbox_empty_level() {
 #[test]
 fn include_coord() {
 	let mut p = TilePyramid::new_empty();
-	p.include_coord(&coord(5, 7, 9));
+	p.insert_coord(&coord(5, 7, 9));
 	assert!(p.includes_coord(&coord(5, 7, 9)));
 	assert!(!p.includes_coord(&coord(5, 0, 0)));
 }
@@ -282,7 +282,7 @@ fn add_border_empty_level_unaffected() {
 fn flip_y_changes_coordinates() {
 	let mut p = TilePyramid::new_empty();
 	// z=1: 2x2 grid; top-left tile (0,0) flips to bottom-left (0,1)
-	p.include_bbox(&bbox(1, 0, 0, 0, 0)).unwrap();
+	p.insert_bbox(&bbox(1, 0, 0, 0, 0)).unwrap();
 	p.flip_y();
 	assert!(p.includes_coord(&coord(1, 0, 1)));
 	assert!(!p.includes_coord(&coord(1, 0, 0)));
@@ -292,7 +292,7 @@ fn flip_y_changes_coordinates() {
 fn swap_xy_changes_coordinates() {
 	let mut p = TilePyramid::new_empty();
 	// bbox with x=[2..4], y=[0..1] → after swap: x=[0..1], y=[2..4]
-	p.include_bbox(&bbox(4, 2, 0, 4, 1)).unwrap();
+	p.insert_bbox(&bbox(4, 2, 0, 4, 1)).unwrap();
 	p.swap_xy();
 	let b = p.get_level_bbox(4);
 	assert_eq!(b.x_min().unwrap(), 0);
@@ -338,8 +338,8 @@ fn from_tile_coords_single_tile() {
 	let c = TileCoord::new(5, 10, 12).unwrap();
 	let p = TilePyramid::from_tile_coords(std::iter::once(c));
 	assert!(!p.is_empty());
-	assert_eq!(p.get_level_min(), Some(5));
-	assert_eq!(p.get_level_max(), Some(5));
+	assert_eq!(p.level_min(), Some(5));
+	assert_eq!(p.level_max(), Some(5));
 	assert_eq!(p.count_tiles(), 1);
 }
 
@@ -352,8 +352,8 @@ fn from_tile_coords_multi_level() {
 		TileCoord::new(4, 5, 7).unwrap(),
 	];
 	let p = TilePyramid::from_tile_coords(coords.into_iter());
-	assert_eq!(p.get_level_min(), Some(2));
-	assert_eq!(p.get_level_max(), Some(4));
+	assert_eq!(p.level_min(), Some(2));
+	assert_eq!(p.level_max(), Some(4));
 	assert_eq!(p.count_tiles(), 3);
 }
 
@@ -371,7 +371,7 @@ fn from_tile_coords_matches_include_coord() {
 	// Build via sequential include_coord
 	let mut seq = TilePyramid::new_empty();
 	for c in &coords {
-		seq.include_coord(c);
+		seq.insert_coord(c);
 	}
 
 	assert_eq!(batch.count_tiles(), seq.count_tiles());
@@ -387,10 +387,10 @@ fn eq_empty_pyramids() {
 #[test]
 fn eq_after_same_operations() {
 	let mut a = TilePyramid::new_empty();
-	a.include_bbox(&bbox(5, 3, 4, 10, 15)).unwrap();
+	a.insert_bbox(&bbox(5, 3, 4, 10, 15)).unwrap();
 
 	let mut b = TilePyramid::new_empty();
-	b.include_bbox(&bbox(5, 3, 4, 10, 15)).unwrap();
+	b.insert_bbox(&bbox(5, 3, 4, 10, 15)).unwrap();
 
 	assert_eq!(a, b);
 }

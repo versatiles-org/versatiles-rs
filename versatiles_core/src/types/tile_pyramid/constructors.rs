@@ -24,14 +24,14 @@ impl TilePyramid {
 		}
 	}
 
-	/// Creates a full pyramid up to `max_zoom_level`; levels above are empty.
+	/// Creates a full pyramid up to `max_level`; levels above are empty.
 	#[must_use]
 	#[allow(clippy::cast_possible_truncation)]
-	pub fn new_full_up_to(max_zoom_level: u8) -> Self {
+	pub fn new_full_up_to(max_level: u8) -> Self {
 		TilePyramid {
 			levels: from_fn(|z| {
 				let level = z as u8;
-				if level <= max_zoom_level {
+				if level <= max_level {
 					TileCover::new_full(level).unwrap()
 				} else {
 					TileCover::new_empty(level).unwrap()
@@ -44,10 +44,10 @@ impl TilePyramid {
 	///
 	/// # Errors
 	/// Returns an error if any zoom level or geographic coordinate is invalid.
-	pub fn from_geo_bbox(zoom_min: u8, zoom_max: u8, geo_bbox: &GeoBBox) -> Result<Self> {
+	pub fn from_geo_bbox(level_min: u8, level_max: u8, geo_bbox: &GeoBBox) -> Result<Self> {
 		let mut pyramid = TilePyramid::new_empty();
-		for z in zoom_min..=zoom_max {
-			pyramid.levels[z as usize] = TileCover::from_geo(z, geo_bbox)?;
+		for z in level_min..=level_max {
+			pyramid.levels[z as usize] = TileCover::from_geo_bbox(z, geo_bbox)?;
 		}
 		Ok(pyramid)
 	}
@@ -89,7 +89,7 @@ where
 	fn from(bboxes: &T) -> Self {
 		let mut pyramid = TilePyramid::new_empty();
 		for bbox in bboxes.as_ref() {
-			pyramid.include_bbox(bbox).expect("include_bbox failed");
+			pyramid.insert_bbox(bbox).expect("include_bbox failed");
 		}
 		pyramid
 	}

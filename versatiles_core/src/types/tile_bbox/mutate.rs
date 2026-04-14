@@ -383,10 +383,10 @@ mod tests {
 		let mut b = TileBBox::new_empty(4)?;
 		assert!(b.is_empty());
 		b.include(3, 5);
-		assert_eq!(b.as_array()?, [3, 5, 3, 5]);
+		assert_eq!(b.to_array()?, [3, 5, 3, 5]);
 
 		b.include(6, 2); // expand both axes
-		assert_eq!(b.as_array()?, [3, 2, 6, 5]);
+		assert_eq!(b.to_array()?, [3, 2, 6, 5]);
 		Ok(())
 	}
 
@@ -412,7 +412,7 @@ mod tests {
 	#[case(bb(3, 2, 2, 3, 3), 0, [2,2,3,3])] // no-op
 	fn expand_by_behaviour(#[case] mut b: TileBBox, #[case] size: u32, #[case] expected: [u32; 4]) {
 		b.buffer(size);
-		assert_eq!(b.as_array().unwrap(), expected);
+		assert_eq!(b.to_array().unwrap(), expected);
 	}
 
 	#[test]
@@ -428,10 +428,10 @@ mod tests {
 		let mut a = bb(4, 4, 4, 6, 6);
 		let b = bb(4, 2, 5, 8, 7);
 		a.include_bbox(&b)?;
-		assert_eq!(a.as_array()?, [2, 4, 8, 7]);
+		assert_eq!(a.to_array()?, [2, 4, 8, 7]);
 		let c = TileBBox::new_empty(4)?;
 		a.include_bbox(&c)?; // no change
-		assert_eq!(a.as_array()?, [2, 4, 8, 7]);
+		assert_eq!(a.to_array()?, [2, 4, 8, 7]);
 		Ok(())
 	}
 
@@ -454,7 +454,7 @@ mod tests {
 			// empty expected; nothing more to assert
 			return Ok(());
 		}
-		assert_eq!(a.as_array()?, exp);
+		assert_eq!(a.to_array()?, exp);
 		Ok(())
 	}
 
@@ -480,9 +480,9 @@ mod tests {
 	fn shift_by_and_to() -> Result<()> {
 		let mut b = bb(8, 5, 6, 7, 8); // 3x3
 		b.shift_by(-5, -5)?; // clamp to 0
-		assert_eq!(b.as_array()?, [0, 1, 2, 3]);
+		assert_eq!(b.to_array()?, [0, 1, 2, 3]);
 		b.shift_to(13, 14)?; // move within bounds
-		assert_eq!(b.as_array()?, [13, 14, 15, 16]);
+		assert_eq!(b.to_array()?, [13, 14, 15, 16]);
 		Ok(())
 	}
 
@@ -491,9 +491,9 @@ mod tests {
 	fn scale_down_by_powers_of_two() -> Result<()> {
 		let mut b = bb(5, 8, 10, 15, 17); // 8x8 region
 		b.scale_down(2);
-		assert_eq!(b.as_array()?, [4, 5, 7, 8]);
+		assert_eq!(b.to_array()?, [4, 5, 7, 8]);
 		b.scale_down(2);
-		assert_eq!(b.as_array()?, [2, 2, 3, 4]);
+		assert_eq!(b.to_array()?, [2, 2, 3, 4]);
 		Ok(())
 	}
 
@@ -508,7 +508,7 @@ mod tests {
 	fn scaled_down_is_pure() -> Result<()> {
 		let b = bb(5, 8, 10, 15, 17);
 		let c = b.scaled_down(4);
-		assert_eq!(c.as_array()?, [2, 2, 3, 4]);
+		assert_eq!(c.to_array()?, [2, 2, 3, 4]);
 		// Original unchanged
 		assert_eq!(b, bb(5, 8, 10, 15, 17));
 		Ok(())
@@ -518,9 +518,9 @@ mod tests {
 	fn scale_up_and_scaled_up() -> Result<()> {
 		let mut b = bb(6, 2, 3, 4, 5); // 3x3
 		b.scale_up(2)?;
-		assert_eq!(b.as_array()?, [4, 6, 9, 11]);
+		assert_eq!(b.to_array()?, [4, 6, 9, 11]);
 		let c = b.scaled_up(2)?;
-		assert_eq!(c.as_array()?, [8, 12, 19, 23]);
+		assert_eq!(c.to_array()?, [8, 12, 19, 23]);
 		Ok(())
 	}
 
@@ -537,10 +537,10 @@ mod tests {
 		let mut b = a;
 		b.level_up(); // z=3, ×2
 		assert_eq!(b.level, 3);
-		assert_eq!(b.as_array()?, [2, 2, 5, 5]);
+		assert_eq!(b.to_array()?, [2, 2, 5, 5]);
 		b.level_down(); // back to z=2
 		assert_eq!(b.level, 2);
-		assert_eq!(b.as_array()?, [1, 1, 2, 2]);
+		assert_eq!(b.to_array()?, [1, 1, 2, 2]);
 
 		let up = a.leveled_up();
 		assert_eq!(up.level, 3);
@@ -623,7 +623,7 @@ mod tests {
 	) -> Result<()> {
 		let mut b = bb(level, x0, y0, x1, y1);
 		b.round(block);
-		assert_eq!(b.as_array()?, [exp_x0, exp_y0, exp_x1, exp_y1]);
+		assert_eq!(b.to_array()?, [exp_x0, exp_y0, exp_x1, exp_y1]);
 		Ok(())
 	}
 
@@ -632,9 +632,9 @@ mod tests {
 	fn rounded_is_pure() -> Result<()> {
 		let original = bb(6, 10, 10, 17, 21);
 		let rounded = original.rounded(8);
-		assert_eq!(rounded.as_array()?, [8, 8, 23, 23]);
+		assert_eq!(rounded.to_array()?, [8, 8, 23, 23]);
 		// original is unchanged
-		assert_eq!(original.as_array()?, [10, 10, 17, 21]);
+		assert_eq!(original.to_array()?, [10, 10, 17, 21]);
 		Ok(())
 	}
 
@@ -704,7 +704,7 @@ mod tests {
 		let mut b = bb(3, 1, 2, 3, 4);
 		b.flip_y();
 		// y' = max_coord - y_max = 7 - 4 = 3; keep height=3 → y_min'=3, y_max'=5
-		assert_eq!(b.as_array()?, [1, 3, 3, 5]);
+		assert_eq!(b.to_array()?, [1, 3, 3, 5]);
 		Ok(())
 	}
 }

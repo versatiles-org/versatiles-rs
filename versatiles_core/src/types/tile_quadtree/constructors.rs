@@ -83,9 +83,9 @@ impl TileQuadtree {
 	/// # Errors
 	/// Returns an error if the zoom level or geographic coordinates are invalid.
 	#[context("Failed to create TileQuadtree from GeoBBox {bbox:?} at level {level}")]
-	pub fn from_geo(level: u8, bbox: &GeoBBox) -> Result<Self> {
+	pub fn from_geo_bbox(level: u8, bbox: &GeoBBox) -> Result<Self> {
 		validate_zoom_level(level)?;
-		let tile_bbox = TileBBox::from_geo(level, bbox)?;
+		let tile_bbox = TileBBox::from_geo_bbox(level, bbox)?;
 		Ok(Self::from_bbox(&tile_bbox))
 	}
 

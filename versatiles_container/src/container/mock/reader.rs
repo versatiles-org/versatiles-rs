@@ -63,11 +63,11 @@ impl MockReader {
 	#[context("creating mock reader with profile {:?}", profile)]
 	pub fn new_mock_profile(profile: MockReaderProfile) -> Result<MockReader> {
 		let mut bbox_pyramid = TilePyramid::new_empty();
-		bbox_pyramid.include_bbox(&TileBBox::from_min_and_max(2, 0, 1, 2, 3)?)?;
-		bbox_pyramid.include_bbox(&TileBBox::from_min_and_max(3, 0, 2, 4, 6)?)?;
-		bbox_pyramid.include_bbox(&TileBBox::new_full(4)?)?;
-		bbox_pyramid.include_bbox(&TileBBox::new_full(5)?)?;
-		bbox_pyramid.include_bbox(&TileBBox::new_full(6)?)?;
+		bbox_pyramid.insert_bbox(&TileBBox::from_min_and_max(2, 0, 1, 2, 3)?)?;
+		bbox_pyramid.insert_bbox(&TileBBox::from_min_and_max(3, 0, 2, 4, 6)?)?;
+		bbox_pyramid.insert_bbox(&TileBBox::new_full(4)?)?;
+		bbox_pyramid.insert_bbox(&TileBBox::new_full(5)?)?;
+		bbox_pyramid.insert_bbox(&TileBBox::new_full(6)?)?;
 
 		MockReader::new_mock(match profile {
 			MockReaderProfile::Json => TileSourceMetadata::new(
@@ -115,7 +115,7 @@ impl MockReader {
 		}
 
 		let mut blob = match format {
-			JSON => Blob::from(coord.as_json()),
+			JSON => Blob::from(coord.to_json()),
 			PNG => Blob::from(MOCK_BYTES_PNG.to_vec()),
 			MVT => Blob::from(MOCK_BYTES_PBF.to_vec()),
 			JPG => Blob::from(MOCK_BYTES_JPG.to_vec()),

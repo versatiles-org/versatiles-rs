@@ -29,9 +29,9 @@ use crate::{GeoBBox, MAX_ZOOM_LEVEL, PyramidInfo, TileCover};
 /// assert!(pyramid.is_empty());
 ///
 /// let bbox = TileBBox::from_min_and_max(5, 3, 4, 10, 15).unwrap();
-/// pyramid.include_bbox(&bbox).unwrap();
+/// pyramid.insert_bbox(&bbox).unwrap();
 /// assert!(!pyramid.is_empty());
-/// assert_eq!(pyramid.get_level_min(), Some(5));
+/// assert_eq!(pyramid.level_min(), Some(5));
 /// ```
 #[derive(Clone)]
 pub struct TilePyramid {
@@ -39,15 +39,15 @@ pub struct TilePyramid {
 }
 
 impl PyramidInfo for TilePyramid {
-	fn get_geo_bbox(&self) -> Option<GeoBBox> {
+	fn geo_bbox(&self) -> Option<GeoBBox> {
 		self.get_geo_bbox()
 	}
 
-	fn get_zoom_min(&self) -> Option<u8> {
-		self.get_level_min()
+	fn level_min(&self) -> Option<u8> {
+		self.level_min()
 	}
 
-	fn get_zoom_max(&self) -> Option<u8> {
-		self.get_level_max()
+	fn level_max(&self) -> Option<u8> {
+		self.level_max()
 	}
 }

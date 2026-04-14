@@ -7,24 +7,24 @@ use anyhow::Result;
 impl TilePyramid {
 	/// Returns a reference to the [`TileCover`] at the given zoom level.
 	#[must_use]
-	pub fn get_level(&self, zoom: u8) -> &TileCover {
-		&self.levels[zoom as usize]
+	pub fn get_level(&self, level: u8) -> &TileCover {
+		&self.levels[level as usize]
 	}
 
 	/// Returns the bounding box of the given zoom level, or an empty bbox if
 	/// the level is empty.
 	#[must_use]
-	pub fn get_level_bbox(&self, zoom: u8) -> TileBBox {
-		self.levels[zoom as usize]
+	pub fn get_level_bbox(&self, level: u8) -> TileBBox {
+		self.levels[level as usize]
 			.bounds()
-			.unwrap_or_else(|| TileBBox::new_empty(zoom).expect("zoom must be ≤ MAX_ZOOM_LEVEL"))
+			.unwrap_or_else(|| TileBBox::new_empty(level).expect("zoom must be ≤ MAX_ZOOM_LEVEL"))
 	}
 
 	/// Finds the minimum (lowest) non-empty zoom level.
 	///
 	/// Returns `None` if all levels are empty.
 	#[must_use]
-	pub fn get_level_min(&self) -> Option<u8> {
+	pub fn level_min(&self) -> Option<u8> {
 		self.levels.iter().find(|c| !c.is_empty()).map(TileCover::level)
 	}
 
@@ -32,7 +32,7 @@ impl TilePyramid {
 	///
 	/// Returns `None` if all levels are empty.
 	#[must_use]
-	pub fn get_level_max(&self) -> Option<u8> {
+	pub fn level_max(&self) -> Option<u8> {
 		self.levels.iter().rev().find(|c| !c.is_empty()).map(TileCover::level)
 	}
 
@@ -149,8 +149,8 @@ impl TilePyramid {
 	/// Returns `None` if all levels are empty.
 	#[must_use]
 	pub fn get_geo_bbox(&self) -> Option<GeoBBox> {
-		let max_zoom = self.get_level_max()?;
-		self.levels[max_zoom as usize].to_geo_bbox()
+		let max_level = self.level_max()?;
+		self.levels[max_level as usize].to_geo_bbox()
 	}
 
 	/// Calculates a geographic center based on the bounding box at a middle
@@ -160,10 +160,10 @@ impl TilePyramid {
 	#[must_use]
 	pub fn get_geo_center(&self) -> Option<GeoCenter> {
 		let bbox = self.get_geo_bbox()?;
-		let zoom = (self.get_level_min()? + 2).min(self.get_level_max()?);
+		let level = (self.level_min()? + 2).min(self.level_max()?);
 		let center_lon = f64::midpoint(bbox.x_min, bbox.x_max);
 		let center_lat = f64::midpoint(bbox.y_min, bbox.y_max);
-		Some(GeoCenter(center_lon, center_lat, zoom))
+		Some(GeoCenter(center_lon, center_lat, level))
 	}
 
 	/// Returns a tile-count-weighted geographic bounding box.

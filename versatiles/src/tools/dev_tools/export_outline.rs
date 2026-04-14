@@ -30,7 +30,7 @@ pub async fn run(args: &ExportOutline, runtime: &TilesRuntime) -> Result<()> {
 	let reader = runtime.get_reader_from_str(input).await?;
 
 	let bbox_pyramid = reader.metadata().bbox_pyramid.clone();
-	let level = args.level.unwrap_or_else(|| bbox_pyramid.get_level_max().unwrap());
+	let level = args.level.unwrap_or_else(|| bbox_pyramid.level_max().unwrap());
 
 	log::debug!("Measuring the outline of the tiles in {input:?} at zoom level {level} and saving it to {output:?}");
 

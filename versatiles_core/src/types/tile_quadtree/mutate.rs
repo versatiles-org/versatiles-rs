@@ -12,7 +12,7 @@ impl TileQuadtree {
 	/// # Errors
 	/// Returns an error if the coordinate's zoom level doesn't match.
 	#[context("Failed to include TileCoord {coord:?} into TileQuadtree at level {}", self.level)]
-	pub fn include_coord(&mut self, coord: &TileCoord) -> Result<()> {
+	pub fn insert_coord(&mut self, coord: &TileCoord) -> Result<()> {
 		check_coord_zoom(coord, self.level)?;
 		let size = 1u64 << self.level;
 		self
@@ -26,13 +26,13 @@ impl TileQuadtree {
 	/// # Errors
 	/// Returns an error if the bbox's zoom level doesn't match.
 	#[context("Failed to include TileBBox {bbox:?} into TileQuadtree at level {}", self.level)]
-	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
+	pub fn insert_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		check_bbox_zoom(bbox, self.level)?;
 		let size = 1u64 << self.level;
 		let Some(bbox) = BBox::new(bbox) else {
 			return Ok(());
 		};
-		self.root.include_bbox((0, 0), size, &bbox);
+		self.root.insert_bbox((0, 0), size, &bbox);
 		Ok(())
 	}
 
@@ -54,7 +54,7 @@ impl TileQuadtree {
 
 		let mut new_root = Node::Empty;
 		for rect in rects {
-			new_root.include_bbox(
+			new_root.insert_bbox(
 				(0, 0),
 				tree_size,
 				&BBox {

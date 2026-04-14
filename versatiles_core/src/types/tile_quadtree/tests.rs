@@ -60,9 +60,9 @@ fn from_bbox_partial() -> Result<()> {
 }
 
 #[test]
-fn from_geo() -> Result<()> {
+fn from_geo_bbox() -> Result<()> {
 	let geo = GeoBBox::new(8.0, 51.0, 8.5, 51.5).unwrap();
-	let t = TileQuadtree::from_geo(9, &geo)?;
+	let t = TileQuadtree::from_geo_bbox(9, &geo)?;
 	assert!(!t.is_empty());
 	Ok(())
 }
@@ -137,9 +137,9 @@ fn intersects() -> Result<()> {
 // -------------------------------------------------------------------------
 
 #[test]
-fn include_coord() -> Result<()> {
+fn insert_coord() -> Result<()> {
 	let mut t = TileQuadtree::new_empty(3).unwrap();
-	t.include_coord(&coord(3, 0, 0))?;
+	t.insert_coord(&coord(3, 0, 0))?;
 	assert_eq!(t.count_tiles(), 1);
 	assert!(t.includes_coord(&coord(3, 0, 0))?);
 	assert!(!t.includes_coord(&coord(3, 1, 0))?);
@@ -150,10 +150,10 @@ fn include_coord() -> Result<()> {
 fn insert_tile_collapses_to_full() -> Result<()> {
 	// At zoom 1, there are only 4 tiles. Insert all 4.
 	let mut t = TileQuadtree::new_empty(1).unwrap();
-	t.include_coord(&coord(1, 0, 0))?;
-	t.include_coord(&coord(1, 1, 0))?;
-	t.include_coord(&coord(1, 0, 1))?;
-	t.include_coord(&coord(1, 1, 1))?;
+	t.insert_coord(&coord(1, 0, 0))?;
+	t.insert_coord(&coord(1, 1, 0))?;
+	t.insert_coord(&coord(1, 0, 1))?;
+	t.insert_coord(&coord(1, 1, 1))?;
 	assert!(t.is_full());
 	Ok(())
 }
@@ -161,7 +161,7 @@ fn insert_tile_collapses_to_full() -> Result<()> {
 #[test]
 fn insert_bbox() -> Result<()> {
 	let mut t = TileQuadtree::new_empty(4).unwrap();
-	t.include_bbox(&bbox(4, 0, 0, 7, 7))?;
+	t.insert_bbox(&bbox(4, 0, 0, 7, 7))?;
 	assert_eq!(t.count_tiles(), 64);
 	Ok(())
 }
@@ -217,7 +217,7 @@ fn buffer_full_stays_full() {
 fn buffer_single_tile_expands_to_square() -> Result<()> {
 	// Single tile at (4, 4) at zoom 4; buffer(2) expands to (2..6, 2..6) = 5×5 = 25 tiles
 	let mut t = TileQuadtree::new_empty(4).unwrap();
-	t.include_coord(&coord(4, 4, 4))?;
+	t.insert_coord(&coord(4, 4, 4))?;
 	t.buffer(2);
 	assert_eq!(t.count_tiles(), 25);
 	assert!(t.includes_coord(&coord(4, 2, 2))?); // top-left corner added
@@ -230,7 +230,7 @@ fn buffer_single_tile_expands_to_square() -> Result<()> {
 fn buffer_clamps_at_boundary() -> Result<()> {
 	// Tile at (0, 0); buffer(3) clamped at x=0, y=0 → (0..3, 0..3) = 4×4 = 16 tiles
 	let mut t = TileQuadtree::new_empty(4).unwrap();
-	t.include_coord(&coord(4, 0, 0))?;
+	t.insert_coord(&coord(4, 0, 0))?;
 	t.buffer(3);
 	assert_eq!(t.count_tiles(), 16);
 	assert!(t.includes_coord(&coord(4, 3, 3))?); // far corner
@@ -242,7 +242,7 @@ fn buffer_clamps_at_boundary() -> Result<()> {
 fn buffer_rectangular_region() -> Result<()> {
 	// 3×3 block at (2,2)–(4,4); buffer(1) → (1,1)–(5,5) = 5×5 = 25 tiles
 	let mut t = TileQuadtree::new_empty(4).unwrap();
-	t.include_bbox(&bbox(4, 2, 2, 4, 4))?;
+	t.insert_bbox(&bbox(4, 2, 2, 4, 4))?;
 	assert_eq!(t.count_tiles(), 9);
 	t.buffer(1);
 	assert_eq!(t.count_tiles(), 25);
@@ -403,7 +403,7 @@ fn count_nodes_empty_and_full() {
 fn count_nodes_partial_tree() -> Result<()> {
 	// A tree with a partial subtree has more than 1 node.
 	let mut t = TileQuadtree::new_empty(3).unwrap();
-	t.include_coord(&coord(3, 0, 0))?;
+	t.insert_coord(&coord(3, 0, 0))?;
 	assert!(t.count_nodes() > 1, "partial tree should have more than one node");
 	Ok(())
 }
@@ -437,13 +437,13 @@ fn zoom_mismatch_includes_bbox() {
 #[test]
 fn zoom_mismatch_include_coord() {
 	let mut t = TileQuadtree::new_empty(3).unwrap();
-	assert!(t.include_coord(&coord(4, 0, 0)).is_err());
+	assert!(t.insert_coord(&coord(4, 0, 0)).is_err());
 }
 
 #[test]
 fn zoom_mismatch_include_bbox() {
 	let mut t = TileQuadtree::new_empty(3).unwrap();
-	assert!(t.include_bbox(&bbox(4, 0, 0, 1, 1)).is_err());
+	assert!(t.insert_bbox(&bbox(4, 0, 0, 1, 1)).is_err());
 }
 
 #[test]
@@ -465,7 +465,7 @@ fn zoom_mismatch_remove_bbox() {
 #[test]
 fn include_empty_bbox_is_noop() -> Result<()> {
 	let mut t = TileQuadtree::new_empty(4).unwrap();
-	t.include_bbox(&TileBBox::new_empty(4)?)?;
+	t.insert_bbox(&TileBBox::new_empty(4)?)?;
 	assert!(t.is_empty());
 	Ok(())
 }
@@ -526,7 +526,7 @@ fn flip_y_full_stays_full() {
 fn flip_y_moves_tile_to_mirrored_position() -> Result<()> {
 	// z=3: 8×8 grid; tile (2, 1) should flip to (2, 8−1−1) = (2, 6)
 	let mut t = TileQuadtree::new_empty(3).unwrap();
-	t.include_coord(&coord(3, 2, 1))?;
+	t.insert_coord(&coord(3, 2, 1))?;
 	t.flip_y();
 	assert!(!t.includes_coord(&coord(3, 2, 1))?);
 	assert!(t.includes_coord(&coord(3, 2, 6))?);
@@ -538,8 +538,8 @@ fn flip_y_moves_tile_to_mirrored_position() -> Result<()> {
 fn flip_y_is_involution() -> Result<()> {
 	// Two applications should return the original tree.
 	let mut t = TileQuadtree::new_empty(3).unwrap();
-	t.include_coord(&coord(3, 2, 1))?;
-	t.include_coord(&coord(3, 5, 6))?;
+	t.insert_coord(&coord(3, 2, 1))?;
+	t.insert_coord(&coord(3, 5, 6))?;
 	let count = t.count_tiles();
 	t.flip_y();
 	t.flip_y();
@@ -572,7 +572,7 @@ fn swap_xy_full_stays_full() {
 fn swap_xy_moves_tile_to_transposed_position() -> Result<()> {
 	// z=3: 8×8 grid; tile (2, 5) should swap to (5, 2)
 	let mut t = TileQuadtree::new_empty(3).unwrap();
-	t.include_coord(&coord(3, 2, 5))?;
+	t.insert_coord(&coord(3, 2, 5))?;
 	t.swap_xy();
 	assert!(!t.includes_coord(&coord(3, 2, 5))?);
 	assert!(t.includes_coord(&coord(3, 5, 2))?);
@@ -584,8 +584,8 @@ fn swap_xy_moves_tile_to_transposed_position() -> Result<()> {
 fn swap_xy_is_involution() -> Result<()> {
 	// Two applications should return the original tree.
 	let mut t = TileQuadtree::new_empty(3).unwrap();
-	t.include_coord(&coord(3, 2, 5))?;
-	t.include_coord(&coord(3, 0, 7))?;
+	t.insert_coord(&coord(3, 2, 5))?;
+	t.insert_coord(&coord(3, 0, 7))?;
 	let count = t.count_tiles();
 	t.swap_xy();
 	t.swap_xy();
@@ -636,7 +636,7 @@ fn from_tile_iter_matches_sequential_insert() -> Result<()> {
 	// Sequential insertion
 	let mut seq = TileQuadtree::new_empty(3).unwrap();
 	for &(x, y) in &tiles {
-		seq.include_coord(&coord(3, x, y))?;
+		seq.insert_coord(&coord(3, x, y))?;
 	}
 
 	// Batch construction

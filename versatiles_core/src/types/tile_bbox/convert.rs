@@ -44,7 +44,7 @@ impl TileBBox {
 
 	/// Returns the bbox as an array `[x_min, y_min, x_max, y_max]`.
 	/// Useful for serialization or equality checks.
-	pub fn as_array(&self) -> Result<[u32; 4]> {
+	pub fn to_array(&self) -> Result<[u32; 4]> {
 		ensure!(!self.is_empty(), "cannot get array of an empty TileBBox");
 		Ok([self.x_min()?, self.y_min()?, self.x_max()?, self.y_max()?])
 	}

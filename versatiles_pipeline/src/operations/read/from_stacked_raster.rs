@@ -251,7 +251,7 @@ impl ReadTileSource for Operation {
 
 			let metadata = source.metadata();
 			traversal.intersect(&metadata.traversal)?;
-			pyramid.include_pyramid(&metadata.bbox_pyramid);
+			pyramid.union(&metadata.bbox_pyramid);
 
 			ensure!(
 				metadata.tile_format.to_type() == TileType::Raster,
@@ -261,7 +261,7 @@ impl ReadTileSource for Operation {
 
 		let metadata = TileSourceMetadata::new(tile_format, tile_compression, pyramid, traversal);
 		metadata.update_tilejson(&mut tilejson);
-		let level_max = metadata.bbox_pyramid.get_level_max().unwrap();
+		let level_max = metadata.bbox_pyramid.level_max().unwrap();
 
 		// Build source entries, optionally wrapping each source with raster_overscale
 		let auto_overscale = args.auto_overscale.unwrap_or(false);
@@ -271,7 +271,7 @@ impl ReadTileSource for Operation {
 			use crate::operations::raster::raster_overscale;
 
 			for source in original_sources {
-				let native_level_max = source.metadata().bbox_pyramid.get_level_max().unwrap();
+				let native_level_max = source.metadata().bbox_pyramid.level_max().unwrap();
 				let overscale_args = raster_overscale::Args {
 					level_base: Some(native_level_max),
 					level_max: Some(level_max),
@@ -553,7 +553,7 @@ mod tests {
 					let mut pyramide = TilePyramid::new_empty();
 					let filename = location.to_string();
 					for c in filename[0..filename.len() - 4].chars() {
-						pyramide.include_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?)?;
+						pyramide.insert_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?)?;
 					}
 					Ok(
 						Box::new(DummyImageSource::from_color(&[0, 0, 0], 4, TileFormat::PNG, Some(pyramide)).unwrap())
@@ -949,9 +949,9 @@ mod tests {
 			|_location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
 					let mut pyramid = TilePyramid::new_empty();
-					pyramid.include_bbox(&TileBBox::new_full(0)?)?;
-					pyramid.include_bbox(&TileBBox::new_full(1)?)?;
-					pyramid.include_bbox(&TileBBox::new_full(2)?)?;
+					pyramid.insert_bbox(&TileBBox::new_full(0)?)?;
+					pyramid.insert_bbox(&TileBBox::new_full(1)?)?;
+					pyramid.insert_bbox(&TileBBox::new_full(2)?)?;
 					Ok(
 						Box::new(DummyImageSource::from_color(&[255, 0, 0], 4, TileFormat::PNG, Some(pyramid)).unwrap())
 							as Box<dyn TileSource>,
@@ -988,12 +988,12 @@ mod tests {
 					if filename.contains("full") {
 						// Full source has all levels
 						for level in 0..=4 {
-							pyramid.include_bbox(&TileBBox::new_full(level)?)?;
+							pyramid.insert_bbox(&TileBBox::new_full(level)?)?;
 						}
 					} else {
 						// Limited source only has levels 0-2
 						for level in 0..=2 {
-							pyramid.include_bbox(&TileBBox::new_full(level)?)?;
+							pyramid.insert_bbox(&TileBBox::new_full(level)?)?;
 						}
 					}
 					let color = if filename.contains("full") {
@@ -1137,20 +1137,20 @@ mod tests {
 		for &(color, max_level) in layers {
 			let mut src_pyramid = TilePyramid::new_empty();
 			for level in 0..=max_level {
-				src_pyramid.include_bbox(&TileBBox::new_full(level).unwrap()).unwrap();
+				src_pyramid.insert_bbox(&TileBBox::new_full(level).unwrap()).unwrap();
 			}
-			pyramid_raw.include_pyramid(&src_pyramid);
+			pyramid_raw.union(&src_pyramid);
 			let source = DummyImageSource::from_color(color, 4, TileFormat::PNG, Some(src_pyramid)).unwrap();
 			traversal.intersect(&source.metadata().traversal).unwrap();
 			original_sources.push(Box::new(source));
 		}
 
-		let level_max = pyramid_raw.get_level_max().unwrap();
+		let level_max = pyramid_raw.level_max().unwrap();
 
 		// Wrap each source with raster_overscale (like auto_overscale=true does)
 		use crate::operations::raster::raster_overscale;
 		for source in original_sources {
-			let native_level_max = source.metadata().bbox_pyramid.get_level_max().unwrap();
+			let native_level_max = source.metadata().bbox_pyramid.level_max().unwrap();
 			let overscale_args = raster_overscale::Args {
 				level_base: Some(native_level_max),
 				level_max: Some(level_max),
@@ -1345,29 +1345,29 @@ mod tests {
 		for &(color, max_level) in layers {
 			let mut src_pyramid = TilePyramid::new_empty();
 			for level in 0..=max_level {
-				src_pyramid.include_bbox(&TileBBox::new_full(level).unwrap()).unwrap();
+				src_pyramid.insert_bbox(&TileBBox::new_full(level).unwrap()).unwrap();
 			}
-			pyramid_raw.include_pyramid(&src_pyramid);
+			pyramid_raw.union(&src_pyramid);
 			let source = DummyImageSource::from_color(color, 4, TileFormat::PNG, Some(src_pyramid)).unwrap();
 			traversal.intersect(&source.metadata().traversal).unwrap();
 			original_sources.push(Box::new(source));
 		}
 
-		let level_max = pyramid_raw.get_level_max().unwrap();
+		let level_max = pyramid_raw.level_max().unwrap();
 
 		// Build a standalone copy of the first source for comparison
 		let first_color = layers[0].0;
 		let first_max = layers[0].1;
 		let mut first_pyramid = TilePyramid::new_empty();
 		for level in 0..=first_max {
-			first_pyramid.include_bbox(&TileBBox::new_full(level).unwrap()).unwrap();
+			first_pyramid.insert_bbox(&TileBBox::new_full(level).unwrap()).unwrap();
 		}
 		let first_source_standalone =
 			DummyImageSource::from_color(first_color, 4, TileFormat::PNG, Some(first_pyramid)).unwrap();
 
 		use crate::operations::raster::raster_overscale;
 		for source in original_sources {
-			let native_level_max = source.metadata().bbox_pyramid.get_level_max().unwrap();
+			let native_level_max = source.metadata().bbox_pyramid.level_max().unwrap();
 			let overscale_args = raster_overscale::Args {
 				level_base: Some(native_level_max),
 				level_max: Some(level_max),

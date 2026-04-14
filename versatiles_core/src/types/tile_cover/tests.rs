@@ -80,7 +80,7 @@ fn intersects_bbox() {
 #[test]
 fn insert_tile_expands_bbox() {
 	let mut c = TileCover::new_empty(4).unwrap();
-	c.include_coord(&coord(4, 3, 3)).unwrap();
+	c.insert_coord(&coord(4, 3, 3)).unwrap();
 	assert!(!c.is_empty());
 	assert_eq!(c.count_tiles(), 1);
 }
@@ -88,7 +88,7 @@ fn insert_tile_expands_bbox() {
 #[test]
 fn insert_bbox() {
 	let mut c = TileCover::new_empty(4).unwrap();
-	c.include_bbox(&bbox(4, 2, 2, 5, 5)).unwrap();
+	c.insert_bbox(&bbox(4, 2, 2, 5, 5)).unwrap();
 	assert_eq!(c.count_tiles(), 16);
 }
 
@@ -266,15 +266,15 @@ fn includes_bbox_level_mismatch_bbox_returns_false() {
 fn include_coord_noop_when_already_covered() {
 	let mut c = TileCover::from(bbox(4, 0, 0, 15, 15));
 	// Already covered; stays Bbox and count unchanged.
-	c.include_coord(&coord(4, 5, 5)).unwrap();
+	c.insert_coord(&coord(4, 5, 5)).unwrap();
 	assert!(matches!(c, TileCover::Bbox(_)));
 	assert_eq!(c.count_tiles(), 256);
 }
 
 #[test]
-fn include_bbox_noop_when_already_covered() {
+fn insert_bbox_noop_when_already_covered() {
 	let mut c = TileCover::from(bbox(4, 0, 0, 15, 15));
-	c.include_bbox(&bbox(4, 2, 2, 8, 8)).unwrap();
+	c.insert_bbox(&bbox(4, 2, 2, 8, 8)).unwrap();
 	assert!(matches!(c, TileCover::Bbox(_)));
 	assert_eq!(c.count_tiles(), 256);
 }

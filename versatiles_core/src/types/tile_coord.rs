@@ -224,7 +224,7 @@ impl TileCoord {
 
 	/// Serialize this coordinate to a compact JSON-like string `{x:…,y:…,z:…}`.
 	#[must_use]
-	pub fn as_json(&self) -> String {
+	pub fn to_json(&self) -> String {
 		format!("{{\"z\":{},\"x\":{},\"y\":{}}}", self.level, self.x, self.y)
 	}
 
@@ -553,7 +553,7 @@ mod tests {
 	fn tilecoord_as_json_and_scaled_down() {
 		let coord = TileCoord::new(4, 5, 6).unwrap();
 		// Test JSON serialization
-		assert_eq!(coord.as_json(), "{\"z\":4,\"x\":5,\"y\":6}");
+		assert_eq!(coord.to_json(), "{\"z\":4,\"x\":5,\"y\":6}");
 		// Test scaling down by a factor
 		let scaled = coord.scaled_down(5);
 		assert_eq!(scaled, TileCoord::new(4, 1, 1).unwrap());

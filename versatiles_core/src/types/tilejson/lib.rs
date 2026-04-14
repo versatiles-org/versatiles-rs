@@ -213,14 +213,14 @@ impl TileJSON {
 	/// Any type implementing [`PyramidInfo`] can be passed here (e.g. [`crate::TilePyramid`]).
 	pub fn update_from_pyramid<P: PyramidInfo>(&mut self, pyramid: &P) {
 		if self.bounds.is_none() {
-			self.bounds = pyramid.get_geo_bbox();
+			self.bounds = pyramid.geo_bbox();
 		}
 
-		if let Some(z) = pyramid.get_zoom_min() {
+		if let Some(z) = pyramid.level_min() {
 			self.set_min_zoom(z);
 		}
 
-		if let Some(z) = pyramid.get_zoom_max() {
+		if let Some(z) = pyramid.level_max() {
 			self.set_max_zoom(z);
 		}
 	}

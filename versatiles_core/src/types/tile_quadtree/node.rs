@@ -260,7 +260,7 @@ impl Node {
 		}
 	}
 
-	pub fn include_bbox(&mut self, (x_off, y_off): (u64, u64), size: u64, bbox: &BBox) {
+	pub fn insert_bbox(&mut self, (x_off, y_off): (u64, u64), size: u64, bbox: &BBox) {
 		// Intersection of bbox with this cell
 		let ix_min = bbox.x_min.max(x_off);
 		let iy_min = bbox.y_min.max(y_off);
@@ -291,10 +291,10 @@ impl Node {
 			let half = size / 2;
 			let mid_x = x_off + half;
 			let mid_y = y_off + half;
-			children[0].include_bbox((x_off, y_off), half, bbox);
-			children[1].include_bbox((mid_x, y_off), half, bbox);
-			children[2].include_bbox((x_off, mid_y), half, bbox);
-			children[3].include_bbox((mid_x, mid_y), half, bbox);
+			children[0].insert_bbox((x_off, y_off), half, bbox);
+			children[1].insert_bbox((mid_x, y_off), half, bbox);
+			children[2].insert_bbox((x_off, mid_y), half, bbox);
+			children[3].insert_bbox((mid_x, mid_y), half, bbox);
 			self.normalize();
 		}
 	}

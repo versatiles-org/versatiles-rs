@@ -70,7 +70,7 @@ impl BlockIndex {
 		let mut pyramid = TilePyramid::new_empty();
 		for block in self.lookup.values() {
 			pyramid
-				.include_bbox(block.get_global_bbox())
+				.insert_bbox(block.get_global_bbox())
 				.expect("include_bbox failed");
 		}
 		pyramid

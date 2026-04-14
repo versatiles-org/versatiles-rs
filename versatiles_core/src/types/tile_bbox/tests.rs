@@ -20,8 +20,8 @@ fn count_tiles_cases(#[case] args: (u8, u32, u32, u32, u32), #[case] expected: u
 }
 
 #[test]
-fn from_geo() -> Result<()> {
-	let bbox1 = TileBBox::from_geo(9, &GeoBBox::new(8.0653, 51.3563, 12.3528, 52.2564)?)?;
+fn from_geo_bbox() -> Result<()> {
+	let bbox1 = TileBBox::from_geo_bbox(9, &GeoBBox::new(8.0653, 51.3563, 12.3528, 52.2564)?)?;
 	let bbox2 = TileBBox::from_min_and_max(9, 267, 168, 273, 170)?;
 	assert_eq!(bbox1, bbox2);
 	Ok(())
@@ -29,11 +29,11 @@ fn from_geo() -> Result<()> {
 
 #[test]
 fn from_geo_is_not_empty() -> Result<()> {
-	let bbox1 = TileBBox::from_geo(0, &GeoBBox::new(8.0, 51.0, 8.000001f64, 51.0)?)?;
+	let bbox1 = TileBBox::from_geo_bbox(0, &GeoBBox::new(8.0, 51.0, 8.000001f64, 51.0)?)?;
 	assert_eq!(bbox1.count_tiles(), 1);
 	assert!(!bbox1.is_empty());
 
-	let bbox2 = TileBBox::from_geo(14, &GeoBBox::new(-132.000001, -40.0, -132.0, -40.0)?)?;
+	let bbox2 = TileBBox::from_geo_bbox(14, &GeoBBox::new(-132.000001, -40.0, -132.0, -40.0)?)?;
 	assert_eq!(bbox2.count_tiles(), 1);
 	assert!(!bbox2.is_empty());
 	Ok(())
@@ -43,7 +43,7 @@ fn from_geo_is_not_empty() -> Result<()> {
 fn quarter_planet() -> Result<()> {
 	let geo_bbox = GeoBBox::new(0.0, -85.05112877980659f64, 180.0, 0.0)?;
 	for level in 1..30 {
-		let bbox = TileBBox::from_geo(level, &geo_bbox)?;
+		let bbox = TileBBox::from_geo_bbox(level, &geo_bbox)?;
 		assert_eq!(bbox.count_tiles(), 4u64.pow(u32::from(level) - 1));
 		assert_eq!(bbox.to_geo_bbox().unwrap(), geo_bbox);
 	}
@@ -54,7 +54,7 @@ fn quarter_planet() -> Result<()> {
 fn sa_pacific() -> Result<()> {
 	let geo_bbox = GeoBBox::new(-180.0, -66.51326044311186f64, -90.0, 0.0)?;
 	for level in 2..30 {
-		let bbox = TileBBox::from_geo(level, &geo_bbox)?;
+		let bbox = TileBBox::from_geo_bbox(level, &geo_bbox)?;
 		assert_eq!(bbox.count_tiles(), 4u64.pow(u32::from(level) - 2));
 		assert_eq!(bbox.to_geo_bbox().unwrap(), geo_bbox);
 	}
@@ -337,7 +337,7 @@ fn test_new_full() -> Result<()> {
 #[test]
 fn test_from_geo_valid() -> Result<()> {
 	let geo_bbox = GeoBBox::new(-180.0, -85.05112878, 180.0, 85.05112878)?;
-	let bbox = TileBBox::from_geo(2, &geo_bbox)?;
+	let bbox = TileBBox::from_geo_bbox(2, &geo_bbox)?;
 	assert_eq!(bbox, TileBBox::from_min_and_max(2, 0, 0, 3, 3)?);
 	Ok(())
 }
@@ -759,9 +759,9 @@ fn set_width_height_clamp_to_bounds() -> Result<()> {
 	// level 4 → max coordinate = 15
 	let mut bbox = TileBBox::from_min_and_size(4, 10, 10, 3, 3)?; // covers x=10..12, y=10..12
 	bbox.set_width(10)?; // would exceed max → clamp to 10..15 → width = 6
-	assert_eq!(bbox.as_array()?, [10, 10, 15, 12]);
+	assert_eq!(bbox.to_array()?, [10, 10, 15, 12]);
 	bbox.set_height(10)?;
-	assert_eq!(bbox.as_array()?, [10, 10, 15, 15]);
+	assert_eq!(bbox.to_array()?, [10, 10, 15, 15]);
 	Ok(())
 }
 
@@ -771,11 +771,11 @@ fn set_min_max_keep_consistency() -> Result<()> {
 	// Move min right/up; max should remain the same
 	bbox.set_x_min(10)?;
 	bbox.set_y_min(11)?;
-	assert_eq!(bbox.as_array()?, [10, 11, 12, 13]);
+	assert_eq!(bbox.to_array()?, [10, 11, 12, 13]);
 	// Move max left/down; min should remain the same
 	bbox.set_x_max(11)?;
 	bbox.set_y_max(12)?;
-	assert_eq!(bbox.as_array()?, [10, 11, 11, 12]);
+	assert_eq!(bbox.to_array()?, [10, 11, 11, 12]);
 	// Setting max less than min should empty the dimension
 	bbox.set_y_max(10)?;
 	assert!(bbox.is_empty());
@@ -792,7 +792,7 @@ fn level_decrease(#[case] min_in: u32, #[case] max_in: u32, #[case] min_out: u32
 	let mut bbox = TileBBox::from_min_and_max(10, min_in, min_in, max_in, max_in)?;
 	bbox.level_down();
 	assert_eq!(bbox.level, 9);
-	assert_eq!(bbox.as_array()?, [min_out, min_out, max_out, max_out]);
+	assert_eq!(bbox.to_array()?, [min_out, min_out, max_out, max_out]);
 	Ok(())
 }
 
@@ -805,7 +805,7 @@ fn level_increase(#[case] min_in: u32, #[case] max_in: u32, #[case] min_out: u32
 	let mut bbox = TileBBox::from_min_and_max(10, min_in, min_in, max_in, max_in)?;
 	bbox.level_up();
 	assert_eq!(bbox.level, 11);
-	assert_eq!(bbox.as_array()?, [min_out, min_out, max_out, max_out]);
+	assert_eq!(bbox.to_array()?, [min_out, min_out, max_out, max_out]);
 	Ok(())
 }
 
@@ -814,7 +814,7 @@ fn level_increase_decrease_roundtrip() -> Result<()> {
 	let original = TileBBox::from_min_and_max(4, 5, 6, 7, 8)?;
 	let inc = original.leveled_up();
 	assert_eq!(inc.level, 5);
-	assert_eq!(inc.as_array()?, [10, 12, 15, 17]);
+	assert_eq!(inc.to_array()?, [10, 12, 15, 17]);
 	let dec = inc.leveled_down();
 	assert_eq!(dec, original);
 	Ok(())
@@ -915,7 +915,7 @@ fn test_scaled_up_cases(
 	let scaled = bbox.scaled_up(scale)?;
 	let (exp_level, exp_x0, exp_y0, exp_x1, exp_y1) = expected;
 	assert_eq!(scaled.level, exp_level);
-	assert_eq!(scaled.as_array()?, [exp_x0, exp_y0, exp_x1, exp_y1]);
+	assert_eq!(scaled.to_array()?, [exp_x0, exp_y0, exp_x1, exp_y1]);
 	// Ensure original bbox remains unchanged
 	assert_eq!(bbox, TileBBox::from_min_and_max(level, x0, y0, x1, y1)?);
 	Ok(())

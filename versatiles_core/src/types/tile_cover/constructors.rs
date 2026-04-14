@@ -39,8 +39,8 @@ impl TileCover {
 	/// # Errors
 	/// Returns an error if the level or geographic coordinates are invalid.
 	#[context("Failed to create TileCover from GeoBBox {bbox:?} at level {level}")]
-	pub fn from_geo(level: u8, bbox: &GeoBBox) -> Result<Self> {
-		Ok(TileCover::Bbox(TileBBox::from_geo(level, bbox)?))
+	pub fn from_geo_bbox(level: u8, bbox: &GeoBBox) -> Result<Self> {
+		Ok(TileCover::Bbox(TileBBox::from_geo_bbox(level, bbox)?))
 	}
 }
 

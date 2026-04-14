@@ -17,20 +17,20 @@ impl TilePyramid {
 	}
 
 	/// Includes a single tile coordinate (expands coverage at its zoom level).
-	pub fn include_coord(&mut self, coord: &TileCoord) {
-		self.levels[coord.level as usize].include_coord(coord).unwrap();
+	pub fn insert_coord(&mut self, coord: &TileCoord) {
+		self.levels[coord.level as usize].insert_coord(coord).unwrap();
 	}
 
 	/// Includes all tiles in `bbox` (expands coverage at `bbox`'s zoom level).
 	///
 	/// # Errors
 	/// Returns an error if the zoom level is invalid or insertion fails.
-	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
-		self.levels[bbox.level() as usize].include_bbox(bbox)
+	pub fn insert_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
+		self.levels[bbox.level() as usize].insert_bbox(bbox)
 	}
 
 	/// Includes all coverage from `other` into this pyramid (union per level).
-	pub fn include_pyramid(&mut self, other: &TilePyramid) {
+	pub fn union(&mut self, other: &TilePyramid) {
 		for z in 0..=MAX_ZOOM_LEVEL as usize {
 			let union = self.levels[z].union(&other.levels[z]).unwrap();
 			self.levels[z] = union;
@@ -45,7 +45,7 @@ impl TilePyramid {
 	pub fn intersect_geo_bbox(&mut self, geo_bbox: &GeoBBox) -> Result<()> {
 		for z in 0..=MAX_ZOOM_LEVEL {
 			if let Some(level) = self.levels.get_mut(z as usize) {
-				let bbox = TileBBox::from_geo(z, geo_bbox)?;
+				let bbox = TileBBox::from_geo_bbox(z, geo_bbox)?;
 				level.intersect_bbox(&bbox)?;
 			}
 		}
@@ -57,26 +57,26 @@ impl TilePyramid {
 	/// # Errors
 	/// Returns an error if any level intersection fails.
 	pub fn intersect(&mut self, other: &TilePyramid) -> Result<()> {
-		for z in 0..=MAX_ZOOM_LEVEL as usize {
-			let intersected = self.levels[z].intersection(&other.levels[z])?;
-			self.levels[z] = intersected;
+		for l in 0..=MAX_ZOOM_LEVEL as usize {
+			let intersected = self.levels[l].intersection(&other.levels[l])?;
+			self.levels[l] = intersected;
 		}
 		Ok(())
 	}
 
-	/// Clears all zoom levels below `zoom_min`.
+	/// Clears all zoom levels below `level_min`.
 	#[allow(clippy::cast_possible_truncation)]
-	pub fn set_level_min(&mut self, zoom_min: u8) {
-		for z in 0..zoom_min as usize {
-			self.levels[z] = TileCover::new_empty(z as u8).unwrap();
+	pub fn set_level_min(&mut self, level_min: u8) {
+		for l in 0..level_min as usize {
+			self.levels[l] = TileCover::new_empty(l as u8).unwrap();
 		}
 	}
 
-	/// Clears all zoom levels above `zoom_max`.
+	/// Clears all zoom levels above `level_max`.
 	#[allow(clippy::cast_possible_truncation)]
-	pub fn set_level_max(&mut self, zoom_max: u8) {
-		for z in (zoom_max as usize + 1)..=MAX_ZOOM_LEVEL as usize {
-			self.levels[z] = TileCover::new_empty(z as u8).unwrap();
+	pub fn set_level_max(&mut self, level_max: u8) {
+		for l in (level_max as usize + 1)..=MAX_ZOOM_LEVEL as usize {
+			self.levels[l] = TileCover::new_empty(l as u8).unwrap();
 		}
 	}
 

@@ -264,7 +264,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_correct_zxy_scheme() -> Result<()> {
 		let mut bbox_pyramid = TilePyramid::new_empty();
-		bbox_pyramid.include_coord(&TileCoord::new(3, 1, 2)?);
+		bbox_pyramid.insert_coord(&TileCoord::new(3, 1, 2)?);
 		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
 			bbox_pyramid,
 			tile_compression: TileCompression::Uncompressed,

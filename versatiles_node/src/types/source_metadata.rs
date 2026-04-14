@@ -20,8 +20,8 @@ impl From<&TileSourceMetadata> for SourceMetadata {
 		Self {
 			tile_format: format!("{:?}", params.tile_format).to_lowercase(),
 			tile_compression: format!("{:?}", params.tile_compression).to_lowercase(),
-			min_zoom: params.bbox_pyramid.get_level_min().unwrap_or(0),
-			max_zoom: params.bbox_pyramid.get_level_max().unwrap_or(0),
+			min_zoom: params.bbox_pyramid.level_min().unwrap_or(0),
+			max_zoom: params.bbox_pyramid.level_max().unwrap_or(0),
 		}
 	}
 }

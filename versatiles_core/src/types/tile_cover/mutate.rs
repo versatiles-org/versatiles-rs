@@ -15,7 +15,7 @@ impl TileCover {
 	/// # Errors
 	/// Returns an error if the coordinate's level does not match this cover's level.
 	#[context("Failed to include TileCoord {coord:?} into TileCover at level {}", self.level())]
-	pub fn include_coord(&mut self, coord: &TileCoord) -> Result<()> {
+	pub fn insert_coord(&mut self, coord: &TileCoord) -> Result<()> {
 		if let TileCover::Bbox(b) = self {
 			if b.is_empty() {
 				return b.include_coord(coord);
@@ -25,7 +25,7 @@ impl TileCover {
 			}
 			self.upgrade_to_tree();
 		}
-		self.as_tree_mut().include_coord(coord)
+		self.as_tree_mut().insert_coord(coord)
 	}
 
 	/// Inserts all tiles in `bbox` into this cover.
@@ -35,8 +35,8 @@ impl TileCover {
 	///
 	/// # Errors
 	/// Returns an error if `bbox`'s level does not match this cover's level.
-	#[context("Failed to include TileBBox {bbox:?} into TileCover at level {}", self.level())]
-	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
+	#[context("Failed to insert TileBBox {bbox:?} into TileCover at level {}", self.level())]
+	pub fn insert_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		if let TileCover::Bbox(b) = self {
 			if b.is_empty() {
 				return b.include_bbox(bbox);
@@ -46,7 +46,7 @@ impl TileCover {
 			}
 			self.upgrade_to_tree();
 		}
-		self.as_tree_mut().include_bbox(bbox)
+		self.as_tree_mut().insert_bbox(bbox)
 	}
 
 	/// Removes a single tile coordinate from this cover.

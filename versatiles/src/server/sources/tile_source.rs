@@ -52,7 +52,7 @@ impl ServerTileSource {
 			// Create a TileCoord instance
 			let coord = TileCoord::new(level, x, y)?;
 
-			log::debug!("get tile, prefix: {}, coord: {}", self.prefix, coord.as_json());
+			log::debug!("get tile, prefix: {}, coord: {}", self.prefix, coord.to_json());
 
 			// Get tile data
 			let tile = self.reader.get_tile(&coord).await;

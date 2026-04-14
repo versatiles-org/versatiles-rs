@@ -14,11 +14,11 @@ use crate::GeoBBox;
 pub trait PyramidInfo {
 	/// Returns the geographic bounding box covering all tiles in the pyramid,
 	/// or `None` if the pyramid is empty.
-	fn get_geo_bbox(&self) -> Option<GeoBBox>;
+	fn geo_bbox(&self) -> Option<GeoBBox>;
 
 	/// Returns the minimum (lowest) non-empty zoom level, or `None` if empty.
-	fn get_zoom_min(&self) -> Option<u8>;
+	fn level_min(&self) -> Option<u8>;
 
 	/// Returns the maximum (highest) non-empty zoom level, or `None` if empty.
-	fn get_zoom_max(&self) -> Option<u8>;
+	fn level_max(&self) -> Option<u8>;
 }

@@ -322,8 +322,8 @@ mod tests {
 		pyramid.set_level_max(10);
 
 		// Verify the pyramid respects zoom bounds
-		assert_eq!(pyramid.get_level_min(), Some(5));
-		assert_eq!(pyramid.get_level_max(), Some(10));
+		assert_eq!(pyramid.level_min(), Some(5));
+		assert_eq!(pyramid.level_max(), Some(10));
 	}
 
 	/// Test TilePyramid with geographic bbox

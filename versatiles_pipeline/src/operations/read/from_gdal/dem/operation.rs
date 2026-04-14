@@ -347,8 +347,8 @@ mod tests {
 		let op = get_operation(&dem_path, "").await;
 		assert_eq!(op.metadata.tile_format, TileFormat::PNG);
 		assert_eq!(op.metadata.tile_compression, TileCompression::Uncompressed);
-		assert_eq!(op.metadata.bbox_pyramid.get_level_min(), Some(0));
-		assert_eq!(op.metadata.bbox_pyramid.get_level_max(), Some(2));
+		assert_eq!(op.metadata.bbox_pyramid.level_min(), Some(0));
+		assert_eq!(op.metadata.bbox_pyramid.level_max(), Some(2));
 	}
 
 	#[tokio::test(flavor = "multi_thread")]
@@ -401,7 +401,7 @@ mod tests {
 		let (_tmp, dem_path) = create_temp_dem();
 		let op = get_operation(&dem_path, "").await;
 		// Use a bbox that doesn't overlap the data (data is at lon 14-24, lat 49-55)
-		let bbox = TileBBox::from_geo(1, &GeoBBox::new(-180.0, -85.0, -170.0, -80.0).unwrap())?;
+		let bbox = TileBBox::from_geo_bbox(1, &GeoBBox::new(-180.0, -85.0, -170.0, -80.0).unwrap())?;
 		let stream = op.get_tile_stream(bbox).await?;
 		let tiles = stream.to_vec().await;
 		assert!(tiles.is_empty(), "stream should be empty for non-overlapping bbox");

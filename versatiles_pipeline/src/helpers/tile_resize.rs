@@ -50,7 +50,7 @@ impl TileResizeCore {
 		let mut output_pyramid = TilePyramid::new_empty();
 
 		let source_max = source_pyramid
-			.get_level_max()
+			.level_max()
 			.ok_or_else(|| anyhow!("source has no zoom levels"))?;
 
 		match target_tile_size {

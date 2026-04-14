@@ -113,7 +113,7 @@ impl Operation {
 
 		let level_base = args
 			.level_base
-			.unwrap_or(source.as_ref().metadata().bbox_pyramid.get_level_max().unwrap());
+			.unwrap_or(source.as_ref().metadata().bbox_pyramid.level_max().unwrap());
 		log::trace!("level_base {level_base}");
 
 		let level_max = args
@@ -124,14 +124,14 @@ impl Operation {
 		if let Some(mut level_bbox) = metadata.bbox_pyramid.get_level(level_base).bounds() {
 			while level_bbox.level() < level_max {
 				level_bbox.level_up();
-				metadata.bbox_pyramid.include_bbox(&level_bbox)?;
+				metadata.bbox_pyramid.insert_bbox(&level_bbox)?;
 			}
 		}
 
 		let mut tilejson = source.as_ref().tilejson().clone();
 		metadata.update_tilejson(&mut tilejson);
 
-		let level_min = source.as_ref().metadata().bbox_pyramid.get_level_min().unwrap_or(0);
+		let level_min = source.as_ref().metadata().bbox_pyramid.level_min().unwrap_or(0);
 		let cache = Cache::builder()
 			.max_capacity(512 * 1024 * 1024) // 512MB limit
 			.weigher(|_k: &TileCoord, v: &Option<Arc<DynamicImage>>| -> u32 {
@@ -515,7 +515,7 @@ mod tests {
 		let op = build_op(3).await?;
 		// metadata and tilejson should be available
 		let metadata = op.metadata();
-		assert!(metadata.bbox_pyramid.get_level_max().is_some());
+		assert!(metadata.bbox_pyramid.level_max().is_some());
 		let _tilejson = op.tilejson();
 		Ok(())
 	}
@@ -535,7 +535,7 @@ mod tests {
 
 		// Should have extended max level
 		let metadata = op.metadata();
-		assert!(metadata.bbox_pyramid.get_level_max().unwrap() >= 5);
+		assert!(metadata.bbox_pyramid.level_max().unwrap() >= 5);
 		Ok(())
 	}
 

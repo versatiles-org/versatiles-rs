@@ -414,7 +414,7 @@ mod tests {
 
 		// Metadata should extend pyramid to level 0
 		let metadata = op.metadata();
-		assert_eq!(metadata.bbox_pyramid.get_level_min(), Some(0));
+		assert_eq!(metadata.bbox_pyramid.level_min(), Some(0));
 		Ok(())
 	}
 }

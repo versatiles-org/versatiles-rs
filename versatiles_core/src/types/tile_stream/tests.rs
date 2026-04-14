@@ -74,7 +74,7 @@ async fn should_iterate_sync_over_items() {
 	let mut result = vec![];
 	tile_stream
 		.for_each(|coord, blob| {
-			result.push(format!("{}, {}", coord.as_json(), blob.as_str()));
+			result.push(format!("{}, {}", coord.to_json(), blob.as_str()));
 		})
 		.await;
 

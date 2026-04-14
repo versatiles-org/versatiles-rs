@@ -410,8 +410,8 @@ mod tests {
 		let metadata = reader.metadata();
 		assert_eq!(metadata.tile_compression, TileCompression::Gzip);
 		assert_eq!(metadata.tile_format, TileFormat::MVT);
-		assert_eq!(metadata.bbox_pyramid.get_level_min().unwrap(), 0);
-		assert_eq!(metadata.bbox_pyramid.get_level_max().unwrap(), 3);
+		assert_eq!(metadata.bbox_pyramid.level_min().unwrap(), 0);
+		assert_eq!(metadata.bbox_pyramid.level_max().unwrap(), 3);
 	}
 
 	#[tokio::test]

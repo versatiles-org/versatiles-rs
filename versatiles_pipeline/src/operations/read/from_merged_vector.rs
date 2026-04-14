@@ -92,7 +92,7 @@ impl ReadTileSource for Operation {
 
 			let metadata = source.metadata();
 			traversal.intersect(&metadata.traversal)?;
-			pyramid.include_pyramid(&metadata.bbox_pyramid);
+			pyramid.union(&metadata.bbox_pyramid);
 
 			ensure!(
 				metadata.tile_format.to_type() == TileType::Vector,
@@ -340,7 +340,7 @@ mod tests {
 					let mut pyramide = TilePyramid::new_empty();
 					let filename = location.to_string();
 					for c in filename[0..filename.len() - 4].chars() {
-						pyramide.include_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?)?;
+						pyramide.insert_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?)?;
 					}
 					Ok(Box::new(DummyVectorSource::new(
 						&[("dummy", &[&[("filename", &filename)]])],

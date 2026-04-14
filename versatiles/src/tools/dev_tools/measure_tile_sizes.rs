@@ -39,7 +39,7 @@ pub async fn run(args: &MeasureTileSizes, runtime: &TilesRuntime) -> Result<()> 
 	let metadata = reader.metadata();
 
 	let output_file = &args.output;
-	let level = args.level.or(metadata.bbox_pyramid.get_level_max()).unwrap_or(10);
+	let level = args.level.or(metadata.bbox_pyramid.level_max()).unwrap_or(10);
 	let scale = args.scale.unwrap_or(1);
 	let width_original = 1 << level;
 	let width_scaled = width_original / scale;

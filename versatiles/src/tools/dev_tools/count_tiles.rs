@@ -23,8 +23,8 @@ pub async fn run(args: &CountTiles, runtime: &TilesRuntime) -> Result<()> {
 	let levels: Vec<u8> = if let Some(level) = args.level {
 		vec![level]
 	} else {
-		let min = pyramid.get_level_min().unwrap_or(0);
-		let max = pyramid.get_level_max().unwrap_or(0);
+		let min = pyramid.level_min().unwrap_or(0);
+		let max = pyramid.level_max().unwrap_or(0);
 		(min..=max).collect()
 	};
 

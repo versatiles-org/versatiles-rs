@@ -20,7 +20,7 @@ async fn read_mbtiles_source() -> Result<()> {
 
 	// Verify metadata is present
 	assert_eq!(reader.metadata().tile_format, TileFormat::MVT);
-	assert!(reader.metadata().bbox_pyramid.get_level_max().unwrap() > 0);
+	assert!(reader.metadata().bbox_pyramid.level_max().unwrap() > 0);
 
 	// Verify tilejson is present
 	let tilejson = reader.tilejson();
@@ -45,7 +45,7 @@ async fn mbtiles_to_versatiles_round_trip() -> Result<()> {
 	// Read back
 	let reader = runtime.get_reader_from_str(versatiles_path.to_str().unwrap()).await?;
 	assert_eq!(reader.metadata().tile_format, original_format);
-	assert!(reader.metadata().bbox_pyramid.get_level_max().unwrap() > 0);
+	assert!(reader.metadata().bbox_pyramid.level_max().unwrap() > 0);
 
 	Ok(())
 }
@@ -69,7 +69,7 @@ async fn mbtiles_to_tar_round_trip() -> Result<()> {
 
 	// Read back
 	let reader = runtime.get_reader_from_str(tar_path.to_str().unwrap()).await?;
-	assert!(reader.metadata().bbox_pyramid.get_level_max().unwrap() > 0);
+	assert!(reader.metadata().bbox_pyramid.level_max().unwrap() > 0);
 
 	Ok(())
 }
@@ -93,7 +93,7 @@ async fn mbtiles_to_pmtiles_round_trip() -> Result<()> {
 
 	// Read back
 	let reader = runtime.get_reader_from_str(pmtiles_path.to_str().unwrap()).await?;
-	assert!(reader.metadata().bbox_pyramid.get_level_max().unwrap() > 0);
+	assert!(reader.metadata().bbox_pyramid.level_max().unwrap() > 0);
 
 	Ok(())
 }
@@ -146,7 +146,7 @@ async fn converter_changes_compression() -> Result<()> {
 
 	// Verify output exists and is readable
 	let reader = runtime.get_reader_from_str(output_path.to_str().unwrap()).await?;
-	assert!(reader.metadata().bbox_pyramid.get_level_max().unwrap() > 0);
+	assert!(reader.metadata().bbox_pyramid.level_max().unwrap() > 0);
 
 	Ok(())
 }
@@ -186,8 +186,8 @@ async fn metadata_consistency_after_conversion() -> Result<()> {
 	let metadata = reader.metadata();
 
 	// Basic metadata checks
-	assert!(metadata.bbox_pyramid.get_level_min().is_some());
-	assert!(metadata.bbox_pyramid.get_level_max().is_some());
+	assert!(metadata.bbox_pyramid.level_min().is_some());
+	assert!(metadata.bbox_pyramid.level_max().is_some());
 	assert!(!metadata.tile_format.as_extension().is_empty());
 
 	Ok(())

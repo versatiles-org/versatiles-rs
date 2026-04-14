@@ -199,7 +199,7 @@ mod tests {
 		// metadata and tilejson should be available
 		let metadata = op.metadata();
 		// After building overview, pyramid should extend to level 0
-		assert!(metadata.bbox_pyramid.get_level_min().is_some());
+		assert!(metadata.bbox_pyramid.level_min().is_some());
 		let _tilejson = op.tilejson();
 		Ok(())
 	}

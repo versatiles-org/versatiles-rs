@@ -190,7 +190,7 @@ impl TileCoord {
 	#[must_use]
 	#[napi]
 	pub fn to_json(&self) -> String {
-		self.inner.as_json()
+		self.inner.to_json()
 	}
 }
 
