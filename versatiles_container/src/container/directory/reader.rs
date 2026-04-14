@@ -109,8 +109,6 @@ impl DirectoryReader {
 		let mut tile_map = HashMap::new();
 		let mut container_form: Option<TileFormat> = None;
 		let mut container_comp: Option<TileCompression> = None;
-		let mut bbox_pyramid = TilePyramid::new_empty();
-
 		for result1 in fs::read_dir(dir)? {
 			// z level
 			if result1.is_err() {
@@ -176,7 +174,6 @@ impl DirectoryReader {
 						}
 
 						let coord = TileCoord::new(level, x, y)?;
-						bbox_pyramid.include_coord(&coord);
 						tile_map.insert(coord, entry3.path());
 					}
 				}
@@ -205,6 +202,8 @@ impl DirectoryReader {
 		if tile_map.is_empty() {
 			bail!("no tiles found");
 		}
+
+		let bbox_pyramid = TilePyramid::from_tile_coords(tile_map.keys().copied());
 
 		let tile_format = container_form.context("tile format must be specified")?;
 		let tile_compression = container_comp.context("tile compression must be specified")?;

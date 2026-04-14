@@ -79,6 +79,7 @@ pub struct MBTilesReader {
 	pool: Pool<SqliteConnectionManager>,
 	tilejson: TileJSON,
 	metadata: TileSourceMetadata,
+	#[allow(dead_code)]
 	runtime: TilesRuntime,
 }
 
@@ -218,104 +219,32 @@ impl MBTilesReader {
 		Ok(())
 	}
 
-	/// Execute a simple aggregate query against the `tiles` table.
+	/// Compute the exact tile coverage pyramid from the `tiles` table.
 	///
-	/// * `sql_value` — the SELECT expression (e.g., `MIN(tile_column)`).
-	/// * `sql_where` — an optional WHERE clause without the `WHERE` keyword.
-	///
-	/// # Errors
-	/// Returns an error if executing the query fails.
-	#[context("executing tiles query")]
-	fn simple_query(&self, sql_value: &str, sql_where: &str) -> Result<i32> {
-		let sql = if sql_where.is_empty() {
-			format!("SELECT {sql_value} FROM tiles")
-		} else {
-			format!("SELECT {sql_value} FROM tiles WHERE {sql_where}")
-		};
-
-		log::trace!("SQL: {sql}");
-
-		let conn = self.pool.get()?;
-		let mut stmt = conn.prepare(&sql)?;
-		Ok(stmt.query_row([], |row| row.get::<_, i32>(0))?)
-	}
-
-	/// Compute the per-zoom bounding boxes from the `tiles` table.
-	///
-	/// Uses a two-step MIN/MAX strategy to speed up queries on large tables by estimating
-	/// bounds from a few columns before querying the constrained range. Flips Y afterward
-	/// to match XYZ addressing.
+	/// Reads every `(zoom_level, tile_column, tile_row)` row in a single scan,
+	/// converts them to [`TileCoord`]s, and builds an exact [`TilePyramid`] via
+	/// [`TilePyramid::from_tile_coords`]. Flips Y afterward to convert from TMS
+	/// to XYZ addressing.
 	///
 	/// # Errors
-	/// Returns an error if queries fail.
+	/// Returns an error if the query fails.
 	#[context("computing bbox pyramid from MBTiles")]
 	fn get_bbox_pyramid(&self) -> Result<TilePyramid> {
 		log::debug!("get_bbox_pyramid");
 
-		let mut bbox_pyramid = TilePyramid::new_empty();
+		let conn = self.pool.get()?;
+		let mut stmt = conn.prepare("SELECT zoom_level, tile_column, tile_row FROM tiles")?;
+		let coords: Vec<TileCoord> = stmt
+			.query_map([], |row| {
+				Ok((row.get::<_, u8>(0)?, row.get::<_, u32>(1)?, row.get::<_, u32>(2)?))
+			})?
+			.filter_map(Result::ok)
+			.filter_map(|(z, x, y)| TileCoord::new(z, x, y).ok())
+			.collect();
 
-		let z0 = u8::try_from(self.simple_query("MIN(zoom_level)", "")?)?;
-		let z1 = u8::try_from(self.simple_query("MAX(zoom_level)", "")?)?;
-
-		let progress = self
-			.runtime
-			.create_progress("get mbtiles bbox pyramid", u64::from(z1 - z0 + 1));
-
-		for z in z0..=z1 {
-			let x0 = self.simple_query("MIN(tile_column)", &format!("zoom_level = {z}"))?;
-			let x1 = self.simple_query("MAX(tile_column)", &format!("zoom_level = {z}"))?;
-			let xc = i32::midpoint(x0, x1);
-
-			/*
-				SQLite is not very fast. In particular, the following query is slow for very large tables:
-				> SELECT MIN(tile_row) FROM tiles WHERE zoom_level = 14
-
-				The above query takes about 1 second per 1 million records to execute.
-				For some reason SQLite is not using the index properly.
-
-				The manual states: The MIN/MAX aggregate function can be optimised down to "a single index lookup",
-				if it is the "leftmost column of an index": https://www.sqlite.org/optoverview.html#minmax
-				I suspect that optimising for the rightmost column in an index (here: tile_row) does not work well.
-
-				To increase the speed of the above query by a factor of about 10, we split it into 2 queries.
-
-				The first query gives a good estimate by calculating MIN(tile_row) for the middle (or any other used) tile_column:
-				> SELECT MIN(tile_row) FROM tiles WHERE zoom_level = 14 AND tile_column = $known_columns
-				This takes only a few milliseconds.
-
-				The second query calculates MIN(tile_row) for all columns, but starting with the estimate:
-				> SELECT MIN(tile_row) FROM tiles WHERE zoom_level = 14 AND tile_row <= $min_row_estimate
-
-				This seems to be a great help. I suspect it helps SQLite so it doesn't have to scan the entire index/table.
-			*/
-
-			let sql_prefix = format!("zoom_level = {z} AND");
-			let columns = format!("(tile_column = {x0} OR tile_column = {xc} OR tile_column = {x1})");
-
-			let mut y0 = self.simple_query("MIN(tile_row)", &format!("{sql_prefix} {columns}"))?;
-			let mut y1 = self.simple_query("MAX(tile_row)", &format!("{sql_prefix} {columns}"))?;
-
-			y0 = self.simple_query("MIN(tile_row)", &format!("{sql_prefix} tile_row <= {y0}"))?;
-			y1 = self.simple_query("MAX(tile_row)", &format!("{sql_prefix} tile_row >= {y1}"))?;
-
-			let max_value = 2i32.pow(u32::from(z)) - 1;
-
-			bbox_pyramid.set_level_bbox(TileBBox::from_min_and_max(
-				z,
-				x0.clamp(0, max_value).cast_unsigned(),
-				y0.clamp(0, max_value).cast_unsigned(),
-				x1.clamp(0, max_value).cast_unsigned(),
-				y1.clamp(0, max_value).cast_unsigned(),
-			)?);
-
-			progress.inc(1);
-		}
-
-		progress.finish();
-
-		bbox_pyramid.flip_y();
-
-		Ok(bbox_pyramid)
+		let mut pyramid = TilePyramid::from_tile_coords(coords.into_iter());
+		pyramid.flip_y();
+		Ok(pyramid)
 	}
 }
 

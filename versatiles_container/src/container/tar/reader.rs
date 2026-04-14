@@ -136,8 +136,6 @@ impl TarTilesReader {
 		let mut tile_map = HashMap::new();
 		let mut tile_format: Option<TileFormat> = None;
 		let mut tile_compression: Option<TileCompression> = None;
-		let mut bbox_pyramid = TilePyramid::new_empty();
-
 		for entry in archive.entries()? {
 			let mut entry = entry?;
 			let header = entry.header();
@@ -182,7 +180,6 @@ impl TarTilesReader {
 					tile_compression = Some(tile.compression);
 				}
 
-				bbox_pyramid.include_coord(&tile.coord);
 				tile_map.insert(
 					tile.coord,
 					ByteRange {
@@ -233,6 +230,8 @@ impl TarTilesReader {
 		if tile_map.is_empty() {
 			return Err(anyhow!("no tiles found in tar"));
 		}
+
+		let bbox_pyramid = TilePyramid::from_tile_coords(tile_map.keys().copied());
 
 		let metadata = TileSourceMetadata::new(
 			tile_format.ok_or(anyhow!("unknown tile format, can't detect format"))?,

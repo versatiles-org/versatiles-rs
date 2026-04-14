@@ -313,10 +313,10 @@ fn calc_bbox_pyramid(
 	compression: TileCompression,
 	runtime: &TilesRuntime,
 ) -> Result<TilePyramid> {
-	let mut bbox_pyramid = TilePyramid::new_empty();
+	let mut coords: Vec<TileCoord> = Vec::new();
 
 	parse_directories(
-		&mut bbox_pyramid,
+		&mut coords,
 		root_bytes_uncompressed,
 		leaves_bytes,
 		compression,
@@ -324,7 +324,7 @@ fn calc_bbox_pyramid(
 	)?;
 
 	fn parse_directories(
-		bbox_pyramid: &mut TilePyramid,
+		coords: &mut Vec<TileCoord>,
 		dir: &Blob,
 		leaves_bytes: &Blob,
 		compression: TileCompression,
@@ -347,15 +347,14 @@ fn calc_bbox_pyramid(
 			if entry.range.length > 0 {
 				if entry.run_length > 0 {
 					for i in 0..u64::from(entry.run_length) {
-						let coord = TileCoord::from_hilbert_index(i + entry.tile_id)?;
-						bbox_pyramid.include_coord(&coord);
+						coords.push(TileCoord::from_hilbert_index(i + entry.tile_id)?);
 					}
 					total_entries += u64::from(entry.run_length);
 				} else {
 					let range = entry.range;
 					let mut blob = leaves_bytes.read_range(&range)?;
 					blob = decompress(blob, compression)?;
-					total_entries += parse_directories(bbox_pyramid, &blob, leaves_bytes, compression, None)?;
+					total_entries += parse_directories(coords, &blob, leaves_bytes, compression, None)?;
 				}
 			}
 		}
@@ -368,7 +367,7 @@ fn calc_bbox_pyramid(
 		Ok(total_entries)
 	}
 
-	Ok(bbox_pyramid)
+	Ok(TilePyramid::from_tile_coords(coords.into_iter()))
 }
 
 #[async_trait]
