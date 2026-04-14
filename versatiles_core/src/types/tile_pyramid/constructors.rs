@@ -1,7 +1,7 @@
 //! Constructors for [`TilePyramid`].
 
 use super::TilePyramid;
-use crate::{GeoBBox, TileBBox, TileCover};
+use crate::{GeoBBox, MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileCover, TileQuadtree};
 use anyhow::Result;
 use std::array::from_fn;
 
@@ -50,6 +50,29 @@ impl TilePyramid {
 			pyramid.levels[z as usize] = TileCover::from_geo(z, geo_bbox)?;
 		}
 		Ok(pyramid)
+	}
+
+	/// Build a pyramid from an iterator of [`TileCoord`]s, one per tile.
+	///
+	/// Internally groups coordinates by zoom level and calls
+	/// [`TileQuadtree::from_tile_iter`] for each non-empty level, giving
+	/// O(T log T + T · level) overall instead of O(T · level²) for sequential
+	/// insertion.
+	#[must_use]
+	#[allow(clippy::cast_possible_truncation)]
+	pub fn from_tile_coords(coords: impl Iterator<Item = TileCoord>) -> Self {
+		let mut per_level: Vec<Vec<(u32, u32)>> = vec![Vec::new(); (MAX_ZOOM_LEVEL + 1) as usize];
+		for c in coords {
+			per_level[c.level as usize].push((c.x, c.y));
+		}
+		let mut pyramid = TilePyramid::new_empty();
+		for (z, tiles) in per_level.into_iter().enumerate() {
+			if !tiles.is_empty() {
+				let tree = TileQuadtree::from_tile_coords(z as u8, &tiles).expect("zoom level already validated");
+				pyramid.levels[z] = TileCover::Tree(tree);
+			}
+		}
+		pyramid
 	}
 }
 

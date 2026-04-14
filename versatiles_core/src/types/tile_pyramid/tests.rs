@@ -325,6 +325,58 @@ fn display_nonempty_pyramid() {
 	assert!(s.contains("3:"), "expected level 3 in pyramid display, got: {s}");
 }
 
+// --- from_tile_coords ---
+
+#[test]
+fn from_tile_coords_empty() {
+	let p = TilePyramid::from_tile_coords(std::iter::empty());
+	assert!(p.is_empty());
+}
+
+#[test]
+fn from_tile_coords_single_tile() {
+	let c = TileCoord::new(5, 10, 12).unwrap();
+	let p = TilePyramid::from_tile_coords(std::iter::once(c));
+	assert!(!p.is_empty());
+	assert_eq!(p.get_level_min(), Some(5));
+	assert_eq!(p.get_level_max(), Some(5));
+	assert_eq!(p.count_tiles(), 1);
+}
+
+#[test]
+fn from_tile_coords_multi_level() {
+	// Tiles at zoom 2 and zoom 4
+	let coords = vec![
+		TileCoord::new(2, 1, 1).unwrap(),
+		TileCoord::new(2, 2, 2).unwrap(),
+		TileCoord::new(4, 5, 7).unwrap(),
+	];
+	let p = TilePyramid::from_tile_coords(coords.into_iter());
+	assert_eq!(p.get_level_min(), Some(2));
+	assert_eq!(p.get_level_max(), Some(4));
+	assert_eq!(p.count_tiles(), 3);
+}
+
+#[test]
+fn from_tile_coords_matches_include_coord() {
+	let coords = vec![
+		TileCoord::new(3, 0, 0).unwrap(),
+		TileCoord::new(3, 1, 2).unwrap(),
+		TileCoord::new(3, 5, 6).unwrap(),
+	];
+
+	// Build via from_tile_coords
+	let batch = TilePyramid::from_tile_coords(coords.clone().into_iter());
+
+	// Build via sequential include_coord
+	let mut seq = TilePyramid::new_empty();
+	for c in &coords {
+		seq.include_coord(c);
+	}
+
+	assert_eq!(batch.count_tiles(), seq.count_tiles());
+}
+
 // --- equality ---
 
 #[test]

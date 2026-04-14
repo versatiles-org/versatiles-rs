@@ -1,6 +1,6 @@
 //! Constructors for [`TileQuadtree`].
 
-use super::{BBox, Node, TileQuadtree};
+use super::{BBox, Node, TileQuadtree, node::morton};
 use crate::{GeoBBox, TileBBox, TileCoord, validate_zoom_level};
 use anyhow::{Result, ensure};
 use versatiles_derive::context;
@@ -87,6 +87,30 @@ impl TileQuadtree {
 		validate_zoom_level(level)?;
 		let tile_bbox = TileBBox::from_geo(level, bbox)?;
 		Ok(Self::from_bbox(&tile_bbox))
+	}
+
+	/// Build a quadtree from a `Vec` of `(x, y)` tile coordinates.
+	///
+	/// This is the efficient batch constructor for large tile sets:
+	/// 1. Each tile's Morton (Z-order) code is computed once — O(T).
+	/// 2. The codes are sorted with `sort_unstable` (pdqsort) — O(T log T).
+	/// 3. The quadtree is built top-down using `partition_point` binary search
+	///    on the sorted codes — O(T · level), with each split being a trivial
+	///    `u64 <` comparison rather than a Morton recomputation.
+	///
+	/// Total extra allocation: one `Vec<u64>` of T × 8 bytes.
+	///
+	/// # Errors
+	/// Returns an error if `level` exceeds `MAX_ZOOM_LEVEL`.
+	#[context("Failed to build TileQuadtree from tile iterator at level {level}")]
+	pub fn from_tile_coords(level: u8, tiles: &[(u32, u32)]) -> Result<Self> {
+		validate_zoom_level(level)?;
+		let mut codes: Vec<u64> = tiles.iter().map(|&(x, y)| morton(u64::from(x), u64::from(y))).collect();
+		codes.sort_unstable();
+		codes.dedup();
+		let size = 1u64 << level;
+		let root = Node::from_morton_sorted(&codes, 0, 0, size);
+		Ok(TileQuadtree { level, root })
 	}
 }
 

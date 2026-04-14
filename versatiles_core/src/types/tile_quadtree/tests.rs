@@ -594,3 +594,73 @@ fn swap_xy_is_involution() -> Result<()> {
 	assert_eq!(t.count_tiles(), count);
 	Ok(())
 }
+
+// -------------------------------------------------------------------------
+// from_tile_iter (batch constructor)
+// -------------------------------------------------------------------------
+
+#[test]
+fn from_tile_iter_empty() -> Result<()> {
+	let t = TileQuadtree::from_tile_coords(4, &[])?;
+	assert!(t.is_empty());
+	assert_eq!(t.count_tiles(), 0);
+	Ok(())
+}
+
+#[test]
+fn from_tile_iter_full() -> Result<()> {
+	// Provide all 4×4 = 16 tiles at zoom 2.
+	let all: Vec<(u32, u32)> = (0u32..4).flat_map(|x| (0u32..4).map(move |y| (x, y))).collect();
+	let t = TileQuadtree::from_tile_coords(2, &all)?;
+	assert!(t.is_full());
+	assert_eq!(t.count_tiles(), 16);
+	Ok(())
+}
+
+#[test]
+fn from_tile_iter_single_tile() -> Result<()> {
+	let t = TileQuadtree::from_tile_coords(3, &[(5, 3)])?;
+	assert!(!t.is_empty());
+	assert!(!t.is_full());
+	assert_eq!(t.count_tiles(), 1);
+	assert!(t.includes_coord(&coord(3, 5, 3))?);
+	assert!(!t.includes_coord(&coord(3, 4, 3))?);
+	Ok(())
+}
+
+#[test]
+fn from_tile_iter_matches_sequential_insert() -> Result<()> {
+	// Build the same tree two ways and assert they are equal.
+	let tiles = vec![(1u32, 2u32), (3, 4), (5, 6), (0, 7), (7, 0)];
+
+	// Sequential insertion
+	let mut seq = TileQuadtree::new_empty(3).unwrap();
+	for &(x, y) in &tiles {
+		seq.include_coord(&coord(3, x, y))?;
+	}
+
+	// Batch construction
+	let batch = TileQuadtree::from_tile_coords(3, &tiles)?;
+
+	assert_eq!(seq, batch);
+	Ok(())
+}
+
+#[test]
+fn from_tile_iter_deduplicates() -> Result<()> {
+	// Duplicate tiles must not inflate the count.
+	let t = TileQuadtree::from_tile_coords(3, &[(2u32, 2u32), (2, 2), (2, 2)])?;
+	assert_eq!(t.count_tiles(), 1);
+	Ok(())
+}
+
+#[test]
+fn from_tile_iter_rectangular_block_matches_from_bbox() -> Result<()> {
+	// A contiguous rectangle should collapse to the same tree as from_bbox.
+	let b = bbox(4, 3, 5, 7, 9);
+	let tiles: Vec<(u32, u32)> = (3u32..=7).flat_map(|x| (5u32..=9).map(move |y| (x, y))).collect();
+	let batch = TileQuadtree::from_tile_coords(4, &tiles)?;
+	let reference = TileQuadtree::from_bbox(&b);
+	assert_eq!(batch, reference);
+	Ok(())
+}
