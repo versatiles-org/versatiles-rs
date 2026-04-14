@@ -213,7 +213,7 @@ impl VersaTilesReader {
 
 				// Get the bounding box of all tiles defined in this block
 				let mut tiles_bbox_used: TileBBox = bbox;
-				tiles_bbox_used.intersect_with(tiles_bbox_block)?;
+				tiles_bbox_used.intersect_bbox(tiles_bbox_block)?;
 				log::trace!("tiles_bbox_used {tiles_bbox_used:?}");
 
 				debug_assert_eq!(bbox.level, tiles_bbox_block.level);
@@ -334,7 +334,7 @@ impl TileSource for VersaTilesReader {
 			};
 			let block_bbox = *block.get_global_bbox();
 			let mut used_bbox = bbox;
-			used_bbox.intersect_with(&block_bbox)?;
+			used_bbox.intersect_bbox(&block_bbox)?;
 			blocks.push((block_bbox, used_bbox, block.clone()));
 		}
 

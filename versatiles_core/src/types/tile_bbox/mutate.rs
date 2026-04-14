@@ -145,7 +145,7 @@ impl TileBBox {
 	/// * `Ok(())` if intersection is successful.
 	/// * `Err(anyhow::Error)` if the zoom levels do not match or other validations fail.
 	#[context("Failed to intersect TileBBox {self:?} with TileBBox {bbox:?}")]
-	pub fn intersect_with(&mut self, bbox: &TileBBox) -> Result<()> {
+	pub fn intersect_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		ensure!(
 			self.level == bbox.level,
 			"Cannot intersect TileBBox at zoom level {} with TileBBox at zoom level {}",
@@ -158,10 +158,10 @@ impl TileBBox {
 			return Ok(());
 		}
 
-		let x_min = self.x_min().unwrap().max(bbox.x_min().unwrap());
-		let y_min = self.y_min().unwrap().max(bbox.y_min().unwrap());
-		let x_max = self.x_max().unwrap().min(bbox.x_max().unwrap());
-		let y_max = self.y_max().unwrap().min(bbox.y_max().unwrap());
+		let x_min = self.x_min()?.max(bbox.x_min()?);
+		let y_min = self.y_min()?.max(bbox.y_min()?);
+		let x_max = self.x_max()?.min(bbox.x_max()?);
+		let y_max = self.y_max()?.min(bbox.y_max()?);
 
 		if x_min > x_max || y_min > y_max {
 			self.set_empty();
@@ -177,7 +177,7 @@ impl TileBBox {
 	/// If the pyramid has no tiles at this zoom level, the bbox is set to empty.
 	pub fn intersect_with_pyramid(&mut self, pyramid: &TilePyramid) {
 		if let Some(level_bbox) = pyramid.get_level(self.level).bounds() {
-			self.intersect_with(&level_bbox).unwrap_or(());
+			self.intersect_bbox(&level_bbox).unwrap_or(());
 		} else {
 			self.set_empty();
 		}
@@ -445,7 +445,7 @@ mod tests {
 	#[case(bb(5, 10,10, 20,20), bb(5, 0,0, 5,5),     [0,0,0,0])] // no overlap → empty
 	#[case(bb(5, 10,10, 20,20), bb(5, 10,10, 20,20), [10,10,20,20])] // identical
 	fn intersect_cases(#[case] mut a: TileBBox, #[case] b: TileBBox, #[case] exp: [u32; 4]) -> Result<()> {
-		a.intersect_with(&b)?;
+		a.intersect_bbox(&b)?;
 		if exp == [0, 0, 0, 0] && (a.width() == 0 || a.height() == 0) {
 			// empty expected; nothing more to assert
 			return Ok(());

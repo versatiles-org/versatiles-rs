@@ -86,4 +86,15 @@ impl TileCover {
 			TileCover::Tree(t) => t.buffer(size),
 		}
 	}
+
+	/// Intersects this cover with `bbox`, retaining only tiles within `bbox`.
+	///
+	/// # Errors
+	/// Returns an error if `bbox`'s level does not match this cover's level.
+	pub fn intersect_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
+		match self {
+			TileCover::Bbox(b) => b.intersect_bbox(bbox),
+			TileCover::Tree(t) => t.intersect_bbox(bbox),
+		}
+	}
 }

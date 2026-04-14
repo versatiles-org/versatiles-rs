@@ -1,13 +1,8 @@
 //! Mutation methods for [`TilePyramid`].
 
 use super::TilePyramid;
-use crate::{GeoBBox, MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileCover, TileQuadtree};
+use crate::{GeoBBox, MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileCover};
 use anyhow::Result;
-use versatiles_derive::context;
-
-/// Zoom level at which the geo-quadtree is materialised exactly.
-/// Above this level the cap tree is scaled via `at_level` (O(1)).
-const MAX_QUADTREE_INTERSECT_ZOOM: u8 = 16;
 
 impl TilePyramid {
 	/// Sets the cover at the level encoded in `cover`.
@@ -47,25 +42,12 @@ impl TilePyramid {
 	///
 	/// Levels ≤ 16 get an exact quadtree; higher levels reuse the cap tree scaled
 	/// via `at_level` (O(1)).
-	///
-	/// # Errors
-	/// Returns an error if the geographic coordinates are invalid.
-	#[context("Failed to intersect {self} with {geo_bbox:?}")]
 	pub fn intersect_geo_bbox(&mut self, geo_bbox: &GeoBBox) -> Result<()> {
-		let cap_geo_qt = TileQuadtree::from_geo(MAX_QUADTREE_INTERSECT_ZOOM, geo_bbox)?;
-
 		for z in 0..=MAX_ZOOM_LEVEL {
-			if self.levels[z as usize].is_empty() {
-				continue;
+			if let Some(level) = self.levels.get_mut(z as usize) {
+				let bbox = TileBBox::from_geo(z, geo_bbox)?;
+				level.intersect_bbox(&bbox)?;
 			}
-			let geo_qt = if z <= MAX_QUADTREE_INTERSECT_ZOOM {
-				TileQuadtree::from_geo(z, geo_bbox)?
-			} else {
-				cap_geo_qt.at_level(z)
-			};
-			let geo_cover = TileCover::from(geo_qt);
-			let intersected = self.levels[z as usize].intersection(&geo_cover)?;
-			self.levels[z as usize] = intersected;
 		}
 		Ok(())
 	}

@@ -176,6 +176,43 @@ impl Node {
 		}
 	}
 
+	pub fn intersect_bbox(&mut self, (x_off, y_off): (u64, u64), size: u64, bbox: &BBox) {
+		if self == &Node::Empty {
+			return;
+		}
+		// Clip bbox to this cell's region.
+		let ix_min = bbox.x_min.max(x_off);
+		let iy_min = bbox.y_min.max(y_off);
+		let ix_max = bbox.x_max.min(x_off + size);
+		let iy_max = bbox.y_max.min(y_off + size);
+
+		// No overlap → clear this subtree entirely.
+		if ix_min >= ix_max || iy_min >= iy_max {
+			*self = Node::Empty;
+			return;
+		}
+
+		if self == &Node::Full {
+			if ix_min == x_off && iy_min == y_off && ix_max == x_off + size && iy_max == y_off + size {
+				// bbox covers the entire cell: stays Full.
+				return;
+			}
+			// Materialise four Full children, then intersect each with bbox.
+			*self = Node::new_partial_full();
+		}
+
+		if let Node::Partial(children) = self {
+			let half = size / 2;
+			let mid_x = x_off + half;
+			let mid_y = y_off + half;
+			children[0].intersect_bbox((x_off, y_off), half, bbox);
+			children[1].intersect_bbox((mid_x, y_off), half, bbox);
+			children[2].intersect_bbox((x_off, mid_y), half, bbox);
+			children[3].intersect_bbox((mid_x, mid_y), half, bbox);
+			self.normalize();
+		}
+	}
+
 	pub fn insert_coord(&mut self, (x_off, y_off): (u64, u64), size: u64, (tx, ty): (u64, u64)) {
 		match self {
 			Node::Full => (),

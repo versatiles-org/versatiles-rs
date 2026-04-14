@@ -74,7 +74,7 @@ fn boolean_operations() -> Result<()> {
 	let bbox2 = TileBBox::from_min_and_max(4, 1, 10, 3, 12)?;
 
 	let mut bbox1_intersect = bbox1;
-	bbox1_intersect.intersect_with(&bbox2)?;
+	bbox1_intersect.intersect_bbox(&bbox2)?;
 	assert_eq!(bbox1_intersect, TileBBox::from_min_and_max(4, 1, 11, 2, 12)?);
 
 	let mut bbox1_union = bbox1;
@@ -237,7 +237,7 @@ fn test_include_bbox() -> Result<()> {
 fn test_intersect_bbox() -> Result<()> {
 	let mut bbox1 = TileBBox::from_min_and_max(4, 0, 11, 2, 13)?;
 	let bbox2 = TileBBox::from_min_and_max(4, 1, 10, 3, 12)?;
-	bbox1.intersect_with(&bbox2)?;
+	bbox1.intersect_bbox(&bbox2)?;
 	assert_eq!(bbox1, TileBBox::from_min_and_max(4, 1, 11, 2, 12)?);
 	Ok(())
 }
@@ -438,16 +438,16 @@ fn should_intersect_bboxes_correctly_and_handle_empty_and_different_levels() -> 
 	let bbox2 = TileBBox::from_min_and_max(6, 10, 15, 20, 25)?;
 	let bbox3 = TileBBox::from_min_and_max(6, 16, 21, 20, 25)?;
 
-	bbox1.intersect_with(&bbox2)?;
+	bbox1.intersect_bbox(&bbox2)?;
 	assert_eq!(bbox1, TileBBox::from_min_and_max(6, 10, 15, 15, 20)?);
 
 	// Intersect with a non-overlapping bounding box
-	bbox1.intersect_with(&bbox3)?;
+	bbox1.intersect_bbox(&bbox3)?;
 	assert!(bbox1.is_empty());
 
 	// Attempting to intersect with a bounding box of different zoom level
 	let bbox_diff_level = TileBBox::from_min_and_max(5, 10, 15, 15, 20)?;
-	let result = bbox1.intersect_with(&bbox_diff_level);
+	let result = bbox1.intersect_bbox(&bbox_diff_level);
 	assert!(result.is_err());
 
 	Ok(())

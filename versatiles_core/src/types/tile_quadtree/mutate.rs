@@ -90,4 +90,14 @@ impl TileQuadtree {
 		self.root.remove_bbox((0, 0), 1u64 << self.level, &bbox);
 		Ok(())
 	}
+
+	pub fn intersect_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
+		check_bbox_zoom(bbox, self.level)?;
+		let Some(bbox) = BBox::new(bbox) else {
+			self.root = Node::Empty;
+			return Ok(());
+		};
+		self.root.intersect_bbox((0, 0), 1u64 << self.level, &bbox);
+		Ok(())
+	}
 }

@@ -27,7 +27,7 @@ impl TileCover {
 	pub fn intersection(&self, other: &TileCover) -> Result<TileCover> {
 		if let (TileCover::Bbox(a), TileCover::Bbox(b)) = (self, other) {
 			let mut result = *a;
-			result.intersect_with(b)?;
+			result.intersect_bbox(b)?;
 			return Ok(TileCover::Bbox(result));
 		}
 		let a = self.to_tree();

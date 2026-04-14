@@ -79,7 +79,7 @@ impl TileBBox {
 
 					let mut bbox =
 						TileBBox::from_min_and_max(level, x, y, (x + size - 1).min(max), (y + size - 1).min(max)).unwrap();
-					bbox.intersect_with(self).unwrap();
+					bbox.intersect_bbox(self).unwrap();
 					bbox
 				})
 				.filter(|bbox| !bbox.is_empty()),
