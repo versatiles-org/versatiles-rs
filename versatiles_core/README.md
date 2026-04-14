@@ -13,7 +13,7 @@ This crate serves as the base dependency for all other VersaTiles components.
 
 ## Features
 
-- **Coordinate Types**: `TileCoord`, `TileBBox`, `TileBBoxPyramid` for working with tile coordinates and bounding boxes
+- **Coordinate Types**: `TileCoord`, `TileBBox`, `TileCover`, `TilePyramid` for working with tile coordinates and bounding boxes
 - **Format Definitions**: Type-safe enums for tile formats (`TileFormat`), compressions (`TileCompression`), and precompressions
 - **Byte Utilities**: Efficient `ByteIterator` for reading blob data
 - **Traversal**: Tools for iterating through tile pyramids and bounding boxes
@@ -30,19 +30,19 @@ Or see [crates.io/crates/versatiles_core](https://crates.io/crates/versatiles_co
 ### Example
 
 ```rust
-use versatiles_core::{TileCoord, TileBBox, TileBBoxPyramid};
+use versatiles_core::{TileCoord, TileBBox, TilePyramid};
 
 // Create a tile coordinate (zoom, x, y)
 let coord = TileCoord::new(5, 16, 10)?;
 
 // Create a bounding box at a specific zoom level
-let bbox = TileBBox::new(5, 10, 12, 15, 20)?;
+let bbox = TileBBox::from_min_and_max(5, 10, 12, 15, 20)?;
 
-// Create a pyramid of bounding boxes across zoom levels
-let pyramid = TileBBoxPyramid::new_full_up_to(8);
+// Create a multi-zoom pyramid covering all tiles up to zoom 8
+let pyramid = TilePyramid::new_full_up_to(8);
 
-// Convert coordinates
-let geo_bbox = bbox.get_geo_bbox();
+// Convert to geographic coordinates
+let geo_bbox = bbox.to_geo_bbox();
 println!("Geographic bounds: {:?}", geo_bbox);
 ```
 

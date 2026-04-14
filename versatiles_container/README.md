@@ -47,9 +47,9 @@ async fn main() -> anyhow::Result<()> {
     let runtime = TilesRuntime::default();
     let reader = runtime.get_reader_from_str("input.mbtiles").await?;
 
-    // Optionally adapt the reader: limit to a bbox pyramid
+    // Optionally adapt the reader: limit to a tile pyramid
     let params = TilesConverterParameters {
-        bbox_pyramid: Some(TileBBoxPyramid::new_full_up_to(8)),
+        bbox_pyramid: Some(TilePyramid::new_full_up_to(8)),
         ..Default::default()
     };
     let reader = Box::new(TilesConvertReader::new_from_reader(reader, params)?);

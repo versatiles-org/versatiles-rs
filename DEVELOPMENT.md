@@ -336,7 +336,7 @@ This covers most of what CI checks, except for coverage reporting.
 
 ### The Problem with Bounding Boxes
 
-Tile coverage used to be described with `TileBBox` — a rectangular `(x_min, y_min, x_max, y_max)` at a single zoom level — and `TileBBoxPyramid` — one `TileBBox` per zoom level. This works for contiguous rectangular regions but fails for:
+`TileBBox` — a rectangular `(x_min, y_min, x_max, y_max)` at a single zoom level — works for contiguous rectangular regions but fails for:
 
 - Countries that straddle the 180° date line (Russia, Fiji, Kiribati)
 - Island nations with scattered tiles
@@ -350,36 +350,47 @@ Tile coverage used to be described with `TileBBox` — a rectangular `(x_min, y_
 - `Full`: all tiles covered in this subtree
 - `Partial`: children are [NW, NE, SW, SE], each also a node
 
-Uniform regions (fully covered or fully empty) collapse to a single node regardless of size, so a fully covered continent at zoom 14 is still just one `Full` node. Non-rectangular or scattered coverage is represented exactly without approximation.
+Uniform regions collapse to a single node regardless of size — a fully covered continent at zoom 14 is one `Full` node. Non-rectangular or scattered coverage is represented exactly without approximation.
 
 Key properties:
 
 - **Space-filling**: memory proportional to the number of coverage *boundaries*, not tiles
-- **Serializable**: compact 2-bit-per-node prefix encoding (a `Full` subtree costs 2 bits regardless of tile count)
+- **Serializable**: compact 2-bit-per-node prefix encoding
 - **Set operations**: `union`, `intersection`, `difference` short-circuit on `Full`/`Empty` nodes
-- **Zoom traversal**: `level_up()` and `level_down()` convert between zoom levels
 
 ```rust
-// Build from a bounding box
-let qt = TileQuadtree::from_bbox(&some_bbox)?;
-
-// Build from geographic coordinates
+// Build from a bounding box or geographic coordinates
+let qt = TileQuadtree::from_bbox(&some_bbox);
 let qt = TileQuadtree::from_geo(zoom, &geo_bbox)?;
 
-// Insert individual tiles
-qt.insert_tile(coord)?;
+// Insert individual tiles or bboxes
+qt.include_coord(&coord)?;
+qt.include_bbox(&bbox)?;
 
 // Set operations
 let union = a.union(&b)?;
 let inter = a.intersection(&b)?;
 ```
 
-### `TileQuadtreePyramid`
+### `TileCover`
 
-`TileQuadtreePyramid` holds one `TileQuadtree` per zoom level (0 through `MAX_ZOOM_LEVEL = 30`). It is the **primary type for tile coverage tracking** and is stored in `TileSourceMetadata.bbox_pyramid`.
+`TileCover` is an enum that represents tile coverage at **one zoom level**, wrapping either a rectangle or a quadtree:
 
 ```rust
-let mut pyramid = TileQuadtreePyramid::new_empty();
+pub enum TileCover {
+    Bbox(TileBBox),    // rectangular, fast
+    Tree(TileQuadtree), // arbitrary shape, exact
+}
+```
+
+Starts as `Bbox` for all constructors that produce rectangular coverage. Automatically upgrades to `Tree` when a non-rectangular operation is requested (`remove_coord`, `remove_bbox`, `intersect_bbox`, `difference`).
+
+### `TilePyramid`
+
+`TilePyramid` holds one `TileCover` per zoom level (0 through `MAX_ZOOM_LEVEL = 30`). It is the **primary type for tile coverage tracking** and is stored in `TileSourceMetadata.bbox_pyramid`.
+
+```rust
+let mut pyramid = TilePyramid::new_empty();
 pyramid.include_bbox(&bbox)?;
 pyramid.intersect_geo_bbox(&geo_bbox)?;
 
@@ -390,7 +401,7 @@ let geo      = pyramid.get_geo_bbox();  // Option<GeoBBox>
 
 ### `PyramidInfo` Trait
 
-Both `TileQuadtreePyramid` and `TileBBoxPyramid` implement the `PyramidInfo` trait, which exposes the three metadata fields needed by `TileJSON::update_from_pyramid`:
+`TilePyramid` implements the `PyramidInfo` trait, which exposes the metadata fields needed by `TileJSON::update_from_pyramid`:
 
 ```rust
 pub trait PyramidInfo {
@@ -402,17 +413,18 @@ pub trait PyramidInfo {
 
 ### What Uses What
 
-| Type                                   | Used for                                                                        |
-|----------------------------------------|---------------------------------------------------------------------------------|
-| `TileQuadtree` / `TileQuadtreePyramid` | Coverage tracking — which tiles actually exist                                  |
-| `TileBBox`                             | Rectangular geometry — image dimensions, request shapes, container block layout |
-| `TileBBoxPyramid`                      | Legacy / backward compatibility; `to_bbox_pyramid()` converts from quadtree     |
+| Type            | Used for                                                                        |
+|-----------------|---------------------------------------------------------------------------------|
+| `TileQuadtree`  | Exact coverage at one zoom level — arbitrary tile shapes, set operations        |
+| `TileCover`     | Coverage at one zoom level — rectangular (fast) or quadtree (exact)             |
+| `TilePyramid`   | Multi-zoom coverage tracking — which tiles exist across all zoom levels         |
+| `TileBBox`      | Rectangular geometry — image dimensions, request shapes, container block layout |
 
-`TileBBox` is kept for anything that is inherently rectangular: requesting a range of tiles from a container, describing image dimensions, wire format block indices. `TileQuadtreePyramid` is used wherever the question is "does this tile exist in this data source?"
+`TileBBox` is kept for anything that is inherently rectangular: requesting a range of tiles from a container, describing image dimensions, wire format block indices. `TilePyramid` is used wherever the question is "does this tile exist in this data source?"
 
 ### High-Zoom Memory Limit
 
-Building a `TileQuadtree` from a geographic bounding box at zoom ≥ 17 would require O(perimeter_tiles) nodes, which can reach gigabytes of RAM. `TileQuadtreePyramid::intersect_geo_bbox` therefore uses a fast rectangular `TileBBox` approximation for zoom levels above `MAX_QUADTREE_INTERSECT_ZOOM = 16`. This matches the behaviour of the old `TileBBoxPyramid` and is accurate enough for filtering purposes at high zoom levels.
+Building a `TileQuadtree` from a geographic bounding box at zoom ≥ 17 would require O(perimeter_tiles) nodes, which can reach gigabytes of RAM. `TilePyramid::intersect_geo_bbox` therefore uses a fast rectangular `TileBBox` approximation for zoom levels above `MAX_QUADTREE_INTERSECT_ZOOM = 16`. This is accurate enough for filtering purposes at high zoom levels.
 
 ## Further Reading
 
