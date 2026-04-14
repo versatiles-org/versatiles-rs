@@ -207,8 +207,8 @@ fn flip_y_and_swap_xy() {
 	let mut p = TilePyramid::new_empty();
 	p.include_bbox(&bbox(3, 0, 0, 3, 3)).unwrap();
 	// Just verify they don't panic
-	p.flip_y().unwrap();
-	p.swap_xy().unwrap();
+	p.flip_y();
+	p.swap_xy();
 	assert!(!p.is_empty());
 }
 
@@ -283,7 +283,7 @@ fn flip_y_changes_coordinates() {
 	let mut p = TilePyramid::new_empty();
 	// z=1: 2x2 grid; top-left tile (0,0) flips to bottom-left (0,1)
 	p.include_bbox(&bbox(1, 0, 0, 0, 0)).unwrap();
-	p.flip_y().unwrap();
+	p.flip_y();
 	assert!(p.includes_coord(&coord(1, 0, 1)));
 	assert!(!p.includes_coord(&coord(1, 0, 0)));
 }
@@ -293,7 +293,7 @@ fn swap_xy_changes_coordinates() {
 	let mut p = TilePyramid::new_empty();
 	// bbox with x=[2..4], y=[0..1] → after swap: x=[0..1], y=[2..4]
 	p.include_bbox(&bbox(4, 2, 0, 4, 1)).unwrap();
-	p.swap_xy().unwrap();
+	p.swap_xy();
 	let b = p.get_level_bbox(4);
 	assert_eq!(b.x_min().unwrap(), 0);
 	assert_eq!(b.y_min().unwrap(), 2);

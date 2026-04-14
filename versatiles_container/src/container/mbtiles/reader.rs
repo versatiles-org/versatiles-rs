@@ -313,7 +313,7 @@ impl MBTilesReader {
 
 		progress.finish();
 
-		bbox_pyramid.flip_y()?;
+		bbox_pyramid.flip_y();
 
 		Ok(bbox_pyramid)
 	}
