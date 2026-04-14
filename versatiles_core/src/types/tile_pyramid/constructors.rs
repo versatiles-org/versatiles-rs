@@ -55,7 +55,7 @@ impl TilePyramid {
 	/// Build a pyramid from an iterator of [`TileCoord`]s, one per tile.
 	///
 	/// Internally groups coordinates by zoom level and calls
-	/// [`TileQuadtree::from_tile_iter`] for each non-empty level, giving
+	/// [`TileQuadtree::from_tile_coords`] for each non-empty level, giving
 	/// O(T log T + T · level) overall instead of O(T · level²) for sequential
 	/// insertion.
 	#[must_use]
