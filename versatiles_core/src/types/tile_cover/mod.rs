@@ -7,7 +7,7 @@
 //! # Representation choice
 //! - Starts as `Bbox` for all constructors that produce rectangular coverage.
 //! - Automatically upgrades to `Tree` only when a non-rectangular operation is
-//!   requested: [`remove_tile`](TileCover::remove_tile),
+//!   requested: [`remove_coord`](TileCover::remove_coord),
 //!   [`remove_bbox`](TileCover::remove_bbox), or
 //!   [`difference`](TileCover::difference).
 //! - [`TileQuadtree`]-based constructors always produce the `Tree` variant.
