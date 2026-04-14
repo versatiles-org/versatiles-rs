@@ -108,4 +108,20 @@ impl TileCover {
 			TileCover::Tree(t) => t.intersect_bbox(bbox),
 		}
 	}
+
+	/// Applies a Y-flip.
+	pub fn flip_y(&mut self) {
+		match self {
+			TileCover::Bbox(b) => b.flip_y(),
+			TileCover::Tree(t) => t.flip_y(),
+		}
+	}
+
+	/// Swaps x and y coordinates: `(x, y) → (y, x)`.
+	pub fn swap_xy(&mut self) {
+		match self {
+			TileCover::Bbox(b) => b.swap_xy(),
+			TileCover::Tree(t) => t.swap_xy(),
+		}
+	}
 }

@@ -88,32 +88,16 @@ impl TilePyramid {
 	}
 
 	/// Applies a Y-flip to every level.
-	///
-	/// For `Bbox` levels this is exact. For `Tree` levels it is lossy (rounds
-	/// through the bounding rectangle).
-	///
-	/// This method is infallible and always returns `Ok(())`.
 	pub fn flip_y(&mut self) {
 		for cover in &mut self.levels {
-			match cover {
-				TileCover::Bbox(b) => b.flip_y(),
-				TileCover::Tree(t) => t.flip_y(),
-			}
+			cover.flip_y();
 		}
 	}
 
 	/// Applies an X/Y swap to every level.
-	///
-	/// For `Bbox` levels this is exact. For `Tree` levels it is lossy (rounds
-	/// through the bounding rectangle).
-	///
-	/// This method is infallible and always returns `Ok(())`.
 	pub fn swap_xy(&mut self) {
 		for cover in &mut self.levels {
-			match cover {
-				TileCover::Bbox(b) => b.swap_xy(),
-				TileCover::Tree(t) => t.swap_xy(),
-			}
+			cover.swap_xy();
 		}
 	}
 }
