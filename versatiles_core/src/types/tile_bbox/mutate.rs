@@ -203,6 +203,10 @@ impl TileBBox {
 		)
 	}
 
+	/// Move the bbox so its top-left corner is at `(x_min, y_min)`, keeping width and height.
+	///
+	/// The shift is **clamped** so the bbox stays within the level's valid range.
+	/// No-op for empty bboxes.
 	#[context("Failed to shift TileBBox {self:?} to ({x_min}, {y_min})")]
 	pub fn shift_to(&mut self, x_min: u32, y_min: u32) -> Result<()> {
 		if self.is_empty() {

@@ -42,6 +42,7 @@ impl TileBBox {
 		Ok(coord.x >= self.x_min()? && coord.x <= self.x_max()? && coord.y >= self.y_min()? && coord.y <= self.y_max()?)
 	}
 
+	/// Returns the zoom level of this bounding box.
 	#[must_use]
 	pub fn level(&self) -> u8 {
 		self.level

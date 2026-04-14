@@ -92,8 +92,7 @@ impl TilePyramid {
 	/// For `Bbox` levels this is exact. For `Tree` levels it is lossy (rounds
 	/// through the bounding rectangle).
 	///
-	/// # Errors
-	/// Returns an error if rebuilding any flipped level fails.
+	/// This method is infallible and always returns `Ok(())`.
 	pub fn flip_y(&mut self) -> Result<()> {
 		for cover in &mut self.levels {
 			match cover {
@@ -115,8 +114,7 @@ impl TilePyramid {
 	/// For `Bbox` levels this is exact. For `Tree` levels it is lossy (rounds
 	/// through the bounding rectangle).
 	///
-	/// # Errors
-	/// Returns an error if rebuilding any swapped level fails.
+	/// This method is infallible and always returns `Ok(())`.
 	pub fn swap_xy(&mut self) -> Result<()> {
 		for cover in &mut self.levels {
 			match cover {

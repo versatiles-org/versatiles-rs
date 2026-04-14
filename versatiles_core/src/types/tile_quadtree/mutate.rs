@@ -91,6 +91,13 @@ impl TileQuadtree {
 		Ok(())
 	}
 
+	/// Intersects the quadtree with a [`TileBBox`], removing any tiles outside it.
+	///
+	/// If `bbox` is empty, the entire tree is cleared. Otherwise, each branch of
+	/// the tree is recursively clipped to the intersection region.
+	///
+	/// # Errors
+	/// Returns an error if `bbox`'s zoom level doesn't match.
 	pub fn intersect_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		check_bbox_zoom(bbox, self.level)?;
 		let Some(bbox) = BBox::new(bbox) else {

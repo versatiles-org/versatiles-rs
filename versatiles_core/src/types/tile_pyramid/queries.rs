@@ -138,6 +138,7 @@ impl TilePyramid {
 			.filter_map(|c| if c.is_empty() { None } else { Some(c.clone()) })
 	}
 
+	/// Returns an iterator over the bounding boxes of all non-empty zoom levels.
 	pub fn iter_bboxes(&self) -> impl Iterator<Item = TileBBox> + '_ {
 		self.iter_levels().filter_map(|l| l.bounds())
 	}

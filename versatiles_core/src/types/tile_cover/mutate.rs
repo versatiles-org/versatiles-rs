@@ -80,6 +80,11 @@ impl TileCover {
 		self.as_tree_mut().remove_bbox(bbox)
 	}
 
+	/// Expands tile coverage outward by `size` tiles in all directions.
+	///
+	/// For `Bbox` covers this expands the rectangle (clamped to level bounds).
+	/// For `Tree` covers this uses Full-node decomposition: each `Full` subtree
+	/// rectangle is expanded independently, then the results are unioned.
 	pub fn buffer(&mut self, size: u32) {
 		match self {
 			TileCover::Bbox(b) => b.buffer(size),
