@@ -97,7 +97,7 @@ impl<'a> BlockBuilder<'a> {
 		}
 
 		// Track actual bbox
-		self.actual_bbox.include_coord(&coord)?;
+		self.actual_bbox.insert_coord(&coord)?;
 
 		// Deduplication for small tiles
 		let range = if blob.len() < 1000 {

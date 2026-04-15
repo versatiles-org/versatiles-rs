@@ -45,7 +45,7 @@ impl TileCover {
 	/// Returns the tightest axis-aligned [`TileBBox`] containing all tiles,
 	/// or `None` if this cover is empty.
 	#[must_use]
-	pub fn bounds(&self) -> Option<TileBBox> {
+	pub fn bbox(&self) -> Option<TileBBox> {
 		match self {
 			TileCover::Bbox(b) => {
 				if b.is_empty() {
@@ -54,7 +54,7 @@ impl TileCover {
 					Some(*b)
 				}
 			}
-			TileCover::Tree(t) => t.bounds(),
+			TileCover::Tree(t) => t.bbox(),
 		}
 	}
 
@@ -93,7 +93,7 @@ impl TileCover {
 
 	/// Returns `true` if this cover overlaps the given `bbox`.
 	///
-	/// For the `Tree` variant this is an approximate check via [`bounds`](Self::bounds).
+	/// For the `Tree` variant this is an approximate check via [`bbox`](Self::bbox).
 	///
 	/// # Errors
 	/// Returns an error if `bbox`'s level does not match this cover's level.
@@ -101,7 +101,7 @@ impl TileCover {
 	pub fn intersects_bbox(&self, bbox: &TileBBox) -> Result<bool> {
 		match self {
 			TileCover::Bbox(b) => b.intersects_bbox(bbox),
-			TileCover::Tree(t) => match t.bounds() {
+			TileCover::Tree(t) => match t.bbox() {
 				Some(b) => b.intersects_bbox(bbox),
 				None => Ok(false),
 			},

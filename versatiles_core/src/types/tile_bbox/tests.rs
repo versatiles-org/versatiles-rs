@@ -78,7 +78,7 @@ fn boolean_operations() -> Result<()> {
 	assert_eq!(bbox1_intersect, TileBBox::from_min_and_max(4, 1, 11, 2, 12)?);
 
 	let mut bbox1_union = bbox1;
-	bbox1_union.include_bbox(&bbox2)?;
+	bbox1_union.insert_bbox(&bbox2)?;
 	assert_eq!(bbox1_union, TileBBox::from_min_and_max(4, 0, 10, 3, 13)?);
 
 	Ok(())
@@ -87,7 +87,7 @@ fn boolean_operations() -> Result<()> {
 #[test]
 fn include_tile() -> Result<()> {
 	let mut bbox = TileBBox::from_min_and_max(4, 0, 1, 2, 3)?;
-	bbox.include(4, 5);
+	bbox.insert_xy(4, 5);
 	assert_eq!(bbox, TileBBox::from_min_and_max(4, 0, 1, 4, 5)?);
 	Ok(())
 }
@@ -219,7 +219,7 @@ fn test_is_full() -> Result<()> {
 #[test]
 fn test_include_tile() -> Result<()> {
 	let mut bbox = TileBBox::from_min_and_max(6, 5, 10, 20, 30)?;
-	bbox.include(25, 35);
+	bbox.insert_xy(25, 35);
 	assert_eq!(bbox, TileBBox::from_min_and_max(6, 5, 10, 25, 35)?);
 	Ok(())
 }
@@ -228,7 +228,7 @@ fn test_include_tile() -> Result<()> {
 fn test_include_bbox() -> Result<()> {
 	let mut bbox1 = TileBBox::from_min_and_max(4, 0, 11, 2, 13)?;
 	let bbox2 = TileBBox::from_min_and_max(4, 1, 10, 3, 12)?;
-	bbox1.include_bbox(&bbox2)?;
+	bbox1.insert_bbox(&bbox2)?;
 	assert_eq!(bbox1, TileBBox::from_min_and_max(4, 0, 10, 3, 13)?);
 	Ok(())
 }
@@ -380,13 +380,13 @@ fn test_count_tiles() -> Result<()> {
 #[test]
 fn test_include() -> Result<()> {
 	let mut bbox = TileBBox::new_empty(6)?;
-	bbox.include(5, 10);
+	bbox.insert_xy(5, 10);
 	assert_eq!(bbox, TileBBox::from_min_and_max(6, 5, 10, 5, 10)?);
 
-	bbox.include(15, 20);
+	bbox.insert_xy(15, 20);
 	assert_eq!(bbox, TileBBox::from_min_and_max(6, 5, 10, 15, 20)?);
 
-	bbox.include(10, 15);
+	bbox.insert_xy(10, 15);
 	assert_eq!(bbox, TileBBox::from_min_and_max(6, 5, 10, 15, 20)?);
 
 	Ok(())
@@ -396,16 +396,16 @@ fn test_include() -> Result<()> {
 fn test_include_coord() -> Result<()> {
 	let mut bbox = TileBBox::new_empty(6)?;
 	let coord = tc(6, 5, 10);
-	bbox.include_coord(&coord)?;
+	bbox.insert_coord(&coord)?;
 	assert_eq!(bbox, TileBBox::from_min_and_max(6, 5, 10, 5, 10)?);
 
 	let coord = tc(6, 15, 20);
-	bbox.include_coord(&coord)?;
+	bbox.insert_coord(&coord)?;
 	assert_eq!(bbox, TileBBox::from_min_and_max(6, 5, 10, 15, 20)?);
 
 	// Attempt to include a coordinate with a different zoom level
 	let coord_invalid = tc(5, 10, 15);
-	let result = bbox.include_coord(&coord_invalid);
+	let result = bbox.insert_coord(&coord_invalid);
 	assert!(result.is_err());
 
 	Ok(())
@@ -416,17 +416,17 @@ fn should_include_bbox_correctly_with_valid_and_empty_bboxes() -> Result<()> {
 	let mut bbox1 = TileBBox::from_min_and_max(6, 5, 10, 15, 20)?;
 	let bbox2 = TileBBox::from_min_and_max(6, 10, 15, 20, 25)?;
 
-	bbox1.include_bbox(&bbox2)?;
+	bbox1.insert_bbox(&bbox2)?;
 	assert_eq!(bbox1, TileBBox::from_min_and_max(6, 5, 10, 20, 25)?);
 
 	// Including an empty bounding box should have no effect
 	let empty_bbox = TileBBox::new_empty(6)?;
-	bbox1.include_bbox(&empty_bbox)?;
+	bbox1.insert_bbox(&empty_bbox)?;
 	assert_eq!(bbox1, TileBBox::from_min_and_max(6, 5, 10, 20, 25)?);
 
 	// Attempting to include a bounding box with different zoom level
 	let bbox_diff_level = TileBBox::from_min_and_max(5, 5, 10, 20, 25)?;
-	let result = bbox1.include_bbox(&bbox_diff_level);
+	let result = bbox1.insert_bbox(&bbox_diff_level);
 	assert!(result.is_err());
 
 	Ok(())
@@ -833,8 +833,8 @@ fn corners_and_dimensions(
 	#[case] height: u32,
 ) -> Result<()> {
 	let bbox = TileBBox::from_min_and_max(level, x0, y0, x1, y1)?;
-	assert_eq!(bbox.min_corner()?, tc(level, x0, y0));
-	assert_eq!(bbox.max_corner()?, tc(level, x1, y1));
+	assert_eq!(bbox.min_tile()?, tc(level, x0, y0));
+	assert_eq!(bbox.max_tile()?, tc(level, x1, y1));
 	assert_eq!(bbox.dimensions(), (width, height));
 	Ok(())
 }

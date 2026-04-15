@@ -56,7 +56,7 @@ impl TilePyramid {
 	///
 	/// # Errors
 	/// Returns an error if any level intersection fails.
-	pub fn intersect(&mut self, other: &TilePyramid) -> Result<()> {
+	pub fn intersect_pyramid(&mut self, other: &TilePyramid) -> Result<()> {
 		for l in 0..=MAX_ZOOM_LEVEL as usize {
 			let intersected = self.levels[l].intersection(&other.levels[l])?;
 			self.levels[l] = intersected;

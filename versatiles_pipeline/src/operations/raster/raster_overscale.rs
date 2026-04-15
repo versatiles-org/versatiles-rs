@@ -121,7 +121,7 @@ impl Operation {
 			.unwrap_or(MAX_ZOOM_LEVEL)
 			.clamp(level_base, MAX_ZOOM_LEVEL);
 
-		if let Some(mut level_bbox) = metadata.bbox_pyramid.get_level(level_base).bounds() {
+		if let Some(mut level_bbox) = metadata.bbox_pyramid.level(level_base).bbox() {
 			while level_bbox.level() < level_max {
 				level_bbox.level_up();
 				metadata.bbox_pyramid.insert_bbox(&level_bbox)?;

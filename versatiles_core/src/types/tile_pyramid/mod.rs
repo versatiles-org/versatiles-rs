@@ -40,7 +40,7 @@ pub struct TilePyramid {
 
 impl PyramidInfo for TilePyramid {
 	fn geo_bbox(&self) -> Option<GeoBBox> {
-		self.get_geo_bbox()
+		TilePyramid::geo_bbox(self)
 	}
 
 	fn level_min(&self) -> Option<u8> {

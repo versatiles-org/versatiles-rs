@@ -49,9 +49,9 @@ fn level() {
 
 #[test]
 fn bounds_empty_and_nonempty() {
-	assert!(TileCover::new_empty(3).unwrap().bounds().is_none());
+	assert!(TileCover::new_empty(3).unwrap().bbox().is_none());
 	let c = TileCover::from(bbox(3, 1, 2, 3, 4));
-	assert_eq!(c.bounds(), Some(bbox(3, 1, 2, 3, 4)));
+	assert_eq!(c.bbox(), Some(bbox(3, 1, 2, 3, 4)));
 }
 
 #[test]
@@ -117,7 +117,7 @@ fn union_bbox_bbox_stays_bbox() {
 	let b = TileCover::from(bbox(4, 5, 5, 8, 8));
 	let u = a.union(&b).unwrap();
 	assert!(matches!(u, TileCover::Tree(_)));
-	assert_eq!(u.bounds(), Some(bbox(4, 0, 0, 8, 8)));
+	assert_eq!(u.bbox(), Some(bbox(4, 0, 0, 8, 8)));
 }
 
 #[test]
@@ -135,7 +135,7 @@ fn intersection_bbox_bbox() {
 	let b = TileCover::from(bbox(4, 4, 4, 11, 11));
 	let i = a.intersection(&b).unwrap();
 	assert!(matches!(i, TileCover::Bbox(_)));
-	assert_eq!(i.bounds(), Some(bbox(4, 4, 4, 7, 7)));
+	assert_eq!(i.bbox(), Some(bbox(4, 4, 4, 7, 7)));
 }
 
 #[test]

@@ -66,7 +66,7 @@ impl TileResizeCore {
 				);
 
 				for level in 0..=source_max {
-					let bbox = source_pyramid.get_level_bbox(level);
+					let bbox = source_pyramid.level_bbox(level);
 					if !bbox.is_empty() {
 						if level == 0 {
 							output_pyramid.set_level_bbox(TileBBox::new_full(0)?);
@@ -87,7 +87,7 @@ impl TileResizeCore {
 				);
 
 				for level in 1..=source_max {
-					let bbox = source_pyramid.get_level_bbox(level);
+					let bbox = source_pyramid.level_bbox(level);
 					if !bbox.is_empty() {
 						output_pyramid.set_level_bbox(bbox.leveled_down());
 					}

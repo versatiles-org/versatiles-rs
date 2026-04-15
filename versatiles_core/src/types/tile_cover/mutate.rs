@@ -18,7 +18,7 @@ impl TileCover {
 	pub fn insert_coord(&mut self, coord: &TileCoord) -> Result<()> {
 		if let TileCover::Bbox(b) = self {
 			if b.is_empty() {
-				return b.include_coord(coord);
+				return b.insert_coord(coord);
 			}
 			if b.includes_coord(coord)? {
 				return Ok(());
@@ -39,7 +39,7 @@ impl TileCover {
 	pub fn insert_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		if let TileCover::Bbox(b) = self {
 			if b.is_empty() {
-				return b.include_bbox(bbox);
+				return b.insert_bbox(bbox);
 			}
 			if b.includes_bbox(bbox)? {
 				return Ok(());

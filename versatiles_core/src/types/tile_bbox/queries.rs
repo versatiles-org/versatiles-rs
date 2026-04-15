@@ -118,13 +118,13 @@ impl TileBBox {
 		TileBBox::from_min_and_max(self.level, x_min, y_min, x_max, y_max)
 	}
 
-	pub fn min_corner(&self) -> Result<TileCoord> {
-		ensure!(!self.is_empty(), "cannot get min corner of an empty TileBBox");
+	pub fn min_tile(&self) -> Result<TileCoord> {
+		ensure!(!self.is_empty(), "cannot get min tile of an empty TileBBox");
 		TileCoord::new(self.level, self.x_min()?, self.y_min()?)
 	}
 
-	pub fn max_corner(&self) -> Result<TileCoord> {
-		ensure!(!self.is_empty(), "cannot get max corner of an empty TileBBox");
+	pub fn max_tile(&self) -> Result<TileCoord> {
+		ensure!(!self.is_empty(), "cannot get max tile of an empty TileBBox");
 		TileCoord::new(self.level, self.x_max()?, self.y_max()?)
 	}
 
@@ -276,8 +276,8 @@ mod tests {
 	#[test]
 	fn corners_and_dimensions() -> Result<()> {
 		let b = bb(4, 5, 6, 7, 9); // 3x4
-		assert_eq!(b.min_corner()?, tc(4, 5, 6));
-		assert_eq!(b.max_corner()?, tc(4, 7, 9));
+		assert_eq!(b.min_tile()?, tc(4, 5, 6));
+		assert_eq!(b.max_tile()?, tc(4, 7, 9));
 		assert_eq!(b.dimensions(), (3, 4));
 		Ok(())
 	}

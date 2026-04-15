@@ -7,16 +7,16 @@ use anyhow::Result;
 impl TilePyramid {
 	/// Returns a reference to the [`TileCover`] at the given zoom level.
 	#[must_use]
-	pub fn get_level(&self, level: u8) -> &TileCover {
+	pub fn level(&self, level: u8) -> &TileCover {
 		&self.levels[level as usize]
 	}
 
 	/// Returns the bounding box of the given zoom level, or an empty bbox if
 	/// the level is empty.
 	#[must_use]
-	pub fn get_level_bbox(&self, level: u8) -> TileBBox {
+	pub fn level_bbox(&self, level: u8) -> TileBBox {
 		self.levels[level as usize]
-			.bounds()
+			.bbox()
 			.unwrap_or_else(|| TileBBox::new_empty(level).expect("zoom must be ≤ MAX_ZOOM_LEVEL"))
 	}
 
@@ -63,7 +63,7 @@ impl TilePyramid {
 	pub fn includes_pyramid(&self, other: &TilePyramid) -> bool {
 		for cover_other in other.levels.iter().filter(|c| !c.is_empty()) {
 			if cover_other
-				.bounds()
+				.bbox()
 				.is_some_and(|bounds| !self.includes_bbox(&bounds).unwrap())
 			{
 				return false;
@@ -90,7 +90,7 @@ impl TilePyramid {
 			.levels
 			.iter()
 			.filter(|c| !c.is_empty())
-			.any(|cover| cover.bounds().is_some_and(|bounds| other.intersects_bbox(&bounds)))
+			.any(|cover| cover.bbox().is_some_and(|bounds| other.intersects_bbox(&bounds)))
 	}
 
 	/// Returns the intersection of `bbox` with the coverage at `bbox`'s zoom
@@ -100,7 +100,7 @@ impl TilePyramid {
 	/// Returns an error if creating an empty bbox fails (should not happen for
 	/// valid inputs).
 	pub fn intersected_bbox(&self, bbox: &TileBBox) -> Result<TileBBox> {
-		if let Some(level_bounds) = self.levels.get(bbox.level() as usize).and_then(TileCover::bounds) {
+		if let Some(level_bounds) = self.levels.get(bbox.level() as usize).and_then(TileCover::bbox) {
 			return level_bounds.intersected_bbox(bbox);
 		}
 		TileBBox::new_empty(bbox.level())
@@ -140,7 +140,7 @@ impl TilePyramid {
 
 	/// Returns an iterator over the bounding boxes of all non-empty zoom levels.
 	pub fn iter_bboxes(&self) -> impl Iterator<Item = TileBBox> + '_ {
-		self.iter_levels().filter_map(|l| l.bounds())
+		self.iter_levels().filter_map(|l| l.bbox())
 	}
 
 	/// Returns a geographic bounding box covering the union of all non-empty
@@ -148,7 +148,7 @@ impl TilePyramid {
 	///
 	/// Returns `None` if all levels are empty.
 	#[must_use]
-	pub fn get_geo_bbox(&self) -> Option<GeoBBox> {
+	pub fn geo_bbox(&self) -> Option<GeoBBox> {
 		let max_level = self.level_max()?;
 		self.levels[max_level as usize].to_geo_bbox()
 	}
@@ -158,8 +158,8 @@ impl TilePyramid {
 	///
 	/// Returns `None` if the pyramid is empty.
 	#[must_use]
-	pub fn get_geo_center(&self) -> Option<GeoCenter> {
-		let bbox = self.get_geo_bbox()?;
+	pub fn geo_center(&self) -> Option<GeoCenter> {
+		let bbox = self.geo_bbox()?;
 		let level = (self.level_min()? + 2).min(self.level_max()?);
 		let center_lon = f64::midpoint(bbox.x_min, bbox.x_max);
 		let center_lat = f64::midpoint(bbox.y_min, bbox.y_max);

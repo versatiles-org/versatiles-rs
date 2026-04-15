@@ -356,10 +356,10 @@ impl TileCoord {
 	/// use versatiles_core::TileCoord;
 	///
 	/// let coord = TileCoord::new(5, 10, 15).unwrap();
-	/// assert_eq!(coord.max_value(), 31); // 2^5 - 1
+	/// assert_eq!(coord.max_coord(), 31); // 2^5 - 1
 	/// ```
 	#[must_use]
-	pub fn max_value(&self) -> u32 {
+	pub fn max_coord(&self) -> u32 {
 		(1u32 << self.level) - 1
 	}
 
@@ -378,7 +378,7 @@ impl TileCoord {
 	/// assert_eq!(coord.y, 5); // 7 (max) - 2 = 5
 	/// ```
 	pub fn flip_y(&mut self) {
-		self.y = self.max_value() - self.y;
+		self.y = self.max_coord() - self.y;
 	}
 
 	/// Swap the x and y coordinates.

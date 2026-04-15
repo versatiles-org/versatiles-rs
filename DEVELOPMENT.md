@@ -364,8 +364,8 @@ let qt = TileQuadtree::from_bbox(&some_bbox);
 let qt = TileQuadtree::from_geo(zoom, &geo_bbox)?;
 
 // Insert individual tiles or bboxes
-qt.include_coord(&coord)?;
-qt.include_bbox(&bbox)?;
+qt.insert_coord(&coord)?;
+qt.insert_bbox(&bbox)?;
 
 // Set operations
 let union = a.union(&b)?;
@@ -391,12 +391,12 @@ Starts as `Bbox` for all constructors that produce rectangular coverage. Automat
 
 ```rust
 let mut pyramid = TilePyramid::new_empty();
-pyramid.include_bbox(&bbox)?;
+pyramid.insert_bbox(&bbox)?;
 pyramid.intersect_geo_bbox(&geo_bbox)?;
 
-let min_zoom = pyramid.get_level_min(); // Option<u8>
-let max_zoom = pyramid.get_level_max(); // Option<u8>
-let geo      = pyramid.get_geo_bbox();  // Option<GeoBBox>
+let min_zoom = pyramid.level_min(); // Option<u8>
+let max_zoom = pyramid.level_max(); // Option<u8>
+let geo      = pyramid.geo_bbox();  // Option<GeoBBox>
 ```
 
 ### `PyramidInfo` Trait

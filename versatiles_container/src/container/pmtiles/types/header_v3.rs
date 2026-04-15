@@ -37,8 +37,8 @@ impl HeaderV3 {
 		use PMTilesType as PT;
 
 		let bbox_pyramid = &parameters.bbox_pyramid;
-		let bbox = tilejson.bounds.or_else(|| bbox_pyramid.get_geo_bbox()).unwrap();
-		let center = tilejson.center.or_else(|| bbox_pyramid.get_geo_center());
+		let bbox = tilejson.bounds.or_else(|| bbox_pyramid.geo_bbox()).unwrap();
+		let center = tilejson.center.or_else(|| bbox_pyramid.geo_center());
 
 		Self {
 			root_dir: ByteRange::new(0, 0),

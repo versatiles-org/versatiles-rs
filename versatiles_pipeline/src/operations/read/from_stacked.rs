@@ -143,7 +143,7 @@ impl TileSource for Operation {
 					let mut bbox_left = TileBBox::new_empty(bbox.level()).unwrap();
 					for (coord, slot) in tiles.iter() {
 						if slot.is_none() {
-							bbox_left.include_coord(&coord).unwrap();
+							bbox_left.insert_coord(&coord).unwrap();
 						}
 					}
 					if bbox_left.is_empty() {

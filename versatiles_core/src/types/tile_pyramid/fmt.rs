@@ -9,7 +9,7 @@ fn fmt_pyramid(pyramid: &TilePyramid, f: &mut fmt::Formatter<'_>) -> fmt::Result
 		.levels
 		.iter()
 		.filter(|c| !c.is_empty())
-		.filter_map(|c| c.bounds().map(|bbox| format!("{bbox:?}")))
+		.filter_map(|c| c.bbox().map(|bbox| format!("{bbox:?}")))
 		.collect();
 	write!(f, "[{}]", parts.join(", "))
 }

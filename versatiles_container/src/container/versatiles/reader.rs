@@ -38,7 +38,7 @@
 //!     }
 //!
 //!     // Stream a bbox (coalesces reads per block for fewer I/O calls)
-//!     let bbox = metadata.bbox_pyramid.get_level(4).bounds().unwrap();
+//!     let bbox = metadata.bbox_pyramid.level(4).bbox().unwrap();
 //!     let mut stream = reader.get_tile_stream(bbox).await?;
 //!     while let Some((coord, mut tile)) = stream.next().await {
 //!         let _size = tile.as_blob(metadata.tile_compression)?.len();

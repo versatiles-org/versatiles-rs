@@ -46,7 +46,7 @@ impl OverviewCore {
 
 		let level_base = level.unwrap_or_else(|| source.metadata().bbox_pyramid.level_max().unwrap());
 
-		if let Some(mut level_bbox) = metadata.bbox_pyramid.get_level(level_base).bounds() {
+		if let Some(mut level_bbox) = metadata.bbox_pyramid.level(level_base).bbox() {
 			while level_bbox.level() > 0 {
 				level_bbox.level_down();
 				metadata.bbox_pyramid.insert_bbox(&level_bbox)?;
@@ -94,7 +94,7 @@ impl OverviewCore {
 		for q in &[0, 1, 2, 3] {
 			let bbox1 = bbox0.leveled_up().get_quadrant(*q)?;
 
-			if let Some((_, blobs1)) = self.cache.remove(&bbox1.min_corner()?) {
+			if let Some((_, blobs1)) = self.cache.remove(&bbox1.min_tile()?) {
 				let entry_bytes = estimate_entry_bytes(&blobs1);
 				self.cache_bytes.fetch_sub(entry_bytes, Ordering::Relaxed);
 				for (coord1, blob1) in blobs1 {
@@ -175,7 +175,7 @@ impl OverviewCore {
 		let (cache_entries, tiles): (Vec<_>, Vec<_>) = results.into_iter().unzip();
 
 		if need_cache {
-			let mut key = container_bbox.min_corner()?;
+			let mut key = container_bbox.min_tile()?;
 			key.floor(BLOCK_TILE_COUNT);
 			let entry_bytes = estimate_entry_bytes(&cache_entries);
 			let total = self.cache_bytes.fetch_add(entry_bytes, Ordering::Relaxed) + entry_bytes;

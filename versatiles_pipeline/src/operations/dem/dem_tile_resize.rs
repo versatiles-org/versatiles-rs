@@ -166,8 +166,8 @@ mod tests {
 
 		assert_eq!(op.tilejson().tile_size.unwrap().size(), 256);
 		let pyramid = &op.metadata().bbox_pyramid;
-		assert!(!pyramid.get_level(0).is_empty());
-		assert!(!pyramid.get_level(5).is_empty());
+		assert!(!pyramid.level(0).is_empty());
+		assert!(!pyramid.level(5).is_empty());
 		Ok(())
 	}
 

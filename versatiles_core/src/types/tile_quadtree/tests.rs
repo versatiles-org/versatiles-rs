@@ -81,8 +81,8 @@ fn tile_count_full() {
 
 #[test]
 fn bounds_empty_and_full() -> Result<()> {
-	assert!(TileQuadtree::new_empty(3).unwrap().bounds().is_none());
-	let full_bounds = TileQuadtree::new_full(2).unwrap().bounds().unwrap();
+	assert!(TileQuadtree::new_empty(3).unwrap().bbox().is_none());
+	let full_bounds = TileQuadtree::new_full(2).unwrap().bbox().unwrap();
 	assert_eq!(full_bounds, TileBBox::new_full(2)?);
 	Ok(())
 }
@@ -91,7 +91,7 @@ fn bounds_empty_and_full() -> Result<()> {
 fn bounds_partial() -> Result<()> {
 	let b = bbox(4, 3, 5, 7, 9);
 	let t = TileQuadtree::from_bbox(&b);
-	let bounds = t.bounds().unwrap();
+	let bounds = t.bbox().unwrap();
 	assert_eq!(bounds, b);
 	Ok(())
 }

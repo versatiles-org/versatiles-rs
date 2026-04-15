@@ -34,7 +34,7 @@ impl TileQuadtree {
 	/// Return the tightest axis-aligned [`TileBBox`] containing all tiles,
 	/// or `None` if the quadtree is empty.
 	#[must_use]
-	pub fn bounds(&self) -> Option<TileBBox> {
+	pub fn bbox(&self) -> Option<TileBBox> {
 		let size = 1u64 << self.level;
 		self.root.bounds((0, 0), size).map(|(x0, y0, x1, y1)| {
 			TileBBox::from_min_and_max(
@@ -51,7 +51,7 @@ impl TileQuadtree {
 	/// Convert the covered area to a geographic [`GeoBBox`], or `None` if empty.
 	#[must_use]
 	pub fn to_geo_bbox(&self) -> Option<GeoBBox> {
-		self.bounds().map(|bb| bb.to_geo_bbox().unwrap())
+		self.bbox().map(|bb| bb.to_geo_bbox().unwrap())
 	}
 
 	/// Check whether a specific tile coordinate is in this quadtree.

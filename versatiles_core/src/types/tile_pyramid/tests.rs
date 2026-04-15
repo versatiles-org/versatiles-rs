@@ -33,7 +33,7 @@ fn new_full_up_to() {
 	let p = TilePyramid::new_full_up_to(5);
 	assert_eq!(p.level_min(), Some(0));
 	assert_eq!(p.level_max(), Some(5));
-	assert!(p.get_level(6).is_empty());
+	assert!(p.level(6).is_empty());
 }
 
 #[test]
@@ -47,15 +47,15 @@ fn from_geo_bbox() {
 	let p = TilePyramid::from_geo_bbox(0, 3, &geo).unwrap();
 	assert_eq!(p.level_min(), Some(0));
 	assert_eq!(p.level_max(), Some(3));
-	assert!(p.get_level(4).is_empty());
+	assert!(p.level(4).is_empty());
 }
 
 #[test]
 fn from_slice_of_bboxes() {
 	let bboxes = vec![bbox(3, 0, 0, 3, 3), bbox(5, 1, 1, 5, 5)];
 	let p = TilePyramid::from(bboxes.as_slice());
-	assert_eq!(p.get_level_bbox(3), bbox(3, 0, 0, 3, 3));
-	assert_eq!(p.get_level_bbox(5), bbox(5, 1, 1, 5, 5));
+	assert_eq!(p.level_bbox(3), bbox(3, 0, 0, 3, 3));
+	assert_eq!(p.level_bbox(5), bbox(5, 1, 1, 5, 5));
 }
 
 // --- queries ---
@@ -65,8 +65,8 @@ fn get_level_and_set_level() {
 	let mut p = TilePyramid::new_empty();
 	let qt = TileQuadtree::new_full(4).unwrap();
 	p.set_level(TileCover::from(qt));
-	assert!(!p.get_level(4).is_empty());
-	assert!(p.get_level(3).is_empty());
+	assert!(!p.level(4).is_empty());
+	assert!(p.level(3).is_empty());
 }
 
 #[test]
@@ -128,12 +128,12 @@ fn count_tiles_and_count_nodes() {
 #[test]
 fn get_geo_bbox_and_center() {
 	let mut p = TilePyramid::new_empty();
-	assert!(p.get_geo_bbox().is_none());
-	assert!(p.get_geo_center().is_none());
+	assert!(p.geo_bbox().is_none());
+	assert!(p.geo_center().is_none());
 
 	p.insert_bbox(&bbox(5, 10, 10, 20, 20)).unwrap();
-	assert!(p.get_geo_bbox().is_some());
-	assert!(p.get_geo_center().is_some());
+	assert!(p.geo_bbox().is_some());
+	assert!(p.geo_center().is_some());
 }
 
 #[test]
@@ -176,7 +176,7 @@ fn intersect_pyramid() {
 	let mut b = TilePyramid::new_empty();
 	b.insert_bbox(&bbox(5, 10, 10, 25, 25)).unwrap();
 
-	a.intersect(&b).unwrap();
+	a.intersect_pyramid(&b).unwrap();
 	assert!(a.includes_coord(&coord(5, 12, 12)));
 	assert!(!a.includes_coord(&coord(5, 2, 2)));
 }
@@ -187,19 +187,19 @@ fn intersect_geo_bbox() {
 	let geo = GeoBBox::new(10.0, 50.0, 15.0, 55.0).unwrap();
 	p.intersect_geo_bbox(&geo).unwrap();
 	assert!(!p.is_empty());
-	assert_eq!(p.get_level(10).count_tiles(), 375);
+	assert_eq!(p.level(10).count_tiles(), 375);
 }
 
 #[test]
 fn set_level_min_and_max() {
 	let mut p = TilePyramid::new_full();
 	p.set_level_min(5);
-	assert!(p.get_level(4).is_empty());
-	assert!(!p.get_level(5).is_empty());
+	assert!(p.level(4).is_empty());
+	assert!(!p.level(5).is_empty());
 
 	p.set_level_max(10);
-	assert!(!p.get_level(10).is_empty());
-	assert!(p.get_level(11).is_empty());
+	assert!(!p.level(10).is_empty());
+	assert!(p.level(11).is_empty());
 }
 
 #[test]
@@ -230,8 +230,8 @@ fn weighted_bbox_nonempty() {
 fn set_level_bbox() {
 	let mut p = TilePyramid::new_empty();
 	p.set_level_bbox(bbox(5, 3, 4, 10, 15));
-	assert_eq!(p.get_level_bbox(5), bbox(5, 3, 4, 10, 15));
-	assert!(p.get_level(4).is_empty());
+	assert_eq!(p.level_bbox(5), bbox(5, 3, 4, 10, 15));
+	assert!(p.level(4).is_empty());
 }
 
 // --- get_level_bbox for empty level ---
@@ -239,7 +239,7 @@ fn set_level_bbox() {
 #[test]
 fn get_level_bbox_empty_level() {
 	let p = TilePyramid::new_empty();
-	let b = p.get_level_bbox(5);
+	let b = p.level_bbox(5);
 	assert!(b.is_empty());
 }
 
@@ -262,7 +262,7 @@ fn add_border() {
 	let mut p = TilePyramid::new_empty();
 	p.set_level_bbox(bbox(5, 5, 5, 10, 10));
 	p.buffer(1);
-	let b = p.get_level_bbox(5);
+	let b = p.level_bbox(5);
 	assert_eq!(b.x_min().unwrap(), 4);
 	assert_eq!(b.y_min().unwrap(), 4);
 	assert_eq!(b.x_max().unwrap(), 11);
@@ -294,7 +294,7 @@ fn swap_xy_changes_coordinates() {
 	// bbox with x=[2..4], y=[0..1] → after swap: x=[0..1], y=[2..4]
 	p.insert_bbox(&bbox(4, 2, 0, 4, 1)).unwrap();
 	p.swap_xy();
-	let b = p.get_level_bbox(4);
+	let b = p.level_bbox(4);
 	assert_eq!(b.x_min().unwrap(), 0);
 	assert_eq!(b.y_min().unwrap(), 2);
 }

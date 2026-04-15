@@ -33,7 +33,7 @@ impl PartialEq for TileCover {
 				if self.count_tiles() != other.count_tiles() {
 					return false;
 				}
-				self.bounds() == other.bounds()
+				self.bbox() == other.bbox()
 			}
 		}
 	}

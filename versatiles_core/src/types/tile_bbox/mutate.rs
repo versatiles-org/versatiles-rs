@@ -17,14 +17,14 @@ use std::ops::Div;
 use versatiles_derive::context;
 
 impl TileBBox {
-	/// Include a specific tile coordinate `(x, y)` into this bbox.
+	/// Insert a specific tile coordinate `(x, y)` into this bbox.
 	///
 	/// If the bbox is empty, it becomes the single-tile bbox at `(x, y)`.
 	/// Otherwise, the bbox is expanded minimally to include the coordinate.
 	///
 	/// # Panics
 	/// Panics if `x` or `y` are out of range for the current level.
-	pub fn include(&mut self, x: u32, y: u32) {
+	pub fn insert_xy(&mut self, x: u32, y: u32) {
 		assert!(x < self.max_count(), "x ({x}) must be < max ({})", self.max_count());
 		assert!(y < self.max_count(), "y ({y}) must be < max ({})", self.max_count());
 		if self.is_empty() {
@@ -45,28 +45,28 @@ impl TileBBox {
 		}
 	}
 
-	/// Includes a tile coordinate (`TileCoord`) within the bounding box.
+	/// Insert a tile coordinate (`TileCoord`) into this bounding box.
 	///
 	/// Expands the bounding box to encompass the given coordinate. The zoom level of the coordinate
 	/// must match the bounding box's zoom level.
 	///
 	/// # Arguments
 	///
-	/// * `coord` - Reference to the tile coordinate to include.
+	/// * `coord` - Reference to the tile coordinate to insert.
 	///
 	/// # Returns
 	///
-	/// * `Ok(())` if inclusion is successful.
+	/// * `Ok(())` if insertion is successful.
 	/// * `Err(anyhow::Error)` if the zoom levels do not match or other validations fail.
-	#[context("Failed to include TileCoord {coord:?} into TileBBox {self:?}")]
-	pub fn include_coord(&mut self, coord: &TileCoord) -> Result<()> {
+	#[context("Failed to insert TileCoord {coord:?} into TileBBox {self:?}")]
+	pub fn insert_coord(&mut self, coord: &TileCoord) -> Result<()> {
 		ensure!(
 			coord.level == self.level,
-			"Cannot include TileCoord with z={} into TileBBox at z={}",
+			"Cannot insert TileCoord with z={} into TileBBox at z={}",
 			coord.level,
 			self.level
 		);
-		self.include(coord.x, coord.y);
+		self.insert_xy(coord.x, coord.y);
 		Ok(())
 	}
 
@@ -96,14 +96,14 @@ impl TileBBox {
 	///
 	/// # Arguments
 	///
-	/// * `bbox` - Reference to the `TileBBox` to include.
+	/// * `bbox` - Reference to the `TileBBox` to insert.
 	///
 	/// # Returns
 	///
-	/// * `Ok(())` if inclusion is successful.
+	/// * `Ok(())` if insertion is successful.
 	/// * `Err(anyhow::Error)` if the zoom levels do not match or other validations fail.
-	#[context("Failed to include TileBBox {bbox:?} into TileBBox {self:?}")]
-	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
+	#[context("Failed to insert TileBBox {bbox:?} into TileBBox {self:?}")]
+	pub fn insert_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		ensure!(
 			self.level == bbox.level,
 			"Cannot include TileBBox with level={} into TileBBox with level={}",
@@ -176,7 +176,7 @@ impl TileBBox {
 	///
 	/// If the pyramid has no tiles at this zoom level, the bbox is set to empty.
 	pub fn intersect_with_pyramid(&mut self, pyramid: &TilePyramid) {
-		if let Some(level_bbox) = pyramid.get_level(self.level).bounds() {
+		if let Some(level_bbox) = pyramid.level(self.level).bbox() {
 			self.intersect_bbox(&level_bbox).unwrap_or(());
 		} else {
 			self.set_empty();
@@ -382,26 +382,26 @@ mod tests {
 	fn include_initializes_when_empty_and_expands() -> Result<()> {
 		let mut b = TileBBox::new_empty(4)?;
 		assert!(b.is_empty());
-		b.include(3, 5);
+		b.insert_xy(3, 5);
 		assert_eq!(b.to_array()?, [3, 5, 3, 5]);
 
-		b.include(6, 2); // expand both axes
+		b.insert_xy(6, 2); // expand both axes
 		assert_eq!(b.to_array()?, [3, 2, 6, 5]);
 		Ok(())
 	}
 
 	#[test]
 	#[should_panic(expected = "x (16) must be < max (16)")]
-	fn include_panics_on_out_of_bounds_x() {
+	fn insert_xy_panics_on_out_of_bounds_x() {
 		let mut b = TileBBox::new_empty(4).unwrap(); // max_count=16
-		b.include(16, 0);
+		b.insert_xy(16, 0);
 	}
 
 	#[test]
-	fn include_coord_level_mismatch_errors() -> Result<()> {
+	fn insert_coord_level_mismatch_errors() -> Result<()> {
 		let mut b = bb(5, 10, 10, 12, 12);
 		let tc = TileCoord::new(6, 11, 11)?; // different level
-		assert!(b.include_coord(&tc).is_err());
+		assert!(b.insert_coord(&tc).is_err());
 		Ok(())
 	}
 
@@ -422,24 +422,24 @@ mod tests {
 		assert!(b.is_empty());
 	}
 
-	// ------------------------------ include_bbox ------------------------------
+	// ------------------------------ insert_bbox ------------------------------
 	#[test]
-	fn include_bbox_merges_ranges_and_ignores_empty() -> Result<()> {
+	fn insert_bbox_merges_ranges_and_ignores_empty() -> Result<()> {
 		let mut a = bb(4, 4, 4, 6, 6);
 		let b = bb(4, 2, 5, 8, 7);
-		a.include_bbox(&b)?;
+		a.insert_bbox(&b)?;
 		assert_eq!(a.to_array()?, [2, 4, 8, 7]);
 		let c = TileBBox::new_empty(4)?;
-		a.include_bbox(&c)?; // no change
+		a.insert_bbox(&c)?; // no change
 		assert_eq!(a.to_array()?, [2, 4, 8, 7]);
 		Ok(())
 	}
 
 	#[test]
-	fn include_bbox_level_mismatch_errors() -> Result<()> {
+	fn insert_bbox_level_mismatch_errors() -> Result<()> {
 		let mut a = bb(3, 0, 0, 1, 1);
 		let b = bb(4, 0, 0, 1, 1);
-		assert!(a.include_bbox(&b).is_err());
+		assert!(a.insert_bbox(&b).is_err());
 		Ok(())
 	}
 

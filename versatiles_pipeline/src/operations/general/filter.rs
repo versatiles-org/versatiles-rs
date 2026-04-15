@@ -78,7 +78,7 @@ impl Operation {
 
 		let mask = if let Some(filename) = args.filename {
 			let mask = factory.get_reader(DataLocation::try_from(&filename)?).await?;
-			metadata.bbox_pyramid.intersect(&mask.metadata().bbox_pyramid)?;
+			metadata.bbox_pyramid.intersect_pyramid(&mask.metadata().bbox_pyramid)?;
 			Some(mask)
 		} else {
 			None
