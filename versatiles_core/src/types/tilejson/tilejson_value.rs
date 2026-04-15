@@ -14,7 +14,7 @@ pub enum TileJsonValue {
 
 impl TileJsonValue {
 	/// Returns `Some(&str)` if the value is a string, or `None` otherwise.
-	pub fn get_str(&self) -> Option<&str> {
+	pub fn as_str(&self) -> Option<&str> {
 		match self {
 			TileJsonValue::String(s) => Some(s),
 			_ => None,
@@ -22,7 +22,7 @@ impl TileJsonValue {
 	}
 
 	/// Returns `Some(i64)` if the value is a byte, or `None` otherwise.
-	pub fn get_integer(&self) -> Option<i64> {
+	pub fn as_integer(&self) -> Option<i64> {
 		match self {
 			TileJsonValue::Integer(b) => Some(*b),
 			_ => None,

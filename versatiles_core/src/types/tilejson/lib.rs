@@ -231,20 +231,20 @@ impl TileJSON {
 
 	/// Retrieves a `String` value from `self.values` by `key`, if present and a string.
 	#[must_use]
-	pub fn get_string(&self, key: &str) -> Option<String> {
-		self.values.get_string(key)
+	pub fn string(&self, key: &str) -> Option<String> {
+		self.values.string(key)
 	}
 
 	/// Retrieves a string slice from `self.values` by `key`, if present and a string.
 	#[must_use]
-	pub fn get_str(&self, key: &str) -> Option<&str> {
-		self.values.get_str(key)
+	pub fn str(&self, key: &str) -> Option<&str> {
+		self.values.str(key)
 	}
 
 	/// Retrieves an `i64` value from `self.values` by `key`, if present and an integer.
 	#[must_use]
-	pub fn get_integer(&self, key: &str) -> Option<i64> {
-		self.values.get_integer(key)
+	pub fn integer(&self, key: &str) -> Option<i64> {
+		self.values.integer(key)
 	}
 
 	/// Removes the value associated with `key` from `self.values`, returning `true` if it was present.
@@ -299,7 +299,7 @@ impl TileJSON {
 
 	#[must_use]
 	pub fn min_zoom(&self) -> Option<u8> {
-		self.values.get_integer("minzoom").and_then(|z| u8::try_from(z).ok())
+		self.values.integer("minzoom").and_then(|z| u8::try_from(z).ok())
 	}
 
 	/// Sets the `minzoom` value to `z`.
@@ -317,7 +317,7 @@ impl TileJSON {
 
 	#[must_use]
 	pub fn max_zoom(&self) -> Option<u8> {
-		self.values.get_integer("maxzoom").and_then(|z| u8::try_from(z).ok())
+		self.values.integer("maxzoom").and_then(|z| u8::try_from(z).ok())
 	}
 
 	/// Sets the `maxzoom` value to `z`.
@@ -401,7 +401,7 @@ impl TileJSON {
 		// 3.1 tilejson - required
 		let version = self
 			.values
-			.get_string("tilejson")
+			.string("tilejson")
 			.ok_or_else(|| anyhow!("Missing tilejson"))?;
 		ensure!(
 			Regex::new(r"^[123]\.[012]\.[01]$")?.is_match(&version),
@@ -451,7 +451,7 @@ impl TileJSON {
 		self.values.check_optional_string("template")?;
 
 		// 3.17 version - optional
-		if let Some(v) = self.values.get_string("version") {
+		if let Some(v) = self.values.string("version") {
 			ensure!(Regex::new(r"^\d+\.\d+\.\d+$")?.is_match(&v), "Invalid version number");
 		}
 
@@ -604,7 +604,7 @@ mod tests {
 		let tj = TileJSON::from_object(&obj)?;
 		assert!(tj.bounds.is_some(), "Expected bounds to be set");
 		assert!(tj.center.is_some(), "Expected center to be set");
-		assert_eq!(tj.values.get_string("tilejson"), Some("3.0.0".to_string()));
+		assert_eq!(tj.values.string("tilejson"), Some("3.0.0".to_string()));
 		Ok(())
 	}
 
@@ -689,7 +689,7 @@ mod tests {
 		let tj = TileJSON::try_from(json_text)?;
 		assert!(tj.bounds.is_some());
 		assert!(tj.center.is_some());
-		assert_eq!(tj.values.get_string("tilejson"), Some("3.0.0".to_string()));
+		assert_eq!(tj.values.string("tilejson"), Some("3.0.0".to_string()));
 		Ok(())
 	}
 
@@ -759,8 +759,8 @@ mod tests {
 	fn should_set_and_get_string_and_str() -> Result<()> {
 		let mut tj = TileJSON::default();
 		tj.set_string("key", "value")?;
-		assert_eq!(tj.get_string("key"), Some("value".to_string()));
-		assert_eq!(tj.get_str("key"), Some("value"));
+		assert_eq!(tj.string("key"), Some("value".to_string()));
+		assert_eq!(tj.str("key"), Some("value"));
 		Ok(())
 	}
 
@@ -768,7 +768,7 @@ mod tests {
 	fn should_set_and_get_byte() -> Result<()> {
 		let mut tj = TileJSON::default();
 		tj.set_byte("byte_key", 42)?;
-		assert_eq!(tj.values.get_integer("byte_key"), Some(42));
+		assert_eq!(tj.values.integer("byte_key"), Some(42));
 		Ok(())
 	}
 
@@ -776,10 +776,10 @@ mod tests {
 	fn should_set_min_and_max_zoom_correctly() {
 		let mut tj = TileJSON::default();
 		tj.set_min_zoom(3);
-		assert_eq!(tj.values.get_integer("minzoom"), Some(3));
+		assert_eq!(tj.values.integer("minzoom"), Some(3));
 		// Lower minzoom should not decrease the value
 		tj.set_min_zoom(1);
-		assert_eq!(tj.values.get_integer("minzoom"), Some(1));
+		assert_eq!(tj.values.integer("minzoom"), Some(1));
 
 		let mut tj2 = TileJSON::default();
 		tj2.set_max_zoom(10);
@@ -812,16 +812,16 @@ mod tests {
 		// Center should be overwritten by the other
 		assert_eq!(tj1.center, Some(GeoCenter(2.0, 2.0, 4)));
 		// Original value should remain, and new value should be inserted
-		assert_eq!(tj1.values.get_string("foo"), Some("bar".to_string()));
-		assert_eq!(tj1.values.get_string("baz"), Some("qux".to_string()));
+		assert_eq!(tj1.values.string("foo"), Some("bar".to_string()));
+		assert_eq!(tj1.values.string("baz"), Some("qux".to_string()));
 		Ok(())
 	}
 
 	#[test]
 	fn should_return_none_for_missing_getters() {
 		let tj = TileJSON::default();
-		assert_eq!(tj.get_string("missing"), None);
-		assert_eq!(tj.get_str("missing"), None);
+		assert_eq!(tj.string("missing"), None);
+		assert_eq!(tj.str("missing"), None);
 	}
 
 	#[test]
@@ -872,7 +872,7 @@ mod tests {
 	fn should_parse_from_string_reference() -> Result<()> {
 		let json_str = r#"{"tilejson":"3.0.0","bounds":[-180,-90,180,90],"center":[0.0,0.0,3.0]}"#.to_string();
 		let tj = TileJSON::try_from(&json_str)?;
-		assert_eq!(tj.values.get_string("tilejson"), Some("3.0.0".to_string()));
+		assert_eq!(tj.values.string("tilejson"), Some("3.0.0".to_string()));
 		Ok(())
 	}
 

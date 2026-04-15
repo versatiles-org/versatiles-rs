@@ -45,13 +45,13 @@ impl TileSource for Operation {
 		SourceType::new_processor("raster_overview", self.core.source.source_type())
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("raster_overview::get_tile_stream {bbox:?}");
-		self.core.get_tile_stream(bbox).await
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("raster_overview::tile_stream {bbox:?}");
+		self.core.tile_stream(bbox).await
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.core.get_tile_coord_stream(bbox).await
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.core.tile_coord_stream(bbox).await
 	}
 }
 
@@ -84,14 +84,14 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn get_tile_stream_at_base_populates_cache() -> Result<()> {
+	async fn tile_stream_at_base_populates_cache() -> Result<()> {
 		let op = make_operation(256, 6).await;
 		let metadata = op.metadata();
 		let level_bbox = metadata.bbox_pyramid.level(6).bbox().unwrap();
 		let bbox = TileBBox::from_min_and_size(6, level_bbox.x_min()?, level_bbox.y_min()?, 1, 1)?;
 
 		// Fetch at base level — should populate the cache with scaled-down entries
-		let tiles = op.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles = op.tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(tiles.len(), 1);
 
 		// Cache should now contain entries for the base-level block
@@ -104,19 +104,19 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn get_tile_stream_builds_lower_zoom_from_cache() -> Result<()> {
+	async fn tile_stream_builds_lower_zoom_from_cache() -> Result<()> {
 		let op = make_operation(256, 6).await;
 		let metadata = op.metadata().clone();
 		let level_bbox = metadata.bbox_pyramid.level(6).bbox().unwrap();
 
 		// First, fetch all base-level tiles to populate the cache
 		let base_bbox = level_bbox;
-		let _base_tiles = op.get_tile_stream(base_bbox).await?.to_vec().await;
+		let _base_tiles = op.tile_stream(base_bbox).await?.to_vec().await;
 		assert!(!op.core.cache.is_empty(), "cache should be populated");
 
 		// Now fetch at level 5 — should compose from cached half-size images
 		let lvl5_bbox = metadata.bbox_pyramid.level(5).bbox().unwrap();
-		let tiles_lvl5 = op.get_tile_stream(lvl5_bbox).await?.to_vec().await;
+		let tiles_lvl5 = op.tile_stream(lvl5_bbox).await?.to_vec().await;
 		// Should produce at least one tile at level 5
 		assert!(!tiles_lvl5.is_empty(), "should produce tiles at level 5 from cache");
 
@@ -205,14 +205,14 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_get_tile_stream_at_base_level() -> Result<()> {
+	async fn test_tile_stream_at_base_level() -> Result<()> {
 		let op = make_operation(256, 6).await;
 		// Request tiles at base level within the pyramid bbox
 		// The GeoBBox(2.224, 48.815, 2.47, 48.903) at level 6 covers tile (33, 22)
 		let metadata = op.metadata();
 		let level_bbox = metadata.bbox_pyramid.level(6).bbox().unwrap();
 		let bbox = TileBBox::from_min_and_size(6, level_bbox.x_min()?, level_bbox.y_min()?, 1, 1)?;
-		let tiles = op.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles = op.tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(tiles.len(), 1);
 		Ok(())
 	}
@@ -225,7 +225,7 @@ mod tests {
 		let metadata = op.metadata();
 		let level_bbox = metadata.bbox_pyramid.level(6).bbox().unwrap();
 		let bbox = TileBBox::from_min_and_size(7, level_bbox.x_min()? * 2, level_bbox.y_min()? * 2, 1, 1)?;
-		let tiles = op.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles = op.tile_stream(bbox).await?.to_vec().await;
 		// May or may not have tiles depending on source, but should not error
 		assert!(tiles.len() <= 1);
 		Ok(())
@@ -272,7 +272,7 @@ mod tests {
 		// Fetch at base level to populate cache
 		let metadata = op.metadata().clone();
 		let base_bbox = metadata.bbox_pyramid.level(6).bbox().unwrap();
-		let _tiles = op.get_tile_stream(base_bbox).await?.to_vec().await;
+		let _tiles = op.tile_stream(base_bbox).await?.to_vec().await;
 
 		// cache_bytes should be non-zero after populating
 		let bytes_after_insert = op.core.cache_bytes.load(Ordering::Relaxed);
@@ -281,7 +281,7 @@ mod tests {
 		// Walk all the way down to level 0 to fully drain the cache
 		for level in (0..6).rev() {
 			let lvl_bbox = metadata.bbox_pyramid.level(level).bbox().unwrap();
-			let _tiles = op.get_tile_stream(lvl_bbox).await?.to_vec().await;
+			let _tiles = op.tile_stream(lvl_bbox).await?.to_vec().await;
 		}
 
 		// After draining everything, cache_bytes should be 0
@@ -298,13 +298,13 @@ mod tests {
 
 		// Fetch all base-level tiles
 		let base_bbox = metadata.bbox_pyramid.level(6).bbox().unwrap();
-		let _base_tiles = op.get_tile_stream(base_bbox).await?.to_vec().await;
+		let _base_tiles = op.tile_stream(base_bbox).await?.to_vec().await;
 		assert!(!op.core.cache.is_empty(), "cache should be populated");
 
 		// Walk down through all zoom levels to drain the cache
 		for level in (0..6).rev() {
 			let lvl_bbox = metadata.bbox_pyramid.level(level).bbox().unwrap();
-			let _tiles = op.get_tile_stream(lvl_bbox).await?.to_vec().await;
+			let _tiles = op.tile_stream(lvl_bbox).await?.to_vec().await;
 		}
 
 		// After consuming all levels the cache should be empty
@@ -396,13 +396,13 @@ mod tests {
 
 		// Fetch base level
 		let base_bbox = metadata.bbox_pyramid.level(6).bbox().unwrap();
-		let base_tiles = op.get_tile_stream(base_bbox).await?.to_vec().await;
+		let base_tiles = op.tile_stream(base_bbox).await?.to_vec().await;
 		assert!(!base_tiles.is_empty(), "base level should have tiles");
 
 		// Walk every level from 5 down to 0 and verify tiles are produced
 		for level in (0..6).rev() {
 			let lvl_bbox = metadata.bbox_pyramid.level(level).bbox().unwrap();
-			let tiles = op.get_tile_stream(lvl_bbox).await?.to_vec().await;
+			let tiles = op.tile_stream(lvl_bbox).await?.to_vec().await;
 			assert!(!tiles.is_empty(), "level {level} should produce at least one tile");
 			for (coord, _) in &tiles {
 				assert_eq!(coord.level, level, "tile should be at level {level}");
@@ -429,12 +429,12 @@ mod tests {
 
 		let metadata = op.metadata().clone();
 		let base_bbox = metadata.bbox_pyramid.level(4).bbox().unwrap();
-		let base_tiles = op.get_tile_stream(base_bbox).await?.to_vec().await;
+		let base_tiles = op.tile_stream(base_bbox).await?.to_vec().await;
 		assert!(!base_tiles.is_empty());
 
 		// Build level 3 from cache
 		let lvl3_bbox = metadata.bbox_pyramid.level(3).bbox().unwrap();
-		let tiles = op.get_tile_stream(lvl3_bbox).await?.to_vec().await;
+		let tiles = op.tile_stream(lvl3_bbox).await?.to_vec().await;
 		assert!(!tiles.is_empty(), "should produce overview tiles with tile_size=512");
 
 		Ok(())

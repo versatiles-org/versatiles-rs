@@ -232,8 +232,8 @@ impl TileSource for Operation {
 
 	/// Stream decoded raster images for all tiles within the bounding box.
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("from_gdal_raster::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("from_gdal_raster::tile_stream {bbox:?}");
 
 		let count = 4096u32.div_euclid(self.tile_size).max(1);
 
@@ -294,7 +294,7 @@ impl TileSource for Operation {
 		Ok(TileStream::from_streams(streams))
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
 			Some(())
@@ -356,7 +356,7 @@ mod tests {
 	}
 
 	#[tokio::test(flavor = "multi_thread")]
-	async fn test_operation_get_tile() -> Result<()> {
+	async fn test_operation_tile() -> Result<()> {
 		async fn gradient_test(level: u8, x: u32, y: u32, expected_row: [u8; 7], expected_col: [u8; 7]) {
 			// Build a `Operation` that points at `testdata/gradient.tif`.
 			// We keep it in‑memory (no factory) and map bands 1‑2‑3 → RGB.
@@ -408,7 +408,7 @@ mod tests {
 	#[tokio::test(flavor = "multi_thread")]
 	async fn test_get_image_stream_returns_images() -> Result<()> {
 		let operation = get_operation(256).await;
-		let mut stream = operation.get_tile_stream(TileBBox::new_full(1)?).await?;
+		let mut stream = operation.tile_stream(TileBBox::new_full(1)?).await?;
 		let mut count = 0;
 		while let Some((coord_out, tile)) = stream.next().await {
 			let image = tile.into_image()?;

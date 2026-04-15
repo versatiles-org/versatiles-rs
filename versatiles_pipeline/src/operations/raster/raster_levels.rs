@@ -58,15 +58,15 @@ impl TileSource for Operation {
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("raster_levels::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("raster_levels::tile_stream {bbox:?}");
 
 		let contrast = self.contrast / 255.0;
 		let brightness = self.brightness / 255.0;
 		let gamma = self.gamma;
 		Ok(self
 			.source
-			.get_tile_stream(bbox)
+			.tile_stream(bbox)
 			.await?
 			.map_parallel_try(move |_coord, mut tile| {
 				#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // clamp ensures 0..=255
@@ -80,8 +80,8 @@ impl TileSource for Operation {
 			.unwrap_results())
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.source.get_tile_coord_stream(bbox).await
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.source.tile_coord_stream(bbox).await
 	}
 }
 
@@ -127,7 +127,7 @@ mod tests {
 			gamma,
 		};
 		let mut tiles = op
-			.get_tile_stream(TileBBox::from_min_and_max(8, 56, 56, 56, 56)?)
+			.tile_stream(TileBBox::from_min_and_max(8, 56, 56, 56, 56)?)
 			.await?
 			.to_vec()
 			.await;
@@ -157,7 +157,7 @@ mod tests {
 			.await?;
 
 		let bbox = TileCoord::new(3, 2, 1)?.to_tile_bbox();
-		let adj = op.get_tile_stream(bbox).await?.next().await.unwrap().1.into_image()?;
+		let adj = op.tile_stream(bbox).await?.next().await.unwrap().1.into_image()?;
 		assert_eq!(adj.average_color(), expected_color);
 		Ok(())
 	}
@@ -171,7 +171,7 @@ mod tests {
 			.await?;
 
 		let bbox = TileCoord::new(3, 2, 1)?.to_tile_bbox();
-		let image = op.get_tile_stream(bbox).await?.next().await.unwrap().1.into_image()?;
+		let image = op.tile_stream(bbox).await?.next().await.unwrap().1.into_image()?;
 		// With defaults, output should match the case (0, 1.0, 1.0) above
 		assert_eq!(image.average_color(), [63, 157, 249]);
 		Ok(())

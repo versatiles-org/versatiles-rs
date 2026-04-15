@@ -90,17 +90,17 @@ impl TileSource for Operation {
 		SourceType::new_container("tile file", "tile")
 	}
 
-	async fn get_tile(&self, _coord: &versatiles_core::TileCoord) -> Result<Option<Tile>> {
+	async fn tile(&self, _coord: &versatiles_core::TileCoord) -> Result<Option<Tile>> {
 		Ok(Some(self.tile.clone()))
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("from_tile::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("from_tile::tile_stream {bbox:?}");
 		let tile = self.tile.clone();
 		Ok(TileStream::from_bbox_parallel(bbox, move |_| Some(tile.clone())))
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
 			Some(())
@@ -159,21 +159,21 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_get_tile() {
+	async fn test_tile() {
 		let temp_file = create_temp_png();
 		let op = Operation::from_file(temp_file.path()).unwrap();
-		let tile = op.get_tile(&TileCoord::new(0, 0, 0).unwrap()).await.unwrap();
+		let tile = op.tile(&TileCoord::new(0, 0, 0).unwrap()).await.unwrap();
 		assert!(tile.is_some());
 		let blob = tile.unwrap().into_blob(Uncompressed).unwrap();
 		assert!(!blob.is_empty());
 	}
 
 	#[tokio::test]
-	async fn test_get_tile_stream() {
+	async fn test_tile_stream() {
 		let temp_file = create_temp_png();
 		let op = Operation::from_file(temp_file.path()).unwrap();
 		let bbox = TileBBox::from_min_and_max(2, 0, 0, 1, 1).unwrap();
-		let mut stream = op.get_tile_stream(bbox).await.unwrap();
+		let mut stream = op.tile_stream(bbox).await.unwrap();
 
 		let mut count = 0;
 		while let Some((coord, tile)) = stream.next().await {

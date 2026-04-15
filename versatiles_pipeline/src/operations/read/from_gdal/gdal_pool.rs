@@ -79,8 +79,8 @@ impl GdalPool {
 			dataset.raster_count()
 		);
 		let instance = Instance::new(dataset);
-		let bbox = instance.get_bbox()?;
-		let pixel_size = instance.get_pixel_size()?;
+		let bbox = instance.bbox()?;
+		let pixel_size = instance.pixel_size()?;
 		log::trace!("Dataset pixel_size (m/px): {pixel_size:.6}");
 		log::trace!("Dataset bbox (EPSG:4326): {bbox:?}");
 

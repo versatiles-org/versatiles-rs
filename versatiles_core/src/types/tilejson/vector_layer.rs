@@ -42,10 +42,10 @@ impl VectorLayers {
 			let object = entry.as_object()?;
 
 			// Required: "id"
-			let id = object.get_string("id")?.ok_or_else(|| anyhow!("missing `id`"))?;
+			let id = object.string("id")?.ok_or_else(|| anyhow!("missing `id`"))?;
 
 			// Optional: "description", "minzoom", "maxzoom"
-			let description = object.get_string("description")?;
+			let description = object.string("description")?;
 			let minzoom = if let Some(v) = object.number("minzoom")? {
 				Some(float_to_int(v)?)
 			} else {
@@ -724,11 +724,11 @@ mod tests {
 		};
 		let obj = layer.as_json_object();
 		// Check object entries
-		assert_eq!(obj.get_string("description")?.unwrap(), "desc");
+		assert_eq!(obj.string("description")?.unwrap(), "desc");
 		assert_eq!(obj.number("minzoom")?.unwrap(), 5.0);
 		assert_eq!(obj.number("maxzoom")?.unwrap(), 10.0);
 		let fields = obj.get("fields").unwrap().as_object()?;
-		assert_eq!(fields.get_string("key")?.unwrap(), "String");
+		assert_eq!(fields.string("key")?.unwrap(), "String");
 		// check valid layer
 		layer.check()?;
 		// check invalid minzoom > maxzoom

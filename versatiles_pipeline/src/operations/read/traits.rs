@@ -21,7 +21,7 @@ pub async fn union_tile_coord_streams(sources: &[&dyn TileSource], bbox: TileBBo
 	let futures: FuturesUnordered<_> = sources
 		.iter()
 		.map(|s| async {
-			let mut stream = s.get_tile_coord_stream(bbox).await?;
+			let mut stream = s.tile_coord_stream(bbox).await?;
 			let mut coords = HashSet::new();
 			while let Some((coord, ())) = stream.next().await {
 				coords.insert(coord);

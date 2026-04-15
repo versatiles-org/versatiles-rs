@@ -39,7 +39,7 @@ pub async fn run(args: &ExportOutline, runtime: &TilesRuntime) -> Result<()> {
 	}
 
 	let bbox = bbox_pyramid.level(level).bbox().unwrap();
-	let mut stream = reader.get_tile_size_stream(bbox).await?;
+	let mut stream = reader.tile_size_stream(bbox).await?;
 
 	let progress = runtime.create_progress("Scanning tile sizes", bbox.count_tiles());
 	let mut outline = TileOutline::new();

@@ -53,7 +53,7 @@ pub trait TileSourceTraverseExt: TileSource {
 					match step {
 						Push(bboxes_in, _) | Stream(bboxes_in, _) => {
 							for bbox in bboxes_in {
-								count += self.get_tile_coord_stream(*bbox).await?.drain_and_count().await;
+								count += self.tile_coord_stream(*bbox).await?.drain_and_count().await;
 							}
 						}
 						Pop(_, _) => {}
@@ -94,7 +94,7 @@ pub trait TileSourceTraverseExt: TileSource {
 								let tracker = tracker.clone();
 								let c = cache.clone();
 								async move {
-									let tile_stream = self.get_tile_stream(bbox).await?.inspect(move |_, _| tracker.inc(1));
+									let tile_stream = self.tile_stream(bbox).await?.inspect(move |_, _| tracker.inc(1));
 
 									c.append_stream(index, tile_stream.inner).await?;
 
@@ -123,7 +123,7 @@ pub trait TileSourceTraverseExt: TileSource {
 						let streams = stream::iter(bboxes).map(move |bbox| {
 							let tracker = tracker2.clone();
 							async move {
-								self.get_tile_stream(bbox).await.unwrap().inspect(move |_, _| {
+								self.tile_stream(bbox).await.unwrap().inspect(move |_, _| {
 									tracker.inc(2);
 								})
 							}
@@ -212,8 +212,8 @@ mod tests {
 			&self.tilejson
 		}
 
-		async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-			log::trace!("test_reader::get_tile_stream {bbox:?}");
+		async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+			log::trace!("test_reader::tile_stream {bbox:?}");
 			let compression = self.metadata.tile_compression;
 			let format = self.metadata.tile_format;
 			let delay_micros = self.tile_delay_micros;
@@ -234,8 +234,8 @@ mod tests {
 			}
 		}
 
-		async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-			log::trace!("test_reader::get_tile_coord_stream {bbox:?}");
+		async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+			log::trace!("test_reader::tile_coord_stream {bbox:?}");
 			Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), |_coord| Some(())))
 		}
 	}

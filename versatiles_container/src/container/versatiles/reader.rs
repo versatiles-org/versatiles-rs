@@ -33,13 +33,13 @@
 //!     println!("format={:?} compression={:?}", metadata.tile_format, metadata.tile_compression);
 //!
 //!     // Fetch one tile
-//!     if let Some(mut tile) = reader.get_tile(&TileCoord::new(15, 1, 4)?).await? {
+//!     if let Some(mut tile) = reader.tile(&TileCoord::new(15, 1, 4)?).await? {
 //!         let _blob = tile.as_blob(metadata.tile_compression)?;
 //!     }
 //!
 //!     // Stream a bbox (coalesces reads per block for fewer I/O calls)
 //!     let bbox = metadata.bbox_pyramid.level(4).bbox().unwrap();
-//!     let mut stream = reader.get_tile_stream(bbox).await?;
+//!     let mut stream = reader.tile_stream(bbox).await?;
 //!     while let Some((coord, mut tile)) = stream.next().await {
 //!         let _size = tile.as_blob(metadata.tile_compression)?.len();
 //!         // use (coord, _size)
@@ -187,7 +187,7 @@ impl VersaTilesReader {
 	}
 
 	/// Sum of all block tiles byte lengths.
-	fn get_tiles_size(&self) -> u64 {
+	fn tiles_size(&self) -> u64 {
 		self.block_index.iter().map(|b| b.tiles_range().length).sum()
 	}
 
@@ -261,8 +261,8 @@ impl TilesReader for VersaTilesReader {
 
 #[async_trait]
 /// [`TileSource`] implementation — provides `container_name`, `parameters`, `tilejson`,
-/// on-the-fly `override_compression`, single-tile fetch via `get_tile`, and bbox streaming via
-/// `get_tile_stream` (with internal read coalescing).
+/// on-the-fly `override_compression`, single-tile fetch via `tile`, and bbox streaming via
+/// `tile_stream` (with internal read coalescing).
 impl TileSource for VersaTilesReader {
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_container("versatiles", self.reader.name())
@@ -282,7 +282,7 @@ impl TileSource for VersaTilesReader {
 	/// within the block's bbox, looks up the tile's byte range from the cached index, and reads it.
 	/// Returns `Ok(None)` for empty ranges or missing blocks.
 	#[context("fetching tile {:?} from '{}'", coord, self.reader.name())]
-	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		// Calculate block coordinate
 		let block_coord = TileCoord::new(coord.level, coord.x.shr(8), coord.y.shr(8))?;
 
@@ -323,7 +323,7 @@ impl TileSource for VersaTilesReader {
 	}
 
 	#[context("streaming tile sizes for bbox {:?}", bbox)]
-	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		let block_coords: Vec<TileCoord> = bbox.scaled_down(256).iter_coords().collect();
 
@@ -384,13 +384,13 @@ impl TileSource for VersaTilesReader {
 		))
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		Ok(self.get_tile_size_stream(bbox).await?.filter_map(|_, _| Some(())))
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		Ok(self.tile_size_stream(bbox).await?.filter_map(|_, _| Some(())))
 	}
 
 	#[context("streaming tiles for bbox {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("versatiles::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("versatiles::tile_stream {bbox:?}");
 		let chunks = self.get_chunks(bbox).await?;
 		Ok(chunks.stream(
 			Arc::clone(&self.reader),
@@ -418,7 +418,7 @@ impl TileSource for VersaTilesReader {
 			.add_key_value("sum of block index sizes", &self.get_index_size())
 			.await;
 		print
-			.add_key_value("sum of block tiles sizes", &self.get_tiles_size())
+			.add_key_value("sum of block tiles sizes", &self.tiles_size())
 			.await;
 
 		Ok(())
@@ -436,9 +436,7 @@ impl Debug for VersaTilesReader {
 
 impl PartialEq for VersaTilesReader {
 	fn eq(&self, other: &Self) -> bool {
-		self.tilejson == other.tilejson
-			&& self.metadata == other.metadata
-			&& self.get_tiles_size() == other.get_tiles_size()
+		self.tilejson == other.tilejson && self.metadata == other.metadata && self.tiles_size() == other.tiles_size()
 	}
 }
 
@@ -482,14 +480,14 @@ mod tests {
 		assert_eq!(reader.metadata().tile_format, TileFormat::MVT);
 
 		let blob = reader
-			.get_tile(&TileCoord::new(4, 15, 1)?)
+			.tile(&TileCoord::new(4, 15, 1)?)
 			.await?
 			.unwrap()
 			.into_blob(TileCompression::Uncompressed)?;
 		assert_eq!(blob.as_slice(), MOCK_BYTES_PBF);
 
 		let sizes = reader
-			.get_tile_stream(TileBBox::new_full(4)?)
+			.tile_stream(TileBBox::new_full(4)?)
 			.await?
 			.map_parallel_try(|_coord, mut tile| Ok(tile.as_blob(TileCompression::Gzip)?.len()))
 			.unwrap_results();
@@ -506,7 +504,7 @@ mod tests {
 	async fn tile_stream_matches_individual_blob_reads() -> Result<()> {
 		let (_, reader) = mk_reader().await?;
 		let bbox = TileBBox::new_full(4)?;
-		let stream = reader.get_tile_stream(bbox).await?;
+		let stream = reader.tile_stream(bbox).await?;
 		let mut all: Vec<(TileCoord, Blob)> = stream
 			.map_parallel_try(|_coord, tile| tile.into_blob(TileCompression::Uncompressed))
 			.unwrap_results()
@@ -530,7 +528,7 @@ mod tests {
 				.map(|(_, b)| b.clone())
 				.expect("present in stream");
 			let from_single = reader
-				.get_tile(&coord)
+				.tile(&coord)
 				.await?
 				.expect("present via single read")
 				.into_blob(TileCompression::Uncompressed)?;
@@ -544,10 +542,10 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn get_tile_out_of_range_is_none() -> Result<()> {
+	async fn tile_out_of_range_is_none() -> Result<()> {
 		let (_, reader) = mk_reader().await?;
 		// level beyond available
-		assert!(reader.get_tile(&TileCoord::new(5, 0, 0)?).await?.is_none());
+		assert!(reader.tile(&TileCoord::new(5, 0, 0)?).await?.is_none());
 		Ok(())
 	}
 
@@ -555,7 +553,7 @@ mod tests {
 	async fn single_tile_bbox_streams() -> Result<()> {
 		let (_, reader) = mk_reader().await?;
 		let one = TileBBox::from_min_and_max(4, 15, 1, 15, 1)?;
-		let blobs = reader.get_tile_stream(one).await?.to_vec().await;
+		let blobs = reader.tile_stream(one).await?.to_vec().await;
 		assert_eq!(blobs.len(), 1);
 		Ok(())
 	}
@@ -656,7 +654,7 @@ mod tests {
 	async fn tile_size_stream_full_level() -> Result<()> {
 		let (_, reader) = mk_reader().await?;
 		let bbox = TileBBox::new_full(4)?;
-		let mut sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
+		let mut sizes: Vec<(TileCoord, u32)> = reader.tile_size_stream(bbox).await?.to_vec().await;
 		sizes.sort_by_key(|(c, _)| (c.y, c.x));
 
 		assert_eq!(sizes.len(), 256);
@@ -671,7 +669,7 @@ mod tests {
 	async fn tile_size_stream_sub_bbox() -> Result<()> {
 		let (_, reader) = mk_reader().await?;
 		let bbox = TileBBox::from_min_and_max(4, 2, 3, 5, 6)?;
-		let sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
+		let sizes: Vec<(TileCoord, u32)> = reader.tile_size_stream(bbox).await?.to_vec().await;
 
 		assert_eq!(sizes.len(), 16); // 4x4
 		for (coord, size) in &sizes {
@@ -686,7 +684,7 @@ mod tests {
 	async fn tile_size_stream_single_tile() -> Result<()> {
 		let (_, reader) = mk_reader().await?;
 		let bbox = TileBBox::from_min_and_max(4, 15, 1, 15, 1)?;
-		let sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
+		let sizes: Vec<(TileCoord, u32)> = reader.tile_size_stream(bbox).await?.to_vec().await;
 
 		assert_eq!(sizes.len(), 1);
 		assert_eq!(sizes[0].0, TileCoord::new(4, 15, 1)?);
@@ -701,11 +699,11 @@ mod tests {
 		let bbox = TileBBox::new_full(4)?;
 		let compression = reader.metadata().tile_compression;
 
-		let mut sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
+		let mut sizes: Vec<(TileCoord, u32)> = reader.tile_size_stream(bbox).await?.to_vec().await;
 		sizes.sort_by_key(|(c, _)| (c.level, c.y, c.x));
 
 		let mut blob_sizes: Vec<(TileCoord, u32)> = reader
-			.get_tile_stream(bbox)
+			.tile_stream(bbox)
 			.await?
 			.map(move |_coord, tile| {
 				u32::try_from(tile.into_blob(compression).expect("tile should have blob").len()).expect("size fits u32")
@@ -727,7 +725,7 @@ mod tests {
 	async fn tile_size_stream_out_of_range_is_empty() -> Result<()> {
 		let (_, reader) = mk_reader().await?;
 		let bbox = TileBBox::new_full(5)?;
-		let sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
+		let sizes: Vec<(TileCoord, u32)> = reader.tile_size_stream(bbox).await?.to_vec().await;
 
 		assert!(sizes.is_empty());
 

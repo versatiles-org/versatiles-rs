@@ -129,7 +129,7 @@ pub(super) async fn fetch_source_tiles(
 		.map(|coord| {
 			let reader = reader.clone();
 			async move {
-				match reader.get_tile(&coord).await? {
+				match reader.tile(&coord).await? {
 					Some(tile) => Ok(Some((coord, tile))),
 					None => Ok(None),
 				}

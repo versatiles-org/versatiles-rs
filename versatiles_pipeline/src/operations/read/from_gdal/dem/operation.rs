@@ -148,8 +148,8 @@ impl TileSource for Operation {
 	}
 
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("from_gdal_dem::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("from_gdal_dem::tile_stream {bbox:?}");
 		let count = 8192u32.div_euclid(self.tile_size).max(1);
 
 		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
@@ -205,7 +205,7 @@ impl TileSource for Operation {
 		Ok(TileStream::from_streams(streams))
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
 			Some(())
@@ -380,11 +380,11 @@ mod tests {
 	#[case("")]
 	#[case("encoding=\"terrarium\"")]
 	#[tokio::test(flavor = "multi_thread")]
-	async fn test_get_tile_stream(#[case] extra_args: &str) -> Result<()> {
+	async fn test_tile_stream(#[case] extra_args: &str) -> Result<()> {
 		let (_tmp, dem_path) = create_temp_dem();
 		let op = get_operation(&dem_path, extra_args).await;
 		let bbox = TileBBox::new_full(1)?;
-		let stream = op.get_tile_stream(bbox).await?;
+		let stream = op.tile_stream(bbox).await?;
 		let tiles = stream.to_vec().await;
 		assert!(!tiles.is_empty(), "stream should produce tiles");
 		for (coord, tile) in &tiles {
@@ -397,12 +397,12 @@ mod tests {
 	}
 
 	#[tokio::test(flavor = "multi_thread")]
-	async fn test_get_tile_stream_empty_bbox() -> Result<()> {
+	async fn test_tile_stream_empty_bbox() -> Result<()> {
 		let (_tmp, dem_path) = create_temp_dem();
 		let op = get_operation(&dem_path, "").await;
 		// Use a bbox that doesn't overlap the data (data is at lon 14-24, lat 49-55)
 		let bbox = TileBBox::from_geo_bbox(1, &GeoBBox::new(-180.0, -85.0, -170.0, -80.0).unwrap())?;
-		let stream = op.get_tile_stream(bbox).await?;
+		let stream = op.tile_stream(bbox).await?;
 		let tiles = stream.to_vec().await;
 		assert!(tiles.is_empty(), "stream should be empty for non-overlapping bbox");
 		Ok(())

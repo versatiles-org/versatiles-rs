@@ -100,7 +100,7 @@ pub fn versatiles_stdin(args: &str, stdin: &str) {
 
 /// Helper to get tilejson metadata from a file using the CLI.
 #[must_use]
-pub fn get_tilejson(filename: &Path) -> JsonValue {
+pub fn tilejson(filename: &Path) -> JsonValue {
 	let mut cmd = versatiles_cmd();
 	let output = cmd
 		.args(["dev", "print-tilejson", filename.to_str().unwrap()])
@@ -113,8 +113,8 @@ pub fn get_tilejson(filename: &Path) -> JsonValue {
 
 /// Extract bounds from tilejson of an output file.
 #[must_use]
-pub fn get_tilejson_bounds(filename: &Path) -> [f64; 4] {
-	let tilejson = get_tilejson(filename);
+pub fn tilejson_bounds(filename: &Path) -> [f64; 4] {
+	let tilejson = tilejson(filename);
 	let obj = tilejson.as_object().expect("tilejson should be an object");
 	let bounds = obj.get("bounds").expect("tilejson should have bounds");
 	bounds
@@ -129,7 +129,7 @@ pub fn get_tilejson_bounds(filename: &Path) -> [f64; 4] {
 pub fn get_bounds_from_vpl(vpl: &str) -> (TempDir, [f64; 4]) {
 	let (temp_dir, output) = get_temp_output("vpl_output.mbtiles");
 	versatiles_stdin(&format!("convert [,vpl]- {}", output.to_str().unwrap()), vpl);
-	let bounds = get_tilejson_bounds(&output);
+	let bounds = tilejson_bounds(&output);
 	(temp_dir, bounds)
 }
 

@@ -93,13 +93,13 @@ impl TileSource for Operation {
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("meta_update::get_tile_stream {bbox:?}");
-		self.source.get_tile_stream(bbox).await
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("meta_update::tile_stream {bbox:?}");
+		self.source.tile_stream(bbox).await
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.source.get_tile_coord_stream(bbox).await
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.source.tile_coord_stream(bbox).await
 	}
 }
 
@@ -112,7 +112,7 @@ mod tests {
 	use crate::PipelineFactory;
 
 	fn get_str(o: &TileJSON, k: &str) -> Option<String> {
-		o.as_object().get_string(k).ok().flatten()
+		o.as_object().string(k).ok().flatten()
 	}
 	fn get_num(o: &TileJSON, k: &str) -> Option<f64> {
 		o.as_object().number(k).ok().flatten()

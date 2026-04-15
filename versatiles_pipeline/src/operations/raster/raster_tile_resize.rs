@@ -48,12 +48,12 @@ impl TileSource for Operation {
 		SourceType::new_processor("raster_tile_resize", self.core.source.as_ref().source_type())
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		self.core.get_tile_stream(bbox)
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		self.core.tile_stream(bbox)
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.core.get_tile_coord_stream(bbox).await
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.core.tile_coord_stream(bbox).await
 	}
 }
 
@@ -121,8 +121,8 @@ mod tests {
 		source
 	}
 
-	fn make_op(source: DummyImageSource, target_tile_size: u32) -> Result<Operation> {
-		let core = TileResizeCore::new(Box::new(source), target_tile_size, Arc::new(|img| img.scaled_down(2)))?;
+	fn make_op(source: DummyImageSource, tartile_size: u32) -> Result<Operation> {
+		let core = TileResizeCore::new(Box::new(source), tartile_size, Arc::new(|img| img.scaled_down(2)))?;
 		Ok(Operation { core })
 	}
 
@@ -152,7 +152,7 @@ mod tests {
 		let op = make_op(make_512_gradient_source(), 256)?;
 
 		let bbox = TileBBox::new_full(1)?;
-		let tiles: Vec<_> = op.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles: Vec<_> = op.tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(tiles.len(), 4);
 
 		for (coord, mut tile) in tiles {
@@ -177,7 +177,7 @@ mod tests {
 		let op = make_op(make_512_gradient_source(), 256)?;
 
 		let bbox = TileBBox::new_full(0)?;
-		let tiles: Vec<_> = op.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles: Vec<_> = op.tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(tiles.len(), 1);
 
 		let (coord, mut tile) = tiles.into_iter().next().unwrap();
@@ -193,7 +193,7 @@ mod tests {
 		let op = make_op(make_256_colored_source(), 512)?;
 
 		let bbox = TileBBox::new_full(0)?;
-		let tiles: Vec<_> = op.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles: Vec<_> = op.tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(tiles.len(), 1);
 
 		let (_coord, mut tile) = tiles.into_iter().next().unwrap();
@@ -240,7 +240,7 @@ mod tests {
 		let op = make_op(source, 512)?;
 
 		let bbox = TileBBox::new_full(0)?;
-		let tiles: Vec<_> = op.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles: Vec<_> = op.tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(tiles.len(), 1);
 
 		let (_coord, mut tile) = tiles.into_iter().next().unwrap();
@@ -265,7 +265,7 @@ mod tests {
 		let op = make_op(make_512_gradient_source(), 256)?;
 
 		let bbox = TileBBox::from_min_and_max(20, 1000, 1000, 1000, 1000)?;
-		let tiles: Vec<_> = op.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles: Vec<_> = op.tile_stream(bbox).await?.to_vec().await;
 		assert!(tiles.is_empty());
 		Ok(())
 	}

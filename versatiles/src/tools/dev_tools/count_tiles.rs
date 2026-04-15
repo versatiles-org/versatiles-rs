@@ -34,7 +34,7 @@ pub async fn run(args: &CountTiles, runtime: &TilesRuntime) -> Result<()> {
 		let count = if bbox.is_empty() {
 			0
 		} else {
-			reader.get_tile_coord_stream(bbox).await?.drain_and_count().await
+			reader.tile_coord_stream(bbox).await?.drain_and_count().await
 		};
 		println!("level {level:2}: {count}");
 		total += count;

@@ -76,7 +76,7 @@ impl TileSource for DummyVectorSource {
 		&self.tilejson
 	}
 
-	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		if !self.metadata.bbox_pyramid.includes_coord(coord) {
 			return Ok(None);
 		}
@@ -112,8 +112,8 @@ impl TileSource for DummyVectorSource {
 		Ok(Some(tile))
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("dummy_vector_source::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("dummy_vector_source::tile_stream {bbox:?}");
 		let data = Arc::clone(&self.data);
 		let bbox_pyramid = self.metadata.bbox_pyramid.clone();
 
@@ -150,7 +150,7 @@ impl TileSource for DummyVectorSource {
 		}))
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		Ok(TileStream::from_iter_coord(
 			bbox.into_iter_coords_zorder(),
@@ -165,7 +165,7 @@ mod tests {
 	use versatiles_core::GeoBBox;
 
 	#[tokio::test]
-	async fn test_get_tile() {
+	async fn test_tile() {
 		let source = DummyVectorSource::new(
 			&[("layer1", &[&[("key1", "value1"), ("key2", "value2")]])],
 			Some(TilePyramid::from_geo_bbox(0, 8, &GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap()).unwrap()),
@@ -179,12 +179,12 @@ mod tests {
 		);
 
 		let coord = TileCoord::new(8, 0, 150).unwrap();
-		let tile_data = source.get_tile(&coord).await.unwrap();
+		let tile_data = source.tile(&coord).await.unwrap();
 
 		assert!(tile_data.is_some());
 
 		let coord = TileCoord::new(8, 100, 100).unwrap();
-		let tile_data = source.get_tile(&coord).await.unwrap();
+		let tile_data = source.tile(&coord).await.unwrap();
 
 		assert!(tile_data.is_none());
 	}

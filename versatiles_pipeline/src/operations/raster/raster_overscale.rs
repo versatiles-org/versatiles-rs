@@ -202,7 +202,7 @@ impl Operation {
 		// Fetch from source
 		let image = self
 			.source
-			.get_tile(&coord)
+			.tile(&coord)
 			.await?
 			.map(|t| t.into_image().map(Arc::new))
 			.transpose()?;
@@ -274,17 +274,17 @@ impl TileSource for Operation {
 	}
 
 	#[context("Failed to get stream for bbox: {:?}", bbox_dst)]
-	async fn get_tile_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("raster_overscale::get_tile_stream {bbox_dst:?}");
+	async fn tile_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("raster_overscale::tile_stream {bbox_dst:?}");
 
 		if !self.metadata.bbox_pyramid.intersects_bbox(&bbox_dst) {
-			log::trace!("get_tile_stream outside bbox_pyramid");
+			log::trace!("tile_stream outside bbox_pyramid");
 			return Ok(TileStream::empty());
 		}
 
 		if bbox_dst.level() <= self.level_base {
-			log::trace!("get_tile_stream level <= level_base");
-			return self.source.as_ref().get_tile_stream(bbox_dst).await;
+			log::trace!("tile_stream level <= level_base");
+			return self.source.as_ref().tile_stream(bbox_dst).await;
 		}
 
 		// Use tile climbing for all upscaling - process in parallel
@@ -321,12 +321,12 @@ impl TileSource for Operation {
 		Ok(stream)
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		if !self.metadata.bbox_pyramid.intersects_bbox(&bbox) {
 			return Ok(TileStream::empty());
 		}
 		if bbox.level() <= self.level_base {
-			return self.source.as_ref().get_tile_coord_stream(bbox).await;
+			return self.source.as_ref().tile_coord_stream(bbox).await;
 		}
 
 		// Above level_base: a tile exists if a source tile covers it.
@@ -343,7 +343,7 @@ impl TileSource for Operation {
 
 		for src_level in (level_stop..=self.level_base).rev() {
 			let source_bbox = bbox.at_level(src_level);
-			let mut stream = self.source.as_ref().get_tile_coord_stream(source_bbox).await?;
+			let mut stream = self.source.as_ref().tile_coord_stream(source_bbox).await?;
 			while let Some((src_coord, _)) = stream.next().await {
 				// Each source coord at src_level covers a block of output coords
 				let scale = 1u32 << (bbox.level() - src_coord.level);
@@ -394,7 +394,7 @@ mod tests {
 		let coord = TileCoord::new(level, u32::from(x), u32::from(y))
 			.unwrap()
 			.to_tile_bbox();
-		let mut tiles = op.get_tile_stream(coord).await.unwrap().to_vec().await;
+		let mut tiles = op.tile_stream(coord).await.unwrap().to_vec().await;
 		assert_eq!(tiles.len(), 1);
 		let mut tile = tiles.pop().unwrap().1;
 		let image = tile.as_image().unwrap();
@@ -465,17 +465,17 @@ mod tests {
 
 		// Should work for tiles at level_base (z=2)
 		let coord_base = TileCoord::new(2, 0, 0)?.to_tile_bbox();
-		let tiles = op.get_tile_stream(coord_base).await?.to_vec().await;
+		let tiles = op.tile_stream(coord_base).await?.to_vec().await;
 		assert_eq!(tiles.len(), 1, "Should return tile at level_base");
 
 		// Should work for tiles above level_base (extracted from level_base)
 		let coord_high = TileCoord::new(3, 0, 0)?.to_tile_bbox();
-		let tiles = op.get_tile_stream(coord_high).await?.to_vec().await;
+		let tiles = op.tile_stream(coord_high).await?.to_vec().await;
 		assert_eq!(tiles.len(), 1, "Should extract from level_base for high zoom");
 
 		// Multiple high-zoom tiles should reuse cached base tile
 		let coord_high2 = TileCoord::new(3, 1, 0)?.to_tile_bbox();
-		let tiles2 = op.get_tile_stream(coord_high2).await?.to_vec().await;
+		let tiles2 = op.tile_stream(coord_high2).await?.to_vec().await;
 		assert_eq!(tiles2.len(), 1, "Should also work for adjacent tile");
 
 		Ok(())
@@ -496,7 +496,7 @@ mod tests {
 
 		// Should work with climbing enabled
 		let coord = TileCoord::new(3, 0, 0)?.to_tile_bbox();
-		let tiles = op.get_tile_stream(coord).await?.to_vec().await;
+		let tiles = op.tile_stream(coord).await?.to_vec().await;
 		assert_eq!(tiles.len(), 1, "Should return tile with climbing enabled");
 
 		Ok(())
@@ -545,7 +545,7 @@ mod tests {
 
 		// Request at level below level_base should pass through to source
 		let coord = TileCoord::new(2, 1, 1)?.to_tile_bbox();
-		let tiles = op.get_tile_stream(coord).await?.to_vec().await;
+		let tiles = op.tile_stream(coord).await?.to_vec().await;
 		assert_eq!(tiles.len(), 1, "Should passthrough to source for level <= level_base");
 		Ok(())
 	}

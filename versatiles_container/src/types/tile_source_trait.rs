@@ -72,9 +72,9 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	/// - `Ok(Some(tile))` if the tile exists
 	/// - `Ok(None)` for gaps or empty tiles
 	/// - `Err(_)` on read/processing errors
-	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		let bbox = coord.to_tile_bbox();
-		let mut stream = self.get_tile_stream(bbox).await?;
+		let mut stream = self.tile_stream(bbox).await?;
 		Ok(stream.next().await.map(|(_, t)| t))
 	}
 
@@ -83,19 +83,19 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	/// Returns a [`TileStream`] of `(TileCoord, Tile)` pairs. The stream handles
 	/// backpressure and supports concurrent pulls.
 	///
-	/// Default implementation wraps individual `get_tile` calls with internal synchronization.
+	/// Default implementation wraps individual `tile` calls with internal synchronization.
 	/// Sources that can optimize bulk reads should override this.
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>>;
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>>;
 
 	/// Streams which tile coordinates exist within the given bounding box.
 	///
 	/// Returns a [`TileStream`] of `(TileCoord, ())` pairs — one entry per tile
-	/// that actually exists. The default reads full tiles via [`get_tile_stream`](Self::get_tile_stream)
+	/// that actually exists. The default reads full tiles via [`tile_stream`](Self::tile_stream)
 	/// and discards the data. Container readers with index structures should override
 	/// this for a cheaper enumeration.
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		Ok(self
-			.get_tile_size_stream(bbox)
+			.tile_size_stream(bbox)
 			.await?
 			.filter_map(move |_coord, _tile| Some(())))
 	}
@@ -105,12 +105,12 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	/// Returns a [`TileStream`] of `(TileCoord, u32)` pairs, where the `u32`
 	/// is the size of the tile blob as stored in the container.
 	///
-	/// The default implementation reads tiles via [`get_tile_stream`](Self::get_tile_stream)
+	/// The default implementation reads tiles via [`tile_stream`](Self::tile_stream)
 	/// and maps each tile to its blob length. Container readers with index-based size
 	/// information should override this for better performance.
-	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
 		let compression = self.metadata().tile_compression;
-		Ok(self.get_tile_stream(bbox).await?.filter_map(move |_coord, tile| {
+		Ok(self.tile_stream(bbox).await?.filter_map(move |_coord, tile| {
 			let blob = tile.into_blob(compression).ok()?;
 			u32::try_from(blob.len()).ok()
 		}))
@@ -228,7 +228,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		for bbox in self.metadata().bbox_pyramid.iter_bboxes() {
 			let mut level_size_sum: u64 = 0;
 			let mut level_count: u64 = 0;
-			let mut stream = self.get_tile_size_stream(bbox).await?;
+			let mut stream = self.tile_size_stream(bbox).await?;
 			while let Some((coord, size_u32)) = stream.next().await {
 				let size = u64::from(size_u32);
 
@@ -390,8 +390,8 @@ mod tests {
 			&self.tilejson
 		}
 
-		async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-			log::trace!("test_source::get_tile_stream {bbox:?}");
+		async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+			log::trace!("test_source::tile_stream {bbox:?}");
 			let tile_compression = self.metadata.tile_compression;
 			let tile_format = self.metadata.tile_format;
 			Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {
@@ -425,22 +425,22 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_get_tile_stream() -> Result<()> {
+	async fn test_tile_stream() -> Result<()> {
 		let reader = TestReader::new_dummy();
 		let bbox = TileBBox::from_min_and_max(1, 0, 0, 1, 1)?;
-		let stream = reader.get_tile_stream(bbox).await?;
+		let stream = reader.tile_stream(bbox).await?;
 
 		assert_eq!(stream.drain_and_count().await, 4); // Assuming 4 tiles in a 2x2 bbox
 		Ok(())
 	}
 
 	#[tokio::test]
-	async fn test_get_tile_coord_stream() -> Result<()> {
+	async fn test_tile_coord_stream() -> Result<()> {
 		let reader = TestReader::new_dummy();
 		let bbox = TileBBox::from_min_and_max(1, 0, 0, 1, 1)?;
-		let coord_count = reader.get_tile_coord_stream(bbox).await?.drain_and_count().await;
+		let coord_count = reader.tile_coord_stream(bbox).await?.drain_and_count().await;
 		let tile_count = reader
-			.get_tile_stream(TileBBox::from_min_and_max(1, 0, 0, 1, 1)?)
+			.tile_stream(TileBBox::from_min_and_max(1, 0, 0, 1, 1)?)
 			.await?
 			.drain_and_count()
 			.await;

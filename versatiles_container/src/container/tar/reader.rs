@@ -21,7 +21,7 @@
 //! let mut reader = TarTilesReader::open(path)?;
 //!
 //! // Read one tile
-//! if let Some(mut tile) = reader.get_tile(&TileCoord::new(3, 6, 2)?).await? {
+//! if let Some(mut tile) = reader.tile(&TileCoord::new(3, 6, 2)?).await? {
 //!     let _blob = tile.as_blob(reader.metadata().tile_compression)?;
 //! }
 //! # Ok(()) }
@@ -302,8 +302,8 @@ impl TileSource for TarTilesReader {
 	/// # Errors
 	/// Propagates I/O errors while reading the tar entry.
 	#[context("getting tile {:?}", coord)]
-	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		log::trace!("get_tile {coord:?}");
+	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+		log::trace!("tile {coord:?}");
 		Self::lookup_tile(
 			coord,
 			&self.tile_map,
@@ -314,8 +314,8 @@ impl TileSource for TarTilesReader {
 		.await
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("tar::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("tar::tile_stream {bbox:?}");
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		let reader = Arc::clone(&self.reader);
 		let tile_map = Arc::clone(&self.tile_map);
@@ -334,7 +334,7 @@ impl TileSource for TarTilesReader {
 		}))
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		let tile_map = Arc::clone(&self.tile_map);
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
@@ -342,7 +342,7 @@ impl TileSource for TarTilesReader {
 		}))
 	}
 
-	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		let tile_map = Arc::clone(&self.tile_map);
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
@@ -401,7 +401,7 @@ pub mod tests {
 		assert_eq!(reader.metadata().tile_format, TileFormat::MVT);
 
 		let blob = reader
-			.get_tile(&TileCoord::new(3, 6, 2)?)
+			.tile(&TileCoord::new(3, 6, 2)?)
 			.await?
 			.unwrap()
 			.into_blob(TileCompression::Uncompressed)?;
@@ -490,7 +490,7 @@ pub mod tests {
 		assert_eq!(reader.metadata().bbox_pyramid.count_tiles(), 1);
 		assert_eq!(
 			reader
-				.get_tile(&TileCoord::new(3, 1, 2)?)
+				.tile(&TileCoord::new(3, 1, 2)?)
 				.await?
 				.unwrap()
 				.as_blob(TileCompression::Uncompressed)?
@@ -509,7 +509,7 @@ pub mod tests {
 		let bbox = TileBBox::new_full(2)?;
 
 		// Get all tiles via stream
-		let stream = reader.get_tile_stream(bbox).await?;
+		let stream = reader.tile_stream(bbox).await?;
 		let stream_tiles: Vec<_> = stream.to_vec().await;
 		assert_eq!(stream_tiles.len(), 16);
 
@@ -517,7 +517,7 @@ pub mod tests {
 		for (coord, mut tile) in stream_tiles {
 			let stream_blob = tile.as_blob(reader.metadata().tile_compression)?;
 			let single_blob = reader
-				.get_tile(&coord)
+				.tile(&coord)
 				.await?
 				.expect("tile should exist")
 				.into_blob(reader.metadata().tile_compression)?;

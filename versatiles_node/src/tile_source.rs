@@ -324,7 +324,7 @@ impl TileSource {
 		}
 		#[allow(clippy::cast_possible_truncation)]
 		let coord = napi_result!(RustTileCoord::new(z as u8, x, y))?;
-		let tile_opt = napi_result!(self.reader.get_tile(&coord).await)?;
+		let tile_opt = napi_result!(self.reader.tile(&coord).await)?;
 
 		tile_opt
 			.map(|mut tile| {

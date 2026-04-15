@@ -45,7 +45,7 @@ impl CompressionTestServer {
 		(resp.status().as_u16(), resp.headers().clone())
 	}
 
-	async fn get_tile_with_encoding(&self, accept_encoding: Option<&str>) -> (u16, HeaderMap, Vec<u8>) {
+	async fn tile_with_encoding(&self, accept_encoding: Option<&str>) -> (u16, HeaderMap, Vec<u8>) {
 		let client = reqwest::Client::builder()
 			.no_gzip()
 			.no_brotli()
@@ -96,7 +96,7 @@ async fn e2e_accept_gzip_returns_gzip() {
 	let input = get_testdata("berlin.mbtiles");
 	let server = CompressionTestServer::new(&input).await;
 
-	let (status, headers, _body) = server.get_tile_with_encoding(Some("gzip")).await;
+	let (status, headers, _body) = server.tile_with_encoding(Some("gzip")).await;
 
 	assert_eq!(status, 200);
 	// Server should return gzip if it can
@@ -116,7 +116,7 @@ async fn e2e_accept_brotli_returns_brotli() {
 	let input = get_testdata("berlin.mbtiles");
 	let server = CompressionTestServer::new(&input).await;
 
-	let (status, headers, _body) = server.get_tile_with_encoding(Some("br")).await;
+	let (status, headers, _body) = server.tile_with_encoding(Some("br")).await;
 
 	assert_eq!(status, 200);
 	// Server should return brotli if it can
@@ -136,7 +136,7 @@ async fn e2e_accept_wildcard_encoding() {
 	let input = get_testdata("berlin.mbtiles");
 	let server = CompressionTestServer::new(&input).await;
 
-	let (status, headers, _body) = server.get_tile_with_encoding(Some("*")).await;
+	let (status, headers, _body) = server.tile_with_encoding(Some("*")).await;
 
 	assert_eq!(status, 200);
 	// Server can return any encoding with wildcard
@@ -156,7 +156,7 @@ async fn e2e_accept_multiple_encodings() {
 	let input = get_testdata("berlin.mbtiles");
 	let server = CompressionTestServer::new(&input).await;
 
-	let (status, headers, _body) = server.get_tile_with_encoding(Some("gzip, br")).await;
+	let (status, headers, _body) = server.tile_with_encoding(Some("gzip, br")).await;
 
 	assert_eq!(status, 200);
 	// Server can choose either gzip or brotli
@@ -176,7 +176,7 @@ async fn e2e_accept_encoding_with_quality() {
 	let input = get_testdata("berlin.mbtiles");
 	let server = CompressionTestServer::new(&input).await;
 
-	let (status, headers, _body) = server.get_tile_with_encoding(Some("br;q=1.0, gzip;q=0.8")).await;
+	let (status, headers, _body) = server.tile_with_encoding(Some("br;q=1.0, gzip;q=0.8")).await;
 
 	assert_eq!(status, 200);
 	// Server should prefer br (higher quality)
@@ -197,17 +197,17 @@ async fn e2e_tile_data_valid_with_different_encodings() {
 	let server = CompressionTestServer::new(&input).await;
 
 	// Get tile with identity encoding explicitly requested
-	let (status1, _headers1, body1) = server.get_tile_with_encoding(Some("identity")).await;
+	let (status1, _headers1, body1) = server.tile_with_encoding(Some("identity")).await;
 	assert_eq!(status1, 200);
 	assert!(!body1.is_empty(), "Tile body should not be empty with identity");
 
 	// Get tile with gzip
-	let (status2, _headers2, body2) = server.get_tile_with_encoding(Some("gzip")).await;
+	let (status2, _headers2, body2) = server.tile_with_encoding(Some("gzip")).await;
 	assert_eq!(status2, 200);
 	assert!(!body2.is_empty(), "Tile body should not be empty with gzip");
 
 	// Get tile with brotli
-	let (status3, _headers3, body3) = server.get_tile_with_encoding(Some("br")).await;
+	let (status3, _headers3, body3) = server.tile_with_encoding(Some("br")).await;
 	assert_eq!(status3, 200);
 	assert!(!body3.is_empty(), "Tile body should not be empty with brotli");
 }

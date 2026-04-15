@@ -51,13 +51,13 @@ impl TileSource for Operation {
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("raster_flatten::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("raster_flatten::tile_stream {bbox:?}");
 
 		let color = self.color;
 		Ok(self
 			.source
-			.get_tile_stream(bbox)
+			.tile_stream(bbox)
 			.await?
 			.map_parallel_try(move |_coord, mut tile| {
 				if tile.as_image()?.has_alpha() {
@@ -72,8 +72,8 @@ impl TileSource for Operation {
 			.unwrap_results())
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.source.get_tile_coord_stream(bbox).await
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.source.tile_coord_stream(bbox).await
 	}
 }
 
@@ -95,11 +95,11 @@ mod tests {
 			.await?;
 
 		let bbox = TileCoord::new(2, 1, 1)?.to_tile_bbox();
-		let image = op.get_tile_stream(bbox).await?.next().await.unwrap().1.into_image()?;
+		let image = op.tile_stream(bbox).await?.next().await.unwrap().1.into_image()?;
 		assert_eq!(image.average_color(), [238, 119, 0]);
 
 		let bbox = TileCoord::new(2, 2, 1)?.to_tile_bbox();
-		let image = op.get_tile_stream(bbox).await?.next().await.unwrap().1.into_image()?;
+		let image = op.tile_stream(bbox).await?.next().await.unwrap().1.into_image()?;
 		assert_eq!(image.average_color(), [254, 135, 16]);
 
 		Ok(())
@@ -114,7 +114,7 @@ mod tests {
 			.await?;
 
 		let bbox = TileCoord::new(2, 1, 1)?.to_tile_bbox();
-		let image = op.get_tile_stream(bbox).await?.next().await.unwrap().1.into_image()?;
+		let image = op.tile_stream(bbox).await?.next().await.unwrap().1.into_image()?;
 		// With white background, the average should be different from custom orange
 		let avg = image.average_color();
 		assert_eq!(avg.len(), 3); // RGB output (no alpha)

@@ -122,8 +122,8 @@ impl TileSource for Operation {
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("dem_quantize::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("dem_quantize::tile_stream {bbox:?}");
 
 		let elevation_error = self.elevation_error;
 		let slope_error = self.slope_error;
@@ -131,7 +131,7 @@ impl TileSource for Operation {
 
 		Ok(self
 			.source
-			.get_tile_stream(bbox)
+			.tile_stream(bbox)
 			.await?
 			.map_parallel_try(move |coord, mut tile| {
 				let (mask_r, mask_g, mask_b) = compute_masks_for_tile(&coord, elevation_error, slope_error, encoding);
@@ -160,8 +160,8 @@ impl TileSource for Operation {
 			.unwrap_results())
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.source.get_tile_coord_stream(bbox).await
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.source.tile_coord_stream(bbox).await
 	}
 }
 
@@ -325,7 +325,7 @@ mod tests {
 		};
 
 		let bbox = TileBBox::from_min_and_max(8, 56, 56, 56, 56)?;
-		let mut tiles = op.get_tile_stream(bbox).await?.to_vec().await;
+		let mut tiles = op.tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(tiles.len(), 1);
 
 		let result_image = tiles[0].1.as_image_mut()?;
@@ -368,7 +368,7 @@ mod tests {
 		};
 
 		let bbox = TileBBox::from_min_and_max(8, 56, 56, 56, 56)?;
-		let mut tiles = op.get_tile_stream(bbox).await?.to_vec().await;
+		let mut tiles = op.tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(tiles.len(), 1);
 
 		let result_image = tiles[0].1.as_image_mut()?;

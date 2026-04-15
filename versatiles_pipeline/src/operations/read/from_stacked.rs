@@ -119,15 +119,15 @@ impl TileSource for Operation {
 	}
 
 	#[context("Failed to get stacked tile coord stream for bbox: {:?}", bbox)]
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let refs: Vec<&dyn TileSource> = self.sources.iter().map(|s| s.as_ref() as &dyn TileSource).collect();
 		super::traits::union_tile_coord_streams(&refs, bbox).await
 	}
 
 	/// Stream packed tiles intersecting `bbox` using the overlay strategy.
 	#[context("Failed to get stacked tile stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("from_stacked::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("from_stacked::tile_stream {bbox:?}");
 		// We need the desired output compression inside the closure, so copy it.
 		let format = self.metadata.tile_format;
 		let sources = Arc::clone(&self.sources);
@@ -150,7 +150,7 @@ impl TileSource for Operation {
 						continue;
 					}
 
-					let stream = source.get_tile_stream(bbox_left).await.unwrap();
+					let stream = source.tile_stream(bbox_left).await.unwrap();
 					stream
 						.for_each(|coord, mut tile| {
 							let entry = tiles.get_mut(&coord).unwrap();
@@ -291,7 +291,7 @@ mod tests {
 
 		let bbox = TileBBox::new_full(3)?;
 
-		let tiles = result.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles = result.tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(arrange_tiles(tiles, check_vector), *RESULT_PATTERN);
 
 		Ok(())
@@ -314,7 +314,7 @@ mod tests {
 
 		let bbox = TileBBox::new_full(3)?;
 
-		let tiles = result.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles = result.tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(arrange_tiles(tiles, check_image), *RESULT_PATTERN);
 
 		Ok(())

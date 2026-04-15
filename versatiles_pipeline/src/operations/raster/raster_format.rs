@@ -164,13 +164,13 @@ impl TileSource for Operation {
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("raster_format::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("raster_format::tile_stream {bbox:?}");
 
 		let quality = self.quality[bbox.level() as usize];
 		let quality_translucent = self.quality_translucent.map(|qt| qt[bbox.level() as usize]);
 		let effort = self.effort;
-		let stream = self.source.get_tile_stream(bbox).await?;
+		let stream = self.source.tile_stream(bbox).await?;
 		let format: TileFormat = self.format.into();
 
 		Ok(stream
@@ -186,8 +186,8 @@ impl TileSource for Operation {
 			.unwrap_results())
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.source.get_tile_coord_stream(bbox).await
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.source.tile_coord_stream(bbox).await
 	}
 }
 
@@ -280,7 +280,7 @@ mod tests {
 
 		// Stream should still yield exactly one tile and the tile should be WEBP now
 		let bbox = TileCoord::new(3, 2, 2)?.to_tile_bbox();
-		let mut items = op.get_tile_stream(bbox).await?.to_vec().await;
+		let mut items = op.tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(items.len(), 1, "expected exactly one tile at z=3, x=2, y=2");
 		let (_coord, tile) = items.remove(0);
 		assert_eq!(tile.format(), TileFormat::WEBP);
@@ -301,7 +301,7 @@ mod tests {
 
 		// Stream should yield tiles
 		let bbox = TileCoord::new(3, 2, 2)?.to_tile_bbox();
-		let mut items = op.get_tile_stream(bbox).await?.to_vec().await;
+		let mut items = op.tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(items.len(), 1);
 		let (_coord, tile) = items.remove(0);
 		assert_eq!(tile.format(), TileFormat::WEBP);

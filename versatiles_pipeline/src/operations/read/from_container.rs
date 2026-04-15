@@ -66,15 +66,15 @@ impl TileSource for Operation {
 	}
 
 	/// Stream raw tile blobs intersecting the bounding box by delegating to
-	/// `TileSource::get_tile_stream`.
+	/// `TileSource::tile_stream`.
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("from_container::get_tile_stream {bbox:?}");
-		self.source.get_tile_stream(bbox).await
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("from_container::tile_stream {bbox:?}");
+		self.source.tile_stream(bbox).await
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.source.get_tile_coord_stream(bbox).await
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.source.tile_coord_stream(bbox).await
 	}
 }
 
@@ -129,7 +129,7 @@ mod tests {
 		);
 
 		let mut stream = operation
-			.get_tile_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?)
+			.tile_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?)
 			.await?;
 
 		let mut n = 0;
@@ -179,7 +179,7 @@ mod tests {
 		);
 
 		let mut stream = operation
-			.get_tile_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?)
+			.tile_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?)
 			.await?;
 
 		let mut n = 0;

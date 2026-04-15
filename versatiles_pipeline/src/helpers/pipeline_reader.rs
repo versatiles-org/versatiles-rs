@@ -137,13 +137,8 @@ impl TileSource for PipelineReader {
 	/// Returns `Ok(None)` if the pipeline yields no tile; returns an error if multiple tiles
 	/// are produced (pipelines must emit at most one tile per coordinate).
 	#[context("getting tile {:?} via pipeline '{}'", coord, self.name)]
-	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		let mut vec = self
-			.operation
-			.get_tile_stream(coord.to_tile_bbox())
-			.await?
-			.to_vec()
-			.await;
+	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+		let mut vec = self.operation.tile_stream(coord.to_tile_bbox()).await?.to_vec().await;
 
 		ensure!(vec.len() <= 1, "PipelineReader should return at most one tile");
 
@@ -154,19 +149,19 @@ impl TileSource for PipelineReader {
 		}
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.operation.get_tile_coord_stream(bbox).await
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.operation.tile_coord_stream(bbox).await
 	}
 
-	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
-		self.operation.get_tile_size_stream(bbox).await
+	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+		self.operation.tile_size_stream(bbox).await
 	}
 
 	/// Streams all tiles intersecting `bbox` by executing the pipeline's output operation.
 	#[context("streaming tiles for bbox {:?} via pipeline '{}'", bbox, self.name)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("pipeline_reader::get_tile_stream {bbox:?}");
-		self.operation.get_tile_stream(bbox).await
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("pipeline_reader::tile_stream {bbox:?}");
+		self.operation.tile_stream(bbox).await
 	}
 }
 
@@ -216,14 +211,14 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_tile_pipeline_reader_get_tile() -> Result<()> {
+	async fn test_tile_pipeline_reader_tile() -> Result<()> {
 		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), TilesRuntime::new_silent()).await?;
 
-		let result = reader.get_tile(&TileCoord::new(14, 0, 0)?).await;
+		let result = reader.tile(&TileCoord::new(14, 0, 0)?).await;
 		assert_eq!(result?, None);
 
 		let result = reader
-			.get_tile(&TileCoord::new(14, 8800, 5377)?)
+			.tile(&TileCoord::new(14, 8800, 5377)?)
 			.await?
 			.unwrap()
 			.into_blob(TileCompression::Uncompressed)?;
@@ -234,10 +229,10 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_tile_pipeline_reader_get_tile_stream() -> Result<()> {
+	async fn test_tile_pipeline_reader_tile_stream() -> Result<()> {
 		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), TilesRuntime::new_silent()).await?;
 		let bbox = TileBBox::from_min_and_max(1, 0, 0, 1, 1)?;
-		let result_stream = reader.get_tile_stream(bbox).await?;
+		let result_stream = reader.tile_stream(bbox).await?;
 		let result = result_stream.to_vec().await;
 
 		assert!(!result.is_empty());

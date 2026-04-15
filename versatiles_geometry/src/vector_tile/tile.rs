@@ -104,13 +104,13 @@ mod tests {
 			.context("Failed to read all data from PBF file")
 	}
 
-	async fn get_tile() -> Result<VectorTile> {
+	async fn tile() -> Result<VectorTile> {
 		VectorTile::from_blob(&get_pbf().await?).context("Failed to convert blob to VectorTile")
 	}
 
 	#[tokio::test]
 	async fn from_to_blob() -> Result<()> {
-		let tile1 = get_tile().await.context("Failed to get initial VectorTile")?;
+		let tile1 = tile().await.context("Failed to get initial VectorTile")?;
 		let blob2 = tile1.to_blob().context("Failed to convert VectorTile to blob")?;
 		let tile2 = VectorTile::from_blob(&blob2).context("Failed to convert blob back to VectorTile")?;
 		assert_eq!(tile1, tile2);

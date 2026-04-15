@@ -104,8 +104,8 @@ impl TileSource for Operation {
 		SourceType::new_container("debug", "debug")
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("from_debug::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("from_debug::tile_stream {bbox:?}");
 		let format = self.metadata.tile_format;
 		match self.metadata.tile_format.to_type() {
 			TileType::Raster => {
@@ -121,7 +121,7 @@ impl TileSource for Operation {
 		}
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
 			Some(())
@@ -144,7 +144,7 @@ mod tests {
 
 		let coord = TileCoord { x: 1, y: 2, level: 3 };
 		let tile = operation
-			.get_tile_stream(coord.to_tile_bbox())
+			.tile_stream(coord.to_tile_bbox())
 			.await?
 			.next()
 			.await
@@ -155,7 +155,7 @@ mod tests {
 		assert_eq!(operation.tilejson().as_pretty_lines(100), tilejson, "for '{format}'");
 
 		let mut stream = operation
-			.get_tile_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?)
+			.tile_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?)
 			.await?;
 
 		let mut n = 0;

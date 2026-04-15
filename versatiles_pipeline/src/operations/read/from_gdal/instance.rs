@@ -36,7 +36,7 @@ impl Instance {
 	}
 
 	#[context("Failed to compute bounding box for GDAL dataset")]
-	pub fn get_bbox(&self) -> Result<GeoBBox> {
+	pub fn bbox(&self) -> Result<GeoBBox> {
 		log::trace!("Computing dataset_bbox()");
 		let gt = self
 			.dataset
@@ -85,7 +85,7 @@ impl Instance {
 	///   three points to 3857, and takes the max of the two neighbor distances.
 	/// * Returns a strictly positive finite value or an error.
 	#[context("Failed to compute pixel size for GDAL dataset")]
-	pub fn get_pixel_size(&self) -> Result<f64> {
+	pub fn pixel_size(&self) -> Result<f64> {
 		log::trace!("Computing dataset_pixel_size()");
 		let gt = self
 			.dataset
@@ -176,7 +176,7 @@ mod tests {
 	#[case( 3857, [-2e7, -2e7, 2e7, 2e7], [-179.663, -85.022, 179.663, 85.022])]
 	#[case( 4326, [-10.0, -20.0, 30.0, 40.0], [-10.0, -20.0, 30.0, 40.0])]
 	#[case(25832, [186073.6, 2214294.0, 714984.2, 5542944.0], [4.623, 20.0, 12.0, 50.039])]
-	fn test_get_bbox(#[case] epsg: u32, #[case] bbox_in: [f64; 4], #[case] bbox_out: [f64; 4]) -> Result<()> {
+	fn test_bbox(#[case] epsg: u32, #[case] bbox_in: [f64; 4], #[case] bbox_out: [f64; 4]) -> Result<()> {
 		let mut ds = mem_dataset(100, 100, 1);
 		ds.set_spatial_ref(&get_spatial_ref(epsg)?)?;
 		ds.set_geo_transform(&[
@@ -188,7 +188,7 @@ mod tests {
 			(bbox_in[1] - bbox_in[3]) / 100.0,
 		])?;
 		let inst = Instance::new(ds);
-		let bbox = inst.get_bbox()?;
+		let bbox = inst.bbox()?;
 
 		if (bbox.x_min - bbox_out[0]).abs() > 1e-3
 			|| (bbox.y_min - bbox_out[1]).abs() > 1e-3

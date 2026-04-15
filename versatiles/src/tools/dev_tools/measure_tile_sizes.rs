@@ -57,7 +57,7 @@ pub async fn run(args: &MeasureTileSizes, runtime: &TilesRuntime) -> Result<()> 
 	let bbox = TileBBox::new_full(level)?;
 
 	let progress = runtime.create_progress("Scanning tile sizes", (width_original * width_original) as u64);
-	let stream = reader.get_tile_size_stream(bbox).await?;
+	let stream = reader.tile_size_stream(bbox).await?;
 	let vec = stream.inspect(|_, _| progress.inc(1)).to_vec().await;
 	progress.finish();
 

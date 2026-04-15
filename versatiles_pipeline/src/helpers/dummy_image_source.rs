@@ -88,7 +88,7 @@ impl TileSource for DummyImageSource {
 	}
 
 	#[context("Getting tile for coord: {:?}", coord)]
-	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		if !self.metadata.bbox_pyramid.includes_coord(coord) {
 			return Ok(None);
 		}
@@ -96,8 +96,8 @@ impl TileSource for DummyImageSource {
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("dummy_image_source::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("dummy_image_source::tile_stream {bbox:?}");
 
 		let generate_tile = (self.generate_tile).clone();
 		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
@@ -107,7 +107,7 @@ impl TileSource for DummyImageSource {
 		))
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		Ok(TileStream::from_iter_coord(
 			bbox.into_iter_coords_zorder(),
@@ -148,7 +148,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_dummy_image_source_get_tile() {
+	async fn test_dummy_image_source_tile() {
 		let source = DummyImageSource::from_color(
 			&[0, 100, 200],
 			4,
@@ -156,10 +156,10 @@ mod tests {
 			Some(TilePyramid::from_geo_bbox(0, 8, &GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap()).unwrap()),
 		)
 		.unwrap();
-		let tile_data = source.get_tile(&TileCoord::new(8, 0, 255).unwrap()).await.unwrap();
+		let tile_data = source.tile(&TileCoord::new(8, 0, 255).unwrap()).await.unwrap();
 		assert!(tile_data.is_some());
 
-		let tile_data = source.get_tile(&TileCoord::new(8, 0, 0).unwrap()).await.unwrap();
+		let tile_data = source.tile(&TileCoord::new(8, 0, 0).unwrap()).await.unwrap();
 		assert!(tile_data.is_none());
 	}
 

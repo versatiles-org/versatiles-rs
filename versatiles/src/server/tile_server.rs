@@ -403,7 +403,7 @@ impl TileServer {
 	}
 
 	#[must_use]
-	pub fn get_url_mapping(&self) -> Vec<(super::Url, String)> {
+	pub fn url_mapping(&self) -> Vec<(super::Url, String)> {
 		let mut result = Vec::new();
 		for entry in self.tile_sources.iter() {
 			let tile_source = entry.value();
@@ -506,7 +506,7 @@ mod tests {
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 
 		assert_eq!(
-			server.get_url_mapping(),
+			server.url_mapping(),
 			vec![(
 				crate::server::Url::from("/tiles/cheese/"),
 				"container 'dummy' ('dummy')".to_string()

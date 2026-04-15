@@ -16,7 +16,7 @@
 //! **"All overscaled → empty" policy:** After spatially filtering sources
 //! to those that overlap the requested bbox, if *every* remaining source
 //! would be overscaled (none have native data at this zoom level),
-//! `get_tile_stream` returns an empty stream instead of blending N upscaled
+//! `tile_stream` returns an empty stream instead of blending N upscaled
 //! tiles. This includes the edge case where some sources are native at the
 //! zoom level but don't cover the requested tile — they are removed by the
 //! spatial filter first, leaving only overscaled sources. This is
@@ -70,7 +70,7 @@
 //! - The output `format` differs from the source format, or
 //! - Blending occurred (the tile now holds a decoded image, not a blob).
 //!
-//! ## `get_tile_stream` flow
+//! ## `tile_stream` flow
 //!
 //! 1. **Spatial filter** — sources whose pyramid doesn't intersect the bbox
 //!    are removed.
@@ -79,7 +79,7 @@
 //! 3. **Large bbox splitting** — bboxes larger than 32×32 are split into a
 //!    grid and each cell is processed separately.
 //! 4. **Per-tile dispatch** — each coordinate is processed in parallel via
-//!    `get_tile`, then passed through `change_format`.
+//!    `tile`, then passed through `change_format`.
 
 use crate::{
 	PipelineFactory,
@@ -185,12 +185,12 @@ struct Operation {
 /// # Arguments
 /// * `coord` - The tile coordinate to fetch
 /// * `entries` - Sources with precomputed overscale status for this request level
-async fn get_tile(coord: TileCoord, entries: Vec<FilteredSourceEntry>) -> Result<Option<(TileCoord, Tile)>> {
+async fn tile(coord: TileCoord, entries: Vec<FilteredSourceEntry>) -> Result<Option<(TileCoord, Tile)>> {
 	let mut tile = Option::<Tile>::None;
 	let mut has_native = false;
 
 	for entry in &entries {
-		if let Some(mut tile_bg) = entry.source.get_tile(&coord).await? {
+		if let Some(mut tile_bg) = entry.source.tile(&coord).await? {
 			if !entry.is_overscaled {
 				has_native = true;
 			}
@@ -319,15 +319,15 @@ impl TileSource for Operation {
 	}
 
 	#[context("Failed to get stacked raster tile coord stream for bbox: {:?}", bbox)]
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let refs: Vec<&dyn TileSource> = self.sources.iter().map(|e| e.source.as_ref().as_ref()).collect();
 		super::traits::union_tile_coord_streams(&refs, bbox).await
 	}
 
 	/// Stream packed raster tiles intersecting `bbox`.
 	#[context("Failed to get stacked raster tile stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("from_stacked_raster::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("from_stacked_raster::tile_stream {bbox:?}");
 
 		// Filter sources to only those that overlap with the bbox,
 		// and precompute whether each source is overscaled at this level
@@ -359,7 +359,7 @@ impl TileSource for Operation {
 			let sub_bboxes: Vec<TileBBox> = bbox.iter_bbox_grid(MAX_BBOX_SIZE).collect();
 			let mut streams = Vec::with_capacity(sub_bboxes.len());
 			for sub_bbox in sub_bboxes {
-				streams.push(self.get_tile_stream(sub_bbox).await?);
+				streams.push(self.tile_stream(sub_bbox).await?);
 			}
 			return Ok(TileStream::from_streams(stream::iter(
 				streams.into_iter().map(futures::future::ready),
@@ -372,7 +372,7 @@ impl TileSource for Operation {
 			let mut native_coords = HashSet::new();
 			for entry in &entries {
 				if !entry.is_overscaled {
-					let mut stream = entry.source.get_tile_coord_stream(bbox).await?;
+					let mut stream = entry.source.tile_coord_stream(bbox).await?;
 					while let Some((coord, ())) = stream.next().await {
 						native_coords.insert(coord);
 					}
@@ -391,7 +391,7 @@ impl TileSource for Operation {
 					if !native_coords.contains(&c) {
 						return None;
 					}
-					let tile = get_tile(c, entries).await.unwrap();
+					let tile = tile(c, entries).await.unwrap();
 					if let Some((_coord, mut tile)) = tile {
 						tile.change_format(tile_format, None, None).unwrap();
 						return Some((c, tile));
@@ -405,7 +405,7 @@ impl TileSource for Operation {
 		Ok(TileStream::from_bbox_async_parallel(bbox, move |c| {
 			let entries = entries.clone();
 			async move {
-				let tile = get_tile(c, entries).await.unwrap();
+				let tile = tile(c, entries).await.unwrap();
 				if let Some((_coord, mut tile)) = tile {
 					tile.change_format(tile_format, None, None).unwrap();
 					return Some((c, tile));
@@ -492,7 +492,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_operation_get_tile_stream() -> Result<()> {
+	async fn test_operation_tile_stream() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
 			.operation_from_vpl(
@@ -504,7 +504,7 @@ mod tests {
 			.await?;
 
 		let bbox = TileBBox::new_full(3)?;
-		let tiles = result.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles = result.tile_stream(bbox).await?.to_vec().await;
 
 		assert_eq!(
 			arrange_tiles(tiles, |mut tile| {
@@ -611,7 +611,7 @@ mod tests {
 	#[case(&["FF000080", "00FF0080", "0000FFFF"], "7F3E3FFF")] // three-layer blend
 	#[case(&["FF000080", "00FF00FF", "0000FFFF"], "7F7E00FF")] // middle opaque short-circuits
 	#[tokio::test]
-	async fn test_get_tile_multiple_layers(#[case] input: &[&str], #[case] expected: &str) {
+	async fn test_tile_multiple_layers(#[case] input: &[&str], #[case] expected: &str) {
 		use versatiles_core::TileFormat::PNG;
 
 		for s in input {
@@ -634,7 +634,7 @@ mod tests {
 			.collect();
 
 		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let result = get_tile(coord, entries).await.unwrap();
+		let result = tile(coord, entries).await.unwrap();
 		let color = result.unwrap().1.as_image().unwrap().average_color();
 		assert_eq!(rgba_to_hex(&color), expected);
 	}
@@ -649,8 +649,8 @@ mod tests {
 		let plain = factory.operation_from_vpl("from_container filename=00F7.png").await?;
 
 		let bbox = TileBBox::new_full(3)?;
-		let stacked_tiles = stacked.get_tile_stream(bbox).await?.to_vec().await;
-		let plain_tiles = plain.get_tile_stream(bbox).await?.to_vec().await;
+		let stacked_tiles = stacked.tile_stream(bbox).await?.to_vec().await;
+		let plain_tiles = plain.tile_stream(bbox).await?.to_vec().await;
 
 		// Convert to maps for easy lookup
 		use std::collections::HashMap;
@@ -683,9 +683,9 @@ mod tests {
 		let bbox = TileBBox::new_full(3)?;
 		let coord = TileCoord::new(3, 2, 2)?; // a tile that lies in the overlap area in our dummy dataset
 
-		let stacked_tile = stacked.get_tile_stream(bbox).await?.to_map().await.remove(&coord);
-		let tile1 = src1.get_tile_stream(bbox).await?.to_map().await.remove(&coord);
-		let tile2 = src2.get_tile_stream(bbox).await?.to_map().await.remove(&coord);
+		let stacked_tile = stacked.tile_stream(bbox).await?.to_map().await.remove(&coord);
+		let tile1 = src1.tile_stream(bbox).await?.to_map().await.remove(&coord);
+		let tile2 = src2.tile_stream(bbox).await?.to_map().await.remove(&coord);
 
 		if let Some(mut stacked_tile) = stacked_tile {
 			// If both sources produced a tile here, blended output must differ from each single-source blob
@@ -704,10 +704,10 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_get_tile_empty_sources_returns_none() {
+	async fn test_tile_empty_sources_returns_none() {
 		let entries: Vec<FilteredSourceEntry> = vec![];
 		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let result = get_tile(coord, entries).await.unwrap();
+		let result = tile(coord, entries).await.unwrap();
 		assert!(result.is_none());
 	}
 
@@ -743,7 +743,7 @@ mod tests {
 	#[case(&[true, false], true)] // mixed (overscaled + native) -> Some
 	#[case(&[false, false], true)] // all native -> Some
 	#[tokio::test]
-	async fn test_get_tile_native_overscale_behavior(#[case] overscaled_flags: &[bool], #[case] expect_some: bool) {
+	async fn test_tile_native_overscale_behavior(#[case] overscaled_flags: &[bool], #[case] expect_some: bool) {
 		use versatiles_core::TileFormat::PNG;
 
 		let entries: Vec<FilteredSourceEntry> = overscaled_flags
@@ -761,7 +761,7 @@ mod tests {
 			.collect();
 
 		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let result = get_tile(coord, entries).await.unwrap();
+		let result = tile(coord, entries).await.unwrap();
 		assert_eq!(result.is_some(), expect_some);
 	}
 
@@ -808,7 +808,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_get_tile_with_empty_background() {
+	async fn test_tile_with_empty_background() {
 		use versatiles_core::TileFormat::PNG;
 
 		// Create a source that produces empty (fully transparent) tiles
@@ -828,7 +828,7 @@ mod tests {
 		];
 
 		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let result = get_tile(coord, entries).await.unwrap();
+		let result = tile(coord, entries).await.unwrap();
 
 		// Should return a tile (the foreground replaces the empty background)
 		assert!(result.is_some());
@@ -876,7 +876,7 @@ mod tests {
 						fn source_type(&self) -> Arc<SourceType> {
 							SourceType::new_container("dummy_vector", "test")
 						}
-						async fn get_tile_stream(&self, _bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+						async fn tile_stream(&self, _bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 							Ok(TileStream::empty())
 						}
 					}
@@ -920,7 +920,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_get_tile_stream_no_overlap() -> Result<()> {
+	async fn test_tile_stream_no_overlap() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		// Create a stacked raster with sources that have limited bbox
 		let result = factory
@@ -933,7 +933,7 @@ mod tests {
 
 		// Request a bbox that doesn't overlap with any source
 		let bbox = TileBBox::from_min_and_max(3, 6, 0, 7, 1)?; // right side of the world
-		let tiles: Vec<_> = result.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles: Vec<_> = result.tile_stream(bbox).await?.to_vec().await;
 
 		// Should return empty stream
 		assert!(tiles.is_empty());
@@ -941,7 +941,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_get_tile_stream_all_overscaled() -> Result<()> {
+	async fn test_tile_stream_all_overscaled() -> Result<()> {
 		use futures::future::BoxFuture;
 
 		// Create a factory where the source only has data up to level 2
@@ -968,7 +968,7 @@ mod tests {
 		// With auto_overscale, tiles would be synthetic, but there's only one source
 		// so all tiles at level 5 are overscaled -> empty stream
 		let bbox = TileBBox::new_full(5)?;
-		let tiles: Vec<_> = result.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles: Vec<_> = result.tile_stream(bbox).await?.to_vec().await;
 
 		// Should return empty stream since all sources are overscaled at this level
 		assert!(tiles.is_empty());
@@ -1021,7 +1021,7 @@ mod tests {
 		// Request at level 4 where first source is native but second is overscaled
 		// This should trigger the optimization path at line 270
 		let bbox = TileBBox::from_min_and_max(4, 0, 0, 3, 3)?;
-		let tiles: Vec<_> = result.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles: Vec<_> = result.tile_stream(bbox).await?.to_vec().await;
 
 		// Should return tiles (blended from first native + second overscaled)
 		assert!(!tiles.is_empty());
@@ -1042,7 +1042,7 @@ mod tests {
 
 		// Request a large bbox (> 32x32) to trigger the splitting logic at line 304
 		let bbox = TileBBox::from_min_and_max(6, 0, 0, 63, 63)?; // 64x64 bbox
-		let tiles: Vec<_> = result.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles: Vec<_> = result.tile_stream(bbox).await?.to_vec().await;
 
 		// Should still return tiles (the splitting is transparent to the caller)
 		// The exact count depends on the source data overlap
@@ -1065,7 +1065,7 @@ mod tests {
 		assert_eq!(result.metadata().tile_format, TileFormat::WEBP);
 
 		let bbox = TileBBox::new_full(3)?;
-		let tiles: Vec<_> = result.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles: Vec<_> = result.tile_stream(bbox).await?.to_vec().await;
 
 		// Verify tiles are in WEBP format
 		for (_coord, tile) in &tiles {
@@ -1091,7 +1091,7 @@ mod tests {
 		assert_eq!(result.metadata().tile_format, TileFormat::JPG);
 
 		let bbox = TileBBox::new_full(3)?;
-		let tiles: Vec<_> = result.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles: Vec<_> = result.tile_stream(bbox).await?.to_vec().await;
 
 		// Verify tiles are in JPG format
 		for (_coord, tile) in &tiles {
@@ -1174,7 +1174,7 @@ mod tests {
 		};
 
 		let coord = TileCoord::new(request_level, 0, 0).unwrap();
-		let result = op.get_tile_stream(coord.to_tile_bbox()).await.unwrap().to_vec().await;
+		let result = op.tile_stream(coord.to_tile_bbox()).await.unwrap().to_vec().await;
 
 		if result.is_empty() {
 			return None;
@@ -1184,7 +1184,7 @@ mod tests {
 		Some(rgba_to_hex(&color))
 	}
 
-	// Note on layer ordering in `get_tile()`:
+	// Note on layer ordering in `tile()`:
 	// - entries[0] is the TOP/foreground layer (overlaid on top of others)
 	// - entries[N-1] is the BOTTOM/background layer
 	// The function iterates entries in order; each new entry becomes the
@@ -1247,8 +1247,8 @@ mod tests {
 
 	/// Foreground (top layer, entries[0]) is native, background (bottom, entries[1]) is overscaled.
 	/// The overscaled background should still be blended underneath the native foreground.
-	/// BUG: The optimization path at line 270 uses get_tile() for the overscaled entries,
-	///      but get_tile() returns None when has_native_tile is false, dropping the background.
+	/// BUG: The optimization path at line 270 uses tile() for the overscaled entries,
+	///      but tile() returns None when has_native_tile is false, dropping the background.
 	#[tokio::test]
 	async fn test_auto_overscale_top_native_bottom_overscaled() {
 		let color = auto_overscale_color_test(
@@ -1271,7 +1271,7 @@ mod tests {
 	/// The overscaled foreground should still be composited onto the native background.
 	/// BUG: The optimization path streams from the first entry when it's the only native one.
 	///      When entries[1] is native, the default path is used. But since entries[0] is
-	///      overscaled and listed first in get_tile(), the result might still be correct
+	///      overscaled and listed first in tile(), the result might still be correct
 	///      IF the default path handles mixed native/overscaled correctly.
 	#[tokio::test]
 	async fn test_auto_overscale_top_overscaled_bottom_native() {
@@ -1333,7 +1333,7 @@ mod tests {
 
 	/// Helper: build an Operation from SourceEntries and collect a single tile.
 	/// Returns `(tile_from_operation, tile_from_first_source_alone)` for blob comparison.
-	async fn get_tiles_for_blob_comparison(
+	async fn tiles_for_blob_comparison(
 		layers: &[(&[u8], u8)], // (RGBA color, max zoom level)
 		request_level: u8,
 	) -> (Tile, Tile) {
@@ -1393,11 +1393,11 @@ mod tests {
 		let coord = TileCoord::new(request_level, 0, 0).unwrap();
 		let bbox = coord.to_tile_bbox();
 
-		let mut op_tiles = op.get_tile_stream(bbox).await.unwrap().to_vec().await;
+		let mut op_tiles = op.tile_stream(bbox).await.unwrap().to_vec().await;
 		assert_eq!(op_tiles.len(), 1, "expected exactly one tile");
 		let (_, op_tile) = op_tiles.remove(0);
 
-		let standalone_tile = first_source_standalone.get_tile(&coord).await.unwrap().unwrap();
+		let standalone_tile = first_source_standalone.tile(&coord).await.unwrap().unwrap();
 
 		(op_tile, standalone_tile)
 	}
@@ -1406,7 +1406,7 @@ mod tests {
 	/// the blob should be preserved byte-for-byte — no decode/blend/re-encode.
 	#[tokio::test]
 	async fn test_opaque_foreground_preserves_blob() {
-		let (mut op_tile, mut standalone_tile) = get_tiles_for_blob_comparison(
+		let (mut op_tile, mut standalone_tile) = tiles_for_blob_comparison(
 			&[
 				(&[255, 0, 0], 5),      // red opaque RGB foreground (native at level 3)
 				(&[0, 255, 0, 128], 3), // green semi-transparent background (overscaled at level 3)
@@ -1427,7 +1427,7 @@ mod tests {
 	/// background layers must happen, so the blob will differ from the standalone source.
 	#[tokio::test]
 	async fn test_semitransparent_foreground_triggers_reencoding() {
-		let (mut op_tile, mut standalone_tile) = get_tiles_for_blob_comparison(
+		let (mut op_tile, mut standalone_tile) = tiles_for_blob_comparison(
 			&[
 				(&[255, 0, 0, 128], 5), // red semi-transparent foreground (native at level 3)
 				(&[0, 255, 0, 255], 3), // green opaque background (overscaled at level 3)
@@ -1448,7 +1448,7 @@ mod tests {
 	/// but pixel scanning reveals full opacity. The blob should still be preserved.
 	#[tokio::test]
 	async fn test_opaque_rgba_foreground_preserves_blob() {
-		let (mut op_tile, mut standalone_tile) = get_tiles_for_blob_comparison(
+		let (mut op_tile, mut standalone_tile) = tiles_for_blob_comparison(
 			&[
 				(&[255, 0, 0, 255], 5), // red opaque RGBA foreground (native at level 3)
 				(&[0, 255, 0, 128], 3), // green semi-transparent background (overscaled at level 3)

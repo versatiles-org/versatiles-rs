@@ -16,7 +16,7 @@
 //! #[tokio::test]
 //! async fn test_mock_reader() -> Result<()> {
 //!     let mut reader = MockReader::new_mock_profile(MockReaderProfile::PNG)?;
-//!     let tile_data = reader.get_tile(&TileCoord::new(0, 0, 0)?).await?;
+//!     let tile_data = reader.tile(&TileCoord::new(0, 0, 0)?).await?;
 //!     assert!(tile_data.is_some());
 //!     Ok(())
 //! }
@@ -142,7 +142,7 @@ impl TileSource for MockReader {
 	}
 
 	#[context("fetching mock tile {:?} (format={:?}, compression={:?})", coord, self.metadata.tile_format, self.metadata.tile_compression)]
-	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		Self::create_mock_tile(
 			coord,
 			&self.metadata.bbox_pyramid,
@@ -151,8 +151,8 @@ impl TileSource for MockReader {
 		)
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("mock::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("mock::tile_stream {bbox:?}");
 
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		let format = self.metadata.tile_format;
@@ -164,7 +164,7 @@ impl TileSource for MockReader {
 		}))
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 
 		Ok(TileStream::from_bbox_parallel(bbox, move |_coord| Some(())))
@@ -201,7 +201,7 @@ mod tests {
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 		let blob = reader
-			.get_tile(&TileCoord::new(4, 5, 6)?)
+			.tile(&TileCoord::new(4, 5, 6)?)
 			.await?
 			.unwrap()
 			.into_blob(TileCompression::Uncompressed)?
@@ -211,12 +211,12 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn get_tile() {
+	async fn tile() {
 		let test = |profile, blob| async move {
 			let coord = TileCoord::new(6, 23, 45).unwrap();
 			let reader = MockReader::new_mock_profile(profile).unwrap();
 			let tile_uncompressed = reader
-				.get_tile(&coord)
+				.tile(&coord)
 				.await
 				.unwrap()
 				.unwrap()
@@ -244,7 +244,7 @@ mod tests {
 		let bbox = TileBBox::from_min_and_max(4, 0, 0, 3, 3)?;
 
 		// Get all tiles via stream
-		let stream = reader.get_tile_stream(bbox).await?;
+		let stream = reader.tile_stream(bbox).await?;
 		let stream_tiles: Vec<_> = stream.to_vec().await;
 		assert_eq!(stream_tiles.len(), 16); // 4x4 grid
 
@@ -252,7 +252,7 @@ mod tests {
 		for (coord, mut tile) in stream_tiles {
 			let stream_blob = tile.as_blob(reader.metadata().tile_compression)?;
 			let single_blob = reader
-				.get_tile(&coord)
+				.tile(&coord)
 				.await?
 				.expect("tile should exist")
 				.into_blob(reader.metadata().tile_compression)?;

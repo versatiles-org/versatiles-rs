@@ -129,15 +129,15 @@ impl TileSource for Operation {
 	}
 
 	#[context("Failed to get merged tile coord stream for bbox: {:?}", bbox)]
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let refs: Vec<&dyn TileSource> = self.sources.iter().map(|s| s.as_ref() as &dyn TileSource).collect();
 		super::traits::union_tile_coord_streams(&refs, bbox).await
 	}
 
 	/// Stream merged vector tiles for every coordinate in `bbox`.
 	#[context("Failed to get merged tile stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("from_merged_vector::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("from_merged_vector::tile_stream {bbox:?}");
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 		let sources = Arc::clone(&self.sources);
 		let format = self.metadata.tile_format;
@@ -149,7 +149,7 @@ impl TileSource for Operation {
 
 				for source in sources.iter() {
 					source
-						.get_tile_stream(bbox)
+						.tile_stream(bbox)
 						.await
 						.unwrap()
 						.for_each(|coord, tile| {
@@ -280,7 +280,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_operation_get_tile_stream() -> Result<()> {
+	async fn test_operation_tile_stream() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
 			.operation_from_vpl(
@@ -292,7 +292,7 @@ mod tests {
 			.await?;
 
 		let bbox = TileBBox::new_full(3)?;
-		let tiles = result.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles = result.tile_stream(bbox).await?.to_vec().await;
 
 		assert_eq!(
 			arrange_tiles(tiles, |tile| {

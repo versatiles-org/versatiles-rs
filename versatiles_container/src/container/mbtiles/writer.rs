@@ -192,7 +192,7 @@ impl TilesWriter for MBTilesWriter {
 		}
 
 		for key in ["name", "author", "type", "description", "version", "license"] {
-			if let Some(value) = tilejson.get_str(key) {
+			if let Some(value) = tilejson.str(key) {
 				writer.set_metadata(key, value)?;
 			}
 		}

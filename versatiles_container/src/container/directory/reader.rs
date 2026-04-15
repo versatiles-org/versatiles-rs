@@ -31,7 +31,7 @@
 //! #[tokio::main]
 //! async fn main() {
 //!     let mut reader = DirectoryReader::open(Path::new("/absolute/path/to/tiles")).unwrap();
-//!     let tile_data = reader.get_tile(&TileCoord::new(3, 1, 2).unwrap()).await.unwrap();
+//!     let tile_data = reader.tile(&TileCoord::new(3, 1, 2).unwrap()).await.unwrap();
 //! }
 //! ```
 //!
@@ -259,8 +259,8 @@ impl TileSource for DirectoryReader {
 	}
 
 	#[context("fetching tile {:?} from directory '{}'", coord, self.dir.display())]
-	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		log::trace!("get_tile {coord:?}");
+	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+		log::trace!("tile {coord:?}");
 		Self::lookup_tile(
 			coord,
 			&self.tile_map,
@@ -269,8 +269,8 @@ impl TileSource for DirectoryReader {
 		)
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("directory::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("directory::tile_stream {bbox:?}");
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		let tile_map = Arc::clone(&self.tile_map);
 		let tile_compression = self.metadata.tile_compression;
@@ -281,7 +281,7 @@ impl TileSource for DirectoryReader {
 		}))
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		let tile_map = Arc::clone(&self.tile_map);
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
@@ -289,7 +289,7 @@ impl TileSource for DirectoryReader {
 		}))
 	}
 
-	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		let tile_map = Arc::clone(&self.tile_map);
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
@@ -340,13 +340,13 @@ mod tests {
 			"{\"bounds\":[-90,66.51326,-45,79.171335],\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 
-		let mut tile_data = reader.get_tile(&TileCoord::new(3, 2, 1)?).await?.unwrap();
+		let mut tile_data = reader.tile(&TileCoord::new(3, 2, 1)?).await?.unwrap();
 		assert_eq!(
 			tile_data.as_blob(reader.metadata().tile_compression)?,
 			&Blob::from("test tile data")
 		);
 
-		assert!(reader.get_tile(&TileCoord::new(2, 2, 1)?).await?.is_none());
+		assert!(reader.tile(&TileCoord::new(2, 2, 1)?).await?.is_none());
 
 		Ok(())
 	}
@@ -416,7 +416,7 @@ mod tests {
 		let reader = DirectoryReader::open(&dir).unwrap();
 		let coord = TileCoord::new(3, 2, 1).unwrap();
 		let blob = reader
-			.get_tile(&coord)
+			.tile(&coord)
 			.await
 			.unwrap()
 			.unwrap()
@@ -521,7 +521,7 @@ mod tests {
 		let reader = DirectoryReader::open(&dir)?;
 		let bbox = TileBBox::from_min_and_max(2, 0, 0, 1, 1)?;
 
-		let mut sizes: Vec<(TileCoord, u32)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
+		let mut sizes: Vec<(TileCoord, u32)> = reader.tile_size_stream(bbox).await?.to_vec().await;
 		sizes.sort_by_key(|(c, _)| (c.y, c.x));
 
 		assert_eq!(sizes.len(), 3);
@@ -568,7 +568,7 @@ mod tests {
 		let bbox = TileBBox::from_min_and_max(2, 0, 0, 1, 1)?;
 
 		// Get all tiles via stream
-		let stream = reader.get_tile_stream(bbox).await?;
+		let stream = reader.tile_stream(bbox).await?;
 		let stream_tiles: Vec<_> = stream.to_vec().await;
 		assert_eq!(stream_tiles.len(), 4);
 
@@ -576,7 +576,7 @@ mod tests {
 		for (coord, mut tile) in stream_tiles {
 			let stream_blob = tile.as_blob(reader.metadata().tile_compression)?;
 			let single_blob = reader
-				.get_tile(&coord)
+				.tile(&coord)
 				.await?
 				.expect("tile should exist")
 				.into_blob(reader.metadata().tile_compression)?;

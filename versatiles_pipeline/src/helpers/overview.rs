@@ -189,9 +189,9 @@ impl OverviewCore {
 		Ok(tiles.into_iter().flatten().collect())
 	}
 
-	pub async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	pub async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		if bbox.level() >= self.level_base {
-			return self.source.get_tile_coord_stream(bbox).await;
+			return self.source.tile_coord_stream(bbox).await;
 		}
 
 		let mut source_bbox = bbox.at_level(self.level_base);
@@ -201,7 +201,7 @@ impl OverviewCore {
 		}
 
 		let mut coords = std::collections::HashSet::new();
-		let mut stream = self.source.get_tile_coord_stream(source_bbox).await?;
+		let mut stream = self.source.tile_coord_stream(source_bbox).await?;
 		while let Some((coord, _)) = stream.next().await {
 			let c = coord.at_level(bbox.level());
 			if bbox.includes_coord(&c)? {
@@ -214,11 +214,11 @@ impl OverviewCore {
 	}
 
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
-	pub async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("overview::get_tile_stream {bbox:?}");
+	pub async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("overview::tile_stream {bbox:?}");
 
 		if bbox.level() > self.level_base {
-			return self.source.get_tile_stream(bbox).await;
+			return self.source.tile_stream(bbox).await;
 		}
 
 		let size = bbox.max_count().min(BLOCK_TILE_COUNT);
@@ -233,7 +233,7 @@ impl OverviewCore {
 				bbox,
 				self
 					.source
-					.get_tile_stream(bbox)
+					.tile_stream(bbox)
 					.await?
 					.map_parallel_try(|_coord, tile| tile.into_image())
 					.unwrap_results(),

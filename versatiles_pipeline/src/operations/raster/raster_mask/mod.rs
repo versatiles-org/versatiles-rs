@@ -90,7 +90,7 @@ impl Operation {
 
 		// Clip bbox_pyramid to the mask geometry's geographic bounds so that tiles
 		// entirely outside the mask are never requested from the source.
-		if let Some(geo_bbox) = mask.get_geo_bbox() {
+		if let Some(geo_bbox) = mask.geo_bbox() {
 			metadata.bbox_pyramid.intersect_geo_bbox(&geo_bbox)?;
 		}
 
@@ -120,11 +120,11 @@ impl TileSource for Operation {
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("raster_mask::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("raster_mask::tile_stream {bbox:?}");
 
 		let mask = Arc::clone(&self.mask);
-		let stream = self.source.get_tile_stream(bbox).await?;
+		let stream = self.source.tile_stream(bbox).await?;
 
 		Ok(stream
 			.filter_map_parallel_try(move |coord, tile| {
@@ -175,8 +175,8 @@ impl TileSource for Operation {
 			.unwrap_results())
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.source.get_tile_coord_stream(bbox).await
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.source.tile_coord_stream(bbox).await
 	}
 }
 
@@ -237,7 +237,7 @@ mod tests {
 
 		// Get a tile that should be affected
 		let coord = TileCoord::new(2, 2, 1)?;
-		let stream = op.get_tile_stream(coord.to_tile_bbox()).await?;
+		let stream = op.tile_stream(coord.to_tile_bbox()).await?;
 		let tiles: Vec<_> = stream.to_vec().await;
 
 		// Should have tiles (some may be filtered if outside mask)
@@ -260,7 +260,7 @@ mod tests {
 			.await?;
 
 		let coord = TileCoord::new(2, 2, 1)?;
-		let stream = op.get_tile_stream(coord.to_tile_bbox()).await?;
+		let stream = op.tile_stream(coord.to_tile_bbox()).await?;
 		let _tiles: Vec<_> = stream.to_vec().await;
 
 		Ok(())
@@ -279,7 +279,7 @@ mod tests {
 			.await?;
 
 		let coord = TileCoord::new(2, 2, 1)?;
-		let stream = op.get_tile_stream(coord.to_tile_bbox()).await?;
+		let stream = op.tile_stream(coord.to_tile_bbox()).await?;
 		let _tiles: Vec<_> = stream.to_vec().await;
 
 		Ok(())

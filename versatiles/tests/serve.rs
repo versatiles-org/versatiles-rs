@@ -12,7 +12,7 @@ async fn e2e_serve_local_file() {
 	let server = Server::new(&[&input]).await;
 	assert_eq!(server.get_index().await, ["berlin"]);
 	assert_eq!(
-		server.get_tilejson("berlin").await,
+		server.tilejson("berlin").await,
 		vec!["length: 19", "desc: Tile config for simple vector tiles schema"]
 	);
 }
@@ -22,7 +22,7 @@ async fn e2e_serve_remote_url() {
 	let server = Server::new(&["https://download.versatiles.org/osm.versatiles"]).await;
 	assert_eq!(server.get_index().await, ["osm"]);
 	assert_eq!(
-		server.get_tilejson("osm").await,
+		server.tilejson("osm").await,
 		vec!["length: 26", "desc: Vector tiles based on OSM in Shortbread scheme"]
 	);
 }
@@ -108,13 +108,13 @@ impl Server {
 		JsonValue::parse_str(&text).unwrap()
 	}
 
-	async fn get_tilejson(&self, name: &str) -> Vec<String> {
+	async fn tilejson(&self, name: &str) -> Vec<String> {
 		let json = self
 			.get_json(&format!("/tiles/{name}/tiles.json"))
 			.await
 			.into_object()
 			.unwrap();
-		let desc = json.get_string("description").unwrap().unwrap_or_default();
+		let desc = json.string("description").unwrap().unwrap_or_default();
 		let length = json.array("vector_layers").unwrap().unwrap().len();
 		vec![format!("length: {length}"), format!("desc: {desc}")]
 	}

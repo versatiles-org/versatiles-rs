@@ -19,8 +19,8 @@ async fn assert_tiles_equal(
 	output_reader: &Arc<Box<dyn TileSource>>,
 	coord: &TileCoord,
 ) {
-	let source_tile = source_reader.get_tile(coord).await.unwrap();
-	let output_tile = output_reader.get_tile(coord).await.unwrap();
+	let source_tile = source_reader.tile(coord).await.unwrap();
+	let output_tile = output_reader.tile(coord).await.unwrap();
 
 	match (source_tile, output_tile) {
 		(Some(mut src), Some(mut out)) => {

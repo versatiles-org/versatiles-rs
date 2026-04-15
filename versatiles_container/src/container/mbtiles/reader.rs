@@ -38,7 +38,7 @@
 //!
 //!     // Fetch a single tile (z/x/y)
 //!     let coord = TileCoord::new(1, 1, 1)?;
-//!     if let Some(tile) = reader.get_tile(&coord).await? {
+//!     if let Some(tile) = reader.tile(&coord).await? {
 //!         let _blob = tile.into_blob(reader.metadata().tile_compression)?;
 //!     }
 //!     Ok(())
@@ -333,7 +333,7 @@ impl TileSource for MBTilesReader {
 	/// # Errors
 	/// Returns an error if the query fails.
 	#[context("fetching tile {:?} from '{}'", coord, self.name)]
-	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		log::trace!("read tile from coord {coord:?}");
 
 		let conn = self.pool.get()?;
@@ -355,7 +355,7 @@ impl TileSource for MBTilesReader {
 	}
 
 	#[context("streaming tile coords for bbox {:?}", bbox)]
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let mut bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 
 		if bbox.is_empty() {
@@ -397,7 +397,7 @@ impl TileSource for MBTilesReader {
 	}
 
 	#[context("streaming tile sizes for bbox {:?}", bbox)]
-	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
 		let mut bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 
 		if bbox.is_empty() {
@@ -448,8 +448,8 @@ impl TileSource for MBTilesReader {
 	/// # Errors
 	/// Returns an error if the query fails.
 	#[context("streaming tiles for bbox {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("mbtiles::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("mbtiles::tile_stream {bbox:?}");
 
 		let mut bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 
@@ -545,7 +545,7 @@ pub mod tests {
 		assert_eq!(reader.metadata().tile_format, MVT);
 
 		let tile = reader
-			.get_tile(&TileCoord::new(14, 8803, 5376)?)
+			.tile(&TileCoord::new(14, 8803, 5376)?)
 			.await?
 			.unwrap()
 			.into_blob(reader.metadata().tile_compression)?;
@@ -611,7 +611,7 @@ pub mod tests {
 		let bbox = TileBBox::from_min_and_max(9, 274, 167, 275, 168)?;
 
 		// Get all tiles via stream
-		let stream = reader.get_tile_stream(bbox).await?;
+		let stream = reader.tile_stream(bbox).await?;
 		let stream_tiles: Vec<_> = stream.to_vec().await;
 		assert_eq!(stream_tiles.len(), 4);
 
@@ -619,7 +619,7 @@ pub mod tests {
 		for (coord, mut tile) in stream_tiles {
 			let stream_blob = tile.as_blob(reader.metadata().tile_compression)?;
 			let single_blob = reader
-				.get_tile(&coord)
+				.tile(&coord)
 				.await?
 				.expect("tile should exist")
 				.into_blob(reader.metadata().tile_compression)?;

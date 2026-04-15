@@ -55,7 +55,7 @@ impl ServerTileSource {
 			log::debug!("get tile, prefix: {}, coord: {}", self.prefix, coord.to_json());
 
 			// Get tile data
-			let tile = self.reader.get_tile(&coord).await;
+			let tile = self.reader.tile(&coord).await;
 
 			// If tile data is not found, return a not found response
 			if tile.is_err() {
@@ -216,7 +216,7 @@ mod tests {
 
 		let tile_json = check_response(c, "meta.json", Uncompressed, "application/json").await?;
 		let tile_json = TileJSON::try_from(tile_json)?.as_object();
-		assert_eq!(tile_json.get_string("tile_format")?.unwrap(), exp_mime);
+		assert_eq!(tile_json.string("tile_format")?.unwrap(), exp_mime);
 		assert_eq!(tile_json.array("bounds")?.unwrap().stringify(), exp_bounds);
 		#[allow(clippy::cast_sign_loss)] // zoom values are 0-31
 		{

@@ -35,13 +35,13 @@ impl<R: RunnerTrait> TileSource for TransformOp<R> {
 	}
 
 	#[context("Failed to get transformed tile stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("vector_transform::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("vector_transform::tile_stream {bbox:?}");
 		let runner = self.runner.clone();
 		let tile_format = self.metadata.tile_format;
 		Ok(self
 			.source
-			.get_tile_stream(bbox)
+			.tile_stream(bbox)
 			.await?
 			.filter_map_parallel_try(move |_coord, tile| {
 				let vector = tile.into_vector()?;
@@ -54,8 +54,8 @@ impl<R: RunnerTrait> TileSource for TransformOp<R> {
 			.unwrap_results())
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.source.get_tile_coord_stream(bbox).await
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.source.tile_coord_stream(bbox).await
 	}
 }
 

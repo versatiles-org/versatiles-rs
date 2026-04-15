@@ -227,7 +227,7 @@ impl TileSource for TilesConvertReader {
 		&self.tilejson
 	}
 
-	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		let mut coord = *coord;
 
 		if self.converter_parameters.flip_y {
@@ -238,7 +238,7 @@ impl TileSource for TilesConvertReader {
 			coord.swap_xy();
 		}
 
-		let tile = self.reader.get_tile(&coord).await?;
+		let tile = self.reader.tile(&coord).await?;
 
 		let Some(mut tile) = tile else { return Ok(None) };
 
@@ -257,7 +257,7 @@ impl TileSource for TilesConvertReader {
 		Ok(Some(tile))
 	}
 
-	async fn get_tile_coord_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		if self.converter_parameters.swap_xy {
 			bbox.swap_xy();
 		}
@@ -265,7 +265,7 @@ impl TileSource for TilesConvertReader {
 			bbox.flip_y();
 		}
 
-		let mut stream = self.reader.get_tile_coord_stream(bbox).await?;
+		let mut stream = self.reader.tile_coord_stream(bbox).await?;
 
 		let flip_y = self.converter_parameters.flip_y;
 		let swap_xy = self.converter_parameters.swap_xy;
@@ -285,8 +285,8 @@ impl TileSource for TilesConvertReader {
 		Ok(stream)
 	}
 
-	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("converter::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("converter::tile_stream {bbox:?}");
 		if self.converter_parameters.swap_xy {
 			bbox.swap_xy();
 		}
@@ -294,7 +294,7 @@ impl TileSource for TilesConvertReader {
 			bbox.flip_y();
 		}
 
-		let mut stream = self.reader.get_tile_stream(bbox).await?;
+		let mut stream = self.reader.tile_stream(bbox).await?;
 
 		let flip_y = self.converter_parameters.flip_y;
 		let swap_xy = self.converter_parameters.swap_xy;
@@ -401,7 +401,7 @@ mod tests {
 		let mut tiles: Vec<String> = Vec::new();
 		for coord in bbox.iter_coords_zorder() {
 			let mut text = reader_out
-				.get_tile(&coord)
+				.tile(&coord)
 				.await?
 				.unwrap()
 				.into_blob(tile_compression_out)?
@@ -455,13 +455,13 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_get_tile() -> Result<()> {
+	async fn test_tile() -> Result<()> {
 		let reader = get_mock_reader(MVT, Uncompressed);
 		let cp = TilesConverterParameters::default();
 		let tcr = TilesConvertReader::new_from_reader(reader, cp)?;
 
 		let coord = TileCoord::new(0, 0, 0)?;
-		let data = tcr.get_tile(&coord).await?;
+		let data = tcr.tile(&coord).await?;
 		assert!(data.is_some());
 
 		Ok(())
@@ -478,12 +478,12 @@ mod tests {
 		let tcr = TilesConvertReader::new_from_reader(reader, cp)?;
 
 		let mut coord = TileCoord::new(4, 5, 6)?;
-		let data = tcr.get_tile(&coord).await?;
+		let data = tcr.tile(&coord).await?;
 		assert!(data.is_some());
 
 		coord.flip_y();
 		coord.swap_xy();
-		let data_flipped = tcr.get_tile(&coord).await?;
+		let data_flipped = tcr.tile(&coord).await?;
 		assert_eq!(data, data_flipped);
 
 		Ok(())
@@ -552,7 +552,7 @@ mod tests {
 		assert_eq!(tcr.metadata().tile_compression, Uncompressed);
 
 		let coord = TileCoord::new(0, 0, 0)?;
-		let tile = tcr.get_tile(&coord).await?.unwrap();
+		let tile = tcr.tile(&coord).await?.unwrap();
 		assert_eq!(tile.format(), WEBP);
 
 		Ok(())
@@ -573,7 +573,7 @@ mod tests {
 		assert_eq!(tcr.metadata().tile_compression, Gzip);
 
 		let coord = TileCoord::new(0, 0, 0)?;
-		let tile = tcr.get_tile(&coord).await?.unwrap();
+		let tile = tcr.tile(&coord).await?.unwrap();
 		assert_eq!(tile.format(), WEBP);
 
 		Ok(())

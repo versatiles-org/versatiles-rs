@@ -159,7 +159,7 @@ async fn individual_tile_access() -> Result<()> {
 
 	// Try to get a specific tile
 	let coord = TileCoord::new(0, 0, 0)?;
-	let tile = reader.get_tile(&coord).await?;
+	let tile = reader.tile(&coord).await?;
 
 	// Level 0 should have a tile
 	assert!(tile.is_some());
@@ -213,7 +213,7 @@ async fn versatiles_tile_data_preserved_after_round_trip() -> Result<()> {
 
 	let mut original_tiles = Vec::new();
 	for coord in &test_coords {
-		if let Some(tile) = source.get_tile(coord).await? {
+		if let Some(tile) = source.tile(coord).await? {
 			let blob = tile.into_blob(TileCompression::Uncompressed)?;
 			original_tiles.push((*coord, blob));
 		}
@@ -231,7 +231,7 @@ async fn versatiles_tile_data_preserved_after_round_trip() -> Result<()> {
 	// Verify each tile's content matches
 	for (coord, original_blob) in &original_tiles {
 		let read_tile = reader
-			.get_tile(coord)
+			.tile(coord)
 			.await?
 			.unwrap_or_else(|| panic!("Tile at {coord:?} should exist after round-trip"));
 		let read_blob = read_tile.into_blob(TileCompression::Uncompressed)?;
@@ -269,12 +269,7 @@ async fn versatiles_tile_stream_complete_after_round_trip() -> Result<()> {
 	};
 	let filtered_for_count = TilesConvertReader::new_from_reader(source_for_count, params_for_count)?;
 	let bbox = TileBBox::new_full(4)?;
-	let source_tiles: Vec<_> = filtered_for_count
-		.into_shared()
-		.get_tile_stream(bbox)
-		.await?
-		.to_vec()
-		.await;
+	let source_tiles: Vec<_> = filtered_for_count.into_shared().tile_stream(bbox).await?.to_vec().await;
 	let source_tile_count = source_tiles.len();
 
 	// Write to versatiles
@@ -283,7 +278,7 @@ async fn versatiles_tile_stream_complete_after_round_trip() -> Result<()> {
 	// Read back and count tiles
 	let reader = runtime.get_reader_from_str(versatiles_path.to_str().unwrap()).await?;
 	let read_bbox = TileBBox::new_full(4)?;
-	let read_tiles: Vec<_> = reader.get_tile_stream(read_bbox).await?.to_vec().await;
+	let read_tiles: Vec<_> = reader.tile_stream(read_bbox).await?.to_vec().await;
 
 	assert_eq!(
 		read_tiles.len(),
@@ -323,8 +318,8 @@ async fn versatiles_block_boundary_tiles_preserved() -> Result<()> {
 	let source2 = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
 
 	for coord in &boundary_coords {
-		let original = source2.get_tile(coord).await?;
-		let read = reader.get_tile(coord).await?;
+		let original = source2.tile(coord).await?;
+		let read = reader.tile(coord).await?;
 
 		match (original, read) {
 			(Some(orig_tile), Some(read_tile)) => {
@@ -369,7 +364,7 @@ async fn versatiles_deduplicated_tiles_readable() -> Result<()> {
 	// Get the original tiles before writing
 	let bbox = TileBBox::new_full(2)?;
 	let original_tiles: Vec<(TileCoord, Blob)> = source
-		.get_tile_stream(bbox)
+		.tile_stream(bbox)
 		.await?
 		.map_parallel_try(|_coord, tile: Tile| tile.into_blob(TileCompression::Uncompressed))
 		.unwrap_results()
@@ -385,7 +380,7 @@ async fn versatiles_deduplicated_tiles_readable() -> Result<()> {
 	// Verify each tile can be read and matches original
 	for (coord, original_blob) in &original_tiles {
 		let read_tile = reader
-			.get_tile(coord)
+			.tile(coord)
 			.await?
 			.unwrap_or_else(|| panic!("Tile at {coord:?} should exist"));
 		let read_blob = read_tile.into_blob(TileCompression::Uncompressed)?;

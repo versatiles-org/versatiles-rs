@@ -190,7 +190,7 @@ mod tests {
 			)
 			.await?;
 
-		let mut stream = operation.get_tile_stream(TileBBox::new_full(0)?).await?;
+		let mut stream = operation.tile_stream(TileBBox::new_full(0)?).await?;
 		let tile = stream.next().await.unwrap().1.into_vector()?;
 
 		Ok((

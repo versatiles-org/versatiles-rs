@@ -30,7 +30,7 @@ impl Debug for TileResizeCore {
 }
 
 impl TileResizeCore {
-	pub fn new(source: Box<dyn TileSource>, target_tile_size: u32, scale_down_fn: ScaleDownFn) -> Result<Self> {
+	pub fn new(source: Box<dyn TileSource>, tartile_size: u32, scale_down_fn: ScaleDownFn) -> Result<Self> {
 		let source_tile_size = source
 			.tilejson()
 			.tile_size
@@ -38,12 +38,12 @@ impl TileResizeCore {
 			.ok_or_else(|| anyhow!("source tile_size is not set"))?;
 
 		ensure!(
-			target_tile_size == 256 || target_tile_size == 512,
+			tartile_size == 256 || tartile_size == 512,
 			"target tile_size must be 256 or 512"
 		);
 		ensure!(
-			source_tile_size != target_tile_size,
-			"source tile_size ({source_tile_size}) must differ from target ({target_tile_size})"
+			source_tile_size != tartile_size,
+			"source tile_size ({source_tile_size}) must differ from target ({tartile_size})"
 		);
 
 		let source_pyramid = source.metadata().bbox_pyramid.clone();
@@ -53,7 +53,7 @@ impl TileResizeCore {
 			.level_max()
 			.ok_or_else(|| anyhow!("source has no zoom levels"))?;
 
-		match target_tile_size {
+		match tartile_size {
 			256 => {
 				// 512→256: split
 				ensure!(
@@ -100,7 +100,7 @@ impl TileResizeCore {
 		metadata.bbox_pyramid = output_pyramid;
 
 		let mut tilejson = source.tilejson().clone();
-		tilejson.set_tile_size(target_tile_size)?;
+		tilejson.set_tile_size(tartile_size)?;
 		metadata.update_tilejson(&mut tilejson);
 
 		let cache = Cache::builder()
@@ -127,7 +127,7 @@ impl TileResizeCore {
 
 		let image = self
 			.source
-			.get_tile(coord)
+			.tile(coord)
 			.await?
 			.map(|t| t.into_image().map(Arc::new))
 			.transpose()?;
@@ -167,7 +167,7 @@ impl TileResizeCore {
 			let child_coord = TileCoord::new(child_level, base_x + dx, base_y + dy)?;
 			let child_image = self
 				.source
-				.get_tile(&child_coord)
+				.tile(&child_coord)
 				.await?
 				.map(Tile::into_image)
 				.transpose()?;
@@ -188,7 +188,7 @@ impl TileResizeCore {
 		Ok(Some(canvas))
 	}
 
-	pub async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	pub async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
@@ -202,13 +202,13 @@ impl TileResizeCore {
 			// output tiles at (level, 2x..2x+1, 2y..2y+1), plus level 0 special case.
 			if bbox.level() == 0 {
 				// Level 0 output exists if source has (0,0,0)
-				let mut stream = self.source.get_tile_coord_stream(TileBBox::new_full(0)?).await?;
+				let mut stream = self.source.tile_coord_stream(TileBBox::new_full(0)?).await?;
 				if stream.next().await.is_some() {
 					coords.insert(TileCoord::new(0, 0, 0)?);
 				}
 			} else {
 				let source_bbox = bbox.leveled_down();
-				let mut stream = self.source.get_tile_coord_stream(source_bbox).await?;
+				let mut stream = self.source.tile_coord_stream(source_bbox).await?;
 				while let Some((src_coord, _)) = stream.next().await {
 					// Each source coord produces up to 4 children
 					for dy in 0..2u32 {
@@ -226,7 +226,7 @@ impl TileResizeCore {
 			// output tile at (level, x/2, y/2). An output tile exists if any
 			// of its 4 children exist.
 			let source_bbox = bbox.leveled_up();
-			let mut stream = self.source.get_tile_coord_stream(source_bbox).await?;
+			let mut stream = self.source.tile_coord_stream(source_bbox).await?;
 			while let Some((src_coord, _)) = stream.next().await {
 				let parent = src_coord.to_level_decreased()?;
 				if bbox.includes_coord(&parent)? {
@@ -239,7 +239,7 @@ impl TileResizeCore {
 		Ok(TileStream::from_vec(vec))
 	}
 
-	pub fn get_tile_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<'static, Tile>> {
+	pub fn tile_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<'static, Tile>> {
 		if !self.metadata.bbox_pyramid.intersects_bbox(&bbox_dst) {
 			return Ok(TileStream::empty());
 		}

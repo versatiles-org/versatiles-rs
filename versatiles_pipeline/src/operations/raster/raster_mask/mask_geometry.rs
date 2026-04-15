@@ -374,7 +374,7 @@ impl MaskGeometry {
 	/// Converts the stored Mercator bounds back to longitude/latitude degrees.
 	/// Returns `None` if the inverse projection produces invalid coordinates.
 	#[must_use]
-	pub fn get_geo_bbox(&self) -> Option<GeoBBox> {
+	pub fn geo_bbox(&self) -> Option<GeoBBox> {
 		let [mx_min, my_min, mx_max, my_max] = self.bounds_mercator;
 
 		// Inverse spherical Mercator: x (meters) → longitude (degrees)

@@ -36,7 +36,7 @@ impl JsonObject {
 	}
 
 	/// Retrieve a string value for the specified key, returning `None` if missing or not a string.
-	pub fn get_string(&self, key: &str) -> Result<Option<String>> {
+	pub fn string(&self, key: &str) -> Result<Option<String>> {
 		self.get(key).map(JsonValue::to_string).transpose()
 	}
 
@@ -222,13 +222,13 @@ mod tests {
 	}
 
 	#[test]
-	fn test_get_string() {
+	fn test_string() {
 		let obj = JsonObject::from(vec![("key", "value")]);
-		let value = obj.get_string("key").unwrap();
+		let value = obj.string("key").unwrap();
 
 		assert_eq!(value, Some("value".to_string()));
 
-		let missing = obj.get_string("missing").unwrap();
+		let missing = obj.string("missing").unwrap();
 		assert_eq!(missing, None);
 	}
 

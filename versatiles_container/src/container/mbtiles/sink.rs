@@ -151,7 +151,7 @@ impl MBTilesTileSink {
 		}
 
 		for key in ["name", "author", "type", "description", "version", "license"] {
-			if let Some(value) = tilejson.get_str(key) {
+			if let Some(value) = tilejson.str(key) {
 				self.set_metadata(key, value)?;
 			}
 		}
@@ -264,8 +264,8 @@ mod tests {
 		assert_eq!(reader.metadata().tile_format, TileFormat::WEBP);
 		assert_eq!(reader.metadata().bbox_pyramid.count_tiles(), 16);
 
-		// Verify a specific tile via get_tile
-		let tile = reader.get_tile(&TileCoord::new(2, 1, 1)?).await?;
+		// Verify a specific tile via tile
+		let tile = reader.tile(&TileCoord::new(2, 1, 1)?).await?;
 		assert!(tile.is_some());
 		let blob = tile.unwrap().into_blob(TileCompression::Uncompressed)?;
 		assert_eq!(blob.as_slice(), &[1u8; 8]);

@@ -133,13 +133,13 @@ impl TileSource for Operation {
 		SourceType::new_processor("dem_overview", self.core.source.source_type())
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("dem_overview::get_tile_stream {bbox:?}");
-		self.core.get_tile_stream(bbox).await
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("dem_overview::tile_stream {bbox:?}");
+		self.core.tile_stream(bbox).await
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.core.get_tile_coord_stream(bbox).await
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.core.tile_coord_stream(bbox).await
 	}
 }
 
@@ -350,7 +350,7 @@ mod tests {
 
 		let mut tiles_at_2 = Vec::new();
 		for bbox in &bboxes {
-			let tiles: Vec<_> = op.get_tile_stream(*bbox).await?.to_vec().await;
+			let tiles: Vec<_> = op.tile_stream(*bbox).await?.to_vec().await;
 			for (coord, tile) in tiles {
 				if coord.level == 2 {
 					tiles_at_2.push((coord, tile));

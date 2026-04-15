@@ -261,7 +261,7 @@ fn test_overlaps_bbox() -> Result<()> {
 #[case((8, 100, 100, 199, 199), (8, 100, 101), 100)]
 #[case((8, 100, 100, 199, 199), (8, 100, 199), 9900)]
 #[case((8, 100, 100, 199, 199), (8, 199, 199), 9999)]
-fn get_tile_index_cases(
+fn tile_index_cases(
 	#[case] bbox: (u8, u32, u32, u32, u32),
 	#[case] coord: (u8, u32, u32),
 	#[case] expected: u64,

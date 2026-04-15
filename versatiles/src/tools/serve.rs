@@ -111,7 +111,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 
 	let mut server: TileServer = TileServer::from_config(config, runtime.clone()).await?;
 
-	let mut list = server.get_url_mapping();
+	let mut list = server.url_mapping();
 	list.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 	for (url, source) in &list {
 		log::info!("add tile source: {} <- {source}", url.join_as_string("*"));

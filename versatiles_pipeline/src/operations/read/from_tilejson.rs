@@ -239,7 +239,7 @@ impl TileSource for Operation {
 		&self.tilejson
 	}
 
-	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		Ok(fetch_tile(
 			self.client.clone(),
 			self.tile_url_template.clone(),
@@ -251,7 +251,7 @@ impl TileSource for Operation {
 		.map(|(_, tile)| tile))
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
 			Some(())
@@ -259,8 +259,8 @@ impl TileSource for Operation {
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("from_tilejson::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("from_tilejson::tile_stream {bbox:?}");
 		let client = self.client.clone();
 		let template = self.tile_url_template.clone();
 		let tile_format = self.tile_format;

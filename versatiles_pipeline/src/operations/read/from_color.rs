@@ -118,17 +118,17 @@ impl TileSource for Operation {
 		SourceType::new_container("solid color", "color")
 	}
 
-	async fn get_tile(&self, _coord: &versatiles_core::TileCoord) -> Result<Option<Tile>> {
+	async fn tile(&self, _coord: &versatiles_core::TileCoord) -> Result<Option<Tile>> {
 		Ok(Some(self.tile.clone()))
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("from_color::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("from_color::tile_stream {bbox:?}");
 		let tile = self.tile.clone();
 		Ok(TileStream::from_bbox_parallel(bbox, move |_| Some(tile.clone())))
 	}
 
-	async fn get_tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
 			Some(())
@@ -161,9 +161,9 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_operation_get_tile() {
+	async fn test_operation_tile() {
 		let op = Operation::from_parameters(&[255, 0, 0], 256, TileFormat::PNG).unwrap();
-		let tile = op.get_tile(&TileCoord::new(0, 0, 0).unwrap()).await.unwrap();
+		let tile = op.tile(&TileCoord::new(0, 0, 0).unwrap()).await.unwrap();
 		assert!(tile.is_some());
 		let blob = tile.unwrap().into_blob(Uncompressed).unwrap();
 		assert!(!blob.is_empty());
@@ -187,7 +187,7 @@ mod tests {
 		// Test tile content
 		let coord = TileCoord::new(5, 10, 15).unwrap();
 		let tile = op
-			.get_tile_stream(coord.to_tile_bbox())
+			.tile_stream(coord.to_tile_bbox())
 			.await
 			.unwrap()
 			.next()

@@ -30,7 +30,7 @@
 //!         Ok(Blob::from(self.data.clone()))
 //!     }
 //!
-//!     fn get_name(&self) -> &str {
+//!     fn name(&self) -> &str {
 //!         "MockDataReader"
 //!     }
 //! }
@@ -66,7 +66,7 @@ pub type DataReader = Box<dyn DataReaderTrait>;
 /// # Required Methods
 /// - `read_range`: Reads a specific range of bytes from the data source.
 /// - `read_all`: Reads all the data from the data source.
-/// - `get_name`: Gets the name of the data source.
+/// - `name`: Gets the name of the data source.
 #[async_trait]
 pub trait DataReaderTrait: Debug + Send + Sync {
 	/// Reads a specific range of bytes from the data source.

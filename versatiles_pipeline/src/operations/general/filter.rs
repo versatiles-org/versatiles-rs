@@ -116,38 +116,38 @@ impl TileSource for Operation {
 		&self.tilejson
 	}
 
-	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("filter::get_tile_stream {bbox:?}");
+	async fn tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		log::trace!("filter::tile_stream {bbox:?}");
 		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
 
 		if let Some(mask) = &self.mask {
-			let mut coord_stream = mask.get_tile_coord_stream(bbox).await?;
+			let mut coord_stream = mask.tile_coord_stream(bbox).await?;
 			let mut allowed = HashSet::new();
 			while let Some((coord, _)) = coord_stream.next().await {
 				allowed.insert(coord);
 			}
-			let source_stream = self.source.get_tile_stream(bbox).await?;
+			let source_stream = self.source.tile_stream(bbox).await?;
 			Ok(source_stream.filter_coord(move |coord| {
 				let contains = allowed.contains(&coord);
 				async move { contains }
 			}))
 		} else {
-			self.source.get_tile_stream(bbox).await
+			self.source.tile_stream(bbox).await
 		}
 	}
 
-	async fn get_tile_coord_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+	async fn tile_coord_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
 		if let Some(mask) = &self.mask {
-			mask.get_tile_coord_stream(bbox).await
+			mask.tile_coord_stream(bbox).await
 		} else {
-			self.source.get_tile_coord_stream(bbox).await
+			self.source.tile_coord_stream(bbox).await
 		}
 	}
 }
@@ -196,7 +196,7 @@ mod tests {
 			for x in 0..max_xy {
 				for y in 0..max_xy {
 					let coord = TileCoord::new(level, x, y)?;
-					let count = op.get_tile_stream(coord.to_tile_bbox()).await?.to_vec().await.len();
+					let count = op.tile_stream(coord.to_tile_bbox()).await?.to_vec().await.len();
 					if set.contains(&(level, x, y)) {
 						assert!(count == 1, "Expected one tile for {coord:?}, found {count}");
 					} else {
@@ -226,7 +226,7 @@ mod tests {
 
 		for z in 0..=6 {
 			let coord = TileCoord::new(z, 0, 0)?;
-			let n = op.get_tile_stream(coord.to_tile_bbox()).await?.to_vec().await.len();
+			let n = op.tile_stream(coord.to_tile_bbox()).await?.to_vec().await.len();
 			assert_eq!(n == 1, (3..=4).contains(&z), "z={z}");
 		}
 		Ok(())
@@ -268,12 +268,12 @@ mod tests {
 
 		// Sanity: tiles outside the final bbox shouldn't pass
 		let outside = TileCoord::new(4, 0, 0)?.to_tile_bbox();
-		let n_out = op.get_tile_stream(outside).await?.to_vec().await.len();
+		let n_out = op.tile_stream(outside).await?.to_vec().await.len();
 		assert_eq!(n_out, 0);
 
 		// Inside tile at z=4 should pass
 		let inside = TileCoord::new(4, 8, 7)?.to_tile_bbox(); // somewhere within [10,5,40,20]
-		let n_in = op.get_tile_stream(inside).await?.to_vec().await.len();
+		let n_in = op.tile_stream(inside).await?.to_vec().await.len();
 		assert_eq!(n_in, 1);
 
 		Ok(())
@@ -290,7 +290,7 @@ mod tests {
 		assert!(!op.metadata().bbox_pyramid.is_empty());
 
 		let bbox = TileBBox::from_min_and_max(3, 1, 1, 2, 2)?;
-		let count = op.get_tile_stream(bbox).await?.drain_and_count().await;
+		let count = op.tile_stream(bbox).await?.drain_and_count().await;
 		assert!(count > 0, "Expected tiles to pass through filename filter");
 
 		Ok(())
@@ -307,7 +307,7 @@ mod tests {
 
 		// A tile far outside the bbox should not pass even though the mask is full-world.
 		let far = TileCoord::new(3, 7, 7)?.to_tile_bbox();
-		let count = op.get_tile_stream(far).await?.drain_and_count().await;
+		let count = op.tile_stream(far).await?.drain_and_count().await;
 		assert_eq!(count, 0, "Expected no tiles outside filtered bbox");
 
 		Ok(())
@@ -321,7 +321,7 @@ mod tests {
 			.await?;
 
 		let bbox = TileBBox::from_min_and_max(2, 0, 0, 3, 3)?;
-		let count = op.get_tile_coord_stream(bbox).await?.drain_and_count().await;
+		let count = op.tile_coord_stream(bbox).await?.drain_and_count().await;
 		assert!(count > 0);
 
 		Ok(())

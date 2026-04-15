@@ -27,21 +27,21 @@ impl TileJsonValues {
 	/// otherwise returns `None`.
 	///
 	/// This method does **not** copy or clone data, returning a `&str` slice instead.
-	pub fn get_str(&self, key: &str) -> Option<&str> {
-		self.0.get(key).and_then(|v| v.get_str())
+	pub fn str(&self, key: &str) -> Option<&str> {
+		self.0.get(key).and_then(|v| v.as_str())
 	}
 
 	/// Returns a cloned `String` if this key exists as a string variant,
 	/// otherwise returns `None`.
 	///
 	/// This method *does* allocate, returning an owned `String`.
-	pub fn get_string(&self, key: &str) -> Option<String> {
-		self.0.get(key).and_then(|v| v.get_str().map(ToOwned::to_owned))
+	pub fn string(&self, key: &str) -> Option<String> {
+		self.0.get(key).and_then(|v| v.as_str().map(ToOwned::to_owned))
 	}
 
 	/// Returns a `i64` if this key exists as an integer variant, otherwise returns `None`.
-	pub fn get_integer(&self, key: &str) -> Option<i64> {
-		self.0.get(key).and_then(TileJsonValue::get_integer)
+	pub fn integer(&self, key: &str) -> Option<i64> {
+		self.0.get(key).and_then(TileJsonValue::as_integer)
 	}
 
 	/// Checks if the given `key` is either absent or references a list (`Vec<String>`).
@@ -92,7 +92,7 @@ impl TileJsonValues {
 	where
 		F: FnOnce(Option<i64>) -> i64,
 	{
-		let new_val = update(self.0.get(key).and_then(TileJsonValue::get_integer));
+		let new_val = update(self.0.get(key).and_then(TileJsonValue::as_integer));
 		self.0.insert(key.to_owned(), TileJsonValue::Integer(new_val));
 	}
 
@@ -126,14 +126,14 @@ mod tests {
 	#[test]
 	fn default_includes_tilejson() {
 		let default_values = TileJsonValues::default();
-		assert_eq!(default_values.get_string("tilejson"), Some("3.0.0".to_owned()));
+		assert_eq!(default_values.string("tilejson"), Some("3.0.0".to_owned()));
 	}
 
 	#[test]
 	fn insert_and_retrieve_string() -> Result<()> {
 		let mut tv = TileJsonValues::default();
 		tv.insert("name", &JsonValue::from("Test Layer"))?;
-		assert_eq!(tv.get_string("name"), Some("Test Layer".to_owned()));
+		assert_eq!(tv.string("name"), Some("Test Layer".to_owned()));
 		Ok(())
 	}
 
@@ -141,7 +141,7 @@ mod tests {
 	fn insert_and_retrieve_byte() -> Result<()> {
 		let mut tv = TileJsonValues::default();
 		tv.insert("maxzoom", &JsonValue::from(12.9_f64))?;
-		assert_eq!(tv.get_integer("maxzoom"), Some(13));
+		assert_eq!(tv.integer("maxzoom"), Some(13));
 		Ok(())
 	}
 
@@ -199,11 +199,11 @@ mod tests {
 		let mut tv = TileJsonValues::default();
 		// No existing value => default to 0
 		tv.update_integer("zoom", |maybe| maybe.unwrap_or(0).max(10));
-		assert_eq!(tv.get_integer("zoom"), Some(10));
+		assert_eq!(tv.integer("zoom"), Some(10));
 
 		// Existing value => modify existing
 		tv.update_integer("zoom", |maybe| maybe.unwrap_or(0).max(20));
-		assert_eq!(tv.get_integer("zoom"), Some(20));
+		assert_eq!(tv.integer("zoom"), Some(20));
 	}
 
 	#[test]
