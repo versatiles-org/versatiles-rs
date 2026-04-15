@@ -151,7 +151,7 @@ impl Blob {
 		if range.offset + range.length > self.0.len() as u64 {
 			bail!("read outside range")
 		}
-		Ok(Blob::from(&self.0[range.as_range_usize()?]))
+		Ok(Blob::from(&self.0[range.to_range_usize()?]))
 	}
 
 	/// Returns a reference to the underlying byte slice.
@@ -319,10 +319,10 @@ impl Blob {
 	/// use versatiles_core::Blob;
 	///
 	/// let blob = Blob::from(&[0xDE, 0xAD, 0xBE, 0xEF]);
-	/// assert_eq!(blob.as_hex(), "de ad be ef");
+	/// assert_eq!(blob.to_hex(), "de ad be ef");
 	/// ```
 	#[must_use]
-	pub fn as_hex(&self) -> String {
+	pub fn to_hex(&self) -> String {
 		use std::fmt::Write;
 		if self.0.is_empty() {
 			return String::new();
@@ -555,7 +555,7 @@ impl From<String> for Blob {
 /// Implements [`Debug`] by printing the byte length and hexadecimal representation of the bytes.
 impl Debug for Blob {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "Blob({}): {}", self.0.len(), self.as_hex())
+		write!(f, "Blob({}): {}", self.0.len(), self.to_hex())
 	}
 }
 
@@ -753,9 +753,9 @@ mod tests {
 	}
 
 	#[test]
-	fn test_as_hex() {
+	fn test_to_hex() {
 		let blob = Blob::from(&[0xAB, 0xCD, 0xEF]);
-		assert_eq!(blob.as_hex(), "ab cd ef");
+		assert_eq!(blob.to_hex(), "ab cd ef");
 	}
 
 	#[test]

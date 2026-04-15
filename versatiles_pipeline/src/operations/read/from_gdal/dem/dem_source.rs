@@ -175,14 +175,14 @@ impl DemSource {
 	}
 
 	#[context("Failed to get elevation tile ({width}x{height}) for bbox ({bbox:?}) from GDAL DEM dataset")]
-	pub async fn get_elevation_tile(
+	pub async fn elevation_tile(
 		&self,
 		bbox: &GeoBBox,
 		width: usize,
 		height: usize,
 		encoding: DemEncoding,
 	) -> Result<Option<DynamicImage>> {
-		let instance = self.pool.get_instance().await?;
+		let instance = self.pool.instance().await?;
 
 		let dst = reproject_to_float_dataset(&instance, width, height, bbox, self.cutline.as_ref())?;
 
@@ -382,14 +382,10 @@ mod tests {
 	#[case(DemEncoding::Mapbox)]
 	#[case(DemEncoding::Terrarium)]
 	#[tokio::test(flavor = "multi_thread")]
-	async fn test_get_elevation_tile(#[case] encoding: DemEncoding) {
+	async fn test_elevation_tile(#[case] encoding: DemEncoding) {
 		let bbox_in = GeoBBox::new(14.0, 49.0, 24.0, 55.0).unwrap();
 		let ds = DemSource::from_testdata(bbox_in).unwrap();
-		let image = ds
-			.get_elevation_tile(&bbox_in, 256, 256, encoding)
-			.await
-			.unwrap()
-			.unwrap();
+		let image = ds.elevation_tile(&bbox_in, 256, 256, encoding).await.unwrap().unwrap();
 		assert_eq!(image.width(), 256);
 		assert_eq!(image.height(), 256);
 	}

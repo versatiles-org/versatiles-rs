@@ -53,7 +53,7 @@ impl JsonArray {
 	}
 
 	/// Convert all elements to Rust `String`s, returning an error if any element is not a string.
-	pub fn as_string_vec(&self) -> Result<Vec<String>> {
+	pub fn to_string_vec(&self) -> Result<Vec<String>> {
 		self.0.iter().map(JsonValue::to_string).collect::<Result<Vec<_>>>()
 	}
 
@@ -153,14 +153,14 @@ mod tests {
 	}
 
 	#[test]
-	fn test_as_string_vec() -> Result<()> {
+	fn test_to_string_vec() -> Result<()> {
 		let array = JsonArray::from(vec!["hello", "world"]);
 
-		assert_eq!(array.as_string_vec()?, vec!["hello", "world"]);
+		assert_eq!(array.to_string_vec()?, vec!["hello", "world"]);
 
 		// Test with a non-string element
 		assert_eq!(
-			JsonArray::from(vec![1, 2]).as_string_vec().unwrap_err().to_string(),
+			JsonArray::from(vec![1, 2]).to_string_vec().unwrap_err().to_string(),
 			"expected a string, found a number"
 		);
 

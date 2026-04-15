@@ -196,7 +196,7 @@ mod tests {
 			Some(TilePyramid::from_geo_bbox(3, 15, &GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap()).unwrap()),
 		);
 		assert_eq!(
-			source.tilejson().as_pretty_lines(100),
+			source.tilejson().to_pretty_lines(100),
 			[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 0, 0],",

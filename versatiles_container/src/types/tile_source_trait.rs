@@ -126,17 +126,17 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 
 		let mut print = PrettyPrint::new();
 
-		let cat = print.get_category("meta_data").await;
+		let cat = print.category("meta_data").await;
 		cat.add_key_value("source_type", &self.source_type().to_string()).await;
 
 		cat.add_key_json("meta", &self.tilejson().as_json_value()).await;
 
-		self.probe_metadata(&mut print.get_category("parameters").await).await?;
+		self.probe_metadata(&mut print.category("parameters").await).await?;
 
 		if matches!(level, Container | Tiles | TileContents) {
 			log::debug!("probing source {:?} at depth {:?}", self.source_type(), level);
 			self
-				.probe_container(&mut print.get_category("container").await, runtime)
+				.probe_container(&mut print.category("container").await, runtime)
 				.await?;
 		}
 
@@ -146,9 +146,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 				self.tilejson().as_json_value(),
 				level
 			);
-			self
-				.probe_tiles(&mut print.get_category("tiles").await, runtime)
-				.await?;
+			self.probe_tiles(&mut print.category("tiles").await, runtime).await?;
 		}
 
 		if matches!(level, TileContents) {
@@ -158,7 +156,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 				level
 			);
 			self
-				.probe_tile_contents(&mut print.get_category("tile contents").await, runtime)
+				.probe_tile_contents(&mut print.category("tile contents").await, runtime)
 				.await?;
 		}
 
@@ -418,7 +416,7 @@ mod tests {
 	async fn test_get_meta() -> Result<()> {
 		let reader = TestReader::new_dummy();
 		assert_eq!(
-			reader.tilejson().as_string(),
+			reader.tilejson().stringify(),
 			"{\"metadata\":\"test\",\"tilejson\":\"3.0.0\"}"
 		);
 		Ok(())
@@ -459,7 +457,7 @@ mod tests {
 			let mut print = PrettyPrint::new();
 			let runtime = TilesRuntime::default();
 			reader
-				.probe_tile_contents(&mut print.get_category("tile contents").await, &runtime)
+				.probe_tile_contents(&mut print.category("tile contents").await, &runtime)
 				.await?;
 		}
 		Ok(())

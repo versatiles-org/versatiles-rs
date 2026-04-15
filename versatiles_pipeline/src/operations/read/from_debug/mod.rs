@@ -152,7 +152,7 @@ mod tests {
 			.1;
 
 		assert_eq!(tile.into_blob(Uncompressed)?.len(), len, "for '{format}'");
-		assert_eq!(operation.tilejson().as_pretty_lines(100), tilejson, "for '{format}'");
+		assert_eq!(operation.tilejson().to_pretty_lines(100), tilejson, "for '{format}'");
 
 		let mut stream = operation
 			.tile_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?)

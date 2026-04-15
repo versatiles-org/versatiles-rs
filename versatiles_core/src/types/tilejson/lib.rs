@@ -25,7 +25,7 @@
 //! let tilejson = TileJSON::try_from(json_text)?;
 //!
 //! // Convert back to JSON string or Blob
-//! let json_string = tilejson.as_string();
+//! let json_string = tilejson.stringify();
 //! let json_blob = tilejson.as_blob();
 //! # Ok(())
 //! # }
@@ -169,16 +169,10 @@ impl TileJSON {
 	// Conversions
 	// -------------------------------------------------------------------------
 
-	/// Returns a JSON string (pretty-printed) representing this `TileJSON`.
-	#[must_use]
-	pub fn as_string(&self) -> String {
-		self.as_object().stringify()
-	}
-
 	/// Returns a `Blob` containing the JSON string representation.
 	#[must_use]
 	pub fn as_blob(&self) -> Blob {
-		Blob::from(self.as_string())
+		Blob::from(self.stringify())
 	}
 
 	/// Pretty-prints this `TileJSON` into multiple lines with a maximum width.
@@ -190,7 +184,7 @@ impl TileJSON {
 	///
 	/// # Returns
 	/// A vector of lines representing the pretty-printed JSON.
-	pub fn as_pretty_lines(&self, max_width: usize) -> Vec<String> {
+	pub fn to_pretty_lines(&self, max_width: usize) -> Vec<String> {
 		self
 			.as_object()
 			.stringify_pretty_multi_line(max_width, 0)
@@ -489,10 +483,10 @@ impl TileJSON {
 	// Final Utilities
 	// -------------------------------------------------------------------------
 
-	/// Converts this `TileJSON` to a JSON string (synonym for [`Self::as_string`]).
+	/// Converts this `TileJSON` to a JSON string.
 	#[must_use]
 	pub fn stringify(&self) -> String {
-		self.as_string()
+		self.as_object().stringify()
 	}
 
 	/// Parses `TileJSON` from a blob or returns `TileJSON::default()` on failure.
@@ -573,7 +567,7 @@ impl From<&TileJSON> for Blob {
 impl Debug for TileJSON {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		// Provide a short debug with JSON representation
-		write!(f, "TileJSON({})", self.as_string())
+		write!(f, "TileJSON({})", self.stringify())
 	}
 }
 
@@ -729,7 +723,7 @@ mod tests {
 	fn should_roundtrip_via_string_and_blob() -> Result<()> {
 		let obj = make_test_json_object();
 		let tj1 = TileJSON::from_object(&obj)?;
-		let json_str = tj1.as_string();
+		let json_str = tj1.stringify();
 		let tj2 = TileJSON::try_from(json_str.as_str())?;
 		assert_eq!(tj1, tj2);
 
@@ -743,7 +737,7 @@ mod tests {
 	fn should_return_pretty_lines() -> Result<()> {
 		let obj = make_test_json_object();
 		let tj = TileJSON::from_object(&obj)?;
-		let lines = tj.as_pretty_lines(40);
+		let lines = tj.to_pretty_lines(40);
 		assert!(lines.len() > 1);
 		Ok(())
 	}
@@ -832,7 +826,7 @@ mod tests {
 		// Inspect via as_json_value
 		let obj = tj.as_json_value().into_object()?;
 		let arr = obj.get("list_key").unwrap().as_array()?;
-		assert_eq!(arr.as_string_vec()?, list);
+		assert_eq!(arr.to_string_vec()?, list);
 		Ok(())
 	}
 
@@ -865,7 +859,7 @@ mod tests {
 	#[test]
 	fn should_stringify_same_as_as_string() {
 		let tj = TileJSON::default();
-		assert_eq!(tj.stringify(), tj.as_string());
+		assert_eq!(tj.stringify(), tj.stringify());
 	}
 
 	#[test]
@@ -880,10 +874,10 @@ mod tests {
 	fn should_convert_into_string_and_blob() {
 		let tj = TileJSON::default();
 		let s: String = tj.clone().into();
-		assert_eq!(s, tj.as_string());
+		assert_eq!(s, tj.stringify());
 		let blob: Blob = tj.clone().into();
-		assert_eq!(blob.as_str(), tj.as_string());
+		assert_eq!(blob.as_str(), tj.stringify());
 		let blob_ref: Blob = (&tj).into();
-		assert_eq!(blob_ref.as_str(), tj.as_string());
+		assert_eq!(blob_ref.as_str(), tj.stringify());
 	}
 }

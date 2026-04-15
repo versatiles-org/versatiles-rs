@@ -236,14 +236,14 @@ impl RasterSource {
 	}
 
 	#[context("Failed to get image data ({width}x{height}) for bbox ({bbox:?}) from GDAL dataset")]
-	pub async fn get_image(&self, bbox: &GeoBBox, width: usize, height: usize) -> Result<Option<DynamicImage>> {
+	pub async fn image(&self, bbox: &GeoBBox, width: usize, height: usize) -> Result<Option<DynamicImage>> {
 		let band_mapping = self.band_mapping.clone();
 		let cutline = self.cutline.clone();
 		let nodata = self.nodata.clone();
 		let extra_nodata = self.extra_nodata.clone();
 
 		// Get instance from pool - single synchronization point!
-		let instance = self.pool.get_instance().await?;
+		let instance = self.pool.instance().await?;
 
 		// Run GDAL reprojection + pixel reading on a blocking thread so we
 		// don't block the async executor.  This is the CPU/IO-heavy part.
@@ -431,14 +431,14 @@ mod tests {
 	#[case(3, ColorType::Rgba8, 3)]
 	#[case(4, ColorType::Rgba8, 3)] // 4 bands → RGB + alpha, so 3 color channels
 	#[tokio::test(flavor = "multi_thread")]
-	async fn test_dataset_get_image2(
+	async fn test_dataset_image2(
 		#[case] channels: usize,
 		#[case] expected_color: ColorType,
 		#[case] color_channels: usize,
 	) {
 		let bbox_in = GeoBBox::new(14.0, 49.0, 24.0, 55.0).unwrap();
 		let ds = RasterSource::from_testdata(bbox_in, channels).unwrap();
-		let image = ds.get_image(&bbox_in, 256, 256).await.unwrap().unwrap();
+		let image = ds.image(&bbox_in, 256, 256).await.unwrap().unwrap();
 		assert_eq!(image.width(), 256);
 		assert_eq!(image.height(), 256);
 		assert_eq!(image.color(), expected_color);

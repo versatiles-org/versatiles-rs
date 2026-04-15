@@ -469,7 +469,7 @@ mod tests {
 			"container 'versatiles' ('*.versatiles')"
 		);
 		assert_eq!(
-			reader.tilejson().as_string(),
+			reader.tilejson().stringify(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 		assert_eq!(
@@ -594,10 +594,10 @@ mod tests {
 
 		let mut printer = PrettyPrint::new();
 		reader
-			.probe_container(&mut printer.get_category("container").await, &runtime)
+			.probe_container(&mut printer.category("container").await, &runtime)
 			.await?;
 		assert_eq!(
-			printer.as_string().await.split('\n').collect::<Vec<_>>(),
+			printer.stringify().await.split('\n').collect::<Vec<_>>(),
 			[
 				"container:",
 				"  tile format: MVT",
@@ -613,9 +613,9 @@ mod tests {
 
 		let mut printer = PrettyPrint::new();
 		reader
-			.probe_tiles(&mut printer.get_category("tiles").await, &runtime)
+			.probe_tiles(&mut printer.category("tiles").await, &runtime)
 			.await?;
-		let output = printer.as_string().await;
+		let output = printer.stringify().await;
 		assert_eq!(
 			output.split('\n').collect::<Vec<_>>(),
 			[

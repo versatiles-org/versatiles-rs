@@ -26,9 +26,9 @@ async fn fetch_tilejson(args: &PrintTilejson, runtime: &TilesRuntime) -> Result<
 	let reader = runtime.get_reader_from_str(&args.input).await?;
 
 	Ok(if args.pretty {
-		reader.tilejson().as_pretty_lines(80).join("\n")
+		reader.tilejson().to_pretty_lines(80).join("\n")
 	} else {
-		reader.tilejson().as_string()
+		reader.tilejson().stringify()
 	})
 }
 

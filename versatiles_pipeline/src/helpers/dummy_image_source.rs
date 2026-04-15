@@ -173,7 +173,7 @@ mod tests {
 		)
 		.unwrap();
 		assert_eq!(
-			source.tilejson().as_pretty_lines(100),
+			source.tilejson().to_pretty_lines(100),
 			[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 0, 0],",

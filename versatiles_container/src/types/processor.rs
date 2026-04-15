@@ -271,7 +271,7 @@ mod tests {
 
 		let tilejson = processor.tilejson();
 		// TileJSON should be valid
-		assert!(tilejson.as_string().contains("tilejson"));
+		assert!(tilejson.stringify().contains("tilejson"));
 	}
 
 	#[test]
@@ -309,7 +309,7 @@ mod tests {
 		let processor = TileProcessor::new("test", source).with_tilejson(new_tilejson.clone());
 
 		// Verify TileJSON was replaced (default TileJSON should contain "3.0.0")
-		assert!(processor.tilejson().as_string().contains("3.0.0"));
+		assert!(processor.tilejson().stringify().contains("3.0.0"));
 	}
 
 	#[test]
@@ -343,7 +343,7 @@ mod tests {
 		// Verify all were set
 		assert_eq!(processor.parameters().tile_format, TileFormat::WEBP);
 		assert_eq!(processor.parameters().tile_compression, TileCompression::Brotli);
-		assert!(processor.tilejson().as_string().contains("3.0.0"));
+		assert!(processor.tilejson().stringify().contains("3.0.0"));
 		assert_eq!(processor.traversal().max_size().unwrap(), 128);
 	}
 
@@ -369,7 +369,7 @@ mod tests {
 		*processor.tilejson_mut() = TileJSON::default();
 
 		// Verify modification (should still be valid TileJSON)
-		assert!(processor.tilejson().as_string().contains("3.0.0"));
+		assert!(processor.tilejson().stringify().contains("3.0.0"));
 	}
 
 	#[test]

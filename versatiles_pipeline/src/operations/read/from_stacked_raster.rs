@@ -473,7 +473,7 @@ mod tests {
 			.await?;
 
 		assert_eq!(
-			result.tilejson().as_pretty_lines(100),
+			result.tilejson().to_pretty_lines(100),
 			[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
@@ -527,7 +527,7 @@ mod tests {
 		);
 
 		assert_eq!(
-			result.tilejson().as_pretty_lines(100),
+			result.tilejson().to_pretty_lines(100),
 			[
 				"{",
 				"  \"bounds\": [-130, -70, 130, 70],",
@@ -579,7 +579,7 @@ mod tests {
 		);
 
 		assert_eq!(
-			result.tilejson().as_pretty_lines(100),
+			result.tilejson().to_pretty_lines(100),
 			[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",

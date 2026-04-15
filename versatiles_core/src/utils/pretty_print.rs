@@ -40,7 +40,7 @@ impl PrettyPrinter {
 	}
 
 	#[cfg(any(test, feature = "test"))]
-	async fn as_string(&self) -> String {
+	async fn stringify(&self) -> String {
 		use regex::{Regex, RegexBuilder};
 		use std::sync::LazyLock;
 
@@ -78,7 +78,7 @@ impl PrettyPrint {
 	}
 
 	/// Writes a bold white category header followed by a colon and returns a new indented PrettyPrint.
-	pub async fn get_category(&mut self, text: &str) -> PrettyPrint {
+	pub async fn category(&mut self, text: &str) -> PrettyPrint {
 		self.write_line(text.white().bold().to_string() + ":").await;
 		self.new_indented()
 	}
@@ -167,8 +167,8 @@ impl PrettyPrint {
 	}
 
 	#[cfg(any(test, feature = "test"))]
-	pub async fn as_string(&self) -> String {
-		self.printer.as_string().await
+	pub async fn stringify(&self) -> String {
+		self.printer.stringify().await
 	}
 }
 
@@ -221,12 +221,12 @@ mod tests {
 		let mut printer = PrettyPrint::new();
 
 		printer.add_warning("test_warning_1").await;
-		let mut cat = printer.get_category("test_category_1").await;
+		let mut cat = printer.category("test_category_1").await;
 		cat.get_list("test_list_1").await.add_key_value("string_1", &4).await;
 		cat.add_warning("test_warning_2").await;
 		printer.add_warning("test_warning_3").await;
 
-		let result = printer.as_string().await;
+		let result = printer.stringify().await;
 		assert_eq!(
 			&result,
 			"test_warning_1\ntest_category_1:\n  test_list_1:\n    string_1: 4\n  test_warning_2\ntest_warning_3\n"
@@ -246,7 +246,7 @@ mod tests {
 				],
 			)
 			.await;
-		let result = printer.as_string().await;
+		let result = printer.stringify().await;
 		assert_eq!(
 			result.split('\n').collect::<Vec<_>>(),
 			[

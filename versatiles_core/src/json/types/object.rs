@@ -56,7 +56,7 @@ impl JsonObject {
 
 	/// Retrieve a `Vec<String>` from the array at the specified key, if present and all elements are strings.
 	pub fn string_vec(&self, key: &str) -> Result<Option<Vec<String>>> {
-		self.array(key)?.map(super::array::JsonArray::as_string_vec).transpose()
+		self.array(key)?.map(super::array::JsonArray::to_string_vec).transpose()
 	}
 
 	/// Retrieve a `Vec<T>` from the array at the specified key, if present and all elements are numeric.

@@ -82,7 +82,7 @@ impl TryFrom<&JsonValue> for TileJsonValue {
 	fn try_from(value: &JsonValue) -> Result<Self> {
 		match value {
 			JsonValue::String(s) => Ok(TileJsonValue::String(s.to_owned())),
-			JsonValue::Array(a) => Ok(TileJsonValue::List(a.as_string_vec()?)),
+			JsonValue::Array(a) => Ok(TileJsonValue::List(a.to_string_vec()?)),
 			JsonValue::Number(n) => Ok(TileJsonValue::Integer(float_to_int(*n)?)),
 			_ => bail!("Invalid value type: only string, array, or integer allowed"),
 		}

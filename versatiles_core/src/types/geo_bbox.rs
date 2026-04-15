@@ -226,11 +226,11 @@ impl GeoBBox {
 	/// use versatiles_core::GeoBBox;
 	///
 	/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0).unwrap();
-	/// assert_eq!(bbox.as_string_json(), "[-10,-5,10,5]");
+	/// assert_eq!(bbox.to_json_string(), "[-10,-5,10,5]");
 	/// ```
 	#[must_use]
-	pub fn as_string_json(&self) -> String {
-		format!("[{}]", self.as_string_list())
+	pub fn to_json_string(&self) -> String {
+		format!("[{}]", self.to_list_string())
 	}
 
 	/// Returns the bounding box as a string in the form `x_min, y_min, x_max, y_max`.
@@ -240,10 +240,10 @@ impl GeoBBox {
 	/// use versatiles_core::GeoBBox;
 	///
 	/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0).unwrap();
-	/// assert_eq!(bbox.as_string_list(), "-10,-5,10,5");
+	/// assert_eq!(bbox.to_list_string(), "-10,-5,10,5");
 	/// ```
 	#[must_use]
-	pub fn as_string_list(&self) -> String {
+	pub fn to_list_string(&self) -> String {
 		format!("{},{},{},{}", self.x_min, self.y_min, self.x_max, self.y_max)
 	}
 
@@ -526,8 +526,8 @@ mod tests {
 	#[test]
 	fn test_as_string() {
 		let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0).unwrap();
-		assert_eq!(bbox.as_string_json(), "[-10,-5,10,5]");
-		assert_eq!(bbox.as_string_list(), "-10,-5,10,5");
+		assert_eq!(bbox.to_json_string(), "[-10,-5,10,5]");
+		assert_eq!(bbox.to_list_string(), "-10,-5,10,5");
 	}
 
 	#[test]
@@ -686,8 +686,8 @@ mod tests {
 	#[test]
 	fn test_as_string_edge_cases() {
 		let bbox = GeoBBox::new(-180.0, -90.0, 180.0, 90.0).unwrap();
-		assert_eq!(bbox.as_string_json(), "[-180,-90,180,90]");
-		assert_eq!(bbox.as_string_list(), "-180,-90,180,90");
+		assert_eq!(bbox.to_json_string(), "[-180,-90,180,90]");
+		assert_eq!(bbox.to_list_string(), "-180,-90,180,90");
 	}
 
 	#[test]

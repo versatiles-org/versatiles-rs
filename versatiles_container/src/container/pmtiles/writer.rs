@@ -171,7 +171,7 @@ impl TilesWriter for PMTilesWriter {
 		entries.merge_runs();
 
 		writer.set_position(HeaderV3::len())?;
-		let directory = entries.as_directory(16384 - HeaderV3::len(), INTERNAL_COMPRESSION)?;
+		let directory = entries.build_directory(16384 - HeaderV3::len(), INTERNAL_COMPRESSION)?;
 		header.root_dir = writer.append(&directory.root_bytes)?;
 
 		writer.set_position(tile_data_end)?;

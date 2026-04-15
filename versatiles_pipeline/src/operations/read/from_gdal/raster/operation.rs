@@ -185,18 +185,18 @@ impl Operation {
 
 	#[cfg(test)]
 	#[context("Failed to get image data ({width}x{height}) for bbox ({bbox:?}) from GDAL dataset")]
-	async fn get_image_data_from_gdal(
+	async fn image_data_from_gdal(
 		&self,
 		bbox: &versatiles_core::GeoBBox,
 		width: usize,
 		height: usize,
 	) -> Result<Option<imageproc::image::DynamicImage>> {
-		log::debug!("get_image_data_from_gdal: bbox={bbox:?}, size={width}x{height}");
-		let res = self.source.get_image(bbox, width, height).await;
+		log::debug!("image_data_from_gdal: bbox={bbox:?}, size={width}x{height}");
+		let res = self.source.image(bbox, width, height).await;
 		match &res {
-			Ok(Some(_)) => log::trace!("get_image_data_from_gdal: image available for bbox={bbox:?}"),
-			Ok(None) => log::trace!("get_image_data_from_gdal: no image for bbox={bbox:?}"),
-			Err(e) => log::trace!("get_image_data_from_gdal error for bbox={bbox:?}: {e}"),
+			Ok(Some(_)) => log::trace!("image_data_from_gdal: image available for bbox={bbox:?}"),
+			Ok(None) => log::trace!("image_data_from_gdal: no image for bbox={bbox:?}"),
+			Err(e) => log::trace!("image_data_from_gdal error for bbox={bbox:?}: {e}"),
 		}
 		res
 	}
@@ -256,9 +256,9 @@ impl TileSource for Operation {
 				let width = (size * bbox.width()) as usize;
 				let height = (size * bbox.height()) as usize;
 
-				log::debug!("get_image_data_from_gdal: bbox={geo_bbox:?}, size={width}x{height}");
+				log::debug!("image_data_from_gdal: bbox={geo_bbox:?}, size={width}x{height}");
 				let image = source
-					.get_image(&geo_bbox, width, height)
+					.image(&geo_bbox, width, height)
 					.await
 					.unwrap_or_else(|e| panic!("GDAL failed to read image chunk at {geo_bbox:?} ({width}x{height}): {e}"));
 
@@ -366,7 +366,7 @@ mod tests {
 
 			// Extract a 7×7 tile and gather the RGB bytes.
 			let image = operation
-				.get_image_data_from_gdal(&coord.to_geo_bbox(), 7, 7)
+				.image_data_from_gdal(&coord.to_geo_bbox(), 7, 7)
 				.await
 				.unwrap()
 				.unwrap();
@@ -406,7 +406,7 @@ mod tests {
 	}
 
 	#[tokio::test(flavor = "multi_thread")]
-	async fn test_get_image_stream_returns_images() -> Result<()> {
+	async fn test_image_stream_returns_images() -> Result<()> {
 		let operation = get_operation(256).await;
 		let mut stream = operation.tile_stream(TileBBox::new_full(1)?).await?;
 		let mut count = 0;

@@ -103,7 +103,7 @@ impl GdalPool {
 	}
 
 	/// Get an instance from the pool.
-	pub async fn get_instance(&self) -> Result<PooledInstance> {
+	pub async fn instance(&self) -> Result<PooledInstance> {
 		let obj = self
 			.pool
 			.get()

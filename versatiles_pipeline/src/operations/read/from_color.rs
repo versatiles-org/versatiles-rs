@@ -206,6 +206,6 @@ mod tests {
 			.unwrap();
 
 		let tilejson = op.tilejson();
-		assert!(tilejson.as_pretty_lines(100).join("\n").contains("image/png"));
+		assert!(tilejson.to_pretty_lines(100).join("\n").contains("image/png"));
 	}
 }

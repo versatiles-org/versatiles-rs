@@ -279,7 +279,7 @@ fn test_as_geo_bbox() -> Result<()> {
 	let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12)?;
 	let geo_bbox = bbox.to_geo_bbox().unwrap();
 	assert_eq!(
-		geo_bbox.as_string_list(),
+		geo_bbox.to_list_string(),
 		"-67.5,-74.01954331150228,0,-40.97989806962013"
 	);
 	Ok(())

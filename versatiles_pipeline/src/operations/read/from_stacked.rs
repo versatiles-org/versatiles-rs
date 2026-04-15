@@ -256,7 +256,7 @@ mod tests {
 			.await?;
 
 		assert_eq!(
-			result.tilejson().as_pretty_lines(100),
+			result.tilejson().to_pretty_lines(100),
 			[
 				"{",
 				"  \"bounds\": [-11, -12, 7, 8],",

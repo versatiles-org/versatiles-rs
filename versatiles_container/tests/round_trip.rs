@@ -24,7 +24,7 @@ async fn read_mbtiles_source() -> Result<()> {
 
 	// Verify tilejson is present
 	let tilejson = reader.tilejson();
-	assert!(!tilejson.as_string().is_empty());
+	assert!(!tilejson.stringify().is_empty());
 
 	Ok(())
 }

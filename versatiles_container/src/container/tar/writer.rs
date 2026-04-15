@@ -169,7 +169,7 @@ mod tests {
 
 		let reader = TarTilesReader::open(&temp_path)?;
 		assert_eq!(
-			reader.tilejson().as_string(),
+			reader.tilejson().stringify(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 

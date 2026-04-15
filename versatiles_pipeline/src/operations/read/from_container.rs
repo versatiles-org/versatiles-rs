@@ -105,7 +105,7 @@ mod tests {
 		assert_eq!(
 			operation
 				.tilejson()
-				.as_pretty_lines(10)
+				.to_pretty_lines(10)
 				.iter()
 				.map(std::string::String::as_str)
 				.collect::<Vec<_>>(),
@@ -155,7 +155,7 @@ mod tests {
 		assert_eq!(
 			operation
 				.tilejson()
-				.as_pretty_lines(10)
+				.to_pretty_lines(10)
 				.iter()
 				.map(std::string::String::as_str)
 				.collect::<Vec<_>>(),

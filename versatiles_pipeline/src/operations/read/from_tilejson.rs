@@ -120,7 +120,7 @@ fn extract_tile_url(tilejson: &TileJSON) -> Result<String> {
 		.get("tiles")
 		.ok_or_else(|| anyhow!("TileJSON is missing 'tiles' array"))?;
 	let tiles_array = tiles_value.as_array()?;
-	let tiles = tiles_array.as_string_vec()?;
+	let tiles = tiles_array.to_string_vec()?;
 	let first = tiles
 		.into_iter()
 		.next()

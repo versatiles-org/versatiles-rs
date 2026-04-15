@@ -510,7 +510,7 @@ mod tests {
 		);
 
 		assert_wildcard!(
-			reader.tilejson().as_string(),
+			reader.tilejson().stringify(),
 			"{\"author\":\"OpenStreetMap contributors, Geofabrik GmbH\",*,\"version\":\"3.0\"}"
 		);
 
@@ -604,9 +604,9 @@ mod tests {
 
 		let mut printer = PrettyPrint::new();
 		reader
-			.probe_container(&mut printer.get_category("container").await, &runtime)
+			.probe_container(&mut printer.category("container").await, &runtime)
 			.await?;
-		let output = printer.as_string().await;
+		let output = printer.stringify().await;
 		assert!(
 			output.contains("addressed tiles count: 878"),
 			"unexpected output: {output}"

@@ -141,7 +141,7 @@ impl EntriesV3 {
 	///
 	/// # Errors
 	/// Returns an error if the entries cannot be serialized or compressed as specified.
-	pub fn as_directory(&mut self, target_root_len: u64, compression: TileCompression) -> Result<Directory> {
+	pub fn build_directory(&mut self, target_root_len: u64, compression: TileCompression) -> Result<Directory> {
 		self.entries.sort_by_cached_key(|e| e.tile_id);
 		let entries: &EntriesSliceV3 = &self.as_slice();
 
@@ -344,7 +344,7 @@ mod tests {
 	fn serialize_entries() -> Result<()> {
 		let entries = create_entries();
 		let serialized = entries.as_slice().serialize_entries()?;
-		assert_eq!(serialized.as_hex(), "03 01 01 01 00 01 00 64 64 64 65 00 00");
+		assert_eq!(serialized.to_hex(), "03 01 01 01 00 01 00 64 64 64 65 00 00");
 
 		let new_entries = EntriesV3::from_blob(&serialized)?;
 		assert_eq!(entries, new_entries);
@@ -368,9 +368,9 @@ mod tests {
 	}
 
 	#[test]
-	fn test_as_directory() -> Result<()> {
+	fn test_build_directory() -> Result<()> {
 		let mut entries = create_entries();
-		let directory = entries.as_directory(1000, TileCompression::Uncompressed)?; // Assuming 1000 is enough size for root
+		let directory = entries.build_directory(1000, TileCompression::Uncompressed)?; // Assuming 1000 is enough size for root
 		assert!(!directory.root_bytes.is_empty());
 		Ok(())
 	}
@@ -496,11 +496,11 @@ mod tests {
 		assert_eq!(entries.tile_count(), 6);
 	}
 
-	/// Tests the as_directory function for correct directory structure creation
+	/// Tests the build_directory function for correct directory structure creation
 	#[test]
-	fn test_as_directory_structure() -> Result<()> {
+	fn test_build_directory_structure() -> Result<()> {
 		let mut entries = create_filled_entries(500); // A reasonable number of entries for testing
-		let directory = entries.as_directory(1024, TileCompression::Uncompressed)?; // Assuming a small root directory size
+		let directory = entries.build_directory(1024, TileCompression::Uncompressed)?; // Assuming a small root directory size
 
 		assert!(
 			!directory.root_bytes.is_empty(),

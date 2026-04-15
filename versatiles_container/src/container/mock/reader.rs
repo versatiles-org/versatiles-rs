@@ -197,7 +197,7 @@ mod tests {
 		assert_eq!(reader.source_type().to_string(), "container 'dummy' ('dummy')");
 
 		assert_eq!(
-			reader.tilejson().as_string(),
+			reader.tilejson().stringify(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 		let blob = reader
@@ -276,9 +276,9 @@ mod tests {
 
 		let mut printer = PrettyPrint::new();
 		reader
-			.probe_container(&mut printer.get_category("container").await, &runtime)
+			.probe_container(&mut printer.category("container").await, &runtime)
 			.await?;
-		assert_eq!(printer.as_string().await, "container:\n  type: \"mock\"\n");
+		assert_eq!(printer.stringify().await, "container:\n  type: \"mock\"\n");
 
 		Ok(())
 	}

@@ -61,7 +61,7 @@ pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
 	/// Non‑alpha images are returned unchanged. Errors for unsupported color types.
 	fn into_no_alpha(self) -> Result<DynamicImage>;
 
-	/// Like [`get_scaled_down`](Self::get_scaled_down), but consumes `self` and returns the result.
+	/// Like [`scaled_down`](Self::scaled_down), but consumes `self` and returns the result.
 	///
 	/// Returns `self` unchanged when `factor == 1`.
 	fn into_scaled_down(self, factor: u32) -> Result<DynamicImage>;

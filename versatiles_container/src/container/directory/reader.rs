@@ -336,7 +336,7 @@ mod tests {
 		let reader = DirectoryReader::open(&dir)?;
 
 		assert_eq!(
-			reader.tilejson().as_string(),
+			reader.tilejson().stringify(),
 			"{\"bounds\":[-90,66.51326,-45,79.171335],\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 
@@ -399,7 +399,7 @@ mod tests {
 
 		let reader = DirectoryReader::open(&dir).unwrap();
 		assert_eq!(
-			reader.tilejson().as_string(),
+			reader.tilejson().stringify(),
 			"{\"bounds\":[-90,66.51326,0,85.051129],\"maxzoom\":2,\"minzoom\":2,\"tilejson\":\"3.0.0\",\"type\":\"dummy data\"}"
 		);
 
@@ -504,7 +504,7 @@ mod tests {
 		);
 
 		assert_eq!(
-			reader.tilejson().as_string(),
+			reader.tilejson().stringify(),
 			"{\"bounds\":[-90,66.51326,-45,79.171335],\"key\":\"value\",\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\"}"
 		);
 
@@ -546,9 +546,9 @@ mod tests {
 
 		let mut printer = PrettyPrint::new();
 		reader
-			.probe_container(&mut printer.get_category("container").await, &runtime)
+			.probe_container(&mut printer.category("container").await, &runtime)
 			.await?;
-		let output = printer.as_string().await;
+		let output = printer.stringify().await;
 		assert!(output.contains("tile count: 2"), "unexpected output: {output}");
 		assert!(output.contains("directory:"), "unexpected output: {output}");
 

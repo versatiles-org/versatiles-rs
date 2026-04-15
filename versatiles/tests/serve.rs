@@ -125,7 +125,7 @@ impl Server {
 			.await
 			.into_array()
 			.unwrap()
-			.as_string_vec()
+			.to_string_vec()
 			.unwrap()
 	}
 }

@@ -172,10 +172,7 @@ impl TileSource for Operation {
 				let width = (size * bbox.width()) as usize;
 				let height = (size * bbox.height()) as usize;
 
-				let image = source
-					.get_elevation_tile(&geo_bbox, width, height, encoding)
-					.await
-					.unwrap();
+				let image = source.elevation_tile(&geo_bbox, width, height, encoding).await.unwrap();
 
 				if let Some(image) = image {
 					let vec = tokio::task::spawn_blocking(move || {

@@ -189,7 +189,7 @@ mod tests {
 		let temp_file = create_temp_png();
 		let op = Operation::from_file(temp_file.path()).unwrap();
 		let tilejson = op.tilejson();
-		assert!(tilejson.as_pretty_lines(100).join("\n").contains("image/png"));
+		assert!(tilejson.to_pretty_lines(100).join("\n").contains("image/png"));
 	}
 
 	#[test]
