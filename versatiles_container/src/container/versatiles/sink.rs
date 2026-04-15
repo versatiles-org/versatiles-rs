@@ -181,7 +181,7 @@ impl TileSink for VersaTilesSink {
 			}
 
 			if let Some(block) = block_builder.finalize()? {
-				block_index.add_block(block);
+				block_index.insert_block(block);
 			}
 
 			// Delete temp file immediately to free disk space
@@ -194,7 +194,7 @@ impl TileSink for VersaTilesSink {
 		progress.finish();
 
 		// 8. Write block index
-		header.blocks_range = writer.append(&block_index.as_brotli_blob()?)?;
+		header.blocks_range = writer.append(&block_index.to_brotli_blob()?)?;
 
 		// 9. Rewrite header with final ranges
 		writer.write_start(&header.to_blob()?)?;

@@ -140,14 +140,14 @@ impl<'a> BlockBuilder<'a> {
 
 		// Create optimally-sized TileIndex
 		let tile_count = usize::try_from(self.actual_bbox.count_tiles())?;
-		let mut tile_index = TileIndex::new_empty(tile_count);
+		let mut tile_index = TileIndex::new(tile_count);
 		for (coord, range) in self.tile_positions {
 			let index = usize::try_from(self.actual_bbox.index_of(&coord)?)?;
 			tile_index.set(index, range);
 		}
 
 		// Write index
-		let index_range = self.writer.append(&tile_index.as_brotli_blob()?)?;
+		let index_range = self.writer.append(&tile_index.to_brotli_blob()?)?;
 
 		// Create BlockDefinition with actual bbox
 		let mut block = BlockDefinition::new(&self.actual_bbox)?;
@@ -185,7 +185,7 @@ mod tests {
 			.unwrap();
 
 		let block = builder.finalize().unwrap().unwrap();
-		let bbox = block.get_global_bbox();
+		let bbox = block.global_bbox();
 
 		assert_eq!(bbox.level(), 10);
 		assert_eq!(bbox.width(), 1);
@@ -203,7 +203,7 @@ mod tests {
 		builder.write_tile(coord(10, 200, 255), Blob::from("tile3")).unwrap();
 
 		let block = builder.finalize().unwrap().unwrap();
-		let bbox = block.get_global_bbox();
+		let bbox = block.global_bbox();
 
 		// Bbox should span from (10,20) to (200,255)
 		assert_eq!(bbox.x_min().unwrap(), 10);
@@ -248,7 +248,7 @@ mod tests {
 
 		// The tiles_range should be smaller than 2x the blob size
 		// because the second tile reuses the first tile's data
-		let tiles_range = block.get_tiles_range();
+		let tiles_range = block.tiles_range();
 		assert!(tiles_range.length < 2 * small_blob.len());
 	}
 
@@ -276,7 +276,7 @@ mod tests {
 		builder.write_tile(coord(0, 0, 0), Blob::from("world tile")).unwrap();
 
 		let block = builder.finalize().unwrap().unwrap();
-		let bbox = block.get_global_bbox();
+		let bbox = block.global_bbox();
 
 		assert_eq!(bbox.level(), 0);
 		assert_eq!(bbox.width(), 1);
@@ -300,7 +300,7 @@ mod tests {
 			.unwrap();
 
 		let block = builder.finalize().unwrap().unwrap();
-		let bbox = block.get_global_bbox();
+		let bbox = block.global_bbox();
 
 		assert_eq!(bbox.x_min().unwrap(), 16128);
 		assert_eq!(bbox.y_min().unwrap(), 16128);
@@ -318,7 +318,7 @@ mod tests {
 		builder.write_tile(coord(10, 255, 255), Blob::from("tile")).unwrap();
 
 		let block = builder.finalize().unwrap().unwrap();
-		let bbox = block.get_global_bbox();
+		let bbox = block.global_bbox();
 
 		assert_eq!(bbox.x_min().unwrap(), 255);
 		assert_eq!(bbox.y_min().unwrap(), 255);
@@ -348,7 +348,7 @@ mod tests {
 		builder.write_tile(coord(10, 200, 100), Blob::from("tile2")).unwrap();
 
 		let block = builder.finalize().unwrap().unwrap();
-		let bbox = block.get_global_bbox();
+		let bbox = block.global_bbox();
 
 		// Bbox should be exactly (5,10) to (200,100), not the full 256x256
 		assert_eq!(bbox.x_min().unwrap(), 5);
@@ -382,7 +382,7 @@ mod tests {
 		}
 
 		let block = builder.finalize().unwrap().unwrap();
-		let bbox = block.get_global_bbox();
+		let bbox = block.global_bbox();
 
 		// Verify bbox: (0,0) to (2,1) = 3x2 grid
 		assert_eq!(bbox.x_min().unwrap(), 0);
@@ -412,7 +412,7 @@ mod tests {
 		builder.write_tile(coord(10, 1, 0), blob_999.clone()).unwrap();
 
 		let block = builder.finalize().unwrap().unwrap();
-		let tiles_range_999 = block.get_tiles_range();
+		let tiles_range_999 = block.tiles_range();
 
 		// Reset and test 1000 bytes - should NOT be deduplicated
 		let mut writer2 = DataWriterBlob::new().unwrap();
@@ -423,7 +423,7 @@ mod tests {
 		builder2.write_tile(coord(10, 1, 0), blob_1000.clone()).unwrap();
 
 		let block2 = builder2.finalize().unwrap().unwrap();
-		let tiles_range_1000 = block2.get_tiles_range();
+		let tiles_range_1000 = block2.tiles_range();
 
 		// 999-byte blobs should be deduplicated (written once)
 		assert!(tiles_range_999.length < 2 * 999);
@@ -445,7 +445,7 @@ mod tests {
 		}
 
 		let block = builder.finalize().unwrap().unwrap();
-		let tiles_range = block.get_tiles_range();
+		let tiles_range = block.tiles_range();
 
 		// All 10 tiles should reference the same data
 		// The tiles_range should be approximately the size of one blob
@@ -468,7 +468,7 @@ mod tests {
 		builder.write_tile(coord(10, 4, 0), dup_blob.clone()).unwrap();
 
 		let block = builder.finalize().unwrap().unwrap();
-		let tiles_range = block.get_tiles_range();
+		let tiles_range = block.tiles_range();
 
 		// Should have: 1x dup_blob + 1x unique1 + 1x unique2 = 3 blobs stored
 		let expected_size = dup_blob.len() + unique1.len() + unique2.len();
@@ -485,7 +485,7 @@ mod tests {
 		builder.write_tile(coord(10, 150, 400), Blob::from("tile2")).unwrap();
 
 		let block = builder.finalize().unwrap().unwrap();
-		let bbox = block.get_global_bbox();
+		let bbox = block.global_bbox();
 
 		// Both tiles are in block (0, 1)
 		assert_eq!(bbox.x_min().unwrap(), 100);
@@ -504,8 +504,8 @@ mod tests {
 		let block = builder.finalize().unwrap().unwrap();
 
 		// Both ranges should be non-empty
-		let tiles_range = block.get_tiles_range();
-		let index_range = block.get_index_range();
+		let tiles_range = block.tiles_range();
+		let index_range = block.index_range();
 
 		assert!(tiles_range.length > 0, "tiles_range should not be empty");
 		assert!(index_range.length > 0, "index_range should not be empty");

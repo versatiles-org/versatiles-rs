@@ -246,7 +246,7 @@ mod tests {
 		let data_reader = DataReaderBlob::from(data_writer);
 		let reader = PMTilesReader::open_data(Box::new(data_reader), runtime).await?;
 
-		let entries = reader.get_tile_entries()?;
+		let entries = reader.tile_entries()?;
 		let entries_vec = entries.iter().collect::<Vec<_>>();
 
 		// With dedup + merge_runs, all identical MVT tiles share one blob

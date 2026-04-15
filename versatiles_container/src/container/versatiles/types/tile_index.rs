@@ -20,11 +20,11 @@ pub struct TileIndex {
 }
 
 impl TileIndex {
-	/// Creates a new empty `TileIndex` with a specified count.
+	/// Creates a new `TileIndex` with a specified count.
 	///
 	/// # Arguments
 	/// * `count` - The number of byte ranges in the index.
-	pub fn new_empty(count: usize) -> Self {
+	pub fn new(count: usize) -> Self {
 		let index = vec![ByteRange::new(0, 0); count];
 		Self { index }
 	}
@@ -79,7 +79,7 @@ impl TileIndex {
 	/// # Errors
 	/// Returns an error if the conversion fails.
 	#[context("Failed to create TileIndex from blob")]
-	pub fn as_blob(&self) -> Result<Blob> {
+	pub fn to_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_be();
 		for range in &self.index {
 			writer.write_u64(range.offset)?;
@@ -94,8 +94,8 @@ impl TileIndex {
 	/// # Errors
 	/// Returns an error if the compression or conversion fails.
 	#[context("Failed to create TileIndex from Brotli blob")]
-	pub fn as_brotli_blob(&self) -> Result<Blob> {
-		compress_brotli_fast(&self.as_blob()?)
+	pub fn to_brotli_blob(&self) -> Result<Blob> {
+		compress_brotli_fast(&self.to_blob()?)
 	}
 
 	/// Gets the byte range for a specific index.
@@ -119,12 +119,12 @@ impl TileIndex {
 		self.index.iter()
 	}
 
-	/// Adds an offset to all byte ranges in the index.
+	/// Shifts all byte range offsets by a delta.
 	///
 	/// # Arguments
-	/// * `offset` - The offset to add to each byte range.
-	pub fn add_offset(&mut self, offset: u64) {
-		self.index.iter_mut().for_each(|r| r.offset += offset);
+	/// * `delta` - The value to add to each byte range offset.
+	pub fn shift_by(&mut self, delta: u64) {
+		self.index.iter_mut().for_each(|r| r.offset += delta);
 	}
 }
 
@@ -137,7 +137,7 @@ mod tests {
 	fn init() {
 		const COUNT: u64 = 16;
 
-		let mut index = TileIndex::new_empty(COUNT as usize);
+		let mut index = TileIndex::new(COUNT as usize);
 		assert_eq!(index.len(), COUNT as usize);
 
 		for i in 0..COUNT {
@@ -145,7 +145,7 @@ mod tests {
 			assert_eq!(index.get(i as usize), &ByteRange::new(i * i, i));
 		}
 
-		index.add_offset(18);
+		index.shift_by(18);
 
 		for (index, range) in index.iter().enumerate() {
 			let i = index as u64;
@@ -155,11 +155,11 @@ mod tests {
 
 	#[test]
 	fn conversion() -> Result<()> {
-		let mut index1 = TileIndex::new_empty(100);
+		let mut index1 = TileIndex::new(100);
 		for i in 0..100u64 {
 			index1.set(i as usize, ByteRange::new(i * 1000, i * 2000));
 		}
-		let blob = index1.as_brotli_blob()?;
+		let blob = index1.to_brotli_blob()?;
 		let index2 = TileIndex::from_brotli_blob(&blob)?;
 		assert_eq!(index1, index2);
 

@@ -133,7 +133,7 @@ impl BlockDefinition {
 	/// # Errors
 	/// Returns an error if the conversion fails.
 	#[context("Failed to create BlockDefinition from blob")]
-	pub fn as_blob(&self) -> Result<Blob> {
+	pub fn to_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_be();
 		writer.write_u8(self.offset.level)?;
 		writer.write_u32(self.offset.x)?;
@@ -161,7 +161,7 @@ impl BlockDefinition {
 	/// # Returns
 	/// The sort index for the block.
 	#[cfg(test)]
-	pub fn get_sort_index(&self) -> u64 {
+	pub fn sort_index(&self) -> u64 {
 		self.offset.sort_index()
 	}
 
@@ -169,7 +169,7 @@ impl BlockDefinition {
 	///
 	/// # Returns
 	/// A reference to the global bounding box of the defined tiles.
-	pub fn get_global_bbox(&self) -> &TileBBox {
+	pub fn global_bbox(&self) -> &TileBBox {
 		&self.global_bbox
 	}
 
@@ -177,7 +177,7 @@ impl BlockDefinition {
 	///
 	/// # Returns
 	/// A reference to the byte range for the tiles data.
-	pub fn get_tiles_range(&self) -> &ByteRange {
+	pub fn tiles_range(&self) -> &ByteRange {
 		&self.tiles_range
 	}
 
@@ -185,7 +185,7 @@ impl BlockDefinition {
 	///
 	/// # Returns
 	/// A reference to the byte range for the index data.
-	pub fn get_index_range(&self) -> &ByteRange {
+	pub fn index_range(&self) -> &ByteRange {
 		&self.index_range
 	}
 
@@ -193,7 +193,7 @@ impl BlockDefinition {
 	///
 	/// # Returns
 	/// A reference to the coordinate of the block.
-	pub fn get_coord(&self) -> &TileCoord {
+	pub fn coord(&self) -> &TileCoord {
 		&self.offset
 	}
 
@@ -233,23 +233,20 @@ mod tests {
 		def.tiles_range = ByteRange::new(4, 5);
 		def.index_range = ByteRange::new(9, 6);
 
-		assert_eq!(def, BlockDefinition::from_blob(&def.as_blob()?)?);
+		assert_eq!(def, BlockDefinition::from_blob(&def.to_blob()?)?);
 		assert_eq!(def.count_tiles(), 1071);
-		assert_eq!(def.as_blob()?.len(), 33);
-		assert_eq!(def.get_sort_index(), 5596502);
+		assert_eq!(def.to_blob()?.len(), 33);
+		assert_eq!(def.sort_index(), 5596502);
 		assert_eq!(def.as_str(), "[12,[300,400],[320,450]]");
-		assert_eq!(def.get_coord().level, 12);
-		assert_eq!(def.get_coord(), &TileCoord::new(12, 1, 1)?);
-		assert_eq!(
-			def.get_global_bbox(),
-			&TileBBox::from_min_and_max(12, 300, 400, 320, 450)?
-		);
+		assert_eq!(def.coord().level, 12);
+		assert_eq!(def.coord(), &TileCoord::new(12, 1, 1)?);
+		assert_eq!(def.global_bbox(), &TileBBox::from_min_and_max(12, 300, 400, 320, 450)?);
 		assert_eq!(
 			format!("{def:?}"),
 			"BlockDefinition { x/y/z: TileCoord(12, [1, 1]), bbox: 8: [44,144,64,194] (21x51), tiles_range: ByteRange[4,5], index_range: ByteRange[9,6] }"
 		);
 
-		let def2 = BlockDefinition::from_blob(&def.as_blob()?)?;
+		let def2 = BlockDefinition::from_blob(&def.to_blob()?)?;
 		assert_eq!(def, def2);
 
 		Ok(())
@@ -262,7 +259,7 @@ mod tests {
 		let range = ByteRange::new(10, 20);
 
 		def.set_tiles_range(range);
-		assert_eq!(*def.get_tiles_range(), range);
+		assert_eq!(*def.tiles_range(), range);
 
 		Ok(())
 	}
@@ -274,7 +271,7 @@ mod tests {
 		let range = ByteRange::new(10, 20);
 
 		def.set_index_range(range);
-		assert_eq!(*def.get_index_range(), range);
+		assert_eq!(*def.index_range(), range);
 
 		Ok(())
 	}

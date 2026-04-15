@@ -195,7 +195,7 @@ impl VersaTilesWriter {
 						// Finalize and add to block index if not empty
 						if let Some(block) = block_builder.finalize()? {
 							log::trace!("finish block {block:?}");
-							block_index_mutex.lock().await.add_block(block);
+							block_index_mutex.lock().await.insert_block(block);
 						} else {
 							log::trace!("skipping empty block at {bbox:?}");
 						}
@@ -211,7 +211,7 @@ impl VersaTilesWriter {
 		let range = writer_mutex
 			.lock()
 			.await
-			.append(&block_index_mutex.lock().await.as_brotli_blob()?)?;
+			.append(&block_index_mutex.lock().await.to_brotli_blob()?)?;
 
 		Ok(range)
 	}

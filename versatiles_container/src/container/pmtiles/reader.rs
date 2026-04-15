@@ -173,7 +173,7 @@ impl PMTilesReader {
 
 	/// Decode and return the root directory entries (`EntriesV3`).
 	#[context("reading PMTiles root entries")]
-	pub fn get_tile_entries(&self) -> Result<EntriesV3> {
+	pub fn tile_entries(&self) -> Result<EntriesV3> {
 		EntriesV3::from_blob(&self.root_bytes_uncompressed)
 	}
 

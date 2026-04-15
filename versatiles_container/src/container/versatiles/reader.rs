@@ -132,7 +132,7 @@ impl VersaTilesReader {
 		let block_index =
 			BlockIndex::from_brotli_blob(&block_index_blob).context("Failed decompressing the block index")?;
 
-		let bbox_pyramid = block_index.get_bbox_pyramid();
+		let bbox_pyramid = block_index.bbox_pyramid();
 		let metadata = TileSourceMetadata::new(
 			header.tile_format,
 			header.compression,
@@ -163,16 +163,16 @@ impl VersaTilesReader {
 	/// Returns an error if reading or decompression fails.
 	#[context("Failed to get tile index for block {block:?}")]
 	async fn get_block_tile_index(&self, block: &BlockDefinition) -> Result<Arc<TileIndex>> {
-		let block_coord = block.get_coord();
+		let block_coord = block.coord();
 
 		let mut cache = self.tile_index_cache.lock().await;
 
 		Ok(if let Some(value) = cache.get(block_coord) {
 			value
 		} else {
-			let blob = self.reader.read_range(block.get_index_range()).await?;
+			let blob = self.reader.read_range(block.index_range()).await?;
 			let mut tile_index = TileIndex::from_brotli_blob(&blob)?;
-			tile_index.add_offset(block.get_tiles_range().offset);
+			tile_index.shift_by(block.tiles_range().offset);
 
 			debug_assert_eq!(tile_index.len(), usize::try_from(block.count_tiles())?);
 
@@ -183,12 +183,12 @@ impl VersaTilesReader {
 	/// Sum of all block index byte lengths.
 	#[cfg(feature = "cli")]
 	fn get_index_size(&self) -> u64 {
-		self.block_index.iter().map(|b| b.get_index_range().length).sum()
+		self.block_index.iter().map(|b| b.index_range().length).sum()
 	}
 
 	/// Sum of all block tiles byte lengths.
 	fn get_tiles_size(&self) -> u64 {
-		self.block_index.iter().map(|b| b.get_tiles_range().length).sum()
+		self.block_index.iter().map(|b| b.tiles_range().length).sum()
 	}
 
 	/// Build read **chunks** by grouping tile ranges within the same block.
@@ -201,14 +201,14 @@ impl VersaTilesReader {
 		let stream = futures::stream::iter(block_coords).then(|block_coord: TileCoord| {
 			async move {
 				// Get the block using the block coordinate
-				let Some(block) = self.block_index.get_block(&block_coord) else {
+				let Some(block) = self.block_index.block(&block_coord) else {
 					return Ok(Chunks::new_empty());
 				};
 				let block = block.clone();
 				log::trace!("block {block:?}");
 
 				// Get the bounding box of all tiles defined in this block
-				let tiles_bbox_block = block.get_global_bbox();
+				let tiles_bbox_block = block.global_bbox();
 				log::trace!("tiles_bbox_block {tiles_bbox_block:?}");
 
 				// Get the bounding box of all tiles defined in this block
@@ -287,13 +287,13 @@ impl TileSource for VersaTilesReader {
 		let block_coord = TileCoord::new(coord.level, coord.x.shr(8), coord.y.shr(8))?;
 
 		// Get the block using the block coordinate
-		let Some(block) = self.block_index.get_block(&block_coord) else {
+		let Some(block) = self.block_index.block(&block_coord) else {
 			return Ok(None);
 		};
 		let block = block.clone();
 
 		// Get the block and its bounding box
-		let bbox = block.get_global_bbox();
+		let bbox = block.global_bbox();
 
 		// Check if the tile is within the block definition
 		if !bbox.includes_coord(coord)? {
@@ -329,10 +329,10 @@ impl TileSource for VersaTilesReader {
 
 		let mut blocks: Vec<(TileBBox, TileBBox, BlockDefinition)> = Vec::new();
 		for block_coord in block_coords {
-			let Some(block) = self.block_index.get_block(&block_coord) else {
+			let Some(block) = self.block_index.block(&block_coord) else {
 				continue;
 			};
-			let block_bbox = *block.get_global_bbox();
+			let block_bbox = *block.global_bbox();
 			let mut used_bbox = bbox;
 			used_bbox.intersect_bbox(&block_bbox)?;
 			blocks.push((block_bbox, used_bbox, block.clone()));
@@ -345,10 +345,10 @@ impl TileSource for VersaTilesReader {
 				.then(move |(block_bbox, used_bbox, block)| {
 					let reader = Arc::clone(&reader);
 					async move {
-						let blob = match reader.read_range(block.get_index_range()).await {
+						let blob = match reader.read_range(block.index_range()).await {
 							Ok(blob) => blob,
 							Err(e) => {
-								log::error!("failed to read block index range {:?}: {e}", block.get_index_range());
+								log::error!("failed to read block index range {:?}: {e}", block.index_range());
 								return futures::stream::iter(Vec::new());
 							}
 						};

@@ -47,7 +47,7 @@ impl BlockIndex {
 		let mut block_index = Self::new_empty();
 		for i in 0..count {
 			let range = &ByteRange::new(i * BLOCK_INDEX_LENGTH, BLOCK_INDEX_LENGTH);
-			block_index.add_block(BlockDefinition::from_blob(&buf.read_range(range)?)?);
+			block_index.insert_block(BlockDefinition::from_blob(&buf.read_range(range)?)?);
 		}
 
 		Ok(block_index)
@@ -66,12 +66,10 @@ impl BlockIndex {
 	}
 
 	/// Returns a [`TilePyramid`] representing the bounding boxes of the blocks in the index.
-	pub fn get_bbox_pyramid(&self) -> TilePyramid {
+	pub fn bbox_pyramid(&self) -> TilePyramid {
 		let mut pyramid = TilePyramid::new_empty();
 		for block in self.lookup.values() {
-			pyramid
-				.insert_bbox(block.get_global_bbox())
-				.expect("include_bbox failed");
+			pyramid.insert_bbox(block.global_bbox()).expect("include_bbox failed");
 		}
 		pyramid
 	}
@@ -80,8 +78,8 @@ impl BlockIndex {
 	///
 	/// # Arguments
 	/// * `block` - The block to add.
-	pub fn add_block(&mut self, block: BlockDefinition) {
-		self.lookup.insert(*block.get_coord(), block);
+	pub fn insert_block(&mut self, block: BlockDefinition) {
+		self.lookup.insert(*block.coord(), block);
 	}
 
 	/// Converts the `BlockIndex` to a binary blob.
@@ -92,10 +90,10 @@ impl BlockIndex {
 	/// # Errors
 	/// Returns an error if the conversion fails.
 	#[context("Failed to create BlockIndex from blob")]
-	pub fn as_blob(&self) -> Result<Blob> {
+	pub fn to_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_be();
 		for block in self.lookup.values() {
-			writer.write_blob(&block.as_blob()?)?;
+			writer.write_blob(&block.to_blob()?)?;
 		}
 
 		Ok(writer.into_blob())
@@ -109,8 +107,8 @@ impl BlockIndex {
 	/// # Errors
 	/// Returns an error if the conversion fails.
 	#[context("Failed to create BlockIndex from Brotli blob")]
-	pub fn as_brotli_blob(&self) -> Result<Blob> {
-		compress_brotli_fast(&self.as_blob()?)
+	pub fn to_brotli_blob(&self) -> Result<Blob> {
+		compress_brotli_fast(&self.to_blob()?)
 	}
 
 	/// Retrieves a block from the index by its coordinates.
@@ -120,7 +118,7 @@ impl BlockIndex {
 	///
 	/// # Returns
 	/// An option containing a reference to the block if found, or `None` if not found.
-	pub fn get_block(&self, coord: &TileCoord) -> Option<&BlockDefinition> {
+	pub fn block(&self, coord: &TileCoord) -> Option<&BlockDefinition> {
 		self.lookup.get(coord)
 	}
 
@@ -150,8 +148,8 @@ mod tests {
 	#[test]
 	fn conversion() -> Result<()> {
 		let mut index1 = BlockIndex::new_empty();
-		index1.add_block(BlockDefinition::new(&TileBBox::from_min_and_max(3, 1, 2, 3, 4)?)?);
-		let blob = index1.as_brotli_blob()?;
+		index1.insert_block(BlockDefinition::new(&TileBBox::from_min_and_max(3, 1, 2, 3, 4)?)?);
+		let blob = index1.to_brotli_blob()?;
 		let index2 = BlockIndex::from_brotli_blob(&blob)?;
 		assert_eq!(index1, index2);
 		Ok(())
