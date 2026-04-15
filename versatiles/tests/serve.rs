@@ -115,7 +115,7 @@ impl Server {
 			.into_object()
 			.unwrap();
 		let desc = json.get_string("description").unwrap().unwrap_or_default();
-		let length = json.get_array("vector_layers").unwrap().unwrap().len();
+		let length = json.array("vector_layers").unwrap().unwrap().len();
 		vec![format!("length: {length}"), format!("desc: {desc}")]
 	}
 

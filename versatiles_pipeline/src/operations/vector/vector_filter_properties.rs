@@ -69,15 +69,15 @@ impl RunnerTrait for Runner {
 pub struct Factory {}
 
 impl OperationFactoryTrait for Factory {
-	fn get_docs(&self) -> String {
-		Args::get_docs()
+	fn docs(&self) -> String {
+		Args::docs()
 	}
-	fn get_tag_name(&self) -> &str {
+	fn tag_name(&self) -> &str {
 		"vector_filter_properties"
 	}
 	#[cfg(feature = "codegen")]
-	fn get_field_metadata(&self) -> Vec<crate::vpl::VPLFieldMeta> {
-		Args::get_field_metadata()
+	fn field_metadata(&self) -> Vec<crate::vpl::VPLFieldMeta> {
+		Args::field_metadata()
 	}
 }
 

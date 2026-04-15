@@ -92,7 +92,7 @@ impl TraversalSize {
 		Ok(())
 	}
 
-	pub fn get_intersected(&self, other: &TraversalSize) -> Result<TraversalSize> {
+	pub fn intersected(&self, other: &TraversalSize) -> Result<TraversalSize> {
 		let mut result = self.clone();
 		result.intersect(other)?;
 		Ok(result)

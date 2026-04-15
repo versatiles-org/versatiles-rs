@@ -39,7 +39,7 @@ impl ReadTileSource for Operation {
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let source = factory.get_reader(DataLocation::try_from(&args.filename)?).await?;
+		let source = factory.reader(DataLocation::try_from(&args.filename)?).await?;
 		let mut tilejson = source.tilejson().clone();
 		source.metadata().update_tilejson(&mut tilejson);
 

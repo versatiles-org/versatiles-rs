@@ -93,5 +93,5 @@ pub trait DataReaderTrait: Debug + Send + Sync {
 	/// # Returns
 	///
 	/// * A string slice representing the name of the data source.
-	fn get_name(&self) -> &str;
+	fn name(&self) -> &str;
 }

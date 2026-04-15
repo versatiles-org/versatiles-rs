@@ -85,15 +85,15 @@ mod tests {
 	}
 
 	#[test]
-	fn test_factory_get_tag_name() {
+	fn test_factory_tag_name() {
 		let factory = Factory {};
-		assert_eq!(factory.get_tag_name(), "dem_tile_resize");
+		assert_eq!(factory.tag_name(), "dem_tile_resize");
 	}
 
 	#[test]
-	fn test_factory_get_docs() {
+	fn test_factory_docs() {
 		let factory = Factory {};
-		let docs = factory.get_docs();
+		let docs = factory.docs();
 		assert!(docs.contains("tile_size"));
 		assert!(docs.contains("encoding"));
 	}

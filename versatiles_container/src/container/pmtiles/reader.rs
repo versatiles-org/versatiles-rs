@@ -117,7 +117,7 @@ impl PMTilesReader {
 	where
 		Self: Sized,
 	{
-		log::debug!("Opening PMTilesReader for {}", data_reader.get_name());
+		log::debug!("Opening PMTilesReader for {}", data_reader.name());
 
 		let header = HeaderV3::deserialize(&data_reader.read_range(&ByteRange::new(0, HeaderV3::len())).await?)?;
 		log::trace!("Header: {header:?}");
@@ -380,7 +380,7 @@ impl TilesReader for PMTilesReader {
 #[async_trait]
 impl TileSource for PMTilesReader {
 	fn source_type(&self) -> Arc<SourceType> {
-		SourceType::new_container("pmtiles", self.data_reader.get_name())
+		SourceType::new_container("pmtiles", self.data_reader.name())
 	}
 
 	/// Returns the current reader parameters (tile format, compression, bbox pyramid).

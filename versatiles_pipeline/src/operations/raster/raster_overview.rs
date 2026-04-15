@@ -25,7 +25,7 @@ impl Operation {
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let core = OverviewCore::new(source, args.level, Arc::new(|img| img.get_scaled_down(2)))?;
+		let core = OverviewCore::new(source, args.level, Arc::new(|img| img.scaled_down(2)))?;
 
 		Ok(Self { core })
 	}
@@ -232,15 +232,15 @@ mod tests {
 	}
 
 	#[test]
-	fn test_factory_get_tag_name() {
+	fn test_factory_tag_name() {
 		let factory = Factory {};
-		assert_eq!(factory.get_tag_name(), "raster_overview");
+		assert_eq!(factory.tag_name(), "raster_overview");
 	}
 
 	#[test]
-	fn test_factory_get_docs() {
+	fn test_factory_docs() {
 		let factory = Factory {};
-		let docs = factory.get_docs();
+		let docs = factory.docs();
 		assert!(docs.contains("level"));
 	}
 

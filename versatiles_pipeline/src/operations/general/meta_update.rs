@@ -115,7 +115,7 @@ mod tests {
 		o.as_object().get_string(k).ok().flatten()
 	}
 	fn get_num(o: &TileJSON, k: &str) -> Option<f64> {
-		o.as_object().get_number(k).ok().flatten()
+		o.as_object().number(k).ok().flatten()
 	}
 
 	#[tokio::test]
@@ -153,8 +153,8 @@ mod tests {
 		assert_eq!(tj.tile_schema, Some(TileSchema::try_from("shortbread@1.0")?));
 
 		// Pre-existing zooms from the filter should remain intact
-		assert_eq!(tj.as_object().get_number("minzoom")?.unwrap(), 2.0);
-		assert_eq!(tj.as_object().get_number("maxzoom")?.unwrap(), 7.0);
+		assert_eq!(tj.as_object().number("minzoom")?.unwrap(), 2.0);
+		assert_eq!(tj.as_object().number("maxzoom")?.unwrap(), 7.0);
 		Ok(())
 	}
 

@@ -238,7 +238,7 @@ impl TileServer {
 		self.static_sources.rcu(|old| {
 			let new: Vec<_> = old
 				.iter()
-				.filter(|source| source.get_prefix() != &target_prefix)
+				.filter(|source| source.prefix() != &target_prefix)
 				.cloned()
 				.collect();
 			new
@@ -382,7 +382,7 @@ impl TileServer {
 	/// If the server was started with port 0, this returns the actual ephemeral port
 	/// assigned after binding.
 	#[must_use]
-	pub fn get_port(&self) -> u16 {
+	pub fn port(&self) -> u16 {
 		self.port
 	}
 
@@ -407,7 +407,7 @@ impl TileServer {
 		let mut result = Vec::new();
 		for entry in self.tile_sources.iter() {
 			let tile_source = entry.value();
-			let source_name = tile_source.get_source_name();
+			let source_name = tile_source.source_name();
 			result.push((tile_source.prefix.clone(), source_name));
 		}
 		result
@@ -725,7 +725,7 @@ mod tests {
 
 		// Verify the second one still exists
 		let sources = server.static_sources.load();
-		assert_eq!(sources[0].get_prefix().str, "/second/");
+		assert_eq!(sources[0].prefix().str, "/second/");
 		Ok(())
 	}
 

@@ -29,7 +29,7 @@ impl Operation {
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let tile_size = args.tile_size.ok_or_else(|| anyhow::anyhow!("tile_size is required"))?;
-		let core = TileResizeCore::new(source, tile_size, Arc::new(|img| img.get_scaled_down(2)))?;
+		let core = TileResizeCore::new(source, tile_size, Arc::new(|img| img.scaled_down(2)))?;
 		Ok(Self { core })
 	}
 }
@@ -69,29 +69,29 @@ mod tests {
 	use versatiles_image::{DynamicImage, GenericImageView, traits::DynamicImageTraitConvert};
 
 	#[test]
-	fn test_factory_get_tag_name() {
+	fn test_factory_tag_name() {
 		let factory = Factory {};
-		assert_eq!(factory.get_tag_name(), "raster_tile_resize");
+		assert_eq!(factory.tag_name(), "raster_tile_resize");
 	}
 
 	#[test]
-	fn test_factory_get_docs() {
+	fn test_factory_docs() {
 		let factory = Factory {};
-		let docs = factory.get_docs();
+		let docs = factory.docs();
 		assert!(docs.contains("tile_size"));
 	}
 
 	#[tokio::test]
 	async fn test_build_rejects_same_tile_size() {
 		let source = DummyImageSource::from_color(&[128, 128, 128], 256, TileFormat::PNG, None).unwrap();
-		let result = TileResizeCore::new(Box::new(source), 256, Arc::new(|img| img.get_scaled_down(2)));
+		let result = TileResizeCore::new(Box::new(source), 256, Arc::new(|img| img.scaled_down(2)));
 		assert!(result.is_err());
 	}
 
 	#[tokio::test]
 	async fn test_build_rejects_invalid_tile_size() {
 		let source = DummyImageSource::from_color(&[128, 128, 128], 256, TileFormat::PNG, None).unwrap();
-		let result = TileResizeCore::new(Box::new(source), 1024, Arc::new(|img| img.get_scaled_down(2)));
+		let result = TileResizeCore::new(Box::new(source), 1024, Arc::new(|img| img.scaled_down(2)));
 		assert!(result.is_err());
 	}
 
@@ -122,11 +122,7 @@ mod tests {
 	}
 
 	fn make_op(source: DummyImageSource, target_tile_size: u32) -> Result<Operation> {
-		let core = TileResizeCore::new(
-			Box::new(source),
-			target_tile_size,
-			Arc::new(|img| img.get_scaled_down(2)),
-		)?;
+		let core = TileResizeCore::new(Box::new(source), target_tile_size, Arc::new(|img| img.scaled_down(2)))?;
 		Ok(Operation { core })
 	}
 

@@ -81,7 +81,7 @@ impl TileSourceMetadata {
 		{
 			tile_json.tile_schema = Some(match tile_type {
 				TileType::Raster => TileSchema::RasterRGB,
-				TileType::Vector => tile_json.vector_layers.get_tile_schema(),
+				TileType::Vector => tile_json.vector_layers.tile_schema(),
 				TileType::Unknown => TileSchema::Unknown,
 			});
 		}

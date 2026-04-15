@@ -305,15 +305,15 @@ impl TileSource for Operation {
 pub struct Factory {}
 
 impl OperationFactoryTrait for Factory {
-	fn get_docs(&self) -> String {
-		Args::get_docs()
+	fn docs(&self) -> String {
+		Args::docs()
 	}
-	fn get_tag_name(&self) -> &str {
+	fn tag_name(&self) -> &str {
 		"from_gdal_raster"
 	}
 	#[cfg(feature = "codegen")]
-	fn get_field_metadata(&self) -> Vec<crate::vpl::VPLFieldMeta> {
-		Args::get_field_metadata()
+	fn field_metadata(&self) -> Vec<crate::vpl::VPLFieldMeta> {
+		Args::field_metadata()
 	}
 }
 
@@ -456,15 +456,15 @@ mod tests {
 	}
 
 	#[test]
-	fn test_factory_get_tag_name() {
+	fn test_factory_tag_name() {
 		let factory = Factory {};
-		assert_eq!(factory.get_tag_name(), "from_gdal_raster");
+		assert_eq!(factory.tag_name(), "from_gdal_raster");
 	}
 
 	#[test]
-	fn test_factory_get_docs() {
+	fn test_factory_docs() {
 		let factory = Factory {};
-		let docs = factory.get_docs();
+		let docs = factory.docs();
 		assert!(docs.contains("filename"));
 		assert!(docs.contains("tile_size"));
 		assert!(docs.contains("tile_format"));

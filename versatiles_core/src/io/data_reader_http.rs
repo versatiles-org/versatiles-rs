@@ -303,7 +303,7 @@ impl DataReaderTrait for DataReaderHttp {
 	/// # Returns
 	///
 	/// * A string slice representing the name of the data source.
-	fn get_name(&self) -> &str {
+	fn name(&self) -> &str {
 		&self.name
 	}
 }
@@ -372,7 +372,7 @@ mod tests {
 		let data_reader_http = DataReaderHttp::try_from(&Url::parse(url).unwrap())?;
 
 		// Check if the name matches the original URL
-		assert_eq!(data_reader_http.get_name(), url);
+		assert_eq!(data_reader_http.name(), url);
 
 		Ok(())
 	}
@@ -384,7 +384,7 @@ mod tests {
 
 		assert_eq!(reader.username.as_deref(), Some("user"));
 		assert_eq!(reader.password.as_deref(), Some("p@ss"));
-		assert_eq!(reader.get_name(), "https://example.com/data.bin");
+		assert_eq!(reader.name(), "https://example.com/data.bin");
 		assert_eq!(reader.url.username(), "");
 		assert_eq!(reader.url.password(), None);
 
@@ -398,7 +398,7 @@ mod tests {
 
 		assert_eq!(reader.username, None);
 		assert_eq!(reader.password, None);
-		assert_eq!(reader.get_name(), "https://example.com/data.bin");
+		assert_eq!(reader.name(), "https://example.com/data.bin");
 
 		Ok(())
 	}

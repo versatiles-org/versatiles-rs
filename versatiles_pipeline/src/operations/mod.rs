@@ -7,7 +7,7 @@ mod vector;
 
 use crate::factory::{ReadOperationFactoryTrait, TransformOperationFactoryTrait};
 
-pub fn get_transform_operation_factories() -> Vec<Box<dyn TransformOperationFactoryTrait>> {
+pub fn transform_operation_factories() -> Vec<Box<dyn TransformOperationFactoryTrait>> {
 	vec![
 		Box::new(general::filter::Factory {}),
 		Box::new(general::meta_update::Factory {}),
@@ -27,7 +27,7 @@ pub fn get_transform_operation_factories() -> Vec<Box<dyn TransformOperationFact
 	]
 }
 
-pub fn get_read_operation_factories() -> Vec<Box<dyn ReadOperationFactoryTrait>> {
+pub fn read_operation_factories() -> Vec<Box<dyn ReadOperationFactoryTrait>> {
 	vec![
 		Box::new(read::from_color::Factory {}),
 		Box::new(read::from_container::Factory {}),

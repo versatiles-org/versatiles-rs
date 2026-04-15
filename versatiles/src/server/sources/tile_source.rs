@@ -32,7 +32,7 @@ impl ServerTileSource {
 		})
 	}
 
-	pub fn get_source_name(&self) -> String {
+	pub fn source_name(&self) -> String {
 		self.reader.source_type().to_string() // Direct access!
 	}
 
@@ -217,11 +217,11 @@ mod tests {
 		let tile_json = check_response(c, "meta.json", Uncompressed, "application/json").await?;
 		let tile_json = TileJSON::try_from(tile_json)?.as_object();
 		assert_eq!(tile_json.get_string("tile_format")?.unwrap(), exp_mime);
-		assert_eq!(tile_json.get_array("bounds")?.unwrap().stringify(), exp_bounds);
+		assert_eq!(tile_json.array("bounds")?.unwrap().stringify(), exp_bounds);
 		#[allow(clippy::cast_sign_loss)] // zoom values are 0-31
 		{
-			assert_eq!(tile_json.get_number("minzoom")?.unwrap() as u8, exp_minzoom);
-			assert_eq!(tile_json.get_number("maxzoom")?.unwrap() as u8, exp_maxzoom);
+			assert_eq!(tile_json.number("minzoom")?.unwrap() as u8, exp_minzoom);
+			assert_eq!(tile_json.number("maxzoom")?.unwrap() as u8, exp_maxzoom);
 		}
 
 		assert_eq!(check_status(c, "x/0/0.png").await, 400);

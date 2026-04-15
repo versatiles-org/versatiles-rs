@@ -135,12 +135,12 @@ impl TarFile {
 #[async_trait]
 impl StaticSourceTrait for TarFile {
 	#[cfg(test)]
-	fn get_type(&self) -> &str {
+	fn type_name(&self) -> &str {
 		"tar"
 	}
 
 	#[cfg(test)]
-	fn get_name(&self) -> &str {
+	fn name(&self) -> &str {
 		&self.name
 	}
 
@@ -231,7 +231,7 @@ mod tests {
 
 		let tar_file = TarFile::from(&file).unwrap();
 
-		assert!(tar_file.get_name().ends_with("temp.tar"));
+		assert!(tar_file.name().ends_with("temp.tar"));
 		assert!(format!("{tar_file:?}").starts_with("TarFile { name:"));
 	}
 

@@ -9,15 +9,15 @@ macro_rules! define_transform_factory {
 		pub struct Factory {}
 
 		impl $crate::factory::OperationFactoryTrait for Factory {
-			fn get_docs(&self) -> String {
-				<$args>::get_docs()
+			fn docs(&self) -> String {
+				<$args>::docs()
 			}
-			fn get_tag_name(&self) -> &str {
+			fn tag_name(&self) -> &str {
 				$tag
 			}
 			#[cfg(feature = "codegen")]
-			fn get_field_metadata(&self) -> Vec<$crate::vpl::VPLFieldMeta> {
-				<$args>::get_field_metadata()
+			fn field_metadata(&self) -> Vec<$crate::vpl::VPLFieldMeta> {
+				<$args>::field_metadata()
 			}
 		}
 
@@ -48,15 +48,15 @@ macro_rules! define_read_factory {
 		pub struct Factory {}
 
 		impl $crate::factory::OperationFactoryTrait for Factory {
-			fn get_docs(&self) -> String {
-				<$args>::get_docs()
+			fn docs(&self) -> String {
+				<$args>::docs()
 			}
-			fn get_tag_name(&self) -> &str {
+			fn tag_name(&self) -> &str {
 				$tag
 			}
 			#[cfg(feature = "codegen")]
-			fn get_field_metadata(&self) -> Vec<$crate::vpl::VPLFieldMeta> {
-				<$args>::get_field_metadata()
+			fn field_metadata(&self) -> Vec<$crate::vpl::VPLFieldMeta> {
+				<$args>::field_metadata()
 			}
 		}
 

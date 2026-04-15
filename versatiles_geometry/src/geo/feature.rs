@@ -174,15 +174,15 @@ mod tests {
 		let mut f = GeoFeature::new_example();
 		let j = f.to_json(None);
 		assert_eq!(j.get_string("type").unwrap(), Some("Feature".into()));
-		assert!(j.get_number("id").unwrap().is_some());
-		assert!(j.get_object("geometry").unwrap().is_some());
-		assert!(j.get_object("properties").unwrap().is_some());
+		assert!(j.number("id").unwrap().is_some());
+		assert!(j.object("geometry").unwrap().is_some());
+		assert!(j.object("properties").unwrap().is_some());
 
 		// without id
 		f.id = None;
 		let j2 = f.to_json(None);
 		assert_eq!(j2.get_string("type").unwrap(), Some("Feature".into()));
-		assert!(j2.get_number("id").unwrap().is_none());
+		assert!(j2.number("id").unwrap().is_none());
 	}
 
 	#[test]
@@ -198,7 +198,7 @@ mod tests {
 		// geometry is present and serializable
 		let j = f.to_json(None);
 		assert_eq!(j.get_string("type").unwrap(), Some("Feature".into()));
-		assert!(j.get_object("geometry").unwrap().is_some());
+		assert!(j.object("geometry").unwrap().is_some());
 	}
 
 	#[test]

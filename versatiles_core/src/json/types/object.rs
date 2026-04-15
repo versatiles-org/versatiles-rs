@@ -40,40 +40,34 @@ impl JsonObject {
 		self.get(key).map(JsonValue::to_string).transpose()
 	}
 
-	pub fn get_object(&self, key: &str) -> Result<Option<&JsonObject>> {
+	pub fn object(&self, key: &str) -> Result<Option<&JsonObject>> {
 		self.get(key).map(JsonValue::as_object).transpose()
 	}
 
 	/// Retrieve a numeric value of type `T` for the specified key, returning `None` if missing or not numeric.
-	pub fn get_number(&self, key: &str) -> Result<Option<f64>> {
+	pub fn number(&self, key: &str) -> Result<Option<f64>> {
 		self.get(key).map(JsonValue::as_number).transpose()
 	}
 
 	/// Retrieve a `JsonArray` reference for the specified key, if present and an array.
-	pub fn get_array(&self, key: &str) -> Result<Option<&JsonArray>> {
+	pub fn array(&self, key: &str) -> Result<Option<&JsonArray>> {
 		self.get(key).map(JsonValue::as_array).transpose()
 	}
 
 	/// Retrieve a `Vec<String>` from the array at the specified key, if present and all elements are strings.
-	pub fn get_string_vec(&self, key: &str) -> Result<Option<Vec<String>>> {
-		self
-			.get_array(key)?
-			.map(super::array::JsonArray::as_string_vec)
-			.transpose()
+	pub fn string_vec(&self, key: &str) -> Result<Option<Vec<String>>> {
+		self.array(key)?.map(super::array::JsonArray::as_string_vec).transpose()
 	}
 
 	/// Retrieve a `Vec<T>` from the array at the specified key, if present and all elements are numeric.
-	pub fn get_number_vec(&self, key: &str) -> Result<Option<Vec<f64>>> {
-		self
-			.get_array(key)?
-			.map(super::array::JsonArray::as_number_vec)
-			.transpose()
+	pub fn number_vec(&self, key: &str) -> Result<Option<Vec<f64>>> {
+		self.array(key)?.map(super::array::JsonArray::as_number_vec).transpose()
 	}
 
 	/// Retrieve a fixed-size array `[T; N]` from the array at the specified key, if present and all elements are numeric.
-	pub fn get_number_array<const N: usize>(&self, key: &str) -> Result<Option<[f64; N]>> {
+	pub fn number_array<const N: usize>(&self, key: &str) -> Result<Option<[f64; N]>> {
 		self
-			.get_array(key)?
+			.array(key)?
 			.map(super::array::JsonArray::as_number_array::<N>)
 			.transpose()
 	}
@@ -239,46 +233,46 @@ mod tests {
 	}
 
 	#[test]
-	fn test_get_number() {
+	fn test_number() {
 		let obj = JsonObject::from(vec![("key", 42)]);
-		let value = obj.get_number("key").unwrap();
+		let value = obj.number("key").unwrap();
 		assert_eq!(value, Some(42.0));
 
-		let missing = obj.get_number("missing").unwrap();
+		let missing = obj.number("missing").unwrap();
 		assert_eq!(missing, None);
 	}
 
 	#[test]
-	fn test_get_array() {
+	fn test_array() {
 		let array = JsonArray(vec![JsonValue::from("item1"), JsonValue::from("item2")]);
 		let obj = JsonObject::from(vec![("key", JsonValue::Array(array.clone()))]);
 
-		let value = obj.get_array("key").unwrap();
+		let value = obj.array("key").unwrap();
 		assert_eq!(value, Some(&array));
 	}
 
 	#[test]
-	fn test_get_string_vec() {
+	fn test_string_vec() {
 		let array = JsonArray(vec![JsonValue::from("item1"), JsonValue::from("item2")]);
 		let obj = JsonObject::from(vec![("key", JsonValue::Array(array))]);
 
-		let value = obj.get_string_vec("key").unwrap();
+		let value = obj.string_vec("key").unwrap();
 		assert_eq!(value, Some(vec!["item1".to_string(), "item2".to_string()]));
 	}
 
 	#[test]
-	fn test_get_number_vec() {
+	fn test_number_vec() {
 		let array = JsonArray::from(vec![1, 2, 3]);
 		let obj = JsonObject::from(vec![("key", JsonValue::Array(array))]);
-		assert_eq!(obj.get_number_vec("key").unwrap(), Some(vec![1.0, 2.0, 3.0]));
+		assert_eq!(obj.number_vec("key").unwrap(), Some(vec![1.0, 2.0, 3.0]));
 	}
 
 	#[test]
-	fn test_get_number_array() {
+	fn test_number_array() {
 		let array = JsonArray::from(vec![1, 2, 3]);
 		let obj = JsonObject::from(vec![("key", JsonValue::Array(array))]);
 
-		let value = obj.get_number_array("key").unwrap();
+		let value = obj.number_array("key").unwrap();
 		assert_eq!(value, Some([1.0, 2.0, 3.0]));
 	}
 
@@ -362,8 +356,8 @@ mod tests {
 		let input = vec![("foo", 3), ("bar", 4)];
 		let jv: JsonValue = input.clone().into();
 		if let JsonValue::Object(obj) = jv {
-			assert_eq!(obj.get_number("foo").unwrap(), Some(3.0));
-			assert_eq!(obj.get_number("bar").unwrap(), Some(4.0));
+			assert_eq!(obj.number("foo").unwrap(), Some(3.0));
+			assert_eq!(obj.number("bar").unwrap(), Some(4.0));
 		} else {
 			panic!("Expected JsonValue::Object variant");
 		}
@@ -372,9 +366,9 @@ mod tests {
 	#[test]
 	fn test_get_missing_variants() {
 		let obj = JsonObject::default();
-		assert_eq!(obj.get_array("missing").unwrap(), None);
-		assert_eq!(obj.get_string_vec("missing").unwrap(), None);
-		assert_eq!(obj.get_number_vec("missing").unwrap(), None);
-		assert_eq!(obj.get_number_array::<3>("missing").unwrap(), None);
+		assert_eq!(obj.array("missing").unwrap(), None);
+		assert_eq!(obj.string_vec("missing").unwrap(), None);
+		assert_eq!(obj.number_vec("missing").unwrap(), None);
+		assert_eq!(obj.number_array::<3>("missing").unwrap(), None);
 	}
 }

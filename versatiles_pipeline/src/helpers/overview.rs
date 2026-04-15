@@ -92,7 +92,7 @@ impl OverviewCore {
 
 		// get images from cache
 		for q in &[0, 1, 2, 3] {
-			let bbox1 = bbox0.leveled_up().get_quadrant(*q)?;
+			let bbox1 = bbox0.leveled_up().quadrant(*q)?;
 
 			if let Some((_, blobs1)) = self.cache.remove(&bbox1.min_tile()?) {
 				let entry_bytes = estimate_entry_bytes(&blobs1);

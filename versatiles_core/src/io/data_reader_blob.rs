@@ -99,7 +99,7 @@ impl DataReaderTrait for DataReaderBlob {
 	/// # Returns
 	///
 	/// * A string slice representing the name of the data source.
-	fn get_name(&self) -> &'static str {
+	fn name(&self) -> &'static str {
 		"memory"
 	}
 }
@@ -193,7 +193,7 @@ mod tests {
 
 		let data_reader = DataReaderBlob::from(blob.clone());
 
-		assert_eq!(data_reader.get_name(), "memory");
+		assert_eq!(data_reader.name(), "memory");
 
 		assert_eq!(data_reader.read_range(&ByteRange::new(0, 8)).await?, blob);
 
@@ -212,7 +212,7 @@ mod tests {
 		let data = vec![10, 20, 30, 40, 50, 60, 70, 80];
 		let data_reader = DataReaderBlob::from(data.clone());
 
-		assert_eq!(data_reader.get_name(), "memory");
+		assert_eq!(data_reader.name(), "memory");
 		assert_eq!(data_reader.len(), data.len());
 
 		let range = ByteRange::new(2, 4);
@@ -229,7 +229,7 @@ mod tests {
 		data_writer.append(&Blob::from(data))?;
 		let data_reader: DataReaderBlob = data_writer.into();
 
-		assert_eq!(data_reader.get_name(), "memory");
+		assert_eq!(data_reader.name(), "memory");
 		assert_eq!(data_reader.len(), 6);
 
 		let range = ByteRange::new(0, 6);
@@ -246,7 +246,7 @@ mod tests {
 		data_writer.append(&Blob::from(data))?;
 		let data_reader: DataReaderBlob = Box::new(data_writer).into();
 
-		assert_eq!(data_reader.get_name(), "memory");
+		assert_eq!(data_reader.name(), "memory");
 		assert_eq!(data_reader.len(), 6);
 
 		let range = ByteRange::new(0, 6);

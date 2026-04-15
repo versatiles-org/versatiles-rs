@@ -40,7 +40,7 @@ pub trait DynamicImageTraitConvert {
 	fn iter_pixels(&self) -> impl Iterator<Item = &[u8]>;
 
 	/// Returns a reference to the raw pixel data at the specified (x, y) coordinates.
-	fn get_raw_pixel(&self, x: u32, y: u32) -> &[u8];
+	fn raw_pixel(&self, x: u32, y: u32) -> &[u8];
 }
 
 impl DynamicImageTraitConvert for DynamicImage {
@@ -127,7 +127,7 @@ impl DynamicImageTraitConvert for DynamicImage {
 		}
 	}
 
-	fn get_raw_pixel(&self, x: u32, y: u32) -> &[u8] {
+	fn raw_pixel(&self, x: u32, y: u32) -> &[u8] {
 		match self {
 			DynamicImage::ImageLuma8(i) => &i.get_pixel(x, y).0,
 			DynamicImage::ImageLumaA8(i) => &i.get_pixel(x, y).0,

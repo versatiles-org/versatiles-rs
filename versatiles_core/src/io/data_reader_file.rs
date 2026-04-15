@@ -160,7 +160,7 @@ impl DataReaderTrait for DataReaderFile {
 	/// # Returns
 	///
 	/// * A string slice representing the name of the data source.
-	fn get_name(&self) -> &str {
+	fn name(&self) -> &str {
 		&self.name
 	}
 }
@@ -249,7 +249,7 @@ mod tests {
 		let data_reader_file = DataReaderFile::open(temp_file_path.path())?;
 
 		// Check if the name matches the original file path
-		assert_wildcard!(data_reader_file.get_name(), "*testfile.txt");
+		assert_wildcard!(data_reader_file.name(), "*testfile.txt");
 
 		Ok(())
 	}

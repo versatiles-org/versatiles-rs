@@ -50,7 +50,7 @@ impl TileJsonValues {
 		if let Some(value) = self.0.get(key)
 			&& !value.is_list()
 		{
-			bail!("Item '{key}' is a '{}' and not a 'List'", value.get_type());
+			bail!("Item '{key}' is a '{}' and not a 'List'", value.type_name());
 		}
 		Ok(())
 	}
@@ -61,7 +61,7 @@ impl TileJsonValues {
 		if let Some(value) = self.0.get(key)
 			&& !value.is_string()
 		{
-			bail!("Item '{key}' is '{}' and not a 'String'", value.get_type());
+			bail!("Item '{key}' is '{}' and not a 'String'", value.type_name());
 		}
 		Ok(())
 	}
@@ -72,7 +72,7 @@ impl TileJsonValues {
 		if let Some(value) = self.0.get(key)
 			&& !value.is_integer()
 		{
-			bail!("Item '{key}' is '{}' and not a 'Integer'", value.get_type());
+			bail!("Item '{key}' is '{}' and not a 'Integer'", value.type_name());
 		}
 		Ok(())
 	}

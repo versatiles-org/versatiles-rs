@@ -38,12 +38,12 @@ pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
 	/// size `width_dst × height_dst` using `fast_image_resize`.
 	///
 	/// Coordinates are given in source pixel space. Returns an error on resize failures.
-	fn get_extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> Result<DynamicImage>;
+	fn extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> Result<DynamicImage>;
 
 	/// Produces a scaled‑down copy by the integer `factor` using a **box filter**.
 	///
 	/// Panics if `factor == 0`. Returns an error on resize failures.
-	fn get_scaled_down(&self, factor: u32) -> Result<DynamicImage>;
+	fn scaled_down(&self, factor: u32) -> Result<DynamicImage>;
 
 	/// Flattens an image with alpha against a given **background color**.
 	///
@@ -114,14 +114,14 @@ where
 	}
 
 	#[context("extracting region ({:.2},{:.2},{:.2},{:.2}) from {}x{} into {}x{}", x, y, w, h, self.width(), self.height(), width_dst, height_dst)]
-	fn get_extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> Result<DynamicImage> {
+	fn extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> Result<DynamicImage> {
 		let mut dst_image = DynamicImage::new(width_dst, height_dst, self.color());
 		Resizer::new().resize(self, &mut dst_image, &ResizeOptions::default().crop(x, y, w, h))?;
 		Ok(dst_image)
 	}
 
 	#[context("downscaling {}x{} by factor {} ({:?})", self.width(), self.height(), factor, self.color())]
-	fn get_scaled_down(&self, factor: u32) -> Result<DynamicImage> {
+	fn scaled_down(&self, factor: u32) -> Result<DynamicImage> {
 		assert!(factor > 0, "Scaling factor must be greater than zero");
 
 		let mut dst_image = DynamicImage::new(self.width() / factor, self.height() / factor, self.color());
@@ -185,7 +185,7 @@ where
 		if factor == 1 {
 			Ok(self)
 		} else {
-			self.get_scaled_down(factor)
+			self.scaled_down(factor)
 		}
 	}
 
@@ -489,7 +489,7 @@ mod tests {
 		let img = DynamicImage::new_test_rgb();
 		let out = img.clone().into_scaled_down(factor).unwrap();
 		assert_eq!(out.dimensions(), expect_dims);
-		let out2 = img.get_scaled_down(factor).unwrap();
+		let out2 = img.scaled_down(factor).unwrap();
 		assert_eq!(out2.dimensions(), expect_dims);
 	}
 
@@ -497,7 +497,7 @@ mod tests {
 	fn get_extract_returns_requested_size() {
 		let img = DynamicImage::new_test_rgb();
 		// Crop a centered 128x128 region and request same-sized output
-		let out = img.get_extract(64.0, 64.0, 128.0, 128.0, 128, 128).unwrap();
+		let out = img.extract(64.0, 64.0, 128.0, 128.0, 128, 128).unwrap();
 		assert_eq!(out.dimensions(), (128, 128));
 		assert_eq!(out.extended_color_type(), ECT::Rgb8);
 	}
@@ -607,7 +607,7 @@ mod tests {
 		let top = DynamicImage::from_raw(1, 1, top_bytes.to_vec()).unwrap();
 
 		base.overlay_additive(&top).unwrap();
-		let px = base.get_raw_pixel(0, 0);
+		let px = base.raw_pixel(0, 0);
 		assert_eq!(px, expect_color);
 	}
 

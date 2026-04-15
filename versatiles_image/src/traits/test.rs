@@ -244,7 +244,7 @@ where
 
 			for y in 0..height {
 				for x in 0..width {
-					let b = f64::from(self.get_raw_pixel(x, y)[c as usize]);
+					let b = f64::from(self.raw_pixel(x, y)[c as usize]);
 					// Ignore saturated pixels; those are clipped by generation and non-linear
 					if b <= 0.0 || b >= 255.0 {
 						continue;
@@ -304,7 +304,7 @@ where
 			let mut n = 0.0;
 			for y in 0..height {
 				for x in 0..width {
-					let bb = f64::from(self.get_raw_pixel(x, y)[c as usize]);
+					let bb = f64::from(self.raw_pixel(x, y)[c as usize]);
 					if bb <= 0.0 || bb >= 255.0 {
 						continue;
 					}

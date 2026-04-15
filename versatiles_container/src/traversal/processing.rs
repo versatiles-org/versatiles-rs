@@ -49,7 +49,7 @@ pub fn translate_traversals(
 	traversal_read: &Traversal,
 	traversal_write: &Traversal,
 ) -> Result<Vec<TraversalTranslationStep>> {
-	if let Ok(traversal) = traversal_read.get_intersected(traversal_write) {
+	if let Ok(traversal) = traversal_read.intersected(traversal_write) {
 		return Ok(traversal
 			.traverse_pyramid(pyramid)?
 			.into_iter()

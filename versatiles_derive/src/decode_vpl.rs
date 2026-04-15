@@ -12,7 +12,7 @@ struct TypeMapping {
 	method_name: &'static str,
 	/// Whether this is a required field (affects documentation formatting)
 	is_required: bool,
-	/// Optional generic type parameter (e.g., "u8" for get_property_number_option::<u8>)
+	/// Optional generic type parameter (e.g., "u8" for property_number_option::<u8>)
 	generic_param: Option<&'static str>,
 	/// Optional second generic parameter (e.g., "4" for array lengths)
 	generic_param2: Option<&'static str>,
@@ -24,7 +24,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "String",
 		display_name: "String",
-		method_name: "get_property_string_required",
+		method_name: "property_string_required",
 		is_required: true,
 		generic_param: None,
 		generic_param2: None,
@@ -32,7 +32,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "bool",
 		display_name: "Boolean",
-		method_name: "get_property_bool_required",
+		method_name: "property_bool_required",
 		is_required: true,
 		generic_param: None,
 		generic_param2: None,
@@ -40,7 +40,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "u8",
 		display_name: "u8",
-		method_name: "get_property_number_required",
+		method_name: "property_number_required",
 		is_required: true,
 		generic_param: Some("u8"),
 		generic_param2: None,
@@ -48,7 +48,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "[f64;4]",
 		display_name: "[f64,f64,f64,f64]",
-		method_name: "get_property_number_array_required",
+		method_name: "property_number_array_required",
 		is_required: true,
 		generic_param: Some("f64"),
 		generic_param2: None,
@@ -57,7 +57,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "Option<bool>",
 		display_name: "bool",
-		method_name: "get_property_bool_option",
+		method_name: "property_bool_option",
 		is_required: false,
 		generic_param: None,
 		generic_param2: None,
@@ -65,7 +65,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "Option<String>",
 		display_name: "String",
-		method_name: "get_property_string_option",
+		method_name: "property_string_option",
 		is_required: false,
 		generic_param: None,
 		generic_param2: None,
@@ -73,7 +73,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "Option<f32>",
 		display_name: "f32",
-		method_name: "get_property_number_option",
+		method_name: "property_number_option",
 		is_required: false,
 		generic_param: Some("f32"),
 		generic_param2: None,
@@ -81,7 +81,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "Option<u8>",
 		display_name: "u8",
-		method_name: "get_property_number_option",
+		method_name: "property_number_option",
 		is_required: false,
 		generic_param: Some("u8"),
 		generic_param2: None,
@@ -89,7 +89,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "Option<u16>",
 		display_name: "u16",
-		method_name: "get_property_number_option",
+		method_name: "property_number_option",
 		is_required: false,
 		generic_param: Some("u16"),
 		generic_param2: None,
@@ -97,7 +97,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "Option<u32>",
 		display_name: "u32",
-		method_name: "get_property_number_option",
+		method_name: "property_number_option",
 		is_required: false,
 		generic_param: Some("u32"),
 		generic_param2: None,
@@ -105,7 +105,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "Option<f64>",
 		display_name: "f64",
-		method_name: "get_property_number_option",
+		method_name: "property_number_option",
 		is_required: false,
 		generic_param: Some("f64"),
 		generic_param2: None,
@@ -113,7 +113,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "Option<[f64;3]>",
 		display_name: "[f64,f64,f64]",
-		method_name: "get_property_number_array_option",
+		method_name: "property_number_array_option",
 		is_required: false,
 		generic_param: Some("f64"),
 		generic_param2: Some("3"),
@@ -121,7 +121,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "Option<[f64;4]>",
 		display_name: "[f64,f64,f64,f64]",
-		method_name: "get_property_number_array_option",
+		method_name: "property_number_array_option",
 		is_required: false,
 		generic_param: Some("f64"),
 		generic_param2: Some("4"),
@@ -129,7 +129,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "Option<[u8;3]>",
 		display_name: "[u8,u8,u8]",
-		method_name: "get_property_number_array_option",
+		method_name: "property_number_array_option",
 		is_required: false,
 		generic_param: Some("u8"),
 		generic_param2: Some("3"),
@@ -137,7 +137,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "Option<TileCompression>",
 		display_name: "TileCompression",
-		method_name: "get_property_enum_option",
+		method_name: "property_enum_option",
 		is_required: false,
 		generic_param: Some("TileCompression"),
 		generic_param2: None,
@@ -145,7 +145,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "Option<TileSchema>",
 		display_name: "TileSchema",
-		method_name: "get_property_enum_option",
+		method_name: "property_enum_option",
 		is_required: false,
 		generic_param: Some("TileSchema"),
 		generic_param2: None,
@@ -153,7 +153,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	TypeMapping {
 		pattern: "Option<TileFormat>",
 		display_name: "TileFormat",
-		method_name: "get_property_enum_option",
+		method_name: "property_enum_option",
 		is_required: false,
 		generic_param: Some("TileFormat"),
 		generic_param2: None,
@@ -338,9 +338,9 @@ fn build_impl_tokens(
 	quote! {
 		impl #name {
 			pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {
-				// scan node.get_property_names to ensure, that all properties are also defined in field_names
+				// scan node.property_names to ensure, that all properties are also defined in field_names
 				let argument_names: Vec<String> = vec![#(#field_names.to_string()),*];
-				let property_names = node.get_property_names();
+				let property_names = node.property_names();
 				for property_name in property_names {
 					if !argument_names.contains(&property_name) {
 						anyhow::bail!(
@@ -357,12 +357,12 @@ fn build_impl_tokens(
 				})
 			}
 
-			pub fn get_docs() -> String {
+			pub fn docs() -> String {
 				#doc.to_string()
 			}
 
 			#[cfg(feature = "codegen")]
-			pub fn get_field_metadata() -> Vec<crate::vpl::VPLFieldMeta> {
+			pub fn field_metadata() -> Vec<crate::vpl::VPLFieldMeta> {
 				vec![#(#meta_entries),*]
 			}
 		}
@@ -469,11 +469,11 @@ mod tests {
 		let ts = decode_struct(input.clone(), data_struct).unwrap();
 		let code = pretty_tokens(&ts).join("\n");
 		assert!(code.contains("pub fn from_vpl_node(node: &VPLNode) -> Result<Self>"));
-		assert!(code.contains("field1: node.get_property_string_required(\"field1\")?"));
-		assert!(code.contains("pub fn get_docs() -> String"));
+		assert!(code.contains("field1: node.property_string_required(\"field1\")?"));
+		assert!(code.contains("pub fn docs() -> String"));
 		assert!(code.contains("Struct documentation"));
 		assert!(code.contains("Field documentation"));
-		assert!(code.contains("pub fn get_field_metadata()"));
+		assert!(code.contains("pub fn field_metadata()"));
 		assert!(code.contains("\"field1\".to_string()"));
 		assert!(code.contains("\"String\""));
 		let code_no_spaces = code.replace(' ', "");
@@ -494,7 +494,7 @@ mod tests {
 			"missing getter {getter}"
 		);
 		assert!(code.contains(comment), "missing comment {comment}");
-		assert!(code.contains("pub fn get_field_metadata() -> Vec<crate::vpl::VPLFieldMeta>"));
+		assert!(code.contains("pub fn field_metadata() -> Vec<crate::vpl::VPLFieldMeta>"));
 	}
 
 	#[test]
@@ -505,7 +505,7 @@ mod tests {
 					v: String,
 				}
 			),
-			"get_property_string_required",
+			"property_string_required",
 			"**`v`: String (required)**",
 		);
 		assert_field_type_decodes(
@@ -514,7 +514,7 @@ mod tests {
 					v: bool,
 				}
 			),
-			"get_property_bool_required",
+			"property_bool_required",
 			"**`v`: Boolean (required)**",
 		);
 		assert_field_type_decodes(
@@ -523,7 +523,7 @@ mod tests {
 					v: u8,
 				}
 			),
-			"get_property_number_required::<u8>",
+			"property_number_required::<u8>",
 			"**`v`: u8 (required)**",
 		);
 		assert_field_type_decodes(
@@ -532,7 +532,7 @@ mod tests {
 					v: [f64; 4],
 				}
 			),
-			"get_property_number_array_required::<f64>",
+			"property_number_array_required::<f64>",
 			"**`v`: [f64,f64,f64,f64] (required)**",
 		);
 	}
@@ -545,7 +545,7 @@ mod tests {
 					v: Option<bool>,
 				}
 			),
-			"get_property_bool_option",
+			"property_bool_option",
 			"*`v`: bool (optional)*",
 		);
 		assert_field_type_decodes(
@@ -554,7 +554,7 @@ mod tests {
 					v: Option<String>,
 				}
 			),
-			"get_property_string_option",
+			"property_string_option",
 			"*`v`: String (optional)*",
 		);
 		assert_field_type_decodes(
@@ -563,7 +563,7 @@ mod tests {
 					v: Option<f32>,
 				}
 			),
-			"get_property_number_option::<f32>",
+			"property_number_option::<f32>",
 			"*`v`: f32 (optional)*",
 		);
 		assert_field_type_decodes(
@@ -572,7 +572,7 @@ mod tests {
 					v: Option<u8>,
 				}
 			),
-			"get_property_number_option::<u8>",
+			"property_number_option::<u8>",
 			"*`v`: u8 (optional)*",
 		);
 		assert_field_type_decodes(
@@ -581,7 +581,7 @@ mod tests {
 					v: Option<u32>,
 				}
 			),
-			"get_property_number_option::<u32>",
+			"property_number_option::<u32>",
 			"*`v`: u32 (optional)*",
 		);
 		assert_field_type_decodes(
@@ -590,7 +590,7 @@ mod tests {
 					v: Option<f64>,
 				}
 			),
-			"get_property_number_option::<f64>",
+			"property_number_option::<f64>",
 			"*`v`: f64 (optional)*",
 		);
 		assert_field_type_decodes(
@@ -599,7 +599,7 @@ mod tests {
 					v: Option<[f64; 4]>,
 				}
 			),
-			"get_property_number_array_option::<f64, 4>",
+			"property_number_array_option::<f64, 4>",
 			"*`v`: [f64,f64,f64,f64] (optional)*",
 		);
 		assert_field_type_decodes(
@@ -608,7 +608,7 @@ mod tests {
 					v: Option<TileFormat>,
 				}
 			),
-			"get_property_enum_option::<TileFormat>",
+			"property_enum_option::<TileFormat>",
 			"*`v`: TileFormat (optional)*",
 		);
 	}
@@ -629,7 +629,7 @@ mod tests {
 		};
 		let ts = decode_struct(input.clone(), data_struct).unwrap();
 		let code = ts.to_string();
-		// Ensure get_docs includes Sources section
+		// Ensure docs includes Sources section
 		assert!(code.contains("### Sources"));
 		assert!(code.contains("List of sources"));
 	}
@@ -655,7 +655,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_get_field_metadata_generated() {
+	fn test_field_metadata_generated() {
 		let input: DeriveInput = parse_quote!(
 			/// MyStruct docs
 			struct MyStruct {
@@ -674,8 +674,8 @@ mod tests {
 		let ts = decode_struct(input, data_struct).unwrap();
 		let code = pretty_tokens(&ts).join("\n");
 
-		// Verify get_field_metadata method is generated
-		assert!(code.contains("pub fn get_field_metadata()"));
+		// Verify field_metadata method is generated
+		assert!(code.contains("pub fn field_metadata()"));
 
 		// Verify field entries exist (prettyplease uses "key : value" formatting)
 		assert!(code.contains("\"field_name\".to_string()"));

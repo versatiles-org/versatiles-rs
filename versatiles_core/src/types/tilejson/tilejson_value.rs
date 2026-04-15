@@ -39,7 +39,7 @@ impl TileJsonValue {
 	}
 
 	/// Returns a string describing which variant this `TileJsonValue` is (`"List"`, `"String"`, or `"Integer"`).
-	pub fn get_type(&self) -> &str {
+	pub fn type_name(&self) -> &str {
 		match self {
 			TileJsonValue::Integer(_) => "Integer",
 			TileJsonValue::List(_) => "List",

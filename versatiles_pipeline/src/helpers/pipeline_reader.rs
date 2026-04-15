@@ -47,12 +47,12 @@ impl<'a> PipelineReader {
 	/// Opens a `PipelineReader` from an arbitrary [`DataReader`] containing VPL.
 	///
 	/// Useful when VPL is packaged in other containers or fetched over the network.
-	#[context("opening VPL from reader '{}'", reader.get_name())]
+	#[context("opening VPL from reader '{}'", reader.name())]
 	pub async fn open_data(reader: DataReader, dir: &Path, runtime: TilesRuntime) -> Result<PipelineReader> {
 		let vpl = reader.read_all().await?.into_string();
-		Self::from_str(&vpl, reader.get_name(), dir, runtime)
+		Self::from_str(&vpl, reader.name(), dir, runtime)
 			.await
-			.with_context(|| format!("failed parsing {} as VPL", reader.get_name()))
+			.with_context(|| format!("failed parsing {} as VPL", reader.name()))
 	}
 
 	/// Test helper: constructs a `PipelineReader` from a raw VPL string.

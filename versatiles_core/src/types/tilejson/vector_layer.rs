@@ -46,13 +46,13 @@ impl VectorLayers {
 
 			// Optional: "description", "minzoom", "maxzoom"
 			let description = object.get_string("description")?;
-			let minzoom = if let Some(v) = object.get_number("minzoom")? {
+			let minzoom = if let Some(v) = object.number("minzoom")? {
 				Some(float_to_int(v)?)
 			} else {
 				None
 			};
 
-			let maxzoom = if let Some(v) = object.get_number("maxzoom")? {
+			let maxzoom = if let Some(v) = object.number("maxzoom")? {
 				Some(float_to_int(v)?)
 			} else {
 				None
@@ -121,7 +121,7 @@ impl VectorLayers {
 	}
 
 	#[must_use]
-	pub fn get_tile_schema(&self) -> TileSchema {
+	pub fn tile_schema(&self) -> TileSchema {
 		if self.contains_ids(&[
 			"aerodrome_label",
 			"aeroway",
@@ -624,14 +624,14 @@ mod tests {
 	}
 
 	#[test]
-	fn test_get_tile_schema_empty() {
+	fn test_tile_schema_empty() {
 		use TileSchema::*;
 		let empty = VectorLayers(BTreeMap::new());
-		assert_eq!(empty.get_tile_schema(), VectorOther);
+		assert_eq!(empty.tile_schema(), VectorOther);
 	}
 
 	#[test]
-	fn test_get_tile_schema_openmaptiles() {
+	fn test_tile_schema_openmaptiles() {
 		use TileSchema::*;
 		let known_open = [
 			"aerodrome_label",
@@ -664,11 +664,11 @@ mod tests {
 			);
 		}
 		let vl = VectorLayers(map);
-		assert_eq!(vl.get_tile_schema(), VectorOpenMapTiles);
+		assert_eq!(vl.tile_schema(), VectorOpenMapTiles);
 	}
 
 	#[test]
-	fn test_get_tile_schema_shortbread1() {
+	fn test_tile_schema_shortbread1() {
 		use TileSchema::*;
 		let known_sb = [
 			"addresses",
@@ -711,7 +711,7 @@ mod tests {
 			);
 		}
 		let vl = VectorLayers(map);
-		assert_eq!(vl.get_tile_schema(), VectorShortbread1_0);
+		assert_eq!(vl.tile_schema(), VectorShortbread1_0);
 	}
 
 	#[test]
@@ -725,8 +725,8 @@ mod tests {
 		let obj = layer.as_json_object();
 		// Check object entries
 		assert_eq!(obj.get_string("description")?.unwrap(), "desc");
-		assert_eq!(obj.get_number("minzoom")?.unwrap(), 5.0);
-		assert_eq!(obj.get_number("maxzoom")?.unwrap(), 10.0);
+		assert_eq!(obj.number("minzoom")?.unwrap(), 5.0);
+		assert_eq!(obj.number("maxzoom")?.unwrap(), 10.0);
 		let fields = obj.get("fields").unwrap().as_object()?;
 		assert_eq!(fields.get_string("key")?.unwrap(), "String");
 		// check valid layer

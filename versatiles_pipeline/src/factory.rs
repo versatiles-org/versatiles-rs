@@ -12,7 +12,7 @@
 
 use crate::{
 	helpers::{dummy_image_source::DummyImageSource, dummy_vector_source::DummyVectorSource},
-	operations::{get_read_operation_factories, get_transform_operation_factories},
+	operations::{read_operation_factories, transform_operation_factories},
 	vpl::{VPLNode, VPLPipeline, parse_vpl},
 };
 use anyhow::{Result, anyhow, bail};
@@ -28,10 +28,10 @@ use versatiles_derive::context;
 static MULTIPLE_NEWLINES_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\n{3,}").unwrap());
 
 pub trait OperationFactoryTrait: Send + Sync {
-	fn get_tag_name(&self) -> &str;
-	fn get_docs(&self) -> String;
+	fn tag_name(&self) -> &str;
+	fn docs(&self) -> String;
 	#[cfg(feature = "codegen")]
-	fn get_field_metadata(&self) -> Vec<crate::vpl::VPLFieldMeta>;
+	fn field_metadata(&self) -> Vec<crate::vpl::VPLFieldMeta>;
 }
 
 /// Factory trait for read operations that create tile sources from VPL nodes.
@@ -104,11 +104,11 @@ impl PipelineFactory {
 	pub fn new_default(dir: DataLocation, create_reader: Callback, runtime: TilesRuntime) -> Self {
 		let mut factory = PipelineFactory::new_empty(dir, create_reader, runtime);
 
-		for f in get_read_operation_factories() {
+		for f in read_operation_factories() {
 			factory.add_read_factory(f);
 		}
 
-		for f in get_transform_operation_factories() {
+		for f in transform_operation_factories() {
 			factory.add_tran_factory(f);
 		}
 
@@ -165,17 +165,17 @@ impl PipelineFactory {
 
 	/// Registers a read operation factory under its VPL tag name.
 	fn add_read_factory(&mut self, factory: Box<dyn ReadOperationFactoryTrait>) {
-		self.read_ops.insert(factory.get_tag_name().to_string(), factory);
+		self.read_ops.insert(factory.tag_name().to_string(), factory);
 	}
 
 	/// Registers a transform operation factory under its VPL tag name.
 	fn add_tran_factory(&mut self, factory: Box<dyn TransformOperationFactoryTrait>) {
-		self.tran_ops.insert(factory.get_tag_name().to_string(), factory);
+		self.tran_ops.insert(factory.tag_name().to_string(), factory);
 	}
 
 	/// Invokes `create_reader` to open a container. Callers must resolve first.
 	#[context("Failed to get reader for file '{}'", location)]
-	pub async fn get_reader(&self, location: DataLocation) -> Result<Box<dyn TileSource>> {
+	pub async fn reader(&self, location: DataLocation) -> Result<Box<dyn TileSource>> {
 		let location = location.resolved(&self.dir)?;
 		(self.create_reader.as_ref())(location).await
 	}
@@ -238,8 +238,8 @@ impl PipelineFactory {
 			T: OperationFactoryTrait + ?Sized,
 		{
 			vec.iter()
-				.sorted_by_key(|f| f.get_tag_name())
-				.map(|f| format!("---\n\n## {}\n\n{}", f.get_tag_name(), f.get_docs()))
+				.sorted_by_key(|f| f.tag_name())
+				.map(|f| format!("---\n\n## {}\n\n{}", f.tag_name(), f.docs()))
 				.join("\n\n")
 		}
 
@@ -279,26 +279,26 @@ pub struct OperationMeta {
 /// Returns metadata for all registered operations (both read and transform).
 #[must_use]
 #[cfg(feature = "codegen")]
-pub fn get_all_operation_metadata() -> Vec<OperationMeta> {
-	use crate::operations::{get_read_operation_factories, get_transform_operation_factories};
+pub fn all_operation_metadata() -> Vec<OperationMeta> {
+	use crate::operations::{read_operation_factories, transform_operation_factories};
 
 	let mut ops = Vec::new();
 
-	for f in get_read_operation_factories() {
+	for f in read_operation_factories() {
 		ops.push(OperationMeta {
-			tag_name: f.get_tag_name().to_string(),
+			tag_name: f.tag_name().to_string(),
 			kind: "read",
-			doc: f.get_docs(),
-			fields: f.get_field_metadata(),
+			doc: f.docs(),
+			fields: f.field_metadata(),
 		});
 	}
 
-	for f in get_transform_operation_factories() {
+	for f in transform_operation_factories() {
 		ops.push(OperationMeta {
-			tag_name: f.get_tag_name().to_string(),
+			tag_name: f.tag_name().to_string(),
 			kind: "transform",
-			doc: f.get_docs(),
-			fields: f.get_field_metadata(),
+			doc: f.docs(),
+			fields: f.field_metadata(),
 		});
 	}
 

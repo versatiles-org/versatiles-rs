@@ -108,7 +108,7 @@ impl Traversal {
 	/// Return a new `Traversal` that is the intersection of this and another, without modifying either.
 	#[must_use = "this returns the new Traversal, it doesn't modify either input"]
 	#[context("while computing intersected Traversal between {:?} and {:?}", self.order, other.order)]
-	pub fn get_intersected(&self, other: &Traversal) -> Result<Traversal> {
+	pub fn intersected(&self, other: &Traversal) -> Result<Traversal> {
 		let mut result = self.clone();
 		result.intersect(other)?;
 		Ok(result)
@@ -138,7 +138,7 @@ impl Traversal {
 
 	#[must_use = "this returns the traversal steps, it doesn't modify anything"]
 	#[context("while computing traversal translation steps between {:?} and {:?}", self.order, other.order)]
-	pub fn get_traversal_steps(&self, other: &Self, pyramid: &TilePyramid) -> Result<Vec<TraversalTranslationStep>> {
+	pub fn traversal_steps(&self, other: &Self, pyramid: &TilePyramid) -> Result<Vec<TraversalTranslationStep>> {
 		translate_traversals(pyramid, self, other)
 	}
 
@@ -340,16 +340,16 @@ mod tests {
 	}
 
 	#[test]
-	fn test_intersect_and_get_intersected() {
+	fn test_intersect_and_intersected() {
 		let mut t1 = Traversal::new(TraversalOrder::AnyOrder, 1, 16).unwrap();
 		let t2 = Traversal::new(TraversalOrder::DepthFirst, 2, 8).unwrap();
 		// in-place intersect
 		t1.intersect(&t2).unwrap();
 		assert_eq!(t1.order(), &TraversalOrder::DepthFirst);
 		assert_eq!(t1.max_size().unwrap(), 8);
-		// get_intersected returns a new instance and does not modify original
+		// intersected returns a new instance and does not modify original
 		let t3 = Traversal::new(TraversalOrder::PMTiles, 4, 64).unwrap();
-		let got = t3.get_intersected(&Traversal::new_any_size(2, 16).unwrap()).unwrap();
+		let got = t3.intersected(&Traversal::new_any_size(2, 16).unwrap()).unwrap();
 		assert_eq!(got.order(), &TraversalOrder::PMTiles);
 		assert_eq!(got.max_size().unwrap(), 16);
 	}

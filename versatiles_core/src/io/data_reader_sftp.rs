@@ -179,7 +179,7 @@ impl DataReaderTrait for DataReaderSftp {
 		self.read_range(&ByteRange::new(0, self.size)).await
 	}
 
-	fn get_name(&self) -> &str {
+	fn name(&self) -> &str {
 		&self.name
 	}
 }

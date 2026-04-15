@@ -138,7 +138,7 @@ impl TileBBox {
 	///
 	/// The bbox must have even width and height. Returns an error otherwise.
 	#[context("getting quadrant {quadrant} of TileBBox {self:?}")]
-	pub fn get_quadrant(&self, quadrant: u8) -> Result<TileBBox> {
+	pub fn quadrant(&self, quadrant: u8) -> Result<TileBBox> {
 		if self.is_empty() {
 			return Ok(*self);
 		}
@@ -287,10 +287,10 @@ mod tests {
 	fn get_quadrant_happy_path() -> Result<()> {
 		// 4x4 region divisible by 2
 		let b = bb(4, 8, 12, 11, 15);
-		let q0 = b.get_quadrant(0)?; // top-left
-		let q1 = b.get_quadrant(1)?; // top-right
-		let q2 = b.get_quadrant(2)?; // bottom-left
-		let q3 = b.get_quadrant(3)?; // bottom-right
+		let q0 = b.quadrant(0)?; // top-left
+		let q1 = b.quadrant(1)?; // top-right
+		let q2 = b.quadrant(2)?; // bottom-left
+		let q3 = b.quadrant(3)?; // bottom-right
 		assert_eq!(q0.to_array()?, [8, 12, 9, 13]);
 		assert_eq!(q1.to_array()?, [10, 12, 11, 13]);
 		assert_eq!(q2.to_array()?, [8, 14, 9, 15]);
@@ -302,20 +302,20 @@ mod tests {
 	fn get_quadrant_errors_on_bad_input() -> Result<()> {
 		// odd width
 		let b = bb(4, 8, 12, 10, 15); // width=3, height=4
-		assert!(b.get_quadrant(0).is_err());
+		assert!(b.quadrant(0).is_err());
 		// odd height
 		let b = bb(4, 8, 12, 11, 14); // width=4, height=3
-		assert!(b.get_quadrant(0).is_err());
+		assert!(b.quadrant(0).is_err());
 		// invalid quadrant index
 		let b = bb(4, 8, 12, 11, 15);
-		assert!(b.get_quadrant(4).is_err());
+		assert!(b.quadrant(4).is_err());
 		Ok(())
 	}
 
 	#[test]
 	fn get_quadrant_on_empty_returns_self() -> Result<()> {
 		let e = TileBBox::new_empty(5)?;
-		let q = e.get_quadrant(0)?;
+		let q = e.quadrant(0)?;
 		assert_eq!(q, e);
 		Ok(())
 	}

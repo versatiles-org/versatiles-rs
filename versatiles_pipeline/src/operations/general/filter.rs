@@ -77,7 +77,7 @@ impl Operation {
 		}
 
 		let mask = if let Some(filename) = args.filename {
-			let mask = factory.get_reader(DataLocation::try_from(&filename)?).await?;
+			let mask = factory.reader(DataLocation::try_from(&filename)?).await?;
 			metadata.bbox_pyramid.intersect_pyramid(&mask.metadata().bbox_pyramid)?;
 			Some(mask)
 		} else {
@@ -169,9 +169,9 @@ mod tests {
 			.await?;
 
 		let o = op.tilejson().as_object();
-		assert_eq!(&o.get_number_array("bounds")?.unwrap(), &[0.0, 0.0, 40.0, 20.0]);
-		assert_eq!(o.get_number("minzoom")?.unwrap(), 0.0);
-		assert_eq!(o.get_number("maxzoom")?.unwrap(), 30.0);
+		assert_eq!(&o.number_array("bounds")?.unwrap(), &[0.0, 0.0, 40.0, 20.0]);
+		assert_eq!(o.number("minzoom")?.unwrap(), 0.0);
+		assert_eq!(o.number("maxzoom")?.unwrap(), 30.0);
 
 		let inside: &[(u8, u32, u32)] = &[
 			(0, 0, 0),
@@ -218,11 +218,11 @@ mod tests {
 
 		let o = op.tilejson().as_object();
 		assert_eq!(
-			o.get_number_array("bounds")?.unwrap(),
+			o.number_array("bounds")?.unwrap(),
 			[-180.0, -85.051129, 180.0, 85.051129]
 		);
-		assert_eq!(o.get_number("minzoom")?.unwrap(), 3.0);
-		assert_eq!(o.get_number("maxzoom")?.unwrap(), 4.0);
+		assert_eq!(o.number("minzoom")?.unwrap(), 3.0);
+		assert_eq!(o.number("maxzoom")?.unwrap(), 4.0);
 
 		for z in 0..=6 {
 			let coord = TileCoord::new(z, 0, 0)?;
@@ -256,15 +256,15 @@ mod tests {
 		let o = op.tilejson().as_object();
 
 		// Expect the intersection of the two boxes
-		let b: [f64; 4] = o.get_number_array("bounds")?.unwrap();
+		let b: [f64; 4] = o.number_array("bounds")?.unwrap();
 		assert!((b[0] - 10.0).abs() < 1e-4);
 		assert!((b[1] - 5.0).abs() < 1e-4);
 		assert!((b[2] - 40.0).abs() < 1e-4);
 		assert!((b[3] - 20.0).abs() < 1e-4);
 
 		// Expect the narrowed zoom range
-		assert_eq!(o.get_number("minzoom")?.unwrap(), 3.0);
-		assert_eq!(o.get_number("maxzoom")?.unwrap(), 25.0);
+		assert_eq!(o.number("minzoom")?.unwrap(), 3.0);
+		assert_eq!(o.number("maxzoom")?.unwrap(), 25.0);
 
 		// Sanity: tiles outside the final bbox shouldn't pass
 		let outside = TileCoord::new(4, 0, 0)?.to_tile_bbox();

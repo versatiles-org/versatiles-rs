@@ -48,13 +48,13 @@ impl Folder {
 #[async_trait]
 impl StaticSourceTrait for Folder {
 	#[cfg(test)]
-	fn get_type(&self) -> &str {
+	fn type_name(&self) -> &str {
 		"folder"
 	}
 
 	// Returns the name of the folder
 	#[cfg(test)]
-	fn get_name(&self) -> &str {
+	fn name(&self) -> &str {
 		&self.name
 	}
 
@@ -117,7 +117,7 @@ mod tests {
 		assert!(debug.ends_with("testdata\", name: \"../testdata\" }"));
 
 		// Test get_name function
-		assert_eq!(folder.get_name(), "../testdata");
+		assert_eq!(folder.name(), "../testdata");
 
 		// Test get_data function with a non-existent file
 		let result = folder.get_data(&Url::from("recipes/Queijo.txt"), &TargetCompression::from_none());

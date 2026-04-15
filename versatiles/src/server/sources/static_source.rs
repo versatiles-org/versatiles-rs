@@ -8,9 +8,9 @@ use versatiles_derive::context;
 #[async_trait]
 pub trait StaticSourceTrait: Send + Sync + Debug {
 	#[cfg(test)]
-	fn get_type(&self) -> &str;
+	fn type_name(&self) -> &str;
 	#[cfg(test)]
-	fn get_name(&self) -> &str;
+	fn name(&self) -> &str;
 	fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse>;
 }
 
@@ -36,11 +36,11 @@ impl StaticSource {
 	}
 
 	#[cfg(test)]
-	pub fn get_type(&self) -> &str {
-		self.source.get_type()
+	pub fn type_name(&self) -> &str {
+		self.source.type_name()
 	}
 
-	pub fn get_prefix(&self) -> &Url {
+	pub fn prefix(&self) -> &Url {
 		&self.prefix
 	}
 
@@ -64,11 +64,11 @@ mod tests {
 
 	#[async_trait]
 	impl StaticSourceTrait for MockStaticSource {
-		fn get_type(&self) -> &str {
+		fn type_name(&self) -> &str {
 			"mock"
 		}
 
-		fn get_name(&self) -> &str {
+		fn name(&self) -> &str {
 			"MockSource"
 		}
 
@@ -91,7 +91,7 @@ mod tests {
 
 		let check_type = |path: PathBuf, type_name: &str| {
 			let source = StaticSource::new(&path, "").unwrap();
-			assert_eq!(source.get_type(), type_name);
+			assert_eq!(source.type_name(), type_name);
 		};
 
 		let check_error = |path: PathBuf, error_should: &str| {

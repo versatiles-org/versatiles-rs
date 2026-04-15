@@ -868,10 +868,10 @@ fn as_level_up_and_down(
 #[test]
 fn get_quadrant_happy_path() -> Result<()> {
 	let bbox = TileBBox::from_min_and_max(4, 8, 12, 11, 15)?; // 4x4 → even
-	assert_eq!(bbox.get_quadrant(0)?, TileBBox::from_min_and_max(4, 8, 12, 9, 13)?);
-	assert_eq!(bbox.get_quadrant(1)?, TileBBox::from_min_and_max(4, 10, 12, 11, 13)?);
-	assert_eq!(bbox.get_quadrant(2)?, TileBBox::from_min_and_max(4, 8, 14, 9, 15)?);
-	assert_eq!(bbox.get_quadrant(3)?, TileBBox::from_min_and_max(4, 10, 14, 11, 15)?);
+	assert_eq!(bbox.quadrant(0)?, TileBBox::from_min_and_max(4, 8, 12, 9, 13)?);
+	assert_eq!(bbox.quadrant(1)?, TileBBox::from_min_and_max(4, 10, 12, 11, 13)?);
+	assert_eq!(bbox.quadrant(2)?, TileBBox::from_min_and_max(4, 8, 14, 9, 15)?);
+	assert_eq!(bbox.quadrant(3)?, TileBBox::from_min_and_max(4, 10, 14, 11, 15)?);
 	Ok(())
 }
 
@@ -879,15 +879,15 @@ fn get_quadrant_happy_path() -> Result<()> {
 fn get_quadrant_errors() -> Result<()> {
 	// Empty bbox → Ok(empty)
 	let empty = TileBBox::new_empty(4)?;
-	assert!(empty.get_quadrant(0)?.is_empty());
+	assert!(empty.quadrant(0)?.is_empty());
 	// Odd width/height → error
 	let odd_w = TileBBox::from_min_and_max(4, 0, 0, 2, 3)?; // width=3
-	assert!(odd_w.get_quadrant(0).is_err());
+	assert!(odd_w.quadrant(0).is_err());
 	let odd_h = TileBBox::from_min_and_max(4, 0, 0, 3, 2)?; // height=3
-	assert!(odd_h.get_quadrant(0).is_err());
+	assert!(odd_h.quadrant(0).is_err());
 	// Invalid quadrant index
 	let even = TileBBox::from_min_and_max(4, 0, 0, 3, 3)?;
-	assert!(even.get_quadrant(4).is_err());
+	assert!(even.quadrant(4).is_err());
 	Ok(())
 }
 

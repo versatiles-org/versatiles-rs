@@ -322,7 +322,7 @@ impl TileServer {
 		}
 
 		// Cache the actual bound port for synchronous access
-		let bound_port = server.get_port();
+		let bound_port = server.port();
 		*self
 			.actual_port
 			.write()

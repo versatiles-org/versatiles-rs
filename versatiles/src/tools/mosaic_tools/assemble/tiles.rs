@@ -483,7 +483,7 @@ mod tests {
 		let result = composite_two_tiles(base, top)?;
 		let img = result.into_image()?;
 		use versatiles_image::traits::DynamicImageTraitConvert;
-		let px = img.get_raw_pixel(0, 0);
+		let px = img.raw_pixel(0, 0);
 		assert_eq!(px[3], 255); // alpha snapped to 255
 		assert_eq!(px[0], 128); // red component
 		assert_eq!(px[2], 127); // blue component
@@ -507,7 +507,7 @@ mod tests {
 		let img = result.into_image()?;
 		use versatiles_image::traits::DynamicImageTraitConvert;
 		// Both fully transparent → result should be transparent
-		let px = img.get_raw_pixel(0, 0);
+		let px = img.raw_pixel(0, 0);
 		assert_eq!(px[3], 0);
 		Ok(())
 	}

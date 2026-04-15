@@ -256,7 +256,7 @@ fn extract_image(image_src: &DynamicImage, coord_src: TileCoord, coord_dst: Tile
 	let y0 = tile_offset_y * sub_size;
 
 	// Extract the sub-region and upscale to full tile size
-	image_src.get_extract(x0, y0, sub_size, sub_size, tile_size, tile_size)
+	image_src.extract(x0, y0, sub_size, sub_size, tile_size, tile_size)
 }
 
 #[async_trait]
@@ -551,15 +551,15 @@ mod tests {
 	}
 
 	#[test]
-	fn test_factory_get_tag_name() {
+	fn test_factory_tag_name() {
 		let factory = Factory {};
-		assert_eq!(factory.get_tag_name(), "raster_overscale");
+		assert_eq!(factory.tag_name(), "raster_overscale");
 	}
 
 	#[test]
-	fn test_factory_get_docs() {
+	fn test_factory_docs() {
 		let factory = Factory {};
-		let docs = factory.get_docs();
+		let docs = factory.docs();
 		assert!(docs.contains("level_base"));
 		assert!(docs.contains("level_max"));
 		assert!(docs.contains("enable_climbing"));

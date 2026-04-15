@@ -59,7 +59,7 @@ impl VPLNode {
 
 	/// Returns all property names present on this node.
 	#[must_use]
-	pub fn get_property_names(&self) -> Vec<String> {
+	pub fn property_names(&self) -> Vec<String> {
 		self.properties.keys().cloned().collect()
 	}
 
@@ -67,7 +67,7 @@ impl VPLNode {
 	///
 	/// Error messages include the node name and the invalid value.
 	#[context("Failed to get optional property enum '{field}' from VPL node '{}'", self.name)]
-	pub fn get_property_enum_option<'a, T>(&'a self, field: &str) -> Result<Option<T>>
+	pub fn property_enum_option<'a, T>(&'a self, field: &str) -> Result<Option<T>>
 	where
 		T: TryFrom<&'a str>,
 		<T as TryFrom<&'a str>>::Error: std::fmt::Display + Send + Sync + 'static,
@@ -85,25 +85,25 @@ impl VPLNode {
 
 	/// Optional string parameter accessor; clones the stored value when present.
 	#[context("Failed to get optional property string '{field}' from VPL node '{}'", self.name)]
-	pub fn get_property_string_option(&self, field: &str) -> Result<Option<String>> {
+	pub fn property_string_option(&self, field: &str) -> Result<Option<String>> {
 		Ok(self.get_property(field)?.cloned())
 	}
 
 	/// Required string parameter accessor; errors if the field is missing.
 	#[context("Failed to get required property string '{field}' from VPL node '{}'", self.name)]
-	pub fn get_property_string_required(&self, field: &str) -> Result<String> {
-		self.required(field, self.get_property_string_option(field))
+	pub fn property_string_required(&self, field: &str) -> Result<String> {
+		self.required(field, self.property_string_option(field))
 	}
 
 	/// Required boolean parameter accessor; accepts `1/true/yes/ok` (case-insensitive) for `true`.
 	#[context("Failed to get required property bool '{field}' from VPL node '{}'", self.name)]
-	pub fn get_property_bool_required(&self, field: &str) -> Result<bool> {
-		self.required(field, self.get_property_bool_option(field))
+	pub fn property_bool_required(&self, field: &str) -> Result<bool> {
+		self.required(field, self.property_bool_option(field))
 	}
 
 	/// Optional boolean parameter accessor; accepts `1/true/yes/ok` (case-insensitive).
 	#[context("Failed to get optional property bool '{field}' from VPL node '{}'", self.name)]
-	pub fn get_property_bool_option(&self, field: &str) -> Result<Option<bool>> {
+	pub fn property_bool_option(&self, field: &str) -> Result<Option<bool>> {
 		Ok(self
 			.get_property(field)?
 			.map(|v| matches!(v.trim().to_lowercase().as_str(), "1" | "true" | "yes" | "ok")))
@@ -111,7 +111,7 @@ impl VPLNode {
 
 	/// Optional numeric parameter accessor using `FromStr` for the target type.
 	#[context("Failed to get optional property number '{field}' from VPL node '{}'", self.name)]
-	pub fn get_property_number_option<T>(&self, field: &str) -> Result<Option<T>>
+	pub fn property_number_option<T>(&self, field: &str) -> Result<Option<T>>
 	where
 		T: FromStr,
 		<T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
@@ -128,17 +128,17 @@ impl VPLNode {
 
 	/// Required numeric parameter accessor; errors when missing or when parsing fails.
 	#[context("Failed to get required property number '{field}' from VPL node '{}'", self.name)]
-	pub fn get_property_number_required<T>(&self, field: &str) -> Result<T>
+	pub fn property_number_required<T>(&self, field: &str) -> Result<T>
 	where
 		T: FromStr,
 		<T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
 	{
-		self.required(field, self.get_property_number_option::<T>(field))
+		self.required(field, self.property_number_option::<T>(field))
 	}
 
 	/// Optional fixed-size numeric array accessor; enforces exactly `N` elements.
 	#[context("Failed to get optional property number array '{field}' from VPL node '{}'", self.name)]
-	pub fn get_property_number_array_option<T, const N: usize>(&self, field: &str) -> Result<Option<[T; N]>>
+	pub fn property_number_array_option<T, const N: usize>(&self, field: &str) -> Result<Option<[T; N]>>
 	where
 		T: FromStr + Debug,
 		<T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
@@ -170,12 +170,12 @@ impl VPLNode {
 
 	/// Required fixed-size numeric array accessor; enforces presence and exactly `N` elements.
 	#[context("Failed to get required property number array '{field}' from VPL node '{}'", self.name)]
-	pub fn get_property_number_array_required<T, const N: usize>(&self, field: &str) -> Result<[T; N]>
+	pub fn property_number_array_required<T, const N: usize>(&self, field: &str) -> Result<[T; N]>
 	where
 		T: FromStr + Debug,
 		<T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
 	{
-		self.required(field, self.get_property_number_array_option::<T, N>(field))
+		self.required(field, self.property_number_array_option::<T, N>(field))
 	}
 
 	/// Internal helper: converts `Ok(Some(_))` to the value or produces a standard "required" error.
@@ -303,10 +303,10 @@ mod tests {
 			sources: vec![],
 		};
 		assert_eq!(
-			node.get_property_string_option("key1").unwrap().unwrap(),
+			node.property_string_option("key1").unwrap().unwrap(),
 			"value1".to_string()
 		);
-		assert!(node.get_property_string_option("key2").unwrap().is_none());
+		assert!(node.property_string_option("key2").unwrap().is_none());
 	}
 
 	#[test]
@@ -316,8 +316,8 @@ mod tests {
 			properties: make_property(vec![("key1", "value1")]),
 			sources: vec![],
 		};
-		assert_eq!(node.get_property_string_required("key1").unwrap(), "value1".to_string());
-		assert!(node.get_property_string_required("key2").is_err());
+		assert_eq!(node.property_string_required("key1").unwrap(), "value1".to_string());
+		assert!(node.property_string_required("key2").is_err());
 	}
 
 	#[test]
@@ -327,8 +327,8 @@ mod tests {
 			properties: make_property(vec![("key1", "true"), ("key2", "0")]),
 			sources: vec![],
 		};
-		assert!(node.get_property_bool_required("key1").unwrap());
-		assert!(!node.get_property_bool_required("key2").unwrap());
+		assert!(node.property_bool_required("key1").unwrap());
+		assert!(!node.property_bool_required("key2").unwrap());
 	}
 
 	#[test]
@@ -338,9 +338,9 @@ mod tests {
 			properties: make_property(vec![("key1", "42"), ("key2", "invalid")]),
 			sources: vec![],
 		};
-		assert_eq!(node.get_property_number_option::<i32>("key1").unwrap().unwrap(), 42);
-		assert!(node.get_property_number_option::<i32>("key2").is_err());
-		assert!(node.get_property_number_option::<i32>("key3").unwrap().is_none());
+		assert_eq!(node.property_number_option::<i32>("key1").unwrap().unwrap(), 42);
+		assert!(node.property_number_option::<i32>("key2").is_err());
+		assert!(node.property_number_option::<i32>("key3").unwrap().is_none());
 	}
 
 	#[test]
@@ -350,8 +350,8 @@ mod tests {
 			properties: make_property(vec![("key1", "42")]),
 			sources: vec![],
 		};
-		assert_eq!(node.get_property_number_required::<i32>("key1").unwrap(), 42);
-		assert!(node.get_property_number_required::<i32>("key2").is_err());
+		assert_eq!(node.property_number_required::<i32>("key1").unwrap(), 42);
+		assert!(node.property_number_required::<i32>("key2").is_err());
 	}
 
 	#[test]
@@ -362,18 +362,10 @@ mod tests {
 			sources: vec![],
 		};
 		assert_eq!(
-			node
-				.get_property_number_array_option::<i32, 4>("key1")
-				.unwrap()
-				.unwrap(),
+			node.property_number_array_option::<i32, 4>("key1").unwrap().unwrap(),
 			[1, 2, 3, 4]
 		);
-		assert!(
-			node
-				.get_property_number_array_option::<i32, 4>("key2")
-				.unwrap()
-				.is_none()
-		);
+		assert!(node.property_number_array_option::<i32, 4>("key2").unwrap().is_none());
 	}
 
 	#[test]
@@ -384,10 +376,10 @@ mod tests {
 			sources: vec![],
 		};
 		assert_eq!(
-			node.get_property_number_array_required::<i32, 4>("key1").unwrap(),
+			node.property_number_array_required::<i32, 4>("key1").unwrap(),
 			[1, 2, 3, 4]
 		);
-		assert!(node.get_property_number_array_required::<i32, 4>("key2").is_err());
+		assert!(node.property_number_array_required::<i32, 4>("key2").is_err());
 	}
 
 	#[test]

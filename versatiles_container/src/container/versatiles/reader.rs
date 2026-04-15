@@ -265,7 +265,7 @@ impl TilesReader for VersaTilesReader {
 /// `get_tile_stream` (with internal read coalescing).
 impl TileSource for VersaTilesReader {
 	fn source_type(&self) -> Arc<SourceType> {
-		SourceType::new_container("versatiles", self.reader.get_name())
+		SourceType::new_container("versatiles", self.reader.name())
 	}
 
 	fn tilejson(&self) -> &TileJSON {
@@ -281,7 +281,7 @@ impl TileSource for VersaTilesReader {
 	/// Computes the corresponding **block coordinate** (z, x>>8, y>>8), verifies membership
 	/// within the block's bbox, looks up the tile's byte range from the cached index, and reads it.
 	/// Returns `Ok(None)` for empty ranges or missing blocks.
-	#[context("fetching tile {:?} from '{}'", coord, self.reader.get_name())]
+	#[context("fetching tile {:?} from '{}'", coord, self.reader.name())]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		// Calculate block coordinate
 		let block_coord = TileCoord::new(coord.level, coord.x.shr(8), coord.y.shr(8))?;
