@@ -125,10 +125,10 @@ regex = { version = "1.12.3", default-features = false, features = [
 ] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["std"] }
-tokio = { version = "1.51.0", features = ["rt-multi-thread", "sync"] }
+tokio = { version = "1.52.0", features = ["rt-multi-thread", "sync"] }
 
 # CLI dependencies
-clap = { version = "4.6.0", features = ["default", "derive", "wrap_help"] }
+clap = { version = "4.6.1", features = ["default", "derive", "wrap_help"] }
 colored = { version = "3.1.1", default-features = false }
 env_logger = { version = "0.11.10" }
 termimad = { version = "0.34.1" }
@@ -146,7 +146,7 @@ r2d2 = { version = "0.8.10", default-features = false }
 r2d2_sqlite = { version = "0.33.0", default-features = false }
 
 # HTTP/Server dependencies
-axum = { version = "0.8.8", default-features = false }
+axum = { version = "0.8.9", default-features = false }
 mime_guess = { version = "2.0.5", default-features = false }
 reqwest = { version = "0.13.2", default-features = false, features = ["default-tls"] }
 tower = { version = "0.5.3" }
@@ -156,14 +156,14 @@ tower-http = { version = "0.6.8" }
 imageproc = { version = "0.26.1", default-features = false }
 
 # Geometry dependencies
-geo = { version = "0.32.0" }
+geo = { version = "0.33.0" }
 rstar = { version = "0.12.2", default-features = false }
 
 # Utility dependencies
 serde_yaml_ng = "0.10.0"
 terminal_size = { version = "0.4.4" }
 time = { version = "0.3.47", default-features = false }
-uuid = { version = "1.23.0" }
+uuid = { version = "1.23.1" }
 glob = { version = "0.3", default-features = false }
 wildmatch = { version = "2.6.1", default-features = false }
 

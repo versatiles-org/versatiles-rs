@@ -15,11 +15,11 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow.workspace = true
-ctor = "0.8.0"
+ctor = "0.10.0"
 env_logger.workspace = true
 log.workspace = true
-napi = { version = "3.8.4", features = ["async"] }
-napi-derive = "3.5.3"
+napi = { version = "3.8.5", features = ["async"] }
+napi-derive = "3.5.4"
 tokio.workspace = true
 versatiles = { workspace = true, default-features = false, features = [
 	"codegen",
