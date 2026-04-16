@@ -206,7 +206,7 @@ mod tests {
 		let (exp_mime, exp_bounds, exp_header, exp_minzoom, exp_maxzoom) = expected_tile_json;
 
 		let runtime = create_test_runtime();
-		let reader = runtime.get_reader_from_str(filename).await?;
+		let reader = runtime.reader_from_str(filename).await?;
 		let c = &mut ServerTileSource::from(reader, "prefix")?;
 
 		assert_eq!(

@@ -17,7 +17,7 @@ pub struct CountTiles {
 }
 
 pub async fn run(args: &CountTiles, runtime: &TilesRuntime) -> Result<()> {
-	let reader = runtime.get_reader_from_str(&args.input).await?;
+	let reader = runtime.reader_from_str(&args.input).await?;
 	let pyramid = &reader.metadata().bbox_pyramid;
 
 	let levels: Vec<u8> = if let Some(level) = args.level {

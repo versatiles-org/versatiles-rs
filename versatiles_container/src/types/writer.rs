@@ -21,7 +21,7 @@
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
 //!     let runtime = TilesRuntime::default();
-//!     let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+//!     let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 //!     let output_path = std::env::temp_dir().join("example.versatiles");
 //!
 //!     // The runtime automatically dispatches to the correct writer

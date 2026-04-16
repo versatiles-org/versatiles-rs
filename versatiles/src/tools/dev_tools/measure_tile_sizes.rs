@@ -35,7 +35,7 @@ pub struct MeasureTileSizes {
 
 pub async fn run(args: &MeasureTileSizes, runtime: &TilesRuntime) -> Result<()> {
 	let input = &args.input;
-	let reader = runtime.get_reader_from_str(input).await?;
+	let reader = runtime.reader_from_str(input).await?;
 	let metadata = reader.metadata();
 
 	let output_file = &args.output;

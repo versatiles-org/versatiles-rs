@@ -103,7 +103,7 @@ pub struct Subcommand {
 pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	log::info!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
-	let reader = runtime.get_reader_from_str(&arguments.input_file).await?;
+	let reader = runtime.reader_from_str(&arguments.input_file).await?;
 
 	let (bbox_pyramid, geo_bbox) = get_bbox_pyramid(arguments)?;
 

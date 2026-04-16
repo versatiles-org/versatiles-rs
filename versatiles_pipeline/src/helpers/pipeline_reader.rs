@@ -76,7 +76,7 @@ impl<'a> PipelineReader {
 			move |location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
 				let runtime = runtime2.clone();
 				Box::pin(async move {
-					let arc_reader = runtime.clone().get_reader_from_location(location).await?;
+					let arc_reader = runtime.clone().reader_from_location(location).await?;
 					Arc::try_unwrap(arc_reader)
 						.map_err(|_| anyhow::anyhow!("Cannot get exclusive access to reader for pipeline"))
 				})

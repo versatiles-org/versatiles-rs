@@ -33,7 +33,7 @@
 //! #[tokio::main]
 //! async fn main() {
 //!     let runtime = TilesRuntime::default();
-//!     let reader = runtime.get_reader_from_str("../testdata/berlin.pmtiles").await.unwrap();
+//!     let reader = runtime.reader_from_str("../testdata/berlin.pmtiles").await.unwrap();
 //!
 //!     // Define the output filename
 //!     let output_path = std::env::temp_dir().join("temp1.versatiles");

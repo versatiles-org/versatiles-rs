@@ -22,7 +22,7 @@
 //!     let runtime = TilesRuntime::default();
 //!
 //!     // Open the source
-//!     let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+//!     let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 //!
 //!     // Limit to a bbox pyramid and keep source compression;
 //!     // you could also set `tile_compression: Some(TileCompression::Brotli)` to re-encode.

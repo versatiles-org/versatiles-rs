@@ -227,7 +227,7 @@ pub async fn convert(
 ) -> Result<()> {
 	// Open the input tile source
 	let runtime = create_runtime();
-	let reader = napi_result!(runtime.get_reader_from_str(&input).await)?;
+	let reader = napi_result!(runtime.reader_from_str(&input).await)?;
 
 	// Use shared conversion logic
 	let output_path = std::path::PathBuf::from(&output);
@@ -593,7 +593,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_convert_mbtiles_to_versatiles() {
 		let runtime = create_runtime();
-		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
 
 		let temp_dir = tempfile::TempDir::new().unwrap();
 		let output_path = temp_dir.path().join("output.versatiles");
@@ -608,7 +608,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_convert_with_zoom_filter() {
 		let runtime = create_runtime();
-		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
 
 		let temp_dir = tempfile::TempDir::new().unwrap();
 		let output_path = temp_dir.path().join("output.versatiles");
@@ -633,7 +633,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_convert_with_bbox_filter() {
 		let runtime = create_runtime();
-		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
 
 		let temp_dir = tempfile::TempDir::new().unwrap();
 		let output_path = temp_dir.path().join("output.versatiles");
@@ -659,7 +659,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_convert_with_bbox_and_border() {
 		let runtime = create_runtime();
-		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
 
 		let temp_dir = tempfile::TempDir::new().unwrap();
 		let output_path = temp_dir.path().join("output.versatiles");
@@ -684,7 +684,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_convert_with_compression() {
 		let runtime = create_runtime();
-		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
 
 		let temp_dir = tempfile::TempDir::new().unwrap();
 		let output_path = temp_dir.path().join("output.versatiles");
@@ -709,7 +709,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_convert_with_flip_y() {
 		let runtime = create_runtime();
-		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
 
 		let temp_dir = tempfile::TempDir::new().unwrap();
 		let output_path = temp_dir.path().join("output.versatiles");
@@ -734,7 +734,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_convert_with_all_options() {
 		let runtime = create_runtime();
-		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
 
 		let temp_dir = tempfile::TempDir::new().unwrap();
 		let output_path = temp_dir.path().join("output.versatiles");
@@ -759,7 +759,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_convert_invalid_bbox_length_error() {
 		let runtime = create_runtime();
-		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
 
 		let temp_dir = tempfile::TempDir::new().unwrap();
 		let output_path = temp_dir.path().join("output.versatiles");
@@ -786,7 +786,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_convert_invalid_compression_error() {
 		let runtime = create_runtime();
-		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
 
 		let temp_dir = tempfile::TempDir::new().unwrap();
 		let output_path = temp_dir.path().join("output.versatiles");
@@ -810,7 +810,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_convert_pmtiles_to_versatiles() {
 		let runtime = create_runtime();
-		let reader = runtime.get_reader_from_str("../testdata/berlin.pmtiles").await.unwrap();
+		let reader = runtime.reader_from_str("../testdata/berlin.pmtiles").await.unwrap();
 
 		let temp_dir = tempfile::TempDir::new().unwrap();
 		let output_path = temp_dir.path().join("output.versatiles");
@@ -829,7 +829,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_convert_to_different_formats(#[case] output_filename: &str) {
 		let runtime = create_runtime();
-		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
 
 		let temp_dir = tempfile::TempDir::new().unwrap();
 		let output_path = temp_dir.path().join(output_filename);
@@ -855,7 +855,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_convert_roundtrip_readable() {
 		let runtime = create_runtime();
-		let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
 
 		let temp_dir = tempfile::TempDir::new().unwrap();
 		let output_path = temp_dir.path().join("output.versatiles");
@@ -877,7 +877,7 @@ mod tests {
 
 		// Try to read back the converted file
 		let runtime2 = create_runtime();
-		let result = runtime2.get_reader_from_str(output_path.to_str().unwrap()).await;
+		let result = runtime2.reader_from_str(output_path.to_str().unwrap()).await;
 
 		assert!(result.is_ok(), "Should be able to read back converted file");
 	}

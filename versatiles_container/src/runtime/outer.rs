@@ -115,21 +115,17 @@ impl TilesRuntime {
 			.await
 	}
 
-	pub async fn get_reader_from_str(&self, filename: &str) -> Result<SharedTileSource> {
-		self.inner.registry.get_reader_from_str(filename, self.clone()).await
+	pub async fn reader_from_str(&self, filename: &str) -> Result<SharedTileSource> {
+		self.inner.registry.reader_from_str(filename, self.clone()).await
 	}
 
 	/// Open a tile container reader from a [`DataLocation`] (path or URL).
-	pub async fn get_reader_from_location(&self, location: DataLocation) -> Result<SharedTileSource> {
-		self
-			.inner
-			.registry
-			.get_reader_from_location(location, self.clone())
-			.await
+	pub async fn reader_from_location(&self, location: DataLocation) -> Result<SharedTileSource> {
+		self.inner.registry.reader_from_location(location, self.clone()).await
 	}
 
-	pub async fn get_reader(&self, data_source: DataSource) -> Result<SharedTileSource> {
-		self.inner.registry.get_reader(data_source, self.clone()).await
+	pub async fn reader(&self, data_source: DataSource) -> Result<SharedTileSource> {
+		self.inner.registry.reader(data_source, self.clone()).await
 	}
 }
 

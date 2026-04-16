@@ -83,7 +83,7 @@ impl TileSource {
 	#[napi(factory)]
 	pub async fn open(path: String) -> Result<Self> {
 		let runtime = create_runtime();
-		let source = napi_result!(runtime.get_reader_from_str(&path).await)?;
+		let source = napi_result!(runtime.reader_from_str(&path).await)?;
 		Ok(Self::new(source))
 	}
 

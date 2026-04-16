@@ -23,7 +23,7 @@ pub async fn run(args: &PrintTilejson, runtime: &TilesRuntime) -> Result<()> {
 }
 
 async fn fetch_tilejson(args: &PrintTilejson, runtime: &TilesRuntime) -> Result<String> {
-	let reader = runtime.get_reader_from_str(&args.input).await?;
+	let reader = runtime.reader_from_str(&args.input).await?;
 
 	Ok(if args.pretty {
 		reader.tilejson().to_pretty_lines(80).join("\n")

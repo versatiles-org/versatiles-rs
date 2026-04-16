@@ -151,7 +151,7 @@ impl TileServer {
 			tile_config.src,
 		);
 
-		let reader = self.runtime.get_reader(tile_config.src.clone()).await?;
+		let reader = self.runtime.reader(tile_config.src.clone()).await?;
 
 		self.add_tile_source(name, reader).await
 	}

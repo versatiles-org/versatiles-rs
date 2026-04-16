@@ -25,7 +25,7 @@ use versatiles_container::TilesRuntime;
 ///
 /// ```
 /// let runtime = create_runtime();
-/// let reader = runtime.get_reader_from_str("tiles.versatiles").await?;
+/// let reader = runtime.reader_from_str("tiles.versatiles").await?;
 /// ```
 pub fn create_runtime() -> TilesRuntime {
 	TilesRuntime::builder()

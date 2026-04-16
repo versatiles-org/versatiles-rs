@@ -114,7 +114,7 @@ pub(super) async fn fetch_source_tiles(
 ) -> Result<Vec<(TileCoord, Tile)>> {
 	let path = &paths[source_idx];
 	let reader = runtime
-		.get_reader_from_str(path)
+		.reader_from_str(path)
 		.await
 		.with_context(|| format!("Failed to open container: {path}"))?;
 

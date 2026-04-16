@@ -66,8 +66,8 @@ async fn e2e_tile_integrity_mbtiles_to_versatiles() {
 
 	// Read tiles from both source and output using library
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
-	let source_reader = runtime.get_reader_from_str(&input).await.unwrap();
-	let output_reader = runtime.get_reader_from_str(output.to_str().unwrap()).await.unwrap();
+	let source_reader = runtime.reader_from_str(&input).await.unwrap();
+	let output_reader = runtime.reader_from_str(output.to_str().unwrap()).await.unwrap();
 
 	// Test multiple tiles at different zoom levels
 	let test_coords = [
@@ -94,8 +94,8 @@ async fn e2e_tile_integrity_mbtiles_to_pmtiles() {
 
 	// Verify tile integrity
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
-	let source_reader = runtime.get_reader_from_str(&input).await.unwrap();
-	let output_reader = runtime.get_reader_from_str(output.to_str().unwrap()).await.unwrap();
+	let source_reader = runtime.reader_from_str(&input).await.unwrap();
+	let output_reader = runtime.reader_from_str(output.to_str().unwrap()).await.unwrap();
 
 	// Test specific tile known to exist in berlin dataset
 	let coord = TileCoord::new(14, 8800, 5374).unwrap();
@@ -126,8 +126,8 @@ async fn e2e_tile_integrity_round_trip() {
 
 	// Verify tile integrity end-to-end
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
-	let source_reader = runtime.get_reader_from_str(&input).await.unwrap();
-	let final_reader = runtime.get_reader_from_str(final_path.to_str().unwrap()).await.unwrap();
+	let source_reader = runtime.reader_from_str(&input).await.unwrap();
+	let final_reader = runtime.reader_from_str(final_path.to_str().unwrap()).await.unwrap();
 
 	// Test multiple tiles
 	let test_coords = [
@@ -157,8 +157,8 @@ async fn e2e_tile_integrity_with_recompression() {
 
 	// Verify tile integrity (library handles decompression)
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
-	let source_reader = runtime.get_reader_from_str(&input).await.unwrap();
-	let output_reader = runtime.get_reader_from_str(output_br.to_str().unwrap()).await.unwrap();
+	let source_reader = runtime.reader_from_str(&input).await.unwrap();
+	let output_reader = runtime.reader_from_str(output_br.to_str().unwrap()).await.unwrap();
 
 	let coord = TileCoord::new(14, 8800, 5374).unwrap();
 	assert_tiles_equal(&source_reader, &output_reader, &coord).await;
@@ -180,8 +180,8 @@ async fn e2e_tile_integrity_with_bbox_filter() {
 
 	// Verify tile content for a tile within the bbox
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
-	let source_reader = runtime.get_reader_from_str(&input).await.unwrap();
-	let output_reader = runtime.get_reader_from_str(output.to_str().unwrap()).await.unwrap();
+	let source_reader = runtime.reader_from_str(&input).await.unwrap();
+	let output_reader = runtime.reader_from_str(output.to_str().unwrap()).await.unwrap();
 
 	// This tile should be within the bbox
 	let coord = TileCoord::new(14, 8802, 5373).unwrap();

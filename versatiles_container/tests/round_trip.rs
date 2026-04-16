@@ -16,7 +16,7 @@ async fn read_mbtiles_source() -> Result<()> {
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
 
 	// Read from existing testdata
-	let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+	let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 
 	// Verify metadata is present
 	assert_eq!(reader.metadata().tile_format, TileFormat::MVT);
@@ -36,14 +36,14 @@ async fn mbtiles_to_versatiles_round_trip() -> Result<()> {
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
 
 	// Read source
-	let source = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 	let original_format = source.metadata().tile_format;
 
 	// Write to versatiles
 	runtime.write_to_path(source, &versatiles_path).await?;
 
 	// Read back
-	let reader = runtime.get_reader_from_str(versatiles_path.to_str().unwrap()).await?;
+	let reader = runtime.reader_from_str(versatiles_path.to_str().unwrap()).await?;
 	assert_eq!(reader.metadata().tile_format, original_format);
 	assert!(reader.metadata().bbox_pyramid.level_max().unwrap() > 0);
 
@@ -57,7 +57,7 @@ async fn mbtiles_to_tar_round_trip() -> Result<()> {
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
 
 	// Read source (limit to small subset for faster test)
-	let source = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 	let params = TilesConverterParameters {
 		bbox_pyramid: Some(TilePyramid::new_full_up_to(5)), // Limit to levels 0-5
 		..Default::default()
@@ -68,7 +68,7 @@ async fn mbtiles_to_tar_round_trip() -> Result<()> {
 	runtime.write_to_path(filtered.into_shared(), &tar_path).await?;
 
 	// Read back
-	let reader = runtime.get_reader_from_str(tar_path.to_str().unwrap()).await?;
+	let reader = runtime.reader_from_str(tar_path.to_str().unwrap()).await?;
 	assert!(reader.metadata().bbox_pyramid.level_max().unwrap() > 0);
 
 	Ok(())
@@ -81,7 +81,7 @@ async fn mbtiles_to_pmtiles_round_trip() -> Result<()> {
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
 
 	// Read source with filter
-	let source = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 	let params = TilesConverterParameters {
 		bbox_pyramid: Some(TilePyramid::new_full_up_to(5)),
 		..Default::default()
@@ -92,7 +92,7 @@ async fn mbtiles_to_pmtiles_round_trip() -> Result<()> {
 	runtime.write_to_path(filtered.into_shared(), &pmtiles_path).await?;
 
 	// Read back
-	let reader = runtime.get_reader_from_str(pmtiles_path.to_str().unwrap()).await?;
+	let reader = runtime.reader_from_str(pmtiles_path.to_str().unwrap()).await?;
 	assert!(reader.metadata().bbox_pyramid.level_max().unwrap() > 0);
 
 	Ok(())
@@ -105,7 +105,7 @@ async fn converter_preserves_tile_format() -> Result<()> {
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
 
 	// Read source
-	let source = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 	let original_format = source.metadata().tile_format;
 	let original_compression = source.metadata().tile_compression;
 
@@ -118,7 +118,7 @@ async fn converter_preserves_tile_format() -> Result<()> {
 	convert_tiles_container(source, params, &output_path, runtime.clone()).await?;
 
 	// Verify format is preserved
-	let reader = runtime.get_reader_from_str(output_path.to_str().unwrap()).await?;
+	let reader = runtime.reader_from_str(output_path.to_str().unwrap()).await?;
 	assert_eq!(reader.metadata().tile_format, original_format);
 	// Note: compression may change depending on writer implementation
 	let _ = original_compression; // May differ based on writer
@@ -133,7 +133,7 @@ async fn converter_changes_compression() -> Result<()> {
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
 
 	// Read source
-	let source = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 
 	// Convert with Brotli compression
 	let params = TilesConverterParameters {
@@ -145,7 +145,7 @@ async fn converter_changes_compression() -> Result<()> {
 	convert_tiles_container(source, params, &output_path, runtime.clone()).await?;
 
 	// Verify output exists and is readable
-	let reader = runtime.get_reader_from_str(output_path.to_str().unwrap()).await?;
+	let reader = runtime.reader_from_str(output_path.to_str().unwrap()).await?;
 	assert!(reader.metadata().bbox_pyramid.level_max().unwrap() > 0);
 
 	Ok(())
@@ -155,7 +155,7 @@ async fn converter_changes_compression() -> Result<()> {
 async fn individual_tile_access() -> Result<()> {
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
 
-	let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+	let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 
 	// Try to get a specific tile
 	let coord = TileCoord::new(0, 0, 0)?;
@@ -174,7 +174,7 @@ async fn metadata_consistency_after_conversion() -> Result<()> {
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
 
 	// Read and convert
-	let source = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 	let params = TilesConverterParameters {
 		bbox_pyramid: Some(TilePyramid::new_full_up_to(3)),
 		..Default::default()
@@ -182,7 +182,7 @@ async fn metadata_consistency_after_conversion() -> Result<()> {
 	convert_tiles_container(source, params, &output_path, runtime.clone()).await?;
 
 	// Read back and verify metadata
-	let reader = runtime.get_reader_from_str(output_path.to_str().unwrap()).await?;
+	let reader = runtime.reader_from_str(output_path.to_str().unwrap()).await?;
 	let metadata = reader.metadata();
 
 	// Basic metadata checks
@@ -202,7 +202,7 @@ async fn versatiles_tile_data_preserved_after_round_trip() -> Result<()> {
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
 
 	// Read source
-	let source = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 
 	// Collect some tiles from the source BEFORE writing
 	let test_coords = [
@@ -222,11 +222,11 @@ async fn versatiles_tile_data_preserved_after_round_trip() -> Result<()> {
 	assert!(!original_tiles.is_empty(), "Should have found at least one test tile");
 
 	// Write to versatiles
-	let source2 = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+	let source2 = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 	runtime.write_to_path(source2, &versatiles_path).await?;
 
 	// Read back from versatiles
-	let reader = runtime.get_reader_from_str(versatiles_path.to_str().unwrap()).await?;
+	let reader = runtime.reader_from_str(versatiles_path.to_str().unwrap()).await?;
 
 	// Verify each tile's content matches
 	for (coord, original_blob) in &original_tiles {
@@ -254,7 +254,7 @@ async fn versatiles_tile_stream_complete_after_round_trip() -> Result<()> {
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
 
 	// Read source and limit to a small bbox for faster testing
-	let source = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 	let params = TilesConverterParameters {
 		bbox_pyramid: Some(TilePyramid::new_full_up_to(4)), // Levels 0-4
 		..Default::default()
@@ -262,7 +262,7 @@ async fn versatiles_tile_stream_complete_after_round_trip() -> Result<()> {
 	let filtered = TilesConvertReader::new_from_reader(source, params)?;
 
 	// Count tiles in source stream
-	let source_for_count = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+	let source_for_count = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 	let params_for_count = TilesConverterParameters {
 		bbox_pyramid: Some(TilePyramid::new_full_up_to(4)),
 		..Default::default()
@@ -276,7 +276,7 @@ async fn versatiles_tile_stream_complete_after_round_trip() -> Result<()> {
 	runtime.write_to_path(filtered.into_shared(), &versatiles_path).await?;
 
 	// Read back and count tiles
-	let reader = runtime.get_reader_from_str(versatiles_path.to_str().unwrap()).await?;
+	let reader = runtime.reader_from_str(versatiles_path.to_str().unwrap()).await?;
 	let read_bbox = TileBBox::new_full(4)?;
 	let read_tiles: Vec<_> = reader.tile_stream(read_bbox).await?.to_vec().await;
 
@@ -298,13 +298,13 @@ async fn versatiles_block_boundary_tiles_preserved() -> Result<()> {
 
 	// Berlin mbtiles goes up to zoom 14, which has tiles up to 16383
 	// At zoom 9, tiles go up to 511, so we can test boundary at 255/256
-	let source = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 
 	// Write to versatiles
 	runtime.write_to_path(source, &versatiles_path).await?;
 
 	// Read back
-	let reader = runtime.get_reader_from_str(versatiles_path.to_str().unwrap()).await?;
+	let reader = runtime.reader_from_str(versatiles_path.to_str().unwrap()).await?;
 
 	// Test tiles near block boundaries at zoom level 9 if they exist
 	// Block 0 ends at 255, Block 1 starts at 256
@@ -315,7 +315,7 @@ async fn versatiles_block_boundary_tiles_preserved() -> Result<()> {
 		TileCoord::new(9, 270, 256)?, // First row in block row 1
 	];
 
-	let source2 = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+	let source2 = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 
 	for coord in &boundary_coords {
 		let original = source2.tile(coord).await?;
@@ -375,7 +375,7 @@ async fn versatiles_deduplicated_tiles_readable() -> Result<()> {
 	VersaTilesWriter::write_to_path(&mut source, &versatiles_path, runtime.clone()).await?;
 
 	// Read back
-	let reader = runtime.get_reader_from_str(versatiles_path.to_str().unwrap()).await?;
+	let reader = runtime.reader_from_str(versatiles_path.to_str().unwrap()).await?;
 
 	// Verify each tile can be read and matches original
 	for (coord, original_blob) in &original_tiles {
@@ -460,7 +460,7 @@ async fn tilejson_metadata_preserved_over_pyramid(#[case] filename: &str) -> Res
 	runtime.write_to_path(source.into_shared(), &output_path).await?;
 
 	// Read back
-	let reader = runtime.get_reader_from_str(output_path.to_str().unwrap()).await?;
+	let reader = runtime.reader_from_str(output_path.to_str().unwrap()).await?;
 	let tj = reader.tilejson();
 
 	// Assert bounds match the custom values, not the pyramid

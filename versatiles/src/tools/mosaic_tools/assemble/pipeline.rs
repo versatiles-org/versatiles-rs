@@ -51,7 +51,7 @@ pub(super) async fn scan_sources(
 
 	for (idx, path) in paths.iter().enumerate() {
 		let reader = runtime
-			.get_reader_from_str(path)
+			.reader_from_str(path)
 			.await
 			.with_context(|| format!("Failed to open container: {path}"))?;
 

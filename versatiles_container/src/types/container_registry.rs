@@ -14,7 +14,7 @@
 //!     let runtime = TilesRuntime::default();
 //!
 //!     // Read from a local file
-//!     let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
+//!     let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
 //!
 //!     // Define the output filename
 //!     let output_path = std::env::temp_dir().join("temp3.versatiles");
@@ -100,19 +100,15 @@ impl ContainerRegistry {
 	}
 
 	#[context("Failed to get reader from string '{data_source}'")]
-	pub async fn get_reader_from_str(&self, data_source: &str, runtime: TilesRuntime) -> Result<SharedTileSource> {
-		self.get_reader(DataSource::parse(data_source)?, runtime).await
+	pub async fn reader_from_str(&self, data_source: &str, runtime: TilesRuntime) -> Result<SharedTileSource> {
+		self.reader(DataSource::parse(data_source)?, runtime).await
 	}
 
 	/// Get a tile container reader for a given [`DataLocation`] (path or URL).
-	pub async fn get_reader_from_location(
-		&self,
-		location: DataLocation,
-		runtime: TilesRuntime,
-	) -> Result<SharedTileSource> {
+	pub async fn reader_from_location(&self, location: DataLocation, runtime: TilesRuntime) -> Result<SharedTileSource> {
 		let debug = format!("{location:?}");
 		self
-			.get_reader(DataSource::try_from(location)?, runtime)
+			.reader(DataSource::try_from(location)?, runtime)
 			.await
 			.with_context(|| format!("Failed to get reader from location '{debug}'"))
 	}
@@ -127,7 +123,7 @@ impl ContainerRegistry {
 	/// # Returns
 	/// A `SharedTileSource` for reading tiles.
 	#[context("Failed to get reader for '{data_source:?}'")]
-	pub async fn get_reader(&self, data_source: DataSource, runtime: TilesRuntime) -> Result<SharedTileSource> {
+	pub async fn reader(&self, data_source: DataSource, runtime: TilesRuntime) -> Result<SharedTileSource> {
 		let mut data_source = data_source.clone();
 		data_source.resolve(&DataLocation::cwd()?)?;
 		let extension = sanitize_extension(data_source.container_type()?);
@@ -432,7 +428,7 @@ pub mod tests {
 		async fn inner() -> Result<()> {
 			let reg = ContainerRegistry::default();
 			let runtime = TilesRuntime::default();
-			let err = reg.get_reader_from_str("file.unknown_ext", runtime).await.unwrap_err();
+			let err = reg.reader_from_str("file.unknown_ext", runtime).await.unwrap_err();
 			assert!(err.to_string().contains("unknown"), "unexpected error: {err}");
 			Ok(())
 		}
@@ -551,7 +547,7 @@ pub mod tests {
 				.await?;
 
 			// get test container reader using the default registry (back-compat)
-			let reader2 = registry.get_reader_from_str(path.to_str().unwrap(), runtime).await?;
+			let reader2 = registry.reader_from_str(path.to_str().unwrap(), runtime).await?;
 			let mut boxed =
 				Arc::try_unwrap(reader2).map_err(|_| anyhow!("Cannot get exclusive access to reader for test"))?;
 			MockWriter::write(boxed.as_mut()).await?;

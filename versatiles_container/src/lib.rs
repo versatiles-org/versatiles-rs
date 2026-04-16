@@ -20,7 +20,7 @@
 //! async fn main() -> anyhow::Result<()> {
 //!     // Open a source container via the registry
 //!     let runtime = TilesRuntime::default();
-//!     let reader = runtime.get_reader_from_str("../testdata/berlin.mbtiles").await?;
+//!     let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 //!
 //!     // Optionally adapt the reader: limit to a bbox pyramid, keep compression as-is
 //!     let params = TilesConverterParameters {

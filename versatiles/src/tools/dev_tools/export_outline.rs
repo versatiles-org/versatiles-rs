@@ -27,7 +27,7 @@ pub async fn run(args: &ExportOutline, runtime: &TilesRuntime) -> Result<()> {
 	let input = &args.input;
 	let output = &args.output;
 
-	let reader = runtime.get_reader_from_str(input).await?;
+	let reader = runtime.reader_from_str(input).await?;
 
 	let bbox_pyramid = reader.metadata().bbox_pyramid.clone();
 	let level = args.level.unwrap_or_else(|| bbox_pyramid.level_max().unwrap());
