@@ -224,13 +224,14 @@ Like raster_tile_resize, but uses 24-bit raw value averaging for downscaling
 
 ## filter
 
-Filter tiles by bounding box and/or zoom levels.
+Filter tiles by bounding box, zoom levels, and/or the tile coordinates present in another container.
 
 ### Parameters
 
 - *`bbox`: [f64,f64,f64,f64] (optional)* - Bounding box in WGS84: [min lng, min lat, max lng, max lat].
 - *`level_min`: u8 (optional)* - minimal zoom level
 - *`level_max`: u8 (optional)* - maximal zoom level
+- *`filename`: String (optional)* - Path to a tile container used as a coordinate allow-list. Only tiles whose coordinates exist in this container are passed through. Accepts the same path/URL syntax as `from_container`. Note: opening the container and building the allow-list requires I/O at pipeline build time.
 
 ---
 
