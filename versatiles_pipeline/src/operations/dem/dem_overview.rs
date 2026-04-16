@@ -77,6 +77,7 @@ pub(super) fn dem_scale_down(image: &DynamicImage) -> Result<DynamicImage> {
 					}
 					#[allow(clippy::cast_possible_truncation)]
 					let avg_alpha = ((alpha_sum + 2) / 4) as u8; // max 255, truncation impossible
+					#[allow(clippy::manual_checked_ops)]
 					if count > 0 {
 						let avg = (sum + count / 2) / count;
 						let Rgb([cr, cg, cb]) = raw_to_rgb(avg);

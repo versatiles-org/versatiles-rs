@@ -319,7 +319,7 @@ mod tests {
 
 		for batch in &batches {
 			let batch_tiles: usize = batch.iter().map(|g| g.coords.len()).sum();
-			assert!(batch_tiles <= 40, "batch has {batch_tiles} tiles, exceeds limit of 40",);
+			assert!(batch_tiles <= 40, "batch has {batch_tiles} tiles, exceeds limit of 40");
 		}
 
 		let total: usize = batches.iter().flat_map(|b| b.iter()).map(|g| g.coords.len()).sum();

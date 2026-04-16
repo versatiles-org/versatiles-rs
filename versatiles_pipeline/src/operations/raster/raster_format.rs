@@ -213,7 +213,7 @@ mod tests {
 		assert_eq!(result.len(), 32);
 		let result_str = result[0..16]
 			.iter()
-			.map(|x| x.map(|v| v.to_string()).unwrap_or(String::new()))
+			.map(|x| x.map_or(String::new(), |v| v.to_string()))
 			.collect::<Vec<String>>()
 			.join(",");
 

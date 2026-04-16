@@ -58,6 +58,7 @@ must_use_candidate = "deny"
 cast_precision_loss = "allow"
 
 # Allow stylistic patterns used consistently in codebase
+duration_suboptimal_units = "allow"
 ignored_unit_patterns = "allow"
 items_after_statements = "allow"
 iter_without_into_iter = "allow"

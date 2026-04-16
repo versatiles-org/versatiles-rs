@@ -130,7 +130,7 @@ impl BandMapping {
 			}
 			Ok::<_, anyhow::Error>(channels)
 		})()
-		.with_context(|| format!("Failed to compute channel mapping from bands [{band_string}]",))?;
+		.with_context(|| format!("Failed to compute channel mapping from bands [{band_string}]"))?;
 
 		let (map, src_alpha_band): (Vec<usize>, Option<usize>) = match channels {
 			[None, Some(red), Some(green), Some(blue), Some(alpha)] => {
@@ -152,7 +152,7 @@ impl BandMapping {
 				(vec![gray], None)
 			}
 			_ => {
-				bail!("The found bands ({channels:?}) cannot be interpreted as grey/RGB (+alpha)",);
+				bail!("The found bands ({channels:?}) cannot be interpreted as grey/RGB (+alpha)");
 			}
 		};
 		log::trace!("Band mapping result: color_bands={map:?}, src_alpha_band={src_alpha_band:?}");
