@@ -14,7 +14,7 @@ pub struct VectorLayer {
 #[napi(object, js_name = "TileJSON")]
 #[derive(Debug, PartialEq)]
 pub struct TileJSON {
-	pub tilejson: String,
+	pub version: String,
 	pub minzoom: f64,
 	pub maxzoom: f64,
 	/// Geographic bounding box. If `Some`, `[west, south, east, north]`.
@@ -66,7 +66,7 @@ impl TileJSON {
 			maxzoom: tj
 				.integer("maxzoom")
 				.map_or_else(|| f64::from(p.level_max().unwrap_or(0)), |v| v as f64),
-			tilejson: String::from("3.0"),
+			version: String::from("3.0"),
 		}
 	}
 }

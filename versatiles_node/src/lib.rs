@@ -179,12 +179,12 @@ mod tests {
 		let result = ProbeResult {
 			source_name: "test.versatiles".to_string(),
 			container_name: "versatiles".to_string(),
-			tile_json: "{}".to_string(),
+			tile_json_raw: "{}".to_string(),
 			parameters: metadata,
 		};
 		assert_eq!(result.source_name, "test.versatiles");
 		assert_eq!(result.container_name, "versatiles");
-		assert_eq!(result.tile_json, "{}");
+		assert_eq!(result.tile_json_raw, "{}");
 		assert_eq!(result.parameters.tile_format, "pbf");
 	}
 }

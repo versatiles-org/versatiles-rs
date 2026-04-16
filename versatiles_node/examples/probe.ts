@@ -32,7 +32,7 @@ log.info('Zoom Range', `${metadata.minZoom} - ${metadata.maxZoom}`);
 // Parse and display TileJSON
 const tileJSON = source.tileJson();
 log.section('TileJSON Metadata');
-log.info('Version', tileJSON.tilejson);
+log.info('Version', tileJSON.version);
 log.info('Bounds', tileJSON.bounds ? tileJSON.bounds.join(', ') : 'None');
 if (tileJSON.vectorLayers) {
 	log.info('Vector Layers', tileJSON.vectorLayers.length.toString());

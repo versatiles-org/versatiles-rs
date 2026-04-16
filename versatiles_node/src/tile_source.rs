@@ -703,7 +703,7 @@ mod tests {
 		assert_eq!(tile_json.bounds.unwrap(), [13.08283, 52.33446, 13.762245, 52.6783]);
 
 		// Check common fields
-		assert_eq!(tile_json.tilejson, "3.0");
+		assert_eq!(tile_json.version, "3.0");
 		assert_eq!(tile_json.minzoom, 0.0);
 		assert_eq!(tile_json.maxzoom, 14.0);
 		assert!(tile_json.vector_layers.is_some());
@@ -722,7 +722,7 @@ mod tests {
 		assert!(tile_json.bounds.is_none());
 
 		// Check common fields
-		assert_eq!(tile_json.tilejson, "3.0");
+		assert_eq!(tile_json.version, "3.0");
 		assert_eq!(tile_json.minzoom, 0.0);
 		assert_eq!(tile_json.maxzoom, 14.0);
 		assert!(tile_json.vector_layers.is_some());
@@ -1013,7 +1013,7 @@ mod tests {
 			.unwrap();
 
 		let tile_json = reader.tile_json();
-		assert_eq!(tile_json.tilejson, "3.0");
+		assert_eq!(tile_json.version, "3.0");
 		assert_eq!(tile_json.minzoom, 0.0);
 		assert_eq!(tile_json.maxzoom, 14.0);
 		assert!(tile_json.vector_layers.is_some());

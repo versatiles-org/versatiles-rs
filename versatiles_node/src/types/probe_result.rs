@@ -9,7 +9,7 @@ pub struct ProbeResult {
 	/// Container type (e.g., "mbtiles", "versatiles")
 	pub container_name: String,
 	/// TileJSON metadata as JSON string
-	pub tile_json: String,
+	pub tile_json_raw: String,
 	/// Reader parameters
 	pub parameters: SourceMetadata,
 }

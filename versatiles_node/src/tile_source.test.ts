@@ -94,7 +94,7 @@ describe('TileSource', () => {
 			expect(tileJson).toBeDefined();
 			expect(typeof tileJson).toBe('object');
 
-			expect(tileJson.tilejson).toBe('3.0');
+			expect(tileJson.version).toBe('3.0');
 			// tiles array, bounds, and other fields may or may not be present depending on implementation
 			expect(typeof tileJson.minzoom).toBe('number');
 			expect(typeof tileJson.maxzoom).toBe('number');
@@ -104,7 +104,7 @@ describe('TileSource', () => {
 			const reader = await TileSource.fromPath(PMTILES_PATH);
 			const tileJson = reader.tileJson();
 
-			expect(tileJson.tilejson).toBe('3.0');
+			expect(tileJson.version).toBe('3.0');
 		});
 	});
 
@@ -203,7 +203,7 @@ describe('TileSource', () => {
 
 			const tileJson = reader.tileJson();
 			expect(tileJson).toBeDefined();
-			expect(tileJson.tilejson).toBe('3.0');
+			expect(tileJson.version).toBe('3.0');
 			expect(tileJson.minzoom).toBe(0);
 			expect(tileJson.maxzoom).toBe(14);
 			expect(tileJson.vectorLayers).toBeDefined();
