@@ -131,7 +131,7 @@ pub struct MessageData {
 // Type aliases for the three different callback types
 // Note: Using weak references (Weak=true) to avoid blocking process exit
 type ProgressCallback = ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false, true>;
-type MessageCallback = ThreadsafeFunction<(String, String), Unknown<'static>, (String, String), Status, false, true>;
+type MessageCallback = ThreadsafeFunction<MessageData, Unknown<'static>, MessageData, Status, false, true>;
 
 /// Progress monitor for long-running operations
 ///
@@ -186,7 +186,7 @@ impl Progress {
 	#[napi(ts_args_type = "callback: (type: string, message: string) => void")]
 	pub fn on_message(&self, callback: Function<'static>) -> Result<&Self> {
 		let tsfn = callback
-			.build_threadsafe_function::<(String, String)>()
+			.build_threadsafe_function::<MessageData>()
 			.weak::<true>()
 			.build_callback(|ctx| Ok(ctx.value))?;
 		let mut listeners = self.message_listeners.lock().unwrap();
@@ -209,7 +209,10 @@ impl Progress {
 		let listeners = self.message_listeners.lock().unwrap();
 		for listener in listeners.iter() {
 			let _ = listener.call(
-				(msg_type.to_string(), message.to_string()),
+				MessageData {
+					msg_type: msg_type.to_string(),
+					message: message.to_string(),
+				},
 				ThreadsafeFunctionCallMode::NonBlocking,
 			);
 		}
