@@ -14,7 +14,7 @@ import { log } from './lib/logger.js';
 log.title('VersaTiles Probe Example');
 
 const containerPath = fileURLToPath(new URL('../../testdata/berlin.mbtiles', import.meta.url));
-const source = await TileSource.open(containerPath);
+const source = await TileSource.fromPath(containerPath);
 
 log.section('Container Information');
 const sourceType = source.sourceType();

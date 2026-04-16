@@ -180,7 +180,7 @@ impl TileServer {
 	#[napi]
 	pub async fn add_tile_source_from_path(&self, name: String, path: String) -> Result<()> {
 		// Open the tile source
-		let tile_source = TileSource::open(path).await?;
+		let tile_source = TileSource::from_path(path).await?;
 
 		// Delegate to add_tile_source
 		self.add_tile_source(name, &tile_source).await
@@ -906,7 +906,7 @@ mod tests {
 		let server = TileServer::new(None).unwrap();
 
 		// Open a TileSource
-		let tile_source = TileSource::open("../testdata/berlin.mbtiles".to_string())
+		let tile_source = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -940,7 +940,7 @@ mod tests {
 		server.start().await.unwrap();
 
 		// Open a TileSource
-		let tile_source = TileSource::open("../testdata/berlin.mbtiles".to_string())
+		let tile_source = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 
@@ -969,7 +969,7 @@ mod tests {
 			.unwrap();
 
 		// Add from TileSource object
-		let tile_source = TileSource::open("../testdata/berlin.pmtiles".to_string())
+		let tile_source = TileSource::from_path("../testdata/berlin.pmtiles".to_string())
 			.await
 			.unwrap();
 		server
@@ -998,7 +998,7 @@ mod tests {
 		.unwrap();
 
 		// Add TileSource object before starting
-		let tile_source = TileSource::open("../testdata/berlin.mbtiles".to_string())
+		let tile_source = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
 			.await
 			.unwrap();
 		server

@@ -21,7 +21,7 @@ describe('TileSource.convertTo()', () => {
 	});
 
 	it('should convert MBTiles to VersaTiles format', async () => {
-		const source = await TileSource.open(MBTILES_PATH);
+		const source = await TileSource.fromPath(MBTILES_PATH);
 		await source.convertTo(outputPath);
 
 		expect(fs.existsSync(outputPath)).toBeTruthy();
@@ -30,7 +30,7 @@ describe('TileSource.convertTo()', () => {
 	});
 
 	it('should convert with zoom filter options', async () => {
-		const source = await TileSource.open(MBTILES_PATH);
+		const source = await TileSource.fromPath(MBTILES_PATH);
 		await source.convertTo(outputPath, {
 			minZoom: 5,
 			maxZoom: 10,
@@ -41,7 +41,7 @@ describe('TileSource.convertTo()', () => {
 	});
 
 	it('should convert with bbox filter', async () => {
-		const source = await TileSource.open(MBTILES_PATH);
+		const source = await TileSource.fromPath(MBTILES_PATH);
 		await source.convertTo(outputPath, {
 			bbox: [13.0, 52.0, 14.0, 53.0], // Berlin area
 			bboxBorder: 1,
@@ -51,7 +51,7 @@ describe('TileSource.convertTo()', () => {
 	});
 
 	it('should receive progress updates', async () => {
-		const source = await TileSource.open(MBTILES_PATH);
+		const source = await TileSource.fromPath(MBTILES_PATH);
 		const progressUpdates: number[] = [];
 
 		await source.convertTo(
@@ -68,7 +68,7 @@ describe('TileSource.convertTo()', () => {
 	});
 
 	it('should receive message updates', async () => {
-		const source = await TileSource.open(MBTILES_PATH);
+		const source = await TileSource.fromPath(MBTILES_PATH);
 		const messages: Array<{ type: string; message: string }> = [];
 
 		await source.convertTo(outputPath, null, null, (data) => {

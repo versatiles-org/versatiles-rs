@@ -23,7 +23,7 @@ const containerPath = fileURLToPath(new URL('../../testdata/berlin.mbtiles', imp
 	// Example 1: Read a single tile
 	log.section('Example 1: Read a single tile');
 
-	const source = await TileSource.open(containerPath);
+	const source = await TileSource.fromPath(containerPath);
 
 	// Get a tile at zoom 10, column 550, row 335 (Berlin area)
 	const tile = await source.getTile(10, 550, 335);
@@ -42,7 +42,7 @@ const containerPath = fileURLToPath(new URL('../../testdata/berlin.mbtiles', imp
 {
 	// Example 2: Read multiple tiles
 	log.section('Example 2: Read multiple tiles');
-	const source = await TileSource.open(containerPath);
+	const source = await TileSource.fromPath(containerPath);
 
 	const tiles = [
 		{ z: 5, x: 17, y: 10 },
@@ -72,7 +72,7 @@ const containerPath = fileURLToPath(new URL('../../testdata/berlin.mbtiles', imp
 	log.info('Tile coordinates', `zoom=${zoom}, x=${coord.x}, y=${coord.y}`);
 	// Get the tile at these coordinates
 
-	const source = await TileSource.open(containerPath);
+	const source = await TileSource.fromPath(containerPath);
 	const tile = await source.getTile(coord.z, coord.x, coord.y);
 
 	log.info('Tile size', `${tile!.length} bytes`);
@@ -104,7 +104,7 @@ const containerPath = fileURLToPath(new URL('../../testdata/berlin.mbtiles', imp
 	// Example 5: Read tiles in a geographic area
 	log.section('Example 5: Read all tiles in a bounding box');
 
-	const source = await TileSource.open(containerPath);
+	const source = await TileSource.fromPath(containerPath);
 
 	// Define a small area in Berlin
 	const west = 13.4;
@@ -142,7 +142,7 @@ const containerPath = fileURLToPath(new URL('../../testdata/berlin.mbtiles', imp
 	// Example 6: Get tile information without reading data
 	log.section('Example 6: Check tile availability');
 
-	const source = await TileSource.open(containerPath);
+	const source = await TileSource.fromPath(containerPath);
 
 	const testCoords = [
 		{ z: 0, x: 0, y: 0, name: 'World (zoom 0)' },

@@ -23,7 +23,7 @@ describe('convertTo()', () => {
 		expect(fs.existsSync(outputPath)).toBeTruthy();
 
 		// Verify we can open the converted file
-		const newReader = await TileSource.open(outputPath);
+		const newReader = await TileSource.fromPath(outputPath);
 		expect(newReader.metadata()).toStrictEqual({
 			maxZoom: 14,
 			minZoom: 0,
@@ -41,7 +41,7 @@ describe('convertTo()', () => {
 		expect(fs.existsSync(outputPath)).toBeTruthy();
 
 		// Verify we can open the converted file
-		const newReader = await TileSource.open(outputPath);
+		const newReader = await TileSource.fromPath(outputPath);
 		expect(newReader.metadata()).toStrictEqual({
 			maxZoom: 14,
 			minZoom: 0,
@@ -62,7 +62,7 @@ describe('convertTo()', () => {
 		});
 		expect(fs.existsSync(outputPath)).toBeTruthy();
 
-		const newReader = await TileSource.open(outputPath);
+		const newReader = await TileSource.fromPath(outputPath);
 		expect(newReader.metadata()).toStrictEqual({
 			maxZoom: 7,
 			minZoom: 5,

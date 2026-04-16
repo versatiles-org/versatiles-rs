@@ -11,23 +11,23 @@ const MBTILES_PATH = path.join(TESTDATA_DIR, 'berlin.mbtiles');
 const PMTILES_PATH = path.join(TESTDATA_DIR, 'berlin.pmtiles');
 
 describe('TileSource', () => {
-	describe('open()', () => {
+	describe('fromPath()', () => {
 		it('should open MBTiles file', async () => {
-			const reader = await TileSource.open(MBTILES_PATH);
+			const reader = await TileSource.fromPath(MBTILES_PATH);
 			expect(reader).toBeDefined();
 		});
 
 		it('should open PMTiles file', async () => {
-			const reader = await TileSource.open(PMTILES_PATH);
+			const reader = await TileSource.fromPath(PMTILES_PATH);
 			expect(reader).toBeDefined();
 		});
 
 		it('should throw error for non-existent file', async () => {
-			await expect(TileSource.open('/nonexistent/file.mbtiles')).rejects.toThrow();
+			await expect(TileSource.fromPath('/nonexistent/file.mbtiles')).rejects.toThrow();
 		});
 
 		it('should throw error for invalid file format', async () => {
-			await expect(TileSource.open(__filename)).rejects.toThrow();
+			await expect(TileSource.fromPath(__filename)).rejects.toThrow();
 		});
 	});
 
@@ -35,7 +35,7 @@ describe('TileSource', () => {
 		let reader: TileSource;
 
 		beforeAll(async () => {
-			reader = await TileSource.open(MBTILES_PATH);
+			reader = await TileSource.fromPath(MBTILES_PATH);
 		});
 
 		it('should retrieve existing tile', async () => {
@@ -88,7 +88,7 @@ describe('TileSource', () => {
 
 	describe('tileJson', () => {
 		it('should return valid TileJSON for MBTiles', async () => {
-			const reader = await TileSource.open(MBTILES_PATH);
+			const reader = await TileSource.fromPath(MBTILES_PATH);
 			const tileJson = reader.tileJson();
 
 			expect(tileJson).toBeDefined();
@@ -101,7 +101,7 @@ describe('TileSource', () => {
 		});
 
 		it('should return valid TileJSON for PMTiles', async () => {
-			const reader = await TileSource.open(PMTILES_PATH);
+			const reader = await TileSource.fromPath(PMTILES_PATH);
 			const tileJson = reader.tileJson();
 
 			expect(tileJson.tilejson).toBe('3.0');
@@ -110,7 +110,7 @@ describe('TileSource', () => {
 
 	describe('metadata', () => {
 		it('should return reader metadata', async () => {
-			const reader = await TileSource.open(MBTILES_PATH);
+			const reader = await TileSource.fromPath(MBTILES_PATH);
 			const metadata = reader.metadata();
 
 			expect(metadata).toStrictEqual({
@@ -124,7 +124,7 @@ describe('TileSource', () => {
 
 	describe('sourceType', () => {
 		it('should return correct source type for MBTiles', async () => {
-			const reader = await TileSource.open(MBTILES_PATH);
+			const reader = await TileSource.fromPath(MBTILES_PATH);
 			const sourceType = reader.sourceType();
 
 			expect(sourceType.kind).toEqual('container');
@@ -135,7 +135,7 @@ describe('TileSource', () => {
 		});
 
 		it('should return correct source type for PMTiles', async () => {
-			const reader = await TileSource.open(PMTILES_PATH);
+			const reader = await TileSource.fromPath(PMTILES_PATH);
 			const sourceType = reader.sourceType();
 
 			expect(sourceType.kind).toEqual('container');

@@ -63,7 +63,7 @@ npx tsx examples/probe.ts
 
 **Features shown:**
 
-- Opening tile sources with `TileSource.open()`
+- Opening tile sources with `TileSource.fromPath()`
 - Accessing source type information
 - Reading metadata (format, compression, zoom levels)
 - Accessing TileJSON metadata
@@ -154,7 +154,7 @@ If you don't have this test data, you can:
 ```typescript
 import { TileSource } from '@versatiles/versatiles-rs';
 
-const source = await TileSource.open('path/to/tiles.mbtiles');
+const source = await TileSource.fromPath('path/to/tiles.mbtiles');
 ```
 
 ### Getting Tile Metadata
@@ -162,7 +162,7 @@ const source = await TileSource.open('path/to/tiles.mbtiles');
 ```typescript
 import { TileSource } from '@versatiles/versatiles-rs';
 
-const source = await TileSource.open('tiles.mbtiles');
+const source = await TileSource.fromPath('tiles.mbtiles');
 const metadata = source.metadata();
 const tileJSON = source.tileJson();
 

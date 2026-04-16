@@ -128,7 +128,7 @@ import { ContainerReader } from '../index.js';
 
 describe('Example', () => {
   test('should work', async () => {
-    const reader = await ContainerReader.open('../testdata/berlin.mbtiles');
+    const reader = await ContainerReader.fromPath('../testdata/berlin.mbtiles');
     // ... assertions
   });
 });

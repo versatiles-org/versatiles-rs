@@ -179,7 +179,7 @@ fn generate_vpl_class(out: &mut String, ops: &[OperationMeta]) {
 
 	// open
 	out.push_str("\t/** Execute this VPL pipeline and return a TileSource. */\n");
-	out.push_str("\tasync open(dir?: string): Promise<TileSource> {\n");
+	out.push_str("\tasync fromPath(dir?: string): Promise<TileSource> {\n");
 	out.push_str("\t\treturn TileSource.fromPipeline(JSON.stringify(this.toJSON()), dir);\n");
 	out.push_str("\t}\n");
 

@@ -58,7 +58,7 @@ console.log(`Server running at http://localhost:${server.port}`);
 ```javascript
 import { TileSource } from '@versatiles/versatiles-rs';
 
-const source = await TileSource.open('tiles.mbtiles');
+const source = await TileSource.fromPath('tiles.mbtiles');
 
 // Get a single tile
 const tile = await source.getTile(5, 16, 10);
@@ -81,7 +81,7 @@ console.log('Bounds:', tileJSON.bounds);
 ```javascript
 import { TileSource } from '@versatiles/versatiles-rs';
 
-const source = await TileSource.open('tiles.mbtiles');
+const source = await TileSource.fromPath('tiles.mbtiles');
 const sourceType = source.sourceType();
 const metadata = source.metadata();
 
@@ -142,7 +142,7 @@ Convert tiles from one format to another.
 
 ### `class TileSource`
 
-#### `TileSource.open(path)`
+#### `TileSource.fromPath(path)`
 
 Open a tile container.
 
@@ -152,7 +152,7 @@ Open a tile container.
 
 **Returns:** `Promise<TileSource>`
 
-#### `TileSource.fromVpl(vpl, basePath?)`
+#### `TileSource.openVpl(vpl, basePath?)`
 
 Create a tile source from VPL (VersaTiles Pipeline Language).
 

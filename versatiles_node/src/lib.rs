@@ -23,7 +23,7 @@
 //! const { TileSource, TileServer, convert } = require('versatiles');
 //!
 //! // Read tiles from a container
-//! const reader = await TileSource.open('tiles.versatiles');
+//! const reader = await TileSource.fromPath('tiles.versatiles');
 //! const tile = await reader.getTile(10, 512, 384);
 //!
 //! // Convert tiles with progress monitoring

@@ -20,7 +20,7 @@ const testdataDir = fileURLToPath(new URL('../../testdata/', import.meta.url));
 		.filter({ levelMin: 6, levelMax: 10, bbox: [13.3, 52.4, 13.5, 52.6] })
 		.vectorFilterLayers({ filter: 'ocean' });
 
-	const source = await pipeline.open(testdataDir);
+	const source = await pipeline.fromPath(testdataDir);
 	const tile = await source.getTile(8, 137, 83);
 
 	log.info('Pipeline', pipeline.toString());
@@ -35,7 +35,7 @@ const testdataDir = fileURLToPath(new URL('../../testdata/', import.meta.url));
 	const fallback = VPL.fromDebug({ format: 'mvt' });
 	const pipeline = VPL.fromStacked([primary, fallback]);
 
-	const source = await pipeline.open(testdataDir);
+	const source = await pipeline.fromPath(testdataDir);
 	const tile = await source.getTile(10, 550, 335);
 
 	log.info('Pipeline', pipeline.toString());
@@ -56,7 +56,7 @@ const testdataDir = fileURLToPath(new URL('../../testdata/', import.meta.url));
 	});
 	const pipeline = VPL.fromMergedVector([labels, borders]);
 
-	const source = await pipeline.open(testdataDir);
+	const source = await pipeline.fromPath(testdataDir);
 	const tile = await source.getTile(5, 17, 10);
 
 	log.info('Pipeline', pipeline.toString());
