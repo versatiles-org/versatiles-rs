@@ -63,7 +63,7 @@ cors:
 		let _ = self.child.wait();
 	}
 
-	async fn get_with_origin(&self, path: &str, origin: &str) -> (u16, HeaderMap) {
+	async fn with_origin(&self, path: &str, origin: &str) -> (u16, HeaderMap) {
 		let client = reqwest::Client::new();
 		let resp = client
 			.get(format!("{}{path}", self.host))
@@ -101,7 +101,7 @@ async fn e2e_cors_headers_for_allowed_origin() {
 	let server = CorsTestServer::new(&["https://example.org"], Some(86400)).await;
 
 	let (status, headers) = server
-		.get_with_origin("/tiles/test/tiles.json", "https://example.org")
+		.with_origin("/tiles/test/tiles.json", "https://example.org")
 		.await;
 
 	assert_eq!(status, 200);
@@ -118,9 +118,7 @@ async fn e2e_cors_headers_for_allowed_origin() {
 async fn e2e_cors_headers_absent_for_disallowed_origin() {
 	let server = CorsTestServer::new(&["https://example.org"], None).await;
 
-	let (status, headers) = server
-		.get_with_origin("/tiles/test/tiles.json", "https://evil.com")
-		.await;
+	let (status, headers) = server.with_origin("/tiles/test/tiles.json", "https://evil.com").await;
 
 	assert_eq!(status, 200);
 
@@ -138,7 +136,7 @@ async fn e2e_cors_wildcard_subdomain() {
 
 	// Subdomain should be allowed
 	let (status, headers) = server
-		.get_with_origin("/tiles/test/tiles.json", "https://app.example.org")
+		.with_origin("/tiles/test/tiles.json", "https://app.example.org")
 		.await;
 	assert_eq!(status, 200);
 	assert!(
@@ -148,7 +146,7 @@ async fn e2e_cors_wildcard_subdomain() {
 
 	// Different domain should not be allowed
 	let (_, headers2) = server
-		.get_with_origin("/tiles/test/tiles.json", "https://example.com")
+		.with_origin("/tiles/test/tiles.json", "https://example.com")
 		.await;
 	assert!(
 		headers2.get("access-control-allow-origin").is_none(),
@@ -188,7 +186,7 @@ async fn e2e_cors_multiple_origins() {
 
 	// First origin should be allowed
 	let (_, headers1) = server
-		.get_with_origin("/tiles/test/tiles.json", "https://first.example.org")
+		.with_origin("/tiles/test/tiles.json", "https://first.example.org")
 		.await;
 	assert!(
 		headers1.get("access-control-allow-origin").is_some(),
@@ -197,7 +195,7 @@ async fn e2e_cors_multiple_origins() {
 
 	// Second origin should be allowed
 	let (_, headers2) = server
-		.get_with_origin("/tiles/test/tiles.json", "https://second.example.org")
+		.with_origin("/tiles/test/tiles.json", "https://second.example.org")
 		.await;
 	assert!(
 		headers2.get("access-control-allow-origin").is_some(),
@@ -206,7 +204,7 @@ async fn e2e_cors_multiple_origins() {
 
 	// Other origin should not be allowed
 	let (_, headers3) = server
-		.get_with_origin("/tiles/test/tiles.json", "https://third.example.org")
+		.with_origin("/tiles/test/tiles.json", "https://third.example.org")
 		.await;
 	assert!(
 		headers3.get("access-control-allow-origin").is_none(),
@@ -220,7 +218,7 @@ async fn e2e_cors_on_tile_endpoint() {
 	let server = CorsTestServer::new(&["https://example.org"], None).await;
 
 	// Request an actual tile
-	let (status, headers) = server.get_with_origin("/tiles/test/0/0/0", "https://example.org").await;
+	let (status, headers) = server.with_origin("/tiles/test/0/0/0", "https://example.org").await;
 
 	assert_eq!(status, 200);
 	assert!(
@@ -263,7 +261,7 @@ tiles:
 		let _ = self.child.wait();
 	}
 
-	async fn get_with_origin(&self, path: &str, origin: &str) -> (u16, HeaderMap) {
+	async fn with_origin(&self, path: &str, origin: &str) -> (u16, HeaderMap) {
 		let client = reqwest::Client::new();
 		let resp = client
 			.get(format!("{}{path}", self.host))
@@ -296,7 +294,7 @@ async fn e2e_cors_allows_all_origins_by_default() {
 	];
 
 	for origin in test_origins {
-		let (status, headers) = server.get_with_origin("/tiles/test/tiles.json", origin).await;
+		let (status, headers) = server.with_origin("/tiles/test/tiles.json", origin).await;
 
 		assert_eq!(status, 200, "Request from {origin} should succeed");
 		assert!(

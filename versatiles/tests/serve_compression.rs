@@ -27,7 +27,7 @@ impl CompressionTestServer {
 		let _ = self.child.wait();
 	}
 
-	async fn get_with_encoding(&self, path: &str, accept_encoding: Option<&str>) -> (u16, HeaderMap) {
+	async fn with_encoding(&self, path: &str, accept_encoding: Option<&str>) -> (u16, HeaderMap) {
 		let client = reqwest::Client::builder()
 			// Disable automatic decompression so we can inspect the raw Content-Encoding
 			.no_gzip()
@@ -79,7 +79,7 @@ async fn e2e_no_accept_encoding_returns_uncompressed() {
 	let input = get_testdata("berlin.mbtiles");
 	let server = CompressionTestServer::new(&input).await;
 
-	let (status, headers) = server.get_with_encoding("/tiles/berlin/tiles.json", None).await;
+	let (status, headers) = server.with_encoding("/tiles/berlin/tiles.json", None).await;
 
 	assert_eq!(status, 200);
 	// No Content-Encoding header means uncompressed
@@ -218,7 +218,7 @@ async fn e2e_json_endpoint_respects_encoding() {
 	let input = get_testdata("berlin.mbtiles");
 	let server = CompressionTestServer::new(&input).await;
 
-	let (status, headers) = server.get_with_encoding("/tiles/berlin/tiles.json", Some("gzip")).await;
+	let (status, headers) = server.with_encoding("/tiles/berlin/tiles.json", Some("gzip")).await;
 
 	assert_eq!(status, 200);
 	// JSON endpoints should also respect Accept-Encoding

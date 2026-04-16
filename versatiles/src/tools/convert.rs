@@ -105,7 +105,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 
 	let reader = runtime.reader_from_str(&arguments.input_file).await?;
 
-	let (bbox_pyramid, geo_bbox) = get_bbox_pyramid(arguments)?;
+	let (bbox_pyramid, geo_bbox) = bbox_pyramid(arguments)?;
 
 	let (tile_format, format_quality, format_effort) = if let Some(ref tf) = arguments.tile_format {
 		let (fmt, q, s) = parse_tile_format(tf)?;
@@ -133,7 +133,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 }
 
 #[context("Failed to get bounding box pyramid")]
-fn get_bbox_pyramid(arguments: &Subcommand) -> Result<(Option<TilePyramid>, Option<GeoBBox>)> {
+fn bbox_pyramid(arguments: &Subcommand) -> Result<(Option<TilePyramid>, Option<GeoBBox>)> {
 	if arguments.min_zoom.is_none() && arguments.max_zoom.is_none() && arguments.bbox.is_none() {
 		return Ok((None, None));
 	}

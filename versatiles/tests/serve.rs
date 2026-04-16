@@ -10,7 +10,7 @@ use versatiles_core::json::JsonValue;
 async fn e2e_serve_local_file() {
 	let input = get_testdata("berlin.pmtiles");
 	let server = Server::new(&[&input]).await;
-	assert_eq!(server.get_index().await, ["berlin"]);
+	assert_eq!(server.index().await, ["berlin"]);
 	assert_eq!(
 		server.tilejson("berlin").await,
 		vec!["length: 19", "desc: Tile config for simple vector tiles schema"]
@@ -20,7 +20,7 @@ async fn e2e_serve_local_file() {
 #[tokio::test]
 async fn e2e_serve_remote_url() {
 	let server = Server::new(&["https://download.versatiles.org/osm.versatiles"]).await;
-	assert_eq!(server.get_index().await, ["osm"]);
+	assert_eq!(server.index().await, ["osm"]);
 	assert_eq!(
 		server.tilejson("osm").await,
 		vec!["length: 26", "desc: Vector tiles based on OSM in Shortbread scheme"]
@@ -99,7 +99,7 @@ impl Server {
 		let _ = self.child.wait();
 	}
 
-	async fn get_json(&self, path: &str) -> JsonValue {
+	async fn json(&self, path: &str) -> JsonValue {
 		let url = format!("{}{}", self.host, path);
 		let resp = reqwest::get(&url).await.unwrap();
 		assert_eq!(resp.status(), 200);
@@ -110,7 +110,7 @@ impl Server {
 
 	async fn tilejson(&self, name: &str) -> Vec<String> {
 		let json = self
-			.get_json(&format!("/tiles/{name}/tiles.json"))
+			.json(&format!("/tiles/{name}/tiles.json"))
 			.await
 			.into_object()
 			.unwrap();
@@ -119,9 +119,9 @@ impl Server {
 		vec![format!("length: {length}"), format!("desc: {desc}")]
 	}
 
-	async fn get_index(&self) -> Vec<String> {
+	async fn index(&self) -> Vec<String> {
 		self
-			.get_json("/tiles/index.json")
+			.json("/tiles/index.json")
 			.await
 			.into_array()
 			.unwrap()

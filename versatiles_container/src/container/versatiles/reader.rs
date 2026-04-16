@@ -182,7 +182,7 @@ impl VersaTilesReader {
 
 	/// Sum of all block index byte lengths.
 	#[cfg(feature = "cli")]
-	fn get_index_size(&self) -> u64 {
+	fn index_size(&self) -> u64 {
 		self.block_index.iter().map(|b| b.index_range().length).sum()
 	}
 
@@ -415,7 +415,7 @@ impl TileSource for VersaTilesReader {
 		print.add_key_value("block count", &self.block_index.len()).await;
 
 		print
-			.add_key_value("sum of block index sizes", &self.get_index_size())
+			.add_key_value("sum of block index sizes", &self.index_size())
 			.await;
 		print
 			.add_key_value("sum of block tiles sizes", &self.tiles_size())

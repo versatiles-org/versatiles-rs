@@ -387,7 +387,7 @@ mod tests {
 			}
 		}
 
-		pub fn get_factory(&self) -> Arc<dyn Fn() -> Result<gdal::Dataset> + Send + Sync + 'static> {
+		pub fn factory(&self) -> Arc<dyn Fn() -> Result<gdal::Dataset> + Send + Sync + 'static> {
 			let src_band_count = self.src_band_count;
 			let geotransform_c = self.geotransform;
 			let size = self.size;
@@ -418,7 +418,7 @@ mod tests {
 
 	impl RasterSource {
 		pub fn from_testdata(bbox: GeoBBox, channel_count: usize) -> Result<RasterSource> {
-			let factory = DatasetFactory::new(bbox, channel_count).get_factory();
+			let factory = DatasetFactory::new(bbox, channel_count).factory();
 			// Construct via the factory (seed one instance inside new_with_factory)
 			futures::executor::block_on(RasterSource::new_with_factory(factory, 1, 2, None, None, None))
 		}

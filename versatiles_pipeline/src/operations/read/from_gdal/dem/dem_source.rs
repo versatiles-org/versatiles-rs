@@ -259,7 +259,7 @@ mod tests {
 			DemDatasetFactory { geotransform, size }
 		}
 
-		pub fn get_factory(&self) -> Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static> {
+		pub fn factory(&self) -> Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static> {
 			let geotransform_c = self.geotransform;
 			let size = self.size;
 			Arc::new(move || -> Result<Dataset> {
@@ -284,7 +284,7 @@ mod tests {
 
 	impl DemSource {
 		pub fn from_testdata(bbox: GeoBBox) -> Result<DemSource> {
-			let factory = DemDatasetFactory::new(bbox).get_factory();
+			let factory = DemDatasetFactory::new(bbox).factory();
 			futures::executor::block_on(DemSource::new_with_factory(factory, 1, 2, None))
 		}
 	}

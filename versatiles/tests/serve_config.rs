@@ -44,7 +44,7 @@ impl ConfigTestServer {
 		reqwest::get(format!("{}{path}", self.host)).await.unwrap()
 	}
 
-	async fn get_with_origin(&self, path: &str, origin: &str) -> reqwest::Response {
+	async fn with_origin(&self, path: &str, origin: &str) -> reqwest::Response {
 		let client = reqwest::Client::new();
 		client
 			.get(format!("{}{path}", self.host))
@@ -143,7 +143,7 @@ cors:
 
 	// Allowed origin should get CORS headers
 	let resp = server
-		.get_with_origin("/tiles/test/tiles.json", "https://allowed.example.org")
+		.with_origin("/tiles/test/tiles.json", "https://allowed.example.org")
 		.await;
 	assert_eq!(resp.status(), 200);
 	assert!(
@@ -153,7 +153,7 @@ cors:
 
 	// Disallowed origin should not get CORS headers
 	let resp = server
-		.get_with_origin("/tiles/test/tiles.json", "https://disallowed.example.org")
+		.with_origin("/tiles/test/tiles.json", "https://disallowed.example.org")
 		.await;
 	assert_eq!(resp.status(), 200);
 	assert!(
@@ -340,7 +340,7 @@ cors:
 
 	// Subdomain should be allowed
 	let resp = server
-		.get_with_origin("/tiles/test/tiles.json", "https://app.example.org")
+		.with_origin("/tiles/test/tiles.json", "https://app.example.org")
 		.await;
 	assert!(
 		resp.headers().get("access-control-allow-origin").is_some(),
@@ -348,9 +348,7 @@ cors:
 	);
 
 	// Different domain should not be allowed
-	let resp = server
-		.get_with_origin("/tiles/test/tiles.json", "https://other.com")
-		.await;
+	let resp = server.with_origin("/tiles/test/tiles.json", "https://other.com").await;
 	assert!(
 		resp.headers().get("access-control-allow-origin").is_none(),
 		"Different domain should not be allowed"

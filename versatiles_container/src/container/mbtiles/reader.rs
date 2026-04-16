@@ -141,7 +141,7 @@ impl MBTilesReader {
 	fn load_meta_data(&mut self) -> Result<()> {
 		log::debug!("load_meta_data");
 
-		let pyramid = self.get_bbox_pyramid()?;
+		let pyramid = self.bbox_pyramid()?;
 		let conn = self.pool.get()?;
 		let mut stmt = conn.prepare("SELECT name, value FROM metadata")?;
 		let entries = stmt.query_map([], |row| {
@@ -229,8 +229,8 @@ impl MBTilesReader {
 	/// # Errors
 	/// Returns an error if the query fails.
 	#[context("computing bbox pyramid from MBTiles")]
-	fn get_bbox_pyramid(&self) -> Result<TilePyramid> {
-		log::debug!("get_bbox_pyramid");
+	fn bbox_pyramid(&self) -> Result<TilePyramid> {
+		log::debug!("bbox_pyramid");
 
 		let conn = self.pool.get()?;
 		let mut stmt = conn.prepare("SELECT zoom_level, tile_column, tile_row FROM tiles")?;
