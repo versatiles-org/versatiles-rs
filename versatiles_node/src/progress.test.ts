@@ -129,7 +129,7 @@ describe('convertTo with callbacks', () => {
 
 		expect(Object.fromEntries(Object.entries(progressData2).map(([key, value]) => [key, typeof value]))).toStrictEqual({
 			estimatedSecondsRemaining: 'number',
-			eta: 'number',
+			etaTimestamp: 'number',
 			message: 'string',
 			percentage: 'number',
 			position: 'number',

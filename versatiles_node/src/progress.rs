@@ -56,17 +56,17 @@ pub struct ProgressData {
 	/// Estimated completion time as JavaScript Date
 	///
 	/// Timestamp in milliseconds since UNIX epoch (January 1, 1970).
-	/// Can be converted to a JavaScript Date object with `new Date(eta)`.
+	/// Can be converted to a JavaScript Date object with `new Date(eta_timestamp)`.
 	/// Returns `null` if insufficient data to estimate.
 	///
 	/// **Example:**
 	/// ```javascript
-	/// if (progress.eta) {
-	///   const completionTime = new Date(progress.eta);
+	/// if (progress.eta_timestamp) {
+	///   const completionTime = new Date(progress.eta_timestamp);
 	///   console.log(`Expected completion: ${completionTime.toLocaleTimeString()}`);
 	/// }
 	/// ```
-	pub eta: Option<f64>,
+	pub eta_timestamp: Option<f64>,
 
 	/// Current operation step or status message
 	///
@@ -97,7 +97,7 @@ impl From<&ProgressState> for ProgressData {
 		};
 		ProgressData {
 			estimated_seconds_remaining,
-			eta,
+			eta_timestamp: eta,
 			message: Some(data.message.clone()),
 			percentage: data.position as f64 / data.total as f64 * 100.0,
 			position: data.position as f64,
@@ -265,7 +265,7 @@ mod tests {
 		assert_eq!(progress_data.percentage, 50.0);
 		assert!(progress_data.speed > 0.0);
 		assert!(progress_data.estimated_seconds_remaining.is_some());
-		assert!(progress_data.eta.is_some());
+		assert!(progress_data.eta_timestamp.is_some());
 		assert_eq!(progress_data.message, Some("Test progress".to_string()));
 	}
 
@@ -293,7 +293,7 @@ mod tests {
 		assert_eq!(progress_data.percentage, 0.0);
 		assert_eq!(progress_data.speed, 0.0);
 		assert_eq!(progress_data.estimated_seconds_remaining, None);
-		assert_eq!(progress_data.eta, None);
+		assert_eq!(progress_data.eta_timestamp, None);
 	}
 
 	#[test]
@@ -320,7 +320,7 @@ mod tests {
 		assert_eq!(progress_data.percentage, 100.0);
 		assert!(progress_data.speed > 0.0);
 		assert_eq!(progress_data.estimated_seconds_remaining, Some(0.0));
-		assert!(progress_data.eta.is_some());
+		assert!(progress_data.eta_timestamp.is_some());
 	}
 
 	#[test]
@@ -393,7 +393,7 @@ mod tests {
 		assert_eq!(progress_data.total, 100000.0);
 		assert!(progress_data.speed > 0.0);
 		assert_eq!(progress_data.estimated_seconds_remaining, None);
-		assert_eq!(progress_data.eta, None);
+		assert_eq!(progress_data.eta_timestamp, None);
 	}
 
 	#[test]
@@ -420,10 +420,10 @@ mod tests {
 		assert_eq!(progress_data.percentage, 50.0);
 		assert!(progress_data.speed > 0.0);
 		assert!(progress_data.estimated_seconds_remaining.is_some());
-		assert!(progress_data.eta.is_some());
+		assert!(progress_data.eta_timestamp.is_some());
 
 		// ETA should be in the future
-		if let Some(eta_ms) = progress_data.eta {
+		if let Some(eta_ms) = progress_data.eta_timestamp {
 			let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs_f64() * 1000.0;
 			assert!(eta_ms > now_ms);
 		}
@@ -449,8 +449,8 @@ mod tests {
 		let progress_data = ProgressData::from(&state);
 
 		// Verify ETA is calculated and reasonable
-		assert!(progress_data.eta.is_some());
-		if let Some(eta_ms) = progress_data.eta {
+		assert!(progress_data.eta_timestamp.is_some());
+		if let Some(eta_ms) = progress_data.eta_timestamp {
 			// ETA should be a valid timestamp (not negative, not too far in future)
 			assert!(eta_ms > 0.0);
 
@@ -602,7 +602,7 @@ mod tests {
 			percentage: 50.0,
 			speed: 10.5,
 			estimated_seconds_remaining: Some(5.0),
-			eta: Some(1234567890.0),
+			eta_timestamp: Some(1234567890.0),
 			message: Some("Test".to_string()),
 		};
 
@@ -616,7 +616,7 @@ mod tests {
 			progress_data1.estimated_seconds_remaining,
 			progress_data2.estimated_seconds_remaining
 		);
-		assert_eq!(progress_data1.eta, progress_data2.eta);
+		assert_eq!(progress_data1.eta_timestamp, progress_data2.eta_timestamp);
 		assert_eq!(progress_data1.message, progress_data2.message);
 	}
 
@@ -630,7 +630,7 @@ mod tests {
 			percentage: 50.0,
 			speed: 10.5,
 			estimated_seconds_remaining: Some(5.0),
-			eta: Some(1234567890.0),
+			eta_timestamp: Some(1234567890.0),
 			message: Some("Test".to_string()),
 		};
 
@@ -677,7 +677,7 @@ mod tests {
 				percentage: f64::from(i * 10),
 				speed: 10.5,
 				estimated_seconds_remaining: Some(5.0),
-				eta: Some(1234567890.0),
+				eta_timestamp: Some(1234567890.0),
 				message: Some(format!("Processing item {i}")),
 			};
 
@@ -772,7 +772,7 @@ mod tests {
 				percentage,
 				speed: 10.0,
 				estimated_seconds_remaining: None,
-				eta: None,
+				eta_timestamp: None,
 				message: Some(format!("{percentage}% complete")),
 			};
 
@@ -791,7 +791,7 @@ mod tests {
 			percentage: 50.0,
 			speed: 0.0,
 			estimated_seconds_remaining: None,
-			eta: None,
+			eta_timestamp: None,
 			message: None,
 		};
 
@@ -880,7 +880,7 @@ mod tests {
 						percentage: (f64::from(i * 100 + j) / 10.0),
 						speed: 50.0,
 						estimated_seconds_remaining: Some(10.0),
-						eta: Some(1234567890.0),
+						eta_timestamp: Some(1234567890.0),
 						message: Some(format!("Thread {i} item {j}")),
 					};
 					progress_clone.emit_progress(&data);

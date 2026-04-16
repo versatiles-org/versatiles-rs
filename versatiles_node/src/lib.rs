@@ -104,7 +104,7 @@ mod tests {
 			percentage: 10.0,
 			speed: 50.0,
 			estimated_seconds_remaining: Some(180.0),
-			eta: Some(1234567890.0),
+			eta_timestamp: Some(1234567890.0),
 			message: Some("Processing".to_string()),
 		};
 		assert_eq!(data.position, 100.0);
@@ -112,7 +112,7 @@ mod tests {
 		assert_eq!(data.percentage, 10.0);
 		assert_eq!(data.speed, 50.0);
 		assert_eq!(data.estimated_seconds_remaining, Some(180.0));
-		assert_eq!(data.eta, Some(1234567890.0));
+		assert_eq!(data.eta_timestamp, Some(1234567890.0));
 		assert_eq!(data.message, Some("Processing".to_string()));
 	}
 
