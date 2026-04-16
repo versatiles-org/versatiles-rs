@@ -21,12 +21,12 @@
 //!
 //!     // Appending data
 //!     writer.append(&data)?;
-//!     assert_eq!(writer.get_position()?, 4);
+//!     assert_eq!(writer.position()?, 4);
 //!
 //!     // Writing data from the start
 //!     writer.write_start(&Blob::from(vec![5, 6, 7, 8]))?;
 //!     writer.set_position(0)?;
-//!     assert_eq!(writer.get_position()?, 0);
+//!     assert_eq!(writer.position()?, 0);
 //!
 //!     Ok(())
 //! }
@@ -111,7 +111,7 @@ impl DataWriterTrait for DataWriterFile {
 	///
 	/// * A Result containing the current write position in bytes or an error.
 	#[context("while getting current write position")]
-	fn get_position(&mut self) -> Result<u64> {
+	fn position(&mut self) -> Result<u64> {
 		Ok(self.writer.stream_position()?)
 	}
 
@@ -141,7 +141,7 @@ mod tests {
 	use std::io::Read;
 
 	#[test]
-	fn test_append_and_get_position() -> Result<()> {
+	fn test_append_and_position() -> Result<()> {
 		// Create a temporary file
 		let temp = NamedTempFile::new("test1")?;
 		let path = temp.path();
@@ -154,7 +154,7 @@ mod tests {
 		let range = writer.append(&data)?;
 		assert_eq!(range.to_string(), "[0..=2]");
 		// Position should now equal length
-		assert_eq!(writer.get_position()?, 3);
+		assert_eq!(writer.position()?, 3);
 
 		// Read back file contents
 		let mut file = File::open(path)?;
@@ -174,7 +174,7 @@ mod tests {
 		let start = Blob::from(vec![1, 2, 3, 4]);
 		writer.write_start(&start)?;
 		// After write_start, position unchanged (0)
-		assert_eq!(writer.get_position()?, 0);
+		assert_eq!(writer.position()?, 0);
 
 		// Now append more data
 		let extra = Blob::from(vec![5, 6]);

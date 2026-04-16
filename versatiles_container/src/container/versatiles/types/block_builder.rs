@@ -47,7 +47,7 @@ impl<'a> BlockBuilder<'a> {
 	/// * `writer` - The data writer to write tiles to
 	#[context("creating BlockBuilder for level {level}")]
 	pub fn new(level: u8, writer: &'a mut dyn DataWriterTrait) -> Result<Self> {
-		let initial_offset = writer.get_position()?;
+		let initial_offset = writer.position()?;
 		let actual_bbox = TileBBox::new_empty(level)?;
 
 		Ok(Self {
@@ -135,7 +135,7 @@ impl<'a> BlockBuilder<'a> {
 		}
 
 		// Calculate tile range
-		let tiles_end_offset = self.writer.get_position()?;
+		let tiles_end_offset = self.writer.position()?;
 		let tiles_range = ByteRange::new(self.initial_offset, tiles_end_offset - self.initial_offset);
 
 		// Create optimally-sized TileIndex

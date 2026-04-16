@@ -26,7 +26,7 @@ pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
 	///
 	/// * `Rgba8` → `Rgb8`, `La8` → `L8`. Non‑alpha images are returned unchanged.
 	/// * Returns an error for unsupported color types.
-	fn as_no_alpha(&self) -> Result<DynamicImage>;
+	fn to_no_alpha(&self) -> Result<DynamicImage>;
 
 	/// Computes a quick **representative color** of the image.
 	///
@@ -74,7 +74,7 @@ pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
 	/// Applies a mapping function `f` to **color channels only**, leaving the alpha channel intact.
 	///
 	/// The function is called per component (`u8`). Errors on unsupported color types.
-	fn mut_color_values<F>(&mut self, f: F)
+	fn map_color_values<F>(&mut self, f: F)
 	where
 		F: Fn(u8) -> u8;
 
@@ -99,7 +99,7 @@ where
 	DynamicImage: DynamicImageTraitInfo,
 {
 	#[context("removing alpha from {:?} image (has_alpha={})", self.color(), self.has_alpha())]
-	fn as_no_alpha(&self) -> Result<DynamicImage> {
+	fn to_no_alpha(&self) -> Result<DynamicImage> {
 		Ok(match self {
 			DynamicImage::ImageRgba8(_) => DynamicImage::from(self.to_rgb8()),
 			DynamicImage::ImageLumaA8(_) => DynamicImage::from(self.to_luma8()),
@@ -208,7 +208,7 @@ where
 		Ok(())
 	}
 
-	fn mut_color_values<F>(&mut self, f: F)
+	fn map_color_values<F>(&mut self, f: F)
 	where
 		F: Fn(u8) -> u8,
 	{
@@ -324,12 +324,12 @@ mod tests {
 	#[case::la(DynamicImage::new_test_greya(), ECT::L8, false)]
 	#[case::rgb(DynamicImage::new_test_rgb(), ECT::Rgb8, false)]
 	#[case::grey(DynamicImage::new_test_grey(), ECT::L8, false)]
-	fn as_no_alpha_drops_alpha_when_present(
+	fn to_no_alpha_drops_alpha_when_present(
 		#[case] src: DynamicImage,
 		#[case] expect_type: ECT,
 		#[case] expect_has_alpha: bool,
 	) {
-		let out = src.as_no_alpha().unwrap();
+		let out = src.to_no_alpha().unwrap();
 		assert_eq!(out.extended_color_type(), expect_type);
 		assert_eq!(out.has_alpha(), expect_has_alpha);
 	}
@@ -433,12 +433,12 @@ mod tests {
 	// With alpha: color bytes -> 0, alpha bytes unchanged
 	#[case::luma_a(DynamicImage::new_test_greya(), Some((2usize, 1usize)))] // stride=2, alpha at index 1
 	#[case::rgba(DynamicImage::new_test_rgba(), Some((4usize, 3usize)))] // stride=4, alpha at index 3
-	fn mut_color_values_applies_fn_to_all_color_channels(
+	fn map_color_values_applies_fn_to_all_color_channels(
 		#[case] mut img: DynamicImage,
 		#[case] alpha_layout: Option<(usize, usize)>, // (stride, alpha_index)
 	) {
 		let before = img.as_bytes().to_vec();
-		img.mut_color_values(|_| 0);
+		img.map_color_values(|_| 0);
 		let after = img.as_bytes();
 
 		match alpha_layout {

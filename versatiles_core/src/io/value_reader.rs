@@ -46,7 +46,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	///
 	/// # Returns
 	/// A mutable reference to the underlying reader implementing `SeekRead`.
-	fn get_reader(&mut self) -> &mut dyn SeekRead;
+	fn reader(&mut self) -> &mut dyn SeekRead;
 
 	/// Returns the total length of the readable data.
 	///
@@ -104,7 +104,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 		let mut value = 0;
 		let mut shift = 0;
 		loop {
-			let byte = self.get_reader().read_u8()?;
+			let byte = self.reader().read_u8()?;
 			value |= (u64::from(byte) & 0x7F) << shift;
 			if byte & 0x80 == 0 {
 				break;
@@ -137,7 +137,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// # Errors
 	/// Returns an error if reading fails.
 	fn read_f32(&mut self) -> Result<f32> {
-		Ok(self.get_reader().read_f32::<E>()?)
+		Ok(self.reader().read_f32::<E>()?)
 	}
 
 	/// Reads a 64-bit floating point number from the data.
@@ -148,7 +148,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// # Errors
 	/// Returns an error if reading fails.
 	fn read_f64(&mut self) -> Result<f64> {
-		Ok(self.get_reader().read_f64::<E>()?)
+		Ok(self.reader().read_f64::<E>()?)
 	}
 
 	/// Reads an unsigned 8-bit integer from the data.
@@ -159,7 +159,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// # Errors
 	/// Returns an error if reading fails.
 	fn read_u8(&mut self) -> Result<u8> {
-		Ok(self.get_reader().read_u8()?)
+		Ok(self.reader().read_u8()?)
 	}
 
 	/// Reads a signed 16-bit integer from the data.
@@ -170,7 +170,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// # Errors
 	/// Returns an error if reading fails.
 	fn read_i16(&mut self) -> Result<i16> {
-		Ok(self.get_reader().read_i16::<E>()?)
+		Ok(self.reader().read_i16::<E>()?)
 	}
 
 	/// Reads a signed 32-bit integer from the data.
@@ -181,7 +181,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// # Errors
 	/// Returns an error if reading fails.
 	fn read_i32(&mut self) -> Result<i32> {
-		Ok(self.get_reader().read_i32::<E>()?)
+		Ok(self.reader().read_i32::<E>()?)
 	}
 
 	/// Reads a signed 64-bit integer from the data.
@@ -192,7 +192,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// # Errors
 	/// Returns an error if reading fails.
 	fn read_i64(&mut self) -> Result<i64> {
-		Ok(self.get_reader().read_i64::<E>()?)
+		Ok(self.reader().read_i64::<E>()?)
 	}
 
 	/// Reads an unsigned 16-bit integer from the data.
@@ -203,7 +203,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// # Errors
 	/// Returns an error if reading fails.
 	fn read_u16(&mut self) -> Result<u16> {
-		Ok(self.get_reader().read_u16::<E>()?)
+		Ok(self.reader().read_u16::<E>()?)
 	}
 
 	/// Reads an unsigned 32-bit integer from the data.
@@ -214,7 +214,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// # Errors
 	/// Returns an error if reading fails.
 	fn read_u32(&mut self) -> Result<u32> {
-		Ok(self.get_reader().read_u32::<E>()?)
+		Ok(self.reader().read_u32::<E>()?)
 	}
 
 	/// Reads an unsigned 64-bit integer from the data.
@@ -225,7 +225,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// # Errors
 	/// Returns an error if reading fails.
 	fn read_u64(&mut self) -> Result<u64> {
-		Ok(self.get_reader().read_u64::<E>()?)
+		Ok(self.reader().read_u64::<E>()?)
 	}
 
 	/// Reads a binary blob of the specified length.
@@ -240,7 +240,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// Returns an error if reading fails.
 	fn read_blob(&mut self, length: u64) -> Result<Blob> {
 		let mut blob = Blob::new_sized(usize::try_from(length).context("Blob length too large for this platform")?);
-		self.get_reader().read_exact(blob.as_mut_slice())?;
+		self.reader().read_exact(blob.as_mut_slice())?;
 		Ok(blob)
 	}
 
@@ -256,7 +256,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// Returns an error if reading fails or if the bytes are not valid UTF-8.
 	fn read_string(&mut self, length: u64) -> Result<String> {
 		let mut vec = vec![0u8; usize::try_from(length).context("String length too large for this platform")?];
-		self.get_reader().read_exact(&mut vec)?;
+		self.reader().read_exact(&mut vec)?;
 		Ok(String::from_utf8(vec)?)
 	}
 
@@ -269,8 +269,8 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// Returns an error if reading fails.
 	fn read_range(&mut self) -> Result<ByteRange> {
 		Ok(ByteRange::new(
-			self.get_reader().read_u64::<E>()?,
-			self.get_reader().read_u64::<E>()?,
+			self.reader().read_u64::<E>()?,
+			self.reader().read_u64::<E>()?,
 		))
 	}
 

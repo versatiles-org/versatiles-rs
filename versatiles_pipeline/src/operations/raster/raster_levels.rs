@@ -70,7 +70,7 @@ impl TileSource for Operation {
 			.await?
 			.map_parallel_try(move |_coord, mut tile| {
 				#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // clamp ensures 0..=255
-				tile.as_image_mut()?.mut_color_values(|v| {
+				tile.as_image_mut()?.map_color_values(|v| {
 					(((f32::from(v) - 127.5) * contrast + 0.5 + brightness).powf(gamma) * 255.0)
 						.round()
 						.clamp(0.0, 255.0) as u8

@@ -32,7 +32,7 @@
 //! }
 //!
 //! impl ValueWriter<LittleEndian> for MockValueWriter {
-//!     fn get_writer(&mut self) -> &mut dyn std::io::Write {
+//!     fn writer(&mut self) -> &mut dyn std::io::Write {
 //!         &mut self.cursor
 //!     }
 //!
@@ -66,7 +66,7 @@ pub trait ValueWriter<E: ByteOrder> {
 	/// # Returns
 	///
 	/// A mutable reference to a type implementing [`std::io::Write`].
-	fn get_writer(&mut self) -> &mut dyn Write;
+	fn writer(&mut self) -> &mut dyn Write;
 
 	/// Returns the current write position.
 	///
@@ -104,11 +104,11 @@ pub trait ValueWriter<E: ByteOrder> {
 	fn write_varint(&mut self, mut value: u64) -> Result<()> {
 		while value >= 0x80 {
 			#[allow(clippy::cast_possible_truncation)] // Safe: value & 0x7F always fits in u8
-			self.get_writer().write_all(&[((value & 0x7F) as u8) | 0x80])?;
+			self.writer().write_all(&[((value & 0x7F) as u8) | 0x80])?;
 			value >>= 7;
 		}
 		#[allow(clippy::cast_possible_truncation)] // Safe: value always fits in u8 here
-		self.get_writer().write_all(&[value as u8])?;
+		self.writer().write_all(&[value as u8])?;
 		Ok(())
 	}
 
@@ -135,7 +135,7 @@ pub trait ValueWriter<E: ByteOrder> {
 	///
 	/// Returns an error if writing to the underlying writer fails.
 	fn write_u8(&mut self, value: u8) -> Result<()> {
-		Ok(self.get_writer().write_u8(value)?)
+		Ok(self.writer().write_u8(value)?)
 	}
 
 	/// Writes a 32-bit signed integer using the specified byte order.
@@ -148,7 +148,7 @@ pub trait ValueWriter<E: ByteOrder> {
 	///
 	/// Returns an error if writing to the underlying writer fails.
 	fn write_i32(&mut self, value: i32) -> Result<()> {
-		Ok(self.get_writer().write_i32::<E>(value)?)
+		Ok(self.writer().write_i32::<E>(value)?)
 	}
 
 	/// Writes a 32-bit floating-point value using the specified byte order.
@@ -161,7 +161,7 @@ pub trait ValueWriter<E: ByteOrder> {
 	///
 	/// Returns an error if writing to the underlying writer fails.
 	fn write_f32(&mut self, value: f32) -> Result<()> {
-		Ok(self.get_writer().write_f32::<E>(value)?)
+		Ok(self.writer().write_f32::<E>(value)?)
 	}
 
 	/// Writes a 64-bit floating-point value using the specified byte order.
@@ -174,7 +174,7 @@ pub trait ValueWriter<E: ByteOrder> {
 	///
 	/// Returns an error if writing to the underlying writer fails.
 	fn write_f64(&mut self, value: f64) -> Result<()> {
-		Ok(self.get_writer().write_f64::<E>(value)?)
+		Ok(self.writer().write_f64::<E>(value)?)
 	}
 
 	/// Writes a 32-bit unsigned integer using the specified byte order.
@@ -187,7 +187,7 @@ pub trait ValueWriter<E: ByteOrder> {
 	///
 	/// Returns an error if writing to the underlying writer fails.
 	fn write_u32(&mut self, value: u32) -> Result<()> {
-		Ok(self.get_writer().write_u32::<E>(value)?)
+		Ok(self.writer().write_u32::<E>(value)?)
 	}
 
 	/// Writes a 64-bit unsigned integer using the specified byte order.
@@ -200,7 +200,7 @@ pub trait ValueWriter<E: ByteOrder> {
 	///
 	/// Returns an error if writing to the underlying writer fails.
 	fn write_u64(&mut self, value: u64) -> Result<()> {
-		Ok(self.get_writer().write_u64::<E>(value)?)
+		Ok(self.writer().write_u64::<E>(value)?)
 	}
 
 	/// Writes the contents of a [`Blob`] to the writer.
@@ -213,7 +213,7 @@ pub trait ValueWriter<E: ByteOrder> {
 	///
 	/// Returns an error if writing to the underlying writer fails.
 	fn write_blob(&mut self, blob: &Blob) -> Result<()> {
-		self.get_writer().write_all(blob.as_slice())?;
+		self.writer().write_all(blob.as_slice())?;
 		Ok(())
 	}
 
@@ -227,7 +227,7 @@ pub trait ValueWriter<E: ByteOrder> {
 	///
 	/// Returns an error if writing to the underlying writer fails.
 	fn write_slice(&mut self, buf: &[u8]) -> Result<()> {
-		self.get_writer().write_all(buf)?;
+		self.writer().write_all(buf)?;
 		Ok(())
 	}
 
@@ -241,7 +241,7 @@ pub trait ValueWriter<E: ByteOrder> {
 	///
 	/// Returns an error if writing to the underlying writer fails.
 	fn write_string(&mut self, text: &str) -> Result<()> {
-		self.get_writer().write_all(text.as_bytes())?;
+		self.writer().write_all(text.as_bytes())?;
 		Ok(())
 	}
 
@@ -255,8 +255,8 @@ pub trait ValueWriter<E: ByteOrder> {
 	///
 	/// Returns an error if writing to the underlying writer fails.
 	fn write_range(&mut self, range: &ByteRange) -> Result<()> {
-		self.get_writer().write_u64::<E>(range.offset)?;
-		self.get_writer().write_u64::<E>(range.length)?;
+		self.writer().write_u64::<E>(range.offset)?;
+		self.writer().write_u64::<E>(range.length)?;
 		Ok(())
 	}
 
@@ -353,7 +353,7 @@ mod tests {
 	}
 
 	impl ValueWriter<LittleEndian> for MockValueWriter {
-		fn get_writer(&mut self) -> &mut dyn Write {
+		fn writer(&mut self) -> &mut dyn Write {
 			&mut self.cursor
 		}
 

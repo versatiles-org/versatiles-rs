@@ -93,7 +93,7 @@ impl ValueWriterFile<BigEndian> {
 }
 
 impl<E: ByteOrder> ValueWriter<E> for ValueWriterFile<E> {
-	fn get_writer(&mut self) -> &mut dyn Write {
+	fn writer(&mut self) -> &mut dyn Write {
 		&mut self.writer
 	}
 

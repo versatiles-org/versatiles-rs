@@ -101,7 +101,7 @@ impl ValueReaderBlob<BigEndian> {
 impl SeekRead for Cursor<Vec<u8>> {}
 
 impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderBlob<E> {
-	fn get_reader(&mut self) -> &mut dyn SeekRead {
+	fn reader(&mut self) -> &mut dyn SeekRead {
 		&mut self.cursor
 	}
 

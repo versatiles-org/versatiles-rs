@@ -30,7 +30,7 @@
 //!         Ok(())
 //!     }
 //!
-//!     fn get_position(&mut self) -> Result<u64> {
+//!     fn position(&mut self) -> Result<u64> {
 //!         Ok(self.position)
 //!     }
 //!
@@ -64,7 +64,7 @@ use anyhow::Result;
 /// # Required Methods
 /// - `append`: Appends data to the writer.
 /// - `write_start`: Writes data from the start of the writer.
-/// - `get_position`: Gets the current write position.
+/// - `position`: Gets the current write position.
 /// - `set_position`: Sets the write position.
 pub trait DataWriterTrait: Send + Sync {
 	/// Appends data to the writer.
@@ -94,7 +94,7 @@ pub trait DataWriterTrait: Send + Sync {
 	/// # Returns
 	///
 	/// * A Result containing the current write position in bytes or an error.
-	fn get_position(&mut self) -> Result<u64>;
+	fn position(&mut self) -> Result<u64>;
 
 	/// Sets the write position.
 	///

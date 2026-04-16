@@ -102,7 +102,7 @@ impl TilesWriter for PMTilesWriter {
 		metadata = compress(metadata, INTERNAL_COMPRESSION)?;
 		header.metadata = writer.append(&metadata)?;
 
-		let tile_data_start = writer.get_position()?;
+		let tile_data_start = writer.position()?;
 
 		let writer_mutex = Arc::new(Mutex::new(writer));
 		let entries_mutex = Arc::new(Mutex::new(entries));
@@ -164,7 +164,7 @@ impl TilesWriter for PMTilesWriter {
 		let mut writer = writer_mutex.lock().await;
 		let tile_contents_count = dedup_map.lock().await.len() as u64;
 
-		let tile_data_end = writer.get_position()?;
+		let tile_data_end = writer.position()?;
 
 		header.tile_data = ByteRange::new(tile_data_start, tile_data_end - tile_data_start);
 

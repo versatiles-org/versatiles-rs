@@ -89,7 +89,7 @@ impl ValueWriterBlob<BigEndian> {
 }
 
 impl<E: ByteOrder> ValueWriter<E> for ValueWriterBlob<E> {
-	fn get_writer(&mut self) -> &mut dyn Write {
+	fn writer(&mut self) -> &mut dyn Write {
 		&mut self.cursor
 	}
 

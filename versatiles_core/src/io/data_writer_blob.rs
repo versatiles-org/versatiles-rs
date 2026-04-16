@@ -162,7 +162,7 @@ impl DataWriterTrait for DataWriterBlob {
 	///
 	/// * A Result containing the current write position in bytes or an error.
 	#[context("while getting current write position from DataWriterBlob")]
-	fn get_position(&mut self) -> Result<u64> {
+	fn position(&mut self) -> Result<u64> {
 		Ok(self.writer.stream_position()?)
 	}
 
@@ -229,9 +229,9 @@ mod tests {
 		let mut writer = DataWriterBlob::new()?;
 		writer.append(&Blob::from(vec![1, 2, 3, 4]))?;
 
-		assert_eq!(writer.get_position()?, 4);
+		assert_eq!(writer.position()?, 4);
 		writer.set_position(2)?;
-		assert_eq!(writer.get_position()?, 2);
+		assert_eq!(writer.position()?, 2);
 
 		writer.append(&Blob::from(vec![5, 6]))?;
 		assert_eq!(writer.as_slice(), &[1, 2, 5, 6]);

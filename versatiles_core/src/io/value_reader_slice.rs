@@ -102,7 +102,7 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderSlice<'a, E> {
 	///
 	/// # Returns
 	/// A mutable reference to the underlying `SeekRead` implementation.
-	fn get_reader(&mut self) -> &mut dyn SeekRead {
+	fn reader(&mut self) -> &mut dyn SeekRead {
 		&mut self.cursor
 	}
 

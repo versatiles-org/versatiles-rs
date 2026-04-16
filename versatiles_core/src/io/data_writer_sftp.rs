@@ -127,7 +127,7 @@ impl DataWriterTrait for DataWriterSftp {
 		self.network_write_start(blob)
 	}
 
-	fn get_position(&mut self) -> Result<u64> {
+	fn position(&mut self) -> Result<u64> {
 		Ok(self.position)
 	}
 

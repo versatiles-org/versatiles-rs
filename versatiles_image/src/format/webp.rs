@@ -46,7 +46,7 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>, effort: Option<u8>) -> 
 	#[allow(unused_assignments)]
 	let mut optional_image: Option<DynamicImage> = None;
 	if image.has_alpha() && image.is_opaque() {
-		let i = image.as_no_alpha()?;
+		let i = image.to_no_alpha()?;
 		optional_image = Some(i);
 		image_ref = optional_image.as_ref().unwrap();
 	}

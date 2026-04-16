@@ -443,7 +443,7 @@ mod tests {
 		assert_eq!(image.height(), 256);
 		assert_eq!(image.color(), expected_color);
 		// Strip alpha before gauging marker pattern (alpha is always added by BandMapping)
-		let image_no_alpha = image.as_no_alpha().unwrap();
+		let image_no_alpha = image.to_no_alpha().unwrap();
 		let results = image_no_alpha.gauge_marker();
 
 		let expected_results = [
