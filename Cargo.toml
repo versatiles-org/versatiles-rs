@@ -126,7 +126,7 @@ regex = { version = "1.12.3", default-features = false, features = [
 ] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["std"] }
-tokio = { version = "1.52.0", features = ["rt-multi-thread", "sync"] }
+tokio = { version = "1.52.1", features = ["rt-multi-thread", "sync"] }
 
 # CLI dependencies
 clap = { version = "4.6.1", features = ["default", "derive", "wrap_help"] }
