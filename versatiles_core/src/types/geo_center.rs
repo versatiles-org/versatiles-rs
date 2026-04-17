@@ -131,8 +131,6 @@ impl TryFrom<Vec<f64>> for GeoCenter {
 	/// # Errors
 	///
 	/// Returns an error if the length is not exactly three.
-	/// If desired, you could also validate numeric bounds here before casting
-	/// `zoom` to `u8`.
 	///
 	/// # Examples
 	/// ```

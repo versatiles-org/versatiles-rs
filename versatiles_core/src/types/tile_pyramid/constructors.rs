@@ -8,35 +8,31 @@ use std::array::from_fn;
 impl TilePyramid {
 	/// Creates an empty pyramid (all levels empty).
 	#[must_use]
-	#[allow(clippy::cast_possible_truncation)]
 	pub fn new_empty() -> Self {
-		TilePyramid {
-			levels: from_fn(|z| TileCover::new_empty(z as u8).unwrap()),
-		}
+		TilePyramid::from_fn(TileCover::new_empty)
 	}
 
 	/// Creates a full pyramid (all levels full).
 	#[must_use]
-	#[allow(clippy::cast_possible_truncation)]
 	pub fn new_full() -> Self {
-		TilePyramid {
-			levels: from_fn(|z| TileCover::new_full(z as u8).unwrap()),
-		}
+		TilePyramid::from_fn(TileCover::new_full)
 	}
 
 	/// Creates a full pyramid up to `max_level`; levels above are empty.
 	#[must_use]
-	#[allow(clippy::cast_possible_truncation)]
 	pub fn new_full_up_to(max_level: u8) -> Self {
+		TilePyramid::from_fn(|level| {
+			if level <= max_level {
+				TileCover::new_full(level)
+			} else {
+				TileCover::new_empty(level)
+			}
+		})
+	}
+
+	pub fn from_fn(mut f: impl FnMut(u8) -> Result<TileCover>) -> Self {
 		TilePyramid {
-			levels: from_fn(|z| {
-				let level = z as u8;
-				if level <= max_level {
-					TileCover::new_full(level).unwrap()
-				} else {
-					TileCover::new_empty(level).unwrap()
-				}
-			}),
+			levels: from_fn(|z| f(u8::try_from(z).unwrap()).unwrap()),
 		}
 	}
 

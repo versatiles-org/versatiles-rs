@@ -112,7 +112,7 @@ impl Debug for ServerTileSource {
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 mod tests {
 	use super::*;
 	use crate::runtime::create_test_runtime;
@@ -218,7 +218,6 @@ mod tests {
 		let tile_json = TileJSON::try_from(tile_json)?.as_object();
 		assert_eq!(tile_json.string("tile_format")?.unwrap(), exp_mime);
 		assert_eq!(tile_json.array("bounds")?.unwrap().stringify(), exp_bounds);
-		#[allow(clippy::cast_sign_loss)] // zoom values are 0-31
 		{
 			assert_eq!(tile_json.number("minzoom")?.unwrap() as u8, exp_minzoom);
 			assert_eq!(tile_json.number("maxzoom")?.unwrap() as u8, exp_maxzoom);

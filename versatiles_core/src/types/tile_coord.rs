@@ -137,12 +137,11 @@ impl TileCoord {
 		let x = zoom * (x / 360.0 + 0.5);
 		let y = zoom * (0.5 - 0.5 * (y * PI / 360.0 + PI / 4.0).tan().ln() / PI);
 
+		#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // Safe: clamped to valid tile range
 		TileCoord::new(
 			z,
-			#[allow(clippy::cast_possible_truncation)] // Safe: clamped to valid tile range
-			u32::try_from(x.min(zoom - 1.0).max(0.0).floor() as i64)?,
-			#[allow(clippy::cast_possible_truncation)] // Safe: clamped to valid tile range
-			u32::try_from(y.min(zoom - 1.0).max(0.0).floor() as i64)?,
+			x.clamp(0.0, zoom - 1.0).floor() as u32,
+			y.clamp(0.0, zoom - 1.0).floor() as u32,
 		)
 	}
 

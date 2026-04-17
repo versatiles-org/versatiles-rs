@@ -204,8 +204,7 @@ impl DemSource {
 				rgb_buf[i * 3 + 2] = b;
 			}
 
-			#[allow(clippy::cast_possible_truncation)]
-			let img = RgbImage::from_raw(width as u32, height as u32, rgb_buf)
+			let img = RgbImage::from_raw(u32::try_from(width)?, u32::try_from(height)?, rgb_buf)
 				.context("Failed to create RgbImage from elevation data")?;
 			Ok(Some(DynamicImage::ImageRgb8(img)))
 		})

@@ -77,7 +77,7 @@ pub async fn run(args: &MeasureTileSizes, runtime: &TilesRuntime) -> Result<()> 
 	#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // clamp ensures 0..=255
 	let buffer = result
 		.into_iter()
-		.map(|v| ((v as f64 / n).max(1.0).log2() * 10.0).clamp(0.0, 255.0) as u8)
+		.map(|v| ((v as f64 / n).max(1.0).log2() * 10.0) as u8)
 		.collect::<Vec<u8>>();
 
 	let image = <DynamicImage as DynamicImageTraitConvert>::from_raw(width_scaled, width_scaled, buffer)?;
