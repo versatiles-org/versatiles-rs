@@ -376,9 +376,9 @@ impl VectorLayer {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 
 	#[test]
 	fn test_from_json_array_basic() -> Result<()> {
@@ -725,8 +725,8 @@ mod tests {
 		let obj = layer.as_json_object();
 		// Check object entries
 		assert_eq!(obj.string("description")?.unwrap(), "desc");
-		assert_eq!(obj.number("minzoom")?.unwrap(), 5.0);
-		assert_eq!(obj.number("maxzoom")?.unwrap(), 10.0);
+		assert_relative_eq!(obj.number("minzoom")?.unwrap(), 5.0);
+		assert_relative_eq!(obj.number("maxzoom")?.unwrap(), 10.0);
 		let fields = obj.get("fields").unwrap().as_object()?;
 		assert_eq!(fields.string("key")?.unwrap(), "String");
 		// check valid layer

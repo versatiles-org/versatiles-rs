@@ -42,6 +42,7 @@ versatiles_geometry.workspace = true
 versatiles_image.workspace = true
 
 [dev-dependencies]
+approx.workspace = true
 assert_fs.workspace = true
 pretty_assertions.workspace = true
 regex.workspace = true

@@ -610,9 +610,9 @@ fn step_to_node(step: PipelineStep) -> VPLNode {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 
 	#[tokio::test]
 	async fn test_open_valid_mbtiles() {
@@ -704,8 +704,8 @@ mod tests {
 
 		// Check common fields
 		assert_eq!(tile_json.version, "3.0");
-		assert_eq!(tile_json.minzoom, 0.0);
-		assert_eq!(tile_json.maxzoom, 14.0);
+		assert_relative_eq!(tile_json.minzoom, 0.0);
+		assert_relative_eq!(tile_json.maxzoom, 14.0);
 		assert!(tile_json.vector_layers.is_some());
 		assert_eq!(tile_json.vector_layers.as_ref().unwrap().len(), 19);
 	}
@@ -723,8 +723,8 @@ mod tests {
 
 		// Check common fields
 		assert_eq!(tile_json.version, "3.0");
-		assert_eq!(tile_json.minzoom, 0.0);
-		assert_eq!(tile_json.maxzoom, 14.0);
+		assert_relative_eq!(tile_json.minzoom, 0.0);
+		assert_relative_eq!(tile_json.maxzoom, 14.0);
 		assert!(tile_json.vector_layers.is_some());
 		assert_eq!(tile_json.vector_layers.as_ref().unwrap().len(), 19);
 	}
@@ -1014,8 +1014,8 @@ mod tests {
 
 		let tile_json = reader.tile_json();
 		assert_eq!(tile_json.version, "3.0");
-		assert_eq!(tile_json.minzoom, 0.0);
-		assert_eq!(tile_json.maxzoom, 14.0);
+		assert_relative_eq!(tile_json.minzoom, 0.0);
+		assert_relative_eq!(tile_json.maxzoom, 14.0);
 		assert!(tile_json.vector_layers.is_some());
 	}
 

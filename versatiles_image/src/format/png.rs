@@ -80,12 +80,12 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	/// PNG smoke tests: lossless round‑trip over all supported color types and
 	/// verification that fully opaque images are saved **without** an alpha channel.
 	use super::*;
 	use crate::traits::DynamicImageTraitTest;
+	use approx::assert_relative_eq;
 	use rstest::rstest;
 
 	/* ---------- Success cases ---------- */
@@ -101,7 +101,7 @@ mod tests {
 		assert_eq!(img.diff(&decoded)?, vec![0.0; img.channel_count() as usize]);
 
 		let compression_percent = ((10_000 * blob.len()) as f64 / img.as_bytes().len() as f64).round() / 100.0;
-		assert_eq!(compression_percent, expected_compression_percent);
+		assert_relative_eq!(compression_percent, expected_compression_percent);
 
 		Ok(())
 	}

@@ -576,10 +576,10 @@ impl Debug for TileJSON {
 // ----------------------------------------------------------------------------
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
 	use crate::TilePyramid;
+	use approx::assert_relative_eq;
 
 	/// Creates a minimal valid `TileJSON` object in the form of `JsonObject`.
 	fn make_test_json_object() -> JsonObject {
@@ -647,7 +647,7 @@ mod tests {
 
 		// Intersection => [-10, -5, 0, 2]
 		let b = tj.bounds.expect("Should have bounds");
-		assert_eq!(b.as_array(), [-10.0, -5.0, 0.0, 2.0]);
+		assert_relative_eq!(b.as_array().as_slice(), [-10.0_f64, -5.0, 0.0, 2.0].as_slice());
 	}
 
 	#[test]
@@ -661,9 +661,9 @@ mod tests {
 		let bounds = tj.bounds.expect("Should have updated bounds");
 		// Typically from_geo_bbox can clamp lat/long (like -85.051...), adjust test if relevant
 		// This depends on the implementation within `TilePyramid`.
-		assert_eq!(
-			bounds.as_array(),
-			[-180.0, -85.05112877980659, 180.0, 85.05112877980659]
+		assert_relative_eq!(
+			bounds.as_array().as_slice(),
+			[-180.0_f64, -85.05112877980659, 180.0, 85.05112877980659].as_slice()
 		);
 
 		// Zoom

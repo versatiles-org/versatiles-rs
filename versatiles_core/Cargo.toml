@@ -41,6 +41,7 @@ ssh2-config = { workspace = true, optional = true }
 versatiles_derive.workspace = true
 
 [dev-dependencies]
+approx.workspace = true
 assert_fs.workspace = true
 criterion.workspace = true
 rstest.workspace = true

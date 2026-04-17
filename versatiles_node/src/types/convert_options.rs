@@ -80,9 +80,9 @@ pub struct ConvertOptions {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 
 	#[test]
 	fn test_convert_options_clone() {
@@ -227,10 +227,10 @@ mod tests {
 
 		if let Some(bbox) = &options.bbox {
 			assert_eq!(bbox.len(), 4);
-			assert_eq!(bbox[0], -10.0); // west
-			assert_eq!(bbox[1], 35.0); // south
-			assert_eq!(bbox[2], 40.0); // east
-			assert_eq!(bbox[3], 70.0); // north
+			assert_relative_eq!(bbox[0], -10.0); // west
+			assert_relative_eq!(bbox[1], 35.0); // south
+			assert_relative_eq!(bbox[2], 40.0); // east
+			assert_relative_eq!(bbox[3], 70.0); // north
 		} else {
 			panic!("bbox should be Some");
 		}

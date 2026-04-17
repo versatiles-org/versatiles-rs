@@ -126,9 +126,9 @@ impl From<geo::LineString<f64>> for RingGeometry {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 
 	fn square() -> RingGeometry {
 		RingGeometry::from(&[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]])
@@ -139,19 +139,19 @@ mod tests {
 	#[test]
 	fn area_ccw_positive() {
 		// CCW square 10x10
-		assert_eq!(square().area(), 200.0);
+		assert_relative_eq!(square().area(), 200.0);
 	}
 
 	#[test]
 	fn area_cw_negative() {
 		// CW winding
 		let ring = RingGeometry::from(&[[0, 0], [0, 10], [10, 10], [10, 0], [0, 0]]);
-		assert_eq!(ring.area(), -200.0);
+		assert_relative_eq!(ring.area(), -200.0);
 	}
 
 	#[test]
 	fn area_empty() {
-		assert_eq!(RingGeometry::new().area(), 0.0);
+		assert_relative_eq!(RingGeometry::new().area(), 0.0);
 	}
 
 	// ── verify ──────────────────────────────────────────────────────────
@@ -222,7 +222,7 @@ mod tests {
 	#[test]
 	fn compute_bounds() {
 		let bounds = square().compute_bounds().unwrap();
-		assert_eq!(bounds, [0.0, 0.0, 10.0, 10.0]);
+		assert_relative_eq!(bounds.as_slice(), [0.0_f64, 0.0, 10.0, 10.0].as_slice());
 	}
 
 	#[test]
@@ -251,8 +251,8 @@ mod tests {
 	#[test]
 	fn composite_first_last() {
 		let ring = RingGeometry::from(&[[1, 2], [3, 4], [5, 6]]);
-		assert_eq!(ring.first().unwrap().x(), 1.0);
-		assert_eq!(ring.last().unwrap().x(), 5.0);
+		assert_relative_eq!(ring.first().unwrap().x(), 1.0);
+		assert_relative_eq!(ring.last().unwrap().x(), 5.0);
 	}
 
 	// ── Debug / Clone / Eq ──────────────────────────────────────────────

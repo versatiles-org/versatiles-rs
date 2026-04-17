@@ -97,9 +97,9 @@ impl Debug for MultiPointGeometry {
 crate::impl_from_array!(MultiPointGeometry, PointGeometry);
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 
 	fn sample() -> MultiPointGeometry {
 		MultiPointGeometry::from(&[[1, 2], [3, 4], [5, 6]])
@@ -109,7 +109,7 @@ mod tests {
 
 	#[test]
 	fn area_is_zero() {
-		assert_eq!(sample().area(), 0.0);
+		assert_relative_eq!(sample().area(), 0.0);
 	}
 
 	#[test]
@@ -155,14 +155,14 @@ mod tests {
 	#[test]
 	fn compute_bounds() {
 		let bounds = sample().compute_bounds().unwrap();
-		assert_eq!(bounds, [1.0, 2.0, 5.0, 6.0]);
+		assert_relative_eq!(bounds.as_slice(), [1.0_f64, 2.0, 5.0, 6.0].as_slice());
 	}
 
 	#[test]
 	fn compute_bounds_single_point() {
 		let mp = MultiPointGeometry::from(&[[7, 8]]);
 		let bounds = mp.compute_bounds().unwrap();
-		assert_eq!(bounds, [7.0, 8.0, 7.0, 8.0]);
+		assert_relative_eq!(bounds.as_slice(), [7.0_f64, 8.0, 7.0, 8.0].as_slice());
 	}
 
 	#[test]
@@ -191,8 +191,8 @@ mod tests {
 	#[test]
 	fn composite_first_last() {
 		let mp = sample();
-		assert_eq!(mp.first().unwrap().x(), 1.0);
-		assert_eq!(mp.last().unwrap().x(), 5.0);
+		assert_relative_eq!(mp.first().unwrap().x(), 1.0);
+		assert_relative_eq!(mp.last().unwrap().x(), 5.0);
 	}
 
 	#[test]
@@ -206,7 +206,7 @@ mod tests {
 	fn composite_pop() {
 		let mut mp = sample();
 		let popped = mp.pop().unwrap();
-		assert_eq!(popped.x(), 5.0);
+		assert_relative_eq!(popped.x(), 5.0);
 		assert_eq!(mp.len(), 2);
 	}
 
@@ -225,7 +225,7 @@ mod tests {
 	#[test]
 	fn composite_into_first_and_rest() {
 		let (first, rest) = sample().into_first_and_rest().unwrap();
-		assert_eq!(first.x(), 1.0);
+		assert_relative_eq!(first.x(), 1.0);
 		assert_eq!(rest.len(), 2);
 	}
 

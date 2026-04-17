@@ -88,15 +88,15 @@ where
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 
 	#[test]
 	fn new_and_accessors() {
 		let point = PointGeometry::new(Coordinates::new(1.0, 2.0));
-		assert_eq!(point.x(), 1.0);
-		assert_eq!(point.y(), 2.0);
+		assert_relative_eq!(point.x(), 1.0);
+		assert_relative_eq!(point.y(), 2.0);
 		assert_eq!(point.as_coord(), &Coordinates::new(1.0, 2.0));
 	}
 
@@ -117,20 +117,20 @@ mod tests {
 	#[test]
 	fn from_array_ref() {
 		let p = PointGeometry::from(&[1, 2]);
-		assert_eq!(p.x(), 1.0);
-		assert_eq!(p.y(), 2.0);
+		assert_relative_eq!(p.x(), 1.0);
+		assert_relative_eq!(p.y(), 2.0);
 	}
 
 	#[test]
 	fn from_f64_array() {
 		let p = PointGeometry::from([1.0, 2.0]);
-		assert_eq!(p.x(), 1.0);
-		assert_eq!(p.y(), 2.0);
+		assert_relative_eq!(p.x(), 1.0);
+		assert_relative_eq!(p.y(), 2.0);
 	}
 
 	#[test]
 	fn area_is_zero() {
-		assert_eq!(PointGeometry::from(&[5, 10]).area(), 0.0);
+		assert_relative_eq!(PointGeometry::from(&[5, 10]).area(), 0.0);
 	}
 
 	#[test]
@@ -168,7 +168,7 @@ mod tests {
 	#[test]
 	fn compute_bounds() {
 		let bounds = PointGeometry::from([3.0, 7.0]).compute_bounds().unwrap();
-		assert_eq!(bounds, [3.0, 7.0, 3.0, 7.0]);
+		assert_relative_eq!(bounds.as_slice(), [3.0_f64, 7.0, 3.0, 7.0].as_slice());
 	}
 
 	#[test]

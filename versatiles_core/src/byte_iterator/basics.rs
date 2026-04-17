@@ -325,9 +325,9 @@ pub fn parse_array_entries<R>(
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 	use std::io::Cursor;
 
 	fn get_reader(s: &str) -> ByteIterator<'_> {
@@ -431,13 +431,13 @@ mod tests {
 		assert!(parse::<i32>("1-2").is_err());
 
 		// Floating point parsing
-		assert_eq!(parse::<f64>("12.34")?, 12.34);
-		assert_eq!(parse::<f64>("-0.123E3")?, -123.0);
-		assert_eq!(parse::<f64>("2e10")?, 2e10);
-		assert_eq!(parse::<f64>("+2e10")?, 2e10);
-		assert_eq!(parse::<f64>("-2e10")?, -2e10);
-		assert_eq!(parse::<f64>("2e+10")?, 2e10);
-		assert_eq!(parse::<f64>("2e-10")?, 2e-10);
+		assert_relative_eq!(parse::<f64>("12.34")?, 12.34);
+		assert_relative_eq!(parse::<f64>("-0.123E3")?, -123.0);
+		assert_relative_eq!(parse::<f64>("2e10")?, 2e10);
+		assert_relative_eq!(parse::<f64>("+2e10")?, 2e10);
+		assert_relative_eq!(parse::<f64>("-2e10")?, -2e10);
+		assert_relative_eq!(parse::<f64>("2e+10")?, 2e10);
+		assert_relative_eq!(parse::<f64>("2e-10")?, 2e-10);
 		assert!(parse::<f64>("abc").is_err());
 		assert!(parse::<f64>("12.34.56").is_err());
 		assert!(parse::<f64>("1-2").is_err());

@@ -133,9 +133,9 @@ impl From<geo::Polygon<f64>> for PolygonGeometry {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 
 	fn square_poly() -> PolygonGeometry {
 		PolygonGeometry::from(&[[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]])
@@ -146,7 +146,7 @@ mod tests {
 	#[test]
 	fn area() {
 		let polygon = PolygonGeometry::from(&[[[0, 0], [5, 0], [5, 5], [0, 5], [0, 0]]]);
-		assert_eq!(polygon.area(), 50.0);
+		assert_relative_eq!(polygon.area(), 50.0);
 	}
 
 	// ── verify ──────────────────────────────────────────────────────────
@@ -217,7 +217,7 @@ mod tests {
 	#[test]
 	fn compute_bounds() {
 		let bounds = square_poly().compute_bounds().unwrap();
-		assert_eq!(bounds, [0.0, 0.0, 10.0, 10.0]);
+		assert_relative_eq!(bounds.as_slice(), [0.0_f64, 0.0, 10.0, 10.0].as_slice());
 	}
 
 	#[test]

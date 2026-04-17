@@ -213,12 +213,12 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	/// WebP tests: lossy & lossless success cases, rejection of grey/greya inputs,
 	/// and verification that fully opaque RGBA is stored without alpha.
 	use super::*;
 	use crate::traits::DynamicImageTraitTest;
+	use approx::assert_relative_eq;
 	use rstest::rstest;
 
 	#[rstest]
@@ -240,7 +240,7 @@ mod tests {
 
 		assert_eq!(img.diff(&blob2image(&blob)?)?, expected_diff);
 
-		assert_eq!(
+		assert_relative_eq!(
 			((10000 * blob.len()) as f64 / img.as_bytes().len() as f64).round() / 100.0,
 			expected_compression_percent
 		);

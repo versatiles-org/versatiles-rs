@@ -43,9 +43,9 @@ impl_from_number_lossless!(f32, u8, u16, u32, i8, i16, i32);
 impl_from_number_lossy!(u64, u128, usize, i64, i128, isize);
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 
 	/// Generate per-type tests that assert `From<T> for JsonValue` maps to `Number(v as f64)`.
 	/// Only include values that are within or equal to the exact-integer range of f64 where relevant.
@@ -59,7 +59,7 @@ mod tests {
 					for &v in vals {
 						let j: JsonValue = JsonValue::from(v);
 						match j {
-							JsonValue::Number(n) => assert_eq!(n, v as f64, "failed for value {:?} ({})", v, stringify!($t)),
+							JsonValue::Number(n) => assert_relative_eq!(n, v as f64),
 							_ => panic!("expected JsonValue::Number for type {}", stringify!($t)),
 						}
 					}

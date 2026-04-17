@@ -99,9 +99,9 @@ impl Debug for LineStringGeometry {
 crate::impl_from_array!(LineStringGeometry, Coordinates);
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 
 	// Tests for impl_from_array! macro-generated From implementations
 
@@ -110,8 +110,8 @@ mod tests {
 		let coords: Vec<(f64, f64)> = vec![(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)];
 		let line = LineStringGeometry::from(coords);
 		assert_eq!(line.0.len(), 3);
-		assert_eq!(line.0[0].x(), 0.0);
-		assert_eq!(line.0[2].x(), 2.0);
+		assert_relative_eq!(line.0[0].x(), 0.0);
+		assert_relative_eq!(line.0[2].x(), 2.0);
 	}
 
 	#[test]
@@ -140,7 +140,7 @@ mod tests {
 	#[test]
 	fn test_area() {
 		let line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0)]);
-		assert_eq!(line.area(), 0.0);
+		assert_relative_eq!(line.area(), 0.0);
 	}
 
 	#[test]
@@ -211,15 +211,15 @@ mod tests {
 		let line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)]);
 		let coords: Vec<_> = line.into_iter().collect();
 		assert_eq!(coords.len(), 3);
-		assert_eq!(coords[0].x(), 0.0);
-		assert_eq!(coords[2].x(), 2.0);
+		assert_relative_eq!(coords[0].x(), 0.0);
+		assert_relative_eq!(coords[2].x(), 2.0);
 	}
 
 	#[test]
 	fn test_into_first_and_rest() {
 		let line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)]);
 		let (first, rest) = line.into_first_and_rest().unwrap();
-		assert_eq!(first.x(), 0.0);
+		assert_relative_eq!(first.x(), 0.0);
 		assert_eq!(rest.len(), 2);
 	}
 
@@ -256,7 +256,7 @@ mod tests {
 	fn test_pop() {
 		let mut line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0)]);
 		let popped = line.pop().unwrap();
-		assert_eq!(popped.x(), 1.0);
+		assert_relative_eq!(popped.x(), 1.0);
 		assert_eq!(line.len(), 1);
 	}
 
@@ -269,8 +269,8 @@ mod tests {
 	#[test]
 	fn test_first_and_last() {
 		let line = LineStringGeometry::from(vec![(0.0, 0.0), (1.0, 1.0), (2.0, 2.0)]);
-		assert_eq!(line.first().unwrap().x(), 0.0);
-		assert_eq!(line.last().unwrap().x(), 2.0);
+		assert_relative_eq!(line.first().unwrap().x(), 0.0);
+		assert_relative_eq!(line.last().unwrap().x(), 2.0);
 	}
 
 	#[test]
@@ -286,7 +286,7 @@ mod tests {
 		if let Some(first) = line.first_mut() {
 			*first = Coordinates::from((9.0, 9.0));
 		}
-		assert_eq!(line.first().unwrap().x(), 9.0);
+		assert_relative_eq!(line.first().unwrap().x(), 9.0);
 	}
 
 	#[test]
@@ -295,7 +295,7 @@ mod tests {
 		if let Some(last) = line.last_mut() {
 			*last = Coordinates::from((9.0, 9.0));
 		}
-		assert_eq!(line.last().unwrap().x(), 9.0);
+		assert_relative_eq!(line.last().unwrap().x(), 9.0);
 	}
 
 	#[test]
@@ -318,7 +318,7 @@ mod tests {
 	fn test_compute_bounds() {
 		let line = LineStringGeometry::from(vec![(1.0, 2.0), (5.0, 8.0), (3.0, 4.0)]);
 		let bounds = line.compute_bounds().unwrap();
-		assert_eq!(bounds, [1.0, 2.0, 5.0, 8.0]);
+		assert_relative_eq!(bounds.as_slice(), [1.0_f64, 2.0, 5.0, 8.0].as_slice());
 	}
 
 	#[test]

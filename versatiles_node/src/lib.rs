@@ -91,9 +91,9 @@ fn init_logger() {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 
 	/// Test that ProgressData can be created and has expected fields
 	#[test]
@@ -107,10 +107,10 @@ mod tests {
 			eta_timestamp: Some(1234567890.0),
 			message: Some("Processing".to_string()),
 		};
-		assert_eq!(data.position, 100.0);
-		assert_eq!(data.total, 1000.0);
-		assert_eq!(data.percentage, 10.0);
-		assert_eq!(data.speed, 50.0);
+		assert_relative_eq!(data.position, 100.0);
+		assert_relative_eq!(data.total, 1000.0);
+		assert_relative_eq!(data.percentage, 10.0);
+		assert_relative_eq!(data.speed, 50.0);
 		assert_eq!(data.estimated_seconds_remaining, Some(180.0));
 		assert_eq!(data.eta_timestamp, Some(1234567890.0));
 		assert_eq!(data.message, Some("Processing".to_string()));

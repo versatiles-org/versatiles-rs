@@ -235,9 +235,9 @@ impl Progress {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 	use std::time::Instant;
 	use versatiles_container::ProgressId;
 
@@ -260,9 +260,9 @@ mod tests {
 
 		let progress_data = ProgressData::from(&state);
 
-		assert_eq!(progress_data.position, 50.0);
-		assert_eq!(progress_data.total, 100.0);
-		assert_eq!(progress_data.percentage, 50.0);
+		assert_relative_eq!(progress_data.position, 50.0);
+		assert_relative_eq!(progress_data.total, 100.0);
+		assert_relative_eq!(progress_data.percentage, 50.0);
 		assert!(progress_data.speed > 0.0);
 		assert!(progress_data.estimated_seconds_remaining.is_some());
 		assert!(progress_data.eta_timestamp.is_some());
@@ -288,10 +288,10 @@ mod tests {
 
 		let progress_data = ProgressData::from(&state);
 
-		assert_eq!(progress_data.position, 0.0);
-		assert_eq!(progress_data.total, 100.0);
-		assert_eq!(progress_data.percentage, 0.0);
-		assert_eq!(progress_data.speed, 0.0);
+		assert_relative_eq!(progress_data.position, 0.0);
+		assert_relative_eq!(progress_data.total, 100.0);
+		assert_relative_eq!(progress_data.percentage, 0.0);
+		assert_relative_eq!(progress_data.speed, 0.0);
 		assert_eq!(progress_data.estimated_seconds_remaining, None);
 		assert_eq!(progress_data.eta_timestamp, None);
 	}
@@ -315,9 +315,9 @@ mod tests {
 
 		let progress_data = ProgressData::from(&state);
 
-		assert_eq!(progress_data.position, 100.0);
-		assert_eq!(progress_data.total, 100.0);
-		assert_eq!(progress_data.percentage, 100.0);
+		assert_relative_eq!(progress_data.position, 100.0);
+		assert_relative_eq!(progress_data.total, 100.0);
+		assert_relative_eq!(progress_data.percentage, 100.0);
 		assert!(progress_data.speed > 0.0);
 		assert_eq!(progress_data.estimated_seconds_remaining, Some(0.0));
 		assert!(progress_data.eta_timestamp.is_some());
@@ -338,7 +338,7 @@ mod tests {
 		};
 
 		let progress_data = ProgressData::from(&state);
-		assert_eq!(progress_data.percentage, 25.0);
+		assert_relative_eq!(progress_data.percentage, 25.0);
 	}
 
 	#[test]
@@ -389,8 +389,8 @@ mod tests {
 		let progress_data = ProgressData::from(&state);
 
 		// Should not have ETA when below threshold
-		assert_eq!(progress_data.position, 1.0);
-		assert_eq!(progress_data.total, 100000.0);
+		assert_relative_eq!(progress_data.position, 1.0);
+		assert_relative_eq!(progress_data.total, 100000.0);
 		assert!(progress_data.speed > 0.0);
 		assert_eq!(progress_data.estimated_seconds_remaining, None);
 		assert_eq!(progress_data.eta_timestamp, None);
@@ -415,9 +415,9 @@ mod tests {
 
 		let progress_data = ProgressData::from(&state);
 
-		assert_eq!(progress_data.position, 5_000_000.0);
-		assert_eq!(progress_data.total, 10_000_000.0);
-		assert_eq!(progress_data.percentage, 50.0);
+		assert_relative_eq!(progress_data.position, 5_000_000.0);
+		assert_relative_eq!(progress_data.total, 10_000_000.0);
+		assert_relative_eq!(progress_data.percentage, 50.0);
 		assert!(progress_data.speed > 0.0);
 		assert!(progress_data.estimated_seconds_remaining.is_some());
 		assert!(progress_data.eta_timestamp.is_some());
@@ -539,7 +539,7 @@ mod tests {
 			finished: false,
 		};
 		let progress_data = ProgressData::from(&state);
-		assert_eq!(progress_data.percentage, 0.0);
+		assert_relative_eq!(progress_data.percentage, 0.0);
 
 		// Test 100% case
 		let state = ProgressState {
@@ -553,7 +553,7 @@ mod tests {
 			finished: true,
 		};
 		let progress_data = ProgressData::from(&state);
-		assert_eq!(progress_data.percentage, 100.0);
+		assert_relative_eq!(progress_data.percentage, 100.0);
 
 		// Test fractional percentage
 		let state = ProgressState {
@@ -567,7 +567,7 @@ mod tests {
 			finished: false,
 		};
 		let progress_data = ProgressData::from(&state);
-		assert_eq!(progress_data.percentage, 33.0);
+		assert_relative_eq!(progress_data.percentage, 33.0);
 	}
 
 	#[test]
@@ -608,10 +608,10 @@ mod tests {
 
 		let progress_data2 = progress_data1.clone();
 
-		assert_eq!(progress_data1.position, progress_data2.position);
-		assert_eq!(progress_data1.total, progress_data2.total);
-		assert_eq!(progress_data1.percentage, progress_data2.percentage);
-		assert_eq!(progress_data1.speed, progress_data2.speed);
+		assert_relative_eq!(progress_data1.position, progress_data2.position);
+		assert_relative_eq!(progress_data1.total, progress_data2.total);
+		assert_relative_eq!(progress_data1.percentage, progress_data2.percentage);
+		assert_relative_eq!(progress_data1.speed, progress_data2.speed);
 		assert_eq!(
 			progress_data1.estimated_seconds_remaining,
 			progress_data2.estimated_seconds_remaining

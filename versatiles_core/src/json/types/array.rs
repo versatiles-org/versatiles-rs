@@ -137,9 +137,9 @@ where
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 
 	#[test]
 	fn test_stringify() {
@@ -185,7 +185,7 @@ mod tests {
 	#[test]
 	fn test_as_number_array() -> Result<()> {
 		let array = JsonArray::from(vec![1.2, 3.4, 5.6]);
-		assert_eq!(array.as_number_array()?, [1.2, 3.4, 5.6]);
+		assert_relative_eq!(array.as_number_array::<3>()?.as_slice(), [1.2_f64, 3.4, 5.6].as_slice());
 
 		Ok(())
 	}

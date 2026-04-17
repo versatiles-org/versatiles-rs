@@ -297,9 +297,9 @@ fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordin
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 
 	#[test]
 	fn test_parse_geojson_valid_feature_collection() -> Result<()> {
@@ -316,8 +316,8 @@ mod tests {
 		let feature = &collection.features[0];
 		assert_eq!(feature.geometry.type_name(), "Point");
 		if let Geometry::Point(coords) = &feature.geometry {
-			assert_eq!(coords.x(), 1.0);
-			assert_eq!(coords.y(), 2.0);
+			assert_relative_eq!(coords.x(), 1.0);
+			assert_relative_eq!(coords.y(), 2.0);
 		}
 		assert_eq!(feature.properties.get("p"), Some(&GeoValue::String("v".to_string())));
 
@@ -691,8 +691,8 @@ mod tests {
 		}]}"#;
 		let collection = parse_geojson(json)?;
 		if let Geometry::Point(coords) = &collection.features[0].geometry {
-			assert_eq!(coords.x(), -1.5);
-			assert_eq!(coords.y(), -2.5);
+			assert_relative_eq!(coords.x(), -1.5);
+			assert_relative_eq!(coords.y(), -2.5);
 		}
 		Ok(())
 	}

@@ -131,16 +131,16 @@ impl Debug for Coordinates {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 	use rstest::rstest;
 
 	#[test]
 	fn new_and_accessors() {
 		let c = Coordinates::new(13.404954, 52.520008);
-		assert_eq!(c.x(), 13.404954);
-		assert_eq!(c.y(), 52.520008);
+		assert_relative_eq!(c.x(), 13.404954);
+		assert_relative_eq!(c.y(), 52.520008);
 	}
 
 	#[test]
@@ -170,8 +170,8 @@ mod tests {
 	fn from_array_ref() {
 		let a = [7.0f64, 8.0f64];
 		let c = Coordinates::from(&a);
-		assert_eq!(c.x(), 7.0);
-		assert_eq!(c.y(), 8.0);
+		assert_relative_eq!(c.x(), 7.0);
+		assert_relative_eq!(c.y(), 8.0);
 	}
 
 	#[test]
@@ -179,25 +179,25 @@ mod tests {
 		let c1 = Coordinates::from((3.0f64, 4.0f64));
 		let t = (5.0f64, 6.0f64);
 		let c2 = Coordinates::from(&t);
-		assert_eq!(c1.x(), 3.0);
-		assert_eq!(c1.y(), 4.0);
-		assert_eq!(c2.x(), 5.0);
-		assert_eq!(c2.y(), 6.0);
+		assert_relative_eq!(c1.x(), 3.0);
+		assert_relative_eq!(c1.y(), 4.0);
+		assert_relative_eq!(c2.x(), 5.0);
+		assert_relative_eq!(c2.y(), 6.0);
 	}
 
 	#[test]
 	fn into_array_f64_and_f32() {
 		let c = Coordinates::new(10.25, -20.5);
 		let arr_f64: [f64; 2] = c.into();
-		assert_eq!(arr_f64, [10.25, -20.5]);
+		assert_relative_eq!(arr_f64.as_slice(), [10.25_f64, -20.5].as_slice());
 	}
 
 	#[test]
 	fn from_geo_coord() {
 		let gc = geo::Coord { x: 11.0, y: 22.0 };
 		let c = Coordinates::from(gc);
-		assert_eq!(c.x(), 11.0);
-		assert_eq!(c.y(), 22.0);
+		assert_relative_eq!(c.x(), 11.0);
+		assert_relative_eq!(c.y(), 22.0);
 	}
 
 	#[test]

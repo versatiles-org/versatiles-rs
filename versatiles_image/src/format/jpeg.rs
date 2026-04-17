@@ -79,10 +79,10 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 /// Tests for JPEG encoding and decoding.
 /// Ensures correct behavior for both supported and unsupported (alpha) image types.
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
 	use crate::traits::DynamicImageTraitTest;
+	use approx::assert_relative_eq;
 	use rstest::rstest;
 
 	/* ---------- Success cases (no alpha) ---------- */
@@ -98,7 +98,7 @@ mod tests {
 		let decoded = blob2image(&blob)?;
 		assert_eq!(img.diff(&decoded)?, expected_diff);
 
-		assert_eq!(
+		assert_relative_eq!(
 			((10000 * blob.len()) as f64 / img.as_bytes().len() as f64).round() / 100.0,
 			expected_compression_percent
 		);

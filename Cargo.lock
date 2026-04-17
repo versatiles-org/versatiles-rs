@@ -4533,6 +4533,7 @@ name = "versatiles_core"
 version = "3.9.0"
 dependencies = [
  "anyhow",
+ "approx",
  "arc-swap",
  "assert_fs",
  "async-trait",
@@ -4582,6 +4583,7 @@ name = "versatiles_geometry"
 version = "3.9.0"
 dependencies = [
  "anyhow",
+ "approx",
  "byteorder",
  "futures",
  "geo",
@@ -4599,6 +4601,7 @@ name = "versatiles_image"
 version = "3.9.0"
 dependencies = [
  "anyhow",
+ "approx",
  "fast_image_resize",
  "image",
  "imageproc",
@@ -4614,6 +4617,7 @@ name = "versatiles_node"
 version = "3.9.0"
 dependencies = [
  "anyhow",
+ "approx",
  "ctor",
  "env_logger",
  "log",
@@ -4637,6 +4641,7 @@ version = "3.9.0"
 dependencies = [
  "ab_glyph",
  "anyhow",
+ "approx",
  "assert_fs",
  "async-trait",
  "dashmap",

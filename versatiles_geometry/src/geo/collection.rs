@@ -58,9 +58,9 @@ impl GeoCollection {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 
 	#[test]
 	fn test_from_empty() {
@@ -138,7 +138,7 @@ mod tests {
 			.unwrap()
 			.as_number_vec()
 			.unwrap();
-		assert_eq!(coords[0], 1.12);
-		assert_eq!(coords[1], 2.99);
+		assert_relative_eq!(coords[0], 1.12);
+		assert_relative_eq!(coords[1], 2.99);
 	}
 }

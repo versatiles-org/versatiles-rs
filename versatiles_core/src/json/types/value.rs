@@ -212,10 +212,10 @@ impl From<JsonObject> for JsonValue {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
 	use crate::Blob;
+	use approx::assert_relative_eq;
 
 	#[test]
 	fn test_from_str() {
@@ -353,7 +353,7 @@ mod tests {
 	fn test_as_number() {
 		let value = JsonValue::Number(42.0);
 
-		assert_eq!(value.as_number().unwrap(), 42.0);
+		assert_relative_eq!(value.as_number().unwrap(), 42.0);
 
 		let non_number = JsonValue::String("not a number".to_string());
 		assert!(non_number.as_number().is_err());

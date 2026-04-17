@@ -98,9 +98,9 @@ impl Debug for MultiLineStringGeometry {
 crate::impl_from_array!(MultiLineStringGeometry, LineStringGeometry);
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 
 	fn sample() -> MultiLineStringGeometry {
 		MultiLineStringGeometry::from(vec![
@@ -113,7 +113,7 @@ mod tests {
 
 	#[test]
 	fn area_is_zero() {
-		assert_eq!(sample().area(), 0.0);
+		assert_relative_eq!(sample().area(), 0.0);
 	}
 
 	#[test]
@@ -158,7 +158,7 @@ mod tests {
 	#[test]
 	fn compute_bounds() {
 		let bounds = sample().compute_bounds().unwrap();
-		assert_eq!(bounds, [0.0, 0.0, 6.0, 7.0]);
+		assert_relative_eq!(bounds.as_slice(), [0.0_f64, 0.0, 6.0, 7.0].as_slice());
 	}
 
 	#[test]
@@ -186,8 +186,8 @@ mod tests {
 	#[test]
 	fn composite_first_last() {
 		let ml = sample();
-		assert_eq!(ml.first().unwrap().as_vec()[0].x(), 0.0);
-		assert_eq!(ml.last().unwrap().as_vec()[0].x(), 2.0);
+		assert_relative_eq!(ml.first().unwrap().as_vec()[0].x(), 0.0);
+		assert_relative_eq!(ml.last().unwrap().as_vec()[0].x(), 2.0);
 	}
 
 	#[test]

@@ -195,9 +195,9 @@ impl TileCoord {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 	use rstest::rstest;
 
 	#[rstest]
@@ -254,7 +254,7 @@ mod tests {
 
 		assert_eq!(geo.len(), 2);
 		// Zoom 0 tile (0,0) covers the entire world, center is at western edge and near north pole
-		assert_eq!(geo[0], -180.0);
+		assert_relative_eq!(geo[0], -180.0);
 		assert!((geo[1] - 85.05).abs() < 0.1); // Near the Web Mercator northern limit
 	}
 

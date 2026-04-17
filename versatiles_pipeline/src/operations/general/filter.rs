@@ -155,9 +155,9 @@ impl TileSource for Operation {
 crate::operations::macros::define_transform_factory!("filter", Args, Operation);
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
+	use approx::assert_relative_eq;
 	use std::collections::HashSet;
 	use versatiles_core::TileCoord;
 
@@ -169,9 +169,12 @@ mod tests {
 			.await?;
 
 		let o = op.tilejson().as_object();
-		assert_eq!(&o.number_array("bounds")?.unwrap(), &[0.0, 0.0, 40.0, 20.0]);
-		assert_eq!(o.number("minzoom")?.unwrap(), 0.0);
-		assert_eq!(o.number("maxzoom")?.unwrap(), 30.0);
+		assert_relative_eq!(
+			o.number_array::<4>("bounds")?.unwrap().as_slice(),
+			[0.0_f64, 0.0, 40.0, 20.0].as_slice()
+		);
+		assert_relative_eq!(o.number("minzoom")?.unwrap(), 0.0);
+		assert_relative_eq!(o.number("maxzoom")?.unwrap(), 30.0);
 
 		let inside: &[(u8, u32, u32)] = &[
 			(0, 0, 0),
@@ -217,12 +220,12 @@ mod tests {
 			.await?;
 
 		let o = op.tilejson().as_object();
-		assert_eq!(
-			o.number_array("bounds")?.unwrap(),
-			[-180.0, -85.051129, 180.0, 85.051129]
+		assert_relative_eq!(
+			o.number_array::<4>("bounds")?.unwrap().as_slice(),
+			[-180.0_f64, -85.051129, 180.0, 85.051129].as_slice()
 		);
-		assert_eq!(o.number("minzoom")?.unwrap(), 3.0);
-		assert_eq!(o.number("maxzoom")?.unwrap(), 4.0);
+		assert_relative_eq!(o.number("minzoom")?.unwrap(), 3.0);
+		assert_relative_eq!(o.number("maxzoom")?.unwrap(), 4.0);
 
 		for z in 0..=6 {
 			let coord = TileCoord::new(z, 0, 0)?;
@@ -263,8 +266,8 @@ mod tests {
 		assert!((b[3] - 20.0).abs() < 1e-4);
 
 		// Expect the narrowed zoom range
-		assert_eq!(o.number("minzoom")?.unwrap(), 3.0);
-		assert_eq!(o.number("maxzoom")?.unwrap(), 25.0);
+		assert_relative_eq!(o.number("minzoom")?.unwrap(), 3.0);
+		assert_relative_eq!(o.number("maxzoom")?.unwrap(), 25.0);
 
 		// Sanity: tiles outside the final bbox shouldn't pass
 		let outside = TileCoord::new(4, 0, 0)?.to_tile_bbox();

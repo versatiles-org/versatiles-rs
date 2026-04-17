@@ -155,11 +155,11 @@ impl TryFrom<Vec<f64>> for GeoCenter {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::GeoCenter;
 	use crate::MAX_ZOOM_LEVEL;
 	use anyhow::Result;
+	use approx::assert_relative_eq;
 	use std::convert::TryFrom;
 
 	#[test]
@@ -198,7 +198,7 @@ mod tests {
 	fn test_as_vec_and_array() {
 		let gc = GeoCenter(-75.0, 40.0, 5);
 		assert_eq!(gc.as_vec(), vec![-75.0, 40.0, 5.0]);
-		assert_eq!(gc.as_array(), [-75.0, 40.0, 5.0]);
+		assert_relative_eq!(gc.as_array().as_slice(), [-75.0_f64, 40.0, 5.0].as_slice());
 	}
 
 	#[test]

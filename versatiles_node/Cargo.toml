@@ -31,6 +31,7 @@ serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+approx.workspace = true
 rstest.workspace = true
 pretty_assertions.workspace = true
 tempfile.workspace = true

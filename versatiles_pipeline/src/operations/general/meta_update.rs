@@ -106,10 +106,10 @@ impl TileSource for Operation {
 crate::operations::macros::define_transform_factory!("meta_update", Args, Operation);
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
 	use crate::PipelineFactory;
+	use approx::assert_relative_eq;
 
 	fn get_str(o: &TileJSON, k: &str) -> Option<String> {
 		o.as_object().string(k).ok().flatten()
@@ -145,16 +145,16 @@ mod tests {
 
 		// Center
 		let center = tj.center.unwrap();
-		assert_eq!(center.0, 1.5);
-		assert_eq!(center.1, 2.5);
+		assert_relative_eq!(center.0, 1.5);
+		assert_relative_eq!(center.1, 2.5);
 		assert_eq!(center.2, 8);
 
 		// Tile Content was parsed into typed field
 		assert_eq!(tj.tile_schema, Some(TileSchema::try_from("shortbread@1.0")?));
 
 		// Pre-existing zooms from the filter should remain intact
-		assert_eq!(tj.as_object().number("minzoom")?.unwrap(), 2.0);
-		assert_eq!(tj.as_object().number("maxzoom")?.unwrap(), 7.0);
+		assert_relative_eq!(tj.as_object().number("minzoom")?.unwrap(), 2.0);
+		assert_relative_eq!(tj.as_object().number("maxzoom")?.unwrap(), 7.0);
 		Ok(())
 	}
 

@@ -104,10 +104,10 @@ impl Debug for MultiPolygonGeometry {
 crate::impl_from_array!(MultiPolygonGeometry, PolygonGeometry);
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::super::RingGeometry;
 	use super::*;
+	use approx::assert_relative_eq;
 
 	fn single_square() -> MultiPolygonGeometry {
 		MultiPolygonGeometry::from(&[[[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]]])
@@ -124,18 +124,18 @@ mod tests {
 
 	#[test]
 	fn area_single() {
-		assert_eq!(single_square().area(), 200.0);
+		assert_relative_eq!(single_square().area(), 200.0);
 	}
 
 	#[test]
 	fn area_multiple() {
 		// Two 10x10 squares
-		assert_eq!(two_squares().area(), 400.0);
+		assert_relative_eq!(two_squares().area(), 400.0);
 	}
 
 	#[test]
 	fn area_empty() {
-		assert_eq!(MultiPolygonGeometry::new().area(), 0.0);
+		assert_relative_eq!(MultiPolygonGeometry::new().area(), 0.0);
 	}
 
 	#[test]
@@ -195,7 +195,7 @@ mod tests {
 	#[test]
 	fn compute_bounds() {
 		let bounds = two_squares().compute_bounds().unwrap();
-		assert_eq!(bounds, [0.0, 0.0, 30.0, 10.0]);
+		assert_relative_eq!(bounds.as_slice(), [0.0_f64, 0.0, 30.0, 10.0].as_slice());
 	}
 
 	#[test]
@@ -223,15 +223,15 @@ mod tests {
 	#[test]
 	fn composite_first_last() {
 		let mp = two_squares();
-		assert_eq!(mp.first().unwrap().0[0].0[0].x(), 0.0);
-		assert_eq!(mp.last().unwrap().0[0].0[0].x(), 20.0);
+		assert_relative_eq!(mp.first().unwrap().0[0].0[0].x(), 0.0);
+		assert_relative_eq!(mp.last().unwrap().0[0].0[0].x(), 20.0);
 	}
 
 	#[test]
 	fn composite_pop() {
 		let mut mp = two_squares();
 		let popped = mp.pop().unwrap();
-		assert_eq!(popped.0[0].0[0].x(), 20.0);
+		assert_relative_eq!(popped.0[0].0[0].x(), 20.0);
 		assert_eq!(mp.len(), 1);
 	}
 
@@ -250,7 +250,7 @@ mod tests {
 	#[test]
 	fn composite_into_first_and_rest() {
 		let (first, rest) = two_squares().into_first_and_rest().unwrap();
-		assert_eq!(first.0[0].0[0].x(), 0.0);
+		assert_relative_eq!(first.0[0].0[0].x(), 0.0);
 		assert_eq!(rest.len(), 1);
 	}
 

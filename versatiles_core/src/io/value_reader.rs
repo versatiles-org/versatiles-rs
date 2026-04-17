@@ -377,10 +377,10 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	use super::super::ValueReaderSlice;
 	use super::*;
+	use approx::assert_relative_eq;
 
 	#[test]
 	fn test_is_empty() {
@@ -410,25 +410,25 @@ mod tests {
 	#[test]
 	fn test_read_f32_le() {
 		let mut reader = ValueReaderSlice::new_le(&[0, 0, 0x80, 0x3F]); // 1.0 in f32
-		assert_eq!(reader.read_f32().unwrap(), 1.0);
+		assert_relative_eq!(reader.read_f32().unwrap(), 1.0_f32);
 	}
 
 	#[test]
 	fn test_read_f32_be() {
 		let mut reader = ValueReaderSlice::new_be(&[0x3F, 0x80, 0, 0]); // 1.0 in f32
-		assert_eq!(reader.read_f32().unwrap(), 1.0);
+		assert_relative_eq!(reader.read_f32().unwrap(), 1.0_f32);
 	}
 
 	#[test]
 	fn test_read_f64_le() {
 		let mut reader = ValueReaderSlice::new_le(&[0, 0, 0, 0, 0, 0, 0xF0, 0x3F]); // 1.0 in f64
-		assert_eq!(reader.read_f64().unwrap(), 1.0);
+		assert_relative_eq!(reader.read_f64().unwrap(), 1.0_f64);
 	}
 
 	#[test]
 	fn test_read_f64_be() {
 		let mut reader = ValueReaderSlice::new_be(&[0x3F, 0xF0, 0, 0, 0, 0, 0, 0]); // 1.0 in f64
-		assert_eq!(reader.read_f64().unwrap(), 1.0);
+		assert_relative_eq!(reader.read_f64().unwrap(), 1.0_f64);
 	}
 
 	#[test]

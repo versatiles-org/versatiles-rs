@@ -84,12 +84,12 @@ pub fn blob2image(_blob: &Blob) -> Result<DynamicImage> {
 }
 
 #[cfg(test)]
-#[allow(clippy::float_cmp)]
 mod tests {
 	/// AVIF encoding smoke tests: verify byte‑size ratios for our synthetic patterns
 	/// and validate the explicit error for the unsupported "lossless" path.
 	use super::*;
 	use crate::traits::DynamicImageTraitTest;
+	use approx::assert_relative_eq;
 	use rstest::rstest;
 
 	/* ---------- Success cases ---------- */
@@ -102,7 +102,7 @@ mod tests {
 		let blob = image2blob(&img, None)?;
 
 		let compression_percent = ((10_000 * blob.len()) as f64 / img.as_bytes().len() as f64).round() / 100.0;
-		assert_eq!(compression_percent, expected_compression_percent);
+		assert_relative_eq!(compression_percent, expected_compression_percent);
 
 		Ok(())
 	}
