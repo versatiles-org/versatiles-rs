@@ -132,7 +132,7 @@ impl TileSource for Operation {
 		let format = self.metadata.tile_format;
 		let sources = Arc::clone(&self.sources);
 
-		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
+		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_grid(32).collect();
 
 		Ok(TileStream::from_streams(stream::iter(sub_bboxes).map(move |bbox| {
 			let sources = Arc::clone(&sources);

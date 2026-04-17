@@ -128,14 +128,10 @@ fn iter_coords() -> Result<()> {
 #[case(16, (10, 5, 6, 16, 15), "5,6,15,15 16,6,16,15")]
 #[case(16, (10, 6, 7, 6, 7), "6,7,6,7")]
 #[case(64, (4, 6, 7, 6, 7), "6,7,6,7")]
-fn iter_bbox_grid_cases(
-	#[case] size: u32,
-	#[case] def: (u8, u32, u32, u32, u32),
-	#[case] expected: &str,
-) -> Result<()> {
+fn iter_grid_cases(#[case] size: u32, #[case] def: (u8, u32, u32, u32, u32), #[case] expected: &str) -> Result<()> {
 	let bbox = TileBBox::from_min_and_max(def.0, def.1, def.2, def.3, def.4)?;
 	let result: String = bbox
-		.iter_bbox_grid(size)
+		.iter_grid(size)
 		.map(|bbox| {
 			format!(
 				"{},{},{},{}",
@@ -565,7 +561,7 @@ fn should_split_bbox_into_correct_grid() -> Result<()> {
 	let bbox = TileBBox::from_min_and_max(4, 0, 0, 7, 7)?;
 
 	let grid_size = 4;
-	let grids: Vec<TileBBox> = bbox.iter_bbox_grid(grid_size).collect();
+	let grids: Vec<TileBBox> = bbox.iter_grid(grid_size).collect();
 
 	let expected_grids = vec![
 		TileBBox::from_min_and_max(4, 0, 0, 3, 3)?,
@@ -680,7 +676,7 @@ fn should_handle_bbox_overlap_edge_cases() -> Result<()> {
 #[test]
 fn should_handle_empty_bbox_in_grid_iteration() -> Result<()> {
 	let bbox = TileBBox::new_empty(4)?;
-	let grids: Vec<TileBBox> = bbox.iter_bbox_grid(4).collect();
+	let grids: Vec<TileBBox> = bbox.iter_grid(4).collect();
 	assert!(grids.is_empty());
 	Ok(())
 }
@@ -688,7 +684,7 @@ fn should_handle_empty_bbox_in_grid_iteration() -> Result<()> {
 #[test]
 fn should_handle_single_tile_in_grid_iteration() -> Result<()> {
 	let bbox = TileBBox::from_min_and_max(4, 5, 10, 5, 10)?;
-	let grids: Vec<TileBBox> = bbox.iter_bbox_grid(4).collect();
+	let grids: Vec<TileBBox> = bbox.iter_grid(4).collect();
 	let expected_grids = vec![TileBBox::from_min_and_max(4, 5, 10, 5, 10)?];
 	assert_eq!(grids, expected_grids);
 	Ok(())

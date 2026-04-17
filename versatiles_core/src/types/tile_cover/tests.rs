@@ -331,14 +331,14 @@ fn iter_tiles_count() {
 }
 
 #[test]
-fn iter_bbox_grid_empty() {
+fn iter_grid_empty() {
 	let c = TileCover::new_empty(4).unwrap();
-	assert_eq!(c.iter_bbox_grid(4).count(), 0);
+	assert_eq!(c.iter_grid(4).count(), 0);
 }
 
 #[test]
-fn iter_bbox_grid_nonempty() {
+fn iter_grid_nonempty() {
 	let c = TileCover::from(bbox(4, 0, 0, 7, 7));
 	// 8×8 tiles split into 4×4 blocks → 4 blocks
-	assert_eq!(c.iter_bbox_grid(4).count(), 4);
+	assert_eq!(c.iter_grid(4).count(), 4);
 }

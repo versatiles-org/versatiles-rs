@@ -356,7 +356,7 @@ impl TileSource for Operation {
 		// If the bounding box is big, split into a grid and process each cell recursively
 		const MAX_BBOX_SIZE: u32 = 32;
 		if bbox.width() > MAX_BBOX_SIZE || bbox.height() > MAX_BBOX_SIZE {
-			let sub_bboxes: Vec<TileBBox> = bbox.iter_bbox_grid(MAX_BBOX_SIZE).collect();
+			let sub_bboxes: Vec<TileBBox> = bbox.iter_grid(MAX_BBOX_SIZE).collect();
 			let mut streams = Vec::with_capacity(sub_bboxes.len());
 			for sub_bbox in sub_bboxes {
 				streams.push(self.tile_stream(sub_bbox).await?);

@@ -6,13 +6,7 @@ impl TileBBox {
 	// Iteration Methods
 	// -------------------------------------------------------------------------
 
-	/// Returns an iterator over all tile coordinates within the bounding box.
-	///
-	/// The iteration is in row-major order.
-	///
-	/// # Returns
-	///
-	/// An iterator yielding `TileCoord` instances.
+	/// Returns an iterator over all tile coordinates within the bounding box in row-major order.
 	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord> + '_ {
 		if self.is_empty() {
 			return Box::new(std::iter::empty()) as Box<dyn Iterator<Item = TileCoord>>;
@@ -26,13 +20,8 @@ impl TileBBox {
 		) as Box<dyn Iterator<Item = TileCoord>>
 	}
 
-	/// Consumes the bounding box and returns an iterator over all tile coordinates within it.
-	///
-	/// The iteration is in row-major order.
-	///
-	/// # Returns
-	///
-	/// An iterator yielding `TileCoord` instances.
+	/// Consumes the bounding box and returns a `Send` iterator over all tile coordinates in
+	/// row-major order.  Prefer [`iter_coords`](Self::iter_coords) when ownership is not needed.
 	#[must_use]
 	pub fn into_iter_coords(self) -> Box<dyn Iterator<Item = TileCoord> + Send> {
 		if self.is_empty() {
@@ -48,22 +37,14 @@ impl TileBBox {
 		)
 	}
 
-	/// Splits the bounding box into a grid of smaller bounding boxes of a specified size.
+	/// Splits the bounding box into an aligned grid of smaller bounding boxes.
 	///
-	/// Each sub-bounding box will have dimensions at most `size x size` tiles.
-	/// The last sub-bounding boxes in each row or column may be smaller if the original
-	/// dimensions are not exact multiples of `size`.
-	///
-	/// # Arguments
-	///
-	/// * `size` - Maximum size of each grid cell.
-	///
-	/// # Returns
-	///
-	/// An iterator yielding `TileBBox` instances representing the grid.
+	/// `size` must be a power of two.
+	/// Each cell covers at most `size × size`.
+	/// Empty cells are omitted.
 	#[must_use]
-	pub fn iter_bbox_grid(&self, size: u32) -> Box<dyn Iterator<Item = TileBBox> + '_> {
-		assert!(size != 0, "size must be greater than 0");
+	pub fn iter_grid(&self, size: u32) -> Box<dyn Iterator<Item = TileBBox> + '_> {
+		assert!(size.is_power_of_two(), "size must be a power of two");
 
 		let level = self.level;
 		let max = (1u32 << level) - 1;
@@ -134,7 +115,7 @@ mod tests {
 	}
 
 	// ------------------------------
-	// iter_bbox_grid
+	// iter_grid
 	// ------------------------------
 	#[rstest]
 	#[case::size2((5, 10, 20, 15, 25), 2, (3,3))]
@@ -149,7 +130,7 @@ mod tests {
 		let bb = TileBBox::from_min_and_max(z, x0, y0, x1, y1)?;
 		let mut cols = HashMap::new();
 		let mut rows = HashMap::new();
-		for coord in bb.iter_bbox_grid(size) {
+		for coord in bb.iter_grid(size) {
 			cols.entry(coord.x_min()?).and_modify(|c| *c += 1).or_insert(1);
 			rows.entry(coord.y_min()?).and_modify(|c| *c += 1).or_insert(1);
 			assert!(bb.includes_bbox(&coord)?);
@@ -168,7 +149,7 @@ mod tests {
 	fn grid_first_last_cell_contents() -> Result<()> {
 		// 5×4 bbox at z=6, grid size 2 → expect cells laid out left-to-right, top-to-bottom
 		let bb = TileBBox::from_min_and_max(8, 100, 200, 104, 203)?;
-		let mut it = bb.iter_bbox_grid(2);
+		let mut it = bb.iter_grid(2);
 		let first = it.next().unwrap();
 		assert_eq!(
 			(first.x_min()?, first.y_min()?, first.x_max()?, first.y_max()?),
@@ -184,9 +165,9 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "size must be greater than 0")]
-	fn grid_panics_on_zero_size() {
+	#[should_panic(expected = "size must be a power of two")]
+	fn grid_panics_on_non_power_of_two() {
 		let bb = TileBBox::from_min_and_max(4, 0, 0, 3, 3).unwrap();
-		let _ = bb.iter_bbox_grid(0).collect::<Vec<_>>();
+		let _ = bb.iter_grid(3).collect::<Vec<_>>();
 	}
 }

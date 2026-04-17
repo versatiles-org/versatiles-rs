@@ -4,55 +4,44 @@ use super::{Node, TileQuadtree};
 use crate::TileCoord;
 
 impl TileQuadtree {
-	/// Iterate over all tile coordinates covered by this quadtree.
+	/// Returns an iterator over every tile coordinate in this quadtree.
 	///
-	/// Tiles are yielded in DFS order (NW first, then NE, SW, SE).
+	/// Coordinates are yielded in depth-first order: NW subtree first, then NE, SW, SE.
 	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord> + '_ {
 		TileIter::new(&self.root, 0, 0, self.level)
 	}
 
-	/// Split the quadtree into a grid of sub-quadtrees, each covering at most
-	/// `size × size` tiles at the current zoom level.
+	/// Splits the quadtree into an aligned grid of sub-quadtrees.
 	///
-	/// This is analogous to `TileBBox::iter_bbox_grid`.
-	pub fn iter_bbox_grid(&self, size: u32) -> impl Iterator<Item = TileQuadtree> + '_ {
-		assert!(size > 0, "grid size must be > 0");
-		let zoom = self.level;
-		let total = 1u64 << zoom;
-		let s = u64::from(size);
-		let cols = total.div_ceil(s);
-		let rows = total.div_ceil(s);
+	/// Each cell covers a `size × size` tile block.
+	/// Every returned [`TileQuadtree`] has the same `level` as `self`, so their coordinates are directly comparable and their
+	/// union equals `self`. Empty grid cells are omitted.
+	///
+	/// This is analogous to [`crate::TileBBox::iter_grid`].
+	pub fn iter_grid(&self, size: u32) -> impl Iterator<Item = TileQuadtree> {
+		assert!(size.is_power_of_two(), "grid size must be a power of 2");
+		if u64::from(size) >= 1u64 << self.level {
+			// If the grid size is larger than the whole quadtree, just return self.
+			return vec![self.clone()].into_iter();
+		}
 
-		(0..rows).flat_map(move |row| {
-			(0..cols).filter_map(move |col| {
-				let x_min = col * s;
-				let y_min = row * s;
-				let x_max = (x_min + s).min(total);
-				let y_max = (y_min + s).min(total);
-
-				// Build a sub-quadtree by intersecting self with this grid cell
-				use crate::TileBBox;
-				let bbox = TileBBox::from_min_and_max(
-					zoom,
-					u32::try_from(x_min).unwrap(),
-					u32::try_from(y_min).unwrap(),
-					u32::try_from(x_max - 1).unwrap(),
-					u32::try_from(y_max - 1).unwrap(),
-				)
-				.ok()?;
-				let cell_tree = TileQuadtree::from_bbox(&bbox);
-				let result = self.intersection(&cell_tree).ok()?;
-				if result.is_empty() { None } else { Some(result) }
-			})
-		})
+		let cell_level = u8::try_from(size.ilog2()).unwrap();
+		let depth = self.level - cell_level;
+		let level = self.level;
+		let mut cells: Vec<TileQuadtree> = Vec::new();
+		collect_grid_cells(&self.root, depth, 0, 0, depth, level, &mut cells);
+		cells.into_iter()
 	}
 }
 
+/// DFS iterator that expands quadtree nodes into individual [`TileCoord`]s.
 struct TileIter<'a> {
 	stack: Vec<IterFrame<'a>>,
 	zoom: u8,
 }
 
+/// One entry on the [`TileIter`] stack, tracking the node and the tile-space
+/// rectangle it covers: `[x_off, x_off+size) × [y_off, y_off+size)`.
 struct IterFrame<'a> {
 	node: &'a Node,
 	x_off: u64,
@@ -157,4 +146,73 @@ impl Iterator for TileIter<'_> {
 			}
 		}
 	}
+}
+
+/// Recursively walks the tree, collecting one [`TileQuadtree`] per non-empty
+/// grid cell into `out`.
+///
+/// - `remaining` — levels still to descend before we reach a grid-cell leaf.
+/// - `(col, row)` — grid-cell coordinates of the current node (in units of `size`).
+/// - `depth` — total descent distance from root to leaf, equal to `level - log2(size)`.
+///   Passed unchanged to [`embed_node`].
+/// - `level` — zoom level of the original tree; all returned trees inherit it.
+fn collect_grid_cells(
+	node: &Node,
+	remaining: u8,
+	col: u64,
+	row: u64,
+	depth: u8,
+	level: u8,
+	out: &mut Vec<TileQuadtree>,
+) {
+	if remaining == 0 {
+		if !node.is_empty() {
+			out.push(TileQuadtree {
+				level,
+				root: embed_node(node.clone(), col, row, depth),
+			});
+		}
+		return;
+	}
+	match node {
+		Node::Empty => {}
+		Node::Full => {
+			for (dc, dr) in [(0u64, 0u64), (1, 0), (0, 1), (1, 1)] {
+				collect_grid_cells(
+					&Node::Full,
+					remaining - 1,
+					col * 2 + dc,
+					row * 2 + dr,
+					depth,
+					level,
+					out,
+				);
+			}
+		}
+		Node::Partial(children) => {
+			// children order: NW=0, NE=1, SW=2, SE=3
+			collect_grid_cells(&children[0], remaining - 1, col * 2, row * 2, depth, level, out);
+			collect_grid_cells(&children[1], remaining - 1, col * 2 + 1, row * 2, depth, level, out);
+			collect_grid_cells(&children[2], remaining - 1, col * 2, row * 2 + 1, depth, level, out);
+			collect_grid_cells(&children[3], remaining - 1, col * 2 + 1, row * 2 + 1, depth, level, out);
+		}
+	}
+}
+
+/// Places `node` at grid position `(col, row)` inside a fresh root of depth `depth`.
+///
+/// Builds the wrapper from the inside out: at each bit (starting at bit 0) the
+/// current subtree is placed into the correct NW/NE/SW/SE child slot determined
+/// by the corresponding bits of `col` and `row`.  The root covers the full
+/// `[0, 2^depth)^2` tile space with content only in the `(col, row)` cell.
+#[allow(clippy::cast_possible_truncation)]
+fn embed_node(node: Node, col: u64, row: u64, depth: u8) -> Node {
+	let mut result = node;
+	for bit in 0..depth {
+		let idx = (((col >> bit) & 1) | (((row >> bit) & 1) << 1)) as usize; // NW=0, NE=1, SW=2, SE=3
+		let mut children = [Node::Empty, Node::Empty, Node::Empty, Node::Empty];
+		children[idx] = result;
+		result = Node::new_partial(children);
+	}
+	result
 }

@@ -154,7 +154,7 @@ impl TileSource for Operation {
 
 		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
 
-		let bboxes: Vec<TileBBox> = bbox.iter_bbox_grid(count).collect();
+		let bboxes: Vec<TileBBox> = bbox.iter_grid(count).collect();
 		let size = self.tile_size;
 		let tile_format = self.metadata.tile_format;
 		let source = Arc::clone(&self.source);

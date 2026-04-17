@@ -20,10 +20,10 @@ impl TileCover {
 	///
 	/// Uses [`bbox`](TileCover::bbox) to determine the area to partition.
 	/// Returns an empty iterator if this cover is empty.
-	pub fn iter_bbox_grid(&self, size: u32) -> impl Iterator<Item = TileBBox> + Send {
+	pub fn iter_grid(&self, size: u32) -> impl Iterator<Item = TileBBox> + Send {
 		let vec: Vec<TileBBox> = match self {
-			TileCover::Bbox(b) => b.iter_bbox_grid(size).collect(),
-			TileCover::Tree(t) => t.iter_bbox_grid(size).filter_map(|b| b.bbox()).collect(),
+			TileCover::Bbox(b) => b.iter_grid(size).collect(),
+			TileCover::Tree(t) => t.iter_grid(size).filter_map(|b| b.bbox()).collect(),
 		};
 		vec.into_iter()
 	}
