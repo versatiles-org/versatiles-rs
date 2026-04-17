@@ -428,9 +428,8 @@ impl TileSource for MBTilesReader {
 					let level = row.get::<_, u8>(2)?;
 					let mut coord = TileCoord::new(level, x, y).unwrap();
 					coord.flip_y();
-					let size = row.get::<_, i64>(3)?.max(0);
-					#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-					Ok((coord, size as u32))
+					let size = row.get::<_, u32>(3)?;
+					Ok((coord, size))
 				},
 			)
 			.unwrap()

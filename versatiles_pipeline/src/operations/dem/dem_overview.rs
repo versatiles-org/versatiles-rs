@@ -65,6 +65,7 @@ pub(super) fn dem_scale_down(image: &DynamicImage) -> Result<DynamicImage> {
 					let mut sum = 0u64;
 					let mut alpha_sum = 0u64;
 					let mut count = 0u64;
+
 					for dy in 0..2u32 {
 						for dx in 0..2u32 {
 							let Rgba([r, g, b, a]) = *img.get_pixel(sx + dx, sy + dy);
@@ -75,11 +76,10 @@ pub(super) fn dem_scale_down(image: &DynamicImage) -> Result<DynamicImage> {
 							alpha_sum += u64::from(a);
 						}
 					}
-					#[allow(clippy::cast_possible_truncation)]
-					let avg_alpha = ((alpha_sum + 2) / 4) as u8; // max 255, truncation impossible
-					#[allow(clippy::manual_checked_ops)]
-					if count > 0 {
-						let avg = (sum + count / 2) / count;
+
+					let avg_alpha = ((alpha_sum + 2) / 4).min(255) as u8;
+
+					if let Some(avg) = (sum + count / 2).checked_div(count) {
 						let Rgb([cr, cg, cb]) = raw_to_rgb(avg);
 						out.put_pixel(ox, oy, Rgba([cr, cg, cb, avg_alpha]));
 					} else {

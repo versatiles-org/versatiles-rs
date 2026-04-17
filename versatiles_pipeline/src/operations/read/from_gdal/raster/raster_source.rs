@@ -8,6 +8,7 @@ use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitConvert;
 
 /// Reproject the source dataset into an 8-bit in-memory dataset in EPSG:3857.
+#[context("Failed to reproject GDAL dataset to target bbox ({bbox:?}) and size {width}x{height}")]
 fn reproject_to_dataset(
 	instance: &Instance,
 	width: usize,
@@ -40,6 +41,9 @@ fn reproject_to_dataset(
 	// Create cutline geometry from WKT — must live until after warp completes
 	let cutline_geom = cutline.map(Cutline::create_ogr_geometry).transpose()?;
 
+	let width_i32 = i32::try_from(width)?;
+	let height_i32 = i32::try_from(height)?;
+
 	unsafe {
 		use gdal_sys::{
 			CPLErr, CPLGetLastErrorMsg, CSLSetNameValue, GDALChunkAndWarpMulti, GDALCreateGenImgProjTransformer2,
@@ -57,7 +61,7 @@ fn reproject_to_dataset(
 			c"ALL_CPUS".as_ptr(),
 		);
 
-		band_mapping.setup_gdal_warp_options(&mut *options_ptr);
+		band_mapping.setup_gdal_warp_options(&mut *options_ptr)?;
 
 		if !nodata.is_empty() {
 			(*options_ptr).papszWarpOptions = CSLSetNameValue(
@@ -84,14 +88,7 @@ fn reproject_to_dataset(
 
 		let operation: GDALWarpOperationH = GDALCreateWarpOperation(options_ptr);
 
-		#[allow(clippy::cast_possible_truncation)]
-		let rv = GDALChunkAndWarpMulti(
-			operation,
-			0,
-			0,
-			i32::try_from(width).unwrap(),
-			i32::try_from(height).unwrap(),
-		);
+		let rv = GDALChunkAndWarpMulti(operation, 0, 0, width_i32, height_i32);
 
 		GDALDestroyWarpOperation(operation);
 		GDALDestroyGenImgProjTransformer((*options_ptr).pTransformerArg);
@@ -202,7 +199,10 @@ impl RasterSource {
 				.map(|vals| {
 					let resolved = resolve_nodata_set(vals, n_color_bands)?;
 					#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-					Ok(resolved.into_iter().map(|v| v.round() as u8).collect())
+					Ok(resolved
+						.into_iter()
+						.map(|v| v.round().clamp(0.0, 255.0) as u8)
+						.collect())
 				})
 				.collect::<Result<_>>()?;
 			(primary, extra)

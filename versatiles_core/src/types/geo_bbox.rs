@@ -53,7 +53,6 @@ use super::constants::{EARTH_RADIUS, MAX_LAT, MAX_LON};
 /// assert_eq!(bbox1.as_tuple(), (-12.0, -5.0, 10.0, 6.0));
 /// ```
 #[derive(Clone, Copy, PartialEq)]
-#[allow(clippy::manual_non_exhaustive)]
 pub struct GeoBBox {
 	/// West (minimum longitude) in degrees.
 	pub x_min: f64,
@@ -63,7 +62,6 @@ pub struct GeoBBox {
 	pub x_max: f64,
 	/// North (maximum latitude) in degrees.
 	pub y_max: f64,
-	phantom: (),
 }
 
 impl GeoBBox {
@@ -93,7 +91,6 @@ impl GeoBBox {
 			y_min,
 			x_max,
 			y_max,
-			phantom: (),
 		}
 		.checked()
 	}
@@ -120,7 +117,6 @@ impl GeoBBox {
 			y_min: y0.min(y1).clamp(-90.0, 90.0),
 			x_max: x0.max(x1).clamp(-180.0, 180.0),
 			y_max: y0.max(y1).clamp(-90.0, 90.0),
-			phantom: (),
 		}
 		.checked()
 		.unwrap()

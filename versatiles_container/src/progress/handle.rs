@@ -315,11 +315,11 @@ fn terminal_width() -> usize {
 	80
 }
 
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // values are clamped non-negative
 fn make_bar(pos: u64, len: u64, width: usize) -> String {
 	let width = width.max(1);
 	let frac = (pos as f64 / len.max(1) as f64).clamp(0.0, 1.0);
 	let exact = frac * (width as f64);
+	#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 	let whole = exact.floor() as usize;
 	let rem = exact - whole as f64;
 
@@ -333,6 +333,7 @@ fn make_bar(pos: u64, len: u64, width: usize) -> String {
 	}
 	if whole < width {
 		// pick partial if there's any remainder
+		#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 		let idx = (rem * 8.0).floor() as usize; // 0..=7
 		if idx > 0 {
 			s.push_str(partials[idx.min(7)]);

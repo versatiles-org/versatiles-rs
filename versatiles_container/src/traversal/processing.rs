@@ -57,39 +57,38 @@ pub fn translate_traversals(
 			.collect::<Vec<_>>());
 	}
 
-	if traversal_write.order() == &TraversalOrder::AnyOrder {
-		#[allow(clippy::collapsible_if)]
-		if traversal_read.size.max_size()? <= traversal_write.size.min_size()? {
-			let write_size = traversal_write.size.min_size()?;
-			let read_bboxes = traversal_read.traverse_pyramid(pyramid)?;
+	if traversal_write.order() == &TraversalOrder::AnyOrder
+		&& traversal_read.size.max_size()? <= traversal_write.size.min_size()?
+	{
+		let write_size = traversal_write.size.min_size()?;
+		let read_bboxes = traversal_read.traverse_pyramid(pyramid)?;
 
-			use TraversalTranslationStep::{Pop, Push};
+		use TraversalTranslationStep::{Pop, Push};
 
-			let mut map_write = HashMap::<TileBBox, (usize, TileBBox)>::new();
-			let mut steps: Vec<TraversalTranslationStep> = vec![];
-			for bbox_read in read_bboxes {
-				let bbox_write = bbox_read.rounded(write_size);
-				let n = map_write.len();
-				let index = map_write.entry(bbox_write).or_insert((n, bbox_write)).0;
-				steps.push(Push(vec![bbox_read], index));
-			}
-
-			for (index, bbox_write) in map_write.into_values() {
-				steps.push(Pop(index, bbox_write));
-			}
-
-			simplify_steps(&mut steps)?;
-			verify_steps(
-				&steps,
-				*traversal_read.order(),
-				traversal_read.size.max_size()?,
-				*traversal_write.order(),
-				write_size,
-				pyramid,
-			)?;
-
-			return Ok(steps);
+		let mut map_write = HashMap::<TileBBox, (usize, TileBBox)>::new();
+		let mut steps: Vec<TraversalTranslationStep> = vec![];
+		for bbox_read in read_bboxes {
+			let bbox_write = bbox_read.rounded(write_size);
+			let n = map_write.len();
+			let index = map_write.entry(bbox_write).or_insert((n, bbox_write)).0;
+			steps.push(Push(vec![bbox_read], index));
 		}
+
+		for (index, bbox_write) in map_write.into_values() {
+			steps.push(Pop(index, bbox_write));
+		}
+
+		simplify_steps(&mut steps)?;
+		verify_steps(
+			&steps,
+			*traversal_read.order(),
+			traversal_read.size.max_size()?,
+			*traversal_write.order(),
+			write_size,
+			pyramid,
+		)?;
+
+		return Ok(steps);
 	}
 
 	bail!("Could not find a way to translate traversals.")

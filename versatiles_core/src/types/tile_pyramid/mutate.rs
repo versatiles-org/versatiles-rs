@@ -65,18 +65,16 @@ impl TilePyramid {
 	}
 
 	/// Clears all zoom levels below `level_min`.
-	#[allow(clippy::cast_possible_truncation)]
 	pub fn set_level_min(&mut self, level_min: u8) {
-		for l in 0..level_min as usize {
-			self.levels[l] = TileCover::new_empty(l as u8).unwrap();
+		for l in 0..level_min {
+			self.levels[l as usize] = TileCover::new_empty(l).unwrap();
 		}
 	}
 
 	/// Clears all zoom levels above `level_max`.
-	#[allow(clippy::cast_possible_truncation)]
 	pub fn set_level_max(&mut self, level_max: u8) {
-		for l in (level_max as usize + 1)..=MAX_ZOOM_LEVEL as usize {
-			self.levels[l] = TileCover::new_empty(l as u8).unwrap();
+		for l in (level_max + 1)..=MAX_ZOOM_LEVEL {
+			self.levels[l as usize] = TileCover::new_empty(l).unwrap();
 		}
 	}
 

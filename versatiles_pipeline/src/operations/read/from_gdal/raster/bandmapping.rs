@@ -250,9 +250,10 @@ impl BandMapping {
 	/// # Safety
 	/// This function modifies the provided `GDALWarpOptions` structure.
 	#[allow(clippy::cast_possible_truncation)]
-	pub unsafe fn setup_gdal_warp_options(&self, options: &mut gdal_sys::GDALWarpOptions) {
+	#[context("Failed to setup GDAL warp options for band mapping")]
+	pub unsafe fn setup_gdal_warp_options(&self, options: &mut gdal_sys::GDALWarpOptions) -> Result<()> {
 		let color_count = self.color_band_count();
-		options.nBandCount = i32::try_from(color_count).unwrap();
+		options.nBandCount = i32::try_from(color_count)?;
 
 		unsafe {
 			let n = std::mem::size_of::<i32>() * color_count;
@@ -260,19 +261,20 @@ impl BandMapping {
 			options.panDstBands = gdal_sys::CPLMalloc(n).cast::<i32>();
 
 			for (i, &band_index) in self.map.iter().enumerate() {
-				options.panSrcBands.add(i).write(i32::try_from(band_index).unwrap());
-				options.panDstBands.add(i).write(i32::try_from(i + 1).unwrap());
+				options.panSrcBands.add(i).write(i32::try_from(band_index)?);
+				options.panDstBands.add(i).write(i32::try_from(i + 1)?);
 			}
 		}
 
 		// Tell GDAL about alpha bands so outside areas get alpha=0.
 		// The destination alpha band is always the last band.
-		let dst_alpha_band = i32::try_from(color_count + 1).unwrap();
+		let dst_alpha_band = i32::try_from(color_count + 1)?;
 		options.nDstAlphaBand = dst_alpha_band;
 
 		if let Some(src_alpha) = self.src_alpha_band {
-			options.nSrcAlphaBand = i32::try_from(src_alpha).unwrap();
+			options.nSrcAlphaBand = i32::try_from(src_alpha)?;
 		}
+		Ok(())
 	}
 }
 
