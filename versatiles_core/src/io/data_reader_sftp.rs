@@ -208,4 +208,76 @@ mod tests {
 		let result = DataReaderSftp::open(&url, Some(Path::new("/nonexistent/key")));
 		assert!(result.is_err());
 	}
+
+	#[cfg(feature = "ssh2")]
+	mod sftp_server_tests {
+		use super::*;
+		use crate::{ByteRange, io::test_sftp_server::TestSftpServer};
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn read_all_returns_correct_bytes() {
+			let server = TestSftpServer::start().await;
+			let data: Vec<u8> = (0u8..100).collect();
+			server.write_file("/test.bin", &data).await;
+			let url = server.url("/test.bin");
+			let reader = tokio::task::spawn_blocking(move || DataReaderSftp::open(&url, None))
+				.await
+				.unwrap()
+				.unwrap();
+			let result = reader.read_all().await.unwrap();
+			assert_eq!(result.as_slice(), data.as_slice());
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn read_range_returns_slice() {
+			let server = TestSftpServer::start().await;
+			let data: Vec<u8> = (0u8..100).collect();
+			server.write_file("/test.bin", &data).await;
+			let url = server.url("/test.bin");
+			let reader = tokio::task::spawn_blocking(move || DataReaderSftp::open(&url, None))
+				.await
+				.unwrap()
+				.unwrap();
+			let result = reader.read_range(&ByteRange::new(20, 30)).await.unwrap();
+			assert_eq!(result.as_slice(), &data[20..50]);
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn read_range_at_eof() {
+			let server = TestSftpServer::start().await;
+			server.write_file("/test.bin", b"hello").await;
+			let url = server.url("/test.bin");
+			let reader = tokio::task::spawn_blocking(move || DataReaderSftp::open(&url, None))
+				.await
+				.unwrap()
+				.unwrap();
+			let result = reader.read_range(&ByteRange::new(5, 0)).await.unwrap();
+			assert!(result.is_empty());
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn read_retry_after_disconnect() {
+			let server = TestSftpServer::start().await;
+			let data: Vec<u8> = (0u8..50).collect();
+			server.write_file("/test.bin", &data).await;
+			let url = server.url("/test.bin");
+			let reader = tokio::task::spawn_blocking(move || DataReaderSftp::open(&url, None))
+				.await
+				.unwrap()
+				.unwrap();
+			server.schedule_disconnect();
+			let result = reader.read_range(&ByteRange::new(0, 50)).await.unwrap();
+			assert_eq!(result.as_slice(), data.as_slice());
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn open_nonexistent_file_errors() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/nonexistent.bin");
+			let result = tokio::task::spawn_blocking(move || DataReaderSftp::open(&url, None))
+				.await
+				.unwrap();
+			assert!(result.is_err());
+		}
+	}
 }
