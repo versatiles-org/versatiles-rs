@@ -187,6 +187,66 @@ fn remove_bbox() -> Result<()> {
 }
 
 // -------------------------------------------------------------------------
+// intersect_bbox
+// -------------------------------------------------------------------------
+
+#[test]
+fn intersect_bbox_clips_full_tree() -> Result<()> {
+	let mut t = TileQuadtree::new_full(3).unwrap();
+	t.intersect_bbox(&bbox(3, 2, 2, 5, 5))?;
+	assert_eq!(t.count_tiles(), 16); // 4×4 inner square
+	assert!(t.includes_coord(&coord(3, 2, 2))?);
+	assert!(t.includes_coord(&coord(3, 5, 5))?);
+	assert!(!t.includes_coord(&coord(3, 0, 0))?);
+	assert!(!t.includes_coord(&coord(3, 6, 6))?);
+	Ok(())
+}
+
+#[test]
+fn intersect_bbox_with_empty_bbox_clears_tree() -> Result<()> {
+	let mut t = TileQuadtree::new_full(3).unwrap();
+	t.intersect_bbox(&TileBBox::new_empty(3)?)?;
+	assert!(t.is_empty());
+	Ok(())
+}
+
+#[test]
+fn intersect_bbox_on_empty_tree_is_noop() -> Result<()> {
+	let mut t = TileQuadtree::new_empty(3).unwrap();
+	t.intersect_bbox(&bbox(3, 0, 0, 7, 7))?;
+	assert!(t.is_empty());
+	Ok(())
+}
+
+#[test]
+fn intersect_bbox_full_coverage_is_noop() -> Result<()> {
+	let mut t = TileQuadtree::from_bbox(&bbox(3, 1, 1, 5, 5));
+	let count_before = t.count_tiles();
+	t.intersect_bbox(&TileBBox::new_full(3)?)?;
+	assert_eq!(t.count_tiles(), count_before);
+	Ok(())
+}
+
+#[test]
+fn intersect_bbox_partial_tree_clips_correctly() -> Result<()> {
+	// Tree covers (0,0)-(7,3); clip to (4,0)-(7,7) → intersection is (4,0)-(7,3) = 4×4 = 16
+	let mut t = TileQuadtree::from_bbox(&bbox(3, 0, 0, 7, 3));
+	t.intersect_bbox(&bbox(3, 4, 0, 7, 7))?;
+	assert_eq!(t.count_tiles(), 16);
+	assert!(!t.includes_coord(&coord(3, 3, 0))?); // clipped left
+	assert!(!t.includes_coord(&coord(3, 4, 4))?); // clipped bottom
+	assert!(t.includes_coord(&coord(3, 4, 0))?);
+	assert!(t.includes_coord(&coord(3, 7, 3))?);
+	Ok(())
+}
+
+#[test]
+fn intersect_bbox_zoom_mismatch_errors() {
+	let mut t = TileQuadtree::new_full(3).unwrap();
+	assert!(t.intersect_bbox(&bbox(4, 0, 0, 1, 1)).is_err());
+}
+
+// -------------------------------------------------------------------------
 // Buffer
 // -------------------------------------------------------------------------
 
