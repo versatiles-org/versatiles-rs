@@ -87,3 +87,95 @@ where
 		tilejson,
 	}) as Box<dyn TileSource>)
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::helpers::dummy_vector_source::DummyVectorSource;
+	use anyhow::Result;
+	use versatiles_core::{TileBBox, TilePyramid};
+	use versatiles_geometry::vector_tile::VectorTile;
+
+	#[derive(Debug)]
+	struct PassthroughRunner;
+
+	impl RunnerTrait for PassthroughRunner {
+		fn update_tilejson(&self, _tilejson: &mut TileJSON) {}
+		fn run(&self, tile: VectorTile) -> Result<Option<VectorTile>> {
+			Ok(Some(tile))
+		}
+	}
+
+	#[derive(Debug)]
+	struct DropRunner;
+
+	impl RunnerTrait for DropRunner {
+		fn update_tilejson(&self, _tilejson: &mut TileJSON) {}
+		fn run(&self, _tile: VectorTile) -> Result<Option<VectorTile>> {
+			Ok(None)
+		}
+	}
+
+	fn make_vector_source() -> DummyVectorSource {
+		DummyVectorSource::new(
+			&[("layer1", &[&[("key", "val")]])],
+			Some(TilePyramid::new_full_up_to(2)),
+		)
+	}
+
+	#[tokio::test]
+	async fn test_build_transform_passthrough() -> Result<()> {
+		let source = Box::new(make_vector_source());
+		let op = build_transform(source, PassthroughRunner).await?;
+		let bbox = TileBBox::new_full(0)?;
+		let tiles = op.tile_stream(bbox).await?.to_vec().await;
+		assert!(!tiles.is_empty());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_build_transform_drops_tiles() -> Result<()> {
+		let source = Box::new(make_vector_source());
+		let op = build_transform(source, DropRunner).await?;
+		let bbox = TileBBox::new_full(0)?;
+		let tiles = op.tile_stream(bbox).await?.to_vec().await;
+		assert!(tiles.is_empty());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_build_transform_rejects_raster_source() {
+		use crate::helpers::dummy_image_source::DummyImageSource;
+		use versatiles_core::TileFormat;
+		let source = Box::new(DummyImageSource::from_color(&[128u8, 0, 0], 256, TileFormat::PNG, None).unwrap());
+		let result = build_transform(source, PassthroughRunner).await;
+		assert!(result.is_err());
+	}
+
+	#[tokio::test]
+	async fn test_transform_op_metadata_and_tilejson() -> Result<()> {
+		let source = Box::new(make_vector_source());
+		let op = build_transform(source, PassthroughRunner).await?;
+		assert!(!op.metadata().bbox_pyramid.is_empty());
+		assert!(op.tilejson().min_zoom().is_some());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_transform_op_tile_coord_stream() -> Result<()> {
+		let source = Box::new(make_vector_source());
+		let op = build_transform(source, PassthroughRunner).await?;
+		let bbox = TileBBox::new_full(0)?;
+		let coords = op.tile_coord_stream(bbox).await?.to_vec().await;
+		assert!(!coords.is_empty());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_transform_op_source_type() -> Result<()> {
+		let source = Box::new(make_vector_source());
+		let op = build_transform(source, PassthroughRunner).await?;
+		assert!(op.source_type().to_string().contains("vector_transform"));
+		Ok(())
+	}
+}

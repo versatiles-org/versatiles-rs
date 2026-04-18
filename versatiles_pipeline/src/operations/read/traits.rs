@@ -44,3 +44,60 @@ pub async fn union_tile_coord_streams(sources: &[&dyn TileSource], bbox: TileBBo
 	let vec: Vec<(TileCoord, ())> = union.into_iter().map(|c| (c, ())).collect();
 	Ok(TileStream::from_vec(vec))
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::helpers::dummy_vector_source::DummyVectorSource;
+	use versatiles_core::TilePyramid;
+
+	#[tokio::test]
+	async fn test_union_empty_sources() -> Result<()> {
+		let bbox = TileBBox::new_full(2)?;
+		let mut stream = union_tile_coord_streams(&[], bbox).await?;
+		assert!(stream.next().await.is_none());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_union_single_source() -> Result<()> {
+		let pyramid = TilePyramid::new_full_up_to(2);
+		let source = DummyVectorSource::new(&[("layer", &[])], Some(pyramid));
+		let bbox = TileBBox::new_full(1)?;
+		let sources: &[&dyn TileSource] = &[&source];
+		let stream = union_tile_coord_streams(sources, bbox).await?;
+		let coords = stream.to_vec().await;
+		// level 1 full = 4 tiles
+		assert_eq!(coords.len(), 4);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_union_two_non_overlapping_sources() -> Result<()> {
+		use versatiles_core::GeoBBox;
+		let pyramid1 = TilePyramid::from_geo_bbox(1, 1, &GeoBBox::new(-180.0, -85.0, 0.0, 85.0).unwrap()).unwrap();
+		let pyramid2 = TilePyramid::from_geo_bbox(1, 1, &GeoBBox::new(0.0, -85.0, 180.0, 85.0).unwrap()).unwrap();
+		let source1 = DummyVectorSource::new(&[("layer", &[])], Some(pyramid1));
+		let source2 = DummyVectorSource::new(&[("layer", &[])], Some(pyramid2));
+		let bbox = TileBBox::new_full(1)?;
+		let sources: &[&dyn TileSource] = &[&source1, &source2];
+		let stream = union_tile_coord_streams(sources, bbox).await?;
+		let coords = stream.to_vec().await;
+		assert_eq!(coords.len(), 4);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_union_overlapping_sources_deduplicates() -> Result<()> {
+		let pyramid = TilePyramid::new_full_up_to(1);
+		let source1 = DummyVectorSource::new(&[("layer", &[])], Some(pyramid.clone()));
+		let source2 = DummyVectorSource::new(&[("layer", &[])], Some(pyramid));
+		let bbox = TileBBox::new_full(1)?;
+		let sources: &[&dyn TileSource] = &[&source1, &source2];
+		let stream = union_tile_coord_streams(sources, bbox).await?;
+		let coords = stream.to_vec().await;
+		// Both sources have the same 4 tiles; union should deduplicate
+		assert_eq!(coords.len(), 4);
+		Ok(())
+	}
+}

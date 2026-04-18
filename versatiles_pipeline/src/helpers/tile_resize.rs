@@ -277,3 +277,114 @@ impl TileResizeCore {
 		Ok(stream)
 	}
 }
+
+#[cfg(test)]
+#[allow(clippy::cast_possible_truncation)]
+mod tests {
+	use super::*;
+	use crate::helpers::dummy_image_source::DummyImageSource;
+	use versatiles_core::{TileFormat, TilePyramid};
+	use versatiles_image::{DynamicImage, traits::DynamicImageTraitConvert, traits::DynamicImageTraitOperation};
+
+	fn make_source_512() -> DummyImageSource {
+		let image = DynamicImage::from_fn(512, 512, |x, y| [x as u8, y as u8, 0u8]);
+		let pyramid = TilePyramid::new_full_up_to(4);
+		let mut source = DummyImageSource::from_image(image, TileFormat::PNG, Some(pyramid)).unwrap();
+		source.tilejson_mut().set_tile_size(512).unwrap();
+		source
+	}
+
+	fn make_source_256() -> DummyImageSource {
+		let image = DynamicImage::from_fn(256, 256, |x, y| [x as u8, y as u8, 128u8]);
+		let pyramid = TilePyramid::new_full_up_to(4);
+		let mut source = DummyImageSource::from_image(image, TileFormat::PNG, Some(pyramid)).unwrap();
+		source.tilejson_mut().set_tile_size(256).unwrap();
+		source
+	}
+
+	fn scale_down_fn() -> ScaleDownFn {
+		Arc::new(|img: &DynamicImage| img.scaled_down(2))
+	}
+
+	#[test]
+	fn test_new_no_tile_size_errors() {
+		let image = DynamicImage::from_fn(256, 256, |_, _| [128u8, 0, 0]);
+		let source = DummyImageSource::from_image(image, TileFormat::PNG, None).unwrap();
+		let result = TileResizeCore::new(Box::new(source), 512, scale_down_fn());
+		assert!(result.is_err());
+		assert!(result.unwrap_err().to_string().contains("tile_size"));
+	}
+
+	#[test]
+	fn test_new_split_source_must_be_512() {
+		let source = make_source_256();
+		let result = TileResizeCore::new(Box::new(source), 256, scale_down_fn());
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_new_merge_source_must_be_256() {
+		let source = make_source_512();
+		let result = TileResizeCore::new(Box::new(source), 512, scale_down_fn());
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_new_merge_needs_at_least_level_1() {
+		let image = DynamicImage::from_fn(256, 256, |_, _| [0u8, 0, 0]);
+		let pyramid = TilePyramid::new_full_up_to(0);
+		let mut source = DummyImageSource::from_image(image, TileFormat::PNG, Some(pyramid)).unwrap();
+		source.tilejson_mut().set_tile_size(256).unwrap();
+		let result = TileResizeCore::new(Box::new(source), 512, scale_down_fn());
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_new_empty_source_errors() {
+		let image = DynamicImage::from_fn(512, 512, |_, _| [0u8, 0, 0]);
+		let pyramid = TilePyramid::new_empty();
+		let mut source = DummyImageSource::from_image(image, TileFormat::PNG, Some(pyramid)).unwrap();
+		source.tilejson_mut().set_tile_size(512).unwrap();
+		let result = TileResizeCore::new(Box::new(source), 256, scale_down_fn());
+		assert!(result.is_err());
+	}
+
+	#[tokio::test]
+	async fn test_tile_coord_stream_split_level0() -> anyhow::Result<()> {
+		let core = TileResizeCore::new(Box::new(make_source_512()), 256, scale_down_fn())?;
+		let bbox = TileBBox::new_full(0)?;
+		let coords = core.tile_coord_stream(bbox).await?.to_vec().await;
+		assert_eq!(coords.len(), 1);
+		assert_eq!(coords[0].0.level, 0);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_tile_coord_stream_split_nonzero_level() -> anyhow::Result<()> {
+		let core = TileResizeCore::new(Box::new(make_source_512()), 256, scale_down_fn())?;
+		let bbox = TileBBox::new_full(1)?;
+		let coords = core.tile_coord_stream(bbox).await?.to_vec().await;
+		assert!(!coords.is_empty());
+		assert!(coords.iter().all(|(c, _)| c.level == 1));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_tile_coord_stream_merge() -> anyhow::Result<()> {
+		let core = TileResizeCore::new(Box::new(make_source_256()), 512, scale_down_fn())?;
+		let bbox = TileBBox::new_full(0)?;
+		let coords = core.tile_coord_stream(bbox).await?.to_vec().await;
+		assert!(!coords.is_empty());
+		assert!(coords.iter().all(|(c, _)| c.level == 0));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_tile_coord_stream_empty_bbox() -> anyhow::Result<()> {
+		let core = TileResizeCore::new(Box::new(make_source_512()), 256, scale_down_fn())?;
+		let bbox = TileBBox::from_min_and_max(20, 1000, 1000, 1000, 1000)?;
+		let coords = core.tile_coord_stream(bbox).await?.to_vec().await;
+		assert!(coords.is_empty());
+		Ok(())
+	}
+}

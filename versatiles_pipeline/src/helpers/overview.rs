@@ -268,3 +268,62 @@ impl std::fmt::Debug for OverviewCore {
 			.finish()
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::helpers::dummy_image_source::DummyImageSource;
+	use anyhow::Result;
+	use versatiles_core::{GeoBBox, TileFormat, TilePyramid};
+	use versatiles_image::traits::DynamicImageTraitOperation;
+
+	fn make_core(level_base: u8) -> Result<OverviewCore> {
+		let pyramid = TilePyramid::from_geo_bbox(
+			level_base,
+			level_base,
+			&GeoBBox::new(2.224, 48.815, 2.47, 48.903).unwrap(),
+		)?;
+		let source =
+			Box::new(DummyImageSource::from_color(&[200u8, 100, 50], 256, TileFormat::PNG, Some(pyramid)).unwrap());
+		let scale_fn: ScaleDownFn = Arc::new(|img| img.scaled_down(2));
+		OverviewCore::new(source, Some(level_base), scale_fn)
+	}
+
+	#[tokio::test]
+	async fn tile_coord_stream_at_base_level_delegates_to_source() -> Result<()> {
+		let core = make_core(5)?;
+		let bbox = TileBBox::new_full(5)?;
+		let coords = core.tile_coord_stream(bbox).await?.to_vec().await;
+		assert!(!coords.is_empty());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn tile_stream_above_base_level_delegates_to_source() -> Result<()> {
+		let core = make_core(4)?;
+		let bbox = TileBBox::new_full(5)?;
+		// Source only has tiles at level 4; requesting level 5 passes through to source
+		let tiles = core.tile_stream(bbox).await?.to_vec().await;
+		// source has no tiles at level 5
+		let _ = tiles;
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn build_images_from_cache_rejects_level_gte_base() -> Result<()> {
+		let core = make_core(5)?;
+		let bbox = TileBBox::new_full(5)?;
+		let result = core.build_images_from_cache(bbox).await;
+		assert!(result.is_err());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn tile_coord_stream_below_base_level_returns_coords() -> Result<()> {
+		let core = make_core(5)?;
+		let bbox = TileBBox::new_full(4)?;
+		let coords = core.tile_coord_stream(bbox).await?.to_vec().await;
+		assert!(!coords.is_empty());
+		Ok(())
+	}
+}
