@@ -200,4 +200,109 @@ mod tests {
 		let result = SftpFileSystem::from_url(&url, None);
 		assert!(result.is_err());
 	}
+
+	#[cfg(feature = "ssh2")]
+	mod sftp_server_tests {
+		use super::*;
+		use crate::io::test_sftp_server::TestSftpServer;
+
+		// --- SftpWriteStream ---
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn write_stream_write_and_flush() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/out.bin");
+			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+				let mut stream = SftpWriteStream::from_url(&url, None)?;
+				stream.write_all(b"hello world")?;
+				stream.flush()?;
+				Ok(())
+			})
+			.await
+			.unwrap()
+			.unwrap();
+			assert_eq!(server.read_file("/out.bin").await, b"hello world");
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn write_stream_multiple_writes() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/out.bin");
+			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+				let mut stream = SftpWriteStream::from_url(&url, None)?;
+				stream.write_all(b"foo")?;
+				stream.write_all(b"bar")?;
+				stream.write_all(b"baz")?;
+				Ok(())
+			})
+			.await
+			.unwrap()
+			.unwrap();
+			assert_eq!(server.read_file("/out.bin").await, b"foobarbaz");
+		}
+
+		// --- SftpFileSystem ---
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn write_file_creates_file() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/base");
+			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+				let mut fs = SftpFileSystem::from_url(&url, None)?;
+				fs.write_file("a.bin", b"test data")?;
+				Ok(())
+			})
+			.await
+			.unwrap()
+			.unwrap();
+			assert_eq!(server.read_file("/base/a.bin").await, b"test data");
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn write_file_creates_parent_dirs() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/base");
+			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+				let mut fs = SftpFileSystem::from_url(&url, None)?;
+				fs.write_file("a/b/c.bin", b"nested")?;
+				Ok(())
+			})
+			.await
+			.unwrap()
+			.unwrap();
+			assert_eq!(server.read_file("/base/a/b/c.bin").await, b"nested");
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn write_file_overwrites_existing() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/base");
+			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+				let mut fs = SftpFileSystem::from_url(&url, None)?;
+				fs.write_file("a.bin", b"first")?;
+				fs.write_file("a.bin", b"second")?;
+				Ok(())
+			})
+			.await
+			.unwrap()
+			.unwrap();
+			assert_eq!(server.read_file("/base/a.bin").await, b"second");
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn write_file_retry_after_disconnect() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/base");
+			let mut fs = tokio::task::spawn_blocking(move || SftpFileSystem::from_url(&url, None))
+				.await
+				.unwrap()
+				.unwrap();
+			server.schedule_disconnect();
+			tokio::task::spawn_blocking(move || fs.write_file("retry.bin", b"retried"))
+				.await
+				.unwrap()
+				.unwrap();
+			assert_eq!(server.read_file("/base/retry.bin").await, b"retried");
+		}
+	}
 }
