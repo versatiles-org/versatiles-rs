@@ -201,7 +201,7 @@ mod tests {
 		assert!(result.is_err());
 	}
 
-	#[cfg(feature = "ssh2")]
+	#[cfg(all(feature = "ssh2", unix))]
 	mod sftp_server_tests {
 		use super::*;
 		use crate::io::test_sftp_server::TestSftpServer;

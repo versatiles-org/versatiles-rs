@@ -1,5 +1,5 @@
 //! In-process SFTP server backed by an in-memory filesystem, for integration tests.
-#![cfg(all(feature = "ssh2", test))]
+#![cfg(all(feature = "ssh2", test, unix))]
 
 use reqwest::Url;
 use russh::{
