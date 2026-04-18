@@ -1,6 +1,7 @@
 //! Tests for [`TileCover`].
 
 use crate::{TileBBox, TileCoord, TileCover, TileQuadtree};
+use rstest::rstest;
 
 fn bbox(zoom: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 	TileBBox::from_min_and_max(zoom, x0, y0, x1, y1).unwrap()
@@ -232,31 +233,17 @@ fn intersects_bbox_tree_variant() {
 
 // --- level mismatch errors (Tree variant errors; Bbox variant returns Ok(false)) ---
 
-#[test]
-fn includes_coord_level_mismatch_tree_errors() {
-	// Tree variant errors on zoom mismatch.
-	let c = TileCover::from(TileQuadtree::new_full(4).unwrap());
+#[rstest]
+#[case(TileCover::from(TileQuadtree::new_full(4).unwrap()))]
+#[case(TileCover::from(bbox(4, 0, 0, 15, 15)))]
+fn includes_coord_level_mismatch_errors(#[case] c: TileCover) {
 	assert!(c.includes_coord(&coord(5, 0, 0)).is_err());
 }
 
-#[test]
-fn includes_coord_level_mismatch_bbox_returns_false() {
-	// Bbox variant silently returns Ok(false) for level mismatch.
-	let c = TileCover::from(bbox(4, 0, 0, 15, 15));
-	assert!(c.includes_coord(&coord(5, 0, 0)).is_err());
-}
-
-#[test]
-fn includes_bbox_level_mismatch_tree_errors() {
-	// Tree variant errors on zoom mismatch.
-	let c = TileCover::from(TileQuadtree::new_full(4).unwrap());
-	assert!(c.includes_bbox(&bbox(5, 0, 0, 15, 15)).is_err());
-}
-
-#[test]
-fn includes_bbox_level_mismatch_bbox_returns_false() {
-	// Bbox variant silently returns Ok(false) for level mismatch.
-	let c = TileCover::from(bbox(4, 0, 0, 15, 15));
+#[rstest]
+#[case(TileCover::from(TileQuadtree::new_full(4).unwrap()))]
+#[case(TileCover::from(bbox(4, 0, 0, 15, 15)))]
+fn includes_bbox_level_mismatch_errors(#[case] c: TileCover) {
 	assert!(c.includes_bbox(&bbox(5, 0, 0, 15, 15)).is_err());
 }
 

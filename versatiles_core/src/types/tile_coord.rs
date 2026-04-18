@@ -609,54 +609,49 @@ mod tests {
 		assert_eq!(size as u32, expected);
 	}
 
-	#[test]
-	fn floor_aligns_to_cell_start() {
-		let mut c = TileCoord::new(5, 17, 23).unwrap();
-		c.floor(8);
-		assert_eq!(c.x, 16); // 17 → 16 (2*8)
-		assert_eq!(c.y, 16); // 23 → 16 (2*8)
-
-		// Already aligned stays the same
-		let mut aligned = TileCoord::new(5, 16, 24).unwrap();
-		aligned.floor(8);
-		assert_eq!(aligned.x, 16);
-		assert_eq!(aligned.y, 24);
+	#[rstest]
+	#[case(5, (17, 23), 8, (16, 16))] // mid-cell → cell start
+	#[case(5, (16, 24), 8, (16, 24))] // already aligned → unchanged
+	#[case(4, ( 9,  5), 4, ( 8,  4))] // x rounds down, y already aligned
+	fn floor_aligns_to_cell_start(
+		#[case] level: u8,
+		#[case] (x, y): (u32, u32),
+		#[case] size: u32,
+		#[case] (ex, ey): (u32, u32),
+	) {
+		let mut c = TileCoord::new(level, x, y).unwrap();
+		c.floor(size);
+		assert_eq!((c.x, c.y), (ex, ey));
 	}
 
-	#[test]
-	fn ceil_aligns_to_cell_end() {
-		let mut c = TileCoord::new(5, 17, 23).unwrap();
-		c.ceil(8);
-		assert_eq!(c.x, 23); // (17/8 + 1)*8 - 1 = 23
-		assert_eq!(c.y, 23); // (23/8 + 1)*8 - 1 = 23
-
-		// Already at cell boundary: next cell end
-		let mut c2 = TileCoord::new(5, 16, 8).unwrap();
-		c2.ceil(8);
-		assert_eq!(c2.x, 23); // (16/8 + 1)*8 - 1 = 23
-		assert_eq!(c2.y, 15); // ( 8/8 + 1)*8 - 1 = 15
+	#[rstest]
+	#[case(5, (17, 23), 8, (23, 23))] // mid-cell → cell end
+	#[case(5, (16,  8), 8, (23, 15))] // at cell boundary → next cell end
+	#[case(4, ( 0,  4), 4, ( 3,  7))] // x at start, y mid
+	fn ceil_aligns_to_cell_end(
+		#[case] level: u8,
+		#[case] (x, y): (u32, u32),
+		#[case] size: u32,
+		#[case] (ex, ey): (u32, u32),
+	) {
+		let mut c = TileCoord::new(level, x, y).unwrap();
+		c.ceil(size);
+		assert_eq!((c.x, c.y), (ex, ey));
 	}
 
-	#[test]
-	fn shift_by_moves_within_bounds() {
-		let mut c = TileCoord::new(5, 16, 16).unwrap();
-		c.shift_by(5, -3);
-		assert_eq!(c.x, 21);
-		assert_eq!(c.y, 13);
-	}
-
-	#[test]
-	fn shift_by_clamps_at_zero_and_max() {
-		let max = (1u32 << 5) - 1; // 31 at zoom 5
-		let mut lo = TileCoord::new(5, 0, 0).unwrap();
-		lo.shift_by(-10, -10);
-		assert_eq!(lo.x, 0);
-		assert_eq!(lo.y, 0);
-
-		let mut hi = TileCoord::new(5, max, max).unwrap();
-		hi.shift_by(100, 100);
-		assert_eq!(hi.x, max);
-		assert_eq!(hi.y, max);
+	#[rstest]
+	#[case(5, (16, 16), (  5,  -3), (21, 13))] // normal shift
+	#[case(5, ( 0,  0), (-10, -10), ( 0,  0))] // clamp at minimum
+	#[case(5, (31, 31), (100, 100), (31, 31))] // clamp at maximum (2^5-1=31)
+	fn shift_by(
+		#[case] level: u8,
+		#[case] (x, y): (u32, u32),
+		#[case] (dx, dy): (i64, i64),
+		#[case] (ex, ey): (u32, u32),
+	) {
+		let mut c = TileCoord::new(level, x, y).unwrap();
+		c.shift_by(dx, dy);
+		assert_eq!((c.x, c.y), (ex, ey));
 	}
 
 	#[test]

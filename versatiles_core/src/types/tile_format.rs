@@ -398,24 +398,19 @@ mod tests {
 		}
 	}
 
-	#[test]
-	fn should_return_correct_extension_for_format() {
-		let cases = vec![
-			(AVIF, ".avif"),
-			(BIN, ".bin"),
-			(GEOJSON, ".geojson"),
-			(JPG, ".jpg"),
-			(JSON, ".json"),
-			(MVT, ".pbf"),
-			(PNG, ".png"),
-			(SVG, ".svg"),
-			(TOPOJSON, ".topojson"),
-			(WEBP, ".webp"),
-		];
-
-		for (format, expected) in cases {
-			assert_eq!(format.as_extension(), expected);
-		}
+	#[rstest]
+	#[case(AVIF, ".avif")]
+	#[case(BIN, ".bin")]
+	#[case(GEOJSON, ".geojson")]
+	#[case(JPG, ".jpg")]
+	#[case(JSON, ".json")]
+	#[case(MVT, ".pbf")]
+	#[case(PNG, ".png")]
+	#[case(SVG, ".svg")]
+	#[case(TOPOJSON, ".topojson")]
+	#[case(WEBP, ".webp")]
+	fn should_return_correct_extension_for_format(#[case] format: TileFormat, #[case] expected: &str) {
+		assert_eq!(format.as_extension(), expected);
 	}
 
 	#[rstest]
@@ -491,18 +486,34 @@ mod tests {
 		assert_eq!(format.as_str(), expected);
 	}
 
-	#[test]
-	fn should_return_correct_type_str() {
-		assert_eq!(TileFormat::PNG.as_type_str(), "image");
-		assert_eq!(TileFormat::MVT.as_type_str(), "vector");
-		assert_eq!(TileFormat::BIN.as_type_str(), "unknown");
+	#[rstest]
+	#[case(AVIF, "image")]
+	#[case(BIN, "unknown")]
+	#[case(GEOJSON, "vector")]
+	#[case(JPG, "image")]
+	#[case(JSON, "unknown")]
+	#[case(MVT, "vector")]
+	#[case(PNG, "image")]
+	#[case(SVG, "image")]
+	#[case(TOPOJSON, "vector")]
+	#[case(WEBP, "image")]
+	fn should_return_correct_type_str(#[case] format: TileFormat, #[case] expected: &str) {
+		assert_eq!(format.as_type_str(), expected);
 	}
 
-	#[test]
-	fn should_return_correct_mime_str() {
-		assert_eq!(TileFormat::PNG.as_mime_str(), "image/png");
-		assert_eq!(TileFormat::JPG.as_mime_str(), "image/jpeg");
-		assert_eq!(TileFormat::GEOJSON.as_mime_str(), "application/geo+json");
+	#[rstest]
+	#[case(AVIF, "image/avif")]
+	#[case(BIN, "application/octet-stream")]
+	#[case(GEOJSON, "application/geo+json")]
+	#[case(JPG, "image/jpeg")]
+	#[case(JSON, "application/json")]
+	#[case(MVT, "vnd.mapbox-vector-tile")]
+	#[case(PNG, "image/png")]
+	#[case(SVG, "image/svg+xml")]
+	#[case(TOPOJSON, "application/topo+json")]
+	#[case(WEBP, "image/webp")]
+	fn should_return_correct_mime_str(#[case] format: TileFormat, #[case] expected: &str) {
+		assert_eq!(format.as_mime_str(), expected);
 	}
 
 	#[test]
@@ -517,27 +528,32 @@ mod tests {
 		assert!(TileFormat::try_from_mime("application/x-unknown").is_err());
 	}
 
-	#[test]
-	fn try_from_path_uses_extension() {
+	#[rstest]
+	#[case("tiles.png", Some(PNG))]
+	#[case("data.pbf", Some(MVT))]
+	#[case("archive.zip", None)]
+	#[case("noextension", None)]
+	fn try_from_path_uses_extension(#[case] path: &str, #[case] expected: Option<TileFormat>) {
 		use std::path::Path;
-		assert_eq!(
-			TileFormat::try_from_path(Path::new("tiles.png")).unwrap(),
-			TileFormat::PNG
-		);
-		assert_eq!(
-			TileFormat::try_from_path(Path::new("data.pbf")).unwrap(),
-			TileFormat::MVT
-		);
-		assert!(TileFormat::try_from_path(Path::new("archive.zip")).is_err());
-		assert!(TileFormat::try_from_path(Path::new("noextension")).is_err());
+		let result = TileFormat::try_from_path(Path::new(path));
+		match expected {
+			Some(f) => assert_eq!(result.unwrap(), f),
+			None => assert!(result.is_err()),
+		}
 	}
 
-	#[test]
-	fn should_get_type_return_expected() {
-		use super::TileType::*;
-
-		assert_eq!(PNG.to_type(), Raster);
-		assert_eq!(MVT.to_type(), Vector);
-		assert_eq!(BIN.to_type(), Unknown);
+	#[rstest]
+	#[case(AVIF, TileType::Raster)]
+	#[case(BIN, TileType::Unknown)]
+	#[case(GEOJSON, TileType::Unknown)]
+	#[case(JPG, TileType::Raster)]
+	#[case(JSON, TileType::Unknown)]
+	#[case(MVT, TileType::Vector)]
+	#[case(PNG, TileType::Raster)]
+	#[case(SVG, TileType::Unknown)]
+	#[case(TOPOJSON, TileType::Unknown)]
+	#[case(WEBP, TileType::Raster)]
+	fn should_get_type_return_expected(#[case] format: TileFormat, #[case] expected: TileType) {
+		assert_eq!(format.to_type(), expected);
 	}
 }

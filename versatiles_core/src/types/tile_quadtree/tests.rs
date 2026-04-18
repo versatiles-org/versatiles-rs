@@ -3,6 +3,7 @@
 use super::*;
 use crate::{GeoBBox, TileBBox, TileCoord};
 use anyhow::Result;
+use rstest::rstest;
 
 fn coord(level: u8, x: u32, y: u32) -> TileCoord {
 	TileCoord::new(level, x, y).unwrap()
@@ -455,29 +456,14 @@ fn iter_grid_empty_tree_yields_nothing() {
 // Serialization
 // -------------------------------------------------------------------------
 
-#[test]
-fn serialize_roundtrip_empty() -> Result<()> {
-	let t = TileQuadtree::new_empty(5).unwrap();
+#[rstest]
+#[case(TileQuadtree::new_empty(5).unwrap())]
+#[case(TileQuadtree::new_full(4).unwrap())]
+#[case(TileQuadtree::from_bbox(&bbox(4, 3, 5, 11, 12)))]
+fn serialize_roundtrip(#[case] t: TileQuadtree) -> Result<()> {
+	let level = t.level();
 	let bytes = t.serialize();
-	let t2 = TileQuadtree::deserialize(5, &bytes)?;
-	assert_eq!(t, t2);
-	Ok(())
-}
-
-#[test]
-fn serialize_roundtrip_full() -> Result<()> {
-	let t = TileQuadtree::new_full(4).unwrap();
-	let bytes = t.serialize();
-	let t2 = TileQuadtree::deserialize(4, &bytes)?;
-	assert_eq!(t, t2);
-	Ok(())
-}
-
-#[test]
-fn serialize_roundtrip_partial() -> Result<()> {
-	let t = TileQuadtree::from_bbox(&bbox(4, 3, 5, 11, 12));
-	let bytes = t.serialize();
-	let t2 = TileQuadtree::deserialize(4, &bytes)?;
+	let t2 = TileQuadtree::deserialize(level, &bytes)?;
 	assert_eq!(t, t2);
 	assert_eq!(t.count_tiles(), t2.count_tiles());
 	Ok(())
