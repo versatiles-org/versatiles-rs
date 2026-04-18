@@ -378,9 +378,287 @@ async fn composite_one_batch(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use anyhow::Result;
+	use std::sync::atomic::{AtomicUsize, Ordering};
+	use tempfile::TempDir;
+	use versatiles_container::{MockReader, MockReaderProfile, TileSource, TilesRuntime};
+	use versatiles_core::TileFormat;
+	use versatiles_core::{Blob, TileCompression, TileJSON};
+	use versatiles_image::{DynamicImage, ImageBuffer};
 
 	fn tc(level: u8, x: u32, y: u32) -> TileCoord {
 		TileCoord { level, x, y }
+	}
+
+	fn opaque_rgb_tile() -> Tile {
+		let data = vec![255, 0, 0, 0, 255, 0, 0, 0, 255, 128, 128, 128];
+		let img = DynamicImage::ImageRgb8(ImageBuffer::from_vec(2, 2, data).unwrap());
+		Tile::from_image(img, TileFormat::PNG).unwrap()
+	}
+
+	fn translucent_rgba_tile(alpha: u8) -> Tile {
+		let data = vec![
+			255, 0, 0, alpha, 0, 255, 0, alpha, 0, 0, 255, alpha, 128, 128, 128, alpha,
+		];
+		let img = DynamicImage::ImageRgba8(ImageBuffer::from_vec(2, 2, data).unwrap());
+		Tile::from_image(img, TileFormat::PNG).unwrap()
+	}
+
+	fn assemble_config() -> AssembleConfig {
+		AssembleConfig {
+			quality: [Some(75); 32],
+			lossless: false,
+			tile_format: TileFormat::PNG,
+			tile_compression: versatiles_core::TileCompression::Uncompressed,
+		}
+	}
+
+	// Build sink that we can observe from outside via a shared counter.
+	#[allow(clippy::type_complexity)]
+	fn make_observable_sink() -> (Arc<Box<dyn TileSink>>, Arc<AtomicUsize>, Arc<Mutex<Vec<TileCoord>>>) {
+		let count = Arc::new(AtomicUsize::new(0));
+		let coords: Arc<Mutex<Vec<TileCoord>>> = Arc::new(Mutex::new(Vec::new()));
+		let count2 = Arc::clone(&count);
+		let coords2 = Arc::clone(&coords);
+
+		struct ObsSink {
+			count: Arc<AtomicUsize>,
+			coords: Arc<Mutex<Vec<TileCoord>>>,
+		}
+		impl TileSink for ObsSink {
+			fn write_tile(&self, coord: &TileCoord, _blob: &Blob) -> Result<()> {
+				self.count.fetch_add(1, Ordering::SeqCst);
+				self.coords.lock().unwrap().push(*coord);
+				Ok(())
+			}
+			fn finish(self: Box<Self>, _: &TileJSON, _: &TilesRuntime) -> Result<()> {
+				Ok(())
+			}
+		}
+
+		let sink = Arc::new(Box::new(ObsSink {
+			count: count2,
+			coords: coords2,
+		}) as Box<dyn TileSink>);
+		(sink, count, coords)
+	}
+
+	// ─── classify_and_stream_tiles ───
+
+	#[tokio::test]
+	async fn classify_opaque_tiles_are_written_to_sink() {
+		let stream = TileStream::from_vec(vec![(tc(0, 0, 0), opaque_rgb_tile()), (tc(1, 0, 0), opaque_rgb_tile())]);
+		let (sink, count, coords) = make_observable_sink();
+		let done: Arc<Mutex<HashSet<TileCoord>>> = Arc::default();
+
+		let translucent = classify_and_stream_tiles(stream, assemble_config(), sink, done.clone())
+			.await
+			.unwrap();
+
+		assert_eq!(count.load(Ordering::SeqCst), 2, "two opaque tiles should be written");
+		assert!(translucent.is_empty(), "no translucent tiles expected");
+		let written = coords.lock().unwrap().clone();
+		assert!(written.contains(&tc(0, 0, 0)));
+		assert!(written.contains(&tc(1, 0, 0)));
+		// coords should be in done set
+		assert!(done.lock().unwrap().contains(&tc(0, 0, 0)));
+		assert!(done.lock().unwrap().contains(&tc(1, 0, 0)));
+	}
+
+	#[tokio::test]
+	async fn classify_translucent_tiles_are_returned_not_written() {
+		let stream = TileStream::from_vec(vec![(tc(0, 0, 0), translucent_rgba_tile(128))]);
+		let (sink, count, _) = make_observable_sink();
+		let done: Arc<Mutex<HashSet<TileCoord>>> = Arc::default();
+
+		let translucent = classify_and_stream_tiles(stream, assemble_config(), sink, done)
+			.await
+			.unwrap();
+
+		assert_eq!(count.load(Ordering::SeqCst), 0, "translucent tile must not be written");
+		assert_eq!(translucent, vec![tc(0, 0, 0)]);
+	}
+
+	#[tokio::test]
+	async fn classify_empty_tiles_are_skipped() {
+		// alpha=0 means fully transparent → is_empty() returns true
+		let stream = TileStream::from_vec(vec![(tc(0, 0, 0), translucent_rgba_tile(0))]);
+		let (sink, count, _) = make_observable_sink();
+		let done: Arc<Mutex<HashSet<TileCoord>>> = Arc::default();
+
+		let translucent = classify_and_stream_tiles(stream, assemble_config(), sink, done)
+			.await
+			.unwrap();
+
+		assert_eq!(count.load(Ordering::SeqCst), 0);
+		assert!(translucent.is_empty(), "empty tile should be skipped entirely");
+	}
+
+	#[tokio::test]
+	async fn classify_already_done_coords_are_skipped() {
+		let coord = tc(0, 0, 0);
+		let stream = TileStream::from_vec(vec![(coord, opaque_rgb_tile())]);
+		let (sink, count, _) = make_observable_sink();
+		let done: Arc<Mutex<HashSet<TileCoord>>> = Arc::default();
+		done.lock().unwrap().insert(coord);
+
+		let translucent = classify_and_stream_tiles(stream, assemble_config(), sink, done)
+			.await
+			.unwrap();
+
+		assert_eq!(count.load(Ordering::SeqCst), 0, "already-done tile should be skipped");
+		assert!(translucent.is_empty());
+	}
+
+	#[tokio::test]
+	async fn classify_mixed_stream() {
+		let stream = TileStream::from_vec(vec![
+			(tc(0, 0, 0), opaque_rgb_tile()),
+			(tc(1, 0, 0), translucent_rgba_tile(128)),
+			(tc(2, 0, 0), translucent_rgba_tile(0)), // empty
+			(tc(3, 0, 0), opaque_rgb_tile()),
+		]);
+		let (sink, count, _) = make_observable_sink();
+		let done: Arc<Mutex<HashSet<TileCoord>>> = Arc::default();
+
+		let translucent = classify_and_stream_tiles(stream, assemble_config(), sink, done)
+			.await
+			.unwrap();
+
+		assert_eq!(count.load(Ordering::SeqCst), 2, "two opaque tiles written");
+		assert_eq!(translucent.len(), 1);
+		assert!(translucent.contains(&tc(1, 0, 0)));
+	}
+
+	#[tokio::test]
+	async fn classify_empty_stream_returns_empty() {
+		let stream = TileStream::from_vec(vec![]);
+		let (sink, count, _) = make_observable_sink();
+		let done: Arc<Mutex<HashSet<TileCoord>>> = Arc::default();
+
+		let translucent = classify_and_stream_tiles(stream, assemble_config(), sink, done)
+			.await
+			.unwrap();
+
+		assert_eq!(count.load(Ordering::SeqCst), 0);
+		assert!(translucent.is_empty());
+	}
+
+	// ─── scan_sources / composite_batches / composite_one_batch ───
+
+	/// Write a small MockReader::Png versatiles file to a temp path and return (TempDir, path).
+	async fn create_png_versatiles(runtime: &TilesRuntime) -> (TempDir, String) {
+		let reader = MockReader::new_mock_profile(MockReaderProfile::Png).unwrap().boxed();
+		let dir = TempDir::new().unwrap();
+		let path = dir.path().join("src.versatiles").to_string_lossy().into_owned();
+		runtime.write_to_str(Arc::new(reader), &path).await.unwrap();
+		(dir, path)
+	}
+
+	fn png_quality() -> [Option<u8>; 32] {
+		[Some(75); 32]
+	}
+
+	#[tokio::test]
+	async fn scan_sources_no_sources_returns_error() {
+		let runtime = TilesRuntime::default();
+		let dir = TempDir::new().unwrap();
+		let output = dir.path().join("out.versatiles").to_string_lossy().into_owned();
+		let err = scan_sources(&output, &[], &png_quality(), false, None, None, &runtime)
+			.await
+			.err()
+			.expect("expected an error");
+		assert!(err.to_string().contains("no sources found"), "got: {err}");
+	}
+
+	#[tokio::test]
+	async fn scan_sources_all_opaque_writes_to_done() {
+		let runtime = TilesRuntime::default();
+		let (_src_dir, src_path) = create_png_versatiles(&runtime).await;
+		let out_dir = TempDir::new().unwrap();
+		let output = out_dir.path().join("out.versatiles").to_string_lossy().into_owned();
+
+		let result = scan_sources(&output, &[src_path], &png_quality(), false, None, None, &runtime)
+			.await
+			.unwrap();
+
+		assert!(!result.done.is_empty(), "opaque tiles should all land in done");
+		assert!(result.translucent_map.is_empty(), "no translucent tiles expected");
+		assert_eq!(result.config.tile_format, TileFormat::PNG);
+		assert_eq!(result.config.tile_compression, TileCompression::Uncompressed);
+	}
+
+	#[tokio::test]
+	async fn scan_sources_zoom_filter_excludes_all_tiles() {
+		let runtime = TilesRuntime::default();
+		let (_src_dir, src_path) = create_png_versatiles(&runtime).await;
+		let out_dir = TempDir::new().unwrap();
+		let output = out_dir.path().join("out.versatiles").to_string_lossy().into_owned();
+
+		// MockReader has tiles at levels 2–6; filter to levels 10–14 → no tiles stream
+		let result = scan_sources(
+			&output,
+			&[src_path],
+			&png_quality(),
+			false,
+			Some(10),
+			Some(14),
+			&runtime,
+		)
+		.await
+		.unwrap();
+
+		assert!(result.done.is_empty());
+		assert!(result.translucent_map.is_empty());
+	}
+
+	#[tokio::test]
+	async fn composite_batches_empty_batches_is_ok() {
+		let runtime = TilesRuntime::default();
+		let (_src_dir, src_path) = create_png_versatiles(&runtime).await;
+		let (sink, _, _) = make_observable_sink();
+		let config = AssembleConfig {
+			quality: png_quality(),
+			lossless: false,
+			tile_format: TileFormat::PNG,
+			tile_compression: TileCompression::Uncompressed,
+		};
+
+		composite_batches(&[], &[src_path], &config, &sink, &runtime)
+			.await
+			.unwrap();
+	}
+
+	#[tokio::test]
+	async fn composite_one_batch_composites_and_writes() {
+		let runtime = TilesRuntime::default();
+		// Create two identical PNG sources
+		let (_dir0, src0) = create_png_versatiles(&runtime).await;
+		let (_dir1, src1) = create_png_versatiles(&runtime).await;
+		let paths = vec![src0, src1];
+
+		let (sink, count, _) = make_observable_sink();
+		let config = AssembleConfig {
+			quality: png_quality(),
+			lossless: false,
+			tile_format: TileFormat::PNG,
+			tile_compression: TileCompression::Uncompressed,
+		};
+
+		// Use a tile coord that exists in both sources (level 4 is "full" in MockReader)
+		let coord = TileCoord::new(4, 0, 0).unwrap();
+		let batch: Vec<(TileCoord, Vec<usize>)> = vec![(coord, vec![0, 1])];
+
+		let progress = runtime.create_progress("test", 2);
+		composite_one_batch(&batch, &paths, &config, &sink, &runtime, 4, &progress)
+			.await
+			.unwrap();
+
+		assert_eq!(
+			count.load(Ordering::SeqCst),
+			1,
+			"composited tile should be written to sink"
+		);
 	}
 
 	fn make_translucent_map(entries: &[(TileCoord, &[usize])]) -> HashMap<TileCoord, Vec<usize>> {
