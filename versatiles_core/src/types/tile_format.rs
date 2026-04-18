@@ -518,6 +518,21 @@ mod tests {
 	}
 
 	#[test]
+	fn try_from_path_uses_extension() {
+		use std::path::Path;
+		assert_eq!(
+			TileFormat::try_from_path(Path::new("tiles.png")).unwrap(),
+			TileFormat::PNG
+		);
+		assert_eq!(
+			TileFormat::try_from_path(Path::new("data.pbf")).unwrap(),
+			TileFormat::MVT
+		);
+		assert!(TileFormat::try_from_path(Path::new("archive.zip")).is_err());
+		assert!(TileFormat::try_from_path(Path::new("noextension")).is_err());
+	}
+
+	#[test]
 	fn should_get_type_return_expected() {
 		use super::TileType::*;
 

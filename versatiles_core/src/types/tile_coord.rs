@@ -610,6 +610,70 @@ mod tests {
 	}
 
 	#[test]
+	fn floor_aligns_to_cell_start() {
+		let mut c = TileCoord::new(5, 17, 23).unwrap();
+		c.floor(8);
+		assert_eq!(c.x, 16); // 17 → 16 (2*8)
+		assert_eq!(c.y, 16); // 23 → 16 (2*8)
+
+		// Already aligned stays the same
+		let mut aligned = TileCoord::new(5, 16, 24).unwrap();
+		aligned.floor(8);
+		assert_eq!(aligned.x, 16);
+		assert_eq!(aligned.y, 24);
+	}
+
+	#[test]
+	fn ceil_aligns_to_cell_end() {
+		let mut c = TileCoord::new(5, 17, 23).unwrap();
+		c.ceil(8);
+		assert_eq!(c.x, 23); // (17/8 + 1)*8 - 1 = 23
+		assert_eq!(c.y, 23); // (23/8 + 1)*8 - 1 = 23
+
+		// Already at cell boundary: next cell end
+		let mut c2 = TileCoord::new(5, 16, 8).unwrap();
+		c2.ceil(8);
+		assert_eq!(c2.x, 23); // (16/8 + 1)*8 - 1 = 23
+		assert_eq!(c2.y, 15); // ( 8/8 + 1)*8 - 1 = 15
+	}
+
+	#[test]
+	fn shift_by_moves_within_bounds() {
+		let mut c = TileCoord::new(5, 16, 16).unwrap();
+		c.shift_by(5, -3);
+		assert_eq!(c.x, 21);
+		assert_eq!(c.y, 13);
+	}
+
+	#[test]
+	fn shift_by_clamps_at_zero_and_max() {
+		let max = (1u32 << 5) - 1; // 31 at zoom 5
+		let mut lo = TileCoord::new(5, 0, 0).unwrap();
+		lo.shift_by(-10, -10);
+		assert_eq!(lo.x, 0);
+		assert_eq!(lo.y, 0);
+
+		let mut hi = TileCoord::new(5, max, max).unwrap();
+		hi.shift_by(100, 100);
+		assert_eq!(hi.x, max);
+		assert_eq!(hi.y, max);
+	}
+
+	#[test]
+	fn to_level_decreased_returns_parent() {
+		let c = TileCoord::new(5, 16, 20).unwrap();
+		let parent = c.to_level_decreased().unwrap();
+		assert_eq!(parent.level, 4);
+		assert_eq!(parent.x, 8);
+		assert_eq!(parent.y, 10);
+	}
+
+	#[test]
+	fn to_level_decreased_errors_at_level_zero() {
+		assert!(TileCoord::new(0, 0, 0).unwrap().to_level_decreased().is_err());
+	}
+
+	#[test]
 	fn tilecoord_to_mercator_bbox() {
 		// Zoom 0 should cover the entire world
 		let bbox = TileCoord::new(0, 0, 0).unwrap().to_mercator_bbox();

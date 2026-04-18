@@ -365,6 +365,25 @@ mod tests {
 		);
 	}
 
+	#[tokio::test]
+	async fn into_stream_yields_all_entries() -> Result<()> {
+		let bbox = bb(3, 0, 0, 1, 1); // 2×2 = 4 entries
+		let mut m = TileBBoxMap::<u8>::new_prefilled_with(bbox, 0)?;
+		m.insert(c(3, 0, 0), 1)?;
+		m.insert(c(3, 1, 0), 2)?;
+		m.insert(c(3, 0, 1), 3)?;
+		m.insert(c(3, 1, 1), 4)?;
+
+		let items: Vec<_> = m.into_stream().to_vec().await;
+		assert_eq!(items.len(), 4);
+		let values: std::collections::HashMap<_, _> = items.into_iter().map(|(tc, v)| ((tc.x, tc.y), v)).collect();
+		assert_eq!(values[&(0, 0)], 1);
+		assert_eq!(values[&(1, 0)], 2);
+		assert_eq!(values[&(0, 1)], 3);
+		assert_eq!(values[&(1, 1)], 4);
+		Ok(())
+	}
+
 	#[test]
 	fn map_transforms_inner_items() {
 		let bbox = bb(3, 0, 0, 1, 1);
