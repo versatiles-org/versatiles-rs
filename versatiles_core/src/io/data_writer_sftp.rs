@@ -173,4 +173,93 @@ mod tests {
 		let result = DataWriterSftp::from_url(&url, None);
 		assert!(result.is_err());
 	}
+
+	#[cfg(feature = "ssh2")]
+	mod sftp_server_tests {
+		use super::*;
+		use crate::{Blob, io::test_sftp_server::TestSftpServer};
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn append_writes_bytes() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/out.bin");
+			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+				let mut w = DataWriterSftp::from_url(&url, None)?;
+				w.append(&Blob::from(b"hello"))?;
+				w.append(&Blob::from(b"world"))?;
+				Ok(())
+			})
+			.await
+			.unwrap()
+			.unwrap();
+			assert_eq!(server.read_file("/out.bin").await, b"helloworld");
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn write_start_overwrites_beginning() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/out.bin");
+			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+				let mut w = DataWriterSftp::from_url(&url, None)?;
+				w.append(&Blob::from(b"AAAAABBBBB"))?;
+				w.write_start(&Blob::from(b"12345"))?;
+				Ok(())
+			})
+			.await
+			.unwrap()
+			.unwrap();
+			assert_eq!(server.read_file("/out.bin").await, b"12345BBBBB");
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn position_tracking() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/out.bin");
+			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+				let mut w = DataWriterSftp::from_url(&url, None)?;
+				assert_eq!(w.position()?, 0);
+				w.append(&Blob::from(b"abc"))?;
+				assert_eq!(w.position()?, 3);
+				w.append(&Blob::from(b"de"))?;
+				assert_eq!(w.position()?, 5);
+				Ok(())
+			})
+			.await
+			.unwrap()
+			.unwrap();
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn set_position_then_append() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/out.bin");
+			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+				let mut w = DataWriterSftp::from_url(&url, None)?;
+				w.append(&Blob::from(vec![0u8; 10]))?;
+				w.set_position(5)?;
+				w.append(&Blob::from(vec![1u8; 5]))?;
+				Ok(())
+			})
+			.await
+			.unwrap()
+			.unwrap();
+			assert_eq!(server.read_file("/out.bin").await, [0, 0, 0, 0, 0, 1, 1, 1, 1, 1]);
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn write_retry_after_disconnect() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/out.bin");
+			let mut writer = tokio::task::spawn_blocking(move || DataWriterSftp::from_url(&url, None))
+				.await
+				.unwrap()
+				.unwrap();
+			server.schedule_disconnect();
+			tokio::task::spawn_blocking(move || writer.append(&Blob::from(b"hello")))
+				.await
+				.unwrap()
+				.unwrap();
+			assert_eq!(server.read_file("/out.bin").await, b"hello");
+		}
+	}
 }
