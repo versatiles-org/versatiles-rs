@@ -41,10 +41,7 @@ pub fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Session> 
 	// SSH handshake
 	let mut session = Session::new()?;
 	session.set_tcp_stream(tcp);
-	#[cfg(not(test))]
 	session.set_timeout(30_000);
-	#[cfg(test)]
-	session.set_timeout(1_000);
 	session.handshake()?;
 	session.set_keepalive(true, 60);
 
