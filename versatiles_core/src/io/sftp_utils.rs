@@ -287,4 +287,45 @@ mod tests {
 		let result = open_session(&url, None);
 		assert!(result.is_err());
 	}
+
+	#[cfg(feature = "ssh2")]
+	mod sftp_server_tests {
+		use super::*;
+		use crate::io::test_sftp_server::TestSftpServer;
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn open_session_password_auth() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/");
+			let session = tokio::task::spawn_blocking(move || open_session(&url, None))
+				.await
+				.unwrap();
+			assert!(session.is_ok(), "expected successful auth: {:?}", session.err());
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn open_session_wrong_password() {
+			let server = TestSftpServer::start().await;
+			let mut url = server.url("/");
+			url.set_password(Some("wrongpass")).unwrap();
+			let result = tokio::task::spawn_blocking(move || open_session(&url, None))
+				.await
+				.unwrap();
+			assert!(result.is_err(), "expected auth failure with wrong password");
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn open_session_with_unused_identity_file() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/");
+			let session =
+				tokio::task::spawn_blocking(move || open_session(&url, Some(std::path::Path::new("/nonexistent/key"))))
+					.await
+					.unwrap();
+			assert!(
+				session.is_ok(),
+				"password auth should succeed even with a missing identity file"
+			);
+		}
+	}
 }
