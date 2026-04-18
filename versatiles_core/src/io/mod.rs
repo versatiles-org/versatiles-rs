@@ -35,6 +35,8 @@ mod network_writer;
 pub mod sftp_utils;
 #[cfg(feature = "ssh2")]
 mod sftp_wrappers;
+#[cfg(all(feature = "ssh2", test))]
+pub(crate) mod test_sftp_server;
 #[cfg(feature = "ssh2")]
 pub use sftp_wrappers::*;
 mod value_reader;
