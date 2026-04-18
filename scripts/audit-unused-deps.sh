@@ -41,9 +41,10 @@ run_check "Binary targets" --bins
 run_check "Workspace: no features" --lib --workspace --no-default-features
 run_check "Workspace: defaults" --lib --workspace
 run_check "Feature: cli" --lib --workspace --no-default-features --features cli --exclude versatiles_derive --exclude versatiles_geometry --exclude versatiles_image --exclude versatiles_node --exclude versatiles_pipeline
-run_check "Feature: server" --lib --package versatiles --no-default-features --features server
-run_check "Feature: test" --lib --workspace --no-default-features --features test --exclude versatiles --exclude versatiles_derive --exclude versatiles_node --exclude versatiles_pipeline
 run_check "Feature: gdal" --lib --package versatiles_pipeline --no-default-features --features gdal
+run_check "Feature: server" --lib --package versatiles --no-default-features --features server
+run_check "Feature: ssh2 (core)" --lib --package versatiles_core --no-default-features --features ssh2
+run_check "Feature: test" --lib --workspace --no-default-features --features test --exclude versatiles --exclude versatiles_derive --exclude versatiles_node --exclude versatiles_pipeline
 run_check "All features" --lib --workspace --all-features --exclude versatiles --exclude versatiles_core
 
 if [ $FAILED -gt 0 ]; then
