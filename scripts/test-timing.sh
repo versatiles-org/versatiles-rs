@@ -12,7 +12,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-TOP_N=20         # how many slowest tests to show in the ranked list
+TOP_N=30         # how many slowest tests to show in the ranked list
 SLOW_MS=100      # threshold (ms) to mark a test as slow in the module summary
 MEDIUM_MS=10     # threshold (ms) to mark a test as medium
 
@@ -100,18 +100,14 @@ echo "$PARSED" | awk -F'\t' -v slow="$SLOW_MS" '
 }
 END {
   for (m in total) print total[m] "\t" count[m] "\t" (slow_count[m]+0) "\t" m
-}' | sort -t$'\t' -k1 -rn | awk -F'\t' \
+}' | sort -t$'\t' -k1 -rn | head -n "$TOP_N" | awk -F'\t' \
   -v red="$RED" -v yellow="$YELLOW" -v green="$GREEN" -v bold="$BOLD" \
   -v reset="$RESET" -v slow_thresh="$SLOW_MS" '
 {
   ms=$1; cnt=$2; slow=$3; mod=$4
-  if (ms >= 1000) {
-    time_fmt = sprintf("%.2fs  ", ms/1000)
-  } else {
-    time_fmt = sprintf("%dms    ", ms)
-  }
+  time_fmt = sprintf("%.2fs  ", ms/1000)
   colour = (slow > 0) ? red : (ms >= slow_thresh ? yellow : green)
-  printf "%s%-8s%s  %-5d  %-5d  %s\n", colour, time_fmt, reset, cnt, slow, mod
+  printf "%s%-9s%s  %-5d  %-5d  %s\n", colour, time_fmt, reset, cnt, slow, mod
 }'
 
 echo
