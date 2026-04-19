@@ -965,29 +965,7 @@ flowchart TB
 
 - **/docker/** - Dockerfile for Linux builds
 - **/testdata/** - Test files for validation
-- **/scripts/** - Development and CI/CD automation scripts:
-
-| Script                           | Purpose                                                        |
-|----------------------------------|----------------------------------------------------------------|
-| **`build-debug-with-gdal.sh`**   | **Build debug binary with GDAL**                               |
-| **`build-release-with-gdal.sh`** | **Build release binary with GDAL support**                     |
-| **`check.sh`**                   | **Run all checks (formatting, linting, tests Rust + Node.js)** |
-| **`install-gdal.sh`**            | **Install GDAL via system package manager**                    |
-| `audit-unused-deps.sh`           | Find unused dependencies                                       |
-| `build-docker-*.sh`              | Build Docker images (GDAL, multi-platform)                     |
-| `build-docs*.sh`                 | Generate documentation                                         |
-| `install-unix.sh`                | Install VersaTiles binary on Unix platforms                    |
-| `install-windows.ps1`            | Install VersaTiles binary on Windows                           |
-| `perf-benchmarks.sh`             | Run performance benchmarks                                     |
-| `release-package.sh`             | Create versioned releases                                      |
-| `sync-version.sh`                | Synchronize versions across workspace                          |
-| `test-coverage.sh`               | Generate code coverage reports                                 |
-| `test-unix.sh`                   | Run tests on Unix platforms                                    |
-| `test-windows.ps1`               | Run tests on Windows                                           |
-| `upgrade-deps.sh`                | Update Rust dependencies to latest versions                    |
-| `workflow-*.sh/ps1`              | CI/CD workflow automation                                      |
-
-**Most commonly used:** `check.sh`, `build-release-with-gdal.sh`, `release-package.sh`
+- **/scripts/** - Development and CI/CD automation scripts — see [scripts/README.md](scripts/README.md) for the full reference. Most commonly used: `check.sh`, `build-release-with-gdal.sh`.
 
 ---
 

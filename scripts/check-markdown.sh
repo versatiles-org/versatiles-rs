@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Lint all Markdown files in the repository with markdownlint-cli2.
+#
+# Checks all *.md files, excluding hidden directories, node_modules, and
+# the build target directory. Uses npx to install markdownlint-cli2 on demand.
+
 cd "$(dirname "$0")/.."
 
 set +e

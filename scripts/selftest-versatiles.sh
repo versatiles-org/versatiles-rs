@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+# Smoke-test the versatiles binary with a convert and serve command.
+#
+# Usage:
+#   ./scripts/selftest-versatiles.sh [path-to-versatiles-binary]
+#
+# Defaults to the "versatiles" binary on PATH. Used inside Docker image
+# builds to verify the binary works in the target environment.
+
 dir=$(dirname $(dirname "$0"))
 echo dir=$dir
 

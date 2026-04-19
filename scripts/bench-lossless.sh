@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Run lossless compression benchmarks for WebP and PNG image formats.
+#
+# Executes example binaries from the versatiles_image crate to measure
+# encoding performance of lossless WebP and PNG codecs.
+
 cd "$(dirname "$0")/.."
 
 set -e

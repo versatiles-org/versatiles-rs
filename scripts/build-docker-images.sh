@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Build and smoke-test Docker images for all supported Linux base images.
+#
+# Builds debian, alpine, and scratch variants for linux/amd64 using
+# Docker Buildx, then runs selftest-versatiles.sh inside each image.
+# Exits non-zero if any build or self-test fails.
+
 cd "$(dirname "$0")/../docker"
 
 DEBUG=false

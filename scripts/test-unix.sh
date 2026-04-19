@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Developer test script: format, lint, and test the Rust workspace on Unix.
+#
+# Runs rustfmt, clippy (binary + lib with multiple feature combinations),
+# and cargo test (bins, lib, doc tests) with colored output. Accepts an
+# optional extra cargo argument (e.g. -- --nocapture) forwarded to each step.
+
 cd "$(dirname "$0")/.."
 
 set -e

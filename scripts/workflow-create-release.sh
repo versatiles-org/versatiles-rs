@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# CI script: create a draft GitHub release for the latest version tag.
+#
+# Fetches the two most recent version tags via the GitHub API, assembles a
+# changelog from commits between them, and creates (or updates) a draft
+# pre-release. Writes the tag name to GITHUB_OUTPUT and the notes to
+# GITHUB_STEP_SUMMARY for use in subsequent CI steps.
+
 cd "$(dirname "$0")/.."
 
 set -e

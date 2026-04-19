@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Run all Rust quality checks across the workspace.
+#
+# Steps (in order): rustfmt, cargo check (no-default-features, server, cli,
+# server+cli, all-features), clippy with -D warnings, tests with all features,
+# and doc build with -D warnings. Exits non-zero on the first failure.
+
 cd "$(dirname "$0")/.."
 PROJECT_DIR=$(pwd)
 

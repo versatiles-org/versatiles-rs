@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Run all Node.js quality checks for the versatiles_node package.
+#
+# Steps (in order): npm install (if needed), debug build, TypeScript typecheck,
+# ESLint, Vitest unit tests, example tests, Prettier format check.
+# Skips silently if the versatiles_node directory does not exist.
+
 cd "$(dirname "$0")/.."
 PROJECT_DIR=$(pwd)
 

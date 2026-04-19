@@ -1,4 +1,15 @@
 #!/usr/bin/env bash
+# Build the release binary with GDAL support and optionally install it.
+#
+# Usage:
+#   ./scripts/build-release-with-gdal.sh [--install]
+#
+# Options:
+#   --install  Copy the built binary to /usr/local/bin/versatiles (uses sudo if needed)
+#
+# Requires GDAL development libraries. Install them first with:
+#   ./scripts/install-gdal.sh
+
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

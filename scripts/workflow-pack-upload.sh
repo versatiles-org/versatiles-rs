@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# CI script: package a compiled binary as .tar.gz and upload it to a GitHub release.
+#
+# Usage:
+#   ./scripts/workflow-pack-upload.sh <folder> <filename-stem> <tag>
+#
+# Compresses the "versatiles" binary from <folder>/cli into <filename-stem>.tar.gz,
+# then uploads it (and any .deb files found) to the specified GitHub release tag.
 
 set -e
 
