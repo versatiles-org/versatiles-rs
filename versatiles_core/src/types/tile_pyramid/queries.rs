@@ -1,23 +1,26 @@
 //! Query methods for [`TilePyramid`].
 
 use super::TilePyramid;
-use crate::{GeoBBox, GeoCenter, TileBBox, TileCoord, TileCover};
+use crate::{GeoBBox, GeoCenter, TileBBox, TileCover};
 use anyhow::Result;
 
 impl TilePyramid {
 	/// Returns a reference to the [`TileCover`] at the given zoom level.
 	#[must_use]
-	pub fn level(&self, level: u8) -> &TileCover {
+	pub fn level_ref(&self, level: u8) -> &TileCover {
 		&self.levels[level as usize]
+	}
+	/// Returns a mutable reference to the [`TileCover`] at the given zoom level.
+	#[must_use]
+	pub fn level_mut(&mut self, level: u8) -> &mut TileCover {
+		self.levels.get_mut(level as usize).unwrap()
 	}
 
 	/// Returns the bounding box of the given zoom level, or an empty bbox if
 	/// the level is empty.
 	#[must_use]
 	pub fn level_bbox(&self, level: u8) -> TileBBox {
-		self.levels[level as usize]
-			.bbox()
-			.unwrap_or_else(|| TileBBox::new_empty(level).expect("zoom must be ≤ MAX_ZOOM_LEVEL"))
+		self.level_ref(level).to_bbox()
 	}
 
 	/// Finds the minimum (lowest) non-empty zoom level.
@@ -34,76 +37,6 @@ impl TilePyramid {
 	#[must_use]
 	pub fn level_max(&self) -> Option<u8> {
 		self.levels.iter().rev().find(|c| !c.is_empty()).map(TileCover::level)
-	}
-
-	/// Returns `true` if this pyramid contains the given tile coordinate.
-	#[must_use]
-	pub fn includes_coord(&self, coord: &TileCoord) -> bool {
-		if let Some(cover) = self.levels.get(coord.level as usize) {
-			cover.includes_coord(coord).unwrap()
-		} else {
-			false
-		}
-	}
-
-	/// Returns `true` if all tiles in `bbox` are covered by this pyramid.
-	///
-	/// # Errors
-	/// Returns an error if `bbox`'s level is out of range.
-	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
-		if let Some(cover) = self.levels.get(bbox.level() as usize) {
-			cover.includes_bbox(bbox)
-		} else {
-			Ok(false)
-		}
-	}
-
-	/// Returns `true` if this pyramid completely includes every level of `other`.
-	#[must_use]
-	pub fn includes_pyramid(&self, other: &TilePyramid) -> bool {
-		for cover_other in other.levels.iter().filter(|c| !c.is_empty()) {
-			if cover_other
-				.bbox()
-				.is_some_and(|bounds| !self.includes_bbox(&bounds).unwrap())
-			{
-				return false;
-			}
-		}
-		true
-	}
-
-	/// Returns `true` if the given `bbox` overlaps the coverage at its zoom level.
-	#[must_use]
-	pub fn intersects_bbox(&self, bbox: &TileBBox) -> bool {
-		if let Some(cover) = self.levels.get(bbox.level() as usize) {
-			cover.intersects_bbox(bbox).unwrap()
-		} else {
-			false
-		}
-	}
-
-	/// Returns `true` if any level of this pyramid overlaps the corresponding
-	/// level of `other`.
-	#[must_use]
-	pub fn intersects_pyramid(&self, other: &TilePyramid) -> bool {
-		self
-			.levels
-			.iter()
-			.filter(|c| !c.is_empty())
-			.any(|cover| cover.bbox().is_some_and(|bounds| other.intersects_bbox(&bounds)))
-	}
-
-	/// Returns the intersection of `bbox` with the coverage at `bbox`'s zoom
-	/// level, or an empty bbox if the level is empty or out of range.
-	///
-	/// # Errors
-	/// Returns an error if creating an empty bbox fails (should not happen for
-	/// valid inputs).
-	pub fn intersected_bbox(&self, bbox: &TileBBox) -> Result<TileBBox> {
-		if let Some(level_bounds) = self.levels.get(bbox.level() as usize).and_then(TileCover::bbox) {
-			return level_bounds.intersected_bbox(bbox);
-		}
-		TileBBox::new_empty(bbox.level())
 	}
 
 	/// Counts the total number of tiles across all zoom levels.
@@ -130,17 +63,25 @@ impl TilePyramid {
 		self.levels.iter().all(TileCover::is_empty)
 	}
 
-	/// Returns an iterator over the bounding boxes of all non-empty zoom levels.
-	pub fn iter_levels(&self) -> impl Iterator<Item = TileCover> + '_ {
-		self
-			.levels
-			.iter()
-			.filter_map(|c| if c.is_empty() { None } else { Some(c.clone()) })
+	/// Returns an iterator over all zoom-level covers (0 through `MAX_ZOOM_LEVEL`),
+	/// including empty ones.
+	pub fn iter(&self) -> impl Iterator<Item = &TileCover> + '_ {
+		self.levels.iter()
+	}
+
+	/// Returns a cloned iterator over all zoom-level covers.
+	pub fn to_iter(&self) -> impl Iterator<Item = TileCover> + '_ {
+		self.levels.iter().cloned()
 	}
 
 	/// Returns an iterator over the bounding boxes of all non-empty zoom levels.
-	pub fn iter_bboxes(&self) -> impl Iterator<Item = TileBBox> + '_ {
-		self.iter_levels().filter_map(|l| l.bbox())
+	pub fn to_iter_bboxes(&self) -> impl Iterator<Item = TileBBox> + '_ {
+		self.levels.iter().map(TileCover::to_bbox)
+	}
+
+	/// Returns a mutable iterator over all zoom-level covers.
+	pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut TileCover> + '_ {
+		self.levels.iter_mut()
 	}
 
 	/// Returns a geographic bounding box covering the union of all non-empty
@@ -194,5 +135,68 @@ impl TilePyramid {
 			x_max_sum / weight_sum,
 			y_max_sum / weight_sum,
 		)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::{TileCover, TileQuadtree};
+
+	fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
+		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()
+	}
+
+	#[test]
+	fn count_tiles_and_count_nodes() {
+		let mut p = TilePyramid::new_empty();
+		p.set_level(TileCover::new_full(2).unwrap()); // 16 tiles, Bbox → 0 tree nodes
+		assert_eq!(p.count_tiles(), 16);
+		assert_eq!(p.count_nodes(), 0);
+
+		// Insert a tree level
+		let qt = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3));
+		p.set_level(TileCover::from(qt));
+		assert_eq!(p.count_tiles(), 16 + 16);
+		// tree has some nodes
+	}
+
+	#[test]
+	fn get_geo_bbox_and_center() {
+		let mut p = TilePyramid::new_empty();
+		assert!(p.geo_bbox().is_none());
+		assert!(p.geo_center().is_none());
+
+		p.insert_bbox(&bbox(5, 10, 10, 20, 20)).unwrap();
+		assert!(p.geo_bbox().is_some());
+		assert!(p.geo_center().is_some());
+	}
+
+	#[test]
+	fn iter_levels_and_iter_all_level_bboxes() {
+		let mut p = TilePyramid::new_empty();
+		p.insert_bbox(&bbox(3, 0, 0, 3, 3)).unwrap();
+		p.insert_bbox(&bbox(5, 0, 0, 5, 5)).unwrap();
+
+		assert_eq!(p.iter().filter(|c| !c.is_empty()).count(), 2);
+	}
+
+	#[test]
+	fn weighted_bbox_empty_errors() {
+		assert!(TilePyramid::new_empty().weighted_bbox().is_err());
+	}
+
+	#[test]
+	fn weighted_bbox_nonempty() {
+		let mut p = TilePyramid::new_empty();
+		p.insert_bbox(&bbox(5, 10, 10, 20, 20)).unwrap();
+		assert!(p.weighted_bbox().is_ok());
+	}
+
+	#[test]
+	fn get_level_bbox_empty_level() {
+		let p = TilePyramid::new_empty();
+		let b = p.level_bbox(5);
+		assert!(b.is_empty());
 	}
 }

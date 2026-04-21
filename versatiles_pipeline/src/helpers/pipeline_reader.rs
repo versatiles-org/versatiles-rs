@@ -246,7 +246,7 @@ mod tests {
 		// Trait methods
 		assert_eq!(reader.source_type().to_string(), "processor 'pipeline'");
 		// Parameters should have at least one bbox level
-		assert!(reader.metadata().bbox_pyramid.iter_levels().next().is_some());
+		assert!(reader.metadata().bbox_pyramid.iter().next().is_some());
 		// Debug formatting should include struct name and source
 		let debug = format!("{reader:?}");
 		assert!(debug.contains("PipelineReader"));

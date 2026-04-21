@@ -18,104 +18,10 @@ impl TileBBox {
 	// Basic Queries
 	// -------------------------------------------------------------------------
 
-	/// Checks if the bounding box contains a specific tile coordinate (`TileCoord`) at the same zoom level.
-	///
-	/// # Arguments
-	///
-	/// * `coord` - Reference to the tile coordinate to check.
-	///
-	/// # Returns
-	///
-	/// * `true` if the coordinate is within the bounding box and at the same zoom level.
-	/// * `false` otherwise.
-	pub fn includes_coord(&self, coord: &TileCoord) -> Result<bool> {
-		ensure!(
-			self.level == coord.level,
-			"Cannot compare TileBBox with level={} with TileCoord with level={}",
-			self.level,
-			coord.level
-		);
-		if self.is_empty() {
-			return Ok(false);
-		}
-		// Safety: is_empty() checked above; x_min/y_min/x_max/y_max are valid.
-		Ok(coord.x >= self.x_min()? && coord.x <= self.x_max()? && coord.y >= self.y_min()? && coord.y <= self.y_max()?)
-	}
-
 	/// Returns the zoom level of this bounding box.
 	#[must_use]
 	pub fn level(&self) -> u8 {
 		self.level
-	}
-
-	/// Returns whether this bbox completely includes another bbox at the same level.
-	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
-		ensure!(
-			self.level == bbox.level,
-			"Cannot compare TileBBox with level={} with TileBBox with level={}",
-			self.level,
-			bbox.level,
-		);
-
-		if self.is_empty() || bbox.is_empty() {
-			return Ok(false);
-		}
-
-		// Safety: is_empty() checked above; getters are valid.
-		Ok(self.x_min()? <= bbox.x_min()?
-			&& self.x_max()? >= bbox.x_max()?
-			&& self.y_min()? <= bbox.y_min()?
-			&& self.y_max()? >= bbox.y_max()?)
-	}
-
-	// -------------------------------------------------------------------------
-	// Include and Intersect Operations
-	// -------------------------------------------------------------------------
-
-	/// Checks if two bounding boxes overlap in tile space.
-	///
-	/// Overlap is defined as having at least one tile coordinate in common.
-	pub fn intersects_bbox(&self, bbox: &TileBBox) -> Result<bool> {
-		ensure!(
-			self.level == bbox.level,
-			"Cannot compare TileBBox with level={} with TileBBox with level={}",
-			self.level,
-			bbox.level,
-		);
-
-		if self.is_empty() || bbox.is_empty() {
-			return Ok(false);
-		}
-
-		// Safety: is_empty() checked above; getters are valid.
-		Ok(self.x_min()? <= bbox.x_max()?
-			&& self.x_max()? >= bbox.x_min()?
-			&& self.y_min()? <= bbox.y_max()?
-			&& self.y_max()? >= bbox.y_min()?)
-	}
-
-	pub fn intersected_bbox(&self, bbox: &TileBBox) -> Result<TileBBox> {
-		ensure!(
-			self.level == bbox.level,
-			"Cannot compare TileBBox with level={} with TileBBox with level={}",
-			bbox.level,
-			self.level
-		);
-
-		if self.is_empty() || bbox.is_empty() {
-			return TileBBox::new_empty(self.level);
-		}
-
-		let x_min = self.x_min()?.max(bbox.x_min()?);
-		let y_min = self.y_min()?.max(bbox.y_min()?);
-		let x_max = self.x_max()?.min(bbox.x_max()?);
-		let y_max = self.y_max()?.min(bbox.y_max()?);
-
-		if x_min > x_max || y_min > y_max {
-			return TileBBox::new_empty(self.level); // No intersection
-		}
-
-		TileBBox::from_min_and_max(self.level, x_min, y_min, x_max, y_max)
 	}
 
 	pub fn min_tile(&self) -> Result<TileCoord> {
@@ -175,8 +81,9 @@ impl TileBBox {
 	/// Returns an error if the coordinate lies outside the bbox.
 	pub fn index_of(&self, coord: &TileCoord) -> Result<u64> {
 		ensure!(!self.is_empty(), "cannot get index in an empty TileBBox");
+		ensure!(self.level == coord.level);
 		ensure!(
-			self.includes_coord(coord)?,
+			self.includes_coord(coord),
 			"Coordinate {coord:?} is not within the bounding box {self:?}",
 		);
 
@@ -255,20 +162,18 @@ mod tests {
 		let disjoint = bb(5, 30, 30, 31, 31);
 
 		// contains (TileCoord)
-		assert!(a.includes_coord(&tc(5, 15, 15))?);
-		assert!(a.includes_coord(&tc(6, 15, 15)).is_err()); // level mismatch
-		assert!(!a.includes_coord(&tc(5, 25, 15))?); // outside
+		assert!(a.includes_coord(&tc(5, 15, 15)));
+		assert!(!a.includes_coord(&tc(5, 25, 15))); // outside
 
-		assert!(a.includes_bbox(&inner)?);
-		assert!(!a.includes_bbox(&edge_touch)?); // inner extends beyond
-		assert!(!a.includes_bbox(&disjoint)?);
-		assert!(!a.includes_bbox(&TileBBox::new_empty(5)?)?);
-		assert!(a.includes_bbox(&bb(6, 12, 12, 18, 18)).is_err()); // level mismatch
+		assert!(a.includes_bbox(&inner));
+		assert!(!a.includes_bbox(&edge_touch)); // inner extends beyond
+		assert!(!a.includes_bbox(&disjoint));
+		assert!(a.includes_bbox(&TileBBox::new_empty(5).unwrap())); // empty set is always a subset
 
 		// overlaps_bbox (inclusive on shared edge)
-		assert!(a.intersects_bbox(&inner)?);
-		assert!(a.intersects_bbox(&edge_touch)?); // edge contact counts as overlap by implementation
-		assert!(!a.intersects_bbox(&disjoint)?);
+		assert!(a.intersects_bbox(&inner));
+		assert!(a.intersects_bbox(&edge_touch)); // edge contact counts as overlap by implementation
+		assert!(!a.intersects_bbox(&disjoint));
 		Ok(())
 	}
 
@@ -356,6 +261,135 @@ mod tests {
 	fn as_array_matches_minmax() -> Result<()> {
 		let b = bb(6, 10, 20, 30, 40);
 		assert_eq!(b.to_array()?, [10, 20, 30, 40]);
+		Ok(())
+	}
+
+	#[test]
+	fn test_is_full() -> Result<()> {
+		let bbox = TileBBox::new_full(4)?;
+		assert!(bbox.is_full(), "Expected bbox ({bbox:?}) to be full");
+		Ok(())
+	}
+
+	#[test]
+	fn test_is_empty() -> Result<()> {
+		let empty_bbox = TileBBox::new_empty(4)?;
+		assert!(empty_bbox.is_empty());
+
+		let non_empty_bbox = TileBBox::from_min_and_max(6, 5, 10, 15, 20)?;
+		assert!(!non_empty_bbox.is_empty());
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_width_height() -> Result<()> {
+		let bbox = TileBBox::from_min_and_max(6, 5, 10, 15, 20)?;
+		assert_eq!(bbox.width(), 11);
+		assert_eq!(bbox.height(), 11);
+
+		let empty_bbox = TileBBox::new_empty(4)?;
+		assert_eq!(empty_bbox.width(), 0);
+		assert_eq!(empty_bbox.height(), 0);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_count_tiles() -> Result<()> {
+		let bbox = TileBBox::from_min_and_max(6, 5, 10, 15, 20)?;
+		assert_eq!(bbox.count_tiles(), 121);
+
+		let empty_bbox = TileBBox::new_empty(4)?;
+		assert_eq!(empty_bbox.count_tiles(), 0);
+
+		Ok(())
+	}
+
+	#[rstest]
+	#[case((8, 100, 100, 199, 199), (8, 100, 100), 0)]
+	#[case((8, 100, 100, 199, 199), (8, 101, 100), 1)]
+	#[case((8, 100, 100, 199, 199), (8, 199, 100), 99)]
+	#[case((8, 100, 100, 199, 199), (8, 100, 101), 100)]
+	#[case((8, 100, 100, 199, 199), (8, 100, 199), 9900)]
+	#[case((8, 100, 100, 199, 199), (8, 199, 199), 9999)]
+	fn tile_index_cases(
+		#[case] bbox: (u8, u32, u32, u32, u32),
+		#[case] coord: (u8, u32, u32),
+		#[case] expected: u64,
+	) -> Result<()> {
+		let (l, x0, y0, x1, y1) = bbox;
+		let bbox = TileBBox::from_min_and_max(l, x0, y0, x1, y1)?;
+		let (cl, cx, cy) = coord;
+		let tc = tc(cl, cx, cy);
+		assert_eq!(bbox.index_of(&tc)?, expected);
+		Ok(())
+	}
+
+	#[test]
+	fn should_get_correct_tile_index() -> Result<()> {
+		let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12)?;
+
+		assert_eq!(bbox.index_of(&tc(4, 5, 10))?, 0);
+		assert_eq!(bbox.index_of(&tc(4, 6, 10))?, 1);
+		assert_eq!(bbox.index_of(&tc(4, 7, 10))?, 2);
+		assert_eq!(bbox.index_of(&tc(4, 5, 11))?, 3);
+		assert_eq!(bbox.index_of(&tc(4, 7, 12))?, 8);
+
+		// Attempt to get index of a coordinate outside the bounding box
+		let coord_outside = tc(4, 4, 9);
+		let result = bbox.index_of(&coord_outside);
+		assert!(result.is_err());
+
+		// Attempt to get index with mismatched zoom level
+		let coord_diff_level = tc(5, 5, 10);
+		let result = bbox.index_of(&coord_diff_level);
+		assert!(result.is_err());
+
+		Ok(())
+	}
+
+	#[rstest]
+	#[case(0, (4, 5, 10))]
+	#[case(1, (4, 6, 10))]
+	#[case(2, (4, 7, 10))]
+	#[case(3, (4, 5, 11))]
+	#[case(8, (4, 7, 12))]
+	fn get_coord_by_index_cases(#[case] index: u64, #[case] coord: (u8, u32, u32)) -> Result<()> {
+		let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12)?;
+		let (l, x, y) = coord;
+		assert_eq!(bbox.coord_at_index(index)?, tc(l, x, y));
+		Ok(())
+	}
+
+	#[test]
+	fn get_coord_by_index_out_of_bounds() -> Result<()> {
+		let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12)?;
+		assert!(bbox.coord_at_index(9).is_err());
+		Ok(())
+	}
+
+	#[test]
+	fn get_quadrant_errors() -> Result<()> {
+		// Empty bbox → Ok(empty)
+		let empty = TileBBox::new_empty(4)?;
+		assert!(empty.quadrant(0)?.is_empty());
+		// Odd width/height → error
+		let odd_w = TileBBox::from_min_and_max(4, 0, 0, 2, 3)?; // width=3
+		assert!(odd_w.quadrant(0).is_err());
+		let odd_h = TileBBox::from_min_and_max(4, 0, 0, 3, 2)?; // height=3
+		assert!(odd_h.quadrant(0).is_err());
+		// Invalid quadrant index
+		let even = TileBBox::from_min_and_max(4, 0, 0, 3, 3)?;
+		assert!(even.quadrant(4).is_err());
+		Ok(())
+	}
+
+	#[test]
+	fn max_value_and_string() -> Result<()> {
+		let bbox = TileBBox::from_min_and_max(5, 1, 2, 3, 4)?;
+		assert_eq!(bbox.max_coord(), (1u32 << 5) - 1);
+		assert_eq!(bbox.to_string(), "5:[1,2,3,4]");
 		Ok(())
 	}
 }

@@ -168,7 +168,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	async fn probe_metadata(&self, print: &mut PrettyPrint) -> Result<()> {
 		let metadata = self.metadata();
 		let p = print.get_list("bbox_pyramid").await;
-		for level in metadata.bbox_pyramid.iter_levels() {
+		for level in metadata.bbox_pyramid.iter() {
 			p.add_value(&level).await;
 		}
 		print
@@ -223,7 +223,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		let total_tiles = self.metadata().bbox_pyramid.count_tiles();
 		let progress = runtime.create_progress("scanning tiles", total_tiles);
 
-		for bbox in self.metadata().bbox_pyramid.iter_bboxes() {
+		for bbox in self.metadata().bbox_pyramid.to_iter_bboxes() {
 			let mut level_size_sum: u64 = 0;
 			let mut level_count: u64 = 0;
 			let mut stream = self.tile_size_stream(bbox).await?;

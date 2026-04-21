@@ -107,7 +107,7 @@ impl<W: Write + Send> TileSink for TarTileSink<W> {
 		let mut builder = self.builder.into_inner().unwrap();
 
 		// Write tiles.json metadata entry
-		let meta_blob = compress(Blob::from(tilejson), self.tile_compression)?;
+		let meta_blob = compress(Blob::from(tilejson), &self.tile_compression)?;
 		let filename = format!("tiles.json{}", self.tile_compression.as_extension());
 		let mut header = Header::new_gnu();
 		header.set_size(meta_blob.len());

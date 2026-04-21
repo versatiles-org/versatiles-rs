@@ -14,3 +14,16 @@ impl fmt::Display for TileQuadtree {
 		)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn display() {
+		let t = TileQuadtree::new_full(3).unwrap();
+		let s = format!("{t}");
+		assert!(s.contains("zoom=3"));
+		assert!(s.contains("tiles=64"));
+	}
+}

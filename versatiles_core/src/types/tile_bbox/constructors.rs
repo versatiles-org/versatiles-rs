@@ -714,4 +714,108 @@ mod tests {
 		assert_eq!(bb.height(), 2);
 		Ok(())
 	}
+
+	#[test]
+	fn test_new_valid_bbox() -> Result<()> {
+		let bbox = TileBBox::from_min_and_max(6, 5, 10, 15, 20)?;
+		assert_eq!(bbox.level, 6);
+		assert_eq!(bbox.x_min()?, 5);
+		assert_eq!(bbox.y_min()?, 10);
+		assert_eq!(bbox.x_max()?, 15);
+		assert_eq!(bbox.y_max()?, 20);
+		Ok(())
+	}
+
+	#[test]
+	fn test_new_invalid_level() {
+		let result = TileBBox::from_min_and_max(32, 0, 0, 1, 1);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_new_invalid_coordinates() {
+		let result = TileBBox::from_min_and_max(4, 10, 10, 5, 15);
+		assert!(result.is_err());
+
+		let result = TileBBox::from_min_and_max(4, 5, 15, 7, 10);
+		assert!(result.is_err());
+
+		let result = TileBBox::from_min_and_max(4, 0, 0, 16, 15); // x_max exceeds max for level 4
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_new_full() -> Result<()> {
+		let bbox = TileBBox::new_full(4)?;
+		assert_eq!(bbox, TileBBox::from_min_and_max(4, 0, 0, 15, 15)?);
+		assert!(bbox.is_full());
+		Ok(())
+	}
+
+	#[test]
+	fn test_from_geo_valid() -> Result<()> {
+		let geo_bbox = GeoBBox::new(-180.0, -85.05112878, 180.0, 85.05112878)?;
+		let bbox = TileBBox::from_geo_bbox(2, &geo_bbox)?;
+		assert_eq!(bbox, TileBBox::from_min_and_max(2, 0, 0, 3, 3)?);
+		Ok(())
+	}
+
+	#[test]
+	fn empty_or_full() -> Result<()> {
+		let mut bbox1 = TileBBox::new_empty(12)?;
+		assert!(bbox1.is_empty());
+
+		bbox1.set_full();
+		assert!(bbox1.is_full());
+
+		let mut bbox1 = TileBBox::new_full(13)?;
+		assert!(bbox1.is_full());
+
+		bbox1.set_empty();
+		assert!(bbox1.is_empty());
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_set_empty() -> Result<()> {
+		let mut bbox = TileBBox::from_min_and_max(4, 0, 0, 15, 15)?;
+		bbox.set_empty();
+		assert!(bbox.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn test_set_full() -> Result<()> {
+		let mut bbox = TileBBox::new_empty(4)?;
+		bbox.set_full();
+		assert!(bbox.is_full());
+		Ok(())
+	}
+
+	#[test]
+	fn bbox_swap_xy_transform() -> Result<()> {
+		let mut bbox = TileBBox::from_min_and_max(4, 1, 2, 3, 4)?;
+		bbox.swap_xy();
+		assert_eq!(bbox, TileBBox::from_min_and_max(4, 2, 1, 4, 3)?);
+		Ok(())
+	}
+
+	#[test]
+	fn set_min_max_keep_consistency() -> Result<()> {
+		let mut bbox = TileBBox::from_min_and_max(5, 8, 9, 12, 13)?; // width=5, height=5
+		// Move min right/up; max should remain the same
+		bbox.set_x_min(10)?;
+		bbox.set_y_min(11)?;
+		assert_eq!(bbox.to_array()?, [10, 11, 12, 13]);
+		// Move max left/down; min should remain the same
+		bbox.set_x_max(11)?;
+		bbox.set_y_max(12)?;
+		assert_eq!(bbox.to_array()?, [10, 11, 11, 12]);
+		// Setting max less than min should empty the dimension
+		bbox.set_y_max(10)?;
+		assert!(bbox.is_empty());
+		assert!(bbox.set_x_max(9).is_err());
+		Ok(())
+	}
 }

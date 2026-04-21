@@ -197,8 +197,8 @@ impl MBTilesReader {
 						.collect::<Result<Vec<f64>, _>>()?;
 					self.tilejson.center = Some(GeoCenter::try_from(parts)?);
 				}
-				"minzoom" => self.tilejson.set_min_zoom(value.parse::<u8>()?),
-				"maxzoom" => self.tilejson.set_max_zoom(value.parse::<u8>()?),
+				"minzoom" => self.tilejson.set_zoom_min(value.parse::<u8>()?),
+				"maxzoom" => self.tilejson.set_zoom_max(value.parse::<u8>()?),
 				"json" => {
 					let json = parse_json_str(value).with_context(|| format!("failed to parse JSON: {value}"))?;
 					let object = json.as_object().with_context(|| anyhow!("expected JSON object"))?;
@@ -356,7 +356,7 @@ impl TileSource for MBTilesReader {
 
 	#[context("streaming tile coords for bbox {:?}", bbox)]
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let mut bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let mut bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
@@ -398,7 +398,7 @@ impl TileSource for MBTilesReader {
 
 	#[context("streaming tile sizes for bbox {:?}", bbox)]
 	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
-		let mut bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let mut bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
@@ -450,7 +450,7 @@ impl TileSource for MBTilesReader {
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("mbtiles::tile_stream {bbox:?}");
 
-		let mut bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let mut bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());

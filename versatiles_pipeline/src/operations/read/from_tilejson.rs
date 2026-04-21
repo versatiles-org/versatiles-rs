@@ -84,8 +84,8 @@ impl ReadTileSource for Operation {
 		let tile_format = detect_tile_format(&tilejson, &tile_url_template)?;
 
 		// Build bbox pyramid from TileJSON bounds/zoom
-		let min_zoom = tilejson.min_zoom().unwrap_or(0);
-		let max_zoom = tilejson.max_zoom().unwrap_or(22);
+		let min_zoom = tilejson.zoom_min().unwrap_or(0);
+		let max_zoom = tilejson.zoom_max().unwrap_or(22);
 		let geo_bbox = tilejson
 			.bounds
 			.unwrap_or_else(|| GeoBBox::new(-180.0, -85.05112878, 180.0, 85.05112878).unwrap());
@@ -252,7 +252,7 @@ impl TileSource for Operation {
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
 			Some(())
 		}))

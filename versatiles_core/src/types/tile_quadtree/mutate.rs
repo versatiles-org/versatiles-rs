@@ -1,6 +1,5 @@
 //! Mutation methods for [`TileQuadtree`].
 
-use super::constructors::{check_bbox_zoom, check_coord_zoom};
 use super::{BBox, Node, TileQuadtree};
 use crate::{TileBBox, TileCoord};
 use anyhow::Result;
@@ -13,7 +12,7 @@ impl TileQuadtree {
 	/// Returns an error if the coordinate's zoom level doesn't match.
 	#[context("Failed to include TileCoord {coord:?} into TileQuadtree at level {}", self.level)]
 	pub fn insert_coord(&mut self, coord: &TileCoord) -> Result<()> {
-		check_coord_zoom(coord, self.level)?;
+		self.check_zoom(coord.level)?;
 		let size = 1u64 << self.level;
 		self
 			.root
@@ -27,9 +26,9 @@ impl TileQuadtree {
 	/// Returns an error if the bbox's zoom level doesn't match.
 	#[context("Failed to include TileBBox {bbox:?} into TileQuadtree at level {}", self.level)]
 	pub fn insert_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
-		check_bbox_zoom(bbox, self.level)?;
+		self.check_zoom(bbox.level())?;
 		let size = 1u64 << self.level;
-		let Some(bbox) = BBox::new(bbox) else {
+		let Some(bbox) = BBox::from_bbox(bbox) else {
 			return Ok(());
 		};
 		self.root.insert_bbox((0, 0), size, &bbox);
@@ -74,7 +73,7 @@ impl TileQuadtree {
 	/// Returns an error if the coordinate's zoom level doesn't match.
 	#[context("Failed to remove TileCoord {coord:?} from TileQuadtree at level {}", self.level)]
 	pub fn remove_coord(&mut self, coord: &TileCoord) -> Result<()> {
-		check_coord_zoom(coord, self.level)?;
+		self.check_zoom(coord.level)?;
 		let size = 1u64 << self.level;
 		self
 			.root
@@ -88,8 +87,8 @@ impl TileQuadtree {
 	/// Returns an error if the bbox's zoom level doesn't match.
 	#[context("Failed to remove TileBBox {bbox:?} from TileQuadtree at level {}", self.level)]
 	pub fn remove_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
-		check_bbox_zoom(bbox, self.level)?;
-		let Some(bbox) = BBox::new(bbox) else {
+		self.check_zoom(bbox.level())?;
+		let Some(bbox) = BBox::from_bbox(bbox) else {
 			return Ok(());
 		};
 		self.root.remove_bbox((0, 0), 1u64 << self.level, &bbox);
@@ -111,64 +110,9 @@ impl TileQuadtree {
 	pub fn swap_xy(&mut self) {
 		self.root.swap_xy();
 	}
-
-	/// Intersects the quadtree with a [`TileBBox`], removing any tiles outside it.
-	///
-	/// If `bbox` is empty, the entire tree is cleared. Otherwise, each branch of
-	/// the tree is recursively clipped to the intersection region.
-	///
-	/// # Errors
-	/// Returns an error if `bbox`'s zoom level doesn't match.
-	#[context("Failed to intersect TileQuadtree at level {} with TileBBox {bbox:?}", self.level)]
-	pub fn intersect_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
-		check_bbox_zoom(bbox, self.level)?;
-		let Some(bbox) = BBox::new(bbox) else {
-			self.root = Node::Empty;
-			return Ok(());
-		};
-		self.root.intersect_bbox((0, 0), 1u64 << self.level, &bbox);
-		Ok(())
-	}
 }
 
 impl Node {
-	pub fn intersect_bbox(&mut self, (x_off, y_off): (u64, u64), size: u64, bbox: &BBox) {
-		if self == &Node::Empty {
-			return;
-		}
-		// Clip bbox to this cell's region.
-		let ix_min = bbox.x_min.max(x_off);
-		let iy_min = bbox.y_min.max(y_off);
-		let ix_max = bbox.x_max.min(x_off + size);
-		let iy_max = bbox.y_max.min(y_off + size);
-
-		// No overlap → clear this subtree entirely.
-		if ix_min >= ix_max || iy_min >= iy_max {
-			*self = Node::Empty;
-			return;
-		}
-
-		if self == &Node::Full {
-			if ix_min == x_off && iy_min == y_off && ix_max == x_off + size && iy_max == y_off + size {
-				// bbox covers the entire cell: stays Full.
-				return;
-			}
-			// Materialise four Full children, then intersect each with bbox.
-			*self = Node::new_partial_full();
-		}
-
-		if let Node::Partial(children) = self {
-			let half = size / 2;
-			let mid_x = x_off + half;
-			let mid_y = y_off + half;
-			children[0].intersect_bbox((x_off, y_off), half, bbox);
-			children[1].intersect_bbox((mid_x, y_off), half, bbox);
-			children[2].intersect_bbox((x_off, mid_y), half, bbox);
-			children[3].intersect_bbox((mid_x, mid_y), half, bbox);
-			self.normalize();
-		}
-	}
-
 	pub fn insert_coord(&mut self, (x_off, y_off): (u64, u64), size: u64, (tx, ty): (u64, u64)) {
 		match self {
 			Node::Full => (),
@@ -341,5 +285,276 @@ impl Node {
 			children[idx].remove_coord((cx, cy), half, (tx, ty));
 			self.normalize();
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn coord(level: u8, x: u32, y: u32) -> TileCoord {
+		TileCoord::new(level, x, y).unwrap()
+	}
+
+	fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
+		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()
+	}
+
+	// -------------------------------------------------------------------------
+	// insert / remove
+	// -------------------------------------------------------------------------
+
+	#[test]
+	fn insert_coord() -> Result<()> {
+		let mut t = TileQuadtree::new_empty(3).unwrap();
+		t.insert_coord(&coord(3, 0, 0))?;
+		assert_eq!(t.count_tiles(), 1);
+		assert!(t.includes_coord(&coord(3, 0, 0)));
+		assert!(!t.includes_coord(&coord(3, 1, 0)));
+		Ok(())
+	}
+
+	#[test]
+	fn insert_tile_collapses_to_full() -> Result<()> {
+		// At zoom 1, there are only 4 tiles. Insert all 4.
+		let mut t = TileQuadtree::new_empty(1).unwrap();
+		t.insert_coord(&coord(1, 0, 0))?;
+		t.insert_coord(&coord(1, 1, 0))?;
+		t.insert_coord(&coord(1, 0, 1))?;
+		t.insert_coord(&coord(1, 1, 1))?;
+		assert!(t.is_full());
+		Ok(())
+	}
+
+	#[test]
+	fn insert_bbox() -> Result<()> {
+		let mut t = TileQuadtree::new_empty(4).unwrap();
+		t.insert_bbox(&bbox(4, 0, 0, 7, 7))?;
+		assert_eq!(t.count_tiles(), 64);
+		Ok(())
+	}
+
+	#[test]
+	fn remove_coord() -> Result<()> {
+		let mut t = TileQuadtree::new_full(2).unwrap();
+		t.remove_coord(&coord(2, 0, 0))?;
+		assert!(!t.is_full());
+		assert_eq!(t.count_tiles(), 15);
+		assert!(!t.includes_coord(&coord(2, 0, 0)));
+		assert!(t.includes_coord(&coord(2, 1, 0)));
+		Ok(())
+	}
+
+	#[test]
+	fn remove_bbox() -> Result<()> {
+		let mut t = TileQuadtree::new_full(3).unwrap();
+		t.remove_bbox(&bbox(3, 0, 0, 3, 7))?;
+		assert!(!t.is_full());
+		assert_eq!(t.count_tiles(), 32); // half the tiles removed
+		Ok(())
+	}
+
+	// -------------------------------------------------------------------------
+	// Zoom mismatches
+	// -------------------------------------------------------------------------
+
+	#[test]
+	fn zoom_mismatch_include_coord() {
+		let mut t = TileQuadtree::new_empty(3).unwrap();
+		assert!(t.insert_coord(&coord(4, 0, 0)).is_err());
+	}
+
+	#[test]
+	fn zoom_mismatch_include_bbox() {
+		let mut t = TileQuadtree::new_empty(3).unwrap();
+		assert!(t.insert_bbox(&bbox(4, 0, 0, 1, 1)).is_err());
+	}
+
+	#[test]
+	fn zoom_mismatch_remove_coord() {
+		let mut t = TileQuadtree::new_full(3).unwrap();
+		assert!(t.remove_coord(&coord(4, 0, 0)).is_err());
+	}
+
+	#[test]
+	fn zoom_mismatch_remove_bbox() {
+		let mut t = TileQuadtree::new_full(3).unwrap();
+		assert!(t.remove_bbox(&bbox(4, 0, 0, 1, 1)).is_err());
+	}
+
+	// -------------------------------------------------------------------------
+	// Empty-bbox no-ops
+	// -------------------------------------------------------------------------
+
+	#[test]
+	fn include_empty_bbox_is_noop() -> Result<()> {
+		let mut t = TileQuadtree::new_empty(4).unwrap();
+		t.insert_bbox(&TileBBox::new_empty(4)?)?;
+		assert!(t.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn remove_empty_bbox_is_noop() -> Result<()> {
+		let mut t = TileQuadtree::new_full(3).unwrap();
+		let count_before = t.count_tiles();
+		t.remove_bbox(&TileBBox::new_empty(3)?)?;
+		assert_eq!(t.count_tiles(), count_before);
+		Ok(())
+	}
+
+	// -------------------------------------------------------------------------
+	// Buffer
+	// -------------------------------------------------------------------------
+
+	#[test]
+	fn buffer_zero_is_noop() {
+		let t = TileQuadtree::from_bbox(&bbox(4, 3, 3, 8, 8));
+		let mut t2 = t.clone();
+		t2.buffer(0);
+		assert_eq!(t2, t);
+		assert_eq!(t2.count_tiles(), t.count_tiles());
+	}
+
+	#[test]
+	fn buffer_empty_is_noop() {
+		let mut t = TileQuadtree::new_empty(4).unwrap();
+		t.buffer(2);
+		assert!(t.is_empty());
+	}
+
+	#[test]
+	fn buffer_full_stays_full() {
+		let mut t = TileQuadtree::new_full(3).unwrap();
+		t.buffer(5);
+		assert!(t.is_full());
+	}
+
+	#[test]
+	fn buffer_single_tile_expands_to_square() -> Result<()> {
+		// Single tile at (4, 4) at zoom 4; buffer(2) expands to (2..6, 2..6) = 5×5 = 25 tiles
+		let mut t = TileQuadtree::new_empty(4).unwrap();
+		t.insert_coord(&coord(4, 4, 4))?;
+		t.buffer(2);
+		assert_eq!(t.count_tiles(), 25);
+		assert!(t.includes_coord(&coord(4, 2, 2))); // top-left corner added
+		assert!(t.includes_coord(&coord(4, 6, 6))); // bottom-right corner added
+		assert!(!t.includes_coord(&coord(4, 1, 4))); // just outside
+		Ok(())
+	}
+
+	#[test]
+	fn buffer_clamps_at_boundary() -> Result<()> {
+		// Tile at (0, 0); buffer(3) clamped at x=0, y=0 → (0..3, 0..3) = 4×4 = 16 tiles
+		let mut t = TileQuadtree::new_empty(4).unwrap();
+		t.insert_coord(&coord(4, 0, 0))?;
+		t.buffer(3);
+		assert_eq!(t.count_tiles(), 16);
+		assert!(t.includes_coord(&coord(4, 3, 3))); // far corner
+		assert!(!t.includes_coord(&coord(4, 4, 0))); // just outside buffer
+		Ok(())
+	}
+
+	#[test]
+	fn buffer_rectangular_region() -> Result<()> {
+		// 3×3 block at (2,2)–(4,4); buffer(1) → (1,1)–(5,5) = 5×5 = 25 tiles
+		let mut t = TileQuadtree::new_empty(4).unwrap();
+		t.insert_bbox(&bbox(4, 2, 2, 4, 4))?;
+		assert_eq!(t.count_tiles(), 9);
+		t.buffer(1);
+		assert_eq!(t.count_tiles(), 25);
+		Ok(())
+	}
+
+	// -------------------------------------------------------------------------
+	// flip_y
+	// -------------------------------------------------------------------------
+
+	#[test]
+	fn flip_y_empty_noop() {
+		let mut t = TileQuadtree::new_empty(4).unwrap();
+		t.flip_y();
+		assert!(t.is_empty());
+	}
+
+	#[test]
+	fn flip_y_full_stays_full() {
+		let mut t = TileQuadtree::new_full(3).unwrap();
+		t.flip_y();
+		assert!(t.is_full());
+		assert_eq!(t.count_tiles(), 64);
+	}
+
+	#[test]
+	fn flip_y_moves_tile_to_mirrored_position() -> Result<()> {
+		// z=3: 8×8 grid; tile (2, 1) should flip to (2, 8−1−1) = (2, 6)
+		let mut t = TileQuadtree::new_empty(3).unwrap();
+		t.insert_coord(&coord(3, 2, 1))?;
+		t.flip_y();
+		assert!(!t.includes_coord(&coord(3, 2, 1)));
+		assert!(t.includes_coord(&coord(3, 2, 6)));
+		assert_eq!(t.count_tiles(), 1);
+		Ok(())
+	}
+
+	#[test]
+	fn flip_y_is_involution() -> Result<()> {
+		// Two applications should return the original tree.
+		let mut t = TileQuadtree::new_empty(3).unwrap();
+		t.insert_coord(&coord(3, 2, 1))?;
+		t.insert_coord(&coord(3, 5, 6))?;
+		let count = t.count_tiles();
+		t.flip_y();
+		t.flip_y();
+		assert!(t.includes_coord(&coord(3, 2, 1)));
+		assert!(t.includes_coord(&coord(3, 5, 6)));
+		assert_eq!(t.count_tiles(), count);
+		Ok(())
+	}
+
+	// -------------------------------------------------------------------------
+	// swap_xy
+	// -------------------------------------------------------------------------
+
+	#[test]
+	fn swap_xy_empty_noop() {
+		let mut t = TileQuadtree::new_empty(4).unwrap();
+		t.swap_xy();
+		assert!(t.is_empty());
+	}
+
+	#[test]
+	fn swap_xy_full_stays_full() {
+		let mut t = TileQuadtree::new_full(3).unwrap();
+		t.swap_xy();
+		assert!(t.is_full());
+		assert_eq!(t.count_tiles(), 64);
+	}
+
+	#[test]
+	fn swap_xy_moves_tile_to_transposed_position() -> Result<()> {
+		// z=3: 8×8 grid; tile (2, 5) should swap to (5, 2)
+		let mut t = TileQuadtree::new_empty(3).unwrap();
+		t.insert_coord(&coord(3, 2, 5))?;
+		t.swap_xy();
+		assert!(!t.includes_coord(&coord(3, 2, 5)));
+		assert!(t.includes_coord(&coord(3, 5, 2)));
+		assert_eq!(t.count_tiles(), 1);
+		Ok(())
+	}
+
+	#[test]
+	fn swap_xy_is_involution() -> Result<()> {
+		// Two applications should return the original tree.
+		let mut t = TileQuadtree::new_empty(3).unwrap();
+		t.insert_coord(&coord(3, 2, 5))?;
+		t.insert_coord(&coord(3, 0, 7))?;
+		let count = t.count_tiles();
+		t.swap_xy();
+		t.swap_xy();
+		assert!(t.includes_coord(&coord(3, 2, 5)));
+		assert!(t.includes_coord(&coord(3, 0, 7)));
+		assert_eq!(t.count_tiles(), count);
+		Ok(())
 	}
 }

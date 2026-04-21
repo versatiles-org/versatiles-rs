@@ -126,14 +126,14 @@ impl PMTilesReader {
 		log::trace!("Internal compression: {internal_compression:?}");
 
 		let meta = data_reader.read_range(&header.metadata).await?;
-		let meta = decompress(meta, internal_compression)?;
+		let meta = decompress(meta, &internal_compression)?;
 		let tilejson = TileJSON::try_from_blob_or_default(&meta);
 		log::trace!("TileJSON: {tilejson:?}");
 
 		let root_bytes = data_reader.read_range(&header.root_dir).await?;
 		log::trace!("Root directory bytes length: {}", root_bytes.len());
 
-		let root_bytes_uncompressed = decompress(root_bytes, internal_compression)?;
+		let root_bytes_uncompressed = decompress(root_bytes, &internal_compression)?;
 		log::trace!(
 			"Root directory bytes uncompressed length: {}",
 			root_bytes_uncompressed.len()
@@ -214,7 +214,7 @@ impl PMTilesReader {
 				let mut cache = leaves_cache.lock().await;
 				entries = cache.get_or_set(&range, || {
 					let mut blob = leaves_bytes.read_range(&range)?;
-					blob = decompress(blob, internal_compression)?;
+					blob = decompress(blob, &internal_compression)?;
 					let entries = EntriesV3::from_blob(&blob)?;
 					Ok(Arc::new(entries))
 				})?;
@@ -257,7 +257,7 @@ impl PMTilesReader {
 			let mut cache = leaves_cache.lock().await;
 			entries = cache.get_or_set(&range, || {
 				let mut blob = leaves_bytes.read_range(&range)?;
-				blob = decompress(blob, internal_compression)?;
+				blob = decompress(blob, &internal_compression)?;
 				Ok(Arc::new(EntriesV3::from_blob(&blob)?))
 			})?;
 		}
@@ -353,7 +353,7 @@ fn calc_bbox_pyramid(
 				} else {
 					let range = entry.range;
 					let mut blob = leaves_bytes.read_range(&range)?;
-					blob = decompress(blob, compression)?;
+					blob = decompress(blob, &compression)?;
 					total_entries += parse_directories(coords, &blob, leaves_bytes, compression, None)?;
 				}
 			}
@@ -418,7 +418,7 @@ impl TileSource for PMTilesReader {
 
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("pmtiles::tile_stream {bbox:?}");
-		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		let chunks = self.get_chunks(bbox).await?;
 		Ok(chunks.stream(
 			Arc::clone(&self.data_reader),
@@ -429,7 +429,7 @@ impl TileSource for PMTilesReader {
 
 	#[context("streaming tile sizes for bbox {:?}", bbox)]
 	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
-		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		let mut tile_sizes: Vec<(TileCoord, u32)> = Vec::new();
 
 		let coords: Vec<TileCoord> = bbox.iter_coords().collect();

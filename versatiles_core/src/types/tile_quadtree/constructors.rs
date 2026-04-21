@@ -1,7 +1,7 @@
 //! Constructors for [`TileQuadtree`].
 
 use super::{BBox, Node, TileQuadtree};
-use crate::{GeoBBox, TileBBox, TileCoord, validate_zoom_level};
+use crate::{GeoBBox, TileBBox, validate_zoom_level};
 use anyhow::{Result, ensure};
 use versatiles_derive::context;
 
@@ -35,46 +35,11 @@ impl TileQuadtree {
 		let level = bbox.level();
 		validate_zoom_level(level).expect("TileBBox level should have been validated on construction");
 
-		let Some(bbox) = BBox::new(bbox) else {
+		let Some(bbox) = BBox::from_bbox(bbox) else {
 			return TileQuadtree::new_empty(level).unwrap();
 		};
-		let size = 1u64 << level;
 
-		/// Recursively build a quadtree node for the cell covering
-		/// `[x_off, x_off+size) × [y_off, y_off+size)` against the bbox
-		/// `[bbox.x_min, bbox.x_max) × [bbox.y_min, bbox.y_max)` (all exclusive on max side).
-		fn build_node(depth: u8, (x_off, y_off): (u64, u64), size: u64, bbox: &BBox) -> Node {
-			// Intersection of bbox with this cell
-			let ix_min = bbox.x_min.max(x_off);
-			let iy_min = bbox.y_min.max(y_off);
-			let ix_max = bbox.x_max.min(x_off + size);
-			let iy_max = bbox.y_max.min(y_off + size);
-
-			if ix_min >= ix_max || iy_min >= iy_max {
-				return Node::Empty;
-			}
-
-			if ix_min == x_off && iy_min == y_off && ix_max == x_off + size && iy_max == y_off + size {
-				return Node::Full;
-			}
-
-			if depth == 0 {
-				// We've reached leaf level — any intersection means Full
-				return Node::Full;
-			}
-
-			let half = size / 2;
-			let mid_x = x_off + half;
-			let mid_y = y_off + half;
-			Node::new_partial([
-				build_node(depth - 1, (x_off, y_off), half, bbox),
-				build_node(depth - 1, (mid_x, y_off), half, bbox),
-				build_node(depth - 1, (x_off, mid_y), half, bbox),
-				build_node(depth - 1, (mid_x, mid_y), half, bbox),
-			])
-		}
-
-		let root = build_node(level, (0, 0), size, &bbox);
+		let root = Node::build_node(level, (0, 0), 1u64 << level, &bbox);
 		TileQuadtree { level, root }
 	}
 
@@ -112,31 +77,54 @@ impl TileQuadtree {
 		let root = Node::from_morton_sorted(&codes, 0, 0, size);
 		Ok(TileQuadtree { level, root })
 	}
-}
 
-/// Validate that a TileCoord belongs to the given zoom level.
-pub(crate) fn check_coord_zoom(coord: &TileCoord, zoom: u8) -> Result<()> {
-	ensure!(
-		coord.level == zoom,
-		"TileCoord level {} does not match quadtree zoom {}",
-		coord.level,
-		zoom
-	);
-	Ok(())
-}
-
-/// Validate that a TileBBox belongs to the given zoom level.
-pub(crate) fn check_bbox_zoom(bbox: &TileBBox, zoom: u8) -> Result<()> {
-	ensure!(
-		bbox.level() == zoom,
-		"TileBBox level {} does not match quadtree zoom {}",
-		bbox.level(),
-		zoom
-	);
-	Ok(())
+	/// Validate that a TileBBox belongs to the given zoom level.
+	pub(crate) fn check_zoom(&self, zoom: u8) -> Result<()> {
+		ensure!(
+			self.level == zoom,
+			"quadtree level {} does not match zoom {}",
+			self.level,
+			zoom
+		);
+		Ok(())
+	}
 }
 
 impl Node {
+	/// Recursively build a quadtree node for the cell covering
+	/// `[x_off, x_off+size) × [y_off, y_off+size)` against the bbox
+	/// `[bbox.x_min, bbox.x_max) × [bbox.y_min, bbox.y_max)` (all exclusive on max side).
+	pub fn build_node(depth: u8, (x_off, y_off): (u64, u64), size: u64, bbox: &BBox) -> Node {
+		// Intersection of bbox with this cell
+		let ix_min = bbox.x_min.max(x_off);
+		let iy_min = bbox.y_min.max(y_off);
+		let ix_max = bbox.x_max.min(x_off + size);
+		let iy_max = bbox.y_max.min(y_off + size);
+
+		if ix_min >= ix_max || iy_min >= iy_max {
+			return Node::Empty;
+		}
+
+		if ix_min == x_off && iy_min == y_off && ix_max == x_off + size && iy_max == y_off + size {
+			return Node::Full;
+		}
+
+		if depth == 0 {
+			// We've reached leaf level — any intersection means Full
+			return Node::Full;
+		}
+
+		let half = size / 2;
+		let mid_x = x_off + half;
+		let mid_y = y_off + half;
+		Node::new_partial([
+			Node::build_node(depth - 1, (x_off, y_off), half, bbox),
+			Node::build_node(depth - 1, (mid_x, y_off), half, bbox),
+			Node::build_node(depth - 1, (x_off, mid_y), half, bbox),
+			Node::build_node(depth - 1, (mid_x, mid_y), half, bbox),
+		])
+	}
+
 	/// Build a `Node` from a sorted, deduplicated slice of Morton codes.
 	///
 	/// The slice must only contain codes for tiles within the cell
@@ -196,4 +184,136 @@ fn spread_bits(mut n: u64) -> u64 {
 #[inline]
 fn morton(x: u64, y: u64) -> u64 {
 	spread_bits(x) | (spread_bits(y) << 1)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::TileCoord;
+	use anyhow::Result;
+
+	fn coord(level: u8, x: u32, y: u32) -> TileCoord {
+		TileCoord::new(level, x, y).unwrap()
+	}
+
+	fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
+		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()
+	}
+
+	#[test]
+	fn new_empty_and_full() {
+		let e = TileQuadtree::new_empty(4).unwrap();
+		assert!(e.is_empty());
+		assert!(!e.is_full());
+		assert_eq!(e.level(), 4);
+		assert_eq!(e.count_tiles(), 0);
+
+		let f = TileQuadtree::new_full(3).unwrap();
+		assert!(!f.is_empty());
+		assert!(f.is_full());
+		assert_eq!(f.level(), 3);
+		assert_eq!(f.count_tiles(), 64); // 8×8
+	}
+
+	#[test]
+	fn from_bbox_empty() -> Result<()> {
+		let b = TileBBox::new_empty(5)?;
+		let t = TileQuadtree::from_bbox(&b);
+		assert!(t.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn from_bbox_full() -> Result<()> {
+		let b = TileBBox::new_full(3)?;
+		let t = TileQuadtree::from_bbox(&b);
+		assert!(t.is_full());
+		assert_eq!(t.count_tiles(), 64);
+		Ok(())
+	}
+
+	#[test]
+	fn from_bbox_partial() -> Result<()> {
+		// z=2: 4×4 grid, bbox covers x=0..1, y=0..1 (2×2 = 4 tiles)
+		let b = bbox(2, 0, 0, 1, 1);
+		let t = TileQuadtree::from_bbox(&b);
+		assert!(!t.is_empty());
+		assert!(!t.is_full());
+		assert_eq!(t.count_tiles(), 4);
+		Ok(())
+	}
+
+	#[test]
+	fn from_geo_bbox() -> Result<()> {
+		let geo = GeoBBox::new(8.0, 51.0, 8.5, 51.5).unwrap();
+		let t = TileQuadtree::from_geo_bbox(9, &geo)?;
+		assert!(!t.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn from_tile_iter_empty() -> Result<()> {
+		let t = TileQuadtree::from_tile_coords(4, &[])?;
+		assert!(t.is_empty());
+		assert_eq!(t.count_tiles(), 0);
+		Ok(())
+	}
+
+	#[test]
+	fn from_tile_iter_full() -> Result<()> {
+		// Provide all 4×4 = 16 tiles at zoom 2.
+		let all: Vec<(u32, u32)> = (0u32..4).flat_map(|x| (0u32..4).map(move |y| (x, y))).collect();
+		let t = TileQuadtree::from_tile_coords(2, &all)?;
+		assert!(t.is_full());
+		assert_eq!(t.count_tiles(), 16);
+		Ok(())
+	}
+
+	#[test]
+	fn from_tile_iter_single_tile() -> Result<()> {
+		let t = TileQuadtree::from_tile_coords(3, &[(5, 3)])?;
+		assert!(!t.is_empty());
+		assert!(!t.is_full());
+		assert_eq!(t.count_tiles(), 1);
+		assert!(t.includes_coord(&coord(3, 5, 3)));
+		assert!(!t.includes_coord(&coord(3, 4, 3)));
+		Ok(())
+	}
+
+	#[test]
+	fn from_tile_iter_matches_sequential_insert() -> Result<()> {
+		// Build the same tree two ways and assert they are equal.
+		let tiles = vec![(1u32, 2u32), (3, 4), (5, 6), (0, 7), (7, 0)];
+
+		// Sequential insertion
+		let mut seq = TileQuadtree::new_empty(3).unwrap();
+		for &(x, y) in &tiles {
+			seq.insert_coord(&coord(3, x, y))?;
+		}
+
+		// Batch construction
+		let batch = TileQuadtree::from_tile_coords(3, &tiles)?;
+
+		assert_eq!(seq, batch);
+		Ok(())
+	}
+
+	#[test]
+	fn from_tile_iter_deduplicates() -> Result<()> {
+		// Duplicate tiles must not inflate the count.
+		let t = TileQuadtree::from_tile_coords(3, &[(2u32, 2u32), (2, 2), (2, 2)])?;
+		assert_eq!(t.count_tiles(), 1);
+		Ok(())
+	}
+
+	#[test]
+	fn from_tile_iter_rectangular_block_matches_from_bbox() -> Result<()> {
+		// A contiguous rectangle should collapse to the same tree as from_bbox.
+		let b = bbox(4, 3, 5, 7, 9);
+		let tiles: Vec<(u32, u32)> = (3u32..=7).flat_map(|x| (5u32..=9).map(move |y| (x, y))).collect();
+		let batch = TileQuadtree::from_tile_coords(4, &tiles)?;
+		let reference = TileQuadtree::from_bbox(&b);
+		assert_eq!(batch, reference);
+		Ok(())
+	}
 }

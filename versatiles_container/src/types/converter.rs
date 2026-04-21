@@ -180,7 +180,7 @@ impl TilesConvertReader {
 		}
 
 		if let Some(bbox_pyramid) = &cp.bbox_pyramid {
-			new_rp.bbox_pyramid.intersect_pyramid(bbox_pyramid)?;
+			new_rp.bbox_pyramid.intersect_pyramid(bbox_pyramid);
 		}
 
 		if let Some(tile_format) = cp.tile_format {
@@ -397,7 +397,7 @@ mod tests {
 		let tile_compression_out = parameters_out.tile_compression;
 		assert_eq!(parameters_out.bbox_pyramid, pyramid_out);
 
-		let bbox = pyramid_out.level(3).bbox().unwrap();
+		let bbox = pyramid_out.level_ref(3).to_bbox();
 		let mut tiles: Vec<String> = Vec::new();
 		for coord in bbox.iter_coords_zorder() {
 			let mut text = reader_out

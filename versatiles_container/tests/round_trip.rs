@@ -453,8 +453,8 @@ async fn tilejson_metadata_preserved_over_pyramid(#[case] filename: &str) -> Res
 	let tj = source.tilejson_mut();
 	tj.bounds = Some(GeoBBox::new(10.0, 20.0, 30.0, 40.0)?);
 	tj.center = Some(GeoCenter(20.0, 30.0, 2));
-	tj.set_min_zoom(0);
-	tj.set_max_zoom(3);
+	tj.set_zoom_min(0);
+	tj.set_zoom_max(3);
 
 	// Write to the target format
 	runtime.write_to_path(source.into_shared(), &output_path).await?;

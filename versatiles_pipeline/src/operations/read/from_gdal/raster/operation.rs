@@ -237,7 +237,7 @@ impl TileSource for Operation {
 
 		let count = 4096u32.div_euclid(self.tile_size).max(1);
 
-		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
+		bbox.intersect_pyramid(&self.metadata.bbox_pyramid);
 
 		let bboxes: Vec<TileBBox> = bbox.iter_grid(count).collect();
 		let size = self.tile_size;
@@ -295,7 +295,7 @@ impl TileSource for Operation {
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
 			Some(())
 		}))

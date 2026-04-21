@@ -137,10 +137,10 @@ impl MBTilesTileSink {
 		if let Some(center) = tilejson.center {
 			self.set_metadata("center", &format!("{},{},{}", center.0, center.1, center.2))?;
 		}
-		if let Some(z) = tilejson.min_zoom() {
+		if let Some(z) = tilejson.zoom_min() {
 			self.set_metadata("minzoom", &z.to_string())?;
 		}
-		if let Some(z) = tilejson.max_zoom() {
+		if let Some(z) = tilejson.zoom_max() {
 			self.set_metadata("maxzoom", &z.to_string())?;
 		}
 		if let Some(vector_layers) = tilejson.as_object().get("vector_layers") {
@@ -209,8 +209,8 @@ mod tests {
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
-		tilejson.set_min_zoom(3);
-		tilejson.set_max_zoom(3);
+		tilejson.set_zoom_min(3);
+		tilejson.set_zoom_max(3);
 		Box::new(sink).finish(&tilejson, &crate::TilesRuntime::default())?;
 
 		let reader = MBTilesReader::open(&temp, TilesRuntime::default())?;
@@ -256,8 +256,8 @@ mod tests {
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
-		tilejson.set_min_zoom(2);
-		tilejson.set_max_zoom(2);
+		tilejson.set_zoom_min(2);
+		tilejson.set_zoom_max(2);
 		Box::new(sink).finish(&tilejson, &crate::TilesRuntime::default())?;
 
 		let reader = MBTilesReader::open(&temp, TilesRuntime::default())?;

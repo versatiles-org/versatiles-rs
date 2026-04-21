@@ -93,7 +93,7 @@ impl Tile {
 		let data: Cow<'_, Blob> = if self.compression == TileCompression::Uncompressed {
 			Cow::Borrowed(blob)
 		} else {
-			Cow::Owned(decompress_ref(blob, self.compression)?)
+			Cow::Owned(decompress_ref(blob, &self.compression)?)
 		};
 
 		let result = match self.format {
@@ -496,7 +496,7 @@ mod tests {
 		let uncompressed_blob = tile.blob.unwrap();
 
 		// Compress the blob
-		let compressed_blob = compress(uncompressed_blob, TileCompression::Gzip)?;
+		let compressed_blob = compress(uncompressed_blob, &TileCompression::Gzip)?;
 
 		let compressed_tile = Tile {
 			blob: Some(compressed_blob),

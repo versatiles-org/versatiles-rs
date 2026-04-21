@@ -211,11 +211,11 @@ impl TileJSON {
 		}
 
 		if let Some(z) = pyramid.level_min() {
-			self.set_min_zoom(z);
+			self.set_zoom_min(z);
 		}
 
 		if let Some(z) = pyramid.level_max() {
-			self.set_max_zoom(z);
+			self.set_zoom_max(z);
 		}
 	}
 
@@ -292,7 +292,7 @@ impl TileJSON {
 	}
 
 	#[must_use]
-	pub fn min_zoom(&self) -> Option<u8> {
+	pub fn zoom_min(&self) -> Option<u8> {
 		self.values.integer("minzoom").and_then(|z| u8::try_from(z).ok())
 	}
 
@@ -302,15 +302,15 @@ impl TileJSON {
 	/// ```
 	/// # use versatiles_core::TileJSON;
 	/// # let mut tj = TileJSON::default();
-	/// tj.set_min_zoom(5);
+	/// tj.set_zoom_min(5);
 	/// // minzoom is now 5
 	/// ```
-	pub fn set_min_zoom(&mut self, z: u8) {
+	pub fn set_zoom_min(&mut self, z: u8) {
 		self.values.set("minzoom", z);
 	}
 
 	#[must_use]
-	pub fn max_zoom(&self) -> Option<u8> {
+	pub fn zoom_max(&self) -> Option<u8> {
 		self.values.integer("maxzoom").and_then(|z| u8::try_from(z).ok())
 	}
 
@@ -320,10 +320,10 @@ impl TileJSON {
 	/// ```
 	/// # use versatiles_core::TileJSON;
 	/// # let mut tj = TileJSON::default();
-	/// tj.set_max_zoom(10);
+	/// tj.set_zoom_max(10);
 	/// // maxzoom is now 10
 	/// ```
-	pub fn set_max_zoom(&mut self, z: u8) {
+	pub fn set_zoom_max(&mut self, z: u8) {
 		self.values.set("maxzoom", z);
 	}
 
@@ -360,13 +360,13 @@ impl TileJSON {
 		}
 
 		// 3. Merge minzoom/maxzoom
-		if let Some(omin) = other.min_zoom() {
-			let new_min = self.min_zoom().map_or(omin, |mz| mz.min(omin));
-			self.set_min_zoom(new_min);
+		if let Some(omin) = other.zoom_min() {
+			let new_min = self.zoom_min().map_or(omin, |mz| mz.min(omin));
+			self.set_zoom_min(new_min);
 		}
-		if let Some(omax) = other.max_zoom() {
-			let new_max = self.max_zoom().map_or(omax, |mz| mz.max(omax));
-			self.set_max_zoom(new_max);
+		if let Some(omax) = other.zoom_max() {
+			let new_max = self.zoom_max().map_or(omax, |mz| mz.max(omax));
+			self.set_zoom_max(new_max);
 		}
 
 		// 4. Merge everything else
@@ -623,17 +623,17 @@ mod tests {
 	#[test]
 	fn should_merge_minmaxzoom_correctly() -> Result<()> {
 		let mut tj1 = TileJSON::default();
-		tj1.set_min_zoom(5);
-		tj1.set_max_zoom(15);
+		tj1.set_zoom_min(5);
+		tj1.set_zoom_max(15);
 
 		let mut tj2 = TileJSON::default();
-		tj2.set_min_zoom(2);
-		tj2.set_max_zoom(20);
+		tj2.set_zoom_min(2);
+		tj2.set_zoom_max(20);
 
 		tj1.merge(&tj2)?;
 		// minzoom becomes min(5,2) => 2, maxzoom => max(15,20) => 20
-		assert_eq!(tj1.min_zoom(), Some(2));
-		assert_eq!(tj1.max_zoom(), Some(20));
+		assert_eq!(tj1.zoom_min(), Some(2));
+		assert_eq!(tj1.zoom_max(), Some(20));
 		Ok(())
 	}
 
@@ -667,8 +667,8 @@ mod tests {
 		);
 
 		// Zoom
-		assert_eq!(tj.min_zoom(), Some(2));
-		assert_eq!(tj.max_zoom(), Some(12));
+		assert_eq!(tj.zoom_min(), Some(2));
+		assert_eq!(tj.zoom_max(), Some(12));
 	}
 
 	#[test]
@@ -769,18 +769,18 @@ mod tests {
 	#[test]
 	fn should_set_min_and_max_zoom_correctly() {
 		let mut tj = TileJSON::default();
-		tj.set_min_zoom(3);
+		tj.set_zoom_min(3);
 		assert_eq!(tj.values.integer("minzoom"), Some(3));
 		// Lower minzoom should not decrease the value
-		tj.set_min_zoom(1);
+		tj.set_zoom_min(1);
 		assert_eq!(tj.values.integer("minzoom"), Some(1));
 
 		let mut tj2 = TileJSON::default();
-		tj2.set_max_zoom(10);
-		assert_eq!(tj2.max_zoom(), Some(10));
+		tj2.set_zoom_max(10);
+		assert_eq!(tj2.zoom_max(), Some(10));
 		// Higher maxzoom should not increase the value
-		tj2.set_max_zoom(20);
-		assert_eq!(tj2.max_zoom(), Some(20));
+		tj2.set_zoom_max(20);
+		assert_eq!(tj2.zoom_max(), Some(20));
 	}
 
 	#[test]

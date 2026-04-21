@@ -132,8 +132,8 @@ mod tests {
 
 		assert_eq!(op.tilejson().tile_size.unwrap().size(), 256);
 		let pyramid = &op.metadata().bbox_pyramid;
-		assert!(!pyramid.level(0).is_empty());
-		assert!(!pyramid.level(5).is_empty());
+		assert!(!pyramid.level_ref(0).is_empty());
+		assert!(!pyramid.level_ref(5).is_empty());
 		Ok(())
 	}
 
@@ -143,7 +143,7 @@ mod tests {
 
 		assert_eq!(op.tilejson().tile_size.unwrap().size(), 512);
 		let pyramid = &op.metadata().bbox_pyramid;
-		assert!(!pyramid.level(7).is_empty());
+		assert!(!pyramid.level_ref(7).is_empty());
 		Ok(())
 	}
 

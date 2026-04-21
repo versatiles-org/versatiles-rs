@@ -98,11 +98,11 @@ impl TilesWriter for VersaTilesWriter {
 		// Create the file header, preferring TileJSON values over pyramid-calculated ones
 		let tilejson = reader.tilejson();
 		let zoom_min = tilejson
-			.min_zoom()
+			.zoom_min()
 			.or(bbox_pyramid.level_min())
 			.ok_or(anyhow!("invalid minzoom"))?;
 		let zoom_max = tilejson
-			.max_zoom()
+			.zoom_max()
 			.or(bbox_pyramid.level_max())
 			.ok_or(anyhow!("invalid maxzoom"))?;
 		let bbox = tilejson
@@ -141,7 +141,7 @@ impl VersaTilesWriter {
 		compression: TileCompression,
 	) -> Result<ByteRange> {
 		let meta: Blob = reader.tilejson().into();
-		let compressed = compress(meta, compression)?;
+		let compressed = compress(meta, &compression)?;
 
 		writer.append(&compressed)
 	}

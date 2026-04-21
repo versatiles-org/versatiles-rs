@@ -16,12 +16,13 @@
 mod constructors;
 mod convert;
 mod fmt;
+mod include;
+pub(super) mod info_trait;
+mod intersect;
 mod iter;
 mod mutate;
 mod queries;
 mod set_ops;
-#[cfg(test)]
-mod tests;
 
 use crate::{TileBBox, TileQuadtree};
 

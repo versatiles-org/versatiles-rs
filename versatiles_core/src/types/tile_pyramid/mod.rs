@@ -9,10 +9,10 @@
 
 mod constructors;
 mod fmt;
+mod include;
+mod intersect;
 mod mutate;
 mod queries;
-#[cfg(test)]
-mod tests;
 
 use crate::{GeoBBox, MAX_ZOOM_LEVEL, PyramidInfo, TileCover};
 

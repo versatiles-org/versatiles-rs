@@ -189,7 +189,7 @@ impl TileResizeCore {
 	}
 
 	pub async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
@@ -214,7 +214,7 @@ impl TileResizeCore {
 					for dy in 0..2u32 {
 						for dx in 0..2u32 {
 							let child = TileCoord::new(src_coord.level + 1, src_coord.x * 2 + dx, src_coord.y * 2 + dy)?;
-							if bbox.includes_coord(&child)? {
+							if bbox.includes_coord(&child) {
 								coords.insert(child);
 							}
 						}
@@ -229,7 +229,7 @@ impl TileResizeCore {
 			let mut stream = self.source.tile_coord_stream(source_bbox).await?;
 			while let Some((src_coord, _)) = stream.next().await {
 				let parent = src_coord.to_level_decreased()?;
-				if bbox.includes_coord(&parent)? {
+				if bbox.includes_coord(&parent) {
 					coords.insert(parent);
 				}
 			}

@@ -1,6 +1,5 @@
 use anyhow::Result;
 use versatiles_container::TilesRuntime;
-use versatiles_core::TileBBox;
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -30,7 +29,7 @@ pub async fn run(args: &CountTiles, runtime: &TilesRuntime) -> Result<()> {
 
 	let mut total = 0u64;
 	for level in &levels {
-		let bbox = pyramid.intersected_bbox(&TileBBox::new_full(*level)?)?;
+		let bbox = pyramid.level_ref(*level).to_bbox();
 		let count = if bbox.is_empty() {
 			0
 		} else {

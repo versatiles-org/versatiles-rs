@@ -126,3 +126,34 @@ fn read_node(reader: &mut BitReader<'_>) -> Result<Node> {
 		_ => bail!("invalid 2-bit value: {tag}"),
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::TileBBox;
+	use rstest::rstest;
+
+	fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
+		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()
+	}
+
+	#[rstest]
+	#[case(TileQuadtree::new_empty(5).unwrap())]
+	#[case(TileQuadtree::new_full(4).unwrap())]
+	#[case(TileQuadtree::from_bbox(&bbox(4, 3, 5, 11, 12)))]
+	fn serialize_roundtrip(#[case] t: TileQuadtree) -> Result<()> {
+		let level = t.level();
+		let bytes = t.serialize();
+		let t2 = TileQuadtree::deserialize(level, &bytes)?;
+		assert_eq!(t, t2);
+		assert_eq!(t.count_tiles(), t2.count_tiles());
+		Ok(())
+	}
+
+	#[test]
+	fn deserialize_zoom_mismatch() {
+		let t = TileQuadtree::new_full(3).unwrap();
+		let bytes = t.serialize();
+		assert!(TileQuadtree::deserialize(4, &bytes).is_err());
+	}
+}

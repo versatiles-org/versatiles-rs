@@ -205,14 +205,14 @@ impl TarTilesReader {
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
 						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
 							read_to_end(),
-							TileCompression::Gzip,
+							&TileCompression::Gzip,
 						)?))?;
 						continue;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
 						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
 							read_to_end(),
-							TileCompression::Brotli,
+							&TileCompression::Brotli,
 						)?))?;
 						continue;
 					}
@@ -316,7 +316,7 @@ impl TileSource for TarTilesReader {
 
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("tar::tile_stream {bbox:?}");
-		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		let reader = Arc::clone(&self.reader);
 		let tile_map = Arc::clone(&self.tile_map);
 		let tile_compression = self.metadata.tile_compression;
@@ -335,7 +335,7 @@ impl TileSource for TarTilesReader {
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		let tile_map = Arc::clone(&self.tile_map);
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			tile_map.get(&coord).map(|_| ())
@@ -343,7 +343,7 @@ impl TileSource for TarTilesReader {
 	}
 
 	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
-		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		let tile_map = Arc::clone(&self.tile_map);
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			let range = tile_map.get(&coord)?;

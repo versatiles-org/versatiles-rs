@@ -15,7 +15,7 @@ impl Tile {
 	pub(super) fn recompress_blob(&mut self, compression: TileCompression) -> Result<()> {
 		assert!(self.blob.is_some());
 		if self.compression != compression {
-			self.blob = Some(recompress(self.blob.take().unwrap(), self.compression, compression)?);
+			self.blob = Some(recompress(self.blob.take().unwrap(), &self.compression, &compression)?);
 			self.compression = compression;
 		}
 		Ok(())
@@ -25,7 +25,7 @@ impl Tile {
 	pub(super) fn decompress_blob(&mut self) -> Result<()> {
 		assert!(self.blob.is_some());
 		if self.compression != TileCompression::Uncompressed {
-			self.blob = Some(decompress_ref(self.blob.as_ref().unwrap(), self.compression)?);
+			self.blob = Some(decompress_ref(self.blob.as_ref().unwrap(), &self.compression)?);
 			self.compression = TileCompression::Uncompressed;
 		}
 		Ok(())

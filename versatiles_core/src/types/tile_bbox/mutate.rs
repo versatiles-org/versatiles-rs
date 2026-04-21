@@ -11,7 +11,7 @@
 //! * Methods that cannot fail are infallible; those that validate inputs
 //!   return `anyhow::Result<()>`.
 
-use crate::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TilePyramid, validate_zoom_level};
+use crate::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, validate_zoom_level};
 use anyhow::{Result, ensure};
 use std::ops::Div;
 use versatiles_derive::context;
@@ -131,58 +131,6 @@ impl TileBBox {
 		Ok(())
 	}
 
-	/// Intersects the bounding box with another bounding box.
-	///
-	/// Modifies this bounding box to represent the overlapping area with `bbox`.
-	/// Both bounding boxes must be at the same zoom level.
-	///
-	/// # Arguments
-	///
-	/// * `bbox` - Reference to the `TileBBox` to intersect with.
-	///
-	/// # Returns
-	///
-	/// * `Ok(())` if intersection is successful.
-	/// * `Err(anyhow::Error)` if the zoom levels do not match or other validations fail.
-	#[context("Failed to intersect TileBBox {self:?} with TileBBox {bbox:?}")]
-	pub fn intersect_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
-		ensure!(
-			self.level == bbox.level,
-			"Cannot intersect TileBBox at zoom level {} with TileBBox at zoom level {}",
-			bbox.level,
-			self.level
-		);
-
-		if self.is_empty() || bbox.is_empty() {
-			self.set_empty();
-			return Ok(());
-		}
-
-		let x_min = self.x_min()?.max(bbox.x_min()?);
-		let y_min = self.y_min()?.max(bbox.y_min()?);
-		let x_max = self.x_max()?.min(bbox.x_max()?);
-		let y_max = self.y_max()?.min(bbox.y_max()?);
-
-		if x_min > x_max || y_min > y_max {
-			self.set_empty();
-		} else {
-			self.set_min_and_max(x_min, y_min, x_max, y_max)?;
-		}
-
-		Ok(())
-	}
-
-	/// Intersect this bbox with the coverage of a [`TilePyramid`] at this bbox’s zoom level.
-	///
-	/// If the pyramid has no tiles at this zoom level, the bbox is set to empty.
-	pub fn intersect_with_pyramid(&mut self, pyramid: &TilePyramid) {
-		if let Some(level_bbox) = pyramid.level(self.level).bbox() {
-			self.intersect_bbox(&level_bbox).unwrap_or(());
-		} else {
-			self.set_empty();
-		}
-	}
-
 	/// Shift the bbox by integer offsets `(dx, dy)`.
 	///
 	/// Negative shifts are **clamped** at zero; the bbox never moves outside the
@@ -199,7 +147,7 @@ impl TileBBox {
 			x_min,
 			y_min,
 			self.width().min(self.max_count() - x_min),
-			self.height().min(self.max_coord() - y_min),
+			self.height().min(self.max_count() - y_min),
 		)
 	}
 
@@ -443,38 +391,6 @@ mod tests {
 		Ok(())
 	}
 
-	// ------------------------------ intersect_with / intersect_with_pyramid ------------------------------
-	#[rstest]
-	#[case(bb(5, 10,10, 20,20), bb(5, 15,15, 25,25), [15,15,20,20])] // partial overlap
-	#[case(bb(5, 10,10, 20,20), bb(5, 0,0, 5,5),     [0,0,0,0])] // no overlap → empty
-	#[case(bb(5, 10,10, 20,20), bb(5, 10,10, 20,20), [10,10,20,20])] // identical
-	fn intersect_cases(#[case] mut a: TileBBox, #[case] b: TileBBox, #[case] exp: [u32; 4]) -> Result<()> {
-		a.intersect_bbox(&b)?;
-		if exp == [0, 0, 0, 0] && (a.width() == 0 || a.height() == 0) {
-			// empty expected; nothing more to assert
-			return Ok(());
-		}
-		assert_eq!(a.to_array()?, exp);
-		Ok(())
-	}
-
-	#[test]
-	fn intersect_with_pyramid_shrinks() -> Result<()> {
-		use crate::TilePyramid;
-		let full = TileBBox::new_full(5)?;
-		let pyramid = TilePyramid::from([full].as_slice());
-		let mut b = bb(5, 12, 12, 20, 20);
-		b.intersect_with_pyramid(&pyramid);
-		assert_eq!(b, bb(5, 12, 12, 20, 20)); // full pyramid covers all
-
-		let small = bb(5, 14, 15, 16, 18);
-		let py_small = TilePyramid::from([small].as_slice());
-		let mut b2 = bb(5, 12, 12, 20, 20);
-		b2.intersect_with_pyramid(&py_small);
-		assert_eq!(b2, small);
-		Ok(())
-	}
-
 	// ------------------------------ shift_by / shift_to ------------------------------
 	#[test]
 	fn shift_by_and_to() -> Result<()> {
@@ -705,6 +621,348 @@ mod tests {
 		b.flip_y();
 		// y' = max_coord - y_max = 7 - 4 = 3; keep height=3 → y_min'=3, y_max'=5
 		assert_eq!(b.to_array()?, [1, 3, 3, 5]);
+		Ok(())
+	}
+
+	fn tc(z: u8, x: u32, y: u32) -> TileCoord {
+		TileCoord::new(z, x, y).unwrap()
+	}
+
+	#[test]
+	fn include_tile() -> Result<()> {
+		let mut bbox = TileBBox::from_min_and_max(4, 0, 1, 2, 3)?;
+		bbox.insert_xy(4, 5);
+		assert_eq!(bbox, TileBBox::from_min_and_max(4, 0, 1, 4, 5)?);
+		Ok(())
+	}
+
+	#[test]
+	fn add_border() -> Result<()> {
+		let mut bbox = TileBBox::from_min_and_max(8, 5, 10, 20, 30)?;
+
+		// Border of 1 should increase the size of the bbox by 1 in all directions
+		bbox.buffer(1);
+		assert_eq!(bbox, TileBBox::from_min_and_max(8, 4, 9, 21, 31)?);
+
+		// Border of 0 should not change the size of the bbox
+		bbox.buffer(0);
+		assert_eq!(bbox, TileBBox::from_min_and_max(8, 4, 9, 21, 31)?);
+
+		// Large border should saturate at max=255 for level=8
+		bbox.buffer(999);
+		assert_eq!(bbox, TileBBox::from_min_and_max(8, 0, 0, 255, 255)?);
+
+		let mut bbox = TileBBox::from_min_and_max(6, 5, 10, 15, 20)?;
+
+		// Attempt to add a border with zero values
+		bbox.buffer(0);
+		assert_eq!(bbox, TileBBox::from_min_and_max(6, 5, 10, 15, 20)?);
+
+		// Add a border that exceeds bounds, should clamp to max
+		bbox.buffer(10);
+		assert_eq!(bbox, TileBBox::from_min_and_max(6, 0, 0, 25, 30)?);
+
+		// If bbox is empty, add_border should have no effect
+		let mut empty_bbox = TileBBox::new_empty(8)?;
+		empty_bbox.buffer(1);
+		assert_eq!(empty_bbox, TileBBox::new_empty(8)?);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_shift_by() -> Result<()> {
+		let mut bbox = TileBBox::from_min_and_max(4, 1, 2, 3, 4)?;
+		bbox.shift_by(1, 1)?;
+		assert_eq!(bbox, TileBBox::from_min_and_max(4, 2, 3, 4, 5)?);
+		Ok(())
+	}
+
+	#[test]
+	fn test_include_tile() -> Result<()> {
+		let mut bbox = TileBBox::from_min_and_max(6, 5, 10, 20, 30)?;
+		bbox.insert_xy(25, 35);
+		assert_eq!(bbox, TileBBox::from_min_and_max(6, 5, 10, 25, 35)?);
+		Ok(())
+	}
+
+	#[test]
+	fn test_include_bbox() -> Result<()> {
+		let mut bbox1 = TileBBox::from_min_and_max(4, 0, 11, 2, 13)?;
+		let bbox2 = TileBBox::from_min_and_max(4, 1, 10, 3, 12)?;
+		bbox1.insert_bbox(&bbox2)?;
+		assert_eq!(bbox1, TileBBox::from_min_and_max(4, 0, 10, 3, 13)?);
+		Ok(())
+	}
+
+	#[test]
+	fn test_include() -> Result<()> {
+		let mut bbox = TileBBox::new_empty(6)?;
+		bbox.insert_xy(5, 10);
+		assert_eq!(bbox, TileBBox::from_min_and_max(6, 5, 10, 5, 10)?);
+
+		bbox.insert_xy(15, 20);
+		assert_eq!(bbox, TileBBox::from_min_and_max(6, 5, 10, 15, 20)?);
+
+		bbox.insert_xy(10, 15);
+		assert_eq!(bbox, TileBBox::from_min_and_max(6, 5, 10, 15, 20)?);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_include_coord() -> Result<()> {
+		let mut bbox = TileBBox::new_empty(6)?;
+		let coord = tc(6, 5, 10);
+		bbox.insert_coord(&coord)?;
+		assert_eq!(bbox, TileBBox::from_min_and_max(6, 5, 10, 5, 10)?);
+
+		let coord = tc(6, 15, 20);
+		bbox.insert_coord(&coord)?;
+		assert_eq!(bbox, TileBBox::from_min_and_max(6, 5, 10, 15, 20)?);
+
+		// Attempt to include a coordinate with a different zoom level
+		let coord_invalid = tc(5, 10, 15);
+		let result = bbox.insert_coord(&coord_invalid);
+		assert!(result.is_err());
+
+		Ok(())
+	}
+
+	#[test]
+	fn should_include_bbox_correctly_with_valid_and_empty_bboxes() -> Result<()> {
+		let mut bbox1 = TileBBox::from_min_and_max(6, 5, 10, 15, 20)?;
+		let bbox2 = TileBBox::from_min_and_max(6, 10, 15, 20, 25)?;
+
+		bbox1.insert_bbox(&bbox2)?;
+		assert_eq!(bbox1, TileBBox::from_min_and_max(6, 5, 10, 20, 25)?);
+
+		// Including an empty bounding box should have no effect
+		let empty_bbox = TileBBox::new_empty(6)?;
+		bbox1.insert_bbox(&empty_bbox)?;
+		assert_eq!(bbox1, TileBBox::from_min_and_max(6, 5, 10, 20, 25)?);
+
+		// Attempting to include a bounding box with different zoom level
+		let bbox_diff_level = TileBBox::from_min_and_max(5, 5, 10, 20, 25)?;
+		let result = bbox1.insert_bbox(&bbox_diff_level);
+		assert!(result.is_err());
+
+		Ok(())
+	}
+
+	#[test]
+	fn should_scale_down_correctly() -> Result<()> {
+		let mut bbox = TileBBox::from_min_and_max(4, 4, 4, 7, 7)?;
+		bbox.scale_down(2);
+		assert_eq!(bbox, TileBBox::from_min_and_max(4, 2, 2, 3, 3)?);
+
+		// Scaling down by a factor larger than the coordinates
+		bbox.scale_down(4);
+		assert_eq!(bbox, TileBBox::from_min_and_max(4, 0, 0, 0, 0)?);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_scaled_down_returns_new_bbox_and_preserves_original() -> Result<()> {
+		let original = TileBBox::from_min_and_max(5, 10, 15, 20, 25)?;
+		let scaled = original.scaled_down(4);
+		assert_eq!(scaled, TileBBox::from_min_and_max(5, 2, 3, 5, 6)?);
+		assert_eq!(original, TileBBox::from_min_and_max(5, 10, 15, 20, 25)?);
+		let same = original.scaled_down(1);
+		assert_eq!(same, original);
+		Ok(())
+	}
+
+	#[rstest]
+	#[case((0, 11, 0, 2))]
+	#[case((1, 12, 0, 3))]
+	#[case((2, 13, 0, 3))]
+	#[case((3, 14, 0, 3))]
+	#[case((4, 15, 1, 3))]
+	#[case((5, 16, 1, 4))]
+	#[case((6, 17, 1, 4))]
+	#[case((7, 18, 1, 4))]
+	#[case((8, 19, 2, 4))]
+	fn test_scale_down_cases(#[case] args: (u32, u32, u32, u32)) -> Result<()> {
+		let (min0, max0, min1, max1) = args;
+		let mut bbox0 = TileBBox::from_min_and_max(8, min0, min0, max0, max0)?;
+		let bbox1 = TileBBox::from_min_and_max(8, min1, min1, max1, max1)?;
+		assert_eq!(
+			bbox0.scaled_down(4),
+			bbox1,
+			"scaled_down(4) of {bbox0:?} should return {bbox1:?}"
+		);
+		bbox0.scale_down(4);
+		assert_eq!(bbox0, bbox1, "scale_down(4) of {bbox0:?} should result in {bbox1:?}");
+		Ok(())
+	}
+
+	#[test]
+	fn should_shift_bbox_correctly() -> Result<()> {
+		let mut bbox = TileBBox::from_min_and_size(6, 5, 10, 10, 10)?;
+		bbox.shift_by(3, 4)?;
+		assert_eq!(bbox, TileBBox::from_min_and_size(6, 8, 14, 10, 10)?);
+
+		// Shifting beyond max should not cause overflow due to saturating_add
+		let mut bbox = TileBBox::from_min_and_size(6, 14, 14, 10, 10)?;
+		bbox.shift_by(2, 2)?;
+		assert_eq!(bbox, TileBBox::from_min_and_size(6, 16, 16, 10, 10)?);
+
+		let mut bbox = TileBBox::from_min_and_size(6, 5, 10, 10, 10)?;
+		bbox.shift_by(-3, -5)?;
+		assert_eq!(bbox, TileBBox::from_min_and_size(6, 2, 5, 10, 10)?);
+
+		// Subtracting more than current coordinates should saturate at 0
+		bbox.shift_by(-5, -10)?;
+		assert_eq!(bbox, TileBBox::from_min_and_size(6, 0, 0, 10, 10)?);
+
+		Ok(())
+	}
+
+	#[rstest]
+	#[case([1, 2, 16, 17], [0, 0, 19, 19])]
+	#[case([2, 3, 17, 18], [0, 0, 19, 19])]
+	#[case([3, 4, 18, 19], [0, 4, 19, 19])]
+	#[case([4, 5, 19, 20], [4, 4, 19, 23])]
+	#[case([5, 6, 20, 21], [4, 4, 23, 23])]
+	#[case([6, 7, 21, 22], [4, 4, 23, 23])]
+	#[case([7, 8, 22, 23], [4, 8, 23, 23])]
+	#[case([8, 9, 23, 24], [8, 8, 23, 27])]
+	fn test_round_shifting_cases(#[case] inp: [u32; 4], #[case] exp: [u32; 4]) -> Result<()> {
+		let bbox_exp = TileBBox::from_min_and_max(8, exp[0], exp[1], exp[2], exp[3])?;
+		let mut bbox_inp = TileBBox::from_min_and_max(8, inp[0], inp[1], inp[2], inp[3])?;
+		assert_eq!(bbox_inp.rounded(4), bbox_exp);
+		bbox_inp.round(4);
+		assert_eq!(bbox_inp, bbox_exp);
+		Ok(())
+	}
+
+	#[rstest]
+	#[case(1, [12, 34, 56, 78])]
+	#[case(2, [12, 34, 57, 79])]
+	#[case(3, [12, 33, 56, 80])]
+	#[case(4, [12, 32, 59, 79])]
+	#[case(5, [10, 30, 59, 79])]
+	#[case(6, [12, 30, 59, 83])]
+	#[case(7, [7, 28, 62, 83])]
+	#[case(10, [10, 30, 59, 79])]
+	#[case(100, [0, 0, 99, 99])]
+	#[case(1024, [0, 0, 1023, 1023])]
+	fn test_round_scaling_cases(#[case] scale: u32, #[case] exp: [u32; 4]) -> Result<()> {
+		let bbox_exp = TileBBox::from_min_and_max(12, exp[0], exp[1], exp[2], exp[3])?;
+		let mut bbox_inp = TileBBox::from_min_and_max(12, 12, 34, 56, 78)?;
+		assert_eq!(bbox_inp.rounded(scale), bbox_exp);
+		bbox_inp.round(scale);
+		assert_eq!(bbox_inp, bbox_exp);
+		Ok(())
+	}
+
+	#[rstest]
+	#[case((1, 0, 0, 1, 1), (1, 0, 0, 1, 1))]
+	#[case((2, 0, 0, 1, 1), (2, 0, 2, 1, 3))]
+	#[case((3, 0, 0, 1, 1), (3, 0, 6, 1, 7))]
+	#[case((9, 10, 0, 10, 511), (9, 10, 0, 10, 511))]
+	#[case((9, 0, 10, 511, 10), (9, 0, 501, 511, 501))]
+	fn bbox_flip_y(#[case] a: (u8, u32, u32, u32, u32), #[case] b: (u8, u32, u32, u32, u32)) -> Result<()> {
+		let mut t = TileBBox::from_min_and_max(a.0, a.1, a.2, a.3, a.4)?;
+		t.flip_y();
+
+		assert_eq!(t, TileBBox::from_min_and_max(b.0, b.1, b.2, b.3, b.4)?);
+		Ok(())
+	}
+
+	#[rstest]
+	#[case(4, 6, 2, 3)]
+	#[case(5, 6, 2, 3)]
+	#[case(4, 7, 2, 3)]
+	#[case(5, 7, 2, 3)]
+	fn level_decrease(
+		#[case] min_in: u32,
+		#[case] max_in: u32,
+		#[case] min_out: u32,
+		#[case] max_out: u32,
+	) -> Result<()> {
+		let mut bbox = TileBBox::from_min_and_max(10, min_in, min_in, max_in, max_in)?;
+		bbox.level_down();
+		assert_eq!(bbox.level, 9);
+		assert_eq!(bbox.to_array()?, [min_out, min_out, max_out, max_out]);
+		Ok(())
+	}
+
+	#[rstest]
+	#[case(4, 6, 8, 13)]
+	#[case(5, 6, 10, 13)]
+	#[case(4, 7, 8, 15)]
+	#[case(5, 7, 10, 15)]
+	fn level_increase(
+		#[case] min_in: u32,
+		#[case] max_in: u32,
+		#[case] min_out: u32,
+		#[case] max_out: u32,
+	) -> Result<()> {
+		let mut bbox = TileBBox::from_min_and_max(10, min_in, min_in, max_in, max_in)?;
+		bbox.level_up();
+		assert_eq!(bbox.level, 11);
+		assert_eq!(bbox.to_array()?, [min_out, min_out, max_out, max_out]);
+		Ok(())
+	}
+
+	#[test]
+	fn level_increase_decrease_roundtrip() -> Result<()> {
+		let original = TileBBox::from_min_and_max(4, 5, 6, 7, 8)?;
+		let inc = original.leveled_up();
+		assert_eq!(inc.level, 5);
+		assert_eq!(inc.to_array()?, [10, 12, 15, 17]);
+		let dec = inc.leveled_down();
+		assert_eq!(dec, original);
+		Ok(())
+	}
+
+	#[rstest]
+	#[case(0, 0, 0, 0, 0)]
+	#[case(4, 0, 7, 8, 15)]
+	#[case(5, 0, 15, 16, 31)]
+	#[case(6, 0, 31, 32, 63)]
+	#[case(7, 0, 62, 65, 127)]
+	#[case(8, 0, 124, 131, 255)]
+	#[case(10, 0, 496, 527, 1023)]
+	#[case(20, 0, 507904, 540671, 1048575)]
+	#[case(30, 0, 520093696, 553648127, 1073741823)]
+	fn as_level_up_and_down(
+		#[case] level: u32,
+		#[case] x0: u32,
+		#[case] y0: u32,
+		#[case] x1: u32,
+		#[case] y1: u32,
+	) -> Result<()> {
+		let bbox = TileBBox::from_min_and_max(6, 0, 31, 32, 63)?;
+		let up = bbox.at_level(u8::try_from(level).unwrap());
+		assert_eq!(
+			[u32::from(up.level), up.x_min()?, up.y_min()?, up.x_max()?, up.y_max()?],
+			[level, x0, y0, x1, y1]
+		);
+		Ok(())
+	}
+
+	#[rstest]
+	#[case((5, 5, 10, 7, 12), 2, (5, 10, 20, 15, 25))]
+	#[case((4, 1, 1, 2, 2), 4, (4, 4, 4, 11, 11))]
+	#[case((8, 0, 0, 0, 0), 8, (8, 0, 0, 7, 7))]
+	#[case((6, 3, 5, 3, 5), 2, (6, 6, 10, 7, 11))]
+	fn test_scaled_up_cases(
+		#[case] input: (u8, u32, u32, u32, u32),
+		#[case] scale: u32,
+		#[case] expected: (u8, u32, u32, u32, u32),
+	) -> Result<()> {
+		let (level, x0, y0, x1, y1) = input;
+		let bbox = TileBBox::from_min_and_max(level, x0, y0, x1, y1)?;
+		let scaled = bbox.scaled_up(scale)?;
+		let (exp_level, exp_x0, exp_y0, exp_x1, exp_y1) = expected;
+		assert_eq!(scaled.level, exp_level);
+		assert_eq!(scaled.to_array()?, [exp_x0, exp_y0, exp_x1, exp_y1]);
+		// Ensure original bbox remains unchanged
+		assert_eq!(bbox, TileBBox::from_min_and_max(level, x0, y0, x1, y1)?);
 		Ok(())
 	}
 }

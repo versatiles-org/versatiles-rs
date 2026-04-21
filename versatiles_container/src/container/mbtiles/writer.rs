@@ -175,8 +175,8 @@ impl TilesWriter for MBTilesWriter {
 		let pyramid = &reader.metadata().bbox_pyramid;
 		let bbox = tilejson.bounds.or(pyramid.geo_bbox()).unwrap();
 		let center = tilejson.center.or(pyramid.geo_center()).unwrap();
-		let zoom_min = tilejson.min_zoom().or(pyramid.level_min()).unwrap();
-		let zoom_max = tilejson.max_zoom().or(pyramid.level_max()).unwrap();
+		let zoom_min = tilejson.zoom_min().or(pyramid.level_min()).unwrap();
+		let zoom_max = tilejson.zoom_max().or(pyramid.level_max()).unwrap();
 		writer.set_metadata(
 			"bounds",
 			&format!("{},{},{},{}", bbox.x_min, bbox.y_min, bbox.x_max, bbox.y_max),

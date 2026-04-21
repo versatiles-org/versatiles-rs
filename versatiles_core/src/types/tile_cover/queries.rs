@@ -1,9 +1,6 @@
 //! Query methods for [`TileCover`].
 
 use super::TileCover;
-use crate::{GeoBBox, TileBBox, TileCoord};
-use anyhow::Result;
-use versatiles_derive::context;
 
 impl TileCover {
 	/// Returns the zoom level of this cover.
@@ -41,70 +38,24 @@ impl TileCover {
 			TileCover::Tree(t) => t.count_tiles(),
 		}
 	}
+}
 
-	/// Returns the tightest axis-aligned [`TileBBox`] containing all tiles,
-	/// or `None` if this cover is empty.
-	#[must_use]
-	pub fn bbox(&self) -> Option<TileBBox> {
-		match self {
-			TileCover::Bbox(b) => {
-				if b.is_empty() {
-					None
-				} else {
-					Some(*b)
-				}
-			}
-			TileCover::Tree(t) => t.bbox(),
-		}
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::TileQuadtree;
+
+	#[test]
+	fn level() {
+		assert_eq!(TileCover::new_empty(7).unwrap().level(), 7);
+		assert_eq!(TileCover::from(TileQuadtree::new_empty(5).unwrap()).level(), 5);
 	}
 
-	/// Converts the covered area to a geographic [`GeoBBox`], or `None` if empty.
-	#[must_use]
-	pub fn to_geo_bbox(&self) -> Option<GeoBBox> {
-		match self {
-			TileCover::Bbox(b) => b.to_geo_bbox(),
-			TileCover::Tree(t) => t.to_geo_bbox(),
-		}
-	}
-
-	/// Returns `true` if the given tile coordinate is contained in this cover.
-	///
-	/// # Errors
-	/// Returns an error if the coordinate's level does not match this cover's level.
-	#[context("Failed to check TileCoord {coord:?} against TileCover at level {}", self.level())]
-	pub fn includes_coord(&self, coord: &TileCoord) -> Result<bool> {
-		match self {
-			TileCover::Bbox(b) => b.includes_coord(coord),
-			TileCover::Tree(t) => t.includes_coord(coord),
-		}
-	}
-
-	/// Returns `true` if all tiles in `bbox` are contained in this cover.
-	///
-	/// # Errors
-	/// Returns an error if `bbox`'s level does not match this cover's level.
-	#[context("Failed to check TileBBox {bbox:?} against TileCover at level {}", self.level())]
-	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
-		match self {
-			TileCover::Bbox(b) => b.includes_bbox(bbox),
-			TileCover::Tree(t) => t.includes_bbox(bbox),
-		}
-	}
-
-	/// Returns `true` if this cover overlaps the given `bbox`.
-	///
-	/// For the `Tree` variant this is an approximate check via [`bbox`](Self::bbox).
-	///
-	/// # Errors
-	/// Returns an error if `bbox`'s level does not match this cover's level.
-	#[context("Failed to check intersection of TileCover at level {} with TileBBox {bbox:?}", self.level())]
-	pub fn intersects_bbox(&self, bbox: &TileBBox) -> Result<bool> {
-		match self {
-			TileCover::Bbox(b) => b.intersects_bbox(bbox),
-			TileCover::Tree(t) => match t.bbox() {
-				Some(b) => b.intersects_bbox(bbox),
-				None => Ok(false),
-			},
-		}
+	#[test]
+	fn is_full_tree_variant() {
+		let c = TileCover::from(TileQuadtree::new_full(3).unwrap());
+		assert!(c.is_full());
+		let c2 = TileCover::from(TileQuadtree::new_empty(3).unwrap());
+		assert!(!c2.is_full());
 	}
 }

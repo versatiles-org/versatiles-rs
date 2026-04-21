@@ -39,7 +39,7 @@ impl TileBBox {
 			f64::from(self.y_min().unwrap()),
 		);
 
-		Some(GeoBBox::new(p_min[0], p_min[1], p_max[0], p_max[1]).unwrap())
+		GeoBBox::new(p_min[0], p_min[1], p_max[0], p_max[1]).ok()
 	}
 
 	/// Returns the bbox as an array `[x_min, y_min, x_max, y_max]`.
@@ -139,6 +139,48 @@ mod tests {
 		// Reasonable numeric ranges
 		assert!(minlon >= -180.0 && maxlon <= 180.0);
 		assert!(minlat >= -90.0 && maxlat <= 90.0);
+		Ok(())
+	}
+
+	#[test]
+	fn quarter_planet() -> Result<()> {
+		let geo_bbox = GeoBBox::new(0.0, -85.05112877980659f64, 180.0, 0.0)?;
+		for level in 1..30 {
+			let bbox = TileBBox::from_geo_bbox(level, &geo_bbox)?;
+			assert_eq!(bbox.count_tiles(), 4u64.pow(u32::from(level) - 1));
+			assert_eq!(bbox.to_geo_bbox().unwrap(), geo_bbox);
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn sa_pacific() -> Result<()> {
+		let geo_bbox = GeoBBox::new(-180.0, -66.51326044311186f64, -90.0, 0.0)?;
+		for level in 2..30 {
+			let bbox = TileBBox::from_geo_bbox(level, &geo_bbox)?;
+			assert_eq!(bbox.count_tiles(), 4u64.pow(u32::from(level) - 2));
+			assert_eq!(bbox.to_geo_bbox().unwrap(), geo_bbox);
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn test_as_geo_bbox() -> Result<()> {
+		let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12)?;
+		let geo_bbox = bbox.to_geo_bbox().unwrap();
+		assert_eq!(
+			geo_bbox.to_list_string(),
+			"-67.5,-74.01954331150228,0,-40.97989806962013"
+		);
+		Ok(())
+	}
+
+	#[test]
+	fn should_convert_to_geo_bbox_correctly() -> Result<()> {
+		let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12)?;
+		let geo_bbox = bbox.to_geo_bbox().unwrap();
+		let expected_geo_bbox = GeoBBox::new(-67.5, -74.01954331150228, 0.0, -40.97989806962013)?;
+		assert_eq!(geo_bbox, expected_geo_bbox);
 		Ok(())
 	}
 }

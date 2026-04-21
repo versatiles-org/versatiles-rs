@@ -105,7 +105,7 @@ impl TileSink for DirectoryTileSink {
 	}
 
 	fn finish(self: Box<Self>, tilejson: &TileJSON, _runtime: &crate::TilesRuntime) -> Result<()> {
-		let meta_blob = compress(Blob::from(tilejson), self.tile_compression)?;
+		let meta_blob = compress(Blob::from(tilejson), &self.tile_compression)?;
 		let filename = format!("tiles.json{}", self.tile_compression.as_extension());
 		self.backend.write_file(&filename, meta_blob.as_slice())
 	}

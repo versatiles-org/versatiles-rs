@@ -157,7 +157,7 @@ mod tests {
 		let source = Box::new(make_vector_source());
 		let op = build_transform(source, PassthroughRunner).await?;
 		assert!(!op.metadata().bbox_pyramid.is_empty());
-		assert!(op.tilejson().min_zoom().is_some());
+		assert!(op.tilejson().zoom_min().is_some());
 		Ok(())
 	}
 

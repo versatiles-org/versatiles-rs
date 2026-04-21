@@ -99,7 +99,7 @@ impl TilesWriter for DirectoryWriter {
 		let extension_compression = tile_compression.as_extension().to_string();
 
 		let tilejson = reader.tilejson();
-		let meta_data = compress(tilejson.into(), tile_compression)?;
+		let meta_data = compress(tilejson.into(), &tile_compression)?;
 		let filename = format!("tiles.json{extension_compression}");
 		Self::write(&path.join(filename), &meta_data)?;
 

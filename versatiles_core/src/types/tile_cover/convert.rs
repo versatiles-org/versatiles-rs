@@ -1,7 +1,7 @@
 //! Conversion methods for [`TileCover`].
 
 use super::TileCover;
-use crate::{TileBBox, TileQuadtree};
+use crate::{GeoBBox, TileBBox, TileQuadtree};
 
 impl TileCover {
 	/// Returns a reference to the inner [`TileBBox`], or `None` if this is the
@@ -11,6 +11,37 @@ impl TileCover {
 		match self {
 			TileCover::Bbox(b) => Some(b),
 			TileCover::Tree(_) => None,
+		}
+	}
+
+	/// Returns the axis-aligned bounding box of all covered tiles.
+	///
+	/// For the `Bbox` variant this is a clone; for `Tree` it is the tight
+	/// enclosing bbox computed by the quadtree.
+	#[must_use]
+	pub fn to_bbox(&self) -> TileBBox {
+		match self {
+			TileCover::Bbox(b) => *b,
+			TileCover::Tree(t) => t.to_bbox(),
+		}
+	}
+
+	/// Consumes `self` and returns the axis-aligned bounding box of all covered
+	/// tiles, avoiding a clone when the `Bbox` variant is already owned.
+	#[must_use]
+	pub fn into_bbox(self) -> TileBBox {
+		match self {
+			TileCover::Bbox(b) => b,
+			TileCover::Tree(t) => t.to_bbox(),
+		}
+	}
+
+	/// Converts the covered area to a geographic [`GeoBBox`], or `None` if empty.
+	#[must_use]
+	pub fn to_geo_bbox(&self) -> Option<GeoBBox> {
+		match self {
+			TileCover::Bbox(b) => b.to_geo_bbox(),
+			TileCover::Tree(t) => t.to_geo_bbox(),
 		}
 	}
 
@@ -35,6 +66,16 @@ impl TileCover {
 		match self {
 			TileCover::Bbox(b) => TileQuadtree::from_bbox(b),
 			TileCover::Tree(t) => t.clone(),
+		}
+	}
+
+	/// Consumes `self` and returns the inner [`TileQuadtree`], building one from
+	/// the bbox if necessary without an extra clone.
+	#[must_use]
+	pub fn into_tree(self) -> TileQuadtree {
+		match self {
+			TileCover::Bbox(b) => TileQuadtree::from_bbox(&b),
+			TileCover::Tree(t) => t,
 		}
 	}
 
@@ -66,5 +107,57 @@ impl TileCover {
 			TileCover::Tree(t) => t,
 			TileCover::Bbox(_) => unreachable!(),
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn bbox(zoom: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
+		TileBBox::from_min_and_max(zoom, x0, y0, x1, y1).unwrap()
+	}
+
+	#[test]
+	fn bounds_empty_and_nonempty() {
+		assert!(TileCover::new_empty(3).unwrap().to_bbox().is_empty());
+		let c = TileCover::from(bbox(3, 1, 2, 3, 4));
+		assert_eq!(c.to_bbox(), bbox(3, 1, 2, 3, 4));
+	}
+
+	#[test]
+	fn at_level() {
+		let c = TileCover::from(bbox(5, 4, 4, 8, 8));
+		let c2 = c.at_level(6);
+		assert_eq!(c2.level(), 6);
+	}
+
+	#[test]
+	fn as_bbox_and_as_tree() {
+		let cb = TileCover::from(bbox(2, 0, 0, 1, 1));
+		assert!(cb.as_bbox().is_some());
+		assert!(cb.as_tree().is_none());
+
+		let ct = TileCover::from(TileQuadtree::new_empty(2).unwrap());
+		assert!(ct.as_bbox().is_none());
+		assert!(ct.as_tree().is_some());
+	}
+
+	#[test]
+	fn to_tree_from_bbox() {
+		let c = TileCover::from(bbox(3, 1, 1, 4, 4));
+		let tree = c.to_tree();
+		assert_eq!(tree.count_tiles(), 16);
+	}
+
+	#[test]
+	fn to_geo_bbox_empty_is_none() {
+		assert!(TileCover::new_empty(4).unwrap().to_geo_bbox().is_none());
+	}
+
+	#[test]
+	fn to_geo_bbox_nonempty() {
+		let c = TileCover::from(bbox(4, 0, 0, 15, 15));
+		assert!(c.to_geo_bbox().is_some());
 	}
 }

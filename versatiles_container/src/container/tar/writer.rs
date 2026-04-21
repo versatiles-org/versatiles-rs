@@ -67,7 +67,7 @@ impl TarTilesWriter {
 		let extension_format = tile_format.as_extension();
 		let extension_compression = tile_compression.as_extension();
 
-		let meta_data = compress(reader.tilejson().into(), tile_compression)?;
+		let meta_data = compress(reader.tilejson().into(), &tile_compression)?;
 		let filename = format!("tiles.json{extension_compression}");
 		let mut header = Header::new_gnu();
 		header.set_size(meta_data.len() as u64);

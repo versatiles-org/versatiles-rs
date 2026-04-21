@@ -146,7 +146,7 @@ impl EntriesV3 {
 		let entries: &EntriesSliceV3 = &self.as_slice();
 
 		if entries.len() < 16384 {
-			let root_bytes = compress(entries.serialize_entries()?, compression)?;
+			let root_bytes = compress(entries.serialize_entries()?, &compression)?;
 			// Case1: the entire directory fits into the target len
 			if root_bytes.len() <= target_root_len {
 				return Ok(Directory {
@@ -185,7 +185,7 @@ impl EntriesV3 {
 				if idx + leaf_size > entries.len() {
 					end = entries.len();
 				}
-				let serialized = compress(entries.slice(idx..end).serialize_entries()?, compression)?;
+				let serialized = compress(entries.slice(idx..end).serialize_entries()?, &compression)?;
 
 				root_entries.push(EntryV3::new(
 					entries.get(idx).tile_id,
@@ -197,7 +197,7 @@ impl EntriesV3 {
 				idx += leaf_size;
 			}
 
-			let root_bytes = compress(root_entries.as_slice().serialize_entries()?, compression)?;
+			let root_bytes = compress(root_entries.as_slice().serialize_entries()?, &compression)?;
 
 			Ok(Directory {
 				root_bytes,

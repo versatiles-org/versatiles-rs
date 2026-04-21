@@ -133,7 +133,7 @@ mod tests {
 		for coord in bb.iter_grid(size) {
 			cols.entry(coord.x_min()?).and_modify(|c| *c += 1).or_insert(1);
 			rows.entry(coord.y_min()?).and_modify(|c| *c += 1).or_insert(1);
-			assert!(bb.includes_bbox(&coord)?);
+			assert!(bb.includes_bbox(&coord));
 			assert!(coord.width() <= size);
 			assert!(coord.height() <= size);
 		}
@@ -169,5 +169,97 @@ mod tests {
 	fn grid_panics_on_non_power_of_two() {
 		let bb = TileBBox::from_min_and_max(4, 0, 0, 3, 3).unwrap();
 		let _ = bb.iter_grid(3).collect::<Vec<_>>();
+	}
+
+	#[test]
+	fn iter_coords() -> Result<()> {
+		let bbox = TileBBox::from_min_and_max(16, 1, 5, 2, 6)?;
+		let v: Vec<TileCoord> = bbox.iter_coords().collect();
+		assert_eq!(v.len(), 4);
+		assert_eq!(v[0], tc(16, 1, 5));
+		assert_eq!(v[1], tc(16, 2, 5));
+		assert_eq!(v[2], tc(16, 1, 6));
+		assert_eq!(v[3], tc(16, 2, 6));
+		Ok(())
+	}
+
+	#[rstest]
+	#[case(16, (10, 0, 0, 31, 31), "0,0,15,15 16,0,31,15 0,16,15,31 16,16,31,31")]
+	#[case(16, (10, 5, 6, 25, 26), "5,6,15,15 16,6,25,15 5,16,15,26 16,16,25,26")]
+	#[case(16, (10, 5, 6, 16, 16), "5,6,15,15 16,6,16,15 5,16,15,16 16,16,16,16")]
+	#[case(16, (10, 5, 6, 16, 15), "5,6,15,15 16,6,16,15")]
+	#[case(16, (10, 6, 7, 6, 7), "6,7,6,7")]
+	#[case(64, (4, 6, 7, 6, 7), "6,7,6,7")]
+	fn iter_grid_cases(#[case] size: u32, #[case] def: (u8, u32, u32, u32, u32), #[case] expected: &str) -> Result<()> {
+		let bbox = TileBBox::from_min_and_max(def.0, def.1, def.2, def.3, def.4)?;
+		let result: String = bbox
+			.iter_grid(size)
+			.map(|bbox| {
+				format!(
+					"{},{},{},{}",
+					bbox.x_min().unwrap(),
+					bbox.y_min().unwrap(),
+					bbox.x_max().unwrap(),
+					bbox.y_max().unwrap()
+				)
+			})
+			.collect::<Vec<String>>()
+			.join(" ");
+		assert_eq!(result, expected);
+		Ok(())
+	}
+
+	#[test]
+	fn should_iterate_over_coords_correctly() -> Result<()> {
+		let bbox = TileBBox::from_min_and_max(4, 5, 10, 6, 11)?;
+		let coords: Vec<TileCoord> = bbox.iter_coords().collect();
+		let expected_coords = vec![tc(4, 5, 10), tc(4, 6, 10), tc(4, 5, 11), tc(4, 6, 11)];
+		assert_eq!(coords, expected_coords);
+		Ok(())
+	}
+
+	#[test]
+	fn should_iterate_over_coords_correctly_when_consumed() -> Result<()> {
+		let bbox = TileBBox::from_min_and_max(4, 5, 10, 6, 11)?;
+		let coords: Vec<TileCoord> = bbox.into_iter_coords().collect();
+		let expected_coords = vec![tc(4, 5, 10), tc(4, 6, 10), tc(4, 5, 11), tc(4, 6, 11)];
+		assert_eq!(coords, expected_coords);
+		Ok(())
+	}
+
+	#[test]
+	fn should_split_bbox_into_correct_grid() -> Result<()> {
+		let bbox = TileBBox::from_min_and_max(4, 0, 0, 7, 7)?;
+
+		let grid_size = 4;
+		let grids: Vec<TileBBox> = bbox.iter_grid(grid_size).collect();
+
+		let expected_grids = vec![
+			TileBBox::from_min_and_max(4, 0, 0, 3, 3)?,
+			TileBBox::from_min_and_max(4, 4, 0, 7, 3)?,
+			TileBBox::from_min_and_max(4, 0, 4, 3, 7)?,
+			TileBBox::from_min_and_max(4, 4, 4, 7, 7)?,
+		];
+
+		assert_eq!(grids, expected_grids);
+
+		Ok(())
+	}
+
+	#[test]
+	fn should_handle_empty_bbox_in_grid_iteration() -> Result<()> {
+		let bbox = TileBBox::new_empty(4)?;
+		let grids: Vec<TileBBox> = bbox.iter_grid(4).collect();
+		assert!(grids.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn should_handle_single_tile_in_grid_iteration() -> Result<()> {
+		let bbox = TileBBox::from_min_and_max(4, 5, 10, 5, 10)?;
+		let grids: Vec<TileBBox> = bbox.iter_grid(4).collect();
+		let expected_grids = vec![TileBBox::from_min_and_max(4, 5, 10, 5, 10)?];
+		assert_eq!(grids, expected_grids);
+		Ok(())
 	}
 }

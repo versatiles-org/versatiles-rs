@@ -38,7 +38,7 @@ pub async fn run(args: &ExportOutline, runtime: &TilesRuntime) -> Result<()> {
 		bail!("Only GeoJSON output is supported for now");
 	}
 
-	let bbox = bbox_pyramid.level(level).bbox().unwrap();
+	let bbox = bbox_pyramid.level_ref(level).to_bbox();
 	let mut stream = reader.tile_size_stream(bbox).await?;
 
 	let progress = runtime.create_progress("Scanning tile sizes", bbox.count_tiles());

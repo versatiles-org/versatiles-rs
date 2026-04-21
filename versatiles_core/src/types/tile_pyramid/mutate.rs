@@ -52,18 +52,6 @@ impl TilePyramid {
 		Ok(())
 	}
 
-	/// Intersects (in place) this pyramid with `other` (intersection per level).
-	///
-	/// # Errors
-	/// Returns an error if any level intersection fails.
-	pub fn intersect_pyramid(&mut self, other: &TilePyramid) -> Result<()> {
-		for l in 0..=MAX_ZOOM_LEVEL as usize {
-			let intersected = self.levels[l].intersection(&other.levels[l])?;
-			self.levels[l] = intersected;
-		}
-		Ok(())
-	}
-
 	/// Clears all zoom levels below `level_min`.
 	pub fn set_level_min(&mut self, level_min: u8) {
 		for l in 0..level_min {
@@ -97,5 +85,120 @@ impl TilePyramid {
 		for cover in &mut self.levels {
 			cover.swap_xy();
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::TileQuadtree;
+
+	fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
+		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()
+	}
+	fn coord(z: u8, x: u32, y: u32) -> TileCoord {
+		TileCoord::new(z, x, y).unwrap()
+	}
+
+	#[test]
+	fn get_level_and_set_level() {
+		let mut p = TilePyramid::new_empty();
+		let qt = TileQuadtree::new_full(4).unwrap();
+		p.set_level(TileCover::from(qt));
+		assert!(!p.level_ref(4).is_empty());
+		assert!(p.level_ref(3).is_empty());
+	}
+
+	#[test]
+	fn set_level_bbox() {
+		let mut p = TilePyramid::new_empty();
+		p.set_level_bbox(bbox(5, 3, 4, 10, 15));
+		assert_eq!(p.level_bbox(5), bbox(5, 3, 4, 10, 15));
+		assert!(p.level_ref(4).is_empty());
+	}
+
+	#[test]
+	fn include_coord() {
+		let mut p = TilePyramid::new_empty();
+		p.insert_coord(&coord(5, 7, 9));
+		assert!(p.includes_coord(&coord(5, 7, 9)));
+		assert!(!p.includes_coord(&coord(5, 0, 0)));
+	}
+
+	#[test]
+	fn union() {
+		let mut a = TilePyramid::new_empty();
+		a.insert_bbox(&bbox(5, 0, 0, 5, 5)).unwrap();
+
+		let mut b = TilePyramid::new_empty();
+		b.insert_bbox(&bbox(5, 10, 10, 15, 15)).unwrap();
+
+		a.union(&b);
+		assert!(a.includes_coord(&coord(5, 2, 2)));
+		assert!(a.includes_coord(&coord(5, 12, 12)));
+	}
+
+	#[test]
+	fn set_level_min_and_max() {
+		let mut p = TilePyramid::new_full();
+		p.set_level_min(5);
+		assert!(p.level_ref(4).is_empty());
+		assert!(!p.level_ref(5).is_empty());
+
+		p.set_level_max(10);
+		assert!(!p.level_ref(10).is_empty());
+		assert!(p.level_ref(11).is_empty());
+	}
+
+	#[test]
+	fn add_border() {
+		// Use set_level_bbox to ensure the level stays a Bbox variant
+		// (include_bbox on an empty cover upgrades to Tree, which add_border skips).
+		let mut p = TilePyramid::new_empty();
+		p.set_level_bbox(bbox(5, 5, 5, 10, 10));
+		p.buffer(1);
+		let b = p.level_bbox(5);
+		assert_eq!(b.x_min().unwrap(), 4);
+		assert_eq!(b.y_min().unwrap(), 4);
+		assert_eq!(b.x_max().unwrap(), 11);
+		assert_eq!(b.y_max().unwrap(), 11);
+	}
+
+	#[test]
+	fn add_border_empty_level_unaffected() {
+		let mut p = TilePyramid::new_empty();
+		p.buffer(5);
+		assert!(p.is_empty());
+	}
+
+	#[test]
+	fn flip_y_and_swap_xy() {
+		let mut p = TilePyramid::new_empty();
+		p.insert_bbox(&bbox(3, 0, 0, 3, 3)).unwrap();
+		// Just verify they don't panic
+		p.flip_y();
+		p.swap_xy();
+		assert!(!p.is_empty());
+	}
+
+	#[test]
+	fn flip_y_changes_coordinates() {
+		let mut p = TilePyramid::new_empty();
+		// z=1: 2x2 grid; top-left tile (0,0) flips to bottom-left (0,1)
+		p.insert_bbox(&bbox(1, 0, 0, 0, 0)).unwrap();
+		p.flip_y();
+		assert!(p.includes_coord(&coord(1, 0, 1)));
+		assert!(!p.includes_coord(&coord(1, 0, 0)));
+	}
+
+	#[test]
+	fn swap_xy_changes_coordinates() {
+		let mut p = TilePyramid::new_empty();
+		// bbox with x=[2..4], y=[0..1] → after swap: x=[0..1], y=[2..4]
+		p.insert_bbox(&bbox(4, 2, 0, 4, 1)).unwrap();
+		p.swap_xy();
+		let b = p.level_bbox(4);
+		assert_eq!(b.x_min().unwrap(), 0);
+		assert_eq!(b.y_min().unwrap(), 2);
 	}
 }

@@ -11,15 +11,17 @@
 //! - Index 3 = SE (x >= mid, y >= mid)
 
 mod constructors;
+mod convert;
 mod fmt;
+mod include;
+mod info_trait;
+mod intersect;
 mod iter;
 mod mutate;
 mod node;
 mod queries;
 mod serialize;
 mod set_ops;
-#[cfg(test)]
-mod tests;
 mod zoom;
 
 use node::Node;
@@ -38,7 +40,15 @@ pub(super) struct BBox {
 }
 
 impl BBox {
-	fn new(bbox: &TileBBox) -> Option<Self> {
+	fn new(x_min: u64, y_min: u64, x_max: u64, y_max: u64) -> Self {
+		Self {
+			x_min,
+			y_min,
+			x_max,
+			y_max,
+		}
+	}
+	fn from_bbox(bbox: &TileBBox) -> Option<Self> {
 		if bbox.is_empty() {
 			return None;
 		}
@@ -48,6 +58,23 @@ impl BBox {
 			x_max: u64::from(bbox.x_max().unwrap()) + 1,
 			y_max: u64::from(bbox.y_max().unwrap()) + 1,
 		})
+	}
+	fn into_bbox(self, level: u8) -> TileBBox {
+		TileBBox::from_min_and_max(
+			level,
+			u32::try_from(self.x_min).unwrap(),
+			u32::try_from(self.y_min).unwrap(),
+			u32::try_from(self.x_max - 1).unwrap(),
+			u32::try_from(self.y_max - 1).unwrap(),
+		)
+		.unwrap()
+	}
+	fn union(mut self, other: Self) -> Self {
+		self.x_min = self.x_min.min(other.x_min);
+		self.y_min = self.y_min.min(other.y_min);
+		self.x_max = self.x_max.max(other.x_max);
+		self.y_max = self.y_max.max(other.y_max);
+		self
 	}
 }
 

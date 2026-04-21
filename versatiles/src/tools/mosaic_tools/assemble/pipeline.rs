@@ -105,7 +105,7 @@ pub(super) async fn scan_sources(
 		let sink_arc = sink.as_ref().unwrap();
 
 		// Stream all tiles from this source
-		let level_bboxes: Vec<_> = pyramid.iter_bboxes().collect();
+		let level_bboxes: Vec<_> = pyramid.to_iter_bboxes().collect();
 		let streams: Vec<TileStream<'static, Tile>> =
 			futures::future::try_join_all(level_bboxes.into_iter().map(|bbox| reader.tile_stream(bbox))).await?;
 		let combined = streams

@@ -122,7 +122,7 @@ impl MockReader {
 			WEBP => Blob::from(MOCK_BYTES_WEBP.to_vec()),
 			_ => panic!("tile format {format:?} is not implemented for MockReader"),
 		};
-		blob = compress(blob, compression)?;
+		blob = compress(blob, &compression)?;
 		Ok(Some(Tile::from_blob(blob, compression, format)))
 	}
 }
@@ -154,7 +154,7 @@ impl TileSource for MockReader {
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("mock::tile_stream {bbox:?}");
 
-		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		let format = self.metadata.tile_format;
 		let compression = self.metadata.tile_compression;
 		let bbox_pyramid = self.metadata.bbox_pyramid.clone();
@@ -165,7 +165,7 @@ impl TileSource for MockReader {
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 
 		Ok(TileStream::from_bbox_parallel(bbox, move |_coord| Some(())))
 	}

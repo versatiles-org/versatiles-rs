@@ -185,13 +185,13 @@ impl DirectoryReader {
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
 						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
 							Self::read(&entry1.path())?,
-							TileCompression::Gzip,
+							&TileCompression::Gzip,
 						)?))?;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
 						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
 							Self::read(&entry1.path())?,
-							TileCompression::Brotli,
+							&TileCompression::Brotli,
 						)?))?;
 					}
 					&_ => {}
@@ -271,7 +271,7 @@ impl TileSource for DirectoryReader {
 
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("directory::tile_stream {bbox:?}");
-		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		let tile_map = Arc::clone(&self.tile_map);
 		let tile_compression = self.metadata.tile_compression;
 		let tile_format = self.metadata.tile_format;
@@ -282,7 +282,7 @@ impl TileSource for DirectoryReader {
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		let tile_map = Arc::clone(&self.tile_map);
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			tile_map.get(&coord).map(|_| ())
@@ -290,7 +290,7 @@ impl TileSource for DirectoryReader {
 	}
 
 	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
-		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		let tile_map = Arc::clone(&self.tile_map);
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			let path = tile_map.get(&coord)?;
@@ -389,7 +389,7 @@ mod tests {
 		let dir = TempDir::new().unwrap();
 		fs::write(
 			dir.path().join("meta.json.gz"),
-			compress(Blob::from(r#"{"type":"dummy data"}"#), TileCompression::Gzip)
+			compress(Blob::from(r#"{"type":"dummy data"}"#), &TileCompression::Gzip)
 				.unwrap()
 				.as_slice(),
 		)

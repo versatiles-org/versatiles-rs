@@ -109,7 +109,7 @@ mod tests {
 		};
 
 		let create_file = |path: &PathBuf, compression: TileCompression| {
-			let content = compress(Blob::new_empty(), compression).unwrap();
+			let content = compress(Blob::new_empty(), &compression).unwrap();
 			let mut f = File::create(path).unwrap();
 			f.write_all(content.as_slice()).unwrap();
 		};

@@ -119,7 +119,7 @@ impl VersaTilesReader {
 				.read_range(&header.meta_range)
 				.await
 				.context("Failed reading the meta data")?;
-			let blob = decompress(blob, header.compression).context("Failed decompressing the meta data")?;
+			let blob = decompress(blob, &header.compression).context("Failed decompressing the meta data")?;
 			TileJSON::try_from_blob_or_default(&blob)
 		} else {
 			TileJSON::default()
@@ -228,7 +228,7 @@ impl VersaTilesReader {
 					.enumerate()
 					.filter_map(|(index, range)| {
 						let coord = tiles_bbox_block.coord_at_index(index as u64).ok()?;
-						if tiles_bbox_used.includes_coord(&coord).unwrap() && range.length > 0 {
+						if tiles_bbox_used.includes_coord(&coord) && range.length > 0 {
 							Some((coord, *range))
 						} else {
 							None
@@ -296,7 +296,7 @@ impl TileSource for VersaTilesReader {
 		let bbox = block.global_bbox();
 
 		// Check if the tile is within the block definition
-		if !bbox.includes_coord(coord)? {
+		if !bbox.includes_coord(coord) {
 			log::trace!("tile {coord:?} outside block definition");
 			return Ok(None);
 		}
@@ -324,7 +324,7 @@ impl TileSource for VersaTilesReader {
 
 	#[context("streaming tile sizes for bbox {:?}", bbox)]
 	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
-		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		let block_coords: Vec<TileCoord> = bbox.scaled_down(256).iter_coords().collect();
 
 		let mut blocks: Vec<(TileBBox, TileBBox, BlockDefinition)> = Vec::new();
@@ -368,7 +368,7 @@ impl TileSource for VersaTilesReader {
 									return None;
 								}
 								let coord = block_bbox.coord_at_index(index as u64).ok()?;
-								if used_bbox.includes_coord(&coord).unwrap() {
+								if used_bbox.includes_coord(&coord) {
 									Some((coord, u32::try_from(range.length).ok()?))
 								} else {
 									None
@@ -673,7 +673,7 @@ mod tests {
 
 		assert_eq!(sizes.len(), 16); // 4x4
 		for (coord, size) in &sizes {
-			assert!(bbox.includes_coord(coord)?, "coord {coord:?} outside requested bbox");
+			assert!(bbox.includes_coord(coord), "coord {coord:?} outside requested bbox");
 			assert_eq!(*size, 77);
 		}
 

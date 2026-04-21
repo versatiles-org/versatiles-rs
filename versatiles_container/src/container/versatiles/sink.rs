@@ -156,7 +156,7 @@ impl TileSink for VersaTilesSink {
 
 		// 6. Write metadata
 		let meta_blob: Blob = tilejson.into();
-		let compressed_meta = compress(meta_blob, self.tile_compression)?;
+		let compressed_meta = compress(meta_blob, &self.tile_compression)?;
 		header.meta_range = writer.append(&compressed_meta)?;
 
 		// 7. Write blocks with progress reporting
@@ -243,8 +243,8 @@ mod tests {
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
-		tilejson.set_min_zoom(10);
-		tilejson.set_max_zoom(10);
+		tilejson.set_zoom_min(10);
+		tilejson.set_zoom_max(10);
 		Box::new(sink).finish(&tilejson, &runtime)?;
 
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
@@ -285,8 +285,8 @@ mod tests {
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
-		tilejson.set_min_zoom(0);
-		tilejson.set_max_zoom(1);
+		tilejson.set_zoom_min(0);
+		tilejson.set_zoom_max(1);
 		Box::new(sink).finish(&tilejson, &runtime)?;
 
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
@@ -326,8 +326,8 @@ mod tests {
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
-		tilejson.set_min_zoom(10);
-		tilejson.set_max_zoom(10);
+		tilejson.set_zoom_min(10);
+		tilejson.set_zoom_max(10);
 		Box::new(sink).finish(&tilejson, &runtime)?;
 
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;

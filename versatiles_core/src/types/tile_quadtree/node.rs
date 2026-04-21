@@ -22,16 +22,20 @@ impl Node {
 		}
 	}
 
+	/// Creates a `Partial` node from the given four children, normalising to
+	/// `Empty` or `Full` when all children are uniform.
 	pub(super) fn new_partial(children: [Node; 4]) -> Node {
 		let mut node = Node::Partial(Box::new(children));
 		node.normalize();
 		node
 	}
 
+	/// Creates a `Partial` node with all four children set to `Empty`.
 	pub(super) fn new_partial_empty() -> Node {
 		Node::Partial(Box::new([Node::Empty, Node::Empty, Node::Empty, Node::Empty]))
 	}
 
+	/// Creates a `Partial` node with all four children set to `Full`.
 	pub(super) fn new_partial_full() -> Node {
 		Node::Partial(Box::new([Node::Full, Node::Full, Node::Full, Node::Full]))
 	}

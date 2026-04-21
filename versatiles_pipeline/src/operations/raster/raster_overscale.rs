@@ -121,11 +121,10 @@ impl Operation {
 			.unwrap_or(MAX_ZOOM_LEVEL)
 			.clamp(level_base, MAX_ZOOM_LEVEL);
 
-		if let Some(mut level_bbox) = metadata.bbox_pyramid.level(level_base).bbox() {
-			while level_bbox.level() < level_max {
-				level_bbox.level_up();
-				metadata.bbox_pyramid.insert_bbox(&level_bbox)?;
-			}
+		let mut level_bbox = metadata.bbox_pyramid.level_ref(level_base).to_bbox();
+		while !level_bbox.is_empty() && level_bbox.level() < level_max {
+			level_bbox.level_up();
+			metadata.bbox_pyramid.insert_bbox(&level_bbox)?;
 		}
 
 		let mut tilejson = source.as_ref().tilejson().clone();
@@ -352,7 +351,7 @@ impl TileSource for Operation {
 				for dy in 0..scale {
 					for dx in 0..scale {
 						let coord = TileCoord::new(bbox.level(), base_x + dx, base_y + dy)?;
-						if bbox.includes_coord(&coord)? {
+						if bbox.includes_coord(&coord) {
 							coords.insert(coord);
 						}
 					}

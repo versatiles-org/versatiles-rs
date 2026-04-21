@@ -45,13 +45,52 @@ impl TileCover {
 }
 
 impl From<TileBBox> for TileCover {
+	/// Wraps `bbox` in the `Bbox` variant.
 	fn from(bbox: TileBBox) -> Self {
 		TileCover::Bbox(bbox)
 	}
 }
 
 impl From<TileQuadtree> for TileCover {
+	/// Wraps `tree` in the `Tree` variant.
 	fn from(tree: TileQuadtree) -> Self {
 		TileCover::Tree(tree)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn bbox(zoom: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
+		TileBBox::from_min_and_max(zoom, x0, y0, x1, y1).unwrap()
+	}
+
+	#[test]
+	fn new_empty_is_empty() {
+		let c = TileCover::new_empty(4).unwrap();
+		assert!(c.is_empty());
+		assert_eq!(c.level(), 4);
+		assert_eq!(c.count_tiles(), 0);
+	}
+
+	#[test]
+	fn new_full_covers_all() {
+		let c = TileCover::new_full(2).unwrap();
+		assert!(c.is_full());
+		assert_eq!(c.count_tiles(), 16);
+	}
+
+	#[test]
+	fn from_bbox_and_from_tree() {
+		let b = bbox(3, 0, 0, 3, 3);
+		let cb = TileCover::from(b);
+		assert!(matches!(cb, TileCover::Bbox(_)));
+		assert_eq!(cb.count_tiles(), 16);
+
+		let t = TileQuadtree::new_full(3).unwrap();
+		let ct = TileCover::from(t);
+		assert!(matches!(ct, TileCover::Tree(_)));
+		assert!(ct.is_full());
 	}
 }

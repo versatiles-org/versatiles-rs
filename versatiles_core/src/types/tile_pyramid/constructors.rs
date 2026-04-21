@@ -30,6 +30,7 @@ impl TilePyramid {
 		})
 	}
 
+	/// Constructs a pyramid by calling `f(level)` for each zoom level 0–`MAX_ZOOM_LEVEL`.
 	pub fn from_fn(mut f: impl FnMut(u8) -> Result<TileCover>) -> Self {
 		TilePyramid {
 			levels: from_fn(|z| f(u8::try_from(z).unwrap()).unwrap()),
@@ -73,6 +74,7 @@ impl TilePyramid {
 }
 
 impl Default for TilePyramid {
+	/// Returns an empty pyramid (equivalent to [`TilePyramid::new_empty`]).
 	fn default() -> Self {
 		Self::new_empty()
 	}
@@ -82,11 +84,119 @@ impl<T> From<&T> for TilePyramid
 where
 	T: ?Sized + AsRef<[TileBBox]>,
 {
+	/// Builds a pyramid by inserting each bbox in the slice at its zoom level.
 	fn from(bboxes: &T) -> Self {
 		let mut pyramid = TilePyramid::new_empty();
 		for bbox in bboxes.as_ref() {
 			pyramid.insert_bbox(bbox).expect("include_bbox failed");
 		}
 		pyramid
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::MAX_LAT;
+
+	fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
+		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()
+	}
+
+	#[test]
+	fn new_empty() {
+		let p = TilePyramid::new_empty();
+		assert!(p.is_empty());
+		assert_eq!(p.level_min(), None);
+		assert_eq!(p.level_max(), None);
+		assert_eq!(p.count_tiles(), 0);
+	}
+
+	#[test]
+	fn new_full() {
+		let p = TilePyramid::new_full();
+		assert!(!p.is_empty());
+		assert_eq!(p.level_min(), Some(0));
+		assert_eq!(p.level_max(), Some(30));
+	}
+
+	#[test]
+	fn new_full_up_to() {
+		let p = TilePyramid::new_full_up_to(5);
+		assert_eq!(p.level_min(), Some(0));
+		assert_eq!(p.level_max(), Some(5));
+		assert!(p.level_ref(6).is_empty());
+	}
+
+	#[test]
+	fn default_is_empty() {
+		assert!(TilePyramid::default().is_empty());
+	}
+
+	#[test]
+	fn from_geo_bbox() {
+		let geo = GeoBBox::new(-180.0, -MAX_LAT, 180.0, MAX_LAT).unwrap();
+		let p = TilePyramid::from_geo_bbox(0, 3, &geo).unwrap();
+		assert_eq!(p.level_min(), Some(0));
+		assert_eq!(p.level_max(), Some(3));
+		assert!(p.level_ref(4).is_empty());
+	}
+
+	#[test]
+	fn from_slice_of_bboxes() {
+		let bboxes = vec![bbox(3, 0, 0, 3, 3), bbox(5, 1, 1, 5, 5)];
+		let p = TilePyramid::from(bboxes.as_slice());
+		assert_eq!(p.level_bbox(3), bbox(3, 0, 0, 3, 3));
+		assert_eq!(p.level_bbox(5), bbox(5, 1, 1, 5, 5));
+	}
+
+	#[test]
+	fn from_tile_coords_empty() {
+		let p = TilePyramid::from_tile_coords(std::iter::empty());
+		assert!(p.is_empty());
+	}
+
+	#[test]
+	fn from_tile_coords_single_tile() {
+		let c = TileCoord::new(5, 10, 12).unwrap();
+		let p = TilePyramid::from_tile_coords(std::iter::once(c));
+		assert!(!p.is_empty());
+		assert_eq!(p.level_min(), Some(5));
+		assert_eq!(p.level_max(), Some(5));
+		assert_eq!(p.count_tiles(), 1);
+	}
+
+	#[test]
+	fn from_tile_coords_multi_level() {
+		// Tiles at zoom 2 and zoom 4
+		let coords = vec![
+			TileCoord::new(2, 1, 1).unwrap(),
+			TileCoord::new(2, 2, 2).unwrap(),
+			TileCoord::new(4, 5, 7).unwrap(),
+		];
+		let p = TilePyramid::from_tile_coords(coords.into_iter());
+		assert_eq!(p.level_min(), Some(2));
+		assert_eq!(p.level_max(), Some(4));
+		assert_eq!(p.count_tiles(), 3);
+	}
+
+	#[test]
+	fn from_tile_coords_matches_include_coord() {
+		let coords = vec![
+			TileCoord::new(3, 0, 0).unwrap(),
+			TileCoord::new(3, 1, 2).unwrap(),
+			TileCoord::new(3, 5, 6).unwrap(),
+		];
+
+		// Build via from_tile_coords
+		let batch = TilePyramid::from_tile_coords(coords.clone().into_iter());
+
+		// Build via sequential include_coord
+		let mut seq = TilePyramid::new_empty();
+		for c in &coords {
+			seq.insert_coord(c);
+		}
+
+		assert_eq!(batch.count_tiles(), seq.count_tiles());
 	}
 }

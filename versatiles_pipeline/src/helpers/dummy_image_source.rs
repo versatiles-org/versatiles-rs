@@ -100,7 +100,7 @@ impl TileSource for DummyImageSource {
 		log::trace!("dummy_image_source::tile_stream {bbox:?}");
 
 		let generate_tile = (self.generate_tile).clone();
-		bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
+		bbox.intersect_pyramid(&self.metadata.bbox_pyramid);
 		Ok(TileStream::from_iter_coord(
 			bbox.into_iter_coords_zorder(),
 			move |coord| (generate_tile)(&coord),
@@ -108,7 +108,7 @@ impl TileSource for DummyImageSource {
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = self.metadata.bbox_pyramid.intersected_bbox(&bbox)?;
+		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		Ok(TileStream::from_iter_coord(
 			bbox.into_iter_coords_zorder(),
 			move |_coord| Some(()),

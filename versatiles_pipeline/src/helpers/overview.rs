@@ -46,12 +46,12 @@ impl OverviewCore {
 
 		let level_base = level.unwrap_or_else(|| source.metadata().bbox_pyramid.level_max().unwrap());
 
-		if let Some(mut level_bbox) = metadata.bbox_pyramid.level(level_base).bbox() {
-			while level_bbox.level() > 0 {
-				level_bbox.level_down();
-				metadata.bbox_pyramid.insert_bbox(&level_bbox)?;
-			}
+		let mut level_bbox = metadata.bbox_pyramid.level_ref(level_base).to_bbox();
+		while !level_bbox.is_empty() && level_bbox.level() > 0 {
+			level_bbox.level_down();
+			metadata.bbox_pyramid.insert_bbox(&level_bbox)?;
 		}
+
 		metadata.update_tilejson(&mut tilejson);
 
 		let tile_size = tilejson.tile_size.map_or(512, |ts| u32::from(ts.size()));
@@ -103,7 +103,7 @@ impl OverviewCore {
 						assert_eq!(image1.width(), half_size);
 						assert_eq!(image1.height(), half_size);
 						let coord0 = coord1.to_level_decreased()?;
-						if bbox.includes_coord(&coord0)? {
+						if bbox.includes_coord(&coord0) {
 							map.get_mut(&coord0)?.push((coord1, image1));
 						}
 					}
@@ -160,7 +160,7 @@ impl OverviewCore {
 				} else {
 					None
 				};
-				let tile = if bbox.includes_coord(&coord).unwrap() {
+				let tile = if bbox.includes_coord(&coord) {
 					image_opt.map(|img| (coord, Tile::from_image(img, format).unwrap()))
 				} else {
 					None
@@ -195,7 +195,7 @@ impl OverviewCore {
 		}
 
 		let mut source_bbox = bbox.at_level(self.level_base);
-		source_bbox.intersect_with_pyramid(&self.metadata.bbox_pyramid);
+		source_bbox.intersect_pyramid(&self.metadata.bbox_pyramid);
 		if source_bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
@@ -204,7 +204,7 @@ impl OverviewCore {
 		let mut stream = self.source.tile_coord_stream(source_bbox).await?;
 		while let Some((coord, _)) = stream.next().await {
 			let c = coord.at_level(bbox.level());
-			if bbox.includes_coord(&c)? {
+			if bbox.includes_coord(&c) {
 				coords.insert(c);
 			}
 		}
@@ -225,7 +225,7 @@ impl OverviewCore {
 		let mut bbox0 = bbox.rounded(size);
 		assert_eq!(bbox0.width(), size);
 		assert_eq!(bbox0.height(), size);
-		bbox0.intersect_with_pyramid(&self.metadata.bbox_pyramid);
+		bbox0.intersect_pyramid(&self.metadata.bbox_pyramid);
 
 		let container: TileBBoxMap<Option<DynamicImage>> = if bbox.level() == self.level_base {
 			log::trace!("Fetching images from source for bbox {bbox:?}");
