@@ -17,7 +17,7 @@ use async_trait::async_trait;
 use futures::{StreamExt, stream};
 use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
 use versatiles_core::{
 	Blob, GeoBBox, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream,
 };
@@ -37,7 +37,6 @@ struct Args {
 	max_concurrent_requests: Option<u16>,
 }
 
-#[derive(Debug)]
 struct Operation {
 	client: reqwest::Client,
 	tile_url_template: String,
@@ -47,11 +46,23 @@ struct Operation {
 	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 	url: String,
+	runtime: TilesRuntime,
+}
+
+impl std::fmt::Debug for Operation {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Operation")
+			.field("url", &self.url)
+			.field("tile_format", &self.tile_format)
+			.field("max_retries", &self.max_retries)
+			.field("max_concurrent_requests", &self.max_concurrent_requests)
+			.finish_non_exhaustive()
+	}
 }
 
 impl ReadTileSource for Operation {
 	#[context("Failed to build from_tilejson operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, _factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
 	where
 		Self: Sized + TileSource,
 	{
@@ -110,6 +121,7 @@ impl ReadTileSource for Operation {
 			metadata,
 			tilejson: result_tilejson,
 			url: args.url,
+			runtime: factory.runtime(),
 		}) as Box<dyn TileSource>)
 	}
 }
@@ -163,6 +175,7 @@ async fn fetch_tile(
 	coord: TileCoord,
 	tile_format: TileFormat,
 	max_retries: u32,
+	runtime: Option<TilesRuntime>,
 ) -> Option<(TileCoord, Tile)> {
 	let url = build_tile_url(&template, &coord);
 
@@ -180,7 +193,14 @@ async fn fetch_tile(
 				continue;
 			}
 			Err(e) => {
-				log::error!("failed to fetch tile {coord:?} from '{url}': {e}");
+				if let Some(rt) = &runtime {
+					rt.record_error(
+						&format!("from_tilejson tile {coord:?}"),
+						&anyhow!("HTTP GET '{url}' failed: {e}"),
+					);
+				} else {
+					log::error!("failed to fetch tile {coord:?} from '{url}': {e}");
+				}
 				return None;
 			}
 		};
@@ -197,10 +217,15 @@ async fn fetch_tile(
 				);
 				continue;
 			}
-			log::error!(
-				"failed to fetch tile {coord:?} from '{url}': HTTP {}",
-				response.status()
-			);
+			let status = response.status();
+			if let Some(rt) = &runtime {
+				rt.record_error(
+					&format!("from_tilejson tile {coord:?}"),
+					&anyhow!("HTTP GET '{url}' returned status {status}"),
+				);
+			} else {
+				log::error!("failed to fetch tile {coord:?} from '{url}': HTTP {status}");
+			}
 			return None;
 		}
 
@@ -211,7 +236,14 @@ async fn fetch_tile(
 				continue;
 			}
 			Err(e) => {
-				log::error!("failed to read tile {coord:?} body from '{url}': {e}");
+				if let Some(rt) = &runtime {
+					rt.record_error(
+						&format!("from_tilejson tile {coord:?}"),
+						&anyhow!("reading response body from '{url}' failed: {e}"),
+					);
+				} else {
+					log::error!("failed to read tile {coord:?} body from '{url}': {e}");
+				}
 				return None;
 			}
 		};
@@ -221,7 +253,14 @@ async fn fetch_tile(
 		return Some((coord, tile));
 	}
 
-	log::error!("failed to fetch tile {coord:?} from '{url}' after {max_retries} retries");
+	if let Some(rt) = &runtime {
+		rt.record_error(
+			&format!("from_tilejson tile {coord:?}"),
+			&anyhow!("HTTP fetch from '{url}' failed after {max_retries} retries"),
+		);
+	} else {
+		log::error!("failed to fetch tile {coord:?} from '{url}' after {max_retries} retries");
+	}
 	None
 }
 
@@ -253,6 +292,7 @@ impl TileSource for Operation {
 			*coord,
 			self.tile_format,
 			self.max_retries,
+			Some(self.runtime.clone()),
 		)
 		.await
 		.map(|(_, tile)| tile))
@@ -273,20 +313,30 @@ impl TileSource for Operation {
 		let tile_format = self.tile_format;
 		let max_retries = self.max_retries;
 		let max_concurrent = self.max_concurrent_requests;
+		let runtime = self.runtime.clone();
 
 		let s = stream::iter(bbox.into_iter_coords())
 			.map(move |coord| {
 				let client = client.clone();
 				let template = template.clone();
-				tokio::spawn(async move { fetch_tile(client, template, coord, tile_format, max_retries).await })
+				let runtime = runtime.clone();
+				tokio::spawn(
+					async move { fetch_tile(client, template, coord, tile_format, max_retries, Some(runtime)).await },
+				)
 			})
 			.buffer_unordered(max_concurrent)
-			.filter_map(|result| async {
-				match result {
-					Ok(item) => item,
-					Err(e) => {
-						log::error!("Task join error: {e:?}");
-						None
+			.filter_map({
+				let runtime = self.runtime.clone();
+				move |result| {
+					let runtime = runtime.clone();
+					async move {
+						match result {
+							Ok(item) => item,
+							Err(e) => {
+								runtime.record_error("from_tilejson task", &anyhow!("tokio join error: {e}"));
+								None
+							}
+						}
 					}
 				}
 			});
@@ -445,6 +495,7 @@ mod tests {
 			TileCoord::new(0, 0, 0).unwrap(),
 			TileFormat::PNG,
 			0,
+			None,
 		)
 		.await;
 		assert!(result.is_none());
@@ -462,6 +513,7 @@ mod tests {
 			TileCoord::new(0, 0, 0).unwrap(),
 			TileFormat::MVT,
 			0,
+			None,
 		)
 		.await;
 		assert!(result.is_none());

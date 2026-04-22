@@ -41,7 +41,7 @@
 //! ```
 
 use crate::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
-use anyhow::Result;
+use anyhow::{Result, bail};
 use async_trait::async_trait;
 use std::{path::Path, sync::Arc};
 use versatiles_core::{GeoBBox, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
@@ -122,6 +122,13 @@ pub async fn convert_tiles_container(
 	let converter = TilesConvertReader::new_from_reader(reader, cp).await?;
 	runtime.write_to_path(converter.into_shared(), path).await?;
 
+	if runtime.had_errors() {
+		bail!(
+			"conversion completed with {} read error(s) — output may be incomplete",
+			runtime.error_count()
+		);
+	}
+
 	runtime.events().step("Conversion complete".to_string());
 	Ok(())
 }
@@ -140,6 +147,13 @@ pub async fn convert_tiles_container_to_str(
 
 	let converter = TilesConvertReader::new_from_reader(reader, cp).await?;
 	runtime.write_to_str(converter.into_shared(), destination).await?;
+
+	if runtime.had_errors() {
+		bail!(
+			"conversion completed with {} read error(s) — output may be incomplete",
+			runtime.error_count()
+		);
+	}
 
 	runtime.events().step("Conversion complete".to_string());
 	Ok(())

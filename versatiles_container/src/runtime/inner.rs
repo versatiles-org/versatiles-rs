@@ -1,6 +1,12 @@
 use super::EventBus;
 use crate::{CacheType, ContainerRegistry, ProgressFactory};
-use std::{path::PathBuf, sync::Mutex};
+use std::{
+	path::PathBuf,
+	sync::{
+		Mutex,
+		atomic::{AtomicBool, AtomicUsize},
+	},
+};
 
 pub struct RuntimeInner {
 	pub cache_type: CacheType,
@@ -8,6 +14,18 @@ pub struct RuntimeInner {
 	pub registry: ContainerRegistry,
 	pub event_bus: EventBus,
 	pub progress_factory: Mutex<ProgressFactory>,
+	/// When `true`, operations running under this runtime should abort once
+	/// their stream drains if any error has been recorded via
+	/// `TilesRuntime::record_error`. Set by the `convert` entry points; left
+	/// `false` for servers, which should log errors but keep running.
+	///
+	/// Atomic so the setting can be flipped after the runtime is built
+	/// (e.g. per subcommand in the CLI), without requiring the caller to
+	/// rebuild shared state like the registry and event bus.
+	pub abort_on_error: AtomicBool,
+	/// Count of errors recorded via `TilesRuntime::record_error`. Producers
+	/// can inspect this after a stream drains to detect silent drops.
+	pub error_count: AtomicUsize,
 }
 
 #[cfg(test)]
@@ -27,6 +45,8 @@ mod tests {
 			registry,
 			event_bus,
 			progress_factory,
+			abort_on_error: AtomicBool::new(false),
+			error_count: AtomicUsize::new(0),
 		};
 
 		assert_eq!(inner.cache_type, CacheType::InMemory);
@@ -46,6 +66,8 @@ mod tests {
 			registry,
 			event_bus,
 			progress_factory,
+			abort_on_error: AtomicBool::new(false),
+			error_count: AtomicUsize::new(0),
 		};
 
 		assert_eq!(inner.cache_type, CacheType::Disk(path_buf));
@@ -64,6 +86,8 @@ mod tests {
 			registry,
 			event_bus,
 			progress_factory,
+			abort_on_error: AtomicBool::new(false),
+			error_count: AtomicUsize::new(0),
 		};
 
 		// Verify we can lock and access the progress factory
@@ -85,6 +109,8 @@ mod tests {
 			registry,
 			event_bus: event_bus.clone(),
 			progress_factory,
+			abort_on_error: AtomicBool::new(false),
+			error_count: AtomicUsize::new(0),
 		};
 
 		// Verify event bus works

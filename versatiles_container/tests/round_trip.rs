@@ -490,3 +490,80 @@ async fn tilejson_metadata_preserved_over_pyramid(#[case] filename: &str) -> Res
 
 	Ok(())
 }
+
+/// Abort-on-error runtime: any `record_error` call mid-convert must turn a
+/// nominally-successful run into a hard failure once the stream drains.
+#[tokio::test]
+async fn convert_abort_on_error_bails_when_record_error_fires() -> Result<()> {
+	let temp_dir = TempDir::new()?;
+	let output_path = temp_dir.path().join("output.versatiles");
+	let runtime = TilesRuntime::builder()
+		.silent_progress(true)
+		.abort_on_error(true)
+		.build();
+
+	// Simulate a silently-dropped tile via the shared runtime counter — this is
+	// exactly what producers now do instead of `log::error! + return empty`.
+	runtime.record_error("synthetic test source", &anyhow::anyhow!("simulated read failure"));
+
+	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
+	let params = TilesConverterParameters {
+		tile_pyramid: Some(TilePyramid::new_full_up_to(5)),
+		..Default::default()
+	};
+
+	let result = convert_tiles_container(source, params, &output_path, runtime.clone()).await;
+
+	assert!(result.is_err(), "convert must bail when had_errors is true");
+	// `convert_tiles_container` wraps its body with a `#[context]` macro, so
+	// the bail message lives in the error chain rather than the outermost
+	// `to_string()`. Format with `{:#}` to walk the full chain.
+	let msg = format!("{:#}", result.unwrap_err());
+	assert!(
+		msg.contains("1 read error"),
+		"error message should report the recorded error count, got: {msg}"
+	);
+	assert_eq!(runtime.error_count(), 1);
+	Ok(())
+}
+
+/// Default (serve-mode) runtime: the same `record_error` call is logged and
+/// emitted on the event bus, but conversion succeeds. This covers the serve
+/// semantics — a read failure must not abort the operation.
+#[tokio::test]
+async fn convert_default_runtime_tolerates_record_error() -> Result<()> {
+	let temp_dir = TempDir::new()?;
+	let output_path = temp_dir.path().join("output.versatiles");
+	let runtime = TilesRuntime::builder().silent_progress(true).build();
+	// abort_on_error defaults to false → had_errors stays false even after record_error.
+
+	let captured = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+	let captured_clone = captured.clone();
+	runtime.events().subscribe(move |event| {
+		if let Event::Error { message } = event {
+			captured_clone.lock().unwrap().push(message.clone());
+		}
+	});
+
+	runtime.record_error("synthetic test source", &anyhow::anyhow!("simulated read failure"));
+
+	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
+	let params = TilesConverterParameters {
+		tile_pyramid: Some(TilePyramid::new_full_up_to(5)),
+		..Default::default()
+	};
+
+	convert_tiles_container(source, params, &output_path, runtime.clone())
+		.await
+		.expect("default runtime must tolerate read errors");
+
+	assert_eq!(runtime.error_count(), 1);
+	assert!(
+		!runtime.had_errors(),
+		"had_errors should stay false without abort_on_error"
+	);
+	let events = captured.lock().unwrap();
+	assert_eq!(events.len(), 1, "subscriber should have received one Event::Error");
+	assert!(events[0].contains("synthetic test source"));
+	Ok(())
+}

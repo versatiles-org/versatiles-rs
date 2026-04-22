@@ -5,10 +5,10 @@ use crate::{
 	operations::read::traits::ReadTileSource,
 	vpl::VPLNode,
 };
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
+use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileStream};
 use versatiles_derive::context;
 
@@ -38,13 +38,22 @@ struct Args {
 	cutline: Option<String>,
 }
 
-#[derive(Debug)]
 struct Operation {
 	source: Arc<DemSource>,
 	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 	tile_size: u32,
 	encoding: DemEncoding,
+	runtime: TilesRuntime,
+}
+
+impl Debug for Operation {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Operation")
+			.field("tile_size", &self.tile_size)
+			.field("encoding", &self.encoding)
+			.finish_non_exhaustive()
+	}
 }
 
 impl Operation {
@@ -119,6 +128,7 @@ impl Operation {
 			tilejson,
 			tile_size,
 			encoding,
+			runtime: factory.runtime(),
 		})
 	}
 }
@@ -166,10 +176,12 @@ impl TileSource for Operation {
 		let tile_format = *self.metadata.tile_format();
 		let source = Arc::clone(&self.source);
 		let encoding = self.encoding;
+		let runtime = self.runtime.clone();
 
 		use futures::stream::{self, StreamExt};
 		let streams = stream::iter(bboxes).map(move |bbox| {
 			let source = Arc::clone(&source);
+			let runtime = runtime.clone();
 			async move {
 				if bbox.is_empty() {
 					return TileStream::empty();
@@ -179,13 +191,16 @@ impl TileSource for Operation {
 				let width = (size * bbox.width()) as usize;
 				let height = (size * bbox.height()) as usize;
 
-				let image = source
-					.elevation_tile(&geo_bbox, width, height, encoding)
-					.await
-					.expect("elevation_tile succeeded for bbox");
+				let image = match source.elevation_tile(&geo_bbox, width, height, encoding).await {
+					Ok(img) => img,
+					Err(e) => {
+						runtime.record_error(&format!("gdal dem bbox {bbox:?}"), &e);
+						return TileStream::empty();
+					}
+				};
 
 				if let Some(image) = image {
-					let vec = tokio::task::spawn_blocking(move || {
+					let spawn_result = tokio::task::spawn_blocking(move || {
 						bbox
 							.iter_coords_zorder()
 							.map(|coord| {
@@ -202,8 +217,17 @@ impl TileSource for Operation {
 							})
 							.collect::<Vec<_>>()
 					})
-					.await
-					.expect("spawn_blocking task did not panic");
+					.await;
+					let vec = match spawn_result {
+						Ok(v) => v,
+						Err(e) => {
+							runtime.record_error(
+								&format!("gdal dem bbox {bbox:?}"),
+								&anyhow!("spawn_blocking task failed: {e}"),
+							);
+							return TileStream::empty();
+						}
+					};
 
 					TileStream::from_vec(vec)
 				} else {

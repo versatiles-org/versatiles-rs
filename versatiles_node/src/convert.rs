@@ -97,8 +97,11 @@ pub(crate) async fn convert_tiles_with_options(
 		..Default::default()
 	};
 
-	// Create a new runtime for this conversion with event bridging to JavaScript
+	// Create a new runtime for this conversion with event bridging to JavaScript.
+	// Conversion must fail loudly on silently-dropped tiles, so enable
+	// abort-on-error — the JS caller will see the rejection.
 	let runtime = create_runtime();
+	runtime.set_abort_on_error(true);
 
 	// Bridge progress events to JavaScript callback
 	if let Some(cb) = on_progress {

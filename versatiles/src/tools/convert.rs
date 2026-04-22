@@ -103,6 +103,10 @@ pub struct Subcommand {
 pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	log::info!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
+	// Conversion must fail loudly on any silently-dropped tile: a truncated
+	// output would be indistinguishable from a successful conversion.
+	runtime.set_abort_on_error(true);
+
 	let reader = runtime.reader_from_str(&arguments.input_file).await?;
 
 	let (tile_pyramid, geo_bbox) = tile_pyramid(arguments)?;

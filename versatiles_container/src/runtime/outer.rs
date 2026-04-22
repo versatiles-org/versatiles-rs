@@ -1,7 +1,10 @@
 use super::{EventBus, RuntimeBuilder, RuntimeInner};
 use crate::{CacheType, DataLocation, DataSource, ProgressHandle, SharedTileSource};
 use anyhow::Result;
-use std::{path::Path, sync::Arc};
+use std::{
+	path::Path,
+	sync::{Arc, atomic::Ordering},
+};
 
 /// Immutable runtime configuration and services for tile processing operations
 ///
@@ -67,6 +70,55 @@ impl TilesRuntime {
 	#[must_use]
 	pub fn events(&self) -> &EventBus {
 		&self.inner.event_bus
+	}
+
+	/// Record a read error that would otherwise be silently dropped.
+	///
+	/// Always logs via the `log` crate and emits an `Event::Error` on the bus.
+	/// When the runtime was built with
+	/// [`RuntimeBuilder::abort_on_error(true)`](super::RuntimeBuilder::abort_on_error),
+	/// [`had_errors`](Self::had_errors) starts returning `true` as soon as the
+	/// first error is recorded — so callers can abort after their stream drains
+	/// rather than silently producing truncated output.
+	///
+	/// # Arguments
+	/// * `source` — short label identifying the producer (e.g.
+	///   `"versatiles block index"`, `"from_tilejson tile z/x/y"`).
+	/// * `err` — the underlying error. Its full context chain is preserved in
+	///   the emitted message (formatted with `{:#}`).
+	pub fn record_error(&self, source: &str, err: &anyhow::Error) {
+		let message = format!("{source}: {err:#}");
+		log::error!("{message}");
+		self.inner.event_bus.error(message);
+		self.inner.error_count.fetch_add(1, Ordering::Relaxed);
+	}
+
+	/// Number of errors recorded via [`record_error`](Self::record_error)
+	/// since this runtime was built. Clones share the same counter.
+	#[must_use]
+	pub fn error_count(&self) -> usize {
+		self.inner.error_count.load(Ordering::Relaxed)
+	}
+
+	/// `true` when the runtime was built (or subsequently set) in
+	/// abort-on-error mode and at least one error has been recorded.
+	///
+	/// Convert entry points use this after their stream drains to turn silent
+	/// drops into hard failures. Servers leave abort-on-error disabled, so
+	/// this always returns `false` for them.
+	#[must_use]
+	pub fn had_errors(&self) -> bool {
+		self.inner.abort_on_error.load(Ordering::Relaxed) && self.error_count() > 0
+	}
+
+	/// Override the abort-on-error flag after construction.
+	///
+	/// The CLI builds one shared runtime in `main` and dispatches it to every
+	/// subcommand. The `convert` subcommand flips this to `true` on entry so
+	/// the conversion aborts on any silent-drop error; `serve` leaves it
+	/// `false` so the server keeps running when a read fails.
+	pub fn set_abort_on_error(&self, abort: bool) {
+		self.inner.abort_on_error.store(abort, Ordering::Relaxed);
 	}
 
 	/// Create a progress bar for tracking operations
@@ -217,5 +269,80 @@ mod tests {
 
 		let captured = events.lock().unwrap();
 		assert_eq!(captured.len(), 1);
+	}
+
+	#[test]
+	fn record_error_default_runtime_never_flags_had_errors() {
+		let runtime = TilesRuntime::new();
+		assert!(!runtime.had_errors());
+		runtime.record_error("test source", &anyhow::anyhow!("boom"));
+		assert_eq!(runtime.error_count(), 1);
+		// abort_on_error is false → had_errors stays false
+		assert!(!runtime.had_errors());
+	}
+
+	#[test]
+	fn record_error_abort_mode_flags_had_errors() {
+		let runtime = TilesRuntime::builder().abort_on_error(true).build();
+		assert!(!runtime.had_errors());
+		assert_eq!(runtime.error_count(), 0);
+
+		runtime.record_error("test source", &anyhow::anyhow!("boom"));
+
+		assert_eq!(runtime.error_count(), 1);
+		assert!(runtime.had_errors());
+	}
+
+	#[test]
+	fn record_error_emits_event_with_context_chain() {
+		let runtime = TilesRuntime::builder().abort_on_error(true).build();
+		let messages = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+		let messages_clone = messages.clone();
+		runtime.events().subscribe(move |event| {
+			if let Event::Error { message } = event {
+				messages_clone.lock().unwrap().push(message.clone());
+			}
+		});
+
+		let err = anyhow::anyhow!("root cause").context("middle").context("outer");
+		runtime.record_error("producer X", &err);
+
+		let captured = messages.lock().unwrap();
+		assert_eq!(captured.len(), 1);
+		let msg = &captured[0];
+		assert!(msg.contains("producer X"));
+		// {:#} formatter walks the full chain
+		assert!(msg.contains("outer"));
+		assert!(msg.contains("middle"));
+		assert!(msg.contains("root cause"));
+	}
+
+	#[test]
+	fn set_abort_on_error_flips_flag_post_construction() {
+		let runtime = TilesRuntime::new(); // builder default: abort_on_error = false
+		runtime.record_error("src", &anyhow::anyhow!("a"));
+		assert!(!runtime.had_errors(), "without abort_on_error the flag stays off");
+
+		runtime.set_abort_on_error(true);
+		// The same recorded error now flips had_errors().
+		assert!(runtime.had_errors());
+
+		runtime.set_abort_on_error(false);
+		assert!(!runtime.had_errors());
+	}
+
+	#[test]
+	fn record_error_counter_shared_across_clones() {
+		let runtime = TilesRuntime::builder().abort_on_error(true).build();
+		let clone = runtime.clone();
+
+		runtime.record_error("src", &anyhow::anyhow!("a"));
+		clone.record_error("src", &anyhow::anyhow!("b"));
+
+		// Both views see the combined count.
+		assert_eq!(runtime.error_count(), 2);
+		assert_eq!(clone.error_count(), 2);
+		assert!(runtime.had_errors());
+		assert!(clone.had_errors());
 	}
 }

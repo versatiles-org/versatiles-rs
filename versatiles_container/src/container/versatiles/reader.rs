@@ -345,23 +345,28 @@ impl TileSource for VersaTilesReader {
 		}
 
 		let reader = Arc::clone(&self.reader);
+		let runtime = self.runtime.clone();
 
 		Ok(TileStream::from_stream(
 			futures::stream::iter(blocks)
 				.then(move |(block_bbox, used_bbox, block)| {
 					let reader = Arc::clone(&reader);
+					let runtime = runtime.clone();
 					async move {
 						let blob = match reader.read_range(block.index_range()).await {
 							Ok(blob) => blob,
 							Err(e) => {
-								log::error!("failed to read block index range {:?}: {e}", block.index_range());
+								runtime.record_error(
+									"versatiles block index",
+									&e.context(format!("reading range {:?}", block.index_range())),
+								);
 								return futures::stream::iter(Vec::new());
 							}
 						};
 						let tile_index = match TileIndex::from_brotli_blob(&blob) {
 							Ok(idx) => idx,
 							Err(e) => {
-								log::error!("failed to decompress tile index: {e}");
+								runtime.record_error("versatiles tile index decompress", &e);
 								return futures::stream::iter(Vec::new());
 							}
 						};

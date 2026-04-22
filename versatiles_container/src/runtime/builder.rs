@@ -4,7 +4,10 @@ use super::{EventBus, RuntimeInner, TilesRuntime};
 use crate::{CacheType, ContainerRegistry, ProgressFactory};
 use std::{
 	path::PathBuf,
-	sync::{Arc, Mutex},
+	sync::{
+		Arc, Mutex,
+		atomic::{AtomicBool, AtomicUsize},
+	},
 };
 
 /// Builder for creating customized `TilesRuntime` instances
@@ -25,6 +28,7 @@ pub struct RuntimeBuilder {
 	#[allow(clippy::type_complexity)]
 	registry_customizer: Vec<Box<dyn FnOnce(&mut ContainerRegistry)>>,
 	silent_progress: bool,
+	abort_on_error: bool,
 }
 
 impl RuntimeBuilder {
@@ -39,6 +43,7 @@ impl RuntimeBuilder {
 			silent_progress: false,
 			#[cfg(test)]
 			silent_progress: true,
+			abort_on_error: false,
 		}
 	}
 
@@ -72,6 +77,22 @@ impl RuntimeBuilder {
 	#[must_use]
 	pub fn silent_progress(mut self, silent: bool) -> Self {
 		self.silent_progress = silent;
+		self
+	}
+
+	/// Enable abort-on-error mode.
+	///
+	/// When `true`, any read error recorded through
+	/// [`TilesRuntime::record_error`](super::TilesRuntime::record_error)
+	/// is remembered so the caller can abort after the stream drains via
+	/// [`TilesRuntime::had_errors`](super::TilesRuntime::had_errors).
+	///
+	/// Set this on the runtime used for tile conversion (where a silently
+	/// dropped tile would cause corrupt output). Leave it `false` for servers
+	/// (which should log errors but keep running).
+	#[must_use]
+	pub fn abort_on_error(mut self, abort: bool) -> Self {
+		self.abort_on_error = abort;
 		self
 	}
 
@@ -126,6 +147,8 @@ impl RuntimeBuilder {
 				registry,
 				event_bus,
 				progress_factory,
+				abort_on_error: AtomicBool::new(self.abort_on_error),
+				error_count: AtomicUsize::new(0),
 			}),
 		}
 	}
