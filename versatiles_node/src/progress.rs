@@ -1,3 +1,4 @@
+use crate::macros::NapiResultExt;
 use napi::{
 	bindgen_prelude::*,
 	threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
@@ -175,7 +176,11 @@ impl Progress {
 			.build_threadsafe_function::<ProgressData>()
 			.weak::<true>()
 			.build_callback(|ctx| Ok(ctx.value))?;
-		let mut listeners = self.progress_listeners.lock().expect("poisoned mutex");
+		let mut listeners = self
+			.progress_listeners
+			.lock()
+			.map_err(|_| anyhow::anyhow!("progress listeners mutex poisoned"))
+			.to_napi()?;
 		listeners.push(tsfn);
 		Ok(self)
 	}
@@ -189,7 +194,11 @@ impl Progress {
 			.build_threadsafe_function::<MessageData>()
 			.weak::<true>()
 			.build_callback(|ctx| Ok(ctx.value))?;
-		let mut listeners = self.message_listeners.lock().expect("poisoned mutex");
+		let mut listeners = self
+			.message_listeners
+			.lock()
+			.map_err(|_| anyhow::anyhow!("message listeners mutex poisoned"))
+			.to_napi()?;
 		listeners.push(tsfn);
 		Ok(self)
 	}

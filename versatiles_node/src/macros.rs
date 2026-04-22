@@ -58,8 +58,8 @@ impl<T, E: Into<anyhow::Error>> NapiResultExt<T> for Result<T, E> {
 
 /// Convert `Result<T, anyhow::Error>` to `Result<T, napi::Error>`.
 ///
-/// Legacy macro kept for backward compatibility. Prefer
-/// [`NapiResultExt::to_napi`] in new code.
+/// Legacy macro kept for backward compatibility. Prefer the
+/// `NapiResultExt::to_napi` extension method in new code.
 #[macro_export]
 macro_rules! napi_result {
 	($expr:expr) => {

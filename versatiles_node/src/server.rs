@@ -327,10 +327,13 @@ impl TileServer {
 
 		// Cache the actual bound port for synchronous access
 		let bound_port = server.port();
-		*self
+		let mut port_guard = self
 			.actual_port
 			.write()
-			.expect("Port cache RwLock poisoned - server state corrupted") = Some(bound_port);
+			.map_err(|_| anyhow::anyhow!("port cache RwLock poisoned"))
+			.to_napi()?;
+		*port_guard = Some(bound_port);
+		drop(port_guard);
 
 		*server_lock = Some(server);
 
@@ -368,7 +371,8 @@ impl TileServer {
 		*self
 			.actual_port
 			.write()
-			.expect("Port cache RwLock poisoned - server state corrupted") = None;
+			.map_err(|_| anyhow::anyhow!("port cache RwLock poisoned"))
+			.to_napi()? = None;
 
 		Ok(())
 	}
