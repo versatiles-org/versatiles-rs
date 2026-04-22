@@ -130,7 +130,8 @@ impl TilesWriter for PMTilesWriter {
 							tiles.push((coord, result?));
 						}
 
-						tiles.sort_by_key(|(coord, _)| coord.get_hilbert_index().expect("valid tile coord has hilbert index"));
+						tiles
+							.sort_by_key(|(coord, _)| coord.get_hilbert_index().expect("valid tile coord has hilbert index"));
 
 						// Lock AFTER parallel work — write is cheap (blobs already encoded)
 						let mut writer = writer_mutex.lock().await;

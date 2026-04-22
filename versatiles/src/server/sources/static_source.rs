@@ -49,9 +49,7 @@ impl StaticSource {
 			return None;
 		}
 		self.source.get_data(
-			&url
-				.strip_prefix(&self.prefix)
-				.expect("prefix match checked above"),
+			&url.strip_prefix(&self.prefix).expect("prefix match checked above"),
 			accept,
 		)
 	}

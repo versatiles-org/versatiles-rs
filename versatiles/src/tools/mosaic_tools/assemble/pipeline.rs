@@ -188,9 +188,7 @@ async fn classify_and_stream_tiles(
 		.await;
 	result?;
 
-	Ok(std::mem::take(
-		&mut *translucent_coords.lock().expect("poisoned mutex"),
-	))
+	Ok(std::mem::take(&mut *translucent_coords.lock().expect("poisoned mutex")))
 }
 
 // ─── Between passes: prepare batches ───

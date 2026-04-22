@@ -141,8 +141,16 @@ impl TileSink for VersaTilesSink {
 		sorted_keys.sort_by(|a, b| a.0.cmp(&b.0).then(a.2.cmp(&b.2)).then(a.1.cmp(&b.1)));
 
 		// 3. Compute zoom range from block keys
-		let zoom_min = sorted_keys.iter().map(|k| k.0).min().expect("non-empty after early return above");
-		let zoom_max = sorted_keys.iter().map(|k| k.0).max().expect("non-empty after early return above");
+		let zoom_min = sorted_keys
+			.iter()
+			.map(|k| k.0)
+			.min()
+			.expect("non-empty after early return above");
+		let zoom_max = sorted_keys
+			.iter()
+			.map(|k| k.0)
+			.max()
+			.expect("non-empty after early return above");
 
 		// 4. Compute bbox from tilejson or default to world
 		let bbox = tilejson

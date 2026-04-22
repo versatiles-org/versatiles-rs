@@ -215,10 +215,12 @@ fn generate_read_method(out: &mut String, op: &OperationMeta) {
 			writeln!(out, "\tstatic {method_name}(sources: VPL[]): VPL {{").expect("writing to string never fails");
 		}
 		(false, true) if all_optional => {
-			writeln!(out, "\tstatic {method_name}(options?: {interface_name}): VPL {{").expect("writing to string never fails");
+			writeln!(out, "\tstatic {method_name}(options?: {interface_name}): VPL {{")
+				.expect("writing to string never fails");
 		}
 		(false, true) => {
-			writeln!(out, "\tstatic {method_name}(options: {interface_name}): VPL {{").expect("writing to string never fails");
+			writeln!(out, "\tstatic {method_name}(options: {interface_name}): VPL {{")
+				.expect("writing to string never fails");
 		}
 		(false, false) => {
 			writeln!(out, "\tstatic {method_name}(): VPL {{").expect("writing to string never fails");
@@ -248,7 +250,8 @@ fn generate_read_method(out: &mut String, op: &OperationMeta) {
 	}
 
 	if has_src {
-		writeln!(out, "\t\treturn new VPL([{{ name: '{tag}', params, sources }}]);").expect("writing to string never fails");
+		writeln!(out, "\t\treturn new VPL([{{ name: '{tag}', params, sources }}]);")
+			.expect("writing to string never fails");
 	} else {
 		writeln!(out, "\t\treturn new VPL([{{ name: '{tag}', params }}]);").expect("writing to string never fails");
 	}
@@ -301,7 +304,8 @@ fn generate_transform_method(out: &mut String, op: &OperationMeta) {
 		out.push_str("\t\tconst params: Record<string, unknown> = {};\n");
 	}
 
-	writeln!(out, "\t\treturn new VPL([...this.steps, {{ name: '{tag}', params }}]);").expect("writing to string never fails");
+	writeln!(out, "\t\treturn new VPL([...this.steps, {{ name: '{tag}', params }}]);")
+		.expect("writing to string never fails");
 
 	out.push_str("\t}\n\n");
 }

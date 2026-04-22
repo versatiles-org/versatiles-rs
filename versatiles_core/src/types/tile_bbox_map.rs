@@ -135,19 +135,12 @@ impl<I> TileBBoxMap<I> {
 	///
 	/// Coordinates are yielded with `x` increasing fastest, then `y`.
 	pub fn iter(&self) -> impl Iterator<Item = (TileCoord, &I)> {
-		self
-			.vec
-			.iter()
-			.enumerate()
-			.map(move |(i, item)| {
-				(
-					self
-						.bbox
-						.coord_at_index(i as u64)
-						.expect("index within bbox range"),
-					item,
-				)
-			})
+		self.vec.iter().enumerate().map(move |(i, item)| {
+			(
+				self.bbox.coord_at_index(i as u64).expect("index within bbox range"),
+				item,
+			)
+		})
 	}
 
 	/// Group tiles by their parent tile one level above.
@@ -162,10 +155,7 @@ impl<I> TileBBoxMap<I> {
 		let bbox1 = self.bbox.leveled_down();
 		let mut container1 = TileBBoxMap::<Vec<(TileCoord, I)>>::new_default(bbox1)?;
 		for (i, item) in self.vec.into_iter().enumerate() {
-			let coord0 = self
-				.bbox
-				.coord_at_index(i as u64)
-				.expect("index within bbox range");
+			let coord0 = self.bbox.coord_at_index(i as u64).expect("index within bbox range");
 			let coord1 = coord0.at_level(self.bbox.level() - 1);
 			container1.get_mut(&coord1)?.push((coord0, item));
 		}
@@ -264,14 +254,7 @@ impl<I> std::iter::IntoIterator for TileBBoxMap<I> {
 
 	fn into_iter(self) -> Self::IntoIter {
 		let bbox = self.bbox;
-		let f = Box::new(move |(i, item)| {
-			(
-				bbox
-					.coord_at_index(i as u64)
-					.expect("index within bbox range"),
-				item,
-			)
-		});
+		let f = Box::new(move |(i, item)| (bbox.coord_at_index(i as u64).expect("index within bbox range"), item));
 		self.vec.into_iter().enumerate().map(f)
 	}
 }

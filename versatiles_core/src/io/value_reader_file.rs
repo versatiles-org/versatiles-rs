@@ -116,7 +116,7 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderFile<E> {
 	}
 
 	fn position(&mut self) -> Result<u64> {
-		Ok(self.reader.stream_position().context("file stream_position failed")?)
+		self.reader.stream_position().context("file stream_position failed")
 	}
 
 	fn set_position(&mut self, position: u64) -> Result<()> {

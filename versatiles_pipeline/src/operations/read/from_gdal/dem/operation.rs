@@ -195,7 +195,10 @@ impl TileSource for Operation {
 									size,
 									size,
 								);
-								(coord, Tile::from_image(tile_img, tile_format).expect("tile_format is raster"))
+								(
+									coord,
+									Tile::from_image(tile_img, tile_format).expect("tile_format is raster"),
+								)
 							})
 							.collect::<Vec<_>>()
 					})

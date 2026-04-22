@@ -86,11 +86,9 @@ impl ReadTileSource for Operation {
 		// Build tile pyramid from TileJSON bounds/zoom
 		let min_zoom = tilejson.zoom_min().unwrap_or(0);
 		let max_zoom = tilejson.zoom_max().unwrap_or(22);
-		let geo_bbox = tilejson
-			.bounds
-			.unwrap_or_else(|| {
-				GeoBBox::new(-180.0, -85.05112878, 180.0, 85.05112878).expect("valid web-mercator bounds literal")
-			});
+		let geo_bbox = tilejson.bounds.unwrap_or_else(|| {
+			GeoBBox::new(-180.0, -85.05112878, 180.0, 85.05112878).expect("valid web-mercator bounds literal")
+		});
 		let tile_pyramid = TilePyramid::from_geo_bbox(min_zoom, max_zoom, &geo_bbox)?;
 
 		let metadata = TileSourceMetadata::new(

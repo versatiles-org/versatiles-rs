@@ -58,9 +58,8 @@ impl TileBBox {
 					let x = coord.x * size;
 					let y = coord.y * size;
 
-					let mut bbox =
-						TileBBox::from_min_and_max(level, x, y, (x + size - 1).min(max), (y + size - 1).min(max))
-							.expect("grid cell within level bounds");
+					let mut bbox = TileBBox::from_min_and_max(level, x, y, (x + size - 1).min(max), (y + size - 1).min(max))
+						.expect("grid cell within level bounds");
 					bbox.intersect_bbox(self).expect("same-level intersection");
 					bbox
 				})

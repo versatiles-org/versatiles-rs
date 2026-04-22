@@ -149,8 +149,7 @@ impl TileSource for Operation {
 					TileBBoxMap::<Option<Tile>>::new_default(bbox).expect("32×32 grid bbox always fits in usize");
 
 				for source in sources.iter() {
-					let mut bbox_left =
-						TileBBox::new_empty(bbox.level()).expect("bbox.level() is already a valid zoom");
+					let mut bbox_left = TileBBox::new_empty(bbox.level()).expect("bbox.level() is already a valid zoom");
 					for (coord, slot) in tiles.iter() {
 						if slot.is_none() {
 							bbox_left.insert_coord(&coord).expect("coord is within bbox level");

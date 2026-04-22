@@ -1,4 +1,4 @@
-use super::{Arc, ConcurrencyLimits, Future, Pin, Stream, StreamExt, TileBBox, TileCoord, TileStream, stream};
+use super::{Arc, ConcurrencyLimits, Future, Pin, Result, Stream, StreamExt, TileBBox, TileCoord, TileStream, stream};
 
 impl<'a, T> TileStream<'a, T>
 where
@@ -181,6 +181,55 @@ where
 						log::error!("Task join error: {e:?}");
 						None
 					}
+				}
+			});
+		TileStream { inner: s.boxed() }
+	}
+
+	/// Fallible variant of [`from_bbox_async_parallel`](Self::from_bbox_async_parallel).
+	///
+	/// The async callback returns `Result<Option<(TileCoord, T)>>`. The output stream
+	/// emits `(TileCoord, Result<T>)` pairs:
+	/// - `Ok(Some((coord, t)))` → emitted as `(coord, Ok(t))`
+	/// - `Ok(None)` → dropped (filtered out)
+	/// - `Err(e)` → emitted as `(coord, Err(e))` so the consumer can react
+	///
+	/// Task-join failures (panicking callbacks) are also surfaced as `Err`
+	/// items rather than silently dropped, matching the codebase's `_try` convention.
+	///
+	/// Coordinates are processed in parallel across multiple threads without
+	/// guaranteed order. Uses `cpu_bound` concurrency limit.
+	///
+	/// # Examples
+	/// ```
+	/// # use anyhow::Result;
+	/// # use versatiles_core::{TileBBox, TileCoord, Blob, TileStream};
+	/// # async fn example() {
+	/// let bbox = TileBBox::from_min_and_max(4, 0, 0, 3, 3).unwrap();
+	/// let tile_stream = TileStream::from_bbox_async_parallel_try(bbox, |coord| async move {
+	///     Ok::<_, anyhow::Error>(Some((coord, Blob::from(format!("data for {:?}", coord)))))
+	/// });
+	/// # }
+	/// ```
+	pub fn from_bbox_async_parallel_try<F, Fut>(bbox: TileBBox, mut callback: F) -> TileStream<'a, Result<T>>
+	where
+		F: FnMut(TileCoord) -> Fut + Send + 'a,
+		Fut: Future<Output = Result<Option<(TileCoord, T)>>> + Send + 'static,
+		T: 'static,
+	{
+		let limits = ConcurrencyLimits::default();
+		let s = stream::iter(bbox.into_iter_coords())
+			.map(move |coord| {
+				let fut = callback(coord);
+				async move { (coord, tokio::spawn(fut).await) }
+			})
+			.buffer_unordered(limits.cpu_bound)
+			.filter_map(|(coord, join_result)| async move {
+				match join_result {
+					Ok(Ok(Some((c, t)))) => Some((c, Ok(t))),
+					Ok(Ok(None)) => None,
+					Ok(Err(e)) => Some((coord, Err(e))),
+					Err(e) => Some((coord, Err(anyhow::anyhow!("task join error: {e:?}")))),
 				}
 			});
 		TileStream { inner: s.boxed() }

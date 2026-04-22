@@ -29,9 +29,7 @@ impl TileBBox {
 		assert!(y < self.max_count(), "y ({y}) must be < max ({})", self.max_count());
 		if self.is_empty() {
 			// Initialize bounding box to the provided coordinate
-			self
-				.set_min_and_size(x, y, 1, 1)
-				.expect("x, y within level bounds");
+			self.set_min_and_size(x, y, 1, 1).expect("x, y within level bounds");
 		} else {
 			// Expand bounding box to include the new coordinate
 			if x < self.x_min().expect("bbox is non-empty") {
@@ -123,10 +121,22 @@ impl TileBBox {
 		} else {
 			// Expand bounding box to include the other bounding box
 			self.set_min_and_max(
-				self.x_min().expect("bbox is non-empty").min(bbox.x_min().expect("bbox is non-empty")),
-				self.y_min().expect("bbox is non-empty").min(bbox.y_min().expect("bbox is non-empty")),
-				self.x_max().expect("bbox is non-empty").max(bbox.x_max().expect("bbox is non-empty")),
-				self.y_max().expect("bbox is non-empty").max(bbox.y_max().expect("bbox is non-empty")),
+				self
+					.x_min()
+					.expect("bbox is non-empty")
+					.min(bbox.x_min().expect("bbox is non-empty")),
+				self
+					.y_min()
+					.expect("bbox is non-empty")
+					.min(bbox.y_min().expect("bbox is non-empty")),
+				self
+					.x_max()
+					.expect("bbox is non-empty")
+					.max(bbox.x_max().expect("bbox is non-empty")),
+				self
+					.y_max()
+					.expect("bbox is non-empty")
+					.max(bbox.y_max().expect("bbox is non-empty")),
 			)?;
 		}
 

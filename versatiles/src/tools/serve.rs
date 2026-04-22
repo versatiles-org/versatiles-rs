@@ -97,7 +97,10 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 				.captures(argument)
 				.expect("pattern matched; captures must succeed");
 
-			let filename: &str = capture.name("filename").expect("every pattern defines filename").as_str();
+			let filename: &str = capture
+				.name("filename")
+				.expect("every pattern defines filename")
+				.as_str();
 			let prefix = capture.name("path").map(|m| m.as_str().to_string());
 
 			Ok(StaticSourceConfig {

@@ -400,6 +400,52 @@ async fn test_from_bbox_async_parallel_parallelism() {
 }
 
 #[tokio::test]
+async fn should_create_from_bbox_async_parallel_try_success() {
+	let bbox = TileBBox::from_min_and_max(4, 0, 0, 1, 1).unwrap(); // 2x2 = 4 tiles
+	let stream = TileStream::from_bbox_async_parallel_try(bbox, |coord| async move {
+		Ok::<_, anyhow::Error>(Some((coord, Blob::from(format!("v{}", coord.x)))))
+	});
+	let items = stream.to_vec().await;
+	assert_eq!(items.len(), 4);
+	for (_coord, result) in &items {
+		assert!(result.is_ok());
+	}
+}
+
+#[tokio::test]
+async fn should_create_from_bbox_async_parallel_try_drops_none() {
+	let bbox = TileBBox::from_min_and_max(4, 0, 0, 1, 1).unwrap(); // 2x2 = 4 tiles
+	let stream = TileStream::from_bbox_async_parallel_try(bbox, |coord| async move {
+		// Only emit for x == 0
+		if coord.x == 0 {
+			Ok::<_, anyhow::Error>(Some((coord, Blob::from("keep"))))
+		} else {
+			Ok(None)
+		}
+	});
+	let items = stream.to_vec().await;
+	assert_eq!(items.len(), 2);
+}
+
+#[tokio::test]
+async fn should_create_from_bbox_async_parallel_try_propagates_err() {
+	let bbox = TileBBox::from_min_and_max(4, 0, 0, 1, 1).unwrap(); // 2x2 = 4 tiles
+	let stream = TileStream::from_bbox_async_parallel_try(bbox, |coord| async move {
+		if coord.x == 1 {
+			anyhow::bail!("boom for x=1");
+		}
+		Ok(Some((coord, Blob::from("ok"))))
+	});
+	let items = stream.to_vec().await;
+	assert_eq!(items.len(), 4);
+	let errors: Vec<_> = items.iter().filter(|(_, r)| r.is_err()).collect();
+	assert_eq!(errors.len(), 2); // x=1 fails for both rows
+	for (coord, _) in errors {
+		assert_eq!(coord.x, 1);
+	}
+}
+
+#[tokio::test]
 async fn should_create_from_coord_vec_async() {
 	let coords = vec![tc(0, 0, 0), tc(1, 1, 1)];
 

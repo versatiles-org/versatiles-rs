@@ -138,10 +138,7 @@ impl TarFile {
 
 		Ok(Self {
 			lookup,
-			name: path
-				.to_str()
-				.expect("utf-8 already checked above")
-				.to_owned(),
+			name: path.to_str().expect("utf-8 already checked above").to_owned(),
 		})
 	}
 }

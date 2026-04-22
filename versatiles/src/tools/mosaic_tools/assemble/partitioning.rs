@@ -42,10 +42,7 @@ pub(super) fn partition_into_batches(
 
 	// Special case: single group that exceeds batch_size — split coords spatially
 	if groups.len() == 1 {
-		return split_single_group(
-			groups.into_iter().next().expect("groups.len() == 1"),
-			batch_size,
-		);
+		return split_single_group(groups.into_iter().next().expect("groups.len() == 1"), batch_size);
 	}
 
 	// PCA step: find the principal component via power iteration

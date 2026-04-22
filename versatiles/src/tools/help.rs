@@ -55,11 +55,7 @@ fn print_markdown(md: &str) {
 			.as_bytes()
 			.chunks(1)
 			.map(|char| {
-				u8::from_str_radix(
-					std::str::from_utf8(char).expect("hex digit is ascii"),
-					16,
-				)
-				.expect("valid hex digit")
+				u8::from_str_radix(std::str::from_utf8(char).expect("hex digit is ascii"), 16).expect("valid hex digit")
 					* 17
 			})
 			.collect::<Vec<u8>>();
@@ -71,7 +67,11 @@ fn print_markdown(md: &str) {
 	};
 
 	// Configure header level 1
-	skin.headers.get_mut(0).expect("termimad skin has default headers").set_fg(color("#D33"));
+	skin
+		.headers
+		.get_mut(0)
+		.expect("termimad skin has default headers")
+		.set_fg(color("#D33"));
 
 	// Configure header level 2
 	let h2 = skin.headers.get_mut(1).expect("termimad skin has default headers");
@@ -80,7 +80,11 @@ fn print_markdown(md: &str) {
 	h2.compound_style.style_char('#');
 
 	// Configure header level 3
-	skin.headers.get_mut(2).expect("termimad skin has default headers").set_fg(color("#DD8"));
+	skin
+		.headers
+		.get_mut(2)
+		.expect("termimad skin has default headers")
+		.set_fg(color("#DD8"));
 
 	// Set the other text styles
 	skin.bold.set_fg(color("#FFF"));

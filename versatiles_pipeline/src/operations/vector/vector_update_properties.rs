@@ -128,31 +128,33 @@ impl RunnerTrait for Runner {
 			return Ok(Some(tile));
 		}
 
-		layer.expect("early-returned above if layer is None").filter_map_properties(|mut prop| {
-			// For every feature grab its identifier; if absent, log a warning
-			// and keep the feature unchanged.
-			if let Some(id) = prop.get(&self.args.id_field_tiles) {
-				// Look up the ID in our CSV‑derived map.  When found, merge or replace
-				// the properties according to the flags.
+		layer
+			.expect("early-returned above if layer is None")
+			.filter_map_properties(|mut prop| {
+				// For every feature grab its identifier; if absent, log a warning
+				// and keep the feature unchanged.
+				if let Some(id) = prop.get(&self.args.id_field_tiles) {
+					// Look up the ID in our CSV‑derived map.  When found, merge or replace
+					// the properties according to the flags.
 
-				if let Some(new_prop) = self.properties_map.get(&id.to_string()) {
-					if self.args.replace_properties.unwrap_or(false) {
-						prop = new_prop.clone();
+					if let Some(new_prop) = self.properties_map.get(&id.to_string()) {
+						if self.args.replace_properties.unwrap_or(false) {
+							prop = new_prop.clone();
+						} else {
+							prop.update(new_prop);
+						}
 					} else {
-						prop.update(new_prop);
+						// Optionally drop features that failed the lookup.
+						if self.args.remove_non_matching.unwrap_or(false) {
+							return None;
+						}
+						log::info!("id \"{id}\" not found in data source");
 					}
 				} else {
-					// Optionally drop features that failed the lookup.
-					if self.args.remove_non_matching.unwrap_or(false) {
-						return None;
-					}
-					log::info!("id \"{id}\" not found in data source");
+					log::warn!("id field \"{}\" not found", &self.args.id_field_tiles);
 				}
-			} else {
-				log::warn!("id field \"{}\" not found", &self.args.id_field_tiles);
-			}
-			Some(prop)
-		})?;
+				Some(prop)
+			})?;
 
 		Ok(Some(tile))
 	}

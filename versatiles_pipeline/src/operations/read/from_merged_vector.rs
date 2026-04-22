@@ -179,11 +179,8 @@ impl TileSource for Operation {
 							} else {
 								Some((
 									coord,
-									Tile::from_vector(
-										merge_vector_tiles(vec_tiles).expect("valid vector tiles merge"),
-										format,
-									)
-									.expect("format is vector"),
+									Tile::from_vector(merge_vector_tiles(vec_tiles).expect("valid vector tiles merge"), format)
+										.expect("format is vector"),
 								))
 							}
 						})

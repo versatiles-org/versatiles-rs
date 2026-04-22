@@ -113,7 +113,10 @@ pub fn open_tile_sink(
 			} else {
 				bail!(
 					"unsupported tile sink format: .{}",
-					Path::new(destination).extension().expect("extension matched above").to_string_lossy()
+					Path::new(destination)
+						.extension()
+						.expect("extension matched above")
+						.to_string_lossy()
 				)
 			}
 		}

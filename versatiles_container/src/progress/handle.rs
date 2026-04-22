@@ -239,8 +239,8 @@ impl ProgressHandle {
 			0.0
 		};
 
-		let percent = float_to_int::<f64, u64>((pos as f64 * 100.0 / total as f64).floor())
-			.expect("percent in 0..=100 fits in u64");
+		let percent =
+			float_to_int::<f64, u64>((pos as f64 * 100.0 / total as f64).floor()).expect("percent in 0..=100 fits in u64");
 		let per_sec_str = format_rate(per_sec);
 		let eta_str = format_eta(Duration::from_secs_f64(eta_secs));
 

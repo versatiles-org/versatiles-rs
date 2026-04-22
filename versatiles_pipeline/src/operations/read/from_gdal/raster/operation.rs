@@ -283,7 +283,12 @@ impl TileSource for Operation {
 										size,
 									)
 									.into_optional()
-									.map(|img| (coord, Tile::from_image(img, tile_format).expect("tile_format is raster")))
+									.map(|img| {
+										(
+											coord,
+											Tile::from_image(img, tile_format).expect("tile_format is raster"),
+										)
+									})
 							})
 							.collect::<Vec<_>>()
 					})

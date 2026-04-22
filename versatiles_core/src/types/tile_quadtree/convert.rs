@@ -6,13 +6,10 @@ impl TileQuadtree {
 	/// or `None` if the quadtree is empty.
 	#[must_use]
 	pub fn to_bbox(&self) -> TileBBox {
-		self
-			.root
-			.bounds(&BBox::root(self.level))
-			.map_or_else(
-				|| TileBBox::new_empty(self.level).expect("level already validated"),
-				|b| b.into_bbox(self.level),
-			)
+		self.root.bounds(&BBox::root(self.level)).map_or_else(
+			|| TileBBox::new_empty(self.level).expect("level already validated"),
+			|b| b.into_bbox(self.level),
+		)
 	}
 
 	/// Convert the covered area to a geographic [`GeoBBox`], or `None` if empty.

@@ -77,8 +77,7 @@ fn draw_text(name: &str, y: f32, text: &str) -> VectorTileLayer {
 		position.x += scale * font.h_advance_unscaled(glyph_id);
 	}
 
-	VectorTileLayer::from_features(String::from(name), features, 4096, 1)
-		.expect("debug features have valid geometry")
+	VectorTileLayer::from_features(String::from(name), features, 4096, 1).expect("debug features have valid geometry")
 }
 
 fn get_multipolygon(mls: MultiLineStringGeometry) -> MultiPolygonGeometry {

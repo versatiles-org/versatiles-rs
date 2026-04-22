@@ -25,8 +25,7 @@ use versatiles_container::{DataLocation, TileSource, TilesRuntime};
 use versatiles_core::{TileFormat, TileType};
 use versatiles_derive::context;
 
-static MULTIPLE_NEWLINES_REGEX: LazyLock<Regex> =
-	LazyLock::new(|| Regex::new(r"\n{3,}").expect("valid regex literal"));
+static MULTIPLE_NEWLINES_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\n{3,}").expect("valid regex literal"));
 
 pub trait OperationFactoryTrait: Send + Sync {
 	fn tag_name(&self) -> &str;
