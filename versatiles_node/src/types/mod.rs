@@ -19,6 +19,7 @@ mod source_metadata;
 mod tile_compression;
 mod tile_coord;
 mod tilejson;
+mod zoom;
 
 pub use convert_options::ConvertOptions;
 pub use probe_result::ProbeResult;
@@ -27,3 +28,4 @@ pub use source_metadata::SourceMetadata;
 pub use tile_compression::parse_compression;
 pub use tile_coord::TileCoord;
 pub use tilejson::TileJSON;
+pub use zoom::z_to_u8;

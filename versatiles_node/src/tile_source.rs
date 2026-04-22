@@ -15,7 +15,7 @@ use crate::{
 	napi_result,
 	progress::{MessageData, ProgressData},
 	runtime::create_runtime,
-	types::{ConvertOptions, SourceMetadata, TileJSON},
+	types::{ConvertOptions, SourceMetadata, TileJSON, z_to_u8},
 };
 use napi::{bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
@@ -319,11 +319,7 @@ impl TileSource {
 	/// ```
 	#[napi]
 	pub async fn get_tile(&self, z: u32, x: u32, y: u32) -> Result<Option<Buffer>> {
-		if z > 30 {
-			return Err(Error::from_reason("Zoom level must be between 0 and 30"));
-		}
-		#[allow(clippy::cast_possible_truncation)]
-		let coord = napi_result!(RustTileCoord::new(z as u8, x, y))?;
+		let coord = napi_result!(RustTileCoord::new(z_to_u8(z)?, x, y))?;
 		let tile_opt = napi_result!(self.reader.tile(&coord).await)?;
 
 		tile_opt

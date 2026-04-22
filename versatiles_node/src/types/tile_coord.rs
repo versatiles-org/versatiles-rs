@@ -1,4 +1,4 @@
-use crate::napi_result;
+use crate::{napi_result, types::z_to_u8};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use versatiles_core::TileCoord as RustTileCoord;
@@ -53,11 +53,7 @@ impl TileCoord {
 	/// ```
 	#[napi(constructor)]
 	pub fn new(z: u32, x: u32, y: u32) -> Result<Self> {
-		if z > 30 {
-			return Err(Error::from_reason("Zoom level must be between 0 and 30"));
-		}
-		#[allow(clippy::cast_possible_truncation)]
-		let inner = napi_result!(RustTileCoord::new(z as u8, x, y))?;
+		let inner = napi_result!(RustTileCoord::new(z_to_u8(z)?, x, y))?;
 		Ok(Self { inner })
 	}
 
@@ -92,11 +88,7 @@ impl TileCoord {
 	/// ```
 	#[napi(factory)]
 	pub fn from_geo(lon: f64, lat: f64, z: u32) -> Result<Self> {
-		if z > 30 {
-			return Err(Error::from_reason("Zoom level must be between 0 and 30"));
-		}
-		#[allow(clippy::cast_possible_truncation)]
-		let inner = napi_result!(RustTileCoord::from_geo(lon, lat, z as u8))?;
+		let inner = napi_result!(RustTileCoord::from_geo(lon, lat, z_to_u8(z)?))?;
 		Ok(Self { inner })
 	}
 
