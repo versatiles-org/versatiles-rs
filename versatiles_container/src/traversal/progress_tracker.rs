@@ -109,12 +109,12 @@ mod tests {
 	impl TestReader {
 		fn new(traversal: Traversal, max_level: u8) -> Self {
 			TestReader {
-				metadata: TileSourceMetadata {
-					bbox_pyramid: TilePyramid::new_full_up_to(max_level),
-					tile_compression: TileCompression::Uncompressed,
-					tile_format: TileFormat::PNG,
+				metadata: TileSourceMetadata::new(
+					TileFormat::PNG,
+					TileCompression::Uncompressed,
 					traversal,
-				},
+					Some(TilePyramid::new_full_up_to(max_level)),
+				),
 				tilejson: TileJSON::default(),
 				tile_delay_micros: 0,
 			}
@@ -139,10 +139,17 @@ mod tests {
 			&self.tilejson
 		}
 
+		async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+			self
+				.metadata
+				.tile_pyramid()
+				.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
+		}
+
 		async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 			log::trace!("test_reader::tile_stream {bbox:?}");
-			let compression = self.metadata.tile_compression;
-			let format = self.metadata.tile_format;
+			let compression = *self.metadata.tile_compression();
+			let format = *self.metadata.tile_format();
 			let delay_micros = self.tile_delay_micros;
 
 			if delay_micros > 0 {

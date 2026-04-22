@@ -39,47 +39,25 @@ pub trait TileSourceTraverseExt: TileSource {
 		's: 'a,
 	{
 		async move {
-			let traversal_steps = translate_traversals(
-				&self.metadata().bbox_pyramid,
-				&self.metadata().traversal,
-				traversal_write,
-			)?;
+			let metadata = self.metadata();
+			let tile_pyramid = self.tile_pyramid().await?;
+			let traversal_steps = translate_traversals(&tile_pyramid, metadata.traversal(), traversal_write)?;
 
 			use TraversalTranslationStep::{Pop, Push, Stream};
 
-			let (tn_read, tn_write) = if runtime.precount_tiles() {
-				let mut count = 0u64;
-				for step in &traversal_steps {
-					match step {
-						Push(bboxes_in, _) | Stream(bboxes_in, _) => {
-							for bbox in bboxes_in {
-								count += self.tile_coord_stream(*bbox).await?.drain_and_count().await;
-							}
-						}
-						Pop(_, _) => {}
-					}
-				}
-				(count, count)
-			} else {
-				let mut tn_read = 0u64;
-				let mut tn_write = 0u64;
-				for step in &traversal_steps {
-					match step {
-						Push(bboxes_in, _) => {
-							tn_read += bboxes_in.iter().map(TileBBox::count_tiles).sum::<u64>();
-						}
-						Pop(_, bbox_out) => {
-							tn_write += bbox_out.count_tiles();
-						}
-						Stream(bboxes_in, bbox_out) => {
-							tn_read += bboxes_in.iter().map(TileBBox::count_tiles).sum::<u64>();
-							tn_write += bbox_out.count_tiles();
+			let mut count = 0u64;
+			for step in &traversal_steps {
+				match step {
+					Push(bboxes_in, _) | Stream(bboxes_in, _) => {
+						for bbox in bboxes_in {
+							count += self.tile_coord_stream(*bbox).await?.drain_and_count().await;
 						}
 					}
+					Pop(_, _) => {}
 				}
-				(tn_read, tn_write)
-			};
-			let progress = runtime.create_progress("processing tiles", u64::midpoint(tn_read, tn_write));
+			}
+
+			let progress = runtime.create_progress("processing tiles", count);
 			let tracker = Arc::new(ProgressTracker::new(progress));
 
 			let cache = Arc::new(TraversalCache::<(TileCoord, Tile)>::new(runtime.cache_type())?);
@@ -161,17 +139,14 @@ mod tests {
 		tilejson: TileJSON,
 		/// Optional delay in milliseconds before returning each tile.
 		tile_delay_micros: u64,
+		tile_pyramid: TilePyramid,
 	}
 
 	impl TestReader {
 		fn new(traversal: Traversal, max_level: u8) -> Self {
 			TestReader {
-				metadata: TileSourceMetadata {
-					bbox_pyramid: TilePyramid::new_full_up_to(max_level),
-					tile_compression: TileCompression::Uncompressed,
-					tile_format: TileFormat::PNG,
-					traversal,
-				},
+				metadata: TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, traversal, None),
+				tile_pyramid: TilePyramid::new_full_up_to(max_level),
 				tilejson: TileJSON::default(),
 				tile_delay_micros: 0,
 			}
@@ -182,12 +157,8 @@ mod tests {
 			// Use full world bbox to get all tiles at each zoom level
 			let bbox = GeoBBox::new(-180.0, -85.05, 180.0, 85.05).unwrap();
 			TestReader {
-				metadata: TileSourceMetadata {
-					bbox_pyramid: TilePyramid::from_geo_bbox(min_level, max_level, &bbox).unwrap(),
-					tile_compression: TileCompression::Uncompressed,
-					tile_format: TileFormat::PNG,
-					traversal,
-				},
+				metadata: TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, traversal, None),
+				tile_pyramid: TilePyramid::from_geo_bbox(min_level, max_level, &bbox).unwrap(),
 				tilejson: TileJSON::default(),
 				tile_delay_micros: 0,
 			}
@@ -214,8 +185,8 @@ mod tests {
 
 		async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 			log::trace!("test_reader::tile_stream {bbox:?}");
-			let compression = self.metadata.tile_compression;
-			let format = self.metadata.tile_format;
+			let compression = *self.metadata.tile_compression();
+			let format = *self.metadata.tile_format();
 			let delay_micros = self.tile_delay_micros;
 
 			if delay_micros > 0 {
@@ -237,6 +208,10 @@ mod tests {
 		async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 			log::trace!("test_reader::tile_coord_stream {bbox:?}");
 			Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), |_coord| Some(())))
+		}
+
+		async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+			Ok(Arc::new(self.tile_pyramid.clone()))
 		}
 	}
 
@@ -352,7 +327,7 @@ mod tests {
 						let tiles = stream.to_vec().await;
 						for (coord, tile) in tiles {
 							// Verify tile data contains expected coord
-							let blob = tile.into_blob(TileCompression::Uncompressed)?;
+							let blob = tile.into_blob(&TileCompression::Uncompressed)?;
 							let data = String::from_utf8_lossy(blob.as_slice());
 							let expected = format!("tile:{},{},{}", coord.level, coord.x, coord.y);
 							assert_eq!(data, expected);
@@ -519,7 +494,7 @@ mod tests {
 						let tiles = stream.to_vec().await;
 						for (coord, tile) in tiles {
 							// Verify tile data contains expected coord after caching
-							let blob = tile.into_blob(TileCompression::Uncompressed)?;
+							let blob = tile.into_blob(&TileCompression::Uncompressed)?;
 							let data = String::from_utf8_lossy(blob.as_slice());
 							let expected = format!("tile:{},{},{}", coord.level, coord.x, coord.y);
 							assert_eq!(data, expected, "Tile content mismatch after cache");
