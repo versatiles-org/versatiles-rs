@@ -1,6 +1,6 @@
 use super::DataWriterTrait;
 use crate::{Blob, ByteRange};
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use std::{thread, time::Duration};
 
 const MAX_RETRIES: u32 = 2;
@@ -77,7 +77,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 			}
 		}
 
-		unreachable!()
+		bail!("retry loop exited without returning — MAX_RETRIES invariant violated")
 	}
 
 	/// Write at start of file with retry and reconnect on failure.
@@ -129,7 +129,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 			}
 		}
 
-		unreachable!()
+		bail!("retry loop exited without returning — MAX_RETRIES invariant violated")
 	}
 
 	/// Seek with retry and reconnect on failure.
@@ -178,6 +178,6 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 			}
 		}
 
-		unreachable!()
+		bail!("retry loop exited without returning — MAX_RETRIES invariant violated")
 	}
 }

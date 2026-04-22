@@ -145,7 +145,7 @@ impl SftpFileSystem {
 			}
 		}
 
-		unreachable!()
+		bail!("SFTP write_file retry loop exited without returning — MAX_RETRIES invariant violated")
 	}
 
 	fn try_write_file(&self, full_path: &Path, data: &[u8]) -> Result<()> {

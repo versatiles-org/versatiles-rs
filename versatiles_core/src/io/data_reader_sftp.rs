@@ -1,6 +1,6 @@
 use super::{DataReaderTrait, network_reader::NetworkReader, sftp_utils};
 use crate::{Blob, ByteRange};
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use reqwest::Url;
 use ssh2::Session;
@@ -154,7 +154,7 @@ impl DataReaderSftp {
 			}
 		}
 
-		unreachable!()
+		bail!("SFTP read retry loop exited without returning — MAX_RETRIES invariant violated")
 	}
 }
 
