@@ -61,24 +61,45 @@ impl From<TileQuadtree> for TileCover {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use rstest::rstest;
 
 	fn bbox(zoom: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 		TileBBox::from_min_and_max(zoom, x0, y0, x1, y1).unwrap()
 	}
 
-	#[test]
-	fn new_empty_is_empty() {
-		let c = TileCover::new_empty(4).unwrap();
+	#[rstest]
+	#[case(0)]
+	#[case(1)]
+	#[case(15)]
+	#[case(30)]
+	fn new_empty_is_empty(#[case] level: u8) {
+		let c = TileCover::new_empty(level).unwrap();
 		assert!(c.is_empty());
-		assert_eq!(c.level(), 4);
+		assert!(!c.is_full());
+		assert_eq!(c.level(), level);
 		assert_eq!(c.count_tiles(), 0);
 	}
 
-	#[test]
-	fn new_full_covers_all() {
-		let c = TileCover::new_full(2).unwrap();
+	#[rstest]
+	#[case(0, 1)]
+	#[case(1, 4)]
+	#[case(2, 16)]
+	#[case(10, 1_048_576)]
+	fn new_full_covers_all(#[case] level: u8, #[case] expected: u64) {
+		let c = TileCover::new_full(level).unwrap();
 		assert!(c.is_full());
-		assert_eq!(c.count_tiles(), 16);
+		assert!(!c.is_empty());
+		assert_eq!(c.level(), level);
+		assert_eq!(c.count_tiles(), expected);
+	}
+
+	#[rstest]
+	#[case(31)]
+	#[case(42)]
+	#[case(u8::MAX)]
+	fn constructors_reject_out_of_range_level(#[case] level: u8) {
+		assert!(TileCover::new_empty(level).is_err());
+		assert!(TileCover::new_full(level).is_err());
 	}
 
 	#[test]

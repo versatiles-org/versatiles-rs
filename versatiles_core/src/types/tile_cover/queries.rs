@@ -43,19 +43,36 @@ impl TileCover {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::TileQuadtree;
+	use crate::{TileBBox, TileQuadtree};
+	use rstest::rstest;
 
-	#[test]
-	fn level() {
-		assert_eq!(TileCover::new_empty(7).unwrap().level(), 7);
-		assert_eq!(TileCover::from(TileQuadtree::new_empty(5).unwrap()).level(), 5);
+	#[rstest]
+	#[case(0)]
+	#[case(5)]
+	#[case(15)]
+	#[case(30)]
+	fn level_is_preserved_across_both_variants(#[case] lvl: u8) {
+		assert_eq!(TileCover::new_empty(lvl).unwrap().level(), lvl);
+		assert_eq!(TileCover::from(TileQuadtree::new_empty(lvl).unwrap()).level(), lvl);
+		assert_eq!(TileCover::from(TileQuadtree::new_full(lvl).unwrap()).level(), lvl);
+		assert_eq!(TileCover::from(TileBBox::new_full(lvl).unwrap()).level(), lvl);
 	}
 
-	#[test]
-	fn is_full_tree_variant() {
-		let c = TileCover::from(TileQuadtree::new_full(3).unwrap());
-		assert!(c.is_full());
-		let c2 = TileCover::from(TileQuadtree::new_empty(3).unwrap());
-		assert!(!c2.is_full());
+	#[rstest]
+	// (is_empty, is_full, count) pairs for both variants at several levels.
+	#[case(TileCover::new_empty(3).unwrap(), true, false, 0)]
+	#[case(TileCover::new_full(3).unwrap(), false, true, 64)]
+	#[case(TileCover::from(TileQuadtree::new_empty(4).unwrap()), true, false, 0)]
+	#[case(TileCover::from(TileQuadtree::new_full(4).unwrap()), false, true, 256)]
+	#[case(TileCover::from(TileBBox::from_min_and_max(2, 0, 0, 1, 1).unwrap()), false, false, 4)]
+	fn queries_match_expectations(
+		#[case] c: TileCover,
+		#[case] expected_empty: bool,
+		#[case] expected_full: bool,
+		#[case] expected_count: u64,
+	) {
+		assert_eq!(c.is_empty(), expected_empty);
+		assert_eq!(c.is_full(), expected_full);
+		assert_eq!(c.count_tiles(), expected_count);
 	}
 }

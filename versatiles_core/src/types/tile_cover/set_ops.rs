@@ -106,4 +106,65 @@ mod tests {
 		assert!(a.intersection(&b).is_err());
 		assert!(a.difference(&b).is_err());
 	}
+
+	// ── Algebraic identities: A ∪ A = A, A ∩ A = A, A \ A = ∅ ────────────────
+	#[rstest::rstest]
+	#[case(TileCover::new_empty(3).unwrap())]
+	#[case(TileCover::new_full(3).unwrap())]
+	#[case(TileCover::from(bbox(3, 1, 1, 5, 5)))]
+	#[case(TileCover::from(TileQuadtree::from_bbox(&bbox(3, 1, 1, 5, 5))))]
+	fn set_ops_with_self_identities(#[case] a: TileCover) {
+		let u = a.union(&a).unwrap();
+		let i = a.intersection(&a).unwrap();
+		let d = a.difference(&a).unwrap();
+		assert_eq!(u.count_tiles(), a.count_tiles(), "A ∪ A has same tile count");
+		assert_eq!(i.count_tiles(), a.count_tiles(), "A ∩ A has same tile count");
+		assert_eq!(d.count_tiles(), 0, "A \\ A is empty");
+		assert!(d.is_empty());
+	}
+
+	// ── Identities with empty and full ──────────────────────────────────────
+	#[rstest::rstest]
+	#[case(TileCover::from(bbox(3, 1, 1, 5, 5)))]
+	#[case(TileCover::from(TileQuadtree::from_bbox(&bbox(3, 1, 1, 5, 5))))]
+	fn set_ops_vs_empty_and_full(#[case] a: TileCover) {
+		let empty = TileCover::new_empty(3).unwrap();
+		let full = TileCover::new_full(3).unwrap();
+		// A ∪ ∅ = A, A ∩ full = A, A \ ∅ = A
+		assert_eq!(a.union(&empty).unwrap().count_tiles(), a.count_tiles());
+		assert_eq!(a.intersection(&full).unwrap().count_tiles(), a.count_tiles());
+		assert_eq!(a.difference(&empty).unwrap().count_tiles(), a.count_tiles());
+		// A ∩ ∅ = ∅, A \ full = ∅
+		assert!(a.intersection(&empty).unwrap().is_empty());
+		assert!(a.difference(&full).unwrap().is_empty());
+		// A ∪ full = full (at level where full has 2^(2z) tiles)
+		assert!(a.union(&full).unwrap().is_full());
+	}
+
+	#[test]
+	fn union_is_commutative() {
+		let a = TileCover::from(bbox(3, 0, 0, 3, 7));
+		let b = TileCover::from(bbox(3, 4, 0, 7, 7));
+		let ab = a.union(&b).unwrap();
+		let ba = b.union(&a).unwrap();
+		assert_eq!(ab.count_tiles(), ba.count_tiles());
+		assert_eq!(ab.to_bbox(), ba.to_bbox());
+	}
+
+	#[test]
+	fn intersection_is_commutative() {
+		let a = TileCover::from(bbox(4, 0, 0, 7, 7));
+		let b = TileCover::from(bbox(4, 4, 4, 11, 11));
+		let ab = a.intersection(&b).unwrap();
+		let ba = b.intersection(&a).unwrap();
+		assert_eq!(ab, ba);
+	}
+
+	#[test]
+	fn difference_disjoint_leaves_original_size() {
+		let a = TileCover::from(bbox(3, 0, 0, 3, 3));
+		let b = TileCover::from(bbox(3, 4, 4, 7, 7)); // fully disjoint
+		let d = a.difference(&b).unwrap();
+		assert_eq!(d.count_tiles(), a.count_tiles());
+	}
 }

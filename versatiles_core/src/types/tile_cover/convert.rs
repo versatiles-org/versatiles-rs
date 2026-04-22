@@ -160,4 +160,41 @@ mod tests {
 		let c = TileCover::from(bbox(4, 0, 0, 15, 15));
 		assert!(c.to_geo_bbox().is_some());
 	}
+
+	#[rstest::rstest]
+	#[case(0, 5)] // up
+	#[case(5, 0)] // down
+	#[case(5, 5)] // identity
+	#[case(5, 30)] // to max
+	fn at_level_changes_level_on_both_variants(#[case] from: u8, #[case] to: u8) {
+		let c_bbox = TileCover::from(TileBBox::new_full(from).unwrap());
+		let c_tree = TileCover::from(TileQuadtree::new_full(from).unwrap());
+		assert_eq!(c_bbox.at_level(to).level(), to);
+		assert_eq!(c_tree.at_level(to).level(), to);
+	}
+
+	#[test]
+	fn into_bbox_and_into_tree_match_non_consuming() {
+		let c1 = TileCover::from(bbox(3, 1, 1, 4, 4));
+		assert_eq!(c1.to_bbox(), c1.clone().into_bbox());
+		let t1 = c1.to_tree();
+		let t2 = c1.into_tree();
+		assert_eq!(t1.count_tiles(), t2.count_tiles());
+	}
+
+	#[test]
+	fn to_tree_from_tree_clones() {
+		let tree = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3));
+		let c = TileCover::from(tree.clone());
+		assert_eq!(c.to_tree().count_tiles(), tree.count_tiles());
+		assert_eq!(c.into_tree().count_tiles(), tree.count_tiles());
+	}
+
+	#[test]
+	fn as_bbox_as_tree_none_when_wrong_variant() {
+		let c_bbox = TileCover::from(bbox(2, 0, 0, 1, 1));
+		let c_tree = TileCover::from(TileQuadtree::new_full(2).unwrap());
+		assert!(c_bbox.as_tree().is_none());
+		assert!(c_tree.as_bbox().is_none());
+	}
 }

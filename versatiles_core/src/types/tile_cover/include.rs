@@ -106,4 +106,73 @@ mod tests {
 		let c = TileCover::from(bbox(4, 0, 0, 15, 15));
 		let _ = c.includes_bbox(&bbox(5, 0, 0, 15, 15));
 	}
+
+	// ── Parameterized positive/negative cases across both variants ───────────
+	fn variants(cover_bbox: TileBBox) -> Vec<TileCover> {
+		vec![
+			TileCover::from(cover_bbox),
+			TileCover::from(TileQuadtree::from_bbox(&cover_bbox)),
+		]
+	}
+
+	#[rstest::rstest]
+	#[case(coord(5, 5, 7), true)] // inside
+	#[case(coord(5, 3, 4), true)] // corner min
+	#[case(coord(5, 10, 15), true)] // corner max
+	#[case(coord(5, 0, 0), false)] // outside min
+	#[case(coord(5, 11, 15), false)] // just past x_max
+	#[case(coord(5, 10, 16), false)] // just past y_max
+	fn includes_coord_both_variants(#[case] c: TileCoord, #[case] expected: bool) {
+		for cov in variants(bbox(5, 3, 4, 10, 15)) {
+			assert_eq!(cov.includes_coord(&c), expected, "{cov:?} vs {c:?}");
+		}
+	}
+
+	#[rstest::rstest]
+	#[case(bbox(5, 2, 2, 8, 8), true)] // strict subset
+	#[case(bbox(5, 0, 0, 15, 15), true)] // equal
+	#[case(bbox(5, 0, 0, 16, 16), false)] // extends past max
+	#[case(TileBBox::new_empty(5).unwrap(), true)] // empty is subset of anything
+	fn includes_bbox_both_variants(#[case] inner: TileBBox, #[case] expected: bool) {
+		for cov in variants(bbox(5, 0, 0, 15, 15)) {
+			assert_eq!(cov.includes_bbox(&inner), expected);
+		}
+	}
+
+	#[test]
+	fn empty_cover_includes_only_empty() {
+		let empty = TileCover::new_empty(4).unwrap();
+		assert!(empty.includes_bbox(&TileBBox::new_empty(4).unwrap()));
+		assert!(!empty.includes_coord(&coord(4, 0, 0)));
+		assert!(!empty.includes_bbox(&bbox(4, 0, 0, 0, 0)));
+	}
+
+	#[test]
+	fn full_cover_includes_everything_at_its_level() {
+		let full = TileCover::new_full(3).unwrap();
+		assert!(full.includes_coord(&coord(3, 0, 0)));
+		assert!(full.includes_coord(&coord(3, 7, 7)));
+		assert!(full.includes_bbox(&bbox(3, 0, 0, 7, 7)));
+		assert!(full.includes_bbox(&TileBBox::new_empty(3).unwrap()));
+	}
+
+	#[test]
+	fn includes_cover_across_variants() {
+		let outer_b = TileCover::from(bbox(4, 0, 0, 15, 15));
+		let outer_t = TileCover::from(TileQuadtree::from_bbox(&bbox(4, 0, 0, 15, 15)));
+		let inner_b = TileCover::from(bbox(4, 3, 3, 10, 10));
+		let inner_t = TileCover::from(TileQuadtree::from_bbox(&bbox(4, 3, 3, 10, 10)));
+		// Every outer × inner combination should report inclusion.
+		for o in [&outer_b, &outer_t] {
+			for i in [&inner_b, &inner_t] {
+				assert!(o.includes_cover(i));
+			}
+		}
+		// Inner does NOT include outer.
+		for i in [&inner_b, &inner_t] {
+			for o in [&outer_b, &outer_t] {
+				assert!(!i.includes_cover(o));
+			}
+		}
+	}
 }

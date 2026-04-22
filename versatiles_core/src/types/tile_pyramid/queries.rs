@@ -199,4 +199,70 @@ mod tests {
 		let b = p.level_bbox(5);
 		assert!(b.is_empty());
 	}
+
+	// ── level_min / level_max across varying populations ────────────────────
+	#[rstest::rstest]
+	#[case(&[3], Some(3), Some(3))]
+	#[case(&[5, 10], Some(5), Some(10))]
+	#[case(&[0, 15, 30], Some(0), Some(30))]
+	#[case(&[], None, None)]
+	fn level_min_max_from_levels(
+		#[case] levels: &[u8],
+		#[case] expected_min: Option<u8>,
+		#[case] expected_max: Option<u8>,
+	) {
+		let mut p = TilePyramid::new_empty();
+		for l in levels {
+			p.insert_bbox(&bbox(*l, 0, 0, 0, 0)).unwrap();
+		}
+		assert_eq!(p.level_min(), expected_min);
+		assert_eq!(p.level_max(), expected_max);
+	}
+
+	#[test]
+	fn to_iter_bboxes_has_31_entries_and_tracks_population() {
+		let mut p = TilePyramid::new_empty();
+		p.insert_bbox(&bbox(2, 0, 0, 1, 1)).unwrap();
+		p.insert_bbox(&bbox(5, 0, 0, 3, 3)).unwrap();
+		let bboxes: Vec<_> = p.to_iter_bboxes().collect();
+		assert_eq!(bboxes.len(), 31);
+		let populated: Vec<u8> = bboxes
+			.iter()
+			.enumerate()
+			.filter(|(_, b)| !b.is_empty())
+			.map(|(i, _)| u8::try_from(i).unwrap())
+			.collect();
+		assert_eq!(populated, vec![2, 5]);
+	}
+
+	#[test]
+	fn count_tiles_sums_all_levels() {
+		let mut p = TilePyramid::new_empty();
+		p.insert_bbox(&bbox(2, 0, 0, 1, 1)).unwrap(); // 4 tiles
+		p.insert_bbox(&bbox(3, 0, 0, 2, 2)).unwrap(); // 9 tiles
+		assert_eq!(p.count_tiles(), 13);
+	}
+
+	#[test]
+	fn weighted_bbox_for_single_level_equals_that_levels_bbox() {
+		let mut p = TilePyramid::new_empty();
+		p.insert_bbox(&bbox(5, 10, 10, 20, 20)).unwrap();
+		let wb = p.weighted_bbox().unwrap();
+		let gb = p.geo_bbox().unwrap();
+		// With only one populated level, the weighted average must equal it.
+		assert!((wb.x_min - gb.x_min).abs() < 1e-9);
+		assert!((wb.x_max - gb.x_max).abs() < 1e-9);
+		assert!((wb.y_min - gb.y_min).abs() < 1e-9);
+		assert!((wb.y_max - gb.y_max).abs() < 1e-9);
+	}
+
+	#[test]
+	fn iter_and_to_iter_match() {
+		let mut p = TilePyramid::new_empty();
+		p.insert_bbox(&bbox(3, 0, 0, 3, 3)).unwrap();
+		p.insert_bbox(&bbox(5, 0, 0, 3, 3)).unwrap();
+		let a: Vec<_> = p.iter().cloned().collect();
+		let b: Vec<_> = p.to_iter().collect();
+		assert_eq!(a, b);
+	}
 }

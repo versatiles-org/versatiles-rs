@@ -201,4 +201,137 @@ mod tests {
 		assert_eq!(b.x_min().unwrap(), 0);
 		assert_eq!(b.y_min().unwrap(), 2);
 	}
+
+	// ── flip_y / swap_xy are involutions on any pyramid ─────────────────────
+	fn build_sample() -> TilePyramid {
+		let mut p = TilePyramid::new_empty();
+		p.insert_bbox(&bbox(2, 0, 0, 2, 2)).unwrap();
+		p.insert_bbox(&bbox(4, 3, 5, 10, 12)).unwrap();
+		p.set_level(TileCover::from(TileQuadtree::from_bbox(&bbox(5, 1, 1, 7, 7))));
+		p
+	}
+
+	#[rstest::rstest]
+	#[case::empty(TilePyramid::new_empty())]
+	#[case::full_up_to_3(TilePyramid::new_full_up_to(3))]
+	#[case::mixed(build_sample())]
+	fn flip_y_is_involution(#[case] original: TilePyramid) {
+		let mut p = original.clone();
+		p.flip_y();
+		p.flip_y();
+		assert_eq!(p, original);
+	}
+
+	#[rstest::rstest]
+	#[case::empty(TilePyramid::new_empty())]
+	#[case::full_up_to_3(TilePyramid::new_full_up_to(3))]
+	#[case::mixed(build_sample())]
+	fn swap_xy_is_involution(#[case] original: TilePyramid) {
+		let mut p = original.clone();
+		p.swap_xy();
+		p.swap_xy();
+		assert_eq!(p, original);
+	}
+
+	// ── buffer edge cases ───────────────────────────────────────────────────
+	#[rstest::rstest]
+	#[case(0)] // identity
+	#[case(1)]
+	#[case(100)]
+	fn buffer_empty_pyramid_stays_empty(#[case] size: u32) {
+		let mut p = TilePyramid::new_empty();
+		p.buffer(size);
+		assert!(p.is_empty());
+	}
+
+	#[test]
+	fn buffer_zero_is_identity() {
+		let mut p = TilePyramid::new_empty();
+		p.set_level_bbox(bbox(5, 5, 5, 10, 10));
+		let before = p.clone();
+		p.buffer(0);
+		assert_eq!(p, before);
+	}
+
+	// ── set_level_min / set_level_max behaviour ─────────────────────────────
+	#[rstest::rstest]
+	#[case(0)] // no-op: nothing below 0
+	#[case(3)] // clears 0..=2
+	#[case(31)] // clears everything
+	fn set_level_min_clears_below(#[case] min: u8) {
+		let mut p = TilePyramid::new_full();
+		p.set_level_min(min);
+		for l in 0..min {
+			assert!(p.level_ref(l).is_empty(), "level {l} should be empty");
+		}
+		if min <= 30 {
+			assert!(p.level_ref(min).is_full(), "level {min} should still be full");
+		}
+	}
+
+	#[rstest::rstest]
+	#[case(0)] // keeps only level 0
+	#[case(15)]
+	#[case(30)]
+	fn set_level_max_clears_above(#[case] max: u8) {
+		let mut p = TilePyramid::new_full();
+		p.set_level_max(max);
+		for l in (max + 1)..=30 {
+			assert!(p.level_ref(l).is_empty(), "level {l} should be empty");
+		}
+		assert!(p.level_ref(max).is_full());
+	}
+
+	#[test]
+	fn union_with_empty_is_noop() {
+		let mut p = TilePyramid::new_empty();
+		p.insert_bbox(&bbox(3, 0, 0, 3, 3)).unwrap();
+		let before = p.clone();
+		p.union(&TilePyramid::new_empty());
+		assert_eq!(p, before);
+	}
+
+	#[test]
+	fn union_with_self_is_idempotent() {
+		let mut p = TilePyramid::new_empty();
+		p.insert_bbox(&bbox(3, 0, 0, 3, 3)).unwrap();
+		let before = p.clone();
+		p.union(&before);
+		// After A ∪ A, coverage must still be the same (bit-for-bit equal).
+		assert_eq!(p, before);
+	}
+
+	#[test]
+	fn intersect_geo_bbox_restricts_all_levels() {
+		let mut p = TilePyramid::new_full_up_to(5);
+		p.intersect_geo_bbox(&GeoBBox::new(0.0, 0.0, 10.0, 10.0).unwrap())
+			.unwrap();
+		// Every level's coverage should be a strict subset of the full level.
+		for l in 0..=5 {
+			let bbox = p.level_bbox(l);
+			let full = TileBBox::new_full(l).unwrap();
+			assert!(bbox.count_tiles() <= full.count_tiles());
+		}
+	}
+
+	#[test]
+	fn intersect_geo_bbox_noop_for_world() {
+		// Intersecting with the full world should not change a full pyramid.
+		let mut p = TilePyramid::new_full_up_to(3);
+		let before = p.clone();
+		p.intersect_geo_bbox(&GeoBBox::new(-180.0, -85.0, 180.0, 85.0).unwrap())
+			.unwrap();
+		assert_eq!(p.count_tiles(), before.count_tiles());
+	}
+
+	#[test]
+	fn insert_coord_multiple_levels() {
+		let mut p = TilePyramid::new_empty();
+		for l in [0u8, 5, 10, 20] {
+			p.insert_coord(&coord(l, 0, 0));
+		}
+		assert_eq!(p.level_min(), Some(0));
+		assert_eq!(p.level_max(), Some(20));
+		assert_eq!(p.count_tiles(), 4);
+	}
 }

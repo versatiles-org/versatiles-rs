@@ -138,22 +138,38 @@ mod tests {
 	}
 
 	#[rstest]
+	#[case(TileQuadtree::new_empty(0).unwrap())]
 	#[case(TileQuadtree::new_empty(5).unwrap())]
+	#[case(TileQuadtree::new_empty(30).unwrap())]
+	#[case(TileQuadtree::new_full(0).unwrap())]
 	#[case(TileQuadtree::new_full(4).unwrap())]
+	#[case(TileQuadtree::new_full(30).unwrap())]
 	#[case(TileQuadtree::from_bbox(&bbox(4, 3, 5, 11, 12)))]
+	#[case(TileQuadtree::from_bbox(&bbox(0, 0, 0, 0, 0)))] // single tile at z=0
+	#[case(TileQuadtree::from_tile_coords(3, &[(0, 0), (7, 7), (3, 4)]).unwrap())]
 	fn serialize_roundtrip(#[case] t: TileQuadtree) -> Result<()> {
 		let level = t.level();
 		let bytes = t.serialize();
 		let t2 = TileQuadtree::deserialize(level, &bytes)?;
 		assert_eq!(t, t2);
 		assert_eq!(t.count_tiles(), t2.count_tiles());
+		// Serializing the deserialized value must produce identical bytes.
+		assert_eq!(t2.serialize(), bytes);
 		Ok(())
 	}
 
-	#[test]
-	fn deserialize_zoom_mismatch() {
-		let t = TileQuadtree::new_full(3).unwrap();
+	#[rstest]
+	#[case(3, 4)]
+	#[case(3, 2)]
+	#[case(0, 1)]
+	fn deserialize_zoom_mismatch_errors(#[case] actual: u8, #[case] requested: u8) {
+		let t = TileQuadtree::new_full(actual).unwrap();
 		let bytes = t.serialize();
-		assert!(TileQuadtree::deserialize(4, &bytes).is_err());
+		assert!(TileQuadtree::deserialize(requested, &bytes).is_err());
+	}
+
+	#[test]
+	fn deserialize_empty_bytes_errors() {
+		assert!(TileQuadtree::deserialize(3, &[]).is_err());
 	}
 }

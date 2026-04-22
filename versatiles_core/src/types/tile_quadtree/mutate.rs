@@ -557,4 +557,120 @@ mod tests {
 		assert_eq!(t.count_tiles(), count);
 		Ok(())
 	}
+
+	// ── Zoom mismatches: consolidated via rstest ─────────────────────────────
+	use rstest::rstest;
+
+	enum Op {
+		InsertCoord,
+		RemoveCoord,
+		InsertBBox,
+		RemoveBBox,
+	}
+
+	#[rstest]
+	#[case(Op::InsertCoord)]
+	#[case(Op::RemoveCoord)]
+	#[case(Op::InsertBBox)]
+	#[case(Op::RemoveBBox)]
+	fn zoom_mismatch_all_mutations(#[case] op: Op) {
+		let mut t = TileQuadtree::new_full(3).unwrap();
+		let err = match op {
+			Op::InsertCoord => t.insert_coord(&coord(4, 0, 0)),
+			Op::RemoveCoord => t.remove_coord(&coord(4, 0, 0)),
+			Op::InsertBBox => t.insert_bbox(&bbox(4, 0, 0, 1, 1)),
+			Op::RemoveBBox => t.remove_bbox(&bbox(4, 0, 0, 1, 1)),
+		};
+		assert!(err.is_err());
+	}
+
+	// ── Collapse-to-Full / Collapse-to-Empty invariants ──────────────────────
+	#[test]
+	fn insert_all_tiles_at_level_2_collapses_to_full() -> Result<()> {
+		let mut t = TileQuadtree::new_empty(2).unwrap();
+		for y in 0..4u32 {
+			for x in 0..4u32 {
+				t.insert_coord(&coord(2, x, y))?;
+			}
+		}
+		assert!(t.is_full());
+		// Collapse means one node.
+		assert_eq!(t.count_nodes(), 1);
+		Ok(())
+	}
+
+	#[test]
+	fn remove_all_tiles_collapses_to_empty() -> Result<()> {
+		let mut t = TileQuadtree::new_full(2).unwrap();
+		for y in 0..4u32 {
+			for x in 0..4u32 {
+				t.remove_coord(&coord(2, x, y))?;
+			}
+		}
+		assert!(t.is_empty());
+		assert_eq!(t.count_nodes(), 1);
+		Ok(())
+	}
+
+	#[test]
+	fn insert_single_tile_into_full_is_noop() -> Result<()> {
+		let mut t = TileQuadtree::new_full(3).unwrap();
+		t.insert_coord(&coord(3, 2, 3))?;
+		assert!(t.is_full());
+		Ok(())
+	}
+
+	#[test]
+	fn remove_single_tile_from_empty_is_noop() -> Result<()> {
+		let mut t = TileQuadtree::new_empty(3).unwrap();
+		t.remove_coord(&coord(3, 2, 3))?;
+		assert!(t.is_empty());
+		Ok(())
+	}
+
+	// ── buffer identity sweep across buffer sizes ────────────────────────────
+	#[rstest]
+	#[case(0)]
+	#[case(1)]
+	#[case(8)]
+	fn buffer_empty_stays_empty_for_any_size(#[case] size: u32) {
+		let mut t = TileQuadtree::new_empty(4).unwrap();
+		t.buffer(size);
+		assert!(t.is_empty());
+	}
+
+	#[rstest]
+	#[case(0)]
+	#[case(1)]
+	#[case(8)]
+	fn buffer_full_stays_full_for_any_size(#[case] size: u32) {
+		let mut t = TileQuadtree::new_full(3).unwrap();
+		t.buffer(size);
+		assert!(t.is_full());
+	}
+
+	// ── flip_y / swap_xy involution on various trees ─────────────────────────
+	#[rstest]
+	#[case(TileQuadtree::new_empty(3).unwrap())]
+	#[case(TileQuadtree::new_full(3).unwrap())]
+	#[case(TileQuadtree::from_bbox(&bbox(4, 1, 2, 5, 6)))]
+	#[case(TileQuadtree::from_tile_coords(3, &[(0, 0), (7, 7), (2, 5)]).unwrap())]
+	fn flip_y_involution(#[case] tree: TileQuadtree) {
+		let mut t = tree.clone();
+		t.flip_y();
+		t.flip_y();
+		assert_eq!(t, tree);
+	}
+
+	#[rstest]
+	#[case(TileQuadtree::new_empty(3).unwrap())]
+	#[case(TileQuadtree::new_full(3).unwrap())]
+	#[case(TileQuadtree::from_bbox(&bbox(4, 1, 2, 5, 6)))]
+	#[case(TileQuadtree::from_tile_coords(3, &[(0, 0), (7, 7), (2, 5)]).unwrap())]
+	fn swap_xy_involution(#[case] tree: TileQuadtree) {
+		let mut t = tree.clone();
+		t.swap_xy();
+		t.swap_xy();
+		assert_eq!(t, tree);
+	}
 }

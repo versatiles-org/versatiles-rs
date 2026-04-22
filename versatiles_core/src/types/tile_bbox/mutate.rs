@@ -965,4 +965,102 @@ mod tests {
 		assert_eq!(bbox, TileBBox::from_min_and_max(level, x0, y0, x1, y1)?);
 		Ok(())
 	}
+
+	// ── swap_xy involution: (x, y) ↔ (y, x) applied twice is identity ────────
+	#[rstest]
+	#[case(bb(3, 1, 2, 3, 4))]
+	#[case(bb(4, 0, 0, 15, 15))] // full
+	#[case(bb(5, 0, 0, 0, 0))] // single tile
+	#[case(TileBBox::new_empty(3).unwrap())]
+	fn swap_xy_is_involution(#[case] original: TileBBox) {
+		let mut b = original;
+		b.swap_xy();
+		b.swap_xy();
+		assert_eq!(b, original);
+	}
+
+	#[rstest]
+	#[case(bb(4, 1, 2, 3, 4), [2, 1, 4, 3])]
+	#[case(bb(4, 0, 0, 0, 0), [0, 0, 0, 0])]
+	#[case(bb(4, 5, 10, 5, 10), [10, 5, 10, 5])]
+	fn swap_xy_swaps_axes(#[case] input: TileBBox, #[case] expected: [u32; 4]) -> Result<()> {
+		let mut b = input;
+		b.swap_xy();
+		assert_eq!(b.to_array()?, expected);
+		Ok(())
+	}
+
+	// ── flip_y involution ────────────────────────────────────────────────────
+	#[rstest]
+	#[case(bb(3, 1, 2, 3, 4))]
+	#[case(bb(4, 0, 0, 15, 15))]
+	#[case(bb(4, 0, 0, 0, 0))]
+	#[case(TileBBox::new_empty(3).unwrap())]
+	fn flip_y_is_involution(#[case] original: TileBBox) {
+		let mut b = original;
+		b.flip_y();
+		b.flip_y();
+		assert_eq!(b, original);
+	}
+
+	// ── Identity operations ──────────────────────────────────────────────────
+	#[rstest]
+	#[case(bb(4, 1, 2, 3, 4))]
+	#[case(TileBBox::new_empty(4).unwrap())]
+	#[case(TileBBox::new_full(4).unwrap())]
+	fn scaled_up_by_one_is_identity(#[case] input: TileBBox) -> Result<()> {
+		let out = input.scaled_up(1)?;
+		assert_eq!(out, input);
+		Ok(())
+	}
+
+	#[rstest]
+	#[case(bb(4, 1, 2, 3, 4))]
+	#[case(TileBBox::new_empty(4).unwrap())]
+	fn at_level_same_level_is_identity(#[case] input: TileBBox) {
+		assert_eq!(input.at_level(input.level), input);
+	}
+
+	#[rstest]
+	#[case(bb(4, 1, 2, 3, 4))]
+	#[case(bb(4, 0, 0, 15, 15))]
+	#[case(TileBBox::new_empty(4).unwrap())]
+	fn rounded_by_one_is_identity(#[case] input: TileBBox) {
+		assert_eq!(input.rounded(1), input);
+	}
+
+	// ── level_up then level_down round-trip ─────────────────────────────────
+	#[rstest]
+	#[case(bb(4, 0, 0, 0, 0))]
+	#[case(bb(4, 2, 4, 6, 10))]
+	#[case(bb(10, 100, 200, 300, 500))]
+	fn level_up_then_down_roundtrip(#[case] input: TileBBox) -> Result<()> {
+		let mut b = input;
+		b.level_up();
+		b.level_down();
+		// Going up-down should return to the original (or a superset, but for even coords it's exact).
+		assert!(
+			b.includes_bbox(&input),
+			"level_up then level_down should preserve or enlarge coverage"
+		);
+		assert_eq!(b.level, input.level);
+		Ok(())
+	}
+
+	// ── scale_up rejects zero and 1 is a no-op ──────────────────────────────
+	#[rstest]
+	#[case(0)]
+	fn scale_up_rejects_invalid_factors(#[case] factor: u32) {
+		let mut b = bb(4, 0, 0, 1, 1);
+		assert!(b.scale_up(factor).is_err());
+	}
+
+	#[test]
+	fn scale_up_by_one_is_identity() -> Result<()> {
+		let mut b = bb(4, 3, 5, 7, 9);
+		let before = b;
+		b.scale_up(1)?;
+		assert_eq!(b, before);
+		Ok(())
+	}
 }

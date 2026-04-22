@@ -199,4 +199,48 @@ mod tests {
 
 		assert_eq!(batch.count_tiles(), seq.count_tiles());
 	}
+
+	// ── new_full_up_to sweeps ────────────────────────────────────────────────
+	#[rstest::rstest]
+	#[case(0)]
+	#[case(1)]
+	#[case(5)]
+	#[case(30)]
+	fn new_full_up_to_sets_min_and_max(#[case] level_max: u8) {
+		let p = TilePyramid::new_full_up_to(level_max);
+		assert_eq!(p.level_min(), Some(0));
+		assert_eq!(p.level_max(), Some(level_max));
+		// Level beyond max is empty.
+		if level_max < 30 {
+			assert!(p.level_ref(level_max + 1).is_empty());
+		}
+	}
+
+	// ── from_geo_bbox level ranges ───────────────────────────────────────────
+	#[rstest::rstest]
+	#[case(0, 0)]
+	#[case(0, 5)]
+	#[case(3, 3)]
+	#[case(5, 10)]
+	fn from_geo_bbox_world(#[case] min: u8, #[case] max: u8) {
+		let geo = GeoBBox::new(-180.0, -MAX_LAT, 180.0, MAX_LAT).unwrap();
+		let p = TilePyramid::from_geo_bbox(min, max, &geo).unwrap();
+		assert_eq!(p.level_min(), Some(min));
+		assert_eq!(p.level_max(), Some(max));
+		if min > 0 {
+			assert!(p.level_ref(min - 1).is_empty());
+		}
+		if max < 30 {
+			assert!(p.level_ref(max + 1).is_empty());
+		}
+	}
+
+	#[test]
+	fn from_geo_bbox_min_greater_than_max_is_empty() {
+		// If level_min > level_max, the loop in from_geo_bbox runs no iterations
+		// and every level stays empty.
+		let geo = GeoBBox::new(-10.0, -10.0, 10.0, 10.0).unwrap();
+		let p = TilePyramid::from_geo_bbox(5, 3, &geo).unwrap();
+		assert!(p.is_empty());
+	}
 }

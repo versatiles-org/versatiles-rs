@@ -36,27 +36,44 @@ impl TileCover {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::TileQuadtree;
+	use rstest::rstest;
 
 	fn bbox(zoom: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 		TileBBox::from_min_and_max(zoom, x0, y0, x1, y1).unwrap()
 	}
 
-	#[test]
-	fn iter_tiles_count() {
-		let c = TileCover::from(bbox(3, 0, 0, 3, 3));
-		assert_eq!(c.iter_coords().count(), 16);
+	#[rstest]
+	#[case(TileCover::new_empty(4).unwrap(), 0)]
+	#[case(TileCover::from(bbox(3, 0, 0, 0, 0)), 1)] // single tile
+	#[case(TileCover::from(bbox(3, 0, 0, 3, 3)), 16)] // 4x4
+	#[case(TileCover::new_full(2).unwrap(), 16)] // full z=2
+	#[case(TileCover::from(TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3))), 16)]
+	fn iter_coords_count_matches_count_tiles(#[case] c: TileCover, #[case] expected: u64) {
+		assert_eq!(c.iter_coords().count() as u64, expected);
+		assert_eq!(c.count_tiles(), expected);
+	}
+
+	#[rstest]
+	#[case(4, bbox(4, 0, 0, 7, 7), 4)] // 8×8, grid 4 → 2×2 = 4 cells
+	#[case(4, bbox(4, 0, 0, 15, 15), 16)] // 16×16, grid 4 → 4×4 = 16
+	#[case(8, bbox(4, 0, 0, 7, 7), 1)] // grid ≥ bbox → 1 cell
+	#[case(4, TileBBox::new_empty(4).unwrap(), 0)]
+	fn iter_grid_cell_counts(#[case] grid_size: u32, #[case] b: TileBBox, #[case] expected: usize) {
+		let c = TileCover::from(b);
+		assert_eq!(c.iter_grid(grid_size).count(), expected);
 	}
 
 	#[test]
-	fn iter_grid_empty() {
-		let c = TileCover::new_empty(4).unwrap();
-		assert_eq!(c.iter_grid(4).count(), 0);
-	}
-
-	#[test]
-	fn iter_grid_nonempty() {
-		let c = TileCover::from(bbox(4, 0, 0, 7, 7));
-		// 8×8 tiles split into 4×4 blocks → 4 blocks
-		assert_eq!(c.iter_grid(4).count(), 4);
+	fn iter_coords_yields_expected_coordinates() {
+		let c = TileCover::from(bbox(2, 1, 1, 2, 2));
+		let coords: Vec<_> = c.iter_coords().collect();
+		assert_eq!(coords.len(), 4);
+		// Each coordinate must be at level 2 and inside the bbox.
+		for coord in &coords {
+			assert_eq!(coord.level, 2);
+			assert!((1..=2).contains(&coord.x));
+			assert!((1..=2).contains(&coord.y));
+		}
 	}
 }
