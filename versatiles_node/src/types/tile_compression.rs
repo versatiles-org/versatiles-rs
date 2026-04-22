@@ -3,6 +3,7 @@
 //! This module provides utilities for parsing compression format strings
 //! from JavaScript into Rust's [`TileCompression`] enum.
 
+use anyhow::{Result, bail};
 use versatiles_core::TileCompression;
 
 /// Parse a compression format string into a [`TileCompression`] enum
@@ -23,23 +24,24 @@ use versatiles_core::TileCompression;
 /// # Returns
 ///
 /// - `Ok(TileCompression)` if the format is valid
-/// - `Err(napi::Error)` if the format is not recognized
+/// - `Err(anyhow::Error)` if the format is not recognized
+///
+/// Callers in NAPI contexts should convert with `.to_napi()` from
+/// [`crate::macros::NapiResultExt`].
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// let compression = parse_compression("gzip")?; // TileCompression::Gzip
 /// let compression = parse_compression("BROTLI")?; // TileCompression::Brotli
 /// let compression = parse_compression("none")?; // TileCompression::Uncompressed
 /// ```
-pub fn parse_compression(s: &str) -> napi::Result<TileCompression> {
+pub fn parse_compression(s: &str) -> Result<TileCompression> {
 	match s.to_lowercase().as_str() {
 		"gzip" => Ok(TileCompression::Gzip),
 		"brotli" => Ok(TileCompression::Brotli),
 		"uncompressed" | "none" => Ok(TileCompression::Uncompressed),
-		_ => Err(napi::Error::from_reason(format!(
-			"Invalid compression '{s}'. Use 'gzip', 'brotli', or 'uncompressed'"
-		))),
+		_ => bail!("Invalid compression '{s}'. Use 'gzip', 'brotli', or 'uncompressed'"),
 	}
 }
 
@@ -100,9 +102,9 @@ mod tests {
 	fn test_parse_compression_invalid() {
 		let result = parse_compression("invalid");
 		assert!(result.is_err());
-		let err = result.unwrap_err();
-		assert!(err.reason.contains("Invalid compression"));
-		assert!(err.reason.contains("invalid"));
+		let msg = result.unwrap_err().to_string();
+		assert!(msg.contains("Invalid compression"));
+		assert!(msg.contains("invalid"));
 	}
 
 	#[test]
@@ -115,7 +117,7 @@ mod tests {
 	fn test_parse_compression_lz4() {
 		let result = parse_compression("lz4");
 		assert!(result.is_err());
-		let err = result.unwrap_err();
-		assert!(err.reason.contains("Invalid compression"));
+		let msg = result.unwrap_err().to_string();
+		assert!(msg.contains("Invalid compression"));
 	}
 }

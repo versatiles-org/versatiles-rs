@@ -14,6 +14,7 @@
 //! - **Progress monitoring**: Real-time progress updates and messages
 
 use crate::{
+	macros::NapiResultExt,
 	napi_result,
 	progress::{MessageData, ProgressData},
 	runtime::create_runtime,
@@ -82,7 +83,7 @@ pub(crate) async fn convert_tiles_with_options(
 	}
 
 	let tile_compression = if let Some(ref comp_str) = opts.compress {
-		Some(parse_compression(comp_str)?)
+		Some(parse_compression(comp_str).to_napi()?)
 	} else {
 		None
 	};

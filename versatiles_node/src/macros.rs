@@ -25,8 +25,6 @@ pub fn anyhow_to_napi(err: &anyhow::Error) -> NapiError {
 ///
 /// Free-function form. Equivalent to `anyhow_to_napi(&err.into())`. Use this
 /// inside a `.map_err(...)` when an extension method isn't ergonomic.
-// Allowed until call sites are migrated in subsequent steps.
-#[allow(dead_code)]
 pub fn to_napi(err: impl Into<anyhow::Error>) -> NapiError {
 	anyhow_to_napi(&err.into())
 }
@@ -46,8 +44,6 @@ pub fn to_napi(err: impl Into<anyhow::Error>) -> NapiError {
 ///     Ok(parsed * 2)
 /// }
 /// ```
-// Allowed until call sites are migrated in subsequent steps.
-#[allow(dead_code)]
 pub trait NapiResultExt<T> {
 	/// Convert this `Result` into a `napi::Result`, preserving the full error
 	/// chain in the resulting `napi::Error.reason` string.
