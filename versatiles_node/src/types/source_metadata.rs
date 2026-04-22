@@ -1,5 +1,6 @@
 use napi_derive::napi;
 use versatiles_container::TileSourceMetadata;
+use versatiles_core::TileJSON;
 
 /// Tile source metadata describing output characteristics
 #[napi(object)]
@@ -15,13 +16,38 @@ pub struct SourceMetadata {
 	pub max_zoom: u8,
 }
 
+impl SourceMetadata {
+	/// Build a [`SourceMetadata`] from a source's [`TileSourceMetadata`] and its
+	/// [`TileJSON`]. Zoom levels come from the cached pyramid if available;
+	/// otherwise they fall back to the TileJSON's `minzoom` / `maxzoom`.
+	#[must_use]
+	pub fn from_metadata_and_tilejson(params: &TileSourceMetadata, tilejson: &TileJSON) -> Self {
+		let (min_zoom, max_zoom) = if let Some(pyramid) = params.tile_pyramid() {
+			(pyramid.level_min().unwrap_or(0), pyramid.level_max().unwrap_or(0))
+		} else {
+			(tilejson.zoom_min().unwrap_or(0), tilejson.zoom_max().unwrap_or(0))
+		};
+		Self {
+			tile_format: format!("{:?}", params.tile_format()).to_lowercase(),
+			tile_compression: format!("{:?}", params.tile_compression()).to_lowercase(),
+			min_zoom,
+			max_zoom,
+		}
+	}
+}
+
 impl From<&TileSourceMetadata> for SourceMetadata {
 	fn from(params: &TileSourceMetadata) -> Self {
+		let (min_zoom, max_zoom) = if let Some(pyramid) = params.tile_pyramid() {
+			(pyramid.level_min().unwrap_or(0), pyramid.level_max().unwrap_or(0))
+		} else {
+			(0, 0)
+		};
 		Self {
-			tile_format: format!("{:?}", params.tile_format).to_lowercase(),
-			tile_compression: format!("{:?}", params.tile_compression).to_lowercase(),
-			min_zoom: params.bbox_pyramid.level_min().unwrap_or(0),
-			max_zoom: params.bbox_pyramid.level_max().unwrap_or(0),
+			tile_format: format!("{:?}", params.tile_format()).to_lowercase(),
+			tile_compression: format!("{:?}", params.tile_compression()).to_lowercase(),
+			min_zoom,
+			max_zoom,
 		}
 	}
 }
@@ -42,7 +68,7 @@ mod tests {
 		bbox_pyramid.set_level_min(min_zoom);
 		bbox_pyramid.set_level_max(max_zoom);
 
-		TileSourceMetadata::new(format, compression, bbox_pyramid, Traversal::ANY)
+		TileSourceMetadata::new(format, compression, Traversal::ANY, Some(bbox_pyramid))
 	}
 
 	#[test]

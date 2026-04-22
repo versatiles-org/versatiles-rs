@@ -924,7 +924,7 @@ mod tests {
 		// Verify the TileSource is stored
 		let stored_source = sources.get("berlin").unwrap();
 		let metadata = stored_source.metadata();
-		assert_eq!(metadata.tile_format.as_str(), "mvt");
+		assert_eq!(metadata.tile_format().as_str(), "mvt");
 	}
 
 	#[tokio::test]
@@ -984,8 +984,8 @@ mod tests {
 		assert!(sources.contains_key("berlin2"));
 
 		// Verify both are TileSource objects
-		assert_eq!(sources.get("berlin1").unwrap().metadata().tile_format.as_str(), "mvt");
-		assert_eq!(sources.get("berlin2").unwrap().metadata().tile_format.as_str(), "mvt");
+		assert_eq!(sources.get("berlin1").unwrap().metadata().tile_format().as_str(), "mvt");
+		assert_eq!(sources.get("berlin2").unwrap().metadata().tile_format().as_str(), "mvt");
 	}
 
 	#[tokio::test]

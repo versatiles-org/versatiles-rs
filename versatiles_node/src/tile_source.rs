@@ -329,7 +329,7 @@ impl TileSource {
 		tile_opt
 			.map(|mut tile| {
 				tile
-					.as_blob(versatiles_core::TileCompression::Uncompressed)
+					.as_blob(&versatiles_core::TileCompression::Uncompressed)
 					.map(|blob| Buffer::from(blob.as_slice()))
 			})
 			.transpose()
@@ -355,7 +355,12 @@ impl TileSource {
 	#[must_use]
 	#[napi]
 	pub fn tile_json(&self) -> TileJSON {
-		TileJSON::build(self.reader.tilejson(), &self.reader.metadata().bbox_pyramid)
+		let pyramid = self
+			.reader
+			.metadata()
+			.tile_pyramid()
+			.unwrap_or_else(|| std::sync::Arc::new(versatiles_core::TilePyramid::new_empty()));
+		TileJSON::build(self.reader.tilejson(), pyramid.as_ref())
 	}
 
 	/// Get reader metadata
@@ -382,7 +387,7 @@ impl TileSource {
 	#[must_use]
 	#[napi]
 	pub fn metadata(&self) -> SourceMetadata {
-		SourceMetadata::from(self.reader.metadata())
+		SourceMetadata::from_metadata_and_tilejson(self.reader.metadata(), self.reader.tilejson())
 	}
 
 	/// Get the source type
@@ -718,8 +723,8 @@ mod tests {
 
 		let tile_json = reader.tile_json();
 
-		// PMTiles doesn't have bounds in metadata
-		assert!(tile_json.bounds.is_none());
+		// PMTiles bounds come from the v3 header
+		assert!(tile_json.bounds.is_some());
 
 		// Check common fields
 		assert_eq!(tile_json.version, "3.0");
