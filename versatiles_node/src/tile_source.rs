@@ -12,11 +12,13 @@
 /// - **Directories** - Tile directories following standard naming conventions
 use crate::{
 	convert::convert_tiles_with_options,
+	macros::NapiResultExt,
 	napi_result,
 	progress::{MessageData, ProgressData},
 	runtime::create_runtime,
 	types::{ConvertOptions, SourceMetadata, TileJSON, z_to_u8},
 };
+use anyhow::Context;
 use napi::{bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
 use serde::Deserialize;
@@ -184,7 +186,8 @@ impl TileSource {
 	#[napi(factory)]
 	pub async fn from_pipeline(steps_json: String, dir: Option<String>) -> Result<Self> {
 		let steps: Vec<PipelineStep> = serde_json::from_str(&steps_json)
-			.map_err(|e| napi::Error::from_reason(format!("Invalid pipeline JSON: {e}")))?;
+			.context("Invalid pipeline JSON")
+			.to_napi()?;
 		let pipeline = steps_to_pipeline(steps);
 		let runtime = create_runtime();
 		let path = if let Some(d) = dir {
@@ -329,7 +332,8 @@ impl TileSource {
 					.map(|blob| Buffer::from(blob.as_slice()))
 			})
 			.transpose()
-			.map_err(|e| Error::from_reason(format!("Failed to decompress tile: {e}")))
+			.context("Failed to decompress tile")
+			.to_napi()
 	}
 
 	/// Get TileJSON metadata as a JSON string
