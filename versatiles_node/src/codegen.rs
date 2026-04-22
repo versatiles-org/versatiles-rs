@@ -129,7 +129,7 @@ fn generate_interface(out: &mut String, op: &OperationMeta) {
 	}
 
 	let interface_name = format!("{}Options", to_pascal_case(&op.tag_name));
-	writeln!(out, "export interface {interface_name} {{").unwrap();
+	writeln!(out, "export interface {interface_name} {{").expect("writing to string never fails");
 
 	for field in &fields {
 		let ts_type = rust_type_to_ts(&field.rust_type);
@@ -137,10 +137,10 @@ fn generate_interface(out: &mut String, op: &OperationMeta) {
 		let optional = if field.is_required { "" } else { "?" };
 
 		if !field.doc.is_empty() {
-			writeln!(out, "\t/** {} */", field.doc.replace("*/", "* /")).unwrap();
+			writeln!(out, "\t/** {} */", field.doc.replace("*/", "* /")).expect("writing to string never fails");
 		}
 
-		writeln!(out, "\t{camel_name}{optional}: {ts_type};").unwrap();
+		writeln!(out, "\t{camel_name}{optional}: {ts_type};").expect("writing to string never fails");
 	}
 
 	out.push_str("}\n\n");
@@ -199,7 +199,7 @@ fn generate_read_method(out: &mut String, op: &OperationMeta) {
 	// JSDoc
 	let doc_first_line = op.doc.lines().next().unwrap_or("").trim();
 	if !doc_first_line.is_empty() {
-		writeln!(out, "\t/** {} */", doc_first_line.replace("*/", "* /")).unwrap();
+		writeln!(out, "\t/** {} */", doc_first_line.replace("*/", "* /")).expect("writing to string never fails");
 	}
 
 	// Method signature
@@ -209,19 +209,19 @@ fn generate_read_method(out: &mut String, op: &OperationMeta) {
 				out,
 				"\tstatic {method_name}(sources: VPL[], options?: Omit<{interface_name}, 'sources'>): VPL {{"
 			)
-			.unwrap();
+			.expect("writing to string never fails");
 		}
 		(true, false) => {
-			writeln!(out, "\tstatic {method_name}(sources: VPL[]): VPL {{").unwrap();
+			writeln!(out, "\tstatic {method_name}(sources: VPL[]): VPL {{").expect("writing to string never fails");
 		}
 		(false, true) if all_optional => {
-			writeln!(out, "\tstatic {method_name}(options?: {interface_name}): VPL {{").unwrap();
+			writeln!(out, "\tstatic {method_name}(options?: {interface_name}): VPL {{").expect("writing to string never fails");
 		}
 		(false, true) => {
-			writeln!(out, "\tstatic {method_name}(options: {interface_name}): VPL {{").unwrap();
+			writeln!(out, "\tstatic {method_name}(options: {interface_name}): VPL {{").expect("writing to string never fails");
 		}
 		(false, false) => {
-			writeln!(out, "\tstatic {method_name}(): VPL {{").unwrap();
+			writeln!(out, "\tstatic {method_name}(): VPL {{").expect("writing to string never fails");
 		}
 	}
 
@@ -234,13 +234,13 @@ fn generate_read_method(out: &mut String, op: &OperationMeta) {
 			let snake = &field.name;
 			let accessor = if use_optional_chaining { "?" } else { "" };
 			if field.is_required && !use_optional_chaining {
-				writeln!(out, "\t\tparams['{snake}'] = options.{camel};").unwrap();
+				writeln!(out, "\t\tparams['{snake}'] = options.{camel};").expect("writing to string never fails");
 			} else {
 				writeln!(
 					out,
 					"\t\tif (options{accessor}.{camel} !== undefined) params['{snake}'] = options{accessor}.{camel};"
 				)
-				.unwrap();
+				.expect("writing to string never fails");
 			}
 		}
 	} else {
@@ -248,9 +248,9 @@ fn generate_read_method(out: &mut String, op: &OperationMeta) {
 	}
 
 	if has_src {
-		writeln!(out, "\t\treturn new VPL([{{ name: '{tag}', params, sources }}]);").unwrap();
+		writeln!(out, "\t\treturn new VPL([{{ name: '{tag}', params, sources }}]);").expect("writing to string never fails");
 	} else {
-		writeln!(out, "\t\treturn new VPL([{{ name: '{tag}', params }}]);").unwrap();
+		writeln!(out, "\t\treturn new VPL([{{ name: '{tag}', params }}]);").expect("writing to string never fails");
 	}
 
 	out.push_str("\t}\n\n");
@@ -268,16 +268,16 @@ fn generate_transform_method(out: &mut String, op: &OperationMeta) {
 	// JSDoc
 	let doc_first_line = op.doc.lines().next().unwrap_or("").trim();
 	if !doc_first_line.is_empty() {
-		writeln!(out, "\t/** {} */", doc_first_line.replace("*/", "* /")).unwrap();
+		writeln!(out, "\t/** {} */", doc_first_line.replace("*/", "* /")).expect("writing to string never fails");
 	}
 
 	// Method signature
 	if has_opts && all_optional {
-		writeln!(out, "\t{method_name}(options?: {interface_name}): VPL {{").unwrap();
+		writeln!(out, "\t{method_name}(options?: {interface_name}): VPL {{").expect("writing to string never fails");
 	} else if has_opts {
-		writeln!(out, "\t{method_name}(options: {interface_name}): VPL {{").unwrap();
+		writeln!(out, "\t{method_name}(options: {interface_name}): VPL {{").expect("writing to string never fails");
 	} else {
-		writeln!(out, "\t{method_name}(): VPL {{").unwrap();
+		writeln!(out, "\t{method_name}(): VPL {{").expect("writing to string never fails");
 	}
 
 	// Method body
@@ -287,21 +287,21 @@ fn generate_transform_method(out: &mut String, op: &OperationMeta) {
 			let camel = to_camel_case(&field.name);
 			let snake = &field.name;
 			if field.is_required && !all_optional {
-				writeln!(out, "\t\tparams['{snake}'] = options.{camel};").unwrap();
+				writeln!(out, "\t\tparams['{snake}'] = options.{camel};").expect("writing to string never fails");
 			} else {
 				let accessor = if all_optional { "?" } else { "" };
 				writeln!(
 					out,
 					"\t\tif (options{accessor}.{camel} !== undefined) params['{snake}'] = options{accessor}.{camel};"
 				)
-				.unwrap();
+				.expect("writing to string never fails");
 			}
 		}
 	} else {
 		out.push_str("\t\tconst params: Record<string, unknown> = {};\n");
 	}
 
-	writeln!(out, "\t\treturn new VPL([...this.steps, {{ name: '{tag}', params }}]);").unwrap();
+	writeln!(out, "\t\treturn new VPL([...this.steps, {{ name: '{tag}', params }}]);").expect("writing to string never fails");
 
 	out.push_str("\t}\n\n");
 }

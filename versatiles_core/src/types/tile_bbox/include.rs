@@ -16,10 +16,10 @@ impl TileBBox {
 			return false;
 		}
 		// Safety: is_empty() checked above; x_min/y_min/x_max/y_max are valid.
-		coord.x >= self.x_min().unwrap()
-			&& coord.x <= self.x_max().unwrap()
-			&& coord.y >= self.y_min().unwrap()
-			&& coord.y <= self.y_max().unwrap()
+		coord.x >= self.x_min().expect("bbox is non-empty")
+			&& coord.x <= self.x_max().expect("bbox is non-empty")
+			&& coord.y >= self.y_min().expect("bbox is non-empty")
+			&& coord.y <= self.y_max().expect("bbox is non-empty")
 	}
 
 	/// Returns `true` if every tile in `bbox` is also in `self`.
@@ -45,10 +45,10 @@ impl TileBBox {
 		}
 
 		// Safety: is_empty() checked above; getters are valid.
-		self.x_min().unwrap() <= bbox.x_min().unwrap()
-			&& self.x_max().unwrap() >= bbox.x_max().unwrap()
-			&& self.y_min().unwrap() <= bbox.y_min().unwrap()
-			&& self.y_max().unwrap() >= bbox.y_max().unwrap()
+		self.x_min().expect("bbox is non-empty") <= bbox.x_min().expect("bbox is non-empty")
+			&& self.x_max().expect("bbox is non-empty") >= bbox.x_max().expect("bbox is non-empty")
+			&& self.y_min().expect("bbox is non-empty") <= bbox.y_min().expect("bbox is non-empty")
+			&& self.y_max().expect("bbox is non-empty") >= bbox.y_max().expect("bbox is non-empty")
 	}
 
 	/// Returns `true` if every tile in `tree` is also in `self`.

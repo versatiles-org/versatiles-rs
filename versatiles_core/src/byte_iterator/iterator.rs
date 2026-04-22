@@ -106,7 +106,7 @@ impl<'a> ByteIterator<'a> {
 				.copied()
 				.collect();
 
-			let mut debug_output = String::from_utf8(debug_snapshot).unwrap();
+			let mut debug_output = String::from_utf8(debug_snapshot).expect("debug snapshot is valid UTF-8");
 			if self.peeked_byte.is_none() {
 				debug_output.push_str("<EOF>");
 			}

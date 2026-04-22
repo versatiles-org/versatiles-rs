@@ -122,7 +122,7 @@ impl MBTilesReader {
 		let metadata = TileSourceMetadata::new(MVT, Uncompressed, Traversal::ANY, None);
 
 		let mut reader = MBTilesReader {
-			name: String::from(path.to_str().unwrap()),
+			name: String::from(path.to_str().expect("mbtiles path is utf-8")),
 			pool,
 			tilejson: TileJSON::default(),
 			metadata,
@@ -375,12 +375,10 @@ impl TileSource for MBTilesReader {
 
 		bbox.flip_y();
 
-		let conn = self.pool.get().unwrap();
-		let mut stmt = conn
-			.prepare(
-				"SELECT tile_column, tile_row, zoom_level FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?",
-			)
-			.unwrap();
+		let conn = self.pool.get()?;
+		let mut stmt = conn.prepare(
+			"SELECT tile_column, tile_row, zoom_level FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?",
+		)?;
 
 		let vec: Vec<(TileCoord, ())> = stmt
 			.query_map(
@@ -395,12 +393,11 @@ impl TileSource for MBTilesReader {
 					let x = row.get::<_, u32>(0)?;
 					let y = row.get::<_, u32>(1)?;
 					let level = row.get::<_, u8>(2)?;
-					let mut coord = TileCoord::new(level, x, y).unwrap();
+					let mut coord = TileCoord::new(level, x, y).expect("valid tile coord from db row");
 					coord.flip_y();
 					Ok((coord, ()))
 				},
-			)
-			.unwrap()
+			)?
 			.filter_map(std::result::Result::ok)
 			.collect();
 
@@ -415,12 +412,10 @@ impl TileSource for MBTilesReader {
 
 		bbox.flip_y();
 
-		let conn = self.pool.get().unwrap();
-		let mut stmt = conn
-			.prepare(
-				"SELECT tile_column, tile_row, zoom_level, LENGTH(tile_data) FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?",
-			)
-			.unwrap();
+		let conn = self.pool.get()?;
+		let mut stmt = conn.prepare(
+			"SELECT tile_column, tile_row, zoom_level, LENGTH(tile_data) FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?",
+		)?;
 
 		let vec: Vec<(TileCoord, u32)> = stmt
 			.query_map(
@@ -435,13 +430,12 @@ impl TileSource for MBTilesReader {
 					let x = row.get::<_, u32>(0)?;
 					let y = row.get::<_, u32>(1)?;
 					let level = row.get::<_, u8>(2)?;
-					let mut coord = TileCoord::new(level, x, y).unwrap();
+					let mut coord = TileCoord::new(level, x, y).expect("valid tile coord from db row");
 					coord.flip_y();
 					let size = row.get::<_, u32>(3)?;
 					Ok((coord, size))
 				},
-			)
-			.unwrap()
+			)?
 			.filter_map(std::result::Result::ok)
 			.collect();
 
@@ -467,12 +461,10 @@ impl TileSource for MBTilesReader {
 
 		log::trace!("corrected bbox {bbox:?}");
 
-		let conn = self.pool.get().unwrap();
-		let mut stmt = conn
-			 .prepare(
-					"SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?",
-			 )
-			 .unwrap();
+		let conn = self.pool.get()?;
+		let mut stmt = conn.prepare(
+			"SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?",
+		)?;
 
 		let vec: Vec<(TileCoord, Tile)> = stmt
 			.query_map(
@@ -487,14 +479,13 @@ impl TileSource for MBTilesReader {
 					let x = row.get::<_, u32>(0)?;
 					let y = row.get::<_, u32>(1)?;
 					let level = row.get::<_, u8>(2)?;
-					let mut coord = TileCoord::new(level, x, y).unwrap();
+					let mut coord = TileCoord::new(level, x, y).expect("valid tile coord from db row");
 					coord.flip_y();
 					let blob = Blob::from(row.get::<_, Vec<u8>>(3)?);
 					let tile = Tile::from_blob(blob, *self.metadata.tile_compression(), *self.metadata.tile_format());
 					Ok((coord, tile))
 				},
-			)
-			.unwrap()
+			)?
 			.filter_map(std::result::Result::ok)
 			.collect();
 

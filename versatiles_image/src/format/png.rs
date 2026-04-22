@@ -50,7 +50,7 @@ pub fn encode(image: &DynamicImage, effort: Option<u8>) -> Result<Blob> {
 	if image.has_alpha() && image.is_opaque() {
 		let i = image.to_no_alpha()?;
 		optional_image = Some(i);
-		image_ref = optional_image.as_ref().unwrap();
+		image_ref = optional_image.as_ref().expect("just assigned Some above");
 	}
 
 	let mut buffer: Vec<u8> = Vec::new();

@@ -82,7 +82,7 @@ impl<'de> Deserialize<'de> for StaticSourceConfig {
 
 		let helper = StaticSourceConfigHelper::deserialize(deserializer)?;
 		Ok(StaticSourceConfig {
-			src: DataLocation::from(helper.src),
+			src: DataLocation::try_from(helper.src).map_err(serde::de::Error::custom)?,
 			prefix: helper.prefix,
 		})
 	}

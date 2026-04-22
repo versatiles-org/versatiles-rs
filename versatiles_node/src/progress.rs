@@ -175,7 +175,7 @@ impl Progress {
 			.build_threadsafe_function::<ProgressData>()
 			.weak::<true>()
 			.build_callback(|ctx| Ok(ctx.value))?;
-		let mut listeners = self.progress_listeners.lock().unwrap();
+		let mut listeners = self.progress_listeners.lock().expect("poisoned mutex");
 		listeners.push(tsfn);
 		Ok(self)
 	}
@@ -189,7 +189,7 @@ impl Progress {
 			.build_threadsafe_function::<MessageData>()
 			.weak::<true>()
 			.build_callback(|ctx| Ok(ctx.value))?;
-		let mut listeners = self.message_listeners.lock().unwrap();
+		let mut listeners = self.message_listeners.lock().expect("poisoned mutex");
 		listeners.push(tsfn);
 		Ok(self)
 	}
@@ -198,7 +198,7 @@ impl Progress {
 impl Progress {
 	/// Emit a progress event to all registered listeners
 	pub fn emit_progress(&self, data: &ProgressData) {
-		let listeners = self.progress_listeners.lock().unwrap();
+		let listeners = self.progress_listeners.lock().expect("poisoned mutex");
 		for listener in listeners.iter() {
 			let _ = listener.call(data.clone(), ThreadsafeFunctionCallMode::NonBlocking);
 		}
@@ -206,7 +206,7 @@ impl Progress {
 
 	/// Emit a message event to all registered listeners
 	fn emit_message(&self, msg_type: &str, message: &str) {
-		let listeners = self.message_listeners.lock().unwrap();
+		let listeners = self.message_listeners.lock().expect("poisoned mutex");
 		for listener in listeners.iter() {
 			let _ = listener.call(
 				MessageData {

@@ -217,7 +217,7 @@ impl TileServer {
 		let prefix = url_prefix.clone().unwrap_or_else(|| "/".to_string());
 
 		// Validate that the path exists
-		let data_location = DataLocation::from(path.clone());
+		let data_location = DataLocation::try_from(path.clone()).map_err(|e| napi::Error::from_reason(e.to_string()))?;
 		let path_buf = napi_result!(data_location.as_path())?;
 		if !path_buf.exists() {
 			return Err(Error::from_reason(format!("Static source path does not exist: {path}")));
@@ -304,7 +304,8 @@ impl TileServer {
 		let static_sources = self.static_sources.lock().await;
 		for (path, url_prefix) in static_sources.iter() {
 			use versatiles::config::StaticSourceConfig;
-			let data_location = DataLocation::from(path.clone());
+			let data_location =
+				DataLocation::try_from(path.clone()).map_err(|e| napi::Error::from_reason(e.to_string()))?;
 			config.static_sources.push(StaticSourceConfig {
 				src: data_location,
 				prefix: url_prefix.clone(),

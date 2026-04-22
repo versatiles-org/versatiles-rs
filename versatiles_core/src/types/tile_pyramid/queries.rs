@@ -13,7 +13,7 @@ impl TilePyramid {
 	/// Returns a mutable reference to the [`TileCover`] at the given zoom level.
 	#[must_use]
 	pub fn level_mut(&mut self, level: u8) -> &mut TileCover {
-		self.levels.get_mut(level as usize).unwrap()
+		self.levels.get_mut(level as usize).expect("level <= MAX_ZOOM_LEVEL")
 	}
 
 	/// Returns the bounding box of the given zoom level, or an empty bbox if

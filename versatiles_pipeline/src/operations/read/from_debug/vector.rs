@@ -15,7 +15,8 @@ use versatiles_geometry::{
 	vector_tile::{VectorTile, VectorTileLayer},
 };
 
-static FONT: LazyLock<FontArc> = LazyLock::new(|| FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap());
+static FONT: LazyLock<FontArc> =
+	LazyLock::new(|| FontArc::try_from_slice(include_bytes!("./trim.ttf")).expect("bundled font is valid"));
 
 #[context("Creating debug vector tile for coord {:?}", coord)]
 pub fn create_debug_vector_tile(coord: &TileCoord) -> Result<VectorTile> {
@@ -76,7 +77,8 @@ fn draw_text(name: &str, y: f32, text: &str) -> VectorTileLayer {
 		position.x += scale * font.h_advance_unscaled(glyph_id);
 	}
 
-	VectorTileLayer::from_features(String::from(name), features, 4096, 1).unwrap()
+	VectorTileLayer::from_features(String::from(name), features, 4096, 1)
+		.expect("debug features have valid geometry")
 }
 
 fn get_multipolygon(mls: MultiLineStringGeometry) -> MultiPolygonGeometry {

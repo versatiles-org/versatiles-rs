@@ -239,7 +239,8 @@ impl ProgressHandle {
 			0.0
 		};
 
-		let percent = float_to_int::<f64, u64>((pos as f64 * 100.0 / total as f64).floor()).unwrap();
+		let percent = float_to_int::<f64, u64>((pos as f64 * 100.0 / total as f64).floor())
+			.expect("percent in 0..=100 fits in u64");
 		let per_sec_str = format_rate(per_sec);
 		let eta_str = format_eta(Duration::from_secs_f64(eta_secs));
 
@@ -254,13 +255,13 @@ impl ProgressHandle {
 		if state.finished {
 			// Clear terminal progress indicator
 			let osc = osc_wrap("\x1b]9;4;0;\x07");
-			write!(output, "\r\x1b[2K{line}{osc}").unwrap();
+			write!(output, "\r\x1b[2K{line}{osc}").expect("writing progress to stderr");
 		} else {
 			// Set terminal progress indicator (OSC 9;4)
 			let osc = osc_wrap(&format!("\x1b]9;4;1;{percent}\x07"));
-			write!(output, "\r\x1b[2K{line}{osc}").unwrap();
+			write!(output, "\r\x1b[2K{line}{osc}").expect("writing progress to stderr");
 		}
-		output.flush().unwrap();
+		output.flush().expect("flushing progress to stderr");
 	}
 }
 

@@ -39,7 +39,13 @@ impl<'a> PipelineReader {
 	#[context("opening VPL path '{}'", path.display())]
 	pub async fn open(path: &Path, runtime: TilesRuntime) -> Result<PipelineReader> {
 		let vpl = std::fs::read_to_string(path).with_context(|| anyhow!("Failed to open {path:?}"))?;
-		Self::from_str(&vpl, path.to_str().unwrap(), path.parent().unwrap(), runtime)
+		let path_str = path
+			.to_str()
+			.ok_or_else(|| anyhow!("path '{}' is not valid UTF-8", path.display()))?;
+		let parent = path
+			.parent()
+			.ok_or_else(|| anyhow!("path '{}' has no parent directory", path.display()))?;
+		Self::from_str(&vpl, path_str, parent, runtime)
 			.await
 			.with_context(|| format!("failed parsing {path:?} as VPL"))
 	}

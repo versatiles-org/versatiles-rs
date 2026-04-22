@@ -37,10 +37,10 @@ impl ZOrderIterator {
 		Self {
 			level: bbox.level,
 			stack: vec![(0, 0, size)],
-			x_min: bbox.x_min().unwrap(),
-			y_min: bbox.y_min().unwrap(),
-			x_max: bbox.x_max().unwrap(),
-			y_max: bbox.y_max().unwrap(),
+			x_min: bbox.x_min().expect("bbox is non-empty"),
+			y_min: bbox.y_min().expect("bbox is non-empty"),
+			x_max: bbox.x_max().expect("bbox is non-empty"),
+			y_max: bbox.y_max().expect("bbox is non-empty"),
 		}
 	}
 
@@ -57,7 +57,7 @@ impl Iterator for ZOrderIterator {
 		while let Some((qx, qy, size)) = self.stack.pop() {
 			if size == 1 {
 				// Leaf - emit coordinate (already validated by intersection check)
-				return Some(TileCoord::new(self.level, qx, qy).unwrap());
+				return Some(TileCoord::new(self.level, qx, qy).expect("coord within bbox"));
 			}
 
 			// Subdivide into 4 quadrants, push in reverse Z-order

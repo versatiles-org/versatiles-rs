@@ -50,7 +50,7 @@
 //! let cfg = Config::from_string("tiles: [[\"osm\", \"osm.versatiles\"]]").unwrap();
 //! ```
 use super::{CorsConfig, ServerConfig, StaticSourceConfig, TileSourceConfig};
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use serde::Deserialize;
 use std::{
 	collections::HashMap,
@@ -132,7 +132,10 @@ impl Config {
 		let mut cfg = Config::from_reader(BufReader::new(file))?;
 
 		// Sanity checks
-		cfg.resolve_paths(&DataLocation::from(path.parent().unwrap()))?;
+		let parent = path
+			.parent()
+			.ok_or_else(|| anyhow!("config path '{}' has no parent directory", path.display()))?;
+		cfg.resolve_paths(&DataLocation::from(parent))?;
 		Ok(cfg)
 	}
 

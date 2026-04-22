@@ -95,7 +95,10 @@ pub(super) fn encode_tiles_parallel(
 					})
 				})
 				.collect();
-			handles.into_iter().map(|h| h.join().unwrap()).collect()
+			handles
+				.into_iter()
+				.map(|h| h.join().expect("worker thread panicked"))
+				.collect()
 		});
 		results.extend(chunk_results);
 	}

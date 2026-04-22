@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use std::path::PathBuf;
 use versatiles_container::TilesRuntime;
 use versatiles_geometry::{geo::GeoCollection, tile_outline::TileOutline};
@@ -30,7 +30,12 @@ pub async fn run(args: &ExportOutline, runtime: &TilesRuntime) -> Result<()> {
 	let reader = runtime.reader_from_str(input).await?;
 
 	let tile_pyramid = reader.tile_pyramid().await?;
-	let level = args.level.unwrap_or_else(|| tile_pyramid.level_max().unwrap());
+	let level = match args.level {
+		Some(l) => l,
+		None => tile_pyramid
+			.level_max()
+			.ok_or_else(|| anyhow!("tile pyramid is empty; cannot determine max level"))?,
+	};
 
 	log::debug!("Measuring the outline of the tiles in {input:?} at zoom level {level} and saving it to {output:?}");
 

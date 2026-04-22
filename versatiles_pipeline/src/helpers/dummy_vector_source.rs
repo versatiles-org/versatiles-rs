@@ -46,7 +46,9 @@ impl DummyVectorSource {
 		);
 
 		let mut tilejson = TileJSON::default();
-		tilejson.set_string("name", "dummy vector source").unwrap();
+		tilejson
+			.set_string("name", "dummy vector source")
+			.expect("tilejson accepts string name");
 		metadata.update_tilejson(&mut tilejson);
 
 		DummyVectorSource {

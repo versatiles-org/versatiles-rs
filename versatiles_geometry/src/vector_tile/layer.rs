@@ -78,7 +78,7 @@ impl VectorTileLayer {
 		let mut property_manager = PropertyManager::new();
 		let mut version = 1;
 
-		while reader.has_remaining() {
+		while reader.has_remaining()? {
 			match reader.read_pbf_key().context("Failed to read PBF key")? {
 				(1, 2) => name = Some(reader.read_pbf_string().context("Failed to read layer name")?),
 				(2, 2) => features.push(

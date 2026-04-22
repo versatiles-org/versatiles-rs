@@ -103,7 +103,7 @@ impl TileSink for VersaTilesSink {
 	fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
 		let block_key: BlockKey = (coord.level, coord.x / 256, coord.y / 256);
 
-		let mut writers = self.block_writers.lock().unwrap();
+		let mut writers = self.block_writers.lock().expect("poisoned mutex");
 		let writer = writers.entry(block_key).or_insert_with(|| {
 			let path = self.block_path(&block_key);
 			BufWriter::new(File::create(path).expect("failed to create block temp file"))
@@ -118,7 +118,7 @@ impl TileSink for VersaTilesSink {
 	fn finish(self: Box<Self>, tilejson: &TileJSON, runtime: &crate::TilesRuntime) -> Result<()> {
 		// 1. Flush and close all block writers, collect block keys
 		let block_keys: Vec<BlockKey> = {
-			let mut writers = self.block_writers.lock().unwrap();
+			let mut writers = self.block_writers.lock().expect("poisoned mutex");
 			let keys: Vec<BlockKey> = writers.keys().copied().collect();
 			for (_, mut w) in writers.drain() {
 				w.flush()?;
@@ -141,13 +141,13 @@ impl TileSink for VersaTilesSink {
 		sorted_keys.sort_by(|a, b| a.0.cmp(&b.0).then(a.2.cmp(&b.2)).then(a.1.cmp(&b.1)));
 
 		// 3. Compute zoom range from block keys
-		let zoom_min = sorted_keys.iter().map(|k| k.0).min().unwrap();
-		let zoom_max = sorted_keys.iter().map(|k| k.0).max().unwrap();
+		let zoom_min = sorted_keys.iter().map(|k| k.0).min().expect("non-empty after early return above");
+		let zoom_max = sorted_keys.iter().map(|k| k.0).max().expect("non-empty after early return above");
 
 		// 4. Compute bbox from tilejson or default to world
 		let bbox = tilejson
 			.bounds
-			.unwrap_or_else(|| GeoBBox::new(-180.0, -85.051_13, 180.0, 85.051_13).unwrap());
+			.unwrap_or_else(|| GeoBBox::new(-180.0, -85.051_13, 180.0, 85.051_13).expect("valid world bbox constants"));
 
 		// 5. Create output writer and write initial header
 		let mut writer = self.create_writer()?;

@@ -74,7 +74,7 @@ where
 		);
 
 		Self {
-			cache: LruCache::new(NonZeroUsize::new(max_length).unwrap()),
+			cache: LruCache::new(NonZeroUsize::new(max_length).expect("max_length asserted > 0")),
 		}
 	}
 

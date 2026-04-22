@@ -56,13 +56,13 @@ impl Tile {
 	pub fn into_blob(mut self, compression: &TileCompression) -> Result<Blob> {
 		self.materialize_blob()?;
 		self.recompress_blob(compression)?;
-		Ok(self.blob.unwrap())
+		Ok(self.blob.expect("blob materialized above"))
 	}
 
 	#[context("converting tile into content")]
 	pub(super) fn into_content(mut self) -> Result<TileContent> {
 		self.materialize_content()?;
-		Ok(self.content.unwrap())
+		Ok(self.content.expect("content materialized above"))
 	}
 
 	/// Consume the tile and return the owned raster image.
@@ -87,7 +87,7 @@ impl Tile {
 	pub(super) fn as_content_mut(&mut self) -> Result<&mut TileContent> {
 		self.materialize_content()?;
 		self.delete_blob();
-		Ok(self.content.as_mut().unwrap())
+		Ok(self.content.as_mut().expect("content materialized above"))
 	}
 
 	/// Mutably borrow the raster image content.

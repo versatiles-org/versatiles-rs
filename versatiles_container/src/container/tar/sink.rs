@@ -98,13 +98,13 @@ impl<W: Write + Send> TileSink for TarTileSink<W> {
 		self
 			.builder
 			.lock()
-			.unwrap()
+			.expect("poisoned mutex")
 			.append_data(&mut header, Path::new(&filename), blob.as_slice())?;
 		Ok(())
 	}
 
 	fn finish(self: Box<Self>, tilejson: &TileJSON, _runtime: &crate::TilesRuntime) -> Result<()> {
-		let mut builder = self.builder.into_inner().unwrap();
+		let mut builder = self.builder.into_inner().expect("poisoned mutex");
 
 		// Write tiles.json metadata entry
 		let meta_blob = compress(Blob::from(tilejson), &self.tile_compression)?;

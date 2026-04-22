@@ -119,7 +119,7 @@ fn format_error_chain(err: &anyhow::Error) -> String {
 		if i == 0 {
 			result.push_str("\n  Caused by:");
 		}
-		write!(result, "\n    {cause}").unwrap();
+		write!(result, "\n    {cause}").expect("writing to string never fails");
 	}
 
 	result

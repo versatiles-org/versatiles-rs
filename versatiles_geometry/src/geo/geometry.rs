@@ -137,21 +137,21 @@ impl Geometry {
 			Geometry::Point(_) | Geometry::LineString(_) | Geometry::Polygon(_) => self,
 			Geometry::MultiPoint(mut g) => {
 				if g.len() == 1 {
-					Geometry::Point(g.pop().unwrap())
+					Geometry::Point(g.pop().expect("len == 1 above"))
 				} else {
 					Geometry::MultiPoint(g)
 				}
 			}
 			Geometry::MultiLineString(mut g) => {
 				if g.len() == 1 {
-					Geometry::LineString(g.pop().unwrap())
+					Geometry::LineString(g.pop().expect("len == 1 above"))
 				} else {
 					Geometry::MultiLineString(g)
 				}
 			}
 			Geometry::MultiPolygon(mut g) => {
 				if g.len() == 1 {
-					Geometry::Polygon(g.pop().unwrap())
+					Geometry::Polygon(g.pop().expect("len == 1 above"))
 				} else {
 					Geometry::MultiPolygon(g)
 				}

@@ -105,8 +105,8 @@ fn sort_depth_first(bboxes: &mut Vec<TileBBox>, size: u32) {
 		// Build a depth-first key: quadtree path (MSB first) plus sentinel 4
 		let mut k = Vec::with_capacity(b.level() as usize + 1);
 		for i in (0..b.level()).rev() {
-			let bit_x = (((b.x_min().unwrap() / size) >> i) & 1) as u8;
-			let bit_y = (((b.y_min().unwrap() / size) >> i) & 1) as u8;
+			let bit_x = (((b.x_min().expect("bbox is non-empty after retain") / size) >> i) & 1) as u8;
+			let bit_y = (((b.y_min().expect("bbox is non-empty after retain") / size) >> i) & 1) as u8;
 			k.push(bit_x | (bit_y << 1));
 		}
 		k.push(4);
@@ -120,7 +120,7 @@ fn sort_depth_first(bboxes: &mut Vec<TileBBox>, size: u32) {
 ///
 /// * `bboxes` – slice of boxes to sort.
 fn sort_hilbert(bboxes: &mut [TileBBox]) {
-	bboxes.sort_by_cached_key(|b| b.get_hilbert_index().unwrap());
+	bboxes.sort_by_cached_key(|b| b.get_hilbert_index().expect("bbox is non-empty"));
 }
 
 #[cfg(test)]

@@ -29,18 +29,20 @@ impl TileBBox {
 		assert!(y < self.max_count(), "y ({y}) must be < max ({})", self.max_count());
 		if self.is_empty() {
 			// Initialize bounding box to the provided coordinate
-			self.set_min_and_size(x, y, 1, 1).unwrap();
+			self
+				.set_min_and_size(x, y, 1, 1)
+				.expect("x, y within level bounds");
 		} else {
 			// Expand bounding box to include the new coordinate
-			if x < self.x_min().unwrap() {
-				self.set_x_min(x).unwrap();
-			} else if x > self.x_max().unwrap() {
-				self.set_x_max(x).unwrap();
+			if x < self.x_min().expect("bbox is non-empty") {
+				self.set_x_min(x).expect("x within level bounds");
+			} else if x > self.x_max().expect("bbox is non-empty") {
+				self.set_x_max(x).expect("x within level bounds");
 			}
-			if y < self.y_min().unwrap() {
-				self.set_y_min(y).unwrap();
-			} else if y > self.y_max().unwrap() {
-				self.set_y_max(y).unwrap();
+			if y < self.y_min().expect("bbox is non-empty") {
+				self.set_y_min(y).expect("y within level bounds");
+			} else if y > self.y_max().expect("bbox is non-empty") {
+				self.set_y_max(y).expect("y within level bounds");
 			}
 		}
 	}
@@ -81,12 +83,12 @@ impl TileBBox {
 			let max = self.max_count() - 1;
 			self
 				.set_min_and_max(
-					self.x_min().unwrap().saturating_sub(size),
-					self.y_min().unwrap().saturating_sub(size),
-					self.x_max().unwrap().saturating_add(size).min(max),
-					self.y_max().unwrap().saturating_add(size).min(max),
+					self.x_min().expect("bbox is non-empty").saturating_sub(size),
+					self.y_min().expect("bbox is non-empty").saturating_sub(size),
+					self.x_max().expect("bbox is non-empty").saturating_add(size).min(max),
+					self.y_max().expect("bbox is non-empty").saturating_add(size).min(max),
 				)
-				.unwrap();
+				.expect("clamped to level bounds");
 		}
 	}
 
@@ -121,10 +123,10 @@ impl TileBBox {
 		} else {
 			// Expand bounding box to include the other bounding box
 			self.set_min_and_max(
-				self.x_min().unwrap().min(bbox.x_min().unwrap()),
-				self.y_min().unwrap().min(bbox.y_min().unwrap()),
-				self.x_max().unwrap().max(bbox.x_max().unwrap()),
-				self.y_max().unwrap().max(bbox.y_max().unwrap()),
+				self.x_min().expect("bbox is non-empty").min(bbox.x_min().expect("bbox is non-empty")),
+				self.y_min().expect("bbox is non-empty").min(bbox.y_min().expect("bbox is non-empty")),
+				self.x_max().expect("bbox is non-empty").max(bbox.x_max().expect("bbox is non-empty")),
+				self.y_max().expect("bbox is non-empty").max(bbox.y_max().expect("bbox is non-empty")),
 			)?;
 		}
 
@@ -183,19 +185,19 @@ impl TileBBox {
 
 		self
 			.set_min_and_max(
-				self.x_min().unwrap() / scale,
-				self.y_min().unwrap() / scale,
-				self.x_max().unwrap() / scale,
-				self.y_max().unwrap() / scale,
+				self.x_min().expect("bbox is non-empty") / scale,
+				self.y_min().expect("bbox is non-empty") / scale,
+				self.x_max().expect("bbox is non-empty") / scale,
+				self.y_max().expect("bbox is non-empty") / scale,
 			)
-			.unwrap();
+			.expect("scaled bounds remain valid");
 	}
 
 	/// Return a downscaled **copy** of this bbox by an integer power-of-two factor.
 	#[must_use]
 	pub fn scaled_down(&self, scale: u32) -> TileBBox {
 		if self.is_empty() {
-			return TileBBox::new_empty(self.level).unwrap();
+			return TileBBox::new_empty(self.level).expect("level already validated");
 		}
 		let mut bbox = *self;
 		bbox.scale_down(scale);
@@ -232,7 +234,7 @@ impl TileBBox {
 	pub fn level_up(&mut self) {
 		assert!(self.level < MAX_ZOOM_LEVEL, "level must be less than {MAX_ZOOM_LEVEL}");
 		self.level += 1;
-		self.scale_up(2).unwrap();
+		self.scale_up(2).expect("scale up by 2 at valid level");
 	}
 
 	/// Decrease the zoom level by one and divide coordinates by 2.
@@ -261,13 +263,13 @@ impl TileBBox {
 	/// Convert this bbox to another zoom level, scaling coordinates appropriately.
 	#[must_use]
 	pub fn at_level(&self, level: u8) -> TileBBox {
-		validate_zoom_level(level).unwrap();
+		validate_zoom_level(level).expect("level must be <= MAX_ZOOM_LEVEL");
 
 		let mut bbox = *self;
 		if level > self.level {
 			let scale = 2u32.pow(u32::from(level - self.level));
 			bbox.level = level;
-			bbox.scale_up(scale).unwrap();
+			bbox.scale_up(scale).expect("scale up to higher level");
 		} else {
 			let scale = 2u32.pow(u32::from(self.level - level));
 			bbox.scale_down(scale);
@@ -287,12 +289,12 @@ impl TileBBox {
 		let max_coord = self.max_count() - 1;
 		self
 			.set_min_and_max(
-				(self.x_min().unwrap().div(block_size)) * block_size,
-				(self.y_min().unwrap().div(block_size)) * block_size,
-				((self.x_max().unwrap() + 1).div_ceil(block_size) * block_size - 1).min(max_coord),
-				((self.y_max().unwrap() + 1).div_ceil(block_size) * block_size - 1).min(max_coord),
+				(self.x_min().expect("bbox is non-empty").div(block_size)) * block_size,
+				(self.y_min().expect("bbox is non-empty").div(block_size)) * block_size,
+				((self.x_max().expect("bbox is non-empty") + 1).div_ceil(block_size) * block_size - 1).min(max_coord),
+				((self.y_max().expect("bbox is non-empty") + 1).div_ceil(block_size) * block_size - 1).min(max_coord),
 			)
-			.unwrap();
+			.expect("clamped to level bounds");
 	}
 
 	/// Return a copy rounded to `block_size` boundaries.
@@ -307,8 +309,11 @@ impl TileBBox {
 	pub fn flip_y(&mut self) {
 		if !self.is_empty() {
 			self
-				.shift_to(self.x_min().unwrap(), self.max_coord() - self.y_max().unwrap())
-				.unwrap();
+				.shift_to(
+					self.x_min().expect("bbox is non-empty"),
+					self.max_coord() - self.y_max().expect("bbox is non-empty"),
+				)
+				.expect("shift within level bounds");
 		}
 	}
 }

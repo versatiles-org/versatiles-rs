@@ -76,7 +76,9 @@ impl TileCover {
 	/// Shrinks `self` in place to the tiles also present in the corresponding
 	/// level of `pyramid`.
 	pub fn intersect_pyramid(&mut self, pyramid: &TilePyramid) {
-		self.intersect_cover(pyramid.level_ref(self.level())).unwrap();
+		self
+			.intersect_cover(pyramid.level_ref(self.level()))
+			.expect("same-level operation");
 	}
 
 	/// Returns a new cover containing only the tiles shared by `self` and `bbox`.
@@ -119,7 +121,9 @@ impl TileCover {
 	/// corresponding level of `pyramid`.
 	#[must_use]
 	pub fn intersection_pyramid(&self, pyramid: &TilePyramid) -> Self {
-		self.intersection_cover(pyramid.level_ref(self.level())).unwrap()
+		self
+			.intersection_cover(pyramid.level_ref(self.level()))
+			.expect("same-level operation")
 	}
 }
 

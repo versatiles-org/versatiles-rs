@@ -27,7 +27,7 @@ impl Instance {
 	/// Cleanup the GDAL dataset instance, incrementing its age.
 	pub fn cleanup(&mut self) {
 		self.age = self.age.wrapping_add(1);
-		self.dataset.flush_cache().unwrap();
+		self.dataset.flush_cache().expect("gdal flush_cache on open dataset");
 	}
 
 	/// Access the underlying GDAL dataset.

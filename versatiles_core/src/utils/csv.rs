@@ -101,14 +101,14 @@ fn read_csv_fields<'a>(
 				match iter.consume() {
 					Some(b'\r') => {}
 					Some(b'\n') => {
-						if (fields.len() == 1) && (fields.first().unwrap().is_empty()) {
+						if (fields.len() == 1) && (fields.first().expect("len == 1").is_empty()) {
 							fields.clear();
 							break;
 						}
 						return Some(Ok((fields, iter.position())));
 					}
 					None => {
-						if (fields.len() == 1) && (fields.first().unwrap().is_empty()) {
+						if (fields.len() == 1) && (fields.first().expect("len == 1").is_empty()) {
 							return None;
 						}
 						return Some(Ok((fields, iter.position())));

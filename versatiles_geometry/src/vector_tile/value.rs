@@ -20,7 +20,7 @@ impl<'a> GeoValuePBF<'a> for GeoValue {
 		use GeoValue::{Bool, Double, Float, Int, String, UInt};
 		let mut value: Option<GeoValue> = None;
 
-		while reader.has_remaining() {
+		while reader.has_remaining()? {
 			value = Some(match reader.read_pbf_key().context("Failed to read PBF key")? {
 				// https://protobuf.dev/programming-guides/encoding/#structure
 				(1, 2) => {

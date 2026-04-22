@@ -376,13 +376,16 @@ where
 				let errors_clone = Arc::clone(&errors);
 				async move {
 					if let Err(e) = fut.await {
-						let mut errs = errors_clone.lock().unwrap();
+						let mut errs = errors_clone.lock().expect("poisoned mutex");
 						errs.push(e.context(format!("Failed to process tile at {coord:?}")));
 					}
 				}
 			})
 			.await;
-		let errs = Arc::try_unwrap(errors).unwrap().into_inner().unwrap();
+		let errs = Arc::try_unwrap(errors)
+			.expect("no other Arc references remain")
+			.into_inner()
+			.expect("poisoned mutex");
 		if let Some(e) = errs.into_iter().next() {
 			Err(e)
 		} else {

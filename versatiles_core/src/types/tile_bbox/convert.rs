@@ -29,14 +29,14 @@ impl TileBBox {
 		// Bottom-left in geospatial terms is (x_min, y_max + 1)
 		let p_min = TileCoord::coord_to_geo(
 			self.level,
-			f64::from(self.x_min().unwrap()),
-			f64::from(self.y_max().unwrap() + 1),
+			f64::from(self.x_min().expect("bbox is non-empty")),
+			f64::from(self.y_max().expect("bbox is non-empty") + 1),
 		);
 		// Top-right in geospatial terms is (x_max + 1, y_min)
 		let p_max = TileCoord::coord_to_geo(
 			self.level,
-			f64::from(self.x_max().unwrap() + 1),
-			f64::from(self.y_min().unwrap()),
+			f64::from(self.x_max().expect("bbox is non-empty") + 1),
+			f64::from(self.y_min().expect("bbox is non-empty")),
 		);
 
 		GeoBBox::new(p_min[0], p_min[1], p_max[0], p_max[1]).ok()

@@ -161,7 +161,7 @@ impl VPLNode {
 					})
 					.collect::<Result<Vec<_>>>()?
 					.try_into()
-					.unwrap(),
+					.expect("ensured vec.len() == N above"),
 			)
 		} else {
 			None

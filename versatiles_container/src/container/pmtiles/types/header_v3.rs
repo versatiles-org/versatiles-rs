@@ -40,7 +40,10 @@ impl HeaderV3 {
 		use PMTilesCompression as PC;
 		use PMTilesType as PT;
 
-		let bbox = tilejson.bounds.or_else(|| tile_pyramid.geo_bbox()).unwrap();
+		let bbox = tilejson
+			.bounds
+			.or_else(|| tile_pyramid.geo_bbox())
+			.expect("bounds available from tilejson or pyramid");
 		let center = tilejson.center.or_else(|| tile_pyramid.geo_center());
 
 		Self {
@@ -57,18 +60,18 @@ impl HeaderV3 {
 			tile_type: PT::from_value(*parameters.tile_format()).unwrap_or(PT::UNKNOWN),
 			min_zoom: tilejson.zoom_min().or(tile_pyramid.level_min()).unwrap_or(0),
 			max_zoom: tilejson.zoom_max().or(tile_pyramid.level_max()).unwrap_or(14),
-			min_lon_e7: float_to_int(bbox.x_min * 1e7).unwrap(),
-			min_lat_e7: float_to_int(bbox.y_min * 1e7).unwrap(),
-			max_lon_e7: float_to_int(bbox.x_max * 1e7).unwrap(),
-			max_lat_e7: float_to_int(bbox.y_max * 1e7).unwrap(),
+			min_lon_e7: float_to_int(bbox.x_min * 1e7).expect("lon*1e7 fits in i32"),
+			min_lat_e7: float_to_int(bbox.y_min * 1e7).expect("lat*1e7 fits in i32"),
+			max_lon_e7: float_to_int(bbox.x_max * 1e7).expect("lon*1e7 fits in i32"),
+			max_lat_e7: float_to_int(bbox.y_max * 1e7).expect("lat*1e7 fits in i32"),
 			center_zoom: center.map_or(5, |c| c.2),
 			center_lon_e7: center.map_or_else(
-				|| float_to_int((bbox.x_min + bbox.x_max) * 5e6).unwrap(),
-				|c| float_to_int(c.0 * 1e7).unwrap(),
+				|| float_to_int((bbox.x_min + bbox.x_max) * 5e6).expect("lon midpoint fits in i32"),
+				|c| float_to_int(c.0 * 1e7).expect("lon*1e7 fits in i32"),
 			),
 			center_lat_e7: center.map_or_else(
-				|| float_to_int((bbox.y_min + bbox.y_max) * 5e6).unwrap(),
-				|c| float_to_int(c.1 * 1e7).unwrap(),
+				|| float_to_int((bbox.y_min + bbox.y_max) * 5e6).expect("lat midpoint fits in i32"),
+				|c| float_to_int(c.1 * 1e7).expect("lat*1e7 fits in i32"),
 			),
 		}
 	}

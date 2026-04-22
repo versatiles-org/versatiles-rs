@@ -111,11 +111,11 @@ impl TileSourceMetadata {
 
 	#[must_use]
 	pub fn tile_pyramid(&self) -> Option<Arc<TilePyramid>> {
-		self.tile_pyramid.read().unwrap().clone()
+		self.tile_pyramid.read().expect("poisoned RwLock").clone()
 	}
 
 	pub fn set_tile_pyramid(&self, tile_pyramid: TilePyramid) {
-		*self.tile_pyramid.write().unwrap() = Some(Arc::new(tile_pyramid));
+		*self.tile_pyramid.write().expect("poisoned RwLock") = Some(Arc::new(tile_pyramid));
 	}
 
 	pub fn get_or_compute_tile_pyramid(
@@ -125,7 +125,7 @@ impl TileSourceMetadata {
 		if let Some(pyramid) = self.tile_pyramid() {
 			Ok(pyramid)
 		} else {
-			let mut write_guard = self.tile_pyramid.write().unwrap();
+			let mut write_guard = self.tile_pyramid.write().expect("poisoned RwLock");
 			let pyramid = Arc::new(compute_fn()?);
 			*write_guard = Some(pyramid.clone());
 			Ok(pyramid)

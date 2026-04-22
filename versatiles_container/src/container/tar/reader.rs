@@ -149,7 +149,10 @@ impl TarTilesReader {
 			}
 
 			let path = entry.path()?.clone();
-			let mut path_tmp: Vec<&str> = path.iter().map(|s| s.to_str().unwrap()).collect();
+			let mut path_tmp: Vec<&str> = path
+				.iter()
+				.map(|s| s.to_str().expect("tar path component is utf-8"))
+				.collect();
 
 			if path_tmp[0] == "." {
 				path_tmp.remove(0);
@@ -192,7 +195,7 @@ impl TarTilesReader {
 
 			let mut read_to_end = || {
 				let mut blob: Vec<u8> = Vec::new();
-				entry.read_to_end(&mut blob).unwrap();
+				entry.read_to_end(&mut blob).expect("tar entry readable");
 				Blob::from(blob)
 			};
 
@@ -240,7 +243,7 @@ impl TarTilesReader {
 
 		Ok(TarTilesReader {
 			tilejson,
-			name: path.to_str().unwrap().to_string(),
+			name: path.to_str().expect("tar path is utf-8").to_string(),
 			metadata,
 			reader: Arc::new(*reader),
 			tile_map: Arc::new(tile_map),

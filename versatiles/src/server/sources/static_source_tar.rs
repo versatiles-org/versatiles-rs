@@ -1,6 +1,6 @@
 use super::super::utils::{Url, guess_mime};
 use super::{SourceResponse, static_source::StaticSourceTrait};
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, anyhow, bail, ensure};
 use async_trait::async_trait;
 use std::{collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::File, io::Read, path::Path};
 use tar::{Archive, EntryType};
@@ -53,7 +53,11 @@ impl TarFile {
 		let mut buffer = Blob::from(buffer);
 		drop(file);
 
-		for part in path.to_str().unwrap().rsplit('.') {
+		for part in path
+			.to_str()
+			.ok_or_else(|| anyhow!("path {path:?} is not valid UTF-8"))?
+			.rsplit('.')
+		{
 			match part {
 				"tar" => break,
 				"gz" => buffer = decompress_gzip(&buffer)?,
@@ -93,13 +97,15 @@ impl TarFile {
 			file.read_to_end(&mut buffer)?;
 			let blob = Blob::from(buffer);
 
-			let filename = entry_path.file_name().unwrap();
+			let Some(filename) = entry_path.file_name() else {
+				continue;
+			};
 			let mime = guess_mime(Path::new(&filename));
 
 			let mut add = |path: &Path, blob: Blob| {
 				let mut name = path
 					.iter()
-					.map(|s| s.to_str().unwrap())
+					.map(|s| s.to_str().expect("tar entry path is utf-8"))
 					.collect::<Vec<&str>>()
 					.join("/");
 
@@ -120,14 +126,22 @@ impl TarFile {
 			};
 
 			if filename == OsStr::new("index.html") {
-				add(entry_path.parent().unwrap(), blob.clone());
+				add(
+					entry_path
+						.parent()
+						.expect("entry_path has a file_name, so parent exists"),
+					blob.clone(),
+				);
 			}
 			add(&entry_path, blob);
 		}
 
 		Ok(Self {
 			lookup,
-			name: path.to_str().unwrap().to_owned(),
+			name: path
+				.to_str()
+				.expect("utf-8 already checked above")
+				.to_owned(),
 		})
 	}
 }

@@ -40,18 +40,18 @@ impl TranslucentBuffer {
 
 	/// Remove and return all entries.
 	pub fn drain(&self) -> HashMap<u64, (TileCoord, Tile)> {
-		self.inner.lock().unwrap().drain().collect()
+		self.inner.lock().expect("poisoned mutex").drain().collect()
 	}
 
 	/// Remove a tile by its Hilbert key, returning `(coord, tile)` if present.
 	pub fn remove(&self, key: u64) -> Option<(TileCoord, Tile)> {
-		self.inner.lock().unwrap().remove(&key)
+		self.inner.lock().expect("poisoned mutex").remove(&key)
 	}
 
 	/// Insert a tile. The key must be `coord.get_hilbert_index()`.
 	pub fn insert(&self, coord: TileCoord, tile: Tile) -> anyhow::Result<()> {
 		let key = coord.get_hilbert_index()?;
-		self.inner.lock().unwrap().insert(key, (coord, tile));
+		self.inner.lock().expect("poisoned mutex").insert(key, (coord, tile));
 		Ok(())
 	}
 }

@@ -171,7 +171,7 @@ impl TileCoord {
 	/// ```
 	#[must_use]
 	pub fn coord_to_geo(level: u8, x: f64, y: f64) -> [f64; 2] {
-		validate_zoom_level(level).unwrap();
+		validate_zoom_level(level).expect("level must be <= MAX_ZOOM_LEVEL");
 		let zoom: f64 = 2.0f64.powi(i32::from(level));
 		[
 			(x / zoom - 0.5) * 360.0,
@@ -188,7 +188,10 @@ impl TileCoord {
 	/// Return the geographic bounding box of this tile as `[west, south, east, north]`.
 	#[must_use]
 	pub fn to_geo_bbox(&self) -> GeoBBox {
-		self.to_tile_bbox().to_geo_bbox().unwrap()
+		self
+			.to_tile_bbox()
+			.to_geo_bbox()
+			.expect("single-tile bbox has valid geo bounds")
 	}
 
 	/// Return the Web Mercator bounding box of this tile as `[x_min, y_min, x_max, y_max]` in meters.
@@ -251,7 +254,7 @@ impl TileCoord {
 	/// Returns an error if bounding coordinates overflow.
 	#[must_use]
 	pub fn to_tile_bbox(&self) -> TileBBox {
-		TileBBox::from_min_and_size(self.level, self.x, self.y, 1, 1).unwrap()
+		TileBBox::from_min_and_size(self.level, self.x, self.y, 1, 1).expect("coord is valid at level")
 	}
 
 	/// Change this coordinate to a new zoom `level`, scaling x/y accordingly.
@@ -260,7 +263,7 @@ impl TileCoord {
 	#[must_use]
 	pub fn at_level(&self, level: u8) -> TileCoord {
 		use std::cmp::Ordering::{Equal, Greater, Less};
-		validate_zoom_level(level).unwrap();
+		validate_zoom_level(level).expect("level must be <= MAX_ZOOM_LEVEL");
 		match level.cmp(&self.level) {
 			Greater => {
 				let scale = 2u32.pow(u32::from(level - self.level));

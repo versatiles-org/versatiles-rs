@@ -83,7 +83,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		r"^(?P<filename>.*)$",
 	]
 	.iter()
-	.map(|pat| Regex::new(pat).unwrap())
+	.map(|pat| Regex::new(pat).expect("valid regex literal"))
 	.collect();
 
 	let mut static_sources = arguments
@@ -93,11 +93,11 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 			let capture = static_patterns
 				.iter()
 				.find(|p| p.is_match(argument))
-				.unwrap()
+				.expect("catch-all pattern always matches")
 				.captures(argument)
-				.unwrap();
+				.expect("pattern matched; captures must succeed");
 
-			let filename: &str = capture.name("filename").unwrap().as_str();
+			let filename: &str = capture.name("filename").expect("every pattern defines filename").as_str();
 			let prefix = capture.name("path").map(|m| m.as_str().to_string());
 
 			Ok(StaticSourceConfig {
@@ -112,7 +112,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	let mut server: TileServer = TileServer::from_config(config, runtime.clone()).await?;
 
 	let mut list = server.url_mapping();
-	list.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+	list.sort_by(|a, b| a.0.partial_cmp(&b.0).expect("url comparison is total"));
 	for (url, source) in &list {
 		log::info!("add tile source: {} <- {source}", url.join_as_string("*"));
 	}

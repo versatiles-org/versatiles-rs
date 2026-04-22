@@ -296,7 +296,10 @@ impl TileServer {
 			// Map timeouts, loadshed, and buffer-closed errors to a clear 503.
 			// 503 is cache-aware and plays well with upstream retries; 429 is reserved for per-client rate limits.
 			let mut resp = (StatusCode::SERVICE_UNAVAILABLE, "Service overloaded, try later").into_response();
-			resp.headers_mut().insert("Retry-After", "2".parse().unwrap());
+			resp.headers_mut().insert(
+				"Retry-After",
+				"2".parse().expect("literal is valid header value"),
+			);
 			Ok::<_, std::convert::Infallible>(resp)
 		});
 

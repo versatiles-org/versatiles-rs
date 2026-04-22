@@ -124,7 +124,7 @@ impl BandMapping {
 					channels[channel_index].is_none(),
 					"GDAL dataset band {band_index} uses the same channel ({}) as band {}",
 					["grey", "red", "green", "blue", "alpha"][channel_index],
-					channels[channel_index].unwrap()
+					channels[channel_index].expect("ensure guards that value is Some")
 				);
 				channels[channel_index] = Some(*band_index);
 			}
@@ -181,7 +181,7 @@ impl BandMapping {
 	/// Maximum GDAL band index referenced by this mapping.
 	#[allow(dead_code)]
 	pub fn max_band_index(&self) -> usize {
-		let color_max = *self.map.iter().max().unwrap();
+		let color_max = *self.map.iter().max().expect("map always has at least one color band");
 		self.src_alpha_band.map_or(color_max, |a| color_max.max(a))
 	}
 

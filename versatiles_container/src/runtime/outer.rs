@@ -93,7 +93,12 @@ impl TilesRuntime {
 	/// ```
 	#[must_use]
 	pub fn create_progress(&self, message: &str, total: u64) -> ProgressHandle {
-		self.inner.progress_factory.lock().unwrap().create(message, total)
+		self
+			.inner
+			.progress_factory
+			.lock()
+			.expect("poisoned mutex")
+			.create(message, total)
 	}
 
 	pub async fn write_to_path(&self, reader: SharedTileSource, path: &Path) -> Result<()> {

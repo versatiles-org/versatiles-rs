@@ -225,7 +225,7 @@ impl TilesWriter for MBTilesWriter {
 							.map_parallel_try(move |_coord, tile| tile.into_blob(&tile_compression))
 							.unwrap_results()
 							.for_each_buffered(4096, |v| {
-								writer.add_tiles(&v).unwrap();
+								writer.add_tiles(&v).expect("mbtiles batch insert");
 							})
 							.await;
 						Ok(())

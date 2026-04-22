@@ -133,7 +133,7 @@ impl TileCompression {
 	/// ```
 	pub fn from_filename(filename: &mut String) -> TileCompression {
 		if let Some(index) = filename.rfind('.') {
-			let compression = match filename.get(index..).unwrap() {
+			let compression = match filename.get(index..).expect("rfind returns valid index") {
 				".gz" => Gzip,
 				".br" => Brotli,
 				".zst" => Zstd,

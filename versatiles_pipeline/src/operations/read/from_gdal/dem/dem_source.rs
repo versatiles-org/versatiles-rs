@@ -113,8 +113,8 @@ fn reproject_to_float_dataset(
 			operation,
 			0,
 			0,
-			i32::try_from(width).unwrap(),
-			i32::try_from(height).unwrap(),
+			i32::try_from(width).context("warp width exceeds i32::MAX")?,
+			i32::try_from(height).context("warp height exceeds i32::MAX")?,
 		);
 
 		GDALDestroyWarpOperation(operation);

@@ -115,7 +115,12 @@ impl Operation {
 			.tile_pyramid()
 			.ok_or_else(|| anyhow::anyhow!("source tile_pyramid not set"))?;
 
-		let level_base = args.level_base.unwrap_or(source_pyramid.level_max().unwrap());
+		let level_base = match args.level_base {
+			Some(level) => level,
+			None => source_pyramid
+				.level_max()
+				.ok_or_else(|| anyhow::anyhow!("source pyramid is empty"))?,
+		};
 		log::trace!("level_base {level_base}");
 
 		let level_max = args

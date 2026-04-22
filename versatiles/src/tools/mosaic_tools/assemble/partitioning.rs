@@ -42,7 +42,10 @@ pub(super) fn partition_into_batches(
 
 	// Special case: single group that exceeds batch_size — split coords spatially
 	if groups.len() == 1 {
-		return split_single_group(groups.into_iter().next().unwrap(), batch_size);
+		return split_single_group(
+			groups.into_iter().next().expect("groups.len() == 1"),
+			batch_size,
+		);
 	}
 
 	// PCA step: find the principal component via power iteration
@@ -135,11 +138,11 @@ fn pca_bisect(groups: Vec<SignatureGroup>, num_sources: usize) -> (Vec<Signature
 
 	let left: Vec<SignatureGroup> = indices_left
 		.into_iter()
-		.map(|i| groups_by_idx[i].take().unwrap())
+		.map(|i| groups_by_idx[i].take().expect("each index visited exactly once"))
 		.collect();
 	let right: Vec<SignatureGroup> = indices_right
 		.into_iter()
-		.map(|i| groups_by_idx[i].take().unwrap())
+		.map(|i| groups_by_idx[i].take().expect("each index visited exactly once"))
 		.collect();
 
 	(left, right)

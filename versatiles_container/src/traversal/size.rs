@@ -132,7 +132,7 @@ impl std::fmt::Debug for TraversalSize {
 fn size_to_bits(size: u32) -> Result<u8> {
 	ensure!(size > 0, "Size must be greater than zero");
 	ensure!(size.is_power_of_two(), "Size must be a power of two, but is {size}");
-	let bits: u8 = float_to_int(f64::from(size).log2().floor()).unwrap();
+	let bits: u8 = float_to_int(f64::from(size).log2().floor()).expect("log2 of u32 fits in u8");
 	ensure!(bits < 32, "Size {size} is too large");
 	Ok(bits)
 }

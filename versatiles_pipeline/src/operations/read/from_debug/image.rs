@@ -6,7 +6,8 @@ use imageproc::{
 use std::sync::LazyLock;
 use versatiles_core::TileCoord;
 
-static FONT: LazyLock<FontArc> = LazyLock::new(|| FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap());
+static FONT: LazyLock<FontArc> =
+	LazyLock::new(|| FontArc::try_from_slice(include_bytes!("./trim.ttf")).expect("bundled font is valid"));
 
 pub fn create_debug_image(coord: &TileCoord, use_alpha: bool) -> DynamicImage {
 	let br = ((coord.x + coord.y) % 2) as u8 * 255;

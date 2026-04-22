@@ -25,7 +25,8 @@ use versatiles_container::{DataLocation, TileSource, TilesRuntime};
 use versatiles_core::{TileFormat, TileType};
 use versatiles_derive::context;
 
-static MULTIPLE_NEWLINES_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\n{3,}").unwrap());
+static MULTIPLE_NEWLINES_REGEX: LazyLock<Regex> =
+	LazyLock::new(|| Regex::new(r"\n{3,}").expect("valid regex literal"));
 
 pub trait OperationFactoryTrait: Send + Sync {
 	fn tag_name(&self) -> &str;
@@ -143,7 +144,7 @@ impl PipelineFactory {
 							} else {
 								vec![50, 150, 250]
 							};
-							Box::new(DummyImageSource::from_color(&color, 4, format, None).unwrap()) as Box<dyn TileSource>
+							Box::new(DummyImageSource::from_color(&color, 4, format, None)?) as Box<dyn TileSource>
 						}
 						_ => bail!("unsupported tile type for dummy reader in filename '{location}'"),
 					})

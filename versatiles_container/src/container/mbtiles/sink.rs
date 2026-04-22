@@ -162,7 +162,7 @@ impl MBTilesTileSink {
 
 impl TileSink for MBTilesTileSink {
 	fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
-		let mut buf = self.buffer.lock().unwrap();
+		let mut buf = self.buffer.lock().expect("poisoned mutex");
 		buf.push((*coord, blob.as_slice().to_vec()));
 
 		if buf.len() >= BUFFER_SIZE {
@@ -176,7 +176,7 @@ impl TileSink for MBTilesTileSink {
 
 	fn finish(self: Box<Self>, tilejson: &TileJSON, _runtime: &crate::TilesRuntime) -> Result<()> {
 		// Flush remaining tiles
-		let remaining: Vec<_> = self.buffer.lock().unwrap().drain(..).collect();
+		let remaining: Vec<_> = self.buffer.lock().expect("poisoned mutex").drain(..).collect();
 		self.flush_buffer(&remaining)?;
 
 		// Write metadata

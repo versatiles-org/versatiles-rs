@@ -15,7 +15,11 @@ impl Tile {
 	pub(super) fn recompress_blob(&mut self, compression: &TileCompression) -> Result<()> {
 		assert!(self.blob.is_some());
 		if &self.compression != compression {
-			self.blob = Some(recompress(self.blob.take().unwrap(), &self.compression, compression)?);
+			self.blob = Some(recompress(
+				self.blob.take().expect("blob presence asserted above"),
+				&self.compression,
+				compression,
+			)?);
 			self.compression = *compression;
 		}
 		Ok(())
@@ -25,7 +29,10 @@ impl Tile {
 	pub(super) fn decompress_blob(&mut self) -> Result<()> {
 		assert!(self.blob.is_some());
 		if self.compression != TileCompression::Uncompressed {
-			self.blob = Some(decompress_ref(self.blob.as_ref().unwrap(), &self.compression)?);
+			self.blob = Some(decompress_ref(
+				self.blob.as_ref().expect("blob presence asserted above"),
+				&self.compression,
+			)?);
 			self.compression = TileCompression::Uncompressed;
 		}
 		Ok(())
@@ -51,7 +58,7 @@ impl Tile {
 	pub(super) fn materialize_blob(&mut self) -> Result<()> {
 		if self.blob.is_none() {
 			ensure!(self.content.is_some(), "Cannot materialize blob without content");
-			self.blob = Some(self.content.as_ref().unwrap().to_blob(
+			self.blob = Some(self.content.as_ref().expect("content presence ensured above").to_blob(
 				self.format,
 				self.format_quality,
 				self.format_effort,
@@ -66,7 +73,10 @@ impl Tile {
 		if self.content.is_none() {
 			ensure!(self.blob.is_some(), "Cannot materialize content without blob");
 			self.decompress_blob()?;
-			self.content = Some(TileContent::from_blob(self.blob.as_ref().unwrap(), self.format)?);
+			self.content = Some(TileContent::from_blob(
+				self.blob.as_ref().expect("blob presence ensured above"),
+				self.format,
+			)?);
 		}
 		Ok(())
 	}

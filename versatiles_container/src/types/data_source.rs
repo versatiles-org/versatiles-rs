@@ -20,8 +20,8 @@ pub struct DataSource {
 
 use std::sync::LazyLock;
 
-static RE_PREFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\[([\w,]*)\](.*)").unwrap());
-static RE_POSTFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(.*)\[([\w,]*)\]$").unwrap());
+static RE_PREFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\[([\w,]*)\](.*)").expect("valid regex literal"));
+static RE_POSTFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(.*)\[([\w,]*)\]$").expect("valid regex literal"));
 
 impl DataSource {
 	/// Returns an optional reference to the container type, if specified.
@@ -91,25 +91,25 @@ impl DataSource {
 				let blob = Blob::from(content.to_string()?);
 				DataLocation::from(blob)
 			} else {
-				DataLocation::from(
+				DataLocation::try_from(
 					json
 						.get("location")
 						.ok_or(anyhow::anyhow!("missing `location`"))?
 						.to_string()?,
-				)
+				)?
 			}
 		} else if input.starts_with('[')
 			&& let Some(captures) = RE_PREFIX.captures(input)
 		{
 			// Prefix notation with optional name and container type
-			(name, container_type) = extract_name_and_type(captures.get(1).unwrap().as_str());
-			DataLocation::try_from(captures.get(2).unwrap().as_str())?
+			(name, container_type) = extract_name_and_type(captures.get(1).expect("regex has two groups").as_str());
+			DataLocation::try_from(captures.get(2).expect("regex has two groups").as_str())?
 		} else if input.ends_with(']')
 			&& let Some(captures) = RE_POSTFIX.captures(input)
 		{
 			// Postfix notation with optional name and container type
-			(name, container_type) = extract_name_and_type(captures.get(2).unwrap().as_str());
-			DataLocation::try_from(captures.get(1).unwrap().as_str())?
+			(name, container_type) = extract_name_and_type(captures.get(2).expect("regex has two groups").as_str());
+			DataLocation::try_from(captures.get(1).expect("regex has two groups").as_str())?
 		} else {
 			// No prefixes, just a plain location
 			DataLocation::try_from(input)?

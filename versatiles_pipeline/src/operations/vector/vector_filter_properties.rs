@@ -45,15 +45,13 @@ impl Runner {
 impl RunnerTrait for Runner {
 	#[context("Failed to run vector filter properties")]
 	fn run(&self, mut tile: VectorTile) -> Result<Option<VectorTile>> {
-		tile.layers.iter_mut().for_each(|layer| {
+		tile.layers.iter_mut().try_for_each(|layer| {
 			let name = layer.name.clone();
-			layer
-				.filter_map_properties(|mut properties| {
-					properties.retain(|key, _| self.regex.is_match(&format!("{name}/{key}")) == self.invert);
-					Some(properties)
-				})
-				.unwrap();
-		});
+			layer.filter_map_properties(|mut properties| {
+				properties.retain(|key, _| self.regex.is_match(&format!("{name}/{key}")) == self.invert);
+				Some(properties)
+			})
+		})?;
 
 		Ok(Some(tile))
 	}

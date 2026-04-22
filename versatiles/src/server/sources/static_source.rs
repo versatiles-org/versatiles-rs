@@ -48,7 +48,12 @@ impl StaticSource {
 		if !url.starts_with(&self.prefix) {
 			return None;
 		}
-		self.source.get_data(&url.strip_prefix(&self.prefix).unwrap(), accept)
+		self.source.get_data(
+			&url
+				.strip_prefix(&self.prefix)
+				.expect("prefix match checked above"),
+			accept,
+		)
 	}
 }
 

@@ -115,15 +115,18 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderFile<E> {
 		self.len
 	}
 
-	fn position(&mut self) -> u64 {
-		self.reader.stream_position().unwrap()
+	fn position(&mut self) -> Result<u64> {
+		Ok(self.reader.stream_position().context("file stream_position failed")?)
 	}
 
 	fn set_position(&mut self, position: u64) -> Result<()> {
 		if position >= self.len {
 			bail!("set position outside length")
 		}
-		self.reader.seek(SeekFrom::Start(position))?;
+		self
+			.reader
+			.seek(SeekFrom::Start(position))
+			.context("file seek failed")?;
 		Ok(())
 	}
 
@@ -131,7 +134,7 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderFile<E> {
 	where
 		E: 'b,
 	{
-		let start = self.reader.stream_position()?;
+		let start = self.reader.stream_position().context("file stream_position failed")?;
 		let end = start + length;
 		if end > self.len {
 			bail!("sub-reader length exceeds file length");
@@ -222,7 +225,7 @@ mod tests {
 		let file = create_temp_file_with_content(&[0x01, 0x02, 0x03, 0x04])?;
 		let mut reader = ValueReaderFile::new_le(file)?;
 		reader.set_position(2)?;
-		assert_eq!(reader.position(), 2);
+		assert_eq!(reader.position()?, 2);
 		assert_eq!(reader.read_u8()?, 0x03);
 		Ok(())
 	}

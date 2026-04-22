@@ -36,7 +36,7 @@ impl PrettyPrinter {
 	}
 
 	async fn write(&self, text: String) {
-		self.output.lock().await.write_all(text.as_bytes()).unwrap();
+		self.output.lock().await.write_all(text.as_bytes()).expect("write to stderr");
 	}
 
 	#[cfg(any(test, feature = "test"))]
@@ -44,9 +44,10 @@ impl PrettyPrinter {
 		use regex::{Regex, RegexBuilder};
 		use std::sync::LazyLock;
 
-		static RE_COLORS: LazyLock<Regex> = LazyLock::new(|| RegexBuilder::new("\u{001b}\\[[0-9;]*m").build().unwrap());
+		static RE_COLORS: LazyLock<Regex> =
+			LazyLock::new(|| RegexBuilder::new("\u{001b}\\[[0-9;]*m").build().expect("valid regex literal"));
 
-		let text: String = String::from_utf8(self.output.lock().await.to_vec()).unwrap();
+		let text: String = String::from_utf8(self.output.lock().await.to_vec()).expect("output is valid UTF-8");
 		RE_COLORS.replace_all(&text, "").to_string()
 	}
 }
@@ -199,7 +200,7 @@ fn get_formatted_value<V: Debug + ?Sized>(value: &V) -> ColoredString {
 fn format_integer<V: Debug + ?Sized>(value: &V) -> String {
 	let mut text = format!("{value:?}");
 	let mut formatted = String::new();
-	while (text.len() > 3) && text.chars().nth_back(3).unwrap().is_numeric() {
+	while (text.len() > 3) && text.chars().nth_back(3).expect("len > 3 guarantees nth_back(3)").is_numeric() {
 		let i = text.len() - 3;
 		formatted = String::from("_") + &text[i..] + &formatted;
 		text = String::from(&text[..i]);

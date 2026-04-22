@@ -194,7 +194,10 @@ impl RasterSource {
 		// - No explicit value → auto-detect from source dataset bands
 		let (effective_nodata, extra_nodata) = if let Some(sets) = nodata {
 			let mut iter = sets.into_iter();
-			let primary = resolve_nodata_set(iter.next().unwrap(), n_color_bands)?;
+			let primary = resolve_nodata_set(
+				iter.next().expect("split(';') always yields at least one group"),
+				n_color_bands,
+			)?;
 			let extra: Vec<Vec<u8>> = iter
 				.map(|vals| {
 					let resolved = resolve_nodata_set(vals, n_color_bands)?;

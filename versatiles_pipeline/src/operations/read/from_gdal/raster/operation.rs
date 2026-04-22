@@ -259,7 +259,7 @@ impl TileSource for Operation {
 					return TileStream::empty();
 				}
 
-				let geo_bbox = bbox.to_geo_bbox().unwrap();
+				let geo_bbox = bbox.to_geo_bbox().expect("bbox is non-empty");
 				let width = (size * bbox.width()) as usize;
 				let height = (size * bbox.height()) as usize;
 
@@ -277,18 +277,18 @@ impl TileSource for Operation {
 							.filter_map(|coord| {
 								image
 									.crop_imm(
-										(coord.x - bbox.x_min().unwrap()) * size,
-										(coord.y - bbox.y_min().unwrap()) * size,
+										(coord.x - bbox.x_min().expect("bbox is non-empty")) * size,
+										(coord.y - bbox.y_min().expect("bbox is non-empty")) * size,
 										size,
 										size,
 									)
 									.into_optional()
-									.map(|img| (coord, Tile::from_image(img, tile_format).unwrap()))
+									.map(|img| (coord, Tile::from_image(img, tile_format).expect("tile_format is raster")))
 							})
 							.collect::<Vec<_>>()
 					})
 					.await
-					.unwrap();
+					.expect("spawn_blocking task did not panic");
 
 					log::trace!("Returning {} tiles for bbox {:?}", vec.len(), bbox);
 					TileStream::from_vec(vec)

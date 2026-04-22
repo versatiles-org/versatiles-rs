@@ -36,7 +36,7 @@ impl TilePyramid {
 			.levels
 			.iter_mut()
 			.zip(pyramid.levels.iter())
-			.for_each(|(a, b)| a.intersect_cover(b).unwrap());
+			.for_each(|(a, b)| a.intersect_cover(b).expect("same-level operation"));
 	}
 
 	/// Returns a new pyramid where each level contains only the tiles shared by

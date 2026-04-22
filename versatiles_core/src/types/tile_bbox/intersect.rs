@@ -13,10 +13,10 @@ impl TileBBox {
 		}
 
 		// Safety: is_empty() checked above; getters are valid.
-		self.x_min().unwrap() <= bbox.x_max().unwrap()
-			&& self.x_max().unwrap() >= bbox.x_min().unwrap()
-			&& self.y_min().unwrap() <= bbox.y_max().unwrap()
-			&& self.y_max().unwrap() >= bbox.y_min().unwrap()
+		self.x_min().expect("bbox is non-empty") <= bbox.x_max().expect("bbox is non-empty")
+			&& self.x_max().expect("bbox is non-empty") >= bbox.x_min().expect("bbox is non-empty")
+			&& self.y_min().expect("bbox is non-empty") <= bbox.y_max().expect("bbox is non-empty")
+			&& self.y_max().expect("bbox is non-empty") >= bbox.y_min().expect("bbox is non-empty")
 	}
 
 	/// Returns `true` if `self` and `tree` share at least one tile.
@@ -91,7 +91,9 @@ impl TileBBox {
 	/// Shrinks `self` in place to the tiles shared with the corresponding level
 	/// of `pyramid`.
 	pub fn intersect_pyramid(&mut self, pyramid: &TilePyramid) {
-		self.intersect_cover(pyramid.level_ref(self.level)).unwrap();
+		self
+			.intersect_cover(pyramid.level_ref(self.level))
+			.expect("same-level operation");
 	}
 
 	/// Returns a new bbox containing only the tiles shared by `self` and `bbox`.
@@ -140,7 +142,9 @@ impl TileBBox {
 	/// corresponding level of `pyramid`.
 	#[must_use]
 	pub fn intersection_pyramid(&self, pyramid: &TilePyramid) -> Self {
-		self.intersection_cover(pyramid.level_ref(self.level)).unwrap()
+		self
+			.intersection_cover(pyramid.level_ref(self.level))
+			.expect("same-level operation")
 	}
 }
 

@@ -31,7 +31,7 @@ impl Backend {
 				fs::write(&path, data).with_context(|| format!("Failed to write to {}", path.display()))
 			}
 			#[cfg(feature = "ssh2")]
-			Self::Sftp(fs) => fs.lock().unwrap().write_file(rel_path, data),
+			Self::Sftp(fs) => fs.lock().expect("poisoned mutex").write_file(rel_path, data),
 		}
 	}
 }

@@ -226,12 +226,15 @@ impl GeoValue {
 	pub fn parse_str(value: &str) -> Self {
 		// Double: requires decimal point and/or exponent, no leading zeros
 		// Format: -?[0|1-9...](.[digits])([eE][+-]?digits) where . or e/E is required
-		static REG_DOUBLE: LazyLock<Regex> =
-			LazyLock::new(|| Regex::new(r"^-?(?:0|[1-9]\d*)(?:(?:\.\d+)(?:[eE][+-]?\d+)?|[eE][+-]?\d+)$").unwrap());
+		static REG_DOUBLE: LazyLock<Regex> = LazyLock::new(|| {
+			Regex::new(r"^-?(?:0|[1-9]\d*)(?:(?:\.\d+)(?:[eE][+-]?\d+)?|[eE][+-]?\d+)$").expect("valid regex literal")
+		});
 		// Signed integer (negative): -[0|1-9...]
-		static REG_INT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^-(?:0|[1-9]\d*)$").unwrap());
+		static REG_INT: LazyLock<Regex> =
+			LazyLock::new(|| Regex::new(r"^-(?:0|[1-9]\d*)$").expect("valid regex literal"));
 		// Unsigned integer: 0 or [1-9...]
-		static REG_UINT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(?:0|[1-9]\d*)$").unwrap());
+		static REG_UINT: LazyLock<Regex> =
+			LazyLock::new(|| Regex::new(r"^(?:0|[1-9]\d*)$").expect("valid regex literal"));
 
 		match value {
 			"" => GeoValue::String(String::new()),
@@ -239,11 +242,11 @@ impl GeoValue {
 			"false" => GeoValue::Bool(false),
 			_ => {
 				if REG_DOUBLE.is_match(value) {
-					GeoValue::Double(value.parse::<f64>().unwrap())
+					GeoValue::Double(value.parse::<f64>().expect("regex matched numeric literal"))
 				} else if REG_INT.is_match(value) {
-					GeoValue::Int(value.parse::<i64>().unwrap())
+					GeoValue::Int(value.parse::<i64>().expect("regex matched signed integer literal"))
 				} else if REG_UINT.is_match(value) {
-					GeoValue::UInt(value.parse::<u64>().unwrap())
+					GeoValue::UInt(value.parse::<u64>().expect("regex matched unsigned integer literal"))
 				} else {
 					GeoValue::String(value.to_string())
 				}

@@ -118,8 +118,8 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderSlice<'a, E> {
 	///
 	/// # Returns
 	/// The zero-based byte offset as `u64`.
-	fn position(&mut self) -> u64 {
-		self.cursor.position()
+	fn position(&mut self) -> Result<u64> {
+		Ok(self.cursor.position())
 	}
 
 	/// Sets the current read position.
@@ -249,7 +249,7 @@ mod tests {
 		let blob = vec![0x01, 0x02, 0x03, 0x04];
 		let mut reader = ValueReaderSlice::new_le(&blob);
 		reader.set_position(2)?;
-		assert_eq!(reader.position(), 2);
+		assert_eq!(reader.position()?, 2);
 		assert_eq!(reader.read_u8()?, 0x03);
 		Ok(())
 	}

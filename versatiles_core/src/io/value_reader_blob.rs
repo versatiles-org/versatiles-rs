@@ -109,8 +109,8 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderBlob<E> {
 		self.len
 	}
 
-	fn position(&mut self) -> u64 {
-		self.cursor.position()
+	fn position(&mut self) -> Result<u64> {
+		Ok(self.cursor.position())
 	}
 
 	fn set_position(&mut self, position: u64) -> Result<()> {
@@ -217,7 +217,7 @@ mod tests {
 		let mut reader = ValueReaderBlob::new_le(Blob::from(buf));
 
 		reader.set_position(2)?;
-		assert_eq!(reader.position(), 2);
+		assert_eq!(reader.position()?, 2);
 		assert_eq!(reader.read_u8()?, 0x03);
 		Ok(())
 	}

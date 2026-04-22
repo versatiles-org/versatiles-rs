@@ -202,7 +202,7 @@ async fn tile(coord: TileCoord, entries: Vec<FilteredSourceEntry>) -> Result<Opt
 				}
 			}
 			tile = Some(tile_bg);
-			if tile.as_mut().unwrap().is_opaque()? {
+			if tile.as_mut().expect("just assigned Some above").is_opaque()? {
 				break;
 			}
 		}
@@ -235,7 +235,10 @@ impl ReadTileSource for Operation {
 
 		let mut tilejson = TileJSON::default();
 
-		let first_source_metadata = original_sources.first().unwrap().metadata();
+		let first_source_metadata = original_sources
+			.first()
+			.expect("already ensured non-empty sources")
+			.metadata();
 		let tile_format = args.format.unwrap_or(*first_source_metadata.tile_format());
 		ensure!(
 			tile_format.to_type() == TileType::Raster,
@@ -260,7 +263,9 @@ impl ReadTileSource for Operation {
 			);
 		}
 
-		let level_max = pyramid.level_max().unwrap();
+		let level_max = pyramid
+			.level_max()
+			.ok_or_else(|| anyhow::anyhow!("combined source pyramid is empty"))?;
 		let metadata = TileSourceMetadata::new(tile_format, tile_compression, traversal, Some(pyramid));
 		metadata.update_tilejson(&mut tilejson);
 
@@ -272,7 +277,11 @@ impl ReadTileSource for Operation {
 			use crate::operations::raster::raster_overscale;
 
 			for source in original_sources {
-				let native_level_max = source.tile_pyramid().await?.level_max().unwrap();
+				let native_level_max = source
+					.tile_pyramid()
+					.await?
+					.level_max()
+					.ok_or_else(|| anyhow::anyhow!("source pyramid is empty"))?;
 				let overscale_args = raster_overscale::Args {
 					level_base: Some(native_level_max),
 					level_max: Some(level_max),

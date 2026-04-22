@@ -105,11 +105,11 @@ impl EntriesV3 {
 	/// Returns `Some(EntryV3)` if found, or `None` if no entry matches the tile ID.
 	pub fn find_tile(&self, tile_id: u64) -> Option<EntryV3> {
 		let mut m: i64 = 0;
-		let mut n: i64 = i64::try_from(self.entries.len()).unwrap() - 1;
+		let mut n: i64 = i64::try_from(self.entries.len()).expect("entries length fits in i64") - 1;
 
 		while m <= n {
 			let k = (n + m) >> 1;
-			let k_idx = usize::try_from(k).unwrap();
+			let k_idx = usize::try_from(k).expect("k is non-negative and within entries len");
 			let entry_id = self.entries[k_idx].tile_id;
 			match tile_id.cmp(&entry_id) {
 				Ordering::Greater => m = k + 1,
@@ -120,7 +120,7 @@ impl EntriesV3 {
 
 		// at this point, m > n
 		if n >= 0 {
-			let entry = self.entries[usize::try_from(n).unwrap()];
+			let entry = self.entries[usize::try_from(n).expect("n is non-negative here")];
 			if entry.run_length == 0 {
 				return Some(entry);
 			}
@@ -245,7 +245,7 @@ impl From<&Blob> for EntriesV3 {
 	/// # Panics
 	/// Panics if deserialization fails.
 	fn from(blob: &Blob) -> Self {
-		EntriesV3::from_blob(blob).unwrap()
+		EntriesV3::from_blob(blob).expect("valid pmtiles entries blob")
 	}
 }
 
@@ -280,7 +280,7 @@ impl EntriesSliceV3<'_> {
 	///
 	/// Returns a reference to the `EntryV3` at the specified index.
 	pub fn get(&self, index: usize) -> &EntryV3 {
-		self.entries.get(index).unwrap()
+		self.entries.get(index).expect("index within entries slice")
 	}
 
 	/// Serializes the entries slice into a `Blob`.

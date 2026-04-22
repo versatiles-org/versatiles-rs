@@ -115,7 +115,7 @@ impl DirectoryReader {
 				continue;
 			}
 			let entry1 = result1?;
-			let name1 = entry1.file_name().into_string().unwrap();
+			let name1 = entry1.file_name().into_string().expect("filesystem name is utf-8");
 			let numeric1 = name1.parse::<u8>();
 			if numeric1.is_ok() {
 				let level = numeric1?;
@@ -126,26 +126,27 @@ impl DirectoryReader {
 						continue;
 					}
 					let entry2 = result2?;
-					let name2 = entry2.file_name().into_string().unwrap();
+					let name2 = entry2.file_name().into_string().expect("filesystem name is utf-8");
 					let numeric2 = name2.parse::<u32>();
 					if numeric2.is_err() {
 						continue;
 					}
 					let x = numeric2?;
 
-					let files = fs::read_dir(entry2.path())?.map(|f| f.unwrap());
-					let files = files.sorted_unstable_by(|a, b| a.file_name().partial_cmp(&b.file_name()).unwrap());
+					let files = fs::read_dir(entry2.path())?.map(|f| f.expect("readable dir entry"));
+					let files = files
+						.sorted_unstable_by(|a, b| a.file_name().partial_cmp(&b.file_name()).expect("OsString total order"));
 
 					for entry3 in files {
 						// y level
-						let mut filename = entry3.file_name().into_string().unwrap();
+						let mut filename = entry3.file_name().into_string().expect("filesystem name is utf-8");
 						let file_comp = TileCompression::from_filename(&mut filename);
 						let this_form = TileFormat::from_filename(&mut filename);
 
 						if this_form.is_none() {
 							continue;
 						}
-						let file_form = this_form.unwrap();
+						let file_form = this_form.expect("checked is_none above");
 
 						let numeric3 = filename.parse::<u32>();
 						if numeric3.is_err() {
@@ -247,7 +248,7 @@ impl DirectoryReader {
 #[async_trait]
 impl TileSource for DirectoryReader {
 	fn source_type(&self) -> Arc<SourceType> {
-		SourceType::new_container("directory", self.dir.to_str().unwrap())
+		SourceType::new_container("directory", self.dir.to_str().expect("directory path is utf-8"))
 	}
 
 	fn metadata(&self) -> &TileSourceMetadata {

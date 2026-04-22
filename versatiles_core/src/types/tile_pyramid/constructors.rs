@@ -33,7 +33,9 @@ impl TilePyramid {
 	/// Constructs a pyramid by calling `f(level)` for each zoom level 0–`MAX_ZOOM_LEVEL`.
 	pub fn from_fn(mut f: impl FnMut(u8) -> Result<TileCover>) -> Self {
 		TilePyramid {
-			levels: from_fn(|z| f(u8::try_from(z).unwrap()).unwrap()),
+			levels: from_fn(|z| {
+				f(u8::try_from(z).expect("z <= MAX_ZOOM_LEVEL fits in u8")).expect("f succeeds for valid level")
+			}),
 		}
 	}
 

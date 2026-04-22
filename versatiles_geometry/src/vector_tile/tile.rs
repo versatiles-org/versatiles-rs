@@ -42,7 +42,7 @@ impl VectorTile {
 		let mut reader = ValueReaderSlice::new_le(blob.as_slice());
 
 		let mut tile = VectorTile::default();
-		while reader.has_remaining() {
+		while reader.has_remaining()? {
 			match reader.read_pbf_key().context("Failed to read PBF key")? {
 				(3, 2) => {
 					tile.layers.push(

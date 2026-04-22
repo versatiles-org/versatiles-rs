@@ -3,7 +3,7 @@ use super::{
 	SourceResponse,
 	static_source::StaticSourceTrait,
 };
-use anyhow::{Result, ensure};
+use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use std::{
 	env::current_dir,
@@ -40,7 +40,10 @@ impl Folder {
 		// Create a new Folder struct with the given path and name
 		Ok(Folder {
 			folder,
-			name: path.to_str().unwrap().to_owned(),
+			name: path
+				.to_str()
+				.ok_or_else(|| anyhow!("path {path:?} is not valid UTF-8"))?
+				.to_owned(),
 		})
 	}
 }
@@ -88,7 +91,7 @@ impl StaticSourceTrait for Folder {
 		};
 
 		let mut buffer = Vec::new();
-		BufReader::new(file).read_to_end(&mut buffer).unwrap();
+		BufReader::new(file).read_to_end(&mut buffer).ok()?;
 
 		SourceResponse::new_some(Blob::from(buffer), compression, &mime)
 	}

@@ -58,7 +58,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	///
 	/// # Returns
 	/// The current position as a `u64`.
-	fn position(&mut self) -> u64;
+	fn position(&mut self) -> Result<u64>;
 
 	/// Sets the current position within the readable data.
 	///
@@ -81,16 +81,16 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	///
 	/// # Returns
 	/// The number of remaining bytes as a `u64`.
-	fn remaining(&mut self) -> u64 {
-		self.len() - self.position()
+	fn remaining(&mut self) -> Result<u64> {
+		Ok(self.len() - self.position()?)
 	}
 
 	/// Checks if there are any bytes remaining to be read.
 	///
 	/// # Returns
 	/// `true` if there are remaining bytes, otherwise `false`.
-	fn has_remaining(&mut self) -> bool {
-		self.remaining() > 0
+	fn has_remaining(&mut self) -> Result<bool> {
+		Ok(self.remaining()? > 0)
 	}
 
 	/// Reads a variable-length unsigned integer (varint) from the data.
@@ -337,7 +337,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 			.get_pbf_sub_reader()
 			.context("Failed to get PBF sub-reader for packed uint32")?;
 		let mut values = Vec::new();
-		while reader.has_remaining() {
+		while reader.has_remaining()? {
 			values.push(
 				u32::try_from(
 					reader

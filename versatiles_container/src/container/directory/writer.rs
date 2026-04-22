@@ -60,7 +60,7 @@ impl DirectoryWriter {
 	/// Write a `Blob` to `path`, creating missing parent directories.
 	#[context("writing file '{}'", path.display())]
 	fn write(path: &Path, blob: &Blob) -> Result<()> {
-		let parent = path.parent().unwrap();
+		let parent = path.parent().expect("tile path has parent directory");
 		if !parent.exists() {
 			fs::create_dir_all(parent)?;
 		}

@@ -223,7 +223,10 @@ impl CsvReader {
 
 		let mut errors = vec![];
 		let mut iter = read_csv_iter(reader, self.field_separator)?;
-		let header: Vec<String> = iter.next().unwrap()?.0;
+		let header: Vec<String> = iter
+			.next()
+			.ok_or_else(|| anyhow::anyhow!("CSV file has no header row"))??
+			.0;
 		let data: Vec<GeoProperties> = iter
 			.filter_map(|e| {
 				e.map(|(fields, _line_pos, byte_pos)| {

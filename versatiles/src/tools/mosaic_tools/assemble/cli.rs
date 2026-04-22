@@ -54,7 +54,7 @@ pub(super) fn parse_quality(quality: &str) -> Result<[Option<u8>; 32]> {
 		let quality_val: u8 = part.trim().parse()?;
 		ensure!(quality_val <= 100, "Quality value must be between 0 and 100");
 		for z in zoom..32 {
-			result[usize::try_from(z).unwrap()] = Some(quality_val);
+			result[usize::try_from(z).expect("zoom is non-negative")] = Some(quality_val);
 		}
 	}
 	Ok(result)

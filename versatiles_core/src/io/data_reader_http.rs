@@ -185,7 +185,7 @@ impl DataReaderHttp {
 				RegexBuilder::new(r"^bytes (\d+)-(\d+)/\d+$")
 					.case_insensitive(true)
 					.build()
-					.unwrap()
+					.expect("valid regex literal")
 			});
 
 			let caps = RE_RANGE.captures(content_range).ok_or_else(|| {

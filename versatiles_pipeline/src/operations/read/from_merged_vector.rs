@@ -81,7 +81,7 @@ impl ReadTileSource for Operation {
 		ensure!(sources.len() > 1, "must have at least two sources");
 
 		let mut tilejson = TileJSON::default();
-		let first_parameters = sources.first().unwrap().metadata();
+		let first_parameters = sources.first().expect("already ensured sources.len() > 1").metadata();
 		let tile_format = *first_parameters.tile_format();
 		let tile_compression = *first_parameters.tile_compression();
 		let mut pyramid = TilePyramid::new_empty();
@@ -153,15 +153,19 @@ impl TileSource for Operation {
 		Ok(TileStream::from_streams(stream::iter(bboxes).map(move |bbox| {
 			let sources = Arc::clone(&sources);
 			async move {
-				let mut tiles = TileBBoxMap::<Vec<VectorTile>>::new_default(bbox).unwrap();
+				let mut tiles =
+					TileBBoxMap::<Vec<VectorTile>>::new_default(bbox).expect("32×32 grid bbox always fits in usize");
 
 				for source in sources.iter() {
 					source
 						.tile_stream(bbox)
 						.await
-						.unwrap()
+						.expect("tile_stream succeeded for requested bbox")
 						.for_each(|coord, tile| {
-							tiles.get_mut(&coord).unwrap().push(tile.into_vector().unwrap());
+							tiles
+								.get_mut(&coord)
+								.expect("coord is within bbox")
+								.push(tile.into_vector().expect("all sources are vector tiles"));
 						})
 						.await;
 				}
@@ -175,7 +179,11 @@ impl TileSource for Operation {
 							} else {
 								Some((
 									coord,
-									Tile::from_vector(merge_vector_tiles(vec_tiles).unwrap(), format).unwrap(),
+									Tile::from_vector(
+										merge_vector_tiles(vec_tiles).expect("valid vector tiles merge"),
+										format,
+									)
+									.expect("format is vector"),
 								))
 							}
 						})

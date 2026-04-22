@@ -175,11 +175,14 @@ impl TileSource for Operation {
 					return TileStream::empty();
 				}
 
-				let geo_bbox = bbox.to_geo_bbox().unwrap();
+				let geo_bbox = bbox.to_geo_bbox().expect("bbox is non-empty");
 				let width = (size * bbox.width()) as usize;
 				let height = (size * bbox.height()) as usize;
 
-				let image = source.elevation_tile(&geo_bbox, width, height, encoding).await.unwrap();
+				let image = source
+					.elevation_tile(&geo_bbox, width, height, encoding)
+					.await
+					.expect("elevation_tile succeeded for bbox");
 
 				if let Some(image) = image {
 					let vec = tokio::task::spawn_blocking(move || {
@@ -187,17 +190,17 @@ impl TileSource for Operation {
 							.iter_coords_zorder()
 							.map(|coord| {
 								let tile_img = image.crop_imm(
-									(coord.x - bbox.x_min().unwrap()) * size,
-									(coord.y - bbox.y_min().unwrap()) * size,
+									(coord.x - bbox.x_min().expect("bbox is non-empty")) * size,
+									(coord.y - bbox.y_min().expect("bbox is non-empty")) * size,
 									size,
 									size,
 								);
-								(coord, Tile::from_image(tile_img, tile_format).unwrap())
+								(coord, Tile::from_image(tile_img, tile_format).expect("tile_format is raster"))
 							})
 							.collect::<Vec<_>>()
 					})
 					.await
-					.unwrap();
+					.expect("spawn_blocking task did not panic");
 
 					TileStream::from_vec(vec)
 				} else {

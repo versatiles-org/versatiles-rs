@@ -25,7 +25,7 @@ impl TileQuadtree {
 			return vec![self.clone()].into_iter();
 		}
 
-		let cell_level = u8::try_from(size.ilog2()).unwrap();
+		let cell_level = u8::try_from(size.ilog2()).expect("log2 of u32 fits in u8");
 		let depth = self.level - cell_level;
 		let level = self.level;
 		let mut cells: Vec<TileQuadtree> = Vec::new();
@@ -77,10 +77,10 @@ impl Iterator for TileIter<'_> {
 						return Some(
 							TileCoord::new(
 								self.zoom,
-								u32::try_from(frame.x_off).unwrap(),
-								u32::try_from(frame.y_off).unwrap(),
+								u32::try_from(frame.x_off).expect("offset within level bounds"),
+								u32::try_from(frame.y_off).expect("offset within level bounds"),
 							)
-							.unwrap(),
+							.expect("coord valid at zoom"),
 						);
 					}
 					// Expand Full node into 4 children (push in reverse for NW-first order)

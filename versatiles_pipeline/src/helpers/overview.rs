@@ -47,7 +47,12 @@ impl OverviewCore {
 		let source_pyramid = metadata
 			.tile_pyramid()
 			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set on source"))?;
-		let level_base = level.unwrap_or_else(|| source_pyramid.level_max().unwrap());
+		let level_base = match level {
+			Some(l) => l,
+			None => source_pyramid
+				.level_max()
+				.ok_or_else(|| anyhow::anyhow!("source pyramid is empty"))?,
+		};
 
 		let mut new_pyramid = source_pyramid.as_ref().clone();
 		let mut level_bbox = new_pyramid.level_ref(level_base).to_bbox();
@@ -129,7 +134,7 @@ impl OverviewCore {
 						for (coord1, image1) in sub_entries {
 							image_tmp
 								.copy_from(&image1, (coord1.x % 2) * half_size, (coord1.y % 2) * half_size)
-								.unwrap();
+								.expect("half_size sub-image fits at quadrant offset");
 						}
 						image_tmp.into_optional().map(|image| (coord0, image))
 					})
@@ -137,7 +142,7 @@ impl OverviewCore {
 			))
 			.await
 			.into_iter()
-			.filter_map(|r| r.unwrap())
+			.filter_map(|r| r.expect("spawn_blocking task did not panic"))
 			.collect();
 
 		TileBBoxMap::<Option<DynamicImage>>::from_iter(bbox, vec.into_iter())
@@ -164,14 +169,15 @@ impl OverviewCore {
 					image_opt.as_ref().map(|img| {
 						assert_eq!(img.width(), full_size);
 						assert_eq!(img.height(), full_size);
-						let scaled = scale_fn(img).unwrap();
-						versatiles_image::format::png::encode(&scaled, Some(0)).unwrap()
+						let scaled = scale_fn(img).expect("scale_fn succeeds on valid overview image");
+						versatiles_image::format::png::encode(&scaled, Some(0))
+							.expect("png encode succeeds on scaled overview image")
 					})
 				} else {
 					None
 				};
 				let tile = if bbox.includes_coord(&coord) {
-					image_opt.map(|img| (coord, Tile::from_image(img, format).unwrap()))
+					image_opt.map(|img| (coord, Tile::from_image(img, format).expect("source format is raster")))
 				} else {
 					None
 				};

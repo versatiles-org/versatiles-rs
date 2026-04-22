@@ -48,7 +48,7 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>, effort: Option<u8>) -> 
 	if image.has_alpha() && image.is_opaque() {
 		let i = image.to_no_alpha()?;
 		optional_image = Some(i);
-		image_ref = optional_image.as_ref().unwrap();
+		image_ref = optional_image.as_ref().expect("just assigned Some above");
 	}
 
 	let quality = quality.unwrap_or(95);

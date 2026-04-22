@@ -128,7 +128,7 @@ impl RunnerTrait for Runner {
 			return Ok(Some(tile));
 		}
 
-		layer.unwrap().filter_map_properties(|mut prop| {
+		layer.expect("early-returned above if layer is None").filter_map_properties(|mut prop| {
 			// For every feature grab its identifier; if absent, log a warning
 			// and keep the feature unchanged.
 			if let Some(id) = prop.get(&self.args.id_field_tiles) {
@@ -214,7 +214,7 @@ fn parse_separator_char(s: &str) -> Result<char> {
 		"\\t" | "\t" => Ok('\t'),
 		"\\n" | "\n" => Ok('\n'),
 		"\\r" | "\r" => Ok('\r'),
-		s if s.len() == 1 => Ok(s.chars().next().unwrap()),
+		s if s.len() == 1 => Ok(s.chars().next().expect("non-empty string has at least one char")),
 		_ => Err(anyhow!("Separator must be a single character, got '{s}'")),
 	}
 }

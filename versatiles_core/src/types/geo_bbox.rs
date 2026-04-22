@@ -119,7 +119,7 @@ impl GeoBBox {
 			y_max: y0.max(y1).clamp(-90.0, 90.0),
 		}
 		.checked()
-		.unwrap()
+		.expect("clamped bounds are valid")
 	}
 
 	/// Attempts to build an optional `GeoBBox` from an optional `Vec<f64>`.

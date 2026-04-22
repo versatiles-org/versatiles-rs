@@ -4,7 +4,14 @@ use versatiles_core::TileCoord;
 pub fn arrange_tiles<T: ToString>(tiles: Vec<(TileCoord, Tile)>, cb: impl Fn(Tile) -> T) -> Vec<String> {
 	use versatiles_core::TileBBox;
 
-	let mut bbox = TileBBox::new_empty(tiles.first().unwrap().0.level).unwrap();
+	let mut bbox = TileBBox::new_empty(
+		tiles
+			.first()
+			.expect("arrange_tiles requires a non-empty tile list")
+			.0
+			.level,
+	)
+	.expect("tile coord level is already valid");
 	for t in &tiles {
 		bbox.insert_xy(t.0.x, t.0.y);
 	}
@@ -14,8 +21,8 @@ pub fn arrange_tiles<T: ToString>(tiles: Vec<(TileCoord, Tile)>, cb: impl Fn(Til
 		.collect();
 
 	for (coord, item) in tiles {
-		let x = (coord.x - bbox.x_min().unwrap()) as usize;
-		let y = (coord.y - bbox.y_min().unwrap()) as usize;
+		let x = (coord.x - bbox.x_min().expect("bbox populated by insert_xy above")) as usize;
+		let y = (coord.y - bbox.y_min().expect("bbox populated by insert_xy above")) as usize;
 		result[y][x] = cb(item).to_string();
 	}
 	result.into_iter().map(|r| r.join(" ")).collect::<Vec<String>>()

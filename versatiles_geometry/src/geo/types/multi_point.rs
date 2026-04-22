@@ -56,7 +56,7 @@ impl GeometryTrait for MultiPointGeometry {
 
 		for point in &self.0 {
 			// Points always have bounds, so unwrap is safe here
-			let bounds = point.compute_bounds().unwrap();
+			let bounds = point.compute_bounds().expect("point always has bounds");
 			x_min = x_min.min(bounds[0]);
 			y_min = y_min.min(bounds[1]);
 			x_max = x_max.max(bounds[2]);

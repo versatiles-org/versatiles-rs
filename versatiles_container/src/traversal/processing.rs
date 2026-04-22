@@ -220,7 +220,7 @@ fn verify_steps(
 				Pop(idx, bbox) => {
 					ensure!(pushes.contains_key(idx), "Pop without Push {idx}");
 					ensure!(!pops.contains(idx), "Double Pop {idx}");
-					for push_bbox in pushes.get(idx).unwrap() {
+					for push_bbox in pushes.get(idx).expect("contains_key ensured above") {
 						ensure!(!push_bbox.is_empty(), "Pushed BBox {push_bbox:?} is empty");
 						ensure!(
 							bbox.includes_bbox(push_bbox),
@@ -268,7 +268,10 @@ fn verify_steps(
 
 			let key = (scaled.level(), scaled.x_min()?, scaled.y_min()?);
 			ensure!(lookup.contains_key(&key), "Missing read of bbox {bbox:?}");
-			ensure!(!lookup.get(&key).unwrap(), "Duplicate (2) read of bbox {bbox:?}");
+			ensure!(
+				!lookup.get(&key).expect("contains_key ensured above"),
+				"Duplicate (2) read of bbox {bbox:?}"
+			);
 			lookup.insert(key, true);
 		}
 

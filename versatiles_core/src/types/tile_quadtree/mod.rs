@@ -60,22 +60,22 @@ impl BBox {
 			return None;
 		}
 		Some(Self {
-			x_min: u64::from(bbox.x_min().unwrap()),
-			y_min: u64::from(bbox.y_min().unwrap()),
-			x_max: u64::from(bbox.x_max().unwrap()) + 1,
-			y_max: u64::from(bbox.y_max().unwrap()) + 1,
+			x_min: u64::from(bbox.x_min().expect("bbox is non-empty")),
+			y_min: u64::from(bbox.y_min().expect("bbox is non-empty")),
+			x_max: u64::from(bbox.x_max().expect("bbox is non-empty")) + 1,
+			y_max: u64::from(bbox.y_max().expect("bbox is non-empty")) + 1,
 		})
 	}
 
 	fn into_bbox(self, level: u8) -> TileBBox {
 		TileBBox::from_min_and_max(
 			level,
-			u32::try_from(self.x_min).unwrap(),
-			u32::try_from(self.y_min).unwrap(),
-			u32::try_from(self.x_max - 1).unwrap(),
-			u32::try_from(self.y_max - 1).unwrap(),
+			u32::try_from(self.x_min).expect("within level bounds"),
+			u32::try_from(self.y_min).expect("within level bounds"),
+			u32::try_from(self.x_max - 1).expect("within level bounds"),
+			u32::try_from(self.y_max - 1).expect("within level bounds"),
 		)
-		.unwrap()
+		.expect("bbox valid at level")
 	}
 
 	/// Side length. Quadtree cells are always square.

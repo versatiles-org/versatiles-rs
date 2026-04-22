@@ -45,7 +45,7 @@ struct DeduplicatingSink {
 
 impl TileSink for DeduplicatingSink {
 	fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
-		if !self.written.lock().unwrap().insert(*coord) {
+		if !self.written.lock().expect("poisoned mutex").insert(*coord) {
 			return Ok(());
 		}
 		self.inner.write_tile(coord, blob)
@@ -113,7 +113,7 @@ pub fn open_tile_sink(
 			} else {
 				bail!(
 					"unsupported tile sink format: .{}",
-					Path::new(destination).extension().unwrap().to_string_lossy()
+					Path::new(destination).extension().expect("extension matched above").to_string_lossy()
 				)
 			}
 		}

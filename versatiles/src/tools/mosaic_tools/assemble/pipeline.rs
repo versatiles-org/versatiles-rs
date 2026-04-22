@@ -87,7 +87,10 @@ pub(super) async fn scan_sources(
 			cfg
 		};
 
-		tilejson.as_mut().unwrap().merge(reader_tilejson)?;
+		tilejson
+			.as_mut()
+			.expect("tilejson initialized on first iteration")
+			.merge(reader_tilejson)?;
 
 		// Get pyramid and clip to zoom range
 		let mut pyramid = reader.tile_pyramid().await?.as_ref().clone();
@@ -102,7 +105,7 @@ pub(super) async fn scan_sources(
 			continue;
 		}
 
-		let sink_arc = sink.as_ref().unwrap();
+		let sink_arc = sink.as_ref().expect("sink initialized on first iteration");
 
 		// Stream all tiles from this source
 		let level_bboxes: Vec<_> = pyramid.to_iter_bboxes().collect();
@@ -128,11 +131,11 @@ pub(super) async fn scan_sources(
 
 	Ok(FirstPassResult {
 		config,
-		tilejson: tilejson.unwrap(),
+		tilejson: tilejson.expect("tilejson initialized on first iteration"),
 		tile_dim,
-		sink: sink.unwrap(),
+		sink: sink.expect("sink initialized on first iteration"),
 		translucent_map,
-		done: done.into_inner().unwrap(),
+		done: done.into_inner().expect("poisoned mutex"),
 	})
 }
 
@@ -148,7 +151,7 @@ async fn classify_and_stream_tiles(
 	let translucent_coords_ref = Arc::clone(&translucent_coords);
 
 	let callback = Arc::new(move |coord: TileCoord, mut tile: Tile| -> Result<()> {
-		if done.lock().unwrap().contains(&coord) {
+		if done.lock().expect("poisoned mutex").contains(&coord) {
 			return Ok(());
 		}
 		if tile.is_empty()? {
@@ -157,9 +160,9 @@ async fn classify_and_stream_tiles(
 		if tile.is_opaque()? {
 			let blob = write_opaque_blob(tile, &config)?;
 			sink.write_tile(&coord, &blob)?;
-			done.lock().unwrap().insert(coord);
+			done.lock().expect("poisoned mutex").insert(coord);
 		} else {
-			translucent_coords_ref.lock().unwrap().push(coord);
+			translucent_coords_ref.lock().expect("poisoned mutex").push(coord);
 		}
 		Ok(())
 	});
@@ -185,7 +188,9 @@ async fn classify_and_stream_tiles(
 		.await;
 	result?;
 
-	Ok(std::mem::take(&mut *translucent_coords.lock().unwrap()))
+	Ok(std::mem::take(
+		&mut *translucent_coords.lock().expect("poisoned mutex"),
+	))
 }
 
 // ─── Between passes: prepare batches ───

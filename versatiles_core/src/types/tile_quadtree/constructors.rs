@@ -36,7 +36,7 @@ impl TileQuadtree {
 		validate_zoom_level(level).expect("TileBBox level should have been validated on construction");
 
 		let Some(bbox) = BBox::from_bbox(bbox) else {
-			return TileQuadtree::new_empty(level).unwrap();
+			return TileQuadtree::new_empty(level).expect("level already validated");
 		};
 
 		let root = Node::build_node(&BBox::root(level), &bbox);

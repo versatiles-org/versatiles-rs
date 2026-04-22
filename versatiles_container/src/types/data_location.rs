@@ -321,9 +321,10 @@ impl std::fmt::Display for DataLocation {
 	}
 }
 
-impl From<String> for DataLocation {
-	fn from(s: String) -> Self {
-		DataLocation::try_from(s.as_str()).unwrap()
+impl TryFrom<String> for DataLocation {
+	type Error = anyhow::Error;
+	fn try_from(s: String) -> Result<Self> {
+		DataLocation::try_from(s.as_str())
 	}
 }
 
@@ -510,7 +511,7 @@ mod tests {
 		assert_eq!(up.to_string(), "https://example.org/hello.txt");
 
 		let s = String::from("/tmp/abc.txt");
-		let sp: DataLocation = s.into();
+		let sp: DataLocation = s.try_into()?;
 		assert_eq!(sp.as_path()?.to_path_buf(), PathBuf::from("/tmp/abc.txt"));
 
 		let sr = DataLocation::try_from("/tmp/xyz.txt")?;

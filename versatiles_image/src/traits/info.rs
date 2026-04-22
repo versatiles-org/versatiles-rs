@@ -63,7 +63,8 @@ where
 	DynamicImage: DynamicImageTraitConvert,
 {
 	fn bits_per_value(&self) -> u8 {
-		u8::try_from(self.color().bits_per_pixel() / u16::from(self.color().channel_count())).unwrap()
+		u8::try_from(self.color().bits_per_pixel() / u16::from(self.color().channel_count()))
+			.expect("bits per channel fits in u8")
 	}
 
 	fn channel_count(&self) -> u8 {

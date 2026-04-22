@@ -37,7 +37,7 @@ impl VectorTileFeature {
 	pub fn read(reader: &mut dyn ValueReader<'_, LE>) -> Result<VectorTileFeature> {
 		let mut f = VectorTileFeature::default();
 
-		while reader.has_remaining() {
+		while reader.has_remaining()? {
 			match reader.read_pbf_key().context("Failed to read PBF key")? {
 				(1, 0) => f.id = Some(reader.read_varint().context("Failed to read feature ID")?),
 				(2, 2) => f.tag_ids = reader.read_pbf_packed_uint32().context("Failed to read tag IDs")?,
@@ -99,7 +99,7 @@ impl VectorTileFeature {
 			let mut x = 0;
 			let mut y = 0;
 
-			while reader.has_remaining() {
+			while reader.has_remaining()? {
 				let value = reader
 					.read_varint()
 					.context("Failed to read varint for geometry command")?;
@@ -148,7 +148,7 @@ impl VectorTileFeature {
 						.into_iter()
 						.map(|mut point| {
 							ensure!(point.len() == 1, "(Multi)Point entries must have exactly one entry");
-							Ok(point.pop().unwrap())
+							Ok(point.pop().expect("ensured len == 1 above"))
 						})
 						.collect::<Result<Vec<Coordinates>>>()?,
 				))
@@ -246,7 +246,7 @@ impl VectorTileFeature {
 					continue;
 				}
 
-				let (first, rest) = line_string.into_first_and_rest().unwrap();
+				let (first, rest) = line_string.into_first_and_rest().expect("line_string is not empty");
 
 				// Write the MoveTo command for the first point
 				writer.write_varint((1 << 3) | 0x1)?; // MoveTo command
@@ -274,7 +274,7 @@ impl VectorTileFeature {
 						continue;
 					}
 
-					let (first, mut rest) = ring.into_first_and_rest().unwrap();
+					let (first, mut rest) = ring.into_first_and_rest().expect("ring has at least 4 points");
 					rest.pop();
 
 					// Write the MoveTo command for the first point

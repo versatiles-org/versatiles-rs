@@ -18,7 +18,9 @@ impl TilePyramid {
 
 	/// Includes a single tile coordinate (expands coverage at its zoom level).
 	pub fn insert_coord(&mut self, coord: &TileCoord) {
-		self.levels[coord.level as usize].insert_coord(coord).unwrap();
+		self.levels[coord.level as usize]
+			.insert_coord(coord)
+			.expect("same-level operation");
 	}
 
 	/// Includes all tiles in `bbox` (expands coverage at `bbox`'s zoom level).
@@ -32,7 +34,7 @@ impl TilePyramid {
 	/// Includes all coverage from `other` into this pyramid (union per level).
 	pub fn union(&mut self, other: &TilePyramid) {
 		for z in 0..=MAX_ZOOM_LEVEL as usize {
-			let union = self.levels[z].union(&other.levels[z]).unwrap();
+			let union = self.levels[z].union(&other.levels[z]).expect("same-level union");
 			self.levels[z] = union;
 		}
 	}
@@ -55,14 +57,14 @@ impl TilePyramid {
 	/// Clears all zoom levels below `level_min`.
 	pub fn set_level_min(&mut self, level_min: u8) {
 		for l in 0..level_min {
-			self.levels[l as usize] = TileCover::new_empty(l).unwrap();
+			self.levels[l as usize] = TileCover::new_empty(l).expect("l within zoom bounds");
 		}
 	}
 
 	/// Clears all zoom levels above `level_max`.
 	pub fn set_level_max(&mut self, level_max: u8) {
 		for l in (level_max + 1)..=MAX_ZOOM_LEVEL {
-			self.levels[l as usize] = TileCover::new_empty(l).unwrap();
+			self.levels[l as usize] = TileCover::new_empty(l).expect("l within zoom bounds");
 		}
 	}
 

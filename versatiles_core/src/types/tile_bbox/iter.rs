@@ -11,12 +11,12 @@ impl TileBBox {
 		if self.is_empty() {
 			return Box::new(std::iter::empty()) as Box<dyn Iterator<Item = TileCoord>>;
 		}
-		let y_range = self.y_min().unwrap()..=self.y_max().unwrap();
-		let x_range = self.x_min().unwrap()..=self.x_max().unwrap();
+		let y_range = self.y_min().expect("bbox is non-empty")..=self.y_max().expect("bbox is non-empty");
+		let x_range = self.x_min().expect("bbox is non-empty")..=self.x_max().expect("bbox is non-empty");
 		Box::new(
 			y_range
 				.cartesian_product(x_range)
-				.map(|(y, x)| TileCoord::new(self.level, x, y).unwrap()),
+				.map(|(y, x)| TileCoord::new(self.level, x, y).expect("coord within bbox")),
 		) as Box<dyn Iterator<Item = TileCoord>>
 	}
 
@@ -27,13 +27,13 @@ impl TileBBox {
 		if self.is_empty() {
 			return Box::new(std::iter::empty());
 		}
-		let y_range = self.y_min().unwrap()..=self.y_max().unwrap();
-		let x_range = self.x_min().unwrap()..=self.x_max().unwrap();
+		let y_range = self.y_min().expect("bbox is non-empty")..=self.y_max().expect("bbox is non-empty");
+		let x_range = self.x_min().expect("bbox is non-empty")..=self.x_max().expect("bbox is non-empty");
 		let level = self.level;
 		Box::new(
 			y_range
 				.cartesian_product(x_range)
-				.map(move |(y, x)| TileCoord::new(level, x, y).unwrap()),
+				.map(move |(y, x)| TileCoord::new(level, x, y).expect("coord within bbox")),
 		)
 	}
 
@@ -59,8 +59,9 @@ impl TileBBox {
 					let y = coord.y * size;
 
 					let mut bbox =
-						TileBBox::from_min_and_max(level, x, y, (x + size - 1).min(max), (y + size - 1).min(max)).unwrap();
-					bbox.intersect_bbox(self).unwrap();
+						TileBBox::from_min_and_max(level, x, y, (x + size - 1).min(max), (y + size - 1).min(max))
+							.expect("grid cell within level bounds");
+					bbox.intersect_bbox(self).expect("same-level intersection");
 					bbox
 				})
 				.filter(|bbox| !bbox.is_empty()),
