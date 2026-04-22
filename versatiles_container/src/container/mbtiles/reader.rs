@@ -11,7 +11,11 @@
 //!
 //! It also reads optional fields like `bounds`, `minzoom`, `maxzoom`, and `json` (for
 //! `vector_layers`) and merges them into an internal [`TileJSON`](versatiles_core::TileJSON).
-//! The bounding-box pyramid is inferred from the `tiles` table to augment/validate metadata.
+//!
+//! The per-level coverage pyramid is **not** scanned at open time. It is computed
+//! lazily on the first call to [`TileSource::tile_pyramid`](crate::TileSource::tile_pyramid)
+//! by reading `(zoom_level, tile_column, tile_row)` from the `tiles` table, and
+//! the result is cached for subsequent calls.
 //!
 //! ## Requirements
 //! - The `MBTiles` file **must be an absolute path** when opening with [`open`].
@@ -71,9 +75,10 @@ use versatiles_core::utils::PrettyPrint;
 
 /// Reader for `MBTiles` (`SQLite`) containers.
 ///
-/// Opens a `SQLite` database with `metadata` and `tiles` tables, merges metadata into
-/// [`TileJSON`], infers a bounding-box pyramid by scanning levels/rows/columns, and
-/// exposes tiles via the [`TileSource`] interface.
+/// Opens a `SQLite` database with `metadata` and `tiles` tables, merges the
+/// metadata rows into [`TileJSON`], and exposes tiles via the [`TileSource`]
+/// interface. The coverage pyramid is computed lazily on first request via
+/// [`TileSource::tile_pyramid`] and cached thereafter.
 pub struct MBTilesReader {
 	name: String,
 	pool: Pool<SqliteConnectionManager>,
@@ -272,8 +277,13 @@ impl TileSource for MBTilesReader {
 		&self.metadata
 	}
 
+	/// Returns the coverage pyramid, computing it lazily on first access.
+	///
+	/// The first call scans the `tiles` table to derive the exact per-level
+	/// coverage; the result is cached in [`TileSourceMetadata`] and reused by
+	/// subsequent calls.
 	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		Ok(Arc::new(self.bbox_pyramid()?))
+		self.metadata.get_or_compute_tile_pyramid(|| self.bbox_pyramid())
 	}
 
 	#[cfg(feature = "cli")]
