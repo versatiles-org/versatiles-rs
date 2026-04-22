@@ -1,48 +1,69 @@
 //! Error conversion utilities
 //!
-//! This module provides utilities for converting between Rust's `anyhow::Error`
-//! and NAPI's `napi::Error` types, which is essential for bridging Rust error
-//! handling with JavaScript/Node.js error handling.
+//! Bridges Rust error types to `napi::Error` so failures surface as JavaScript
+//! exceptions with their full context chain preserved.
 //!
-//! The main entry point is the [`napi_result!`] macro, which automatically
-//! converts `Result<T, anyhow::Error>` to `Result<T, napi::Error>`.
+//! Preferred entry point is the [`NapiResultExt`] trait — `result.to_napi()?`
+//! works for any `Result<T, E>` where `E: Into<anyhow::Error>` (covers
+//! `anyhow::Error`, `serde_json::Error`, `std::io::Error`, `TryFromIntError`,
+//! etc.). Add context first via `.context("…")` to enrich the error.
+//!
+//! The legacy [`napi_result!`] macro is kept for backward compatibility but
+//! new code should prefer `.to_napi()`.
 
 use napi::Error as NapiError;
 
-/// Convert `anyhow::Error` to `napi::Error`
+/// Convert `anyhow::Error` to `napi::Error`.
 ///
-/// This function formats the anyhow error with its full context chain
-/// and creates a NAPI error with the formatted message.
-///
-/// # Arguments
-///
-/// * `err` - The anyhow error to convert
-///
-/// # Returns
-///
-/// A NAPI error containing the formatted error message
+/// Formats with `{:#}` so the full context chain is included in the JS error
+/// message (e.g. `"Outer context: Middle context: Root cause"`).
 pub fn anyhow_to_napi(err: &anyhow::Error) -> NapiError {
 	NapiError::from_reason(format!("{err:#}"))
 }
 
-/// Convert `Result<T, anyhow::Error>` to `Result<T, napi::Error>`
+/// Convert any error implementing `Into<anyhow::Error>` to `napi::Error`.
 ///
-/// This macro simplifies error conversion in NAPI bindings by automatically
-/// mapping anyhow errors to NAPI errors.
+/// Free-function form. Equivalent to `anyhow_to_napi(&err.into())`. Use this
+/// inside a `.map_err(...)` when an extension method isn't ergonomic.
+// Allowed until call sites are migrated in subsequent steps.
+#[allow(dead_code)]
+pub fn to_napi(err: impl Into<anyhow::Error>) -> NapiError {
+	anyhow_to_napi(&err.into())
+}
+
+/// Extension trait that converts a `Result<T, E>` into `napi::Result<T>` for
+/// any error type implementing `Into<anyhow::Error>`.
 ///
 /// # Example
 ///
 /// ```
-/// use versatiles_node::napi_result;
+/// use versatiles_node::macros::NapiResultExt;
+/// use anyhow::Context;
 ///
-/// fn some_operation() -> anyhow::Result<i32> {
-///     Ok(42)
-/// }
-///
-/// fn napi_wrapper() -> napi::Result<i32> {
-///     napi_result!(some_operation())
+/// fn parse_and_use(s: &str) -> napi::Result<u32> {
+///     // serde_json::Error, std::io::Error, etc. all work directly
+///     let parsed: u32 = s.parse().context("not a u32").to_napi()?;
+///     Ok(parsed * 2)
 /// }
 /// ```
+// Allowed until call sites are migrated in subsequent steps.
+#[allow(dead_code)]
+pub trait NapiResultExt<T> {
+	/// Convert this `Result` into a `napi::Result`, preserving the full error
+	/// chain in the resulting `napi::Error.reason` string.
+	fn to_napi(self) -> napi::Result<T>;
+}
+
+impl<T, E: Into<anyhow::Error>> NapiResultExt<T> for Result<T, E> {
+	fn to_napi(self) -> napi::Result<T> {
+		self.map_err(to_napi)
+	}
+}
+
+/// Convert `Result<T, anyhow::Error>` to `Result<T, napi::Error>`.
+///
+/// Legacy macro kept for backward compatibility. Prefer
+/// [`NapiResultExt::to_napi`] in new code.
 #[macro_export]
 macro_rules! napi_result {
 	($expr:expr) => {
@@ -176,5 +197,75 @@ mod tests {
 
 		assert!(converted.is_err());
 		assert_eq!(converted.unwrap_err().reason, "Value was None");
+	}
+
+	// -------------------------------------------------------------------------
+	// to_napi() free function and NapiResultExt trait
+	// -------------------------------------------------------------------------
+
+	#[test]
+	fn test_to_napi_function_with_anyhow_error() {
+		let napi_err = to_napi(anyhow!("direct anyhow"));
+		assert_eq!(napi_err.reason, "direct anyhow");
+	}
+
+	#[test]
+	fn test_to_napi_function_with_serde_json_error() {
+		// serde_json::Error implements Into<anyhow::Error> via From.
+		let parse_err: serde_json::Error = serde_json::from_str::<i32>("not json").unwrap_err();
+		let napi_err = to_napi(parse_err);
+		assert!(!napi_err.reason.is_empty());
+	}
+
+	#[test]
+	fn test_to_napi_function_with_io_error() {
+		let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "missing");
+		let napi_err = to_napi(io_err);
+		assert!(napi_err.reason.contains("missing"));
+	}
+
+	#[test]
+	fn test_napi_result_ext_anyhow_ok() {
+		let r: anyhow::Result<i32> = Ok(7);
+		let converted = r.to_napi();
+		assert_eq!(converted.unwrap(), 7);
+	}
+
+	#[test]
+	fn test_napi_result_ext_anyhow_err_preserves_chain() {
+		let r: anyhow::Result<()> = Err(anyhow!("root")).context("middle").context("outer");
+		let converted = r.to_napi();
+		let err = converted.unwrap_err();
+		let reason = &err.reason;
+		assert!(reason.contains("outer"));
+		assert!(reason.contains("middle"));
+		assert!(reason.contains("root"));
+	}
+
+	#[test]
+	fn test_napi_result_ext_serde_json_err() {
+		let r: Result<i32, _> = serde_json::from_str("not json");
+		let converted = r.to_napi();
+		assert!(converted.is_err());
+	}
+
+	#[test]
+	fn test_napi_result_ext_with_context_chain() {
+		// context("...") then to_napi() — the canonical migration pattern.
+		let r: Result<i32, _> = serde_json::from_str("nope");
+		let converted = r.context("Invalid pipeline JSON").to_napi();
+		let err = converted.unwrap_err();
+		let reason = &err.reason;
+		assert!(reason.contains("Invalid pipeline JSON"));
+	}
+
+	#[test]
+	fn test_napi_result_ext_io_err_chain() {
+		let r: Result<(), _> = Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied"));
+		let converted = r.context("opening config").to_napi();
+		let err = converted.unwrap_err();
+		let reason = &err.reason;
+		assert!(reason.contains("opening config"));
+		assert!(reason.contains("denied"));
 	}
 }
