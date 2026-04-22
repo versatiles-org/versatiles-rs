@@ -2,7 +2,7 @@ use super::{PMTilesCompression, PMTilesType};
 use crate::TileSourceMetadata;
 use anyhow::{Result, ensure};
 use versatiles_core::{
-	Blob, ByteRange, TileJSON,
+	Blob, ByteRange, TileJSON, TilePyramid,
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 	utils::float_to_int,
 };
@@ -32,11 +32,14 @@ pub struct HeaderV3 {
 }
 
 impl HeaderV3 {
-	pub fn from_parameters(parameters: &TileSourceMetadata, tilejson: &TileJSON) -> HeaderV3 {
+	pub fn from_parameters(
+		parameters: &TileSourceMetadata,
+		bbox_pyramid: &TilePyramid,
+		tilejson: &TileJSON,
+	) -> HeaderV3 {
 		use PMTilesCompression as PC;
 		use PMTilesType as PT;
 
-		let bbox_pyramid = &parameters.bbox_pyramid;
 		let bbox = tilejson.bounds.or_else(|| bbox_pyramid.geo_bbox()).unwrap();
 		let center = tilejson.center.or_else(|| bbox_pyramid.geo_center());
 
@@ -50,8 +53,8 @@ impl HeaderV3 {
 			tile_contents_count: 0,
 			clustered: false,
 			internal_compression: PC::Gzip,
-			tile_compression: PC::from_value(parameters.tile_compression).unwrap_or(PC::Unknown),
-			tile_type: PT::from_value(parameters.tile_format).unwrap_or(PT::UNKNOWN),
+			tile_compression: PC::from_value(*parameters.tile_compression()).unwrap_or(PC::Unknown),
+			tile_type: PT::from_value(*parameters.tile_format()).unwrap_or(PT::UNKNOWN),
 			min_zoom: tilejson.zoom_min().or(bbox_pyramid.level_min()).unwrap_or(0),
 			max_zoom: tilejson.zoom_max().or(bbox_pyramid.level_max()).unwrap_or(14),
 			min_lon_e7: float_to_int(bbox.x_min * 1e7).unwrap(),

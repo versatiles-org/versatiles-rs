@@ -203,18 +203,18 @@ impl DirectoryReader {
 			bail!("no tiles found");
 		}
 
-		let bbox_pyramid = TilePyramid::from_tile_coords(tile_map.keys().copied());
+		let tile_pyramid = TilePyramid::from_tile_coords(tile_map.keys().copied());
 
 		let tile_format = container_form.context("tile format must be specified")?;
 		let tile_compression = container_comp.context("tile compression must be specified")?;
 
-		tilejson.update_from_pyramid(&bbox_pyramid);
+		tilejson.update_from_pyramid(&tile_pyramid);
 
 		Ok(DirectoryReader {
 			tilejson,
 			dir: dir.to_path_buf(),
 			tile_map: Arc::new(tile_map),
-			metadata: TileSourceMetadata::new(tile_format, tile_compression, bbox_pyramid, Traversal::ANY),
+			metadata: TileSourceMetadata::new(tile_format, tile_compression, Traversal::ANY, Some(tile_pyramid)),
 		})
 	}
 
@@ -258,23 +258,28 @@ impl TileSource for DirectoryReader {
 		&self.tilejson
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.metadata
+			.get_or_compute_tile_pyramid(|| Ok(TilePyramid::from_tile_coords(self.tile_map.keys().copied())))
+	}
+
 	#[context("fetching tile {:?} from directory '{}'", coord, self.dir.display())]
 	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		log::trace!("tile {coord:?}");
 		Self::lookup_tile(
 			coord,
 			&self.tile_map,
-			self.metadata.tile_compression,
-			self.metadata.tile_format,
+			*self.metadata.tile_compression(),
+			*self.metadata.tile_format(),
 		)
 	}
 
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("directory::tile_stream {bbox:?}");
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		let tile_map = Arc::clone(&self.tile_map);
-		let tile_compression = self.metadata.tile_compression;
-		let tile_format = self.metadata.tile_format;
+		let tile_compression = *self.metadata.tile_compression();
+		let tile_format = *self.metadata.tile_format();
 
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			DirectoryReader::lookup_tile(&coord, &tile_map, tile_compression, tile_format).ok()?
@@ -282,7 +287,6 @@ impl TileSource for DirectoryReader {
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		let tile_map = Arc::clone(&self.tile_map);
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			tile_map.get(&coord).map(|_| ())
@@ -290,7 +294,6 @@ impl TileSource for DirectoryReader {
 	}
 
 	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 		let tile_map = Arc::clone(&self.tile_map);
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			let path = tile_map.get(&coord)?;
@@ -342,7 +345,7 @@ mod tests {
 
 		let mut tile_data = reader.tile(&TileCoord::new(3, 2, 1)?).await?.unwrap();
 		assert_eq!(
-			tile_data.as_blob(reader.metadata().tile_compression)?,
+			tile_data.as_blob(reader.metadata().tile_compression())?,
 			&Blob::from("test tile data")
 		);
 
@@ -420,7 +423,7 @@ mod tests {
 			.await
 			.unwrap()
 			.unwrap()
-			.into_blob(reader.metadata().tile_compression)?;
+			.into_blob(reader.metadata().tile_compression())?;
 
 		assert_eq!(blob, Blob::from("tile at 3/2/1"));
 
@@ -500,7 +503,7 @@ mod tests {
 
 		assert_wildcard!(
 			format!("{reader:?}"),
-			"DirectoryReader { source_type: Container { name: \"directory\", uri: \"*\" }, parameters: TileSourceMetadata { bbox_pyramid: [3: [2,1,2,1] (1x1)], tile_compression: Brotli, tile_format: PNG, traversal: Traversal(AnyOrder,full) } }"
+			"DirectoryReader { source_type: Container { name: \"directory\", uri: \"*\" }, parameters: TileSourceMetadata { tile_compression: Brotli, tile_format: PNG, traversal: Traversal(AnyOrder,full), tile_pyramid: RwLock { data: * poisoned: false, .. } } }"
 		);
 
 		assert_eq!(
@@ -574,12 +577,12 @@ mod tests {
 
 		// Verify each streamed tile matches individual read
 		for (coord, mut tile) in stream_tiles {
-			let stream_blob = tile.as_blob(reader.metadata().tile_compression)?;
+			let stream_blob = tile.as_blob(reader.metadata().tile_compression())?;
 			let single_blob = reader
 				.tile(&coord)
 				.await?
 				.expect("tile should exist")
-				.into_blob(reader.metadata().tile_compression)?;
+				.into_blob(reader.metadata().tile_compression())?;
 			assert_eq!(
 				stream_blob.as_slice(),
 				single_blob.as_slice(),

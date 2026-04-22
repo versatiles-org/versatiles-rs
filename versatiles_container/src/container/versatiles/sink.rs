@@ -248,12 +248,12 @@ mod tests {
 		Box::new(sink).finish(&tilejson, &runtime)?;
 
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
-		assert_eq!(reader.metadata().tile_format, TileFormat::PNG);
+		assert_eq!(reader.metadata().tile_format(), &TileFormat::PNG);
 
 		for (coord, expected_blob) in &tiles {
 			let tile = reader.tile(coord).await?;
 			assert!(tile.is_some(), "tile at {coord:?} should exist");
-			let blob = tile.unwrap().into_blob(TileCompression::Uncompressed)?;
+			let blob = tile.unwrap().into_blob(&TileCompression::Uncompressed)?;
 			assert_eq!(blob.as_slice(), expected_blob.as_slice());
 		}
 
@@ -290,12 +290,12 @@ mod tests {
 		Box::new(sink).finish(&tilejson, &runtime)?;
 
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
-		assert_eq!(reader.metadata().tile_format, TileFormat::MVT);
+		assert_eq!(reader.metadata().tile_format(), &TileFormat::MVT);
 
 		for (coord, expected_blob) in &tiles {
 			let tile = reader.tile(coord).await?;
 			assert!(tile.is_some(), "tile at {coord:?} should exist");
-			let blob = tile.unwrap().into_blob(TileCompression::Gzip)?;
+			let blob = tile.unwrap().into_blob(&TileCompression::Gzip)?;
 			assert_eq!(blob.as_slice(), expected_blob.as_slice());
 		}
 
@@ -334,7 +334,7 @@ mod tests {
 		for (coord, expected_blob) in &tiles {
 			let tile = reader.tile(coord).await?;
 			assert!(tile.is_some(), "tile at {coord:?} should exist");
-			let blob = tile.unwrap().into_blob(TileCompression::Uncompressed)?;
+			let blob = tile.unwrap().into_blob(&TileCompression::Uncompressed)?;
 			assert_eq!(blob.as_slice(), expected_blob.as_slice());
 		}
 

@@ -31,12 +31,12 @@
 //!
 //!     // Inspect metadata
 //!     let tj = reader.tilejson();
-//!     println!("format={:?} compression={:?}", reader.metadata().tile_format, reader.metadata().tile_compression);
+//!     println!("format={:?} compression={:?}", reader.metadata().tile_format(), reader.metadata().tile_compression());
 //!
 //!     // Fetch a tile
 //!     let coord = TileCoord::new(14, 8800, 5370)?;
 //!     if let Some(mut tile) = reader.tile(&coord).await? {
-//!         let _blob = tile.as_blob(reader.metadata().tile_compression)?;
+//!         let _blob = tile.as_blob(reader.metadata().tile_compression())?;
 //!     }
 //!     Ok(())
 //! }
@@ -58,7 +58,8 @@ use std::{fmt::Debug, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
-	Blob, ByteRange, LimitedCache, TileBBox, TileCompression, TileCoord, TileJSON, TilePyramid, TileStream,
+	Blob, ByteRange, GeoBBox, LimitedCache, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid,
+	TileStream,
 	compression::decompress,
 	io::{DataReader, DataReaderFile},
 	utils::HilbertIndex,
@@ -113,7 +114,7 @@ impl PMTilesReader {
 	/// # Errors
 	/// Returns an error if reading or decompression fails, or if the header/dirs are invalid.
 	#[context("opening PMTiles from reader")]
-	pub async fn open_data(data_reader: DataReader, runtime: TilesRuntime) -> Result<PMTilesReader>
+	pub async fn open_data(data_reader: DataReader, _runtime: TilesRuntime) -> Result<PMTilesReader>
 	where
 		Self: Sized,
 	{
@@ -127,7 +128,7 @@ impl PMTilesReader {
 
 		let meta = data_reader.read_range(&header.metadata).await?;
 		let meta = decompress(meta, &internal_compression)?;
-		let tilejson = TileJSON::try_from_blob_or_default(&meta);
+		let mut tilejson = TileJSON::try_from_blob_or_default(&meta);
 		log::trace!("TileJSON: {tilejson:?}");
 
 		let root_bytes = data_reader.read_range(&header.root_dir).await?;
@@ -142,17 +143,31 @@ impl PMTilesReader {
 		let leaves_bytes = data_reader.read_range(&header.leaf_dirs).await?;
 		log::trace!("Leaf directories bytes length: {}", leaves_bytes.len());
 
-		let bbox_pyramid = calc_bbox_pyramid(&root_bytes_uncompressed, &leaves_bytes, internal_compression, &runtime)?;
-		log::trace!("Bounding box pyramid: {bbox_pyramid:?}");
+		// Populate bounds and zoom from the v3 header if the embedded TileJSON omits them.
+		if tilejson.bounds.is_none() {
+			tilejson.bounds = GeoBBox::new(
+				f64::from(header.min_lon_e7) / 1e7,
+				f64::from(header.min_lat_e7) / 1e7,
+				f64::from(header.max_lon_e7) / 1e7,
+				f64::from(header.max_lat_e7) / 1e7,
+			)
+			.ok();
+		}
+		if tilejson.zoom_min().is_none() {
+			tilejson.set_zoom_min(header.min_zoom);
+		}
+		if tilejson.zoom_max().is_none() {
+			tilejson.set_zoom_max(header.max_zoom);
+		}
 
 		let metadata = TileSourceMetadata::new(
 			header.tile_type.as_value()?,
 			header.tile_compression.as_value()?,
-			bbox_pyramid,
 			Traversal {
 				order: TraversalOrder::PMTiles,
 				size: TraversalSize::new_default(),
 			},
+			None,
 		);
 		log::trace!("Reader parameters: {metadata:?}");
 
@@ -189,9 +204,9 @@ impl PMTilesReader {
 		leaves_cache: &Mutex<LimitedCache<ByteRange, Arc<EntriesV3>>>,
 		leaves_bytes: &Blob,
 		tile_data_offset: u64,
-		tile_compression: TileCompression,
-		tile_format: versatiles_core::TileFormat,
-		internal_compression: TileCompression,
+		tile_compression: &TileCompression,
+		tile_format: &TileFormat,
+		internal_compression: &TileCompression,
 	) -> Result<Option<Tile>> {
 		let mut entries = root_entries;
 
@@ -206,15 +221,15 @@ impl PMTilesReader {
 						data_reader
 							.read_range(&entry.range.shifted_forward(tile_data_offset))
 							.await?,
-						tile_compression,
-						tile_format,
+						*tile_compression,
+						*tile_format,
 					)));
 				}
 				let range = entry.range;
 				let mut cache = leaves_cache.lock().await;
 				entries = cache.get_or_set(&range, || {
 					let mut blob = leaves_bytes.read_range(&range)?;
-					blob = decompress(blob, &internal_compression)?;
+					blob = decompress(blob, internal_compression)?;
 					let entries = EntriesV3::from_blob(&blob)?;
 					Ok(Arc::new(entries))
 				})?;
@@ -311,39 +326,24 @@ fn calc_bbox_pyramid(
 	root_bytes_uncompressed: &Blob,
 	leaves_bytes: &Blob,
 	compression: TileCompression,
-	runtime: &TilesRuntime,
 ) -> Result<TilePyramid> {
 	let mut coords: Vec<TileCoord> = Vec::new();
 
-	parse_directories(
-		&mut coords,
-		root_bytes_uncompressed,
-		leaves_bytes,
-		compression,
-		Some(runtime),
-	)?;
+	parse_directories(&mut coords, root_bytes_uncompressed, leaves_bytes, compression)?;
 
 	fn parse_directories(
 		coords: &mut Vec<TileCoord>,
 		dir: &Blob,
 		leaves_bytes: &Blob,
 		compression: TileCompression,
-		root_runtime: Option<&TilesRuntime>,
 	) -> Result<u64> {
 		log::trace!("parse_directories");
 
 		let entries = EntriesV3::from_blob(dir)?;
 		let entries = entries.iter().collect::<Vec<_>>();
-		let progress = root_runtime
-			.as_ref()
-			.map(|runtime| runtime.create_progress("Parsing PMTiles directories", entries.len() as u64));
 
 		let mut total_entries = 0;
 		for entry in &entries {
-			if let Some(progress) = &progress {
-				progress.inc(1);
-			}
-
 			if entry.range.length > 0 {
 				if entry.run_length > 0 {
 					for i in 0..u64::from(entry.run_length) {
@@ -354,14 +354,9 @@ fn calc_bbox_pyramid(
 					let range = entry.range;
 					let mut blob = leaves_bytes.read_range(&range)?;
 					blob = decompress(blob, &compression)?;
-					total_entries += parse_directories(coords, &blob, leaves_bytes, compression, None)?;
+					total_entries += parse_directories(coords, &blob, leaves_bytes, compression)?;
 				}
 			}
-		}
-
-		if let Some(progress) = progress {
-			progress.finish();
-			log::trace!("Found {total_entries} PMTiles entries");
 		}
 
 		Ok(total_entries)
@@ -393,6 +388,16 @@ impl TileSource for PMTilesReader {
 		&self.tilejson
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self.metadata.get_or_compute_tile_pyramid(|| {
+			calc_bbox_pyramid(
+				&self.root_bytes_uncompressed,
+				&self.leaves_bytes,
+				self.internal_compression,
+			)
+		})
+	}
+
 	/// Fetch a tile by XYZ coordinate.
 	///
 	/// Converts the coordinate to a **Hilbert tile ID**, then traverses up to three levels
@@ -409,27 +414,27 @@ impl TileSource for PMTilesReader {
 			&self.leaves_cache,
 			&self.leaves_bytes,
 			self.header.tile_data.offset,
-			self.metadata.tile_compression,
-			self.metadata.tile_format,
-			self.internal_compression,
+			self.metadata.tile_compression(),
+			self.metadata.tile_format(),
+			&self.internal_compression,
 		)
 		.await
 	}
 
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("pmtiles::tile_stream {bbox:?}");
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		let chunks = self.get_chunks(bbox).await?;
 		Ok(chunks.stream(
 			Arc::clone(&self.data_reader),
-			self.metadata.tile_compression,
-			self.metadata.tile_format,
+			*self.metadata.tile_compression(),
+			*self.metadata.tile_format(),
 		))
 	}
 
 	#[context("streaming tile sizes for bbox {:?}", bbox)]
 	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		let mut tile_sizes: Vec<(TileCoord, u32)> = Vec::new();
 
 		let coords: Vec<TileCoord> = bbox.iter_coords().collect();
@@ -514,9 +519,9 @@ mod tests {
 			"{\"author\":\"OpenStreetMap contributors, Geofabrik GmbH\",*,\"version\":\"3.0\"}"
 		);
 
-		assert_wildcard!(
+		assert_eq!(
 			format!("{:?}", reader.metadata()),
-			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [1,0,1,0] (1x1), 2: [2,1,2,1] (1x1), 3: [4,2,4,2] (1x1), 4: [8,5,8,5] (1x1), 5: [17,10,17,10] (1x1), 6: [34,20,34,21] (1x2), 7: [68,41,68,42] (1x2), 8: [137,83,137,84] (1x2), 9: [274,167,275,168] (2x2), 10: [549,335,551,336] (3x2), 11: [1098,670,1102,673] (5x4), 12: [2196,1340,2204,1346] (9x7), 13: [4393,2680,4409,2693] (17x14), 14: [8787,5361,8818,5387] (32x27)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(PMTiles,full) }"
+			"TileSourceMetadata { tile_compression: Gzip, tile_format: MVT, traversal: Traversal(PMTiles,full), tile_pyramid: RwLock { data: None, poisoned: false, .. } }"
 		);
 
 		assert_eq!(
@@ -524,7 +529,7 @@ mod tests {
 				.tile(&TileCoord::new(0, 0, 0)?)
 				.await?
 				.unwrap()
-				.as_blob(reader.metadata.tile_compression)?
+				.as_blob(reader.metadata.tile_compression())?
 				.len(),
 			20
 		);
@@ -534,7 +539,7 @@ mod tests {
 				.tile(&TileCoord::new(14, 8800, 5370)?)
 				.await?
 				.unwrap()
-				.as_blob(reader.metadata.tile_compression)?
+				.as_blob(reader.metadata.tile_compression())?
 				.len(),
 			100391
 		);
@@ -549,7 +554,7 @@ mod tests {
 		let reader = PMTilesReader::open(&PATH, TilesRuntime::default()).await?;
 
 		let bbox = TileBBox::from_min_and_max(9, 274, 167, 275, 168)?;
-		let compression = reader.metadata().tile_compression;
+		let compression = reader.metadata().tile_compression();
 
 		let mut sizes: Vec<(TileCoord, u32)> = reader.tile_size_stream(bbox).await?.to_vec().await;
 		sizes.sort_by_key(|(c, _)| (c.y, c.x));
@@ -631,12 +636,12 @@ mod tests {
 
 		// Verify each streamed tile matches individual read
 		for (coord, mut tile) in stream_tiles {
-			let stream_blob = tile.as_blob(reader.metadata().tile_compression)?;
+			let stream_blob = tile.as_blob(reader.metadata().tile_compression())?;
 			let single_blob = reader
 				.tile(&coord)
 				.await?
 				.expect("tile should exist")
-				.into_blob(reader.metadata().tile_compression)?;
+				.into_blob(reader.metadata().tile_compression())?;
 			assert_eq!(
 				stream_blob.as_slice(),
 				single_blob.as_slice(),

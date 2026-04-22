@@ -89,10 +89,10 @@ impl TilesWriter for VersaTilesWriter {
 		let parameters = reader.metadata();
 		log::trace!("convert_from - reader.parameters: {parameters:?}");
 
-		let tile_compression = parameters.tile_compression;
+		let tile_compression = *parameters.tile_compression();
 
-		// Get the bounding box pyramid
-		let bbox_pyramid = reader.metadata().bbox_pyramid.clone();
+		// Get the bounding box pyramid (computed lazily by the source).
+		let bbox_pyramid = reader.tile_pyramid().await?;
 		log::trace!("convert_from - bbox_pyramid: {bbox_pyramid:#}");
 
 		// Create the file header, preferring TileJSON values over pyramid-calculated ones
@@ -109,7 +109,7 @@ impl TilesWriter for VersaTilesWriter {
 			.bounds
 			.or(bbox_pyramid.geo_bbox())
 			.ok_or(anyhow!("invalid geo bounding box"))?;
-		let mut header = FileHeader::new(parameters.tile_format, tile_compression, [zoom_min, zoom_max], &bbox)?;
+		let mut header = FileHeader::new(*parameters.tile_format(), tile_compression, [zoom_min, zoom_max], &bbox)?;
 
 		// Convert the header to a blob and write it
 		let blob: Blob = header.to_blob()?;
@@ -159,7 +159,7 @@ impl VersaTilesWriter {
 		tile_compression: TileCompression,
 		runtime: TilesRuntime,
 	) -> Result<ByteRange> {
-		if reader.metadata().bbox_pyramid.is_empty() {
+		if reader.tile_pyramid().await?.is_empty() {
 			return Ok(ByteRange::empty());
 		}
 
@@ -180,7 +180,7 @@ impl VersaTilesWriter {
 
 						// Compress tiles in parallel
 						let compressed_stream = stream
-							.map_parallel_try(move |_coord, tile| tile.into_blob(tile_compression))
+							.map_parallel_try(move |_coord, tile| tile.into_blob(&tile_compression))
 							.unwrap_results();
 
 						// Acquire writer lock and create block builder

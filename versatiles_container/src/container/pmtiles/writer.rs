@@ -96,7 +96,8 @@ impl TilesWriter for PMTilesWriter {
 		writer.set_position(16384)?;
 
 		let tilejson = reader.tilejson();
-		let mut header = HeaderV3::from_parameters(&parameters, tilejson);
+		let bbox_pyramid = reader.tile_pyramid().await?;
+		let mut header = HeaderV3::from_parameters(&parameters, bbox_pyramid.as_ref(), tilejson);
 
 		let mut metadata: Blob = tilejson.into();
 		metadata = compress(metadata, &INTERNAL_COMPRESSION)?;
@@ -107,7 +108,7 @@ impl TilesWriter for PMTilesWriter {
 		let writer_mutex = Arc::new(Mutex::new(writer));
 		let entries_mutex = Arc::new(Mutex::new(entries));
 		let dedup_map: Arc<Mutex<HashMap<u64, ByteRange>>> = Arc::new(Mutex::new(HashMap::new()));
-		let tile_compression = reader.metadata().tile_compression;
+		let tile_compression = *reader.metadata().tile_compression();
 
 		reader
 			.traverse_all_tiles(
@@ -119,7 +120,7 @@ impl TilesWriter for PMTilesWriter {
 					Box::pin(async move {
 						// Pre-encode blobs in parallel (CPU-intensive work happens here)
 						let stream = stream.map_parallel_try(move |_coord, mut tile| {
-							tile.as_blob(tile_compression)?;
+							tile.as_blob(&tile_compression)?;
 							Ok(tile)
 						});
 
@@ -137,7 +138,7 @@ impl TilesWriter for PMTilesWriter {
 						let mut dedup = dedup_map.lock().await;
 						for (coord, mut tile) in tiles {
 							let id = coord.get_hilbert_index()?;
-							let blob = tile.as_blob(tile_compression)?;
+							let blob = tile.as_blob(&tile_compression)?;
 
 							let mut hasher = DefaultHasher::new();
 							blob.as_slice().hash(&mut hasher);
@@ -205,12 +206,10 @@ mod tests {
 	#[context("test: PMTiles read↔write roundtrip")]
 	#[tokio::test]
 	async fn read_write() -> Result<()> {
-		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
-			bbox_pyramid: TilePyramid::new_full_up_to(4),
-			tile_compression: TileCompression::Gzip,
-			tile_format: TileFormat::MVT,
-			traversal: Traversal::ANY,
-		})?;
+		let mut mock_reader = MockReader::new_mock(
+			TilePyramid::new_full_up_to(4),
+			TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, Traversal::ANY, None),
+		)?;
 
 		let runtime = TilesRuntime::default();
 
@@ -231,12 +230,10 @@ mod tests {
 		bbox_pyramid.insert_bbox(&TileBBox::from_min_and_max(15, 4090, 4090, 4139, 4139)?)?;
 		bbox_pyramid.insert_bbox(&TileBBox::from_min_and_max(14, 250, 250, 260, 260)?)?;
 
-		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
+		let mut mock_reader = MockReader::new_mock(
 			bbox_pyramid,
-			tile_compression: TileCompression::Uncompressed,
-			tile_format: TileFormat::MVT,
-			traversal: Traversal::ANY,
-		})?;
+			TileSourceMetadata::new(TileFormat::MVT, TileCompression::Uncompressed, Traversal::ANY, None),
+		)?;
 
 		let runtime = TilesRuntime::default();
 

@@ -23,7 +23,7 @@
 //!     let tile_coord = TileCoord::new(1, 2, 3)?;
 //!     let tile = reader.tile(&tile_coord).await?;
 //!     if let Some(mut tile) = tile {
-//!         println!("Tile data: {:?}", tile.as_blob(TileCompression::Uncompressed));
+//!         println!("Tile data: {:?}", tile.as_blob(&TileCompression::Uncompressed));
 //!     }
 //!
 //!     // Writing to a tar archive

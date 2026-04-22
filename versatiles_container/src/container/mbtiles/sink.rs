@@ -191,8 +191,8 @@ mod tests {
 	use super::*;
 	use crate::{MBTilesReader, TileSource, TilesRuntime};
 
-	#[test]
-	fn write_and_read_back() -> Result<()> {
+	#[tokio::test]
+	async fn write_and_read_back() -> Result<()> {
 		let temp = assert_fs::NamedTempFile::new("test_sink.mbtiles")?;
 		let runtime = TilesRuntime::default();
 
@@ -214,8 +214,8 @@ mod tests {
 		Box::new(sink).finish(&tilejson, &crate::TilesRuntime::default())?;
 
 		let reader = MBTilesReader::open(&temp, TilesRuntime::default())?;
-		assert_eq!(reader.metadata().tile_format, TileFormat::PNG);
-		assert_eq!(reader.metadata().bbox_pyramid.count_tiles(), 1);
+		assert_eq!(reader.metadata().tile_format(), &TileFormat::PNG);
+		assert_eq!(reader.tile_pyramid().await?.count_tiles(), 1);
 
 		Ok(())
 	}
@@ -261,13 +261,13 @@ mod tests {
 		Box::new(sink).finish(&tilejson, &crate::TilesRuntime::default())?;
 
 		let reader = MBTilesReader::open(&temp, TilesRuntime::default())?;
-		assert_eq!(reader.metadata().tile_format, TileFormat::WEBP);
-		assert_eq!(reader.metadata().bbox_pyramid.count_tiles(), 16);
+		assert_eq!(reader.metadata().tile_format(), &TileFormat::WEBP);
+		assert_eq!(reader.tile_pyramid().await?.count_tiles(), 16);
 
 		// Verify a specific tile via tile
 		let tile = reader.tile(&TileCoord::new(2, 1, 1)?).await?;
 		assert!(tile.is_some());
-		let blob = tile.unwrap().into_blob(TileCompression::Uncompressed)?;
+		let blob = tile.unwrap().into_blob(&TileCompression::Uncompressed)?;
 		assert_eq!(blob.as_slice(), &[1u8; 8]);
 
 		Ok(())

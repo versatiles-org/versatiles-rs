@@ -56,36 +56,34 @@ pub const MOCK_BYTES_WEBP: &[u8; 44] = include_bytes!("./mock_tiles/mock.webp");
 pub struct MockReader {
 	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
+	tile_pyramid: TilePyramid,
 }
 
 impl MockReader {
 	/// Creates a new mock tiles reader with the specified profile.
 	#[context("creating mock reader with profile {:?}", profile)]
 	pub fn new_mock_profile(profile: MockReaderProfile) -> Result<MockReader> {
-		let mut bbox_pyramid = TilePyramid::new_empty();
-		bbox_pyramid.insert_bbox(&TileBBox::from_min_and_max(2, 0, 1, 2, 3)?)?;
-		bbox_pyramid.insert_bbox(&TileBBox::from_min_and_max(3, 0, 2, 4, 6)?)?;
-		bbox_pyramid.insert_bbox(&TileBBox::new_full(4)?)?;
-		bbox_pyramid.insert_bbox(&TileBBox::new_full(5)?)?;
-		bbox_pyramid.insert_bbox(&TileBBox::new_full(6)?)?;
+		let mut tile_pyramid = TilePyramid::new_empty();
+		tile_pyramid.insert_bbox(&TileBBox::from_min_and_max(2, 0, 1, 2, 3)?)?;
+		tile_pyramid.insert_bbox(&TileBBox::from_min_and_max(3, 0, 2, 4, 6)?)?;
+		tile_pyramid.insert_bbox(&TileBBox::new_full(4)?)?;
+		tile_pyramid.insert_bbox(&TileBBox::new_full(5)?)?;
+		tile_pyramid.insert_bbox(&TileBBox::new_full(6)?)?;
 
-		MockReader::new_mock(match profile {
-			MockReaderProfile::Json => TileSourceMetadata::new(
-				TileFormat::JSON,
-				TileCompression::Uncompressed,
-				bbox_pyramid,
-				Traversal::ANY,
-			),
-			MockReaderProfile::Png => TileSourceMetadata::new(
-				TileFormat::PNG,
-				TileCompression::Uncompressed,
-				bbox_pyramid,
-				Traversal::ANY,
-			),
-			MockReaderProfile::Pbf => {
-				TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, bbox_pyramid, Traversal::ANY)
-			}
-		})
+		MockReader::new_mock(
+			tile_pyramid,
+			match profile {
+				MockReaderProfile::Json => {
+					TileSourceMetadata::new(TileFormat::JSON, TileCompression::Uncompressed, Traversal::ANY, None)
+				}
+				MockReaderProfile::Png => {
+					TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None)
+				}
+				MockReaderProfile::Pbf => {
+					TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, Traversal::ANY, None)
+				}
+			},
+		)
 	}
 
 	/// Returns a mutable reference to the TileJSON metadata.
@@ -95,18 +93,23 @@ impl MockReader {
 
 	/// Creates a new mock tiles reader with the specified parameters.
 	#[context("creating mock reader from parameters")]
-	pub fn new_mock(metadata: TileSourceMetadata) -> Result<MockReader> {
+	pub fn new_mock(tile_pyramid: TilePyramid, metadata: TileSourceMetadata) -> Result<MockReader> {
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("type", "dummy")?;
-		Ok(MockReader { metadata, tilejson })
+		metadata.set_tile_pyramid(tile_pyramid.clone());
+		Ok(MockReader {
+			metadata,
+			tilejson,
+			tile_pyramid,
+		})
 	}
 
 	/// Internal helper to create a mock tile for the given coordinate.
 	fn create_mock_tile(
 		coord: &TileCoord,
 		bbox_pyramid: &TilePyramid,
-		format: TileFormat,
-		compression: TileCompression,
+		format: &TileFormat,
+		compression: &TileCompression,
 	) -> Result<Option<Tile>> {
 		use TileFormat::{JPG, JSON, MVT, PNG, WEBP};
 
@@ -122,8 +125,8 @@ impl MockReader {
 			WEBP => Blob::from(MOCK_BYTES_WEBP.to_vec()),
 			_ => panic!("tile format {format:?} is not implemented for MockReader"),
 		};
-		blob = compress(blob, &compression)?;
-		Ok(Some(Tile::from_blob(blob, compression, format)))
+		blob = compress(blob, compression)?;
+		Ok(Some(Tile::from_blob(blob, *compression, *format)))
 	}
 }
 
@@ -141,31 +144,35 @@ impl TileSource for MockReader {
 		&self.tilejson
 	}
 
-	#[context("fetching mock tile {:?} (format={:?}, compression={:?})", coord, self.metadata.tile_format, self.metadata.tile_compression)]
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		Ok(Arc::new(self.tile_pyramid.clone()))
+	}
+
+	#[context("fetching mock tile {:?} (format={:?}, compression={:?})", coord, self.metadata.tile_format(), self.metadata.tile_compression())]
 	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		Self::create_mock_tile(
 			coord,
-			&self.metadata.bbox_pyramid,
-			self.metadata.tile_format,
-			self.metadata.tile_compression,
+			&self.tile_pyramid,
+			self.metadata.tile_format(),
+			self.metadata.tile_compression(),
 		)
 	}
 
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("mock::tile_stream {bbox:?}");
 
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
-		let format = self.metadata.tile_format;
-		let compression = self.metadata.tile_compression;
-		let bbox_pyramid = self.metadata.bbox_pyramid.clone();
+		let bbox = bbox.intersection_pyramid(&self.tile_pyramid);
+		let format = *self.metadata.tile_format();
+		let compression = *self.metadata.tile_compression();
+		let tile_pyramid = self.tile_pyramid.clone();
 
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
-			MockReader::create_mock_tile(&coord, &bbox_pyramid, format, compression).ok()?
+			MockReader::create_mock_tile(&coord, &tile_pyramid, &format, &compression).ok()?
 		}))
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = bbox.intersection_pyramid(&self.tile_pyramid);
 
 		Ok(TileStream::from_bbox_parallel(bbox, move |_coord| Some(())))
 	}
@@ -204,7 +211,7 @@ mod tests {
 			.tile(&TileCoord::new(4, 5, 6)?)
 			.await?
 			.unwrap()
-			.into_blob(TileCompression::Uncompressed)?
+			.into_blob(&TileCompression::Uncompressed)?
 			.into_vec();
 		assert_eq!(&blob[0..4], b"\x89PNG");
 		Ok(())
@@ -220,7 +227,7 @@ mod tests {
 				.await
 				.unwrap()
 				.unwrap()
-				.into_blob(TileCompression::Uncompressed)
+				.into_blob(&TileCompression::Uncompressed)
 				.unwrap();
 			assert_eq!(tile_uncompressed, blob);
 		};
@@ -250,12 +257,12 @@ mod tests {
 
 		// Verify each streamed tile matches individual read
 		for (coord, mut tile) in stream_tiles {
-			let stream_blob = tile.as_blob(reader.metadata().tile_compression)?;
+			let stream_blob = tile.as_blob(reader.metadata().tile_compression())?;
 			let single_blob = reader
 				.tile(&coord)
 				.await?
 				.expect("tile should exist")
-				.into_blob(reader.metadata().tile_compression)?;
+				.into_blob(reader.metadata().tile_compression())?;
 			assert_eq!(
 				stream_blob.as_slice(),
 				single_blob.as_slice(),

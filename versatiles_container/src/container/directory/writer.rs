@@ -92,10 +92,10 @@ impl TilesWriter for DirectoryWriter {
 		log::trace!("convert_from");
 
 		let parameters = reader.metadata();
-		let tile_format = parameters.tile_format;
+		let tile_format = *parameters.tile_format();
 
 		let extension_format = tile_format.as_extension().to_string();
-		let tile_compression = reader.metadata().tile_compression;
+		let tile_compression = *reader.metadata().tile_compression();
 		let extension_compression = tile_compression.as_extension().to_string();
 
 		let tilejson = reader.tilejson();
@@ -120,7 +120,7 @@ impl TilesWriter for DirectoryWriter {
 							);
 
 							// Write blob to file
-							let blob = tile.into_blob(tile_compression)?;
+							let blob = tile.into_blob(&tile_compression)?;
 							Self::write(&path.join(filename), &blob)?;
 						}
 						Ok(())
@@ -146,12 +146,10 @@ mod tests {
 		let temp_dir = assert_fs::TempDir::new()?;
 		let temp_path = temp_dir.path();
 
-		let mut mock_reader = MockReader::new_mock(TileSourceMetadata::new(
-			TileFormat::MVT,
-			TileCompression::Gzip,
+		let mut mock_reader = MockReader::new_mock(
 			TilePyramid::new_full_up_to(2),
-			Traversal::ANY,
-		))?;
+			TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, Traversal::ANY, None),
+		)?;
 
 		DirectoryWriter::write_to_path(&mut mock_reader, temp_path, TilesRuntime::default()).await?;
 

@@ -30,18 +30,19 @@
 //!     // Inspect parameters & TileJSON
 //!     let metadata = reader.metadata();
 //!     let tj = reader.tilejson();
-//!     println!("format={:?} compression={:?}", metadata.tile_format, metadata.tile_compression);
+//!     println!("format={:?} compression={:?}", metadata.tile_format(), metadata.tile_compression());
 //!
 //!     // Fetch one tile
 //!     if let Some(mut tile) = reader.tile(&TileCoord::new(15, 1, 4)?).await? {
-//!         let _blob = tile.as_blob(metadata.tile_compression)?;
+//!         let _blob = tile.as_blob(metadata.tile_compression())?;
 //!     }
 //!
 //!     // Stream a bbox (coalesces reads per block for fewer I/O calls)
-//!     let bbox = metadata.bbox_pyramid.level(4).bbox().unwrap();
+//!     let pyramid = reader.tile_pyramid().await?;
+//!     let bbox = pyramid.level_bbox(4);
 //!     let mut stream = reader.tile_stream(bbox).await?;
 //!     while let Some((coord, mut tile)) = stream.next().await {
-//!         let _size = tile.as_blob(metadata.tile_compression)?.len();
+//!         let _size = tile.as_blob(metadata.tile_compression())?.len();
 //!         // use (coord, _size)
 //!     }
 //!     Ok(())
@@ -64,7 +65,7 @@ use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
-	ByteRange, LimitedCache, TileBBox, TileCoord, TileJSON, TileStream,
+	ByteRange, LimitedCache, TileBBox, TileCoord, TileJSON, TilePyramid, TileStream,
 	compression::decompress,
 	io::{DataReader, DataReaderFile},
 };
@@ -132,15 +133,14 @@ impl VersaTilesReader {
 		let block_index =
 			BlockIndex::from_brotli_blob(&block_index_blob).context("Failed decompressing the block index")?;
 
-		let bbox_pyramid = block_index.bbox_pyramid();
 		let metadata = TileSourceMetadata::new(
 			header.tile_format,
 			header.compression,
-			bbox_pyramid,
 			Traversal {
 				order: TraversalOrder::AnyOrder,
 				size: TraversalSize::new_max(256)?,
 			},
+			None,
 		);
 
 		Ok(VersaTilesReader {
@@ -276,6 +276,12 @@ impl TileSource for VersaTilesReader {
 		&self.metadata
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.metadata
+			.get_or_compute_tile_pyramid(|| Ok(self.block_index.bbox_pyramid()))
+	}
+
 	/// Fetch a single tile by XYZ coordinate.
 	///
 	/// Computes the corresponding **block coordinate** (z, x>>8, y>>8), verifies membership
@@ -317,14 +323,14 @@ impl TileSource for VersaTilesReader {
 		let blob = self.reader.read_range(&tile_range).await?;
 		Ok(Some(Tile::from_blob(
 			blob,
-			self.metadata.tile_compression,
-			self.metadata.tile_format,
+			*self.metadata.tile_compression(),
+			*self.metadata.tile_format(),
 		)))
 	}
 
 	#[context("streaming tile sizes for bbox {:?}", bbox)]
 	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		let block_coords: Vec<TileCoord> = bbox.scaled_down(256).iter_coords().collect();
 
 		let mut blocks: Vec<(TileBBox, TileBBox, BlockDefinition)> = Vec::new();
@@ -394,8 +400,8 @@ impl TileSource for VersaTilesReader {
 		let chunks = self.get_chunks(bbox).await?;
 		Ok(chunks.stream(
 			Arc::clone(&self.reader),
-			self.metadata.tile_compression,
-			self.metadata.tile_format,
+			*self.metadata.tile_compression(),
+			*self.metadata.tile_format(),
 		))
 	}
 
@@ -462,7 +468,7 @@ mod tests {
 
 		assert_eq!(
 			format!("{reader:?}"),
-			"VersaTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,1..256) } }"
+			"VersaTilesReader { parameters: TileSourceMetadata { tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,1..256), tile_pyramid: RwLock { data: None, poisoned: false, .. } } }"
 		);
 		assert_wildcard!(
 			reader.source_type().to_string(),
@@ -474,22 +480,22 @@ mod tests {
 		);
 		assert_eq!(
 			format!("{:?}", reader.metadata()),
-			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,1..256) }"
+			"TileSourceMetadata { tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,1..256), tile_pyramid: RwLock { data: None, poisoned: false, .. } }"
 		);
-		assert_eq!(reader.metadata().tile_compression, TileCompression::Gzip);
-		assert_eq!(reader.metadata().tile_format, TileFormat::MVT);
+		assert_eq!(reader.metadata().tile_compression(), &TileCompression::Gzip);
+		assert_eq!(reader.metadata().tile_format(), &TileFormat::MVT);
 
 		let blob = reader
 			.tile(&TileCoord::new(4, 15, 1)?)
 			.await?
 			.unwrap()
-			.into_blob(TileCompression::Uncompressed)?;
+			.into_blob(&TileCompression::Uncompressed)?;
 		assert_eq!(blob.as_slice(), MOCK_BYTES_PBF);
 
 		let sizes = reader
 			.tile_stream(TileBBox::new_full(4)?)
 			.await?
-			.map_parallel_try(|_coord, mut tile| Ok(tile.as_blob(TileCompression::Gzip)?.len()))
+			.map_parallel_try(|_coord, mut tile| Ok(tile.as_blob(&TileCompression::Gzip)?.len()))
 			.unwrap_results();
 		let sizes: Vec<(TileCoord, u64)> = sizes.to_vec().await;
 		assert_eq!(sizes.len(), 256);
@@ -506,7 +512,7 @@ mod tests {
 		let bbox = TileBBox::new_full(4)?;
 		let stream = reader.tile_stream(bbox).await?;
 		let mut all: Vec<(TileCoord, Blob)> = stream
-			.map_parallel_try(|_coord, tile| tile.into_blob(TileCompression::Uncompressed))
+			.map_parallel_try(|_coord, tile| tile.into_blob(&TileCompression::Uncompressed))
 			.unwrap_results()
 			.to_vec()
 			.await;
@@ -531,7 +537,7 @@ mod tests {
 				.tile(&coord)
 				.await?
 				.expect("present via single read")
-				.into_blob(TileCompression::Uncompressed)?;
+				.into_blob(&TileCompression::Uncompressed)?;
 			assert_eq!(
 				from_stream.as_slice(),
 				from_single.as_slice(),
@@ -560,12 +566,10 @@ mod tests {
 
 	#[tokio::test]
 	async fn read_your_own_dog_food() -> Result<()> {
-		let mut reader1 = MockReader::new_mock(TileSourceMetadata::new(
-			TileFormat::JSON,
-			TileCompression::Gzip,
+		let mut reader1 = MockReader::new_mock(
 			TilePyramid::new_full_up_to(4),
-			Traversal::ANY,
-		))?;
+			TileSourceMetadata::new(TileFormat::JSON, TileCompression::Gzip, Traversal::ANY, None),
+		)?;
 
 		let runtime = TilesRuntime::default();
 
@@ -697,7 +701,7 @@ mod tests {
 	async fn tile_size_stream_matches_tile_stream() -> Result<()> {
 		let (_, reader) = mk_reader().await?;
 		let bbox = TileBBox::new_full(4)?;
-		let compression = reader.metadata().tile_compression;
+		let compression = reader.metadata().tile_compression();
 
 		let mut sizes: Vec<(TileCoord, u32)> = reader.tile_size_stream(bbox).await?.to_vec().await;
 		sizes.sort_by_key(|(c, _)| (c.level, c.y, c.x));

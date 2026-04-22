@@ -22,7 +22,7 @@
 //!
 //! // Read one tile
 //! if let Some(mut tile) = reader.tile(&TileCoord::new(3, 6, 2)?).await? {
-//!     let _blob = tile.as_blob(reader.metadata().tile_compression)?;
+//!     let _blob = tile.as_blob(reader.metadata().tile_compression())?;
 //! }
 //! # Ok(()) }
 //! ```
@@ -231,13 +231,11 @@ impl TarTilesReader {
 			return Err(anyhow!("no tiles found in tar"));
 		}
 
-		let bbox_pyramid = TilePyramid::from_tile_coords(tile_map.keys().copied());
-
 		let metadata = TileSourceMetadata::new(
 			tile_format.ok_or(anyhow!("unknown tile format, can't detect format"))?,
 			tile_compression.ok_or(anyhow!("unknown tile compression, can't detect compression"))?,
-			bbox_pyramid.clone(),
 			Traversal::ANY,
+			None,
 		);
 
 		Ok(TarTilesReader {
@@ -294,6 +292,12 @@ impl TileSource for TarTilesReader {
 		&self.tilejson
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.metadata
+			.get_or_compute_tile_pyramid(|| Ok(TilePyramid::from_tile_coords(self.tile_map.keys().copied())))
+	}
+
 	/// Fetch a single tile by XYZ coordinate.
 	///
 	/// Looks up the coordinate in the prebuilt index and reads the corresponding byte range
@@ -308,19 +312,19 @@ impl TileSource for TarTilesReader {
 			coord,
 			&self.tile_map,
 			&self.reader,
-			self.metadata.tile_compression,
-			self.metadata.tile_format,
+			*self.metadata.tile_compression(),
+			*self.metadata.tile_format(),
 		)
 		.await
 	}
 
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("tar::tile_stream {bbox:?}");
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		let reader = Arc::clone(&self.reader);
 		let tile_map = Arc::clone(&self.tile_map);
-		let tile_compression = self.metadata.tile_compression;
-		let tile_format = self.metadata.tile_format;
+		let tile_compression = *self.metadata.tile_compression();
+		let tile_format = *self.metadata.tile_format();
 
 		Ok(TileStream::from_bbox_async_parallel(bbox, move |coord| {
 			let reader = Arc::clone(&reader);
@@ -335,7 +339,7 @@ impl TileSource for TarTilesReader {
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		let tile_map = Arc::clone(&self.tile_map);
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			tile_map.get(&coord).map(|_| ())
@@ -343,7 +347,7 @@ impl TileSource for TarTilesReader {
 	}
 
 	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		let tile_map = Arc::clone(&self.tile_map);
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			let range = tile_map.get(&coord)?;
@@ -386,7 +390,7 @@ pub mod tests {
 
 		assert_eq!(
 			format!("{reader:?}"),
-			"TarTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,full) } }"
+			"TarTilesReader { parameters: TileSourceMetadata { tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,full), tile_pyramid: RwLock { data: None, poisoned: false, .. } } }"
 		);
 		assert_wildcard!(reader.source_type().to_string(), "container 'tar' ('*.tar')");
 		assert_eq!(
@@ -395,16 +399,16 @@ pub mod tests {
 		);
 		assert_eq!(
 			format!("{:?}", reader.metadata()),
-			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,full) }"
+			"TileSourceMetadata { tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,full), tile_pyramid: RwLock { data: None, poisoned: false, .. } }"
 		);
-		assert_eq!(reader.metadata().tile_compression, TileCompression::Gzip);
-		assert_eq!(reader.metadata().tile_format, TileFormat::MVT);
+		assert_eq!(reader.metadata().tile_compression(), &TileCompression::Gzip);
+		assert_eq!(reader.metadata().tile_format(), &TileFormat::MVT);
 
 		let blob = reader
 			.tile(&TileCoord::new(3, 6, 2)?)
 			.await?
 			.unwrap()
-			.into_blob(TileCompression::Uncompressed)?;
+			.into_blob(&TileCompression::Uncompressed)?;
 		assert_eq!(blob.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())
@@ -485,15 +489,15 @@ pub mod tests {
 		a.finish()?;
 
 		let reader = TarTilesReader::open(&filename)?;
-		assert_eq!(reader.metadata().tile_format, TileFormat::BIN);
-		assert_eq!(reader.metadata().tile_compression, TileCompression::Uncompressed);
-		assert_eq!(reader.metadata().bbox_pyramid.count_tiles(), 1);
+		assert_eq!(reader.metadata().tile_format(), &TileFormat::BIN);
+		assert_eq!(reader.metadata().tile_compression(), &TileCompression::Uncompressed);
+		assert_eq!(reader.tile_pyramid().await?.count_tiles(), 1);
 		assert_eq!(
 			reader
 				.tile(&TileCoord::new(3, 1, 2)?)
 				.await?
 				.unwrap()
-				.as_blob(TileCompression::Uncompressed)?
+				.as_blob(&TileCompression::Uncompressed)?
 				.as_slice(),
 			[3, 1, 4, 1, 5, 9].as_ref()
 		);
@@ -515,12 +519,12 @@ pub mod tests {
 
 		// Verify each streamed tile matches individual read
 		for (coord, mut tile) in stream_tiles {
-			let stream_blob = tile.as_blob(reader.metadata().tile_compression)?;
+			let stream_blob = tile.as_blob(reader.metadata().tile_compression())?;
 			let single_blob = reader
 				.tile(&coord)
 				.await?
 				.expect("tile should exist")
-				.into_blob(reader.metadata().tile_compression)?;
+				.into_blob(reader.metadata().tile_compression())?;
 			assert_eq!(
 				stream_blob.as_slice(),
 				single_blob.as_slice(),

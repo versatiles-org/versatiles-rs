@@ -139,9 +139,10 @@ mod tests {
 		Box::new(sink).finish(&tilejson, &TilesRuntime::default())?;
 
 		let reader = TarTilesReader::open(&temp)?;
-		assert_eq!(reader.metadata().tile_format, TileFormat::PNG);
-		assert_eq!(reader.metadata().tile_compression, TileCompression::Uncompressed);
-		assert_eq!(reader.metadata().bbox_pyramid.count_tiles(), 1);
+		assert_eq!(reader.metadata().tile_format(), &TileFormat::PNG);
+		assert_eq!(reader.metadata().tile_compression(), &TileCompression::Uncompressed);
+		let rt = tokio::runtime::Runtime::new()?;
+		assert_eq!(rt.block_on(reader.tile_pyramid())?.count_tiles(), 1);
 
 		Ok(())
 	}
@@ -166,9 +167,10 @@ mod tests {
 		Box::new(sink).finish(&tilejson, &TilesRuntime::default())?;
 
 		let reader = TarTilesReader::open(&temp)?;
-		assert_eq!(reader.metadata().tile_format, TileFormat::WEBP);
-		assert_eq!(reader.metadata().tile_compression, TileCompression::Brotli);
-		assert_eq!(reader.metadata().bbox_pyramid.count_tiles(), 16);
+		assert_eq!(reader.metadata().tile_format(), &TileFormat::WEBP);
+		assert_eq!(reader.metadata().tile_compression(), &TileCompression::Brotli);
+		let rt = tokio::runtime::Runtime::new()?;
+		assert_eq!(rt.block_on(reader.tile_pyramid())?.count_tiles(), 16);
 
 		Ok(())
 	}

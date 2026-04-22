@@ -154,36 +154,50 @@ impl TilesWriter for MBTilesWriter {
 
 		let writer = MBTilesWriter::new(path)?;
 
-		let parameters = reader.metadata().clone();
+		let metadata = reader.metadata().clone();
 
-		let format = match (parameters.tile_format, parameters.tile_compression) {
+		let format = match (metadata.tile_format(), metadata.tile_compression()) {
 			(JPG, Uncompressed) => "jpg",
 			(MVT, Gzip) => "pbf",
 			(PNG, Uncompressed) => "png",
 			(WEBP, Uncompressed) => "webp",
 			_ => bail!(
 				"combination of format ({}) and compression ({}) is not supported. MBTiles supports only uncompressed jpg/png/webp or gzipped pbf",
-				parameters.tile_format,
-				parameters.tile_compression
+				metadata.tile_format(),
+				metadata.tile_compression()
 			),
 		};
 
 		writer.set_metadata("format", format)?;
 		writer.set_metadata("type", "baselayer")?;
 		writer.set_metadata("version", "3.0")?;
+
 		let tilejson = reader.tilejson();
-		let pyramid = &reader.metadata().bbox_pyramid;
-		let bbox = tilejson.bounds.or(pyramid.geo_bbox()).unwrap();
-		let center = tilejson.center.or(pyramid.geo_center()).unwrap();
-		let zoom_min = tilejson.zoom_min().or(pyramid.level_min()).unwrap();
-		let zoom_max = tilejson.zoom_max().or(pyramid.level_max()).unwrap();
-		writer.set_metadata(
-			"bounds",
-			&format!("{},{},{},{}", bbox.x_min, bbox.y_min, bbox.x_max, bbox.y_max),
-		)?;
-		writer.set_metadata("center", &format!("{},{},{}", center.0, center.1, center.2))?;
-		writer.set_metadata("minzoom", &zoom_min.to_string())?;
-		writer.set_metadata("maxzoom", &zoom_max.to_string())?;
+		// Fall back to pyramid-derived values when the tilejson doesn't carry them.
+		let pyramid = reader.tile_pyramid().await.ok();
+		let bounds = tilejson.bounds.or_else(|| pyramid.as_ref().and_then(|p| p.geo_bbox()));
+		if let Some(bbox) = bounds {
+			writer.set_metadata(
+				"bounds",
+				&format!("{},{},{},{}", bbox.x_min, bbox.y_min, bbox.x_max, bbox.y_max),
+			)?;
+		}
+
+		let center = tilejson
+			.center
+			.or_else(|| pyramid.as_ref().and_then(|p| p.geo_center()));
+		if let Some(center) = center {
+			writer.set_metadata("center", &format!("{},{},{}", center.0, center.1, center.2))?;
+		}
+
+		if let Some(zoom_min) = tilejson.zoom_min() {
+			writer.set_metadata("minzoom", &zoom_min.to_string())?;
+		}
+
+		if let Some(zoom_max) = tilejson.zoom_max() {
+			writer.set_metadata("maxzoom", &zoom_max.to_string())?;
+		}
+
 		if let Some(vector_layers) = tilejson.as_object().get("vector_layers") {
 			writer.set_metadata(
 				"json",
@@ -198,7 +212,7 @@ impl TilesWriter for MBTilesWriter {
 		}
 
 		let writer_mutex = Arc::new(Mutex::new(writer));
-		let tile_compression = reader.metadata().tile_compression;
+		let tile_compression = *reader.metadata().tile_compression();
 
 		reader
 			.traverse_all_tiles(
@@ -208,7 +222,7 @@ impl TilesWriter for MBTilesWriter {
 					Box::pin(async move {
 						let mut writer = writer_mutex.lock().await;
 						stream
-							.map_parallel_try(move |_coord, tile| tile.into_blob(tile_compression))
+							.map_parallel_try(move |_coord, tile| tile.into_blob(&tile_compression))
 							.unwrap_results()
 							.for_each_buffered(4096, |v| {
 								writer.add_tiles(&v).unwrap();
@@ -234,12 +248,10 @@ mod tests {
 
 	#[tokio::test]
 	async fn read_write() -> Result<()> {
-		let mut mock_reader = MockReader::new_mock(TileSourceMetadata {
-			bbox_pyramid: TilePyramid::new_full_up_to(5),
-			tile_compression: TileCompression::Gzip,
-			tile_format: TileFormat::MVT,
-			traversal: Traversal::ANY,
-		})?;
+		let mut mock_reader = MockReader::new_mock(
+			TilePyramid::new_full_up_to(5),
+			TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, Traversal::ANY, None),
+		)?;
 
 		let filename = NamedTempFile::new("temp.mbtiles")?;
 		MBTilesWriter::write_to_path(&mut mock_reader, &filename, TilesRuntime::default()).await?;

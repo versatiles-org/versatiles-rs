@@ -39,7 +39,7 @@
 //!     // Fetch a single tile (z/x/y)
 //!     let coord = TileCoord::new(1, 1, 1)?;
 //!     if let Some(tile) = reader.tile(&coord).await? {
-//!         let _blob = tile.into_blob(reader.metadata().tile_compression)?;
+//!         let _blob = tile.into_blob(reader.metadata().tile_compression())?;
 //!     }
 //!     Ok(())
 //! }
@@ -114,7 +114,7 @@ impl MBTilesReader {
 
 		let manager = SqliteConnectionManager::file(path);
 		let pool = Pool::builder().max_size(10).build(manager)?;
-		let metadata = TileSourceMetadata::new(MVT, Uncompressed, TilePyramid::new_empty(), Traversal::ANY);
+		let metadata = TileSourceMetadata::new(MVT, Uncompressed, Traversal::ANY, None);
 
 		let mut reader = MBTilesReader {
 			name: String::from(path.to_str().unwrap()),
@@ -141,7 +141,6 @@ impl MBTilesReader {
 	fn load_meta_data(&mut self) -> Result<()> {
 		log::debug!("load_meta_data");
 
-		let pyramid = self.bbox_pyramid()?;
 		let conn = self.pool.get()?;
 		let mut stmt = conn.prepare("SELECT name, value FROM metadata")?;
 		let entries = stmt.query_map([], |row| {
@@ -211,10 +210,8 @@ impl MBTilesReader {
 			}
 		}
 
-		self.tilejson.update_from_pyramid(&pyramid);
-		self.metadata.tile_format = tile_format?;
-		self.metadata.tile_compression = compression?;
-		self.metadata.bbox_pyramid = pyramid;
+		self.metadata.set_tile_format(tile_format?);
+		self.metadata.set_tile_compression(compression?);
 
 		Ok(())
 	}
@@ -273,6 +270,10 @@ impl TileSource for MBTilesReader {
 	/// Returns the parameters of the tiles reader.
 	fn metadata(&self) -> &TileSourceMetadata {
 		&self.metadata
+	}
+
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		Ok(Arc::new(self.bbox_pyramid()?))
 	}
 
 	#[cfg(feature = "cli")]
@@ -346,8 +347,8 @@ impl TileSource for MBTilesReader {
 		}) {
 			Ok(Some(Tile::from_blob(
 				Blob::from(vec),
-				self.metadata.tile_compression,
-				self.metadata.tile_format,
+				*self.metadata.tile_compression(),
+				*self.metadata.tile_format(),
 			)))
 		} else {
 			Ok(None)
@@ -355,9 +356,7 @@ impl TileSource for MBTilesReader {
 	}
 
 	#[context("streaming tile coords for bbox {:?}", bbox)]
-	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let mut bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
-
+	async fn tile_coord_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
@@ -397,9 +396,7 @@ impl TileSource for MBTilesReader {
 	}
 
 	#[context("streaming tile sizes for bbox {:?}", bbox)]
-	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
-		let mut bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
-
+	async fn tile_size_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, u32>> {
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
@@ -447,10 +444,8 @@ impl TileSource for MBTilesReader {
 	/// # Errors
 	/// Returns an error if the query fails.
 	#[context("streaming tiles for bbox {:?}", bbox)]
-	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+	async fn tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("mbtiles::tile_stream {bbox:?}");
-
-		let mut bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
 
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
@@ -483,7 +478,7 @@ impl TileSource for MBTilesReader {
 					let mut coord = TileCoord::new(level, x, y).unwrap();
 					coord.flip_y();
 					let blob = Blob::from(row.get::<_, Vec<u8>>(3)?);
-					let tile = Tile::from_blob(blob, self.metadata.tile_compression, self.metadata.tile_format);
+					let tile = Tile::from_blob(blob, *self.metadata.tile_compression(), *self.metadata.tile_format());
 					Ok((coord, tile))
 				},
 			)
@@ -526,7 +521,7 @@ pub mod tests {
 
 		assert_eq!(
 			format!("{reader:?}"),
-			"MBTilesReader { parameters: TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [1,0,1,0] (1x1), 2: [2,1,2,1] (1x1), 3: [4,2,4,2] (1x1), 4: [8,5,8,5] (1x1), 5: [17,10,17,10] (1x1), 6: [34,20,34,21] (1x2), 7: [68,41,68,42] (1x2), 8: [137,83,137,84] (1x2), 9: [274,167,275,168] (2x2), 10: [549,335,551,336] (3x2), 11: [1098,670,1102,673] (5x4), 12: [2196,1340,2204,1346] (9x7), 13: [4393,2680,4409,2693] (17x14), 14: [8787,5361,8818,5387] (32x27)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,full) } }"
+			"MBTilesReader { parameters: TileSourceMetadata { tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,full), tile_pyramid: RwLock { data: None, poisoned: false, .. } } }"
 		);
 		assert_eq!(
 			reader.source_type().to_string(),
@@ -538,16 +533,16 @@ pub mod tests {
 		);
 		assert_eq!(
 			format!("{:?}", reader.metadata()),
-			"TileSourceMetadata { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [1,0,1,0] (1x1), 2: [2,1,2,1] (1x1), 3: [4,2,4,2] (1x1), 4: [8,5,8,5] (1x1), 5: [17,10,17,10] (1x1), 6: [34,20,34,21] (1x2), 7: [68,41,68,42] (1x2), 8: [137,83,137,84] (1x2), 9: [274,167,275,168] (2x2), 10: [549,335,551,336] (3x2), 11: [1098,670,1102,673] (5x4), 12: [2196,1340,2204,1346] (9x7), 13: [4393,2680,4409,2693] (17x14), 14: [8787,5361,8818,5387] (32x27)], tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,full) }"
+			"TileSourceMetadata { tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,full), tile_pyramid: RwLock { data: None, poisoned: false, .. } }"
 		);
-		assert_eq!(reader.metadata().tile_compression, Gzip);
-		assert_eq!(reader.metadata().tile_format, MVT);
+		assert_eq!(reader.metadata().tile_compression(), &Gzip);
+		assert_eq!(reader.metadata().tile_format(), &MVT);
 
 		let tile = reader
 			.tile(&TileCoord::new(14, 8803, 5376)?)
 			.await?
 			.unwrap()
-			.into_blob(reader.metadata().tile_compression)?;
+			.into_blob(reader.metadata().tile_compression())?;
 		assert_eq!(tile.len(), 172969);
 		assert_eq!(tile.range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
 		assert_eq!(tile.range(172959..172969), &[255, 15, 172, 89, 205, 237, 7, 134, 5, 0]);
@@ -616,12 +611,12 @@ pub mod tests {
 
 		// Verify each streamed tile matches individual read
 		for (coord, mut tile) in stream_tiles {
-			let stream_blob = tile.as_blob(reader.metadata().tile_compression)?;
+			let stream_blob = tile.as_blob(reader.metadata().tile_compression())?;
 			let single_blob = reader
 				.tile(&coord)
 				.await?
 				.expect("tile should exist")
-				.into_blob(reader.metadata().tile_compression)?;
+				.into_blob(reader.metadata().tile_compression())?;
 			assert_eq!(
 				stream_blob.as_slice(),
 				single_blob.as_slice(),
