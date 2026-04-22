@@ -14,7 +14,7 @@ impl TileQuadtree {
 		let Some(bbox) = BBox::from_bbox(bbox) else {
 			return false;
 		};
-		self.root.intersects_bbox((0, 0), 1u64 << self.level, bbox)
+		self.root.intersects_bbox(&BBox::root(self.level), &bbox)
 	}
 
 	/// Returns `true` if any tile is covered by both `self` and `tree`.
@@ -51,7 +51,7 @@ impl TileQuadtree {
 			self.root = Node::Empty;
 			return Ok(());
 		};
-		self.root.intersect_bbox((0, 0), 1u64 << self.level, &bbox);
+		self.root.intersect_bbox(&BBox::root(self.level), &bbox);
 		Ok(())
 	}
 
@@ -89,7 +89,7 @@ impl TileQuadtree {
 	pub fn intersection_bbox(&self, bbox: &TileBBox) -> Result<Self> {
 		self.ensure_same_level(bbox, "intersect")?;
 		let root = if let Some(bbox) = BBox::from_bbox(bbox) {
-			self.root.intersection_bbox((0, 0), 1u64 << self.level, bbox)
+			self.root.intersection_bbox(&BBox::root(self.level), &bbox)
 		} else {
 			Node::Empty
 		};
@@ -133,35 +133,19 @@ impl TileQuadtree {
 impl Node {
 	/// Returns `true` if the bbox overlaps with any tile in this subtree.
 	///
-	/// `(x_off, y_off)` and `size` describe the tile-space region this node
-	/// covers; `bbox` uses exclusive max coordinates.
-	pub fn intersects_bbox(&self, (x_off, y_off): (u64, u64), size: u64, bbox: BBox) -> bool {
+	/// `cell` is the tile-space region this node covers; `bbox` uses exclusive
+	/// max coordinates. The caller must ensure `cell.intersection(bbox)` is
+	/// non-empty before calling.
+	pub fn intersects_bbox(&self, cell: &BBox, bbox: &BBox) -> bool {
 		match self {
 			Node::Empty => false,
 			Node::Full => true,
 			Node::Partial(children) => {
-				let half = size / 2;
-				let mid_x = x_off + half;
-				let mid_y = y_off + half;
-				let child_offsets = [(x_off, y_off), (mid_x, y_off), (x_off, mid_y), (mid_x, mid_y)];
-				for (i, child) in children.iter().enumerate() {
-					let (cx, cy) = child_offsets[i];
-					let cx_max = cx + half;
-					let cy_max = cy + half;
-					// Clip bbox against this child's region
-					let x_min = bbox.x_min.max(cx);
-					let y_min = bbox.y_min.max(cy);
-					let x_max = bbox.x_max.min(cx_max);
-					let y_max = bbox.y_max.min(cy_max);
-					if x_min < x_max && y_min < y_max {
-						// Pass the clipped sub-bbox so children don't re-clip unnecessarily
-						let child_bbox = BBox::new(x_min, y_min, x_max, y_max);
-						if child.intersects_bbox((cx, cy), half, child_bbox) {
-							return true;
-						}
-					}
-				}
-				false
+				let quads = cell.quadrants();
+				children
+					.iter()
+					.zip(&quads)
+					.any(|(child, q)| q.intersection(bbox).is_some() && child.intersects_bbox(q, bbox))
 			}
 		}
 	}
@@ -177,41 +161,30 @@ impl Node {
 
 	/// Removes from this subtree all tiles that fall outside `bbox`.
 	///
-	/// `(x_off, y_off)` and `size` describe this node's tile-space region;
-	/// `bbox` uses exclusive max coordinates.
-	pub fn intersect_bbox(&mut self, (x_off, y_off): (u64, u64), size: u64, bbox: &BBox) {
+	/// `cell` is this node's tile-space region; `bbox` uses exclusive max
+	/// coordinates.
+	pub fn intersect_bbox(&mut self, cell: &BBox, bbox: &BBox) {
 		if self == &Node::Empty {
 			return;
 		}
-		// Clip bbox to this cell's region.
-		let ix_min = bbox.x_min.max(x_off);
-		let iy_min = bbox.y_min.max(y_off);
-		let ix_max = bbox.x_max.min(x_off + size);
-		let iy_max = bbox.y_max.min(y_off + size);
-
 		// No overlap → clear this subtree entirely.
-		if ix_min >= ix_max || iy_min >= iy_max {
+		if cell.intersection(bbox).is_none() {
 			*self = Node::Empty;
 			return;
 		}
-
 		if self == &Node::Full {
-			if ix_min == x_off && iy_min == y_off && ix_max == x_off + size && iy_max == y_off + size {
-				// bbox covers the entire cell: stays Full.
+			// bbox covers the entire cell: stays Full.
+			if bbox.covers(cell) {
 				return;
 			}
 			// Materialise four Full children, then intersect each with bbox.
 			*self = Node::new_partial_full();
 		}
-
 		if let Node::Partial(children) = self {
-			let half = size / 2;
-			let mid_x = x_off + half;
-			let mid_y = y_off + half;
-			children[0].intersect_bbox((x_off, y_off), half, bbox);
-			children[1].intersect_bbox((mid_x, y_off), half, bbox);
-			children[2].intersect_bbox((x_off, mid_y), half, bbox);
-			children[3].intersect_bbox((mid_x, mid_y), half, bbox);
+			let quads = cell.quadrants();
+			for (child, q) in children.iter_mut().zip(&quads) {
+				child.intersect_bbox(q, bbox);
+			}
 			self.normalize();
 		}
 	}
@@ -234,30 +207,21 @@ impl Node {
 	/// Returns a new node covering only the tiles in this subtree that also
 	/// fall within `bbox`.
 	///
-	/// `(x_off, y_off)` and `size` describe this node's tile-space region;
-	/// `bbox` uses exclusive max coordinates.
-	pub fn intersection_bbox(&self, (x_off, y_off): (u64, u64), size: u64, bbox: BBox) -> Node {
+	/// `cell` is this node's tile-space region; `bbox` uses exclusive max
+	/// coordinates.
+	pub fn intersection_bbox(&self, cell: &BBox, bbox: &BBox) -> Node {
 		match self {
 			Node::Empty => Node::Empty,
-			Node::Full => Node::build_node(u8::try_from(size.ilog2()).unwrap(), (x_off, y_off), size, &bbox),
+			Node::Full => Node::build_node(cell, bbox),
 			Node::Partial(children) => {
-				let half = size / 2;
-				let mid_x = x_off + half;
-				let mid_y = y_off + half;
-				let offsets = [(x_off, y_off), (mid_x, y_off), (x_off, mid_y), (mid_x, mid_y)];
-				let intersect = |i: usize| -> Node {
-					let (cx, cy) = offsets[i];
-					let ix_min = bbox.x_min.max(cx);
-					let iy_min = bbox.y_min.max(cy);
-					let ix_max = bbox.x_max.min(cx + half);
-					let iy_max = bbox.y_max.min(cy + half);
-					if ix_min < ix_max && iy_min < iy_max {
-						children[i].intersection_bbox((cx, cy), half, BBox::new(ix_min, iy_min, ix_max, iy_max))
+				let quads = cell.quadrants();
+				Node::new_partial(std::array::from_fn(|i| {
+					if quads[i].intersection(bbox).is_some() {
+						children[i].intersection_bbox(&quads[i], bbox)
 					} else {
 						Node::Empty
 					}
-				};
-				Node::new_partial([intersect(0), intersect(1), intersect(2), intersect(3)])
+				}))
 			}
 		}
 	}

@@ -39,7 +39,7 @@ impl TileQuadtree {
 			return TileQuadtree::new_empty(level).unwrap();
 		};
 
-		let root = Node::build_node(level, (0, 0), 1u64 << level, &bbox);
+		let root = Node::build_node(&BBox::root(level), &bbox);
 		TileQuadtree { level, root }
 	}
 
@@ -73,8 +73,7 @@ impl TileQuadtree {
 		let mut codes: Vec<u64> = tiles.iter().map(|&(x, y)| morton(u64::from(x), u64::from(y))).collect();
 		codes.sort_unstable();
 		codes.dedup();
-		let size = 1u64 << level;
-		let root = Node::from_morton_sorted(&codes, 0, 0, size);
+		let root = Node::from_morton_sorted(&codes, &BBox::root(level));
 		Ok(TileQuadtree { level, root })
 	}
 
@@ -91,59 +90,44 @@ impl TileQuadtree {
 }
 
 impl Node {
-	/// Recursively build a quadtree node for the cell covering
-	/// `[x_off, x_off+size) × [y_off, y_off+size)` against the bbox
-	/// `[bbox.x_min, bbox.x_max) × [bbox.y_min, bbox.y_max)` (all exclusive on max side).
-	pub fn build_node(depth: u8, (x_off, y_off): (u64, u64), size: u64, bbox: &BBox) -> Node {
-		// Intersection of bbox with this cell
-		let ix_min = bbox.x_min.max(x_off);
-		let iy_min = bbox.y_min.max(y_off);
-		let ix_max = bbox.x_max.min(x_off + size);
-		let iy_max = bbox.y_max.min(y_off + size);
-
-		if ix_min >= ix_max || iy_min >= iy_max {
+	/// Recursively build a quadtree node for `cell` against `bbox` (both using
+	/// exclusive max coordinates).
+	pub fn build_node(cell: &BBox, bbox: &BBox) -> Node {
+		let Some(clip) = cell.intersection(bbox) else {
 			return Node::Empty;
-		}
-
-		if ix_min == x_off && iy_min == y_off && ix_max == x_off + size && iy_max == y_off + size {
+		};
+		if clip.covers(cell) {
 			return Node::Full;
 		}
-
-		if depth == 0 {
-			// We've reached leaf level — any intersection means Full
+		// At size == 1, overlap implies coverage for tile-aligned bboxes,
+		// so this branch is defensive — it should never fire in practice.
+		if cell.size() == 1 {
 			return Node::Full;
 		}
-
-		let half = size / 2;
-		let mid_x = x_off + half;
-		let mid_y = y_off + half;
-		Node::new_partial([
-			Node::build_node(depth - 1, (x_off, y_off), half, bbox),
-			Node::build_node(depth - 1, (mid_x, y_off), half, bbox),
-			Node::build_node(depth - 1, (x_off, mid_y), half, bbox),
-			Node::build_node(depth - 1, (mid_x, mid_y), half, bbox),
-		])
+		let quads = cell.quadrants();
+		Node::new_partial(std::array::from_fn(|i| Node::build_node(&quads[i], bbox)))
 	}
 
 	/// Build a `Node` from a sorted, deduplicated slice of Morton codes.
 	///
-	/// The slice must only contain codes for tiles within the cell
-	/// `[x_off, x_off+size) × [y_off, y_off+size)` and be sorted ascending.
-	/// Each quadrant split uses `partition_point` with a trivial `u64 <`
-	/// comparison — no Morton recomputation per tile.
-	pub(super) fn from_morton_sorted(codes: &[u64], x_off: u64, y_off: u64, size: u64) -> Node {
+	/// The slice must only contain codes for tiles within `cell` and be sorted
+	/// ascending. Each quadrant split uses `partition_point` with a trivial
+	/// `u64 <` comparison — no Morton recomputation per tile.
+	pub(super) fn from_morton_sorted(codes: &[u64], cell: &BBox) -> Node {
 		if codes.is_empty() {
 			return Node::Empty;
 		}
+		let size = cell.size();
 		if codes.len() as u64 == size * size {
 			return Node::Full;
 		}
 		if size == 1 {
 			return Node::Full;
 		}
-		let half = size / 2;
-		let mid_x = x_off + half;
-		let mid_y = y_off + half;
+		let quads = cell.quadrants();
+		let (x_off, y_off) = (cell.x_min, cell.y_min);
+		let mid_x = quads[0].x_max;
+		let mid_y = quads[0].y_max;
 		// Morton code of the first tile in each quadrant.
 		let ne_base = morton(mid_x, y_off);
 		let sw_base = morton(x_off, mid_y);
@@ -154,10 +138,10 @@ impl Node {
 		let se_start = codes.partition_point(|&c| c < se_base);
 
 		Node::new_partial([
-			Node::from_morton_sorted(&codes[..ne_start], x_off, y_off, half), // NW
-			Node::from_morton_sorted(&codes[ne_start..sw_start], mid_x, y_off, half), // NE
-			Node::from_morton_sorted(&codes[sw_start..se_start], x_off, mid_y, half), // SW
-			Node::from_morton_sorted(&codes[se_start..], mid_x, mid_y, half), // SE
+			Node::from_morton_sorted(&codes[..ne_start], &quads[0]),
+			Node::from_morton_sorted(&codes[ne_start..sw_start], &quads[1]),
+			Node::from_morton_sorted(&codes[sw_start..se_start], &quads[2]),
+			Node::from_morton_sorted(&codes[se_start..], &quads[3]),
 		])
 	}
 }

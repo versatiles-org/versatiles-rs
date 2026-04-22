@@ -13,10 +13,9 @@ impl TileQuadtree {
 	#[context("Failed to include TileCoord {coord:?} into TileQuadtree at level {}", self.level)]
 	pub fn insert_coord(&mut self, coord: &TileCoord) -> Result<()> {
 		self.check_zoom(coord.level)?;
-		let size = 1u64 << self.level;
 		self
 			.root
-			.insert_coord((0, 0), size, (u64::from(coord.x), u64::from(coord.y)));
+			.insert_coord(&BBox::root(self.level), (u64::from(coord.x), u64::from(coord.y)));
 		Ok(())
 	}
 
@@ -27,11 +26,10 @@ impl TileQuadtree {
 	#[context("Failed to include TileBBox {bbox:?} into TileQuadtree at level {}", self.level)]
 	pub fn insert_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
 		self.check_zoom(bbox.level())?;
-		let size = 1u64 << self.level;
 		let Some(bbox) = BBox::from_bbox(bbox) else {
 			return Ok(());
 		};
-		self.root.insert_bbox((0, 0), size, &bbox);
+		self.root.insert_bbox(&BBox::root(self.level), &bbox);
 		Ok(())
 	}
 
@@ -45,24 +43,22 @@ impl TileQuadtree {
 		if size == 0 || self.is_empty() {
 			return;
 		}
-		let tree_size = 1u64 << self.level;
+		let root_cell = BBox::root(self.level);
+		let tree_size = root_cell.size();
 		let n = u64::from(size);
 
 		let mut rects: Vec<BBox> = Vec::new();
-		self.root.collect_full_rects((0, 0), tree_size, &mut rects);
+		self.root.collect_full_rects(&root_cell, &mut rects);
 
 		let mut new_root = Node::Empty;
 		for rect in rects {
-			new_root.insert_bbox(
-				(0, 0),
-				tree_size,
-				&BBox {
-					x_min: rect.x_min.saturating_sub(n),
-					y_min: rect.y_min.saturating_sub(n),
-					x_max: (rect.x_max + n).min(tree_size),
-					y_max: (rect.y_max + n).min(tree_size),
-				},
-			);
+			let expanded = BBox {
+				x_min: rect.x_min.saturating_sub(n),
+				y_min: rect.y_min.saturating_sub(n),
+				x_max: (rect.x_max + n).min(tree_size),
+				y_max: (rect.y_max + n).min(tree_size),
+			};
+			new_root.insert_bbox(&root_cell, &expanded);
 		}
 		self.root = new_root;
 	}
@@ -74,10 +70,9 @@ impl TileQuadtree {
 	#[context("Failed to remove TileCoord {coord:?} from TileQuadtree at level {}", self.level)]
 	pub fn remove_coord(&mut self, coord: &TileCoord) -> Result<()> {
 		self.check_zoom(coord.level)?;
-		let size = 1u64 << self.level;
 		self
 			.root
-			.remove_coord((0, 0), size, (u64::from(coord.x), u64::from(coord.y)));
+			.remove_coord(&BBox::root(self.level), (u64::from(coord.x), u64::from(coord.y)));
 		Ok(())
 	}
 
@@ -91,7 +86,7 @@ impl TileQuadtree {
 		let Some(bbox) = BBox::from_bbox(bbox) else {
 			return Ok(());
 		};
-		self.root.remove_bbox((0, 0), 1u64 << self.level, &bbox);
+		self.root.remove_bbox(&BBox::root(self.level), &bbox);
 		Ok(())
 	}
 
@@ -113,60 +108,46 @@ impl TileQuadtree {
 }
 
 impl Node {
-	pub fn insert_coord(&mut self, (x_off, y_off): (u64, u64), size: u64, (tx, ty): (u64, u64)) {
+	pub fn insert_coord(&mut self, cell: &BBox, (tx, ty): (u64, u64)) {
 		match self {
 			Node::Full => (),
 			Node::Empty => {
-				if size == 1 {
+				if cell.size() == 1 {
 					*self = Node::Full;
 				} else {
 					*self = Node::new_partial_empty();
-					self.insert_coord((x_off, y_off), size, (tx, ty));
+					self.insert_coord(cell, (tx, ty));
 				}
 			}
 			Node::Partial(children) => {
-				let (idx, cx, cy, half) = Node::child_quadrant((x_off, y_off), size, (tx, ty));
-				children[idx].insert_coord((cx, cy), half, (tx, ty));
+				let (idx, child_cell) = Node::child_quadrant(cell, (tx, ty));
+				children[idx].insert_coord(&child_cell, (tx, ty));
 				self.normalize();
 			}
 		}
 	}
 
-	pub fn insert_bbox(&mut self, (x_off, y_off): (u64, u64), size: u64, bbox: &BBox) {
-		// Intersection of bbox with this cell
-		let ix_min = bbox.x_min.max(x_off);
-		let iy_min = bbox.y_min.max(y_off);
-		let ix_max = bbox.x_max.min(x_off + size);
-		let iy_max = bbox.y_max.min(y_off + size);
-
-		if ix_min >= ix_max || iy_min >= iy_max {
-			return; // bbox doesn't touch this cell
+	pub fn insert_bbox(&mut self, cell: &BBox, bbox: &BBox) {
+		// bbox doesn't touch this cell.
+		if cell.intersection(bbox).is_none() {
+			return;
 		}
-
-		// If bbox covers the full cell, mark Full
-		if ix_min == x_off && iy_min == y_off && ix_max == x_off + size && iy_max == y_off + size {
+		// bbox covers the full cell.
+		if bbox.covers(cell) {
 			*self = Node::Full;
 			return;
 		}
-
 		if self == &Node::Full {
 			return;
 		}
 		if self == &Node::Empty {
-			if size == 1 {
-				*self = Node::Full;
-				return;
-			}
 			*self = Node::new_partial_empty();
 		}
 		if let Node::Partial(children) = self {
-			let half = size / 2;
-			let mid_x = x_off + half;
-			let mid_y = y_off + half;
-			children[0].insert_bbox((x_off, y_off), half, bbox);
-			children[1].insert_bbox((mid_x, y_off), half, bbox);
-			children[2].insert_bbox((x_off, mid_y), half, bbox);
-			children[3].insert_bbox((mid_x, mid_y), half, bbox);
+			let quads = cell.quadrants();
+			for (child, q) in children.iter_mut().zip(&quads) {
+				child.insert_bbox(q, bbox);
+			}
 			self.normalize();
 		}
 	}
@@ -175,22 +156,15 @@ impl Node {
 	///
 	/// Each entry uses exclusive upper bounds, matching the internal [`BBox`]
 	/// convention used throughout this module.
-	pub(crate) fn collect_full_rects(&self, (x_off, y_off): (u64, u64), size: u64, out: &mut Vec<super::BBox>) {
+	pub(crate) fn collect_full_rects(&self, cell: &BBox, out: &mut Vec<super::BBox>) {
 		match self {
 			Node::Empty => {}
-			Node::Full => out.push(super::BBox {
-				x_min: x_off,
-				y_min: y_off,
-				x_max: x_off + size,
-				y_max: y_off + size,
-			}),
+			Node::Full => out.push(*cell),
 			Node::Partial(children) => {
-				let half = size / 2;
-				let (mid_x, mid_y) = (x_off + half, y_off + half);
-				children[0].collect_full_rects((x_off, y_off), half, out); // NW
-				children[1].collect_full_rects((mid_x, y_off), half, out); // NE
-				children[2].collect_full_rects((x_off, mid_y), half, out); // SW
-				children[3].collect_full_rects((mid_x, mid_y), half, out); // SE
+				let quads = cell.quadrants();
+				for (child, q) in children.iter().zip(&quads) {
+					child.collect_full_rects(q, out);
+				}
 			}
 		}
 	}
@@ -230,59 +204,43 @@ impl Node {
 		}
 	}
 
-	pub fn remove_bbox(&mut self, (x_off, y_off): (u64, u64), size: u64, bbox: &BBox) {
-		let ix_min = bbox.x_min.max(x_off);
-		let iy_min = bbox.y_min.max(y_off);
-		let ix_max = bbox.x_max.min(x_off + size);
-		let iy_max = bbox.y_max.min(y_off + size);
-
-		if ix_min >= ix_max || iy_min >= iy_max {
+	pub fn remove_bbox(&mut self, cell: &BBox, bbox: &BBox) {
+		if cell.intersection(bbox).is_none() {
 			return;
 		}
-
-		if ix_min == x_off && iy_min == y_off && ix_max == x_off + size && iy_max == y_off + size {
+		if bbox.covers(cell) {
 			*self = Node::Empty;
 			return;
 		}
-
 		if self == &Node::Empty {
 			return;
 		}
-
 		if self == &Node::Full {
-			if size == 1 {
-				*self = Node::Empty;
-				return;
-			}
 			*self = Node::new_partial_full();
 		}
-
 		if let Node::Partial(children) = self {
-			let half = size / 2;
-			let mid_x = x_off + half;
-			let mid_y = y_off + half;
-			children[0].remove_bbox((x_off, y_off), half, bbox);
-			children[1].remove_bbox((mid_x, y_off), half, bbox);
-			children[2].remove_bbox((x_off, mid_y), half, bbox);
-			children[3].remove_bbox((mid_x, mid_y), half, bbox);
+			let quads = cell.quadrants();
+			for (child, q) in children.iter_mut().zip(&quads) {
+				child.remove_bbox(q, bbox);
+			}
 			self.normalize();
 		}
 	}
 
-	pub fn remove_coord(&mut self, (x_off, y_off): (u64, u64), size: u64, (tx, ty): (u64, u64)) {
+	pub fn remove_coord(&mut self, cell: &BBox, (tx, ty): (u64, u64)) {
 		if self == &Node::Empty {
 			return;
 		}
 		if self == &Node::Full {
-			if size == 1 {
+			if cell.size() == 1 {
 				*self = Node::Empty;
 				return;
 			}
 			*self = Node::new_partial_full();
 		}
 		if let Node::Partial(children) = self {
-			let (idx, cx, cy, half) = Node::child_quadrant((x_off, y_off), size, (tx, ty));
-			children[idx].remove_coord((cx, cy), half, (tx, ty));
+			let (idx, child_cell) = Node::child_quadrant(cell, (tx, ty));
+			children[idx].remove_coord(&child_cell, (tx, ty));
 			self.normalize();
 		}
 	}

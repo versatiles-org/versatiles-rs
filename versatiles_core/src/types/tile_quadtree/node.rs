@@ -1,3 +1,5 @@
+use super::BBox;
+
 /// A single node in the quadtree.
 ///
 /// - `Empty` — no tiles covered in this subtree.
@@ -41,23 +43,19 @@ impl Node {
 	}
 
 	/// Determine which child quadrant contains `(tx, ty)` and return
-	/// `(child_index, child_x_off, child_y_off, half_size)`.
+	/// `(child_index, child_cell)`.
 	///
 	/// Child indices follow `[NW, NE, SW, SE]` order (index 0..3).
-	pub(super) fn child_quadrant((x_off, y_off): (u64, u64), size: u64, (tx, ty): (u64, u64)) -> (usize, u64, u64, u64) {
-		let half = size / 2;
-		let mid_x = x_off + half;
-		let mid_y = y_off + half;
-		if tx < mid_x {
-			if ty < mid_y {
-				(0, x_off, y_off, half)
-			} else {
-				(2, x_off, mid_y, half)
-			}
-		} else if ty < mid_y {
-			(1, mid_x, y_off, half)
-		} else {
-			(3, mid_x, mid_y, half)
-		}
+	pub(super) fn child_quadrant(cell: &BBox, (tx, ty): (u64, u64)) -> (usize, BBox) {
+		let quads = cell.quadrants();
+		let mid_x = quads[0].x_max;
+		let mid_y = quads[0].y_max;
+		let idx = match (tx < mid_x, ty < mid_y) {
+			(true, true) => 0,
+			(false, true) => 1,
+			(true, false) => 2,
+			(false, false) => 3,
+		};
+		(idx, quads[idx])
 	}
 }

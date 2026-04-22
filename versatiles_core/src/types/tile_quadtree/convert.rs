@@ -8,7 +8,7 @@ impl TileQuadtree {
 	pub fn to_bbox(&self) -> TileBBox {
 		self
 			.root
-			.bounds((0, 0), 1u64 << self.level)
+			.bounds(&BBox::root(self.level))
 			.map_or_else(|| TileBBox::new_empty(self.level).unwrap(), |b| b.into_bbox(self.level))
 	}
 
@@ -20,27 +20,19 @@ impl TileQuadtree {
 }
 
 impl Node {
-	/// Returns the bounding box `(x_min, y_min, x_max_excl, y_max_excl)` of non-empty tiles.
-	pub fn bounds(&self, (x_off, y_off): (u64, u64), size: u64) -> Option<BBox> {
+	/// Returns the bounding box of non-empty tiles within `cell`, or `None` if
+	/// this subtree is empty.
+	pub fn bounds(&self, cell: &BBox) -> Option<BBox> {
 		match self {
 			Node::Empty => None,
-			Node::Full => Some(BBox::new(x_off, y_off, x_off + size, y_off + size)),
+			Node::Full => Some(*cell),
 			Node::Partial(children) => {
-				let half = size / 2;
-				let mid_x = x_off + half;
-				let mid_y = y_off + half;
-				let child_offsets = [(x_off, y_off), (mid_x, y_off), (x_off, mid_y), (mid_x, mid_y)];
-				let mut result: Option<BBox> = None;
-				for (i, child) in children.iter().enumerate() {
-					let (cx, cy) = child_offsets[i];
-					if let Some(b) = child.bounds((cx, cy), half) {
-						result = Some(match result {
-							None => b,
-							Some(r) => r.union(b),
-						});
-					}
-				}
-				result
+				let quads = cell.quadrants();
+				children
+					.iter()
+					.zip(&quads)
+					.filter_map(|(child, q)| child.bounds(q))
+					.reduce(BBox::union)
 			}
 		}
 	}
