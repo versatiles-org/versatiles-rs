@@ -157,13 +157,13 @@ impl Operation {
 		let metadata = TileSourceMetadata::new(
 			args.tile_format.unwrap_or(TileFormat::PNG),
 			TileCompression::Uncompressed,
-			bbox_pyramid,
 			Traversal::ANY,
+			Some(bbox_pyramid),
 		);
 		log::trace!(
 			"Parameters: format={:?}, compression={:?}",
-			metadata.tile_format,
-			metadata.tile_compression
+			metadata.tile_format(),
+			metadata.tile_compression()
 		);
 		let mut tilejson = TileJSON {
 			bounds: Some(*bbox),
@@ -230,18 +230,25 @@ impl TileSource for Operation {
 		SourceType::new_container("gdal_raster", "gdal_raster")
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
+	}
+
 	/// Stream decoded raster images for all tiles within the bounding box.
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
-	async fn tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("from_gdal_raster::tile_stream {bbox:?}");
 
 		let count = 4096u32.div_euclid(self.tile_size).max(1);
 
-		bbox.intersect_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 
 		let bboxes: Vec<TileBBox> = bbox.iter_grid(count).collect();
 		let size = self.tile_size;
-		let tile_format = self.metadata.tile_format;
+		let tile_format = *self.metadata.tile_format();
 		let source = Arc::clone(&self.source);
 
 		use futures::stream::{self, StreamExt};
@@ -295,7 +302,7 @@ impl TileSource for Operation {
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
 			Some(())
 		}))
@@ -441,8 +448,8 @@ mod tests {
 	async fn test_metadata() -> Result<()> {
 		let operation = get_operation(512).await;
 		let metadata = operation.metadata();
-		assert_eq!(metadata.tile_format, TileFormat::PNG);
-		assert_eq!(metadata.tile_compression, TileCompression::Uncompressed);
+		assert_eq!(*metadata.tile_format(), TileFormat::PNG);
+		assert_eq!(*metadata.tile_compression(), TileCompression::Uncompressed);
 		Ok(())
 	}
 

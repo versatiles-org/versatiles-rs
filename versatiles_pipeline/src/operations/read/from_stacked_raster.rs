@@ -236,12 +236,12 @@ impl ReadTileSource for Operation {
 		let mut tilejson = TileJSON::default();
 
 		let first_source_metadata = original_sources.first().unwrap().metadata();
-		let tile_format = args.format.unwrap_or(first_source_metadata.tile_format);
+		let tile_format = args.format.unwrap_or(*first_source_metadata.tile_format());
 		ensure!(
 			tile_format.to_type() == TileType::Raster,
 			"output format must be a raster format"
 		);
-		let tile_compression = first_source_metadata.tile_compression;
+		let tile_compression = *first_source_metadata.tile_compression();
 
 		let mut pyramid = TilePyramid::new_empty();
 		let mut traversal = Traversal::new_any();
@@ -250,18 +250,19 @@ impl ReadTileSource for Operation {
 			tilejson.merge(source.tilejson())?;
 
 			let metadata = source.metadata();
-			traversal.intersect(&metadata.traversal)?;
-			pyramid.union(&metadata.bbox_pyramid);
+			traversal.intersect(metadata.traversal())?;
+			let src_pyramid = source.tile_pyramid().await?;
+			pyramid.union(src_pyramid.as_ref());
 
 			ensure!(
-				metadata.tile_format.to_type() == TileType::Raster,
+				metadata.tile_format().to_type() == TileType::Raster,
 				"all sources must be raster tiles"
 			);
 		}
 
-		let metadata = TileSourceMetadata::new(tile_format, tile_compression, pyramid, traversal);
+		let level_max = pyramid.level_max().unwrap();
+		let metadata = TileSourceMetadata::new(tile_format, tile_compression, traversal, Some(pyramid));
 		metadata.update_tilejson(&mut tilejson);
-		let level_max = metadata.bbox_pyramid.level_max().unwrap();
 
 		// Build source entries, optionally wrapping each source with raster_overscale
 		let auto_overscale = args.auto_overscale.unwrap_or(false);
@@ -271,7 +272,7 @@ impl ReadTileSource for Operation {
 			use crate::operations::raster::raster_overscale;
 
 			for source in original_sources {
-				let native_level_max = source.metadata().bbox_pyramid.level_max().unwrap();
+				let native_level_max = source.tile_pyramid().await?.level_max().unwrap();
 				let overscale_args = raster_overscale::Args {
 					level_base: Some(native_level_max),
 					level_max: Some(level_max),
@@ -318,6 +319,13 @@ impl TileSource for Operation {
 		SourceType::new_composite("from_stacked_raster", &self.source_types)
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
+	}
+
 	#[context("Failed to get stacked raster tile coord stream for bbox: {:?}", bbox)]
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let refs: Vec<&dyn TileSource> = self.sources.iter().map(|e| e.source.as_ref().as_ref()).collect();
@@ -331,12 +339,13 @@ impl TileSource for Operation {
 
 		// Filter sources to only those that overlap with the bbox,
 		// and precompute whether each source is overscaled at this level
-		let entries: Vec<FilteredSourceEntry> = self
-			.sources
-			.iter()
-			.filter(|entry| entry.source.metadata().bbox_pyramid.intersects_bbox(&bbox))
-			.map(|entry| entry.for_level(bbox.level()))
-			.collect();
+		let mut entries: Vec<FilteredSourceEntry> = Vec::new();
+		for entry in &self.sources {
+			let pyramid = entry.source.tile_pyramid().await?;
+			if pyramid.intersects_bbox(&bbox) {
+				entries.push(entry.for_level(bbox.level()));
+			}
+		}
 
 		// Return empty stream if no sources remain after filtering
 		if entries.is_empty() {
@@ -351,7 +360,7 @@ impl TileSource for Operation {
 			return Ok(TileStream::empty());
 		}
 
-		let tile_format = self.metadata.tile_format;
+		let tile_format = *self.metadata.tile_format();
 
 		// If the bounding box is big, split into a grid and process each cell recursively
 		const MAX_BBOX_SIZE: u32 = 32;
@@ -508,7 +517,7 @@ mod tests {
 
 		assert_eq!(
 			arrange_tiles(tiles, |mut tile| {
-				match get_color(tile.as_blob(Uncompressed).unwrap()).as_str() {
+				match get_color(tile.as_blob(&Uncompressed).unwrap()).as_str() {
 					"0000FF77" => "🟦",
 					"FFFF0077" => "🟨",
 					"5858A6B6" => "🟩",
@@ -571,11 +580,11 @@ mod tests {
 
 		let parameters = result.metadata();
 
-		assert_eq!(parameters.tile_format, TileFormat::PNG);
-		assert_eq!(parameters.tile_compression, TileCompression::Uncompressed);
+		assert_eq!(*parameters.tile_format(), TileFormat::PNG);
+		assert_eq!(*parameters.tile_compression(), TileCompression::Uncompressed);
 		assert_eq!(
-			format!("{}", parameters.bbox_pyramid),
-			"[1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)]"
+			format!("{}", parameters.tile_pyramid().unwrap()),
+			"[TileCover::Tree(TileQuadtree(zoom=1, tiles=4, nodes=1)), TileCover::Tree(TileQuadtree(zoom=2, tiles=16, nodes=1)), TileCover::Tree(TileQuadtree(zoom=3, tiles=64, nodes=1))]"
 		);
 
 		assert_eq!(
@@ -661,8 +670,8 @@ mod tests {
 		for (coord, mut tile_plain) in map_plain {
 			if let Some(mut tile_stacked) = map_stacked.remove(&coord) {
 				assert_eq!(
-					tile_stacked.as_blob(Uncompressed).unwrap(),
-					tile_plain.as_blob(Uncompressed).unwrap()
+					tile_stacked.as_blob(&Uncompressed).unwrap(),
+					tile_plain.as_blob(&Uncompressed).unwrap()
 				);
 			}
 		}
@@ -691,12 +700,12 @@ mod tests {
 			// If both sources produced a tile here, blended output must differ from each single-source blob
 			if let (Some(mut tile1), Some(mut tile2)) = (tile1, tile2) {
 				assert_ne!(
-					stacked_tile.as_blob(Uncompressed).unwrap(),
-					tile1.as_blob(Uncompressed).unwrap()
+					stacked_tile.as_blob(&Uncompressed).unwrap(),
+					tile1.as_blob(&Uncompressed).unwrap()
 				);
 				assert_ne!(
-					stacked_tile.as_blob(Uncompressed).unwrap(),
-					tile2.as_blob(Uncompressed).unwrap()
+					stacked_tile.as_blob(&Uncompressed).unwrap(),
+					tile2.as_blob(&Uncompressed).unwrap()
 				);
 			}
 		}
@@ -776,7 +785,7 @@ mod tests {
 				"from_stacked_raster auto_overscale={value} [ from_container filename=07.png ]"
 			))
 			.await?;
-		assert_eq!(result.metadata().tile_format.to_type(), TileType::Raster);
+		assert_eq!(result.metadata().tile_format().to_type(), TileType::Raster);
 		Ok(())
 	}
 
@@ -876,6 +885,12 @@ mod tests {
 						fn source_type(&self) -> Arc<SourceType> {
 							SourceType::new_container("dummy_vector", "test")
 						}
+						async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+							self
+								.metadata
+								.tile_pyramid()
+								.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
+						}
 						async fn tile_stream(&self, _bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 							Ok(TileStream::empty())
 						}
@@ -885,8 +900,8 @@ mod tests {
 					let metadata = TileSourceMetadata::new(
 						TileFormat::MVT, // Vector tile format
 						TileCompression::Uncompressed,
-						pyramid,
 						Traversal::new_any(),
+						Some(pyramid),
 					);
 					let tilejson = TileJSON::default();
 
@@ -1062,7 +1077,7 @@ mod tests {
 			)
 			.await?;
 
-		assert_eq!(result.metadata().tile_format, TileFormat::WEBP);
+		assert_eq!(*result.metadata().tile_format(), TileFormat::WEBP);
 
 		let bbox = TileBBox::new_full(3)?;
 		let tiles: Vec<_> = result.tile_stream(bbox).await?.to_vec().await;
@@ -1088,7 +1103,7 @@ mod tests {
 			)
 			.await?;
 
-		assert_eq!(result.metadata().tile_format, TileFormat::JPG);
+		assert_eq!(*result.metadata().tile_format(), TileFormat::JPG);
 
 		let bbox = TileBBox::new_full(3)?;
 		let tiles: Vec<_> = result.tile_stream(bbox).await?.to_vec().await;
@@ -1109,8 +1124,8 @@ mod tests {
 			.await?;
 
 		let metadata = result.metadata();
-		assert_eq!(metadata.tile_format, TileFormat::PNG);
-		assert_eq!(metadata.tile_compression, TileCompression::Uncompressed);
+		assert_eq!(*metadata.tile_format(), TileFormat::PNG);
+		assert_eq!(*metadata.tile_compression(), TileCompression::Uncompressed);
 		Ok(())
 	}
 
@@ -1141,7 +1156,7 @@ mod tests {
 			}
 			pyramid_raw.union(&src_pyramid);
 			let source = DummyImageSource::from_color(color, 4, TileFormat::PNG, Some(src_pyramid)).unwrap();
-			traversal.intersect(&source.metadata().traversal).unwrap();
+			traversal.intersect(source.metadata().traversal()).unwrap();
 			original_sources.push(Box::new(source));
 		}
 
@@ -1150,7 +1165,7 @@ mod tests {
 		// Wrap each source with raster_overscale (like auto_overscale=true does)
 		use crate::operations::raster::raster_overscale;
 		for source in original_sources {
-			let native_level_max = source.metadata().bbox_pyramid.level_max().unwrap();
+			let native_level_max = source.tile_pyramid().await.unwrap().level_max().unwrap();
 			let overscale_args = raster_overscale::Args {
 				level_base: Some(native_level_max),
 				level_max: Some(level_max),
@@ -1163,7 +1178,12 @@ mod tests {
 			});
 		}
 
-		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, pyramid_raw, traversal);
+		let metadata = TileSourceMetadata::new(
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			traversal,
+			Some(pyramid_raw),
+		);
 		let tilejson = TileJSON::default();
 
 		let op = Operation {
@@ -1349,7 +1369,7 @@ mod tests {
 			}
 			pyramid_raw.union(&src_pyramid);
 			let source = DummyImageSource::from_color(color, 4, TileFormat::PNG, Some(src_pyramid)).unwrap();
-			traversal.intersect(&source.metadata().traversal).unwrap();
+			traversal.intersect(source.metadata().traversal()).unwrap();
 			original_sources.push(Box::new(source));
 		}
 
@@ -1367,7 +1387,7 @@ mod tests {
 
 		use crate::operations::raster::raster_overscale;
 		for source in original_sources {
-			let native_level_max = source.metadata().bbox_pyramid.level_max().unwrap();
+			let native_level_max = source.tile_pyramid().await.unwrap().level_max().unwrap();
 			let overscale_args = raster_overscale::Args {
 				level_base: Some(native_level_max),
 				level_max: Some(level_max),
@@ -1380,7 +1400,12 @@ mod tests {
 			});
 		}
 
-		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, pyramid_raw, traversal);
+		let metadata = TileSourceMetadata::new(
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			traversal,
+			Some(pyramid_raw),
+		);
 		let tilejson = TileJSON::default();
 
 		let op = Operation {
@@ -1417,8 +1442,8 @@ mod tests {
 
 		// The operation tile should be byte-identical to the standalone first source tile
 		assert_eq!(
-			op_tile.as_blob(Uncompressed).unwrap(),
-			standalone_tile.as_blob(Uncompressed).unwrap(),
+			op_tile.as_blob(&Uncompressed).unwrap(),
+			standalone_tile.as_blob(&Uncompressed).unwrap(),
 			"opaque foreground tile was re-encoded when it should have been preserved"
 		);
 	}
@@ -1438,8 +1463,8 @@ mod tests {
 
 		// The operation tile should differ because blending happened
 		assert_ne!(
-			op_tile.as_blob(Uncompressed).unwrap(),
-			standalone_tile.as_blob(Uncompressed).unwrap(),
+			op_tile.as_blob(&Uncompressed).unwrap(),
+			standalone_tile.as_blob(&Uncompressed).unwrap(),
 			"semi-transparent foreground tile was NOT re-encoded — blending didn't happen"
 		);
 	}
@@ -1460,8 +1485,8 @@ mod tests {
 		// Even though the format has an alpha channel, the tile is fully opaque,
 		// so it should be preserved without re-encoding
 		assert_eq!(
-			op_tile.as_blob(Uncompressed).unwrap(),
-			standalone_tile.as_blob(Uncompressed).unwrap(),
+			op_tile.as_blob(&Uncompressed).unwrap(),
+			standalone_tile.as_blob(&Uncompressed).unwrap(),
 			"opaque RGBA foreground tile was re-encoded when it should have been preserved"
 		);
 	}

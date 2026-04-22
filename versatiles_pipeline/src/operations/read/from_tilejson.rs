@@ -94,8 +94,8 @@ impl ReadTileSource for Operation {
 		let metadata = TileSourceMetadata::new(
 			tile_format,
 			TileCompression::Uncompressed,
-			bbox_pyramid,
 			Traversal::new_any(),
+			Some(bbox_pyramid),
 		);
 
 		let mut result_tilejson = tilejson.clone();
@@ -239,6 +239,13 @@ impl TileSource for Operation {
 		&self.tilejson
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
+	}
+
 	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		Ok(fetch_tile(
 			self.client.clone(),
@@ -252,7 +259,7 @@ impl TileSource for Operation {
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
 			Some(())
 		}))

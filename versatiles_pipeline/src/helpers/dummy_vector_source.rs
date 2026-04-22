@@ -41,8 +41,8 @@ impl DummyVectorSource {
 		let metadata = TileSourceMetadata::new(
 			TileFormat::MVT,
 			TileCompression::Uncompressed,
-			bbox_pyramid,
 			Traversal::ANY,
+			Some(bbox_pyramid),
 		);
 
 		let mut tilejson = TileJSON::default();
@@ -58,7 +58,7 @@ impl DummyVectorSource {
 
 	#[allow(dead_code)]
 	pub fn set_traversal(&mut self, traversal: Traversal) {
-		self.metadata.traversal = traversal;
+		self.metadata.set_traversal(traversal);
 	}
 }
 
@@ -76,8 +76,17 @@ impl TileSource for DummyVectorSource {
 		&self.tilejson
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
+	}
+
 	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		if !self.metadata.bbox_pyramid.includes_coord(coord) {
+		if let Some(pyramid) = self.metadata.tile_pyramid()
+			&& !pyramid.includes_coord(coord)
+		{
 			return Ok(None);
 		}
 
@@ -115,10 +124,12 @@ impl TileSource for DummyVectorSource {
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("dummy_vector_source::tile_stream {bbox:?}");
 		let data = Arc::clone(&self.data);
-		let bbox_pyramid = self.metadata.bbox_pyramid.clone();
+		let bbox_pyramid = self.metadata.tile_pyramid();
 
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
-			if !bbox_pyramid.includes_coord(&coord) {
+			if let Some(pyramid) = &bbox_pyramid
+				&& !pyramid.includes_coord(&coord)
+			{
 				return None;
 			}
 
@@ -151,7 +162,7 @@ impl TileSource for DummyVectorSource {
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		Ok(TileStream::from_iter_coord(
 			bbox.into_iter_coords_zorder(),
 			move |_coord| Some(()),
@@ -174,7 +185,8 @@ mod tests {
 		assert!(
 			source
 				.metadata()
-				.bbox_pyramid
+				.tile_pyramid()
+				.unwrap()
 				.includes_coord(&TileCoord::new(8, 0, 200).unwrap())
 		);
 

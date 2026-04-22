@@ -3,7 +3,7 @@ use anyhow::{Result, bail};
 use async_trait::async_trait;
 use std::{collections::HashSet, fmt::Debug, sync::Arc};
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{GeoBBox, TileBBox, TileJSON, TileStream};
+use versatiles_core::{GeoBBox, TileBBox, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -37,7 +37,7 @@ impl Operation {
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let mut metadata = source.metadata().clone();
+		let metadata = source.metadata().clone();
 		let mut tilejson = source.tilejson().clone();
 
 		if let (Some(lo), Some(hi)) = (args.level_min, args.level_max)
@@ -49,25 +49,27 @@ impl Operation {
 			);
 		}
 
+		let mut tile_pyramid = source.tile_pyramid().await?.as_ref().clone();
+
 		if let Some(mut level_min) = args.level_min {
-			if let Some(existing_level_min) = metadata.bbox_pyramid.level_min() {
+			if let Some(existing_level_min) = tile_pyramid.level_min() {
 				level_min = level_min.max(existing_level_min);
 			}
-			metadata.bbox_pyramid.set_level_min(level_min);
+			tile_pyramid.set_level_min(level_min);
 			tilejson.set_zoom_min(level_min);
 		}
 
 		if let Some(mut level_max) = args.level_max {
-			if let Some(existing_level_max) = metadata.bbox_pyramid.level_max() {
+			if let Some(existing_level_max) = tile_pyramid.level_max() {
 				level_max = level_max.min(existing_level_max);
 			}
-			metadata.bbox_pyramid.set_level_max(level_max);
+			tile_pyramid.set_level_max(level_max);
 			tilejson.set_zoom_max(level_max);
 		}
 
 		if let Some(bbox) = args.bbox {
 			let bbox = GeoBBox::try_from(&bbox)?;
-			metadata.bbox_pyramid.intersect_geo_bbox(&bbox)?;
+			tile_pyramid.intersect_geo_bbox(&bbox)?;
 			if let Some(existing_bbox) = &mut tilejson.bounds {
 				existing_bbox.intersect(&bbox);
 			} else {
@@ -78,19 +80,21 @@ impl Operation {
 
 		let mask = if let Some(filename) = args.filename {
 			let mask = factory.reader(DataLocation::try_from(&filename)?).await?;
-			metadata.bbox_pyramid.intersect_pyramid(&mask.metadata().bbox_pyramid);
+			let mask_pyramid = mask.tile_pyramid().await?;
+			tile_pyramid.intersect_pyramid(&mask_pyramid);
 			Some(mask)
 		} else {
 			None
 		};
 
-		if metadata.bbox_pyramid.is_empty() {
+		if tile_pyramid.is_empty() {
 			log::warn!(
 				"Filter operation in VPL node {:?} results in empty bbox_pyramid",
 				vpl_node.name
 			);
 		}
 
+		metadata.set_tile_pyramid(tile_pyramid);
 		metadata.update_tilejson(&mut tilejson);
 
 		Ok(Self {
@@ -116,9 +120,16 @@ impl TileSource for Operation {
 		&self.tilejson
 	}
 
-	async fn tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
+	}
+
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("filter::tile_stream {bbox:?}");
-		bbox.intersect_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
@@ -139,8 +150,8 @@ impl TileSource for Operation {
 		}
 	}
 
-	async fn tile_coord_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		bbox.intersect_pyramid(&self.metadata.bbox_pyramid);
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
@@ -290,7 +301,7 @@ mod tests {
 			.operation_from_vpl("from_debug format=mvt | filter filename=\"test.pbf\"")
 			.await?;
 
-		assert!(!op.metadata().bbox_pyramid.is_empty());
+		assert!(!op.metadata().tile_pyramid().unwrap().is_empty());
 
 		let bbox = TileBBox::from_min_and_max(3, 1, 1, 2, 2)?;
 		let count = op.tile_stream(bbox).await?.drain_and_count().await;
@@ -306,7 +317,7 @@ mod tests {
 			.operation_from_vpl("from_debug format=mvt | filter bbox=[0,0,10,10] filename=\"test.pbf\"")
 			.await?;
 
-		assert!(!op.metadata().bbox_pyramid.is_empty());
+		assert!(!op.metadata().tile_pyramid().unwrap().is_empty());
 
 		// A tile far outside the bbox should not pass even though the mask is full-world.
 		let far = TileCoord::new(3, 7, 7)?.to_tile_bbox();

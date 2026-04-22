@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use imageproc::image::Rgb;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileJSON, TileStream};
+use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitOperation;
 
@@ -48,6 +48,10 @@ impl TileSource for Operation {
 
 	fn tilejson(&self) -> &TileJSON {
 		self.source.tilejson()
+	}
+
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self.source.tile_pyramid().await
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]

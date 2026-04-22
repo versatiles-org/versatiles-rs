@@ -46,7 +46,10 @@ impl TileResizeCore {
 			"source tile_size ({source_tile_size}) must differ from target ({tartile_size})"
 		);
 
-		let source_pyramid = source.metadata().bbox_pyramid.clone();
+		let source_pyramid = source
+			.metadata()
+			.tile_pyramid()
+			.ok_or_else(|| anyhow!("source tile_pyramid not set"))?;
 		let mut output_pyramid = TilePyramid::new_empty();
 
 		let source_max = source_pyramid
@@ -96,8 +99,8 @@ impl TileResizeCore {
 			_ => unreachable!(),
 		}
 
-		let mut metadata = source.metadata().clone();
-		metadata.bbox_pyramid = output_pyramid;
+		let metadata = source.metadata().clone();
+		metadata.set_tile_pyramid(output_pyramid);
 
 		let mut tilejson = source.tilejson().clone();
 		tilejson.set_tile_size(tartile_size)?;
@@ -189,7 +192,7 @@ impl TileResizeCore {
 	}
 
 	pub async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		if bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
@@ -240,12 +243,14 @@ impl TileResizeCore {
 	}
 
 	pub fn tile_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<'static, Tile>> {
-		if !self.metadata.bbox_pyramid.intersects_bbox(&bbox_dst) {
+		if let Some(pyramid) = self.metadata.tile_pyramid()
+			&& !pyramid.intersects_bbox(&bbox_dst)
+		{
 			return Ok(TileStream::empty());
 		}
 
 		let self_arc = Arc::new(self.clone());
-		let tile_format = self.metadata.tile_format;
+		let tile_format = *self.metadata.tile_format();
 		let is_split = self.source_tile_size == 512;
 
 		let stream = TileStream::from_bbox_async_parallel(bbox_dst, move |coord_dst| {

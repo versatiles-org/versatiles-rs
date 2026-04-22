@@ -40,7 +40,7 @@ use async_trait::async_trait;
 use moka::future::Cache;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TileStream};
+use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_image::{DynamicImage, traits::DynamicImageTraitOperation};
 
@@ -109,11 +109,13 @@ impl Operation {
 	}
 
 	pub fn new(source: Box<dyn TileSource>, args: &Args) -> Result<Operation> {
-		let mut metadata = source.as_ref().metadata().clone();
+		let metadata = source.as_ref().metadata().clone();
 
-		let level_base = args
-			.level_base
-			.unwrap_or(source.as_ref().metadata().bbox_pyramid.level_max().unwrap());
+		let source_pyramid = metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("source tile_pyramid not set"))?;
+
+		let level_base = args.level_base.unwrap_or(source_pyramid.level_max().unwrap());
 		log::trace!("level_base {level_base}");
 
 		let level_max = args
@@ -121,16 +123,17 @@ impl Operation {
 			.unwrap_or(MAX_ZOOM_LEVEL)
 			.clamp(level_base, MAX_ZOOM_LEVEL);
 
-		let mut level_bbox = metadata.bbox_pyramid.level_ref(level_base).to_bbox();
+		let mut new_pyramid = source_pyramid.as_ref().clone();
+		let mut level_bbox = new_pyramid.level_ref(level_base).to_bbox();
 		while !level_bbox.is_empty() && level_bbox.level() < level_max {
 			level_bbox.level_up();
-			metadata.bbox_pyramid.insert_bbox(&level_bbox)?;
+			new_pyramid.insert_bbox(&level_bbox)?;
 		}
+		let level_min = new_pyramid.level_min().unwrap_or(0);
+		metadata.set_tile_pyramid(new_pyramid);
 
 		let mut tilejson = source.as_ref().tilejson().clone();
 		metadata.update_tilejson(&mut tilejson);
-
-		let level_min = source.as_ref().metadata().bbox_pyramid.level_min().unwrap_or(0);
 		let cache = Cache::builder()
 			.max_capacity(512 * 1024 * 1024) // 512MB limit
 			.weigher(|_k: &TileCoord, v: &Option<Arc<DynamicImage>>| -> u32 {
@@ -272,11 +275,20 @@ impl TileSource for Operation {
 		SourceType::new_processor("raster_overscale", self.source.as_ref().source_type())
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
+	}
+
 	#[context("Failed to get stream for bbox: {:?}", bbox_dst)]
 	async fn tile_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("raster_overscale::tile_stream {bbox_dst:?}");
 
-		if !self.metadata.bbox_pyramid.intersects_bbox(&bbox_dst) {
+		if let Some(pyramid) = self.metadata.tile_pyramid()
+			&& !pyramid.intersects_bbox(&bbox_dst)
+		{
 			log::trace!("tile_stream outside bbox_pyramid");
 			return Ok(TileStream::empty());
 		}
@@ -289,7 +301,7 @@ impl TileSource for Operation {
 		// Use tile climbing for all upscaling - process in parallel
 		let self_arc = Arc::new(self.clone()); // Share Operation across tasks
 		let enable_climbing = self.enable_climbing;
-		let tile_format = self.metadata.tile_format;
+		let tile_format = *self.metadata.tile_format();
 
 		let stream = TileStream::from_bbox_async_parallel(bbox_dst, move |coord_dst| {
 			let self_arc = self_arc.clone();
@@ -321,7 +333,9 @@ impl TileSource for Operation {
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		if !self.metadata.bbox_pyramid.intersects_bbox(&bbox) {
+		if let Some(pyramid) = self.metadata.tile_pyramid()
+			&& !pyramid.intersects_bbox(&bbox)
+		{
 			return Ok(TileStream::empty());
 		}
 		if bbox.level() <= self.level_base {
@@ -514,7 +528,7 @@ mod tests {
 		let op = build_op(3).await?;
 		// metadata and tilejson should be available
 		let metadata = op.metadata();
-		assert!(metadata.bbox_pyramid.level_max().is_some());
+		assert!(metadata.tile_pyramid().unwrap().level_max().is_some());
 		let _tilejson = op.tilejson();
 		Ok(())
 	}
@@ -534,7 +548,7 @@ mod tests {
 
 		// Should have extended max level
 		let metadata = op.metadata();
-		assert!(metadata.bbox_pyramid.level_max().unwrap() >= 5);
+		assert!(metadata.tile_pyramid().unwrap().level_max().unwrap() >= 5);
 		Ok(())
 	}
 

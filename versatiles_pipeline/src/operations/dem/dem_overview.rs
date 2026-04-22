@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use imageproc::image::{DynamicImage, Rgb, RgbImage, Rgba, RgbaImage};
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileJSON, TileStream};
+use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Generate lower-zoom DEM overview tiles by averaging 24-bit elevation values.
@@ -132,6 +132,14 @@ impl TileSource for Operation {
 
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_processor("dem_overview", self.core.source.source_type())
+	}
+
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.core
+			.metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
 	}
 
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
@@ -346,8 +354,9 @@ mod tests {
 
 		// Stream tiles level-by-level from highest to lowest (as the traversal does).
 		// This populates the cache at each level so lower levels can build from it.
-		let traversal = op.metadata().traversal.clone();
-		let bboxes = traversal.traverse_pyramid(&op.metadata().bbox_pyramid)?;
+		let traversal = op.metadata().traversal().clone();
+		let pyramid = op.tile_pyramid().await?;
+		let bboxes = traversal.traverse_pyramid(pyramid.as_ref())?;
 
 		let mut tiles_at_2 = Vec::new();
 		for bbox in &bboxes {
@@ -414,8 +423,8 @@ mod tests {
 			.await?;
 
 		// Metadata should extend pyramid to level 0
-		let metadata = op.metadata();
-		assert_eq!(metadata.bbox_pyramid.level_min(), Some(0));
+		let pyramid = op.tile_pyramid().await?;
+		assert_eq!(pyramid.level_min(), Some(0));
 		Ok(())
 	}
 }

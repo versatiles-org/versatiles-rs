@@ -82,8 +82,8 @@ impl ReadTileSource for Operation {
 
 		let mut tilejson = TileJSON::default();
 		let first_parameters = sources.first().unwrap().metadata();
-		let tile_format = first_parameters.tile_format;
-		let tile_compression = first_parameters.tile_compression;
+		let tile_format = *first_parameters.tile_format();
+		let tile_compression = *first_parameters.tile_compression();
 		let mut pyramid = TilePyramid::new_empty();
 		let mut traversal = Traversal::ANY;
 
@@ -91,16 +91,17 @@ impl ReadTileSource for Operation {
 			tilejson.merge(source.tilejson())?;
 
 			let metadata = source.metadata();
-			traversal.intersect(&metadata.traversal)?;
-			pyramid.union(&metadata.bbox_pyramid);
+			traversal.intersect(metadata.traversal())?;
+			let src_pyramid = source.tile_pyramid().await?;
+			pyramid.union(src_pyramid.as_ref());
 
 			ensure!(
-				metadata.tile_format.to_type() == TileType::Vector,
+				metadata.tile_format().to_type() == TileType::Vector,
 				"all sources must be vector tiles"
 			);
 		}
 
-		let metadata = TileSourceMetadata::new(tile_format, tile_compression, pyramid, traversal);
+		let metadata = TileSourceMetadata::new(tile_format, tile_compression, traversal, Some(pyramid));
 		metadata.update_tilejson(&mut tilejson);
 
 		Ok(Box::new(Self {
@@ -128,6 +129,13 @@ impl TileSource for Operation {
 		SourceType::new_composite("from_merged_vector", &source_types)
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
+	}
+
 	#[context("Failed to get merged tile coord stream for bbox: {:?}", bbox)]
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let refs: Vec<&dyn TileSource> = self.sources.iter().map(|s| s.as_ref() as &dyn TileSource).collect();
@@ -140,7 +148,7 @@ impl TileSource for Operation {
 		log::trace!("from_merged_vector::tile_stream {bbox:?}");
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_grid(32).collect();
 		let sources = Arc::clone(&self.sources);
-		let format = self.metadata.tile_format;
+		let format = *self.metadata.tile_format();
 
 		Ok(TileStream::from_streams(stream::iter(bboxes).map(move |bbox| {
 			let sources = Arc::clone(&sources);
@@ -296,7 +304,7 @@ mod tests {
 
 		assert_eq!(
 			arrange_tiles(tiles, |tile| {
-				match check_tile(&tile.into_blob(TileCompression::Uncompressed).unwrap()).as_str() {
+				match check_tile(&tile.into_blob(&TileCompression::Uncompressed).unwrap()).as_str() {
 					"A.pbf" => "🟦",
 					"B.pbf" => "🟨",
 					"A.pbf,B.pbf" => "🟩",
@@ -358,11 +366,11 @@ mod tests {
 
 		let parameters = result.metadata();
 
-		assert_eq!(parameters.tile_format, TileFormat::MVT);
-		assert_eq!(parameters.tile_compression, TileCompression::Uncompressed);
+		assert_eq!(*parameters.tile_format(), TileFormat::MVT);
+		assert_eq!(*parameters.tile_compression(), TileCompression::Uncompressed);
 		assert_eq!(
-			format!("{}", parameters.bbox_pyramid),
-			"[1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)]"
+			format!("{}", parameters.tile_pyramid().unwrap()),
+			"[TileCover::Tree(TileQuadtree(zoom=1, tiles=4, nodes=1)), TileCover::Tree(TileQuadtree(zoom=2, tiles=16, nodes=1)), TileCover::Tree(TileQuadtree(zoom=3, tiles=64, nodes=1))]"
 		);
 
 		assert_eq!(

@@ -45,8 +45,8 @@ impl Operation {
 		let metadata = TileSourceMetadata::new(
 			tile_format,
 			TileCompression::Uncompressed,
-			TilePyramid::new_full(),
 			Traversal::ANY,
+			Some(TilePyramid::new_full()),
 		);
 
 		let tilejson = {
@@ -90,6 +90,13 @@ impl TileSource for Operation {
 		SourceType::new_container("tile file", "tile")
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
+	}
+
 	async fn tile(&self, _coord: &versatiles_core::TileCoord) -> Result<Option<Tile>> {
 		Ok(Some(self.tile.clone()))
 	}
@@ -101,7 +108,7 @@ impl TileSource for Operation {
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
 			Some(())
 		}))
@@ -141,7 +148,7 @@ mod tests {
 	fn test_from_file_png() {
 		let temp_file = create_temp_png();
 		let op = Operation::from_file(temp_file.path()).unwrap();
-		assert_eq!(op.metadata().tile_format, TileFormat::PNG);
+		assert_eq!(*op.metadata().tile_format(), TileFormat::PNG);
 	}
 
 	#[test]
@@ -164,7 +171,7 @@ mod tests {
 		let op = Operation::from_file(temp_file.path()).unwrap();
 		let tile = op.tile(&TileCoord::new(0, 0, 0).unwrap()).await.unwrap();
 		assert!(tile.is_some());
-		let blob = tile.unwrap().into_blob(Uncompressed).unwrap();
+		let blob = tile.unwrap().into_blob(&Uncompressed).unwrap();
 		assert!(!blob.is_empty());
 	}
 
@@ -178,7 +185,7 @@ mod tests {
 		let mut count = 0;
 		while let Some((coord, tile)) = stream.next().await {
 			assert!(coord.level == 2);
-			assert!(!tile.into_blob(Uncompressed).unwrap().is_empty());
+			assert!(!tile.into_blob(&Uncompressed).unwrap().is_empty());
 			count += 1;
 		}
 		assert_eq!(count, 4); // 2x2 tiles at level 2

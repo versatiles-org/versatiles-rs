@@ -38,7 +38,9 @@ mod tests {
 			})
 			.collect();
 
-		let arranged = arrange_tiles(tiles, |tile| tile.into_blob(Uncompressed).unwrap().as_str().to_string());
+		let arranged = arrange_tiles(tiles, |tile| {
+			tile.into_blob(&Uncompressed).unwrap().as_str().to_string()
+		});
 		assert_eq!(arranged, ["a b", "c ❌"]);
 	}
 }

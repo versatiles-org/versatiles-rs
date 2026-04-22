@@ -54,14 +54,14 @@ impl Operation {
 			.flatten()
 			.collect::<Vec<u8>>();
 		let image = versatiles_image::DynamicImage::from_raw(tile_size as usize, tile_size as usize, data)?;
-		let blob = Tile::from_image(image, tile_format)?.into_blob(TileCompression::Uncompressed)?;
+		let blob = Tile::from_image(image, tile_format)?.into_blob(&TileCompression::Uncompressed)?;
 		let tile = Tile::from_blob(blob, TileCompression::Uncompressed, tile_format);
 
 		let metadata = TileSourceMetadata::new(
 			tile_format,
 			TileCompression::Uncompressed,
-			TilePyramid::new_full(),
 			Traversal::ANY,
+			Some(TilePyramid::new_full()),
 		);
 
 		let tilejson = {
@@ -118,6 +118,13 @@ impl TileSource for Operation {
 		SourceType::new_container("solid color", "color")
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
+	}
+
 	async fn tile(&self, _coord: &versatiles_core::TileCoord) -> Result<Option<Tile>> {
 		Ok(Some(self.tile.clone()))
 	}
@@ -129,7 +136,7 @@ impl TileSource for Operation {
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
 			Some(())
 		}))
@@ -146,7 +153,7 @@ mod tests {
 	#[test]
 	fn test_operation_default_parameters() {
 		let op = Operation::from_parameters(&[0, 0, 0], 512, TileFormat::PNG).unwrap();
-		assert_eq!(op.metadata().tile_format, TileFormat::PNG);
+		assert_eq!(*op.metadata().tile_format(), TileFormat::PNG);
 	}
 
 	#[test]
@@ -165,7 +172,7 @@ mod tests {
 		let op = Operation::from_parameters(&[255, 0, 0], 256, TileFormat::PNG).unwrap();
 		let tile = op.tile(&TileCoord::new(0, 0, 0).unwrap()).await.unwrap();
 		assert!(tile.is_some());
-		let blob = tile.unwrap().into_blob(Uncompressed).unwrap();
+		let blob = tile.unwrap().into_blob(&Uncompressed).unwrap();
 		assert!(!blob.is_empty());
 	}
 
@@ -178,11 +185,11 @@ mod tests {
 			.operation_from_vpl("from_color color=FF5733 size=256 format=webp")
 			.await
 			.unwrap();
-		assert_eq!(op.metadata().tile_format, TileFormat::WEBP);
+		assert_eq!(*op.metadata().tile_format(), TileFormat::WEBP);
 
 		// Test with defaults
 		let op = factory.operation_from_vpl("from_color").await.unwrap();
-		assert_eq!(op.metadata().tile_format, TileFormat::PNG);
+		assert_eq!(*op.metadata().tile_format(), TileFormat::PNG);
 
 		// Test tile content
 		let coord = TileCoord::new(5, 10, 15).unwrap();
@@ -194,7 +201,7 @@ mod tests {
 			.await
 			.unwrap()
 			.1;
-		assert!(!tile.into_blob(Uncompressed).unwrap().is_empty());
+		assert!(!tile.into_blob(&Uncompressed).unwrap().is_empty());
 	}
 
 	#[tokio::test]

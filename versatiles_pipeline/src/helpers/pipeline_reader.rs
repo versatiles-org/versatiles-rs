@@ -15,7 +15,7 @@ use std::{path::Path, sync::Arc};
 use versatiles_container::{
 	DataLocation, SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime,
 };
-use versatiles_core::{TileBBox, TileCoord, TileJSON, TileStream, io::DataReader};
+use versatiles_core::{TileBBox, TileCoord, TileJSON, TilePyramid, TileStream, io::DataReader};
 use versatiles_derive::context;
 
 /// Tile reader that executes a VPL-defined operation pipeline and returns composed tiles.
@@ -132,6 +132,10 @@ impl TileSource for PipelineReader {
 		self.operation.tilejson()
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self.operation.tile_pyramid().await
+	}
+
 	/// Fetches a single tile for `coord` by executing the pipeline over that tile’s bbox.
 	///
 	/// Returns `Ok(None)` if the pipeline yields no tile; returns an error if multiple tiles
@@ -221,7 +225,7 @@ mod tests {
 			.tile(&TileCoord::new(14, 8800, 5377)?)
 			.await?
 			.unwrap()
-			.into_blob(TileCompression::Uncompressed)?;
+			.into_blob(&TileCompression::Uncompressed)?;
 
 		assert_eq!(result.len(), 141385);
 
@@ -246,7 +250,7 @@ mod tests {
 		// Trait methods
 		assert_eq!(reader.source_type().to_string(), "processor 'pipeline'");
 		// Parameters should have at least one bbox level
-		assert!(reader.metadata().bbox_pyramid.iter().next().is_some());
+		assert!(reader.tile_pyramid().await?.iter().next().is_some());
 		// Debug formatting should include struct name and source
 		let debug = format!("{reader:?}");
 		assert!(debug.contains("PipelineReader"));

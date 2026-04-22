@@ -2,7 +2,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileJSON, TileStream, TileType};
+use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream, TileType};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 
@@ -34,11 +34,15 @@ impl<R: RunnerTrait> TileSource for TransformOp<R> {
 		SourceType::new_processor("vector_transform", self.source.source_type())
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self.source.tile_pyramid().await
+	}
+
 	#[context("Failed to get transformed tile stream for bbox: {:?}", bbox)]
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("vector_transform::tile_stream {bbox:?}");
 		let runner = self.runner.clone();
-		let tile_format = self.metadata.tile_format;
+		let tile_format = *self.metadata.tile_format();
 		Ok(self
 			.source
 			.tile_stream(bbox)
@@ -68,7 +72,7 @@ where
 	// ── common steps ───────────────────────────────────────────────
 	let metadata = source.metadata().clone();
 	ensure!(
-		metadata.tile_format.to_type() == TileType::Vector,
+		metadata.tile_format().to_type() == TileType::Vector,
 		"source must be vector tiles"
 	);
 
@@ -156,7 +160,7 @@ mod tests {
 	async fn test_transform_op_metadata_and_tilejson() -> Result<()> {
 		let source = Box::new(make_vector_source());
 		let op = build_transform(source, PassthroughRunner).await?;
-		assert!(!op.metadata().bbox_pyramid.is_empty());
+		assert!(!op.metadata().tile_pyramid().unwrap().is_empty());
 		assert!(op.tilejson().zoom_min().is_some());
 		Ok(())
 	}

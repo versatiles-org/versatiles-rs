@@ -19,7 +19,7 @@ use blur_function::BlurFunction;
 use mask_geometry::{MaskGeometry, TileClassification};
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileFormat, TileJSON, TileStream};
+use versatiles_core::{TileBBox, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_image::DynamicImage;
 
@@ -57,14 +57,14 @@ impl Operation {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		// Validate source format is raster
-		let mut metadata = source.metadata().clone();
+		let metadata = source.metadata().clone();
 		if !matches!(
-			metadata.tile_format,
+			metadata.tile_format(),
 			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP
 		) {
 			bail!(
 				"raster_mask requires a raster tile source, but got format: {:?}",
-				metadata.tile_format
+				metadata.tile_format()
 			);
 		}
 
@@ -91,7 +91,9 @@ impl Operation {
 		// Clip bbox_pyramid to the mask geometry's geographic bounds so that tiles
 		// entirely outside the mask are never requested from the source.
 		if let Some(geo_bbox) = mask.geo_bbox() {
-			metadata.bbox_pyramid.intersect_geo_bbox(&geo_bbox)?;
+			let mut tile_pyramid = source.tile_pyramid().await?.as_ref().clone();
+			tile_pyramid.intersect_geo_bbox(&geo_bbox)?;
+			metadata.set_tile_pyramid(tile_pyramid);
 		}
 
 		let tilejson = source.tilejson().clone();
@@ -117,6 +119,14 @@ impl TileSource for Operation {
 
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
+	}
+
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		if let Some(pyramid) = self.metadata.tile_pyramid() {
+			Ok(pyramid)
+		} else {
+			self.source.tile_pyramid().await
+		}
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
@@ -327,7 +337,7 @@ mod tests {
 
 		// Metadata should be passed through from source
 		let metadata = op.metadata();
-		assert_eq!(metadata.tile_format, TileFormat::PNG);
+		assert_eq!(*metadata.tile_format(), TileFormat::PNG);
 
 		Ok(())
 	}

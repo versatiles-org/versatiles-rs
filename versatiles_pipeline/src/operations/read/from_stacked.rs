@@ -60,19 +60,19 @@ impl ReadTileSource for Operation {
 			.into_iter()
 			.collect::<Result<Vec<_>>>()?;
 
-		Ok(Box::new(Operation::new(sources)?) as Box<dyn TileSource>)
+		Ok(Box::new(Operation::new(sources).await?) as Box<dyn TileSource>)
 	}
 }
 
 impl Operation {
 	#[context("Failed to create from_stacked operation")]
-	fn new(sources: Vec<Box<dyn TileSource>>) -> Result<Operation> {
+	async fn new(sources: Vec<Box<dyn TileSource>>) -> Result<Operation> {
 		ensure!(sources.len() > 1, "must have at least two sources");
 
 		let mut tilejson = TileJSON::default();
 		let parameters = sources.first().unwrap().metadata();
-		let tile_format = parameters.tile_format;
-		let tile_compression = parameters.tile_compression;
+		let tile_format = *parameters.tile_format();
+		let tile_compression = *parameters.tile_compression();
 
 		let mut pyramid = TilePyramid::new_empty();
 		let mut traversal = Traversal::default();
@@ -81,16 +81,17 @@ impl Operation {
 			tilejson.merge(source.tilejson())?;
 
 			let metadata = source.metadata();
-			traversal.intersect(&metadata.traversal)?;
-			pyramid.union(&metadata.bbox_pyramid);
+			traversal.intersect(metadata.traversal())?;
+			let src_pyramid = source.tile_pyramid().await?;
+			pyramid.union(src_pyramid.as_ref());
 
 			ensure!(
-				metadata.tile_format == tile_format,
+				*metadata.tile_format() == tile_format,
 				"all sources must have the same tile format"
 			);
 		}
 
-		let metadata = TileSourceMetadata::new(tile_format, tile_compression, pyramid, traversal);
+		let metadata = TileSourceMetadata::new(tile_format, tile_compression, traversal, Some(pyramid));
 		metadata.update_tilejson(&mut tilejson);
 
 		Ok(Self {
@@ -118,6 +119,13 @@ impl TileSource for Operation {
 		SourceType::new_composite("from_stacked", &source_types)
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
+	}
+
 	#[context("Failed to get stacked tile coord stream for bbox: {:?}", bbox)]
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let refs: Vec<&dyn TileSource> = self.sources.iter().map(|s| s.as_ref() as &dyn TileSource).collect();
@@ -129,7 +137,7 @@ impl TileSource for Operation {
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("from_stacked::tile_stream {bbox:?}");
 		// We need the desired output compression inside the closure, so copy it.
-		let format = self.metadata.tile_format;
+		let format = *self.metadata.tile_format();
 		let sources = Arc::clone(&self.sources);
 
 		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_grid(32).collect();
@@ -320,8 +328,8 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn test_traversal_orders_overlay() {
+	#[tokio::test]
+	async fn test_traversal_orders_overlay() {
 		use crate::operations::read::from_container::operation_from_reader;
 
 		let mut src1 = DummyVectorSource::new(&[], Some(TilePyramid::new_full_up_to(8)));
@@ -334,10 +342,11 @@ mod tests {
 			operation_from_reader(Box::new(src1)),
 			operation_from_reader(Box::new(src2)),
 		])
+		.await
 		.unwrap();
 
 		assert_eq!(
-			op.metadata().traversal,
+			*op.metadata().traversal(),
 			Traversal::new(TraversalOrder::PMTiles, 4, 16).unwrap()
 		);
 	}

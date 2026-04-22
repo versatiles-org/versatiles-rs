@@ -3,7 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{GeoBBox, GeoCenter, TileBBox, TileJSON, TileSchema, TileStream};
+use versatiles_core::{GeoBBox, GeoCenter, TileBBox, TileJSON, TilePyramid, TileSchema, TileStream};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -90,6 +90,10 @@ impl TileSource for Operation {
 
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
+	}
+
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self.source.tile_pyramid().await
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]

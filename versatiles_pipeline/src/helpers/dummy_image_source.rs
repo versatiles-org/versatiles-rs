@@ -59,7 +59,12 @@ impl DummyImageSource {
 		ensure!(tile_format.is_raster(), "tile_format must be a raster format");
 
 		let bbox_pyramid = pyramid.unwrap_or_else(|| TilePyramid::new_full_up_to(8));
-		let metadata = TileSourceMetadata::new(tile_format, TileCompression::Uncompressed, bbox_pyramid, Traversal::ANY);
+		let metadata = TileSourceMetadata::new(
+			tile_format,
+			TileCompression::Uncompressed,
+			Traversal::ANY,
+			Some(bbox_pyramid),
+		);
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("name", "dummy raster source")?;
@@ -87,20 +92,29 @@ impl TileSource for DummyImageSource {
 		&self.tilejson
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
+	}
+
 	#[context("Getting tile for coord: {:?}", coord)]
 	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		if !self.metadata.bbox_pyramid.includes_coord(coord) {
+		if let Some(pyramid) = self.metadata.tile_pyramid()
+			&& !pyramid.includes_coord(coord)
+		{
 			return Ok(None);
 		}
 		Ok((self.generate_tile)(coord))
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("dummy_image_source::tile_stream {bbox:?}");
 
 		let generate_tile = (self.generate_tile).clone();
-		bbox.intersect_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		Ok(TileStream::from_iter_coord(
 			bbox.into_iter_coords_zorder(),
 			move |coord| (generate_tile)(&coord),
@@ -108,7 +122,7 @@ impl TileSource for DummyImageSource {
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		Ok(TileStream::from_iter_coord(
 			bbox.into_iter_coords_zorder(),
 			move |_coord| Some(()),
@@ -119,9 +133,9 @@ impl TileSource for DummyImageSource {
 impl std::fmt::Debug for DummyImageSource {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("DummyImageSource")
-			.field("tile_format", &self.metadata.tile_format)
-			.field("tile_compression", &self.metadata.tile_compression)
-			.field("bbox_pyramid", &self.metadata.bbox_pyramid)
+			.field("tile_format", self.metadata.tile_format())
+			.field("tile_compression", self.metadata.tile_compression())
+			.field("tile_pyramid", &self.metadata.tile_pyramid())
 			.finish()
 	}
 }

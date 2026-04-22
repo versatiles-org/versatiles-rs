@@ -39,25 +39,35 @@ impl OverviewCore {
 	///
 	/// The tile size is read from the source's TileJSON (defaults to 512 if not set).
 	pub fn new(source: Box<dyn TileSource>, level: Option<u8>, scale_fn: ScaleDownFn) -> Result<Self> {
-		ensure!(source.metadata().traversal.is_any());
+		ensure!(source.metadata().traversal().is_any());
 
-		let mut metadata = source.metadata().clone();
+		let metadata = source.metadata().clone();
 		let mut tilejson = source.tilejson().clone();
 
-		let level_base = level.unwrap_or_else(|| source.metadata().bbox_pyramid.level_max().unwrap());
+		let source_pyramid = metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set on source"))?;
+		let level_base = level.unwrap_or_else(|| source_pyramid.level_max().unwrap());
 
-		let mut level_bbox = metadata.bbox_pyramid.level_ref(level_base).to_bbox();
+		let mut new_pyramid = source_pyramid.as_ref().clone();
+		let mut level_bbox = new_pyramid.level_ref(level_base).to_bbox();
 		while !level_bbox.is_empty() && level_bbox.level() > 0 {
 			level_bbox.level_down();
-			metadata.bbox_pyramid.insert_bbox(&level_bbox)?;
+			new_pyramid.insert_bbox(&level_bbox)?;
 		}
+		metadata.set_tile_pyramid(new_pyramid);
 
 		metadata.update_tilejson(&mut tilejson);
 
 		let tile_size = tilejson.tile_size.map_or(512, |ts| u32::from(ts.size()));
 		let cache = Arc::new(DashMap::new());
 		let cache_bytes = Arc::new(AtomicUsize::new(0));
-		metadata.traversal = Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?;
+		let mut metadata = metadata;
+		metadata.set_traversal(Traversal::new(
+			TraversalOrder::DepthFirst,
+			BLOCK_TILE_COUNT,
+			BLOCK_TILE_COUNT,
+		)?);
 
 		Ok(Self {
 			metadata,
@@ -142,7 +152,7 @@ impl OverviewCore {
 		bbox: TileBBox,
 	) -> Result<Vec<(TileCoord, Tile)>> {
 		let container_bbox = *container.bbox();
-		let format = self.source.metadata().tile_format;
+		let format = *self.source.metadata().tile_format();
 		let full_size = self.tile_size;
 		let scale_fn = self.scale_fn.clone();
 		let need_cache = container_bbox.level() > 0 && container_bbox.level() <= self.level_base;
@@ -194,8 +204,8 @@ impl OverviewCore {
 			return self.source.tile_coord_stream(bbox).await;
 		}
 
-		let mut source_bbox = bbox.at_level(self.level_base);
-		source_bbox.intersect_pyramid(&self.metadata.bbox_pyramid);
+		let source_bbox_upsized = bbox.at_level(self.level_base);
+		let source_bbox = self.metadata.intersection_bbox(&source_bbox_upsized);
 		if source_bbox.is_empty() {
 			return Ok(TileStream::empty());
 		}
@@ -222,10 +232,10 @@ impl OverviewCore {
 		}
 
 		let size = bbox.max_count().min(BLOCK_TILE_COUNT);
-		let mut bbox0 = bbox.rounded(size);
-		assert_eq!(bbox0.width(), size);
-		assert_eq!(bbox0.height(), size);
-		bbox0.intersect_pyramid(&self.metadata.bbox_pyramid);
+		let bbox0_raw = bbox.rounded(size);
+		assert_eq!(bbox0_raw.width(), size);
+		assert_eq!(bbox0_raw.height(), size);
+		let bbox0 = self.metadata.intersection_bbox(&bbox0_raw);
 
 		let container: TileBBoxMap<Option<DynamicImage>> = if bbox.level() == self.level_base {
 			log::trace!("Fetching images from source for bbox {bbox:?}");

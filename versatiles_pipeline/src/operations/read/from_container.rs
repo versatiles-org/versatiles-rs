@@ -11,7 +11,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
 use versatiles_container::{DataLocation, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileJSON, TileStream};
+use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -29,6 +29,7 @@ struct Args {
 /// bounds and zoom levels without touching the reader again.
 struct Operation {
 	source: Box<dyn TileSource>,
+	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 }
 
@@ -40,10 +41,17 @@ impl ReadTileSource for Operation {
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let source = factory.reader(DataLocation::try_from(&args.filename)?).await?;
+		let tile_pyramid = source.tile_pyramid().await?;
+		let metadata = source.metadata().clone();
+		metadata.set_tile_pyramid(tile_pyramid.as_ref().clone());
 		let mut tilejson = source.tilejson().clone();
-		source.metadata().update_tilejson(&mut tilejson);
+		metadata.update_tilejson(&mut tilejson);
 
-		Ok(Box::new(Self { source, tilejson }) as Box<dyn TileSource>)
+		Ok(Box::new(Self {
+			source,
+			metadata,
+			tilejson,
+		}) as Box<dyn TileSource>)
 	}
 }
 
@@ -56,13 +64,17 @@ impl TileSource for Operation {
 	/// Return the reader's technical parameters (compression, tile size,
 	/// etc.) without performing any I/O.
 	fn metadata(&self) -> &TileSourceMetadata {
-		self.source.metadata()
+		&self.metadata
 	}
 
 	/// Expose the container's `TileJSON` so that consumers can inspect
 	/// bounds, zoom range and other dataset metadata.
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
+	}
+
+	async fn tile_pyramid(&self) -> Result<std::sync::Arc<TilePyramid>> {
+		self.source.tile_pyramid().await
 	}
 
 	/// Stream raw tile blobs intersecting the bounding box by delegating to
@@ -82,10 +94,12 @@ crate::operations::macros::define_read_factory!("from_container", Args, Operatio
 
 #[cfg(test)]
 pub fn operation_from_reader(reader: Box<dyn TileSource>) -> Box<dyn TileSource> {
+	let metadata = reader.metadata().clone();
 	let mut tilejson = reader.tilejson().clone();
-	reader.metadata().update_tilejson(&mut tilejson);
+	metadata.update_tilejson(&mut tilejson);
 	Box::new(Operation {
 		source: reader,
+		metadata,
 		tilejson,
 	}) as Box<dyn TileSource>
 }
@@ -134,7 +148,7 @@ mod tests {
 
 		let mut n = 0;
 		while let Some((coord, tile)) = stream.next().await {
-			assert!(tile.into_blob(Uncompressed)?.len() > 50);
+			assert!(tile.into_blob(&Uncompressed)?.len() > 50);
 			assert!(coord.x >= 1 && coord.x <= 2);
 			assert!(coord.y >= 1 && coord.y <= 3);
 			assert_eq!(coord.level, 3);
@@ -184,7 +198,7 @@ mod tests {
 
 		let mut n = 0;
 		while let Some((coord, tile)) = stream.next().await {
-			assert!(tile.into_blob(Uncompressed)?.len() > 50);
+			assert!(tile.into_blob(&Uncompressed)?.len() > 50);
 			assert!(coord.x >= 1 && coord.x <= 2);
 			assert!(coord.y >= 1 && coord.y <= 3);
 			assert_eq!(coord.level, 3);

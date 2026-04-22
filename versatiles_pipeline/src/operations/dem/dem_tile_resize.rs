@@ -4,7 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileJSON, TileStream};
+use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -54,6 +54,14 @@ impl TileSource for Operation {
 
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_processor("dem_tile_resize", self.core.source.as_ref().source_type())
+	}
+
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.core
+			.metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
 	}
 
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
@@ -165,7 +173,7 @@ mod tests {
 		op.core.tilejson.tile_schema = Some(TileSchema::RasterDEMMapbox);
 
 		assert_eq!(op.tilejson().tile_size.unwrap().size(), 256);
-		let pyramid = &op.metadata().bbox_pyramid;
+		let pyramid = op.metadata().tile_pyramid().unwrap();
 		assert!(!pyramid.level_ref(0).is_empty());
 		assert!(!pyramid.level_ref(5).is_empty());
 		Ok(())

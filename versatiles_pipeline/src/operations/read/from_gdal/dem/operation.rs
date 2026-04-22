@@ -96,8 +96,8 @@ impl Operation {
 		let metadata = TileSourceMetadata::new(
 			TileFormat::PNG,
 			TileCompression::Uncompressed,
-			bbox_pyramid,
 			Traversal::ANY,
+			Some(bbox_pyramid),
 		);
 
 		let tile_schema = match encoding {
@@ -147,16 +147,23 @@ impl TileSource for Operation {
 		SourceType::new_container("gdal_dem", "gdal_dem")
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
+	}
+
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
-	async fn tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("from_gdal_dem::tile_stream {bbox:?}");
 		let count = 8192u32.div_euclid(self.tile_size).max(1);
 
-		bbox.intersect_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 
 		let bboxes: Vec<TileBBox> = bbox.iter_grid(count).collect();
 		let size = self.tile_size;
-		let tile_format = self.metadata.tile_format;
+		let tile_format = *self.metadata.tile_format();
 		let source = Arc::clone(&self.source);
 		let encoding = self.encoding;
 
@@ -203,7 +210,7 @@ impl TileSource for Operation {
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
 			Some(())
 		}))
@@ -342,10 +349,11 @@ mod tests {
 	async fn test_operation_metadata() {
 		let (_tmp, dem_path) = create_temp_dem();
 		let op = get_operation(&dem_path, "").await;
-		assert_eq!(op.metadata.tile_format, TileFormat::PNG);
-		assert_eq!(op.metadata.tile_compression, TileCompression::Uncompressed);
-		assert_eq!(op.metadata.bbox_pyramid.level_min(), Some(0));
-		assert_eq!(op.metadata.bbox_pyramid.level_max(), Some(2));
+		assert_eq!(*op.metadata.tile_format(), TileFormat::PNG);
+		assert_eq!(*op.metadata.tile_compression(), TileCompression::Uncompressed);
+		let pyramid = op.metadata.tile_pyramid().unwrap();
+		assert_eq!(pyramid.level_min(), Some(0));
+		assert_eq!(pyramid.level_max(), Some(2));
 	}
 
 	#[tokio::test(flavor = "multi_thread")]
@@ -428,7 +436,7 @@ mod tests {
 		))
 		.unwrap();
 		let source = Operation::build(vpl_node, &factory).await?;
-		assert_eq!(source.metadata().tile_format, TileFormat::PNG);
+		assert_eq!(*source.metadata().tile_format(), TileFormat::PNG);
 		Ok(())
 	}
 }

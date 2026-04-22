@@ -3,7 +3,7 @@ use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use std::{fmt::Debug, str, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TileStream};
+use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -96,11 +96,11 @@ impl Operation {
 		let format: RasterTileFormat = if let Some(text) = args.format {
 			RasterTileFormat::from_str(&text)?
 		} else {
-			RasterTileFormat::try_from(metadata.tile_format)?
+			RasterTileFormat::try_from(*metadata.tile_format())?
 		};
 
-		metadata.tile_format = format.into();
-		metadata.tile_compression = TileCompression::Uncompressed;
+		metadata.set_tile_format(format.into());
+		metadata.set_tile_compression(TileCompression::Uncompressed);
 
 		let mut tilejson = source.tilejson().clone();
 		metadata.update_tilejson(&mut tilejson);
@@ -161,6 +161,10 @@ impl TileSource for Operation {
 
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
+	}
+
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self.source.tile_pyramid().await
 	}
 
 	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
@@ -275,8 +279,8 @@ mod tests {
 
 		// Parameters must reflect the target format and uncompressed tile_compression
 		let params = op.metadata().clone();
-		assert_eq!(params.tile_format, TileFormat::WEBP);
-		assert_eq!(params.tile_compression, TileCompression::Uncompressed);
+		assert_eq!(*params.tile_format(), TileFormat::WEBP);
+		assert_eq!(*params.tile_compression(), TileCompression::Uncompressed);
 
 		// Stream should still yield exactly one tile and the tile should be WEBP now
 		let bbox = TileCoord::new(3, 2, 2)?.to_tile_bbox();
@@ -296,8 +300,8 @@ mod tests {
 			.await?;
 
 		let params = op.metadata().clone();
-		assert_eq!(params.tile_format, TileFormat::WEBP);
-		assert_eq!(params.tile_compression, TileCompression::Uncompressed);
+		assert_eq!(*params.tile_format(), TileFormat::WEBP);
+		assert_eq!(*params.tile_compression(), TileCompression::Uncompressed);
 
 		// Stream should yield tiles
 		let bbox = TileCoord::new(3, 2, 2)?.to_tile_bbox();

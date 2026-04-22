@@ -46,8 +46,8 @@ impl Operation {
 		let metadata = TileSourceMetadata::new(
 			tile_format,
 			TileCompression::Uncompressed,
-			TilePyramid::new_full(),
 			Traversal::ANY,
+			Some(TilePyramid::new_full()),
 		);
 
 		let mut tilejson = TileJSON::default();
@@ -104,10 +104,17 @@ impl TileSource for Operation {
 		SourceType::new_container("debug", "debug")
 	}
 
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self
+			.metadata
+			.tile_pyramid()
+			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
+	}
+
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("from_debug::tile_stream {bbox:?}");
-		let format = self.metadata.tile_format;
-		match self.metadata.tile_format.to_type() {
+		let format = *self.metadata.tile_format();
+		match self.metadata.tile_format().to_type() {
 			TileType::Raster => {
 				let alpha = format != TileFormat::JPG;
 				Ok(TileStream::from_bbox_parallel(bbox, move |c| {
@@ -117,12 +124,12 @@ impl TileSource for Operation {
 			TileType::Vector => Ok(TileStream::from_bbox_parallel(bbox, move |c| {
 				Some(Tile::from_vector(create_debug_vector_tile(&c).unwrap(), format).unwrap())
 			})),
-			_ => bail!("tile format '{}' is not supported.", self.metadata.tile_format),
+			_ => bail!("tile format '{}' is not supported.", self.metadata.tile_format()),
 		}
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = bbox.intersection_pyramid(&self.metadata.bbox_pyramid);
+		let bbox = self.metadata.intersection_bbox(&bbox);
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
 			Some(())
 		}))
@@ -151,7 +158,7 @@ mod tests {
 			.unwrap()
 			.1;
 
-		assert_eq!(tile.into_blob(Uncompressed)?.len(), len, "for '{format}'");
+		assert_eq!(tile.into_blob(&Uncompressed)?.len(), len, "for '{format}'");
 		assert_eq!(operation.tilejson().to_pretty_lines(100), tilejson, "for '{format}'");
 
 		let mut stream = operation
@@ -160,7 +167,7 @@ mod tests {
 
 		let mut n = 0;
 		while let Some((coord, tile)) = stream.next().await {
-			assert!(!tile.into_blob(Uncompressed)?.is_empty(), "for '{format}'");
+			assert!(!tile.into_blob(&Uncompressed)?.is_empty(), "for '{format}'");
 			assert!(coord.x >= 1 && coord.x <= 2, "for '{format}'");
 			assert!(coord.y >= 1 && coord.y <= 3, "for '{format}'");
 			assert_eq!(coord.level, 3, "for '{format}'");
