@@ -546,8 +546,12 @@ mod tests {
 
 		let mut server = TileServer::new_test(IP, 0, true, false);
 
-		let parameters = TileSourceMetadata::new(format, compression, TilePyramid::new_full_up_to(8), Traversal::ANY);
-		let reader = Arc::new(MockReader::new_mock(parameters).unwrap().boxed());
+		let parameters = TileSourceMetadata::new(format, compression, Traversal::ANY, None);
+		let reader = Arc::new(
+			MockReader::new_mock(TilePyramid::new_full_up_to(8), parameters)
+				.unwrap()
+				.boxed(),
+		);
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 		server.start().await.unwrap();
 

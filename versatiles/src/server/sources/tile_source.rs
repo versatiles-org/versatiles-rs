@@ -19,9 +19,9 @@ impl ServerTileSource {
 	// Constructor function for creating a TileSource instance
 	#[context("creating tile source: id='{id}'")]
 	pub fn from(reader: Arc<Box<dyn TileSource>>, id: &str) -> Result<ServerTileSource> {
-		let parameters = reader.metadata();
-		let tile_mime = parameters.tile_format.as_mime_str().to_string();
-		let compression = parameters.tile_compression;
+		let metadata = reader.metadata();
+		let tile_mime = metadata.tile_format().as_mime_str().to_string();
+		let compression = *metadata.tile_compression();
 
 		Ok(ServerTileSource {
 			prefix: Url::new(format!("/tiles/{id}/")).to_dir(),
@@ -65,7 +65,7 @@ impl ServerTileSource {
 			// If tile data is not found, return a not found response
 			return if let Some(tile) = tile? {
 				Ok(SourceResponse::new_some(
-					tile.into_blob(self.compression)?,
+					tile.into_blob(&self.compression)?,
 					self.compression,
 					&self.tile_mime,
 				))
@@ -142,10 +142,14 @@ mod tests {
 		let reader = Arc::new(MockReader::new_mock_profile(MockReaderProfile::Png)?.boxed());
 		let container = ServerTileSource::from(reader, "prefix")?;
 		// Updated expected output - no more "Mutex { data: ... }"
-		assert_eq!(
-			format!("{container:?}"),
-			"ServerTileSource { reader: MockReader { parameters: TileSourceMetadata { bbox_pyramid: [2: [0,1,2,3] (3x3), 3: [0,2,4,6] (5x5), 4: [0,0,15,15] (16x16), 5: [0,0,31,31] (32x32), 6: [0,0,63,63] (64x64)], tile_compression: Uncompressed, tile_format: PNG, traversal: Traversal(AnyOrder,full) } }, tile_mime: \"image/png\", compression: Uncompressed }"
+		let debug_str = format!("{container:?}");
+		assert!(
+			debug_str.contains("ServerTileSource { reader: MockReader { parameters: TileSourceMetadata {"),
+			"unexpected debug output: {debug_str}"
 		);
+		assert!(debug_str.contains("tile_compression: Uncompressed"));
+		assert!(debug_str.contains("tile_format: PNG"));
+		assert!(debug_str.contains("tile_mime: \"image/png\""));
 		Ok(())
 	}
 
@@ -159,7 +163,7 @@ mod tests {
 	#[case(
 		"../testdata/berlin.pmtiles",
 		"12/2200/1345",
-		("vnd.mapbox-vector-tile", "[13.07373,52.321911,13.776855,52.683043]", [31, 139, 8, 0], 0, 14)
+		("vnd.mapbox-vector-tile", "[13.08283,52.33446,13.762245,52.6783]", [31, 139, 8, 0], 0, 14)
 	)]
 	#[case(
 		"../testdata/berlin.vpl",

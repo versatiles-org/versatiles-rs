@@ -25,8 +25,8 @@ async fn assert_tiles_equal(
 	match (source_tile, output_tile) {
 		(Some(mut src), Some(mut out)) => {
 			// Get uncompressed blobs for comparison
-			let src_blob = src.as_blob(TileCompression::Uncompressed).unwrap();
-			let out_blob = out.as_blob(TileCompression::Uncompressed).unwrap();
+			let src_blob = src.as_blob(&TileCompression::Uncompressed).unwrap();
+			let out_blob = out.as_blob(&TileCompression::Uncompressed).unwrap();
 			assert_eq!(
 				src_blob.as_slice(),
 				out_blob.as_slice(),

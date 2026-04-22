@@ -92,11 +92,6 @@ struct Cli {
 		help = "SSH identity file for SFTP authentication (overrides VERSATILES_SSH_IDENTITY)"
 	)]
 	ssh_identity: Option<PathBuf>,
-
-	/// Pre-count tiles before processing for accurate progress bars.
-	/// This requires an additional pass over the tile source, which may be slow for large datasets.
-	#[arg(long, global = true, display_order = 99)]
-	precount_tiles: bool,
 }
 
 /// Define subcommands for the command-line interface
@@ -163,9 +158,6 @@ fn main() {
 		}
 		if let Some(ssh_identity) = &cli.ssh_identity {
 			builder = builder.ssh_identity(ssh_identity.clone());
-		}
-		if cli.precount_tiles {
-			builder = builder.precount_tiles(true);
 		}
 		builder.build()
 	};

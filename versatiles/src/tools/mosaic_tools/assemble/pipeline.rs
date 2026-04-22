@@ -66,8 +66,8 @@ pub(super) async fn scan_sources(
 			let cfg = AssembleConfig {
 				quality: *quality,
 				lossless,
-				tile_format: metadata.tile_format,
-				tile_compression: metadata.tile_compression,
+				tile_format: *metadata.tile_format(),
+				tile_compression: *metadata.tile_compression(),
 			};
 			tile_dim = reader_tilejson.tile_size.map_or(256, |ts| u64::from(ts.size()));
 			tilejson = Some(TileJSON {
@@ -90,7 +90,7 @@ pub(super) async fn scan_sources(
 		tilejson.as_mut().unwrap().merge(reader_tilejson)?;
 
 		// Get pyramid and clip to zoom range
-		let mut pyramid = metadata.bbox_pyramid.clone();
+		let mut pyramid = reader.tile_pyramid().await?.as_ref().clone();
 		if let Some(min) = min_zoom {
 			pyramid.set_level_min(min);
 		}

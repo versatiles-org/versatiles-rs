@@ -27,15 +27,15 @@ pub(super) fn validate_source_format(
 	config: &AssembleConfig,
 ) -> Result<()> {
 	ensure!(
-		metadata.tile_format == config.tile_format,
+		*metadata.tile_format() == config.tile_format,
 		"Source {path} has tile format {:?}, expected {:?}",
-		metadata.tile_format,
+		metadata.tile_format(),
 		config.tile_format
 	);
 	ensure!(
-		metadata.tile_compression == config.tile_compression,
+		*metadata.tile_compression() == config.tile_compression,
 		"Source {path} has tile compression {:?}, expected {:?}",
-		metadata.tile_compression,
+		metadata.tile_compression(),
 		config.tile_compression
 	);
 	Ok(())
@@ -59,7 +59,7 @@ pub(super) fn composite_two_tiles(base: Tile, top: Tile) -> Result<Tile> {
 
 /// Write an opaque tile's original blob to the sink without re-encoding.
 pub(super) fn write_opaque_blob(tile: Tile, config: &AssembleConfig) -> Result<Blob> {
-	tile.into_blob(config.tile_compression)
+	tile.into_blob(&config.tile_compression)
 }
 
 /// Re-encode translucent tiles as WebP in parallel and compress for the output container.
@@ -91,7 +91,7 @@ pub(super) fn encode_tiles_parallel(
 							cfg.quality[coord.level as usize]
 						};
 						tile.change_format(TileFormat::WEBP, quality, None)?;
-						Ok((coord, tile.into_blob(cfg.tile_compression)?))
+						Ok((coord, tile.into_blob(&cfg.tile_compression)?))
 					})
 				})
 				.collect();
@@ -189,22 +189,24 @@ mod tests {
 	#[test]
 	fn validate_source_format_matching() {
 		let config = test_config();
-		let metadata = versatiles_container::TileSourceMetadata {
-			tile_format: TileFormat::WEBP,
-			tile_compression: TileCompression::Uncompressed,
-			..Default::default()
-		};
+		let metadata = versatiles_container::TileSourceMetadata::new(
+			TileFormat::WEBP,
+			TileCompression::Uncompressed,
+			versatiles_container::Traversal::ANY,
+			None,
+		);
 		assert!(validate_source_format("test.versatiles", &metadata, &config).is_ok());
 	}
 
 	#[test]
 	fn validate_source_format_mismatched_format() {
 		let config = test_config();
-		let metadata = versatiles_container::TileSourceMetadata {
-			tile_format: TileFormat::PNG,
-			tile_compression: TileCompression::Uncompressed,
-			..Default::default()
-		};
+		let metadata = versatiles_container::TileSourceMetadata::new(
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			versatiles_container::Traversal::ANY,
+			None,
+		);
 		let err = validate_source_format("bad.versatiles", &metadata, &config).unwrap_err();
 		assert!(err.to_string().contains("tile format"));
 	}
@@ -212,11 +214,12 @@ mod tests {
 	#[test]
 	fn validate_source_format_mismatched_compression() {
 		let config = test_config();
-		let metadata = versatiles_container::TileSourceMetadata {
-			tile_format: TileFormat::WEBP,
-			tile_compression: TileCompression::Gzip,
-			..Default::default()
-		};
+		let metadata = versatiles_container::TileSourceMetadata::new(
+			TileFormat::WEBP,
+			TileCompression::Gzip,
+			versatiles_container::Traversal::ANY,
+			None,
+		);
 		let err = validate_source_format("bad.versatiles", &metadata, &config).unwrap_err();
 		assert!(err.to_string().contains("tile compression"));
 	}
@@ -387,11 +390,12 @@ mod tests {
 	#[test]
 	fn validate_source_format_both_mismatched() {
 		let config = test_config();
-		let metadata = versatiles_container::TileSourceMetadata {
-			tile_format: TileFormat::PNG,
-			tile_compression: TileCompression::Gzip,
-			..Default::default()
-		};
+		let metadata = versatiles_container::TileSourceMetadata::new(
+			TileFormat::PNG,
+			TileCompression::Gzip,
+			versatiles_container::Traversal::ANY,
+			None,
+		);
 		// First check fires (format), so error mentions format
 		let err = validate_source_format("bad.versatiles", &metadata, &config).unwrap_err();
 		assert!(err.to_string().contains("tile format"));
@@ -400,10 +404,12 @@ mod tests {
 	#[test]
 	fn validate_source_format_includes_path_in_error() {
 		let config = test_config();
-		let metadata = versatiles_container::TileSourceMetadata {
-			tile_format: TileFormat::PNG,
-			..Default::default()
-		};
+		let metadata = versatiles_container::TileSourceMetadata::new(
+			TileFormat::PNG,
+			TileCompression::default(),
+			versatiles_container::Traversal::ANY,
+			None,
+		);
 		let err = validate_source_format("my/special/path.versatiles", &metadata, &config).unwrap_err();
 		assert!(err.to_string().contains("my/special/path.versatiles"));
 	}
@@ -438,7 +444,7 @@ mod tests {
 		let top = translucent_rgba_tile(100);
 		let result = composite_two_tiles(base, top)?;
 		// The result should be producible as a blob
-		let blob = result.into_blob(TileCompression::Uncompressed)?;
+		let blob = result.into_blob(&TileCompression::Uncompressed)?;
 		assert!(!blob.is_empty());
 		Ok(())
 	}
@@ -637,23 +643,22 @@ mod tests {
 					tile_compression: comp,
 					..test_config()
 				};
-				let matching = versatiles_container::TileSourceMetadata {
-					tile_format: fmt,
-					tile_compression: comp,
-					..Default::default()
-				};
+				let matching =
+					versatiles_container::TileSourceMetadata::new(fmt, comp, versatiles_container::Traversal::ANY, None);
 				assert!(validate_source_format("test", &matching, &config).is_ok());
 
 				// Mismatched format should fail
-				let wrong_fmt = versatiles_container::TileSourceMetadata {
-					tile_format: if fmt == TileFormat::PNG {
-						TileFormat::WEBP
-					} else {
-						TileFormat::PNG
-					},
-					tile_compression: comp,
-					..Default::default()
+				let wrong_format = if fmt == TileFormat::PNG {
+					TileFormat::WEBP
+				} else {
+					TileFormat::PNG
 				};
+				let wrong_fmt = versatiles_container::TileSourceMetadata::new(
+					wrong_format,
+					comp,
+					versatiles_container::Traversal::ANY,
+					None,
+				);
 				assert!(validate_source_format("test", &wrong_fmt, &config).is_err());
 			}
 		}
