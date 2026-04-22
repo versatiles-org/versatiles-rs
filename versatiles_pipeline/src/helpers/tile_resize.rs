@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Result, anyhow, bail, ensure};
 use imageproc::image::DynamicImage;
 use moka::future::Cache;
 use std::{fmt::Debug, sync::Arc};
@@ -96,7 +96,7 @@ impl TileResizeCore {
 					}
 				}
 			}
-			_ => unreachable!(),
+			_ => bail!("target tile_size must be 256 or 512, got {tartile_size}"),
 		}
 
 		let metadata = source.metadata().clone();

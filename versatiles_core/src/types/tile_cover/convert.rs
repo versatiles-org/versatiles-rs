@@ -105,7 +105,7 @@ impl TileCover {
 		self.upgrade_to_tree();
 		match self {
 			TileCover::Tree(t) => t,
-			TileCover::Bbox(_) => unreachable!(),
+			TileCover::Bbox(_) => unreachable!("upgrade_to_tree leaves self as TileCover::Tree"),
 		}
 	}
 }

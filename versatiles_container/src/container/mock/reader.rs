@@ -27,7 +27,7 @@ use std::sync::Arc;
 #[cfg(feature = "cli")]
 use crate::TilesRuntime;
 use crate::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use anyhow::Result;
+use anyhow::{Result, bail};
 use async_trait::async_trait;
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
@@ -123,7 +123,7 @@ impl MockReader {
 			MVT => Blob::from(MOCK_BYTES_PBF.to_vec()),
 			JPG => Blob::from(MOCK_BYTES_JPG.to_vec()),
 			WEBP => Blob::from(MOCK_BYTES_WEBP.to_vec()),
-			_ => panic!("tile format {format:?} is not implemented for MockReader"),
+			_ => bail!("tile format {format:?} is not implemented for MockReader"),
 		};
 		blob = compress(blob, compression)?;
 		Ok(Some(Tile::from_blob(blob, *compression, *format)))

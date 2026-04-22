@@ -185,12 +185,12 @@ fn parse_geojson_geometry(iter: &mut ByteIterator) -> Result<Geometry> {
 
 	let coordinates = coordinates.ok_or(anyhow!("geometry must have coordinates"))?;
 	let geometry = match geometry_type.as_str() {
-		"Point" => Geometry::new_point(coordinates.unwrap_c0()),
-		"LineString" => Geometry::new_line_string(coordinates.unwrap_c1()),
-		"Polygon" => Geometry::new_polygon(coordinates.unwrap_c2()),
-		"MultiPoint" => Geometry::new_multi_point(coordinates.unwrap_c1()),
-		"MultiLineString" => Geometry::new_multi_line_string(coordinates.unwrap_c2()),
-		"MultiPolygon" => Geometry::new_multi_polygon(coordinates.unwrap_c3()),
+		"Point" => Geometry::new_point(coordinates.take_c0()?),
+		"LineString" => Geometry::new_line_string(coordinates.take_c1()?),
+		"Polygon" => Geometry::new_polygon(coordinates.take_c2()?),
+		"MultiPoint" => Geometry::new_multi_point(coordinates.take_c1()?),
+		"MultiLineString" => Geometry::new_multi_line_string(coordinates.take_c2()?),
+		"MultiPolygon" => Geometry::new_multi_polygon(coordinates.take_c3()?),
 		_ => bail!("unknown geometry type '{geometry_type}'"),
 	};
 
@@ -209,39 +209,39 @@ enum TemporaryCoordinates {
 }
 
 impl TemporaryCoordinates {
-	/// Extracts a single numeric value; panics if the coordinate is not a scalar.
-	pub fn unwrap_v(self) -> f64 {
+	/// Extracts a single numeric value.
+	pub fn take_v(self) -> Result<f64> {
 		match self {
-			TemporaryCoordinates::V(v) => v,
-			_ => panic!("coordinate is not a single value"),
+			TemporaryCoordinates::V(v) => Ok(v),
+			_ => bail!("coordinate is not a single value"),
 		}
 	}
-	/// Extracts a single point `[x, y]`; panics if the coordinate is not a point.
-	pub fn unwrap_c0(self) -> [f64; 2] {
+	/// Extracts a single point `[x, y]`.
+	pub fn take_c0(self) -> Result<[f64; 2]> {
 		match self {
-			TemporaryCoordinates::C0(v) => v,
-			_ => panic!("coordinates are not a point"),
+			TemporaryCoordinates::C0(v) => Ok(v),
+			_ => bail!("coordinates are not a point"),
 		}
 	}
-	/// Extracts an array of points; panics if the coordinate is not a list of points.
-	pub fn unwrap_c1(self) -> Vec<[f64; 2]> {
+	/// Extracts an array of points.
+	pub fn take_c1(self) -> Result<Vec<[f64; 2]>> {
 		match self {
-			TemporaryCoordinates::C1(v) => v,
-			_ => panic!("coordinates are not an array of points"),
+			TemporaryCoordinates::C1(v) => Ok(v),
+			_ => bail!("coordinates are not an array of points"),
 		}
 	}
-	/// Extracts an array of linearly nested point arrays (e.g., rings); panics otherwise.
-	pub fn unwrap_c2(self) -> Vec<Vec<[f64; 2]>> {
+	/// Extracts an array of linearly nested point arrays (e.g., rings).
+	pub fn take_c2(self) -> Result<Vec<Vec<[f64; 2]>>> {
 		match self {
-			TemporaryCoordinates::C2(v) => v,
-			_ => panic!("coordinates are not an array of an array of points"),
+			TemporaryCoordinates::C2(v) => Ok(v),
+			_ => bail!("coordinates are not an array of an array of points"),
 		}
 	}
-	/// Extracts an array of arrays of point arrays (e.g., polygons); panics otherwise.
-	pub fn unwrap_c3(self) -> Vec<Vec<Vec<[f64; 2]>>> {
+	/// Extracts an array of arrays of point arrays (e.g., polygons).
+	pub fn take_c3(self) -> Result<Vec<Vec<Vec<[f64; 2]>>>> {
 		match self {
-			TemporaryCoordinates::C3(v) => v,
-			_ => panic!("coordinates are not an array of an array of an array of points"),
+			TemporaryCoordinates::C3(v) => Ok(v),
+			_ => bail!("coordinates are not an array of an array of an array of points"),
 		}
 	}
 }
@@ -274,12 +274,24 @@ fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordin
 						if list.len() != 2 {
 							bail!("points in coordinates must have exactly two values")
 						}
-						let values: Vec<f64> = list.into_iter().map(TemporaryCoordinates::unwrap_v).collect();
+						let values: Vec<f64> = list
+							.into_iter()
+							.map(TemporaryCoordinates::take_v)
+							.collect::<Result<_>>()?;
 						C0([values[0], values[1]])
 					}
-					C0(_) => C1(list.into_iter().map(TemporaryCoordinates::unwrap_c0).collect()),
-					C1(_) => C2(list.into_iter().map(TemporaryCoordinates::unwrap_c1).collect()),
-					C2(_) => C3(list.into_iter().map(TemporaryCoordinates::unwrap_c2).collect()),
+					C0(_) => C1(list
+						.into_iter()
+						.map(TemporaryCoordinates::take_c0)
+						.collect::<Result<_>>()?),
+					C1(_) => C2(list
+						.into_iter()
+						.map(TemporaryCoordinates::take_c1)
+						.collect::<Result<_>>()?),
+					C2(_) => C3(list
+						.into_iter()
+						.map(TemporaryCoordinates::take_c2)
+						.collect::<Result<_>>()?),
 					C3(_) => bail!("coordinates are nested too deep"),
 				};
 

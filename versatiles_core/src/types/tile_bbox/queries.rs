@@ -69,7 +69,7 @@ impl TileBBox {
 			1 => TileBBox::from_min_and_size(self.level, x + w, y, w, h)?, // Top-right
 			2 => TileBBox::from_min_and_size(self.level, x, y + h, w, h)?, // Bottom-left
 			3 => TileBBox::from_min_and_size(self.level, x + w, y + h, w, h)?, // Bottom-right
-			_ => unreachable!(),
+			_ => unreachable!("quadrant < 4 was checked above"),
 		};
 
 		Ok(bbox)

@@ -55,7 +55,7 @@
 //!   or queries fail.
 
 use crate::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal};
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Result, anyhow, bail, ensure};
 use async_trait::async_trait;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -181,7 +181,7 @@ impl MBTilesReader {
 						tile_format = Ok(WEBP);
 						compression = Ok(Uncompressed);
 					}
-					_ => panic!("unknown file format: {value}"),
+					_ => bail!("unknown tile format '{value}' in mbtiles metadata of '{}'", self.name),
 				},
 				// https://github.com/mapbox/mbtiles-spec/blob/master/1.3/spec.md#content
 				"bounds" => {

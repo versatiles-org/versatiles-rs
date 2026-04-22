@@ -114,7 +114,9 @@ fn read_csv_fields<'a>(
 						return Some(Ok((fields, iter.position())));
 					}
 					Some(e) if e == separator => break,
-					Some(_) => panic!(),
+					// parse_simple_csv_string / parse_quoted_csv_string stop at separator,
+					// \r, \n, or EOF — so consume() here can only yield one of those.
+					Some(_) => unreachable!("csv field parser left non-boundary byte unread"),
 				}
 			}
 		}
