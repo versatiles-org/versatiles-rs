@@ -19,8 +19,8 @@ async fn read_mbtiles_source() -> Result<()> {
 	let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 
 	// Verify metadata is present
-	assert_eq!(reader.metadata().tile_format, TileFormat::MVT);
-	assert!(reader.metadata().bbox_pyramid.level_max().unwrap() > 0);
+	assert_eq!(*reader.metadata().tile_format(), TileFormat::MVT);
+	assert!(reader.tilejson().zoom_max().is_some());
 
 	// Verify tilejson is present
 	let tilejson = reader.tilejson();
@@ -37,15 +37,21 @@ async fn mbtiles_to_versatiles_round_trip() -> Result<()> {
 
 	// Read source
 	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
-	let original_format = source.metadata().tile_format;
+	let original_format = *source.metadata().tile_format();
 
-	// Write to versatiles
-	runtime.write_to_path(source, &versatiles_path).await?;
+	// Write to versatiles (via convert to compute pyramid)
+	convert_tiles_container(
+		source,
+		TilesConverterParameters::default(),
+		&versatiles_path,
+		runtime.clone(),
+	)
+	.await?;
 
 	// Read back
 	let reader = runtime.reader_from_str(versatiles_path.to_str().unwrap()).await?;
-	assert_eq!(reader.metadata().tile_format, original_format);
-	assert!(reader.metadata().bbox_pyramid.level_max().unwrap() > 0);
+	assert_eq!(*reader.metadata().tile_format(), original_format);
+	assert!(reader.tilejson().zoom_max().is_some());
 
 	Ok(())
 }
@@ -62,14 +68,14 @@ async fn mbtiles_to_tar_round_trip() -> Result<()> {
 		bbox_pyramid: Some(TilePyramid::new_full_up_to(5)), // Limit to levels 0-5
 		..Default::default()
 	};
-	let filtered = TilesConvertReader::new_from_reader(source, params)?;
+	let filtered = TilesConvertReader::new_from_reader(source, params).await?;
 
 	// Write to tar
 	runtime.write_to_path(filtered.into_shared(), &tar_path).await?;
 
 	// Read back
 	let reader = runtime.reader_from_str(tar_path.to_str().unwrap()).await?;
-	assert!(reader.metadata().bbox_pyramid.level_max().unwrap() > 0);
+	assert!(reader.tilejson().zoom_max().is_some());
 
 	Ok(())
 }
@@ -86,14 +92,14 @@ async fn mbtiles_to_pmtiles_round_trip() -> Result<()> {
 		bbox_pyramid: Some(TilePyramid::new_full_up_to(5)),
 		..Default::default()
 	};
-	let filtered = TilesConvertReader::new_from_reader(source, params)?;
+	let filtered = TilesConvertReader::new_from_reader(source, params).await?;
 
 	// Write to pmtiles
 	runtime.write_to_path(filtered.into_shared(), &pmtiles_path).await?;
 
 	// Read back
 	let reader = runtime.reader_from_str(pmtiles_path.to_str().unwrap()).await?;
-	assert!(reader.metadata().bbox_pyramid.level_max().unwrap() > 0);
+	assert!(reader.tilejson().zoom_max().is_some());
 
 	Ok(())
 }
@@ -106,8 +112,8 @@ async fn converter_preserves_tile_format() -> Result<()> {
 
 	// Read source
 	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
-	let original_format = source.metadata().tile_format;
-	let original_compression = source.metadata().tile_compression;
+	let original_format = *source.metadata().tile_format();
+	let original_compression = *source.metadata().tile_compression();
 
 	// Convert without changing format/compression
 	let params = TilesConverterParameters {
@@ -119,7 +125,7 @@ async fn converter_preserves_tile_format() -> Result<()> {
 
 	// Verify format is preserved
 	let reader = runtime.reader_from_str(output_path.to_str().unwrap()).await?;
-	assert_eq!(reader.metadata().tile_format, original_format);
+	assert_eq!(*reader.metadata().tile_format(), original_format);
 	// Note: compression may change depending on writer implementation
 	let _ = original_compression; // May differ based on writer
 
@@ -146,7 +152,7 @@ async fn converter_changes_compression() -> Result<()> {
 
 	// Verify output exists and is readable
 	let reader = runtime.reader_from_str(output_path.to_str().unwrap()).await?;
-	assert!(reader.metadata().bbox_pyramid.level_max().unwrap() > 0);
+	assert!(reader.tilejson().zoom_max().is_some());
 
 	Ok(())
 }
@@ -186,9 +192,9 @@ async fn metadata_consistency_after_conversion() -> Result<()> {
 	let metadata = reader.metadata();
 
 	// Basic metadata checks
-	assert!(metadata.bbox_pyramid.level_min().is_some());
-	assert!(metadata.bbox_pyramid.level_max().is_some());
-	assert!(!metadata.tile_format.as_extension().is_empty());
+	assert!(reader.tilejson().zoom_min().is_some());
+	assert!(reader.tilejson().zoom_max().is_some());
+	assert!(!metadata.tile_format().as_extension().is_empty());
 
 	Ok(())
 }
@@ -214,16 +220,22 @@ async fn versatiles_tile_data_preserved_after_round_trip() -> Result<()> {
 	let mut original_tiles = Vec::new();
 	for coord in &test_coords {
 		if let Some(tile) = source.tile(coord).await? {
-			let blob = tile.into_blob(TileCompression::Uncompressed)?;
+			let blob = tile.into_blob(&TileCompression::Uncompressed)?;
 			original_tiles.push((*coord, blob));
 		}
 	}
 
 	assert!(!original_tiles.is_empty(), "Should have found at least one test tile");
 
-	// Write to versatiles
+	// Write to versatiles (via convert to compute pyramid)
 	let source2 = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
-	runtime.write_to_path(source2, &versatiles_path).await?;
+	convert_tiles_container(
+		source2,
+		TilesConverterParameters::default(),
+		&versatiles_path,
+		runtime.clone(),
+	)
+	.await?;
 
 	// Read back from versatiles
 	let reader = runtime.reader_from_str(versatiles_path.to_str().unwrap()).await?;
@@ -234,7 +246,7 @@ async fn versatiles_tile_data_preserved_after_round_trip() -> Result<()> {
 			.tile(coord)
 			.await?
 			.unwrap_or_else(|| panic!("Tile at {coord:?} should exist after round-trip"));
-		let read_blob = read_tile.into_blob(TileCompression::Uncompressed)?;
+		let read_blob = read_tile.into_blob(&TileCompression::Uncompressed)?;
 
 		assert_eq!(
 			original_blob.as_slice(),
@@ -259,7 +271,7 @@ async fn versatiles_tile_stream_complete_after_round_trip() -> Result<()> {
 		bbox_pyramid: Some(TilePyramid::new_full_up_to(4)), // Levels 0-4
 		..Default::default()
 	};
-	let filtered = TilesConvertReader::new_from_reader(source, params)?;
+	let filtered = TilesConvertReader::new_from_reader(source, params).await?;
 
 	// Count tiles in source stream
 	let source_for_count = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
@@ -267,7 +279,7 @@ async fn versatiles_tile_stream_complete_after_round_trip() -> Result<()> {
 		bbox_pyramid: Some(TilePyramid::new_full_up_to(4)),
 		..Default::default()
 	};
-	let filtered_for_count = TilesConvertReader::new_from_reader(source_for_count, params_for_count)?;
+	let filtered_for_count = TilesConvertReader::new_from_reader(source_for_count, params_for_count).await?;
 	let bbox = TileBBox::new_full(4)?;
 	let source_tiles: Vec<_> = filtered_for_count.into_shared().tile_stream(bbox).await?.to_vec().await;
 	let source_tile_count = source_tiles.len();
@@ -300,8 +312,14 @@ async fn versatiles_block_boundary_tiles_preserved() -> Result<()> {
 	// At zoom 9, tiles go up to 511, so we can test boundary at 255/256
 	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 
-	// Write to versatiles
-	runtime.write_to_path(source, &versatiles_path).await?;
+	// Write to versatiles (via convert to compute pyramid)
+	convert_tiles_container(
+		source,
+		TilesConverterParameters::default(),
+		&versatiles_path,
+		runtime.clone(),
+	)
+	.await?;
 
 	// Read back
 	let reader = runtime.reader_from_str(versatiles_path.to_str().unwrap()).await?;
@@ -323,8 +341,8 @@ async fn versatiles_block_boundary_tiles_preserved() -> Result<()> {
 
 		match (original, read) {
 			(Some(orig_tile), Some(read_tile)) => {
-				let orig_blob = orig_tile.into_blob(TileCompression::Uncompressed)?;
-				let read_blob = read_tile.into_blob(TileCompression::Uncompressed)?;
+				let orig_blob = orig_tile.into_blob(&TileCompression::Uncompressed)?;
+				let read_blob = read_tile.into_blob(&TileCompression::Uncompressed)?;
 				assert_eq!(
 					orig_blob.as_slice(),
 					read_blob.as_slice(),
@@ -354,19 +372,17 @@ async fn versatiles_deduplicated_tiles_readable() -> Result<()> {
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
 
 	// Create a mock source with duplicate small tiles
-	let mut source = MockReader::new_mock(TileSourceMetadata::new(
-		TileFormat::MVT,
-		TileCompression::Uncompressed,
+	let mut source = MockReader::new_mock(
 		TilePyramid::new_full_up_to(2), // Small: 4x4 = 16 tiles at level 2
-		Traversal::ANY,
-	))?;
+		TileSourceMetadata::new(TileFormat::MVT, TileCompression::Uncompressed, Traversal::ANY, None),
+	)?;
 
 	// Get the original tiles before writing
 	let bbox = TileBBox::new_full(2)?;
 	let original_tiles: Vec<(TileCoord, Blob)> = source
 		.tile_stream(bbox)
 		.await?
-		.map_parallel_try(|_coord, tile: Tile| tile.into_blob(TileCompression::Uncompressed))
+		.map_parallel_try(|_coord, tile: Tile| tile.into_blob(&TileCompression::Uncompressed))
 		.unwrap_results()
 		.to_vec()
 		.await;
@@ -383,7 +399,7 @@ async fn versatiles_deduplicated_tiles_readable() -> Result<()> {
 			.tile(coord)
 			.await?
 			.unwrap_or_else(|| panic!("Tile at {coord:?} should exist"));
-		let read_blob = read_tile.into_blob(TileCompression::Uncompressed)?;
+		let read_blob = read_tile.into_blob(&TileCompression::Uncompressed)?;
 
 		assert_eq!(
 			original_blob.as_slice(),
@@ -404,12 +420,10 @@ async fn versatiles_empty_source_fails_gracefully() -> Result<()> {
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
 
 	// Create an empty mock source (no zoom levels at all)
-	let mut source = MockReader::new_mock(TileSourceMetadata::new(
-		TileFormat::MVT,
-		TileCompression::Uncompressed,
+	let mut source = MockReader::new_mock(
 		TilePyramid::new_empty(),
-		Traversal::ANY,
-	))?;
+		TileSourceMetadata::new(TileFormat::MVT, TileCompression::Uncompressed, Traversal::ANY, None),
+	)?;
 
 	// Writing should fail because the VersaTiles format requires valid minzoom/maxzoom
 	let result = VersaTilesWriter::write_to_path(&mut source, &versatiles_path, runtime.clone()).await;
@@ -442,12 +456,10 @@ async fn tilejson_metadata_preserved_over_pyramid(#[case] filename: &str) -> Res
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
 
 	// Create a MockReader with a wide pyramid (zoom 0-4, full world, PNG format)
-	let mut source = MockReader::new_mock(TileSourceMetadata::new(
-		TileFormat::PNG,
-		TileCompression::Uncompressed,
+	let mut source = MockReader::new_mock(
 		TilePyramid::new_full_up_to(4),
-		Traversal::ANY,
-	))?;
+		TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None),
+	)?;
 
 	// Set custom TileJSON values that intentionally differ from the pyramid
 	let tj = source.tilejson_mut();

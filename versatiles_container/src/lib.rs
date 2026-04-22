@@ -27,7 +27,7 @@
 //!         bbox_pyramid: Some(TilePyramid::new_full_up_to(8)),
 //!         ..Default::default()
 //!     };
-//!     let reader = Arc::new(Box::new(TilesConvertReader::new_from_reader(reader, params)?) as Box<dyn TileSource>);
+//!     let reader = Arc::new(Box::new(TilesConvertReader::new_from_reader(reader, params).await?) as Box<dyn TileSource>);
 //!
 //!     // Write to a target path; format is inferred from the extension
 //!     let output = std::env::temp_dir().join("example.versatiles");
