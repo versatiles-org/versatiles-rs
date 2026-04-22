@@ -115,45 +115,67 @@ fn node_difference(a: &Node, b: &Node) -> Node {
 mod tests {
 	use super::*;
 	use crate::TileBBox;
+	use rstest::rstest;
 
 	fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()
 	}
 
-	#[test]
-	fn union() -> Result<()> {
-		let a = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 7));
-		let b = TileQuadtree::from_bbox(&bbox(3, 4, 0, 7, 7));
-		let u = a.union(&b)?;
-		assert!(u.is_full());
+	/// Which binary set operation to invoke.
+	#[derive(Debug, Clone, Copy)]
+	enum SetOp {
+		Union,
+		Intersection,
+		Difference,
+	}
+
+	impl SetOp {
+		fn apply(self, a: &TileQuadtree, b: &TileQuadtree) -> Result<TileQuadtree> {
+			match self {
+				SetOp::Union => a.union(b),
+				SetOp::Intersection => a.intersection(b),
+				SetOp::Difference => a.difference(b),
+			}
+		}
+	}
+
+	#[rstest]
+	#[case::union(
+		SetOp::Union,
+		TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 7)),
+		TileQuadtree::from_bbox(&bbox(3, 4, 0, 7, 7)),
+		64, // half ∪ half = full (8×8 = 64)
+	)]
+	#[case::intersection(
+		SetOp::Intersection,
+		TileQuadtree::from_bbox(&bbox(3, 0, 0, 5, 5)),
+		TileQuadtree::from_bbox(&bbox(3, 3, 3, 7, 7)),
+		9, // overlap [3,3]-[5,5] = 3×3
+	)]
+	#[case::difference(
+		SetOp::Difference,
+		TileQuadtree::new_full(2).unwrap(),
+		TileQuadtree::from_bbox(&bbox(2, 0, 0, 1, 1)),
+		12, // 16 − 4
+	)]
+	fn set_op_cases(
+		#[case] op: SetOp,
+		#[case] a: TileQuadtree,
+		#[case] b: TileQuadtree,
+		#[case] expected: u64,
+	) -> Result<()> {
+		let out = op.apply(&a, &b)?;
+		assert_eq!(out.count_tiles(), expected);
 		Ok(())
 	}
 
-	#[test]
-	fn intersection() -> Result<()> {
-		let a = TileQuadtree::from_bbox(&bbox(3, 0, 0, 5, 5));
-		let b = TileQuadtree::from_bbox(&bbox(3, 3, 3, 7, 7));
-		let i = a.intersection(&b)?;
-		// Overlap is [3,3] to [5,5] = 3x3 = 9 tiles
-		assert_eq!(i.count_tiles(), 9);
-		Ok(())
-	}
-
-	#[test]
-	fn difference() -> Result<()> {
-		let a = TileQuadtree::new_full(2).unwrap();
-		let b = TileQuadtree::from_bbox(&bbox(2, 0, 0, 1, 1));
-		let d = a.difference(&b)?;
-		assert_eq!(d.count_tiles(), 12);
-		Ok(())
-	}
-
-	#[test]
-	fn set_ops_zoom_mismatch() {
+	#[rstest]
+	#[case(SetOp::Union)]
+	#[case(SetOp::Intersection)]
+	#[case(SetOp::Difference)]
+	fn zoom_mismatch_errors(#[case] op: SetOp) {
 		let a = TileQuadtree::new_full(3).unwrap();
 		let b = TileQuadtree::new_full(4).unwrap();
-		assert!(a.union(&b).is_err());
-		assert!(a.intersection(&b).is_err());
-		assert!(a.difference(&b).is_err());
+		assert!(op.apply(&a, &b).is_err());
 	}
 }

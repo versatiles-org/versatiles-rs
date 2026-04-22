@@ -41,25 +41,18 @@ impl Node {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use anyhow::Result;
 
 	fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()
 	}
 
-	#[test]
-	fn bounds_empty_and_full() -> Result<()> {
-		assert!(TileQuadtree::new_empty(3).unwrap().to_bbox().is_empty());
-		assert_eq!(TileQuadtree::new_full(2).unwrap().to_bbox(), TileBBox::new_full(2)?);
-		Ok(())
-	}
-
-	#[test]
-	fn bounds_partial() -> Result<()> {
-		let b = bbox(4, 3, 5, 7, 9);
-		let t = TileQuadtree::from_bbox(&b);
-		assert_eq!(t.to_bbox(), b);
-		Ok(())
+	/// `to_bbox()` across tree kinds — expected bbox.
+	#[rstest::rstest]
+	#[case::empty(TileQuadtree::new_empty(3).unwrap(), TileBBox::new_empty(3).unwrap())]
+	#[case::full(TileQuadtree::new_full(2).unwrap(), TileBBox::new_full(2).unwrap())]
+	#[case::partial(TileQuadtree::from_bbox(&bbox(4, 3, 5, 7, 9)), bbox(4, 3, 5, 7, 9))]
+	fn to_bbox_cases(#[case] t: TileQuadtree, #[case] expected: TileBBox) {
+		assert_eq!(t.to_bbox(), expected);
 	}
 
 	#[test]

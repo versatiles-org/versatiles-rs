@@ -72,34 +72,44 @@ impl Node {
 mod tests {
 	use super::*;
 	use crate::TileCoord;
-	use anyhow::Result;
+	use rstest::rstest;
 
 	fn coord(level: u8, x: u32, y: u32) -> TileCoord {
 		TileCoord::new(level, x, y).unwrap()
 	}
 
-	#[test]
-	fn tile_count_full() {
-		for z in 0u8..=5 {
-			let expected = 1u64 << (2 * u32::from(z));
-			assert_eq!(TileQuadtree::new_full(z).unwrap().count_tiles(), expected);
-		}
+	/// `count_tiles` on a full quadtree at zoom `z` equals `4^z` (2²ᶻ).
+	#[rstest]
+	#[case(0)]
+	#[case(1)]
+	#[case(2)]
+	#[case(3)]
+	#[case(4)]
+	#[case(5)]
+	fn tile_count_full(#[case] z: u8) {
+		let expected = 1u64 << (2 * u32::from(z));
+		assert_eq!(TileQuadtree::new_full(z).unwrap().count_tiles(), expected);
 	}
 
-	#[test]
-	fn count_nodes_empty_and_full() {
-		// An empty tree has 1 node (the root Empty node).
-		assert_eq!(TileQuadtree::new_empty(4).unwrap().count_nodes(), 1);
-		// A full tree has 1 node (the root Full node).
-		assert_eq!(TileQuadtree::new_full(5).unwrap().count_nodes(), 1);
-	}
-
-	#[test]
-	fn count_nodes_partial_tree() -> Result<()> {
-		// A tree with a partial subtree has more than 1 node.
+	/// Structural tree kind → node count (empty/full collapse to 1 node;
+	/// partial has more than one).
+	#[rstest]
+	#[case::empty(TileQuadtree::new_empty(4).unwrap(), 1, false)]
+	#[case::full(TileQuadtree::new_full(5).unwrap(), 1, false)]
+	#[case::partial({
 		let mut t = TileQuadtree::new_empty(3).unwrap();
-		t.insert_coord(&coord(3, 0, 0))?;
-		assert!(t.count_nodes() > 1, "partial tree should have more than one node");
-		Ok(())
+		t.insert_coord(&coord(3, 0, 0)).unwrap();
+		t
+	}, 1, true)]
+	fn count_nodes_cases(#[case] t: TileQuadtree, #[case] min_nodes: u64, #[case] must_exceed: bool) {
+		let n = t.count_nodes();
+		if must_exceed {
+			assert!(
+				n > min_nodes,
+				"partial tree must have more than {min_nodes} node(s), got {n}"
+			);
+		} else {
+			assert_eq!(n, min_nodes);
+		}
 	}
 }

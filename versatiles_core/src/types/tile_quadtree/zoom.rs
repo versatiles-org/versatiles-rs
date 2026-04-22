@@ -48,21 +48,27 @@ fn reduce_max_depth(node: &Node, max_depth: u8) -> Node {
 mod tests {
 	use super::*;
 	use crate::TileBBox;
-	use anyhow::Result;
+	use rstest::rstest;
 
 	fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()
 	}
 
-	#[test]
-	fn at_level_roundtrip() -> Result<()> {
+	/// `at_level` preserves the requested level and never yields more tiles
+	/// than the source when going coarser.
+	#[rstest]
+	#[case::coarser(3)]
+	#[case::same(4)]
+	#[case::finer(5)]
+	fn at_level_preserves_requested_level(#[case] target: u8) {
 		let t = TileQuadtree::from_bbox(&bbox(4, 4, 4, 11, 11));
-		let up = t.at_level(3);
-		assert_eq!(up.level(), 3);
-		let down = t.at_level(5);
-		assert_eq!(down.level(), 5);
-		// Going up should have fewer or equal tiles
-		assert!(up.count_tiles() <= t.count_tiles());
-		Ok(())
+		let out = t.at_level(target);
+		assert_eq!(out.level(), target);
+		if target < t.level() {
+			assert!(
+				out.count_tiles() <= t.count_tiles(),
+				"coarser level must not grow tile count"
+			);
+		}
 	}
 }

@@ -313,51 +313,33 @@ mod tests {
 	}
 
 	// -------------------------------------------------------------------------
-	// Zoom mismatches
+	// Zoom mismatches — consolidated under a single rstest further below
+	// (see `zoom_mismatch_all_mutations`).
 	// -------------------------------------------------------------------------
 
-	#[test]
-	fn zoom_mismatch_include_coord() {
-		let mut t = TileQuadtree::new_empty(3).unwrap();
-		assert!(t.insert_coord(&coord(4, 0, 0)).is_err());
-	}
-
-	#[test]
-	fn zoom_mismatch_include_bbox() {
-		let mut t = TileQuadtree::new_empty(3).unwrap();
-		assert!(t.insert_bbox(&bbox(4, 0, 0, 1, 1)).is_err());
-	}
-
-	#[test]
-	fn zoom_mismatch_remove_coord() {
-		let mut t = TileQuadtree::new_full(3).unwrap();
-		assert!(t.remove_coord(&coord(4, 0, 0)).is_err());
-	}
-
-	#[test]
-	fn zoom_mismatch_remove_bbox() {
-		let mut t = TileQuadtree::new_full(3).unwrap();
-		assert!(t.remove_bbox(&bbox(4, 0, 0, 1, 1)).is_err());
-	}
-
 	// -------------------------------------------------------------------------
-	// Empty-bbox no-ops
+	// Empty-bbox no-ops: insert_bbox and remove_bbox both must leave the tree
+	// unchanged when handed an empty bbox.
 	// -------------------------------------------------------------------------
 
-	#[test]
-	fn include_empty_bbox_is_noop() -> Result<()> {
-		let mut t = TileQuadtree::new_empty(4).unwrap();
-		t.insert_bbox(&TileBBox::new_empty(4)?)?;
-		assert!(t.is_empty());
-		Ok(())
-	}
-
-	#[test]
-	fn remove_empty_bbox_is_noop() -> Result<()> {
-		let mut t = TileQuadtree::new_full(3).unwrap();
-		let count_before = t.count_tiles();
-		t.remove_bbox(&TileBBox::new_empty(3)?)?;
-		assert_eq!(t.count_tiles(), count_before);
+	#[rstest::rstest]
+	#[case::insert(true)]
+	#[case::remove(false)]
+	fn empty_bbox_is_noop_for_bbox_mutation(#[case] insert: bool) -> Result<()> {
+		let (mut t, expected) = if insert {
+			(TileQuadtree::new_empty(4).unwrap(), 0u64)
+		} else {
+			let t = TileQuadtree::new_full(3).unwrap();
+			let c = t.count_tiles();
+			(t, c)
+		};
+		let level = t.level();
+		if insert {
+			t.insert_bbox(&TileBBox::new_empty(level)?)?;
+		} else {
+			t.remove_bbox(&TileBBox::new_empty(level)?)?;
+		}
+		assert_eq!(t.count_tiles(), expected);
 		Ok(())
 	}
 
@@ -425,94 +407,46 @@ mod tests {
 	}
 
 	// -------------------------------------------------------------------------
-	// flip_y
+	// flip_y / swap_xy
 	// -------------------------------------------------------------------------
 
-	#[test]
-	fn flip_y_empty_noop() {
-		let mut t = TileQuadtree::new_empty(4).unwrap();
-		t.flip_y();
-		assert!(t.is_empty());
+	/// Both transforms are symmetric over empty / full trees — the tree must
+	/// stay structurally identical to the input.
+	#[rstest::rstest]
+	#[case::flip_empty(true, TileQuadtree::new_empty(4).unwrap())]
+	#[case::flip_full(true, TileQuadtree::new_full(3).unwrap())]
+	#[case::swap_empty(false, TileQuadtree::new_empty(4).unwrap())]
+	#[case::swap_full(false, TileQuadtree::new_full(3).unwrap())]
+	fn flip_y_and_swap_xy_preserve_empty_and_full(#[case] flip: bool, #[case] tree: TileQuadtree) {
+		let mut t = tree.clone();
+		if flip {
+			t.flip_y();
+		} else {
+			t.swap_xy();
+		}
+		assert_eq!(t, tree);
 	}
 
-	#[test]
-	fn flip_y_full_stays_full() {
-		let mut t = TileQuadtree::new_full(3).unwrap();
-		t.flip_y();
-		assert!(t.is_full());
-		assert_eq!(t.count_tiles(), 64);
-	}
-
-	#[test]
-	fn flip_y_moves_tile_to_mirrored_position() -> Result<()> {
-		// z=3: 8×8 grid; tile (2, 1) should flip to (2, 8−1−1) = (2, 6)
-		let mut t = TileQuadtree::new_empty(3).unwrap();
-		t.insert_coord(&coord(3, 2, 1))?;
-		t.flip_y();
-		assert!(!t.includes_coord(&coord(3, 2, 1)));
-		assert!(t.includes_coord(&coord(3, 2, 6)));
+	/// flip_y and swap_xy should move a single tile to the mirrored / transposed
+	/// position and preserve the total tile count.
+	#[rstest::rstest]
+	#[case::flip(true, coord(3, 2, 1), coord(3, 2, 6))]
+	#[case::swap(false, coord(3, 2, 5), coord(3, 5, 2))]
+	fn flip_y_and_swap_xy_move_single_tile(
+		#[case] flip: bool,
+		#[case] input: TileCoord,
+		#[case] expected: TileCoord,
+	) -> Result<()> {
+		let mut t = TileQuadtree::new_empty(input.level).unwrap();
+		t.insert_coord(&input)?;
+		if flip {
+			t.flip_y();
+		} else {
+			t.swap_xy();
+		}
+		assert!(!t.includes_coord(&input));
+		assert!(t.includes_coord(&expected));
 		assert_eq!(t.count_tiles(), 1);
-		Ok(())
-	}
-
-	#[test]
-	fn flip_y_is_involution() -> Result<()> {
-		// Two applications should return the original tree.
-		let mut t = TileQuadtree::new_empty(3).unwrap();
-		t.insert_coord(&coord(3, 2, 1))?;
-		t.insert_coord(&coord(3, 5, 6))?;
-		let count = t.count_tiles();
-		t.flip_y();
-		t.flip_y();
-		assert!(t.includes_coord(&coord(3, 2, 1)));
-		assert!(t.includes_coord(&coord(3, 5, 6)));
-		assert_eq!(t.count_tiles(), count);
-		Ok(())
-	}
-
-	// -------------------------------------------------------------------------
-	// swap_xy
-	// -------------------------------------------------------------------------
-
-	#[test]
-	fn swap_xy_empty_noop() {
-		let mut t = TileQuadtree::new_empty(4).unwrap();
-		t.swap_xy();
-		assert!(t.is_empty());
-	}
-
-	#[test]
-	fn swap_xy_full_stays_full() {
-		let mut t = TileQuadtree::new_full(3).unwrap();
-		t.swap_xy();
-		assert!(t.is_full());
-		assert_eq!(t.count_tiles(), 64);
-	}
-
-	#[test]
-	fn swap_xy_moves_tile_to_transposed_position() -> Result<()> {
-		// z=3: 8×8 grid; tile (2, 5) should swap to (5, 2)
-		let mut t = TileQuadtree::new_empty(3).unwrap();
-		t.insert_coord(&coord(3, 2, 5))?;
-		t.swap_xy();
-		assert!(!t.includes_coord(&coord(3, 2, 5)));
-		assert!(t.includes_coord(&coord(3, 5, 2)));
-		assert_eq!(t.count_tiles(), 1);
-		Ok(())
-	}
-
-	#[test]
-	fn swap_xy_is_involution() -> Result<()> {
-		// Two applications should return the original tree.
-		let mut t = TileQuadtree::new_empty(3).unwrap();
-		t.insert_coord(&coord(3, 2, 5))?;
-		t.insert_coord(&coord(3, 0, 7))?;
-		let count = t.count_tiles();
-		t.swap_xy();
-		t.swap_xy();
-		assert!(t.includes_coord(&coord(3, 2, 5)));
-		assert!(t.includes_coord(&coord(3, 0, 7)));
-		assert_eq!(t.count_tiles(), count);
 		Ok(())
 	}
 
@@ -543,46 +477,52 @@ mod tests {
 	}
 
 	// ── Collapse-to-Full / Collapse-to-Empty invariants ──────────────────────
-	#[test]
-	fn insert_all_tiles_at_level_2_collapses_to_full() -> Result<()> {
-		let mut t = TileQuadtree::new_empty(2).unwrap();
+
+	/// Iterating every tile at z=2 and inserting/removing it must leave the
+	/// tree in the opposite-uniform state with a single collapsed root node.
+	#[rstest::rstest]
+	#[case::insert_all(true)]
+	#[case::remove_all(false)]
+	fn all_tiles_collapse_to_uniform_root(#[case] insert: bool) -> Result<()> {
+		let mut t = if insert {
+			TileQuadtree::new_empty(2).unwrap()
+		} else {
+			TileQuadtree::new_full(2).unwrap()
+		};
 		for y in 0..4u32 {
 			for x in 0..4u32 {
-				t.insert_coord(&coord(2, x, y))?;
+				if insert {
+					t.insert_coord(&coord(2, x, y))?;
+				} else {
+					t.remove_coord(&coord(2, x, y))?;
+				}
 			}
 		}
-		assert!(t.is_full());
-		// Collapse means one node.
-		assert_eq!(t.count_nodes(), 1);
-		Ok(())
-	}
-
-	#[test]
-	fn remove_all_tiles_collapses_to_empty() -> Result<()> {
-		let mut t = TileQuadtree::new_full(2).unwrap();
-		for y in 0..4u32 {
-			for x in 0..4u32 {
-				t.remove_coord(&coord(2, x, y))?;
-			}
+		if insert {
+			assert!(t.is_full());
+		} else {
+			assert!(t.is_empty());
 		}
-		assert!(t.is_empty());
-		assert_eq!(t.count_nodes(), 1);
+		assert_eq!(t.count_nodes(), 1, "uniform tree must collapse to a single node");
 		Ok(())
 	}
 
-	#[test]
-	fn insert_single_tile_into_full_is_noop() -> Result<()> {
-		let mut t = TileQuadtree::new_full(3).unwrap();
-		t.insert_coord(&coord(3, 2, 3))?;
-		assert!(t.is_full());
-		Ok(())
-	}
-
-	#[test]
-	fn remove_single_tile_from_empty_is_noop() -> Result<()> {
-		let mut t = TileQuadtree::new_empty(3).unwrap();
-		t.remove_coord(&coord(3, 2, 3))?;
-		assert!(t.is_empty());
+	/// Inserting a tile already covered or removing one already absent is a
+	/// no-op.
+	#[rstest::rstest]
+	#[case::insert_into_full(TileQuadtree::new_full(3).unwrap(), true)]
+	#[case::remove_from_empty(TileQuadtree::new_empty(3).unwrap(), false)]
+	fn trivial_mutation_is_noop(#[case] mut t: TileQuadtree, #[case] insert: bool) -> Result<()> {
+		let c = coord(3, 2, 3);
+		let was_full = t.is_full();
+		let was_empty = t.is_empty();
+		if insert {
+			t.insert_coord(&c)?;
+		} else {
+			t.remove_coord(&c)?;
+		}
+		assert_eq!(t.is_full(), was_full);
+		assert_eq!(t.is_empty(), was_empty);
 		Ok(())
 	}
 

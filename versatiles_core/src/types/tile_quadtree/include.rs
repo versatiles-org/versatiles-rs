@@ -95,7 +95,7 @@ impl Node {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use anyhow::Result;
+	use rstest::rstest;
 
 	fn coord(level: u8, x: u32, y: u32) -> TileCoord {
 		TileCoord::new(level, x, y).unwrap()
@@ -105,13 +105,16 @@ mod tests {
 		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()
 	}
 
-	#[test]
-	fn includes_coord() {
+	/// Tree built from `bbox(3, 2, 2, 4, 4)` — included coords at corners and
+	/// excluded coords just outside.
+	#[rstest]
+	#[case::corner_tl(coord(3, 2, 2), true)]
+	#[case::corner_br(coord(3, 4, 4), true)]
+	#[case::origin_outside(coord(3, 0, 0), false)]
+	#[case::just_outside_br(coord(3, 5, 5), false)]
+	fn includes_coord_cases(#[case] c: TileCoord, #[case] expected: bool) {
 		let t = TileQuadtree::from_bbox(&bbox(3, 2, 2, 4, 4));
-		assert!(t.includes_coord(&coord(3, 2, 2)));
-		assert!(t.includes_coord(&coord(3, 4, 4)));
-		assert!(!t.includes_coord(&coord(3, 0, 0)));
-		assert!(!t.includes_coord(&coord(3, 5, 5)));
+		assert_eq!(t.includes_coord(&c), expected);
 	}
 
 	#[test]
@@ -121,30 +124,21 @@ mod tests {
 		let _ = t.includes_coord(&coord(4, 2, 2));
 	}
 
-	#[test]
-	fn includes_bbox() -> Result<()> {
-		let full = TileQuadtree::new_full(3).unwrap();
-		assert!(full.includes_bbox(&TileBBox::new_full(3)?));
-		assert!(full.includes_bbox(&bbox(3, 0, 0, 3, 3)));
-
-		let t = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3));
-		assert!(t.includes_bbox(&bbox(3, 0, 0, 2, 2)));
-		assert!(!t.includes_bbox(&TileBBox::new_full(3)?));
-		Ok(())
+	/// `includes_bbox` across tree kinds × query kinds.
+	#[rstest]
+	#[case::full_includes_full(TileQuadtree::new_full(3).unwrap(), TileBBox::new_full(3).unwrap(), true)]
+	#[case::full_includes_sub(TileQuadtree::new_full(3).unwrap(), bbox(3, 0, 0, 3, 3), true)]
+	#[case::partial_includes_sub(TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3)), bbox(3, 0, 0, 2, 2), true)]
+	#[case::partial_does_not_include_full(TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3)), TileBBox::new_full(3).unwrap(), false)]
+	#[case::empty_bbox_is_trivial(TileQuadtree::new_empty(4).unwrap(), TileBBox::new_empty(4).unwrap(), true)]
+	fn includes_bbox_cases(#[case] t: TileQuadtree, #[case] b: TileBBox, #[case] expected: bool) {
+		assert_eq!(t.includes_bbox(&b), expected);
 	}
 
 	#[test]
 	#[should_panic(expected = "assertion `left == right` failed")]
-	fn zoom_mismatch_includes_bbox() {
+	fn includes_bbox_zoom_mismatch_panics() {
 		let t = TileQuadtree::new_full(3).unwrap();
 		let _ = t.includes_bbox(&bbox(4, 0, 0, 1, 1));
-	}
-
-	#[test]
-	fn includes_empty_bbox_returns_true() -> Result<()> {
-		// An empty bbox is trivially contained in any tree.
-		let t = TileQuadtree::new_empty(4).unwrap();
-		assert!(t.includes_bbox(&TileBBox::new_empty(4)?));
-		Ok(())
 	}
 }

@@ -221,23 +221,26 @@ fn embed_node(node: Node, col: u64, row: u64, depth: u8) -> Node {
 mod tests {
 	use super::*;
 	use crate::TileBBox;
-	use anyhow::Result;
+	use rstest::rstest;
+	use std::collections::HashSet;
 
 	fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()
 	}
 
-	#[test]
-	fn iter_tiles_count() -> Result<()> {
-		let t = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3));
+	/// `iter_coords()` — length should match `count_tiles()`.
+	#[rstest]
+	#[case::partial_z3(TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3)), 16)]
+	#[case::full_z2(TileQuadtree::new_full(2).unwrap(), 16)]
+	#[case::empty_z3(TileQuadtree::new_empty(3).unwrap(), 0)]
+	fn iter_coords_count_matches_total(#[case] t: TileQuadtree, #[case] expected: usize) {
 		let tiles: Vec<_> = t.iter_coords().collect();
+		assert_eq!(tiles.len(), expected);
 		assert_eq!(tiles.len() as u64, t.count_tiles());
-		assert_eq!(tiles.len(), 16);
-		Ok(())
 	}
 
 	#[test]
-	fn iter_tiles_full() {
+	fn iter_tiles_full_contains_every_coord() {
 		let t = TileQuadtree::new_full(2).unwrap();
 		let mut tiles: Vec<_> = t.iter_coords().collect();
 		tiles.sort_by_key(|c| (c.y, c.x));
@@ -248,58 +251,36 @@ mod tests {
 		assert_eq!(tiles, expected);
 	}
 
-	#[test]
-	fn iter_tiles_empty() {
-		let t = TileQuadtree::new_empty(3).unwrap();
-		assert_eq!(t.iter_coords().count(), 0);
-	}
-
-	#[test]
-	fn iter_grid_covers_all() -> Result<()> {
-		let t = TileQuadtree::from_bbox(&bbox(4, 0, 0, 15, 15));
-		let mut seen = std::collections::HashSet::new();
+	/// `iter_grid` partitions coords across cells — no duplicates, total
+	/// matches `count_tiles()`, every cell inherits the tree's level.
+	#[rstest]
+	#[case::aligned(TileQuadtree::from_bbox(&bbox(4, 0, 0, 15, 15)), 4)]
+	#[case::non_aligned(TileQuadtree::from_bbox(&bbox(4, 1, 1, 6, 6)), 4)]
+	fn iter_grid_partition_is_lossless(#[case] t: TileQuadtree, #[case] grid_size: u32) {
+		let level = t.level();
+		let mut seen = HashSet::new();
 		let mut total = 0u64;
-		for cell in t.iter_grid(4) {
-			assert_eq!(cell.level(), 4, "returned cell must have same level as original");
+		for cell in t.iter_grid(grid_size) {
+			assert_eq!(cell.level(), level, "cell must preserve the tree level");
 			for c in cell.iter_coords() {
 				assert!(seen.insert(c), "duplicate coord {c:?}");
 			}
 			total += cell.count_tiles();
 		}
 		assert_eq!(total, t.count_tiles());
-		Ok(())
 	}
 
 	#[test]
-	fn iter_grid_non_aligned_tree() -> Result<()> {
-		// Tree covers a non-aligned region; tiles must be partitioned without loss or duplication.
-		let t = TileQuadtree::from_bbox(&bbox(4, 1, 1, 6, 6));
-		let mut seen = std::collections::HashSet::new();
-		let mut total = 0u64;
-		for cell in t.iter_grid(4) {
-			assert_eq!(cell.level(), 4);
-			for c in cell.iter_coords() {
-				assert!(seen.insert(c), "duplicate coord {c:?}");
-			}
-			total += cell.count_tiles();
-		}
-		assert_eq!(total, t.count_tiles());
-		Ok(())
-	}
-
-	#[test]
-	fn iter_grid_size_equals_full_level() -> Result<()> {
-		// size == 2^level → single cell returned containing the whole tree.
+	fn iter_grid_size_equals_full_level() {
+		// grid_size == 2^level → single cell returned containing the whole tree.
 		let t = TileQuadtree::from_bbox(&bbox(3, 2, 2, 5, 5));
 		let cells: Vec<_> = t.iter_grid(8).collect();
 		assert_eq!(cells.len(), 1);
 		assert_eq!(cells[0].level(), 3);
 		assert_eq!(cells[0].count_tiles(), t.count_tiles());
-		// Coords must match exactly
-		let orig: std::collections::HashSet<_> = t.iter_coords().collect();
-		let cell: std::collections::HashSet<_> = cells[0].iter_coords().collect();
+		let orig: HashSet<_> = t.iter_coords().collect();
+		let cell: HashSet<_> = cells[0].iter_coords().collect();
 		assert_eq!(orig, cell);
-		Ok(())
 	}
 
 	#[test]

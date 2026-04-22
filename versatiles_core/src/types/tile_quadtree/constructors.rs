@@ -199,32 +199,16 @@ mod tests {
 		assert_eq!(f.count_tiles(), 64); // 8×8
 	}
 
-	#[test]
-	fn from_bbox_empty() -> Result<()> {
-		let b = TileBBox::new_empty(5)?;
+	/// `from_bbox(bbox)` → (is_empty, is_full, count).
+	#[rstest::rstest]
+	#[case::empty(TileBBox::new_empty(5).unwrap(), true, false, 0)]
+	#[case::full_at_z3(TileBBox::new_full(3).unwrap(), false, true, 64)]
+	#[case::partial_at_z2(bbox(2, 0, 0, 1, 1), false, false, 4)]
+	fn from_bbox_cases(#[case] b: TileBBox, #[case] empty: bool, #[case] full: bool, #[case] count: u64) {
 		let t = TileQuadtree::from_bbox(&b);
-		assert!(t.is_empty());
-		Ok(())
-	}
-
-	#[test]
-	fn from_bbox_full() -> Result<()> {
-		let b = TileBBox::new_full(3)?;
-		let t = TileQuadtree::from_bbox(&b);
-		assert!(t.is_full());
-		assert_eq!(t.count_tiles(), 64);
-		Ok(())
-	}
-
-	#[test]
-	fn from_bbox_partial() -> Result<()> {
-		// z=2: 4×4 grid, bbox covers x=0..1, y=0..1 (2×2 = 4 tiles)
-		let b = bbox(2, 0, 0, 1, 1);
-		let t = TileQuadtree::from_bbox(&b);
-		assert!(!t.is_empty());
-		assert!(!t.is_full());
-		assert_eq!(t.count_tiles(), 4);
-		Ok(())
+		assert_eq!(t.is_empty(), empty);
+		assert_eq!(t.is_full(), full);
+		assert_eq!(t.count_tiles(), count);
 	}
 
 	#[test]
@@ -235,30 +219,29 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn from_tile_iter_empty() -> Result<()> {
-		let t = TileQuadtree::from_tile_coords(4, &[])?;
-		assert!(t.is_empty());
-		assert_eq!(t.count_tiles(), 0);
+	/// `from_tile_coords(level, tiles)` — variants of input → (is_empty, is_full, count).
+	#[rstest::rstest]
+	#[case::empty(4, vec![], true, false, 0)]
+	#[case::full_at_z2(2, (0u32..4).flat_map(|x| (0u32..4).map(move |y| (x, y))).collect(), false, true, 16)]
+	#[case::single_tile(3, vec![(5, 3)], false, false, 1)]
+	#[case::deduplicates(3, vec![(2, 2), (2, 2), (2, 2)], false, false, 1)]
+	fn from_tile_iter_cases(
+		#[case] level: u8,
+		#[case] tiles: Vec<(u32, u32)>,
+		#[case] empty: bool,
+		#[case] full: bool,
+		#[case] count: u64,
+	) -> Result<()> {
+		let t = TileQuadtree::from_tile_coords(level, &tiles)?;
+		assert_eq!(t.is_empty(), empty);
+		assert_eq!(t.is_full(), full);
+		assert_eq!(t.count_tiles(), count);
 		Ok(())
 	}
 
 	#[test]
-	fn from_tile_iter_full() -> Result<()> {
-		// Provide all 4×4 = 16 tiles at zoom 2.
-		let all: Vec<(u32, u32)> = (0u32..4).flat_map(|x| (0u32..4).map(move |y| (x, y))).collect();
-		let t = TileQuadtree::from_tile_coords(2, &all)?;
-		assert!(t.is_full());
-		assert_eq!(t.count_tiles(), 16);
-		Ok(())
-	}
-
-	#[test]
-	fn from_tile_iter_single_tile() -> Result<()> {
+	fn from_tile_iter_single_tile_inclusion() -> Result<()> {
 		let t = TileQuadtree::from_tile_coords(3, &[(5, 3)])?;
-		assert!(!t.is_empty());
-		assert!(!t.is_full());
-		assert_eq!(t.count_tiles(), 1);
 		assert!(t.includes_coord(&coord(3, 5, 3)));
 		assert!(!t.includes_coord(&coord(3, 4, 3)));
 		Ok(())
@@ -279,14 +262,6 @@ mod tests {
 		let batch = TileQuadtree::from_tile_coords(3, &tiles)?;
 
 		assert_eq!(seq, batch);
-		Ok(())
-	}
-
-	#[test]
-	fn from_tile_iter_deduplicates() -> Result<()> {
-		// Duplicate tiles must not inflate the count.
-		let t = TileQuadtree::from_tile_coords(3, &[(2u32, 2u32), (2, 2), (2, 2)])?;
-		assert_eq!(t.count_tiles(), 1);
 		Ok(())
 	}
 
