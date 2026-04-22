@@ -11,7 +11,7 @@
 //! | `drain_and_count` | Consume stream and return count |
 //! | `chain` | Concatenate two streams end-to-end |
 
-use super::{Future, StreamExt, TileCoord, TileStream, ready};
+use super::{Future, Result, StreamExt, TileCoord, TileStream, ready};
 
 impl<'a, T> TileStream<'a, T>
 where
@@ -140,6 +140,44 @@ where
 		if !buffer.is_empty() {
 			callback(buffer);
 		}
+	}
+
+	/// Fallible variant of [`for_each_buffered`](Self::for_each_buffered).
+	///
+	/// The callback returns `Result<()>`. The first error short-circuits the loop
+	/// and is returned, leaving the remaining stream items unprocessed.
+	///
+	/// # Examples
+	/// ```
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
+	/// # async fn test() -> anyhow::Result<()> {
+	/// let stream = TileStream::from_vec(vec![
+	///     (TileCoord::new(0,0,0).unwrap(), Blob::from("a")),
+	///     (TileCoord::new(1,1,1).unwrap(), Blob::from("b")),
+	/// ]);
+	/// stream.for_each_buffered_try(2, |chunk| {
+	///     // batch insert; propagate any DB error with `?`
+	///     Ok(())
+	/// }).await?;
+	/// # Ok(()) }
+	/// ```
+	pub async fn for_each_buffered_try<F>(mut self, buffer_size: usize, mut callback: F) -> Result<()>
+	where
+		F: FnMut(Vec<(TileCoord, T)>) -> Result<()>,
+	{
+		let mut buffer = Vec::with_capacity(buffer_size);
+		while let Some(item) = self.inner.next().await {
+			buffer.push(item);
+
+			if buffer.len() >= buffer_size {
+				callback(buffer)?;
+				buffer = Vec::with_capacity(buffer_size);
+			}
+		}
+		if !buffer.is_empty() {
+			callback(buffer)?;
+		}
+		Ok(())
 	}
 
 	// -------------------------------------------------------------------------
@@ -330,6 +368,70 @@ mod tests {
 				called = true;
 			})
 			.await;
+
+		assert!(!called);
+	}
+
+	// -------------------------------------------------------------------------
+	// for_each_buffered_try
+	// -------------------------------------------------------------------------
+
+	#[tokio::test]
+	async fn test_for_each_buffered_try_success() {
+		let stream = TileStream::from_vec(vec![
+			(tc(0, 0, 0), Blob::from("a")),
+			(tc(1, 1, 1), Blob::from("b")),
+			(tc(2, 2, 2), Blob::from("c")),
+		]);
+
+		let mut chunk_sizes = Vec::new();
+		stream
+			.for_each_buffered_try(2, |chunk| {
+				chunk_sizes.push(chunk.len());
+				Ok(())
+			})
+			.await
+			.unwrap();
+
+		assert_eq!(chunk_sizes, vec![2, 1]);
+	}
+
+	#[tokio::test]
+	async fn test_for_each_buffered_try_short_circuits_on_error() {
+		let stream = TileStream::from_vec(vec![
+			(tc(0, 0, 0), Blob::from("a")),
+			(tc(1, 1, 1), Blob::from("b")),
+			(tc(2, 2, 2), Blob::from("c")),
+			(tc(3, 3, 3), Blob::from("d")),
+		]);
+
+		let mut chunks_seen = 0;
+		let result = stream
+			.for_each_buffered_try(2, |_chunk| {
+				chunks_seen += 1;
+				if chunks_seen == 2 {
+					anyhow::bail!("boom on second chunk");
+				}
+				Ok(())
+			})
+			.await;
+
+		assert!(result.is_err());
+		assert_eq!(chunks_seen, 2); // first chunk processed, second errored, third never reached
+	}
+
+	#[tokio::test]
+	async fn test_for_each_buffered_try_empty_stream_returns_ok() {
+		let stream: TileStream<Blob> = TileStream::empty();
+
+		let mut called = false;
+		stream
+			.for_each_buffered_try(2, |_chunk| {
+				called = true;
+				Ok(())
+			})
+			.await
+			.unwrap();
 
 		assert!(!called);
 	}
