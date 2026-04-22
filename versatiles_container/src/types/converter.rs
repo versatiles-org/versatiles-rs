@@ -119,7 +119,7 @@ pub async fn convert_tiles_container(
 ) -> Result<()> {
 	runtime.events().step("Starting conversion".to_string());
 
-	let converter = TilesConvertReader::new_from_reader(reader, cp)?;
+	let converter = TilesConvertReader::new_from_reader(reader, cp).await?;
 	runtime.write_to_path(converter.into_shared(), path).await?;
 
 	runtime.events().step("Conversion complete".to_string());
@@ -138,7 +138,7 @@ pub async fn convert_tiles_container_to_str(
 ) -> Result<()> {
 	runtime.events().step("Starting conversion".to_string());
 
-	let converter = TilesConvertReader::new_from_reader(reader, cp)?;
+	let converter = TilesConvertReader::new_from_reader(reader, cp).await?;
 	runtime.write_to_str(converter.into_shared(), destination).await?;
 
 	runtime.events().step("Conversion complete".to_string());
@@ -157,6 +157,7 @@ pub struct TilesConvertReader {
 	converter_parameters: TilesConverterParameters,
 	reader_metadata: TileSourceMetadata,
 	tilejson: TileJSON,
+	tile_pyramid: Arc<TilePyramid>,
 }
 
 impl TilesConvertReader {
@@ -168,28 +169,33 @@ impl TilesConvertReader {
 	/// ### Errors
 	/// Propagates errors from querying/deriving parameters or updating metadata.
 	#[context("Creating converter reader from existing reader")]
-	pub fn new_from_reader(reader: SharedTileSource, cp: TilesConverterParameters) -> Result<TilesConvertReader> {
-		let rp: TileSourceMetadata = reader.metadata().to_owned();
-		let mut new_rp: TileSourceMetadata = rp.clone();
-
+	pub async fn new_from_reader(reader: SharedTileSource, cp: TilesConverterParameters) -> Result<TilesConvertReader> {
+		let mut tile_pyramid = reader.tile_pyramid().await?.as_ref().clone();
 		if cp.flip_y {
-			new_rp.bbox_pyramid.flip_y();
+			tile_pyramid.flip_y();
 		}
 		if cp.swap_xy {
-			new_rp.bbox_pyramid.swap_xy();
+			tile_pyramid.swap_xy();
 		}
 
 		if let Some(bbox_pyramid) = &cp.bbox_pyramid {
-			new_rp.bbox_pyramid.intersect_pyramid(bbox_pyramid);
+			tile_pyramid.intersect_pyramid(bbox_pyramid);
 		}
 
+		let mut new_rp: TileSourceMetadata = reader.metadata().clone();
+
 		if let Some(tile_format) = cp.tile_format {
-			new_rp.tile_format = tile_format;
+			new_rp.set_tile_format(tile_format);
 		}
 
 		if let Some(tile_compression) = cp.tile_compression {
-			new_rp.tile_compression = tile_compression;
+			new_rp.set_tile_compression(tile_compression);
 		}
+
+		// Expose the (possibly transformed/filtered) pyramid through the metadata so
+		// downstream consumers (e.g. `update_tilejson`, writers) can derive bounds,
+		// zoom range, and center from it.
+		new_rp.set_tile_pyramid(tile_pyramid.clone());
 
 		let mut tilejson = reader.tilejson().clone();
 
@@ -209,6 +215,7 @@ impl TilesConvertReader {
 			converter_parameters: cp,
 			reader_metadata: new_rp,
 			tilejson,
+			tile_pyramid: Arc::new(tile_pyramid),
 		})
 	}
 }
@@ -251,7 +258,7 @@ impl TileSource for TilesConvertReader {
 		}
 
 		if let Some(compression) = self.converter_parameters.tile_compression {
-			tile.change_compression(compression)?;
+			tile.change_compression(&compression)?;
 		}
 
 		Ok(Some(tile))
@@ -325,13 +332,17 @@ impl TileSource for TilesConvertReader {
 		if let Some(tile_compression) = self.converter_parameters.tile_compression {
 			stream = stream
 				.map_parallel_try(move |_coord, mut tile| {
-					tile.change_compression(tile_compression)?;
+					tile.change_compression(&tile_compression)?;
 					Ok(tile)
 				})
 				.unwrap_results();
 		}
 
 		Ok(stream)
+	}
+
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		Ok(self.tile_pyramid.clone())
 	}
 }
 
@@ -355,9 +366,11 @@ mod tests {
 	}
 
 	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> SharedTileSource {
-		let bbox_pyramid = TilePyramid::new_full_up_to(4);
-		let reader_metadata = TileSourceMetadata::new(tf, tc, bbox_pyramid, Traversal::ANY);
-		MockReader::new_mock(reader_metadata).unwrap().into_shared()
+		let tile_pyramid = TilePyramid::new_full_up_to(4);
+		let reader_metadata = TileSourceMetadata::new(tf, tc, Traversal::ANY, None);
+		MockReader::new_mock(tile_pyramid, reader_metadata)
+			.unwrap()
+			.into_shared()
 	}
 
 	#[rstest]
@@ -376,8 +389,8 @@ mod tests {
 		let pyramid_convert = new_pyramid([2, 3, 7, 7]);
 		let pyramid_out = new_pyramid(bbox_out);
 
-		let reader_metadata = TileSourceMetadata::new(JSON, Uncompressed, pyramid_in, Traversal::ANY);
-		let reader = MockReader::new_mock(reader_metadata)?.into_shared();
+		let reader_metadata = TileSourceMetadata::new(JSON, Uncompressed, Traversal::ANY, None);
+		let reader = MockReader::new_mock(pyramid_in, reader_metadata)?.into_shared();
 
 		let temp_file = NamedTempFile::new("test.versatiles")?;
 		let runtime = TilesRuntime::default();
@@ -394,8 +407,8 @@ mod tests {
 
 		let reader_out = VersaTilesReader::open(&temp_file, runtime).await?;
 		let parameters_out = reader_out.metadata();
-		let tile_compression_out = parameters_out.tile_compression;
-		assert_eq!(parameters_out.bbox_pyramid, pyramid_out);
+		let tile_compression_out = parameters_out.tile_compression();
+		assert_eq!(reader_out.tile_pyramid().await?.as_ref(), &pyramid_out);
 
 		let bbox = pyramid_out.level_ref(3).to_bbox();
 		let mut tiles: Vec<String> = Vec::new();
@@ -443,22 +456,23 @@ mod tests {
 		assert!(!cp.swap_xy);
 	}
 
-	#[test]
-	fn test_tiles_convert_reader_new_from_reader() {
+	#[tokio::test]
+	async fn test_tiles_convert_reader_new_from_reader() -> Result<()> {
 		let reader = get_mock_reader(MVT, Uncompressed);
 		let cp = TilesConverterParameters::default();
 
-		let tcr = TilesConvertReader::new_from_reader(reader, cp).unwrap();
+		let tcr = TilesConvertReader::new_from_reader(reader, cp).await?;
 
 		assert_eq!(tcr.reader.source_type().to_string(), "container 'dummy' ('dummy')");
 		assert_eq!(tcr.source_type().to_string(), "processor 'TilesConvertReader'");
+		Ok(())
 	}
 
 	#[tokio::test]
 	async fn test_tile() -> Result<()> {
 		let reader = get_mock_reader(MVT, Uncompressed);
 		let cp = TilesConverterParameters::default();
-		let tcr = TilesConvertReader::new_from_reader(reader, cp)?;
+		let tcr = TilesConvertReader::new_from_reader(reader, cp).await?;
 
 		let coord = TileCoord::new(0, 0, 0)?;
 		let data = tcr.tile(&coord).await?;
@@ -475,7 +489,7 @@ mod tests {
 			swap_xy: true,
 			..Default::default()
 		};
-		let tcr = TilesConvertReader::new_from_reader(reader, cp)?;
+		let tcr = TilesConvertReader::new_from_reader(reader, cp).await?;
 
 		let mut coord = TileCoord::new(4, 5, 6)?;
 		let data = tcr.tile(&coord).await?;
@@ -489,53 +503,55 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn test_geo_bbox_intersects_existing_tilejson_bounds() {
+	#[tokio::test]
+	async fn test_geo_bbox_intersects_existing_tilejson_bounds() -> Result<()> {
 		// Source has bounds covering a wide area
-		let source_bounds = GeoBBox::new(10.0, 50.0, 15.0, 55.0).unwrap();
-		let bbox_pyramid = TilePyramid::new_full_up_to(4);
-		let reader_metadata = TileSourceMetadata::new(MVT, Uncompressed, bbox_pyramid, Traversal::ANY);
-		let mut reader = MockReader::new_mock(reader_metadata).unwrap();
+		let source_bounds = GeoBBox::new(10.0, 50.0, 15.0, 55.0)?;
+		let tile_pyramid = TilePyramid::new_full_up_to(4);
+		let reader_metadata = TileSourceMetadata::new(MVT, Uncompressed, Traversal::ANY, None);
+		let mut reader = MockReader::new_mock(tile_pyramid, reader_metadata)?;
 		reader.tilejson_mut().bounds = Some(source_bounds);
 		let reader = reader.into_shared();
 
 		// User specifies a bbox that partially overlaps
-		let filter_bbox = GeoBBox::new(12.0, 52.0, 20.0, 60.0).unwrap();
+		let filter_bbox = GeoBBox::new(12.0, 52.0, 20.0, 60.0)?;
 		let mut filter_pyramid = TilePyramid::new_full();
-		filter_pyramid.intersect_geo_bbox(&filter_bbox).unwrap();
+		filter_pyramid.intersect_geo_bbox(&filter_bbox)?;
 
 		let cp = TilesConverterParameters {
 			bbox_pyramid: Some(filter_pyramid),
 			geo_bbox: Some(filter_bbox),
 			..Default::default()
 		};
-		let tcr = TilesConvertReader::new_from_reader(reader, cp).unwrap();
-		let bounds = tcr.tilejson().bounds.unwrap();
+		let tcr = TilesConvertReader::new_from_reader(reader, cp).await?;
+		let bounds = tcr.tilejson().bounds.ok_or_else(|| anyhow::anyhow!("missing bounds"))?;
 
 		// Bounds should be the intersection: [12.0, 52.0, 15.0, 55.0]
 		assert_eq!(bounds.as_tuple(), (12.0, 52.0, 15.0, 55.0));
+		Ok(())
 	}
 
-	#[test]
-	fn test_geo_bbox_without_existing_bounds_uses_pyramid() {
+	#[tokio::test]
+	async fn test_geo_bbox_without_existing_bounds_uses_pyramid() -> Result<()> {
 		// Source has NO explicit bounds in tilejson
-		let bbox_pyramid = TilePyramid::new_full_up_to(4);
-		let reader_metadata = TileSourceMetadata::new(MVT, Uncompressed, bbox_pyramid, Traversal::ANY);
-		let reader = MockReader::new_mock(reader_metadata).unwrap().into_shared();
+		let tile_pyramid = TilePyramid::new_full_up_to(4);
+		let reader_metadata = TileSourceMetadata::new(MVT, Uncompressed, Traversal::ANY, None);
+		let reader = MockReader::new_mock(tile_pyramid, reader_metadata)?.into_shared();
 
-		let filter_bbox = GeoBBox::new(12.0, 52.0, 14.0, 54.0).unwrap();
+		let filter_bbox = GeoBBox::new(12.0, 52.0, 14.0, 54.0)?;
 		let mut filter_pyramid = TilePyramid::new_full();
-		filter_pyramid.intersect_geo_bbox(&filter_bbox).unwrap();
+		filter_pyramid.intersect_geo_bbox(&filter_bbox)?;
 
 		let cp = TilesConverterParameters {
 			bbox_pyramid: Some(filter_pyramid),
 			geo_bbox: Some(filter_bbox),
 			..Default::default()
 		};
-		let tcr = TilesConvertReader::new_from_reader(reader, cp).unwrap();
+		let tcr = TilesConvertReader::new_from_reader(reader, cp).await?;
 
 		// Bounds should be set from the pyramid (since no existing bounds to intersect)
 		assert!(tcr.tilejson().bounds.is_some());
+		Ok(())
 	}
 
 	#[tokio::test]
@@ -546,10 +562,10 @@ mod tests {
 			format_quality: Some(80),
 			..Default::default()
 		};
-		let tcr = TilesConvertReader::new_from_reader(reader, cp)?;
+		let tcr = TilesConvertReader::new_from_reader(reader, cp).await?;
 
-		assert_eq!(tcr.metadata().tile_format, WEBP);
-		assert_eq!(tcr.metadata().tile_compression, Uncompressed);
+		assert_eq!(tcr.metadata().tile_format(), &WEBP);
+		assert_eq!(tcr.metadata().tile_compression(), &Uncompressed);
 
 		let coord = TileCoord::new(0, 0, 0)?;
 		let tile = tcr.tile(&coord).await?.unwrap();
@@ -567,10 +583,10 @@ mod tests {
 			tile_compression: Some(Gzip),
 			..Default::default()
 		};
-		let tcr = TilesConvertReader::new_from_reader(reader, cp)?;
+		let tcr = TilesConvertReader::new_from_reader(reader, cp).await?;
 
-		assert_eq!(tcr.metadata().tile_format, WEBP);
-		assert_eq!(tcr.metadata().tile_compression, Gzip);
+		assert_eq!(tcr.metadata().tile_format(), &WEBP);
+		assert_eq!(tcr.metadata().tile_compression(), &Gzip);
 
 		let coord = TileCoord::new(0, 0, 0)?;
 		let tile = tcr.tile(&coord).await?.unwrap();

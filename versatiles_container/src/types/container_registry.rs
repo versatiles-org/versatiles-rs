@@ -351,12 +351,10 @@ pub async fn make_test_file(
 	extension: &str,
 ) -> Result<NamedTempFile> {
 	// get dummy reader
-	let reader = MockReader::new_mock(TileSourceMetadata::new(
-		tile_format,
-		compression,
+	let reader = MockReader::new_mock(
 		TilePyramid::new_full_up_to(max_zoom_level),
-		Traversal::ANY,
-	))?;
+		TileSourceMetadata::new(tile_format, compression, Traversal::ANY, None),
+	)?;
 
 	// get to test container converter
 	let container_file = match extension {
@@ -441,12 +439,10 @@ pub mod tests {
 		async fn inner() -> Result<()> {
 			let reg = ContainerRegistry::default();
 			let runtime = TilesRuntime::default();
-			let reader = MockReader::new_mock(TileSourceMetadata::new(
-				TileFormat::PNG,
-				TileCompression::Uncompressed,
+			let reader = MockReader::new_mock(
 				TilePyramid::new_full_up_to(0),
-				Traversal::ANY,
-			))?;
+				TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None),
+			)?;
 			let path = std::env::temp_dir().join("file.unknown_ext");
 			let err = reg
 				.write_to_path(Arc::new(Box::new(reader)), &path, runtime)
@@ -472,12 +468,10 @@ pub mod tests {
 		#[tokio::main]
 		async fn inner() -> Result<()> {
 			// Create a versatiles file via temp file, then read it back as a blob
-			let reader = MockReader::new_mock(TileSourceMetadata::new(
-				TileFormat::PNG,
-				TileCompression::Uncompressed,
+			let reader = MockReader::new_mock(
 				TilePyramid::new_full_up_to(1),
-				Traversal::ANY,
-			))?;
+				TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None),
+			)?;
 
 			let temp = assert_fs::NamedTempFile::new("blob_test.versatiles")?;
 			let reg = ContainerRegistry::default();
@@ -521,12 +515,10 @@ pub mod tests {
 			let _start = Instant::now();
 
 			// get dummy reader
-			let reader1 = MockReader::new_mock(TileSourceMetadata::new(
-				tile_format,
-				compression,
+			let reader1 = MockReader::new_mock(
 				TilePyramid::new_full_up_to(2),
-				Traversal::ANY,
-			))?;
+				TileSourceMetadata::new(tile_format, compression, Traversal::ANY, None),
+			)?;
 
 			let path = TempDir::new()?.to_path_buf();
 			if !path.exists() {

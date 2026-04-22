@@ -24,7 +24,7 @@ use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::{ProbeDepth, utils::PrettyPrint};
-use versatiles_core::{TileBBox, TileCoord, TileJSON, TileStream};
+use versatiles_core::{TileBBox, TileCoord, TileJSON, TilePyramid, TileStream};
 
 /// Shared ownership of a tile source for concurrent access.
 ///
@@ -65,6 +65,9 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 
 	/// Returns the `TileJSON` metadata for this tileset.
 	fn tilejson(&self) -> &TileJSON;
+
+	/// Gets the actual tile pyramid for this source.
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>>;
 
 	/// Fetches a single tile at the given coordinate.
 	///
@@ -109,9 +112,9 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	/// and maps each tile to its blob length. Container readers with index-based size
 	/// information should override this for better performance.
 	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
-		let compression = self.metadata().tile_compression;
+		let compression = *self.metadata().tile_compression();
 		Ok(self.tile_stream(bbox).await?.filter_map(move |_coord, tile| {
-			let blob = tile.into_blob(compression).ok()?;
+			let blob = tile.into_blob(&compression).ok()?;
 			u32::try_from(blob.len()).ok()
 		}))
 	}
@@ -168,13 +171,14 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	async fn probe_metadata(&self, print: &mut PrettyPrint) -> Result<()> {
 		let metadata = self.metadata();
 		let p = print.get_list("bbox_pyramid").await;
-		for level in metadata.bbox_pyramid.iter() {
+		let bbox_pyramid = self.tile_pyramid().await?;
+		for level in bbox_pyramid.iter() {
 			p.add_value(&level).await;
 		}
 		print
-			.add_key_value("tile compression", &metadata.tile_compression)
+			.add_key_value("tile compression", metadata.tile_compression())
 			.await;
-		print.add_key_value("tile format", &metadata.tile_format).await;
+		print.add_key_value("tile format", metadata.tile_format()).await;
 		Ok(())
 	}
 
@@ -220,10 +224,11 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		let mut tile_count: u64 = 0;
 		let mut level_stats: Vec<(u8, u64, u64)> = Vec::new();
 
-		let total_tiles = self.metadata().bbox_pyramid.count_tiles();
+		let tile_pyramid = self.tile_pyramid().await?;
+		let total_tiles = tile_pyramid.count_tiles();
 		let progress = runtime.create_progress("scanning tiles", total_tiles);
 
-		for bbox in self.metadata().bbox_pyramid.to_iter_bboxes() {
+		for bbox in tile_pyramid.to_iter_bboxes().filter(|b| !b.is_empty()) {
 			let mut level_size_sum: u64 = 0;
 			let mut level_count: u64 = 0;
 			let mut stream = self.tile_size_stream(bbox).await?;
@@ -363,12 +368,12 @@ mod tests {
 			let mut tilejson = TileJSON::default();
 			tilejson.set_string("metadata", "test").unwrap();
 			TestReader {
-				metadata: TileSourceMetadata {
-					bbox_pyramid: TilePyramid::new_full_up_to(3),
-					tile_compression: TileCompression::Gzip,
-					tile_format: TileFormat::MVT,
-					traversal: Traversal::ANY,
-				},
+				metadata: TileSourceMetadata::new(
+					TileFormat::MVT,
+					TileCompression::Gzip,
+					Traversal::ANY,
+					Some(TilePyramid::new_full_up_to(3)),
+				),
 				tilejson,
 			}
 		}
@@ -390,8 +395,8 @@ mod tests {
 
 		async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 			log::trace!("test_source::tile_stream {bbox:?}");
-			let tile_compression = self.metadata.tile_compression;
-			let tile_format = self.metadata.tile_format;
+			let tile_compression = *self.metadata.tile_compression();
+			let tile_format = *self.metadata.tile_format();
 			Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {
 				Some(Tile::from_blob(
 					Blob::from("test tile data"),
@@ -400,16 +405,22 @@ mod tests {
 				))
 			}))
 		}
+
+		async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+			Ok(self
+				.metadata
+				.tile_pyramid()
+				.unwrap_or_else(|| Arc::new(TilePyramid::new_full_up_to(3))))
+		}
 	}
 
 	#[tokio::test]
 	async fn test_metadata() {
 		let reader = TestReader::new_dummy();
 		let metadata = reader.metadata();
-		assert_eq!(metadata.tile_compression, TileCompression::Gzip);
-		assert_eq!(metadata.tile_format, TileFormat::MVT);
-		assert_eq!(metadata.bbox_pyramid.level_min().unwrap(), 0);
-		assert_eq!(metadata.bbox_pyramid.level_max().unwrap(), 3);
+		assert_eq!(metadata.tile_compression(), &TileCompression::Gzip);
+		assert_eq!(metadata.tile_format(), &TileFormat::MVT);
+		assert_eq!(metadata.traversal(), &Traversal::ANY);
 	}
 
 	#[tokio::test]

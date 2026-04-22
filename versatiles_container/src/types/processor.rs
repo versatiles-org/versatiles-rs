@@ -61,7 +61,7 @@ use versatiles_core::TileJSON;
 pub struct TileProcessor {
 	name: String,
 	source: Box<dyn TileSource>,
-	parameters: TileSourceMetadata,
+	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 	traversal: Traversal,
 }
@@ -77,14 +77,14 @@ impl TileProcessor {
 	/// * `name` - Human-readable name for this processor (e.g., "filter", "converter")
 	/// * `source` - The upstream tile source to wrap
 	pub fn new(name: impl Into<String>, source: Box<dyn TileSource>) -> Self {
-		let parameters = source.metadata().clone();
+		let metadata = source.metadata().clone();
 		let tilejson = source.tilejson().clone();
-		let traversal = parameters.traversal.clone();
+		let traversal = metadata.traversal().clone();
 
 		Self {
 			name: name.into(),
 			source,
-			parameters,
+			metadata,
 			tilejson,
 			traversal,
 		}
@@ -95,7 +95,7 @@ impl TileProcessor {
 	/// Use this when the processor modifies spatial extent, compression, or format.
 	#[must_use]
 	pub fn with_parameters(mut self, parameters: TileSourceMetadata) -> Self {
-		self.parameters = parameters;
+		self.metadata = parameters;
 		self
 	}
 
@@ -138,8 +138,8 @@ impl TileProcessor {
 
 	/// Returns the (potentially modified) parameters.
 	#[must_use]
-	pub fn parameters(&self) -> &TileSourceMetadata {
-		&self.parameters
+	pub fn metadata(&self) -> &TileSourceMetadata {
+		&self.metadata
 	}
 
 	/// Returns the (potentially modified) `TileJSON`.
@@ -158,7 +158,7 @@ impl TileProcessor {
 	///
 	/// Use this to modify parameters after construction.
 	pub fn parameters_mut(&mut self) -> &mut TileSourceMetadata {
-		&mut self.parameters
+		&mut self.metadata
 	}
 
 	/// Returns a mutable reference to the `TileJSON`.
@@ -186,20 +186,22 @@ mod tests {
 		let metadata = TileSourceMetadata::new(
 			TileFormat::PNG,
 			TileCompression::Uncompressed,
-			TilePyramid::new_full_up_to(10),
 			Traversal::new_any(),
+			None,
 		);
-		MockReader::new_mock(metadata).unwrap().boxed()
+		MockReader::new_mock(TilePyramid::new_full_up_to(10), metadata)
+			.unwrap()
+			.boxed()
 	}
 
 	#[test]
 	fn test_new_processor() {
 		let source = create_mock_source();
-		let processor = TileProcessor::new("test_processor", source);
+		let p = TileProcessor::new("test_processor", source);
 
-		assert_eq!(processor.name(), "test_processor");
-		assert!(processor.parameters().tile_format == TileFormat::PNG);
-		assert!(processor.parameters().tile_compression == TileCompression::Uncompressed);
+		assert_eq!(p.name(), "test_processor");
+		assert_eq!(p.metadata().tile_format(), &TileFormat::PNG);
+		assert_eq!(p.metadata().tile_compression(), &TileCompression::Uncompressed);
 	}
 
 	#[test]
@@ -207,15 +209,11 @@ mod tests {
 		let source = create_mock_source();
 		let original_metadata = source.metadata().clone();
 
-		let processor = TileProcessor::new("test", source);
+		let p = TileProcessor::new("test", source);
 
 		// Verify metadata was cloned
-		assert_eq!(processor.parameters().tile_format, original_metadata.tile_format);
-		assert_eq!(
-			processor.parameters().tile_compression,
-			original_metadata.tile_compression
-		);
-		assert_eq!(processor.parameters().bbox_pyramid, original_metadata.bbox_pyramid);
+		assert_eq!(p.metadata().tile_format(), original_metadata.tile_format());
+		assert_eq!(p.metadata().tile_compression(), original_metadata.tile_compression());
 	}
 
 	#[test]
@@ -241,7 +239,7 @@ mod tests {
 
 		// Verify source is accessible
 		let source_ref = processor.source();
-		assert_eq!(source_ref.metadata().tile_format, TileFormat::PNG);
+		assert_eq!(source_ref.metadata().tile_format(), &TileFormat::PNG);
 	}
 
 	#[test]
@@ -251,7 +249,7 @@ mod tests {
 
 		// Verify mutable source is accessible
 		let source_mut = processor.source_mut();
-		assert_eq!(source_mut.metadata().tile_format, TileFormat::PNG);
+		assert_eq!(source_mut.metadata().tile_format(), &TileFormat::PNG);
 	}
 
 	#[test]
@@ -259,9 +257,9 @@ mod tests {
 		let source = create_mock_source();
 		let processor = TileProcessor::new("test", source);
 
-		let params = processor.parameters();
-		assert_eq!(params.tile_format, TileFormat::PNG);
-		assert_eq!(params.tile_compression, TileCompression::Uncompressed);
+		let params = processor.metadata();
+		assert_eq!(params.tile_format(), &TileFormat::PNG);
+		assert_eq!(params.tile_compression(), &TileCompression::Uncompressed);
 	}
 
 	#[test]
@@ -287,18 +285,13 @@ mod tests {
 	#[test]
 	fn test_with_parameters_builder() {
 		let source = create_mock_source();
-		let new_metadata = TileSourceMetadata::new(
-			TileFormat::JPG,
-			TileCompression::Gzip,
-			TilePyramid::new_full_up_to(5),
-			Traversal::new_any(),
-		);
+		let new_metadata = TileSourceMetadata::new(TileFormat::JPG, TileCompression::Gzip, Traversal::new_any(), None);
 
 		let processor = TileProcessor::new("test", source).with_parameters(new_metadata.clone());
 
 		// Verify parameters were replaced
-		assert_eq!(processor.parameters().tile_format, TileFormat::JPG);
-		assert_eq!(processor.parameters().tile_compression, TileCompression::Gzip);
+		assert_eq!(processor.metadata().tile_format(), &TileFormat::JPG);
+		assert_eq!(processor.metadata().tile_compression(), &TileCompression::Gzip);
 	}
 
 	#[test]
@@ -326,12 +319,7 @@ mod tests {
 	#[test]
 	fn test_builder_chaining() {
 		let source = create_mock_source();
-		let new_metadata = TileSourceMetadata::new(
-			TileFormat::WEBP,
-			TileCompression::Brotli,
-			TilePyramid::new_full_up_to(8),
-			Traversal::new_any(),
-		);
+		let new_metadata = TileSourceMetadata::new(TileFormat::WEBP, TileCompression::Brotli, Traversal::new_any(), None);
 		let new_tilejson = TileJSON::default();
 		let new_traversal = Traversal::new_any_size(128, 128).unwrap();
 
@@ -341,23 +329,10 @@ mod tests {
 			.with_traversal(new_traversal);
 
 		// Verify all were set
-		assert_eq!(processor.parameters().tile_format, TileFormat::WEBP);
-		assert_eq!(processor.parameters().tile_compression, TileCompression::Brotli);
+		assert_eq!(processor.metadata().tile_format(), &TileFormat::WEBP);
+		assert_eq!(processor.metadata().tile_compression(), &TileCompression::Brotli);
 		assert!(processor.tilejson().stringify().contains("3.0.0"));
 		assert_eq!(processor.traversal().max_size().unwrap(), 128);
-	}
-
-	#[test]
-	fn test_parameters_mut() {
-		let source = create_mock_source();
-		let mut processor = TileProcessor::new("test", source);
-
-		// Modify parameters via mutable reference
-		let params_mut = processor.parameters_mut();
-		params_mut.tile_format = TileFormat::MVT;
-
-		// Verify modification
-		assert_eq!(processor.parameters().tile_format, TileFormat::MVT);
 	}
 
 	#[test]
@@ -392,8 +367,10 @@ mod tests {
 		let processor = TileProcessor::new("test", source);
 
 		// Verify source metadata is still accessible through processor
-		assert_eq!(processor.source().metadata().tile_format, source_metadata.tile_format);
-		assert_eq!(processor.source().metadata().bbox_pyramid, source_metadata.bbox_pyramid);
+		assert_eq!(
+			processor.source().metadata().tile_format(),
+			source_metadata.tile_format()
+		);
 	}
 
 	#[test]
@@ -412,32 +389,26 @@ mod tests {
 	#[test]
 	fn test_processor_with_different_formats() {
 		// Test with MVT format
-		let metadata_mvt = TileSourceMetadata::new(
-			TileFormat::MVT,
-			TileCompression::Gzip,
-			TilePyramid::new_full_up_to(14),
-			Traversal::new_any(),
-		);
-		let source_mvt = MockReader::new_mock(metadata_mvt).unwrap().boxed();
+		let metadata_mvt = TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, Traversal::new_any(), None);
+		let source_mvt = MockReader::new_mock(TilePyramid::new_full_up_to(14), metadata_mvt)
+			.unwrap()
+			.boxed();
 		let processor_mvt = TileProcessor::new("mvt_processor", source_mvt);
 
-		assert_eq!(processor_mvt.parameters().tile_format, TileFormat::MVT);
-		assert_eq!(processor_mvt.parameters().tile_compression, TileCompression::Gzip);
+		assert_eq!(processor_mvt.metadata().tile_format(), &TileFormat::MVT);
+		assert_eq!(processor_mvt.metadata().tile_compression(), &TileCompression::Gzip);
 	}
 
 	#[test]
 	fn test_processor_with_different_compressions() {
 		// Test with Brotli compression
-		let metadata = TileSourceMetadata::new(
-			TileFormat::PNG,
-			TileCompression::Brotli,
-			TilePyramid::new_full_up_to(10),
-			Traversal::new_any(),
-		);
-		let source = MockReader::new_mock(metadata).unwrap().boxed();
+		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Brotli, Traversal::new_any(), None);
+		let source = MockReader::new_mock(TilePyramid::new_full_up_to(10), metadata)
+			.unwrap()
+			.boxed();
 		let processor = TileProcessor::new("brotli_processor", source);
 
-		assert_eq!(processor.parameters().tile_compression, TileCompression::Brotli);
+		assert_eq!(processor.metadata().tile_compression(), &TileCompression::Brotli);
 	}
 
 	#[test]
@@ -448,25 +419,22 @@ mod tests {
 		let metadata = TileSourceMetadata::new(
 			TileFormat::PNG,
 			TileCompression::Uncompressed,
-			pyramid.clone(),
 			Traversal::new_any(),
+			Some(pyramid.clone()),
 		);
-		let source = MockReader::new_mock(metadata).unwrap().boxed();
+		let source = MockReader::new_mock(pyramid.clone(), metadata).unwrap().boxed();
 		let processor = TileProcessor::new("bbox_processor", source);
 
-		assert_eq!(processor.parameters().bbox_pyramid, pyramid);
+		assert_eq!(processor.metadata().tile_pyramid().unwrap().as_ref(), &pyramid);
 	}
 
 	#[test]
 	fn test_processor_with_custom_traversal() {
 		let traversal = Traversal::new_any_size(64, 64).unwrap();
-		let metadata = TileSourceMetadata::new(
-			TileFormat::PNG,
-			TileCompression::Uncompressed,
-			TilePyramid::new_full_up_to(10),
-			traversal.clone(),
-		);
-		let source = MockReader::new_mock(metadata).unwrap().boxed();
+		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, traversal.clone(), None);
+		let source = MockReader::new_mock(TilePyramid::new_full_up_to(10), metadata)
+			.unwrap()
+			.boxed();
 		let processor = TileProcessor::new("traversal_processor", source);
 
 		assert_eq!(processor.traversal().max_size().unwrap(), 64);

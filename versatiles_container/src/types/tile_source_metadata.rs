@@ -1,24 +1,34 @@
 //! This module defines metadata describing tile source output characteristics.
 
 use crate::Traversal;
-use versatiles_core::{TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileType};
+use anyhow::Result;
+use std::sync::{Arc, RwLock};
+use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileType};
 
 /// Metadata describing the output characteristics of a tile source.
 ///
 /// # Fields
-/// - `bbox_pyramid`: The bounding box and zoom pyramid defining the tile coverage.
+/// - `tile_pyramid`: The bounding box and zoom pyramid defining the tile coverage.
 /// - `tile_compression`: The compression algorithm applied to tiles (e.g., gzip, brotli).
 /// - `tile_format`: The format of the tiles (e.g., PNG, JPEG, PBF).
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct TileSourceMetadata {
-	/// The bounding box and zoom pyramid defining the tile coverage.
-	pub bbox_pyramid: TilePyramid,
 	/// The compression algorithm applied to tiles (e.g., gzip, brotli).
-	pub tile_compression: TileCompression,
+	tile_compression: TileCompression,
 	/// The format of the tiles (e.g., PNG, JPEG, PBF).
-	pub tile_format: TileFormat,
+	tile_format: TileFormat,
 
-	pub traversal: Traversal,
+	traversal: Traversal,
+
+	tile_pyramid: Arc<RwLock<Option<Arc<TilePyramid>>>>,
+}
+
+impl PartialEq for TileSourceMetadata {
+	fn eq(&self, other: &Self) -> bool {
+		self.tile_compression == other.tile_compression
+			&& self.tile_format == other.tile_format
+			&& self.traversal == other.traversal
+	}
 }
 
 impl TileSourceMetadata {
@@ -27,7 +37,7 @@ impl TileSourceMetadata {
 	/// # Arguments
 	/// * `tile_format` - The format of the tiles.
 	/// * `tile_compression` - The compression algorithm applied to tiles.
-	/// * `bbox_pyramid` - The bounding box and zoom pyramid defining the tile coverage.
+	/// * `tile_pyramid` - The bounding box and zoom pyramid defining the tile coverage.
 	///
 	/// # Returns
 	/// A new instance of `TileSourceMetadata` configured with the specified parameters.
@@ -35,31 +45,14 @@ impl TileSourceMetadata {
 	pub fn new(
 		tile_format: TileFormat,
 		tile_compression: TileCompression,
-		bbox_pyramid: TilePyramid,
 		traversal: Traversal,
+		tile_pyramid: Option<TilePyramid>,
 	) -> TileSourceMetadata {
 		TileSourceMetadata {
-			bbox_pyramid,
 			tile_compression,
 			tile_format,
 			traversal,
-		}
-	}
-
-	#[cfg(test)]
-	#[allow(dead_code)]
-	/// Creates a `TileSourceMetadata` with a default full pyramid up to zoom level 31 for testing purposes.
-	#[must_use]
-	pub fn new_full(
-		tile_format: TileFormat,
-		tile_compression: TileCompression,
-		traversal: Traversal,
-	) -> TileSourceMetadata {
-		TileSourceMetadata {
-			tile_format,
-			tile_compression,
-			bbox_pyramid: TilePyramid::new_full(),
-			traversal,
+			tile_pyramid: Arc::new(RwLock::new(tile_pyramid.map(Arc::new))),
 		}
 	}
 
@@ -70,7 +63,9 @@ impl TileSourceMetadata {
 	/// - If `tile_schema` is absent or mismatched with `tile_type`, infers a suitable schema
 	///   (e.g., `RasterRGB` for rasters; for vectors, derived from `vector_layers`).
 	pub fn update_tilejson(&self, tile_json: &mut TileJSON) {
-		tile_json.update_from_pyramid(&self.bbox_pyramid);
+		if let Some(tile_pyramid) = self.tile_pyramid() {
+			tile_json.update_from_pyramid(tile_pyramid.as_ref());
+		}
 
 		tile_json.tile_format = Some(self.tile_format);
 
@@ -86,6 +81,66 @@ impl TileSourceMetadata {
 			});
 		}
 	}
+
+	#[must_use]
+	pub fn traversal(&self) -> &Traversal {
+		&self.traversal
+	}
+
+	#[must_use]
+	pub fn tile_compression(&self) -> &TileCompression {
+		&self.tile_compression
+	}
+
+	#[must_use]
+	pub fn tile_format(&self) -> &TileFormat {
+		&self.tile_format
+	}
+
+	pub fn set_traversal(&mut self, traversal: Traversal) {
+		self.traversal = traversal;
+	}
+
+	pub fn set_tile_compression(&mut self, tile_compression: TileCompression) {
+		self.tile_compression = tile_compression;
+	}
+
+	pub fn set_tile_format(&mut self, tile_format: TileFormat) {
+		self.tile_format = tile_format;
+	}
+
+	#[must_use]
+	pub fn tile_pyramid(&self) -> Option<Arc<TilePyramid>> {
+		self.tile_pyramid.read().unwrap().clone()
+	}
+
+	pub fn set_tile_pyramid(&self, tile_pyramid: TilePyramid) {
+		*self.tile_pyramid.write().unwrap() = Some(Arc::new(tile_pyramid));
+	}
+
+	pub fn get_or_compute_tile_pyramid(
+		&self,
+		compute_fn: impl FnOnce() -> Result<TilePyramid>,
+	) -> Result<Arc<TilePyramid>> {
+		if let Some(pyramid) = self.tile_pyramid() {
+			Ok(pyramid)
+		} else {
+			let mut write_guard = self.tile_pyramid.write().unwrap();
+			let pyramid = Arc::new(compute_fn()?);
+			*write_guard = Some(pyramid.clone());
+			Ok(pyramid)
+		}
+	}
+
+	// takes a requested tile bbox and returns the intersection of it with the tile pyramid, if available
+	#[must_use]
+	pub fn intersection_bbox(&self, bbox: &TileBBox) -> TileBBox {
+		if let Some(tile_pyramid) = self.tile_pyramid() {
+			bbox.intersection_pyramid(&tile_pyramid)
+		} else {
+			*bbox
+		}
+	}
 }
 
 #[cfg(test)]
@@ -97,15 +152,20 @@ mod tests {
 
 	#[test]
 	fn test_tiles_reader_parameters_new() {
-		let bbox_pyramid = TilePyramid::from_geo_bbox(0, 10, &GeoBBox::new(-180.0, -90.0, 180.0, 90.0).unwrap()).unwrap();
+		let tile_pyramid = TilePyramid::from_geo_bbox(0, 10, &GeoBBox::new(-180.0, -90.0, 180.0, 90.0).unwrap()).unwrap();
 		let tile_format = TileFormat::PNG;
 		let tile_compression = TileCompression::Gzip;
 
-		let params = TileSourceMetadata::new(tile_format, tile_compression, bbox_pyramid.clone(), Traversal::ANY);
+		let params = TileSourceMetadata::new(
+			tile_format,
+			tile_compression,
+			Traversal::ANY,
+			Some(tile_pyramid.clone()),
+		);
 
 		assert_eq!(params.tile_format, tile_format);
 		assert_eq!(params.tile_compression, tile_compression);
-		assert_eq!(params.bbox_pyramid, bbox_pyramid);
+		assert_eq!(params.tile_pyramid().unwrap().as_ref(), &tile_pyramid);
 	}
 
 	#[test]
@@ -113,23 +173,24 @@ mod tests {
 		let tile_format = TileFormat::JPG;
 		let tile_compression = TileCompression::Gzip;
 
-		let params = TileSourceMetadata::new_full(tile_format, tile_compression, Traversal::ANY);
+		let params = TileSourceMetadata::new(tile_format, tile_compression, Traversal::ANY, None);
 
 		assert_eq!(params.tile_format, tile_format);
 		assert_eq!(params.tile_compression, tile_compression);
-		assert_eq!(params.bbox_pyramid, TilePyramid::new_full());
+		assert!(params.tile_pyramid().is_none());
 	}
 
 	#[test]
 	fn should_update_tile_json() -> Result<()> {
 		let mut tj = TileJSON::default();
 		// Prepare reader parameters
-		let bbox_pyramid = TilePyramid::from_geo_bbox(1, 4, &GeoBBox::new(-180.0, -90.0, 180.0, 90.0).unwrap())?;
-		let rp = TileSourceMetadata {
-			bbox_pyramid,
-			tile_format: TileFormat::PNG,
-			..Default::default()
-		};
+		let tile_pyramid = TilePyramid::from_geo_bbox(1, 4, &GeoBBox::new(-180.0, -90.0, 180.0, 90.0).unwrap())?;
+		let rp = TileSourceMetadata::new(
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			Traversal::ANY,
+			Some(tile_pyramid),
+		);
 		rp.update_tilejson(&mut tj);
 		// Bounds and zooms
 		assert_eq!(tj.zoom_min(), Some(1));

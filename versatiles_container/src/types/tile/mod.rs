@@ -44,7 +44,7 @@ use crate::TileContent;
 /// use versatiles_core::{TileCompression::Uncompressed, TileFormat::PNG};
 /// # let img = versatiles_image::DynamicImage::new_rgb8(1,1);
 /// let mut tile = Tile::from_image(img, PNG).expect("raster tile");
-/// let blob = tile.as_blob(Uncompressed).expect("to blob");
+/// let blob = tile.as_blob(&Uncompressed).expect("to blob");
 /// assert!(!blob.is_empty());
 /// ```
 ///

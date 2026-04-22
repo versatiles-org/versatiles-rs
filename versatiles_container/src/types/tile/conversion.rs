@@ -12,11 +12,11 @@ use crate::TileContent;
 
 impl Tile {
 	#[context("recompressing blob: {:?} -> {:?}", self.compression, compression)]
-	pub(super) fn recompress_blob(&mut self, compression: TileCompression) -> Result<()> {
+	pub(super) fn recompress_blob(&mut self, compression: &TileCompression) -> Result<()> {
 		assert!(self.blob.is_some());
-		if self.compression != compression {
-			self.blob = Some(recompress(self.blob.take().unwrap(), &self.compression, &compression)?);
-			self.compression = compression;
+		if &self.compression != compression {
+			self.blob = Some(recompress(self.blob.take().unwrap(), &self.compression, compression)?);
+			self.compression = *compression;
 		}
 		Ok(())
 	}
@@ -32,7 +32,7 @@ impl Tile {
 	}
 
 	#[cfg(test)]
-	pub(super) fn __recompress_blob_for_test(&mut self, compression: TileCompression) {
+	pub(super) fn __recompress_blob_for_test(&mut self, compression: &TileCompression) {
 		self.recompress_blob(compression).unwrap();
 	}
 
@@ -109,11 +109,11 @@ impl Tile {
 	/// When no blob is present, only the flag changes; compression is applied on the
 	/// next materialization of the blob.
 	#[context("changing compression to {:?}", compression)]
-	pub fn change_compression(&mut self, compression: TileCompression) -> Result<()> {
+	pub fn change_compression(&mut self, compression: &TileCompression) -> Result<()> {
 		if self.blob.is_some() {
 			self.recompress_blob(compression)?;
 		} else {
-			self.compression = compression;
+			self.compression = *compression;
 		}
 		Ok(())
 	}

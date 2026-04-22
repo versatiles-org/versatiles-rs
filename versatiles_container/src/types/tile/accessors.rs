@@ -18,7 +18,7 @@ impl Tile {
 	/// Returns a reference valid until the next mutating call.
 	#[must_use = "this returns the blob reference, it doesn't modify anything externally"]
 	#[context("getting blob (target_compression={:?})", compression)]
-	pub fn as_blob(&mut self, compression: TileCompression) -> Result<&Blob> {
+	pub fn as_blob(&mut self, compression: &TileCompression) -> Result<&Blob> {
 		self.materialize_blob()?;
 		self.recompress_blob(compression)?;
 		self.blob.as_ref().ok_or(anyhow!("blob should be present"))
@@ -53,7 +53,7 @@ impl Tile {
 	/// This materializes content-to-blob if necessary and applies (re-)compression.
 	#[must_use = "this consumes the tile and returns the blob"]
 	#[context("converting tile into blob (target_compression={:?})", compression)]
-	pub fn into_blob(mut self, compression: TileCompression) -> Result<Blob> {
+	pub fn into_blob(mut self, compression: &TileCompression) -> Result<Blob> {
 		self.materialize_blob()?;
 		self.recompress_blob(compression)?;
 		Ok(self.blob.unwrap())
