@@ -252,16 +252,19 @@ impl ProgressHandle {
 
 		use std::io::Write;
 		let mut output = std::io::stderr();
+		// stderr write errors are non-fatal: progress is best-effort UI.
+		// If the user piped stderr into a closed reader (e.g. `head -1`),
+		// dropping these writes is preferable to aborting the program.
 		if state.finished {
 			// Clear terminal progress indicator
 			let osc = osc_wrap("\x1b]9;4;0;\x07");
-			write!(output, "\r\x1b[2K{line}{osc}").expect("writing progress to stderr");
+			let _ = write!(output, "\r\x1b[2K{line}{osc}");
 		} else {
 			// Set terminal progress indicator (OSC 9;4)
 			let osc = osc_wrap(&format!("\x1b]9;4;1;{percent}\x07"));
-			write!(output, "\r\x1b[2K{line}{osc}").expect("writing progress to stderr");
+			let _ = write!(output, "\r\x1b[2K{line}{osc}");
 		}
-		output.flush().expect("flushing progress to stderr");
+		let _ = output.flush();
 	}
 }
 
