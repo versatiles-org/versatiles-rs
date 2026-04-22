@@ -233,6 +233,37 @@ async fn should_return_none_if_stream_is_empty() {
 }
 
 #[tokio::test]
+async fn should_construct_from_streams_try_success() {
+	let substreams = vec![
+		Box::pin(async { Ok(TileStream::from_vec(vec![(tc(0, 0, 0), Blob::from("a"))])) })
+			as Pin<Box<dyn Future<Output = anyhow::Result<TileStream<'static>>> + Send>>,
+		Box::pin(async { Ok(TileStream::from_vec(vec![(tc(1, 1, 1), Blob::from("b"))])) })
+			as Pin<Box<dyn Future<Output = anyhow::Result<TileStream<'static>>> + Send>>,
+	];
+	let merged = TileStream::<Blob>::from_streams_try(stream::iter(substreams));
+	let items = merged.to_vec().await;
+	assert_eq!(items.len(), 2);
+	for (_coord, result) in items {
+		assert!(result.is_ok());
+	}
+}
+
+#[tokio::test]
+async fn should_construct_from_streams_try_surfaces_per_future_error() {
+	let substreams = vec![
+		Box::pin(async { Ok(TileStream::from_vec(vec![(tc(0, 0, 0), Blob::from("ok"))])) })
+			as Pin<Box<dyn Future<Output = anyhow::Result<TileStream<'static>>> + Send>>,
+		Box::pin(async { anyhow::bail!("bbox 1 failed") })
+			as Pin<Box<dyn Future<Output = anyhow::Result<TileStream<'static>>> + Send>>,
+	];
+	let merged = TileStream::<Blob>::from_streams_try(stream::iter(substreams));
+	let items = merged.to_vec().await;
+	assert_eq!(items.len(), 2);
+	let errors: Vec<_> = items.iter().filter(|(_, r)| r.is_err()).collect();
+	assert_eq!(errors.len(), 1);
+}
+
+#[tokio::test]
 async fn should_process_async_for_each() {
 	let tile_data = vec![(tc(0, 0, 0), Blob::from("async0")), (tc(1, 1, 1), Blob::from("async1"))];
 

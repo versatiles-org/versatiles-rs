@@ -37,6 +37,35 @@ where
 		}
 	}
 
+	/// Fallible variant of [`from_streams`](Self::from_streams).
+	///
+	/// Each future may either resolve to a sub-stream or to an error. Successful
+	/// sub-streams are flattened into the output as `(coord, Ok(t))` items.
+	/// A failing future is surfaced as a single `(sentinel_coord, Err(e))` item,
+	/// where `sentinel_coord = TileCoord::new(0, 0, 0)` — there is no per-tile
+	/// coordinate associated with a top-level per-bbox failure.
+	///
+	/// The output type is `TileStream<Result<T>>`, matching the codebase's
+	/// `_try` convention; consumers can use `unwrap_results()` /
+	/// `for_each_try` to propagate errors with `?`.
+	pub fn from_streams_try<FutureStream>(
+		streams: impl Stream<Item = FutureStream> + Send + 'a,
+	) -> TileStream<'a, Result<T>>
+	where
+		FutureStream: Future<Output = Result<TileStream<'a, T>>> + Send + 'a,
+		T: 'a,
+	{
+		let limits = ConcurrencyLimits::default();
+		let inner = streams.buffer_unordered(limits.io_bound).flat_map(|res| match res {
+			Ok(s) => s.inner.map(|(coord, t)| (coord, Ok(t))).boxed(),
+			Err(e) => {
+				let sentinel = TileCoord::new(0, 0, 0).expect("(0,0,0) is a valid tile coord");
+				futures::stream::once(async move { (sentinel, Err(e)) }).boxed()
+			}
+		});
+		TileStream { inner: Box::pin(inner) }
+	}
+
 	// -------------------------------------------------------------------------
 	// Collecting and Iteration
 	// -------------------------------------------------------------------------
