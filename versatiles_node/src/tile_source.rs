@@ -1135,4 +1135,136 @@ mod tests {
 		// Clean up
 		let _ = std::fs::remove_file(&output_path);
 	}
+
+	// ── from_pipeline: JSON-based pipeline construction ──────────────────
+
+	#[tokio::test]
+	async fn test_from_pipeline_valid_json() {
+		// Build a single-step pipeline equivalent to:
+		//   from_container filename="berlin.mbtiles"
+		let steps_json = r#"[
+			{
+				"name": "from_container",
+				"params": { "filename": "berlin.mbtiles" }
+			}
+		]"#;
+		let source = TileSource::from_pipeline(steps_json.to_string(), Some("../testdata".to_string()))
+			.await
+			.unwrap();
+		assert!(!source.metadata().tile_format.is_empty());
+	}
+
+	#[tokio::test]
+	async fn test_from_pipeline_invalid_json_bubbles_error() {
+		let result = TileSource::from_pipeline("not valid json".to_string(), Some("../testdata".to_string())).await;
+		let Err(err) = result else {
+			panic!("expected error for invalid JSON");
+		};
+		assert!(err.reason.contains("Invalid pipeline JSON"), "{}", err.reason);
+	}
+
+	#[tokio::test]
+	async fn test_from_pipeline_empty_array_fails_build() {
+		// Empty pipeline should fail when PipelineReader tries to build.
+		let result = TileSource::from_pipeline("[]".to_string(), Some("../testdata".to_string())).await;
+		assert!(result.is_err());
+	}
+
+	#[tokio::test]
+	async fn test_from_pipeline_with_numeric_and_bool_params() {
+		// Exercises step_to_node's Number/Bool branches by constructing a
+		// nested pipeline with a `filter` operation on top of a source.
+		let steps_json = r#"[
+			{
+				"name": "from_container",
+				"params": { "filename": "berlin.mbtiles" }
+			},
+			{
+				"name": "filter",
+				"params": { "level_min": 0, "level_max": 3 }
+			}
+		]"#;
+		let source = TileSource::from_pipeline(steps_json.to_string(), Some("../testdata".to_string()))
+			.await
+			.unwrap();
+		assert!(source.metadata().max_zoom <= 3);
+	}
+
+	#[tokio::test]
+	async fn test_from_pipeline_array_param_with_mixed_types() {
+		// `from_merged_vector` wraps multiple sources in `sources` — exercises
+		// the nested-sources branch of step_to_node.
+		let steps_json = r#"[
+			{
+				"name": "from_merged_vector",
+				"params": {},
+				"sources": [
+					[
+						{ "name": "from_container", "params": { "filename": "berlin.mbtiles" } }
+					],
+					[
+						{ "name": "from_container", "params": { "filename": "berlin.pmtiles" } }
+					]
+				]
+			}
+		]"#;
+		let source = TileSource::from_pipeline(steps_json.to_string(), Some("../testdata".to_string()))
+			.await
+			.unwrap();
+		assert!(!source.metadata().tile_format.is_empty());
+	}
+
+	// ── SourceType getters across all three kinds ────────────────────────
+
+	#[tokio::test]
+	async fn test_source_type_container_fields() {
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+			.await
+			.unwrap();
+		let st = reader.source_type();
+		assert_eq!(st.kind(), "container");
+		assert!(!st.name().is_empty());
+		assert!(st.uri().is_some(), "container should expose its file path");
+		assert!(st.input().is_none(), "container has no input");
+		assert!(st.inputs().is_none(), "container has no inputs");
+	}
+
+	#[tokio::test]
+	async fn test_source_type_processor_fields() {
+		// Applying a filter wraps the container in a Processor.
+		let vpl = r#"from_container filename="berlin.mbtiles" | filter level_min=3"#;
+		let source = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
+			.await
+			.unwrap();
+		let st = source.source_type();
+		assert_eq!(st.kind(), "processor");
+		assert!(!st.name().is_empty());
+		assert!(st.uri().is_none(), "processor has no URI");
+		assert!(st.input().is_some(), "processor must expose its input");
+		assert!(st.inputs().is_none(), "processor has a single input, not inputs");
+	}
+
+	/// Direct round-trip through the SourceType napi wrapper for the Composite
+	/// variant. Constructs a RustSourceType::Composite in-process and checks
+	/// that the napi getters surface its fields. `from_vpl` can't produce a
+	/// top-level Composite because PipelineReader always wraps its operation
+	/// as a Processor at the top level.
+	#[test]
+	fn test_source_type_composite_napi_getters() {
+		let c1 = versatiles_container::SourceType::new_container("mbtiles", "a.mbtiles");
+		let c2 = versatiles_container::SourceType::new_container("pmtiles", "b.pmtiles");
+		let composite = versatiles_container::SourceType::new_composite("stacked", &[c1.clone(), c2.clone()]);
+		let napi = SourceType::from(composite);
+		assert_eq!(napi.kind(), "composite");
+		assert_eq!(napi.name(), "stacked");
+		assert!(napi.uri().is_none());
+		assert!(napi.input().is_none());
+		let ins = napi.inputs().expect("composite exposes inputs");
+		assert_eq!(ins.len(), 2);
+		assert_eq!(ins[0].kind(), "container");
+		assert_eq!(ins[1].kind(), "container");
+		// Exercise the `From<Arc<RustSourceType>>` impl path.
+		let napi_from_arc: SourceType = Arc::clone(&c1).into();
+		assert_eq!(napi_from_arc.kind(), "container");
+	}
 }

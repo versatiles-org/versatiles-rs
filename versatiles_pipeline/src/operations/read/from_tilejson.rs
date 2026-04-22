@@ -486,16 +486,111 @@ mod tests {
 
 	// ── fetch_tile ──────────────────────────────────────────────────────
 
+	// Local mock HTTP server. Spawns an axum app on a free port and returns
+	// the base URL (e.g. `http://127.0.0.1:54321`).
+	async fn spawn_mock_server<F>(router_builder: F) -> String
+	where
+		F: FnOnce() -> axum::Router,
+	{
+		use tokio::net::TcpListener;
+		let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let addr = listener.local_addr().unwrap();
+		let app = router_builder();
+		tokio::spawn(async move {
+			axum::serve(listener, app).await.unwrap();
+		});
+		// Give the runtime a tick to register the spawn.
+		tokio::task::yield_now().await;
+		format!("http://{addr}")
+	}
+
 	#[tokio::test]
-	async fn fetch_tile_404_returns_none() {
+	async fn fetch_tile_success_returns_blob() {
+		let base = spawn_mock_server(|| {
+			// axum rejects multi-param segments like `/{z}/{x}/{y}.png`; use a
+			// catch-all fallback that matches every tile path.
+			axum::Router::new().fallback(axum::routing::get(|| async { "pixel_bytes".to_string() }))
+		})
+		.await;
+
+		let template = format!("{base}/{{z}}/{{x}}/{{y}}.png");
 		let client = reqwest::Client::new();
 		let result = fetch_tile(
 			client,
-			"https://httpbin.org/status/404".to_string(),
+			template,
+			TileCoord::new(2, 1, 3).unwrap(),
+			TileFormat::PNG,
+			0,
+			None,
+		)
+		.await;
+
+		let (coord, tile) = result.expect("expected Some on 200 OK");
+		assert_eq!(coord.level, 2);
+		assert_eq!(coord.x, 1);
+		assert_eq!(coord.y, 3);
+		let blob = tile.into_blob(&TileCompression::Uncompressed).unwrap();
+		assert_eq!(blob.as_slice(), b"pixel_bytes");
+	}
+
+	#[tokio::test]
+	async fn fetch_tile_404_returns_none() {
+		let base =
+			spawn_mock_server(|| axum::Router::new().fallback(|| async { (axum::http::StatusCode::NOT_FOUND, "nope") }))
+				.await;
+
+		let result = fetch_tile(
+			reqwest::Client::new(),
+			format!("{base}/{{z}}/{{x}}/{{y}}.png"),
 			TileCoord::new(0, 0, 0).unwrap(),
 			TileFormat::PNG,
 			0,
 			None,
+		)
+		.await;
+		assert!(result.is_none());
+	}
+
+	#[tokio::test]
+	async fn fetch_tile_http_5xx_records_error_after_retries() {
+		use versatiles_container::TilesRuntime;
+		let base = spawn_mock_server(|| {
+			axum::Router::new().fallback(|| async { (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "boom") })
+		})
+		.await;
+
+		let runtime = TilesRuntime::builder()
+			.silent_progress(true)
+			.abort_on_error(true)
+			.build();
+		let result = fetch_tile(
+			reqwest::Client::new(),
+			format!("{base}/{{z}}/{{x}}/{{y}}.png"),
+			TileCoord::new(1, 0, 0).unwrap(),
+			TileFormat::PNG,
+			1, // 1 retry → 2 attempts total
+			Some(runtime.clone()),
+		)
+		.await;
+		assert!(result.is_none());
+		assert_eq!(runtime.error_count(), 1, "exhausted retries should record one error");
+		assert!(runtime.had_errors());
+	}
+
+	#[tokio::test]
+	async fn fetch_tile_http_5xx_without_runtime_returns_none() {
+		let base = spawn_mock_server(|| {
+			axum::Router::new().fallback(|| async { (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "boom") })
+		})
+		.await;
+
+		let result = fetch_tile(
+			reqwest::Client::new(),
+			format!("{base}/{{z}}/{{x}}/{{y}}.png"),
+			TileCoord::new(0, 0, 0).unwrap(),
+			TileFormat::PNG,
+			0,
+			None, // no runtime — just logs
 		)
 		.await;
 		assert!(result.is_none());
@@ -517,5 +612,155 @@ mod tests {
 		)
 		.await;
 		assert!(result.is_none());
+	}
+
+	#[tokio::test]
+	async fn fetch_tile_connection_refused_records_error() {
+		use versatiles_container::TilesRuntime;
+		let client = reqwest::Client::builder()
+			.timeout(Duration::from_millis(500))
+			.build()
+			.unwrap();
+		let runtime = TilesRuntime::builder()
+			.silent_progress(true)
+			.abort_on_error(true)
+			.build();
+		let result = fetch_tile(
+			client,
+			"http://127.0.0.1:1/{z}/{x}/{y}.pbf".to_string(),
+			TileCoord::new(0, 0, 0).unwrap(),
+			TileFormat::MVT,
+			0,
+			Some(runtime.clone()),
+		)
+		.await;
+		assert!(result.is_none());
+		assert_eq!(runtime.error_count(), 1);
+	}
+
+	// ── is_retryable_error ──────────────────────────────────────────────
+
+	#[tokio::test]
+	async fn is_retryable_error_flags_timeouts_and_connect() {
+		// Build a client that will timeout connecting to an unreachable IP.
+		let client = reqwest::Client::builder()
+			.timeout(Duration::from_millis(10))
+			.build()
+			.unwrap();
+		let err = client.get("http://10.255.255.1:1/nothing").send().await.unwrap_err();
+		// At least one of connect / timeout / body should be true for a timeout
+		// on an unroutable address.
+		assert!(is_retryable_error(&err));
+	}
+
+	// ── Operation::build via VPL ────────────────────────────────────────
+
+	#[tokio::test]
+	async fn operation_build_happy_path() -> Result<()> {
+		use crate::PipelineFactory;
+
+		// Single server that serves tiles.json at /tiles.json (with an absolute
+		// tiles URL template pointing back at itself) and tiles at anything
+		// else via a catch-all.
+		let base_holder: std::sync::Arc<std::sync::OnceLock<String>> = std::sync::Arc::new(std::sync::OnceLock::new());
+		let holder = base_holder.clone();
+		let base = spawn_mock_server(move || {
+			let holder_for_json = holder.clone();
+			axum::Router::new()
+				.route(
+					"/tiles.json",
+					axum::routing::get(move || {
+						let holder = holder_for_json.clone();
+						async move {
+							let base = holder.get().cloned().unwrap_or_default();
+							let body = format!(
+								r#"{{"tilejson":"3.0.0","tiles":["{base}/{{z}}/{{x}}/{{y}}.png"],"minzoom":0,"maxzoom":2}}"#
+							);
+							([("content-type", "application/json")], body)
+						}
+					}),
+				)
+				.fallback(axum::routing::get(|| async { "pixel_bytes".to_string() }))
+		})
+		.await;
+		base_holder.set(base.clone()).unwrap();
+
+		let factory = PipelineFactory::new_dummy();
+		let vpl = crate::vpl::VPLNode::try_from_str(&format!(r#"from_tilejson url="{base}/tiles.json""#))?;
+		let source = Operation::build(vpl, &factory).await?;
+		assert_eq!(*source.metadata().tile_format(), TileFormat::PNG);
+		assert!(source.tilejson().zoom_max().is_some());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn operation_build_errors_on_http_5xx() {
+		use crate::PipelineFactory;
+		let base = spawn_mock_server(|| {
+			axum::Router::new().fallback(|| async { (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "boom") })
+		})
+		.await;
+		let factory = PipelineFactory::new_dummy();
+		let vpl = crate::vpl::VPLNode::try_from_str(&format!(r#"from_tilejson url="{base}/tiles.json""#)).unwrap();
+		let err = Operation::build(vpl, &factory).await.unwrap_err();
+		let msg = format!("{err:#}");
+		assert!(msg.contains("HTTP") || msg.contains("500"));
+	}
+
+	// ── tile_stream and tile via a mock server ──────────────────────────
+
+	#[tokio::test]
+	async fn tile_and_tile_stream_happy_path() -> Result<()> {
+		use crate::PipelineFactory;
+		use futures::StreamExt as _;
+
+		// Server: tiles.json at /tiles.json; all other paths return a fixed body.
+		let base_holder: std::sync::Arc<std::sync::OnceLock<String>> = std::sync::Arc::new(std::sync::OnceLock::new());
+		let holder = base_holder.clone();
+		let base = spawn_mock_server(move || {
+			let holder_for_json = holder.clone();
+			axum::Router::new()
+				.route(
+					"/tiles.json",
+					axum::routing::get(move || {
+						let holder = holder_for_json.clone();
+						async move {
+							let base = holder.get().cloned().unwrap_or_default();
+							let body = format!(
+								r#"{{"tilejson":"3.0.0","tiles":["{base}/{{z}}/{{x}}/{{y}}.png"],"minzoom":0,"maxzoom":2}}"#
+							);
+							([("content-type", "application/json")], body)
+						}
+					}),
+				)
+				.fallback(axum::routing::get(|| async { "tile_body".to_string() }))
+		})
+		.await;
+		base_holder.set(base.clone()).unwrap();
+
+		let factory = PipelineFactory::new_dummy();
+		let vpl = crate::vpl::VPLNode::try_from_str(&format!(
+			r#"from_tilejson url="{base}/tiles.json" max_concurrent_requests=2"#
+		))?;
+		let source = Operation::build(vpl, &factory).await?;
+
+		// Single-tile path.
+		let tile = source
+			.tile(&TileCoord::new(1, 0, 0).unwrap())
+			.await?
+			.expect("tile should be present");
+		let blob = tile.into_blob(&TileCompression::Uncompressed)?;
+		assert_eq!(blob.as_slice(), b"tile_body");
+
+		// Stream path: fetch all tiles at z=1 (2×2 = 4 tiles).
+		let bbox = TileBBox::from_min_and_max(1, 0, 0, 1, 1)?;
+		let stream = source.tile_stream(bbox).await?;
+		let collected: Vec<_> = stream.inner.collect().await;
+		assert_eq!(collected.len(), 4);
+		for (_coord, tile) in collected {
+			let b = tile.into_blob(&TileCompression::Uncompressed)?;
+			assert_eq!(b.as_slice(), b"tile_body");
+		}
+		Ok(())
 	}
 }

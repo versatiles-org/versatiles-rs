@@ -5822,6 +5822,7 @@ dependencies = [
  "approx",
  "assert_fs",
  "async-trait",
+ "axum",
  "dashmap",
  "deadpool",
  "futures",

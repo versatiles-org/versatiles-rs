@@ -292,6 +292,32 @@ mod tests {
 		assert!(result.is_err());
 	}
 
+	#[test]
+	fn test_open_session_unresolvable_host() {
+		// A hostname that DNS cannot resolve exercises the resolve-error branch
+		// around line 30 of open_session.
+		let url = Url::parse("sftp://this-host-must-not-exist.invalid:22/path").unwrap();
+		let Err(err) = open_session(&url, None) else {
+			panic!("expected DNS failure for .invalid TLD");
+		};
+		let msg = format!("{err:#}");
+		assert!(
+			msg.contains("resolve") || msg.contains("connect") || msg.contains("not known") || msg.contains("lookup"),
+			"expected DNS / connect error, got: {msg}"
+		);
+	}
+
+	#[rstest::rstest]
+	#[case("sftp://host", "")]
+	#[case("sftp://host/", "/")]
+	#[case("sftp://host/path", "/path")]
+	#[case("sftp://user@host:2222", "")]
+	#[case("sftp://host/a%20b/file.tar", "/a%20b/file.tar")] // URL-encoded space stays encoded
+	fn test_remote_path_variants(#[case] url_str: &str, #[case] expected: &str) {
+		let url = Url::parse(url_str).unwrap();
+		assert_eq!(remote_path(&url), PathBuf::from(expected));
+	}
+
 	#[cfg(all(feature = "ssh2", unix))]
 	mod sftp_server_tests {
 		use super::*;
