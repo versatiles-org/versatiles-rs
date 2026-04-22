@@ -509,4 +509,141 @@ mod tests {
 		assert!(docs.contains("level_max"));
 		assert!(docs.contains("level_min"));
 	}
+
+	// ── Debug impl ──────────────────────────────────────────────────────────
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_operation_debug_format() {
+		let operation = get_operation(512).await;
+		let s = format!("{operation:?}");
+		assert!(s.contains("Operation"));
+		assert!(s.contains("tile_size"));
+	}
+
+	// ── Factory::build dispatch (ReadOperationFactoryTrait path) ────────────
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_factory_build_dispatches_to_operation() -> Result<()> {
+		let factory = Factory {};
+		let pipeline_factory = PipelineFactory::new_dummy();
+		let vpl = VPLNode::try_from_str(
+			"from_gdal_raster filename=\"../testdata/gradient.tif\" tile_size=\"512\" level_min=\"0\" level_max=\"1\"",
+		)?;
+		let source = factory.build(vpl, &pipeline_factory).await?;
+		assert!(source.metadata().tile_pyramid().is_some());
+		Ok(())
+	}
+
+	// ── Arg parsing: bands / nodata / cutline ───────────────────────────────
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_build_with_bands_arg() -> Result<()> {
+		let operation = Operation::new(
+			VPLNode::try_from_str(
+				"from_gdal_raster filename=\"../testdata/gradient.tif\" tile_size=\"256\" level_min=\"0\" level_max=\"0\" bands=\"1,2,3\"",
+			)?,
+			&PipelineFactory::new_dummy(),
+		)
+		.await?;
+		// The operation constructs successfully with explicit bands; this exercises
+		// the bands-parsing branch in Operation::new.
+		assert_eq!(operation.tile_size, 256);
+		Ok(())
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_build_with_invalid_bands_arg_errors() {
+		let result = Operation::new(
+			VPLNode::try_from_str(
+				"from_gdal_raster filename=\"../testdata/gradient.tif\" tile_size=\"256\" bands=\"not_a_number\"",
+			)
+			.unwrap(),
+			&PipelineFactory::new_dummy(),
+		)
+		.await;
+		let Err(err) = result else {
+			panic!("invalid bands should fail");
+		};
+		let msg = format!("{err:#}");
+		assert!(msg.contains("band"), "expected band parse error, got: {msg}");
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_build_with_nodata_single_value() -> Result<()> {
+		// Single nodata value applied to all bands.
+		let operation = Operation::new(
+			VPLNode::try_from_str(
+				"from_gdal_raster filename=\"../testdata/gradient.tif\" tile_size=\"256\" level_min=\"0\" level_max=\"0\" nodata=\"0\"",
+			)?,
+			&PipelineFactory::new_dummy(),
+		)
+		.await?;
+		assert_eq!(operation.tile_size, 256);
+		Ok(())
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_build_with_nodata_per_band_grouped() -> Result<()> {
+		// Semicolon-separated groups with comma-separated per-band values.
+		let operation = Operation::new(
+			VPLNode::try_from_str(
+				"from_gdal_raster filename=\"../testdata/gradient.tif\" tile_size=\"256\" level_min=\"0\" level_max=\"0\" nodata=\"0,0,0;255,255,255\"",
+			)?,
+			&PipelineFactory::new_dummy(),
+		)
+		.await?;
+		assert_eq!(operation.tile_size, 256);
+		Ok(())
+	}
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_build_with_invalid_nodata_errors() {
+		let result = Operation::new(
+			VPLNode::try_from_str(
+				"from_gdal_raster filename=\"../testdata/gradient.tif\" tile_size=\"256\" nodata=\"not_a_number\"",
+			)
+			.unwrap(),
+			&PipelineFactory::new_dummy(),
+		)
+		.await;
+		let Err(err) = result else {
+			panic!("invalid nodata should fail");
+		};
+		let msg = format!("{err:#}");
+		assert!(msg.contains("nodata"), "expected nodata parse error, got: {msg}");
+	}
+
+	// ── tile_coord_stream ───────────────────────────────────────────────────
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_tile_coord_stream_yields_all_coords() -> Result<()> {
+		use versatiles_core::TileBBox;
+		let operation = get_operation(256).await;
+		let mut stream = operation.tile_coord_stream(TileBBox::new_full(1)?).await?;
+		let mut count = 0;
+		while let Some((_coord, _)) = stream.next().await {
+			count += 1;
+		}
+		// Full level-1 bbox (intersected with the raster extent) covers ≤ 4 tiles.
+		assert!(count > 0 && count <= 4, "expected 1..=4 tiles, got {count}");
+		Ok(())
+	}
+
+	// ── tile_stream: empty bbox short-circuit ───────────────────────────────
+
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_tile_stream_empty_bbox_returns_empty() -> Result<()> {
+		use versatiles_core::TileBBox;
+		let operation = get_operation(256).await;
+		// Pick a bbox outside the dataset extent so it intersects to empty.
+		let outside = TileBBox::from_min_and_max(20, 0, 0, 0, 0)?;
+		let mut stream = operation.tile_stream(outside).await?;
+		// Drain — should be empty (no tiles produced).
+		let mut count = 0;
+		while stream.next().await.is_some() {
+			count += 1;
+		}
+		assert_eq!(count, 0);
+		Ok(())
+	}
 }
