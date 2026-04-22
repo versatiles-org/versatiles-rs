@@ -18,7 +18,7 @@ impl TileCover {
 
 	/// Splits the covered area into a grid of `TileBBox` cells of the given `size`.
 	///
-	/// Uses [`bbox`](TileCover::bbox) to determine the area to partition.
+	/// Uses [`to_bbox`](TileCover::to_bbox) to determine the area to partition.
 	/// Returns an empty iterator if this cover is empty.
 	pub fn iter_grid(&self, size: u32) -> impl Iterator<Item = TileBBox> + Send {
 		let vec: Vec<TileBBox> = match self {
