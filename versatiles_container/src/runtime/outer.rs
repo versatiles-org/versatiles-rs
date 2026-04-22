@@ -55,12 +55,6 @@ impl TilesRuntime {
 		&self.inner.cache_type
 	}
 
-	/// Whether tiles should be pre-counted before processing
-	#[must_use]
-	pub fn precount_tiles(&self) -> bool {
-		self.inner.precount_tiles
-	}
-
 	/// Get the SSH identity file path, if configured
 	#[must_use]
 	pub fn ssh_identity(&self) -> Option<&Path> {
