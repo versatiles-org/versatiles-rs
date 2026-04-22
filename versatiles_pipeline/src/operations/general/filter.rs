@@ -89,7 +89,7 @@ impl Operation {
 
 		if tile_pyramid.is_empty() {
 			log::warn!(
-				"Filter operation in VPL node {:?} results in empty bbox_pyramid",
+				"Filter operation in VPL node {:?} results in empty tile_pyramid",
 				vpl_node.name
 			);
 		}

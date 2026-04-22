@@ -22,9 +22,9 @@
 //!     let runtime = TilesRuntime::default();
 //!     let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 //!
-//!     // Optionally adapt the reader: limit to a bbox pyramid, keep compression as-is
+//!     // Optionally adapt the reader: limit to a tile pyramid, keep compression as-is
 //!     let params = TilesConverterParameters {
-//!         bbox_pyramid: Some(TilePyramid::new_full_up_to(8)),
+//!         tile_pyramid: Some(TilePyramid::new_full_up_to(8)),
 //!         ..Default::default()
 //!     };
 //!     let reader = Arc::new(Box::new(TilesConvertReader::new_from_reader(reader, params).await?) as Box<dyn TileSource>);

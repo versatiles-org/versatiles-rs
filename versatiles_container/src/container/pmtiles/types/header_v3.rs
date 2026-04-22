@@ -34,14 +34,14 @@ pub struct HeaderV3 {
 impl HeaderV3 {
 	pub fn from_parameters(
 		parameters: &TileSourceMetadata,
-		bbox_pyramid: &TilePyramid,
+		tile_pyramid: &TilePyramid,
 		tilejson: &TileJSON,
 	) -> HeaderV3 {
 		use PMTilesCompression as PC;
 		use PMTilesType as PT;
 
-		let bbox = tilejson.bounds.or_else(|| bbox_pyramid.geo_bbox()).unwrap();
-		let center = tilejson.center.or_else(|| bbox_pyramid.geo_center());
+		let bbox = tilejson.bounds.or_else(|| tile_pyramid.geo_bbox()).unwrap();
+		let center = tilejson.center.or_else(|| tile_pyramid.geo_center());
 
 		Self {
 			root_dir: ByteRange::new(0, 0),
@@ -55,8 +55,8 @@ impl HeaderV3 {
 			internal_compression: PC::Gzip,
 			tile_compression: PC::from_value(*parameters.tile_compression()).unwrap_or(PC::Unknown),
 			tile_type: PT::from_value(*parameters.tile_format()).unwrap_or(PT::UNKNOWN),
-			min_zoom: tilejson.zoom_min().or(bbox_pyramid.level_min()).unwrap_or(0),
-			max_zoom: tilejson.zoom_max().or(bbox_pyramid.level_max()).unwrap_or(14),
+			min_zoom: tilejson.zoom_min().or(tile_pyramid.level_min()).unwrap_or(0),
+			max_zoom: tilejson.zoom_max().or(tile_pyramid.level_max()).unwrap_or(14),
 			min_lon_e7: float_to_int(bbox.x_min * 1e7).unwrap(),
 			min_lat_e7: float_to_int(bbox.y_min * 1e7).unwrap(),
 			max_lon_e7: float_to_int(bbox.x_max * 1e7).unwrap(),

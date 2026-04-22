@@ -7,7 +7,7 @@
 //! ## Detected properties
 //! - **Tile format** is inferred from the innermost filename extension (e.g., `.png`, `.webp`, `.pbf`, `.mvt`, `.bin`).
 //! - **Transport compression** is inferred from an outer extension (e.g., `.br`, `.gz`), or `Uncompressed` if none.
-//! - A **bbox pyramid** is computed from all discovered `{z,x,y}` coordinates.
+//! - A **tile pyramid** is computed from all discovered `{z,x,y}` coordinates.
 //!
 //! All tiles must share the same **format** and **compression**; mixing them returns an error.
 //!
@@ -104,7 +104,7 @@ impl TarTilesReader {
 	/// - tiles at `{z}/{x}/{y}.<format>[.<compression>]`
 	/// - metadata files: `meta.json`, `tiles.json`, `metadata.json` (optionally `.gz`/`.br`)
 	///
-	/// Determines a uniform tile **format** and **compression**, and computes a bbox pyramid
+	/// Determines a uniform tile **format** and **compression**, and computes a tile pyramid
 	/// from discovered coordinates.
 	///
 	/// # Errors

@@ -96,8 +96,8 @@ impl TilesWriter for PMTilesWriter {
 		writer.set_position(16384)?;
 
 		let tilejson = reader.tilejson();
-		let bbox_pyramid = reader.tile_pyramid().await?;
-		let mut header = HeaderV3::from_parameters(&parameters, bbox_pyramid.as_ref(), tilejson);
+		let tile_pyramid = reader.tile_pyramid().await?;
+		let mut header = HeaderV3::from_parameters(&parameters, tile_pyramid.as_ref(), tilejson);
 
 		let mut metadata: Blob = tilejson.into();
 		metadata = compress(metadata, &INTERNAL_COMPRESSION)?;
@@ -226,12 +226,12 @@ mod tests {
 	#[context("test: PMTiles tile ordering (Hilbert & offsets)")]
 	#[tokio::test]
 	async fn tiles_written_in_order() -> Result<()> {
-		let mut bbox_pyramid = TilePyramid::new_empty();
-		bbox_pyramid.insert_bbox(&TileBBox::from_min_and_max(15, 4090, 4090, 4139, 4139)?)?;
-		bbox_pyramid.insert_bbox(&TileBBox::from_min_and_max(14, 250, 250, 260, 260)?)?;
+		let mut tile_pyramid = TilePyramid::new_empty();
+		tile_pyramid.insert_bbox(&TileBBox::from_min_and_max(15, 4090, 4090, 4139, 4139)?)?;
+		tile_pyramid.insert_bbox(&TileBBox::from_min_and_max(14, 250, 250, 260, 260)?)?;
 
 		let mut mock_reader = MockReader::new_mock(
-			bbox_pyramid,
+			tile_pyramid,
 			TileSourceMetadata::new(TileFormat::MVT, TileCompression::Uncompressed, Traversal::ANY, None),
 		)?;
 

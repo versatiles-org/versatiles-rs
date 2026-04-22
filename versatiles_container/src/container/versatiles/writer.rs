@@ -91,23 +91,23 @@ impl TilesWriter for VersaTilesWriter {
 
 		let tile_compression = *parameters.tile_compression();
 
-		// Get the bounding box pyramid (computed lazily by the source).
-		let bbox_pyramid = reader.tile_pyramid().await?;
-		log::trace!("convert_from - bbox_pyramid: {bbox_pyramid:#}");
+		// Get the tile pyramid (computed lazily by the source).
+		let tile_pyramid = reader.tile_pyramid().await?;
+		log::trace!("convert_from - tile_pyramid: {tile_pyramid:#}");
 
 		// Create the file header, preferring TileJSON values over pyramid-calculated ones
 		let tilejson = reader.tilejson();
 		let zoom_min = tilejson
 			.zoom_min()
-			.or(bbox_pyramid.level_min())
+			.or(tile_pyramid.level_min())
 			.ok_or(anyhow!("invalid minzoom"))?;
 		let zoom_max = tilejson
 			.zoom_max()
-			.or(bbox_pyramid.level_max())
+			.or(tile_pyramid.level_max())
 			.ok_or(anyhow!("invalid maxzoom"))?;
 		let bbox = tilejson
 			.bounds
-			.or(bbox_pyramid.geo_bbox())
+			.or(tile_pyramid.geo_bbox())
 			.ok_or(anyhow!("invalid geo bounding box"))?;
 		let mut header = FileHeader::new(*parameters.tile_format(), tile_compression, [zoom_min, zoom_max], &bbox)?;
 

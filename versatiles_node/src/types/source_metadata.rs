@@ -64,11 +64,11 @@ mod tests {
 		min_zoom: u8,
 		max_zoom: u8,
 	) -> TileSourceMetadata {
-		let mut bbox_pyramid = TilePyramid::new_full();
-		bbox_pyramid.set_level_min(min_zoom);
-		bbox_pyramid.set_level_max(max_zoom);
+		let mut tile_pyramid = TilePyramid::new_full();
+		tile_pyramid.set_level_min(min_zoom);
+		tile_pyramid.set_level_max(max_zoom);
 
-		TileSourceMetadata::new(format, compression, Traversal::ANY, Some(bbox_pyramid))
+		TileSourceMetadata::new(format, compression, Traversal::ANY, Some(tile_pyramid))
 	}
 
 	#[test]

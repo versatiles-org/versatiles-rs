@@ -65,7 +65,7 @@ async fn mbtiles_to_tar_round_trip() -> Result<()> {
 	// Read source (limit to small subset for faster test)
 	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 	let params = TilesConverterParameters {
-		bbox_pyramid: Some(TilePyramid::new_full_up_to(5)), // Limit to levels 0-5
+		tile_pyramid: Some(TilePyramid::new_full_up_to(5)), // Limit to levels 0-5
 		..Default::default()
 	};
 	let filtered = TilesConvertReader::new_from_reader(source, params).await?;
@@ -89,7 +89,7 @@ async fn mbtiles_to_pmtiles_round_trip() -> Result<()> {
 	// Read source with filter
 	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 	let params = TilesConverterParameters {
-		bbox_pyramid: Some(TilePyramid::new_full_up_to(5)),
+		tile_pyramid: Some(TilePyramid::new_full_up_to(5)),
 		..Default::default()
 	};
 	let filtered = TilesConvertReader::new_from_reader(source, params).await?;
@@ -117,7 +117,7 @@ async fn converter_preserves_tile_format() -> Result<()> {
 
 	// Convert without changing format/compression
 	let params = TilesConverterParameters {
-		bbox_pyramid: Some(TilePyramid::new_full_up_to(3)),
+		tile_pyramid: Some(TilePyramid::new_full_up_to(3)),
 		..Default::default()
 	};
 
@@ -143,7 +143,7 @@ async fn converter_changes_compression() -> Result<()> {
 
 	// Convert with Brotli compression
 	let params = TilesConverterParameters {
-		bbox_pyramid: Some(TilePyramid::new_full_up_to(3)),
+		tile_pyramid: Some(TilePyramid::new_full_up_to(3)),
 		tile_compression: Some(TileCompression::Brotli),
 		..Default::default()
 	};
@@ -182,7 +182,7 @@ async fn metadata_consistency_after_conversion() -> Result<()> {
 	// Read and convert
 	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 	let params = TilesConverterParameters {
-		bbox_pyramid: Some(TilePyramid::new_full_up_to(3)),
+		tile_pyramid: Some(TilePyramid::new_full_up_to(3)),
 		..Default::default()
 	};
 	convert_tiles_container(source, params, &output_path, runtime.clone()).await?;
@@ -268,7 +268,7 @@ async fn versatiles_tile_stream_complete_after_round_trip() -> Result<()> {
 	// Read source and limit to a small bbox for faster testing
 	let source = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 	let params = TilesConverterParameters {
-		bbox_pyramid: Some(TilePyramid::new_full_up_to(4)), // Levels 0-4
+		tile_pyramid: Some(TilePyramid::new_full_up_to(4)), // Levels 0-4
 		..Default::default()
 	};
 	let filtered = TilesConvertReader::new_from_reader(source, params).await?;
@@ -276,7 +276,7 @@ async fn versatiles_tile_stream_complete_after_round_trip() -> Result<()> {
 	// Count tiles in source stream
 	let source_for_count = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 	let params_for_count = TilesConverterParameters {
-		bbox_pyramid: Some(TilePyramid::new_full_up_to(4)),
+		tile_pyramid: Some(TilePyramid::new_full_up_to(4)),
 		..Default::default()
 	};
 	let filtered_for_count = TilesConvertReader::new_from_reader(source_for_count, params_for_count).await?;
@@ -412,7 +412,7 @@ async fn versatiles_deduplicated_tiles_readable() -> Result<()> {
 }
 
 /// Verifies that empty tile sources (with no zoom levels) produce an error.
-/// The VersaTiles format requires a valid zoom range, so an empty bbox_pyramid cannot be written.
+/// The VersaTiles format requires a valid zoom range, so an empty tile_pyramid cannot be written.
 #[tokio::test]
 async fn versatiles_empty_source_fails_gracefully() -> Result<()> {
 	let temp_dir = TempDir::new()?;

@@ -49,7 +49,7 @@ pub(crate) async fn convert_tiles_with_options(
 		swap_xy: None,
 	});
 
-	let mut bbox_pyramid: Option<TilePyramid> = None;
+	let mut tile_pyramid: Option<TilePyramid> = None;
 	let mut geo_bbox_filter: Option<GeoBBox> = None;
 
 	if opts.min_zoom.is_some() || opts.max_zoom.is_some() || opts.bbox.is_some() {
@@ -78,7 +78,7 @@ pub(crate) async fn convert_tiles_with_options(
 			}
 		}
 
-		bbox_pyramid = Some(pyramid);
+		tile_pyramid = Some(pyramid);
 	}
 
 	let tile_compression = if let Some(ref comp_str) = opts.compress {
@@ -88,7 +88,7 @@ pub(crate) async fn convert_tiles_with_options(
 	};
 
 	let params = TilesConverterParameters {
-		bbox_pyramid,
+		tile_pyramid,
 		geo_bbox: geo_bbox_filter,
 		tile_compression,
 		flip_y: opts.flip_y.unwrap_or(false),
@@ -528,14 +528,14 @@ mod tests {
 		#[case] with_pyramid: bool,
 		#[case] _desc: &str,
 	) {
-		let bbox_pyramid = if with_pyramid {
+		let tile_pyramid = if with_pyramid {
 			Some(TilePyramid::new_full_up_to(10))
 		} else {
 			None
 		};
 
 		let params = TilesConverterParameters {
-			bbox_pyramid,
+			tile_pyramid,
 			geo_bbox: None,
 			tile_compression: compression,
 			flip_y,
@@ -546,7 +546,7 @@ mod tests {
 		assert_eq!(params.tile_compression.is_some(), compression.is_some());
 		assert_eq!(params.flip_y, flip_y);
 		assert_eq!(params.swap_xy, swap_xy);
-		assert_eq!(params.bbox_pyramid.is_some(), with_pyramid);
+		assert_eq!(params.tile_pyramid.is_some(), with_pyramid);
 	}
 
 	/// Test bbox_border is only applied when bbox exists

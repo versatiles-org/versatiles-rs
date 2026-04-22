@@ -66,7 +66,7 @@ impl BlockIndex {
 	}
 
 	/// Returns a [`TilePyramid`] representing the bounding boxes of the blocks in the index.
-	pub fn bbox_pyramid(&self) -> TilePyramid {
+	pub fn tile_pyramid(&self) -> TilePyramid {
 		let mut pyramid = TilePyramid::new_empty();
 		for block in self.lookup.values() {
 			pyramid.insert_bbox(block.global_bbox()).expect("include_bbox failed");

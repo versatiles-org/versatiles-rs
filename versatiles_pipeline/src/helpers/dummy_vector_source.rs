@@ -37,12 +37,12 @@ impl DummyVectorSource {
 			.collect();
 
 		// Initialize the parameters with the given bounding box or a default one
-		let bbox_pyramid = pyramid.unwrap_or_else(|| TilePyramid::new_full_up_to(8));
+		let tile_pyramid = pyramid.unwrap_or_else(|| TilePyramid::new_full_up_to(8));
 		let metadata = TileSourceMetadata::new(
 			TileFormat::MVT,
 			TileCompression::Uncompressed,
 			Traversal::ANY,
-			Some(bbox_pyramid),
+			Some(tile_pyramid),
 		);
 
 		let mut tilejson = TileJSON::default();
@@ -124,10 +124,10 @@ impl TileSource for DummyVectorSource {
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("dummy_vector_source::tile_stream {bbox:?}");
 		let data = Arc::clone(&self.data);
-		let bbox_pyramid = self.metadata.tile_pyramid();
+		let tile_pyramid = self.metadata.tile_pyramid();
 
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
-			if let Some(pyramid) = &bbox_pyramid
+			if let Some(pyramid) = &tile_pyramid
 				&& !pyramid.includes_coord(&coord)
 			{
 				return None;

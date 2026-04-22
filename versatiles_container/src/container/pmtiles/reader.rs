@@ -10,7 +10,7 @@
 //! - `header`: parsed [`HeaderV3`] with offsets and compression flags
 //! - `tilejson`: parsed `TileJSON` (from `metadata` range), merged into [`TileJSON`]
 //! - `parameters`: [`TileSourceMetadata`] with `tile_format`, `tile_compression`, and a
-//!   computed **bbox pyramid** inferred from the directory tree
+//!   computed **tile pyramid** inferred from the directory tree
 //!
 //! ## Requirements
 //! - Use an **absolute** filesystem path when opening via [`open`].
@@ -69,7 +69,7 @@ use versatiles_derive::context;
 /// Reader for `PMTiles` v3 containers.
 ///
 /// Parses the header and directory blobs, merges embedded `TileJSON`, computes a
-/// bounding-box pyramid by traversing directory entries, and exposes tiles via
+/// tile pyramid by traversing directory entries, and exposes tiles via
 /// the [`TileSource`] interface.
 #[derive(Debug)]
 pub struct PMTilesReader {
@@ -85,7 +85,7 @@ pub struct PMTilesReader {
 	pub leaves_cache: Arc<Mutex<LimitedCache<ByteRange, Arc<EntriesV3>>>>,
 	/// Merged `TileJSON` metadata extracted from the `PMTiles` `metadata` range.
 	pub tilejson: TileJSON,
-	/// Runtime parameters (tile format, compression, bbox pyramid) advertised by this reader.
+	/// Runtime parameters (tile format, compression, tile pyramid) advertised by this reader.
 	pub metadata: TileSourceMetadata,
 	/// Uncompressed root directory blob.
 	pub root_bytes_uncompressed: Blob,
@@ -108,7 +108,7 @@ impl PMTilesReader {
 	/// Open a `PMTiles` container from an existing [`DataReader`].
 	///
 	/// Reads the v3 header, decompresses and parses the metadata (`TileJSON`) and
-	/// root directory, prepares leaf directory bytes, computes the bbox pyramid, and
+	/// root directory, prepares leaf directory bytes, computes the tile pyramid, and
 	/// initializes caches for fast lookups.
 	///
 	/// # Errors
@@ -308,7 +308,7 @@ impl PMTilesReader {
 	}
 }
 
-/// Build the per‑zoom bounding box pyramid by traversing `PMTiles` directory entries.
+/// Build the per‑zoom tile pyramid by traversing `PMTiles` directory entries.
 ///
 /// Walks the root and leaf directory blobs, following entry ranges. For `run_length`
 /// entries, expands the run into individual tiles via Hilbert indices; for directory
@@ -321,8 +321,8 @@ impl PMTilesReader {
 ///
 /// ### Errors
 /// Returns an error when directory blobs cannot be parsed or decompressed.
-#[context("building bbox pyramid from PMTiles directories")]
-fn calc_bbox_pyramid(
+#[context("building tile pyramid from PMTiles directories")]
+fn calc_tile_pyramid(
 	root_bytes_uncompressed: &Blob,
 	leaves_bytes: &Blob,
 	compression: TileCompression,
@@ -378,7 +378,7 @@ impl TileSource for PMTilesReader {
 		SourceType::new_container("pmtiles", self.data_reader.name())
 	}
 
-	/// Returns the current reader parameters (tile format, compression, bbox pyramid).
+	/// Returns the current reader parameters (tile format, compression, tile pyramid).
 	fn metadata(&self) -> &TileSourceMetadata {
 		&self.metadata
 	}
@@ -390,7 +390,7 @@ impl TileSource for PMTilesReader {
 
 	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
 		self.metadata.get_or_compute_tile_pyramid(|| {
-			calc_bbox_pyramid(
+			calc_tile_pyramid(
 				&self.root_bytes_uncompressed,
 				&self.leaves_bytes,
 				self.internal_compression,

@@ -83,19 +83,19 @@ impl ReadTileSource for Operation {
 		// Detect tile format
 		let tile_format = detect_tile_format(&tilejson, &tile_url_template)?;
 
-		// Build bbox pyramid from TileJSON bounds/zoom
+		// Build tile pyramid from TileJSON bounds/zoom
 		let min_zoom = tilejson.zoom_min().unwrap_or(0);
 		let max_zoom = tilejson.zoom_max().unwrap_or(22);
 		let geo_bbox = tilejson
 			.bounds
 			.unwrap_or_else(|| GeoBBox::new(-180.0, -85.05112878, 180.0, 85.05112878).unwrap());
-		let bbox_pyramid = TilePyramid::from_geo_bbox(min_zoom, max_zoom, &geo_bbox)?;
+		let tile_pyramid = TilePyramid::from_geo_bbox(min_zoom, max_zoom, &geo_bbox)?;
 
 		let metadata = TileSourceMetadata::new(
 			tile_format,
 			TileCompression::Uncompressed,
 			Traversal::new_any(),
-			Some(bbox_pyramid),
+			Some(tile_pyramid),
 		);
 
 		let mut result_tilejson = tilejson.clone();

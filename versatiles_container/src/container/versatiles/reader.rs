@@ -9,7 +9,7 @@
 //! ## Extracted artifacts
 //! - `tilejson`: parsed `TileJSON` from the `meta_range` (if present)
 //! - `parameters`: [`TileSourceMetadata`] with `tile_format`, `tile_compression`, and a
-//!   **bbox pyramid** computed from the block index
+//!   **tile pyramid** computed from the block index
 //! - `block_index`: lightweight structure describing all block ranges
 //!
 //! ## Usage
@@ -74,7 +74,7 @@ use versatiles_derive::context;
 /// Reader for `.versatiles` containers.
 ///
 /// Decompresses and parses the block index, merges embedded `TileJSON`, computes a
-/// per-zoom bounding-box pyramid, and serves tiles via lazy index lookups. Tile
+/// per-zoom tile pyramid, and serves tiles via lazy index lookups. Tile
 /// indices are cached (least-recently-used) to accelerate repeated random access.
 pub struct VersaTilesReader {
 	block_index: BlockIndex,
@@ -104,7 +104,7 @@ impl VersaTilesReader {
 	/// Open a `.versatiles` container from an existing [`DataReader`].
 	///
 	/// Reads the header, loads and (if present) decompresses the `TileJSON` metadata, then
-	/// reads and decompresses the **block index** (Brotli). Finally, computes the bbox pyramid
+	/// reads and decompresses the **block index** (Brotli). Finally, computes the tile pyramid
 	/// from the block index and initializes the tile-index cache.
 	///
 	/// # Errors
@@ -279,7 +279,7 @@ impl TileSource for VersaTilesReader {
 	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
 		self
 			.metadata
-			.get_or_compute_tile_pyramid(|| Ok(self.block_index.bbox_pyramid()))
+			.get_or_compute_tile_pyramid(|| Ok(self.block_index.tile_pyramid()))
 	}
 
 	/// Fetch a single tile by XYZ coordinate.

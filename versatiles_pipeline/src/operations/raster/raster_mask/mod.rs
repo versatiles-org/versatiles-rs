@@ -88,7 +88,7 @@ impl Operation {
 			blur_function,
 		)?;
 
-		// Clip bbox_pyramid to the mask geometry's geographic bounds so that tiles
+		// Clip tile_pyramid to the mask geometry's geographic bounds so that tiles
 		// entirely outside the mask are never requested from the source.
 		if let Some(geo_bbox) = mask.geo_bbox() {
 			let mut tile_pyramid = source.tile_pyramid().await?.as_ref().clone();

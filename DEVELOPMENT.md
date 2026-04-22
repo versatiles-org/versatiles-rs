@@ -387,7 +387,7 @@ Starts as `Bbox` for all constructors that produce rectangular coverage. Automat
 
 ### `TilePyramid`
 
-`TilePyramid` holds one `TileCover` per zoom level (0 through `MAX_ZOOM_LEVEL = 30`). It is the **primary type for tile coverage tracking** and is stored in `TileSourceMetadata.bbox_pyramid`.
+`TilePyramid` holds one `TileCover` per zoom level (0 through `MAX_ZOOM_LEVEL = 30`). It is the **primary type for tile coverage tracking** and is accessed via `TileSourceMetadata::tile_pyramid()`.
 
 ```rust
 let mut pyramid = TilePyramid::new_empty();

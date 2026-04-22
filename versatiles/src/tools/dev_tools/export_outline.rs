@@ -29,8 +29,8 @@ pub async fn run(args: &ExportOutline, runtime: &TilesRuntime) -> Result<()> {
 
 	let reader = runtime.reader_from_str(input).await?;
 
-	let bbox_pyramid = reader.tile_pyramid().await?;
-	let level = args.level.unwrap_or_else(|| bbox_pyramid.level_max().unwrap());
+	let tile_pyramid = reader.tile_pyramid().await?;
+	let level = args.level.unwrap_or_else(|| tile_pyramid.level_max().unwrap());
 
 	log::debug!("Measuring the outline of the tiles in {input:?} at zoom level {level} and saving it to {output:?}");
 
@@ -38,7 +38,7 @@ pub async fn run(args: &ExportOutline, runtime: &TilesRuntime) -> Result<()> {
 		bail!("Only GeoJSON output is supported for now");
 	}
 
-	let bbox = bbox_pyramid.level_ref(level).to_bbox();
+	let bbox = tile_pyramid.level_ref(level).to_bbox();
 	let mut stream = reader.tile_size_stream(bbox).await?;
 
 	let progress = runtime.create_progress("Scanning tile sizes", bbox.count_tiles());

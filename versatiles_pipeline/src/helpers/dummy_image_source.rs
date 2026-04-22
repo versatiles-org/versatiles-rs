@@ -58,12 +58,12 @@ impl DummyImageSource {
 	{
 		ensure!(tile_format.is_raster(), "tile_format must be a raster format");
 
-		let bbox_pyramid = pyramid.unwrap_or_else(|| TilePyramid::new_full_up_to(8));
+		let tile_pyramid = pyramid.unwrap_or_else(|| TilePyramid::new_full_up_to(8));
 		let metadata = TileSourceMetadata::new(
 			tile_format,
 			TileCompression::Uncompressed,
 			Traversal::ANY,
-			Some(bbox_pyramid),
+			Some(tile_pyramid),
 		);
 
 		let mut tilejson = TileJSON::default();

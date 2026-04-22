@@ -105,7 +105,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 
 	let reader = runtime.reader_from_str(&arguments.input_file).await?;
 
-	let (bbox_pyramid, geo_bbox) = bbox_pyramid(arguments)?;
+	let (tile_pyramid, geo_bbox) = tile_pyramid(arguments)?;
 
 	let (tile_format, format_quality, format_effort) = if let Some(ref tf) = arguments.tile_format {
 		let (fmt, q, s) = parse_tile_format(tf)?;
@@ -115,7 +115,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	};
 
 	let parameters = TilesConverterParameters {
-		bbox_pyramid,
+		tile_pyramid,
 		geo_bbox,
 		flip_y: arguments.flip_y,
 		swap_xy: arguments.swap_xy,
@@ -132,21 +132,21 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	Ok(())
 }
 
-#[context("Failed to get bounding box pyramid")]
-fn bbox_pyramid(arguments: &Subcommand) -> Result<(Option<TilePyramid>, Option<GeoBBox>)> {
+#[context("Failed to get tile pyramid")]
+fn tile_pyramid(arguments: &Subcommand) -> Result<(Option<TilePyramid>, Option<GeoBBox>)> {
 	if arguments.min_zoom.is_none() && arguments.max_zoom.is_none() && arguments.bbox.is_none() {
 		return Ok((None, None));
 	}
 
-	let mut bbox_pyramid = TilePyramid::new_full();
+	let mut tile_pyramid = TilePyramid::new_full();
 	let mut geo_bbox = None;
 
 	if let Some(level_min) = arguments.min_zoom {
-		bbox_pyramid.set_level_min(level_min);
+		tile_pyramid.set_level_min(level_min);
 	}
 
 	if let Some(level_max) = arguments.max_zoom {
-		bbox_pyramid.set_level_max(level_max);
+		tile_pyramid.set_level_max(level_max);
 	}
 
 	if let Some(bbox) = &arguments.bbox {
@@ -165,15 +165,15 @@ fn bbox_pyramid(arguments: &Subcommand) -> Result<(Option<TilePyramid>, Option<G
 		}
 
 		let bbox = GeoBBox::try_from(values)?;
-		bbox_pyramid.intersect_geo_bbox(&bbox)?;
+		tile_pyramid.intersect_geo_bbox(&bbox)?;
 		geo_bbox = Some(bbox);
 
 		if let Some(b) = arguments.bbox_border {
-			bbox_pyramid.buffer(b);
+			tile_pyramid.buffer(b);
 		}
 	}
 
-	Ok((Some(bbox_pyramid), geo_bbox))
+	Ok((Some(tile_pyramid), geo_bbox))
 }
 
 #[cfg(test)]

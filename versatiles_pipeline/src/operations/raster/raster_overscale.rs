@@ -289,7 +289,7 @@ impl TileSource for Operation {
 		if let Some(pyramid) = self.metadata.tile_pyramid()
 			&& !pyramid.intersects_bbox(&bbox_dst)
 		{
-			log::trace!("tile_stream outside bbox_pyramid");
+			log::trace!("tile_stream outside tile_pyramid");
 			return Ok(TileStream::empty());
 		}
 

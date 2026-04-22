@@ -654,8 +654,8 @@ mod tests {
 	fn should_update_from_pyramid_and_set_bounds_and_zoom() {
 		let mut tj = TileJSON::default();
 		// If we have no bounds, it should set them. If we have no minzoom/maxzoom, it sets them.
-		let bbox_pyramid = TilePyramid::from_geo_bbox(2, 12, &GeoBBox::new(-180.0, -90.0, 180.0, 90.0).unwrap()).unwrap();
-		tj.update_from_pyramid(&bbox_pyramid);
+		let tile_pyramid = TilePyramid::from_geo_bbox(2, 12, &GeoBBox::new(-180.0, -90.0, 180.0, 90.0).unwrap()).unwrap();
+		tj.update_from_pyramid(&tile_pyramid);
 
 		// Bounds
 		let bounds = tj.bounds.expect("Should have updated bounds");

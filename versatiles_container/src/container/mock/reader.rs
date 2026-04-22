@@ -107,13 +107,13 @@ impl MockReader {
 	/// Internal helper to create a mock tile for the given coordinate.
 	fn create_mock_tile(
 		coord: &TileCoord,
-		bbox_pyramid: &TilePyramid,
+		tile_pyramid: &TilePyramid,
 		format: &TileFormat,
 		compression: &TileCompression,
 	) -> Result<Option<Tile>> {
 		use TileFormat::{JPG, JSON, MVT, PNG, WEBP};
 
-		if !bbox_pyramid.includes_coord(coord) {
+		if !tile_pyramid.includes_coord(coord) {
 			return Ok(None);
 		}
 

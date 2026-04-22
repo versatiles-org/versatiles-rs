@@ -61,7 +61,7 @@ use versatiles_derive::context;
 /// A reader for tiles stored in a directory structure.
 ///
 /// This struct merges `TileJSON` metadata from recognized files such as `meta.json`, `tiles.json`, or `metadata.json` (and their compressed variants),
-/// and infers a bounding-box pyramid from the folder hierarchy to provide tile reading functionality.
+/// and infers a tile pyramid from the folder hierarchy to provide tile reading functionality.
 ///
 /// The directory structure is expected as:
 /// ```text
@@ -85,7 +85,7 @@ impl DirectoryReader {
 	/// Metadata files (`meta.json`, `tiles.json`, `metadata.json` and their `.gz`/`.br` variants) are merged into the `TileJSON`.
 	/// Bounds, minzoom, and maxzoom are inferred from the directory's tile pyramid and merged with metadata.
 	///
-	/// The returned `DirectoryReader` contains `TileSourceMetadata` which specify the tile format, compression, and bounding box pyramid.
+	/// The returned `DirectoryReader` contains `TileSourceMetadata` which specify the tile format, compression, and tile pyramid.
 	///
 	/// # Arguments
 	///

@@ -24,10 +24,10 @@
 //!     // Open the source
 //!     let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 //!
-//!     // Limit to a bbox pyramid and keep source compression;
+//!     // Limit to a tile pyramid and keep source compression;
 //!     // you could also set `tile_compression: Some(TileCompression::Brotli)` to re-encode.
 //!     let converter_params = TilesConverterParameters {
-//!         bbox_pyramid: Some(TilePyramid::new_full_up_to(8)),
+//!         tile_pyramid: Some(TilePyramid::new_full_up_to(8)),
 //!         ..Default::default()
 //!     };
 //!
@@ -58,7 +58,7 @@ use versatiles_derive::context;
 pub struct TilesConverterParameters {
 	/// Optional spatial/zoom restriction. When set, only tiles inside the given
 	/// [`TilePyramid`] are read/streamed. Existing bounds are intersected with this.
-	pub bbox_pyramid: Option<TilePyramid>,
+	pub tile_pyramid: Option<TilePyramid>,
 	/// Optional geographic bounding box filter. When set, existing tilejson bounds are
 	/// intersected with this bbox rather than being recalculated from the pyramid.
 	pub geo_bbox: Option<GeoBBox>,
@@ -82,7 +82,7 @@ impl Default for TilesConverterParameters {
 	/// Returns parameters that perform no geometric change and keep source compression.
 	fn default() -> Self {
 		TilesConverterParameters {
-			bbox_pyramid: None,
+			tile_pyramid: None,
 			geo_bbox: None,
 			tile_compression: None,
 			tile_format: None,
@@ -178,8 +178,8 @@ impl TilesConvertReader {
 			tile_pyramid.swap_xy();
 		}
 
-		if let Some(bbox_pyramid) = &cp.bbox_pyramid {
-			tile_pyramid.intersect_pyramid(bbox_pyramid);
+		if let Some(filter_pyramid) = &cp.tile_pyramid {
+			tile_pyramid.intersect_pyramid(filter_pyramid);
 		}
 
 		let mut new_rp: TileSourceMetadata = reader.metadata().clone();
@@ -396,7 +396,7 @@ mod tests {
 		let runtime = TilesRuntime::default();
 
 		let cp = TilesConverterParameters {
-			bbox_pyramid: Some(pyramid_convert),
+			tile_pyramid: Some(pyramid_convert),
 			geo_bbox: None,
 			flip_y,
 			swap_xy,
@@ -434,7 +434,7 @@ mod tests {
 	#[test]
 	fn test_tiles_converter_parameters_new() {
 		let cp = TilesConverterParameters {
-			bbox_pyramid: Some(TilePyramid::new_full_up_to(1)),
+			tile_pyramid: Some(TilePyramid::new_full_up_to(1)),
 			geo_bbox: None,
 			flip_y: true,
 			swap_xy: true,
@@ -442,7 +442,7 @@ mod tests {
 			..Default::default()
 		};
 
-		assert!(cp.bbox_pyramid.is_some());
+		assert!(cp.tile_pyramid.is_some());
 		assert!(cp.flip_y);
 		assert!(cp.swap_xy);
 	}
@@ -451,7 +451,7 @@ mod tests {
 	fn test_tiles_converter_parameters_default() {
 		let cp = TilesConverterParameters::default();
 
-		assert_eq!(cp.bbox_pyramid, None);
+		assert_eq!(cp.tile_pyramid, None);
 		assert!(!cp.flip_y);
 		assert!(!cp.swap_xy);
 	}
@@ -519,7 +519,7 @@ mod tests {
 		filter_pyramid.intersect_geo_bbox(&filter_bbox)?;
 
 		let cp = TilesConverterParameters {
-			bbox_pyramid: Some(filter_pyramid),
+			tile_pyramid: Some(filter_pyramid),
 			geo_bbox: Some(filter_bbox),
 			..Default::default()
 		};
@@ -543,7 +543,7 @@ mod tests {
 		filter_pyramid.intersect_geo_bbox(&filter_bbox)?;
 
 		let cp = TilesConverterParameters {
-			bbox_pyramid: Some(filter_pyramid),
+			tile_pyramid: Some(filter_pyramid),
 			geo_bbox: Some(filter_bbox),
 			..Default::default()
 		};

@@ -151,14 +151,14 @@ impl Operation {
 
 		let level_max = args.level_max.unwrap_or(source.level_max(tile_size)?);
 		let level_min = args.level_min.unwrap_or(level_max);
-		log::trace!("Building bbox pyramid: level_min={level_min}, level_max={level_max}, tile_size={tile_size}");
-		let bbox_pyramid = TilePyramid::from_geo_bbox(level_min, level_max, bbox)?;
+		log::trace!("Building tile pyramid: level_min={level_min}, level_max={level_max}, tile_size={tile_size}");
+		let tile_pyramid = TilePyramid::from_geo_bbox(level_min, level_max, bbox)?;
 
 		let metadata = TileSourceMetadata::new(
 			args.tile_format.unwrap_or(TileFormat::PNG),
 			TileCompression::Uncompressed,
 			Traversal::ANY,
-			Some(bbox_pyramid),
+			Some(tile_pyramid),
 		);
 		log::trace!(
 			"Parameters: format={:?}, compression={:?}",

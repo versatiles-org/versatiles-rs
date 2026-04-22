@@ -57,7 +57,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	/// Returns runtime metadata describing the tiles this source will produce.
 	///
 	/// Includes:
-	/// - `bbox_pyramid`: Spatial extent at each zoom level
+	/// - `tile_pyramid`: Spatial extent at each zoom level
 	/// - `tile_compression`: Current output compression
 	/// - `tile_format`: Tile format (PNG, JPG, MVT, etc.)
 	/// - `traversal`: Preferred tile traversal order
@@ -166,13 +166,13 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
-	/// Writes source metadata (bbox pyramid, formats, compression) to the CLI reporter.
+	/// Writes source metadata (tile pyramid, formats, compression) to the CLI reporter.
 	#[cfg(feature = "cli")]
 	async fn probe_metadata(&self, print: &mut PrettyPrint) -> Result<()> {
 		let metadata = self.metadata();
-		let p = print.get_list("bbox_pyramid").await;
-		let bbox_pyramid = self.tile_pyramid().await?;
-		for level in bbox_pyramid.iter() {
+		let p = print.get_list("tile_pyramid").await;
+		let tile_pyramid = self.tile_pyramid().await?;
+		for level in tile_pyramid.iter() {
 			p.add_value(&level).await;
 		}
 		print

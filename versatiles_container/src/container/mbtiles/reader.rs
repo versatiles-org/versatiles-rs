@@ -138,7 +138,7 @@ impl MBTilesReader {
 	///
 	/// Parses `format` to determine tile format & transport compression, reads `bounds`,
 	/// `minzoom`, `maxzoom`, and `json` (for `vector_layers`), then merges them into `tilejson`.
-	/// Also updates the bounding-box pyramid from the database.
+	/// Also updates the tile pyramid from the database.
 	///
 	/// # Errors
 	/// Returns an error if `format` is missing/unknown or queries fail.
@@ -230,9 +230,9 @@ impl MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if the query fails.
-	#[context("computing bbox pyramid from MBTiles")]
-	fn bbox_pyramid(&self) -> Result<TilePyramid> {
-		log::debug!("bbox_pyramid");
+	#[context("computing tile pyramid from MBTiles")]
+	fn compute_tile_pyramid(&self) -> Result<TilePyramid> {
+		log::debug!("tile_pyramid");
 
 		let conn = self.pool.get()?;
 		let mut stmt = conn.prepare("SELECT zoom_level, tile_column, tile_row FROM tiles")?;
@@ -283,7 +283,9 @@ impl TileSource for MBTilesReader {
 	/// coverage; the result is cached in [`TileSourceMetadata`] and reused by
 	/// subsequent calls.
 	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self.metadata.get_or_compute_tile_pyramid(|| self.bbox_pyramid())
+		self
+			.metadata
+			.get_or_compute_tile_pyramid(|| self.compute_tile_pyramid())
 	}
 
 	#[cfg(feature = "cli")]

@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Optionally adapt the reader: limit to a tile pyramid
     let params = TilesConverterParameters {
-        bbox_pyramid: Some(TilePyramid::new_full_up_to(8)),
+        tile_pyramid: Some(TilePyramid::new_full_up_to(8)),
         ..Default::default()
     };
     let reader = Box::new(TilesConvertReader::new_from_reader(reader, params)?);

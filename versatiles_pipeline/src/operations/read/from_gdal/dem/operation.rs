@@ -91,13 +91,13 @@ impl Operation {
 
 		let level_max = args.level_max.unwrap_or(source.level_max(tile_size)?);
 		let level_min = args.level_min.unwrap_or(level_max);
-		let bbox_pyramid = TilePyramid::from_geo_bbox(level_min, level_max, bbox)?;
+		let tile_pyramid = TilePyramid::from_geo_bbox(level_min, level_max, bbox)?;
 
 		let metadata = TileSourceMetadata::new(
 			TileFormat::PNG,
 			TileCompression::Uncompressed,
 			Traversal::ANY,
-			Some(bbox_pyramid),
+			Some(tile_pyramid),
 		);
 
 		let tile_schema = match encoding {
