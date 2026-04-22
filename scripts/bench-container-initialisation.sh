@@ -13,25 +13,26 @@
 # Each measurement is the minimum of $ITERATIONS warm-cache runs. Cold-cache
 # runs (i.e. after evicting the OS page cache) are out of scope here.
 #
+# It is downloaded once into testdata/bench/bench.versatiles and then
+# converted into the four other container formats. Subsequent runs reuse the
+# cached files in testdata/bench/.
+#
 # Usage:
 #   ./scripts/bench-init.sh [ITERATIONS]
 #   ITERATIONS=10 ./scripts/bench-init.sh
-#
-# Example output:
-#   container       server (ms)   conversion (ms)
-#   ──────────────────────────────────────────────
-#   mbtiles                  31              162
-#   pmtiles                  29              154
-#   versatiles               28               29
-#   directory                47               48
-#   tar                      62               63
 
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
 ITERATIONS=${1:-${ITERATIONS:-5}}
 TESTDATA="$(pwd)/testdata"
-SOURCE_VERSATILES="$TESTDATA/berlin.versatiles"
+BENCHDIR="$TESTDATA/bench"
+
+# Real-world benchmark dataset: Ocean tiles from the public OSM mirror.
+# Large enough that the lazy-pyramid optimisation is actually visible.
+SOURCE_URL="https://download.versatiles.org/osm.versatiles"
+SOURCE_BBOX="-180,-30,-150,0"
+SOURCE_VERSATILES="$BENCHDIR/bench.versatiles"
 
 RED=$'\033[0;31m'; YELLOW=$'\033[0;33m'; GREEN=$'\033[0;32m'
 CYAN=$'\033[0;36m'; BOLD=$'\033[1m'; RESET=$'\033[0m'
@@ -41,25 +42,34 @@ echo "${BOLD}${CYAN}Building release binary (versatiles --features cli)…${RESE
 cargo build --release -p versatiles --features cli >&2
 VERSATILES="$(pwd)/target/release/versatiles"
 
-# ── 2. Make sure all 5 container types exist as test data ────────────────────
+# ── 2. Generate the benchmark dataset (cached in testdata/bench/) ────────────
+mkdir -p "$BENCHDIR"
+
+# Step 1: download the Ocean subset from the public OSM mirror.
+if [[ ! -f "$SOURCE_VERSATILES" ]]; then
+  echo "${YELLOW}Downloading Ocean subset of $SOURCE_URL → bench.versatiles…${RESET}" >&2
+  "$VERSATILES" convert --compress gzip --bbox "$SOURCE_BBOX" "$SOURCE_URL" "$SOURCE_VERSATILES" >&2
+fi
+
+# Step 2: derive the other four container formats from the local bench.versatiles.
 ensure_test_data() {
   local target=$1
   if [[ -e "$target" ]]; then return; fi
-  echo "${YELLOW}Creating $(basename "$target") from berlin.versatiles…${RESET}" >&2
+  echo "${YELLOW}Creating $(basename "$target") from bench.versatiles…${RESET}" >&2
   "$VERSATILES" convert "$SOURCE_VERSATILES" "$target" >&2
 }
-
 ensure_test_data_directory() {
   local target=$1
   if [[ -d "$target" ]]; then return; fi
-  echo "${YELLOW}Creating $(basename "$target")/ from berlin.versatiles…${RESET}" >&2
+  echo "${YELLOW}Creating $(basename "$target")/ from bench.versatiles…${RESET}" >&2
   mkdir -p "$target"
   "$VERSATILES" convert "$SOURCE_VERSATILES" "$target" >&2
 }
 
-ensure_test_data "$TESTDATA/berlin.tar"
-ensure_test_data_directory "$TESTDATA/berlin.directory"
-# mbtiles, pmtiles, versatiles are already in the repo.
+ensure_test_data           "$BENCHDIR/bench.mbtiles"
+ensure_test_data           "$BENCHDIR/bench.pmtiles"
+ensure_test_data           "$BENCHDIR/bench.tar"
+ensure_test_data_directory "$BENCHDIR/bench.directory"
 
 # ── 3. Measure: best (min) of N iterations, returns milliseconds ─────────────
 # Uses bash's built-in `time` with %R format → "0.023" (seconds).
@@ -106,11 +116,11 @@ printf "${BOLD}%-12s  %12s  %16s  %12s${RESET}\n" \
 printf '%.0s─' $(seq 1 60); echo
 
 for entry in \
-  "mbtiles    :$TESTDATA/berlin.mbtiles" \
-  "pmtiles    :$TESTDATA/berlin.pmtiles" \
-  "versatiles :$TESTDATA/berlin.versatiles" \
-  "directory  :$TESTDATA/berlin.directory" \
-  "tar        :$TESTDATA/berlin.tar"
+  "mbtiles    :$BENCHDIR/bench.mbtiles" \
+  "pmtiles    :$BENCHDIR/bench.pmtiles" \
+  "versatiles :$BENCHDIR/bench.versatiles" \
+  "directory  :$BENCHDIR/bench.directory" \
+  "tar        :$BENCHDIR/bench.tar"
 do
   name=${entry%%:*}
   path=${entry#*:}

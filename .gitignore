@@ -15,7 +15,7 @@ releases
 target
 test.trace
 testdata/*.tif
-testdata/berlin.directory
+testdata/bench/
 testdata/temp*
 testdata/test*
 tiles
