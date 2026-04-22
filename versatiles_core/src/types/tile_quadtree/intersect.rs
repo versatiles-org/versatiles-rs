@@ -239,12 +239,7 @@ impl Node {
 	pub fn intersection_bbox(&self, (x_off, y_off): (u64, u64), size: u64, bbox: BBox) -> Node {
 		match self {
 			Node::Empty => Node::Empty,
-			Node::Full => Node::build_node(
-				u8::try_from(size.trailing_zeros()).unwrap(),
-				(x_off, y_off),
-				size,
-				&bbox,
-			),
+			Node::Full => Node::build_node(u8::try_from(size.ilog2()).unwrap(), (x_off, y_off), size, &bbox),
 			Node::Partial(children) => {
 				let half = size / 2;
 				let mid_x = x_off + half;
