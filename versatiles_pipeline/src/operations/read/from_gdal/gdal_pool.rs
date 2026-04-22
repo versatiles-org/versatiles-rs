@@ -41,7 +41,7 @@ impl Manager for GdalManager {
 		}
 
 		// Cleanup the instance for reuse
-		obj.cleanup();
+		obj.cleanup().map_err(RecycleError::Backend)?;
 		Ok(())
 	}
 }

@@ -1,5 +1,5 @@
 use super::get_spatial_ref;
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use gdal::{Dataset, spatial_ref::CoordTransform, vector::Geometry};
 use std::fmt::Debug;
 use versatiles_core::GeoBBox;
@@ -24,10 +24,15 @@ impl Instance {
 		self.age
 	}
 
-	/// Cleanup the GDAL dataset instance, incrementing its age.
-	pub fn cleanup(&mut self) {
+	/// Cleanup the GDAL dataset instance, incrementing its age and flushing
+	/// any in-memory write cache to disk.
+	///
+	/// # Errors
+	/// Returns an error if `flush_cache` fails (e.g. underlying I/O error).
+	pub fn cleanup(&mut self) -> Result<()> {
 		self.age = self.age.wrapping_add(1);
-		self.dataset.flush_cache().expect("gdal flush_cache on open dataset");
+		self.dataset.flush_cache().context("gdal flush_cache failed")?;
+		Ok(())
 	}
 
 	/// Access the underlying GDAL dataset.
@@ -166,9 +171,9 @@ mod tests {
 		let ds = mem_dataset(1, 1, 1);
 		let mut inst = Instance::new(ds);
 		assert_eq!(inst.age(), 0);
-		inst.cleanup();
+		inst.cleanup().unwrap();
 		assert_eq!(inst.age(), 1);
-		inst.cleanup();
+		inst.cleanup().unwrap();
 		assert_eq!(inst.age(), 2);
 	}
 
