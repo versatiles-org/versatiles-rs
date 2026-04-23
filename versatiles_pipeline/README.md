@@ -40,6 +40,68 @@ from_stacked [
 ]
 ```
 
+## Filter expressions (CEL)
+
+The `vector_filter_features` transform evaluates a boolean [CEL (Common Expression Language)](https://github.com/google/cel-spec) expression per feature. Quick reference:
+
+### Types
+
+- **bool** — `true`, `false`
+- **int / uint** — `42`, `-7`, `1000u`
+- **double** — `3.14`, `-0.5`, `1e-6`
+- **string** — `'hello'` or `"hello"`
+- **list** — `[1, 2, 3]`, `['a', 'b']`
+- **map** — accessed via `m['key']` or `m.key`
+- **null** — `null`
+
+### Operators
+
+- **Equality** — `==`, `!=`
+- **Ordering** — `<`, `<=`, `>`, `>=`
+- **Logical** — `&&`, `||`, `!`
+- **Membership** — `x in [1, 2, 3]`
+- **Regex** — `s.matches('pattern')` (RE2 syntax, matched anywhere in `s`)
+
+### Accessing feature properties
+
+Properties whose names are valid CEL identifiers (letters, digits, underscore) are exposed as top-level variables:
+
+```vpl
+vector_filter_features layer=["place"] expr="name == 'Berlin'"
+```
+
+For keys containing `:`, `-`, `.`, or other non-identifier characters, use the `props` map:
+
+```vpl
+vector_filter_features layer=["addr"] expr="props['addr:street'] == 'Hauptstr.'"
+```
+
+### Missing keys
+
+A property absent from a feature resolves to `null` for identifier-safe access. Compare against `null` to keep or drop missing-key features explicitly:
+
+```vpl
+# keep only features whose `name` is present and non-empty
+vector_filter_features layer=["place"] expr="name != null && name != ''"
+```
+
+For identifier-safe keys you can also use the `has()` macro on the `props` map:
+
+```vpl
+# equivalent presence check on an identifier-safe key
+vector_filter_features layer=["place"] expr="has(props.name)"
+```
+
+For non-identifier keys (containing `:`, `-`, `.`, etc.), use the `in` operator:
+
+```vpl
+vector_filter_features layer=["addr"] expr="'addr:street' in props"
+```
+
+### More
+
+See the [CEL language spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md) for the full grammar, built-in functions, and string methods.
+
 ---
 
 # READ operations
@@ -333,13 +395,34 @@ Convert the size of tiles by splitting or merging them to a width of 256px or 51
 
 ---
 
-## vector_filter_layers
+## vector_filter_features
 
-Filters vector tile layers based on a comma-separated list of layer names.
+Drops vector features in selected layers that do not satisfy a boolean CEL expression.
+Features in layers outside `layer` pass through untouched.
+# Examples
+```text
+vector_filter_features layer=["place"] expr="name == 'Berlin'"
+vector_filter_features layer=["poi"]   expr="population >= 1000"
+vector_filter_features layer=["road"]  expr="highway in ['primary','secondary']"
+vector_filter_features layer=["place"] expr="name.matches('^St\\.')"
+vector_filter_features layer=["poi"]   expr="name != null && name != ''"
+vector_filter_features layer=["addr"]  expr="props['addr:street'] == 'Hauptstr.'"
+```
 
 ### Parameters
 
-- **`filter`: String (required)** - Comma‑separated list of layer names that should be removed from the tiles, e.g.: filter="pois,ocean".
+- **`layer`: [String,...] (required)** - Layers the expression applies to, as a VPL array of strings. Features in all other layers are left unchanged. Example: `layer=["poi","place"]`.
+- **`expr`: String (required)** - CEL (Common Expression Language) boolean expression. Feature properties are available as `props["key"]`; properties whose names are valid CEL identifiers (letters, digits, underscore) are also exposed as top-level identifiers. Missing keys resolve to null; use `name != null` (for identifier-safe keys) or `has(props.key)` (for any key) for explicit presence checks. See `versatiles help` for a CEL operator cheat-sheet.
+
+---
+
+## vector_filter_layers
+
+Filters vector tile layers by name.
+
+### Parameters
+
+- **`filter`: [String,...] (required)** - Layer names to remove from the tiles, e.g. `filter=["pois","ocean"]`.
 - *`invert`: bool (optional)* - If set, inverts the filter logic (i.e., keeps only layers matching the filter).
 
 ---
