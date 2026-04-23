@@ -21,6 +21,7 @@ pub fn transform_operation_factories() -> Vec<Box<dyn TransformOperationFactoryT
 		Box::new(raster::raster_overscale::Factory {}),
 		Box::new(raster::raster_overview::Factory {}),
 		Box::new(raster::raster_tile_resize::Factory {}),
+		Box::new(vector::vector_filter_features::Factory {}),
 		Box::new(vector::vector_filter_layers::Factory {}),
 		Box::new(vector::vector_filter_properties::Factory {}),
 		Box::new(vector::vector_update_properties::Factory {}),

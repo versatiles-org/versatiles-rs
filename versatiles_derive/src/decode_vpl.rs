@@ -53,6 +53,14 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f64"),
 		generic_param2: None,
 	},
+	TypeMapping {
+		pattern: "Vec<String>",
+		display_name: "[String,...]",
+		method_name: "property_string_list_required",
+		is_required: true,
+		generic_param: None,
+		generic_param2: None,
+	},
 	// Optional types
 	TypeMapping {
 		pattern: "Option<bool>",
@@ -133,6 +141,14 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: false,
 		generic_param: Some("u8"),
 		generic_param2: Some("3"),
+	},
+	TypeMapping {
+		pattern: "Option<Vec<String>>",
+		display_name: "[String,...]",
+		method_name: "property_string_list_option",
+		is_required: false,
+		generic_param: None,
+		generic_param2: None,
 	},
 	TypeMapping {
 		pattern: "Option<TileCompression>",
@@ -535,6 +551,15 @@ mod tests {
 			"property_number_array_required::<f64>",
 			"**`v`: [f64,f64,f64,f64] (required)**",
 		);
+		assert_field_type_decodes(
+			parse_quote!(
+				struct T {
+					v: Vec<String>,
+				}
+			),
+			"property_string_list_required",
+			"**`v`: [String,...] (required)**",
+		);
 	}
 
 	#[test]
@@ -610,6 +635,15 @@ mod tests {
 			),
 			"property_enum_option::<TileFormat>",
 			"*`v`: TileFormat (optional)*",
+		);
+		assert_field_type_decodes(
+			parse_quote!(
+				struct T {
+					v: Option<Vec<String>>,
+				}
+			),
+			"property_string_list_option",
+			"*`v`: [String,...] (optional)*",
 		);
 	}
 

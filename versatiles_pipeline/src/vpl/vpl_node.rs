@@ -95,6 +95,21 @@ impl VPLNode {
 		self.required(field, self.property_string_option(field))
 	}
 
+	/// Optional string-list parameter accessor; returns `None` if the field is absent.
+	///
+	/// Accepts both scalar form `field=foo` (one-element list) and VPL array form
+	/// `field=[foo,bar]`. Preserves all values in source order.
+	#[context("Failed to get optional property string list '{field}' from VPL node '{}'", self.name)]
+	pub fn property_string_list_option(&self, field: &str) -> Result<Option<Vec<String>>> {
+		Ok(self.get_property_vec(field).cloned())
+	}
+
+	/// Required string-list parameter accessor; errors if the field is missing.
+	#[context("Failed to get required property string list '{field}' from VPL node '{}'", self.name)]
+	pub fn property_string_list_required(&self, field: &str) -> Result<Vec<String>> {
+		self.required(field, self.property_string_list_option(field))
+	}
+
 	/// Required boolean parameter accessor; accepts `1/true/yes/ok` (case-insensitive) for `true`.
 	#[context("Failed to get required property bool '{field}' from VPL node '{}'", self.name)]
 	pub fn property_bool_required(&self, field: &str) -> Result<bool> {
@@ -352,6 +367,38 @@ mod tests {
 		};
 		assert_eq!(node.property_number_required::<i32>("key1").unwrap(), 42);
 		assert!(node.property_number_required::<i32>("key2").is_err());
+	}
+
+	#[test]
+	fn test_vplnode_get_property_string_list() {
+		let node = VPLNode {
+			name: "node".to_string(),
+			properties: make_properties(vec![("key1", vec!["a", "b", "c"]), ("key2", vec!["only"])]),
+			sources: vec![],
+		};
+		assert_eq!(
+			node.property_string_list_option("key1").unwrap().unwrap(),
+			vec!["a".to_string(), "b".to_string(), "c".to_string()]
+		);
+		assert_eq!(
+			node.property_string_list_option("key2").unwrap().unwrap(),
+			vec!["only".to_string()]
+		);
+		assert!(node.property_string_list_option("key3").unwrap().is_none());
+	}
+
+	#[test]
+	fn test_vplnode_get_property_string_list_req() {
+		let node = VPLNode {
+			name: "node".to_string(),
+			properties: make_properties(vec![("key1", vec!["a", "b"])]),
+			sources: vec![],
+		};
+		assert_eq!(
+			node.property_string_list_required("key1").unwrap(),
+			vec!["a".to_string(), "b".to_string()]
+		);
+		assert!(node.property_string_list_required("key2").is_err());
 	}
 
 	#[test]
