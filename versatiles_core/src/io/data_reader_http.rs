@@ -123,6 +123,12 @@ impl DataReaderHttp {
 
 const MAX_RETRIES: u32 = 2;
 
+/// Exponential backoff unit for retry waits (seconds in prod, ms in tests).
+#[cfg(not(test))]
+const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_secs(1 << exp);
+#[cfg(test)]
+const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_millis(1 << exp);
+
 fn is_retryable_error(err: &reqwest::Error) -> bool {
 	err.is_connect() || err.is_timeout() || err.is_body()
 }
@@ -139,7 +145,7 @@ impl DataReaderHttp {
 			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
 
 			if attempt > 0 {
-				let backoff = Duration::from_secs(1 << (attempt - 1));
+				let backoff = BACKOFF(attempt - 1);
 				log::warn!("HTTP read {range} from '{url}': retrying ({attempt_label}, waiting {backoff:?})");
 				sleep(backoff).await;
 			}
@@ -254,7 +260,7 @@ impl DataReaderTrait for DataReaderHttp {
 			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
 
 			if attempt > 0 {
-				let backoff = Duration::from_secs(1 << (attempt - 1));
+				let backoff = BACKOFF(attempt - 1);
 				log::warn!("HTTP read from '{url}': retrying ({attempt_label}, waiting {backoff:?})");
 				sleep(backoff).await;
 			}

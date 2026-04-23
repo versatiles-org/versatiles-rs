@@ -15,6 +15,16 @@ use std::{
 
 const MAX_RETRIES: u32 = 2;
 
+/// Exponential backoff unit for retry waits.
+///
+/// In production this is one second so retries wait 1 s, 2 s, … In tests the
+/// unit shrinks to a few milliseconds to keep the retry-path tests fast while
+/// still exercising the `thread::sleep` call itself.
+#[cfg(not(test))]
+const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_secs(1 << exp);
+#[cfg(test)]
+const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_millis(1 << exp);
+
 /// A [`Write`] stream to a remote file via SFTP.
 ///
 /// Keeps the SSH session alive for the lifetime of the writer.
@@ -118,7 +128,7 @@ impl SftpFileSystem {
 			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
 
 			if attempt > 0 {
-				let backoff = Duration::from_secs(1 << (attempt - 1));
+				let backoff = BACKOFF(attempt - 1);
 				log::warn!("SFTP write file {full_path:?}: retrying ({attempt_label}, waiting {backoff:?})");
 				thread::sleep(backoff);
 				if let Err(e) = self.reconnect() {

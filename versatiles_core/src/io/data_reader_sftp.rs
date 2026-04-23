@@ -14,6 +14,12 @@ use std::{
 
 const MAX_RETRIES: u32 = 2;
 
+/// Exponential backoff unit for retry waits (seconds in prod, ms in tests).
+#[cfg(not(test))]
+const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_secs(1 << exp);
+#[cfg(test)]
+const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_millis(1 << exp);
+
 struct SftpConnection {
 	file: ssh2::File,
 	// Keep session alive for the lifetime of the connection
@@ -101,7 +107,7 @@ impl DataReaderSftp {
 			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
 
 			if attempt > 0 {
-				let backoff = Duration::from_secs(1 << (attempt - 1));
+				let backoff = BACKOFF(attempt - 1);
 				log::warn!("SFTP read {range} from '{name}': retrying ({attempt_label}, waiting {backoff:?})");
 				thread::sleep(backoff);
 
