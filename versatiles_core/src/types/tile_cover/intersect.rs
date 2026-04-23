@@ -135,48 +135,36 @@ mod tests {
 		TileBBox::from_min_and_max(zoom, x0, y0, x1, y1).unwrap()
 	}
 
-	#[test]
-	fn intersects_bbox() {
-		let c = TileCover::from(bbox(4, 0, 0, 7, 7));
-		assert!(c.intersects_bbox(&bbox(4, 5, 5, 10, 10)));
-		assert!(!c.intersects_bbox(&bbox(4, 10, 10, 15, 15)));
-	}
-
-	#[test]
-	fn intersects_bbox_tree_variant() {
-		let c = TileCover::from(TileQuadtree::from_bbox(&bbox(4, 0, 0, 7, 7)));
-		assert!(c.intersects_bbox(&bbox(4, 5, 5, 10, 10)));
-		assert!(!c.intersects_bbox(&bbox(4, 10, 10, 15, 15)));
-	}
-
-	// ── Parameterized intersects_bbox across both variants ──────────────────
-	fn variants(cov: TileBBox) -> Vec<TileCover> {
-		vec![TileCover::from(cov), TileCover::from(TileQuadtree::from_bbox(&cov))]
-	}
-
+	/// `intersects_bbox` is consistent across the Bbox and Tree variants.
+	/// Cover is built from bbox(4, 0,0,7,7) in both representations.
 	#[rstest::rstest]
-	#[case(bbox(4, 5, 5, 10, 10), true)] // overlaps
-	#[case(bbox(4, 7, 7, 7, 7), true)] // corner tile (self.x_max)
-	#[case(bbox(4, 0, 0, 0, 0), true)] // opposite corner
-	#[case(bbox(4, 10, 10, 15, 15), false)] // fully outside
-	#[case(bbox(4, 8, 0, 15, 7), false)] // touches edge but not overlap (8 > 7)
-	#[case(TileBBox::new_empty(4).unwrap(), false)] // empty never intersects
+	#[case::overlaps(bbox(4, 5, 5, 10, 10), true)]
+	#[case::corner_tile_at_x_max(bbox(4, 7, 7, 7, 7), true)]
+	#[case::opposite_corner(bbox(4, 0, 0, 0, 0), true)]
+	#[case::fully_outside(bbox(4, 10, 10, 15, 15), false)]
+	#[case::edge_but_not_overlap(bbox(4, 8, 0, 15, 7), false)] // 8 > 7
+	#[case::empty_never_overlaps(TileBBox::new_empty(4).unwrap(), false)]
 	fn intersects_bbox_cases(#[case] other: TileBBox, #[case] expected: bool) {
-		for cov in variants(bbox(4, 0, 0, 7, 7)) {
+		for cov in [
+			TileCover::from(bbox(4, 0, 0, 7, 7)),
+			TileCover::from(TileQuadtree::from_bbox(&bbox(4, 0, 0, 7, 7))),
+		] {
 			assert_eq!(cov.intersects_bbox(&other), expected);
 		}
 	}
 
-	#[test]
-	fn intersect_bbox_shrinks_and_clears() {
+	/// In-place `intersect_bbox` shrinks to the overlap or becomes empty when
+	/// disjoint.
+	#[rstest::rstest]
+	#[case::overlap(bbox(4, 4, 4, 11, 11), Some(bbox(4, 4, 4, 7, 7)))]
+	#[case::disjoint(bbox(4, 10, 10, 15, 15), None)]
+	fn intersect_bbox_cases(#[case] clip: TileBBox, #[case] expected: Option<TileBBox>) {
 		let mut c = TileCover::from(bbox(4, 0, 0, 7, 7));
-		c.intersect_bbox(&bbox(4, 4, 4, 11, 11)).unwrap();
-		assert_eq!(c.to_bbox(), bbox(4, 4, 4, 7, 7));
-
-		// Intersect with disjoint → empty.
-		let mut c = TileCover::from(bbox(4, 0, 0, 7, 7));
-		c.intersect_bbox(&bbox(4, 10, 10, 15, 15)).unwrap();
-		assert!(c.is_empty());
+		c.intersect_bbox(&clip).unwrap();
+		match expected {
+			Some(e) => assert_eq!(c.to_bbox(), e),
+			None => assert!(c.is_empty()),
+		}
 	}
 
 	#[test]
@@ -189,24 +177,30 @@ mod tests {
 	fn intersection_bbox_is_pure() {
 		let orig = TileCover::from(bbox(4, 0, 0, 7, 7));
 		let out = orig.intersection_bbox(&bbox(4, 4, 4, 11, 11)).unwrap();
-		// Original is unchanged.
-		assert_eq!(orig.count_tiles(), 64);
+		assert_eq!(orig.count_tiles(), 64, "original unchanged");
 		assert_eq!(out.to_bbox(), bbox(4, 4, 4, 7, 7));
 	}
 
-	#[test]
-	fn intersection_cover_across_variants() {
-		let a_b = TileCover::from(bbox(4, 0, 0, 7, 7));
-		let a_t = TileCover::from(TileQuadtree::from_bbox(&bbox(4, 0, 0, 7, 7)));
-		let b_b = TileCover::from(bbox(4, 4, 4, 11, 11));
-		let b_t = TileCover::from(TileQuadtree::from_bbox(&bbox(4, 4, 4, 11, 11)));
-		// All 4 combinations should produce the same coverage.
-		let expected = bbox(4, 4, 4, 7, 7);
-		for a in [&a_b, &a_t] {
-			for b in [&b_b, &b_t] {
-				let i = a.intersection_cover(b).unwrap();
-				assert_eq!(i.to_bbox(), expected, "variants {a:?} ∩ {b:?}");
-			}
-		}
+	/// `intersection_cover` yields the same result for all 4 combinations of
+	/// Bbox / Tree variants on either side.
+	#[rstest::rstest]
+	#[case::bbox_bbox(false, false)]
+	#[case::bbox_tree(false, true)]
+	#[case::tree_bbox(true, false)]
+	#[case::tree_tree(true, true)]
+	fn intersection_cover_across_variants(#[case] a_is_tree: bool, #[case] b_is_tree: bool) {
+		let a_bbox = bbox(4, 0, 0, 7, 7);
+		let b_bbox = bbox(4, 4, 4, 11, 11);
+		let a = if a_is_tree {
+			TileCover::from(TileQuadtree::from_bbox(&a_bbox))
+		} else {
+			TileCover::from(a_bbox)
+		};
+		let b = if b_is_tree {
+			TileCover::from(TileQuadtree::from_bbox(&b_bbox))
+		} else {
+			TileCover::from(b_bbox)
+		};
+		assert_eq!(a.intersection_cover(&b).unwrap().to_bbox(), bbox(4, 4, 4, 7, 7));
 	}
 }

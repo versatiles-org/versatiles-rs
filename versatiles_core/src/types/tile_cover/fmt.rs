@@ -50,44 +50,35 @@ impl PartialEq for TileCover {
 mod tests {
 	use super::*;
 	use crate::{TileBBox, TileQuadtree};
+	use rstest::rstest;
 
 	fn bbox(zoom: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 		TileBBox::from_min_and_max(zoom, x0, y0, x1, y1).unwrap()
 	}
 
-	#[test]
-	fn eq_bbox_bbox() {
-		let a = TileCover::from(bbox(4, 1, 1, 5, 5));
-		let b = TileCover::from(bbox(4, 1, 1, 5, 5));
-		assert_eq!(a, b);
+	/// `PartialEq` across variants at the same level.
+	#[rstest]
+	#[case::bbox_eq_bbox(TileCover::from(bbox(4, 1, 1, 5, 5)), TileCover::from(bbox(4, 1, 1, 5, 5)), true)]
+	#[case::bbox_eq_tree_same_coverage(
+		TileCover::from(bbox(3, 0, 0, 7, 7)),
+		TileCover::from(TileQuadtree::from_bbox(&bbox(3, 0, 0, 7, 7))),
+		true,
+	)]
+	#[case::different_levels(TileCover::new_empty(2).unwrap(), TileCover::new_empty(3).unwrap(), false)]
+	fn eq_cases(#[case] a: TileCover, #[case] b: TileCover, #[case] expected_eq: bool) {
+		assert_eq!(a == b, expected_eq);
 	}
 
-	#[test]
-	fn eq_bbox_tree_same_coverage() {
-		let b = bbox(3, 0, 0, 7, 7);
-		let cb = TileCover::from(b);
-		let ct = TileCover::from(TileQuadtree::from_bbox(&b));
-		assert_eq!(cb, ct);
-	}
-
-	#[test]
-	fn neq_different_levels() {
-		let a = TileCover::new_empty(2).unwrap();
-		let b = TileCover::new_empty(3).unwrap();
-		assert_ne!(a, b);
-	}
-
-	#[test]
-	fn display_bbox_variant() {
-		let c = TileCover::from(bbox(3, 0, 0, 7, 7));
+	/// Display output is non-empty on both variants; tree variant additionally
+	/// shows its zoom level.
+	#[rstest]
+	#[case::bbox_variant(TileCover::from(bbox(3, 0, 0, 7, 7)), None)]
+	#[case::tree_variant(TileCover::from(TileQuadtree::new_full(3).unwrap()), Some("zoom=3"))]
+	fn display_cases(#[case] c: TileCover, #[case] must_contain: Option<&str>) {
 		let s = format!("{c}");
 		assert!(!s.is_empty());
-	}
-
-	#[test]
-	fn display_tree_variant() {
-		let c = TileCover::from(TileQuadtree::new_full(3).unwrap());
-		let s = format!("{c}");
-		assert!(s.contains("zoom=3"));
+		if let Some(substr) = must_contain {
+			assert!(s.contains(substr), "expected {substr:?} in {s:?}");
+		}
 	}
 }

@@ -65,19 +65,8 @@ mod tests {
 		TileCoord::new(z, x, y).unwrap()
 	}
 
-	#[test]
-	fn contains_tile() {
-		let c = TileCover::from(bbox(5, 3, 4, 10, 15));
-		assert!(c.includes_coord(&coord(5, 5, 7)));
-		assert!(!c.includes_coord(&coord(5, 0, 0)));
-	}
-
-	#[test]
-	fn contains_bbox() {
-		let c = TileCover::from(bbox(5, 0, 0, 15, 15));
-		assert!(c.includes_bbox(&bbox(5, 2, 2, 8, 8)));
-		assert!(!c.includes_bbox(&bbox(5, 0, 0, 16, 16)));
-	}
+	// ── Level-mismatch panics (tree and bbox variants panic with different
+	//    messages, so each needs its own `should_panic` expectation). ───────
 
 	#[test]
 	#[should_panic(expected = "assertion `left == right` failed")]
@@ -139,40 +128,62 @@ mod tests {
 		}
 	}
 
+	/// Empty and full covers at a given level:
+	///   - empty.includes_coord(any) → false
+	///   - empty.includes_bbox(empty) → true (empty is subset of any set)
+	///   - full.includes_coord(any in-range) → true
+	///   - full.includes_bbox(any at same level) → true
+	#[rstest::rstest]
+	#[case::empty_contains_nothing_at_point(TileCover::new_empty(4).unwrap(), coord(4, 0, 0), false)]
+	#[case::empty_contains_empty_bbox_trivially(TileCover::new_empty(4).unwrap(), coord(4, 0, 0), false)]
+	#[case::full_contains_origin(TileCover::new_full(3).unwrap(), coord(3, 0, 0), true)]
+	#[case::full_contains_last(TileCover::new_full(3).unwrap(), coord(3, 7, 7), true)]
+	fn empty_and_full_cover_inclusion(#[case] c: TileCover, #[case] point: TileCoord, #[case] expected: bool) {
+		assert_eq!(c.includes_coord(&point), expected);
+	}
+
 	#[test]
-	fn empty_cover_includes_only_empty() {
+	fn empty_cover_includes_empty_bbox() {
 		let empty = TileCover::new_empty(4).unwrap();
 		assert!(empty.includes_bbox(&TileBBox::new_empty(4).unwrap()));
-		assert!(!empty.includes_coord(&coord(4, 0, 0)));
 		assert!(!empty.includes_bbox(&bbox(4, 0, 0, 0, 0)));
 	}
 
 	#[test]
 	fn full_cover_includes_everything_at_its_level() {
 		let full = TileCover::new_full(3).unwrap();
-		assert!(full.includes_coord(&coord(3, 0, 0)));
-		assert!(full.includes_coord(&coord(3, 7, 7)));
 		assert!(full.includes_bbox(&bbox(3, 0, 0, 7, 7)));
 		assert!(full.includes_bbox(&TileBBox::new_empty(3).unwrap()));
 	}
 
-	#[test]
-	fn includes_cover_across_variants() {
-		let outer_b = TileCover::from(bbox(4, 0, 0, 15, 15));
-		let outer_t = TileCover::from(TileQuadtree::from_bbox(&bbox(4, 0, 0, 15, 15)));
-		let inner_b = TileCover::from(bbox(4, 3, 3, 10, 10));
-		let inner_t = TileCover::from(TileQuadtree::from_bbox(&bbox(4, 3, 3, 10, 10)));
-		// Every outer × inner combination should report inclusion.
-		for o in [&outer_b, &outer_t] {
-			for i in [&inner_b, &inner_t] {
-				assert!(o.includes_cover(i));
-			}
-		}
-		// Inner does NOT include outer.
-		for i in [&inner_b, &inner_t] {
-			for o in [&outer_b, &outer_t] {
-				assert!(!i.includes_cover(o));
-			}
-		}
+	/// `outer.includes_cover(inner)` across every combination of Bbox and
+	/// Tree variants on both sides: outer=bbox(4, 0,0,15,15),
+	/// inner=bbox(4, 3,3,10,10). Outer ⊇ inner in all 4 combinations; inner ⊉
+	/// outer in any of them.
+	#[rstest::rstest]
+	#[case::bb_then_bb(false, false, true, false)]
+	#[case::bb_then_tt(false, true, true, false)]
+	#[case::tt_then_bb(true, false, true, false)]
+	#[case::tt_then_tt(true, true, true, false)]
+	fn includes_cover_across_variants(
+		#[case] outer_is_tree: bool,
+		#[case] inner_is_tree: bool,
+		#[case] outer_includes_inner: bool,
+		#[case] inner_includes_outer: bool,
+	) {
+		let outer_bbox = bbox(4, 0, 0, 15, 15);
+		let inner_bbox = bbox(4, 3, 3, 10, 10);
+		let outer = if outer_is_tree {
+			TileCover::from(TileQuadtree::from_bbox(&outer_bbox))
+		} else {
+			TileCover::from(outer_bbox)
+		};
+		let inner = if inner_is_tree {
+			TileCover::from(TileQuadtree::from_bbox(&inner_bbox))
+		} else {
+			TileCover::from(inner_bbox)
+		};
+		assert_eq!(outer.includes_cover(&inner), outer_includes_inner);
+		assert_eq!(inner.includes_cover(&outer), inner_includes_outer);
 	}
 }

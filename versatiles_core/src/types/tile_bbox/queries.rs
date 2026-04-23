@@ -121,275 +121,148 @@ mod tests {
 		TileCoord::new(z, x, y).unwrap()
 	}
 
-	// ------------------------------ Basic queries ------------------------------
-	#[test]
-	fn is_empty_and_count_tiles() -> Result<()> {
-		let e = TileBBox::new_empty(5)?;
-		assert!(e.is_empty());
-		assert_eq!(e.count_tiles(), 0);
+	// ── Basic queries: is_empty / is_full / count_tiles / width / height ──
 
-		let b = bb(4, 5, 6, 7, 9); // 3x4
-		assert!(!b.is_empty());
-		assert_eq!(b.count_tiles(), 12);
-		Ok(())
-	}
-
+	/// (bbox, is_empty, is_full, count_tiles, width, height).
 	#[rstest]
-	#[case(0, 1)]
-	#[case(1, 2)]
-	#[case(5, 32)]
-	fn max_count_matches_power_of_two(#[case] level: u8, #[case] expect: u32) -> Result<()> {
-		let b = TileBBox::new_empty(level)?;
-		assert_eq!(b.max_count(), expect);
-		Ok(())
+	#[case::empty_z5(TileBBox::new_empty(5).unwrap(), true, false, 0, 0, 0)]
+	#[case::full_z3(TileBBox::new_full(3).unwrap(), false, true, 64, 8, 8)]
+	#[case::partial_3x4(bb(4, 5, 6, 7, 9), false, false, 12, 3, 4)]
+	#[case::partial_11x11(bb(6, 5, 10, 15, 20), false, false, 121, 11, 11)]
+	fn basic_queries_cases(
+		#[case] b: TileBBox,
+		#[case] empty: bool,
+		#[case] full: bool,
+		#[case] count: u64,
+		#[case] width: u32,
+		#[case] height: u32,
+	) {
+		assert_eq!(b.is_empty(), empty);
+		assert_eq!(b.is_full(), full);
+		assert_eq!(b.count_tiles(), count);
+		assert_eq!(b.width(), width);
+		assert_eq!(b.height(), height);
+		assert_eq!(b.dimensions(), (width, height));
 	}
 
-	#[test]
-	fn is_full_works_in_tests_only() -> Result<()> {
-		let f = TileBBox::new_full(3)?;
-		assert!(f.is_full());
-		let p = bb(3, 0, 0, 6, 7); // not full
-		assert!(!p.is_full());
-		Ok(())
+	/// At zoom z, `max_count()` is 2^z tiles per axis, `max_coord()` is 2^z − 1.
+	#[rstest]
+	#[case(0, 1, 0)]
+	#[case(1, 2, 1)]
+	#[case(3, 8, 7)]
+	#[case(5, 32, 31)]
+	fn axis_bounds_are_powers_of_two(#[case] level: u8, #[case] max_count: u32, #[case] max_coord: u32) {
+		let b = TileBBox::new_empty(level).unwrap();
+		assert_eq!(b.max_count(), max_count);
+		assert_eq!(b.max_coord(), max_coord);
 	}
 
-	// ------------------------------ Contains / overlaps / try_contains_bbox ------------------------------
-	#[test]
-	fn contains_and_overlaps_and_try_contains() -> Result<()> {
+	// ── Contains / overlaps ─────────────────────────────────────────────────
+
+	/// a = bbox(5, 10,10,20,20) against various other bboxes.
+	#[rstest]
+	#[case::inner(bb(5, 12, 12, 18, 18), true, true)]
+	#[case::edge_touch(bb(5, 20, 12, 22, 18), false, true)]
+	#[case::disjoint(bb(5, 30, 30, 31, 31), false, false)]
+	#[case::empty(TileBBox::new_empty(5).unwrap(), true, false)]
+	fn includes_bbox_and_intersects_bbox(#[case] other: TileBBox, #[case] includes: bool, #[case] intersects: bool) {
 		let a = bb(5, 10, 10, 20, 20);
-		let inner = bb(5, 12, 12, 18, 18);
-		let edge_touch = bb(5, 20, 12, 22, 18); // touches at x=20
-		let disjoint = bb(5, 30, 30, 31, 31);
-
-		// contains (TileCoord)
-		assert!(a.includes_coord(&tc(5, 15, 15)));
-		assert!(!a.includes_coord(&tc(5, 25, 15))); // outside
-
-		assert!(a.includes_bbox(&inner));
-		assert!(!a.includes_bbox(&edge_touch)); // inner extends beyond
-		assert!(!a.includes_bbox(&disjoint));
-		assert!(a.includes_bbox(&TileBBox::new_empty(5).unwrap())); // empty set is always a subset
-
-		// overlaps_bbox (inclusive on shared edge)
-		assert!(a.intersects_bbox(&inner));
-		assert!(a.intersects_bbox(&edge_touch)); // edge contact counts as overlap by implementation
-		assert!(!a.intersects_bbox(&disjoint));
-		Ok(())
+		assert_eq!(a.includes_bbox(&other), includes);
+		assert_eq!(a.intersects_bbox(&other), intersects);
 	}
 
-	// ------------------------------ Corners & dimensions ------------------------------
+	// ── Corners, dimensions, as_array ──────────────────────────────────────
+
 	#[test]
-	fn corners_and_dimensions() -> Result<()> {
+	fn corners_and_as_array() -> Result<()> {
 		let b = bb(4, 5, 6, 7, 9); // 3x4
 		assert_eq!(b.min_tile()?, tc(4, 5, 6));
 		assert_eq!(b.max_tile()?, tc(4, 7, 9));
-		assert_eq!(b.dimensions(), (3, 4));
-		Ok(())
-	}
-
-	// ------------------------------ Quadrants ------------------------------
-	#[test]
-	fn get_quadrant_happy_path() -> Result<()> {
-		// 4x4 region divisible by 2
-		let b = bb(4, 8, 12, 11, 15);
-		let q0 = b.quadrant(0)?; // top-left
-		let q1 = b.quadrant(1)?; // top-right
-		let q2 = b.quadrant(2)?; // bottom-left
-		let q3 = b.quadrant(3)?; // bottom-right
-		assert_eq!(q0.to_array()?, [8, 12, 9, 13]);
-		assert_eq!(q1.to_array()?, [10, 12, 11, 13]);
-		assert_eq!(q2.to_array()?, [8, 14, 9, 15]);
-		assert_eq!(q3.to_array()?, [10, 14, 11, 15]);
+		assert_eq!(b.to_array()?, [5, 6, 7, 9]);
 		Ok(())
 	}
 
 	#[test]
-	fn get_quadrant_errors_on_bad_input() -> Result<()> {
-		// odd width
-		let b = bb(4, 8, 12, 10, 15); // width=3, height=4
-		assert!(b.quadrant(0).is_err());
-		// odd height
-		let b = bb(4, 8, 12, 11, 14); // width=4, height=3
-		assert!(b.quadrant(0).is_err());
-		// invalid quadrant index
-		let b = bb(4, 8, 12, 11, 15);
-		assert!(b.quadrant(4).is_err());
-		Ok(())
+	fn to_string_is_level_and_bounds() {
+		assert_eq!(bb(5, 1, 2, 3, 4).to_string(), "5:[1,2,3,4]");
 	}
 
-	#[test]
-	fn get_quadrant_on_empty_returns_self() -> Result<()> {
-		let e = TileBBox::new_empty(5)?;
-		let q = e.quadrant(0)?;
-		assert_eq!(q, e);
-		Ok(())
-	}
+	// ── Quadrants: happy paths for all four quadrant indices ──────────────
 
-	// ------------------------------ Index mapping ------------------------------
-	#[test]
-	fn index_of_and_coord_at_index_roundtrip() -> Result<()> {
-		let b = bb(4, 5, 6, 7, 7); // 3x2
-
-		// index_of
-		assert_eq!(b.index_of(&tc(4, 5, 6))?, 0);
-		assert_eq!(b.index_of(&tc(4, 7, 6))?, 2);
-		assert_eq!(b.index_of(&tc(4, 7, 7))?, 5);
-
-		// coord_at_index
-		assert_eq!(b.coord_at_index(0)?, tc(4, 5, 6));
-		assert_eq!(b.coord_at_index(2)?, tc(4, 7, 6));
-		assert_eq!(b.coord_at_index(5)?, tc(4, 7, 7));
-
-		// Errors
-		assert!(b.index_of(&tc(4, 9, 9)).is_err()); // outside
-		assert!(b.coord_at_index(6).is_err()); // OOB
-		Ok(())
-	}
-
-	// ------------------------------ max_coord / as_array ------------------------------
 	#[rstest]
-	#[case(0, 0)]
-	#[case(1, 1)]
-	#[case(3, 7)]
-	fn max_coord_is_2_pow_z_minus_1(#[case] level: u8, #[case] expect: u32) -> Result<()> {
-		let b = TileBBox::new_empty(level)?;
-		assert_eq!(b.max_coord(), expect);
-		Ok(())
-	}
-
-	#[test]
-	fn as_array_matches_minmax() -> Result<()> {
-		let b = bb(6, 10, 20, 30, 40);
-		assert_eq!(b.to_array()?, [10, 20, 30, 40]);
-		Ok(())
-	}
-
-	#[test]
-	fn test_is_full() -> Result<()> {
-		let bbox = TileBBox::new_full(4)?;
-		assert!(bbox.is_full(), "Expected bbox ({bbox:?}) to be full");
-		Ok(())
-	}
-
-	#[test]
-	fn test_is_empty() -> Result<()> {
-		let empty_bbox = TileBBox::new_empty(4)?;
-		assert!(empty_bbox.is_empty());
-
-		let non_empty_bbox = TileBBox::from_min_and_max(6, 5, 10, 15, 20)?;
-		assert!(!non_empty_bbox.is_empty());
-
-		Ok(())
-	}
-
-	#[test]
-	fn test_width_height() -> Result<()> {
-		let bbox = TileBBox::from_min_and_max(6, 5, 10, 15, 20)?;
-		assert_eq!(bbox.width(), 11);
-		assert_eq!(bbox.height(), 11);
-
-		let empty_bbox = TileBBox::new_empty(4)?;
-		assert_eq!(empty_bbox.width(), 0);
-		assert_eq!(empty_bbox.height(), 0);
-
-		Ok(())
-	}
-
-	#[test]
-	fn test_count_tiles() -> Result<()> {
-		let bbox = TileBBox::from_min_and_max(6, 5, 10, 15, 20)?;
-		assert_eq!(bbox.count_tiles(), 121);
-
-		let empty_bbox = TileBBox::new_empty(4)?;
-		assert_eq!(empty_bbox.count_tiles(), 0);
-
+	#[case::top_left(0, [8, 12, 9, 13])]
+	#[case::top_right(1, [10, 12, 11, 13])]
+	#[case::bottom_left(2, [8, 14, 9, 15])]
+	#[case::bottom_right(3, [10, 14, 11, 15])]
+	fn quadrant_happy_path(#[case] idx: u8, #[case] expected: [u32; 4]) -> Result<()> {
+		let b = bb(4, 8, 12, 11, 15); // 4x4, aligned
+		assert_eq!(b.quadrant(idx)?.to_array()?, expected);
 		Ok(())
 	}
 
 	#[rstest]
-	#[case((8, 100, 100, 199, 199), (8, 100, 100), 0)]
-	#[case((8, 100, 100, 199, 199), (8, 101, 100), 1)]
-	#[case((8, 100, 100, 199, 199), (8, 199, 100), 99)]
-	#[case((8, 100, 100, 199, 199), (8, 100, 101), 100)]
-	#[case((8, 100, 100, 199, 199), (8, 100, 199), 9900)]
-	#[case((8, 100, 100, 199, 199), (8, 199, 199), 9999)]
-	fn tile_index_cases(
-		#[case] bbox: (u8, u32, u32, u32, u32),
-		#[case] coord: (u8, u32, u32),
-		#[case] expected: u64,
-	) -> Result<()> {
-		let (l, x0, y0, x1, y1) = bbox;
-		let bbox = TileBBox::from_min_and_max(l, x0, y0, x1, y1)?;
-		let (cl, cx, cy) = coord;
-		let tc = tc(cl, cx, cy);
-		assert_eq!(bbox.index_of(&tc)?, expected);
+	#[case::odd_width(bb(4, 8, 12, 10, 15), 0, true)] // width=3
+	#[case::odd_height(bb(4, 8, 12, 11, 14), 0, true)] // height=3
+	#[case::invalid_index(bb(4, 8, 12, 11, 15), 4, true)] // OOB quadrant
+	#[case::empty_returns_self(TileBBox::new_empty(5).unwrap(), 0, false)]
+	fn quadrant_error_and_empty_cases(#[case] b: TileBBox, #[case] q: u8, #[case] expect_err: bool) {
+		let r = b.quadrant(q);
+		assert_eq!(r.is_err(), expect_err);
+		if !expect_err {
+			// Empty passes through unchanged.
+			assert_eq!(r.unwrap(), b);
+		}
+	}
+
+	// ── Index mapping ───────────────────────────────────────────────────────
+
+	/// `index_of(coord)` on bbox(8, 100,100,199,199) — various coords.
+	#[rstest]
+	#[case::top_left((8, 100, 100), 0)]
+	#[case::next_x((8, 101, 100), 1)]
+	#[case::right_edge((8, 199, 100), 99)]
+	#[case::next_y((8, 100, 101), 100)]
+	#[case::bottom_left((8, 100, 199), 9900)]
+	#[case::bottom_right((8, 199, 199), 9999)]
+	fn index_of_cases(#[case] coord: (u8, u32, u32), #[case] expected: u64) -> Result<()> {
+		let b = bb(8, 100, 100, 199, 199);
+		let (l, x, y) = coord;
+		assert_eq!(b.index_of(&tc(l, x, y))?, expected);
 		Ok(())
 	}
 
-	#[test]
-	fn should_get_correct_tile_index() -> Result<()> {
-		let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12)?;
-
-		assert_eq!(bbox.index_of(&tc(4, 5, 10))?, 0);
-		assert_eq!(bbox.index_of(&tc(4, 6, 10))?, 1);
-		assert_eq!(bbox.index_of(&tc(4, 7, 10))?, 2);
-		assert_eq!(bbox.index_of(&tc(4, 5, 11))?, 3);
-		assert_eq!(bbox.index_of(&tc(4, 7, 12))?, 8);
-
-		// Attempt to get index of a coordinate outside the bounding box
-		let coord_outside = tc(4, 4, 9);
-		let result = bbox.index_of(&coord_outside);
-		assert!(result.is_err());
-
-		// Attempt to get index with mismatched zoom level
-		let coord_diff_level = tc(5, 5, 10);
-		let result = bbox.index_of(&coord_diff_level);
-		assert!(result.is_err());
-
-		Ok(())
-	}
-
+	/// `coord_at_index` on bbox(4, 5,10,7,12) — roundtrip matches `index_of`.
 	#[rstest]
 	#[case(0, (4, 5, 10))]
 	#[case(1, (4, 6, 10))]
 	#[case(2, (4, 7, 10))]
 	#[case(3, (4, 5, 11))]
 	#[case(8, (4, 7, 12))]
-	fn get_coord_by_index_cases(#[case] index: u64, #[case] coord: (u8, u32, u32)) -> Result<()> {
-		let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12)?;
-		let (l, x, y) = coord;
-		assert_eq!(bbox.coord_at_index(index)?, tc(l, x, y));
+	fn coord_at_index_cases(#[case] index: u64, #[case] expected: (u8, u32, u32)) -> Result<()> {
+		let b = bb(4, 5, 10, 7, 12);
+		let (l, x, y) = expected;
+		let c = tc(l, x, y);
+		assert_eq!(b.coord_at_index(index)?, c);
+		// Roundtrip must match.
+		assert_eq!(b.index_of(&c)?, index);
 		Ok(())
 	}
 
-	#[test]
-	fn get_coord_by_index_out_of_bounds() -> Result<()> {
-		let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12)?;
-		assert!(bbox.coord_at_index(9).is_err());
-		Ok(())
-	}
-
-	#[test]
-	fn get_quadrant_errors() -> Result<()> {
-		// Empty bbox → Ok(empty)
-		let empty = TileBBox::new_empty(4)?;
-		assert!(empty.quadrant(0)?.is_empty());
-		// Odd width/height → error
-		let odd_w = TileBBox::from_min_and_max(4, 0, 0, 2, 3)?; // width=3
-		assert!(odd_w.quadrant(0).is_err());
-		let odd_h = TileBBox::from_min_and_max(4, 0, 0, 3, 2)?; // height=3
-		assert!(odd_h.quadrant(0).is_err());
-		// Invalid quadrant index
-		let even = TileBBox::from_min_and_max(4, 0, 0, 3, 3)?;
-		assert!(even.quadrant(4).is_err());
-		Ok(())
-	}
-
-	#[test]
-	fn max_value_and_string() -> Result<()> {
-		let bbox = TileBBox::from_min_and_max(5, 1, 2, 3, 4)?;
-		assert_eq!(bbox.max_coord(), (1u32 << 5) - 1);
-		assert_eq!(bbox.to_string(), "5:[1,2,3,4]");
-		Ok(())
+	/// Error cases for the index/coord mapping.
+	#[rstest]
+	#[case::outside_bbox(bb(4, 5, 10, 7, 12), Some(tc(4, 4, 9)), None)]
+	#[case::wrong_zoom(bb(4, 5, 10, 7, 12), Some(tc(5, 5, 10)), None)]
+	#[case::index_oob(bb(4, 5, 10, 7, 12), None, Some(9))]
+	fn index_mapping_error_cases(
+		#[case] b: TileBBox,
+		#[case] bad_coord: Option<TileCoord>,
+		#[case] bad_index: Option<u64>,
+	) {
+		if let Some(c) = bad_coord {
+			assert!(b.index_of(&c).is_err());
+		}
+		if let Some(i) = bad_index {
+			assert!(b.coord_at_index(i).is_err());
+		}
 	}
 }

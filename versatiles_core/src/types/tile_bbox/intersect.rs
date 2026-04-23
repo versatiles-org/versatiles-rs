@@ -157,153 +157,63 @@ mod tests {
 		TileBBox::from_min_and_max(level, x_min, y_min, x_max, y_max).unwrap()
 	}
 
-	// ------------------------------ intersect_with / intersect_pyramid ------------------------------
+	/// In-place `intersect_bbox(a, b)` → resulting bbox (None means empty).
 	#[rstest]
-	#[case(bb(5, 10,10, 20,20), bb(5, 15,15, 25,25), [15,15,20,20])] // partial overlap
-	#[case(bb(5, 10,10, 20,20), bb(5, 0,0, 5,5),     [0,0,0,0])] // no overlap → empty
-	#[case(bb(5, 10,10, 20,20), bb(5, 10,10, 20,20), [10,10,20,20])] // identical
-	fn intersect_cases(#[case] mut a: TileBBox, #[case] b: TileBBox, #[case] exp: [u32; 4]) {
+	#[case::partial(bb(6, 5, 10, 15, 20), bb(6, 10, 15, 20, 25), Some(bb(6, 10, 15, 15, 20)))]
+	#[case::edge_at_corner(bb(4, 0, 11, 2, 13), bb(4, 1, 10, 3, 12), Some(bb(4, 1, 11, 2, 12)))]
+	#[case::disjoint(bb(6, 5, 10, 15, 20), bb(6, 16, 21, 20, 25), None)]
+	#[case::identical(bb(5, 10, 10, 20, 20), bb(5, 10, 10, 20, 20), Some(bb(5, 10, 10, 20, 20)))]
+	fn intersect_bbox_cases(#[case] mut a: TileBBox, #[case] b: TileBBox, #[case] expected: Option<TileBBox>) {
 		a.intersect_bbox(&b).unwrap();
-		if exp == [0, 0, 0, 0] && (a.width() == 0 || a.height() == 0) {
-			// empty expected; nothing more to assert
-			return;
+		match expected {
+			Some(e) => assert_eq!(a, e),
+			None => assert!(a.is_empty()),
 		}
-		assert_eq!(a.to_array().unwrap(), exp);
 	}
 
 	#[test]
-	fn intersect_pyramid_shrinks() {
+	fn intersect_bbox_zoom_mismatch_errors() {
+		let mut a = bb(6, 5, 10, 15, 20);
+		assert!(a.intersect_bbox(&bb(5, 10, 15, 15, 20)).is_err());
+	}
+
+	/// `a.intersects_bbox(b)` — overlap / edge / disjoint / empty.
+	#[rstest]
+	#[case::partial(bb(6, 5, 10, 15, 20), bb(6, 10, 15, 20, 25), true)]
+	#[case::edge(bb(4, 0, 0, 5, 5), bb(4, 5, 5, 10, 10), true)]
+	#[case::just_beyond_edge(bb(4, 0, 0, 5, 5), bb(4, 6, 6, 10, 10), false)]
+	#[case::disjoint(bb(6, 5, 10, 15, 20), bb(6, 16, 21, 20, 25), false)]
+	#[case::self_overlap(bb(6, 5, 10, 15, 20), bb(6, 5, 10, 15, 20), true)]
+	#[case::empty_never_overlaps(bb(4, 0, 0, 5, 5), TileBBox::new_empty(4).unwrap(), false)]
+	fn intersects_bbox_cases(#[case] a: TileBBox, #[case] b: TileBBox, #[case] expected: bool) {
+		assert_eq!(a.intersects_bbox(&b), expected);
+	}
+
+	#[test]
+	fn insert_bbox_is_bounding_union() -> anyhow::Result<()> {
+		let mut a = bb(4, 0, 11, 2, 13);
+		a.insert_bbox(&bb(4, 1, 10, 3, 12))?;
+		assert_eq!(a, bb(4, 0, 10, 3, 13));
+		Ok(())
+	}
+
+	/// `intersect_pyramid` — pyramid restricts the bbox at self.level.
+	#[rstest]
+	#[case::full_pyramid_is_noop(
+		TileBBox::new_full(5).unwrap(),
+		bb(5, 12, 12, 20, 20),
+		bb(5, 12, 12, 20, 20),
+	)]
+	#[case::pyramid_subset(bb(5, 12, 12, 18, 18), bb(5, 10, 10, 20, 20), bb(5, 12, 12, 18, 18))]
+	#[case::small_pyramid_drops_to_inner(bb(5, 14, 15, 16, 18), bb(5, 12, 12, 20, 20), bb(5, 14, 15, 16, 18))]
+	fn intersect_pyramid_cases(
+		#[case] pyramid_bbox: TileBBox,
+		#[case] mut target: TileBBox,
+		#[case] expected: TileBBox,
+	) {
 		use crate::TilePyramid;
-		let full = TileBBox::new_full(5).unwrap();
-		let pyramid = TilePyramid::from([full].as_slice());
-		let mut b = bb(5, 12, 12, 20, 20);
-		b.intersect_pyramid(&pyramid);
-		assert_eq!(b, bb(5, 12, 12, 20, 20)); // full pyramid covers all
-
-		let small = bb(5, 14, 15, 16, 18);
-		let py_small = TilePyramid::from([small].as_slice());
-		let mut b2 = bb(5, 12, 12, 20, 20);
-		b2.intersect_pyramid(&py_small);
-		assert_eq!(b2, small);
-	}
-
-	#[test]
-	fn boolean_operations() -> anyhow::Result<()> {
-		let bbox1 = TileBBox::from_min_and_max(4, 0, 11, 2, 13)?;
-		let bbox2 = TileBBox::from_min_and_max(4, 1, 10, 3, 12)?;
-
-		let mut bbox1_intersect = bbox1;
-		bbox1_intersect.intersect_bbox(&bbox2)?;
-		assert_eq!(bbox1_intersect, TileBBox::from_min_and_max(4, 1, 11, 2, 12)?);
-
-		let mut bbox1_union = bbox1;
-		bbox1_union.insert_bbox(&bbox2)?;
-		assert_eq!(bbox1_union, TileBBox::from_min_and_max(4, 0, 10, 3, 13)?);
-
-		Ok(())
-	}
-
-	#[test]
-	fn test_intersect_bbox() -> anyhow::Result<()> {
-		let mut bbox1 = TileBBox::from_min_and_max(4, 0, 11, 2, 13)?;
-		let bbox2 = TileBBox::from_min_and_max(4, 1, 10, 3, 12)?;
-		bbox1.intersect_bbox(&bbox2)?;
-		assert_eq!(bbox1, TileBBox::from_min_and_max(4, 1, 11, 2, 12)?);
-		Ok(())
-	}
-
-	#[test]
-	fn test_overlaps_bbox() -> anyhow::Result<()> {
-		let bbox1 = TileBBox::from_min_and_max(4, 0, 11, 2, 13)?;
-		let bbox2 = TileBBox::from_min_and_max(4, 1, 10, 3, 12)?;
-		assert!(bbox1.intersects_bbox(&bbox2));
-
-		let bbox3 = TileBBox::from_min_and_max(4, 8, 8, 9, 9)?;
-		assert!(!bbox1.intersects_bbox(&bbox3));
-
-		Ok(())
-	}
-
-	#[test]
-	fn should_intersect_bboxes_correctly_and_handle_empty_and_different_levels() -> anyhow::Result<()> {
-		let mut bbox1 = TileBBox::from_min_and_max(6, 5, 10, 15, 20)?;
-		let bbox2 = TileBBox::from_min_and_max(6, 10, 15, 20, 25)?;
-		let bbox3 = TileBBox::from_min_and_max(6, 16, 21, 20, 25)?;
-
-		bbox1.intersect_bbox(&bbox2)?;
-		assert_eq!(bbox1, TileBBox::from_min_and_max(6, 10, 15, 15, 20)?);
-
-		// Intersect with a non-overlapping bounding box
-		bbox1.intersect_bbox(&bbox3)?;
-		assert!(bbox1.is_empty());
-
-		// Attempting to intersect with a bounding box of different zoom level
-		let bbox_diff_level = TileBBox::from_min_and_max(5, 10, 15, 15, 20)?;
-		let result = bbox1.intersect_bbox(&bbox_diff_level);
-		assert!(result.is_err());
-
-		Ok(())
-	}
-
-	#[test]
-	fn should_correctly_determine_bbox_overlap() -> anyhow::Result<()> {
-		let bbox1 = TileBBox::from_min_and_max(6, 5, 10, 15, 20)?;
-		let bbox2 = TileBBox::from_min_and_max(6, 10, 15, 20, 25)?;
-		let bbox3 = TileBBox::from_min_and_max(6, 16, 21, 20, 25)?;
-
-		assert!(bbox1.intersects_bbox(&bbox2));
-		assert!(!bbox1.intersects_bbox(&bbox3));
-		assert!(bbox1.intersects_bbox(&bbox1));
-		assert!(bbox1.intersects_bbox(&bbox1.clone()));
-
-		Ok(())
-	}
-
-	#[test]
-	fn should_handle_bbox_overlap_edge_cases() -> anyhow::Result<()> {
-		let bbox1 = TileBBox::from_min_and_max(4, 0, 0, 5, 5)?;
-		let bbox2 = TileBBox::from_min_and_max(4, 5, 5, 10, 10)?;
-		let bbox3 = TileBBox::from_min_and_max(4, 6, 6, 10, 10)?;
-		let bbox4 = TileBBox::from_min_and_max(4, 0, 0, 5, 5)?;
-
-		// Overlapping at the edge
-		assert!(bbox1.intersects_bbox(&bbox2));
-
-		// No overlapping
-		assert!(!bbox1.intersects_bbox(&bbox3));
-
-		// Completely overlapping
-		assert!(bbox1.intersects_bbox(&bbox4));
-
-		// One empty bounding box
-		let empty_bbox = TileBBox::new_empty(4)?;
-		assert!(!bbox1.intersects_bbox(&empty_bbox));
-
-		Ok(())
-	}
-
-	#[test]
-	fn test_intersect_pyramid() -> anyhow::Result<()> {
-		use crate::TilePyramid;
-		// Create a pyramid with a known full bbox at level 5
-		let pyramid = TilePyramid::from([TileBBox::new_full(5)?].as_slice());
-
-		// Create a bbox partially overlapping the full bbox
-		let mut bbox = TileBBox::from_min_and_max(5, 10, 10, 20, 20)?;
-		bbox.intersect_pyramid(&pyramid);
-
-		// Since the pyramid covers the full range, intersection should not modify bbox
-		assert_eq!(bbox, TileBBox::from_min_and_max(5, 10, 10, 20, 20)?);
-
-		// Now create a pyramid with a smaller bbox (subset)
-		let smaller_bbox = TileBBox::from_min_and_max(5, 12, 12, 18, 18)?;
-		let pyramid_small = TilePyramid::from([smaller_bbox].as_slice());
-		let mut bbox = TileBBox::from_min_and_max(5, 10, 10, 20, 20)?;
-		bbox.intersect_pyramid(&pyramid_small);
-
-		// Intersection should shrink to overlap region
-		assert_eq!(bbox, TileBBox::from_min_and_max(5, 12, 12, 18, 18)?);
-
-		Ok(())
+		let pyramid = TilePyramid::from([pyramid_bbox].as_slice());
+		target.intersect_pyramid(&pyramid);
+		assert_eq!(target, expected);
 	}
 }

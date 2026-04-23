@@ -40,6 +40,7 @@ impl TilePyramid {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use rstest::rstest;
 
 	fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()
@@ -48,39 +49,35 @@ mod tests {
 		TileCoord::new(z, x, y).unwrap()
 	}
 
-	#[test]
-	fn includes_coord() {
+	fn pyramid_from(b: TileBBox) -> TilePyramid {
 		let mut p = TilePyramid::new_empty();
-		p.insert_bbox(&bbox(5, 3, 4, 10, 15)).unwrap();
-		assert!(p.includes_coord(&coord(5, 5, 7)));
-		assert!(!p.includes_coord(&coord(5, 0, 0)));
-		assert!(!p.includes_coord(&coord(6, 5, 7)));
+		p.insert_bbox(&b).unwrap();
+		p
 	}
 
-	#[test]
-	fn includes_bbox() {
-		let mut p = TilePyramid::new_empty();
-		p.insert_bbox(&bbox(5, 0, 0, 15, 15)).unwrap();
-		assert!(p.includes_bbox(&bbox(5, 2, 2, 8, 8)));
-		assert!(!p.includes_bbox(&bbox(5, 0, 0, 20, 20)));
+	/// Pyramid with bbox(5, 3,4,10,15) at z=5. Test coord inclusion.
+	#[rstest]
+	#[case::inside(coord(5, 5, 7), true)]
+	#[case::outside_at_same_level(coord(5, 0, 0), false)]
+	#[case::other_level_is_empty(coord(6, 5, 7), false)]
+	fn includes_coord_cases(#[case] c: TileCoord, #[case] expected: bool) {
+		assert_eq!(pyramid_from(bbox(5, 3, 4, 10, 15)).includes_coord(&c), expected);
 	}
 
-	#[test]
-	fn includes_pyramid() {
-		let mut a = TilePyramid::new_empty();
-		a.insert_bbox(&bbox(5, 0, 0, 15, 15)).unwrap();
-
-		let mut b = TilePyramid::new_empty();
-		b.insert_bbox(&bbox(5, 2, 2, 8, 8)).unwrap();
-
-		assert!(a.includes_pyramid(&b));
-		assert!(!b.includes_pyramid(&a));
+	/// Pyramid with bbox(5, 0,0,15,15) at z=5. Test bbox inclusion.
+	#[rstest]
+	#[case::subset(bbox(5, 2, 2, 8, 8), true)]
+	#[case::extends_beyond(bbox(5, 0, 0, 20, 20), false)]
+	fn includes_bbox_cases(#[case] query: TileBBox, #[case] expected: bool) {
+		assert_eq!(pyramid_from(bbox(5, 0, 0, 15, 15)).includes_bbox(&query), expected);
 	}
 
-	#[test]
-	fn includes_empty_pyramid() {
-		let p = TilePyramid::new_full_up_to(5);
-		// Every pyramid includes an empty pyramid.
-		assert!(p.includes_pyramid(&TilePyramid::new_empty()));
+	/// `a.includes_pyramid(b)` — various (a, b) pairs.
+	#[rstest]
+	#[case::superset(pyramid_from(bbox(5, 0, 0, 15, 15)), pyramid_from(bbox(5, 2, 2, 8, 8)), true)]
+	#[case::not_superset(pyramid_from(bbox(5, 2, 2, 8, 8)), pyramid_from(bbox(5, 0, 0, 15, 15)), false)]
+	#[case::any_includes_empty(TilePyramid::new_full_up_to(5), TilePyramid::new_empty(), true)]
+	fn includes_pyramid_cases(#[case] a: TilePyramid, #[case] b: TilePyramid, #[case] expected: bool) {
+		assert_eq!(a.includes_pyramid(&b), expected);
 	}
 }

@@ -62,49 +62,75 @@ mod tests {
 		TileBBox::from_min_and_max(zoom, x0, y0, x1, y1).unwrap()
 	}
 
-	#[test]
-	fn union_bbox_bbox_stays_bbox() {
-		let a = TileCover::from(bbox(4, 0, 0, 3, 3));
-		let b = TileCover::from(bbox(4, 5, 5, 8, 8));
-		let u = a.union(&b).unwrap();
-		assert!(matches!(u, TileCover::Tree(_)));
-		assert_eq!(u.to_bbox(), bbox(4, 0, 0, 8, 8));
+	/// Which binary set operation to invoke.
+	#[derive(Debug, Clone, Copy)]
+	enum SetOp {
+		Union,
+		Intersection,
+		Difference,
 	}
 
-	#[test]
-	fn union_with_tree_gives_tree() {
-		let a = TileCover::from(bbox(3, 0, 0, 3, 3));
-		let b = TileCover::from(TileQuadtree::new_full(3).unwrap());
-		let u = a.union(&b).unwrap();
-		assert!(matches!(u, TileCover::Tree(_)));
-		assert!(u.is_full());
+	impl SetOp {
+		fn apply(self, a: &TileCover, b: &TileCover) -> anyhow::Result<TileCover> {
+			match self {
+				SetOp::Union => a.union(b),
+				SetOp::Intersection => a.intersection(b),
+				SetOp::Difference => a.difference(b),
+			}
+		}
 	}
 
-	#[test]
-	fn intersection_bbox_bbox() {
-		let a = TileCover::from(bbox(4, 0, 0, 7, 7));
-		let b = TileCover::from(bbox(4, 4, 4, 11, 11));
-		let i = a.intersection(&b).unwrap();
-		assert!(matches!(i, TileCover::Bbox(_)));
-		assert_eq!(i.to_bbox(), bbox(4, 4, 4, 7, 7));
+	/// Expected storage kind (Bbox vs Tree) for a result + its tile count or
+	/// bbox. Covers the core per-variant compaction rules in one table.
+	#[rstest::rstest]
+	#[case::union_bbox_bbox_becomes_tree(
+		SetOp::Union,
+		TileCover::from(bbox(4, 0, 0, 3, 3)),
+		TileCover::from(bbox(4, 5, 5, 8, 8)),
+		/* is_tree */ true,
+		/* tile_count */ 32,
+	)]
+	#[case::union_with_full_tree_is_full(
+		SetOp::Union,
+		TileCover::from(bbox(3, 0, 0, 3, 3)),
+		TileCover::from(TileQuadtree::new_full(3).unwrap()),
+		true,
+		64,
+	)]
+	#[case::intersection_bbox_bbox_stays_bbox(
+		SetOp::Intersection,
+		TileCover::from(bbox(4, 0, 0, 7, 7)),
+		TileCover::from(bbox(4, 4, 4, 11, 11)),
+		false,
+		16
+	)]
+	#[case::difference_becomes_tree(
+		SetOp::Difference,
+		TileCover::from(bbox(3, 0, 0, 7, 7)), // 64 tiles
+		TileCover::from(bbox(3, 0, 0, 3, 3)), // 16 tiles
+		true,
+		48,
+	)]
+	fn set_op_storage_and_count(
+		#[case] op: SetOp,
+		#[case] a: TileCover,
+		#[case] b: TileCover,
+		#[case] result_is_tree: bool,
+		#[case] expected_count: u64,
+	) {
+		let out = op.apply(&a, &b).unwrap();
+		assert_eq!(matches!(out, TileCover::Tree(_)), result_is_tree);
+		assert_eq!(out.count_tiles(), expected_count);
 	}
 
-	#[test]
-	fn difference_always_tree() {
-		let a = TileCover::from(bbox(3, 0, 0, 7, 7)); // full z=3, 64 tiles
-		let b = TileCover::from(bbox(3, 0, 0, 3, 3)); // 16 tiles
-		let d = a.difference(&b).unwrap();
-		assert!(matches!(d, TileCover::Tree(_)));
-		assert_eq!(d.count_tiles(), 48);
-	}
-
-	#[test]
-	fn set_ops_zoom_mismatch_errors() {
+	#[rstest::rstest]
+	#[case(SetOp::Union)]
+	#[case(SetOp::Intersection)]
+	#[case(SetOp::Difference)]
+	fn zoom_mismatch_errors(#[case] op: SetOp) {
 		let a = TileCover::from(bbox(3, 0, 0, 7, 7));
 		let b = TileCover::from(bbox(4, 0, 0, 15, 15));
-		assert!(a.union(&b).is_err());
-		assert!(a.intersection(&b).is_err());
-		assert!(a.difference(&b).is_err());
+		assert!(op.apply(&a, &b).is_err());
 	}
 
 	// ── Algebraic identities: A ∪ A = A, A ∩ A = A, A \ A = ∅ ────────────────
@@ -141,30 +167,29 @@ mod tests {
 		assert!(a.union(&full).unwrap().is_full());
 	}
 
-	#[test]
-	fn union_is_commutative() {
-		let a = TileCover::from(bbox(3, 0, 0, 3, 7));
-		let b = TileCover::from(bbox(3, 4, 0, 7, 7));
-		let ab = a.union(&b).unwrap();
-		let ba = b.union(&a).unwrap();
+	/// Union and intersection are commutative.
+	#[rstest::rstest]
+	#[case::union(
+		SetOp::Union,
+		TileCover::from(bbox(3, 0, 0, 3, 7)),
+		TileCover::from(bbox(3, 4, 0, 7, 7))
+	)]
+	#[case::intersection(
+		SetOp::Intersection,
+		TileCover::from(bbox(4, 0, 0, 7, 7)),
+		TileCover::from(bbox(4, 4, 4, 11, 11))
+	)]
+	fn commutativity(#[case] op: SetOp, #[case] a: TileCover, #[case] b: TileCover) {
+		let ab = op.apply(&a, &b).unwrap();
+		let ba = op.apply(&b, &a).unwrap();
 		assert_eq!(ab.count_tiles(), ba.count_tiles());
 		assert_eq!(ab.to_bbox(), ba.to_bbox());
-	}
-
-	#[test]
-	fn intersection_is_commutative() {
-		let a = TileCover::from(bbox(4, 0, 0, 7, 7));
-		let b = TileCover::from(bbox(4, 4, 4, 11, 11));
-		let ab = a.intersection(&b).unwrap();
-		let ba = b.intersection(&a).unwrap();
-		assert_eq!(ab, ba);
 	}
 
 	#[test]
 	fn difference_disjoint_leaves_original_size() {
 		let a = TileCover::from(bbox(3, 0, 0, 3, 3));
 		let b = TileCover::from(bbox(3, 4, 4, 7, 7)); // fully disjoint
-		let d = a.difference(&b).unwrap();
-		assert_eq!(d.count_tiles(), a.count_tiles());
+		assert_eq!(a.difference(&b).unwrap().count_tiles(), a.count_tiles());
 	}
 }

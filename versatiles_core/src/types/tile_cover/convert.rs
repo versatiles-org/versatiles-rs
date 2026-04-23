@@ -113,59 +113,46 @@ impl TileCover {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use rstest::rstest;
 
 	fn bbox(zoom: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 		TileBBox::from_min_and_max(zoom, x0, y0, x1, y1).unwrap()
 	}
 
-	#[test]
-	fn bounds_empty_and_nonempty() {
-		assert!(TileCover::new_empty(3).unwrap().to_bbox().is_empty());
-		let c = TileCover::from(bbox(3, 1, 2, 3, 4));
-		assert_eq!(c.to_bbox(), bbox(3, 1, 2, 3, 4));
+	/// `to_bbox()` — empty cover yields empty bbox; populated yields the
+	/// originating bbox.
+	#[rstest]
+	#[case::empty(TileCover::new_empty(3).unwrap(), TileBBox::new_empty(3).unwrap())]
+	#[case::bbox_variant(TileCover::from(bbox(3, 1, 2, 3, 4)), bbox(3, 1, 2, 3, 4))]
+	fn to_bbox_cases(#[case] c: TileCover, #[case] expected: TileBBox) {
+		assert_eq!(c.to_bbox(), expected);
 	}
 
-	#[test]
-	fn at_level() {
-		let c = TileCover::from(bbox(5, 4, 4, 8, 8));
-		let c2 = c.at_level(6);
-		assert_eq!(c2.level(), 6);
+	/// `as_bbox` / `as_tree` are mutually exclusive per variant.
+	#[rstest]
+	#[case::bbox_variant(TileCover::from(bbox(2, 0, 0, 1, 1)), true, false)]
+	#[case::tree_variant(TileCover::from(TileQuadtree::new_empty(2).unwrap()), false, true)]
+	#[case::full_tree(TileCover::from(TileQuadtree::new_full(2).unwrap()), false, true)]
+	fn as_bbox_and_as_tree_are_mutually_exclusive(#[case] c: TileCover, #[case] is_bbox: bool, #[case] is_tree: bool) {
+		assert_eq!(c.as_bbox().is_some(), is_bbox);
+		assert_eq!(c.as_tree().is_some(), is_tree);
 	}
 
-	#[test]
-	fn as_bbox_and_as_tree() {
-		let cb = TileCover::from(bbox(2, 0, 0, 1, 1));
-		assert!(cb.as_bbox().is_some());
-		assert!(cb.as_tree().is_none());
-
-		let ct = TileCover::from(TileQuadtree::new_empty(2).unwrap());
-		assert!(ct.as_bbox().is_none());
-		assert!(ct.as_tree().is_some());
+	/// `to_geo_bbox()` — None for empty, Some otherwise.
+	#[rstest]
+	#[case::empty(TileCover::new_empty(4).unwrap(), false)]
+	#[case::populated(TileCover::from(bbox(4, 0, 0, 15, 15)), true)]
+	fn to_geo_bbox_some_when_populated(#[case] c: TileCover, #[case] expect_some: bool) {
+		assert_eq!(c.to_geo_bbox().is_some(), expect_some);
 	}
 
-	#[test]
-	fn to_tree_from_bbox() {
-		let c = TileCover::from(bbox(3, 1, 1, 4, 4));
-		let tree = c.to_tree();
-		assert_eq!(tree.count_tiles(), 16);
-	}
-
-	#[test]
-	fn to_geo_bbox_empty_is_none() {
-		assert!(TileCover::new_empty(4).unwrap().to_geo_bbox().is_none());
-	}
-
-	#[test]
-	fn to_geo_bbox_nonempty() {
-		let c = TileCover::from(bbox(4, 0, 0, 15, 15));
-		assert!(c.to_geo_bbox().is_some());
-	}
-
-	#[rstest::rstest]
-	#[case(0, 5)] // up
-	#[case(5, 0)] // down
-	#[case(5, 5)] // identity
-	#[case(5, 30)] // to max
+	/// `at_level` preserves the requested level for both variants and across
+	/// up/down/identity/extreme transitions.
+	#[rstest]
+	#[case::up(0, 5)]
+	#[case::down(5, 0)]
+	#[case::identity(5, 5)]
+	#[case::to_max(5, 30)]
 	fn at_level_changes_level_on_both_variants(#[case] from: u8, #[case] to: u8) {
 		let c_bbox = TileCover::from(TileBBox::new_full(from).unwrap());
 		let c_tree = TileCover::from(TileQuadtree::new_full(from).unwrap());
@@ -173,28 +160,18 @@ mod tests {
 		assert_eq!(c_tree.at_level(to).level(), to);
 	}
 
-	#[test]
-	fn into_bbox_and_into_tree_match_non_consuming() {
-		let c1 = TileCover::from(bbox(3, 1, 1, 4, 4));
-		assert_eq!(c1.to_bbox(), c1.clone().into_bbox());
-		let t1 = c1.to_tree();
-		let t2 = c1.into_tree();
-		assert_eq!(t1.count_tiles(), t2.count_tiles());
-	}
+	/// `to_bbox/tree` (by ref) and `into_bbox/tree` (consuming) yield
+	/// equivalent outputs across both variants.
+	#[rstest]
+	#[case::from_bbox(TileCover::from(bbox(3, 1, 1, 4, 4)), 16)]
+	#[case::from_tree(TileCover::from(TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3))), 16)]
+	fn to_and_into_equivalents_match(#[case] c: TileCover, #[case] expected_tiles: u64) {
+		let by_ref_bbox = c.to_bbox();
+		let by_ref_tree = c.to_tree();
+		assert_eq!(by_ref_tree.count_tiles(), expected_tiles);
 
-	#[test]
-	fn to_tree_from_tree_clones() {
-		let tree = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3));
-		let c = TileCover::from(tree.clone());
-		assert_eq!(c.to_tree().count_tiles(), tree.count_tiles());
-		assert_eq!(c.into_tree().count_tiles(), tree.count_tiles());
-	}
-
-	#[test]
-	fn as_bbox_as_tree_none_when_wrong_variant() {
-		let c_bbox = TileCover::from(bbox(2, 0, 0, 1, 1));
-		let c_tree = TileCover::from(TileQuadtree::new_full(2).unwrap());
-		assert!(c_bbox.as_tree().is_none());
-		assert!(c_tree.as_bbox().is_none());
+		// Consuming variants must match their by-ref siblings.
+		assert_eq!(c.clone().into_bbox(), by_ref_bbox);
+		assert_eq!(c.into_tree().count_tiles(), expected_tiles);
 	}
 }

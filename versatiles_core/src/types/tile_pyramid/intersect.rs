@@ -53,6 +53,7 @@ impl TilePyramid {
 mod tests {
 	use super::*;
 	use crate::{GeoBBox, TileCoord};
+	use rstest::rstest;
 
 	fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()
@@ -61,55 +62,50 @@ mod tests {
 		TileCoord::new(z, x, y).unwrap()
 	}
 
-	#[test]
-	fn intersects_bbox() {
+	fn pyramid_from(b: TileBBox) -> TilePyramid {
 		let mut p = TilePyramid::new_empty();
-		p.insert_bbox(&bbox(4, 0, 0, 7, 7)).unwrap();
-		assert!(p.intersects_bbox(&bbox(4, 5, 5, 10, 10)));
-		assert!(!p.intersects_bbox(&bbox(4, 10, 10, 15, 15)));
+		p.insert_bbox(&b).unwrap();
+		p
+	}
+
+	/// Pyramid with bbox(4, 0,0,7,7) intersecting different query bboxes.
+	#[rstest]
+	#[case::overlap(bbox(4, 5, 5, 10, 10), true)]
+	#[case::disjoint(bbox(4, 10, 10, 15, 15), false)]
+	fn intersects_bbox_cases(#[case] query: TileBBox, #[case] expected: bool) {
+		assert_eq!(pyramid_from(bbox(4, 0, 0, 7, 7)).intersects_bbox(&query), expected);
+	}
+
+	/// `a.intersects_pyramid(b)` — subset / disjoint.
+	#[rstest]
+	#[case::subset(pyramid_from(bbox(5, 2, 2, 8, 8)), true)]
+	#[case::disjoint(pyramid_from(bbox(5, 20, 20, 25, 25)), false)]
+	fn intersects_pyramid_cases(#[case] b: TilePyramid, #[case] expected: bool) {
+		let a = pyramid_from(bbox(5, 0, 0, 15, 15));
+		assert_eq!(a.intersects_pyramid(&b), expected);
 	}
 
 	#[test]
-	fn intersects_pyramid() {
-		let mut a = TilePyramid::new_empty();
-		a.insert_bbox(&bbox(5, 0, 0, 15, 15)).unwrap();
-
-		let mut b = TilePyramid::new_empty();
-		b.insert_bbox(&bbox(5, 2, 2, 8, 8)).unwrap();
-		assert!(a.intersects_pyramid(&b));
-
-		let mut c = TilePyramid::new_empty();
-		c.insert_bbox(&bbox(5, 20, 20, 25, 25)).unwrap();
-		assert!(!a.intersects_pyramid(&c));
-	}
-
-	#[test]
-	fn intersect_pyramid() {
-		let mut a = TilePyramid::new_empty();
-		a.insert_bbox(&bbox(5, 0, 0, 15, 15)).unwrap();
-
-		let mut b = TilePyramid::new_empty();
-		b.insert_bbox(&bbox(5, 10, 10, 25, 25)).unwrap();
-
-		a.intersect_pyramid(&b);
+	fn intersect_pyramid_narrows_to_overlap() {
+		let mut a = pyramid_from(bbox(5, 0, 0, 15, 15));
+		a.intersect_pyramid(&pyramid_from(bbox(5, 10, 10, 25, 25)));
 		assert!(a.includes_coord(&coord(5, 12, 12)));
 		assert!(!a.includes_coord(&coord(5, 2, 2)));
 	}
 
 	#[test]
-	fn intersect_geo_bbox() {
+	fn intersect_geo_bbox_restricts_every_level() {
 		let mut p = TilePyramid::new_full();
-		let geo = GeoBBox::new(10.0, 50.0, 15.0, 55.0).unwrap();
-		p.intersect_geo_bbox(&geo).unwrap();
+		p.intersect_geo_bbox(&GeoBBox::new(10.0, 50.0, 15.0, 55.0).unwrap())
+			.unwrap();
 		assert!(!p.is_empty());
 		assert_eq!(p.level_ref(10).count_tiles(), 375);
 	}
 
 	#[test]
-	fn intersected_bbox() {
-		let mut p = TilePyramid::new_empty();
-		p.insert_bbox(&bbox(4, 0, 0, 7, 7)).unwrap();
-		let result = p.level_ref(4).intersection_bbox(&bbox(4, 4, 4, 11, 11)).unwrap();
-		assert_eq!(result.to_bbox(), bbox(4, 4, 4, 7, 7));
+	fn intersection_bbox_via_level_ref() {
+		let p = pyramid_from(bbox(4, 0, 0, 7, 7));
+		let out = p.level_ref(4).intersection_bbox(&bbox(4, 4, 4, 11, 11)).unwrap();
+		assert_eq!(out.to_bbox(), bbox(4, 4, 4, 7, 7));
 	}
 }

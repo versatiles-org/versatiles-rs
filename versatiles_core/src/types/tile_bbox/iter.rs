@@ -83,35 +83,26 @@ mod tests {
 	// ------------------------------
 	// iter_coords / into_iter_coords
 	// ------------------------------
-	#[test]
-	fn iter_coords_row_major_and_count() -> Result<()> {
-		// z=4, bbox: x=2..4 (3 cols), y=5..6 (2 rows) → 6 coords
-		let bb = TileBBox::from_min_and_max(4, 2, 5, 4, 6)?;
-		let v: Vec<_> = bb.iter_coords().collect();
-		assert_eq!(v.len(), 6);
-		// Row-major: y runs slowest? In this module we do y_range.cartesian_product(x_range)
-		// which yields (y,x) pairs; with Itertools, cartesian_product iterates the
-		// left iterator outer and right inner → for each y, iterate all x.
-		let exp = vec![
-			tc(4, 2, 5),
-			tc(4, 3, 5),
-			tc(4, 4, 5),
-			tc(4, 2, 6),
-			tc(4, 3, 6),
-			tc(4, 4, 6),
-		];
-		assert_eq!(v, exp);
-		Ok(())
-	}
-
-	#[test]
-	fn into_iter_coords_consumes_and_matches() -> Result<()> {
-		let bb = TileBBox::from_min_and_max(5, 10, 20, 11, 22)?; // 2 cols × 3 rows
-		let a: Vec<_> = bb.iter_coords().collect();
-		let b: Vec<_> = bb.into_iter_coords().collect();
-		assert_eq!(a, b);
-		assert_eq!(a.len(), 6);
-		Ok(())
+	/// `iter_coords` yields row-major: for each row y, every column x.
+	/// Also verifies `into_iter_coords` returns the same sequence.
+	#[rstest]
+	#[case::small_3x2(
+		TileBBox::from_min_and_max(4, 2, 5, 4, 6).unwrap(),
+		vec![tc(4, 2, 5), tc(4, 3, 5), tc(4, 4, 5), tc(4, 2, 6), tc(4, 3, 6), tc(4, 4, 6)],
+	)]
+	#[case::small_2x2(
+		TileBBox::from_min_and_max(4, 5, 10, 6, 11).unwrap(),
+		vec![tc(4, 5, 10), tc(4, 6, 10), tc(4, 5, 11), tc(4, 6, 11)],
+	)]
+	#[case::high_zoom_2x2(
+		TileBBox::from_min_and_max(16, 1, 5, 2, 6).unwrap(),
+		vec![tc(16, 1, 5), tc(16, 2, 5), tc(16, 1, 6), tc(16, 2, 6)],
+	)]
+	fn iter_coords_is_row_major(#[case] bb: TileBBox, #[case] expected: Vec<TileCoord>) {
+		let via_ref: Vec<_> = bb.iter_coords().collect();
+		let via_owned: Vec<_> = bb.into_iter_coords().collect();
+		assert_eq!(via_ref, expected);
+		assert_eq!(via_owned, expected);
 	}
 
 	// ------------------------------
@@ -171,18 +162,8 @@ mod tests {
 		let _ = bb.iter_grid(3).collect::<Vec<_>>();
 	}
 
-	#[test]
-	fn iter_coords() -> Result<()> {
-		let bbox = TileBBox::from_min_and_max(16, 1, 5, 2, 6)?;
-		let v: Vec<TileCoord> = bbox.iter_coords().collect();
-		assert_eq!(v.len(), 4);
-		assert_eq!(v[0], tc(16, 1, 5));
-		assert_eq!(v[1], tc(16, 2, 5));
-		assert_eq!(v[2], tc(16, 1, 6));
-		assert_eq!(v[3], tc(16, 2, 6));
-		Ok(())
-	}
-
+	/// `iter_grid` cases: (grid_size, source_bbox, expected_cells_as_text).
+	/// The text form "x0,y0,x1,y1 ..." keeps the assertion compact.
 	#[rstest]
 	#[case(16, (10, 0, 0, 31, 31), "0,0,15,15 16,0,31,15 0,16,15,31 16,16,31,31")]
 	#[case(16, (10, 5, 6, 25, 26), "5,6,15,15 16,6,25,15 5,16,15,26 16,16,25,26")]
@@ -190,6 +171,7 @@ mod tests {
 	#[case(16, (10, 5, 6, 16, 15), "5,6,15,15 16,6,16,15")]
 	#[case(16, (10, 6, 7, 6, 7), "6,7,6,7")]
 	#[case(64, (4, 6, 7, 6, 7), "6,7,6,7")]
+	#[case::full_z4_size_4(4, (4, 0, 0, 7, 7), "0,0,3,3 4,0,7,3 0,4,3,7 4,4,7,7")]
 	fn iter_grid_cases(#[case] size: u32, #[case] def: (u8, u32, u32, u32, u32), #[case] expected: &str) -> Result<()> {
 		let bbox = TileBBox::from_min_and_max(def.0, def.1, def.2, def.3, def.4)?;
 		let result: String = bbox
@@ -209,57 +191,10 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn should_iterate_over_coords_correctly() -> Result<()> {
-		let bbox = TileBBox::from_min_and_max(4, 5, 10, 6, 11)?;
-		let coords: Vec<TileCoord> = bbox.iter_coords().collect();
-		let expected_coords = vec![tc(4, 5, 10), tc(4, 6, 10), tc(4, 5, 11), tc(4, 6, 11)];
-		assert_eq!(coords, expected_coords);
-		Ok(())
-	}
-
-	#[test]
-	fn should_iterate_over_coords_correctly_when_consumed() -> Result<()> {
-		let bbox = TileBBox::from_min_and_max(4, 5, 10, 6, 11)?;
-		let coords: Vec<TileCoord> = bbox.into_iter_coords().collect();
-		let expected_coords = vec![tc(4, 5, 10), tc(4, 6, 10), tc(4, 5, 11), tc(4, 6, 11)];
-		assert_eq!(coords, expected_coords);
-		Ok(())
-	}
-
-	#[test]
-	fn should_split_bbox_into_correct_grid() -> Result<()> {
-		let bbox = TileBBox::from_min_and_max(4, 0, 0, 7, 7)?;
-
-		let grid_size = 4;
-		let grids: Vec<TileBBox> = bbox.iter_grid(grid_size).collect();
-
-		let expected_grids = vec![
-			TileBBox::from_min_and_max(4, 0, 0, 3, 3)?,
-			TileBBox::from_min_and_max(4, 4, 0, 7, 3)?,
-			TileBBox::from_min_and_max(4, 0, 4, 3, 7)?,
-			TileBBox::from_min_and_max(4, 4, 4, 7, 7)?,
-		];
-
-		assert_eq!(grids, expected_grids);
-
-		Ok(())
-	}
-
-	#[test]
-	fn should_handle_empty_bbox_in_grid_iteration() -> Result<()> {
-		let bbox = TileBBox::new_empty(4)?;
-		let grids: Vec<TileBBox> = bbox.iter_grid(4).collect();
-		assert!(grids.is_empty());
-		Ok(())
-	}
-
-	#[test]
-	fn should_handle_single_tile_in_grid_iteration() -> Result<()> {
-		let bbox = TileBBox::from_min_and_max(4, 5, 10, 5, 10)?;
-		let grids: Vec<TileBBox> = bbox.iter_grid(4).collect();
-		let expected_grids = vec![TileBBox::from_min_and_max(4, 5, 10, 5, 10)?];
-		assert_eq!(grids, expected_grids);
-		Ok(())
+	#[rstest]
+	#[case::empty(TileBBox::new_empty(4).unwrap(), 0)]
+	#[case::single_tile(TileBBox::from_min_and_max(4, 5, 10, 5, 10).unwrap(), 1)]
+	fn iter_grid_edge_cases(#[case] bbox: TileBBox, #[case] expected_cells: usize) {
+		assert_eq!(bbox.iter_grid(4).count(), expected_cells);
 	}
 }

@@ -71,68 +71,49 @@ impl TileBBox {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use anyhow::Result;
+	use rstest::rstest;
 
 	fn tc(z: u8, x: u32, y: u32) -> TileCoord {
 		TileCoord::new(z, x, y).unwrap()
 	}
 
-	#[test]
-	fn test_contains() -> Result<()> {
-		let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12)?;
-		assert!(bbox.includes_coord(&tc(4, 6, 11)));
-		assert!(!bbox.includes_coord(&tc(4, 4, 9)));
-		Ok(())
+	fn bb(z: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
+		TileBBox::from_min_and_max(z, x0, y0, x1, y1).unwrap()
 	}
 
-	#[test]
-	fn should_determine_contains3_correctly() -> Result<()> {
-		let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12)?;
-		let valid_coord = tc(4, 6, 11);
-		let invalid_coord_outside = tc(4, 4, 9);
-
-		assert!(bbox.includes_coord(&valid_coord));
-		assert!(!bbox.includes_coord(&invalid_coord_outside));
-
-		Ok(())
+	/// `includes_coord` against bbox(4, 5,10,7,12).
+	#[rstest]
+	#[case::inside(tc(4, 6, 11), true)]
+	#[case::outside_upper_left(tc(4, 4, 9), false)]
+	#[case::outside_lower_right(tc(4, 8, 13), false)]
+	#[case::on_min_corner(tc(4, 5, 10), true)]
+	#[case::on_max_corner(tc(4, 7, 12), true)]
+	fn includes_coord_cases(#[case] c: TileCoord, #[case] expected: bool) {
+		assert_eq!(bb(4, 5, 10, 7, 12).includes_coord(&c), expected);
 	}
 
 	#[test]
 	#[should_panic(expected = "Cannot compare TileBBox with level=")]
 	fn includes_coord_zoom_mismatch_panics() {
-		let bbox = TileBBox::from_min_and_max(4, 5, 10, 7, 12).unwrap();
-		let _ = bbox.includes_coord(&tc(5, 6, 11));
+		let _ = bb(4, 5, 10, 7, 12).includes_coord(&tc(5, 6, 11));
 	}
 
-	#[test]
-	fn test_try_contains_bbox() -> Result<()> {
-		let bbox_outer = TileBBox::from_min_and_max(5, 10, 10, 20, 20)?;
-		let bbox_inner = TileBBox::from_min_and_max(5, 12, 12, 18, 18)?;
-		let bbox_partial = TileBBox::from_min_and_max(5, 15, 15, 25, 25)?;
-		let bbox_non_overlap = TileBBox::from_min_and_max(5, 21, 21, 22, 22)?;
-
-		// Fully contained
-		assert!(bbox_outer.includes_bbox(&bbox_inner));
-		// Not fully contained (partial overlap)
-		assert!(!bbox_outer.includes_bbox(&bbox_partial));
-		// Not contained (no overlap)
-		assert!(!bbox_outer.includes_bbox(&bbox_non_overlap));
-
-		// Empty subset: any set includes the empty set; empty set includes nothing non-empty
-		let empty_outer = TileBBox::new_empty(5)?;
-		let empty_inner = TileBBox::new_empty(5)?;
-		assert!(!empty_outer.includes_bbox(&bbox_inner));
-		assert!(bbox_outer.includes_bbox(&empty_inner));
-		assert!(empty_outer.includes_bbox(&empty_inner));
-
-		Ok(())
+	/// `outer.includes_bbox(inner)` with outer = bbox(5, 10,10,20,20) unless the
+	/// case says otherwise.
+	#[rstest]
+	#[case::fully_contained(bb(5, 10, 10, 20, 20), bb(5, 12, 12, 18, 18), true)]
+	#[case::partial_overlap(bb(5, 10, 10, 20, 20), bb(5, 15, 15, 25, 25), false)]
+	#[case::disjoint(bb(5, 10, 10, 20, 20), bb(5, 21, 21, 22, 22), false)]
+	#[case::empty_inner_is_subset(bb(5, 10, 10, 20, 20), TileBBox::new_empty(5).unwrap(), true)]
+	#[case::empty_outer_excludes_nonempty(TileBBox::new_empty(5).unwrap(), bb(5, 12, 12, 18, 18), false)]
+	#[case::empty_outer_includes_empty(TileBBox::new_empty(5).unwrap(), TileBBox::new_empty(5).unwrap(), true)]
+	fn includes_bbox_cases(#[case] outer: TileBBox, #[case] inner: TileBBox, #[case] expected: bool) {
+		assert_eq!(outer.includes_bbox(&inner), expected);
 	}
 
 	#[test]
 	#[should_panic(expected = "Cannot compare TileBBox with level=")]
 	fn includes_bbox_zoom_mismatch_panics() {
-		let bbox_outer = TileBBox::from_min_and_max(5, 10, 10, 20, 20).unwrap();
-		let bbox_diff_level = TileBBox::from_min_and_max(6, 12, 12, 18, 18).unwrap();
-		let _ = bbox_outer.includes_bbox(&bbox_diff_level);
+		let _ = bb(5, 10, 10, 20, 20).includes_bbox(&bb(6, 12, 12, 18, 18));
 	}
 }

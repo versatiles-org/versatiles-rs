@@ -142,66 +142,91 @@ impl TilePyramid {
 mod tests {
 	use super::*;
 	use crate::{TileCover, TileQuadtree};
+	use rstest::rstest;
 
 	fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()
 	}
 
-	#[test]
-	fn count_tiles_and_count_nodes() {
+	fn pyramid_from_bboxes(bs: &[TileBBox]) -> TilePyramid {
 		let mut p = TilePyramid::new_empty();
-		p.set_level(TileCover::new_full(2).unwrap()); // 16 tiles, Bbox → 0 tree nodes
-		assert_eq!(p.count_tiles(), 16);
-		assert_eq!(p.count_nodes(), 0);
+		for b in bs {
+			p.insert_bbox(b).unwrap();
+		}
+		p
+	}
 
-		// Insert a tree level
-		let qt = TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3));
-		p.set_level(TileCover::from(qt));
-		assert_eq!(p.count_tiles(), 16 + 16);
-		// tree has some nodes
+	/// `count_tiles` across different level storage kinds. `count_nodes`
+	/// counts internal quadtree nodes, which Bbox covers skip entirely (0)
+	/// but Tree covers contribute to.
+	#[rstest]
+	#[case::bbox_only_is_node_free(
+		{
+			let mut p = TilePyramid::new_empty();
+			p.set_level(TileCover::new_full(2).unwrap());
+			p
+		},
+		16,
+		0,
+	)]
+	#[case::bbox_plus_tree_has_tree_nodes(
+		{
+			let mut p = TilePyramid::new_empty();
+			p.set_level(TileCover::new_full(2).unwrap());
+			p.set_level(TileCover::from(TileQuadtree::from_bbox(&bbox(3, 0, 0, 3, 3))));
+			p
+		},
+		16 + 16,
+		5, // empirically: a 4×4 block at z=3 yields 5 tree nodes (1 partial + 4 children, after normalisation).
+	)]
+	#[case::two_bboxes(pyramid_from_bboxes(&[bbox(2, 0, 0, 1, 1), bbox(3, 0, 0, 2, 2)]), 13, 0)]
+	fn count_cases(#[case] p: TilePyramid, #[case] expected_tiles: u64, #[case] expected_nodes: u64) {
+		assert_eq!(p.count_tiles(), expected_tiles);
+		assert_eq!(p.count_nodes(), expected_nodes);
+	}
+
+	/// Empty pyramid → geo_bbox/geo_center None; populated → Some.
+	#[rstest]
+	#[case::empty(TilePyramid::new_empty(), false)]
+	#[case::populated(pyramid_from_bboxes(&[bbox(5, 10, 10, 20, 20)]), true)]
+	fn geo_bbox_and_center_are_some_when_populated(#[case] p: TilePyramid, #[case] expect_some: bool) {
+		assert_eq!(p.geo_bbox().is_some(), expect_some);
+		assert_eq!(p.geo_center().is_some(), expect_some);
 	}
 
 	#[test]
-	fn get_geo_bbox_and_center() {
-		let mut p = TilePyramid::new_empty();
-		assert!(p.geo_bbox().is_none());
-		assert!(p.geo_center().is_none());
-
-		p.insert_bbox(&bbox(5, 10, 10, 20, 20)).unwrap();
-		assert!(p.geo_bbox().is_some());
-		assert!(p.geo_center().is_some());
-	}
-
-	#[test]
-	fn iter_levels_and_iter_all_level_bboxes() {
-		let mut p = TilePyramid::new_empty();
-		p.insert_bbox(&bbox(3, 0, 0, 3, 3)).unwrap();
-		p.insert_bbox(&bbox(5, 0, 0, 5, 5)).unwrap();
-
+	fn iter_skips_empty_levels() {
+		let p = pyramid_from_bboxes(&[bbox(3, 0, 0, 3, 3), bbox(5, 0, 0, 5, 5)]);
 		assert_eq!(p.iter().filter(|c| !c.is_empty()).count(), 2);
 	}
 
-	#[test]
-	fn weighted_bbox_empty_errors() {
-		assert!(TilePyramid::new_empty().weighted_bbox().is_err());
-	}
-
-	#[test]
-	fn weighted_bbox_nonempty() {
-		let mut p = TilePyramid::new_empty();
-		p.insert_bbox(&bbox(5, 10, 10, 20, 20)).unwrap();
-		assert!(p.weighted_bbox().is_ok());
+	/// `weighted_bbox` — empty errors, single populated level returns that
+	/// level's bbox exactly.
+	#[rstest]
+	#[case::empty_errors(TilePyramid::new_empty(), None)]
+	#[case::single_level(pyramid_from_bboxes(&[bbox(5, 10, 10, 20, 20)]), Some(()))]
+	fn weighted_bbox_cases(#[case] p: TilePyramid, #[case] expect: Option<()>) {
+		match (p.weighted_bbox(), expect) {
+			(Ok(wb), Some(())) => {
+				// With only one populated level, the weighted average must match it.
+				let gb = p.geo_bbox().unwrap();
+				assert!((wb.x_min - gb.x_min).abs() < 1e-9);
+				assert!((wb.x_max - gb.x_max).abs() < 1e-9);
+				assert!((wb.y_min - gb.y_min).abs() < 1e-9);
+				assert!((wb.y_max - gb.y_max).abs() < 1e-9);
+			}
+			(Err(_), None) => {}
+			(got, want) => panic!("weighted_bbox mismatch: got={got:?}, expected some={}", want.is_some()),
+		}
 	}
 
 	#[test]
 	fn get_level_bbox_empty_level() {
-		let p = TilePyramid::new_empty();
-		let b = p.level_bbox(5);
-		assert!(b.is_empty());
+		assert!(TilePyramid::new_empty().level_bbox(5).is_empty());
 	}
 
 	// ── level_min / level_max across varying populations ────────────────────
-	#[rstest::rstest]
+	#[rstest]
 	#[case(&[3], Some(3), Some(3))]
 	#[case(&[5, 10], Some(5), Some(10))]
 	#[case(&[0, 15, 30], Some(0), Some(30))]
@@ -221,9 +246,7 @@ mod tests {
 
 	#[test]
 	fn to_iter_bboxes_has_31_entries_and_tracks_population() {
-		let mut p = TilePyramid::new_empty();
-		p.insert_bbox(&bbox(2, 0, 0, 1, 1)).unwrap();
-		p.insert_bbox(&bbox(5, 0, 0, 3, 3)).unwrap();
+		let p = pyramid_from_bboxes(&[bbox(2, 0, 0, 1, 1), bbox(5, 0, 0, 3, 3)]);
 		let bboxes: Vec<_> = p.to_iter_bboxes().collect();
 		assert_eq!(bboxes.len(), 31);
 		let populated: Vec<u8> = bboxes
@@ -236,31 +259,8 @@ mod tests {
 	}
 
 	#[test]
-	fn count_tiles_sums_all_levels() {
-		let mut p = TilePyramid::new_empty();
-		p.insert_bbox(&bbox(2, 0, 0, 1, 1)).unwrap(); // 4 tiles
-		p.insert_bbox(&bbox(3, 0, 0, 2, 2)).unwrap(); // 9 tiles
-		assert_eq!(p.count_tiles(), 13);
-	}
-
-	#[test]
-	fn weighted_bbox_for_single_level_equals_that_levels_bbox() {
-		let mut p = TilePyramid::new_empty();
-		p.insert_bbox(&bbox(5, 10, 10, 20, 20)).unwrap();
-		let wb = p.weighted_bbox().unwrap();
-		let gb = p.geo_bbox().unwrap();
-		// With only one populated level, the weighted average must equal it.
-		assert!((wb.x_min - gb.x_min).abs() < 1e-9);
-		assert!((wb.x_max - gb.x_max).abs() < 1e-9);
-		assert!((wb.y_min - gb.y_min).abs() < 1e-9);
-		assert!((wb.y_max - gb.y_max).abs() < 1e-9);
-	}
-
-	#[test]
-	fn iter_and_to_iter_match() {
-		let mut p = TilePyramid::new_empty();
-		p.insert_bbox(&bbox(3, 0, 0, 3, 3)).unwrap();
-		p.insert_bbox(&bbox(5, 0, 0, 3, 3)).unwrap();
+	fn iter_and_to_iter_yield_same_sequence() {
+		let p = pyramid_from_bboxes(&[bbox(3, 0, 0, 3, 3), bbox(5, 0, 0, 3, 3)]);
 		let a: Vec<_> = p.iter().cloned().collect();
 		let b: Vec<_> = p.to_iter().collect();
 		assert_eq!(a, b);

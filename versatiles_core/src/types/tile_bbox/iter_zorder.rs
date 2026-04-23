@@ -141,138 +141,108 @@ mod tests {
 	#[test]
 	fn zorder_iterator_empty_bbox() -> Result<()> {
 		let bb = TileBBox::new_empty(5)?;
-		let coords: Vec<_> = bb.iter_coords_zorder().collect();
-		assert!(coords.is_empty());
+		assert!(bb.iter_coords_zorder().next().is_none());
 		Ok(())
 	}
 
-	#[test]
-	fn zorder_iterator_single_tile() {
-		let bb = TileBBox::from_min_and_max(3, 5, 3, 5, 3).unwrap();
-		assert_eq!(
-			extract_tc(bb.iter_coords_zorder()),
-			&[
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· 00 ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··"
-			]
-		);
+	/// Z-order visit-order layouts for small 8×8 bboxes. Each `&[&str]` is a
+	/// row-by-row grid where `NN` is the iteration index and `··` is outside.
+	#[rstest]
+	#[case::single_tile(
+		TileBBox::from_min_and_max(3, 5, 3, 5, 3).unwrap(),
+		&[
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· 00 ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+		],
+	)]
+	#[case::at_origin_3x3(
+		TileBBox::from_min_and_max(3, 0, 0, 2, 2).unwrap(),
+		&[
+			"00 01 04 ·· ·· ·· ·· ··",
+			"02 03 05 ·· ·· ·· ·· ··",
+			"06 07 08 ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+		],
+	)]
+	#[case::y_offset_3x3(
+		TileBBox::from_min_and_max(3, 0, 1, 2, 3).unwrap(),
+		&[
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"00 01 02 ·· ·· ·· ·· ··",
+			"03 04 07 ·· ·· ·· ·· ··",
+			"05 06 08 ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+		],
+	)]
+	#[case::x_offset_3x3(
+		TileBBox::from_min_and_max(3, 1, 0, 3, 2).unwrap(),
+		&[
+			"·· 00 02 03 ·· ·· ·· ··",
+			"·· 01 04 05 ·· ·· ·· ··",
+			"·· 06 07 08 ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+		],
+	)]
+	#[case::offset_4x4(
+		TileBBox::from_min_and_max(3, 1, 1, 4, 4).unwrap(),
+		&[
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· 00 01 02 09 ·· ·· ··",
+			"·· 03 05 06 10 ·· ·· ··",
+			"·· 04 07 08 11 ·· ·· ··",
+			"·· 12 13 14 15 ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+			"·· ·· ·· ·· ·· ·· ·· ··",
+		],
+	)]
+	fn zorder_visit_order_layout(#[case] bb: TileBBox, #[case] expected: &[&str]) {
+		assert_eq!(extract_tc(bb.iter_coords_zorder()), expected);
 	}
 
-	#[test]
-	fn zorder_iterator_1() {
-		let bb = TileBBox::from_min_and_max(3, 0, 0, 2, 2).unwrap();
-		assert_eq!(
-			extract_tc(bb.iter_coords_zorder()),
-			&[
-				"00 01 04 ·· ·· ·· ·· ··",
-				"02 03 05 ·· ·· ·· ·· ··",
-				"06 07 08 ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··"
-			]
-		);
-	}
-
-	#[test]
-	fn zorder_iterator_2() {
-		let bb = TileBBox::from_min_and_max(3, 0, 1, 2, 3).unwrap();
-		assert_eq!(
-			extract_tc(bb.iter_coords_zorder()),
-			&[
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"00 01 02 ·· ·· ·· ·· ··",
-				"03 04 07 ·· ·· ·· ·· ··",
-				"05 06 08 ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··"
-			]
-		);
-	}
-
-	#[test]
-	fn zorder_iterator_3() {
-		let bb = TileBBox::from_min_and_max(3, 1, 0, 3, 2).unwrap();
-		assert_eq!(
-			extract_tc(bb.iter_coords_zorder()),
-			&[
-				"·· 00 02 03 ·· ·· ·· ··",
-				"·· 01 04 05 ·· ·· ·· ··",
-				"·· 06 07 08 ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··"
-			]
-		);
-	}
-
-	#[test]
-	fn zorder_iterator_offset_bbox_3() {
-		let bb = TileBBox::from_min_and_max(3, 1, 1, 4, 4).unwrap();
-		assert_eq!(
-			extract_tc(bb.iter_coords_zorder()),
-			&[
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· 00 01 02 09 ·· ·· ··",
-				"·· 03 05 06 10 ·· ·· ··",
-				"·· 04 07 08 11 ·· ·· ··",
-				"·· 12 13 14 15 ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··",
-				"·· ·· ·· ·· ·· ·· ·· ··"
-			]
-		);
-	}
-
+	/// `iter_coords_zorder` yields the same set as `iter_coords` (just in a
+	/// different order) — count must equal `count_tiles`, and both variants
+	/// (`&self` and owned) produce identical sequences.
 	#[rstest]
 	#[case(3, 0, 0, 7, 7)]
 	#[case(4, 2, 5, 4, 6)]
 	#[case(5, 10, 20, 15, 25)]
-	fn zorder_count_matches_rowmajor(#[case] z: u8, #[case] x0: u32, #[case] y0: u32, #[case] x1: u32, #[case] y1: u32) {
-		let bb = TileBBox::from_min_and_max(z, x0, y0, x1, y1).unwrap();
-
-		let mut zorder: Vec<_> = bb.iter_coords_zorder().collect();
-		let mut rowmajor: Vec<_> = bb.iter_coords().collect();
-
-		assert_eq!(
-			zorder.len() as u64,
-			bb.count_tiles(),
-			"count mismatch for bbox ({x0},{y0})-({x1},{y1}) at z{z}"
-		);
-
-		zorder.sort_by_key(|c| (c.y, c.x));
-		rowmajor.sort_by_key(|c| (c.y, c.x));
-		assert_eq!(zorder, rowmajor);
-	}
-
-	#[rstest]
-	#[case(3, 0, 0, 7, 7)]
-	#[case(4, 2, 5, 4, 6)]
-	#[case(5, 10, 20, 15, 25)]
-	fn into_iter_coords_zorder_matches(
+	fn zorder_matches_rowmajor_as_set(
 		#[case] z: u8,
 		#[case] x0: u32,
 		#[case] y0: u32,
 		#[case] x1: u32,
 		#[case] y1: u32,
-	) -> Result<()> {
-		let bb = TileBBox::from_min_and_max(z, x0, y0, x1, y1)?;
-		let a: Vec<_> = bb.iter_coords_zorder().collect();
-		let b: Vec<_> = bb.into_iter_coords_zorder().collect();
-		assert_eq!(a, b);
-		Ok(())
+	) {
+		let bb = TileBBox::from_min_and_max(z, x0, y0, x1, y1).unwrap();
+
+		let zorder: Vec<_> = bb.iter_coords_zorder().collect();
+		let owned: Vec<_> = bb.into_iter_coords_zorder().collect();
+		assert_eq!(zorder, owned, "&self and owned variants must match");
+		assert_eq!(zorder.len() as u64, bb.count_tiles());
+
+		let mut z_sorted = zorder.clone();
+		let mut r_sorted: Vec<_> = bb.iter_coords().collect();
+		z_sorted.sort_by_key(|c| (c.y, c.x));
+		r_sorted.sort_by_key(|c| (c.y, c.x));
+		assert_eq!(z_sorted, r_sorted, "same set as row-major");
 	}
 
 	#[test]
