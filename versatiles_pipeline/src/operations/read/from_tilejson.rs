@@ -169,6 +169,12 @@ fn is_retryable_error(err: &reqwest::Error) -> bool {
 	err.is_connect() || err.is_timeout() || err.is_body()
 }
 
+/// Exponential backoff unit for retry waits (seconds in prod, ms in tests).
+#[cfg(not(test))]
+const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_secs(1 << exp);
+#[cfg(test)]
+const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_millis(1 << exp);
+
 async fn fetch_tile(
 	client: reqwest::Client,
 	template: String,
@@ -181,7 +187,7 @@ async fn fetch_tile(
 
 	for attempt in 0..=max_retries {
 		if attempt > 0 {
-			let backoff = Duration::from_secs(1 << (attempt - 1));
+			let backoff = BACKOFF(attempt - 1);
 			log::warn!("retry attempt {attempt}/{max_retries} fetching tile {coord:?} from '{url}', waiting {backoff:?}");
 			sleep(backoff).await;
 		}
