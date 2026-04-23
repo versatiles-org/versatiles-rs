@@ -134,6 +134,9 @@ pub struct MessageData {
 type ProgressCallback = ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false, true>;
 type MessageCallback = ThreadsafeFunction<MessageData, Unknown<'static>, MessageData, Status, false, true>;
 
+type ProgressListenerFn = Box<dyn Fn(ProgressData) + Send + Sync + 'static>;
+type MessageListenerFn = Box<dyn Fn(MessageData) + Send + Sync + 'static>;
+
 /// Progress monitor for long-running operations
 ///
 /// This class allows monitoring the progress of tile conversion and other
@@ -141,9 +144,10 @@ type MessageCallback = ThreadsafeFunction<MessageData, Unknown<'static>, Message
 #[napi]
 #[derive(Clone)]
 pub struct Progress {
-	// Event listeners with typed callbacks
-	progress_listeners: Arc<Mutex<Vec<ProgressCallback>>>,
-	message_listeners: Arc<Mutex<Vec<MessageCallback>>>,
+	// Event listeners stored as generic callable closures so that non-napi
+	// callers (e.g. unit tests) can register listeners too.
+	progress_listeners: Arc<Mutex<Vec<ProgressListenerFn>>>,
+	message_listeners: Arc<Mutex<Vec<MessageListenerFn>>>,
 }
 
 #[napi]
@@ -172,16 +176,14 @@ impl Progress {
 	/// The eta field is a JavaScript Date object representing the estimated time of completion.
 	#[napi(ts_args_type = "callback: (data: ProgressData) => void")]
 	pub fn on_progress(&self, callback: Function<'static>) -> Result<&Self> {
-		let tsfn = callback
+		let tsfn: ProgressCallback = callback
 			.build_threadsafe_function::<ProgressData>()
 			.weak::<true>()
 			.build_callback(|ctx| Ok(ctx.value))?;
-		let mut listeners = self
-			.progress_listeners
-			.lock()
-			.map_err(|_| anyhow::anyhow!("progress listeners mutex poisoned"))
-			.to_napi()?;
-		listeners.push(tsfn);
+		let listener: ProgressListenerFn = Box::new(move |data| {
+			let _ = tsfn.call(data, ThreadsafeFunctionCallMode::NonBlocking);
+		});
+		self.push_progress_listener(listener).to_napi()?;
 		Ok(self)
 	}
 
@@ -190,26 +192,47 @@ impl Progress {
 	/// The callback receives (type, message) where type is 'step', 'warning', or 'error'
 	#[napi(ts_args_type = "callback: (type: string, message: string) => void")]
 	pub fn on_message(&self, callback: Function<'static>) -> Result<&Self> {
-		let tsfn = callback
+		let tsfn: MessageCallback = callback
 			.build_threadsafe_function::<MessageData>()
 			.weak::<true>()
 			.build_callback(|ctx| Ok(ctx.value))?;
-		let mut listeners = self
-			.message_listeners
-			.lock()
-			.map_err(|_| anyhow::anyhow!("message listeners mutex poisoned"))
-			.to_napi()?;
-		listeners.push(tsfn);
+		let listener: MessageListenerFn = Box::new(move |data| {
+			let _ = tsfn.call(data, ThreadsafeFunctionCallMode::NonBlocking);
+		});
+		self.push_message_listener(listener).to_napi()?;
 		Ok(self)
 	}
 }
 
 impl Progress {
+	/// Append a progress listener to the internal list.
+	///
+	/// Split out so non-napi callers (tests) can exercise the mutex-and-push
+	/// logic without needing a JS [`Function`].
+	fn push_progress_listener(&self, listener: ProgressListenerFn) -> anyhow::Result<()> {
+		let mut listeners = self
+			.progress_listeners
+			.lock()
+			.map_err(|_| anyhow::anyhow!("progress listeners mutex poisoned"))?;
+		listeners.push(listener);
+		Ok(())
+	}
+
+	/// Append a message listener to the internal list. See [`Self::push_progress_listener`].
+	fn push_message_listener(&self, listener: MessageListenerFn) -> anyhow::Result<()> {
+		let mut listeners = self
+			.message_listeners
+			.lock()
+			.map_err(|_| anyhow::anyhow!("message listeners mutex poisoned"))?;
+		listeners.push(listener);
+		Ok(())
+	}
+
 	/// Emit a progress event to all registered listeners
 	pub fn emit_progress(&self, data: &ProgressData) {
 		let listeners = self.progress_listeners.lock().expect("poisoned mutex");
 		for listener in listeners.iter() {
-			let _ = listener.call(data.clone(), ThreadsafeFunctionCallMode::NonBlocking);
+			listener(data.clone());
 		}
 	}
 
@@ -217,13 +240,10 @@ impl Progress {
 	fn emit_message(&self, msg_type: &str, message: &str) {
 		let listeners = self.message_listeners.lock().expect("poisoned mutex");
 		for listener in listeners.iter() {
-			let _ = listener.call(
-				MessageData {
-					msg_type: msg_type.to_string(),
-					message: message.to_string(),
-				},
-				ThreadsafeFunctionCallMode::NonBlocking,
-			);
+			listener(MessageData {
+				msg_type: msg_type.to_string(),
+				message: message.to_string(),
+			});
 		}
 	}
 
@@ -901,5 +921,295 @@ mod tests {
 		for handle in handles {
 			handle.join().unwrap();
 		}
+	}
+
+	// ========================================================================
+	// Tests covering the non-napi portions of on_progress / on_message and
+	// the listener-dispatch path inside emit_progress / emit_message.
+	// The napi Function -> ThreadsafeFunction conversion cannot be exercised
+	// without a JS runtime, so the listener-registration logic is split out
+	// into push_progress_listener / push_message_listener so it can be tested
+	// with plain Rust closures here.
+	// ========================================================================
+
+	use std::sync::atomic::{AtomicUsize, Ordering};
+
+	#[test]
+	fn test_on_progress_registers_listener_and_emits() {
+		// Exercises the same mutex-lock-and-push path taken by on_progress.
+		let progress = Progress::new();
+		let received = Arc::new(Mutex::new(Vec::<ProgressData>::new()));
+
+		let received_clone = Arc::clone(&received);
+		progress
+			.push_progress_listener(Box::new(move |data| {
+				received_clone.lock().unwrap().push(data);
+			}))
+			.unwrap();
+
+		// Listener must be registered.
+		assert_eq!(progress.progress_listeners.lock().unwrap().len(), 1);
+
+		let data = ProgressData {
+			position: 42.0,
+			total: 100.0,
+			percentage: 42.0,
+			speed: 3.45,
+			estimated_seconds_remaining: Some(9.0),
+			eta_timestamp: Some(1_700_000_000_000.0),
+			message: Some("halfway".to_string()),
+		};
+		progress.emit_progress(&data);
+
+		let received = received.lock().unwrap();
+		assert_eq!(received.len(), 1);
+		assert_relative_eq!(received[0].position, 42.0);
+		assert_relative_eq!(received[0].percentage, 42.0);
+		assert_eq!(received[0].message, Some("halfway".to_string()));
+	}
+
+	#[test]
+	fn test_on_progress_multiple_listeners_all_invoked() {
+		let progress = Progress::new();
+		let count_a = Arc::new(AtomicUsize::new(0));
+		let count_b = Arc::new(AtomicUsize::new(0));
+		let count_c = Arc::new(AtomicUsize::new(0));
+
+		for counter in [&count_a, &count_b, &count_c] {
+			let counter = Arc::clone(counter);
+			progress
+				.push_progress_listener(Box::new(move |_| {
+					counter.fetch_add(1, Ordering::SeqCst);
+				}))
+				.unwrap();
+		}
+		assert_eq!(progress.progress_listeners.lock().unwrap().len(), 3);
+
+		let data = ProgressData {
+			position: 1.0,
+			total: 10.0,
+			percentage: 10.0,
+			speed: 1.0,
+			estimated_seconds_remaining: None,
+			eta_timestamp: None,
+			message: None,
+		};
+		progress.emit_progress(&data);
+		progress.emit_progress(&data);
+
+		assert_eq!(count_a.load(Ordering::SeqCst), 2);
+		assert_eq!(count_b.load(Ordering::SeqCst), 2);
+		assert_eq!(count_c.load(Ordering::SeqCst), 2);
+	}
+
+	#[test]
+	fn test_on_progress_shared_via_clone() {
+		// A listener registered on one Progress instance must fire for its
+		// clones, since they share the underlying Arc<Mutex<...>>.
+		let progress1 = Progress::new();
+		let progress2 = progress1.clone();
+
+		let calls = Arc::new(AtomicUsize::new(0));
+		let calls_clone = Arc::clone(&calls);
+		progress1
+			.push_progress_listener(Box::new(move |_| {
+				calls_clone.fetch_add(1, Ordering::SeqCst);
+			}))
+			.unwrap();
+
+		let data = ProgressData {
+			position: 0.0,
+			total: 1.0,
+			percentage: 0.0,
+			speed: 0.0,
+			estimated_seconds_remaining: None,
+			eta_timestamp: None,
+			message: None,
+		};
+		progress2.emit_progress(&data);
+		assert_eq!(calls.load(Ordering::SeqCst), 1);
+	}
+
+	#[test]
+	fn test_on_message_registers_listener_and_emits_step() {
+		let progress = Progress::new();
+		let received = Arc::new(Mutex::new(Vec::<MessageData>::new()));
+
+		let received_clone = Arc::clone(&received);
+		progress
+			.push_message_listener(Box::new(move |msg| {
+				received_clone.lock().unwrap().push(msg);
+			}))
+			.unwrap();
+
+		assert_eq!(progress.message_listeners.lock().unwrap().len(), 1);
+
+		progress.emit_step("loading");
+		let received = received.lock().unwrap();
+		assert_eq!(received.len(), 1);
+		assert_eq!(received[0].msg_type, "step");
+		assert_eq!(received[0].message, "loading");
+	}
+
+	#[test]
+	fn test_on_message_captures_all_types() {
+		// emit_step / emit_warning / emit_error all funnel through emit_message,
+		// so a single listener should see all three with the right msg_type.
+		let progress = Progress::new();
+		let received = Arc::new(Mutex::new(Vec::<MessageData>::new()));
+
+		let received_clone = Arc::clone(&received);
+		progress
+			.push_message_listener(Box::new(move |msg| {
+				received_clone.lock().unwrap().push(msg);
+			}))
+			.unwrap();
+
+		progress.emit_step("step-msg");
+		progress.emit_warning("warn-msg");
+		progress.emit_error("err-msg");
+
+		let received = received.lock().unwrap();
+		assert_eq!(received.len(), 3);
+		assert_eq!(received[0].msg_type, "step");
+		assert_eq!(received[0].message, "step-msg");
+		assert_eq!(received[1].msg_type, "warning");
+		assert_eq!(received[1].message, "warn-msg");
+		assert_eq!(received[2].msg_type, "error");
+		assert_eq!(received[2].message, "err-msg");
+	}
+
+	#[test]
+	fn test_on_message_multiple_listeners_all_invoked() {
+		let progress = Progress::new();
+		let count_a = Arc::new(AtomicUsize::new(0));
+		let count_b = Arc::new(AtomicUsize::new(0));
+
+		for counter in [&count_a, &count_b] {
+			let counter = Arc::clone(counter);
+			progress
+				.push_message_listener(Box::new(move |_| {
+					counter.fetch_add(1, Ordering::SeqCst);
+				}))
+				.unwrap();
+		}
+		assert_eq!(progress.message_listeners.lock().unwrap().len(), 2);
+
+		progress.emit_step("one");
+		progress.emit_warning("two");
+		progress.emit_error("three");
+
+		assert_eq!(count_a.load(Ordering::SeqCst), 3);
+		assert_eq!(count_b.load(Ordering::SeqCst), 3);
+	}
+
+	#[test]
+	fn test_on_message_shared_via_clone() {
+		let progress1 = Progress::new();
+		let progress2 = progress1.clone();
+
+		let last = Arc::new(Mutex::new(None::<MessageData>));
+		let last_clone = Arc::clone(&last);
+		progress2
+			.push_message_listener(Box::new(move |msg| {
+				*last_clone.lock().unwrap() = Some(msg);
+			}))
+			.unwrap();
+
+		progress1.emit_warning("shared");
+
+		let last = last.lock().unwrap();
+		let msg = last.as_ref().unwrap();
+		assert_eq!(msg.msg_type, "warning");
+		assert_eq!(msg.message, "shared");
+	}
+
+	#[test]
+	fn test_listener_order_preserved() {
+		// Listeners should be invoked in registration order.
+		let progress = Progress::new();
+		let order = Arc::new(Mutex::new(Vec::<u32>::new()));
+
+		for id in [1u32, 2, 3, 4] {
+			let order_clone = Arc::clone(&order);
+			progress
+				.push_progress_listener(Box::new(move |_| {
+					order_clone.lock().unwrap().push(id);
+				}))
+				.unwrap();
+		}
+
+		let data = ProgressData {
+			position: 0.0,
+			total: 1.0,
+			percentage: 0.0,
+			speed: 0.0,
+			estimated_seconds_remaining: None,
+			eta_timestamp: None,
+			message: None,
+		};
+		progress.emit_progress(&data);
+
+		assert_eq!(*order.lock().unwrap(), vec![1, 2, 3, 4]);
+	}
+
+	#[test]
+	fn test_concurrent_listener_registration_and_emit() {
+		// Listener registration and emission are protected by a Mutex; adding
+		// listeners from one thread while another emits should be safe and all
+		// callbacks fired after registration should observe subsequent emits.
+		use std::thread;
+
+		let progress = Arc::new(Progress::new());
+		let calls = Arc::new(AtomicUsize::new(0));
+
+		let reg_progress = Arc::clone(&progress);
+		let reg_calls = Arc::clone(&calls);
+		let reg = thread::spawn(move || {
+			for _ in 0..20 {
+				let c = Arc::clone(&reg_calls);
+				reg_progress
+					.push_progress_listener(Box::new(move |_| {
+						c.fetch_add(1, Ordering::SeqCst);
+					}))
+					.unwrap();
+			}
+		});
+
+		let emit_progress_ref = Arc::clone(&progress);
+		let emitter = thread::spawn(move || {
+			let data = ProgressData {
+				position: 0.0,
+				total: 1.0,
+				percentage: 0.0,
+				speed: 0.0,
+				estimated_seconds_remaining: None,
+				eta_timestamp: None,
+				message: None,
+			};
+			for _ in 0..50 {
+				emit_progress_ref.emit_progress(&data);
+			}
+		});
+
+		reg.join().unwrap();
+		emitter.join().unwrap();
+
+		// Final emit with all 20 listeners registered.
+		let data = ProgressData {
+			position: 0.0,
+			total: 1.0,
+			percentage: 0.0,
+			speed: 0.0,
+			estimated_seconds_remaining: None,
+			eta_timestamp: None,
+			message: None,
+		};
+		let before = calls.load(Ordering::SeqCst);
+		progress.emit_progress(&data);
+		let after = calls.load(Ordering::SeqCst);
+
+		// The final emit must invoke exactly 20 listeners (the number we added).
+		assert_eq!(after - before, 20);
 	}
 }
