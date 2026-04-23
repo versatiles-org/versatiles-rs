@@ -32,7 +32,7 @@ use versatiles_geometry::{
 ///   vector_filter_features layer=["poi"]   expr="population >= 1000"
 ///   vector_filter_features layer=["road"]  expr="highway in ['primary','secondary']"
 ///   vector_filter_features layer=["place"] expr="name.matches('^St\\.')"
-///   vector_filter_features layer=["poi"]   expr="has(name) && name != ''"
+///   vector_filter_features layer=["poi"]   expr="name != null && name != ''"
 ///   vector_filter_features layer=["addr"]  expr="props['addr:street'] == 'Hauptstr.'"
 struct Args {
 	/// Layers the expression applies to, as a VPL array of strings.
@@ -43,8 +43,9 @@ struct Args {
 	/// CEL (Common Expression Language) boolean expression.
 	/// Feature properties are available as `props["key"]`; properties whose names are
 	/// valid CEL identifiers (letters, digits, underscore) are also exposed as top-level
-	/// identifiers. Missing keys resolve to null; use `has(name)` for explicit presence
-	/// checks. See `versatiles help` for a CEL operator cheat-sheet.
+	/// identifiers. Missing keys resolve to null; use `name != null` (for identifier-safe
+	/// keys) or `has(props.key)` (for any key) for explicit presence checks.
+	/// See `versatiles help` for a CEL operator cheat-sheet.
 	expr: String,
 }
 
