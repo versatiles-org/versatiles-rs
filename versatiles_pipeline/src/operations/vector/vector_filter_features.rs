@@ -194,7 +194,7 @@ mod tests {
 		VectorTileLayer::from_features(name.to_string(), features, 4096, 1).unwrap()
 	}
 
-	fn run_expr(layers: Vec<&str>, expr: &str, tile: VectorTile) -> Result<Option<VectorTile>> {
+	fn run_expr(layers: &[&str], expr: &str, tile: VectorTile) -> Result<Option<VectorTile>> {
 		let runner = Runner::from_args(&Args {
 			layer: layers.iter().map(|s| (*s).to_string()).collect(),
 			expr: expr.to_string(),
@@ -250,7 +250,7 @@ mod tests {
 				feature(vec![("population", GeoValue::Int(2000))]),
 			],
 		)]);
-		let out = run_expr(vec!["poi"], "population >= 1000", tile).unwrap().unwrap();
+		let out = run_expr(&["poi"], "population >= 1000", tile).unwrap().unwrap();
 		assert_eq!(summarise(&out), vec![("poi".to_string(), 1)]);
 	}
 
@@ -264,7 +264,7 @@ mod tests {
 			],
 		)]);
 		// All drop: tile becomes empty → Ok(None).
-		let out = run_expr(vec!["poi"], "population >= 1000", tile).unwrap();
+		let out = run_expr(&["poi"], "population >= 1000", tile).unwrap();
 		assert!(out.is_none());
 	}
 
@@ -275,7 +275,7 @@ mod tests {
 			layer("road", vec![feature(vec![("highway", GeoValue::from("service"))])]),
 		]);
 		// `expr` would drop the poi feature by `population < 1000`, but road is out of scope and untouched.
-		let out = run_expr(vec!["road"], "highway == 'primary'", tile).unwrap().unwrap();
+		let out = run_expr(&["road"], "highway == 'primary'", tile).unwrap().unwrap();
 		// road feature does not match so road drops; poi (out of scope) passes through intact.
 		assert_eq!(summarise(&out), vec![("poi".to_string(), 1)]);
 	}
@@ -287,7 +287,7 @@ mod tests {
 			layer("road", vec![feature(vec![("highway", GeoValue::from("primary"))])]),
 		]);
 		// poi predicate drops its only feature; road is out of scope and survives.
-		let out = run_expr(vec!["poi"], "population >= 1000", tile).unwrap().unwrap();
+		let out = run_expr(&["poi"], "population >= 1000", tile).unwrap().unwrap();
 		assert_eq!(summarise(&out), vec![("road".to_string(), 1)]);
 	}
 
@@ -297,7 +297,7 @@ mod tests {
 			"poi",
 			vec![feature(vec![("population", GeoValue::Int(10))])],
 		)]);
-		let out = run_expr(vec!["poi"], "population >= 1000", tile).unwrap();
+		let out = run_expr(&["poi"], "population >= 1000", tile).unwrap();
 		assert!(out.is_none(), "all layers filtered empty should drop the tile");
 	}
 
@@ -305,7 +305,7 @@ mod tests {
 	fn test_missing_property_is_dropped() {
 		// Feature lacks `population`; `name == ...` expression has nothing to match against.
 		let tile = VectorTile::new(vec![layer("poi", vec![feature(vec![("other", GeoValue::from("x"))])])]);
-		let out = run_expr(vec!["poi"], "population >= 1000", tile).unwrap();
+		let out = run_expr(&["poi"], "population >= 1000", tile).unwrap();
 		assert!(out.is_none());
 	}
 
@@ -319,7 +319,7 @@ mod tests {
 				feature(vec![("name", GeoValue::from("Berlin"))]),
 			],
 		)]);
-		let out = run_expr(vec!["poi"], "name == null || name == 'Berlin'", tile)
+		let out = run_expr(&["poi"], "name == null || name == 'Berlin'", tile)
 			.unwrap()
 			.unwrap();
 		assert_eq!(summarise(&out), vec![("poi".to_string(), 2)]);
@@ -335,7 +335,7 @@ mod tests {
 				feature(vec![("other", GeoValue::from("x"))]),
 			],
 		)]);
-		let out = run_expr(vec!["addr"], "'addr:street' in props", tile).unwrap().unwrap();
+		let out = run_expr(&["addr"], "'addr:street' in props", tile).unwrap().unwrap();
 		assert_eq!(summarise(&out), vec![("addr".to_string(), 1)]);
 	}
 
@@ -348,7 +348,7 @@ mod tests {
 				feature(vec![("other", GeoValue::from("x"))]), // name missing
 			],
 		)]);
-		let out = run_expr(vec!["poi"], "has(props.name)", tile).unwrap().unwrap();
+		let out = run_expr(&["poi"], "has(props.name)", tile).unwrap().unwrap();
 		assert_eq!(summarise(&out), vec![("poi".to_string(), 1)]);
 	}
 
@@ -361,7 +361,7 @@ mod tests {
 				feature(vec![("addr:street", GeoValue::from("Nebenstr."))]),
 			],
 		)]);
-		let out = run_expr(vec!["addr"], "props['addr:street'] == 'Hauptstr.'", tile)
+		let out = run_expr(&["addr"], "props['addr:street'] == 'Hauptstr.'", tile)
 			.unwrap()
 			.unwrap();
 		assert_eq!(summarise(&out), vec![("addr".to_string(), 1)]);
@@ -377,7 +377,7 @@ mod tests {
 				feature(vec![("highway", GeoValue::from("secondary"))]),
 			],
 		)]);
-		let out = run_expr(vec!["road"], "highway in ['primary','secondary']", tile)
+		let out = run_expr(&["road"], "highway in ['primary','secondary']", tile)
 			.unwrap()
 			.unwrap();
 		assert_eq!(summarise(&out), vec![("road".to_string(), 2)]);
@@ -393,9 +393,7 @@ mod tests {
 				feature(vec![("name", GeoValue::from("St. Gallen"))]),
 			],
 		)]);
-		let out = run_expr(vec!["place"], r#"name.matches('^St\\.')"#, tile)
-			.unwrap()
-			.unwrap();
+		let out = run_expr(&["place"], r"name.matches('^St\\.')", tile).unwrap().unwrap();
 		assert_eq!(summarise(&out), vec![("place".to_string(), 2)]);
 	}
 
