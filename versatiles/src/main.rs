@@ -119,23 +119,26 @@ enum Commands {
 	Dev(tools::dev::Subcommand),
 }
 
-/// Main function for running the command-line interface
-fn main() {
-	let cli = Cli::parse();
-
-	// Initialize logger and set log level based on verbosity flag
-	let verbosity = i16::from(cli.verbose) - i16::from(cli.quiet);
-	let log_level = match verbosity {
+/// Map the `-v`/`-q` verbosity counters to a `LevelFilter`.
+///
+/// Each `-v` increases the level, each `-q` decreases it. `Info` is the
+/// baseline; below `Error` the logger is turned off entirely.
+fn log_level_from_verbosity(verbose: u8, quiet: u8) -> LevelFilter {
+	let verbosity = i16::from(verbose) - i16::from(quiet);
+	match verbosity {
 		i16::MIN..-2 => LevelFilter::Off,
 		-2 => LevelFilter::Error,
 		-1 => LevelFilter::Warn,
 		0 => LevelFilter::Info,
 		1 => LevelFilter::Debug,
 		2..=i16::MAX => LevelFilter::Trace,
-	};
+	}
+}
 
+/// Initialize the global logger with the given level and the CLI's line format.
+fn init_logger(level: LevelFilter) {
 	env_logger::Builder::new()
-		.filter_level(log_level)
+		.filter_level(level)
 		.format(|buf, record| {
 			let level = record.level();
 			let prefix = match level {
@@ -150,23 +153,36 @@ fn main() {
 			writeln!(buf, "{style}{prefix}{style:#}{args}")
 		})
 		.init();
+}
 
-	let runtime = {
-		let mut builder = create_runtime_builder();
-		if let Some(cache_dir) = &cli.cache_dir {
-			builder = builder.with_disk_cache(cache_dir);
-		}
-		if let Some(ssh_identity) = &cli.ssh_identity {
-			builder = builder.ssh_identity(ssh_identity.clone());
-		}
-		builder.build()
-	};
+/// Build the tiles runtime honoring the global CLI flags.
+fn build_runtime(cli: &Cli) -> TilesRuntime {
+	let mut builder = create_runtime_builder();
+	if let Some(cache_dir) = &cli.cache_dir {
+		builder = builder.with_disk_cache(cache_dir);
+	}
+	if let Some(ssh_identity) = &cli.ssh_identity {
+		builder = builder.ssh_identity(ssh_identity.clone());
+	}
+	builder.build()
+}
+
+/// Format an error and its cause chain to `out` as the CLI would print it.
+fn report_error<W: Write>(err: &anyhow::Error, out: &mut W) {
+	let _ = writeln!(out, "\nError: {err}");
+	for cause in err.chain().skip(1) {
+		let _ = writeln!(out, "  Caused by: {cause}");
+	}
+}
+
+/// Main function for running the command-line interface
+fn main() {
+	let cli = Cli::parse();
+	init_logger(log_level_from_verbosity(cli.verbose, cli.quiet));
+	let runtime = build_runtime(&cli);
 
 	if let Err(err) = run(&cli, &runtime) {
-		eprintln!("\nError: {err}");
-		for cause in err.chain().skip(1) {
-			eprintln!("  Caused by: {cause}");
-		}
+		report_error(&err, &mut std::io::stderr());
 		std::process::exit(1);
 	}
 }
@@ -351,5 +367,104 @@ mod tests {
 		])?;
 		assert!(output.exists(), "convert should produce output file");
 		Ok(())
+	}
+
+	// ------------------------------------------------------------------------
+	// Tests for extracted helpers (log_level_from_verbosity, build_runtime,
+	// report_error) — these cover the logic that used to live inline in
+	// `fn main()` and that `cargo test` can't reach via the binary entrypoint.
+	// ------------------------------------------------------------------------
+
+	#[rstest::rstest]
+	#[case(0, 10, LevelFilter::Off)]
+	#[case(0, 3, LevelFilter::Off)]
+	#[case(0, 2, LevelFilter::Error)]
+	#[case(0, 1, LevelFilter::Warn)]
+	#[case(0, 0, LevelFilter::Info)]
+	#[case(1, 0, LevelFilter::Debug)]
+	#[case(2, 0, LevelFilter::Trace)]
+	#[case(10, 0, LevelFilter::Trace)]
+	// -v and -q cancel out.
+	#[case(3, 3, LevelFilter::Info)]
+	// Simultaneous flags are rejected at parse time by clap, so we only
+	// exercise the mapping logic here.
+	fn log_level_mapping(#[case] verbose: u8, #[case] quiet: u8, #[case] expected: LevelFilter) {
+		assert_eq!(log_level_from_verbosity(verbose, quiet), expected);
+	}
+
+	#[test]
+	fn build_runtime_defaults() {
+		let cli = Cli::try_parse_from(vec!["versatiles", "help", "source"]).unwrap();
+		// Just verify the builder path runs end-to-end without panicking.
+		let _runtime = build_runtime(&cli);
+	}
+
+	#[test]
+	fn build_runtime_with_cache_dir() -> Result<()> {
+		let tmp = tempfile::TempDir::new()?;
+		let cli = Cli::try_parse_from(vec![
+			"versatiles",
+			"--cache-dir",
+			tmp.path().to_str().unwrap(),
+			"help",
+			"source",
+		])
+		.unwrap();
+		let _runtime = build_runtime(&cli);
+		Ok(())
+	}
+
+	#[test]
+	fn build_runtime_with_ssh_identity() {
+		// The path need not exist — the runtime builder only stores it; ssh
+		// auth is deferred until a sftp:// source is opened.
+		let cli = Cli::try_parse_from(vec![
+			"versatiles",
+			"--ssh-identity",
+			"/tmp/nonexistent_id_ed25519",
+			"help",
+			"source",
+		])
+		.unwrap();
+		let _runtime = build_runtime(&cli);
+	}
+
+	#[test]
+	fn report_error_single_error() {
+		let err = anyhow::anyhow!("disk is full");
+		let mut buf = Vec::<u8>::new();
+		report_error(&err, &mut buf);
+		let out = String::from_utf8(buf).unwrap();
+		assert_eq!(out, "\nError: disk is full\n");
+	}
+
+	#[test]
+	fn report_error_includes_cause_chain() {
+		let err = anyhow::anyhow!("root cause")
+			.context("middle layer")
+			.context("top-level failure");
+		let mut buf = Vec::<u8>::new();
+		report_error(&err, &mut buf);
+		let out = String::from_utf8(buf).unwrap();
+
+		assert!(out.starts_with("\nError: top-level failure\n"), "got: {out:?}");
+		assert!(out.contains("  Caused by: middle layer\n"), "got: {out:?}");
+		assert!(out.contains("  Caused by: root cause\n"), "got: {out:?}");
+	}
+
+	/// Exercises the `Commands::Mosaic` dispatch branch in `run()`. Clap
+	/// accepts the arg shape; the tool then errors on the non-existent
+	/// inputs. We only need the dispatch branch to fire, so any Err from
+	/// `run_command` is fine.
+	#[test]
+	fn mosaic_subcommand_dispatches_through_run() {
+		let result = run_command(vec![
+			"versatiles",
+			"mosaic",
+			"assemble",
+			"/nonexistent/input.versatiles",
+			"/nonexistent/output.versatiles",
+		]);
+		assert!(result.is_err(), "expected tool to fail on missing inputs");
 	}
 }
