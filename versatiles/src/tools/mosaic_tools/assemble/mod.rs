@@ -7,16 +7,17 @@
 //! - **Empty** tiles are skipped.
 //! - **Translucent** tiles are recorded as `(TileCoord, Vec<source_index>)`.
 //!
-//! **Between passes** — coords already in `done` are removed, tiles are collapsed
-//! into signature groups (by source set) and partitioned into batches via PCA-based
-//! recursive bisection, bounded by `--max-buffer-size`.
+//! **Between passes** — coords already in `done` are removed; the remaining tiles
+//! are packed greedily into batches. Each batch is seeded with the tile needing the
+//! most sources, then filled with tiles that maximise source overlap, admission
+//! gated by the batch's peak in-memory footprint (`max_tiles_in_memory`) so it stays
+//! within `--max-buffer-size`.
 //!
 //! **Second pass** — for each batch, only the needed sources are opened. Tiles are
-//! composited onto a `TranslucentBuffer` and flushed to the sink once the batch is
-//! complete.
+//! composited onto a `TranslucentBuffer` and flushed to the sink as soon as their
+//! last contributing source has been processed, keeping peak memory bounded.
 
 mod cli;
-mod partitioning;
 mod pipeline;
 mod tiles;
 mod translucent_buffer;

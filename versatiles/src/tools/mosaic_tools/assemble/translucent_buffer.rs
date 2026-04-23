@@ -39,6 +39,7 @@ impl TranslucentBuffer {
 	}
 
 	/// Remove and return all entries.
+	#[cfg(test)]
 	pub fn drain(&self) -> HashMap<u64, (TileCoord, Tile)> {
 		self.inner.lock().expect("poisoned mutex").drain().collect()
 	}
@@ -46,6 +47,19 @@ impl TranslucentBuffer {
 	/// Remove a tile by its Hilbert key, returning `(coord, tile)` if present.
 	pub fn remove(&self, key: u64) -> Option<(TileCoord, Tile)> {
 		self.inner.lock().expect("poisoned mutex").remove(&key)
+	}
+
+	/// Remove every entry whose Hilbert key is in `keys`, returning the extracted
+	/// `(coord, tile)` pairs. The mutex is acquired exactly once.
+	pub fn remove_many(&self, keys: &[u64]) -> Vec<(TileCoord, Tile)> {
+		let mut inner = self.inner.lock().expect("poisoned mutex");
+		let mut out = Vec::with_capacity(keys.len());
+		for key in keys {
+			if let Some(entry) = inner.remove(key) {
+				out.push(entry);
+			}
+		}
+		out
 	}
 
 	/// Insert a tile. The key must be `coord.get_hilbert_index()`.

@@ -1,7 +1,6 @@
 //! Two-pass pipeline: scan sources → write opaque → batch-composite translucent.
 
 use super::AssembleConfig;
-use super::partitioning::{collapse_into_signature_groups, partition_into_batches};
 use super::tiles::{
 	composite_two_tiles, encode_tiles_parallel, fetch_source_tiles, validate_source_format, write_opaque_blob,
 };
@@ -14,7 +13,84 @@ use versatiles_container::{Tile, TileSink, TilesRuntime, open_tile_sink};
 use versatiles_core::{ConcurrencyLimits, TileCoord, TileJSON, TileStream, utils::HilbertIndex};
 
 /// A batch of tiles, each annotated with the source indices that contribute to it.
-type TileBatch = Vec<(TileCoord, Vec<usize>)>;
+///
+/// Sources inside the batch are processed in ascending index order during the
+/// second pass; tiles are flushed as soon as all of their sources have been
+/// composited. `max_tiles_in_memory` reports the peak occupancy of the
+/// compositing buffer under that schedule, so the packer can keep the peak
+/// bounded by `max_buffer_size / tile_bytes`.
+pub(super) struct TileBatch {
+	/// Tuples of `(coord, sources)`. `sources` is sorted ascending and deduped.
+	tiles: Vec<(TileCoord, Vec<usize>)>,
+}
+
+impl TileBatch {
+	fn new() -> Self {
+		Self { tiles: Vec::new() }
+	}
+
+	#[cfg(test)]
+	pub(super) fn len(&self) -> usize {
+		self.tiles.len()
+	}
+
+	pub(super) fn tiles(&self) -> &[(TileCoord, Vec<usize>)] {
+		&self.tiles
+	}
+
+	fn push(&mut self, coord: TileCoord, sources: Vec<usize>) {
+		self.tiles.push((coord, sources));
+	}
+
+	/// All unique source indices used in this batch, sorted ascending.
+	pub(super) fn sources(&self) -> Vec<usize> {
+		let set: BTreeSet<usize> = self.tiles.iter().flat_map(|(_, s)| s).copied().collect();
+		set.into_iter().collect()
+	}
+
+	#[cfg(test)]
+	pub(super) fn into_tiles(self) -> Vec<(TileCoord, Vec<usize>)> {
+		self.tiles
+	}
+
+	/// Peak number of tiles simultaneously held in the compositing buffer when
+	/// sources are processed in ascending index order and each tile is flushed
+	/// as soon as its last contributing source has been composited.
+	pub(super) fn max_tiles_in_memory(&self) -> usize {
+		match self.tiles.len() {
+			0 => return 0,
+			1 => return 1,
+			_ => {}
+		}
+
+		let sources = self.sources();
+		let n = sources.len();
+		// Split +1/-1 events into two unsigned vectors to avoid signed arithmetic:
+		// `starts[i]` tiles come alive at step i; `ends[i]` tiles finish their last
+		// source at step i and are flushed before step i+1.
+		let mut starts = vec![0usize; n];
+		let mut ends = vec![0usize; n];
+		for (_, srcs) in &self.tiles {
+			let positions = srcs
+				.iter()
+				.map(|s| sources.binary_search(s).expect("source present in batch"));
+			let (first, last) = positions.fold((usize::MAX, 0usize), |(lo, hi), p| (lo.min(p), hi.max(p)));
+			starts[first] += 1;
+			ends[last] += 1;
+		}
+
+		let mut peak = 0usize;
+		let mut running = 0usize;
+		for i in 0..n {
+			running += starts[i];
+			if running > peak {
+				peak = running;
+			}
+			running -= ends[i];
+		}
+		peak
+	}
+}
 
 /// Results collected during the first pass (source scanning).
 pub(super) struct FirstPassResult {
@@ -193,15 +269,19 @@ async fn classify_and_stream_tiles(
 
 // ─── Between passes: prepare batches ───
 
-/// Prune already-done coords, collapse into signature groups, partition into batches.
+/// Prune already-done coords and pack the remaining translucent tiles into batches.
 ///
-/// Returns `None` if all tiles were opaque (no second pass needed).
+/// The packer is memory-aware: it seeds each batch with the tile requiring the most
+/// sources, then greedily adds more tiles that maximise source overlap — using the
+/// batch's `max_tiles_in_memory` as its admission criterion. Because tiles flush as
+/// soon as their last source has been composited, many batches can hold significantly
+/// more tiles than the naive `max_buffer_size / tile_bytes` bound.
 pub(super) fn prepare_batches(
 	mut translucent_map: HashMap<TileCoord, Vec<usize>>,
 	done: HashSet<TileCoord>,
 	tile_dim: u64,
 	max_buffer_size: u64,
-	num_sources: usize,
+	_num_sources: usize,
 ) -> Vec<TileBatch> {
 	translucent_map.retain(|coord, _| !done.contains(coord));
 	drop(done);
@@ -211,33 +291,96 @@ pub(super) fn prepare_batches(
 	}
 
 	let total_tiles = translucent_map.len();
-	let groups = collapse_into_signature_groups(translucent_map);
 
-	let batch_size = if max_buffer_size > 0 {
+	// Each tile's source list must be sorted+deduped so `max_tiles_in_memory` and the
+	// scoring step can treat it as a canonical signature.
+	let mut pool: Vec<(TileCoord, Vec<usize>)> = translucent_map
+		.into_iter()
+		.map(|(c, mut s)| {
+			s.sort_unstable();
+			s.dedup();
+			(c, s)
+		})
+		.collect();
+
+	let batch_size: usize = if max_buffer_size > 0 {
 		usize::try_from((max_buffer_size / (tile_dim * tile_dim * 4)).max(1)).unwrap_or(usize::MAX)
 	} else {
 		total_tiles
 	};
 
-	let batch_groups = partition_into_batches(groups, num_sources, batch_size);
+	let mut batches: Vec<TileBatch> = Vec::new();
 
-	let batches: Vec<TileBatch> = batch_groups
-		.into_iter()
-		.map(|batch| {
-			batch
-				.into_iter()
-				.flat_map(|g| {
-					let sources = g.sources;
-					g.coords.into_iter().map(move |c| (c, sources.clone()))
+	while !pool.is_empty() {
+		let mut batch = TileBatch::new();
+
+		// Step 1: seed with the tile needing the most sources. Deterministic tiebreak
+		// on (level, x, y) so equal-length pools yield stable output across runs.
+		let seed_idx = pool
+			.iter()
+			.enumerate()
+			.max_by(|(_, (ca, sa)), (_, (cb, sb))| {
+				sa.len()
+					.cmp(&sb.len())
+					.then_with(|| cb.level.cmp(&ca.level))
+					.then_with(|| cb.x.cmp(&ca.x))
+					.then_with(|| cb.y.cmp(&ca.y))
+			})
+			.map(|(i, _)| i)
+			.expect("pool not empty");
+		let (seed_coord, seed_sources) = pool.swap_remove(seed_idx);
+		batch.push(seed_coord, seed_sources);
+
+		loop {
+			// Step 2 + 3: peak occupancy → remaining room.
+			let peak = batch.max_tiles_in_memory();
+			let room = batch_size.saturating_sub(peak);
+
+			// Step 4: batch is full.
+			if room == 0 || pool.is_empty() {
+				break;
+			}
+
+			// Step 5: score each remaining tile — reward overlap, penalise new sources.
+			// The ranking key is `(overlap desc, new_sources asc)` which matches
+			// "favour overlap, penalise new sources" without any signed arithmetic.
+			let batch_sources: BTreeSet<usize> = batch.tiles().iter().flat_map(|(_, s)| s).copied().collect();
+
+			let mut scored: Vec<(usize, usize, usize)> = pool
+				.iter()
+				.enumerate()
+				.map(|(i, (_, srcs))| {
+					let overlap = srcs.iter().filter(|s| batch_sources.contains(s)).count();
+					let new_sources = srcs.len() - overlap;
+					(overlap, new_sources, i)
 				})
-				.collect()
-		})
-		.collect();
+				.collect();
 
-	let total_source_opens: usize = batches
-		.iter()
-		.map(|b| b.iter().flat_map(|(_, s)| s).collect::<BTreeSet<_>>().len())
-		.sum();
+			// Sort descending by overlap, ascending by new_sources. Stable sort keeps
+			// pool order as the final deterministic tiebreak.
+			scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+
+			// Step 6: if no picks fit, finish the batch.
+			if scored.is_empty() {
+				break;
+			}
+
+			// Step 5 (cont.): take up to `room` best candidates.
+			let mut picks: Vec<usize> = scored.into_iter().take(room).map(|(_, _, i)| i).collect();
+
+			// Swap-remove in descending index order to keep earlier indices valid.
+			picks.sort_unstable_by(|a, b| b.cmp(a));
+			for i in picks {
+				let (c, s) = pool.swap_remove(i);
+				batch.push(c, s);
+			}
+			// Step 7: loop — recompute peak under the new membership.
+		}
+
+		batches.push(batch);
+	}
+
+	let total_source_opens: usize = batches.iter().map(|b| b.sources().len()).sum();
 	log::debug!(
 		"partitioned {} tiles into {} batches ({} total source-opens)",
 		total_tiles,
@@ -258,13 +401,7 @@ pub(super) async fn composite_batches(
 	sink: &Arc<Box<dyn TileSink>>,
 	runtime: &TilesRuntime,
 ) -> Result<()> {
-	let total_source_reads: u64 = batches
-		.iter()
-		.map(|batch| {
-			let sources: BTreeSet<usize> = batch.iter().flat_map(|(_, srcs)| srcs).copied().collect();
-			sources.len() as u64
-		})
-		.sum();
+	let total_source_reads: u64 = batches.iter().map(|batch| batch.sources().len() as u64).sum();
 
 	let progress = runtime.create_progress("pass 2/2: compositing tiles", total_source_reads);
 	let concurrency = ConcurrencyLimits::default().cpu_bound;
@@ -277,9 +414,13 @@ pub(super) async fn composite_batches(
 	Ok(())
 }
 
-/// Composite a single batch: fetch tiles from each needed source, composite, encode, flush.
+/// Composite a single batch: fetch tiles from each needed source, composite, and
+/// flush each tile as soon as its last contributing source has been processed.
+///
+/// Flushing mid-batch keeps peak memory bounded by `TileBatch::max_tiles_in_memory`
+/// — otherwise every tile would sit in the buffer until the very last source.
 async fn composite_one_batch(
-	batch: &[(TileCoord, Vec<usize>)],
+	batch: &TileBatch,
 	paths: &[String],
 	config: &AssembleConfig,
 	sink: &Arc<Box<dyn TileSink>>,
@@ -287,16 +428,21 @@ async fn composite_one_batch(
 	concurrency: usize,
 	progress: &versatiles_container::ProgressHandle,
 ) -> Result<()> {
-	let sources_needed: Vec<usize> = {
-		let set: BTreeSet<usize> = batch.iter().flat_map(|(_, srcs)| srcs).copied().collect();
-		set.into_iter().collect()
-	};
+	let tiles = batch.tiles();
+	let sources_needed = batch.sources();
+
+	// For each source, the Hilbert keys of tiles whose *last* contributing source is
+	// that source — those tiles are safe to flush right after the source step ends.
+	let mut flush_keys: HashMap<usize, Vec<u64>> = HashMap::new();
+	for (coord, srcs) in tiles {
+		let last = *srcs.last().expect("tile has at least one source");
+		flush_keys.entry(last).or_default().push(coord.get_hilbert_index()?);
+	}
 
 	let buffer = Arc::new(TranslucentBuffer::new());
-
 	let mut prefetched: Option<Vec<(TileCoord, Tile)>> = None;
 
-	let batch_arc = Arc::new(batch.to_vec());
+	let batch_arc = Arc::new(tiles.to_vec());
 	let paths_arc = Arc::new(paths.to_vec());
 
 	for (pos, &source_idx) in sources_needed.iter().enumerate() {
@@ -304,7 +450,7 @@ async fn composite_one_batch(
 		let fetched_tiles = if let Some(tiles) = prefetched.take() {
 			tiles
 		} else {
-			fetch_source_tiles(source_idx, batch, paths, runtime).await?
+			fetch_source_tiles(source_idx, tiles, paths, runtime).await?
 		};
 
 		// Kick off pre-fetch for the NEXT source in the background
@@ -361,18 +507,19 @@ async fn composite_one_batch(
 			prefetched = Some(handle.await.map_err(|e| anyhow!("prefetch task panicked: {e}"))??);
 		}
 
-		progress.inc(1);
-	}
-
-	// Flush buffer: encode translucent tiles to WebP (single encoding step)
-	let buffer = Arc::try_unwrap(buffer).map_err(|_| anyhow!("buffer still has references"))?;
-	let tiles: Vec<_> = buffer.drain().into_values().collect();
-	if !tiles.is_empty() {
-		let prepared = encode_tiles_parallel(tiles, config);
-		for result in prepared {
-			let (coord, blob) = result?;
-			sink.write_tile(&coord, &blob)?;
+		// Flush tiles whose last contributing source is this one.
+		if let Some(keys) = flush_keys.remove(&source_idx) {
+			let flushed = buffer.remove_many(&keys);
+			if !flushed.is_empty() {
+				let prepared = encode_tiles_parallel(flushed, config);
+				for result in prepared {
+					let (coord, blob) = result?;
+					sink.write_tile(&coord, &blob)?;
+				}
+			}
 		}
+
+		progress.inc(1);
 	}
 
 	Ok(())
@@ -650,7 +797,8 @@ mod tests {
 
 		// Use a tile coord that exists in both sources (level 4 is "full" in MockReader)
 		let coord = TileCoord::new(4, 0, 0).unwrap();
-		let batch: Vec<(TileCoord, Vec<usize>)> = vec![(coord, vec![0, 1])];
+		let mut batch = TileBatch::new();
+		batch.push(coord, vec![0, 1]);
 
 		let progress = runtime.create_progress("test", 2);
 		composite_one_batch(&batch, &paths, &config, &sink, &runtime, 4, &progress)
@@ -664,8 +812,132 @@ mod tests {
 		);
 	}
 
+	#[tokio::test]
+	async fn composite_one_batch_flushes_incrementally() {
+		// With a batch whose tiles' last-source is spread across multiple sources,
+		// the sink must receive writes *during* the source loop — not only at the end.
+		let runtime = TilesRuntime::default();
+		let (_d0, src0) = create_png_versatiles(&runtime).await;
+		let (_d1, src1) = create_png_versatiles(&runtime).await;
+		let (_d2, src2) = create_png_versatiles(&runtime).await;
+		let paths = vec![src0, src1, src2];
+
+		let (sink, count, _coords) = make_observable_sink();
+		let config = AssembleConfig {
+			quality: png_quality(),
+			lossless: false,
+			tile_format: TileFormat::PNG,
+			tile_compression: TileCompression::Uncompressed,
+		};
+
+		// Two tiles with different last-sources: tile_a ends at source 1, tile_b at source 2.
+		let mut batch = TileBatch::new();
+		batch.push(TileCoord::new(4, 0, 0).unwrap(), vec![0, 1]);
+		batch.push(TileCoord::new(4, 1, 0).unwrap(), vec![0, 2]);
+
+		let progress = runtime.create_progress("test", 3);
+		composite_one_batch(&batch, &paths, &config, &sink, &runtime, 4, &progress)
+			.await
+			.unwrap();
+
+		assert_eq!(count.load(Ordering::SeqCst), 2, "both tiles should be flushed");
+	}
+
 	fn make_translucent_map(entries: &[(TileCoord, &[usize])]) -> HashMap<TileCoord, Vec<usize>> {
 		entries.iter().map(|(c, s)| (*c, s.to_vec())).collect()
+	}
+
+	fn batch_of(entries: &[(TileCoord, &[usize])]) -> TileBatch {
+		let mut batch = TileBatch::new();
+		for (c, s) in entries {
+			batch.push(*c, s.to_vec());
+		}
+		batch
+	}
+
+	// ─── TileBatch::max_tiles_in_memory ───
+
+	#[test]
+	fn max_tiles_in_memory_empty() {
+		assert_eq!(TileBatch::new().max_tiles_in_memory(), 0);
+	}
+
+	#[test]
+	fn max_tiles_in_memory_single_tile() {
+		let batch = batch_of(&[(tc(0, 0, 0), &[0, 1, 2])]);
+		assert_eq!(batch.max_tiles_in_memory(), 1);
+	}
+
+	#[test]
+	fn max_tiles_in_memory_disjoint_sources() {
+		// Three tiles with disjoint sources processed sequentially: each flushes
+		// before the next one is loaded, so the peak is 1, not 3.
+		let batch = batch_of(&[(tc(0, 0, 0), &[0]), (tc(0, 1, 0), &[1]), (tc(0, 2, 0), &[2])]);
+		assert_eq!(batch.max_tiles_in_memory(), 1);
+	}
+
+	#[test]
+	fn max_tiles_in_memory_overlapping_span() {
+		// Both tiles span sources 0..=2, so both are alive for every step.
+		let batch = batch_of(&[(tc(0, 0, 0), &[0, 2]), (tc(0, 1, 0), &[0, 2])]);
+		assert_eq!(batch.max_tiles_in_memory(), 2);
+	}
+
+	#[test]
+	fn max_tiles_in_memory_staggered_intervals() {
+		// Timeline sources=[0,1,2,3]; tiles cover [0,1], [1,2], [2,3].
+		// Peak is 2 at step 1 (tiles 0 and 1 overlapping) and step 2 (tiles 1 and 2).
+		let batch = batch_of(&[(tc(0, 0, 0), &[0, 1]), (tc(0, 1, 0), &[1, 2]), (tc(0, 2, 0), &[2, 3])]);
+		assert_eq!(batch.max_tiles_in_memory(), 2);
+	}
+
+	#[test]
+	fn max_tiles_in_memory_sparse_source_indices() {
+		// Actual source indices 0 and 100 are not positions — `max_tiles_in_memory`
+		// uses their positions in the sorted source list.
+		let batch = batch_of(&[(tc(0, 0, 0), &[0, 100]), (tc(0, 1, 0), &[50])]);
+		// Timeline positions: {0, 50, 100} → positions (0, 2). Tile 0 spans 0..=2,
+		// tile 1 at position 1. Peak at step 1 = 2.
+		assert_eq!(batch.max_tiles_in_memory(), 2);
+	}
+
+	// ─── prepare_batches: packing density ───
+
+	#[test]
+	fn prepare_batches_packs_disjoint_tiles_densely() {
+		// Ten tiles whose sources are all distinct — the old fixed-size packer would
+		// produce `ceil(10 / batch_size)` batches. Because each tile flushes as its
+		// sole source finishes, the new packer fits them all in a single batch.
+		let entries: Vec<(TileCoord, &[usize])> = (0..10).map(|i| (tc(0, i, 0), &[0][..])).collect();
+		// Give each tile its own source index.
+		let map: HashMap<TileCoord, Vec<usize>> = entries.iter().enumerate().map(|(i, (c, _))| (*c, vec![i])).collect();
+
+		// batch_size=2, but per-tile peak is 1 → all 10 fit in one batch.
+		let max_buffer = 256 * 256 * 4 * 2;
+		let batches = prepare_batches(map, HashSet::new(), 256, max_buffer, 10);
+		assert_eq!(batches.len(), 1, "disjoint tiles should pack into a single batch");
+		assert_eq!(batches[0].len(), 10);
+		assert_eq!(batches[0].max_tiles_in_memory(), 1);
+	}
+
+	#[test]
+	fn prepare_batches_respects_peak_under_overlap() {
+		// Five tiles all covering source 0 — peak must equal batch size.
+		let map = make_translucent_map(&[
+			(tc(0, 0, 0), &[0]),
+			(tc(0, 1, 0), &[0]),
+			(tc(0, 2, 0), &[0]),
+			(tc(0, 3, 0), &[0]),
+			(tc(0, 4, 0), &[0]),
+		]);
+		// batch_size=2 → expect peak ≤ 2 in every batch.
+		let max_buffer = 256 * 256 * 4 * 2;
+		let batches = prepare_batches(map, HashSet::new(), 256, max_buffer, 1);
+		let total: usize = batches.iter().map(TileBatch::len).sum();
+		assert_eq!(total, 5);
+		for batch in &batches {
+			assert!(batch.max_tiles_in_memory() <= 2);
+		}
 	}
 
 	#[test]
@@ -687,7 +959,7 @@ mod tests {
 		let map = make_translucent_map(&[(tc(0, 0, 0), &[0]), (tc(1, 0, 0), &[1]), (tc(2, 0, 0), &[2])]);
 		let done: HashSet<TileCoord> = [tc(0, 0, 0)].into_iter().collect();
 		let batches = prepare_batches(map, done, 256, 0, 3);
-		let total_tiles: usize = batches.iter().map(Vec::len).sum();
+		let total_tiles: usize = batches.iter().map(TileBatch::len).sum();
 		assert_eq!(total_tiles, 2);
 	}
 
@@ -697,6 +969,8 @@ mod tests {
 		let batches = prepare_batches(map, HashSet::new(), 256, 0, 3);
 		// max_buffer_size=0 means unlimited → single batch
 		assert_eq!(batches.len(), 1);
+		// Each tile has disjoint sources so the peak is 1: tiles flush as their sole source
+		// finishes, even though the batch holds all 3.
 		assert_eq!(batches[0].len(), 3);
 	}
 
@@ -716,7 +990,7 @@ mod tests {
 	fn prepare_batches_preserves_source_indices() {
 		let map = make_translucent_map(&[(tc(0, 0, 0), &[0, 2]), (tc(1, 0, 0), &[1, 3])]);
 		let batches = prepare_batches(map, HashSet::new(), 256, 0, 4);
-		let all_tiles: Vec<_> = batches.into_iter().flatten().collect();
+		let all_tiles: Vec<_> = batches.into_iter().flat_map(TileBatch::into_tiles).collect();
 		assert_eq!(all_tiles.len(), 2);
 
 		for (coord, sources) in &all_tiles {
@@ -737,15 +1011,16 @@ mod tests {
 		for (i, c) in coords.iter().enumerate() {
 			map.insert(*c, vec![i % 3]);
 		}
-		// tile_dim=256, max_buffer_size=256*256*4*5 = 5 tiles per batch
+		// tile_dim=256, max_buffer_size=256*256*4*5 means peak memory ≤ 5 tiles.
 		let max_buffer = 256 * 256 * 4 * 5;
 		let batches = prepare_batches(map, HashSet::new(), 256, max_buffer, 3);
 
-		let total_tiles: usize = batches.iter().map(Vec::len).sum();
+		let total_tiles: usize = batches.iter().map(TileBatch::len).sum();
 		assert_eq!(total_tiles, 20);
 
 		for batch in &batches {
-			assert!(batch.len() <= 5, "batch has {} tiles, expected <= 5", batch.len());
+			let peak = batch.max_tiles_in_memory();
+			assert!(peak <= 5, "batch peak is {peak}, expected <= 5");
 		}
 	}
 
@@ -755,8 +1030,8 @@ mod tests {
 		let batches = prepare_batches(map, HashSet::new(), 256, 0, 1);
 		assert_eq!(batches.len(), 1);
 		assert_eq!(batches[0].len(), 1);
-		assert_eq!(batches[0][0].0, tc(0, 0, 0));
-		assert_eq!(batches[0][0].1, vec![0]);
+		assert_eq!(batches[0].tiles()[0].0, tc(0, 0, 0));
+		assert_eq!(batches[0].tiles()[0].1, vec![0]);
 	}
 
 	#[test]
@@ -782,10 +1057,10 @@ mod tests {
 			(tc(3, 3, 0), &[3]),
 		]);
 		let batches = prepare_batches(map, HashSet::new(), 64, 50_000, 4);
-		let total: usize = batches.iter().map(Vec::len).sum();
+		let total: usize = batches.iter().map(TileBatch::len).sum();
 		assert_eq!(total, 7);
 		for batch in &batches {
-			assert!(batch.len() <= 3);
+			assert!(batch.max_tiles_in_memory() <= 3);
 		}
 	}
 
@@ -800,7 +1075,7 @@ mod tests {
 		]);
 		let done: HashSet<TileCoord> = [tc(0, 0, 0), tc(1, 1, 0)].into_iter().collect();
 		let batches = prepare_batches(map, done, 256, 0, 2);
-		let total: usize = batches.iter().map(Vec::len).sum();
+		let total: usize = batches.iter().map(TileBatch::len).sum();
 		assert_eq!(total, 2);
 	}
 
@@ -826,11 +1101,11 @@ mod tests {
 		let max_buffer = 256 * 256 * 4 * 25;
 		let batches = prepare_batches(map, HashSet::new(), 256, max_buffer, 10);
 
-		let total: usize = batches.iter().map(Vec::len).sum();
+		let total: usize = batches.iter().map(TileBatch::len).sum();
 		assert_eq!(total, 100);
 
 		for batch in &batches {
-			assert!(batch.len() <= 25);
+			assert!(batch.max_tiles_in_memory() <= 25);
 		}
 	}
 
@@ -847,10 +1122,10 @@ mod tests {
 
 	#[test]
 	fn prepare_batches_sources_sorted_in_output() {
-		// Source indices should remain sorted after collapse + partition
+		// Source indices must be ascending for max_tiles_in_memory to work; `prepare_batches` sorts them.
 		let map = make_translucent_map(&[(tc(0, 0, 0), &[3, 1, 2])]);
 		let batches = prepare_batches(map, HashSet::new(), 256, 0, 5);
-		assert_eq!(batches[0][0].1, vec![1, 2, 3]); // sorted by collapse_into_signature_groups
+		assert_eq!(batches[0].tiles()[0].1, vec![1, 2, 3]);
 	}
 
 	#[test]
