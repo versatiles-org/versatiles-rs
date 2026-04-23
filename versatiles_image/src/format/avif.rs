@@ -88,7 +88,7 @@ mod tests {
 	/// AVIF encoding smoke tests: verify byte‑size ratios for our synthetic patterns
 	/// and validate the explicit error for the unsupported "lossless" path.
 	use super::*;
-	use crate::traits::DynamicImageTraitTest;
+	use crate::traits::{DynamicImageTraitConvert, DynamicImageTraitTest};
 	use approx::assert_relative_eq;
 	use rstest::rstest;
 
@@ -138,26 +138,21 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn encode_with_custom_effort() -> Result<()> {
-		let img = DynamicImage::new_test_rgb();
-		// Effort 100 maps to encoder speed 1 (slowest/best)
-		let blob_slow = encode(&img, Some(80), Some(100))?;
-		// Effort 0 maps to encoder speed 10 (fastest)
-		let blob_fast = encode(&img, Some(80), Some(0))?;
-		// Both should produce valid output
-		assert!(!blob_slow.is_empty());
-		assert!(!blob_fast.is_empty());
-		Ok(())
-	}
-
-	#[test]
-	fn encode_effort_edge_cases() -> Result<()> {
-		let img = DynamicImage::new_test_rgb();
-		// Test effort boundaries
-		assert!(encode(&img, Some(80), Some(0)).is_ok());
-		assert!(encode(&img, Some(80), Some(50)).is_ok());
-		assert!(encode(&img, Some(80), Some(100)).is_ok());
+	/// `encode` accepts any `effort` in 0..=100 and produces non-empty output.
+	///
+	/// Effort 100 maps to encoder speed 1 (slowest) and effort 0 to speed 10
+	/// (fastest). We cover both boundaries and the midpoint on a single tiny
+	/// image to keep the test fast — the underlying AVIF library is expensive
+	/// at high effort.
+	#[rstest]
+	#[case::fastest(0)]
+	#[case::middle(50)]
+	#[case::slowest(100)]
+	fn encode_accepts_valid_effort(#[case] effort: u8) -> Result<()> {
+		#[allow(clippy::cast_possible_truncation)]
+		let img = DynamicImage::from_fn(32, 32, |x, y| [x as u8, (255 - x) as u8, y as u8]);
+		let blob = encode(&img, Some(80), Some(effort))?;
+		assert!(!blob.is_empty());
 		Ok(())
 	}
 
