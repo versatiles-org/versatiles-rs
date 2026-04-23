@@ -6,7 +6,7 @@
 //! transform or regroup values across levels.
 
 use crate::{TileBBox, TileCoord, TileStream};
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use std::fmt::Debug;
 use versatiles_derive::context;
 
@@ -152,6 +152,10 @@ impl<I> TileBBoxMap<I> {
 	where
 		I: Clone,
 	{
+		ensure!(
+			self.bbox.level() > 0,
+			"cannot decrease level: bbox is already at level 0"
+		);
 		let bbox1 = self.bbox.leveled_down();
 		let mut container1 = TileBBoxMap::<Vec<(TileCoord, I)>>::new_default(bbox1)?;
 		for (i, item) in self.vec.into_iter().enumerate() {
