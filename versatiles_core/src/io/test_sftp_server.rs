@@ -4,9 +4,45 @@
 use reqwest::Url;
 use russh::{
 	Channel, ChannelId,
-	keys::{Algorithm, PrivateKey, ssh_key::rand_core::OsRng},
+	keys::{
+		Algorithm, PrivateKey,
+		ssh_key::rand_core::{TryCryptoRng, TryRng},
+	},
 	server::{self, Auth, Msg, Session},
 };
+
+/// Test-only OS-backed RNG that satisfies `PrivateKey::random`'s `CryptoRng` bound.
+///
+/// rand_core 0.10 (used by russh's forked ssh-key) no longer re-exports `OsRng`, so
+/// we provide a minimal `/dev/urandom`-backed adapter. Implementing `TryRng<Error =
+/// Infallible>` + `TryCryptoRng` is enough — rand_core's blanket impls give us
+/// `Rng` + `CryptoRng` automatically.
+struct OsRng;
+
+impl TryRng for OsRng {
+	type Error = std::convert::Infallible;
+
+	fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+		let mut b = [0u8; 4];
+		self.try_fill_bytes(&mut b)?;
+		Ok(u32::from_ne_bytes(b))
+	}
+
+	fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+		let mut b = [0u8; 8];
+		self.try_fill_bytes(&mut b)?;
+		Ok(u64::from_ne_bytes(b))
+	}
+
+	fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
+		use std::io::Read;
+		let mut f = std::fs::File::open("/dev/urandom").expect("test OsRng: open /dev/urandom");
+		f.read_exact(dst).expect("test OsRng: read /dev/urandom");
+		Ok(())
+	}
+}
+
+impl TryCryptoRng for OsRng {}
 use russh_sftp::protocol::{Attrs, Data, FileAttributes, Handle, OpenFlags, Status, StatusCode, Version};
 use std::{
 	collections::HashMap,
