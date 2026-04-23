@@ -62,8 +62,17 @@ struct Runner {
 
 impl Runner {
 	pub fn from_args(args: &Args) -> Result<Self> {
-		let program =
-			Program::compile(&args.expr).map_err(|e| anyhow!("Failed to compile CEL expression `{}`: {e}", args.expr))?;
+		// `cel-parser 0.10.1` panics on some malformed inputs instead of returning ParseErrors.
+		// Containing the panic here keeps a bad expression from taking down the whole pipeline
+		// and preserves our contract: CEL errors surface cleanly at build time.
+		let program = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Program::compile(&args.expr)))
+			.map_err(|_| {
+				anyhow!(
+					"Failed to compile CEL expression `{}`: parser panicked on malformed input",
+					args.expr
+				)
+			})?
+			.map_err(|e| anyhow!("Failed to compile CEL expression `{}`: {e}", args.expr))?;
 
 		let refs = program.references();
 		let binds_props = refs.has_variable("props");
@@ -160,5 +169,237 @@ impl TransformOperationFactoryTrait for Factory {
 	) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		build_transform::<Runner>(source, Runner::from_args(&args)?).await
+	}
+}
+
+// ───────────────────────── TESTS ─────────────────────────
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use pretty_assertions::assert_eq;
+	use versatiles_core::TileBBox;
+	use versatiles_geometry::{
+		geo::{GeoFeature, Geometry},
+		vector_tile::VectorTileLayer,
+	};
+
+	fn feature(props: Vec<(&str, GeoValue)>) -> GeoFeature {
+		let mut f = GeoFeature::new(Geometry::new_example());
+		f.properties = GeoProperties::from(props);
+		f
+	}
+
+	fn layer(name: &str, features: Vec<GeoFeature>) -> VectorTileLayer {
+		VectorTileLayer::from_features(name.to_string(), features, 4096, 1).unwrap()
+	}
+
+	fn run_expr(layers: Vec<&str>, expr: &str, tile: VectorTile) -> Result<Option<VectorTile>> {
+		let runner = Runner::from_args(&Args {
+			layer: layers.iter().map(|s| (*s).to_string()).collect(),
+			expr: expr.to_string(),
+		})?;
+		runner.run(tile)
+	}
+
+	/// Returns `(layer_name, feature_count)` pairs, sorted by layer name.
+	fn summarise(tile: &VectorTile) -> Vec<(String, usize)> {
+		let mut s: Vec<_> = tile.layers.iter().map(|l| (l.name.clone(), l.features.len())).collect();
+		s.sort();
+		s
+	}
+
+	#[test]
+	fn test_args_requires_layer_and_expr() {
+		let n = VPLNode::try_from_str(r#"vector_filter_features expr="true""#).unwrap();
+		assert!(Args::from_vpl_node(&n).is_err());
+
+		let n = VPLNode::try_from_str(r#"vector_filter_features layer=["poi"]"#).unwrap();
+		assert!(Args::from_vpl_node(&n).is_err());
+	}
+
+	#[test]
+	fn test_args_parses_layer_array() {
+		let n = VPLNode::try_from_str(r#"vector_filter_features layer=["poi","place"] expr="true""#).unwrap();
+		let a = Args::from_vpl_node(&n).unwrap();
+		assert_eq!(a.layer, vec!["poi".to_string(), "place".to_string()]);
+		assert_eq!(a.expr, "true");
+	}
+
+	#[test]
+	fn test_expr_compile_error_surfaces_at_from_args() {
+		let err = Runner::from_args(&Args {
+			layer: vec!["x".into()],
+			expr: "population >=".into(), // incomplete expression
+		})
+		.unwrap_err();
+		let msg = err.to_string();
+		assert!(msg.contains("CEL"), "message should mention CEL: {msg}");
+		assert!(
+			msg.contains("population >="),
+			"message should echo the expression: {msg}"
+		);
+	}
+
+	#[test]
+	fn test_keeps_feature_when_predicate_true() {
+		let tile = VectorTile::new(vec![layer(
+			"poi",
+			vec![
+				feature(vec![("population", GeoValue::Int(500))]),
+				feature(vec![("population", GeoValue::Int(2000))]),
+			],
+		)]);
+		let out = run_expr(vec!["poi"], "population >= 1000", tile).unwrap().unwrap();
+		assert_eq!(summarise(&out), vec![("poi".to_string(), 1)]);
+	}
+
+	#[test]
+	fn test_drops_feature_when_predicate_false() {
+		let tile = VectorTile::new(vec![layer(
+			"poi",
+			vec![
+				feature(vec![("population", GeoValue::Int(500))]),
+				feature(vec![("population", GeoValue::Int(600))]),
+			],
+		)]);
+		// All drop: tile becomes empty → Ok(None).
+		let out = run_expr(vec!["poi"], "population >= 1000", tile).unwrap();
+		assert!(out.is_none());
+	}
+
+	#[test]
+	fn test_out_of_scope_layer_untouched() {
+		let tile = VectorTile::new(vec![
+			layer("poi", vec![feature(vec![("population", GeoValue::Int(10))])]),
+			layer("road", vec![feature(vec![("highway", GeoValue::from("service"))])]),
+		]);
+		// `expr` would drop the poi feature by `population < 1000`, but road is out of scope and untouched.
+		let out = run_expr(vec!["road"], "highway == 'primary'", tile).unwrap().unwrap();
+		// road feature does not match so road drops; poi (out of scope) passes through intact.
+		assert_eq!(summarise(&out), vec![("poi".to_string(), 1)]);
+	}
+
+	#[test]
+	fn test_drops_empty_layer_but_keeps_others() {
+		let tile = VectorTile::new(vec![
+			layer("poi", vec![feature(vec![("population", GeoValue::Int(10))])]),
+			layer("road", vec![feature(vec![("highway", GeoValue::from("primary"))])]),
+		]);
+		// poi predicate drops its only feature; road is out of scope and survives.
+		let out = run_expr(vec!["poi"], "population >= 1000", tile).unwrap().unwrap();
+		assert_eq!(summarise(&out), vec![("road".to_string(), 1)]);
+	}
+
+	#[test]
+	fn test_drops_empty_tile_when_all_layers_empty() {
+		let tile = VectorTile::new(vec![layer(
+			"poi",
+			vec![feature(vec![("population", GeoValue::Int(10))])],
+		)]);
+		let out = run_expr(vec!["poi"], "population >= 1000", tile).unwrap();
+		assert!(out.is_none(), "all layers filtered empty should drop the tile");
+	}
+
+	#[test]
+	fn test_missing_property_is_dropped() {
+		// Feature lacks `population`; `name == ...` expression has nothing to match against.
+		let tile = VectorTile::new(vec![layer("poi", vec![feature(vec![("other", GeoValue::from("x"))])])]);
+		let out = run_expr(vec!["poi"], "population >= 1000", tile).unwrap();
+		assert!(out.is_none());
+	}
+
+	#[test]
+	fn test_missing_property_with_null_check_keeps_feature() {
+		// Users can keep features whose property is missing by comparing to null.
+		let tile = VectorTile::new(vec![layer(
+			"poi",
+			vec![
+				feature(vec![("other", GeoValue::from("x"))]), // `name` missing → Null
+				feature(vec![("name", GeoValue::from("Berlin"))]),
+			],
+		)]);
+		let out = run_expr(vec!["poi"], "name == null || name == 'Berlin'", tile)
+			.unwrap()
+			.unwrap();
+		assert_eq!(summarise(&out), vec![("poi".to_string(), 2)]);
+	}
+
+	#[test]
+	fn test_special_char_property_via_props_map() {
+		let tile = VectorTile::new(vec![layer(
+			"addr",
+			vec![
+				feature(vec![("addr:street", GeoValue::from("Hauptstr."))]),
+				feature(vec![("addr:street", GeoValue::from("Nebenstr."))]),
+			],
+		)]);
+		let out = run_expr(vec!["addr"], "props['addr:street'] == 'Hauptstr.'", tile)
+			.unwrap()
+			.unwrap();
+		assert_eq!(summarise(&out), vec![("addr".to_string(), 1)]);
+	}
+
+	#[test]
+	fn test_in_operator() {
+		let tile = VectorTile::new(vec![layer(
+			"road",
+			vec![
+				feature(vec![("highway", GeoValue::from("primary"))]),
+				feature(vec![("highway", GeoValue::from("residential"))]),
+				feature(vec![("highway", GeoValue::from("secondary"))]),
+			],
+		)]);
+		let out = run_expr(vec!["road"], "highway in ['primary','secondary']", tile)
+			.unwrap()
+			.unwrap();
+		assert_eq!(summarise(&out), vec![("road".to_string(), 2)]);
+	}
+
+	#[test]
+	fn test_matches_operator() {
+		let tile = VectorTile::new(vec![layer(
+			"place",
+			vec![
+				feature(vec![("name", GeoValue::from("St. Mary"))]),
+				feature(vec![("name", GeoValue::from("Berlin"))]),
+				feature(vec![("name", GeoValue::from("St. Gallen"))]),
+			],
+		)]);
+		let out = run_expr(vec!["place"], r#"name.matches('^St\\.')"#, tile)
+			.unwrap()
+			.unwrap();
+		assert_eq!(summarise(&out), vec![("place".to_string(), 2)]);
+	}
+
+	/// End-to-end via PipelineFactory: parses VPL, builds the op, streams tiles,
+	/// and checks the transformed output.
+	#[tokio::test]
+	async fn test_integration_via_vpl() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+
+		// `from_debug format=mvt` produces layers: background, debug_x, debug_y, debug_z.
+		// Apply the filter only to debug_x; other layers should pass through.
+		let op = factory
+			.operation_from_vpl(r#"from_debug format=mvt | vector_filter_features layer=["debug_x"] expr="false""#)
+			.await?;
+
+		let mut stream = op.tile_stream(TileBBox::new_full(0)?).await?;
+		let tile = stream.next().await.unwrap().1.into_vector()?;
+		let summary: Vec<String> = tile.layers.iter().map(|l| l.name.clone()).collect();
+
+		// debug_x should be gone; others remain.
+		assert!(!summary.contains(&"debug_x".to_string()), "debug_x should be dropped");
+		assert!(summary.contains(&"debug_y".to_string()));
+		assert!(summary.contains(&"debug_z".to_string()));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_integration_compile_error_surfaces() {
+		let factory = PipelineFactory::new_dummy();
+		let result = factory
+			.operation_from_vpl(r#"from_debug format=mvt | vector_filter_features layer=["debug_x"] expr="population >=""#)
+			.await;
+		assert!(result.is_err(), "invalid CEL should fail at pipeline build time");
 	}
 }
