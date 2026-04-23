@@ -213,7 +213,7 @@ mod tests {
 				&Traversal::ANY,
 				|_bbox, stream| {
 					Box::pin(async move {
-						stream.for_each_async(|_, _| sleep_micros(100000)).await;
+						stream.for_each_async(|_, _| sleep_micros(10000)).await;
 						Ok(())
 					})
 				},
