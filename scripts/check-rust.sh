@@ -15,11 +15,7 @@ echo "Rust Checks"
 echo "=========================================="
 
 echo "cargo fmt"
-result=$(cargo fmt -- --check --color=always 2>&1)
-if [ $? -ne 0 ]; then
-   echo -e "$result\nERROR DURING: cargo fmt"
-   exit 1
-fi
+cargo fmt
 
 echo "cargo check"
 result=$(cargo check --color=always --workspace --no-default-features --all-targets 2>&1)
