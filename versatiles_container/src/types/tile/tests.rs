@@ -344,3 +344,36 @@ fn debug_shows_core_fields_for_vector_content_only() -> Result<()> {
 	);
 	Ok(())
 }
+
+#[test]
+fn estimated_heap_size_reflects_blob_and_content_presence() -> Result<()> {
+	// From image: content present, no blob.
+	let mut tile_from_image = Tile::from_image(tiny_rgb_image(), PNG)?;
+	let s_content_only = tile_from_image.estimated_heap_size();
+	assert_eq!(s_content_only, 512 * 512 * 4);
+
+	// Materialize blob — both should contribute.
+	let _ = tile_from_image.as_blob(&Uncompressed)?;
+	let s_both = tile_from_image.estimated_heap_size();
+	assert!(s_both > s_content_only);
+
+	// Blob only (no content).
+	let blob_only = Tile::from_blob(Blob::from(vec![0u8; 42]), Uncompressed, BIN);
+	assert_eq!(blob_only.estimated_heap_size(), 42);
+	Ok(())
+}
+
+#[test]
+fn set_format_quality_and_effort_roundtrip() -> Result<()> {
+	let mut tile = Tile::from_image(tiny_rgb_image(), PNG)?;
+	tile.set_format_quality(Some(7));
+	tile.set_format_effort(Some(3));
+	assert_eq!(tile.format_quality, Some(7));
+	assert_eq!(tile.format_effort, Some(3));
+
+	tile.set_format_quality(None);
+	tile.set_format_effort(None);
+	assert_eq!(tile.format_quality, None);
+	assert_eq!(tile.format_effort, None);
+	Ok(())
+}

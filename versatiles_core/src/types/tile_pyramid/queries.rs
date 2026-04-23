@@ -265,4 +265,21 @@ mod tests {
 		let b: Vec<_> = p.to_iter().collect();
 		assert_eq!(a, b);
 	}
+
+	#[test]
+	fn level_mut_allows_in_place_modification() {
+		let mut p = pyramid_from_bboxes(&[bbox(4, 0, 0, 3, 3)]);
+		let cover = p.level_mut(4);
+		cover.intersect_bbox(&bbox(4, 2, 2, 3, 3)).unwrap();
+		assert_eq!(p.level_ref(4).count_tiles(), 4);
+	}
+
+	#[test]
+	fn iter_mut_can_mutate_all_levels() {
+		let mut p = pyramid_from_bboxes(&[bbox(3, 0, 0, 3, 3), bbox(4, 0, 0, 7, 7)]);
+		for cover in p.iter_mut() {
+			*cover = TileCover::new_empty(cover.level()).unwrap();
+		}
+		assert!(p.is_empty());
+	}
 }

@@ -127,4 +127,41 @@ mod tests {
 		assert_eq!(a, b);
 		assert_eq!(b, c);
 	}
+
+	#[rstest]
+	#[case::f64_256(256.0_f64, Some(TileSize::Size256))]
+	#[case::f64_512(512.0_f64, Some(TileSize::Size512))]
+	#[case::f64_invalid(128.0_f64, None)]
+	fn try_from_f64(#[case] input: f64, #[case] expected: Option<TileSize>) {
+		let result = TileSize::try_from(input);
+		match expected {
+			Some(e) => assert_eq!(result.unwrap(), e),
+			None => assert!(result.is_err()),
+		}
+	}
+
+	#[rstest]
+	#[case::u16_256(256_u16, Some(TileSize::Size256))]
+	#[case::u16_512(512_u16, Some(TileSize::Size512))]
+	#[case::u16_invalid(128_u16, None)]
+	fn try_from_u16(#[case] input: u16, #[case] expected: Option<TileSize>) {
+		let result = TileSize::try_from(input);
+		match expected {
+			Some(e) => assert_eq!(result.unwrap(), e),
+			None => assert!(result.is_err()),
+		}
+	}
+
+	#[rstest]
+	#[case::u32_256(256_u32, Some(TileSize::Size256))]
+	#[case::u32_512(512_u32, Some(TileSize::Size512))]
+	#[case::u32_too_large(1_000_000_u32, None)]
+	#[case::u32_invalid(128_u32, None)]
+	fn try_from_u32(#[case] input: u32, #[case] expected: Option<TileSize>) {
+		let result = TileSize::try_from(input);
+		match expected {
+			Some(e) => assert_eq!(result.unwrap(), e),
+			None => assert!(result.is_err()),
+		}
+	}
 }

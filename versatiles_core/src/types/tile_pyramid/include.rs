@@ -80,4 +80,21 @@ mod tests {
 	fn includes_pyramid_cases(#[case] a: TilePyramid, #[case] b: TilePyramid, #[case] expected: bool) {
 		assert_eq!(a.includes_pyramid(&b), expected);
 	}
+
+	/// Pyramid with bbox(5, 0,0,15,15) at z=5. Test tree inclusion.
+	#[rstest]
+	#[case::subset_tree(TileQuadtree::from_bbox(&bbox(5, 2, 2, 8, 8)), true)]
+	#[case::tree_extends_beyond(TileQuadtree::from_bbox(&bbox(5, 10, 10, 20, 20)), false)]
+	fn includes_tree_cases(#[case] tree: TileQuadtree, #[case] expected: bool) {
+		assert_eq!(pyramid_from(bbox(5, 0, 0, 15, 15)).includes_tree(&tree), expected);
+	}
+
+	/// Pyramid with bbox(5, 0,0,15,15) at z=5. Test cover inclusion across variants.
+	#[rstest]
+	#[case::subset_bbox_cover(TileCover::from(bbox(5, 2, 2, 8, 8)), true)]
+	#[case::subset_tree_cover(TileCover::from(TileQuadtree::from_bbox(&bbox(5, 2, 2, 8, 8))), true)]
+	#[case::cover_extends_beyond(TileCover::from(bbox(5, 10, 10, 20, 20)), false)]
+	fn includes_cover_cases(#[case] cover: TileCover, #[case] expected: bool) {
+		assert_eq!(pyramid_from(bbox(5, 0, 0, 15, 15)).includes_cover(&cover), expected);
+	}
 }

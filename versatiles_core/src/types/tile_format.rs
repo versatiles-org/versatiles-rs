@@ -556,4 +556,24 @@ mod tests {
 	fn should_get_type_return_expected(#[case] format: TileFormat, #[case] expected: TileType) {
 		assert_eq!(format.to_type(), expected);
 	}
+
+	#[rstest]
+	#[case(AVIF, true, false)]
+	#[case(BIN, false, false)]
+	#[case(GEOJSON, false, false)]
+	#[case(JPG, true, false)]
+	#[case(JSON, false, false)]
+	#[case(MVT, false, true)]
+	#[case(PNG, true, false)]
+	#[case(SVG, false, false)]
+	#[case(TOPOJSON, false, false)]
+	#[case(WEBP, true, false)]
+	fn is_raster_and_is_vector_classify_correctly(
+		#[case] format: TileFormat,
+		#[case] expect_raster: bool,
+		#[case] expect_vector: bool,
+	) {
+		assert_eq!(format.is_raster(), expect_raster);
+		assert_eq!(format.is_vector(), expect_vector);
+	}
 }

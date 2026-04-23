@@ -108,4 +108,31 @@ mod tests {
 		let out = p.level_ref(4).intersection_bbox(&bbox(4, 4, 4, 11, 11)).unwrap();
 		assert_eq!(out.to_bbox(), bbox(4, 4, 4, 7, 7));
 	}
+
+	#[rstest]
+	#[case::overlap(TileQuadtree::from_bbox(&bbox(4, 5, 5, 10, 10)), true)]
+	#[case::disjoint(TileQuadtree::from_bbox(&bbox(4, 10, 10, 15, 15)), false)]
+	fn intersects_tree_cases(#[case] tree: TileQuadtree, #[case] expected: bool) {
+		assert_eq!(pyramid_from(bbox(4, 0, 0, 7, 7)).intersects_tree(&tree), expected);
+	}
+
+	#[rstest]
+	#[case::bbox_cover_overlap(TileCover::from(bbox(4, 5, 5, 10, 10)), true)]
+	#[case::tree_cover_overlap(TileCover::from(TileQuadtree::from_bbox(&bbox(4, 5, 5, 10, 10))), true)]
+	#[case::bbox_cover_disjoint(TileCover::from(bbox(4, 10, 10, 15, 15)), false)]
+	fn intersects_cover_cases(#[case] cover: TileCover, #[case] expected: bool) {
+		assert_eq!(pyramid_from(bbox(4, 0, 0, 7, 7)).intersects_cover(&cover), expected);
+	}
+
+	#[test]
+	fn intersection_pyramid_is_pure() {
+		let a = pyramid_from(bbox(5, 0, 0, 15, 15));
+		let b = pyramid_from(bbox(5, 10, 10, 25, 25));
+		let out = a.intersection_pyramid(&b);
+		// Original unchanged.
+		assert!(a.includes_coord(&coord(5, 2, 2)));
+		// Result is the overlap only.
+		assert!(out.includes_coord(&coord(5, 12, 12)));
+		assert!(!out.includes_coord(&coord(5, 2, 2)));
+	}
 }

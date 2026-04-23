@@ -138,6 +138,16 @@ mod tests {
 	}
 
 	#[test]
+	fn remove_returns_true_if_present() -> Result<()> {
+		let mut tv = TileJsonValues::default();
+		tv.insert("name", &JsonValue::from("Test Layer"))?;
+		assert!(tv.remove("name"));
+		assert!(!tv.remove("name"));
+		assert_eq!(tv.string("name"), None);
+		Ok(())
+	}
+
+	#[test]
 	fn insert_and_retrieve_byte() -> Result<()> {
 		let mut tv = TileJsonValues::default();
 		tv.insert("maxzoom", &JsonValue::from(12.9_f64))?;

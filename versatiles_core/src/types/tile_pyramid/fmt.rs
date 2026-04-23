@@ -80,4 +80,15 @@ mod tests {
 
 		assert_eq!(a, b);
 	}
+
+	#[test]
+	fn eq_detects_different_levels() {
+		let mut a = TilePyramid::new_empty();
+		a.insert_bbox(&bbox(5, 3, 4, 10, 15)).unwrap();
+
+		let mut b = TilePyramid::new_empty();
+		b.insert_bbox(&bbox(5, 3, 4, 11, 15)).unwrap();
+
+		assert_ne!(a, b);
+	}
 }

@@ -402,4 +402,25 @@ mod tests {
 
 		Ok(())
 	}
+
+	#[test]
+	fn debug_impl_hides_credentials() -> Result<()> {
+		let with_creds = DataReaderHttp::try_from(&Url::parse("https://user:pass@example.com/").unwrap())?;
+		let debug = format!("{with_creds:?}");
+		assert!(debug.contains("has_credentials: true"));
+		assert!(!debug.contains("pass"));
+
+		let no_creds = DataReaderHttp::try_from(&Url::parse("https://example.com/").unwrap())?;
+		let debug = format!("{no_creds:?}");
+		assert!(debug.contains("has_credentials: false"));
+
+		Ok(())
+	}
+
+	#[test]
+	fn from_url_rejects_unsupported_scheme() {
+		let url = Url::parse("ftp://example.com/").unwrap();
+		let err = DataReaderHttp::try_from(&url).unwrap_err();
+		assert!(err.to_string().contains("unsupported URL scheme"));
+	}
 }

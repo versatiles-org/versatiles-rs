@@ -90,4 +90,55 @@ impl TryFrom<&JsonValue> for TileJsonValue {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+	use super::*;
+
+	#[test]
+	fn as_str_only_matches_string_variant() {
+		assert_eq!(TileJsonValue::String("hi".into()).as_str(), Some("hi"));
+		assert_eq!(TileJsonValue::Integer(7).as_str(), None);
+		assert_eq!(TileJsonValue::List(vec!["a".into()]).as_str(), None);
+	}
+
+	#[test]
+	fn as_integer_only_matches_integer_variant() {
+		assert_eq!(TileJsonValue::Integer(7).as_integer(), Some(7));
+		assert_eq!(TileJsonValue::String("x".into()).as_integer(), None);
+	}
+
+	#[test]
+	fn type_name_reports_variant() {
+		assert_eq!(TileJsonValue::Integer(1).type_name(), "Integer");
+		assert_eq!(TileJsonValue::String("x".into()).type_name(), "String");
+		assert_eq!(TileJsonValue::List(vec![]).type_name(), "List");
+	}
+
+	#[test]
+	fn is_flags() {
+		let i = TileJsonValue::Integer(1);
+		let s = TileJsonValue::String("x".into());
+		let l = TileJsonValue::List(vec![]);
+		assert!(i.is_integer() && !i.is_string() && !i.is_list());
+		assert!(s.is_string() && !s.is_integer() && !s.is_list());
+		assert!(l.is_list() && !l.is_string() && !l.is_integer());
+	}
+
+	#[test]
+	fn as_json_value_and_from_u8() {
+		let v = TileJsonValue::from(5_u8);
+		assert_eq!(v.as_json_value(), JsonValue::from(5_i64));
+		let s: JsonValue = TileJsonValue::String("x".into()).as_json_value();
+		assert_eq!(s, JsonValue::from("x"));
+		let l: JsonValue = TileJsonValue::List(vec!["a".into(), "b".into()]).as_json_value();
+		assert_eq!(l, JsonValue::from(vec!["a", "b"]));
+	}
+
+	#[test]
+	fn try_from_json_value_accepts_supported_and_rejects_others() {
+		assert!(TileJsonValue::try_from(&JsonValue::from("x")).is_ok());
+		assert!(TileJsonValue::try_from(&JsonValue::from(42_i64)).is_ok());
+		assert!(TileJsonValue::try_from(&JsonValue::from(vec!["a", "b"])).is_ok());
+		assert!(TileJsonValue::try_from(&JsonValue::Null).is_err());
+		assert!(TileJsonValue::try_from(&JsonValue::Boolean(true)).is_err());
+	}
+}

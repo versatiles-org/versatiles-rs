@@ -203,4 +203,126 @@ mod tests {
 		};
 		assert_eq!(a.intersection_cover(&b).unwrap().to_bbox(), bbox(4, 4, 4, 7, 7));
 	}
+
+	/// `intersects_tree` must agree with `intersects_bbox` on both variants.
+	#[rstest::rstest]
+	#[case::overlap(bbox(4, 4, 4, 11, 11), true)]
+	#[case::disjoint(bbox(4, 10, 10, 15, 15), false)]
+	fn intersects_tree_cases(#[case] other: TileBBox, #[case] expected: bool) {
+		let other_tree = TileQuadtree::from_bbox(&other);
+		for cov in [
+			TileCover::from(bbox(4, 0, 0, 7, 7)),
+			TileCover::from(TileQuadtree::from_bbox(&bbox(4, 0, 0, 7, 7))),
+		] {
+			assert_eq!(cov.intersects_tree(&other_tree), expected);
+		}
+	}
+
+	/// `intersects_cover` over all four variant combinations.
+	#[rstest::rstest]
+	#[case::bbox_bbox(false, false, true)]
+	#[case::bbox_tree(false, true, true)]
+	#[case::tree_bbox(true, false, true)]
+	#[case::tree_tree(true, true, true)]
+	#[case::tree_tree_disjoint(true, true, false)]
+	fn intersects_cover_across_variants(#[case] a_is_tree: bool, #[case] b_is_tree: bool, #[case] expect_overlap: bool) {
+		let a_bbox = bbox(4, 0, 0, 7, 7);
+		let b_bbox = if expect_overlap {
+			bbox(4, 4, 4, 11, 11)
+		} else {
+			bbox(4, 10, 10, 15, 15)
+		};
+		let make = |is_tree: bool, b: TileBBox| -> TileCover {
+			if is_tree {
+				TileCover::from(TileQuadtree::from_bbox(&b))
+			} else {
+				TileCover::from(b)
+			}
+		};
+		let a = make(a_is_tree, a_bbox);
+		let b = make(b_is_tree, b_bbox);
+		assert_eq!(a.intersects_cover(&b), expect_overlap);
+	}
+
+	#[test]
+	fn intersects_pyramid_uses_matching_level() {
+		let mut pyramid = TilePyramid::new_empty();
+		pyramid.insert_bbox(&bbox(4, 0, 0, 7, 7)).unwrap();
+		let cover_overlap = TileCover::from(bbox(4, 4, 4, 11, 11));
+		let cover_disjoint = TileCover::from(bbox(4, 10, 10, 15, 15));
+		assert!(cover_overlap.intersects_pyramid(&pyramid));
+		assert!(!cover_disjoint.intersects_pyramid(&pyramid));
+	}
+
+	/// In-place `intersect_tree` on both variants shrinks to the overlap.
+	#[rstest::rstest]
+	#[case::from_bbox(false)]
+	#[case::from_tree(true)]
+	fn intersect_tree_cases(#[case] is_tree: bool) {
+		let clip = TileQuadtree::from_bbox(&bbox(4, 4, 4, 11, 11));
+		let mut c = if is_tree {
+			TileCover::from(TileQuadtree::from_bbox(&bbox(4, 0, 0, 7, 7)))
+		} else {
+			TileCover::from(bbox(4, 0, 0, 7, 7))
+		};
+		c.intersect_tree(&clip).unwrap();
+		assert_eq!(c.to_bbox(), bbox(4, 4, 4, 7, 7));
+	}
+
+	/// In-place `intersect_cover` across all four variant combinations.
+	#[rstest::rstest]
+	#[case::bbox_bbox(false, false)]
+	#[case::bbox_tree(false, true)]
+	#[case::tree_bbox(true, false)]
+	#[case::tree_tree(true, true)]
+	fn intersect_cover_across_variants(#[case] a_is_tree: bool, #[case] b_is_tree: bool) {
+		let a_bbox = bbox(4, 0, 0, 7, 7);
+		let b_bbox = bbox(4, 4, 4, 11, 11);
+		let make = |is_tree: bool, b: TileBBox| -> TileCover {
+			if is_tree {
+				TileCover::from(TileQuadtree::from_bbox(&b))
+			} else {
+				TileCover::from(b)
+			}
+		};
+		let mut a = make(a_is_tree, a_bbox);
+		let b = make(b_is_tree, b_bbox);
+		a.intersect_cover(&b).unwrap();
+		assert_eq!(a.to_bbox(), bbox(4, 4, 4, 7, 7));
+	}
+
+	#[test]
+	fn intersect_pyramid_narrows_to_level_overlap() {
+		let mut pyramid = TilePyramid::new_empty();
+		pyramid.insert_bbox(&bbox(4, 4, 4, 11, 11)).unwrap();
+		let mut cover = TileCover::from(bbox(4, 0, 0, 7, 7));
+		cover.intersect_pyramid(&pyramid);
+		assert_eq!(cover.to_bbox(), bbox(4, 4, 4, 7, 7));
+	}
+
+	/// `intersection_tree` is pure on both variants.
+	#[rstest::rstest]
+	#[case::from_bbox(false)]
+	#[case::from_tree(true)]
+	fn intersection_tree_cases(#[case] is_tree: bool) {
+		let clip = TileQuadtree::from_bbox(&bbox(4, 4, 4, 11, 11));
+		let orig = if is_tree {
+			TileCover::from(TileQuadtree::from_bbox(&bbox(4, 0, 0, 7, 7)))
+		} else {
+			TileCover::from(bbox(4, 0, 0, 7, 7))
+		};
+		let out = orig.intersection_tree(&clip).unwrap();
+		assert_eq!(orig.count_tiles(), 64, "original unchanged");
+		assert_eq!(out.to_bbox(), bbox(4, 4, 4, 7, 7));
+	}
+
+	#[test]
+	fn intersection_pyramid_returns_overlap() {
+		let mut pyramid = TilePyramid::new_empty();
+		pyramid.insert_bbox(&bbox(4, 4, 4, 11, 11)).unwrap();
+		let cover = TileCover::from(bbox(4, 0, 0, 7, 7));
+		let out = cover.intersection_pyramid(&pyramid);
+		assert_eq!(cover.count_tiles(), 64, "original unchanged");
+		assert_eq!(out.to_bbox(), bbox(4, 4, 4, 7, 7));
+	}
 }

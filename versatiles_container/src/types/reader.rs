@@ -52,3 +52,25 @@ pub trait TilesReader: Send {
 		bail!("this format does not support reading from a generic data reader")
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::{MBTilesReader, TarTilesReader, TilesRuntime};
+
+	#[tokio::test]
+	async fn default_open_reader_bails_for_file_only_readers() {
+		let runtime = TilesRuntime::new();
+		let path = std::env::current_dir()
+			.unwrap()
+			.parent()
+			.unwrap()
+			.join("testdata/berlin.mbtiles");
+		let reader = DataReaderFile::open(&path).unwrap();
+		let err = MBTilesReader::open_reader(reader, runtime).await.unwrap_err();
+		assert!(err.to_string().contains("not support"));
+
+		assert!(!MBTilesReader::supports_data_reader());
+		assert!(!TarTilesReader::supports_data_reader());
+	}
+}
