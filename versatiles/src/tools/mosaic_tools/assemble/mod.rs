@@ -69,8 +69,7 @@ pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 		first.tile_dim,
 		max_buffer_size,
 		paths.len(),
-	)
-	.unwrap_or(vec![]);
+	);
 
 	pipeline::composite_batches(&batches, &paths, &first.config, &first.sink, runtime).await?;
 
