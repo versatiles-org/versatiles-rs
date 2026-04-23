@@ -69,13 +69,28 @@ impl Runner {
 		// Containing the panic here keeps a bad expression from taking down the whole pipeline
 		// and preserves our contract: CEL errors surface cleanly at build time.
 		let program = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Program::compile(&args.expr)))
-			.map_err(|_| {
+			.map_err(|panic_payload| {
+				// `catch_unwind` returns `Box<dyn Any + Send>`; extract a message if the panic
+				// carried one (Rust panics with string literals or `format!`-ed Strings).
+				let detail = panic_payload
+					.downcast_ref::<String>()
+					.map(String::as_str)
+					.or_else(|| panic_payload.downcast_ref::<&'static str>().copied())
+					.unwrap_or("no panic message");
 				anyhow!(
-					"Failed to compile CEL expression `{}`: parser panicked on malformed input",
+					"Failed to compile CEL expression:\n  {}\n\n\
+					 Parser crashed (likely malformed CEL input): {detail}\n\n\
+					 Common causes: unmatched brackets, trailing operators, unsupported tokens. \
+					 Run `versatiles help` for the CEL operator cheat-sheet.",
 					args.expr
 				)
 			})?
-			.map_err(|e| anyhow!("Failed to compile CEL expression `{}`: {e}", args.expr))?;
+			.map_err(|e| {
+				// `ParseErrors::Display` already renders `ERROR: <input>:L:C: msg` plus a source
+				// snippet with a caret. Put the expression and the report on separate lines so
+				// the caret alignment survives and terminal output stays readable.
+				anyhow!("Failed to compile CEL expression:\n  {}\n\n{e}", args.expr)
+			})?;
 
 		let refs = program.references();
 		let binds_props = refs.has_variable("props");
@@ -229,17 +244,50 @@ mod tests {
 	}
 
 	#[test]
-	fn test_expr_compile_error_surfaces_at_from_args() {
+	fn test_expr_compile_error_on_panic_path_is_helpful() {
+		// Incomplete trailing operator — `cel-parser 0.10.1` panics on this input.
+		// The error should: (a) echo the user's expression, (b) flag likely-malformed input,
+		// (c) point them at `versatiles help` for reference material.
 		let err = Runner::from_args(&Args {
 			layer: vec!["x".into()],
-			expr: "population >=".into(), // incomplete expression
+			expr: "population >=".into(),
 		})
 		.unwrap_err();
-		let msg = err.to_string();
-		assert!(msg.contains("CEL"), "message should mention CEL: {msg}");
-		assert!(
-			msg.contains("population >="),
-			"message should echo the expression: {msg}"
+		assert_eq!(
+			err.to_string().split('\n').collect::<Vec<_>>(),
+			[
+				"Failed to compile CEL expression:",
+				"  population >=",
+				"",
+				"Parser crashed (likely malformed CEL input): internal error: entered unreachable code: should have been properly implemented by generated context when reachable",
+				"",
+				"Common causes: unmatched brackets, trailing operators, unsupported tokens. Run `versatiles help` for the CEL operator cheat-sheet.",
+			]
+		);
+	}
+
+	#[test]
+	fn test_expr_compile_error_on_err_path_includes_location() {
+		// Unknown / unsupported token — cel-parser returns ParseErrors with line/column info
+		// rather than panicking. The error should surface that location report to the user.
+		let err = Runner::from_args(&Args {
+			layer: vec!["x".into()],
+			expr: "foo @@".into(),
+		})
+		.unwrap_err();
+		assert_eq!(
+			err.to_string().split('\n').collect::<Vec<_>>(),
+			[
+				"Failed to compile CEL expression:",
+				"  foo @@",
+				"",
+				"ERROR: <input>:1:5: Syntax error: token recognition error at: '@'",
+				"| foo @@",
+				"| ....^",
+				"ERROR: <input>:1:6: Syntax error: token recognition error at: '@'",
+				"| foo @@",
+				"| .....^",
+			]
 		);
 	}
 
