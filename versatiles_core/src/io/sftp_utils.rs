@@ -41,11 +41,11 @@ pub fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Session> 
 	// SSH handshake
 	let mut session = Session::new()?;
 	session.set_tcp_stream(tcp);
-	// Use a much shorter timeout in tests so session teardown completes quickly.
-	#[cfg(not(test))]
+	// 10 s is generous for ordinary operations and prevents `Session(-9)`
+	// ("API timeout expired") flakes on loaded CI runners — we saw 1 s
+	// be insufficient for local in-process SFTP round-trips on macOS + GDAL.
+	// Drop speed is not affected because keepalive is disabled in tests below.
 	session.set_timeout(10_000);
-	#[cfg(test)]
-	session.set_timeout(1_000);
 	session.handshake()?;
 	// Keepalive causes session teardown to block for `api_timeout` per drop in tests
 	// because the test server never acknowledges keepalive or channel-close replies.
