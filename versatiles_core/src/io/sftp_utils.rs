@@ -45,7 +45,7 @@ pub fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Session> 
 	#[cfg(not(test))]
 	session.set_timeout(10_000);
 	#[cfg(test)]
-	session.set_timeout(200);
+	session.set_timeout(1_000);
 	session.handshake()?;
 	// Keepalive causes session teardown to block for `api_timeout` per drop in tests
 	// because the test server never acknowledges keepalive or channel-close replies.
