@@ -19,6 +19,7 @@ workspace = true
 ab_glyph = { version = "0.2.32", default-features = false, features = ["std"] }
 anyhow.workspace = true
 async-trait.workspace = true
+cel-interpreter = { version = "0.10.0", default-features = false, features = ["regex"] }
 deadpool = { workspace = true, optional = true }
 futures.workspace = true
 gdal = { version = "0.19.0", optional = true }
