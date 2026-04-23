@@ -28,12 +28,14 @@ use versatiles_geometry::{
 ///
 /// # Examples
 ///
-///   vector_filter_features layer=["place"] expr="name == 'Berlin'"
-///   vector_filter_features layer=["poi"]   expr="population >= 1000"
-///   vector_filter_features layer=["road"]  expr="highway in ['primary','secondary']"
-///   vector_filter_features layer=["place"] expr="name.matches('^St\\.')"
-///   vector_filter_features layer=["poi"]   expr="name != null && name != ''"
-///   vector_filter_features layer=["addr"]  expr="props['addr:street'] == 'Hauptstr.'"
+/// ```text
+/// vector_filter_features layer=["place"] expr="name == 'Berlin'"
+/// vector_filter_features layer=["poi"]   expr="population >= 1000"
+/// vector_filter_features layer=["road"]  expr="highway in ['primary','secondary']"
+/// vector_filter_features layer=["place"] expr="name.matches('^St\\.')"
+/// vector_filter_features layer=["poi"]   expr="name != null && name != ''"
+/// vector_filter_features layer=["addr"]  expr="props['addr:street'] == 'Hauptstr.'"
+/// ```
 struct Args {
 	/// Layers the expression applies to, as a VPL array of strings.
 	/// Features in all other layers are left unchanged.
