@@ -3,54 +3,99 @@ use std::collections::BTreeMap;
 use versatiles_container::{TileSource, TilesConverterParameters, TilesRuntime, convert_tiles_container_to_str};
 use versatiles_pipeline::{PipelineReader, VPLNode, VPLPipeline};
 
-/// Tile a single georeferenced raster image into a tile container.
-///
-/// Reads a georeferenced raster (GeoTIFF, etc.) via GDAL, tiles it at a base zoom level,
-/// generates overview tiles down to a minimum zoom, and writes a tile container
-/// with smart WebP compression (lossy for opaque, lossless for translucent).
 #[derive(clap::Args, Debug)]
-#[command(arg_required_else_help = true, disable_version_flag = true)]
+#[command(
+	arg_required_else_help = true,
+	disable_version_flag = true,
+	about = "Tile a georeferenced raster into a .versatiles container",
+	long_about = "\
+Tile a georeferenced raster into a .versatiles container.
+
+Reprojects the input to Web Mercator (EPSG:3857) via GDAL, slices it at a
+native \"base\" zoom level, and builds overview tiles down to a minimum zoom.
+Output tiles are encoded as WebP: lossy for fully-opaque tiles (controlled
+by --quality) and lossless for tiles with any transparency.
+
+Base zoom is --max-zoom. It is the finest zoom level written — the one at
+which the input pixel grid is sampled most directly. Overviews are
+progressively coarser zooms produced by averaging.
+
+EXAMPLES
+
+  # Auto-detect base zoom from image resolution; build overviews from z=0.
+  versatiles mosaic tile scene.tif scene.versatiles
+
+  # Explicit base zoom; skip overviews below z=6 (smaller output).
+  versatiles mosaic tile --min-zoom 6 --max-zoom 14 scene.tif scene.versatiles
+
+  # 4-band image (R,G,B,NIR): use bands 1-3 for color; treat 0 as nodata.
+  versatiles mosaic tile --bands 1,2,3 --nodata 0 scene.tif scene.versatiles
+
+  # Image is in UTM zone 32N but lacks a CRS tag — assert it explicitly.
+  versatiles mosaic tile --crs 25832 scene.tif scene.versatiles"
+)]
 pub struct Tile {
-	/// Path to a georeferenced raster image (GeoTIFF, etc.) readable by GDAL.
+	/// Georeferenced raster readable by GDAL (GeoTIFF, JPEG2000, COG, ...).
+	/// Must carry either a valid CRS/geotransform or be combined with --crs.
 	input_image: String,
 
-	/// Output .versatiles container path.
+	/// Output .versatiles container. Overwrites any existing file.
 	output: String,
 
-	/// Lowest overview zoom level to generate (default: 0).
+	/// Coarsest overview zoom level to write. Use a higher value to drop
+	/// low-resolution overviews and shrink the output.
 	#[arg(long, value_name = "int", default_value = "0")]
 	min_zoom: u8,
 
-	/// Base zoom level for tiling (auto-detected from image resolution if omitted).
+	/// Finest (base) zoom level to tile the image at.
+	///
+	/// Chosen automatically from the image's ground resolution if omitted.
+	/// Every overview zoom between --min-zoom and this value is generated.
 	#[arg(long, value_name = "int")]
 	max_zoom: Option<u8>,
 
-	/// Lossy WebP quality for opaque tiles, using zoom-dependent syntax
-	/// (e.g. "70,14:50,15:20"). Default: 75.
+	/// Lossy WebP quality (0-100) for opaque tiles.
+	///
+	/// A single number (e.g. "75") applies to every zoom. A comma-separated
+	/// list ramps quality from z=0 upwards: "90,80,70" means z=0 → 90,
+	/// z=1 → 80, z≥2 → 70 (the last value extends to all higher zooms).
+	/// Use "Z:Q" to jump to zoom Z explicitly, e.g. "70,14:50,15:20" means
+	/// z<14 → 70, z=14 → 50, z≥15 → 20. Translucent tiles ignore this and
+	/// are encoded losslessly.
 	#[arg(long, value_name = "str", default_value = "75")]
 	quality: String,
 
-	/// Comma-separated 1-based band indices for color channels (e.g. "4,3,2" for RGB).
-	/// Defaults to auto-detection from the source's color interpretation metadata.
+	/// 1-based band indices to map onto R, G, B (and optionally A).
+	///
+	/// Example: "4,3,2" uses band 4 as red, band 3 as green, band 2 as blue —
+	/// the standard false-color composite for Landsat. Auto-detected from
+	/// the source's color interpretation metadata if omitted.
 	#[arg(long, value_name = "str")]
 	bands: Option<String>,
 
-	/// NoData value(s) to treat as transparent. Multiple values can be
-	/// separated by semicolons (e.g. "0;255" treats both 0 and 255 as nodata).
-	/// Each value can be a single number applied to all bands or
-	/// comma-separated per-band values (e.g. "0,0,0;255,255,255").
-	/// If not specified, uses the source dataset's nodata value (if any).
+	/// Pixel values to treat as transparent.
+	///
+	/// Syntax: one or more values separated by semicolons. Each value may be
+	/// a single number (applied to every band) or comma-separated per-band
+	/// values. Examples: "0" (treat 0 in every band as nodata),
+	/// "0;255" (both 0 and 255 are nodata), "0,0,0;255,255,255" (pure black
+	/// and pure white pixels are transparent). Defaults to the source
+	/// dataset's embedded nodata value, if any.
 	#[arg(long, value_name = "str")]
 	nodata: Option<String>,
 
-	/// Override the source CRS with an EPSG code (e.g. "4326" or "25832").
-	/// Use this when the input image has no embedded CRS or an incorrect one.
+	/// Assert the source CRS as an EPSG code (e.g. "4326", "3857", "25832").
+	///
+	/// Overrides whatever the file declares — use only when the input lacks
+	/// a CRS or has an incorrect one. The reprojection target is always
+	/// Web Mercator (EPSG:3857) and is not configurable.
 	#[arg(long, value_name = "EPSG")]
 	crs: Option<String>,
 
-	/// Number of concurrent GDAL instances for parallel decoding.
-	/// Higher values use more memory but improve throughput for slow codecs (e.g. JPEG2000).
-	/// Default: number of CPU cores.
+	/// Maximum number of concurrent GDAL readers.
+	///
+	/// Raise this to speed up decoding of slow codecs (e.g. JPEG2000) at the
+	/// cost of more memory. Default: one reader per CPU core.
 	#[arg(long, value_name = "int")]
 	gdal_concurrency: Option<u8>,
 }

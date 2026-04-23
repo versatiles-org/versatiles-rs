@@ -1,39 +1,107 @@
 use anyhow::{Context, Result, ensure};
 
-/// CLI arguments for `mosaic assemble`.
 #[derive(clap::Args, Debug)]
-#[command(arg_required_else_help = true, disable_version_flag = true)]
+#[command(
+	arg_required_else_help = true,
+	disable_version_flag = true,
+	about = "Combine many tile containers into a single mosaic",
+	long_about = "\
+Combine many tile containers into a single mosaic.
+
+Overlays input containers in listed order (earlier wins) and writes one
+unified container. Opaque tiles pass through unchanged; tiles with any
+transparency are composited in a two-pass pipeline: the first pass streams
+every source once and classifies each tile as opaque, empty, or translucent;
+the second pass only re-opens the sources needed to composite each
+translucent tile.
+
+EXAMPLES
+
+  # Two literal inputs + an output (last path is always the output).
+  versatiles mosaic assemble a.versatiles b.versatiles mosaic.versatiles
+
+  # Glob expansion + a list file. Containers listed earlier win.
+  versatiles mosaic assemble 'scenes/*.versatiles' extra.txt mosaic.versatiles
+
+  # Cap memory at half of system RAM and drop zooms above 14.
+  versatiles mosaic assemble --max-buffer-size 50% --max-zoom 14 \\
+      @inputs.lst mosaic.versatiles"
+)]
 pub struct Assemble {
-	/// Input container paths, URLs, or glob patterns, followed by the output path.
-	/// The last argument is always the output; all preceding arguments are inputs.
-	/// Glob patterns (*, ?, [) are expanded. Containers listed earlier overlay
-	/// containers listed later. Arguments ending in .txt are read as list files
-	/// (one path per line, # comments supported). Use @filename to read any file
-	/// as a list regardless of extension.
-	#[arg(required = true, num_args = 2..)]
+	#[arg(
+		required = true,
+		num_args = 2..,
+		help = "Input containers followed by the output path (last one wins)",
+		long_help = "\
+Input containers followed by the output path (last one wins).
+
+Minimum two paths: at least one input and exactly one output. Each
+non-output path may be one of:
+
+  * a literal path or URL to a tile container
+  * a glob pattern (`*`, `?`, `[...]`) — matches are sorted lexically
+  * a `.txt` file — read as a list (one path per line, `#` comments)
+  * an `@file` argument — same as `.txt`, regardless of extension
+
+Ordering matters: the first container to supply a given tile wins, so list
+higher-priority (e.g. more recent) scenes earlier. The final positional
+argument is always treated as the output path."
+	)]
 	pub(super) paths: Vec<String>,
 
-	/// Lossy WebP quality for the final output tiles, using zoom-dependent syntax
-	/// (e.g. "70,14:50,15:20"). Default: 75.
+	/// Lossy WebP quality (0-100) for opaque tiles.
+	///
+	/// Single value (e.g. "75") applies to every zoom. Comma-separated list
+	/// ramps from z=0 upwards ("90,80,70" → z=0 → 90, z=1 → 80, z≥2 → 70).
+	/// Use "Z:Q" to jump to zoom Z ("70,14:50,15:20" → z<14 → 70, z=14 → 50,
+	/// z≥15 → 20). Translucent tiles ignore this (see --lossless).
 	#[arg(long, value_name = "str", default_value = "75")]
 	pub(super) quality: String,
 
-	/// Encode translucent tiles as lossless WebP instead of using the lossy --quality setting
+	/// Encode translucent tiles losslessly.
+	///
+	/// By default translucent tiles use the same lossy --quality setting as
+	/// opaque tiles. This flag forces lossless WebP for translucent tiles
+	/// only — useful when soft edges or semi-transparent overlays must stay
+	/// sharp. Opaque tiles remain lossy.
 	#[arg(long)]
 	pub(super) lossless: bool,
 
-	/// Minimum zoom level to include in the output (default: include all).
+	/// Drop zoom levels below this threshold.
+	///
+	/// Tiles at z < MIN_ZOOM are excluded from the output. Use to trim
+	/// low-resolution overviews if the source contains more zooms than
+	/// needed. Default: include every zoom in the inputs.
 	#[arg(long, value_name = "int")]
 	pub(super) min_zoom: Option<u8>,
 
-	/// Maximum zoom level to include in the output (default: include all).
+	/// Drop zoom levels above this threshold.
+	///
+	/// Tiles at z > MAX_ZOOM are excluded from the output. Use to cap the
+	/// resolution of the mosaic without re-tiling the inputs. Default:
+	/// include every zoom in the inputs.
 	#[arg(long, value_name = "int")]
 	pub(super) max_zoom: Option<u8>,
 
-	/// Maximum memory for the tile buffer (default: 4g).
-	/// Supports units: k, m, g, t (e.g. "4g") and % of system memory (e.g. "50%").
-	/// Plain number is interpreted as bytes. 0 means unlimited.
-	#[arg(long, value_name = "size", default_value = "4g")]
+	#[arg(
+		long,
+		value_name = "size",
+		default_value = "4g",
+		help = "Upper bound on the translucent-tile buffer held in memory",
+		long_help = "\
+Upper bound on the translucent-tile buffer held in memory.
+
+Accepts:
+
+  * plain bytes:    \"4000000000\"
+  * SI units:       \"1500m\" = 1.5 GB, \"4g\" = 4 GB, \"0.5t\"
+  * RAM percentage: \"50%\" (Linux / macOS only)
+  * \"0\":            disables the cap
+
+A bigger buffer means fewer re-scans of the inputs when the translucent
+working set is large. If the set doesn't fit, the pipeline splits it into
+batches and re-opens the affected sources per batch."
+	)]
 	pub(super) max_buffer_size: String,
 }
 
