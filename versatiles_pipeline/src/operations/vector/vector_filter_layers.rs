@@ -13,10 +13,10 @@ use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Filters vector tile layers based on a comma-separated list of layer names.
+/// Filters vector tile layers by name.
 struct Args {
-	/// Comma‑separated list of layer names that should be removed from the tiles, e.g.: filter="pois,ocean".
-	filter: String,
+	/// Layer names to remove from the tiles, e.g. `filter=["pois","ocean"]`.
+	filter: Vec<String>,
 
 	/// If set, inverts the filter logic (i.e., keeps only layers matching the filter).
 	invert: Option<bool>,
@@ -30,10 +30,8 @@ struct Runner {
 
 impl Runner {
 	pub fn from_args(args: &Args) -> Self {
-		let layer_set: HashSet<String> = args.filter.split(',').map(|s| s.trim().to_string()).collect();
-
 		Self {
-			layer_set,
+			layer_set: args.filter.iter().cloned().collect(),
 			invert: args.invert.unwrap_or(false),
 		}
 	}
@@ -114,7 +112,7 @@ mod tests {
 		}
 
 		let runner = Runner::from_args(&Args {
-			filter: "test_layer1".to_string(),
+			filter: vec!["test_layer1".to_string()],
 			invert: None,
 		});
 
@@ -126,12 +124,20 @@ mod tests {
 	}
 
 	#[test]
-	fn test_args_from_vpl_node() {
-		let vpl_node = VPLNode::try_from_str(r#"vector_filter_layers filter="temp,tomp" invert=true"#).unwrap();
+	fn test_args_from_vpl_node_array() {
+		let vpl_node = VPLNode::try_from_str(r#"vector_filter_layers filter=["temp","tomp"] invert=true"#).unwrap();
 
 		let args = Args::from_vpl_node(&vpl_node).unwrap();
-		assert_eq!(args.filter, "temp,tomp");
+		assert_eq!(args.filter, vec!["temp".to_string(), "tomp".to_string()]);
 		assert_eq!(args.invert, Some(true));
+	}
+
+	#[test]
+	fn test_args_from_vpl_node_single_value() {
+		// Single-value form `filter="name"` still works — VPL's parser stores it as a one-element vec.
+		let vpl_node = VPLNode::try_from_str(r#"vector_filter_layers filter="only""#).unwrap();
+		let args = Args::from_vpl_node(&vpl_node).unwrap();
+		assert_eq!(args.filter, vec!["only".to_string()]);
 	}
 
 	async fn run_test(filter: &str, invert: &str) -> Result<(String, String)> {
@@ -184,7 +190,7 @@ mod tests {
 				"Failed to create reader from VPL",
 				"Failed to build pipeline from VPL",
 				"Failed to create transform operation from VPL node",
-				"Failed to get required property string 'filter' from VPL node 'vector_filter_layers'",
+				"Failed to get required property string list 'filter' from VPL node 'vector_filter_layers'",
 				"In operation 'vector_filter_layers' the parameter 'filter' is required but missing.",
 			]
 		);
@@ -209,5 +215,22 @@ mod tests {
 		let (layers, json) = run_test("debug_y", "true").await.unwrap();
 		assert_eq!(layers, "debug_y");
 		assert_eq!(json, "debug_y");
+	}
+
+	#[tokio::test]
+	async fn test_filter_array_multi() {
+		// from_debug produces layers [background, debug_z, debug_x, debug_y]. Removing debug_x
+		// and debug_y in one invocation leaves background and debug_z in both the tile and the
+		// tilejson.
+		let (layers, json) = run_test(r#"["debug_x","debug_y"]"#, "").await.unwrap();
+		assert_eq!(layers, "background,debug_z");
+		assert_eq!(json, "background,debug_z");
+	}
+
+	#[tokio::test]
+	async fn test_filter_array_and_invert() {
+		let (layers, json) = run_test(r#"["debug_x","debug_y"]"#, "true").await.unwrap();
+		assert_eq!(layers, "debug_x,debug_y");
+		assert_eq!(json, "debug_x,debug_y");
 	}
 }
