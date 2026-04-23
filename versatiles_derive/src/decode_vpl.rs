@@ -199,11 +199,20 @@ pub fn extract_comment(attr: &Attribute) -> Option<String> {
 	None
 }
 
-/// Extract doc comments from struct attributes.
+/// Extract doc comments from struct attributes, preserving blank lines so the
+/// rendered markdown keeps headings and code fences legible. `extract_comment`
+/// collapses blank `///` lines to `None`; here we promote them to empty strings
+/// so `join("\n")` yields real paragraph breaks.
 fn extract_struct_docs(attrs: &[Attribute]) -> String {
 	attrs
 		.iter()
-		.filter_map(extract_comment)
+		.filter_map(|a| {
+			if a.path().is_ident("doc") {
+				Some(extract_comment(a).unwrap_or_default())
+			} else {
+				None
+			}
+		})
 		.collect::<Vec<String>>()
 		.join("\n")
 		.trim()

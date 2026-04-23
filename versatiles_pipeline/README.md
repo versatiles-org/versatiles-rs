@@ -245,6 +245,7 @@ using the URL template from the TileJSON `tiles` array.
 ## dem_overview
 
 Generate lower-zoom DEM overview tiles by averaging 24-bit elevation values.
+
 Unlike raster_overview which averages RGB channels independently,
 this operation decodes each pixel to its 24-bit raw elevation value,
 averages the values correctly, and re-encodes back to RGB.
@@ -259,6 +260,7 @@ averages the values correctly, and re-encodes back to RGB.
 ## dem_quantize
 
 Quantize DEM (elevation) raster tiles by zeroing unnecessary low bits.
+
 Computes a per-tile quantization mask from two physically meaningful criteria:
 elevation error relative to pixel size, and maximum slope distortion.
 The stricter (smaller step) wins. Single-pass — no min/max scan needed.
@@ -274,6 +276,7 @@ The stricter (smaller step) wins. Single-pass — no min/max scan needed.
 ## dem_tile_resize
 
 Convert DEM tile size between 256px and 512px by splitting or merging tiles.
+
 Like raster_tile_resize, but uses 24-bit raw value averaging for downscaling
 (level 0, 512→256) instead of channel-wise averaging.
 
@@ -399,7 +402,9 @@ Convert the size of tiles by splitting or merging them to a width of 256px or 51
 
 Drops vector features in selected layers that do not satisfy a boolean CEL expression.
 Features in layers outside `layer` pass through untouched.
-# Examples
+
+### Examples
+
 ```text
 vector_filter_features layer=["place"] expr="name == 'Berlin'"
 vector_filter_features layer=["poi"]   expr="population >= 1000"
@@ -441,6 +446,7 @@ Filters properties based on a regular expressions.
 ## vector_update_properties
 
 Arguments for the `vector_update_properties` operation.
+
 This operation joins vector tile features with external tabular data (CSV/TSV)
 based on matching ID fields, allowing you to enrich or update feature properties.
 

@@ -26,7 +26,7 @@ use versatiles_geometry::{
 /// Drops vector features in selected layers that do not satisfy a boolean CEL expression.
 /// Features in layers outside `layer` pass through untouched.
 ///
-/// # Examples
+/// ### Examples
 ///
 /// ```text
 /// vector_filter_features layer=["place"] expr="name == 'Berlin'"
