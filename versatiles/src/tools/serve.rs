@@ -148,7 +148,7 @@ mod tests {
 			"-p",
 			"65001",
 			"--auto-shutdown",
-			"500",
+			"50",
 			"../testdata/berlin.mbtiles[test]",
 		])?;
 		Ok(())
@@ -164,7 +164,7 @@ mod tests {
 			"-p",
 			"65002",
 			"--auto-shutdown",
-			"500",
+			"50",
 			"[test]https://download.versatiles.org/osm.versatiles",
 		])?;
 		Ok(())
@@ -180,7 +180,7 @@ mod tests {
 			"-p",
 			"65003",
 			"--auto-shutdown",
-			"500",
+			"50",
 		])?;
 		Ok(())
 	}
