@@ -326,6 +326,33 @@ mod tests {
 	}
 
 	#[test]
+	fn test_key_in_props_map() {
+		// For non-identifier keys (like OSM `addr:street`), `'key' in props` checks presence.
+		let tile = VectorTile::new(vec![layer(
+			"addr",
+			vec![
+				feature(vec![("addr:street", GeoValue::from("Hauptstr."))]),
+				feature(vec![("other", GeoValue::from("x"))]),
+			],
+		)]);
+		let out = run_expr(vec!["addr"], "'addr:street' in props", tile).unwrap().unwrap();
+		assert_eq!(summarise(&out), vec![("addr".to_string(), 1)]);
+	}
+
+	#[test]
+	fn test_has_on_props_map() {
+		let tile = VectorTile::new(vec![layer(
+			"poi",
+			vec![
+				feature(vec![("name", GeoValue::from("Berlin"))]),
+				feature(vec![("other", GeoValue::from("x"))]), // name missing
+			],
+		)]);
+		let out = run_expr(vec!["poi"], "has(props.name)", tile).unwrap().unwrap();
+		assert_eq!(summarise(&out), vec![("poi".to_string(), 1)]);
+	}
+
+	#[test]
 	fn test_special_char_property_via_props_map() {
 		let tile = VectorTile::new(vec![layer(
 			"addr",
