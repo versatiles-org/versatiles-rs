@@ -197,9 +197,13 @@ impl ByteRange {
 	/// assert_eq!(usize_range.end, 65);
 	/// ```
 	pub fn to_range_usize(&self) -> Result<Range<usize>> {
+		let end = self
+			.offset
+			.checked_add(self.length)
+			.context("ByteRange offset + length overflows u64")?;
 		Ok(Range {
 			start: usize::try_from(self.offset).context("ByteRange offset too large for this platform")?,
-			end: usize::try_from(self.offset + self.length).context("ByteRange end too large for this platform")?,
+			end: usize::try_from(end).context("ByteRange end too large for this platform")?,
 		})
 	}
 }
@@ -212,7 +216,13 @@ impl fmt::Debug for ByteRange {
 
 impl fmt::Display for ByteRange {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "[{}..={}]", self.offset, self.offset + self.length - 1)
+		if self.length == 0 {
+			return write!(f, "[{}..{}]", self.offset, self.offset);
+		}
+		match self.offset.checked_add(self.length) {
+			Some(end) => write!(f, "[{}..={}]", self.offset, end - 1),
+			None => write!(f, "[{}..={}]", self.offset, u64::MAX),
+		}
 	}
 }
 
@@ -260,11 +270,38 @@ mod tests {
 	#[test]
 	fn test_shifted_backward() {
 		let original = ByteRange::new(10, 5);
-		let shifted = original.shifted_backward(5);
+		let shifted = original.shifted_backward(5).unwrap();
 		assert_eq!(shifted.offset, 5, "Offset should be 10 - 5 = 5");
 		assert_eq!(shifted.length, 5, "Length should remain unchanged");
 		// Original should remain unchanged
 		assert_eq!(original.offset, 10, "Original offset unchanged");
+	}
+
+	/// `shifted_backward` must return an error when the shift would underflow.
+	#[test]
+	fn test_shifted_backward_underflow() {
+		let range = ByteRange::new(3, 5);
+		assert!(range.shifted_backward(4).is_err());
+		assert!(range.shifted_backward(u64::MAX).is_err());
+	}
+
+	/// Display impl must not underflow for empty ranges and must not overflow near u64::MAX.
+	#[test]
+	fn test_display_edge_cases() {
+		assert_eq!(format!("{}", ByteRange::new(0, 0)), "[0..0]");
+		assert_eq!(format!("{}", ByteRange::new(42, 0)), "[42..42]");
+		assert_eq!(format!("{}", ByteRange::new(0, 1)), "[0..=0]");
+		assert_eq!(format!("{}", ByteRange::new(10, 5)), "[10..=14]");
+		// length causes offset + length to overflow u64 — must not panic.
+		let r = ByteRange::new(u64::MAX - 2, 10);
+		let _ = format!("{r}");
+	}
+
+	/// `to_range_usize` must report an error (not panic) when offset + length overflows u64.
+	#[test]
+	fn test_to_range_usize_overflow() {
+		let range = ByteRange::new(u64::MAX - 2, 10);
+		assert!(range.to_range_usize().is_err());
 	}
 
 	/// Confirms `shift_forward` mutates the offset in place.

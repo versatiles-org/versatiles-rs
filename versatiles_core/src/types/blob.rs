@@ -148,7 +148,11 @@ impl Blob {
 	/// ```
 	#[context("Failed to read {range:?} from Blob of length {}", self.0.len())]
 	pub fn read_range(&self, range: &ByteRange) -> Result<Blob> {
-		if range.offset + range.length > self.0.len() as u64 {
+		let end = range
+			.offset
+			.checked_add(range.length)
+			.context("range offset + length overflows u64")?;
+		if end > self.0.len() as u64 {
 			bail!("read outside range")
 		}
 		Ok(Blob::from(&self.0[range.to_range_usize()?]))
