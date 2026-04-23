@@ -32,8 +32,10 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-# Skip e2e tests (test functions prefixed with e2e_) during coverage
-cargo llvm-cov test --workspace --all-features --tests --lcov \
+# Skip e2e tests (test functions prefixed with e2e_) during coverage.
+# RUST_LOG=off silences env_logger output from tests; --quiet (both for cargo
+# and the test binary) suppresses compilation progress and per-test lines.
+RUST_LOG=off cargo llvm-cov test --quiet --workspace --all-features --tests --lcov \
 	--output-path "$PROJECT_DIR/lcov.info" "${CARGO_ARGS[@]}" -- --skip e2e_
 
 cargo llvm-cov report --color always | awk '
