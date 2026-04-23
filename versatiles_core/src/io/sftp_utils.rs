@@ -34,7 +34,7 @@ pub fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Session> 
 	#[cfg(not(test))]
 	let connect_timeout = Duration::from_secs(30);
 	#[cfg(test)]
-	let connect_timeout = Duration::from_secs(1);
+	let connect_timeout = Duration::from_millis(200);
 	let tcp = TcpStream::connect_timeout(&addr, connect_timeout)
 		.with_context(|| format!("failed to connect to {host}:{port}"))?;
 
