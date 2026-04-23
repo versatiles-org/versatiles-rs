@@ -103,13 +103,16 @@ impl ByteRange {
 
 	/// Returns a new `ByteRange` that is shifted backward by the specified `offset`.
 	///
-	/// This method does not mutate the original `ByteRange`.\
-	/// **Note:** It is the caller's responsibility to ensure that `self.offset >= offset`;\
-	/// otherwise, the resulting offset could be negative when interpreted as `u64`.
+	/// This method does not mutate the original `ByteRange`.
 	///
 	/// # Arguments
 	///
 	/// * `offset` - The number of bytes to shift the range backward.
+	///
+	/// # Errors
+	///
+	/// Returns an error if `offset > self.offset` (the resulting range would
+	/// start before byte 0).
 	///
 	/// # Examples
 	///
@@ -117,16 +120,22 @@ impl ByteRange {
 	/// use versatiles_core::ByteRange;
 	///
 	/// let r1 = ByteRange::new(10, 5);
-	/// let r2 = r1.shifted_backward(3);
+	/// let r2 = r1.shifted_backward(3).unwrap();
 	/// assert_eq!(r2.offset, 7);
 	/// assert_eq!(r2.length, 5);
+	/// assert!(r1.shifted_backward(20).is_err());
 	/// ```
-	#[must_use]
-	pub fn shifted_backward(&self, offset: u64) -> Self {
-		Self {
-			offset: self.offset - offset,
+	pub fn shifted_backward(&self, offset: u64) -> Result<Self> {
+		let new_offset = self.offset.checked_sub(offset).with_context(|| {
+			format!(
+				"shifted_backward({offset}) underflows ByteRange offset ({})",
+				self.offset
+			)
+		})?;
+		Ok(Self {
+			offset: new_offset,
 			length: self.length,
-		}
+		})
 	}
 
 	/// Shifts the current `ByteRange` forward (in-place) by the specified `offset`.

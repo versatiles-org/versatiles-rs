@@ -148,7 +148,7 @@ impl TilesWriter for PMTilesWriter {
 							let range = if let Some(&existing) = dedup.get(&hash) {
 								existing
 							} else {
-								let range = writer.append(blob)?.shifted_backward(tile_data_start);
+								let range = writer.append(blob)?.shifted_backward(tile_data_start)?;
 								dedup.insert(hash, range);
 								range
 							};
