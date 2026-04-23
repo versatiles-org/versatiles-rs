@@ -41,11 +41,11 @@ pub fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Session> 
 	// SSH handshake
 	let mut session = Session::new()?;
 	session.set_tcp_stream(tcp);
-	// Use a shorter timeout in tests so session teardown completes in ~5s instead of ~30s.
+	// Use a much shorter timeout in tests so session teardown completes quickly.
 	#[cfg(not(test))]
 	session.set_timeout(10_000);
 	#[cfg(test)]
-	session.set_timeout(3_000);
+	session.set_timeout(200);
 	session.handshake()?;
 	// Keepalive causes session teardown to block for `api_timeout` per drop in tests
 	// because the test server never acknowledges keepalive or channel-close replies.
