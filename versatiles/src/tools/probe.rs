@@ -88,21 +88,32 @@ pub async fn probe(source: &dyn TileSource, level: ProbeDepth, runtime: &TilesRu
 /// Writes source metadata (tile pyramid, formats, compression) to `print`.
 pub async fn probe_metadata(source: &dyn TileSource, print: &mut PrettyPrint) -> Result<()> {
 	let metadata = source.metadata();
-	let p = print.get_list("tile_pyramid").await;
 	let tile_pyramid = source.tile_pyramid().await?;
-	for level in tile_pyramid.iter() {
-		if !level.is_empty() {
+	let rows: Vec<Vec<String>> = tile_pyramid
+		.iter()
+		.filter(|level| !level.is_empty())
+		.map(|level| {
 			let bbox = level.to_bbox();
-			let entry = [
-				format!("level: {}", level.level(),),
-				format!("bbox: {:?}", bbox.to_array().unwrap()),
-				format!("tiles: {}", level.count_tiles(),),
-				format!("coverage: {}%", level.count_tiles() * 100 / bbox.count_tiles()),
+			let tiles = level.count_tiles();
+			let coverage = tiles * 100 / bbox.count_tiles();
+			vec![
+				format!("{}", level.level()),
+				format_integer_str(bbox.x_min().unwrap().to_string()),
+				format_integer_str(bbox.x_max().unwrap().to_string()),
+				format_integer_str(bbox.y_min().unwrap().to_string()),
+				format_integer_str(bbox.y_max().unwrap().to_string()),
+				format_integer_str(tiles.to_string()),
+				format!("{coverage}%"),
 			]
-			.join(", ");
-			p.add_value(&entry).await;
-		}
-	}
+		})
+		.collect();
+	print
+		.add_table(
+			"tile_pyramid",
+			&["level", "x0", "x1", "y0", "y1", "tiles", "coverage"],
+			&rows,
+		)
+		.await;
 	print
 		.add_key_value("tile compression", metadata.tile_compression())
 		.await;
@@ -110,21 +121,21 @@ pub async fn probe_metadata(source: &dyn TileSource, print: &mut PrettyPrint) ->
 	Ok(())
 }
 
+/// Formats a `u64` with underscores as thousands separators (e.g. `1_234_567`).
+fn format_integer_str(v: String) -> String {
+	let mut result = String::new();
+	for (i, c) in v.chars().enumerate() {
+		if i > 0 && (v.len() - i).is_multiple_of(3) {
+			result.push('_');
+		}
+		result.push(c);
+	}
+	result
+}
+
 /// Scans all tiles, reporting average size and the top-10 biggest tiles.
 #[allow(clippy::too_many_lines)]
 pub async fn probe_tiles(source: &dyn TileSource, print: &mut PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
-	fn format_integer_str(value: u64) -> String {
-		let s = value.to_string();
-		let mut result = String::new();
-		for (i, c) in s.chars().enumerate() {
-			if i > 0 && (s.len() - i).is_multiple_of(3) {
-				result.push('_');
-			}
-			result.push(c);
-		}
-		result
-	}
-
 	#[derive(Debug)]
 	#[allow(dead_code)]
 	struct Entry {
@@ -197,7 +208,7 @@ pub async fn probe_tiles(source: &dyn TileSource, print: &mut PrettyPrint, runti
 					format!("{}", e.z),
 					format!("{}", e.x),
 					format!("{}", e.y),
-					format_integer_str(e.size),
+					format_integer_str(e.size.to_string()),
 				]
 			})
 			.collect();
@@ -211,9 +222,9 @@ pub async fn probe_tiles(source: &dyn TileSource, print: &mut PrettyPrint, runti
 				let avg = if *count > 0 { size / count } else { 0 };
 				vec![
 					format!("{level}"),
-					format_integer_str(*count),
-					format_integer_str(*size),
-					format_integer_str(avg),
+					format_integer_str(count.to_string()),
+					format_integer_str(size.to_string()),
+					format_integer_str(avg.to_string()),
 				]
 			})
 			.collect();

@@ -146,11 +146,9 @@ impl PrettyPrint {
 		let header_cells: Vec<String> = headers
 			.iter()
 			.enumerate()
-			.map(|(i, h)| format!("{:>width$}", h, width = widths[i]))
+			.map(|(i, h)| format!("{:>width$}", h, width = widths[i]).white().to_string())
 			.collect();
-		self
-			.write_line(format!("  {}", header_cells.join(" │ ").white().bold()))
-			.await;
+		self.write_line(format!("  {}", header_cells.join(" │ "))).await;
 
 		// Separator line
 		let sep_cells: Vec<String> = widths.iter().map(|w| "─".repeat(*w)).collect();
@@ -162,9 +160,9 @@ impl PrettyPrint {
 				.iter()
 				.enumerate()
 				.take(col_count)
-				.map(|(i, cell)| format!("{:>width$}", cell, width = widths[i]))
+				.map(|(i, cell)| format!("{:>width$}", cell, width = widths[i]).bright_cyan().to_string())
 				.collect();
-			self.write_line(format!("  {}", cells.join(" │ ").bright_cyan())).await;
+			self.write_line(format!("  {}", cells.join(" │ "))).await;
 		}
 	}
 
