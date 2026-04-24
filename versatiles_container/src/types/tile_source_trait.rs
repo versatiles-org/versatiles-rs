@@ -173,7 +173,17 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		let p = print.get_list("tile_pyramid").await;
 		let tile_pyramid = self.tile_pyramid().await?;
 		for level in tile_pyramid.iter() {
-			p.add_value(&level).await;
+			if !level.is_empty() {
+				let bbox = level.to_bbox();
+				let entry = [
+					format!("level: {}", level.level(),),
+					format!("bbox: {:?}", bbox.to_array().unwrap()),
+					format!("tiles: {}", level.count_tiles(),),
+					format!("coverage: {}%", level.count_tiles() * 100 / bbox.count_tiles()),
+				]
+				.join(", ");
+				p.add_value(&entry).await;
+			}
 		}
 		print
 			.add_key_value("tile compression", metadata.tile_compression())
