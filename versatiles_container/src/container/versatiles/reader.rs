@@ -620,42 +620,6 @@ mod tests {
 			]
 		);
 
-		let mut printer = PrettyPrint::new();
-		reader
-			.probe_tiles(&mut printer.category("tiles").await, &runtime)
-			.await?;
-		let output = printer.stringify().await;
-		assert_eq!(
-			output.split('\n').collect::<Vec<_>>(),
-			[
-				"tiles:",
-				"  tile count: 341",
-				"  average tile size: 77",
-				"  biggest tiles:",
-				"     # │ z │  x │  y │ size",
-				"    ───┼───┼────┼────┼─────",
-				"     1 │ 1 │  0 │  0 │   77",
-				"     2 │ 1 │  1 │  0 │   77",
-				"     3 │ 1 │  0 │  1 │   77",
-				"     4 │ 1 │  1 │  1 │   77",
-				"     5 │ 2 │  0 │  0 │   77",
-				"     6 │ 2 │  1 │  0 │   77",
-				"     7 │ 2 │  2 │  0 │   77",
-				"     8 │ 2 │  3 │  0 │   77",
-				"     9 │ 2 │  0 │  1 │   77",
-				"    10 │ 4 │ 15 │ 15 │   77",
-				"  tile size analysis per level:",
-				"    level │ count │ size_sum │ avg_size",
-				"    ──────┼───────┼──────────┼─────────",
-				"        0 │     1 │       77 │       77",
-				"        1 │     4 │      308 │       77",
-				"        2 │    16 │    1_232 │       77",
-				"        3 │    64 │    4_928 │       77",
-				"        4 │   256 │   19_712 │       77",
-				""
-			]
-		);
-
 		Ok(())
 	}
 

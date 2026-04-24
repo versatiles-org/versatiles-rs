@@ -1,6 +1,6 @@
 use anyhow::Result;
-use versatiles_container::TilesRuntime;
-use versatiles_core::ProbeDepth;
+use versatiles_container::{TileSource, TilesRuntime};
+use versatiles_core::{ProbeDepth, utils::PrettyPrint};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -32,15 +32,210 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	};
 
 	log::debug!("probing {:?} at depth {:?}", arguments.filename, level);
-	reader.probe(level, runtime).await?;
+	probe(&**reader, level, runtime).await?;
+
+	Ok(())
+}
+
+/// Performs a hierarchical CLI probe of `source` at the specified depth.
+///
+/// Writes metadata, container specifics, tiles, and tile contents to a fresh
+/// `PrettyPrint` reporter based on `level`. Format-specific details are
+/// delegated to the source via `TileSource::probe_container` and
+/// `TileSource::probe_tile_contents`.
+pub async fn probe(source: &dyn TileSource, level: ProbeDepth, runtime: &TilesRuntime) -> Result<()> {
+	use ProbeDepth::{Container, TileContents, Tiles};
+
+	let mut print = PrettyPrint::new();
+
+	let cat = print.category("meta_data").await;
+	cat.add_key_value("source_type", &source.source_type().to_string())
+		.await;
+	cat.add_key_json("meta", &source.tilejson().as_json_value()).await;
+
+	probe_metadata(source, &mut print.category("parameters").await).await?;
+
+	if matches!(level, Container | Tiles | TileContents) {
+		log::debug!("probing source {:?} at depth {:?}", source.source_type(), level);
+		source
+			.probe_container(&mut print.category("container").await, runtime)
+			.await?;
+	}
+
+	if matches!(level, Tiles | TileContents) {
+		log::debug!(
+			"probing tiles {:?} at depth {:?}",
+			source.tilejson().as_json_value(),
+			level
+		);
+		probe_tiles(source, &mut print.category("tiles").await, runtime).await?;
+	}
+
+	if matches!(level, TileContents) {
+		log::debug!(
+			"probing tile contents {:?} at depth {:?}",
+			source.tilejson().as_json_value(),
+			level
+		);
+		source
+			.probe_tile_contents(&mut print.category("tile contents").await, runtime)
+			.await?;
+	}
+
+	Ok(())
+}
+
+/// Writes source metadata (tile pyramid, formats, compression) to `print`.
+pub async fn probe_metadata(source: &dyn TileSource, print: &mut PrettyPrint) -> Result<()> {
+	let metadata = source.metadata();
+	let p = print.get_list("tile_pyramid").await;
+	let tile_pyramid = source.tile_pyramid().await?;
+	for level in tile_pyramid.iter() {
+		if !level.is_empty() {
+			let bbox = level.to_bbox();
+			let entry = [
+				format!("level: {}", level.level(),),
+				format!("bbox: {:?}", bbox.to_array().unwrap()),
+				format!("tiles: {}", level.count_tiles(),),
+				format!("coverage: {}%", level.count_tiles() * 100 / bbox.count_tiles()),
+			]
+			.join(", ");
+			p.add_value(&entry).await;
+		}
+	}
+	print
+		.add_key_value("tile compression", metadata.tile_compression())
+		.await;
+	print.add_key_value("tile format", metadata.tile_format()).await;
+	Ok(())
+}
+
+/// Scans all tiles, reporting average size and the top-10 biggest tiles.
+#[allow(clippy::too_many_lines)]
+pub async fn probe_tiles(source: &dyn TileSource, print: &mut PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
+	fn format_integer_str(value: u64) -> String {
+		let s = value.to_string();
+		let mut result = String::new();
+		for (i, c) in s.chars().enumerate() {
+			if i > 0 && (s.len() - i).is_multiple_of(3) {
+				result.push('_');
+			}
+			result.push(c);
+		}
+		result
+	}
+
+	#[derive(Debug)]
+	#[allow(dead_code)]
+	struct Entry {
+		size: u64,
+		x: u32,
+		y: u32,
+		z: u8,
+	}
+
+	let mut biggest_tiles: Vec<Entry> = Vec::new();
+	let mut min_size: u64 = 0;
+	let mut size_sum: u64 = 0;
+	let mut tile_count: u64 = 0;
+	let mut level_stats: Vec<(u8, u64, u64)> = Vec::new();
+
+	let tile_pyramid = source.tile_pyramid().await?;
+	let total_tiles = tile_pyramid.count_tiles();
+	let progress = runtime.create_progress("scanning tiles", total_tiles);
+
+	for bbox in tile_pyramid.to_iter_bboxes().filter(|b| !b.is_empty()) {
+		let mut level_size_sum: u64 = 0;
+		let mut level_count: u64 = 0;
+		let mut stream = source.tile_size_stream(bbox).await?;
+		while let Some((coord, size_u32)) = stream.next().await {
+			let size = u64::from(size_u32);
+
+			tile_count += 1;
+			size_sum += size;
+			level_size_sum += size;
+			level_count += 1;
+			progress.inc(1);
+
+			if size < min_size {
+				continue;
+			}
+
+			let pos = biggest_tiles
+				.binary_search_by(|e| e.size.cmp(&size).reverse())
+				.unwrap_or_else(|p| p);
+			biggest_tiles.insert(
+				pos,
+				Entry {
+					size,
+					x: coord.x,
+					y: coord.y,
+					z: coord.level,
+				},
+			);
+			if biggest_tiles.len() > 10 {
+				biggest_tiles.pop();
+			}
+			min_size = biggest_tiles.last().expect("biggest_tiles is non-empty").size;
+		}
+		level_stats.push((bbox.level(), level_count, level_size_sum));
+	}
+	progress.finish();
+
+	if tile_count > 0 {
+		print.add_key_value("tile count", &tile_count).await;
+		print
+			.add_key_value("average tile size", &size_sum.div_euclid(tile_count))
+			.await;
+
+		let rows: Vec<Vec<String>> = biggest_tiles
+			.iter()
+			.enumerate()
+			.map(|(i, e)| {
+				vec![
+					format!("{}", i + 1),
+					format!("{}", e.z),
+					format!("{}", e.x),
+					format!("{}", e.y),
+					format_integer_str(e.size),
+				]
+			})
+			.collect();
+		print
+			.add_table("biggest tiles", &["#", "z", "x", "y", "size"], &rows)
+			.await;
+
+		let rows: Vec<Vec<String>> = level_stats
+			.iter()
+			.map(|(level, count, size)| {
+				let avg = if *count > 0 { size / count } else { 0 };
+				vec![
+					format!("{level}"),
+					format_integer_str(*count),
+					format_integer_str(*size),
+					format_integer_str(avg),
+				]
+			})
+			.collect();
+		print
+			.add_table(
+				"tile size analysis per level",
+				&["level", "count", "size_sum", "avg_size"],
+				&rows,
+			)
+			.await;
+	} else {
+		print.add_warning("no tiles found").await;
+	}
 
 	Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use crate::tests::run_command;
-	use anyhow::Result;
+	use versatiles::runtime::create_test_runtime;
 
 	#[test]
 	fn test_local() -> Result<()> {
@@ -56,6 +251,34 @@ mod tests {
 			"-q",
 			"https://download.versatiles.org/osm.versatiles",
 		])?;
+		Ok(())
+	}
+
+	/// Exercises the full orchestration and each free function against a real
+	/// MBTiles file. This replaces the per-method tests that used to live on
+	/// `TileSource` before the probe helpers moved out of the trait.
+	#[tokio::test]
+	async fn probe_all_levels_against_mbtiles() -> Result<()> {
+		let runtime = create_test_runtime();
+		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
+		let source: &dyn TileSource = &**reader;
+
+		probe(source, ProbeDepth::Shallow, &runtime).await?;
+		probe(source, ProbeDepth::Container, &runtime).await?;
+
+		let mut printer = PrettyPrint::new();
+		probe_metadata(source, &mut printer).await?;
+		let out = printer.stringify().await;
+		assert!(out.contains("tile compression"), "got: {out}");
+		assert!(out.contains("tile format"), "got: {out}");
+
+		let mut printer = PrettyPrint::new();
+		probe_tiles(source, &mut printer.category("tiles").await, &runtime).await?;
+		let out = printer.stringify().await;
+		assert!(out.contains("tile count"), "got: {out}");
+		assert!(out.contains("biggest tiles"), "got: {out}");
+		assert!(out.contains("tile size analysis per level"), "got: {out}");
+
 		Ok(())
 	}
 }

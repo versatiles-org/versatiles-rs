@@ -453,11 +453,6 @@ pub mod tests {
 			["container:", "  tile count: 341", "  total stored size: 26_257", ""]
 		);
 
-		let mut printer = PrettyPrint::new();
-		reader
-			.probe_tiles(&mut printer.category("tiles").await, &runtime)
-			.await?;
-
 		Ok(())
 	}
 

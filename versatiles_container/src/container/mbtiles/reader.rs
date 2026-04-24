@@ -592,11 +592,6 @@ pub mod tests {
 			]
 		);
 
-		let mut printer = PrettyPrint::new();
-		reader
-			.probe_tiles(&mut printer.category("tiles").await, &runtime)
-			.await?;
-
 		Ok(())
 	}
 

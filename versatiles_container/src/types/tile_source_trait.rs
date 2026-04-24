@@ -23,7 +23,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
 #[cfg(feature = "cli")]
-use versatiles_core::{ProbeDepth, utils::PrettyPrint};
+use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{TileBBox, TileCoord, TileJSON, TilePyramid, TileStream};
 
 /// Shared ownership of a tile source for concurrent access.
@@ -119,82 +119,11 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		}))
 	}
 
-	/// Performs a hierarchical CLI probe at the specified depth.
+	/// Writes source-specific container metadata, or a placeholder if not implemented.
 	///
-	/// Probes metadata, container specifics, tiles, and tile contents
-	/// based on the requested depth level.
-	#[cfg(feature = "cli")]
-	async fn probe(&self, level: ProbeDepth, runtime: &TilesRuntime) -> Result<()> {
-		use ProbeDepth::{Container, TileContents, Tiles};
-
-		let mut print = PrettyPrint::new();
-
-		let cat = print.category("meta_data").await;
-		cat.add_key_value("source_type", &self.source_type().to_string()).await;
-
-		cat.add_key_json("meta", &self.tilejson().as_json_value()).await;
-
-		self.probe_metadata(&mut print.category("parameters").await).await?;
-
-		if matches!(level, Container | Tiles | TileContents) {
-			log::debug!("probing source {:?} at depth {:?}", self.source_type(), level);
-			self
-				.probe_container(&mut print.category("container").await, runtime)
-				.await?;
-		}
-
-		if matches!(level, Tiles | TileContents) {
-			log::debug!(
-				"probing tiles {:?} at depth {:?}",
-				self.tilejson().as_json_value(),
-				level
-			);
-			self.probe_tiles(&mut print.category("tiles").await, runtime).await?;
-		}
-
-		if matches!(level, TileContents) {
-			log::debug!(
-				"probing tile contents {:?} at depth {:?}",
-				self.tilejson().as_json_value(),
-				level
-			);
-			self
-				.probe_tile_contents(&mut print.category("tile contents").await, runtime)
-				.await?;
-		}
-
-		Ok(())
-	}
-
-	/// Writes source metadata (tile pyramid, formats, compression) to the CLI reporter.
-	#[cfg(feature = "cli")]
-	async fn probe_metadata(&self, print: &mut PrettyPrint) -> Result<()> {
-		let metadata = self.metadata();
-		let p = print.get_list("tile_pyramid").await;
-		let tile_pyramid = self.tile_pyramid().await?;
-		for level in tile_pyramid.iter() {
-			if !level.is_empty() {
-				let bbox = level.to_bbox();
-				let entry = [
-					format!("level: {}", level.level(),),
-					format!("bbox: {:?}", bbox.to_array().unwrap()),
-					format!("tiles: {}", level.count_tiles(),),
-					format!("coverage: {}%", level.count_tiles() * 100 / bbox.count_tiles()),
-				]
-				.join(", ");
-				p.add_value(&entry).await;
-			}
-		}
-		print
-			.add_key_value("tile compression", metadata.tile_compression())
-			.await;
-		print.add_key_value("tile format", metadata.tile_format()).await;
-		Ok(())
-	}
-
-	/// Writes source-specific metadata or a placeholder if not implemented.
-	///
-	/// Container readers may override to provide format-specific details.
+	/// This is the format-specific hook invoked during the CLI probe orchestration
+	/// (see `versatiles::tools::probe`). Container readers override this to report
+	/// details that only make sense for their particular format.
 	#[cfg(feature = "cli")]
 	async fn probe_container(&self, print: &mut PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
 		print
@@ -203,129 +132,10 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
-	/// Scans all tiles, reporting average size and the top-10 biggest tiles.
-	#[cfg(feature = "cli")]
-	#[allow(clippy::too_many_lines)]
-	async fn probe_tiles(&self, print: &mut PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
-		fn format_integer_str(value: u64) -> String {
-			let s = value.to_string();
-			let mut result = String::new();
-			for (i, c) in s.chars().enumerate() {
-				if i > 0 && (s.len() - i).is_multiple_of(3) {
-					result.push('_');
-				}
-				result.push(c);
-			}
-			result
-		}
-
-		#[derive(Debug)]
-		#[allow(dead_code)]
-		struct Entry {
-			size: u64,
-			x: u32,
-			y: u32,
-			z: u8,
-		}
-
-		let mut biggest_tiles: Vec<Entry> = Vec::new();
-		let mut min_size: u64 = 0;
-		let mut size_sum: u64 = 0;
-		let mut tile_count: u64 = 0;
-		let mut level_stats: Vec<(u8, u64, u64)> = Vec::new();
-
-		let tile_pyramid = self.tile_pyramid().await?;
-		let total_tiles = tile_pyramid.count_tiles();
-		let progress = runtime.create_progress("scanning tiles", total_tiles);
-
-		for bbox in tile_pyramid.to_iter_bboxes().filter(|b| !b.is_empty()) {
-			let mut level_size_sum: u64 = 0;
-			let mut level_count: u64 = 0;
-			let mut stream = self.tile_size_stream(bbox).await?;
-			while let Some((coord, size_u32)) = stream.next().await {
-				let size = u64::from(size_u32);
-
-				tile_count += 1;
-				size_sum += size;
-				level_size_sum += size;
-				level_count += 1;
-				progress.inc(1);
-
-				if size < min_size {
-					continue;
-				}
-
-				let pos = biggest_tiles
-					.binary_search_by(|e| e.size.cmp(&size).reverse())
-					.unwrap_or_else(|p| p);
-				biggest_tiles.insert(
-					pos,
-					Entry {
-						size,
-						x: coord.x,
-						y: coord.y,
-						z: coord.level,
-					},
-				);
-				if biggest_tiles.len() > 10 {
-					biggest_tiles.pop();
-				}
-				min_size = biggest_tiles.last().expect("biggest_tiles is non-empty").size;
-			}
-			level_stats.push((bbox.level(), level_count, level_size_sum));
-		}
-		progress.finish();
-
-		if tile_count > 0 {
-			print.add_key_value("tile count", &tile_count).await;
-			print
-				.add_key_value("average tile size", &size_sum.div_euclid(tile_count))
-				.await;
-
-			let rows: Vec<Vec<String>> = biggest_tiles
-				.iter()
-				.enumerate()
-				.map(|(i, e)| {
-					vec![
-						format!("{}", i + 1),
-						format!("{}", e.z),
-						format!("{}", e.x),
-						format!("{}", e.y),
-						format_integer_str(e.size),
-					]
-				})
-				.collect();
-			print
-				.add_table("biggest tiles", &["#", "z", "x", "y", "size"], &rows)
-				.await;
-
-			let rows: Vec<Vec<String>> = level_stats
-				.iter()
-				.map(|(level, count, size)| {
-					let avg = if *count > 0 { size / count } else { 0 };
-					vec![
-						format!("{level}"),
-						format_integer_str(*count),
-						format_integer_str(*size),
-						format_integer_str(avg),
-					]
-				})
-				.collect();
-			print
-				.add_table(
-					"tile size analysis per level",
-					&["level", "count", "size_sum", "avg_size"],
-					&rows,
-				)
-				.await;
-		} else {
-			print.add_warning("no tiles found").await;
-		}
-
-		Ok(())
-	}
-
 	/// Writes sample tile content diagnostics or a placeholder if not implemented.
+	///
+	/// Format-specific hook for the CLI probe orchestration. Override to inspect
+	/// tile payloads (e.g., vector layer stats, raster histograms).
 	#[cfg(feature = "cli")]
 	async fn probe_tile_contents(&self, print: &mut PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
 		print
@@ -357,8 +167,6 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 /// Tests cover trait defaults, parameter plumbing, streaming behavior, and the CLI probe stubs.
 #[cfg(test)]
 mod tests {
-	#[cfg(feature = "cli")]
-	use super::ProbeDepth;
 	use super::*;
 	#[cfg(feature = "cli")]
 	use crate::TilesRuntime;
@@ -486,41 +294,11 @@ mod tests {
 
 	#[cfg(feature = "cli")]
 	#[tokio::test]
-	async fn test_probe_metadata() -> Result<()> {
-		let reader = TestReader::new_dummy();
-		let mut print = PrettyPrint::new();
-		reader.probe_metadata(&mut print).await?;
-		Ok(())
-	}
-
-	#[cfg(feature = "cli")]
-	#[tokio::test]
 	async fn test_probe_container() -> Result<()> {
 		let reader = TestReader::new_dummy();
 		let mut print = PrettyPrint::new();
 		let runtime = TilesRuntime::default();
 		reader.probe_container(&mut print, &runtime).await?;
-		Ok(())
-	}
-
-	#[cfg(feature = "cli")]
-	#[tokio::test]
-	async fn test_probe_tiles() -> Result<()> {
-		let reader = TestReader::new_dummy();
-		let mut print = PrettyPrint::new();
-		let runtime = TilesRuntime::default();
-		reader.probe_tiles(&mut print, &runtime).await?;
-		Ok(())
-	}
-
-	#[cfg(feature = "cli")]
-	#[tokio::test]
-	async fn test_probe_all_levels() -> Result<()> {
-		let reader = TestReader::new_dummy();
-		let runtime = TilesRuntime::default();
-		reader.probe(ProbeDepth::Container, &runtime).await?;
-		reader.probe(ProbeDepth::Tiles, &runtime).await?;
-		reader.probe(ProbeDepth::TileContents, &runtime).await?;
 		Ok(())
 	}
 }
