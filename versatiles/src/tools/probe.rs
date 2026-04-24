@@ -11,8 +11,8 @@ pub struct Subcommand {
 	filename: String,
 
 	/// deep scan (depending on the container implementation)
-	///   -d: scans container
-	///  -dd: scans all tiles
+	///   -d: scans container metadata
+	///  -dd: scans all tile sizes
 	/// -ddd: scans all tile contents
 	#[arg(long, short, action = clap::ArgAction::Count, verbatim_doc_comment)]
 	deep: u8,
@@ -27,7 +27,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	let level = match arguments.deep {
 		0 => ProbeDepth::Shallow,
 		1 => ProbeDepth::Container,
-		2 => ProbeDepth::Tiles,
+		2 => ProbeDepth::TileSizes,
 		3..=255 => ProbeDepth::TileContents,
 	};
 
@@ -44,7 +44,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 /// delegated to the source via `TileSource::probe_container` and
 /// `TileSource::probe_tile_contents`.
 pub async fn probe(source: &dyn TileSource, level: ProbeDepth, runtime: &TilesRuntime) -> Result<()> {
-	use ProbeDepth::{Container, TileContents, Tiles};
+	use ProbeDepth::{Container, TileContents, TileSizes};
 
 	let mut print = PrettyPrint::new();
 
@@ -55,20 +55,20 @@ pub async fn probe(source: &dyn TileSource, level: ProbeDepth, runtime: &TilesRu
 
 	probe_metadata(source, &mut print.category("parameters").await).await?;
 
-	if matches!(level, Container | Tiles | TileContents) {
+	if matches!(level, Container | TileSizes | TileContents) {
 		log::debug!("probing source {:?} at depth {:?}", source.source_type(), level);
 		source
 			.probe_container(&mut print.category("container").await, runtime)
 			.await?;
 	}
 
-	if matches!(level, Tiles | TileContents) {
+	if matches!(level, TileSizes | TileContents) {
 		log::debug!(
 			"probing tiles {:?} at depth {:?}",
 			source.tilejson().as_json_value(),
 			level
 		);
-		probe_tiles(source, &mut print.category("tiles").await, runtime).await?;
+		probe_tile_sizes(source, &mut print.category("tiles").await, runtime).await?;
 	}
 
 	if matches!(level, TileContents) {
@@ -77,9 +77,7 @@ pub async fn probe(source: &dyn TileSource, level: ProbeDepth, runtime: &TilesRu
 			source.tilejson().as_json_value(),
 			level
 		);
-		source
-			.probe_tile_contents(&mut print.category("tile contents").await, runtime)
-			.await?;
+		probe_tile_contents(source, &mut print.category("tile contents").await, runtime).await?;
 	}
 
 	Ok(())
@@ -135,7 +133,7 @@ fn format_integer_str(v: String) -> String {
 
 /// Scans all tiles, reporting average size and the top-10 biggest tiles.
 #[allow(clippy::too_many_lines)]
-pub async fn probe_tiles(source: &dyn TileSource, print: &mut PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
+pub async fn probe_tile_sizes(source: &dyn TileSource, print: &mut PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
 	#[derive(Debug)]
 	#[allow(dead_code)]
 	struct Entry {
@@ -242,6 +240,17 @@ pub async fn probe_tiles(source: &dyn TileSource, print: &mut PrettyPrint, runti
 	Ok(())
 }
 
+/// Writes sample tile content diagnostics or a placeholder if not implemented.
+///
+/// Format-specific hook for the CLI probe orchestration. Override to inspect
+/// tile payloads (e.g., vector layer stats, raster histograms).
+async fn probe_tile_contents(_source: &dyn TileSource, print: &mut PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
+	print
+		.add_warning("deep tile contents probing is not implemented for this source")
+		.await;
+	Ok(())
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -284,7 +293,7 @@ mod tests {
 		assert!(out.contains("tile format"), "got: {out}");
 
 		let mut printer = PrettyPrint::new();
-		probe_tiles(source, &mut printer.category("tiles").await, &runtime).await?;
+		probe_tile_sizes(source, &mut printer.category("tiles").await, &runtime).await?;
 		let out = printer.stringify().await;
 		assert!(out.contains("tile count"), "got: {out}");
 		assert!(out.contains("biggest tiles"), "got: {out}");

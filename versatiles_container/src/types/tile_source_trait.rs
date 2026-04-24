@@ -132,18 +132,6 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
-	/// Writes sample tile content diagnostics or a placeholder if not implemented.
-	///
-	/// Format-specific hook for the CLI probe orchestration. Override to inspect
-	/// tile payloads (e.g., vector layer stats, raster histograms).
-	#[cfg(feature = "cli")]
-	async fn probe_tile_contents(&self, print: &mut PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
-		print
-			.add_warning("deep tile contents probing is not implemented for this source")
-			.await;
-		Ok(())
-	}
-
 	/// Converts `self` into a boxed trait object for dynamic dispatch.
 	fn boxed(self) -> Box<dyn TileSource>
 	where
@@ -273,22 +261,6 @@ mod tests {
 			.await;
 		assert_eq!(coord_count, tile_count);
 		assert_eq!(coord_count, 4);
-		Ok(())
-	}
-
-	#[tokio::test]
-	async fn test_probe_tile_contents() -> Result<()> {
-		#[cfg(feature = "cli")]
-		{
-			use versatiles_core::utils::PrettyPrint;
-
-			let reader = TestReader::new_dummy();
-			let mut print = PrettyPrint::new();
-			let runtime = TilesRuntime::default();
-			reader
-				.probe_tile_contents(&mut print.category("tile contents").await, &runtime)
-				.await?;
-		}
 		Ok(())
 	}
 

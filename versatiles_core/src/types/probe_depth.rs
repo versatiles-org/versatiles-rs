@@ -40,7 +40,7 @@ pub enum ProbeDepth {
 	/// Tiles-level probing depth:
 	/// Inspect each tile's basic metadata (e.g., tile count, bounding boxes),
 	/// but do not examine tile contents.
-	Tiles = 2,
+	TileSizes = 2,
 
 	/// Tile contents-level probing depth:
 	/// Fully read the tile data, including its uncompressed or detailed structure.
@@ -57,7 +57,7 @@ mod tests {
 		match depth {
 			ProbeDepth::Shallow => "Shallow probe: Minimal info gathered.".into(),
 			ProbeDepth::Container => "Container probe: Container-level metadata gathered.".into(),
-			ProbeDepth::Tiles => "Tiles probe: Tile-level metadata gathered.".into(),
+			ProbeDepth::TileSizes => "Tiles probe: Tile-level metadata gathered.".into(),
 			ProbeDepth::TileContents => "TileContents probe: Full tile contents gathered.".into(),
 		}
 	}
@@ -74,7 +74,7 @@ mod tests {
 			"Container probe: Container-level metadata gathered."
 		);
 		assert_eq!(
-			simulate_probe(ProbeDepth::Tiles),
+			simulate_probe(ProbeDepth::TileSizes),
 			"Tiles probe: Tile-level metadata gathered."
 		);
 		assert_eq!(
@@ -89,7 +89,7 @@ mod tests {
 	fn test_discriminants() {
 		assert_eq!(ProbeDepth::Shallow as i32, 0);
 		assert_eq!(ProbeDepth::Container as i32, 1);
-		assert_eq!(ProbeDepth::Tiles as i32, 2);
+		assert_eq!(ProbeDepth::TileSizes as i32, 2);
 		assert_eq!(ProbeDepth::TileContents as i32, 3);
 	}
 }
