@@ -9,6 +9,7 @@
 //! These modules form the geometric backbone for reading, transforming, and exporting geospatial data in VersaTiles.
 
 pub mod ext;
+pub mod feature_source;
 pub mod geo;
 pub mod geojson;
 pub mod tile_outline;
