@@ -20,6 +20,20 @@ Example:
 from_container filename="world.versatiles" | do_some_filtering | do_some_processing
 ```
 
+### Reading raw vector data
+
+Beyond existing tile containers, pipelines can read raw vector geo data and produce MVT tiles directly. The `from_geo` operation accepts GeoJSON files (Shapefile is added in a later phase), projects features to web mercator, simplifies per zoom, and emits tiles on demand:
+
+```vpl
+from_geo filename="places.geojson" layer_name="places" max_zoom=12
+```
+
+For tabular point data (CSV with explicit longitude/latitude columns) use `from_csv`:
+
+```vpl
+from_csv filename="quakes.csv" lon_column="longitude" lat_column="latitude" max_zoom=8
+```
+
 ## Operation Format
 
 Each operation follows this structure:
