@@ -25,7 +25,7 @@ use crate::geo::GeoFeature;
 use crate::vector_tile::VectorTile;
 use anyhow::{Result, bail};
 use futures::StreamExt;
-use geo::BoundingRect;
+use geo::{Area, BoundingRect, Euclidean, Length};
 use geo_types::{Coord, Geometry};
 use rstar::RTree;
 use spatial_index::{FeatureRef, query};
@@ -275,6 +275,52 @@ fn flatten_feature(feature: GeoFeature) -> Vec<GeoFeature> {
 	}
 }
 
+/// Pick the `max_zoom` where the median feature size in mercator-meters
+/// renders at ≈ 4 tile-pixels. WGS84-input features are projected internally.
+///
+/// For point-only inputs (no length/area to measure), returns `MAX_ZOOM` (14).
+///
+/// Result is clamped to `[0, MAX_ZOOM]` where `MAX_ZOOM = 14`.
+#[must_use]
+pub fn auto_max_zoom(features_wgs84: &[GeoFeature]) -> u8 {
+	const MAX_ZOOM: u8 = 14;
+	const TARGET_PX: f64 = 4.0;
+
+	let mut sizes: Vec<f64> = features_wgs84
+		.iter()
+		.filter_map(|f| feature_size_mercator(&f.geometry.clone().to_mercator()))
+		.filter(|s| s.is_finite() && *s > 0.0)
+		.collect();
+	if sizes.is_empty() {
+		return MAX_ZOOM;
+	}
+	sizes.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+	let median = sizes[sizes.len() / 2];
+
+	// At zoom z, a size of `median` mercator-meters renders as
+	// `median * 2^z * TILE_EXTENT / WORLD_SIZE` pixels. Solve for the z where
+	// that equals TARGET_PX:
+	//     2^z = TARGET_PX * WORLD_SIZE / (median * TILE_EXTENT)
+	//     z = log2(...)
+	let zoom_f = (TARGET_PX * WORLD_SIZE / (median * f64::from(TILE_EXTENT))).log2();
+	if !zoom_f.is_finite() {
+		return MAX_ZOOM;
+	}
+	#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+	let z = zoom_f.round().clamp(0.0, f64::from(MAX_ZOOM)) as u8;
+	z
+}
+
+fn feature_size_mercator(g: &Geometry<f64>) -> Option<f64> {
+	match g {
+		Geometry::LineString(ls) => Some(Euclidean.length(ls)),
+		Geometry::MultiLineString(ml) => Some(Euclidean.length(ml)),
+		Geometry::Polygon(p) => Some(p.unsigned_area().sqrt()),
+		Geometry::MultiPolygon(mp) => Some(mp.unsigned_area().sqrt()),
+		_ => None,
+	}
+}
+
 /// Combined simplification tolerance for the arc graph at the given pixels-per-meter.
 ///
 /// The arc graph stores one arc per shared edge — an arc traversed by both
@@ -446,6 +492,78 @@ mod tests {
 		assert_eq!(tile.layers.len(), 1);
 		assert_eq!(tile.layers[0].features.len(), 1);
 		Ok(())
+	}
+
+	#[test]
+	fn auto_max_zoom_for_country_scale_polygon() {
+		// A 10°×10° polygon ≈ 1100 km in mercator. At z=0 it's already ~112 px
+		// wide — way above the 4-px target. log2(4·40075km/(1100km·4096)) is
+		// negative, so the heuristic clamps to 0. (Interpretation: the data is
+		// huge enough at z=0 that no extra detail is needed.)
+		let exterior = LineString::from(vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0], [0.0, 0.0]]);
+		let f = GeoFeature::new(Geometry::Polygon(Polygon::new(exterior, vec![])));
+		assert_eq!(auto_max_zoom(std::slice::from_ref(&f)), 0);
+	}
+
+	#[test]
+	fn auto_max_zoom_for_kilometer_scale_polygon() {
+		// A ~1 km polygon at the equator: 0.009°×0.009° lon/lat ≈ 1 km × 1 km
+		// in mercator. log2(4·40075/(1·4096)) ≈ log2(39) ≈ 5.3 → 5.
+		let exterior = LineString::from(vec![[0.0, 0.0], [0.009, 0.0], [0.009, 0.009], [0.0, 0.009], [0.0, 0.0]]);
+		let f = GeoFeature::new(Geometry::Polygon(Polygon::new(exterior, vec![])));
+		let z = auto_max_zoom(std::slice::from_ref(&f));
+		assert!((4..=6).contains(&z), "expected ~5, got {z}");
+	}
+
+	#[test]
+	fn auto_max_zoom_for_meter_scale_features_caps_at_14() {
+		// A 1 m × 1 m polygon would suggest zoom > 14; should cap at 14.
+		let exterior = LineString::from(vec![
+			[0.000_001, 0.000_001],
+			[0.000_010, 0.000_001],
+			[0.000_010, 0.000_010],
+			[0.000_001, 0.000_010],
+			[0.000_001, 0.000_001],
+		]);
+		let f = GeoFeature::new(Geometry::Polygon(Polygon::new(exterior, vec![])));
+		assert_eq!(auto_max_zoom(std::slice::from_ref(&f)), 14);
+	}
+
+	#[test]
+	fn auto_max_zoom_for_point_only_input_defaults_to_14() {
+		let p1 = GeoFeature::new(Geometry::Point(Point::new(0.0, 0.0)));
+		let p2 = GeoFeature::new(Geometry::Point(Point::new(1.0, 1.0)));
+		assert_eq!(auto_max_zoom(&[p1, p2]), 14);
+	}
+
+	#[test]
+	fn auto_max_zoom_uses_median_not_mean() {
+		// One enormous polygon (continent-scale) and many tiny polygons. The
+		// median is small → high zoom suggested.
+		let huge = LineString::from(vec![
+			[-90.0, -45.0],
+			[90.0, -45.0],
+			[90.0, 45.0],
+			[-90.0, 45.0],
+			[-90.0, -45.0],
+		]);
+		let mut features: Vec<GeoFeature> = Vec::new();
+		features.push(GeoFeature::new(Geometry::Polygon(Polygon::new(huge, vec![]))));
+		// 10 small polygons (~10 m × 10 m each).
+		for i in 0..10 {
+			let off = f64::from(i) * 0.001;
+			let small = LineString::from(vec![
+				[off, off],
+				[off + 0.0001, off],
+				[off + 0.0001, off + 0.0001],
+				[off, off + 0.0001],
+				[off, off],
+			]);
+			features.push(GeoFeature::new(Geometry::Polygon(Polygon::new(small, vec![]))));
+		}
+		let z = auto_max_zoom(&features);
+		// Median feature size is small → should return 14 or near it.
+		assert!(z >= 12, "expected ≥12 (median is small), got {z}");
 	}
 
 	#[tokio::test]

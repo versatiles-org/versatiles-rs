@@ -20,12 +20,14 @@
 use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
+use futures::StreamExt;
 use std::sync::Arc;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
-use versatiles_geometry::feature_import::{FeatureImport, FeatureImportConfig, PointReductionStrategy};
-use versatiles_geometry::feature_source::{GeoJsonSource, ShapefileSource};
+use versatiles_geometry::feature_import::{FeatureImport, FeatureImportConfig, PointReductionStrategy, auto_max_zoom};
+use versatiles_geometry::feature_source::{FeatureSource, GeoJsonSource, ShapefileSource};
+use versatiles_geometry::geo::GeoFeature;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 #[allow(dead_code)] // Phase 1 honors a subset of fields; the rest are wired in later phases.
@@ -100,17 +102,6 @@ impl ReadTileSource for Operation {
 			.map(PointReductionStrategy::parse)
 			.transpose()?
 			.unwrap_or_default();
-		let config = FeatureImportConfig {
-			layer_name: layer_name.clone(),
-			min_zoom: args.min_zoom.unwrap_or(0),
-			max_zoom: args.max_zoom.unwrap_or(14),
-			polygon_simplify_px: args.polygon_simplify.unwrap_or(4.0),
-			line_simplify_px: args.line_simplify.unwrap_or(4.0),
-			polygon_min_area_px: args.polygon_min_area.unwrap_or(4.0),
-			line_min_length_px: args.line_min_length.unwrap_or(4.0),
-			point_reduction,
-			point_reduction_value: args.point_reduction_value.unwrap_or(0.0),
-		};
 
 		// Format dispatch by extension (case-insensitive).
 		let ext = path
@@ -118,21 +109,30 @@ impl ReadTileSource for Operation {
 			.and_then(|s| s.to_str())
 			.map(str::to_ascii_lowercase)
 			.unwrap_or_default();
-		let import = match ext.as_str() {
-			"geojson" | "json" | "ndjson" => {
-				let source = GeoJsonSource::new(&path);
-				FeatureImport::from_source(&source, config).await?
-			}
-			"shp" => {
-				let source = ShapefileSource::new(&path);
-				FeatureImport::from_source(&source, config).await?
-			}
+		let features: Vec<GeoFeature> = match ext.as_str() {
+			"geojson" | "json" | "ndjson" => drain(&GeoJsonSource::new(&path)).await?,
+			"shp" => drain(&ShapefileSource::new(&path)).await?,
 			"" => bail!(
 				"file '{}' has no extension; expected .geojson / .json / .ndjson / .shp",
 				path.display()
 			),
 			other => bail!("unsupported file extension '.{other}' for from_geo"),
 		};
+
+		// Auto max_zoom heuristic when not explicitly specified.
+		let max_zoom = args.max_zoom.unwrap_or_else(|| auto_max_zoom(&features));
+		let config = FeatureImportConfig {
+			layer_name: layer_name.clone(),
+			min_zoom: args.min_zoom.unwrap_or(0),
+			max_zoom,
+			polygon_simplify_px: args.polygon_simplify.unwrap_or(4.0),
+			line_simplify_px: args.line_simplify.unwrap_or(4.0),
+			polygon_min_area_px: args.polygon_min_area.unwrap_or(4.0),
+			line_min_length_px: args.line_min_length.unwrap_or(4.0),
+			point_reduction,
+			point_reduction_value: args.point_reduction_value.unwrap_or(0.0),
+		};
+		let import = FeatureImport::from_features(features, config)?;
 
 		// Build TileJSON / metadata. Tile pyramid covers the data bbox over
 		// [min_zoom, max_zoom]; for empty input, an empty pyramid.
@@ -205,6 +205,16 @@ impl TileSource for Operation {
 			Some(())
 		}))
 	}
+}
+
+/// Drain a `FeatureSource`'s stream into a `Vec`.
+async fn drain<S: FeatureSource + ?Sized>(source: &S) -> Result<Vec<GeoFeature>> {
+	let mut stream = source.load()?;
+	let mut features = Vec::new();
+	while let Some(item) = stream.next().await {
+		features.push(item?);
+	}
+	Ok(features)
 }
 
 crate::operations::macros::define_read_factory!("from_geo", Args, Operation);

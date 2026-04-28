@@ -13,12 +13,14 @@
 use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
+use futures::StreamExt;
 use std::sync::Arc;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
-use versatiles_geometry::feature_import::{FeatureImport, FeatureImportConfig, PointReductionStrategy};
-use versatiles_geometry::feature_source::CsvSourceBuilder;
+use versatiles_geometry::feature_import::{FeatureImport, FeatureImportConfig, PointReductionStrategy, auto_max_zoom};
+use versatiles_geometry::feature_source::{CsvSourceBuilder, FeatureSource};
+use versatiles_geometry::geo::GeoFeature;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 #[allow(dead_code)] // Phase 3 honors a subset of fields; the rest are wired in later phases.
@@ -119,10 +121,19 @@ impl ReadTileSource for Operation {
 			.map(PointReductionStrategy::parse)
 			.transpose()?
 			.unwrap_or_default();
+
+		// Drain features once so the auto-max-zoom heuristic can inspect them.
+		let mut stream = source.load()?;
+		let mut features: Vec<GeoFeature> = Vec::new();
+		while let Some(item) = stream.next().await {
+			features.push(item?);
+		}
+
+		let max_zoom = args.max_zoom.unwrap_or_else(|| auto_max_zoom(&features));
 		let config = FeatureImportConfig {
 			layer_name: layer_name.clone(),
 			min_zoom: args.min_zoom.unwrap_or(0),
-			max_zoom: args.max_zoom.unwrap_or(14),
+			max_zoom,
 			polygon_simplify_px: args.polygon_simplify.unwrap_or(4.0),
 			line_simplify_px: args.line_simplify.unwrap_or(4.0),
 			polygon_min_area_px: args.polygon_min_area.unwrap_or(4.0),
@@ -130,7 +141,7 @@ impl ReadTileSource for Operation {
 			point_reduction,
 			point_reduction_value: args.point_reduction_value.unwrap_or(0.0),
 		};
-		let import = FeatureImport::from_source(&source, config).await?;
+		let import = FeatureImport::from_features(features, config)?;
 
 		let pyramid = match import.bounds_geo()? {
 			Some(bbox) => TilePyramid::from_geo_bbox(import.config().min_zoom, import.config().max_zoom, &bbox)?,
