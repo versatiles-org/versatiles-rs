@@ -22,7 +22,7 @@ use std::sync::Arc;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
-use versatiles_geometry::feature_import::{FeatureImport, FeatureImportConfig, PointReductionStrategy, auto_max_zoom};
+use versatiles_geometry::feature_import::{FeatureImport, FeatureImportConfig, PointReductionStrategy};
 use versatiles_geometry::feature_source::{FeatureSource, GeoJsonSource, ShapefileSource};
 use versatiles_geometry::geo::GeoFeature;
 
@@ -117,12 +117,12 @@ impl ReadTileSource for Operation {
 			other => bail!("unsupported file extension '.{other}' for from_geo"),
 		};
 
-		// Auto max_zoom heuristic when not explicitly specified.
-		let max_zoom = args.max_zoom.unwrap_or_else(|| auto_max_zoom(&features));
+		// `args.max_zoom` of `None` triggers the auto-heuristic inside
+		// `FeatureImport::from_features`; no extra projection pass needed here.
 		let config = FeatureImportConfig {
 			layer_name: layer_name.clone(),
 			min_zoom: args.min_zoom.unwrap_or(0),
-			max_zoom,
+			max_zoom: args.max_zoom,
 			polygon_simplify_px: args.polygon_simplify.unwrap_or(4.0),
 			line_simplify_px: args.line_simplify.unwrap_or(4.0),
 			polygon_min_area_px: args.polygon_min_area.unwrap_or(4.0),
@@ -135,7 +135,7 @@ impl ReadTileSource for Operation {
 		// Build TileJSON / metadata. Tile pyramid covers the data bbox over
 		// [min_zoom, max_zoom]; for empty input, an empty pyramid.
 		let pyramid = match import.bounds_geo()? {
-			Some(bbox) => TilePyramid::from_geo_bbox(import.config().min_zoom, import.config().max_zoom, &bbox)?,
+			Some(bbox) => TilePyramid::from_geo_bbox(import.min_zoom(), import.max_zoom(), &bbox)?,
 			None => TilePyramid::new_empty(),
 		};
 		let metadata = TileSourceMetadata::new(
@@ -199,9 +199,17 @@ impl TileSource for Operation {
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let bbox = self.metadata.intersection_bbox(&bbox);
-		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_coord| {
-			Some(())
-		}))
+		// Yield only coords that the source's pyramid actually covers — for a
+		// small dataset at high `max_zoom`, this avoids reporting millions of
+		// empty coords through the pipeline.
+		let pyramid = self.metadata.tile_pyramid();
+		Ok(TileStream::from_iter_coord(
+			bbox.into_iter_coords(),
+			move |coord| match &pyramid {
+				Some(p) if !p.includes_coord(&coord) => None,
+				_ => Some(()),
+			},
+		))
 	}
 }
 

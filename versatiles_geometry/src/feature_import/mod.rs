@@ -49,7 +49,9 @@ pub const TILE_EXTENT: u32 = 4096;
 pub struct FeatureImportConfig {
 	pub layer_name: String,
 	pub min_zoom: u8,
-	pub max_zoom: u8,
+	/// Highest zoom level emitted. `None` triggers the auto-heuristic
+	/// (median feature size ≈ 4 tile-pixels, capped at 14).
+	pub max_zoom: Option<u8>,
 	/// Douglas-Peucker tolerance for polygons, in tile-pixels at the current zoom.
 	pub polygon_simplify_px: f32,
 	/// Douglas-Peucker tolerance for lines, in tile-pixels at the current zoom.
@@ -73,7 +75,7 @@ impl Default for FeatureImportConfig {
 		Self {
 			layer_name: "features".to_string(),
 			min_zoom: 0,
-			max_zoom: 14,
+			max_zoom: None, // auto via `auto_max_zoom`
 			polygon_simplify_px: 4.0,
 			line_simplify_px: 4.0,
 			polygon_min_area_px: 4.0,
@@ -93,6 +95,9 @@ struct ZoomLayer {
 /// indexed for tile-bbox queries.
 pub struct FeatureImport {
 	config: FeatureImportConfig,
+	/// User intent → resolved at construction. Reflects the auto-heuristic
+	/// when `config.max_zoom` was `None`.
+	resolved_max_zoom: u8,
 	/// Indexed by zoom level. `None` for zooms outside `[min_zoom, max_zoom]`.
 	layers: Vec<Option<ZoomLayer>>,
 	bounds_mercator: Option<[f64; 4]>,
@@ -112,11 +117,8 @@ impl FeatureImport {
 	/// Build the import directly from a vector of features (synchronous path
 	/// for tests and callers that already have features in memory).
 	pub fn from_features(features: Vec<GeoFeature>, config: FeatureImportConfig) -> Result<Self> {
-		if config.min_zoom > config.max_zoom {
-			bail!("min_zoom ({}) > max_zoom ({})", config.min_zoom, config.max_zoom);
-		}
-
-		// Project to web mercator.
+		// Project to web mercator (only once — the auto-`max_zoom` heuristic
+		// reuses these projected geometries instead of re-projecting).
 		let projected: Vec<GeoFeature> = features
 			.into_iter()
 			.map(|mut f| {
@@ -124,6 +126,13 @@ impl FeatureImport {
 				f
 			})
 			.collect();
+
+		// Resolve the auto-`max_zoom` heuristic against the projected features
+		// so we don't pay for projection twice.
+		let resolved_max_zoom = config.max_zoom.unwrap_or_else(|| auto_max_zoom_projected(&projected));
+		if config.min_zoom > resolved_max_zoom {
+			bail!("min_zoom ({}) > max_zoom ({resolved_max_zoom})", config.min_zoom);
+		}
 
 		// Flatten Multi* into N independent features.
 		let flattened: Vec<GeoFeature> = projected.into_iter().flat_map(flatten_feature).collect();
@@ -134,9 +143,9 @@ impl FeatureImport {
 		let (arc_graph, feature_arcs): (ArcGraph, Vec<FeatureArcs>) = arc_graph::build(&flattened);
 
 		// Per-zoom simplification + reduction + spatial index.
-		let n_slots = usize::from(config.max_zoom) + 1;
+		let n_slots = usize::from(resolved_max_zoom) + 1;
 		let mut layers: Vec<Option<ZoomLayer>> = (0..n_slots).map(|_| None).collect();
-		for z in config.min_zoom..=config.max_zoom {
+		for z in config.min_zoom..=resolved_max_zoom {
 			let m_per_px = meters_per_pixel(z);
 			let tol_simplify_m = arc_simplify_tolerance(&config, m_per_px);
 			let polygon_min_area_m2 = f64::from(config.polygon_min_area_px) * m_per_px * m_per_px;
@@ -159,7 +168,7 @@ impl FeatureImport {
 				PointReductionStrategy::None => indexed,
 				PointReductionStrategy::DropRate => {
 					// Cumulative keep ratio: `value^(max_zoom - z)`. At max_zoom it's 1.0.
-					let exp = i32::from(config.max_zoom.saturating_sub(z));
+					let exp = i32::from(resolved_max_zoom.saturating_sub(z));
 					let keep_ratio = f64::from(config.point_reduction_value).powi(exp);
 					reduce_points::apply_drop_rate(indexed, keep_ratio)
 				}
@@ -168,7 +177,13 @@ impl FeatureImport {
 					reduce_points::apply_min_distance(indexed, threshold_m)
 				}
 			};
-			let zoom_features: Vec<GeoFeature> = reduced.into_iter().map(|(_, f)| f).collect();
+			// Drop features without a bounding rect so the R-tree and the
+			// feature list stay aligned (orphans wouldn't be retrievable).
+			let zoom_features: Vec<GeoFeature> = reduced
+				.into_iter()
+				.map(|(_, f)| f)
+				.filter(|f| f.geometry.bounding_rect().is_some())
+				.collect();
 
 			let rtree = build_rtree(&zoom_features);
 			layers[usize::from(z)] = Some(ZoomLayer {
@@ -179,6 +194,7 @@ impl FeatureImport {
 
 		Ok(Self {
 			config,
+			resolved_max_zoom,
 			layers,
 			bounds_mercator,
 		})
@@ -221,6 +237,19 @@ impl FeatureImport {
 	#[must_use]
 	pub fn config(&self) -> &FeatureImportConfig {
 		&self.config
+	}
+
+	/// The effective `max_zoom`: either `config.max_zoom` if set, or the
+	/// auto-heuristic value computed during construction.
+	#[must_use]
+	pub fn max_zoom(&self) -> u8 {
+		self.resolved_max_zoom
+	}
+
+	/// The effective `min_zoom` (just a passthrough; included for symmetry).
+	#[must_use]
+	pub fn min_zoom(&self) -> u8 {
+		self.config.min_zoom
 	}
 }
 
@@ -285,20 +314,38 @@ fn flatten_feature(feature: GeoFeature) -> Vec<GeoFeature> {
 	}
 }
 
-/// Pick the `max_zoom` where the median feature size in mercator-meters
-/// renders at ≈ 4 tile-pixels. WGS84-input features are projected internally.
+/// Pick the `max_zoom` where the median feature size renders at ≈ 4 tile-pixels.
 ///
-/// For point-only inputs (no length/area to measure), returns `MAX_ZOOM` (14).
+/// Input features must be in **WGS84 lon/lat**; they're projected internally.
+/// For point-only inputs (no length/area to measure) the result is the
+/// hard cap `MAX_ZOOM = 14` — point density isn't taken into account in v1
+/// (known limitation; future versions may use median nearest-neighbor distance).
 ///
-/// Result is clamped to `[0, MAX_ZOOM]` where `MAX_ZOOM = 14`.
+/// Most callers should set [`FeatureImportConfig::max_zoom`] to `None` instead
+/// of calling this directly — that path projects each geometry once instead
+/// of twice (this function clones every input geometry to project it).
 #[must_use]
 pub fn auto_max_zoom(features_wgs84: &[GeoFeature]) -> u8 {
+	let projected: Vec<GeoFeature> = features_wgs84
+		.iter()
+		.map(|f| GeoFeature {
+			id: f.id.clone(),
+			geometry: f.geometry.clone().to_mercator(),
+			properties: f.properties.clone(),
+		})
+		.collect();
+	auto_max_zoom_projected(&projected)
+}
+
+/// Internal: same as [`auto_max_zoom`] but expects features already in mercator.
+/// Avoids an extra projection pass when the caller has them projected.
+fn auto_max_zoom_projected(features_mercator: &[GeoFeature]) -> u8 {
 	const MAX_ZOOM: u8 = 14;
 	const TARGET_PX: f64 = 4.0;
 
-	let mut sizes: Vec<f64> = features_wgs84
+	let mut sizes: Vec<f64> = features_mercator
 		.iter()
-		.filter_map(|f| feature_size_mercator(&f.geometry.clone().to_mercator()))
+		.filter_map(|f| feature_size_mercator(&f.geometry))
 		.filter(|s| s.is_finite() && *s > 0.0)
 		.collect();
 	if sizes.is_empty() {
@@ -396,7 +443,7 @@ mod tests {
 			point_feature(2, "east", 90.0, 30.0),
 		];
 		let config = FeatureImportConfig {
-			max_zoom: 5,
+			max_zoom: Some(5),
 			..Default::default()
 		};
 		let import = FeatureImport::from_features(features, config)?;
@@ -422,7 +469,7 @@ mod tests {
 	#[test]
 	fn out_of_range_zoom_returns_none() -> Result<()> {
 		let config = FeatureImportConfig {
-			max_zoom: 3,
+			max_zoom: Some(3),
 			..Default::default()
 		};
 		let import = FeatureImport::from_features(vec![point_feature(1, "o", 0.0, 0.0)], config)?;
@@ -445,7 +492,7 @@ mod tests {
 		let feature = GeoFeature::new(Geometry::Polygon(polygon));
 
 		let config = FeatureImportConfig {
-			max_zoom: 5,
+			max_zoom: Some(5),
 			polygon_simplify_px: 0.0,
 			..Default::default()
 		};
@@ -463,7 +510,7 @@ mod tests {
 		let line = LineString::from(vec![[13.405, 52.520], [13.406, 52.520]]);
 		let feature = GeoFeature::new(Geometry::LineString(line));
 		let config = FeatureImportConfig {
-			max_zoom: 14,
+			max_zoom: Some(14),
 			line_simplify_px: 0.0,
 			..Default::default()
 		};
@@ -492,7 +539,7 @@ mod tests {
 		feature.set_property("kind".into(), "boundary");
 
 		let config = FeatureImportConfig {
-			max_zoom: 3,
+			max_zoom: Some(3),
 			polygon_simplify_px: 0.0, // disable simplification for this test
 			..Default::default()
 		};
@@ -587,7 +634,7 @@ mod tests {
 		// behaviour.)
 		let config = FeatureImportConfig {
 			layer_name: "places".to_string(),
-			max_zoom: 5,
+			max_zoom: Some(5),
 			polygon_simplify_px: 0.0,
 			line_simplify_px: 0.0,
 			polygon_min_area_px: 0.0,

@@ -126,27 +126,39 @@ impl FeatureSource for CsvSource {
 		let header_names: Vec<String> = headers.iter().map(str::to_string).collect();
 		let path_for_errors = self.path.clone();
 
+		// Per-row errors (malformed CSV record, unparseable lon/lat) are logged
+		// once per source and the row is skipped; one bad row never aborts the
+		// whole load. Mirrors the lossy-DBF behavior in `ShapefileSource`.
 		let mut features: Vec<Result<GeoFeature>> = Vec::new();
+		let mut skipped: u64 = 0;
+		let mut first_error: Option<String> = None;
 		for (row_idx, record) in csv_reader.records().enumerate() {
 			let record = match record {
 				Ok(r) => r,
 				Err(e) => {
-					features.push(Err(anyhow::Error::new(e).context(format!(
-						"reading CSV record {} of {}",
-						row_idx + 1,
-						path_for_errors.display()
-					))));
+					skipped += 1;
+					if first_error.is_none() {
+						first_error = Some(format!("row {}: {e}", row_idx + 1));
+					}
 					continue;
 				}
 			};
 			match build_feature(&record, lon_idx, lat_idx, id_idx, &header_names) {
 				Ok(feature) => features.push(Ok(feature)),
-				Err(e) => features.push(Err(e.context(format!(
-					"row {} in {}",
-					row_idx + 1,
-					path_for_errors.display()
-				)))),
+				Err(e) => {
+					skipped += 1;
+					if first_error.is_none() {
+						first_error = Some(format!("row {}: {e}", row_idx + 1));
+					}
+				}
 			}
+		}
+		if skipped > 0 {
+			log::warn!(
+				"CSV {} had {skipped} unreadable row(s); first error: {}",
+				path_for_errors.display(),
+				first_error.as_deref().unwrap_or("(none recorded)"),
+			);
 		}
 
 		Ok(stream::iter(features).boxed())
@@ -279,23 +291,20 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn unparseable_lon_emits_row_error() -> Result<()> {
+	async fn unparseable_lon_skipped_with_warning() -> Result<()> {
+		// One bad row should be silently skipped (with a single log::warn) so
+		// downstream consumers (drain loops, FeatureImport) see a partial load.
 		let dir = tempfile::tempdir()?;
 		let path = dir.path().join("bad.csv");
-		std::fs::write(&path, "lon,lat,name\n1.0,2.0,A\nnot_a_number,3.0,B\n")?;
+		std::fs::write(&path, "lon,lat,name\n1.0,2.0,A\nnot_a_number,3.0,B\n3.0,4.0,C\n")?;
 
 		let source = CsvSourceBuilder::new(&path, "lon", "lat").build()?;
 		let mut stream = source.load()?;
-		let mut ok = 0;
-		let mut err = 0;
+		let mut features = Vec::new();
 		while let Some(item) = stream.next().await {
-			match item {
-				Ok(_) => ok += 1,
-				Err(_) => err += 1,
-			}
+			features.push(item?); // No bad row leaks as an Err item.
 		}
-		assert_eq!(ok, 1);
-		assert_eq!(err, 1);
+		assert_eq!(features.len(), 2, "expected the two parseable rows");
 		Ok(())
 	}
 
