@@ -8,6 +8,7 @@
 //!
 //! These modules form the geometric backbone for reading, transforming, and exporting geospatial data in VersaTiles.
 
+pub mod arc_graph;
 pub mod ext;
 pub mod feature_import;
 pub mod feature_source;
