@@ -109,10 +109,36 @@ pub fn clip_geometry(g: Geometry<f64>, bbox: [f64; 4]) -> Vec<Geometry<f64>> {
 fn quantize_geometry(g: &Geometry<f64>, tile_bbox: [f64; 4], extent: u32) -> Geometry<f64> {
 	let [xmin, _, xmax, ymax] = tile_bbox;
 	let scale = f64::from(extent) / (xmax - xmin);
-	g.map_coords(|c| Coord {
+	let mapped = g.map_coords(|c| Coord {
 		x: (c.x - xmin) * scale,
 		y: (ymax - c.y) * scale, // tile-local Y is flipped (top-left origin)
-	})
+	});
+	// Y flip reverses ring orientation. The MVT encoder/decoder uses a
+	// math-axes convention (positive surveyor's-formula area = exterior); to
+	// preserve it we re-reverse polygon rings here.
+	reverse_polygon_rings(mapped)
+}
+
+fn reverse_polygon_rings(g: Geometry<f64>) -> Geometry<f64> {
+	fn reverse_ring(ls: LineString<f64>) -> LineString<f64> {
+		let mut v = ls.0;
+		v.reverse();
+		LineString::new(v)
+	}
+	fn reverse_polygon(p: Polygon<f64>) -> Polygon<f64> {
+		let (exterior, interiors) = p.into_inner();
+		Polygon::new(
+			reverse_ring(exterior),
+			interiors.into_iter().map(reverse_ring).collect(),
+		)
+	}
+	match g {
+		Geometry::Polygon(p) => Geometry::Polygon(reverse_polygon(p)),
+		Geometry::MultiPolygon(mp) => {
+			Geometry::MultiPolygon(MultiPolygon(mp.0.into_iter().map(reverse_polygon).collect()))
+		}
+		other => other,
+	}
 }
 
 // ─── Line clipping ────────────────────────────────────────────────────────

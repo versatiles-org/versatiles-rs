@@ -305,6 +305,51 @@ mod tests {
 		Ok(())
 	}
 
+	/// One malformed row in a CSV must not abort the whole load. The skip-
+	/// with-warn behavior in `CsvSource::load` propagates through the
+	/// `from_csv` operation: surviving rows still become tiles.
+	#[tokio::test]
+	async fn malformed_row_is_skipped_not_aborted() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let path = dir.path().join("partial.csv");
+		std::fs::write(
+			&path,
+			"lon,lat,name\n0.0,0.0,A\nnot_a_number,1.0,B\n2.0,2.0,C\n",
+		)?;
+
+		let factory = PipelineFactory::new_dummy();
+		let vpl = format!(
+			"from_csv filename=\"{}\" lon_column=\"lon\" lat_column=\"lat\" max_zoom=2",
+			path.display()
+		);
+		let op = factory.operation_from_vpl(&vpl).await?;
+
+		let tile = op.tile(&TileCoord::new(0, 0, 0)?).await?.expect("world tile");
+		let vt = versatiles_geometry::vector_tile::VectorTile::from_blob(&tile.into_blob(&Uncompressed)?)?;
+		assert_eq!(
+			vt.layers[0].features.len(),
+			2,
+			"the two parseable rows should still produce features"
+		);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn unsupported_args_error() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let result = factory
+			.operation_from_vpl(
+				"from_csv filename=\"../testdata/quakes.csv\" \
+				 lon_column=\"longitude\" lat_column=\"latitude\" \
+				 properties_include=[\"name\"]",
+			)
+			.await;
+		assert!(result.is_err());
+		let msg = format!("{:#}", result.unwrap_err());
+		assert!(msg.contains("properties_include"), "{msg}");
+		Ok(())
+	}
+
 	#[tokio::test]
 	async fn delimiter_must_be_single_byte() {
 		let factory = PipelineFactory::new_dummy();

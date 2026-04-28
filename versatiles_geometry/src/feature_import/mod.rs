@@ -112,6 +112,9 @@ impl FeatureImport {
 	pub fn from_features(features: Vec<GeoFeature>, config: FeatureImportConfig) -> Result<Self> {
 		// Project to web mercator (only once — the auto-`max_zoom` heuristic
 		// reuses these projected geometries instead of re-projecting).
+		// TODO: validate CRS once the GeoJSON parser tracks it. v1 trusts the
+		// caller to pass WGS84 lon/lat; non-WGS84 input silently produces
+		// garbage mercator coordinates.
 		let projected: Vec<GeoFeature> = features
 			.into_iter()
 			.map(|mut f| {

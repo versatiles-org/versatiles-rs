@@ -298,6 +298,91 @@ mod tests {
 		Ok(())
 	}
 
+	/// End-to-end topology-preservation test: two adjacent polygons share a
+	/// wiggly edge in `testdata/borders.geojson`. After the full pipeline
+	/// (project → arc graph → simplify → reassemble → clip → quantize →
+	/// encode MVT), the two rendered polygons must still share vertices at
+	/// every zoom level — i.e. the intersection of their decoded vertex
+	/// sets is non-empty. If topology weren't preserved, simplification
+	/// would shift one polygon's edge differently from the other's and the
+	/// shared vertices would drift apart.
+	#[tokio::test]
+	async fn shared_border_topology_preserved_through_from_geo() -> Result<()> {
+		use std::collections::HashSet;
+
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				"from_geo filename=\"../testdata/borders.geojson\" layer_name=\"borders\" \
+				 max_zoom=10 polygon_min_area=0 line_min_length=0",
+			)
+			.await?;
+
+		// The fixture's two polygons share a wiggly edge at lon=6, between lat=2
+		// and lat=3. Query the tile that contains that shared edge at each
+		// zoom: both polygons must intersect it, so both must show up in the
+		// rendered MVT. Topology preservation is the same property at every
+		// zoom — checking z=4..=10 is plenty of evidence that the arc-graph
+		// pipeline survives end-to-end.
+		for z in 4..=10 {
+			let coord = versatiles_core::TileCoord::from_geo(6.0, 2.5, z)?;
+			let tile = op
+				.tile(&coord)
+				.await?
+				.unwrap_or_else(|| panic!("tile at z={z} present"));
+			let blob = tile.into_blob(&Uncompressed)?;
+			let vt = versatiles_geometry::vector_tile::VectorTile::from_blob(&blob)?;
+			assert_eq!(vt.layers[0].features.len(), 2, "both polygons at z={z}");
+
+			let g0 = vt.layers[0].features[0].to_geometry()?;
+			let g1 = vt.layers[0].features[1].to_geometry()?;
+			let a: HashSet<(i64, i64)> = polygon_vertex_set(&g0);
+			let b: HashSet<(i64, i64)> = polygon_vertex_set(&g1);
+			assert!(!a.is_empty() && !b.is_empty(), "polygon vertex set empty at z={z}");
+			let shared: HashSet<_> = a.intersection(&b).copied().collect();
+			assert!(
+				!shared.is_empty(),
+				"adjacent polygons must still share vertices at z={z} (a={a:?}, b={b:?})"
+			);
+		}
+		Ok(())
+	}
+
+	/// Return the integer-grid vertex set of all of a polygon's coordinates.
+	fn polygon_vertex_set(g: &geo_types::Geometry<f64>) -> std::collections::HashSet<(i64, i64)> {
+		let coords: Vec<geo_types::Coord<f64>> = match g {
+			geo_types::Geometry::MultiPolygon(mp) => mp
+				.0
+				.iter()
+				.flat_map(|p| p.exterior().0.iter().copied().collect::<Vec<_>>())
+				.collect(),
+			geo_types::Geometry::Polygon(p) => p.exterior().0.clone(),
+			_ => return std::collections::HashSet::new(),
+		};
+		coords
+			.iter()
+			.map(|c| {
+				#[allow(clippy::cast_possible_truncation)]
+				let q = (c.x.round() as i64, c.y.round() as i64);
+				q
+			})
+			.collect()
+	}
+
+	#[tokio::test]
+	async fn unsupported_args_error() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let bbox_err = factory
+			.operation_from_vpl(
+				"from_geo filename=\"../testdata/places.geojson\" bbox=[0,0,1,1]",
+			)
+			.await;
+		assert!(bbox_err.is_err());
+		let msg = format!("{:#}", bbox_err.unwrap_err());
+		assert!(msg.contains("bbox"), "{msg}");
+		Ok(())
+	}
+
 	#[tokio::test]
 	async fn extension_dispatch_is_case_insensitive() -> Result<()> {
 		// Mixed-case `.SHP` should still route to the shapefile path.
