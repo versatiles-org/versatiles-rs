@@ -32,6 +32,7 @@ pub fn read_operation_factories() -> Vec<Box<dyn ReadOperationFactoryTrait>> {
 	vec![
 		Box::new(read::from_color::Factory {}),
 		Box::new(read::from_container::Factory {}),
+		Box::new(read::from_csv::Factory {}),
 		Box::new(read::from_debug::Factory {}),
 		Box::new(read::from_geo::Factory {}),
 		Box::new(read::from_merged_vector::Factory {}),

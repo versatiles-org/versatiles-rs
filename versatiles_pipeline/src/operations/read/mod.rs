@@ -1,5 +1,6 @@
 pub mod from_color;
 pub mod from_container;
+pub mod from_csv;
 pub mod from_debug;
 #[cfg(feature = "gdal")]
 pub mod from_gdal;
