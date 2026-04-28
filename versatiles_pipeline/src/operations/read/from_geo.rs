@@ -100,6 +100,8 @@ impl ReadTileSource for Operation {
 			max_zoom: args.max_zoom.unwrap_or(14),
 			polygon_simplify_px: args.polygon_simplify.unwrap_or(4.0),
 			line_simplify_px: args.line_simplify.unwrap_or(4.0),
+			polygon_min_area_px: args.polygon_min_area.unwrap_or(4.0),
+			line_min_length_px: args.line_min_length.unwrap_or(4.0),
 		};
 
 		// Format dispatch by extension (case-insensitive).

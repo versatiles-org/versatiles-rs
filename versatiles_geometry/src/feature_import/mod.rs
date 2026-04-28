@@ -9,6 +9,8 @@
 //! simplification. Phase 5 will replace this with a topology-preserving
 //! arc-graph implementation behind the same configuration knobs.
 
+mod reduce_lines;
+mod reduce_polygons;
 mod spatial_index;
 mod tile_render;
 
@@ -31,8 +33,8 @@ pub const TILE_EXTENT: u32 = 4096;
 
 /// Configuration for [`FeatureImport`].
 ///
-/// Reduction-related fields (`polygon_min_area`, `point_reduction`, …) are
-/// intentionally absent in Phase 1 and will be added in Phase 4.
+/// Point-reduction strategies (`point_reduction`, `point_reduction_value`) are
+/// added in step 4.2.
 #[derive(Clone, Debug)]
 pub struct FeatureImportConfig {
 	pub layer_name: String,
@@ -42,6 +44,12 @@ pub struct FeatureImportConfig {
 	pub polygon_simplify_px: f32,
 	/// Douglas-Peucker tolerance for lines, in tile-pixels at the current zoom.
 	pub line_simplify_px: f32,
+	/// Drop polygons whose area at the current zoom is below this many tile-pixels².
+	/// `0.0` disables the filter.
+	pub polygon_min_area_px: f32,
+	/// Drop lines whose length at the current zoom is below this many tile-pixels.
+	/// `0.0` disables the filter.
+	pub line_min_length_px: f32,
 }
 
 impl Default for FeatureImportConfig {
@@ -52,6 +60,8 @@ impl Default for FeatureImportConfig {
 			max_zoom: 14,
 			polygon_simplify_px: 4.0,
 			line_simplify_px: 4.0,
+			polygon_min_area_px: 4.0,
+			line_min_length_px: 4.0,
 		}
 	}
 }
@@ -101,15 +111,20 @@ impl FeatureImport {
 		let flattened: Vec<GeoFeature> = projected.into_iter().flat_map(flatten_feature).collect();
 		let bounds_mercator = features_bbox(&flattened);
 
-		// Per-zoom simplification + spatial index.
+		// Per-zoom simplification + reduction + spatial index.
 		let n_slots = usize::from(config.max_zoom) + 1;
 		let mut layers: Vec<Option<ZoomLayer>> = (0..n_slots).map(|_| None).collect();
 		for z in config.min_zoom..=config.max_zoom {
-			let tol_polygon_m = simplify_tolerance_meters(config.polygon_simplify_px, z);
-			let tol_line_m = simplify_tolerance_meters(config.line_simplify_px, z);
+			let m_per_px = meters_per_pixel(z);
+			let tol_polygon_m = f64::from(config.polygon_simplify_px) * m_per_px;
+			let tol_line_m = f64::from(config.line_simplify_px) * m_per_px;
+			let polygon_min_area_m2 = f64::from(config.polygon_min_area_px) * m_per_px * m_per_px;
+			let line_min_length_m = f64::from(config.line_min_length_px) * m_per_px;
 			let zoom_features: Vec<GeoFeature> = flattened
 				.iter()
 				.map(|f| simplify_feature(f, tol_polygon_m, tol_line_m))
+				.filter(|f| reduce_polygons::passes_min_area(&f.geometry, polygon_min_area_m2))
+				.filter(|f| reduce_lines::passes_min_length(&f.geometry, line_min_length_m))
 				.collect();
 			let rtree = build_rtree(&zoom_features);
 			layers[usize::from(z)] = Some(ZoomLayer {
@@ -175,14 +190,10 @@ fn tile_mercator_bbox(z: u8, x: u32, y: u32) -> [f64; 4] {
 	[xmin, ymin, xmax, ymax]
 }
 
-fn simplify_tolerance_meters(tolerance_px: f32, zoom: u8) -> f64 {
-	if tolerance_px <= 0.0 {
-		return 0.0;
-	}
+fn meters_per_pixel(zoom: u8) -> f64 {
 	let tiles_per_side = f64::from(2u32.pow(u32::from(zoom)));
 	let tile_size_m = WORLD_SIZE / tiles_per_side;
-	let m_per_px = tile_size_m / f64::from(TILE_EXTENT);
-	f64::from(tolerance_px) * m_per_px
+	tile_size_m / f64::from(TILE_EXTENT)
 }
 
 fn flatten_feature(feature: GeoFeature) -> Vec<GeoFeature> {
@@ -321,6 +332,52 @@ mod tests {
 		};
 		let import = FeatureImport::from_features(vec![point_feature(1, "o", 0.0, 0.0)], config)?;
 		assert!(import.get_tile(10, 0, 0)?.is_none());
+		Ok(())
+	}
+
+	#[test]
+	fn drops_tiny_polygon_at_low_zoom() -> Result<()> {
+		// A tiny polygon (~1m × 1m) is below `polygon_min_area_px=4` at *every*
+		// zoom (it's never larger than 4 px²), so no tile should contain it.
+		let exterior = LineString::from(vec![
+			[13.40500, 52.52000],
+			[13.40501, 52.52000],
+			[13.40501, 52.52001],
+			[13.40500, 52.52001],
+			[13.40500, 52.52000],
+		]);
+		let polygon = Polygon::new(exterior, vec![]);
+		let feature = GeoFeature::new(Geometry::Polygon(polygon));
+
+		let config = FeatureImportConfig {
+			max_zoom: 5,
+			polygon_simplify_px: 0.0,
+			..Default::default()
+		};
+		let import = FeatureImport::from_features(vec![feature], config)?;
+		// Tile (z=5) over Berlin is the smallest tile we built.
+		let coord = versatiles_core::TileCoord::from_geo(13.405, 52.52, 5)?;
+		assert!(import.get_tile(coord.level, coord.x, coord.y)?.is_none());
+		Ok(())
+	}
+
+	#[test]
+	fn drops_short_line_at_low_zoom() -> Result<()> {
+		// A ~10m line at high zoom is fine; at low zoom (z=0, 1 px ≈ 9.8 km),
+		// it's far below `line_min_length_px=4` (which means ≥ 39 km at z=0).
+		let line = LineString::from(vec![[13.405, 52.520], [13.406, 52.520]]);
+		let feature = GeoFeature::new(Geometry::LineString(line));
+		let config = FeatureImportConfig {
+			max_zoom: 14,
+			line_simplify_px: 0.0,
+			..Default::default()
+		};
+		let import = FeatureImport::from_features(vec![feature], config)?;
+		// At z=0, the line is too short.
+		assert!(import.get_tile(0, 0, 0)?.is_none());
+		// At z=14, the line is large enough.
+		let coord = versatiles_core::TileCoord::from_geo(13.405, 52.52, 14)?;
+		assert!(import.get_tile(coord.level, coord.x, coord.y)?.is_some());
 		Ok(())
 	}
 
