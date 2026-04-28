@@ -35,8 +35,11 @@ pub struct ArcRef {
 /// The graph of all distinct arcs in a feature set.
 #[derive(Clone, Debug, Default)]
 pub struct ArcGraph {
-	pub(crate) arcs: Vec<Arc>,
-	pub(crate) canonical_index: HashMap<Vec<(u64, u64)>, ArcId>,
+	pub(super) arcs: Vec<Arc>,
+	/// Canonical key → arc id, used by [`extract::build`] to dedupe arcs in
+	/// either direction. Not used after build; kept on the graph so the
+	/// `insert` method (also private to the module) can append.
+	pub(super) canonical_index: HashMap<Vec<(u64, u64)>, ArcId>,
 }
 
 impl ArcGraph {
@@ -75,14 +78,33 @@ pub enum FeatureArcs {
 
 /// A linestring decomposed into arcs (in input order).
 #[derive(Clone, Debug)]
-pub struct LineStringArcs(pub Vec<ArcRef>);
+pub struct LineStringArcs(pub(super) Vec<ArcRef>);
+
+impl LineStringArcs {
+	#[must_use]
+	pub fn arcs(&self) -> &[ArcRef] {
+		&self.0
+	}
+}
 
 /// A polygon decomposed into arcs: one ring of arcs for the exterior, plus
 /// one ring of arcs for each interior (hole).
 #[derive(Clone, Debug)]
 pub struct PolygonArcs {
-	pub exterior: Vec<ArcRef>,
-	pub interiors: Vec<Vec<ArcRef>>,
+	pub(super) exterior: Vec<ArcRef>,
+	pub(super) interiors: Vec<Vec<ArcRef>>,
+}
+
+impl PolygonArcs {
+	#[must_use]
+	pub fn exterior(&self) -> &[ArcRef] {
+		&self.exterior
+	}
+
+	#[must_use]
+	pub fn interiors(&self) -> &[Vec<ArcRef>] {
+		&self.interiors
+	}
 }
 
 #[cfg(test)]

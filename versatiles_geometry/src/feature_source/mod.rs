@@ -25,6 +25,13 @@ pub trait FeatureSource: Send {
 	/// features via [`futures::stream::iter`]; later implementations are free to
 	/// stream records on demand. Either way the caller drains the stream to get
 	/// every feature.
+	///
+	/// **v1 limitation**: this method is synchronous. A genuinely streaming
+	/// source that needs to perform async I/O during setup (FlatGeobuf with HTTP
+	/// range requests, OSM PBF block index over the network) will require
+	/// changing this to `async fn`. We're deferring that breaking change until
+	/// such a source is added; existing v1 adapters do their I/O synchronously
+	/// inside this method.
 	fn load(&self) -> Result<BoxStream<'static, Result<GeoFeature>>>;
 
 	/// Short, human-readable name for this source — typically the filename stem.

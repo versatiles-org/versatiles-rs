@@ -19,24 +19,25 @@
 //!    min-length, points by `point_reduction` strategy.
 //! 5. Build an R-tree over surviving features for fast tile-bbox queries.
 
+mod heuristics;
 mod reduce_lines;
 mod reduce_points;
 mod reduce_polygons;
 mod spatial_index;
 mod tile_render;
 
+pub use heuristics::auto_max_zoom;
 pub use reduce_points::PointReductionStrategy;
 pub use tile_render::{clip_geometry, render_tile};
 
 use crate::arc_graph::{self, ArcGraph, FeatureArcs};
 use crate::ext::{MercatorExt, coord_from_mercator};
-use crate::feature_source::FeatureSource;
 use crate::geo::GeoFeature;
 use crate::vector_tile::VectorTile;
 use anyhow::{Result, bail};
-use futures::StreamExt;
-use geo::{Area, BoundingRect, Euclidean, Length};
+use geo::BoundingRect;
 use geo_types::{Coord, Geometry};
+use heuristics::auto_max_zoom_projected;
 use rstar::RTree;
 use spatial_index::{FeatureRef, query};
 use versatiles_core::{GeoBBox, WORLD_SIZE};
@@ -104,18 +105,10 @@ pub struct FeatureImport {
 }
 
 impl FeatureImport {
-	/// Drain a [`FeatureSource`]'s stream and build the import.
-	pub async fn from_source<S: FeatureSource + ?Sized>(source: &S, config: FeatureImportConfig) -> Result<Self> {
-		let mut stream = source.load()?;
-		let mut features = Vec::new();
-		while let Some(item) = stream.next().await {
-			features.push(item?);
-		}
-		Self::from_features(features, config)
-	}
-
-	/// Build the import directly from a vector of features (synchronous path
-	/// for tests and callers that already have features in memory).
+	/// Build the import from a vector of features.
+	///
+	/// Callers typically drain a [`crate::feature_source::FeatureSource`]'s
+	/// stream into a `Vec<GeoFeature>` first, then pass it here.
 	pub fn from_features(features: Vec<GeoFeature>, config: FeatureImportConfig) -> Result<Self> {
 		// Project to web mercator (only once — the auto-`max_zoom` heuristic
 		// reuses these projected geometries instead of re-projecting).
@@ -311,70 +304,6 @@ fn flatten_feature(feature: GeoFeature) -> Vec<GeoFeature> {
 			})
 			.collect(),
 		_ => unreachable!("checked is_multi above"),
-	}
-}
-
-/// Pick the `max_zoom` where the median feature size renders at ≈ 4 tile-pixels.
-///
-/// Input features must be in **WGS84 lon/lat**; they're projected internally.
-/// For point-only inputs (no length/area to measure) the result is the
-/// hard cap `MAX_ZOOM = 14` — point density isn't taken into account in v1
-/// (known limitation; future versions may use median nearest-neighbor distance).
-///
-/// Most callers should set [`FeatureImportConfig::max_zoom`] to `None` instead
-/// of calling this directly — that path projects each geometry once instead
-/// of twice (this function clones every input geometry to project it).
-#[must_use]
-pub fn auto_max_zoom(features_wgs84: &[GeoFeature]) -> u8 {
-	let projected: Vec<GeoFeature> = features_wgs84
-		.iter()
-		.map(|f| GeoFeature {
-			id: f.id.clone(),
-			geometry: f.geometry.clone().to_mercator(),
-			properties: f.properties.clone(),
-		})
-		.collect();
-	auto_max_zoom_projected(&projected)
-}
-
-/// Internal: same as [`auto_max_zoom`] but expects features already in mercator.
-/// Avoids an extra projection pass when the caller has them projected.
-fn auto_max_zoom_projected(features_mercator: &[GeoFeature]) -> u8 {
-	const MAX_ZOOM: u8 = 14;
-	const TARGET_PX: f64 = 4.0;
-
-	let mut sizes: Vec<f64> = features_mercator
-		.iter()
-		.filter_map(|f| feature_size_mercator(&f.geometry))
-		.filter(|s| s.is_finite() && *s > 0.0)
-		.collect();
-	if sizes.is_empty() {
-		return MAX_ZOOM;
-	}
-	sizes.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-	let median = sizes[sizes.len() / 2];
-
-	// At zoom z, a size of `median` mercator-meters renders as
-	// `median * 2^z * TILE_EXTENT / WORLD_SIZE` pixels. Solve for the z where
-	// that equals TARGET_PX:
-	//     2^z = TARGET_PX * WORLD_SIZE / (median * TILE_EXTENT)
-	//     z = log2(...)
-	let zoom_f = (TARGET_PX * WORLD_SIZE / (median * f64::from(TILE_EXTENT))).log2();
-	if !zoom_f.is_finite() {
-		return MAX_ZOOM;
-	}
-	#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-	let z = zoom_f.round().clamp(0.0, f64::from(MAX_ZOOM)) as u8;
-	z
-}
-
-fn feature_size_mercator(g: &Geometry<f64>) -> Option<f64> {
-	match g {
-		Geometry::LineString(ls) => Some(Euclidean.length(ls)),
-		Geometry::MultiLineString(ml) => Some(Euclidean.length(ml)),
-		Geometry::Polygon(p) => Some(p.unsigned_area().sqrt()),
-		Geometry::MultiPolygon(mp) => Some(mp.unsigned_area().sqrt()),
-		_ => None,
 	}
 }
 
@@ -624,14 +553,14 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn from_source_loads_geojson() -> Result<()> {
-		use crate::feature_source::GeoJsonSource;
+	async fn from_features_via_geojson_source() -> Result<()> {
+		use crate::feature_source::{FeatureSource, GeoJsonSource};
+		use futures::StreamExt;
 		let src = GeoJsonSource::new("../testdata/places.geojson");
 		// Disable simplification + reduction so this test exercises only the
 		// import + render path. (At z=0, the default simplify tolerance is
 		// kilometers-large, which is intentional but would collapse the
-		// fixture's small polygons into degenerate triangles — Phase 5
-		// behaviour.)
+		// fixture's small polygons into degenerate triangles.)
 		let config = FeatureImportConfig {
 			layer_name: "places".to_string(),
 			max_zoom: Some(5),
@@ -641,7 +570,12 @@ mod tests {
 			line_min_length_px: 0.0,
 			..Default::default()
 		};
-		let import = FeatureImport::from_source(&src, config).await?;
+		let mut stream = src.load()?;
+		let mut features = Vec::new();
+		while let Some(item) = stream.next().await {
+			features.push(item?);
+		}
+		let import = FeatureImport::from_features(features, config)?;
 		assert!(import.bounds_mercator().is_some());
 
 		let tile = import.get_tile(0, 0, 0)?.expect("world tile non-empty");
