@@ -72,8 +72,20 @@ impl FeatureSource for ShapefileSource {
 	fn load(&self) -> Result<BoxStream<'static, Result<GeoFeature>>> {
 		self.check_projection()?;
 
-		let mut reader = shapefile::Reader::from_path(&self.path)
+		// Build the dbase reader with `UnicodeLossy` so non-UTF-8 bytes become
+		// U+FFFD instead of aborting the whole load — matches the lossy
+		// behavior dbase had by default before 0.7.
+		let shape_reader = shapefile::ShapeReader::from_path(&self.path)
 			.with_context(|| format!("opening shapefile {}", self.path.display()))?;
+		let dbf_path = self.path.with_extension("dbf");
+		let dbf_file = std::io::BufReader::new(
+			fs::File::open(&dbf_path).with_context(|| format!("opening dbf {}", dbf_path.display()))?,
+		);
+		let dbase_reader = dbase::ReaderBuilder::new(dbf_file)
+			.with_encoding(dbase::encoding::UnicodeLossy)
+			.build()
+			.with_context(|| format!("reading dbf {}", dbf_path.display()))?;
+		let mut reader = shapefile::Reader::new(shape_reader, dbase_reader);
 
 		let mut features: Vec<Result<GeoFeature>> = Vec::new();
 		let mut had_lossy = false;
