@@ -76,6 +76,11 @@ pub fn apply_min_distance(features: Vec<(usize, GeoFeature)>, threshold: f64) ->
 			continue;
 		};
 		let coord = point.0;
+		// `(x / cell_size).floor() as i64` saturates silently on NaN/inf;
+		// drop non-finite points rather than indexing them into the grid.
+		if !coord.x.is_finite() || !coord.y.is_finite() {
+			continue;
+		}
 		#[allow(clippy::cast_possible_truncation)]
 		let cx = (coord.x / cell_size).floor() as i64;
 		#[allow(clippy::cast_possible_truncation)]
@@ -116,7 +121,8 @@ fn keep_for_index(index: usize, keep_ratio: f64) -> bool {
 	u < keep_ratio
 }
 
-/// Splitmix64 — a fast, deterministic, non-cryptographic mixer.
+/// Splitmix64 — a fast, deterministic, non-cryptographic mixer
+/// (Steele, Lea, Flood 2014, "Fast Splittable Pseudorandom Number Generators").
 fn splitmix64(mut x: u64) -> u64 {
 	x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
 	x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);

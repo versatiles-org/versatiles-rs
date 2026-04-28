@@ -69,17 +69,15 @@ fn reassemble_ring(arcs: &[Arc], refs: &[ArcRef]) -> LineString<f64> {
 fn concat_arc_refs(arcs: &[Arc], refs: &[ArcRef]) -> Vec<Coord<f64>> {
 	let mut out: Vec<Coord<f64>> = Vec::new();
 	for (i, arc_ref) in refs.iter().enumerate() {
-		let arc = &arcs[arc_ref.arc_id];
-		let mut iter: Box<dyn Iterator<Item = Coord<f64>>> = if arc_ref.reversed {
-			Box::new(arc.coords.iter().rev().copied())
+		let coords = &arcs[arc_ref.arc_id].coords;
+		// First coord of every arc after the first duplicates the previous
+		// arc's last vertex (the junction); skip it.
+		let skip = usize::from(i > 0);
+		if arc_ref.reversed {
+			out.extend(coords.iter().rev().skip(skip).copied());
 		} else {
-			Box::new(arc.coords.iter().copied())
-		};
-		if i > 0 {
-			// First coord duplicates the previous arc's last; skip it.
-			let _ = iter.next();
+			out.extend(coords.iter().skip(skip).copied());
 		}
-		out.extend(iter);
 	}
 	out
 }

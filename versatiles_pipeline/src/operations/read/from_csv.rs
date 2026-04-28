@@ -312,10 +312,7 @@ mod tests {
 	async fn malformed_row_is_skipped_not_aborted() -> Result<()> {
 		let dir = tempfile::tempdir()?;
 		let path = dir.path().join("partial.csv");
-		std::fs::write(
-			&path,
-			"lon,lat,name\n0.0,0.0,A\nnot_a_number,1.0,B\n2.0,2.0,C\n",
-		)?;
+		std::fs::write(&path, "lon,lat,name\n0.0,0.0,A\nnot_a_number,1.0,B\n2.0,2.0,C\n")?;
 
 		let factory = PipelineFactory::new_dummy();
 		let vpl = format!(

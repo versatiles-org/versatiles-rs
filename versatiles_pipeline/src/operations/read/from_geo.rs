@@ -351,11 +351,7 @@ mod tests {
 	/// Return the integer-grid vertex set of all of a polygon's coordinates.
 	fn polygon_vertex_set(g: &geo_types::Geometry<f64>) -> std::collections::HashSet<(i64, i64)> {
 		let coords: Vec<geo_types::Coord<f64>> = match g {
-			geo_types::Geometry::MultiPolygon(mp) => mp
-				.0
-				.iter()
-				.flat_map(|p| p.exterior().0.iter().copied().collect::<Vec<_>>())
-				.collect(),
+			geo_types::Geometry::MultiPolygon(mp) => mp.0.iter().flat_map(|p| p.exterior().0.clone()).collect(),
 			geo_types::Geometry::Polygon(p) => p.exterior().0.clone(),
 			_ => return std::collections::HashSet::new(),
 		};
@@ -373,9 +369,7 @@ mod tests {
 	async fn unsupported_args_error() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let bbox_err = factory
-			.operation_from_vpl(
-				"from_geo filename=\"../testdata/places.geojson\" bbox=[0,0,1,1]",
-			)
+			.operation_from_vpl("from_geo filename=\"../testdata/places.geojson\" bbox=[0,0,1,1]")
 			.await;
 		assert!(bbox_err.is_err());
 		let msg = format!("{:#}", bbox_err.unwrap_err());
