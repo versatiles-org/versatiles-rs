@@ -10,10 +10,12 @@
 //! arc-graph implementation behind the same configuration knobs.
 
 mod reduce_lines;
+mod reduce_points;
 mod reduce_polygons;
 mod spatial_index;
 mod tile_render;
 
+pub use reduce_points::PointReductionStrategy;
 pub use tile_render::{clip_geometry, render_tile};
 
 use crate::ext::{MercatorExt, coord_from_mercator};
@@ -32,9 +34,6 @@ use versatiles_core::{GeoBBox, WORLD_SIZE};
 pub const TILE_EXTENT: u32 = 4096;
 
 /// Configuration for [`FeatureImport`].
-///
-/// Point-reduction strategies (`point_reduction`, `point_reduction_value`) are
-/// added in step 4.2.
 #[derive(Clone, Debug)]
 pub struct FeatureImportConfig {
 	pub layer_name: String,
@@ -50,6 +49,12 @@ pub struct FeatureImportConfig {
 	/// Drop lines whose length at the current zoom is below this many tile-pixels.
 	/// `0.0` disables the filter.
 	pub line_min_length_px: f32,
+	/// Point-reduction strategy applied per-zoom. See [`PointReductionStrategy`].
+	pub point_reduction: PointReductionStrategy,
+	/// Numeric value whose meaning depends on `point_reduction`:
+	/// - `DropRate`: keep-fraction per zoom step (in `[0, 1]`).
+	/// - `MinDistance`: minimum distance between kept points, in tile-pixels.
+	pub point_reduction_value: f32,
 }
 
 impl Default for FeatureImportConfig {
@@ -62,6 +67,8 @@ impl Default for FeatureImportConfig {
 			line_simplify_px: 4.0,
 			polygon_min_area_px: 4.0,
 			line_min_length_px: 4.0,
+			point_reduction: PointReductionStrategy::None,
+			point_reduction_value: 0.0,
 		}
 	}
 }
@@ -120,12 +127,31 @@ impl FeatureImport {
 			let tol_line_m = f64::from(config.line_simplify_px) * m_per_px;
 			let polygon_min_area_m2 = f64::from(config.polygon_min_area_px) * m_per_px * m_per_px;
 			let line_min_length_m = f64::from(config.line_min_length_px) * m_per_px;
-			let zoom_features: Vec<GeoFeature> = flattened
+
+			// Carry the original `flattened` index along so point-reduction
+			// strategies hash on a stable identifier.
+			let indexed: Vec<(usize, GeoFeature)> = flattened
 				.iter()
-				.map(|f| simplify_feature(f, tol_polygon_m, tol_line_m))
-				.filter(|f| reduce_polygons::passes_min_area(&f.geometry, polygon_min_area_m2))
-				.filter(|f| reduce_lines::passes_min_length(&f.geometry, line_min_length_m))
+				.enumerate()
+				.map(|(idx, f)| (idx, simplify_feature(f, tol_polygon_m, tol_line_m)))
+				.filter(|(_, f)| reduce_polygons::passes_min_area(&f.geometry, polygon_min_area_m2))
+				.filter(|(_, f)| reduce_lines::passes_min_length(&f.geometry, line_min_length_m))
 				.collect();
+			let reduced = match config.point_reduction {
+				PointReductionStrategy::None => indexed,
+				PointReductionStrategy::DropRate => {
+					// Cumulative keep ratio: `value^(max_zoom - z)`. At max_zoom it's 1.0.
+					let exp = i32::from(config.max_zoom.saturating_sub(z));
+					let keep_ratio = f64::from(config.point_reduction_value).powi(exp);
+					reduce_points::apply_drop_rate(indexed, keep_ratio)
+				}
+				PointReductionStrategy::MinDistance => {
+					let threshold_m = f64::from(config.point_reduction_value) * m_per_px;
+					reduce_points::apply_min_distance(indexed, threshold_m)
+				}
+			};
+			let zoom_features: Vec<GeoFeature> = reduced.into_iter().map(|(_, f)| f).collect();
+
 			let rtree = build_rtree(&zoom_features);
 			layers[usize::from(z)] = Some(ZoomLayer {
 				features: zoom_features,

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
-use versatiles_geometry::feature_import::{FeatureImport, FeatureImportConfig};
+use versatiles_geometry::feature_import::{FeatureImport, FeatureImportConfig, PointReductionStrategy};
 use versatiles_geometry::feature_source::CsvSourceBuilder;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -113,6 +113,12 @@ impl ReadTileSource for Operation {
 		}
 		let source = builder.build()?;
 
+		let point_reduction = args
+			.point_reduction
+			.as_deref()
+			.map(PointReductionStrategy::parse)
+			.transpose()?
+			.unwrap_or_default();
 		let config = FeatureImportConfig {
 			layer_name: layer_name.clone(),
 			min_zoom: args.min_zoom.unwrap_or(0),
@@ -121,6 +127,8 @@ impl ReadTileSource for Operation {
 			line_simplify_px: args.line_simplify.unwrap_or(4.0),
 			polygon_min_area_px: args.polygon_min_area.unwrap_or(4.0),
 			line_min_length_px: args.line_min_length.unwrap_or(4.0),
+			point_reduction,
+			point_reduction_value: args.point_reduction_value.unwrap_or(0.0),
 		};
 		let import = FeatureImport::from_source(&source, config).await?;
 
@@ -235,6 +243,29 @@ mod tests {
 		assert!(result.is_err());
 		let err_str = format!("{:#}", result.err().unwrap());
 		assert!(err_str.contains("missing"), "{err_str}");
+	}
+
+	#[tokio::test]
+	async fn min_distance_drops_close_points_at_low_zoom() -> Result<()> {
+		// At z=0 every tile-pixel is huge (~9.8 km), so a min_distance of 256
+		// pixels = ~2500 km easily separates the 3 fixture points (Berlin,
+		// Hamburg, München all within ~600 km of each other).
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				"from_csv filename=\"../testdata/quakes.csv\" \
+				 lon_column=\"longitude\" lat_column=\"latitude\" \
+				 max_zoom=8 \
+				 point_reduction=\"min_distance\" point_reduction_value=256",
+			)
+			.await?;
+
+		let tile = op.tile(&TileCoord::new(0, 0, 0)?).await?.expect("world tile");
+		let blob = tile.into_blob(&Uncompressed)?;
+		let vt = versatiles_geometry::vector_tile::VectorTile::from_blob(&blob)?;
+		// At z=0 the threshold is so wide that only the first point survives.
+		assert_eq!(vt.layers[0].features.len(), 1);
+		Ok(())
 	}
 
 	#[tokio::test]

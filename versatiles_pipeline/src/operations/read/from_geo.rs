@@ -24,7 +24,7 @@ use std::sync::Arc;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
-use versatiles_geometry::feature_import::{FeatureImport, FeatureImportConfig};
+use versatiles_geometry::feature_import::{FeatureImport, FeatureImportConfig, PointReductionStrategy};
 use versatiles_geometry::feature_source::{GeoJsonSource, ShapefileSource};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -94,6 +94,12 @@ impl ReadTileSource for Operation {
 				.to_string()
 		});
 
+		let point_reduction = args
+			.point_reduction
+			.as_deref()
+			.map(PointReductionStrategy::parse)
+			.transpose()?
+			.unwrap_or_default();
 		let config = FeatureImportConfig {
 			layer_name: layer_name.clone(),
 			min_zoom: args.min_zoom.unwrap_or(0),
@@ -102,6 +108,8 @@ impl ReadTileSource for Operation {
 			line_simplify_px: args.line_simplify.unwrap_or(4.0),
 			polygon_min_area_px: args.polygon_min_area.unwrap_or(4.0),
 			line_min_length_px: args.line_min_length.unwrap_or(4.0),
+			point_reduction,
+			point_reduction_value: args.point_reduction_value.unwrap_or(0.0),
 		};
 
 		// Format dispatch by extension (case-insensitive).
