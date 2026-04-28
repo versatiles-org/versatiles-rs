@@ -105,7 +105,7 @@ mod tests {
 	#[test]
 	fn isolated_ring_becomes_one_closed_arc() {
 		let p = polygon_feature(&[vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]]]);
-		let (graph, fa) = build(&[p]).unwrap();
+		let (graph, fa) = build(&[p]);
 		assert_eq!(graph.len(), 1);
 		match &fa[0] {
 			FeatureArcs::Polygon(pa) => {
@@ -127,7 +127,7 @@ mod tests {
 		// Shared edge: (1,0)-(1,1)
 		let a = polygon_feature(&[vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]]]);
 		let b = polygon_feature(&[vec![[1.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0], [1.0, 0.0]]]);
-		let (graph, fa) = build(&[a, b]).unwrap();
+		let (graph, fa) = build(&[a, b]);
 
 		// Three arcs: A's outer (going 0,0 → 0,1 → 1,1), shared (1,1 → 1,0 or
 		// reverse), B's outer (1,0 → 2,0 → 2,1 → 1,1).
@@ -157,7 +157,7 @@ mod tests {
 		// A linestring passing through vertex (4,0): goes (5,-1) → (4,0) → (5,1).
 		let p = polygon_feature(&[vec![[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0], [0.0, 0.0]]]);
 		let l = line_feature(vec![[5.0, -1.0], [4.0, 0.0], [5.0, 1.0]]);
-		let (graph, fa) = build(&[p, l]).unwrap();
+		let (graph, fa) = build(&[p, l]);
 
 		// Polygon should split at (4,0). Plus the line splits at (4,0). Plus
 		// the line endpoints are junctions (open-line endpoints), but the line
@@ -185,7 +185,7 @@ mod tests {
 		// (1,0) sees neighbors {(0,0), (2,0), (1,-1), (1,1)} — size 4 → junction.
 		let a = line_feature(vec![[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]]);
 		let b = line_feature(vec![[1.0, -1.0], [1.0, 0.0], [1.0, 1.0]]);
-		let (graph, fa) = build(&[a, b]).unwrap();
+		let (graph, fa) = build(&[a, b]);
 
 		// 4 arcs: A splits into 2, B splits into 2. None are shared (different
 		// neighbors), so total = 4 distinct arcs.
@@ -205,7 +205,7 @@ mod tests {
 		// Two identical isolated polygons — one arc shared between both.
 		let a = polygon_feature(&[vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]]]);
 		let b = polygon_feature(&[vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.0, 0.0]]]);
-		let (graph, fa) = build(&[a, b]).unwrap();
+		let (graph, fa) = build(&[a, b]);
 		// Hmm, both polygons "share" the entire ring as common. Every vertex
 		// has the same {prev, next} neighbor set in both polygons → no
 		// junctions. So both rings produce one closed arc each, and they
@@ -221,7 +221,7 @@ mod tests {
 	#[test]
 	fn point_passes_through() {
 		let p = GeoFeature::new(Geometry::Point(geo_types::Point::new(13.4, 52.5)));
-		let (graph, fa) = build(&[p]).unwrap();
+		let (graph, fa) = build(&[p]);
 		assert_eq!(graph.len(), 0);
 		match &fa[0] {
 			FeatureArcs::Point(c) => {

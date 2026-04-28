@@ -101,7 +101,7 @@ mod tests {
 	#[test]
 	fn isolated_polygon_round_trips() {
 		let original = poly_feat(&[vec![[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0], [0.0, 0.0]]]);
-		let (graph, fa) = build(std::slice::from_ref(&original)).unwrap();
+		let (graph, fa) = build(std::slice::from_ref(&original));
 		let arcs: Vec<Arc> = graph.arcs().to_vec();
 		let rebuilt = reassemble_features(&arcs, &fa, std::slice::from_ref(&original));
 		match (&original.geometry, &rebuilt[0].geometry) {
@@ -147,7 +147,7 @@ mod tests {
 		let a = poly_feat(&[a_ring]);
 		let b = poly_feat(&[b_ring]);
 		let template = vec![a, b];
-		let (graph, fa) = build(&template).unwrap();
+		let (graph, fa) = build(&template);
 
 		// Tolerances span from "no-op" to "drops every interior wiggle vertex".
 		// Each represents a different zoom in the real pipeline.
@@ -184,7 +184,7 @@ mod tests {
 		let a = line_feat(vec![[0.0, 0.0], [0.5, 0.0001], [1.0, 0.0], [1.5, -0.0001], [2.0, 0.0]]);
 		let b = line_feat(vec![[1.0, -1.0], [1.0001, -0.5], [1.0, 0.0], [0.9999, 0.5], [1.0, 1.0]]);
 		let template = vec![a, b];
-		let (graph, fa) = build(&template).unwrap();
+		let (graph, fa) = build(&template);
 
 		let junction = Coord { x: 1.0, y: 0.0 };
 		for &tolerance in &[0.0, 0.001, 0.01, 0.1] {
@@ -248,7 +248,7 @@ mod tests {
 			[1.0, 0.0],
 		]]);
 		let template = vec![a.clone(), b.clone()];
-		let (graph, fa) = build(&template).unwrap();
+		let (graph, fa) = build(&template);
 		// Simplify the arcs with a tolerance large enough to drop the wiggle.
 		let simplified = simplify_arcs(&graph, 0.01);
 		let rebuilt = reassemble_features(&simplified, &fa, &template);

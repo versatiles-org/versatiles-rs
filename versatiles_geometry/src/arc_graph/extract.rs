@@ -22,7 +22,6 @@
 
 use super::{Arc, ArcGraph, ArcId, ArcRef, FeatureArcs, LineStringArcs, PolygonArcs};
 use crate::geo::GeoFeature;
-use anyhow::Result;
 use geo_types::{Coord, Geometry, LineString, Polygon};
 use std::collections::{HashMap, HashSet};
 
@@ -36,7 +35,8 @@ fn key(c: Coord<f64>) -> CoordKey {
 
 /// Build an arc graph from `features` and return the per-feature arc-reference list.
 /// The returned `Vec<FeatureArcs>` aligns 1:1 with `features`.
-pub fn build(features: &[GeoFeature]) -> Result<(ArcGraph, Vec<FeatureArcs>)> {
+#[must_use]
+pub fn build(features: &[GeoFeature]) -> (ArcGraph, Vec<FeatureArcs>) {
 	// Pass 1: gather neighbor sets to identify junctions.
 	let junctions = identify_junctions(features);
 
@@ -67,7 +67,7 @@ pub fn build(features: &[GeoFeature]) -> Result<(ArcGraph, Vec<FeatureArcs>)> {
 		};
 		feature_arcs.push(entry);
 	}
-	Ok((graph, feature_arcs))
+	(graph, feature_arcs)
 }
 
 /// Walk every ring and line, collect each vertex's distinct neighbor set, and

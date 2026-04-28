@@ -1,13 +1,23 @@
 //! In-memory feature-import engine.
 //!
-//! Drains a [`crate::feature_source::FeatureSource`] stream, projects every
-//! geometry to web mercator, and prepares per-zoom feature lists with a
-//! spatial index. [`FeatureImport::get_tile`] then renders any tile lazily
-//! by querying the index, clipping, quantizing, and encoding MVT.
+//! Takes a `Vec<GeoFeature>` (loaded from one of the [`crate::feature_source`]
+//! adapters), projects every geometry to web mercator, and prepares per-zoom
+//! feature lists with a spatial index. [`FeatureImport::get_tile`] then
+//! renders any tile lazily by querying the index, clipping, quantizing, and
+//! encoding MVT.
 //!
-//! Phase 1 uses [`geo::Simplify`] (Douglas-Peucker) per feature for
-//! simplification. Phase 5 will replace this with a topology-preserving
-//! arc-graph implementation behind the same configuration knobs.
+//! ## Pipeline (per zoom)
+//!
+//! 1. Build an [`crate::arc_graph::ArcGraph`] once from the projected,
+//!    multi-geometry-flattened features. Shared polygon borders and shared
+//!    line segments collapse into a single arc.
+//! 2. Per zoom: simplify each arc once via Douglas-Peucker
+//!    ([`crate::arc_graph::simplify_arcs`]). Topology preserves automatically
+//!    because shared arcs are simplified once, not per feature.
+//! 3. Reassemble feature geometries from the simplified arcs.
+//! 4. Apply per-zoom reduction: drop polygons by min-area, lines by
+//!    min-length, points by `point_reduction` strategy.
+//! 5. Build an R-tree over surviving features for fast tile-bbox queries.
 
 mod reduce_lines;
 mod reduce_points;
@@ -121,7 +131,7 @@ impl FeatureImport {
 
 		// Build the arc graph once. Per-zoom simplification simplifies each
 		// arc and reassembles features so shared boundaries stay aligned.
-		let (arc_graph, feature_arcs): (ArcGraph, Vec<FeatureArcs>) = arc_graph::build(&flattened)?;
+		let (arc_graph, feature_arcs): (ArcGraph, Vec<FeatureArcs>) = arc_graph::build(&flattened);
 
 		// Per-zoom simplification + reduction + spatial index.
 		let n_slots = usize::from(config.max_zoom) + 1;

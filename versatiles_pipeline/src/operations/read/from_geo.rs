@@ -1,15 +1,12 @@
 //! # From‑geo read operation
 //!
-//! Reads a vector geo-data file (GeoJSON in Phase 1; Shapefile added later)
-//! and exposes it as a [`TileSource`] of MVT tiles.
+//! Reads a vector geo-data file (GeoJSON or Shapefile, dispatched by file
+//! extension) and exposes it as a [`TileSource`] of MVT tiles.
 //!
 //! Internally builds a [`FeatureImport`] which projects features to web
-//! mercator, simplifies per zoom, indexes with an R-tree, then renders
-//! tiles on demand by clipping + quantizing.
-//!
-//! Phase 1 only honors `filename`, `layer_name`, `min_zoom`, `max_zoom`,
-//! `polygon_simplify`, `line_simplify`. Other args parse but are no-ops
-//! until later phases.
+//! mercator, decomposes shared boundaries into an arc graph, simplifies
+//! per zoom (topology-preserving), applies geometry-typed reduction, and
+//! renders tiles on demand by clipping + quantizing.
 //!
 //! ## Example
 //!
@@ -30,7 +27,6 @@ use versatiles_geometry::feature_source::{FeatureSource, GeoJsonSource, Shapefil
 use versatiles_geometry::geo::GeoFeature;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-#[allow(dead_code)] // Phase 1 honors a subset of fields; the rest are wired in later phases.
 /// Reads a GeoJSON or Shapefile and emits MVT vector tiles.
 struct Args {
 	/// Filename of the GeoJSON or Shapefile (relative to the VPL file path).
@@ -40,26 +36,27 @@ struct Args {
 	layer_name: Option<String>,
 	/// Lowest zoom level emitted (default 0).
 	min_zoom: Option<u8>,
-	/// Highest zoom level emitted (default 14).
+	/// Highest zoom level emitted. Defaults to an auto-heuristic (median feature
+	/// size ≈ 4 tile-pixels, capped at 14).
 	max_zoom: Option<u8>,
-	/// Bounding box [w, s, e, n] in degrees that limits the output (currently
-	/// ignored in Phase 1; honored from a later phase).
+	/// Bounding-box clip in degrees `[w, s, e, n]`. Not supported in v1; setting
+	/// this errors out.
 	bbox: Option<[f64; 4]>,
-	/// Property names to keep (currently ignored in Phase 1).
+	/// Property whitelist. Not supported in v1; setting this errors out.
 	properties_include: Option<Vec<String>>,
-	/// Property names to drop (currently ignored in Phase 1).
+	/// Property blacklist. Not supported in v1; setting this errors out.
 	properties_exclude: Option<Vec<String>>,
-	/// Drop polygons whose area is below this many tile-pixels² (Phase 4).
+	/// Drop polygons whose area is below this many tile-pixels² (default 4).
 	polygon_min_area: Option<f32>,
 	/// Douglas-Peucker tolerance for polygons, in tile-pixels (default 4).
 	polygon_simplify: Option<f32>,
-	/// Drop lines whose length is below this many tile-pixels (Phase 4).
+	/// Drop lines whose length is below this many tile-pixels (default 4).
 	line_min_length: Option<f32>,
 	/// Douglas-Peucker tolerance for lines, in tile-pixels (default 4).
 	line_simplify: Option<f32>,
-	/// Point reduction strategy: `none` / `drop_rate` / `min_distance` (Phase 4).
+	/// Point reduction strategy: `none` / `drop_rate` / `min_distance` (default `none`).
 	point_reduction: Option<String>,
-	/// Numeric value whose meaning depends on `point_reduction` (Phase 4).
+	/// Numeric value whose meaning depends on `point_reduction`.
 	point_reduction_value: Option<f32>,
 }
 
@@ -85,6 +82,7 @@ impl ReadTileSource for Operation {
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
+		reject_unsupported_args(&args)?;
 		let location = factory.resolve_location(&DataLocation::try_from(args.filename.as_str())?)?;
 		let path = location.to_path_buf()?;
 
@@ -205,6 +203,21 @@ impl TileSource for Operation {
 			Some(())
 		}))
 	}
+}
+
+/// Reject the v1-deferred args (bbox / properties_include / properties_exclude) with a
+/// clear error message when they're set, instead of silently no-oping.
+fn reject_unsupported_args(args: &Args) -> Result<()> {
+	if args.bbox.is_some() {
+		bail!("from_geo: `bbox=` is not supported in v1");
+	}
+	if args.properties_include.is_some() {
+		bail!("from_geo: `properties_include=` is not supported in v1");
+	}
+	if args.properties_exclude.is_some() {
+		bail!("from_geo: `properties_exclude=` is not supported in v1");
+	}
+	Ok(())
 }
 
 /// Drain a `FeatureSource`'s stream into a `Vec`.
