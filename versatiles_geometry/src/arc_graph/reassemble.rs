@@ -115,6 +115,115 @@ mod tests {
 		}
 	}
 
+	fn line_feat(coords: Vec<[f64; 2]>) -> GeoFeature {
+		GeoFeature::new(Geometry::LineString(LineString::from(coords)))
+	}
+
+	/// Two polygons share a wiggly border. At *every* simplification tolerance,
+	/// both polygons' reassembled exteriors must contain the same coordinate
+	/// sequence along the shared edge. This is the `--detect-shared-borders`
+	/// guarantee that prevents gaps/overlaps after simplification.
+	#[test]
+	fn shared_border_byte_identical_at_every_tolerance() {
+		use super::super::simplify::simplify_arcs;
+
+		// Wiggly shared edge from (1, 0) to (1, 1).
+		let shared_edge: Vec<[f64; 2]> = vec![
+			[1.0, 0.0],
+			[1.001, 0.15],
+			[0.999, 0.30],
+			[1.001, 0.45],
+			[0.999, 0.60],
+			[1.001, 0.75],
+			[0.999, 0.90],
+			[1.0, 1.0],
+		];
+		let mut a_ring: Vec<[f64; 2]> = vec![[0.0, 0.0]];
+		a_ring.extend(shared_edge.iter().copied());
+		a_ring.push([0.0, 1.0]);
+		a_ring.push([0.0, 0.0]);
+		let mut b_ring: Vec<[f64; 2]> = vec![[1.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0]];
+		b_ring.extend(shared_edge.iter().rev().skip(1).copied()); // back along the shared edge in reverse, end at (1, 0)
+		let a = poly_feat(&[a_ring]);
+		let b = poly_feat(&[b_ring]);
+		let template = vec![a, b];
+		let (graph, fa) = build(&template).unwrap();
+
+		// Tolerances span from "no-op" to "drops every interior wiggle vertex".
+		// Each represents a different zoom in the real pipeline.
+		for &tolerance in &[0.0, 0.0001, 0.005, 0.05, 0.5] {
+			let simplified = simplify_arcs(&graph, tolerance);
+			let rebuilt = reassemble_features(&simplified, &fa, &template);
+
+			let a_border = vertices_at_x(&rebuilt[0].geometry, 1.0);
+			let b_border = vertices_at_x(&rebuilt[1].geometry, 1.0);
+
+			// Sort by Y so the comparison is direction-agnostic — both
+			// polygons traverse the shared edge but in opposite directions.
+			let mut a_sorted = a_border.clone();
+			a_sorted.sort_by(|p, q| p.y.partial_cmp(&q.y).unwrap());
+			let mut b_sorted = b_border.clone();
+			b_sorted.sort_by(|p, q| p.y.partial_cmp(&q.y).unwrap());
+			assert_eq!(
+				a_sorted, b_sorted,
+				"shared border must be byte-identical at tolerance {tolerance}"
+			);
+		}
+	}
+
+	/// Two LineStrings cross at a single shared vertex. After arc-graph
+	/// simplification at any tolerance, the junction vertex must remain
+	/// present and unchanged in *both* lines.
+	#[test]
+	fn road_junction_vertex_preserved_at_every_tolerance() {
+		use super::super::simplify::simplify_arcs;
+
+		// Line A: (0, 0) — small wiggle — (1, 0) — small wiggle — (2, 0)
+		// Line B: (1, -1) — wiggle — (1, 0) — wiggle — (1, 1)
+		// Junction: (1, 0).
+		let a = line_feat(vec![[0.0, 0.0], [0.5, 0.0001], [1.0, 0.0], [1.5, -0.0001], [2.0, 0.0]]);
+		let b = line_feat(vec![[1.0, -1.0], [1.0001, -0.5], [1.0, 0.0], [0.9999, 0.5], [1.0, 1.0]]);
+		let template = vec![a, b];
+		let (graph, fa) = build(&template).unwrap();
+
+		let junction = Coord { x: 1.0, y: 0.0 };
+		for &tolerance in &[0.0, 0.001, 0.01, 0.1] {
+			let simplified = simplify_arcs(&graph, tolerance);
+			let rebuilt = reassemble_features(&simplified, &fa, &template);
+
+			let a_coords = line_string_coords(&rebuilt[0].geometry);
+			let b_coords = line_string_coords(&rebuilt[1].geometry);
+			assert!(
+				a_coords.contains(&junction),
+				"line A must keep the junction vertex at tolerance {tolerance}"
+			);
+			assert!(
+				b_coords.contains(&junction),
+				"line B must keep the junction vertex at tolerance {tolerance}"
+			);
+		}
+	}
+
+	fn vertices_at_x(g: &Geometry<f64>, x: f64) -> Vec<Coord<f64>> {
+		match g {
+			Geometry::Polygon(p) => p
+				.exterior()
+				.0
+				.iter()
+				.filter(|c| (c.x - x).abs() < 1e-9)
+				.copied()
+				.collect(),
+			_ => panic!("expected Polygon"),
+		}
+	}
+
+	fn line_string_coords(g: &Geometry<f64>) -> Vec<Coord<f64>> {
+		match g {
+			Geometry::LineString(ls) => ls.0.clone(),
+			_ => panic!("expected LineString"),
+		}
+	}
+
 	#[test]
 	fn shared_border_simplifies_consistently() {
 		// Two polygons sharing an edge with a tiny wiggle in the middle.
