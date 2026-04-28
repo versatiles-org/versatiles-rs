@@ -381,18 +381,20 @@ mod tests {
 	async fn extension_dispatch_is_case_insensitive() -> Result<()> {
 		// Mixed-case `.SHP` should still route to the shapefile path.
 		let factory = PipelineFactory::new_dummy();
-		// Symlink `admin.SHP` → `admin.shp` so both the .shp/.shx/.dbf lookups
-		// resolve. We do this in a tempdir to keep the testdata directory clean.
+		// Copy the fixture into a tempdir with an uppercase `.SHP` to test
+		// our extension dispatch, but keep the sibling `.shx`/`.dbf` lowercase:
+		// the shapefile crate's sidecar lookup is `path.with_extension("dbf")`,
+		// which preserves the stem and uses the literal lowercase string we
+		// pass — case-sensitive filesystems (Linux CI) require the actual
+		// files to match.
 		let tmp = tempfile::tempdir()?;
-		for ext in ["shp", "shx", "dbf"] {
-			let upper = ext.to_uppercase();
-			std::fs::copy(
-				format!("../testdata/admin.{ext}"),
-				tmp.path().join(format!("ADMIN.{upper}")),
-			)?;
-		}
-		let path_str = tmp.path().join("ADMIN.SHP");
-		let vpl = format!("from_geo filename=\"{}\" max_zoom=4", path_str.display());
+		std::fs::copy("../testdata/admin.shp", tmp.path().join("ADMIN.SHP"))?;
+		std::fs::copy("../testdata/admin.shx", tmp.path().join("ADMIN.shx"))?;
+		std::fs::copy("../testdata/admin.dbf", tmp.path().join("ADMIN.dbf"))?;
+		// VPL strings treat backslashes as escapes; use forward slashes so the
+		// Windows tempdir path survives parsing.
+		let path_for_vpl = tmp.path().join("ADMIN.SHP").to_string_lossy().replace('\\', "/");
+		let vpl = format!("from_geo filename=\"{path_for_vpl}\" max_zoom=4");
 		let op = factory.operation_from_vpl(&vpl).await?;
 		assert!(op.tile(&TileCoord::new(0, 0, 0)?).await?.is_some());
 		Ok(())

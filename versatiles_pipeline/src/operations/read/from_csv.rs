@@ -315,10 +315,10 @@ mod tests {
 		std::fs::write(&path, "lon,lat,name\n0.0,0.0,A\nnot_a_number,1.0,B\n2.0,2.0,C\n")?;
 
 		let factory = PipelineFactory::new_dummy();
-		let vpl = format!(
-			"from_csv filename=\"{}\" lon_column=\"lon\" lat_column=\"lat\" max_zoom=2",
-			path.display()
-		);
+		// VPL strings treat backslashes as escapes; use forward slashes so the
+		// Windows tempdir path (e.g. `C:\Users\…`) survives parsing.
+		let path_for_vpl = path.to_string_lossy().replace('\\', "/");
+		let vpl = format!("from_csv filename=\"{path_for_vpl}\" lon_column=\"lon\" lat_column=\"lat\" max_zoom=2");
 		let op = factory.operation_from_vpl(&vpl).await?;
 
 		let tile = op.tile(&TileCoord::new(0, 0, 0)?).await?.expect("world tile");
