@@ -217,8 +217,14 @@ mod tests {
 	#[tokio::test]
 	async fn loads_places_geojson() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
+		// Disable simplification + reduction so the small fixture features all
+		// survive at z=0. (Phase 5's per-zoom DP collapses small polygons at low
+		// zoom — a deliberate v1 behaviour, but unwanted for this load smoke test.)
 		let op = factory
-			.operation_from_vpl("from_geo filename=\"../testdata/places.geojson\" layer_name=\"places\" max_zoom=8")
+			.operation_from_vpl(
+				"from_geo filename=\"../testdata/places.geojson\" layer_name=\"places\" max_zoom=8 \
+				 polygon_simplify=0 line_simplify=0 polygon_min_area=0 line_min_length=0",
+			)
 			.await?;
 
 		// Tile (0, 0, 0) covers the whole world; 4 fixture features → 5 after

@@ -18,13 +18,14 @@ mod tile_render;
 pub use reduce_points::PointReductionStrategy;
 pub use tile_render::{clip_geometry, render_tile};
 
+use crate::arc_graph::{self, ArcGraph, FeatureArcs};
 use crate::ext::{MercatorExt, coord_from_mercator};
 use crate::feature_source::FeatureSource;
 use crate::geo::GeoFeature;
 use crate::vector_tile::VectorTile;
 use anyhow::{Result, bail};
 use futures::StreamExt;
-use geo::{BoundingRect, Simplify};
+use geo::BoundingRect;
 use geo_types::{Coord, Geometry};
 use rstar::RTree;
 use spatial_index::{FeatureRef, query};
@@ -118,22 +119,29 @@ impl FeatureImport {
 		let flattened: Vec<GeoFeature> = projected.into_iter().flat_map(flatten_feature).collect();
 		let bounds_mercator = features_bbox(&flattened);
 
+		// Build the arc graph once. Per-zoom simplification simplifies each
+		// arc and reassembles features so shared boundaries stay aligned.
+		let (arc_graph, feature_arcs): (ArcGraph, Vec<FeatureArcs>) = arc_graph::build(&flattened)?;
+
 		// Per-zoom simplification + reduction + spatial index.
 		let n_slots = usize::from(config.max_zoom) + 1;
 		let mut layers: Vec<Option<ZoomLayer>> = (0..n_slots).map(|_| None).collect();
 		for z in config.min_zoom..=config.max_zoom {
 			let m_per_px = meters_per_pixel(z);
-			let tol_polygon_m = f64::from(config.polygon_simplify_px) * m_per_px;
-			let tol_line_m = f64::from(config.line_simplify_px) * m_per_px;
+			let tol_simplify_m = arc_simplify_tolerance(&config, m_per_px);
 			let polygon_min_area_m2 = f64::from(config.polygon_min_area_px) * m_per_px * m_per_px;
 			let line_min_length_m = f64::from(config.line_min_length_px) * m_per_px;
 
+			// Topology-preserving simplification: simplify each arc once, then
+			// reassemble features from the simplified arcs.
+			let simplified_arcs = arc_graph::simplify_arcs(&arc_graph, tol_simplify_m);
+			let reassembled = arc_graph::reassemble_features(&simplified_arcs, &feature_arcs, &flattened);
+
 			// Carry the original `flattened` index along so point-reduction
 			// strategies hash on a stable identifier.
-			let indexed: Vec<(usize, GeoFeature)> = flattened
-				.iter()
+			let indexed: Vec<(usize, GeoFeature)> = reassembled
+				.into_iter()
 				.enumerate()
-				.map(|(idx, f)| (idx, simplify_feature(f, tol_polygon_m, tol_line_m)))
 				.filter(|(_, f)| reduce_polygons::passes_min_area(&f.geometry, polygon_min_area_m2))
 				.filter(|(_, f)| reduce_lines::passes_min_length(&f.geometry, line_min_length_m))
 				.collect();
@@ -267,17 +275,22 @@ fn flatten_feature(feature: GeoFeature) -> Vec<GeoFeature> {
 	}
 }
 
-fn simplify_feature(feature: &GeoFeature, tol_polygon_m: f64, tol_line_m: f64) -> GeoFeature {
-	let geometry = match &feature.geometry {
-		Geometry::LineString(ls) if tol_line_m > 0.0 => Geometry::LineString(ls.simplify(tol_line_m)),
-		Geometry::Polygon(p) if tol_polygon_m > 0.0 => Geometry::Polygon(p.simplify(tol_polygon_m)),
-		other => other.clone(),
+/// Combined simplification tolerance for the arc graph at the given pixels-per-meter.
+///
+/// The arc graph stores one arc per shared edge — an arc traversed by both
+/// polygons and lines must use a single tolerance. v1 picks the *minimum*
+/// non-zero of `polygon_simplify_px` and `line_simplify_px` as a conservative
+/// shared tolerance.
+fn arc_simplify_tolerance(config: &FeatureImportConfig, m_per_px: f64) -> f64 {
+	let p = f64::from(config.polygon_simplify_px);
+	let l = f64::from(config.line_simplify_px);
+	let combined_px = match (p > 0.0, l > 0.0) {
+		(true, true) => p.min(l),
+		(true, false) => p,
+		(false, true) => l,
+		(false, false) => 0.0,
 	};
-	GeoFeature {
-		id: feature.id.clone(),
-		geometry,
-		properties: feature.properties.clone(),
-	}
+	combined_px * m_per_px
 }
 
 fn features_bbox(features: &[GeoFeature]) -> Option<[f64; 4]> {
@@ -439,9 +452,18 @@ mod tests {
 	async fn from_source_loads_geojson() -> Result<()> {
 		use crate::feature_source::GeoJsonSource;
 		let src = GeoJsonSource::new("../testdata/places.geojson");
+		// Disable simplification + reduction so this test exercises only the
+		// import + render path. (At z=0, the default simplify tolerance is
+		// kilometers-large, which is intentional but would collapse the
+		// fixture's small polygons into degenerate triangles — Phase 5
+		// behaviour.)
 		let config = FeatureImportConfig {
 			layer_name: "places".to_string(),
 			max_zoom: 5,
+			polygon_simplify_px: 0.0,
+			line_simplify_px: 0.0,
+			polygon_min_area_px: 0.0,
+			line_min_length_px: 0.0,
 			..Default::default()
 		};
 		let import = FeatureImport::from_source(&src, config).await?;

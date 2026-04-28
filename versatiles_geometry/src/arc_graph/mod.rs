@@ -5,8 +5,12 @@
 //! features at each zoom level.
 
 mod extract;
+mod reassemble;
+mod simplify;
 
 pub use extract::build;
+pub use reassemble::reassemble_features;
+pub use simplify::simplify_arcs;
 
 use geo_types::Coord;
 use std::collections::HashMap;
