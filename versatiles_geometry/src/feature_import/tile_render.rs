@@ -11,19 +11,18 @@ use crate::vector_tile::{VectorTile, VectorTileLayer};
 use anyhow::Result;
 use geo::MapCoords;
 use geo_types::{Coord, Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Polygon};
-use versatiles_core::Blob;
 
 const MVT_VERSION: u32 = 1;
 
 /// Clip every feature to `tile_bbox` (mercator), quantize to the tile-local
-/// `[0, extent]` grid, encode as a single-layer MVT, and return the protobuf
-/// blob. Returns `Ok(None)` if no feature survives clipping.
+/// `[0, extent]` grid, encode as a single-layer MVT. Returns `Ok(None)` if
+/// no feature survives clipping.
 pub fn render_tile(
 	features: impl IntoIterator<Item = GeoFeature>,
 	layer_name: &str,
 	tile_bbox: [f64; 4],
 	extent: u32,
-) -> Result<Option<Blob>> {
+) -> Result<Option<VectorTile>> {
 	let mut clipped: Vec<GeoFeature> = Vec::new();
 	for feature in features {
 		let GeoFeature {
@@ -46,8 +45,7 @@ pub fn render_tile(
 	}
 
 	let layer = VectorTileLayer::from_features(layer_name.to_string(), clipped, extent, MVT_VERSION)?;
-	let tile = VectorTile::new(vec![layer]);
-	Ok(Some(tile.to_blob()?))
+	Ok(Some(VectorTile::new(vec![layer])))
 }
 
 /// Clip a single geometry to `bbox`. May produce zero, one, or multiple

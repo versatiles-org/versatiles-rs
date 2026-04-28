@@ -14,16 +14,17 @@ mod tile_render;
 
 pub use tile_render::{clip_geometry, render_tile};
 
-use crate::ext::MercatorExt;
+use crate::ext::{MercatorExt, coord_from_mercator};
 use crate::feature_source::FeatureSource;
 use crate::geo::GeoFeature;
+use crate::vector_tile::VectorTile;
 use anyhow::{Result, bail};
 use futures::StreamExt;
 use geo::{BoundingRect, Simplify};
-use geo_types::Geometry;
+use geo_types::{Coord, Geometry};
 use rstar::RTree;
 use spatial_index::{FeatureRef, query};
-use versatiles_core::{Blob, WORLD_SIZE};
+use versatiles_core::{GeoBBox, WORLD_SIZE};
 
 /// MVT tile-local coordinate extent (4096 pixels per tile, the conventional default).
 pub const TILE_EXTENT: u32 = 4096;
@@ -126,7 +127,7 @@ impl FeatureImport {
 
 	/// Render the MVT tile at `(z, x, y)`. Returns `Ok(None)` for zooms
 	/// outside `[min_zoom, max_zoom]` and tiles with no surviving features.
-	pub fn get_tile(&self, z: u8, x: u32, y: u32) -> Result<Option<Blob>> {
+	pub fn get_tile(&self, z: u8, x: u32, y: u32) -> Result<Option<VectorTile>> {
 		let Some(layer) = self.layers.get(usize::from(z)).and_then(Option::as_ref) else {
 			return Ok(None);
 		};
@@ -146,6 +147,16 @@ impl FeatureImport {
 	#[must_use]
 	pub fn bounds_mercator(&self) -> Option<[f64; 4]> {
 		self.bounds_mercator
+	}
+
+	/// The data bbox in WGS84 (lon/lat degrees), or `None` if the input was empty.
+	pub fn bounds_geo(&self) -> Result<Option<GeoBBox>> {
+		let Some([xmin, ymin, xmax, ymax]) = self.bounds_mercator else {
+			return Ok(None);
+		};
+		let min = coord_from_mercator(Coord { x: xmin, y: ymin });
+		let max = coord_from_mercator(Coord { x: xmax, y: ymax });
+		Ok(Some(GeoBBox::new(min.x, min.y, max.x, max.y)?))
 	}
 
 	#[must_use]
@@ -263,7 +274,6 @@ fn build_rtree(features: &[GeoFeature]) -> RTree<FeatureRef> {
 mod tests {
 	use super::*;
 	use crate::geo::GeoValue;
-	use crate::vector_tile::VectorTile;
 	use geo_types::{LineString, Point, Polygon};
 
 	fn point_feature(id: u64, name: &str, lon: f64, lat: f64) -> GeoFeature {
@@ -288,8 +298,7 @@ mod tests {
 		assert!(import.bounds_mercator().is_some());
 
 		// Tile (0, 0, 0) covers the whole world; both points must appear.
-		let blob = import.get_tile(0, 0, 0)?.expect("world tile is non-empty");
-		let tile = VectorTile::from_blob(&blob)?;
+		let tile = import.get_tile(0, 0, 0)?.expect("world tile is non-empty");
 		assert_eq!(tile.layers.len(), 1);
 		assert_eq!(tile.layers[0].name, "features");
 		assert_eq!(tile.layers[0].features.len(), 2);
@@ -337,8 +346,7 @@ mod tests {
 		};
 		let import = FeatureImport::from_features(vec![feature], config)?;
 
-		let blob = import.get_tile(2, 1, 1)?.expect("tile in the polygon");
-		let tile = VectorTile::from_blob(&blob)?;
+		let tile = import.get_tile(2, 1, 1)?.expect("tile in the polygon");
 		assert_eq!(tile.layers.len(), 1);
 		assert_eq!(tile.layers[0].features.len(), 1);
 		Ok(())
@@ -356,8 +364,7 @@ mod tests {
 		let import = FeatureImport::from_source(&src, config).await?;
 		assert!(import.bounds_mercator().is_some());
 
-		let blob = import.get_tile(0, 0, 0)?.expect("world tile non-empty");
-		let tile = VectorTile::from_blob(&blob)?;
+		let tile = import.get_tile(0, 0, 0)?.expect("world tile non-empty");
 		assert_eq!(tile.layers[0].name, "places");
 		// 4 input features but the MultiPolygon flattens to 2, total 5.
 		assert_eq!(tile.layers[0].features.len(), 5);
