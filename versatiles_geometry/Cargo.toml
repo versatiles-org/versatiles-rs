@@ -18,12 +18,15 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 byteorder.workspace = true
+csv.workspace = true
 futures.workspace = true
 geo.workspace = true
 geo-types.workspace = true
 log.workspace = true
 num_cpus.workspace = true
 regex.workspace = true
+rstar.workspace = true
+shapefile.workspace = true
 tokio.workspace = true
 
 versatiles_core.workspace = true
