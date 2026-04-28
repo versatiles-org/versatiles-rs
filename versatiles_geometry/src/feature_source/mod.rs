@@ -5,9 +5,11 @@
 //! [`futures::stream::iter`]; future streaming adapters (FlatGeobuf, OSM PBF)
 //! can pull records on demand without changing the public API.
 
+mod csv;
 mod geojson;
 mod shapefile;
 
+pub use csv::{CsvSource, CsvSourceBuilder};
 pub use geojson::GeoJsonSource;
 pub use shapefile::ShapefileSource;
 
