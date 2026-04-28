@@ -337,11 +337,13 @@ mod tests {
 	// Test Helpers
 	// ========================================================================
 
+	use geo_types::{Geometry, LineString, Point};
+
 	/// Creates a point feature with the given id and coordinates
 	fn point_feature(id: u64, x: f64, y: f64) -> GeoFeature {
 		GeoFeature {
 			id: Some(GeoValue::from(id)),
-			geometry: crate::geo::Geometry::new_point([x, y]),
+			geometry: Geometry::Point(Point::new(x, y)),
 			properties: GeoProperties::default(),
 		}
 	}
@@ -350,7 +352,7 @@ mod tests {
 	fn point_feature_with_props(id: u64, x: f64, y: f64, props: Vec<(&str, GeoValue)>) -> GeoFeature {
 		GeoFeature {
 			id: Some(GeoValue::from(id)),
-			geometry: crate::geo::Geometry::new_point([x, y]),
+			geometry: Geometry::Point(Point::new(x, y)),
 			properties: GeoProperties::from(props),
 		}
 	}
@@ -601,7 +603,7 @@ mod tests {
 	fn test_retain_features_filter_by_geometry_type() -> Result<()> {
 		let line_feature = GeoFeature {
 			id: Some(GeoValue::from(2)),
-			geometry: crate::geo::Geometry::new_line_string(vec![[0.0, 0.0], [1.0, 1.0]]),
+			geometry: Geometry::LineString(LineString::from(vec![[0.0, 0.0], [1.0, 1.0]])),
 			properties: GeoProperties::default(),
 		};
 		let mut layer = make_layer(vec![point_feature(1, 0.0, 0.0), line_feature])?;

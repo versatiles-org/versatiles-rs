@@ -230,12 +230,12 @@ mod tests {
 	use std::{fs::File, io::Write, vec};
 	use versatiles_core::TileCoord;
 	use versatiles_geometry::{
-		geo::{GeoFeature, GeoProperties, GeoValue, Geometry},
+		geo::{GeoFeature, GeoProperties, GeoValue, example_geometry},
 		vector_tile::VectorTileLayer,
 	};
 
 	fn create_sample_vector_tile() -> VectorTile {
-		let mut feature = GeoFeature::new(Geometry::new_example());
+		let mut feature = GeoFeature::new(example_geometry());
 		feature.properties = GeoProperties::from(vec![
 			("id", GeoValue::from("feature_1")),
 			("property1", GeoValue::from("value1")),

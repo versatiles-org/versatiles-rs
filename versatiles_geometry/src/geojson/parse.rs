@@ -5,8 +5,9 @@
 //! It uses a streaming `ByteIterator` for zero-allocation-ish parsing with precise
 //! error contexts via the `#[context]` macro.
 
-use crate::geo::{GeoCollection, GeoFeature, GeoProperties, GeoValue, Geometry};
+use crate::geo::{GeoCollection, GeoFeature, GeoProperties, GeoValue};
 use anyhow::{Result, anyhow, bail};
+use geo_types::{Coord, Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon};
 use std::{io::Cursor, str};
 use versatiles_core::{
 	byte_iterator::{
@@ -72,7 +73,7 @@ fn check_type(object_type: Option<String>, name: &str) -> Result<()> {
 pub fn parse_geojson_feature(iter: &mut ByteIterator) -> Result<GeoFeature> {
 	let mut object_type: Option<String> = None;
 	let mut id: Option<GeoValue> = None;
-	let mut geometry: Option<Geometry> = None;
+	let mut geometry: Option<Geometry<f64>> = None;
 	let mut properties: Option<GeoProperties> = None;
 
 	parse_object_entries(iter, |key, iter2| {
@@ -168,7 +169,7 @@ fn parse_geojson_properties(iter: &mut ByteIterator) -> Result<GeoProperties> {
 ///
 /// Supports `Point`, `LineString`, `Polygon`, `MultiPoint`, `MultiLineString`, and `MultiPolygon`.
 #[context("parsing GeoJSON geometry")]
-fn parse_geojson_geometry(iter: &mut ByteIterator) -> Result<Geometry> {
+fn parse_geojson_geometry(iter: &mut ByteIterator) -> Result<Geometry<f64>> {
 	let mut geometry_type: Option<String> = None;
 	let mut coordinates: Option<TemporaryCoordinates> = None;
 
@@ -185,16 +186,41 @@ fn parse_geojson_geometry(iter: &mut ByteIterator) -> Result<Geometry> {
 
 	let coordinates = coordinates.ok_or(anyhow!("geometry must have coordinates"))?;
 	let geometry = match geometry_type.as_str() {
-		"Point" => Geometry::new_point(coordinates.take_c0()?),
-		"LineString" => Geometry::new_line_string(coordinates.take_c1()?),
-		"Polygon" => Geometry::new_polygon(coordinates.take_c2()?),
-		"MultiPoint" => Geometry::new_multi_point(coordinates.take_c1()?),
-		"MultiLineString" => Geometry::new_multi_line_string(coordinates.take_c2()?),
-		"MultiPolygon" => Geometry::new_multi_polygon(coordinates.take_c3()?),
+		"Point" => Geometry::Point(point_from_c0(coordinates.take_c0()?)),
+		"LineString" => Geometry::LineString(line_string_from_c1(coordinates.take_c1()?)),
+		"Polygon" => Geometry::Polygon(polygon_from_c2(coordinates.take_c2()?)),
+		"MultiPoint" => Geometry::MultiPoint(MultiPoint(
+			coordinates.take_c1()?.into_iter().map(point_from_c0).collect(),
+		)),
+		"MultiLineString" => Geometry::MultiLineString(MultiLineString(
+			coordinates.take_c2()?.into_iter().map(line_string_from_c1).collect(),
+		)),
+		"MultiPolygon" => Geometry::MultiPolygon(MultiPolygon(
+			coordinates.take_c3()?.into_iter().map(polygon_from_c2).collect(),
+		)),
 		_ => bail!("unknown geometry type '{geometry_type}'"),
 	};
 
 	Ok(geometry)
+}
+
+fn coord_from(c: [f64; 2]) -> Coord<f64> {
+	Coord { x: c[0], y: c[1] }
+}
+
+fn point_from_c0(c: [f64; 2]) -> Point<f64> {
+	Point(coord_from(c))
+}
+
+fn line_string_from_c1(coords: Vec<[f64; 2]>) -> LineString<f64> {
+	LineString::new(coords.into_iter().map(coord_from).collect())
+}
+
+fn polygon_from_c2(rings: Vec<Vec<[f64; 2]>>) -> Polygon<f64> {
+	let mut iter = rings.into_iter().map(line_string_from_c1);
+	let exterior = iter.next().unwrap_or_else(|| LineString::new(vec![]));
+	let interiors = iter.collect();
+	Polygon::new(exterior, interiors)
 }
 
 /// Temporary coordinate accumulator used while recursively parsing nested coordinate arrays.
@@ -311,6 +337,7 @@ fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordin
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::ext::type_name;
 	use approx::assert_relative_eq;
 
 	#[test]
@@ -326,7 +353,7 @@ mod tests {
 		assert_eq!(collection.features.len(), 1);
 
 		let feature = &collection.features[0];
-		assert_eq!(feature.geometry.type_name(), "Point");
+		assert_eq!(type_name(&feature.geometry), "Point");
 		if let Geometry::Point(coords) = &feature.geometry {
 			assert_relative_eq!(coords.x(), 1.0);
 			assert_relative_eq!(coords.y(), 2.0);
@@ -460,7 +487,7 @@ mod tests {
 			"type":"Feature","geometry":{"type":"LineString","coordinates":[[0,0],[1,1]]},"properties":{}
 		}]}"#;
 		let collection = parse_geojson(json)?;
-		assert_eq!(collection.features[0].geometry.type_name(), "LineString");
+		assert_eq!(type_name(&collection.features[0].geometry), "LineString");
 		Ok(())
 	}
 
@@ -472,7 +499,7 @@ mod tests {
 			"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,1],[0,0]]]},"properties":{}
 		}]}"#;
 		let collection = parse_geojson(json)?;
-		assert_eq!(collection.features[0].geometry.type_name(), "Polygon");
+		assert_eq!(type_name(&collection.features[0].geometry), "Polygon");
 		Ok(())
 	}
 
@@ -484,7 +511,7 @@ mod tests {
 			"type":"Feature","geometry":{"type":"MultiPoint","coordinates":[[1,2],[3,4]]},"properties":{}
 		}]}"#;
 		let collection = parse_geojson(json)?;
-		assert_eq!(collection.features[0].geometry.type_name(), "MultiPoint");
+		assert_eq!(type_name(&collection.features[0].geometry), "MultiPoint");
 		Ok(())
 	}
 
@@ -496,7 +523,7 @@ mod tests {
 			"type":"Feature","geometry":{"type":"MultiLineString","coordinates":[[[0,0],[1,1]],[[2,2],[3,3]]]},"properties":{}
 		}]}"#;
 		let collection = parse_geojson(json)?;
-		assert_eq!(collection.features[0].geometry.type_name(), "MultiLineString");
+		assert_eq!(type_name(&collection.features[0].geometry), "MultiLineString");
 		Ok(())
 	}
 
@@ -508,7 +535,7 @@ mod tests {
 			"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[0,0],[1,0],[1,1],[0,1],[0,0]]]]},"properties":{}
 		}]}"#;
 		let collection = parse_geojson(json)?;
-		assert_eq!(collection.features[0].geometry.type_name(), "MultiPolygon");
+		assert_eq!(type_name(&collection.features[0].geometry), "MultiPolygon");
 		Ok(())
 	}
 

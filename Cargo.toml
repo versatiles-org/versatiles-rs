@@ -158,6 +158,7 @@ imageproc = { version = "0.26.1", default-features = false }
 
 # Geometry dependencies
 geo = { version = "0.33.1" }
+geo-types = { version = "0.7.19" }
 rstar = { version = "0.12.2", default-features = false }
 
 # Utility dependencies

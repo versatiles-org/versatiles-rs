@@ -19,7 +19,7 @@
 ///     match depth {
 ///         ProbeDepth::Shallow => println!("Performing a shallow probe"),
 ///         ProbeDepth::Container => println!("Probing container-level metadata"),
-///         ProbeDepth::Tiles => println!("Probing each tile's metadata"),
+///         ProbeDepth::TileSizes => println!("Probing each tile's metadata"),
 ///         ProbeDepth::TileContents => println!("Probing tile contents in detail"),
 ///     }
 /// }

@@ -68,6 +68,7 @@ pub fn read_ndgeojson_stream(reader: impl BufRead) -> impl Stream<Item = Result<
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::ext::type_name;
 	use futures::StreamExt;
 	use std::io::{BufReader, Cursor};
 
@@ -76,7 +77,7 @@ mod tests {
 		let json = r#"{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[0,0]},"properties":{}}]}"#;
 		let collection = read_geojson(Cursor::new(json))?;
 		assert_eq!(collection.features.len(), 1);
-		assert_eq!(collection.features[0].geometry.type_name(), "Point");
+		assert_eq!(type_name(&collection.features[0].geometry), "Point");
 		Ok(())
 	}
 
@@ -89,7 +90,7 @@ mod tests {
 		assert_eq!(results.len(), 2);
 		for res in results {
 			let feature = res.unwrap();
-			assert_eq!(feature.geometry.type_name(), "Point");
+			assert_eq!(type_name(&feature.geometry), "Point");
 		}
 	}
 
@@ -101,7 +102,7 @@ mod tests {
 		let mut count = 0;
 		while let Some(res) = stream.next().await {
 			let feature = res.unwrap();
-			assert_eq!(feature.geometry.type_name(), "Point");
+			assert_eq!(type_name(&feature.geometry), "Point");
 			count += 1;
 		}
 		assert_eq!(count, 2);

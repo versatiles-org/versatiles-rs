@@ -1,4 +1,4 @@
-use crate::geo::Geometry;
+use geo_types::Geometry;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub enum GeomType {
@@ -27,23 +27,23 @@ impl From<u64> for GeomType {
 	}
 }
 
-impl From<&Geometry> for GeomType {
-	fn from(geometry: &Geometry) -> Self {
-		use Geometry::{MultiLineString, MultiPoint, MultiPolygon};
+impl From<&Geometry<f64>> for GeomType {
+	fn from(geometry: &Geometry<f64>) -> Self {
 		match geometry {
-			MultiPoint(_) => GeomType::MultiPoint,
-			MultiLineString(_) => GeomType::MultiLineString,
-			MultiPolygon(_) => GeomType::MultiPolygon,
-			_ => panic!("only Multi* geometries are allowed"),
+			Geometry::Point(_) | Geometry::MultiPoint(_) => GeomType::MultiPoint,
+			Geometry::Line(_) | Geometry::LineString(_) | Geometry::MultiLineString(_) => GeomType::MultiLineString,
+			Geometry::Polygon(_) | Geometry::Rect(_) | Geometry::Triangle(_) | Geometry::MultiPolygon(_) => {
+				GeomType::MultiPolygon
+			}
+			Geometry::GeometryCollection(_) => GeomType::Unknown,
 		}
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use std::vec;
-
 	use super::*;
+	use geo_types::{LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon};
 
 	#[test]
 	fn test_as_u64() {
@@ -64,12 +64,21 @@ mod tests {
 
 	#[test]
 	fn test_from_geometry() {
-		let multi_point = Geometry::new_multi_point(&[[1, 2], [3, 4]]);
-		let multi_line_string = Geometry::new_multi_line_string(&[vec![[1, 2], [3, 4]], vec![[5, 6], [7, 8]]]);
-		let multi_polygon = Geometry::new_multi_polygon(&vec![
-			vec![vec![[0, 0], [10, 0], [5, 8], [0, 0]]],
-			vec![vec![[12, 0], [18, 0], [18, 8], [12, 8], [12, 0]]],
-		]);
+		let multi_point = Geometry::MultiPoint(MultiPoint(vec![Point::new(1.0, 2.0), Point::new(3.0, 4.0)]));
+		let multi_line_string = Geometry::MultiLineString(MultiLineString(vec![
+			LineString::from(vec![[1.0, 2.0], [3.0, 4.0]]),
+			LineString::from(vec![[5.0, 6.0], [7.0, 8.0]]),
+		]));
+		let multi_polygon = Geometry::MultiPolygon(MultiPolygon(vec![
+			Polygon::new(
+				LineString::from(vec![[0.0, 0.0], [10.0, 0.0], [5.0, 8.0], [0.0, 0.0]]),
+				vec![],
+			),
+			Polygon::new(
+				LineString::from(vec![[12.0, 0.0], [18.0, 0.0], [18.0, 8.0], [12.0, 8.0], [12.0, 0.0]]),
+				vec![],
+			),
+		]));
 
 		assert_eq!(GeomType::from(&multi_point), GeomType::MultiPoint);
 		assert_eq!(GeomType::from(&multi_line_string), GeomType::MultiLineString);

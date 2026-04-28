@@ -1,10 +1,11 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use geo_types::{Geometry, Point};
 use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_geometry::{
-	geo::{GeoFeature, Geometry},
+	geo::GeoFeature,
 	vector_tile::{VectorTile, VectorTileLayer},
 };
 
@@ -100,7 +101,7 @@ impl TileSource for DummyVectorSource {
 
 			// Create features for the current layer
 			for properties in features_def {
-				let mut feature = GeoFeature::new(Geometry::new_point(&[1, 2]));
+				let mut feature = GeoFeature::new(Geometry::Point(Point::new(1.0, 2.0)));
 				feature.set_property("x".to_string(), coord.x);
 				feature.set_property("y".to_string(), coord.y);
 				feature.set_property("z".to_string(), coord.level);
@@ -141,7 +142,7 @@ impl TileSource for DummyVectorSource {
 				let mut features: Vec<GeoFeature> = vec![];
 
 				for properties in features_def {
-					let mut feature = GeoFeature::new(Geometry::new_point(&[1, 2]));
+					let mut feature = GeoFeature::new(Geometry::Point(Point::new(1.0, 2.0)));
 					feature.set_property("x".to_string(), coord.x);
 					feature.set_property("y".to_string(), coord.y);
 					feature.set_property("z".to_string(), coord.level);

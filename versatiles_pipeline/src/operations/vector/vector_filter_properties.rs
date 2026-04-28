@@ -138,7 +138,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_runner_run() {
 		fn create_layer(suffix: &str) -> VectorTileLayer {
-			let mut feature = GeoFeature::new(Geometry::new_example());
+			let mut feature = GeoFeature::new(example_geometry());
 			feature.properties = GeoProperties::from(vec![
 				("id", GeoValue::from(format!("feature_{suffix}"))),
 				("property", GeoValue::from(format!("value_{suffix}"))),

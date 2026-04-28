@@ -4,16 +4,30 @@ use ab_glyph::{
 	Point,
 };
 use anyhow::Result;
+use geo_types::{Coord, Geometry, LineString, MultiLineString, MultiPolygon, Polygon};
 use std::{f64::consts::PI, ops::Div, sync::LazyLock, vec};
 use versatiles_core::TileCoord;
 use versatiles_derive::context;
 use versatiles_geometry::{
-	geo::{
-		CompositeGeometryTrait, Coordinates, GeoFeature, GeoValue, Geometry, GeometryTrait, LineStringGeometry,
-		MultiLineStringGeometry, MultiPolygonGeometry, PolygonGeometry, RingGeometry,
-	},
+	geo::{GeoFeature, GeoValue},
 	vector_tile::{VectorTile, VectorTileLayer},
 };
+
+/// Signed area (×2) of a closed ring of coordinates, trapezoid form.
+/// Matches the historical versatiles convention: positive for counter-clockwise rings.
+fn ring_signed_double_area(coords: &[Coord<f64>]) -> f64 {
+	let n = coords.len();
+	if n < 3 {
+		return 0.0;
+	}
+	let mut sum = 0.0;
+	let mut prev = coords[n - 1];
+	for &p in coords {
+		sum += (prev.x - p.x) * (p.y + prev.y);
+		prev = p;
+	}
+	sum
+}
 
 static FONT: LazyLock<FontArc> =
 	LazyLock::new(|| FontArc::try_from_slice(include_bytes!("./trim.ttf")).expect("bundled font is valid"));
@@ -38,14 +52,14 @@ fn draw_text(name: &str, y: f32, text: &str) -> VectorTileLayer {
 	let mut position = Point { x: 100.0, y };
 
 	let get_char_as_feature = |outline: Outline, position: &Point| {
-		let mut mls = MultiLineStringGeometry::new();
+		let mut mls: Vec<LineString<f64>> = Vec::new();
 		for curve in outline.curves {
 			let points = match curve {
 				Line(p0, p1) => vec![p0, p1],
 				Quad(p0, c0, p1) => draw_quad(p0, c0, p1),
 				Cubic(p0, c0, c1, p1) => draw_cubic(p0, c0, c1, p1),
 			};
-			mls.push(LineStringGeometry::from(
+			mls.push(LineString::from(
 				points
 					.iter()
 					.map(|p| {
@@ -58,7 +72,7 @@ fn draw_text(name: &str, y: f32, text: &str) -> VectorTileLayer {
 			));
 		}
 
-		let multipolygon = get_multipolygon(mls);
+		let multipolygon = get_multipolygon(MultiLineString(mls));
 
 		GeoFeature::new(Geometry::MultiPolygon(multipolygon))
 	};
@@ -80,47 +94,54 @@ fn draw_text(name: &str, y: f32, text: &str) -> VectorTileLayer {
 	VectorTileLayer::from_features(String::from(name), features, 4096, 1).expect("debug features have valid geometry")
 }
 
-fn get_multipolygon(mls: MultiLineStringGeometry) -> MultiPolygonGeometry {
-	fn get_ring(mut iter: impl Iterator<Item = LineStringGeometry>) -> Option<RingGeometry> {
-		let mut points = iter.next()?.into_inner();
-		let p0 = points.first()?.clone();
+fn get_multipolygon(mls: MultiLineString<f64>) -> MultiPolygon<f64> {
+	fn get_ring(iter: &mut std::vec::IntoIter<LineString<f64>>) -> Option<LineString<f64>> {
+		let mut points = iter.next()?.0;
+		let p0 = *points.first()?;
 
 		while points.last()? != &p0 {
 			let line = iter.next()?;
-			for point in line.into_iter().skip(1) {
+			for point in line.0.into_iter().skip(1) {
 				points.push(point);
 			}
 		}
 
-		Some(RingGeometry(points))
+		Some(LineString::new(points))
 	}
 
-	let mut multipolygon = MultiPolygonGeometry::new();
-	let mut iter = mls.into_iter();
+	let mut polygons: Vec<Polygon<f64>> = Vec::new();
+	let mut iter = mls.0.into_iter();
 
 	while let Some(ring) = get_ring(&mut iter) {
-		if ring.len() == 2 {
+		if ring.0.len() == 2 {
 			continue;
 		}
-		if ring.area() > 0.0 {
-			multipolygon.push(PolygonGeometry::from(vec![ring]));
+		if ring_signed_double_area(&ring.0) > 0.0 {
+			polygons.push(Polygon::new(ring, vec![]));
 		} else {
-			multipolygon.last_mut().expect("first ring is missing").push(ring);
+			let parent = polygons.last_mut().expect("first ring is missing");
+			let exterior = parent.exterior().clone();
+			let mut interiors: Vec<LineString<f64>> = parent.interiors().to_vec();
+			interiors.push(ring);
+			*parent = Polygon::new(exterior, interiors);
 		}
 	}
 
-	multipolygon
+	MultiPolygon(polygons)
 }
 
 #[context("Creating background layer for debug vector tile")]
 fn get_background_layer() -> Result<VectorTileLayer> {
-	let mut circle = LineStringGeometry::new();
+	let mut coords: Vec<Coord<f64>> = Vec::new();
 	for i in 0..=100 {
 		let a = PI * f64::from(i) / 50.0;
-		circle.push(Coordinates::new((a.cos() + 1.0) * 2047.5, (a.sin() + 1.0) * 2047.5));
+		coords.push(Coord {
+			x: (a.cos() + 1.0) * 2047.5,
+			y: (a.sin() + 1.0) * 2047.5,
+		});
 	}
 
-	let feature = GeoFeature::new(Geometry::new_line_string(circle));
+	let feature = GeoFeature::new(Geometry::LineString(LineString::new(coords)));
 	VectorTileLayer::from_features(String::from("background"), vec![feature], 4096, 1)
 }
 

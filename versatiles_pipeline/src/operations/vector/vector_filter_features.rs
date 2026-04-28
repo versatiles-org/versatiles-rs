@@ -197,12 +197,12 @@ mod tests {
 	use pretty_assertions::assert_eq;
 	use versatiles_core::TileBBox;
 	use versatiles_geometry::{
-		geo::{GeoFeature, Geometry},
+		geo::{GeoFeature, example_geometry},
 		vector_tile::VectorTileLayer,
 	};
 
 	fn feature(props: Vec<(&str, GeoValue)>) -> GeoFeature {
-		let mut f = GeoFeature::new(Geometry::new_example());
+		let mut f = GeoFeature::new(example_geometry());
 		f.properties = GeoProperties::from(props);
 		f
 	}

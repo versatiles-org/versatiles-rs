@@ -9,13 +9,15 @@
 
 use super::blur_function::BlurFunction;
 use anyhow::{Result, ensure};
+use geo::BoundingRect;
+use geo_types::{Geometry, LineString, MultiPolygon, Polygon};
 use rstar::{AABB, RTree, RTreeObject};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use versatiles_core::{EARTH_RADIUS, GeoBBox};
 use versatiles_derive::context;
-use versatiles_geometry::geo::{Geometry, GeometryTrait, MultiPolygonGeometry, PolygonGeometry, RingGeometry};
+use versatiles_geometry::ext::MercatorExt;
 use versatiles_geometry::geojson::read_geojson;
 
 /// Classification of a tile's relationship to the mask geometry.
@@ -113,7 +115,7 @@ impl RTreeObject for EdgeSegment {
 pub struct MaskGeometry {
 	/// Geometry in Web Mercator (EPSG:3857) for meter-based calculations
 	#[allow(dead_code)]
-	polygon_mercator: MultiPolygonGeometry,
+	polygon_mercator: MultiPolygon<f64>,
 
 	/// R-tree index of polygon edges for fast distance queries
 	edge_rtree: RTree<EdgeSegment>,
@@ -173,7 +175,7 @@ impl MaskGeometry {
 		let collection = read_geojson(reader)?;
 
 		// Collect all polygons from the GeoJSON
-		let mut polygons_wgs84: Vec<PolygonGeometry> = Vec::new();
+		let mut polygons_wgs84: Vec<Polygon<f64>> = Vec::new();
 
 		for feature in collection.features {
 			match feature.geometry {
@@ -198,16 +200,17 @@ impl MaskGeometry {
 		);
 
 		// Convert to Web Mercator
-		let multi_polygon = MultiPolygonGeometry(polygons_wgs84).to_mercator();
+		let multi_polygon = MultiPolygon(polygons_wgs84).to_mercator();
 
 		// Build R-tree from edges
 		let edges = extract_edges(&multi_polygon);
 		let edge_rtree = RTree::bulk_load(edges);
 
 		// Compute bounding box
-		let bounds_mercator = multi_polygon
-			.compute_bounds()
+		let rect = multi_polygon
+			.bounding_rect()
 			.ok_or_else(|| anyhow::anyhow!("Mask geometry is empty - no polygons found"))?;
+		let bounds_mercator = [rect.min().x, rect.min().y, rect.max().x, rect.max().y];
 
 		let blur_meters = blur_meters.max(0.0);
 		let outer_threshold = buffer_meters + blur_meters;
@@ -590,12 +593,13 @@ impl MaskGeometry {
 }
 
 /// Extract all edges from a MultiPolygon as EdgeSegments.
-fn extract_edges(multi_poly: &MultiPolygonGeometry) -> Vec<EdgeSegment> {
+fn extract_edges(multi_poly: &MultiPolygon<f64>) -> Vec<EdgeSegment> {
 	let mut edges = Vec::new();
 
 	for poly in &multi_poly.0 {
-		for ring in &poly.0 {
-			extract_ring_edges(ring, &mut edges);
+		extract_ring_edges(poly.exterior(), &mut edges);
+		for interior in poly.interiors() {
+			extract_ring_edges(interior, &mut edges);
 		}
 	}
 
@@ -603,12 +607,12 @@ fn extract_edges(multi_poly: &MultiPolygonGeometry) -> Vec<EdgeSegment> {
 }
 
 /// Extract edges from a ring and add them to the edges vector.
-fn extract_ring_edges(ring: &RingGeometry, edges: &mut Vec<EdgeSegment>) {
+fn extract_ring_edges(ring: &LineString<f64>, edges: &mut Vec<EdgeSegment>) {
 	let coords = &ring.0;
 
 	for window in coords.windows(2) {
 		if let [c1, c2] = window {
-			edges.push(EdgeSegment::new([c1.x(), c1.y()], [c2.x(), c2.y()]));
+			edges.push(EdgeSegment::new([c1.x, c1.y], [c2.x, c2.y]));
 		}
 	}
 }
@@ -642,7 +646,7 @@ mod tests {
 
 		// Test with no blur
 		let mask = MaskGeometry {
-			polygon_mercator: MultiPolygonGeometry(vec![]),
+			polygon_mercator: MultiPolygon(vec![]),
 			edge_rtree: RTree::new(),
 			bounds_mercator: [0.0, 0.0, 0.0, 0.0],
 			buffer_meters: 0.0,
@@ -659,7 +663,7 @@ mod tests {
 	#[test]
 	fn test_blur_function_alpha_with_blur() {
 		let mask = MaskGeometry {
-			polygon_mercator: MultiPolygonGeometry(vec![]),
+			polygon_mercator: MultiPolygon(vec![]),
 			edge_rtree: RTree::new(),
 			bounds_mercator: [0.0, 0.0, 0.0, 0.0],
 			buffer_meters: 0.0,
@@ -704,18 +708,10 @@ mod tests {
 
 	#[test]
 	fn test_contains_point_rtree() {
-		use versatiles_geometry::geo::{Coordinates, PolygonGeometry, RingGeometry};
-
 		// Create a simple square polygon: (0,0) to (100,100)
-		let ring = RingGeometry(vec![
-			Coordinates::new(0.0, 0.0),
-			Coordinates::new(100.0, 0.0),
-			Coordinates::new(100.0, 100.0),
-			Coordinates::new(0.0, 100.0),
-			Coordinates::new(0.0, 0.0),
-		]);
-		let poly = PolygonGeometry(vec![ring]);
-		let multi = MultiPolygonGeometry(vec![poly]);
+		let ring = LineString::from(vec![[0.0, 0.0], [100.0, 0.0], [100.0, 100.0], [0.0, 100.0], [0.0, 0.0]]);
+		let poly = Polygon::new(ring, vec![]);
+		let multi = MultiPolygon(vec![poly]);
 
 		let edges = extract_edges(&multi);
 		let edge_rtree = RTree::bulk_load(edges);
@@ -744,18 +740,16 @@ mod tests {
 
 	#[test]
 	fn test_compute_alpha_grid_fully_inside() {
-		use versatiles_geometry::geo::{Coordinates, PolygonGeometry, RingGeometry};
-
 		// Create a large polygon that fully contains the test tile
-		let ring = RingGeometry(vec![
-			Coordinates::new(-1000.0, -1000.0),
-			Coordinates::new(1000.0, -1000.0),
-			Coordinates::new(1000.0, 1000.0),
-			Coordinates::new(-1000.0, 1000.0),
-			Coordinates::new(-1000.0, -1000.0),
+		let ring = LineString::from(vec![
+			[-1000.0, -1000.0],
+			[1000.0, -1000.0],
+			[1000.0, 1000.0],
+			[-1000.0, 1000.0],
+			[-1000.0, -1000.0],
 		]);
-		let poly = PolygonGeometry(vec![ring]);
-		let multi = MultiPolygonGeometry(vec![poly]);
+		let poly = Polygon::new(ring, vec![]);
+		let multi = MultiPolygon(vec![poly]);
 
 		let edges = extract_edges(&multi);
 		let edge_rtree = RTree::bulk_load(edges);
@@ -779,18 +773,16 @@ mod tests {
 
 	#[test]
 	fn test_compute_alpha_grid_fully_outside() {
-		use versatiles_geometry::geo::{Coordinates, PolygonGeometry, RingGeometry};
-
 		// Create a polygon far from the test tile
-		let ring = RingGeometry(vec![
-			Coordinates::new(10000.0, 10000.0),
-			Coordinates::new(11000.0, 10000.0),
-			Coordinates::new(11000.0, 11000.0),
-			Coordinates::new(10000.0, 11000.0),
-			Coordinates::new(10000.0, 10000.0),
+		let ring = LineString::from(vec![
+			[10000.0, 10000.0],
+			[11000.0, 10000.0],
+			[11000.0, 11000.0],
+			[10000.0, 11000.0],
+			[10000.0, 10000.0],
 		]);
-		let poly = PolygonGeometry(vec![ring]);
-		let multi = MultiPolygonGeometry(vec![poly]);
+		let poly = Polygon::new(ring, vec![]);
+		let multi = MultiPolygon(vec![poly]);
 
 		let edges = extract_edges(&multi);
 		let edge_rtree = RTree::bulk_load(edges);

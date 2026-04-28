@@ -1,12 +1,11 @@
 #![allow(dead_code)]
 
 use super::{geometry_type::GeomType, layer::VectorTileLayer};
-use crate::geo::{
-	CompositeGeometryTrait, Coordinates, GeoFeature, GeoProperties, GeoValue, Geometry, GeometryTrait,
-	MultiLineStringGeometry, MultiPointGeometry, MultiPolygonGeometry, RingGeometry, SingleGeometryTrait,
-};
+use crate::ext::validate;
+use crate::geo::{GeoFeature, GeoProperties, GeoValue};
 use anyhow::{Context, Result, bail, ensure};
 use byteorder::LE;
+use geo_types::{Coord, Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon};
 use versatiles_core::{
 	Blob,
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
@@ -30,6 +29,22 @@ impl Default for VectorTileFeature {
 			geom_data: Blob::new_empty(),
 		}
 	}
+}
+
+/// Returns 2 × the signed area of a closed ring (trapezoid form, matching the
+/// historical versatiles convention: positive for counter-clockwise rings).
+fn ring_signed_double_area(coords: &[Coord<f64>]) -> f64 {
+	let n = coords.len();
+	if n < 3 {
+		return 0.0;
+	}
+	let mut sum = 0.0;
+	let mut prev = coords[n - 1];
+	for &p in coords {
+		sum += (prev.x - p.x) * (p.y + prev.y);
+		prev = p;
+	}
+	sum
 }
 
 impl VectorTileFeature {
@@ -88,16 +103,16 @@ impl VectorTileFeature {
 		Ok(writer.into_blob())
 	}
 
-	pub fn to_geometry(&self) -> Result<Geometry> {
+	pub fn to_geometry(&self) -> Result<Geometry<f64>> {
 		// https://github.com/mapbox/vector-tile-spec/blob/master/2.1/README.md#43-geometry-encoding
 
 		let coordinates = {
 			let mut reader = ValueReaderSlice::new_le(self.geom_data.as_slice());
 
-			let mut lines: Vec<Vec<Coordinates>> = Vec::new();
-			let mut line: Vec<Coordinates> = Vec::new();
-			let mut x = 0;
-			let mut y = 0;
+			let mut lines: Vec<Vec<Coord<f64>>> = Vec::new();
+			let mut line: Vec<Coord<f64>> = Vec::new();
+			let mut x = 0i64;
+			let mut y = 0i64;
 
 			while reader.has_remaining()? {
 				let value = reader
@@ -118,13 +133,16 @@ impl VectorTileFeature {
 							x += reader.read_svarint().context("Failed to read x coordinate")?;
 							y += reader.read_svarint().context("Failed to read y coordinate")?;
 
-							line.push(Coordinates::new(x as f64, y as f64));
+							line.push(Coord {
+								x: x as f64,
+								y: y as f64,
+							});
 						}
 					}
 					7 => {
 						// ClosePath command
 						ensure!(!line.is_empty(), "ClosePath command found on an empty linestring");
-						line.push(line[0].clone());
+						line.push(line[0]);
 					}
 					_ => bail!("Unknown command {command}"),
 				}
@@ -143,43 +161,48 @@ impl VectorTileFeature {
 			GeomType::MultiPoint => {
 				ensure!(!coordinates.is_empty(), "(Multi)Points must not be empty");
 
-				Ok(Geometry::new_multi_point(
-					coordinates
-						.into_iter()
-						.map(|mut point| {
-							ensure!(point.len() == 1, "(Multi)Point entries must have exactly one entry");
-							Ok(point.pop().expect("ensured len == 1 above"))
-						})
-						.collect::<Result<Vec<Coordinates>>>()?,
-				))
+				let points = coordinates
+					.into_iter()
+					.map(|mut entry| {
+						ensure!(entry.len() == 1, "(Multi)Point entries must have exactly one entry");
+						Ok(Point(entry.pop().expect("ensured len == 1 above")))
+					})
+					.collect::<Result<Vec<Point<f64>>>>()?;
+				Ok(Geometry::MultiPoint(MultiPoint(points)))
 			}
 
 			GeomType::MultiLineString => {
 				ensure!(!coordinates.is_empty(), "MultiLineStrings must have at least one entry");
-				let f = Geometry::new_multi_line_string(coordinates);
-				f.verify().context("Invalid MultiLineString")?;
-				Ok(f)
+				let lines = coordinates.into_iter().map(LineString::new).collect::<Vec<_>>();
+				let g = Geometry::MultiLineString(MultiLineString(lines));
+				validate(&g).context("Invalid MultiLineString")?;
+				Ok(g)
 			}
 
 			GeomType::MultiPolygon => {
 				ensure!(!coordinates.is_empty(), "Polygons must have at least one entry");
-				let mut current_polygon = Vec::new();
-				let mut polygons = Vec::new();
+				let mut current_polygon: Vec<LineString<f64>> = Vec::new();
+				let mut polygons: Vec<Polygon<f64>> = Vec::new();
 
-				for ring in coordinates {
-					let ring = RingGeometry(ring);
-					ring.verify().context("Invalid ring in Polygon")?;
+				let push_polygon = |rings: Vec<LineString<f64>>, polygons: &mut Vec<Polygon<f64>>| {
+					if let Some((exterior, interiors)) = rings.split_first() {
+						polygons.push(Polygon::new(exterior.clone(), interiors.to_vec()));
+					}
+				};
 
-					let area = ring.area();
+				for ring_coords in coordinates {
+					let area2 = ring_signed_double_area(&ring_coords);
+					ensure!(ring_coords.len() >= 4, "polygon ring must have at least 4 points");
+					ensure!(ring_coords.first() == ring_coords.last(), "polygon ring must be closed");
+					let ring = LineString::new(ring_coords);
 
-					if area > 1e-14 {
+					if area2 > 1e-14 {
 						// Outer ring
 						if !current_polygon.is_empty() {
-							polygons.push(current_polygon);
-							current_polygon = Vec::new();
+							push_polygon(std::mem::take(&mut current_polygon), &mut polygons);
 						}
 						current_polygon.push(ring);
-					} else if area < -1e-14 {
+					} else if area2 < -1e-14 {
 						// Inner ring
 						if current_polygon.is_empty() {
 							log::trace!("An outer ring must precede inner rings");
@@ -192,10 +215,10 @@ impl VectorTileFeature {
 				}
 
 				if !current_polygon.is_empty() {
-					polygons.push(current_polygon);
+					push_polygon(current_polygon, &mut polygons);
 				}
 
-				Ok(Geometry::new_multi_polygon(polygons))
+				Ok(Geometry::MultiPolygon(MultiPolygon(polygons)))
 			}
 		}
 	}
@@ -216,10 +239,10 @@ impl VectorTileFeature {
 		Ok(feature)
 	}
 
-	pub fn from_geometry(id: Option<u64>, tag_ids: Vec<u32>, geometry: Geometry) -> Result<VectorTileFeature> {
-		fn write_coord(writer: &mut ValueWriterBlob<LE>, coord0: &mut (i64, i64), coord: &Coordinates) -> Result<()> {
-			let x = float_to_int(coord.x())?;
-			let y = float_to_int(coord.y())?;
+	pub fn from_geometry(id: Option<u64>, tag_ids: Vec<u32>, geometry: Geometry<f64>) -> Result<VectorTileFeature> {
+		fn write_coord(writer: &mut ValueWriterBlob<LE>, coord0: &mut (i64, i64), coord: Coord<f64>) -> Result<()> {
+			let x = float_to_int(coord.x)?;
+			let y = float_to_int(coord.y)?;
 			writer.write_svarint(x - coord0.0)?;
 			writer.write_svarint(y - coord0.1)?;
 			coord0.0 = x;
@@ -227,36 +250,35 @@ impl VectorTileFeature {
 			Ok(())
 		}
 
-		fn write_points(points: MultiPointGeometry) -> Result<Blob> {
+		fn write_points(points: MultiPoint<f64>) -> Result<Blob> {
 			let mut writer = ValueWriterBlob::new_le();
 			let point0 = &mut (0i64, 0i64);
-			writer.write_varint(((points.len() as u64) << 3) | 0x1)?;
-			for point in points.into_iter() {
-				write_coord(&mut writer, point0, point.as_coord())?;
+			writer.write_varint(((points.0.len() as u64) << 3) | 0x1)?;
+			for point in points.0 {
+				write_coord(&mut writer, point0, point.0)?;
 			}
 			Ok(writer.into_blob())
 		}
 
-		fn write_line_strings(line_strings: MultiLineStringGeometry) -> Result<Blob> {
+		fn write_line_strings(line_strings: MultiLineString<f64>) -> Result<Blob> {
 			let mut writer = ValueWriterBlob::new_le();
 			let point0 = &mut (0i64, 0i64);
 
-			for line_string in line_strings.into_iter() {
-				if line_string.is_empty() {
+			for line_string in line_strings.0 {
+				let coords = line_string.0;
+				let Some((first, rest)) = coords.split_first() else {
 					continue;
-				}
-
-				let (first, rest) = line_string.into_first_and_rest().expect("line_string is not empty");
+				};
 
 				// Write the MoveTo command for the first point
 				writer.write_varint((1 << 3) | 0x1)?; // MoveTo command
-				write_coord(&mut writer, point0, &first)?;
+				write_coord(&mut writer, point0, *first)?;
 
 				// Write the LineTo command for the remaining points
 				if !rest.is_empty() {
 					writer.write_varint(((rest.len() as u64) << 3) | 0x2)?; // LineTo command
-					for point in rest {
-						write_coord(&mut writer, point0, &point)?;
+					for &point in rest {
+						write_coord(&mut writer, point0, point)?;
 					}
 				}
 			}
@@ -264,50 +286,65 @@ impl VectorTileFeature {
 			Ok(writer.into_blob())
 		}
 
-		fn write_polygons(polygons: MultiPolygonGeometry) -> Result<Blob> {
+		fn write_ring(writer: &mut ValueWriterBlob<LE>, point0: &mut (i64, i64), ring: &LineString<f64>) -> Result<()> {
+			let coords = &ring.0;
+			// Drop closing duplicate vertex if present (MVT closes via ClosePath, not by repeating).
+			let trim_to = if coords.len() >= 2 && coords.first() == coords.last() {
+				coords.len() - 1
+			} else {
+				coords.len()
+			};
+			if trim_to < 3 {
+				// degenerate ring; skip
+				return Ok(());
+			}
+			let coords = &coords[..trim_to];
+
+			let (first, rest) = coords.split_first().expect("trim_to >= 3");
+
+			writer.write_varint((1 << 3) | 0x1)?; // MoveTo command
+			write_coord(writer, point0, *first)?;
+
+			if !rest.is_empty() {
+				writer.write_varint(((rest.len() as u64) << 3) | 0x2)?; // LineTo command
+				for &point in rest {
+					write_coord(writer, point0, point)?;
+				}
+			}
+
+			writer.write_varint(7)?; // ClosePath command
+			Ok(())
+		}
+
+		fn write_polygons(polygons: MultiPolygon<f64>) -> Result<Blob> {
 			let mut writer = ValueWriterBlob::new_le();
 			let point0 = &mut (0i64, 0i64);
 
-			for polygon in polygons.into_iter() {
-				for ring in polygon.into_iter() {
-					if ring.len() < 4 {
-						continue;
-					}
-
-					let (first, mut rest) = ring.into_first_and_rest().expect("ring has at least 4 points");
-					rest.pop();
-
-					// Write the MoveTo command for the first point
-					writer.write_varint((1 << 3) | 0x1)?; // MoveTo command
-					write_coord(&mut writer, point0, &first)?;
-
-					// Write the LineTo command for the remaining points
-					if !rest.is_empty() {
-						writer.write_varint(((rest.len() as u64) << 3) | 0x2)?; // LineTo command
-						for point in rest {
-							write_coord(&mut writer, point0, &point)?;
-						}
-					}
-
-					// Write the ClosePath command
-					writer.write_varint(7)?; // ClosePath command
+			for polygon in polygons.0 {
+				let (exterior, interiors) = polygon.into_inner();
+				write_ring(&mut writer, point0, &exterior)?;
+				for interior in interiors {
+					write_ring(&mut writer, point0, &interior)?;
 				}
 			}
 
 			Ok(writer.into_blob())
 		}
 
-		fn m<T>(g: &[T]) -> Vec<&T> {
-			g.iter().collect()
-		}
-		use crate::geo::Geometry::{LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon};
 		let (geom_type, geom_data) = match geometry {
-			Point(g) => (GeomType::MultiPoint, write_points(g.into_multi())?),
-			MultiPoint(g) => (GeomType::MultiPoint, write_points(g)?),
-			LineString(g) => (GeomType::MultiLineString, write_line_strings(g.into_multi())?),
-			MultiLineString(g) => (GeomType::MultiLineString, write_line_strings(g)?),
-			Polygon(g) => (GeomType::MultiPolygon, write_polygons(g.into_multi())?),
-			MultiPolygon(g) => (GeomType::MultiPolygon, write_polygons(g)?),
+			Geometry::Point(p) => (GeomType::MultiPoint, write_points(MultiPoint(vec![p]))?),
+			Geometry::MultiPoint(mp) => (GeomType::MultiPoint, write_points(mp)?),
+			Geometry::LineString(ls) => (
+				GeomType::MultiLineString,
+				write_line_strings(MultiLineString(vec![ls]))?,
+			),
+			Geometry::MultiLineString(ml) => (GeomType::MultiLineString, write_line_strings(ml)?),
+			Geometry::Polygon(p) => (GeomType::MultiPolygon, write_polygons(MultiPolygon(vec![p]))?),
+			Geometry::MultiPolygon(mp) => (GeomType::MultiPolygon, write_polygons(mp)?),
+			Geometry::Line(_) => bail!("MVT encoding of Line is not supported"),
+			Geometry::Rect(_) => bail!("MVT encoding of Rect is not supported"),
+			Geometry::Triangle(_) => bail!("MVT encoding of Triangle is not supported"),
+			Geometry::GeometryCollection(_) => bail!("MVT encoding of GeometryCollection is not supported"),
 		};
 
 		Ok(VectorTileFeature {
@@ -320,68 +357,100 @@ impl VectorTileFeature {
 
 	#[cfg(test)]
 	pub fn new_example() -> Self {
-		VectorTileFeature::from_geometry(Some(3), vec![1, 2], Geometry::new_example()).unwrap()
+		VectorTileFeature::from_geometry(Some(3), vec![1, 2], crate::geo::example_geometry()).unwrap()
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use geo_types::{LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon};
 
-	fn round_trip_feature(geometry: Geometry) -> Result<()> {
-		// Convert to VectorTileFeature
+	fn ls_from(pts: &[[i32; 2]]) -> LineString<f64> {
+		LineString::from(
+			pts.iter()
+				.map(|p| [f64::from(p[0]), f64::from(p[1])])
+				.collect::<Vec<_>>(),
+		)
+	}
+
+	fn polygon_from(rings: &[Vec<[i32; 2]>]) -> Polygon<f64> {
+		let mut iter = rings.iter().map(|ring| ls_from(ring));
+		let exterior = iter.next().expect("polygon has exterior");
+		let interiors = iter.collect();
+		Polygon::new(exterior, interiors)
+	}
+
+	fn round_trip_feature(geometry: Geometry<f64>) -> Result<()> {
 		let vector_tile_feature = VectorTileFeature::from_geometry(None, vec![], geometry.clone())?;
-
-		// Compare original and converted features
-		assert_eq!(geometry.into_multi_geometry(), vector_tile_feature.to_geometry()?);
+		let decoded = vector_tile_feature.to_geometry()?;
+		assert_eq!(canonical_multi(geometry), decoded);
 		Ok(())
+	}
+
+	/// Lifts single-geometry variants into their multi equivalents so that
+	/// MVT round-trips (which always decode into multi geometries) compare cleanly.
+	fn canonical_multi(g: Geometry<f64>) -> Geometry<f64> {
+		match g {
+			Geometry::Point(p) => Geometry::MultiPoint(MultiPoint(vec![p])),
+			Geometry::LineString(ls) => Geometry::MultiLineString(MultiLineString(vec![ls])),
+			Geometry::Polygon(p) => Geometry::MultiPolygon(MultiPolygon(vec![p])),
+			other => other,
+		}
 	}
 
 	#[test]
 	fn point_geometry_round_trip() -> Result<()> {
-		let geometry = Geometry::new_point(&[1, 2]);
-		round_trip_feature(geometry)
+		round_trip_feature(Geometry::Point(Point::new(1.0, 2.0)))
 	}
 
 	#[test]
 	fn line_string_geometry_round_trip() -> Result<()> {
-		let geometry = Geometry::new_line_string(&[[0, 1], [0, 3]]);
-		round_trip_feature(geometry)
+		round_trip_feature(Geometry::LineString(ls_from(&[[0, 1], [0, 3]])))
 	}
 
 	#[test]
 	fn polygon_geometry_round_trip() -> Result<()> {
-		let geometry = Geometry::new_polygon(&[
+		let p = polygon_from(&[
 			vec![[0, 0], [3, 0], [3, 3], [0, 3], [0, 0]],
 			vec![[1, 1], [1, 2], [2, 2], [1, 1]],
 		]);
-		round_trip_feature(geometry)
+		round_trip_feature(Geometry::Polygon(p))
 	}
 
 	#[test]
 	fn multi_point_geometry_round_trip() -> Result<()> {
-		let geometry = Geometry::new_multi_point(&[[2, 3], [4, 5]]);
-		round_trip_feature(geometry)
+		let mp = MultiPoint(vec![Point::new(2.0, 3.0), Point::new(4.0, 5.0)]);
+		round_trip_feature(Geometry::MultiPoint(mp))
 	}
 
 	#[test]
 	fn multi_line_string_geometry_round_trip() -> Result<()> {
-		let geometry = Geometry::new_multi_line_string(&[vec![[0, 0], [1, 1], [2, 0]], vec![[0, 2], [1, 1], [2, 2]]]);
-		round_trip_feature(geometry)
+		let ml = MultiLineString(vec![
+			ls_from(&[[0, 0], [1, 1], [2, 0]]),
+			ls_from(&[[0, 2], [1, 1], [2, 2]]),
+		]);
+		round_trip_feature(Geometry::MultiLineString(ml))
 	}
 
 	#[test]
 	fn multi_polygon_geometry_round_trip() -> Result<()> {
-		let geometry = Geometry::new_multi_polygon(&[
-			vec![
+		let mp = MultiPolygon(vec![
+			polygon_from(&[
 				vec![[0, 0], [3, 0], [3, 3], [0, 3], [0, 0]],
 				vec![[1, 1], [1, 2], [2, 2], [1, 1]],
-			],
-			vec![
+			]),
+			polygon_from(&[
 				vec![[4, 0], [7, 0], [7, 3], [4, 3], [4, 0]],
 				vec![[5, 1], [5, 2], [6, 2], [5, 1]],
-			],
+			]),
 		]);
-		round_trip_feature(geometry)
+		round_trip_feature(Geometry::MultiPolygon(mp))
+	}
+
+	#[test]
+	fn rejects_unsupported_variants() {
+		let l = geo_types::Line::new(Coord { x: 0.0, y: 0.0 }, Coord { x: 1.0, y: 1.0 });
+		assert!(VectorTileFeature::from_geometry(None, vec![], Geometry::Line(l)).is_err());
 	}
 }

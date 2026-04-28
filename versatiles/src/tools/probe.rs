@@ -96,11 +96,11 @@ pub async fn probe_metadata(source: &dyn TileSource, print: &mut PrettyPrint) ->
 			let coverage = tiles * 100 / bbox.count_tiles();
 			vec![
 				format!("{}", level.level()),
-				format_integer_str(bbox.x_min().unwrap().to_string()),
-				format_integer_str(bbox.x_max().unwrap().to_string()),
-				format_integer_str(bbox.y_min().unwrap().to_string()),
-				format_integer_str(bbox.y_max().unwrap().to_string()),
-				format_integer_str(tiles.to_string()),
+				format_integer_str(&bbox.x_min().unwrap().to_string()),
+				format_integer_str(&bbox.x_max().unwrap().to_string()),
+				format_integer_str(&bbox.y_min().unwrap().to_string()),
+				format_integer_str(&bbox.y_max().unwrap().to_string()),
+				format_integer_str(&tiles.to_string()),
 				format!("{coverage}%"),
 			]
 		})
@@ -120,7 +120,7 @@ pub async fn probe_metadata(source: &dyn TileSource, print: &mut PrettyPrint) ->
 }
 
 /// Formats a `u64` with underscores as thousands separators (e.g. `1_234_567`).
-fn format_integer_str(v: String) -> String {
+fn format_integer_str(v: &str) -> String {
 	let mut result = String::new();
 	for (i, c) in v.chars().enumerate() {
 		if i > 0 && (v.len() - i).is_multiple_of(3) {
@@ -206,7 +206,7 @@ pub async fn probe_tile_sizes(source: &dyn TileSource, print: &mut PrettyPrint, 
 					format!("{}", e.z),
 					format!("{}", e.x),
 					format!("{}", e.y),
-					format_integer_str(e.size.to_string()),
+					format_integer_str(&e.size.to_string()),
 				]
 			})
 			.collect();
@@ -220,9 +220,9 @@ pub async fn probe_tile_sizes(source: &dyn TileSource, print: &mut PrettyPrint, 
 				let avg = if *count > 0 { size / count } else { 0 };
 				vec![
 					format!("{level}"),
-					format_integer_str(count.to_string()),
-					format_integer_str(size.to_string()),
-					format_integer_str(avg.to_string()),
+					format_integer_str(&count.to_string()),
+					format_integer_str(&size.to_string()),
+					format_integer_str(&avg.to_string()),
 				]
 			})
 			.collect();
