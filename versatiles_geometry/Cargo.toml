@@ -35,6 +35,7 @@ versatiles_derive.workspace = true
 [dev-dependencies]
 approx.workspace = true
 rstest.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["macros"] }
 versatiles_core = { workspace = true, features = ["test"] }
 

@@ -6,8 +6,10 @@
 //! can pull records on demand without changing the public API.
 
 mod geojson;
+mod shapefile;
 
 pub use geojson::GeoJsonSource;
+pub use shapefile::ShapefileSource;
 
 use crate::geo::GeoFeature;
 use anyhow::Result;

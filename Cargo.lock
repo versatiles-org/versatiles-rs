@@ -5643,6 +5643,7 @@ checksum = "79d5472e932503059d02779ad2c1b96258980940c6923e49f427fbe80eb3053c"
 dependencies = [
  "byteorder",
  "dbase",
+ "geo-types",
 ]
 
 [[package]]
@@ -6543,6 +6544,7 @@ dependencies = [
  "rstar",
  "rstest",
  "shapefile",
+ "tempfile",
  "tokio",
  "versatiles_core",
  "versatiles_derive",
