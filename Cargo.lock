@@ -6618,6 +6618,7 @@ dependencies = [
  "reqwest",
  "rstar",
  "rstest",
+ "tempfile",
  "tokio",
  "versatiles_container",
  "versatiles_core",

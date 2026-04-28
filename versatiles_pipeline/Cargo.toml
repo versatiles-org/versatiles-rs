@@ -51,6 +51,7 @@ axum = { workspace = true, features = ["http1", "tokio"] }
 pretty_assertions.workspace = true
 regex.workspace = true
 rstest.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "net"] }
 
 versatiles_container = { workspace = true, features = ["test"] }

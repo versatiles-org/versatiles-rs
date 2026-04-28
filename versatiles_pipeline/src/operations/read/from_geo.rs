@@ -25,7 +25,7 @@ use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourc
 use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_geometry::feature_import::{FeatureImport, FeatureImportConfig};
-use versatiles_geometry::feature_source::GeoJsonSource;
+use versatiles_geometry::feature_source::{GeoJsonSource, ShapefileSource};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 #[allow(dead_code)] // Phase 1 honors a subset of fields; the rest are wired in later phases.
@@ -113,7 +113,10 @@ impl ReadTileSource for Operation {
 				let source = GeoJsonSource::new(&path);
 				FeatureImport::from_source(&source, config).await?
 			}
-			"shp" => bail!("shapefile support is added in Phase 2"),
+			"shp" => {
+				let source = ShapefileSource::new(&path);
+				FeatureImport::from_source(&source, config).await?
+			}
 			"" => bail!(
 				"file '{}' has no extension; expected .geojson / .json / .ndjson / .shp",
 				path.display()
@@ -230,11 +233,42 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn shapefile_errors_until_phase_2() {
+	async fn loads_admin_shapefile() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
-		let result = factory
-			.operation_from_vpl("from_geo filename=\"../testdata/admin.shp\"")
-			.await;
-		assert!(result.is_err());
+		let op = factory
+			.operation_from_vpl("from_geo filename=\"../testdata/admin.shp\" layer_name=\"admin\" max_zoom=8")
+			.await?;
+
+		// Tile (0, 0, 0) covers the whole world; both polygons (Berlin + Brandenburg)
+		// should be present.
+		let tile = op.tile(&TileCoord::new(0, 0, 0)?).await?.expect("world tile present");
+		let blob = tile.into_blob(&Uncompressed)?;
+		assert!(!blob.is_empty());
+
+		let vt = versatiles_geometry::vector_tile::VectorTile::from_blob(&blob)?;
+		assert_eq!(vt.layers[0].name, "admin");
+		assert_eq!(vt.layers[0].features.len(), 2);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn extension_dispatch_is_case_insensitive() -> Result<()> {
+		// Mixed-case `.SHP` should still route to the shapefile path.
+		let factory = PipelineFactory::new_dummy();
+		// Symlink `admin.SHP` → `admin.shp` so both the .shp/.shx/.dbf lookups
+		// resolve. We do this in a tempdir to keep the testdata directory clean.
+		let tmp = tempfile::tempdir()?;
+		for ext in ["shp", "shx", "dbf"] {
+			let upper = ext.to_uppercase();
+			std::fs::copy(
+				format!("../testdata/admin.{ext}"),
+				tmp.path().join(format!("ADMIN.{upper}")),
+			)?;
+		}
+		let path_str = tmp.path().join("ADMIN.SHP");
+		let vpl = format!("from_geo filename=\"{}\" max_zoom=4", path_str.display());
+		let op = factory.operation_from_vpl(&vpl).await?;
+		assert!(op.tile(&TileCoord::new(0, 0, 0)?).await?.is_some());
+		Ok(())
 	}
 }
