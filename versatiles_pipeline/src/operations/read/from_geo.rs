@@ -255,7 +255,7 @@ async fn load_features(
 	let (handle, cb) = if total_bytes >= PROGRESS_MIN_BYTES {
 		let handle = factory
 			.runtime()
-			.create_progress(&format!("importing {format_label}"), total_bytes);
+			.create_progress(&format!("loading {format_label}"), total_bytes);
 		let inc = handle.clone();
 		let cb: ProgressCallback = Arc::new(move |n| inc.inc(n));
 		(Some(handle), Some(cb))

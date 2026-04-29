@@ -125,7 +125,7 @@ impl ReadTileSource for Operation {
 		// progress bar that ticks as the file is read.
 		let total_bytes = std::fs::metadata(&path).map_or(0, |m| m.len());
 		let progress_handle = if total_bytes >= PROGRESS_MIN_BYTES {
-			let handle = factory.runtime().create_progress("importing CSV", total_bytes);
+			let handle = factory.runtime().create_progress("loading CSV", total_bytes);
 			let inc = handle.clone();
 			let cb: ProgressCallback = Arc::new(move |n| inc.inc(n));
 			builder = builder.with_progress(cb);
