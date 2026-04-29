@@ -1,0 +1,4 @@
+{"type":"Feature","id":1,"geometry":{"type":"Point","coordinates":[13.4050,52.5200]},"properties":{"name":"Berlin","kind":"capital"}}
+{"type":"Feature","id":2,"geometry":{"type":"LineString","coordinates":[[13.0,52.5],[13.4,52.5],[13.8,52.5]]},"properties":{"name":"S5","kind":"rail"}}
+{"type":"Feature","id":3,"geometry":{"type":"Polygon","coordinates":[[[13.0,52.3],[13.8,52.3],[13.8,52.7],[13.0,52.7],[13.0,52.3]]]},"properties":{"name":"City","kind":"boundary"}}
+{"type":"Feature","id":4,"geometry":{"type":"MultiPolygon","coordinates":[[[[13.0,52.0],[13.5,52.0],[13.5,52.2],[13.0,52.2],[13.0,52.0]]],[[[14.0,52.0],[14.5,52.0],[14.5,52.2],[14.0,52.2],[14.0,52.0]]]]},"properties":{"name":"Districts","kind":"admin"}}

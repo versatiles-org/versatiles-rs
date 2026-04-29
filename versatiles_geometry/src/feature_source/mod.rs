@@ -10,7 +10,7 @@ mod geojson;
 mod shapefile;
 
 pub use csv::{CsvSource, CsvSourceBuilder};
-pub use geojson::GeoJsonSource;
+pub use geojson::{Format as GeoJsonFormat, GeoJsonSource};
 pub use shapefile::ShapefileSource;
 
 use crate::geo::GeoFeature;

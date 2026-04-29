@@ -22,7 +22,7 @@ from_container filename="world.versatiles" | do_some_filtering | do_some_process
 
 ### Reading raw vector data
 
-Beyond existing tile containers, pipelines can read raw vector geo data and produce MVT tiles directly. The `from_geo` operation accepts GeoJSON and Shapefile inputs, projects features to web mercator, simplifies per zoom, and emits tiles on demand:
+Beyond existing tile containers, pipelines can read raw vector geo data and produce MVT tiles directly. The `from_geo` operation accepts GeoJSON, newline-delimited GeoJSON (`.ndjson` / `.geojsonl`), and Shapefile inputs; projects features to web mercator; simplifies per zoom; and emits tiles on demand:
 
 ```vpl
 from_geo filename="places.geojson" layer_name="places" max_zoom=12

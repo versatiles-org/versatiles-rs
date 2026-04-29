@@ -1,7 +1,8 @@
 //! # From‑geo read operation
 //!
-//! Reads a vector geo-data file (GeoJSON or Shapefile, dispatched by file
-//! extension) and exposes it as a [`TileSource`] of MVT tiles.
+//! Reads a vector geo-data file (GeoJSON, newline-delimited GeoJSON, or
+//! Shapefile, dispatched by file extension) and exposes it as a
+//! [`TileSource`] of MVT tiles.
 //!
 //! Internally builds a [`FeatureImport`] which projects features to web
 //! mercator, decomposes shared boundaries into an arc graph, simplifies
@@ -29,8 +30,13 @@ use versatiles_geometry::geo::GeoFeature;
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a GeoJSON or Shapefile and emits MVT vector tiles.
 struct Args {
-	/// Filename of the GeoJSON or Shapefile (relative to the VPL file path).
-	/// Format is detected from the extension (`.geojson`, `.json`, `.ndjson`, `.shp`).
+	/// Filename of the input (relative to the VPL file path). Format is detected
+	/// from the extension:
+	///
+	/// - `.geojson` / `.json` — GeoJSON `FeatureCollection`
+	/// - `.ndjson` / `.geojsonl` / `.ndgeojson` — newline-delimited GeoJSON
+	///   (one feature per line)
+	/// - `.shp` — Esri Shapefile
 	filename: String,
 	/// Name of the MVT layer in the output tiles. Defaults to the filename stem.
 	layer_name: Option<String>,
@@ -108,10 +114,11 @@ impl ReadTileSource for Operation {
 			.map(str::to_ascii_lowercase)
 			.unwrap_or_default();
 		let features: Vec<GeoFeature> = match ext.as_str() {
-			"geojson" | "json" | "ndjson" => drain(&GeoJsonSource::new(&path)).await?,
+			"geojson" | "json" => drain(&GeoJsonSource::new(&path)).await?,
+			"ndjson" | "ndgeojson" | "geojsonl" => drain(&GeoJsonSource::new_line_delimited(&path)).await?,
 			"shp" => drain(&ShapefileSource::new(&path)).await?,
 			"" => bail!(
-				"file '{}' has no extension; expected .geojson / .json / .ndjson / .shp",
+				"file '{}' has no extension; expected .geojson / .json / .ndjson / .geojsonl / .ndgeojson / .shp",
 				path.display()
 			),
 			other => bail!("unsupported file extension '.{other}' for from_geo"),
@@ -266,6 +273,27 @@ mod tests {
 
 		let vt = versatiles_geometry::vector_tile::VectorTile::from_blob(&blob)?;
 		assert_eq!(vt.layers[0].name, "places");
+		assert_eq!(vt.layers[0].features.len(), 5);
+		Ok(())
+	}
+
+	/// Newline-delimited GeoJSON: same fixture as `places.geojson`, one
+	/// feature per line. Routes through the `LineDelimited` parser path.
+	#[tokio::test]
+	async fn loads_places_geojsonl() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				"from_geo filename=\"../testdata/places.geojsonl\" layer_name=\"places\" max_zoom=8 \
+				 polygon_simplify=0 line_simplify=0 polygon_min_area=0 line_min_length=0",
+			)
+			.await?;
+
+		let tile = op.tile(&TileCoord::new(0, 0, 0)?).await?.expect("world tile present");
+		let vt = versatiles_geometry::vector_tile::VectorTile::from_blob(&tile.into_blob(&Uncompressed)?)?;
+		assert_eq!(vt.layers[0].name, "places");
+		// Same shape as the FeatureCollection sibling: 4 features → 5 after
+		// MultiPolygon flatten.
 		assert_eq!(vt.layers[0].features.len(), 5);
 		Ok(())
 	}
