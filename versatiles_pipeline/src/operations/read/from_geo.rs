@@ -129,7 +129,7 @@ impl ReadTileSource for Operation {
 			),
 			other => bail!("unsupported file extension '.{other}' for from_geo"),
 		};
-		log::info!("from_geo: importing {format_label} from {}", path.display());
+		log::debug!("from_geo: loading {format_label} from {}", path.display());
 		let features = load_features(&path, ext.as_str(), format_label, factory).await?;
 
 		// `args.max_zoom` of `None` triggers the auto-heuristic inside
