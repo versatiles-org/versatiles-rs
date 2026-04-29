@@ -335,7 +335,14 @@ impl FeatureImport {
 		let [xmin, ymin, xmax, ymax] = self.bounds_mercator;
 		let min = coord_from_mercator(Coord { x: xmin, y: ymin });
 		let max = coord_from_mercator(Coord { x: xmax, y: ymax });
-		Ok(Some(GeoBBox::new(min.x, min.y, max.x, max.y)?))
+		// Mercator → WGS84 round-trip can land just outside [-180, 180] / [-90, 90]
+		// due to f64 rounding (e.g. 180.00000000000003). Clamp before constructing
+		// the GeoBBox so its strict bounds check doesn't reject valid input.
+		let lon_min = min.x.clamp(-180.0, 180.0);
+		let lat_min = min.y.clamp(-90.0, 90.0);
+		let lon_max = max.x.clamp(-180.0, 180.0);
+		let lat_max = max.y.clamp(-90.0, 90.0);
+		Ok(Some(GeoBBox::new(lon_min, lat_min, lon_max, lat_max)?))
 	}
 
 	#[must_use]
