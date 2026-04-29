@@ -114,15 +114,22 @@ impl ReadTileSource for Operation {
 			.and_then(|s| s.to_str())
 			.map(str::to_ascii_lowercase)
 			.unwrap_or_default();
-		let features: Vec<GeoFeature> = match ext.as_str() {
-			"geojson" | "json" => drain(&GeoJsonSource::new(&path)).await?,
-			"ndjson" | "ndgeojson" | "geojsonl" | "geojsonseq" => drain(&GeoJsonSource::new_line_delimited(&path)).await?,
-			"shp" => drain(&ShapefileSource::new(&path)).await?,
+		let format_label = match ext.as_str() {
+			"geojson" | "json" => "GeoJSON",
+			"ndjson" | "ndgeojson" | "geojsonl" | "geojsonseq" => "line-delimited GeoJSON",
+			"shp" => "Shapefile",
 			"" => bail!(
 				"file '{}' has no extension; expected .geojson / .json / .ndjson / .geojsonl / .ndgeojson / .geojsonseq / .shp",
 				path.display()
 			),
 			other => bail!("unsupported file extension '.{other}' for from_geo"),
+		};
+		log::info!("from_geo: importing {format_label} from {}", path.display());
+		let features: Vec<GeoFeature> = match ext.as_str() {
+			"geojson" | "json" => drain(&GeoJsonSource::new(&path)).await?,
+			"ndjson" | "ndgeojson" | "geojsonl" | "geojsonseq" => drain(&GeoJsonSource::new_line_delimited(&path)).await?,
+			"shp" => drain(&ShapefileSource::new(&path)).await?,
+			_ => unreachable!("format_label match above already validated the extension"),
 		};
 
 		// `args.max_zoom` of `None` triggers the auto-heuristic inside

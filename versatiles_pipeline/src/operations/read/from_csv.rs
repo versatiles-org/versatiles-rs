@@ -124,6 +124,7 @@ impl ReadTileSource for Operation {
 			.transpose()?
 			.unwrap_or_default();
 
+		log::info!("from_csv: importing CSV from {}", path.display());
 		// Drain features once so the auto-max-zoom heuristic can inspect them.
 		let mut stream = source.load()?;
 		let mut features: Vec<GeoFeature> = Vec::new();
