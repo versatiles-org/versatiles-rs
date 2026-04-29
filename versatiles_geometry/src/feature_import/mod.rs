@@ -114,6 +114,10 @@ pub struct FeatureImport {
 	/// Indexed by zoom level. `None` for zooms outside `[min_zoom, max_zoom]`.
 	layers: Vec<Option<ZoomLayer>>,
 	bounds_mercator: [f64; 4],
+	/// Property name → MVT/TileJSON field type ("Boolean" / "Number" / "String"),
+	/// computed from the input features before cascading. Drives the TileJSON
+	/// `vector_layers` entry that consumers like QGIS need to discover layers.
+	property_schema: std::collections::BTreeMap<String, String>,
 }
 
 impl FeatureImport {
@@ -129,6 +133,11 @@ impl FeatureImport {
 		// caller to pass WGS84 lon/lat; non-WGS84 input silently produces
 		// garbage mercator coordinates.
 		log::debug!("projecting {} features to mercator", features.len());
+		// Snapshot the property schema before we consume the features. Drives the
+		// TileJSON `vector_layers` entry; sticking to a single TileJSON-spec
+		// type per field, picking the most informative on collisions
+		// (Boolean < Number < String).
+		let property_schema = collect_property_schema(&features);
 		let projected: Vec<GeoFeature> = features
 			.into_iter()
 			.map(|mut f| {
@@ -249,7 +258,17 @@ impl FeatureImport {
 			resolved_max_zoom,
 			layers,
 			bounds_mercator,
+			property_schema,
 		})
+	}
+
+	/// Property-name → TileJSON field-type map ("Boolean" / "Number" / "String"),
+	/// derived from the input features. Use this to populate the TileJSON
+	/// `vector_layers` entry so MBTiles consumers (e.g. QGIS) can discover
+	/// what's in each layer.
+	#[must_use]
+	pub fn property_schema(&self) -> &std::collections::BTreeMap<String, String> {
+		&self.property_schema
 	}
 
 	/// Render the MVT tile at `(z, x, y)`. Returns `Ok(None)` for zooms
@@ -380,6 +399,45 @@ fn arc_simplify_tolerance(config: &FeatureImportConfig, m_per_px: f64) -> f64 {
 		(false, false) => 0.0,
 	};
 	combined_px * m_per_px
+}
+
+/// Walk every feature's properties and accumulate `name → TileJSON-field-type`.
+///
+/// TileJSON 3.0 §3.3.2 only allows three field types: `Boolean`, `Number`, and
+/// `String`. We map [`crate::geo::GeoValue`] variants accordingly, ignoring
+/// `Null` (no type signal). On a name collision between Boolean/Number/String
+/// we promote to the most permissive ("String" wins, then "Number", then
+/// "Boolean") so the schema covers every value the consumer might see.
+fn collect_property_schema(features: &[GeoFeature]) -> std::collections::BTreeMap<String, String> {
+	use crate::geo::GeoValue;
+	fn rank(t: &str) -> u8 {
+		match t {
+			"Boolean" => 1,
+			"Number" => 2,
+			"String" => 3,
+			_ => 0,
+		}
+	}
+	let mut schema: std::collections::BTreeMap<String, String> = std::collections::BTreeMap::new();
+	for feature in features {
+		for (name, value) in feature.properties.iter() {
+			let new_type = match value {
+				GeoValue::Bool(_) => "Boolean",
+				GeoValue::Int(_) | GeoValue::UInt(_) | GeoValue::Float(_) | GeoValue::Double(_) => "Number",
+				GeoValue::String(_) => "String",
+				GeoValue::Null => continue,
+			};
+			schema
+				.entry(name.clone())
+				.and_modify(|existing| {
+					if rank(new_type) > rank(existing) {
+						*existing = new_type.to_string();
+					}
+				})
+				.or_insert_with(|| new_type.to_string());
+		}
+	}
+	schema
 }
 
 fn features_bbox(features: &[GeoFeature]) -> Option<[f64; 4]> {

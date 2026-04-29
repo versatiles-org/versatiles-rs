@@ -162,6 +162,10 @@ impl ReadTileSource for Operation {
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("name", &layer_name)?;
+		// Vector consumers like QGIS need the TileJSON `vector_layers` entry to
+		// know what's in each MVT layer; set one entry covering this layer's
+		// fields and zoom range.
+		populate_vector_layers(&mut tilejson, &layer_name, &import)?;
 		metadata.update_tilejson(&mut tilejson);
 
 		Ok(Box::new(Self {
@@ -306,6 +310,21 @@ fn source_size_bytes(path: &Path, ext: &str) -> u64 {
 	} else {
 		primary
 	}
+}
+
+/// Populate `tilejson.vector_layers` with a single entry describing this
+/// import's layer. MBTiles vector consumers (QGIS, Mapbox GL, etc.) read this
+/// to discover what's inside the tiles.
+fn populate_vector_layers(tilejson: &mut TileJSON, layer_name: &str, import: &FeatureImport) -> Result<()> {
+	use versatiles_core::{VectorLayer, VectorLayers};
+	let layer = VectorLayer {
+		fields: import.property_schema().clone(),
+		description: None,
+		minzoom: Some(import.min_zoom()),
+		maxzoom: Some(import.max_zoom()),
+	};
+	tilejson.vector_layers = VectorLayers(std::iter::once((layer_name.to_string(), layer)).collect());
+	Ok(())
 }
 
 /// Drain a `FeatureSource`'s stream into a `Vec`.

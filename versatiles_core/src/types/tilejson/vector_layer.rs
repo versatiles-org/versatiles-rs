@@ -14,7 +14,7 @@ use std::{collections::BTreeMap, fmt::Debug};
 pub struct VectorLayers(pub BTreeMap<String, VectorLayer>);
 
 impl VectorLayers {
-	/// Constructs a [`VectorLayers`] instance from a [`JsonArray`].
+	/// Constructs a [`VectorLayers`] instance from a JSON array value.
 	///
 	/// # JSON Structure
 	///
