@@ -297,14 +297,22 @@ fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordin
 
 				let list = match list.first().expect("checked non-empty above") {
 					V(_) => {
-						if list.len() != 2 {
-							bail!("points in coordinates must have exactly two values")
+						// RFC 7946: a position is "an array of numbers… two or more
+						// elements", with the optional 3rd being altitude. We're 2D-only,
+						// so take the first two and ignore the rest. Real-world feeds
+						// also stuff `null` into the altitude slot — we tolerate that
+						// (parse_geojson_coordinates accepts `null` as NaN below) and
+						// drop those slots silently. NaN in the lon/lat slots stays an
+						// error.
+						if list.len() < 2 {
+							bail!("points in coordinates must have at least two values")
 						}
-						let values: Vec<f64> = list
-							.into_iter()
-							.map(TemporaryCoordinates::take_v)
-							.collect::<Result<_>>()?;
-						C0([values[0], values[1]])
+						let x = list.remove(0).take_v()?;
+						let y = list.remove(0).take_v()?;
+						if !x.is_finite() || !y.is_finite() {
+							bail!("longitude and latitude must be finite numbers")
+						}
+						C0([x, y])
 					}
 					C0(_) => C1(list
 						.into_iter()
@@ -324,6 +332,7 @@ fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordin
 				Ok(list)
 			}
 			d if d.is_ascii_digit() || d == b'.' || d == b'-' => parse_number_as(iter).map(V),
+			b'n' => parse_tag(iter, "null").map(|()| V(f64::NAN)),
 			c => Err(iter.format_error(&format!(
 				"expected an array or number while parsing coordinates, but got character '{}'",
 				c as char
@@ -656,14 +665,41 @@ mod tests {
 	}
 
 	#[test]
-	fn test_parse_geojson_wrong_point_dimensions() {
+	fn test_parse_geojson_three_dimensional_point_drops_altitude() {
+		// RFC 7946 §3.1.1 allows an optional 3rd element (altitude). We're
+		// 2D-only, so the altitude is silently dropped.
 		let json = r#"{
 		"type":"FeatureCollection",
 		"features":[{
 			"type":"Feature","geometry":{"type":"Point","coordinates":[1,2,3]},"properties":{}
 		}]}"#;
-		let result = parse_geojson(json);
-		assert!(result.is_err());
+		let collection = parse_geojson(json).expect("3D point should parse");
+		match &collection.features[0].geometry {
+			Geometry::Point(p) => assert!((p.x() - 1.0).abs() < 1e-9 && (p.y() - 2.0).abs() < 1e-9),
+			other => panic!("expected Point, got {other:?}"),
+		}
+	}
+
+	#[test]
+	fn test_parse_geojson_null_altitude_tolerated() {
+		// Real-world feeds (e.g. USGS earthquakes) emit `null` as altitude when
+		// the value is unknown. Tolerate it.
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"Point","coordinates":[1,2,null]},"properties":{}
+		}]}"#;
+		parse_geojson(json).expect("null altitude should parse");
+	}
+
+	#[test]
+	fn test_parse_geojson_null_lon_or_lat_errors() {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"Point","coordinates":[null,2]},"properties":{}
+		}]}"#;
+		assert!(parse_geojson(json).is_err());
 	}
 
 	#[test]

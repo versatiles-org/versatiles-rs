@@ -26,19 +26,14 @@ pub fn read_geojson(mut reader: impl Read) -> Result<GeoCollection> {
 
 /// Internal helper that processes a single NDGeoJSON line.
 ///
-/// Skips empty lines, strips the optional RFC 8142 record-separator
-/// (`U+001E`) prefix used by GeoJSON Text Sequences, parses valid GeoJSON
-/// features, and wraps errors with line number context.
+/// Skips empty lines, parses valid GeoJSON features, and wraps errors with line number context.
 #[context("processing GeoJSON line {}", index + 1)]
 fn process_line(line: std::io::Result<String>, index: usize) -> Result<Option<GeoFeature>> {
 	match line {
 		Ok(line) if line.trim().is_empty() => Ok(None), // Skip empty or whitespace-only lines
-		Ok(line) => {
-			let trimmed = line.trim_start_matches('\u{1E}');
-			parse_geojson_feature(&mut ByteIterator::from_reader(Cursor::new(trimmed.to_string()), true))
-				.map(Some)
-				.map_err(|e| anyhow!("line {}: {}", index + 1, e))
-		}
+		Ok(line) => parse_geojson_feature(&mut ByteIterator::from_reader(Cursor::new(line), true))
+			.map(Some)
+			.map_err(|e| anyhow!("line {}: {}", index + 1, e)),
 		Err(e) => Err(anyhow!("line {}: {}", index + 1, e)),
 	}
 }
@@ -52,6 +47,67 @@ pub fn read_ndgeojson_iter(reader: impl BufRead) -> impl Iterator<Item = Result<
 		.lines()
 		.enumerate()
 		.filter_map(|(index, line)| process_line(line, index).transpose())
+}
+
+/// Returns an iterator over [`GeoFeature`] values parsed from a GeoJSON Text
+/// Sequence (RFC 8142): records are separated by the record-separator byte
+/// `U+001E` and each record holds one JSON-encoded feature. Unlike NDJSON the
+/// JSON inside a record may span multiple physical lines, so we split on the
+/// RS byte rather than on newlines.
+pub fn read_geojson_seq_iter(mut reader: impl BufRead) -> impl Iterator<Item = Result<GeoFeature>> {
+	// Skip everything before the first RS so leading garbage / a stray BOM
+	// doesn't confuse the first record.
+	let mut prelude = Vec::new();
+	let _ = reader.read_until(0x1E, &mut prelude);
+
+	let mut index = 0_usize;
+	std::iter::from_fn(move || {
+		loop {
+			let mut buf = Vec::new();
+			match reader.read_until(0x1E, &mut buf) {
+				Ok(0) => return None,
+				Ok(_) => {
+					index += 1;
+					// Drop the trailing RS (if any) — it belongs to the next record.
+					if buf.last() == Some(&0x1E) {
+						buf.pop();
+					}
+					let text = match std::str::from_utf8(&buf) {
+						Ok(s) => s,
+						Err(e) => return Some(Err(anyhow!("record {index}: invalid UTF-8: {e}"))),
+					};
+					// RFC 8142 allows blank records (e.g. trailing whitespace); skip.
+					if text.trim().is_empty() {
+						continue;
+					}
+					return Some(
+						parse_geojson_feature(&mut ByteIterator::from_reader(Cursor::new(text.to_string()), true))
+							.map_err(|e| anyhow!("record {index}: parsing GeoJSON Feature: {e}")),
+					);
+				}
+				Err(e) => return Some(Err(anyhow!("record {}: {e}", index + 1))),
+			}
+		}
+	})
+}
+
+/// Returns an iterator over [`GeoFeature`] values from either NDGeoJSON or
+/// RFC 8142 GeoJSON Text Sequences. Format is auto-detected from the first
+/// non-whitespace byte: a leading `U+001E` selects the sequence parser,
+/// anything else selects the line-based parser.
+pub fn read_line_delimited_geojson_iter(
+	mut reader: impl BufRead + 'static,
+) -> Result<Box<dyn Iterator<Item = Result<GeoFeature>>>> {
+	let buf = reader.fill_buf()?;
+	let leads_with_rs = buf
+		.iter()
+		.find(|&&b| !b.is_ascii_whitespace())
+		.is_some_and(|&b| b == 0x1E);
+	if leads_with_rs {
+		Ok(Box::new(read_geojson_seq_iter(reader)))
+	} else {
+		Ok(Box::new(read_ndgeojson_iter(reader)))
+	}
 }
 
 /// Returns an asynchronous stream of [`GeoFeature`] values parsed from NDGeoJSON input.
@@ -97,6 +153,35 @@ mod tests {
 			let feature = res.unwrap();
 			assert_eq!(type_name(&feature.geometry), "Point");
 		}
+	}
+
+	#[test]
+	fn read_geojson_seq_iter_with_multiline_records() {
+		// RFC 8142: records start with U+001E and the JSON inside a record
+		// may span multiple physical lines.
+		let single = r#"{"type":"Feature","geometry":{"type":"Point","coordinates":[0,0]},"properties":{}}"#;
+		let multi = "{\n  \"type\": \"Feature\",\n  \"geometry\": { \"type\": \"Point\", \"coordinates\": [1, 1] },\n  \"properties\": {}\n}";
+		let input = format!("\u{1E}{single}\n\u{1E}{multi}\n");
+		let iter = read_geojson_seq_iter(BufReader::new(Cursor::new(input)));
+		let results: Vec<_> = iter.collect();
+		assert_eq!(results.len(), 2);
+		for res in results {
+			let feature = res.unwrap();
+			assert_eq!(type_name(&feature.geometry), "Point");
+		}
+	}
+
+	#[test]
+	fn read_line_delimited_dispatch_picks_format_from_leading_byte() {
+		let nd = "{\"type\":\"Feature\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[0,0]},\"properties\":{}}\n";
+		let seq = format!(
+			"\u{1E}{}",
+			"{\"type\":\"Feature\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[0,0]},\"properties\":{}}\n"
+		);
+		let iter = read_line_delimited_geojson_iter(BufReader::new(Cursor::new(nd))).unwrap();
+		assert_eq!(iter.count(), 1);
+		let iter = read_line_delimited_geojson_iter(BufReader::new(Cursor::new(seq))).unwrap();
+		assert_eq!(iter.count(), 1);
 	}
 
 	#[tokio::test]
