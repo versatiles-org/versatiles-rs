@@ -593,7 +593,7 @@ mod tests {
 		assert_eq!(*parameters.tile_compression(), TileCompression::Uncompressed);
 		assert_eq!(
 			format!("{}", parameters.tile_pyramid().unwrap()),
-			"[TileCover::Tree(TileQuadtree(zoom=1, tiles=4, nodes=1)), TileCover::Tree(TileQuadtree(zoom=2, tiles=16, nodes=1)), TileCover::Tree(TileQuadtree(zoom=3, tiles=64, nodes=1))]"
+			"[TileQuadtree { level: 1, root: Full }, TileQuadtree { level: 2, root: Full }, TileQuadtree { level: 3, root: Full }]"
 		);
 
 		assert_eq!(

@@ -17,8 +17,8 @@ impl fmt::Debug for TileCover {
 	/// Formats the cover with its variant tag for debugging.
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			TileCover::Bbox(b) => write!(f, "TileCover::Bbox({b:?})"),
-			TileCover::Tree(t) => write!(f, "TileCover::Tree({t})"),
+			TileCover::Bbox(b) => write!(f, "{b:?}"),
+			TileCover::Tree(t) => write!(f, "{t:?}"),
 		}
 	}
 }
