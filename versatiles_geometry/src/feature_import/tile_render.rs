@@ -12,7 +12,10 @@ use anyhow::Result;
 use geo::MapCoords;
 use geo_types::{Coord, Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Polygon};
 
-const MVT_VERSION: u32 = 1;
+/// MVT spec layer version. The spec (vector-tile-spec 2.x) says layers SHOULD
+/// be version 2; some readers (notably QGIS) treat the protobuf default of 1
+/// as "no layer" and render nothing.
+const MVT_VERSION: u32 = 2;
 
 /// Clip every feature to `tile_bbox` (mercator), quantize to the tile-local
 /// `[0, extent]` grid, encode as a single-layer MVT. Returns `Ok(None)` if
