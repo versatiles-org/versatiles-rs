@@ -26,7 +26,12 @@ pub fn reassemble_features(arcs: &[Arc], feature_arcs: &[FeatureArcs], template:
 		.collect()
 }
 
-fn reassemble_geometry(arcs: &[Arc], fa: &FeatureArcs) -> Geometry<f64> {
+/// Reassemble a single feature's geometry from `arcs` and its [`FeatureArcs`].
+/// Equivalent to one iteration of [`reassemble_features`]; useful when callers
+/// only want to rebuild a subset of features (e.g. those still alive after
+/// per-zoom filtering).
+#[must_use]
+pub fn reassemble_geometry(arcs: &[Arc], fa: &FeatureArcs) -> Geometry<f64> {
 	match fa {
 		FeatureArcs::Point(c) => Geometry::Point(Point(*c)),
 		FeatureArcs::MultiPoint(coords) => Geometry::MultiPoint(MultiPoint(coords.iter().map(|c| Point(*c)).collect())),
@@ -150,7 +155,7 @@ mod tests {
 		// Tolerances span from "no-op" to "drops every interior wiggle vertex".
 		// Each represents a different zoom in the real pipeline.
 		for &tolerance in &[0.0, 0.0001, 0.005, 0.05, 0.5] {
-			let simplified = simplify_arcs(&graph, tolerance);
+			let simplified = simplify_arcs(graph.arcs(), tolerance);
 			let rebuilt = reassemble_features(&simplified, &fa, &template);
 
 			let a_border = vertices_at_x(&rebuilt[0].geometry, 1.0);
@@ -186,7 +191,7 @@ mod tests {
 
 		let junction = Coord { x: 1.0, y: 0.0 };
 		for &tolerance in &[0.0, 0.001, 0.01, 0.1] {
-			let simplified = simplify_arcs(&graph, tolerance);
+			let simplified = simplify_arcs(graph.arcs(), tolerance);
 			let rebuilt = reassemble_features(&simplified, &fa, &template);
 
 			let a_coords = line_string_coords(&rebuilt[0].geometry);
@@ -248,7 +253,7 @@ mod tests {
 		let template = vec![a.clone(), b.clone()];
 		let (graph, fa) = build(&template);
 		// Simplify the arcs with a tolerance large enough to drop the wiggle.
-		let simplified = simplify_arcs(&graph, 0.01);
+		let simplified = simplify_arcs(graph.arcs(), 0.01);
 		let rebuilt = reassemble_features(&simplified, &fa, &template);
 
 		// Compare the shared boundary coordinates between A and B by extracting

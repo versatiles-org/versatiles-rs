@@ -9,7 +9,7 @@ mod reassemble;
 mod simplify;
 
 pub use extract::build;
-pub use reassemble::reassemble_features;
+pub use reassemble::{reassemble_features, reassemble_geometry};
 pub use simplify::simplify_arcs;
 
 use geo_types::Coord;

@@ -6,18 +6,21 @@
 //! renders any tile lazily by querying the index, clipping, quantizing, and
 //! encoding MVT.
 //!
-//! ## Pipeline (per zoom)
+//! ## Pipeline (top-down cascade)
 //!
 //! 1. Build an [`crate::arc_graph::ArcGraph`] once from the projected,
 //!    multi-geometry-flattened features. Shared polygon borders and shared
 //!    line segments collapse into a single arc.
-//! 2. Per zoom: simplify each arc once via Douglas-Peucker
-//!    ([`crate::arc_graph::simplify_arcs`]). Topology preserves automatically
-//!    because shared arcs are simplified once, not per feature.
-//! 3. Reassemble feature geometries from the simplified arcs.
-//! 4. Apply per-zoom reduction: drop polygons by min-area, lines by
-//!    min-length, points by `point_reduction` strategy.
-//! 5. Build an R-tree over surviving features for fast tile-bbox queries.
+//! 2. Iterate zoom levels from `max_zoom` down to `min_zoom`. At each step,
+//!    simplify the *previous step's* arcs at the current zoom's tolerance
+//!    (Douglas-Peucker is monotonic, so chaining is identical to simplifying
+//!    the original from scratch — a strict speed-up since work shrinks as
+//!    we go down); reassemble only the features that survived the previous
+//!    zoom's filters; drop polygons by min-area and lines by min-length at
+//!    this zoom's thresholds; apply the `point_reduction` strategy on top of
+//!    the previous zoom's surviving point set (cumulative across zooms — a
+//!    point dropped at a finer zoom can never reappear at a coarser one);
+//!    and build an R-tree over the survivors for fast tile-bbox queries.
 
 mod heuristics;
 mod reduce_lines;
@@ -64,11 +67,17 @@ pub struct FeatureImportConfig {
 	/// Drop lines whose length at the current zoom is below this many tile-pixels.
 	/// `0.0` disables the filter.
 	pub line_min_length_px: f32,
-	/// Point-reduction strategy applied per-zoom. See [`PointReductionStrategy`].
+	/// Point-reduction strategy applied per-zoom; cumulative across zooms (a
+	/// point dropped at zoom z+1 cannot reappear at zoom z). See
+	/// [`PointReductionStrategy`].
 	pub point_reduction: PointReductionStrategy,
 	/// Numeric value whose meaning depends on `point_reduction`:
-	/// - `DropRate`: keep-fraction per zoom step (in `[0, 1]`).
-	/// - `MinDistance`: minimum distance between kept points, in tile-pixels.
+	/// - `DropRate`: per-zoom keep-fraction (in `[0, 1]`). Composes
+	///   geometrically across zooms — at `max_zoom - k`, the cumulative
+	///   keep-ratio is `value^k`.
+	/// - `MinDistance`: minimum distance between kept points, in tile-pixels
+	///   *at the current zoom*. Equivalent to a coarser threshold (in meters)
+	///   at lower zooms.
 	pub point_reduction_value: f32,
 }
 
@@ -144,46 +153,82 @@ impl FeatureImport {
 		// arc and reassembles features so shared boundaries stay aligned.
 		let (arc_graph, feature_arcs): (ArcGraph, Vec<FeatureArcs>) = arc_graph::build(&flattened);
 
-		// Per-zoom simplification + reduction + spatial index.
+		// Top-down cascade: simplify arcs and prune features once at max_zoom,
+		// then carry the result down to each lower zoom. See the module
+		// docstring for the rationale.
 		let n_slots = usize::from(resolved_max_zoom) + 1;
 		let mut layers: Vec<Option<ZoomLayer>> = (0..n_slots).map(|_| None).collect();
 		log::debug!(
-			"building zoom layers for zooms {}..={resolved_max_zoom}",
+			"building zoom layers for zooms {}..={resolved_max_zoom} (cascading max→min)",
 			config.min_zoom,
 		);
-		for z in config.min_zoom..=resolved_max_zoom {
+
+		// Cascade state. `arcs` shrinks as we simplify further at each step.
+		// `alive_indices` are the indices into `flattened` of features still
+		// passing every filter applied so far (max_zoom..z+1).
+		let mut arcs: Vec<arc_graph::Arc> = arc_graph.arcs().to_vec();
+		let mut alive_indices: Vec<usize> = (0..flattened.len()).collect();
+
+		for z in (config.min_zoom..=resolved_max_zoom).rev() {
 			log::trace!("processing zoom {z}");
 			let m_per_px = meters_per_pixel(z);
 			let tol_simplify_m = arc_simplify_tolerance(&config, m_per_px);
 			let polygon_min_area_m2 = f64::from(config.polygon_min_area_px) * m_per_px * m_per_px;
 			let line_min_length_m = f64::from(config.line_min_length_px) * m_per_px;
 
-			// Topology-preserving simplification: simplify each arc once, then
-			// reassemble features from the simplified arcs.
-			let simplified_arcs = arc_graph::simplify_arcs(&arc_graph, tol_simplify_m);
-			let reassembled = arc_graph::reassemble_features(&simplified_arcs, &feature_arcs, &flattened);
+			// Cascade step on the arcs (DP is monotonic across tolerances).
+			arcs = arc_graph::simplify_arcs(&arcs, tol_simplify_m);
 
-			// Carry the original `flattened` index along so point-reduction
-			// strategies hash on a stable identifier.
-			let indexed: Vec<(usize, GeoFeature)> = reassembled
+			// Reassemble only the still-alive features at this zoom.
+			let reassembled: Vec<(usize, GeoFeature)> = alive_indices
+				.iter()
+				.map(|&i| {
+					let template = &flattened[i];
+					let geometry = arc_graph::reassemble_geometry(&arcs, &feature_arcs[i]);
+					(
+						i,
+						GeoFeature {
+							id: template.id.clone(),
+							geometry,
+							properties: template.properties.clone(),
+						},
+					)
+				})
+				.collect();
+
+			// Re-apply min-area / min-length filters at this zoom's (larger)
+			// thresholds. Both filters are monotonic in the threshold, so this
+			// can only shrink `alive_indices`.
+			let filtered: Vec<(usize, GeoFeature)> = reassembled
 				.into_iter()
-				.enumerate()
 				.filter(|(_, f)| reduce_polygons::passes_min_area(&f.geometry, polygon_min_area_m2))
 				.filter(|(_, f)| reduce_lines::passes_min_length(&f.geometry, line_min_length_m))
 				.collect();
+
+			// Cascade point reduction: each strategy operates on the previous
+			// zoom's survivors so reductions chain naturally.
+			//
+			// - `DropRate(v)` drops `1 - v` of the *current* survivors. Across
+			//   k zooms this composes to a `v^k` keep-ratio — same shape as
+			//   the prior per-zoom `value^(max_zoom - z)`.
+			// - `MinDistance(d * m_per_px)` drops points closer than `d`
+			//   tile-pixels at this zoom; survivors at coarser zooms are a
+			//   subset of those at finer zooms.
 			let reduced = match config.point_reduction {
-				PointReductionStrategy::None => indexed,
+				PointReductionStrategy::None => filtered,
 				PointReductionStrategy::DropRate => {
-					// Cumulative keep ratio: `value^(max_zoom - z)`. At max_zoom it's 1.0.
-					let exp = i32::from(resolved_max_zoom.saturating_sub(z));
-					let keep_ratio = f64::from(config.point_reduction_value).powi(exp);
-					reduce_points::apply_drop_rate(indexed, keep_ratio)
+					let keep_ratio = f64::from(config.point_reduction_value);
+					reduce_points::apply_drop_rate(filtered, keep_ratio)
 				}
 				PointReductionStrategy::MinDistance => {
 					let threshold_m = f64::from(config.point_reduction_value) * m_per_px;
-					reduce_points::apply_min_distance(indexed, threshold_m)
+					reduce_points::apply_min_distance(filtered, threshold_m)
 				}
 			};
+
+			// Carry surviving original indices forward to the next coarser zoom.
+			alive_indices = reduced.iter().map(|(i, _)| *i).collect();
+
 			// Drop features without a bounding rect so the R-tree and the
 			// feature list stay aligned (orphans wouldn't be retrievable).
 			let zoom_features: Vec<GeoFeature> = reduced
