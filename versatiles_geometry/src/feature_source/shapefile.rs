@@ -14,7 +14,7 @@
 //! Projection: only WGS84 input is supported. If a `.prj` file is present
 //! and is not WGS84, [`load`](FeatureSource::load) bails.
 
-use super::FeatureSource;
+use super::{FeatureSource, ProgressCallback, ProgressReader};
 use crate::geo::{GeoFeature, GeoProperties, GeoValue};
 use anyhow::{Context, Result, anyhow, bail};
 use futures::stream::{self, BoxStream, StreamExt};
@@ -27,10 +27,21 @@ use std::{
 };
 
 /// Reads features from an Esri Shapefile (`.shp` + `.dbf`).
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ShapefileSource {
 	path: PathBuf,
 	name: String,
+	progress: Option<ProgressCallback>,
+}
+
+impl std::fmt::Debug for ShapefileSource {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("ShapefileSource")
+			.field("path", &self.path)
+			.field("name", &self.name)
+			.field("progress", &self.progress.as_ref().map(|_| "<callback>"))
+			.finish()
+	}
 }
 
 impl ShapefileSource {
@@ -45,7 +56,19 @@ impl ShapefileSource {
 			.and_then(|s| s.to_str())
 			.unwrap_or("features")
 			.to_string();
-		Self { path, name }
+		Self {
+			path,
+			name,
+			progress: None,
+		}
+	}
+
+	/// Attach a [`ProgressCallback`] reporting bytes consumed from the `.shp`
+	/// and `.dbf` sidecars. The smaller `.shx` index is not tracked.
+	#[must_use]
+	pub fn with_progress(mut self, callback: ProgressCallback) -> Self {
+		self.progress = Some(callback);
+		self
 	}
 
 	/// Read the optional `.prj` sibling file. If present and not WGS84,
@@ -72,16 +95,31 @@ impl FeatureSource for ShapefileSource {
 	fn load(&self) -> Result<BoxStream<'static, Result<GeoFeature>>> {
 		self.check_projection()?;
 
+		// Open .shp + .dbf manually so we can wrap each in a ProgressReader.
+		// (.shx is small and optional — keep the original from_path lookup
+		// path for it via with_shx if it exists.)
+		let shp_file =
+			fs::File::open(&self.path).with_context(|| format!("opening shapefile {}", self.path.display()))?;
+		let shp_reader = std::io::BufReader::new(ProgressReader::maybe(shp_file, self.progress.clone()));
+		let shx_path = self.path.with_extension("shx");
+		let shape_reader = if shx_path.exists() {
+			let shx_source = std::io::BufReader::new(
+				fs::File::open(&shx_path).with_context(|| format!("opening shx {}", shx_path.display()))?,
+			);
+			shapefile::ShapeReader::with_shx(shp_reader, shx_source)
+				.with_context(|| format!("reading shapefile {}", self.path.display()))?
+		} else {
+			shapefile::ShapeReader::new(shp_reader)
+				.with_context(|| format!("reading shapefile {}", self.path.display()))?
+		};
+
 		// Build the dbase reader with `UnicodeLossy` so non-UTF-8 bytes become
 		// U+FFFD instead of aborting the whole load — matches the lossy
 		// behavior dbase had by default before 0.7.
-		let shape_reader = shapefile::ShapeReader::from_path(&self.path)
-			.with_context(|| format!("opening shapefile {}", self.path.display()))?;
 		let dbf_path = self.path.with_extension("dbf");
-		let dbf_file = std::io::BufReader::new(
-			fs::File::open(&dbf_path).with_context(|| format!("opening dbf {}", dbf_path.display()))?,
-		);
-		let dbase_reader = dbase::ReaderBuilder::new(dbf_file)
+		let dbf_file = fs::File::open(&dbf_path).with_context(|| format!("opening dbf {}", dbf_path.display()))?;
+		let dbf_buffered = std::io::BufReader::new(ProgressReader::maybe(dbf_file, self.progress.clone()));
+		let dbase_reader = dbase::ReaderBuilder::new(dbf_buffered)
 			.with_encoding(dbase::encoding::UnicodeLossy)
 			.build()
 			.with_context(|| format!("reading dbf {}", dbf_path.display()))?;

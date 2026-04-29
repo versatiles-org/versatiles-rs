@@ -11,7 +11,7 @@
 //!   The two shapes are auto-detected from the file's leading byte; see
 //!   [`crate::geojson::read_line_delimited_geojson_iter`].
 
-use super::FeatureSource;
+use super::{FeatureSource, ProgressCallback, ProgressReader};
 use crate::{
 	geo::GeoFeature,
 	geojson::{read_geojson, read_line_delimited_geojson_iter},
@@ -34,11 +34,23 @@ pub enum Format {
 }
 
 /// Reads features from a GeoJSON file.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GeoJsonSource {
 	path: PathBuf,
 	name: String,
 	format: Format,
+	progress: Option<ProgressCallback>,
+}
+
+impl std::fmt::Debug for GeoJsonSource {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("GeoJsonSource")
+			.field("path", &self.path)
+			.field("name", &self.name)
+			.field("format", &self.format)
+			.field("progress", &self.progress.as_ref().map(|_| "<callback>"))
+			.finish()
+	}
 }
 
 impl GeoJsonSource {
@@ -65,16 +77,30 @@ impl GeoJsonSource {
 			.and_then(|s| s.to_str())
 			.unwrap_or("features")
 			.to_string();
-		Self { path, name, format }
+		Self {
+			path,
+			name,
+			format,
+			progress: None,
+		}
+	}
+
+	/// Attach a [`ProgressCallback`] that will be invoked with the number of
+	/// bytes read from the underlying file on every successful read.
+	#[must_use]
+	pub fn with_progress(mut self, callback: ProgressCallback) -> Self {
+		self.progress = Some(callback);
+		self
 	}
 }
 
 impl FeatureSource for GeoJsonSource {
 	fn load(&self) -> Result<BoxStream<'static, Result<GeoFeature>>> {
 		let file = File::open(&self.path).with_context(|| format!("opening GeoJSON file {}", self.path.display()))?;
+		let reader = ProgressReader::maybe(file, self.progress.clone());
 		match self.format {
 			Format::FeatureCollection => {
-				let collection = read_geojson(BufReader::new(file))
+				let collection = read_geojson(BufReader::new(reader))
 					.with_context(|| format!("parsing GeoJSON file {}", self.path.display()))?;
 				Ok(stream::iter(collection.features.into_iter().map(Ok)).boxed())
 			}
@@ -83,7 +109,7 @@ impl FeatureSource for GeoJsonSource {
 				// Auto-detect NDGeoJSON vs RFC 8142 GeoJSON Text Sequences from
 				// the leading byte; RFC 8142 records can span physical lines, so
 				// the line-based reader splits them in the wrong place.
-				let iter = read_line_delimited_geojson_iter(BufReader::new(file))
+				let iter = read_line_delimited_geojson_iter(BufReader::new(reader))
 					.with_context(|| format!("opening line-delimited GeoJSON file {}", path.display()))?;
 				let features: Vec<Result<GeoFeature>> = iter
 					.map(move |item| item.with_context(|| format!("parsing line-delimited GeoJSON file {}", path.display())))

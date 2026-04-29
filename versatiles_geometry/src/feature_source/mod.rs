@@ -7,10 +7,12 @@
 
 mod csv;
 mod geojson;
+mod progress;
 mod shapefile;
 
 pub use csv::{CsvSource, CsvSourceBuilder};
 pub use geojson::{Format as GeoJsonFormat, GeoJsonSource};
+pub use progress::{ProgressCallback, ProgressReader};
 pub use shapefile::ShapefileSource;
 
 use crate::geo::GeoFeature;

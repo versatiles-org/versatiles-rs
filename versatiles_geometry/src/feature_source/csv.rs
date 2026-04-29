@@ -8,7 +8,7 @@
 //! v1 only supports the lon/lat path — WKT geometry columns are out of
 //! scope. The `lon_column` and `lat_column` fields are both required.
 
-use super::FeatureSource;
+use super::{FeatureSource, ProgressCallback, ProgressReader};
 use crate::geo::{GeoFeature, GeoProperties, GeoValue};
 use anyhow::{Context, Result, bail};
 use futures::stream::{self, BoxStream, StreamExt};
@@ -20,7 +20,7 @@ use std::{
 };
 
 /// Reads point features from a CSV file using explicit lon/lat columns.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CsvSource {
 	path: PathBuf,
 	name: String,
@@ -29,10 +29,26 @@ pub struct CsvSource {
 	id_column: Option<String>,
 	delimiter: u8,
 	has_header: bool,
+	progress: Option<ProgressCallback>,
+}
+
+impl std::fmt::Debug for CsvSource {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("CsvSource")
+			.field("path", &self.path)
+			.field("name", &self.name)
+			.field("lon_column", &self.lon_column)
+			.field("lat_column", &self.lat_column)
+			.field("id_column", &self.id_column)
+			.field("delimiter", &self.delimiter)
+			.field("has_header", &self.has_header)
+			.field("progress", &self.progress.as_ref().map(|_| "<callback>"))
+			.finish()
+	}
 }
 
 /// Builder for [`CsvSource`]. `path`, `lon_column`, and `lat_column` are required.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CsvSourceBuilder {
 	path: PathBuf,
 	lon_column: String,
@@ -40,6 +56,7 @@ pub struct CsvSourceBuilder {
 	id_column: Option<String>,
 	delimiter: u8,
 	has_header: bool,
+	progress: Option<ProgressCallback>,
 }
 
 impl CsvSourceBuilder {
@@ -53,7 +70,15 @@ impl CsvSourceBuilder {
 			id_column: None,
 			delimiter: b',',
 			has_header: true,
+			progress: None,
 		}
+	}
+
+	/// Attach a [`ProgressCallback`] reporting bytes consumed from the CSV file.
+	#[must_use]
+	pub fn with_progress(mut self, callback: ProgressCallback) -> Self {
+		self.progress = Some(callback);
+		self
 	}
 
 	/// Override the column whose value becomes the feature's `id` (numeric or string).
@@ -97,6 +122,7 @@ impl CsvSourceBuilder {
 			id_column: self.id_column,
 			delimiter: self.delimiter,
 			has_header: self.has_header,
+			progress: self.progress,
 		})
 	}
 }
@@ -104,7 +130,7 @@ impl CsvSourceBuilder {
 impl FeatureSource for CsvSource {
 	fn load(&self) -> Result<BoxStream<'static, Result<GeoFeature>>> {
 		let file = File::open(&self.path).with_context(|| format!("opening CSV file {}", self.path.display()))?;
-		let reader = BufReader::new(file);
+		let reader = BufReader::new(ProgressReader::maybe(file, self.progress.clone()));
 		let mut csv_reader = csv::ReaderBuilder::new()
 			.delimiter(self.delimiter)
 			.has_headers(self.has_header)

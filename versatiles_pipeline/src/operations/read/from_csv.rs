@@ -19,7 +19,12 @@ use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourc
 use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_geometry::feature_import::{FeatureImport, FeatureImportConfig, PointReductionStrategy};
-use versatiles_geometry::feature_source::{CsvSourceBuilder, FeatureSource};
+use versatiles_geometry::feature_source::{CsvSourceBuilder, FeatureSource, ProgressCallback};
+
+/// Don't bother showing a progress bar for tiny inputs — the bar would
+/// flicker once and disappear. 10 MB is the smallest size where users start
+/// to notice the wait.
+const PROGRESS_MIN_BYTES: u64 = 10_000_000;
 use versatiles_geometry::geo::GeoFeature;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -115,6 +120,20 @@ impl ReadTileSource for Operation {
 		if let Some(has_header) = args.has_header {
 			builder = builder.has_header(has_header);
 		}
+
+		// For sources large enough to be visibly slow, attach a byte-level
+		// progress bar that ticks as the file is read.
+		let total_bytes = std::fs::metadata(&path).map_or(0, |m| m.len());
+		let progress_handle = if total_bytes >= PROGRESS_MIN_BYTES {
+			let handle = factory.runtime().create_progress("importing CSV", total_bytes);
+			let inc = handle.clone();
+			let cb: ProgressCallback = Arc::new(move |n| inc.inc(n));
+			builder = builder.with_progress(cb);
+			Some(handle)
+		} else {
+			None
+		};
+
 		let source = builder.build()?;
 
 		let point_reduction = args
@@ -130,6 +149,9 @@ impl ReadTileSource for Operation {
 		let mut features: Vec<GeoFeature> = Vec::new();
 		while let Some(item) = stream.next().await {
 			features.push(item?);
+		}
+		if let Some(h) = progress_handle {
+			h.finish();
 		}
 
 		// `args.max_zoom` of `None` triggers the auto-heuristic inside

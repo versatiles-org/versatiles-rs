@@ -19,13 +19,18 @@ use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLN
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::StreamExt;
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_geometry::feature_import::{FeatureImport, FeatureImportConfig, PointReductionStrategy};
-use versatiles_geometry::feature_source::{FeatureSource, GeoJsonSource, ShapefileSource};
+use versatiles_geometry::feature_source::{FeatureSource, GeoJsonSource, ProgressCallback, ShapefileSource};
 use versatiles_geometry::geo::GeoFeature;
+
+/// Don't bother showing a progress bar for tiny inputs — the bar would
+/// flicker once and disappear. 10 MB is the smallest size where users start
+/// to notice the wait.
+const PROGRESS_MIN_BYTES: u64 = 10_000_000;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a GeoJSON or Shapefile and emits MVT vector tiles.
@@ -125,12 +130,7 @@ impl ReadTileSource for Operation {
 			other => bail!("unsupported file extension '.{other}' for from_geo"),
 		};
 		log::info!("from_geo: importing {format_label} from {}", path.display());
-		let features: Vec<GeoFeature> = match ext.as_str() {
-			"geojson" | "json" => drain(&GeoJsonSource::new(&path)).await?,
-			"ndjson" | "ndgeojson" | "geojsonl" | "geojsonseq" => drain(&GeoJsonSource::new_line_delimited(&path)).await?,
-			"shp" => drain(&ShapefileSource::new(&path)).await?,
-			_ => unreachable!("format_label match above already validated the extension"),
-		};
+		let features = load_features(&path, ext.as_str(), format_label, factory).await?;
 
 		// `args.max_zoom` of `None` triggers the auto-heuristic inside
 		// `FeatureImport::from_features`; no extra projection pass needed here.
@@ -241,6 +241,71 @@ fn reject_unsupported_args(args: &Args) -> Result<()> {
 		bail!("from_geo: `properties_exclude=` is not supported in v1");
 	}
 	Ok(())
+}
+
+/// Build the right [`FeatureSource`] for `ext`, attach a byte-level progress
+/// bar when the input is big enough to be visibly slow, and drain it.
+async fn load_features(
+	path: &Path,
+	ext: &str,
+	format_label: &str,
+	factory: &PipelineFactory,
+) -> Result<Vec<GeoFeature>> {
+	let total_bytes = source_size_bytes(path, ext);
+	let (handle, cb) = if total_bytes >= PROGRESS_MIN_BYTES {
+		let handle = factory
+			.runtime()
+			.create_progress(&format!("importing {format_label}"), total_bytes);
+		let inc = handle.clone();
+		let cb: ProgressCallback = Arc::new(move |n| inc.inc(n));
+		(Some(handle), Some(cb))
+	} else {
+		(None, None)
+	};
+
+	let features = match ext {
+		"geojson" | "json" => {
+			let mut s = GeoJsonSource::new(path);
+			if let Some(cb) = cb {
+				s = s.with_progress(cb);
+			}
+			drain(&s).await?
+		}
+		"ndjson" | "ndgeojson" | "geojsonl" | "geojsonseq" => {
+			let mut s = GeoJsonSource::new_line_delimited(path);
+			if let Some(cb) = cb {
+				s = s.with_progress(cb);
+			}
+			drain(&s).await?
+		}
+		"shp" => {
+			let mut s = ShapefileSource::new(path);
+			if let Some(cb) = cb {
+				s = s.with_progress(cb);
+			}
+			drain(&s).await?
+		}
+		_ => unreachable!("caller validated the extension"),
+	};
+	if let Some(h) = handle {
+		h.finish();
+	}
+	Ok(features)
+}
+
+/// Total number of bytes the import will read for the given input. For
+/// shapefiles that's the sum of `.shp` + `.dbf` (the .shx is small and
+/// the projection file is negligible). Anything we can't stat returns 0,
+/// which falls below the progress threshold and silently disables the bar.
+fn source_size_bytes(path: &Path, ext: &str) -> u64 {
+	let primary = std::fs::metadata(path).map_or(0, |m| m.len());
+	if ext == "shp" {
+		let dbf = path.with_extension("dbf");
+		let dbf_len = std::fs::metadata(&dbf).map_or(0, |m| m.len());
+		primary.saturating_add(dbf_len)
+	} else {
+		primary
+	}
 }
 
 /// Drain a `FeatureSource`'s stream into a `Vec`.
