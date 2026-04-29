@@ -96,8 +96,8 @@ pub fn read_geojson_seq_iter(mut reader: impl BufRead) -> impl Iterator<Item = R
 /// non-whitespace byte: a leading `U+001E` selects the sequence parser,
 /// anything else selects the line-based parser.
 pub fn read_line_delimited_geojson_iter(
-	mut reader: impl BufRead + 'static,
-) -> Result<Box<dyn Iterator<Item = Result<GeoFeature>>>> {
+	mut reader: impl BufRead + Send + 'static,
+) -> Result<Box<dyn Iterator<Item = Result<GeoFeature>> + Send>> {
 	let buf = reader.fill_buf()?;
 	let leads_with_rs = buf
 		.iter()

@@ -111,10 +111,13 @@ impl FeatureSource for GeoJsonSource {
 				// the line-based reader splits them in the wrong place.
 				let iter = read_line_delimited_geojson_iter(BufReader::new(reader))
 					.with_context(|| format!("opening line-delimited GeoJSON file {}", path.display()))?;
-				let features: Vec<Result<GeoFeature>> = iter
-					.map(move |item| item.with_context(|| format!("parsing line-delimited GeoJSON file {}", path.display())))
-					.collect();
-				Ok(stream::iter(features).boxed())
+				// Wrap the parser iterator directly — pulling features one-at-a-time
+				// avoids materialising the full Vec<GeoFeature> in the source on top
+				// of whatever the consumer is building. Critical for multi-GB inputs.
+				Ok(stream::iter(iter.map(move |item| {
+					item.with_context(|| format!("parsing line-delimited GeoJSON file {}", path.display()))
+				}))
+				.boxed())
 			}
 		}
 	}

@@ -138,13 +138,15 @@ impl FeatureImport {
 		// type per field, picking the most informative on collisions
 		// (Boolean < Number < String).
 		let property_schema = collect_property_schema(&features);
-		let projected: Vec<GeoFeature> = features
-			.into_iter()
-			.map(|mut f| {
-				f.geometry = f.geometry.to_mercator();
-				f
-			})
-			.collect();
+		// In-place projection: avoids holding two `Vec<GeoFeature>` simultaneously,
+		// which on multi-GB inputs (millions of features × ~few KB of properties
+		// each) could double peak memory.
+		let mut projected = features;
+		for f in &mut projected {
+			let stub = Geometry::Point(geo_types::Point::new(0.0, 0.0));
+			let original = std::mem::replace(&mut f.geometry, stub);
+			f.geometry = original.to_mercator();
+		}
 
 		// Resolve the auto-`max_zoom` heuristic against the projected features
 		// so we don't pay for projection twice.
@@ -153,9 +155,21 @@ impl FeatureImport {
 			bail!("min_zoom ({}) > max_zoom ({resolved_max_zoom})", config.min_zoom);
 		}
 
-		// Flatten Multi* into N independent features.
-		log::debug!("flattening {} features", projected.len());
-		let flattened: Vec<GeoFeature> = projected.into_iter().flat_map(flatten_feature).collect();
+		// Flatten Multi* into N independent features. If no feature is a Multi*
+		// (the common point-only / linestring-only / polygon-only case), keep
+		// the existing Vec — saves a full reallocation on multi-GB inputs.
+		let has_multi = projected.iter().any(|f| {
+			matches!(
+				f.geometry,
+				Geometry::MultiPoint(_) | Geometry::MultiLineString(_) | Geometry::MultiPolygon(_)
+			)
+		});
+		log::debug!("flattening {} features (has_multi={has_multi})", projected.len());
+		let flattened: Vec<GeoFeature> = if has_multi {
+			projected.into_iter().flat_map(flatten_feature).collect()
+		} else {
+			projected
+		};
 		let bounds_mercator = features_bbox(&flattened).ok_or_else(|| anyhow::anyhow!("failed to compute bounds"))?;
 
 		// Build the arc graph once. Per-zoom simplification simplifies each
