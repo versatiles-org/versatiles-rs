@@ -5,9 +5,10 @@
 //! - [`Format::FeatureCollection`] — a single JSON document containing a
 //!   GeoJSON `FeatureCollection`. Read in full with
 //!   [`crate::geojson::read_geojson`].
-//! - [`Format::LineDelimited`] — newline-delimited GeoJSON (NDGeoJSON /
-//!   GeoJSONL): one feature per line. Read line-by-line via
-//!   [`crate::geojson::read_ndgeojson_iter`].
+//! - [`Format::LineDelimited`] — line-delimited GeoJSON (NDGeoJSON /
+//!   GeoJSONL / GeoJSON Text Sequences per RFC 8142): one feature per line,
+//!   optionally prefixed by the record-separator byte `U+001E`. Read
+//!   line-by-line via [`crate::geojson::read_ndgeojson_iter`].
 
 use super::FeatureSource;
 use crate::{
@@ -160,6 +161,30 @@ mod tests {
 			"{\"type\":\"Feature\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[0,0]},\"properties\":{}}\n\
 			 \n\
 			 {\"type\":\"Feature\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[1,1]},\"properties\":{}}\n",
+		)?;
+
+		let source = GeoJsonSource::new_line_delimited(&path);
+		let mut stream = source.load()?;
+		let mut count = 0;
+		while let Some(item) = stream.next().await {
+			item?;
+			count += 1;
+		}
+		assert_eq!(count, 2);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn line_delimited_strips_rfc8142_record_separator() -> Result<()> {
+		// GeoJSON Text Sequences (RFC 8142) prefix every record with U+001E.
+		// We treat that prefix as optional decoration on a line-delimited
+		// stream and parse the JSON that follows.
+		let dir = tempfile::tempdir()?;
+		let path = dir.path().join("rs.geojsonseq");
+		std::fs::write(
+			&path,
+			"\u{1E}{\"type\":\"Feature\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[0,0]},\"properties\":{}}\n\
+			 \u{1E}{\"type\":\"Feature\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[1,1]},\"properties\":{}}\n",
 		)?;
 
 		let source = GeoJsonSource::new_line_delimited(&path);

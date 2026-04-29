@@ -34,8 +34,9 @@ struct Args {
 	/// from the extension:
 	///
 	/// - `.geojson` / `.json` — GeoJSON `FeatureCollection`
-	/// - `.ndjson` / `.geojsonl` / `.ndgeojson` — newline-delimited GeoJSON
-	///   (one feature per line)
+	/// - `.ndjson` / `.geojsonl` / `.ndgeojson` / `.geojsonseq` — line-delimited
+	///   GeoJSON (one feature per line; `.geojsonseq` may use the RFC 8142
+	///   record-separator prefix `U+001E`)
 	/// - `.shp` — Esri Shapefile
 	filename: String,
 	/// Name of the MVT layer in the output tiles. Defaults to the filename stem.
@@ -115,10 +116,10 @@ impl ReadTileSource for Operation {
 			.unwrap_or_default();
 		let features: Vec<GeoFeature> = match ext.as_str() {
 			"geojson" | "json" => drain(&GeoJsonSource::new(&path)).await?,
-			"ndjson" | "ndgeojson" | "geojsonl" => drain(&GeoJsonSource::new_line_delimited(&path)).await?,
+			"ndjson" | "ndgeojson" | "geojsonl" | "geojsonseq" => drain(&GeoJsonSource::new_line_delimited(&path)).await?,
 			"shp" => drain(&ShapefileSource::new(&path)).await?,
 			"" => bail!(
-				"file '{}' has no extension; expected .geojson / .json / .ndjson / .geojsonl / .ndgeojson / .shp",
+				"file '{}' has no extension; expected .geojson / .json / .ndjson / .geojsonl / .ndgeojson / .geojsonseq / .shp",
 				path.display()
 			),
 			other => bail!("unsupported file extension '.{other}' for from_geo"),

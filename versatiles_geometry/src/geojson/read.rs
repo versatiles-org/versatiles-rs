@@ -26,14 +26,19 @@ pub fn read_geojson(mut reader: impl Read) -> Result<GeoCollection> {
 
 /// Internal helper that processes a single NDGeoJSON line.
 ///
-/// Skips empty lines, parses valid GeoJSON features, and wraps errors with line number context.
+/// Skips empty lines, strips the optional RFC 8142 record-separator
+/// (`U+001E`) prefix used by GeoJSON Text Sequences, parses valid GeoJSON
+/// features, and wraps errors with line number context.
 #[context("processing GeoJSON line {}", index + 1)]
 fn process_line(line: std::io::Result<String>, index: usize) -> Result<Option<GeoFeature>> {
 	match line {
 		Ok(line) if line.trim().is_empty() => Ok(None), // Skip empty or whitespace-only lines
-		Ok(line) => parse_geojson_feature(&mut ByteIterator::from_reader(Cursor::new(line), true))
-			.map(Some)
-			.map_err(|e| anyhow!("line {}: {}", index + 1, e)),
+		Ok(line) => {
+			let trimmed = line.trim_start_matches('\u{1E}');
+			parse_geojson_feature(&mut ByteIterator::from_reader(Cursor::new(trimmed.to_string()), true))
+				.map(Some)
+				.map_err(|e| anyhow!("line {}: {}", index + 1, e))
+		}
 		Err(e) => Err(anyhow!("line {}: {}", index + 1, e)),
 	}
 }
