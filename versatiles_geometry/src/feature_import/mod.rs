@@ -29,6 +29,7 @@ mod tile_render;
 pub use heuristics::auto_max_zoom;
 pub use reduce_points::PointReductionStrategy;
 pub use tile_render::{clip_geometry, render_tile};
+use versatiles_derive::context;
 
 use crate::arc_graph::{self, ArcGraph, FeatureArcs};
 use crate::ext::{MercatorExt, coord_from_mercator};
@@ -87,6 +88,7 @@ impl Default for FeatureImportConfig {
 	}
 }
 
+#[derive(Debug)]
 struct ZoomLayer {
 	features: Vec<GeoFeature>,
 	rtree: RTree<FeatureRef>,
@@ -94,6 +96,7 @@ struct ZoomLayer {
 
 /// In-memory import: features projected to mercator, simplified per zoom,
 /// indexed for tile-bbox queries.
+#[derive(Debug)]
 pub struct FeatureImport {
 	config: FeatureImportConfig,
 	/// User intent → resolved at construction. Reflects the auto-heuristic
@@ -101,7 +104,7 @@ pub struct FeatureImport {
 	resolved_max_zoom: u8,
 	/// Indexed by zoom level. `None` for zooms outside `[min_zoom, max_zoom]`.
 	layers: Vec<Option<ZoomLayer>>,
-	bounds_mercator: Option<[f64; 4]>,
+	bounds_mercator: [f64; 4],
 }
 
 impl FeatureImport {
@@ -109,12 +112,14 @@ impl FeatureImport {
 	///
 	/// Callers typically drain a [`crate::feature_source::FeatureSource`]'s
 	/// stream into a `Vec<GeoFeature>` first, then pass it here.
+	#[context("importing features")]
 	pub fn from_features(features: Vec<GeoFeature>, config: FeatureImportConfig) -> Result<Self> {
 		// Project to web mercator (only once — the auto-`max_zoom` heuristic
 		// reuses these projected geometries instead of re-projecting).
 		// TODO: validate CRS once the GeoJSON parser tracks it. v1 trusts the
 		// caller to pass WGS84 lon/lat; non-WGS84 input silently produces
 		// garbage mercator coordinates.
+		log::debug!("projecting {} features to mercator", features.len());
 		let projected: Vec<GeoFeature> = features
 			.into_iter()
 			.map(|mut f| {
@@ -131,8 +136,9 @@ impl FeatureImport {
 		}
 
 		// Flatten Multi* into N independent features.
+		log::debug!("flattening {} features", projected.len());
 		let flattened: Vec<GeoFeature> = projected.into_iter().flat_map(flatten_feature).collect();
-		let bounds_mercator = features_bbox(&flattened);
+		let bounds_mercator = features_bbox(&flattened).ok_or_else(|| anyhow::anyhow!("failed to compute bounds"))?;
 
 		// Build the arc graph once. Per-zoom simplification simplifies each
 		// arc and reassembles features so shared boundaries stay aligned.
@@ -141,7 +147,12 @@ impl FeatureImport {
 		// Per-zoom simplification + reduction + spatial index.
 		let n_slots = usize::from(resolved_max_zoom) + 1;
 		let mut layers: Vec<Option<ZoomLayer>> = (0..n_slots).map(|_| None).collect();
+		log::debug!(
+			"building zoom layers for zooms {}..={resolved_max_zoom}",
+			config.min_zoom,
+		);
 		for z in config.min_zoom..=resolved_max_zoom {
+			log::trace!("processing zoom {z}");
 			let m_per_px = meters_per_pixel(z);
 			let tol_simplify_m = arc_simplify_tolerance(&config, m_per_px);
 			let polygon_min_area_m2 = f64::from(config.polygon_min_area_px) * m_per_px * m_per_px;
@@ -216,15 +227,13 @@ impl FeatureImport {
 
 	/// The mercator bbox of all input features, or `None` if the input was empty.
 	#[must_use]
-	pub fn bounds_mercator(&self) -> Option<[f64; 4]> {
+	pub fn bounds_mercator(&self) -> [f64; 4] {
 		self.bounds_mercator
 	}
 
 	/// The data bbox in WGS84 (lon/lat degrees), or `None` if the input was empty.
 	pub fn bounds_geo(&self) -> Result<Option<GeoBBox>> {
-		let Some([xmin, ymin, xmax, ymax]) = self.bounds_mercator else {
-			return Ok(None);
-		};
+		let [xmin, ymin, xmax, ymax] = self.bounds_mercator;
 		let min = coord_from_mercator(Coord { x: xmin, y: ymin });
 		let max = coord_from_mercator(Coord { x: xmax, y: ymax });
 		Ok(Some(GeoBBox::new(min.x, min.y, max.x, max.y)?))
@@ -356,6 +365,7 @@ fn build_rtree(features: &[GeoFeature]) -> RTree<FeatureRef> {
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_possible_truncation)]
 mod tests {
 	use super::*;
 	use crate::geo::GeoValue;
@@ -380,7 +390,7 @@ mod tests {
 		};
 		let import = FeatureImport::from_features(features, config)?;
 
-		assert!(import.bounds_mercator().is_some());
+		assert_eq!(import.bounds_mercator().map(|b| b as i64), [0, 0, 10018754, 3503549]);
 
 		// Tile (0, 0, 0) covers the whole world; both points must appear.
 		let tile = import.get_tile(0, 0, 0)?.expect("world tile is non-empty");
@@ -392,9 +402,8 @@ mod tests {
 
 	#[test]
 	fn empty_input_yields_no_tiles() -> Result<()> {
-		let import = FeatureImport::from_features(Vec::new(), FeatureImportConfig::default())?;
-		assert!(import.bounds_mercator().is_none());
-		assert!(import.get_tile(0, 0, 0)?.is_none());
+		let import = FeatureImport::from_features(Vec::new(), FeatureImportConfig::default());
+		assert_eq!(import.unwrap_err().to_string(), "importing features");
 		Ok(())
 	}
 
@@ -579,7 +588,10 @@ mod tests {
 			features.push(item?);
 		}
 		let import = FeatureImport::from_features(features, config)?;
-		assert!(import.bounds_mercator().is_some());
+		assert_eq!(
+			import.bounds_mercator().map(|b| b as i64),
+			[1447153, 6800125, 1614132, 6927697]
+		);
 
 		let tile = import.get_tile(0, 0, 0)?.expect("world tile non-empty");
 		assert_eq!(tile.layers[0].name, "places");
