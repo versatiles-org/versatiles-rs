@@ -13,7 +13,6 @@
 //!
 //! Non-point geometries pass through both strategies unchanged.
 
-use crate::geo::GeoFeature;
 use anyhow::{Result, bail};
 use geo_types::{Coord, Geometry};
 use std::collections::HashMap;
@@ -43,17 +42,17 @@ impl PointReductionStrategy {
 /// `drop_rate` filter. Keeps point features whose stable hash falls under
 /// `keep_ratio`. Non-point features pass through.
 #[must_use]
-pub fn apply_drop_rate(features: Vec<(usize, GeoFeature)>, keep_ratio: f64) -> Vec<(usize, GeoFeature)> {
+pub fn apply_drop_rate(features: Vec<(usize, Geometry<f64>)>, keep_ratio: f64) -> Vec<(usize, Geometry<f64>)> {
 	if keep_ratio >= 1.0 {
 		return features;
 	}
 	if keep_ratio <= 0.0 {
 		// Drop all points; non-points still pass.
-		return features.into_iter().filter(|(_, f)| !is_point(&f.geometry)).collect();
+		return features.into_iter().filter(|(_, g)| !is_point(g)).collect();
 	}
 	features
 		.into_iter()
-		.filter(|(idx, f)| !is_point(&f.geometry) || keep_for_index(*idx, keep_ratio))
+		.filter(|(idx, g)| !is_point(g) || keep_for_index(*idx, keep_ratio))
 		.collect()
 }
 
@@ -61,7 +60,7 @@ pub fn apply_drop_rate(features: Vec<(usize, GeoFeature)>, keep_ratio: f64) -> V
 /// (mercator-meters) of an already-kept point. Iteration order = input
 /// order, so first-seen wins. Non-point features pass through.
 #[must_use]
-pub fn apply_min_distance(features: Vec<(usize, GeoFeature)>, threshold: f64) -> Vec<(usize, GeoFeature)> {
+pub fn apply_min_distance(features: Vec<(usize, Geometry<f64>)>, threshold: f64) -> Vec<(usize, Geometry<f64>)> {
 	if threshold <= 0.0 {
 		return features;
 	}
@@ -70,9 +69,9 @@ pub fn apply_min_distance(features: Vec<(usize, GeoFeature)>, threshold: f64) ->
 	let mut grid: HashMap<(i64, i64), Vec<Coord<f64>>> = HashMap::new();
 	let mut kept = Vec::with_capacity(features.len());
 
-	for (idx, feature) in features {
-		let Geometry::Point(point) = &feature.geometry else {
-			kept.push((idx, feature));
+	for (idx, geometry) in features {
+		let Geometry::Point(point) = &geometry else {
+			kept.push((idx, geometry));
 			continue;
 		};
 		let coord = point.0;
@@ -101,7 +100,7 @@ pub fn apply_min_distance(features: Vec<(usize, GeoFeature)>, threshold: f64) ->
 		}
 		if !too_close {
 			grid.entry((cx, cy)).or_default().push(coord);
-			kept.push((idx, feature));
+			kept.push((idx, geometry));
 		}
 	}
 	kept
@@ -134,11 +133,10 @@ fn splitmix64(mut x: u64) -> u64 {
 #[allow(clippy::cast_precision_loss)] // test indices are small `usize`s
 mod tests {
 	use super::*;
-	use crate::geo::GeoFeature;
 	use geo_types::{LineString, Point};
 
-	fn point_feature(lon: f64, lat: f64) -> GeoFeature {
-		GeoFeature::new(Geometry::Point(Point::new(lon, lat)))
+	fn point_geom(lon: f64, lat: f64) -> Geometry<f64> {
+		Geometry::Point(Point::new(lon, lat))
 	}
 
 	#[test]
@@ -158,14 +156,14 @@ mod tests {
 
 	#[test]
 	fn drop_rate_keeps_all_at_ratio_1() {
-		let features: Vec<(usize, GeoFeature)> = (0..100).map(|i| (i, point_feature(i as f64, 0.0))).collect();
+		let features: Vec<(usize, Geometry<f64>)> = (0..100).map(|i| (i, point_geom(i as f64, 0.0))).collect();
 		let kept = apply_drop_rate(features, 1.0);
 		assert_eq!(kept.len(), 100);
 	}
 
 	#[test]
 	fn drop_rate_drops_all_at_ratio_0() {
-		let features: Vec<(usize, GeoFeature)> = (0..100).map(|i| (i, point_feature(i as f64, 0.0))).collect();
+		let features: Vec<(usize, Geometry<f64>)> = (0..100).map(|i| (i, point_geom(i as f64, 0.0))).collect();
 		let kept = apply_drop_rate(features, 0.0);
 		assert_eq!(kept.len(), 0);
 	}
@@ -173,7 +171,7 @@ mod tests {
 	#[test]
 	fn drop_rate_approximate_keep_ratio() {
 		// 10000 points sampled at 0.5 should keep roughly 5000 (allow 5% tolerance).
-		let features: Vec<(usize, GeoFeature)> = (0..10_000).map(|i| (i, point_feature(i as f64, 0.0))).collect();
+		let features: Vec<(usize, Geometry<f64>)> = (0..10_000).map(|i| (i, point_geom(i as f64, 0.0))).collect();
 		let kept = apply_drop_rate(features, 0.5);
 		let ratio = kept.len() as f64 / 10_000.0;
 		assert!((ratio - 0.5).abs() < 0.05, "expected ~0.5, got {ratio}");
@@ -181,7 +179,7 @@ mod tests {
 
 	#[test]
 	fn drop_rate_is_deterministic() {
-		let make = || -> Vec<(usize, GeoFeature)> { (0..1000).map(|i| (i, point_feature(i as f64, 0.0))).collect() };
+		let make = || -> Vec<(usize, Geometry<f64>)> { (0..1000).map(|i| (i, point_geom(i as f64, 0.0))).collect() };
 		let kept1 = apply_drop_rate(make(), 0.3);
 		let kept2 = apply_drop_rate(make(), 0.3);
 		let indices1: Vec<usize> = kept1.iter().map(|(i, _)| *i).collect();
@@ -191,8 +189,8 @@ mod tests {
 
 	#[test]
 	fn drop_rate_passes_non_points_unchanged() {
-		let line: GeoFeature = GeoFeature::new(Geometry::LineString(LineString::from(vec![[0.0, 0.0], [1.0, 1.0]])));
-		let features = vec![(0, line.clone())];
+		let line: Geometry<f64> = Geometry::LineString(LineString::from(vec![[0.0, 0.0], [1.0, 1.0]]));
+		let features: Vec<(usize, Geometry<f64>)> = vec![(0, line.clone())];
 		let kept = apply_drop_rate(features, 0.0);
 		assert_eq!(kept.len(), 1);
 	}
@@ -203,9 +201,9 @@ mod tests {
 		// keep 0; drop 5 (within 7 of 0); keep 10 (within 5 of 5 — but 5 was
 		// already dropped, so we check against KEPT points only → kept).
 		let features = vec![
-			(0, point_feature(0.0, 0.0)),
-			(1, point_feature(5.0, 0.0)),
-			(2, point_feature(10.0, 0.0)),
+			(0, point_geom(0.0, 0.0)),
+			(1, point_geom(5.0, 0.0)),
+			(2, point_geom(10.0, 0.0)),
 		];
 		let kept = apply_min_distance(features, 7.0);
 		assert_eq!(kept.len(), 2);
@@ -216,9 +214,9 @@ mod tests {
 	#[test]
 	fn min_distance_first_seen_wins() {
 		let features = vec![
-			(0, point_feature(0.0, 0.0)),
-			(1, point_feature(0.5, 0.0)), // < 1.0 from feature 0
-			(2, point_feature(0.7, 0.0)), // < 1.0 from feature 0
+			(0, point_geom(0.0, 0.0)),
+			(1, point_geom(0.5, 0.0)), // < 1.0 from feature 0
+			(2, point_geom(0.7, 0.0)), // < 1.0 from feature 0
 		];
 		let kept = apply_min_distance(features, 1.0);
 		assert_eq!(kept.len(), 1);
@@ -228,8 +226,8 @@ mod tests {
 	#[test]
 	fn min_distance_threshold_zero_keeps_everything() {
 		let features = vec![
-			(0, point_feature(0.0, 0.0)),
-			(1, point_feature(0.0, 0.0)), // duplicate point
+			(0, point_geom(0.0, 0.0)),
+			(1, point_geom(0.0, 0.0)), // duplicate point
 		];
 		let kept = apply_min_distance(features, 0.0);
 		assert_eq!(kept.len(), 2);
@@ -237,8 +235,8 @@ mod tests {
 
 	#[test]
 	fn min_distance_passes_non_points_unchanged() {
-		let line: GeoFeature = GeoFeature::new(Geometry::LineString(LineString::from(vec![[0.0, 0.0], [1.0, 1.0]])));
-		let features = vec![(0, line.clone())];
+		let line: Geometry<f64> = Geometry::LineString(LineString::from(vec![[0.0, 0.0], [1.0, 1.0]]));
+		let features: Vec<(usize, Geometry<f64>)> = vec![(0, line.clone())];
 		let kept = apply_min_distance(features, 100.0);
 		assert_eq!(kept.len(), 1);
 	}
@@ -249,8 +247,8 @@ mod tests {
 		// Cells are anchored at multiples of `threshold`, so these two points
 		// straddle a cell boundary — the 9-cell scan must catch the conflict.
 		let features = vec![
-			(0, point_feature(9.99, 0.0)),  // cell (0, 0) when cell_size=10
-			(1, point_feature(10.01, 0.0)), // cell (1, 0); distance to (9.99, 0) = 0.02
+			(0, point_geom(9.99, 0.0)),  // cell (0, 0) when cell_size=10
+			(1, point_geom(10.01, 0.0)), // cell (1, 0); distance to (9.99, 0) = 0.02
 		];
 		let kept = apply_min_distance(features, 10.0);
 		assert_eq!(kept.len(), 1);

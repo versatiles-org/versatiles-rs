@@ -97,9 +97,19 @@ impl Default for FeatureImportConfig {
 	}
 }
 
+/// One feature alive at a given zoom: an index into the shared `flattened`
+/// pool plus the geometry simplified for this zoom. Properties and id come
+/// from the pool at render time, so this struct stays small (~24 bytes for a
+/// point) regardless of how heavy the source feature's properties are.
+#[derive(Debug)]
+struct ZoomEntry {
+	source_index: usize,
+	geometry: Geometry<f64>,
+}
+
 #[derive(Debug)]
 struct ZoomLayer {
-	features: Vec<GeoFeature>,
+	entries: Vec<ZoomEntry>,
 	rtree: RTree<FeatureRef>,
 }
 
@@ -118,6 +128,10 @@ pub struct FeatureImport {
 	/// computed from the input features before cascading. Drives the TileJSON
 	/// `vector_layers` entry that consumers like QGIS need to discover layers.
 	property_schema: std::collections::BTreeMap<String, String>,
+	/// Shared pool of post-projection, post-flatten features. Each [`ZoomEntry`]
+	/// references this by index, so each feature's `id` and `properties` are
+	/// stored exactly once instead of being cloned into every per-zoom layer.
+	flattened: Vec<GeoFeature>,
 }
 
 impl FeatureImport {
@@ -202,30 +216,24 @@ impl FeatureImport {
 			// Cascade step on the arcs (DP is monotonic across tolerances).
 			arcs = arc_graph::simplify_arcs(&arcs, tol_simplify_m);
 
-			// Reassemble only the still-alive features at this zoom.
-			let reassembled: Vec<(usize, GeoFeature)> = alive_indices
+			// Reassemble only the still-alive features at this zoom. We carry
+			// just the simplified geometry here; the source `id` and
+			// `properties` stay in `flattened` and are joined back at render
+			// time. This is the memory win on point-heavy multi-GB inputs:
+			// per-zoom storage is now tens of bytes per feature instead of
+			// kilobytes.
+			let reassembled: Vec<(usize, Geometry<f64>)> = alive_indices
 				.iter()
-				.map(|&i| {
-					let template = &flattened[i];
-					let geometry = arc_graph::reassemble_geometry(&arcs, &feature_arcs[i]);
-					(
-						i,
-						GeoFeature {
-							id: template.id.clone(),
-							geometry,
-							properties: template.properties.clone(),
-						},
-					)
-				})
+				.map(|&i| (i, arc_graph::reassemble_geometry(&arcs, &feature_arcs[i])))
 				.collect();
 
 			// Re-apply min-area / min-length filters at this zoom's (larger)
 			// thresholds. Both filters are monotonic in the threshold, so this
 			// can only shrink `alive_indices`.
-			let filtered: Vec<(usize, GeoFeature)> = reassembled
+			let filtered: Vec<(usize, Geometry<f64>)> = reassembled
 				.into_iter()
-				.filter(|(_, f)| reduce_polygons::passes_min_area(&f.geometry, polygon_min_area_m2))
-				.filter(|(_, f)| reduce_lines::passes_min_length(&f.geometry, line_min_length_m))
+				.filter(|(_, g)| reduce_polygons::passes_min_area(g, polygon_min_area_m2))
+				.filter(|(_, g)| reduce_lines::passes_min_length(g, line_min_length_m))
 				.collect();
 
 			// Cascade point reduction: each strategy operates on the previous
@@ -252,19 +260,20 @@ impl FeatureImport {
 			// Carry surviving original indices forward to the next coarser zoom.
 			alive_indices = reduced.iter().map(|(i, _)| *i).collect();
 
-			// Drop features without a bounding rect so the R-tree and the
-			// feature list stay aligned (orphans wouldn't be retrievable).
-			let zoom_features: Vec<GeoFeature> = reduced
+			// Drop entries whose geometry has no bounding rect so the R-tree
+			// and the entries Vec stay aligned (orphans wouldn't be retrievable).
+			let entries: Vec<ZoomEntry> = reduced
 				.into_iter()
-				.map(|(_, f)| f)
-				.filter(|f| f.geometry.bounding_rect().is_some())
+				.filter_map(|(i, g)| {
+					g.bounding_rect().map(|_| ZoomEntry {
+						source_index: i,
+						geometry: g,
+					})
+				})
 				.collect();
 
-			let rtree = build_rtree(&zoom_features);
-			layers[usize::from(z)] = Some(ZoomLayer {
-				features: zoom_features,
-				rtree,
-			});
+			let rtree = build_rtree_from_entries(&entries);
+			layers[usize::from(z)] = Some(ZoomLayer { entries, rtree });
 		}
 
 		Ok(Self {
@@ -273,6 +282,7 @@ impl FeatureImport {
 			layers,
 			bounds_mercator,
 			property_schema,
+			flattened,
 		})
 	}
 
@@ -296,9 +306,20 @@ impl FeatureImport {
 		if candidates.is_empty() {
 			return Ok(None);
 		}
+		// Re-hydrate full GeoFeatures: per-zoom geometry + properties/id from
+		// the shared `flattened` pool. Cloning happens here once per tile, not
+		// once per zoom.
 		let candidate_features: Vec<GeoFeature> = candidates
 			.into_iter()
-			.map(|r| layer.features[r.index].clone())
+			.map(|r| {
+				let entry = &layer.entries[r.index];
+				let template = &self.flattened[entry.source_index];
+				GeoFeature {
+					id: template.id.clone(),
+					geometry: entry.geometry.clone(),
+					properties: template.properties.clone(),
+				}
+			})
 			.collect();
 		render_tile(candidate_features, &self.config.layer_name, tile_bbox, TILE_EXTENT)
 	}
@@ -468,12 +489,12 @@ fn features_bbox(features: &[GeoFeature]) -> Option<[f64; 4]> {
 	acc.map(|(a, b, c, d)| [a, b, c, d])
 }
 
-fn build_rtree(features: &[GeoFeature]) -> RTree<FeatureRef> {
-	let refs: Vec<FeatureRef> = features
+fn build_rtree_from_entries(entries: &[ZoomEntry]) -> RTree<FeatureRef> {
+	let refs: Vec<FeatureRef> = entries
 		.iter()
 		.enumerate()
-		.filter_map(|(i, f)| {
-			f.geometry
+		.filter_map(|(i, e)| {
+			e.geometry
 				.bounding_rect()
 				.map(|r| FeatureRef::new(i, [r.min().x, r.min().y, r.max().x, r.max().y]))
 		})
