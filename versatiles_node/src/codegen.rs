@@ -530,4 +530,68 @@ mod tests {
 		);
 		assert!(format_field.enum_variants.contains(&"png"));
 	}
+
+	/// Look up `(op_name, field_name)` in the live VPL metadata.
+	fn find_field(ops: &[OperationMeta], op_name: &str, field_name: &str) -> VPLFieldMeta {
+		let op = ops
+			.iter()
+			.find(|o| o.tag_name == op_name)
+			.unwrap_or_else(|| panic!("operation `{op_name}` not registered"));
+		op.fields
+			.iter()
+			.find(|f| f.name == field_name)
+			.unwrap_or_else(|| panic!("field `{field_name}` not found on `{op_name}`"))
+			.clone()
+	}
+
+	/// All VPL fields that should produce a TS string-literal union after
+	/// Chunk B. One row per migrated arg; the canonical-variants list is
+	/// pinned here so the test fails loudly if a new variant is added to an
+	/// enum but the migration doc / TS surface forgets to follow.
+	const ENUM_FIELDS: &[(&str, &str, &[&str])] = &[
+		("from_color", "format", &["avif", "bin", "geojson", "jpg", "json", "mvt", "png", "svg", "topojson", "webp"]),
+		("from_debug", "format", &["avif", "bin", "geojson", "jpg", "json", "mvt", "png", "svg", "topojson", "webp"]),
+		("from_geo", "compression", &["none", "gzip", "brotli", "zstd"]),
+		("from_geo", "point_reduction", &["none", "drop_rate", "min_distance"]),
+		("from_csv", "compression", &["none", "gzip", "brotli", "zstd"]),
+		("from_csv", "point_reduction", &["none", "drop_rate", "min_distance"]),
+		("raster_format", "format", &["avif", "jpg", "png", "webp"]),
+	];
+
+	#[test]
+	fn migrated_fields_carry_canonical_enum_variants_in_metadata() {
+		// One pinned canonical-variants list per migrated field. Catches both
+		// "field accidentally not migrated" (empty enum_variants) and "enum
+		// variant added without updating the TS surface".
+		let ops = versatiles::pipeline::all_operation_metadata();
+		for (op_name, field_name, expected) in ENUM_FIELDS {
+			let f = find_field(&ops, op_name, field_name);
+			assert_eq!(
+				f.enum_variants.as_slice(),
+				*expected,
+				"{op_name}::{field_name} variants drifted",
+			);
+		}
+	}
+
+	#[test]
+	fn migrated_fields_render_as_string_literal_union_in_generated_typescript() {
+		// End-to-end check: the .ts output for each migrated op carries a real
+		// string-literal union, not `string`. Pulls the same TS that the napi
+		// entry point (`generate_vpl_typescript`) returns.
+		let ts = generate_vpl_typescript();
+		for (op_name, field_name, variants) in ENUM_FIELDS {
+			let camel = to_camel_case(field_name);
+			let union = variants
+				.iter()
+				.map(|v| format!(r#""{v}""#))
+				.collect::<Vec<_>>()
+				.join(" | ");
+			let needle = format!("\t{camel}?: {union};");
+			assert!(
+				ts.contains(&needle),
+				"{op_name}::{field_name} should render as `{needle}` in the generated TS",
+			);
+		}
+	}
 }
