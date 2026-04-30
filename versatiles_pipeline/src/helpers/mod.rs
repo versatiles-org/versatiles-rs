@@ -7,6 +7,7 @@ pub mod dummy_vector_source;
 pub mod overview;
 mod pipeline_reader;
 pub mod tile_resize;
+pub mod tile_size_monitor;
 
 #[cfg(test)]
 pub use arrange_tiles::*;

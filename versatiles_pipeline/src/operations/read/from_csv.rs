@@ -10,7 +10,9 @@
 //! from_csv filename="quakes.csv" lon_column="longitude" lat_column="latitude" id_column="event_id" max_zoom=8
 //! ```
 
-use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
+use crate::{
+	PipelineFactory, helpers::tile_size_monitor::TileSizeMonitor, operations::read::traits::ReadTileSource, vpl::VPLNode,
+};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -78,6 +80,7 @@ pub struct Operation {
 	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 	compression: TileCompression,
+	size_monitor: TileSizeMonitor,
 }
 
 impl std::fmt::Debug for Operation {
@@ -197,6 +200,7 @@ impl ReadTileSource for Operation {
 			metadata,
 			tilejson,
 			compression,
+			size_monitor: TileSizeMonitor::new("from_csv"),
 		}) as Box<dyn TileSource>)
 	}
 }
@@ -242,6 +246,8 @@ impl TileSource for Operation {
 			Some(vector_tile) => {
 				let mut tile = Tile::from_vector(vector_tile, TileFormat::MVT)?;
 				tile.change_compression(&self.compression)?;
+				let blob = tile.as_blob(&self.compression)?;
+				self.size_monitor.check(*coord, blob)?;
 				Ok(Some(tile))
 			}
 			None => Ok(None),
@@ -253,11 +259,17 @@ impl TileSource for Operation {
 		let bbox = self.metadata.intersection_bbox(&bbox);
 		let import = Arc::clone(&self.import);
 		let compression = self.compression;
+		let monitor = self.size_monitor.clone();
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			match import.get_tile(coord.level, coord.x, coord.y) {
 				Ok(Some(vt)) => {
 					let mut tile = Tile::from_vector(vt, TileFormat::MVT).ok()?;
 					tile.change_compression(&compression).ok()?;
+					let blob = tile.as_blob(&compression).ok()?;
+					if let Err(e) = monitor.check(coord, blob) {
+						log::error!("{e:#}");
+						return None;
+					}
 					Some(tile)
 				}
 				_ => None,

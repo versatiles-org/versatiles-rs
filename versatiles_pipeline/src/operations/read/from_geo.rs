@@ -15,7 +15,9 @@
 //! from_geo filename="places.geojson" layer_name="places" max_zoom=12
 //! ```
 
-use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
+use crate::{
+	PipelineFactory, helpers::tile_size_monitor::TileSizeMonitor, operations::read::traits::ReadTileSource, vpl::VPLNode,
+};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -87,6 +89,7 @@ pub struct Operation {
 	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 	compression: TileCompression,
+	size_monitor: TileSizeMonitor,
 }
 
 impl std::fmt::Debug for Operation {
@@ -187,6 +190,7 @@ impl ReadTileSource for Operation {
 			metadata,
 			tilejson,
 			compression,
+			size_monitor: TileSizeMonitor::new("from_geo"),
 		}) as Box<dyn TileSource>)
 	}
 }
@@ -217,6 +221,8 @@ impl TileSource for Operation {
 			Some(vector_tile) => {
 				let mut tile = Tile::from_vector(vector_tile, TileFormat::MVT)?;
 				tile.change_compression(&self.compression)?;
+				let blob = tile.as_blob(&self.compression)?;
+				self.size_monitor.check(*coord, blob)?;
 				Ok(Some(tile))
 			}
 			None => Ok(None),
@@ -228,11 +234,21 @@ impl TileSource for Operation {
 		let bbox = self.metadata.intersection_bbox(&bbox);
 		let import = Arc::clone(&self.import);
 		let compression = self.compression;
+		let monitor = self.size_monitor.clone();
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			match import.get_tile(coord.level, coord.x, coord.y) {
 				Ok(Some(vt)) => {
 					let mut tile = Tile::from_vector(vt, TileFormat::MVT).ok()?;
 					tile.change_compression(&compression).ok()?;
+					let blob = tile.as_blob(&compression).ok()?;
+					// In the streaming/parallel path we can't propagate an error
+					// cleanly per-tile; treat hard-cap violations as "drop this
+					// tile" and rely on the synchronous `tile()` path (or a
+					// targeted re-render) to surface the error to the user.
+					if let Err(e) = monitor.check(coord, blob) {
+						log::error!("{e:#}");
+						return None;
+					}
 					Some(tile)
 				}
 				_ => None,
