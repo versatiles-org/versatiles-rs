@@ -187,13 +187,12 @@ impl FeatureImport {
 	/// Build the import from a vector of features.
 	///
 	/// Callers typically drain a [`crate::feature_source::FeatureSource`]'s
-	/// stream into a `Vec<GeoFeature>` first, then pass it here. The `config`
-	/// argument accepts either a [`FeatureImportArgs`] (every field optional;
-	/// missing values fall back to [`FeatureImportConfig::default`]) or a
-	/// fully-resolved [`FeatureImportConfig`] for advanced/test code.
+	/// stream into a `Vec<GeoFeature>` first, then pass it here. The `args`
+	/// struct is the user-input shape with every knob optional; missing
+	/// values fall back to [`FeatureImportConfig::default`].
 	#[context("importing features")]
-	pub fn from_features(features: Vec<GeoFeature>, config: impl Into<FeatureImportConfig>) -> Result<Self> {
-		let config: FeatureImportConfig = config.into();
+	pub fn from_features(features: Vec<GeoFeature>, args: FeatureImportArgs) -> Result<Self> {
+		let config: FeatureImportConfig = args.into();
 		// Project to web mercator (only once — the auto-`max_zoom` heuristic
 		// reuses these projected geometries instead of re-projecting).
 		// TODO: validate CRS once the GeoJSON parser tracks it. v1 trusts the
@@ -582,11 +581,11 @@ mod tests {
 			point_feature(1, "origin", 0.0, 0.0),
 			point_feature(2, "east", 90.0, 30.0),
 		];
-		let config = FeatureImportConfig {
+		let args = FeatureImportArgs {
 			max_zoom: Some(5),
 			..Default::default()
 		};
-		let import = FeatureImport::from_features(features, config)?;
+		let import = FeatureImport::from_features(features, args)?;
 
 		assert_eq!(import.bounds_mercator().map(|b| b as i64), [0, 0, 10018754, 3503549]);
 
@@ -600,18 +599,18 @@ mod tests {
 
 	#[test]
 	fn empty_input_yields_no_tiles() -> Result<()> {
-		let import = FeatureImport::from_features(Vec::new(), FeatureImportConfig::default());
+		let import = FeatureImport::from_features(Vec::new(), FeatureImportArgs::default());
 		assert_eq!(import.unwrap_err().to_string(), "importing features");
 		Ok(())
 	}
 
 	#[test]
 	fn out_of_range_zoom_returns_none() -> Result<()> {
-		let config = FeatureImportConfig {
+		let args = FeatureImportArgs {
 			max_zoom: Some(3),
 			..Default::default()
 		};
-		let import = FeatureImport::from_features(vec![point_feature(1, "o", 0.0, 0.0)], config)?;
+		let import = FeatureImport::from_features(vec![point_feature(1, "o", 0.0, 0.0)], args)?;
 		assert!(import.get_tile(10, 0, 0)?.is_none());
 		Ok(())
 	}
@@ -630,12 +629,12 @@ mod tests {
 		let polygon = Polygon::new(exterior, vec![]);
 		let feature = GeoFeature::new(Geometry::Polygon(polygon));
 
-		let config = FeatureImportConfig {
+		let args = FeatureImportArgs {
 			max_zoom: Some(5),
-			polygon_simplify_px: 0.0,
+			polygon_simplify_px: Some(0.0),
 			..Default::default()
 		};
-		let import = FeatureImport::from_features(vec![feature], config)?;
+		let import = FeatureImport::from_features(vec![feature], args)?;
 		// Tile (z=5) over Berlin is the smallest tile we built.
 		let coord = versatiles_core::TileCoord::from_geo(13.405, 52.52, 5)?;
 		assert!(import.get_tile(coord.level, coord.x, coord.y)?.is_none());
@@ -648,12 +647,12 @@ mod tests {
 		// it's far below `line_min_length_px=4` (which means ≥ 39 km at z=0).
 		let line = LineString::from(vec![[13.405, 52.520], [13.406, 52.520]]);
 		let feature = GeoFeature::new(Geometry::LineString(line));
-		let config = FeatureImportConfig {
+		let args = FeatureImportArgs {
 			max_zoom: Some(14),
-			line_simplify_px: 0.0,
+			line_simplify_px: Some(0.0),
 			..Default::default()
 		};
-		let import = FeatureImport::from_features(vec![feature], config)?;
+		let import = FeatureImport::from_features(vec![feature], args)?;
 		// At z=0, the line is too short.
 		assert!(import.get_tile(0, 0, 0)?.is_none());
 		// At z=14, the line is large enough.
@@ -677,12 +676,12 @@ mod tests {
 		let mut feature = GeoFeature::new(Geometry::Polygon(polygon));
 		feature.set_property("kind".into(), "boundary");
 
-		let config = FeatureImportConfig {
+		let args = FeatureImportArgs {
 			max_zoom: Some(3),
-			polygon_simplify_px: 0.0, // disable simplification for this test
+			polygon_simplify_px: Some(0.0), // disable simplification for this test
 			..Default::default()
 		};
-		let import = FeatureImport::from_features(vec![feature], config)?;
+		let import = FeatureImport::from_features(vec![feature], args)?;
 
 		let tile = import.get_tile(2, 1, 1)?.expect("tile in the polygon");
 		assert_eq!(tile.layers.len(), 1);
@@ -771,13 +770,13 @@ mod tests {
 		// import + render path. (At z=0, the default simplify tolerance is
 		// kilometers-large, which is intentional but would collapse the
 		// fixture's small polygons into degenerate triangles.)
-		let config = FeatureImportConfig {
-			layer_name: "places".to_string(),
+		let args = FeatureImportArgs {
+			layer_name: Some("places".to_string()),
 			max_zoom: Some(5),
-			polygon_simplify_px: 0.0,
-			line_simplify_px: 0.0,
-			polygon_min_area_px: 0.0,
-			line_min_length_px: 0.0,
+			polygon_simplify_px: Some(0.0),
+			line_simplify_px: Some(0.0),
+			polygon_min_area_px: Some(0.0),
+			line_min_length_px: Some(0.0),
 			..Default::default()
 		};
 		let mut stream = src.load()?;
@@ -785,7 +784,7 @@ mod tests {
 		while let Some(item) = stream.next().await {
 			features.push(item?);
 		}
-		let import = FeatureImport::from_features(features, config)?;
+		let import = FeatureImport::from_features(features, args)?;
 		assert_eq!(
 			import.bounds_mercator().map(|b| b as i64),
 			[1447153, 6800125, 1614132, 6927697]
