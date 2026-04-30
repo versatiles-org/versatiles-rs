@@ -98,14 +98,16 @@ pub struct FeatureImportConfig {
 	/// point dropped at zoom z+1 cannot reappear at zoom z). See
 	/// [`PointReductionStrategy`].
 	pub point_reduction: PointReductionStrategy,
-	/// Numeric value whose meaning depends on `point_reduction`:
-	/// - `DropRate`: per-zoom keep-fraction (in `[0, 1]`). Composes
-	///   geometrically across zooms — at `max_zoom - k`, the cumulative
-	///   keep-ratio is `value^k`.
-	/// - `MinDistance`: minimum distance between kept points, in tile-pixels
-	///   *at the current zoom*. Equivalent to a coarser threshold (in meters)
-	///   at lower zooms.
-	pub point_reduction_value: f32,
+	/// Threshold for [`PointReductionStrategy::MinDistance`]: minimum distance
+	/// between kept points, in tile-pixels *at the current zoom*. Equivalent
+	/// to a coarser threshold (in meters) at lower zooms. Ignored unless
+	/// `point_reduction` is `MinDistance`.
+	pub min_distance_px: f32,
+	/// Per-zoom keep-fraction for [`PointReductionStrategy::DropRate`]
+	/// (in `[0, 1]`). Composes geometrically across zooms — at `max_zoom - k`,
+	/// the cumulative keep-ratio is `value^k`. Ignored unless
+	/// `point_reduction` is `DropRate`.
+	pub drop_rate_keep_ratio: f32,
 }
 
 impl Default for FeatureImportConfig {
@@ -119,10 +121,14 @@ impl Default for FeatureImportConfig {
 			polygon_min_area_px: 4.0,
 			line_min_length_px: 4.0,
 			// Point datasets at city/regional density tend to be unreadable
-			// without thinning at low zooms; min-distance with a 4-pixel
+			// without thinning at low zooms; min-distance with a 16-pixel
 			// threshold is the sensible default that "just works".
 			point_reduction: PointReductionStrategy::MinDistance,
-			point_reduction_value: 4.0,
+			min_distance_px: 16.0,
+			// 0.5 ≈ "halve the survivors per zoom step out from max_zoom" —
+			// a sane default thinning curve. Only used when `point_reduction`
+			// is explicitly switched to `DropRate`.
+			drop_rate_keep_ratio: 0.5,
 		}
 	}
 }
@@ -130,6 +136,16 @@ impl Default for FeatureImportConfig {
 impl From<FeatureImportArgs> for FeatureImportConfig {
 	fn from(args: FeatureImportArgs) -> Self {
 		let d = Self::default();
+		// The user-facing API exposes a single `point_reduction_value` knob
+		// whose meaning depends on the active strategy. Route it to the
+		// strategy-appropriate field; the other field stays at default and
+		// will be ignored by the cascade.
+		let strategy = args.point_reduction.unwrap_or(d.point_reduction);
+		let (min_distance_px, drop_rate_keep_ratio) = match (strategy, args.point_reduction_value) {
+			(PointReductionStrategy::MinDistance, Some(v)) => (v, d.drop_rate_keep_ratio),
+			(PointReductionStrategy::DropRate, Some(v)) => (d.min_distance_px, v),
+			_ => (d.min_distance_px, d.drop_rate_keep_ratio),
+		};
 		Self {
 			layer_name: args.layer_name.unwrap_or(d.layer_name),
 			min_zoom: args.min_zoom.unwrap_or(d.min_zoom),
@@ -140,8 +156,9 @@ impl From<FeatureImportArgs> for FeatureImportConfig {
 			line_simplify_px: args.line_simplify_px.unwrap_or(d.line_simplify_px),
 			polygon_min_area_px: args.polygon_min_area_px.unwrap_or(d.polygon_min_area_px),
 			line_min_length_px: args.line_min_length_px.unwrap_or(d.line_min_length_px),
-			point_reduction: args.point_reduction.unwrap_or(d.point_reduction),
-			point_reduction_value: args.point_reduction_value.unwrap_or(d.point_reduction_value),
+			point_reduction: strategy,
+			min_distance_px,
+			drop_rate_keep_ratio,
 		}
 	}
 }
@@ -300,11 +317,11 @@ impl FeatureImport {
 			let reduced = match config.point_reduction {
 				PointReductionStrategy::None => filtered,
 				PointReductionStrategy::DropRate => {
-					let keep_ratio = f64::from(config.point_reduction_value);
+					let keep_ratio = f64::from(config.drop_rate_keep_ratio);
 					reduce_points::apply_drop_rate(filtered, keep_ratio)
 				}
 				PointReductionStrategy::MinDistance => {
-					let threshold_m = f64::from(config.point_reduction_value) * m_per_px;
+					let threshold_m = f64::from(config.min_distance_px) * m_per_px;
 					reduce_points::apply_min_distance(filtered, threshold_m)
 				}
 			};

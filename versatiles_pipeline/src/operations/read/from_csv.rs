@@ -58,10 +58,13 @@ struct Args {
 	/// Property blacklist. Not supported in v1; setting this errors out.
 	properties_exclude: Option<Vec<String>>,
 	/// Point reduction strategy: `none` / `drop_rate` / `min_distance`
-	/// (default `min_distance`, with a 4-tile-pixel threshold).
+	/// (default `min_distance`).
 	point_reduction: Option<String>,
-	/// Numeric value whose meaning depends on `point_reduction`. Defaults to
-	/// 4 (tile pixels for `min_distance`; ignored for `none`).
+	/// Numeric value whose meaning depends on `point_reduction`:
+	/// - `min_distance` (default): minimum distance between kept points,
+	///   in tile-pixels at the current zoom. Defaults to 16.
+	/// - `drop_rate`: per-zoom keep-fraction in `[0, 1]`. Defaults to 0.5.
+	/// - `none`: ignored.
 	point_reduction_value: Option<f32>,
 	/// Tile-compression applied before the tiles leave this operation:
 	/// `gzip` (default), `brotli`, `zstd`, or `none`. Aliases `gz` / `br` /

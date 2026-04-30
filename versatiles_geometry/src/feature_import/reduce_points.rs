@@ -18,7 +18,9 @@ use geo_types::{Coord, Geometry};
 use std::collections::HashMap;
 
 /// User-selected point-reduction strategy. Threshold-style values are stored
-/// in [`crate::feature_import::FeatureImportConfig::point_reduction_value`].
+/// in [`crate::feature_import::FeatureImportConfig::min_distance_px`] and
+/// [`crate::feature_import::FeatureImportConfig::drop_rate_keep_ratio`] —
+/// only the field matching the active strategy is read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum PointReductionStrategy {
 	None,
