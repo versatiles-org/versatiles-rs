@@ -301,7 +301,12 @@ impl VectorTileLayer {
 		let features = features
 			.into_iter()
 			.map(|feature| {
-				let id = feature.id.map(|id| id.as_u64()).transpose()?;
+				// MVT feature.id is a uint64. GeoJSON / Shapefile inputs often
+				// have string ids (e.g. USGS earthquake IDs like
+				// "official17000127050000000"); silently drop those rather
+				// than failing the whole tile. A `log::warn!` once would be
+				// nicer but the layer encoder has no across-tile state.
+				let id = feature.id.and_then(|id| id.as_u64().ok());
 				VectorTileFeature::from_geometry(
 					id,
 					property_manager.encode_tag_ids(feature.properties),
