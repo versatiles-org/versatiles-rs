@@ -16,7 +16,7 @@
 
 use crate::helpers::{
 	tile_error_monitor::{TileErrorMonitor, TileErrorStage},
-	tile_size_monitor::TileSizeMonitor,
+	tile_size_monitor::{TileBreakdown, TileSizeMonitor},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -138,10 +138,14 @@ impl TileSource for FeatureTileSource {
 	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		match self.import.get_tile(coord.level, coord.x, coord.y)? {
 			Some(vector_tile) => {
+				// Compute the breakdown before `Tile::from_vector` consumes
+				// the `VectorTile` — the size monitor uses it in any
+				// soft-cap warning or hard-cap error message.
+				let breakdown = TileBreakdown::from_vector_tile(&vector_tile);
 				let mut tile = Tile::from_vector(vector_tile, TileFormat::MVT)?;
 				tile.change_compression(&self.compression)?;
 				let blob = tile.as_blob(&self.compression)?;
-				self.size_monitor.check(*coord, blob)?;
+				self.size_monitor.check(*coord, blob, breakdown)?;
 				Ok(Some(tile))
 			}
 			None => Ok(None),
@@ -163,6 +167,10 @@ impl TileSource for FeatureTileSource {
 					return None;
 				}
 			};
+			// Compute the breakdown before `Tile::from_vector` moves out
+			// of `vector_tile`; the monitor needs it for any over-cap
+			// warning or summary line.
+			let breakdown = TileBreakdown::from_vector_tile(&vector_tile);
 			let mut tile = match Tile::from_vector(vector_tile, TileFormat::MVT) {
 				Ok(t) => t,
 				Err(e) => {
@@ -181,7 +189,7 @@ impl TileSource for FeatureTileSource {
 					return None;
 				}
 			};
-			if let Err(e) = size_monitor.check(coord, blob) {
+			if let Err(e) = size_monitor.check(coord, blob, breakdown) {
 				// Hard-cap violation: the size monitor's own one-shot warning
 				// will fire from inside `check`; we still record it through
 				// the error monitor so the end-of-run summary captures it.

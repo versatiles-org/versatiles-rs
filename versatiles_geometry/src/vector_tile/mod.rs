@@ -19,3 +19,8 @@ mod value;
 
 pub use layer::VectorTileLayer;
 pub use tile::VectorTile;
+/// Trait for encoding/decoding individual MVT property values. Exposed so
+/// downstream callers (e.g. `TileSizeMonitor`'s breakdown) can measure the
+/// encoded byte cost of each value without depending on the full layer
+/// encoder.
+pub use value::GeoValuePBF;
