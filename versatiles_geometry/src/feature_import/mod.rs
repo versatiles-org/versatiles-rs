@@ -32,6 +32,28 @@ mod tile_render;
 pub use heuristics::auto_max_zoom;
 pub use reduce_points::PointReductionStrategy;
 pub use tile_render::{clip_geometry, render_tile};
+
+/// Project a single feature to web mercator and split any `Multi*` geometry
+/// into one feature per sub-geometry. Callers that load features from disk
+/// should run this on every record as it arrives so that the
+/// `Vec<GeoFeature>` handed to [`FeatureImport::from_features`] is already in
+/// the shape the cascade expects (mercator coords, no `Multi*` variants).
+///
+/// Returns either:
+/// - one feature, with mercator coords (the common case: point, single
+///   linestring, single polygon, or a point cloud — `MultiPoint` is treated
+///   as a single feature whose interior is N points), or
+/// - N features, when the input is `MultiLineString` or `MultiPolygon`.
+///
+/// Properties and the `id` are cloned per output piece. For the no-split
+/// case there's no clone — `feature.geometry` is replaced in place.
+#[must_use]
+pub fn project_and_flatten(mut feature: crate::geo::GeoFeature) -> Vec<crate::geo::GeoFeature> {
+	let stub = geo_types::Geometry::Point(geo_types::Point::new(0.0, 0.0));
+	let original = std::mem::replace(&mut feature.geometry, stub);
+	feature.geometry = MercatorExt::to_mercator(original);
+	flatten_feature(feature)
+}
 use versatiles_derive::context;
 
 use crate::arc_graph::{self, ArcGraph, FeatureArcs};
@@ -207,52 +229,27 @@ impl FeatureImport {
 	/// stream into a `Vec<GeoFeature>` first, then pass it here. The `args`
 	/// struct is the user-input shape with every knob optional; missing
 	/// values fall back to [`FeatureImportConfig::default`].
+	///
+	/// **Input precondition**: features are already in web-mercator and
+	/// `Multi*` variants have been split into single-geometry features.
+	/// Callers loading from disk should run [`project_and_flatten`] on every
+	/// record as it arrives — fusing the work into the load loop saves two
+	/// full passes over what's typically a multi-GB feature vector.
 	#[context("importing features")]
-	pub fn from_features(features: Vec<GeoFeature>, args: FeatureImportArgs) -> Result<Self> {
+	pub fn from_features(flattened: Vec<GeoFeature>, args: FeatureImportArgs) -> Result<Self> {
 		let config: FeatureImportConfig = args.into();
-		// Project to web mercator (only once — the auto-`max_zoom` heuristic
-		// reuses these projected geometries instead of re-projecting).
-		// TODO: validate CRS once the GeoJSON parser tracks it. v1 trusts the
-		// caller to pass WGS84 lon/lat; non-WGS84 input silently produces
-		// garbage mercator coordinates.
-		log::debug!("projecting {} features to mercator", features.len());
 		// Snapshot the property schema before we consume the features. Drives the
 		// TileJSON `vector_layers` entry; sticking to a single TileJSON-spec
 		// type per field, picking the most informative on collisions
 		// (Boolean < Number < String).
-		let property_schema = collect_property_schema(&features);
-		// In-place projection: avoids holding two `Vec<GeoFeature>` simultaneously,
-		// which on multi-GB inputs (millions of features × ~few KB of properties
-		// each) could double peak memory.
-		let mut projected = features;
-		for f in &mut projected {
-			let stub = Geometry::Point(geo_types::Point::new(0.0, 0.0));
-			let original = std::mem::replace(&mut f.geometry, stub);
-			f.geometry = original.to_mercator();
-		}
+		let property_schema = collect_property_schema(&flattened);
 
-		// Resolve the auto-`max_zoom` heuristic against the projected features
-		// so we don't pay for projection twice.
-		let resolved_max_zoom = config.max_zoom.unwrap_or_else(|| auto_max_zoom_projected(&projected));
+		// Resolve the auto-`max_zoom` heuristic against the projected features.
+		let resolved_max_zoom = config.max_zoom.unwrap_or_else(|| auto_max_zoom_projected(&flattened));
 		if config.min_zoom > resolved_max_zoom {
 			bail!("min_zoom ({}) > max_zoom ({resolved_max_zoom})", config.min_zoom);
 		}
 
-		// Flatten Multi* into N independent features. If no feature is a Multi*
-		// (the common point-only / linestring-only / polygon-only case), keep
-		// the existing Vec — saves a full reallocation on multi-GB inputs.
-		let has_multi = projected.iter().any(|f| {
-			matches!(
-				f.geometry,
-				Geometry::MultiPoint(_) | Geometry::MultiLineString(_) | Geometry::MultiPolygon(_)
-			)
-		});
-		log::debug!("flattening {} features (has_multi={has_multi})", projected.len());
-		let flattened: Vec<GeoFeature> = if has_multi {
-			projected.into_iter().flat_map(flatten_feature).collect()
-		} else {
-			projected
-		};
 		let bounds_mercator = features_bbox(&flattened).ok_or_else(|| anyhow::anyhow!("failed to compute bounds"))?;
 
 		// Build the arc graph once. Per-zoom simplification simplifies each
@@ -602,7 +599,7 @@ mod tests {
 			max_zoom: Some(5),
 			..Default::default()
 		};
-		let import = FeatureImport::from_features(features, args)?;
+		let import = FeatureImport::from_features(features.into_iter().flat_map(project_and_flatten).collect(), args)?;
 
 		assert_eq!(import.bounds_mercator().map(|b| b as i64), [0, 0, 10018754, 3503549]);
 
@@ -627,7 +624,7 @@ mod tests {
 			max_zoom: Some(3),
 			..Default::default()
 		};
-		let import = FeatureImport::from_features(vec![point_feature(1, "o", 0.0, 0.0)], args)?;
+		let import = FeatureImport::from_features(project_and_flatten(point_feature(1, "o", 0.0, 0.0)), args)?;
 		assert!(import.get_tile(10, 0, 0)?.is_none());
 		Ok(())
 	}
@@ -651,7 +648,7 @@ mod tests {
 			polygon_simplify_px: Some(0.0),
 			..Default::default()
 		};
-		let import = FeatureImport::from_features(vec![feature], args)?;
+		let import = FeatureImport::from_features(project_and_flatten(feature), args)?;
 		// Tile (z=5) over Berlin is the smallest tile we built.
 		let coord = versatiles_core::TileCoord::from_geo(13.405, 52.52, 5)?;
 		assert!(import.get_tile(coord.level, coord.x, coord.y)?.is_none());
@@ -669,7 +666,7 @@ mod tests {
 			line_simplify_px: Some(0.0),
 			..Default::default()
 		};
-		let import = FeatureImport::from_features(vec![feature], args)?;
+		let import = FeatureImport::from_features(project_and_flatten(feature), args)?;
 		// At z=0, the line is too short.
 		assert!(import.get_tile(0, 0, 0)?.is_none());
 		// At z=14, the line is large enough.
@@ -698,7 +695,7 @@ mod tests {
 			polygon_simplify_px: Some(0.0), // disable simplification for this test
 			..Default::default()
 		};
-		let import = FeatureImport::from_features(vec![feature], args)?;
+		let import = FeatureImport::from_features(project_and_flatten(feature), args)?;
 
 		let tile = import.get_tile(2, 1, 1)?.expect("tile in the polygon");
 		assert_eq!(tile.layers.len(), 1);
@@ -799,7 +796,7 @@ mod tests {
 		let mut stream = src.load()?;
 		let mut features = Vec::new();
 		while let Some(item) = stream.next().await {
-			features.push(item?);
+			features.extend(project_and_flatten(item?));
 		}
 		let import = FeatureImport::from_features(features, args)?;
 		assert_eq!(

@@ -140,10 +140,15 @@ impl ReadTileSource for Operation {
 
 		log::info!("from_csv: importing CSV from {}", path.display());
 		// Drain features once so the auto-max-zoom heuristic can inspect them.
+		// Project + flatten on the fly so we don't make two extra full-Vec
+		// passes after load. CSV is point-only so flatten is effectively a
+		// no-op, but project_and_flatten keeps the call site uniform with
+		// from_geo.
+		use versatiles_geometry::feature_import::project_and_flatten;
 		let mut stream = source.load()?;
 		let mut features: Vec<GeoFeature> = Vec::new();
 		while let Some(item) = stream.next().await {
-			features.push(item?);
+			features.extend(project_and_flatten(item?));
 		}
 		if let Some(h) = progress_handle {
 			h.finish();

@@ -255,12 +255,17 @@ fn source_size_bytes(path: &Path, ext: &str) -> u64 {
 	}
 }
 
-/// Drain a `FeatureSource`'s stream into a `Vec`.
+/// Drain a `FeatureSource`'s stream into a `Vec`, projecting each record to
+/// web mercator and splitting `Multi*` geometries on the fly. This is what
+/// [`FeatureImport::from_features`] expects as input — fusing the work into
+/// the load loop avoids two extra full-Vec passes on what's typically a
+/// multi-GB feature set.
 async fn drain<S: FeatureSource + ?Sized>(source: &S) -> Result<Vec<GeoFeature>> {
+	use versatiles_geometry::feature_import::project_and_flatten;
 	let mut stream = source.load()?;
 	let mut features = Vec::new();
 	while let Some(item) = stream.next().await {
-		features.push(item?);
+		features.extend(project_and_flatten(item?));
 	}
 	Ok(features)
 }
