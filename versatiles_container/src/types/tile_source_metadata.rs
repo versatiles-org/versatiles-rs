@@ -10,12 +10,12 @@ use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyram
 /// # Fields
 /// - `tile_pyramid`: The bounding box and zoom pyramid defining the tile coverage.
 /// - `tile_compression`: The compression algorithm applied to tiles (e.g., gzip, brotli).
-/// - `tile_format`: The format of the tiles (e.g., PNG, JPEG, PBF).
+/// - `tile_format`: The format of the tiles (e.g., PNG, JPEG, MVT).
 #[derive(Debug, Default, Clone)]
 pub struct TileSourceMetadata {
 	/// The compression algorithm applied to tiles (e.g., gzip, brotli).
 	tile_compression: TileCompression,
-	/// The format of the tiles (e.g., PNG, JPEG, PBF).
+	/// The format of the tiles (e.g., PNG, JPEG, MVT).
 	tile_format: TileFormat,
 
 	traversal: Traversal,

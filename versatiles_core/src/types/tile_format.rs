@@ -3,7 +3,7 @@
 //! extracting the format from a filename.
 //!
 //! The `TileFormat` enum supports a variety of tile formats such as `AVIF`, `BIN`, `GEOJSON`, `JPG`,
-//! `JSON`, `PBF`, `PNG`, `SVG`, `TOPOJSON`, and `WEBP`. Each variant provides its canonical file extension
+//! `JSON`, `MVT`, `PNG`, `SVG`, `TOPOJSON`, and `WEBP`. Each variant provides its canonical file extension
 //! and can be derived from a filename or string representation.
 //!
 //! # Examples
@@ -50,7 +50,7 @@ use versatiles_derive::context;
 /// - `GEOJSON` - `GeoJSON` vector data
 /// - `JPG` - JPEG image format (including `.jpeg`)
 /// - `JSON` - Generic JSON data
-/// - `PBF` - Mapbox Vector Tile in Protocol Buffer format
+/// - `MVT` - Mapbox Vector Tile schema (encoded as PBF on disk)
 /// - `PNG` - PNG image format
 /// - `SVG` - SVG image format
 /// - `TOPOJSON` - `TopoJSON` vector data
