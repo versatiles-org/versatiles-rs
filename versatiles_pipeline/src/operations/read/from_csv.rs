@@ -57,9 +57,11 @@ struct Args {
 	properties_include: Option<Vec<String>>,
 	/// Property blacklist. Not supported in v1; setting this errors out.
 	properties_exclude: Option<Vec<String>>,
-	/// Point reduction strategy: `none` / `drop_rate` / `min_distance` (default `none`).
+	/// Point reduction strategy: `none` / `drop_rate` / `min_distance`
+	/// (default `min_distance`, with a 4-tile-pixel threshold).
 	point_reduction: Option<String>,
-	/// Numeric value whose meaning depends on `point_reduction`.
+	/// Numeric value whose meaning depends on `point_reduction`. Defaults to
+	/// 4 (tile pixels for `min_distance`; ignored for `none`).
 	point_reduction_value: Option<f32>,
 	/// Tile-compression applied before the tiles leave this operation:
 	/// `gzip` (default), `brotli`, `zstd`, or `none`. Aliases `gz` / `br` /
@@ -133,12 +135,16 @@ impl ReadTileSource for Operation {
 
 		let source = builder.build()?;
 
+		// Single source of truth for FeatureImport defaults: take the
+		// `Default` impl and override only the fields the user actually
+		// passed.
+		let defaults = FeatureImportConfig::default();
 		let point_reduction = args
 			.point_reduction
 			.as_deref()
 			.map(PointReductionStrategy::parse)
 			.transpose()?
-			.unwrap_or_default();
+			.unwrap_or(defaults.point_reduction);
 
 		// Default to gzip — the most widely supported compression for vector
 		// tiles; consumers like QGIS, Mapbox GL, and most servers expect it.
@@ -163,15 +169,15 @@ impl ReadTileSource for Operation {
 		// `args.max_zoom` of `None` triggers the auto-heuristic inside
 		// `FeatureImport::from_features`; no extra projection pass needed here.
 		// CSV is point-only by construction, so polygon/line knobs aren't
-		// exposed on this op — we leave them at the FeatureImportConfig
-		// defaults where they're effectively no-ops.
+		// exposed on this op — we keep their fields at the `defaults` values
+		// where they're no-ops for point input.
 		let config = FeatureImportConfig {
 			layer_name: layer_name.clone(),
-			min_zoom: args.min_zoom.unwrap_or(0),
+			min_zoom: args.min_zoom.unwrap_or(defaults.min_zoom),
 			max_zoom: args.max_zoom,
 			point_reduction,
-			point_reduction_value: args.point_reduction_value.unwrap_or(0.0),
-			..FeatureImportConfig::default()
+			point_reduction_value: args.point_reduction_value.unwrap_or(defaults.point_reduction_value),
+			..defaults
 		};
 		let import = FeatureImport::from_features(features, config)?;
 

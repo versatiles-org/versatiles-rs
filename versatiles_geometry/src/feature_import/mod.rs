@@ -91,8 +91,11 @@ impl Default for FeatureImportConfig {
 			line_simplify_px: 4.0,
 			polygon_min_area_px: 4.0,
 			line_min_length_px: 4.0,
-			point_reduction: PointReductionStrategy::None,
-			point_reduction_value: 0.0,
+			// Point datasets at city/regional density tend to be unreadable
+			// without thinning at low zooms; min-distance with a 4-pixel
+			// threshold is the sensible default that "just works".
+			point_reduction: PointReductionStrategy::MinDistance,
+			point_reduction_value: 4.0,
 		}
 	}
 }

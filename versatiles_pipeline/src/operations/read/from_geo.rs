@@ -66,9 +66,11 @@ struct Args {
 	line_min_length: Option<f32>,
 	/// Douglas-Peucker tolerance for lines, in tile-pixels (default 4).
 	line_simplify: Option<f32>,
-	/// Point reduction strategy: `none` / `drop_rate` / `min_distance` (default `none`).
+	/// Point reduction strategy: `none` / `drop_rate` / `min_distance`
+	/// (default `min_distance`, with a 4-tile-pixel threshold).
 	point_reduction: Option<String>,
-	/// Numeric value whose meaning depends on `point_reduction`.
+	/// Numeric value whose meaning depends on `point_reduction`. Defaults to
+	/// 4 (tile pixels for `min_distance`; ignored for `none`).
 	point_reduction_value: Option<f32>,
 	/// Tile-compression applied before the tiles leave this operation:
 	/// `gzip` (default), `brotli`, `zstd`, or `none`. Aliases `gz` / `br` /
@@ -111,12 +113,16 @@ impl ReadTileSource for Operation {
 				.to_string()
 		});
 
+		// Single source of truth for FeatureImport defaults: take the
+		// `Default` impl and override only the fields the user actually
+		// passed. Avoids repeating the literal default values per op.
+		let defaults = FeatureImportConfig::default();
 		let point_reduction = args
 			.point_reduction
 			.as_deref()
 			.map(PointReductionStrategy::parse)
 			.transpose()?
-			.unwrap_or_default();
+			.unwrap_or(defaults.point_reduction);
 
 		// Default to gzip — the most widely supported compression for vector
 		// tiles; consumers like QGIS, Mapbox GL, and most servers expect it.
@@ -150,14 +156,14 @@ impl ReadTileSource for Operation {
 		// `FeatureImport::from_features`; no extra projection pass needed here.
 		let config = FeatureImportConfig {
 			layer_name: layer_name.clone(),
-			min_zoom: args.min_zoom.unwrap_or(0),
+			min_zoom: args.min_zoom.unwrap_or(defaults.min_zoom),
 			max_zoom: args.max_zoom,
-			polygon_simplify_px: args.polygon_simplify.unwrap_or(4.0),
-			line_simplify_px: args.line_simplify.unwrap_or(4.0),
-			polygon_min_area_px: args.polygon_min_area.unwrap_or(4.0),
-			line_min_length_px: args.line_min_length.unwrap_or(4.0),
+			polygon_simplify_px: args.polygon_simplify.unwrap_or(defaults.polygon_simplify_px),
+			line_simplify_px: args.line_simplify.unwrap_or(defaults.line_simplify_px),
+			polygon_min_area_px: args.polygon_min_area.unwrap_or(defaults.polygon_min_area_px),
+			line_min_length_px: args.line_min_length.unwrap_or(defaults.line_min_length_px),
 			point_reduction,
-			point_reduction_value: args.point_reduction_value.unwrap_or(0.0),
+			point_reduction_value: args.point_reduction_value.unwrap_or(defaults.point_reduction_value),
 		};
 		let import = FeatureImport::from_features(features, config)?;
 

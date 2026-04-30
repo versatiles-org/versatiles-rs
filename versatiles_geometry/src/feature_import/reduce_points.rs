@@ -21,9 +21,9 @@ use std::collections::HashMap;
 /// in [`crate::feature_import::FeatureImportConfig::point_reduction_value`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum PointReductionStrategy {
-	#[default]
 	None,
 	DropRate,
+	#[default]
 	MinDistance,
 }
 
