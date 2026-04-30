@@ -122,7 +122,9 @@ impl TileFormat {
 	/// ```
 	#[must_use]
 	pub fn variants() -> &'static [&'static str] {
-		&["avif", "bin", "geojson", "jpg", "json", "mvt", "png", "svg", "topojson", "webp"]
+		&[
+			"avif", "bin", "geojson", "jpg", "json", "mvt", "png", "svg", "topojson", "webp",
+		]
 	}
 
 	#[context("Could not convert string '{value}' to TileFormat")]

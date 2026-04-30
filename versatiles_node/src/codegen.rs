@@ -403,8 +403,14 @@ mod tests {
 		assert_eq!(rust_type_to_ts(&plain_field("u8")), "number");
 		assert_eq!(rust_type_to_ts(&plain_field("Option<u8>")), "number");
 		assert_eq!(rust_type_to_ts(&plain_field("Option<String>")), "string");
-		assert_eq!(rust_type_to_ts(&plain_field("[f64;4]")), "[number, number, number, number]");
-		assert_eq!(rust_type_to_ts(&plain_field("Option<[f64;3]>")), "[number, number, number]");
+		assert_eq!(
+			rust_type_to_ts(&plain_field("[f64;4]")),
+			"[number, number, number, number]"
+		);
+		assert_eq!(
+			rust_type_to_ts(&plain_field("Option<[f64;3]>")),
+			"[number, number, number]"
+		);
 		assert_eq!(rust_type_to_ts(&plain_field("Vec<VPLPipeline>")), "VPL[]");
 	}
 
@@ -549,8 +555,20 @@ mod tests {
 	/// pinned here so the test fails loudly if a new variant is added to an
 	/// enum but the migration doc / TS surface forgets to follow.
 	const ENUM_FIELDS: &[(&str, &str, &[&str])] = &[
-		("from_color", "format", &["avif", "bin", "geojson", "jpg", "json", "mvt", "png", "svg", "topojson", "webp"]),
-		("from_debug", "format", &["avif", "bin", "geojson", "jpg", "json", "mvt", "png", "svg", "topojson", "webp"]),
+		(
+			"from_color",
+			"format",
+			&[
+				"avif", "bin", "geojson", "jpg", "json", "mvt", "png", "svg", "topojson", "webp",
+			],
+		),
+		(
+			"from_debug",
+			"format",
+			&[
+				"avif", "bin", "geojson", "jpg", "json", "mvt", "png", "svg", "topojson", "webp",
+			],
+		),
 		("from_geo", "compression", &["none", "gzip", "brotli", "zstd"]),
 		("from_geo", "point_reduction", &["none", "drop_rate", "min_distance"]),
 		("from_csv", "compression", &["none", "gzip", "brotli", "zstd"]),
