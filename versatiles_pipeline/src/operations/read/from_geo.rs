@@ -16,7 +16,13 @@
 //! ```
 
 use crate::{
-	PipelineFactory, helpers::tile_size_monitor::TileSizeMonitor, operations::read::traits::ReadTileSource, vpl::VPLNode,
+	PipelineFactory,
+	helpers::{
+		tile_error_monitor::{TileErrorMonitor, TileErrorStage},
+		tile_size_monitor::TileSizeMonitor,
+	},
+	operations::read::traits::ReadTileSource,
+	vpl::VPLNode,
 };
 use anyhow::{Result, bail};
 use async_trait::async_trait;
@@ -90,6 +96,7 @@ pub struct Operation {
 	tilejson: TileJSON,
 	compression: TileCompression,
 	size_monitor: TileSizeMonitor,
+	error_monitor: TileErrorMonitor,
 }
 
 impl std::fmt::Debug for Operation {
@@ -191,6 +198,7 @@ impl ReadTileSource for Operation {
 			tilejson,
 			compression,
 			size_monitor: TileSizeMonitor::new("from_geo"),
+			error_monitor: TileErrorMonitor::new("from_geo"),
 		}) as Box<dyn TileSource>)
 	}
 }
@@ -234,25 +242,43 @@ impl TileSource for Operation {
 		let bbox = self.metadata.intersection_bbox(&bbox);
 		let import = Arc::clone(&self.import);
 		let compression = self.compression;
-		let monitor = self.size_monitor.clone();
+		let size_monitor = self.size_monitor.clone();
+		let error_monitor = self.error_monitor.clone();
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
-			match import.get_tile(coord.level, coord.x, coord.y) {
-				Ok(Some(vt)) => {
-					let mut tile = Tile::from_vector(vt, TileFormat::MVT).ok()?;
-					tile.change_compression(&compression).ok()?;
-					let blob = tile.as_blob(&compression).ok()?;
-					// In the streaming/parallel path we can't propagate an error
-					// cleanly per-tile; treat hard-cap violations as "drop this
-					// tile" and rely on the synchronous `tile()` path (or a
-					// targeted re-render) to surface the error to the user.
-					if let Err(e) = monitor.check(coord, blob) {
-						log::error!("{e:#}");
-						return None;
-					}
-					Some(tile)
+			let vector_tile = match import.get_tile(coord.level, coord.x, coord.y) {
+				Ok(Some(vt)) => vt,
+				Ok(None) => return None,
+				Err(e) => {
+					error_monitor.record(coord, TileErrorStage::Render, &e);
+					return None;
 				}
-				_ => None,
+			};
+			let mut tile = match Tile::from_vector(vector_tile, TileFormat::MVT) {
+				Ok(t) => t,
+				Err(e) => {
+					error_monitor.record(coord, TileErrorStage::Wrap, &e);
+					return None;
+				}
+			};
+			if let Err(e) = tile.change_compression(&compression) {
+				error_monitor.record(coord, TileErrorStage::Compress, &e);
+				return None;
 			}
+			let blob = match tile.as_blob(&compression) {
+				Ok(b) => b,
+				Err(e) => {
+					error_monitor.record(coord, TileErrorStage::Serialize, &e);
+					return None;
+				}
+			};
+			if let Err(e) = size_monitor.check(coord, blob) {
+				// Hard-cap violation: the size monitor's own one-shot warning
+				// will fire from inside `check`; we still record it through
+				// the error monitor so the end-of-run summary captures it.
+				error_monitor.record(coord, TileErrorStage::OverHardCap, &e);
+				return None;
+			}
+			Some(tile)
 		}))
 	}
 
