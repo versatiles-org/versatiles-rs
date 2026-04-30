@@ -70,6 +70,10 @@ struct Args {
 	point_reduction: Option<String>,
 	/// Numeric value whose meaning depends on `point_reduction`.
 	point_reduction_value: Option<f32>,
+	/// Tile-compression applied before the tiles leave this operation:
+	/// `gzip` (default), `brotli`, `zstd`, or `none`. Aliases `gz` / `br` /
+	/// `zst` / `raw` are accepted.
+	compression: Option<String>,
 }
 
 /// `TileSource` wrapping an in-memory [`FeatureImport`].
@@ -77,6 +81,7 @@ pub struct Operation {
 	import: Arc<FeatureImport>,
 	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
+	compression: TileCompression,
 }
 
 impl std::fmt::Debug for Operation {
@@ -112,6 +117,15 @@ impl ReadTileSource for Operation {
 			.map(PointReductionStrategy::parse)
 			.transpose()?
 			.unwrap_or_default();
+
+		// Default to gzip — the most widely supported compression for vector
+		// tiles; consumers like QGIS, Mapbox GL, and most servers expect it.
+		let compression = args
+			.compression
+			.as_deref()
+			.map(TileCompression::try_from)
+			.transpose()?
+			.unwrap_or(TileCompression::Gzip);
 
 		// Format dispatch by extension (case-insensitive).
 		let ext = path
@@ -153,12 +167,7 @@ impl ReadTileSource for Operation {
 			Some(bbox) => TilePyramid::from_geo_bbox(import.min_zoom(), import.max_zoom(), &bbox)?,
 			None => TilePyramid::new_empty(),
 		};
-		let metadata = TileSourceMetadata::new(
-			TileFormat::MVT,
-			TileCompression::Uncompressed,
-			Traversal::ANY,
-			Some(pyramid),
-		);
+		let metadata = TileSourceMetadata::new(TileFormat::MVT, compression, Traversal::ANY, Some(pyramid));
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("name", &layer_name)?;
@@ -172,6 +181,7 @@ impl ReadTileSource for Operation {
 			import: Arc::new(import),
 			metadata,
 			tilejson,
+			compression,
 		}) as Box<dyn TileSource>)
 	}
 }
@@ -199,7 +209,11 @@ impl TileSource for Operation {
 
 	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		match self.import.get_tile(coord.level, coord.x, coord.y)? {
-			Some(vector_tile) => Ok(Some(Tile::from_vector(vector_tile, TileFormat::MVT)?)),
+			Some(vector_tile) => {
+				let mut tile = Tile::from_vector(vector_tile, TileFormat::MVT)?;
+				tile.change_compression(&self.compression)?;
+				Ok(Some(tile))
+			}
 			None => Ok(None),
 		}
 	}
@@ -208,9 +222,14 @@ impl TileSource for Operation {
 		log::trace!("from_geo::tile_stream {bbox:?}");
 		let bbox = self.metadata.intersection_bbox(&bbox);
 		let import = Arc::clone(&self.import);
+		let compression = self.compression;
 		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
 			match import.get_tile(coord.level, coord.x, coord.y) {
-				Ok(Some(vt)) => Tile::from_vector(vt, TileFormat::MVT).ok(),
+				Ok(Some(vt)) => {
+					let mut tile = Tile::from_vector(vt, TileFormat::MVT).ok()?;
+					tile.change_compression(&compression).ok()?;
+					Some(tile)
+				}
 				_ => None,
 			}
 		}))
