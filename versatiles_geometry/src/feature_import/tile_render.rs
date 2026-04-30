@@ -18,8 +18,12 @@ use geo_types::{Coord, Geometry, LineString, MultiLineString, MultiPoint, MultiP
 const MVT_VERSION: u32 = 2;
 
 /// Clip every feature to `tile_bbox` (mercator), quantize to the tile-local
-/// `[0, extent]` grid, encode as a single-layer MVT. Returns `Ok(None)` if
-/// no feature survives clipping.
+/// `[0, extent]` grid, encode as a single-layer MVT. Returns `Ok(None)` when
+/// the resulting tile would carry no usable geometry — either because no
+/// feature survived clipping, or because every feature collapsed to fewer
+/// than the spec-required number of distinct integer-grid vertices (3 per
+/// polygon ring, 2 per linestring) after quantization. Empty tiles are
+/// useless to downstream consumers and just bloat the container.
 pub fn render_tile(
 	features: impl IntoIterator<Item = GeoFeature>,
 	layer_name: &str,
@@ -35,6 +39,13 @@ pub fn render_tile(
 		} = feature;
 		for piece in clip_geometry(geometry, tile_bbox) {
 			let quantized = quantize_geometry(&piece, tile_bbox, extent);
+			// Skip features whose quantized geometry has nothing to draw —
+			// the encoder would happily write commands for a polygon whose
+			// rings all collapsed to a single pixel, but downstream consumers
+			// either render nothing or get confused by empty rings.
+			if !has_visible_geometry(&quantized) {
+				continue;
+			}
 			clipped.push(GeoFeature {
 				id: id.clone(),
 				geometry: quantized,
@@ -49,6 +60,50 @@ pub fn render_tile(
 
 	let layer = VectorTileLayer::from_features(layer_name.to_string(), clipped, extent, MVT_VERSION)?;
 	Ok(Some(VectorTile::new(vec![layer])))
+}
+
+/// Returns `true` when the quantized geometry has enough distinct
+/// integer-grid vertices to render. Decoded MVT requires:
+/// - any number of distinct points for `Point` / `MultiPoint`,
+/// - ≥ 2 distinct vertices per linestring,
+/// - ≥ 3 distinct vertices per polygon ring.
+///
+/// We round to the integer grid here because the MVT encoder rounds during
+/// `write_coord`; vertices that round to the same cell collapse into one
+/// command and don't add information.
+fn has_visible_geometry(g: &Geometry<f64>) -> bool {
+	match g {
+		Geometry::Point(_) | Geometry::MultiPoint(_) => true,
+		Geometry::LineString(ls) => distinct_grid_vertices_at_least(&ls.0, 2),
+		Geometry::MultiLineString(ml) => ml.0.iter().any(|ls| distinct_grid_vertices_at_least(&ls.0, 2)),
+		Geometry::Polygon(p) => polygon_has_visible_ring(p),
+		Geometry::MultiPolygon(mp) => mp.0.iter().any(polygon_has_visible_ring),
+		_ => false,
+	}
+}
+
+fn polygon_has_visible_ring(p: &Polygon<f64>) -> bool {
+	// Only the exterior matters for "is this polygon visible?"; an interior
+	// (hole) on its own doesn't draw anything if there's no exterior to
+	// punch it through.
+	distinct_grid_vertices_at_least(&p.exterior().0, 3)
+}
+
+fn distinct_grid_vertices_at_least(coords: &[Coord<f64>], n: usize) -> bool {
+	if coords.len() < n {
+		return false;
+	}
+	let mut seen: std::collections::HashSet<(i64, i64)> = std::collections::HashSet::with_capacity(coords.len());
+	for c in coords {
+		// Match the encoder's rounding (`float_to_int` rounds half-away-from-zero).
+		#[allow(clippy::cast_possible_truncation)]
+		let key = (c.x.round() as i64, c.y.round() as i64);
+		seen.insert(key);
+		if seen.len() >= n {
+			return true;
+		}
+	}
+	false
 }
 
 /// Clip a single geometry to `bbox`. May produce zero, one, or multiple
@@ -378,6 +433,33 @@ mod tests {
 			}
 			other => panic!("expected Polygon, got {other:?}"),
 		}
+	}
+
+	#[test]
+	fn render_tile_drops_when_features_collapse_to_empty_geometry() {
+		// A polygon whose exterior survives clipping but is so small that all
+		// vertices land on the same integer tile-pixel after quantization.
+		// `VectorTileFeature::from_geometry`'s ring writer skips rings with
+		// < 3 distinct vertices, so the encoded `geom_data` is empty; the
+		// whole tile should then be dropped.
+		let tile_bbox = [0.0, 0.0, 1.0, 1.0];
+		// Polygon ~1/(extent*8) wide, well below the 1-px grid. Inside the
+		// tile, so it survives clipping; quantization collapses it.
+		let eps = 1.0 / 32_768.0;
+		let exterior = LineString::from(vec![
+			[0.5, 0.5],
+			[0.5 + eps, 0.5],
+			[0.5 + eps, 0.5 + eps],
+			[0.5, 0.5 + eps],
+			[0.5, 0.5],
+		]);
+		let polygon = Polygon::new(exterior, vec![]);
+		let feature = GeoFeature::new(Geometry::Polygon(polygon));
+		let out = render_tile(vec![feature], "L", tile_bbox, 4096).unwrap();
+		assert!(
+			out.is_none(),
+			"tiles where every feature collapses to empty geometry should be None"
+		);
 	}
 
 	#[test]
