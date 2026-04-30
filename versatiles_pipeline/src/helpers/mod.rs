@@ -4,6 +4,7 @@ mod container_registry;
 mod csv;
 pub mod dummy_image_source;
 pub mod dummy_vector_source;
+pub mod feature_tile_source;
 pub mod overview;
 mod pipeline_reader;
 pub mod tile_error_monitor;

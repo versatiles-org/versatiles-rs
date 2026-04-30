@@ -6,10 +6,15 @@ use std::collections::HashSet;
 use versatiles_container::TileSource;
 use versatiles_core::{TileBBox, TileCoord, TileStream};
 
-pub trait ReadTileSource: TileSource {
+/// Marker trait implemented by each read operation's `Operation` type to
+/// host its `build` factory. The build result is `Box<dyn TileSource>`, which
+/// can be a *different* type than `Self` — useful when the actual runtime
+/// `TileSource` is shared across formats (see
+/// [`crate::helpers::feature_tile_source::FeatureTileSource`]).
+pub trait ReadTileSource {
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
 	where
-		Self: Sized + TileSource;
+		Self: Sized;
 }
 
 /// Collect the union of tile coordinates from multiple sources into a single stream.

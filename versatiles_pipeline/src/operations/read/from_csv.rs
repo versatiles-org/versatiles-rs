@@ -12,28 +12,25 @@
 
 use crate::{
 	PipelineFactory,
-	helpers::{
-		tile_error_monitor::{TileErrorMonitor, TileErrorStage},
-		tile_size_monitor::TileSizeMonitor,
+	helpers::feature_tile_source::{
+		FeatureTileSource, apply_property_filters, parse_compression, parse_point_reduction,
 	},
 	operations::read::traits::ReadTileSource,
 	vpl::VPLNode,
 };
 use anyhow::{Result, bail};
-use async_trait::async_trait;
 use futures::StreamExt;
 use std::sync::Arc;
-use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
+use versatiles_container::{DataLocation, TileSource};
 use versatiles_derive::context;
-use versatiles_geometry::feature_import::{FeatureImport, FeatureImportArgs, PointReductionStrategy};
+use versatiles_geometry::feature_import::{FeatureImport, FeatureImportArgs};
 use versatiles_geometry::feature_source::{CsvSourceBuilder, FeatureSource, ProgressCallback};
+use versatiles_geometry::geo::GeoFeature;
 
 /// Don't bother showing a progress bar for tiny inputs — the bar would
 /// flicker once and disappear. 10 MB is the smallest size where users start
 /// to notice the wait.
 const PROGRESS_MIN_BYTES: u64 = 10_000_000;
-use versatiles_geometry::geo::GeoFeature;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a CSV file with longitude/latitude columns and emits MVT point tiles.
@@ -84,29 +81,15 @@ struct Args {
 	compression: Option<String>,
 }
 
-/// `TileSource` wrapping an in-memory [`FeatureImport`] built from a CSV source.
-pub struct Operation {
-	import: Arc<FeatureImport>,
-	metadata: TileSourceMetadata,
-	tilejson: TileJSON,
-	compression: TileCompression,
-	size_monitor: TileSizeMonitor,
-	error_monitor: TileErrorMonitor,
-}
-
-impl std::fmt::Debug for Operation {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("from_csv::Operation")
-			.field("metadata", &self.metadata)
-			.finish()
-	}
-}
+/// Marker type for the read-factory macro. The actual runtime `TileSource`
+/// is a [`FeatureTileSource`] returned from [`Operation::build`].
+pub struct Operation;
 
 impl ReadTileSource for Operation {
 	#[context("Failed to build from_csv operation in VPL node {:?}", vpl_node.name)]
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
 	where
-		Self: Sized + TileSource,
+		Self: Sized,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 		reject_unsupported_args(&args)?;
@@ -152,20 +135,8 @@ impl ReadTileSource for Operation {
 
 		let source = builder.build()?;
 
-		let point_reduction = args
-			.point_reduction
-			.as_deref()
-			.map(PointReductionStrategy::parse)
-			.transpose()?;
-
-		// Default to gzip — the most widely supported compression for vector
-		// tiles; consumers like QGIS, Mapbox GL, and most servers expect it.
-		let compression = args
-			.compression
-			.as_deref()
-			.map(TileCompression::try_from)
-			.transpose()?
-			.unwrap_or(TileCompression::Gzip);
+		let point_reduction = parse_point_reduction(args.point_reduction.as_deref())?;
+		let compression = parse_compression(args.compression.as_deref())?;
 
 		log::info!("from_csv: importing CSV from {}", path.display());
 		// Drain features once so the auto-max-zoom heuristic can inspect them.
@@ -199,135 +170,14 @@ impl ReadTileSource for Operation {
 		};
 		let import = FeatureImport::from_features(features, import_args)?;
 
-		let pyramid = match import.bounds_geo()? {
-			Some(bbox) => TilePyramid::from_geo_bbox(import.min_zoom(), import.max_zoom(), &bbox)?,
-			None => TilePyramid::new_empty(),
-		};
-		let metadata = TileSourceMetadata::new(TileFormat::MVT, compression, Traversal::ANY, Some(pyramid));
-
-		let mut tilejson = TileJSON::default();
-		tilejson.set_string("name", &layer_name)?;
-		// Vector consumers like QGIS need the TileJSON `vector_layers` entry to
-		// know what's in each MVT layer; set one entry covering this layer's
-		// fields and zoom range.
-		populate_vector_layers(&mut tilejson, &layer_name, &import)?;
-		metadata.update_tilejson(&mut tilejson);
-
-		Ok(Box::new(Self {
-			import: Arc::new(import),
-			metadata,
-			tilejson,
+		Ok(Box::new(FeatureTileSource::new(
+			import,
+			&layer_name,
 			compression,
-			size_monitor: TileSizeMonitor::new("from_csv"),
-			error_monitor: TileErrorMonitor::new("from_csv"),
-		}) as Box<dyn TileSource>)
-	}
-}
-
-/// Populate `tilejson.vector_layers` with a single entry describing this
-/// import's layer. MBTiles vector consumers (QGIS, Mapbox GL, etc.) read this
-/// to discover what's inside the tiles.
-fn populate_vector_layers(tilejson: &mut TileJSON, layer_name: &str, import: &FeatureImport) -> Result<()> {
-	use versatiles_core::{VectorLayer, VectorLayers};
-	let layer = VectorLayer {
-		fields: import.property_schema().clone(),
-		description: None,
-		minzoom: Some(import.min_zoom()),
-		maxzoom: Some(import.max_zoom()),
-	};
-	tilejson.vector_layers = VectorLayers(std::iter::once((layer_name.to_string(), layer)).collect());
-	Ok(())
-}
-
-#[async_trait]
-impl TileSource for Operation {
-	fn source_type(&self) -> Arc<SourceType> {
-		SourceType::new_container("csv features", "csv")
-	}
-
-	fn metadata(&self) -> &TileSourceMetadata {
-		&self.metadata
-	}
-
-	fn tilejson(&self) -> &TileJSON {
-		&self.tilejson
-	}
-
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self
-			.metadata
-			.tile_pyramid()
-			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
-	}
-
-	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		match self.import.get_tile(coord.level, coord.x, coord.y)? {
-			Some(vector_tile) => {
-				let mut tile = Tile::from_vector(vector_tile, TileFormat::MVT)?;
-				tile.change_compression(&self.compression)?;
-				let blob = tile.as_blob(&self.compression)?;
-				self.size_monitor.check(*coord, blob)?;
-				Ok(Some(tile))
-			}
-			None => Ok(None),
-		}
-	}
-
-	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("from_csv::tile_stream {bbox:?}");
-		let bbox = self.metadata.intersection_bbox(&bbox);
-		let import = Arc::clone(&self.import);
-		let compression = self.compression;
-		let size_monitor = self.size_monitor.clone();
-		let error_monitor = self.error_monitor.clone();
-		Ok(TileStream::from_bbox_parallel(bbox, move |coord| {
-			let vector_tile = match import.get_tile(coord.level, coord.x, coord.y) {
-				Ok(Some(vt)) => vt,
-				Ok(None) => return None,
-				Err(e) => {
-					error_monitor.record(coord, TileErrorStage::Render, &e);
-					return None;
-				}
-			};
-			let mut tile = match Tile::from_vector(vector_tile, TileFormat::MVT) {
-				Ok(t) => t,
-				Err(e) => {
-					error_monitor.record(coord, TileErrorStage::Wrap, &e);
-					return None;
-				}
-			};
-			if let Err(e) = tile.change_compression(&compression) {
-				error_monitor.record(coord, TileErrorStage::Compress, &e);
-				return None;
-			}
-			let blob = match tile.as_blob(&compression) {
-				Ok(b) => b,
-				Err(e) => {
-					error_monitor.record(coord, TileErrorStage::Serialize, &e);
-					return None;
-				}
-			};
-			if let Err(e) = size_monitor.check(coord, blob) {
-				error_monitor.record(coord, TileErrorStage::OverHardCap, &e);
-				return None;
-			}
-			Some(tile)
-		}))
-	}
-
-	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let bbox = self.metadata.intersection_bbox(&bbox);
-		// Yield only coords that the source's pyramid actually covers — for a
-		// small dataset at high `max_zoom`, this avoids reporting millions of
-		// empty coords through the pipeline.
-		let pyramid = self.metadata.tile_pyramid();
-		Ok(TileStream::from_iter_coord(
-			bbox.into_iter_coords(),
-			move |coord| match &pyramid {
-				Some(p) if !p.includes_coord(&coord) => None,
-				_ => Some(()),
-			},
-		))
+			"from_csv",
+			"csv features",
+			"csv",
+		)?) as Box<dyn TileSource>)
 	}
 }
 
@@ -343,30 +193,13 @@ fn reject_unsupported_args(args: &Args) -> Result<()> {
 	Ok(())
 }
 
-/// Apply the property whitelist / blacklist to every feature in `features`.
-/// Either argument may be `None` (no filtering). The caller has already
-/// rejected the case where both are `Some`.
-fn apply_property_filters(features: &mut [GeoFeature], include: Option<&[String]>, exclude: Option<&[String]>) {
-	use std::collections::HashSet;
-	if let Some(keep) = include {
-		let keep: HashSet<&str> = keep.iter().map(String::as_str).collect();
-		for f in features.iter_mut() {
-			f.properties.retain(|k, _| keep.contains(k.as_str()));
-		}
-	} else if let Some(drop) = exclude {
-		let drop: HashSet<&str> = drop.iter().map(String::as_str).collect();
-		for f in features.iter_mut() {
-			f.properties.retain(|k, _| !drop.contains(k.as_str()));
-		}
-	}
-}
-
 crate::operations::macros::define_read_factory!("from_csv", Args, Operation);
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use versatiles_core::TileCompression::Uncompressed;
+	use versatiles_core::TileCoord;
 
 	#[tokio::test]
 	async fn loads_quakes_csv() -> Result<()> {
