@@ -39,6 +39,19 @@ impl PointReductionStrategy {
 			other => bail!("unknown point_reduction strategy '{other}'; expected one of: none / drop_rate / min_distance"),
 		}
 	}
+
+	/// Return all accepted strategy strings, in declaration order.
+	#[must_use]
+	pub fn variants() -> &'static [&'static str] {
+		&["none", "drop_rate", "min_distance"]
+	}
+}
+
+impl TryFrom<&str> for PointReductionStrategy {
+	type Error = anyhow::Error;
+	fn try_from(value: &str) -> Result<Self> {
+		Self::parse(value)
+	}
 }
 
 /// `drop_rate` filter. Keeps point features whose stable hash falls under
@@ -154,6 +167,16 @@ mod tests {
 		);
 		assert!(PointReductionStrategy::parse("unknown").is_err());
 		Ok(())
+	}
+
+	#[test]
+	fn variants_match_try_from() {
+		// Every string in `variants()` must be parseable; the codegen layer
+		// (versatiles_node::codegen) builds TS string-literal unions from this
+		// list and relies on it staying in sync with `TryFrom<&str>`.
+		for &v in PointReductionStrategy::variants() {
+			assert!(PointReductionStrategy::try_from(v).is_ok(), "{v} should parse");
+		}
 	}
 
 	#[test]

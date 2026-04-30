@@ -80,6 +80,31 @@ impl TileSchema {
 		}
 	}
 
+	/// Return all canonical schema strings accepted by [`Self::try_from`].
+	///
+	/// `Unknown` is intentionally excluded — it's the in-memory fallback for
+	/// "unrecognised input", not a value users select.
+	///
+	/// # Examples
+	/// ```
+	/// use versatiles_core::TileSchema;
+	/// let v = TileSchema::variants();
+	/// assert!(v.contains(&"openmaptiles"));
+	/// ```
+	#[must_use]
+	pub fn variants() -> &'static [&'static str] {
+		&[
+			"rgb",
+			"rgba",
+			"dem/mapbox",
+			"dem/terrarium",
+			"dem/versatiles",
+			"openmaptiles",
+			"shortbread@1.0",
+			"other",
+		]
+	}
+
 	/// Classifies the schema into a broader [`TileType`].
 	///
 	/// This convenience helper hides the verbose `match` over individual
@@ -201,5 +226,14 @@ mod tests {
 		}
 
 		assert!(TileSchema::try_from("invalid").is_err());
+	}
+
+	#[test]
+	fn variants_match_try_from() {
+		// versatiles_node's codegen builds TS string-literal unions from
+		// `variants()`; every value must round-trip through `try_from`.
+		for &v in TileSchema::variants() {
+			assert!(TileSchema::try_from(v).is_ok(), "{v} should parse");
+		}
 	}
 }

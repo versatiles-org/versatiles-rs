@@ -16,6 +16,11 @@ struct TypeMapping {
 	generic_param: Option<&'static str>,
 	/// Optional second generic parameter (e.g., "4" for array lengths)
 	generic_param2: Option<&'static str>,
+	/// True if `generic_param` names a string-enum exposing `fn variants() ->
+	/// &'static [&'static str]`. The derive emits a call to that method into
+	/// `VPLFieldMeta::enum_variants`, which downstream codegen
+	/// (`versatiles_node`) uses to synthesize TS string-literal unions.
+	is_enum: bool,
 }
 
 /// All supported type mappings for VPLDecode.
@@ -28,6 +33,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: true,
 		generic_param: None,
 		generic_param2: None,
+		is_enum: false,
 	},
 	TypeMapping {
 		pattern: "bool",
@@ -36,6 +42,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: true,
 		generic_param: None,
 		generic_param2: None,
+		is_enum: false,
 	},
 	TypeMapping {
 		pattern: "u8",
@@ -44,6 +51,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: true,
 		generic_param: Some("u8"),
 		generic_param2: None,
+		is_enum: false,
 	},
 	TypeMapping {
 		pattern: "[f64;4]",
@@ -52,6 +60,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: true,
 		generic_param: Some("f64"),
 		generic_param2: None,
+		is_enum: false,
 	},
 	TypeMapping {
 		pattern: "Vec<String>",
@@ -60,6 +69,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: true,
 		generic_param: None,
 		generic_param2: None,
+		is_enum: false,
 	},
 	// Optional types
 	TypeMapping {
@@ -69,6 +79,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: false,
 		generic_param: None,
 		generic_param2: None,
+		is_enum: false,
 	},
 	TypeMapping {
 		pattern: "Option<String>",
@@ -77,6 +88,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: false,
 		generic_param: None,
 		generic_param2: None,
+		is_enum: false,
 	},
 	TypeMapping {
 		pattern: "Option<f32>",
@@ -85,6 +97,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: false,
 		generic_param: Some("f32"),
 		generic_param2: None,
+		is_enum: false,
 	},
 	TypeMapping {
 		pattern: "Option<u8>",
@@ -93,6 +106,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: false,
 		generic_param: Some("u8"),
 		generic_param2: None,
+		is_enum: false,
 	},
 	TypeMapping {
 		pattern: "Option<u16>",
@@ -101,6 +115,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: false,
 		generic_param: Some("u16"),
 		generic_param2: None,
+		is_enum: false,
 	},
 	TypeMapping {
 		pattern: "Option<u32>",
@@ -109,6 +124,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: false,
 		generic_param: Some("u32"),
 		generic_param2: None,
+		is_enum: false,
 	},
 	TypeMapping {
 		pattern: "Option<f64>",
@@ -117,6 +133,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: false,
 		generic_param: Some("f64"),
 		generic_param2: None,
+		is_enum: false,
 	},
 	TypeMapping {
 		pattern: "Option<[f64;3]>",
@@ -125,6 +142,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: false,
 		generic_param: Some("f64"),
 		generic_param2: Some("3"),
+		is_enum: false,
 	},
 	TypeMapping {
 		pattern: "Option<[f64;4]>",
@@ -133,6 +151,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: false,
 		generic_param: Some("f64"),
 		generic_param2: Some("4"),
+		is_enum: false,
 	},
 	TypeMapping {
 		pattern: "Option<[u8;3]>",
@@ -141,6 +160,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: false,
 		generic_param: Some("u8"),
 		generic_param2: Some("3"),
+		is_enum: false,
 	},
 	TypeMapping {
 		pattern: "Option<Vec<String>>",
@@ -149,6 +169,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: false,
 		generic_param: None,
 		generic_param2: None,
+		is_enum: false,
 	},
 	TypeMapping {
 		pattern: "Option<TileCompression>",
@@ -157,6 +178,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: false,
 		generic_param: Some("TileCompression"),
 		generic_param2: None,
+		is_enum: true,
 	},
 	TypeMapping {
 		pattern: "Option<TileSchema>",
@@ -165,6 +187,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: false,
 		generic_param: Some("TileSchema"),
 		generic_param2: None,
+		is_enum: true,
 	},
 	TypeMapping {
 		pattern: "Option<TileFormat>",
@@ -173,6 +196,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_required: false,
 		generic_param: Some("TileFormat"),
 		generic_param2: None,
+		is_enum: true,
 	},
 ];
 
@@ -226,6 +250,11 @@ struct FieldMeta {
 	is_required: bool,
 	is_sources: bool,
 	doc: String,
+	/// `Some(generic_param)` when the field is a string-enum (i.e. its
+	/// `TypeMapping::is_enum` is `true`); `None` otherwise. The derive
+	/// emits `<T>::variants().to_vec()` into the generated metadata for
+	/// these fields, where `T` is this generic param.
+	enum_type: Option<&'static str>,
 }
 
 /// Processed field information returned by `process_field`.
@@ -270,6 +299,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 			is_required: true,
 			is_sources: true,
 			doc: raw_comment,
+			enum_type: None,
 		};
 		return Ok((field_str, ProcessedField::Sources { doc, parser }, meta));
 	}
@@ -320,6 +350,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 		is_required: mapping.is_required,
 		is_sources: false,
 		doc: raw_comment,
+		enum_type: if mapping.is_enum { mapping.generic_param } else { None },
 	};
 
 	Ok((
@@ -348,6 +379,15 @@ fn build_impl_tokens(
 			let required = m.is_required;
 			let is_sources = m.is_sources;
 			let fdoc = &m.doc;
+			// For enum-typed fields, ask the enum itself for its accepted
+			// variants — single source of truth, kept in sync with the
+			// `TryFrom<&str>` impl by the enum's own round-trip test.
+			let variants_expr: TokenStream = if let Some(enum_ty) = m.enum_type {
+				let ty = format_ident!("{}", enum_ty);
+				quote! { #ty::variants().to_vec() }
+			} else {
+				quote! { Vec::new() }
+			};
 			quote! {
 				crate::vpl::VPLFieldMeta {
 					name: #fname.to_string(),
@@ -355,6 +395,7 @@ fn build_impl_tokens(
 					is_required: #required,
 					is_sources: #is_sources,
 					doc: #fdoc.to_string(),
+					enum_variants: #variants_expr,
 				}
 			}
 		})

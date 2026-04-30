@@ -48,10 +48,22 @@ fn to_pascal_case(s: &str) -> String {
 	result
 }
 
-/// Map a Rust type string to a TypeScript type string.
-fn rust_type_to_ts(rust_type: &str) -> &'static str {
-	match rust_type {
-		"String" | "Option<String>" | "Option<TileFormat>" | "Option<TileSchema>" | "Option<TileCompression>" => "string",
+/// Map a VPL field's Rust type to a TypeScript type expression.
+///
+/// Enum-typed fields (carrying a non-empty `enum_variants`) become a TS
+/// string-literal union (`"a" | "b" | "c"`). Everything else falls back to
+/// the static type-string match below.
+fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
+	if !field.enum_variants.is_empty() {
+		return field
+			.enum_variants
+			.iter()
+			.map(|v| format!(r#""{v}""#))
+			.collect::<Vec<_>>()
+			.join(" | ");
+	}
+	let ts: &'static str = match field.rust_type.as_str() {
+		"String" | "Option<String>" => "string",
 		"bool" | "Option<bool>" => "boolean",
 		"u8" | "u16" | "u32" | "f32" | "f64" | "Option<u8>" | "Option<u16>" | "Option<u32>" | "Option<f32>"
 		| "Option<f64>" => "number",
@@ -59,7 +71,8 @@ fn rust_type_to_ts(rust_type: &str) -> &'static str {
 		"[f64;3]" | "Option<[f64;3]>" | "[u8;3]" | "Option<[u8;3]>" => "[number, number, number]",
 		"Vec<VPLPipeline>" => "VPL[]",
 		_ => "unknown",
-	}
+	};
+	ts.to_string()
 }
 
 /// Check if an operation has a `sources` field.
@@ -132,7 +145,7 @@ fn generate_interface(out: &mut String, op: &OperationMeta) {
 	writeln!(out, "export interface {interface_name} {{").expect("writing to string never fails");
 
 	for field in &fields {
-		let ts_type = rust_type_to_ts(&field.rust_type);
+		let ts_type = rust_type_to_ts(field);
 		let camel_name = to_camel_case(&field.name);
 		let optional = if field.is_required { "" } else { "?" };
 
@@ -365,17 +378,42 @@ mod tests {
 		assert_eq!(to_pascal_case("raster_format"), "RasterFormat");
 	}
 
+	fn plain_field(rust_type: &str) -> VPLFieldMeta {
+		VPLFieldMeta {
+			name: "x".to_string(),
+			rust_type: rust_type.to_string(),
+			is_required: false,
+			is_sources: false,
+			doc: String::new(),
+			enum_variants: Vec::new(),
+		}
+	}
+
+	fn enum_field(rust_type: &str, variants: Vec<&'static str>) -> VPLFieldMeta {
+		VPLFieldMeta {
+			enum_variants: variants,
+			..plain_field(rust_type)
+		}
+	}
+
 	#[test]
-	fn test_rust_type_to_ts() {
-		assert_eq!(rust_type_to_ts("String"), "string");
-		assert_eq!(rust_type_to_ts("bool"), "boolean");
-		assert_eq!(rust_type_to_ts("u8"), "number");
-		assert_eq!(rust_type_to_ts("Option<u8>"), "number");
-		assert_eq!(rust_type_to_ts("Option<String>"), "string");
-		assert_eq!(rust_type_to_ts("[f64;4]"), "[number, number, number, number]");
-		assert_eq!(rust_type_to_ts("Option<[f64;3]>"), "[number, number, number]");
-		assert_eq!(rust_type_to_ts("Option<TileFormat>"), "string");
-		assert_eq!(rust_type_to_ts("Vec<VPLPipeline>"), "VPL[]");
+	fn test_rust_type_to_ts_basic_types() {
+		assert_eq!(rust_type_to_ts(&plain_field("String")), "string");
+		assert_eq!(rust_type_to_ts(&plain_field("bool")), "boolean");
+		assert_eq!(rust_type_to_ts(&plain_field("u8")), "number");
+		assert_eq!(rust_type_to_ts(&plain_field("Option<u8>")), "number");
+		assert_eq!(rust_type_to_ts(&plain_field("Option<String>")), "string");
+		assert_eq!(rust_type_to_ts(&plain_field("[f64;4]")), "[number, number, number, number]");
+		assert_eq!(rust_type_to_ts(&plain_field("Option<[f64;3]>")), "[number, number, number]");
+		assert_eq!(rust_type_to_ts(&plain_field("Vec<VPLPipeline>")), "VPL[]");
+	}
+
+	#[test]
+	fn test_rust_type_to_ts_emits_string_literal_union_for_enums() {
+		// Enum-typed fields become a TS string-literal union driven by
+		// `enum_variants` — not the `rust_type` string.
+		let f = enum_field("Option<TileCompression>", vec!["none", "gzip", "brotli", "zstd"]);
+		assert_eq!(rust_type_to_ts(&f), r#""none" | "gzip" | "brotli" | "zstd""#);
 	}
 
 	#[test]
@@ -390,6 +428,7 @@ mod tests {
 				is_required: true,
 				is_sources: false,
 				doc: "The filename of the tile container.".to_string(),
+				enum_variants: Vec::new(),
 			}],
 		}];
 
@@ -415,6 +454,7 @@ mod tests {
 					is_required: false,
 					is_sources: false,
 					doc: "minimal zoom level".to_string(),
+					enum_variants: Vec::new(),
 				},
 				VPLFieldMeta {
 					name: "level_max".to_string(),
@@ -422,6 +462,7 @@ mod tests {
 					is_required: false,
 					is_sources: false,
 					doc: "maximal zoom level".to_string(),
+					enum_variants: Vec::new(),
 				},
 			],
 		}];
@@ -447,6 +488,7 @@ mod tests {
 					is_required: true,
 					is_sources: true,
 					doc: "Raster sources.".to_string(),
+					enum_variants: Vec::new(),
 				},
 				VPLFieldMeta {
 					name: "format".to_string(),
@@ -454,6 +496,7 @@ mod tests {
 					is_required: false,
 					is_sources: false,
 					doc: "Output format.".to_string(),
+					enum_variants: vec!["avif", "jpg", "png", "webp"],
 				},
 			],
 		}];
@@ -462,5 +505,29 @@ mod tests {
 		assert!(ts.contains(
 			"static fromStackedRaster(sources: VPL[], options?: Omit<FromStackedRasterOptions, 'sources'>): VPL"
 		));
+		// Enum-typed field is rendered as a TS string-literal union, not `string`.
+		assert!(
+			ts.contains(r#"format?: "avif" | "jpg" | "png" | "webp";"#),
+			"expected literal union for format field, got:\n{ts}"
+		);
+	}
+
+	#[test]
+	fn live_metadata_emits_string_literal_union_for_existing_enum_op() {
+		// from_stacked_raster::format is already typed `Option<TileFormat>`, so
+		// after Chunk A this real op should produce a literal union — without
+		// any per-op migration. Guards against the derive losing the
+		// `enum_variants` wiring.
+		let ops = versatiles::pipeline::all_operation_metadata();
+		let op = ops
+			.iter()
+			.find(|o| o.tag_name == "from_stacked_raster")
+			.expect("from_stacked_raster registered");
+		let format_field = op.fields.iter().find(|f| f.name == "format").expect("format field");
+		assert!(
+			!format_field.enum_variants.is_empty(),
+			"Option<TileFormat> field should carry enum_variants"
+		);
+		assert!(format_field.enum_variants.contains(&"png"));
 	}
 }

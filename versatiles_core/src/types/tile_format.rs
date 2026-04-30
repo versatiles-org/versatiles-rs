@@ -107,6 +107,24 @@ impl TileFormat {
 		}
 	}
 
+	/// Return all canonical variant strings (the values [`Self::as_str`] returns).
+	///
+	/// Aliases accepted by [`Self::try_from_str`] (`"jpeg"`, `"pbf"`) are *not*
+	/// included — the list is the typed surface meant for editor completion
+	/// and TS string-literal unions, not the full parser grammar.
+	///
+	/// # Examples
+	/// ```
+	/// use versatiles_core::TileFormat;
+	/// let v = TileFormat::variants();
+	/// assert!(v.contains(&"png"));
+	/// assert!(v.contains(&"mvt"));
+	/// ```
+	#[must_use]
+	pub fn variants() -> &'static [&'static str] {
+		&["avif", "bin", "geojson", "jpg", "json", "mvt", "png", "svg", "topojson", "webp"]
+	}
+
 	#[context("Could not convert string '{value}' to TileFormat")]
 	pub fn try_from_str(value: &str) -> Result<Self> {
 		Ok(match value.to_lowercase().trim_matches([' ', '.']) {
@@ -575,5 +593,14 @@ mod tests {
 	) {
 		assert_eq!(format.is_raster(), expect_raster);
 		assert_eq!(format.is_vector(), expect_vector);
+	}
+
+	#[test]
+	fn variants_match_try_from() {
+		// versatiles_node's codegen builds TS string-literal unions from
+		// `variants()`; every value must round-trip through `try_from_str`.
+		for &v in TileFormat::variants() {
+			assert!(TileFormat::try_from_str(v).is_ok(), "{v} should parse");
+		}
 	}
 }
