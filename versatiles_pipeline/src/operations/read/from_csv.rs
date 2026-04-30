@@ -57,14 +57,6 @@ struct Args {
 	properties_include: Option<Vec<String>>,
 	/// Property blacklist. Not supported in v1; setting this errors out.
 	properties_exclude: Option<Vec<String>>,
-	/// Has no effect for CSV (point-only input).
-	polygon_min_area: Option<f32>,
-	/// Has no effect for CSV (point-only input).
-	polygon_simplify: Option<f32>,
-	/// Has no effect for CSV (point-only input).
-	line_min_length: Option<f32>,
-	/// Has no effect for CSV (point-only input).
-	line_simplify: Option<f32>,
 	/// Point reduction strategy: `none` / `drop_rate` / `min_distance` (default `none`).
 	point_reduction: Option<String>,
 	/// Numeric value whose meaning depends on `point_reduction`.
@@ -170,16 +162,16 @@ impl ReadTileSource for Operation {
 
 		// `args.max_zoom` of `None` triggers the auto-heuristic inside
 		// `FeatureImport::from_features`; no extra projection pass needed here.
+		// CSV is point-only by construction, so polygon/line knobs aren't
+		// exposed on this op — we leave them at the FeatureImportConfig
+		// defaults where they're effectively no-ops.
 		let config = FeatureImportConfig {
 			layer_name: layer_name.clone(),
 			min_zoom: args.min_zoom.unwrap_or(0),
 			max_zoom: args.max_zoom,
-			polygon_simplify_px: args.polygon_simplify.unwrap_or(4.0),
-			line_simplify_px: args.line_simplify.unwrap_or(4.0),
-			polygon_min_area_px: args.polygon_min_area.unwrap_or(4.0),
-			line_min_length_px: args.line_min_length.unwrap_or(4.0),
 			point_reduction,
 			point_reduction_value: args.point_reduction_value.unwrap_or(0.0),
+			..FeatureImportConfig::default()
 		};
 		let import = FeatureImport::from_features(features, config)?;
 
