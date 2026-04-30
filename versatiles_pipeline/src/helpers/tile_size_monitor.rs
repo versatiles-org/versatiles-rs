@@ -228,16 +228,7 @@ impl Drop for MonitorInner {
 			if !top.is_empty() {
 				let lines: Vec<String> = top
 					.iter()
-					.map(|(size, c, b)| {
-						format!(
-							"{}/{}/{} = {} KB ({})",
-							c.level,
-							c.x,
-							c.y,
-							size / 1024,
-							b.fmt_inline(),
-						)
-					})
+					.map(|(size, c, b)| format!("{}/{}/{} = {} KB ({})", c.level, c.x, c.y, size / 1024, b.fmt_inline(),))
 					.collect();
 				log::warn!(
 					"{}: top {} oversized tile(s): [{}]. Consider trimming properties, raising `max_zoom`, or enabling stronger point reduction.",
