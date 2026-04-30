@@ -453,4 +453,37 @@ mod tests {
 		let l = geo_types::Line::new(Coord { x: 0.0, y: 0.0 }, Coord { x: 1.0, y: 1.0 });
 		assert!(VectorTileFeature::from_geometry(None, vec![], Geometry::Line(l)).is_err());
 	}
+
+	fn coords(pts: &[(f64, f64)]) -> Vec<Coord<f64>> {
+		pts.iter().map(|&(x, y)| Coord { x, y }).collect()
+	}
+
+	#[test]
+	fn ring_signed_double_area_ccw_is_positive() {
+		// Unit square wound counter-clockwise: 2 × area = 2.
+		let ring = coords(&[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0), (0.0, 0.0)]);
+		assert!((ring_signed_double_area(&ring) - 2.0).abs() < 1e-12);
+	}
+
+	#[test]
+	fn ring_signed_double_area_cw_is_negative() {
+		// Same square wound clockwise: 2 × area = -2.
+		let ring = coords(&[(0.0, 0.0), (0.0, 1.0), (1.0, 1.0), (1.0, 0.0), (0.0, 0.0)]);
+		assert!((ring_signed_double_area(&ring) - (-2.0)).abs() < 1e-12);
+	}
+
+	#[test]
+	fn ring_signed_double_area_degenerate_returns_zero() {
+		// Fewer than 3 points: not a ring; defined to be 0.
+		assert!(ring_signed_double_area(&[]).abs() < 1e-12);
+		assert!(ring_signed_double_area(&coords(&[(0.0, 0.0)])).abs() < 1e-12);
+		assert!(ring_signed_double_area(&coords(&[(0.0, 0.0), (1.0, 1.0)])).abs() < 1e-12);
+	}
+
+	#[test]
+	fn ring_signed_double_area_collinear_is_zero() {
+		// Three collinear points enclose no area.
+		let ring = coords(&[(0.0, 0.0), (1.0, 1.0), (2.0, 2.0), (0.0, 0.0)]);
+		assert!(ring_signed_double_area(&ring).abs() < 1e-12);
+	}
 }

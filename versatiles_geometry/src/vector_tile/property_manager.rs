@@ -170,3 +170,80 @@ impl PropertyManager {
 		Ok(properties)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn vtlp_add_dedupes_and_assigns_stable_indices() {
+		let mut m: VTLPMap<String> = VTLPMap::default();
+		assert_eq!(m.add("a".to_string()), 0);
+		assert_eq!(m.add("b".to_string()), 1);
+		// Same entry returns the existing id, no new slot.
+		assert_eq!(m.add("a".to_string()), 0);
+		assert_eq!(m.list, vec!["a", "b"]);
+	}
+
+	#[test]
+	fn vtlp_get_out_of_bounds_errors() {
+		let m: VTLPMap<String> = VTLPMap::from(["a", "b"].as_slice());
+		assert!(m.get(2).is_err());
+		assert!(m.get(u32::MAX).is_err());
+	}
+
+	#[test]
+	fn vtlp_find_missing_errors() {
+		let m: VTLPMap<String> = VTLPMap::from(["a"].as_slice());
+		assert!(m.find(&"a".to_string()).is_ok());
+		assert!(m.find(&"z".to_string()).is_err());
+	}
+
+	#[test]
+	fn encode_decode_round_trip() {
+		let mut pm = PropertyManager::new();
+		let props: GeoProperties = vec![
+			("name", GeoValue::from("Berlin")),
+			("pop", GeoValue::from(3_645_000_u64)),
+		]
+		.into();
+		let tag_ids = pm.encode_tag_ids(props.clone());
+		assert_eq!(tag_ids.len(), 4, "two key-value pairs → four ids");
+		let decoded = pm.decode_tag_ids(&tag_ids).unwrap();
+		assert_eq!(decoded.get("name"), props.get("name"));
+		assert_eq!(decoded.get("pop"), props.get("pop"));
+	}
+
+	#[test]
+	fn decode_rejects_odd_length_tag_ids() {
+		let pm = PropertyManager::from_slices(&["k"], &["v"]);
+		// 3 ids = 1.5 pairs — must error rather than silently dropping or
+		// reading off the end of the value table.
+		let err = pm.decode_tag_ids(&[0, 0, 0]).unwrap_err();
+		assert!(format!("{err:#}").contains("even"), "{err:#}");
+	}
+
+	#[test]
+	fn decode_rejects_unknown_tag_index() {
+		let pm = PropertyManager::from_slices(&["k"], &["v"]);
+		// Key id 5 doesn't exist.
+		let err = pm.decode_tag_ids(&[5, 0]).unwrap_err();
+		let msg = format!("{err:#}");
+		assert!(msg.contains("property key"), "{msg}");
+	}
+
+	#[test]
+	fn encode_dedupes_repeated_keys_across_features() {
+		// Two features, same key. The shared key should land at index 0 once,
+		// not twice — that's the whole point of the property manager.
+		let mut pm = PropertyManager::new();
+		let p1: GeoProperties = vec![("name", GeoValue::from("A"))].into();
+		let p2: GeoProperties = vec![("name", GeoValue::from("B"))].into();
+		let ids1 = pm.encode_tag_ids(p1);
+		let ids2 = pm.encode_tag_ids(p2);
+		assert_eq!(ids1[0], ids2[0], "key index should be shared");
+		assert_ne!(ids1[1], ids2[1], "value index should differ");
+		assert_eq!(pm.key.list, vec!["name"]);
+		assert_eq!(pm.val.list.len(), 2);
+	}
+}

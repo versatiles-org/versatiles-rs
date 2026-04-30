@@ -124,4 +124,38 @@ mod tests {
 		let p = Polygon::new(exterior, vec![interior]);
 		assert!(validate(&Geometry::Polygon(p)).is_err());
 	}
+
+	#[test]
+	fn multi_line_string_propagates_child_failure() {
+		let good = LineString::from(vec![[0.0, 0.0], [1.0, 1.0]]);
+		let bad = LineString::from(vec![Coord { x: 0.0, y: 0.0 }]); // 1 point
+		let ml = MultiLineString(vec![good, bad]);
+		assert!(validate(&Geometry::MultiLineString(ml)).is_err());
+	}
+
+	#[test]
+	fn multi_polygon_propagates_child_failure() {
+		let good_ext = LineString::from(vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]);
+		let good = Polygon::new(good_ext, vec![]);
+		let bad_ext = LineString::from(vec![[5.0, 5.0], [6.0, 6.0]]); // < 4 points after auto-close
+		let bad = Polygon::new(bad_ext, vec![]);
+		let mp = MultiPolygon(vec![good, bad]);
+		assert!(validate(&Geometry::MultiPolygon(mp)).is_err());
+	}
+
+	#[test]
+	fn geometry_collection_recurses_into_children() {
+		// One valid point + one invalid linestring; the collection must fail.
+		let bad = Geometry::LineString(LineString::from(vec![Coord { x: 0.0, y: 0.0 }]));
+		let gc = GeometryCollection(vec![Geometry::Point(Point::new(0.0, 0.0)), bad]);
+		assert!(validate(&Geometry::GeometryCollection(gc)).is_err());
+	}
+
+	#[test]
+	fn empty_collections_are_valid() {
+		// Empty containers carry no bad children → no validation failure.
+		assert!(validate(&Geometry::MultiLineString(MultiLineString(vec![]))).is_ok());
+		assert!(validate(&Geometry::MultiPolygon(MultiPolygon(vec![]))).is_ok());
+		assert!(validate(&Geometry::GeometryCollection(GeometryCollection(vec![]))).is_ok());
+	}
 }

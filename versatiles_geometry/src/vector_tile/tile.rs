@@ -116,4 +116,55 @@ mod tests {
 		assert_eq!(tile1, tile2);
 		Ok(())
 	}
+
+	#[tokio::test]
+	async fn find_layer_returns_first_match() -> Result<()> {
+		let tile = tile().await?;
+		// The shortbread schema includes a "place" layer; pick whatever the
+		// fixture has and confirm find_layer returns the same one.
+		let first_name = tile.layers.first().map(|l| l.name.clone()).expect("fixture has layers");
+		let found = tile.find_layer(&first_name).expect("layer present");
+		assert_eq!(found.name, first_name);
+		assert!(tile.find_layer("definitely-not-a-layer-name").is_none());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn find_layer_mut_allows_modification() -> Result<()> {
+		let mut tile = tile().await?;
+		let first_name = tile.layers.first().map(|l| l.name.clone()).expect("fixture has layers");
+		let original_extent = tile.find_layer(&first_name).unwrap().extent;
+		// Use the mut handle to bump the extent — proves we got a unique borrow.
+		tile.find_layer_mut(&first_name).unwrap().extent = original_extent + 1;
+		assert_eq!(tile.find_layer(&first_name).unwrap().extent, original_extent + 1);
+		Ok(())
+	}
+
+	#[test]
+	fn from_blob_rejects_unknown_top_level_field() {
+		// Top-level MVT only defines field 3 (repeated layer). Field 1 wire 0
+		// (varint) is not allowed and should error out, not be silently dropped.
+		let mut writer = ValueWriterBlob::new_le();
+		writer.write_pbf_key(1, 0).unwrap();
+		writer.write_varint(123).unwrap();
+		let blob = writer.into_blob();
+		let err = VectorTile::from_blob(&blob).unwrap_err();
+		let msg = format!("{err:#}");
+		assert!(msg.contains("field number"), "{msg}");
+	}
+
+	#[test]
+	fn empty_blob_decodes_to_empty_tile() {
+		let tile = VectorTile::from_blob(&Blob::new_empty()).unwrap();
+		assert!(tile.layers.is_empty());
+	}
+
+	#[test]
+	fn empty_tile_round_trips_via_blob() {
+		let tile = VectorTile::default();
+		let blob = tile.to_blob().unwrap();
+		assert!(blob.is_empty());
+		let decoded = VectorTile::from_blob(&blob).unwrap();
+		assert_eq!(tile, decoded);
+	}
 }

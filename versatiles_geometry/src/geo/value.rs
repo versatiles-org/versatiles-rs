@@ -422,4 +422,45 @@ mod tests {
 	fn test_json(#[case] value: GeoValue, #[case] json: JsonValue) {
 		assert_eq!(value.to_json(), json);
 	}
+
+	#[test]
+	fn as_u64_accepts_uint_and_non_negative_int() {
+		assert_eq!(GeoValue::UInt(7).as_u64().unwrap(), 7);
+		assert_eq!(GeoValue::Int(0).as_u64().unwrap(), 0);
+		assert_eq!(GeoValue::Int(123).as_u64().unwrap(), 123);
+	}
+
+	#[test]
+	fn as_u64_rejects_negative_and_non_integers() {
+		assert!(GeoValue::Int(-1).as_u64().is_err());
+		assert!(GeoValue::Double(1.0).as_u64().is_err());
+		assert!(GeoValue::Float(1.0).as_u64().is_err());
+		assert!(GeoValue::Bool(true).as_u64().is_err());
+		assert!(GeoValue::String("1".into()).as_u64().is_err());
+		assert!(GeoValue::Null.as_u64().is_err());
+	}
+
+	#[rstest]
+	#[case(GeoValue::Null, "null")]
+	#[case(GeoValue::Bool(true), "true")]
+	#[case(GeoValue::Bool(false), "false")]
+	#[case(GeoValue::Int(-42), "-42")]
+	#[case(GeoValue::UInt(42), "42")]
+	#[case(GeoValue::String("hi".into()), "hi")]
+	fn display_renders_plain_value(#[case] value: GeoValue, #[case] expected: &str) {
+		assert_eq!(format!("{value}"), expected);
+	}
+
+	#[test]
+	fn hash_separates_variants_with_same_inner_bits() {
+		// 0u64 and 0i64 share inner bits but live in different variants —
+		// hashing must include the discriminant so they don't collide.
+		use std::collections::hash_map::DefaultHasher;
+		use std::hash::{Hash, Hasher};
+		let mut h_uint = DefaultHasher::new();
+		GeoValue::UInt(0).hash(&mut h_uint);
+		let mut h_int = DefaultHasher::new();
+		GeoValue::Int(0).hash(&mut h_int);
+		assert_ne!(h_uint.finish(), h_int.finish());
+	}
 }

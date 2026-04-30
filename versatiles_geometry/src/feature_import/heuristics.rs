@@ -74,3 +74,67 @@ fn feature_size_mercator(g: &Geometry<f64>) -> Option<f64> {
 		_ => None,
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use geo_types::{LineString, Point, Polygon};
+
+	fn ls_feature(coords: Vec<[f64; 2]>) -> GeoFeature {
+		GeoFeature::new(Geometry::LineString(LineString::from(coords)))
+	}
+
+	fn point_feature(x: f64, y: f64) -> GeoFeature {
+		GeoFeature::new(Geometry::Point(Point::new(x, y)))
+	}
+
+	fn square_polygon_feature(side_meters: f64) -> GeoFeature {
+		// Build directly in mercator coords so we can drive
+		// `auto_max_zoom_projected` without depending on the projection.
+		let s = side_meters;
+		let exterior = LineString::from(vec![[0.0, 0.0], [s, 0.0], [s, s], [0.0, s], [0.0, 0.0]]);
+		GeoFeature::new(Geometry::Polygon(Polygon::new(exterior, vec![])))
+	}
+
+	#[test]
+	fn empty_input_returns_max_zoom() {
+		// No features → no measurable sizes → fallback to the cap.
+		assert_eq!(auto_max_zoom(&[]), 14);
+	}
+
+	#[test]
+	fn point_only_input_returns_max_zoom() {
+		// `feature_size_mercator` returns None for Point/MultiPoint, so the
+		// median list is empty and we fall back to the cap. Documented
+		// limitation.
+		let features = vec![point_feature(0.0, 0.0), point_feature(13.4, 52.5)];
+		assert_eq!(auto_max_zoom(&features), 14);
+	}
+
+	#[test]
+	fn very_large_features_pick_zoom_zero() {
+		// A polygon spanning the entire world projects to a size on the order
+		// of WORLD_SIZE; the heuristic should clamp to 0.
+		let big = square_polygon_feature(WORLD_SIZE);
+		assert_eq!(auto_max_zoom_projected(&[big]), 0);
+	}
+
+	#[test]
+	fn tiny_features_pick_max_zoom() {
+		// A 1-meter-square polygon is much smaller than ~4 px even at zoom 14;
+		// the heuristic clamps to MAX_ZOOM.
+		let tiny = square_polygon_feature(1.0);
+		assert_eq!(auto_max_zoom_projected(&[tiny]), 14);
+	}
+
+	#[test]
+	fn skips_non_finite_and_zero_sizes() {
+		// A degenerate (zero-length) linestring should be filtered out as
+		// "no measurable size", and the only valid entry drives the result.
+		let zero_len = ls_feature(vec![[0.0, 0.0], [0.0, 0.0]]); // length = 0
+		let one_m = ls_feature(vec![[0.0, 0.0], [1.0, 0.0]]); // length = 1m
+		let result = auto_max_zoom_projected(&[zero_len, one_m]);
+		// 1m line → very small relative to 4 px; pinned at MAX_ZOOM.
+		assert_eq!(result, 14);
+	}
+}

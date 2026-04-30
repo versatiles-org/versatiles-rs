@@ -184,6 +184,62 @@ mod tests {
 		assert_eq!(iter.count(), 1);
 	}
 
+	#[test]
+	fn read_geojson_seq_iter_reports_invalid_utf8() {
+		// One valid record followed by a record carrying an invalid UTF-8 byte.
+		// The first must succeed, the second must surface a UTF-8 error tagged
+		// with a record index.
+		let valid = r#"{"type":"Feature","geometry":{"type":"Point","coordinates":[0,0]},"properties":{}}"#;
+		let mut bytes: Vec<u8> = Vec::new();
+		bytes.push(0x1E);
+		bytes.extend_from_slice(valid.as_bytes());
+		bytes.push(0x1E);
+		bytes.push(0xFF); // lone continuation byte → not valid UTF-8
+		let mut iter = read_geojson_seq_iter(BufReader::new(Cursor::new(bytes)));
+		assert!(iter.next().unwrap().is_ok());
+		let err = iter.next().unwrap().unwrap_err();
+		let msg = format!("{err:#}");
+		assert!(msg.contains("invalid UTF-8"), "{msg}");
+		assert!(msg.contains("record"), "{msg}");
+		assert!(iter.next().is_none());
+	}
+
+	#[test]
+	fn read_geojson_seq_iter_skips_blank_records() {
+		// Trailing RS / extra whitespace creates blank records — they must not
+		// produce a parse error.
+		let f = r#"{"type":"Feature","geometry":{"type":"Point","coordinates":[0,0]},"properties":{}}"#;
+		let input = format!("\u{1E}{f}\n\u{1E}\n\u{1E}   \n\u{1E}{f}\n");
+		let iter = read_geojson_seq_iter(BufReader::new(Cursor::new(input)));
+		let results: Vec<_> = iter.collect();
+		assert_eq!(results.len(), 2);
+		assert!(results.iter().all(Result::is_ok));
+	}
+
+	#[test]
+	fn read_line_delimited_dispatch_skips_leading_whitespace() {
+		// Whitespace before the first RS must still dispatch to the sequence
+		// parser — auto-detection ignores leading whitespace.
+		let f = r#"{"type":"Feature","geometry":{"type":"Point","coordinates":[0,0]},"properties":{}}"#;
+		let input = format!("   \n\u{1E}{f}\n");
+		let iter = read_line_delimited_geojson_iter(BufReader::new(Cursor::new(input))).unwrap();
+		assert_eq!(iter.count(), 1);
+	}
+
+	#[test]
+	fn read_ndgeojson_iter_reports_line_number_on_parse_error() {
+		// Second line is malformed JSON; the error message must point at line 2.
+		let good = r#"{"type":"Feature","geometry":{"type":"Point","coordinates":[0,0]},"properties":{}}"#;
+		let input = format!("{good}\nnot json\n{good}");
+		let mut iter = read_ndgeojson_iter(BufReader::new(Cursor::new(input)));
+		assert!(iter.next().unwrap().is_ok());
+		let err = iter.next().unwrap().unwrap_err();
+		let msg = format!("{err:#}");
+		assert!(msg.contains("line 2"), "{msg}");
+		// Subsequent good lines still parse — one bad line doesn't poison the iterator.
+		assert!(iter.next().unwrap().is_ok());
+	}
+
 	#[tokio::test]
 	async fn test_read_ndgeojson_stream() {
 		let json = r#"{"type":"Feature","geometry":{"type":"Point","coordinates":[2,2]},"properties":{}}"#;
