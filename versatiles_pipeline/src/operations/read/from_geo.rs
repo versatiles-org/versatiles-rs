@@ -23,7 +23,7 @@ use std::{path::Path, sync::Arc};
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
-use versatiles_geometry::feature_import::{FeatureImport, FeatureImportConfig, PointReductionStrategy};
+use versatiles_geometry::feature_import::{FeatureImport, FeatureImportArgs, PointReductionStrategy};
 use versatiles_geometry::feature_source::{FeatureSource, GeoJsonSource, ProgressCallback, ShapefileSource};
 use versatiles_geometry::geo::GeoFeature;
 
@@ -113,16 +113,11 @@ impl ReadTileSource for Operation {
 				.to_string()
 		});
 
-		// Single source of truth for FeatureImport defaults: take the
-		// `Default` impl and override only the fields the user actually
-		// passed. Avoids repeating the literal default values per op.
-		let defaults = FeatureImportConfig::default();
 		let point_reduction = args
 			.point_reduction
 			.as_deref()
 			.map(PointReductionStrategy::parse)
-			.transpose()?
-			.unwrap_or(defaults.point_reduction);
+			.transpose()?;
 
 		// Default to gzip — the most widely supported compression for vector
 		// tiles; consumers like QGIS, Mapbox GL, and most servers expect it.
@@ -152,20 +147,21 @@ impl ReadTileSource for Operation {
 		log::debug!("from_geo: loading {format_label} from {}", path.display());
 		let features = load_features(&path, ext.as_str(), format_label, factory).await?;
 
-		// `args.max_zoom` of `None` triggers the auto-heuristic inside
-		// `FeatureImport::from_features`; no extra projection pass needed here.
-		let config = FeatureImportConfig {
-			layer_name: layer_name.clone(),
-			min_zoom: args.min_zoom.unwrap_or(defaults.min_zoom),
+		// 1:1 carry-through from VPL args → FeatureImportArgs. `None` fields
+		// are filled with defaults inside `FeatureImport::from_features` via
+		// the `From<FeatureImportArgs>` impl.
+		let import_args = FeatureImportArgs {
+			layer_name: Some(layer_name.clone()),
+			min_zoom: args.min_zoom,
 			max_zoom: args.max_zoom,
-			polygon_simplify_px: args.polygon_simplify.unwrap_or(defaults.polygon_simplify_px),
-			line_simplify_px: args.line_simplify.unwrap_or(defaults.line_simplify_px),
-			polygon_min_area_px: args.polygon_min_area.unwrap_or(defaults.polygon_min_area_px),
-			line_min_length_px: args.line_min_length.unwrap_or(defaults.line_min_length_px),
+			polygon_simplify_px: args.polygon_simplify,
+			line_simplify_px: args.line_simplify,
+			polygon_min_area_px: args.polygon_min_area,
+			line_min_length_px: args.line_min_length,
 			point_reduction,
-			point_reduction_value: args.point_reduction_value.unwrap_or(defaults.point_reduction_value),
+			point_reduction_value: args.point_reduction_value,
 		};
-		let import = FeatureImport::from_features(features, config)?;
+		let import = FeatureImport::from_features(features, import_args)?;
 
 		// Build TileJSON / metadata. Tile pyramid covers the data bbox over
 		// [min_zoom, max_zoom]; for empty input, an empty pyramid.

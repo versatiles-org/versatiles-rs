@@ -18,7 +18,7 @@ use std::sync::Arc;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
-use versatiles_geometry::feature_import::{FeatureImport, FeatureImportConfig, PointReductionStrategy};
+use versatiles_geometry::feature_import::{FeatureImport, FeatureImportArgs, PointReductionStrategy};
 use versatiles_geometry::feature_source::{CsvSourceBuilder, FeatureSource, ProgressCallback};
 
 /// Don't bother showing a progress bar for tiny inputs — the bar would
@@ -135,16 +135,11 @@ impl ReadTileSource for Operation {
 
 		let source = builder.build()?;
 
-		// Single source of truth for FeatureImport defaults: take the
-		// `Default` impl and override only the fields the user actually
-		// passed.
-		let defaults = FeatureImportConfig::default();
 		let point_reduction = args
 			.point_reduction
 			.as_deref()
 			.map(PointReductionStrategy::parse)
-			.transpose()?
-			.unwrap_or(defaults.point_reduction);
+			.transpose()?;
 
 		// Default to gzip — the most widely supported compression for vector
 		// tiles; consumers like QGIS, Mapbox GL, and most servers expect it.
@@ -166,20 +161,19 @@ impl ReadTileSource for Operation {
 			h.finish();
 		}
 
-		// `args.max_zoom` of `None` triggers the auto-heuristic inside
-		// `FeatureImport::from_features`; no extra projection pass needed here.
-		// CSV is point-only by construction, so polygon/line knobs aren't
-		// exposed on this op — we keep their fields at the `defaults` values
-		// where they're no-ops for point input.
-		let config = FeatureImportConfig {
-			layer_name: layer_name.clone(),
-			min_zoom: args.min_zoom.unwrap_or(defaults.min_zoom),
+		// 1:1 carry-through from VPL args → FeatureImportArgs. CSV is
+		// point-only so we don't expose polygon/line knobs; those fields stay
+		// `None` and `From<FeatureImportArgs>` fills them with defaults
+		// (which are no-ops for point-only input).
+		let import_args = FeatureImportArgs {
+			layer_name: Some(layer_name.clone()),
+			min_zoom: args.min_zoom,
 			max_zoom: args.max_zoom,
 			point_reduction,
-			point_reduction_value: args.point_reduction_value.unwrap_or(defaults.point_reduction_value),
-			..defaults
+			point_reduction_value: args.point_reduction_value,
+			..FeatureImportArgs::default()
 		};
-		let import = FeatureImport::from_features(features, config)?;
+		let import = FeatureImport::from_features(features, import_args)?;
 
 		let pyramid = match import.bounds_geo()? {
 			Some(bbox) => TilePyramid::from_geo_bbox(import.min_zoom(), import.max_zoom(), &bbox)?,

@@ -49,7 +49,34 @@ use versatiles_core::{GeoBBox, WORLD_SIZE};
 /// MVT tile-local coordinate extent (4096 pixels per tile, the conventional default).
 pub const TILE_EXTENT: u32 = 4096;
 
-/// Configuration for [`FeatureImport`].
+/// User-input shape for [`FeatureImport`]: every knob optional.
+///
+/// This is what the public callers (e.g. the `from_geo` / `from_csv` VPL
+/// operations) build from their own arg structs — a near 1:1 copy, no
+/// per-caller default wiring. [`FeatureImportArgs`] resolves to the concrete
+/// [`FeatureImportConfig`] via `From`, filling any `None` with the value
+/// from [`FeatureImportConfig::default`].
+///
+/// `max_zoom` keeps its `Option<u8>` shape on both sides — `None` is a
+/// meaningful signal there ("run the auto-heuristic"), not a missing value.
+#[derive(Clone, Debug, Default)]
+pub struct FeatureImportArgs {
+	pub layer_name: Option<String>,
+	pub min_zoom: Option<u8>,
+	/// Highest zoom level emitted. `None` triggers the auto-heuristic
+	/// (median feature size ≈ 4 tile-pixels, capped at 14).
+	pub max_zoom: Option<u8>,
+	pub polygon_simplify_px: Option<f32>,
+	pub line_simplify_px: Option<f32>,
+	pub polygon_min_area_px: Option<f32>,
+	pub line_min_length_px: Option<f32>,
+	pub point_reduction: Option<PointReductionStrategy>,
+	pub point_reduction_value: Option<f32>,
+}
+
+/// Resolved configuration consumed by the cascade. Every field is concrete;
+/// defaults have already been applied. Built from a [`FeatureImportArgs`]
+/// (typical) or constructed directly (advanced/test code).
 #[derive(Clone, Debug)]
 pub struct FeatureImportConfig {
 	pub layer_name: String,
@@ -100,6 +127,25 @@ impl Default for FeatureImportConfig {
 	}
 }
 
+impl From<FeatureImportArgs> for FeatureImportConfig {
+	fn from(args: FeatureImportArgs) -> Self {
+		let d = Self::default();
+		Self {
+			layer_name: args.layer_name.unwrap_or(d.layer_name),
+			min_zoom: args.min_zoom.unwrap_or(d.min_zoom),
+			// `Option::or` here, not `unwrap_or`: the "default" for max_zoom
+			// is itself `None` (= run the auto-heuristic later).
+			max_zoom: args.max_zoom.or(d.max_zoom),
+			polygon_simplify_px: args.polygon_simplify_px.unwrap_or(d.polygon_simplify_px),
+			line_simplify_px: args.line_simplify_px.unwrap_or(d.line_simplify_px),
+			polygon_min_area_px: args.polygon_min_area_px.unwrap_or(d.polygon_min_area_px),
+			line_min_length_px: args.line_min_length_px.unwrap_or(d.line_min_length_px),
+			point_reduction: args.point_reduction.unwrap_or(d.point_reduction),
+			point_reduction_value: args.point_reduction_value.unwrap_or(d.point_reduction_value),
+		}
+	}
+}
+
 /// One feature alive at a given zoom: an index into the shared `flattened`
 /// pool plus the geometry simplified for this zoom. Properties and id come
 /// from the pool at render time, so this struct stays small (~24 bytes for a
@@ -141,9 +187,13 @@ impl FeatureImport {
 	/// Build the import from a vector of features.
 	///
 	/// Callers typically drain a [`crate::feature_source::FeatureSource`]'s
-	/// stream into a `Vec<GeoFeature>` first, then pass it here.
+	/// stream into a `Vec<GeoFeature>` first, then pass it here. The `config`
+	/// argument accepts either a [`FeatureImportArgs`] (every field optional;
+	/// missing values fall back to [`FeatureImportConfig::default`]) or a
+	/// fully-resolved [`FeatureImportConfig`] for advanced/test code.
 	#[context("importing features")]
-	pub fn from_features(features: Vec<GeoFeature>, config: FeatureImportConfig) -> Result<Self> {
+	pub fn from_features(features: Vec<GeoFeature>, config: impl Into<FeatureImportConfig>) -> Result<Self> {
+		let config: FeatureImportConfig = config.into();
 		// Project to web mercator (only once — the auto-`max_zoom` heuristic
 		// reuses these projected geometries instead of re-projecting).
 		// TODO: validate CRS once the GeoJSON parser tracks it. v1 trusts the
