@@ -11,7 +11,7 @@ use versatiles_derive::context;
 struct Args {
 	/// The desired tile format. Allowed values are: AVIF, JPG, PNG or WEBP.
 	/// If not specified, the source format will be used.
-	format: Option<String>,
+	format: Option<RasterTileFormat>,
 	/// Quality level for the tile compression (only AVIF, JPG or WEBP), between 0 (worst) and 100 (lossless).
 	/// To allow different quality levels for different zoom levels, this can also be a comma-separated list like this:
 	/// "70,14:50,15:20", where the first value is the default quality, and the other values specify the quality for the specified zoom level (and higher).
@@ -43,6 +43,20 @@ impl RasterTileFormat {
 			"webp" => Webp,
 			_ => bail!("Invalid tile format '{text}'"),
 		})
+	}
+
+	/// Canonical strings for codegen / completion. Aliases (`"jpeg"`)
+	/// accepted by [`Self::from_str`] are *not* included.
+	#[allow(dead_code)] // called by VPLDecode-generated metadata; dead-code lint can't see through the proc-macro.
+	pub fn variants() -> &'static [&'static str] {
+		&["avif", "jpg", "png", "webp"]
+	}
+}
+
+impl TryFrom<&str> for RasterTileFormat {
+	type Error = anyhow::Error;
+	fn try_from(value: &str) -> Result<Self> {
+		Self::from_str(value)
 	}
 }
 
@@ -93,8 +107,8 @@ impl Operation {
 
 		let mut metadata = source.metadata().clone();
 
-		let format: RasterTileFormat = if let Some(text) = args.format {
-			RasterTileFormat::from_str(&text)?
+		let format: RasterTileFormat = if let Some(f) = args.format {
+			f
 		} else {
 			RasterTileFormat::try_from(*metadata.tile_format())?
 		};

@@ -12,9 +12,7 @@
 
 use crate::{
 	PipelineFactory,
-	helpers::feature_tile_source::{
-		FeatureTileSource, apply_property_filters, parse_compression, parse_point_reduction,
-	},
+	helpers::feature_tile_source::{FeatureTileSource, apply_property_filters},
 	operations::read::traits::ReadTileSource,
 	vpl::VPLNode,
 };
@@ -22,8 +20,9 @@ use anyhow::{Result, bail};
 use futures::StreamExt;
 use std::sync::Arc;
 use versatiles_container::{DataLocation, TileSource};
+use versatiles_core::TileCompression;
 use versatiles_derive::context;
-use versatiles_geometry::feature_import::{FeatureImport, FeatureImportArgs};
+use versatiles_geometry::feature_import::{FeatureImport, FeatureImportArgs, PointReductionStrategy};
 use versatiles_geometry::feature_source::{CsvSourceBuilder, FeatureSource, ProgressCallback};
 use versatiles_geometry::geo::GeoFeature;
 
@@ -68,7 +67,7 @@ struct Args {
 	properties_exclude: Option<Vec<String>>,
 	/// Point reduction strategy: `none` / `drop_rate` / `min_distance`
 	/// (default `min_distance`).
-	point_reduction: Option<String>,
+	point_reduction: Option<PointReductionStrategy>,
 	/// Numeric value whose meaning depends on `point_reduction`:
 	/// - `min_distance` (default): minimum distance between kept points,
 	///   in tile-pixels at the current zoom. Defaults to 16.
@@ -76,9 +75,8 @@ struct Args {
 	/// - `none`: ignored.
 	point_reduction_value: Option<f32>,
 	/// Tile-compression applied before the tiles leave this operation:
-	/// `gzip` (default), `brotli`, `zstd`, or `none`. Aliases `gz` / `br` /
-	/// `zst` / `raw` are accepted.
-	compression: Option<String>,
+	/// `gzip` (default), `brotli`, `zstd`, or `none`.
+	compression: Option<TileCompression>,
 }
 
 /// Marker type for the read-factory macro. The actual runtime `TileSource`
@@ -135,8 +133,8 @@ impl ReadTileSource for Operation {
 
 		let source = builder.build()?;
 
-		let point_reduction = parse_point_reduction(args.point_reduction.as_deref())?;
-		let compression = parse_compression(args.compression.as_deref())?;
+		let point_reduction = args.point_reduction;
+		let compression = args.compression.unwrap_or(TileCompression::Gzip);
 
 		log::info!("from_csv: importing CSV from {}", path.display());
 		// Drain features once so the auto-max-zoom heuristic can inspect them.

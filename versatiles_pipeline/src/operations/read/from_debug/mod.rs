@@ -30,7 +30,7 @@ use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyram
 /// Generates debug tiles that display their coordinates as text.
 struct Args {
 	/// Target tile format: one of `"mvt"` (default), `"avif"`, `"jpg"`, `"png"` or `"webp"`
-	format: Option<String>,
+	format: Option<TileFormat>,
 }
 
 /// Implements [`TileSource`] by fabricating debug tiles entirely in
@@ -69,13 +69,7 @@ impl Operation {
 	}
 	pub fn from_vpl_node(vpl_node: &VPLNode) -> Result<Self> {
 		let args = Args::from_vpl_node(vpl_node)?;
-		Self::from_parameters(
-			args
-				.format
-				.map(|f| TileFormat::try_from_str(&f))
-				.transpose()?
-				.unwrap_or(TileFormat::MVT),
-		)
+		Self::from_parameters(args.format.unwrap_or(TileFormat::MVT))
 	}
 }
 

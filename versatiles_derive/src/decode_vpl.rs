@@ -198,6 +198,24 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param2: None,
 		is_enum: true,
 	},
+	TypeMapping {
+		pattern: "Option<PointReductionStrategy>",
+		display_name: "PointReductionStrategy",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("PointReductionStrategy"),
+		generic_param2: None,
+		is_enum: true,
+	},
+	TypeMapping {
+		pattern: "Option<RasterTileFormat>",
+		display_name: "RasterTileFormat",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("RasterTileFormat"),
+		generic_param2: None,
+		is_enum: true,
+	},
 ];
 
 /// Find a type mapping by its pattern string.

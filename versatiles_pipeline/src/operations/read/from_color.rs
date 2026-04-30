@@ -28,7 +28,7 @@ struct Args {
 	/// Tile size in pixels (256 or 512). Defaults to 512.
 	size: Option<u16>,
 	/// Tile format: one of "avif", "jpg", "png", or "webp". Defaults to "png".
-	format: Option<String>,
+	format: Option<TileFormat>,
 }
 
 /// Implements [`TileSource`] by returning clones of a pre-generated solid-color tile.
@@ -85,11 +85,7 @@ impl Operation {
 
 		let tile_size = u32::from(args.size.unwrap_or(512));
 
-		let tile_format = args
-			.format
-			.map(|f| TileFormat::try_from_str(&f))
-			.transpose()?
-			.unwrap_or(TileFormat::PNG);
+		let tile_format = args.format.unwrap_or(TileFormat::PNG);
 
 		Self::from_parameters(&color_bytes, tile_size, tile_format)
 	}

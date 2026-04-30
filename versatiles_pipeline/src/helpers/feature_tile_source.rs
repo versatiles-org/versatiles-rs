@@ -10,8 +10,6 @@
 //!
 //! - [`apply_property_filters`] — implements `properties_include=` /
 //!   `properties_exclude=` over a `Vec<GeoFeature>`.
-//! - [`parse_compression`] / [`parse_point_reduction`] — small Args-string
-//!   parsers with the right defaults.
 //! - [`FeatureTileSource`] — the concrete `TileSource` impl. Each op
 //!   constructs one of these from its [`FeatureImport`] + chosen settings
 //!   and returns it from the `ReadTileSource::build` factory.
@@ -27,7 +25,7 @@ use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Tra
 use versatiles_core::{
 	TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream, VectorLayer, VectorLayers,
 };
-use versatiles_geometry::feature_import::{FeatureImport, PointReductionStrategy};
+use versatiles_geometry::feature_import::FeatureImport;
 use versatiles_geometry::geo::GeoFeature;
 
 /// Apply `properties_include` (whitelist) or `properties_exclude` (blacklist)
@@ -46,26 +44,6 @@ pub fn apply_property_filters(features: &mut [GeoFeature], include: Option<&[Str
 			f.properties.retain(|k, _| !drop.contains(k.as_str()));
 		}
 	}
-}
-
-/// Parse the user-facing `compression=` arg string into a [`TileCompression`].
-/// Defaults to [`TileCompression::Gzip`] — the most widely supported
-/// compression for vector tiles, expected by QGIS, Mapbox GL, and most
-/// servers.
-pub fn parse_compression(s: Option<&str>) -> Result<TileCompression> {
-	Ok(s
-		.map(TileCompression::try_from)
-		.transpose()?
-		.unwrap_or(TileCompression::Gzip))
-}
-
-/// Parse the user-facing `point_reduction=` arg string into a
-/// [`PointReductionStrategy`]. `None` means "use the default" — the caller
-/// passes the result straight into [`crate::FeatureImportArgs`], which
-/// resolves `None` to the strategy from
-/// [`crate::FeatureImportConfig::default`].
-pub fn parse_point_reduction(s: Option<&str>) -> Result<Option<PointReductionStrategy>> {
-	s.map(PointReductionStrategy::parse).transpose()
 }
 
 /// Concrete `TileSource` shared by `from_geo` and `from_csv`. Wraps a
