@@ -302,13 +302,13 @@ impl TileSource for Operation {
 /// clear error message when they're set, instead of silently no-oping.
 fn reject_unsupported_args(args: &Args) -> Result<()> {
 	if args.bbox.is_some() {
-		bail!("from_geo: `bbox=` is not supported in v1");
+		bail!("from_geo: `bbox=` is not supported");
 	}
 	if args.properties_include.is_some() {
-		bail!("from_geo: `properties_include=` is not supported in v1");
+		bail!("from_geo: `properties_include=` is not supported");
 	}
 	if args.properties_exclude.is_some() {
-		bail!("from_geo: `properties_exclude=` is not supported in v1");
+		bail!("from_geo: `properties_exclude=` is not supported");
 	}
 	Ok(())
 }

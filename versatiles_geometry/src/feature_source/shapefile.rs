@@ -84,7 +84,7 @@ impl ShapefileSource {
 			Ok(())
 		} else {
 			bail!(
-				"shapefile {} has a non-WGS84 projection (.prj); reprojection is not supported in v1",
+				"shapefile {} has a non-WGS84 projection (.prj); reprojection is not supported",
 				self.path.display()
 			)
 		}
