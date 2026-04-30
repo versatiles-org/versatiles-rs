@@ -62,9 +62,11 @@ struct Args {
 	/// Bounding-box clip in degrees `[w, s, e, n]`. Not supported in v1; setting
 	/// this errors out.
 	bbox: Option<[f64; 4]>,
-	/// Property whitelist. Not supported in v1; setting this errors out.
+	/// Property whitelist: keep only the named properties, drop everything else.
+	/// Mutually exclusive with `properties_exclude`.
 	properties_include: Option<Vec<String>>,
-	/// Property blacklist. Not supported in v1; setting this errors out.
+	/// Property blacklist: drop the named properties, keep everything else.
+	/// Mutually exclusive with `properties_include`.
 	properties_exclude: Option<Vec<String>>,
 	/// Drop polygons whose area is below this many tile-pixels² (default 4).
 	polygon_min_area: Option<f32>,
@@ -170,6 +172,13 @@ impl ReadTileSource for Operation {
 				f.id = None;
 			}
 		}
+		// Apply property filters before passing to FeatureImport so the
+		// generated `vector_layers` schema reflects the kept fields.
+		apply_property_filters(
+			&mut features,
+			args.properties_include.as_deref(),
+			args.properties_exclude.as_deref(),
+		);
 
 		// 1:1 carry-through from VPL args → FeatureImportArgs. `None` fields
 		// are filled with defaults inside `FeatureImport::from_features` via
@@ -309,19 +318,34 @@ impl TileSource for Operation {
 	}
 }
 
-/// Reject the v1-deferred args (bbox / properties_include / properties_exclude) with a
-/// clear error message when they're set, instead of silently no-oping.
+/// Reject the args we still don't support (`bbox=`) and the combination
+/// `properties_include= … properties_exclude=` (ambiguous: pick one).
 fn reject_unsupported_args(args: &Args) -> Result<()> {
 	if args.bbox.is_some() {
 		bail!("from_geo: `bbox=` is not supported");
 	}
-	if args.properties_include.is_some() {
-		bail!("from_geo: `properties_include=` is not supported");
-	}
-	if args.properties_exclude.is_some() {
-		bail!("from_geo: `properties_exclude=` is not supported");
+	if args.properties_include.is_some() && args.properties_exclude.is_some() {
+		bail!("from_geo: `properties_include=` and `properties_exclude=` are mutually exclusive");
 	}
 	Ok(())
+}
+
+/// Apply the property whitelist / blacklist to every feature in `features`.
+/// Either argument may be `None` (no filtering). The caller has already
+/// rejected the case where both are `Some`.
+fn apply_property_filters(features: &mut [GeoFeature], include: Option<&[String]>, exclude: Option<&[String]>) {
+	use std::collections::HashSet;
+	if let Some(keep) = include {
+		let keep: HashSet<&str> = keep.iter().map(String::as_str).collect();
+		for f in features.iter_mut() {
+			f.properties.retain(|k, _| keep.contains(k.as_str()));
+		}
+	} else if let Some(drop) = exclude {
+		let drop: HashSet<&str> = drop.iter().map(String::as_str).collect();
+		for f in features.iter_mut() {
+			f.properties.retain(|k, _| !drop.contains(k.as_str()));
+		}
+	}
 }
 
 /// Build the right [`FeatureSource`] for `ext`, attach a byte-level progress
@@ -597,6 +621,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn unsupported_args_error() -> Result<()> {
+		// `bbox=` is still rejected.
 		let factory = PipelineFactory::new_dummy();
 		let bbox_err = factory
 			.operation_from_vpl("from_geo filename=\"../testdata/places.geojson\" bbox=[0,0,1,1]")
@@ -604,6 +629,48 @@ mod tests {
 		assert!(bbox_err.is_err());
 		let msg = format!("{:#}", bbox_err.unwrap_err());
 		assert!(msg.contains("bbox"), "{msg}");
+
+		// Combining include + exclude is rejected as ambiguous.
+		let factory = PipelineFactory::new_dummy();
+		let result = factory
+			.operation_from_vpl(
+				"from_geo filename=\"../testdata/places.geojson\" \
+				 properties_include=[\"a\"] properties_exclude=[\"b\"]",
+			)
+			.await;
+		assert!(result.is_err());
+		let msg = format!("{:#}", result.unwrap_err());
+		assert!(msg.contains("mutually exclusive"), "{msg}");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn properties_include_keeps_only_listed() -> Result<()> {
+		// places.geojson features have `name` and `kind` — keep only `name`.
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				"from_geo filename=\"../testdata/places.geojson\" max_zoom=4 \
+				 properties_include=[\"name\"]",
+			)
+			.await?;
+		let schema = op.tilejson().vector_layers.0.values().next().unwrap().fields.clone();
+		assert_eq!(schema.keys().collect::<Vec<_>>(), vec!["name"]);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn properties_exclude_drops_listed() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				"from_geo filename=\"../testdata/places.geojson\" max_zoom=4 \
+				 properties_exclude=[\"kind\"]",
+			)
+			.await?;
+		let schema = op.tilejson().vector_layers.0.values().next().unwrap().fields.clone();
+		assert!(!schema.contains_key("kind"));
+		assert!(schema.contains_key("name"));
 		Ok(())
 	}
 

@@ -61,9 +61,13 @@ struct Args {
 	/// Bounding-box clip in degrees `[w, s, e, n]`. Not supported in v1; setting
 	/// this errors out.
 	bbox: Option<[f64; 4]>,
-	/// Property whitelist. Not supported in v1; setting this errors out.
+	/// Property whitelist: keep only the named columns as feature properties,
+	/// drop everything else. Mutually exclusive with `properties_exclude`.
+	/// (`lon_column` / `lat_column` / `id_column` are consumed earlier by the
+	/// CSV adapter and aren't affected.)
 	properties_include: Option<Vec<String>>,
-	/// Property blacklist. Not supported in v1; setting this errors out.
+	/// Property blacklist: drop the named properties, keep everything else.
+	/// Mutually exclusive with `properties_include`.
 	properties_exclude: Option<Vec<String>>,
 	/// Point reduction strategy: `none` / `drop_rate` / `min_distance`
 	/// (default `min_distance`).
@@ -173,6 +177,13 @@ impl ReadTileSource for Operation {
 		if let Some(h) = progress_handle {
 			h.finish();
 		}
+		// Apply property filters before passing to FeatureImport so the
+		// generated `vector_layers` schema reflects the kept fields.
+		apply_property_filters(
+			&mut features,
+			args.properties_include.as_deref(),
+			args.properties_exclude.as_deref(),
+		);
 
 		// 1:1 carry-through from VPL args → FeatureImportArgs. CSV is
 		// point-only so we don't expose polygon/line knobs; those fields stay
@@ -320,19 +331,34 @@ impl TileSource for Operation {
 	}
 }
 
-/// Reject the v1-deferred args (bbox / properties_include / properties_exclude) with a
-/// clear error message when they're set, instead of silently no-oping.
+/// Reject the args we still don't support (`bbox=`) and the combination
+/// `properties_include= … properties_exclude=` (ambiguous: pick one).
 fn reject_unsupported_args(args: &Args) -> Result<()> {
 	if args.bbox.is_some() {
 		bail!("from_csv: `bbox=` is not supported");
 	}
-	if args.properties_include.is_some() {
-		bail!("from_csv: `properties_include=` is not supported");
-	}
-	if args.properties_exclude.is_some() {
-		bail!("from_csv: `properties_exclude=` is not supported");
+	if args.properties_include.is_some() && args.properties_exclude.is_some() {
+		bail!("from_csv: `properties_include=` and `properties_exclude=` are mutually exclusive");
 	}
 	Ok(())
+}
+
+/// Apply the property whitelist / blacklist to every feature in `features`.
+/// Either argument may be `None` (no filtering). The caller has already
+/// rejected the case where both are `Some`.
+fn apply_property_filters(features: &mut [GeoFeature], include: Option<&[String]>, exclude: Option<&[String]>) {
+	use std::collections::HashSet;
+	if let Some(keep) = include {
+		let keep: HashSet<&str> = keep.iter().map(String::as_str).collect();
+		for f in features.iter_mut() {
+			f.properties.retain(|k, _| keep.contains(k.as_str()));
+		}
+	} else if let Some(drop) = exclude {
+		let drop: HashSet<&str> = drop.iter().map(String::as_str).collect();
+		for f in features.iter_mut() {
+			f.properties.retain(|k, _| !drop.contains(k.as_str()));
+		}
+	}
 }
 
 crate::operations::macros::define_read_factory!("from_csv", Args, Operation);
@@ -428,17 +454,66 @@ mod tests {
 
 	#[tokio::test]
 	async fn unsupported_args_error() -> Result<()> {
+		// `bbox=` is still rejected.
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
 			.operation_from_vpl(
 				"from_csv filename=\"../testdata/quakes.csv\" \
 				 lon_column=\"longitude\" lat_column=\"latitude\" \
-				 properties_include=[\"name\"]",
+				 bbox=[0,0,1,1]",
 			)
 			.await;
 		assert!(result.is_err());
 		let msg = format!("{:#}", result.unwrap_err());
-		assert!(msg.contains("properties_include"), "{msg}");
+		assert!(msg.contains("bbox"), "{msg}");
+
+		// Combining include + exclude is rejected as ambiguous.
+		let factory = PipelineFactory::new_dummy();
+		let result = factory
+			.operation_from_vpl(
+				"from_csv filename=\"../testdata/quakes.csv\" \
+				 lon_column=\"longitude\" lat_column=\"latitude\" \
+				 properties_include=[\"a\"] properties_exclude=[\"b\"]",
+			)
+			.await;
+		assert!(result.is_err());
+		let msg = format!("{:#}", result.unwrap_err());
+		assert!(msg.contains("mutually exclusive"), "{msg}");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn properties_include_keeps_only_listed() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				"from_csv filename=\"../testdata/quakes.csv\" \
+				 lon_column=\"longitude\" lat_column=\"latitude\" \
+				 properties_include=[\"magnitude\"] max_zoom=2",
+			)
+			.await?;
+		let schema = op.tilejson().vector_layers.0.values().next().unwrap().fields.clone();
+		assert_eq!(
+			schema.keys().collect::<Vec<_>>(),
+			vec!["magnitude"],
+			"only `magnitude` should remain after include filter"
+		);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn properties_exclude_drops_listed() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				"from_csv filename=\"../testdata/quakes.csv\" \
+				 lon_column=\"longitude\" lat_column=\"latitude\" \
+				 properties_exclude=[\"magnitude\"] max_zoom=2",
+			)
+			.await?;
+		let schema = op.tilejson().vector_layers.0.values().next().unwrap().fields.clone();
+		assert!(!schema.contains_key("magnitude"), "`magnitude` should be excluded");
+		assert!(!schema.is_empty(), "other fields should still be present");
 		Ok(())
 	}
 
