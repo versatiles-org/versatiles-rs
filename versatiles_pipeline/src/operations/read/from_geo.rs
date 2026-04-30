@@ -87,6 +87,12 @@ struct Args {
 	/// `gzip` (default), `brotli`, `zstd`, or `none`. Aliases `gz` / `br` /
 	/// `zst` / `raw` are accepted.
 	compression: Option<String>,
+	/// If `true`, drop the GeoJSON / Shapefile `id` field from every feature
+	/// before encoding. Useful for sources where the id is a string (e.g. USGS
+	/// earthquakes — those would be silently dropped at MVT encode anyway, since
+	/// MVT requires `uint64` ids), or when the id is just noise. Defaults to
+	/// `false` — keep the id when it's a non-negative integer.
+	ignore_id: Option<bool>,
 }
 
 /// `TileSource` wrapping an in-memory [`FeatureImport`].
@@ -158,7 +164,12 @@ impl ReadTileSource for Operation {
 			other => bail!("unsupported file extension '.{other}' for from_geo"),
 		};
 		log::debug!("from_geo: loading {format_label} from {}", path.display());
-		let features = load_features(&path, ext.as_str(), format_label, factory).await?;
+		let mut features = load_features(&path, ext.as_str(), format_label, factory).await?;
+		if args.ignore_id.unwrap_or(false) {
+			for f in &mut features {
+				f.id = None;
+			}
+		}
 
 		// 1:1 carry-through from VPL args → FeatureImportArgs. `None` fields
 		// are filled with defaults inside `FeatureImport::from_features` via
@@ -432,6 +443,39 @@ mod tests {
 		let vt = versatiles_geometry::vector_tile::VectorTile::from_blob(&blob)?;
 		assert_eq!(vt.layers[0].name, "places");
 		assert_eq!(vt.layers[0].features.len(), 5);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn ignore_id_strips_feature_ids() -> Result<()> {
+		// places.geojson features carry integer ids (1..=4). Verify the
+		// default keeps them and `ignore_id=true` drops them all.
+		const COMMON: &str = "layer_name=\"places\" max_zoom=8 polygon_simplify=0 line_simplify=0 \
+			 polygon_min_area=0 line_min_length=0";
+
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(&format!("from_geo filename=\"../testdata/places.geojson\" {COMMON}"))
+			.await?;
+		let tile = op.tile(&TileCoord::new(0, 0, 0)?).await?.expect("world tile present");
+		let vt = versatiles_geometry::vector_tile::VectorTile::from_blob(&tile.into_blob(&Uncompressed)?)?;
+		assert!(
+			vt.layers[0].features.iter().any(|f| f.id.is_some()),
+			"default: at least one feature should carry its id"
+		);
+
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(&format!(
+				"from_geo filename=\"../testdata/places.geojson\" ignore_id=true {COMMON}"
+			))
+			.await?;
+		let tile = op.tile(&TileCoord::new(0, 0, 0)?).await?.expect("world tile present");
+		let vt = versatiles_geometry::vector_tile::VectorTile::from_blob(&tile.into_blob(&Uncompressed)?)?;
+		assert!(
+			vt.layers[0].features.iter().all(|f| f.id.is_none()),
+			"ignore_id=true: every feature should have id=None"
+		);
 		Ok(())
 	}
 
