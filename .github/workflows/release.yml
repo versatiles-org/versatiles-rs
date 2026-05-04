@@ -488,7 +488,14 @@ jobs:
         if: env.PUBLISH_ENABLED == 'true'
         run: |
           echo "Current npm version: $(npm --version)"
-          npm install -g npm@latest
+          # `npm install -g npm@latest` has been failing on ubuntu-latest
+          # because the runner image's bundled npm 10.9.7 ships an
+          # incomplete @npmcli/arborist (missing promise-retry), so the
+          # bundled npm can't install another npm. corepack fetches the
+          # tarball directly from the registry and activates it via a
+          # shim — no dependency on the broken global tree.
+          corepack enable npm
+          corepack prepare npm@latest --activate
           echo "Updated npm version: $(npm --version)"
 
       - name: Install dependencies
