@@ -1,3 +1,7 @@
+// Bumped from the default 128 to satisfy `ctor::ctor`'s expanded `concat!`
+// chain in newer ctor releases.
+#![recursion_limit = "256"]
+
 //! # VersaTiles Node.js Bindings
 //!
 //! Native Node.js bindings for the VersaTiles library, providing high-performance
@@ -70,7 +74,11 @@ pub use types::{ConvertOptions, ProbeResult, ServerOptions, SourceMetadata, Tile
 /// - `RUST_LOG=debug` - Show debug and above
 /// - `RUST_LOG=warn` - Show warnings and errors only
 /// - `RUST_LOG=versatiles=debug,versatiles_core=trace` - Fine-grained control
-#[ctor::ctor]
+// `ctor` 0.5+ requires this annotation to acknowledge that running code
+// before `main` is inherently unsafe (no globals are guaranteed to be
+// initialised yet). The body below only touches `env_logger` + `log`, both
+// of which are designed to be initialised eagerly.
+#[ctor::ctor(unsafe)]
 fn init_logger() {
 	use std::io::Write;
 
