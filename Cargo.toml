@@ -126,7 +126,7 @@ regex = { version = "1.12.3", default-features = false, features = [
 ] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["std"] }
-tokio = { version = "1.52.1", features = ["rt-multi-thread", "sync"] }
+tokio = { version = "1.52.2", features = ["rt-multi-thread", "sync"] }
 
 # CLI dependencies
 clap = { version = "4.6.1", features = ["default", "derive", "wrap_help"] }
@@ -154,7 +154,7 @@ tower = { version = "0.5.3" }
 tower-http = { version = "0.6.8" }
 
 # Image processing dependencies
-imageproc = { version = "0.26.1", default-features = false }
+imageproc = { version = "0.26.2", default-features = false }
 
 # Geometry dependencies
 csv = { version = "1.4", default-features = false }
