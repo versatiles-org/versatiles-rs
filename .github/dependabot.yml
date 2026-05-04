@@ -11,6 +11,11 @@ updates:
     schedule: { interval: weekly }
     open-pull-requests-limit: 0
 
+  - package-ecosystem: docker
+    directory: /docker
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 0
+
   # Monthly regular updates
   - package-ecosystem: cargo
     directory: /
@@ -21,3 +26,8 @@ updates:
     directory: /
     schedule: { interval: monthly }
     groups: { github-action: { patterns: ['*'] } }
+
+  - package-ecosystem: docker
+    directory: /docker
+    schedule: { interval: monthly }
+    groups: { docker: { patterns: ['*'] } }
