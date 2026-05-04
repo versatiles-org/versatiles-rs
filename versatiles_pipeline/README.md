@@ -20,6 +20,20 @@ Example:
 from_container filename="world.versatiles" | do_some_filtering | do_some_processing
 ```
 
+### Reading raw vector data
+
+Beyond existing tile containers, pipelines can read raw vector geo data and produce MVT tiles directly. The `from_geo` operation accepts GeoJSON, line-delimited GeoJSON (`.ndjson` / `.geojsonl` / `.geojsonseq`), and Shapefile inputs; projects features to web mercator; simplifies per zoom; and emits tiles on demand:
+
+```vpl
+from_geo filename="places.geojson" layer_name="places" max_zoom=12
+```
+
+For tabular point data (CSV with explicit longitude/latitude columns) use `from_csv`. Omit `max_zoom` to let it pick automatically based on feature density:
+
+```vpl
+from_csv filename="quakes.csv" lon_column="longitude" lat_column="latitude"
+```
+
 ## Operation Format
 
 Each operation follows this structure:
@@ -116,7 +130,7 @@ Generates solid-color tiles of the specified size and format.
 
 - *`color`: String (optional)* - Hex color in RGB or RGBA format (e.g., "FF5733" or "FF573380"). Defaults to "000000" (black).
 - *`size`: u16 (optional)* - Tile size in pixels (256 or 512). Defaults to 512.
-- *`format`: String (optional)* - Tile format: one of "avif", "jpg", "png", or "webp". Defaults to "png".
+- *`format`: TileFormat (optional)* - Tile format: one of "avif", "jpg", "png", or "webp". Defaults to "png".
 
 ---
 
@@ -130,13 +144,37 @@ Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*
 
 ---
 
+## from_csv
+
+Reads a CSV file with longitude/latitude columns and emits MVT point tiles.
+
+### Parameters
+
+- **`filename`: String (required)** - Filename of the CSV file (relative to the VPL file path).
+- **`lon_column`: String (required)** - Header column name holding the longitude (degrees, WGS84). Required.
+- **`lat_column`: String (required)** - Header column name holding the latitude (degrees, WGS84). Required.
+- *`id_column`: String (optional)* - Optional column to expose as the MVT feature `id` (numeric if it parses as `u64`, else string).
+- *`delimiter`: String (optional)* - Field delimiter as a single ASCII character. Defaults to `,`.
+- *`has_header`: bool (optional)* - Whether row 1 contains column names. Defaults to `true`. Header-less CSVs aren't supported in v1.
+- *`layer_name`: String (optional)* - Name of the MVT layer in the output tiles. Defaults to the filename stem.
+- *`min_zoom`: u8 (optional)* - Lowest zoom level emitted (default 0).
+- *`max_zoom`: u8 (optional)* - Highest zoom level emitted. Defaults to an auto-heuristic (median feature size ≈ 4 tile-pixels, capped at 14). For point-only inputs the heuristic returns 14.
+- *`bbox`: [f64,f64,f64,f64] (optional)* - Bounding-box clip in degrees `[w, s, e, n]`. Not supported in v1; setting this errors out.
+- *`properties_include`: [String,...] (optional)* - Property whitelist: keep only the named columns as feature properties, drop everything else. Mutually exclusive with `properties_exclude`. (`lon_column` / `lat_column` / `id_column` are consumed earlier by the CSV adapter and aren't affected.)
+- *`properties_exclude`: [String,...] (optional)* - Property blacklist: drop the named properties, keep everything else. Mutually exclusive with `properties_include`.
+- *`point_reduction`: PointReductionStrategy (optional)* - Point reduction strategy: `none` / `drop_rate` / `min_distance` (default `min_distance`).
+- *`point_reduction_value`: f32 (optional)* - Numeric value whose meaning depends on `point_reduction`: - `min_distance` (default): minimum distance between kept points, in tile-pixels at the current zoom. Defaults to 16. - `drop_rate`: per-zoom keep-fraction in `[0, 1]`. Defaults to 0.5. - `none`: ignored.
+- *`compression`: TileCompression (optional)* - Tile-compression applied before the tiles leave this operation: `gzip` (default), `brotli`, `zstd`, or `none`.
+
+---
+
 ## from_debug
 
 Generates debug tiles that display their coordinates as text.
 
 ### Parameters
 
-- *`format`: String (optional)* - Target tile format: one of `"mvt"` (default), `"avif"`, `"jpg"`, `"png"` or `"webp"`
+- *`format`: TileFormat (optional)* - Target tile format: one of `"mvt"` (default), `"avif"`, `"jpg"`, `"png"` or `"webp"`
 
 ---
 
@@ -175,6 +213,30 @@ Hint: When using "gdalbuildvrt" to create a virtual raster, don't forget to set 
 - *`bands`: String (optional)* - Comma-separated list of 1-based band indices to use as color channels. E.g. "4,3,2" maps band 4→Red, band 3→Green, band 2→Blue. "1" maps band 1→Grey. Defaults to auto-detection from color interpretation.
 - *`nodata`: String (optional)* - NoData value(s) to treat as transparent. Multiple values can be separated by semicolons (e.g. "0;255" treats both 0 and 255 as nodata). Each value can be a single number applied to all bands or comma-separated per-band values (e.g. "0,0,0;255,255,255"). The first value is handled natively by GDAL during reprojection; additional values are applied as a post-warp alpha mask. If not specified, the source dataset's per-band nodata value is used (if any).
 - *`crs`: u32 (optional)* - Override the source CRS with an EPSG code (e.g. "4326" or "25832"). Use this when the input image has no embedded CRS or an incorrect one.
+
+---
+
+## from_geo
+
+Reads a GeoJSON or Shapefile and emits MVT vector tiles.
+
+### Parameters
+
+- **`filename`: String (required)** - Filename of the input (relative to the VPL file path). Format is detected from the extension: - `.geojson` / `.json` — GeoJSON `FeatureCollection` - `.ndjson` / `.geojsonl` / `.ndgeojson` / `.geojsonseq` — line-delimited GeoJSON (one feature per line; `.geojsonseq` may use the RFC 8142 record-separator prefix `U+001E`) - `.shp` — Esri Shapefile
+- *`layer_name`: String (optional)* - Name of the MVT layer in the output tiles. Defaults to the filename stem.
+- *`min_zoom`: u8 (optional)* - Lowest zoom level emitted (default 0).
+- *`max_zoom`: u8 (optional)* - Highest zoom level emitted. Defaults to an auto-heuristic (median feature size ≈ 4 tile-pixels, capped at 14).
+- *`bbox`: [f64,f64,f64,f64] (optional)* - Bounding-box clip in degrees `[w, s, e, n]`. Not supported in v1; setting this errors out.
+- *`properties_include`: [String,...] (optional)* - Property whitelist: keep only the named properties, drop everything else. Mutually exclusive with `properties_exclude`.
+- *`properties_exclude`: [String,...] (optional)* - Property blacklist: drop the named properties, keep everything else. Mutually exclusive with `properties_include`.
+- *`polygon_min_area`: f32 (optional)* - Drop polygons whose area is below this many tile-pixels² (default 4).
+- *`polygon_simplify`: f32 (optional)* - Douglas-Peucker tolerance for polygons, in tile-pixels (default 4).
+- *`line_min_length`: f32 (optional)* - Drop lines whose length is below this many tile-pixels (default 4).
+- *`line_simplify`: f32 (optional)* - Douglas-Peucker tolerance for lines, in tile-pixels (default 4).
+- *`point_reduction`: PointReductionStrategy (optional)* - Point reduction strategy: `none` / `drop_rate` / `min_distance` (default `min_distance`).
+- *`point_reduction_value`: f32 (optional)* - Numeric value whose meaning depends on `point_reduction`: - `min_distance` (default): minimum distance between kept points, in tile-pixels at the current zoom. Defaults to 16. - `drop_rate`: per-zoom keep-fraction in `[0, 1]`. Defaults to 0.5. - `none`: ignored.
+- *`compression`: TileCompression (optional)* - Tile-compression applied before the tiles leave this operation: `gzip` (default), `brotli`, `zstd`, or `none`.
+- *`ignore_id`: bool (optional)* - If `true`, drop the GeoJSON / Shapefile `id` field from every feature before encoding. Useful for sources where the id is a string (e.g. USGS earthquakes — those would be silently dropped at MVT encode anyway, since MVT requires `uint64` ids), or when the id is just noise. Defaults to `false` — keep the id when it's a non-negative integer.
 
 ---
 
@@ -333,7 +395,7 @@ Convert raster tiles to a different image format and/or adjust quality/effort se
 
 ### Parameters
 
-- *`format`: String (optional)* - The desired tile format. Allowed values are: AVIF, JPG, PNG or WEBP. If not specified, the source format will be used.
+- *`format`: RasterTileFormat (optional)* - The desired tile format. Allowed values are: AVIF, JPG, PNG or WEBP. If not specified, the source format will be used.
 - *`quality`: String (optional)* - Quality level for the tile compression (only AVIF, JPG or WEBP), between 0 (worst) and 100 (lossless). To allow different quality levels for different zoom levels, this can also be a comma-separated list like this: "70,14:50,15:20", where the first value is the default quality, and the other values specify the quality for the specified zoom level (and higher).
 - *`quality_translucent`: String (optional)* - Quality level for translucent (semi-transparent) tiles, using the same zoom-dependent syntax as quality. When set, tiles are checked for opacity: opaque tiles use the normal quality setting, while translucent tiles use this value (typically 100 for lossless).
 - *`effort`: u8 (optional)* - Compression effort, between 0 (fastest) and 100 (slowest/best).
