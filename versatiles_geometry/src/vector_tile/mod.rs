@@ -17,6 +17,8 @@ mod property_manager;
 mod tile;
 mod value;
 
+pub use feature::{VectorTileFeature, ring_signed_double_area};
+pub use geometry_type::GeomType;
 pub use layer::VectorTileLayer;
 pub use tile::VectorTile;
 /// Trait for encoding/decoding individual MVT property values. Exposed so
