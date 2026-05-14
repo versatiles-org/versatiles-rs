@@ -229,10 +229,11 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "linux-feature-${{ matrix.name }}"
+          shared-key: "linux-feature"
           cache-targets: true
           cache-on-failure: false
           cache-bin: false
+          save-if: ${{ matrix.name == 'all-features' }}
 
       - name: Check compilation
         if: ${{ !matrix.run-tests }}
