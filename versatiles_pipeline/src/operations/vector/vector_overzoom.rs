@@ -300,35 +300,38 @@ fn drop_invisible(g: Geometry<f64>) -> Option<Geometry<f64>> {
 	}
 }
 
-/// Extracts and rescales features from a parent vector tile to produce a child tile.
+/// Layer metadata + already-clipped features, prior to MVT re-encoding. Split
+/// out of [`extract_tile`] so `tile_coord_stream` can run the (cheap) decode +
+/// clip + filter pipeline without paying for re-encoding.
+struct ExtractedLayer {
+	name: String,
+	extent: u32,
+	version: u32,
+	features: Vec<GeoFeature>,
+}
+
+/// Decode + clip + filter half of [`extract_tile`]. Produces the input that
+/// [`encode_features`] would feed to `VectorTileLayer::from_features`.
 ///
-/// For each layer in `tile_src`, every feature is decoded to `Geometry<f64>`, clipped to
-/// the child's sub-region (expanded by `buffer` extent units on every side), and the
-/// surviving pieces are translated + scaled into the child tile's coordinate space. The
-/// resulting layer keeps the source layer's `extent` and `version`.
-///
-/// Returns `Ok(None)` when no surviving features remain (e.g. the child tile covers an
-/// empty quadrant of the parent).
-#[context("extracting tile for coord {:?}", coord_dst)]
-fn extract_tile(
+/// Returns `Ok(None)` when no features survive the per-child clip. Caller is
+/// responsible for the level_diff > 0 invariant — the same-level passthrough
+/// path of `extract_tile` short-circuits before reaching this function.
+#[context("extracting features for coord {:?}", coord_dst)]
+fn extract_features(
 	tile_src: &VectorTile,
 	coord_src: TileCoord,
 	coord_dst: TileCoord,
 	buffer: u32,
-) -> Result<Option<VectorTile>> {
+) -> Result<Option<Vec<ExtractedLayer>>> {
 	let level_diff = i32::from(coord_dst.level) - i32::from(coord_src.level);
-	ensure!(level_diff >= 0, "difference in levels must be non-negative");
-
-	if level_diff == 0 {
-		return Ok(Some(tile_src.clone()));
-	}
+	ensure!(level_diff > 0, "extract_features requires level_diff > 0");
 
 	#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 	let scale = 1u32 << level_diff as u32;
 	let f_scale = f64::from(scale);
 	let buf = f64::from(buffer);
 
-	let mut out_layers: Vec<VectorTileLayer> = Vec::new();
+	let mut out_layers: Vec<ExtractedLayer> = Vec::new();
 	for layer_src in &tile_src.layers {
 		if layer_src.extent == 0 {
 			continue;
@@ -381,18 +384,57 @@ fn extract_tile(
 			continue;
 		}
 
-		out_layers.push(VectorTileLayer::from_features(
-			layer_src.name.clone(),
-			out_features,
+		out_layers.push(ExtractedLayer {
+			name: layer_src.name.clone(),
 			extent,
-			layer_src.version,
-		)?);
+			version: layer_src.version,
+			features: out_features,
+		});
 	}
 
 	if out_layers.is_empty() {
 		Ok(None)
 	} else {
-		Ok(Some(VectorTile::new(out_layers)))
+		Ok(Some(out_layers))
+	}
+}
+
+/// Re-encode half: builds a [`VectorTile`] from extracted layers by running
+/// each through `VectorTileLayer::from_features`.
+fn encode_features(layers: Vec<ExtractedLayer>) -> Result<VectorTile> {
+	let out_layers = layers
+		.into_iter()
+		.map(|l| VectorTileLayer::from_features(l.name, l.features, l.extent, l.version))
+		.collect::<Result<Vec<_>>>()?;
+	Ok(VectorTile::new(out_layers))
+}
+
+/// Extracts and rescales features from a parent vector tile to produce a child tile.
+///
+/// For each layer in `tile_src`, every feature is decoded to `Geometry<f64>`, clipped to
+/// the child's sub-region (expanded by `buffer` extent units on every side), and the
+/// surviving pieces are translated + scaled into the child tile's coordinate space. The
+/// resulting layer keeps the source layer's `extent` and `version`.
+///
+/// Returns `Ok(None)` when no surviving features remain (e.g. the child tile covers an
+/// empty quadrant of the parent).
+#[context("extracting tile for coord {:?}", coord_dst)]
+fn extract_tile(
+	tile_src: &VectorTile,
+	coord_src: TileCoord,
+	coord_dst: TileCoord,
+	buffer: u32,
+) -> Result<Option<VectorTile>> {
+	let level_diff = i32::from(coord_dst.level) - i32::from(coord_src.level);
+	ensure!(level_diff >= 0, "difference in levels must be non-negative");
+
+	if level_diff == 0 {
+		return Ok(Some(tile_src.clone()));
+	}
+
+	match extract_features(tile_src, coord_src, coord_dst, buffer)? {
+		Some(layers) => Ok(Some(encode_features(layers)?)),
+		None => Ok(None),
 	}
 }
 
@@ -476,34 +518,38 @@ impl TileSource for Operation {
 			return self.source.as_ref().tile_coord_stream(bbox).await;
 		}
 
-		let mut coords = std::collections::HashSet::new();
+		// To honour the `TileSource` stream-count invariant we have to run the
+		// same decode + clip + filter pipeline as `tile_stream` and only emit
+		// coords whose features survive. We skip the (expensive) MVT re-encode
+		// by stopping at `extract_features` — saves ~50% of the per-tile cost
+		// while keeping counts exact. Source tiles are still served from the
+		// per-operation cache, so the decode happens at most once per source
+		// tile across both stream calls.
+		let self_arc = Arc::new(self.clone());
+		let enable_climbing = self.enable_climbing;
+		let buffer = self.buffer;
 
-		let level_stop = if self.enable_climbing {
-			self.level_min
-		} else {
-			self.level_base
-		};
-
-		for src_level in (level_stop..=self.level_base).rev() {
-			let source_bbox = bbox.at_level(src_level);
-			let mut stream = self.source.as_ref().tile_coord_stream(source_bbox).await?;
-			while let Some((src_coord, _)) = stream.next().await {
-				let scale = 1u32 << (bbox.level() - src_coord.level);
-				let base_x = src_coord.x * scale;
-				let base_y = src_coord.y * scale;
-				for dy in 0..scale {
-					for dx in 0..scale {
-						let coord = TileCoord::new(bbox.level(), base_x + dx, base_y + dy)?;
-						if bbox.includes_coord(&coord) {
-							coords.insert(coord);
+		let stream = TileStream::from_bbox_async_parallel(bbox, move |coord_dst| {
+			let self_arc = self_arc.clone();
+			async move {
+				match self_arc.find_tile(coord_dst, enable_climbing).await {
+					Ok(Some((coord_src, tile_src))) => match extract_features(&tile_src, coord_src, coord_dst, buffer) {
+						Ok(Some(_)) => Some((coord_dst, ())),
+						Ok(None) => None,
+						Err(e) => {
+							log::error!("Error counting tile {coord_dst:?}: {e:?}");
+							None
 						}
+					},
+					Ok(None) => None,
+					Err(e) => {
+						log::error!("Error finding tile {coord_dst:?}: {e:?}");
+						None
 					}
 				}
 			}
-		}
-
-		let vec: Vec<(TileCoord, ())> = coords.into_iter().map(|c| (c, ())).collect();
-		Ok(TileStream::from_vec(vec))
+		});
+		Ok(stream)
 	}
 }
 
@@ -694,16 +740,12 @@ mod tests {
 		Ok(())
 	}
 
-	// Known violation of the TileSource stream-count invariant: at z > level_base,
-	// `tile_coord_stream` enumerates every destination coord that has *some* source
-	// coverage, while `tile_stream` emits only tiles whose features survive the
-	// per-child clip. For the dummy source at z=3 that's 64 vs 16. Ignored until
-	// either `tile_coord_stream` is tightened to match (cost: full extract per
-	// candidate) or the converter's traversal is taught to handle upper-bound
-	// counts. See the TileSource trait docs for the invariant rationale.
-	#[ignore = "vector_overzoom over-estimates in tile_coord_stream; see comment"]
 	#[tokio::test]
 	async fn satisfies_stream_count_invariant() -> Result<()> {
+		// Exact counts across both streams — the override implementation routes
+		// `tile_coord_stream` through `extract_features` so destinations whose
+		// features don't survive the per-child clip are dropped from the count
+		// too.
 		let op = build_op("").await?;
 		let pyr = op.tile_pyramid().await?;
 		for z in 0..=pyr.level_max().unwrap_or(0) {
