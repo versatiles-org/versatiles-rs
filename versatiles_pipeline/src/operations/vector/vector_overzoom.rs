@@ -884,4 +884,84 @@ mod tests {
 		}
 		Ok(())
 	}
+
+	/// Pulls out the first feature of the first layer and returns its coordinates,
+	/// asserting the geometry is a single line.
+	fn first_line_coords(tile: &VectorTile) -> Result<Vec<Coord<f64>>> {
+		let geom = tile.layers[0].features[0].to_geometry()?;
+		match geom {
+			Geometry::MultiLineString(ml) => Ok(ml.0[0].0.clone()),
+			other => panic!("expected MultiLineString, got {other:?}"),
+		}
+	}
+
+	#[test]
+	fn buffer_extends_clip_past_child_edge() -> Result<()> {
+		// A line in parent z=2 that crosses the child (3, 0, 0) sub-region edge
+		// at parent-x=2048. With buffer=0 the clip stops exactly at the edge;
+		// with a positive buffer the clipped piece extends past the visible
+		// child-tile boundary by `buffer / scale` parent-units (= `buffer`
+		// child-units after rescale).
+		let line = Geometry::LineString(LineString::from(vec![[1000.0, 100.0], [3000.0, 100.0]]));
+		let tile = VectorTile::new(vec![layer_with_feature("L", line)]);
+		let parent = TileCoord::new(2, 0, 0)?;
+		let child = TileCoord::new(3, 0, 0)?;
+
+		// buffer=0: max-x clipped exactly at the child edge.
+		let out_zero = extract_tile(&tile, parent, child, 0)?.expect("non-empty clip");
+		let max_x_zero = first_line_coords(&out_zero)?
+			.iter()
+			.map(|c| c.x)
+			.fold(f64::NEG_INFINITY, f64::max);
+		assert!(
+			(max_x_zero - 4096.0).abs() < 1.0,
+			"buffer=0 must clip at child-x=4096, got {max_x_zero}"
+		);
+
+		// buffer=80: max-x extends to child-x = 4096 + 80 = 4176.
+		let out_buf = extract_tile(&tile, parent, child, 80)?.expect("non-empty clip");
+		let max_x_buf = first_line_coords(&out_buf)?
+			.iter()
+			.map(|c| c.x)
+			.fold(f64::NEG_INFINITY, f64::max);
+		assert!(
+			(max_x_buf - 4176.0).abs() < 1.0,
+			"buffer=80 must extend max-x to ~4176 (4096 + buffer), got {max_x_buf}"
+		);
+		Ok(())
+	}
+
+	#[test]
+	fn buffer_pulls_in_features_outside_subregion() -> Result<()> {
+		// Line entirely outside child (3, 0, 0)'s sub-region [0..2048] but inside
+		// the buffer zone — parent-x = [2060..2080]. With buffer=0 the feature
+		// is dropped (no surviving pieces, no layer, extract returns None).
+		// With buffer=80 (40 parent-units) it survives in the buffer zone.
+		let line = Geometry::LineString(LineString::from(vec![[2060.0, 100.0], [2080.0, 100.0]]));
+		let tile = VectorTile::new(vec![layer_with_feature("L", line)]);
+		let parent = TileCoord::new(2, 0, 0)?;
+		let child = TileCoord::new(3, 0, 0)?;
+
+		assert!(
+			extract_tile(&tile, parent, child, 0)?.is_none(),
+			"buffer=0 must drop a feature entirely outside the sub-region"
+		);
+
+		let out = extract_tile(&tile, parent, child, 80)?.expect("buffer=80 keeps the feature");
+		let coords = first_line_coords(&out)?;
+		assert!(!coords.is_empty(), "buffered feature must produce output coords");
+		for c in &coords {
+			assert!(
+				c.x > 4096.0,
+				"buffered coord should sit past the visible tile edge, got x={}",
+				c.x
+			);
+			assert!(
+				c.x < 4096.0 + 80.0 + 1.0,
+				"buffered coord must not exceed the buffer width, got x={}",
+				c.x
+			);
+		}
+		Ok(())
+	}
 }
