@@ -1,6 +1,7 @@
 use anyhow::Result;
 use versatiles_container::{TileSource, TilesRuntime};
-use versatiles_core::{ProbeDepth, utils::PrettyPrint};
+use versatiles_core::{ProbeDepth, TileType, utils::PrettyPrint};
+use versatiles_geometry::vector_tile::{DegenerateReason, IssueKind, validate_tile};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -240,15 +241,158 @@ pub async fn probe_tile_sizes(source: &dyn TileSource, print: &mut PrettyPrint, 
 	Ok(())
 }
 
-/// Writes sample tile content diagnostics or a placeholder if not implemented.
-///
-/// Format-specific hook for the CLI probe orchestration. Override to inspect
-/// tile payloads (e.g., vector layer stats, raster histograms).
-async fn probe_tile_contents(_source: &dyn TileSource, print: &mut PrettyPrint, _runtime: &TilesRuntime) -> Result<()> {
+/// Walks every tile in `source` and reports MVT spec violations found by the
+/// validator. For non-vector sources, emits a "not implemented" warning — we
+/// don't have content-level diagnostics for raster yet.
+async fn probe_tile_contents(source: &dyn TileSource, print: &mut PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
+	if source.metadata().tile_format().to_type() != TileType::Vector {
+		print
+			.add_warning("deep tile contents probing is only implemented for vector sources")
+			.await;
+		return Ok(());
+	}
+
+	probe_mvt_validation(source, print, runtime).await
+}
+
+/// Iterates every tile, runs the MVT validator on it, and prints a summary
+/// of any issues found. Total cost is one decode-per-tile; with the validator
+/// running in lockstep that's cheap relative to the decode itself.
+async fn probe_mvt_validation(
+	source: &dyn TileSource,
+	print: &mut PrettyPrint,
+	runtime: &TilesRuntime,
+) -> Result<()> {
+	#[derive(Default)]
+	struct Counters {
+		orphan_inner: u64,
+		degenerate_too_few: u64,
+		degenerate_sub_pixel: u64,
+		degenerate_collinear: u64,
+		unknown_geom: u64,
+		malformed_stream: u64,
+		decode_failures: u64,
+		tiles_with_issues: u64,
+	}
+	const SAMPLE_LIMIT: usize = 10;
+
+	let mut counters = Counters::default();
+	let mut samples: Vec<Vec<String>> = Vec::with_capacity(SAMPLE_LIMIT);
+	let mut tile_count: u64 = 0;
+
+	let tile_pyramid = source.tile_pyramid().await?;
+	let total_tiles = tile_pyramid.count_tiles();
+	let progress = runtime.create_progress("validating tile contents", total_tiles);
+
+	for bbox in tile_pyramid.to_iter_bboxes().filter(|b| !b.is_empty()) {
+		let mut stream = source.tile_stream(bbox).await?;
+		while let Some((coord, mut tile)) = stream.next().await {
+			tile_count += 1;
+			progress.inc(1);
+
+			let vt = match tile.as_vector() {
+				Ok(vt) => vt,
+				Err(_) => {
+					counters.decode_failures += 1;
+					continue;
+				}
+			};
+
+			let issues = validate_tile(vt);
+			if issues.is_empty() {
+				continue;
+			}
+			counters.tiles_with_issues += 1;
+
+			for issue in &issues {
+				match &issue.kind {
+					IssueKind::OrphanInnerRing => counters.orphan_inner += 1,
+					IssueKind::DegenerateRing(DegenerateReason::TooFewVertices) => {
+						counters.degenerate_too_few += 1;
+					}
+					IssueKind::DegenerateRing(DegenerateReason::SubPixel) => counters.degenerate_sub_pixel += 1,
+					IssueKind::DegenerateRing(DegenerateReason::Collinear) => counters.degenerate_collinear += 1,
+					IssueKind::UnknownGeometryType => counters.unknown_geom += 1,
+					IssueKind::MalformedCommandStream(_) => counters.malformed_stream += 1,
+				}
+				if samples.len() < SAMPLE_LIMIT {
+					samples.push(vec![
+						format!("{}", coord.level),
+						format!("{}", coord.x),
+						format!("{}", coord.y),
+						issue.layer.clone(),
+						format!("{}", issue.feature_index),
+						describe_kind(&issue.kind),
+					]);
+				}
+			}
+		}
+	}
+	progress.finish();
+
+	print.add_key_value("tiles scanned", &tile_count).await;
+
+	let total_issues = counters.orphan_inner
+		+ counters.degenerate_too_few
+		+ counters.degenerate_sub_pixel
+		+ counters.degenerate_collinear
+		+ counters.unknown_geom
+		+ counters.malformed_stream;
+
+	if counters.decode_failures > 0 {
+		print
+			.add_warning(&format!(
+				"{} tile(s) failed to decode as vector — counted but not validated",
+				counters.decode_failures
+			))
+			.await;
+	}
+
+	if total_issues == 0 {
+		print.add_key_value("MVT spec issues", &"none").await;
+		return Ok(());
+	}
+
+	print.add_key_value("MVT spec issues (total)", &total_issues).await;
 	print
-		.add_warning("deep tile contents probing is not implemented for this source")
+		.add_key_value("tiles with issues", &counters.tiles_with_issues)
 		.await;
+
+	let kind_rows: Vec<Vec<String>> = [
+		("OrphanInnerRing", counters.orphan_inner),
+		("DegenerateRing(TooFewVertices)", counters.degenerate_too_few),
+		("DegenerateRing(SubPixel)", counters.degenerate_sub_pixel),
+		("DegenerateRing(Collinear)", counters.degenerate_collinear),
+		("UnknownGeometryType", counters.unknown_geom),
+		("MalformedCommandStream", counters.malformed_stream),
+	]
+	.into_iter()
+	.filter(|(_, n)| *n > 0)
+	.map(|(name, n)| vec![name.to_string(), format_integer_str(&n.to_string())])
+	.collect();
+
+	print.add_table("issues by kind", &["kind", "count"], &kind_rows).await;
+
+	if !samples.is_empty() {
+		print
+			.add_table(
+				&format!("sample issues (first {})", samples.len()),
+				&["z", "x", "y", "layer", "feature", "kind"],
+				&samples,
+			)
+			.await;
+	}
+
 	Ok(())
+}
+
+fn describe_kind(kind: &IssueKind) -> String {
+	match kind {
+		IssueKind::OrphanInnerRing => "OrphanInnerRing".to_string(),
+		IssueKind::DegenerateRing(reason) => format!("DegenerateRing({reason:?})"),
+		IssueKind::UnknownGeometryType => "UnknownGeometryType".to_string(),
+		IssueKind::MalformedCommandStream(_) => "MalformedCommandStream".to_string(),
+	}
 }
 
 #[cfg(test)]
@@ -299,6 +443,29 @@ mod tests {
 		assert!(out.contains("biggest tiles"), "got: {out}");
 		assert!(out.contains("tile size analysis per level"), "got: {out}");
 
+		Ok(())
+	}
+
+	/// Walk every tile in `berlin.mbtiles` through the validator-backed deep
+	/// probe. We only assert the output is well-formed — the fixture happens
+	/// to contain malformed polygons (orphan inner rings in the `land`
+	/// layer) from its tilemaker generator, which is itself a useful
+	/// finding but unstable across fixture regenerations.
+	#[tokio::test]
+	async fn probe_tile_contents_against_mbtiles_runs_and_summarises() -> Result<()> {
+		let runtime = create_test_runtime();
+		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
+		let source: &dyn TileSource = &**reader;
+
+		let mut printer = PrettyPrint::new();
+		probe_tile_contents(source, &mut printer.category("tile contents").await, &runtime).await?;
+		let out = printer.stringify().await;
+
+		assert!(out.contains("tiles scanned"), "missing tile count: {out}");
+		// Output must include EITHER a "none" line OR an issue summary —
+		// never neither (which would mean the validator didn't run at all).
+		let summarised = out.contains("MVT spec issues") && (out.contains("none") || out.contains("issues by kind"));
+		assert!(summarised, "validator output missing or malformed: {out}");
 		Ok(())
 	}
 }
