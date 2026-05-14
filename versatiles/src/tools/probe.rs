@@ -255,29 +255,48 @@ async fn probe_tile_contents(source: &dyn TileSource, print: &mut PrettyPrint, r
 	probe_mvt_validation(source, print, runtime).await
 }
 
+#[derive(Default)]
+struct ValidationCounters {
+	orphan_inner: u64,
+	degenerate_too_few: u64,
+	degenerate_sub_pixel: u64,
+	degenerate_collinear: u64,
+	unknown_geom: u64,
+	malformed_stream: u64,
+	decode_failures: u64,
+	tiles_with_issues: u64,
+}
+
+impl ValidationCounters {
+	fn total_issues(&self) -> u64 {
+		self.orphan_inner
+			+ self.degenerate_too_few
+			+ self.degenerate_sub_pixel
+			+ self.degenerate_collinear
+			+ self.unknown_geom
+			+ self.malformed_stream
+	}
+
+	fn record(&mut self, kind: &IssueKind) {
+		match kind {
+			IssueKind::OrphanInnerRing => self.orphan_inner += 1,
+			IssueKind::DegenerateRing(DegenerateReason::TooFewVertices) => self.degenerate_too_few += 1,
+			IssueKind::DegenerateRing(DegenerateReason::SubPixel) => self.degenerate_sub_pixel += 1,
+			IssueKind::DegenerateRing(DegenerateReason::Collinear) => self.degenerate_collinear += 1,
+			IssueKind::UnknownGeometryType => self.unknown_geom += 1,
+			IssueKind::MalformedCommandStream(_) => self.malformed_stream += 1,
+		}
+	}
+}
+
+const VALIDATION_SAMPLE_LIMIT: usize = 10;
+
 /// Iterates every tile, runs the MVT validator on it, and prints a summary
 /// of any issues found. Total cost is one decode-per-tile; with the validator
 /// running in lockstep that's cheap relative to the decode itself.
-async fn probe_mvt_validation(
-	source: &dyn TileSource,
-	print: &mut PrettyPrint,
-	runtime: &TilesRuntime,
-) -> Result<()> {
-	#[derive(Default)]
-	struct Counters {
-		orphan_inner: u64,
-		degenerate_too_few: u64,
-		degenerate_sub_pixel: u64,
-		degenerate_collinear: u64,
-		unknown_geom: u64,
-		malformed_stream: u64,
-		decode_failures: u64,
-		tiles_with_issues: u64,
-	}
-	const SAMPLE_LIMIT: usize = 10;
-
-	let mut counters = Counters::default();
-	let mut samples: Vec<Vec<String>> = Vec::with_capacity(SAMPLE_LIMIT);
+async fn probe_mvt_validation(source: &dyn TileSource, print: &mut PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
+	let mut counters = ValidationCounters::default();
+	let mut samples: Vec<Vec<String>> = Vec::with_capacity(VALIDATION_SAMPLE_LIMIT);
 	let mut tile_count: u64 = 0;
 
 	let tile_pyramid = source.tile_pyramid().await?;
@@ -290,12 +309,9 @@ async fn probe_mvt_validation(
 			tile_count += 1;
 			progress.inc(1);
 
-			let vt = match tile.as_vector() {
-				Ok(vt) => vt,
-				Err(_) => {
-					counters.decode_failures += 1;
-					continue;
-				}
+			let Ok(vt) = tile.as_vector() else {
+				counters.decode_failures += 1;
+				continue;
 			};
 
 			let issues = validate_tile(vt);
@@ -305,17 +321,8 @@ async fn probe_mvt_validation(
 			counters.tiles_with_issues += 1;
 
 			for issue in &issues {
-				match &issue.kind {
-					IssueKind::OrphanInnerRing => counters.orphan_inner += 1,
-					IssueKind::DegenerateRing(DegenerateReason::TooFewVertices) => {
-						counters.degenerate_too_few += 1;
-					}
-					IssueKind::DegenerateRing(DegenerateReason::SubPixel) => counters.degenerate_sub_pixel += 1,
-					IssueKind::DegenerateRing(DegenerateReason::Collinear) => counters.degenerate_collinear += 1,
-					IssueKind::UnknownGeometryType => counters.unknown_geom += 1,
-					IssueKind::MalformedCommandStream(_) => counters.malformed_stream += 1,
-				}
-				if samples.len() < SAMPLE_LIMIT {
+				counters.record(&issue.kind);
+				if samples.len() < VALIDATION_SAMPLE_LIMIT {
 					samples.push(vec![
 						format!("{}", coord.level),
 						format!("{}", coord.x),
@@ -330,14 +337,17 @@ async fn probe_mvt_validation(
 	}
 	progress.finish();
 
-	print.add_key_value("tiles scanned", &tile_count).await;
+	print_validation_summary(print, tile_count, &counters, &samples).await;
+	Ok(())
+}
 
-	let total_issues = counters.orphan_inner
-		+ counters.degenerate_too_few
-		+ counters.degenerate_sub_pixel
-		+ counters.degenerate_collinear
-		+ counters.unknown_geom
-		+ counters.malformed_stream;
+async fn print_validation_summary(
+	print: &mut PrettyPrint,
+	tile_count: u64,
+	counters: &ValidationCounters,
+	samples: &[Vec<String>],
+) {
+	print.add_key_value("tiles scanned", &tile_count).await;
 
 	if counters.decode_failures > 0 {
 		print
@@ -348,12 +358,13 @@ async fn probe_mvt_validation(
 			.await;
 	}
 
-	if total_issues == 0 {
+	let total = counters.total_issues();
+	if total == 0 {
 		print.add_key_value("MVT spec issues", &"none").await;
-		return Ok(());
+		return;
 	}
 
-	print.add_key_value("MVT spec issues (total)", &total_issues).await;
+	print.add_key_value("MVT spec issues (total)", &total).await;
 	print
 		.add_key_value("tiles with issues", &counters.tiles_with_issues)
 		.await;
@@ -378,12 +389,10 @@ async fn probe_mvt_validation(
 			.add_table(
 				&format!("sample issues (first {})", samples.len()),
 				&["z", "x", "y", "layer", "feature", "kind"],
-				&samples,
+				samples,
 			)
 			.await;
 	}
-
-	Ok(())
 }
 
 fn describe_kind(kind: &IssueKind) -> String {

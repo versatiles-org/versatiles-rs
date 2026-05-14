@@ -875,10 +875,7 @@ mod tests {
 	/// ones survive — each is decided independently.
 	#[test]
 	fn encoder_drops_degenerate_polygons_from_multipolygon() -> Result<()> {
-		let valid = Polygon::new(
-			ls_from(&[[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]]),
-			vec![],
-		);
+		let valid = Polygon::new(ls_from(&[[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]]), vec![]);
 		let bad = Polygon::new(ls_from(&[[10, 10], [11, 11], [12, 12], [10, 10]]), vec![]);
 		let mp = MultiPolygon(vec![valid, bad]);
 

@@ -299,7 +299,8 @@ mod tests {
 
 		assert!(total_tiles > 0, "expected to walk at least one tile");
 		assert_eq!(
-			total_issues, 0,
+			total_issues,
+			0,
 			"vector_repair must leave no spec issues; first remaining: {}",
 			sample_issue.as_deref().unwrap_or("<none>")
 		);

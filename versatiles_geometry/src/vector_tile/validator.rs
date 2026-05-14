@@ -16,8 +16,8 @@
 //! - **`DegenerateRing`**: a ring that rounds to fewer than 3 distinct
 //!   integer-grid points (`SubPixel`), has fewer than 3 vertices
 //!   (`TooFewVertices`), or has zero/near-zero surveyor area (`Collinear`).
-//! - **`UnknownGeometryType`**: feature has [`GeomType::Unknown`] (geom type
-//!   0 in the MVT spec, "anything not classified").
+//! - **`UnknownGeometryType`**: feature has geometry type 0 ("Unknown" — the
+//!   MVT spec defines this code but does not assign it a shape).
 //! - **`MalformedCommandStream`**: the geometry command stream could not be
 //!   parsed (bad varint, unknown command, ClosePath on empty linestring,
 //!   …). The string carries the parser's error message.
@@ -53,8 +53,9 @@ pub enum IssueKind {
 	/// A ring that would not render after encoding to MVT integer-grid
 	/// coordinates. The wrapped reason gives the precise failure mode.
 	DegenerateRing(DegenerateReason),
-	/// Feature carries [`GeomType::Unknown`]. The spec defines it but the
-	/// decoder cannot produce a meaningful geometry from it.
+	/// Feature carries geometry type 0 ("Unknown"). The spec defines this
+	/// code but does not assign it a shape, so the decoder cannot produce
+	/// any meaningful geometry from it.
 	UnknownGeometryType,
 	/// The MVT geometry command stream could not be parsed. The string is the
 	/// parser's `anyhow` error chain, joined.
@@ -232,7 +233,7 @@ mod tests {
 		let mut writer = ValueWriterBlob::new_le();
 		let mut prev = (0i64, 0i64);
 		for ring in rings {
-			assert!(ring.len() >= 1);
+			assert!(!ring.is_empty());
 			let (fx, fy) = ring[0];
 			let (ix, iy) = (i64::from(fx), i64::from(fy));
 			writer.write_varint((1 << 3) | 0x1).unwrap(); // MoveTo count=1
