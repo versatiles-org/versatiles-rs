@@ -13,7 +13,7 @@ async fn e2e_serve_local_file() {
 	assert_eq!(server.index().await, ["berlin"]);
 	assert_eq!(
 		server.tilejson("berlin").await,
-		vec!["length: 19", "desc: Tile config for simple vector tiles schema"]
+		vec!["length: 26", "desc: Vector tiles based on OSM in Shortbread scheme"]
 	);
 }
 

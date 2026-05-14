@@ -731,7 +731,7 @@ mod tests {
 		assert_relative_eq!(tile_json.minzoom, 0.0);
 		assert_relative_eq!(tile_json.maxzoom, 14.0);
 		assert!(tile_json.vector_layers.is_some());
-		assert_eq!(tile_json.vector_layers.as_ref().unwrap().len(), 19);
+		assert_eq!(tile_json.vector_layers.as_ref().unwrap().len(), 26);
 	}
 
 	#[tokio::test]

@@ -154,9 +154,9 @@ mod tests {
 	}
 
 	// Test the get_data method of the ServerTileSource.
-	// `berlin.mbtiles` was regenerated from osm.versatiles with a tighter
-	// central-Berlin bbox; `berlin.pmtiles` still has the original wider
-	// bounds. Each case carries its own expected bounds string.
+	// All three fixtures cover the same central-Berlin bbox at z0..z14
+	// (regenerated from osm.versatiles), so they share the same expected
+	// bounds and tile coord.
 	#[rstest]
 	#[case(
 		"../testdata/berlin.mbtiles",
@@ -165,8 +165,8 @@ mod tests {
 	)]
 	#[case(
 		"../testdata/berlin.pmtiles",
-		"12/2200/1345",
-		("vnd.mapbox-vector-tile", "[13.08283,52.33446,13.762245,52.6783]", [31, 139, 8, 0], 0, 14)
+		"12/2200/1343",
+		("vnd.mapbox-vector-tile", "[13.3,52.45,13.46,52.55]", [31, 139, 8, 0], 0, 14)
 	)]
 	#[case(
 		"../testdata/berlin.vpl",

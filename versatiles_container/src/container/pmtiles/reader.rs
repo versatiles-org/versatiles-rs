@@ -511,12 +511,12 @@ mod tests {
 
 		assert_eq!(
 			format!("{:?}", reader.header),
-			"HeaderV3 { root_dir: ByteRange[127,2271], metadata: ByteRange[2398,592], leaf_dirs: ByteRange[2990,0], tile_data: ByteRange[2990,25869006], addressed_tiles_count: 878, tile_entries_count: 878, tile_contents_count: 876, clustered: true, internal_compression: Gzip, tile_compression: Gzip, tile_type: MVT, min_zoom: 0, max_zoom: 14, min_lon_e7: 130828300, min_lat_e7: 523344600, max_lon_e7: 137622450, max_lat_e7: 526783000, center_zoom: 7, center_lon_e7: 134225380, center_lat_e7: 525063800 }"
+			"HeaderV3 { root_dir: ByteRange[127,504], metadata: ByteRange[631,888], leaf_dirs: ByteRange[1519,0], tile_data: ByteRange[1519,11339914], addressed_tiles_count: 130, tile_entries_count: 130, tile_contents_count: 130, clustered: true, internal_compression: Gzip, tile_compression: Gzip, tile_type: MVT, min_zoom: 0, max_zoom: 14, min_lon_e7: 133000000, min_lat_e7: 524500000, max_lon_e7: 134600000, max_lat_e7: 525500000, center_zoom: 2, center_lon_e7: 133813476, center_lat_e7: 525028064 }"
 		);
 
 		assert_wildcard!(
 			reader.tilejson().stringify(),
-			"{\"author\":\"OpenStreetMap contributors, Geofabrik GmbH\",*,\"version\":\"3.0\"}"
+			"{\"author\":\"OpenStreetMap contributors\",*,\"version\":\"2.0\"}"
 		);
 
 		assert_eq!(
@@ -531,7 +531,7 @@ mod tests {
 				.unwrap()
 				.as_blob(reader.metadata.tile_compression())?
 				.len(),
-			20
+			90891
 		);
 
 		assert_eq!(
@@ -541,7 +541,7 @@ mod tests {
 				.unwrap()
 				.as_blob(reader.metadata.tile_compression())?
 				.len(),
-			100391
+			130653
 		);
 
 		assert!(reader.tile(&TileCoord::new(16, 0, 0)?).await?.is_none());
@@ -582,7 +582,7 @@ mod tests {
 
 		assert_eq!(sizes.len(), 1);
 		assert_eq!(sizes[0].0, TileCoord::new(0, 0, 0)?);
-		assert_eq!(sizes[0].1, 20);
+		assert_eq!(sizes[0].1, 90891);
 
 		Ok(())
 	}
@@ -613,7 +613,7 @@ mod tests {
 			.await?;
 		let output = printer.stringify().await;
 		assert!(
-			output.contains("addressed tiles count: 878"),
+			output.contains("addressed tiles count: 130"),
 			"unexpected output: {output}"
 		);
 		assert!(output.contains("clustered: true"), "unexpected output: {output}");
