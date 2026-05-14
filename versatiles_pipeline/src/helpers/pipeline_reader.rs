@@ -233,7 +233,7 @@ mod tests {
 			.unwrap()
 			.into_blob(&TileCompression::Uncompressed)?;
 
-		assert_eq!(result.len(), 141385);
+		assert_eq!(result.len(), 187438);
 
 		Ok(())
 	}

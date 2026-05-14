@@ -456,12 +456,11 @@ mod tests {
 	}
 
 	/// Walk every tile in `berlin.mbtiles` through the validator-backed deep
-	/// probe. We only assert the output is well-formed — the fixture happens
-	/// to contain malformed polygons (orphan inner rings in the `land`
-	/// layer) from its tilemaker generator, which is itself a useful
-	/// finding but unstable across fixture regenerations.
+	/// probe. The fixture was regenerated through `vector_repair` so it is
+	/// MVT 2.1 conformant; the test asserts the validator reports zero
+	/// issues and the output structure is well-formed.
 	#[tokio::test]
-	async fn probe_tile_contents_against_mbtiles_runs_and_summarises() -> Result<()> {
+	async fn probe_tile_contents_against_mbtiles_reports_no_issues() -> Result<()> {
 		let runtime = create_test_runtime();
 		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 		let source: &dyn TileSource = &**reader;
@@ -471,10 +470,11 @@ mod tests {
 		let out = printer.stringify().await;
 
 		assert!(out.contains("tiles scanned"), "missing tile count: {out}");
-		// Output must include EITHER a "none" line OR an issue summary —
-		// never neither (which would mean the validator didn't run at all).
-		let summarised = out.contains("MVT spec issues") && (out.contains("none") || out.contains("issues by kind"));
-		assert!(summarised, "validator output missing or malformed: {out}");
+		assert!(out.contains("MVT spec issues"), "missing validator section: {out}");
+		assert!(
+			out.contains("none"),
+			"expected zero issues for repaired fixture, got: {out}"
+		);
 		Ok(())
 	}
 }

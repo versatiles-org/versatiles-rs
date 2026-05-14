@@ -77,19 +77,24 @@ fn e2e_convert_vpl_via_stdin() {
 }
 
 // --- Convert command bbox tests ---
+//
+// All assertions below are computed against the fixture's actual bounds
+// ([13.3, 52.45, 13.46, 52.55] for the small repaired-from-osm.versatiles
+// berlin fixture).
 
 #[test]
 fn e2e_convert_bbox_inside_source() {
 	let input = get_testdata("berlin.mbtiles");
 	let (_temp_dir, output) = get_temp_output("bbox_inside.mbtiles");
 
+	// A bbox strictly inside the fixture's bounds → output bounds = arg.
 	versatiles_run(&format!(
-		"convert --bbox 13.2,52.4,13.6,52.6 {} {}",
+		"convert --bbox 13.35,52.48,13.42,52.52 {} {}",
 		&input,
 		output.to_str().unwrap()
 	));
 
-	assert_eq!(tilejson_bounds(&output), [13.2, 52.4, 13.6, 52.6]);
+	assert_eq!(tilejson_bounds(&output), [13.35, 52.48, 13.42, 52.52]);
 }
 
 #[test]
@@ -97,13 +102,14 @@ fn e2e_convert_bbox_partial_overlap() {
 	let input = get_testdata("berlin.mbtiles");
 	let (_temp_dir, output) = get_temp_output("bbox_partial.mbtiles");
 
+	// arg overlaps the eastern half of the fixture → clamped intersection.
 	versatiles_run(&format!(
-		"convert --bbox 13.5,52.5,14.5,53.5 {} {}",
+		"convert --bbox 13.4,52.5,13.7,52.6 {} {}",
 		&input,
 		output.to_str().unwrap()
 	));
 
-	assert_eq!(tilejson_bounds(&output), [13.5, 52.5, 13.762245, 52.6783]);
+	assert_eq!(tilejson_bounds(&output), [13.4, 52.5, 13.46, 52.55]);
 }
 
 #[test]
@@ -111,13 +117,14 @@ fn e2e_convert_bbox_contains_source() {
 	let input = get_testdata("berlin.mbtiles");
 	let (_temp_dir, output) = get_temp_output("bbox_contains.mbtiles");
 
+	// arg wider than fixture in every direction → output keeps fixture bounds.
 	versatiles_run(&format!(
 		"convert --bbox 12.0,51.0,15.0,54.0 {} {}",
 		&input,
 		output.to_str().unwrap()
 	));
 
-	assert_eq!(tilejson_bounds(&output), [13.08283, 52.33446, 13.762245, 52.6783]);
+	assert_eq!(tilejson_bounds(&output), [13.3, 52.45, 13.46, 52.55]);
 }
 
 #[test]
@@ -127,7 +134,7 @@ fn e2e_convert_no_bbox() {
 
 	versatiles_run(&format!("convert {} {}", &input, output.to_str().unwrap()));
 
-	assert_eq!(tilejson_bounds(&output), [13.08283, 52.33446, 13.762245, 52.6783]);
+	assert_eq!(tilejson_bounds(&output), [13.3, 52.45, 13.46, 52.55]);
 }
 
 // --- VPL filter bbox tests ---
@@ -135,21 +142,23 @@ fn e2e_convert_no_bbox() {
 #[test]
 fn e2e_vpl_filter_bbox() {
 	let input = get_testdata("berlin.mbtiles");
-	let vpl = format!("from_container filename='{input}' | filter bbox=[13.2,52.4,13.6,52.6]");
+	// filter bbox strictly inside fixture → result = filter bbox.
+	let vpl = format!("from_container filename='{input}' | filter bbox=[13.35,52.48,13.42,52.52]");
 
 	let (_temp_dir, bounds) = get_bounds_from_vpl(&vpl);
-	assert_eq!(bounds, [13.2, 52.4, 13.6, 52.6]);
+	assert_eq!(bounds, [13.35, 52.48, 13.42, 52.52]);
 }
 
 #[test]
 fn e2e_vpl_chained_filters() {
 	let input = get_testdata("berlin.mbtiles");
+	// outer filter wider than inner; inner inside fixture → result = inner.
 	let vpl = format!(
-		"from_container filename='{input}' | filter bbox=[13.0,52.0,13.8,52.8] | filter bbox=[13.3,52.4,13.6,52.6]"
+		"from_container filename='{input}' | filter bbox=[13.0,52.0,13.5,52.6] | filter bbox=[13.35,52.48,13.42,52.52]"
 	);
 
 	let (_temp_dir, bounds) = get_bounds_from_vpl(&vpl);
-	assert_eq!(bounds, [13.3, 52.4, 13.6, 52.6]);
+	assert_eq!(bounds, [13.35, 52.48, 13.42, 52.52]);
 }
 
 // --- Combination operation bbox tests ---
@@ -157,15 +166,16 @@ fn e2e_vpl_chained_filters() {
 #[test]
 fn e2e_vpl_from_merged_vector_bbox() {
 	let input = get_testdata("berlin.mbtiles");
+	// Two non-overlapping sub-bboxes inside the fixture → merged bounds = union.
 	let vpl = format!(
 		"from_merged_vector [\n\
-		   from_container filename='{input}' | filter bbox=[13.1,52.35,13.4,52.5],\n\
-		   from_container filename='{input}' | filter bbox=[13.5,52.5,13.75,52.65]\n\
+		   from_container filename='{input}' | filter bbox=[13.30,52.45,13.37,52.55],\n\
+		   from_container filename='{input}' | filter bbox=[13.40,52.45,13.46,52.55]\n\
 		]"
 	);
 
 	let (_temp_dir, bounds) = get_bounds_from_vpl(&vpl);
-	assert_eq!(bounds, [13.1, 52.35, 13.75, 52.65]);
+	assert_eq!(bounds, [13.30, 52.45, 13.46, 52.55]);
 }
 
 #[test]
@@ -173,13 +183,13 @@ fn e2e_vpl_from_stacked_bbox() {
 	let input = get_testdata("berlin.mbtiles");
 	let vpl = format!(
 		"from_stacked [\n\
-		   from_container filename='{input}' | filter bbox=[13.1,52.35,13.4,52.5],\n\
-		   from_container filename='{input}' | filter bbox=[13.5,52.5,13.75,52.65]\n\
+		   from_container filename='{input}' | filter bbox=[13.30,52.45,13.37,52.55],\n\
+		   from_container filename='{input}' | filter bbox=[13.40,52.45,13.46,52.55]\n\
 		]"
 	);
 
 	let (_temp_dir, bounds) = get_bounds_from_vpl(&vpl);
-	assert_eq!(bounds, [13.1, 52.35, 13.75, 52.65]);
+	assert_eq!(bounds, [13.30, 52.45, 13.46, 52.55]);
 }
 
 #[test]

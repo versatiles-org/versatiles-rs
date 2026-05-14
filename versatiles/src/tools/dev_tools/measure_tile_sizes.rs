@@ -122,7 +122,7 @@ mod tests {
 		assert_eq!(image.dimensions(), (4096, 4096));
 
 		let image = image.crop_imm(2195, 1339, 11, 9);
-		assert_eq!(image.average_color(), [82]);
+		assert_eq!(image.average_color(), [22]);
 
 		Ok(())
 	}

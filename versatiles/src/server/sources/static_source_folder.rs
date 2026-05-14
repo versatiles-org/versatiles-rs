@@ -131,7 +131,7 @@ mod tests {
 		assert!(result.is_some());
 
 		let result = result.unwrap();
-		assert_eq!(result.blob.len(), 26533888);
+		assert_eq!(result.blob.len(), 11481088);
 		assert_eq!(result.compression, TileCompression::Uncompressed);
 	}
 

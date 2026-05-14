@@ -705,14 +705,14 @@ mod tests {
 		let tile_json = reader.tile_json();
 
 		// MBTiles should have bounds
-		assert_eq!(tile_json.bounds.unwrap(), [13.08283, 52.33446, 13.762245, 52.6783]);
+		assert_eq!(tile_json.bounds.unwrap(), [13.3, 52.45, 13.46, 52.55]);
 
 		// Check common fields
 		assert_eq!(tile_json.version, "3.0");
 		assert_relative_eq!(tile_json.minzoom, 0.0);
 		assert_relative_eq!(tile_json.maxzoom, 14.0);
 		assert!(tile_json.vector_layers.is_some());
-		assert_eq!(tile_json.vector_layers.as_ref().unwrap().len(), 19);
+		assert_eq!(tile_json.vector_layers.as_ref().unwrap().len(), 26);
 	}
 
 	#[tokio::test]
@@ -945,7 +945,7 @@ mod tests {
 
 		// Get a tile that likely exists
 		let buffer = reader.get_tile(10, 550, 335).await.unwrap().unwrap();
-		assert_eq!(buffer.len(), 113612);
+		assert_eq!(buffer.len(), 103615);
 	}
 
 	#[tokio::test]
@@ -1006,7 +1006,7 @@ mod tests {
 
 		// Get a tile that should exist
 		let tile = reader.get_tile(5, 17, 10).await.unwrap();
-		assert_eq!(tile.unwrap().len(), 4137);
+		assert_eq!(tile.unwrap().len(), 192108);
 	}
 
 	#[tokio::test]

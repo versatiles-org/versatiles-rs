@@ -153,12 +153,15 @@ mod tests {
 		Ok(())
 	}
 
-	// Test the get_data method of the ServerTileSource
+	// Test the get_data method of the ServerTileSource.
+	// `berlin.mbtiles` was regenerated from osm.versatiles with a tighter
+	// central-Berlin bbox; `berlin.pmtiles` still has the original wider
+	// bounds. Each case carries its own expected bounds string.
 	#[rstest]
 	#[case(
 		"../testdata/berlin.mbtiles",
-		"12/2200/1345",
-		("vnd.mapbox-vector-tile", "[13.08283,52.33446,13.762245,52.6783]", [31, 139, 8, 0], 0, 14)
+		"12/2200/1343",
+		("vnd.mapbox-vector-tile", "[13.3,52.45,13.46,52.55]", [31, 139, 8, 0], 0, 14)
 	)]
 	#[case(
 		"../testdata/berlin.pmtiles",
@@ -167,8 +170,8 @@ mod tests {
 	)]
 	#[case(
 		"../testdata/berlin.vpl",
-		"12/2200/1345",
-		("vnd.mapbox-vector-tile", "[13.08283,52.33446,13.762245,52.6783]", [31, 139, 8, 0], 0, 14)
+		"12/2200/1343",
+		("vnd.mapbox-vector-tile", "[13.3,52.45,13.46,52.55]", [31, 139, 8, 0], 0, 14)
 	)]
 	#[tokio::test]
 	async fn tile_container_get_data(
