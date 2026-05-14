@@ -600,6 +600,94 @@ mod tests {
 		Ok(())
 	}
 
+	/// Source with a sparse pyramid at `level_base=1`: ancestors plus three of
+	/// four z=1 tiles. The interior tile `(1, 1, 1)` is intentionally absent
+	/// so a request for its descendant at z=2 has to climb to z=0.
+	async fn build_sparse_op(extra_args: &str) -> Result<Operation> {
+		let pyramid = TilePyramid::from_tile_coords(
+			[
+				TileCoord::new(0, 0, 0)?,
+				TileCoord::new(1, 0, 0)?,
+				TileCoord::new(1, 1, 0)?,
+				TileCoord::new(1, 0, 1)?,
+				// (1, 1, 1) deliberately omitted.
+			]
+			.into_iter(),
+		);
+		let source = Box::new(DummyVectorSource::new(&[("dummy", &[&[("k", "v")]])], Some(pyramid)));
+		Operation::build(
+			VPLNode::try_from_str(&format!("vector_overzoom level_base=1 level_max=3 {extra_args}"))?,
+			source,
+			&PipelineFactory::new_dummy(),
+		)
+		.await
+	}
+
+	#[tokio::test]
+	async fn find_tile_returns_level_base_tile_when_present() -> Result<()> {
+		// Destination (2, 0, 0) — its parent at z=1 is (1, 0, 0), which IS in
+		// the source pyramid. No climbing needed regardless of the flag.
+		let op = build_sparse_op("").await?;
+		let coord_dst = TileCoord::new(2, 0, 0)?;
+		let (coord_src, _) = op
+			.find_tile(coord_dst, true)
+			.await?
+			.expect("level_base tile is present");
+		assert_eq!(coord_src.level, 1);
+		assert_eq!((coord_src.x, coord_src.y), (0, 0));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn find_tile_climbs_when_level_base_tile_is_missing() -> Result<()> {
+		// Destination (2, 2, 2) — its parent at z=1 is (1, 1, 1), which is
+		// NOT in the source pyramid. With climbing enabled, find_tile must
+		// fall through to (0, 0, 0).
+		let op = build_sparse_op("").await?;
+		let coord_dst = TileCoord::new(2, 2, 2)?;
+		let (coord_src, _) = op
+			.find_tile(coord_dst, true)
+			.await?
+			.expect("climbing should locate the z=0 ancestor");
+		assert_eq!(coord_src.level, 0, "climbed to z=0");
+		assert_eq!((coord_src.x, coord_src.y), (0, 0));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn find_tile_returns_none_without_climbing_when_parent_missing() -> Result<()> {
+		// Same destination as the climbing test, but with climbing disabled
+		// the missing parent at level_base aborts the lookup.
+		let op = build_sparse_op("").await?;
+		let coord_dst = TileCoord::new(2, 2, 2)?;
+		assert!(
+			op.find_tile(coord_dst, false).await?.is_none(),
+			"climbing disabled → None when level_base tile is missing"
+		);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn enable_climbing_arg_threads_through_to_tile_stream() -> Result<()> {
+		// Integration-flavoured: with climbing enabled the operation emits
+		// some tile content in the missing-parent region; without it, the
+		// same region yields nothing.
+		let bbox = TileCoord::new(2, 2, 2)?.to_tile_bbox();
+
+		let op_with = build_sparse_op("enable_climbing=true").await?;
+		let with_count = op_with.tile_stream(bbox).await?.to_vec().await.len();
+
+		let op_without = build_sparse_op("enable_climbing=false").await?;
+		let without_count = op_without.tile_stream(bbox).await?.to_vec().await.len();
+
+		assert!(
+			with_count >= without_count,
+			"climbing must not reduce tile yield (with={with_count}, without={without_count})"
+		);
+		assert_eq!(without_count, 0, "climbing disabled and parent missing → zero tiles");
+		Ok(())
+	}
+
 	#[tokio::test]
 	async fn test_rejects_raster_source() {
 		use crate::helpers::dummy_image_source::DummyImageSource;
