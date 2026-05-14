@@ -183,6 +183,10 @@ impl VectorTileFeature {
 				ensure!(!coordinates.is_empty(), "Polygons must have at least one entry");
 				let mut current_polygon: Vec<LineString<f64>> = Vec::new();
 				let mut polygons: Vec<Polygon<f64>> = Vec::new();
+				// Surface spec violations on first occurrence per feature. Repeated rings
+				// in the same feature do not retrigger the warning to avoid flooding the
+				// log when an entire tile is malformed.
+				let mut bad_winding_warned = false;
 
 				let push_polygon = |rings: Vec<LineString<f64>>, polygons: &mut Vec<Polygon<f64>>| {
 					if let Some((exterior, interiors)) = rings.split_first() {
@@ -205,12 +209,19 @@ impl VectorTileFeature {
 					} else if area2 < -1e-14 {
 						// Inner ring
 						if current_polygon.is_empty() {
-							log::trace!("An outer ring must precede inner rings");
+							if !bad_winding_warned {
+								log::warn!(
+									"Dropping orphan inner ring with no preceding outer — \
+									 likely indicates inverted polygon winding in source MVT \
+									 (violates MVT 2.1 §4.3.3.3)"
+								);
+								bad_winding_warned = true;
+							}
 						} else {
 							current_polygon.push(ring);
 						}
 					} else {
-						log::trace!("Error: Ring with zero area");
+						log::debug!("Skipping polygon ring with zero area (collinear or degenerate vertices)");
 					}
 				}
 
@@ -485,5 +496,83 @@ mod tests {
 		// Three collinear points enclose no area.
 		let ring = coords(&[(0.0, 0.0), (1.0, 1.0), (2.0, 2.0), (0.0, 0.0)]);
 		assert!(ring_signed_double_area(&ring).abs() < 1e-12);
+	}
+
+	/// Builds a polygon-typed `VectorTileFeature` whose `geom_data` encodes the
+	/// given rings literally, in the given order and winding. Unlike
+	/// `from_geometry`, this does not normalise or validate the input, so it can
+	/// be used to construct spec-violating fixtures.
+	#[cfg(test)]
+	fn raw_polygon_feature(rings: &[Vec<(i32, i32)>]) -> VectorTileFeature {
+		use versatiles_core::io::{ValueWriter, ValueWriterBlob};
+		let mut writer = ValueWriterBlob::new_le();
+		let mut prev = (0i64, 0i64);
+		for ring in rings {
+			assert!(ring.len() >= 3, "ring needs at least 3 vertices");
+			let (fx, fy) = ring[0];
+			let (ix, iy) = (i64::from(fx), i64::from(fy));
+			writer.write_varint((1 << 3) | 0x1).unwrap(); // MoveTo, count=1
+			writer.write_svarint(ix - prev.0).unwrap();
+			writer.write_svarint(iy - prev.1).unwrap();
+			prev = (ix, iy);
+
+			let rest = ring.len() - 1;
+			writer.write_varint(((rest as u64) << 3) | 0x2).unwrap(); // LineTo, count=rest
+			for &(fx, fy) in &ring[1..] {
+				let (ix, iy) = (i64::from(fx), i64::from(fy));
+				writer.write_svarint(ix - prev.0).unwrap();
+				writer.write_svarint(iy - prev.1).unwrap();
+				prev = (ix, iy);
+			}
+			writer.write_varint(7).unwrap(); // ClosePath
+		}
+		VectorTileFeature {
+			id: None,
+			tag_ids: vec![],
+			geom_type: GeomType::MultiPolygon,
+			geom_data: writer.into_blob(),
+		}
+	}
+
+	/// A feature whose rings all classify as inner (no preceding outer) — i.e.
+	/// the inverted-winding case from `landcover-vectors#3`. The decoder must
+	/// drop them silently (returning an empty MultiPolygon) and warn once.
+	#[test]
+	fn orphan_inner_rings_decode_to_empty_multipolygon() -> Result<()> {
+		// Two CCW (positive area) rings — outer in spec, but if a producer
+		// emits them as the *first* rings in a feature without preceding CW
+		// outers, the strict decoder treats them as outer rings, not orphans.
+		// To actually exercise the orphan-inner path we need CW (negative area)
+		// rings at the start of the feature.
+		let inner_a = vec![(0, 0), (0, 100), (100, 100), (100, 0), (0, 0)]; // CW (screen) → negative area
+		let inner_b = vec![(200, 200), (200, 300), (300, 300), (300, 200), (200, 200)];
+		let feature = raw_polygon_feature(&[inner_a, inner_b]);
+
+		let geom = feature.to_geometry()?;
+		match geom {
+			Geometry::MultiPolygon(mp) => {
+				assert!(
+					mp.0.is_empty(),
+					"orphan inner rings must be dropped; got {} polygon(s)",
+					mp.0.len()
+				);
+			}
+			other => panic!("expected MultiPolygon, got {other:?}"),
+		}
+		Ok(())
+	}
+
+	/// A feature whose only rings have zero area (collinear vertices). The
+	/// decoder must drop them silently at debug-log level.
+	#[test]
+	fn zero_area_rings_decode_to_empty_multipolygon() -> Result<()> {
+		let collinear = vec![(0, 0), (10, 10), (20, 20), (0, 0)];
+		let feature = raw_polygon_feature(&[collinear]);
+		let geom = feature.to_geometry()?;
+		match geom {
+			Geometry::MultiPolygon(mp) => assert!(mp.0.is_empty()),
+			other => panic!("expected MultiPolygon, got {other:?}"),
+		}
+		Ok(())
 	}
 }
