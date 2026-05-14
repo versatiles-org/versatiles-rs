@@ -618,14 +618,15 @@ mod tests {
 	/// progress count came out as 0/1 even though the actual write was correct.
 	#[tokio::test]
 	async fn swap_xy_does_not_corrupt_source_metadata() -> Result<()> {
-		use crate::VersaTilesReader;
+		use crate::MBTilesReader;
 
+		// `*.versatiles` is gitignored, so use the tracked mbtiles fixture instead.
 		let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 			.parent()
 			.unwrap()
-			.join("testdata/berlin.versatiles");
+			.join("testdata/berlin.mbtiles");
 		let runtime = TilesRuntime::default();
-		let reader = VersaTilesReader::open(&path, runtime.clone()).await?;
+		let reader = MBTilesReader::open(&path, runtime.clone())?;
 		let shared = reader.into_shared();
 
 		// Snapshot the source's pyramid before wrapping.
