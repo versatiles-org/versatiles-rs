@@ -62,8 +62,10 @@ pub struct Args {
 	/// Defaults to the maximum zoom level of the source.
 	pub level_base: Option<u8>,
 
-	/// The maximum zoom level to support. Defaults to 30.
-	/// Requests above this level will not return tiles.
+	/// The maximum zoom level to support. Defaults to `level_base + 4`
+	/// (each extra level quadruples the tile count, so 4 levels = 256× —
+	/// usually the sweet spot before the pyramid becomes unwieldy).
+	/// Set explicitly if you want to overzoom further. Capped at 30.
 	pub level_max: Option<u8>,
 
 	/// Enable tile climbing when the expected source tile doesn't exist.
@@ -138,7 +140,7 @@ impl Operation {
 
 		let level_max = args
 			.level_max
-			.unwrap_or(MAX_ZOOM_LEVEL)
+			.unwrap_or_else(|| level_base.saturating_add(4))
 			.clamp(level_base, MAX_ZOOM_LEVEL);
 
 		let mut new_pyramid = source_pyramid.as_ref().clone();
@@ -555,6 +557,16 @@ mod tests {
 		let op = build_op("level_max=5").await?;
 		let pyramid = op.metadata.tile_pyramid().unwrap();
 		assert!(pyramid.level_max().unwrap() >= 5);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn level_max_defaults_to_level_base_plus_four() -> Result<()> {
+		// Source pyramid stops at z=2, level_base defaults to source level_max (2),
+		// so the operation should extend to z=6 by default — not all the way to 30.
+		let op = build_op("").await?;
+		let pyramid = op.metadata.tile_pyramid().unwrap();
+		assert_eq!(pyramid.level_max().unwrap(), 6);
 		Ok(())
 	}
 
