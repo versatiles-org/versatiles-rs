@@ -57,10 +57,9 @@ const WINDING_EPSILON: f64 = 1e-14;
 /// negative area. Rings whose area is within `WINDING_EPSILON` of zero
 /// (degenerate) are left as-is; the encoder is responsible for filtering them.
 ///
-/// Callers should run this before encoding any `Polygon`/`MultiPolygon` to MVT
-/// so that consumers see spec-conformant winding regardless of where the input
-/// geometry came from.
-#[allow(dead_code)] // wired into the encoder in a follow-up commit
+/// Called by `VectorTileFeature::from_geometry` (via `write_polygons`) so that
+/// any `Polygon`/`MultiPolygon` handed to the encoder ends up spec-conformant
+/// on disk regardless of where the input geometry came from.
 pub(crate) fn normalize_polygon_winding(poly: Polygon<f64>) -> Polygon<f64> {
 	let (mut exterior, interiors) = poly.into_inner();
 	if ring_signed_double_area(&exterior.0) < -WINDING_EPSILON {
@@ -79,7 +78,6 @@ pub(crate) fn normalize_polygon_winding(poly: Polygon<f64>) -> Polygon<f64> {
 }
 
 /// `normalize_polygon_winding` lifted over each polygon in a `MultiPolygon`.
-#[allow(dead_code)] // wired into the encoder in a follow-up commit
 pub(crate) fn normalize_multipolygon_winding(mp: MultiPolygon<f64>) -> MultiPolygon<f64> {
 	MultiPolygon(mp.0.into_iter().map(normalize_polygon_winding).collect())
 }
@@ -367,6 +365,12 @@ impl VectorTileFeature {
 		fn write_polygons(polygons: MultiPolygon<f64>) -> Result<Blob> {
 			let mut writer = ValueWriterBlob::new_le();
 			let point0 = &mut (0i64, 0i64);
+
+			// Normalise ring winding to MVT 2.1 §4.3.3.3 before writing varints.
+			// Callers can hand us geometry from any source (geojson, shapefile,
+			// pipeline output) without worrying about winding; the on-disk MVT
+			// always conforms to the spec.
+			let polygons = normalize_multipolygon_winding(polygons);
 
 			for polygon in polygons.0 {
 				let (exterior, interiors) = polygon.into_inner();
@@ -686,6 +690,36 @@ mod tests {
 		let normalized = normalize_polygon_winding(original);
 
 		assert_eq!(ring_pts(normalized.exterior()), ring_pts(&outer_collinear));
+	}
+
+	/// Round-trip a polygon-with-hole whose rings are *both* inverted relative
+	/// to MVT 2.1. Before C2 the encoder would emit the inverted bytes,
+	/// `to_geometry` would classify the (then-orphan) inner rings and lose the
+	/// hole. After C2 the encoder rewinds first, so the on-disk MVT is
+	/// conformant and the hole survives the round-trip.
+	#[test]
+	fn from_geometry_normalises_inverted_winding() -> Result<()> {
+		let outer_inverted = ls_from(&[[0, 0], [0, 4], [4, 4], [4, 0], [0, 0]]); // CCW → negative area
+		let inner_inverted = ls_from(&[[1, 1], [3, 1], [3, 3], [1, 3], [1, 1]]); // CW → positive area
+		let bad = Polygon::new(outer_inverted, vec![inner_inverted]);
+
+		let feature = VectorTileFeature::from_geometry(None, vec![], Geometry::Polygon(bad))?;
+		let decoded = feature.to_geometry()?;
+
+		match decoded {
+			Geometry::MultiPolygon(mp) => {
+				assert_eq!(mp.0.len(), 1, "exactly one polygon survives the round-trip");
+				assert_eq!(
+					mp.0[0].interiors().len(),
+					1,
+					"hole must survive — was lost pre-fix because of inverted winding"
+				);
+				assert!(ring_signed_double_area(&mp.0[0].exterior().0) > 0.0);
+				assert!(ring_signed_double_area(&mp.0[0].interiors()[0].0) < 0.0);
+			}
+			other => panic!("expected MultiPolygon, got {other:?}"),
+		}
+		Ok(())
 	}
 
 	/// `normalize_multipolygon_winding` decides per polygon — a mixed-input
