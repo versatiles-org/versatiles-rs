@@ -512,6 +512,20 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn satisfies_stream_count_invariant() -> Result<()> {
+		let (_, reader) = mk_reader().await?;
+		let pyr = reader.tile_pyramid().await?;
+		for z in 0..=pyr.level_max().unwrap_or(0) {
+			let bbox = pyr.level_ref(z).to_bbox();
+			if bbox.is_empty() {
+				continue;
+			}
+			crate::testing::assert_stream_counts_agree(&reader, bbox).await?;
+		}
+		Ok(())
+	}
+
+	#[tokio::test]
 	async fn tile_stream_matches_individual_blob_reads() -> Result<()> {
 		let (_, reader) = mk_reader().await?;
 		let bbox = TileBBox::new_full(4)?;

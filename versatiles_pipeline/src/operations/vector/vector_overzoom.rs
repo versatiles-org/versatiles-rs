@@ -694,6 +694,28 @@ mod tests {
 		Ok(())
 	}
 
+	// Known violation of the TileSource stream-count invariant: at z > level_base,
+	// `tile_coord_stream` enumerates every destination coord that has *some* source
+	// coverage, while `tile_stream` emits only tiles whose features survive the
+	// per-child clip. For the dummy source at z=3 that's 64 vs 16. Ignored until
+	// either `tile_coord_stream` is tightened to match (cost: full extract per
+	// candidate) or the converter's traversal is taught to handle upper-bound
+	// counts. See the TileSource trait docs for the invariant rationale.
+	#[ignore = "vector_overzoom over-estimates in tile_coord_stream; see comment"]
+	#[tokio::test]
+	async fn satisfies_stream_count_invariant() -> Result<()> {
+		let op = build_op("").await?;
+		let pyr = op.tile_pyramid().await?;
+		for z in 0..=pyr.level_max().unwrap_or(0) {
+			let bbox = pyr.level_ref(z).to_bbox();
+			if bbox.is_empty() {
+				continue;
+			}
+			versatiles_container::testing::assert_stream_counts_agree(&op, bbox).await?;
+		}
+		Ok(())
+	}
+
 	#[tokio::test]
 	async fn enable_climbing_arg_threads_through_to_tile_stream() -> Result<()> {
 		// Integration-flavoured: with climbing enabled the operation emits

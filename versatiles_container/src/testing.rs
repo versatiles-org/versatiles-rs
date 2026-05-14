@@ -1,8 +1,12 @@
 //! Shared test utilities and fixtures for the versatiles_container crate.
 //!
-//! This module provides common test helpers that can be reused across test modules.
-//! It is only compiled when running tests.
+//! This module provides common test helpers that can be reused across test modules,
+//! including downstream crates that pull `versatiles_container` with the `test`
+//! feature enabled.
 
+use crate::TileSource;
+use anyhow::Result;
+use versatiles_core::TileBBox;
 use versatiles_image::{DynamicImage, ImageBuffer};
 
 /// Creates a tiny 2x2 RGB test image with known pixel values.
@@ -21,6 +25,26 @@ pub fn tiny_rgb_image() -> DynamicImage {
 		10, 20, 30, // misc
 	];
 	DynamicImage::ImageRgb8(ImageBuffer::from_vec(2, 2, data).expect("vec->img"))
+}
+
+/// Asserts that a source's `tile_coord_stream` and `tile_stream` produce the
+/// same number of items for the given `bbox`.
+///
+/// This invariant is required by the [`TileSource`](crate::TileSource) trait:
+/// any implementation that diverges between the two streams will silently
+/// break the converter's progress accounting (and any other code that counts
+/// via the lighter `tile_coord_stream`). See the trait docs for the rationale.
+///
+/// # Panics
+/// Panics with a useful message when the two counts disagree.
+pub async fn assert_stream_counts_agree(source: &dyn TileSource, bbox: TileBBox) -> Result<()> {
+	let coord_count = source.tile_coord_stream(bbox).await?.drain_and_count().await;
+	let tile_count = source.tile_stream(bbox).await?.to_vec().await.len() as u64;
+	assert_eq!(
+		coord_count, tile_count,
+		"TileSource invariant violated for bbox {bbox:?}: tile_coord_stream yielded {coord_count}, tile_stream yielded {tile_count}",
+	);
+	Ok(())
 }
 
 #[cfg(test)]

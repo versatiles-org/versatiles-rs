@@ -67,5 +67,5 @@ mod types;
 /// Re‑exports reader/writer traits, converters, and auxiliary types.
 pub use types::*;
 
-#[cfg(test)]
-pub(crate) mod testing;
+#[cfg(any(test, feature = "test"))]
+pub mod testing;

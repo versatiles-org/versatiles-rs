@@ -656,12 +656,34 @@ mod tests {
 			if bbox.is_empty() {
 				continue;
 			}
-			let coord_count = conv.tile_coord_stream(bbox).await?.drain_and_count().await;
-			let tile_count = conv.tile_stream(bbox).await?.to_vec().await.len() as u64;
-			assert_eq!(
-				coord_count, tile_count,
-				"z={z}: tile_coord_stream={coord_count} != tile_stream={tile_count}",
-			);
+			crate::testing::assert_stream_counts_agree(&conv, bbox).await?;
+		}
+		Ok(())
+	}
+
+	/// Direct exercise of the [`TileSource`](crate::TileSource) stream-count
+	/// invariant against the converter, with no swap/flip/filter applied —
+	/// catches regressions that wouldn't be specific to the swap_xy path.
+	#[tokio::test]
+	async fn converter_satisfies_stream_count_invariant() -> Result<()> {
+		use crate::MBTilesReader;
+
+		let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+			.parent()
+			.unwrap()
+			.join("testdata/berlin.mbtiles");
+		let runtime = TilesRuntime::default();
+		let shared = MBTilesReader::open(&path, runtime.clone())?.into_shared();
+
+		let conv = TilesConvertReader::new_from_reader(shared, TilesConverterParameters::default()).await?;
+
+		let pyr = conv.tile_pyramid().await?;
+		for z in 0..=pyr.level_max().unwrap_or(0) {
+			let bbox = pyr.level_ref(z).to_bbox();
+			if bbox.is_empty() {
+				continue;
+			}
+			crate::testing::assert_stream_counts_agree(&conv, bbox).await?;
 		}
 		Ok(())
 	}
