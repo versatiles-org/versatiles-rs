@@ -82,6 +82,44 @@ pub(crate) fn normalize_multipolygon_winding(mp: MultiPolygon<f64>) -> MultiPoly
 	MultiPolygon(mp.0.into_iter().map(normalize_polygon_winding).collect())
 }
 
+/// Returns `true` if a ring would round to a degenerate shape on the MVT
+/// integer grid. A ring is degenerate when any of these hold:
+///
+/// - fewer than 3 vertices (after dropping the optional closing duplicate);
+/// - fewer than 3 distinct integer-grid vertices (the encoder rounds each
+///   coord half-away-from-zero, so sub-pixel rings collapse);
+/// - the surveyor's signed area is within `WINDING_EPSILON` of zero
+///   (collinear vertices).
+///
+/// Degenerate rings would still be written by the raw encoder but would not
+/// render — and emitting them risks turning interior rings into orphan inners
+/// at the decoder if the exterior is the degenerate one.
+fn ring_is_degenerate(coords: &[Coord<f64>]) -> bool {
+	let n = if coords.len() >= 2 && coords.first() == coords.last() {
+		coords.len() - 1
+	} else {
+		coords.len()
+	};
+	if n < 3 {
+		return true;
+	}
+	let coords = &coords[..n];
+
+	let mut seen = std::collections::HashSet::<(i64, i64)>::with_capacity(n);
+	for c in coords {
+		#[allow(clippy::cast_possible_truncation)]
+		seen.insert((c.x.round() as i64, c.y.round() as i64));
+		if seen.len() >= 3 {
+			break;
+		}
+	}
+	if seen.len() < 3 {
+		return true;
+	}
+
+	ring_signed_double_area(coords).abs() < WINDING_EPSILON
+}
+
 impl VectorTileFeature {
 	/// Decodes a `VectorTileFeature` from a `BlobReader`.
 	pub fn read(reader: &mut dyn ValueReader<'_, LE>) -> Result<VectorTileFeature> {
@@ -215,7 +253,13 @@ impl VectorTileFeature {
 			}
 
 			GeomType::MultiPolygon => {
-				ensure!(!coordinates.is_empty(), "Polygons must have at least one entry");
+				// Empty MultiPolygon data is a legitimate intermediate state when
+				// every ring of the original geometry was degenerate and the
+				// encoder dropped the whole feature. Decode it as an empty
+				// MultiPolygon rather than failing.
+				if coordinates.is_empty() {
+					return Ok(Geometry::MultiPolygon(MultiPolygon(vec![])));
+				}
 				let mut current_polygon: Vec<LineString<f64>> = Vec::new();
 				let mut polygons: Vec<Polygon<f64>> = Vec::new();
 				// Surface spec violations on first occurrence per feature. Repeated rings
@@ -374,8 +418,17 @@ impl VectorTileFeature {
 
 			for polygon in polygons.0 {
 				let (exterior, interiors) = polygon.into_inner();
+				// Skip the whole polygon if its exterior is degenerate. Emitting
+				// only the interiors would leave them as orphan inner rings in
+				// the MVT stream, which the decoder drops — silent data loss.
+				if ring_is_degenerate(&exterior.0) {
+					continue;
+				}
 				write_ring(&mut writer, point0, &exterior)?;
 				for interior in interiors {
+					if ring_is_degenerate(&interior.0) {
+						continue;
+					}
 					write_ring(&mut writer, point0, &interior)?;
 				}
 			}
@@ -716,6 +769,118 @@ mod tests {
 				);
 				assert!(ring_signed_double_area(&mp.0[0].exterior().0) > 0.0);
 				assert!(ring_signed_double_area(&mp.0[0].interiors()[0].0) < 0.0);
+			}
+			other => panic!("expected MultiPolygon, got {other:?}"),
+		}
+		Ok(())
+	}
+
+	// ── ring_is_degenerate ────────────────────────────────────────────────
+
+	#[test]
+	fn ring_is_degenerate_too_few_vertices() {
+		assert!(ring_is_degenerate(&coords(&[(0.0, 0.0), (1.0, 0.0), (0.0, 0.0)]))); // 2 unique + closing dup
+		assert!(ring_is_degenerate(&coords(&[(0.0, 0.0), (1.0, 0.0)])));
+		assert!(ring_is_degenerate(&[]));
+	}
+
+	#[test]
+	fn ring_is_degenerate_collinear() {
+		// All three points on a line — zero area.
+		assert!(ring_is_degenerate(&coords(&[
+			(0.0, 0.0),
+			(1.0, 1.0),
+			(2.0, 2.0),
+			(0.0, 0.0),
+		])));
+	}
+
+	#[test]
+	fn ring_is_degenerate_subpixel_collapses_to_grid_point() {
+		// Three vertices that all round to (0, 0) at the integer grid.
+		assert!(ring_is_degenerate(&coords(&[
+			(0.0, 0.0),
+			(0.1, 0.1),
+			(-0.2, 0.2),
+			(0.0, 0.0),
+		])));
+	}
+
+	#[test]
+	fn ring_is_degenerate_normal_triangle_is_fine() {
+		assert!(!ring_is_degenerate(&coords(&[
+			(0.0, 0.0),
+			(4.0, 0.0),
+			(0.0, 4.0),
+			(0.0, 0.0),
+		])));
+	}
+
+	/// A polygon with a degenerate exterior must be dropped wholesale by the
+	/// encoder — interior rings would otherwise become orphan inners and the
+	/// decoder would silently drop them.
+	#[test]
+	fn encoder_drops_polygon_with_degenerate_exterior() -> Result<()> {
+		// Exterior: three collinear points → zero area, degenerate.
+		// Interior: a valid (CCW = negative area) ring that would normally
+		// survive as a hole.
+		let degenerate_exterior = ls_from(&[[0, 0], [1, 1], [2, 2], [0, 0]]);
+		let valid_hole = ls_from(&[[3, 3], [3, 5], [5, 5], [5, 3], [3, 3]]);
+		let poly = Polygon::new(degenerate_exterior, vec![valid_hole]);
+
+		let feature = VectorTileFeature::from_geometry(None, vec![], Geometry::Polygon(poly))?;
+		let decoded = feature.to_geometry()?;
+		match decoded {
+			Geometry::MultiPolygon(mp) => {
+				assert!(mp.0.is_empty(), "polygon with degenerate exterior must be dropped");
+			}
+			other => panic!("expected MultiPolygon, got {other:?}"),
+		}
+		Ok(())
+	}
+
+	/// A polygon with a valid exterior and a degenerate interior must encode
+	/// the exterior and drop the bad interior — the polygon itself survives.
+	#[test]
+	fn encoder_drops_degenerate_interior_but_keeps_exterior() -> Result<()> {
+		let exterior = ls_from(&[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]); // CW screen, positive area
+		let degenerate_hole = ls_from(&[[3, 3], [4, 4], [5, 5], [3, 3]]); // collinear
+		let valid_hole = ls_from(&[[6, 6], [6, 8], [8, 8], [8, 6], [6, 6]]); // CCW screen, negative area
+		let poly = Polygon::new(exterior, vec![degenerate_hole, valid_hole]);
+
+		let feature = VectorTileFeature::from_geometry(None, vec![], Geometry::Polygon(poly))?;
+		let decoded = feature.to_geometry()?;
+		match decoded {
+			Geometry::MultiPolygon(mp) => {
+				assert_eq!(mp.0.len(), 1, "polygon survives");
+				assert_eq!(
+					mp.0[0].interiors().len(),
+					1,
+					"only the valid hole survives — got {}",
+					mp.0[0].interiors().len()
+				);
+			}
+			other => panic!("expected MultiPolygon, got {other:?}"),
+		}
+		Ok(())
+	}
+
+	/// In a `MultiPolygon`, the degenerate polygons drop out and the valid
+	/// ones survive — each is decided independently.
+	#[test]
+	fn encoder_drops_degenerate_polygons_from_multipolygon() -> Result<()> {
+		let valid = Polygon::new(
+			ls_from(&[[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]]),
+			vec![],
+		);
+		let bad = Polygon::new(ls_from(&[[10, 10], [11, 11], [12, 12], [10, 10]]), vec![]);
+		let mp = MultiPolygon(vec![valid, bad]);
+
+		let feature = VectorTileFeature::from_geometry(None, vec![], Geometry::MultiPolygon(mp))?;
+		let decoded = feature.to_geometry()?;
+		match decoded {
+			Geometry::MultiPolygon(mp) => {
+				assert_eq!(mp.0.len(), 1, "only the valid polygon survives");
 			}
 			other => panic!("expected MultiPolygon, got {other:?}"),
 		}
