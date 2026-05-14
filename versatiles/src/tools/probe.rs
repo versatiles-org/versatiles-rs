@@ -477,4 +477,191 @@ mod tests {
 		);
 		Ok(())
 	}
+
+	// ── pure-helper unit tests ────────────────────────────────────────────
+
+	#[test]
+	fn describe_kind_covers_every_issue_variant() {
+		assert_eq!(describe_kind(&IssueKind::OrphanInnerRing), "OrphanInnerRing");
+		assert_eq!(describe_kind(&IssueKind::UnknownGeometryType), "UnknownGeometryType");
+		assert_eq!(
+			describe_kind(&IssueKind::MalformedCommandStream("anything".into())),
+			"MalformedCommandStream"
+		);
+		assert_eq!(
+			describe_kind(&IssueKind::DegenerateRing(DegenerateReason::TooFewVertices)),
+			"DegenerateRing(TooFewVertices)"
+		);
+		assert_eq!(
+			describe_kind(&IssueKind::DegenerateRing(DegenerateReason::SubPixel)),
+			"DegenerateRing(SubPixel)"
+		);
+		assert_eq!(
+			describe_kind(&IssueKind::DegenerateRing(DegenerateReason::Collinear)),
+			"DegenerateRing(Collinear)"
+		);
+	}
+
+	#[test]
+	fn validation_counters_record_increments_the_matching_field() {
+		let mut c = ValidationCounters::default();
+		c.record(&IssueKind::OrphanInnerRing);
+		c.record(&IssueKind::OrphanInnerRing);
+		c.record(&IssueKind::DegenerateRing(DegenerateReason::TooFewVertices));
+		c.record(&IssueKind::DegenerateRing(DegenerateReason::SubPixel));
+		c.record(&IssueKind::DegenerateRing(DegenerateReason::Collinear));
+		c.record(&IssueKind::UnknownGeometryType);
+		c.record(&IssueKind::MalformedCommandStream("err".into()));
+
+		assert_eq!(c.orphan_inner, 2);
+		assert_eq!(c.degenerate_too_few, 1);
+		assert_eq!(c.degenerate_sub_pixel, 1);
+		assert_eq!(c.degenerate_collinear, 1);
+		assert_eq!(c.unknown_geom, 1);
+		assert_eq!(c.malformed_stream, 1);
+		assert_eq!(c.total_issues(), 7);
+	}
+
+	#[test]
+	fn validation_counters_total_is_zero_by_default() {
+		let c = ValidationCounters::default();
+		assert_eq!(c.total_issues(), 0);
+	}
+
+	// ── print_validation_summary output paths ─────────────────────────────
+
+	#[tokio::test]
+	async fn print_validation_summary_clean_reports_none() {
+		let mut printer = PrettyPrint::new();
+		let counters = ValidationCounters::default();
+		print_validation_summary(&mut printer, 42, &counters, &[]).await;
+		let out = printer.stringify().await;
+		assert!(out.contains("tiles scanned: 42"), "got: {out}");
+		assert!(out.contains("MVT spec issues"), "got: {out}");
+		assert!(out.contains("none"), "got: {out}");
+		assert!(!out.contains("issues by kind"), "got: {out}");
+	}
+
+	#[tokio::test]
+	async fn print_validation_summary_dirty_reports_kind_table_and_samples() {
+		let mut printer = PrettyPrint::new();
+		let counters = ValidationCounters {
+			orphan_inner: 5,
+			degenerate_too_few: 0,
+			degenerate_sub_pixel: 1,
+			degenerate_collinear: 2,
+			unknown_geom: 0,
+			malformed_stream: 1,
+			decode_failures: 0,
+			tiles_with_issues: 7,
+		};
+		let samples = vec![vec![
+			"14".to_string(),
+			"8800".to_string(),
+			"5377".to_string(),
+			"land".to_string(),
+			"3".to_string(),
+			"OrphanInnerRing".to_string(),
+		]];
+		print_validation_summary(&mut printer, 130, &counters, &samples).await;
+		let out = printer.stringify().await;
+
+		assert!(out.contains("MVT spec issues (total): 9"), "got: {out}");
+		assert!(out.contains("tiles with issues: 7"), "got: {out}");
+		assert!(out.contains("issues by kind"), "got: {out}");
+		assert!(out.contains("OrphanInnerRing"), "got: {out}");
+		assert!(out.contains("DegenerateRing(SubPixel)"), "got: {out}");
+		assert!(out.contains("DegenerateRing(Collinear)"), "got: {out}");
+		assert!(out.contains("MalformedCommandStream"), "got: {out}");
+		// Zero-count kinds must not appear in the table.
+		assert!(!out.contains("DegenerateRing(TooFewVertices)"), "got: {out}");
+		assert!(!out.contains("UnknownGeometryType"), "got: {out}");
+		// Sample table
+		assert!(out.contains("sample issues (first 1)"), "got: {out}");
+		assert!(out.contains("land"), "got: {out}");
+	}
+
+	#[tokio::test]
+	async fn print_validation_summary_decode_failures_warn() {
+		let mut printer = PrettyPrint::new();
+		let counters = ValidationCounters {
+			decode_failures: 3,
+			..ValidationCounters::default()
+		};
+		print_validation_summary(&mut printer, 10, &counters, &[]).await;
+		let out = printer.stringify().await;
+		assert!(out.contains("3 tile(s) failed to decode"), "got: {out}");
+		// total_issues is still 0 so we still report "none" for spec issues.
+		assert!(out.contains("MVT spec issues"), "got: {out}");
+		assert!(out.contains("none"), "got: {out}");
+	}
+
+	// ── probe_tile_contents on a raster source ────────────────────────────
+
+	#[tokio::test]
+	async fn probe_tile_contents_on_raster_emits_not_implemented_warning() -> Result<()> {
+		use versatiles_container::{MockReader, MockReaderProfile};
+		let reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
+		let source: &dyn TileSource = &reader;
+		let runtime = create_test_runtime();
+
+		let mut printer = PrettyPrint::new();
+		probe_tile_contents(source, &mut printer.category("tile contents").await, &runtime).await?;
+		let out = printer.stringify().await;
+		assert!(
+			out.contains("only implemented for vector sources"),
+			"expected 'not implemented' warning, got: {out}",
+		);
+		// And we should NOT have walked any tiles for a raster source.
+		assert!(!out.contains("tiles scanned"), "got: {out}");
+		Ok(())
+	}
+
+	// ── probe_tile_sizes on an empty pyramid ──────────────────────────────
+
+	#[tokio::test]
+	async fn probe_tile_sizes_no_tiles_warns() -> Result<()> {
+		use versatiles_container::{MockReader, TileSourceMetadata, Traversal};
+		use versatiles_core::{TileCompression, TileFormat, TilePyramid};
+		let pyramid = TilePyramid::new_empty();
+		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None);
+		let reader = MockReader::new_mock(pyramid, metadata)?;
+		let source: &dyn TileSource = &reader;
+		let runtime = create_test_runtime();
+
+		let mut printer = PrettyPrint::new();
+		probe_tile_sizes(source, &mut printer.category("tiles").await, &runtime).await?;
+		let out = printer.stringify().await;
+		assert!(out.contains("no tiles found"), "got: {out}");
+		Ok(())
+	}
+
+	// ── probe() dispatch at every depth ───────────────────────────────────
+
+	#[tokio::test]
+	async fn probe_dispatches_at_each_depth() -> Result<()> {
+		let runtime = create_test_runtime();
+		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
+		let source: &dyn TileSource = &**reader;
+
+		// Each depth level exercises a different branch of the matches!() arms
+		// in `probe()` and the `run()` ProbeDepth match. Shallow is already
+		// covered by `probe_all_levels_against_mbtiles`; this test fills the
+		// other three.
+		probe(source, ProbeDepth::Container, &runtime).await?;
+		probe(source, ProbeDepth::TileSizes, &runtime).await?;
+		probe(source, ProbeDepth::TileContents, &runtime).await?;
+		Ok(())
+	}
+
+	#[test]
+	fn run_at_each_deep_level_dispatches() -> Result<()> {
+		// Exercises lines 30..=32 of `run()` (the `-d`, `-dd`, `-ddd` arms of
+		// the ProbeDepth match). `-q` suppresses logging so the assertion
+		// boils down to "doesn't error out".
+		for flag in ["-d", "-dd", "-ddd"] {
+			run_command(vec!["versatiles", "probe", "-q", flag, "../testdata/berlin.mbtiles"])?;
+		}
+		Ok(())
+	}
 }
