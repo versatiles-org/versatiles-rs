@@ -96,13 +96,18 @@ fn repair_tile_if_needed(mut tile: Tile) -> Result<Tile> {
 
 	// Dirty: rebuild every layer's features through from_features so the
 	// encoder's winding normalisation and degeneracy filtering fire.
+	//
+	// Uses the *lenient* feature decoder so that inverted-winding input
+	// (the landcover-vectors#3 pattern) is detected per-feature and rewound
+	// before classifying outer/inner rings. The strict decoder would drop
+	// the original outer rings as "orphan inners" and lose the shape.
 	let vt = tile.as_vector()?;
 	let mut new_layers: Vec<VectorTileLayer> = Vec::with_capacity(vt.layers.len());
 	for layer in &vt.layers {
 		let features = layer
 			.features
 			.iter()
-			.map(|f| f.to_feature(layer))
+			.map(|f| f.to_feature_lenient(layer))
 			.collect::<Result<Vec<_>>>()?;
 		new_layers.push(VectorTileLayer::from_features(
 			layer.name.clone(),
@@ -252,11 +257,11 @@ mod tests {
 		Ok(())
 	}
 
-	/// End-to-end: wrap `vector_repair` around a real, malformed-in-places
-	/// fixture (`../testdata/berlin.mbtiles`), walk every tile, and assert
-	/// the validator finds zero issues on the output. Pre-fix the same
-	/// fixture has 57 issues across 43 tiles — see the comment in
-	/// `versatiles/src/tools/probe.rs::tests`.
+	/// End-to-end: wrap `vector_repair` around `../testdata/berlin.mbtiles`
+	/// and verify the validator reports zero issues on the output. The
+	/// fixture is itself the output of an earlier `vector_repair` run, so
+	/// this test now mostly exercises the no-op-when-clean path — the
+	/// operation should pass every tile through unchanged.
 	///
 	/// Constructs the operation directly rather than going through the VPL
 	/// pipeline factory, which would need the full container registry wired

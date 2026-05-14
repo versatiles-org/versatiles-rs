@@ -335,6 +335,116 @@ impl VectorTileFeature {
 		Ok(feature)
 	}
 
+	/// Like [`Self::to_geometry`] but tolerant of inverted polygon winding.
+	///
+	/// The strict decoder follows MVT 2.1 §4.3.3.3 literally: it classifies
+	/// rings by signed area, dropping any negative-area ring that appears
+	/// before a positive-area ring. That is correct for spec-conformant
+	/// input but lossy when the source data uses the opposite winding
+	/// convention — the real outer rings get dropped as "orphan inners",
+	/// silently losing the geometry's shape.
+	///
+	/// This decoder detects per-feature inversion via the dominant ring-area
+	/// sign (`total_pos_area >= total_neg_area`). When the convention is
+	/// inverted, all rings are reversed *before* outer/inner classification.
+	/// The result is correctly-shaped geometry regardless of which convention
+	/// the source used.
+	///
+	/// Used by `vector_repair` in repair contexts where the operation's
+	/// purpose is to fix malformed input. The default decoder
+	/// ([`Self::to_geometry`]) remains strict.
+	///
+	/// For non-polygon types this delegates to [`Self::to_geometry`] — there
+	/// is no winding rule for points or line strings.
+	///
+	/// # Caveats
+	///
+	/// The per-feature heuristic assumes uniform convention within a
+	/// feature. A feature carrying a mix of correctly-wound and
+	/// inversely-wound polygons would be processed as if all polygons
+	/// followed the dominant convention; the others would end up with
+	/// their winding flipped. Such mixed-convention features are
+	/// pathological and not known to occur in real data.
+	pub fn to_geometry_lenient(&self) -> Result<Geometry<f64>> {
+		if self.geom_type == GeomType::MultiPolygon {
+			self.decode_polygon_lenient()
+		} else {
+			self.to_geometry()
+		}
+	}
+
+	/// `to_feature` counterpart of [`Self::to_geometry_lenient`]: builds a
+	/// [`GeoFeature`] using the lenient geometry decoder, then attaches the
+	/// id and decoded tags from `layer`.
+	pub fn to_feature_lenient(&self, layer: &VectorTileLayer) -> Result<GeoFeature> {
+		let mut feature = GeoFeature::new(
+			self
+				.to_geometry_lenient()
+				.context("Failed to convert to geometry (lenient)")?,
+		);
+		if let Some(id) = self.id {
+			feature.set_id(GeoValue::from(id));
+		}
+		feature.properties = layer.decode_tag_ids(&self.tag_ids)?;
+		Ok(feature)
+	}
+
+	fn decode_polygon_lenient(&self) -> Result<Geometry<f64>> {
+		let rings = parse_geom_command_stream(&self.geom_data)?;
+		if rings.is_empty() {
+			return Ok(Geometry::MultiPolygon(MultiPolygon(vec![])));
+		}
+
+		// Per-feature convention detection: outer rings typically have larger
+		// absolute area than inner rings, so the side that contributes more
+		// total area is the one carrying the outers.
+		let areas: Vec<f64> = rings.iter().map(|r| ring_signed_double_area(r)).collect();
+		let total_pos: f64 = areas.iter().filter(|&&a| a > WINDING_EPSILON).sum();
+		let total_neg: f64 = areas.iter().filter(|&&a| a < -WINDING_EPSILON).map(|a| -a).sum();
+		let outer_is_positive = total_pos >= total_neg;
+
+		let mut current: Vec<LineString<f64>> = Vec::new();
+		let mut polygons: Vec<Polygon<f64>> = Vec::new();
+		let push = |rings: Vec<LineString<f64>>, polygons: &mut Vec<Polygon<f64>>| {
+			if let Some((exterior, interiors)) = rings.split_first() {
+				polygons.push(Polygon::new(exterior.clone(), interiors.to_vec()));
+			}
+		};
+
+		for (mut ring_coords, area2) in rings.into_iter().zip(areas.iter().copied()) {
+			if area2.abs() <= WINDING_EPSILON {
+				// Degenerate ring — would be filtered by the encoder anyway.
+				continue;
+			}
+			ensure!(ring_coords.len() >= 4, "polygon ring must have at least 4 points");
+			ensure!(ring_coords.first() == ring_coords.last(), "polygon ring must be closed");
+
+			// Rewind so positive area = outer once classification runs below.
+			if !outer_is_positive {
+				ring_coords.reverse();
+			}
+			let is_outer = if outer_is_positive { area2 > 0.0 } else { area2 < 0.0 };
+			let ring = LineString::new(ring_coords);
+
+			if is_outer {
+				if !current.is_empty() {
+					push(std::mem::take(&mut current), &mut polygons);
+				}
+				current.push(ring);
+			} else if !current.is_empty() {
+				current.push(ring);
+			}
+			// Inner rings with no preceding outer (still possible if the
+			// inversion-detection picked the wrong convention) are dropped
+			// here, same as the strict decoder.
+		}
+
+		if !current.is_empty() {
+			push(current, &mut polygons);
+		}
+		Ok(Geometry::MultiPolygon(MultiPolygon(polygons)))
+	}
+
 	pub fn from_geometry(id: Option<u64>, tag_ids: Vec<u32>, geometry: Geometry<f64>) -> Result<VectorTileFeature> {
 		fn write_coord(writer: &mut ValueWriterBlob<LE>, coord0: &mut (i64, i64), coord: Coord<f64>) -> Result<()> {
 			let x = float_to_int(coord.x)?;
@@ -669,6 +779,82 @@ mod tests {
 		let collinear = vec![(0, 0), (10, 10), (20, 20), (0, 0)];
 		let feature = raw_polygon_feature(&[collinear]);
 		let geom = feature.to_geometry()?;
+		match geom {
+			Geometry::MultiPolygon(mp) => assert!(mp.0.is_empty()),
+			other => panic!("expected MultiPolygon, got {other:?}"),
+		}
+		Ok(())
+	}
+
+	// ── to_geometry_lenient ───────────────────────────────────────────────
+
+	/// Inverted-winding polygon-with-hole (outer CCW screen / negative area,
+	/// inner CW screen / positive area) — the landcover-vectors#3 pattern.
+	/// Strict decode drops the outer; lenient decode detects inversion via
+	/// `total_pos < total_neg` (the outer's |area| dominates the inner's)
+	/// and rewinds all rings before classification.
+	#[test]
+	fn lenient_decode_recovers_inverted_winding_polygon_with_hole() -> Result<()> {
+		let outer_ccw = vec![(0, 0), (0, 100), (100, 100), (100, 0)]; // CCW → -10000
+		let inner_cw = vec![(20, 20), (60, 20), (60, 60), (20, 60)]; // CW  → +1600
+		let feature = raw_polygon_feature(&[outer_ccw, inner_cw]);
+
+		// Sanity: strict decode loses the outer.
+		let strict = feature.to_geometry()?;
+		match strict {
+			Geometry::MultiPolygon(mp) => {
+				assert_eq!(mp.0.len(), 1, "strict: one (wrong) polygon");
+				assert!(mp.0[0].interiors().is_empty(), "strict: hole lost");
+			}
+			other => panic!("expected MultiPolygon, got {other:?}"),
+		}
+
+		// Lenient decode preserves the shape: one polygon, one interior.
+		let lenient = feature.to_geometry_lenient()?;
+		match lenient {
+			Geometry::MultiPolygon(mp) => {
+				assert_eq!(mp.0.len(), 1, "lenient: one polygon");
+				assert_eq!(mp.0[0].interiors().len(), 1, "lenient: hole preserved");
+				assert!(
+					ring_signed_double_area(&mp.0[0].exterior().0) > 0.0,
+					"lenient: exterior must be normalised to positive area"
+				);
+				assert!(
+					ring_signed_double_area(&mp.0[0].interiors()[0].0) < 0.0,
+					"lenient: interior must be normalised to negative area"
+				);
+			}
+			other => panic!("expected MultiPolygon, got {other:?}"),
+		}
+		Ok(())
+	}
+
+	/// Standard MVT 2.1 winding round-trips unchanged through the lenient
+	/// decoder (no regression for well-formed input).
+	#[test]
+	fn lenient_decode_preserves_standard_winding() -> Result<()> {
+		let outer_cw = vec![(0, 0), (100, 0), (100, 100), (0, 100)]; // CW → +10000
+		let inner_ccw = vec![(20, 20), (20, 60), (60, 60), (60, 20)]; // CCW → -1600
+		let feature = raw_polygon_feature(&[outer_cw, inner_ccw]);
+		let geom = feature.to_geometry_lenient()?;
+		match geom {
+			Geometry::MultiPolygon(mp) => {
+				assert_eq!(mp.0.len(), 1);
+				assert_eq!(mp.0[0].interiors().len(), 1);
+			}
+			other => panic!("expected MultiPolygon, got {other:?}"),
+		}
+		Ok(())
+	}
+
+	/// A polygon-feature whose rings are all degenerate should decode (under
+	/// the lenient decoder) to an empty MultiPolygon, mirroring the strict
+	/// decoder's empty-data behaviour.
+	#[test]
+	fn lenient_decode_empty_when_all_rings_degenerate() -> Result<()> {
+		let collinear = vec![(0, 0), (5, 5), (10, 10), (0, 0)];
+		let feature = raw_polygon_feature(&[collinear]);
+		let geom = feature.to_geometry_lenient()?;
 		match geom {
 			Geometry::MultiPolygon(mp) => assert!(mp.0.is_empty()),
 			other => panic!("expected MultiPolygon, got {other:?}"),
