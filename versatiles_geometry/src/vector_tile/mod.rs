@@ -15,10 +15,12 @@ mod geometry_type;
 mod layer;
 mod property_manager;
 mod tile;
+mod validator;
 mod value;
 
 pub use layer::VectorTileLayer;
 pub use tile::VectorTile;
+pub use validator::{DegenerateReason, IssueKind, ValidationIssue, validate_tile};
 /// Trait for encoding/decoding individual MVT property values. Exposed so
 /// downstream callers (e.g. `TileSizeMonitor`'s breakdown) can measure the
 /// encoded byte cost of each value without depending on the full layer

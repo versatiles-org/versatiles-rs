@@ -33,7 +33,7 @@ impl Default for VectorTileFeature {
 
 /// Returns 2 × the signed area of a closed ring (trapezoid form, matching the
 /// historical versatiles convention: positive for counter-clockwise rings).
-fn ring_signed_double_area(coords: &[Coord<f64>]) -> f64 {
+pub(super) fn ring_signed_double_area(coords: &[Coord<f64>]) -> f64 {
 	let n = coords.len();
 	if n < 3 {
 		return 0.0;
@@ -50,7 +50,7 @@ fn ring_signed_double_area(coords: &[Coord<f64>]) -> f64 {
 /// Threshold below which a ring's signed double area is treated as zero
 /// (degenerate ring — collinear vertices or floating-point noise). Mirrors
 /// the threshold used by [`VectorTileFeature::to_geometry`].
-const WINDING_EPSILON: f64 = 1e-14;
+pub(super) const WINDING_EPSILON: f64 = 1e-14;
 
 /// Rewinds the rings of a polygon so they conform to MVT 2.1 §4.3.3.3:
 /// the exterior ring has positive surveyor area, each interior ring has
@@ -94,7 +94,7 @@ pub(crate) fn normalize_multipolygon_winding(mp: MultiPolygon<f64>) -> MultiPoly
 /// Degenerate rings would still be written by the raw encoder but would not
 /// render — and emitting them risks turning interior rings into orphan inners
 /// at the decoder if the exterior is the degenerate one.
-fn ring_is_degenerate(coords: &[Coord<f64>]) -> bool {
+pub(super) fn ring_is_degenerate(coords: &[Coord<f64>]) -> bool {
 	let n = if coords.len() >= 2 && coords.first() == coords.last() {
 		coords.len() - 1
 	} else {
@@ -118,6 +118,61 @@ fn ring_is_degenerate(coords: &[Coord<f64>]) -> bool {
 	}
 
 	ring_signed_double_area(coords).abs() < WINDING_EPSILON
+}
+
+/// Parses an MVT geometry command stream into a `Vec` of point sequences, one
+/// per `MoveTo` boundary. Used by both [`VectorTileFeature::to_geometry`] and
+/// the spec validator — they need exactly the same parsing semantics.
+///
+/// See <https://github.com/mapbox/vector-tile-spec/blob/master/2.1/README.md#43-geometry-encoding>.
+pub(super) fn parse_geom_command_stream(geom_data: &Blob) -> Result<Vec<Vec<Coord<f64>>>> {
+	let mut reader = ValueReaderSlice::new_le(geom_data.as_slice());
+
+	let mut lines: Vec<Vec<Coord<f64>>> = Vec::new();
+	let mut line: Vec<Coord<f64>> = Vec::new();
+	let mut x = 0i64;
+	let mut y = 0i64;
+
+	while reader.has_remaining()? {
+		let value = reader
+			.read_varint()
+			.context("Failed to read varint for geometry command")?;
+		let command = value & 0x7;
+		let count = value >> 3;
+
+		match command {
+			1 | 2 => {
+				for _ in 0..count {
+					if command == 1 && !line.is_empty() {
+						// MoveTo command indicates the start of a new linestring
+						lines.push(line);
+						line = Vec::new();
+					}
+
+					x += reader.read_svarint().context("Failed to read x coordinate")?;
+					y += reader.read_svarint().context("Failed to read y coordinate")?;
+
+					#[allow(clippy::cast_precision_loss)]
+					line.push(Coord {
+						x: x as f64,
+						y: y as f64,
+					});
+				}
+			}
+			7 => {
+				// ClosePath command
+				ensure!(!line.is_empty(), "ClosePath command found on an empty linestring");
+				line.push(line[0]);
+			}
+			_ => bail!("Unknown command {command}"),
+		}
+	}
+
+	if !line.is_empty() {
+		lines.push(line);
+	}
+
+	Ok(lines)
 }
 
 impl VectorTileFeature {
@@ -177,56 +232,7 @@ impl VectorTileFeature {
 	}
 
 	pub fn to_geometry(&self) -> Result<Geometry<f64>> {
-		// https://github.com/mapbox/vector-tile-spec/blob/master/2.1/README.md#43-geometry-encoding
-
-		let coordinates = {
-			let mut reader = ValueReaderSlice::new_le(self.geom_data.as_slice());
-
-			let mut lines: Vec<Vec<Coord<f64>>> = Vec::new();
-			let mut line: Vec<Coord<f64>> = Vec::new();
-			let mut x = 0i64;
-			let mut y = 0i64;
-
-			while reader.has_remaining()? {
-				let value = reader
-					.read_varint()
-					.context("Failed to read varint for geometry command")?;
-				let command = value & 0x7;
-				let count = value >> 3;
-
-				match command {
-					1 | 2 => {
-						for _ in 0..count {
-							if command == 1 && !line.is_empty() {
-								// MoveTo command indicates the start of a new linestring
-								lines.push(line);
-								line = Vec::new();
-							}
-
-							x += reader.read_svarint().context("Failed to read x coordinate")?;
-							y += reader.read_svarint().context("Failed to read y coordinate")?;
-
-							line.push(Coord {
-								x: x as f64,
-								y: y as f64,
-							});
-						}
-					}
-					7 => {
-						// ClosePath command
-						ensure!(!line.is_empty(), "ClosePath command found on an empty linestring");
-						line.push(line[0]);
-					}
-					_ => bail!("Unknown command {command}"),
-				}
-			}
-
-			if !line.is_empty() {
-				lines.push(line);
-			}
-
-			lines
-		};
+		let coordinates = parse_geom_command_stream(&self.geom_data)?;
 
 		match self.geom_type {
 			GeomType::Unknown => bail!("Unknown geometry type"),
