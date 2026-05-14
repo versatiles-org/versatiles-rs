@@ -190,63 +190,293 @@ impl MercatorExt for Geometry<f64> {
 mod tests {
 	use super::*;
 	use approx::assert_relative_eq;
+	use geo_types::GeometryCollection;
+
+	/// Tight equality tolerance for round-trips that go through `to_radians()`
+	/// then `from_radians()`. f64 round-tripping introduces ~1e-9 noise; we
+	/// pick a hair below that to catch real divergence.
+	const EPS: f64 = 1e-6;
+
+	fn assert_coord_eq(a: Coord<f64>, b: Coord<f64>) {
+		assert_relative_eq!(a.x, b.x, epsilon = EPS);
+		assert_relative_eq!(a.y, b.y, epsilon = EPS);
+	}
+
+	// ── free-function tests ──────────────────────────────────────────────
 
 	#[test]
 	fn coord_to_mercator_origin() {
 		let m = coord_to_mercator(Coord { x: 0.0, y: 0.0 });
-		assert_relative_eq!(m.x, 0.0, epsilon = 1e-6);
-		assert_relative_eq!(m.y, 0.0, epsilon = 1e-6);
+		assert_relative_eq!(m.x, 0.0, epsilon = EPS);
+		assert_relative_eq!(m.y, 0.0, epsilon = EPS);
 	}
 
 	#[test]
-	fn mercator_roundtrip() {
-		let original = Coord { x: 10.0, y: 50.0 };
-		let projected = coord_to_mercator(original);
-		let back = coord_from_mercator(projected);
-		assert_relative_eq!(back.x, original.x, epsilon = 1e-6);
-		assert_relative_eq!(back.y, original.y, epsilon = 1e-6);
+	fn coord_to_mercator_from_mercator_round_trip_at_multiple_locations() {
+		for original in [
+			Coord { x: 10.0, y: 50.0 },
+			Coord { x: -73.99, y: 40.74 },
+			Coord { x: 139.69, y: 35.69 },
+			Coord { x: -100.0, y: -45.0 },
+			Coord { x: 180.0, y: 0.0 },
+		] {
+			let projected = coord_to_mercator(original);
+			let back = coord_from_mercator(projected);
+			assert_coord_eq(back, original);
+		}
 	}
 
 	#[test]
-	fn latitude_clamping_avoids_infinity() {
-		let m = coord_to_mercator(Coord { x: 0.0, y: 90.0 });
-		assert!(m.y.is_finite());
+	fn latitude_clamping_avoids_infinity_at_both_poles() {
+		let north = coord_to_mercator(Coord { x: 0.0, y: 90.0 });
+		let south = coord_to_mercator(Coord { x: 0.0, y: -90.0 });
+		assert!(north.y.is_finite());
+		assert!(south.y.is_finite());
+		// Clamping is symmetric around the equator.
+		assert_relative_eq!(north.y, -south.y, epsilon = EPS);
 	}
 
 	#[test]
-	fn coord_trait_impl() {
+	fn longitude_passes_through_unclamped() {
+		// `coord_to_mercator` does not clamp x. ±180° at the antimeridian
+		// projects to the spherical equivalent without normalisation.
+		let east = coord_to_mercator(Coord { x: 180.0, y: 0.0 });
+		let west = coord_to_mercator(Coord { x: -180.0, y: 0.0 });
+		assert_relative_eq!(east.x, -west.x, epsilon = EPS);
+	}
+
+	// ── Coord trait impl ─────────────────────────────────────────────────
+
+	#[test]
+	fn coord_trait_to_and_from_match_free_functions() {
 		let c = Coord { x: 1.0, y: 2.0 };
-		let projected = c.to_mercator();
-		assert_relative_eq!(projected, coord_to_mercator(c), epsilon = 1e-12);
+		assert_eq!(c.to_mercator(), coord_to_mercator(c));
+		assert_eq!(c.from_mercator(), coord_from_mercator(c));
 	}
 
+	// ── Point trait impl ─────────────────────────────────────────────────
+
 	#[test]
-	fn point_trait_impl() {
+	fn point_round_trip() {
 		let p = Point::new(13.4, 52.5);
-		let projected = p.to_mercator();
-		assert!(projected.x() > 0.0 && projected.y() > 0.0);
+		let back = p.to_mercator().from_mercator();
+		assert_relative_eq!(back.x(), p.x(), epsilon = EPS);
+		assert_relative_eq!(back.y(), p.y(), epsilon = EPS);
+	}
+
+	// ── LineString trait impl ────────────────────────────────────────────
+
+	#[test]
+	fn line_string_round_trip_preserves_all_vertices() {
+		let ls = LineString::from(vec![[0.0, 0.0], [10.0, 20.0], [-5.0, 30.0]]);
+		let back = ls.clone().to_mercator().from_mercator();
+		assert_eq!(back.0.len(), ls.0.len());
+		for (a, b) in back.0.iter().zip(ls.0.iter()) {
+			assert_coord_eq(*a, *b);
+		}
+	}
+
+	// ── Polygon trait impl ───────────────────────────────────────────────
+
+	#[test]
+	fn polygon_round_trip_preserves_exterior_and_interiors() {
+		let exterior = LineString::from(vec![[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0], [0.0, 0.0]]);
+		let inner = LineString::from(vec![[1.0, 1.0], [3.0, 1.0], [3.0, 3.0], [1.0, 3.0], [1.0, 1.0]]);
+		let p = Polygon::new(exterior, vec![inner]);
+		let back = p.clone().to_mercator().from_mercator();
+		assert_eq!(back.interiors().len(), 1);
+		for (a, b) in back.exterior().0.iter().zip(p.exterior().0.iter()) {
+			assert_coord_eq(*a, *b);
+		}
+		for (a, b) in back.interiors()[0].0.iter().zip(p.interiors()[0].0.iter()) {
+			assert_coord_eq(*a, *b);
+		}
+	}
+
+	// ── MultiPoint / MultiLineString / MultiPolygon trait impls ──────────
+
+	#[test]
+	fn multi_point_round_trip() {
+		let mp = MultiPoint(vec![
+			Point::new(1.0, 2.0),
+			Point::new(-5.0, -10.0),
+			Point::new(170.0, 60.0),
+		]);
+		let back = mp.clone().to_mercator().from_mercator();
+		assert_eq!(back.0.len(), mp.0.len());
+		for (a, b) in back.0.iter().zip(mp.0.iter()) {
+			assert_relative_eq!(a.x(), b.x(), epsilon = EPS);
+			assert_relative_eq!(a.y(), b.y(), epsilon = EPS);
+		}
 	}
 
 	#[test]
-	fn polygon_trait_impl() {
-		let exterior = LineString::from(vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]);
-		let p = Polygon::new(exterior, vec![]);
-		let projected = p.clone().to_mercator();
-		// First vertex stays at origin under mercator(0,0).
-		assert_relative_eq!(projected.exterior().0[0].x, 0.0, epsilon = 1e-6);
+	fn multi_line_string_round_trip() {
+		let mls = MultiLineString(vec![
+			LineString::from(vec![[0.0, 0.0], [1.0, 1.0]]),
+			LineString::from(vec![[10.0, 20.0], [30.0, 40.0], [50.0, 0.0]]),
+		]);
+		let back = mls.clone().to_mercator().from_mercator();
+		assert_eq!(back.0.len(), mls.0.len());
+		for (a, b) in back.0.iter().zip(mls.0.iter()) {
+			assert_eq!(a.0.len(), b.0.len());
+		}
 	}
 
 	#[test]
-	fn geometry_dispatch_round_trip() {
-		let g: Geometry<f64> = Point::new(1.5, -2.5).into();
+	fn multi_polygon_round_trip() {
+		let mp = MultiPolygon(vec![
+			Polygon::new(
+				LineString::from(vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]),
+				vec![],
+			),
+			Polygon::new(
+				LineString::from(vec![[10.0, 10.0], [11.0, 10.0], [11.0, 11.0], [10.0, 10.0]]),
+				vec![LineString::from(vec![
+					[10.2, 10.2],
+					[10.8, 10.2],
+					[10.8, 10.8],
+					[10.2, 10.2],
+				])],
+			),
+		]);
+		let back = mp.clone().to_mercator().from_mercator();
+		assert_eq!(back.0.len(), 2);
+		assert_eq!(back.0[1].interiors().len(), 1);
+	}
+
+	// ── Line / Rect / Triangle trait impls ───────────────────────────────
+
+	#[test]
+	fn line_round_trip() {
+		let l = Line::new(Coord { x: 1.0, y: 2.0 }, Coord { x: 3.0, y: 4.0 });
+		let back = l.to_mercator().from_mercator();
+		assert_coord_eq(back.start, l.start);
+		assert_coord_eq(back.end, l.end);
+	}
+
+	#[test]
+	fn rect_round_trip_preserves_min_max() {
+		let r = Rect::new(Coord { x: -1.0, y: -2.0 }, Coord { x: 3.0, y: 4.0 });
+		let back = r.to_mercator().from_mercator();
+		assert_coord_eq(back.min(), r.min());
+		assert_coord_eq(back.max(), r.max());
+	}
+
+	#[test]
+	fn triangle_round_trip_preserves_all_vertices() {
+		let t = Triangle::new(
+			Coord { x: 0.0, y: 0.0 },
+			Coord { x: 5.0, y: 0.0 },
+			Coord { x: 0.0, y: 5.0 },
+		);
+		let back = t.to_mercator().from_mercator();
+		assert_coord_eq(back.v1(), t.v1());
+		assert_coord_eq(back.v2(), t.v2());
+		assert_coord_eq(back.v3(), t.v3());
+	}
+
+	// ── Geometry dispatch — every variant ────────────────────────────────
+
+	/// Round-trips a single `Geometry<f64>` value through both directions
+	/// and asserts the variant comes back as the same kind. Specific value
+	/// equality is checked per-variant in the dedicated tests above; here
+	/// we only need to verify the dispatch wiring.
+	fn assert_geometry_round_trip(g: &Geometry<f64>) {
 		let projected = g.clone().to_mercator();
 		let back = projected.from_mercator();
-		match (g, back) {
-			(Geometry::Point(a), Geometry::Point(b)) => {
-				assert_relative_eq!(a.x(), b.x(), epsilon = 1e-6);
-				assert_relative_eq!(a.y(), b.y(), epsilon = 1e-6);
+		assert!(
+			std::mem::discriminant(g) == std::mem::discriminant(&back),
+			"variant changed during round-trip"
+		);
+	}
+
+	#[test]
+	fn geometry_dispatch_point() {
+		assert_geometry_round_trip(&Geometry::Point(Point::new(1.5, -2.5)));
+	}
+
+	#[test]
+	fn geometry_dispatch_line() {
+		assert_geometry_round_trip(&Geometry::Line(Line::new(
+			Coord { x: 1.0, y: 2.0 },
+			Coord { x: 3.0, y: 4.0 },
+		)));
+	}
+
+	#[test]
+	fn geometry_dispatch_line_string() {
+		assert_geometry_round_trip(&Geometry::LineString(LineString::from(vec![[0.0, 0.0], [1.0, 1.0]])));
+	}
+
+	#[test]
+	fn geometry_dispatch_polygon() {
+		assert_geometry_round_trip(&Geometry::Polygon(Polygon::new(
+			LineString::from(vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]),
+			vec![],
+		)));
+	}
+
+	#[test]
+	fn geometry_dispatch_multi_point() {
+		assert_geometry_round_trip(&Geometry::MultiPoint(MultiPoint(vec![
+			Point::new(1.0, 2.0),
+			Point::new(3.0, 4.0),
+		])));
+	}
+
+	#[test]
+	fn geometry_dispatch_multi_line_string() {
+		assert_geometry_round_trip(&Geometry::MultiLineString(MultiLineString(vec![LineString::from(
+			vec![[0.0, 0.0], [1.0, 1.0]],
+		)])));
+	}
+
+	#[test]
+	fn geometry_dispatch_multi_polygon() {
+		assert_geometry_round_trip(&Geometry::MultiPolygon(MultiPolygon(vec![Polygon::new(
+			LineString::from(vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]),
+			vec![],
+		)])));
+	}
+
+	#[test]
+	fn geometry_dispatch_rect() {
+		assert_geometry_round_trip(&Geometry::Rect(Rect::new(
+			Coord { x: -1.0, y: -2.0 },
+			Coord { x: 3.0, y: 4.0 },
+		)));
+	}
+
+	#[test]
+	fn geometry_dispatch_triangle() {
+		assert_geometry_round_trip(&Geometry::Triangle(Triangle::new(
+			Coord { x: 0.0, y: 0.0 },
+			Coord { x: 5.0, y: 0.0 },
+			Coord { x: 0.0, y: 5.0 },
+		)));
+	}
+
+	#[test]
+	fn geometry_dispatch_geometry_collection_round_trips_each_inner() {
+		let gc = Geometry::GeometryCollection(GeometryCollection(vec![
+			Geometry::Point(Point::new(1.0, 2.0)),
+			Geometry::Line(Line::new(Coord { x: 0.0, y: 0.0 }, Coord { x: 3.0, y: 4.0 })),
+			Geometry::Triangle(Triangle::new(
+				Coord { x: 0.0, y: 0.0 },
+				Coord { x: 5.0, y: 0.0 },
+				Coord { x: 0.0, y: 5.0 },
+			)),
+		]));
+		let back = gc.clone().to_mercator().from_mercator();
+		match (gc, back) {
+			(Geometry::GeometryCollection(a), Geometry::GeometryCollection(b)) => {
+				assert_eq!(a.0.len(), b.0.len());
+				for (left, right) in a.0.iter().zip(b.0.iter()) {
+					assert_eq!(std::mem::discriminant(left), std::mem::discriminant(right));
+				}
 			}
-			_ => panic!("expected Point variants"),
+			_ => panic!("expected GeometryCollection on both sides"),
 		}
 	}
 }
