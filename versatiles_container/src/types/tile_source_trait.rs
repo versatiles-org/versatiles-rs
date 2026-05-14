@@ -55,7 +55,7 @@ pub type SharedTileSource = Arc<Box<dyn TileSource>>;
 /// method must filter by the same predicate.
 ///
 /// Implementors should add a regression test calling
-/// [`testing::assert_stream_counts_agree`](crate::testing::assert_stream_counts_agree)
+/// `testing::assert_stream_counts_agree` (gated by the `test` feature)
 /// against their representative bboxes.
 #[async_trait]
 pub trait TileSource: Debug + Send + Sync + Unpin {
