@@ -128,7 +128,7 @@ impl Operation {
 			"vector_overzoom requires a vector tile source"
 		);
 
-		let metadata = source.as_ref().metadata().clone();
+		let mut metadata = source.as_ref().metadata().clone();
 
 		let source_pyramid = metadata
 			.tile_pyramid()

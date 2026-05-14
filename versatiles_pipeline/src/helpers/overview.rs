@@ -67,7 +67,7 @@ impl OverviewCore {
 		let tile_size = tilejson.tile_size.map_or(512, |ts| u32::from(ts.size()));
 		let cache = Arc::new(DashMap::new());
 		let cache_bytes = Arc::new(AtomicUsize::new(0));
-		let mut metadata = metadata;
+
 		metadata.set_traversal(Traversal::new(
 			TraversalOrder::DepthFirst,
 			BLOCK_TILE_COUNT,
