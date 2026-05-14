@@ -608,4 +608,60 @@ mod tests {
 
 		Ok(())
 	}
+
+	/// Regression: wrapping a source in a `TilesConvertReader` must not mutate the
+	/// source's metadata. Previously the converter would call `set_tile_pyramid`
+	/// on a clone whose `Arc<RwLock<...>>` was shared with the source, silently
+	/// overwriting the source's pyramid with the swapped/flipped/filtered one.
+	/// That broke any subsequent reader of `metadata.intersection_bbox`
+	/// (notably `tile_size_stream` → `tile_coord_stream`), so the conversion
+	/// progress count came out as 0/1 even though the actual write was correct.
+	#[tokio::test]
+	async fn swap_xy_does_not_corrupt_source_metadata() -> Result<()> {
+		use crate::VersaTilesReader;
+
+		let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+			.parent()
+			.unwrap()
+			.join("testdata/berlin.versatiles");
+		let runtime = TilesRuntime::default();
+		let reader = VersaTilesReader::open(&path, runtime.clone()).await?;
+		let shared = reader.into_shared();
+
+		// Snapshot the source's pyramid before wrapping.
+		let before = shared.tile_pyramid().await?.as_ref().clone();
+
+		// Build a converter that swaps X/Y. This used to silently mutate the
+		// shared `tile_pyramid` lock.
+		let conv = TilesConvertReader::new_from_reader(
+			shared.clone(),
+			TilesConverterParameters {
+				swap_xy: true,
+				..Default::default()
+			},
+		)
+		.await?;
+
+		// 1) Source's pyramid must be unchanged.
+		let after = shared.tile_pyramid().await?.as_ref().clone();
+		assert_eq!(before, after, "source pyramid was mutated by the converter");
+
+		// 2) `tile_coord_stream` and `tile_stream` must agree on counts at every
+		//    level. Before the fix this failed for every level except z=0 (which
+		//    is invariant under swap) — coord returned 0, stream returned N.
+		let pyr = conv.tile_pyramid().await?;
+		for z in 0..=pyr.level_max().unwrap_or(0) {
+			let bbox = pyr.level_ref(z).to_bbox();
+			if bbox.is_empty() {
+				continue;
+			}
+			let coord_count = conv.tile_coord_stream(bbox).await?.drain_and_count().await;
+			let tile_count = conv.tile_stream(bbox).await?.to_vec().await.len() as u64;
+			assert_eq!(
+				coord_count, tile_count,
+				"z={z}: tile_coord_stream={coord_count} != tile_stream={tile_count}",
+			);
+		}
+		Ok(())
+	}
 }

@@ -109,7 +109,7 @@ impl Operation {
 	}
 
 	pub fn new(source: Box<dyn TileSource>, args: &Args) -> Result<Operation> {
-		let metadata = source.as_ref().metadata().clone();
+		let mut metadata = source.as_ref().metadata().clone();
 
 		let source_pyramid = metadata
 			.tile_pyramid()

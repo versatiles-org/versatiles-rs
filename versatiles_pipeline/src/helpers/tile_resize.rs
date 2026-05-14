@@ -99,7 +99,7 @@ impl TileResizeCore {
 			_ => bail!("target tile_size must be 256 or 512, got {tartile_size}"),
 		}
 
-		let metadata = source.metadata().clone();
+		let mut metadata = source.metadata().clone();
 		metadata.set_tile_pyramid(output_pyramid);
 
 		let mut tilejson = source.tilejson().clone();

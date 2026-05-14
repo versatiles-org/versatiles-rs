@@ -41,7 +41,7 @@ impl OverviewCore {
 	pub fn new(source: Box<dyn TileSource>, level: Option<u8>, scale_fn: ScaleDownFn) -> Result<Self> {
 		ensure!(source.metadata().traversal().is_any());
 
-		let metadata = source.metadata().clone();
+		let mut metadata = source.metadata().clone();
 		let mut tilejson = source.tilejson().clone();
 
 		let source_pyramid = metadata

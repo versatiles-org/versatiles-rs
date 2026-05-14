@@ -57,7 +57,7 @@ impl Operation {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		// Validate source format is raster
-		let metadata = source.metadata().clone();
+		let mut metadata = source.metadata().clone();
 		if !matches!(
 			metadata.tile_format(),
 			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP

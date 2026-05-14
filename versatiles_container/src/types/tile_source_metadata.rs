@@ -11,7 +11,7 @@ use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyram
 /// - `tile_pyramid`: The bounding box and zoom pyramid defining the tile coverage.
 /// - `tile_compression`: The compression algorithm applied to tiles (e.g., gzip, brotli).
 /// - `tile_format`: The format of the tiles (e.g., PNG, JPEG, MVT).
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 pub struct TileSourceMetadata {
 	/// The compression algorithm applied to tiles (e.g., gzip, brotli).
 	tile_compression: TileCompression,
@@ -21,6 +21,24 @@ pub struct TileSourceMetadata {
 	traversal: Traversal,
 
 	tile_pyramid: Arc<RwLock<Option<Arc<TilePyramid>>>>,
+}
+
+impl Clone for TileSourceMetadata {
+	/// Produces an independent copy whose `tile_pyramid` lock is *not* shared
+	/// with `self`. The inner `Arc<TilePyramid>` itself is cheaply ref-bumped.
+	///
+	/// Sharing the lock (as a naive derived `Clone` would) is unsound here:
+	/// `set_tile_pyramid` would mutate every sibling clone, silently corrupting
+	/// every source that has been wrapped by a converter/filter/operation.
+	fn clone(&self) -> Self {
+		let pyramid = self.tile_pyramid.read().expect("poisoned RwLock").clone();
+		TileSourceMetadata {
+			tile_compression: self.tile_compression,
+			tile_format: self.tile_format,
+			traversal: self.traversal.clone(),
+			tile_pyramid: Arc::new(RwLock::new(pyramid)),
+		}
+	}
 }
 
 impl PartialEq for TileSourceMetadata {
@@ -114,7 +132,10 @@ impl TileSourceMetadata {
 		self.tile_pyramid.read().expect("poisoned RwLock").clone()
 	}
 
-	pub fn set_tile_pyramid(&self, tile_pyramid: TilePyramid) {
+	/// Overwrites the tile pyramid. Requires `&mut self` so that mutations cannot
+	/// accidentally propagate through a shared clone — see the `Clone` impl above
+	/// for the rationale.
+	pub fn set_tile_pyramid(&mut self, tile_pyramid: TilePyramid) {
 		*self.tile_pyramid.write().expect("poisoned RwLock") = Some(Arc::new(tile_pyramid));
 	}
 

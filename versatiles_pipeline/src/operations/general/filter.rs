@@ -37,7 +37,7 @@ impl Operation {
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let metadata = source.metadata().clone();
+		let mut metadata = source.metadata().clone();
 		let mut tilejson = source.tilejson().clone();
 
 		if let (Some(lo), Some(hi)) = (args.level_min, args.level_max)

@@ -42,7 +42,7 @@ impl ReadTileSource for Operation {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let source = factory.reader(DataLocation::try_from(&args.filename)?).await?;
 		let tile_pyramid = source.tile_pyramid().await?;
-		let metadata = source.metadata().clone();
+		let mut metadata = source.metadata().clone();
 		metadata.set_tile_pyramid(tile_pyramid.as_ref().clone());
 		let mut tilejson = source.tilejson().clone();
 		metadata.update_tilejson(&mut tilejson);

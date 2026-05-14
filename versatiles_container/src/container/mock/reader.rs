@@ -93,7 +93,7 @@ impl MockReader {
 
 	/// Creates a new mock tiles reader with the specified parameters.
 	#[context("creating mock reader from parameters")]
-	pub fn new_mock(tile_pyramid: TilePyramid, metadata: TileSourceMetadata) -> Result<MockReader> {
+	pub fn new_mock(tile_pyramid: TilePyramid, mut metadata: TileSourceMetadata) -> Result<MockReader> {
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("type", "dummy")?;
 		metadata.set_tile_pyramid(tile_pyramid.clone());
