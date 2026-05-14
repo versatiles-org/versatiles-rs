@@ -228,3 +228,213 @@ fn populate_vector_layers(tilejson: &mut TileJSON, layer_name: &str, import: &Fe
 	};
 	tilejson.vector_layers = VectorLayers(std::iter::once((layer_name.to_string(), layer)).collect());
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use geo_types::{Geometry, Point};
+	use versatiles_core::TileBBox;
+	use versatiles_geometry::feature_import::{FeatureImportArgs, project_and_flatten};
+	use versatiles_geometry::geo::GeoValue;
+
+	// ── apply_property_filters ───────────────────────────────────────────
+
+	fn feature_with(props: &[(&str, &str)]) -> GeoFeature {
+		let mut f = GeoFeature::new(Geometry::Point(Point::new(0.0, 0.0)));
+		for (k, v) in props {
+			f.set_property((*k).into(), *v);
+		}
+		f
+	}
+
+	fn prop_keys(f: &GeoFeature) -> Vec<String> {
+		let mut keys: Vec<String> = f.properties.iter().map(|(k, _)| k.clone()).collect();
+		keys.sort();
+		keys
+	}
+
+	#[test]
+	fn apply_property_filters_include_drops_unlisted_keys() {
+		let mut features = vec![feature_with(&[("keep", "1"), ("drop", "2"), ("also_drop", "3")])];
+		let keep = vec!["keep".to_string()];
+		apply_property_filters(&mut features, Some(&keep), None);
+		assert_eq!(prop_keys(&features[0]), vec!["keep"]);
+	}
+
+	#[test]
+	fn apply_property_filters_exclude_drops_listed_keys() {
+		let mut features = vec![feature_with(&[("a", "1"), ("b", "2"), ("c", "3")])];
+		let drop = vec!["b".to_string()];
+		apply_property_filters(&mut features, None, Some(&drop));
+		assert_eq!(prop_keys(&features[0]), vec!["a", "c"]);
+	}
+
+	#[test]
+	fn apply_property_filters_neither_is_noop() {
+		let mut features = vec![feature_with(&[("a", "1"), ("b", "2")])];
+		apply_property_filters(&mut features, None, None);
+		assert_eq!(prop_keys(&features[0]), vec!["a", "b"]);
+	}
+
+	#[test]
+	fn apply_property_filters_include_precedence_when_both_are_set() {
+		// The callers reject `Some + Some` at the VPL parsing layer; the
+		// helper itself defines include as winning. Documented behaviour.
+		let mut features = vec![feature_with(&[("a", "1"), ("b", "2")])];
+		let keep = vec!["a".to_string()];
+		let drop = vec!["a".to_string()];
+		apply_property_filters(&mut features, Some(&keep), Some(&drop));
+		assert_eq!(prop_keys(&features[0]), vec!["a"], "include must win");
+	}
+
+	// ── FeatureTileSource construction + accessors ───────────────────────
+
+	fn point_feature(id: u64, name: &str, lon: f64, lat: f64) -> GeoFeature {
+		let mut f = GeoFeature::new(Geometry::Point(Point::new(lon, lat)));
+		f.set_id(GeoValue::from(id));
+		f.set_property("name".into(), name);
+		f
+	}
+
+	fn build_source(max_zoom: u8) -> FeatureTileSource {
+		let features: Vec<GeoFeature> = vec![
+			point_feature(1, "origin", 0.0, 0.0),
+			point_feature(2, "east", 90.0, 30.0),
+		]
+		.into_iter()
+		.flat_map(project_and_flatten)
+		.collect();
+		let args = FeatureImportArgs {
+			max_zoom: Some(max_zoom),
+			..Default::default()
+		};
+		let import = FeatureImport::from_features(features, args).unwrap();
+		FeatureTileSource::new(
+			import,
+			"features",
+			TileCompression::Uncompressed,
+			"test_label",
+			"test source",
+			"test",
+		)
+		.unwrap()
+	}
+
+	#[test]
+	fn new_populates_metadata_and_tilejson() {
+		let source = build_source(2);
+		// metadata accessor + tile_pyramid present
+		let m = source.metadata();
+		assert_eq!(m.tile_format(), &TileFormat::MVT);
+		assert_eq!(m.tile_compression(), &TileCompression::Uncompressed);
+		assert!(m.tile_pyramid().is_some(), "pyramid set after construction");
+
+		// tilejson has the layer name + a single vector_layers entry
+		let tj = source.tilejson();
+		assert_eq!(tj.vector_layers.0.len(), 1);
+		assert!(tj.vector_layers.0.contains_key("features"));
+	}
+
+	#[test]
+	fn debug_impl_emits_struct_name_and_source_short() {
+		let source = build_source(2);
+		let s = format!("{source:?}");
+		assert!(s.contains("FeatureTileSource"), "got: {s}");
+		assert!(s.contains("test"), "should expose source_short, got: {s}");
+	}
+
+	#[test]
+	fn source_type_uses_descriptor_strings() {
+		let source = build_source(2);
+		let st = source.source_type().to_string();
+		assert!(st.contains("test source"), "got: {st}");
+		assert!(st.contains("test"), "got: {st}");
+	}
+
+	#[tokio::test]
+	async fn tile_pyramid_async_accessor_returns_set_pyramid() -> Result<()> {
+		let source = build_source(2);
+		let pyramid = source.tile_pyramid().await?;
+		// At max_zoom=2 the world is 4×4 tiles; our two points span lon
+		// 0..90°, lat 0..30°, so the level-2 bbox is a real (non-empty) range.
+		assert!(pyramid.level_max().is_some());
+		Ok(())
+	}
+
+	// ── tile / tile_stream / tile_coord_stream ───────────────────────────
+
+	#[tokio::test]
+	async fn tile_returns_some_for_world_tile() -> Result<()> {
+		let source = build_source(2);
+		let coord = TileCoord::new(0, 0, 0)?;
+		let tile = source.tile(&coord).await?;
+		assert!(tile.is_some(), "world tile must be non-empty for non-empty input");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn tile_returns_none_outside_data_bbox() -> Result<()> {
+		let source = build_source(2);
+		// Tile (2, 0, 3) is the bottom-left z2 tile, covering southern latitudes;
+		// our input is in the northern hemisphere, so the import returns None.
+		let coord = TileCoord::new(2, 0, 3)?;
+		let tile = source.tile(&coord).await?;
+		assert!(tile.is_none(), "tile outside data must be None");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn tile_stream_yields_tiles_for_world_bbox() -> Result<()> {
+		let source = build_source(0);
+		let bbox = TileBBox::new_full(0)?;
+		let mut stream = source.tile_stream(bbox).await?;
+		let mut count = 0;
+		while let Some(_item) = stream.next().await {
+			count += 1;
+		}
+		assert_eq!(count, 1, "expected exactly the world tile (0,0,0)");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn tile_stream_skips_pyramid_tiles_with_no_features() -> Result<()> {
+		// At z=3, the two points sit in tiles widely separated along the
+		// x-axis. The pyramid bbox covers the whole rectangle between them, so
+		// the in-between columns are empty and hit the `Ok(None)` branch in
+		// `import.get_tile(..)`.
+		let source = build_source(3);
+		let pyramid = source.tile_pyramid().await?;
+		let level = pyramid.level_max().unwrap();
+		let bbox = pyramid.level_ref(level).to_bbox();
+		let total = bbox.count_tiles();
+		let mut stream = source.tile_stream(bbox).await?;
+		let mut yielded = 0u64;
+		while let Some(_t) = stream.next().await {
+			yielded += 1;
+		}
+		assert!(yielded > 0, "at least one data tile must be present");
+		assert!(
+			yielded < total,
+			"tile_stream must filter out data-empty tiles (yielded {yielded} of {total})",
+		);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn tile_coord_stream_filters_to_pyramid_bbox() -> Result<()> {
+		let source = build_source(2);
+		// Pass a full z2 bbox; the pyramid only covers the data's slice of
+		// z2, so `tile_coord_stream` must filter out tiles outside that slice.
+		let bbox = TileBBox::new_full(2)?;
+		let mut stream = source.tile_coord_stream(bbox).await?;
+		let mut count = 0;
+		while let Some(_item) = stream.next().await {
+			count += 1;
+		}
+		// Full z2 bbox has 16 tiles; the data covers far fewer. Just assert
+		// the filter is doing work (i.e. fewer than 16 yielded).
+		assert!(count > 0, "should yield at least one coord");
+		assert!(count < 16, "should filter out non-pyramid coords; got {count} of 16");
+		Ok(())
+	}
+}
