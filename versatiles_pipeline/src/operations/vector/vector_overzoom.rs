@@ -514,7 +514,9 @@ mod tests {
 	use super::*;
 	use crate::factory::OperationFactoryTrait;
 	use crate::helpers::dummy_vector_source::DummyVectorSource;
+	use geo_types::Geometry;
 	use versatiles_core::{TileCoord, TilePyramid};
+	use versatiles_geometry::geo::GeoValue;
 
 	async fn build_op(extra_args: &str) -> Result<Operation> {
 		let source = Box::new(DummyVectorSource::new(
@@ -582,21 +584,46 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_overzoom_generates_child_tile() -> Result<()> {
-		// DummyVectorSource produces a layer "dummy" with one Point feature per tile.
-		// At z3, four child tiles cover the z2 parent; each should still produce a tile
-		// (the point is at parent (1,2) which is far from any sub-tile boundary, so it
-		// falls cleanly into one of the four children — but with the buffer it leaks
-		// into neighbours too).
+		// DummyVectorSource emits one MVT-local Point at (1, 2) per source tile,
+		// plus properties `x`/`y`/`z` carrying the source coord and `k="v"`.
+		// For destination (3, 2, 2) the level_base=2 parent is (2, 1, 1); the
+		// child sub-region within that parent is its top-left quadrant
+		// (offset_x = offset_y = 0, scale = 2). The point sits inside the
+		// sub-region and rescales to (2, 4) in child space.
 		let op = build_op("").await?;
 		let bbox = TileCoord::new(3, 2, 2)?.to_tile_bbox();
-		let mut tiles = op.tile_stream(bbox).await?.to_vec().await;
-		// Either 0 or 1 tile depending on whether the point falls inside; what we care
-		// about is that calling the overzoom path doesn't error.
-		if let Some((_coord, mut tile)) = tiles.pop() {
-			let vt = tile.as_vector()?;
-			// If a tile came back, it must have at least one layer.
-			assert!(!vt.layers.is_empty());
-		}
+		let tiles = op.tile_stream(bbox).await?.to_vec().await;
+		assert_eq!(tiles.len(), 1, "exactly one child tile expected");
+
+		let (coord, mut tile) = tiles.into_iter().next().unwrap();
+		assert_eq!((coord.level, coord.x, coord.y), (3, 2, 2));
+
+		let vt = tile.as_vector()?;
+		assert_eq!(vt.layers.len(), 1, "single layer carried through");
+		let layer = &vt.layers[0];
+		assert_eq!(layer.name, "dummy");
+		assert_eq!(layer.extent, 4096, "extent preserved from source layer");
+		assert_eq!(layer.features.len(), 1, "single feature carried through");
+
+		let feature = &layer.features[0];
+		let pt = match feature.to_geometry()? {
+			Geometry::MultiPoint(mp) => {
+				assert_eq!(mp.0.len(), 1, "single point round-trips as one-element MultiPoint");
+				mp.0[0].0
+			}
+			other => panic!("expected MultiPoint, got {other:?}"),
+		};
+		// Rescaled child-space coords. MVT integer-grid rounding makes these
+		// exact: 1 → 2, 2 → 4 after the ×2 scale.
+		assert!((pt.x - 2.0).abs() < 0.5, "child x should be 2.0, got {}", pt.x);
+		assert!((pt.y - 4.0).abs() < 0.5, "child y should be 4.0, got {}", pt.y);
+
+		// Properties are passed through unchanged from the source tile at z=2 (1, 1).
+		let props = feature.decode_properties(layer)?;
+		assert_eq!(props.get("k"), Some(&GeoValue::String("v".to_string())));
+		assert_eq!(props.get("z"), Some(&GeoValue::UInt(2)));
+		assert_eq!(props.get("x"), Some(&GeoValue::UInt(1)));
+		assert_eq!(props.get("y"), Some(&GeoValue::UInt(1)));
 		Ok(())
 	}
 
@@ -704,7 +731,7 @@ mod tests {
 
 	// ── extract_tile unit tests ──────────────────────────────────────────────
 
-	use geo_types::{Geometry, LineString, Point};
+	use geo_types::{LineString, Point};
 	use versatiles_geometry::geo::GeoFeature as GF;
 
 	fn layer_with_feature(name: &str, geometry: Geometry<f64>) -> VectorTileLayer {
