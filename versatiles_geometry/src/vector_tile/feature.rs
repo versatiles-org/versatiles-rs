@@ -456,6 +456,9 @@ impl VectorTileFeature {
 
 		fn write_points(points: MultiPoint<f64>) -> Result<Blob> {
 			let mut writer = ValueWriterBlob::new_le();
+			if points.0.is_empty() {
+				return Ok(writer.into_blob());
+			}
 			let point0 = &mut (0i64, 0i64);
 			writer.write_varint(((points.0.len() as u64) << 3) | 0x1)?;
 			for point in points.0 {
@@ -550,7 +553,7 @@ impl VectorTileFeature {
 			Ok(writer.into_blob())
 		}
 
-		let (geom_type, geom_data) = match geometry {
+		let (mut geom_type, geom_data) = match geometry {
 			Geometry::Point(p) => (GeomType::MultiPoint, write_points(MultiPoint(vec![p]))?),
 			Geometry::MultiPoint(mp) => (GeomType::MultiPoint, write_points(mp)?),
 			Geometry::LineString(ls) => (
@@ -565,6 +568,15 @@ impl VectorTileFeature {
 			Geometry::Triangle(_) => bail!("MVT encoding of Triangle is not supported"),
 			Geometry::GeometryCollection(_) => bail!("MVT encoding of GeometryCollection is not supported"),
 		};
+
+		// MVT 2.1 §4.3 requires Point/LineString/Polygon features to carry at
+		// least one point/vertex/ring. If the writer produced an empty command
+		// stream (empty input, or every ring degenerate), downgrade to Unknown
+		// so the encoded feature stays spec-compliant — an Unknown feature
+		// with empty geom_data is the canonical "no geometry" form.
+		if geom_data.is_empty() {
+			geom_type = GeomType::Unknown;
+		}
 
 		Ok(VectorTileFeature {
 			id,
@@ -671,6 +683,66 @@ mod tests {
 	fn rejects_unsupported_variants() {
 		let l = geo_types::Line::new(Coord { x: 0.0, y: 0.0 }, Coord { x: 1.0, y: 1.0 });
 		assert!(VectorTileFeature::from_geometry(None, vec![], Geometry::Line(l)).is_err());
+	}
+
+	/// Regression for the MVT 2.1 §4.2 requirement that every feature MUST
+	/// carry the geometry field (PBF tag 4). Earlier versions skipped the
+	/// field when `geom_data` was empty, which broke MapLibre interop.
+	#[test]
+	fn to_blob_always_emits_geometry_field() -> Result<()> {
+		use versatiles_core::io::ValueReaderSlice;
+		let cases: Vec<Geometry<f64>> = vec![
+			Geometry::Point(Point::new(1.0, 2.0)),
+			Geometry::MultiPoint(MultiPoint(vec![])),
+			Geometry::MultiLineString(MultiLineString(vec![])),
+			Geometry::MultiPolygon(MultiPolygon(vec![])),
+		];
+		for g in cases {
+			let label = format!("{g:?}");
+			let feat = VectorTileFeature::from_geometry(None, vec![], g)?;
+			let blob = feat.to_blob()?;
+			let mut reader = ValueReaderSlice::new_le(blob.as_slice());
+			let decoded = VectorTileFeature::read(&mut reader).expect(&label);
+			// Re-parsing succeeds only if field 4 was emitted (decoder bails
+			// otherwise — no other field carries geom_data).
+			assert_eq!(
+				decoded.geom_data.as_slice(),
+				feat.geom_data.as_slice(),
+				"geom_data round-trip mismatch for {label}"
+			);
+		}
+		Ok(())
+	}
+
+	/// Empty input geometries must be encoded as `Unknown` with empty
+	/// `geom_data`, the spec-compliant "no geometry" form.
+	#[test]
+	fn from_geometry_downgrades_empty_to_unknown() -> Result<()> {
+		let cases: Vec<Geometry<f64>> = vec![
+			Geometry::MultiPoint(MultiPoint(vec![])),
+			Geometry::LineString(LineString::new(vec![])),
+			Geometry::MultiLineString(MultiLineString(vec![])),
+			Geometry::MultiPolygon(MultiPolygon(vec![])),
+		];
+		for g in cases {
+			let label = format!("{g:?}");
+			let feat = VectorTileFeature::from_geometry(None, vec![], g)?;
+			assert_eq!(feat.geom_type, GeomType::Unknown, "{label}");
+			assert!(feat.geom_data.is_empty(), "{label}");
+		}
+		Ok(())
+	}
+
+	/// All-degenerate polygons produce empty `geom_data`; the encoder
+	/// downgrades them to `Unknown` rather than emitting `MultiPolygon` with
+	/// no rings (which decoders may interpret inconsistently).
+	#[test]
+	fn from_geometry_downgrades_all_degenerate_polygon_to_unknown() -> Result<()> {
+		let collinear = polygon_from(&[vec![[0, 0], [1, 1], [2, 2], [0, 0]]]);
+		let feat = VectorTileFeature::from_geometry(None, vec![], Geometry::Polygon(collinear))?;
+		assert_eq!(feat.geom_type, GeomType::Unknown);
+		assert!(feat.geom_data.is_empty());
+		Ok(())
 	}
 
 	fn coords(pts: &[(f64, f64)]) -> Vec<Coord<f64>> {
@@ -1008,7 +1080,8 @@ mod tests {
 
 	/// A polygon with a degenerate exterior must be dropped wholesale by the
 	/// encoder — interior rings would otherwise become orphan inners and the
-	/// decoder would silently drop them.
+	/// decoder would silently drop them. The resulting feature carries no
+	/// geometry, so it's encoded as `Unknown` with empty `geom_data`.
 	#[test]
 	fn encoder_drops_polygon_with_degenerate_exterior() -> Result<()> {
 		// Exterior: three collinear points → zero area, degenerate.
@@ -1019,13 +1092,8 @@ mod tests {
 		let poly = Polygon::new(degenerate_exterior, vec![valid_hole]);
 
 		let feature = VectorTileFeature::from_geometry(None, vec![], Geometry::Polygon(poly))?;
-		let decoded = feature.to_geometry()?;
-		match decoded {
-			Geometry::MultiPolygon(mp) => {
-				assert!(mp.0.is_empty(), "polygon with degenerate exterior must be dropped");
-			}
-			other => panic!("expected MultiPolygon, got {other:?}"),
-		}
+		assert_eq!(feature.geom_type, GeomType::Unknown);
+		assert!(feature.geom_data.is_empty());
 		Ok(())
 	}
 
