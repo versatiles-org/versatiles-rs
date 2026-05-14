@@ -47,6 +47,43 @@ fn ring_signed_double_area(coords: &[Coord<f64>]) -> f64 {
 	sum
 }
 
+/// Threshold below which a ring's signed double area is treated as zero
+/// (degenerate ring — collinear vertices or floating-point noise). Mirrors
+/// the threshold used by [`VectorTileFeature::to_geometry`].
+const WINDING_EPSILON: f64 = 1e-14;
+
+/// Rewinds the rings of a polygon so they conform to MVT 2.1 §4.3.3.3:
+/// the exterior ring has positive surveyor area, each interior ring has
+/// negative area. Rings whose area is within `WINDING_EPSILON` of zero
+/// (degenerate) are left as-is; the encoder is responsible for filtering them.
+///
+/// Callers should run this before encoding any `Polygon`/`MultiPolygon` to MVT
+/// so that consumers see spec-conformant winding regardless of where the input
+/// geometry came from.
+#[allow(dead_code)] // wired into the encoder in a follow-up commit
+pub(crate) fn normalize_polygon_winding(poly: Polygon<f64>) -> Polygon<f64> {
+	let (mut exterior, interiors) = poly.into_inner();
+	if ring_signed_double_area(&exterior.0) < -WINDING_EPSILON {
+		exterior.0.reverse();
+	}
+	let interiors = interiors
+		.into_iter()
+		.map(|mut interior| {
+			if ring_signed_double_area(&interior.0) > WINDING_EPSILON {
+				interior.0.reverse();
+			}
+			interior
+		})
+		.collect();
+	Polygon::new(exterior, interiors)
+}
+
+/// `normalize_polygon_winding` lifted over each polygon in a `MultiPolygon`.
+#[allow(dead_code)] // wired into the encoder in a follow-up commit
+pub(crate) fn normalize_multipolygon_winding(mp: MultiPolygon<f64>) -> MultiPolygon<f64> {
+	MultiPolygon(mp.0.into_iter().map(normalize_polygon_winding).collect())
+}
+
 impl VectorTileFeature {
 	/// Decodes a `VectorTileFeature` from a `BlobReader`.
 	pub fn read(reader: &mut dyn ValueReader<'_, LE>) -> Result<VectorTileFeature> {
@@ -574,5 +611,102 @@ mod tests {
 			other => panic!("expected MultiPolygon, got {other:?}"),
 		}
 		Ok(())
+	}
+
+	// ── normalize_polygon_winding ─────────────────────────────────────────
+
+	/// Returns the vertices of a ring as `(x, y)` tuples, dropping the closing
+	/// duplicate so equality assertions are order-only.
+	fn ring_pts(ls: &LineString<f64>) -> Vec<(f64, f64)> {
+		ls.0.iter().map(|c| (c.x, c.y)).collect()
+	}
+
+	/// Polygon already in MVT 2.1 winding (outer CW screen = positive area,
+	/// inner CCW screen = negative area) is left unchanged.
+	#[test]
+	fn normalize_polygon_winding_noop_for_correct_input() {
+		// Outer: (0,0)-(4,0)-(4,4)-(0,4) — CW in screen-Y → positive area2.
+		let outer = ls_from(&[[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]]);
+		// Inner: (1,1)-(1,3)-(3,3)-(3,1) — CCW in screen-Y → negative area2.
+		let inner = ls_from(&[[1, 1], [1, 3], [3, 3], [3, 1], [1, 1]]);
+		let original = Polygon::new(outer.clone(), vec![inner.clone()]);
+
+		let normalized = normalize_polygon_winding(original);
+
+		assert_eq!(ring_pts(normalized.exterior()), ring_pts(&outer));
+		assert_eq!(normalized.interiors().len(), 1);
+		assert_eq!(ring_pts(&normalized.interiors()[0]), ring_pts(&inner));
+	}
+
+	/// Inverted outer ring (CCW screen, negative area) is reversed; inner is
+	/// left alone.
+	#[test]
+	fn normalize_polygon_winding_reverses_inverted_outer() {
+		let outer_inverted = ls_from(&[[0, 0], [0, 4], [4, 4], [4, 0], [0, 0]]); // CCW → negative area
+		let inner = ls_from(&[[1, 1], [1, 3], [3, 3], [3, 1], [1, 1]]); // already CCW → negative area
+		let original = Polygon::new(outer_inverted.clone(), vec![inner.clone()]);
+
+		let normalized = normalize_polygon_winding(original);
+
+		// Exterior should now be CW (positive area).
+		assert!(ring_signed_double_area(&normalized.exterior().0) > 0.0);
+		// And it should be the *reverse* of the input.
+		let mut reversed = ring_pts(&outer_inverted);
+		reversed.reverse();
+		assert_eq!(ring_pts(normalized.exterior()), reversed);
+		// Interior was already correct → unchanged.
+		assert_eq!(ring_pts(&normalized.interiors()[0]), ring_pts(&inner));
+	}
+
+	/// Inverted inner ring (CW screen, positive area) is reversed; outer is
+	/// left alone.
+	#[test]
+	fn normalize_polygon_winding_reverses_inverted_inner() {
+		let outer = ls_from(&[[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]]); // CW → positive area
+		let inner_inverted = ls_from(&[[1, 1], [3, 1], [3, 3], [1, 3], [1, 1]]); // CW → positive area
+		let original = Polygon::new(outer.clone(), vec![inner_inverted.clone()]);
+
+		let normalized = normalize_polygon_winding(original);
+
+		assert_eq!(ring_pts(normalized.exterior()), ring_pts(&outer));
+		// Interior should now have negative area.
+		assert!(ring_signed_double_area(&normalized.interiors()[0].0) < 0.0);
+		let mut reversed = ring_pts(&inner_inverted);
+		reversed.reverse();
+		assert_eq!(ring_pts(&normalized.interiors()[0]), reversed);
+	}
+
+	/// Degenerate ring (area ≈ 0) is left unchanged regardless of input.
+	#[test]
+	fn normalize_polygon_winding_leaves_degenerate_alone() {
+		// Collinear outer — area is exactly zero.
+		let outer_collinear = ls_from(&[[0, 0], [1, 1], [2, 2], [0, 0]]);
+		let original = Polygon::new(outer_collinear.clone(), vec![]);
+
+		let normalized = normalize_polygon_winding(original);
+
+		assert_eq!(ring_pts(normalized.exterior()), ring_pts(&outer_collinear));
+	}
+
+	/// `normalize_multipolygon_winding` decides per polygon — a mixed-input
+	/// `MultiPolygon` ends up with each polygon individually conformant.
+	#[test]
+	fn normalize_multipolygon_winding_decides_per_polygon() {
+		// Polygon 1: outer already CW (correct), no holes.
+		let p1 = Polygon::new(ls_from(&[[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]]), vec![]);
+		// Polygon 2: outer inverted (CCW), inverted hole (CW).
+		let p2 = Polygon::new(
+			ls_from(&[[10, 10], [10, 14], [14, 14], [14, 10], [10, 10]]),
+			vec![ls_from(&[[11, 11], [13, 11], [13, 13], [11, 13], [11, 11]])],
+		);
+
+		let mp = MultiPolygon(vec![p1.clone(), p2]);
+		let normalized = normalize_multipolygon_winding(mp);
+
+		// First polygon unchanged.
+		assert_eq!(ring_pts(normalized.0[0].exterior()), ring_pts(p1.exterior()));
+		// Second polygon: both rings flipped.
+		assert!(ring_signed_double_area(&normalized.0[1].exterior().0) > 0.0);
+		assert!(ring_signed_double_area(&normalized.0[1].interiors()[0].0) < 0.0);
 	}
 }
