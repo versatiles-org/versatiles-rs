@@ -1,6 +1,11 @@
 name: 'Setup GDAL'
 description: 'Install GDAL via system package manager, with Homebrew bottle caching on macOS'
 
+outputs:
+  version:
+    description: 'Installed GDAL version (output of `gdal-config --version`)'
+    value: ${{ steps.verify.outputs.version }}
+
 runs:
   using: 'composite'
   steps:
@@ -20,5 +25,9 @@ runs:
       run: ./scripts/install-gdal.sh --testing
 
     - name: Verify GDAL installation
+      id: verify
       shell: bash
-      run: gdal-config --version
+      run: |
+        version="$(gdal-config --version)"
+        echo "GDAL version: $version"
+        echo "version=$version" >> "$GITHUB_OUTPUT"

@@ -388,12 +388,16 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup GDAL
+        id: gdal
         uses: ./.github/actions/setup-gdal
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "macos-gdal"
+          # Bake GDAL version into the key so brew rolling forward (e.g. 3.12.4 →
+          # 3.13.0) doesn't leave us with rlibs that hard-code a Cellar path that
+          # no longer exists.
+          shared-key: "macos-gdal-${{ steps.gdal.outputs.version }}"
           cache-targets: true
           cache-on-failure: false
           cache-bin: false
