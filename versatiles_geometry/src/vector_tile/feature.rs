@@ -5,7 +5,9 @@ use crate::ext::validate;
 use crate::geo::{GeoFeature, GeoProperties, GeoValue};
 use anyhow::{Context, Result, bail, ensure};
 use byteorder::LE;
-use geo_types::{Coord, Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon};
+use geo_types::{
+	Coord, Geometry, GeometryCollection, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon,
+};
 use versatiles_core::{
 	Blob,
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
@@ -233,11 +235,19 @@ impl VectorTileFeature {
 		let coordinates = parse_geom_command_stream(&self.geom_data)?;
 
 		match self.geom_type {
-			GeomType::Unknown => bail!("Unknown geometry type"),
+			// Spec-compliant "no geometry" form: a feature with `geom_type=0`
+			// (and, in practice, empty `geom_data`). Surfaces as an empty
+			// `GeometryCollection` so the encoder can round-trip it back to
+			// Unknown without inventing a fake type.
+			GeomType::Unknown => Ok(Geometry::GeometryCollection(GeometryCollection(vec![]))),
 
 			GeomType::MultiPoint => {
-				ensure!(!coordinates.is_empty(), "(Multi)Points must not be empty");
-
+				// Empty MultiPoint data is the symmetric counterpart of the
+				// encoder's degenerate-input case (see `from_geometry`). Treat
+				// it as an empty MultiPoint rather than failing the decode.
+				if coordinates.is_empty() {
+					return Ok(Geometry::MultiPoint(MultiPoint(vec![])));
+				}
 				let points = coordinates
 					.into_iter()
 					.map(|mut entry| {
@@ -249,7 +259,9 @@ impl VectorTileFeature {
 			}
 
 			GeomType::MultiLineString => {
-				ensure!(!coordinates.is_empty(), "MultiLineStrings must have at least one entry");
+				if coordinates.is_empty() {
+					return Ok(Geometry::MultiLineString(MultiLineString(vec![])));
+				}
 				let lines = coordinates.into_iter().map(LineString::new).collect::<Vec<_>>();
 				let g = Geometry::MultiLineString(MultiLineString(lines));
 				validate(&g).context("Invalid MultiLineString")?;
@@ -443,6 +455,7 @@ impl VectorTileFeature {
 		Ok(Geometry::MultiPolygon(MultiPolygon(polygons)))
 	}
 
+	#[allow(clippy::too_many_lines)]
 	pub fn from_geometry(id: Option<u64>, tag_ids: Vec<u32>, geometry: Geometry<f64>) -> Result<VectorTileFeature> {
 		fn write_coord(writer: &mut ValueWriterBlob<LE>, coord0: &mut (i64, i64), coord: Coord<f64>) -> Result<()> {
 			let x = float_to_int(coord.x)?;
@@ -566,7 +579,11 @@ impl VectorTileFeature {
 			Geometry::Line(_) => bail!("MVT encoding of Line is not supported"),
 			Geometry::Rect(_) => bail!("MVT encoding of Rect is not supported"),
 			Geometry::Triangle(_) => bail!("MVT encoding of Triangle is not supported"),
-			Geometry::GeometryCollection(_) => bail!("MVT encoding of GeometryCollection is not supported"),
+			// Empty GeometryCollection is the in-memory form of an Unknown
+			// feature with no geometry. Non-empty collections aren't
+			// representable in MVT and stay rejected.
+			Geometry::GeometryCollection(gc) if gc.0.is_empty() => (GeomType::Unknown, Blob::new_empty()),
+			Geometry::GeometryCollection(_) => bail!("MVT encoding of non-empty GeometryCollection is not supported"),
 		};
 
 		// MVT 2.1 §4.3 requires Point/LineString/Polygon features to carry at

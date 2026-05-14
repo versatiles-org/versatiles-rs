@@ -16,8 +16,12 @@
 //! - **`DegenerateRing`**: a ring that rounds to fewer than 3 distinct
 //!   integer-grid points (`SubPixel`), has fewer than 3 vertices
 //!   (`TooFewVertices`), or has zero/near-zero surveyor area (`Collinear`).
-//! - **`UnknownGeometryType`**: feature has geometry type 0 ("Unknown" — the
-//!   MVT spec defines this code but does not assign it a shape).
+//! - **`UnknownGeometryType`**: feature has geometry type 0 ("Unknown") but
+//!   carries non-empty `geom_data` — the spec defines type 0 but does not
+//!   assign it a shape, so attached data is ambiguous.
+//! - **`EmptyGeometryForType`**: feature carries a non-Unknown geometry type
+//!   but the command stream parses to zero coordinates — violates MVT 2.1
+//!   §4.3 (Point/LineString/Polygon all require at least one element).
 //! - **`MalformedCommandStream`**: the geometry command stream could not be
 //!   parsed (bad varint, unknown command, ClosePath on empty linestring,
 //!   …). The string carries the parser's error message.
@@ -25,8 +29,9 @@
 //! ## What does NOT get reported
 //!
 //! - Layers with `extent == 0` (the encoder skips them by default).
-//! - Features with completely empty geometry — that's a legitimate post-
-//!   filtering outcome (see C3).
+//! - Features with `geom_type == Unknown` *and* empty `geom_data` — that's
+//!   the canonical "no geometry" form (MVT 2.1 allows it; the encoder emits
+//!   it for inputs that collapse to nothing).
 //! - Inverted polygon winding *per se*, when the polygon parses cleanly as
 //!   "one outer + zero or more inners". The orphan-inner case is the
 //!   observable symptom.
@@ -53,10 +58,15 @@ pub enum IssueKind {
 	/// A ring that would not render after encoding to MVT integer-grid
 	/// coordinates. The wrapped reason gives the precise failure mode.
 	DegenerateRing(DegenerateReason),
-	/// Feature carries geometry type 0 ("Unknown"). The spec defines this
-	/// code but does not assign it a shape, so the decoder cannot produce
-	/// any meaningful geometry from it.
+	/// Feature has geometry type 0 ("Unknown") but carries non-empty
+	/// `geom_data`. The spec defines type 0 but doesn't assign it a shape,
+	/// so the attached data is ambiguous.
 	UnknownGeometryType,
+	/// Feature has a non-Unknown geometry type but the command stream parses
+	/// to zero coordinates. Violates MVT 2.1 §4.3 which requires at least one
+	/// point/vertex/ring for each typed geometry. The wrapped value is the
+	/// declared type.
+	EmptyGeometryForType(GeomType),
 	/// The MVT geometry command stream could not be parsed. The string is the
 	/// parser's `anyhow` error chain, joined.
 	MalformedCommandStream(String),
@@ -103,7 +113,11 @@ fn validate_feature(
 	};
 
 	if feature.geom_type == GeomType::Unknown {
-		push(IssueKind::UnknownGeometryType, issues);
+		// (Unknown, empty) is the spec-compliant "no geometry" form — silent.
+		// (Unknown, non-empty) is ambiguous — flag.
+		if !feature.geom_data.is_empty() {
+			push(IssueKind::UnknownGeometryType, issues);
+		}
 		return;
 	}
 
@@ -114,6 +128,14 @@ fn validate_feature(
 			return;
 		}
 	};
+
+	// A typed feature with no parsed coordinates violates MVT 2.1 §4.3.
+	// The encoder downgrades such features to Unknown, so this only fires
+	// for inbound tiles produced by other tools.
+	if rings.iter().all(Vec::is_empty) {
+		push(IssueKind::EmptyGeometryForType(feature.geom_type), issues);
+		return;
+	}
 
 	match feature.geom_type {
 		GeomType::MultiPolygon => check_polygon_rings(layer, feature_index, &rings, issues),
@@ -351,7 +373,8 @@ mod tests {
 	}
 
 	#[test]
-	fn detects_unknown_geometry_type() {
+	fn unknown_with_empty_data_is_not_flagged() {
+		// Canonical "no geometry" form — spec-compliant per MVT 2.1 §4.2.
 		let feature = VectorTileFeature {
 			id: None,
 			tag_ids: vec![],
@@ -359,9 +382,42 @@ mod tests {
 			geom_data: Blob::new_empty(),
 		};
 		let tile = tile_with_layer(layer_with_features("l", vec![feature]));
+		assert!(validate_tile(&tile).is_empty());
+	}
+
+	#[test]
+	fn detects_unknown_geometry_with_attached_data() {
+		// Type 0 + non-empty data → ambiguous (spec defines no shape for 0).
+		let feature = VectorTileFeature {
+			id: None,
+			tag_ids: vec![],
+			geom_type: GeomType::Unknown,
+			geom_data: Blob::from(vec![0x09, 0x00, 0x00]),
+		};
+		let tile = tile_with_layer(layer_with_features("l", vec![feature]));
 		let issues = validate_tile(&tile);
 		assert_eq!(issues.len(), 1);
 		assert_eq!(issues[0].kind, IssueKind::UnknownGeometryType);
+	}
+
+	#[test]
+	fn detects_typed_feature_with_empty_geom_data() {
+		// MVT 2.1 §4.3: typed features require at least one element. Empty
+		// command stream on a typed feature is the spec violation our own
+		// encoder downgrades to Unknown; we still surface it for inbound
+		// tiles from other producers.
+		for geom_type in [GeomType::MultiPoint, GeomType::MultiLineString, GeomType::MultiPolygon] {
+			let feature = VectorTileFeature {
+				id: None,
+				tag_ids: vec![],
+				geom_type,
+				geom_data: Blob::new_empty(),
+			};
+			let tile = tile_with_layer(layer_with_features("l", vec![feature]));
+			let issues = validate_tile(&tile);
+			assert_eq!(issues.len(), 1, "type={geom_type:?}");
+			assert_eq!(issues[0].kind, IssueKind::EmptyGeometryForType(geom_type));
+		}
 	}
 
 	#[test]

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use versatiles_container::{TileSource, TilesRuntime};
 use versatiles_core::{ProbeDepth, TileType, utils::PrettyPrint};
-use versatiles_geometry::vector_tile::{DegenerateReason, IssueKind, validate_tile};
+use versatiles_geometry::vector_tile::{DegenerateReason, GeomType, IssueKind, validate_tile};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -262,6 +262,9 @@ struct ValidationCounters {
 	degenerate_sub_pixel: u64,
 	degenerate_collinear: u64,
 	unknown_geom: u64,
+	empty_geom_point: u64,
+	empty_geom_line: u64,
+	empty_geom_polygon: u64,
 	malformed_stream: u64,
 	decode_failures: u64,
 	tiles_with_issues: u64,
@@ -274,6 +277,9 @@ impl ValidationCounters {
 			+ self.degenerate_sub_pixel
 			+ self.degenerate_collinear
 			+ self.unknown_geom
+			+ self.empty_geom_point
+			+ self.empty_geom_line
+			+ self.empty_geom_polygon
 			+ self.malformed_stream
 	}
 
@@ -283,7 +289,13 @@ impl ValidationCounters {
 			IssueKind::DegenerateRing(DegenerateReason::TooFewVertices) => self.degenerate_too_few += 1,
 			IssueKind::DegenerateRing(DegenerateReason::SubPixel) => self.degenerate_sub_pixel += 1,
 			IssueKind::DegenerateRing(DegenerateReason::Collinear) => self.degenerate_collinear += 1,
-			IssueKind::UnknownGeometryType => self.unknown_geom += 1,
+			// `EmptyGeometryForType(Unknown)` is unreachable in practice (the
+			// validator filters that case out before recording), but folded
+			// into `unknown_geom` so the match stays exhaustive.
+			IssueKind::UnknownGeometryType | IssueKind::EmptyGeometryForType(GeomType::Unknown) => self.unknown_geom += 1,
+			IssueKind::EmptyGeometryForType(GeomType::MultiPoint) => self.empty_geom_point += 1,
+			IssueKind::EmptyGeometryForType(GeomType::MultiLineString) => self.empty_geom_line += 1,
+			IssueKind::EmptyGeometryForType(GeomType::MultiPolygon) => self.empty_geom_polygon += 1,
 			IssueKind::MalformedCommandStream(_) => self.malformed_stream += 1,
 		}
 	}
@@ -375,6 +387,9 @@ async fn print_validation_summary(
 		("DegenerateRing(SubPixel)", counters.degenerate_sub_pixel),
 		("DegenerateRing(Collinear)", counters.degenerate_collinear),
 		("UnknownGeometryType", counters.unknown_geom),
+		("EmptyGeometryForType(MultiPoint)", counters.empty_geom_point),
+		("EmptyGeometryForType(MultiLineString)", counters.empty_geom_line),
+		("EmptyGeometryForType(MultiPolygon)", counters.empty_geom_polygon),
 		("MalformedCommandStream", counters.malformed_stream),
 	]
 	.into_iter()
@@ -400,6 +415,7 @@ fn describe_kind(kind: &IssueKind) -> String {
 		IssueKind::OrphanInnerRing => "OrphanInnerRing".to_string(),
 		IssueKind::DegenerateRing(reason) => format!("DegenerateRing({reason:?})"),
 		IssueKind::UnknownGeometryType => "UnknownGeometryType".to_string(),
+		IssueKind::EmptyGeometryForType(geom_type) => format!("EmptyGeometryForType({geom_type:?})"),
 		IssueKind::MalformedCommandStream(_) => "MalformedCommandStream".to_string(),
 	}
 }
@@ -500,6 +516,18 @@ mod tests {
 			describe_kind(&IssueKind::DegenerateRing(DegenerateReason::Collinear)),
 			"DegenerateRing(Collinear)"
 		);
+		assert_eq!(
+			describe_kind(&IssueKind::EmptyGeometryForType(GeomType::MultiPoint)),
+			"EmptyGeometryForType(MultiPoint)"
+		);
+		assert_eq!(
+			describe_kind(&IssueKind::EmptyGeometryForType(GeomType::MultiLineString)),
+			"EmptyGeometryForType(MultiLineString)"
+		);
+		assert_eq!(
+			describe_kind(&IssueKind::EmptyGeometryForType(GeomType::MultiPolygon)),
+			"EmptyGeometryForType(MultiPolygon)"
+		);
 	}
 
 	#[test]
@@ -511,6 +539,9 @@ mod tests {
 		c.record(&IssueKind::DegenerateRing(DegenerateReason::SubPixel));
 		c.record(&IssueKind::DegenerateRing(DegenerateReason::Collinear));
 		c.record(&IssueKind::UnknownGeometryType);
+		c.record(&IssueKind::EmptyGeometryForType(GeomType::MultiPoint));
+		c.record(&IssueKind::EmptyGeometryForType(GeomType::MultiLineString));
+		c.record(&IssueKind::EmptyGeometryForType(GeomType::MultiPolygon));
 		c.record(&IssueKind::MalformedCommandStream("err".into()));
 
 		assert_eq!(c.orphan_inner, 2);
@@ -518,8 +549,11 @@ mod tests {
 		assert_eq!(c.degenerate_sub_pixel, 1);
 		assert_eq!(c.degenerate_collinear, 1);
 		assert_eq!(c.unknown_geom, 1);
+		assert_eq!(c.empty_geom_point, 1);
+		assert_eq!(c.empty_geom_line, 1);
+		assert_eq!(c.empty_geom_polygon, 1);
 		assert_eq!(c.malformed_stream, 1);
-		assert_eq!(c.total_issues(), 7);
+		assert_eq!(c.total_issues(), 10);
 	}
 
 	#[test]
@@ -551,6 +585,9 @@ mod tests {
 			degenerate_sub_pixel: 1,
 			degenerate_collinear: 2,
 			unknown_geom: 0,
+			empty_geom_point: 0,
+			empty_geom_line: 0,
+			empty_geom_polygon: 0,
 			malformed_stream: 1,
 			decode_failures: 0,
 			tiles_with_issues: 7,

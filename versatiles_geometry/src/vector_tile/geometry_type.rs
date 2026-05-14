@@ -1,6 +1,6 @@
 use geo_types::Geometry;
 
-#[derive(Copy, Clone, Debug, Default, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum GeomType {
 	#[default]
 	Unknown = 0,
@@ -11,6 +11,7 @@ pub enum GeomType {
 
 impl GeomType {
 	#[allow(dead_code)]
+	#[must_use]
 	pub fn as_u64(&self) -> u64 {
 		*self as u64
 	}

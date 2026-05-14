@@ -18,6 +18,7 @@ mod tile;
 mod validator;
 mod value;
 
+pub use geometry_type::GeomType;
 pub use layer::VectorTileLayer;
 pub use tile::VectorTile;
 pub use validator::{DegenerateReason, IssueKind, ValidationIssue, validate_tile};
