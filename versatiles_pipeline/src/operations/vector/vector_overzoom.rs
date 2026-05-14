@@ -31,22 +31,19 @@
 //! Generating many high-zoom children from the same parent only decodes that parent once.
 
 use crate::{PipelineFactory, vpl::VPLNode};
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use geo::MapCoords;
-use geo_types::{Coord, Geometry, LineString, MultiPolygon, Polygon};
+use geo_types::{Coord, Geometry, MultiPolygon, Polygon};
 use moka::future::Cache;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{
-	Blob, MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TilePyramid, TileStream,
-	io::{ValueReader, ValueReaderSlice},
-};
+use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_geometry::{
 	feature_import::clip_geometry,
 	geo::{GeoFeature, GeoValue},
-	vector_tile::{GeomType, VectorTile, VectorTileFeature, VectorTileLayer, ring_signed_double_area},
+	vector_tile::{VectorTile, VectorTileLayer},
 };
 
 /// Default clip buffer in tile-extent units. Matches tippecanoe's default of 5 pixels
@@ -54,9 +51,6 @@ use versatiles_geometry::{
 const DEFAULT_BUFFER: u32 = 80;
 /// Cache budget for decoded parent vector tiles.
 const CACHE_CAPACITY_BYTES: u64 = 256 * 1024 * 1024;
-/// Threshold below which a ring's signed double area is treated as zero (degenerate
-/// ring - collinear vertices or floating-point noise).
-const RING_AREA_EPSILON: f64 = 1e-14;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Vector overzoom operation - generates vector tiles beyond the source's native max zoom.
@@ -304,127 +298,6 @@ fn drop_invisible(g: Geometry<f64>) -> Option<Geometry<f64>> {
 	}
 }
 
-/// Workaround helper which decodes an MVT polygon feature without enforcing MVT 2.1's
-/// strict ring orientation.
-///
-/// [`VectorTileFeature::to_geometry`] follows the spec strictly, so a feature with
-/// reversed winding decodes as orphan inner rings (silently dropped) and the holes get
-/// reclassified as outer rings.
-///
-/// This helper picks the convention per-feature using the heuristic
-/// `total_outer_area >= total_inner_area`, then normalizes all rings to the spec
-/// (positive area = outer) by reversing them if the source used the opposite sign —
-/// that way the rest of the pipeline (clipping, encoding) and downstream renderers see
-/// strict winding regardless of source.
-fn decode_polygon_feature_lenient(geom_data: &Blob) -> Result<Geometry<f64>> {
-	let coordinates = {
-		let mut reader = ValueReaderSlice::new_le(geom_data.as_slice());
-
-		let mut lines: Vec<Vec<Coord<f64>>> = Vec::new();
-		let mut line: Vec<Coord<f64>> = Vec::new();
-		let mut x = 0i64;
-		let mut y = 0i64;
-
-		while reader.has_remaining()? {
-			let value = reader
-				.read_varint()
-				.context("Failed to read varint for geometry command")?;
-			let command = value & 0x7;
-			let count = value >> 3;
-
-			match command {
-				1 | 2 => {
-					for _ in 0..count {
-						if command == 1 && !line.is_empty() {
-							// MoveTo command
-							lines.push(line);
-							line = Vec::new();
-						}
-
-						x += reader.read_svarint().context("Failed to read x coordinate")?;
-						y += reader.read_svarint().context("Failed to read y coordinate")?;
-
-						line.push(Coord {
-							x: x as f64,
-							y: y as f64,
-						});
-					}
-				}
-				// ClosePath command
-				7 => {
-					ensure!(!line.is_empty(), "ClosePath command found on an empty linestring");
-					line.push(line[0]);
-				}
-				_ => bail!("Unknown command {command}"),
-			}
-		}
-
-		if !line.is_empty() {
-			lines.push(line);
-		}
-
-		lines
-	};
-
-	ensure!(!coordinates.is_empty(), "Polygons must have at least one entry");
-
-	// Pick the per-feature outer convention from the dominant area sign.
-	let areas: Vec<f64> = coordinates.iter().map(|r| ring_signed_double_area(r)).collect();
-	let total_pos: f64 = areas.iter().filter(|&&a| a > RING_AREA_EPSILON).sum();
-	let total_neg: f64 = areas.iter().filter(|&&a| a < -RING_AREA_EPSILON).map(|a| -a).sum();
-	let outer_is_positive = total_pos >= total_neg;
-
-	let mut current_polygon: Vec<LineString<f64>> = Vec::new();
-	let mut polygons: Vec<Polygon<f64>> = Vec::new();
-
-	let push_polygon = |rings: Vec<LineString<f64>>, polygons: &mut Vec<Polygon<f64>>| {
-		if let Some((exterior, interiors)) = rings.split_first() {
-			polygons.push(Polygon::new(exterior.clone(), interiors.to_vec()));
-		}
-	};
-
-	for (mut ring_coords, area2) in coordinates.into_iter().zip(areas.iter().copied()) {
-		ensure!(ring_coords.len() >= 4, "polygon ring must have at least 4 points");
-		ensure!(ring_coords.first() == ring_coords.last(), "polygon ring must be closed");
-		if area2.abs() <= RING_AREA_EPSILON {
-			// Skip degenerate (zero-area) rings silently.
-			continue;
-		}
-		// Normalize ring orientation so that exterior rings always have positive area2§
-		if !outer_is_positive {
-			ring_coords.reverse();
-		}
-		let is_outer = if outer_is_positive { area2 > 0.0 } else { area2 < 0.0 };
-		let ring = LineString::new(ring_coords);
-
-		if is_outer {
-			if !current_polygon.is_empty() {
-				push_polygon(std::mem::take(&mut current_polygon), &mut polygons);
-			}
-			current_polygon.push(ring);
-		} else if !current_polygon.is_empty() {
-			current_polygon.push(ring);
-		}
-		// orphan inner rings with no preceding outer silently dropped here
-	}
-
-	if !current_polygon.is_empty() {
-		push_polygon(current_polygon, &mut polygons);
-	}
-
-	Ok(Geometry::MultiPolygon(MultiPolygon(polygons)))
-}
-
-/// Decodes a feature's geometry, using the lenient polygon decoder for polygons and the
-/// standard [`VectorTileFeature::to_geometry`] path for points and lines.
-fn feature_to_geometry_lenient(feature: &VectorTileFeature) -> Result<Geometry<f64>> {
-	if feature.geom_type == GeomType::MultiPolygon {
-		decode_polygon_feature_lenient(&feature.geom_data)
-	} else {
-		feature.to_geometry()
-	}
-}
-
 /// Extracts and rescales features from a parent vector tile to produce a child tile.
 ///
 /// For each layer in `tile_src`, every feature is decoded to `Geometry<f64>`, clipped to
@@ -477,7 +350,7 @@ fn extract_tile(
 
 		let mut out_features: Vec<GeoFeature> = Vec::new();
 		for feature_src in &layer_src.features {
-			let geometry = match feature_to_geometry_lenient(feature_src) {
+			let geometry = match feature_src.to_geometry() {
 				Ok(g) => g,
 				Err(e) => {
 					log::trace!("skipping unreadable feature: {e:#}");
@@ -737,127 +610,6 @@ mod tests {
 	fn layer_with_feature(name: &str, geometry: Geometry<f64>) -> VectorTileLayer {
 		let f = GF::new(geometry);
 		VectorTileLayer::from_features(name.to_string(), vec![f], 4096, 1).unwrap()
-	}
-
-	/// Helper: builds a `VectorTileFeature` from raw rings, bypassing `from_features`'s
-	/// orientation handling. We write rings in the exact order/orientation given so we
-	/// can simulate a source MVT with reversed winding convention.
-	fn raw_polygon_feature(rings_with_signs: &[(Vec<(f64, f64)>, &str)]) -> VectorTileFeature {
-		use versatiles_core::io::{ValueWriter, ValueWriterBlob};
-		let mut writer = ValueWriterBlob::new_le();
-		let mut prev = (0i64, 0i64);
-		for (vertices, _label) in rings_with_signs {
-			let n = vertices.len();
-			assert!(n >= 3);
-			// MoveTo command (count=1) for the first vertex.
-			writer.write_varint((1 << 3) | 0x1).unwrap();
-			let (fx, fy) = vertices[0];
-			#[allow(clippy::cast_possible_truncation)]
-			let (ix, iy) = (fx as i64, fy as i64);
-			writer.write_svarint(ix - prev.0).unwrap();
-			writer.write_svarint(iy - prev.1).unwrap();
-			prev = (ix, iy);
-			// LineTo for the rest.
-			let rest = n - 1;
-			writer.write_varint(((rest as u64) << 3) | 0x2).unwrap();
-			for &(fx, fy) in &vertices[1..] {
-				#[allow(clippy::cast_possible_truncation)]
-				let (ix, iy) = (fx as i64, fy as i64);
-				writer.write_svarint(ix - prev.0).unwrap();
-				writer.write_svarint(iy - prev.1).unwrap();
-				prev = (ix, iy);
-			}
-			// ClosePath.
-			writer.write_varint(7).unwrap();
-		}
-		VectorTileFeature {
-			id: None,
-			tag_ids: vec![],
-			geom_type: GeomType::MultiPolygon,
-			geom_data: Blob::from(writer.into_blob().into_vec()),
-		}
-	}
-
-	#[test]
-	fn lenient_decode_handles_reversed_winding() -> Result<()> {
-		// Reverse-winding source: outer is CCW screen (negative area2), inner is CW (positive).
-		// Standard `to_geometry` would classify the outer as orphan inner (drop it) and the
-		// inner as outer — so the rendered result would show the hole as a filled polygon
-		// and lose the original outer boundary.
-		// The lenient decoder must detect the convention and normalize to MVT 2.1 winding.
-		let outer_ccw_screen = vec![(0.0, 0.0), (0.0, 4096.0), (4096.0, 4096.0), (4096.0, 0.0)];
-		let inner_cw_screen = vec![(1000.0, 1000.0), (3000.0, 1000.0), (3000.0, 3000.0), (1000.0, 3000.0)];
-		let feature = raw_polygon_feature(&[(outer_ccw_screen, "outer"), (inner_cw_screen, "inner")]);
-
-		// Sanity: strict decode loses content because the first ring is classified as inner.
-		let strict = feature.to_geometry()?;
-		match &strict {
-			Geometry::MultiPolygon(mp) => {
-				// One polygon survives — but it is the inner ring re-classified as outer.
-				// (The original outer becomes an orphan inner, silently dropped.)
-				assert_eq!(mp.0.len(), 1, "strict path produces one (wrong) polygon");
-				assert!(
-					mp.0[0].interiors().is_empty(),
-					"strict path lost the hole — this is the bug"
-				);
-			}
-			other => panic!("expected MultiPolygon, got {other:?}"),
-		}
-
-		// Lenient decode: should produce one polygon-with-hole, normalized to standard winding.
-		let lenient = decode_polygon_feature_lenient(&feature.geom_data)?;
-		match lenient {
-			Geometry::MultiPolygon(mp) => {
-				assert_eq!(mp.0.len(), 1, "lenient: one polygon");
-				let p = &mp.0[0];
-				assert_eq!(p.interiors().len(), 1, "lenient: hole preserved");
-				// After normalization, exterior must have positive area2 (MVT 2.1 outer).
-				let ext_area: f64 = {
-					let r = &p.exterior().0;
-					let n = r.len();
-					let mut sum = 0.0_f64;
-					let mut prev = r[n - 1];
-					for &v in r {
-						sum += (prev.x - v.x) * (v.y + prev.y);
-						prev = v;
-					}
-					sum
-				};
-				assert!(ext_area > 0.0, "exterior must be positive area2 after normalization");
-				// And the interior must have negative area2.
-				let int_area: f64 = {
-					let r = &p.interiors()[0].0;
-					let n = r.len();
-					let mut sum = 0.0_f64;
-					let mut prev = r[n - 1];
-					for &v in r {
-						sum += (prev.x - v.x) * (v.y + prev.y);
-						prev = v;
-					}
-					sum
-				};
-				assert!(int_area < 0.0, "interior must be negative area2 after normalization");
-			}
-			other => panic!("expected MultiPolygon, got {other:?}"),
-		}
-		Ok(())
-	}
-
-	#[test]
-	fn lenient_decode_preserves_standard_winding() -> Result<()> {
-		// Standard MVT 2.1 winding: outer CW screen (positive area2), inner CCW (negative).
-		let outer_cw_screen = vec![(0.0, 0.0), (4096.0, 0.0), (4096.0, 4096.0), (0.0, 4096.0)];
-		let inner_ccw_screen = vec![(1000.0, 1000.0), (1000.0, 3000.0), (3000.0, 3000.0), (3000.0, 1000.0)];
-		let feature = raw_polygon_feature(&[(outer_cw_screen, "outer"), (inner_ccw_screen, "inner")]);
-		let g = decode_polygon_feature_lenient(&feature.geom_data)?;
-		match g {
-			Geometry::MultiPolygon(mp) => {
-				assert_eq!(mp.0.len(), 1);
-				assert_eq!(mp.0[0].interiors().len(), 1, "hole preserved");
-			}
-			other => panic!("expected MultiPolygon, got {other:?}"),
-		}
-		Ok(())
 	}
 
 	#[test]

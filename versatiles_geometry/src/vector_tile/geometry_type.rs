@@ -11,7 +11,6 @@ pub enum GeomType {
 
 impl GeomType {
 	#[allow(dead_code)]
-	#[must_use]
 	pub fn as_u64(&self) -> u64 {
 		*self as u64
 	}

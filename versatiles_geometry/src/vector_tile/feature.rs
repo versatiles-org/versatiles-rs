@@ -33,8 +33,7 @@ impl Default for VectorTileFeature {
 
 /// Returns 2 × the signed area of a closed ring (trapezoid form, matching the
 /// historical versatiles convention: positive for counter-clockwise rings).
-#[must_use]
-pub fn ring_signed_double_area(coords: &[Coord<f64>]) -> f64 {
+fn ring_signed_double_area(coords: &[Coord<f64>]) -> f64 {
 	let n = coords.len();
 	if n < 3 {
 		return 0.0;
@@ -357,7 +356,6 @@ impl VectorTileFeature {
 	}
 
 	#[cfg(test)]
-	#[must_use]
 	pub fn new_example() -> Self {
 		VectorTileFeature::from_geometry(Some(3), vec![1, 2], crate::geo::example_geometry()).unwrap()
 	}
