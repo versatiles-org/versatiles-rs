@@ -259,6 +259,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: macos-${{ matrix.arch }}
+          cache-bin: false
 
       - name: Run Tests
         if: env.BUILD_ENABLED == 'true'
@@ -324,6 +325,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: windows-${{ matrix.arch }}
+          cache-bin: false
 
       - name: Run Tests
         if: env.BUILD_ENABLED == 'true' && matrix.arch == 'x86_64'
@@ -687,6 +689,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: 'crates-publish'
+          cache-bin: false
 
       - name: Publish crates to crates.io
         if: env.PUBLISH_ENABLED == 'true'

@@ -81,6 +81,7 @@ jobs:
           shared-key: "linux-docs"
           cache-targets: true
           cache-on-failure: false
+          cache-bin: false
 
       - name: Build docs
         run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
@@ -107,6 +108,7 @@ jobs:
           shared-key: "linux-nodejs"
           cache-targets: true
           cache-on-failure: false
+          cache-bin: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -169,6 +171,7 @@ jobs:
           shared-key: "linux-coverage"
           cache-targets: true
           cache-on-failure: false
+          cache-bin: false
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
@@ -229,6 +232,7 @@ jobs:
           shared-key: "linux-feature-${{ matrix.name }}"
           cache-targets: true
           cache-on-failure: false
+          cache-bin: false
 
       - name: Check compilation
         if: ${{ !matrix.run-tests }}
@@ -269,6 +273,7 @@ jobs:
           shared-key: "windows-test"
           cache-targets: true
           cache-on-failure: false
+          cache-bin: false
 
       - name: Test
         run: cargo test --workspace
@@ -301,6 +306,7 @@ jobs:
           shared-key: "windows-nodejs"
           cache-targets: true
           cache-on-failure: false
+          cache-bin: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -362,6 +368,7 @@ jobs:
           shared-key: "windows-arm-test"
           cache-targets: true
           cache-on-failure: false
+          cache-bin: false
 
       - name: Test
         run: cargo test --workspace
@@ -388,6 +395,7 @@ jobs:
           shared-key: "macos-gdal"
           cache-targets: true
           cache-on-failure: false
+          cache-bin: false
 
       - name: Test with GDAL
         run: cargo test --workspace --features gdal

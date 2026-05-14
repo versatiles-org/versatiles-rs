@@ -43,6 +43,7 @@ jobs:
         with:
           shared-key: "docs"
           cache-targets: true
+          cache-bin: false
 
       - name: Install Node.js dependencies
         working-directory: ./versatiles_node
