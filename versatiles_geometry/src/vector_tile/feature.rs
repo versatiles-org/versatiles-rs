@@ -219,14 +219,12 @@ impl VectorTileFeature {
 			.write_varint(self.geom_type.as_u64())
 			.context("Failed to write geometry type")?;
 
-		if !self.geom_data.is_empty() {
-			writer
-				.write_pbf_key(4, 2)
-				.context("Failed to write PBF key for geometry data")?;
-			writer
-				.write_pbf_blob(&self.geom_data)
-				.context("Failed to write geometry data")?;
-		}
+		writer
+			.write_pbf_key(4, 2)
+			.context("Failed to write PBF key for geometry data")?;
+		writer
+			.write_pbf_blob(&self.geom_data)
+			.context("Failed to write geometry data")?;
 
 		Ok(writer.into_blob())
 	}
