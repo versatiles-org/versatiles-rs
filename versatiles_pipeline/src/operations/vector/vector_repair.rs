@@ -251,4 +251,58 @@ mod tests {
 		assert_eq!(vt.layers[0].features.len(), 1);
 		Ok(())
 	}
+
+	/// End-to-end: wrap `vector_repair` around a real, malformed-in-places
+	/// fixture (`../testdata/berlin.mbtiles`), walk every tile, and assert
+	/// the validator finds zero issues on the output. Pre-fix the same
+	/// fixture has 57 issues across 43 tiles — see the comment in
+	/// `versatiles/src/tools/probe.rs::tests`.
+	///
+	/// Constructs the operation directly rather than going through the VPL
+	/// pipeline factory, which would need the full container registry wired
+	/// up just to open an mbtiles file.
+	#[tokio::test]
+	async fn end_to_end_repairs_berlin_mbtiles() -> Result<()> {
+		use versatiles_container::{MBTilesReader, TilesRuntime};
+
+		let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+			.parent()
+			.unwrap()
+			.join("testdata/berlin.mbtiles");
+		let runtime = TilesRuntime::new_silent();
+		let reader = MBTilesReader::open(&path, runtime)?;
+		let source: Box<dyn TileSource> = Box::new(reader);
+		let op = Operation::new(source)?;
+
+		let pyramid = op.tile_pyramid().await?;
+		let mut total_tiles = 0u64;
+		let mut total_issues = 0u64;
+		let mut sample_issue: Option<String> = None;
+
+		for bbox in pyramid.to_iter_bboxes().filter(|b| !b.is_empty()) {
+			let mut stream = op.tile_stream(bbox).await?;
+			while let Some((coord, mut tile)) = stream.next().await {
+				total_tiles += 1;
+				let vt = tile.as_vector()?;
+				let issues = validate_tile(vt);
+				if !issues.is_empty() {
+					total_issues += issues.len() as u64;
+					if sample_issue.is_none() {
+						sample_issue = Some(format!(
+							"z={} x={} y={} layer={:?} feature={} kind={:?}",
+							coord.level, coord.x, coord.y, issues[0].layer, issues[0].feature_index, issues[0].kind
+						));
+					}
+				}
+			}
+		}
+
+		assert!(total_tiles > 0, "expected to walk at least one tile");
+		assert_eq!(
+			total_issues, 0,
+			"vector_repair must leave no spec issues; first remaining: {}",
+			sample_issue.as_deref().unwrap_or("<none>")
+		);
+		Ok(())
+	}
 }
