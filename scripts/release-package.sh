@@ -165,6 +165,111 @@ create_release_tag() {
 	log_success "Tag created: v$new_version"
 }
 
+# Ensure prerequisites for the release workflow are present.
+preflight_checks() {
+	local current_branch
+	current_branch=$(git rev-parse --abbrev-ref HEAD)
+	if [ "$current_branch" != "dev" ]; then
+		log_error "Releases must be cut from the 'dev' branch (currently on '$current_branch')"
+		exit 1
+	fi
+
+	if [ -n "$(git status --porcelain)" ]; then
+		log_error "Git working directory is not clean!"
+		git status --porcelain
+		exit 1
+	fi
+
+	if ! command -v gh >/dev/null 2>&1; then
+		log_error "Required: GitHub CLI ('gh') for the post-push CI wait step"
+		exit 1
+	fi
+
+	if ! gh auth status >/dev/null 2>&1; then
+		log_error "Not logged in to GitHub CLI; run: gh auth login"
+		exit 1
+	fi
+
+	log_step "Fetching latest refs from origin..."
+	git fetch origin --quiet
+
+	log_step "Ensuring 'dev' is at or ahead of 'origin/dev'..."
+	if ! git merge-base --is-ancestor origin/dev HEAD; then
+		log_error "Local 'dev' has diverged from or is behind 'origin/dev'. Pull/rebase first."
+		exit 1
+	fi
+
+	log_step "Ensuring 'main' is an ancestor of 'dev' (no main-only commits)..."
+	if ! git merge-base --is-ancestor origin/main HEAD; then
+		log_error "'origin/main' is not an ancestor of 'dev' — sync first"
+		log_error "Hint: git checkout dev && git merge --ff-only origin/main"
+		exit 1
+	fi
+}
+
+# Run build-docs-readme.sh and, if it modified any tracked files, land those
+# changes as a standalone commit before the release commit.
+regenerate_readmes() {
+	log_step "Building README documentation..."
+	./scripts/build-docs-readme.sh
+
+	if [ -n "$(git status --porcelain)" ]; then
+		log_step "Generated READMEs changed — committing as a separate commit..."
+		git add -u
+		git commit -S -m "docs: regenerate auto-built READMEs"
+		log_success "Docs commit created"
+	else
+		log_success "Generated READMEs already up to date"
+	fi
+}
+
+# Push 'dev', then watch the CI run on the just-pushed commit and exit non-zero
+# if it fails. The 'main' branch protection requires a green 'CI Success' check
+# on the tip — we can't fast-forward main until this passes.
+push_dev_and_wait_for_ci() {
+	local sha
+	sha=$(git rev-parse HEAD)
+	local short_sha
+	short_sha=$(git rev-parse --short HEAD)
+
+	log_step "Pushing 'dev' to origin..."
+	git push origin dev
+
+	log_step "Locating CI run for $short_sha..."
+	local run_id=""
+	for _ in 1 2 3 4 5 6; do
+		run_id=$(gh run list \
+			--repo versatiles-org/versatiles-rs \
+			--branch dev \
+			--commit "$sha" \
+			--workflow CI \
+			--limit 1 \
+			--json databaseId \
+			--jq '.[0].databaseId' 2>/dev/null || true)
+		[ -n "$run_id" ] && break
+		sleep 5
+	done
+	if [ -z "$run_id" ]; then
+		log_error "Could not find CI run for commit $short_sha"
+		exit 1
+	fi
+
+	log_step "Watching CI run $run_id (this can take several minutes)..."
+	if ! gh run watch --repo versatiles-org/versatiles-rs --exit-status "$run_id"; then
+		log_error "CI failed on $short_sha — fix forward on dev and re-run the release script"
+		exit 1
+	fi
+	log_success "CI passed on $short_sha"
+}
+
+# Fast-forward 'main' to dev's tip. Branch protection (linear-history + green
+# CI Success) is satisfied because dev's tip already has CI green.
+fast_forward_main() {
+	log_step "Fast-forwarding 'main' to dev's tip..."
+	git push origin dev:main
+	log_success "main updated"
+}
+
 # Main function
 main() {
 	local version_arg="$1"
@@ -229,21 +334,16 @@ main() {
 		echo ""
 	fi
 
-	# Pre-release checks
-	log_step "Building README documentation..."
-	./scripts/build-docs-readme.sh
+	# Pre-flight: must be on dev, clean, gh available, dev up-to-date with origin,
+	# and main an ancestor of dev (so the FF later is a no-rewrite operation).
+	preflight_checks
 
-	log_step "Checking git status..."
-	if [ -n "$(git status --porcelain)" ]; then
-		log_error "Git working directory is not clean!"
-		git status --porcelain
-		exit 1
-	fi
-	log_success "Git working directory is clean"
+	# Regenerate auto-built READMEs. If anything changed, land it as its own
+	# commit before the release commit so the version-bump diff stays minimal.
+	regenerate_readmes
 
 	log_step "Running checks..."
-	./scripts/check.sh
-	if [ $? -ne 0 ]; then
+	if ! ./scripts/check.sh; then
 		log_error "Checks failed!"
 		exit 1
 	fi
@@ -270,19 +370,29 @@ main() {
 	echo -e "${BLU}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${END}"
 	echo ""
 
-	# Update version files
+	# Update version files and create the release commit (no tag yet — we tag
+	# only after CI confirms the commit is green).
 	update_cargo_versions "$new_version"
 	update_package_json_version "$new_version"
 
 	echo ""
 
-	# Create commit and tag
 	create_release_commit "$new_version"
-	create_release_tag "$new_version"
 
 	echo ""
-	log_step "Pushing to remote..."
-	git push origin main --follow-tags
+
+	# Push dev so CI runs on the new commit, wait for it to pass, then move
+	# main forward. Branch protection on main requires the tip to have a green
+	# 'CI Success' check; this sequencing satisfies that.
+	push_dev_and_wait_for_ci
+	fast_forward_main
+
+	# Tag only the green commit and push the tag separately so the v-tag
+	# ruleset only fires once we're confident in the release.
+	echo ""
+	create_release_tag "$new_version"
+	log_step "Pushing tag v$new_version..."
+	git push origin "v$new_version"
 
 	echo ""
 	echo -e "${GRE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${END}"
