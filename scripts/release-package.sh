@@ -255,7 +255,7 @@ push_dev_and_wait_for_ci() {
 	fi
 
 	log_step "Watching CI run $run_id (this can take several minutes)..."
-	if ! gh run watch --repo versatiles-org/versatiles-rs --exit-status "$run_id"; then
+	if ! gh run watch --compact --repo versatiles-org/versatiles-rs --exit-status "$run_id"; then
 		log_error "CI failed on $short_sha — fix forward on dev and re-run the release script"
 		exit 1
 	fi
