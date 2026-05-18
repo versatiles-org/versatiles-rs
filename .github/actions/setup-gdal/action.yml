@@ -1,5 +1,5 @@
 name: 'Setup GDAL'
-description: 'Install GDAL via system package manager, with Homebrew bottle caching on macOS'
+description: 'Install GDAL via system package manager, caching the whole Homebrew prefix on macOS'
 
 outputs:
   version:
@@ -9,16 +9,25 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Cache Homebrew bottle downloads
+    # Cache the installed Homebrew prefix, not just the downloaded bottles.
+    # The dominant cost of `brew install gdal` is "pouring" ~70 dependency
+    # bottles (aws-sdk-cpp alone is 82k files) into /opt/homebrew — caching
+    # the downloads avoids the fetch but not the pour. Caching the whole
+    # prefix lets a cache hit skip `brew install` entirely.
+    - name: Cache Homebrew GDAL install
+      id: gdal-cache
       if: runner.os == 'macOS'
       uses: actions/cache@v5
       with:
-        path: ~/Library/Caches/Homebrew/downloads
-        key: macos-gdal-bottles-${{ runner.arch }}-${{ hashFiles('scripts/install-gdal.sh') }}
-        restore-keys: |
-          macos-gdal-bottles-${{ runner.arch }}-
+        path: /opt/homebrew
+        # `ImageOS` is included so a runner-image bump re-installs cleanly
+        # instead of restoring a stale prefix.
+        key: macos-gdal-prefix-${{ runner.arch }}-${{ env.ImageOS }}-${{ hashFiles('scripts/install-gdal.sh') }}
 
     - name: Install GDAL
+      # Skip on macOS only when the prefix cache was restored — GDAL and all
+      # its dependencies are then already poured and linked.
+      if: runner.os != 'macOS' || steps.gdal-cache.outputs.cache-hit != 'true'
       shell: bash
       env:
         HOMEBREW_NO_AUTO_UPDATE: "1"
