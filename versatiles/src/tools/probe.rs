@@ -434,12 +434,8 @@ mod tests {
 
 	#[test]
 	fn test_remote() -> Result<()> {
-		run_command(vec![
-			"versatiles",
-			"probe",
-			"-q",
-			"https://download.versatiles.org/osm.versatiles",
-		])?;
+		let server = crate::test_http_server::TestHttpServer::shared();
+		run_command(vec!["versatiles", "probe", "-q", &server.url("berlin.pmtiles")])?;
 		Ok(())
 	}
 

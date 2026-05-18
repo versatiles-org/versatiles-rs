@@ -27,6 +27,9 @@
 // Import necessary modules and dependencies
 mod tools;
 
+#[cfg(test)]
+mod test_http_server;
+
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use log::LevelFilter;

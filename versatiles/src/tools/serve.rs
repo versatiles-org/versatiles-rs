@@ -156,6 +156,7 @@ mod tests {
 
 	#[test]
 	fn test_remote() -> Result<()> {
+		let server = crate::test_http_server::TestHttpServer::shared();
 		run_command(vec![
 			"versatiles",
 			"serve",
@@ -165,18 +166,34 @@ mod tests {
 			"65002",
 			"--auto-shutdown",
 			"50",
-			"[test]https://download.versatiles.org/osm.versatiles",
+			&format!("[test]{}", server.url("berlin.pmtiles")),
 		])?;
 		Ok(())
 	}
 
 	#[test]
 	fn test_config() -> Result<()> {
+		// Serve a config file whose tile sources are a local HTTP source (the
+		// test server) and a local file — exercising config loading without
+		// reaching out to download.versatiles.org.
+		let server = crate::test_http_server::TestHttpServer::shared();
+		let mbtiles = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../testdata/berlin.mbtiles");
+		let temp_dir = assert_fs::TempDir::new()?;
+		let config_path = temp_dir.path().join("config.yml");
+		// Single-quoted YAML scalars so Windows backslash paths need no escaping.
+		std::fs::write(
+			&config_path,
+			format!(
+				"server:\n  ip: 127.0.0.1\ntiles:\n  - name: osm\n    src: '{}'\n  - name: berlin\n    src: '{}'\n",
+				server.url("berlin.pmtiles"),
+				mbtiles.display(),
+			),
+		)?;
 		run_command(vec![
 			"versatiles",
 			"serve",
 			"-c",
-			"../testdata/config1.yml",
+			config_path.to_str().expect("temp config path is valid UTF-8"),
 			"-p",
 			"65003",
 			"--auto-shutdown",

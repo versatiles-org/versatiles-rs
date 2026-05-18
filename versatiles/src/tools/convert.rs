@@ -265,6 +265,7 @@ mod tests {
 
 	#[test]
 	fn test_remote1() -> Result<()> {
+		let server = crate::test_http_server::TestHttpServer::shared();
 		let temp_dir = TempDir::new()?;
 		let temp_path = temp_dir.path().display();
 
@@ -275,14 +276,15 @@ mod tests {
 			"--max-zoom=2",
 			"--bbox=-180,-85,180,85",
 			"--flip-y",
-			"https://download.versatiles.org/osm.versatiles",
-			&format!("{temp_path}/planet2.versatiles"),
+			&server.url("berlin.pmtiles"),
+			&format!("{temp_path}/remote1.versatiles"),
 		])?;
 		Ok(())
 	}
 
 	#[test]
 	fn test_remote2() -> Result<()> {
+		let server = crate::test_http_server::TestHttpServer::shared();
 		let temp_dir = TempDir::new()?;
 		let temp_path = temp_dir.path().display();
 
@@ -290,10 +292,10 @@ mod tests {
 			"versatiles",
 			"convert",
 			"--min-zoom=12",
-			"--bbox=9.14,48.76,9.19,48.79",
+			"--bbox=13.38,52.46,13.43,52.49",
 			"--flip-y",
-			"https://download.versatiles.org/osm.versatiles",
-			&format!("{temp_path}/stuttgart.versatiles"),
+			&server.url("berlin.pmtiles"),
+			&format!("{temp_path}/remote2.versatiles"),
 		])?;
 		Ok(())
 	}
