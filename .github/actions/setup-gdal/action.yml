@@ -1,5 +1,5 @@
 name: 'Setup GDAL'
-description: 'Install GDAL via system package manager, caching the whole Homebrew prefix on macOS'
+description: 'Install GDAL via the system package manager, caching the GDAL Homebrew tree on macOS'
 
 outputs:
   version:
@@ -9,29 +9,47 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    # Cache the installed Homebrew prefix, not just the downloaded bottles.
-    # The dominant cost of `brew install gdal` is "pouring" ~70 dependency
-    # bottles (aws-sdk-cpp alone is 82k files) into /opt/homebrew — caching
-    # the downloads avoids the fetch but not the pour. Caching the whole
-    # prefix lets a cache hit skip `brew install` entirely.
-    - name: Cache Homebrew GDAL install
+    # Cache only GDAL's own Homebrew dependency tree, packed into one tarball.
+    # Caching the whole /opt/homebrew prefix also works but is ~5 GB, because
+    # it captures everything GitHub preinstalls on the runner; restricting it
+    # to the ~70 formulae GDAL pulls in keeps the cache a few times smaller.
+    - name: Cache GDAL Homebrew tree
       id: gdal-cache
       if: runner.os == 'macOS'
       uses: actions/cache@v5
       with:
-        path: /opt/homebrew
-        # `ImageOS` is included so a runner-image bump re-installs cleanly
-        # instead of restoring a stale prefix.
-        key: macos-gdal-prefix-${{ runner.arch }}-${{ env.ImageOS }}-${{ hashFiles('scripts/install-gdal.sh') }}
+        path: ~/gdal-brew-tree.tar
+        # ImageVersion keeps the cached Cellar in lockstep with the Homebrew
+        # formula versions baked into the runner image, so `brew install`
+        # below relinks instead of re-pouring.
+        key: macos-gdal-tree-${{ runner.arch }}-${{ env.ImageVersion }}-${{ hashFiles('scripts/install-gdal.sh') }}
+
+    # Cache hit: unpack GDAL's Cellar + opt entries so `brew install` only has
+    # to re-create symlinks instead of pouring ~70 bottles (~6 min).
+    - name: Restore GDAL Homebrew tree
+      if: runner.os == 'macOS' && steps.gdal-cache.outputs.cache-hit == 'true'
+      shell: bash
+      run: tar -xf ~/gdal-brew-tree.tar -C /
 
     - name: Install GDAL
-      # Skip on macOS only when the prefix cache was restored — GDAL and all
-      # its dependencies are then already poured and linked.
-      if: runner.os != 'macOS' || steps.gdal-cache.outputs.cache-hit != 'true'
       shell: bash
       env:
         HOMEBREW_NO_AUTO_UPDATE: "1"
       run: ./scripts/install-gdal.sh --testing
+
+    # Cache miss: pack GDAL's Cellar package files and `opt` symlinks (the
+    # latter are how libgdal locates its dependencies at runtime) for next run.
+    - name: Pack GDAL Homebrew tree
+      if: runner.os == 'macOS' && steps.gdal-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        members=()
+        for f in gdal $(brew deps gdal); do
+          for sub in "Cellar/$f" "opt/$f"; do
+            [ -e "/opt/homebrew/$sub" ] && members+=("opt/homebrew/$sub")
+          done
+        done
+        tar -cf ~/gdal-brew-tree.tar -C / "${members[@]}"
 
     - name: Verify GDAL installation
       id: verify
