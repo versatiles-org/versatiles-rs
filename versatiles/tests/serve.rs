@@ -19,10 +19,13 @@ async fn e2e_serve_local_file() {
 
 #[tokio::test]
 async fn e2e_serve_remote_url() {
-	let server = Server::new(&["https://download.versatiles.org/osm.versatiles"]).await;
-	assert_eq!(server.index().await, ["osm"]);
+	// Serve a container over HTTP from an in-process server instead of
+	// download.versatiles.org, so the test is hermetic and CI-parallel-safe.
+	let url = TestHttpServer::shared().url("berlin.pmtiles");
+	let server = Server::new(&[url.as_str()]).await;
+	assert_eq!(server.index().await, ["berlin"]);
 	assert_eq!(
-		server.tilejson("osm").await,
+		server.tilejson("berlin").await,
 		vec!["length: 26", "desc: Vector tiles based on OSM in Shortbread scheme"]
 	);
 }

@@ -40,6 +40,7 @@ pub struct TestHttpServer {
 
 impl TestHttpServer {
 	/// Process-wide shared instance — started once, reused by every test.
+	#[must_use]
 	pub fn shared() -> &'static TestHttpServer {
 		static SERVER: OnceLock<TestHttpServer> = OnceLock::new();
 		SERVER.get_or_init(TestHttpServer::start)
@@ -57,6 +58,7 @@ impl TestHttpServer {
 	}
 
 	/// URL for a file under `testdata/`, e.g. `url("berlin.pmtiles")`.
+	#[must_use]
 	pub fn url(&self, file: &str) -> String {
 		format!("http://127.0.0.1:{}/{file}", self.port)
 	}

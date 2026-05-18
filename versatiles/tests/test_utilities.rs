@@ -7,6 +7,12 @@ use std::{
 use tempfile::{TempDir, tempdir};
 use versatiles_core::json::JsonValue;
 
+// Reuse the in-process HTTP server (with byte-range support) from the binary
+// crate's unit tests, so integration tests need no `download.versatiles.org`.
+#[path = "../src/test_http_server.rs"]
+mod test_http_server;
+pub use test_http_server::TestHttpServer;
+
 #[cfg(windows)]
 pub const BINARY_NAME: &str = "versatiles.exe";
 #[cfg(not(windows))]
