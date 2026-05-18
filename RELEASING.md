@@ -26,11 +26,12 @@ You can either provide the release type as an argument, or run the script withou
 # 1) patch   - Bug fixes, small improvements (x.y.Z)
 # 2) minor   - New features, backward compatible (x.Y.0)
 # 3) major   - Breaking changes (X.0.0)
-# 4) alpha   - Early development, unstable API (x.y.z-alpha.N)
-# 5) beta    - Feature complete, testing phase (x.y.z-beta.N)
-# 6) rc      - Release candidate, final testing (x.y.z-rc.N)
-# 7) dev     - Daily builds, experimental features (x.y.z-dev.N)
-# 8) Cancel
+# 4) release - Remove pre-release suffix (x.y.z-rc.N → x.y.z)
+# 5) alpha   - Early development, unstable API (x.y.z-alpha.N)
+# 6) beta    - Feature complete, testing phase (x.y.z-beta.N)
+# 7) rc      - Release candidate, final testing (x.y.z-rc.N)
+# 8) retry   - Re-release the current version unchanged (e.g. after a failed CI run)
+# 9) Cancel
 #
 # Enter selection number:
 ```
@@ -98,6 +99,21 @@ You can either provide the release type as an argument, or run the script withou
 # From rc to stable: 2.4.0-rc.1 → 2.4.0
 ./scripts/release-package.sh patch
 ```
+
+##### Retrying a Failed Release
+
+If a release attempt fails *after* the version-bump commit has already landed on
+`dev` — most often because the CI run on that commit went red — fix the problem
+on `dev` with normal commits, then retry **without** bumping the version again:
+
+```bash
+# Re-release the version already in Cargo.toml (no new version-bump commit)
+./scripts/release-package.sh retry
+```
+
+`retry` reuses the version currently in `Cargo.toml`, skips the version bump and
+release commit, and re-runs the rest of the pipeline (checks, push, CI wait,
+fast-forward `main`, tag). It aborts if that version's tag already exists.
 
 This script will:
 

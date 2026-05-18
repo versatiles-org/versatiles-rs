@@ -10,7 +10,7 @@ BLU="\033[1;34m"
 END="\033[0m"
 
 # Valid release type keywords
-VALID_KEYWORDS="patch minor major release alpha beta rc"
+VALID_KEYWORDS="patch minor major release alpha beta rc retry"
 
 # Helper function for logging steps
 log_step() {
@@ -165,6 +165,22 @@ create_release_tag() {
 	log_success "Tag created: v$new_version"
 }
 
+# Abort if the version's tag already exists (locally or on origin) — that
+# would mean the release is already published and must not be repeated.
+ensure_tag_absent() {
+	local v="$1"
+
+	if git rev-parse -q --verify "refs/tags/v$v" >/dev/null 2>&1; then
+		log_error "Tag v$v already exists locally — this version is already released"
+		exit 1
+	fi
+
+	if git ls-remote --exit-code --tags origin "v$v" >/dev/null 2>&1; then
+		log_error "Tag v$v already exists on origin — this version is already released"
+		exit 1
+	fi
+}
+
 # Ensure prerequisites for the release workflow are present.
 preflight_checks() {
 	local current_branch
@@ -276,6 +292,7 @@ main() {
 	local release_type=""
 	local new_version=""
 	local is_specific_version=false
+	local is_retry=false
 
 	# Semver regex pattern
 	local version_regex='^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$'
@@ -295,6 +312,7 @@ main() {
 			"alpha   - Early development, unstable API (x.y.z-alpha.N)"
 			"beta    - Feature complete, testing phase (x.y.z-beta.N)"
 			"rc      - Release candidate, final testing (x.y.z-rc.N)"
+			"retry   - Re-release the current version unchanged (e.g. after a failed CI run)"
 			"Cancel"
 		)
 
@@ -307,7 +325,8 @@ main() {
 				5) release_type="alpha"; break;;
 				6) release_type="beta"; break;;
 				7) release_type="rc"; break;;
-				8) echo -e "${YEL}Cancelled${END}"; exit 0;;
+				8) release_type="retry"; break;;
+				9) echo -e "${YEL}Cancelled${END}"; exit 0;;
 				*) echo -e "${RED}Invalid selection${END}";;
 			esac
 		done
@@ -334,6 +353,13 @@ main() {
 		echo ""
 	fi
 
+	# "retry" re-runs the release pipeline for the version already in Cargo.toml
+	# (no version bump, no release commit) — used to recover a release whose CI
+	# run failed after the version-bump commit had already landed.
+	if [ "$release_type" = "retry" ]; then
+		is_retry=true
+	fi
+
 	# Pre-flight: must be on dev, clean, gh available, dev up-to-date with origin,
 	# and main an ancestor of dev (so the FF later is a no-rewrite operation).
 	preflight_checks
@@ -356,13 +382,21 @@ main() {
 	echo -e "${BLU}Current version: $current_version${END}"
 
 	# Calculate or validate new version
-	if [ "$is_specific_version" = true ]; then
+	if [ "$is_retry" = true ]; then
+		# Retry: reuse the version already committed to Cargo.toml as-is.
+		new_version="$current_version"
+		log_step "Retry mode: re-releasing current version $new_version (no version bump)"
+	elif [ "$is_specific_version" = true ]; then
 		validate_specific_version "$new_version" "$current_version"
 	else
 		log_step "Calculating new version..."
 		new_version=$(calculate_new_version "$release_type")
 		log_success "Calculated new version: $new_version"
 	fi
+
+	# The tag must not exist yet — for "retry" this also guards against
+	# re-releasing a version that actually completed last time.
+	ensure_tag_absent "$new_version"
 
 	echo ""
 	echo -e "${BLU}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${END}"
@@ -371,13 +405,18 @@ main() {
 	echo ""
 
 	# Update version files and create the release commit (no tag yet — we tag
-	# only after CI confirms the commit is green).
-	update_cargo_versions "$new_version"
-	update_package_json_version "$new_version"
+	# only after CI confirms the commit is green). Skipped on retry: the
+	# version is already in Cargo.toml and was committed by the prior attempt.
+	if [ "$is_retry" = true ]; then
+		log_step "Retry mode: skipping version bump and release commit"
+	else
+		update_cargo_versions "$new_version"
+		update_package_json_version "$new_version"
 
-	echo ""
+		echo ""
 
-	create_release_commit "$new_version"
+		create_release_commit "$new_version"
+	fi
 
 	echo ""
 
