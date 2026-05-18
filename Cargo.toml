@@ -173,7 +173,7 @@ wildmatch = { version = "2.6.1", default-features = false }
 
 # Multithreading optimization dependencies
 moka = { version = "0.12", features = ["future"] }  # Lock-free LRU cache
-dashmap = "6.1"                                     # Concurrent HashMap
+dashmap = "6.2"                                     # Concurrent HashMap
 parking_lot = "0.12"                                # Fast synchronization
 arc-swap = "1.9"                                    # Lock-free updates
 deadpool = { version = "0.13", features = ["managed"] }  # Connection pooling
