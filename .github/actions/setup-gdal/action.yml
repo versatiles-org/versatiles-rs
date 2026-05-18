@@ -24,12 +24,21 @@ runs:
         # below relinks instead of re-pouring.
         key: macos-gdal-tree-${{ runner.arch }}-${{ env.ImageVersion }}-${{ hashFiles('scripts/install-gdal.sh') }}
 
-    # Cache hit: unpack GDAL's Cellar + opt entries so `brew install` only has
-    # to re-create symlinks instead of pouring ~70 bottles (~6 min).
+    # Cache hit: unpack GDAL's Cellar + opt entries, then relink. This skips
+    # pouring ~70 bottles (~6 min). `brew install` below does NOT relink an
+    # already-installed-but-unlinked formula, so the symlinks (`gdal-config`
+    # etc.) must be recreated explicitly here.
     - name: Restore GDAL Homebrew tree
       if: runner.os == 'macOS' && steps.gdal-cache.outputs.cache-hit == 'true'
       shell: bash
-      run: tar -xf ~/gdal-brew-tree.tar -C /
+      run: |
+        tar -xf ~/gdal-brew-tree.tar -C /
+        # Link GDAL and its non-keg-only dependencies; keg-only ones (llvm …)
+        # fail to link by design and are reached via their restored `opt` links.
+        for f in gdal $(brew deps gdal); do
+          brew link --overwrite "$f" 2>/dev/null || true
+        done
+        command -v gdal-config >/dev/null || { echo "gdal-config missing after relink"; exit 1; }
 
     - name: Install GDAL
       shell: bash
