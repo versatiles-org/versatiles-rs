@@ -32,6 +32,8 @@ mod network_reader;
 #[cfg(feature = "ssh2")]
 mod network_writer;
 #[cfg(feature = "ssh2")]
+mod sftp_pool;
+#[cfg(feature = "ssh2")]
 pub mod sftp_utils;
 #[cfg(feature = "ssh2")]
 mod sftp_wrappers;

@@ -1,13 +1,11 @@
-use super::{DataReaderTrait, network_reader::NetworkReader, sftp_utils};
+use super::{DataReaderTrait, network_reader::NetworkReader, sftp_pool, sftp_utils};
 use crate::{Blob, ByteRange};
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use reqwest::Url;
-use ssh2::Session;
 use std::{
-	io::{Read, Seek, SeekFrom},
-	path::{Path, PathBuf},
-	sync::{Mutex, atomic::AtomicU64},
+	path::Path,
+	sync::{Arc, atomic::AtomicU64},
 	thread,
 	time::Duration,
 };
@@ -20,19 +18,16 @@ const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_secs(1 << exp);
 #[cfg(test)]
 const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_millis(1 << exp);
 
-struct SftpConnection {
-	file: ssh2::File,
-	// Keep session alive for the lifetime of the connection
-	_session: Session,
-}
-
 /// A struct that provides reading capabilities from a remote file via SFTP.
+///
+/// The SSH connection is not owned by the reader: it is borrowed from a
+/// per-server connection pool, so many readers of the same server share a
+/// small, fixed number of connections instead of opening one each.
 pub struct DataReaderSftp {
-	connection: Mutex<SftpConnection>,
+	connection: Arc<sftp_pool::Connection>,
+	file_id: u64,
 	size: u64,
 	name: String,
-	url: Url,
-	identity_file: Option<PathBuf>,
 	max_request_bytes: AtomicU64,
 }
 
@@ -44,46 +39,33 @@ impl std::fmt::Debug for DataReaderSftp {
 
 impl DataReaderSftp {
 	/// Opens a remote file for reading via SFTP with an optional identity file.
+	///
+	/// The underlying SSH connection is taken from the shared per-server
+	/// connection pool; opening many files from the same server reuses a
+	/// bounded set of connections rather than opening one per file.
 	pub fn open(url: &Url, identity_file: Option<&Path>) -> Result<DataReaderSftp> {
-		let session = sftp_utils::open_session(url, identity_file)?;
-		let path = sftp_utils::remote_path(url);
 		let name = sftp_utils::display_name(url);
-
-		let sftp = session.sftp()?;
-		let stat = sftp
-			.stat(&path)
-			.with_context(|| format!("failed to stat remote file {path:?}"))?;
-		let size = stat.size.unwrap_or(0);
-
-		let file = sftp
-			.open(&path)
-			.with_context(|| format!("failed to open remote file {path:?}"))?;
+		let connection = sftp_pool::acquire(url, identity_file)?;
+		let path = sftp_utils::remote_path(url);
+		let (file_id, size) = connection
+			.register(&path)
+			.with_context(|| format!("failed to open '{name}'"))?;
 
 		Ok(DataReaderSftp {
-			connection: Mutex::new(SftpConnection {
-				file,
-				_session: session,
-			}),
+			connection,
+			file_id,
 			size,
 			name,
-			url: url.clone(),
-			identity_file: identity_file.map(Path::to_path_buf),
 			max_request_bytes: AtomicU64::new(u64::MAX),
 		})
 	}
+}
 
-	fn reconnect(&self) -> Result<SftpConnection> {
-		log::info!("reconnecting SFTP session to '{}'", self.name);
-		let session = sftp_utils::open_session(&self.url, self.identity_file.as_deref())?;
-		let path = sftp_utils::remote_path(&self.url);
-		let sftp = session.sftp()?;
-		let file = sftp
-			.open(&path)
-			.with_context(|| format!("failed to reopen remote file {path:?}"))?;
-		Ok(SftpConnection {
-			file,
-			_session: session,
-		})
+impl Drop for DataReaderSftp {
+	fn drop(&mut self) {
+		// Release the file handle back to the pooled connection so it is not
+		// re-opened on future reconnects. The connection itself stays pooled.
+		self.connection.unregister(self.file_id);
 	}
 }
 
@@ -102,6 +84,10 @@ impl DataReaderSftp {
 		let total_attempts = MAX_RETRIES + 1;
 		let name = &self.name;
 		let len = range.length;
+		// Generation observed for the most recent read attempt. Passed to
+		// `reconnect` so that sibling readers sharing this pooled connection
+		// do not each reconnect the same dropped session.
+		let mut generation = self.connection.generation()?;
 
 		for attempt in 0..=MAX_RETRIES {
 			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
@@ -111,42 +97,22 @@ impl DataReaderSftp {
 				log::warn!("SFTP read {range} from '{name}': retrying ({attempt_label}, waiting {backoff:?})");
 				thread::sleep(backoff);
 
-				match self.reconnect() {
-					Ok(new_conn) => {
-						let mut conn = self
-							.connection
-							.lock()
-							.map_err(|e| anyhow::anyhow!("lock poisoned: {e}"))?;
-						*conn = new_conn;
+				if let Err(e) = self.connection.reconnect(generation) {
+					log::warn!("SFTP read {range} from '{name}': reconnect failed ({attempt_label}): {e}");
+					if attempt >= MAX_RETRIES {
+						return Err(e).with_context(|| {
+							format!(
+								"could not read {range} ({len} bytes) from '{name}': reconnect failed — gave up after {total_attempts} attempts"
+							)
+						});
 					}
-					Err(e) => {
-						log::warn!("SFTP read {range} from '{name}': reconnect failed ({attempt_label}): {e}");
-						if attempt >= MAX_RETRIES {
-							return Err(e).with_context(|| {
-								format!(
-									"could not read {range} ({len} bytes) from '{name}': reconnect failed — gave up after {total_attempts} attempts"
-								)
-							});
-						}
-						continue;
-					}
+					continue;
 				}
 			}
 
-			let buf_len = usize::try_from(range.length)?;
-			let result = {
-				let mut conn = self
-					.connection
-					.lock()
-					.map_err(|e| anyhow::anyhow!("lock poisoned: {e}"))?;
-				conn.file.seek(SeekFrom::Start(range.offset)).and_then(|_| {
-					let mut buffer = vec![0u8; buf_len];
-					conn.file.read_exact(&mut buffer).map(|_| buffer)
-				})
-			};
-
-			match result {
-				Ok(buffer) => return Ok(Blob::from(buffer)),
+			generation = self.connection.generation()?;
+			match self.connection.read_range(self.file_id, range) {
+				Ok(blob) => return Ok(blob),
 				Err(e) if attempt < MAX_RETRIES => {
 					log::warn!("SFTP read {range} from '{name}': {e} ({attempt_label}), will retry");
 				}
