@@ -164,6 +164,8 @@ jobs:
           name: node-binding-linux-${{ matrix.libc }}-aarch64
           path: output/node/libversatiles_node.so
           retention-days: 1
+          # Re-run safe: replace a same-named artifact from a prior attempt.
+          overwrite: true
 
   build-linux-x86:
     name: Build Linux x86
@@ -223,6 +225,8 @@ jobs:
           name: node-binding-linux-${{ matrix.libc }}-x86_64
           path: output/node/libversatiles_node.so
           retention-days: 1
+          # Re-run safe: replace a same-named artifact from a prior attempt.
+          overwrite: true
 
   build-macos:
     name: Build MacOS
@@ -294,6 +298,8 @@ jobs:
           name: node-binding-macos-${{ matrix.arch }}
           path: target/${{ matrix.arch }}-apple-darwin/release/node/libversatiles_node.dylib
           retention-days: 1
+          # Re-run safe: replace a same-named artifact from a prior attempt.
+          overwrite: true
 
   build-windows:
     name: Build Windows
@@ -364,6 +370,8 @@ jobs:
           name: node-binding-windows-${{ matrix.arch }}
           path: target\${{ matrix.arch }}-pc-windows-msvc\release\node\versatiles_node.dll
           retention-days: 1
+          # Re-run safe: replace a same-named artifact from a prior attempt.
+          overwrite: true
 
   package-npm-binaries:
     name: Package npm binaries
@@ -461,6 +469,8 @@ jobs:
           name: npm-packages
           path: versatiles_node/npm/*/*.tgz
           retention-days: 7
+          # Re-run safe: replace a same-named artifact from a prior attempt.
+          overwrite: true
 
   publish-npm:
     name: Publish to npm
@@ -752,7 +762,20 @@ jobs:
 
             VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
 
-            # Try to publish, but don't fail if version already exists
+            # Skip if this version is already on crates.io — makes the job
+            # safe to re-run after a partial publish. Any non-200 (incl. a
+            # network error → "000") falls through to the publish attempt,
+            # which has its own already-published guard below.
+            http=$(curl -sS -o /dev/null -w '%{http_code}' \
+              -A 'versatiles-rs-release-ci' \
+              "https://crates.io/api/v1/crates/$crate/$VERSION" || echo "000")
+            if [ "$http" = "200" ]; then
+              echo "✓ $crate@$VERSION already on crates.io — skipping"
+              cd ..
+              continue
+            fi
+
+            # Try to publish, but don't fail if the version already exists
             echo "Publishing $crate@$VERSION..."
             if cargo publish --allow-dirty 2>&1 | tee /tmp/publish.log; then
               echo "✓ Published $crate@$VERSION"
@@ -762,9 +785,10 @@ jobs:
                 sleep 30
               fi
             else
-              # Check if the error is because version already exists
-              if grep -q "already exists" /tmp/publish.log; then
-                echo "⚠️  $crate@$VERSION already exists on crates.io, skipping..."
+              # Tolerate a version that already exists (crates.io words this as
+              # "already uploaded"); anything else is a real error.
+              if grep -qiE "already (uploaded|exists)" /tmp/publish.log; then
+                echo "⚠️  $crate@$VERSION already on crates.io — skipping"
               else
                 # It's a real error, fail the build
                 echo "❌ Failed to publish $crate@$VERSION"
