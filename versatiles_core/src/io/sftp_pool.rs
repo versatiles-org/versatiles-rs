@@ -22,11 +22,28 @@ use std::{
 	sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock},
 };
 
-/// Maximum SSH connections kept open per server. Operations on a single
-/// libssh2 session are serialized (the session is not thread-safe), so this is
-/// also the per-server ceiling on *concurrent* reads. Kept well below the
-/// simultaneous-connection limit of typical SFTP servers.
-const CONNECTIONS_PER_SERVER: usize = 16;
+/// Default maximum SSH connections kept open per server. Operations on a
+/// single libssh2 session are serialized (the session is not thread-safe), so
+/// this is also the per-server ceiling on *concurrent* reads.
+///
+/// Kept conservative because some SFTP servers cap simultaneous connections
+/// aggressively — e.g. a Hetzner Storage Box allows only 10. Override with the
+/// `VERSATILES_SFTP_MAX_CONNECTIONS` environment variable for servers that
+/// allow more (more read concurrency) or fewer.
+const DEFAULT_CONNECTIONS_PER_SERVER: usize = 8;
+
+/// Per-server connection cap: `VERSATILES_SFTP_MAX_CONNECTIONS` if set to a
+/// positive integer, otherwise [`DEFAULT_CONNECTIONS_PER_SERVER`]. Read once.
+fn connections_per_server() -> usize {
+	static CAP: OnceLock<usize> = OnceLock::new();
+	*CAP.get_or_init(|| {
+		std::env::var("VERSATILES_SFTP_MAX_CONNECTIONS")
+			.ok()
+			.and_then(|value| value.parse::<usize>().ok())
+			.filter(|&n| n > 0)
+			.unwrap_or(DEFAULT_CONNECTIONS_PER_SERVER)
+	})
+}
 
 /// Maximum SSH handshakes performed concurrently. Kept below `sshd`'s default
 /// `MaxStartups` threshold (10) so a burst of opens is never rejected, while
@@ -104,10 +121,15 @@ impl ServerKey {
 	}
 }
 
-/// One open file handle on a pooled connection.
-struct OpenFile {
-	path: PathBuf,
-	file: ssh2::File,
+/// The session-bound state of a connection: the SSH session, its SFTP channel,
+/// and the file handles opened on it. Replaced wholesale on every reconnect.
+struct LiveConnection {
+	// Kept alive for the lifetime of the SFTP channel.
+	_session: Session,
+	sftp: Sftp,
+	/// Open file handles, by id. Rebuilt from [`ConnectionInner::registered`]
+	/// on every reconnect.
+	files: HashMap<u64, ssh2::File>,
 }
 
 /// The mutable state behind a connection's lock.
@@ -115,17 +137,18 @@ struct OpenFile {
 /// libssh2 sessions are not safe for concurrent use, so every operation —
 /// reading, opening a file, reconnecting — happens while this is locked.
 struct ConnectionInner {
-	// Kept alive for the lifetime of the SFTP channel.
-	_session: Session,
-	sftp: Sftp,
-	/// Every file handle opened on this connection, kept centrally so a
-	/// reconnect (which invalidates the whole session) can re-open them all.
-	files: HashMap<u64, OpenFile>,
-	/// Bumped on every reconnect. Captured before a read so that 50 sources
-	/// racing to reconnect the same dropped connection trigger just one
-	/// actual reconnect.
+	/// The live SSH session, or `None` while a reconnect is in progress or
+	/// after one failed (the next read then triggers a fresh reconnect).
+	live: Option<LiveConnection>,
+	/// Remote path of every registered file, by id. Kept outside `live` so it
+	/// survives reconnects — even failed ones — and stays the durable source
+	/// of truth for re-opening the file handles.
+	registered: HashMap<u64, PathBuf>,
+	/// Bumped on every successful reconnect. Captured before a read so that
+	/// many sources racing to reconnect the same dropped connection trigger
+	/// just one actual reconnect.
 	generation: u64,
-	/// Monotonic id source for `files`; never reused, even after removal.
+	/// Monotonic id source for registered files; never reused, even after removal.
 	next_file_id: u64,
 }
 
@@ -143,9 +166,12 @@ impl Connection {
 		let sftp = session.sftp()?;
 		Ok(Arc::new(Connection {
 			inner: Mutex::new(ConnectionInner {
-				_session: session,
-				sftp,
-				files: HashMap::new(),
+				live: Some(LiveConnection {
+					_session: session,
+					sftp,
+					files: HashMap::new(),
+				}),
+				registered: HashMap::new(),
 				generation: 0,
 				next_file_id: 0,
 			}),
@@ -166,32 +192,34 @@ impl Connection {
 	/// Returns the file id (used for later reads) and the file size.
 	pub fn register(&self, path: &Path) -> Result<(u64, u64)> {
 		let mut inner = self.lock()?;
-		let size = inner
+		let id = inner.next_file_id;
+		let live = inner
+			.live
+			.as_mut()
+			.ok_or_else(|| anyhow!("SFTP connection is not established"))?;
+		let size = live
 			.sftp
 			.stat(path)
 			.with_context(|| format!("failed to stat remote file {path:?}"))?
 			.size
 			.unwrap_or(0);
-		let file = inner
+		let file = live
 			.sftp
 			.open(path)
 			.with_context(|| format!("failed to open remote file {path:?}"))?;
-		let id = inner.next_file_id;
+		live.files.insert(id, file);
+		inner.registered.insert(id, path.to_path_buf());
 		inner.next_file_id += 1;
-		inner.files.insert(
-			id,
-			OpenFile {
-				path: path.to_path_buf(),
-				file,
-			},
-		);
 		Ok((id, size))
 	}
 
 	/// Drop a file handle once its source is gone. Best-effort.
 	pub fn unregister(&self, id: u64) {
 		if let Ok(mut inner) = self.lock() {
-			inner.files.remove(&id);
+			inner.registered.remove(&id);
+			if let Some(live) = inner.live.as_mut() {
+				live.files.remove(&id);
+			}
 		}
 	}
 
@@ -204,13 +232,16 @@ impl Connection {
 	/// Read `range` from the file registered under `id`.
 	pub fn read_range(&self, id: u64, range: &ByteRange) -> Result<Blob> {
 		let mut inner = self.lock()?;
-		let open_file = inner
+		let file = inner
+			.live
+			.as_mut()
+			.ok_or_else(|| anyhow!("SFTP connection is not established"))?
 			.files
 			.get_mut(&id)
 			.ok_or_else(|| anyhow!("SFTP file id {id} is not registered"))?;
-		open_file.file.seek(SeekFrom::Start(range.offset))?;
+		file.seek(SeekFrom::Start(range.offset))?;
 		let mut buffer = vec![0u8; usize::try_from(range.length)?];
-		open_file.file.read_exact(&mut buffer)?;
+		file.read_exact(&mut buffer)?;
 		Ok(Blob::from(buffer))
 	}
 
@@ -231,24 +262,24 @@ impl Connection {
 			sftp_utils::display_name(&self.url)
 		);
 
+		// Drop the old session *before* opening the new one, so the two never
+		// both count against the server's simultaneous-connection limit.
+		inner.live = None;
+
 		let session = sftp_utils::open_session(&self.url, self.identity_file.as_deref())?;
 		let sftp = session.sftp()?;
-		let mut files = HashMap::with_capacity(inner.files.len());
-		for (id, open_file) in &inner.files {
+		let mut files = HashMap::with_capacity(inner.registered.len());
+		for (id, path) in &inner.registered {
 			let file = sftp
-				.open(&open_file.path)
-				.with_context(|| format!("failed to reopen remote file {:?}", open_file.path))?;
-			files.insert(
-				*id,
-				OpenFile {
-					path: open_file.path.clone(),
-					file,
-				},
-			);
+				.open(path)
+				.with_context(|| format!("failed to reopen remote file {path:?}"))?;
+			files.insert(*id, file);
 		}
-		inner._session = session;
-		inner.sftp = sftp;
-		inner.files = files;
+		inner.live = Some(LiveConnection {
+			_session: session,
+			sftp,
+			files,
+		});
 		inner.generation += 1;
 		Ok(())
 	}
@@ -291,9 +322,9 @@ enum Decision {
 
 /// Get a pooled connection for `url`.
 ///
-/// A new connection is opened while the server is below
-/// [`CONNECTIONS_PER_SERVER`]; beyond that an existing connection is reused
-/// round-robin. The handshake runs *outside* the pool lock, rate-limited by
+/// A new connection is opened while the server is below its connection cap
+/// (see [`connections_per_server`]); beyond that an existing connection is
+/// reused round-robin. The handshake runs *outside* the pool lock, rate-limited by
 /// [`open_throttle`] — so neither opening nor reading is serialized through a
 /// single global lock, while the handshake burst still stays under `sshd`'s
 /// `MaxStartups` limit.
@@ -304,7 +335,7 @@ pub fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection
 	loop {
 		let decision = {
 			let server = guard.entry(key.clone()).or_default();
-			if server.connections.len() + server.opening < CONNECTIONS_PER_SERVER {
+			if server.connections.len() + server.opening < connections_per_server() {
 				server.opening += 1;
 				Decision::Open
 			} else if server.connections.is_empty() {
@@ -406,7 +437,8 @@ mod tests {
 			// Acquire more sources than the per-server cap, concurrently — the
 			// surplus must reuse existing connections rather than open new
 			// ones, even when many `acquire` calls race.
-			let total = CONNECTIONS_PER_SERVER + 4;
+			let cap = connections_per_server();
+			let total = cap + 4;
 			let mut handles = Vec::with_capacity(total);
 			for _ in 0..total {
 				let url = url.clone();
@@ -418,7 +450,7 @@ mod tests {
 			}
 
 			assert_eq!(acquired.len(), total);
-			assert_eq!(connection_count(&url).unwrap(), CONNECTIONS_PER_SERVER);
+			assert_eq!(connection_count(&url).unwrap(), cap);
 		}
 
 		#[tokio::test(flavor = "multi_thread")]
