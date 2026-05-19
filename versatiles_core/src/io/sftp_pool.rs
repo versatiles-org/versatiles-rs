@@ -2,10 +2,13 @@
 //!
 //! Opening one full SSH connection per source does not scale: a burst of
 //! parallel opens to the same server trips `sshd`'s `MaxStartups` limit and
-//! the server rejects connections. This module keeps a small, fixed number
-//! of SSH connections per server and lets many file handles share each one
-//! (SFTP multiplexes file handles over a single channel), so the number of
-//! sources is decoupled from the number of TCP/SSH connections.
+//! the server rejects connections.
+//!
+//! The fix is to rate-limit connection *establishment* — handshakes run a few
+//! at a time, staying under `MaxStartups` — without throttling steady-state
+//! concurrency. Each server may hold many connections (up to a cap), so
+//! concurrent reads spread across them instead of being funnelled through one
+//! lock; a source reuses an existing connection only once the cap is reached.
 
 use super::sftp_utils;
 use crate::{Blob, ByteRange};
@@ -16,13 +19,66 @@ use std::{
 	collections::HashMap,
 	io::{Read, Seek, SeekFrom},
 	path::{Path, PathBuf},
-	sync::{Arc, Mutex, MutexGuard, OnceLock},
+	sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock},
 };
 
-/// SSH connections kept open per server. Each connection carries one SFTP
-/// channel that holds many file handles, so this only bounds I/O concurrency
-/// and lock contention — not how many sources you can open.
-const CONNECTIONS_PER_SERVER: usize = 4;
+/// Maximum SSH connections kept open per server. Operations on a single
+/// libssh2 session are serialized (the session is not thread-safe), so this is
+/// also the per-server ceiling on *concurrent* reads. Kept well below the
+/// simultaneous-connection limit of typical SFTP servers.
+const CONNECTIONS_PER_SERVER: usize = 16;
+
+/// Maximum SSH handshakes performed concurrently. Kept below `sshd`'s default
+/// `MaxStartups` threshold (10) so a burst of opens is never rejected, while
+/// still letting handshakes proceed in parallel rather than one at a time.
+const MAX_CONCURRENT_OPENS: usize = 8;
+
+/// A minimal counting semaphore (std only) bounding concurrent SSH handshakes.
+struct OpenThrottle {
+	permits: Mutex<usize>,
+	released: Condvar,
+}
+
+impl OpenThrottle {
+	/// Block until a permit is free; the returned guard releases it on drop.
+	fn acquire(&self) -> OpenPermit<'_> {
+		let mut permits = self.permits.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+		while *permits == 0 {
+			permits = self
+				.released
+				.wait(permits)
+				.unwrap_or_else(std::sync::PoisonError::into_inner);
+		}
+		*permits -= 1;
+		OpenPermit { throttle: self }
+	}
+}
+
+/// RAII permit from [`OpenThrottle::acquire`]; returns the permit on drop.
+struct OpenPermit<'a> {
+	throttle: &'a OpenThrottle,
+}
+
+impl Drop for OpenPermit<'_> {
+	fn drop(&mut self) {
+		let mut permits = self
+			.throttle
+			.permits
+			.lock()
+			.unwrap_or_else(std::sync::PoisonError::into_inner);
+		*permits += 1;
+		self.throttle.released.notify_one();
+	}
+}
+
+/// Process-wide handshake throttle.
+fn open_throttle() -> &'static OpenThrottle {
+	static THROTTLE: OnceLock<OpenThrottle> = OnceLock::new();
+	THROTTLE.get_or_init(|| OpenThrottle {
+		permits: Mutex::new(MAX_CONCURRENT_OPENS),
+		released: Condvar::new(),
+	})
+}
 
 /// Identifies one SSH endpoint. Sources sharing a key share connections.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -198,38 +254,102 @@ impl Connection {
 	}
 }
 
-/// The connections held for one server, with a round-robin cursor.
+/// The connections held for one server.
 #[derive(Default)]
 struct ServerPool {
+	/// Established connections, handed out round-robin once the cap is reached.
 	connections: Vec<Arc<Connection>>,
+	/// Connections currently mid-handshake — counted toward the cap so racing
+	/// `acquire` calls cannot collectively overshoot it.
+	opening: usize,
+	/// Round-robin cursor into `connections`.
 	next: usize,
 }
 
 static POOL: OnceLock<Mutex<HashMap<ServerKey, ServerPool>>> = OnceLock::new();
+static POOL_READY: OnceLock<Condvar> = OnceLock::new();
+
+fn pool() -> &'static Mutex<HashMap<ServerKey, ServerPool>> {
+	POOL.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Signalled whenever a connection finishes opening, waking `acquire` calls
+/// waiting at the cap for a connection to become reusable.
+fn pool_ready() -> &'static Condvar {
+	POOL_READY.get_or_init(Condvar::new)
+}
+
+/// What an `acquire` iteration decided to do, computed under the pool lock.
+enum Decision {
+	/// Open a fresh connection (a slot was reserved via `opening`).
+	Open,
+	/// Reuse an already-established connection.
+	Reuse(Arc<Connection>),
+	/// At the cap with every connection still mid-handshake — wait.
+	Wait,
+}
 
 /// Get a pooled connection for `url`.
 ///
-/// New connections are created until the server reaches
-/// [`CONNECTIONS_PER_SERVER`], after which existing connections are handed
-/// out round-robin. The global pool lock is intentionally held across
-/// connection setup: this serializes the connect burst and keeps `sshd`'s
-/// `MaxStartups` limit from rejecting parallel opens.
+/// A new connection is opened while the server is below
+/// [`CONNECTIONS_PER_SERVER`]; beyond that an existing connection is reused
+/// round-robin. The handshake runs *outside* the pool lock, rate-limited by
+/// [`open_throttle`] — so neither opening nor reading is serialized through a
+/// single global lock, while the handshake burst still stays under `sshd`'s
+/// `MaxStartups` limit.
 pub fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection>> {
 	let key = ServerKey::from_url(url)?;
-	let mut pool = POOL
-		.get_or_init(|| Mutex::new(HashMap::new()))
-		.lock()
-		.map_err(|e| anyhow!("SFTP pool lock poisoned: {e}"))?;
-	let server = pool.entry(key).or_default();
+	let mut guard = pool().lock().map_err(|e| anyhow!("SFTP pool lock poisoned: {e}"))?;
 
-	if server.connections.len() < CONNECTIONS_PER_SERVER {
-		let connection = Connection::open(url, identity_file)?;
-		server.connections.push(Arc::clone(&connection));
-		Ok(connection)
-	} else {
-		let connection = Arc::clone(&server.connections[server.next]);
-		server.next = (server.next + 1) % server.connections.len();
-		Ok(connection)
+	loop {
+		let decision = {
+			let server = guard.entry(key.clone()).or_default();
+			if server.connections.len() + server.opening < CONNECTIONS_PER_SERVER {
+				server.opening += 1;
+				Decision::Open
+			} else if server.connections.is_empty() {
+				Decision::Wait
+			} else {
+				let connection = Arc::clone(&server.connections[server.next]);
+				server.next = (server.next + 1) % server.connections.len();
+				Decision::Reuse(connection)
+			}
+		};
+
+		match decision {
+			Decision::Reuse(connection) => return Ok(connection),
+			Decision::Wait => {
+				guard = pool_ready()
+					.wait(guard)
+					.map_err(|e| anyhow!("SFTP pool lock poisoned: {e}"))?;
+			}
+			Decision::Open => {
+				drop(guard);
+
+				// Handshake outside the pool lock, throttled to stay under MaxStartups.
+				let result = {
+					let _permit = open_throttle().acquire();
+					Connection::open(url, identity_file)
+				};
+
+				let outcome = {
+					let mut g = pool().lock().map_err(|e| anyhow!("SFTP pool lock poisoned: {e}"))?;
+					let server = g.entry(key.clone()).or_default();
+					server.opening -= 1;
+					match result {
+						Ok(connection) => {
+							server.connections.push(Arc::clone(&connection));
+							Ok(connection)
+						}
+						Err(e) => Err(e),
+					}
+				};
+				// Wake anyone waiting at the cap: a connection appeared, or a
+				// reserved slot was freed by a failed open.
+				pool_ready().notify_all();
+				return outcome;
+			}
+		}
 	}
 }
 
@@ -237,11 +357,8 @@ pub fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection
 #[cfg(test)]
 fn connection_count(url: &Url) -> Result<usize> {
 	let key = ServerKey::from_url(url)?;
-	let pool = POOL
-		.get_or_init(|| Mutex::new(HashMap::new()))
-		.lock()
-		.map_err(|e| anyhow!("SFTP pool lock poisoned: {e}"))?;
-	Ok(pool.get(&key).map_or(0, |server| server.connections.len()))
+	let guard = pool().lock().map_err(|e| anyhow!("SFTP pool lock poisoned: {e}"))?;
+	Ok(guard.get(&key).map_or(0, |server| server.connections.len()))
 }
 
 #[cfg(test)]
@@ -286,16 +403,21 @@ mod tests {
 			server.write_file("/a.bin", b"hello").await;
 			let url = server.url("/a.bin");
 
-			// Acquire far more connections than the per-server cap.
-			let acquired = tokio::task::spawn_blocking({
+			// Acquire more sources than the per-server cap, concurrently — the
+			// surplus must reuse existing connections rather than open new
+			// ones, even when many `acquire` calls race.
+			let total = CONNECTIONS_PER_SERVER + 4;
+			let mut handles = Vec::with_capacity(total);
+			for _ in 0..total {
 				let url = url.clone();
-				move || -> Result<Vec<Arc<Connection>>> { (0..12).map(|_| acquire(&url, None)).collect() }
-			})
-			.await
-			.unwrap()
-			.unwrap();
+				handles.push(tokio::task::spawn_blocking(move || acquire(&url, None)));
+			}
+			let mut acquired = Vec::with_capacity(total);
+			for handle in handles {
+				acquired.push(handle.await.unwrap().unwrap());
+			}
 
-			assert_eq!(acquired.len(), 12);
+			assert_eq!(acquired.len(), total);
 			assert_eq!(connection_count(&url).unwrap(), CONNECTIONS_PER_SERVER);
 		}
 
