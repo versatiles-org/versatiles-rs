@@ -608,45 +608,77 @@ jobs:
           echo "✓ All required files present and valid"
           echo "✓ No native bindings in main package (correct)"
 
-      - name: Publish platform packages
+      - name: Publish npm packages
         if: env.PUBLISH_ENABLED == 'true'
         working-directory: ./versatiles_node
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           NPM_TAG="${{ needs.prepare.outputs.npm_tag }}"
-          echo "Publishing platform packages with tag: $NPM_TAG"
+          echo "Publishing npm packages with tag: $NPM_TAG"
 
-          # Find all .tgz files recursively
+          # Publish a package idempotently, so the job is safe to re-run after a
+          # partial or flaky failure:
+          #  - skip if that exact name@version is already on the registry;
+          #  - tolerate the Sigstore transparency-log 409 ("equivalent entry
+          #    already exists"), which npm can raise *after* the package itself
+          #    landed, by re-checking the registry instead of trusting the exit
+          #    code; retry once if it genuinely did not publish.
+          # Args: <name> <version> <target>  (target: a .tgz path or "." for cwd)
+          publish_idempotent() {
+            local name="$1" version="$2" target="$3"
+            local spec="$name@$version"
+
+            if npm view "$spec" version >/dev/null 2>&1; then
+              echo "✓ $spec already on npm — skipping"
+              return 0
+            fi
+
+            local attempt
+            for attempt in 1 2; do
+              echo "Publishing $spec ($target) — attempt $attempt"
+              if npm publish "$target" --access public --provenance --tag "$NPM_TAG"; then
+                echo "✓ Published $spec"
+                return 0
+              fi
+              echo "⚠️  publish of $spec reported an error — re-checking the registry…"
+              sleep 15
+              if npm view "$spec" version >/dev/null 2>&1; then
+                echo "✓ $spec is on npm despite the error — treating as published"
+                return 0
+              fi
+            done
+
+            echo "❌ $spec failed to publish after 2 attempts"
+            return 1
+          }
+
+          # --- Platform packages (must publish before the main package, which
+          #     lists them as optionalDependencies) ---
           packages=$(find npm -name "*.tgz" -type f)
-
           if [ -z "$packages" ]; then
             echo "ERROR: No .tgz files found in npm directory"
             exit 1
           fi
-
-          echo "Found packages:"
+          echo "Found platform packages:"
           echo "$packages"
 
-          # Publish each platform package with provenance attestation
           for pkg in $packages; do
             echo ""
-            echo "Publishing $pkg with --tag $NPM_TAG"
-            npm publish "$pkg" --access public --provenance --tag "$NPM_TAG"
+            meta=$(tar -xzOf "$pkg" package/package.json)
+            name=$(node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).name" <<<"$meta")
+            version=$(node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version" <<<"$meta")
+            publish_idempotent "$name" "$version" "$pkg"
           done
 
+          # --- Main package ---
           echo ""
-          echo "✓ All platform packages published"
+          main_name=$(node -p "require('./package.json').name")
+          main_version=$(node -p "require('./package.json').version")
+          publish_idempotent "$main_name" "$main_version" "."
 
-      - name: Publish main package
-        if: env.PUBLISH_ENABLED == 'true'
-        working-directory: ./versatiles_node
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          NPM_TAG="${{ needs.prepare.outputs.npm_tag }}"
-          echo "Publishing main package with tag: $NPM_TAG"
-          npm publish --access public --provenance --tag "$NPM_TAG"
+          echo ""
+          echo "✓ All npm packages published"
 
       - name: Verify publication
         if: env.PUBLISH_ENABLED == 'true'
