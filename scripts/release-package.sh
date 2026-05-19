@@ -181,6 +181,29 @@ ensure_tag_absent() {
 	fi
 }
 
+# Retry mode: the version's tag may already exist because the release was
+# tagged but its release workflow failed. That is expected — the tag will be
+# moved to the new release commit later. Abort only if the release actually
+# finished, detected via a finalized (non-draft) GitHub release.
+check_retry_tag() {
+	local v="$1"
+
+	if ! git rev-parse -q --verify "refs/tags/v$v" >/dev/null 2>&1 &&
+		! git ls-remote --exit-code --tags origin "v$v" >/dev/null 2>&1; then
+		return 0 # no tag yet — it will simply be created
+	fi
+
+	local is_draft
+	is_draft=$(gh release view "v$v" --repo versatiles-org/versatiles-rs \
+		--json isDraft --jq '.isDraft' 2>/dev/null || echo "missing")
+	if [ "$is_draft" = "false" ]; then
+		log_error "v$v is already published (its GitHub release is finalized) — nothing to retry"
+		exit 1
+	fi
+
+	log_step "Tag v$v already exists from a failed attempt — it will be moved to the new release commit"
+}
+
 # Ensure prerequisites for the release workflow are present.
 preflight_checks() {
 	local current_branch
@@ -394,9 +417,13 @@ main() {
 		log_success "Calculated new version: $new_version"
 	fi
 
-	# The tag must not exist yet — for "retry" this also guards against
-	# re-releasing a version that actually completed last time.
-	ensure_tag_absent "$new_version"
+	# Non-retry: the tag must not exist yet. Retry: the tag may exist (a failed
+	# attempt) and will be moved; only abort if the release actually finished.
+	if [ "$is_retry" = true ]; then
+		check_retry_tag "$new_version"
+	else
+		ensure_tag_absent "$new_version"
+	fi
 
 	echo ""
 	echo -e "${BLU}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${END}"
@@ -429,6 +456,16 @@ main() {
 	# Tag only the green commit and push the tag separately so the v-tag
 	# ruleset only fires once we're confident in the release.
 	echo ""
+	# Retry: drop the existing tag (origin + local) so it can be re-created on
+	# the freshly-verified commit — pushing it again retriggers the release
+	# workflow, now with whatever fixes have landed since the failed attempt.
+	if [ "$is_retry" = true ]; then
+		if git ls-remote --exit-code --tags origin "v$new_version" >/dev/null 2>&1; then
+			log_step "Removing old tag v$new_version from origin..."
+			git push origin ":refs/tags/v$new_version"
+		fi
+		git tag -d "v$new_version" >/dev/null 2>&1 || true
+	fi
 	create_release_tag "$new_version"
 	log_step "Pushing tag v$new_version..."
 	git push origin "v$new_version"

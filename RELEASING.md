@@ -102,9 +102,10 @@ You can either provide the release type as an argument, or run the script withou
 
 ##### Retrying a Failed Release
 
-If a release attempt fails *after* the version-bump commit has already landed on
-`dev` — most often because the CI run on that commit went red — fix the problem
-on `dev` with normal commits, then retry **without** bumping the version again:
+If a release attempt fails after the version-bump commit has already landed on
+`dev` — whether the CI run on that commit went red, or the tag was pushed but
+its **release workflow** failed — fix the problem on `dev` with normal commits,
+then retry **without** bumping the version again:
 
 ```bash
 # Re-release the version already in Cargo.toml (no new version-bump commit)
@@ -113,7 +114,10 @@ on `dev` with normal commits, then retry **without** bumping the version again:
 
 `retry` reuses the version currently in `Cargo.toml`, skips the version bump and
 release commit, and re-runs the rest of the pipeline (checks, push, CI wait,
-fast-forward `main`, tag). It aborts if that version's tag already exists.
+fast-forward `main`, tag). If that version's tag already exists (the release was
+tagged but its workflow failed), `retry` **moves** the tag to the new release
+commit and re-pushes it, which retriggers the release workflow. It aborts only
+if the release actually finished — detected via a finalized GitHub release.
 
 This script will:
 
