@@ -19,8 +19,18 @@ use std::{
 	collections::HashMap,
 	io::{Read, Seek, SeekFrom},
 	path::{Path, PathBuf},
-	sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock},
+	sync::{
+		Arc, Condvar, Mutex, MutexGuard, OnceLock,
+		atomic::{AtomicU64, Ordering},
+	},
+	time::Instant,
 };
+
+/// Monotonic id for log correlation across pool / connection / read messages.
+fn next_connection_id() -> u64 {
+	static NEXT: AtomicU64 = AtomicU64::new(0);
+	NEXT.fetch_add(1, Ordering::Relaxed)
+}
 
 /// Default maximum SSH connections kept open per server. Operations on a
 /// single libssh2 session are serialized (the session is not thread-safe), so
@@ -150,10 +160,17 @@ struct ConnectionInner {
 	generation: u64,
 	/// Monotonic id source for registered files; never reused, even after removal.
 	next_file_id: u64,
+	/// Wall-clock instant of the last successful read (or of the open /
+	/// reconnect, if no read has happened yet). Logged on failures so we can
+	/// tell whether the connection died while active or while sitting idle.
+	last_used: Instant,
 }
 
 /// One pooled SSH connection, shared by every source it serves.
 pub struct Connection {
+	/// Process-wide unique id used in log messages to correlate pool, open,
+	/// reconnect and read events across threads.
+	id: u64,
 	inner: Mutex<ConnectionInner>,
 	/// Re-open data for reconnects (host/port/user/password; path is unused).
 	url: Url,
@@ -162,9 +179,18 @@ pub struct Connection {
 
 impl Connection {
 	fn open(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection>> {
+		let id = next_connection_id();
+		let display = sftp_utils::display_name(url);
+		log::debug!("[sftp conn {id}] opening SSH+SFTP session to '{display}'");
+		let started = Instant::now();
 		let session = sftp_utils::open_session(url, identity_file)?;
 		let sftp = session.sftp()?;
+		log::debug!(
+			"[sftp conn {id}] session ready in {:.2}s",
+			started.elapsed().as_secs_f32()
+		);
 		Ok(Arc::new(Connection {
+			id,
 			inner: Mutex::new(ConnectionInner {
 				live: Some(LiveConnection {
 					_session: session,
@@ -174,6 +200,7 @@ impl Connection {
 				registered: HashMap::new(),
 				generation: 0,
 				next_file_id: 0,
+				last_used: Instant::now(),
 			}),
 			url: url.clone(),
 			identity_file: identity_file.map(Path::to_path_buf),
@@ -232,17 +259,38 @@ impl Connection {
 	/// Read `range` from the file registered under `id`.
 	pub fn read_range(&self, id: u64, range: &ByteRange) -> Result<Blob> {
 		let mut inner = self.lock()?;
-		let file = inner
-			.live
-			.as_mut()
-			.ok_or_else(|| anyhow!("SFTP connection is not established"))?
-			.files
-			.get_mut(&id)
-			.ok_or_else(|| anyhow!("SFTP file id {id} is not registered"))?;
-		file.seek(SeekFrom::Start(range.offset))?;
-		let mut buffer = vec![0u8; usize::try_from(range.length)?];
-		file.read_exact(&mut buffer)?;
-		Ok(Blob::from(buffer))
+		let idle = inner.last_used.elapsed();
+		let read_result: Result<Blob> = (|| {
+			let file = inner
+				.live
+				.as_mut()
+				.ok_or_else(|| anyhow!("SFTP connection is not established"))?
+				.files
+				.get_mut(&id)
+				.ok_or_else(|| anyhow!("SFTP file id {id} is not registered"))?;
+			file.seek(SeekFrom::Start(range.offset))?;
+			let mut buffer = vec![0u8; usize::try_from(range.length)?];
+			file.read_exact(&mut buffer)?;
+			Ok(Blob::from(buffer))
+		})();
+
+		match read_result {
+			Ok(blob) => {
+				inner.last_used = Instant::now();
+				Ok(blob)
+			}
+			Err(e) => {
+				// Idle time on a failure tells us whether the connection died
+				// while active or after sitting idle — the latter suggests the
+				// server is closing idle sessions (e.g. SSH ClientAliveInterval).
+				log::debug!(
+					"[sftp conn {}] read {range} failed after {:.1}s idle: {e}",
+					self.id,
+					idle.as_secs_f32(),
+				);
+				Err(e)
+			}
+		}
 	}
 
 	/// Rebuild the SSH session and SFTP channel and re-open every registered
@@ -258,7 +306,9 @@ impl Connection {
 			return Ok(());
 		}
 		log::info!(
-			"reconnecting pooled SFTP session to '{}'",
+			"[sftp conn {}] reconnecting (idle for {:.1}s) to '{}'",
+			self.id,
+			inner.last_used.elapsed().as_secs_f32(),
 			sftp_utils::display_name(&self.url)
 		);
 
@@ -281,6 +331,8 @@ impl Connection {
 			files,
 		});
 		inner.generation += 1;
+		inner.last_used = Instant::now();
+		log::debug!("[sftp conn {}] reconnect complete (generation {})", self.id, inner.generation);
 		Ok(())
 	}
 }
@@ -348,8 +400,12 @@ pub fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection
 		};
 
 		match decision {
-			Decision::Reuse(connection) => return Ok(connection),
+			Decision::Reuse(connection) => {
+				log::debug!("[sftp pool] {}: reusing conn {}", key.host, connection.id);
+				return Ok(connection);
+			}
 			Decision::Wait => {
+				log::debug!("[sftp pool] {}: at cap ({}), waiting for a connection", key.host, connections_per_server());
 				guard = pool_ready()
 					.wait(guard)
 					.map_err(|e| anyhow!("SFTP pool lock poisoned: {e}"))?;
@@ -370,9 +426,19 @@ pub fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection
 					match result {
 						Ok(connection) => {
 							server.connections.push(Arc::clone(&connection));
+							log::debug!(
+								"[sftp pool] {}: opened conn {}, pool now {} connection(s) (cap {})",
+								key.host,
+								connection.id,
+								server.connections.len(),
+								connections_per_server()
+							);
 							Ok(connection)
 						}
-						Err(e) => Err(e),
+						Err(e) => {
+							log::debug!("[sftp pool] {}: open failed: {e}", key.host);
+							Err(e)
+						}
 					}
 				};
 				// Wake anyone waiting at the cap: a connection appeared, or a
