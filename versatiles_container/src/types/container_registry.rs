@@ -128,6 +128,24 @@ impl ContainerRegistry {
 		data_source.resolve(&DataLocation::cwd()?)?;
 		let extension = sanitize_extension(data_source.container_type()?);
 
+		let started = std::time::Instant::now();
+		let label = format!("{data_source:?}");
+		log::trace!("registry: opening {label} (.{extension})");
+		let result = self.reader_impl(data_source, runtime, extension).await;
+		log::trace!(
+			"registry: {label} → {} in {:.2}s",
+			if result.is_ok() { "ok" } else { "err" },
+			started.elapsed().as_secs_f32()
+		);
+		result
+	}
+
+	async fn reader_impl(
+		&self,
+		data_source: DataSource,
+		runtime: TilesRuntime,
+		extension: String,
+	) -> Result<SharedTileSource> {
 		match data_source.into_location() {
 			DataLocation::Url(url) => {
 				let reader: DataReader = match url.scheme() {

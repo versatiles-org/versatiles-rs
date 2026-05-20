@@ -61,7 +61,7 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{lock::Mutex, stream::StreamExt};
-use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
+use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc, time::Instant};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
@@ -111,27 +111,49 @@ impl VersaTilesReader {
 	/// Returns an error if header/metadata/index reads or decompressions fail.
 	#[context("Failed to open versatiles reader")]
 	pub async fn open_data(mut reader: DataReader, runtime: TilesRuntime) -> Result<VersaTilesReader> {
+		let name = reader.name().to_string();
+		log::trace!("versatiles: opening '{name}'");
+
+		let phase = Instant::now();
 		let header = FileHeader::from_reader(&mut reader)
 			.await
 			.context("Failed reading the header")?;
+		log::trace!(
+			"versatiles: '{name}' header read in {:.2}s",
+			phase.elapsed().as_secs_f32()
+		);
 
 		let tilejson = if header.meta_range.length > 0 {
+			let phase = Instant::now();
 			let blob = reader
 				.read_range(&header.meta_range)
 				.await
 				.context("Failed reading the meta data")?;
 			let blob = decompress(blob, &header.compression).context("Failed decompressing the meta data")?;
-			TileJSON::try_from_blob_or_default(&blob)
+			let json = TileJSON::try_from_blob_or_default(&blob);
+			log::trace!(
+				"versatiles: '{name}' meta ({} bytes) read in {:.2}s",
+				header.meta_range.length,
+				phase.elapsed().as_secs_f32()
+			);
+			json
 		} else {
 			TileJSON::default()
 		};
 
+		let phase = Instant::now();
 		let block_index_blob = reader
 			.read_range(&header.blocks_range)
 			.await
 			.context("Failed reading the block index")?;
 		let block_index =
 			BlockIndex::from_brotli_blob(&block_index_blob).context("Failed decompressing the block index")?;
+		log::trace!(
+			"versatiles: '{name}' block index ({} bytes, {} block(s)) read+decoded in {:.2}s",
+			header.blocks_range.length,
+			block_index.len(),
+			phase.elapsed().as_secs_f32()
+		);
 
 		let metadata = TileSourceMetadata::new(
 			header.tile_format,

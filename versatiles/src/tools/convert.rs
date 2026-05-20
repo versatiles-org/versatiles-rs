@@ -1,4 +1,5 @@
 use anyhow::{Result, bail};
+use std::time::Instant;
 use versatiles_container::{TilesConverterParameters, TilesRuntime, convert_tiles_container_to_str};
 use versatiles_core::{GeoBBox, TileCompression, TileFormat, TilePyramid};
 use versatiles_derive::context;
@@ -107,7 +108,13 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	// output would be indistinguishable from a successful conversion.
 	runtime.set_abort_on_error(true);
 
+	log::trace!("convert: opening source {:?}", arguments.input_file);
+	let open_start = Instant::now();
 	let reader = runtime.reader_from_str(&arguments.input_file).await?;
+	log::trace!(
+		"convert: source opened in {:.2}s",
+		open_start.elapsed().as_secs_f32()
+	);
 
 	let (tile_pyramid, geo_bbox) = tile_pyramid(arguments)?;
 
@@ -129,7 +136,13 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		format_effort,
 	};
 
+	log::trace!("convert: starting tile stream to {:?}", arguments.output_file);
+	let stream_start = Instant::now();
 	convert_tiles_container_to_str(reader, parameters, &arguments.output_file, runtime.clone()).await?;
+	log::trace!(
+		"convert: tile streaming complete in {:.2}s",
+		stream_start.elapsed().as_secs_f32()
+	);
 
 	log::info!("finished converting tiles");
 

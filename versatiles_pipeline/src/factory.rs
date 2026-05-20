@@ -20,7 +20,7 @@ use async_trait::async_trait;
 use futures::future::BoxFuture;
 use itertools::Itertools;
 use regex::Regex;
-use std::{collections::HashMap, path::PathBuf, sync::LazyLock, vec};
+use std::{collections::HashMap, path::PathBuf, sync::LazyLock, time::Instant, vec};
 use versatiles_container::{DataLocation, TileSource, TilesRuntime};
 use versatiles_core::{TileFormat, TileType};
 use versatiles_derive::context;
@@ -191,14 +191,37 @@ impl PipelineFactory {
 	/// Takes the head node as a read operation and folds the remaining nodes as transforms.
 	#[context("Failed to build pipeline from VPL")]
 	pub async fn build_pipeline(&self, pipeline: VPLPipeline) -> Result<Box<dyn TileSource>> {
+		let pipeline_started = Instant::now();
 		let (head, tail) = pipeline.split()?;
+		log::trace!(
+			"pipeline: building {} VPL node(s): head '{}' + {} transform(s)",
+			1 + tail.len(),
+			head.name,
+			tail.len()
+		);
 
+		let head_name = head.name.clone();
+		let node_started = Instant::now();
 		let mut vpl_operation = self.read_operation_from_node(head).await?;
+		log::trace!(
+			"pipeline: read node '{head_name}' built in {:.2}s",
+			node_started.elapsed().as_secs_f32()
+		);
 
 		for node in tail {
+			let node_name = node.name.clone();
+			let node_started = Instant::now();
 			vpl_operation = self.tran_operation_from_node(node, vpl_operation).await?;
+			log::trace!(
+				"pipeline: transform node '{node_name}' built in {:.2}s",
+				node_started.elapsed().as_secs_f32()
+			);
 		}
 
+		log::trace!(
+			"pipeline: built in {:.2}s total",
+			pipeline_started.elapsed().as_secs_f32()
+		);
 		Ok(vpl_operation)
 	}
 
