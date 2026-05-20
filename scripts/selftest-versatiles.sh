@@ -20,4 +20,6 @@ fi
 set -x
 
 $cmd convert --max-zoom 3 "$dir/testdata/berlin.mbtiles" "$dir/testdata/test.versatiles"
-$cmd serve --auto-shutdown 1000 -p 8088 "https://download.versatiles.org/osm.versatiles"
+# Serve the .versatiles we just built — keeps the selftest hermetic so a
+# build can't fail because download.versatiles.org is rate-limiting CI.
+$cmd serve --auto-shutdown 1000 -p 8088 "$dir/testdata/test.versatiles"
