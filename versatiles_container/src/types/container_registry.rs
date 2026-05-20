@@ -129,11 +129,11 @@ impl ContainerRegistry {
 		let extension = sanitize_extension(data_source.container_type()?);
 
 		let started = std::time::Instant::now();
-		let label = format!("{data_source:?}");
-		log::trace!("registry: opening {label} (.{extension})");
+		let label = data_source.location().to_string();
+		log::trace!("registry: opening '{label}' (.{extension})");
 		let result = self.reader_impl(data_source, runtime, extension).await;
 		log::trace!(
-			"registry: {label} → {} in {:.2}s",
+			"registry: '{label}' → {} in {:.2}s",
 			if result.is_ok() { "ok" } else { "err" },
 			started.elapsed().as_secs_f32()
 		);
@@ -158,12 +158,11 @@ impl ContainerRegistry {
 						// on the async task's worker thread.
 						let identity = runtime.ssh_identity().map(std::path::Path::to_path_buf);
 						let url_for_open = url.clone();
-						let reader = tokio::task::spawn_blocking(move || {
-							DataReaderSftp::open(&url_for_open, identity.as_deref())
-						})
-						.await
-						.with_context(|| format!("SFTP open task panicked for '{url}'"))?
-						.with_context(|| format!("Failed to create SFTP data reader for URL '{url}'"))?;
+						let reader =
+							tokio::task::spawn_blocking(move || DataReaderSftp::open(&url_for_open, identity.as_deref()))
+								.await
+								.with_context(|| format!("SFTP open task panicked for '{url}'"))?
+								.with_context(|| format!("Failed to create SFTP data reader for URL '{url}'"))?;
 						Box::new(reader)
 					}
 					"http" | "https" => Box::new(

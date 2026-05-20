@@ -332,7 +332,11 @@ impl Connection {
 		});
 		inner.generation += 1;
 		inner.last_used = Instant::now();
-		log::debug!("[sftp conn {}] reconnect complete (generation {})", self.id, inner.generation);
+		log::debug!(
+			"[sftp conn {}] reconnect complete (generation {})",
+			self.id,
+			inner.generation
+		);
 		Ok(())
 	}
 }
@@ -405,7 +409,11 @@ pub fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection
 				return Ok(connection);
 			}
 			Decision::Wait => {
-				log::debug!("[sftp pool] {}: at cap ({}), waiting for a connection", key.host, connections_per_server());
+				log::debug!(
+					"[sftp pool] {}: at cap ({}), waiting for a connection",
+					key.host,
+					connections_per_server()
+				);
 				guard = pool_ready()
 					.wait(guard)
 					.map_err(|e| anyhow!("SFTP pool lock poisoned: {e}"))?;
