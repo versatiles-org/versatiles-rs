@@ -150,10 +150,22 @@ impl ContainerRegistry {
 			DataLocation::Url(url) => {
 				let reader: DataReader = match url.scheme() {
 					#[cfg(feature = "ssh2")]
-					"sftp" => Box::new(
-						DataReaderSftp::open(&url, runtime.ssh_identity())
-							.with_context(|| format!("Failed to create SFTP data reader for URL '{url}'"))?,
-					),
+					"sftp" => {
+						// SFTP open does a blocking SSH handshake. Off-load it to
+						// the tokio blocking pool so concurrent opens (e.g. from
+						// `from_stacked_raster` building several sub-pipelines at
+						// once) actually run in parallel instead of serializing
+						// on the async task's worker thread.
+						let identity = runtime.ssh_identity().map(std::path::Path::to_path_buf);
+						let url_for_open = url.clone();
+						let reader = tokio::task::spawn_blocking(move || {
+							DataReaderSftp::open(&url_for_open, identity.as_deref())
+						})
+						.await
+						.with_context(|| format!("SFTP open task panicked for '{url}'"))?
+						.with_context(|| format!("Failed to create SFTP data reader for URL '{url}'"))?;
+						Box::new(reader)
+					}
 					"http" | "https" => Box::new(
 						DataReaderHttp::try_from(&url)
 							.with_context(|| format!("Failed to create HTTP data reader for URL '{url}'"))?,

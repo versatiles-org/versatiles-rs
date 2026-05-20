@@ -88,7 +88,7 @@ use crate::{
 };
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use futures::stream;
+use futures::{future::try_join_all, stream};
 use std::{collections::HashSet, sync::Arc, vec};
 use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream, TileType};
@@ -223,13 +223,13 @@ impl ReadTileSource for Operation {
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		let mut original_sources: Vec<Box<dyn TileSource>> = vec![];
-		let mut source_types: Vec<Arc<SourceType>> = vec![];
-		for source in args.sources {
-			let s = factory.build_pipeline(source).await?;
-			source_types.push(s.source_type());
-			original_sources.push(s);
-		}
+		// Build sub-pipelines concurrently — for a stack of N SFTP sources this
+		// is N parallel handshakes instead of N sequential, which dominates the
+		// pre-tile-streaming time. `try_join_all` preserves input order, so the
+		// stacking order (first source = foreground) is unchanged.
+		let original_sources: Vec<Box<dyn TileSource>> =
+			try_join_all(args.sources.into_iter().map(|s| factory.build_pipeline(s))).await?;
+		let source_types: Vec<Arc<SourceType>> = original_sources.iter().map(|s| s.source_type()).collect();
 
 		ensure!(!original_sources.is_empty(), "must have at least one source");
 
