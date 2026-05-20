@@ -8,7 +8,7 @@ use super::{Traversal, TraversalTranslationStep, translate_traversals};
 use crate::{Tile, TileSource, TilesRuntime, TraversalCache};
 use anyhow::Result;
 use futures::{StreamExt, future::BoxFuture, stream};
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 use versatiles_core::{TileBBox, TileCoord, TileStream};
 
 /// Extension trait providing traversal with higher-rank trait bounds (HRTBs).
@@ -39,23 +39,35 @@ pub trait TileSourceTraverseExt: TileSource {
 		's: 'a,
 	{
 		async move {
+			let phase = Instant::now();
 			let metadata = self.metadata();
 			let tile_pyramid = self.tile_pyramid().await?;
 			let traversal_steps = translate_traversals(&tile_pyramid, metadata.traversal(), traversal_write)?;
+			log::trace!(
+				"traverse: tile_pyramid + translate_traversals in {:.2}s ({} step(s))",
+				phase.elapsed().as_secs_f32(),
+				traversal_steps.len()
+			);
 
 			use TraversalTranslationStep::{Pop, Push, Stream};
 
-			let mut count = 0u64;
-			for step in &traversal_steps {
-				match step {
-					Push(bboxes_in, _) | Stream(bboxes_in, _) => {
-						for bbox in bboxes_in {
-							count += self.tile_coord_stream(*bbox).await?.drain_and_count().await;
-						}
-					}
-					Pop(_, _) => {}
-				}
-			}
+			// Use the bbox volume as the progress-bar maximum. The previous
+			// implementation walked `tile_coord_stream` over the whole pyramid
+			// up front — exact for sparse sources but over the network for
+			// SFTP/HTTP backends it dominated startup (tens of seconds before
+			// any tile was written). Block-index reads still happen during
+			// streaming, where they overlap with the actual work and the
+			// progress bar shows that progress to the user.
+			let count: u64 = traversal_steps
+				.iter()
+				.filter_map(|step| match step {
+					Push(bboxes_in, _) | Stream(bboxes_in, _) => Some(bboxes_in),
+					Pop(_, _) => None,
+				})
+				.flatten()
+				.map(TileBBox::count_tiles)
+				.sum();
+			log::trace!("traverse: estimated {count} tile(s) for progress");
 
 			let progress = runtime.create_progress("processing tiles", count);
 			let tracker = Arc::new(ProgressTracker::new(progress));
