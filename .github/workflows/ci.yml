@@ -261,6 +261,11 @@ jobs:
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
+          # Cargo's libgit2 needs core.longpaths to clone the gdal git dep,
+          # whose `gdal-src/source` submodule contains files whose absolute
+          # path exceeds Windows' MAX_PATH (260). Remove when the gdal crate
+          # is back on crates.io (see versatiles_pipeline/Cargo.toml).
+          git config --global core.longpaths true
 
       - name: Checkout
         uses: actions/checkout@v6
@@ -294,6 +299,11 @@ jobs:
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
+          # Cargo's libgit2 needs core.longpaths to clone the gdal git dep,
+          # whose `gdal-src/source` submodule contains files whose absolute
+          # path exceeds Windows' MAX_PATH (260). Remove when the gdal crate
+          # is back on crates.io (see versatiles_pipeline/Cargo.toml).
+          git config --global core.longpaths true
 
       - name: Checkout
         uses: actions/checkout@v6
@@ -356,6 +366,11 @@ jobs:
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
+          # Cargo's libgit2 needs core.longpaths to clone the gdal git dep,
+          # whose `gdal-src/source` submodule contains files whose absolute
+          # path exceeds Windows' MAX_PATH (260). Remove when the gdal crate
+          # is back on crates.io (see versatiles_pipeline/Cargo.toml).
+          git config --global core.longpaths true
 
       - name: Checkout
         uses: actions/checkout@v6
