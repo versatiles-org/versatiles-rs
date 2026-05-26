@@ -15,10 +15,20 @@ case $ARCH in
 esac
 echo "Detected architecture: $ARCH"
 
-# Detect OS and libc type
+# Detect OS and pick libc variant
+# On Linux, default to the fully-static musl build — it runs on any kernel
+# regardless of the host's glibc version, avoiding "GLIBC_x.y not found"
+# failures on older distros. Set VERSATILES_LIBC=gnu to opt into the
+# dynamically-linked glibc build instead.
 OS=$(uname)
 case $OS in
-   Linux) OS="linux-$(ldd --version 2>&1 | grep -q 'musl' && echo 'musl' || echo 'gnu')" ;;
+   Linux)
+      LIBC="${VERSATILES_LIBC:-musl}"
+      case $LIBC in
+         musl|gnu) OS="linux-$LIBC" ;;
+         *) echo "Unsupported VERSATILES_LIBC: $LIBC (expected musl or gnu)"; exit 1 ;;
+      esac
+      ;;
    Darwin) OS="macos" ;;
    *)
       echo "Unsupported OS: $OS"
