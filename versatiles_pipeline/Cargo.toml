@@ -24,8 +24,11 @@ deadpool = { workspace = true, optional = true }
 futures.workspace = true
 geo.workspace = true
 geo-types.workspace = true
-gdal = { version = "0.19.0", optional = true }
-gdal-sys = { version = "0.12.0", optional = true, features = ["bindgen"] }
+# TEMP: pinned to PR https://github.com/georust/gdal/pull/714 for GDAL 3.13
+# compatibility (GDT_Byte → GDT_UInt8, bOperateInBufType). Revert to the
+# crates.io version once a release including the fix is published.
+gdal = { git = "https://github.com/AlexanderWillner/gdal", rev = "bc255dce662300a70d64b64be7c641912f48e780", version = "0.19", optional = true }
+gdal-sys = { git = "https://github.com/AlexanderWillner/gdal", rev = "bc255dce662300a70d64b64be7c641912f48e780", version = "0.12", optional = true, features = ["bindgen"] }
 imageproc = { workspace = true, features = ["text"] }
 itertools = { workspace = true, features = ["use_alloc"] }
 dashmap.workspace = true
