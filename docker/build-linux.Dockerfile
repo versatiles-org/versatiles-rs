@@ -12,7 +12,11 @@ FROM rust:alpine AS builder_musl
 RUN apk add --no-cache bash musl-dev pkgconf openssl-dev openssl-libs-static
 
 # CREATE BUILDER SYSTEM FOR GNU
-FROM rust:slim AS builder_gnu
+# Pinned to bookworm (glibc 2.36) instead of the floating `rust:slim` tag, which
+# now tracks trixie (glibc 2.41). Trixie-built binaries fail to start on common
+# stable distros (Debian 12, Ubuntu 22.04, RHEL 9). Bump to the next Debian
+# stable when bookworm nears EOL.
+FROM rust:slim-bookworm AS builder_gnu
 # Avoid prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 # Install necessary packages
