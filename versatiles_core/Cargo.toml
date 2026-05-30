@@ -18,7 +18,7 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-brotli = { version = "8.0.2", default-features = false, features = ["std"] }
+brotli = { version = "8.0.3", default-features = false, features = ["std"] }
 byteorder = { workspace = true, features = [] }
 clap = { workspace = true, optional = true, features = ["derive"] }
 colored = { version = "3.1.1", default-features = false, optional = true }
@@ -52,8 +52,8 @@ wildmatch.workspace = true
 # In-process SFTP test server — only needed on unix (russh depends on aws-lc-rs
 # which requires NASM/cmake on Windows and is not needed for the Windows build).
 [target.'cfg(unix)'.dev-dependencies]
-russh = "0.60"
-russh-sftp = "2.1"
+russh = "0.61"
+russh-sftp = "2.3"
 
 # Multithreading benchmark dependencies
 dashmap.workspace = true

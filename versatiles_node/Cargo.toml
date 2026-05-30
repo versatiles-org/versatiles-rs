@@ -15,7 +15,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 anyhow.workspace = true
-ctor = "1.0.6"
+ctor = "1.0.7"
 env_logger.workspace = true
 log.workspace = true
 napi = { version = "3.9.0", features = ["async"] }
