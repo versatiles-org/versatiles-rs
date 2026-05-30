@@ -18,13 +18,12 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-brotli.workspace = true
+brotli = { version = "8.0.2", default-features = false, features = ["std"] }
 byteorder = { workspace = true, features = [] }
 clap = { workspace = true, optional = true, features = ["derive"] }
-colored = { workspace = true, optional = true }
+colored = { version = "3.1.1", default-features = false, optional = true }
 enumset.workspace = true
-flate2.workspace = true
-zstd.workspace = true
+flate2 = { version = "1.1.9", default-features = false, features = ["default"] }
 futures.workspace = true
 itertools.workspace = true
 log.workspace = true
@@ -34,16 +33,17 @@ num_cpus.workspace = true
 percent-encoding = "2"
 regex.workspace = true
 reqwest.workspace = true
-tokio.workspace = true
 ssh2 = { version = "0.9", optional = true }
 ssh2-config = { version = "0.7", default-features = false, optional = true }
+tokio.workspace = true
+zstd = { version = "0.13.3", default-features = false }
 
 versatiles_derive.workspace = true
 
 [dev-dependencies]
 approx.workspace = true
 assert_fs.workspace = true
-criterion.workspace = true
+criterion = "0.8.2"
 rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros"] }

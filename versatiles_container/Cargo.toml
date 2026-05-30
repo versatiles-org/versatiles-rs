@@ -23,19 +23,19 @@ byteorder.workspace = true
 dashmap.workspace = true
 enumset.workspace = true
 futures.workspace = true
-libc = "0.2"
 itertools = { workspace = true, features = ["use_alloc"] }
+libc = "0.2"
 log.workspace = true
 parking_lot.workspace = true
-r2d2 = { workspace = true, features = [] }
-r2d2_sqlite = { workspace = true, features = ["bundled"] }
+r2d2 = { version = "0.8.10", default-features = false }
+r2d2_sqlite = { version = "0.34.0", default-features = false, features = ["bundled"] }
 regex.workspace = true
 reqwest.workspace = true
 tar.workspace = true
-terminal_size.workspace = true
-time = { workspace = true, features = ["formatting", "local-offset"] }
+terminal_size = "0.4.4"
+time = { version = "0.3.47", default-features = false, features = ["formatting", "local-offset"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
-uuid = { workspace = true, features = ["v4"] }
+uuid = { version = "1.23.1", features = ["v4"] }
 
 versatiles_core = { workspace = true, default-features = false }
 versatiles_derive.workspace = true
