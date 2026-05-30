@@ -36,7 +36,7 @@ regex.workspace = true
 reqwest.workspace = true
 tokio.workspace = true
 ssh2 = { version = "0.9", optional = true }
-ssh2-config = { workspace = true, optional = true }
+ssh2-config = { version = "0.7", default-features = false, optional = true }
 
 versatiles_derive.workspace = true
 
