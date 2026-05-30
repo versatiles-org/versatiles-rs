@@ -31,7 +31,7 @@ impl RTreeObject for FeatureRef {
 /// Returns an iterator over feature refs whose envelope intersects `bbox`.
 pub fn query(rtree: &RTree<FeatureRef>, bbox: [f64; 4]) -> impl Iterator<Item = &FeatureRef> {
 	let envelope = AABB::from_corners([bbox[0], bbox[1]], [bbox[2], bbox[3]]);
-	rtree.locate_in_envelope_intersecting(&envelope)
+	rtree.locate_in_envelope_intersecting(envelope)
 }
 
 #[cfg(test)]

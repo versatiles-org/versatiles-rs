@@ -410,7 +410,7 @@ impl MaskGeometry {
 
 		let mut crossings = 0;
 
-		for edge in self.edge_rtree.locate_in_envelope_intersecting(&envelope) {
+		for edge in self.edge_rtree.locate_in_envelope_intersecting(envelope) {
 			// Only count edges that actually span y (the envelope query might include
 			// edges that just touch y at their endpoints)
 			if edge.ray_crosses(x, y) {
@@ -571,7 +571,7 @@ impl MaskGeometry {
 
 		let mut min_dist_sq = f64::MAX;
 
-		for edge in self.edge_rtree.locate_in_envelope_intersecting(&envelope) {
+		for edge in self.edge_rtree.locate_in_envelope_intersecting(envelope) {
 			let dist_sq = edge.distance_squared_to_point(point);
 			if dist_sq < min_dist_sq {
 				min_dist_sq = dist_sq;
