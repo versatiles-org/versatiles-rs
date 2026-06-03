@@ -26,6 +26,7 @@ futures.workspace = true
 itertools = { workspace = true, features = ["use_alloc"] }
 libc = "0.2"
 log.workspace = true
+moka.workspace = true
 parking_lot.workspace = true
 r2d2 = { version = "0.8.10", default-features = false }
 r2d2_sqlite = { version = "0.34.0", default-features = false, features = ["bundled"] }

@@ -60,12 +60,13 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::{lock::Mutex, stream::StreamExt};
-use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc, time::Instant};
+use futures::stream::StreamExt;
+use moka::future::Cache;
+use std::{fmt::Debug, mem::size_of, ops::Shr, path::Path, sync::Arc, time::Instant};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
-	ByteRange, ConcurrencyLimits, LimitedCache, TileBBox, TileCoord, TileJSON, TilePyramid, TileStream,
+	ByteRange, ConcurrencyLimits, TileBBox, TileCoord, TileJSON, TilePyramid, TileStream,
 	compression::decompress,
 	io::{DataReader, DataReaderFile},
 };
@@ -82,7 +83,7 @@ pub struct VersaTilesReader {
 	header: FileHeader,
 	metadata: TileSourceMetadata,
 	reader: Arc<DataReader>,
-	tile_index_cache: Mutex<LimitedCache<TileCoord, Arc<TileIndex>>>,
+	tile_index_cache: Cache<TileCoord, Arc<TileIndex>>,
 	tilejson: TileJSON,
 	#[allow(dead_code)] // used by probe_tiles under #[cfg(feature = "cli")]
 	runtime: TilesRuntime,
@@ -170,7 +171,13 @@ impl VersaTilesReader {
 			header,
 			metadata,
 			reader: Arc::new(reader),
-			tile_index_cache: Mutex::new(LimitedCache::with_maximum_size(100_000_000)),
+			tile_index_cache: Cache::builder()
+				.max_capacity(100_000_000)
+				.weigher(|_k, v: &Arc<TileIndex>| {
+					let bytes = size_of::<TileCoord>() + size_of::<Arc<TileIndex>>() + v.len() * size_of::<ByteRange>();
+					u32::try_from(bytes).unwrap_or(u32::MAX)
+				})
+				.build(),
 			tilejson,
 			runtime,
 		})
@@ -179,27 +186,30 @@ impl VersaTilesReader {
 	/// Load (and cache) the tile index for a block.
 	///
 	/// Reads the block's index blob, decompresses it, adjusts offsets to the tiles segment,
-	/// and inserts the result into an in-memory LRU-like cache. Subsequent calls reuse the cache.
+	/// and inserts the result into a concurrent byte-budgeted cache. Concurrent callers
+	/// for the same block share a single load; different blocks load in parallel.
 	///
 	/// # Errors
 	/// Returns an error if reading or decompression fails.
 	#[context("Failed to get tile index for block {block:?}")]
 	async fn get_block_tile_index(&self, block: &BlockDefinition) -> Result<Arc<TileIndex>> {
-		let block_coord = block.coord();
+		let block_coord = *block.coord();
+		let reader = Arc::clone(&self.reader);
+		let index_range = *block.index_range();
+		let tiles_offset = block.tiles_range().offset;
+		let expected_count = usize::try_from(block.count_tiles())?;
 
-		let mut cache = self.tile_index_cache.lock().await;
-
-		Ok(if let Some(value) = cache.get(block_coord) {
-			value
-		} else {
-			let blob = self.reader.read_range(block.index_range()).await?;
-			let mut tile_index = TileIndex::from_brotli_blob(&blob)?;
-			tile_index.shift_by(block.tiles_range().offset);
-
-			debug_assert_eq!(tile_index.len(), usize::try_from(block.count_tiles())?);
-
-			cache.add(*block_coord, Arc::new(tile_index))
-		})
+		self
+			.tile_index_cache
+			.try_get_with(block_coord, async move {
+				let blob = reader.read_range(&index_range).await?;
+				let mut tile_index = TileIndex::from_brotli_blob(&blob)?;
+				tile_index.shift_by(tiles_offset);
+				debug_assert_eq!(tile_index.len(), expected_count);
+				anyhow::Ok(Arc::new(tile_index))
+			})
+			.await
+			.map_err(|e: Arc<anyhow::Error>| anyhow::anyhow!("{e:#}"))
 	}
 
 	/// Sum of all block index byte lengths.

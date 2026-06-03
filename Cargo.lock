@@ -5734,6 +5734,7 @@ dependencies = [
  "itertools 0.14.0",
  "libc",
  "log",
+ "moka",
  "parking_lot",
  "r2d2",
  "r2d2_sqlite",
