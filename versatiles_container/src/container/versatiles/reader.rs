@@ -755,4 +755,132 @@ mod tests {
 
 		Ok(())
 	}
+
+	// --- parallelism / dedup tests ---
+
+	#[derive(Debug, Default)]
+	struct CountingState {
+		in_flight: std::sync::atomic::AtomicUsize,
+		max_in_flight: std::sync::atomic::AtomicUsize,
+		reads: parking_lot::Mutex<Vec<ByteRange>>,
+	}
+
+	impl CountingState {
+		fn reset(&self) {
+			use std::sync::atomic::Ordering::SeqCst;
+			self.in_flight.store(0, SeqCst);
+			self.max_in_flight.store(0, SeqCst);
+			self.reads.lock().clear();
+		}
+	}
+
+	#[derive(Debug)]
+	struct CountingReader {
+		inner: DataReader,
+		state: Arc<CountingState>,
+		delay: std::time::Duration,
+	}
+
+	#[async_trait]
+	impl versatiles_core::io::DataReaderTrait for CountingReader {
+		async fn read_range(&self, range: &ByteRange) -> Result<versatiles_core::Blob> {
+			use std::sync::atomic::Ordering::SeqCst;
+			let n = self.state.in_flight.fetch_add(1, SeqCst) + 1;
+			self.state.max_in_flight.fetch_max(n, SeqCst);
+			self.state.reads.lock().push(*range);
+			tokio::time::sleep(self.delay).await;
+			let result = self.inner.read_range(range).await;
+			self.state.in_flight.fetch_sub(1, SeqCst);
+			result
+		}
+		async fn read_all(&self) -> Result<versatiles_core::Blob> {
+			self.inner.read_all().await
+		}
+		fn name(&self) -> &str {
+			self.inner.name()
+		}
+	}
+
+	/// Build a fresh in-memory `.versatiles` blob and open a reader against it,
+	/// wrapped in a `CountingReader` so we can observe the data-layer traffic.
+	async fn mk_counting_reader(delay_ms: u64) -> Result<(VersaTilesReader, Arc<CountingState>)> {
+		let mut src = MockReader::new_mock(
+			TilePyramid::new_full_up_to(4),
+			TileSourceMetadata::new(TileFormat::JSON, TileCompression::Gzip, Traversal::ANY, None),
+		)?;
+		let runtime = TilesRuntime::default();
+		let mut writer = DataWriterBlob::new()?;
+		VersaTilesWriter::write_to_writer(&mut src, &mut writer, runtime.clone()).await?;
+		let inner: DataReader = Box::new(writer.to_reader());
+		let state = Arc::new(CountingState::default());
+		let counting = CountingReader {
+			inner,
+			state: Arc::clone(&state),
+			delay: std::time::Duration::from_millis(delay_ms),
+		};
+		let reader = VersaTilesReader::open_data(Box::new(counting), runtime).await?;
+		// Discard counters accumulated during open_data (header, meta, block-index).
+		state.reset();
+		Ok((reader, state))
+	}
+
+	#[tokio::test]
+	async fn concurrent_same_block_dedups_index_read() -> Result<()> {
+		use std::sync::atomic::Ordering::SeqCst;
+		let (reader, state) = mk_counting_reader(20).await?;
+		let reader = Arc::new(reader);
+		let coord = TileCoord::new(4, 15, 1)?;
+
+		let mut handles = Vec::new();
+		for _ in 0..16 {
+			let r = Arc::clone(&reader);
+			handles.push(tokio::spawn(async move { r.tile(&coord).await.unwrap() }));
+		}
+		for h in handles {
+			h.await.unwrap();
+		}
+
+		// With dedup we expect at most: 1 block-index read + 16 tile-data reads = 17.
+		// Without dedup we'd see 16 + 16 = 32.
+		let total = state.reads.lock().len();
+		assert!(
+			total <= 17,
+			"expected dedup of same-block index reads, saw {total} total reads for 16 same-tile fetches"
+		);
+		// Sanity: at least one block-index load did happen.
+		assert!(total >= 17, "expected 16 data reads + 1 index read, saw {total}");
+		// And the data reads themselves should have overlapped.
+		let peak = state.max_in_flight.load(SeqCst);
+		assert!(peak >= 2, "expected concurrent tile-data reads, saw peak {peak}");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn concurrent_different_blocks_load_in_parallel() -> Result<()> {
+		use std::sync::atomic::Ordering::SeqCst;
+		let (reader, state) = mk_counting_reader(40).await?;
+		let reader = Arc::new(reader);
+
+		// One tile per zoom level 0..=4 — each lives in a different block.
+		let coords: Vec<TileCoord> = (0..=4u8).map(|z| TileCoord::new(z, 0, 0).unwrap()).collect();
+
+		let mut handles = Vec::new();
+		for coord in coords {
+			let r = Arc::clone(&reader);
+			handles.push(tokio::spawn(async move { r.tile(&coord).await.unwrap() }));
+		}
+		for h in handles {
+			h.await.unwrap();
+		}
+
+		// 5 blocks => 5 index reads + 5 data reads = 10 total, all distinct ranges.
+		assert_eq!(state.reads.lock().len(), 10);
+		let peak = state.max_in_flight.load(SeqCst);
+		assert!(
+			peak >= 2,
+			"expected concurrent block-index loads for distinct blocks, saw peak {peak}"
+		);
+		Ok(())
+	}
+
 }

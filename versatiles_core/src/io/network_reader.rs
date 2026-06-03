@@ -63,3 +63,81 @@ pub(crate) trait NetworkReader: DataReaderTrait {
 		Ok(Blob::from(data))
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::{
+		fmt,
+		sync::{
+			Arc,
+			atomic::{AtomicU64, AtomicUsize, Ordering as AtomicOrdering},
+		},
+		time::Duration,
+	};
+
+	#[derive(Default)]
+	struct PeakState {
+		in_flight: AtomicUsize,
+		max_in_flight: AtomicUsize,
+		max_request: AtomicU64,
+	}
+
+	struct PeakNetReader {
+		state: Arc<PeakState>,
+		delay: Duration,
+	}
+
+	impl fmt::Debug for PeakNetReader {
+		fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+			f.debug_struct("PeakNetReader").finish()
+		}
+	}
+
+	#[async_trait]
+	impl DataReaderTrait for PeakNetReader {
+		async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
+			self.network_read_range(range).await
+		}
+		async fn read_all(&self) -> Result<Blob> {
+			unreachable!("PeakNetReader only used for read_range")
+		}
+		fn name(&self) -> &str {
+			"peak-net"
+		}
+	}
+
+	#[async_trait]
+	impl NetworkReader for PeakNetReader {
+		async fn try_read_range(&self, range: &ByteRange) -> Result<Blob> {
+			let n = self.state.in_flight.fetch_add(1, AtomicOrdering::SeqCst) + 1;
+			self.state.max_in_flight.fetch_max(n, AtomicOrdering::SeqCst);
+			tokio::time::sleep(self.delay).await;
+			self.state.in_flight.fetch_sub(1, AtomicOrdering::SeqCst);
+			Ok(Blob::from(vec![0u8; usize::try_from(range.length).unwrap()]))
+		}
+		fn max_request_bytes(&self) -> &AtomicU64 {
+			&self.state.max_request
+		}
+	}
+
+	#[tokio::test]
+	async fn split_and_read_runs_halves_concurrently() {
+		let state = Arc::new(PeakState {
+			in_flight: AtomicUsize::new(0),
+			max_in_flight: AtomicUsize::new(0),
+			// Force proactive split: any range > 10 bytes splits before issuing.
+			max_request: AtomicU64::new(10),
+		});
+		let reader = PeakNetReader {
+			state: Arc::clone(&state),
+			delay: Duration::from_millis(40),
+		};
+
+		let blob = reader.network_read_range(&ByteRange::new(0, 100)).await.unwrap();
+
+		assert_eq!(blob.len(), 100);
+		let peak = state.max_in_flight.load(AtomicOrdering::SeqCst);
+		assert!(peak >= 2, "expected concurrent split halves, saw peak {peak} in flight");
+	}
+}

@@ -186,3 +186,84 @@ impl FromIterator<Chunk> for Chunks {
 		Chunks::new(iter.into_iter().collect())
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use anyhow::Result;
+	use async_trait::async_trait;
+	use std::{
+		sync::atomic::{AtomicUsize, Ordering},
+		time::Duration,
+	};
+	use versatiles_core::io::DataReaderTrait;
+
+	/// Shared counters observed from outside the boxed reader.
+	#[derive(Debug, Default)]
+	struct PeakState {
+		in_flight: AtomicUsize,
+		max_in_flight: AtomicUsize,
+		total_reads: AtomicUsize,
+	}
+
+	/// `DataReader` that records peak concurrent in-flight reads via a
+	/// shared `Arc<PeakState>`. Each `read_range` increments the counter,
+	/// sleeps briefly so overlap is observable, then decrements.
+	#[derive(Debug)]
+	struct PeakCounter {
+		state: Arc<PeakState>,
+		delay: Duration,
+	}
+
+	#[async_trait]
+	impl DataReaderTrait for PeakCounter {
+		async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
+			let n = self.state.in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+			self.state.max_in_flight.fetch_max(n, Ordering::SeqCst);
+			self.state.total_reads.fetch_add(1, Ordering::SeqCst);
+			tokio::time::sleep(self.delay).await;
+			self.state.in_flight.fetch_sub(1, Ordering::SeqCst);
+			Ok(Blob::from(vec![0u8; usize::try_from(range.length).unwrap()]))
+		}
+
+		async fn read_all(&self) -> Result<Blob> {
+			unreachable!("PeakCounter only used for read_range")
+		}
+
+		fn name(&self) -> &str {
+			"peak-counter"
+		}
+	}
+
+	#[tokio::test]
+	async fn chunks_stream_overlaps_reads() {
+		// Build 8 ranges spaced > MAX_CHUNK_GAP apart so each becomes its own chunk.
+		let gap = MAX_CHUNK_GAP + 1;
+		let tile_ranges: Vec<(TileCoord, ByteRange)> = (0..8u32)
+			.map(|i| {
+				(
+					// Zoom 3 fits 8 x-coords on the row.
+					TileCoord::new(3, i, 0).unwrap(),
+					ByteRange::new(u64::from(i) * gap, 1),
+				)
+			})
+			.collect();
+		let chunks = Chunks::from_tile_ranges(tile_ranges);
+		assert_eq!(chunks.chunks.len(), 8, "test setup expects 8 separate chunks");
+
+		let state = Arc::new(PeakState::default());
+		let reader: DataReader = Box::new(PeakCounter {
+			state: Arc::clone(&state),
+			delay: Duration::from_millis(40),
+		});
+
+		let _ = chunks
+			.stream(Arc::new(reader), TileCompression::Uncompressed, TileFormat::BIN)
+			.to_vec()
+			.await;
+
+		assert_eq!(state.total_reads.load(Ordering::SeqCst), 8, "one read per chunk");
+		let peak = state.max_in_flight.load(Ordering::SeqCst);
+		assert!(peak >= 2, "expected concurrent chunk reads, saw peak {peak} in flight");
+	}
+}
