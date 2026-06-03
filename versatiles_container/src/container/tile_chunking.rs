@@ -13,7 +13,7 @@ use crate::Tile;
 use anyhow::Result;
 use futures::stream::StreamExt;
 use std::sync::Arc;
-use versatiles_core::{Blob, ByteRange, TileCompression, TileCoord, TileFormat, TileStream, io::DataReader};
+use versatiles_core::{Blob, ByteRange, ConcurrencyLimits, TileCompression, TileCoord, TileFormat, TileStream, io::DataReader};
 
 const MAX_CHUNK_SIZE: u64 = 256 * 1024 * 1024;
 const MAX_CHUNK_GAP: u64 = 256 * 1024;
@@ -152,9 +152,10 @@ impl Chunks {
 		tile_compression: TileCompression,
 		tile_format: TileFormat,
 	) -> TileStream<'static, Tile> {
+		let concurrency = ConcurrencyLimits::default().io_bound;
 		TileStream::from_stream(
 			futures::stream::iter(self.chunks)
-				.then(move |chunk| {
+				.map(move |chunk| {
 					let reader = Arc::clone(&reader);
 					async move {
 						let entries = chunk
@@ -164,6 +165,7 @@ impl Chunks {
 						futures::stream::iter(entries)
 					}
 				})
+				.buffer_unordered(concurrency)
 				.flatten()
 				.boxed(),
 		)

@@ -49,13 +49,15 @@ pub(crate) trait NetworkReader: DataReaderTrait {
 	}
 
 	/// Splits a range in half and reads each half via `read_range` (which
-	/// may recurse back into `network_read_range`).
+	/// may recurse back into `network_read_range`). The two halves are
+	/// fetched concurrently so wall-clock stays near max(left, right)
+	/// instead of left + right.
 	async fn split_and_read(&self, range: &ByteRange) -> Result<Blob> {
 		let mid = range.offset + range.length / 2;
 		let left = ByteRange::new(range.offset, mid - range.offset);
 		let right = ByteRange::new(mid, range.offset + range.length - mid);
-		let blob_left = self.read_range(&left).await?;
-		let blob_right = self.read_range(&right).await?;
+		let (blob_left, blob_right) =
+			futures::future::try_join(self.read_range(&left), self.read_range(&right)).await?;
 		let mut data = blob_left.into_vec();
 		data.extend_from_slice(blob_right.as_slice());
 		Ok(Blob::from(data))
