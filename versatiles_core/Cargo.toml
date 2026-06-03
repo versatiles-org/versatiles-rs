@@ -20,6 +20,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 brotli = { version = "8.0.3", default-features = false, features = ["std"] }
 byteorder = { workspace = true, features = [] }
+dashmap.workspace = true
 clap = { workspace = true, optional = true, features = ["derive"] }
 colored = { version = "3.1.1", default-features = false, optional = true }
 enumset.workspace = true

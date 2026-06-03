@@ -44,13 +44,37 @@ use std::{
 };
 use tokio::{sync::Semaphore, time::sleep};
 
-/// Maximum number of HTTP requests allowed in flight per reader.
+/// Maximum number of HTTP requests allowed in flight, shared across all
+/// readers pointing at the same host.
 ///
 /// Caps the upstream burst when many `read_range` calls fan out concurrently
-/// (e.g. via `buffer_unordered` in tile-chunk streaming). Prevents 429/503
-/// responses from origins with per-IP rate limits and keeps the adaptive
-/// `max_request_bytes` splitter from misinterpreting overload as oversize.
+/// (e.g. via `buffer_unordered` in tile-chunk streaming) AND when multiple
+/// `DataReaderHttp` instances point at the same origin (e.g. stacking many
+/// PMTiles from one server). Prevents 429/503 responses from origins with
+/// per-IP rate limits and keeps the adaptive `max_request_bytes` splitter
+/// from misinterpreting overload as oversize.
 const DEFAULT_MAX_IN_FLIGHT: usize = 16;
+
+/// Per-host semaphore registry. Two `DataReaderHttp` instances built from
+/// URLs with the same host share the same `Semaphore` instance, so opening
+/// many readers against one origin doesn't multiply the in-flight cap.
+///
+/// The semaphore for a host is created on first access with
+/// `DEFAULT_MAX_IN_FLIGHT` permits. Subsequent readers for the same host
+/// reuse it regardless of their individual configured cap — callers that
+/// need to opt out can use [`DataReaderHttp::with_max_in_flight`], which
+/// installs a private per-reader semaphore.
+static HOST_SEMAPHORES: LazyLock<DashMap<String, Arc<Semaphore>>> = LazyLock::new(DashMap::new);
+
+fn host_semaphore(url: &Url) -> Arc<Semaphore> {
+	// Fall back to the full URL string if the URL somehow has no host. This
+	// gives unique-per-URL isolation rather than crashing or sharing globally.
+	let key = url.host_str().unwrap_or_else(|| url.as_str()).to_string();
+	HOST_SEMAPHORES
+		.entry(key)
+		.or_insert_with(|| Arc::new(Semaphore::new(DEFAULT_MAX_IN_FLIGHT)))
+		.clone()
+}
 
 /// A struct that provides reading capabilities from an HTTP(S) endpoint.
 pub struct DataReaderHttp {
@@ -110,6 +134,7 @@ impl TryFrom<&Url> for DataReaderHttp {
 			.use_rustls_tls()
 			.build()?;
 
+		let in_flight = host_semaphore(&url);
 		Ok(DataReaderHttp {
 			client,
 			name: url.to_string(),
@@ -117,7 +142,7 @@ impl TryFrom<&Url> for DataReaderHttp {
 			username,
 			password,
 			max_request_bytes: AtomicU64::new(u64::MAX),
-			in_flight: Arc::new(Semaphore::new(DEFAULT_MAX_IN_FLIGHT)),
+			in_flight,
 		})
 	}
 }
@@ -509,14 +534,17 @@ mod tests {
 
 	#[test]
 	fn default_in_flight_cap() -> Result<()> {
-		let reader = DataReaderHttp::try_from(&Url::parse("https://example.com/").unwrap())?;
+		// Use a host unique to this test so other tests can't mutate its permits.
+		let reader = DataReaderHttp::try_from(&Url::parse("https://default-cap-test.invalid/").unwrap())?;
 		assert_eq!(reader.in_flight.available_permits(), DEFAULT_MAX_IN_FLIGHT);
 		Ok(())
 	}
 
 	#[test]
 	fn with_max_in_flight_overrides_cap() -> Result<()> {
-		let reader = DataReaderHttp::try_from(&Url::parse("https://example.com/").unwrap())?.with_max_in_flight(8);
+		// Overriding installs a private semaphore; host-shared one is bypassed.
+		let reader =
+			DataReaderHttp::try_from(&Url::parse("https://override-cap-test.invalid/").unwrap())?.with_max_in_flight(8);
 		assert_eq!(reader.in_flight.available_permits(), 8);
 		Ok(())
 	}
@@ -524,10 +552,29 @@ mod tests {
 	#[test]
 	fn with_max_in_flight_clamps_below_two() -> Result<()> {
 		// split_and_read fans out to two halves; a cap of 1 would deadlock.
-		let reader = DataReaderHttp::try_from(&Url::parse("https://example.com/").unwrap())?.with_max_in_flight(0);
+		let reader =
+			DataReaderHttp::try_from(&Url::parse("https://clamp-low-test.invalid/").unwrap())?.with_max_in_flight(0);
 		assert_eq!(reader.in_flight.available_permits(), 2);
-		let reader = DataReaderHttp::try_from(&Url::parse("https://example.com/").unwrap())?.with_max_in_flight(1);
+		let reader =
+			DataReaderHttp::try_from(&Url::parse("https://clamp-one-test.invalid/").unwrap())?.with_max_in_flight(1);
 		assert_eq!(reader.in_flight.available_permits(), 2);
+		Ok(())
+	}
+
+	#[test]
+	fn semaphore_shared_across_readers_with_same_host() -> Result<()> {
+		let r1 = DataReaderHttp::try_from(&Url::parse("https://shared-host-test.invalid/a.bin").unwrap())?;
+		let r2 = DataReaderHttp::try_from(&Url::parse("https://shared-host-test.invalid/b.bin").unwrap())?;
+		// Same Arc -> same underlying Semaphore instance.
+		assert!(Arc::ptr_eq(&r1.in_flight, &r2.in_flight));
+		Ok(())
+	}
+
+	#[test]
+	fn semaphore_distinct_across_hosts() -> Result<()> {
+		let r1 = DataReaderHttp::try_from(&Url::parse("https://host-a-test.invalid/").unwrap())?;
+		let r2 = DataReaderHttp::try_from(&Url::parse("https://host-b-test.invalid/").unwrap())?;
+		assert!(!Arc::ptr_eq(&r1.in_flight, &r2.in_flight));
 		Ok(())
 	}
 }
