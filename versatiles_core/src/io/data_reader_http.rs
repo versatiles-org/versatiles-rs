@@ -33,6 +33,7 @@ use super::{DataReaderTrait, network_reader::NetworkReader};
 use crate::{Blob, ByteRange};
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
+use dashmap::DashMap;
 use percent_encoding::percent_decode_str;
 use regex::{Regex, RegexBuilder};
 use reqwest::{Client, RequestBuilder, StatusCode, Url};
@@ -154,6 +155,23 @@ fn is_retryable_error(err: &reqwest::Error) -> bool {
 	err.is_connect() || err.is_timeout() || err.is_body()
 }
 
+/// Render a `reqwest::Error` together with its full `source()` chain.
+///
+/// `reqwest::Error`'s Display reports the outer wrapper (e.g. "error sending
+/// request for url (...)") but hides the underlying cause — connection reset,
+/// TLS handshake timeout, DNS failure, etc. Walking the chain makes the actual
+/// failure visible in retry/bail logs without bumping verbosity to `debug`.
+fn describe_error(err: &reqwest::Error) -> String {
+	use std::error::Error;
+	let mut parts: Vec<String> = vec![err.to_string()];
+	let mut src: Option<&dyn Error> = err.source();
+	while let Some(s) = src {
+		parts.push(s.to_string());
+		src = s.source();
+	}
+	parts.join(" -> ")
+}
+
 impl DataReaderHttp {
 	/// Single-range read with retry/backoff.
 	async fn try_read_range_impl(&self, range: &ByteRange) -> Result<Blob> {
@@ -188,11 +206,17 @@ impl DataReaderHttp {
 			{
 				Ok(r) => r,
 				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
-					log::warn!("HTTP read {range} from '{url}': {e} ({attempt_label}), will retry");
+					log::warn!(
+						"HTTP read {range} from '{url}': {} ({attempt_label}), will retry",
+						describe_error(&e)
+					);
 					continue;
 				}
 				Err(e) => {
-					bail!("could not read {range} ({len} bytes) from '{url}': {e} — gave up after {total_attempts} attempts")
+					bail!(
+						"could not read {range} ({len} bytes) from '{url}': {} — gave up after {total_attempts} attempts",
+						describe_error(&e)
+					)
 				}
 			};
 
@@ -245,11 +269,15 @@ impl DataReaderHttp {
 			let bytes = match response.bytes().await {
 				Ok(b) => b,
 				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
-					log::warn!("HTTP read {range} from '{url}': error reading body: {e} ({attempt_label}), will retry");
+					log::warn!(
+						"HTTP read {range} from '{url}': error reading body: {} ({attempt_label}), will retry",
+						describe_error(&e)
+					);
 					continue;
 				}
 				Err(e) => bail!(
-					"could not read {range} ({len} bytes) from '{url}': error reading body: {e} — gave up after {total_attempts} attempts"
+					"could not read {range} ({len} bytes) from '{url}': error reading body: {} — gave up after {total_attempts} attempts",
+					describe_error(&e)
 				),
 			};
 
@@ -305,10 +333,16 @@ impl DataReaderTrait for DataReaderHttp {
 			let response = match self.apply_auth(self.client.get(self.url.clone())).send().await {
 				Ok(r) => r,
 				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
-					log::warn!("HTTP read from '{url}': {e} ({attempt_label}), will retry");
+					log::warn!(
+						"HTTP read from '{url}': {} ({attempt_label}), will retry",
+						describe_error(&e)
+					);
 					continue;
 				}
-				Err(e) => bail!("could not read from '{url}': {e} — gave up after {total_attempts} attempts"),
+				Err(e) => bail!(
+					"could not read from '{url}': {} — gave up after {total_attempts} attempts",
+					describe_error(&e)
+				),
 			};
 
 			let status = response.status();
@@ -327,11 +361,17 @@ impl DataReaderTrait for DataReaderHttp {
 			let bytes = match response.bytes().await {
 				Ok(b) => b,
 				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
-					log::warn!("HTTP read from '{url}': error reading body: {e} ({attempt_label}), will retry");
+					log::warn!(
+						"HTTP read from '{url}': error reading body: {} ({attempt_label}), will retry",
+						describe_error(&e)
+					);
 					continue;
 				}
 				Err(e) => {
-					bail!("could not read from '{url}': error reading body: {e} — gave up after {total_attempts} attempts")
+					bail!(
+						"could not read from '{url}': error reading body: {} — gave up after {total_attempts} attempts",
+						describe_error(&e)
+					)
 				}
 			};
 
