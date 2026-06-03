@@ -53,13 +53,12 @@ use crate::{
 };
 use anyhow::{Result, bail};
 use async_trait::async_trait;
-use futures::lock::Mutex;
-use std::{fmt::Debug, path::Path, sync::Arc};
+use moka::future::Cache;
+use std::{fmt::Debug, mem::size_of, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
-	Blob, ByteRange, GeoBBox, LimitedCache, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid,
-	TileStream,
+	Blob, ByteRange, GeoBBox, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream,
 	compression::decompress,
 	io::{DataReader, DataReaderFile},
 	utils::HilbertIndex,
@@ -82,7 +81,9 @@ pub struct PMTilesReader {
 	/// Raw (compressed) concatenated blob of all leaf directories.
 	pub leaves_bytes: Arc<Blob>,
 	/// Decompression cache mapping leaf directory byte ranges to parsed entries.
-	pub leaves_cache: Arc<Mutex<LimitedCache<ByteRange, Arc<EntriesV3>>>>,
+	/// Concurrent loads of the same range dedup automatically; distinct ranges
+	/// decompress in parallel.
+	pub leaves_cache: Cache<ByteRange, Arc<EntriesV3>>,
 	/// Merged `TileJSON` metadata extracted from the `PMTiles` `metadata` range.
 	pub tilejson: TileJSON,
 	/// Runtime parameters (tile format, compression, tile pyramid) advertised by this reader.
@@ -126,28 +127,33 @@ impl PMTilesReader {
 		let internal_compression = header.internal_compression.as_value()?;
 		log::trace!("Internal compression: {internal_compression:?}");
 
-		let meta = data_reader.read_range(&header.metadata).await?;
+		// Header is read first; the next three reads (metadata, root_dir, leaf_dirs)
+		// hit disjoint, known ranges and can fan out concurrently. For HTTP-backed
+		// readers this saves ~2 RTTs on every open.
+		// Files with all entries in the root dir have leaf_dirs.length == 0; skip
+		// that read so we don't issue a no-op HTTP request.
+		let metadata_fut = data_reader.read_range(&header.metadata);
+		let root_dir_fut = data_reader.read_range(&header.root_dir);
+		let leaf_dirs_fut = async {
+			if header.leaf_dirs.length == 0 {
+				Ok::<Blob, anyhow::Error>(Blob::default())
+			} else {
+				data_reader.read_range(&header.leaf_dirs).await
+			}
+		};
+		let (meta, root_bytes, leaves_bytes) =
+			futures::future::try_join3(metadata_fut, root_dir_fut, leaf_dirs_fut).await?;
+
 		let meta = decompress(meta, &internal_compression)?;
 		let mut tilejson = TileJSON::try_from_blob_or_default(&meta);
 		log::trace!("TileJSON: {tilejson:?}");
 
-		let root_bytes = data_reader.read_range(&header.root_dir).await?;
 		log::trace!("Root directory bytes length: {}", root_bytes.len());
-
 		let root_bytes_uncompressed = decompress(root_bytes, &internal_compression)?;
 		log::trace!(
 			"Root directory bytes uncompressed length: {}",
 			root_bytes_uncompressed.len()
 		);
-
-		// Files with all entries in the root dir have leaf_dirs.length == 0;
-		// skip the read so we don't issue a no-op HTTP request (which would be
-		// `bytes=N-(N-1)` — malformed, rejected with 400 by conforming servers).
-		let leaves_bytes = if header.leaf_dirs.length == 0 {
-			Blob::default()
-		} else {
-			data_reader.read_range(&header.leaf_dirs).await?
-		};
 		log::trace!("Leaf directories bytes length: {}", leaves_bytes.len());
 
 		// Populate bounds and zoom from the v3 header if the embedded TileJSON omits them.
@@ -185,7 +191,16 @@ impl PMTilesReader {
 			header,
 			internal_compression,
 			leaves_bytes: Arc::new(leaves_bytes),
-			leaves_cache: Arc::new(Mutex::new(LimitedCache::with_maximum_size(100_000_000))),
+			leaves_cache: Cache::builder()
+				.max_capacity(100_000_000)
+				.weigher(|_k, v: &Arc<EntriesV3>| {
+					// Approximate byte weight. EntriesV3 stores Vec<EntryV3>; the exact
+					// struct size isn't directly exposed, so over-estimate via len() * 32B
+					// (close to EntryV3's actual size). The weighted cap stays meaningful.
+					let bytes = size_of::<ByteRange>() + size_of::<Arc<EntriesV3>>() + v.len() * 32;
+					u32::try_from(bytes).unwrap_or(u32::MAX)
+				})
+				.build(),
 			tilejson,
 			metadata,
 			root_bytes_uncompressed,
@@ -208,8 +223,8 @@ impl PMTilesReader {
 		tile_id: u64,
 		data_reader: &DataReader,
 		root_entries: Arc<EntriesV3>,
-		leaves_cache: &Mutex<LimitedCache<ByteRange, Arc<EntriesV3>>>,
-		leaves_bytes: &Blob,
+		leaves_cache: &Cache<ByteRange, Arc<EntriesV3>>,
+		leaves_bytes: &Arc<Blob>,
 		tile_data_offset: u64,
 		tile_compression: &TileCompression,
 		tile_format: &TileFormat,
@@ -233,13 +248,17 @@ impl PMTilesReader {
 					)));
 				}
 				let range = entry.range;
-				let mut cache = leaves_cache.lock().await;
-				entries = cache.get_or_set(&range, || {
-					let mut blob = leaves_bytes.read_range(&range)?;
-					blob = decompress(blob, internal_compression)?;
-					let entries = EntriesV3::from_blob(&blob)?;
-					Ok(Arc::new(entries))
-				})?;
+				let leaves = Arc::clone(leaves_bytes);
+				let compression = *internal_compression;
+				entries = leaves_cache
+					.try_get_with(range, async move {
+						let mut blob = leaves.read_range(&range)?;
+						blob = decompress(blob, &compression)?;
+						let parsed = EntriesV3::from_blob(&blob)?;
+						anyhow::Ok(Arc::new(parsed))
+					})
+					.await
+					.map_err(|e: Arc<anyhow::Error>| anyhow::anyhow!("{e:#}"))?;
 			} else {
 				return Ok(None);
 			}
@@ -255,8 +274,8 @@ impl PMTilesReader {
 	async fn resolve_tile_range(
 		tile_id: u64,
 		root_entries: Arc<EntriesV3>,
-		leaves_cache: &Mutex<LimitedCache<ByteRange, Arc<EntriesV3>>>,
-		leaves_bytes: &Blob,
+		leaves_cache: &Cache<ByteRange, Arc<EntriesV3>>,
+		leaves_bytes: &Arc<Blob>,
 		tile_data_offset: u64,
 		internal_compression: TileCompression,
 	) -> Result<Option<ByteRange>> {
@@ -276,12 +295,15 @@ impl PMTilesReader {
 			}
 
 			let range = entry.range;
-			let mut cache = leaves_cache.lock().await;
-			entries = cache.get_or_set(&range, || {
-				let mut blob = leaves_bytes.read_range(&range)?;
-				blob = decompress(blob, &internal_compression)?;
-				Ok(Arc::new(EntriesV3::from_blob(&blob)?))
-			})?;
+			let leaves = Arc::clone(leaves_bytes);
+			entries = leaves_cache
+				.try_get_with(range, async move {
+					let mut blob = leaves.read_range(&range)?;
+					blob = decompress(blob, &internal_compression)?;
+					anyhow::Ok(Arc::new(EntriesV3::from_blob(&blob)?))
+				})
+				.await
+				.map_err(|e: Arc<anyhow::Error>| anyhow::anyhow!("{e:#}"))?;
 		}
 
 		Ok(None)
@@ -640,6 +662,26 @@ mod tests {
 		assert!(output.contains("clustered: true"), "unexpected output: {output}");
 		assert!(output.contains("tile data size:"), "unexpected output: {output}");
 
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn concurrent_tile_lookups_share_leaves_cache() -> Result<()> {
+		// Verifies the moka cache lets concurrent tile lookups dedup leaf-directory
+		// decompression. The test PMTiles file in this fixture has all entries in
+		// the root dir (leaf_dirs.length == 0), so the cache is never populated here —
+		// but the API path must still work without holding a mutex across the await.
+		let reader = Arc::new(PMTilesReader::open(&PATH, TilesRuntime::default()).await?);
+		let coord = TileCoord::new(14, 8800, 5370)?;
+		let mut handles = Vec::new();
+		for _ in 0..16 {
+			let r = Arc::clone(&reader);
+			handles.push(tokio::spawn(async move { r.tile(&coord).await.unwrap() }));
+		}
+		for h in handles {
+			let tile = h.await.unwrap().expect("tile should exist");
+			assert!(!tile.into_blob(&TileCompression::Gzip)?.is_empty());
+		}
 		Ok(())
 	}
 
