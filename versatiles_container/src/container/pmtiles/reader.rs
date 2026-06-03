@@ -140,7 +140,14 @@ impl PMTilesReader {
 			root_bytes_uncompressed.len()
 		);
 
-		let leaves_bytes = data_reader.read_range(&header.leaf_dirs).await?;
+		// Files with all entries in the root dir have leaf_dirs.length == 0;
+		// skip the read so we don't issue a no-op HTTP request (which would be
+		// `bytes=N-(N-1)` — malformed, rejected with 400 by conforming servers).
+		let leaves_bytes = if header.leaf_dirs.length == 0 {
+			Blob::default()
+		} else {
+			data_reader.read_range(&header.leaf_dirs).await?
+		};
 		log::trace!("Leaf directories bytes length: {}", leaves_bytes.len());
 
 		// Populate bounds and zoom from the v3 header if the embedded TileJSON omits them.

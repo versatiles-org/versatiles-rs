@@ -24,6 +24,13 @@ pub(crate) trait NetworkReader: DataReaderTrait {
 	/// On failure, splits the range in half and reads each half separately,
 	/// recording the failure so future large ranges split proactively.
 	async fn network_read_range(&self, range: &ByteRange) -> Result<Blob> {
+		// Short-circuit zero-length reads. HTTP `Range: bytes=N-(N-1)` is malformed
+		// and conforming servers reject it with 400; SFTP would also reject. Empty
+		// "ranges" appear in PMTiles when a directory section is absent.
+		if range.length == 0 {
+			return Ok(Blob::default());
+		}
+
 		// Proactive split: skip try_read_range entirely for ranges we know are too large
 		if range.length > self.max_request_bytes().load(Ordering::Relaxed) && range.length > 1 {
 			log::trace!(
@@ -118,6 +125,23 @@ mod tests {
 		fn max_request_bytes(&self) -> &AtomicU64 {
 			&self.state.max_request
 		}
+	}
+
+	#[tokio::test]
+	async fn zero_length_read_short_circuits() {
+		let state = Arc::new(PeakState {
+			in_flight: AtomicUsize::new(0),
+			max_in_flight: AtomicUsize::new(0),
+			max_request: AtomicU64::new(u64::MAX),
+		});
+		let reader = PeakNetReader {
+			state: Arc::clone(&state),
+			delay: Duration::from_millis(10),
+		};
+		let blob = reader.network_read_range(&ByteRange::new(4117, 0)).await.unwrap();
+		assert_eq!(blob.len(), 0);
+		// No call should have reached try_read_range — no malformed HTTP range sent.
+		assert_eq!(state.max_in_flight.load(AtomicOrdering::SeqCst), 0);
 	}
 
 	#[tokio::test]
