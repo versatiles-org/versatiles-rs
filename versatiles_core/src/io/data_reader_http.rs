@@ -132,8 +132,8 @@ impl DataReaderHttp {
 
 	/// Override the maximum number of HTTP requests allowed in flight.
 	///
-	/// Values below 2 are clamped to 2 to keep [`network_reader::split_and_read`]
-	/// (which fans out to two concurrent halves on oversize-range failure) from
+	/// Values below 2 are clamped to 2 to keep the adaptive splitter (which
+	/// fans out to two concurrent halves on oversize-range failure) from
 	/// deadlocking.
 	#[must_use]
 	pub fn with_max_in_flight(mut self, n: usize) -> Self {

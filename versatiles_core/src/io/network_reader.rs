@@ -56,8 +56,7 @@ pub(crate) trait NetworkReader: DataReaderTrait {
 		let mid = range.offset + range.length / 2;
 		let left = ByteRange::new(range.offset, mid - range.offset);
 		let right = ByteRange::new(mid, range.offset + range.length - mid);
-		let (blob_left, blob_right) =
-			futures::future::try_join(self.read_range(&left), self.read_range(&right)).await?;
+		let (blob_left, blob_right) = futures::future::try_join(self.read_range(&left), self.read_range(&right)).await?;
 		let mut data = blob_left.into_vec();
 		data.extend_from_slice(blob_right.as_slice());
 		Ok(Blob::from(data))
