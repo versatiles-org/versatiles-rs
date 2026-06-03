@@ -65,7 +65,7 @@ use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc, time::Instant};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
-	ByteRange, LimitedCache, TileBBox, TileCoord, TileJSON, TilePyramid, TileStream,
+	ByteRange, ConcurrencyLimits, LimitedCache, TileBBox, TileCoord, TileJSON, TilePyramid, TileStream,
 	compression::decompress,
 	io::{DataReader, DataReaderFile},
 };
@@ -219,48 +219,51 @@ impl VersaTilesReader {
 	/// to minimize I/O calls during streaming.
 	async fn get_chunks(&self, bbox: TileBBox) -> Result<Chunks> {
 		let block_coords: Vec<TileCoord> = bbox.scaled_down(256).iter_coords().collect();
+		let io_bound = ConcurrencyLimits::default().io_bound;
 
-		let stream = futures::stream::iter(block_coords).then(|block_coord: TileCoord| {
-			async move {
-				// Get the block using the block coordinate
-				let Some(block) = self.block_index.block(&block_coord) else {
-					return Ok(Chunks::new_empty());
-				};
-				let block = block.clone();
-				log::trace!("block {block:?}");
+		let stream = futures::stream::iter(block_coords)
+			.map(|block_coord: TileCoord| {
+				async move {
+					// Get the block using the block coordinate
+					let Some(block) = self.block_index.block(&block_coord) else {
+						return Ok(Chunks::new_empty());
+					};
+					let block = block.clone();
+					log::trace!("block {block:?}");
 
-				// Get the bounding box of all tiles defined in this block
-				let tiles_bbox_block = block.global_bbox();
-				log::trace!("tiles_bbox_block {tiles_bbox_block:?}");
+					// Get the bounding box of all tiles defined in this block
+					let tiles_bbox_block = block.global_bbox();
+					log::trace!("tiles_bbox_block {tiles_bbox_block:?}");
 
-				// Get the bounding box of all tiles defined in this block
-				let mut tiles_bbox_used: TileBBox = bbox;
-				tiles_bbox_used.intersect_bbox(tiles_bbox_block)?;
-				log::trace!("tiles_bbox_used {tiles_bbox_used:?}");
+					// Get the bounding box of all tiles defined in this block
+					let mut tiles_bbox_used: TileBBox = bbox;
+					tiles_bbox_used.intersect_bbox(tiles_bbox_block)?;
+					log::trace!("tiles_bbox_used {tiles_bbox_used:?}");
 
-				debug_assert_eq!(bbox.level(), tiles_bbox_block.level());
-				debug_assert_eq!(bbox.level(), tiles_bbox_used.level());
+					debug_assert_eq!(bbox.level(), tiles_bbox_block.level());
+					debug_assert_eq!(bbox.level(), tiles_bbox_used.level());
 
-				// Get the tile index of this block
-				let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await?;
-				log::trace!("tile_index.len() {}", tile_index.len());
+					// Get the tile index of this block
+					let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await?;
+					log::trace!("tile_index.len() {}", tile_index.len());
 
-				let tile_ranges: Vec<(TileCoord, ByteRange)> = tile_index
-					.iter()
-					.enumerate()
-					.filter_map(|(index, range)| {
-						let coord = tiles_bbox_block.coord_at_index(index as u64).ok()?;
-						if tiles_bbox_used.includes_coord(&coord) && range.length > 0 {
-							Some((coord, *range))
-						} else {
-							None
-						}
-					})
-					.collect();
+					let tile_ranges: Vec<(TileCoord, ByteRange)> = tile_index
+						.iter()
+						.enumerate()
+						.filter_map(|(index, range)| {
+							let coord = tiles_bbox_block.coord_at_index(index as u64).ok()?;
+							if tiles_bbox_used.includes_coord(&coord) && range.length > 0 {
+								Some((coord, *range))
+							} else {
+								None
+							}
+						})
+						.collect();
 
-				Ok(Chunks::from_tile_ranges(tile_ranges))
-			}
-		});
+					Ok(Chunks::from_tile_ranges(tile_ranges))
+				}
+			})
+			.buffer_unordered(io_bound);
 
 		let chunks: Vec<Result<Chunks>> = stream.collect().await;
 
@@ -368,10 +371,11 @@ impl TileSource for VersaTilesReader {
 
 		let reader = Arc::clone(&self.reader);
 		let runtime = self.runtime.clone();
+		let io_bound = ConcurrencyLimits::default().io_bound;
 
 		Ok(TileStream::from_stream(
 			futures::stream::iter(blocks)
-				.then(move |(block_bbox, used_bbox, block)| {
+				.map(move |(block_bbox, used_bbox, block)| {
 					let reader = Arc::clone(&reader);
 					let runtime = runtime.clone();
 					async move {
@@ -412,6 +416,7 @@ impl TileSource for VersaTilesReader {
 						futures::stream::iter(entries)
 					}
 				})
+				.buffer_unordered(io_bound)
 				.flatten()
 				.boxed(),
 		))
