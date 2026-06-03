@@ -38,10 +38,18 @@ use regex::{Regex, RegexBuilder};
 use reqwest::{Client, RequestBuilder, StatusCode, Url};
 use std::{
 	fmt, str,
-	sync::{LazyLock, atomic::AtomicU64},
+	sync::{Arc, LazyLock, atomic::AtomicU64},
 	time::Duration,
 };
-use tokio::time::sleep;
+use tokio::{sync::Semaphore, time::sleep};
+
+/// Maximum number of HTTP requests allowed in flight per reader.
+///
+/// Caps the upstream burst when many `read_range` calls fan out concurrently
+/// (e.g. via `buffer_unordered` in tile-chunk streaming). Prevents 429/503
+/// responses from origins with per-IP rate limits and keeps the adaptive
+/// `max_request_bytes` splitter from misinterpreting overload as oversize.
+const DEFAULT_MAX_IN_FLIGHT: usize = 16;
 
 /// A struct that provides reading capabilities from an HTTP(S) endpoint.
 pub struct DataReaderHttp {
@@ -51,6 +59,7 @@ pub struct DataReaderHttp {
 	username: Option<String>,
 	password: Option<String>,
 	max_request_bytes: AtomicU64,
+	in_flight: Arc<Semaphore>,
 }
 
 impl fmt::Debug for DataReaderHttp {
@@ -107,6 +116,7 @@ impl TryFrom<&Url> for DataReaderHttp {
 			username,
 			password,
 			max_request_bytes: AtomicU64::new(u64::MAX),
+			in_flight: Arc::new(Semaphore::new(DEFAULT_MAX_IN_FLIGHT)),
 		})
 	}
 }
@@ -118,6 +128,17 @@ impl DataReaderHttp {
 		} else {
 			builder
 		}
+	}
+
+	/// Override the maximum number of HTTP requests allowed in flight.
+	///
+	/// Values below 2 are clamped to 2 to keep [`network_reader::split_and_read`]
+	/// (which fans out to two concurrent halves on oversize-range failure) from
+	/// deadlocking.
+	#[must_use]
+	pub fn with_max_in_flight(mut self, n: usize) -> Self {
+		self.in_flight = Arc::new(Semaphore::new(n.max(2)));
+		self
 	}
 }
 
@@ -149,6 +170,15 @@ impl DataReaderHttp {
 				log::warn!("HTTP read {range} from '{url}': retrying ({attempt_label}, waiting {backoff:?})");
 				sleep(backoff).await;
 			}
+
+			// Acquire INSIDE the loop so retry backoff sleeps don't hold the permit,
+			// and so a fatal failure releases the permit before bail!.
+			let _permit = self
+				.in_flight
+				.clone()
+				.acquire_owned()
+				.await
+				.expect("in-flight semaphore is never closed");
 
 			let response = match self
 				.apply_auth(self.client.get(self.url.clone()))
@@ -264,6 +294,13 @@ impl DataReaderTrait for DataReaderHttp {
 				log::warn!("HTTP read from '{url}': retrying ({attempt_label}, waiting {backoff:?})");
 				sleep(backoff).await;
 			}
+
+			let _permit = self
+				.in_flight
+				.clone()
+				.acquire_owned()
+				.await
+				.expect("in-flight semaphore is never closed");
 
 			let response = match self.apply_auth(self.client.get(self.url.clone())).send().await {
 				Ok(r) => r,
@@ -428,5 +465,29 @@ mod tests {
 		let url = Url::parse("ftp://example.com/").unwrap();
 		let err = DataReaderHttp::try_from(&url).unwrap_err();
 		assert!(err.to_string().contains("unsupported URL scheme"));
+	}
+
+	#[test]
+	fn default_in_flight_cap() -> Result<()> {
+		let reader = DataReaderHttp::try_from(&Url::parse("https://example.com/").unwrap())?;
+		assert_eq!(reader.in_flight.available_permits(), DEFAULT_MAX_IN_FLIGHT);
+		Ok(())
+	}
+
+	#[test]
+	fn with_max_in_flight_overrides_cap() -> Result<()> {
+		let reader = DataReaderHttp::try_from(&Url::parse("https://example.com/").unwrap())?.with_max_in_flight(8);
+		assert_eq!(reader.in_flight.available_permits(), 8);
+		Ok(())
+	}
+
+	#[test]
+	fn with_max_in_flight_clamps_below_two() -> Result<()> {
+		// split_and_read fans out to two halves; a cap of 1 would deadlock.
+		let reader = DataReaderHttp::try_from(&Url::parse("https://example.com/").unwrap())?.with_max_in_flight(0);
+		assert_eq!(reader.in_flight.available_permits(), 2);
+		let reader = DataReaderHttp::try_from(&Url::parse("https://example.com/").unwrap())?.with_max_in_flight(1);
+		assert_eq!(reader.in_flight.available_permits(), 2);
+		Ok(())
 	}
 }
