@@ -433,8 +433,20 @@ mod tests {
 
 	#[tokio::test]
 	async fn server() -> Result<()> {
-		async fn get(path: &str) -> String {
-			reqwest::get(format!("http://{IP}:50001/{path}"))
+		// Bind to port 0 — Windows reserves blocks of dynamic ports (Hyper-V,
+		// WinNAT, Docker Desktop), so hardcoding e.g. 50001 fails with
+		// WSAEACCES (os error 10013) on runners where it lands in an excluded
+		// range. Let the OS pick a free port, then read it back via `port()`.
+		let mut server = TileServer::new_test(IP, 0, true, false);
+
+		let reader = Arc::new(MockReader::new_mock_profile(MRP::Pbf)?.boxed());
+		server.add_tile_source("cheese".to_string(), reader).await?;
+
+		server.start().await?;
+		let port = server.port();
+
+		async fn get(port: u16, path: &str) -> String {
+			reqwest::get(format!("http://{IP}:{port}/{path}"))
 				.await
 				.expect("should have made a get request")
 				.text()
@@ -442,21 +454,14 @@ mod tests {
 				.expect("should have returned text")
 		}
 
-		let mut server = TileServer::new_test(IP, 50001, true, false);
-
-		let reader = Arc::new(MockReader::new_mock_profile(MRP::Pbf)?.boxed());
-		server.add_tile_source("cheese".to_string(), reader).await?;
-
-		server.start().await?;
-
-		assert_eq!(get("tiles/cheese/brum.json").await, "Not Found");
+		assert_eq!(get(port, "tiles/cheese/brum.json").await, "Not Found");
 
 		let meta = "{\"bounds\":[-180,-85.051129,180,85.051129],\"maxzoom\":6,\"minzoom\":2,\"tile_format\":\"vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tile_type\":\"vector\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/cheese/{z}/{x}/{y}\"],\"type\":\"dummy\"}";
-		assert_eq!(get("tiles/cheese/meta.json").await, meta);
-		assert_eq!(get("tiles/cheese/tiles.json").await, meta);
-		assert_eq!(&get("tiles/cheese/3/4/5").await[0..9], "\u{1a}4\n\u{5}ocean");
-		assert_eq!(get("tiles/index.json").await, "[\"cheese\"]");
-		assert_eq!(get("status").await, "ready!");
+		assert_eq!(get(port, "tiles/cheese/meta.json").await, meta);
+		assert_eq!(get(port, "tiles/cheese/tiles.json").await, meta);
+		assert_eq!(&get(port, "tiles/cheese/3/4/5").await[0..9], "\u{1a}4\n\u{5}ocean");
+		assert_eq!(get(port, "tiles/index.json").await, "[\"cheese\"]");
+		assert_eq!(get(port, "status").await, "ready!");
 
 		server.stop().await;
 
