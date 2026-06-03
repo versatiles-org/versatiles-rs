@@ -53,7 +53,11 @@ use tokio::{sync::Semaphore, time::sleep};
 /// PMTiles from one server). Prevents 429/503 responses from origins with
 /// per-IP rate limits and keeps the adaptive `max_request_bytes` splitter
 /// from misinterpreting overload as oversize.
-const DEFAULT_MAX_IN_FLIGHT: usize = 16;
+///
+/// 8 is a conservative default chosen to work well with self-hosted origins
+/// and modest CDNs. Cloud object stores (S3, R2, GCS) can sustain more — bump
+/// per reader with [`DataReaderHttp::with_max_in_flight`] when known.
+const DEFAULT_MAX_IN_FLIGHT: usize = 8;
 
 /// Per-host semaphore registry. Two `DataReaderHttp` instances built from
 /// URLs with the same host share the same `Semaphore` instance, so opening
