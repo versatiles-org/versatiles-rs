@@ -45,18 +45,32 @@
 //! Returns errors if writing fails, compression fails, or if metadata or bounding box
 //! information is invalid.
 
-use super::types::{BlockBuilder, BlockIndex, FileHeader};
+use super::types::{BlockBuilder, BlockDefinition, BlockIndex, FileHeader};
 use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
-use futures::lock::Mutex;
-use std::sync::Arc;
+use futures::{SinkExt, StreamExt, channel::mpsc, try_join};
 use versatiles_core::{
 	compression::compress,
-	io::DataWriterTrait,
+	io::{DataWriterBlob, DataWriterTrait},
 	types::{Blob, ByteRange, TileCompression},
 };
 use versatiles_derive::context;
+
+/// Number of fully-built blocks that may sit in the writer queue at once.
+///
+/// Each block is read + compressed into its own in-memory buffer off the writer's
+/// critical path, then handed to the single serial writer. A small queue lets the
+/// writer drain block *N* while block *N+1* is still being read/compressed (filling
+/// the per-block "trough" where only the writer was busy), while bounding peak memory
+/// to roughly this many compressed blocks. Override with `VERSATILES_WRITE_QUEUE_DEPTH`.
+fn write_queue_depth() -> usize {
+	std::env::var("VERSATILES_WRITE_QUEUE_DEPTH")
+		.ok()
+		.and_then(|s| s.trim().parse::<usize>().ok())
+		.filter(|&n| n > 0)
+		.unwrap_or(4)
+}
 
 /// Writer for `.versatiles` containers.
 ///
@@ -163,55 +177,75 @@ impl VersaTilesWriter {
 			return Ok(ByteRange::empty());
 		}
 
-		// Create the block index
-		let block_index_mutex = Arc::new(Mutex::new(BlockIndex::new_empty()));
-		let writer_mutex = Arc::new(Mutex::new(writer));
+		// Pipeline: parallel block builders (read + compress + serialize each block into
+		// its own in-memory buffer) feed a single serial writer over a bounded channel.
+		// This keeps the heavy work off the writer's critical path so block N is written
+		// while block N+1 is already being read/compressed. The channel bounds peak memory.
+		let (tx, mut rx) = mpsc::channel::<(BlockDefinition, Blob)>(write_queue_depth());
 
-		// Initialize blocks and populate them
-		reader
-			.traverse_all_tiles(
-				&Traversal::new_any_size(256, 256)?,
-				|bbox, stream| {
-					let writer_mutex = Arc::clone(&writer_mutex);
-					let block_index_mutex = Arc::clone(&block_index_mutex);
+		// Producer: build each block fully in memory, then hand it to the writer.
+		let produce = async move {
+			reader
+				.traverse_all_tiles(
+					&Traversal::new_any_size(256, 256)?,
+					move |bbox, stream| {
+						let mut tx = tx.clone();
 
-					Box::pin(async move {
-						log::trace!("start processing block at {bbox:?}");
+						Box::pin(async move {
+							log::trace!("start processing block at {bbox:?}");
 
-						// Compress tiles in parallel
-						let compressed_stream = stream
-							.map_parallel_try(move |_coord, tile| tile.into_blob(&tile_compression))
-							.unwrap_results();
+							// Compress tiles in parallel.
+							let compressed_stream = stream
+								.map_parallel_try(move |_coord, tile| tile.into_blob(&tile_compression))
+								.unwrap_results();
 
-						// Acquire writer lock and create block builder
-						let mut writer = writer_mutex.lock().await;
-						let mut block_builder = BlockBuilder::new(bbox.level(), &mut **writer)?;
+							// Serialize the block into a private in-memory buffer. Tile byte
+							// ranges are recorded relative to the block start, so the bytes are
+							// position-independent until the writer appends them.
+							let mut buffer = DataWriterBlob::new()?;
+							let mut block_builder = BlockBuilder::new(bbox.level(), &mut buffer)?;
+							compressed_stream
+								.for_each_try(|coord, blob| block_builder.write_tile(coord, blob))
+								.await?;
 
-						// Stream compressed tiles to block builder
-						compressed_stream
-							.for_each_try(|coord, blob| block_builder.write_tile(coord, blob))
-							.await?;
+							if let Some(block) = block_builder.finalize()? {
+								log::trace!("built block {block:?}");
+								// Backpressure here bounds in-flight memory; the writer runs concurrently.
+								tx.send((block, buffer.into_blob()))
+									.await
+									.map_err(|_| anyhow!("writer stopped accepting blocks"))?;
+							} else {
+								log::trace!("skipping empty block at {bbox:?}");
+							}
 
-						// Finalize and add to block index if not empty
-						if let Some(block) = block_builder.finalize()? {
-							log::trace!("finish block {block:?}");
-							block_index_mutex.lock().await.insert_block(block);
-						} else {
-							log::trace!("skipping empty block at {bbox:?}");
-						}
+							Ok(())
+						})
+					},
+					runtime.clone(),
+				)
+				.await?;
+			// Dropping the last sender closes the channel so the writer can finish.
+			Ok::<(), anyhow::Error>(())
+		};
 
-						Ok(())
-					})
-				},
-				runtime.clone(),
-			)
-			.await?;
+		// Consumer: the single serial writer. Append each finished block and record it,
+		// fixing up the byte ranges from block-relative to absolute file positions.
+		let consume = async {
+			let mut block_index = BlockIndex::new_empty();
+			while let Some((mut block, blob)) = rx.next().await {
+				let base = writer.position()?;
+				writer.append(&blob)?;
+				block.set_tiles_range(block.tiles_range().shifted_forward(base));
+				block.set_index_range(block.index_range().shifted_forward(base));
+				block_index.insert_block(block);
+			}
+			Ok::<BlockIndex, anyhow::Error>(block_index)
+		};
+
+		let ((), block_index) = try_join!(produce, consume)?;
 
 		// write the block index
-		let range = writer_mutex
-			.lock()
-			.await
-			.append(&block_index_mutex.lock().await.to_brotli_blob()?)?;
+		let range = writer.append(&block_index.to_brotli_blob()?)?;
 
 		Ok(range)
 	}
