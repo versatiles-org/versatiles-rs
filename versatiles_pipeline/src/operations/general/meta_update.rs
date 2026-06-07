@@ -3,7 +3,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{GeoBBox, GeoCenter, TileBBox, TileJSON, TilePyramid, TileSchema, TileStream, json::parse_json_str};
+use versatiles_core::{
+	GeoBBox, GeoCenter, TileBBox, TileJSON, TilePyramid, TileSchema, TileStream, json::parse_json_str,
+};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -222,7 +224,10 @@ mod tests {
 		let layers = &op.tilejson().vector_layers;
 		let place_labels = layers.find("place_labels").expect("place_labels should be set");
 		assert_eq!(place_labels.fields.get("name").map(String::as_str), Some("String"));
-		assert_eq!(place_labels.fields.get("population").map(String::as_str), Some("Number"));
+		assert_eq!(
+			place_labels.fields.get("population").map(String::as_str),
+			Some("Number")
+		);
 		assert_eq!(place_labels.minzoom, Some(0));
 		assert_eq!(place_labels.maxzoom, Some(14));
 		Ok(())

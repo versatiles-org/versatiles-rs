@@ -102,9 +102,7 @@ impl FieldType {
 	fn from_value(value: &GeoValue) -> Option<FieldType> {
 		match value {
 			GeoValue::Bool(_) => Some(FieldType::Boolean),
-			GeoValue::Double(_) | GeoValue::Float(_) | GeoValue::Int(_) | GeoValue::UInt(_) => {
-				Some(FieldType::Number)
-			}
+			GeoValue::Double(_) | GeoValue::Float(_) | GeoValue::Int(_) | GeoValue::UInt(_) => Some(FieldType::Number),
 			GeoValue::String(_) => Some(FieldType::String),
 			GeoValue::Null => None,
 		}
@@ -178,7 +176,10 @@ async fn scan(args: &VectorLayersTool, runtime: &TilesRuntime) -> Result<TileJSO
 		(min..=max).collect()
 	};
 
-	let total: u64 = levels.iter().map(|l| pyramid.level_ref(*l).to_bbox().count_tiles()).sum();
+	let total: u64 = levels
+		.iter()
+		.map(|l| pyramid.level_ref(*l).to_bbox().count_tiles())
+		.sum();
 	let progress = runtime.create_progress("Scanning vector tiles", total);
 
 	let mut layers: BTreeMap<String, LayerInfo> = BTreeMap::new();
