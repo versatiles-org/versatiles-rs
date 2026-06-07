@@ -1,22 +1,32 @@
 use anyhow::{Result, bail};
 use std::collections::BTreeMap;
 use std::io::Write;
-use versatiles_container::TilesRuntime;
+use std::sync::Arc;
+use versatiles_container::{SharedTileSource, TileSource, TilesRuntime};
 use versatiles_core::{TileJSON, TileType, VectorLayer, VectorLayers};
 use versatiles_geometry::geo::GeoValue;
+use versatiles_pipeline::PipelineReader;
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
 /// Scan all vector tiles of a container and generate a TileJSON with a valid `vector_layers` field.
 ///
 /// Every tile is decoded and inspected to collect, per layer, the set of property fields (with
-/// their value types) and the zoom range in which the layer occurs. The resulting `vector_layers`
-/// array replaces whatever the source declared, and the full TileJSON is printed to stdout.
+/// their value types) and the zoom range in which the layer occurs.
+///
+/// Without an output file, the resulting TileJSON is printed to stdout. With an output file, the
+/// input is copied to it through the `meta_update` VPL operation, which replaces its TileJSON with
+/// the freshly calculated one (including the new `vector_layers`).
 pub struct VectorLayersTool {
 	/// Tile container to read (path, URL, or data source expression).
 	/// Run `versatiles help source` for syntax details.
 	#[arg(value_name = "INPUT_FILE", verbatim_doc_comment)]
 	input: String,
+
+	/// Optional output container. When given, the input is written here with the calculated
+	/// TileJSON applied via `meta_update`, instead of printing the TileJSON to stdout.
+	#[arg(value_name = "OUTPUT_FILE")]
+	output: Option<String>,
 
 	/// Only scan tiles at this zoom level. If not specified, all levels are scanned.
 	#[arg(long)]
@@ -30,13 +40,45 @@ pub struct VectorLayersTool {
 pub async fn run(args: &VectorLayersTool, runtime: &TilesRuntime) -> Result<()> {
 	let tilejson = scan(args, runtime).await?;
 
-	let output = if args.pretty {
-		tilejson.to_pretty_lines(80).join("\n")
+	if let Some(output) = &args.output {
+		write_via_meta_update(&args.input, &tilejson, output, runtime).await?;
 	} else {
-		tilejson.stringify()
-	};
-	std::io::stdout().write_all(output.as_bytes())?;
+		let rendered = if args.pretty {
+			tilejson.to_pretty_lines(80).join("\n")
+		} else {
+			tilejson.stringify()
+		};
+		std::io::stdout().write_all(rendered.as_bytes())?;
+	}
 	Ok(())
+}
+
+/// Copies `input` to `output`, applying the freshly calculated `tilejson` via the
+/// `meta_update` VPL operation.
+async fn write_via_meta_update(input: &str, tilejson: &TileJSON, output: &str, runtime: &TilesRuntime) -> Result<()> {
+	// Embed both the input path and the TileJSON as double-quoted VPL strings.
+	let vpl = format!(
+		"from_container filename=\"{}\" | meta_update tilejson=\"{}\"",
+		escape_vpl_string(input),
+		escape_vpl_string(&tilejson.stringify()),
+	);
+	log::debug!("running pipeline: {vpl}");
+
+	let dir = std::env::current_dir()?;
+	let reader = PipelineReader::open_str(&vpl, &dir, runtime.clone()).await?;
+	let shared: SharedTileSource = Arc::new(Box::new(reader) as Box<dyn TileSource>);
+
+	// Fail loudly on any dropped tile rather than writing a truncated container.
+	runtime.set_abort_on_error(true);
+	runtime.write_to_str(shared, output).await?;
+	Ok(())
+}
+
+/// Escapes a string for embedding inside a VPL double-quoted literal.
+///
+/// The VPL parser unescapes `\\` and `\"`, so backslashes must be doubled first.
+fn escape_vpl_string(value: &str) -> String {
+	value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 /// The TileJSON field type a [`GeoValue`] maps to, per the TileJSON 3.0.0 spec.
@@ -200,6 +242,7 @@ mod tests {
 		let tilejson = scan(
 			&VectorLayersTool {
 				input: "../testdata/berlin.mbtiles".into(),
+				output: None,
 				level: None,
 				pretty: false,
 			},
@@ -234,6 +277,7 @@ mod tests {
 		let tilejson = scan(
 			&VectorLayersTool {
 				input: "../testdata/berlin.mbtiles".into(),
+				output: None,
 				level: Some(14),
 				pretty: false,
 			},
@@ -247,5 +291,38 @@ mod tests {
 			assert_eq!(layer.minzoom, Some(14));
 			assert_eq!(layer.maxzoom, Some(14));
 		}
+	}
+
+	#[tokio::test]
+	async fn test_write_via_meta_update() {
+		let runtime = create_test_runtime();
+		let temp_dir = assert_fs::TempDir::new().unwrap();
+		let output = temp_dir.path().join("out.mbtiles").display().to_string();
+
+		run(
+			&VectorLayersTool {
+				input: "../testdata/berlin.mbtiles".into(),
+				output: Some(output.clone()),
+				level: None,
+				pretty: false,
+			},
+			&runtime,
+		)
+		.await
+		.unwrap();
+
+		// Re-open the written container; its TileJSON must carry the calculated vector_layers.
+		let written = runtime.reader_from_str(&output).await.unwrap();
+		assert!(
+			written.tilejson().vector_layers.find("place_labels").is_some(),
+			"written container should carry the calculated vector_layers"
+		);
+	}
+
+	#[test]
+	fn test_escape_vpl_string() {
+		assert_eq!(escape_vpl_string("plain"), "plain");
+		assert_eq!(escape_vpl_string(r#"{"a":"b"}"#), r#"{\"a\":\"b\"}"#);
+		assert_eq!(escape_vpl_string(r"back\slash"), r"back\\slash");
 	}
 }
