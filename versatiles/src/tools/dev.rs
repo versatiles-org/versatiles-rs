@@ -1,4 +1,4 @@
-use super::dev_tools::{count_tiles, export_outline, measure_tile_sizes, print_tilejson};
+use super::dev_tools::{count_tiles, export_outline, measure_tile_sizes, print_tilejson, vector_layers};
 use anyhow::Result;
 use versatiles_container::TilesRuntime;
 
@@ -15,6 +15,7 @@ enum DevCommands {
 	MeasureTileSizes(measure_tile_sizes::MeasureTileSizes),
 	ExportOutline(export_outline::ExportOutline),
 	PrintTilejson(print_tilejson::PrintTilejson),
+	VectorLayers(vector_layers::VectorLayersTool),
 }
 
 #[tokio::main]
@@ -24,6 +25,7 @@ pub async fn run(command: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		DevCommands::MeasureTileSizes(args) => measure_tile_sizes::run(args, runtime).await?,
 		DevCommands::ExportOutline(args) => export_outline::run(args, runtime).await?,
 		DevCommands::PrintTilejson(args) => print_tilejson::run(args, runtime).await?,
+		DevCommands::VectorLayers(args) => vector_layers::run(args, runtime).await?,
 	}
 
 	Ok(())
