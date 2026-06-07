@@ -17,6 +17,13 @@
 //! }
 //! ```
 
+/// `User-Agent` header sent with every HTTP(S) request VersaTiles makes.
+///
+/// It identifies the software, its version, and an info URL so tile and data
+/// providers can recognize (and, if needed, contact about) VersaTiles traffic,
+/// e.g. `versatiles/4.1.5 (+https://versatiles.org)`.
+pub const USER_AGENT: &str = concat!("versatiles/", env!("CARGO_PKG_VERSION"), " (+https://versatiles.org)");
+
 mod data_reader;
 mod data_reader_blob;
 mod data_reader_file;
@@ -67,3 +74,16 @@ pub use value_reader_slice::*;
 pub use value_writer::*;
 pub use value_writer_blob::*;
 pub use value_writer_file::*;
+
+#[cfg(test)]
+mod tests {
+	use super::USER_AGENT;
+
+	#[test]
+	fn user_agent_has_expected_shape() {
+		// e.g. "versatiles/4.1.5 (+https://versatiles.org)"
+		assert!(USER_AGENT.starts_with("versatiles/"), "got: {USER_AGENT}");
+		assert!(USER_AGENT.contains(env!("CARGO_PKG_VERSION")), "got: {USER_AGENT}");
+		assert!(USER_AGENT.contains("(+https://versatiles.org)"), "got: {USER_AGENT}");
+	}
+}

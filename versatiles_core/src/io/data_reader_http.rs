@@ -131,6 +131,7 @@ impl TryFrom<&Url> for DataReaderHttp {
 		}
 
 		let client = Client::builder()
+			.user_agent(crate::io::USER_AGENT)
 			.connect_timeout(Duration::from_secs(30))
 			// No overall timeout — large range reads (100+ MB) can take minutes.
 			// Dead connections are caught by TCP keepalive and connect_timeout.
