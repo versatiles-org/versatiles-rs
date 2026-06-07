@@ -25,6 +25,10 @@ struct Args {
 	name: Option<String>,
 	/// Tile schema, allowed values: "rgb", "rgba", "dem/mapbox", "dem/terrarium", "dem/versatiles", "openmaptiles", "shortbread@1.0", "other", "unknown"
 	schema: Option<TileSchema>,
+	/// A complete TileJSON document (JSON string) used as the basis for the new metadata.
+	/// When given, the new metadata starts from this document instead of the source's; the
+	/// other parameters then override individual fields on top of it.
+	tilejson: Option<String>,
 	/// The `vector_layers` array as a JSON string. It is parsed and validated against the
 	/// TileJSON spec before replacing the source's `vector_layers`.
 	vector_layers: Option<String>,
@@ -43,7 +47,10 @@ impl Operation {
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let mut tilejson = source.tilejson().clone();
+		let mut tilejson = match args.tilejson {
+			Some(tilejson) => TileJSON::try_from(tilejson.as_str()).context("parsing 'tilejson'")?,
+			None => source.tilejson().clone(),
+		};
 
 		if let Some(attribution) = args.attribution {
 			tilejson.set_string("attribution", &attribution)?;
@@ -170,6 +177,35 @@ mod tests {
 		assert_relative_eq!(tj.as_object().number("minzoom")?.unwrap(), 2.0);
 		assert_relative_eq!(tj.as_object().number("maxzoom")?.unwrap(), 7.0);
 		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_meta_update_uses_tilejson_as_basis() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				"from_debug format=mvt | meta_update \
+				 tilejson='{\"tilejson\":\"3.0.0\",\"name\":\"Base\",\"attribution\":\"Base attr\"}' \
+				 name=\"Override\"",
+			)
+			.await?;
+
+		let tj = op.tilejson();
+		// `name` from the basis is overridden by the explicit parameter ...
+		assert_eq!(get_str(tj, "name").as_deref(), Some("Override"));
+		// ... while other fields from the basis survive.
+		assert_eq!(get_str(tj, "attribution").as_deref(), Some("Base attr"));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_meta_update_rejects_malformed_tilejson() {
+		let factory = PipelineFactory::new_dummy();
+		let err = factory
+			.operation_from_vpl("from_debug format=mvt | meta_update tilejson='{not valid'")
+			.await
+			.unwrap_err();
+		assert!(format!("{err:#}").contains("parsing 'tilejson'"), "got: {err:#}");
 	}
 
 	#[tokio::test]
