@@ -3,7 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{GeoBBox, GeoCenter, TileBBox, TileJSON, TilePyramid, TileSchema, TileStream};
+use versatiles_core::{GeoBBox, GeoCenter, TileBBox, TileJSON, TilePyramid, TileSchema, TileStream, json::parse_json_str};
 use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -25,6 +25,9 @@ struct Args {
 	name: Option<String>,
 	/// Tile schema, allowed values: "rgb", "rgba", "dem/mapbox", "dem/terrarium", "dem/versatiles", "openmaptiles", "shortbread@1.0", "other", "unknown"
 	schema: Option<TileSchema>,
+	/// The `vector_layers` array as a JSON string. It is parsed and validated against the
+	/// TileJSON spec before replacing the source's `vector_layers`.
+	vector_layers: Option<String>,
 }
 
 #[derive(Debug)]
@@ -72,6 +75,13 @@ impl Operation {
 
 		if let Some(schema) = args.schema {
 			tilejson.tile_schema = Some(schema);
+		}
+
+		if let Some(vector_layers) = args.vector_layers {
+			let json = parse_json_str(&vector_layers).context("parsing 'vector_layers' as JSON")?;
+			tilejson
+				.set_vector_layers(&json)
+				.context("validating 'vector_layers'")?;
 		}
 
 		Ok(Self { source, tilejson })
@@ -160,6 +170,53 @@ mod tests {
 		assert_relative_eq!(tj.as_object().number("minzoom")?.unwrap(), 2.0);
 		assert_relative_eq!(tj.as_object().number("maxzoom")?.unwrap(), 7.0);
 		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_meta_update_sets_vector_layers_from_json() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				"from_debug format=mvt | meta_update \
+				 vector_layers='[{\"id\":\"place_labels\",\"minzoom\":0,\"maxzoom\":14,\
+				 \"fields\":{\"name\":\"String\",\"population\":\"Number\"}}]'",
+			)
+			.await?;
+
+		let layers = &op.tilejson().vector_layers;
+		let place_labels = layers.find("place_labels").expect("place_labels should be set");
+		assert_eq!(place_labels.fields.get("name").map(String::as_str), Some("String"));
+		assert_eq!(place_labels.fields.get("population").map(String::as_str), Some("Number"));
+		assert_eq!(place_labels.minzoom, Some(0));
+		assert_eq!(place_labels.maxzoom, Some(14));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_meta_update_rejects_malformed_json() {
+		let factory = PipelineFactory::new_dummy();
+		let err = factory
+			.operation_from_vpl("from_debug format=mvt | meta_update vector_layers='[{not valid json'")
+			.await
+			.unwrap_err();
+		assert!(
+			format!("{err:#}").contains("parsing 'vector_layers' as JSON"),
+			"got: {err:#}"
+		);
+	}
+
+	#[tokio::test]
+	async fn test_meta_update_rejects_invalid_vector_layers() {
+		let factory = PipelineFactory::new_dummy();
+		// Structurally valid JSON, but a layer entry is missing the required `id`.
+		let err = factory
+			.operation_from_vpl("from_debug format=mvt | meta_update vector_layers='[{\"fields\":{}}]'")
+			.await
+			.unwrap_err();
+		assert!(
+			format!("{err:#}").contains("validating 'vector_layers'"),
+			"got: {err:#}"
+		);
 	}
 
 	#[tokio::test]
