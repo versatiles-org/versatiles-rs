@@ -1,8 +1,8 @@
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::sync::Arc;
-use versatiles_container::{SharedTileSource, TileSource, TilesRuntime};
+use versatiles_container::{SharedTileSource, Tile, TileSource, TilesRuntime};
 use versatiles_core::{TileJSON, TileType, VectorLayer, VectorLayers};
 use versatiles_geometry::geo::GeoValue;
 use versatiles_pipeline::PipelineReader;
@@ -109,6 +109,65 @@ impl FieldType {
 	}
 }
 
+/// Records one observation of `key` having type `ty` into a field-type map.
+///
+/// `None` for `ty` means the value was `null` (no type information).
+fn merge_field(fields: &mut BTreeMap<String, Option<FieldType>>, key: &str, ty: Option<FieldType>) {
+	match fields.get_mut(key) {
+		// First sighting of this field.
+		None => {
+			fields.insert(key.to_owned(), ty);
+		}
+		// Field already seen as `null` only — adopt the first concrete type.
+		Some(existing @ None) => *existing = ty,
+		// Conflicting concrete types collapse to the most general representation.
+		Some(Some(existing)) => {
+			if let Some(ty) = ty
+				&& *existing != ty
+			{
+				*existing = FieldType::String;
+			}
+		}
+	}
+}
+
+/// Field-type observations for a single layer within a single tile.
+type TileLayerFields = (String, BTreeMap<String, Option<FieldType>>);
+
+/// Decodes one tile and collapses it into per-layer field observations.
+///
+/// Runs the expensive work — decompression, protobuf parsing, and field-type
+/// inference — so it can be dispatched to a worker thread. Observations are already
+/// deduplicated per layer, so the serial merge afterwards stays cheap.
+fn summarize_tile(tile: Tile) -> Result<Vec<TileLayerFields>> {
+	let vector_tile = tile.into_vector()?;
+	let mut result: Vec<TileLayerFields> = Vec::with_capacity(vector_tile.layers.len());
+
+	for layer in &vector_tile.layers {
+		let pm = &layer.property_manager;
+		// Classify each value-table entry once, instead of per feature occurrence.
+		let value_types: Vec<Option<FieldType>> = pm.val.list.iter().map(FieldType::from_value).collect();
+
+		let mut fields = BTreeMap::new();
+		for feature in &layer.features {
+			for pair in feature.tag_ids.chunks_exact(2) {
+				let key = pm
+					.key
+					.list
+					.get(pair[0] as usize)
+					.ok_or_else(|| anyhow!("tag key index {} out of range", pair[0]))?;
+				let ty = *value_types
+					.get(pair[1] as usize)
+					.ok_or_else(|| anyhow!("tag value index {} out of range", pair[1]))?;
+				merge_field(&mut fields, key, ty);
+			}
+		}
+		result.push((layer.name.clone(), fields));
+	}
+
+	Ok(result)
+}
+
 /// Accumulated information about a single layer across all scanned tiles.
 #[derive(Default)]
 struct LayerInfo {
@@ -124,22 +183,9 @@ impl LayerInfo {
 		self.maxzoom = Some(self.maxzoom.map_or(level, |z| z.max(level)));
 	}
 
-	fn observe_field(&mut self, key: &str, ty: Option<FieldType>) {
-		match self.fields.get_mut(key) {
-			// First sighting of this field.
-			None => {
-				self.fields.insert(key.to_owned(), ty);
-			}
-			// Field already seen as `null` only — adopt the first concrete type.
-			Some(existing @ None) => *existing = ty,
-			// Conflicting concrete types collapse to the most general representation.
-			Some(Some(existing)) => {
-				if let Some(ty) = ty
-					&& *existing != ty
-				{
-					*existing = FieldType::String;
-				}
-			}
+	fn merge_fields(&mut self, fields: BTreeMap<String, Option<FieldType>>) {
+		for (key, ty) in fields {
+			merge_field(&mut self.fields, &key, ty);
 		}
 	}
 
@@ -190,30 +236,25 @@ async fn scan(args: &VectorLayersTool, runtime: &TilesRuntime) -> Result<TileJSO
 			continue;
 		}
 
-		let mut stream = reader.tile_stream(bbox).await?;
-		while let Some((coord, tile)) = stream.next().await {
+		// Decode and summarize tiles on a worker pool (CPU-bound: decompression +
+		// protobuf parsing), then merge the compact per-tile results serially.
+		let progress = progress.clone();
+		let mut stream = reader.tile_stream(bbox).await?.filter_map_parallel(move |coord, tile| {
 			progress.inc(1);
-
-			let vector_tile = match tile.into_vector() {
-				Ok(vt) => vt,
+			match summarize_tile(tile) {
+				Ok(tile_layers) => Some(tile_layers),
 				Err(e) => {
 					log::warn!("skipping tile {coord:?}: {e:#}");
-					continue;
+					None
 				}
-			};
+			}
+		});
 
-			for layer in &vector_tile.layers {
-				let info = layers.entry(layer.name.clone()).or_default();
+		while let Some((coord, tile_layers)) = stream.next().await {
+			for (name, fields) in tile_layers {
+				let info = layers.entry(name).or_default();
 				info.observe_zoom(coord.level);
-
-				let pm = &layer.property_manager;
-				for feature in &layer.features {
-					for pair in feature.tag_ids.chunks_exact(2) {
-						let key = pm.key.get(pair[0])?;
-						let value = pm.val.get(pair[1])?;
-						info.observe_field(key, FieldType::from_value(value));
-					}
-				}
+				info.merge_fields(fields);
 			}
 		}
 	}
