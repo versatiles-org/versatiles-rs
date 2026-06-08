@@ -655,6 +655,19 @@ versatiles help config
 VersaTiles supports the following environment variables:
 
 - `VERSATILES_CACHE_DIR` - Enable disk-based tile caching. This is useful if you want to convert large tile sets with the `from_gdal_raster` VPL operation but have limited memory. Example: `VERSATILES_CACHE_DIR=/tmp/versatiles_cache`
+- `VERSATILES_SSH_IDENTITY` - SSH identity (private key) file used for SFTP authentication.
+
+Network resilience for remote reads/writes (HTTP and SFTP) over long-running transfers:
+
+- `VERSATILES_NET_MAX_RETRIES` - Retries after the first attempt for each network read/write (default `32`).
+- `VERSATILES_NET_RETRY_BASE_MS` - Initial retry backoff in milliseconds; doubles each retry (default `1000`).
+- `VERSATILES_NET_RETRY_MAX_MS` - Upper bound for a single retry backoff in milliseconds (default `60000`). With the defaults, a single operation tolerates roughly 25–30 minutes of continuous failure before giving up, so a long unattended transfer survives a storage/CDN outage instead of aborting.
+
+SFTP connection tuning:
+
+- `VERSATILES_SFTP_TIMEOUT_MS` - Per-operation SFTP API timeout in milliseconds (default `30000`). Raise it if you see "API timeout expired" / "draining incoming flow" errors on congested links.
+- `VERSATILES_SFTP_KEEPALIVE_SECS` - TCP and SSH keepalive interval in seconds (default `15`), keeping connections alive across idle gaps.
+- `VERSATILES_SFTP_MAX_CONNECTIONS` - Maximum number of pooled SFTP connections per server.
 
 **Example usage:**
 
