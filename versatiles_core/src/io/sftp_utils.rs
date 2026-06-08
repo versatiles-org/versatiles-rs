@@ -38,19 +38,41 @@ pub fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Session> 
 	let tcp = TcpStream::connect_timeout(&addr, connect_timeout)
 		.with_context(|| format!("failed to connect to {host}:{port}"))?;
 
+	// Socket-level TCP keepalive so the connection survives idle gaps — e.g. while a
+	// large source range is being read and nothing is written for a while — without
+	// being reaped by NAT/firewalls or the server. Best-effort: a failure here only
+	// makes idle drops more likely, it must not abort the connection. Disabled under
+	// `cfg(test)` to match the in-process test server (see SSH keepalive note below).
+	#[cfg(not(test))]
+	{
+		let ka_secs = u64::from(super::retry::env_u32("VERSATILES_SFTP_KEEPALIVE_SECS", 15));
+		let keepalive = socket2::TcpKeepalive::new()
+			.with_time(Duration::from_secs(ka_secs))
+			.with_interval(Duration::from_secs(ka_secs));
+		if let Err(e) = socket2::SockRef::from(&tcp).set_tcp_keepalive(&keepalive) {
+			log::warn!("failed to enable TCP keepalive on SFTP socket: {e}");
+		}
+	}
+
 	// SSH handshake
 	let mut session = Session::new()?;
 	session.set_tcp_stream(tcp);
-	// 10 s is generous for ordinary operations and prevents `Session(-9)`
-	// ("API timeout expired") flakes on loaded CI runners — we saw 1 s
-	// be insufficient for local in-process SFTP round-trips on macOS + GDAL.
-	// Drop speed is not affected because keepalive is disabled in tests below.
-	session.set_timeout(10_000);
-	session.handshake()?;
-	// Keepalive causes session teardown to block for `api_timeout` per drop in tests
-	// because the test server never acknowledges keepalive or channel-close replies.
+	// API timeout for individual SFTP operations. Too low and a slow write under load
+	// turns into a `Session(-9)` ("API timeout expired") / "draining incoming flow"
+	// error mid-transfer; 30 s (configurable) tolerates congested links. Tests pin a
+	// fixed 10 s — high enough to avoid round-trip flakes on loaded CI, while the
+	// short connect timeout keeps unreachable-host tests fast.
 	#[cfg(not(test))]
-	session.set_keepalive(true, 60);
+	let timeout_ms = super::retry::env_u32("VERSATILES_SFTP_TIMEOUT_MS", 30_000);
+	#[cfg(test)]
+	let timeout_ms = 10_000;
+	session.set_timeout(timeout_ms);
+	session.handshake()?;
+	// SSH-level keepalive prevents the server's idle disconnect. Disabled in tests
+	// because the in-process test server never acknowledges keepalive or channel-close
+	// replies, which would make session teardown block for `api_timeout` per drop.
+	#[cfg(not(test))]
+	session.set_keepalive(true, super::retry::env_u32("VERSATILES_SFTP_KEEPALIVE_SECS", 15));
 
 	// Sanitized target for log messages (no credentials)
 	let target = display_name(url);

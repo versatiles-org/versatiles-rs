@@ -1,19 +1,7 @@
 use super::DataWriterTrait;
 use crate::{Blob, ByteRange};
 use anyhow::{Context, Result, bail};
-use std::{thread, time::Duration};
-
-const MAX_RETRIES: u32 = 2;
-
-/// Exponential backoff unit for retry waits.
-///
-/// In production this is one second so retries wait 1 s, 2 s, … In tests the
-/// unit shrinks to a few milliseconds to keep the retry-path tests fast while
-/// still exercising the `thread::sleep` call itself.
-#[cfg(not(test))]
-const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_secs(1 << exp);
-#[cfg(test)]
-const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_millis(1 << exp);
+use std::thread;
 
 /// Trait for network-based data writers (SFTP, cloud storage, etc.)
 /// that need retry logic with reconnection.
@@ -44,11 +32,13 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 		let name = self.writer_name().to_string();
 		let pos = self.tracked_position();
 		let blob_len = blob.len();
-		let total_attempts = MAX_RETRIES + 1;
+		let policy = super::retry::policy();
+		let max_retries = policy.max_retries;
+		let total_attempts = max_retries + 1;
 
-		for attempt in 0..=MAX_RETRIES {
+		for attempt in 0..=max_retries {
 			if attempt > 0 {
-				let backoff = BACKOFF(attempt - 1);
+				let backoff = policy.backoff(attempt - 1);
 				log::warn!(
 					"write to '{name}' at position {pos}: retrying (attempt {}/{total_attempts}, waiting {backoff:?})",
 					attempt + 1
@@ -60,7 +50,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 						"write to '{name}' at position {pos}: reconnect failed (attempt {}/{total_attempts}): {e}",
 						attempt + 1
 					);
-					if attempt >= MAX_RETRIES {
+					if attempt >= max_retries {
 						return Err(e).with_context(|| {
 							format!("could not write {blob_len} bytes at position {pos} to '{name}': reconnect failed — gave up after {total_attempts} attempts")
 						});
@@ -71,7 +61,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 
 			match self.try_append(blob) {
 				Ok(range) => return Ok(range),
-				Err(e) if attempt < MAX_RETRIES => {
+				Err(e) if attempt < max_retries => {
 					log::warn!(
 						"write to '{name}' at position {pos}: {e} (attempt {}/{total_attempts}), will retry",
 						attempt + 1
@@ -94,13 +84,15 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 	fn network_write_start(&mut self, blob: &Blob) -> Result<()> {
 		let name = self.writer_name().to_string();
 		let blob_len = blob.len();
-		let total_attempts = MAX_RETRIES + 1;
+		let policy = super::retry::policy();
+		let max_retries = policy.max_retries;
+		let total_attempts = max_retries + 1;
 
-		for attempt in 0..=MAX_RETRIES {
+		for attempt in 0..=max_retries {
 			let restore_pos = self.tracked_position();
 
 			if attempt > 0 {
-				let backoff = BACKOFF(attempt - 1);
+				let backoff = policy.backoff(attempt - 1);
 				log::warn!(
 					"write_start to '{name}': retrying (attempt {}/{total_attempts}, waiting {backoff:?})",
 					attempt + 1
@@ -112,7 +104,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 						"write_start to '{name}': reconnect failed (attempt {}/{total_attempts}): {e}",
 						attempt + 1
 					);
-					if attempt >= MAX_RETRIES {
+					if attempt >= max_retries {
 						return Err(e).with_context(|| {
 							format!("could not write {blob_len} bytes at start of '{name}': reconnect failed — gave up after {total_attempts} attempts")
 						});
@@ -123,7 +115,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 
 			match self.try_write_at(0, blob, restore_pos) {
 				Ok(()) => return Ok(()),
-				Err(e) if attempt < MAX_RETRIES => {
+				Err(e) if attempt < max_retries => {
 					log::warn!(
 						"write_start to '{name}': {e} (attempt {}/{total_attempts}), will retry",
 						attempt + 1
@@ -145,11 +137,13 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 	/// Seek with retry and reconnect on failure.
 	fn network_set_position(&mut self, position: u64) -> Result<()> {
 		let name = self.writer_name().to_string();
-		let total_attempts = MAX_RETRIES + 1;
+		let policy = super::retry::policy();
+		let max_retries = policy.max_retries;
+		let total_attempts = max_retries + 1;
 
-		for attempt in 0..=MAX_RETRIES {
+		for attempt in 0..=max_retries {
 			if attempt > 0 {
-				let backoff = BACKOFF(attempt - 1);
+				let backoff = policy.backoff(attempt - 1);
 				log::warn!(
 					"seek in '{name}' to position {position}: retrying (attempt {}/{total_attempts}, waiting {backoff:?})",
 					attempt + 1
@@ -161,7 +155,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 						"seek in '{name}' to position {position}: reconnect failed (attempt {}/{total_attempts}): {e}",
 						attempt + 1
 					);
-					if attempt >= MAX_RETRIES {
+					if attempt >= max_retries {
 						return Err(e).with_context(|| {
 							format!(
 								"could not seek to position {position} in '{name}': reconnect failed — gave up after {total_attempts} attempts"
@@ -174,7 +168,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 
 			match self.try_seek(position) {
 				Ok(()) => return Ok(()),
-				Err(e) if attempt < MAX_RETRIES => {
+				Err(e) if attempt < max_retries => {
 					log::warn!(
 						"seek in '{name}' to position {position}: {e} (attempt {}/{total_attempts}), will retry",
 						attempt + 1
@@ -197,6 +191,11 @@ mod tests {
 	use super::*;
 	use anyhow::anyhow;
 	use std::collections::VecDeque;
+
+	/// Retry count from the shared policy (2 under `cfg(test)` defaults).
+	fn max_retries() -> u32 {
+		crate::io::retry::policy().max_retries
+	}
 
 	/// In-memory NetworkWriter stub. Each `try_*` / `reconnect` call pops the
 	/// next programmed outcome from its queue; `()` means success.
@@ -313,14 +312,14 @@ mod tests {
 	#[test]
 	fn network_append_gives_up_after_max_retries() {
 		let mut w = FakeWriter::new();
-		for _ in 0..=MAX_RETRIES {
+		for _ in 0..=max_retries() {
 			w.append_outcomes.push_back(Err(anyhow!("disk full")));
 		}
 		let err = w.network_append(&Blob::from(vec![1])).unwrap_err();
 		let msg = format!("{err:#}");
 		assert!(msg.contains("gave up"));
 		assert!(msg.contains("disk full"));
-		assert_eq!(w.append_calls, MAX_RETRIES + 1);
+		assert_eq!(w.append_calls, max_retries() + 1);
 	}
 
 	#[test]
@@ -328,7 +327,7 @@ mod tests {
 		let mut w = FakeWriter::new();
 		// Fail first attempt, then fail all reconnects.
 		w.append_outcomes.push_back(Err(anyhow!("boom")));
-		for _ in 0..=MAX_RETRIES {
+		for _ in 0..=max_retries() {
 			w.reconnect_outcomes.push_back(Err(anyhow!("link down")));
 		}
 		let err = w.network_append(&Blob::from(vec![1])).unwrap_err();
@@ -376,7 +375,7 @@ mod tests {
 	#[test]
 	fn network_write_start_gives_up_after_max_retries() {
 		let mut w = FakeWriter::new();
-		for _ in 0..=MAX_RETRIES {
+		for _ in 0..=max_retries() {
 			w.write_at_outcomes.push_back(Err(anyhow!("nope")));
 		}
 		let err = w.network_write_start(&Blob::from(vec![1])).unwrap_err();
@@ -387,7 +386,7 @@ mod tests {
 	fn network_write_start_reconnect_failure_surfaces() {
 		let mut w = FakeWriter::new();
 		w.write_at_outcomes.push_back(Err(anyhow!("boom")));
-		for _ in 0..=MAX_RETRIES {
+		for _ in 0..=max_retries() {
 			w.reconnect_outcomes.push_back(Err(anyhow!("link down")));
 		}
 		let err = w.network_write_start(&Blob::from(vec![1])).unwrap_err();
@@ -419,7 +418,7 @@ mod tests {
 	#[test]
 	fn network_set_position_gives_up_after_max_retries() {
 		let mut w = FakeWriter::new();
-		for _ in 0..=MAX_RETRIES {
+		for _ in 0..=max_retries() {
 			w.seek_outcomes.push_back(Err(anyhow!("eof")));
 		}
 		let err = w.network_set_position(1).unwrap_err();
@@ -432,7 +431,7 @@ mod tests {
 	fn network_set_position_reconnect_failure_surfaces() {
 		let mut w = FakeWriter::new();
 		w.seek_outcomes.push_back(Err(anyhow!("boom")));
-		for _ in 0..=MAX_RETRIES {
+		for _ in 0..=max_retries() {
 			w.reconnect_outcomes.push_back(Err(anyhow!("link down")));
 		}
 		let err = w.network_set_position(9).unwrap_err();

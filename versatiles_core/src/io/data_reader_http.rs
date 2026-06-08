@@ -173,14 +173,6 @@ impl DataReaderHttp {
 	}
 }
 
-const MAX_RETRIES: u32 = 2;
-
-/// Exponential backoff unit for retry waits (seconds in prod, ms in tests).
-#[cfg(not(test))]
-const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_secs(1 << exp);
-#[cfg(test)]
-const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_millis(1 << exp);
-
 fn is_retryable_error(err: &reqwest::Error) -> bool {
 	err.is_connect() || err.is_timeout() || err.is_body()
 }
@@ -206,15 +198,17 @@ impl DataReaderHttp {
 	/// Single-range read with retry/backoff.
 	async fn try_read_range_impl(&self, range: &ByteRange) -> Result<Blob> {
 		let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
-		let total_attempts = MAX_RETRIES + 1;
+		let policy = super::retry::policy();
+		let max_retries = policy.max_retries;
+		let total_attempts = max_retries + 1;
 		let url = &self.url;
 		let len = range.length;
 
-		for attempt in 0..=MAX_RETRIES {
+		for attempt in 0..=max_retries {
 			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
 
 			if attempt > 0 {
-				let backoff = BACKOFF(attempt - 1);
+				let backoff = policy.backoff(attempt - 1);
 				log::warn!("HTTP read {range} from '{url}': retrying ({attempt_label}, waiting {backoff:?})");
 				sleep(backoff).await;
 			}
@@ -235,7 +229,7 @@ impl DataReaderHttp {
 				.await
 			{
 				Ok(r) => r,
-				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
+				Err(e) if is_retryable_error(&e) && attempt < max_retries => {
 					log::warn!(
 						"HTTP read {range} from '{url}': {} ({attempt_label}), will retry",
 						describe_error(&e)
@@ -251,7 +245,7 @@ impl DataReaderHttp {
 			};
 
 			let status = response.status();
-			if status.is_server_error() && attempt < MAX_RETRIES {
+			if status.is_server_error() && attempt < max_retries {
 				log::warn!("HTTP read {range} from '{url}': server returned {status} ({attempt_label}), will retry");
 				continue;
 			}
@@ -298,7 +292,7 @@ impl DataReaderHttp {
 
 			let bytes = match response.bytes().await {
 				Ok(b) => b,
-				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
+				Err(e) if is_retryable_error(&e) && attempt < max_retries => {
 					log::warn!(
 						"HTTP read {range} from '{url}': error reading body: {} ({attempt_label}), will retry",
 						describe_error(&e)
@@ -341,14 +335,16 @@ impl DataReaderTrait for DataReaderHttp {
 	///
 	/// * A Result containing a Blob with all the data or an error.
 	async fn read_all(&self) -> Result<Blob> {
-		let total_attempts = MAX_RETRIES + 1;
+		let policy = super::retry::policy();
+		let max_retries = policy.max_retries;
+		let total_attempts = max_retries + 1;
 		let url = &self.url;
 
-		for attempt in 0..=MAX_RETRIES {
+		for attempt in 0..=max_retries {
 			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
 
 			if attempt > 0 {
-				let backoff = BACKOFF(attempt - 1);
+				let backoff = policy.backoff(attempt - 1);
 				log::warn!("HTTP read from '{url}': retrying ({attempt_label}, waiting {backoff:?})");
 				sleep(backoff).await;
 			}
@@ -362,7 +358,7 @@ impl DataReaderTrait for DataReaderHttp {
 
 			let response = match self.apply_auth(self.client.get(self.url.clone())).send().await {
 				Ok(r) => r,
-				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
+				Err(e) if is_retryable_error(&e) && attempt < max_retries => {
 					log::warn!(
 						"HTTP read from '{url}': {} ({attempt_label}), will retry",
 						describe_error(&e)
@@ -376,7 +372,7 @@ impl DataReaderTrait for DataReaderHttp {
 			};
 
 			let status = response.status();
-			if status.is_server_error() && attempt < MAX_RETRIES {
+			if status.is_server_error() && attempt < max_retries {
 				log::warn!("HTTP read from '{url}': server returned {status} ({attempt_label}), will retry");
 				continue;
 			}
@@ -390,7 +386,7 @@ impl DataReaderTrait for DataReaderHttp {
 
 			let bytes = match response.bytes().await {
 				Ok(b) => b,
-				Err(e) if is_retryable_error(&e) && attempt < MAX_RETRIES => {
+				Err(e) if is_retryable_error(&e) && attempt < max_retries => {
 					log::warn!(
 						"HTTP read from '{url}': error reading body: {} ({attempt_label}), will retry",
 						describe_error(&e)

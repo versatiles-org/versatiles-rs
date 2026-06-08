@@ -34,6 +34,7 @@ num_cpus.workspace = true
 percent-encoding = "2"
 regex.workspace = true
 reqwest.workspace = true
+socket2 = { version = "0.5", optional = true }
 ssh2 = { version = "0.9", optional = true }
 ssh2-config = { version = "0.7", default-features = false, optional = true }
 tokio.workspace = true
@@ -69,7 +70,7 @@ moka.workspace = true
 [features]
 default = []
 cli = ["dep:colored", "dep:clap"]
-ssh2 = ["dep:ssh2", "dep:ssh2-config"]
+ssh2 = ["dep:ssh2", "dep:ssh2-config", "dep:socket2"]
 test = []
 
 [[bench]]

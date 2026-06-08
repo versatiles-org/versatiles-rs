@@ -38,6 +38,7 @@ mod data_writer_sftp;
 mod network_reader;
 #[cfg(feature = "ssh2")]
 mod network_writer;
+mod retry;
 #[cfg(feature = "ssh2")]
 mod sftp_pool;
 #[cfg(feature = "ssh2")]

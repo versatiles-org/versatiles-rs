@@ -10,20 +10,7 @@ use std::{
 	io::Write,
 	path::{Path, PathBuf},
 	thread,
-	time::Duration,
 };
-
-const MAX_RETRIES: u32 = 2;
-
-/// Exponential backoff unit for retry waits.
-///
-/// In production this is one second so retries wait 1 s, 2 s, … In tests the
-/// unit shrinks to a few milliseconds to keep the retry-path tests fast while
-/// still exercising the `thread::sleep` call itself.
-#[cfg(not(test))]
-const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_secs(1 << exp);
-#[cfg(test)]
-const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_millis(1 << exp);
 
 /// A [`Write`] stream to a remote file via SFTP.
 ///
@@ -122,18 +109,20 @@ impl SftpFileSystem {
 			self.mkdir_p(parent)?;
 		}
 
-		let total_attempts = MAX_RETRIES + 1;
+		let policy = super::retry::policy();
+		let max_retries = policy.max_retries;
+		let total_attempts = max_retries + 1;
 
-		for attempt in 0..=MAX_RETRIES {
+		for attempt in 0..=max_retries {
 			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
 
 			if attempt > 0 {
-				let backoff = BACKOFF(attempt - 1);
+				let backoff = policy.backoff(attempt - 1);
 				log::warn!("SFTP write file {full_path:?}: retrying ({attempt_label}, waiting {backoff:?})");
 				thread::sleep(backoff);
 				if let Err(e) = self.reconnect() {
 					log::warn!("SFTP write file {full_path:?}: reconnect failed: {e} ({attempt_label})");
-					if attempt >= MAX_RETRIES {
+					if attempt >= max_retries {
 						return Err(e).with_context(|| {
 							format!("could not write file {full_path:?} — reconnect failed after {total_attempts} attempts")
 						});
@@ -144,7 +133,7 @@ impl SftpFileSystem {
 
 			match self.try_write_file(&full_path, data) {
 				Ok(()) => return Ok(()),
-				Err(e) if attempt < MAX_RETRIES => {
+				Err(e) if attempt < max_retries => {
 					log::warn!("SFTP write file {full_path:?}: {e} ({attempt_label}), will retry");
 				}
 				Err(e) => {

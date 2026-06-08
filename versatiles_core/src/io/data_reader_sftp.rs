@@ -7,16 +7,7 @@ use std::{
 	path::Path,
 	sync::{Arc, atomic::AtomicU64},
 	thread,
-	time::Duration,
 };
-
-const MAX_RETRIES: u32 = 2;
-
-/// Exponential backoff unit for retry waits (seconds in prod, ms in tests).
-#[cfg(not(test))]
-const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_secs(1 << exp);
-#[cfg(test)]
-const BACKOFF: fn(u32) -> Duration = |exp| Duration::from_millis(1 << exp);
 
 /// A struct that provides reading capabilities from a remote file via SFTP.
 ///
@@ -81,7 +72,9 @@ impl TryFrom<&Url> for DataReaderSftp {
 impl DataReaderSftp {
 	/// Single-range read with retry/backoff/reconnect.
 	fn try_read_range_impl(&self, range: &ByteRange) -> Result<Blob> {
-		let total_attempts = MAX_RETRIES + 1;
+		let policy = super::retry::policy();
+		let max_retries = policy.max_retries;
+		let total_attempts = max_retries + 1;
 		let name = &self.name;
 		let len = range.length;
 		// Generation observed for the most recent read attempt. Passed to
@@ -89,17 +82,17 @@ impl DataReaderSftp {
 		// do not each reconnect the same dropped session.
 		let mut generation = self.connection.generation()?;
 
-		for attempt in 0..=MAX_RETRIES {
+		for attempt in 0..=max_retries {
 			let attempt_label = format!("attempt {}/{total_attempts}", attempt + 1);
 
 			if attempt > 0 {
-				let backoff = BACKOFF(attempt - 1);
+				let backoff = policy.backoff(attempt - 1);
 				log::warn!("SFTP read {range} from '{name}': retrying ({attempt_label}, waiting {backoff:?})");
 				thread::sleep(backoff);
 
 				if let Err(e) = self.connection.reconnect(generation) {
 					log::warn!("SFTP read {range} from '{name}': reconnect failed ({attempt_label}): {e}");
-					if attempt >= MAX_RETRIES {
+					if attempt >= max_retries {
 						return Err(e).with_context(|| {
 							format!(
 								"could not read {range} ({len} bytes) from '{name}': reconnect failed — gave up after {total_attempts} attempts"
@@ -113,7 +106,7 @@ impl DataReaderSftp {
 			generation = self.connection.generation()?;
 			match self.connection.read_range(self.file_id, range) {
 				Ok(blob) => return Ok(blob),
-				Err(e) if attempt < MAX_RETRIES => {
+				Err(e) if attempt < max_retries => {
 					log::warn!("SFTP read {range} from '{name}': {e} ({attempt_label}), will retry");
 				}
 				Err(e) => {
