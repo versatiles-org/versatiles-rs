@@ -376,6 +376,9 @@ Update metadata, see also <https://github.com/mapbox/tilejson-spec/tree/master/3
 - *`legend`: String (optional)* - Legend text.
 - *`name`: String (optional)* - Name text.
 - *`schema`: TileSchema (optional)* - Tile schema, allowed values: "rgb", "rgba", "dem/mapbox", "dem/terrarium", "dem/versatiles", "openmaptiles", "shortbread@1.0", "other", "unknown"
+- *`tilejson`: String (optional)* - A complete TileJSON document (JSON string) used as the basis for the new metadata. When given, the new metadata starts from this document instead of the source's; the other parameters then override individual fields on top of it.
+- *`tilejson_update`: String (optional)* - A partial TileJSON document (JSON string) merged onto the current metadata. Scalar fields (e.g. `name`, `attribution`) and `vector_layers` overwrite; `bounds` and the zoom range are widened to the union. The individual parameters still take precedence.
+- *`vector_layers`: String (optional)* - The `vector_layers` array as a JSON string. It is parsed and validated against the TileJSON spec before replacing the source's `vector_layers`.
 
 ---
 
