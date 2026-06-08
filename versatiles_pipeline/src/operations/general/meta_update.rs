@@ -31,6 +31,10 @@ struct Args {
 	/// When given, the new metadata starts from this document instead of the source's; the
 	/// other parameters then override individual fields on top of it.
 	tilejson: Option<String>,
+	/// A partial TileJSON document (JSON string) merged onto the current metadata.
+	/// Scalar fields (e.g. `name`, `attribution`) and `vector_layers` overwrite; `bounds` and the
+	/// zoom range are widened to the union. The individual parameters still take precedence.
+	tilejson_update: Option<String>,
 	/// The `vector_layers` array as a JSON string. It is parsed and validated against the
 	/// TileJSON spec before replacing the source's `vector_layers`.
 	vector_layers: Option<String>,
@@ -53,6 +57,12 @@ impl Operation {
 			Some(tilejson) => TileJSON::try_from(tilejson.as_str()).context("parsing 'tilejson'")?,
 			None => source.tilejson().clone(),
 		};
+
+		// Overlay the update document before the scalar parameters, so the latter win.
+		if let Some(tilejson_update) = args.tilejson_update {
+			let update = TileJSON::try_from(tilejson_update.as_str()).context("parsing 'tilejson_update'")?;
+			tilejson.merge(&update).context("merging 'tilejson_update'")?;
+		}
 
 		if let Some(attribution) = args.attribution {
 			tilejson.set_string("attribution", &attribution)?;
@@ -198,6 +208,58 @@ mod tests {
 		// ... while other fields from the basis survive.
 		assert_eq!(get_str(tj, "attribution").as_deref(), Some("Base attr"));
 		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_meta_update_overlays_tilejson_update() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				"from_debug format=mvt | meta_update \
+				 tilejson='{\"tilejson\":\"3.0.0\",\"name\":\"Base\",\"attribution\":\"Base attr\"}' \
+				 tilejson_update='{\"name\":\"Updated\",\"description\":\"Added\"}' \
+				 attribution=\"Final attr\"",
+			)
+			.await?;
+
+		let tj = op.tilejson();
+		// Overlaid field wins over the basis ...
+		assert_eq!(get_str(tj, "name").as_deref(), Some("Updated"));
+		// ... a new field from the overlay is added ...
+		assert_eq!(get_str(tj, "description").as_deref(), Some("Added"));
+		// ... a basis field not touched by the overlay survives ...
+		// (here it is also overridden by the explicit `attribution` parameter, which wins last)
+		assert_eq!(get_str(tj, "attribution").as_deref(), Some("Final attr"));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_meta_update_tilejson_update_keeps_source_fields() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		// Without `tilejson=`, the overlay is applied onto the source's TileJSON.
+		let op = factory
+			.operation_from_vpl(
+				"from_debug format=mvt | filter bbox=[0,0,10,10] level_min=2 level_max=7 \
+				 | meta_update tilejson_update='{\"name\":\"Just the name\"}'",
+			)
+			.await?;
+
+		let tj = op.tilejson();
+		assert_eq!(get_str(tj, "name").as_deref(), Some("Just the name"));
+		// The source-derived zoom range is preserved (overlay only widens it).
+		assert_relative_eq!(tj.as_object().number("minzoom")?.unwrap(), 2.0);
+		assert_relative_eq!(tj.as_object().number("maxzoom")?.unwrap(), 7.0);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_meta_update_rejects_malformed_tilejson_update() {
+		let factory = PipelineFactory::new_dummy();
+		let err = factory
+			.operation_from_vpl("from_debug format=mvt | meta_update tilejson_update='{not valid'")
+			.await
+			.unwrap_err();
+		assert!(format!("{err:#}").contains("parsing 'tilejson_update'"), "got: {err:#}");
 	}
 
 	#[tokio::test]
