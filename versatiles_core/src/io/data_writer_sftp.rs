@@ -6,7 +6,20 @@ use ssh2::{OpenFlags, OpenType, Session};
 use std::{
 	io::{Seek, SeekFrom, Write},
 	path::{Path, PathBuf},
+	time::{Duration, Instant},
 };
+
+/// Render a byte count as a human-readable string for diagnostics.
+fn format_bytes(n: u64) -> String {
+	const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+	let mut value = n as f64;
+	let mut unit = 0;
+	while value >= 1024.0 && unit < UNITS.len() - 1 {
+		value /= 1024.0;
+		unit += 1;
+	}
+	format!("{value:.1} {}", UNITS[unit])
+}
 
 /// A struct that provides writing capabilities to a remote file via SFTP.
 pub struct DataWriterSftp {
@@ -17,6 +30,16 @@ pub struct DataWriterSftp {
 	name: String,
 	// Keep session alive for the lifetime of the writer
 	_session: Session,
+	// --- Connection diagnostics (reset on every (re)connect) ---
+	/// When the current connection was established.
+	connected_at: Instant,
+	/// Bytes appended over the current connection.
+	bytes_on_connection: u64,
+	/// When the last successful write finished — used to measure the idle gap
+	/// before the next write (e.g. while a block is being read/processed upstream).
+	last_write_end: Instant,
+	/// Idle gap immediately before the most recent write attempt.
+	last_attempt_idle: Duration,
 }
 
 impl DataWriterSftp {
@@ -38,6 +61,7 @@ impl DataWriterSftp {
 			.create(&path)
 			.with_context(|| format!("failed to create remote file {path:?}"))?;
 
+		let now = Instant::now();
 		Ok(DataWriterSftp {
 			file,
 			position: 0,
@@ -45,6 +69,10 @@ impl DataWriterSftp {
 			identity_file: identity_file.map(Path::to_path_buf),
 			name: sftp_utils::display_name(url),
 			_session: session,
+			connected_at: now,
+			bytes_on_connection: 0,
+			last_write_end: now,
+			last_attempt_idle: Duration::ZERO,
 		})
 	}
 
@@ -57,9 +85,14 @@ impl DataWriterSftp {
 
 impl NetworkWriter for DataWriterSftp {
 	fn try_append(&mut self, blob: &Blob) -> Result<ByteRange> {
+		// Idle gap since the last successful write (time spent producing this block
+		// upstream, during which the SFTP session sat idle).
+		self.last_attempt_idle = self.last_write_end.elapsed();
 		let pos = self.position;
 		self.file.write_all(blob.as_slice())?;
 		self.position += blob.len();
+		self.bytes_on_connection += blob.len();
+		self.last_write_end = Instant::now();
 		Ok(ByteRange::new(pos, blob.len()))
 	}
 
@@ -93,7 +126,17 @@ impl NetworkWriter for DataWriterSftp {
 
 	fn reconnect(&mut self) -> Result<()> {
 		let path = sftp_utils::remote_path(&self.url);
-		log::info!("reconnecting SFTP writer to '{}'", self.name);
+		// Summarize the connection that just died — this is the key signal for
+		// diagnosing *why* the server drops us: compare "alive" (time-based limit?),
+		// "wrote" (byte-volume limit?) and "idle before failure" (idle-timeout?)
+		// across reconnects.
+		log::info!(
+			"reconnecting SFTP writer to '{}' (previous connection: alive {:.1}s, wrote {}, idle {:.1}s before failure)",
+			self.name,
+			self.connected_at.elapsed().as_secs_f64(),
+			format_bytes(self.bytes_on_connection),
+			self.last_attempt_idle.as_secs_f64(),
+		);
 
 		let session = sftp_utils::open_session(&self.url, self.identity_file.as_deref())?;
 		let sftp = session.sftp()?;
@@ -106,6 +149,10 @@ impl NetworkWriter for DataWriterSftp {
 
 		self.file = file;
 		self._session = session;
+		let now = Instant::now();
+		self.connected_at = now;
+		self.bytes_on_connection = 0;
+		self.last_write_end = now;
 		Ok(())
 	}
 
@@ -115,6 +162,15 @@ impl NetworkWriter for DataWriterSftp {
 
 	fn tracked_position(&self) -> u64 {
 		self.position
+	}
+
+	fn failure_context(&self) -> String {
+		format!(
+			" [conn alive {:.1}s, {} written, idle {:.1}s before this write]",
+			self.connected_at.elapsed().as_secs_f64(),
+			format_bytes(self.bytes_on_connection),
+			self.last_attempt_idle.as_secs_f64(),
+		)
 	}
 }
 

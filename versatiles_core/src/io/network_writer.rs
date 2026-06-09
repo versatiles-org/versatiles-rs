@@ -27,6 +27,12 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 	/// Current tracked write position (no I/O).
 	fn tracked_position(&self) -> u64;
 
+	/// Extra diagnostic context appended to write-failure warnings (e.g. connection
+	/// age, bytes written, idle gap). Defaults to empty; implementors may override.
+	fn failure_context(&self) -> String {
+		String::new()
+	}
+
 	/// Append with retry and reconnect on failure.
 	fn network_append(&mut self, blob: &Blob) -> Result<ByteRange> {
 		let name = self.writer_name().to_string();
@@ -62,8 +68,9 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 			match self.try_append(blob) {
 				Ok(range) => return Ok(range),
 				Err(e) if attempt < max_retries => {
+					let ctx = self.failure_context();
 					log::warn!(
-						"write to '{name}' at position {pos}: {e} (attempt {}/{total_attempts}), will retry",
+						"write to '{name}' at position {pos}: {e}{ctx} (attempt {}/{total_attempts}), will retry",
 						attempt + 1
 					);
 				}
@@ -116,8 +123,9 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 			match self.try_write_at(0, blob, restore_pos) {
 				Ok(()) => return Ok(()),
 				Err(e) if attempt < max_retries => {
+					let ctx = self.failure_context();
 					log::warn!(
-						"write_start to '{name}': {e} (attempt {}/{total_attempts}), will retry",
+						"write_start to '{name}': {e}{ctx} (attempt {}/{total_attempts}), will retry",
 						attempt + 1
 					);
 				}
@@ -169,8 +177,9 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 			match self.try_seek(position) {
 				Ok(()) => return Ok(()),
 				Err(e) if attempt < max_retries => {
+					let ctx = self.failure_context();
 					log::warn!(
-						"seek in '{name}' to position {position}: {e} (attempt {}/{total_attempts}), will retry",
+						"seek in '{name}' to position {position}: {e}{ctx} (attempt {}/{total_attempts}), will retry",
 						attempt + 1
 					);
 				}
