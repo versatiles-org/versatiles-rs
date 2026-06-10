@@ -252,6 +252,9 @@ impl TileSource for Operation {
 		log::trace!("from_gdal_raster::tile_stream {bbox:?}");
 
 		let count = 4096u32.div_euclid(self.tile_size).max(1);
+		// Each chunk decodes one large source image and produces `count²` tiles; bound how
+		// many chunks are read concurrently so peak memory stays within the tile budget.
+		let concurrency = crate::operations::read::traits::chunk_concurrency((count * count) as usize);
 
 		let bbox = self.metadata.intersection_bbox(&bbox);
 
@@ -329,7 +332,7 @@ impl TileSource for Operation {
 			}
 		});
 
-		Ok(TileStream::from_streams(streams))
+		Ok(TileStream::from_streams_bounded(streams, concurrency))
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {

@@ -63,6 +63,19 @@ pub fn coord_concurrency(tiles_per_coord: usize) -> usize {
 	by_budget.min(ConcurrencyLimits::default().cpu_bound)
 }
 
+/// Concurrency for chunk-based readers that materialize `tiles_per_chunk` tiles —
+/// plus a correspondingly large source buffer — per chunk (e.g. GDAL meta-tile
+/// windows, which decode one ~4096²/8192²-pixel image per chunk).
+///
+/// Bounded by the tile budget and the I/O-bound concurrency limit, so resident
+/// output tiles ≤ `concurrency × tiles_per_chunk ≤ max_tiles_in_flight()`.
+#[cfg(feature = "gdal")]
+#[must_use]
+pub fn chunk_concurrency(tiles_per_chunk: usize) -> usize {
+	let by_budget = (max_tiles_in_flight() / tiles_per_chunk.max(1)).max(1);
+	by_budget.min(ConcurrencyLimits::default().io_bound)
+}
+
 /// Marker trait implemented by each read operation's `Operation` type to
 /// host its `build` factory. The build result is `Box<dyn TileSource>`, which
 /// can be a *different* type than `Self` — useful when the actual runtime
