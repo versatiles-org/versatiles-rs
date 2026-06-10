@@ -204,6 +204,7 @@ mod tests {
 	}
 
 	#[test]
+	#[allow(clippy::float_cmp)]
 	fn global_policy_uses_test_defaults() {
 		let p = policy();
 		assert_eq!(p.max_retries, DEFAULT_MAX_RETRIES);
