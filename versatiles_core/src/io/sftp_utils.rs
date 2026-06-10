@@ -4,8 +4,90 @@ use ssh2::Session;
 use std::{
 	net::{TcpStream, ToSocketAddrs},
 	path::{Path, PathBuf},
+	sync::{
+		Arc, Mutex,
+		atomic::{AtomicBool, Ordering},
+	},
+	thread::JoinHandle,
 	time::Duration,
 };
+
+/// A shared SSH session that can be swapped on reconnect — the unit the keepalive
+/// pings. `ssh2::Session` is `Clone` and internally `Arc<Mutex<_>>`-guarded, so the
+/// keepalive thread and the owning writer can touch it concurrently; ssh2 serializes
+/// the actual libssh2 calls.
+pub type SharedSession = Arc<Mutex<Session>>;
+
+/// Background keepalive for an SFTP connection.
+///
+/// Started when an SFTP reader/writer opens its connection; periodically sends an SSH
+/// keepalive so the server (and NAT/firewalls) do not reap the session during long idle
+/// gaps — e.g. while the writer waits minutes for the next block from a slow source.
+/// Stopping is automatic on drop (the idiomatic "close"): the background thread is
+/// signalled and joined.
+///
+/// Best-effort: a failed ping is logged and ignored — the owner's normal retry path
+/// reconnects on the next real operation.
+pub struct SftpKeepalive {
+	stop: Arc<AtomicBool>,
+	handle: Option<JoinHandle<()>>,
+}
+
+impl SftpKeepalive {
+	/// Spawn a keepalive pinging `session` every `VERSATILES_SFTP_KEEPALIVE_SECS`
+	/// seconds (default 15). `name` is only used for log messages.
+	#[must_use]
+	pub fn start(session: SharedSession, name: String) -> Self {
+		let secs = u64::from(super::retry::env_u32("VERSATILES_SFTP_KEEPALIVE_SECS", 15));
+		let interval = Duration::from_secs(secs.max(1));
+		let stop = Arc::new(AtomicBool::new(false));
+
+		let stop_thread = Arc::clone(&stop);
+		let handle = std::thread::Builder::new()
+			.name("sftp-keepalive".into())
+			.spawn(move || {
+				// Wake frequently enough to stop promptly, but only ping every `interval`.
+				let tick = Duration::from_millis(500).min(interval);
+				let mut waited = Duration::ZERO;
+				while !stop_thread.load(Ordering::Relaxed) {
+					std::thread::sleep(tick);
+					waited += tick;
+					if waited < interval {
+						continue;
+					}
+					waited = Duration::ZERO;
+					if stop_thread.load(Ordering::Relaxed) {
+						break;
+					}
+					// Clone the current session (cheap Arc clone) and release the lock
+					// before the (possibly blocking) network call.
+					let session = match session.lock() {
+						Ok(guard) => guard.clone(),
+						Err(_) => break, // poisoned: owner gone
+					};
+					match session.keepalive_send() {
+						Ok(_) => log::trace!("sent SFTP keepalive to '{name}'"),
+						Err(e) => log::debug!("SFTP keepalive to '{name}' failed (will reconnect on next op): {e}"),
+					}
+				}
+			})
+			.expect("spawning sftp-keepalive thread");
+
+		SftpKeepalive {
+			stop,
+			handle: Some(handle),
+		}
+	}
+}
+
+impl Drop for SftpKeepalive {
+	fn drop(&mut self) {
+		self.stop.store(true, Ordering::Relaxed);
+		if let Some(handle) = self.handle.take() {
+			let _ = handle.join();
+		}
+	}
+}
 
 /// Opens an authenticated SSH session from an SFTP URL.
 ///

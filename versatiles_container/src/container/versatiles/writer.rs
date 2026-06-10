@@ -230,6 +230,8 @@ impl VersaTilesWriter {
 
 		// Consumer: the single serial writer. Append each finished block and record it,
 		// fixing up the byte ranges from block-relative to absolute file positions.
+		// (Network sinks keep their connection alive across the idle gaps between blocks
+		// via their own background keepalive — see `SftpKeepalive`.)
 		let consume = async {
 			let mut block_index = BlockIndex::new_empty();
 			while let Some((mut block, blob)) = rx.next().await {

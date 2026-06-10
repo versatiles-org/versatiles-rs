@@ -1,11 +1,13 @@
-use super::{DataWriterTrait, network_writer::NetworkWriter, sftp_utils};
+use super::sftp_utils::{self, SftpKeepalive, SharedSession};
+use super::{DataWriterTrait, network_writer::NetworkWriter};
 use crate::{Blob, ByteRange};
 use anyhow::{Context, Result};
 use reqwest::Url;
-use ssh2::{OpenFlags, OpenType, Session};
+use ssh2::{OpenFlags, OpenType};
 use std::{
 	io::{Seek, SeekFrom, Write},
 	path::{Path, PathBuf},
+	sync::{Arc, Mutex},
 	time::{Duration, Instant},
 };
 
@@ -28,8 +30,11 @@ pub struct DataWriterSftp {
 	url: Url,
 	identity_file: Option<PathBuf>,
 	name: String,
-	// Keep session alive for the lifetime of the writer
-	_session: Session,
+	// Shared SSH session (swapped on reconnect). Shared with the background keepalive,
+	// which pings it during idle gaps so the peer does not reap the connection.
+	session: SharedSession,
+	// Background keepalive; dropping it stops and joins the pinger thread.
+	_keepalive: SftpKeepalive,
 	// --- Connection diagnostics (reset on every (re)connect) ---
 	/// When the current connection was established.
 	connected_at: Instant,
@@ -61,14 +66,19 @@ impl DataWriterSftp {
 			.create(&path)
 			.with_context(|| format!("failed to create remote file {path:?}"))?;
 
+		let name = sftp_utils::display_name(url);
+		let session: SharedSession = Arc::new(Mutex::new(session));
+		let keepalive = SftpKeepalive::start(Arc::clone(&session), name.clone());
+
 		let now = Instant::now();
 		Ok(DataWriterSftp {
 			file,
 			position: 0,
 			url: url.clone(),
 			identity_file: identity_file.map(Path::to_path_buf),
-			name: sftp_utils::display_name(url),
-			_session: session,
+			name,
+			session,
+			_keepalive: keepalive,
 			connected_at: now,
 			bytes_on_connection: 0,
 			last_write_end: now,
@@ -148,7 +158,8 @@ impl NetworkWriter for DataWriterSftp {
 			.with_context(|| format!("failed to seek to position {} in {path:?}", self.position))?;
 
 		self.file = file;
-		self._session = session;
+		// Swap the shared session so the keepalive thread pings the new connection.
+		*self.session.lock().expect("session mutex poisoned") = session;
 		let now = Instant::now();
 		self.connected_at = now;
 		self.bytes_on_connection = 0;

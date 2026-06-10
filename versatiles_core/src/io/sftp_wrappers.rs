@@ -4,20 +4,25 @@
 //! depending on the `ssh2` crate directly.
 
 use super::sftp_utils;
+use super::sftp_utils::{SftpKeepalive, SharedSession};
 use anyhow::{Context, Result, bail};
 use reqwest::Url;
 use std::{
 	io::Write,
 	path::{Path, PathBuf},
+	sync::{Arc, Mutex},
 	thread,
 };
 
 /// A [`Write`] stream to a remote file via SFTP.
 ///
-/// Keeps the SSH session alive for the lifetime of the writer.
+/// Keeps the SSH session alive for the lifetime of the writer, with a background
+/// keepalive so the connection survives idle gaps between writes.
 pub struct SftpWriteStream {
 	file: ssh2::File,
-	_session: ssh2::Session,
+	// Shared session, pinged by the background keepalive.
+	_session: SharedSession,
+	_keepalive: SftpKeepalive,
 }
 
 // ssh2::Session and ssh2::File are backed by libssh2 ref-counted handles.
@@ -33,9 +38,13 @@ impl SftpWriteStream {
 			.create(&remote_path)
 			.with_context(|| format!("failed to create remote file {remote_path:?}"))?;
 
+		let session: SharedSession = Arc::new(Mutex::new(session));
+		let keepalive = SftpKeepalive::start(Arc::clone(&session), sftp_utils::display_name(url));
+
 		Ok(Self {
 			file,
 			_session: session,
+			_keepalive: keepalive,
 		})
 	}
 }
@@ -57,7 +66,9 @@ pub struct SftpFileSystem {
 	base_path: PathBuf,
 	url: Url,
 	identity_file: Option<PathBuf>,
-	_session: ssh2::Session,
+	// Shared session (swapped on reconnect), pinged by the background keepalive.
+	session: SharedSession,
+	_keepalive: SftpKeepalive,
 }
 
 // ssh2::Sftp is backed by libssh2 ref-counted handles.
@@ -79,12 +90,16 @@ impl SftpFileSystem {
 			}
 		}
 
+		let session: SharedSession = Arc::new(Mutex::new(session));
+		let keepalive = SftpKeepalive::start(Arc::clone(&session), sftp_utils::display_name(url));
+
 		Ok(Self {
 			sftp,
 			base_path,
 			url: url.clone(),
 			identity_file: identity_file.map(Path::to_path_buf),
-			_session: session,
+			session,
+			_keepalive: keepalive,
 		})
 	}
 
@@ -93,7 +108,8 @@ impl SftpFileSystem {
 		let session = sftp_utils::open_session(&self.url, self.identity_file.as_deref())?;
 		let sftp = session.sftp()?;
 		self.sftp = sftp;
-		self._session = session;
+		// Swap the shared session so the keepalive thread pings the new connection.
+		*self.session.lock().expect("session mutex poisoned") = session;
 		Ok(())
 	}
 
