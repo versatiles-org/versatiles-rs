@@ -108,6 +108,10 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	// output would be indistinguishable from a successful conversion.
 	runtime.set_abort_on_error(true);
 
+	// Periodically log RSS so memory growth (e.g. toward an OOM kill, which the
+	// process can't report itself) is visible in the conversion's own output.
+	let _memory_heartbeat = super::memory::start();
+
 	log::trace!("convert: opening source '{}'", arguments.input_file);
 	let open_start = Instant::now();
 	let reader = runtime.reader_from_str(&arguments.input_file).await?;
