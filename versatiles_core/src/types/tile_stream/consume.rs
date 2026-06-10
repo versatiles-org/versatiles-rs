@@ -31,9 +31,26 @@ where
 	where
 		FutureStream: Future<Output = TileStream<'a, T>> + Send + 'a,
 	{
-		let limits = ConcurrencyLimits::default();
+		Self::from_streams_bounded(streams, ConcurrencyLimits::default().io_bound)
+	}
+
+	/// Like [`from_streams`](Self::from_streams) but caps how many of the sub-stream
+	/// futures are awaited concurrently.
+	///
+	/// `from_streams` uses the (large) I/O-bound concurrency limit, which is right for
+	/// cheap fan-out but unbounded for callers that materialize a lot of data per
+	/// sub-stream. Such callers should pass an explicit `concurrency` so peak memory is
+	/// bounded by `concurrency × (cost of one sub-stream)`. `concurrency` is clamped to
+	/// at least 1.
+	pub fn from_streams_bounded<FutureStream>(
+		streams: impl Stream<Item = FutureStream> + Send + 'a,
+		concurrency: usize,
+	) -> TileStream<'a, T>
+	where
+		FutureStream: Future<Output = TileStream<'a, T>> + Send + 'a,
+	{
 		TileStream {
-			inner: Box::pin(streams.buffer_unordered(limits.io_bound).map(|s| s.inner).flatten()), // I/O-bound: awaiting async streams
+			inner: Box::pin(streams.buffer_unordered(concurrency.max(1)).map(|s| s.inner).flatten()),
 		}
 	}
 
