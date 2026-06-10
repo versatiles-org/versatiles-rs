@@ -95,8 +95,21 @@ impl Chunk {
 		tile_compression: TileCompression,
 		tile_format: TileFormat,
 	) -> Result<Vec<(TileCoord, Tile)>> {
+		log::trace!(
+			"chunk: reading {} bytes for {} tiles",
+			self.range.length,
+			self.tiles.len()
+		);
 		let big_blob = reader.read_range(&self.range).await?;
-		Ok(self.slice_tiles(&big_blob, tile_compression, tile_format))
+		log::trace!(
+			"chunk: slicing {} tiles from {} bytes (range offset {})",
+			self.tiles.len(),
+			big_blob.len(),
+			self.range.offset
+		);
+		let tiles = self.slice_tiles(&big_blob, tile_compression, tile_format);
+		log::trace!("chunk: done slicing {} tiles", tiles.len());
+		Ok(tiles)
 	}
 
 	/// Slice a big blob into individual tiles using the chunk's tile ranges.
@@ -191,6 +204,10 @@ impl Chunks {
 		tile_format: TileFormat,
 	) -> TileStream<'static, Tile> {
 		let concurrency = chunk_read_concurrency();
+		log::trace!(
+			"chunk stream: {} chunks, read concurrency {concurrency}",
+			self.chunks.len()
+		);
 		TileStream::from_stream(
 			futures::stream::iter(self.chunks)
 				.map(move |chunk| {

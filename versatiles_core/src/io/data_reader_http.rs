@@ -213,6 +213,8 @@ impl DataReaderHttp {
 				sleep(backoff).await;
 			}
 
+			log::trace!("http: {range} {attempt_label}: sending request");
+
 			// Acquire INSIDE the loop so retry backoff sleeps don't hold the permit,
 			// and so a fatal failure releases the permit before bail!.
 			let _permit = self
@@ -305,6 +307,7 @@ impl DataReaderHttp {
 				),
 			};
 
+			log::trace!("http: {range} {attempt_label}: read {} bytes ok", bytes.len());
 			return Ok(Blob::from(&*bytes));
 		}
 

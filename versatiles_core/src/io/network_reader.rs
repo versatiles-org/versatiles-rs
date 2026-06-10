@@ -24,6 +24,7 @@ pub(crate) trait NetworkReader: DataReaderTrait {
 	/// On failure, splits the range in half and reads each half separately,
 	/// recording the failure so future large ranges split proactively.
 	async fn network_read_range(&self, range: &ByteRange) -> Result<Blob> {
+		log::trace!("network_read_range {range} ({} bytes)", range.length);
 		// Short-circuit zero-length reads. HTTP `Range: bytes=N-(N-1)` is malformed
 		// and conforming servers reject it with 400; SFTP would also reject. Empty
 		// "ranges" appear in PMTiles when a directory section is absent.
@@ -63,6 +64,7 @@ pub(crate) trait NetworkReader: DataReaderTrait {
 		let mid = range.offset + range.length / 2;
 		let left = ByteRange::new(range.offset, mid - range.offset);
 		let right = ByteRange::new(mid, range.offset + range.length - mid);
+		log::trace!("split_and_read {range} -> [{left}] + [{right}]");
 		let (blob_left, blob_right) = futures::future::try_join(self.read_range(&left), self.read_range(&right)).await?;
 		let mut data = blob_left.into_vec();
 		data.extend_from_slice(blob_right.as_slice());

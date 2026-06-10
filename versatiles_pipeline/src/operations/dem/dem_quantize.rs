@@ -138,6 +138,9 @@ impl TileSource for Operation {
 			.tile_stream(bbox)
 			.await?
 			.map_parallel_try(move |coord, mut tile| {
+				// Time per-tile decode+quantize; trace slow tiles — decoding one large image
+				// is single-threaded and can dominate when few tiles are in flight.
+				let started = std::time::Instant::now();
 				let (mask_r, mask_g, mask_b) = compute_masks_for_tile(&coord, elevation_error, slope_error, encoding);
 
 				let image = tile.as_image_mut()?;
@@ -159,6 +162,10 @@ impl TileSource for Operation {
 					_ => bail!("dem_quantize requires RGB8 or RGBA8 images"),
 				}
 				tile.set_format_quality(Some(100)); // max quality to preserve pixel values
+				let elapsed = started.elapsed();
+				if elapsed.as_secs_f64() > 1.0 {
+					log::trace!("dem_quantize: slow tile {coord:?}: {elapsed:?}");
+				}
 				Ok(tile)
 			})
 			.unwrap_results())

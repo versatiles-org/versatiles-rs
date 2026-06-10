@@ -50,6 +50,7 @@ use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traver
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt, channel::mpsc, try_join};
+use std::time::Instant;
 use versatiles_core::{
 	compression::compress,
 	io::{DataWriterBlob, DataWriterTrait},
@@ -196,7 +197,21 @@ impl VersaTilesWriter {
 
 							// Compress tiles in parallel.
 							let compressed_stream = stream
-								.map_parallel_try(move |_coord, tile| tile.into_blob(&tile_compression))
+								.map_parallel_try(move |coord, tile| {
+									// Time each tile; trace the slow ones — a single large tile
+									// re-encoding single-threaded can hold a core for a long time
+									// (e.g. max-quality DEM at low zoom).
+									let started = Instant::now();
+									let blob = tile.into_blob(&tile_compression)?;
+									let elapsed = started.elapsed();
+									if elapsed.as_secs_f64() > 1.0 {
+										log::trace!(
+											"writer: slow tile encode {coord:?}: {elapsed:?} -> {} bytes",
+											blob.len()
+										);
+									}
+									Ok(blob)
+								})
 								.unwrap_results();
 
 							// Serialize the block into a private in-memory buffer. Tile byte
@@ -235,12 +250,15 @@ impl VersaTilesWriter {
 		let consume = async {
 			let mut block_index = BlockIndex::new_empty();
 			while let Some((mut block, blob)) = rx.next().await {
+				log::trace!("writer: appending block ({} bytes) to output", blob.len());
 				let base = writer.position()?;
 				writer.append(&blob)?;
+				log::trace!("writer: appended block, output position now {}", base + blob.len());
 				block.set_tiles_range(block.tiles_range().shifted_forward(base));
 				block.set_index_range(block.index_range().shifted_forward(base));
 				block_index.insert_block(block);
 			}
+			log::trace!("writer: input drained, finalizing block index");
 			Ok::<BlockIndex, anyhow::Error>(block_index)
 		};
 

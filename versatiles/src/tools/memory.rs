@@ -86,7 +86,7 @@ pub fn start() -> Option<HeartbeatGuard> {
 			interval.tick().await;
 			if let Some(rss) = process_rss_bytes() {
 				peak = peak.max(rss);
-				log::info!("memory: RSS {} (peak {})", format_bytes(rss), format_bytes(peak));
+				log::debug!("memory: RSS {} (peak {})", format_bytes(rss), format_bytes(peak));
 			}
 		}
 	});
