@@ -673,6 +673,11 @@ Memory for tile-gathering operations:
 
 - `VERSATILES_MAX_TILES_IN_FLIGHT` - Upper bound on the number of raw source tiles held in memory at once by operations that combine sources (`from_merged_vector`, `from_stacked`, `from_stacked_raster`); default `2048`. Peak memory ≈ this × the largest tile size, so lower it for very large tiles or many sources (e.g. `512`), or raise it for more read-ahead on small tiles.
 
+Memory for reading containers (PMTiles / VersaTiles):
+
+- `VERSATILES_CHUNK_MAX_BYTES` - Maximum size of a single coalesced byte-range read when streaming tiles, in bytes (default `67108864` = 64 MiB). Each chunk is read as one in-memory blob.
+- `VERSATILES_CHUNK_READ_MEMORY` - Budget for total in-flight chunk-read bytes (default `268435456` = 256 MiB). The number of chunks read concurrently is `budget / chunk_size`, so peak read memory stays near this value regardless of CPU count. Lower it on memory-constrained machines, or raise it to read further ahead on fast links.
+
 **Example usage:**
 
 ```sh

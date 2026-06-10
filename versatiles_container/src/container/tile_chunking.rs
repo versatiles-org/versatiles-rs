@@ -2,8 +2,12 @@
 //!
 //! Both the VersaTiles and PMTiles readers use this module to minimize I/O calls
 //! when streaming tiles for a bounding box. Nearby byte ranges are grouped into
-//! chunks (up to ~256 MiB each, with a small gap tolerance), which are then read
-//! as single large blobs and sliced into individual tiles.
+//! chunks (each up to `VERSATILES_CHUNK_MAX_BYTES`, default 64 MiB, with a small gap
+//! tolerance), which are then read as single blobs and sliced into individual tiles.
+//!
+//! Chunks are read concurrently up to a memory budget (`VERSATILES_CHUNK_READ_MEMORY`,
+//! default 256 MiB), so peak read memory is bounded regardless of CPU count — important
+//! when a bounding box coalesces into many large chunks.
 //!
 //! When a chunk read fails, the chunk is automatically split into smaller pieces
 //! and retried. This continues recursively down to individual tile reads, so a
@@ -17,8 +21,40 @@ use versatiles_core::{
 	Blob, ByteRange, ConcurrencyLimits, TileCompression, TileCoord, TileFormat, TileStream, io::DataReader,
 };
 
-const MAX_CHUNK_SIZE: u64 = 256 * 1024 * 1024;
+/// Default maximum size of a single coalesced chunk. Each chunk is read as one
+/// in-memory blob, so `chunk size × read-ahead` bounds peak read memory. Override
+/// with `VERSATILES_CHUNK_MAX_BYTES`.
+const DEFAULT_MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
+/// Default budget for total in-flight chunk-read bytes. The number of chunks read
+/// concurrently is `budget / chunk_size` (≥ 1, capped at the I/O concurrency limit),
+/// so peak read memory stays near this value regardless of CPU count. Override with
+/// `VERSATILES_CHUNK_READ_MEMORY`.
+const DEFAULT_CHUNK_READ_MEMORY: u64 = 256 * 1024 * 1024;
 const MAX_CHUNK_GAP: u64 = 256 * 1024;
+
+/// Parse a positive byte-count environment variable, falling back to `default`.
+fn env_bytes(name: &str, default: u64) -> u64 {
+	std::env::var(name)
+		.ok()
+		.and_then(|s| s.trim().parse::<u64>().ok())
+		.filter(|&n| n > 0)
+		.unwrap_or(default)
+}
+
+/// Maximum coalesced chunk size (bytes).
+fn max_chunk_size() -> u64 {
+	env_bytes("VERSATILES_CHUNK_MAX_BYTES", DEFAULT_MAX_CHUNK_SIZE)
+}
+
+/// How many chunks to read concurrently, derived from a memory budget so that
+/// `concurrency × chunk_size ≈ budget`. Bounds peak read memory independent of the
+/// (CPU-derived) I/O concurrency limit, which is far too high for large chunk blobs.
+fn chunk_read_concurrency() -> usize {
+	let budget = env_bytes("VERSATILES_CHUNK_READ_MEMORY", DEFAULT_CHUNK_READ_MEMORY);
+	let by_budget = (budget / max_chunk_size().max(1)).max(1);
+	let cap = ConcurrencyLimits::default().io_bound as u64;
+	usize::try_from(by_budget.min(cap)).unwrap_or(1).max(1)
+}
 
 /// A group of tile byte ranges that can be served from a single large read.
 /// `range` tracks the combined byte span in the container.
@@ -141,9 +177,9 @@ impl Chunks {
 	/// Sort tile ranges by byte offset and coalesce into chunks.
 	///
 	/// Nearby ranges (within `MAX_CHUNK_GAP`) are grouped together as long as the
-	/// total chunk size stays below `MAX_CHUNK_SIZE`.
+	/// total chunk size stays below [`max_chunk_size`].
 	pub fn from_tile_ranges(mut tile_ranges: Vec<(TileCoord, ByteRange)>) -> Chunks {
-		Chunks::coalesce(&mut tile_ranges, MAX_CHUNK_SIZE, MAX_CHUNK_GAP)
+		Chunks::coalesce(&mut tile_ranges, max_chunk_size(), MAX_CHUNK_GAP)
 	}
 
 	/// Convert chunks into a `TileStream` by reading each chunk as a single blob
@@ -154,7 +190,7 @@ impl Chunks {
 		tile_compression: TileCompression,
 		tile_format: TileFormat,
 	) -> TileStream<'static, Tile> {
-		let concurrency = ConcurrencyLimits::default().io_bound;
+		let concurrency = chunk_read_concurrency();
 		TileStream::from_stream(
 			futures::stream::iter(self.chunks)
 				.map(move |chunk| {
@@ -267,5 +303,49 @@ mod tests {
 		assert_eq!(state.total_reads.load(Ordering::SeqCst), 8, "one read per chunk");
 		let peak = state.max_in_flight.load(Ordering::SeqCst);
 		assert!(peak >= 2, "expected concurrent chunk reads, saw peak {peak} in flight");
+	}
+
+	#[test]
+	fn chunk_concurrency_defaults_to_memory_budget() {
+		// With defaults (env unset): 256 MiB budget / 64 MiB chunk = 4, far below io_bound.
+		if std::env::var("VERSATILES_CHUNK_MAX_BYTES").is_err() && std::env::var("VERSATILES_CHUNK_READ_MEMORY").is_err()
+		{
+			assert_eq!(max_chunk_size(), DEFAULT_MAX_CHUNK_SIZE);
+			assert_eq!(chunk_read_concurrency(), 4);
+			assert!(
+				chunk_read_concurrency() < ConcurrencyLimits::default().io_bound,
+				"budget must cap concurrency well below the I/O limit"
+			);
+		}
+	}
+
+	#[tokio::test]
+	async fn chunks_stream_concurrency_is_bounded() {
+		// Many separate chunks, but in-flight reads must stay within the budget cap.
+		let gap = MAX_CHUNK_GAP + 1;
+		let n = 32u32;
+		let tile_ranges: Vec<(TileCoord, ByteRange)> = (0..n)
+			.map(|i| (TileCoord::new(5, i, 0).unwrap(), ByteRange::new(u64::from(i) * gap, 1)))
+			.collect();
+		let chunks = Chunks::from_tile_ranges(tile_ranges);
+		assert_eq!(chunks.chunks.len(), n as usize, "expected one chunk per range");
+
+		let state = Arc::new(PeakState::default());
+		let reader: DataReader = Box::new(PeakCounter {
+			state: Arc::clone(&state),
+			delay: Duration::from_millis(20),
+		});
+
+		let _ = chunks
+			.stream(Arc::new(reader), TileCompression::Uncompressed, TileFormat::BIN)
+			.to_vec()
+			.await;
+
+		let peak = state.max_in_flight.load(Ordering::SeqCst);
+		let limit = chunk_read_concurrency();
+		assert!(
+			peak <= limit,
+			"peak {peak} in flight exceeded the budget concurrency {limit}"
+		);
 	}
 }
