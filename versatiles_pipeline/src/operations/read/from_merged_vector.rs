@@ -88,40 +88,6 @@ fn merge_tiles(mut tiles: Vec<Tile>, format: TileFormat) -> Result<Tile> {
 	Tile::from_vector(merge_vector_tiles(vector_tiles)?, format)
 }
 
-/// Default upper bound on the number of raw source tiles `tile_stream` keeps in memory
-/// at once. Peak memory ≈ this many tiles × the largest tile size, so it is lowered for
-/// very large tiles or many sources (and raised for more read-ahead) via
-/// `VERSATILES_MERGE_MAX_TILES`.
-const DEFAULT_MAX_TILES_IN_FLIGHT: usize = 2048;
-
-/// Number of read chunks processed concurrently: one chunk is merged while the next is
-/// being read. Kept small so the tile budget yields a tight memory bound.
-const MERGE_READ_AHEAD: usize = 2;
-
-/// The configured cap on resident raw source tiles (env-overridable).
-fn max_tiles_in_flight() -> usize {
-	std::env::var("VERSATILES_MERGE_MAX_TILES")
-		.ok()
-		.and_then(|s| s.trim().parse::<usize>().ok())
-		.filter(|&n| n > 0)
-		.unwrap_or(DEFAULT_MAX_TILES_IN_FLIGHT)
-}
-
-/// Largest power-of-two grid cell size (tiles per side) for which `MERGE_READ_AHEAD`
-/// chunks across `n_sources` stay within `max_tiles`.
-///
-/// This guarantees resident raw tiles ≤ `MERGE_READ_AHEAD × size² × n_sources ≤ max_tiles`
-/// regardless of how large the requested bbox is.
-fn merge_grid_size(max_tiles: usize, n_sources: usize) -> u32 {
-	let budget = u64::try_from((max_tiles / (MERGE_READ_AHEAD * n_sources.max(1))).max(1)).unwrap_or(u64::MAX);
-	let mut size: u64 = 1;
-	// Cap at 4096 (a 4096² cell is already 16M tiles) to keep `size` well within u32.
-	while size < 4096 && (size * 2) * (size * 2) <= budget {
-		size *= 2;
-	}
-	u32::try_from(size).unwrap_or(4096)
-}
-
 impl ReadTileSource for Operation {
 	#[context("Failed to build from_merged_vector operation")]
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
@@ -212,15 +178,15 @@ impl TileSource for Operation {
 	#[context("Failed to get merged tile stream for bbox: {:?}", bbox)]
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("from_merged_vector::tile_stream {bbox:?}");
-		let n_sources = self.sources.len();
-		let grid_size = merge_grid_size(max_tiles_in_flight(), n_sources);
+		// Each coordinate holds one tile per source until merged.
+		let grid_size = super::traits::chunk_grid_size(self.sources.len());
 		let bboxes: Vec<TileBBox> = bbox.iter_grid(grid_size).collect();
 		let sources = Arc::clone(&self.sources);
 		let format = *self.metadata.tile_format();
 
 		// Stage 1: read raw source tiles per chunk (sources kept in order for a
 		// deterministic merge). Bounded read-ahead caps resident raw tiles to
-		// `MERGE_READ_AHEAD × grid_size² × n_sources ≤ max_tiles_in_flight()`.
+		// `READ_AHEAD × grid_size² × n_sources ≤ max_tiles_in_flight()`.
 		let groups = TileStream::from_streams_bounded(
 			stream::iter(bboxes).map(move |chunk_bbox| {
 				let sources = Arc::clone(&sources);
@@ -252,7 +218,7 @@ impl TileSource for Operation {
 					)
 				}
 			}),
-			MERGE_READ_AHEAD,
+			super::traits::READ_AHEAD,
 		);
 
 		// Stage 2: merge in parallel across cores. Single-source coordinates skip the
@@ -479,32 +445,6 @@ mod tests {
 		assert!(merged_tile.layers.iter().any(|l| l.name == "layer2"));
 
 		Ok(())
-	}
-
-	#[test]
-	fn test_merge_grid_size_respects_budget() {
-		// For every budget/source combination the resident-tile bound must hold:
-		//   MERGE_READ_AHEAD * grid² * n_sources <= max_tiles
-		for &max_tiles in &[1usize, 64, 256, 2048, 100_000, 10_000_000] {
-			for &n_sources in &[2usize, 3, 8] {
-				let g = u64::from(merge_grid_size(max_tiles, n_sources));
-				assert!(g >= 1, "grid size must be at least 1");
-				let resident = MERGE_READ_AHEAD as u64 * g * g * n_sources as u64;
-				assert!(
-					resident <= max_tiles as u64 || g == 1,
-					"resident {resident} exceeds budget {max_tiles} (grid {g}, sources {n_sources})"
-				);
-			}
-		}
-	}
-
-	#[test]
-	fn test_merge_grid_size_is_power_of_two() {
-		// iter_grid asserts the size is a power of two.
-		for &max_tiles in &[1usize, 100, 2048, 50_000] {
-			let g = merge_grid_size(max_tiles, 2);
-			assert!(g.is_power_of_two(), "grid size {g} must be a power of two");
-		}
 	}
 
 	#[test]

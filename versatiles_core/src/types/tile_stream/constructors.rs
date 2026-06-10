@@ -164,16 +164,32 @@ where
 	/// });
 	/// # }
 	/// ```
-	pub fn from_bbox_async_parallel<F, Fut>(bbox: TileBBox, mut callback: F) -> Self
+	pub fn from_bbox_async_parallel<F, Fut>(bbox: TileBBox, callback: F) -> Self
 	where
 		F: FnMut(TileCoord) -> Fut + Send + 'a,
 		Fut: Future<Output = Option<(TileCoord, T)>> + Send + 'static,
 		T: 'static,
 	{
-		let limits = ConcurrencyLimits::default();
+		Self::from_bbox_async_parallel_bounded(bbox, ConcurrencyLimits::default().cpu_bound, callback)
+	}
+
+	/// Like [`from_bbox_async_parallel`](Self::from_bbox_async_parallel) but caps how many
+	/// per-coordinate futures run concurrently.
+	///
+	/// The default uses the CPU-bound limit, which is right when each coordinate's result
+	/// is small. Callers whose per-coordinate work holds a lot of memory (e.g. blending
+	/// several large raster tiles) should pass an explicit `concurrency` so peak memory is
+	/// bounded by `concurrency × (tiles held per coordinate)`. `concurrency` is clamped to
+	/// at least 1.
+	pub fn from_bbox_async_parallel_bounded<F, Fut>(bbox: TileBBox, concurrency: usize, mut callback: F) -> Self
+	where
+		F: FnMut(TileCoord) -> Fut + Send + 'a,
+		Fut: Future<Output = Option<(TileCoord, T)>> + Send + 'static,
+		T: 'static,
+	{
 		let s = stream::iter(bbox.into_iter_coords())
 			.map(move |coord| tokio::spawn(callback(coord)))
-			.buffer_unordered(limits.cpu_bound)
+			.buffer_unordered(concurrency.max(1))
 			.filter_map(|result| async {
 				match result {
 					Ok(item) => item,

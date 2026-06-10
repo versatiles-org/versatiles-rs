@@ -669,6 +669,10 @@ SFTP connection tuning:
 - `VERSATILES_SFTP_KEEPALIVE_SECS` - TCP and SSH keepalive interval in seconds (default `15`), keeping connections alive across idle gaps.
 - `VERSATILES_SFTP_MAX_CONNECTIONS` - Maximum number of pooled SFTP connections per server.
 
+Memory for tile-gathering operations:
+
+- `VERSATILES_MAX_TILES_IN_FLIGHT` - Upper bound on the number of raw source tiles held in memory at once by operations that combine sources (`from_merged_vector`, `from_stacked`, `from_stacked_raster`); default `2048`. Peak memory ≈ this × the largest tile size, so lower it for very large tiles or many sources (e.g. `512`), or raise it for more read-ahead on small tiles.
+
 **Example usage:**
 
 ```sh

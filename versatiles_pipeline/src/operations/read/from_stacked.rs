@@ -140,48 +140,52 @@ impl TileSource for Operation {
 		let format = *self.metadata.tile_format();
 		let sources = Arc::clone(&self.sources);
 
-		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_grid(32).collect();
+		// Overlay keeps a single tile per coordinate (first non-empty source wins), so the
+		// budget counts one tile per coordinate. Bounded read-ahead caps resident tiles.
+		let sub_bboxes: Vec<TileBBox> = bbox.iter_grid(super::traits::chunk_grid_size(1)).collect();
 
-		Ok(TileStream::from_streams(stream::iter(sub_bboxes).map(move |bbox| {
-			let sources = Arc::clone(&sources);
-			async move {
-				let mut tiles =
-					TileBBoxMap::<Option<Tile>>::new_default(bbox).expect("32×32 grid bbox always fits in usize");
+		Ok(TileStream::from_streams_bounded(
+			stream::iter(sub_bboxes).map(move |bbox| {
+				let sources = Arc::clone(&sources);
+				async move {
+					let mut tiles = TileBBoxMap::<Option<Tile>>::new_default(bbox).expect("grid cell fits in usize");
 
-				for source in sources.iter() {
-					let mut bbox_left = TileBBox::new_empty(bbox.level()).expect("bbox.level() is already a valid zoom");
-					for (coord, slot) in tiles.iter() {
-						if slot.is_none() {
-							bbox_left.insert_coord(&coord).expect("coord is within bbox level");
-						}
-					}
-					if bbox_left.is_empty() {
-						continue;
-					}
-
-					let stream = source
-						.tile_stream(bbox_left)
-						.await
-						.expect("tile_stream succeeded for requested bbox");
-					stream
-						.for_each(|coord, mut tile| {
-							let entry = tiles.get_mut(&coord).expect("coord is within bbox");
-							if entry.is_none() {
-								tile
-									.change_format(format, None, None)
-									.expect("all sources share the same tile format");
-								*entry = Some(tile);
+					for source in sources.iter() {
+						let mut bbox_left = TileBBox::new_empty(bbox.level()).expect("bbox.level() is already a valid zoom");
+						for (coord, slot) in tiles.iter() {
+							if slot.is_none() {
+								bbox_left.insert_coord(&coord).expect("coord is within bbox level");
 							}
-						})
-						.await;
+						}
+						if bbox_left.is_empty() {
+							continue;
+						}
+
+						let stream = source
+							.tile_stream(bbox_left)
+							.await
+							.expect("tile_stream succeeded for requested bbox");
+						stream
+							.for_each(|coord, mut tile| {
+								let entry = tiles.get_mut(&coord).expect("coord is within bbox");
+								if entry.is_none() {
+									tile
+										.change_format(format, None, None)
+										.expect("all sources share the same tile format");
+									*entry = Some(tile);
+								}
+							})
+							.await;
+					}
+					let vec = tiles
+						.into_iter()
+						.filter_map(|(coord, item)| item.map(|tile| (coord, tile)))
+						.collect::<Vec<_>>();
+					TileStream::from_vec(vec)
 				}
-				let vec = tiles
-					.into_iter()
-					.filter_map(|(coord, item)| item.map(|tile| (coord, tile)))
-					.collect::<Vec<_>>();
-				TileStream::from_vec(vec)
-			}
-		})))
+			}),
+			super::traits::READ_AHEAD,
+		))
 	}
 }
 

@@ -402,13 +402,38 @@ impl TileSource for Operation {
 			}
 
 			let native_coords = Arc::new(native_coords);
-			return Ok(TileStream::from_bbox_async_parallel(bbox, move |c| {
-				let entries = entries.clone();
-				let native_coords = Arc::clone(&native_coords);
-				async move {
-					if !native_coords.contains(&c) {
-						return None;
+			// Bound per-coordinate concurrency by the tile budget: blending holds one
+			// (decoded, potentially large) raster tile per source per in-flight coordinate.
+			let concurrency = super::traits::coord_concurrency(entries.len());
+			return Ok(TileStream::from_bbox_async_parallel_bounded(
+				bbox,
+				concurrency,
+				move |c| {
+					let entries = entries.clone();
+					let native_coords = Arc::clone(&native_coords);
+					async move {
+						if !native_coords.contains(&c) {
+							return None;
+						}
+						let tile = tile(c, entries).await.unwrap();
+						if let Some((_coord, mut tile)) = tile {
+							tile.change_format(tile_format, None, None).unwrap();
+							return Some((c, tile));
+						}
+						tile
 					}
+				},
+			));
+		}
+
+		// Default: process tile by tile (all-native path)
+		let concurrency = super::traits::coord_concurrency(entries.len());
+		Ok(TileStream::from_bbox_async_parallel_bounded(
+			bbox,
+			concurrency,
+			move |c| {
+				let entries = entries.clone();
+				async move {
 					let tile = tile(c, entries).await.unwrap();
 					if let Some((_coord, mut tile)) = tile {
 						tile.change_format(tile_format, None, None).unwrap();
@@ -416,21 +441,8 @@ impl TileSource for Operation {
 					}
 					tile
 				}
-			}));
-		}
-
-		// Default: process tile by tile (all-native path)
-		Ok(TileStream::from_bbox_async_parallel(bbox, move |c| {
-			let entries = entries.clone();
-			async move {
-				let tile = tile(c, entries).await.unwrap();
-				if let Some((_coord, mut tile)) = tile {
-					tile.change_format(tile_format, None, None).unwrap();
-					return Some((c, tile));
-				}
-				tile
-			}
-		}))
+			},
+		))
 	}
 }
 
