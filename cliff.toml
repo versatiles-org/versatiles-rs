@@ -1,0 +1,37 @@
+# git-cliff config for the grouped release notes built by
+# scripts/workflow-create-release.sh. This relies on git-cliff's defaults and only
+# overrides what the defaults get wrong for *release notes*:
+#   - a minimal body: no per-version "## [x.y.z]" header, plain group headings,
+#     subject line only;
+#   - commit groups that SKIP noise (style/test/chore/ci/build/release + merges),
+#     which the default would otherwise render as their own sections.
+# Docs: https://git-cliff.org/docs/configuration
+
+[changelog]
+header = ""
+body = """
+{%- for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim | upper_first }}
+
+{% for commit in commits -%}
+- {{ commit.message | split(pat="\n") | first | upper_first }}
+{% endfor -%}
+{% endfor -%}
+"""
+footer = ""
+trim = true
+
+[git]
+# Keep non-conventional commits (e.g. a plain "Update dependencies") under
+# "Other Changes" rather than dropping them (git-cliff drops them by default).
+filter_unconventional = false
+commit_parsers = [
+  { message = "^feat", group = "<!-- 0 -->Features" },
+  { message = "^fix", group = "<!-- 1 -->Bug Fixes" },
+  { message = "^perf", group = "<!-- 2 -->Performance" },
+  { message = "^refactor", group = "<!-- 3 -->Refactoring" },
+  { message = "^docs?", group = "<!-- 4 -->Documentation" },
+  { message = "^(style|test|chore|ci|build|release)", skip = true },
+  { message = "^Merge ", skip = true },
+  { message = ".*", group = "<!-- 5 -->Other Changes" },
+]

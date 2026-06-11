@@ -72,6 +72,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          # Full history + tags so git-cliff can build the changelog for the tag range.
+          fetch-depth: 0
+
+      - name: Install git-cliff
+        uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
 
       - id: create_release
         name: Get version via latest git tag
