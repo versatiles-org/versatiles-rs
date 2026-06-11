@@ -678,6 +678,10 @@ Memory for reading containers (PMTiles / VersaTiles):
 - `VERSATILES_CHUNK_MAX_BYTES` - Maximum size of a single coalesced byte-range read when streaming tiles, in bytes (default `67108864` = 64 MiB). Each chunk is read as one in-memory blob.
 - `VERSATILES_CHUNK_READ_MEMORY` - Budget for total in-flight chunk-read bytes (default `268435456` = 256 MiB). The number of chunks read concurrently is `budget / chunk_size`, so peak read memory stays near this value regardless of CPU count. Lower it on memory-constrained machines, or raise it to read further ahead on fast links.
 
+Memory for writing `.versatiles` containers:
+
+- `VERSATILES_WRITE_TILE_BUFFER` - Number of compressed tiles buffered between the parallel compressor and the serial writer (default `64`). Tiles are streamed straight to the output, so peak writer memory is ≈ this × the tile size — independent of how large a block is. Lower it for very large tiles on memory-constrained machines, or raise it for more write-ahead.
+
 **Example usage:**
 
 ```sh

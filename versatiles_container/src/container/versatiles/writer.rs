@@ -45,7 +45,7 @@
 //! Returns errors if writing fails, compression fails, or if metadata or bounding box
 //! information is invalid.
 
-use super::types::{BlockBuilder, BlockDefinition, BlockIndex, FileHeader};
+use super::types::{BlockBuilder, BlockIndex, FileHeader};
 use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
@@ -53,24 +53,39 @@ use futures::{SinkExt, StreamExt, channel::mpsc, try_join};
 use std::time::Instant;
 use versatiles_core::{
 	compression::compress,
-	io::{DataWriterBlob, DataWriterTrait},
-	types::{Blob, ByteRange, TileCompression},
+	io::DataWriterTrait,
+	types::{Blob, ByteRange, TileCompression, TileCoord},
 };
+
+/// Messages streamed from the parallel block builders to the single serial writer.
+///
+/// Tiles are sent individually (not as a whole pre-built block) so the writer can
+/// append them straight to the output as they arrive. This bounds peak memory to a
+/// small number of in-flight tiles instead of materializing an entire block — which
+/// for dense low-zoom DEM can be many gigabytes.
+enum BlockMessage {
+	/// Begin a new block at the given zoom level.
+	Start(u8),
+	/// A compressed tile belonging to the current block.
+	Tile(TileCoord, Blob),
+	/// The current block is complete; finalize and write its index.
+	End,
+}
 use versatiles_derive::context;
 
-/// Number of fully-built blocks that may sit in the writer queue at once.
+/// Number of compressed tiles that may sit in the writer queue at once.
 ///
-/// Each block is read + compressed into its own in-memory buffer off the writer's
-/// critical path, then handed to the single serial writer. A small queue lets the
-/// writer drain block *N* while block *N+1* is still being read/compressed (filling
-/// the per-block "trough" where only the writer was busy), while bounding peak memory
-/// to roughly this many compressed blocks. Override with `VERSATILES_WRITE_QUEUE_DEPTH`.
-fn write_queue_depth() -> usize {
-	std::env::var("VERSATILES_WRITE_QUEUE_DEPTH")
+/// Tiles are compressed in parallel off the writer's critical path, then streamed
+/// individually to the single serial writer which appends them straight to the output.
+/// This buffer decouples the parallel compressor from the serial writer; peak memory is
+/// roughly this many compressed tiles (so ≈ `depth × tile size`), independent of how
+/// large a block is. Override with `VERSATILES_WRITE_TILE_BUFFER`.
+fn tile_buffer_size() -> usize {
+	std::env::var("VERSATILES_WRITE_TILE_BUFFER")
 		.ok()
 		.and_then(|s| s.trim().parse::<usize>().ok())
 		.filter(|&n| n > 0)
-		.unwrap_or(4)
+		.unwrap_or(64)
 }
 
 /// Writer for `.versatiles` containers.
@@ -178,13 +193,14 @@ impl VersaTilesWriter {
 			return Ok(ByteRange::empty());
 		}
 
-		// Pipeline: parallel block builders (read + compress + serialize each block into
-		// its own in-memory buffer) feed a single serial writer over a bounded channel.
-		// This keeps the heavy work off the writer's critical path so block N is written
-		// while block N+1 is already being read/compressed. The channel bounds peak memory.
-		let (tx, mut rx) = mpsc::channel::<(BlockDefinition, Blob)>(write_queue_depth());
+		// Pipeline: tiles are compressed in parallel off the writer's critical path, then
+		// streamed individually to a single serial writer over a bounded channel. The
+		// writer appends each tile straight to the output and builds the block index
+		// incrementally, so peak memory is a handful of in-flight tiles — NOT a whole
+		// block (which for dense low-zoom DEM can be many gigabytes and would OOM).
+		let (tx, mut rx) = mpsc::channel::<BlockMessage>(tile_buffer_size());
 
-		// Producer: build each block fully in memory, then hand it to the writer.
+		// Producer: compress tiles in parallel and stream them, block by block.
 		let produce = async move {
 			reader
 				.traverse_all_tiles(
@@ -194,9 +210,12 @@ impl VersaTilesWriter {
 
 						Box::pin(async move {
 							log::trace!("start processing block at {bbox:?}");
+							tx.send(BlockMessage::Start(bbox.level()))
+								.await
+								.map_err(|_| anyhow!("writer stopped accepting blocks"))?;
 
-							// Compress tiles in parallel.
-							let compressed_stream = stream
+							// Compress tiles in parallel, then forward each to the serial writer.
+							stream
 								.map_parallel_try(move |coord, tile| {
 									// Time each tile; trace the slow ones — a single large tile
 									// re-encoding single-threaded can hold a core for a long time
@@ -212,27 +231,21 @@ impl VersaTilesWriter {
 									}
 									Ok(blob)
 								})
-								.unwrap_results();
-
-							// Serialize the block into a private in-memory buffer. Tile byte
-							// ranges are recorded relative to the block start, so the bytes are
-							// position-independent until the writer appends them.
-							let mut buffer = DataWriterBlob::new()?;
-							let mut block_builder = BlockBuilder::new(bbox.level(), &mut buffer)?;
-							compressed_stream
-								.for_each_try(|coord, blob| block_builder.write_tile(coord, blob))
+								.unwrap_results()
+								.for_each_async_try(|coord, blob| {
+									let mut tx = tx.clone();
+									// Backpressure here bounds in-flight memory; the writer runs concurrently.
+									async move {
+										tx.send(BlockMessage::Tile(coord, blob))
+											.await
+											.map_err(|_| anyhow!("writer stopped accepting tiles"))
+									}
+								})
 								.await?;
 
-							if let Some(block) = block_builder.finalize()? {
-								log::trace!("built block {block:?}");
-								// Backpressure here bounds in-flight memory; the writer runs concurrently.
-								tx.send((block, buffer.into_blob()))
-									.await
-									.map_err(|_| anyhow!("writer stopped accepting blocks"))?;
-							} else {
-								log::trace!("skipping empty block at {bbox:?}");
-							}
-
+							tx.send(BlockMessage::End)
+								.await
+								.map_err(|_| anyhow!("writer stopped accepting blocks"))?;
 							Ok(())
 						})
 					},
@@ -243,20 +256,35 @@ impl VersaTilesWriter {
 			Ok::<(), anyhow::Error>(())
 		};
 
-		// Consumer: the single serial writer. Append each finished block and record it,
-		// fixing up the byte ranges from block-relative to absolute file positions.
-		// (Network sinks keep their connection alive across the idle gaps between blocks
-		// via their own background keepalive — see `SftpKeepalive`.)
+		// Consumer: the single serial writer. Builds each block directly into the output
+		// via `BlockBuilder` (which appends tiles immediately and keeps only the small
+		// per-tile index in memory), so no whole-block buffer is ever materialized.
+		// (Network sinks keep their connection alive across idle gaps via `SftpKeepalive`.)
 		let consume = async {
 			let mut block_index = BlockIndex::new_empty();
-			while let Some((mut block, blob)) = rx.next().await {
-				log::trace!("writer: appending block ({} bytes) to output", blob.len());
-				let base = writer.position()?;
-				writer.append(&blob)?;
-				log::trace!("writer: appended block, output position now {}", base + blob.len());
-				block.set_tiles_range(block.tiles_range().shifted_forward(base));
-				block.set_index_range(block.index_range().shifted_forward(base));
-				block_index.insert_block(block);
+			while let Some(message) = rx.next().await {
+				let BlockMessage::Start(level) = message else {
+					return Err(anyhow!("writer protocol error: expected block start"));
+				};
+				// `BlockBuilder` borrows the writer for the duration of this block only,
+				// writing tiles straight to the output as they arrive.
+				let mut block_builder = BlockBuilder::new(level, writer)?;
+				let mut tile_count: u64 = 0;
+				loop {
+					match rx.next().await {
+						Some(BlockMessage::Tile(coord, blob)) => {
+							block_builder.write_tile(coord, blob)?;
+							tile_count += 1;
+						}
+						Some(BlockMessage::End) => break,
+						Some(BlockMessage::Start(_)) => return Err(anyhow!("writer protocol error: nested block start")),
+						None => return Err(anyhow!("producer dropped mid-block")),
+					}
+				}
+				if let Some(block) = block_builder.finalize()? {
+					log::trace!("writer: wrote block ({tile_count} tiles) to output");
+					block_index.insert_block(block);
+				}
 			}
 			log::trace!("writer: input drained, finalizing block index");
 			Ok::<BlockIndex, anyhow::Error>(block_index)
