@@ -6,7 +6,6 @@ use std::path::PathBuf;
 
 pub const TILE_URLS: &[&str] = &[
 	"https://tiles.versatiles.org/tiles/elevation/11/1034/709",
-	"https://tiles.versatiles.org/tiles/elevation/11/1044/625",
 	"https://tiles.versatiles.org/tiles/elevation/11/1068/728",
 	"https://tiles.versatiles.org/tiles/elevation/11/1079/886",
 	"https://tiles.versatiles.org/tiles/elevation/11/1081/886",
