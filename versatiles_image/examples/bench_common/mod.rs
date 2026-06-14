@@ -5,16 +5,16 @@ use libwebp_sys::{VP8StatusCode, WebPBitstreamFeatures, WebPDecodeRGB, WebPFree,
 use std::path::PathBuf;
 
 pub const TILE_URLS: &[&str] = &[
-	"https://tiles.versatiles.org/tiles/elevation/11/1034/709",
-	"https://tiles.versatiles.org/tiles/elevation/11/1068/728",
-	"https://tiles.versatiles.org/tiles/elevation/11/1079/886",
-	"https://tiles.versatiles.org/tiles/elevation/11/1081/886",
-	"https://tiles.versatiles.org/tiles/elevation/11/1098/660",
-	"https://tiles.versatiles.org/tiles/elevation/11/113/896",
-	"https://tiles.versatiles.org/tiles/elevation/11/1518/858",
-	"https://tiles.versatiles.org/tiles/elevation/11/1569/335",
-	"https://tiles.versatiles.org/tiles/elevation/11/693/1105",
-	"https://tiles.versatiles.org/tiles/elevation/11/890/437",
+	"https://tiles.mapterhorn.com/11/1034/709.webp",
+	"https://tiles.mapterhorn.com/11/1068/728.webp",
+	"https://tiles.mapterhorn.com/11/1079/886.webp",
+	"https://tiles.mapterhorn.com/11/1081/886.webp",
+	"https://tiles.mapterhorn.com/11/1098/660.webp",
+	"https://tiles.mapterhorn.com/11/113/896.webp",
+	"https://tiles.mapterhorn.com/11/1518/858.webp",
+	"https://tiles.mapterhorn.com/11/1569/335.webp",
+	"https://tiles.mapterhorn.com/11/693/1105.webp",
+	"https://tiles.mapterhorn.com/11/890/437.webp",
 ];
 
 fn cache_dir() -> PathBuf {
