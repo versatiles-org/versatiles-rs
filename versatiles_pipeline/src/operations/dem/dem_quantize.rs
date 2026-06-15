@@ -9,11 +9,12 @@ use versatiles_derive::context;
 use versatiles_image::DynamicImage;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Quantize DEM (elevation) raster tiles by zeroing unnecessary low bits.
+/// Quantize DEM (elevation) raster tiles by rounding to a per-tile power-of-two step.
 ///
-/// Computes a per-tile quantization mask from two physically meaningful criteria:
-/// elevation error relative to pixel size, and maximum slope distortion.
-/// The stricter (smaller step) wins. Single-pass — no min/max scan needed.
+/// Computes the step from two physically meaningful criteria: elevation error relative to
+/// pixel size, and maximum slope distortion. The stricter (smaller step) wins. Values are
+/// rounded to the nearest multiple of the step (not truncated), which halves the worst-case
+/// elevation error and removes the downward bias at no size cost. Single-pass — no scan.
 struct Args {
 	/// Allowed elevation error as fraction of pixel ground size.
 	/// E.g. 0.5 means for a 10 m pixel, allow up to 5 m elevation error. Defaults to 0.5.
@@ -34,15 +35,14 @@ struct Operation {
 	encoding: DemEncoding,
 }
 
-/// Compute per-channel bit masks for a tile based on its coordinates and quantization parameters.
+/// Compute the round-to-nearest quantizer for a tile from its coordinates and parameters.
 ///
-/// Returns `(mask_r, mask_g, mask_b)` to be applied via bitwise AND to each pixel channel.
-fn compute_masks_for_tile(
-	coord: &TileCoord,
-	elevation_error: f64,
-	slope_error: f64,
-	encoding: DemEncoding,
-) -> (u8, u8, u8) {
+/// Returns `(mask_24, round_add)`. Apply per pixel by reconstructing the 24-bit raw
+/// elevation, adding `round_add`, clamping to 24 bits, then ANDing with `mask_24`. This
+/// rounds each value to the nearest multiple of the per-tile step `2^zero_bits` instead of
+/// truncating downward, which halves the worst-case elevation error and removes the
+/// systematic downward bias — at the same step (same slope error) and the same size.
+fn compute_quantizer(coord: &TileCoord, elevation_error: f64, slope_error: f64, encoding: DemEncoding) -> (u32, u32) {
 	let tile_ground_meters = coord.ground_size_meters();
 	let pixel_meters = tile_ground_meters / 256.0;
 
@@ -74,11 +74,22 @@ fn compute_masks_for_tile(
 	} else {
 		0x00FF_FFFFu32 & !((1u32 << zero_bits) - 1)
 	};
+	// Half a step, added before masking, turns truncation into round-to-nearest.
+	let round_add = if zero_bits == 0 { 0 } else { 1u32 << (zero_bits - 1) };
+	(mask_24, round_add)
+}
 
-	let mask_b = (mask_24 & 0xFF) as u8;
-	let mask_g = ((mask_24 >> 8) & 0xFF) as u8;
-	let mask_r = ((mask_24 >> 16) & 0xFF) as u8;
-	(mask_r, mask_g, mask_b)
+/// Apply the round-to-nearest quantizer to one RGB pixel in place (alpha untouched).
+///
+/// Rounding is done on the reconstructed 24-bit value so a carry can propagate across
+/// channel boundaries (B → G → R), then clamped to the 24-bit range.
+#[allow(clippy::cast_possible_truncation)]
+fn quantize_pixel(r: &mut u8, g: &mut u8, b: &mut u8, mask_24: u32, round_add: u32) {
+	let raw = (u32::from(*r) << 16) | (u32::from(*g) << 8) | u32::from(*b);
+	let q = (raw + round_add).min(0x00FF_FFFF) & mask_24;
+	*r = ((q >> 16) & 0xFF) as u8;
+	*g = ((q >> 8) & 0xFF) as u8;
+	*b = (q & 0xFF) as u8;
 }
 
 impl Operation {
@@ -141,22 +152,20 @@ impl TileSource for Operation {
 				// Time per-tile decode+quantize; trace slow tiles — decoding one large image
 				// is single-threaded and can dominate when few tiles are in flight.
 				let started = std::time::Instant::now();
-				let (mask_r, mask_g, mask_b) = compute_masks_for_tile(&coord, elevation_error, slope_error, encoding);
+				let (mask_24, round_add) = compute_quantizer(&coord, elevation_error, slope_error, encoding);
 
 				let image = tile.as_image_mut()?;
 				match image {
 					DynamicImage::ImageRgb8(img) => {
 						for p in img.pixels_mut() {
-							p[0] &= mask_r;
-							p[1] &= mask_g;
-							p[2] &= mask_b;
+							let [r, g, b] = &mut p.0;
+							quantize_pixel(r, g, b, mask_24, round_add);
 						}
 					}
 					DynamicImage::ImageRgba8(img) => {
 						for p in img.pixels_mut() {
-							p[0] &= mask_r;
-							p[1] &= mask_g;
-							p[2] &= mask_b;
+							let [r, g, b, _a] = &mut p.0;
+							quantize_pixel(r, g, b, mask_24, round_add);
 						}
 					}
 					_ => bail!("dem_quantize requires RGB8 or RGBA8 images"),
@@ -192,7 +201,18 @@ mod tests {
 		(u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b)
 	}
 
-	// ── compute_masks_for_tile unit tests ────────────────────────────────
+	/// Per-channel masks `(mask_r, mask_g, mask_b)` derived from the quantizer, for tests.
+	fn masks(coord: &TileCoord, elevation_error: f64, slope_error: f64, encoding: DemEncoding) -> (u8, u8, u8) {
+		let (mask_24, _round_add) = compute_quantizer(coord, elevation_error, slope_error, encoding);
+		#[allow(clippy::cast_possible_truncation)]
+		(
+			((mask_24 >> 16) & 0xFF) as u8,
+			((mask_24 >> 8) & 0xFF) as u8,
+			(mask_24 & 0xFF) as u8,
+		)
+	}
+
+	// ── compute_quantizer unit tests ─────────────────────────────────────
 
 	#[test]
 	fn test_masks_zoom0_equator_mapbox() {
@@ -202,7 +222,7 @@ mod tests {
 		// Gradient is stricter → zero_bits ≈ 14
 		// 14 zero bits: B fully zeroed (bits 0-7), G partially (bits 8-13), R preserved (bits 16-23)
 		let coord = TileCoord::new(0, 0, 0).unwrap();
-		let (mr, mg, mb) = compute_masks_for_tile(&coord, 0.5, 1.0, DemEncoding::Mapbox);
+		let (mr, mg, mb) = masks(&coord, 0.5, 1.0, DemEncoding::Mapbox);
 		assert_eq!(mr, 0xFF, "R should be preserved at zoom 0 (only 14 bits zeroed)");
 		assert_ne!(mg, 0xFF, "G should be partially masked at zoom 0");
 		assert_eq!(mb, 0x00, "B should be fully zeroed at zoom 0");
@@ -215,7 +235,7 @@ mod tests {
 		// gradient=1°: step ≈ 0.167 m → raw ≈ 1.67 → zero_bits = 1
 		// Gradient is stricter → zero_bits ≈ 1
 		let coord = TileCoord::new(14, 8192, 8192).unwrap();
-		let (mr, mg, mb) = compute_masks_for_tile(&coord, 0.5, 1.0, DemEncoding::Mapbox);
+		let (mr, mg, mb) = masks(&coord, 0.5, 1.0, DemEncoding::Mapbox);
 		// Very few bits zeroed — masks should be close to 0xFF
 		assert_eq!(mr, 0xFF, "R should be unmasked at zoom 14");
 		assert_eq!(mg, 0xFF, "G should be unmasked at zoom 14");
@@ -230,7 +250,7 @@ mod tests {
 		// gradient=1°: step ≈ 0.01 m → raw ≈ 0.1 → zero_bits = 0
 		// Gradient needs full precision → zero_bits = 0
 		let coord = TileCoord::new(18, 131072, 131072).unwrap();
-		let (mr, mg, mb) = compute_masks_for_tile(&coord, 0.5, 1.0, DemEncoding::Mapbox);
+		let (mr, mg, mb) = masks(&coord, 0.5, 1.0, DemEncoding::Mapbox);
 		assert_eq!(
 			(mr, mg, mb),
 			(0xFF, 0xFF, 0xFF),
@@ -243,8 +263,8 @@ mod tests {
 		// Terrarium has finer raw units (1/256 m vs 0.1 m), so same step allows
 		// more zero bits in terrarium than mapbox
 		let coord = TileCoord::new(8, 128, 128).unwrap();
-		let (mr_m, mg_m, mb_m) = compute_masks_for_tile(&coord, 0.5, 1.0, DemEncoding::Mapbox);
-		let (mr_t, mg_t, mb_t) = compute_masks_for_tile(&coord, 0.5, 1.0, DemEncoding::Terrarium);
+		let (mr_m, mg_m, mb_m) = masks(&coord, 0.5, 1.0, DemEncoding::Mapbox);
+		let (mr_t, mg_t, mb_t) = masks(&coord, 0.5, 1.0, DemEncoding::Terrarium);
 		// Terrarium raw unit is ~25.6x smaller than Mapbox, so max_step_raw is ~25.6x larger
 		// This means more zero_bits for Terrarium
 		let mapbox_mask = pixel_to_raw(mr_m, mg_m, mb_m);
@@ -261,8 +281,8 @@ mod tests {
 		let equator = TileCoord::new(8, 128, 128).unwrap();
 		let high_lat = TileCoord::new(8, 128, 16).unwrap(); // near pole
 
-		let (mr_eq, mg_eq, mb_eq) = compute_masks_for_tile(&equator, 0.5, 1.0, DemEncoding::Mapbox);
-		let (mr_hl, mg_hl, mb_hl) = compute_masks_for_tile(&high_lat, 0.5, 1.0, DemEncoding::Mapbox);
+		let (mr_eq, mg_eq, mb_eq) = masks(&equator, 0.5, 1.0, DemEncoding::Mapbox);
+		let (mr_hl, mg_hl, mb_hl) = masks(&high_lat, 0.5, 1.0, DemEncoding::Mapbox);
 
 		let mask_eq = pixel_to_raw(mr_eq, mg_eq, mb_eq);
 		let mask_hl = pixel_to_raw(mr_hl, mg_hl, mb_hl);
@@ -275,8 +295,8 @@ mod tests {
 	#[test]
 	fn test_masks_stricter_ratio_preserves_more() {
 		let coord = TileCoord::new(8, 128, 128).unwrap();
-		let (mr1, mg1, mb1) = compute_masks_for_tile(&coord, 0.5, 1.0, DemEncoding::Mapbox);
-		let (mr2, mg2, mb2) = compute_masks_for_tile(&coord, 0.05, 1.0, DemEncoding::Mapbox);
+		let (mr1, mg1, mb1) = masks(&coord, 0.5, 1.0, DemEncoding::Mapbox);
+		let (mr2, mg2, mb2) = masks(&coord, 0.05, 1.0, DemEncoding::Mapbox);
 
 		let mask1 = pixel_to_raw(mr1, mg1, mb1);
 		let mask2 = pixel_to_raw(mr2, mg2, mb2);
@@ -286,8 +306,8 @@ mod tests {
 	#[test]
 	fn test_masks_stricter_gradient_preserves_more() {
 		let coord = TileCoord::new(8, 128, 128).unwrap();
-		let (mr1, mg1, mb1) = compute_masks_for_tile(&coord, 0.5, 2.0, DemEncoding::Mapbox);
-		let (mr2, mg2, mb2) = compute_masks_for_tile(&coord, 0.5, 0.5, DemEncoding::Mapbox);
+		let (mr1, mg1, mb1) = masks(&coord, 0.5, 2.0, DemEncoding::Mapbox);
+		let (mr2, mg2, mb2) = masks(&coord, 0.5, 0.5, DemEncoding::Mapbox);
 
 		let mask1 = pixel_to_raw(mr1, mg1, mb1);
 		let mask2 = pixel_to_raw(mr2, mg2, mb2);
@@ -301,6 +321,69 @@ mod tests {
 		assert_eq!(pixel_to_raw(0x12, 0x34, 0x56), 0x123456);
 		assert_eq!(pixel_to_raw(0, 0, 0), 0);
 		assert_eq!(pixel_to_raw(255, 255, 255), 0x00FF_FFFF);
+	}
+
+	// ── rounding behaviour tests ────────────────────────────────────────
+
+	#[test]
+	fn test_round_add_is_half_step() {
+		// round_add must be exactly half the quantization step (0 when no bits zeroed).
+		let coord = TileCoord::new(8, 128, 128).unwrap();
+		let (mask_24, round_add) = compute_quantizer(&coord, 0.5, 1.0, DemEncoding::Mapbox);
+		let step = (!mask_24 & 0x00FF_FFFF) + 1; // 2^zero_bits
+		assert_eq!(round_add, step / 2);
+	}
+
+	#[test]
+	fn test_quantize_pixel_rounds_to_nearest() {
+		let mask_24 = 0x00FF_FF00; // zero low 8 bits → step 256
+		let round_add = 0x80; // half step
+		// 0x000180 = 384 → ties-up → 512 (0x000200)
+		let (mut r, mut g, mut b) = (0x00, 0x01, 0x80);
+		quantize_pixel(&mut r, &mut g, &mut b, mask_24, round_add);
+		assert_eq!(pixel_to_raw(r, g, b), 0x0000_0200);
+		// 0x00017F = 383 → rounds down → 256 (0x000100)
+		let (mut r, mut g, mut b) = (0x00, 0x01, 0x7F);
+		quantize_pixel(&mut r, &mut g, &mut b, mask_24, round_add);
+		assert_eq!(pixel_to_raw(r, g, b), 0x0000_0100);
+	}
+
+	#[test]
+	fn test_quantize_pixel_carry_across_channels() {
+		// Rounding up at a channel boundary must carry B → G.
+		let mask_24 = 0x00FF_FF00;
+		let round_add = 0x80;
+		let (mut r, mut g, mut b) = (0x00, 0xFF, 0x80); // 0x00FF80 + 0x80 = 0x010000
+		quantize_pixel(&mut r, &mut g, &mut b, mask_24, round_add);
+		assert_eq!(pixel_to_raw(r, g, b), 0x0001_0000, "carry B→G must propagate");
+	}
+
+	#[test]
+	fn test_quantize_pixel_clamps_at_max() {
+		// Near the 24-bit ceiling, rounding up must clamp (no wrap to 0).
+		let mask_24 = 0x00FF_FF00;
+		let round_add = 0x80;
+		let (mut r, mut g, mut b) = (0xFF, 0xFF, 0xFF);
+		quantize_pixel(&mut r, &mut g, &mut b, mask_24, round_add);
+		assert_eq!(pixel_to_raw(r, g, b), 0x00FF_FF00);
+	}
+
+	#[test]
+	fn test_rounding_less_biased_than_truncation() {
+		// Over a ramp, round-to-nearest has far smaller mean signed error than truncation.
+		let mask_24 = 0x00FF_FF00u32;
+		let round_add = 0x80u32;
+		let (mut sum_round, mut sum_trunc) = (0i64, 0i64);
+		for v in 0u32..4096 {
+			let (mut r, mut g, mut b) = (((v >> 16) & 0xFF) as u8, ((v >> 8) & 0xFF) as u8, (v & 0xFF) as u8);
+			quantize_pixel(&mut r, &mut g, &mut b, mask_24, round_add);
+			sum_round += i64::from(pixel_to_raw(r, g, b)) - i64::from(v);
+			sum_trunc += i64::from(v & mask_24) - i64::from(v);
+		}
+		assert!(
+			sum_round.abs() * 10 < sum_trunc.abs(),
+			"rounding should be far less biased: round={sum_round}, trunc={sum_trunc}"
+		);
 	}
 
 	// ── pixel processing tests ──────────────────────────────────────────
@@ -345,7 +428,7 @@ mod tests {
 			DynamicImage::ImageRgb8(img) => {
 				// Compute expected masks for tile (8, 56, 56)
 				let coord = TileCoord::new(8, 56, 56).unwrap();
-				let (_mr, _mg, mb) = compute_masks_for_tile(&coord, 0.5, 1.0, DemEncoding::Mapbox);
+				let (_mr, _mg, mb) = masks(&coord, 0.5, 1.0, DemEncoding::Mapbox);
 				let zeroed_bits = !mb;
 				for p in img.pixels() {
 					assert_eq!(p[2] & zeroed_bits, 0, "Low bits of B channel should be zeroed");
@@ -386,7 +469,7 @@ mod tests {
 		match result_image {
 			DynamicImage::ImageRgba8(img) => {
 				let coord = TileCoord::new(8, 56, 56).unwrap();
-				let (_mr, _mg, mb) = compute_masks_for_tile(&coord, 0.5, 1.0, DemEncoding::Mapbox);
+				let (_mr, _mg, mb) = masks(&coord, 0.5, 1.0, DemEncoding::Mapbox);
 				let zeroed_bits = !mb;
 				for p in img.pixels() {
 					assert_eq!(p[2] & zeroed_bits, 0, "Low bits of B channel should be zeroed");
