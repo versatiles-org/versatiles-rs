@@ -2,6 +2,9 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::many_single_char_names)]
+#![allow(dead_code)]
 
 //! Rate–distortion benchmark for terrarium DEM size-reduction strategies.
 //!
@@ -45,13 +48,19 @@ fn rgb_to_elev(r: u8, g: u8, b: u8) -> f64 {
 }
 fn elev_to_rgb(e: f64) -> [u8; 3] {
 	let raw = ((e + 32768.0) / RAW_UNIT_M).round().clamp(0.0, 0x00FF_FFFF as f64) as u32;
-	[((raw >> 16) & 0xFF) as u8, ((raw >> 8) & 0xFF) as u8, (raw & 0xFF) as u8]
+	[
+		((raw >> 16) & 0xFF) as u8,
+		((raw >> 8) & 0xFF) as u8,
+		(raw & 0xFF) as u8,
+	]
 }
 
 // ── geo helpers ──────────────────────────────────────────────────────────────
-fn pixel_meters(z: u32, x: u32, y: u32) -> f64 {
+fn pixel_meters(z: u32, _x: u32, y: u32) -> f64 {
 	let n = f64::from(1u32 << z);
-	let lat_rad = (std::f64::consts::PI * (1.0 - 2.0 * (f64::from(y) + 0.5) / n)).sinh().atan();
+	let lat_rad = (std::f64::consts::PI * (1.0 - 2.0 * (f64::from(y) + 0.5) / n))
+		.sinh()
+		.atan();
 	(WORLD_SIZE / n) * lat_rad.cos() / 256.0
 }
 
@@ -77,7 +86,8 @@ fn zero_bits_for(tol_raw: f64) -> u32 {
 }
 
 fn quantize_raw<F: Fn(u32) -> u32>(elev: &Grid, f: F) -> Grid {
-	elev.iter()
+	elev
+		.iter()
 		.map(|&e| {
 			let raw = ((e + 32768.0) / RAW_UNIT_M).round().clamp(0.0, 0x00FF_FFFF as f64) as u32;
 			f(raw) as f64 * RAW_UNIT_M - 32768.0
@@ -339,7 +349,10 @@ fn main() {
 		})
 		.collect();
 
-	let orig_total: usize = tiles.iter().map(|(_, g, w, h, ..)| encode_size(g, *w as i32, *h as i32)).sum();
+	let orig_total: usize = tiles
+		.iter()
+		.map(|(_, g, w, h, ..)| encode_size(g, *w as i32, *h as i32))
+		.sum();
 
 	// Baseline: the current op (truncating mask at the 1° slope budget).
 	let mut base_total = 0usize;
@@ -379,7 +392,10 @@ fn main() {
 			bits_sum / n,
 		);
 	}
-	println!("\n(method=4 lossless; {} tiles; rounded power-of-two, content-adaptive per tile)", tiles.len());
+	println!(
+		"\n(method=4 lossless; {} tiles; rounded power-of-two, content-adaptive per tile)",
+		tiles.len()
+	);
 
 	// ── spatially-adaptive (block-wise) at the conservative 1.0° budget ──────────
 	println!("\nBlock-adaptive @ slope_budget=1.0° (size win WITHOUT relaxing quality):");
