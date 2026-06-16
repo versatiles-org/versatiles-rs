@@ -194,6 +194,10 @@ fn measure(orig: &Grid, new: &Grid, w: usize, h: usize, pm: f64) -> Err {
 
 // ── webp size ────────────────────────────────────────────────────────────────
 fn encode_size(grid: &Grid, w: i32, h: i32) -> usize {
+	encode_size_m(grid, w, h, 4)
+}
+
+fn encode_size_m(grid: &Grid, w: i32, h: i32, method: i32) -> usize {
 	let mut rgb = Vec::with_capacity((w * h * 3) as usize);
 	for &e in grid {
 		rgb.extend_from_slice(&elev_to_rgb(e));
@@ -201,7 +205,7 @@ fn encode_size(grid: &Grid, w: i32, h: i32) -> usize {
 	unsafe {
 		let mut config = WebPConfig::new().unwrap();
 		config.lossless = 1;
-		config.method = 4;
+		config.method = method;
 		config.quality = 100.0;
 		config.exact = 1;
 		let mut picture = WebPPicture::new().unwrap();
@@ -331,6 +335,71 @@ fn block_adaptive_grid(
 	(out, bits_sum / nblocks)
 }
 
+/// Replicates the production `dem_quantize` per-pixel adaptive algorithm (raw domain).
+/// Returns (quantized grid, mean bits, sweeps used).
+fn adaptive_production(orig: &Grid, w: usize, h: usize, pm: f64, ee: f64, se: f64) -> (Grid, f64, u32) {
+	let to_raw = |e: f64| ((e + 32768.0) / RAW_UNIT_M).round().clamp(0.0, 0x00FF_FFFF as f64) as u32;
+	let e_raw: Vec<u32> = orig.iter().map(|&e| to_raw(e)).collect();
+	let n = e_raw.len();
+
+	let tol_raw = (ee * pm) / RAW_UNIT_M;
+	let init = if tol_raw < 1.0 {
+		0u8
+	} else {
+		(tol_raw.log2().floor() as i32 + 1).clamp(0, 24) as u8
+	};
+	let q1 = |raw: u32, b: u8| -> u32 {
+		if b == 0 {
+			raw & 0x00FF_FFFF
+		} else {
+			let step = 1u32 << u32::from(b);
+			(raw + (step >> 1)).min(0x00FF_FFFF) & (0x00FF_FFFF & !(step - 1))
+		}
+	};
+
+	let mut bits = vec![init; n];
+	let mut sweeps = 0u32;
+	if init > 0 {
+		let max_diff_raw = (pm * se.to_radians().tan()) / RAW_UNIT_M;
+		for _ in 0..64 {
+			sweeps += 1;
+			let qerr: Vec<i64> = (0..n).map(|i| i64::from(q1(e_raw[i], bits[i])) - i64::from(e_raw[i])).collect();
+			let mut dec = vec![false; n];
+			let mut any = false;
+			for y in 0..h {
+				for x in 0..w {
+					let i = y * w + x;
+					if bits[i] == 0 {
+						continue;
+					}
+					let qq = qerr[i];
+					let over = |j: usize| (qq - qerr[j]).abs() as f64 > max_diff_raw;
+					if (x + 1 < w && over(i + 1))
+						|| (x > 0 && over(i - 1))
+						|| (y + 1 < h && over(i + w))
+						|| (y > 0 && over(i - w))
+					{
+						dec[i] = true;
+						any = true;
+					}
+				}
+			}
+			if !any {
+				break;
+			}
+			for (i, d) in dec.iter().enumerate() {
+				if *d {
+					bits[i] -= 1;
+				}
+			}
+		}
+	}
+	let out: Grid = (0..n).map(|i| f64::from(q1(e_raw[i], bits[i])) * RAW_UNIT_M - 32768.0).collect();
+	let mean_bits = bits.iter().map(|&b| f64::from(b)).sum::<f64>() / n as f64;
+	(out, mean_bits, sweeps)
+}
+
+#[allow(clippy::too_many_lines)]
 fn main() {
 	let images = load_tile_rgb_data();
 
@@ -426,4 +495,59 @@ fn main() {
 		);
 	}
 	println!("(maxΔ° here is the GLOBAL realised slope error, including block boundaries)");
+
+	// ── WebP effort sweep on the FIXED current-op output (no quality change) ──────
+	// Same quantized pixels (current rounded-uniform op) → only the encoder effort
+	// changes. This is the one transparent lever left within the current constraints.
+	println!("\nWebP effort on current-op output (identical pixels, identical errors):");
+	println!("method\tsize\tvs_m4");
+	let quantized: Vec<(Grid, i32, i32)> = tiles
+		.iter()
+		.map(|(_, g, w, h, pm, tol_elev)| {
+			let tol_slope = pm * SLOPE_ERROR_DEG.to_radians().tan();
+			let zb = zero_bits_for(tol_elev.min(tol_slope) / RAW_UNIT_M);
+			(rounded_mask_transform(g, zb), *w as i32, *h as i32)
+		})
+		.collect();
+	let mut m4_total = 0usize;
+	for &method in &[4i32, 5, 6] {
+		let size: usize = quantized.iter().map(|(g, w, h)| encode_size_m(g, *w, *h, method)).sum();
+		if method == 4 {
+			m4_total = size;
+		}
+		println!(
+			"{method}\t{size}\t{:+.2}%",
+			(size as f64 / m4_total as f64 - 1.0) * 100.0
+		);
+	}
+
+	// ── production per-pixel adaptive algorithm (matches dem_quantize.rs) ─────────
+	println!("\nProduction per-pixel adaptive (elevation_error=0.5, slope_error=1.0°):");
+	println!("method\tsize\tvs_orig\tvs_current\tmaxΔm\trmsΔm\tmaxΔ°\trmsΔ°\tmean_bits\tmax_sweeps");
+	{
+		let (mut size, mut wmax_e, mut srms_e, mut wmax_s, mut srms_s, mut bits_sum, mut max_sweeps) =
+			(0usize, 0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64, 0u32);
+		for (_, g, w, h, pm, _tol) in &tiles {
+			let (q, mean_bits, sweeps) = adaptive_production(g, *w, *h, *pm, ELEVATION_ERROR, SLOPE_ERROR_DEG);
+			size += encode_size(&q, *w as i32, *h as i32);
+			let e = measure(g, &q, *w, *h, *pm);
+			wmax_e = wmax_e.max(e.max_e);
+			srms_e += e.rms_e;
+			wmax_s = wmax_s.max(e.max_s);
+			srms_s += e.rms_s;
+			bits_sum += mean_bits;
+			max_sweeps = max_sweeps.max(sweeps);
+		}
+		let n = tiles.len() as f64;
+		println!(
+			"adaptive\t{size}\t{:+.1}%\t{:+.1}%\t{:.3}\t{:.3}\t{:.3}\t{:.3}\t{:.2}\t{max_sweeps}",
+			(size as f64 / orig_total as f64 - 1.0) * 100.0,
+			(size as f64 / base_total as f64 - 1.0) * 100.0,
+			wmax_e,
+			srms_e / n,
+			wmax_s,
+			srms_s / n,
+			bits_sum / n,
+		);
+	}
 }
