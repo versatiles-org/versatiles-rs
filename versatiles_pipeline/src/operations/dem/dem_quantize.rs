@@ -17,7 +17,7 @@ use versatiles_image::DynamicImage;
 /// elevation error and removes the downward bias at no size cost. Single-pass — no scan.
 struct Args {
 	/// Allowed elevation error as fraction of pixel ground size.
-	/// E.g. 0.5 means for a 10 m pixel, allow up to 5 m elevation error. Defaults to 0.5.
+	/// E.g. 0.1 means for a 10 m pixel, allow up to 1 m elevation error. Defaults to 0.1.
 	elevation_error: Option<f64>,
 	/// Maximum allowed slope change in degrees due to quantization.
 	/// Defaults to 1.0.
@@ -100,7 +100,7 @@ impl Operation {
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		let elevation_error = args.elevation_error.unwrap_or(0.5);
+		let elevation_error = args.elevation_error.unwrap_or(0.1);
 		let slope_error = args.slope_error.unwrap_or(1.0);
 
 		let encoding = resolve_encoding(args.encoding.as_ref(), source.tilejson().tile_schema.as_ref())?;
