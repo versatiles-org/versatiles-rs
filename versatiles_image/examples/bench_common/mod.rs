@@ -15,6 +15,14 @@ pub const TILE_URLS: &[&str] = &[
 	"https://tiles.mapterhorn.com/11/1569/335.webp",
 	"https://tiles.mapterhorn.com/11/693/1105.webp",
 	"https://tiles.mapterhorn.com/11/890/437.webp",
+	// Additional tiles from other areas and zoom levels (incl. flat/coastal & overview).
+	"https://tiles.mapterhorn.com/0/0/0.webp",
+	"https://tiles.mapterhorn.com/6/18/34.webp",
+	"https://tiles.mapterhorn.com/11/637/1074.webp",
+	"https://tiles.mapterhorn.com/11/640/1072.webp",
+	"https://tiles.mapterhorn.com/8/115/103.webp",
+	"https://tiles.mapterhorn.com/16/35112/21299.webp",
+	"https://tiles.mapterhorn.com/12/2195/1330.webp",
 ];
 
 fn cache_dir() -> PathBuf {
