@@ -170,7 +170,8 @@ impl TileSource for Operation {
 					}
 					_ => bail!("dem_quantize requires RGB8 or RGBA8 images"),
 				}
-				tile.set_format_quality(Some(100)); // max quality to preserve pixel values
+				tile.set_format_quality(Some(100)); // max quality (lossless) to preserve pixel values
+				tile.set_format_effort(Some(100)); // WebP lossless method 6: ~6% smaller at no quality cost
 				let elapsed = started.elapsed();
 				if elapsed.as_secs_f64() > 1.0 {
 					log::trace!("dem_quantize: slow tile {coord:?}: {elapsed:?}");
