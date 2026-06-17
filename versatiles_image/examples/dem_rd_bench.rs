@@ -29,14 +29,14 @@
 
 mod bench_common;
 
-use bench_common::load_tile_rgb_data;
+use bench_common::{load_tile_rgb_data, original_blob_sizes};
 use libwebp_sys::{
 	WebPConfig, WebPEncode, WebPFree, WebPMemoryWrite, WebPMemoryWriter, WebPMemoryWriterClear, WebPMemoryWriterInit,
 	WebPPicture, WebPPictureFree, WebPPictureImportRGB,
 };
 
 const WORLD_SIZE: f64 = 40_075_016.686;
-const ELEVATION_ERROR: f64 = 0.5; // fraction of pixel ground size
+const ELEVATION_ERROR: f64 = 0.1; // fraction of pixel ground size (matches dem_quantize default)
 const SLOPE_ERROR_DEG: f64 = 1.0;
 const RAW_UNIT_M: f64 = 1.0 / 256.0; // terrarium: 1 raw unit = 1/256 m
 const SMOOTH_ITERS: usize = 12;
@@ -202,6 +202,21 @@ fn encode_size_m(grid: &Grid, w: i32, h: i32, method: i32) -> usize {
 	for &e in grid {
 		rgb.extend_from_slice(&elev_to_rgb(e));
 	}
+	encode_rgb_bytes(&rgb, w, h, method)
+}
+
+/// Encode the grid with the blue channel forced to 0 (B plane becomes constant → ~free),
+/// so `encode_size_m − encode_size_no_blue` is the blue channel's contribution to the file.
+fn encode_size_no_blue(grid: &Grid, w: i32, h: i32, method: i32) -> usize {
+	let mut rgb = Vec::with_capacity((w * h * 3) as usize);
+	for &e in grid {
+		let [r, g, _b] = elev_to_rgb(e);
+		rgb.extend_from_slice(&[r, g, 0]);
+	}
+	encode_rgb_bytes(&rgb, w, h, method)
+}
+
+fn encode_rgb_bytes(rgb: &[u8], w: i32, h: i32, method: i32) -> usize {
 	unsafe {
 		let mut config = WebPConfig::new().unwrap();
 		config.lossless = 1;
@@ -399,6 +414,161 @@ fn adaptive_production(orig: &Grid, w: usize, h: usize, pm: f64, ee: f64, se: f6
 	(out, mean_bits, sweeps)
 }
 
+/// Option 1: total-variation flattening within the constraint "tube".
+///
+/// GOAL. Produce a new elevation `E'` per pixel that (1) stays within `elev_tol` of the
+/// original `E` (elevation budget), (2) never changes the slope between two neighbours by
+/// more than `slope_tol` (slope budget), and (3) is as *flat* as possible — long runs of
+/// identical values — because WebP compresses runs almost for free.
+///
+/// KEY IDEA. Uniform quantization rounds every pixel to the grid *independently*, so two
+/// neighbours that straddle a grid line end up one step apart (a residual WebP must store).
+/// TV instead *coordinates* neighbours: it tries to make each pixel EQUAL to a neighbour we
+/// already decided, extending a flat run, and only steps when the budgets force it. The
+/// unused elevation budget is what lets a run drift along a gentle slope before it must step.
+///
+/// HOW THE BUDGETS BECOME AN INTERVAL. We sweep in raster order, so the left and top
+/// neighbours are already final. For the pixel `p` we compute the set of values `E'[p]` that
+/// still satisfy both budgets — a single interval `[lo, hi]`:
+///   - Elevation box: `E'[p] ∈ [E[p] − elev_tol, E[p] + elev_tol]`.
+///   - Slope to a decided neighbour `n`: we need the *change* in their difference to be small,
+///     `|(E'[p] − E'[n]) − (E[p] − E[n])| ≤ slope_tol`. Writing `d = E[p] − E[n]` (the original
+///     difference) and `c = E'[n] + d`, that is just `E'[p] ∈ [c − slope_tol, c + slope_tol]`.
+///
+/// Intersecting the box with the left- and top-slope intervals gives `[lo, hi]`.
+///
+/// WHY PREFERRING A NEIGHBOUR'S VALUE = FLATTENING. Setting `E'[p] = E'[left]` makes the new
+/// left gradient 0, so the slope *change* there is `|0 − d| = |d|` — allowed exactly when the
+/// original neighbours were within `slope_tol` (i.e. the terrain is locally gentle). That is
+/// also precisely the condition `E'[left] ∈ [lo, hi]`. So "use the left value if it's in the
+/// interval" means "flatten wherever the slope budget permits". Across a gentle ramp the run
+/// value stays put while `E` rises; the *elevation box* is what finally forces a break, and
+/// when it breaks the slope interval only allows a `≤ slope_tol` step — never a cliff.
+fn tv_within_tube(orig: &Grid, w: usize, h: usize, pm: f64, ee: f64, se: f64) -> Grid {
+	// Work in integer "raw" terrarium units (24-bit), so a value is exact and the grid is
+	// integer multiples of `step`. (raw = R<<16 | G<<8 | B; 1 raw unit = 1/256 m.)
+	let to_raw = |e: f64| ((e + 32768.0) / RAW_UNIT_M).round().clamp(0.0, 0x00FF_FFFF as f64) as i64;
+	let e_raw: Vec<i64> = orig.iter().map(|&e| to_raw(e)).collect();
+
+	// Both budgets expressed in raw units.
+	let elev_tol = (ee * pm) / RAW_UNIT_M; // max |E' − E| per pixel
+	let slope_tol = (pm * se.to_radians().tan()) / RAW_UNIT_M; // max change in an adjacent difference
+
+	// `step` is the uniform-quantizer grid (same as the `uniform` path): the largest power-of-two
+	// that fits the stricter budget. We prefer to land on multiples of it so the low bits stay 0.
+	let zb = zero_bits_for(elev_tol.min(slope_tol));
+	let step: i64 = if zb == 0 { 1 } else { 1i64 << zb };
+	let step_f = step as f64;
+
+	let mut ep = vec![0i64; e_raw.len()]; // the output values, filled in raster order
+	for y in 0..h {
+		for x in 0..w {
+			let p = y * w + x;
+			let er = e_raw[p] as f64;
+
+			// Start with the elevation box, then tighten by the slope constraint to each
+			// already-decided neighbour (left and top). Result: the feasible interval [lo, hi].
+			let mut lo = er - elev_tol;
+			let mut hi = er + elev_tol;
+			if x > 0 {
+				// slope interval from the left neighbour, centred at E'[left] + (E[p] − E[left])
+				let c = ep[p - 1] as f64 + (e_raw[p] - e_raw[p - 1]) as f64;
+				lo = lo.max(c - slope_tol);
+				hi = hi.min(c + slope_tol);
+			}
+			if y > 0 {
+				// slope interval from the top neighbour
+				let c = ep[p - w] as f64 + (e_raw[p] - e_raw[p - w]) as f64;
+				lo = lo.max(c - slope_tol);
+				hi = hi.min(c + slope_tol);
+			}
+
+			// Choose a value inside [lo, hi], in order of how compressible it is:
+			let val = if x > 0 && (ep[p - 1] as f64) >= lo && (ep[p - 1] as f64) <= hi {
+				ep[p - 1] // 1. extend the horizontal run: reuse the left value (best for WebP)
+			} else if y > 0 && (ep[p - w] as f64) >= lo && (ep[p - w] as f64) <= hi {
+				ep[p - w] // 2. else match the pixel above (continue a vertical run)
+			} else if lo <= hi {
+				// 3. no neighbour fits, but the interval is non-empty: land on the grid multiple
+				//    of `step` nearest the original (keeps low bits clean, like `uniform`).
+				let t = er.clamp(lo, hi);
+				let mut c = (t / step_f).round() as i64 * step;
+				if (c as f64) < lo {
+					c += step;
+				}
+				if (c as f64) > hi {
+					c -= step;
+				}
+				if (c as f64) >= lo && (c as f64) <= hi {
+					c
+				} else {
+					// 3b. interval narrower than the grid spacing → no multiple fits; take the
+					//     clamped original. This is OFF-GRID (the only source of B-channel noise).
+					t.round() as i64
+				}
+			} else {
+				// 4. left and top slope demands conflict → empty interval (rare). Take the
+				//    midpoint; this may slightly exceed a budget, which the error report exposes.
+				f64::midpoint(lo, hi).round() as i64
+			};
+			ep[p] = val.clamp(0, 0x00FF_FFFF);
+		}
+	}
+
+	// Back to elevation (metres). Note: every edge was checked against exactly one of its two
+	// endpoints (the one processed later), so all edges end up within budget.
+	ep.iter().map(|&r| r as f64 * RAW_UNIT_M - 32768.0).collect()
+}
+
+/// Combined (clean-B + valid): TV flattening snapped onto the uniform step grid, with a
+/// per-tile slope margin. Snapping perturbs the slope, so TV is run at a tightened budget
+/// `se*f`; we take the largest `f` whose snapped result still respects the real budget `se`.
+/// Falls back to plain uniform (always clean + valid) if no margin works.
+fn combined_within_tube(orig: &Grid, w: usize, h: usize, pm: f64, ee: f64, se: f64) -> Grid {
+	let elev_tol = ee * pm / RAW_UNIT_M;
+	let slope_tol = pm * se.to_radians().tan() / RAW_UNIT_M;
+	let zb = zero_bits_for(elev_tol.min(slope_tol));
+	if zb == 0 {
+		return tv_within_tube(orig, w, h, pm, ee, se);
+	}
+	let step = 1i64 << zb;
+	let step_f = step as f64;
+	let snap = |g: &Grid| -> Grid {
+		g.iter()
+			.map(|&e| {
+				let raw = ((e + 32768.0) / RAW_UNIT_M).round();
+				((raw / step_f).round() as i64 * step).clamp(0, 0x00FF_FFFF) as f64 * RAW_UNIT_M - 32768.0
+			})
+			.collect()
+	};
+	let elev_tol_m = ee * pm;
+	let valid = |g: &Grid| -> bool {
+		for y in 0..h {
+			for x in 0..w {
+				let i = y * w + x;
+				let qi = g[i] - orig[i];
+				if qi.abs() > elev_tol_m + 1e-6 {
+					return false;
+				}
+				if x + 1 < w && ((qi - (g[i + 1] - orig[i + 1])).abs() / pm).atan().to_degrees() > se + 1e-6 {
+					return false;
+				}
+				if y + 1 < h && ((qi - (g[i + w] - orig[i + w])).abs() / pm).atan().to_degrees() > se + 1e-6 {
+					return false;
+				}
+			}
+		}
+		true
+	};
+	for f in [1.0, 0.85, 0.7, 0.55, 0.4, 0.25] {
+		let g = snap(&tv_within_tube(orig, w, h, pm, ee, se * f));
+		if valid(&g) {
+			return g;
+		}
+	}
+	rounded_mask_transform(orig, zb)
+}
+
 #[allow(clippy::too_many_lines)]
 fn main() {
 	let images = load_tile_rgb_data();
@@ -422,6 +592,128 @@ fn main() {
 		.iter()
 		.map(|(_, g, w, h, ..)| encode_size(g, *w as i32, *h as i32))
 		.sum();
+
+	// ── Per-tile size table: original vs uniform (current op) vs TV ──────────────
+	// elevation_error / slope_error at the dem_quantize defaults; WebP method 6 (production).
+	let orig_sizes: std::collections::HashMap<String, usize> = original_blob_sizes().into_iter().collect();
+	println!(
+		"Per-tile sizes (elevation_error={ELEVATION_ERROR}, slope_error={SLOPE_ERROR_DEG}°, WebP method 6):"
+	);
+	println!("tile\toriginal\tuniform\tTV\tcombined\tTV_vs_uni\tcomb_vs_uni");
+	let (mut o_tot, mut u_tot, mut t_tot, mut c_tot, mut best_tot) = (0usize, 0usize, 0usize, 0usize, 0usize);
+	for (label, g, w, h, pm, _tol) in &tiles {
+		let tol_slope = pm * SLOPE_ERROR_DEG.to_radians().tan();
+		let zb = zero_bits_for((ELEVATION_ERROR * pm).min(tol_slope) / RAW_UNIT_M);
+		let uni = encode_size_m(&rounded_mask_transform(g, zb), *w as i32, *h as i32, 6);
+		let tv = encode_size_m(
+			&tv_within_tube(g, *w, *h, *pm, ELEVATION_ERROR, SLOPE_ERROR_DEG),
+			*w as i32,
+			*h as i32,
+			6,
+		);
+		let comb = encode_size_m(
+			&combined_within_tube(g, *w, *h, *pm, ELEVATION_ERROR, SLOPE_ERROR_DEG),
+			*w as i32,
+			*h as i32,
+			6,
+		);
+		let orig = *orig_sizes.get(label).unwrap_or(&0);
+		o_tot += orig;
+		u_tot += uni;
+		t_tot += tv;
+		c_tot += comb;
+		best_tot += uni.min(comb);
+		println!(
+			"{label}\t{orig}\t{uni}\t{tv}\t{comb}\t{:+.1}%\t{:+.1}%",
+			(tv as f64 / uni as f64 - 1.0) * 100.0,
+			(comb as f64 / uni as f64 - 1.0) * 100.0
+		);
+	}
+	println!(
+		"TOTAL\t{o_tot}\t{u_tot}\t{t_tot}\t{c_tot}\t{:+.1}%\t{:+.1}%",
+		(t_tot as f64 / u_tot as f64 - 1.0) * 100.0,
+		(c_tot as f64 / u_tot as f64 - 1.0) * 100.0
+	);
+	println!(
+		"best-of(uniform,combined) = {best_tot} ({:+.1}% vs uniform, {:+.1}% vs original)\n",
+		(best_tot as f64 / u_tot as f64 - 1.0) * 100.0,
+		(best_tot as f64 / o_tot as f64 - 1.0) * 100.0
+	);
+
+	// ── Blue-channel cost: full WebP vs WebP with B forced to 0, per version ──────
+	// ΔB = full − no-blue = how many bytes the blue channel (fractional metre) costs.
+	// "original" here = unquantized grid re-encoded at method 6 (not the downloaded blob).
+	println!("Blue-channel cost (method 6; ΔB = full − no-blue bytes):");
+	println!("tile\torig_full\torig_noB\torig_ΔB\tuni_full\tuni_noB\tuni_ΔB\ttv_full\ttv_noB\ttv_ΔB");
+	let (mut ofs, mut onbs, mut ufs, mut unbs, mut tfs, mut tnbs) = (0usize, 0usize, 0usize, 0usize, 0usize, 0usize);
+	for (label, g, w, h, pm, _tol) in &tiles {
+		let tol_slope = pm * SLOPE_ERROR_DEG.to_radians().tan();
+		let zb = zero_bits_for((ELEVATION_ERROR * pm).min(tol_slope) / RAW_UNIT_M);
+		let uni = rounded_mask_transform(g, zb);
+		let tvg = tv_within_tube(g, *w, *h, *pm, ELEVATION_ERROR, SLOPE_ERROR_DEG);
+		let (wi, hi) = (*w as i32, *h as i32);
+		let (of, onb) = (encode_size_m(g, wi, hi, 6), encode_size_no_blue(g, wi, hi, 6));
+		let (uf, unb) = (encode_size_m(&uni, wi, hi, 6), encode_size_no_blue(&uni, wi, hi, 6));
+		let (tf, tnb) = (encode_size_m(&tvg, wi, hi, 6), encode_size_no_blue(&tvg, wi, hi, 6));
+		ofs += of;
+		onbs += onb;
+		ufs += uf;
+		unbs += unb;
+		tfs += tf;
+		tnbs += tnb;
+		println!(
+			"{label}\t{of}\t{onb}\t{}\t{uf}\t{unb}\t{}\t{tf}\t{tnb}\t{}",
+			of - onb,
+			uf - unb,
+			tf - tnb
+		);
+	}
+	println!(
+		"TOTAL\t{ofs}\t{onbs}\t{}\t{ufs}\t{unbs}\t{}\t{tfs}\t{tnbs}\t{}\n",
+		ofs - onbs,
+		ufs - unbs,
+		tfs - tnbs
+	);
+
+	// ── Constraint verification: does the combined output obey both budgets? ──────
+	println!("Combined constraint check (elev budget = {ELEVATION_ERROR}×pixel, slope budget = {SLOPE_ERROR_DEG}°):");
+	println!("tile\tdistinctB\torig_min..max(m)\tout_min..max(m)\tmaxΔm\telev_budget_m\tmaxΔ°\tstatus");
+	for (label, g, w, h, pm, _tol) in &tiles {
+		let tv = combined_within_tube(g, *w, *h, *pm, ELEVATION_ERROR, SLOPE_ERROR_DEG);
+		let mut raws: Vec<i64> = tv.iter().map(|&e| ((e + 32768.0) / RAW_UNIT_M).round() as i64 & 0xFF).collect();
+		raws.sort_unstable();
+		raws.dedup();
+		let omin = g.iter().copied().fold(f64::INFINITY, f64::min);
+		let omax = g.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+		let tmin = tv.iter().copied().fold(f64::INFINITY, f64::min);
+		let tmax = tv.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+		let mut max_e = 0.0f64;
+		let mut max_s = 0.0f64;
+		for y in 0..*h {
+			for x in 0..*w {
+				let i = y * w + x;
+				max_e = max_e.max((tv[i] - g[i]).abs());
+				let qi = tv[i] - g[i];
+				if x + 1 < *w {
+					max_s = max_s.max(((qi - (tv[i + 1] - g[i + 1])).abs() / pm).atan().to_degrees());
+				}
+				if y + 1 < *h {
+					max_s = max_s.max(((qi - (tv[i + w] - g[i + w])).abs() / pm).atan().to_degrees());
+				}
+			}
+		}
+		let elev_budget = ELEVATION_ERROR * pm;
+		let status = if max_e <= elev_budget + 1e-3 && max_s <= SLOPE_ERROR_DEG + 1e-3 {
+			"PASS"
+		} else {
+			"FAIL"
+		};
+		println!(
+			"{label}\t{}\t{omin:.0}..{omax:.0}\t{tmin:.0}..{tmax:.0}\t{max_e:.1}\t{elev_budget:.0}\t{max_s:.3}\t{status}",
+			raws.len()
+		);
+	}
+	println!();
 
 	// Baseline: the current op (truncating mask at the 1° slope budget).
 	let mut base_total = 0usize;
@@ -495,6 +787,48 @@ fn main() {
 		);
 	}
 	println!("(maxΔ° here is the GLOBAL realised slope error, including block boundaries)");
+
+	// ── Option 1: best-of(uniform, TV) vs elevation_error (slope_error fixed at 1.0°) ─
+	// Sweep elevation_error to see how the TV gain and the realised elevation deviation
+	// shrink as the budget is tightened. "vs current" is against the shipped op
+	// (rounded uniform at elevation_error=0.5). All at method 4.
+	let ref_current: usize = tiles
+		.iter()
+		.map(|(_, g, w, h, pm, _)| {
+			let tol_slope = pm * SLOPE_ERROR_DEG.to_radians().tan();
+			let zb = zero_bits_for((0.5 * pm).min(tol_slope) / RAW_UNIT_M);
+			encode_size(&rounded_mask_transform(g, zb), *w as i32, *h as i32)
+		})
+		.sum();
+	println!("\nOption 1 — best-of(uniform,TV) vs elevation_error (slope_error=1.0°, method=4):");
+	println!("elev_err\tuniform\tbest-of\tbestof_vs_uni\tbestof_vs_current\tmaxΔm\trmsΔm\tmaxΔ°");
+	for &ee in &[0.5f64, 0.25, 0.1, 0.05, 0.02] {
+		let (mut uni_size, mut best_size) = (0usize, 0usize);
+		let (mut b_me, mut b_re, mut b_ms) = (0.0f64, 0.0f64, 0.0f64);
+		for (_, g, w, h, pm, _) in &tiles {
+			let tol_slope = pm * SLOPE_ERROR_DEG.to_radians().tan();
+			let zb = zero_bits_for((ee * pm).min(tol_slope) / RAW_UNIT_M);
+			let uni = rounded_mask_transform(g, zb);
+			let tv = tv_within_tube(g, *w, *h, *pm, ee, SLOPE_ERROR_DEG);
+			let us = encode_size(&uni, *w as i32, *h as i32);
+			let ts = encode_size(&tv, *w as i32, *h as i32);
+			uni_size += us;
+			// best-of: keep the smaller, and report ITS realised errors
+			let (chosen, csz) = if ts < us { (&tv, ts) } else { (&uni, us) };
+			best_size += csz;
+			let e = measure(g, chosen, *w, *h, *pm);
+			b_me = b_me.max(e.max_e);
+			b_re += e.rms_e;
+			b_ms = b_ms.max(e.max_s);
+		}
+		let n = tiles.len() as f64;
+		println!(
+			"{ee:.2}\t{uni_size}\t{best_size}\t{:+.1}%\t{:+.1}%\t{b_me:.2}\t{:.2}\t{b_ms:.3}",
+			(best_size as f64 / uni_size as f64 - 1.0) * 100.0,
+			(best_size as f64 / ref_current as f64 - 1.0) * 100.0,
+			b_re / n,
+		);
+	}
 
 	// ── WebP effort sweep on the FIXED current-op output (no quality change) ──────
 	// Same quantized pixels (current rounded-uniform op) → only the encoder effort

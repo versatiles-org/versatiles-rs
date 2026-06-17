@@ -57,23 +57,39 @@ fn download_tile(url: &str) -> Vec<u8> {
 	data
 }
 
+/// Short "z/x/y.ext" label from a tile URL (last three path segments).
+fn label_of(url: &str) -> String {
+	url.rsplit('/')
+		.take(3)
+		.collect::<Vec<_>>()
+		.into_iter()
+		.rev()
+		.collect::<Vec<_>>()
+		.join("/")
+}
+
 pub fn load_tile_rgb_data() -> Vec<(String, Vec<u8>, i32, i32)> {
 	TILE_URLS
 		.iter()
 		.map(|url| {
 			let data = download_tile(url);
-			let label = url
-				.rsplit('/')
-				.take(3)
-				.collect::<Vec<_>>()
-				.into_iter()
-				.rev()
-				.collect::<Vec<_>>()
-				.join("/");
 			let (pixels, w, h) = decode_webp_to_rgb(&data, url);
-			(label, pixels, w, h)
+			(label_of(url), pixels, w, h)
 		})
 		.collect()
+}
+
+/// Original (downloaded) blob byte size per tile, keyed by the same label as `load_tile_rgb_data`.
+pub fn original_blob_sizes() -> Vec<(String, usize)> {
+	TILE_URLS
+		.iter()
+		.map(|url| (label_of(url), download_tile(url).len()))
+		.collect()
+}
+
+/// Original (downloaded) blob bytes per tile, keyed by the same label as `load_tile_rgb_data`.
+pub fn original_blobs() -> Vec<(String, Vec<u8>)> {
+	TILE_URLS.iter().map(|url| (label_of(url), download_tile(url))).collect()
 }
 
 fn decode_webp_to_rgb(data: &[u8], label: &str) -> (Vec<u8>, i32, i32) {
