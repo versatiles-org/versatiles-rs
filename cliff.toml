@@ -3,8 +3,13 @@
 # overrides what the defaults get wrong for *release notes*:
 #   - a minimal body: no per-version "## [x.y.z]" header, plain group headings,
 #     subject line only;
-#   - commit groups that SKIP noise (style/test/chore/ci/build/release + merges),
-#     which the default would otherwise render as their own sections.
+#   - commit groups that SKIP noise (style/test/chore/ci/build/release/bench +
+#     merges), which the default would otherwise render as their own sections.
+#
+# Benchmark/internal-only work should NOT appear in release notes. Mark it either
+# with a `bench:` type or a `(bench)` scope on any type (e.g. `feat(bench): ...`)
+# and it will be dropped. Parsers are first-match-wins, so the scope rule must come
+# before the type rules below.
 # Docs: https://git-cliff.org/docs/configuration
 
 [changelog]
@@ -26,12 +31,13 @@ trim = true
 # "Other Changes" rather than dropping them (git-cliff drops them by default).
 filter_unconventional = false
 commit_parsers = [
+  { message = "^\\w+\\(bench\\)", skip = true },
   { message = "^feat", group = "<!-- 0 -->Features" },
   { message = "^fix", group = "<!-- 1 -->Bug Fixes" },
   { message = "^perf", group = "<!-- 2 -->Performance" },
   { message = "^refactor", group = "<!-- 3 -->Refactoring" },
   { message = "^docs?", group = "<!-- 4 -->Documentation" },
-  { message = "^(style|test|chore|ci|build|release)", skip = true },
+  { message = "^(style|test|chore|ci|build|release|bench)", skip = true },
   { message = "^Merge ", skip = true },
   { message = ".*", group = "<!-- 5 -->Other Changes" },
 ]
