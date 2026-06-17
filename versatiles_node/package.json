@@ -87,19 +87,19 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@napi-rs/cli": "^3.6.2",
-    "@types/node": "^25.8.0",
-    "@vitest/ui": "^4.1.6",
+    "@napi-rs/cli": "^3.7.2",
+    "@types/node": "^25.9.3",
+    "@vitest/ui": "^4.1.9",
     "chalk": "^5.6.2",
-    "eslint": "^10.4.0",
+    "eslint": "^10.5.0",
     "eslint-config-prettier": "^10.1.8",
-    "npm-check-updates": "^22.2.0",
-    "prettier": "^3.8.3",
-    "tsx": "^4.22.1",
+    "npm-check-updates": "^22.2.3",
+    "prettier": "^3.8.4",
+    "tsx": "^4.22.4",
     "typedoc": "^0.28.19",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.59.3",
-    "vitest": "^4.1.6"
+    "typescript-eslint": "^8.61.1",
+    "vitest": "^4.1.9"
   },
   "optionalDependencies": {
     "@versatiles/versatiles-rs-darwin-arm64": "4.2.1",
