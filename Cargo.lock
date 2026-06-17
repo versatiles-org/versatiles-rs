@@ -5590,6 +5590,7 @@ dependencies = [
  "enumset",
  "env_logger",
  "futures",
+ "geo-types",
  "glob",
  "log",
  "mime_guess",

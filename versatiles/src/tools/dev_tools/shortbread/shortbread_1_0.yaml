@@ -1,0 +1,494 @@
+version: "1.0"
+layers:
+  addresses:
+    geometry: Point
+    minzoom: 14
+    attributes:
+      housename:
+        type: String
+        required: false
+      housenumber:
+        type: String
+        required: false
+  aerialways:
+    geometry: Line
+    minzoom: 12
+    attributes:
+      kind:
+        type: String
+        required: true
+        enum: [cable_car, gondola, goods, chair_lift, drag_lift, "t-bar", "j-bar", platter, "rope-tow"]
+        enum_severity: warn
+  boundaries:
+    geometry: Line
+    minzoom: 0
+    attributes:
+      admin_level:
+        type: Number
+        required: true
+        enum: [2, 4]
+        enum_severity: warn
+      disputed:
+        type: Boolean
+        required: false
+      maritime:
+        type: Boolean
+        required: false
+  boundary_labels:
+    geometry: Point
+    minzoom: 2
+    attributes:
+      admin_level:
+        type: Number
+        required: true
+        enum: [2, 4]
+        enum_severity: warn
+      name:
+        type: String
+        required: false
+      name_de:
+        type: String
+        required: false
+      name_en:
+        type: String
+        required: false
+      way_area:
+        type: Number
+        required: false
+  bridges:
+    geometry: Polygon
+    minzoom: 12
+    attributes:
+      kind:
+        type: String
+        required: true
+        enum: [bridge]
+        enum_severity: warn
+  buildings:
+    geometry: Polygon
+    minzoom: 14
+    attributes:
+      dummy:
+        type: Number
+        required: false
+  dam_lines:
+    geometry: Line
+    minzoom: 12
+    attributes:
+      kind:
+        type: String
+        required: true
+        enum: [dam]
+        enum_severity: warn
+  dam_polygons:
+    geometry: Polygon
+    minzoom: 12
+    attributes:
+      kind:
+        type: String
+        required: true
+        enum: [dam]
+        enum_severity: warn
+  ferries:
+    geometry: Line
+    minzoom: 10
+    attributes:
+      kind:
+        type: String
+        required: true
+        enum: [ferry]
+        enum_severity: warn
+      name:
+        type: String
+        required: false
+      name_de:
+        type: String
+        required: false
+      name_en:
+        type: String
+        required: false
+  land:
+    geometry: Polygon
+    minzoom: 7
+    attributes:
+      kind:
+        type: String
+        required: true
+        enum: [forest, grass, meadow, orchard, vineyard, allotments, cemetery, grave_yard, village_green, recreation_ground, greenhouse_horticulture, plant_nursery, sand, beach, heath, scrub, grassland, bare_rock, scree, shingle, swamp, bog, string_bog, wet_meadow, marsh, golf_course, park, garden, playground, miniature_golf, residential, industrial, commercial, garages, retail, railway, landfill, quarry, brownfield, greenfield, farmyard, farmland]
+        enum_severity: warn
+  ocean:
+    geometry: Polygon
+    minzoom: 0
+    attributes: {}
+  pier_lines:
+    geometry: Line
+    minzoom: 12
+    attributes:
+      kind:
+        type: String
+        required: true
+        enum: [pier, breakwater, groyne]
+        enum_severity: warn
+  pier_polygons:
+    geometry: Polygon
+    minzoom: 12
+    attributes:
+      kind:
+        type: String
+        required: true
+        enum: [pier, breakwater, groyne]
+        enum_severity: warn
+  place_labels:
+    geometry: Point
+    minzoom: 4
+    attributes:
+      kind:
+        type: String
+        required: true
+        enum: [capital, state_capital, city, town, village, hamlet, suburb, quarter, neighbourhood, isolated_dwelling, farm, island, locality]
+        enum_severity: warn
+      name:
+        type: String
+        required: false
+      name_de:
+        type: String
+        required: false
+      name_en:
+        type: String
+        required: false
+      population:
+        type: Number
+        required: false
+  pois:
+    geometry: Point
+    minzoom: 14
+    attributes:
+      amenity:
+        type: String
+        required: false
+        enum: [arts_centre, atm, bank, bar, bench, bicycle_rental, biergarten, cafe, car_rental, car_sharing, car_wash, cinema, clinic, college, community_centre, courthouse, dentist, doctors, dog_park, drinking_water, embassy, fast_food, fire_station, food_court, fountain, grave_yard, hospital, hunting_stand, library, marketplace, nightclub, nursing_home, pharmacy, place_of_worship, playground, police, post_box, post_office, prison, pub, public_building, recycling, restaurant, school, shelter, telephone, theatre, toilets, townhall, university, vending_machine, veterinary, waste_basket]
+        enum_severity: hint
+      atm:
+        type: Boolean
+        required: false
+      cuisine:
+        type: String
+        required: false
+      denomination:
+        type: String
+        required: false
+      emergency:
+        type: String
+        required: false
+        enum: [defibrillator, fire_hydrant, phone]
+        enum_severity: hint
+      highway:
+        type: String
+        required: false
+        enum: [emergency_access_point]
+        enum_severity: hint
+      historic:
+        type: String
+        required: false
+        enum: [archaeological_site, battlefield, castle, fort, memorial, monument, ruins, wayside_cross, wayside_shrine]
+        enum_severity: hint
+      housename:
+        type: String
+        required: false
+      housenumber:
+        type: String
+        required: false
+      information:
+        type: String
+        required: false
+      leisure:
+        type: String
+        required: false
+        enum: [golf_course, ice_rink, pitch, sports_centre, stadium, swimming_pool, water_park]
+        enum_severity: hint
+      man_made:
+        type: String
+        required: false
+        enum: [lighthouse, surveillance, tower, wastewater_plant, water_well, water_works, watermill, windmill]
+        enum_severity: hint
+      name:
+        type: String
+        required: false
+      name_de:
+        type: String
+        required: false
+      name_en:
+        type: String
+        required: false
+      office:
+        type: String
+        required: false
+        enum: [diplomatic]
+        enum_severity: hint
+      "recycling:clothes":
+        type: Boolean
+        required: false
+      "recycling:glass_bottles":
+        type: Boolean
+        required: false
+      "recycling:paper":
+        type: Boolean
+        required: false
+      "recycling:scrap_metal":
+        type: Boolean
+        required: false
+      religion:
+        type: String
+        required: false
+      shop:
+        type: String
+        required: false
+        enum: [alcohol, bakery, beauty, beverages, bicycle, books, butcher, car, chemist, clothes, computer, convenience, department_store, doityourself, dry_cleaning, florist, furniture, garden_centre, general, gift, greengrocer, hairdresser, hardware, jewelry, kiosk, laundry, mall, mobile_phone, newsagent, optician, outdoor, shoes, sports, stationery, supermarket, toys, travel_agency, video]
+        enum_severity: hint
+      sport:
+        type: String
+        required: false
+      tourism:
+        type: String
+        required: false
+        enum: [artwork, alpine_hut, bed_and_breakfast, camp_site, caravan_site, chalet, guest_house, hostel, hotel, information, motel, picnic_site, theme_park, viewpoint, zoo]
+        enum_severity: hint
+      "tower:type":
+        type: String
+        required: false
+      vending:
+        type: String
+        required: false
+  public_transport:
+    geometry: Point
+    minzoom: 11
+    attributes:
+      iata:
+        type: String
+        required: false
+      kind:
+        type: String
+        required: true
+        enum: [aerodrome, helipad, station, halt, tram_stop, bus_station, bus_stop, ferry_terminal, aerialway_station]
+        enum_severity: warn
+      name:
+        type: String
+        required: false
+      name_de:
+        type: String
+        required: false
+      name_en:
+        type: String
+        required: false
+  sites:
+    geometry: Polygon
+    minzoom: 14
+    attributes:
+      kind:
+        type: String
+        required: true
+        enum: [danger_area, sports_centre, university, college, school, hospital, prison, parking, bicycle_parking, construction]
+        enum_severity: warn
+  street_labels:
+    geometry: Line
+    minzoom: 10
+    attributes:
+      kind:
+        type: String
+        required: true
+        enum: [motorway, motorway_link, trunk, trunk_link, primary, primary_link, secondary, secondary_link, tertiary, tertiary_link, unclassified, residential, living_street, busway, bus_guideway, service, pedestrian, track, footway, steps, path, cycleway, runway, taxiway, rail, narrow_gauge, tram, light_rail, funicular, subway, monorail]
+        enum_severity: warn
+      name:
+        type: String
+        required: false
+      name_de:
+        type: String
+        required: false
+      name_en:
+        type: String
+        required: false
+      ref:
+        type: String
+        required: false
+      ref_cols:
+        type: Number
+        required: false
+      ref_rows:
+        type: Number
+        required: false
+      tunnel:
+        type: Boolean
+        required: false
+  street_labels_points:
+    geometry: Point
+    minzoom: 12
+    attributes:
+      kind:
+        type: String
+        required: true
+        enum: [motorway_junction]
+        enum_severity: warn
+      name:
+        type: String
+        required: false
+      name_de:
+        type: String
+        required: false
+      name_en:
+        type: String
+        required: false
+      ref:
+        type: String
+        required: false
+  street_polygons:
+    geometry: Polygon
+    minzoom: 11
+    attributes:
+      bridge:
+        type: Boolean
+        required: false
+      kind:
+        type: String
+        required: true
+        enum: [pedestrian, service, runway, taxiway]
+        enum_severity: warn
+      rail:
+        type: Boolean
+        required: false
+      service:
+        type: String
+        required: false
+      surface:
+        type: String
+        required: false
+      tunnel:
+        type: Boolean
+        required: false
+  streets:
+    geometry: Line
+    minzoom: 5
+    attributes:
+      bicycle:
+        type: String
+        required: false
+      bridge:
+        type: Boolean
+        required: false
+      horse:
+        type: String
+        required: false
+      kind:
+        type: String
+        required: true
+        enum: [motorway, trunk, primary, secondary, tertiary, unclassified, residential, busway, bus_guideway, living_street, service, pedestrian, track, footway, steps, path, cycleway, runway, taxiway, rail, narrow_gauge, tram, light_rail, funicular, subway, monorail]
+        enum_severity: warn
+      link:
+        type: Boolean
+        required: false
+      oneway:
+        type: Boolean
+        required: false
+      oneway_reverse:
+        type: Boolean
+        required: false
+      rail:
+        type: Boolean
+        required: false
+      service:
+        type: String
+        required: false
+      surface:
+        type: String
+        required: false
+      tracktype:
+        type: String
+        required: false
+      tunnel:
+        type: Boolean
+        required: false
+  streets_polygons_labels:
+    geometry: Point
+    minzoom: 14
+    attributes:
+      kind:
+        type: String
+        required: true
+        enum: [pedestrian, service, runway, taxiway]
+        enum_severity: warn
+      name:
+        type: String
+        required: false
+      name_de:
+        type: String
+        required: false
+      name_en:
+        type: String
+        required: false
+  water_lines:
+    geometry: Line
+    minzoom: 9
+    attributes:
+      bridge:
+        type: Boolean
+        required: false
+      kind:
+        type: String
+        required: true
+        enum: [canal, river, stream, ditch]
+        enum_severity: warn
+      tunnel:
+        type: Boolean
+        required: false
+  water_lines_labels:
+    geometry: Line
+    minzoom: 12
+    attributes:
+      bridge:
+        type: Boolean
+        required: false
+      kind:
+        type: String
+        required: true
+      name:
+        type: String
+        required: false
+      name_de:
+        type: String
+        required: false
+      name_en:
+        type: String
+        required: false
+      tunnel:
+        type: Boolean
+        required: false
+  water_polygons:
+    geometry: Polygon
+    minzoom: 4
+    attributes:
+      kind:
+        type: String
+        required: true
+        enum: [glacier, water, river, reservoir, basin, dock, canal]
+        enum_severity: warn
+      way_area:
+        type: Number
+        required: false
+  water_polygons_labels:
+    geometry: Point
+    minzoom: 4
+    attributes:
+      kind:
+        type: String
+        required: true
+      name:
+        type: String
+        required: false
+      name_de:
+        type: String
+        required: false
+      name_en:
+        type: String
+        required: false
+      way_area:
+        type: Number
+        required: false
