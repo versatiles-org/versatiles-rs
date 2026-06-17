@@ -321,15 +321,16 @@ averages the values correctly, and re-encodes back to RGB.
 
 ## dem_quantize
 
-Quantize DEM (elevation) raster tiles by zeroing unnecessary low bits.
+Quantize DEM (elevation) raster tiles by rounding to a per-tile power-of-two step.
 
-Computes a per-tile quantization mask from two physically meaningful criteria:
-elevation error relative to pixel size, and maximum slope distortion.
-The stricter (smaller step) wins. Single-pass — no min/max scan needed.
+Computes the step from two physically meaningful criteria: elevation error relative to
+pixel size, and maximum slope distortion. The stricter (smaller step) wins. Values are
+rounded to the nearest multiple of the step (not truncated), which halves the worst-case
+elevation error and removes the downward bias at no size cost. Single-pass — no scan.
 
 ### Parameters
 
-- *`elevation_error`: f64 (optional)* - Allowed elevation error as fraction of pixel ground size. E.g. 0.5 means for a 10 m pixel, allow up to 5 m elevation error. Defaults to 0.5.
+- *`elevation_error`: f64 (optional)* - Allowed elevation error as fraction of pixel ground size. E.g. 0.1 means for a 10 m pixel, allow up to 1 m elevation error. Defaults to 0.1.
 - *`slope_error`: f64 (optional)* - Maximum allowed slope change in degrees due to quantization. Defaults to 1.0.
 - *`encoding`: String (optional)* - Override auto-detection of DEM encoding. Values: "mapbox", "terrarium".
 
