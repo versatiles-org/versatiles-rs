@@ -378,7 +378,9 @@ fn adaptive_production(orig: &Grid, w: usize, h: usize, pm: f64, ee: f64, se: f6
 		let max_diff_raw = (pm * se.to_radians().tan()) / RAW_UNIT_M;
 		for _ in 0..64 {
 			sweeps += 1;
-			let qerr: Vec<i64> = (0..n).map(|i| i64::from(q1(e_raw[i], bits[i])) - i64::from(e_raw[i])).collect();
+			let qerr: Vec<i64> = (0..n)
+				.map(|i| i64::from(q1(e_raw[i], bits[i])) - i64::from(e_raw[i]))
+				.collect();
 			let mut dec = vec![false; n];
 			let mut any = false;
 			for y in 0..h {
@@ -409,7 +411,9 @@ fn adaptive_production(orig: &Grid, w: usize, h: usize, pm: f64, ee: f64, se: f6
 			}
 		}
 	}
-	let out: Grid = (0..n).map(|i| f64::from(q1(e_raw[i], bits[i])) * RAW_UNIT_M - 32768.0).collect();
+	let out: Grid = (0..n)
+		.map(|i| f64::from(q1(e_raw[i], bits[i])) * RAW_UNIT_M - 32768.0)
+		.collect();
 	let mean_bits = bits.iter().map(|&b| f64::from(b)).sum::<f64>() / n as f64;
 	(out, mean_bits, sweeps)
 }
@@ -596,9 +600,7 @@ fn main() {
 	// ── Per-tile size table: original vs uniform (current op) vs TV ──────────────
 	// elevation_error / slope_error at the dem_quantize defaults; WebP method 6 (production).
 	let orig_sizes: std::collections::HashMap<String, usize> = original_blob_sizes().into_iter().collect();
-	println!(
-		"Per-tile sizes (elevation_error={ELEVATION_ERROR}, slope_error={SLOPE_ERROR_DEG}°, WebP method 6):"
-	);
+	println!("Per-tile sizes (elevation_error={ELEVATION_ERROR}, slope_error={SLOPE_ERROR_DEG}°, WebP method 6):");
 	println!("tile\toriginal\tuniform\tTV\tcombined\tTV_vs_uni\tcomb_vs_uni");
 	let (mut o_tot, mut u_tot, mut t_tot, mut c_tot, mut best_tot) = (0usize, 0usize, 0usize, 0usize, 0usize);
 	for (label, g, w, h, pm, _tol) in &tiles {
@@ -680,7 +682,10 @@ fn main() {
 	println!("tile\tdistinctB\torig_min..max(m)\tout_min..max(m)\tmaxΔm\telev_budget_m\tmaxΔ°\tstatus");
 	for (label, g, w, h, pm, _tol) in &tiles {
 		let tv = combined_within_tube(g, *w, *h, *pm, ELEVATION_ERROR, SLOPE_ERROR_DEG);
-		let mut raws: Vec<i64> = tv.iter().map(|&e| ((e + 32768.0) / RAW_UNIT_M).round() as i64 & 0xFF).collect();
+		let mut raws: Vec<i64> = tv
+			.iter()
+			.map(|&e| ((e + 32768.0) / RAW_UNIT_M).round() as i64 & 0xFF)
+			.collect();
 		raws.sort_unstable();
 		raws.dedup();
 		let omin = g.iter().copied().fold(f64::INFINITY, f64::min);

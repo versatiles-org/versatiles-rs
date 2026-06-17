@@ -30,7 +30,9 @@ const WORLD_SIZE: f64 = 40_075_016.686;
 
 fn pixel_meters(z: u32, y: u32) -> f64 {
 	let n = f64::from(1u32 << z);
-	let lat = (std::f64::consts::PI * (1.0 - 2.0 * (f64::from(y) + 0.5) / n)).sinh().atan();
+	let lat = (std::f64::consts::PI * (1.0 - 2.0 * (f64::from(y) + 0.5) / n))
+		.sinh()
+		.atan();
 	(WORLD_SIZE / n) * lat.cos() / 256.0
 }
 
@@ -147,7 +149,10 @@ fn encode_webp(raw: &[i64], w: i32, h: i32) -> Vec<u8> {
 		picture.use_argb = 1;
 		picture.width = w;
 		picture.height = h;
-		assert!(WebPPictureImportRGB(&raw mut picture, rgb.as_ptr(), w * 3) != 0, "import failed");
+		assert!(
+			WebPPictureImportRGB(&raw mut picture, rgb.as_ptr(), w * 3) != 0,
+			"import failed"
+		);
 		let mut writer: WebPMemoryWriter = std::mem::zeroed();
 		WebPMemoryWriterInit(&raw mut writer);
 		picture.writer = Some(WebPMemoryWrite);
@@ -161,18 +166,24 @@ fn encode_webp(raw: &[i64], w: i32, h: i32) -> Vec<u8> {
 	}
 }
 
+#[allow(clippy::too_many_lines)]
 fn main() {
 	let images = load_tile_rgb_data();
 	let blobs = original_blobs();
-	let (label, pixels, w, h) = images.iter().find(|(l, ..)| l == TARGET).expect("target tile not found");
-	let orig_blob = &blobs.iter().find(|(l, _)| l == TARGET).expect("target blob not found").1;
+	let (label, pixels, w, h) = images
+		.iter()
+		.find(|(l, ..)| l == TARGET)
+		.expect("target tile not found");
+	let orig_blob = &blobs
+		.iter()
+		.find(|(l, _)| l == TARGET)
+		.expect("target blob not found")
+		.1;
 	let (wu, hu) = (*w as usize, *h as usize);
 	let pm = pixel_meters(Z, Y);
 
 	let e_raw: Vec<i64> = (0..wu * hu)
-		.map(|i| {
-			(i64::from(pixels[i * 3]) << 16) | (i64::from(pixels[i * 3 + 1]) << 8) | i64::from(pixels[i * 3 + 2])
-		})
+		.map(|i| (i64::from(pixels[i * 3]) << 16) | (i64::from(pixels[i * 3 + 1]) << 8) | i64::from(pixels[i * 3 + 2]))
 		.collect();
 
 	let uni_grid = uniform(&e_raw, pm);
@@ -187,7 +198,11 @@ fn main() {
 		let mut bs: Vec<i64> = g.iter().map(|&r| r & 0xFF).collect();
 		bs.sort_unstable();
 		bs.dedup();
-		println!("  {name}: step={step}, off-grid={off}/{}, distinct B={}", g.len(), bs.len());
+		println!(
+			"  {name}: step={step}, off-grid={off}/{}, distinct B={}",
+			g.len(),
+			bs.len()
+		);
 	};
 	// Realised slope error (degrees) check vs the budget, for validity.
 	let max_slope = |g: &[i64]| {
@@ -197,10 +212,18 @@ fn main() {
 				let i = y * wu + x;
 				let qi = (g[i] - e_raw[i]) as f64;
 				if x + 1 < wu {
-					m = m.max(((qi - (g[i + 1] - e_raw[i + 1]) as f64).abs() * RAW_UNIT_M / pm).atan().to_degrees());
+					m = m.max(
+						((qi - (g[i + 1] - e_raw[i + 1]) as f64).abs() * RAW_UNIT_M / pm)
+							.atan()
+							.to_degrees(),
+					);
 				}
 				if y + 1 < hu {
-					m = m.max(((qi - (g[i + wu] - e_raw[i + wu]) as f64).abs() * RAW_UNIT_M / pm).atan().to_degrees());
+					m = m.max(
+						((qi - (g[i + wu] - e_raw[i + wu]) as f64).abs() * RAW_UNIT_M / pm)
+							.atan()
+							.to_degrees(),
+					);
 				}
 			}
 		}
@@ -216,7 +239,10 @@ fn main() {
 		let ms = max_slope(&g);
 		let sz = encode_webp(&g, *w, *h).len();
 		let ok = ms <= SLOPE_ERROR_DEG + 1e-3;
-		println!("    TV@{se_tv:.1}° → slope={ms:.3}° size={sz} {}", if ok { "VALID" } else { "over" });
+		println!(
+			"    TV@{se_tv:.1}° → slope={ms:.3}° size={sz} {}",
+			if ok { "VALID" } else { "over" }
+		);
 		if ok {
 			comb_grid = g;
 			chosen_se = se_tv;
@@ -251,6 +277,10 @@ fn main() {
 	for (name, data) in &files {
 		let path = dir.join(name);
 		std::fs::write(&path, data).expect("write file");
-		println!("{:>10} B  {}", data.len(), path.canonicalize().unwrap_or(path).display());
+		println!(
+			"{:>10} B  {}",
+			data.len(),
+			path.canonicalize().unwrap_or(path).display()
+		);
 	}
 }

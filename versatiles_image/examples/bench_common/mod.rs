@@ -89,7 +89,10 @@ pub fn original_blob_sizes() -> Vec<(String, usize)> {
 
 /// Original (downloaded) blob bytes per tile, keyed by the same label as `load_tile_rgb_data`.
 pub fn original_blobs() -> Vec<(String, Vec<u8>)> {
-	TILE_URLS.iter().map(|url| (label_of(url), download_tile(url))).collect()
+	TILE_URLS
+		.iter()
+		.map(|url| (label_of(url), download_tile(url)))
+		.collect()
 }
 
 fn decode_webp_to_rgb(data: &[u8], label: &str) -> (Vec<u8>, i32, i32) {
