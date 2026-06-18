@@ -1,7 +1,7 @@
 use anyhow::Result;
 use versatiles_container::{TileSource, TilesRuntime};
 use versatiles_core::{ProbeDepth, TileType, utils::PrettyPrint};
-use versatiles_geometry::vector_tile::{DegenerateReason, GeomType, IssueKind, validate_tile};
+use versatiles_geometry::vector_tile::{DegenerateReason, GeomType, IssueKind, ValidationIssue, validate_tile};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -303,9 +303,29 @@ impl ValidationCounters {
 
 const VALIDATION_SAMPLE_LIMIT: usize = 10;
 
+/// Per-tile result of the decode+validate step, produced off-thread so the
+/// aggregation loop only has to fold cheap owned values.
+enum TileCheck {
+	/// The tile could not be decoded as a vector tile.
+	DecodeFailed,
+	/// The tile decoded; carries the (possibly empty) list of spec violations.
+	Validated(Vec<ValidationIssue>),
+}
+
+/// Decodes a single tile and validates it. This is the CPU-bound work
+/// (decompress + protobuf parse + geometry validation) that gets fanned out
+/// across worker threads by `map_parallel`.
+fn check_tile(mut tile: versatiles_container::Tile) -> TileCheck {
+	match tile.as_vector() {
+		Ok(vt) => TileCheck::Validated(validate_tile(vt)),
+		Err(_) => TileCheck::DecodeFailed,
+	}
+}
+
 /// Iterates every tile, runs the MVT validator on it, and prints a summary
-/// of any issues found. Total cost is one decode-per-tile; with the validator
-/// running in lockstep that's cheap relative to the decode itself.
+/// of any issues found. The per-tile decode+validate (the expensive part) runs
+/// in parallel across worker threads via `map_parallel`; the counter/sample
+/// aggregation stays on this task so it needs no synchronization.
 async fn probe_mvt_validation(source: &dyn TileSource, print: &mut PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
 	let mut counters = ValidationCounters::default();
 	let mut samples: Vec<Vec<String>> = Vec::with_capacity(VALIDATION_SAMPLE_LIMIT);
@@ -316,17 +336,21 @@ async fn probe_mvt_validation(source: &dyn TileSource, print: &mut PrettyPrint, 
 	let progress = runtime.create_progress("validating tile contents", total_tiles);
 
 	for bbox in tile_pyramid.to_iter_bboxes().filter(|b| !b.is_empty()) {
-		let mut stream = source.tile_stream(bbox).await?;
-		while let Some((coord, mut tile)) = stream.next().await {
+		let mut stream = source
+			.tile_stream(bbox)
+			.await?
+			.map_parallel(|_coord, tile| check_tile(tile));
+		while let Some((coord, check)) = stream.next().await {
 			tile_count += 1;
 			progress.inc(1);
 
-			let Ok(vt) = tile.as_vector() else {
-				counters.decode_failures += 1;
-				continue;
+			let issues = match check {
+				TileCheck::DecodeFailed => {
+					counters.decode_failures += 1;
+					continue;
+				}
+				TileCheck::Validated(issues) => issues,
 			};
-
-			let issues = validate_tile(vt);
 			if issues.is_empty() {
 				continue;
 			}
