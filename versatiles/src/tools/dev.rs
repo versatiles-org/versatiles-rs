@@ -1,4 +1,6 @@
-use super::dev_tools::{count_tiles, export_outline, measure_tile_sizes, print_tilejson, shortbread, vector_layers};
+use super::dev_tools::{
+	analyze_tile, count_tiles, export_outline, measure_tile_sizes, print_tilejson, shortbread, vector_layers,
+};
 use anyhow::Result;
 use versatiles_container::TilesRuntime;
 
@@ -11,6 +13,7 @@ pub struct Subcommand {
 
 #[derive(clap::Subcommand, Debug)]
 enum DevCommands {
+	AnalyzeTile(analyze_tile::AnalyzeTile),
 	CountTiles(count_tiles::CountTiles),
 	MeasureTileSizes(measure_tile_sizes::MeasureTileSizes),
 	ExportOutline(export_outline::ExportOutline),
@@ -22,6 +25,7 @@ enum DevCommands {
 #[tokio::main]
 pub async fn run(command: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	match &command.sub_command {
+		DevCommands::AnalyzeTile(args) => analyze_tile::run(args, runtime).await?,
 		DevCommands::CountTiles(args) => count_tiles::run(args, runtime).await?,
 		DevCommands::MeasureTileSizes(args) => measure_tile_sizes::run(args, runtime).await?,
 		DevCommands::ExportOutline(args) => export_outline::run(args, runtime).await?,

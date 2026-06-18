@@ -231,6 +231,40 @@ impl VectorTileFeature {
 		Ok(writer.into_blob())
 	}
 
+	/// Counts the coordinate pairs encoded in this feature's geometry command
+	/// stream, without decoding into a [`Geometry`].
+	///
+	/// This is the vertex count that drives `geom_data` size, so it is the right
+	/// metric for size analysis. It is best-effort: it walks the MVT command
+	/// stream and stops at the first malformed command rather than erroring, so
+	/// it is safe to call on any feature purely for reporting. `ClosePath`
+	/// commands add no coordinates and are not counted.
+	#[must_use]
+	pub fn count_geometry_points(&self) -> usize {
+		let mut reader = ValueReaderSlice::new_le(self.geom_data.as_slice());
+		let mut total = 0usize;
+		while reader.has_remaining().unwrap_or(false) {
+			let Ok(value) = reader.read_varint() else { break };
+			let command = value & 0x7;
+			let count = value >> 3;
+			match command {
+				// MoveTo / LineTo: `count` coordinate pairs, each two svarints.
+				1 | 2 => {
+					for _ in 0..count {
+						if reader.read_svarint().is_err() || reader.read_svarint().is_err() {
+							return total;
+						}
+						total += 1;
+					}
+				}
+				// ClosePath: no coordinates.
+				7 => {}
+				_ => break,
+			}
+		}
+		total
+	}
+
 	pub fn to_geometry(&self) -> Result<Geometry<f64>> {
 		let coordinates = parse_geom_command_stream(&self.geom_data)?;
 
