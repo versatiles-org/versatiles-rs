@@ -174,6 +174,9 @@ struct LayerStats {
 	key_bytes: usize,
 	/// Sum of encoded value-message lengths in the property table.
 	value_bytes: usize,
+	/// Sum of encoded feature-id bytes (key byte + id varint) over features that
+	/// carry an id. Zero for sources without ids.
+	id_bytes: usize,
 	/// Exact encoded layer size (`layer.to_blob().len()`), used to derive the
 	/// residual "other" framing/overhead so the columns sum to the total.
 	encoded_bytes: usize,
@@ -185,12 +188,12 @@ impl LayerStats {
 		self.key_bytes + self.value_bytes
 	}
 
-	/// Residual bytes not attributed to geometry/tags/properties: feature ids,
-	/// geom-type fields, the layer name, and all the PBF key/length framing.
+	/// Residual bytes not attributed to geometry/tags/properties/ids: geom-type
+	/// fields, the layer name, and all the PBF key/length framing.
 	fn other_bytes(&self) -> usize {
 		self
 			.encoded_bytes
-			.saturating_sub(self.geometry_bytes + self.tag_bytes + self.property_bytes())
+			.saturating_sub(self.geometry_bytes + self.tag_bytes + self.property_bytes() + self.id_bytes)
 	}
 }
 
@@ -303,6 +306,7 @@ fn analyze_vector_tile(vt: &VectorTile) -> Result<TileAnalysis> {
 			tag_bytes: 0,
 			key_bytes: 0,
 			value_bytes: 0,
+			id_bytes: 0,
 			encoded_bytes: usize::try_from(layer.to_blob()?.len())?,
 		};
 
@@ -328,6 +332,10 @@ fn analyze_vector_tile(vt: &VectorTile) -> Result<TileAnalysis> {
 			stats.geometry_bytes += geom_bytes;
 			stats.vertex_count += vertices;
 			stats.tag_bytes += tag_bytes;
+			// Feature id (MVT field 1, varint): one key byte + the id varint.
+			if let Some(id) = feature.id {
+				stats.id_bytes += 1 + varint_len(id);
+			}
 
 			for pair in feature.tag_ids.chunks_exact(2) {
 				let (key_id, value_id) = (pair[0] as usize, pair[1] as usize);
@@ -396,32 +404,39 @@ fn analyze_vector_tile(vt: &VectorTile) -> Result<TileAnalysis> {
 async fn add_layer_table(print: &PrettyPrint, analysis: &TileAnalysis) {
 	print.new_line().await;
 	let total = analysis.uncompressed_bytes.max(1);
+
+	// The "ids" column is only shown when the tile actually carries feature ids;
+	// for the common id-less case it would just be a column of zeros.
+	let show_ids = analysis.layers.iter().any(|l| l.id_bytes > 0);
+
+	let mut headers: Vec<&str> = vec!["layer", "feats", "verts", "geometry", "tags", "props"];
+	if show_ids {
+		headers.push("ids");
+	}
+	headers.extend(["other", "total", "%"]);
+
 	let rows: Vec<Vec<String>> = analysis
 		.layers
 		.iter()
 		.map(|l| {
-			vec![
+			let mut row = vec![
 				l.name.clone(),
 				fmt_int(l.feature_count),
 				fmt_int(l.vertex_count),
 				fmt_bytes(l.geometry_bytes),
 				fmt_bytes(l.tag_bytes),
 				fmt_bytes(l.property_bytes()),
-				fmt_bytes(l.other_bytes()),
-				fmt_bytes(l.encoded_bytes),
-				format!("{}%", l.encoded_bytes * 100 / total),
-			]
+			];
+			if show_ids {
+				row.push(fmt_bytes(l.id_bytes));
+			}
+			row.push(fmt_bytes(l.other_bytes()));
+			row.push(fmt_bytes(l.encoded_bytes));
+			row.push(format!("{}%", l.encoded_bytes * 100 / total));
+			row
 		})
 		.collect();
-	print
-		.add_table(
-			"size by layer",
-			&[
-				"layer", "feats", "verts", "geometry", "tags", "props", "other", "total", "%",
-			],
-			&rows,
-		)
-		.await;
+	print.add_table("size by layer", &headers, &rows).await;
 }
 
 async fn add_geom_type_table(print: &PrettyPrint, vt: &VectorTile) {
@@ -764,9 +779,17 @@ mod tests {
 		assert_eq!(name_attr.distinct, 1);
 		assert!(name_attr.bytes >= 200);
 
-		// Per-layer columns must not exceed the layer's own encoded size.
+		// Both test features carry ids, so id bytes are measured and excluded
+		// from the "other" residual.
+		assert!(
+			analysis.layers.iter().all(|l| l.id_bytes > 0),
+			"features with ids should contribute id bytes"
+		);
+
+		// Per-layer columns (now including ids) must not exceed the layer's own
+		// encoded size.
 		for l in &analysis.layers {
-			assert!(l.geometry_bytes + l.tag_bytes + l.property_bytes() <= l.encoded_bytes);
+			assert!(l.geometry_bytes + l.tag_bytes + l.property_bytes() + l.id_bytes <= l.encoded_bytes);
 		}
 		Ok(())
 	}
@@ -782,6 +805,7 @@ mod tests {
 				tag_bytes: 100,
 				key_bytes: 50,
 				value_bytes: 50,
+				id_bytes: 0,
 				encoded_bytes: 10_300,
 			}],
 			top_features: vec![],
@@ -798,6 +822,7 @@ mod tests {
 				vertex_count: 1,
 				geometry_bytes: 100,
 				tag_bytes: 5_000,
+				id_bytes: 0,
 				key_bytes: 2_500,
 				value_bytes: 2_500,
 				encoded_bytes: 10_100,
