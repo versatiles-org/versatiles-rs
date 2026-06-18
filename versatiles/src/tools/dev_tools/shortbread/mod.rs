@@ -136,17 +136,20 @@ pub async fn run(args: &CheckShortbread, runtime: &TilesRuntime) -> Result<()> {
 		let progress = progress.clone();
 		let schema = Arc::clone(&schema);
 		let analyzed = Arc::clone(&analyzed);
-		let mut stream = reader.tile_stream(window).await?.filter_map_parallel(move |coord, tile| {
-			progress.inc(1);
-			analyzed.fetch_add(1, Ordering::Relaxed);
-			match tile.into_vector() {
-				Ok(vt) => Some(validate::analyze_tile(coord, &vt, &schema)),
-				Err(e) => {
-					log::warn!("skipping tile {coord:?}: {e:#}");
-					None
+		let mut stream = reader
+			.tile_stream(window)
+			.await?
+			.filter_map_parallel(move |coord, tile| {
+				progress.inc(1);
+				analyzed.fetch_add(1, Ordering::Relaxed);
+				match tile.into_vector() {
+					Ok(vt) => Some(validate::analyze_tile(coord, &vt, &schema)),
+					Err(e) => {
+						log::warn!("skipping tile {coord:?}: {e:#}");
+						None
+					}
 				}
-			}
-		});
+			});
 
 		while let Some((_coord, issues)) = stream.next().await {
 			registry.merge(issues);
@@ -208,7 +211,11 @@ fn mix64(mut z: u64) -> u64 {
 /// How many windows per level approximate `fraction` of the deepest level (the
 /// one with the most tiles). Applying this same count to every level means
 /// shallower, smaller levels are sampled more fully. Always at least one.
-#[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[allow(
+	clippy::cast_precision_loss,
+	clippy::cast_possible_truncation,
+	clippy::cast_sign_loss
+)]
 fn windows_for_sample(fraction: f64, deepest_tiles: u64) -> u32 {
 	let target = (fraction * deepest_tiles as f64).ceil() as u64;
 	let per_window = u64::from(WINDOW_SIZE) * u64::from(WINDOW_SIZE);
