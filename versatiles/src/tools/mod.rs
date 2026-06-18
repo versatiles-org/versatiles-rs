@@ -8,5 +8,6 @@ pub mod memory;
 pub mod mosaic;
 mod mosaic_tools;
 pub mod probe;
+pub(crate) mod tile_breakdown;
 #[cfg(feature = "server")]
 pub mod serve;

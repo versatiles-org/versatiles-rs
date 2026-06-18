@@ -16,6 +16,7 @@
 //! actually shrink (compression ratio is downstream). The stored/compressed size
 //! is reported alongside for reference.
 
+use crate::tools::tile_breakdown::{LayerStats, layer_stats};
 use anyhow::{Result, anyhow, ensure};
 use versatiles_container::{SharedTileSource, TilesRuntime};
 use versatiles_core::{TileCoord, TileType, utils::PrettyPrint};
@@ -161,42 +162,6 @@ async fn biggest_tile_coords(
 	Ok(biggest.into_iter().map(|(_, coord)| coord).collect())
 }
 
-/// Accumulated byte breakdown for a single layer within the tile.
-struct LayerStats {
-	name: String,
-	feature_count: usize,
-	vertex_count: usize,
-	/// Sum of `feature.geom_data.len()` — the geometry command streams.
-	geometry_bytes: usize,
-	/// Sum of the packed `tag_ids` varint lengths — per-feature property refs.
-	tag_bytes: usize,
-	/// Sum of key-string lengths in the property table.
-	key_bytes: usize,
-	/// Sum of encoded value-message lengths in the property table.
-	value_bytes: usize,
-	/// Sum of encoded feature-id bytes (key byte + id varint) over features that
-	/// carry an id. Zero for sources without ids.
-	id_bytes: usize,
-	/// Exact encoded layer size (`layer.to_blob().len()`), used to derive the
-	/// residual "other" framing/overhead so the columns sum to the total.
-	encoded_bytes: usize,
-}
-
-impl LayerStats {
-	/// Property-table bytes: keys + values (not the per-feature tag refs).
-	fn property_bytes(&self) -> usize {
-		self.key_bytes + self.value_bytes
-	}
-
-	/// Residual bytes not attributed to geometry/tags/properties/ids: geom-type
-	/// fields, the layer name, and all the PBF key/length framing.
-	fn other_bytes(&self) -> usize {
-		self
-			.encoded_bytes
-			.saturating_sub(self.geometry_bytes + self.tag_bytes + self.property_bytes() + self.id_bytes)
-	}
-}
-
 /// One geometry hotspot: a feature with a notably high vertex count.
 struct FeatureEntry {
 	layer: String,
@@ -289,54 +254,31 @@ async fn analyze_one(reader: &SharedTileSource, coord: TileCoord, print: &mut Pr
 	Ok(())
 }
 
-/// Walk the decoded tile and accumulate per-layer stats plus the cross-layer
-/// top-feature and top-value lists.
+/// Walk the decoded tile and accumulate the per-layer byte breakdown (shared
+/// with `probe`) plus the single-tile drill-down lists (top features/values and
+/// per-attribute footprints).
 fn analyze_vector_tile(vt: &VectorTile) -> Result<TileAnalysis> {
-	let mut layers: Vec<LayerStats> = Vec::with_capacity(vt.layers.len());
+	// Per-layer byte breakdown — the part shared with `probe -ddd`.
+	let mut layers = layer_stats(vt)?;
+
 	let mut top_features: Vec<FeatureEntry> = Vec::new();
 	let mut top_values: Vec<ValueEntry> = Vec::new();
 	let mut attributes: Vec<AttributeEntry> = Vec::new();
 
 	for layer in &vt.layers {
-		let mut stats = LayerStats {
-			name: layer.name.clone(),
-			feature_count: layer.features.len(),
-			vertex_count: 0,
-			geometry_bytes: 0,
-			tag_bytes: 0,
-			key_bytes: 0,
-			value_bytes: 0,
-			id_bytes: 0,
-			encoded_bytes: usize::try_from(layer.to_blob()?.len())?,
-		};
-
-		// Encoded size of every value-table entry, indexed by value id. Computed
-		// once and reused for the per-layer total, the top-values list, and the
-		// per-attribute footprint below.
+		// Encoded size of every value-table entry, indexed by value id. Reused
+		// for the top-values list and the per-attribute footprint.
 		let value_sizes: Vec<usize> = layer
 			.property_manager
 			.iter_val()
 			.map(|v| GeoValuePBF::to_blob(v).map_or(0, |b| usize::try_from(b.len()).unwrap_or(0)))
 			.collect();
-		stats.value_bytes = value_sizes.iter().sum();
 
 		// Per key id: occurrence count + the set of distinct value ids it uses.
 		let mut per_key: std::collections::HashMap<usize, (usize, std::collections::HashSet<usize>)> =
 			std::collections::HashMap::new();
 
 		for feature in &layer.features {
-			let geom_bytes = usize::try_from(feature.geom_data.len())?;
-			let vertices = feature.count_geometry_points();
-			let tag_bytes: usize = feature.tag_ids.iter().map(|id| varint_len(u64::from(*id))).sum();
-
-			stats.geometry_bytes += geom_bytes;
-			stats.vertex_count += vertices;
-			stats.tag_bytes += tag_bytes;
-			// Feature id (MVT field 1, varint): one key byte + the id varint.
-			if let Some(id) = feature.id {
-				stats.id_bytes += 1 + varint_len(id);
-			}
-
 			for pair in feature.tag_ids.chunks_exact(2) {
 				let (key_id, value_id) = (pair[0] as usize, pair[1] as usize);
 				let entry = per_key.entry(key_id).or_default();
@@ -347,14 +289,10 @@ fn analyze_vector_tile(vt: &VectorTile) -> Result<TileAnalysis> {
 			top_features.push(FeatureEntry {
 				layer: layer.name.clone(),
 				geom_type: feature.geom_type,
-				vertices,
-				geom_bytes,
+				vertices: feature.count_geometry_points(),
+				geom_bytes: usize::try_from(feature.geom_data.len())?,
 				id: feature.id,
 			});
-		}
-
-		for key in layer.property_manager.iter_key() {
-			stats.key_bytes += key.len();
 		}
 
 		let keys: Vec<&String> = layer.property_manager.iter_key().collect();
@@ -378,8 +316,6 @@ fn analyze_vector_tile(vt: &VectorTile) -> Result<TileAnalysis> {
 				display: render_value(value),
 			});
 		}
-
-		layers.push(stats);
 	}
 
 	layers.sort_by_key(|l| std::cmp::Reverse(l.encoded_bytes));
@@ -561,17 +497,6 @@ fn verdict(analysis: &TileAnalysis) -> String {
 	}
 }
 
-/// Byte length of `value` as an unsigned LEB128 varint (matches the MVT/PBF
-/// packed `tag_ids` encoding).
-fn varint_len(mut value: u64) -> usize {
-	let mut len = 1;
-	while value >= 0x80 {
-		value >>= 7;
-		len += 1;
-	}
-	len
-}
-
 fn geom_type_name(geom_type: GeomType) -> &'static str {
 	match geom_type {
 		GeomType::Unknown => "Unknown",
@@ -706,15 +631,6 @@ mod tests {
 		};
 		assert!(resolve_coords(&args, &reader, &runtime).await.is_err());
 		Ok(())
-	}
-
-	#[test]
-	fn varint_len_matches_leb128_boundaries() {
-		assert_eq!(varint_len(0), 1);
-		assert_eq!(varint_len(127), 1);
-		assert_eq!(varint_len(128), 2);
-		assert_eq!(varint_len(16_383), 2);
-		assert_eq!(varint_len(16_384), 3);
 	}
 
 	#[test]

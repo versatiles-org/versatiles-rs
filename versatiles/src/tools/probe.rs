@@ -1,4 +1,6 @@
+use crate::tools::tile_breakdown::{LayerStats, layer_stats};
 use anyhow::Result;
+use std::collections::HashMap;
 use versatiles_container::{TileSource, TilesRuntime};
 use versatiles_core::{ProbeDepth, TileType, utils::PrettyPrint};
 use versatiles_geometry::vector_tile::{DegenerateReason, GeomType, IssueKind, ValidationIssue, validate_tile};
@@ -308,28 +310,49 @@ const VALIDATION_SAMPLE_LIMIT: usize = 10;
 enum TileCheck {
 	/// The tile could not be decoded as a vector tile.
 	DecodeFailed,
-	/// The tile decoded; carries the (possibly empty) list of spec violations.
-	Validated(Vec<ValidationIssue>),
+	/// The tile decoded; carries the spec violations and the per-layer byte
+	/// breakdown for size aggregation.
+	Validated {
+		issues: Vec<ValidationIssue>,
+		layers: Vec<LayerStats>,
+	},
 }
 
-/// Decodes a single tile and validates it. This is the CPU-bound work
-/// (decompress + protobuf parse + geometry validation) that gets fanned out
-/// across worker threads by `map_parallel`.
+/// Decodes a single tile, validates it, and computes its per-layer byte
+/// breakdown. This is the CPU-bound work (decompress + protobuf parse + geometry
+/// validation + re-encode for sizes) that gets fanned out across worker threads
+/// by `map_parallel`.
 fn check_tile(mut tile: versatiles_container::Tile) -> TileCheck {
 	match tile.as_vector() {
-		Ok(vt) => TileCheck::Validated(validate_tile(vt)),
+		Ok(vt) => TileCheck::Validated {
+			issues: validate_tile(vt),
+			// Size aggregation is best-effort: if a layer fails to re-encode we
+			// skip its sizes rather than aborting the whole deep probe.
+			layers: layer_stats(vt).unwrap_or_default(),
+		},
 		Err(_) => TileCheck::DecodeFailed,
 	}
 }
 
-/// Iterates every tile, runs the MVT validator on it, and prints a summary
-/// of any issues found. The per-tile decode+validate (the expensive part) runs
-/// in parallel across worker threads via `map_parallel`; the counter/sample
-/// aggregation stays on this task so it needs no synchronization.
+/// Aggregated byte breakdown of one layer at one zoom level, across all tiles.
+#[derive(Default)]
+struct LayerAgg {
+	/// How many tiles at this zoom contained this layer.
+	tiles: u64,
+	stats: LayerStats,
+}
+
+/// Iterates every tile, runs the MVT validator and per-layer size breakdown on
+/// it, and prints both a validation summary and a zoom × layer size breakdown.
+/// The per-tile decode+validate+measure (the expensive part) runs in parallel
+/// across worker threads via `map_parallel`; the aggregation stays on this task
+/// so it needs no synchronization.
 async fn probe_mvt_validation(source: &dyn TileSource, print: &mut PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
 	let mut counters = ValidationCounters::default();
 	let mut samples: Vec<Vec<String>> = Vec::with_capacity(VALIDATION_SAMPLE_LIMIT);
 	let mut tile_count: u64 = 0;
+	// (zoom, layer name) -> aggregated byte breakdown.
+	let mut size_agg: HashMap<(u8, String), LayerAgg> = HashMap::new();
 
 	let tile_pyramid = source.tile_pyramid().await?;
 	let total_tiles = tile_pyramid.count_tiles();
@@ -344,13 +367,20 @@ async fn probe_mvt_validation(source: &dyn TileSource, print: &mut PrettyPrint, 
 			tile_count += 1;
 			progress.inc(1);
 
-			let issues = match check {
+			let (issues, layers) = match check {
 				TileCheck::DecodeFailed => {
 					counters.decode_failures += 1;
 					continue;
 				}
-				TileCheck::Validated(issues) => issues,
+				TileCheck::Validated { issues, layers } => (issues, layers),
 			};
+
+			for layer in &layers {
+				let entry = size_agg.entry((coord.level, layer.name.clone())).or_default();
+				entry.tiles += 1;
+				entry.stats.add(layer);
+			}
+
 			if issues.is_empty() {
 				continue;
 			}
@@ -374,7 +404,100 @@ async fn probe_mvt_validation(source: &dyn TileSource, print: &mut PrettyPrint, 
 	progress.finish();
 
 	print_validation_summary(print, tile_count, &counters, &samples).await;
+	print_size_breakdown(print, &size_agg).await;
 	Ok(())
+}
+
+/// Prints the container-wide uncompressed-byte breakdown grouped by zoom level
+/// and layer, plus an all-zooms per-layer roll-up. Bytes are the same
+/// uncompressed MVT figures `analyze-tile` reports, summed over every tile.
+async fn print_size_breakdown(print: &mut PrettyPrint, size_agg: &HashMap<(u8, String), LayerAgg>) {
+	if size_agg.is_empty() {
+		return;
+	}
+
+	let grand_total: usize = size_agg.values().map(|a| a.stats.encoded_bytes).sum();
+	let total = grand_total.max(1);
+
+	// Whether any layer carries feature ids — controls the optional `ids` column.
+	let show_ids = size_agg.values().any(|a| a.stats.id_bytes > 0);
+
+	// Per zoom × layer, ordered by (zoom asc, total bytes desc).
+	let mut entries: Vec<(&(u8, String), &LayerAgg)> = size_agg.iter().collect();
+	entries.sort_by(|a, b| {
+		a.0.0
+			.cmp(&b.0.0)
+			.then(b.1.stats.encoded_bytes.cmp(&a.1.stats.encoded_bytes))
+	});
+
+	let mut headers: Vec<&str> = vec!["zoom", "layer", "tiles", "features", "geometry", "tags", "props"];
+	if show_ids {
+		headers.push("ids");
+	}
+	headers.extend(["other", "total", "%"]);
+
+	let rows: Vec<Vec<String>> = entries
+		.iter()
+		.map(|((zoom, name), agg)| {
+			let s = &agg.stats;
+			let mut row = vec![
+				format!("{zoom}"),
+				name.clone(),
+				format_integer_str(&agg.tiles.to_string()),
+				format_integer_str(&s.feature_count.to_string()),
+				format_integer_str(&s.geometry_bytes.to_string()),
+				format_integer_str(&s.tag_bytes.to_string()),
+				format_integer_str(&s.property_bytes().to_string()),
+			];
+			if show_ids {
+				row.push(format_integer_str(&s.id_bytes.to_string()));
+			}
+			row.push(format_integer_str(&s.other_bytes().to_string()));
+			row.push(format_integer_str(&s.encoded_bytes.to_string()));
+			row.push(format!("{}%", s.encoded_bytes * 100 / total));
+			row
+		})
+		.collect();
+
+	print
+		.add_table("uncompressed size by zoom × layer", &headers, &rows)
+		.await;
+
+	// All-zooms roll-up: which layer dominates the whole container.
+	let mut per_layer: HashMap<&str, LayerStats> = HashMap::new();
+	for ((_, name), agg) in size_agg {
+		per_layer.entry(name).or_default().add(&agg.stats);
+	}
+	let mut layer_rows: Vec<(&str, LayerStats)> = per_layer.into_iter().collect();
+	layer_rows.sort_by_key(|entry| std::cmp::Reverse(entry.1.encoded_bytes));
+
+	let mut headers: Vec<&str> = vec!["layer", "features", "geometry", "tags", "props"];
+	if show_ids {
+		headers.push("ids");
+	}
+	headers.extend(["other", "total", "%"]);
+
+	let rows: Vec<Vec<String>> = layer_rows
+		.iter()
+		.map(|(name, s)| {
+			let mut row = vec![
+				(*name).to_string(),
+				format_integer_str(&s.feature_count.to_string()),
+				format_integer_str(&s.geometry_bytes.to_string()),
+				format_integer_str(&s.tag_bytes.to_string()),
+				format_integer_str(&s.property_bytes().to_string()),
+			];
+			if show_ids {
+				row.push(format_integer_str(&s.id_bytes.to_string()));
+			}
+			row.push(format_integer_str(&s.other_bytes().to_string()));
+			row.push(format_integer_str(&s.encoded_bytes.to_string()));
+			row.push(format!("{}%", s.encoded_bytes * 100 / total));
+			row
+		})
+		.collect();
+
+	print.add_table("uncompressed size by layer (all zooms)", &headers, &rows).await;
 }
 
 async fn print_validation_summary(
@@ -511,6 +634,17 @@ mod tests {
 			out.contains("none"),
 			"expected zero issues for repaired fixture, got: {out}"
 		);
+		// The deep probe also emits the container-wide size breakdown.
+		assert!(
+			out.contains("uncompressed size by zoom × layer"),
+			"missing zoom × layer breakdown: {out}"
+		);
+		assert!(
+			out.contains("uncompressed size by layer (all zooms)"),
+			"missing per-layer roll-up: {out}"
+		);
+		// A known shortbread layer should appear in the breakdown.
+		assert!(out.contains("place_labels"), "expected a known layer in breakdown: {out}");
 		Ok(())
 	}
 
