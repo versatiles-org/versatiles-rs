@@ -224,6 +224,8 @@ async fn analyze_one(reader: &SharedTileSource, coord: TileCoord, print: &mut Pr
 	add_geom_type_table(&cat, &vt).await;
 	add_top_features_table(&cat, &analysis).await;
 	add_top_values_table(&cat, &analysis).await;
+
+	cat.new_line().await;
 	cat.add_key_value("verdict", &verdict(&analysis)).await;
 
 	Ok(())
@@ -300,6 +302,7 @@ fn analyze_vector_tile(vt: &VectorTile) -> Result<TileAnalysis> {
 }
 
 async fn add_layer_table(print: &PrettyPrint, analysis: &TileAnalysis) {
+	print.new_line().await;
 	let total = analysis.uncompressed_bytes.max(1);
 	let rows: Vec<Vec<String>> = analysis
 		.layers
@@ -330,6 +333,7 @@ async fn add_layer_table(print: &PrettyPrint, analysis: &TileAnalysis) {
 }
 
 async fn add_geom_type_table(print: &PrettyPrint, vt: &VectorTile) {
+	print.new_line().await;
 	// (feature count, vertex count, geometry bytes) keyed by geometry type.
 	let mut buckets: std::collections::BTreeMap<&'static str, (usize, usize, usize)> = std::collections::BTreeMap::new();
 	for layer in &vt.layers {
@@ -365,6 +369,7 @@ async fn add_top_features_table(print: &PrettyPrint, analysis: &TileAnalysis) {
 		})
 		.collect();
 	if !rows.is_empty() {
+		print.new_line().await;
 		print
 			.add_table(
 				&format!("top {} features by vertices", rows.len()),
@@ -390,6 +395,7 @@ async fn add_top_values_table(print: &PrettyPrint, analysis: &TileAnalysis) {
 		})
 		.collect();
 	if !rows.is_empty() {
+		print.new_line().await;
 		print
 			.add_table(
 				&format!("top {} property values by size", rows.len()),

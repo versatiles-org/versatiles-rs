@@ -166,6 +166,14 @@ impl PrettyPrint {
 		}
 	}
 
+	/// Writes a single empty line to visually separate sections.
+	///
+	/// Emits only the line suffix (no indentation prefix) so the blank line
+	/// carries no trailing whitespace.
+	pub async fn new_line(&self) {
+		self.printer.write(self.suffix.clone()).await;
+	}
+
 	async fn write_line<T: Display>(&self, line: T) {
 		self
 			.printer
