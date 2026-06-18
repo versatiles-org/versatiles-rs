@@ -79,7 +79,11 @@ pub async fn run(args: &AnalyzeTile, runtime: &TilesRuntime) -> Result<()> {
 
 /// Determine which tiles to analyze: the explicit `--tile` selectors if any were
 /// given, otherwise the `--count` biggest tiles found by scanning the container.
-async fn resolve_coords(args: &AnalyzeTile, reader: &SharedTileSource, runtime: &TilesRuntime) -> Result<Vec<TileCoord>> {
+async fn resolve_coords(
+	args: &AnalyzeTile,
+	reader: &SharedTileSource,
+	runtime: &TilesRuntime,
+) -> Result<Vec<TileCoord>> {
 	if args.tile.is_empty() {
 		ensure!(args.count > 0, "--count must be at least 1");
 		return biggest_tile_coords(reader, args.count, runtime).await;
@@ -586,13 +590,19 @@ mod tests {
 
 	#[test]
 	fn parse_tile_selector_parses_point_and_box() {
-		assert_eq!(parse_tile_selector("14/8802/5374").unwrap(), (14, (8802, 8802), (5374, 5374)));
+		assert_eq!(
+			parse_tile_selector("14/8802/5374").unwrap(),
+			(14, (8802, 8802), (5374, 5374))
+		);
 		assert_eq!(
 			parse_tile_selector("14/8800-8803/5371-5374").unwrap(),
 			(14, (8800, 8803), (5371, 5374))
 		);
 		// Mixed: single x, ranged y.
-		assert_eq!(parse_tile_selector("14/8802/5371-5374").unwrap(), (14, (8802, 8802), (5371, 5374)));
+		assert_eq!(
+			parse_tile_selector("14/8802/5371-5374").unwrap(),
+			(14, (8802, 8802), (5371, 5374))
+		);
 		// Wrong shape.
 		assert!(parse_tile_selector("14/8802").is_err());
 		assert!(parse_tile_selector("14/8802/5374/extra").is_err());

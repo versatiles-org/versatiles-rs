@@ -497,7 +497,9 @@ async fn print_size_breakdown(print: &mut PrettyPrint, size_agg: &HashMap<(u8, S
 		})
 		.collect();
 
-	print.add_table("uncompressed size by layer (all zooms)", &headers, &rows).await;
+	print
+		.add_table("uncompressed size by layer (all zooms)", &headers, &rows)
+		.await;
 }
 
 async fn print_validation_summary(
@@ -644,7 +646,10 @@ mod tests {
 			"missing per-layer roll-up: {out}"
 		);
 		// A known shortbread layer should appear in the breakdown.
-		assert!(out.contains("place_labels"), "expected a known layer in breakdown: {out}");
+		assert!(
+			out.contains("place_labels"),
+			"expected a known layer in breakdown: {out}"
+		);
 		Ok(())
 	}
 

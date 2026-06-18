@@ -92,7 +92,11 @@ pub fn layer_stats(vt: &VectorTile) -> Result<Vec<LayerStats>> {
 		for feature in &layer.features {
 			stats.geometry_bytes += usize::try_from(feature.geom_data.len())?;
 			stats.vertex_count += feature.count_geometry_points();
-			stats.tag_bytes += feature.tag_ids.iter().map(|id| varint_len(u64::from(*id))).sum::<usize>();
+			stats.tag_bytes += feature
+				.tag_ids
+				.iter()
+				.map(|id| varint_len(u64::from(*id)))
+				.sum::<usize>();
 			// Feature id (MVT field 1, varint): one key byte + the id varint.
 			if let Some(id) = feature.id {
 				stats.id_bytes += 1 + varint_len(id);
@@ -134,7 +138,9 @@ mod tests {
 	fn layer_stats_splits_geometry_ids_and_properties() -> Result<()> {
 		let line = GeoFeature {
 			id: Some(GeoValue::from(1_u64)),
-			geometry: Geometry::LineString(LineString::from((0..10).map(|i| [f64::from(i), f64::from(i)]).collect::<Vec<_>>())),
+			geometry: Geometry::LineString(LineString::from(
+				(0..10).map(|i| [f64::from(i), f64::from(i)]).collect::<Vec<_>>(),
+			)),
 			properties: GeoProperties::from(vec![("name", GeoValue::from("Main Street"))]),
 		};
 		let point = GeoFeature {
