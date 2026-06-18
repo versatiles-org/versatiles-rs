@@ -1,9 +1,9 @@
 //! Per-tile size analysis for vector containers.
 //!
 //! `probe -dd` tells you *which* tiles are huge (the "biggest tiles" table);
-//! this tool tells you *why*. Given a single tile coordinate — or, with no
-//! coordinate, the N biggest tiles in the container — it decodes the tile and
-//! reports a full byte breakdown:
+//! this tool tells you *why*. Given one or more tile coordinates (`z/x/y`, with
+//! optional per-axis ranges) — or, with no coordinate, the N biggest tiles in
+//! the container — it decodes each tile and reports a full byte breakdown:
 //!
 //! - per layer: feature count, vertex count, and the split between geometry,
 //!   per-feature tag references, and the property (key+value) table;
@@ -16,7 +16,7 @@
 //! actually shrink (compression ratio is downstream). The stored/compressed size
 //! is reported alongside for reference.
 
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, anyhow, ensure};
 use versatiles_container::{SharedTileSource, TilesRuntime};
 use versatiles_core::{TileCoord, TileType, utils::PrettyPrint};
 use versatiles_geometry::geo::GeoValue;
@@ -25,33 +25,34 @@ use versatiles_geometry::vector_tile::{GeoValuePBF, GeomType, VectorTile};
 /// How many entries to show in the "top features" and "top values" tables.
 const TOP_N: usize = 10;
 
+/// Upper bound on how many tiles a single invocation may analyze when explicit
+/// `--tile` ranges are given. Keeps a wide bbox from flooding the terminal.
+const MAX_SELECTED_TILES: usize = 64;
+
+/// A parsed `z/x/y` selector: zoom plus inclusive `(lo, hi)` x and y ranges.
+type TileSelector = (u8, (u32, u32), (u32, u32));
+
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
 /// Analyze why one or more vector tiles are large, breaking each tile down by
 /// layer into geometry, tag, and property-table bytes.
 ///
-/// With an explicit coordinate (`-z`/`-x`/`-y`, all three required) a single
-/// tile is analyzed. Without a coordinate the container is scanned and the
-/// `--count` biggest tiles are analyzed automatically.
+/// Pass one or more tiles as `z/x/y` via `--tile` (repeatable). Each axis may be
+/// a range, e.g. `--tile 14/8800-8803/5371-5374` selects a 4×4 block. Without
+/// any `--tile`, the container is scanned and the `--count` biggest tiles are
+/// analyzed automatically.
 pub struct AnalyzeTile {
 	/// Tile container to read (path, URL, or data source expression).
 	/// Run `versatiles help source` for syntax details.
 	#[arg(value_name = "INPUT_FILE", verbatim_doc_comment)]
 	input: String,
 
-	/// Zoom level of the tile to analyze (requires --x and --y).
-	#[arg(long, short = 'z')]
-	z: Option<u8>,
+	/// Tile(s) to analyze in `z/x/y` form; each of x and y may be a `lo-hi`
+	/// range (e.g. `14/8800-8803/5371-5374`). Repeat to analyze several.
+	#[arg(long, short = 't', value_name = "Z/X/Y", verbatim_doc_comment)]
+	tile: Vec<String>,
 
-	/// X coordinate of the tile to analyze (requires --z and --y).
-	#[arg(long, short = 'x')]
-	x: Option<u32>,
-
-	/// Y coordinate of the tile to analyze (requires --z and --x).
-	#[arg(long, short = 'y')]
-	y: Option<u32>,
-
-	/// In scan mode (no explicit coordinate), how many of the biggest tiles to analyze.
+	/// In scan mode (no `--tile`), how many of the biggest tiles to analyze.
 	#[arg(long, default_value_t = 3)]
 	count: usize,
 }
@@ -75,20 +76,59 @@ pub async fn run(args: &AnalyzeTile, runtime: &TilesRuntime) -> Result<()> {
 	Ok(())
 }
 
-/// Determine which tiles to analyze: the explicit coordinate if all of z/x/y are
+/// Determine which tiles to analyze: the explicit `--tile` selectors if any were
 /// given, otherwise the `--count` biggest tiles found by scanning the container.
-async fn resolve_coords(
-	args: &AnalyzeTile,
-	reader: &SharedTileSource,
-	runtime: &TilesRuntime,
-) -> Result<Vec<TileCoord>> {
-	match (args.z, args.x, args.y) {
-		(Some(z), Some(x), Some(y)) => Ok(vec![TileCoord::new(z, x, y)?]),
-		(None, None, None) => {
-			ensure!(args.count > 0, "--count must be at least 1");
-			biggest_tile_coords(reader, args.count, runtime).await
+async fn resolve_coords(args: &AnalyzeTile, reader: &SharedTileSource, runtime: &TilesRuntime) -> Result<Vec<TileCoord>> {
+	if args.tile.is_empty() {
+		ensure!(args.count > 0, "--count must be at least 1");
+		return biggest_tile_coords(reader, args.count, runtime).await;
+	}
+
+	let mut coords = Vec::new();
+	for selector in &args.tile {
+		let (z, (x0, x1), (y0, y1)) = parse_tile_selector(selector)?;
+		let count = (u64::from(x1 - x0 + 1)) * (u64::from(y1 - y0 + 1));
+		ensure!(
+			coords.len() as u64 + count <= MAX_SELECTED_TILES as u64,
+			"selection covers more than {MAX_SELECTED_TILES} tiles — narrow the x/y ranges or analyze fewer tiles at once"
+		);
+		for x in x0..=x1 {
+			for y in y0..=y1 {
+				coords.push(TileCoord::new(z, x, y)?);
+			}
 		}
-		_ => bail!("specify all of --z, --x and --y to analyze a single tile, or none to scan for the biggest tiles"),
+	}
+	Ok(coords)
+}
+
+/// Parse a `z/x/y` tile selector, where each of x and y may be a single value or
+/// an inclusive `lo-hi` range. Returns the zoom plus the (inclusive) x and y
+/// ranges.
+fn parse_tile_selector(selector: &str) -> Result<TileSelector> {
+	let parts: Vec<&str> = selector.split('/').collect();
+	ensure!(
+		parts.len() == 3,
+		"tile selector must be in z/x/y form (got {selector:?})"
+	);
+	let z: u8 = parts[0]
+		.parse()
+		.map_err(|_| anyhow!("invalid zoom {:?} in selector {selector:?}", parts[0]))?;
+	let x = parse_axis_range(parts[1]).map_err(|e| e.context(format!("parsing x of {selector:?}")))?;
+	let y = parse_axis_range(parts[2]).map_err(|e| e.context(format!("parsing y of {selector:?}")))?;
+	Ok((z, x, y))
+}
+
+/// Parse a single axis component: either `n` (→ `(n, n)`) or `lo-hi` (→ inclusive
+/// `(lo, hi)`, requiring `lo <= hi`).
+fn parse_axis_range(part: &str) -> Result<(u32, u32)> {
+	if let Some((lo, hi)) = part.split_once('-') {
+		let lo: u32 = lo.parse().map_err(|_| anyhow!("invalid range start {lo:?}"))?;
+		let hi: u32 = hi.parse().map_err(|_| anyhow!("invalid range end {hi:?}"))?;
+		ensure!(lo <= hi, "range start {lo} must not exceed end {hi}");
+		Ok((lo, hi))
+	} else {
+		let value: u32 = part.parse().map_err(|_| anyhow!("invalid coordinate {part:?}"))?;
+		Ok((value, value))
 	}
 }
 
@@ -513,6 +553,65 @@ mod tests {
 			geometry: Geometry::Point(Point::new(x, y)),
 			properties: GeoProperties::from(props),
 		}
+	}
+
+	#[test]
+	fn parse_axis_range_handles_single_and_range() {
+		assert_eq!(parse_axis_range("5").unwrap(), (5, 5));
+		assert_eq!(parse_axis_range("8800-8803").unwrap(), (8800, 8803));
+		// Reversed ranges and garbage are rejected.
+		assert!(parse_axis_range("8803-8800").is_err());
+		assert!(parse_axis_range("abc").is_err());
+		assert!(parse_axis_range("1-").is_err());
+	}
+
+	#[test]
+	fn parse_tile_selector_parses_point_and_box() {
+		assert_eq!(parse_tile_selector("14/8802/5374").unwrap(), (14, (8802, 8802), (5374, 5374)));
+		assert_eq!(
+			parse_tile_selector("14/8800-8803/5371-5374").unwrap(),
+			(14, (8800, 8803), (5371, 5374))
+		);
+		// Mixed: single x, ranged y.
+		assert_eq!(parse_tile_selector("14/8802/5371-5374").unwrap(), (14, (8802, 8802), (5371, 5374)));
+		// Wrong shape.
+		assert!(parse_tile_selector("14/8802").is_err());
+		assert!(parse_tile_selector("14/8802/5374/extra").is_err());
+		assert!(parse_tile_selector("z/8802/5374").is_err());
+	}
+
+	#[tokio::test]
+	async fn resolve_coords_expands_ranges_and_enforces_cap() -> Result<()> {
+		let runtime = create_test_runtime();
+		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
+
+		// A 4×4 block expands to 16 coords.
+		let args = AnalyzeTile {
+			input: "../testdata/berlin.mbtiles".into(),
+			tile: vec!["14/8800-8803/5371-5374".into()],
+			count: 3,
+		};
+		let coords = resolve_coords(&args, &reader, &runtime).await?;
+		assert_eq!(coords.len(), 16);
+		assert!(coords.iter().all(|c| c.level == 14));
+
+		// Multiple selectors accumulate.
+		let args = AnalyzeTile {
+			input: "../testdata/berlin.mbtiles".into(),
+			tile: vec!["14/8802/5374".into(), "5/9/11".into()],
+			count: 3,
+		};
+		let coords = resolve_coords(&args, &reader, &runtime).await?;
+		assert_eq!(coords.len(), 2);
+
+		// Over-cap selection is rejected.
+		let args = AnalyzeTile {
+			input: "../testdata/berlin.mbtiles".into(),
+			tile: vec!["8/0-15/0-15".into()],
+			count: 3,
+		};
+		assert!(resolve_coords(&args, &reader, &runtime).await.is_err());
+		Ok(())
 	}
 
 	#[test]
