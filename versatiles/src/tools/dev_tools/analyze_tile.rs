@@ -212,11 +212,25 @@ struct ValueEntry {
 	display: String,
 }
 
+/// Per-attribute (layer + key) value accounting. `bytes` is the attribute's
+/// footprint in the **deduplicated** value table (the sum of the distinct values
+/// it references), so it ties to what is actually stored. `occurrences` and
+/// `distinct` expose how much the table dedupes: a high occurrence count with a
+/// low distinct count means the values compress well into the shared table.
+struct AttributeEntry {
+	layer: String,
+	key: String,
+	occurrences: usize,
+	distinct: usize,
+	bytes: usize,
+}
+
 /// The full analysis of one decoded tile.
 struct TileAnalysis {
 	layers: Vec<LayerStats>,
 	top_features: Vec<FeatureEntry>,
 	top_values: Vec<ValueEntry>,
+	attributes: Vec<AttributeEntry>,
 	uncompressed_bytes: usize,
 }
 
@@ -264,6 +278,7 @@ async fn analyze_one(reader: &SharedTileSource, coord: TileCoord, print: &mut Pr
 	add_geom_type_table(&cat, &vt).await;
 	add_top_features_table(&cat, &analysis).await;
 	add_top_values_table(&cat, &analysis).await;
+	add_attribute_table(&cat, &analysis).await;
 
 	cat.new_line().await;
 	cat.add_key_value("verdict", &verdict(&analysis)).await;
@@ -277,6 +292,7 @@ fn analyze_vector_tile(vt: &VectorTile) -> Result<TileAnalysis> {
 	let mut layers: Vec<LayerStats> = Vec::with_capacity(vt.layers.len());
 	let mut top_features: Vec<FeatureEntry> = Vec::new();
 	let mut top_values: Vec<ValueEntry> = Vec::new();
+	let mut attributes: Vec<AttributeEntry> = Vec::new();
 
 	for layer in &vt.layers {
 		let mut stats = LayerStats {
@@ -290,6 +306,20 @@ fn analyze_vector_tile(vt: &VectorTile) -> Result<TileAnalysis> {
 			encoded_bytes: usize::try_from(layer.to_blob()?.len())?,
 		};
 
+		// Encoded size of every value-table entry, indexed by value id. Computed
+		// once and reused for the per-layer total, the top-values list, and the
+		// per-attribute footprint below.
+		let value_sizes: Vec<usize> = layer
+			.property_manager
+			.iter_val()
+			.map(|v| GeoValuePBF::to_blob(v).map_or(0, |b| usize::try_from(b.len()).unwrap_or(0)))
+			.collect();
+		stats.value_bytes = value_sizes.iter().sum();
+
+		// Per key id: occurrence count + the set of distinct value ids it uses.
+		let mut per_key: std::collections::HashMap<usize, (usize, std::collections::HashSet<usize>)> =
+			std::collections::HashMap::new();
+
 		for feature in &layer.features {
 			let geom_bytes = usize::try_from(feature.geom_data.len())?;
 			let vertices = feature.count_geometry_points();
@@ -298,6 +328,13 @@ fn analyze_vector_tile(vt: &VectorTile) -> Result<TileAnalysis> {
 			stats.geometry_bytes += geom_bytes;
 			stats.vertex_count += vertices;
 			stats.tag_bytes += tag_bytes;
+
+			for pair in feature.tag_ids.chunks_exact(2) {
+				let (key_id, value_id) = (pair[0] as usize, pair[1] as usize);
+				let entry = per_key.entry(key_id).or_default();
+				entry.0 += 1;
+				entry.1.insert(value_id);
+			}
 
 			top_features.push(FeatureEntry {
 				layer: layer.name.clone(),
@@ -311,12 +348,24 @@ fn analyze_vector_tile(vt: &VectorTile) -> Result<TileAnalysis> {
 		for key in layer.property_manager.iter_key() {
 			stats.key_bytes += key.len();
 		}
+
+		let keys: Vec<&String> = layer.property_manager.iter_key().collect();
+		for (key_id, (occurrences, value_ids)) in per_key {
+			let key = keys.get(key_id).map_or("?", |k| k.as_str()).to_string();
+			let bytes: usize = value_ids.iter().filter_map(|id| value_sizes.get(*id)).sum();
+			attributes.push(AttributeEntry {
+				layer: layer.name.clone(),
+				key,
+				occurrences,
+				distinct: value_ids.len(),
+				bytes,
+			});
+		}
+
 		for value in layer.property_manager.iter_val() {
-			let bytes = GeoValuePBF::to_blob(value).map_or(0, |b| usize::try_from(b.len()).unwrap_or(0));
-			stats.value_bytes += bytes;
 			top_values.push(ValueEntry {
 				layer: layer.name.clone(),
-				bytes,
+				bytes: GeoValuePBF::to_blob(value).map_or(0, |b| usize::try_from(b.len()).unwrap_or(0)),
 				type_name: value_type_name(value),
 				display: render_value(value),
 			});
@@ -330,6 +379,8 @@ fn analyze_vector_tile(vt: &VectorTile) -> Result<TileAnalysis> {
 	top_features.truncate(TOP_N);
 	top_values.sort_by_key(|v| std::cmp::Reverse(v.bytes));
 	top_values.truncate(TOP_N);
+	attributes.sort_by_key(|a| std::cmp::Reverse(a.bytes));
+	attributes.truncate(TOP_N);
 
 	let uncompressed_bytes = usize::try_from(vt.to_blob()?.len())?;
 
@@ -337,6 +388,7 @@ fn analyze_vector_tile(vt: &VectorTile) -> Result<TileAnalysis> {
 		layers,
 		top_features,
 		top_values,
+		attributes,
 		uncompressed_bytes,
 	})
 }
@@ -440,6 +492,33 @@ async fn add_top_values_table(print: &PrettyPrint, analysis: &TileAnalysis) {
 			.add_table(
 				&format!("top {} property values by size", rows.len()),
 				&["layer", "bytes", "type", "value"],
+				&rows,
+			)
+			.await;
+	}
+}
+
+async fn add_attribute_table(print: &PrettyPrint, analysis: &TileAnalysis) {
+	let rows: Vec<Vec<String>> = analysis
+		.attributes
+		.iter()
+		.filter(|a| a.bytes > 0)
+		.map(|a| {
+			vec![
+				a.layer.clone(),
+				a.key.clone(),
+				fmt_int(a.occurrences),
+				fmt_int(a.distinct),
+				fmt_bytes(a.bytes),
+			]
+		})
+		.collect();
+	if !rows.is_empty() {
+		print.new_line().await;
+		print
+			.add_table(
+				&format!("top {} attributes by value size", rows.len()),
+				&["layer", "attribute", "features", "distinct", "bytes"],
 				&rows,
 			)
 			.await;
@@ -676,6 +755,15 @@ mod tests {
 		assert!(analysis.top_values[0].bytes >= 200);
 		assert_eq!(analysis.top_values[0].type_name, "String");
 
+		// The heaviest attribute by value size should be labels/name (the 200-char
+		// string), with one occurrence and one distinct value.
+		let name_attr = &analysis.attributes[0];
+		assert_eq!(name_attr.layer, "labels");
+		assert_eq!(name_attr.key, "name");
+		assert_eq!(name_attr.occurrences, 1);
+		assert_eq!(name_attr.distinct, 1);
+		assert!(name_attr.bytes >= 200);
+
 		// Per-layer columns must not exceed the layer's own encoded size.
 		for l in &analysis.layers {
 			assert!(l.geometry_bytes + l.tag_bytes + l.property_bytes() <= l.encoded_bytes);
@@ -698,6 +786,7 @@ mod tests {
 			}],
 			top_features: vec![],
 			top_values: vec![],
+			attributes: vec![],
 			uncompressed_bytes: 10_300,
 		};
 		assert!(verdict(&geom_heavy).contains("geometry-dominated"));
@@ -715,6 +804,7 @@ mod tests {
 			}],
 			top_features: vec![],
 			top_values: vec![],
+			attributes: vec![],
 			uncompressed_bytes: 10_100,
 		};
 		assert!(verdict(&attr_heavy).contains("attribute-dominated"));
