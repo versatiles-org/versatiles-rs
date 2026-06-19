@@ -254,26 +254,52 @@ impl PipelineFactory {
 	}
 
 	/// Returns rendered Markdown help listing all registered operations and their docs.
+	///
+	/// The `help.md` template may contain the placeholder `<!-- VPL_OPERATIONS_TOC -->`,
+	/// which is replaced by an auto-generated table of contents linking to every
+	/// operation, so the generated `README.md` carries an up-to-date operation index.
 	pub fn help_md(&self) -> String {
-		#[allow(clippy::borrowed_box, clippy::needless_pass_by_value)]
-		fn to_md<T>(vec: Vec<&Box<T>>) -> String
+		#[allow(clippy::borrowed_box)]
+		fn to_md<T>(vec: &[&Box<T>]) -> String
 		where
 			T: OperationFactoryTrait + ?Sized,
 		{
 			vec.iter()
-				.sorted_by_key(|f| f.tag_name())
 				.map(|f| format!("---\n\n## {}\n\n{}", f.tag_name(), f.docs()))
 				.join("\n\n")
 		}
 
+		/// Inline list of links to each operation's section, e.g. ``[`filter`](#filter)``.
+		#[allow(clippy::borrowed_box)]
+		fn toc<T>(vec: &[&Box<T>]) -> String
+		where
+			T: OperationFactoryTrait + ?Sized,
+		{
+			vec.iter()
+				.map(|f| format!("[`{name}`](#{name})", name = f.tag_name()))
+				.join(" · ")
+		}
+
+		// Sort once; both the TOC and the detailed sections use the same order.
+		let read_ops = self.read_ops.values().sorted_by_key(|f| f.tag_name()).collect_vec();
+		let tran_ops = self.tran_ops.values().sorted_by_key(|f| f.tag_name()).collect_vec();
+
+		let toc_section = format!(
+			"## Operations\n\n**Read:** {}\n\n**Transform:** {}",
+			toc(&read_ops),
+			toc(&tran_ops),
+		);
+
+		let intro = include_str!("help.md").replace("<!-- VPL_OPERATIONS_TOC -->", &toc_section);
+
 		let doc = [
-			include_str!("help.md").to_string(),
+			intro,
 			String::from("---"),
 			String::from("# READ operations"),
-			to_md(self.read_ops.values().collect_vec()),
+			to_md(&read_ops),
 			String::from("---"),
 			String::from("# TRANSFORM operations"),
-			to_md(self.tran_ops.values().collect_vec()),
+			to_md(&tran_ops),
 		]
 		.join("\n\n");
 
@@ -326,4 +352,35 @@ pub fn all_operation_metadata() -> Vec<OperationMeta> {
 	}
 
 	ops
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn help_md_includes_operations_toc() {
+		let md = PipelineFactory::new_dummy().help_md();
+
+		// The help.md placeholder must be replaced, not emitted verbatim.
+		assert!(!md.contains("VPL_OPERATIONS_TOC"), "TOC placeholder was not replaced");
+
+		// TOC heading and the two operation groups.
+		assert!(md.contains("## Operations"), "missing TOC heading:\n{md}");
+		assert!(md.contains("**Read:**"), "missing read group:\n{md}");
+		assert!(md.contains("**Transform:**"), "missing transform group:\n{md}");
+
+		// Each TOC entry links to the section anchor that actually exists below.
+		assert!(
+			md.contains("[`from_container`](#from_container)"),
+			"missing read op link:\n{md}"
+		);
+		assert!(md.contains("[`filter`](#filter)"), "missing transform op link:\n{md}");
+		assert!(md.contains("## from_container"), "missing op section heading:\n{md}");
+
+		// The TOC comes before the detailed operation sections.
+		let toc_pos = md.find("## Operations").expect("TOC heading present");
+		let read_section = md.find("# READ operations").expect("READ section present");
+		assert!(toc_pos < read_section, "TOC should appear before the detailed sections");
+	}
 }

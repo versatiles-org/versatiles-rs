@@ -10,6 +10,8 @@ versatiles convert pipeline.vpl result.versatiles
 versatiles serve pipeline.vpl
 ```
 
+<!-- VPL_OPERATIONS_TOC -->
+
 ## Defining a pipeline
 
 To define a pipeline, create a `.vpl` file (or pass it inline — see below) and describe the pipeline using the **VersaTiles Pipeline Language (VPL)**. Pipelines always begin with a read operation (name starts with `from_`), optionally followed by one or more transform operations, separated by the pipe symbol (`|`).
