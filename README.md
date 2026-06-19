@@ -499,6 +499,23 @@ from_merged_vector [
 ]
 ```
 
+**Run a pipeline** from a `.vpl` file or inline via the `[,vpl](…)` source syntax, writing the result to a local or remote target or serving it live:
+
+```sh
+# read a remote pmtiles, drop high zoom levels, write the result back to SFTP
+versatiles convert \
+  '[,vpl](from_container filename="https://example.org/planet.pmtiles" | filter level_max=8)' \
+  sftp://user@fileserver.example.org/tiles/overview.versatiles
+
+# merge a remote base map with a local overlay and serve it live
+versatiles serve '[,vpl](from_merged_vector [
+  from_container filename="https://download.versatiles.org/osm.versatiles",
+  from_container filename="local-overlay.versatiles"
+])'
+```
+
+See [Data Source Syntax](#data-source-syntax) for inline pipelines and `versatiles help source` for remote/SFTP details.
+
 More details can be found in [versatiles_pipeline/README.md](https://github.com/versatiles-org/versatiles-rs/blob/main/versatiles_pipeline/README.md).
 
 ### Data Source Syntax

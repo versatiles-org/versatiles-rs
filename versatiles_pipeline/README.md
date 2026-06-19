@@ -18,7 +18,7 @@ versatiles serve pipeline.vpl
 
 ## Defining a pipeline
 
-To define a pipeline, create a `.vpl` file (or pass it inline — see below) and describe the pipeline using the **VersaTiles Pipeline Language (VPL)**. Pipelines always begin with a read operation (name starts with `from_`), optionally followed by one or more transform operations, separated by the pipe symbol (`|`).
+To define a pipeline, create a `.vpl` file and describe the pipeline using the **VersaTiles Pipeline Language (VPL)**. Pipelines always begin with a read operation (name starts with `from_`), optionally followed by one or more transform operations, separated by the pipe symbol (`|`).
 
 Example:
 
@@ -26,19 +26,7 @@ Example:
 from_container filename="world.versatiles" | do_some_filtering | do_some_processing
 ```
 
-### Inline pipelines
-
-You don't need a `.vpl` file — a pipeline can be passed directly on the command line using the `[,vpl](…)` data-source syntax. This works anywhere a tile source is accepted (`convert`, `serve`, `probe`). Quote it in your shell, since VPL contains `|` and spaces:
-
-```bash
-# inline pipeline written to a container
-versatiles convert '[,vpl](from_container filename="world.versatiles" | filter level_max=10)' out.versatiles
-
-# the same pipeline, served live
-versatiles serve '[,vpl](from_container filename="world.versatiles" | filter level_max=10)'
-```
-
-For the full data-source syntax (name/type prefixes, JSON form, credentials), run `versatiles help source`.
+A pipeline can also be passed inline on the command line — and written to a local or remote target, or served live — without a `.vpl` file. See [Usage in the main README](https://github.com/versatiles-org/versatiles-rs#usage) and `versatiles help source` for CLI invocation and data-source syntax.
 
 ### Reading raw vector data
 
@@ -56,14 +44,7 @@ from_csv filename="quakes.csv" lon_column="longitude" lat_column="latitude"
 
 ### Reading from remote sources
 
-`from_container` reads local files **and** remote `versatiles`/`pmtiles` containers over HTTP, HTTPS, or SFTP — only the byte ranges actually needed are fetched, so there's no need to download the whole container first:
-
-```vpl
-from_container filename="https://download.versatiles.org/osm.versatiles"
-from_container filename="sftp://user@fileserver.example.org/data/world.pmtiles"
-```
-
-Credentials, ports, and authentication details are covered by `versatiles help source`.
+`from_container` also reads remote `versatiles`/`pmtiles` containers over HTTP, HTTPS, or SFTP (e.g. `filename="https://download.versatiles.org/osm.versatiles"`), fetching only the byte ranges it needs. See `versatiles help source` for URL and authentication details.
 
 ## Operation Format
 
@@ -83,38 +64,6 @@ from_stacked [
    from_container filename="europe.versatiles" | filter level_min=5,
    from_container filename="germany.versatiles"
 ]
-```
-
-## Writing or serving the result
-
-A pipeline's output can be **written to a container** or **served live** over HTTP. Both `convert` targets and `serve` sources accept local paths as well as remote URLs:
-
-```bash
-# write to a local container
-versatiles convert pipeline.vpl world.versatiles
-
-# write the result straight to a remote SFTP server (no local copy)
-versatiles convert pipeline.vpl sftp://user@fileserver.example.org/tiles/world.versatiles
-
-# serve the pipeline output as a live tile endpoint
-versatiles serve pipeline.vpl
-```
-
-Remote reading and writing support the `versatiles` and `pmtiles` formats. See `versatiles help source` for SFTP authentication and URL details.
-
-## End-to-end examples
-
-```bash
-# read a remote pmtiles, drop high zoom levels, and write the result back to SFTP
-versatiles convert \
-  '[,vpl](from_container filename="https://example.org/planet.pmtiles" | filter level_max=8)' \
-  sftp://user@fileserver.example.org/tiles/overview.versatiles
-
-# merge a remote base map with a local overlay and serve it live
-versatiles serve '[,vpl](from_merged_vector [
-  from_container filename="https://download.versatiles.org/osm.versatiles",
-  from_container filename="local-overlay.versatiles"
-])'
 ```
 
 ## Filter expressions (CEL)
