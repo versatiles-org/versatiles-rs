@@ -7,6 +7,7 @@ Development, testing, and CI/CD automation scripts for the VersaTiles Rust works
 | Script                                                         | Purpose                                                                        |
 |----------------------------------------------------------------|--------------------------------------------------------------------------------|
 | **[`check.sh`](#checksh)**                                     | **Run all quality checks (Rust + Node.js + Markdown) — run before committing** |
+| **[`format.sh`](#formatsh)**                                   | **Auto-format the codebase (Rust + Node.js + Markdown) in place**              |
 | **[`build-release-with-gdal.sh`](#build-release-with-gdalsh)** | **Build release binary with GDAL support**                                     |
 | **[`release-package.sh`](#release-packagesh)**                 | **Create and tag a versioned release**                                         |
 
@@ -132,6 +133,18 @@ Lint all Markdown files in the repository with `markdownlint-cli2`.
 ```sh
 ./scripts/check-markdown.sh
 ```
+
+---
+
+### `format.sh`
+
+Auto-format the codebase in place — the write-mode counterpart to `check.sh`.
+
+```sh
+./scripts/format.sh
+```
+
+Steps: `cargo fmt` (Rust), `markdownlint-cli2 --fix` (Markdown), and `npm run fix` (ESLint `--fix` + Prettier) in `versatiles_node`. Reports any issues that could not be auto-fixed and exits non-zero, but always runs every formatter. Skips Node.js if `versatiles_node/` does not exist.
 
 ---
 
