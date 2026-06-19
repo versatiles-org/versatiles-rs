@@ -556,10 +556,28 @@ impl From<String> for Blob {
 	}
 }
 
-/// Implements [`Debug`] by printing the byte length and hexadecimal representation of the bytes.
+/// Number of leading bytes shown in [`Blob`]'s [`Debug`] output before the rest
+/// is abbreviated. Enough to eyeball a magic number / compression header without
+/// dumping multi-megabyte payloads into logs.
+const DEBUG_PREVIEW_BYTES: usize = 16;
+
+/// Implements [`Debug`] by printing the byte length and a hexadecimal preview of
+/// the bytes. Blobs up to `DEBUG_PREVIEW_BYTES` are shown in full; larger ones
+/// show only the first `DEBUG_PREVIEW_BYTES` bytes followed by a count of the
+/// remainder, so debug logging never spews entire payloads.
 impl Debug for Blob {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "Blob({}): {}", self.0.len(), self.to_hex())
+		let len = self.0.len();
+		if len <= DEBUG_PREVIEW_BYTES {
+			write!(f, "Blob({len}): {}", self.to_hex())
+		} else {
+			let preview = Blob::from(&self.0[..DEBUG_PREVIEW_BYTES]).to_hex();
+			write!(
+				f,
+				"Blob({len}): {preview} … (+{} more bytes)",
+				len - DEBUG_PREVIEW_BYTES
+			)
+		}
 	}
 }
 
@@ -675,13 +693,20 @@ mod tests {
 	// Test the debug format of the Blob struct
 	#[test]
 	fn debug() {
+		// Up to 16 bytes: shown in full.
 		assert_eq!(
 			format!("{:?}", Blob::from("Voisilmäpulla")),
 			"Blob(14): 56 6f 69 73 69 6c 6d c3 a4 70 75 6c 6c 61"
 		);
+		// Exactly 16 bytes: still shown in full (boundary).
+		assert_eq!(
+			format!("{:?}", Blob::from("0123456789012345")),
+			"Blob(16): 30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35"
+		);
+		// Over 16 bytes: first 16 shown, remainder abbreviated.
 		assert_eq!(
 			format!("{:?}", Blob::from("01234567890123456789012345678901")),
-			"Blob(32): 30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35 36 37 38 39 30 31"
+			"Blob(32): 30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35 … (+16 more bytes)"
 		);
 	}
 
