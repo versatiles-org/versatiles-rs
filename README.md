@@ -224,11 +224,16 @@ VersaTiles works with **tile containers** - files or directories containing map 
 
 **Supported formats:**
 
-- `.versatiles` - Native format (best compression, fastest access)
-- `.mbtiles` - SQLite-based (widely compatible)
-- `.pmtiles` - Cloud-optimized single-file format
-- `.tar` - Simple archive format
-- Directories - Folder structure: `z/x/y.ext`
+| Feature      | `.versatiles` | `.pmtiles` | `.mbtiles` | `.tar` | directory |
+|--------------|:-------------:|:----------:|:----------:|:------:|:---------:|
+| Read         |      ✅       |     ✅     |     ✅     |   ✅   |    ✅     |
+| Write        |      ✅       |     ✅     |     ✅     |   ✅   |    ✅     |
+| Local file   |      ✅       |     ✅     |     ✅     |   ✅   |    ✅     |
+| HTTP(S) read |      ✅       |     ✅     |     ❌     |   ❌   |    ❌     |
+| SFTP read    |      ✅       |     ✅     |     ❌     |   ❌   |    ❌     |
+| SFTP write   |      ✅       |     ✅     |     ❌     |   ❌   |    ❌     |
+
+✅ = supported, ❌ = not supported. Remote read over HTTP/HTTPS and SFTP read/write require the streamable single-file formats (`.versatiles`, `.pmtiles`); SFTP also requires the `ssh2` feature. All formats store opaque tile blobs, so each works with both vector and raster tiles.
 
 **Remote access:** VersaTiles can read remote `.versatiles` and `.pmtiles` files via HTTPS, and write to remote servers via SFTP (requires `ssh2` feature):
 
