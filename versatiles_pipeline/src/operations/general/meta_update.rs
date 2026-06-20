@@ -200,6 +200,13 @@ mod tests {
 		o.as_object().number(k).ok().flatten()
 	}
 
+	/// Escapes a path for embedding inside a VPL double-quoted string. The VPL
+	/// parser treats `\` and `"` as escapes, so Windows paths (which contain
+	/// backslashes) must be escaped or parsing fails.
+	fn vpl_quote(path: &std::path::Path) -> String {
+		path.to_str().unwrap().replace('\\', "\\\\").replace('"', "\\\"")
+	}
+
 	#[tokio::test]
 	async fn test_meta_update_sets_fields_and_preserves_others() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
@@ -376,7 +383,7 @@ mod tests {
 		let dir = assert_fs::TempDir::new()?;
 		let file = dir.child("base.tilejson.json");
 		file.write_str(r#"{"tilejson":"3.0.0","name":"Base","attribution":"Base attr"}"#)?;
-		let path = file.path().to_str().unwrap();
+		let path = vpl_quote(file.path());
 
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
@@ -404,8 +411,8 @@ mod tests {
 		let op = factory
 			.operation_from_vpl(&format!(
 				"from_debug format=mvt | meta_update tilejson_update_file=\"{}\" vector_layers_file=\"{}\"",
-				update.path().to_str().unwrap(),
-				layers.path().to_str().unwrap(),
+				vpl_quote(update.path()),
+				vpl_quote(layers.path()),
 			))
 			.await?;
 
