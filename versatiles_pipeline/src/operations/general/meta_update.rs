@@ -1,8 +1,8 @@
 use crate::{PipelineFactory, vpl::VPLNode};
-use anyhow::Result;
+use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
+use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{
 	GeoBBox, GeoCenter, TileBBox, TileJSON, TilePyramid, TileSchema, TileStream, json::parse_json_str,
 };
@@ -31,13 +31,22 @@ struct Args {
 	/// When given, the new metadata starts from this document instead of the source's; the
 	/// other parameters then override individual fields on top of it.
 	tilejson: Option<String>,
+	/// Path to a file containing a complete TileJSON document, resolved relative to the VPL
+	/// file. Use instead of `tilejson` to avoid inline JSON quoting. Mutually exclusive with `tilejson`.
+	tilejson_file: Option<String>,
 	/// A partial TileJSON document (JSON string) merged onto the current metadata.
 	/// Scalar fields (e.g. `name`, `attribution`) and `vector_layers` overwrite; `bounds` and the
 	/// zoom range are widened to the union. The individual parameters still take precedence.
 	tilejson_update: Option<String>,
+	/// Path to a file containing a partial TileJSON document, resolved relative to the VPL file.
+	/// Use instead of `tilejson_update`. Mutually exclusive with `tilejson_update`.
+	tilejson_update_file: Option<String>,
 	/// The `vector_layers` array as a JSON string. It is parsed and validated against the
 	/// TileJSON spec before replacing the source's `vector_layers`.
 	vector_layers: Option<String>,
+	/// Path to a file containing the `vector_layers` array as JSON, resolved relative to the VPL
+	/// file. Use instead of `vector_layers`. Mutually exclusive with `vector_layers`.
+	vector_layers_file: Option<String>,
 }
 
 #[derive(Debug)]
@@ -48,18 +57,30 @@ struct Operation {
 
 impl Operation {
 	#[context("Building meta_update operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let mut tilejson = match args.tilejson {
+
+		// Each JSON document may be supplied inline or via a `*_file` path; normalize
+		// both forms into a single optional JSON string before parsing.
+		let tilejson_arg = load_json_arg(args.tilejson, args.tilejson_file, factory, "tilejson")?;
+		let tilejson_update_arg = load_json_arg(
+			args.tilejson_update,
+			args.tilejson_update_file,
+			factory,
+			"tilejson_update",
+		)?;
+		let vector_layers_arg = load_json_arg(args.vector_layers, args.vector_layers_file, factory, "vector_layers")?;
+
+		let mut tilejson = match tilejson_arg {
 			Some(tilejson) => TileJSON::try_from(tilejson.as_str()).context("parsing 'tilejson'")?,
 			None => source.tilejson().clone(),
 		};
 
 		// Overlay the update document before the scalar parameters, so the latter win.
-		if let Some(tilejson_update) = args.tilejson_update {
+		if let Some(tilejson_update) = tilejson_update_arg {
 			let update = TileJSON::try_from(tilejson_update.as_str()).context("parsing 'tilejson_update'")?;
 			tilejson.merge(&update).context("merging 'tilejson_update'")?;
 		}
@@ -96,7 +117,7 @@ impl Operation {
 			tilejson.tile_schema = Some(schema);
 		}
 
-		if let Some(vector_layers) = args.vector_layers {
+		if let Some(vector_layers) = vector_layers_arg {
 			let json = parse_json_str(&vector_layers).context("parsing 'vector_layers' as JSON")?;
 			tilejson
 				.set_vector_layers(&json)
@@ -104,6 +125,33 @@ impl Operation {
 		}
 
 		Ok(Self { source, tilejson })
+	}
+}
+
+/// Resolves a JSON argument that may be supplied either inline or via a `*_file` path.
+///
+/// Returns the JSON text. When the `*_file` form is used, the path is resolved relative to
+/// the VPL file and the file is read to a string. Providing both the inline value and the
+/// file path for the same field is an error.
+fn load_json_arg(
+	inline: Option<String>,
+	file: Option<String>,
+	factory: &PipelineFactory,
+	name: &str,
+) -> Result<Option<String>> {
+	match (inline, file) {
+		(Some(_), Some(_)) => bail!("'{name}' and '{name}_file' are mutually exclusive; provide only one"),
+		(Some(value), None) => Ok(Some(value)),
+		(None, Some(path)) => {
+			let location = factory
+				.resolve_location(&DataLocation::try_from(path.as_str())?)
+				.with_context(|| format!("resolving '{name}_file' path {path:?}"))?;
+			let path_buf = location.to_path_buf()?;
+			let content = std::fs::read_to_string(&path_buf)
+				.with_context(|| format!("reading '{name}_file' from {}", path_buf.display()))?;
+			Ok(Some(content))
+		}
+		(None, None) => Ok(None),
 	}
 }
 
@@ -143,6 +191,7 @@ mod tests {
 	use super::*;
 	use crate::PipelineFactory;
 	use approx::assert_relative_eq;
+	use assert_fs::prelude::*;
 
 	fn get_str(o: &TileJSON, k: &str) -> Option<String> {
 		o.as_object().string(k).ok().flatten()
@@ -320,6 +369,79 @@ mod tests {
 			format!("{err:#}").contains("validating 'vector_layers'"),
 			"got: {err:#}"
 		);
+	}
+
+	#[tokio::test]
+	async fn test_meta_update_reads_tilejson_from_file() -> Result<()> {
+		let dir = assert_fs::TempDir::new()?;
+		let file = dir.child("base.tilejson.json");
+		file.write_str(r#"{"tilejson":"3.0.0","name":"Base","attribution":"Base attr"}"#)?;
+		let path = file.path().to_str().unwrap();
+
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(&format!(
+				"from_debug format=mvt | meta_update tilejson_file=\"{path}\" name=\"Override\""
+			))
+			.await?;
+
+		let tj = op.tilejson();
+		// Basis loaded from the file, scalar parameter still overrides it.
+		assert_eq!(get_str(tj, "name").as_deref(), Some("Override"));
+		assert_eq!(get_str(tj, "attribution").as_deref(), Some("Base attr"));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_meta_update_reads_tilejson_update_and_vector_layers_from_files() -> Result<()> {
+		let dir = assert_fs::TempDir::new()?;
+		let update = dir.child("update.json");
+		update.write_str(r#"{"name":"Updated","description":"Added"}"#)?;
+		let layers = dir.child("layers.json");
+		layers.write_str(r#"[{"id":"place_labels","minzoom":0,"maxzoom":14,"fields":{"name":"String"}}]"#)?;
+
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(&format!(
+				"from_debug format=mvt | meta_update tilejson_update_file=\"{}\" vector_layers_file=\"{}\"",
+				update.path().to_str().unwrap(),
+				layers.path().to_str().unwrap(),
+			))
+			.await?;
+
+		let tj = op.tilejson();
+		assert_eq!(get_str(tj, "name").as_deref(), Some("Updated"));
+		assert_eq!(get_str(tj, "description").as_deref(), Some("Added"));
+		let place_labels = tj.vector_layers.find("place_labels").expect("place_labels set");
+		assert_eq!(place_labels.fields.get("name").map(String::as_str), Some("String"));
+		assert_eq!(place_labels.maxzoom, Some(14));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_meta_update_rejects_inline_and_file_together() {
+		let factory = PipelineFactory::new_dummy();
+		let err = factory
+			.operation_from_vpl(
+				"from_debug format=mvt | meta_update \
+				 tilejson='{\"tilejson\":\"3.0.0\"}' tilejson_file=\"some.json\"",
+			)
+			.await
+			.unwrap_err();
+		assert!(
+			format!("{err:#}").contains("'tilejson' and 'tilejson_file' are mutually exclusive"),
+			"got: {err:#}"
+		);
+	}
+
+	#[tokio::test]
+	async fn test_meta_update_reports_missing_file() {
+		let factory = PipelineFactory::new_dummy();
+		let err = factory
+			.operation_from_vpl("from_debug format=mvt | meta_update tilejson_file=\"does-not-exist.json\"")
+			.await
+			.unwrap_err();
+		assert!(format!("{err:#}").contains("reading 'tilejson_file'"), "got: {err:#}");
 	}
 
 	#[tokio::test]
