@@ -106,4 +106,14 @@ pub trait DataWriterTrait: Send + Sync {
 	///
 	/// * A Result indicating success or an error.
 	fn set_position(&mut self, position: u64) -> Result<()>;
+
+	/// Flushes any buffered data and completes the write.
+	///
+	/// Must be called once after all writes are done. Buffering writers (e.g. the
+	/// SFTP writer, which coalesces many small appends into large network writes)
+	/// rely on this to push their final buffer; for unbuffered writers it is a
+	/// no-op. After `finalize` returns `Ok`, the destination holds all written bytes.
+	fn finalize(&mut self) -> Result<()> {
+		Ok(())
+	}
 }

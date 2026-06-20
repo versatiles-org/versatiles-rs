@@ -313,7 +313,9 @@ impl ContainerRegistry {
 				Box::new(|r: SharedTileSource, mut w: Box<dyn DataWriterTrait>, rt| {
 					Box::pin(async move {
 						let mut boxed = Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader"))?;
-						W::write_to_writer(boxed.as_mut(), w.as_mut(), rt).await
+						W::write_to_writer(boxed.as_mut(), w.as_mut(), rt).await?;
+						// Flush any buffered data (e.g. the SFTP writer's coalesced blocks).
+						w.finalize()
 					}) as WriteFuture
 				}) as WriteData,
 			))

@@ -11,6 +11,12 @@ use std::{
 	time::{Duration, Instant},
 };
 
+/// Size of the in-memory append buffer. The `.versatiles`/`pmtiles` writers
+/// append once per tile (often only a few KB); over SFTP each unbuffered write
+/// is a separate, round-trip-bound libssh2 request, which collapses throughput.
+/// Coalescing appends into large writes of this size amortizes that overhead.
+const BUFFER_CAPACITY: usize = 16 * 1024 * 1024;
+
 /// Render a byte count as a human-readable string for diagnostics.
 fn format_bytes(n: u64) -> String {
 	const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
@@ -26,7 +32,11 @@ fn format_bytes(n: u64) -> String {
 /// A struct that provides writing capabilities to a remote file via SFTP.
 pub struct DataWriterSftp {
 	file: ssh2::File,
+	/// Position of the last byte flushed to the remote file (excludes `buffer`).
 	position: u64,
+	/// Pending appended bytes not yet flushed to the network. Coalesced into a
+	/// single large `write` once it reaches `BUFFER_CAPACITY` or on flush.
+	buffer: Vec<u8>,
 	url: Url,
 	identity_file: Option<PathBuf>,
 	name: String,
@@ -74,6 +84,7 @@ impl DataWriterSftp {
 		Ok(DataWriterSftp {
 			file,
 			position: 0,
+			buffer: Vec::with_capacity(BUFFER_CAPACITY),
 			url: url.clone(),
 			identity_file: identity_file.map(Path::to_path_buf),
 			name,
@@ -90,6 +101,19 @@ impl DataWriterSftp {
 	#[must_use]
 	pub fn path_from_url(url: &Url) -> PathBuf {
 		sftp_utils::remote_path(url)
+	}
+
+	/// Flushes the pending append buffer to the remote file as a single (retried)
+	/// network write. No-op when the buffer is empty. Keeps the buffer's capacity
+	/// for reuse.
+	fn flush_buffer(&mut self) -> Result<()> {
+		if self.buffer.is_empty() {
+			return Ok(());
+		}
+		let blob = Blob::from(self.buffer.as_slice());
+		self.network_append(&blob)?;
+		self.buffer.clear();
+		Ok(())
 	}
 }
 
@@ -186,20 +210,53 @@ impl NetworkWriter for DataWriterSftp {
 }
 
 impl DataWriterTrait for DataWriterSftp {
+	/// Appends to the in-memory buffer, flushing to the network once it reaches
+	/// `BUFFER_CAPACITY`. The returned range uses the *logical* offset (where the
+	/// bytes will land in the file once flushed); appends are sequential and the
+	/// buffer flushes in order, so recorded offsets are correct.
 	fn append(&mut self, blob: &Blob) -> Result<ByteRange> {
-		self.network_append(blob)
+		let offset = self.position + self.buffer.len() as u64;
+		self.buffer.extend_from_slice(blob.as_slice());
+		if self.buffer.len() >= BUFFER_CAPACITY {
+			self.flush_buffer()?;
+		}
+		Ok(ByteRange::new(offset, blob.len()))
 	}
 
 	fn write_start(&mut self, blob: &Blob) -> Result<()> {
+		// Flush so the file holds all appended bytes before patching the start.
+		self.flush_buffer()?;
 		self.network_write_start(blob)
 	}
 
 	fn position(&mut self) -> Result<u64> {
-		Ok(self.position)
+		// Logical position includes bytes still pending in the buffer.
+		Ok(self.position + self.buffer.len() as u64)
 	}
 
 	fn set_position(&mut self, position: u64) -> Result<()> {
+		// Flush before seeking so buffered appends are not misplaced.
+		self.flush_buffer()?;
 		self.network_set_position(position)
+	}
+
+	fn finalize(&mut self) -> Result<()> {
+		self.flush_buffer()
+	}
+}
+
+impl Drop for DataWriterSftp {
+	fn drop(&mut self) {
+		// `finalize()` is the supported way to flush; warn if it was missed so an
+		// incomplete upload is at least diagnosable. We do not attempt network I/O
+		// here (it could block/fail during unwinding).
+		if !self.buffer.is_empty() {
+			log::warn!(
+				"SFTP writer for '{}' dropped with {} unflushed; call finalize() before dropping",
+				self.name,
+				format_bytes(self.buffer.len() as u64),
+			);
+		}
 	}
 }
 
@@ -254,6 +311,7 @@ mod tests {
 				let mut w = DataWriterSftp::from_url(&url, None)?;
 				w.append(&Blob::from(b"hello"))?;
 				w.append(&Blob::from(b"world"))?;
+				w.finalize()?;
 				Ok(())
 			})
 			.await
@@ -270,6 +328,7 @@ mod tests {
 				let mut w = DataWriterSftp::from_url(&url, None)?;
 				w.append(&Blob::from(b"AAAAABBBBB"))?;
 				w.write_start(&Blob::from(b"12345"))?;
+				w.finalize()?;
 				Ok(())
 			})
 			.await
@@ -305,6 +364,7 @@ mod tests {
 				w.append(&Blob::from(vec![0u8; 10]))?;
 				w.set_position(5)?;
 				w.append(&Blob::from(vec![1u8; 5]))?;
+				w.finalize()?;
 				Ok(())
 			})
 			.await
@@ -322,11 +382,124 @@ mod tests {
 				.unwrap()
 				.unwrap();
 			server.schedule_disconnect();
-			tokio::task::spawn_blocking(move || writer.append(&Blob::from(b"hello")))
+			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+				writer.append(&Blob::from(b"hello"))?;
+				// The buffered append is written (and the disconnect retried) on flush.
+				writer.finalize()?;
+				Ok(())
+			})
+			.await
+			.unwrap()
+			.unwrap();
+			assert_eq!(server.read_file("/out.bin").await, b"hello");
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn many_small_appends_are_coalesced_and_flushed_on_finalize() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/out.bin");
+			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+				let mut w = DataWriterSftp::from_url(&url, None)?;
+				// Many tiny appends (well under BUFFER_CAPACITY) stay buffered until finalize.
+				for i in 0..1000u32 {
+					let range = w.append(&Blob::from(i.to_le_bytes().to_vec()))?;
+					// Offsets are logical (sequential) even though nothing was flushed yet.
+					assert_eq!(range.offset, u64::from(i) * 4);
+				}
+				assert_eq!(w.position()?, 4000);
+				w.finalize()?;
+				Ok(())
+			})
+			.await
+			.unwrap()
+			.unwrap();
+
+			let bytes = server.read_file("/out.bin").await;
+			assert_eq!(bytes.len(), 4000);
+			let mut expected = Vec::with_capacity(4000);
+			for i in 0..1000u32 {
+				expected.extend_from_slice(&i.to_le_bytes());
+			}
+			assert_eq!(bytes, expected);
+		}
+
+		#[tokio::test(flavor = "multi_thread")]
+		async fn append_larger_than_buffer_capacity_flushes() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/out.bin");
+			let big = vec![7u8; BUFFER_CAPACITY + 1024];
+			let expected = big.clone();
+			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+				let mut w = DataWriterSftp::from_url(&url, None)?;
+				// A single append exceeding the buffer triggers an immediate flush.
+				w.append(&Blob::from(big))?;
+				w.finalize()?;
+				Ok(())
+			})
+			.await
+			.unwrap()
+			.unwrap();
+			assert_eq!(server.read_file("/out.bin").await, expected);
+		}
+
+		/// End-to-end round trip mirroring how the `.versatiles` container writer
+		/// uses this writer: reserve a header region, append many small "tiles"
+		/// (buffered) recording each reported `ByteRange`, patch the real header in
+		/// at offset 0 via `write_start` (which flushes the buffer), then finalize.
+		/// Reading every reported range back through the **real** SFTP reader proves
+		/// the buffered writer's logical offsets are exactly where the reader finds
+		/// the bytes — the contract the container's block index depends on.
+		#[tokio::test(flavor = "multi_thread")]
+		async fn buffered_writer_offsets_resolve_with_real_reader() {
+			use crate::io::{DataReaderSftp, DataReaderTrait};
+
+			let server = TestSftpServer::start().await;
+			let url = server.url("/round_trip.bin");
+			let read_url = url.clone();
+
+			let (header_range, chunks) = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+				let mut w = DataWriterSftp::from_url(&url, None)?;
+
+				// Reserve a 16-byte header region at the start (offset 0).
+				let header_range = w.append(&Blob::from(vec![0u8; 16]))?;
+				assert_eq!(header_range.offset, 0);
+
+				// Many small "tiles", each recording the ByteRange the writer reports.
+				let mut chunks = Vec::new();
+				for i in 0..300u32 {
+					let payload = format!("tile-{i:05}-payload").into_bytes();
+					let range = w.append(&Blob::from(payload.clone()))?;
+					chunks.push((range, payload));
+				}
+
+				// Patch the real header in at offset 0 (flushes the buffer first), then finalize.
+				w.write_start(&Blob::from(b"VERSATILES\0\0\0\0\0\0".to_vec()))?;
+				w.finalize()?;
+				Ok((header_range, chunks))
+			})
+			.await
+			.unwrap()
+			.unwrap();
+
+			let reader = tokio::task::spawn_blocking(move || DataReaderSftp::open(&read_url, None))
 				.await
 				.unwrap()
 				.unwrap();
-			assert_eq!(server.read_file("/out.bin").await, b"hello");
+
+			// The header lands at offset 0 (overwriting the reserved region).
+			let header = reader.read_range(&header_range).await.unwrap();
+			assert_eq!(header.as_slice(), b"VERSATILES\0\0\0\0\0\0");
+
+			// Every tile reads back at the offset the writer reported for it.
+			for (range, payload) in chunks {
+				let got = reader.read_range(&range).await.unwrap();
+				assert_eq!(
+					got.as_slice(),
+					payload.as_slice(),
+					"mismatch at offset {}",
+					range.offset
+				);
+			}
 		}
 	}
 }
