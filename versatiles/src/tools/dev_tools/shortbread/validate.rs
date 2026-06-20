@@ -138,7 +138,14 @@ mod tests {
 	use versatiles_geometry::geo::{GeoFeature, GeoProperties};
 
 	fn schema() -> Schema {
-		Schema::resolve(super::super::schema::SchemaVersion::V1_1, &[]).unwrap()
+		use super::super::schema::{SchemaSelector, SchemaVersion};
+		Schema::resolve(
+			SchemaSelector::Shortbread {
+				version: Some(SchemaVersion::V1_1),
+			},
+			&[],
+		)
+		.unwrap()
 	}
 
 	fn coord() -> TileCoord {

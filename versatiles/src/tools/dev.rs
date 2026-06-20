@@ -19,7 +19,7 @@ enum DevCommands {
 	ExportOutline(export_outline::ExportOutline),
 	PrintTilejson(print_tilejson::PrintTilejson),
 	VectorLayers(vector_layers::VectorLayersTool),
-	CheckShortbread(shortbread::CheckShortbread),
+	ValidateSchema(shortbread::ValidateSchema),
 }
 
 #[tokio::main]
@@ -31,7 +31,7 @@ pub async fn run(command: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		DevCommands::ExportOutline(args) => export_outline::run(args, runtime).await?,
 		DevCommands::PrintTilejson(args) => print_tilejson::run(args, runtime).await?,
 		DevCommands::VectorLayers(args) => vector_layers::run(args, runtime).await?,
-		DevCommands::CheckShortbread(args) => shortbread::run(args, runtime).await?,
+		DevCommands::ValidateSchema(args) => shortbread::run(args, runtime).await?,
 	}
 
 	Ok(())

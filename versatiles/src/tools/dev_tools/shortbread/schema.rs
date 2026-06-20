@@ -13,15 +13,55 @@ use versatiles_geometry::{geo::GeoValue, vector_tile::GeomType};
 const SCHEMA_1_0: &str = include_str!("shortbread_1_0.yaml");
 const SCHEMA_1_1: &str = include_str!("shortbread_1_1.yaml");
 
-/// Which Shortbread spec version to validate against.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+/// A concrete Shortbread spec version.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SchemaVersion {
-	#[value(name = "1.0")]
 	V1_0,
-	#[value(name = "1.1")]
 	V1_1,
-	/// Pick the version whose layer set best matches the container.
+}
+
+/// A `--schema` selection: which schema family, and optionally which version.
+///
+/// Parsed from strings like `auto`, `shortbread`, or `shortbread@1.1`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SchemaSelector {
+	/// Guess both the schema family and its version from the container.
 	Auto,
+	/// Validate against Shortbread. `version: None` auto-detects the version.
+	Shortbread { version: Option<SchemaVersion> },
+}
+
+/// Parses a `--schema` value: `auto`, `<family>`, or `<family>@<version>`.
+///
+/// Returns a `String` error (the form clap expects from a `value_parser`).
+/// Today the only family is `shortbread`; `auto` is therefore equivalent to
+/// `shortbread` with an auto-detected version, but is kept distinct so future
+/// schema families can be guessed here too.
+pub fn parse_schema_selector(s: &str) -> std::result::Result<SchemaSelector, String> {
+	let s = s.trim();
+	if s.eq_ignore_ascii_case("auto") {
+		return Ok(SchemaSelector::Auto);
+	}
+	let (family, version) = match s.split_once('@') {
+		Some((family, version)) => (family.trim(), Some(version.trim())),
+		None => (s, None),
+	};
+	match family.to_ascii_lowercase().as_str() {
+		"shortbread" => Ok(SchemaSelector::Shortbread {
+			version: version.map(parse_shortbread_version).transpose()?,
+		}),
+		other => Err(format!(
+			"unknown schema {other:?}; supported: auto, shortbread, shortbread@1.0, shortbread@1.1"
+		)),
+	}
+}
+
+fn parse_shortbread_version(v: &str) -> std::result::Result<SchemaVersion, String> {
+	match v {
+		"1.0" => Ok(SchemaVersion::V1_0),
+		"1.1" => Ok(SchemaVersion::V1_1),
+		other => Err(format!("unknown shortbread version {other:?}; supported: 1.0, 1.1")),
+	}
 }
 
 /// A parsed Shortbread schema: a set of named layer definitions.
@@ -135,20 +175,32 @@ impl Schema {
 		Schema::parse(SCHEMA_1_1)
 	}
 
-	/// Resolves a [`SchemaVersion`] into a concrete schema. For [`SchemaVersion::Auto`],
-	/// the version whose layer set best overlaps `present_layers` wins (ties → 1.1).
-	pub fn resolve(version: SchemaVersion, present_layers: &[String]) -> Result<Schema> {
-		match version {
-			SchemaVersion::V1_0 => Schema::v1_0(),
-			SchemaVersion::V1_1 => Schema::v1_1(),
-			SchemaVersion::Auto => {
-				let s10 = Schema::v1_0()?;
-				let s11 = Schema::v1_1()?;
-				let score = |s: &Schema| present_layers.iter().filter(|n| s.layers.contains_key(*n)).count();
-				// Prefer 1.1 on ties: it is a superset and the current spec.
-				if score(&s10) > score(&s11) { Ok(s10) } else { Ok(s11) }
+	/// Resolves a [`SchemaSelector`] into a concrete schema.
+	///
+	/// `Auto` and `Shortbread { version: None }` auto-detect the version: the one
+	/// whose layer set best overlaps `present_layers` wins (ties → 1.1). Only the
+	/// Shortbread family exists today, so `Auto` resolves to it.
+	pub fn resolve(selector: SchemaSelector, present_layers: &[String]) -> Result<Schema> {
+		match selector {
+			SchemaSelector::Auto | SchemaSelector::Shortbread { version: None } => {
+				Schema::resolve_shortbread_auto(present_layers)
 			}
+			SchemaSelector::Shortbread {
+				version: Some(SchemaVersion::V1_0),
+			} => Schema::v1_0(),
+			SchemaSelector::Shortbread {
+				version: Some(SchemaVersion::V1_1),
+			} => Schema::v1_1(),
 		}
+	}
+
+	/// Picks the Shortbread version whose layer set best overlaps `present_layers`
+	/// (ties → 1.1, the current superset spec).
+	fn resolve_shortbread_auto(present_layers: &[String]) -> Result<Schema> {
+		let s10 = Schema::v1_0()?;
+		let s11 = Schema::v1_1()?;
+		let score = |s: &Schema| present_layers.iter().filter(|n| s.layers.contains_key(*n)).count();
+		if score(&s10) > score(&s11) { Ok(s10) } else { Ok(s11) }
 	}
 }
 
@@ -198,8 +250,56 @@ mod tests {
 
 	#[test]
 	fn auto_resolves_to_1_1_when_ambiguous() {
-		let s = Schema::resolve(SchemaVersion::Auto, &[]).unwrap();
+		let s = Schema::resolve(SchemaSelector::Auto, &[]).unwrap();
 		assert_eq!(s.version, "1.1");
+		// `shortbread` (family only) auto-detects the version the same way.
+		let s = Schema::resolve(SchemaSelector::Shortbread { version: None }, &[]).unwrap();
+		assert_eq!(s.version, "1.1");
+	}
+
+	#[test]
+	fn resolve_honours_explicit_version() {
+		let s = Schema::resolve(
+			SchemaSelector::Shortbread {
+				version: Some(SchemaVersion::V1_0),
+			},
+			&[],
+		)
+		.unwrap();
+		assert_eq!(s.version, "1.0");
+	}
+
+	#[test]
+	fn parse_schema_selector_forms() {
+		assert_eq!(parse_schema_selector("auto").unwrap(), SchemaSelector::Auto);
+		assert_eq!(parse_schema_selector("AUTO").unwrap(), SchemaSelector::Auto);
+		assert_eq!(
+			parse_schema_selector("shortbread").unwrap(),
+			SchemaSelector::Shortbread { version: None }
+		);
+		assert_eq!(
+			parse_schema_selector("shortbread@1.0").unwrap(),
+			SchemaSelector::Shortbread {
+				version: Some(SchemaVersion::V1_0)
+			}
+		);
+		assert_eq!(
+			parse_schema_selector("shortbread@1.1").unwrap(),
+			SchemaSelector::Shortbread {
+				version: Some(SchemaVersion::V1_1)
+			}
+		);
+		// Unknown family and unknown version are rejected with helpful messages.
+		assert!(
+			parse_schema_selector("openmaptiles")
+				.unwrap_err()
+				.contains("unknown schema")
+		);
+		assert!(
+			parse_schema_selector("shortbread@9.9")
+				.unwrap_err()
+				.contains("unknown shortbread version")
+		);
 	}
 
 	#[test]

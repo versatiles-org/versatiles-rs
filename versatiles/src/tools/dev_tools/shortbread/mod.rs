@@ -1,9 +1,10 @@
-//! `versatiles dev check-shortbread` — validate a vector-tile container against
-//! the [Shortbread](https://shortbread-tiles.org/) schema.
+//! `versatiles dev validate-schema` — validate a vector-tile container against a
+//! tile schema. Currently the only supported schema is
+//! [Shortbread](https://shortbread-tiles.org/).
 //!
 //! Every tile is decoded and checked, per layer/feature/attribute, against an
-//! embedded copy of the schema (versions 1.0 and 1.1). Findings are aggregated
-//! into counted issue groups and printed as a summary, a full list, or JSON.
+//! embedded copy of the schema (Shortbread versions 1.0 and 1.1). Findings are
+//! aggregated into counted issue groups and printed as a summary, list, or JSON.
 
 mod report;
 mod schema;
@@ -11,7 +12,7 @@ mod validate;
 
 use anyhow::{Context, Result, bail};
 use report::{Registry, Severity};
-use schema::{Schema, SchemaVersion};
+use schema::{Schema, SchemaSelector};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -31,21 +32,23 @@ enum OutputFormat {
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
-/// Check that the vector tiles in a container follow the Shortbread schema.
+/// Validate that the vector tiles in a container follow a tile schema.
 ///
 /// Reports unknown/missing layers and attributes, wrong value types or
 /// geometries, and out-of-vocabulary values. Problems are graded as errors,
 /// warnings, or hints; unknown values are tolerated by default (use `--strict`
 /// to treat them as hard failures).
-pub struct CheckShortbread {
+pub struct ValidateSchema {
 	/// Tile container to read (path, URL, or data source expression).
 	/// Run `versatiles help source` for syntax details.
 	#[arg(value_name = "INPUT_FILE", verbatim_doc_comment)]
 	input: String,
 
-	/// Schema version to validate against (`auto` picks the best match).
-	#[arg(long, value_enum, default_value = "auto")]
-	schema: SchemaVersion,
+	/// Schema to validate against: `auto`, `shortbread`, or `shortbread@<version>`
+	/// (e.g. `shortbread@1.1`). `auto` guesses the schema and version; a bare family
+	/// name (`shortbread`) guesses the version.
+	#[arg(long, default_value = "auto", value_parser = schema::parse_schema_selector, verbatim_doc_comment)]
+	schema: SchemaSelector,
 
 	/// Restrict scanning to a zoom level `N` or an inclusive range `A-B`.
 	#[arg(long, value_name = "N|A-B")]
@@ -76,7 +79,7 @@ pub struct CheckShortbread {
 	fail_on: Severity,
 }
 
-pub async fn run(args: &CheckShortbread, runtime: &TilesRuntime) -> Result<()> {
+pub async fn run(args: &ValidateSchema, runtime: &TilesRuntime) -> Result<()> {
 	// Validate cheap arguments before touching the container.
 	let sample = parse_sample(args.sample)?;
 
@@ -277,10 +280,10 @@ mod tests {
 	use super::*;
 	use versatiles::runtime::create_test_runtime;
 
-	fn args(input: &str) -> CheckShortbread {
-		CheckShortbread {
+	fn args(input: &str) -> ValidateSchema {
+		ValidateSchema {
 			input: input.to_string(),
-			schema: SchemaVersion::Auto,
+			schema: SchemaSelector::Auto,
 			zoom: None,
 			sample: None,
 			format: OutputFormat::Summary,
