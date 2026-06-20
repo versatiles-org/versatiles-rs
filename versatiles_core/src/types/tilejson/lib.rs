@@ -934,6 +934,103 @@ mod tests {
 		Ok(())
 	}
 
+	/// Builds a `vector_layers` layer object (`id` + `fields` [+ optional zooms]).
+	fn vlayer_json(id: &str, fields: &[(&str, &str)], minzoom: Option<u8>, maxzoom: Option<u8>) -> JsonValue {
+		let mut field_obj = JsonObject::default();
+		for (k, v) in fields {
+			field_obj.set(k, JsonValue::from(*v));
+		}
+		let mut obj = JsonObject::default();
+		obj.set("id", JsonValue::from(id));
+		obj.set("fields", JsonValue::Object(field_obj));
+		if let Some(z) = minzoom {
+			obj.set("minzoom", JsonValue::from(z));
+		}
+		if let Some(z) = maxzoom {
+			obj.set("maxzoom", JsonValue::from(z));
+		}
+		JsonValue::Object(obj)
+	}
+
+	fn tj_with_layers(layers: Vec<JsonValue>) -> Result<TileJSON> {
+		let mut tj = TileJSON::default();
+		tj.set_vector_layers(&JsonValue::from(layers))?;
+		Ok(tj)
+	}
+
+	#[test]
+	fn should_merge_vector_layers_through_tilejson() -> Result<()> {
+		let mut a = tj_with_layers(vec![vlayer_json("roads", &[("name", "String")], Some(5), Some(10))])?;
+		let b = tj_with_layers(vec![
+			vlayer_json("roads", &[("surface", "String")], Some(3), Some(12)),
+			vlayer_json("water", &[("kind", "String")], None, None),
+		])?;
+
+		a.merge(&b)?;
+
+		// Overlapping "roads": fields unioned, zoom range widened.
+		let roads = a.vector_layers.find("roads").expect("roads layer present");
+		assert!(roads.fields.contains_key("name"));
+		assert!(roads.fields.contains_key("surface"));
+		assert_eq!(roads.minzoom, Some(3));
+		assert_eq!(roads.maxzoom, Some(12));
+		// Distinct "water" carried over.
+		assert!(a.vector_layers.find("water").is_some());
+		Ok(())
+	}
+
+	#[test]
+	fn merge_all_accumulates_vector_layers_across_sources() -> Result<()> {
+		let a = tj_with_layers(vec![vlayer_json("roads", &[("a", "String")], Some(4), Some(8))])?;
+		let b = tj_with_layers(vec![
+			vlayer_json("roads", &[("b", "String")], Some(2), Some(9)),
+			vlayer_json("water", &[("w", "String")], None, None),
+		])?;
+		let c = tj_with_layers(vec![
+			vlayer_json("roads", &[("c", "String")], Some(6), Some(14)),
+			vlayer_json("places", &[("p", "String")], None, None),
+		])?;
+
+		let merged = TileJSON::merge_all([&a, &b, &c])?;
+
+		// Every distinct layer id is present.
+		let mut ids = merged.vector_layers.layer_ids();
+		ids.sort();
+		assert_eq!(
+			ids,
+			vec!["places".to_string(), "roads".to_string(), "water".to_string()]
+		);
+
+		// "roads" accumulates fields and zoom range across all three sources.
+		let roads = merged.vector_layers.find("roads").expect("roads layer present");
+		assert!(roads.fields.contains_key("a"));
+		assert!(roads.fields.contains_key("b"));
+		assert!(roads.fields.contains_key("c"));
+		assert_eq!(roads.minzoom, Some(2)); // min(4, 2, 6)
+		assert_eq!(roads.maxzoom, Some(14)); // max(8, 9, 14)
+		Ok(())
+	}
+
+	#[test]
+	fn should_merge_same_layer_split_across_zoom_ranges() -> Result<()> {
+		// The "roads" layer is split across sources by zoom: one source covers the
+		// low zooms (0..=8), the other the high zooms (9..=14), with adjacent /
+		// disjoint ranges. The merged layer must span the full 0..=14 range and
+		// keep both sources' fields, as a single combined entry.
+		let low = tj_with_layers(vec![vlayer_json("roads", &[("name", "String")], Some(0), Some(8))])?;
+		let high = tj_with_layers(vec![vlayer_json("roads", &[("ref", "String")], Some(9), Some(14))])?;
+
+		let merged = TileJSON::merge_all([&low, &high])?;
+
+		assert_eq!(merged.vector_layers.layer_ids(), vec!["roads".to_string()]);
+		let roads = merged.vector_layers.find("roads").expect("roads layer present");
+		assert_eq!(roads.minzoom, Some(0));
+		assert_eq!(roads.maxzoom, Some(14));
+		assert!(roads.fields.contains_key("name"));
+		assert!(roads.fields.contains_key("ref"));
+		Ok(())
+	}
+
 	#[test]
 	fn should_return_none_for_missing_getters() {
 		let tj = TileJSON::default();

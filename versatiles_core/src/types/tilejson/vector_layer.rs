@@ -551,6 +551,50 @@ mod tests {
 	}
 
 	#[test]
+	fn test_vector_layers_merge_identical_is_idempotent() -> Result<()> {
+		// Merging a layer set with an identical copy must not change anything:
+		// no duplicated fields, same description/zooms, same layer count.
+		let layer = VectorLayer {
+			fields: BTreeMap::from([
+				("name".to_string(), "String".to_string()),
+				("kind".to_string(), "String".to_string()),
+			]),
+			description: Some("Roads".to_string()),
+			minzoom: Some(4),
+			maxzoom: Some(10),
+		};
+		let mut vl = VectorLayers(BTreeMap::from([("roads".to_string(), layer.clone())]));
+		let identical = vl.clone();
+
+		vl.merge(&identical)?;
+
+		assert_eq!(vl.0.len(), 1);
+		assert_eq!(vl.0.get("roads"), Some(&layer));
+		Ok(())
+	}
+
+	#[test]
+	fn test_layer_merge_conflicting_field_type_is_overwritten() {
+		// When the same field has different types across sources, `merge` keeps
+		// the other side's type (documented last-write-wins for fields).
+		let mut a = VectorLayer {
+			fields: BTreeMap::from([("count".to_string(), "String".to_string())]),
+			description: None,
+			minzoom: None,
+			maxzoom: None,
+		};
+		let b = VectorLayer {
+			fields: BTreeMap::from([("count".to_string(), "Number".to_string())]),
+			description: None,
+			minzoom: None,
+			maxzoom: None,
+		};
+
+		a.merge(&b);
+		assert_eq!(a.fields["count"], "Number");
+	}
+
+	#[test]
 	fn test_as_json_value_option() -> Result<()> {
 		let mut layers_map = BTreeMap::new();
 		let layer = VectorLayer {
