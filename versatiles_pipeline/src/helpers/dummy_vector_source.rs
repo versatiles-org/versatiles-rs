@@ -59,6 +59,18 @@ impl DummyVectorSource {
 		}
 	}
 
+	/// Builder helper to give the dummy source a TileJSON `attribution`, used by
+	/// tests that exercise multi-source metadata merging.
+	#[allow(dead_code)]
+	#[must_use]
+	pub fn with_attribution(mut self, attribution: &str) -> Self {
+		self
+			.tilejson
+			.set_string("attribution", attribution)
+			.expect("tilejson accepts string attribution");
+		self
+	}
+
 	#[allow(dead_code)]
 	pub fn set_traversal(&mut self, traversal: Traversal) {
 		self.metadata.set_traversal(traversal);

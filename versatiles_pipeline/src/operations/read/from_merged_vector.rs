@@ -102,7 +102,7 @@ impl ReadTileSource for Operation {
 
 		ensure!(sources.len() > 1, "must have at least two sources");
 
-		let mut tilejson = TileJSON::default();
+		let mut tilejson = TileJSON::merge_all(sources.iter().map(|s| s.tilejson()))?;
 		let first_parameters = sources.first().expect("already ensured sources.len() > 1").metadata();
 		let tile_format = *first_parameters.tile_format();
 		let tile_compression = *first_parameters.tile_compression();
@@ -110,8 +110,6 @@ impl ReadTileSource for Operation {
 		let mut traversal = Traversal::ANY;
 
 		for source in &sources {
-			tilejson.merge(source.tilejson())?;
-
 			let metadata = source.metadata();
 			traversal.intersect(metadata.traversal())?;
 			let src_pyramid = source.tile_pyramid().await?;
@@ -430,6 +428,36 @@ mod tests {
 			]
 		);
 
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_tilejson_combines_attribution_across_sources() -> Result<()> {
+		// Each source advertises a different attribution; the merged source must
+		// keep both credits (the bug was overwriting to a single one).
+		let factory = PipelineFactory::new_dummy_reader(Box::new(
+			|location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
+				Box::pin(async move {
+					let filename = location.to_string();
+					let attribution = format!("© {filename}");
+					Ok(Box::new(
+						DummyVectorSource::new(&[("dummy", &[&[("filename", &filename)]])], None)
+							.with_attribution(&attribution),
+					) as Box<dyn TileSource>)
+				})
+			},
+		));
+
+		let result = factory
+			.operation_from_vpl(
+				r#"from_merged_vector [ from_container filename="a.pbf", from_container filename="b.pbf" ]"#,
+			)
+			.await?;
+
+		assert_eq!(
+			result.tilejson().string("attribution"),
+			Some("© a.pbf · © b.pbf".to_string())
+		);
 		Ok(())
 	}
 

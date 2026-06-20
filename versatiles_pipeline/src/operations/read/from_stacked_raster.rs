@@ -233,7 +233,7 @@ impl ReadTileSource for Operation {
 
 		ensure!(!original_sources.is_empty(), "must have at least one source");
 
-		let mut tilejson = TileJSON::default();
+		let mut tilejson = TileJSON::merge_all(original_sources.iter().map(|s| s.tilejson()))?;
 
 		let first_source_metadata = original_sources
 			.first()
@@ -250,8 +250,6 @@ impl ReadTileSource for Operation {
 		let mut traversal = Traversal::new_any();
 
 		for source in &original_sources {
-			tilejson.merge(source.tilejson())?;
-
 			let metadata = source.metadata();
 			traversal.intersect(metadata.traversal())?;
 			let src_pyramid = source.tile_pyramid().await?;

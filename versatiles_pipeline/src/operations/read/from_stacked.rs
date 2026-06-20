@@ -69,7 +69,7 @@ impl Operation {
 	async fn new(sources: Vec<Box<dyn TileSource>>) -> Result<Operation> {
 		ensure!(sources.len() > 1, "must have at least two sources");
 
-		let mut tilejson = TileJSON::default();
+		let mut tilejson = TileJSON::merge_all(sources.iter().map(|s| s.tilejson()))?;
 		let parameters = sources.first().expect("already ensured sources.len() > 1").metadata();
 		let tile_format = *parameters.tile_format();
 		let tile_compression = *parameters.tile_compression();
@@ -78,8 +78,6 @@ impl Operation {
 		let mut traversal = Traversal::default();
 
 		for source in &sources {
-			tilejson.merge(source.tilejson())?;
-
 			let metadata = source.metadata();
 			traversal.intersect(metadata.traversal())?;
 			let src_pyramid = source.tile_pyramid().await?;

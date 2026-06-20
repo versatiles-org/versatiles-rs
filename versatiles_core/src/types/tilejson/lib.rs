@@ -336,12 +336,45 @@ impl TileJSON {
 	// Merging
 	// -------------------------------------------------------------------------
 
+	/// Value keys that are **combined** (unioned) when merging instead of being
+	/// overwritten, paired with the separator used to join them. This keeps every
+	/// source's credit/description when several tilesets are merged — overwriting
+	/// `attribution` in particular would silently drop required source credits.
+	const COMBINE_SEPARATORS: &'static [(&'static str, &'static str)] = &[("attribution", " · "), ("description", "\n")];
+
+	/// Merges several `TileJSON`s into one, in iteration order.
+	///
+	/// This is the primitive that [`merge`](Self::merge) delegates to; prefer it
+	/// when combining the metadata of multiple sources (e.g. multi-source `from_`
+	/// pipeline operations) so the call sites don't need their own merge loop.
+	///
+	/// Merge rules: see [`merge`](Self::merge). `tile_type` / `tile_format` /
+	/// `tile_schema` / `tile_size` are **not** derived here — those come from the
+	/// source's [`TileSourceMetadata`](crate) and are applied separately.
+	///
+	/// # Errors
+	/// Propagates any error from the underlying pairwise merge.
+	pub fn merge_all<'a, I>(items: I) -> Result<TileJSON>
+	where
+		I: IntoIterator<Item = &'a TileJSON>,
+	{
+		let mut merged = TileJSON::default();
+		for item in items {
+			merged.merge(item)?;
+		}
+		Ok(merged)
+	}
+
 	/// Merges `other` into this `TileJSON` with specific rules:
 	/// 1. **Bounds**: extends or sets `self.bounds` if `other.bounds` is present.
 	/// 2. **Center**: overwrites `self.center` if `other.center` is `Some`.
 	/// 3. **minzoom** / **maxzoom**: uses the min or max across the two.
-	/// 4. **Other values**: overwrites conflicts from `other.values`.
-	/// 5. **Vector layers**: merges layers from `other`, overwriting existing layer IDs if needed.
+	/// 4. **`attribution` / `description`**: combined (unioned, de-duplicated) so
+	///    no source's credit or description is lost.
+	/// 5. **Other values**: overwrites conflicts from `other.values`.
+	/// 6. **Vector layers**: merges layers from `other`, overwriting existing layer IDs if needed.
+	///
+	/// To merge more than two, use [`merge_all`](Self::merge_all).
 	///
 	/// # Errors
 	/// May fail if inserting into `self.values` fails (e.g., invalid data).
@@ -369,14 +402,25 @@ impl TileJSON {
 			self.set_zoom_max(new_max);
 		}
 
-		// 4. Merge everything else
+		// 4./5. Merge remaining values: combine the union-keys, overwrite the rest.
 		for (k, v) in other.values.iter_json_values() {
-			if k != "minzoom" && k != "maxzoom" {
-				self.values.insert(&k, &v)?;
+			if k == "minzoom" || k == "maxzoom" {
+				continue;
 			}
+			if let Some((_, separator)) = Self::COMBINE_SEPARATORS.iter().find(|(key, _)| *key == k) {
+				if let Some(combined) = combine_values(
+					self.values.string(&k).as_deref(),
+					other.values.string(&k).as_deref(),
+					separator,
+				) {
+					self.values.insert(&k, &JsonValue::from(combined.as_str()))?;
+				}
+				continue;
+			}
+			self.values.insert(&k, &v)?;
 		}
 
-		// 5. Merge vector_layers
+		// 6. Merge vector_layers
 		self.vector_layers.merge(&other.vector_layers)?;
 		Ok(())
 	}
@@ -502,6 +546,26 @@ impl TileJSON {
 			log::warn!("Use default TileJSON instead");
 			TileJSON::default()
 		})
+	}
+}
+
+/// Combines two text values into a separator-joined union, skipping empty inputs
+/// and not re-appending an `addition` that is already present as a segment of
+/// `current`. Used by [`TileJSON::merge`] for keys like `attribution` so that
+/// merging many sources accumulates every distinct credit exactly once.
+fn combine_values(current: Option<&str>, addition: Option<&str>, separator: &str) -> Option<String> {
+	let current = current.map(str::trim).filter(|s| !s.is_empty());
+	let addition = addition.map(str::trim).filter(|s| !s.is_empty());
+	match (current, addition) {
+		(None, None) => None,
+		(Some(value), None) | (None, Some(value)) => Some(value.to_string()),
+		(Some(current), Some(addition)) => {
+			if current.split(separator).any(|segment| segment == addition) {
+				Some(current.to_string())
+			} else {
+				Some(format!("{current}{separator}{addition}"))
+			}
+		}
 	}
 }
 
@@ -808,6 +872,65 @@ mod tests {
 		// Original value should remain, and new value should be inserted
 		assert_eq!(tj1.values.string("foo"), Some("bar".to_string()));
 		assert_eq!(tj1.values.string("baz"), Some("qux".to_string()));
+		Ok(())
+	}
+
+	#[test]
+	fn should_combine_attribution_and_description_instead_of_overwriting() -> Result<()> {
+		let mut a = TileJSON::default();
+		a.set_string("attribution", "© OpenStreetMap")?;
+		a.set_string("description", "Base map")?;
+		a.set_string("name", "first")?;
+
+		let mut b = TileJSON::default();
+		b.set_string("attribution", "© Provider B")?;
+		b.set_string("description", "Overlay")?;
+		b.set_string("name", "second")?;
+
+		a.merge(&b)?;
+
+		// attribution/description are unioned so no source's credit is lost…
+		assert_eq!(
+			a.string("attribution"),
+			Some("© OpenStreetMap · © Provider B".to_string())
+		);
+		assert_eq!(a.string("description"), Some("Base map\nOverlay".to_string()));
+		// …while ordinary scalars still follow last-write-wins.
+		assert_eq!(a.string("name"), Some("second".to_string()));
+		Ok(())
+	}
+
+	#[test]
+	fn should_dedup_identical_attribution_when_merging() -> Result<()> {
+		let mut shared = TileJSON::default();
+		shared.set_string("attribution", "© OpenStreetMap")?;
+
+		let same = shared.clone();
+		shared.merge(&same)?;
+
+		// Identical credit must not be duplicated.
+		assert_eq!(shared.string("attribution"), Some("© OpenStreetMap".to_string()));
+		Ok(())
+	}
+
+	#[test]
+	fn merge_all_unions_attribution_across_many_sources_and_dedups() -> Result<()> {
+		let attribution = |s: &str| -> Result<TileJSON> {
+			let mut tj = TileJSON::default();
+			tj.set_string("attribution", s)?;
+			Ok(tj)
+		};
+
+		// Three sources, two of which share a credit.
+		let a = attribution("© A")?;
+		let b = attribution("© B")?;
+		let a2 = attribution("© A")?;
+
+		let merged = TileJSON::merge_all([&a, &b, &a2])?;
+		assert_eq!(merged.string("attribution"), Some("© A · © B".to_string()));
+
+		// Empty iterator yields a default TileJSON.
+		assert_eq!(TileJSON::merge_all(std::iter::empty())?, TileJSON::default());
 		Ok(())
 	}
 
