@@ -1,6 +1,6 @@
 {
   "name": "@versatiles/versatiles-rs",
-  "version": "4.2.2",
+  "version": "4.3.0",
   "description": "Node.js bindings for VersaTiles - convert, serve, and process map tiles",
   "main": "index.js",
   "types": "index.d.ts",
@@ -102,13 +102,13 @@
     "vitest": "^4.1.9"
   },
   "optionalDependencies": {
-    "@versatiles/versatiles-rs-darwin-arm64": "4.2.2",
-    "@versatiles/versatiles-rs-darwin-x64": "4.2.2",
-    "@versatiles/versatiles-rs-linux-arm64-gnu": "4.2.2",
-    "@versatiles/versatiles-rs-linux-arm64-musl": "4.2.2",
-    "@versatiles/versatiles-rs-linux-x64-gnu": "4.2.2",
-    "@versatiles/versatiles-rs-linux-x64-musl": "4.2.2",
-    "@versatiles/versatiles-rs-win32-arm64-msvc": "4.2.2",
-    "@versatiles/versatiles-rs-win32-x64-msvc": "4.2.2"
+    "@versatiles/versatiles-rs-darwin-arm64": "4.3.0",
+    "@versatiles/versatiles-rs-darwin-x64": "4.3.0",
+    "@versatiles/versatiles-rs-linux-arm64-gnu": "4.3.0",
+    "@versatiles/versatiles-rs-linux-arm64-musl": "4.3.0",
+    "@versatiles/versatiles-rs-linux-x64-gnu": "4.3.0",
+    "@versatiles/versatiles-rs-linux-x64-musl": "4.3.0",
+    "@versatiles/versatiles-rs-win32-arm64-msvc": "4.3.0",
+    "@versatiles/versatiles-rs-win32-x64-msvc": "4.3.0"
   }
 }
