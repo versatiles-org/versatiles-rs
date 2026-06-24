@@ -12,8 +12,8 @@
 //! timeouts, panic catching), listening on a socket, graceful shutdown, and
 //! a tiny `/status` probe for liveness checks.
 
-use super::{cors, routes, sources};
-use crate::config::{Config, TileSourceConfig};
+use super::{cors, reload::ReloadHandle, routes, sources};
+use crate::config::{Config, StaticSourceConfig, TileSourceConfig};
 use anyhow::{Result, bail};
 use arc_swap::ArcSwap;
 use axum::error_handling::HandleErrorLayer;
@@ -23,6 +23,7 @@ use axum::{Router, routing::get};
 use dashmap::DashMap;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::Mutex;
 use tokio::{net::TcpListener, sync::oneshot};
 use tower::{
 	ServiceBuilder, buffer::BufferLayer, limit::ConcurrencyLimitLayer, load_shed::LoadShedLayer, timeout::TimeoutLayer,
@@ -73,6 +74,10 @@ pub struct TileServer {
 	cors_max_age_seconds: u64,
 	/// Extra response headers as configured.
 	extra_response_headers: Vec<(HeaderName, HeaderValue)>,
+	/// Shadow of tile-source configs at last successful load/reload — used for diffing.
+	pub(super) current_tile_configs: Arc<Mutex<Vec<TileSourceConfig>>>,
+	/// Shadow of static-source configs at last successful load/reload — used for diffing.
+	pub(super) current_static_configs: Arc<Mutex<Vec<StaticSourceConfig>>>,
 }
 
 impl TileServer {
@@ -93,6 +98,8 @@ impl TileServer {
 			cors_allowed_origins: crate::config::CorsConfig::default().allowed_origins,
 			cors_max_age_seconds: 3600,
 			extra_response_headers: Vec::new(),
+			current_tile_configs: Arc::new(Mutex::new(Vec::new())),
+			current_static_configs: Arc::new(Mutex::new(Vec::new())),
 		}
 	}
 
@@ -123,6 +130,8 @@ impl TileServer {
 			cors_allowed_origins: config.cors.allowed_origins.clone(),
 			cors_max_age_seconds: config.cors.max_age_seconds.unwrap_or(3600),
 			extra_response_headers: parsed_headers,
+			current_tile_configs: Arc::new(Mutex::new(Vec::new())),
+			current_static_configs: Arc::new(Mutex::new(Vec::new())),
 		};
 
 		for tile_config in &config.tile_sources {
@@ -134,6 +143,9 @@ impl TileServer {
 				.add_static_source_from_location(&static_config.src, static_config.prefix.as_deref().unwrap_or("/"))
 				.await?;
 		}
+
+		*server.current_tile_configs.lock().unwrap() = config.tile_sources;
+		*server.current_static_configs.lock().unwrap() = config.static_sources;
 
 		Ok(server)
 	}
@@ -411,6 +423,19 @@ impl TileServer {
 	#[context("adding API routes to app")]
 	async fn add_api_to_app(&self, app: Router) -> Result<Router> {
 		routes::add_api_to_app(app, Arc::clone(&self.tile_sources)).await
+	}
+
+	/// Create a `ReloadHandle` that can reload the config from `config_path` on SIGHUP.
+	#[must_use]
+	pub fn reload_handle(&self, config_path: std::path::PathBuf) -> ReloadHandle {
+		ReloadHandle {
+			config_path,
+			tile_sources: Arc::clone(&self.tile_sources),
+			static_sources: Arc::clone(&self.static_sources),
+			current_tile_configs: Arc::clone(&self.current_tile_configs),
+			current_static_configs: Arc::clone(&self.current_static_configs),
+			runtime: self.runtime.clone(),
+		}
 	}
 
 	#[must_use]

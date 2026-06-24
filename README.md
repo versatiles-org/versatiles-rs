@@ -426,6 +426,17 @@ For a full description of all configuration options:
 versatiles help config
 ```
 
+**Hot-reload (Linux/macOS):**
+
+When started with `-c`, the server reloads its configuration without downtime on `SIGHUP`:
+
+```sh
+# Reload after editing production.yaml
+kill -HUP $(pidof versatiles)
+```
+
+Tile sources are updated incrementally (unchanged sources keep serving in-flight requests). Static sources are swapped atomically. In-flight requests always complete against the version they started with.
+
 #### dev - Developer Tools (Unstable)
 
 Experimental tools for tile analysis and debugging.

@@ -49,6 +49,7 @@ tar = { workspace = true, optional = true }
 termimad = { version = "0.34.1", optional = true }
 tokio = { workspace = true, features = [
 	"rt-multi-thread",
+	"signal",
 	"sync",
 ], optional = true }
 tower = { version = "0.5.3", optional = true, features = [

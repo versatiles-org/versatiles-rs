@@ -4,7 +4,7 @@ use std::{mem::swap, path::PathBuf};
 use tokio::time::{Duration, sleep};
 use versatiles::{
 	config::{Config, StaticSourceConfig, TileSourceConfig},
-	server::TileServer,
+	server::{TileServer, spawn_sighup_handler},
 };
 use versatiles_container::{DataLocation, DataSource, TilesRuntime};
 
@@ -121,6 +121,10 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	}
 
 	server.start().await?;
+
+	if let Some(config_path) = &arguments.config {
+		spawn_sighup_handler(server.reload_handle(config_path.clone()));
+	}
 
 	if let Some(milliseconds) = arguments.auto_shutdown {
 		sleep(Duration::from_millis(milliseconds)).await;
