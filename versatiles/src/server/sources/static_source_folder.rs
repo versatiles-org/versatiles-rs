@@ -63,7 +63,7 @@ impl StaticSourceTrait for Folder {
 
 	// Gets the data at the given path and responds with a compressed or uncompressed version
 	// based on the accept header
-	fn get_data(&self, url: &Url, _accept: &TargetCompression) -> Option<SourceResponse> {
+	async fn get_data(&self, url: &Url, _accept: &TargetCompression) -> Option<SourceResponse> {
 		let mut local_path = url.to_pathbug(&self.folder);
 
 		// If the path is a directory, append 'index.html'
@@ -123,11 +123,15 @@ mod tests {
 		assert_eq!(folder.name(), "../testdata");
 
 		// Test get_data function with a non-existent file
-		let result = folder.get_data(&Url::from("recipes/Queijo.txt"), &TargetCompression::from_none());
+		let result = folder
+			.get_data(&Url::from("recipes/Queijo.txt"), &TargetCompression::from_none())
+			.await;
 		assert!(result.is_none());
 
 		// Test get_data function with an existing uncompressed file
-		let result = folder.get_data(&Url::from("berlin.mbtiles"), &TargetCompression::from_none());
+		let result = folder
+			.get_data(&Url::from("berlin.mbtiles"), &TargetCompression::from_none())
+			.await;
 		assert!(result.is_some());
 
 		let result = result.unwrap();
@@ -151,6 +155,7 @@ mod tests {
 		// Attempt to retrieve data from the directory, expecting to get the contents of index.html
 		let response = folder
 			.get_data(&Url::from("testdir"), &TargetCompression::from_none())
+			.await
 			.unwrap();
 
 		let result = response.blob.as_str();
@@ -178,6 +183,7 @@ mod tests {
 		// Test Brotli compression
 		let response_br = folder
 			.get_data(&Url::from("compressed.txt"), &TargetCompression::from_none())
+			.await
 			.unwrap();
 
 		assert_eq!(response_br.blob.as_str(), "Brotli compressed content");
@@ -189,6 +195,7 @@ mod tests {
 		// Test Gzip compression
 		let response_gz = folder
 			.get_data(&Url::from("compressed.txt"), &TargetCompression::from_none())
+			.await
 			.unwrap();
 
 		assert_eq!(response_gz.blob.as_str(), "Gzip compressed content");

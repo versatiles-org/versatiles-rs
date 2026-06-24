@@ -3,6 +3,7 @@
 mod response;
 mod static_source;
 mod static_source_folder;
+mod static_source_remote_folder;
 mod static_source_tar;
 mod tile_source;
 

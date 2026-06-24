@@ -169,7 +169,7 @@ impl StaticSourceTrait for TarFile {
 		&self.name
 	}
 
-	fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse> {
+	async fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse> {
 		use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
 
 		let file_entry = self.lookup.get(&url.str[1..])?.to_owned();
@@ -279,26 +279,19 @@ mod tests {
 	#[tokio::test]
 	async fn test_get_data(#[case] compression_tar: TileCompression) -> Result<()> {
 		let file = make_test_tar(compression_tar).await;
-		let mut tar_file = TarFile::from(&file)?;
+		let tar_file = TarFile::from(&file)?;
 
-		test2(&mut tar_file, compression_tar, TileCompression::Uncompressed)?;
-		test2(&mut tar_file, compression_tar, TileCompression::Gzip)?;
-		test2(&mut tar_file, compression_tar, TileCompression::Brotli)?;
-
-		return Ok(());
-
-		fn test2(
-			tar_file: &mut TarFile,
-			compression_tar: TileCompression,
-			compression_accept: TileCompression,
-		) -> Result<()> {
+		for compression_accept in [
+			TileCompression::Uncompressed,
+			TileCompression::Gzip,
+			TileCompression::Brotli,
+		] {
 			let accept = TargetCompression::from(compression_accept);
 
-			let result = tar_file.get_data(&Url::from("non_existing_file"), &accept);
+			let result = tar_file.get_data(&Url::from("non_existing_file"), &accept).await;
 			assert!(result.is_none());
 
-			//let path = ["0", "0", "0"];
-			let result = tar_file.get_data(&Url::from("tiles.json"), &accept);
+			let result = tar_file.get_data(&Url::from("tiles.json"), &accept).await;
 			assert!(result.is_some());
 
 			let result = result.unwrap();
@@ -312,8 +305,8 @@ mod tests {
 
 			assert_eq!(result.mime, "application/json");
 			assert_eq!(result.compression, compression_tar);
-
-			Ok(())
 		}
+
+		Ok(())
 	}
 }

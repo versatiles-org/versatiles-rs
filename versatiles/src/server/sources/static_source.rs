@@ -1,4 +1,7 @@
-use super::{super::utils::Url, SourceResponse, static_source_folder::Folder, static_source_tar::TarFile};
+use super::{
+	super::utils::Url, SourceResponse, static_source_folder::Folder, static_source_remote_folder::RemoteFolder,
+	static_source_tar::TarFile,
+};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
@@ -12,7 +15,7 @@ pub trait StaticSourceTrait: Send + Sync + Debug {
 	fn type_name(&self) -> &str;
 	#[cfg(test)]
 	fn name(&self) -> &str;
-	fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse>;
+	async fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse>;
 }
 
 #[derive(Clone)]
@@ -27,7 +30,14 @@ impl StaticSource {
 		let prefix = Url::from(prefix).to_dir();
 		Ok(StaticSource {
 			source: Arc::new(match location {
-				DataLocation::Url(url) => Box::new(TarFile::from_url(url).await?) as Box<dyn StaticSourceTrait>,
+				DataLocation::Url(url) => {
+					let filename = url.path_segments().and_then(|mut s| s.next_back()).unwrap_or("");
+					if filename.contains(".tar") {
+						Box::new(TarFile::from_url(url).await?) as Box<dyn StaticSourceTrait>
+					} else {
+						Box::new(RemoteFolder::from(url)) as Box<dyn StaticSourceTrait>
+					}
+				}
 				DataLocation::Path(path) => {
 					if std::fs::metadata(path)?.is_dir() {
 						Box::new(Folder::from(path)?) as Box<dyn StaticSourceTrait>
@@ -50,14 +60,17 @@ impl StaticSource {
 		&self.prefix
 	}
 
-	pub fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse> {
+	pub async fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse> {
 		if !url.starts_with(&self.prefix) {
 			return None;
 		}
-		self.source.get_data(
-			&url.strip_prefix(&self.prefix).expect("prefix match checked above"),
-			accept,
-		)
+		self
+			.source
+			.get_data(
+				&url.strip_prefix(&self.prefix).expect("prefix match checked above"),
+				accept,
+			)
+			.await
 	}
 }
 
@@ -81,7 +94,7 @@ mod tests {
 			"MockSource"
 		}
 
-		fn get_data(&self, path: &Url, _accept: &TargetCompression) -> Option<SourceResponse> {
+		async fn get_data(&self, path: &Url, _accept: &TargetCompression) -> Option<SourceResponse> {
 			if path.starts_with(&Url::from("exists")) {
 				SourceResponse::new_some(
 					Blob::from(vec![1, 2, 3, 4]),
@@ -148,7 +161,7 @@ mod tests {
 		create_file(&path, Brotli);
 		check_type(path, "tar").await;
 
-		// Test non .tar file
+		// Test non .tar file — treated as remote folder (URL), but path is local so error differs
 		let path = temp_dir.path().join("data.tar.bmp");
 		create_file(&path, Uncompressed);
 		check_error(path, "\" must be a name of a tar file").await;
@@ -167,7 +180,9 @@ mod tests {
 			source: Arc::new(Box::new(MockStaticSource)),
 			prefix: Url::from(""),
 		};
-		let result = static_source.get_data(&Url::from("exists"), &TargetCompression::from_none());
+		let result = static_source
+			.get_data(&Url::from("exists"), &TargetCompression::from_none())
+			.await;
 		assert!(result.is_some());
 	}
 
@@ -177,7 +192,9 @@ mod tests {
 			source: Arc::new(Box::new(MockStaticSource)),
 			prefix: Url::from(""),
 		};
-		let result = static_source.get_data(&Url::from("does_not_exist"), &TargetCompression::from_none());
+		let result = static_source
+			.get_data(&Url::from("does_not_exist"), &TargetCompression::from_none())
+			.await;
 		assert!(result.is_none());
 	}
 
@@ -187,12 +204,14 @@ mod tests {
 			source: Arc::new(Box::new(MockStaticSource)),
 			prefix: Url::from("path/to"),
 		};
-		// Should match and retrieve data
-		let result = static_source.get_data(&Url::from("path/to/exists"), &TargetCompression::from_none());
+		let result = static_source
+			.get_data(&Url::from("path/to/exists"), &TargetCompression::from_none())
+			.await;
 		assert!(result.is_some());
 
-		// Should fail due to path mismatch
-		let result = static_source.get_data(&Url::from("path/wrong/exists"), &TargetCompression::from_none());
+		let result = static_source
+			.get_data(&Url::from("path/wrong/exists"), &TargetCompression::from_none())
+			.await;
 		assert!(result.is_none());
 	}
 }

@@ -100,7 +100,7 @@ pub async fn serve_static(uri: Uri, headers: HeaderMap, State(state): State<Stat
 	let sources = state.sources.load();
 
 	for source in sources.iter() {
-		if let Some(result) = source.get_data(&url, &target) {
+		if let Some(result) = source.get_data(&url, &target).await {
 			log::debug!("send response to static request: {url}");
 			return ok_data(result, target);
 		}
