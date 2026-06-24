@@ -1,7 +1,8 @@
 use super::{super::utils::Url, SourceResponse, static_source_folder::Folder, static_source_tar::TarFile};
-use anyhow::Result;
+use anyhow::{Result, bail};
 use async_trait::async_trait;
-use std::{fmt::Debug, path::Path, sync::Arc};
+use std::{fmt::Debug, sync::Arc};
+use versatiles_container::DataLocation;
 use versatiles_core::compression::TargetCompression;
 use versatiles_derive::context;
 
@@ -21,15 +22,20 @@ pub struct StaticSource {
 }
 
 impl StaticSource {
-	#[context("creating static source: path={path:?}, prefix={prefix}")]
-	pub fn new(path: &Path, prefix: &str) -> Result<StaticSource> {
+	#[context("creating static source from location: location={location:?}, prefix={prefix}")]
+	pub async fn from_location(location: &DataLocation, prefix: &str) -> Result<StaticSource> {
 		let prefix = Url::from(prefix).to_dir();
-
 		Ok(StaticSource {
-			source: Arc::new(if std::fs::metadata(path)?.is_dir() {
-				Box::new(Folder::from(path)?)
-			} else {
-				Box::new(TarFile::from(path)?)
+			source: Arc::new(match location {
+				DataLocation::Url(url) => Box::new(TarFile::from_url(url).await?) as Box<dyn StaticSourceTrait>,
+				DataLocation::Path(path) => {
+					if std::fs::metadata(path)?.is_dir() {
+						Box::new(Folder::from(path)?) as Box<dyn StaticSourceTrait>
+					} else {
+						Box::new(TarFile::from(path)?)
+					}
+				}
+				DataLocation::Blob(_) => bail!("Blob is not supported as a static source"),
 			}),
 			prefix,
 		})
@@ -88,18 +94,21 @@ mod tests {
 		}
 	}
 
-	#[test]
-	fn new_static_source() -> Result<()> {
+	#[tokio::test]
+	async fn from_location_static_source() -> Result<()> {
 		use TileCompression::*;
+		use versatiles_container::DataLocation;
 
-		let check_type = |path: PathBuf, type_name: &str| {
-			let source = StaticSource::new(&path, "").unwrap();
+		let check_type = |path: PathBuf, type_name: &'static str| async move {
+			let loc = DataLocation::from(path);
+			let source = StaticSource::from_location(&loc, "").await.unwrap();
 			assert_eq!(source.type_name(), type_name);
 		};
 
-		let check_error = |path: PathBuf, error_should: &str| {
-			let source = StaticSource::new(&path, "");
-			let error = source
+		let check_error = |path: PathBuf, error_should: &'static str| async move {
+			let loc = DataLocation::from(path);
+			let result = StaticSource::from_location(&loc, "").await;
+			let error = result
 				.err()
 				.iter()
 				.flat_map(|e| e.chain().map(std::string::ToString::to_string))
@@ -122,32 +131,32 @@ mod tests {
 
 		// Test non existent file
 		let path = temp_dir.path().join("non_existent.tar");
-		check_error(path, "(os error 2)");
+		check_error(path, "(os error 2)").await;
 
 		// Test .tar file
 		let path = temp_dir.path().join("temp.tar");
 		create_file(&path, Uncompressed);
-		check_type(path, "tar");
+		check_type(path, "tar").await;
 
 		// Test gzip compressed .tar file
 		let path = temp_dir.path().join("temp.tar.gz");
 		create_file(&path, Gzip);
-		check_type(path, "tar");
+		check_type(path, "tar").await;
 
 		// Test brotli compressed .tar file
 		let path = temp_dir.path().join("temp.tar.br");
 		create_file(&path, Brotli);
-		check_type(path, "tar");
+		check_type(path, "tar").await;
 
 		// Test non .tar file
 		let path = temp_dir.path().join("data.tar.bmp");
 		create_file(&path, Uncompressed);
-		check_error(path, "\" must be a name of a tar file");
+		check_error(path, "\" must be a name of a tar file").await;
 
 		// Test initialization with a folder
 		let path = temp_dir.path().join("folder");
 		std::fs::create_dir(&path)?;
-		check_type(path, "folder");
+		check_type(path, "folder").await;
 
 		Ok(())
 	}

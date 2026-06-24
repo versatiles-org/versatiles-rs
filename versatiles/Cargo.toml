@@ -36,6 +36,7 @@ axum = { workspace = true, optional = true, features = [
 clap = { workspace = true, optional = true, features = ["default"] }
 dashmap = { workspace = true, optional = true }
 enumset = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
 env_logger = { workspace = true, optional = true }
 futures.workspace = true
 glob = { version = "0.3", default-features = false }
@@ -97,6 +98,7 @@ server = [
 	"dep:enumset",
 	"dep:mime_guess",
 	"dep:regex",
+	"dep:reqwest",
 	"dep:tar",
 	"dep:tokio",
 	"dep:tower",

@@ -29,7 +29,7 @@ use tower::{
 };
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
-use versatiles_container::{TileSource, TilesRuntime};
+use versatiles_container::{DataLocation, TileSource, TilesRuntime};
 use versatiles_derive::context;
 
 /// Thin orchestration layer for the VersaTiles HTTP server.
@@ -131,10 +131,7 @@ impl TileServer {
 
 		for static_config in &config.static_sources {
 			server
-				.add_static_source(
-					static_config.src.as_path()?,
-					static_config.prefix.as_deref().unwrap_or("/"),
-				)
+				.add_static_source_from_location(&static_config.src, static_config.prefix.as_deref().unwrap_or("/"))
 				.await?;
 		}
 
@@ -215,14 +212,26 @@ impl TileServer {
 	/// Can be called before or after `start()` - changes take effect immediately.
 	#[context("adding static source: path={path:?}, url_prefix='{url_prefix}'")]
 	pub async fn add_static_source(&mut self, path: &Path, url_prefix: &str) -> Result<()> {
-		log::debug!("add static: {path:?}");
-		let source = sources::StaticSource::new(path, url_prefix)?;
+		self
+			.add_static_source_from_location(&DataLocation::from(path), url_prefix)
+			.await
+	}
+
+	/// Register a static file source from a `DataLocation` mounted at `url_prefix`.
+	///
+	/// Accepts a local path (directory or tar archive) or a remote URL pointing
+	/// to a tar archive. Uses read-copy-update (RCU) for lock-free hot-reload.
+	/// Can be called before or after `start()` - changes take effect immediately.
+	#[context("adding static source from location: location={location:?}, url_prefix='{url_prefix}'")]
+	pub async fn add_static_source_from_location(&mut self, location: &DataLocation, url_prefix: &str) -> Result<()> {
+		log::debug!("add static: {location:?}");
+		let source = sources::StaticSource::from_location(location, url_prefix).await?;
 		self.static_sources.rcu(|old| {
 			let mut new = (**old).clone();
 			new.push(source.clone());
 			new
 		});
-		log::info!("added static source: path={path:?}, url_prefix='{url_prefix}'");
+		log::info!("added static source: location={location:?}, url_prefix='{url_prefix}'");
 		Ok(())
 	}
 

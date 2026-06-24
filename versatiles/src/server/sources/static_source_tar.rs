@@ -7,6 +7,7 @@ use tar::{Archive, EntryType};
 use versatiles_core::{
 	Blob, TileCompression,
 	compression::{TargetCompression, decompress_brotli, decompress_gzip, decompress_zstd},
+	io::{DataReaderHttp, DataReaderTrait},
 };
 use versatiles_derive::context;
 
@@ -39,8 +40,6 @@ pub struct TarFile {
 impl TarFile {
 	#[context("loading static tar file from path: {path:?}")]
 	pub fn from(path: &Path) -> Result<Self> {
-		use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
-
 		let path = current_dir()?.join(path).canonicalize()?;
 
 		ensure!(path.exists(), "path {path:?} does not exist");
@@ -48,26 +47,44 @@ impl TarFile {
 		ensure!(path.is_file(), "path {path:?} must be a file");
 
 		let mut file = File::open(&path)?;
-		let mut buffer: Vec<u8> = Vec::new();
-		file.read_to_end(&mut buffer)?;
-		let mut buffer = Blob::from(buffer);
+		let mut bytes: Vec<u8> = Vec::new();
+		file.read_to_end(&mut bytes)?;
 		drop(file);
 
-		for part in path
-			.to_str()
-			.ok_or_else(|| anyhow!("path {path:?} is not valid UTF-8"))?
-			.rsplit('.')
-		{
+		let filename = path
+			.file_name()
+			.and_then(|s| s.to_str())
+			.ok_or_else(|| anyhow!("path {path:?} has no valid UTF-8 filename"))?;
+		let name = path.to_str().expect("path is valid UTF-8 (checked above)").to_owned();
+
+		Self::from_bytes(Blob::from(bytes), filename, name)
+	}
+
+	#[context("loading static tar file from URL: {url}")]
+	pub async fn from_url(url: &reqwest::Url) -> Result<Self> {
+		let reader = DataReaderHttp::try_from(url)?;
+		let data = reader.read_all().await?;
+		let filename = url
+			.path_segments()
+			.and_then(|mut s| s.next_back())
+			.unwrap_or("remote.tar");
+		Self::from_bytes(data, filename, url.to_string())
+	}
+
+	fn from_bytes(mut data: Blob, filename: &str, name: String) -> Result<Self> {
+		use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
+
+		for part in filename.rsplit('.') {
 			match part {
 				"tar" => break,
-				"gz" => buffer = decompress_gzip(&buffer)?,
-				"br" => buffer = decompress_brotli(&buffer)?,
-				"zst" => buffer = decompress_zstd(&buffer)?,
-				_ => bail!("{path:?} must be a name of a tar file"),
+				"gz" => data = decompress_gzip(&data)?,
+				"br" => data = decompress_brotli(&data)?,
+				"zst" => data = decompress_zstd(&data)?,
+				_ => bail!("{filename:?} must be a name of a tar file"),
 			}
 		}
 
-		let mut archive = Archive::new(buffer.as_slice());
+		let mut archive = Archive::new(data.as_slice());
 
 		let mut lookup: HashMap<String, FileEntry> = HashMap::new();
 		for file_result in archive.entries()? {
@@ -97,10 +114,10 @@ impl TarFile {
 			file.read_to_end(&mut buffer)?;
 			let blob = Blob::from(buffer);
 
-			let Some(filename) = entry_path.file_name() else {
+			let Some(entry_filename) = entry_path.file_name() else {
 				continue;
 			};
-			let mime = guess_mime(Path::new(&filename));
+			let mime = guess_mime(Path::new(&entry_filename));
 
 			let mut add = |path: &Path, blob: Blob| {
 				let mut name = path
@@ -125,7 +142,7 @@ impl TarFile {
 				}
 			};
 
-			if filename == OsStr::new("index.html") {
+			if entry_filename == OsStr::new("index.html") {
 				add(
 					entry_path
 						.parent()
@@ -136,10 +153,7 @@ impl TarFile {
 			add(&entry_path, blob);
 		}
 
-		Ok(Self {
-			lookup,
-			name: path.to_str().expect("utf-8 already checked above").to_owned(),
-		})
+		Ok(Self { lookup, name })
 	}
 }
 
