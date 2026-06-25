@@ -51,15 +51,37 @@ struct Operation {
 ///
 /// If multiple sources provide a layer called `"roads"`, all road features
 /// end up in the same output layer; layers unique to a source are copied as‐is.
+///
+/// `extent` and `version` are normalised to their effective values (defaulting
+/// to 4096 and 1 respectively) on every output layer, so the result is always
+/// a fully spec-conformant MVT 2.1 tile regardless of whether the source tiles
+/// omitted those fields.
+///
+/// Returns an error if two sources provide the same layer name with different
+/// effective extents — the coordinate spaces would be incompatible.
 #[context("Failed to merge vector tiles")]
 fn merge_vector_tiles(tiles: Vec<VectorTile>) -> Result<VectorTile> {
 	let mut layers = HashMap::<String, VectorTileLayer>::new();
 	for tile in tiles {
 		for new_layer in tile.layers {
+			let incoming_extent = new_layer.extent.unwrap_or(4096);
+			let incoming_version = new_layer.version.unwrap_or(1);
 			if let Some(layer) = layers.get_mut(&new_layer.name) {
+				let receiver_extent = layer.extent.unwrap_or(4096);
+				ensure!(
+					receiver_extent == incoming_extent,
+					"layer '{}': extent mismatch between sources ({} vs {}); \
+					 cannot merge features from incompatible coordinate spaces",
+					new_layer.name,
+					receiver_extent,
+					incoming_extent
+				);
 				layer.add_from_layer(new_layer)?;
 			} else {
-				layers.insert(new_layer.name.clone(), new_layer);
+				let mut layer = new_layer;
+				layer.extent = Some(incoming_extent);
+				layer.version = Some(incoming_version);
+				layers.insert(layer.name.clone(), layer);
 			}
 		}
 	}
