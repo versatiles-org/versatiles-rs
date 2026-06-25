@@ -9,6 +9,17 @@
 //!
 //! ## What gets reported
 //!
+//! ### Layer-level issues (`feature_index = None`)
+//!
+//! - **`MissingExtent`**: the layer's `extent` field is absent from the wire
+//!   bytes. MVT 2.1 §4.1 requires every layer to carry an explicit `extent`.
+//! - **`MissingVersion`**: the layer's `version` field is absent. MVT 2.1 §4.1
+//!   requires an explicit `version`.
+//! - **`DuplicateLayerName`**: two or more layers in the same tile share the
+//!   same `name`. MVT 2.1 §4.1 requires layer names to be unique within a tile.
+//!
+//! ### Feature-level issues (`feature_index = Some(i)`)
+//!
 //! - **`OrphanInnerRing`**: a polygon ring with negative surveyor area
 //!   (counter-clockwise in screen-Y) appears before any positive-area ring in
 //!   the same feature. The strict decoder drops it; usually a symptom of
@@ -28,29 +39,47 @@
 //!
 //! ## What does NOT get reported
 //!
-//! - Layers with `extent == 0` (the encoder skips them by default).
 //! - Features with `geom_type == Unknown` *and* empty `geom_data` — that's
 //!   the canonical "no geometry" form (MVT 2.1 allows it; the encoder emits
 //!   it for inputs that collapse to nothing).
 //! - Inverted polygon winding *per se*, when the polygon parses cleanly as
 //!   "one outer + zero or more inners". The orphan-inner case is the
 //!   observable symptom.
+//! - `version` values other than 1 or 2 — these are flagged only if `None`
+//!   (field absent). A tile claiming `version = 1` may be MVT 1.x; that is
+//!   handled at the application level, not here.
 
 use super::VectorTile;
 use super::feature::{WINDING_EPSILON, parse_geom_command_stream, ring_signed_double_area};
 use super::geometry_type::GeomType;
 use geo_types::Coord;
 
-/// A single MVT spec violation, located by layer name + feature index.
+/// A single MVT spec violation, located by layer name and optionally a feature index.
+///
+/// `feature_index` is `None` for layer-level issues (e.g. missing `extent`)
+/// and `Some(i)` for feature-level issues.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidationIssue {
 	pub layer: String,
-	pub feature_index: usize,
+	/// `None` for layer-level issues; `Some(i)` for feature `i` within the layer.
+	pub feature_index: Option<usize>,
 	pub kind: IssueKind,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IssueKind {
+	// ── Layer-level issues ────────────────────────────────────────────────
+	/// The layer's `extent` field is absent from the wire bytes. MVT 2.1 §4.1
+	/// requires every layer to carry an explicit `extent`.
+	MissingExtent,
+	/// The layer's `version` field is absent from the wire bytes. MVT 2.1 §4.1
+	/// requires every layer to carry an explicit `version`.
+	MissingVersion,
+	/// Two or more layers in this tile share the same `name`. MVT 2.1 §4.1
+	/// requires layer names to be unique within a tile.
+	DuplicateLayerName,
+
+	// ── Feature-level issues ──────────────────────────────────────────────
 	/// A polygon ring with negative surveyor area appeared before any
 	/// positive-area ring in this feature. The strict decoder drops it as an
 	/// orphan; usually indicates inverted polygon winding upstream.
@@ -85,12 +114,42 @@ pub enum DegenerateReason {
 	Collinear,
 }
 
-/// Validate every feature in `tile` and collect the spec violations found.
+/// Validate every layer and feature in `tile` and collect the spec violations found.
 /// Returns an empty `Vec` when the tile is conformant.
 #[must_use]
 pub fn validate_tile(tile: &VectorTile) -> Vec<ValidationIssue> {
 	let mut issues = Vec::new();
+
+	// Tile-level: duplicate layer names (MVT 2.1 §4.1).
+	let mut seen_names = std::collections::HashSet::new();
 	for layer in &tile.layers {
+		if !seen_names.insert(layer.name.as_str()) {
+			issues.push(ValidationIssue {
+				layer: layer.name.clone(),
+				feature_index: None,
+				kind: IssueKind::DuplicateLayerName,
+			});
+		}
+	}
+
+	for layer in &tile.layers {
+		// Layer-level: required fields.
+		if layer.extent.is_none() {
+			issues.push(ValidationIssue {
+				layer: layer.name.clone(),
+				feature_index: None,
+				kind: IssueKind::MissingExtent,
+			});
+		}
+		if layer.version.is_none() {
+			issues.push(ValidationIssue {
+				layer: layer.name.clone(),
+				feature_index: None,
+				kind: IssueKind::MissingVersion,
+			});
+		}
+
+		// Feature-level.
 		for (feature_index, feature) in layer.features.iter().enumerate() {
 			validate_feature(&layer.name, feature_index, feature, &mut issues);
 		}
@@ -107,7 +166,7 @@ fn validate_feature(
 	let push = |kind: IssueKind, issues: &mut Vec<ValidationIssue>| {
 		issues.push(ValidationIssue {
 			layer: layer.to_string(),
-			feature_index,
+			feature_index: Some(feature_index),
 			kind,
 		});
 	};
@@ -166,7 +225,7 @@ fn check_polygon_rings(
 		if let Some(reason) = degeneracy_reason(ring) {
 			issues.push(ValidationIssue {
 				layer: layer.to_string(),
-				feature_index,
+				feature_index: Some(feature_index),
 				kind: IssueKind::DegenerateRing(reason),
 			});
 			continue;
@@ -180,7 +239,7 @@ fn check_polygon_rings(
 			// Negative area before any outer → orphan inner.
 			issues.push(ValidationIssue {
 				layer: layer.to_string(),
-				feature_index,
+				feature_index: Some(feature_index),
 				kind: IssueKind::OrphanInnerRing,
 			});
 		}
@@ -313,7 +372,7 @@ mod tests {
 		assert_eq!(issues.len(), 1);
 		assert_eq!(issues[0].kind, IssueKind::OrphanInnerRing);
 		assert_eq!(issues[0].layer, "l");
-		assert_eq!(issues[0].feature_index, 0);
+		assert_eq!(issues[0].feature_index, Some(0));
 	}
 
 	#[test]
@@ -443,6 +502,64 @@ mod tests {
 		let issues = validate_tile(&tile);
 		assert_eq!(issues.len(), 1);
 		assert_eq!(issues[0].layer, "mixed");
-		assert_eq!(issues[0].feature_index, 1);
+		assert_eq!(issues[0].feature_index, Some(1));
+	}
+
+	// ── Layer-level issue tests ───────────────────────────────────────────
+
+	#[test]
+	fn detects_missing_extent() {
+		let mut layer = VectorTileLayer::new("l".to_string(), 4096, 1);
+		layer.extent = None; // simulate a tile encoded without the extent field
+		let tile = VectorTile::new(vec![layer]);
+		let issues = validate_tile(&tile);
+		assert_eq!(issues.len(), 1);
+		assert_eq!(issues[0].kind, IssueKind::MissingExtent);
+		assert_eq!(issues[0].layer, "l");
+		assert_eq!(issues[0].feature_index, None);
+	}
+
+	#[test]
+	fn detects_missing_version() {
+		let mut layer = VectorTileLayer::new("l".to_string(), 4096, 1);
+		layer.version = None;
+		let tile = VectorTile::new(vec![layer]);
+		let issues = validate_tile(&tile);
+		assert_eq!(issues.len(), 1);
+		assert_eq!(issues[0].kind, IssueKind::MissingVersion);
+		assert_eq!(issues[0].feature_index, None);
+	}
+
+	#[test]
+	fn detects_duplicate_layer_name() {
+		let a = VectorTileLayer::new("roads".to_string(), 4096, 1);
+		let b = VectorTileLayer::new("roads".to_string(), 4096, 1);
+		let tile = VectorTile::new(vec![a, b]);
+		let issues = validate_tile(&tile);
+		assert_eq!(issues.len(), 1);
+		assert_eq!(issues[0].kind, IssueKind::DuplicateLayerName);
+		assert_eq!(issues[0].layer, "roads");
+		assert_eq!(issues[0].feature_index, None);
+	}
+
+	#[test]
+	fn both_missing_extent_and_version_reported() {
+		let mut layer = VectorTileLayer::new("l".to_string(), 4096, 1);
+		layer.extent = None;
+		layer.version = None;
+		let tile = VectorTile::new(vec![layer]);
+		let issues = validate_tile(&tile);
+		assert_eq!(issues.len(), 2);
+		assert!(issues.iter().any(|i| i.kind == IssueKind::MissingExtent));
+		assert!(issues.iter().any(|i| i.kind == IssueKind::MissingVersion));
+	}
+
+	#[test]
+	fn layer_level_issues_have_none_feature_index() {
+		let mut layer = VectorTileLayer::new("l".to_string(), 4096, 1);
+		layer.extent = None;
+		let tile = VectorTile::new(vec![layer]);
+		let issues = validate_tile(&tile);
+		assert!(issues.iter().all(|i| i.feature_index.is_none()));
 	}
 }

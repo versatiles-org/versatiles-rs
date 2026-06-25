@@ -295,7 +295,12 @@ mod tests {
 					if sample_issue.is_none() {
 						sample_issue = Some(format!(
 							"z={} x={} y={} layer={:?} feature={} kind={:?}",
-							coord.level, coord.x, coord.y, issues[0].layer, issues[0].feature_index, issues[0].kind
+							coord.level,
+							coord.x,
+							coord.y,
+							issues[0].layer,
+							issues[0].feature_index.map_or("-".to_string(), |i| i.to_string()),
+							issues[0].kind
 						));
 					}
 				}

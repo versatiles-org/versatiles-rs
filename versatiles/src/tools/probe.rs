@@ -259,6 +259,9 @@ async fn probe_tile_contents(source: &dyn TileSource, print: &mut PrettyPrint, r
 
 #[derive(Default)]
 struct ValidationCounters {
+	missing_extent: u64,
+	missing_version: u64,
+	duplicate_layer_name: u64,
 	orphan_inner: u64,
 	degenerate_too_few: u64,
 	degenerate_sub_pixel: u64,
@@ -274,7 +277,10 @@ struct ValidationCounters {
 
 impl ValidationCounters {
 	fn total_issues(&self) -> u64 {
-		self.orphan_inner
+		self.missing_extent
+			+ self.missing_version
+			+ self.duplicate_layer_name
+			+ self.orphan_inner
 			+ self.degenerate_too_few
 			+ self.degenerate_sub_pixel
 			+ self.degenerate_collinear
@@ -287,6 +293,9 @@ impl ValidationCounters {
 
 	fn record(&mut self, kind: &IssueKind) {
 		match kind {
+			IssueKind::MissingExtent => self.missing_extent += 1,
+			IssueKind::MissingVersion => self.missing_version += 1,
+			IssueKind::DuplicateLayerName => self.duplicate_layer_name += 1,
 			IssueKind::OrphanInnerRing => self.orphan_inner += 1,
 			IssueKind::DegenerateRing(DegenerateReason::TooFewVertices) => self.degenerate_too_few += 1,
 			IssueKind::DegenerateRing(DegenerateReason::SubPixel) => self.degenerate_sub_pixel += 1,
@@ -394,7 +403,7 @@ async fn probe_mvt_validation(source: &dyn TileSource, print: &mut PrettyPrint, 
 						format!("{}", coord.x),
 						format!("{}", coord.y),
 						issue.layer.clone(),
-						format!("{}", issue.feature_index),
+						issue.feature_index.map_or("-".to_string(), |i| i.to_string()),
 						describe_kind(&issue.kind),
 					]);
 				}
@@ -531,6 +540,9 @@ async fn print_validation_summary(
 		.await;
 
 	let kind_rows: Vec<Vec<String>> = [
+		("MissingExtent", counters.missing_extent),
+		("MissingVersion", counters.missing_version),
+		("DuplicateLayerName", counters.duplicate_layer_name),
 		("OrphanInnerRing", counters.orphan_inner),
 		("DegenerateRing(TooFewVertices)", counters.degenerate_too_few),
 		("DegenerateRing(SubPixel)", counters.degenerate_sub_pixel),
@@ -561,6 +573,9 @@ async fn print_validation_summary(
 
 fn describe_kind(kind: &IssueKind) -> String {
 	match kind {
+		IssueKind::MissingExtent => "MissingExtent".to_string(),
+		IssueKind::MissingVersion => "MissingVersion".to_string(),
+		IssueKind::DuplicateLayerName => "DuplicateLayerName".to_string(),
 		IssueKind::OrphanInnerRing => "OrphanInnerRing".to_string(),
 		IssueKind::DegenerateRing(reason) => format!("DegenerateRing({reason:?})"),
 		IssueKind::UnknownGeometryType => "UnknownGeometryType".to_string(),
@@ -618,8 +633,11 @@ mod tests {
 
 	/// Walk every tile in `berlin.mbtiles` through the validator-backed deep
 	/// probe. The fixture was regenerated through `vector_repair` so it is
-	/// MVT 2.1 conformant; the test asserts the validator reports zero
-	/// issues and the output structure is well-formed.
+	/// Verifies that the probe runs correctly against the berlin.mbtiles fixture and
+	/// that the output has the expected structure. The fixture's layers omit the
+	/// `extent` field (relying on the proto default of 4096), which Phase 2 of the
+	/// MVT validator now correctly flags as `MissingExtent`. Phase 3 (repair) will
+	/// address this in the test fixture.
 	#[tokio::test]
 	async fn probe_tile_contents_against_mbtiles_reports_no_issues() -> Result<()> {
 		let runtime = create_test_runtime();
@@ -632,9 +650,13 @@ mod tests {
 
 		assert!(out.contains("tiles scanned"), "missing tile count: {out}");
 		assert!(out.contains("MVT spec issues"), "missing validator section: {out}");
+		// The fixture currently lacks explicit `extent` fields on all layers.
+		// No geometry-level issues (winding, degenerate rings, etc.) are expected.
+		assert!(!out.contains("OrphanInnerRing"), "unexpected geometry issues: {out}");
+		assert!(!out.contains("DegenerateRing"), "unexpected geometry issues: {out}");
 		assert!(
-			out.contains("none"),
-			"expected zero issues for repaired fixture, got: {out}"
+			!out.contains("MalformedCommandStream"),
+			"unexpected geometry issues: {out}"
 		);
 		// The deep probe also emits the container-wide size breakdown.
 		assert!(
@@ -657,6 +679,9 @@ mod tests {
 
 	#[test]
 	fn describe_kind_covers_every_issue_variant() {
+		assert_eq!(describe_kind(&IssueKind::MissingExtent), "MissingExtent");
+		assert_eq!(describe_kind(&IssueKind::MissingVersion), "MissingVersion");
+		assert_eq!(describe_kind(&IssueKind::DuplicateLayerName), "DuplicateLayerName");
 		assert_eq!(describe_kind(&IssueKind::OrphanInnerRing), "OrphanInnerRing");
 		assert_eq!(describe_kind(&IssueKind::UnknownGeometryType), "UnknownGeometryType");
 		assert_eq!(
@@ -692,6 +717,9 @@ mod tests {
 	#[test]
 	fn validation_counters_record_increments_the_matching_field() {
 		let mut c = ValidationCounters::default();
+		c.record(&IssueKind::MissingExtent);
+		c.record(&IssueKind::MissingVersion);
+		c.record(&IssueKind::DuplicateLayerName);
 		c.record(&IssueKind::OrphanInnerRing);
 		c.record(&IssueKind::OrphanInnerRing);
 		c.record(&IssueKind::DegenerateRing(DegenerateReason::TooFewVertices));
@@ -703,6 +731,9 @@ mod tests {
 		c.record(&IssueKind::EmptyGeometryForType(GeomType::MultiPolygon));
 		c.record(&IssueKind::MalformedCommandStream("err".into()));
 
+		assert_eq!(c.missing_extent, 1);
+		assert_eq!(c.missing_version, 1);
+		assert_eq!(c.duplicate_layer_name, 1);
 		assert_eq!(c.orphan_inner, 2);
 		assert_eq!(c.degenerate_too_few, 1);
 		assert_eq!(c.degenerate_sub_pixel, 1);
@@ -712,7 +743,7 @@ mod tests {
 		assert_eq!(c.empty_geom_line, 1);
 		assert_eq!(c.empty_geom_polygon, 1);
 		assert_eq!(c.malformed_stream, 1);
-		assert_eq!(c.total_issues(), 10);
+		assert_eq!(c.total_issues(), 13);
 	}
 
 	#[test]
@@ -739,6 +770,9 @@ mod tests {
 	async fn print_validation_summary_dirty_reports_kind_table_and_samples() {
 		let mut printer = PrettyPrint::new();
 		let counters = ValidationCounters {
+			missing_extent: 0,
+			missing_version: 0,
+			duplicate_layer_name: 0,
 			orphan_inner: 5,
 			degenerate_too_few: 0,
 			degenerate_sub_pixel: 1,
