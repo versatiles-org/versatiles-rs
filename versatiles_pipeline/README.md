@@ -539,19 +539,38 @@ Vector overzoom operation - generates vector tiles beyond the source's native ma
 
 ## vector_repair
 
-Repairs vector tiles to conform to MVT 2.1: normalises polygon ring
-winding, drops degenerate rings (collinear / sub-pixel / too-few-vertices),
-and removes polygons whose exteriors would not survive integer-grid
-quantisation.
+Brings every vector tile into full MVT 2.1 conformance. Repairs applied
+in a single pass:
 
-Tiles that the validator considers clean pass through unchanged — the
-original encoded blob is forwarded without re-encoding, so this operation
-is cheap on conformant input.
+- **Missing `extent`** — sets the field to `4096` (the spec-required default).
+- **Missing `version`** — sets the field to `1`.
+- **Duplicate layer names** — first layer with a given name is kept; later duplicates are dropped.
+- **Polygon ring winding** — rings are normalised to the MVT convention (exterior CW, interior CCW).
+- **Degenerate rings** — rings that are collinear, sub-pixel, or have fewer than 3 distinct vertices are dropped.
 
-### Example
+Tiles the validator considers conformant pass through unchanged — the original
+encoded blob is forwarded without re-encoding, so the operation is cheap on
+clean input.
+
+Use `versatiles probe -ddd` to identify which issue kinds are present before
+running `vector_repair`; the probe output includes a `fix:` hint pointing to
+the right invocation.
+
+### Parameters
+
+- *`drop_offenders`: bool (optional)* — When `true`, features whose geometry
+  byte stream cannot be decoded at all are silently removed. When `false`
+  (the default), such layers keep their original geometry bytes intact while
+  structural fixes (`extent`, `version`, duplicate names) are still applied.
+
+### Examples
 
 ```text
+# fix structural and winding issues, leave undecodable features in place
 from_container filename="bad.versatiles" | vector_repair
+
+# also drop features that cannot be decoded
+from_container filename="bad.versatiles" | vector_repair drop_offenders=true
 ```
 
 ---

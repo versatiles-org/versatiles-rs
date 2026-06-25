@@ -15,7 +15,9 @@ This crate is essential for reading, transforming, and exporting geospatial vect
 
 - **Geometry Primitives**: Core geometric types including `Point`, `LineString`, `Polygon`, and `MultiPolygon`
 - **GeoJSON Support**: Parse and serialize GeoJSON and newline-delimited GeoJSON (NDGeoJSON)
-- **Vector Tiles**: Read and write Mapbox Vector Tile (MVT) protobuf format
+- **Vector Tiles**: Read and write Mapbox Vector Tile (MVT) protobuf format, with full MVT 2.1 validation and repair
+- **MVT Validation**: `validate_tile` checks for missing `extent`/`version` fields, duplicate layer names, polygon winding issues, and degenerate rings
+- **MVT Repair**: `repair_tile` fixes every issue the validator reports in one pass, with an option to drop undecodable features
 - **Tile Outlines**: Generate polygonal outlines from tile bounding boxes
 - **Transformations**: Convert between different geometric representations
 
@@ -33,7 +35,7 @@ Or see [crates.io/crates/versatiles_geometry](https://crates.io/crates/versatile
 use versatiles_geometry::{
     geo::{Point, Polygon},
     geojson::GeoJson,
-    vector_tile::VectorTile,
+    vector_tile::{VectorTile, validate_tile, repair_tile},
 };
 
 // Create geometric primitives
@@ -46,6 +48,14 @@ let geojson = GeoJson::from_str(geojson_str)?;
 // Work with vector tiles (MVT)
 let mvt_data: Vec<u8> = /* ... */;
 let tile = VectorTile::from_bytes(&mvt_data)?;
+
+// Validate against MVT 2.1 spec
+let issues = validate_tile(&tile);
+if !issues.is_empty() {
+    // Repair: fix structural issues and polygon winding.
+    // Pass drop_offenders=true to also remove undecodable features.
+    let fixed = repair_tile(tile, false)?;
+}
 ```
 
 ## API Documentation

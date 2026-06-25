@@ -321,11 +321,11 @@ versatiles probe tiles.versatiles
 
 **Depth levels:**
 
-| Level | Flag   | Scans                | Use Case                             |
-|-------|--------|----------------------|--------------------------------------|
-| 1     | `-d`   | Container metadata   | Quick info (zoom range, tile format) |
-| 2     | `-dd`  | All tile coordinates | Find actual tile coverage            |
-| 3     | `-ddd` | Tile contents        | Analyze tile sizes, validate data    |
+| Level | Flag   | Scans              | Use Case                                                                                                                          |
+|-------|--------|--------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| 1     | `-d`   | Container metadata | Quick info (zoom range, tile format)                                                                                              |
+| 2     | `-dd`  | All tile sizes     | Find actual tile coverage and biggest tiles                                                                                       |
+| 3     | `-ddd` | Tile contents      | Validate MVT 2.1 conformance; reports missing `extent`/`version`, duplicate layer names, polygon winding issues, degenerate rings |
 
 **Examples:**
 
@@ -336,11 +336,25 @@ versatiles probe tiles.versatiles -d
 # Find actual zoom range with tiles
 versatiles probe tiles.versatiles -dd
 
-# Deep inspection with tile statistics
+# Deep inspection with MVT validation
 versatiles probe tiles.versatiles -ddd
 
 # Probe remote container
 versatiles probe https://download.versatiles.org/osm.versatiles -d
+```
+
+When `-ddd` reports MVT spec issues the output includes a `fix:` line suggesting the correct `vector_repair` invocation. To apply repairs:
+
+```sh
+# fix structural issues and polygon winding in one pass
+versatiles convert \
+  '[,vpl](from_container filename="bad.versatiles" | vector_repair)' \
+  fixed.versatiles
+
+# also drop features whose geometry cannot be decoded
+versatiles convert \
+  '[,vpl](from_container filename="bad.versatiles" | vector_repair drop_offenders=true)' \
+  fixed.versatiles
 ```
 
 #### serve - HTTP Tile Server
