@@ -108,9 +108,9 @@ pub fn repair_tile(tile: VectorTile, drop_offenders: bool) -> Result<VectorTile>
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::vector_tile::{IssueKind, VectorTileLayer, validate_tile};
 	use crate::vector_tile::feature::VectorTileFeature;
 	use crate::vector_tile::geometry_type::GeomType;
+	use crate::vector_tile::{IssueKind, VectorTileLayer, validate_tile};
 	use versatiles_core::Blob;
 	use versatiles_core::io::{ValueWriter, ValueWriterBlob};
 
@@ -237,7 +237,11 @@ mod tests {
 		let tile = VectorTile::new(vec![layer]);
 
 		let repaired = repair_tile(tile, true)?;
-		assert_eq!(repaired.layers[0].features.len(), 1, "malformed feature should be dropped");
+		assert_eq!(
+			repaired.layers[0].features.len(),
+			1,
+			"malformed feature should be dropped"
+		);
 		Ok(())
 	}
 
