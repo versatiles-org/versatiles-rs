@@ -569,6 +569,32 @@ async fn print_validation_summary(
 			)
 			.await;
 	}
+
+	// Actionable tip: distinguish issues that vector_repair fixes automatically
+	// from those that additionally require drop_offenders=true.
+	let fixable_automatically = counters.missing_extent
+		+ counters.missing_version
+		+ counters.duplicate_layer_name
+		+ counters.orphan_inner
+		+ counters.degenerate_too_few
+		+ counters.degenerate_sub_pixel
+		+ counters.degenerate_collinear;
+	let needs_drop_offenders = counters.unknown_geom
+		+ counters.empty_geom_point
+		+ counters.empty_geom_line
+		+ counters.empty_geom_polygon
+		+ counters.malformed_stream;
+
+	let tip = match (fixable_automatically > 0, needs_drop_offenders > 0) {
+		(true, false) => Some("pipe through `| vector_repair` to fix these issues automatically"),
+		(_, true) => Some(
+			"pipe through `| vector_repair drop_offenders=true` to fix all issues (unfixable features will be removed)",
+		),
+		(false, false) => None,
+	};
+	if let Some(msg) = tip {
+		print.add_key_value("fix", &msg).await;
+	}
 }
 
 fn describe_kind(kind: &IssueKind) -> String {
@@ -650,7 +676,17 @@ mod tests {
 
 		assert!(out.contains("tiles scanned"), "missing tile count: {out}");
 		assert!(out.contains("MVT spec issues"), "missing validator section: {out}");
-		// The fixture currently lacks explicit `extent` fields on all layers.
+		// berlin.mbtiles layers omit the `extent` field — the validator correctly
+		// reports MissingExtent for every layer of every tile.
+		assert!(
+			out.contains("MissingExtent"),
+			"probe must report MissingExtent for the berlin fixture: {out}"
+		);
+		// The validator-level fix tip should point to vector_repair.
+		assert!(
+			out.contains("vector_repair"),
+			"probe must suggest vector_repair when structural issues are found: {out}"
+		);
 		// No geometry-level issues (winding, degenerate rings, etc.) are expected.
 		assert!(!out.contains("OrphanInnerRing"), "unexpected geometry issues: {out}");
 		assert!(!out.contains("DegenerateRing"), "unexpected geometry issues: {out}");
@@ -809,6 +845,12 @@ mod tests {
 		// Sample table
 		assert!(out.contains("sample issues (first 1)"), "got: {out}");
 		assert!(out.contains("land"), "got: {out}");
+		// Has both fixable (orphan rings) and needs-drop-offenders (malformed stream)
+		// → tip should mention drop_offenders=true.
+		assert!(
+			out.contains("drop_offenders=true"),
+			"expected drop_offenders tip: {out}"
+		);
 	}
 
 	#[tokio::test]
@@ -824,6 +866,37 @@ mod tests {
 		// total_issues is still 0 so we still report "none" for spec issues.
 		assert!(out.contains("MVT spec issues"), "got: {out}");
 		assert!(out.contains("none"), "got: {out}");
+	}
+
+	#[tokio::test]
+	async fn print_validation_summary_structural_issues_show_basic_fix_tip() {
+		let mut printer = PrettyPrint::new();
+		let counters = ValidationCounters {
+			missing_extent: 5,
+			missing_version: 2,
+			..ValidationCounters::default()
+		};
+		print_validation_summary(&mut printer, 10, &counters, &[]).await;
+		let out = printer.stringify().await;
+		assert!(out.contains("vector_repair"), "expected fix tip: {out}");
+		// Structural-only issues don't require drop_offenders.
+		assert!(
+			!out.contains("drop_offenders=true"),
+			"structural issues should not require drop_offenders: {out}"
+		);
+	}
+
+	#[tokio::test]
+	async fn print_validation_summary_clean_shows_no_fix_tip() {
+		let mut printer = PrettyPrint::new();
+		let counters = ValidationCounters::default();
+		print_validation_summary(&mut printer, 5, &counters, &[]).await;
+		let out = printer.stringify().await;
+		assert!(!out.contains("fix:"), "clean tiles should not show fix tip: {out}");
+		assert!(
+			!out.contains("vector_repair"),
+			"clean tiles should not show fix tip: {out}"
+		);
 	}
 
 	// ── probe_tile_contents on a raster source ────────────────────────────
