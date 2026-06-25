@@ -135,8 +135,11 @@ mod tests {
 		let first_name = tile.layers.first().map(|l| l.name.clone()).expect("fixture has layers");
 		let original_extent = tile.find_layer(&first_name).unwrap().extent;
 		// Use the mut handle to bump the extent — proves we got a unique borrow.
-		tile.find_layer_mut(&first_name).unwrap().extent = original_extent + 1;
-		assert_eq!(tile.find_layer(&first_name).unwrap().extent, original_extent + 1);
+		tile.find_layer_mut(&first_name).unwrap().extent = original_extent.map(|e| e + 1);
+		assert_eq!(
+			tile.find_layer(&first_name).unwrap().extent,
+			original_extent.map(|e| e + 1)
+		);
 		Ok(())
 	}
 

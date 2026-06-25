@@ -32,18 +32,25 @@ use versatiles_core::{
 /// the global key and value tables required by the MVT spec; features reference properties
 /// by index via `tag_ids`. Helper methods convert to and from high‑level [`GeoFeature`]
 /// values for easier processing and GeoJSON export.
+///
+/// `extent` and `version` are `Option<u32>` to distinguish between a field that was
+/// explicitly present in the encoded tile and one that was absent. `None` means the
+/// producer omitted the field; `Some(v)` means it was set to `v`. Use
+/// `.unwrap_or(4096)` / `.unwrap_or(1)` when you need the effective value.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct VectorTileLayer {
-	/// Tile coordinate extent used to quantize geometry (default 4096).
-	pub extent: u32,
+	/// Tile coordinate extent used to quantize geometry (MVT field 5).
+	/// `None` means the field was absent in the encoded tile (spec requires it; default 4096).
+	pub extent: Option<u32>,
 	/// The layer's vector‑tile features (geometry + tags).
 	pub features: Vec<VectorTileFeature>,
 	/// Human‑readable layer name (MVT field 1).
 	pub name: String,
 	/// Global key/value tables shared by all features in this layer.
 	pub property_manager: PropertyManager,
-	/// MVT layer version (default 1).
-	pub version: u32,
+	/// MVT layer version (MVT field 15).
+	/// `None` means the field was absent in the encoded tile (spec requires it; default 1).
+	pub version: Option<u32>,
 }
 
 impl VectorTileLayer {
@@ -53,11 +60,11 @@ impl VectorTileLayer {
 	#[must_use]
 	pub fn new(name: String, extent: u32, version: u32) -> VectorTileLayer {
 		VectorTileLayer {
-			extent,
+			extent: Some(extent),
 			features: vec![],
 			name,
 			property_manager: PropertyManager::default(),
-			version,
+			version: Some(version),
 		}
 	}
 
@@ -72,11 +79,11 @@ impl VectorTileLayer {
 	/// Expects the fields as defined by the MVT spec and collects keys/values into
 	/// the `property_manager`. Returns an error on malformed inputs.
 	pub fn read(reader: &mut dyn ValueReader<'_, LE>) -> Result<VectorTileLayer> {
-		let mut extent = 4096;
+		let mut extent: Option<u32> = None;
 		let mut features: Vec<VectorTileFeature> = Vec::new();
 		let mut name = None;
 		let mut property_manager = PropertyManager::new();
-		let mut version = 1;
+		let mut version: Option<u32> = None;
 
 		while reader.has_remaining()? {
 			match reader.read_pbf_key().context("Failed to read PBF key")? {
@@ -104,8 +111,8 @@ impl VectorTileLayer {
 						.context("Failed to read GeoValue")?,
 					);
 				}
-				(5, 0) => extent = u32::try_from(reader.read_varint().context("Failed to read extent")?)?,
-				(15, 0) => version = u32::try_from(reader.read_varint().context("Failed to read version")?)?,
+				(5, 0) => extent = Some(u32::try_from(reader.read_varint().context("Failed to read extent")?)?),
+				(15, 0) => version = Some(u32::try_from(reader.read_varint().context("Failed to read version")?)?),
 				(f, w) => bail!("Unexpected combination of field number ({f}) and wire type ({w})"),
 			}
 		}
@@ -159,22 +166,18 @@ impl VectorTileLayer {
 				.context("Failed to write property value blob")?;
 		}
 
-		if self.extent != 4096 {
+		if let Some(e) = self.extent {
 			writer
 				.write_pbf_key(5, 0)
 				.context("Failed to write PBF key for extent")?;
-			writer
-				.write_varint(u64::from(self.extent))
-				.context("Failed to write extent")?;
+			writer.write_varint(u64::from(e)).context("Failed to write extent")?;
 		}
 
-		if self.version != 1 {
+		if let Some(v) = self.version {
 			writer
 				.write_pbf_key(15, 0)
 				.context("Failed to write PBF key for version")?;
-			writer
-				.write_varint(u64::from(self.version))
-				.context("Failed to write version")?;
+			writer.write_varint(u64::from(v)).context("Failed to write version")?;
 		}
 
 		Ok(writer.into_blob())
@@ -316,11 +319,11 @@ impl VectorTileLayer {
 			.collect::<Result<Vec<VectorTileFeature>>>()?;
 
 		Ok(VectorTileLayer {
-			extent,
+			extent: Some(extent),
 			features,
 			name,
 			property_manager,
-			version,
+			version: Some(version),
 		})
 	}
 
@@ -395,8 +398,8 @@ mod tests {
 			format!("{:?}", layer.property_manager),
 			"PropertyManager { key: [\"key\"], val: [String(\"vl\")] }"
 		);
-		assert_eq!(layer.extent, 4096);
-		assert_eq!(layer.version, 1);
+		assert_eq!(layer.extent, None); // no extent field in the test data
+		assert_eq!(layer.version, None); // no version field in the test data
 		Ok(())
 	}
 
@@ -406,8 +409,8 @@ mod tests {
 			name: "hello".to_string(),
 			features: vec![VectorTileFeature::new_example()],
 			property_manager: PropertyManager::from_slices(&["key"], &["value"]),
-			extent: 4096,
-			version: 1,
+			extent: Some(4096),
+			version: Some(1),
 		};
 		let blob = layer.to_blob()?;
 		let expected_data = vec![
@@ -416,6 +419,8 @@ mod tests {
 			26, 6, 0, 0, 8, 5, 0, 7, 9, 2, 5, 26, 0, 4, 2, 0, 0, 3, 7, // feature
 			0x1A, 0x03, b'k', b'e', b'y', // property key: "key"
 			0x22, 0x07, 0x0A, 0x05, b'v', b'a', b'l', b'u', b'e', // property value: "value"
+			40, 128, 32, // extent = 4096 (field 5 varint)
+			120, 1, // version = 1 (field 15 varint)
 		];
 		assert_eq!(blob.into_vec(), expected_data);
 		Ok(())
@@ -457,8 +462,8 @@ mod tests {
 			layer.property_manager.val.list,
 			vec![GeoValue::from("Nice"), GeoValue::from(348085), GeoValue::from(true)]
 		);
-		assert_eq!(layer.extent, 4096);
-		assert_eq!(layer.version, 1);
+		assert_eq!(layer.extent, Some(4096));
+		assert_eq!(layer.version, Some(1));
 		Ok(())
 	}
 

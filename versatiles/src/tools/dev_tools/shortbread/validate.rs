@@ -26,8 +26,10 @@ pub fn analyze_tile(coord: TileCoord, vt: &VectorTile, schema: &Schema) -> Vec<I
 fn check_layer(coord: TileCoord, layer: &VectorTileLayer, def: &LayerDef, issues: &mut Vec<Issue>) {
 	let name = layer.name.as_str();
 
-	if layer.extent != 4096 {
-		issues.push(Issue::new(Severity::Hint, Rule::BadExtent, name, coord).detail(format!("extent {}", layer.extent)));
+	if layer.extent.is_some_and(|e| e != 4096) {
+		issues.push(
+			Issue::new(Severity::Hint, Rule::BadExtent, name, coord).detail(format!("extent {}", layer.extent.unwrap())),
+		);
 	}
 	if coord.level < def.minzoom {
 		issues.push(

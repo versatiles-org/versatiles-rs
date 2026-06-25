@@ -266,7 +266,7 @@ mod tests {
 	async fn test_build_tile_vector() {
 		test(
 			"mvt",
-			1996,
+			2016,
 			&[
 				"{",
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",

@@ -333,10 +333,10 @@ fn extract_features(
 
 	let mut out_layers: Vec<ExtractedLayer> = Vec::new();
 	for layer_src in &tile_src.layers {
-		if layer_src.extent == 0 {
+		if layer_src.extent == Some(0) {
 			continue;
 		}
-		let extent = layer_src.extent;
+		let extent = layer_src.extent.unwrap_or(4096);
 		let sub_extent = f64::from(extent) / f_scale;
 
 		// Sub-tile within the parent that corresponds to coord_dst.
@@ -387,7 +387,7 @@ fn extract_features(
 		out_layers.push(ExtractedLayer {
 			name: layer_src.name.clone(),
 			extent,
-			version: layer_src.version,
+			version: layer_src.version.unwrap_or(1),
 			features: out_features,
 		});
 	}
@@ -648,7 +648,7 @@ mod tests {
 		assert_eq!(vt.layers.len(), 1, "single layer carried through");
 		let layer = &vt.layers[0];
 		assert_eq!(layer.name, "dummy");
-		assert_eq!(layer.extent, 4096, "extent preserved from source layer");
+		assert_eq!(layer.extent, Some(4096), "extent preserved from source layer");
 		assert_eq!(layer.features.len(), 1, "single feature carried through");
 
 		let feature = &layer.features[0];

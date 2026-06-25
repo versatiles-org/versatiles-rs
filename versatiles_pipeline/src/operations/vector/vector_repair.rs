@@ -112,8 +112,8 @@ fn repair_tile_if_needed(mut tile: Tile) -> Result<Tile> {
 		new_layers.push(VectorTileLayer::from_features(
 			layer.name.clone(),
 			features,
-			layer.extent,
-			layer.version,
+			layer.extent.unwrap_or(4096),
+			layer.version.unwrap_or(1),
 		)?);
 	}
 	let cleaned = VectorTile::new(new_layers);
