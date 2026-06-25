@@ -18,8 +18,8 @@ anyhow.workspace = true
 ctor = "1.0.7"
 env_logger.workspace = true
 log.workspace = true
-napi = { version = "3.9.3", features = ["async"] }
-napi-derive = "3.5.6"
+napi = { version = "3.9.4", features = ["async"] }
+napi-derive = "3.5.7"
 tokio.workspace = true
 versatiles = { workspace = true, default-features = false, features = [
 	"codegen",
