@@ -1,6 +1,29 @@
 use versatiles_container::Tile;
 use versatiles_core::TileCoord;
 
+/// Decode every tile in `tiles` as a vector tile and assert it passes MVT 2.1
+/// validation. Panics on the first invalid tile with a descriptive message.
+pub fn assert_tiles_valid(tiles: Vec<(TileCoord, Tile)>) {
+	use versatiles_geometry::vector_tile::validate_tile;
+	for (coord, mut tile) in tiles {
+		let vt = tile.as_vector().unwrap_or_else(|e| {
+			panic!(
+				"tile z={} x={} y={} failed to decode: {e}",
+				coord.level, coord.x, coord.y
+			)
+		});
+		let issues = validate_tile(vt);
+		assert!(
+			issues.is_empty(),
+			"tile z={} x={} y={} has MVT spec issues: {:?}",
+			coord.level,
+			coord.x,
+			coord.y,
+			issues
+		);
+	}
+}
+
 pub fn arrange_tiles<T: ToString>(tiles: Vec<(TileCoord, Tile)>, cb: impl Fn(Tile) -> T) -> Vec<String> {
 	use versatiles_core::TileBBox;
 

@@ -141,7 +141,7 @@ crate::operations::macros::define_read_factory!("from_debug", Args, Operation);
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use versatiles_core::{TileCompression::Uncompressed, TileCoord};
+	use versatiles_core::{TileBBox, TileCompression::Uncompressed, TileCoord};
 
 	async fn test(format: &str, len: u64, tilejson: &[&str]) -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
@@ -260,6 +260,16 @@ mod tests {
 		)
 		.await
 		.unwrap();
+	}
+
+	#[tokio::test]
+	async fn mvt_tiles_pass_mvt_validation() -> Result<()> {
+		use crate::helpers::assert_tiles_valid;
+		let factory = PipelineFactory::new_dummy();
+		let operation = factory.operation_from_vpl("from_debug format=mvt").await?;
+		let tiles = operation.tile_stream(TileBBox::new_full(2)?).await?.to_vec().await;
+		assert_tiles_valid(tiles);
+		Ok(())
 	}
 
 	#[tokio::test]

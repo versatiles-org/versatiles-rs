@@ -478,4 +478,16 @@ mod tests {
 			.await;
 		assert!(result.is_err(), "invalid CEL should fail at pipeline build time");
 	}
+
+	#[tokio::test]
+	async fn output_tiles_pass_mvt_validation() -> Result<()> {
+		use crate::helpers::assert_tiles_valid;
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(r#"from_debug format=mvt | vector_filter_features layer=["debug_x"] expr="true""#)
+			.await?;
+		let tiles = op.tile_stream(TileBBox::new_full(1)?).await?.to_vec().await;
+		assert_tiles_valid(tiles);
+		Ok(())
+	}
 }

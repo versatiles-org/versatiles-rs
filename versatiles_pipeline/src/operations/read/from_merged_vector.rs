@@ -526,4 +526,110 @@ mod tests {
 		assert!(merged.layers.iter().any(|l| l.name == "layer2"));
 		Ok(())
 	}
+
+	// Helper: build a layer whose extent/version fields are absent (None), as
+	// produced by tools that omit them and rely on the proto default of 4096.
+	fn layer_without_extent(name: &str) -> VectorTileLayer {
+		let mut layer = VectorTileLayer::new_standard(name);
+		layer.extent = None;
+		layer.version = None;
+		layer
+	}
+
+	#[test]
+	fn merge_normalises_extent_when_source_omits_it() -> Result<()> {
+		// Simulates the OSM + land-cover bug: one or both sources omit the
+		// `extent` field. The merged output must always have extent=Some(4096).
+		let t1 = VectorTile::new(vec![layer_without_extent("land")]);
+		let t2 = VectorTile::new(vec![layer_without_extent("water")]);
+		let merged = merge_vector_tiles(vec![t1, t2])?;
+
+		for layer in &merged.layers {
+			assert_eq!(
+				layer.extent,
+				Some(4096),
+				"layer '{}': extent must be normalised to Some(4096)",
+				layer.name
+			);
+			assert_eq!(
+				layer.version,
+				Some(1),
+				"layer '{}': version must be normalised to Some(1)",
+				layer.name
+			);
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn merge_normalises_extent_on_shared_layer_name() -> Result<()> {
+		// When two sources share a layer name and one has extent=None, the merged
+		// layer must still have extent=Some(4096).
+		let t1 = VectorTile::new(vec![layer_without_extent("roads")]);
+		let t2 = VectorTile::new(vec![VectorTileLayer::new_standard("roads")]);
+		let merged = merge_vector_tiles(vec![t1, t2])?;
+
+		assert_eq!(merged.layers.len(), 1);
+		assert_eq!(merged.layers[0].extent, Some(4096));
+		assert_eq!(merged.layers[0].version, Some(1));
+		Ok(())
+	}
+
+	#[test]
+	fn merge_rejects_incompatible_extents() {
+		// Two sources provide the same layer name but with different extents —
+		// the feature coordinate spaces are incompatible, so we must error.
+		let mut layer_a = VectorTileLayer::new_standard("roads");
+		layer_a.extent = Some(4096);
+		let mut layer_b = VectorTileLayer::new_standard("roads");
+		layer_b.extent = Some(2048);
+
+		let result = merge_vector_tiles(vec![VectorTile::new(vec![layer_a]), VectorTile::new(vec![layer_b])]);
+		assert!(result.is_err(), "should reject mismatched extents");
+		let msg = format!("{:#}", result.unwrap_err());
+		assert!(
+			msg.contains("extent mismatch"),
+			"error should mention extent mismatch: {msg}"
+		);
+	}
+
+	#[test]
+	fn merged_tiles_pass_mvt_validation() -> Result<()> {
+		use crate::helpers::assert_tiles_valid;
+		let tile1 = Tile::from_vector(
+			VectorTile::new(vec![VectorTileLayer::new_standard("layer1")]),
+			TileFormat::MVT,
+		)?;
+		let tile2 = Tile::from_vector(
+			VectorTile::new(vec![VectorTileLayer::new_standard("layer2")]),
+			TileFormat::MVT,
+		)?;
+		let merged = merge_tiles(vec![tile1, tile2], TileFormat::MVT)?;
+		use versatiles_core::TileCoord;
+		assert_tiles_valid(vec![(TileCoord::new(0, 0, 0)?, merged)]);
+		Ok(())
+	}
+
+	#[test]
+	fn merged_tiles_pass_mvt_validation_when_source_omits_extent() -> Result<()> {
+		use crate::helpers::assert_tiles_valid;
+		use versatiles_core::TileCoord;
+		let t1 = VectorTile::new(vec![layer_without_extent("land")]);
+		let t2 = VectorTile::new(vec![layer_without_extent("water")]);
+		let merged = Tile::from_vector(merge_vector_tiles(vec![t1, t2])?, TileFormat::MVT)?;
+		assert_tiles_valid(vec![(TileCoord::new(0, 0, 0)?, merged)]);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn operation_tiles_pass_mvt_validation() -> Result<()> {
+		use crate::helpers::assert_tiles_valid;
+		let factory = PipelineFactory::new_dummy();
+		let result = factory
+			.operation_from_vpl("from_merged_vector [ from_container filename=1.pbf, from_container filename=2.pbf ]")
+			.await?;
+		let tiles = result.tile_stream(TileBBox::new_full(3)?).await?.to_vec().await;
+		assert_tiles_valid(tiles);
+		Ok(())
+	}
 }

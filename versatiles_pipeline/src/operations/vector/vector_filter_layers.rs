@@ -233,4 +233,16 @@ mod tests {
 		assert_eq!(layers, "debug_x,debug_y");
 		assert_eq!(json, "debug_x,debug_y");
 	}
+
+	#[tokio::test]
+	async fn output_tiles_pass_mvt_validation() -> Result<()> {
+		use crate::helpers::assert_tiles_valid;
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(r#"from_debug format=mvt | vector_filter_layers filter="debug_x""#)
+			.await?;
+		let tiles = op.tile_stream(TileBBox::new_full(1)?).await?.to_vec().await;
+		assert_tiles_valid(tiles);
+		Ok(())
+	}
 }

@@ -561,7 +561,7 @@ mod tests {
 	use crate::factory::OperationFactoryTrait;
 	use crate::helpers::dummy_vector_source::DummyVectorSource;
 	use geo_types::Geometry;
-	use versatiles_core::{TileCoord, TilePyramid};
+	use versatiles_core::{TileBBox, TileCoord, TilePyramid};
 	use versatiles_geometry::geo::GeoValue;
 
 	async fn build_op(extra_args: &str) -> Result<Operation> {
@@ -776,6 +776,17 @@ mod tests {
 			"climbing must not reduce tile yield (with={with_count}, without={without_count})"
 		);
 		assert_eq!(without_count, 0, "climbing disabled and parent missing → zero tiles");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn output_tiles_pass_mvt_validation() -> Result<()> {
+		use crate::helpers::assert_tiles_valid;
+		let op = build_op("").await?;
+		// level_base=2; request tiles at z=3 so the overzoom path is exercised
+		let bbox = TileBBox::from_min_and_max(3, 0, 0, 3, 3)?;
+		let tiles = op.tile_stream(bbox).await?.to_vec().await;
+		assert_tiles_valid(tiles);
 		Ok(())
 	}
 

@@ -398,4 +398,34 @@ mod tests {
 			["data_id: automatically added field", "value: automatically added field",]
 		);
 	}
+
+	#[tokio::test]
+	async fn output_tiles_pass_mvt_validation() -> Result<()> {
+		use crate::helpers::assert_tiles_valid;
+		use versatiles_core::TileBBox;
+		let temp_file = NamedTempFile::new("test.csv")?;
+		let mut file = File::create(&temp_file)?;
+		writeln!(&mut file, "data_id,value\n1,test")?;
+
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(
+				&[
+					"from_debug |",
+					"vector_update_properties",
+					&format!(
+						r#"data_source_path="{}""#,
+						temp_file.to_str().unwrap().replace('\\', "\\\\")
+					),
+					"id_field_tiles=index",
+					"id_field_data=data_id",
+					"layer_name=debug_y",
+				]
+				.join(" "),
+			)
+			.await?;
+		let tiles = op.tile_stream(TileBBox::new_full(1)?).await?.to_vec().await;
+		assert_tiles_valid(tiles);
+		Ok(())
+	}
 }
