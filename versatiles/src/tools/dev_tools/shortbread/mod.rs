@@ -10,10 +10,10 @@ mod report;
 mod schema;
 mod validate;
 
+use crate::tools::tile_sampling::{build_scan_plan, parse_sample};
 use anyhow::{Context, Result, bail};
 use report::{Registry, Severity};
 use schema::{Schema, SchemaSelector};
-use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use versatiles_container::TilesRuntime;
@@ -102,31 +102,8 @@ pub async fn run(args: &ValidateSchema, runtime: &TilesRuntime) -> Result<()> {
 	let (zmin, zmax) = parse_zoom(args.zoom.as_deref(), pmin, pmax)?;
 	let levels: Vec<u8> = (zmin.max(pmin)..=zmax.min(pmax)).collect();
 
-	// Build the scan plan. Without --sample we scan each level's full data bbox.
-	// With --sample we read a fixed number of contiguous square windows per level,
-	// derived from the deepest (largest) level so shallower levels end up covered
-	// more fully — and each window maps to a contiguous file range, keeping remote
-	// reads cheap.
-	let windows_per_level = sample.map(|fraction| {
-		let deepest = levels
-			.iter()
-			.map(|l| pyramid.level_ref(*l).to_bbox().count_tiles())
-			.max()
-			.unwrap_or(0);
-		windows_for_sample(fraction, deepest)
-	});
-
-	let mut plan: Vec<TileBBox> = Vec::new();
-	for level in &levels {
-		let bbox = pyramid.level_ref(*level).to_bbox();
-		if bbox.is_empty() {
-			continue;
-		}
-		match windows_per_level {
-			None => plan.push(bbox),
-			Some(k) => plan.extend(plan_windows(*level, &bbox, k, WINDOW_SIZE)?),
-		}
-	}
+	let level_bboxes = levels.iter().map(|l| pyramid.level_ref(*l).to_bbox());
+	let plan = build_scan_plan(level_bboxes, sample)?;
 	let window_count = plan.len();
 
 	let total: u64 = plan.iter().map(TileBBox::count_tiles).sum();
@@ -190,72 +167,6 @@ pub async fn run(args: &ValidateSchema, runtime: &TilesRuntime) -> Result<()> {
 	Ok(())
 }
 
-/// Validates `--sample` and converts a percentage to a `(0, 1]` fraction.
-/// `None` (no flag) means scan every tile.
-fn parse_sample(percent: Option<f64>) -> Result<Option<f64>> {
-	match percent {
-		None => Ok(None),
-		Some(p) if p.is_finite() && p > 0.0 && p <= 100.0 => Ok(Some(p / 100.0)),
-		Some(p) => bail!("--sample must be in the range (0, 100], got {p}"),
-	}
-}
-
-/// Side length (in tiles) of each sampling window. 64 keeps a window well inside
-/// a single 256×256 versatiles block, so it maps to one coalesced range read.
-const WINDOW_SIZE: u32 = 64;
-
-/// Splitmix64 finalizer — cheap, well-distributed avalanche mixing.
-fn mix64(mut z: u64) -> u64 {
-	z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-	z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-	z ^ (z >> 31)
-}
-
-/// How many windows per level approximate `fraction` of the deepest level (the
-/// one with the most tiles). Applying this same count to every level means
-/// shallower, smaller levels are sampled more fully. Always at least one.
-#[allow(
-	clippy::cast_precision_loss,
-	clippy::cast_possible_truncation,
-	clippy::cast_sign_loss
-)]
-fn windows_for_sample(fraction: f64, deepest_tiles: u64) -> u32 {
-	let target = (fraction * deepest_tiles as f64).ceil() as u64;
-	let per_window = u64::from(WINDOW_SIZE) * u64::from(WINDOW_SIZE);
-	u32::try_from(target.div_ceil(per_window).max(1)).unwrap_or(u32::MAX)
-}
-
-/// Picks up to `k` deterministic square windows of side `s` inside `bbox`. When
-/// `k` such windows would already cover the level, returns the level bbox unsplit
-/// — small low-zoom levels get scanned whole. Placement is hash-based, so the
-/// same level always yields the same windows.
-fn plan_windows(level: u8, bbox: &TileBBox, k: u32, s: u32) -> Result<Vec<TileBBox>> {
-	let (cols, rows) = (bbox.width(), bbox.height());
-	let (sw, sh) = (s.min(cols), s.min(rows));
-	if u64::from(k) * u64::from(sw) * u64::from(sh) >= bbox.count_tiles() {
-		return Ok(vec![*bbox]);
-	}
-	let (x_min, y_min) = (bbox.x_min()?, bbox.y_min()?);
-	let (span_x, span_y) = (cols - sw + 1, rows - sh + 1);
-
-	// Collect distinct top-left corners. The bounded loop avoids spinning when the
-	// placement space is small and hashes collide.
-	let mut corners: BTreeSet<(u32, u32)> = BTreeSet::new();
-	let mut i = 0u32;
-	while corners.len() < k as usize && i < k.saturating_mul(8).max(k) {
-		let seed = (u64::from(level) << 40) ^ (u64::from(i) << 1);
-		let x0 = x_min + u32::try_from(mix64(seed) % u64::from(span_x)).unwrap_or(0);
-		let y0 = y_min + u32::try_from(mix64(seed ^ 1) % u64::from(span_y)).unwrap_or(0);
-		corners.insert((x0, y0));
-		i += 1;
-	}
-
-	corners
-		.into_iter()
-		.map(|(x0, y0)| TileBBox::from_min_and_max(level, x0, y0, x0 + sw - 1, y0 + sh - 1))
-		.collect()
-}
-
 /// Parses the `--zoom` argument (`"N"` or `"A-B"`), defaulting to the pyramid's
 /// full range.
 fn parse_zoom(spec: Option<&str>, default_min: u8, default_max: u8) -> Result<(u8, u8)> {
@@ -310,52 +221,6 @@ mod tests {
 		let runtime = create_test_runtime();
 		let result = run(&args("../testdata/berlin.mbtiles.does-not-exist"), &runtime).await;
 		assert!(result.is_err());
-	}
-
-	#[test]
-	fn parse_sample_validates_range() {
-		assert_eq!(parse_sample(None).unwrap(), None);
-		assert_eq!(parse_sample(Some(100.0)).unwrap(), Some(1.0));
-		assert_eq!(parse_sample(Some(10.0)).unwrap(), Some(0.1));
-		assert!(parse_sample(Some(0.0)).is_err());
-		assert!(parse_sample(Some(-5.0)).is_err());
-		assert!(parse_sample(Some(150.0)).is_err());
-		assert!(parse_sample(Some(f64::NAN)).is_err());
-	}
-
-	#[test]
-	fn windows_for_sample_scales_and_floors() {
-		// 100% of the deepest level → enough windows to tile it (16384 tiles at
-		// 64×64 = 4096 per window → 4 windows).
-		assert_eq!(windows_for_sample(1.0, 16_384), 4);
-		// 10% → ceil(1638.4 / 4096) = 1.
-		assert_eq!(windows_for_sample(0.1, 16_384), 1);
-		// Larger level → more windows.
-		assert_eq!(windows_for_sample(0.1, 4_000_000), 98);
-		// Always at least one window, even for a tiny fraction.
-		assert_eq!(windows_for_sample(0.001, 1), 1);
-	}
-
-	#[test]
-	fn plan_windows_is_deterministic_and_bounded() {
-		// A level far larger than k windows: expect exactly k distinct windows.
-		let bbox = TileBBox::from_min_and_max(14, 0, 0, 1023, 1023).unwrap();
-		let a = plan_windows(14, &bbox, 4, WINDOW_SIZE).unwrap();
-		let b = plan_windows(14, &bbox, 4, WINDOW_SIZE).unwrap();
-		assert_eq!(a, b, "window placement must be deterministic");
-		assert_eq!(a.len(), 4);
-		for w in &a {
-			assert_eq!(w.count_tiles(), u64::from(WINDOW_SIZE) * u64::from(WINDOW_SIZE));
-		}
-	}
-
-	#[test]
-	fn plan_windows_covers_small_level_whole() {
-		// 8×8 level with 4 windows of 64×64 → windows would cover it all, so the
-		// whole bbox is returned unsplit.
-		let bbox = TileBBox::from_min_and_max(3, 0, 0, 7, 7).unwrap();
-		let plan = plan_windows(3, &bbox, 4, WINDOW_SIZE).unwrap();
-		assert_eq!(plan, vec![bbox]);
 	}
 
 	#[test]

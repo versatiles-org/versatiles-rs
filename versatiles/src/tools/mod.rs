@@ -11,3 +11,4 @@ pub mod probe;
 #[cfg(feature = "server")]
 pub mod serve;
 pub(crate) mod tile_breakdown;
+pub(crate) mod tile_sampling;

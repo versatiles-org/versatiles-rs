@@ -1,7 +1,9 @@
 use crate::tools::tile_breakdown::{LayerStats, layer_stats};
+use crate::tools::tile_sampling::{build_scan_plan, parse_sample};
 use anyhow::Result;
 use std::collections::HashMap;
 use versatiles_container::{TileSource, TilesRuntime};
+use versatiles_core::TileBBox;
 use versatiles_core::{ProbeDepth, TileType, utils::PrettyPrint};
 use versatiles_geometry::vector_tile::{DegenerateReason, GeomType, IssueKind, ValidationIssue, validate_tile};
 
@@ -19,12 +21,21 @@ pub struct Subcommand {
 	/// -ddd: scans all tile contents
 	#[arg(long, short, action = clap::ArgAction::Count, verbatim_doc_comment)]
 	deep: u8,
+
+	/// Sample only a portion of tiles during `-ddd` content scanning.
+	/// PERCENT (0–100) is the approximate share of the deepest zoom level to
+	/// read; shallower levels are covered more fully. Tiles are read in
+	/// contiguous square windows so remote sources need fewer range requests.
+	/// Example: `--sample 10` reads roughly 10% of the deepest zoom level.
+	#[arg(long, value_name = "PERCENT", verbatim_doc_comment)]
+	sample: Option<f64>,
 }
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	log::info!("probe {:?}", arguments.filename);
 
+	let sample = parse_sample(arguments.sample)?;
 	let reader = runtime.reader_from_str(&arguments.filename).await?;
 
 	let level = match arguments.deep {
@@ -35,7 +46,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	};
 
 	log::debug!("probing {:?} at depth {:?}", arguments.filename, level);
-	probe(&**reader, level, runtime).await?;
+	probe(&**reader, level, runtime, sample).await?;
 
 	Ok(())
 }
@@ -46,7 +57,12 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 /// `PrettyPrint` reporter based on `level`. Format-specific details are
 /// delegated to the source via `TileSource::probe_container` and
 /// `TileSource::probe_tile_contents`.
-pub async fn probe(source: &dyn TileSource, level: ProbeDepth, runtime: &TilesRuntime) -> Result<()> {
+pub async fn probe(
+	source: &dyn TileSource,
+	level: ProbeDepth,
+	runtime: &TilesRuntime,
+	sample: Option<f64>,
+) -> Result<()> {
 	use ProbeDepth::{Container, TileContents, TileSizes};
 
 	let mut print = PrettyPrint::new();
@@ -80,7 +96,7 @@ pub async fn probe(source: &dyn TileSource, level: ProbeDepth, runtime: &TilesRu
 			source.tilejson().as_json_value(),
 			level
 		);
-		probe_tile_contents(source, &mut print.category("tile contents").await, runtime).await?;
+		probe_tile_contents(source, &mut print.category("tile contents").await, runtime, sample).await?;
 	}
 
 	Ok(())
@@ -246,7 +262,12 @@ pub async fn probe_tile_sizes(source: &dyn TileSource, print: &mut PrettyPrint, 
 /// Walks every tile in `source` and reports MVT spec violations found by the
 /// validator. For non-vector sources, emits a "not implemented" warning — we
 /// don't have content-level diagnostics for raster yet.
-async fn probe_tile_contents(source: &dyn TileSource, print: &mut PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
+async fn probe_tile_contents(
+	source: &dyn TileSource,
+	print: &mut PrettyPrint,
+	runtime: &TilesRuntime,
+	sample: Option<f64>,
+) -> Result<()> {
 	if source.metadata().tile_format().to_type() != TileType::Vector {
 		print
 			.add_warning("deep tile contents probing is only implemented for vector sources")
@@ -254,7 +275,7 @@ async fn probe_tile_contents(source: &dyn TileSource, print: &mut PrettyPrint, r
 		return Ok(());
 	}
 
-	probe_mvt_validation(source, print, runtime).await
+	probe_mvt_validation(source, print, runtime, sample).await
 }
 
 #[derive(Default)]
@@ -356,7 +377,12 @@ struct LayerAgg {
 /// The per-tile decode+validate+measure (the expensive part) runs in parallel
 /// across worker threads via `map_parallel`; the aggregation stays on this task
 /// so it needs no synchronization.
-async fn probe_mvt_validation(source: &dyn TileSource, print: &mut PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
+async fn probe_mvt_validation(
+	source: &dyn TileSource,
+	print: &mut PrettyPrint,
+	runtime: &TilesRuntime,
+	sample: Option<f64>,
+) -> Result<()> {
 	let mut counters = ValidationCounters::default();
 	let mut samples: Vec<Vec<String>> = Vec::with_capacity(VALIDATION_SAMPLE_LIMIT);
 	let mut tile_count: u64 = 0;
@@ -364,10 +390,11 @@ async fn probe_mvt_validation(source: &dyn TileSource, print: &mut PrettyPrint, 
 	let mut size_agg: HashMap<(u8, String), LayerAgg> = HashMap::new();
 
 	let tile_pyramid = source.tile_pyramid().await?;
-	let total_tiles = tile_pyramid.count_tiles();
-	let progress = runtime.create_progress("validating tile contents", total_tiles);
+	let plan = build_scan_plan(tile_pyramid.to_iter_bboxes(), sample)?;
+	let total_in_plan: u64 = plan.iter().map(TileBBox::count_tiles).sum();
+	let progress = runtime.create_progress("validating tile contents", total_in_plan);
 
-	for bbox in tile_pyramid.to_iter_bboxes().filter(|b| !b.is_empty()) {
+	for bbox in plan {
 		let mut stream = source
 			.tile_stream(bbox)
 			.await?
@@ -411,6 +438,12 @@ async fn probe_mvt_validation(source: &dyn TileSource, print: &mut PrettyPrint, 
 		}
 	}
 	progress.finish();
+
+	if let Some(percent) = sample.map(|f| f * 100.0) {
+		print
+			.add_key_value("sampling", &format!("~{percent:.0}% of deepest zoom level"))
+			.await;
+	}
 
 	print_validation_summary(print, tile_count, &counters, &samples).await;
 	print_size_breakdown(print, &size_agg).await;
@@ -638,8 +671,8 @@ mod tests {
 		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 		let source: &dyn TileSource = &**reader;
 
-		probe(source, ProbeDepth::Shallow, &runtime).await?;
-		probe(source, ProbeDepth::Container, &runtime).await?;
+		probe(source, ProbeDepth::Shallow, &runtime, None).await?;
+		probe(source, ProbeDepth::Container, &runtime, None).await?;
 
 		let mut printer = PrettyPrint::new();
 		probe_metadata(source, &mut printer).await?;
@@ -671,7 +704,7 @@ mod tests {
 		let source: &dyn TileSource = &**reader;
 
 		let mut printer = PrettyPrint::new();
-		probe_tile_contents(source, &mut printer.category("tile contents").await, &runtime).await?;
+		probe_tile_contents(source, &mut printer.category("tile contents").await, &runtime, None).await?;
 		let out = printer.stringify().await;
 
 		assert!(out.contains("tiles scanned"), "missing tile count: {out}");
@@ -909,7 +942,7 @@ mod tests {
 		let runtime = create_test_runtime();
 
 		let mut printer = PrettyPrint::new();
-		probe_tile_contents(source, &mut printer.category("tile contents").await, &runtime).await?;
+		probe_tile_contents(source, &mut printer.category("tile contents").await, &runtime, None).await?;
 		let out = printer.stringify().await;
 		assert!(
 			out.contains("only implemented for vector sources"),
@@ -917,6 +950,45 @@ mod tests {
 		);
 		// And we should NOT have walked any tiles for a raster source.
 		assert!(!out.contains("tiles scanned"), "got: {out}");
+		Ok(())
+	}
+
+	// ── sampling mode ────────────────────────────────────────────────────
+
+	#[tokio::test]
+	async fn probe_tile_contents_with_sample_reports_sampling_note() -> Result<()> {
+		let runtime = create_test_runtime();
+		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
+		let source: &dyn TileSource = &**reader;
+
+		let mut printer = PrettyPrint::new();
+		// 10% sample — just enough to exercise the path without scanning everything.
+		probe_tile_contents(
+			source,
+			&mut printer.category("tile contents").await,
+			&runtime,
+			Some(0.1),
+		)
+		.await?;
+		let out = printer.stringify().await;
+
+		assert!(out.contains("sampling"), "expected sampling note in output: {out}");
+		assert!(out.contains("tiles scanned"), "expected tile count: {out}");
+		assert!(out.contains("MVT spec issues"), "expected validator section: {out}");
+		Ok(())
+	}
+
+	#[test]
+	fn run_with_sample_flag_does_not_error() -> Result<()> {
+		run_command(vec![
+			"versatiles",
+			"probe",
+			"-q",
+			"-ddd",
+			"--sample",
+			"25",
+			"../testdata/berlin.mbtiles",
+		])?;
 		Ok(())
 	}
 
@@ -951,9 +1023,9 @@ mod tests {
 		// in `probe()` and the `run()` ProbeDepth match. Shallow is already
 		// covered by `probe_all_levels_against_mbtiles`; this test fills the
 		// other three.
-		probe(source, ProbeDepth::Container, &runtime).await?;
-		probe(source, ProbeDepth::TileSizes, &runtime).await?;
-		probe(source, ProbeDepth::TileContents, &runtime).await?;
+		probe(source, ProbeDepth::Container, &runtime, None).await?;
+		probe(source, ProbeDepth::TileSizes, &runtime, None).await?;
+		probe(source, ProbeDepth::TileContents, &runtime, None).await?;
 		Ok(())
 	}
 
