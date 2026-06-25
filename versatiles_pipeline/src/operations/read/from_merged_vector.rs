@@ -204,8 +204,9 @@ impl TileSource for Operation {
 		let sources = Arc::clone(&self.sources);
 		let format = *self.metadata.tile_format();
 
-		// Stage 1: read raw source tiles per chunk (sources kept in order for a
-		// deterministic merge). Bounded read-ahead caps resident raw tiles to
+		// Stage 1: read raw source tiles per chunk concurrently across all sources,
+		// then insert in source order so the merge stays deterministic. Bounded
+		// read-ahead caps resident raw tiles to
 		// `READ_AHEAD × grid_size² × n_sources ≤ max_tiles_in_flight()`.
 		let groups = TileStream::from_streams_bounded(
 			stream::iter(bboxes).map(move |chunk_bbox| {
@@ -213,15 +214,22 @@ impl TileSource for Operation {
 				async move {
 					let mut tiles = TileBBoxMap::<Vec<Tile>>::new_default(chunk_bbox).expect("grid cell fits in usize");
 
-					for source in sources.iter() {
-						source
-							.tile_stream(chunk_bbox)
-							.await
-							.expect("tile_stream succeeded for requested bbox")
-							.for_each(|coord, tile| {
-								tiles.get_mut(&coord).expect("coord is within bbox").push(tile);
-							})
-							.await;
+					let per_source = join_all((0..sources.len()).map(|i| {
+						let sources = Arc::clone(&sources);
+						async move {
+							sources[i]
+								.tile_stream(chunk_bbox)
+								.await
+								.expect("tile_stream succeeded for requested bbox")
+								.to_vec()
+								.await
+						}
+					}))
+					.await;
+					for source_tiles in per_source {
+						for (coord, tile) in source_tiles {
+							tiles.get_mut(&coord).expect("coord is within bbox").push(tile);
+						}
 					}
 
 					TileStream::from_vec(
