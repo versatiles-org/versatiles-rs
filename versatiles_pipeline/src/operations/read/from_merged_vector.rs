@@ -249,9 +249,11 @@ impl TileSource for Operation {
 			super::traits::READ_AHEAD,
 		);
 
-		// Stage 2: merge in parallel across cores. Single-source coordinates skip the
-		// decode/encode round-trip (see `merge_tiles`); only true overlaps are re-encoded.
-		Ok(groups.map_parallel(move |_coord, vec_tiles| merge_tiles(vec_tiles, format).expect("valid tile merge")))
+		// Stage 2: merge synchronously as tiles are pulled. Single-source coordinates
+		// skip decode/encode (see `merge_tiles`); only true overlaps re-encode.
+		// Running merge inline avoids a second spawn_blocking pool competing with the
+		// writer's brotli stage; merge is fast (< 1 ms per tile) relative to brotli.
+		Ok(groups.map(move |_coord, vec_tiles| merge_tiles(vec_tiles, format).expect("valid tile merge")))
 	}
 }
 
