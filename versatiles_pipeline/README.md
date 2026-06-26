@@ -539,39 +539,33 @@ Vector overzoom operation - generates vector tiles beyond the source's native ma
 
 ## vector_repair
 
-Brings every vector tile into full MVT 2.1 conformance. Repairs applied
-in a single pass:
+Repairs vector tiles to conform to MVT 2.1.
 
-- **Missing `extent`** — sets the field to `4096` (the spec-required default).
-- **Missing `version`** — sets the field to `1`.
-- **Duplicate layer names** — first layer with a given name is kept; later duplicates are dropped.
-- **Polygon ring winding** — rings are normalised to the MVT convention (exterior CW, interior CCW).
-- **Degenerate rings** — rings that are collinear, sub-pixel, or have fewer than 3 distinct vertices are dropped.
+Always fixed: missing `extent`/`version` fields, duplicate layer names,
+inverted polygon winding, and degenerate rings.
 
-Tiles the validator considers conformant pass through unchanged — the original
-encoded blob is forwarded without re-encoding, so the operation is cheap on
-clean input.
+Tiles that the validator considers clean pass through unchanged — the
+original encoded blob is forwarded without re-encoding, so this operation
+is cheap on conformant input.
 
-Use `versatiles probe -ddd` to identify which issue kinds are present before
-running `vector_repair`; the probe output includes a `fix:` hint pointing to
-the right invocation.
+### Arguments
+
+- `drop_offenders` (bool, default `false`): when `true`, features whose
+geometry byte stream cannot be decoded are silently removed. When `false`
+(the default), any layer containing such features keeps its original
+geometry bytes intact while structural fixes (extent, version) are still
+applied.
+
+### Example
+
+```text
+from_container filename="bad.versatiles" | vector_repair
+from_container filename="bad.versatiles" | vector_repair drop_offenders=true
+```
 
 ### Parameters
 
-- *`drop_offenders`: bool (optional)* — When `true`, features whose geometry
-  byte stream cannot be decoded at all are silently removed. When `false`
-  (the default), such layers keep their original geometry bytes intact while
-  structural fixes (`extent`, `version`, duplicate names) are still applied.
-
-### Examples
-
-```text
-# fix structural and winding issues, leave undecodable features in place
-from_container filename="bad.versatiles" | vector_repair
-
-# also drop features that cannot be decoded
-from_container filename="bad.versatiles" | vector_repair drop_offenders=true
-```
+- *`drop_offenders`: bool (optional)* - Drop features that cannot be decoded rather than leaving them in place. Defaults to false.
 
 ---
 
