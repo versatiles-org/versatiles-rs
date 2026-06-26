@@ -793,26 +793,36 @@ jobs:
               continue
             fi
 
-            # Try to publish, but don't fail if the version already exists
+            # Try to publish with retries for transient network errors
             echo "Publishing $crate@$VERSION..."
-            if cargo publish --allow-dirty 2>&1 | tee /tmp/publish.log; then
-              echo "✓ Published $crate@$VERSION"
-              # Wait to avoid rate limiting (except for the last crate)
-              if [ "$crate" != "versatiles" ]; then
-                echo "Waiting 30 seconds before next publish..."
-                sleep 30
+            published=false
+            for attempt in 1 2 3; do
+              if cargo publish --allow-dirty 2>&1 | tee /tmp/publish.log; then
+                echo "✓ Published $crate@$VERSION"
+                # Wait to avoid rate limiting (except for the last crate)
+                if [ "$crate" != "versatiles" ]; then
+                  echo "Waiting 30 seconds before next publish..."
+                  sleep 30
+                fi
+                published=true
+                break
               fi
-            else
               # Tolerate a version that already exists (crates.io words this as
-              # "already uploaded"); anything else is a real error.
+              # "already uploaded"); anything else may be retriable.
               if grep -qiE "already (uploaded|exists)" /tmp/publish.log; then
                 echo "⚠️  $crate@$VERSION already on crates.io — skipping"
-              else
-                # It's a real error, fail the build
-                echo "❌ Failed to publish $crate@$VERSION"
-                cat /tmp/publish.log
-                exit 1
+                published=true
+                break
               fi
+              if [ "$attempt" -lt 3 ]; then
+                echo "⚠️  Attempt $attempt/3 failed — retrying in 20s..."
+                sleep 20
+              fi
+            done
+            if [ "$published" != "true" ]; then
+              echo "❌ Failed to publish $crate@$VERSION after 3 attempts"
+              cat /tmp/publish.log
+              exit 1
             fi
 
             cd ..
