@@ -460,6 +460,7 @@ pub fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection
 
 /// Number of pooled connections currently held for `url`'s server.
 #[cfg(test)]
+#[allow(dead_code)]
 fn connection_count(url: &Url) -> Result<usize> {
 	let key = ServerKey::from_url(url)?;
 	let guard = pool().lock().map_err(|e| anyhow!("SFTP pool lock poisoned: {e}"))?;
@@ -503,6 +504,7 @@ mod tests {
 		use crate::io::test_sftp_server::TestSftpServer;
 
 		#[tokio::test(flavor = "multi_thread")]
+		#[serial_test::serial]
 		async fn caps_connections_per_server() {
 			let server = TestSftpServer::start().await;
 			server.write_file("/a.bin", b"hello").await;
@@ -528,6 +530,7 @@ mod tests {
 		}
 
 		#[tokio::test(flavor = "multi_thread")]
+		#[serial_test::serial]
 		async fn many_files_share_one_connection() {
 			let server = TestSftpServer::start().await;
 			server.write_file("/a.bin", b"aaaa").await;
@@ -552,6 +555,7 @@ mod tests {
 		}
 
 		#[tokio::test(flavor = "multi_thread")]
+		#[serial_test::serial]
 		async fn reconnect_reopens_registered_files() {
 			let server = TestSftpServer::start().await;
 			server.write_file("/a.bin", b"hello").await;

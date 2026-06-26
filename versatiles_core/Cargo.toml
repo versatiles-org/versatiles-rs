@@ -56,6 +56,7 @@ wildmatch.workspace = true
 [target.'cfg(unix)'.dev-dependencies]
 russh = "0.61"
 russh-sftp = "2.3"
+serial_test = "3.5.0"
 
 # Multithreading benchmark dependencies
 dashmap.workspace = true

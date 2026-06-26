@@ -39,6 +39,7 @@ exclude = [
 
 [workspace.lints.rust]
 unused_imports = "deny"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
 
 [workspace.lints.clippy]
 # Enable pedantic lints for code quality

@@ -179,7 +179,8 @@ mod tests {
 		use super::*;
 		use crate::{ByteRange, io::test_sftp_server::TestSftpServer};
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn read_all_returns_correct_bytes() {
 			let server = TestSftpServer::start().await;
 			let data: Vec<u8> = (0u8..100).collect();
@@ -193,7 +194,8 @@ mod tests {
 			assert_eq!(result.as_slice(), data.as_slice());
 		}
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn read_range_returns_slice() {
 			let server = TestSftpServer::start().await;
 			let data: Vec<u8> = (0u8..100).collect();
@@ -207,7 +209,8 @@ mod tests {
 			assert_eq!(result.as_slice(), &data[20..50]);
 		}
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn read_range_at_eof() {
 			let server = TestSftpServer::start().await;
 			server.write_file("/test.bin", b"hello").await;
@@ -220,7 +223,8 @@ mod tests {
 			assert!(result.is_empty());
 		}
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn read_retry_after_disconnect() {
 			let server = TestSftpServer::start().await;
 			let data: Vec<u8> = (0u8..50).collect();
@@ -235,7 +239,8 @@ mod tests {
 			assert_eq!(result.as_slice(), data.as_slice());
 		}
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn open_nonexistent_file_errors() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/nonexistent.bin");

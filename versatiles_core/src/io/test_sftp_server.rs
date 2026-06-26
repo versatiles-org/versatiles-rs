@@ -44,6 +44,7 @@ impl TryRng for OsRng {
 
 impl TryCryptoRng for OsRng {}
 use russh_sftp::protocol::{Attrs, Data, FileAttributes, Handle, OpenFlags, Status, StatusCode, Version};
+use std::time::Duration;
 use std::{
 	collections::HashMap,
 	net::SocketAddr,
@@ -53,7 +54,11 @@ use std::{
 		atomic::{AtomicBool, Ordering},
 	},
 };
-use tokio::{net::TcpListener, sync::Mutex, task::JoinHandle};
+use tokio::{
+	net::TcpListener,
+	sync::{Mutex, oneshot},
+	time,
+};
 
 type Fs = Arc<Mutex<HashMap<PathBuf, FsEntry>>>;
 
@@ -278,11 +283,33 @@ pub struct TestSftpServer {
 	addr: SocketAddr,
 	fs: Fs,
 	drop_flag: Arc<AtomicBool>,
-	_handle: JoinHandle<()>,
+	/// Signals the server thread to exit its accept loop and shut down.
+	shutdown: Arc<AtomicBool>,
+	/// libssh2 API timeout (ms) embedded in URLs returned by [`Self::url`].
+	/// Defaults to 2000 ms in normal builds; automatically raised to 5000 ms
+	/// under `cargo-llvm-cov` (which sets `cfg(coverage)`) because the
+	/// instrumentation overhead slows the in-process server enough that the SSH
+	/// handshake can exceed 500 ms.
+	timeout_ms: u32,
+}
+
+impl Drop for TestSftpServer {
+	fn drop(&mut self) {
+		self.shutdown.store(true, Ordering::SeqCst);
+		// The server thread polls this flag every 100 ms and exits on its own;
+		// we do not join it to avoid blocking the async test context.
+	}
 }
 
 impl TestSftpServer {
 	/// Bind to a random localhost port and start accepting SSH connections.
+	///
+	/// The server runs on a **dedicated two-thread Tokio runtime** in its own OS
+	/// thread, completely isolated from the calling test's runtime. This means the
+	/// server's async tasks (russh handshake, SFTP protocol) always have CPU
+	/// available regardless of how many tests run in parallel, eliminating the
+	/// libssh2 socket-timeout failures that occurred when the server shared a
+	/// runtime with heavily-loaded test workers.
 	pub async fn start() -> Self {
 		let key = PrivateKey::random(&mut OsRng, Algorithm::Ed25519).unwrap();
 		let config = Arc::new(server::Config {
@@ -292,44 +319,81 @@ impl TestSftpServer {
 
 		let fs: Fs = Arc::new(Mutex::new(HashMap::new()));
 		let drop_flag = Arc::new(AtomicBool::new(false));
+		let shutdown = Arc::new(AtomicBool::new(false));
 
-		let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-		let addr = listener.local_addr().unwrap();
+		// Bind synchronously so we know the port before spawning the server thread.
+		let std_listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+		std_listener.set_nonblocking(true).unwrap();
+		let addr = std_listener.local_addr().unwrap();
 
 		let fs_clone = fs.clone();
 		let drop_flag_clone = drop_flag.clone();
+		let shutdown_clone = shutdown.clone();
 
-		let handle = tokio::spawn(async move {
-			loop {
-				let Ok((stream, _)) = listener.accept().await else {
-					break;
-				};
-				let handler = SshHandler {
-					fs: fs_clone.clone(),
-					drop_flag: drop_flag_clone.clone(),
-					channel: None,
-				};
-				let config = config.clone();
-				tokio::spawn(async move {
-					let _ = server::run_stream(config, stream, handler).await;
-				});
-			}
+		let (ready_tx, ready_rx) = oneshot::channel::<()>();
+
+		std::thread::spawn(move || {
+			let rt = tokio::runtime::Builder::new_multi_thread()
+				.worker_threads(2)
+				.enable_all()
+				.build()
+				.unwrap();
+			rt.block_on(async move {
+				let listener = TcpListener::from_std(std_listener).unwrap();
+				// Signal to the caller that the listener is bound and accepting.
+				let _ = ready_tx.send(());
+				loop {
+					if shutdown_clone.load(Ordering::SeqCst) {
+						break;
+					}
+					match time::timeout(Duration::from_millis(100), listener.accept()).await {
+						Ok(Ok((stream, _))) => {
+							let handler = SshHandler {
+								fs: fs_clone.clone(),
+								drop_flag: drop_flag_clone.clone(),
+								channel: None,
+							};
+							let config = config.clone();
+							tokio::spawn(async move {
+								let _ = server::run_stream(config, stream, handler).await;
+							});
+						}
+						Ok(Err(_)) => break,
+						Err(_) => {} // 100 ms poll interval — loop back to check shutdown
+					}
+				}
+			});
 		});
+
+		// Block until the server's runtime has started and is accepting connections.
+		ready_rx.await.expect("SFTP test server panicked during startup");
+
+		// Coverage builds instrument every instruction and are significantly slower;
+		// give them extra budget. Normal builds use 2000 ms — enough headroom above
+		// the ~350 ms observed CI handshake time to absorb OS scheduling jitter.
+		#[cfg(coverage)]
+		let timeout_ms = 5000u32;
+		#[cfg(not(coverage))]
+		let timeout_ms = 2000u32;
 
 		TestSftpServer {
 			addr,
 			fs,
 			drop_flag,
-			_handle: handle,
+			shutdown,
+			timeout_ms,
 		}
 	}
 
-	/// Returns `sftp://testuser:testpass@127.0.0.1:{port}{path}`.
+	/// Returns `sftp://testuser:testpass@127.0.0.1:{port}{path}?timeout_ms={timeout_ms}`.
+	/// The `timeout_ms` query parameter is read by `sftp_utils::open_session` in
+	/// test builds to set the libssh2 API timeout for that connection.
 	pub fn url(&self, path: &str) -> Url {
 		Url::parse(&format!(
-			"sftp://testuser:testpass@127.0.0.1:{}{}",
+			"sftp://testuser:testpass@127.0.0.1:{}{}?timeout_ms={}",
 			self.addr.port(),
-			path
+			path,
+			self.timeout_ms,
 		))
 		.unwrap()
 	}

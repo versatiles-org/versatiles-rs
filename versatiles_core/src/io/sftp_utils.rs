@@ -141,13 +141,19 @@ pub fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Session> 
 	session.set_tcp_stream(tcp);
 	// API timeout for individual SFTP operations. Too low and a slow write under load
 	// turns into a `Session(-9)` ("API timeout expired") / "draining incoming flow"
-	// error mid-transfer; 30 s (configurable) tolerates congested links. Tests pin a
-	// fixed 10 s — high enough to avoid round-trip flakes on loaded CI, while the
-	// short connect timeout keeps unreachable-host tests fast.
+	// error mid-transfer; 30 s (configurable) tolerates congested links. In tests
+	// the default is 500 ms — enough for the in-memory server while keeping teardown
+	// fast (libssh2 blocks for `api_timeout` per dropped handle when the test server
+	// never ACKs channel-close). Tests that need more budget pass `?timeout_ms=N`
+	// in the URL via `TestSftpServer::with_timeout_ms`.
 	#[cfg(not(test))]
 	let timeout_ms = super::retry::env_u32("VERSATILES_SFTP_TIMEOUT_MS", 30_000);
 	#[cfg(test)]
-	let timeout_ms = 10_000;
+	let timeout_ms = url
+		.query_pairs()
+		.find(|(k, _)| k == "timeout_ms")
+		.and_then(|(_, v)| v.parse::<u32>().ok())
+		.unwrap_or(500);
 	session.set_timeout(timeout_ms);
 	session.handshake()?;
 	// SSH-level keepalive prevents the server's idle disconnect. Disabled in tests
@@ -427,7 +433,8 @@ mod tests {
 		use super::*;
 		use crate::io::test_sftp_server::TestSftpServer;
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn open_session_password_auth() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/");
@@ -437,7 +444,8 @@ mod tests {
 			assert!(session.is_ok(), "expected successful auth: {:?}", session.err());
 		}
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn open_session_wrong_password() {
 			let server = TestSftpServer::start().await;
 			let mut url = server.url("/");
@@ -448,7 +456,8 @@ mod tests {
 			assert!(result.is_err(), "expected auth failure with wrong password");
 		}
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn open_session_with_unused_identity_file() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/");

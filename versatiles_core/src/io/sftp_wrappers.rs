@@ -223,7 +223,8 @@ mod tests {
 
 		// --- SftpWriteStream ---
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn write_stream_write_and_flush() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/out.bin");
@@ -239,7 +240,8 @@ mod tests {
 			assert_eq!(server.read_file("/out.bin").await, b"hello world");
 		}
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn write_stream_multiple_writes() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/out.bin");
@@ -258,7 +260,8 @@ mod tests {
 
 		// --- SftpFileSystem ---
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn write_file_creates_file() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/base");
@@ -273,7 +276,8 @@ mod tests {
 			assert_eq!(server.read_file("/base/a.bin").await, b"test data");
 		}
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn write_file_creates_parent_dirs() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/base");
@@ -288,7 +292,8 @@ mod tests {
 			assert_eq!(server.read_file("/base/a/b/c.bin").await, b"nested");
 		}
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn write_file_overwrites_existing() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/base");
@@ -304,7 +309,8 @@ mod tests {
 			assert_eq!(server.read_file("/base/a.bin").await, b"second");
 		}
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn write_file_retry_after_disconnect() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/base");

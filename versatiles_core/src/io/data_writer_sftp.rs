@@ -303,7 +303,8 @@ mod tests {
 		use super::*;
 		use crate::{Blob, io::test_sftp_server::TestSftpServer};
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn append_writes_bytes() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/out.bin");
@@ -320,7 +321,8 @@ mod tests {
 			assert_eq!(server.read_file("/out.bin").await, b"helloworld");
 		}
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn write_start_overwrites_beginning() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/out.bin");
@@ -337,7 +339,8 @@ mod tests {
 			assert_eq!(server.read_file("/out.bin").await, b"12345BBBBB");
 		}
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn position_tracking() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/out.bin");
@@ -355,7 +358,8 @@ mod tests {
 			.unwrap();
 		}
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn set_position_then_append() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/out.bin");
@@ -373,8 +377,11 @@ mod tests {
 			assert_eq!(server.read_file("/out.bin").await, [0, 0, 0, 0, 0, 1, 1, 1, 1, 1]);
 		}
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn write_retry_after_disconnect() {
+			// Longer timeout: the initial handshake + reconnect after the injected
+			// disconnect can exceed 500 ms on a loaded CI runner.
 			let server = TestSftpServer::start().await;
 			let url = server.url("/out.bin");
 			let mut writer = tokio::task::spawn_blocking(move || DataWriterSftp::from_url(&url, None))
@@ -394,7 +401,8 @@ mod tests {
 			assert_eq!(server.read_file("/out.bin").await, b"hello");
 		}
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn many_small_appends_are_coalesced_and_flushed_on_finalize() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/out.bin");
@@ -423,7 +431,8 @@ mod tests {
 			assert_eq!(bytes, expected);
 		}
 
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn append_larger_than_buffer_capacity_flushes() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/out.bin");
@@ -449,7 +458,8 @@ mod tests {
 		/// Reading every reported range back through the **real** SFTP reader proves
 		/// the buffered writer's logical offsets are exactly where the reader finds
 		/// the bytes — the contract the container's block index depends on.
-		#[tokio::test(flavor = "multi_thread")]
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
 		async fn buffered_writer_offsets_resolve_with_real_reader() {
 			use crate::io::{DataReaderSftp, DataReaderTrait};
 
