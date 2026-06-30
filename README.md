@@ -57,6 +57,7 @@ Install VersaTiles via [Homebrew](https://docs.versatiles.org/guides/install_ver
 
 ```sh
 brew tap versatiles-org/versatiles
+brew trust versatiles-org/versatiles
 brew install versatiles
 ```
 
