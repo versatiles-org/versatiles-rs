@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -71,7 +71,7 @@ jobs:
       npm_tag: ${{ steps.detect_prerelease.outputs.npm_tag }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           # Full history + tags so git-cliff can build the changelog for the tag range.
           fetch-depth: 0
@@ -131,7 +131,7 @@ jobs:
 
       - name: Checkout code
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Login to Docker Hub
         if: env.BUILD_ENABLED == 'true'
@@ -192,7 +192,7 @@ jobs:
 
       - name: Checkout code
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Login to Docker Hub
         if: env.BUILD_ENABLED == 'true'
@@ -258,7 +258,7 @@ jobs:
 
       - name: Checkout code
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         if: env.BUILD_ENABLED == 'true'
@@ -336,7 +336,7 @@ jobs:
 
       - name: Checkout code
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         if: env.BUILD_ENABLED == 'true'
@@ -402,7 +402,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -505,7 +505,7 @@ jobs:
 
       - name: Checkout code
         if: env.PUBLISH_ENABLED == 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         if: env.PUBLISH_ENABLED == 'true'
@@ -736,7 +736,7 @@ jobs:
 
       - name: Checkout code
         if: env.PUBLISH_ENABLED == 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.tag }}
 
@@ -836,7 +836,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set Environment Variables
         run: |
