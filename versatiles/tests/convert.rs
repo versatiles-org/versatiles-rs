@@ -44,14 +44,54 @@ fn e2e_convert_pmtiles_to_mbtiles_with_bbox_and_border() {
 	let obj = tj.as_object().expect("tilejson is object");
 	assert_eq!(obj.get("name").and_then(|v| v.as_str().ok()), Some("VersaTiles OSM"));
 	assert_eq!(obj.get("maxzoom").and_then(|v| v.as_number().ok()), Some(14.0));
-	// The fixture's bounds are [13.3, 52.45, 13.46, 52.55]; bbox-border 1
-	// preserves them as the convert clamps the writer to the source bounds.
-	assert_eq!(tilejson_bounds(&output), [13.3, 52.45, 13.46, 52.55]);
+	// The requested bbox is larger than the fixture (~[13.3, 52.45, 13.46,
+	// 52.55]), so the crop clamps to the fixture; `--bbox-border 1` then extends
+	// the bounds outward to the tile-aligned ring actually written (wider on the
+	// south/north edges here).
+	assert_eq!(tilejson_bounds(&output), [13.3, 52.449314, 13.46, 52.556316]);
 	// Verify the Shortbread layer set survived the round-trip.
 	let layer_ids = vector_layer_ids(&tj);
 	assert!(layer_ids.contains(&"land".to_string()));
 	assert!(layer_ids.contains(&"streets".to_string()));
 	assert!(layer_ids.contains(&"buildings".to_string()));
+}
+
+/// Regression: with a bbox *smaller* than the source, `--bbox-border` writes a
+/// ring of tiles around the crop. The advertised bounds must grow to include
+/// that ring, otherwise a client honoring tilejson bounds (e.g. MapLibre) would
+/// never request the border tiles that exist in the container.
+#[test]
+fn e2e_convert_bbox_border_widens_bounds() {
+	let input = get_testdata("berlin.pmtiles");
+
+	// Crop well inside the fixture (~[13.3, 52.45, 13.46, 52.55]).
+	let crop = [13.35, 52.48, 13.40, 52.52];
+
+	let convert = |border: u32, name: &str| -> [f64; 4] {
+		let (_temp_dir, output) = get_temp_output(name);
+		versatiles_run(&format!(
+			"convert --bbox {},{},{},{} --bbox-border {border} {input} {}",
+			crop[0],
+			crop[1],
+			crop[2],
+			crop[3],
+			output.to_str().unwrap()
+		));
+		tilejson_bounds(&output)
+	};
+
+	let plain = convert(0, "crop-plain.mbtiles");
+	let bordered = convert(3, "crop-border.mbtiles");
+
+	// The border must push every side outward beyond the plain crop.
+	assert!(bordered[0] < plain[0], "west must widen: {bordered:?} vs {plain:?}");
+	assert!(bordered[1] < plain[1], "south must widen: {bordered:?} vs {plain:?}");
+	assert!(bordered[2] > plain[2], "east must widen: {bordered:?} vs {plain:?}");
+	assert!(bordered[3] > plain[3], "north must widen: {bordered:?} vs {plain:?}");
+
+	// ...but it stays a small regional box around the crop, not the whole world.
+	assert!(bordered[0] > 13.0 && bordered[2] < 13.8, "stays regional: {bordered:?}");
+	assert!(bordered[1] > 52.2 && bordered[3] < 52.8, "stays regional: {bordered:?}");
 }
 
 #[test]
