@@ -45,6 +45,49 @@ impl TileCover {
 		}
 	}
 
+	/// Folds this cover's *inner*-edge normalized-mercator coordinates into `acc`,
+	/// stored as `[west, north, east, south]` with each value in `[0, 1]`.
+	///
+	/// The four edges are the inner edges of the extremal tiles — i.e. the edge
+	/// of each border tile that faces the cover's center. A tile client that
+	/// selects tiles by bbox *overlap* (e.g. MapLibre, which rounds bounds via
+	/// `floor(west)` / `ceil(east)`) requests a tile as soon as the viewport
+	/// reaches into it, so reaching each extremal tile's inner edge is enough to
+	/// have every tile in this cover requested. Using inner (not outer) edges is
+	/// what keeps coarse, world-spanning tiles from forcing a huge bbox: their
+	/// inner edges sit at the far side of the world and never win the min/max.
+	///
+	/// `acc` combines multiple covers by keeping the *tightest* edges that still
+	/// include every cover: `min` for `west`/`north`, `max` for `east`/`south`.
+	/// A single-tile axis contributes an inverted (west > east) pair that loses
+	/// both comparisons, so it is a no-op. Empty covers are a no-op.
+	pub fn extend_touch_edges(&self, acc: &mut Option<[f64; 4]>) {
+		if self.is_empty() {
+			return;
+		}
+		let bbox = self.to_bbox();
+		let n = f64::from(1u32 << bbox.level());
+		let x_min = f64::from(bbox.x_min().expect("cover is non-empty"));
+		let y_min = f64::from(bbox.y_min().expect("cover is non-empty"));
+		let x_max = f64::from(bbox.x_max().expect("cover is non-empty"));
+		let y_max = f64::from(bbox.y_max().expect("cover is non-empty"));
+
+		let west = (x_min + 1.0) / n;
+		let north = (y_min + 1.0) / n;
+		let east = x_max / n;
+		let south = y_max / n;
+
+		match acc {
+			None => *acc = Some([west, north, east, south]),
+			Some(a) => {
+				a[0] = a[0].min(west);
+				a[1] = a[1].min(north);
+				a[2] = a[2].max(east);
+				a[3] = a[3].max(south);
+			}
+		}
+	}
+
 	/// Returns a reference to the inner [`TileQuadtree`], or `None` if this is
 	/// the `Bbox` variant.
 	#[must_use]
@@ -144,6 +187,51 @@ mod tests {
 	#[case::populated(TileCover::from(bbox(4, 0, 0, 15, 15)), true)]
 	fn to_geo_bbox_some_when_populated(#[case] c: TileCover, #[case] expect_some: bool) {
 		assert_eq!(c.to_geo_bbox().is_some(), expect_some);
+	}
+
+	/// `extend_touch_edges` folds a cover's inner edges (`[west, north, east,
+	/// south]` = `[(x_min+1), (y_min+1), x_max, y_max]`, each divided by `n=2^z`)
+	/// into the accumulator: seeding it when `None`, else `min`-ing west/north and
+	/// `max`-ing east/south.
+	///
+	/// All at z4 (`n = 16`). `cover` is the tile bbox `[x0, y0, x1, y1]`, or `None`
+	/// for an empty cover; `initial`/`expected` are edge numerators divided by `n`.
+	#[rstest]
+	// ── seeding an empty accumulator (`acc = None`) ──────────────────────────
+	// Empty cover → still None.
+	#[case::empty_from_none(None, None, None)]
+	// Single tile → an *inverted* box (west > east, north > south): with nothing
+	// to compare against, the raw inner edges are stored verbatim.
+	#[case::single_tile_from_none(None, Some([5, 5, 5, 5]), Some([6, 6, 5, 5]))]
+	// 2×1 tiles → zero width in x (the two tiles share the x=5 edge), still
+	// inverted in y (single row).
+	#[case::two_by_one_from_none(None, Some([4, 5, 5, 5]), Some([5, 6, 5, 5]))]
+	// 2×2 tiles → collapses to the single shared corner point (5/16, 5/16).
+	#[case::two_by_two_from_none(None, Some([4, 4, 5, 5]), Some([5, 5, 5, 5]))]
+	// 4×4 tiles → a proper (west < east) box.
+	#[case::multi_tile_from_none(None, Some([4, 4, 7, 7]), Some([5, 5, 7, 7]))]
+	// ── folding into an existing accumulator ─────────────────────────────────
+	// A wider cover widens the box (min west/north, max east/south).
+	#[case::widens_existing(Some([5, 5, 7, 7]), Some([2, 2, 9, 9]), Some([3, 3, 9, 9]))]
+	// A single tile inside an existing box loses every min/max → no-op.
+	#[case::single_tile_noop_when_seeded(Some([5, 5, 7, 7]), Some([5, 5, 5, 5]), Some([5, 5, 7, 7]))]
+	// An empty cover never changes an existing box.
+	#[case::empty_noop_when_seeded(Some([5, 5, 7, 7]), None, Some([5, 5, 7, 7]))]
+	fn extend_touch_edges_cases(
+		#[case] initial: Option<[u32; 4]>,
+		#[case] cover: Option<[u32; 4]>,
+		#[case] expected: Option<[u32; 4]>,
+	) {
+		let n = f64::from(1u32 << 4);
+		let scale = |edges: Option<[u32; 4]>| edges.map(|e| e.map(|v| f64::from(v) / n));
+		let cover = match cover {
+			Some([x0, y0, x1, y1]) => TileCover::from(bbox(4, x0, y0, x1, y1)),
+			None => TileCover::new_empty(4).unwrap(),
+		};
+
+		let mut acc = scale(initial);
+		cover.extend_touch_edges(&mut acc);
+		assert_eq!(acc, scale(expected));
 	}
 
 	/// `at_level` preserves the requested level for both variants and across
