@@ -26,7 +26,7 @@ log.workspace = true
 num_cpus.workspace = true
 regex.workspace = true
 rstar.workspace = true
-shapefile = { version = "0.8", features = ["geo-types"] }
+shapefile = { version = "0.9", features = ["geo-types"] }
 tokio.workspace = true
 
 versatiles_core.workspace = true

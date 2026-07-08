@@ -29,12 +29,12 @@ log.workspace = true
 moka.workspace = true
 parking_lot.workspace = true
 r2d2 = { version = "0.8.10", default-features = false }
-r2d2_sqlite = { version = "0.34.0", default-features = false, features = ["bundled"] }
+r2d2_sqlite = { version = "0.35.0", default-features = false, features = ["bundled"] }
 regex.workspace = true
 reqwest.workspace = true
 tar.workspace = true
 terminal_size = "0.4.4"
-time = { version = "0.3.51", default-features = false, features = ["formatting", "local-offset"] }
+time = { version = "0.3.53", default-features = false, features = ["formatting", "local-offset"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
 uuid = { version = "1.23.4", features = ["v4"] }
 
