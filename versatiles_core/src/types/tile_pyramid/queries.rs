@@ -1,7 +1,7 @@
 //! Query methods for [`TilePyramid`].
 
 use super::TilePyramid;
-use crate::{GeoBBox, GeoCenter, TileBBox, TileCover};
+use crate::{GeoBBox, GeoCenter, TileBBox, TileCoord, TileCover};
 use anyhow::Result;
 
 impl TilePyramid {
@@ -92,6 +92,55 @@ impl TilePyramid {
 	pub fn geo_bbox(&self) -> Option<GeoBBox> {
 		let max_level = self.level_max()?;
 		self.levels[max_level as usize].to_geo_bbox()
+	}
+
+	/// Returns the *minimal* geographic bounding box such that a tile client which
+	/// selects tiles by bbox *overlap* (e.g. MapLibre) requests every tile at
+	/// every zoom level — including any border ring added by [`buffer`](Self::buffer).
+	///
+	/// Unlike [`geo_bbox`](Self::geo_bbox), which returns the outer envelope of a
+	/// single (max) level, this walks every level and keeps only each extremal
+	/// tile's *inner* edge (see [`TileCover::extend_touch_edges`]). Because a
+	/// coarse, world-spanning tile is requested for essentially any bounds, its
+	/// inner edges impose no constraint — so a pyramid containing e.g. level 0
+	/// does *not* force the bounds to cover the whole world.
+	///
+	/// The raw inner edges land exactly on tile boundaries, where `floor`/`ceil`
+	/// rounding would drop the edge tiles; the result is therefore nudged outward
+	/// by half a max-zoom tile, which is monotonic (only ever adds tiles) and, at
+	/// worst, advertises one empty boundary column.
+	///
+	/// Returns `None` if the pyramid is empty. Falls back to
+	/// [`geo_bbox`](Self::geo_bbox) if the touch box is degenerate (a crop smaller
+	/// than a single max-zoom tile is a single tile at every level).
+	#[must_use]
+	pub fn geo_bbox_touching_all_tiles(&self) -> Option<GeoBBox> {
+		let mut acc: Option<[f64; 4]> = None;
+		for cover in self.iter() {
+			cover.extend_touch_edges(&mut acc);
+		}
+		let [west, north, east, south] = acc?;
+
+		// Nudge outward by half a max-zoom tile so `floor`/`ceil` include the
+		// tiles whose inner edge we landed on, then clamp back into `[0, 1]`.
+		let z_max = self.level_max()?;
+		let delta = 0.5 / f64::from(1u32 << z_max);
+		let west = (west - delta).clamp(0.0, 1.0);
+		let north = (north - delta).clamp(0.0, 1.0);
+		let east = (east + delta).clamp(0.0, 1.0);
+		let south = (south + delta).clamp(0.0, 1.0);
+
+		if west >= east || north >= south {
+			// Degenerate: crop is a single tile at every level. The tight
+			// max-level envelope is small here, so use it.
+			return self.geo_bbox();
+		}
+
+		// Normalized mercator -> geo via level 0 (where fractional tile coords in
+		// `[0, 1]` map directly to the full world).
+		let [west_lon, north_lat] = TileCoord::coord_to_geo(0, west, north);
+		let [east_lon, south_lat] = TileCoord::coord_to_geo(0, east, south);
+		GeoBBox::new(west_lon, south_lat, east_lon, north_lat).ok()
 	}
 
 	/// Calculates a geographic center based on the bounding box at a middle
@@ -198,6 +247,61 @@ mod tests {
 	fn iter_skips_empty_levels() {
 		let p = pyramid_from_bboxes(&[bbox(3, 0, 0, 3, 3), bbox(5, 0, 0, 5, 5)]);
 		assert_eq!(p.iter().filter(|c| !c.is_empty()).count(), 2);
+	}
+
+	#[test]
+	fn touch_bbox_none_when_empty() {
+		assert!(TilePyramid::new_empty().geo_bbox_touching_all_tiles().is_none());
+	}
+
+	/// A coarse, world-spanning level (z0) must NOT force the bounds to the whole
+	/// world — its inner edges sit at the far side of the world and impose no
+	/// constraint. This is the core reason for using inner (touch) edges.
+	#[test]
+	fn touch_bbox_ignores_coarse_world_tile() {
+		let mut p = TilePyramid::new_empty();
+		p.insert_bbox(&bbox(0, 0, 0, 0, 0)).unwrap(); // full world at z0
+		p.insert_bbox(&bbox(10, 512, 512, 515, 515)).unwrap(); // small region near center at z10
+		let gb = p.geo_bbox_touching_all_tiles().unwrap();
+		assert!(
+			gb.x_min > -5.0 && gb.x_max < 5.0 && gb.y_min > -5.0 && gb.y_max < 5.0,
+			"z0 must not force whole-world bounds, got {gb:?}"
+		);
+	}
+
+	/// A crop that is a single tile at every level has no meaningful inner box, so
+	/// the result falls back to the tight max-level envelope.
+	#[test]
+	fn touch_bbox_falls_back_when_degenerate() {
+		let p = pyramid_from_bboxes(&[bbox(5, 10, 10, 10, 10)]);
+		assert_eq!(p.geo_bbox_touching_all_tiles(), p.geo_bbox());
+	}
+
+	/// A border ring (`buffer`) widens the advertised bounds, because at each
+	/// level the ring reaches further out than the crop. Restricted to high zoom
+	/// levels, where the ring stays a small regional margin. (At very coarse
+	/// levels a border can legitimately span most of the world — those tiles
+	/// really exist and are advertised accordingly.)
+	#[test]
+	fn touch_bbox_widens_with_border() {
+		let filter = GeoBBox::new(13.3, 52.4, 13.5, 52.6).unwrap();
+
+		let mut plain = TilePyramid::new_full_up_to(12);
+		plain.intersect_geo_bbox(&filter).unwrap();
+		plain.set_level_min(10);
+
+		let mut buffered = plain.clone();
+		buffered.buffer(3);
+
+		let a = plain.geo_bbox_touching_all_tiles().unwrap();
+		let b = buffered.geo_bbox_touching_all_tiles().unwrap();
+
+		assert!(b.x_min < a.x_min, "border must extend west: {a:?} vs {b:?}");
+		assert!(b.x_max > a.x_max, "border must extend east: {a:?} vs {b:?}");
+		assert!(b.y_min < a.y_min, "border must extend south: {a:?} vs {b:?}");
+		assert!(b.y_max > a.y_max, "border must extend north: {a:?} vs {b:?}");
+		// A few-tile ring at z10–12 stays a small regional box.
+		assert!(b.x_min > 12.0 && b.x_max < 15.0, "border box must stay regional: {b:?}");
 	}
 
 	/// `weighted_bbox` — empty errors, single populated level returns that
