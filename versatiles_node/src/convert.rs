@@ -91,6 +91,7 @@ pub(crate) async fn convert_tiles_with_options(
 	let params = TilesConverterParameters {
 		tile_pyramid,
 		geo_bbox: geo_bbox_filter,
+		bbox_border: opts.bbox_border,
 		tile_compression,
 		flip_y: opts.flip_y.unwrap_or(false),
 		swap_xy: opts.swap_xy.unwrap_or(false),

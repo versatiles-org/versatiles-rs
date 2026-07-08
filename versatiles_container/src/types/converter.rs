@@ -62,6 +62,11 @@ pub struct TilesConverterParameters {
 	/// Optional geographic bounding box filter. When set, existing tilejson bounds are
 	/// intersected with this bbox rather than being recalculated from the pyramid.
 	pub geo_bbox: Option<GeoBBox>,
+	/// Border ring (in tiles) added around `geo_bbox` when building `tile_pyramid`.
+	/// When `> 0`, the advertised bounds are extended beyond `geo_bbox` to include
+	/// the border tiles (which lie outside the crop), so a tile client requests
+	/// them. `None`/`0` keeps the precise crop bounds.
+	pub bbox_border: Option<u32>,
 	/// Optional compression override. When set, tile payloads are re-encoded to this
 	/// [`TileCompression`] (e.g., Gzip → Brotli). If `None`, the source compression is kept.
 	pub tile_compression: Option<TileCompression>,
@@ -84,6 +89,7 @@ impl Default for TilesConverterParameters {
 		TilesConverterParameters {
 			tile_pyramid: None,
 			geo_bbox: None,
+			bbox_border: None,
 			tile_compression: None,
 			tile_format: None,
 			format_quality: None,
@@ -214,12 +220,29 @@ impl TilesConvertReader {
 		let mut tilejson = reader.tilejson().clone();
 
 		if let Some(ref geo_bbox) = cp.geo_bbox {
-			// Intersect existing tilejson bounds with the given geo bbox
-			if let Some(ref mut bounds) = tilejson.bounds {
-				bounds.intersect(geo_bbox);
-			} else {
-				tilejson.bounds = Some(*geo_bbox);
+			// Base bounds: the precise crop, intersected with any existing source
+			// bounds. A tile client selecting tiles by bbox overlap (e.g. MapLibre)
+			// already requests every tile the crop wrote, since the crop rectangle
+			// overlaps each of them.
+			let mut bounds = match tilejson.bounds {
+				Some(mut b) => {
+					b.intersect(geo_bbox);
+					b
+				}
+				None => *geo_bbox,
+			};
+
+			// A `--bbox-border` ring writes tiles *outside* the crop, which the
+			// crop rectangle does not overlap. Extend the advertised bounds to the
+			// minimal "touch" box of the tiles actually written so those border
+			// tiles are requested too. See `TilePyramid::geo_bbox_touching_all_tiles`.
+			if cp.bbox_border.is_some_and(|b| b > 0)
+				&& let Some(touch) = tile_pyramid.geo_bbox_touching_all_tiles()
+			{
+				bounds.extend(&touch);
 			}
+
+			tilejson.bounds = Some(bounds);
 			tilejson.center = None;
 		}
 		new_rp.update_tilejson(&mut tilejson);
@@ -527,7 +550,8 @@ mod tests {
 		reader.tilejson_mut().bounds = Some(source_bounds);
 		let reader = reader.into_shared();
 
-		// User specifies a bbox that partially overlaps
+		// User specifies a bbox that partially overlaps, without a border, so the
+		// precise crop bounds are kept (intersected with the source bounds).
 		let filter_bbox = GeoBBox::new(12.0, 52.0, 20.0, 60.0)?;
 		let mut filter_pyramid = TilePyramid::new_full();
 		filter_pyramid.intersect_geo_bbox(&filter_bbox)?;
@@ -542,6 +566,38 @@ mod tests {
 
 		// Bounds should be the intersection: [12.0, 52.0, 15.0, 55.0]
 		assert_eq!(bounds.as_tuple(), (12.0, 52.0, 15.0, 55.0));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_bbox_border_extends_bounds_to_written_tiles() -> Result<()> {
+		// With a border, bounds must grow beyond the crop to include the border
+		// tiles that were written outside it.
+		let tile_pyramid = TilePyramid::new_full_up_to(12);
+		let reader_metadata = TileSourceMetadata::new(MVT, Uncompressed, Traversal::ANY, None);
+		let reader = MockReader::new_mock(tile_pyramid, reader_metadata)?.into_shared();
+
+		let filter_bbox = GeoBBox::new(13.35, 52.48, 13.40, 52.52)?;
+		let mut filter_pyramid = TilePyramid::new_full();
+		filter_pyramid.intersect_geo_bbox(&filter_bbox)?;
+		filter_pyramid.set_level_min(10);
+		filter_pyramid.buffer(3);
+
+		let cp = TilesConverterParameters {
+			tile_pyramid: Some(filter_pyramid),
+			geo_bbox: Some(filter_bbox),
+			bbox_border: Some(3),
+			..Default::default()
+		};
+		let tcr = TilesConvertReader::new_from_reader(reader, cp).await?;
+		let b = tcr.tilejson().bounds.ok_or_else(|| anyhow::anyhow!("missing bounds"))?;
+
+		// Every side is pushed outside the requested crop (a 3-tile ring at z10 is
+		// ~1° wide), but the box stays regional — nowhere near the whole world.
+		assert!(b.x_min < 13.35 && b.x_min > 11.0, "west: {b:?}");
+		assert!(b.y_min < 52.48 && b.y_min > 50.0, "south: {b:?}");
+		assert!(b.x_max > 13.40 && b.x_max < 16.0, "east: {b:?}");
+		assert!(b.y_max > 52.52 && b.y_max < 55.0, "north: {b:?}");
 		Ok(())
 	}
 

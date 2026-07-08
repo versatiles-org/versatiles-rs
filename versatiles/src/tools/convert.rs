@@ -129,6 +129,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	let parameters = TilesConverterParameters {
 		tile_pyramid,
 		geo_bbox,
+		bbox_border: arguments.bbox_border,
 		flip_y: arguments.flip_y,
 		swap_xy: arguments.swap_xy,
 		tile_compression: arguments.compress,
