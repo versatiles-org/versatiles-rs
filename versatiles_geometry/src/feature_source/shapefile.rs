@@ -119,9 +119,9 @@ impl FeatureSource for ShapefileSource {
 		let dbf_path = self.path.with_extension("dbf");
 		let dbf_file = fs::File::open(&dbf_path).with_context(|| format!("opening dbf {}", dbf_path.display()))?;
 		let dbf_buffered = std::io::BufReader::new(ProgressReader::maybe(dbf_file, self.progress.clone()));
-		let dbase_reader = dbase::ReaderBuilder::new(dbf_buffered)
+		let dbase_reader = dbase::ReaderBuilder::new()
 			.with_encoding(dbase::encoding::UnicodeLossy)
-			.build()
+			.build(dbf_buffered)
 			.with_context(|| format!("reading dbf {}", dbf_path.display()))?;
 		let mut reader = shapefile::Reader::new(shape_reader, dbase_reader);
 
