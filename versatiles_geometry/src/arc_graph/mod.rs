@@ -138,7 +138,7 @@ mod tests {
 		}
 		// Closed-arc representation: first == last.
 		let arc = &graph.arcs()[0];
-		assert!(arc.coords.first() == arc.coords.last());
+		assert_eq!(arc.coords.first(), arc.coords.last())
 	}
 
 	#[test]
