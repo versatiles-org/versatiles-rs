@@ -87,19 +87,19 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@napi-rs/cli": "^3.7.2",
-    "@types/node": "^26.0.1",
-    "@vitest/ui": "^4.1.9",
+    "@napi-rs/cli": "^3.7.3",
+    "@types/node": "^26.1.1",
+    "@vitest/ui": "^4.1.10",
     "chalk": "^5.6.2",
-    "eslint": "^10.5.0",
+    "eslint": "^10.7.0",
     "eslint-config-prettier": "^10.1.8",
-    "npm-check-updates": "^22.2.7",
-    "prettier": "^3.8.4",
-    "tsx": "^4.22.4",
-    "typedoc": "^0.28.19",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.62.0",
-    "vitest": "^4.1.9"
+    "npm-check-updates": "^22.2.9",
+    "prettier": "^3.9.5",
+    "tsx": "^4.23.1",
+    "typedoc": "^0.28.20",
+    "typescript": "<7",
+    "typescript-eslint": "^8.64.0",
+    "vitest": "^4.1.10"
   },
   "optionalDependencies": {
     "@versatiles/versatiles-rs-darwin-arm64": "4.6.0",
@@ -110,5 +110,9 @@
     "@versatiles/versatiles-rs-linux-x64-musl": "4.6.0",
     "@versatiles/versatiles-rs-win32-arm64-msvc": "4.6.0",
     "@versatiles/versatiles-rs-win32-x64-msvc": "4.6.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "fsevents@2.3.3": true
   }
 }
