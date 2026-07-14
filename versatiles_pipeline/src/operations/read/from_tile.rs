@@ -184,7 +184,7 @@ mod tests {
 
 		let mut count = 0;
 		while let Some((coord, tile)) = stream.next().await {
-			assert!(coord.level == 2);
+			assert_eq!(coord.level, 2);
 			assert!(!tile.into_blob(&Uncompressed).unwrap().is_empty());
 			count += 1;
 		}

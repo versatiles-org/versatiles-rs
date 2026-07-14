@@ -35,7 +35,7 @@ fn e2e_convert_pmtiles_to_mbtiles_with_bbox_and_border() {
 
 	versatiles_run(&format!(
 		"convert --bbox 13.0,52.0,13.8,52.8 --bbox-border 1 {} {}",
-		&input,
+		input,
 		output.to_str().unwrap()
 	));
 
@@ -174,7 +174,7 @@ fn e2e_convert_bbox_inside_source() {
 	// A bbox strictly inside the fixture's bounds → output bounds = arg.
 	versatiles_run(&format!(
 		"convert --bbox 13.35,52.48,13.42,52.52 {} {}",
-		&input,
+		input,
 		output.to_str().unwrap()
 	));
 
@@ -189,7 +189,7 @@ fn e2e_convert_bbox_partial_overlap() {
 	// arg overlaps the eastern half of the fixture → clamped intersection.
 	versatiles_run(&format!(
 		"convert --bbox 13.4,52.5,13.7,52.6 {} {}",
-		&input,
+		input,
 		output.to_str().unwrap()
 	));
 
@@ -204,7 +204,7 @@ fn e2e_convert_bbox_contains_source() {
 	// arg wider than fixture in every direction → output keeps fixture bounds.
 	versatiles_run(&format!(
 		"convert --bbox 12.0,51.0,15.0,54.0 {} {}",
-		&input,
+		input,
 		output.to_str().unwrap()
 	));
 
@@ -216,7 +216,7 @@ fn e2e_convert_no_bbox() {
 	let input = get_testdata("berlin.mbtiles");
 	let (_temp_dir, output) = get_temp_output("no_bbox.mbtiles");
 
-	versatiles_run(&format!("convert {} {}", &input, output.to_str().unwrap()));
+	versatiles_run(&format!("convert {} {}", input, output.to_str().unwrap()));
 
 	assert_eq!(tilejson_bounds(&output), [13.3, 52.45, 13.46, 52.55]);
 }

@@ -60,7 +60,7 @@ impl Instance {
 			.context("GDAL dataset must have a spatial reference (SRS) defined")?;
 
 		log::trace!("size: {width}x{height}");
-		log::trace!("spatial reference: {:?}", &spatial_ref.to_pretty_wkt());
+		log::trace!("spatial reference: {:?}", spatial_ref.to_pretty_wkt());
 
 		let coord_transform = CoordTransform::new(&spatial_ref, &get_spatial_ref(4326)?)
 			.context("Failed to create coordinate transform to EPSG:4326")?;

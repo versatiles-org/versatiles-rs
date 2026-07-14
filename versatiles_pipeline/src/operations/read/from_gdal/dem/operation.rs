@@ -426,7 +426,7 @@ mod tests {
 		let tiles = stream.to_vec().await;
 		assert!(!tiles.is_empty(), "stream should produce tiles");
 		for (coord, tile) in &tiles {
-			assert!(coord.level == 1);
+			assert_eq!(coord.level, 1);
 			let image = tile.clone().into_image()?;
 			assert_eq!(image.width(), 256);
 			assert_eq!(image.height(), 256);
