@@ -151,7 +151,7 @@ impl RunnerTrait for Runner {
 						log::info!("id \"{id}\" not found in data source");
 					}
 				} else {
-					log::warn!("id field \"{}\" not found", &self.args.id_field_tiles);
+					log::warn!("id field \"{}\" not found", self.args.id_field_tiles);
 				}
 				Some(prop)
 			})?;

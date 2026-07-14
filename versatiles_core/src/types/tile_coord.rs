@@ -445,7 +445,7 @@ impl TileCoord {
 /// Custom `Debug` format as `TileCoord(z, [x, y])` for readability.
 impl Debug for TileCoord {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_fmt(format_args!("TileCoord({}, [{}, {}])", &self.level, &self.x, &self.y))
+		f.write_fmt(format_args!("TileCoord({}, [{}, {}])", self.level, self.x, self.y))
 	}
 }
 
