@@ -31,8 +31,23 @@ gzip -9 "$FILENAME.tar"
 #       ;;
 # esac
 
-gh release upload "$TAG" $FILENAME.tar.gz* --clobber
+# Retry uploads: `gh release upload` makes a single call to api.github.com and
+# transient connectivity blips on the runner would otherwise fail the whole release.
+upload() {
+   local attempt
+   for attempt in 1 2 3 4 5; do
+      if gh release upload "$@"; then
+         return 0
+      fi
+      echo "upload attempt $attempt failed; retrying in $((attempt * 10))s..." >&2
+      sleep $((attempt * 10))
+   done
+   echo "upload failed after 5 attempts: gh release upload $*" >&2
+   return 1
+}
+
+upload "$TAG" $FILENAME.tar.gz* --clobber
 
 if ls *.deb 1>/dev/null  2>&1; then
-   gh release upload "$TAG" *.deb --clobber
+   upload "$TAG" *.deb --clobber
 fi
