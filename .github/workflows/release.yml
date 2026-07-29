@@ -662,10 +662,18 @@ jobs:
               return 0
             fi
 
+            # --ignore-scripts: the main package (target ".") has a
+            # `prepublishOnly: napi prepublish` hook that is redundant with this
+            # workflow (platform packages are published manually below and
+            # optionalDependencies are pinned in package.json). Since
+            # @napi-rs/cli 3.8.0, `napi prepublish` also hard-fails unless the
+            # per-target npm/ dirs and addons are staged in this job, which they
+            # are not — so skip lifecycle scripts entirely. Tarball publishes
+            # never ran the hook anyway, so this is a no-op for them.
             local attempt
             for attempt in 1 2; do
               echo "Publishing $spec ($target) — attempt $attempt"
-              if npm publish "$target" --access public --provenance --tag "$NPM_TAG"; then
+              if npm publish "$target" --access public --provenance --tag "$NPM_TAG" --ignore-scripts; then
                 echo "✓ Published $spec"
                 return 0
               fi
