@@ -10,7 +10,8 @@
 //!
 //! [`TileSizeMonitor`] sits between the tile encoder and the consumer:
 //!
-//! - **Hard cap** ([`HARD_CAP_BYTES`], 1 MB) → return an error from `check`,
+//! - **Hard cap** (default [`HARD_CAP_BYTES`], 1 MB; configurable per operation
+//!   via `max_tile_bytes`, `0` disables) → return an error from `check`,
 //!   aborting the conversion with a clear message including `(z, x, y)` and
 //!   a breakdown of what's filling the tile (feature count, geometry vs.
 //!   property bytes).
@@ -98,9 +99,9 @@ impl TileBreakdown {
 /// Tiles below this size never trigger a warning.
 pub const SOFT_CAP_BYTES: usize = 200 * 1024;
 
-/// Tiles above this size cause `check` to return an error. ~1 MB is well
-/// past the practical limit of Mapbox / MapLibre style clients and well into
-/// "this feed is misconfigured" territory.
+/// Default value for the hard cap when the operation doesn't configure one.
+/// ~1 MB is well past the practical limit of Mapbox / MapLibre style clients
+/// and well into "this feed is misconfigured" territory.
 pub const HARD_CAP_BYTES: usize = 1024 * 1024;
 
 /// How many of the largest tiles to remember and report at end-of-run.
@@ -117,6 +118,9 @@ pub struct TileSizeMonitor {
 struct MonitorInner {
 	/// Identifier prefix for log lines, e.g. `"from_geo"`.
 	label: &'static str,
+	/// Encoded-blob size above which `check` returns an error. `None` disables
+	/// the hard cap entirely (only the soft-cap warning remains).
+	hard_cap_bytes: Option<usize>,
 	tile_count: AtomicU64,
 	oversized_count: AtomicU64,
 	total_bytes: AtomicU64,
@@ -129,10 +133,11 @@ struct MonitorInner {
 
 impl TileSizeMonitor {
 	#[must_use]
-	pub fn new(label: &'static str) -> Self {
+	pub fn new(label: &'static str, hard_cap_bytes: Option<usize>) -> Self {
 		Self {
 			inner: Arc::new(MonitorInner {
 				label,
+				hard_cap_bytes,
 				tile_count: AtomicU64::new(0),
 				oversized_count: AtomicU64::new(0),
 				total_bytes: AtomicU64::new(0),
@@ -144,7 +149,8 @@ impl TileSizeMonitor {
 	}
 
 	/// Check the encoded blob's size against the soft and hard caps and
-	/// update accounting. Errors when above [`HARD_CAP_BYTES`].
+	/// update accounting. Errors when above the configured hard cap
+	/// ([`HARD_CAP_BYTES`] by default; `None` disables the hard cap).
 	///
 	/// `breakdown` is included in every warning / error message so the user
 	/// can see whether geometry detail or property bloat is the dominant
@@ -153,24 +159,27 @@ impl TileSizeMonitor {
 	pub fn check(&self, coord: TileCoord, blob: &Blob, breakdown: TileBreakdown) -> Result<()> {
 		#[allow(clippy::cast_possible_truncation)]
 		let size = blob.len() as usize;
-		if size > HARD_CAP_BYTES {
+		let inner = &self.inner;
+		if let Some(hard_cap) = inner.hard_cap_bytes
+			&& size > hard_cap
+		{
 			bail!(
 				"{}: tile {}/{}/{} is {} KB, exceeding the {} KB hard cap. \
 				Breakdown: {}. \
 				Likely causes: missing property pruning on a feature-heavy input, \
 				`point_reduction='none'` on a dense point feed, or `max_zoom` set too low \
-				so all features pile into a few tiles.",
-				self.inner.label,
+				so all features pile into a few tiles. Raise the `max_tile_bytes` argument \
+				to accept larger tiles (0 disables the cap).",
+				inner.label,
 				coord.level,
 				coord.x,
 				coord.y,
 				size / 1024,
-				HARD_CAP_BYTES / 1024,
+				hard_cap / 1024,
 				breakdown.fmt_inline(),
 			);
 		}
 
-		let inner = &self.inner;
 		inner.tile_count.fetch_add(1, Ordering::Relaxed);
 		inner.total_bytes.fetch_add(size as u64, Ordering::Relaxed);
 		inner.max_bytes.fetch_max(size, Ordering::Relaxed);
@@ -259,14 +268,14 @@ mod tests {
 
 	#[test]
 	fn under_soft_cap_passes_silently() {
-		let monitor = TileSizeMonitor::new("test");
+		let monitor = TileSizeMonitor::new("test", Some(HARD_CAP_BYTES));
 		let blob = Blob::from(vec![0u8; 1024]);
 		monitor.check(TileCoord::new(0, 0, 0).unwrap(), &blob, TINY).unwrap();
 	}
 
 	#[test]
 	fn over_soft_cap_passes_but_records() {
-		let monitor = TileSizeMonitor::new("test");
+		let monitor = TileSizeMonitor::new("test", Some(HARD_CAP_BYTES));
 		let blob = Blob::from(vec![0u8; SOFT_CAP_BYTES + 1024]);
 		monitor.check(TileCoord::new(5, 1, 2).unwrap(), &blob, TINY).unwrap();
 		// One tile, one oversized.
@@ -276,7 +285,7 @@ mod tests {
 
 	#[test]
 	fn over_hard_cap_errors() {
-		let monitor = TileSizeMonitor::new("test");
+		let monitor = TileSizeMonitor::new("test", Some(HARD_CAP_BYTES));
 		let blob = Blob::from(vec![0u8; HARD_CAP_BYTES + 1]);
 		let err = monitor
 			.check(TileCoord::new(7, 3, 4).unwrap(), &blob, TINY)
@@ -287,11 +296,32 @@ mod tests {
 	}
 
 	#[test]
+	fn disabled_hard_cap_passes_oversized_tile() {
+		// `max_tile_bytes=0` → hard cap disabled: an over-1-MiB tile must pass
+		// the hard-cap check (only soft-cap accounting applies).
+		let monitor = TileSizeMonitor::new("test", None);
+		let blob = Blob::from(vec![0u8; HARD_CAP_BYTES + 1024]);
+		monitor.check(TileCoord::new(7, 3, 4).unwrap(), &blob, TINY).unwrap();
+	}
+
+	#[test]
+	fn custom_hard_cap_errors_at_custom_threshold() {
+		// A per-operation cap of 512 KB: 600 KB errors, 400 KB passes.
+		let monitor = TileSizeMonitor::new("test", Some(512 * 1024));
+		let over = Blob::from(vec![0u8; 600 * 1024]);
+		monitor
+			.check(TileCoord::new(3, 1, 1).unwrap(), &over, TINY)
+			.unwrap_err();
+		let under = Blob::from(vec![0u8; 400 * 1024]);
+		monitor.check(TileCoord::new(3, 1, 1).unwrap(), &under, TINY).unwrap();
+	}
+
+	#[test]
 	fn over_cap_message_includes_breakdown() {
 		// The whole point of carrying TileBreakdown into `check`: the user
 		// debugging an oversized tile sees feature count + geometry/property
 		// bytes in the error message itself.
-		let monitor = TileSizeMonitor::new("test");
+		let monitor = TileSizeMonitor::new("test", Some(HARD_CAP_BYTES));
 		let blob = Blob::from(vec![0u8; HARD_CAP_BYTES + 1]);
 		let breakdown = TileBreakdown {
 			feature_count: 1234,
@@ -309,7 +339,7 @@ mod tests {
 
 	#[test]
 	fn top_n_keeps_largest() {
-		let monitor = TileSizeMonitor::new("test");
+		let monitor = TileSizeMonitor::new("test", Some(HARD_CAP_BYTES));
 		// Five tiles, ascending sizes — only the 5 largest stay (which is all).
 		// Add a 6th and verify the smallest is dropped.
 		let sizes_kb = [210, 220, 230, 240, 250, 260];
