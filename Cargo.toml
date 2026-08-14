@@ -113,10 +113,10 @@ strip = true
 [workspace.dependencies]
 # Core dependencies
 anyhow = { version = "1.0.104", default-features = false, features = ["std"] }
-async-trait = { version = "0.1.91", default-features = false }
+async-trait = { version = "0.1.92", default-features = false }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
 enumset = { version = "1.1.14", default-features = false }
-futures = { version = "0.3.33", features = ["default"] }
+futures = { version = "0.3.34", features = ["default"] }
 itertools = { version = "0.15.0", default-features = false }
 log = { version = "0.4.33", default-features = false }
 num_cpus = { version = "1.17.0", default-features = false }
@@ -129,7 +129,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "sync"] }
 
 # CLI dependencies
-clap = { version = "4.6.4", features = ["default", "derive", "wrap_help"] }
+clap = { version = "4.6.6", features = ["default", "derive", "wrap_help"] }
 env_logger = { version = "0.11.11" }
 
 # Container/archive dependencies
@@ -144,7 +144,7 @@ imageproc = { version = "0.27.0", default-features = false }
 
 # Geometry dependencies
 geo = { version = "0.33.1" }
-geo-types = { version = "0.7.19" }
+geo-types = { version = "0.7.20" }
 rstar = { version = "0.13.0", default-features = false }
 
 # Utility dependencies

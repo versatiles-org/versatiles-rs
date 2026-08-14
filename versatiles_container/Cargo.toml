@@ -34,7 +34,7 @@ regex.workspace = true
 reqwest.workspace = true
 tar.workspace = true
 terminal_size = "0.4.4"
-time = { version = "0.3.54", default-features = false, features = ["formatting", "local-offset"] }
+time = { version = "0.3.55", default-features = false, features = ["formatting", "local-offset"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
 uuid = { version = "1.24.0", features = ["v4"] }
 

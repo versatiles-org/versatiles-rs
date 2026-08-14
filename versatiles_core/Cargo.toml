@@ -55,7 +55,7 @@ wildmatch.workspace = true
 # which requires NASM/cmake on Windows and is not needed for the Windows build).
 [target.'cfg(unix)'.dev-dependencies]
 russh = "0.62"
-russh-sftp = "2.3"
+russh-sftp = "2.4"
 serial_test = "4.0.1"
 
 # Multithreading benchmark dependencies
