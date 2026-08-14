@@ -2,8 +2,14 @@ name: CI
 
 on:
   push:
+    # Only the branches whose CI result is a status of record: `main` gates
+    # merges via the required "CI Success" check, and `dev` needs its own
+    # passing run before it can be fast-forwarded onto `main`. Feature
+    # branches are covered by the `pull_request` trigger below — listing
+    # them here too would run the whole matrix twice per push.
     branches:
-      - "**"
+      - main
+      - dev
     tags-ignore:
       - "**" # Don't run twice on commits with tags
     paths-ignore:
