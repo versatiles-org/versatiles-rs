@@ -87,18 +87,18 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@napi-rs/cli": "^3.8.0",
-    "@types/node": "^26.1.2",
+    "@napi-rs/cli": "^3.8.6",
+    "@types/node": "^26.2.0",
     "@vitest/ui": "^4.1.10",
     "chalk": "^6.0.0",
-    "eslint": "^10.8.0",
+    "eslint": "^10.8.1",
     "eslint-config-prettier": "^10.1.8",
-    "npm-check-updates": "^23.0.0",
+    "npm-check-updates": "^23.0.2",
     "prettier": "^3.9.6",
-    "tsx": "^4.23.1",
+    "tsx": "^4.23.12",
     "typedoc": "^0.28.20",
-    "typescript": "~6.0.3",
-    "typescript-eslint": "^8.65.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.67.0",
     "vitest": "^4.1.10"
   },
   "optionalDependencies": {
@@ -112,7 +112,7 @@
     "@versatiles/versatiles-rs-win32-x64-msvc": "4.6.1"
   },
   "allowScripts": {
-    "esbuild@0.28.1": true,
-    "fsevents@2.3.3": true
+    "esbuild": true,
+    "fsevents": true
   }
 }
