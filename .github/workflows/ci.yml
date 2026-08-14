@@ -34,6 +34,14 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # CI never attaches a debugger and never reuses a warm incremental dir, so
+  # both settings cost compile time, disk and cache size for nothing. The
+  # profiles in Cargo.toml keep them on for local development; these env vars
+  # override them here only. `dev` covers dependencies, `test` the test
+  # targets themselves — `cargo test` uses both.
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
 
 jobs:
   # ============================================================================
