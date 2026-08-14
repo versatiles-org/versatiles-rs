@@ -60,7 +60,7 @@ runs:
         done
         tar -cf ~/gdal-brew-tree.tar -C / "${members[@]}"
 
-    - name: Verify GDAL installation
+    - name: Check GDAL installation
       id: verify
       shell: bash
       run: |

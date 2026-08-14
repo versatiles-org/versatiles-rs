@@ -54,7 +54,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Run markdownlint
+      - name: Check Markdown
         uses: DavidAnson/markdownlint-cli2-action@v24
         with:
           globs: |
@@ -143,15 +143,15 @@ jobs:
         working-directory: ./versatiles_node
         run: npm install
 
-      - name: Build
+      - name: Build package
         working-directory: ./versatiles_node
         run: npm run build
 
-      - name: Typecheck
+      - name: Check types
         working-directory: ./versatiles_node
         run: npm run typecheck
 
-      - name: Lint
+      - name: Check lints
         working-directory: ./versatiles_node
         run: npm run lint
 
@@ -159,11 +159,11 @@ jobs:
         working-directory: ./versatiles_node
         run: npm run format:check
 
-      - name: Test
+      - name: Run tests
         working-directory: ./versatiles_node
         run: npm run test
 
-      - name: Test examples
+      - name: Run example tests
         working-directory: ./versatiles_node
         run: npm run test:examples
 
@@ -261,7 +261,7 @@ jobs:
         if: ${{ !matrix.run-tests }}
         run: cargo check --workspace --all-targets ${{ matrix.features }}
 
-      - name: Clippy
+      - name: Check lints
         if: matrix.run-clippy
         run: cargo clippy --workspace --all-targets ${{ matrix.features }} -- -D warnings
 
@@ -315,7 +315,7 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
-      - name: Check no-default-features
+      - name: Check compilation (no-default-features)
         run: cargo check --workspace --no-default-features
 
   # ============================================================================
@@ -361,15 +361,15 @@ jobs:
         working-directory: ./versatiles_node
         run: npm install
 
-      - name: Build
+      - name: Build package
         working-directory: ./versatiles_node
         run: npm run build:debug
 
-      - name: Typecheck
+      - name: Check types
         working-directory: ./versatiles_node
         run: npm run typecheck
 
-      - name: Lint
+      - name: Check lints
         working-directory: ./versatiles_node
         run: npm run lint
 
@@ -377,11 +377,11 @@ jobs:
         working-directory: ./versatiles_node
         run: npm run format:check
 
-      - name: Test
+      - name: Run tests
         working-directory: ./versatiles_node
         run: npm run test
 
-      - name: Test examples
+      - name: Run example tests
         working-directory: ./versatiles_node
         run: npm run test:examples
 

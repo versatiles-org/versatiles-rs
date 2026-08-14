@@ -22,7 +22,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v7
 
       - name: Setup Node.js
@@ -32,43 +32,43 @@ jobs:
           cache: 'npm'
           cache-dependency-path: versatiles_node/package-lock.json
 
-      - name: Install Rust toolchain
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Setup GDAL
         uses: ./.github/actions/setup-gdal
 
-      - name: Cache Rust build artifacts
+      - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: "docs"
           cache-targets: true
           cache-bin: false
 
-      - name: Install Node.js dependencies
+      - name: Install dependencies
         working-directory: ./versatiles_node
         run: npm i
 
-      - name: Build native module
+      - name: Build package
         working-directory: ./versatiles_node
         run: npm run build:debug
 
-      - name: Generate documentation
+      - name: Generate docs
         working-directory: ./versatiles_node
         run: npm run docs:generate
 
-      - name: Add .nojekyll file
+      - name: Disable Jekyll
         working-directory: ./versatiles_node
         run: touch docs/.nojekyll
 
-      - name: Setup Pages
+      - name: Configure Pages
         uses: actions/configure-pages@v6
 
-      - name: Upload documentation artifact
+      - name: Upload docs
         uses: actions/upload-pages-artifact@v5
         with:
           path: ./versatiles_node/docs
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy docs
         id: deployment
         uses: actions/deploy-pages@v5

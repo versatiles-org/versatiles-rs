@@ -50,7 +50,7 @@ jobs:
     name: Pre-flight checks
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v7
 
       - name: Setup Node.js
@@ -70,7 +70,7 @@ jobs:
       is_prerelease: ${{ steps.detect_prerelease.outputs.is_prerelease }}
       npm_tag: ${{ steps.detect_prerelease.outputs.npm_tag }}
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v7
         with:
           # Full history + tags so git-cliff can build the changelog for the tag range.
@@ -129,7 +129,7 @@ jobs:
         if: env.BUILD_ENABLED != 'true'
         run: echo "Linux ARM build deselected via workflow_dispatch; fast-passing job."
 
-      - name: Checkout code
+      - name: Checkout
         if: env.BUILD_ENABLED == 'true'
         uses: actions/checkout@v7
 
@@ -140,11 +140,11 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
+      - name: Setup Docker Buildx
         if: env.BUILD_ENABLED == 'true'
         uses: docker/setup-buildx-action@v4
 
-      - name: Test and Build Binary
+      - name: Test and build binary
         if: env.BUILD_ENABLED == 'true'
         run: |
           docker buildx build \
@@ -165,7 +165,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-pack-upload.sh "output" "linux-${{ matrix.libc }}-aarch64" "${{ needs.prepare.outputs.tag }}"
 
-      - name: Upload NAPI binding as artifact
+      - name: Upload NAPI binding
         if: env.BUILD_ENABLED == 'true'
         uses: actions/upload-artifact@v7
         with:
@@ -190,7 +190,7 @@ jobs:
         if: env.BUILD_ENABLED != 'true'
         run: echo "Linux x86 build deselected via workflow_dispatch; fast-passing job."
 
-      - name: Checkout code
+      - name: Checkout
         if: env.BUILD_ENABLED == 'true'
         uses: actions/checkout@v7
 
@@ -201,11 +201,11 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
+      - name: Setup Docker Buildx
         if: env.BUILD_ENABLED == 'true'
         uses: docker/setup-buildx-action@v4
 
-      - name: Test and Build Binary
+      - name: Test and build binary
         if: env.BUILD_ENABLED == 'true'
         run: |
           docker buildx build \
@@ -226,7 +226,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-pack-upload.sh "output" "linux-${{ matrix.libc }}-x86_64" "${{ needs.prepare.outputs.tag }}"
 
-      - name: Upload NAPI binding as artifact
+      - name: Upload NAPI binding
         if: env.BUILD_ENABLED == 'true'
         uses: actions/upload-artifact@v7
         with:
@@ -256,32 +256,32 @@ jobs:
         if: env.BUILD_ENABLED != 'true'
         run: echo "macOS build deselected via workflow_dispatch; fast-passing job."
 
-      - name: Checkout code
+      - name: Checkout
         if: env.BUILD_ENABLED == 'true'
         uses: actions/checkout@v7
 
-      - name: Install Rust toolchain
+      - name: Setup Rust
         if: env.BUILD_ENABLED == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.arch }}-apple-darwin
 
-      - name: Cache cargo/macOS
+      - name: Cache Rust
         if: env.BUILD_ENABLED == 'true'
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: macos-${{ matrix.arch }}
           cache-bin: false
 
-      - name: Run Tests
+      - name: Run tests
         if: env.BUILD_ENABLED == 'true'
         run: cargo test
 
-      - name: Build CLI Binary
+      - name: Build CLI binary
         if: env.BUILD_ENABLED == 'true'
         run: cargo build --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-apple-darwin"
 
-      - name: Build NAPI Binding
+      - name: Build NAPI binding
         if: env.BUILD_ENABLED == 'true'
         run: cargo build --package "versatiles_node" --release --target "${{ matrix.arch }}-apple-darwin"
 
@@ -299,7 +299,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-pack-upload.sh "target/${{ matrix.arch }}-apple-darwin/release" "macos-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
 
-      - name: Upload NAPI binding as artifact
+      - name: Upload NAPI binding
         if: env.BUILD_ENABLED == 'true'
         uses: actions/upload-artifact@v7
         with:
@@ -334,24 +334,24 @@ jobs:
           # is back on crates.io (see versatiles_pipeline/Cargo.toml).
           git config --global core.longpaths true
 
-      - name: Checkout code
+      - name: Checkout
         if: env.BUILD_ENABLED == 'true'
         uses: actions/checkout@v7
 
-      - name: Install Rust toolchain
+      - name: Setup Rust
         if: env.BUILD_ENABLED == 'true'
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.arch }}-pc-windows-msvc
 
-      - name: Cache cargo/Windows
+      - name: Cache Rust
         if: env.BUILD_ENABLED == 'true'
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: windows-${{ matrix.arch }}
           cache-bin: false
 
-      - name: Run Tests
+      - name: Run tests
         if: env.BUILD_ENABLED == 'true' && matrix.arch == 'x86_64'
         run: |
           cargo test --bins
@@ -381,7 +381,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: scripts\workflow-pack-upload.ps1 "target\${{ matrix.arch }}-pc-windows-msvc\release" "windows-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
 
-      - name: Upload NAPI binding as artifact
+      - name: Upload NAPI binding
         if: env.BUILD_ENABLED == 'true'
         uses: actions/upload-artifact@v7
         with:
@@ -401,7 +401,7 @@ jobs:
       - build-windows
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v7
 
       - name: Setup Node.js
@@ -413,7 +413,7 @@ jobs:
         working-directory: ./versatiles_node
         run: npm install
 
-      - name: Download NAPI bindings from workflow artifacts
+      - name: Download NAPI bindings
         uses: actions/download-artifact@v8
         with:
           pattern: node-binding-*
@@ -481,7 +481,7 @@ jobs:
           echo "Platform packages created:"
           ls -lah npm/*/*.tgz
 
-      - name: Upload npm packages as artifacts
+      - name: Upload npm packages
         uses: actions/upload-artifact@v7
         with:
           name: npm-packages
@@ -503,7 +503,7 @@ jobs:
         if: env.PUBLISH_ENABLED != 'true'
         run: echo "npm publish deselected via workflow_dispatch; fast-passing job."
 
-      - name: Checkout code
+      - name: Checkout
         if: env.PUBLISH_ENABLED == 'true'
         uses: actions/checkout@v7
 
@@ -566,7 +566,7 @@ jobs:
           echo "Final npm directory structure:"
           find npm -type f -name "*.tgz" || echo "No .tgz files in npm directory"
 
-      - name: Validate package version
+      - name: Check package version
         if: env.PUBLISH_ENABLED == 'true'
         working-directory: ./versatiles_node
         run: |
@@ -619,7 +619,7 @@ jobs:
           echo ""
           echo "✓ JavaScript wrappers built (native bindings removed)"
 
-      - name: Validate package contents
+      - name: Check package contents
         if: env.PUBLISH_ENABLED == 'true'
         working-directory: ./versatiles_node
         run: |
@@ -716,7 +716,7 @@ jobs:
           echo ""
           echo "✓ All npm packages published"
 
-      - name: Verify publication
+      - name: Check publication
         if: env.PUBLISH_ENABLED == 'true'
         run: |
           sleep 60
@@ -742,17 +742,17 @@ jobs:
         if: env.PUBLISH_ENABLED != 'true'
         run: echo "crates.io publish deselected or is prerelease; fast-passing job."
 
-      - name: Checkout code
+      - name: Checkout
         if: env.PUBLISH_ENABLED == 'true'
         uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.tag }}
 
-      - name: Install Rust toolchain
+      - name: Setup Rust
         if: env.PUBLISH_ENABLED == 'true'
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache Rust build artifacts
+      - name: Cache Rust
         if: env.PUBLISH_ENABLED == 'true'
         uses: Swatinem/rust-cache@v2
         with:
@@ -853,15 +853,15 @@ jobs:
       - publish-crates
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Set Environment Variables
+      - name: Configure environment
         run: |
           echo "TAG=${{ needs.prepare.outputs.tag }}" >> $GITHUB_ENV
           echo "IS_PRERELEASE=${{ needs.prepare.outputs.is_prerelease }}" >> $GITHUB_ENV
 
-      - name: Update and Release Install scripts
+      - name: Update install scripts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
