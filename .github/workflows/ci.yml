@@ -34,14 +34,18 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  # CI never attaches a debugger and never reuses a warm incremental dir, so
-  # both settings cost compile time, disk and cache size for nothing. The
-  # profiles in Cargo.toml keep them on for local development; these env vars
-  # override them here only. `dev` covers dependencies, `test` the test
-  # targets themselves — `cargo test` uses both.
-  CARGO_INCREMENTAL: "0"
-  CARGO_PROFILE_DEV_DEBUG: "0"
-  CARGO_PROFILE_TEST_DEBUG: "0"
+  # Full debuginfo is the single biggest cost in a test build: measured over the
+  # whole workspace, `cargo test --no-run` takes 94s and leaves a 3.6 GB target
+  # dir with it, 83s and 2.7 GB with line tables only. Line tables are what
+  # backtraces actually need — dropping to `0` saves a further 6s but strips the
+  # file:line from every backtrace frame, which is a bad trade when a CI-only
+  # failure is the thing you're debugging. Cargo.toml keeps full debuginfo for
+  # local development; `dev` covers dependencies, `test` the test targets — a
+  # `cargo test` build uses both.
+  # (`CARGO_INCREMENTAL` is not set here: dtolnay/rust-toolchain already exports
+  # `CARGO_INCREMENTAL=0` on every job.)
+  CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
+  CARGO_PROFILE_TEST_DEBUG: "line-tables-only"
 
 jobs:
   # ============================================================================
