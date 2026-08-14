@@ -257,6 +257,12 @@ jobs:
         if: matrix.run-clippy
         run: cargo clippy --workspace --all-targets ${{ matrix.features }} -- -D warnings
 
+      # Split from "Run tests" so the step timings separate compile cost from
+      # test execution; the second command reuses these artifacts.
+      - name: Build tests
+        if: matrix.run-tests
+        run: cargo test --workspace ${{ matrix.features }} --no-run
+
       - name: Run tests
         if: matrix.run-tests
         run: cargo test --workspace ${{ matrix.features }}
@@ -293,7 +299,12 @@ jobs:
           cache-on-failure: false
           cache-bin: false
 
-      - name: Test
+      # Split so the step timings separate compile cost from test execution;
+      # "Test" reuses the artifacts built here.
+      - name: Build tests
+        run: cargo test --workspace --no-run
+
+      - name: Run tests
         run: cargo test --workspace
 
       - name: Check no-default-features
@@ -398,7 +409,12 @@ jobs:
           cache-on-failure: false
           cache-bin: false
 
-      - name: Test
+      # Split so the step timings separate compile cost from test execution;
+      # "Test" reuses the artifacts built here.
+      - name: Build tests
+        run: cargo test --workspace --no-run
+
+      - name: Run tests
         run: cargo test --workspace
 
   # ============================================================================
@@ -429,7 +445,12 @@ jobs:
           cache-on-failure: false
           cache-bin: false
 
-      - name: Test with GDAL
+      # Split so the step timings separate compile cost from test execution;
+      # "Test with GDAL" reuses the artifacts built here.
+      - name: Build tests
+        run: cargo test --workspace --features gdal --no-run
+
+      - name: Run tests
         run: cargo test --workspace --features gdal
 
   # ============================================================================
