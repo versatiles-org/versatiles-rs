@@ -16,7 +16,7 @@
 
 use crate::helpers::{
 	tile_error_monitor::{TileErrorMonitor, TileErrorStage},
-	tile_size_monitor::{HARD_CAP_BYTES, TileBreakdown, TileSizeMonitor},
+	tile_size_monitor::{MaxTileBytes, TileBreakdown, TileSizeMonitor, resolve_hard_cap},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -69,11 +69,11 @@ impl FeatureTileSource {
 	/// `"from_geo"`); `source_description` and `source_short` go into the
 	/// `SourceType` used by tooling that introspects the pipeline.
 	///
-	/// `max_tile_bytes` sets the hard cap on encoded tile size, in bytes:
-	/// `None` keeps the default [`HARD_CAP_BYTES`] (1 MiB), `Some(0)` disables
-	/// the hard cap entirely, and `Some(n)` caps encoded tiles at `n` bytes.
-	/// Tiles above the cap are skipped by the streaming path and error out on
-	/// the single-tile path; the soft-cap (200 KB) warning is unaffected.
+	/// `max_tile_bytes` sets the hard cap on encoded tile size: `None` keeps
+	/// the default 1 MiB, [`MaxTileBytes::Disabled`] switches the cap off, and
+	/// [`MaxTileBytes::Limit`] caps encoded tiles at that many bytes. Tiles
+	/// above the cap are skipped by the streaming path and error out on the
+	/// single-tile path; the soft-cap warning threshold scales with the cap.
 	pub fn new(
 		import: FeatureImport,
 		layer_name: &str,
@@ -81,7 +81,7 @@ impl FeatureTileSource {
 		label: &'static str,
 		source_description: &'static str,
 		source_short: &'static str,
-		max_tile_bytes: Option<u32>,
+		max_tile_bytes: Option<MaxTileBytes>,
 	) -> Result<Self> {
 		// Tile pyramid covers the data bbox over [min_zoom, max_zoom];
 		// for empty input, an empty pyramid.
@@ -109,17 +109,6 @@ impl FeatureTileSource {
 			source_description,
 			source_short,
 		})
-	}
-}
-
-/// Map a VPL `max_tile_bytes` argument to the [`TileSizeMonitor`]'s hard cap:
-/// absent → the default [`HARD_CAP_BYTES`] (1 MiB); `0` → `None`, i.e. the
-/// hard cap is disabled entirely; `n > 0` → cap encoded tiles at `n` bytes.
-fn resolve_hard_cap(max_tile_bytes: Option<u32>) -> Option<usize> {
-	match max_tile_bytes {
-		None => Some(HARD_CAP_BYTES),
-		Some(0) => None,
-		Some(n) => Some(n as usize),
 	}
 }
 
@@ -318,7 +307,7 @@ mod tests {
 		build_source_with_cap(max_zoom, None)
 	}
 
-	fn build_source_with_cap(max_zoom: u8, max_tile_bytes: Option<u32>) -> FeatureTileSource {
+	fn build_source_with_cap(max_zoom: u8, max_tile_bytes: Option<MaxTileBytes>) -> FeatureTileSource {
 		let features: Vec<GeoFeature> = vec![
 			point_feature(1, "origin", 0.0, 0.0),
 			point_feature(2, "east", 90.0, 30.0),
@@ -410,7 +399,7 @@ mod tests {
 	async fn tile_errors_when_above_configured_hard_cap() -> Result<()> {
 		// A 1-byte cap makes every rendered tile over-cap: the single-tile API
 		// must propagate the error rather than drop the tile.
-		let source = build_source_with_cap(2, Some(1));
+		let source = build_source_with_cap(2, Some(MaxTileBytes::Limit(1)));
 		let coord = TileCoord::new(0, 0, 0)?;
 		let err = source.tile(&coord).await.unwrap_err();
 		assert!(format!("{err:#}").contains("hard cap"), "{err:#}");
@@ -419,9 +408,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn tile_passes_when_hard_cap_disabled() -> Result<()> {
-		// `max_tile_bytes=0` disables the hard cap: the same tile that errored
-		// under a 1-byte cap is emitted normally.
-		let source = build_source_with_cap(2, Some(0));
+		// `max_tile_bytes=none` disables the hard cap: the same tile that
+		// errored under a 1-byte cap is emitted normally.
+		let source = build_source_with_cap(2, Some(MaxTileBytes::Disabled));
 		let coord = TileCoord::new(0, 0, 0)?;
 		let tile = source.tile(&coord).await?;
 		assert!(tile.is_some(), "disabled hard cap must emit the tile");
@@ -432,7 +421,7 @@ mod tests {
 	async fn tile_stream_obeys_configured_hard_cap() -> Result<()> {
 		// The streaming path skips over-cap tiles (returning None), so a 1-byte
 		// cap must yield nothing while a disabled cap yields the data tiles.
-		let capped = build_source_with_cap(0, Some(1));
+		let capped = build_source_with_cap(0, Some(MaxTileBytes::Limit(1)));
 		let bbox = TileBBox::new_full(0)?;
 		let mut stream = capped.tile_stream(bbox).await?;
 		assert!(
@@ -440,7 +429,7 @@ mod tests {
 			"all tiles over a 1-byte cap must be skipped"
 		);
 
-		let uncapped = build_source_with_cap(0, Some(0));
+		let uncapped = build_source_with_cap(0, Some(MaxTileBytes::Disabled));
 		let mut stream = uncapped.tile_stream(bbox).await?;
 		assert!(stream.next().await.is_some(), "disabled hard cap must emit the tile");
 		Ok(())

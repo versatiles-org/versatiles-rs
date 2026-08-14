@@ -177,7 +177,7 @@ Reads a CSV file with longitude/latitude columns and emits MVT point tiles.
 - *`point_reduction`: PointReductionStrategy (optional)* - Point reduction strategy: `none` / `drop_rate` / `min_distance` (default `min_distance`).
 - *`point_reduction_value`: f32 (optional)* - Numeric value whose meaning depends on `point_reduction`: - `min_distance` (default): minimum distance between kept points, in tile-pixels at the current zoom. Defaults to 16. - `drop_rate`: per-zoom keep-fraction in `[0, 1]`. Defaults to 0.5. - `none`: ignored.
 - *`compression`: TileCompression (optional)* - Tile-compression applied before the tiles leave this operation: `gzip` (default), `brotli`, `zstd`, or `none`.
-- *`max_tile_bytes`: u32 (optional)* - Maximum encoded tile size in bytes before a tile is considered broken and dropped (streaming path) / errors out (single-tile path). Defaults to 1048576 (1 MiB). `0` disables the hard cap entirely — tiles are emitted at any size (only the 200 KB soft-cap warning remains). Raise this when a legitimate low-zoom tile exceeds the default (e.g. `max_tile_bytes=2097152` for 2 MiB).
+- *`max_tile_bytes`: u32 | none (optional)* - Maximum encoded tile size in bytes before a tile is considered broken and dropped (streaming path) / errors out (single-tile path). Defaults to 1048576 (1 MiB). Raise it when a legitimate low-zoom tile exceeds the default (e.g. `max_tile_bytes=2097152` for 2 MiB), or set `max_tile_bytes=none` to emit tiles at any size. The soft-cap warning threshold (200 KB at the default cap) scales with this value.
 
 ---
 
@@ -249,7 +249,7 @@ Reads a GeoJSON or Shapefile and emits MVT vector tiles.
 - *`point_reduction`: PointReductionStrategy (optional)* - Point reduction strategy: `none` / `drop_rate` / `min_distance` (default `min_distance`).
 - *`point_reduction_value`: f32 (optional)* - Numeric value whose meaning depends on `point_reduction`: - `min_distance` (default): minimum distance between kept points, in tile-pixels at the current zoom. Defaults to 16. - `drop_rate`: per-zoom keep-fraction in `[0, 1]`. Defaults to 0.5. - `none`: ignored.
 - *`compression`: TileCompression (optional)* - Tile-compression applied before the tiles leave this operation: `gzip` (default), `brotli`, `zstd`, or `none`.
-- *`max_tile_bytes`: u32 (optional)* - Maximum encoded tile size in bytes before a tile is considered broken and dropped (streaming path) / errors out (single-tile path). Defaults to 1048576 (1 MiB). `0` disables the hard cap entirely — tiles are emitted at any size (only the 200 KB soft-cap warning remains). Raise this when a legitimate low-zoom tile exceeds the default (e.g. `max_tile_bytes=2097152` for 2 MiB).
+- *`max_tile_bytes`: u32 | none (optional)* - Maximum encoded tile size in bytes before a tile is considered broken and dropped (streaming path) / errors out (single-tile path). Defaults to 1048576 (1 MiB). Raise it when a legitimate low-zoom tile exceeds the default (e.g. `max_tile_bytes=2097152` for 2 MiB), or set `max_tile_bytes=none` to emit tiles at any size. The soft-cap warning threshold (200 KB at the default cap) scales with this value.
 - *`ignore_id`: bool (optional)* - If `true`, drop the GeoJSON / Shapefile `id` field from every feature before encoding. Useful for sources where the id is a string (e.g. USGS earthquakes — those would be silently dropped at MVT encode anyway, since MVT requires `uint64` ids), or when the id is just noise. Defaults to `false` — keep the id when it's a non-negative integer.
 
 ---

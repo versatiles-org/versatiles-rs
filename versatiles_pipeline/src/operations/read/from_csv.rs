@@ -13,6 +13,7 @@
 use crate::{
 	PipelineFactory,
 	helpers::feature_tile_source::{FeatureTileSource, apply_property_filters},
+	helpers::tile_size_monitor::MaxTileBytes,
 	operations::read::traits::ReadTileSource,
 	vpl::VPLNode,
 };
@@ -79,11 +80,11 @@ struct Args {
 	compression: Option<TileCompression>,
 	/// Maximum encoded tile size in bytes before a tile is considered broken
 	/// and dropped (streaming path) / errors out (single-tile path). Defaults to
-	/// 1048576 (1 MiB). `0` disables the hard cap entirely — tiles are emitted
-	/// at any size (only the 200 KB soft-cap warning remains). Raise this when
-	/// a legitimate low-zoom tile exceeds the default (e.g. `max_tile_bytes=2097152`
-	/// for 2 MiB).
-	max_tile_bytes: Option<u32>,
+	/// 1048576 (1 MiB). Raise it when a legitimate low-zoom tile exceeds the
+	/// default (e.g. `max_tile_bytes=2097152` for 2 MiB), or set
+	/// `max_tile_bytes=none` to emit tiles at any size. The soft-cap warning
+	/// threshold (200 KB at the default cap) scales with this value.
+	max_tile_bytes: Option<MaxTileBytes>,
 }
 
 /// Marker type for the read-factory macro. The actual runtime `TileSource`
@@ -248,11 +249,11 @@ mod tests {
 		let err = op.tile(&TileCoord::new(0, 0, 0)?).await.unwrap_err();
 		assert!(format!("{err:#}").contains("hard cap"), "{err:#}");
 
-		// `max_tile_bytes=0` disables the hard cap: the same tile is emitted.
+		// `max_tile_bytes=none` disables the hard cap: the same tile is emitted.
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
 			.operation_from_vpl(&format!(
-				"from_csv filename=\"../testdata/quakes.csv\" max_tile_bytes=0 {COMMON}"
+				"from_csv filename=\"../testdata/quakes.csv\" max_tile_bytes=none {COMMON}"
 			))
 			.await?;
 		assert!(
