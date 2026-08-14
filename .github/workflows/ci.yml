@@ -21,6 +21,14 @@ on:
     - cron: "15 6 * * 2"
   workflow_dispatch:
 
+# One in-flight run per PR (or per branch, for pushes). Pushing again
+# supersedes the previous run instead of leaving both to race through the
+# full ~17-job matrix. `main` is exempt: its runs produce the "CI Success"
+# status that branch protection requires, so they must always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 permissions:
   contents: read
 
