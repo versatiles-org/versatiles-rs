@@ -13,6 +13,7 @@
 use crate::{
 	PipelineFactory,
 	helpers::feature_tile_source::{FeatureTileSource, apply_property_filters},
+	helpers::tile_size_monitor::MaxTileBytes,
 	operations::read::traits::ReadTileSource,
 	vpl::VPLNode,
 };
@@ -77,6 +78,13 @@ struct Args {
 	/// Tile-compression applied before the tiles leave this operation:
 	/// `gzip` (default), `brotli`, `zstd`, or `none`.
 	compression: Option<TileCompression>,
+	/// Maximum encoded tile size in bytes before a tile is considered broken
+	/// and dropped (streaming path) / errors out (single-tile path). Defaults to
+	/// 1048576 (1 MiB). Raise it when a legitimate low-zoom tile exceeds the
+	/// default (e.g. `max_tile_bytes=2097152` for 2 MiB), or set
+	/// `max_tile_bytes=none` to emit tiles at any size. The soft-cap warning
+	/// threshold (200 KB at the default cap) scales with this value.
+	max_tile_bytes: Option<MaxTileBytes>,
 }
 
 /// Marker type for the read-factory macro. The actual runtime `TileSource`
@@ -180,6 +188,7 @@ impl ReadTileSource for Operation {
 			"from_csv",
 			"csv features",
 			"csv",
+			args.max_tile_bytes,
 		)?) as Box<dyn TileSource>)
 	}
 }
@@ -222,6 +231,35 @@ mod tests {
 		let vt = versatiles_geometry::vector_tile::VectorTile::from_blob(&blob)?;
 		assert_eq!(vt.layers[0].name, "quakes");
 		assert_eq!(vt.layers[0].features.len(), 3);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn max_tile_bytes_propagates_to_single_tile_path() -> Result<()> {
+		const COMMON: &str = "lon_column=\"longitude\" lat_column=\"latitude\" layer_name=\"quakes\" max_zoom=8";
+
+		// A 1-byte cap makes the world tile over-cap: the single-tile API must
+		// surface the error instead of silently returning no tile.
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(&format!(
+				"from_csv filename=\"../testdata/quakes.csv\" max_tile_bytes=1 {COMMON}"
+			))
+			.await?;
+		let err = op.tile(&TileCoord::new(0, 0, 0)?).await.unwrap_err();
+		assert!(format!("{err:#}").contains("hard cap"), "{err:#}");
+
+		// `max_tile_bytes=none` disables the hard cap: the same tile is emitted.
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(&format!(
+				"from_csv filename=\"../testdata/quakes.csv\" max_tile_bytes=none {COMMON}"
+			))
+			.await?;
+		assert!(
+			op.tile(&TileCoord::new(0, 0, 0)?).await?.is_some(),
+			"disabled hard cap must emit the world tile"
+		);
 		Ok(())
 	}
 

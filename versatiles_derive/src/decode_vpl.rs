@@ -207,6 +207,19 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param2: None,
 		is_enum: true,
 	},
+	// Parsed via `TryFrom<&str>` like the string enums above, but its accepted
+	// values aren't a closed set (`none` or any byte count), so `is_enum` stays
+	// false — there's no variant list for the TS codegen to turn into a
+	// string-literal union. `versatiles_node::codegen` special-cases it instead.
+	TypeMapping {
+		pattern: "Option<MaxTileBytes>",
+		display_name: "u32 | none",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("MaxTileBytes"),
+		generic_param2: None,
+		is_enum: false,
+	},
 	TypeMapping {
 		pattern: "Option<RasterTileFormat>",
 		display_name: "RasterTileFormat",
@@ -712,6 +725,15 @@ mod tests {
 			),
 			"property_string_list_option",
 			"*`v`: [String,...] (optional)*",
+		);
+		assert_field_type_decodes(
+			parse_quote!(
+				struct T {
+					v: Option<MaxTileBytes>,
+				}
+			),
+			"property_enum_option::<MaxTileBytes>",
+			"*`v`: u32 | none (optional)*",
 		);
 	}
 

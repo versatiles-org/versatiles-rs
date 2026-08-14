@@ -70,6 +70,9 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		"[f64;4]" | "Option<[f64;4]>" => "[number, number, number, number]",
 		"[f64;3]" | "Option<[f64;3]>" | "[u8;3]" | "Option<[u8;3]>" => "[number, number, number]",
 		"Vec<VPLPipeline>" => "VPL[]",
+		// Not a closed variant set, so it carries no `enum_variants`: a byte
+		// count, or the literal "none" to switch the cap off.
+		"Option<MaxTileBytes>" => r#"number | "none""#,
 		_ => "unknown",
 	};
 	ts.to_string()
@@ -412,6 +415,10 @@ mod tests {
 			"[number, number, number]"
 		);
 		assert_eq!(rust_type_to_ts(&plain_field("Vec<VPLPipeline>")), "VPL[]");
+		assert_eq!(
+			rust_type_to_ts(&plain_field("Option<MaxTileBytes>")),
+			r#"number | "none""#
+		);
 	}
 
 	#[test]

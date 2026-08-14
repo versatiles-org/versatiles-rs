@@ -10,19 +10,22 @@
 //!
 //! [`TileSizeMonitor`] sits between the tile encoder and the consumer:
 //!
-//! - **Hard cap** ([`HARD_CAP_BYTES`], 1 MB) → return an error from `check`,
-//!   aborting the conversion with a clear message including `(z, x, y)` and
-//!   a breakdown of what's filling the tile (feature count, geometry vs.
-//!   property bytes).
-//! - **Soft cap** ([`SOFT_CAP_BYTES`], 200 KB) → track silently; emit a
-//!   single one-shot warning the first time it's hit, with the same
+//! - **Hard cap** (default [`HARD_CAP_BYTES`], 1 MiB; configurable per
+//!   operation via `max_tile_bytes`, `none` disables) → return an error from
+//!   `check`, aborting the conversion with a clear message including
+//!   `(z, x, y)` and a breakdown of what's filling the tile (feature count,
+//!   geometry vs. property bytes).
+//! - **Soft cap** (default [`SOFT_CAP_BYTES`], 200 KB) → track silently; emit
+//!   a single one-shot warning the first time it's hit, with the same
 //!   breakdown, so the user gets live feedback. Per-tile warnings would
-//!   drown out the log on a multi-million-tile pyramid.
+//!   drown out the log on a multi-million-tile pyramid. The soft cap scales
+//!   with the configured hard cap (see [`soft_cap_for`]), so raising the hard
+//!   cap doesn't leave the user warned about every tile they just opted in to.
 //! - **End-of-run summary** → on `Drop`, log total tile count, byte
 //!   averages, and the top largest tiles (each with its breakdown) so
 //!   the user can see exactly where the problem is.
 
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 use std::sync::{
 	Arc, Mutex,
 	atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
@@ -95,16 +98,112 @@ impl TileBreakdown {
 	}
 }
 
+/// Soft cap used when the hard cap is left at its default (or disabled).
 /// Tiles below this size never trigger a warning.
 pub const SOFT_CAP_BYTES: usize = 200 * 1024;
 
-/// Tiles above this size cause `check` to return an error. ~1 MB is well
-/// past the practical limit of Mapbox / MapLibre style clients and well into
-/// "this feed is misconfigured" territory.
+/// Default value for the hard cap when the operation doesn't configure one.
+/// ~1 MiB is well past the practical limit of Mapbox / MapLibre style clients
+/// and well into "this feed is misconfigured" territory.
 pub const HARD_CAP_BYTES: usize = 1024 * 1024;
 
 /// How many of the largest tiles to remember and report at end-of-run.
 const TOP_N: usize = 5;
+
+/// Format a byte count for log lines. Sizes are quoted in whole KB, except
+/// below 1 KB where that would render as a bare "0 KB" — reachable now that
+/// the cap is user-settable (`max_tile_bytes=500` says "500 bytes", not
+/// "0 KB, exceeding the 0 KB hard cap").
+fn fmt_bytes(bytes: usize) -> String {
+	if bytes < 1024 {
+		format!("{bytes} bytes")
+	} else {
+		format!("{} KB", bytes / 1024)
+	}
+}
+
+/// Value of the VPL `max_tile_bytes` argument on the operations that
+/// synthesise vector tiles.
+///
+/// Spelled as either a positive byte count (`max_tile_bytes=2097152`) or the
+/// literal `none` (`max_tile_bytes=none`) to switch the hard cap off. `0` is
+/// rejected rather than silently meaning "disabled": a zero-byte cap would
+/// reject every tile, so taking it as its literal value is the more useful
+/// reading, and `none` says "no cap" unambiguously.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MaxTileBytes {
+	/// `max_tile_bytes=none` — no hard cap; tiles are emitted at any size.
+	Disabled,
+	/// `max_tile_bytes=n` — cap encoded tiles at `n` bytes.
+	Limit(u32),
+}
+
+impl MaxTileBytes {
+	/// Parse the string form used by the VPL `max_tile_bytes=` argument.
+	pub fn parse(value: &str) -> Result<Self> {
+		let value = value.trim();
+		if value.eq_ignore_ascii_case("none") {
+			return Ok(Self::Disabled);
+		}
+		let bytes: u32 = value.parse().map_err(|_| {
+			anyhow!("invalid max_tile_bytes '{value}'; expected a byte count (e.g. 2097152) or 'none' to disable the cap")
+		})?;
+		if bytes == 0 {
+			bail!("max_tile_bytes=0 would reject every tile; use max_tile_bytes=none to disable the cap");
+		}
+		Ok(Self::Limit(bytes))
+	}
+
+	/// The hard cap this value implies, in bytes; `None` when disabled.
+	#[must_use]
+	pub fn hard_cap_bytes(self) -> Option<usize> {
+		match self {
+			Self::Disabled => None,
+			Self::Limit(n) => Some(n as usize),
+		}
+	}
+}
+
+impl TryFrom<&str> for MaxTileBytes {
+	type Error = anyhow::Error;
+	fn try_from(value: &str) -> Result<Self> {
+		Self::parse(value)
+	}
+}
+
+/// Map the optional VPL `max_tile_bytes` argument to the monitor's hard cap:
+/// absent → the default [`HARD_CAP_BYTES`] (1 MiB); `none` → no cap at all;
+/// `n` → cap encoded tiles at `n` bytes.
+#[must_use]
+pub fn resolve_hard_cap(max_tile_bytes: Option<MaxTileBytes>) -> Option<usize> {
+	max_tile_bytes.map_or(Some(HARD_CAP_BYTES), MaxTileBytes::hard_cap_bytes)
+}
+
+/// Soft-cap threshold for a given hard cap.
+///
+/// The soft cap is advisory ("this tile is getting big"), so it only means
+/// something relative to the size the user actually considers acceptable.
+/// Scaling it by the hard cap keeps the default 200 KB : 1 MiB ratio: a user
+/// who raises the cap to 2 MiB starts hearing about tiles at 400 KB rather
+/// than being warned about every tile they deliberately allowed, and a user
+/// who lowers it to 100 KB still gets a warning before the hard failure.
+///
+/// A disabled hard cap keeps the plain [`SOFT_CAP_BYTES`] default — there's
+/// no ceiling to scale against, and the advisory warning is the only size
+/// feedback left.
+#[must_use]
+fn soft_cap_for(hard_cap_bytes: Option<usize>) -> usize {
+	let Some(hard) = hard_cap_bytes else {
+		return SOFT_CAP_BYTES;
+	};
+	let soft = u64::try_from(SOFT_CAP_BYTES)
+		.unwrap_or(u64::MAX)
+		.saturating_mul(u64::try_from(hard).unwrap_or(u64::MAX))
+		/ u64::try_from(HARD_CAP_BYTES).unwrap_or(u64::MAX);
+	// `.max(1)` keeps a pathologically small hard cap (say 1 byte, as the
+	// tests use) from warning about every tile it still accepts.
+	usize::try_from(soft).unwrap_or(usize::MAX).max(1)
+}
 
 /// Shared accounting state for one read operation. Cloning a
 /// [`TileSizeMonitor`] is cheap (it's an `Arc`); each clone reports into the
@@ -117,6 +216,12 @@ pub struct TileSizeMonitor {
 struct MonitorInner {
 	/// Identifier prefix for log lines, e.g. `"from_geo"`.
 	label: &'static str,
+	/// Encoded-blob size above which `check` returns an error. `None` disables
+	/// the hard cap entirely (only the soft-cap warning remains).
+	hard_cap_bytes: Option<usize>,
+	/// Encoded-blob size above which a tile counts as oversized and gets
+	/// warned about. Derived from `hard_cap_bytes` by [`soft_cap_for`].
+	soft_cap_bytes: usize,
 	tile_count: AtomicU64,
 	oversized_count: AtomicU64,
 	total_bytes: AtomicU64,
@@ -129,10 +234,12 @@ struct MonitorInner {
 
 impl TileSizeMonitor {
 	#[must_use]
-	pub fn new(label: &'static str) -> Self {
+	pub fn new(label: &'static str, hard_cap_bytes: Option<usize>) -> Self {
 		Self {
 			inner: Arc::new(MonitorInner {
 				label,
+				hard_cap_bytes,
+				soft_cap_bytes: soft_cap_for(hard_cap_bytes),
 				tile_count: AtomicU64::new(0),
 				oversized_count: AtomicU64::new(0),
 				total_bytes: AtomicU64::new(0),
@@ -144,7 +251,8 @@ impl TileSizeMonitor {
 	}
 
 	/// Check the encoded blob's size against the soft and hard caps and
-	/// update accounting. Errors when above [`HARD_CAP_BYTES`].
+	/// update accounting. Errors when above the configured hard cap
+	/// ([`HARD_CAP_BYTES`] by default; `None` disables the hard cap).
 	///
 	/// `breakdown` is included in every warning / error message so the user
 	/// can see whether geometry detail or property bloat is the dominant
@@ -153,29 +261,32 @@ impl TileSizeMonitor {
 	pub fn check(&self, coord: TileCoord, blob: &Blob, breakdown: TileBreakdown) -> Result<()> {
 		#[allow(clippy::cast_possible_truncation)]
 		let size = blob.len() as usize;
-		if size > HARD_CAP_BYTES {
+		let inner = &self.inner;
+		if let Some(hard_cap) = inner.hard_cap_bytes
+			&& size > hard_cap
+		{
 			bail!(
-				"{}: tile {}/{}/{} is {} KB, exceeding the {} KB hard cap. \
+				"{}: tile {}/{}/{} is {}, exceeding the {} hard cap. \
 				Breakdown: {}. \
 				Likely causes: missing property pruning on a feature-heavy input, \
 				`point_reduction='none'` on a dense point feed, or `max_zoom` set too low \
-				so all features pile into a few tiles.",
-				self.inner.label,
+				so all features pile into a few tiles. Raise the `max_tile_bytes` argument \
+				to accept larger tiles (`max_tile_bytes=none` disables the cap).",
+				inner.label,
 				coord.level,
 				coord.x,
 				coord.y,
-				size / 1024,
-				HARD_CAP_BYTES / 1024,
+				fmt_bytes(size),
+				fmt_bytes(hard_cap),
 				breakdown.fmt_inline(),
 			);
 		}
 
-		let inner = &self.inner;
 		inner.tile_count.fetch_add(1, Ordering::Relaxed);
 		inner.total_bytes.fetch_add(size as u64, Ordering::Relaxed);
 		inner.max_bytes.fetch_max(size, Ordering::Relaxed);
 
-		if size > SOFT_CAP_BYTES {
+		if size > inner.soft_cap_bytes {
 			inner.oversized_count.fetch_add(1, Ordering::Relaxed);
 			// One-shot live warning so the user knows during the build that
 			// something is off. Subsequent oversized tiles roll up into the
@@ -186,14 +297,14 @@ impl TileSizeMonitor {
 				.is_ok()
 			{
 				log::warn!(
-					"{}: tile {}/{}/{} is {} KB (> {} KB soft cap). Breakdown: {}. \
+					"{}: tile {}/{}/{} is {} (> {} soft cap). Breakdown: {}. \
 					Further oversized tiles will be summarized at end of run.",
 					inner.label,
 					coord.level,
 					coord.x,
 					coord.y,
-					size / 1024,
-					SOFT_CAP_BYTES / 1024,
+					fmt_bytes(size),
+					fmt_bytes(inner.soft_cap_bytes),
 					breakdown.fmt_inline(),
 				);
 			}
@@ -217,18 +328,27 @@ impl Drop for MonitorInner {
 		let max = *self.max_bytes.get_mut();
 		let avg = total / count.max(1);
 		log::info!(
-			"{}: emitted {count} tile(s); avg {} bytes, max {} bytes; {oversized} over {} KB",
+			"{}: emitted {count} tile(s); avg {} bytes, max {} bytes; {oversized} over {}",
 			self.label,
 			avg,
 			max,
-			SOFT_CAP_BYTES / 1024,
+			fmt_bytes(self.soft_cap_bytes),
 		);
 		if oversized > 0 {
 			let top = self.top.get_mut().expect("poisoned tile-size monitor mutex");
 			if !top.is_empty() {
 				let lines: Vec<String> = top
 					.iter()
-					.map(|(size, c, b)| format!("{}/{}/{} = {} KB ({})", c.level, c.x, c.y, size / 1024, b.fmt_inline()))
+					.map(|(size, c, b)| {
+						format!(
+							"{}/{}/{} = {} ({})",
+							c.level,
+							c.x,
+							c.y,
+							fmt_bytes(*size),
+							b.fmt_inline()
+						)
+					})
 					.collect();
 				log::warn!(
 					"{}: top {} oversized tile(s): [{}]. Consider trimming properties, raising `max_zoom`, or enabling stronger point reduction.",
@@ -259,14 +379,14 @@ mod tests {
 
 	#[test]
 	fn under_soft_cap_passes_silently() {
-		let monitor = TileSizeMonitor::new("test");
+		let monitor = TileSizeMonitor::new("test", Some(HARD_CAP_BYTES));
 		let blob = Blob::from(vec![0u8; 1024]);
 		monitor.check(TileCoord::new(0, 0, 0).unwrap(), &blob, TINY).unwrap();
 	}
 
 	#[test]
 	fn over_soft_cap_passes_but_records() {
-		let monitor = TileSizeMonitor::new("test");
+		let monitor = TileSizeMonitor::new("test", Some(HARD_CAP_BYTES));
 		let blob = Blob::from(vec![0u8; SOFT_CAP_BYTES + 1024]);
 		monitor.check(TileCoord::new(5, 1, 2).unwrap(), &blob, TINY).unwrap();
 		// One tile, one oversized.
@@ -276,7 +396,7 @@ mod tests {
 
 	#[test]
 	fn over_hard_cap_errors() {
-		let monitor = TileSizeMonitor::new("test");
+		let monitor = TileSizeMonitor::new("test", Some(HARD_CAP_BYTES));
 		let blob = Blob::from(vec![0u8; HARD_CAP_BYTES + 1]);
 		let err = monitor
 			.check(TileCoord::new(7, 3, 4).unwrap(), &blob, TINY)
@@ -287,11 +407,122 @@ mod tests {
 	}
 
 	#[test]
+	fn disabled_hard_cap_passes_oversized_tile() {
+		// `max_tile_bytes=none` → hard cap disabled: an over-1-MiB tile must
+		// pass the hard-cap check (only soft-cap accounting applies).
+		let monitor = TileSizeMonitor::new("test", None);
+		let blob = Blob::from(vec![0u8; HARD_CAP_BYTES + 1024]);
+		monitor.check(TileCoord::new(7, 3, 4).unwrap(), &blob, TINY).unwrap();
+	}
+
+	// ── MaxTileBytes parsing ─────────────────────────────────────────────
+
+	#[test]
+	fn max_tile_bytes_parses_none_and_byte_counts() {
+		assert_eq!(MaxTileBytes::parse("none").unwrap(), MaxTileBytes::Disabled);
+		assert_eq!(MaxTileBytes::parse("NONE").unwrap(), MaxTileBytes::Disabled);
+		assert_eq!(MaxTileBytes::parse(" none ").unwrap(), MaxTileBytes::Disabled);
+		assert_eq!(MaxTileBytes::parse("2097152").unwrap(), MaxTileBytes::Limit(2097152));
+	}
+
+	#[test]
+	fn max_tile_bytes_rejects_zero_and_garbage() {
+		// `0` is not a synonym for "disabled": taken literally it would reject
+		// every tile, so it's an error that points at the real spelling.
+		let err = format!("{:#}", MaxTileBytes::parse("0").unwrap_err());
+		assert!(err.contains("max_tile_bytes=none"), "{err}");
+
+		let err = format!("{:#}", MaxTileBytes::parse("2MiB").unwrap_err());
+		assert!(err.contains("expected a byte count"), "{err}");
+	}
+
+	#[test]
+	fn max_tile_bytes_maps_to_hard_cap() {
+		assert_eq!(MaxTileBytes::Disabled.hard_cap_bytes(), None);
+		assert_eq!(MaxTileBytes::Limit(4096).hard_cap_bytes(), Some(4096));
+		// Absent argument keeps the built-in default.
+		assert_eq!(resolve_hard_cap(None), Some(HARD_CAP_BYTES));
+		assert_eq!(resolve_hard_cap(Some(MaxTileBytes::Disabled)), None);
+		assert_eq!(resolve_hard_cap(Some(MaxTileBytes::Limit(4096))), Some(4096));
+	}
+
+	#[test]
+	fn small_sizes_are_reported_in_bytes() {
+		// A sub-KB cap must not render as "0 KB, exceeding the 0 KB hard cap".
+		assert_eq!(fmt_bytes(500), "500 bytes");
+		assert_eq!(fmt_bytes(1023), "1023 bytes");
+		assert_eq!(fmt_bytes(1024), "1 KB");
+
+		let monitor = TileSizeMonitor::new("test", Some(10));
+		let blob = Blob::from(vec![0u8; 100]);
+		let err = monitor
+			.check(TileCoord::new(0, 0, 0).unwrap(), &blob, TINY)
+			.unwrap_err();
+		let msg = format!("{err:#}");
+		assert!(msg.contains("is 100 bytes"), "{msg}");
+		assert!(msg.contains("10 bytes hard cap"), "{msg}");
+	}
+
+	// ── soft cap scaling ─────────────────────────────────────────────────
+
+	#[test]
+	fn soft_cap_scales_with_hard_cap() {
+		// Default hard cap reproduces the historical soft cap exactly.
+		assert_eq!(soft_cap_for(Some(HARD_CAP_BYTES)), SOFT_CAP_BYTES);
+		// Doubling the hard cap doubles the advisory threshold.
+		assert_eq!(soft_cap_for(Some(2 * HARD_CAP_BYTES)), 2 * SOFT_CAP_BYTES);
+		// Halving it halves the threshold, so a warning still precedes the error.
+		assert_eq!(soft_cap_for(Some(HARD_CAP_BYTES / 2)), SOFT_CAP_BYTES / 2);
+		// No ceiling to scale against → plain default.
+		assert_eq!(soft_cap_for(None), SOFT_CAP_BYTES);
+		// A pathologically small cap must not warn about tiles it accepts.
+		assert_eq!(soft_cap_for(Some(1)), 1);
+	}
+
+	#[test]
+	fn raised_hard_cap_does_not_warn_about_tiles_it_allows() {
+		// The point of scaling: at a 4 MiB cap, a 300 KB tile is unremarkable
+		// and must not be counted as oversized, even though it clears the
+		// stock 200 KB soft cap.
+		let monitor = TileSizeMonitor::new("test", Some(4 * HARD_CAP_BYTES));
+		let blob = Blob::from(vec![0u8; 300 * 1024]);
+		monitor.check(TileCoord::new(5, 1, 2).unwrap(), &blob, TINY).unwrap();
+		assert_eq!(monitor.inner.oversized_count.load(Ordering::Relaxed), 0);
+
+		// 900 KB is past the scaled 800 KB soft cap, so it is recorded.
+		let blob = Blob::from(vec![0u8; 900 * 1024]);
+		monitor.check(TileCoord::new(5, 1, 3).unwrap(), &blob, TINY).unwrap();
+		assert_eq!(monitor.inner.oversized_count.load(Ordering::Relaxed), 1);
+	}
+
+	#[test]
+	fn lowered_hard_cap_still_warns_before_it_errors() {
+		// At a 100 KB cap the stock 200 KB soft cap would never fire — the
+		// hard cap would error first, so the user gets no advance warning.
+		let monitor = TileSizeMonitor::new("test", Some(100 * 1024));
+		let blob = Blob::from(vec![0u8; 50 * 1024]);
+		monitor.check(TileCoord::new(5, 1, 2).unwrap(), &blob, TINY).unwrap();
+		assert_eq!(monitor.inner.oversized_count.load(Ordering::Relaxed), 1);
+	}
+
+	#[test]
+	fn custom_hard_cap_errors_at_custom_threshold() {
+		// A per-operation cap of 512 KB: 600 KB errors, 400 KB passes.
+		let monitor = TileSizeMonitor::new("test", Some(512 * 1024));
+		let over = Blob::from(vec![0u8; 600 * 1024]);
+		monitor
+			.check(TileCoord::new(3, 1, 1).unwrap(), &over, TINY)
+			.unwrap_err();
+		let under = Blob::from(vec![0u8; 400 * 1024]);
+		monitor.check(TileCoord::new(3, 1, 1).unwrap(), &under, TINY).unwrap();
+	}
+
+	#[test]
 	fn over_cap_message_includes_breakdown() {
 		// The whole point of carrying TileBreakdown into `check`: the user
 		// debugging an oversized tile sees feature count + geometry/property
 		// bytes in the error message itself.
-		let monitor = TileSizeMonitor::new("test");
+		let monitor = TileSizeMonitor::new("test", Some(HARD_CAP_BYTES));
 		let blob = Blob::from(vec![0u8; HARD_CAP_BYTES + 1]);
 		let breakdown = TileBreakdown {
 			feature_count: 1234,
@@ -309,7 +540,7 @@ mod tests {
 
 	#[test]
 	fn top_n_keeps_largest() {
-		let monitor = TileSizeMonitor::new("test");
+		let monitor = TileSizeMonitor::new("test", Some(HARD_CAP_BYTES));
 		// Five tiles, ascending sizes — only the 5 largest stay (which is all).
 		// Add a 6th and verify the smallest is dropped.
 		let sizes_kb = [210, 220, 230, 240, 250, 260];
