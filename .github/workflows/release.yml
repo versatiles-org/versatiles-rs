@@ -266,13 +266,6 @@ jobs:
         with:
           targets: ${{ matrix.arch }}-apple-darwin
 
-      - name: Cache Rust
-        if: env.BUILD_ENABLED == 'true'
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: macos-${{ matrix.arch }}
-          cache-bin: false
-
       - name: Run tests
         if: env.BUILD_ENABLED == 'true'
         run: cargo test
@@ -343,13 +336,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.arch }}-pc-windows-msvc
-
-      - name: Cache Rust
-        if: env.BUILD_ENABLED == 'true'
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: windows-${{ matrix.arch }}
-          cache-bin: false
 
       - name: Run tests
         if: env.BUILD_ENABLED == 'true' && matrix.arch == 'x86_64'
@@ -751,13 +737,6 @@ jobs:
       - name: Setup Rust
         if: env.PUBLISH_ENABLED == 'true'
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust
-        if: env.PUBLISH_ENABLED == 'true'
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: 'crates-publish'
-          cache-bin: false
 
       - name: Publish crates to crates.io
         if: env.PUBLISH_ENABLED == 'true'

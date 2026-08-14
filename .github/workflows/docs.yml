@@ -35,13 +35,6 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "docs"
-          cache-targets: true
-          cache-bin: false
-
       - name: Install dependencies
         working-directory: ./versatiles_node
         run: npm i
