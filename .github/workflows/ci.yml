@@ -105,8 +105,11 @@ jobs:
           cache-on-failure: false
           cache-bin: false
 
+      # `gdal` is opt-in (`default = []`), so without it rustdoc never sees the
+      # gdal-gated modules — `from_gdal`, `mosaic_tools::tile` — and `-D warnings`
+      # never checks their docs. That's why this job installs GDAL.
       - name: Build docs
-        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --features gdal
 
   # ============================================================================
   # Linux: Node.js
