@@ -3,9 +3,9 @@ use anyhow::{Result, ensure};
 use nom::{
 	IResult, Parser,
 	branch::alt,
-	bytes::complete::{escaped_transform, is_not, tag, take_while, take_while1},
+	bytes::complete::{escaped_transform, tag, take_while, take_while1},
 	character::complete::{alphanumeric1, char, multispace1, none_of, one_of},
-	combinator::{all_consuming, cut, opt, recognize, value},
+	combinator::{all_consuming, cut, opt, peek, recognize, value},
 	error::context,
 	multi::{many0, many1, separated_list0, separated_list1},
 	sequence::{delimited, pair, preceded, separated_pair},
@@ -53,16 +53,22 @@ fn parse_double_quoted_string(input: &str) -> IResult<&str, String, VerboseError
 		"parsing double quoted string",
 		delimited(
 			char('"'),
-			escaped_transform(
-				none_of("\\\""),
-				'\\',
-				alt((
-					value("\\", tag("\\")),
-					value("\"", tag("\"")),
-					value("\n", tag("n")),
-					value("\t", tag("t")),
-				)),
-			),
+			alt((
+				// `escaped_transform` cannot match an empty body, so `""` is matched separately.
+				// Peeking keeps every non-empty body on the `escaped_transform` branch, so a bad
+				// escape still reports at the escape rather than at the opening quote.
+				value(String::new(), peek(char('"'))),
+				escaped_transform(
+					none_of("\\\""),
+					'\\',
+					alt((
+						value("\\", tag("\\")),
+						value("\"", tag("\"")),
+						value("\n", tag("n")),
+						value("\t", tag("t")),
+					)),
+				),
+			)),
 			char('"'),
 		),
 	)
@@ -72,7 +78,12 @@ fn parse_double_quoted_string(input: &str) -> IResult<&str, String, VerboseError
 fn parse_single_quoted_string(input: &str) -> IResult<&str, String, VerboseError<&str>> {
 	context(
 		"parsing single quoted string",
-		delimited(char('\''), is_not("'").map(|s: &str| s.to_string()), char('\'')),
+		// `take_while` rather than `is_not`, so that an empty body (`''`) is accepted.
+		delimited(
+			char('\''),
+			take_while(|c: char| c != '\'').map(|s: &str| s.to_string()),
+			char('\''),
+		),
 	)
 	.parse(input)
 }
@@ -220,6 +231,7 @@ mod tests {
 	#[case(r#""foo bar""#, r"foo bar")]
 	#[case(r#""foo\"bar""#, r#"foo"bar"#)]
 	#[case(r#""foo\"bar\"""#, r#"foo"bar""#)]
+	#[case(r#""""#, "")]
 	fn parse_double_quoted_string_ok(#[case] input: &str, #[case] expected: &str) {
 		assert_eq!(parse_double_quoted_string(input).unwrap(), ("", expected.to_string()));
 	}
@@ -237,8 +249,41 @@ mod tests {
 	#[case(r"'foo bar'", "", r"foo bar")]
 	#[case(r"'foo\'bar'", "bar'", r"foo\")]
 	#[case(r"'foo\\bar'", "", r"foo\\bar")]
+	#[case("''", "", "")]
+	#[case("'' rest", " rest", "")]
 	fn parse_single_quoted_string_ok(#[case] input: &str, #[case] rest: &str, #[case] expected: &str) {
 		assert_eq!(parse_single_quoted_string(input).unwrap(), (rest, expected.to_string()));
+	}
+
+	/// Both quote forms must be able to spell the empty string, and an empty value must
+	/// survive all the way into the parsed node. See issue #218.
+	#[rstest]
+	#[case(r#"node a="""#)]
+	#[case("node a=''")]
+	fn parse_empty_string_value(#[case] input: &str) {
+		let expected = VPLNode::from(("node", ("a", "")));
+		assert_eq!(parse_vpl(input).unwrap(), VPLPipeline::from(expected));
+	}
+
+	#[test]
+	fn parse_empty_string_in_array() {
+		assert_eq!(
+			parse_array(r#"["", x, '']"#).unwrap(),
+			("", vec![String::new(), "x".to_string(), String::new()])
+		);
+	}
+
+	/// An empty body must not swallow the error for a malformed escape: the trace has to keep
+	/// pointing at the offending escape rather than at the opening quote.
+	#[test]
+	fn parse_bad_escape_still_reports_at_the_escape() {
+		let error = parse_vpl(r#"node a="foo\qbar""#).unwrap_err();
+		let error = error.chain().last().unwrap().to_string();
+		let lines = error.trim().lines().collect::<Vec<&str>>();
+		assert_eq!(
+			&lines[0..3],
+			&["0: at line 1, in Tag:", r#"node a="foo\qbar""#, "            ^"]
+		);
 	}
 
 	#[test]
