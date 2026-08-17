@@ -298,8 +298,13 @@ mod tests {
 		let error = error.chain().last().unwrap().to_string();
 		let lines = error.trim().lines().collect::<Vec<&str>>();
 		assert_eq!(
-			&lines[0..3],
-			&["0: at line 1, in Tag:", r#"node a="foo\qbar""#, "            ^"]
+			&lines[0..4],
+			&[
+				"0: at line 1:",
+				r#"node a="foo\qbar""#,
+				"            ^",
+				"unexpected character"
+			]
 		);
 	}
 
@@ -409,9 +414,10 @@ mod tests {
 
 	#[rstest]
 	#[case("node [ child key=value ] node", &[
-		"0: at line 1, in Eof:",
+		"0: at line 1:",
 		"node [ child key=value ] node",
-		"                         ^"
+		"                         ^",
+		"unexpected input"
 	])]
 	#[case("node child key=value ]", &[
 		"0: at line 1:",
@@ -472,14 +478,16 @@ mod tests {
 		"^"
 	])]
 	#[case("node [n key=2]]", &[
-		"0: at line 1, in Eof:",
+		"0: at line 1:",
 		"node [n key=2]]",
-		"              ^"
+		"              ^",
+		"unexpected input"
 	])]
 	#[case("node [ ] [ ]", &[
-		"0: at line 1, in Eof:",
+		"0: at line 1:",
 		"node [ ] [ ]",
-		"         ^"
+		"         ^",
+		"unexpected input"
 	])]
 	#[case("node [ a; b ]", &[
 		"0: at line 1:",
@@ -500,9 +508,10 @@ mod tests {
 		"^"
 	])]
 	#[case("node | | node", &[
-		"0: at line 1, in Eof:",
+		"0: at line 1:",
 		"node | | node",
-		"     ^"
+		"     ^",
+		"unexpected input"
 	])]
 	fn test_error_messages(#[case] vpl: &str, #[case] message: &[&str]) {
 		let error = parse_vpl(vpl).unwrap_err().chain().last().unwrap().to_string();

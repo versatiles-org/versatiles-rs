@@ -7,7 +7,7 @@
 //! discards it in favour of a rendered string; [`render_trace`] is a port of that rendering which
 //! keeps the offsets and fixes its caret placement.
 
-use nom::Offset;
+use nom::{Offset, error::ErrorKind};
 use nom_language::error::{VerboseError, VerboseErrorKind};
 use std::{fmt, ops::Range};
 
@@ -171,21 +171,27 @@ fn render_trace(input: &str, error: &VerboseError<&str>) -> String {
 				"{i}: at line {line_number}, in {label}:\n{line}\n{:>column$}\n\n",
 				'^'
 			),
-			VerboseErrorKind::Nom(kind) => write!(
-				result,
-				"{i}: at line {line_number}, in {kind:?}:\n{line}\n{:>column$}\n\n",
-				'^'
-			),
+			// A described kind reads as a message under the caret, like the `Char` stanzas above.
+			// An undescribed one keeps the old `in <kind>` shape rather than being dressed up.
+			VerboseErrorKind::Nom(kind) => match describe_kind(*kind) {
+				Some(description) => write!(
+					result,
+					"{i}: at line {line_number}:\n{line}\n{:>column$}\n{description}\n\n",
+					'^'
+				),
+				None => write!(
+					result,
+					"{i}: at line {line_number}, in {kind:?}:\n{line}\n{:>column$}\n\n",
+					'^'
+				),
+			},
 		};
 	}
 
 	result
 }
 
-/// Renders the innermost error entry, wording `Char` failures as the trace does.
-///
-/// `Nom` kinds are passed through under their own names (`"Eof"`, `"OneOf"`); turning those into
-/// something a user can act on is a separate job from extracting them.
+/// Renders the innermost error entry.
 fn describe(remaining: &str, kind: &VerboseErrorKind) -> String {
 	match kind {
 		VerboseErrorKind::Char(expected) => remaining.chars().next().map_or_else(
@@ -193,8 +199,29 @@ fn describe(remaining: &str, kind: &VerboseErrorKind) -> String {
 			|actual| format!("expected '{expected}', found {actual}"),
 		),
 		VerboseErrorKind::Context(label) => (*label).to_string(),
-		VerboseErrorKind::Nom(kind) => format!("{kind:?}"),
+		VerboseErrorKind::Nom(kind) => describe_kind(*kind).map_or_else(|| format!("{kind:?}"), ToString::to_string),
 	}
+}
+
+/// Plain wording for the `nom` kinds this grammar can actually produce.
+///
+/// Only these six are reachable — established by driving the parser with malformed input rather
+/// than by reading the combinator list — and each is worded for what was wrong at that position,
+/// not for which combinator noticed. Anything unmapped keeps its `nom` name: a name is unhelpful,
+/// but a confident guess about an unfamiliar failure would be worse.
+fn describe_kind(kind: ErrorKind) -> Option<&'static str> {
+	Some(match kind {
+		// `all_consuming` found input it could not attach to the pipeline.
+		ErrorKind::Eof => "unexpected input",
+		// A character-level parser rejected the character under the caret. Deliberately vague
+		// about which one: the three are interchangeable from the reader's point of view.
+		ErrorKind::OneOf | ErrorKind::Tag | ErrorKind::TakeWhile1 => "unexpected character",
+		// Wrappers. These sit above one of the above at the same position, so they rarely carry
+		// the useful detail, but they still appear as stanzas in the trace.
+		ErrorKind::Alt => "none of the alternatives matched",
+		ErrorKind::Many1 => "expected at least one",
+		_ => return None,
+	})
 }
 
 #[cfg(test)]
@@ -271,7 +298,7 @@ mod tests {
 		let input = "node | | node";
 		let error = error_of(input);
 
-		assert_eq!(error.message, "Eof");
+		assert_eq!(error.message, "unexpected input");
 		assert_eq!(&input[error.span.clone()], "|");
 		assert!(error.context.is_empty());
 	}
@@ -326,10 +353,7 @@ mod tests {
 	fn line_numbers_follow_the_offset() {
 		let rendered = error_of("node a=1 |\nnode b=!").to_string();
 
-		assert!(
-			rendered.starts_with("0: at line 2, in OneOf:\nnode b=!\n"),
-			"{rendered}"
-		);
+		assert!(rendered.starts_with("0: at line 2:\nnode b=!\n"), "{rendered}");
 		assert_eq!(caret_column(&rendered, 0), 8);
 		assert!(
 			rendered.contains("at line 1, in parsing pipeline:\nnode a=1 |\n"),
