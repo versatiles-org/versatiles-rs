@@ -1,5 +1,5 @@
 use super::{VPLNode, VPLPipeline};
-use anyhow::{Result, ensure};
+use anyhow::Result;
 use nom::{
 	IResult, Parser,
 	branch::alt,
@@ -185,19 +185,23 @@ fn parse_pipeline(input: &str) -> IResult<&str, VPLPipeline, VerboseError<&str>>
 	.parse(input)
 }
 
+/// Parses VPL text into a [`VPLPipeline`].
+///
+/// On failure the error carries `nom`'s context trace, rendered by `convert_error` into the
+/// caret-annotated form the CLI prints. That rendering is a `String`, so the position of the
+/// mistake is drawn rather than stated — see issue #217.
 #[context("Failed to parse VPL input")]
 pub fn parse_vpl(input: &str) -> Result<VPLPipeline> {
-	let result = all_consuming(parse_pipeline).parse(input);
-	match result {
-		Ok((leftover, pipeline)) => {
-			ensure!(
-				leftover.trim().is_empty(),
-				"VPL didn't parse till the end. The rest: '{leftover}'"
-			);
-			Ok(pipeline)
-		}
+	// `all_consuming` fails unless the whole input was consumed, so a successful parse cannot
+	// leave anything behind and the leftover needs no checking.
+	match all_consuming(parse_pipeline).parse(input) {
+		Ok((_, pipeline)) => Ok(pipeline),
 		Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(anyhow::anyhow!(convert_error(input, e))),
-		Err(e) => Err(anyhow::anyhow!("Error parsing VPL: {e:?}")).context("Failed to parse VPL input"),
+		// Only `Incomplete` reaches here, which streaming parsers produce. Every parser above
+		// comes from `nom::…::complete`, so this is unreachable in practice; it stays as a
+		// diagnostic rather than a panic in case that ever changes. The surrounding `#[context]`
+		// already supplies the "Failed to parse VPL input" wrapper.
+		Err(e) => Err(anyhow::anyhow!("Error parsing VPL: {e:?}")),
 	}
 }
 
