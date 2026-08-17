@@ -403,8 +403,8 @@ fn cst_file(input: &str) -> Res<'_, CstFile> {
 pub fn parse_cst(input: &str) -> Result<CstFile, VplParseError> {
 	match all_consuming(cst_file).parse(input) {
 		Ok((_, mut file)) => {
-			let end = assign_spans(&mut file);
-			debug_assert_eq!(end, input.len(), "CST lost text while parsing: {input:?}");
+			file.reindex_spans();
+			debug_assert_eq!(file.to_string(), input, "the CST lost text while parsing");
 			Ok(file)
 		}
 		Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(VplParseError::from_verbose(input, &e)),
@@ -412,69 +412,6 @@ pub fn parse_cst(input: &str) -> Result<CstFile, VplParseError> {
 			input,
 			format!("Error parsing VPL: {e:?}"),
 		)),
-	}
-}
-
-// ---------------------------------------------------------------------------------------------
-// Span assignment
-// ---------------------------------------------------------------------------------------------
-
-/// Walks the tree in source order, filling in every token's span. Returns the final offset, which
-/// equals the input length exactly when nothing was lost.
-fn assign_spans(file: &mut CstFile) -> usize {
-	let mut offset = 0;
-	walk_pipeline(&mut file.pipeline, &mut offset);
-	offset + file.trailing.len()
-}
-
-fn walk_token(token: &mut CstToken, offset: &mut usize) {
-	*offset += token.leading.len();
-	let start = *offset;
-	*offset += token.text.len();
-	token.span = Some(start..*offset);
-}
-
-fn walk_pipeline(pipeline: &mut CstPipeline, offset: &mut usize) {
-	for item in &mut pipeline.nodes.items {
-		if let Some(separator) = &mut item.separator {
-			walk_token(separator, offset);
-		}
-		walk_node(&mut item.value, offset);
-	}
-}
-
-fn walk_node(node: &mut CstNode, offset: &mut usize) {
-	walk_token(&mut node.name, offset);
-	for property in &mut node.properties {
-		walk_token(&mut property.key, offset);
-		walk_token(&mut property.equals, offset);
-		walk_value(&mut property.value, offset);
-	}
-	if let Some(sources) = &mut node.sources {
-		walk_token(&mut sources.open, offset);
-		for item in &mut sources.pipelines.items {
-			if let Some(separator) = &mut item.separator {
-				walk_token(separator, offset);
-			}
-			walk_pipeline(&mut item.value, offset);
-		}
-		walk_token(&mut sources.close, offset);
-	}
-}
-
-fn walk_value(value: &mut CstValue, offset: &mut usize) {
-	match value {
-		CstValue::Single(string) => walk_token(&mut string.token, offset),
-		CstValue::Array(array) => {
-			walk_token(&mut array.open, offset);
-			for item in &mut array.items.items {
-				if let Some(separator) = &mut item.separator {
-					walk_token(separator, offset);
-				}
-				walk_token(&mut item.value.token, offset);
-			}
-			walk_token(&mut array.close, offset);
-		}
 	}
 }
 

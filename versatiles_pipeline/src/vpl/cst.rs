@@ -60,6 +60,14 @@ impl CstToken {
 	}
 }
 
+impl CstToken {
+	/// Replaces the token text, keeping the trivia and dropping the now-stale span.
+	pub fn set_text(&mut self, text: impl Into<String>) {
+		self.text = text.into();
+		self.span = None;
+	}
+}
+
 impl Display for CstToken {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str(&self.leading)?;
@@ -127,6 +135,34 @@ impl<T> Punctuated<T> {
 	pub fn is_empty(&self) -> bool {
 		self.items.is_empty()
 	}
+
+	/// Iterates mutably over the elements, ignoring separators.
+	pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+		self.items.iter_mut().map(|item| &mut item.value)
+	}
+
+	/// Appends an element, giving it `separator` unless it is the first.
+	pub fn push(&mut self, value: T, separator: CstToken) {
+		let separator = (!self.items.is_empty()).then_some(separator);
+		self.items.push(PunctuatedItem { separator, value });
+	}
+
+	/// Removes the element at `index`, returning it.
+	///
+	/// Removing the first element clears the new first element's separator: a list that begins
+	/// with its separator would print a leading `|` or `,` and no longer parse.
+	pub fn remove(&mut self, index: usize) -> Option<T> {
+		if index >= self.items.len() {
+			return None;
+		}
+		let removed = self.items.remove(index);
+		if index == 0
+			&& let Some(first) = self.items.first_mut()
+		{
+			first.separator = None;
+		}
+		Some(removed.value)
+	}
 }
 
 impl<T: Display> Display for Punctuated<T> {
@@ -168,6 +204,17 @@ impl CstFile {
 	pub fn lower(&self) -> VPLPipeline {
 		self.pipeline.lower()
 	}
+
+	/// Recomputes every token's span from the tree's current text.
+	///
+	/// Editing invalidates spans — a token whose text changed no longer sits where it did, and
+	/// neither does anything after it. Because the tree is lossless, walking it in order and
+	/// accumulating `leading.len() + text.len()` reproduces the positions the text now has, so
+	/// call this after a round of edits to make the spans address the printed result again.
+	pub fn reindex_spans(&mut self) {
+		let mut offset = 0;
+		walk_pipeline(&mut self.pipeline, &mut offset);
+	}
 }
 
 impl Display for CstFile {
@@ -189,6 +236,21 @@ impl CstPipeline {
 	#[must_use]
 	pub fn lower(&self) -> VPLPipeline {
 		VPLPipeline::new(self.nodes.iter().map(CstNode::lower).collect())
+	}
+}
+
+impl CstPipeline {
+	/// Appends a node, separating it from the previous one with ` | `.
+	pub fn push_node(&mut self, mut node: CstNode) {
+		if !self.nodes.is_empty() && node.name.leading.is_empty() {
+			node.name.leading = " ".to_string();
+		}
+		self.nodes.push(node, CstToken::with_leading(" ", "|"));
+	}
+
+	/// Removes the node at `index`, keeping the remaining separators valid.
+	pub fn remove_node(&mut self, index: usize) -> Option<CstNode> {
+		self.nodes.remove(index)
 	}
 }
 
@@ -218,6 +280,38 @@ impl CstNode {
 			properties: Vec::new(),
 			sources: None,
 		}
+	}
+
+	/// The first parameter named `key`, if the node has one.
+	#[must_use]
+	pub fn property(&self, key: &str) -> Option<&CstProperty> {
+		self.properties.iter().find(|property| property.key.text == key)
+	}
+
+	/// The first parameter named `key`, mutably.
+	pub fn property_mut(&mut self, key: &str) -> Option<&mut CstProperty> {
+		self.properties.iter_mut().find(|property| property.key.text == key)
+	}
+
+	/// Sets `key` to `value`, updating the parameter in place if it is already there and
+	/// appending ` key=value` if it is not.
+	///
+	/// Only the first parameter with that name is updated. The grammar permits repeats — they are
+	/// merged into one list when lowering — so use [`remove_property`](Self::remove_property)
+	/// first if you mean to replace a repeated key rather than edit its first occurrence.
+	pub fn set_property(&mut self, key: &str, value: &str) {
+		if let Some(property) = self.property_mut(key) {
+			property.set_value(value);
+		} else {
+			self.properties.push(CstProperty::new(key, value));
+		}
+	}
+
+	/// Removes every parameter named `key`, returning how many went.
+	pub fn remove_property(&mut self, key: &str) -> usize {
+		let before = self.properties.len();
+		self.properties.retain(|property| property.key.text != key);
+		before - self.properties.len()
 	}
 
 	/// Converts to the semantic tree.
@@ -283,6 +377,23 @@ impl CstProperty {
 	}
 }
 
+impl CstProperty {
+	/// Replaces the value, re-quoting it as loosely as the grammar allows.
+	///
+	/// The trivia before the value is kept, so ` key = value` stays spaced the way it was.
+	pub fn set_value(&mut self, value: &str) {
+		match &mut self.value {
+			CstValue::Single(string) => string.set(value),
+			other => {
+				let leading = std::mem::take(&mut other.first_token_mut().leading);
+				let mut replacement = CstValue::single(value);
+				replacement.first_token_mut().leading = leading;
+				*other = replacement;
+			}
+		}
+	}
+}
+
 impl Display for CstProperty {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{}{}{}", self.key, self.equals, self.value)
@@ -299,6 +410,45 @@ pub enum CstValue {
 }
 
 impl CstValue {
+	/// A single value, quoted as loosely as the grammar allows.
+	#[must_use]
+	pub fn single(value: &str) -> Self {
+		CstValue::Single(CstString::new(value))
+	}
+
+	/// A bracketed list, printed as `[a, b, c]`.
+	#[must_use]
+	pub fn array<I: IntoIterator<Item = S>, S: AsRef<str>>(values: I) -> Self {
+		let items = values
+			.into_iter()
+			.enumerate()
+			.map(|(i, value)| {
+				let mut string = CstString::new(value.as_ref());
+				if i > 0 {
+					string.token.leading = " ".to_string();
+				}
+				PunctuatedItem {
+					separator: (i > 0).then(|| CstToken::new(",")),
+					value: string,
+				}
+			})
+			.collect();
+
+		CstValue::Array(CstArray {
+			open: CstToken::new("["),
+			items: Punctuated { items },
+			close: CstToken::new("]"),
+		})
+	}
+
+	/// The first token of the value, which is where its trivia lives.
+	fn first_token_mut(&mut self) -> &mut CstToken {
+		match self {
+			CstValue::Single(string) => &mut string.token,
+			CstValue::Array(array) => &mut array.open,
+		}
+	}
+
 	/// The decoded values, one entry for a single value and one per item for an array.
 	#[must_use]
 	pub fn decode(&self) -> Vec<String> {
@@ -428,9 +578,73 @@ impl CstString {
 	}
 }
 
+impl CstString {
+	/// Replaces the value, re-quoting it and keeping the trivia before it.
+	pub fn set(&mut self, value: &str) {
+		let replacement = CstString::new(value);
+		self.token.set_text(replacement.token.text);
+		self.kind = replacement.kind;
+	}
+}
+
 impl Display for CstString {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{}", self.token)
+	}
+}
+
+// ---------------------------------------------------------------------------------------------
+// Span assignment
+// ---------------------------------------------------------------------------------------------
+
+fn walk_token(token: &mut CstToken, offset: &mut usize) {
+	*offset += token.leading.len();
+	let start = *offset;
+	*offset += token.text.len();
+	token.span = Some(start..*offset);
+}
+
+fn walk_pipeline(pipeline: &mut CstPipeline, offset: &mut usize) {
+	for item in &mut pipeline.nodes.items {
+		if let Some(separator) = &mut item.separator {
+			walk_token(separator, offset);
+		}
+		walk_node(&mut item.value, offset);
+	}
+}
+
+fn walk_node(node: &mut CstNode, offset: &mut usize) {
+	walk_token(&mut node.name, offset);
+	for property in &mut node.properties {
+		walk_token(&mut property.key, offset);
+		walk_token(&mut property.equals, offset);
+		walk_value(&mut property.value, offset);
+	}
+	if let Some(sources) = &mut node.sources {
+		walk_token(&mut sources.open, offset);
+		for item in &mut sources.pipelines.items {
+			if let Some(separator) = &mut item.separator {
+				walk_token(separator, offset);
+			}
+			walk_pipeline(&mut item.value, offset);
+		}
+		walk_token(&mut sources.close, offset);
+	}
+}
+
+fn walk_value(value: &mut CstValue, offset: &mut usize) {
+	match value {
+		CstValue::Single(string) => walk_token(&mut string.token, offset),
+		CstValue::Array(array) => {
+			walk_token(&mut array.open, offset);
+			for item in &mut array.items.items {
+				if let Some(separator) = &mut item.separator {
+					walk_token(separator, offset);
+				}
+				walk_token(&mut item.value.token, offset);
+			}
+			walk_token(&mut array.close, offset);
+		}
 	}
 }
 
@@ -611,5 +825,141 @@ mod tests {
 
 		assert_eq!(file.to_string(), "node key=[]");
 		assert_eq!(file.lower(), parse_vpl("node key=[]").unwrap());
+	}
+
+	// -----------------------------------------------------------------------------------------
+	// Editing
+	// -----------------------------------------------------------------------------------------
+
+	use crate::vpl::parse_cst;
+
+	/// Edits are only useful if what comes out still parses, so every case below prints the edited
+	/// tree and parses it again rather than trusting the string.
+	fn edited(source: &str, edit: impl FnOnce(&mut CstFile)) -> String {
+		let mut file = parse_cst(source).unwrap();
+		edit(&mut file);
+		let printed = file.to_string();
+		parse_cst(&printed).unwrap_or_else(|e| panic!("edit produced unparseable VPL {printed:?}:\n{e}"));
+		printed
+	}
+
+	/// The point of the whole exercise: changing one value leaves everything else byte-identical.
+	#[test]
+	fn setting_a_value_leaves_the_rest_of_the_file_alone() {
+		let source = "# which file\nfrom_container  filename = 'berlin.versatiles'  # note\n| filter level_min=5";
+		let printed = edited(source, |file| {
+			file.pipeline.nodes.items[0]
+				.value
+				.set_property("filename", "hamburg.versatiles");
+		});
+
+		assert_eq!(
+			printed,
+			"# which file\nfrom_container  filename = hamburg.versatiles  # note\n| filter level_min=5"
+		);
+	}
+
+	/// A value that needs quoting gets it, without the caller having to know the rules.
+	#[test]
+	fn setting_a_value_quotes_it_as_needed() {
+		let printed = edited("node key=plain", |file| {
+			file.pipeline.nodes.items[0].value.set_property("key", "needs quoting");
+		});
+		assert_eq!(printed, "node key='needs quoting'");
+
+		let printed = edited("node key=plain", |file| {
+			file.pipeline.nodes.items[0].value.set_property("key", "it's awkward");
+		});
+		assert_eq!(printed, r#"node key="it's awkward""#);
+	}
+
+	#[test]
+	fn adding_a_parameter_places_it_before_the_sources() {
+		let printed = edited("from_stacked [ a, b ]", |file| {
+			file.pipeline.nodes.items[0].value.set_property("level_min", "5");
+		});
+		assert_eq!(printed, "from_stacked level_min=5 [ a, b ]");
+	}
+
+	#[test]
+	fn removing_a_parameter_takes_its_whitespace_with_it() {
+		let printed = edited("node alpha=1 beta=2 gamma=3", |file| {
+			assert_eq!(file.pipeline.nodes.items[0].value.remove_property("beta"), 1);
+		});
+		assert_eq!(printed, "node alpha=1 gamma=3");
+	}
+
+	/// Repeated keys are legal, so removing by name has to take all of them.
+	#[test]
+	fn removing_a_repeated_parameter_takes_every_copy() {
+		let printed = edited("node key=a key=b other=c", |file| {
+			assert_eq!(file.pipeline.nodes.items[0].value.remove_property("key"), 2);
+		});
+		assert_eq!(printed, "node other=c");
+	}
+
+	#[test]
+	fn pushing_a_node_separates_it_with_a_pipe() {
+		let printed = edited("from_container filename=a", |file| {
+			let mut node = CstNode::new("filter");
+			node.set_property("level_min", "5");
+			file.pipeline.push_node(node);
+		});
+		assert_eq!(printed, "from_container filename=a | filter level_min=5");
+	}
+
+	/// The invariant worth protecting: a list that kept its separator after losing its first
+	/// element would print a leading `|` and stop parsing.
+	#[test]
+	fn removing_the_first_node_does_not_leave_a_dangling_separator() {
+		let printed = edited("alpha | beta | gamma", |file| {
+			assert_eq!(file.pipeline.remove_node(0).unwrap().name.text, "alpha");
+		});
+		assert!(!printed.trim_start().starts_with('|'), "got {printed:?}");
+		assert_eq!(parse_cst(&printed).unwrap().lower().len(), 2);
+	}
+
+	#[test]
+	fn arrays_can_be_built_without_knowing_the_syntax() {
+		let printed = edited("node key=old", |file| {
+			file.pipeline.nodes.items[0].value.properties[0].value = CstValue::array(["place", "water park", "it's"]);
+		});
+		assert_eq!(printed, r#"node key=[place, 'water park', "it's"]"#);
+		assert_eq!(
+			parse_cst(&printed).unwrap().pipeline.nodes.items[0].value.properties[0]
+				.value
+				.decode(),
+			["place", "water park", "it's"]
+		);
+	}
+
+	/// Replacing an array with a single value must keep the spacing around it.
+	#[test]
+	fn replacing_an_array_with_a_single_value_keeps_the_spacing() {
+		let printed = edited("node key = [a, b]", |file| {
+			file.pipeline.nodes.items[0].value.set_property("key", "one");
+		});
+		assert_eq!(printed, "node key = one");
+	}
+
+	/// Spans are stale the moment the text changes, and correct again after a reindex.
+	#[test]
+	fn reindexing_makes_spans_address_the_edited_text() {
+		let mut file = parse_cst("node key=short | other").unwrap();
+		file.pipeline.nodes.items[0]
+			.value
+			.set_property("key", "considerably-longer");
+
+		let printed = file.to_string();
+		file.reindex_spans();
+
+		let value = &file.pipeline.nodes.items[0].value.properties[0].value;
+		let CstValue::Single(string) = value else {
+			panic!("expected a single value")
+		};
+		assert_eq!(&printed[string.token.span.clone().unwrap()], "considerably-longer");
+		// tokens after the edit moved too
+		let second = &file.pipeline.nodes.items[1].value;
+		assert_eq!(&printed[second.name.span.clone().unwrap()], "other");
 	}
 }
