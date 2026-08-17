@@ -185,6 +185,20 @@ fn parse_pipeline(input: &str) -> IResult<&str, VPLPipeline, VerboseError<&str>>
 	.parse(input)
 }
 
+/// Parses `input`, handing back `nom`'s own error instead of a rendered one.
+///
+/// Scaffolding for the structured-error work: it lets [`super::error`] test its extraction against
+/// real parser output. Once `parse_vpl` is built on top of the structured error, this becomes the
+/// shared entry point rather than a test-only one.
+#[cfg(test)]
+pub(super) fn parse_vpl_verbose(input: &str) -> Result<VPLPipeline, VerboseError<&str>> {
+	match all_consuming(parse_pipeline).parse(input) {
+		Ok((_, pipeline)) => Ok(pipeline),
+		Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(e),
+		Err(e) => panic!("complete parsers cannot report {e:?}"),
+	}
+}
+
 /// Parses VPL text into a [`VPLPipeline`].
 ///
 /// On failure the error carries `nom`'s context trace, rendered by `convert_error` into the
