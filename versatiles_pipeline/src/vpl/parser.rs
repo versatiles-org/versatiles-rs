@@ -190,6 +190,24 @@ fn parse_pipeline(input: &str) -> IResult<&str, VPLPipeline, VerboseError<&str>>
 /// Use this over [`parse_vpl`] when the caller wants to *point at* the mistake — to underline it
 /// in an editor, or turn it into a language-server range. [`VplParseError`] displays as the same
 /// caret-annotated trace `parse_vpl` produces, so nothing is lost by preferring it.
+///
+/// # Examples
+///
+/// ```
+/// use versatiles_pipeline::vpl::parse_vpl_detailed;
+///
+/// let source = "from_container filename=a | vector_filter zoom";
+/// let error = parse_vpl_detailed(source).unwrap_err();
+///
+/// // The position is data, so it can be sliced straight out of the source. Here the input ran
+/// // out, so the span is empty and sits at the end.
+/// assert_eq!(error.span, 46..46);
+/// assert_eq!(error.message, "expected '=', got end of input");
+///
+/// // Each context frame says where its construct began, so a caller can widen the span itself.
+/// assert_eq!(error.context[0].label, "parsing property");
+/// assert_eq!(&source[error.context[0].offset..error.span.end], "zoom");
+/// ```
 pub fn parse_vpl_detailed(input: &str) -> Result<VPLPipeline, VplParseError> {
 	// `all_consuming` fails unless the whole input was consumed, so a successful parse cannot
 	// leave anything behind and the leftover needs no checking.

@@ -82,6 +82,19 @@ fn quote(value: &str) -> Cow<'_, str> {
 }
 
 impl Display for VPLNode {
+	/// Writes the node as VPL text, using the least punctuation that parses back.
+	///
+	/// The same normalisation as [`VPLPipeline`]'s: parameters are alphabetised, quoting is
+	/// reduced to whatever the grammar allows, and a one-element list collapses to a plain value.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_pipeline::vpl::VPLNode;
+	///
+	/// let node = VPLNode::try_from_str("filter  level_min=5 layer=[\"place\"]").unwrap();
+	/// assert_eq!(node.to_string(), "filter layer=place level_min=5");
+	/// ```
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str(&self.name)?;
 
@@ -119,6 +132,42 @@ impl Display for VPLNode {
 }
 
 impl Display for VPLPipeline {
+	/// Writes the pipeline as VPL text, using the least punctuation that parses back.
+	///
+	/// The output re-parses to an equal pipeline, but it is **not** necessarily the text it was
+	/// parsed from — the parser discards what it does not need, so a load-edit-save cycle is lossy:
+	///
+	/// - comments are gone; the whitespace parser folds them away
+	/// - parameters come back alphabetised, because they are held in a `BTreeMap`
+	/// - line breaks, indentation, the author's choice of quotes, and `a=[x]` versus `a=x` are all
+	///   normalised
+	///
+	/// So this is the right tool for writing out a pipeline built in code, and the wrong one for
+	/// rewriting a file someone is editing.
+	///
+	/// Values are quoted only as far as the grammar requires: bare where it allows, single quotes
+	/// next (no escapes needed, so backslashes stay readable), double quotes with escapes last.
+	/// Every value has a representation, so this cannot fail — with one exception: an empty
+	/// pipeline writes as the empty string, which is not valid VPL, since the grammar requires at
+	/// least one node. Node names and parameter keys have no quoted form either, so a node built by
+	/// hand with a key containing a space will write text that does not parse back.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_pipeline::vpl::parse_vpl;
+	///
+	/// // quoting is reduced and the comment is dropped
+	/// let pipeline = parse_vpl("from_container  filename='berlin.versatiles' # a comment").unwrap();
+	/// assert_eq!(pipeline.to_string(), "from_container filename=berlin.versatiles");
+	///
+	/// // parameters come back in alphabetical order, not source order
+	/// let pipeline = parse_vpl("node zebra=1 alpha=2").unwrap();
+	/// assert_eq!(pipeline.to_string(), "node alpha=2 zebra=1");
+	///
+	/// // but the round trip preserves meaning
+	/// assert_eq!(parse_vpl(&pipeline.to_string()).unwrap(), pipeline);
+	/// ```
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		for (i, node) in self.pipeline.iter().enumerate() {
 			if i > 0 {
