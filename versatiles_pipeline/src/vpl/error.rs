@@ -3,11 +3,12 @@
 //! Nothing here interprets the grammar: the offsets and labels are `nom`'s own, extracted rather
 //! than invented. The extraction is possible because every entry in a `VerboseError` holds the
 //! input still remaining at that point, which is a suffix of the whole input — so the difference
-//! in length is the byte offset. `convert_error` computes exactly this before discarding it in
-//! favour of a rendered string.
+//! in length is the byte offset. `nom_language`'s `convert_error` computes exactly this and then
+//! discards it in favour of a rendered string; [`render_trace`] is a port of that rendering which
+//! keeps the offsets and fixes its caret placement.
 
 use nom::Offset;
-use nom_language::error::{VerboseError, VerboseErrorKind, convert_error};
+use nom_language::error::{VerboseError, VerboseErrorKind};
 use std::{fmt, ops::Range};
 
 /// One frame of the parser's context stack.
@@ -56,7 +57,7 @@ impl VplParseError {
 	/// `error`'s entries each hold the *remaining* input at that point, which is always a suffix
 	/// of `input`, so the byte offset is the difference between the two. Entry order is innermost
 	/// first, because `nom` pushes each enclosing frame as the failure propagates outwards.
-	pub(crate) fn from_verbose(input: &str, error: VerboseError<&str>) -> Self {
+	pub(crate) fn from_verbose(input: &str, error: &VerboseError<&str>) -> Self {
 		let offset_of = |remaining: &str| input.offset(remaining);
 
 		let (message, span) = error.errors.first().map_or_else(
@@ -82,7 +83,7 @@ impl VplParseError {
 			})
 			.collect();
 
-		let trace = convert_error(input, error);
+		let trace = render_trace(input, error);
 		VplParseError {
 			span,
 			message,
@@ -114,6 +115,72 @@ impl fmt::Display for VplParseError {
 }
 
 impl std::error::Error for VplParseError {}
+
+/// Renders the caret-annotated trace: one stanza per entry, innermost first.
+///
+/// A port of `nom_language::error::convert_error`, kept faithful to it — the wording, the stanza
+/// order and the blank line between stanzas are all deliberate matches — with one fix. That
+/// function derives the caret's column from a **byte** offset and then pads it with `{:>width$}`,
+/// which counts **characters**; so on a line containing anything non-ASCII the caret drifts right
+/// by one column for every extra byte those characters occupy. Counting the prefix in characters
+/// puts it back under the character it is pointing at.
+fn render_trace(input: &str, error: &VerboseError<&str>) -> String {
+	// Writing to a `String` cannot fail, so the results below are deliberately discarded.
+	use std::fmt::Write;
+
+	let mut result = String::new();
+
+	for (i, (remaining, kind)) in error.errors.iter().enumerate() {
+		if input.is_empty() {
+			let what = match kind {
+				VerboseErrorKind::Char(c) => format!("expected '{c}'"),
+				VerboseErrorKind::Context(label) => format!("in {label}"),
+				VerboseErrorKind::Nom(kind) => format!("in {kind:?}"),
+			};
+			let _ = write!(result, "{i}: {what}, got empty input\n\n");
+			continue;
+		}
+
+		let offset = input.offset(remaining);
+		let prefix = &input[..offset];
+		let line_number = prefix.matches('\n').count() + 1;
+		let line_begin = prefix.rfind('\n').map_or(0, |pos| pos + 1);
+		let line = input[line_begin..]
+			.lines()
+			.next()
+			.unwrap_or(&input[line_begin..])
+			.trim_end();
+		// Characters, not bytes — this is the fix described above.
+		let column = prefix[line_begin..].chars().count() + 1;
+
+		let _ = match kind {
+			VerboseErrorKind::Char(c) => match remaining.chars().next() {
+				Some(actual) => write!(
+					result,
+					"{i}: at line {line_number}:\n{line}\n{:>column$}\nexpected '{c}', found {actual}\n\n",
+					'^'
+				),
+				None => write!(
+					result,
+					"{i}: at line {line_number}:\n{line}\n{:>column$}\nexpected '{c}', got end of input\n\n",
+					'^'
+				),
+			},
+			VerboseErrorKind::Context(label) => write!(
+				result,
+				"{i}: at line {line_number}, in {label}:\n{line}\n{:>column$}\n\n",
+				'^'
+			),
+			VerboseErrorKind::Nom(kind) => write!(
+				result,
+				"{i}: at line {line_number}, in {kind:?}:\n{line}\n{:>column$}\n\n",
+				'^'
+			),
+		};
+	}
+
+	result
+}
 
 /// Renders the innermost error entry, wording `Char` failures as the trace does.
 ///
@@ -227,6 +294,56 @@ mod tests {
 
 		assert_eq!(structured.span, 11..12);
 		assert_eq!(structured.message, "expected '=', found k");
+	}
+
+	/// Returns the `^` line of the given stanza, and how many characters precede the caret.
+	fn caret_column(rendered: &str, stanza: usize) -> usize {
+		let caret = rendered
+			.lines()
+			.filter(|l| l.trim() == "^")
+			.nth(stanza)
+			.expect("stanza should have a caret line");
+		caret.chars().count()
+	}
+
+	/// The caret is padded by character but was positioned by byte, so anything non-ASCII earlier
+	/// on the line used to shove it to the right. Here `!` is the 18th character but the 20th byte.
+	#[test]
+	fn caret_lands_under_the_offending_character_despite_non_ascii() {
+		let input = "node a=\"Grüße\" b=!";
+		let rendered = error_of(input).to_string();
+
+		let expected = input.chars().position(|c| c == '!').unwrap() + 1;
+		assert_eq!(expected, 18);
+		assert_eq!(caret_column(&rendered, 0), expected);
+		// the whole line is echoed above the caret, unchanged
+		assert_eq!(rendered.lines().nth(1).unwrap(), input);
+	}
+
+	/// The port has to rediscover which line the offset falls on, and report each frame against
+	/// its own line — the outermost frame here points back at line 1.
+	#[test]
+	fn line_numbers_follow_the_offset() {
+		let rendered = error_of("node a=1 |\nnode b=!").to_string();
+
+		assert!(
+			rendered.starts_with("0: at line 2, in OneOf:\nnode b=!\n"),
+			"{rendered}"
+		);
+		assert_eq!(caret_column(&rendered, 0), 8);
+		assert!(
+			rendered.contains("at line 1, in parsing pipeline:\nnode a=1 |\n"),
+			"{rendered}"
+		);
+	}
+
+	/// Empty input takes a separate branch with its own wording and no caret at all.
+	#[test]
+	fn empty_input_renders_without_a_caret() {
+		let rendered = error_of("").to_string();
+
+		assert!(rendered.contains("got empty input"), "{rendered}");
+		assert!(!rendered.contains('^'), "{rendered}");
 	}
 
 	/// Both entry points render the same trace, so preferring the detailed one costs nothing.

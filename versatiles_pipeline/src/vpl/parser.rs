@@ -195,7 +195,7 @@ pub fn parse_vpl_detailed(input: &str) -> Result<VPLPipeline, VplParseError> {
 	// leave anything behind and the leftover needs no checking.
 	match all_consuming(parse_pipeline).parse(input) {
 		Ok((_, pipeline)) => Ok(pipeline),
-		Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(VplParseError::from_verbose(input, e)),
+		Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(VplParseError::from_verbose(input, &e)),
 		// Only `Incomplete` reaches here, which streaming parsers produce. Every parser above
 		// comes from `nom::…::complete`, so this is unreachable in practice; it stays as a
 		// diagnostic rather than a panic in case that ever changes. There is no position to
