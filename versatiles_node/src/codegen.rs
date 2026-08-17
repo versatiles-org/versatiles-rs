@@ -100,10 +100,8 @@ fn generate_typescript(ops: &[OperationMeta]) -> String {
 	// Header
 	out.push_str("// AUTO-GENERATED — DO NOT EDIT\n");
 	out.push_str("// Generated from Rust VPL operation metadata\n\n");
-	out.push_str("import { TileSource } from './index.js';\n\n");
-
-	// Serialization helper (module-private)
-	generate_serialize_helper(&mut out);
+	out.push_str("import { TileSource, parseVpl, stringifyVpl } from './index.js';\n\n");
+	generate_parse_types(&mut out);
 
 	// Generate interfaces for all operations
 	for op in ops {
@@ -116,24 +114,27 @@ fn generate_typescript(ops: &[OperationMeta]) -> String {
 	out
 }
 
-/// Generate the serializeParam helper function.
-fn generate_serialize_helper(out: &mut String) {
-	out.push_str("function serializeParam(key: string, value: unknown): string {\n");
-	out.push_str("\tif (typeof value === 'boolean') {\n");
-	out.push_str("\t\treturn `${key}=${value}`;\n");
-	out.push_str("\t}\n");
-	out.push_str("\tif (typeof value === 'number') {\n");
-	out.push_str("\t\treturn `${key}=${value}`;\n");
-	out.push_str("\t}\n");
-	out.push_str("\tif (Array.isArray(value)) {\n");
-	out.push_str("\t\treturn `${key}=[${value.join(',')}]`;\n");
-	out.push_str("\t}\n");
-	out.push_str("\tconst str = String(value);\n");
-	out.push_str("\tif (/^[a-zA-Z0-9._-]+$/.test(str)) {\n");
-	out.push_str("\t\treturn `${key}=${str}`;\n");
-	out.push_str("\t}\n");
-	out.push_str("\treturn `${key}=\"${str.replace(/\\\\/g, '\\\\\\\\').replace(/\"/g, '\\\\\"')}\"`;\n");
+/// Generate the types describing what the native parser hands back.
+fn generate_parse_types(out: &mut String) {
+	out.push_str("/** A pipeline step in the JSON form the native bindings exchange. */\n");
+	out.push_str("export interface VplStep {\n");
+	out.push_str("\tname: string;\n");
+	out.push_str("\tparams: Record<string, unknown>;\n");
+	out.push_str("\tsources?: VplStep[][];\n");
 	out.push_str("}\n\n");
+
+	out.push_str("/** A VPL syntax error. `span` and `offset` are **byte** offsets into the parsed text. */\n");
+	out.push_str("export interface VplSyntaxError {\n");
+	out.push_str("\tspan: { start: number; end: number };\n");
+	out.push_str("\tmessage: string;\n");
+	out.push_str("\tcontext: { label: string; offset: number }[];\n");
+	out.push_str("\t/** The caret-annotated rendering, as printed by the CLI. */\n");
+	out.push_str("\ttrace: string;\n");
+	out.push_str("}\n\n");
+
+	out.push_str("type VplParseResult =\n");
+	out.push_str("\t| { ok: true; pipeline: VplStep[] }\n");
+	out.push_str("\t| { ok: false; error: VplSyntaxError };\n\n");
 }
 
 /// Generate a TypeScript interface for an operation's options.
@@ -194,6 +195,7 @@ fn generate_vpl_class(out: &mut String, ops: &[OperationMeta]) {
 	generate_to_json_method(out);
 
 	// open
+	generate_parse_methods(out);
 	out.push_str("\t/** Execute this VPL pipeline and return a TileSource. */\n");
 	out.push_str("\tasync fromPath(dir?: string): Promise<TileSource> {\n");
 	out.push_str("\t\treturn TileSource.fromPipeline(JSON.stringify(this.toJSON()), dir);\n");
@@ -326,26 +328,50 @@ fn generate_transform_method(out: &mut String, op: &OperationMeta) {
 	out.push_str("\t}\n\n");
 }
 
-/// Generate the toString method for VPL serialization.
+/// Generate the toString method, which delegates to the Rust serialiser.
+///
+/// Writing VPL by hand here is what produced invalid pipelines before: sources were emitted
+/// ahead of the parameters, and array items were joined without quoting. The grammar decides
+/// both, so the grammar's own serialiser is the only correct source of the answer.
 fn generate_to_string_method(out: &mut String) {
 	out.push_str("\t/** Serialize this VPL pipeline to a string. */\n");
 	out.push_str("\ttoString(): string {\n");
-	out.push_str("\t\treturn this.steps.map(step => {\n");
-	out.push_str("\t\t\tlet result = step.name;\n\n");
+	out.push_str("\t\treturn stringifyVpl(JSON.stringify(this.toJSON()));\n");
+	out.push_str("\t}\n\n");
+}
 
-	// Handle sources
-	out.push_str("\t\t\tif (step.sources && step.sources.length > 0) {\n");
-	out.push_str("\t\t\t\tconst pipelines = step.sources.map(s => s.toString());\n");
-	out.push_str("\t\t\t\tresult += ' [ ' + pipelines.join(', ') + ' ]';\n");
-	out.push_str("\t\t\t}\n\n");
+/// Generate the static `parse` and `diagnose` methods.
+///
+/// The native binding reports a syntax error as data, because an editor re-parses on every
+/// keystroke and a broken pipeline there is an expected state rather than an exception. Both
+/// idioms are offered: `parse` throws, `diagnose` hands back the error.
+fn generate_parse_methods(out: &mut String) {
+	out.push_str("\t/** A syntax error, with byte offsets into the parsed text. */\n");
+	out.push_str("\tstatic parseError(vpl: string): VplSyntaxError | undefined {\n");
+	out.push_str("\t\tconst result = JSON.parse(parseVpl(vpl)) as VplParseResult;\n");
+	out.push_str("\t\treturn result.ok ? undefined : result.error;\n");
+	out.push_str("\t}\n\n");
 
-	// Handle params
-	out.push_str("\t\t\tfor (const [key, value] of Object.entries(step.params)) {\n");
-	out.push_str("\t\t\t\tresult += ' ' + serializeParam(key, value);\n");
-	out.push_str("\t\t\t}\n\n");
+	out.push_str("\t/** Rebuild a pipeline from the JSON form, nesting child pipelines as VPL. */\n");
+	out.push_str("\tstatic fromJSON(steps: VplStep[]): VPL {\n");
+	out.push_str("\t\treturn new VPL(steps.map(step => ({\n");
+	out.push_str("\t\t\tname: step.name,\n");
+	out.push_str("\t\t\tparams: step.params,\n");
+	out.push_str("\t\t\tsources: step.sources?.map(source => VPL.fromJSON(source)),\n");
+	out.push_str("\t\t})));\n");
+	out.push_str("\t}\n\n");
 
-	out.push_str("\t\t\treturn result;\n");
-	out.push_str("\t\t}).join(' | ');\n");
+	out.push_str("\t/** Parse VPL text, throwing on a syntax error. */\n");
+	out.push_str("\tstatic parse(vpl: string): VPL {\n");
+	out.push_str("\t\tconst result = JSON.parse(parseVpl(vpl)) as VplParseResult;\n");
+	out.push_str("\t\tif (!result.ok) {\n");
+	out.push_str(
+		"\t\t\tconst error = new SyntaxError(result.error.message) as SyntaxError & { vpl: VplSyntaxError };\n",
+	);
+	out.push_str("\t\t\terror.vpl = result.error;\n");
+	out.push_str("\t\t\tthrow error;\n");
+	out.push_str("\t\t}\n");
+	out.push_str("\t\treturn VPL.fromJSON(result.pipeline);\n");
 	out.push_str("\t}\n\n");
 }
 
@@ -451,7 +477,8 @@ mod tests {
 		assert!(ts.contains("filename: string;"));
 		assert!(ts.contains("static fromContainer(options: FromContainerOptions): VPL"));
 		assert!(ts.contains("params['filename'] = options.filename;"));
-		assert!(ts.contains("function serializeParam"));
+		assert!(ts.contains("stringifyVpl(JSON.stringify(this.toJSON()))"));
+		assert!(ts.contains("export interface VplSyntaxError"));
 	}
 
 	#[test]

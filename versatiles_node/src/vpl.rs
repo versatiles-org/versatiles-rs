@@ -1,0 +1,243 @@
+//! VPL text handling for JavaScript: parsing pipelines and writing them back out.
+//!
+//! Both directions go through `versatiles_pipeline`, so the quoting and grammar rules exist in
+//! exactly one place. The TypeScript `VPL` builder used to carry its own serialiser, which drifted
+//! from the grammar and emitted pipelines that would not parse — sources before parameters, and
+//! array items that were never quoted.
+//!
+//! Pipelines cross the boundary as JSON strings, matching `TileSource.fromPipeline`.
+
+use crate::macros::NapiResultExt;
+use anyhow::Context;
+use napi::Result;
+use napi_derive::napi;
+use serde::Deserialize;
+use serde_json::{Value, json};
+use std::collections::BTreeMap;
+use versatiles::pipeline::vpl::{VPLNode, VPLPipeline, parse_vpl_detailed};
+
+/// One operation in the JSON pipeline representation the TypeScript builder produces.
+#[derive(Deserialize)]
+pub(crate) struct PipelineStep {
+	pub(crate) name: String,
+	pub(crate) params: std::collections::HashMap<String, Value>,
+	#[serde(default)]
+	pub(crate) sources: Vec<Vec<PipelineStep>>,
+}
+
+pub(crate) fn steps_to_pipeline(steps: Vec<PipelineStep>) -> VPLPipeline {
+	VPLPipeline::new(steps.into_iter().map(step_to_node).collect())
+}
+
+fn value_to_strings(value: Value) -> Vec<String> {
+	fn scalar(value: Value) -> String {
+		match value {
+			Value::String(s) => s,
+			Value::Number(n) => n.to_string(),
+			Value::Bool(b) => b.to_string(),
+			other => other.to_string(),
+		}
+	}
+
+	match value {
+		Value::Array(items) => items.into_iter().map(scalar).collect(),
+		other => vec![scalar(other)],
+	}
+}
+
+fn step_to_node(step: PipelineStep) -> VPLNode {
+	let properties: BTreeMap<String, Vec<String>> = step
+		.params
+		.into_iter()
+		.map(|(key, value)| (key, value_to_strings(value)))
+		.collect();
+
+	VPLNode {
+		name: step.name,
+		properties,
+		sources: step.sources.into_iter().map(steps_to_pipeline).collect(),
+	}
+}
+
+/// The inverse of [`steps_to_pipeline`], for handing a parsed pipeline back to JavaScript.
+///
+/// A parameter with exactly one value becomes a string and anything else becomes an array, which
+/// is the shape the builder produces and `steps_to_pipeline` accepts — so a pipeline can be parsed,
+/// handed to JavaScript, and sent straight back.
+fn pipeline_to_steps(pipeline: &VPLPipeline) -> Value {
+	let steps: Vec<Value> = pipeline
+		.pipeline
+		.iter()
+		.map(|node| {
+			let params: serde_json::Map<String, Value> = node
+				.properties
+				.iter()
+				.map(|(key, values)| {
+					let value = match values.as_slice() {
+						[single] => Value::String(single.clone()),
+						many => Value::Array(many.iter().cloned().map(Value::from).collect()),
+					};
+					(key.clone(), value)
+				})
+				.collect();
+
+			let mut step = json!({ "name": node.name, "params": params });
+			if !node.sources.is_empty() {
+				let sources: Vec<Value> = node.sources.iter().map(pipeline_to_steps).collect();
+				step["sources"] = Value::Array(sources);
+			}
+			step
+		})
+		.collect();
+
+	Value::Array(steps)
+}
+
+/// Writes a pipeline as VPL text.
+///
+/// Takes the JSON produced by `VPL.toJSON()` and returns text that `TileSource.fromVpl` accepts.
+/// Quoting is decided by the grammar, so values containing spaces, quotes or newlines are handled
+/// without the caller knowing the rules.
+///
+/// @param stepsJson - JSON string describing the pipeline steps
+/// @returns the pipeline as VPL text
+// The `String` arguments below are taken by value because that is the shape napi generates for a
+// JavaScript `string`; clippy sees them only borrowed and would rather they were `&str`.
+#[allow(clippy::needless_pass_by_value)]
+#[napi]
+pub fn stringify_vpl(steps_json: String) -> Result<String> {
+	let steps: Vec<PipelineStep> = serde_json::from_str(&steps_json)
+		.context("Invalid pipeline JSON")
+		.to_napi()?;
+	Ok(steps_to_pipeline(steps).to_string())
+}
+
+/// Parses VPL text into the JSON pipeline representation.
+///
+/// Returns a JSON string rather than throwing, because an editor parses on every keystroke and a
+/// syntax error there is an expected state rather than an exception:
+///
+/// - on success, `{"ok": true, "pipeline": [...]}` — the same shape `VPL.toJSON()` produces
+/// - on failure, `{"ok": false, "error": {"span": {...}, "message": "...", "context": [...],
+///   "trace": "..."}}`
+///
+/// `span` holds **byte** offsets into the input, so a caller can convert to whatever unit it
+/// counts in. `trace` is the caret-annotated rendering the CLI prints.
+///
+/// @param vpl - the VPL text to parse
+/// @returns a JSON string describing either the pipeline or the error
+#[napi]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn parse_vpl(vpl: String) -> String {
+	let result = match parse_vpl_detailed(&vpl) {
+		Ok(pipeline) => json!({ "ok": true, "pipeline": pipeline_to_steps(&pipeline) }),
+		Err(error) => json!({
+			"ok": false,
+			"error": {
+				"span": { "start": error.span.start, "end": error.span.end },
+				"message": error.message,
+				"context": error
+					.context
+					.iter()
+					.map(|frame| json!({ "label": frame.label, "offset": frame.offset }))
+					.collect::<Vec<Value>>(),
+				"trace": error.to_string(),
+			}
+		}),
+	};
+	result.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn parsed(vpl: &str) -> Value {
+		serde_json::from_str(&parse_vpl(vpl.to_string())).unwrap()
+	}
+
+	#[test]
+	fn stringify_quotes_what_the_grammar_requires() {
+		let steps = r#"[{"name":"from_container","params":{"filename":"a b.versatiles"}}]"#;
+		assert_eq!(
+			stringify_vpl(steps.to_string()).unwrap(),
+			"from_container filename='a b.versatiles'"
+		);
+	}
+
+	/// The builder used to write sources *before* the parameters, which the grammar rejects.
+	#[test]
+	fn stringify_puts_sources_after_parameters() {
+		let steps = r#"[{"name":"from_stacked_raster","params":{"level_min":5},
+			"sources":[[{"name":"a","params":{}}],[{"name":"b","params":{}}]]}]"#;
+		let vpl = stringify_vpl(steps.to_string()).unwrap();
+
+		assert_eq!(vpl, "from_stacked_raster level_min=5 [ a, b ]");
+		assert!(parsed(&vpl)["ok"].as_bool().unwrap(), "{vpl} should parse");
+	}
+
+	/// The builder used to join array items without quoting them, so any item containing a space
+	/// produced text that would not parse.
+	#[test]
+	fn stringify_quotes_array_items() {
+		let steps = r#"[{"name":"vector_filter_layers","params":{"layer":["place","water park"]}}]"#;
+		let vpl = stringify_vpl(steps.to_string()).unwrap();
+
+		assert_eq!(vpl, "vector_filter_layers layer=[place, 'water park']");
+		assert!(parsed(&vpl)["ok"].as_bool().unwrap(), "{vpl} should parse");
+	}
+
+	#[test]
+	fn stringify_rejects_malformed_json() {
+		assert!(stringify_vpl("not json".to_string()).is_err());
+	}
+
+	#[test]
+	fn parse_returns_the_builder_shape() {
+		let result = parsed("from_container filename='a b' | filter level_min=5");
+		assert!(result["ok"].as_bool().unwrap());
+
+		let pipeline = &result["pipeline"];
+		assert_eq!(pipeline[0]["name"], "from_container");
+		assert_eq!(pipeline[0]["params"]["filename"], "a b");
+		assert_eq!(pipeline[1]["params"]["level_min"], "5");
+	}
+
+	/// Parsing and stringifying have to be inverse, or JavaScript cannot edit a pipeline it read.
+	#[test]
+	fn parse_and_stringify_round_trip() {
+		for vpl in [
+			"from_container filename='a b'",
+			"vector_filter_layers layer=[place, water]",
+			"from_stacked [ a key=1, b ] | filter level_min=5",
+			"node key=''",
+		] {
+			let result = parsed(vpl);
+			assert!(result["ok"].as_bool().unwrap(), "{vpl} should parse");
+			let back = stringify_vpl(result["pipeline"].to_string()).unwrap();
+			assert_eq!(back, vpl, "round trip differed");
+		}
+	}
+
+	#[test]
+	fn parse_reports_errors_as_data() {
+		let result = parsed("from_container filename=a | vector_filter zoom");
+		assert!(!result["ok"].as_bool().unwrap());
+
+		let error = &result["error"];
+		assert_eq!(error["span"]["start"], 46);
+		assert_eq!(error["message"], "expected '=', got end of input");
+		assert_eq!(error["context"][0]["label"], "parsing property");
+		assert_eq!(error["context"][0]["offset"], 42);
+		assert!(error["trace"].as_str().unwrap().contains("at line 1"));
+	}
+
+	/// Byte offsets, so a caller can decide how it wants to count.
+	#[test]
+	fn parse_reports_byte_offsets() {
+		let result = parsed("node a=\"Grüße\" b=!");
+		assert_eq!(result["error"]["span"]["start"], 19);
+		assert_eq!(result["error"]["span"]["end"], 20);
+	}
+}

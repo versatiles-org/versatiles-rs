@@ -17,14 +17,13 @@ use crate::{
 	progress::{MessageData, ProgressData},
 	runtime::create_runtime,
 	types::{ConvertOptions, SourceMetadata, TileJSON, z_to_u8},
+	vpl::{PipelineStep, steps_to_pipeline},
 };
 use anyhow::Context;
 use napi::{bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
 use napi_derive::napi;
-use serde::Deserialize;
-use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 use versatiles::pipeline::PipelineReader;
-use versatiles::pipeline::vpl::{VPLNode, VPLPipeline};
 use versatiles_container::{SourceType as RustSourceType, TileSource as RustTileSource};
 use versatiles_core::TileCoord as RustTileCoord;
 
@@ -568,49 +567,6 @@ impl From<&RustSourceType> for SourceType {
 impl From<Arc<RustSourceType>> for SourceType {
 	fn from(inner: Arc<RustSourceType>) -> Self {
 		SourceType { inner }
-	}
-}
-
-#[derive(Deserialize)]
-struct PipelineStep {
-	name: String,
-	params: std::collections::HashMap<String, serde_json::Value>,
-	#[serde(default)]
-	sources: Vec<Vec<PipelineStep>>,
-}
-
-fn steps_to_pipeline(steps: Vec<PipelineStep>) -> VPLPipeline {
-	VPLPipeline::new(steps.into_iter().map(step_to_node).collect())
-}
-
-fn step_to_node(step: PipelineStep) -> VPLNode {
-	let properties: BTreeMap<String, Vec<String>> = step
-		.params
-		.into_iter()
-		.map(|(k, v)| {
-			let values = match v {
-				serde_json::Value::String(s) => vec![s],
-				serde_json::Value::Number(n) => vec![n.to_string()],
-				serde_json::Value::Bool(b) => vec![b.to_string()],
-				serde_json::Value::Array(arr) => arr
-					.into_iter()
-					.map(|v| match v {
-						serde_json::Value::String(s) => s,
-						serde_json::Value::Number(n) => n.to_string(),
-						serde_json::Value::Bool(b) => b.to_string(),
-						other => other.to_string(),
-					})
-					.collect(),
-				other => vec![other.to_string()],
-			};
-			(k, values)
-		})
-		.collect();
-	let sources = step.sources.into_iter().map(steps_to_pipeline).collect();
-	VPLNode {
-		name: step.name,
-		properties,
-		sources,
 	}
 }
 

@@ -55,12 +55,14 @@ mod runtime;
 mod server;
 mod tile_source;
 mod types;
+mod vpl;
 
 pub use convert::convert;
 pub use progress::{Progress, ProgressData};
 pub use server::TileServer;
 pub use tile_source::TileSource;
 pub use types::{ConvertOptions, ProbeResult, ServerOptions, SourceMetadata, TileCoord};
+pub use vpl::{parse_vpl, stringify_vpl};
 
 /// Initialize logging when the module loads.
 /// This ensures that log messages from the Rust code are visible in the Node.js console.
