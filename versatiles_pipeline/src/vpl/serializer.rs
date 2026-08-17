@@ -56,7 +56,9 @@ fn is_bare(value: &str) -> bool {
 /// keeps backslashes readable (`'C:\dir'`); otherwise double-quoted with `\\`, `\"`, `\n`
 /// and `\t` escaped. Single quotes are skipped for values containing `'` (they have no escape
 /// mechanism) or control characters (double quotes can spell the common ones).
-fn quote(value: &str) -> Cow<'_, str> {
+///
+/// Shared with [`cst`](super::cst) so that the quoting rules exist in exactly one place.
+pub(super) fn quote(value: &str) -> Cow<'_, str> {
 	if is_bare(value) {
 		return Cow::Borrowed(value);
 	}
