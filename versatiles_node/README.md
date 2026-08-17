@@ -9,6 +9,7 @@ Node.js bindings for [VersaTiles](https://github.com/versatiles-org/versatiles-r
 - 🗺️ **Tile Server** - Built-in HTTP tile server with dynamic source management
 - 📊 **Metadata Access** - Read TileJSON and inspect container details
 - 🌍 **Coordinate Utils** - Convert between tile and geographic coordinates
+- 🧩 **VPL Pipelines** - Build, parse and losslessly edit VersaTiles Pipeline Language
 - ⚡ **Async API** - Non-blocking operations with Promise-based interface
 - 📦 **Dual Format** - Supports both ESM and CommonJS
 
@@ -348,6 +349,83 @@ Get JSON representation.
 - `coord.z` (number): Zoom level
 - `coord.x` (number): Column
 - `coord.y` (number): Row
+
+### VPL — the VersaTiles Pipeline Language
+
+Everything below is exported from `@versatiles/versatiles-rs/vpl` and shares one grammar with the
+Rust engine, so anything it writes is something the engine will read.
+
+#### Building and running a pipeline
+
+```javascript
+import { VPL } from '@versatiles/versatiles-rs/vpl';
+
+const pipeline = VPL.fromContainer({ filename: 'world.versatiles' })
+  .filter({ levelMin: 0, levelMax: 14 })
+  .rasterFormat({ format: 'webp', quality: '80' });
+
+pipeline.toString();
+// "from_container filename=world.versatiles | filter level_max=14 level_min=0 | raster_format format=webp quality=80"
+
+// resolve relative filenames against a directory, then execute
+const source = await pipeline.fromPath('./data');
+```
+
+Values are quoted by the grammar rather than by the caller, so spaces, quotes and newlines need no
+special handling. Note that parameters come out in alphabetical order: the pipeline a `VPL` object
+describes is a set of parameters, not a sequence of them.
+
+#### Parsing
+
+```javascript
+const pipeline = VPL.parse("from_container filename='world.versatiles'");
+
+// Errors as data, for an editor that re-parses on every keystroke:
+const error = VPL.parseError('from_container filename=a | vector_filter zoom');
+error.span; // { start: 46, end: 46 } — byte offsets into the text
+error.message; // "expected '=', got end of input"
+error.trace; // the caret-annotated rendering the CLI prints
+```
+
+`VPL.parse` throws a `SyntaxError` instead, with the same object attached as `error.vpl`.
+
+Offsets are **bytes**, not characters, so a caller can convert to whatever unit it counts in — an
+editor in characters, a language server in UTF-16 units. Anything non-ASCII earlier in the line
+makes the two differ.
+
+#### Editing a file somebody wrote
+
+`VPL` is the _semantic_ pipeline: it forgets comments, formatting and parameter order, which is
+right for building a pipeline and wrong for saving one. To edit a `.vpl` file without rewriting the
+parts nobody touched, use the concrete syntax tree, which keeps every byte:
+
+```javascript
+import { parseCst, stringifyCst } from '@versatiles/versatiles-rs/vpl';
+
+const source = "# where the data lives\nfrom_container  filename = 'berlin.versatiles'\n";
+const cst = parseCst(source);
+
+stringifyCst(cst) === source; // true — nothing was lost on the way in
+
+const value = cst.pipeline.nodes[0].value.properties[0].value;
+value.token.text = 'hamburg.versatiles';
+value.quote = 'bare';
+
+stringifyCst(cst);
+// "# where the data lives\nfrom_container  filename = hamburg.versatiles\n"
+```
+
+The comment, the double space and the spaces around `=` all survive, because only the bytes you
+changed are rewritten. `parseCstResult` returns the error as data where `parseCst` throws.
+
+Every token carries a `span` of byte offsets into the parsed text, and `leading` holds the
+whitespace and comments before it. Both may be omitted when building a tree by hand — the minimum
+is `{ pipeline: { nodes: [{ value: { name: { text: 'from_debug' } } }] } }`.
+
+One caveat: `span` describes where a token **was**. After an edit the spans are stale; parse the
+printed text again to get fresh ones.
+
+To run an edited tree, print it and hand it to `TileSource.fromVpl(stringifyCst(cst))`.
 
 ## Supported Formats
 
