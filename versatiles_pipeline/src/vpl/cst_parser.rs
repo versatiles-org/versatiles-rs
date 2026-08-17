@@ -28,10 +28,10 @@ use super::{
 use nom::{
 	IResult, Parser,
 	branch::alt,
-	bytes::complete::{escaped, tag, take_while, take_while1},
-	character::complete::{alphanumeric1, char, multispace1, none_of, one_of},
-	combinator::{all_consuming, cut, peek, recognize, value},
-	error::context,
+	bytes::complete::{take_while, take_while1},
+	character::complete::{alphanumeric1, char, multispace1, one_of},
+	combinator::{all_consuming, cut, recognize},
+	error::{ErrorKind, ParseError, context},
 	multi::{many0, many1},
 	sequence::{pair, preceded},
 };
@@ -96,23 +96,38 @@ fn unquoted_value(input: &str) -> Res<'_, &str> {
 
 /// Recognises a double-quoted string without decoding it.
 ///
-/// The escape alternatives are spelled out as separate `tag`s rather than as a single `one_of`
-/// so that a bad escape produces the same `nom` frames — and so the same rendered trace — as the
-/// semantic parser's `escaped_transform`.
-fn double_quoted(input: &str) -> Res<'_, &str> {
-	context(
-		"parsing double quoted string",
-		recognize((
-			char('"'),
-			alt((
-				// `escaped` cannot match an empty body, so `""` is handled separately.
-				value("", peek(char('"'))),
-				escaped(none_of("\\\""), '\\', alt((tag("\\"), tag("\""), tag("n"), tag("t")))),
-			)),
-			char('"'),
-		)),
-	)
+/// Hand-written rather than built on `escaped`, which reports a malformed escape against the
+/// *start* of the string body — `escaped_transform` reports it against the backslash, and neither
+/// points at the character that is actually wrong. Scanning here puts the caret on the offending
+/// escape character, or on the backslash when the input simply ran out after it.
+fn double_quoted<'a>(input: &'a str) -> Res<'a, &'a str> {
+	context("parsing double quoted string", |input: &'a str| {
+		let Some(body) = input.strip_prefix('"') else {
+			return Err(nom::Err::Error(VerboseError::from_char(input, '"')));
+		};
+
+		let mut chars = body.char_indices();
+		while let Some((i, c)) = chars.next() {
+			match c {
+				// Opening quote + body + closing quote.
+				'"' => return Ok((&input[i + 2..], &input[..i + 2])),
+				'\\' => match chars.next() {
+					Some((_, '\\' | '"' | 'n' | 't')) => {}
+					Some((j, _)) => return Err(bad_escape(&body[j..])),
+					None => return Err(bad_escape(&body[i..])),
+				},
+				_ => {}
+			}
+		}
+
+		// Ran out before the closing quote; report it where the semantic parser did.
+		Err(nom::Err::Error(VerboseError::from_char(&body[body.len()..], '"')))
+	})
 	.parse(input)
+}
+
+fn bad_escape(remaining: &str) -> nom::Err<VerboseError<&str>> {
+	nom::Err::Error(VerboseError::from_error_kind(remaining, ErrorKind::Escaped))
 }
 
 fn single_quoted(input: &str) -> Res<'_, &str> {
@@ -240,16 +255,20 @@ fn cst_value(input: &str) -> Res<'_, CstValue> {
 fn cst_sources<'a>(input: &'a str, leading: &'a str) -> Res<'a, CstSources> {
 	context("parsing sources", move |input: &'a str| {
 		let (input, open) = bracket(input, leading, '[')?;
-		let (input, pipelines) = punctuated(input, ',', cst_pipeline)?;
+		let (input, pipelines) = punctuated(input, ',', |i| {
+			let (rest, leading) = ws0(i)?;
+			cst_pipeline_nested(rest, leading)
+		})?;
 		let (input, close) = cut(|i| punct(i, ']')).parse(input)?;
 		Ok((input, CstSources { open, pipelines, close }))
 	})
 	.parse(input)
 }
 
-fn cst_node<'a>(input: &'a str) -> Res<'a, CstNode> {
-	context("parsing node", |input: &'a str| {
-		let (input, name) = token0(input, identifier)?;
+fn cst_node<'a>(input: &'a str, leading: &'a str) -> Res<'a, CstNode> {
+	context("parsing node", move |input: &'a str| {
+		let (input, text) = identifier(input)?;
+		let name = CstToken::with_leading(leading, text);
 
 		let mut properties = Vec::new();
 		let mut input = input;
@@ -293,39 +312,54 @@ fn cst_node<'a>(input: &'a str) -> Res<'a, CstNode> {
 	.parse(input)
 }
 
+/// A pipeline at the top level, where the frame is recorded *before* the leading trivia — the
+/// semantic parser wrapped `delimited(ws0, …)` in the context, so the caret lands on the
+/// whitespace.
 fn cst_pipeline<'a>(input: &'a str) -> Res<'a, CstPipeline> {
 	context("parsing pipeline", |input: &'a str| {
-		let (input, first) = cst_node(input)?;
-		let mut nodes = vec![PunctuatedItem {
-			separator: None,
-			value: first,
-		}];
-		let mut input = input;
-
-		// As `separated_list1`: a soft failure after the `|` gives the separator back, so
-		// `node | | node` is reported as unexpected input at the first `|`.
-		while let Ok((rest, pipe)) = punct(input, '|') {
-			match cst_node(rest) {
-				Ok((rest, node)) => {
-					nodes.push(PunctuatedItem {
-						separator: Some(pipe),
-						value: node,
-					});
-					input = rest;
-				}
-				Err(nom::Err::Error(_)) => break,
-				Err(e) => return Err(e),
-			}
-		}
-
-		Ok((
-			input,
-			CstPipeline {
-				nodes: Punctuated { items: nodes },
-			},
-		))
+		let (rest, leading) = ws0(input)?;
+		pipeline_body(rest, leading)
 	})
 	.parse(input)
+}
+
+/// A pipeline inside `[ … ]`, where the caller has already read the trivia — the semantic parser
+/// consumed it in `(char('['), ws0)` before entering, so the frame lands on the first node.
+fn cst_pipeline_nested<'a>(input: &'a str, leading: &'a str) -> Res<'a, CstPipeline> {
+	context("parsing pipeline", move |input: &'a str| pipeline_body(input, leading)).parse(input)
+}
+
+fn pipeline_body<'a>(input: &'a str, leading: &'a str) -> Res<'a, CstPipeline> {
+	let (input, first) = cst_node(input, leading)?;
+	let mut nodes = vec![PunctuatedItem {
+		separator: None,
+		value: first,
+	}];
+	let mut input = input;
+
+	// As `separated_list1`: a soft failure after the `|` gives the separator back, so
+	// `node | | node` is reported as unexpected input at the first `|`.
+	while let Ok((rest, pipe)) = punct(input, '|') {
+		let Ok((rest, leading)) = ws0(rest) else { break };
+		match cst_node(rest, leading) {
+			Ok((rest, node)) => {
+				nodes.push(PunctuatedItem {
+					separator: Some(pipe),
+					value: node,
+				});
+				input = rest;
+			}
+			Err(nom::Err::Error(_)) => break,
+			Err(e) => return Err(e),
+		}
+	}
+
+	Ok((
+		input,
+		CstPipeline {
+			nodes: Punctuated { items: nodes },
+		},
+	))
 }
 
 fn cst_file(input: &str) -> Res<'_, CstFile> {
@@ -488,23 +522,12 @@ mod tests {
 		}
 	}
 
-	/// The lossless tree and the semantic parser must agree about what the text *means*.
-	#[test]
-	fn lowering_matches_the_semantic_parser() {
-		for source in CORPUS {
-			let cst = parse_cst(source).unwrap_or_else(|e| panic!("failed on {source:?}:\n{e}"));
-			let expected = parse_vpl(source).unwrap_or_else(|e| panic!("failed on {source:?}:\n{e:#}"));
-			assert_eq!(cst.lower(), expected, "lowering differed for {source:?}");
-		}
-	}
-
 	/// The testdata file the semantic parser is tested against, for a realistic sample.
 	#[test]
 	fn round_trips_the_testdata_file() {
 		const INPUT: &str = include_str!("../../../testdata/berlin.vpl");
 		let file = parse_cst(INPUT).unwrap();
 		assert_eq!(file.to_string(), INPUT);
-		assert_eq!(file.lower(), parse_vpl(INPUT).unwrap());
 	}
 
 	/// Spans have to address the original text, not a reconstruction of it.
@@ -553,8 +576,22 @@ mod tests {
 		assert_eq!(file.lower(), parse_vpl("node zebra=1 alpha=2 zebra=3").unwrap());
 	}
 
-	/// Both parsers must reject the same inputs *and* say the same thing about them. The trace is
-	/// observable output, so an identical rejection with a different message is still a change.
+	/// Malformed escapes are reported against the escape character itself.
+	#[test]
+	fn reports_malformed_escapes_precisely() {
+		let error = parse_cst(r#"node a="foo\qbar""#).unwrap_err();
+		assert_eq!(error.message, "malformed escape sequence");
+		// the caret sits on the offending escape character, not on the backslash or the quote
+		assert_eq!(&r#"node a="foo\qbar""#[error.span.clone()], "q");
+
+		// and when the input simply stops after a backslash, on the backslash itself
+		let source = "node a=\"x\\";
+		let error = parse_cst(source).unwrap_err();
+		assert_eq!(error.message, "malformed escape sequence");
+		assert_eq!(&source[error.span.clone()], "\\");
+	}
+
+	/// Rejected input must still be described usefully: a message, and a span inside the source.
 	#[rstest]
 	#[case("")]
 	#[case("node child key=value ]")]
@@ -575,12 +612,162 @@ mod tests {
 	#[case("node a=ä")]
 	#[case("node a=[1 2]")]
 	#[case("no de")]
-	// the divergence a `ws0` between parameters would have introduced
+	// `ws0` between parameters would have made this two parameters instead of an error
 	#[case("node a=\"x\"b=2")]
-	fn fails_exactly_like_the_semantic_parser(#[case] source: &str) {
-		let semantic = parse_vpl(source).expect_err("semantic parser accepted it");
-		let semantic = semantic.chain().last().unwrap().to_string();
-		let cst = parse_cst(source).expect_err("CST parser accepted it").to_string();
-		assert_eq!(cst, semantic, "trace differed for {source:?}");
+	fn rejects_malformed_input(#[case] source: &str) {
+		let error = parse_cst(source).expect_err("should have been rejected");
+		assert!(!error.message.is_empty(), "no message for {source:?}");
+		assert!(error.span.end <= source.len(), "span out of bounds for {source:?}");
+		assert!(
+			source.is_char_boundary(error.span.start),
+			"span splits a character in {source:?}"
+		);
+	}
+
+	/// The round trip has to hold for everything the parser accepts, not just for inputs someone
+	/// thought to write down. This enumerates short token sequences and mutates the valid corpus,
+	/// which is how the `parsing pipeline` frame inside `[ … ]` was caught during the port.
+	#[test]
+	fn round_trips_generated_inputs() {
+		const ALPHABET: &[&str] = &[
+			"node", "a", "=", "1", "|", "[", "]", ",", " ", "'", "\"", "#", "\n", ".", "\\",
+		];
+		let singles: Vec<String> = ALPHABET.iter().map(|s| (*s).to_string()).collect();
+		let mut inputs = singles.clone();
+		for _ in 1..4 {
+			let mut next = Vec::new();
+			for prefix in &inputs {
+				for token in &singles {
+					next.push(format!("{prefix}{token}"));
+				}
+			}
+			inputs.extend(next);
+		}
+		for source in CORPUS {
+			let chars: Vec<char> = source.chars().collect();
+			for i in 0..chars.len() {
+				let mut deleted = chars.clone();
+				deleted.remove(i);
+				inputs.push(deleted.into_iter().collect());
+				for c in ['|', '[', ']', ',', '=', '"', '\'', ' ', '#', '\\', 'ä'] {
+					let mut replaced = chars.clone();
+					replaced[i] = c;
+					inputs.push(replaced.into_iter().collect());
+				}
+			}
+		}
+
+		let mut accepted = 0;
+		for source in &inputs {
+			match parse_cst(source) {
+				Ok(file) => {
+					accepted += 1;
+					assert_eq!(&file.to_string(), source, "round trip differed for {source:?}");
+				}
+				Err(error) => {
+					assert!(error.span.end <= source.len(), "span out of bounds for {source:?}");
+				}
+			}
+		}
+		assert!(accepted > 3000, "expected a healthy share to parse, got {accepted}");
+	}
+
+	// -----------------------------------------------------------------------------------------
+	// Leaf parsers, ported from the semantic grammar's own tests when it was replaced.
+	// -----------------------------------------------------------------------------------------
+
+	#[test]
+	fn identifiers_need_a_leading_letter() {
+		for source in ["foo", "foo123", "foo-bar", "foo_bar"] {
+			assert_eq!(bare_identifier(source).unwrap().1, source);
+		}
+		for source in ["123foo", "=a", "-foo", "\"foo\"", "\"foo"] {
+			assert!(bare_identifier(source).is_err(), "accepted {source:?}");
+		}
+	}
+
+	#[rstest]
+	#[case(r#""foo""#, "foo")]
+	#[case(r#""foo bar""#, "foo bar")]
+	#[case(r#""foo\"bar""#, "foo\"bar")]
+	#[case(r#""foo\"bar\"""#, "foo\"bar\"")]
+	#[case(r#""""#, "")]
+	#[case(r#""a\nb\tc\\d""#, "a\nb\tc\\d")]
+	fn double_quoted_strings_recognise_then_decode(#[case] source: &str, #[case] decoded: &str) {
+		let (rest, text) = double_quoted(source).unwrap();
+		assert_eq!(rest, "");
+		assert_eq!(text, source, "the raw spelling is kept verbatim");
+
+		let string = CstString {
+			token: CstToken::new(text),
+			kind: CstStringKind::Double,
+		};
+		assert_eq!(string.decode(), decoded);
+	}
+
+	#[rstest]
+	#[case(r#""foo bar "#)]
+	#[case(r#" foo"bar "#)]
+	#[case(r#" foo bar""#)]
+	fn double_quoted_strings_reject(#[case] source: &str) {
+		assert!(double_quoted(source).is_err(), "accepted {source:?}");
+	}
+
+	/// Single quotes have no escape mechanism at all, so a `\` before the closing quote ends the
+	/// string rather than escaping it.
+	#[rstest]
+	#[case("'foo'", "", "foo")]
+	#[case("'foo bar'", "", "foo bar")]
+	#[case(r"'foo\'bar'", "bar'", r"foo\")]
+	#[case(r"'foo\\bar'", "", r"foo\\bar")]
+	#[case("''", "", "")]
+	#[case("'' rest", " rest", "")]
+	fn single_quoted_strings_take_text_literally(
+		#[case] source: &str,
+		#[case] expected_rest: &str,
+		#[case] decoded: &str,
+	) {
+		let (rest, text) = single_quoted(source).unwrap();
+		assert_eq!(rest, expected_rest);
+
+		let string = CstString {
+			token: CstToken::new(text),
+			kind: CstStringKind::Single,
+		};
+		assert_eq!(string.decode(), decoded);
+	}
+
+	#[test]
+	fn unquoted_values_allow_dots_dashes_and_underscores() {
+		for source in ["value1", "value.1", "value-1", "value_1", "-2.0"] {
+			assert_eq!(unquoted_value(source).unwrap().1, source);
+		}
+		assert_eq!(unquoted_value("value 1").unwrap(), (" 1", "value"));
+		assert_eq!(unquoted_value("value\"").unwrap(), ("\"", "value"));
+	}
+
+	/// Empty strings are values like any other, including inside an array. See issue #218.
+	#[test]
+	fn arrays_carry_empty_strings() {
+		let file = parse_cst(r#"node key=["", x, '']"#).unwrap();
+		let property = &file.pipeline.nodes.items[0].value.properties[0];
+		assert_eq!(
+			property.value.decode(),
+			vec![String::new(), "x".to_string(), String::new()]
+		);
+	}
+
+	#[test]
+	fn a_node_keeps_its_parameters_and_children() {
+		let source = "node key1=value1 key2=\"value2\" key3=\"a=\\\"b\\\"\" [ child ]";
+		let file = parse_cst(source).unwrap();
+		assert_eq!(file.to_string(), source);
+
+		let node = &file.pipeline.nodes.items[0].value;
+		let decoded: Vec<Vec<String>> = node.properties.iter().map(|p| p.value.decode()).collect();
+		assert_eq!(decoded, [["value1"], ["value2"], ["a=\"b\""]]);
+
+		let child = &node.sources.as_ref().unwrap().pipelines.items[0].value;
+		assert_eq!(child.nodes.items[0].value.name.text, "child");
 	}
 }

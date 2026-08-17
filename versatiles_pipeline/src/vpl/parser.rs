@@ -1,195 +1,22 @@
-use super::{VPLNode, VPLPipeline, VplParseError};
+//! The semantic parse entry points.
+//!
+//! The grammar itself lives in [`cst_parser`](super::cst_parser): there is one parser, and it is
+//! the lossless one. Everything here is that parser followed by
+//! [`CstFile::lower`](super::CstFile::lower), which drops trivia, decodes escapes, and folds the
+//! parameters into the alphabetised map the engine wants.
+
+use super::{VPLPipeline, VplParseError, parse_cst};
 use anyhow::Result;
-use nom::{
-	IResult, Parser,
-	branch::alt,
-	bytes::complete::{escaped_transform, tag, take_while, take_while1},
-	character::complete::{alphanumeric1, char, multispace1, none_of, one_of},
-	combinator::{all_consuming, cut, opt, peek, recognize, value},
-	error::context,
-	multi::{many0, many1, separated_list0, separated_list1},
-	sequence::{delimited, pair, preceded, separated_pair},
-};
-use nom_language::error::VerboseError;
-use std::collections::BTreeMap;
 use versatiles_derive::context;
-
-// Consume whitespace **and** shell-style comments ("# ...\n").
-fn comment(i: &str) -> IResult<&str, (), VerboseError<&str>> {
-	value((), preceded(char('#'), take_while(|c: char| c != '\n'))).parse(i)
-}
-
-fn ws0(i: &str) -> IResult<&str, (), VerboseError<&str>> {
-	value((), many0(alt((value((), multispace1), comment)))).parse(i)
-}
-
-fn ws1(i: &str) -> IResult<&str, (), VerboseError<&str>> {
-	value((), many1(alt((value((), multispace1), comment)))).parse(i)
-}
-
-fn parse_unquoted_value(input: &str) -> IResult<&str, String, VerboseError<&str>> {
-	context(
-		"parsing unquoted value",
-		recognize(many1(alt((alphanumeric1, recognize(one_of(".-_")))))),
-	)
-	.parse(input)
-	.map(|(a, b)| (a, b.to_string()))
-}
-
-fn parse_bare_identifier(input: &str) -> IResult<&str, String, VerboseError<&str>> {
-	context(
-		"parsing bare_identifier",
-		recognize(pair(
-			take_while1(|c: char| c.is_ascii_alphabetic()),
-			take_while(|c: char| c.is_ascii_alphanumeric() || "_-".contains(c)),
-		)),
-	)
-	.parse(input)
-	.map(|(a, b)| (a, b.to_string()))
-}
-
-fn parse_double_quoted_string(input: &str) -> IResult<&str, String, VerboseError<&str>> {
-	context(
-		"parsing double quoted string",
-		delimited(
-			char('"'),
-			alt((
-				// `escaped_transform` cannot match an empty body, so `""` is matched separately.
-				// Peeking keeps every non-empty body on the `escaped_transform` branch, so a bad
-				// escape still reports at the escape rather than at the opening quote.
-				value(String::new(), peek(char('"'))),
-				escaped_transform(
-					none_of("\\\""),
-					'\\',
-					alt((
-						value("\\", tag("\\")),
-						value("\"", tag("\"")),
-						value("\n", tag("n")),
-						value("\t", tag("t")),
-					)),
-				),
-			)),
-			char('"'),
-		),
-	)
-	.parse(input)
-}
-
-fn parse_single_quoted_string(input: &str) -> IResult<&str, String, VerboseError<&str>> {
-	context(
-		"parsing single quoted string",
-		// `take_while` rather than `is_not`, so that an empty body (`''`) is accepted.
-		delimited(
-			char('\''),
-			take_while(|c: char| c != '\'').map(|s: &str| s.to_string()),
-			char('\''),
-		),
-	)
-	.parse(input)
-}
-
-fn parse_array(input: &str) -> IResult<&str, Vec<String>, VerboseError<&str>> {
-	context(
-		"parsing array",
-		delimited(
-			(char('['), ws0),
-			separated_list0((ws0, char(','), ws0), parse_string),
-			(ws0, char(']')),
-		),
-	)
-	.parse(input)
-}
-
-fn parse_string(input: &str) -> IResult<&str, String, VerboseError<&str>> {
-	if input.starts_with('"') {
-		parse_double_quoted_string.parse(input)
-	} else if input.starts_with('\'') {
-		parse_single_quoted_string.parse(input)
-	} else {
-		parse_unquoted_value.parse(input)
-	}
-}
-
-fn parse_value(input: &str) -> IResult<&str, Vec<String>, VerboseError<&str>> {
-	if input.starts_with('[') {
-		parse_array.parse(input)
-	} else {
-		parse_string.map(|a| vec![a]).parse(input)
-	}
-}
-
-fn parse_identifier(input: &str) -> IResult<&str, String, VerboseError<&str>> {
-	context("parsing node identifier", parse_bare_identifier).parse(input)
-}
-
-fn parse_property(input: &str) -> IResult<&str, (String, Vec<String>), VerboseError<&str>> {
-	context(
-		"parsing property",
-		separated_pair(parse_identifier, cut((ws0, char('='), ws0)), cut(parse_value)),
-	)
-	.parse(input)
-}
-
-fn parse_sources(input: &str) -> IResult<&str, Vec<VPLPipeline>, VerboseError<&str>> {
-	context(
-		"parsing sources",
-		opt(delimited(
-			(char('['), ws0),
-			separated_list0((ws0, char(','), ws0), parse_pipeline),
-			(ws0, cut(char(']'))),
-		))
-		.map(std::option::Option::unwrap_or_default),
-	)
-	.parse(input)
-}
-
-fn parse_node<'a>(input: &'a str) -> IResult<&'a str, VPLNode, VerboseError<&'a str>> {
-	context("parsing node", |input: &'a str| {
-		let (input, _) = ws0(input)?;
-		let (input, name) = parse_identifier(input)?;
-		let (input, _) = ws0(input)?;
-		let (input, property_list) = separated_list0(ws1, parse_property).parse(input)?;
-		let (input, _) = ws0(input)?;
-		let (input, children) = parse_sources(input)?;
-		let (input, _) = ws0(input)?;
-
-		let mut properties = BTreeMap::new();
-		for (key, mut values) in property_list {
-			properties
-				.entry(key)
-				.and_modify(|list: &mut Vec<String>| list.append(&mut values))
-				.or_insert(values);
-		}
-
-		Ok((
-			input,
-			VPLNode {
-				name,
-				properties,
-				sources: children,
-			},
-		))
-	})
-	.parse(input)
-}
-
-fn parse_pipeline(input: &str) -> IResult<&str, VPLPipeline, VerboseError<&str>> {
-	context(
-		"parsing pipeline",
-		delimited(
-			ws0,
-			separated_list1((ws0, char('|'), ws0), parse_node).map(VPLPipeline::new),
-			ws0,
-		),
-	)
-	.parse(input)
-}
 
 /// Parses VPL text into a [`VPLPipeline`], reporting failures with a machine-readable position.
 ///
 /// Use this over [`parse_vpl`] when the caller wants to *point at* the mistake — to underline it
 /// in an editor, or turn it into a language-server range. [`VplParseError`] displays as the same
 /// caret-annotated trace `parse_vpl` produces, so nothing is lost by preferring it.
+///
+/// Callers that want to *edit* the text rather than run it should reach for
+/// [`parse_cst`](super::parse_cst) instead, which keeps the comments and formatting this discards.
 ///
 /// # Examples
 ///
@@ -209,20 +36,7 @@ fn parse_pipeline(input: &str) -> IResult<&str, VPLPipeline, VerboseError<&str>>
 /// assert_eq!(&source[error.context[0].offset..error.span.end], "zoom");
 /// ```
 pub fn parse_vpl_detailed(input: &str) -> Result<VPLPipeline, VplParseError> {
-	// `all_consuming` fails unless the whole input was consumed, so a successful parse cannot
-	// leave anything behind and the leftover needs no checking.
-	match all_consuming(parse_pipeline).parse(input) {
-		Ok((_, pipeline)) => Ok(pipeline),
-		Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(VplParseError::from_verbose(input, &e)),
-		// Only `Incomplete` reaches here, which streaming parsers produce. Every parser above
-		// comes from `nom::…::complete`, so this is unreachable in practice; it stays as a
-		// diagnostic rather than a panic in case that ever changes. There is no position to
-		// report, so it is attributed to the end of the input.
-		Err(e) => Err(VplParseError::at_end_of_input(
-			input,
-			format!("Error parsing VPL: {e:?}"),
-		)),
-	}
+	parse_cst(input).map(|file| file.lower())
 }
 
 /// Parses VPL text into a [`VPLPipeline`].
@@ -239,56 +53,8 @@ pub fn parse_vpl(input: &str) -> Result<VPLPipeline> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::vpl::VPLNode;
 	use rstest::rstest;
-
-	#[test]
-	fn test_parse_bare_identifier() {
-		for input in ["foo", "foo123", "foo-bar", "foo_bar"] {
-			assert_eq!(parse_bare_identifier(input).unwrap().1, input);
-		}
-
-		for input in ["123foo", "=a", "-foo"] {
-			let r = parse_bare_identifier(input);
-			assert!(r.is_err());
-		}
-	}
-
-	#[test]
-	fn test_parse_identifier() {
-		assert_eq!(parse_identifier("foo"), Ok(("", "foo".to_string())));
-		assert!(parse_identifier("\"foo\"").is_err());
-		assert!(parse_identifier("123foo").is_err());
-		assert!(parse_identifier("\"foo").is_err());
-	}
-
-	#[rstest]
-	#[case(r#""foo""#, r"foo")]
-	#[case(r#""foo bar""#, r"foo bar")]
-	#[case(r#""foo\"bar""#, r#"foo"bar"#)]
-	#[case(r#""foo\"bar\"""#, r#"foo"bar""#)]
-	#[case(r#""""#, "")]
-	fn parse_double_quoted_string_ok(#[case] input: &str, #[case] expected: &str) {
-		assert_eq!(parse_double_quoted_string(input).unwrap(), ("", expected.to_string()));
-	}
-
-	#[rstest]
-	#[case(r#""foo bar "#)]
-	#[case(r#" foo"bar "#)]
-	#[case(r#" foo bar""#)]
-	fn parse_double_quoted_string_error(#[case] input: &str) {
-		assert!(parse_double_quoted_string(input).is_err());
-	}
-
-	#[rstest]
-	#[case(r"'foo'", "", r"foo")]
-	#[case(r"'foo bar'", "", r"foo bar")]
-	#[case(r"'foo\'bar'", "bar'", r"foo\")]
-	#[case(r"'foo\\bar'", "", r"foo\\bar")]
-	#[case("''", "", "")]
-	#[case("'' rest", " rest", "")]
-	fn parse_single_quoted_string_ok(#[case] input: &str, #[case] rest: &str, #[case] expected: &str) {
-		assert_eq!(parse_single_quoted_string(input).unwrap(), (rest, expected.to_string()));
-	}
 
 	/// Both quote forms must be able to spell the empty string, and an empty value must
 	/// survive all the way into the parsed node. See issue #218.
@@ -300,16 +66,8 @@ mod tests {
 		assert_eq!(parse_vpl(input).unwrap(), VPLPipeline::from(expected));
 	}
 
-	#[test]
-	fn parse_empty_string_in_array() {
-		assert_eq!(
-			parse_array(r#"["", x, '']"#).unwrap(),
-			("", vec![String::new(), "x".to_string(), String::new()])
-		);
-	}
-
-	/// An empty body must not swallow the error for a malformed escape: the trace has to keep
-	/// pointing at the offending escape rather than at the opening quote.
+	/// A malformed escape must be reported against the offending escape character, not against the
+	/// opening quote or the backslash.
 	#[test]
 	fn parse_bad_escape_still_reports_at_the_escape() {
 		let error = parse_vpl(r#"node a="foo\qbar""#).unwrap_err();
@@ -321,34 +79,9 @@ mod tests {
 				"0: at line 1:",
 				r#"node a="foo\qbar""#,
 				"            ^",
-				"unexpected character"
+				"malformed escape sequence"
 			]
 		);
-	}
-
-	#[test]
-	fn test_parse_prop() {
-		let check = |a, b: &str, c: &str| {
-			assert_eq!(
-				parse_property(a),
-				Ok(("", (b.to_string(), vec![c.to_string()]))),
-				"error on: {a}"
-			);
-		};
-		check("key=value", "key", "value");
-		check("key=\"value\"", "key", "value");
-		check("key=-2.0", "key", "-2.0");
-	}
-
-	#[test]
-	fn test_parse_node() {
-		let input = "node key1=value1 key2=\"value2\" key3=\"a=\\\"b\\\"\" [ child ]";
-		let expected = VPLNode::from((
-			"node",
-			vec![("key1", "value1"), ("key2", "value2"), ("key3", "a=\"b\"")],
-			VPLPipeline::from(VPLNode::from("child")),
-		));
-		assert_eq!(parse_node(input), Ok(("", expected)));
 	}
 
 	#[test]
@@ -410,24 +143,6 @@ mod tests {
 			)),
 		]);
 		assert_eq!(parse_vpl(INPUT).unwrap(), expected);
-	}
-
-	#[test]
-	fn test_parse_unquoted_value() {
-		let inputs = ["value1", "value.1", "value-1", "value_1"];
-
-		for input in &inputs {
-			assert_eq!(parse_unquoted_value(input).unwrap().1, *input);
-		}
-	}
-
-	#[test]
-	fn test_parse_value() {
-		assert_eq!(parse_value("value1"), Ok(("", vec!["value1".to_string()])));
-		assert_eq!(parse_value("\"value1\""), Ok(("", vec!["value1".to_string()])));
-		assert_eq!(parse_value("value 1"), Ok((" 1", vec!["value".to_string()])));
-		assert_eq!(parse_value("value\""), Ok(("\"", vec!["value".to_string()])));
-		assert!(parse_value("\"value").is_err());
 	}
 
 	#[rstest]

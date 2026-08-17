@@ -218,6 +218,9 @@ fn describe_kind(kind: ErrorKind) -> Option<&'static str> {
 		ErrorKind::OneOf | ErrorKind::Tag | ErrorKind::TakeWhile1 => "unexpected character",
 		// Wrappers. These sit above one of the above at the same position, so they rarely carry
 		// the useful detail, but they still appear as stanzas in the trace.
+		// `Escaped` is raised by this crate's own string scanner, which knows the failure is an
+		// escape rather than merely an unexpected byte.
+		ErrorKind::Escaped => "malformed escape sequence",
 		ErrorKind::Alt => "none of the alternatives matched",
 		ErrorKind::Many1 => "expected at least one",
 		_ => return None,
