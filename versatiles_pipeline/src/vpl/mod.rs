@@ -1,6 +1,7 @@
 #[cfg(feature = "codegen")]
 mod field_meta;
 mod parser;
+mod serializer;
 mod vpl_node;
 mod vpl_pipeline;
 
