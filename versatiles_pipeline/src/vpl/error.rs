@@ -7,8 +7,8 @@
 //! favour of a rendered string.
 
 use nom::Offset;
-use nom_language::error::{VerboseError, VerboseErrorKind};
-use std::ops::Range;
+use nom_language::error::{VerboseError, VerboseErrorKind, convert_error};
+use std::{fmt, ops::Range};
 
 /// One frame of the parser's context stack.
 ///
@@ -46,6 +46,8 @@ pub struct VplParseError {
 	pub message: String,
 	/// The context stack, innermost first and outermost last.
 	pub context: Vec<VplErrorFrame>,
+	/// The caret-annotated trace, rendered eagerly because [`Display`] has no access to the input.
+	trace: String,
 }
 
 impl VplParseError {
@@ -54,9 +56,7 @@ impl VplParseError {
 	/// `error`'s entries each hold the *remaining* input at that point, which is always a suffix
 	/// of `input`, so the byte offset is the difference between the two. Entry order is innermost
 	/// first, because `nom` pushes each enclosing frame as the failure propagates outwards.
-	// Constructed by `parse_vpl` once the structured error is wired into it; see issue #217.
-	#[allow(dead_code)]
-	pub(crate) fn from_verbose(input: &str, error: &VerboseError<&str>) -> Self {
+	pub(crate) fn from_verbose(input: &str, error: VerboseError<&str>) -> Self {
 		let offset_of = |remaining: &str| input.offset(remaining);
 
 		let (message, span) = error.errors.first().map_or_else(
@@ -82,9 +82,38 @@ impl VplParseError {
 			})
 			.collect();
 
-		VplParseError { span, message, context }
+		let trace = convert_error(input, error);
+		VplParseError {
+			span,
+			message,
+			context,
+			trace,
+		}
+	}
+
+	/// Builds an error at the end of the input, for failures that carry no position of their own.
+	pub(crate) fn at_end_of_input(input: &str, message: impl Into<String>) -> Self {
+		let message = message.into();
+		VplParseError {
+			span: input.len()..input.len(),
+			trace: message.clone(),
+			message,
+			context: Vec::new(),
+		}
 	}
 }
+
+impl fmt::Display for VplParseError {
+	/// Writes the caret-annotated trace, i.e. what the CLI prints.
+	///
+	/// The structured fields are the reason this type exists; this is what it looks like to
+	/// someone reading a terminal.
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str(&self.trace)
+	}
+}
+
+impl std::error::Error for VplParseError {}
 
 /// Renders the innermost error entry, wording `Char` failures as the trace does.
 ///
@@ -104,12 +133,11 @@ fn describe(remaining: &str, kind: &VerboseErrorKind) -> String {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::vpl::parser::parse_vpl_verbose;
+	use crate::vpl::parse_vpl_detailed;
 
 	/// Parses `input`, expecting failure, and returns the structured error.
 	fn error_of(input: &str) -> VplParseError {
-		let error = parse_vpl_verbose(input).expect_err("expected a parse error");
-		VplParseError::from_verbose(input, &error)
+		parse_vpl_detailed(input).expect_err("expected a parse error")
 	}
 
 	fn labels(error: &VplParseError) -> Vec<&str> {
@@ -185,5 +213,34 @@ mod tests {
 	fn empty_input_is_reported_at_offset_zero() {
 		let error = error_of("");
 		assert_eq!(error.span, 0..0);
+	}
+
+	/// `parse_vpl` keeps its `anyhow` signature, but the position is no longer lost on the way out:
+	/// the structured error is still in the chain.
+	#[test]
+	fn parse_vpl_carries_the_structured_error() {
+		let error = crate::vpl::parse_vpl("node child key=value ]").unwrap_err();
+		let structured = error
+			.chain()
+			.find_map(|cause| cause.downcast_ref::<VplParseError>())
+			.expect("structured error should be recoverable from the chain");
+
+		assert_eq!(structured.span, 11..12);
+		assert_eq!(structured.message, "expected '=', found k");
+	}
+
+	/// Both entry points render the same trace, so preferring the detailed one costs nothing.
+	#[test]
+	fn both_entry_points_render_alike() {
+		let input = "node key=\"2.1";
+		let rendered = crate::vpl::parse_vpl(input)
+			.unwrap_err()
+			.chain()
+			.last()
+			.unwrap()
+			.to_string();
+
+		assert_eq!(error_of(input).to_string(), rendered);
+		assert!(rendered.contains("expected '\"', got end of input"));
 	}
 }

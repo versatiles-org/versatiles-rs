@@ -1,4 +1,4 @@
-use super::{VPLNode, VPLPipeline};
+use super::{VPLNode, VPLPipeline, VplParseError};
 use anyhow::Result;
 use nom::{
 	IResult, Parser,
@@ -10,7 +10,7 @@ use nom::{
 	multi::{many0, many1, separated_list0, separated_list1},
 	sequence::{delimited, pair, preceded, separated_pair},
 };
-use nom_language::error::{VerboseError, convert_error};
+use nom_language::error::VerboseError;
 use std::collections::BTreeMap;
 use versatiles_derive::context;
 
@@ -185,38 +185,37 @@ fn parse_pipeline(input: &str) -> IResult<&str, VPLPipeline, VerboseError<&str>>
 	.parse(input)
 }
 
-/// Parses `input`, handing back `nom`'s own error instead of a rendered one.
+/// Parses VPL text into a [`VPLPipeline`], reporting failures with a machine-readable position.
 ///
-/// Scaffolding for the structured-error work: it lets [`super::error`] test its extraction against
-/// real parser output. Once `parse_vpl` is built on top of the structured error, this becomes the
-/// shared entry point rather than a test-only one.
-#[cfg(test)]
-pub(super) fn parse_vpl_verbose(input: &str) -> Result<VPLPipeline, VerboseError<&str>> {
+/// Use this over [`parse_vpl`] when the caller wants to *point at* the mistake — to underline it
+/// in an editor, or turn it into a language-server range. [`VplParseError`] displays as the same
+/// caret-annotated trace `parse_vpl` produces, so nothing is lost by preferring it.
+pub fn parse_vpl_detailed(input: &str) -> Result<VPLPipeline, VplParseError> {
+	// `all_consuming` fails unless the whole input was consumed, so a successful parse cannot
+	// leave anything behind and the leftover needs no checking.
 	match all_consuming(parse_pipeline).parse(input) {
 		Ok((_, pipeline)) => Ok(pipeline),
-		Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(e),
-		Err(e) => panic!("complete parsers cannot report {e:?}"),
+		Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(VplParseError::from_verbose(input, e)),
+		// Only `Incomplete` reaches here, which streaming parsers produce. Every parser above
+		// comes from `nom::…::complete`, so this is unreachable in practice; it stays as a
+		// diagnostic rather than a panic in case that ever changes. There is no position to
+		// report, so it is attributed to the end of the input.
+		Err(e) => Err(VplParseError::at_end_of_input(
+			input,
+			format!("Error parsing VPL: {e:?}"),
+		)),
 	}
 }
 
 /// Parses VPL text into a [`VPLPipeline`].
 ///
-/// On failure the error carries `nom`'s context trace, rendered by `convert_error` into the
-/// caret-annotated form the CLI prints. That rendering is a `String`, so the position of the
-/// mistake is drawn rather than stated — see issue #217.
+/// The error displays as `nom`'s context trace in the caret-annotated form the CLI prints. That
+/// rendering states the position by drawing it, so a caller that needs the position as data should
+/// either use [`parse_vpl_detailed`] or recover the [`VplParseError`] from the returned error with
+/// [`anyhow::Error::downcast_ref`].
 #[context("Failed to parse VPL input")]
 pub fn parse_vpl(input: &str) -> Result<VPLPipeline> {
-	// `all_consuming` fails unless the whole input was consumed, so a successful parse cannot
-	// leave anything behind and the leftover needs no checking.
-	match all_consuming(parse_pipeline).parse(input) {
-		Ok((_, pipeline)) => Ok(pipeline),
-		Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Err(anyhow::anyhow!(convert_error(input, e))),
-		// Only `Incomplete` reaches here, which streaming parsers produce. Every parser above
-		// comes from `nom::…::complete`, so this is unreachable in practice; it stays as a
-		// diagnostic rather than a panic in case that ever changes. The surrounding `#[context]`
-		// already supplies the "Failed to parse VPL input" wrapper.
-		Err(e) => Err(anyhow::anyhow!("Error parsing VPL: {e:?}")),
-	}
+	parse_vpl_detailed(input).map_err(anyhow::Error::from)
 }
 
 #[cfg(test)]

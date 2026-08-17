@@ -9,6 +9,6 @@ mod vpl_pipeline;
 pub use error::{VplErrorFrame, VplParseError};
 #[cfg(feature = "codegen")]
 pub use field_meta::VPLFieldMeta;
-pub use parser::parse_vpl;
+pub use parser::{parse_vpl, parse_vpl_detailed};
 pub use vpl_node::VPLNode;
 pub use vpl_pipeline::VPLPipeline;
