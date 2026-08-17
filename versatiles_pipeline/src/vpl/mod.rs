@@ -34,6 +34,7 @@
 //! as byte offsets instead of drawing it — what an editor or language server needs.
 
 mod cst;
+mod cst_parser;
 mod error;
 #[cfg(feature = "codegen")]
 mod field_meta;
@@ -43,9 +44,10 @@ mod vpl_node;
 mod vpl_pipeline;
 
 pub use cst::{
-	CstArray, CstFile, CstNode, CstPipeline, CstProperty, CstSources, CstString, CstStringKind, CstToken, Punctuated,
-	PunctuatedItem,
+	CstArray, CstFile, CstNode, CstPipeline, CstProperty, CstSources, CstString, CstStringKind, CstToken, CstValue,
+	Punctuated, PunctuatedItem,
 };
+pub use cst_parser::parse_cst;
 pub use error::{VplErrorFrame, VplParseError};
 #[cfg(feature = "codegen")]
 pub use field_meta::VPLFieldMeta;
