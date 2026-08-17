@@ -14,7 +14,7 @@ use napi_derive::napi;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
-use versatiles::pipeline::vpl::{VPLNode, VPLPipeline, parse_vpl_detailed};
+use versatiles::pipeline::vpl::{CstFile, VPLNode, VPLPipeline, parse_cst, parse_vpl_detailed};
 
 /// One operation in the JSON pipeline representation the TypeScript builder produces.
 #[derive(Deserialize)]
@@ -112,6 +112,20 @@ pub fn stringify_vpl(steps_json: String) -> Result<String> {
 	Ok(steps_to_pipeline(steps).to_string())
 }
 
+/// Renders a parse failure as the JSON both entry points return.
+fn error_to_json(error: &versatiles::pipeline::vpl::VplParseError) -> Value {
+	json!({
+		"span": { "start": error.span.start, "end": error.span.end },
+		"message": error.message,
+		"context": error
+			.context
+			.iter()
+			.map(|frame| json!({ "label": frame.label, "offset": frame.offset }))
+			.collect::<Vec<Value>>(),
+		"trace": error.to_string(),
+	})
+}
+
 /// Parses VPL text into the JSON pipeline representation.
 ///
 /// Returns a JSON string rather than throwing, because an editor parses on every keystroke and a
@@ -132,21 +146,56 @@ pub fn stringify_vpl(steps_json: String) -> Result<String> {
 pub fn parse_vpl(vpl: String) -> String {
 	let result = match parse_vpl_detailed(&vpl) {
 		Ok(pipeline) => json!({ "ok": true, "pipeline": pipeline_to_steps(&pipeline) }),
-		Err(error) => json!({
-			"ok": false,
-			"error": {
-				"span": { "start": error.span.start, "end": error.span.end },
-				"message": error.message,
-				"context": error
-					.context
-					.iter()
-					.map(|frame| json!({ "label": frame.label, "offset": frame.offset }))
-					.collect::<Vec<Value>>(),
-				"trace": error.to_string(),
-			}
-		}),
+		Err(error) => json!({ "ok": false, "error": error_to_json(&error) }),
 	};
 	result.to_string()
+}
+
+/// Parses VPL text into the lossless syntax tree.
+///
+/// Unlike [`parse_vpl`], which returns the semantic pipeline the engine runs, this keeps
+/// everything the file contains — comments, whitespace, the order the parameters were written in,
+/// and which quotes the author chose. Hold this tree if you mean to edit a file somebody wrote:
+/// [`stringify_vpl_cst`] prints it back byte for byte, so the parts nobody touched stay untouched.
+///
+/// Returns a JSON string, with the same result shape as [`parse_vpl`]:
+///
+/// - on success, `{"ok": true, "cst": {...}}`
+/// - on failure, `{"ok": false, "error": {...}}`
+///
+/// Every token carries a `span` of **byte** offsets into the input.
+///
+/// @param vpl - the VPL text to parse
+/// @returns a JSON string describing either the syntax tree or the error
+#[napi]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn parse_vpl_cst(vpl: String) -> String {
+	match parse_cst(&vpl) {
+		Ok(file) => json!({ "ok": true, "cst": file }),
+		Err(error) => json!({ "ok": false, "error": error_to_json(&error) }),
+	}
+	.to_string()
+}
+
+/// Writes a lossless syntax tree back out as VPL text.
+///
+/// The inverse of [`parse_vpl_cst`]: an unedited tree prints back to exactly the text it was
+/// parsed from. Fields that describe formatting — `leading`, `trailing`, `span` — may be omitted
+/// when building a tree by hand, so a minimal node is `{"name": {"text": "from_debug"}}`.
+///
+/// Note that `span` values are stale after an edit; they describe where a token *was*. Parse the
+/// printed text again to get fresh ones.
+///
+/// @param cstJson - JSON string describing the syntax tree
+/// @returns the tree as VPL text
+#[allow(clippy::needless_pass_by_value)]
+#[napi]
+pub fn stringify_vpl_cst(cst_json: String) -> Result<String> {
+	let file: CstFile = serde_json::from_str(&cst_json)
+		.context("Invalid VPL syntax tree JSON")
+		.to_napi()?;
+	Ok(file.to_string())
 }
 
 #[cfg(test)]
@@ -239,5 +288,51 @@ mod tests {
 		let result = parsed("node a=\"Grüße\" b=!");
 		assert_eq!(result["error"]["span"]["start"], 19);
 		assert_eq!(result["error"]["span"]["end"], 20);
+	}
+
+	/// Holding the tree elsewhere is only safe if it comes back unchanged.
+	#[test]
+	fn cst_round_trips_through_json() {
+		for vpl in [
+			"# a comment\nfrom_container  filename = 'berlin.versatiles'  # note\n",
+			"from_stacked [ a key=1 | b, c ] | filter level_min=5",
+			"node key=[\"\", x, '']",
+		] {
+			let parsed: Value = serde_json::from_str(&parse_vpl_cst(vpl.to_string())).unwrap();
+			assert!(parsed["ok"].as_bool().unwrap(), "{vpl} should parse");
+
+			let printed = stringify_vpl_cst(parsed["cst"].to_string()).unwrap();
+			assert_eq!(printed, vpl, "comments or formatting were lost");
+		}
+	}
+
+	/// Editing the tree changes only what was edited.
+	#[test]
+	fn editing_the_tree_leaves_the_rest_alone() {
+		let source = "# which file\nfrom_container  filename = 'berlin.versatiles'  # note";
+		let mut parsed: Value = serde_json::from_str(&parse_vpl_cst(source.to_string())).unwrap();
+
+		let value = &mut parsed["cst"]["pipeline"]["nodes"][0]["value"]["properties"][0]["value"];
+		value["token"]["text"] = Value::String("hamburg.versatiles".to_string());
+		value["quote"] = Value::String("bare".to_string());
+
+		let printed = stringify_vpl_cst(parsed["cst"].to_string()).unwrap();
+		assert_eq!(
+			printed,
+			"# which file\nfrom_container  filename = hamburg.versatiles  # note"
+		);
+	}
+
+	#[test]
+	fn cst_reports_errors_the_same_way_as_the_pipeline_parser() {
+		let parsed: Value = serde_json::from_str(&parse_vpl_cst("node ][".to_string())).unwrap();
+		assert!(!parsed["ok"].as_bool().unwrap());
+		assert!(!parsed["error"]["message"].as_str().unwrap().is_empty());
+		assert!(parsed["error"]["trace"].as_str().unwrap().contains("at line 1"));
+	}
+
+	#[test]
+	fn stringify_cst_rejects_malformed_json() {
+		assert!(stringify_vpl_cst("not json".to_string()).is_err());
 	}
 }

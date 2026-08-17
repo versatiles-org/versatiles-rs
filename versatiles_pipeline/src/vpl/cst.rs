@@ -11,6 +11,13 @@
 //! `print(parse(x)) == x` holds by construction rather than by care. [`CstPipeline::lower`]
 //! converts to the semantic tree when it is time to run something.
 //!
+//! # Crossing a boundary
+//!
+//! The tree serialises to JSON so a caller in another language can hold it, edit it, and send it
+//! back to be printed. Field names are the ones below; `leading`, `span`, `properties`, `sources`
+//! and `trailing` may all be omitted when building a tree from the other side, so a minimal node
+//! is `{"name": {"text": "from_debug"}}`.
+//!
 //! # Owned text
 //!
 //! Tokens hold `String`, not borrowed slices. A tree that borrows its source cannot be moved
@@ -19,6 +26,7 @@
 //! where there was one, and is `None` for anything built rather than parsed.
 
 use super::{VPLNode, VPLPipeline, serializer::quote};
+use serde::{Deserialize, Serialize};
 use std::{
 	collections::BTreeMap,
 	fmt::{self, Display},
@@ -26,15 +34,17 @@ use std::{
 };
 
 /// A single piece of source text, together with the trivia that preceded it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CstToken {
 	/// Whitespace and comments between the previous token and this one. Often empty.
+	#[serde(default, skip_serializing_if = "String::is_empty")]
 	pub leading: String,
 	/// The token itself, verbatim — quotes and escapes exactly as written.
 	pub text: String,
 	/// Byte range of `text` in the source it was parsed from; `None` if synthesized.
 	///
 	/// The range covers `text` only. The trivia occupies the `leading.len()` bytes before it.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub span: Option<Range<usize>>,
 }
 
@@ -79,7 +89,8 @@ impl Display for CstToken {
 ///
 /// The separator is stored on the element that *follows* it, so inserting or removing an element
 /// is a local edit rather than one that has to keep a parallel vector in step.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct Punctuated<T> {
 	/// Elements in source order. Only the first may have `separator: None`.
 	pub items: Vec<PunctuatedItem<T>>,
@@ -93,9 +104,10 @@ impl<T> Default for Punctuated<T> {
 }
 
 /// One element of a [`Punctuated`] list, with the separator that introduced it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PunctuatedItem<T> {
 	/// The separator before this element; `None` for the first element of a list.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub separator: Option<CstToken>,
 	/// The element itself.
 	pub value: T,
@@ -181,11 +193,12 @@ impl<T: Display> Display for Punctuated<T> {
 ///
 /// Exists because trailing trivia has no token to attach to: the grammar allows whitespace and
 /// comments after the last node, and something has to hold them for the round trip to be exact.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CstFile {
 	/// The pipeline itself. Leading trivia belongs to its first token.
 	pub pipeline: CstPipeline,
 	/// Whitespace and comments after the last token.
+	#[serde(default, skip_serializing_if = "String::is_empty")]
 	pub trailing: String,
 }
 
@@ -225,7 +238,7 @@ impl Display for CstFile {
 }
 
 /// A sequence of nodes separated by `|`.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CstPipeline {
 	/// The nodes, in source order.
 	pub nodes: Punctuated<CstNode>,
@@ -261,13 +274,15 @@ impl Display for CstPipeline {
 }
 
 /// One operation: a name, its parameters in source order, and optional child pipelines.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CstNode {
 	/// The operation name.
 	pub name: CstToken,
 	/// Parameters in the order they were written, duplicates kept apart.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub properties: Vec<CstProperty>,
 	/// The bracketed child pipelines, if the node has any.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub sources: Option<CstSources>,
 }
 
@@ -355,7 +370,7 @@ impl Display for CstNode {
 }
 
 /// A single `key=value` parameter.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CstProperty {
 	/// The parameter name.
 	pub key: CstToken,
@@ -401,7 +416,9 @@ impl Display for CstProperty {
 }
 
 /// The right-hand side of a parameter: one value, or a bracketed list of them.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+// Tagged so JavaScript can branch on `kind` rather than on which field is present.
+#[serde(tag = "kind", rename_all = "lowercase")]
 pub enum CstValue {
 	/// A single value, e.g. `level_min=5`.
 	Single(CstString),
@@ -469,7 +486,7 @@ impl Display for CstValue {
 }
 
 /// A bracketed list of values, e.g. `["place", "water"]`.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CstArray {
 	/// The `[`.
 	pub open: CstToken,
@@ -486,7 +503,7 @@ impl Display for CstArray {
 }
 
 /// A bracketed list of child pipelines, e.g. `[ a | b, c ]`.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CstSources {
 	/// The `[`.
 	pub open: CstToken,
@@ -503,7 +520,8 @@ impl Display for CstSources {
 }
 
 /// How a string was spelled in the source.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum CstStringKind {
 	/// Unquoted, e.g. `webp`.
 	Bare,
@@ -518,11 +536,12 @@ pub enum CstStringKind {
 /// The raw text is the single source of truth; the decoded value is derived on demand by
 /// [`decode`](Self::decode) rather than stored, so editing `token.text` cannot leave the two
 /// disagreeing.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CstString {
 	/// The value verbatim, including any quotes.
 	pub token: CstToken,
 	/// Which spelling `token.text` uses.
+	#[serde(rename = "quote")]
 	pub kind: CstStringKind,
 }
 
@@ -961,5 +980,58 @@ mod tests {
 		// tokens after the edit moved too
 		let second = &file.pipeline.nodes.items[1].value;
 		assert_eq!(&printed[second.name.span.clone().unwrap()], "other");
+	}
+
+	// -----------------------------------------------------------------------------------------
+	// The JSON wire format
+	// -----------------------------------------------------------------------------------------
+
+	/// A tree that survives JSON must survive it *exactly*: the whole point of holding a CST in
+	/// another language is that printing it there still reproduces the file byte for byte.
+	#[test]
+	fn json_round_trip_is_lossless() {
+		for source in [
+			"# a comment\nfrom_container  filename = 'berlin.versatiles'  # note\n",
+			"from_stacked [ a key=1 | b, c ] | filter level_min=5",
+			"node key=[\"\", x, ''] other=\"a\\nb\"",
+			"node",
+		] {
+			let file = parse_cst(source).unwrap();
+			let json = serde_json::to_string(&file).unwrap();
+			let restored: CstFile = serde_json::from_str(&json).unwrap();
+
+			assert_eq!(restored, file, "tree differed after JSON for {source:?}");
+			assert_eq!(restored.to_string(), source, "text differed after JSON for {source:?}");
+		}
+	}
+
+	/// The shape JavaScript sees. Pinned because it is an API, not an implementation detail.
+	#[test]
+	fn json_shape_is_stable() {
+		let file = parse_cst("node key='a b'").unwrap();
+		let json = serde_json::to_value(&file).unwrap();
+
+		let node = &json["pipeline"]["nodes"][0]["value"];
+		assert_eq!(node["name"]["text"], "node");
+		assert_eq!(node["name"]["span"], serde_json::json!({ "start": 0, "end": 4 }));
+
+		let value = &node["properties"][0]["value"];
+		assert_eq!(value["kind"], "single");
+		assert_eq!(value["quote"], "single");
+		assert_eq!(value["token"]["text"], "'a b'");
+
+		// empty trivia, absent sources and the like stay out of the payload
+		assert!(node.get("sources").is_none());
+		assert!(json.get("trailing").is_none());
+	}
+
+	/// Building a tree from the other side should not mean filling in every field.
+	#[test]
+	fn json_accepts_a_minimal_tree() {
+		let json = r#"{"pipeline":{"nodes":[{"value":{"name":{"text":"from_debug"}}}]}}"#;
+		let file: CstFile = serde_json::from_str(json).unwrap();
+
+		assert_eq!(file.to_string(), "from_debug");
+		assert_eq!(file.lower(), crate::vpl::parse_vpl("from_debug").unwrap());
 	}
 }

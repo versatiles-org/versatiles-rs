@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { VPL } from '../vpl.js';
 import { parseVpl } from '../index.js';
+import { parseCst, parseCstResult, stringifyCst } from '../vpl.js';
 
 /**
  * Asserts the serialised pipeline, and that it is actually valid VPL.
@@ -169,5 +170,47 @@ describe('VPL Builder', () => {
 				expect((error as SyntaxError & { vpl: { trace: string } }).vpl.trace).toContain('at line 1');
 			}
 		});
+	});
+});
+
+describe('CST (lossless syntax tree)', () => {
+	const source = "# which file\nfrom_container  filename = 'berlin.versatiles'  # note\n| filter level_min=5\n";
+
+	it('round-trips a file byte for byte', () => {
+		expect(stringifyCst(parseCst(source))).toBe(source);
+	});
+
+	it('changes only what was edited', () => {
+		const cst = parseCst(source);
+		const value = cst.pipeline.nodes[0].value.properties![0].value;
+		if (value.kind !== 'single') throw new Error('expected a single value');
+		value.token.text = 'hamburg.versatiles';
+		value.quote = 'bare';
+
+		expect(stringifyCst(cst)).toBe(
+			'# which file\nfrom_container  filename = hamburg.versatiles  # note\n| filter level_min=5\n',
+		);
+	});
+
+	it('keeps parameters in source order, unlike the semantic tree', () => {
+		const cst = parseCst('node zebra=1 alpha=2');
+		expect(cst.pipeline.nodes[0].value.properties!.map((p) => p.key.text)).toEqual(['zebra', 'alpha']);
+		expect(VPL.parse('node zebra=1 alpha=2').toString()).toBe('node alpha=2 zebra=1');
+	});
+
+	it('gives every token a byte span into the source', () => {
+		const cst = parseCst(source);
+		const name = cst.pipeline.nodes[0].value.name;
+		expect(source.slice(name.span!.start, name.span!.end)).toBe('from_container');
+	});
+
+	it('accepts a tree built by hand, without the formatting fields', () => {
+		expect(stringifyCst({ pipeline: { nodes: [{ value: { name: { text: 'from_debug' } } }] } })).toBe('from_debug');
+	});
+
+	it('reports a syntax error as data, or throws', () => {
+		const result = parseCstResult('node ][');
+		expect(result.ok).toBe(false);
+		expect(() => parseCst('node ][')).toThrow(SyntaxError);
 	});
 });

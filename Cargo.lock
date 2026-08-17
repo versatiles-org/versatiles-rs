@@ -5831,6 +5831,8 @@ dependencies = [
  "reqwest",
  "rstar 0.13.0",
  "rstest",
+ "serde",
+ "serde_json",
  "tempfile",
  "tokio",
  "versatiles_container",

@@ -100,8 +100,9 @@ fn generate_typescript(ops: &[OperationMeta]) -> String {
 	// Header
 	out.push_str("// AUTO-GENERATED — DO NOT EDIT\n");
 	out.push_str("// Generated from Rust VPL operation metadata\n\n");
-	out.push_str("import { TileSource, parseVpl, stringifyVpl } from './index.js';\n\n");
+	out.push_str("import { TileSource, parseVpl, parseVplCst, stringifyVpl, stringifyVplCst } from './index.js';\n\n");
 	generate_parse_types(&mut out);
+	generate_cst_types(&mut out);
 
 	// Generate interfaces for all operations
 	for op in ops {
@@ -135,6 +136,106 @@ fn generate_parse_types(out: &mut String) {
 	out.push_str("type VplParseResult =\n");
 	out.push_str("\t| { ok: true; pipeline: VplStep[] }\n");
 	out.push_str("\t| { ok: false; error: VplSyntaxError };\n\n");
+}
+
+/// Generate the lossless syntax tree types and the functions that read and write them.
+fn generate_cst_types(out: &mut String) {
+	out.push_str(
+		"/**\n\
+		 * A stretch of source text, with the whitespace and comments immediately before it.\n\
+		 *\n\
+		 * `span` holds **byte** offsets into the text this was parsed from, and covers `text`\n\
+		 * only. It is absent for tokens you build yourself, and stale after an edit.\n\
+		 */\n",
+	);
+	out.push_str("export interface CstToken {\n");
+	out.push_str("\tleading?: string;\n");
+	out.push_str("\ttext: string;\n");
+	out.push_str("\tspan?: { start: number; end: number };\n");
+	out.push_str("}\n\n");
+
+	out.push_str("/** An element of a separated list. The first element has no separator. */\n");
+	out.push_str("export interface CstItem<T> {\n");
+	out.push_str("\tseparator?: CstToken;\n");
+	out.push_str("\tvalue: T;\n");
+	out.push_str("}\n\n");
+
+	out.push_str("/** How a value was spelled: unquoted, `'single'`, or `\\\"double\\\"`. */\n");
+	out.push_str("export type CstQuote = 'bare' | 'single' | 'double';\n\n");
+
+	out.push_str("/** A value, keeping its quotes and escapes exactly as written. */\n");
+	out.push_str("export interface CstString {\n");
+	out.push_str("\ttoken: CstToken;\n");
+	out.push_str("\tquote: CstQuote;\n");
+	out.push_str("}\n\n");
+
+	out.push_str("/** The right-hand side of a parameter: one value, or a bracketed list. */\n");
+	out.push_str("export type CstValue =\n");
+	out.push_str("\t| ({ kind: 'single' } & CstString)\n");
+	out.push_str("\t| { kind: 'array'; open: CstToken; items: CstItem<CstString>[]; close: CstToken };\n\n");
+
+	out.push_str("/** A single `key=value` parameter. */\n");
+	out.push_str("export interface CstProperty {\n");
+	out.push_str("\tkey: CstToken;\n");
+	out.push_str("\tequals: CstToken;\n");
+	out.push_str("\tvalue: CstValue;\n");
+	out.push_str("}\n\n");
+
+	out.push_str("/** A bracketed list of child pipelines. */\n");
+	out.push_str("export interface CstSources {\n");
+	out.push_str("\topen: CstToken;\n");
+	out.push_str("\tpipelines: CstItem<CstPipeline>[];\n");
+	out.push_str("\tclose: CstToken;\n");
+	out.push_str("}\n\n");
+
+	out.push_str("/** One operation, with its parameters in the order they were written. */\n");
+	out.push_str("export interface CstNode {\n");
+	out.push_str("\tname: CstToken;\n");
+	out.push_str("\tproperties?: CstProperty[];\n");
+	out.push_str("\tsources?: CstSources;\n");
+	out.push_str("}\n\n");
+
+	out.push_str("/** Nodes separated by `|`. */\n");
+	out.push_str("export interface CstPipeline {\n");
+	out.push_str("\tnodes: CstItem<CstNode>[];\n");
+	out.push_str("}\n\n");
+
+	out.push_str(
+		"/**\n\
+		 * A whole VPL file, losslessly.\n\
+		 *\n\
+		 * Printing an unedited tree reproduces the source byte for byte — comments, indentation,\n\
+		 * parameter order and quote style included — so editing one value leaves the rest of a\n\
+		 * hand-written file untouched.\n\
+		 */\n",
+	);
+	out.push_str("export interface CstFile {\n");
+	out.push_str("\tpipeline: CstPipeline;\n");
+	out.push_str("\ttrailing?: string;\n");
+	out.push_str("}\n\n");
+
+	out.push_str("type CstParseResult = { ok: true; cst: CstFile } | { ok: false; error: VplSyntaxError };\n\n");
+
+	out.push_str("/** Parse VPL text into a lossless syntax tree, returning the error rather than throwing. */\n");
+	out.push_str("export function parseCstResult(vpl: string): CstParseResult {\n");
+	out.push_str("\treturn JSON.parse(parseVplCst(vpl)) as CstParseResult;\n");
+	out.push_str("}\n\n");
+
+	out.push_str("/** Parse VPL text into a lossless syntax tree, throwing on a syntax error. */\n");
+	out.push_str("export function parseCst(vpl: string): CstFile {\n");
+	out.push_str("\tconst result = parseCstResult(vpl);\n");
+	out.push_str("\tif (!result.ok) {\n");
+	out.push_str("\t\tconst error = new SyntaxError(result.error.message) as SyntaxError & { vpl: VplSyntaxError };\n");
+	out.push_str("\t\terror.vpl = result.error;\n");
+	out.push_str("\t\tthrow error;\n");
+	out.push_str("\t}\n");
+	out.push_str("\treturn result.cst;\n");
+	out.push_str("}\n\n");
+
+	out.push_str("/** Write a lossless syntax tree back out as VPL text. */\n");
+	out.push_str("export function stringifyCst(cst: CstFile): string {\n");
+	out.push_str("\treturn stringifyVplCst(JSON.stringify(cst));\n");
+	out.push_str("}\n\n");
 }
 
 /// Generate a TypeScript interface for an operation's options.
@@ -479,6 +580,8 @@ mod tests {
 		assert!(ts.contains("params['filename'] = options.filename;"));
 		assert!(ts.contains("stringifyVpl(JSON.stringify(this.toJSON()))"));
 		assert!(ts.contains("export interface VplSyntaxError"));
+		assert!(ts.contains("export interface CstFile"));
+		assert!(ts.contains("export function stringifyCst"));
 	}
 
 	#[test]
