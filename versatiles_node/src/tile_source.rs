@@ -456,11 +456,7 @@ impl SourceType {
 	/// - `"composite"`: Multiple sources combined
 	#[napi(getter)]
 	pub fn kind(&self) -> String {
-		match self.inner.as_ref() {
-			RustSourceType::Container { .. } => "container".to_string(),
-			RustSourceType::Processor { .. } => "processor".to_string(),
-			RustSourceType::Composite { .. } => "composite".to_string(),
-		}
+		self.inner.kind().to_string()
 	}
 
 	/// Get the name of the source
@@ -470,11 +466,7 @@ impl SourceType {
 	/// For processors, this describes the transformation (e.g., "filter", "transform").
 	#[napi(getter)]
 	pub fn name(&self) -> String {
-		match self.inner.as_ref() {
-			RustSourceType::Container { name, .. }
-			| RustSourceType::Processor { name, .. }
-			| RustSourceType::Composite { name, .. } => name.clone(),
-		}
+		self.inner.name().to_string()
 	}
 
 	/// Get the file path or URL (for Container sources only)
@@ -491,10 +483,7 @@ impl SourceType {
 	/// ```
 	#[napi(getter)]
 	pub fn uri(&self) -> Option<String> {
-		match self.inner.as_ref() {
-			RustSourceType::Container { input, .. } => Some(input.clone()),
-			_ => None,
-		}
+		self.inner.input().map(str::to_string)
 	}
 
 	/// Get the input source being processed (for Processor sources only)

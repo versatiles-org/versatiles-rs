@@ -35,6 +35,47 @@ impl SourceType {
 			inputs: inputs.to_vec(),
 		})
 	}
+
+	/// The name of this source, without the diagnostics: `"mbtiles"`,
+	/// `"filter"`, `"stacked"`.
+	///
+	/// [`Display`](std::fmt::Display) renders a sentence meant for a log line —
+	/// `container 'mbtiles' ('/home/me/berlin.mbtiles')` — which is the wrong
+	/// thing to put in a UI that wants a short label. Use this instead.
+	#[must_use]
+	pub fn name(&self) -> &str {
+		match self {
+			SourceType::Container { name, .. }
+			| SourceType::Processor { name, .. }
+			| SourceType::Composite { name, .. } => name,
+		}
+	}
+
+	/// The path or URL this source reads from, for a container.
+	///
+	/// `None` for processors and composites, which have upstream sources rather
+	/// than an input location.
+	#[must_use]
+	pub fn input(&self) -> Option<&str> {
+		match self {
+			SourceType::Container { input, .. } => Some(input),
+			SourceType::Processor { .. } | SourceType::Composite { .. } => None,
+		}
+	}
+
+	/// Which variant this is: `"container"`, `"processor"` or `"composite"`.
+	///
+	/// Lets a caller branch on, or label, the kind of source without matching
+	/// the enum — which is the only reason the variants needed to be public to
+	/// a consumer that just wants to display them.
+	#[must_use]
+	pub fn kind(&self) -> &'static str {
+		match self {
+			SourceType::Container { .. } => "container",
+			SourceType::Processor { .. } => "processor",
+			SourceType::Composite { .. } => "composite",
+		}
+	}
 }
 
 impl std::fmt::Display for SourceType {
@@ -172,5 +213,39 @@ mod tests {
 
 		let source3 = SourceType::new_container("mbtiles", "/path/to/other.mbtiles");
 		assert_ne!(source1, source3);
+	}
+
+	#[test]
+	fn accessors_read_back_each_variant() {
+		let container = SourceType::new_container("mbtiles", "/path/to/file.mbtiles");
+		let processor = SourceType::new_processor("filter", container.clone());
+		let composite = SourceType::new_composite("stacked", &[container.clone(), processor.clone()]);
+
+		assert_eq!(container.name(), "mbtiles");
+		assert_eq!(processor.name(), "filter");
+		assert_eq!(composite.name(), "stacked");
+
+		assert_eq!(container.kind(), "container");
+		assert_eq!(processor.kind(), "processor");
+		assert_eq!(composite.kind(), "composite");
+
+		// Only a container reads from a location; the others have upstream sources.
+		assert_eq!(container.input(), Some("/path/to/file.mbtiles"));
+		assert_eq!(processor.input(), None);
+		assert_eq!(composite.input(), None);
+	}
+
+	/// The point of the accessors: `Display` is a log line, not a label. A UI
+	/// that wants "mbtiles" must not end up showing the user's full path.
+	#[test]
+	fn name_is_not_the_display_string() {
+		let container = SourceType::new_container("mbtiles", "/home/someone/tiles/berlin.mbtiles");
+
+		assert_eq!(container.name(), "mbtiles");
+		assert_eq!(
+			container.to_string(),
+			"container 'mbtiles' ('/home/someone/tiles/berlin.mbtiles')"
+		);
+		assert!(!container.name().contains('/'), "a name must never carry a path");
 	}
 }
