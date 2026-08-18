@@ -168,7 +168,7 @@ pub fn parse_vpl(vpl: String) -> String {
 ///
 /// `path` addresses the offending node by index: `[2]` is the third node of the pipeline, and
 /// descending into a node's bracketed sources appends the source index and then the node index.
-/// The same walk applies to the tree from [`parse_vpl_cst`], which is how this becomes a span.
+/// The same walk applies to the tree from `parseVplCst`, which is how this becomes a span.
 ///
 /// Two things are deliberately *not* reported, because doing so would reject VPL that runs:
 /// parameter values are never validated (`color=red` passes here and fails at build time), and
