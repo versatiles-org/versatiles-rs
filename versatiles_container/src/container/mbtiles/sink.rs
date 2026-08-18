@@ -61,19 +61,12 @@ impl MBTilesTileSink {
 
 	#[context("creating MBTilesTileSink for '{}'", path.display())]
 	fn new(path: &Path, tile_format: TileFormat, tile_compression: TileCompression) -> Result<Self> {
-		use TileCompression::{Gzip, Uncompressed};
-		use TileFormat::{JPG, MVT, PNG, WEBP};
-
-		let format_str = match (tile_format, tile_compression) {
-			(JPG, Uncompressed) => "jpg",
-			(MVT, Gzip) => "pbf",
-			(PNG, Uncompressed) => "png",
-			(WEBP, Uncompressed) => "webp",
-			_ => bail!(
-				"combination of format ({tile_format}) and compression ({tile_compression}) is not supported. \
-				 MBTiles supports only uncompressed jpg/png/webp or gzipped pbf"
-			),
-		};
+		// Unlike the writer, a sink is handed finished blobs and cannot
+		// recompress them, so it can only verify what it was told.
+		let (format_str, required) = super::required_encoding(tile_format)?;
+		if tile_compression != required {
+			bail!("MBTiles stores {tile_format} tiles {required}, but this sink was given {tile_compression}");
+		}
 
 		if path.exists() {
 			remove_file(path)?;

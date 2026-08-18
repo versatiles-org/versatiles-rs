@@ -45,12 +45,12 @@
 
 use std::{fs::remove_file, path::Path, sync::Arc};
 
-use anyhow::{Result, bail};
+use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use r2d2::Pool;
 use r2d2_sqlite::{SqliteConnectionManager, rusqlite::params};
-use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, json::JsonObject};
+use versatiles_core::{Blob, TileCoord, json::JsonObject};
 use versatiles_derive::context;
 
 use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
@@ -151,24 +151,21 @@ impl TilesWriter for MBTilesWriter {
 	/// or if database insertion encounters an error.
 	#[context("writing MBTiles to '{}'", path.display())]
 	async fn write_to_path(reader: &mut dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
-		use TileCompression::{Gzip, Uncompressed};
-		use TileFormat::{JPG, MVT, PNG, WEBP};
-
 		let writer = MBTilesWriter::new(path)?;
 
 		let metadata = reader.metadata().clone();
 
-		let format = match (metadata.tile_format(), metadata.tile_compression()) {
-			(JPG, Uncompressed) => "jpg",
-			(MVT, Gzip) => "pbf",
-			(PNG, Uncompressed) => "png",
-			(WEBP, Uncompressed) => "webp",
-			_ => bail!(
-				"combination of format ({}) and compression ({}) is not supported. MBTiles supports only uncompressed jpg/png/webp or gzipped pbf",
+		// MBTiles accepts exactly one compression per format, and recompressing
+		// is lossless, so adapt rather than refuse — the alternative is telling
+		// the user to re-run with a `--compress` value we could have chosen.
+		let (format, compression) = super::required_encoding(*metadata.tile_format())?;
+		if metadata.tile_compression() != &compression {
+			log::info!(
+				"recompressing {} tiles from {} to {compression}, which is what MBTiles stores",
 				metadata.tile_format(),
 				metadata.tile_compression()
-			),
-		};
+			);
+		}
 
 		writer.set_metadata("format", format)?;
 		writer.set_metadata("type", "baselayer")?;
@@ -214,7 +211,7 @@ impl TilesWriter for MBTilesWriter {
 		}
 
 		let writer_mutex = Arc::new(Mutex::new(writer));
-		let tile_compression = *reader.metadata().tile_compression();
+		let tile_compression = compression;
 
 		reader
 			.traverse_all_tiles(
@@ -242,7 +239,7 @@ impl TilesWriter for MBTilesWriter {
 #[cfg(test)]
 mod tests {
 	use assert_fs::NamedTempFile;
-	use versatiles_core::TilePyramid;
+	use versatiles_core::{TileCompression, TileFormat, TilePyramid};
 
 	use super::*;
 	use crate::{MBTilesReader, MockReader, MockWriter, TileSourceMetadata};
@@ -262,5 +259,35 @@ mod tests {
 		MockWriter::write(&mut reader).await?;
 
 		Ok(())
+	}
+
+	/// The secondary point of #228: uncompressed MVT used to be refused, telling
+	/// the user to re-run with a `--compress` value the writer could have picked
+	/// itself. Recompressing is lossless, so it adapts instead.
+	#[tokio::test]
+	async fn uncompressed_mvt_is_gzipped_rather_than_refused() -> Result<()> {
+		let file = NamedTempFile::new("uncompressed_mvt.mbtiles")?;
+		let mut reader = MockReader::new_mock(
+			TilePyramid::new_full_up_to(2),
+			TileSourceMetadata::new(TileFormat::MVT, TileCompression::Uncompressed, Traversal::ANY, None),
+		)?;
+
+		MBTilesWriter::write_to_path(&mut reader, file.path(), TilesRuntime::default()).await?;
+
+		// MBTiles stores vector tiles gzipped, so that is what comes back.
+		let written = MBTilesReader::open(file.path(), TilesRuntime::default())?;
+		assert_eq!(written.metadata().tile_compression(), &TileCompression::Gzip);
+		assert_eq!(written.metadata().tile_format(), &TileFormat::MVT);
+		Ok(())
+	}
+
+	/// A format MBTiles cannot store at all must still fail, and say what it takes.
+	#[test]
+	fn an_unsupported_format_still_fails() {
+		let err = super::super::required_encoding(TileFormat::JSON).unwrap_err();
+		assert!(
+			format!("{err}").contains("supports jpg, png, webp and pbf"),
+			"unexpected: {err}"
+		);
 	}
 }
