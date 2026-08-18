@@ -65,6 +65,9 @@ pub use geo_bbox::*;
 mod geo_center;
 pub use geo_center::*;
 
+mod geo_crop;
+pub use geo_crop::*;
+
 mod limited_cache;
 pub use limited_cache::*;
 

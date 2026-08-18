@@ -44,7 +44,9 @@ use std::{path::Path, sync::Arc};
 
 use anyhow::{Result, bail};
 use async_trait::async_trait;
-use versatiles_core::{GeoBBox, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
+use versatiles_core::{
+	GeoBBox, GeoCrop, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream,
+};
 use versatiles_derive::context;
 
 use crate::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
@@ -316,29 +318,8 @@ impl TilesConvertReader {
 		let mut tilejson = reader.tilejson().clone();
 
 		if let Some(ref geo_bbox) = cp.geo_bbox {
-			// Base bounds: the precise crop, intersected with any existing source
-			// bounds. A tile client selecting tiles by bbox overlap (e.g. MapLibre)
-			// already requests every tile the crop wrote, since the crop rectangle
-			// overlaps each of them.
-			let mut bounds = match tilejson.bounds {
-				Some(mut b) => {
-					b.intersect(geo_bbox);
-					b
-				}
-				None => *geo_bbox,
-			};
-
-			// A `--bbox-border` ring writes tiles *outside* the crop, which the
-			// crop rectangle does not overlap. Extend the advertised bounds to the
-			// minimal "touch" box of the tiles actually written so those border
-			// tiles are requested too. See `TilePyramid::geo_bbox_touching_all_tiles`.
-			if cp.bbox_border.is_some_and(|b| b > 0)
-				&& let Some(touch) = tile_pyramid.geo_bbox_touching_all_tiles()
-			{
-				bounds.extend(&touch);
-			}
-
-			tilejson.bounds = Some(bounds);
+			let crop = GeoCrop::new(*geo_bbox, cp.bbox_border.unwrap_or(0));
+			tilejson.bounds = Some(crop.bounds(tilejson.bounds, &tile_pyramid));
 			tilejson.center = None;
 		}
 		new_rp.update_tilejson(&mut tilejson);

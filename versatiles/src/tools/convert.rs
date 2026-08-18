@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use anyhow::{Result, bail};
 use versatiles_container::{TilesConverterParameters, TilesRuntime, convert_tiles_container_to_str};
-use versatiles_core::{GeoBBox, TileCompression, TileFormat, TilePyramid};
+use versatiles_core::{GeoBBox, GeoCrop, TileCompression, TileFormat, TilePyramid};
 use versatiles_derive::context;
 
 /// Parse a tile format string like "webp", "webp,80", or "avif,90,50"
@@ -185,12 +185,10 @@ fn tile_pyramid(arguments: &Subcommand) -> Result<(Option<TilePyramid>, Option<G
 		}
 
 		let bbox = GeoBBox::try_from(values)?;
-		tile_pyramid.intersect_geo_bbox(&bbox)?;
+		// Same rule the `filter` operation applies, so `--bbox-border N` and
+		// `filter bbox_border=N` cannot drift apart.
+		GeoCrop::new(bbox, arguments.bbox_border.unwrap_or(0)).apply_to_pyramid(&mut tile_pyramid)?;
 		geo_bbox = Some(bbox);
-
-		if let Some(b) = arguments.bbox_border {
-			tile_pyramid.buffer(b);
-		}
 	}
 
 	Ok((Some(tile_pyramid), geo_bbox))

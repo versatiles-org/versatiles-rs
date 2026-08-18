@@ -3,7 +3,7 @@ use std::{collections::HashSet, fmt::Debug, sync::Arc};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{GeoBBox, TileBBox, TileJSON, TilePyramid, TileStream};
+use versatiles_core::{GeoBBox, GeoCrop, TileBBox, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 
 use crate::{PipelineFactory, vpl::VPLNode};
@@ -94,53 +94,11 @@ impl Operation {
 		}
 
 		if let Some(bbox) = args.bbox {
-			let bbox = GeoBBox::try_from(&bbox)?;
+			let crop = GeoCrop::new(GeoBBox::try_from(&bbox)?, args.bbox_border.unwrap_or(0));
+			crop.apply_to_pyramid(&mut tile_pyramid)?;
 
-			if let Some(border) = args.bbox_border.filter(|border| *border > 0) {
-				// Grow the ring from a *full* pyramid cropped to the bbox, then
-				// intersect with the source — exactly what `convert
-				// --bbox-border` does. Buffering the source-intersected pyramid
-				// instead would let the ring invent tiles the source does not
-				// have, and at low zoom levels a two-tile ring swallows the
-				// whole level.
-				let mut cropped = TilePyramid::new_full();
-				if let Some(level_min) = tile_pyramid.level_min() {
-					cropped.set_level_min(level_min);
-				}
-				if let Some(level_max) = tile_pyramid.level_max() {
-					cropped.set_level_max(level_max);
-				}
-				cropped.intersect_geo_bbox(&bbox)?;
-				cropped.buffer(border);
-				tile_pyramid.intersect_pyramid(&cropped);
-			} else {
-				tile_pyramid.intersect_geo_bbox(&bbox)?;
-			}
-
-			// Base bounds: the precise crop, intersected with any bounds the
-			// source already advertises.
-			let mut bounds = match tilejson.bounds {
-				Some(mut existing) => {
-					existing.intersect(&bbox);
-					existing
-				}
-				None => bbox,
-			};
-
-			// A border ring keeps tiles *outside* the crop, which the crop
-			// rectangle does not overlap — so a client selecting tiles by bbox
-			// overlap would never ask for them. Extend the advertised bounds to
-			// the minimal box touching every tile actually kept. Mirrors
-			// `TilesConvertReader::new_from_reader`, so `filter bbox_border=N`
-			// and `convert --bbox-border N` describe the same tileset.
-			if args.bbox_border.is_some_and(|border| border > 0)
-				&& let Some(touching) = tile_pyramid.geo_bbox_touching_all_tiles()
-			{
-				bounds.extend(&touching);
-			}
-
-			tilejson.bounds = Some(bounds);
-			tilejson.center = None; // Center may no longer be valid after bbox intersection, so clear it to avoid confusion
+			tilejson.bounds = Some(crop.bounds(tilejson.bounds, &tile_pyramid));
+			tilejson.center = None; // Center may no longer be valid after cropping, so clear it to avoid confusion
 		}
 
 		let mask = if let Some(filename) = args.filename {
