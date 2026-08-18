@@ -61,7 +61,7 @@ pub use convert::convert;
 pub use progress::{Progress, ProgressData};
 pub use server::TileServer;
 pub use tile_source::TileSource;
-pub use types::{ConvertOptions, ProbeResult, ServerOptions, SourceMetadata, TileCoord};
+pub use types::{ConvertOptions, ServerOptions, SourceMetadata, TileCoord};
 pub use vpl::{parse_vpl, stringify_vpl};
 
 /// Initialize logging when the module loads.
@@ -175,26 +175,5 @@ mod tests {
 		assert_eq!(metadata.tile_compression, "gzip");
 		assert_eq!(metadata.min_zoom, 0);
 		assert_eq!(metadata.max_zoom, 14);
-	}
-
-	/// Test that ProbeResult has expected structure
-	#[test]
-	fn test_probe_result_export() {
-		let metadata = SourceMetadata {
-			tile_format: "pbf".to_string(),
-			tile_compression: "brotli".to_string(),
-			min_zoom: 0,
-			max_zoom: 14,
-		};
-		let result = ProbeResult {
-			source_name: "test.versatiles".to_string(),
-			container_name: "versatiles".to_string(),
-			tile_json_raw: "{}".to_string(),
-			parameters: metadata,
-		};
-		assert_eq!(result.source_name, "test.versatiles");
-		assert_eq!(result.container_name, "versatiles");
-		assert_eq!(result.tile_json_raw, "{}");
-		assert_eq!(result.parameters.tile_format, "pbf");
 	}
 }

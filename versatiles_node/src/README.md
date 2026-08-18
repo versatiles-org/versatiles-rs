@@ -72,7 +72,6 @@ Tests for `TileCoord` class:
 
 Tests for standalone functions:
 
-- `probeTiles()` - Container probing
 - `convertTiles()` - Format conversion with various options
 
 ## Writing Tests

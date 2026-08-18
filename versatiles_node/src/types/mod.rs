@@ -9,11 +9,9 @@
 //! - [`ConvertOptions`]: Configuration for tile conversion operations
 //! - [`ServerOptions`]: Configuration for the HTTP tile server
 //! - [`SourceMetadata`]: Metadata about a tile source
-//! - [`ProbeResult`]: Information about a probed tile container
 //! - [`TileCoord`]: Tile coordinate with zoom, x, and y
 
 mod convert_options;
-mod probe_result;
 mod server_options;
 mod source_metadata;
 mod tile_compression;
@@ -22,7 +20,6 @@ mod tilejson;
 mod zoom;
 
 pub use convert_options::ConvertOptions;
-pub use probe_result::ProbeResult;
 pub use server_options::ServerOptions;
 pub use source_metadata::SourceMetadata;
 pub use tile_compression::parse_compression;
