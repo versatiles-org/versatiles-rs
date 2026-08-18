@@ -12,7 +12,7 @@ Run all checks (Rust + Node.js):
 
 This runs:
 
-- Rust: `cargo check`, `cargo fmt --check`, `cargo clippy`, `cargo test`, `cargo doc`
+- Rust: `cargo check`, `cargo fmt-check`, `cargo clippy`, `cargo test`, `cargo doc`
 - Node.js: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`
 
 ## Rust Commands
@@ -24,10 +24,10 @@ This runs:
 cargo check --workspace --all-features --all-targets
 
 # Format code
-cargo fmt
+cargo fmt-all
 
 # Check formatting
-cargo fmt -- --check
+cargo fmt-check
 
 # Lint with clippy
 cargo clippy --workspace --all-targets -- -D warnings
@@ -191,7 +191,7 @@ lefthook run pre-commit --exclude rust-fmt
 ```bash
 # 1. Make your changes
 # 2. Format code
-cargo fmt
+cargo fmt-all
 
 # 3. Run checks
 ./scripts/check.sh
@@ -300,7 +300,7 @@ cannot carry a `[patch]` of its own, so this workaround is available to applicat
 
 ### Clippy Warnings
 
-Auto-fix what you can with `cargo fmt`, then address remaining warnings manually.
+Auto-fix what you can with `cargo fmt-all`, then address remaining warnings manually.
 
 ### ESLint/Prettier Errors
 

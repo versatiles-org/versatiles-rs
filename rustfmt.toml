@@ -3,3 +3,9 @@ hard_tabs = true
 max_width = 120
 newline_style = "Unix"
 tab_spaces = 3
+
+# NOTE: `imports_granularity` and `group_imports` are deliberately *not* set
+# here. Stable rustfmt refuses them when they come from a config file, but
+# accepts the same values passed as `--config` on the command line. They are
+# therefore set in the `fmt-all` / `fmt-check` cargo aliases in
+# .cargo/config.toml — use those rather than a bare `cargo fmt`.

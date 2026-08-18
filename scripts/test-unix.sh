@@ -14,7 +14,7 @@ RUST_BACKTRACE=1
 
 # Format
 echo -e "\033[1;33mFormatting...\033[0m"
-cargo fmt
+cargo fmt-all
 
 # Clippy
 echo -e "\033[1;33mRunning clippy for binary...\033[0m"

@@ -1,0 +1,11 @@
+# Formatting aliases.
+#
+# `imports_granularity` merges two `use` statements that share a path into one;
+# `group_imports` sorts imports into std / external / crate blocks. Stable
+# rustfmt accepts both only via `--config` on the command line, not from
+# rustfmt.toml, so they live here instead of in that file.
+#
+# Use `cargo fmt-all` to format and `cargo fmt-check` to verify.
+[alias]
+fmt-all = ["fmt", "--all", "--", "--config", "imports_granularity=Crate,group_imports=StdExternalCrate"]
+fmt-check = ["fmt", "--all", "--", "--check", "--config", "imports_granularity=Crate,group_imports=StdExternalCrate"]

@@ -24,7 +24,7 @@ Run the same checks CI will run:
 ./scripts/check.sh
 ```
 
-That wraps `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, and the Markdown and Node.js linters. Push only after it passes locally.
+That wraps `cargo fmt-check`, `cargo clippy -D warnings`, `cargo test`, and the Markdown and Node.js linters. Push only after it passes locally.
 
 ## Commit and PR conventions
 

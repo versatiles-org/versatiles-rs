@@ -83,7 +83,7 @@ jobs:
           components: rustfmt
 
       - name: Check format
-        run: cargo fmt -- --check
+        run: cargo fmt-check
 
   # ============================================================================
   # Linux: Docs

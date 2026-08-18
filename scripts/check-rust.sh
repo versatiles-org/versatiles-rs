@@ -14,8 +14,8 @@ echo "=========================================="
 echo "Rust Checks"
 echo "=========================================="
 
-echo "cargo fmt"
-cargo fmt
+echo "cargo fmt-all"
+cargo fmt-all
 
 echo "cargo check"
 result=$(cargo check --color=always --workspace --no-default-features --all-targets 2>&1)

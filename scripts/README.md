@@ -144,7 +144,7 @@ Auto-format the codebase in place — the write-mode counterpart to `check.sh`.
 ./scripts/format.sh
 ```
 
-Steps: `cargo fmt` (Rust), `markdownlint-cli2 --fix` (Markdown), and `npm run fix` (ESLint `--fix` + Prettier) in `versatiles_node`. Reports any issues that could not be auto-fixed and exits non-zero, but always runs every formatter. Skips Node.js if `versatiles_node/` does not exist.
+Steps: `cargo fmt-all` (Rust), `markdownlint-cli2 --fix` (Markdown), and `npm run fix` (ESLint `--fix` + Prettier) in `versatiles_node`. Reports any issues that could not be auto-fixed and exits non-zero, but always runs every formatter. Skips Node.js if `versatiles_node/` does not exist.
 
 ---
 

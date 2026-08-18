@@ -2,7 +2,7 @@
 # Auto-format the codebase in place: Rust, Markdown, and Node.js.
 #
 # The write-mode counterpart to check.sh. Steps:
-#   - Rust:     cargo fmt
+#   - Rust:     cargo fmt-all
 #   - Markdown: markdownlint-cli2 --fix (same file set as check-markdown.sh)
 #   - Node.js:  npm run fix (eslint --fix + prettier --write) in versatiles_node
 #
@@ -19,7 +19,7 @@ FAILED=""
 echo "=========================================="
 echo "Formatting Rust"
 echo "=========================================="
-cargo fmt
+cargo fmt-all
 if [ $? -ne 0 ]; then
    FAILED="${FAILED} rust"
 fi

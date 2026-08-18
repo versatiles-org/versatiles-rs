@@ -240,7 +240,7 @@ Run `npm run format` to format all files automatically.
 
 ### Rust
 
-- **Format**: Use `cargo fmt` to format code
+- **Format**: Use `cargo fmt-all` to format code
 - **Lint**: Use `cargo clippy` to check for issues
 - **Style**: Follow standard Rust conventions
 

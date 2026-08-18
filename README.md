@@ -812,7 +812,7 @@ This runs:
 
 ```bash
 # Auto-format
-cargo fmt
+cargo fmt-all
 
 # Auto-fix clippy warnings
 cargo clippy --fix
