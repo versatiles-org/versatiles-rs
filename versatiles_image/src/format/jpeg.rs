@@ -20,11 +20,12 @@
 //! let blob = encode(&img, Some(90)).expect("encode ok");
 //! let decoded = blob2image(&blob).expect("decode ok");
 //! ```
-use crate::traits::DynamicImageTraitInfo;
 use anyhow::{Result, anyhow, bail};
 use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::jpeg::JpegEncoder, load_from_memory_with_format};
 use versatiles_core::Blob;
 use versatiles_derive::context;
+
+use crate::traits::DynamicImageTraitInfo;
 
 /// Encode a `DynamicImage` into a JPEG [`Blob`].
 ///
@@ -80,10 +81,11 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 /// Ensures correct behavior for both supported and unsupported (alpha) image types.
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::traits::DynamicImageTraitTest;
 	use approx::assert_relative_eq;
 	use rstest::rstest;
+
+	use super::*;
+	use crate::traits::DynamicImageTraitTest;
 
 	/* ---------- Success cases (no alpha) ---------- */
 	#[rstest]

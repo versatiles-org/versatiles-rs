@@ -48,14 +48,16 @@ mod utility;
 #[cfg(test)]
 mod tests;
 
-use crate::{Blob, ConcurrencyLimits, TileBBox, TileCoord};
+use std::{collections::HashMap, pin::Pin, sync::Arc};
+
 use anyhow::Result;
 use futures::{
 	Future, Stream, StreamExt,
 	future::ready,
 	stream::{self, BoxStream},
 };
-use std::{collections::HashMap, pin::Pin, sync::Arc};
+
+use crate::{Blob, ConcurrencyLimits, TileBBox, TileCoord};
 
 /// A stream of tiles represented by `(TileCoord, T)` pairs.
 ///

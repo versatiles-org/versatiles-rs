@@ -8,14 +8,16 @@
 //! between an encoded blob and a decoded content representation. Expensive conversions
 //! are wrapped with contextual error messages via the `#[context(...)]` attribute.
 
-use crate::CacheValue;
+use std::io::{Read, Write};
+
 use anyhow::{Result, bail};
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use std::io::{Read, Write};
 use versatiles_core::{Blob, TileFormat, TileType};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::{DynamicImage, DynamicImageTraitConvert};
+
+use crate::CacheValue;
 
 /// Decoded tile content (raster or vector).
 ///

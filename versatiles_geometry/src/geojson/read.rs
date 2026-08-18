@@ -2,16 +2,18 @@
 //! It supports full-file parsing, line-by-line iteration, and asynchronous streaming via `futures`.
 //! It integrates with the crate’s custom `ByteIterator` and the `#[context]` macro for detailed error handling.
 
+use std::io::{BufRead, Cursor, Read};
+
+use anyhow::{Error, Result, anyhow};
+use futures::{Stream, StreamExt, future::ready, stream};
+use versatiles_core::byte_iterator::ByteIterator;
+use versatiles_derive::context;
+
 use super::parse_geojson;
 use crate::{
 	geo::{GeoCollection, GeoFeature},
 	geojson::parse_geojson_feature,
 };
-use anyhow::{Error, Result, anyhow};
-use futures::{Stream, StreamExt, future::ready, stream};
-use std::io::{BufRead, Cursor, Read};
-use versatiles_core::byte_iterator::ByteIterator;
-use versatiles_derive::context;
 
 /// Reads an entire GeoJSON document from any `Read` source and parses it into a [`GeoCollection`].
 ///
@@ -128,10 +130,12 @@ pub fn read_ndgeojson_stream(reader: impl BufRead) -> impl Stream<Item = Result<
 
 #[cfg(test)]
 mod tests {
+	use std::io::{BufReader, Cursor};
+
+	use futures::StreamExt;
+
 	use super::*;
 	use crate::ext::type_name;
-	use futures::StreamExt;
-	use std::io::{BufReader, Cursor};
 
 	#[test]
 	fn test_read_geojson_basic() -> Result<()> {

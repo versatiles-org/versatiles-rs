@@ -22,10 +22,10 @@ mod pipeline;
 mod tiles;
 mod translucent_buffer;
 
-pub use cli::Assemble;
+use std::sync::Arc;
 
 use anyhow::{Result, anyhow, ensure};
-use std::sync::Arc;
+pub use cli::Assemble;
 use versatiles_container::TilesRuntime;
 use versatiles_core::{TileCompression, TileFormat};
 

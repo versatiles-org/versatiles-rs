@@ -1,7 +1,7 @@
-use napi_derive::napi;
 use std::fmt::Write;
-use versatiles::pipeline::vpl::VPLFieldMeta;
-use versatiles::pipeline::{OperationMeta, all_operation_metadata};
+
+use napi_derive::napi;
+use versatiles::pipeline::{OperationMeta, all_operation_metadata, vpl::VPLFieldMeta};
 
 /// Generate the VPL TypeScript builder source code from Rust operation metadata.
 ///

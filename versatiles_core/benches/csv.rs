@@ -1,6 +1,6 @@
+use std::{fmt::Write, hint::black_box, io::Cursor};
+
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
-use std::fmt::Write;
-use std::{hint::black_box, io::Cursor};
 use versatiles_core::utils::read_csv_iter;
 
 const DATA_SIZE: usize = 16 * 1024 * 1024;

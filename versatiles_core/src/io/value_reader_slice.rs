@@ -31,10 +31,12 @@
 
 #![allow(dead_code)]
 
-use super::{SeekRead, ValueReader};
+use std::{io::Cursor, marker::PhantomData};
+
 use anyhow::{Context, Result, anyhow, bail};
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use std::{io::Cursor, marker::PhantomData};
+
+use super::{SeekRead, ValueReader};
 
 /// A struct that provides reading capabilities from a byte slice using a specified byte order.
 pub struct ValueReaderSlice<'a, E: ByteOrder> {

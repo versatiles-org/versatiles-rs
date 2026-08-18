@@ -1,10 +1,11 @@
-use anyhow::{Result, ensure};
-use dashmap::DashMap;
-use imageproc::image::{DynamicImage, GenericImage};
 use std::sync::{
 	Arc,
 	atomic::{AtomicUsize, Ordering},
 };
+
+use anyhow::{Result, ensure};
+use dashmap::DashMap;
+use imageproc::image::{DynamicImage, GenericImage};
 use versatiles_container::{Tile, TileSource, TileSourceMetadata, Traversal, TraversalOrder};
 use versatiles_core::{Blob, TileBBox, TileBBoxMap, TileCoord, TileJSON, TileStream};
 use versatiles_derive::context;
@@ -287,11 +288,12 @@ impl std::fmt::Debug for OverviewCore {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::helpers::dummy_image_source::DummyImageSource;
 	use anyhow::Result;
 	use versatiles_core::{GeoBBox, TileFormat, TilePyramid};
 	use versatiles_image::traits::DynamicImageTraitOperation;
+
+	use super::*;
+	use crate::helpers::dummy_image_source::DummyImageSource;
 
 	fn make_core(level_base: u8) -> Result<OverviewCore> {
 		let pyramid = TilePyramid::from_geo_bbox(

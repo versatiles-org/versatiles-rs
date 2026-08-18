@@ -1,5 +1,6 @@
-use crate::{GeoBBox, TileBBox, TileCoord};
 use anyhow::{Result, ensure};
+
+use crate::{GeoBBox, TileBBox, TileCoord};
 
 impl TileBBox {
 	// -------------------------------------------------------------------------
@@ -52,9 +53,10 @@ impl TileBBox {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use anyhow::Result;
 	use rstest::rstest;
+
+	use super::*;
 
 	fn approx_eq(a: f64, b: f64, eps: f64) -> bool {
 		(a - b).abs() <= eps

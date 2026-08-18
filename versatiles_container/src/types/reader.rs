@@ -6,11 +6,13 @@
 //! Implementations of this trait are registered in the [`ContainerRegistry`] to handle specific
 //! input formats (e.g. `.mbtiles`, `.pmtiles`, `.versatiles`, `.tar`).
 
-use crate::{SharedTileSource, TilesRuntime};
+use std::path::Path;
+
 use anyhow::{Result, bail};
 use async_trait::async_trait;
-use std::path::Path;
 use versatiles_core::io::{DataReader, DataReaderFile};
+
+use crate::{SharedTileSource, TilesRuntime};
 
 /// Interface for opening tile containers from paths or data readers.
 ///

@@ -1,15 +1,17 @@
-use super::{
-	super::utils::{Url, guess_mime},
-	SourceResponse,
-	static_source::StaticSourceTrait,
-};
+use std::{fmt::Debug, path::Path};
+
 use async_trait::async_trait;
 use reqwest::Url as ReqwestUrl;
-use std::{fmt::Debug, path::Path};
 use versatiles_core::{
 	TileCompression,
 	compression::TargetCompression,
 	io::{DataReaderHttp, DataReaderTrait},
+};
+
+use super::{
+	super::utils::{Url, guess_mime},
+	SourceResponse,
+	static_source::StaticSourceTrait,
 };
 
 pub struct RemoteFolder {

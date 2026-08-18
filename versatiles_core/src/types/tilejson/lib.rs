@@ -31,14 +31,16 @@
 //! # }
 //! ```
 
+use std::fmt::Debug;
+
+use anyhow::{Ok, Result, anyhow, ensure};
+use regex::Regex;
+
 use super::{TileJsonValues, VectorLayers};
 use crate::{
 	Blob, GeoBBox, GeoCenter, PyramidInfo, TileFormat, TileSchema, TileSize, TileType,
 	json::{JsonObject, JsonValue, parse_json_str},
 };
-use anyhow::{Ok, Result, anyhow, ensure};
-use regex::Regex;
-use std::fmt::Debug;
 
 /// A struct representing a `TileJSON` object.
 ///
@@ -641,9 +643,10 @@ impl Debug for TileJSON {
 
 #[cfg(test)]
 mod tests {
+	use approx::assert_relative_eq;
+
 	use super::*;
 	use crate::TilePyramid;
-	use approx::assert_relative_eq;
 
 	/// Creates a minimal valid `TileJSON` object in the form of `JsonObject`.
 	fn make_test_json_object() -> JsonObject {

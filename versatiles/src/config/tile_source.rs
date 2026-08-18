@@ -14,9 +14,10 @@
 //! The server will make these tiles available under:
 //! - `/tiles/osm/{z}/{x}/{y}`
 //! - `/tiles/berlin/{z}/{x}/{y}`
+use std::fmt::Debug;
+
 use anyhow::Result;
 use serde::Deserialize;
-use std::fmt::Debug;
 use versatiles_container::{DataLocation, DataSource};
 use versatiles_derive::{ConfigDoc, context};
 

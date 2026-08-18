@@ -2,12 +2,16 @@
 //! It is mainly used for CLI and testing purposes to display categories, lists,
 //! key/value pairs, warnings, and JSON data with indentation and color for better readability.
 
-use crate::json::{JsonValue, stringify_pretty_multi_line};
+use std::{
+	fmt::{Debug, Display},
+	io::Write,
+	sync::Arc,
+};
+
 use colored::{ColoredString, Colorize};
-use std::fmt::{Debug, Display};
-use std::io::Write;
-use std::sync::Arc;
 use tokio::sync::Mutex;
+
+use crate::json::{JsonValue, stringify_pretty_multi_line};
 
 /// Low-level writer abstraction that handles output buffering.
 /// In runtime, writes directly to stderr; in tests, buffers output in a Vec<u8>.
@@ -46,8 +50,9 @@ impl PrettyPrinter {
 
 	#[cfg(any(test, feature = "test"))]
 	async fn stringify(&self) -> String {
-		use regex::{Regex, RegexBuilder};
 		use std::sync::LazyLock;
+
+		use regex::{Regex, RegexBuilder};
 
 		static RE_COLORS: LazyLock<Regex> = LazyLock::new(|| {
 			RegexBuilder::new("\u{001b}\\[[0-9;]*m")

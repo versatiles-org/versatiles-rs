@@ -12,15 +12,16 @@ mod args;
 mod config_doc;
 mod decode_vpl;
 
+use proc_macro::TokenStream;
+use proc_macro2::{Ident, Span};
+use quote::{ToTokens, quote};
+use syn::{Fields, parse_macro_input, spanned::Spanned};
+
 use crate::{
 	args::Args,
 	config_doc::{angle_inner, collect_doc, is_option, is_primitive_like, is_url_path, path_ident, serde_rename},
 	decode_vpl::decode_struct,
 };
-use proc_macro::TokenStream;
-use proc_macro2::{Ident, Span};
-use quote::{ToTokens, quote};
-use syn::{Fields, parse_macro_input, spanned::Spanned};
 
 /// Derive macro to decode VPL data into Rust structs.
 ///

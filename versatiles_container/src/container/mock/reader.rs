@@ -24,9 +24,6 @@
 
 use std::sync::Arc;
 
-#[cfg(feature = "cli")]
-use crate::TilesRuntime;
-use crate::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 #[cfg(feature = "cli")]
@@ -35,6 +32,10 @@ use versatiles_core::{
 	Blob, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream, compression::compress,
 };
 use versatiles_derive::context;
+
+#[cfg(feature = "cli")]
+use crate::TilesRuntime;
+use crate::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 
 /// Enum representing different mock profiles for tile data.
 #[derive(Debug, Clone, Copy)]
@@ -194,9 +195,10 @@ impl std::fmt::Debug for MockReader {
 
 #[cfg(test)]
 mod tests {
+	use anyhow::Result;
+
 	use super::*;
 	use crate::MockWriter;
-	use anyhow::Result;
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {

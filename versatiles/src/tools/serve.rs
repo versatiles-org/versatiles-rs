@@ -1,6 +1,7 @@
+use std::{mem::swap, path::PathBuf};
+
 use anyhow::{Context, Result};
 use regex::Regex;
-use std::{mem::swap, path::PathBuf};
 use tokio::time::{Duration, sleep};
 use versatiles::{
 	config::{Config, StaticSourceConfig, TileSourceConfig},
@@ -139,8 +140,9 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-	use crate::tests::run_command;
 	use anyhow::Result;
+
+	use crate::tests::run_command;
 
 	#[test]
 	fn test_local() -> Result<()> {

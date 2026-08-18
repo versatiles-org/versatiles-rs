@@ -5,8 +5,9 @@
 //! Tiles are grouped into contiguous square *windows* so remote sources
 //! can coalesce multiple coordinate lookups into a single byte-range request.
 
-use anyhow::{Context, Result, bail};
 use std::collections::BTreeSet;
+
+use anyhow::{Context, Result, bail};
 use versatiles_core::TileBBox;
 
 /// Side length (in tiles) of each sampling window. 64 keeps a window well

@@ -18,10 +18,6 @@
 //! Concurrent writes to the same index are isolated via per-call files (Disk)
 //! or [`DashMap`] sharding (Memory).
 
-use crate::cache::{cache_type::CacheType, traits::CacheValue};
-use anyhow::Result;
-use dashmap::DashMap;
-use futures::{Stream, StreamExt, stream::BoxStream};
 use std::{
 	fmt::Debug,
 	fs::{File, create_dir_all, remove_dir_all, remove_file},
@@ -30,8 +26,14 @@ use std::{
 	path::{Path, PathBuf},
 	sync::atomic::{AtomicUsize, Ordering},
 };
+
+use anyhow::Result;
+use dashmap::DashMap;
+use futures::{Stream, StreamExt, stream::BoxStream};
 use uuid::Uuid;
 use versatiles_derive::context;
+
+use crate::cache::{cache_type::CacheType, traits::CacheValue};
 
 /// A thin [`Read`] wrapper that tracks the number of bytes consumed.
 struct CountingReader<R> {
@@ -294,9 +296,10 @@ impl<V: CacheValue> Debug for TraversalCache<V> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use rstest::rstest;
 	use tempfile::TempDir;
+
+	use super::*;
 
 	#[rstest]
 	#[case::mem("mem")]

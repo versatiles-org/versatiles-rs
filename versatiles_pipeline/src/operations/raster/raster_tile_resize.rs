@@ -1,11 +1,13 @@
-use crate::{PipelineFactory, helpers::tile_resize::TileResizeCore, vpl::VPLNode};
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
-use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitOperation;
+
+use crate::{PipelineFactory, helpers::tile_resize::TileResizeCore, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Convert the size of tiles by splitting or merging them to a width of 256px or 512px.
@@ -70,11 +72,11 @@ crate::operations::macros::define_transform_factory!("raster_tile_resize", Args,
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
-	use super::*;
-	use crate::factory::OperationFactoryTrait;
-	use crate::helpers::dummy_image_source::DummyImageSource;
 	use versatiles_core::{TileBBox, TileCoord, TileFormat, TilePyramid};
 	use versatiles_image::{DynamicImage, GenericImageView, traits::DynamicImageTraitConvert};
+
+	use super::*;
+	use crate::{factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource};
 
 	#[test]
 	fn test_factory_tag_name() {

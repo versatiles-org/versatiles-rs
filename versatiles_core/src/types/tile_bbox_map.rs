@@ -5,10 +5,12 @@
 //! It provides O(1) indexed access via [`TileCoord`] and utility methods to
 //! transform or regroup values across levels.
 
-use crate::{TileBBox, TileCoord, TileStream};
-use anyhow::{Context, Result, ensure};
 use std::fmt::Debug;
+
+use anyhow::{Context, Result, ensure};
 use versatiles_derive::context;
+
+use crate::{TileBBox, TileCoord, TileStream};
 
 /// A dense map of tiles inside a bounding box.
 ///

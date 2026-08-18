@@ -152,8 +152,9 @@ pub fn is_url_path(ty: &syn::Type) -> bool {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use syn::parse_quote;
+
+	use super::*;
 
 	#[test]
 	fn test_collect_doc() {

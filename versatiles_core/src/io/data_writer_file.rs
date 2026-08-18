@@ -32,16 +32,18 @@
 //! }
 //! ```
 
-use super::DataWriterTrait;
-use crate::{Blob, ByteRange};
-use anyhow::{Result, ensure};
-use async_trait::async_trait;
 use std::{
 	fs::File,
 	io::{BufWriter, Seek, SeekFrom, Write},
 	path::Path,
 };
+
+use anyhow::{Result, ensure};
+use async_trait::async_trait;
 use versatiles_derive::context;
+
+use super::DataWriterTrait;
+use crate::{Blob, ByteRange};
 
 /// A struct that provides writing capabilities to a file.
 pub struct DataWriterFile {
@@ -133,12 +135,13 @@ impl DataWriterTrait for DataWriterFile {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::Blob;
+	use std::{fs::File, io::Read};
+
 	use anyhow::Result;
 	use assert_fs::NamedTempFile;
-	use std::fs::File;
-	use std::io::Read;
+
+	use super::*;
+	use crate::Blob;
 
 	#[test]
 	fn test_append_and_position() -> Result<()> {

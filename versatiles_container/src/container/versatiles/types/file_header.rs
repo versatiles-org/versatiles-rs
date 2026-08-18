@@ -208,9 +208,11 @@ impl FileHeader {
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
-	use super::*;
-	use TileCompression::*;
 	use std::panic::catch_unwind;
+
+	use TileCompression::*;
+
+	use super::*;
 
 	#[test]
 	#[allow(clippy::zero_prefixed_literal)]

@@ -1,9 +1,3 @@
-use crate::{
-	PipelineFactory,
-	factory::{OperationFactoryTrait, TransformOperationFactoryTrait},
-	operations::vector::traits::{RunnerTrait, build_transform},
-	vpl::VPLNode,
-};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use regex::Regex;
@@ -11,6 +5,13 @@ use versatiles_container::TileSource;
 use versatiles_core::TileJSON;
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
+
+use crate::{
+	PipelineFactory,
+	factory::{OperationFactoryTrait, TransformOperationFactoryTrait},
+	operations::vector::traits::{RunnerTrait, build_transform},
+	vpl::VPLNode,
+};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filters properties based on a regular expressions.
@@ -96,10 +97,11 @@ impl TransformOperationFactoryTrait for Factory {
 // ───────────────────────── TESTS ─────────────────────────
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use pretty_assertions::assert_eq;
 	use versatiles_core::TileBBox;
 	use versatiles_geometry::{geo::*, vector_tile::VectorTileLayer};
+
+	use super::*;
 
 	fn extract_tile_properties(tile: &VectorTile) -> Vec<String> {
 		let mut properties: Vec<String> = tile

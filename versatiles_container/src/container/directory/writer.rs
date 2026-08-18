@@ -43,12 +43,14 @@
 //! ### Errors
 //! Returns errors if the destination path is not absolute, if file I/O fails, or if compression/encoding fails.
 
-use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
+use std::{fs, path::Path};
+
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use std::{fs, path::Path};
 use versatiles_core::{Blob, compression::compress};
 use versatiles_derive::context;
+
+use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
 
 /// Writes a directory-based tile pyramid along with a compressed `TileJSON` (`tiles.json[.<br|gz>]`).
 ///
@@ -136,9 +138,10 @@ impl TilesWriter for DirectoryWriter {
 
 #[cfg(test)]
 mod tests {
+	use versatiles_core::{TileCompression, TileFormat, TilePyramid, compression::decompress_gzip};
+
 	use super::*;
 	use crate::{MOCK_BYTES_PBF, MockReader, TileSourceMetadata};
-	use versatiles_core::{TileCompression, TileFormat, TilePyramid, compression::decompress_gzip};
 
 	/// Tests the functionality of writing tile data to a directory from a mock reader.
 	#[tokio::test]

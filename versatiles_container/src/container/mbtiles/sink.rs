@@ -4,15 +4,15 @@
 //! tables with TMS coordinate flipping (`tile_row = 2^z - 1 - y`).
 //! Thread-safe via an internal `Mutex` around the tile insert buffer.
 
-use crate::TileSink;
+use std::{fs::remove_file, path::Path, sync::Mutex};
+
 use anyhow::{Result, bail};
 use r2d2::Pool;
 use r2d2_sqlite::{SqliteConnectionManager, rusqlite::params};
-use std::fs::remove_file;
-use std::path::Path;
-use std::sync::Mutex;
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, TileJSON, json::JsonObject};
 use versatiles_derive::context;
+
+use crate::TileSink;
 
 const BUFFER_SIZE: usize = 4096;
 

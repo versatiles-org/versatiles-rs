@@ -11,17 +11,19 @@
 //!   The two shapes are auto-detected from the file's leading byte; see
 //!   [`crate::geojson::read_line_delimited_geojson_iter`].
 
-use super::{FeatureSource, ProgressCallback, ProgressReader};
-use crate::{
-	geo::GeoFeature,
-	geojson::{read_geojson, read_line_delimited_geojson_iter},
-};
-use anyhow::{Context, Result};
-use futures::stream::{self, BoxStream, StreamExt};
 use std::{
 	fs::File,
 	io::BufReader,
 	path::{Path, PathBuf},
+};
+
+use anyhow::{Context, Result};
+use futures::stream::{self, BoxStream, StreamExt};
+
+use super::{FeatureSource, ProgressCallback, ProgressReader};
+use crate::{
+	geo::GeoFeature,
+	geojson::{read_geojson, read_line_delimited_geojson_iter},
 };
 
 /// On-disk shape of a GeoJSON file.
@@ -129,9 +131,10 @@ impl FeatureSource for GeoJsonSource {
 
 #[cfg(test)]
 mod tests {
+	use futures::StreamExt;
+
 	use super::*;
 	use crate::ext::type_name;
-	use futures::StreamExt;
 
 	const FIXTURE: &str = "../testdata/places.geojson";
 

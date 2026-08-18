@@ -1,6 +1,7 @@
-use super::TileType;
 use anyhow::bail;
 use enumset::{EnumSet, EnumSetType};
+
+use super::TileType;
 
 /// Known tile schema identifiers.
 ///

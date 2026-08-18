@@ -20,14 +20,16 @@
 //! Clean tiles return the original blob unchanged; no re-encoding, no extra
 //! allocation.
 
-use crate::{PipelineFactory, vpl::VPLNode};
+use std::{fmt::Debug, sync::Arc};
+
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileCoord, TileJSON, TilePyramid, TileStream, TileType};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::repair_tile;
+
+use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Repairs vector tiles to conform to MVT 2.1.
@@ -156,11 +158,11 @@ crate::operations::macros::define_transform_factory!("vector_repair", Args, Oper
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::factory::OperationFactoryTrait;
-	use crate::helpers::dummy_vector_source::DummyVectorSource;
 	use versatiles_container::TileSource;
 	use versatiles_core::TilePyramid;
+
+	use super::*;
+	use crate::{factory::OperationFactoryTrait, helpers::dummy_vector_source::DummyVectorSource};
 
 	#[tokio::test]
 	async fn test_factory_tag_name() {
@@ -190,8 +192,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_rejects_raster_source() {
-		use crate::helpers::dummy_image_source::DummyImageSource;
 		use versatiles_core::TileFormat;
+
+		use crate::helpers::dummy_image_source::DummyImageSource;
 		let source = Box::new(DummyImageSource::from_color(&[128u8, 0, 0], 4, TileFormat::PNG, None).unwrap());
 		let result = Operation::build(
 			VPLNode::try_from_str("vector_repair").unwrap(),
@@ -252,8 +255,10 @@ mod tests {
 
 	use geo_types::{Geometry, LineString, Polygon};
 	use versatiles_core::TileFormat;
-	use versatiles_geometry::geo::GeoFeature;
-	use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer, validate_tile};
+	use versatiles_geometry::{
+		geo::GeoFeature,
+		vector_tile::{VectorTile, VectorTileLayer, validate_tile},
+	};
 
 	fn build_clean_tile() -> Tile {
 		let outer = LineString::from(vec![[0.0, 0.0], [100.0, 0.0], [100.0, 100.0], [0.0, 100.0], [0.0, 0.0]]);

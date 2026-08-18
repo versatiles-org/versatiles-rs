@@ -25,11 +25,12 @@
 //!   averages, and the top largest tiles (each with its breakdown) so
 //!   the user can see exactly where the problem is.
 
-use anyhow::{Result, anyhow, bail};
 use std::sync::{
 	Arc, Mutex,
 	atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
 };
+
+use anyhow::{Result, anyhow, bail};
 use versatiles_core::{Blob, TileCoord};
 use versatiles_geometry::vector_tile::{GeoValuePBF, VectorTile};
 
@@ -363,11 +364,12 @@ impl Drop for MonitorInner {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles_geometry::{
 		geo::{GeoFeature, GeoProperties, GeoValue},
 		vector_tile::{VectorTile, VectorTileLayer},
 	};
+
+	use super::*;
 
 	/// Synthesise a tiny breakdown so size-cap tests don't have to build a
 	/// real `VectorTile`. Real-world numbers come through `from_vector_tile`.

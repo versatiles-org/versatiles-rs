@@ -42,9 +42,10 @@ impl TileCover {
 
 #[cfg(test)]
 mod tests {
+	use rstest::rstest;
+
 	use super::*;
 	use crate::{TileBBox, TileQuadtree};
-	use rstest::rstest;
 
 	#[rstest]
 	#[case(0)]

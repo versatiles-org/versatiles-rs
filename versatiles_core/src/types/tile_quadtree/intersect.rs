@@ -1,6 +1,7 @@
+use anyhow::Result;
+
 use super::{BBox, Node, TileQuadtree};
 use crate::{TileBBox, TileCover, TilePyramid, types::info_trait::TileCoverInfo};
-use anyhow::Result;
 
 impl TileQuadtree {
 	/// Returns `true` if any tile covered by `self` falls within `bbox`.
@@ -247,10 +248,11 @@ impl Node {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::TileCoord;
 	use anyhow::Result;
 	use rstest::rstest;
+
+	use super::*;
+	use crate::TileCoord;
 
 	fn coord(level: u8, x: u32, y: u32) -> TileCoord {
 		TileCoord::new(level, x, y).unwrap()

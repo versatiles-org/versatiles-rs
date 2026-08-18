@@ -10,11 +10,6 @@
 //! concurrent reads spread across them instead of being funnelled through one
 //! lock; a source reuses an existing connection only once the cap is reached.
 
-use super::sftp_utils;
-use crate::{Blob, ByteRange};
-use anyhow::{Context, Result, anyhow};
-use reqwest::Url;
-use ssh2::{Session, Sftp};
 use std::{
 	collections::HashMap,
 	io::{Read, Seek, SeekFrom},
@@ -25,6 +20,13 @@ use std::{
 	},
 	time::Instant,
 };
+
+use anyhow::{Context, Result, anyhow};
+use reqwest::Url;
+use ssh2::{Session, Sftp};
+
+use super::sftp_utils;
+use crate::{Blob, ByteRange};
 
 /// Monotonic id for log correlation across pool / connection / read messages.
 fn next_connection_id() -> u64 {

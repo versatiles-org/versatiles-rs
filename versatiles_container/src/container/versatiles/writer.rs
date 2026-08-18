@@ -45,17 +45,19 @@
 //! Returns errors if writing fails, compression fails, or if metadata or bounding box
 //! information is invalid.
 
-use super::types::{BlockBuilder, BlockIndex, FileHeader};
-use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
+use std::time::Instant;
+
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt, channel::mpsc, try_join};
-use std::time::Instant;
 use versatiles_core::{
 	compression::compress,
 	io::DataWriterTrait,
 	types::{Blob, ByteRange, TileCompression, TileCoord},
 };
+
+use super::types::{BlockBuilder, BlockIndex, FileHeader};
+use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
 
 /// Messages streamed from the parallel block builders to the single serial writer.
 ///

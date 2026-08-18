@@ -10,11 +10,12 @@
 //! - If an image **has alpha but is fully opaque**, the encoder will **drop alpha** to save bytes.
 //! - Uses `image::codecs::png::PngEncoder` with an effort → (compression, filter) mapping.
 
-use crate::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 use anyhow::{Result, anyhow, bail};
 use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::png, load_from_memory_with_format};
 use versatiles_core::Blob;
 use versatiles_derive::context;
+
+use crate::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 
 #[context("encoding {}x{} {:?} as PNG (e={:?})", image.width(), image.height(), image.color(), effort)]
 /// Encode a `DynamicImage` into a PNG [`Blob`].
@@ -81,12 +82,13 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 
 #[cfg(test)]
 mod tests {
+	use approx::assert_relative_eq;
+	use rstest::rstest;
+
 	/// PNG smoke tests: lossless round‑trip over all supported color types and
 	/// verification that fully opaque images are saved **without** an alpha channel.
 	use super::*;
 	use crate::traits::DynamicImageTraitTest;
-	use approx::assert_relative_eq;
-	use rstest::rstest;
 
 	/* ---------- Success cases ---------- */
 	#[rstest]

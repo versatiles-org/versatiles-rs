@@ -7,13 +7,14 @@
 //!
 //! MVT top‑level encoding uses repeated field 3 for embedded `layer` messages.
 
-use super::layer::VectorTileLayer;
 use anyhow::{Result, bail};
 use versatiles_core::{
 	Blob,
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 };
 use versatiles_derive::context;
+
+use super::layer::VectorTileLayer;
 
 /// A complete vector tile consisting of one or more layers.
 ///
@@ -91,10 +92,12 @@ impl VectorTile {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use anyhow::Context;
 	use std::env::current_dir;
+
+	use anyhow::Context;
 	use versatiles_core::io::{DataReaderFile, DataReaderTrait};
+
+	use super::*;
 
 	async fn get_pbf() -> Result<Blob> {
 		DataReaderFile::open(&current_dir().unwrap().join("../testdata/shortbread-tile.pbf"))

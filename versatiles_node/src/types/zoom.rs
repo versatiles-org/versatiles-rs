@@ -25,8 +25,9 @@ pub fn z_to_u8(z: u32) -> napi::Result<u8> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use rstest::rstest;
+
+	use super::*;
 
 	#[rstest]
 	#[case(0u8)]

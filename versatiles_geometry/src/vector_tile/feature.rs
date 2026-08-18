@@ -1,8 +1,5 @@
 #![allow(dead_code)]
 
-use super::{geometry_type::GeomType, layer::VectorTileLayer};
-use crate::ext::validate;
-use crate::geo::{GeoFeature, GeoProperties, GeoValue};
 use anyhow::{Context, Result, bail, ensure};
 use byteorder::LE;
 use geo_types::{
@@ -12,6 +9,12 @@ use versatiles_core::{
 	Blob,
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 	utils::float_to_int,
+};
+
+use super::{geometry_type::GeomType, layer::VectorTileLayer};
+use crate::{
+	ext::validate,
+	geo::{GeoFeature, GeoProperties, GeoValue},
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -645,8 +648,9 @@ impl VectorTileFeature {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use geo_types::{LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon};
+
+	use super::*;
 
 	fn ls_from(pts: &[[i32; 2]]) -> LineString<f64> {
 		LineString::from(

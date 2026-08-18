@@ -1,7 +1,8 @@
 //! Geographic center point with zoom level
 
-use anyhow::{Result, ensure};
 use std::fmt::Debug;
+
+use anyhow::{Result, ensure};
 
 /// A center point in geographic space with an associated zoom level.
 ///
@@ -156,11 +157,13 @@ impl TryFrom<Vec<f64>> for GeoCenter {
 
 #[cfg(test)]
 mod tests {
-	use super::GeoCenter;
-	use crate::MAX_ZOOM_LEVEL;
+	use std::convert::TryFrom;
+
 	use anyhow::Result;
 	use approx::assert_relative_eq;
-	use std::convert::TryFrom;
+
+	use super::GeoCenter;
+	use crate::MAX_ZOOM_LEVEL;
 
 	#[test]
 	fn test_from_option_vec() -> Result<()> {

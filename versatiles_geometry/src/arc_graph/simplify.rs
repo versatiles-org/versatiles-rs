@@ -5,9 +5,10 @@
 //! aligned: two polygons that share an arc now share the *same* simplified
 //! coordinate sequence, byte-for-byte.
 
-use super::Arc;
 use geo::Simplify;
 use geo_types::LineString;
+
+use super::Arc;
 
 /// Returns a `Vec<Arc>` aligned with `arcs` where every arc has been
 /// simplified at `tolerance` (mercator-meters). Endpoints are preserved.
@@ -39,8 +40,9 @@ fn simplify_arc(arc: &Arc, tolerance: f64) -> Arc {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use geo_types::Coord;
+
+	use super::*;
 
 	fn arc(coords: Vec<[f64; 2]>) -> Arc {
 		Arc {

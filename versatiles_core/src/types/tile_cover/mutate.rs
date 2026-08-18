@@ -1,9 +1,10 @@
 //! Mutation methods for [`TileCover`].
 
-use super::TileCover;
-use crate::{TileBBox, TileCoord};
 use anyhow::Result;
 use versatiles_derive::context;
+
+use super::TileCover;
+use crate::{TileBBox, TileCoord};
 
 impl TileCover {
 	/// Inserts a single tile coordinate into this cover.

@@ -4,9 +4,10 @@
 //! a predefined number of elements (derived from the byte size limit). Once the limit is reached,
 //! least-recently accessed items are removed automatically.
 
+use std::{fmt::Debug, hash::Hash, mem::size_of, num::NonZeroUsize, ops::Div};
+
 use anyhow::Result;
 use lru::LruCache;
-use std::{fmt::Debug, hash::Hash, mem::size_of, num::NonZeroUsize, ops::Div};
 use versatiles_derive::context;
 
 /// A generic cache that stores key-value pairs up to a specified total size limit (in bytes).
@@ -229,9 +230,11 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::LimitedCache;
-	use anyhow::{Result, anyhow};
 	use std::mem::size_of;
+
+	use anyhow::{Result, anyhow};
+
+	use super::LimitedCache;
 
 	/// Ensures that creation with a given `maximum_size` sets the derived capacity appropriately.
 	#[test]

@@ -7,8 +7,9 @@
 
 mod test_utilities;
 
-use reqwest::header::CONTENT_TYPE;
 use std::{fs, process::Child};
+
+use reqwest::header::CONTENT_TYPE;
 use tempfile::TempDir;
 use test_utilities::*;
 

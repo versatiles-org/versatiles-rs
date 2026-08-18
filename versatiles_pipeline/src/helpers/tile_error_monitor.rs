@@ -17,11 +17,12 @@
 //! - **End-of-run summary on `Drop`** → total errors and first-error sample
 //!   per stage, so even a fully-quiet run leaves a clear trail.
 
-use anyhow::Error;
 use std::sync::{
 	Arc, Mutex,
 	atomic::{AtomicU64, Ordering},
 };
+
+use anyhow::Error;
 use versatiles_core::TileCoord;
 
 /// Logical pipeline stage where a per-tile error happened. Picking the stage
@@ -167,8 +168,9 @@ impl Drop for MonitorInner {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use anyhow::anyhow;
+
+	use super::*;
 
 	#[test]
 	fn first_error_per_stage_increments_count() {

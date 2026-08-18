@@ -1,3 +1,5 @@
+use std::{f64::consts::PI, ops::Div, sync::LazyLock, vec};
+
 use ab_glyph::{
 	Font, FontArc, Outline,
 	OutlineCurve::{Cubic, Line, Quad},
@@ -5,7 +7,6 @@ use ab_glyph::{
 };
 use anyhow::Result;
 use geo_types::{Coord, Geometry, LineString, MultiLineString, MultiPolygon, Polygon};
-use std::{f64::consts::PI, ops::Div, sync::LazyLock, vec};
 use versatiles_core::TileCoord;
 use versatiles_derive::context;
 use versatiles_geometry::{

@@ -1,5 +1,6 @@
-use crate::TileCover;
 use anyhow::{Result, bail};
+
+use crate::TileCover;
 
 pub trait TileCoverInfo {
 	fn get_level(&self) -> u8;

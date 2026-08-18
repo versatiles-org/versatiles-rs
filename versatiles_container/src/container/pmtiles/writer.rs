@@ -39,19 +39,15 @@
 //! ## Errors
 //! Returns errors if writing, compression, or serialization fails.
 
-use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression};
-use crate::{
-	TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter,
-	traversal::{Traversal, TraversalOrder},
-};
-use anyhow::Result;
-use async_trait::async_trait;
-use futures::lock::Mutex;
 use std::{
 	collections::HashMap,
 	hash::{DefaultHasher, Hash, Hasher},
 	sync::Arc,
 };
+
+use anyhow::Result;
+use async_trait::async_trait;
+use futures::lock::Mutex;
 use versatiles_core::{
 	compression::compress,
 	io::DataWriterTrait,
@@ -59,6 +55,12 @@ use versatiles_core::{
 	utils::HilbertIndex,
 };
 use versatiles_derive::context;
+
+use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression};
+use crate::{
+	TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter,
+	traversal::{Traversal, TraversalOrder},
+};
 
 /// Writer for `PMTiles` v3 archives.
 ///
@@ -193,6 +195,9 @@ impl TilesWriter for PMTilesWriter {
 
 #[cfg(test)]
 mod tests {
+	use versatiles_core::{TileBBox, TileFormat, TilePyramid, io::*};
+	use versatiles_derive::context;
+
 	use super::*;
 	use crate::{
 		TileSourceMetadata,
@@ -201,8 +206,6 @@ mod tests {
 			pmtiles::PMTilesReader,
 		},
 	};
-	use versatiles_core::{TileBBox, TileFormat, TilePyramid, io::*};
-	use versatiles_derive::context;
 
 	#[context("test: PMTiles read↔write roundtrip")]
 	#[tokio::test]

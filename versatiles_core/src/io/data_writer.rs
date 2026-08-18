@@ -56,8 +56,9 @@
 //! }
 //! ```
 
-use crate::{Blob, ByteRange};
 use anyhow::Result;
+
+use crate::{Blob, ByteRange};
 
 /// A trait for writing data to various destinations.
 ///

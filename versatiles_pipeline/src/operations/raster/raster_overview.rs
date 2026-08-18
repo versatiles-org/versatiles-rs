@@ -1,10 +1,12 @@
-use crate::{PipelineFactory, helpers::overview::OverviewCore, vpl::VPLNode};
+use std::{fmt::Debug, sync::Arc};
+
 use anyhow::Result;
 use async_trait::async_trait;
-use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
 use versatiles_image::traits::DynamicImageTraitOperation;
+
+use crate::{PipelineFactory, helpers::overview::OverviewCore, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Generate lower-zoom overview tiles by downscaling from a base zoom level.
@@ -68,11 +70,11 @@ crate::operations::macros::define_transform_factory!("raster_overview", Args, Op
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
-	use super::*;
-	use crate::factory::OperationFactoryTrait;
-	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::{DynamicImage, GenericImage, GenericImageView, Rgba};
 	use versatiles_core::{Blob, GeoBBox, TileCoord, TileFormat, TilePyramid};
+
+	use super::*;
+	use crate::{factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource};
 
 	async fn make_operation(tile_size: u32, level_base: u8) -> Operation {
 		let pyramid = TilePyramid::from_geo_bbox(

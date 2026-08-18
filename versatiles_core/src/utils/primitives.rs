@@ -1,6 +1,7 @@
+use std::any::type_name;
+
 use anyhow::{Result, anyhow, ensure};
 use num_traits::{Bounded, Float, NumCast, PrimInt};
-use std::any::type_name;
 
 pub fn float_to_int<F, I>(value: F) -> Result<I>
 where
@@ -26,8 +27,9 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use rstest::rstest;
+
+	use super::*;
 
 	#[rstest]
 	#[case::zero(0.0_f64, 0_i32)]

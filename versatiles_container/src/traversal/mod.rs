@@ -9,12 +9,11 @@ mod progress_tracker;
 mod size;
 mod traits;
 
+use anyhow::Result;
 pub use order::TraversalOrder;
 pub use processing::{TraversalTranslationStep, translate_traversals};
 pub use size::TraversalSize;
 pub use traits::TileSourceTraverseExt;
-
-use anyhow::Result;
 use versatiles_core::{TileBBox, TilePyramid};
 use versatiles_derive::context;
 
@@ -164,8 +163,9 @@ impl std::fmt::Debug for Traversal {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles_core::GeoBBox;
+
+	use super::*;
 
 	fn traverse_test(order: TraversalOrder, size: u32, bbox: [i16; 4], min_level: u8, max_level: u8) -> Vec<String> {
 		let pyramid = TilePyramid::from_geo_bbox(min_level, max_level, &GeoBBox::try_from(&bbox).unwrap()).unwrap();

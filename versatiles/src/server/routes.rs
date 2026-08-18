@@ -3,11 +3,8 @@
 //! This module wires handlers into an Axum `Router` without mixing in server
 //! lifecycle or CORS logic. It's intentionally tiny and declarative.
 
-use super::{
-	handlers::{StaticHandlerState, error_404, ok_json, serve_static, serve_tile_from_source},
-	sources::{ServerTileSource, StaticSource},
-	utils::Url,
-};
+use std::sync::Arc;
+
 use anyhow::Result;
 use axum::{
 	Router,
@@ -18,8 +15,13 @@ use axum::{
 	routing::get,
 };
 use dashmap::DashMap;
-use std::sync::Arc;
 use versatiles_derive::context;
+
+use super::{
+	handlers::{StaticHandlerState, error_404, ok_json, serve_static, serve_tile_from_source},
+	sources::{ServerTileSource, StaticSource},
+	utils::Url,
+};
 
 /// State for dynamic tile routing - looks up sources at request time.
 #[derive(Clone)]
@@ -119,9 +121,10 @@ pub async fn add_api_to_app(app: Router, sources: Arc<DashMap<String, Arc<Server
 // --- tests -------------------------------------------------------------------
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use axum::{body::Body, http::StatusCode};
-	use tower::ServiceExt as _; // for `oneshot`
+	use tower::ServiceExt as _;
+
+	use super::*; // for `oneshot`
 
 	async fn get_body_text(app: Router, path: &str) -> (StatusCode, String) {
 		let req = axum::http::Request::builder().uri(path).body(Body::empty()).unwrap();

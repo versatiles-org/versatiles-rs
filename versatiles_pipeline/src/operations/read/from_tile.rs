@@ -13,12 +13,14 @@
 //! from_tile filename="empty.pbf"
 //! ```
 
-use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
+use std::{path::Path, sync::Arc};
+
 use anyhow::Result;
 use async_trait::async_trait;
-use std::{path::Path, sync::Arc};
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{Blob, TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
+
+use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a single tile file and uses it as a template for all tile requests.
@@ -119,10 +121,12 @@ crate::operations::macros::define_read_factory!("from_tile", Args, Operation);
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use assert_fs::NamedTempFile;
 	use std::{fs::File, io::Write};
+
+	use assert_fs::NamedTempFile;
 	use versatiles_core::{TileCompression::Uncompressed, TileCoord};
+
+	use super::*;
 
 	fn create_temp_png() -> NamedTempFile {
 		// Minimal valid PNG: 1x1 pixel, red

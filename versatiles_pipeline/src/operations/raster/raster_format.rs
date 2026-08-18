@@ -1,10 +1,12 @@
-use crate::{PipelineFactory, vpl::VPLNode};
+use std::{fmt::Debug, str, sync::Arc};
+
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
-use std::{fmt::Debug, str, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
+
+use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Convert raster tiles to a different image format and/or adjust quality/effort settings.
@@ -213,9 +215,10 @@ crate::operations::macros::define_transform_factory!("raster_format", Args, Oper
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use rstest::rstest;
 	use versatiles_core::{TileCompression, TileCoord};
+
+	use super::*;
 
 	#[rstest]
 	#[case("80 -> 80,80,80,80,80,80,80,80,80,80,80,80,80,80,80,80")]

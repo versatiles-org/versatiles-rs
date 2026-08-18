@@ -102,8 +102,9 @@ fn init_logger() {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use approx::assert_relative_eq;
+
+	use super::*;
 
 	/// Test that ProgressData can be created and has expected fields
 	#[test]

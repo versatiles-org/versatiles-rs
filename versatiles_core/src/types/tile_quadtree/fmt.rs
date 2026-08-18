@@ -1,7 +1,8 @@
 //! Display formatting for [`TileQuadtree`].
 
-use super::TileQuadtree;
 use std::fmt;
+
+use super::TileQuadtree;
 
 impl fmt::Display for TileQuadtree {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

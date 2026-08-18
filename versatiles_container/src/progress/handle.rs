@@ -1,5 +1,3 @@
-use crate::{EventBus, ProgressId, ProgressState};
-use parking_lot::Mutex;
 use std::{
 	sync::{
 		Arc, Once,
@@ -7,7 +5,11 @@ use std::{
 	},
 	time::{Duration, Instant},
 };
+
+use parking_lot::Mutex;
 use versatiles_core::utils::float_to_int;
+
+use crate::{EventBus, ProgressId, ProgressState};
 
 /// Set to `true` once we detect we are running inside a tmux session.
 /// Written once in `install_osc_reset_hooks`; read (with Relaxed ordering)
@@ -355,8 +357,9 @@ fn make_bar(pos: u64, len: u64, width: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use std::time::Duration;
+
+	use super::*;
 
 	#[test]
 	fn test_progress_handle_new() {

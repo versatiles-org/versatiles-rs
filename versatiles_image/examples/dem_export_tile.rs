@@ -13,12 +13,13 @@
 
 mod bench_common;
 
+use std::path::PathBuf;
+
 use bench_common::{load_tile_rgb_data, original_blobs};
 use libwebp_sys::{
 	WebPConfig, WebPEncode, WebPFree, WebPMemoryWrite, WebPMemoryWriter, WebPMemoryWriterInit, WebPPicture,
 	WebPPictureFree, WebPPictureImportRGB,
 };
-use std::path::PathBuf;
 
 const TARGET: &str = "11/1068/728.webp";
 const Z: u32 = 11;

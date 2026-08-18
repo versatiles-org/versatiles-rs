@@ -28,12 +28,16 @@
 
 #![allow(dead_code)]
 
-use super::ValueWriter;
+use std::{
+	fs::File,
+	io::{BufWriter, Seek, Write},
+	marker::PhantomData,
+};
+
 use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use std::fs::File;
-use std::io::{BufWriter, Seek, Write};
-use std::marker::PhantomData;
+
+use super::ValueWriter;
 
 /// A struct that provides writing capabilities to a file using a specified byte order.
 pub struct ValueWriterFile<E: ByteOrder> {
@@ -104,11 +108,15 @@ impl<E: ByteOrder> ValueWriter<E> for ValueWriterFile<E> {
 
 #[cfg(test)]
 mod tests {
+	use std::{
+		fs::File,
+		io::{Read, SeekFrom},
+	};
+
+	use assert_fs::NamedTempFile;
+
 	use super::*;
 	use crate::{Blob, ByteRange};
-	use assert_fs::NamedTempFile;
-	use std::fs::File;
-	use std::io::{Read, SeekFrom};
 
 	struct TempFile {
 		f: NamedTempFile,

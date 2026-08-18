@@ -43,8 +43,9 @@ impl From<&Geometry<f64>> for GeomType {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use geo_types::{LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon};
+
+	use super::*;
 
 	#[test]
 	fn test_as_u64() {

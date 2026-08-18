@@ -24,12 +24,13 @@
 //! assert_eq!(filename, "file.txt");
 //! ```
 
+use std::fmt::Display;
+
 use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
 use anyhow::{Result, bail};
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
 use enumset::EnumSetType;
-use std::fmt::Display;
 
 /// Enum representing possible compression algorithms.
 #[cfg_attr(feature = "cli", derive(ValueEnum))]
@@ -190,10 +191,12 @@ impl From<TileCompression> for u8 {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use std::collections::HashSet;
+
 	use enumset::EnumSet;
 	use rstest::rstest;
-	use std::collections::HashSet;
+
+	use super::*;
 
 	#[test]
 	fn test_format_conversion() {

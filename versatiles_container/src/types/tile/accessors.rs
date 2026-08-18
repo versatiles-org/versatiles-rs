@@ -1,12 +1,13 @@
 //! Accessor methods for retrieving blob or content from a Tile.
 
-use super::Tile;
-use crate::TileContent;
 use anyhow::{Result, anyhow};
 use versatiles_core::{Blob, TileCompression, TileFormat};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::DynamicImage;
+
+use super::Tile;
+use crate::TileContent;
 
 impl Tile {
 	/// Get a reference to the encoded blob, re-(de)compressing as needed.

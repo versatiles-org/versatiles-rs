@@ -1,9 +1,11 @@
 //! This module defines metadata describing tile source output characteristics.
 
-use crate::Traversal;
-use anyhow::Result;
 use std::sync::{Arc, RwLock};
+
+use anyhow::Result;
 use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileType};
+
+use crate::Traversal;
 
 /// Metadata describing the output characteristics of a tile source.
 ///

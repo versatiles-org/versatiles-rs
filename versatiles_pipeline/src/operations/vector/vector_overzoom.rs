@@ -30,13 +30,13 @@
 //! The operation maintains an LRU cache (256MB by default) of decoded source vector tiles.
 //! Generating many high-zoom children from the same parent only decodes that parent once.
 
-use crate::{PipelineFactory, vpl::VPLNode};
+use std::{fmt::Debug, sync::Arc};
+
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use geo::MapCoords;
 use geo_types::{Coord, Geometry, MultiPolygon, Polygon};
 use moka::future::Cache;
-use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
@@ -45,6 +45,8 @@ use versatiles_geometry::{
 	geo::{GeoFeature, GeoValue},
 	vector_tile::{VectorTile, VectorTileLayer},
 };
+
+use crate::{PipelineFactory, vpl::VPLNode};
 
 /// Default clip buffer in tile-extent units. Matches tippecanoe's default of 5 pixels
 /// at 256-px tile size scaled to the standard MVT extent of 4096 (5 * 4096 / 256 = 80).
@@ -557,12 +559,12 @@ crate::operations::macros::define_transform_factory!("vector_overzoom", Args, Op
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::factory::OperationFactoryTrait;
-	use crate::helpers::dummy_vector_source::DummyVectorSource;
 	use geo_types::Geometry;
 	use versatiles_core::{TileBBox, TileCoord, TilePyramid};
 	use versatiles_geometry::geo::GeoValue;
+
+	use super::*;
+	use crate::{factory::OperationFactoryTrait, helpers::dummy_vector_source::DummyVectorSource};
 
 	async fn build_op(extra_args: &str) -> Result<Operation> {
 		let source = Box::new(DummyVectorSource::new(
@@ -792,8 +794,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_rejects_raster_source() {
-		use crate::helpers::dummy_image_source::DummyImageSource;
 		use versatiles_core::TileFormat;
+
+		use crate::helpers::dummy_image_source::DummyImageSource;
 		let source = Box::new(DummyImageSource::from_color(&[128u8, 0, 0], 4, TileFormat::PNG, None).unwrap());
 		let result = Operation::build(
 			VPLNode::try_from_str("vector_overzoom level_base=2").unwrap(),

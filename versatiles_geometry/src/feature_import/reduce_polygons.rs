@@ -26,8 +26,9 @@ pub fn passes_min_area(g: &Geometry<f64>, min_area: f64) -> bool {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use geo_types::{LineString, Point, Polygon};
+
+	use super::*;
 
 	fn square(side: f64) -> Polygon<f64> {
 		Polygon::new(

@@ -1,8 +1,10 @@
-use super::DataReaderTrait;
-use crate::{Blob, ByteRange};
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use anyhow::Result;
 use async_trait::async_trait;
-use std::sync::atomic::{AtomicU64, Ordering};
+
+use super::DataReaderTrait;
+use crate::{Blob, ByteRange};
 
 /// Trait for network-based data readers (HTTP, SFTP, cloud storage, etc.)
 /// that need retry logic and adaptive range splitting.
@@ -74,7 +76,6 @@ pub(crate) trait NetworkReader: DataReaderTrait {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use std::{
 		fmt,
 		sync::{
@@ -83,6 +84,8 @@ mod tests {
 		},
 		time::Duration,
 	};
+
+	use super::*;
 
 	#[derive(Default)]
 	struct PeakState {

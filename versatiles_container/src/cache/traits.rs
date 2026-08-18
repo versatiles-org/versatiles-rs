@@ -19,11 +19,12 @@
 //!
 //! Each implementation encodes its content in little-endian order where applicable.
 
-use anyhow::{Result, anyhow, bail};
-use byteorder::{LittleEndian as LE, ReadBytesExt, WriteBytesExt};
 #[cfg(test)]
 use std::io::Cursor;
 use std::io::{Read, Write};
+
+use anyhow::{Result, anyhow, bail};
+use byteorder::{LittleEndian as LE, ReadBytesExt, WriteBytesExt};
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat};
 use versatiles_image::{DynamicImage, ImageBuffer};
 
@@ -315,8 +316,9 @@ impl CacheValue for DynamicImage {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use rstest::rstest;
+
+	use super::*;
 
 	fn roundtrip<T>(value: &T)
 	where

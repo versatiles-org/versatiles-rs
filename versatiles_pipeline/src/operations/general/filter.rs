@@ -1,10 +1,12 @@
-use crate::{PipelineFactory, vpl::VPLNode};
+use std::{collections::HashSet, fmt::Debug, sync::Arc};
+
 use anyhow::{Result, bail};
 use async_trait::async_trait;
-use std::{collections::HashSet, fmt::Debug, sync::Arc};
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{GeoBBox, TileBBox, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
+
+use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filter tiles by bounding box, zoom levels, and/or the tile coordinates present in another container.
@@ -167,10 +169,12 @@ crate::operations::macros::define_transform_factory!("filter", Args, Operation);
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use approx::assert_relative_eq;
 	use std::collections::HashSet;
+
+	use approx::assert_relative_eq;
 	use versatiles_core::TileCoord;
+
+	use super::*;
 
 	#[tokio::test]
 	async fn test_filter_inside() -> Result<()> {

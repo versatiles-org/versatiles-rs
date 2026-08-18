@@ -1,5 +1,6 @@
-use crate::{TileBBox, TileCoord};
 use anyhow::{Result, bail};
+
+use crate::{TileBBox, TileCoord};
 
 /// Converts between 2‑D tile space and its position along a **Hilbert
 /// space‑filling curve**.

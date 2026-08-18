@@ -11,10 +11,12 @@
 //! * Methods that cannot fail are infallible; those that validate inputs
 //!   return `anyhow::Result<()>`.
 
-use crate::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, validate_zoom_level};
-use anyhow::{Result, ensure};
 use std::ops::Div;
+
+use anyhow::{Result, ensure};
 use versatiles_derive::context;
+
+use crate::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, validate_zoom_level};
 
 impl TileBBox {
 	/// Insert a specific tile coordinate `(x, y)` into this bbox.
@@ -331,9 +333,10 @@ impl TileBBox {
 #[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 mod tests {
-	use super::*;
 	use anyhow::Result;
 	use rstest::rstest;
+
+	use super::*;
 
 	// Helpers
 	fn bb(z: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {

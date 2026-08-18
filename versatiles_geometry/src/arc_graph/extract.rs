@@ -20,10 +20,12 @@
 //! (each sees three: the shared neighbor, plus each polygon's diverging
 //! non-shared neighbor).
 
+use std::collections::{HashMap, HashSet};
+
+use geo_types::{Coord, Geometry, LineString, Polygon};
+
 use super::{Arc, ArcGraph, ArcId, ArcRef, FeatureArcs, LineStringArcs, PolygonArcs};
 use crate::geo::GeoFeature;
-use geo_types::{Coord, Geometry, LineString, Polygon};
-use std::collections::{HashMap, HashSet};
 
 /// Bit-exact, direction-comparable key for a coordinate.
 type CoordKey = (u64, u64);

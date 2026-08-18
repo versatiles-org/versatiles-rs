@@ -14,8 +14,9 @@ pub fn guess_mime(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use std::path::Path;
+
+	use super::*;
 
 	#[test]
 	fn test_guess_mime() {

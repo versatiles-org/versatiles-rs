@@ -3,8 +3,9 @@
 //! This module provides [`ProgressTracker`], a helper struct for consistent
 //! progress tracking using the midpoint of read/write operations.
 
-use crate::ProgressHandle;
 use std::sync::atomic::{AtomicU64, Ordering};
+
+use crate::ProgressHandle;
 
 /// Helper for consistent progress tracking using midpoint of read/write operations.
 ///
@@ -85,13 +86,14 @@ impl ProgressTracker {
 #[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 mod tests {
-	use crate::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
+	use std::sync::Arc;
+
 	use anyhow::Result;
 	use async_trait::async_trait;
-	use std::sync::Arc;
 	use versatiles_core::{Blob, TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
 
 	use super::super::{TileSourceTraverseExt, Traversal};
+	use crate::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 
 	// ============================================================================
 	// Test helpers

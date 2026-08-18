@@ -32,12 +32,14 @@
 
 #![allow(dead_code)]
 
-use super::{DataReaderBlob, DataWriterTrait};
-use crate::{Blob, ByteRange};
+use std::io::{Cursor, Seek, SeekFrom, Write};
+
 use anyhow::Result;
 use async_trait::async_trait;
-use std::io::{Cursor, Seek, SeekFrom, Write};
 use versatiles_derive::context;
+
+use super::{DataReaderBlob, DataWriterTrait};
+use crate::{Blob, ByteRange};
 
 /// A struct that provides writing capabilities to an in-memory blob of data.
 #[derive(Clone)]
@@ -184,8 +186,7 @@ impl DataWriterTrait for DataWriterBlob {
 
 #[cfg(test)]
 mod tests {
-	use super::super::DataReaderTrait;
-	use super::*;
+	use super::{super::DataReaderTrait, *};
 
 	#[test]
 	fn test_new() -> Result<()> {

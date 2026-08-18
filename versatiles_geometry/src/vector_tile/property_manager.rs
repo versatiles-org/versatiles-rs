@@ -1,6 +1,8 @@
-use crate::geo::{GeoProperties, GeoValue};
-use anyhow::{Context, Result, anyhow, ensure};
 use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Div};
+
+use anyhow::{Context, Result, anyhow, ensure};
+
+use crate::geo::{GeoProperties, GeoValue};
 
 #[derive(Clone, PartialEq)]
 pub struct VTLPMap<T>

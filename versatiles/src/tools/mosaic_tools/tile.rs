@@ -1,5 +1,6 @@
-use anyhow::Result;
 use std::collections::BTreeMap;
+
+use anyhow::Result;
 use versatiles_container::{TileSource, TilesConverterParameters, TilesRuntime, convert_tiles_container_to_str};
 use versatiles_pipeline::{PipelineReader, VPLNode, VPLPipeline};
 

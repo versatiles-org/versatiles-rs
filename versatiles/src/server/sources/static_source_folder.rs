@@ -1,10 +1,3 @@
-use super::{
-	super::{Url, utils::guess_mime},
-	SourceResponse,
-	static_source::StaticSourceTrait,
-};
-use anyhow::{Result, anyhow, ensure};
-use async_trait::async_trait;
 use std::{
 	env::current_dir,
 	fmt::Debug,
@@ -12,8 +5,17 @@ use std::{
 	io::{BufReader, Read},
 	path::{Path, PathBuf},
 };
+
+use anyhow::{Result, anyhow, ensure};
+use async_trait::async_trait;
 use versatiles_core::{Blob, TileCompression, compression::TargetCompression};
 use versatiles_derive::context;
+
+use super::{
+	super::{Url, utils::guess_mime},
+	SourceResponse,
+	static_source::StaticSourceTrait,
+};
 
 // Folder struct definition
 #[derive(Clone)]

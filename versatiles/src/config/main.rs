@@ -49,18 +49,19 @@
 //! use versatiles::config::Config;
 //! let cfg = Config::from_string("tiles: [[\"osm\", \"osm.versatiles\"]]").unwrap();
 //! ```
-use super::{CorsConfig, ServerConfig, StaticSourceConfig, TileSourceConfig};
-use anyhow::{Result, anyhow};
-use serde::Deserialize;
 use std::{
 	collections::HashMap,
 	fs::File,
 	io::{BufReader, Read},
 	path::Path,
 };
+
+use anyhow::{Result, anyhow};
+use serde::Deserialize;
 use versatiles_container::DataLocation;
-use versatiles_derive::ConfigDoc;
-use versatiles_derive::context;
+use versatiles_derive::{ConfigDoc, context};
+
+use super::{CorsConfig, ServerConfig, StaticSourceConfig, TileSourceConfig};
 
 /// Top-level server configuration.
 ///
@@ -173,8 +174,9 @@ impl Config {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use pretty_assertions::assert_eq;
+
+	use super::*;
 
 	#[test]
 	fn parse_example_config() {

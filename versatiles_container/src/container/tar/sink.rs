@@ -5,14 +5,18 @@
 //!
 //! Supports both local paths and `sftp://` URLs as output destinations.
 
-use crate::TileSink;
+use std::{
+	fs::File,
+	io::{BufWriter, Write},
+	path::Path,
+	sync::Mutex,
+};
+
 use anyhow::{Context, Result};
-use std::fs::File;
-use std::io::{BufWriter, Write};
-use std::path::Path;
-use std::sync::Mutex;
 use tar::{Builder, Header};
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, TileJSON, compression::compress};
+
+use crate::TileSink;
 
 /// A tile sink that writes pre-compressed blobs into a `.tar` archive.
 ///

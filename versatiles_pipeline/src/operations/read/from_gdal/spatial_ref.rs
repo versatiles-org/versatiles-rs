@@ -11,9 +11,10 @@ pub fn get_spatial_ref(epsg: u32) -> Result<SpatialRef> {
 
 #[cfg(test)]
 mod tests {
-	use super::get_spatial_ref;
 	use anyhow::Result;
 	use gdal::spatial_ref::CoordTransform;
+
+	use super::get_spatial_ref;
 
 	// Reference values for (lon=10°, lat=50°) in EPSG:3857
 	const R: f64 = 6_378_137.0; // WGS84 semi-major

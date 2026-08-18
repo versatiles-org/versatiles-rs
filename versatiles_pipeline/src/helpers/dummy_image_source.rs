@@ -1,7 +1,8 @@
+use std::sync::Arc;
+
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
-use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
@@ -142,8 +143,9 @@ impl std::fmt::Debug for DummyImageSource {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles_core::{GeoBBox, TileFormat::*};
+
+	use super::*;
 
 	#[test]
 	fn test_dummy_image_source_creation_valid() {

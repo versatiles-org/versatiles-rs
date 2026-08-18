@@ -5,9 +5,10 @@
 //! hand-reviewed before commit. They are embedded at compile time so the tool
 //! stays offline and deterministic.
 
+use std::collections::BTreeMap;
+
 use anyhow::{Context, Result};
 use serde::Deserialize;
-use std::collections::BTreeMap;
 use versatiles_geometry::{geo::GeoValue, vector_tile::GeomType};
 
 const SCHEMA_1_0: &str = include_str!("shortbread_1_0.yaml");

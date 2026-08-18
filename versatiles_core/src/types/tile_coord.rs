@@ -27,14 +27,16 @@
 //! assert_eq!(zoomed.level, 7);
 //! ```
 
-use super::constants::WORLD_SIZE;
-use crate::{GeoBBox, TileBBox};
-use anyhow::{Result, ensure};
 use std::{
 	f64::consts::PI,
 	fmt::{self, Debug},
 };
+
+use anyhow::{Result, ensure};
 use versatiles_derive::context;
+
+use super::constants::WORLD_SIZE;
+use crate::{GeoBBox, TileBBox};
 
 pub const MAX_ZOOM_LEVEL: u8 = 30;
 
@@ -467,13 +469,15 @@ impl PartialOrd for TileCoord {
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::float_cmp)]
 mod tests {
-	use super::*;
-	use rstest::rstest;
 	use std::{
 		cmp::Ordering::{self, *},
 		collections::hash_map::DefaultHasher,
 		hash::{Hash, Hasher},
 	};
+
+	use rstest::rstest;
+
+	use super::*;
 
 	#[test]
 	fn partial_eq() {

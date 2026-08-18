@@ -37,15 +37,17 @@
 
 #![allow(dead_code)]
 
-use super::{SeekRead, ValueReader, ValueReaderBlob};
-use crate::Blob;
-use anyhow::{Context, Result, bail};
-use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use std::{
 	fs::File,
 	io::{BufReader, Read, Seek, SeekFrom},
 	marker::PhantomData,
 };
+
+use anyhow::{Context, Result, bail};
+use byteorder::{BigEndian, ByteOrder, LittleEndian};
+
+use super::{SeekRead, ValueReader, ValueReaderBlob};
+use crate::Blob;
 
 /// A struct that provides reading capabilities from a file using a specified byte order.
 pub struct ValueReaderFile<E: ByteOrder> {

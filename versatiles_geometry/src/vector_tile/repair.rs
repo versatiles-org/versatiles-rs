@@ -27,9 +27,11 @@
 //! left as they are in the wire bytes, preserving every byte of the original
 //! payload.
 
-use super::{VectorTile, VectorTileLayer, validate_tile};
-use anyhow::Result;
 use std::collections::HashSet;
+
+use anyhow::Result;
+
+use super::{VectorTile, VectorTileLayer, validate_tile};
 
 /// Repair `tile` so that it passes [`validate_tile`].
 ///
@@ -107,12 +109,15 @@ pub fn repair_tile(tile: VectorTile, drop_offenders: bool) -> Result<VectorTile>
 
 #[cfg(test)]
 mod tests {
+	use versatiles_core::{
+		Blob,
+		io::{ValueWriter, ValueWriterBlob},
+	};
+
 	use super::*;
-	use crate::vector_tile::feature::VectorTileFeature;
-	use crate::vector_tile::geometry_type::GeomType;
-	use crate::vector_tile::{IssueKind, VectorTileLayer, validate_tile};
-	use versatiles_core::Blob;
-	use versatiles_core::io::{ValueWriter, ValueWriterBlob};
+	use crate::vector_tile::{
+		IssueKind, VectorTileLayer, feature::VectorTileFeature, geometry_type::GeomType, validate_tile,
+	};
 
 	fn raw_polygon_feature(rings: &[Vec<(i32, i32)>]) -> VectorTileFeature {
 		let mut writer = ValueWriterBlob::new_le();

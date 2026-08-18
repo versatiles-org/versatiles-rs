@@ -1,12 +1,13 @@
 //! Tile constructors for creating tiles from blobs, images, or vector data.
 
-use super::Tile;
-use crate::TileContent;
 use anyhow::{Result, ensure};
 use versatiles_core::{Blob, TileCompression, TileFormat};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::DynamicImage;
+
+use super::Tile;
+use crate::TileContent;
 
 impl Tile {
 	/// Construct a `Tile` from an already encoded `blob`.

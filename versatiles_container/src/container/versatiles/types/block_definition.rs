@@ -2,8 +2,9 @@
 //!
 //! The `BlockDefinition` struct contains metadata about the tile block, including its coordinates, bounding box, and byte ranges for tiles and index data.
 
-use anyhow::{Result, ensure};
 use std::{fmt, ops::Div};
+
+use anyhow::{Result, ensure};
 use versatiles_core::{
 	Blob, ByteRange, TileBBox, TileCoord,
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},

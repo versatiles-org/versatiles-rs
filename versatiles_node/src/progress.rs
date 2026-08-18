@@ -1,15 +1,17 @@
-use crate::macros::NapiResultExt;
-use napi::{
-	bindgen_prelude::*,
-	threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
-};
-use napi_derive::napi;
 use std::{
 	ops::Div,
 	sync::{Arc, Mutex},
 	time::{Duration, SystemTime, UNIX_EPOCH},
 };
+
+use napi::{
+	bindgen_prelude::*,
+	threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
+};
+use napi_derive::napi;
 use versatiles_container::ProgressState;
+
+use crate::macros::NapiResultExt;
 
 /// Progress information for long-running operations
 ///
@@ -265,10 +267,12 @@ impl Progress {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use approx::assert_relative_eq;
 	use std::time::Instant;
+
+	use approx::assert_relative_eq;
 	use versatiles_container::ProgressId;
+
+	use super::*;
 
 	#[test]
 	fn test_progress_data_conversion_with_finite_values() {
@@ -855,8 +859,7 @@ mod tests {
 
 	#[test]
 	fn test_concurrent_emits() {
-		use std::sync::Arc;
-		use std::thread;
+		use std::{sync::Arc, thread};
 
 		// Test that Progress is thread-safe for emits
 		let progress = Arc::new(Progress::new());
@@ -892,8 +895,7 @@ mod tests {
 
 	#[test]
 	fn test_emit_progress_concurrent() {
-		use std::sync::Arc;
-		use std::thread;
+		use std::{sync::Arc, thread};
 
 		// Test that emit_progress is thread-safe
 		let progress = Arc::new(Progress::new());

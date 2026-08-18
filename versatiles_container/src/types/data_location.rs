@@ -9,12 +9,13 @@
 //! - `Path(std::path::PathBuf)` for absolute or relative filesystem paths (e.g., `/data/a.txt` or `./a/b`)
 //! - `Blob(Blob)` for in-memory data blobs
 
-use anyhow::{Context, Result, anyhow, bail};
-use reqwest::Url;
 use std::{
 	fmt::Debug,
 	path::{Path, PathBuf},
 };
+
+use anyhow::{Context, Result, anyhow, bail};
+use reqwest::Url;
 use versatiles_core::Blob;
 use versatiles_derive::context;
 
@@ -222,8 +223,10 @@ impl DataLocation {
 // Windows UNC shares (`\\server\\share`). Relative parents (`..`) are preserved if there
 // is nothing left to pop. Used by `resolve` for Path+Path cases.
 fn normalize(path: &Path) -> PathBuf {
-	use std::ffi::OsString;
-	use std::path::Component::{CurDir, Normal, ParentDir, Prefix, RootDir};
+	use std::{
+		ffi::OsString,
+		path::Component::{CurDir, Normal, ParentDir, Prefix, RootDir},
+	};
 
 	let mut prefix: Option<OsString> = None;
 	let mut is_abs = false;
@@ -390,8 +393,9 @@ impl Debug for DataLocation {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use rstest::rstest;
+
+	use super::*;
 	#[rstest]
 	#[case("https://example.org/a/b/c.txt", false)]
 	#[case("/tmp/hello/world.txt", true)]

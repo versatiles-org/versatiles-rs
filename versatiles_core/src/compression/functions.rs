@@ -19,14 +19,15 @@
 //! assert_eq!(data, decompressed);
 //! # Ok::<(), anyhow::Error>(())
 //! ```
+use anyhow::{Result, bail};
+use versatiles_derive::context;
+
 use super::{
 	compression_goal::CompressionGoal,
 	methods::{compress_brotli, compress_gzip, compress_zstd, decompress_brotli, decompress_gzip, decompress_zstd},
 	target_compression::TargetCompression,
 };
 use crate::{Blob, TileCompression};
-use anyhow::{Result, bail};
-use versatiles_derive::context;
 
 /// Optimizes the compression of a data blob based on the target compression settings.
 ///
@@ -249,13 +250,12 @@ pub fn decompress_ref(blob: &Blob, compression: &TileCompression) -> Result<Blob
 
 #[cfg(test)]
 mod tests {
-	use super::super::test_utils::generate_test_data;
-	use super::*;
+	use CompressionGoal::*;
+	use TileCompression::*;
 	use enumset::{EnumSet, enum_set};
 	use rstest::{fixture, rstest};
 
-	use CompressionGoal::*;
-	use TileCompression::*;
+	use super::{super::test_utils::generate_test_data, *};
 
 	/// Fixture providing pre-compressed test blobs for all compression types.
 	struct TestBlobs {

@@ -53,10 +53,12 @@
 //! }
 //! ```
 
-use crate::{Blob, ByteRange};
+use std::fmt::Debug;
+
 use anyhow::Result;
 use async_trait::async_trait;
-use std::fmt::Debug;
+
+use crate::{Blob, ByteRange};
 
 /// Type alias for a boxed dynamic implementation of the `DataReaderTrait`.
 pub type DataReader = Box<dyn DataReaderTrait>;

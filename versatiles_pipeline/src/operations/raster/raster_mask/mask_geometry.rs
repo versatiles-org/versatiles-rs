@@ -7,18 +7,17 @@
 //! - Building R-tree spatial indices for efficient distance queries
 //! - Computing signed distances and alpha values for pixel masking
 
-use super::blur_function::BlurFunction;
+use std::{fs::File, io::BufReader, path::Path};
+
 use anyhow::{Result, ensure};
 use geo::BoundingRect;
 use geo_types::{Geometry, LineString, MultiPolygon, Polygon};
 use rstar::{AABB, RTree, RTreeObject};
-use std::fs::File;
-use std::io::BufReader;
-use std::path::Path;
 use versatiles_core::{EARTH_RADIUS, GeoBBox};
 use versatiles_derive::context;
-use versatiles_geometry::ext::MercatorExt;
-use versatiles_geometry::geojson::read_geojson;
+use versatiles_geometry::{ext::MercatorExt, geojson::read_geojson};
+
+use super::blur_function::BlurFunction;
 
 /// Classification of a tile's relationship to the mask geometry.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -44,8 +44,9 @@
 //! }
 //! ```
 
-use crate::{TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::TileJSON;
+
+use crate::{TileSource, TileSourceMetadata, Traversal};
 
 /// Base struct for tile processors that wrap a single upstream source.
 ///
@@ -178,9 +179,10 @@ impl TileProcessor {
 
 #[cfg(test)]
 mod tests {
+	use versatiles_core::{TileCompression, TileFormat, TilePyramid};
+
 	use super::*;
 	use crate::{MockReader, Traversal};
-	use versatiles_core::{TileCompression, TileFormat, TilePyramid};
 
 	fn create_mock_source() -> Box<dyn TileSource> {
 		let metadata = TileSourceMetadata::new(

@@ -6,12 +6,13 @@
 
 mod bench_common;
 
+use std::time::Instant;
+
 use bench_common::{load_tile_rgb_data, print_header, print_row};
 use libwebp_sys::{
 	WebPConfig, WebPEncode, WebPFree, WebPImageHint, WebPMemoryWrite, WebPMemoryWriter, WebPMemoryWriterClear,
 	WebPMemoryWriterInit, WebPPicture, WebPPictureFree, WebPPictureImportRGB,
 };
-use std::time::Instant;
 
 fn encode_lossless(
 	data: &[u8],

@@ -3,13 +3,14 @@
 //! This module provides [`TileSourceTraverseExt`], an extension trait that adds
 //! traversal capabilities to any [`TileSource`] implementation.
 
-use super::progress_tracker::ProgressTracker;
-use super::{Traversal, TraversalTranslationStep, translate_traversals};
-use crate::{Tile, TileSource, TilesRuntime, TraversalCache};
+use std::{sync::Arc, time::Instant};
+
 use anyhow::Result;
 use futures::{StreamExt, future::BoxFuture, stream};
-use std::{sync::Arc, time::Instant};
 use versatiles_core::{TileBBox, TileCoord, TileStream};
+
+use super::{Traversal, TraversalTranslationStep, progress_tracker::ProgressTracker, translate_traversals};
+use crate::{Tile, TileSource, TilesRuntime, TraversalCache};
 
 /// Extension trait providing traversal with higher-rank trait bounds (HRTBs).
 ///
@@ -136,13 +137,15 @@ impl<T: TileSource + ?Sized> TileSourceTraverseExt for T {}
 #[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 mod tests {
-	use super::*;
-	use crate::{SourceType, TileSourceMetadata, TilesRuntime, TraversalOrder};
+	use std::sync::atomic::{AtomicU64, Ordering};
+
 	use anyhow::Result;
 	use async_trait::async_trait;
 	use rstest::rstest;
-	use std::sync::atomic::{AtomicU64, Ordering};
 	use versatiles_core::{Blob, TileCompression, TileFormat, TileJSON, TilePyramid};
+
+	use super::*;
+	use crate::{SourceType, TileSourceMetadata, TilesRuntime, TraversalOrder};
 
 	/// Test reader that produces tiles with predictable content.
 	#[derive(Debug)]

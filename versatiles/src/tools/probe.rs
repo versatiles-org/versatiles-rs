@@ -1,11 +1,13 @@
-use crate::tools::tile_sampling::{build_scan_plan, parse_sample};
-use anyhow::Result;
 use std::collections::HashMap;
+
+use anyhow::Result;
 use versatiles_container::{TileSource, TilesRuntime};
-use versatiles_core::TileBBox;
-use versatiles_core::{ProbeDepth, TileType, utils::PrettyPrint};
-use versatiles_geometry::vector_tile::{DegenerateReason, GeomType, IssueKind, ValidationIssue, validate_tile};
-use versatiles_geometry::vector_tile::{LayerStats, layer_stats};
+use versatiles_core::{ProbeDepth, TileBBox, TileType, utils::PrettyPrint};
+use versatiles_geometry::vector_tile::{
+	DegenerateReason, GeomType, IssueKind, LayerStats, ValidationIssue, layer_stats, validate_tile,
+};
+
+use crate::tools::tile_sampling::{build_scan_plan, parse_sample};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -645,9 +647,10 @@ fn describe_kind(kind: &IssueKind) -> String {
 
 #[cfg(test)]
 mod tests {
+	use versatiles::runtime::create_test_runtime;
+
 	use super::*;
 	use crate::tests::run_command;
-	use versatiles::runtime::create_test_runtime;
 
 	#[test]
 	fn test_local() -> Result<()> {

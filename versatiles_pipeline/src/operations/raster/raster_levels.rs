@@ -1,11 +1,13 @@
-use crate::{PipelineFactory, vpl::VPLNode};
+use std::{fmt::Debug, sync::Arc};
+
 use anyhow::Result;
 use async_trait::async_trait;
-use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitOperation;
+
+use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Adjust brightness, contrast and gamma of raster tiles.
@@ -93,12 +95,12 @@ crate::operations::macros::define_transform_factory!("raster_levels", Args, Oper
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::factory::OperationFactoryTrait;
-	use crate::helpers::dummy_image_source::DummyImageSource;
 	use rstest::rstest;
 	use versatiles_core::{TileBBox, TileCoord, TileFormat};
 	use versatiles_image::DynamicImageTraitOperation;
+
+	use super::*;
+	use crate::{factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource};
 
 	#[rstest]
 	#[case::no_change(&[102], 0.0, 1.0, 1.0, &[102])]

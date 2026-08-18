@@ -3,11 +3,12 @@
 //! Uses the same `{z}/{x}/{y}.<format>[.<compression>]` layout as [`DirectoryWriter`](super::DirectoryWriter).
 //! Supports both local paths and `sftp://` URLs as output destinations.
 
-use crate::TileSink;
+use std::{fs, path::PathBuf};
+
 use anyhow::{Context, Result};
-use std::fs;
-use std::path::PathBuf;
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, TileJSON, compression::compress};
+
+use crate::TileSink;
 
 /// Backend abstraction for writing files (local or SFTP).
 enum Backend {
@@ -113,9 +114,10 @@ impl TileSink for DirectoryTileSink {
 
 #[cfg(test)]
 mod tests {
+	use versatiles_core::compression::decompress_gzip;
+
 	use super::*;
 	use crate::TilesRuntime;
-	use versatiles_core::compression::decompress_gzip;
 
 	#[test]
 	fn write_and_read_back() -> Result<()> {

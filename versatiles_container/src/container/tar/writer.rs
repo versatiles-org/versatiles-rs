@@ -15,19 +15,21 @@
 //! Returns errors if the archive file cannot be created, or if encoding/compression of
 //! tiles/TileJSON fails while streaming from the reader.
 
-use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
-use anyhow::Result;
-use async_trait::async_trait;
-use futures::lock::Mutex;
 use std::{
 	fs::File,
 	io::Write,
 	path::{Path, PathBuf},
 	sync::Arc,
 };
+
+use anyhow::Result;
+use async_trait::async_trait;
+use futures::lock::Mutex;
 use tar::{Builder, Header};
 use versatiles_core::{compression::compress, io::DataWriterTrait};
 use versatiles_derive::context;
+
+use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
 
 /// Writer for tiles packaged inside a tar archive.
 ///
@@ -132,10 +134,11 @@ impl TilesWriter for TarTilesWriter {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::{MockReader, MockWriter, TarTilesReader, TileSourceMetadata};
 	use assert_fs::NamedTempFile;
 	use versatiles_core::*;
+
+	use super::*;
+	use crate::{MockReader, MockWriter, TarTilesReader, TileSourceMetadata};
 
 	#[tokio::test]
 	async fn read_write() -> Result<()> {

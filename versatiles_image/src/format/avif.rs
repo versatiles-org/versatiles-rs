@@ -10,7 +10,6 @@
 //! - The optional `effort` argument (0–100) is mapped linearly to the encoder range **1..=10**
 //!   (1 = slow/best, 10 = fast). Higher effort → slower/better compression.
 
-use crate::traits::DynamicImageTraitInfo;
 use anyhow::{Result, bail};
 use image::{
 	DynamicImage, ImageEncoder,
@@ -18,6 +17,8 @@ use image::{
 };
 use versatiles_core::Blob;
 use versatiles_derive::context;
+
+use crate::traits::DynamicImageTraitInfo;
 
 /// Encode a `DynamicImage` into an AVIF [`Blob`].
 ///
@@ -85,12 +86,13 @@ pub fn blob2image(_blob: &Blob) -> Result<DynamicImage> {
 
 #[cfg(test)]
 mod tests {
+	use approx::assert_relative_eq;
+	use rstest::rstest;
+
 	/// AVIF encoding smoke tests: verify byte‑size ratios for our synthetic patterns
 	/// and validate the explicit error for the unsupported "lossless" path.
 	use super::*;
 	use crate::traits::{DynamicImageTraitConvert, DynamicImageTraitTest};
-	use approx::assert_relative_eq;
-	use rstest::rstest;
 
 	/* ---------- Success cases ---------- */
 	#[rstest]

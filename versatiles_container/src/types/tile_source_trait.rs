@@ -16,15 +16,17 @@
 //! - Type-safe pipeline construction
 //! - Clear separation between data sources and transformations
 
-#[cfg(feature = "cli")]
-use crate::TilesRuntime;
-use crate::{SourceType, Tile, TileSourceMetadata};
+use std::{fmt::Debug, sync::Arc};
+
 use anyhow::Result;
 use async_trait::async_trait;
-use std::{fmt::Debug, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{TileBBox, TileCoord, TileJSON, TilePyramid, TileStream};
+
+#[cfg(feature = "cli")]
+use crate::TilesRuntime;
+use crate::{SourceType, Tile, TileSourceMetadata};
 
 /// Shared ownership of a tile source for concurrent access.
 ///
@@ -168,13 +170,14 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 /// Tests cover trait defaults, parameter plumbing, streaming behavior, and the CLI probe stubs.
 #[cfg(test)]
 mod tests {
+	#[cfg(feature = "cli")]
+	use versatiles_core::utils::PrettyPrint;
+	use versatiles_core::{Blob, TileCompression, TileFormat, TilePyramid};
+
 	use super::*;
 	#[cfg(feature = "cli")]
 	use crate::TilesRuntime;
 	use crate::Traversal;
-	#[cfg(feature = "cli")]
-	use versatiles_core::utils::PrettyPrint;
-	use versatiles_core::{Blob, TileCompression, TileFormat, TilePyramid};
 
 	#[derive(Debug)]
 	struct TestReader {

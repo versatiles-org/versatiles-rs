@@ -1,9 +1,10 @@
 //! Constructors for [`TileQuadtree`].
 
-use super::{BBox, Node, TileQuadtree};
-use crate::{GeoBBox, TileBBox, validate_zoom_level};
 use anyhow::{Result, ensure};
 use versatiles_derive::context;
+
+use super::{BBox, Node, TileQuadtree};
+use crate::{GeoBBox, TileBBox, validate_zoom_level};
 
 impl TileQuadtree {
 	/// Create an empty quadtree at the given zoom level.
@@ -172,9 +173,10 @@ fn morton(x: u64, y: u64) -> u64 {
 
 #[cfg(test)]
 mod tests {
+	use anyhow::Result;
+
 	use super::*;
 	use crate::TileCoord;
-	use anyhow::Result;
 
 	fn coord(level: u8, x: u32, y: u32) -> TileCoord {
 		TileCoord::new(level, x, y).unwrap()

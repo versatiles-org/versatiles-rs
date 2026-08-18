@@ -13,6 +13,16 @@
 //! - **Transformations**: Flip Y-axis or swap X/Y coordinates
 //! - **Progress monitoring**: Real-time progress updates and messages
 
+use std::{path::Path, sync::Arc};
+
+use napi::{
+	bindgen_prelude::*,
+	threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
+};
+use napi_derive::napi;
+use versatiles_container::{TileSource as RustTileSource, TilesConverterParameters, runtime::Event};
+use versatiles_core::{GeoBBox, TilePyramid};
+
 use crate::{
 	macros::NapiResultExt,
 	napi_result,
@@ -20,14 +30,6 @@ use crate::{
 	runtime::create_runtime,
 	types::{ConvertOptions, parse_compression},
 };
-use napi::{
-	bindgen_prelude::*,
-	threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode},
-};
-use napi_derive::napi;
-use std::{path::Path, sync::Arc};
-use versatiles_container::{TileSource as RustTileSource, TilesConverterParameters, runtime::Event};
-use versatiles_core::{GeoBBox, TilePyramid};
 
 /// Internal helper function to convert tiles with options and callbacks
 ///
@@ -241,9 +243,10 @@ pub async fn convert(
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use rstest::rstest;
 	use versatiles_core::TileCompression;
+
+	use super::*;
 
 	/// Test bbox validation - must have exactly 4 elements
 	#[rstest]

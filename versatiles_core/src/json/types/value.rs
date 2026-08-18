@@ -1,8 +1,11 @@
 //! JSON value enum representing any valid JSON data and utilities for parsing, serializing, and converting.
 
-use crate::Blob;
-use crate::json::{JsonArray, JsonObject, parse_json_str, stringify};
 use anyhow::{Result, bail};
+
+use crate::{
+	Blob,
+	json::{JsonArray, JsonObject, parse_json_str, stringify},
+};
 
 /// Represents any JSON data: arrays, objects, numbers, strings, booleans, and null.
 ///
@@ -213,9 +216,10 @@ impl From<JsonObject> for JsonValue {
 
 #[cfg(test)]
 mod tests {
+	use approx::assert_relative_eq;
+
 	use super::*;
 	use crate::Blob;
-	use approx::assert_relative_eq;
 
 	#[test]
 	fn test_from_str() {

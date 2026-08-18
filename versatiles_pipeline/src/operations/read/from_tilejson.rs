@@ -11,17 +11,19 @@
 //! from_tilejson url="https://example.com/tiles.json" max_retries=5 max_concurrent_requests=64
 //! ```
 
-use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
+use std::{sync::Arc, time::Duration};
+
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
 use futures::{StreamExt, stream};
-use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
 use versatiles_core::{
 	Blob, GeoBBox, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream,
 };
 use versatiles_derive::context;
+
+use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads tiles from a remote tile server via a TileJSON endpoint.
@@ -356,8 +358,9 @@ crate::operations::macros::define_read_factory!("from_tilejson", Args, Operation
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use rstest::rstest;
+
+	use super::*;
 
 	// ── detect_tile_format ──────────────────────────────────────────────
 
@@ -718,8 +721,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn tile_and_tile_stream_happy_path() -> Result<()> {
-		use crate::PipelineFactory;
 		use futures::StreamExt as _;
+
+		use crate::PipelineFactory;
 
 		// Server: tiles.json at /tiles.json; all other paths return a fixed body.
 		let base_holder: std::sync::Arc<std::sync::OnceLock<String>> = std::sync::Arc::new(std::sync::OnceLock::new());

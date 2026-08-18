@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 #![allow(clippy::cast_sign_loss)]
 
-use libwebp_sys::{VP8StatusCode, WebPBitstreamFeatures, WebPDecodeRGB, WebPFree, WebPGetFeatures};
 use std::path::PathBuf;
+
+use libwebp_sys::{VP8StatusCode, WebPBitstreamFeatures, WebPDecodeRGB, WebPFree, WebPGetFeatures};
 
 pub const TILE_URLS: &[&str] = &[
 	"https://tiles.mapterhorn.com/11/1034/709.webp",

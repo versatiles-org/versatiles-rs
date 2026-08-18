@@ -4,8 +4,9 @@
 //! It supports peeking at the next byte without consuming it, advancing the iterator, and consuming bytes one by one.
 //! When debug mode is enabled, it maintains a ring buffer of recently read bytes to help with error reporting.
 
-use anyhow::{Error, Result, anyhow};
 use std::io::Read;
+
+use anyhow::{Error, Result, anyhow};
 
 const DEBUG_RING_BUFFER_SIZE: usize = 16;
 const BUFFER_SIZE: usize = 4096;
@@ -228,8 +229,9 @@ impl<'a> ByteIterator<'a> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use std::io::Cursor;
+
+	use super::*;
 
 	#[test]
 	fn test_from_iterator() {

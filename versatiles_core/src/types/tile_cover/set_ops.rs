@@ -1,8 +1,9 @@
 //! Set-algebra operations for [`TileCover`].
 
-use super::TileCover;
 use anyhow::Result;
 use versatiles_derive::context;
+
+use super::TileCover;
 
 impl TileCover {
 	/// Returns the union of this cover and `other`.

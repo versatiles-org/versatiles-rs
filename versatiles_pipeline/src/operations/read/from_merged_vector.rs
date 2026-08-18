@@ -14,19 +14,21 @@
 //! 3. Unit tests that verify layer merging, tile‐JSON updates, and
 //!    pyramid handling.
 
+use std::{collections::HashMap, sync::Arc};
+
+use anyhow::{Result, ensure};
+use async_trait::async_trait;
+use futures::{StreamExt, future::join_all, stream};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
+use versatiles_core::{TileBBox, TileBBoxMap, TileFormat, TileJSON, TilePyramid, TileStream, TileType};
+use versatiles_derive::context;
+use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
+
 use crate::{
 	PipelineFactory,
 	operations::read::traits::ReadTileSource,
 	vpl::{VPLNode, VPLPipeline},
 };
-use anyhow::{Result, ensure};
-use async_trait::async_trait;
-use futures::{StreamExt, future::join_all, stream};
-use std::{collections::HashMap, sync::Arc};
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileBBoxMap, TileFormat, TileJSON, TilePyramid, TileStream, TileType};
-use versatiles_derive::context;
-use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Merges multiple vector tile sources.
@@ -262,13 +264,14 @@ crate::operations::macros::define_read_factory!("from_merged_vector", Args, Oper
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
-	use super::*;
-	use crate::helpers::{arrange_tiles, dummy_vector_source::DummyVectorSource};
 	use futures::future::BoxFuture;
 	use itertools::Itertools;
 	use pretty_assertions::assert_eq;
 	use versatiles_container::{DataLocation, TileSource};
 	use versatiles_core::{Blob, TileCompression, TileFormat, TilePyramid};
+
+	use super::*;
+	use crate::helpers::{arrange_tiles, dummy_vector_source::DummyVectorSource};
 
 	pub fn check_tile(blob: &Blob) -> String {
 		let tile = VectorTile::from_blob(blob).unwrap();
@@ -622,8 +625,9 @@ mod tests {
 
 	#[test]
 	fn merged_tiles_pass_mvt_validation_when_source_omits_extent() -> Result<()> {
-		use crate::helpers::assert_tiles_valid;
 		use versatiles_core::TileCoord;
+
+		use crate::helpers::assert_tiles_valid;
 		let t1 = VectorTile::new(vec![layer_without_extent("land")]);
 		let t2 = VectorTile::new(vec![layer_without_extent("water")]);
 		let merged = Tile::from_vector(merge_vector_tiles(vec![t1, t2])?, TileFormat::MVT)?;

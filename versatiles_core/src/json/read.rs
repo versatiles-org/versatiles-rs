@@ -1,10 +1,12 @@
 //! Utilities for reading newline-delimited JSON (NDJSON) from readers,
 //! providing both synchronous iterator and asynchronous stream interfaces.
 #![allow(dead_code)]
-use super::JsonValue;
+use std::io::BufRead;
+
 use anyhow::{Context, Error, Result};
 use futures::{Stream, StreamExt, future::ready, stream};
-use std::io::BufRead;
+
+use super::JsonValue;
 
 /// Process a single line of NDJSON, parsing it into `JsonValue` or reporting errors.
 ///
@@ -88,10 +90,12 @@ pub fn read_ndjson_stream(reader: impl BufRead) -> impl Stream<Item = Result<Jso
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use futures::StreamExt;
 	use std::io::Cursor;
+
+	use futures::StreamExt;
 	use tokio;
+
+	use super::*;
 
 	fn join_errors(e: &Error) -> Vec<String> {
 		e.chain().map(std::string::ToString::to_string).collect::<Vec<String>>()

@@ -1,9 +1,9 @@
-use crate::{DirectoryTileSink, MBTilesTileSink, TarTileSink, TilesRuntime, VersaTilesSink};
+use std::{collections::HashSet, path::Path, sync::Mutex};
+
 use anyhow::{Result, bail};
-use std::collections::HashSet;
-use std::path::Path;
-use std::sync::Mutex;
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, TileJSON};
+
+use crate::{DirectoryTileSink, MBTilesTileSink, TarTileSink, TilesRuntime, VersaTilesSink};
 
 /// Push-model interface for writing individual tiles to a container in any order.
 ///
@@ -133,8 +133,9 @@ fn extract_extension_from_url(url: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use std::sync::atomic::{AtomicUsize, Ordering};
+
+	use super::*;
 
 	/// A mock TileSink that counts write_tile calls and records coords.
 	struct MockSink {

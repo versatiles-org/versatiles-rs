@@ -1,7 +1,9 @@
+use std::fmt::{self, Debug};
+
+use enumset::EnumSet;
+
 use super::compression_goal::CompressionGoal;
 use crate::TileCompression;
-use enumset::EnumSet;
-use std::fmt::{self, Debug};
 
 /// Represents the target compression settings.
 #[derive(Clone, PartialEq, Eq)]
@@ -108,9 +110,10 @@ impl Default for TargetCompression {
 
 #[cfg(test)]
 mod tests {
+	use enumset::EnumSet;
+
 	use super::*;
 	use crate::TileCompression;
-	use enumset::EnumSet;
 
 	#[test]
 	fn test_from_set_default_goal() {

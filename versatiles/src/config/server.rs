@@ -15,8 +15,9 @@
 //!
 //! All fields are optional. Defaults are applied when values are not specified.
 
-use serde::Deserialize;
 use std::str;
+
+use serde::Deserialize;
 use versatiles_derive::ConfigDoc;
 
 /// Configuration for the VersaTiles HTTP server.

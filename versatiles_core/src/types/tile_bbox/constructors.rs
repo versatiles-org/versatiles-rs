@@ -38,9 +38,10 @@
 //! assert_eq!(bb.height(), 4);
 //! ```
 
-use crate::{GeoBBox, TileCoord, validate_zoom_level};
 use anyhow::{Result, ensure};
 use versatiles_derive::context;
+
+use crate::{GeoBBox, TileCoord, validate_zoom_level};
 
 /// A rectangular region of tiles at a specific zoom level.
 ///
@@ -477,8 +478,9 @@ impl TileBBox {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use rstest::rstest;
+
+	use super::*;
 
 	#[rstest]
 	#[case((4, 5, 12, 5, 12), 1)]

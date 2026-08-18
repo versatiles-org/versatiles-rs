@@ -1,5 +1,3 @@
-use super::EventBus;
-use crate::{CacheType, ContainerRegistry, ProgressFactory};
 use std::{
 	path::PathBuf,
 	sync::{
@@ -7,6 +5,9 @@ use std::{
 		atomic::{AtomicBool, AtomicUsize},
 	},
 };
+
+use super::EventBus;
+use crate::{CacheType, ContainerRegistry, ProgressFactory};
 
 pub struct RuntimeInner {
 	pub cache_type: CacheType,

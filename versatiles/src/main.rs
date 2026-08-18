@@ -30,10 +30,11 @@ mod tools;
 #[cfg(test)]
 mod test_http_server;
 
+use std::{io::Write, path::PathBuf};
+
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use log::LevelFilter;
-use std::{io::Write, path::PathBuf};
 use versatiles::runtime::create_runtime_builder;
 use versatiles_container::TilesRuntime;
 

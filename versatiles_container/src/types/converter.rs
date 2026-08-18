@@ -40,12 +40,14 @@
 //! }
 //! ```
 
-use crate::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
+use std::{path::Path, sync::Arc};
+
 use anyhow::{Result, bail};
 use async_trait::async_trait;
-use std::{path::Path, sync::Arc};
 use versatiles_core::{GeoBBox, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
+
+use crate::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 
 /// Parameters that control how tiles are transformed during reading/conversion.
 ///
@@ -481,8 +483,6 @@ impl TileSource for TilesConvertReader {
 /// and compression override behavior.
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::{MockReader, Traversal, VersaTilesReader};
 	use assert_fs::NamedTempFile;
 	use rstest::rstest;
 	use versatiles_core::{
@@ -491,6 +491,9 @@ mod tests {
 		TileFormat::{self, *},
 		TilePyramid,
 	};
+
+	use super::*;
+	use crate::{MockReader, Traversal, VersaTilesReader};
 
 	fn new_pyramid(b: [u32; 4]) -> TilePyramid {
 		TilePyramid::from([TileBBox::from_min_and_max(3, b[0], b[1], b[2], b[3]).unwrap()].as_slice())

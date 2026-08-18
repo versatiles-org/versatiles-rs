@@ -10,20 +10,22 @@
 //! register all built-in read/transform operations. For testing and demos there is also
 //! a "dummy" mode that resolves filenames to synthetic vector/raster sources.
 
-use crate::{
-	helpers::{dummy_image_source::DummyImageSource, dummy_vector_source::DummyVectorSource},
-	operations::{read_operation_factories, transform_operation_factories},
-	vpl::{VPLNode, VPLPipeline, parse_vpl},
-};
+use std::{collections::HashMap, path::PathBuf, sync::LazyLock, time::Instant, vec};
+
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use itertools::Itertools;
 use regex::Regex;
-use std::{collections::HashMap, path::PathBuf, sync::LazyLock, time::Instant, vec};
 use versatiles_container::{DataLocation, TileSource, TilesRuntime};
 use versatiles_core::{TileFormat, TileType};
 use versatiles_derive::context;
+
+use crate::{
+	helpers::{dummy_image_source::DummyImageSource, dummy_vector_source::DummyVectorSource},
+	operations::{read_operation_factories, transform_operation_factories},
+	vpl::{VPLNode, VPLPipeline, parse_vpl},
+};
 
 static MULTIPLE_NEWLINES_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\n{3,}").expect("valid regex literal"));
 

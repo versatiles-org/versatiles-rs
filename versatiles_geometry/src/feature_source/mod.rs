@@ -10,14 +10,14 @@ mod geojson;
 mod progress;
 mod shapefile;
 
+use anyhow::Result;
 pub use csv::{CsvSource, CsvSourceBuilder};
+use futures::stream::BoxStream;
 pub use geojson::{Format as GeoJsonFormat, GeoJsonSource};
 pub use progress::{ProgressCallback, ProgressReader};
 pub use shapefile::ShapefileSource;
 
 use crate::geo::GeoFeature;
-use anyhow::Result;
-use futures::stream::BoxStream;
 
 /// A source that produces a stream of [`GeoFeature`]s loaded from an on-disk format.
 pub trait FeatureSource: Send {

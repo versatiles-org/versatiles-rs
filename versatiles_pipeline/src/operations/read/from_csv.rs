@@ -10,22 +10,28 @@
 //! from_csv filename="quakes.csv" lon_column="longitude" lat_column="latitude" id_column="event_id" max_zoom=8
 //! ```
 
-use crate::{
-	PipelineFactory,
-	helpers::feature_tile_source::{FeatureTileSource, apply_property_filters},
-	helpers::tile_size_monitor::MaxTileBytes,
-	operations::read::traits::ReadTileSource,
-	vpl::VPLNode,
-};
+use std::sync::Arc;
+
 use anyhow::{Result, bail};
 use futures::StreamExt;
-use std::sync::Arc;
 use versatiles_container::{DataLocation, TileSource};
 use versatiles_core::TileCompression;
 use versatiles_derive::context;
-use versatiles_geometry::feature_import::{FeatureImport, FeatureImportArgs, PointReductionStrategy};
-use versatiles_geometry::feature_source::{CsvSourceBuilder, FeatureSource, ProgressCallback};
-use versatiles_geometry::geo::GeoFeature;
+use versatiles_geometry::{
+	feature_import::{FeatureImport, FeatureImportArgs, PointReductionStrategy},
+	feature_source::{CsvSourceBuilder, FeatureSource, ProgressCallback},
+	geo::GeoFeature,
+};
+
+use crate::{
+	PipelineFactory,
+	helpers::{
+		feature_tile_source::{FeatureTileSource, apply_property_filters},
+		tile_size_monitor::MaxTileBytes,
+	},
+	operations::read::traits::ReadTileSource,
+	vpl::VPLNode,
+};
 
 /// Don't bother showing a progress bar for tiny inputs — the bar would
 /// flicker once and disappear. 10 MB is the smallest size where users start
@@ -209,9 +215,9 @@ crate::operations::macros::define_read_factory!("from_csv", Args, Operation);
 
 #[cfg(test)]
 mod tests {
+	use versatiles_core::{TileCompression::Uncompressed, TileCoord};
+
 	use super::*;
-	use versatiles_core::TileCompression::Uncompressed;
-	use versatiles_core::TileCoord;
 
 	#[tokio::test]
 	async fn loads_quakes_csv() -> Result<()> {

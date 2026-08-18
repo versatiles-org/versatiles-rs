@@ -1,16 +1,20 @@
 //! Two-pass pipeline: scan sources → write opaque → batch-composite translucent.
 
-use super::AssembleConfig;
-use super::tiles::{
-	composite_two_tiles, encode_tiles_parallel, fetch_source_tiles, validate_source_format, write_opaque_blob,
+use std::{
+	collections::{BTreeSet, HashMap, HashSet},
+	sync::{Arc, Mutex},
 };
-use super::translucent_buffer::TranslucentBuffer;
+
 use anyhow::{Context, Result, anyhow};
 use futures::{StreamExt, future::ready};
-use std::collections::{BTreeSet, HashMap, HashSet};
-use std::sync::{Arc, Mutex};
 use versatiles_container::{Tile, TileSink, TilesRuntime, open_tile_sink};
 use versatiles_core::{ConcurrencyLimits, TileCoord, TileJSON, TileStream, utils::HilbertIndex};
+
+use super::{
+	AssembleConfig,
+	tiles::{composite_two_tiles, encode_tiles_parallel, fetch_source_tiles, validate_source_format, write_opaque_blob},
+	translucent_buffer::TranslucentBuffer,
+};
 
 /// A batch of tiles, each annotated with the source indices that contribute to it.
 ///
@@ -527,14 +531,15 @@ async fn composite_one_batch(
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use anyhow::Result;
 	use std::sync::atomic::{AtomicUsize, Ordering};
+
+	use anyhow::Result;
 	use tempfile::TempDir;
 	use versatiles_container::{MockReader, MockReaderProfile, TileSource, TilesRuntime};
-	use versatiles_core::TileFormat;
-	use versatiles_core::{Blob, TileCompression, TileJSON};
+	use versatiles_core::{Blob, TileCompression, TileFormat, TileJSON};
 	use versatiles_image::{DynamicImage, ImageBuffer};
+
+	use super::*;
 
 	fn tc(level: u8, x: u32, y: u32) -> TileCoord {
 		TileCoord { level, x, y }

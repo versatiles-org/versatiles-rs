@@ -1,8 +1,10 @@
-use crate::Blob;
+use std::io::Cursor;
+
 use anyhow::Result;
 use brotli::{BrotliCompress, BrotliDecompress, enc::BrotliEncoderParams};
-use std::io::Cursor;
 use versatiles_derive::context;
+
+use crate::Blob;
 
 /// Compresses data using Brotli.
 ///
@@ -90,8 +92,7 @@ pub fn decompress_brotli(blob: &Blob) -> Result<Blob> {
 
 #[cfg(test)]
 mod tests {
-	use super::super::super::test_utils::generate_test_data;
-	use super::*;
+	use super::{super::super::test_utils::generate_test_data, *};
 
 	#[test]
 	fn should_compress_and_decompress_brotli_correctly() -> Result<()> {

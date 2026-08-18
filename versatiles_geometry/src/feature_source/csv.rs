@@ -8,16 +8,18 @@
 //! v1 only supports the lon/lat path — WKT geometry columns are out of
 //! scope. The `lon_column` and `lat_column` fields are both required.
 
-use super::{FeatureSource, ProgressCallback, ProgressReader};
-use crate::geo::{GeoFeature, GeoProperties, GeoValue};
-use anyhow::{Context, Result, bail};
-use futures::stream::{self, BoxStream, StreamExt};
-use geo_types::{Geometry, Point};
 use std::{
 	fs::File,
 	io::BufReader,
 	path::{Path, PathBuf},
 };
+
+use anyhow::{Context, Result, bail};
+use futures::stream::{self, BoxStream, StreamExt};
+use geo_types::{Geometry, Point};
+
+use super::{FeatureSource, ProgressCallback, ProgressReader};
+use crate::geo::{GeoFeature, GeoProperties, GeoValue};
 
 /// Reads point features from a CSV file using explicit lon/lat columns.
 #[derive(Clone)]
@@ -255,9 +257,10 @@ fn parse_id(raw: &str) -> GeoValue {
 
 #[cfg(test)]
 mod tests {
+	use futures::StreamExt;
+
 	use super::*;
 	use crate::ext::type_name;
-	use futures::StreamExt;
 
 	const FIXTURE: &str = "../testdata/quakes.csv";
 

@@ -3,12 +3,12 @@
 //! Currently just one: [`auto_max_zoom`], which inspects the median feature
 //! size and picks the zoom level where it renders at ≈ 4 tile-pixels.
 
-use super::TILE_EXTENT;
-use crate::ext::MercatorExt;
-use crate::geo::GeoFeature;
 use geo::{Area, Euclidean, Length};
 use geo_types::Geometry;
 use versatiles_core::WORLD_SIZE;
+
+use super::TILE_EXTENT;
+use crate::{ext::MercatorExt, geo::GeoFeature};
 
 /// Pick the `max_zoom` where the median feature size renders at ≈ 4 tile-pixels.
 ///
@@ -77,8 +77,9 @@ fn feature_size_mercator(g: &Geometry<f64>) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use geo_types::{LineString, Point, Polygon};
+
+	use super::*;
 
 	fn ls_feature(coords: Vec<[f64; 2]>) -> GeoFeature {
 		GeoFeature::new(Geometry::LineString(LineString::from(coords)))

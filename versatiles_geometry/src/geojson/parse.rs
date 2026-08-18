@@ -5,10 +5,10 @@
 //! It uses a streaming `ByteIterator` for zero-allocation-ish parsing with precise
 //! error contexts via the `#[context]` macro.
 
-use crate::geo::{GeoCollection, GeoFeature, GeoProperties, GeoValue};
+use std::{io::Cursor, str};
+
 use anyhow::{Result, anyhow, bail};
 use geo_types::{Coord, Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon};
-use std::{io::Cursor, str};
 use versatiles_core::{
 	byte_iterator::{
 		ByteIterator, parse_array_entries, parse_number_as, parse_number_as_string, parse_object_entries,
@@ -17,6 +17,8 @@ use versatiles_core::{
 	json::parse_json_iter,
 };
 use versatiles_derive::context;
+
+use crate::geo::{GeoCollection, GeoFeature, GeoProperties, GeoValue};
 
 /// Parses a GeoJSON FeatureCollection from a UTF‑8 string into a [`GeoCollection`].
 ///
@@ -345,9 +347,10 @@ fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordin
 
 #[cfg(test)]
 mod tests {
+	use approx::assert_relative_eq;
+
 	use super::*;
 	use crate::ext::type_name;
-	use approx::assert_relative_eq;
 
 	#[test]
 	fn test_parse_geojson_valid_feature_collection() -> Result<()> {
@@ -562,6 +565,7 @@ mod tests {
 	#[test]
 	fn test_parse_geojson_number_variants() -> Result<()> {
 		use std::io::Cursor;
+
 		use versatiles_core::byte_iterator::ByteIterator;
 		let cases = vec![
 			("123", GeoValue::UInt(123)),
@@ -733,6 +737,7 @@ mod tests {
 	#[test]
 	fn test_parse_geojson_invalid_id_character() {
 		use std::io::Cursor;
+
 		use versatiles_core::byte_iterator::ByteIterator;
 		let mut iter = ByteIterator::from_reader(Cursor::new("[1,2]"), true);
 		let result = parse_geojson_id(&mut iter);
@@ -742,6 +747,7 @@ mod tests {
 	#[test]
 	fn test_parse_geojson_invalid_value_character() {
 		use std::io::Cursor;
+
 		use versatiles_core::byte_iterator::ByteIterator;
 		let mut iter = ByteIterator::from_reader(Cursor::new("[1,2]"), true);
 		let result = parse_geojson_value(&mut iter);
@@ -751,6 +757,7 @@ mod tests {
 	#[test]
 	fn test_parse_geojson_invalid_coordinate_character() {
 		use std::io::Cursor;
+
 		use versatiles_core::byte_iterator::ByteIterator;
 		let mut iter = ByteIterator::from_reader(Cursor::new("\"invalid\""), true);
 		let result = parse_geojson_coordinates(&mut iter);

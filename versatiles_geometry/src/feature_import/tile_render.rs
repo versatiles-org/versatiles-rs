@@ -6,11 +6,14 @@
 //! by hand here to avoid pulling in heavier polygon-boolean machinery for
 //! Phase 1.
 
-use crate::geo::GeoFeature;
-use crate::vector_tile::{VectorTile, VectorTileLayer};
 use anyhow::Result;
 use geo::MapCoords;
 use geo_types::{Coord, Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Polygon};
+
+use crate::{
+	geo::GeoFeature,
+	vector_tile::{VectorTile, VectorTileLayer},
+};
 
 /// MVT spec layer version. The spec (vector-tile-spec 2.x) says layers SHOULD
 /// be version 2; some readers (notably QGIS) treat the protobuf default of 1
@@ -374,8 +377,9 @@ fn clip_polygon(p: &Polygon<f64>, bbox: [f64; 4]) -> Vec<Polygon<f64>> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use geo_types::{LineString, Point, Polygon};
+
+	use super::*;
 
 	#[test]
 	fn point_inside_kept() {

@@ -12,11 +12,13 @@
 //! - Empty blocks return `None` from `finalize()` (not stored)
 //! - Tile indices use row-major ordering within the block
 
-use super::{BlockDefinition, TileIndex};
-use anyhow::{Result, ensure};
 use std::collections::HashMap;
+
+use anyhow::{Result, ensure};
 use versatiles_core::{Blob, ByteRange, TileBBox, TileCoord, io::DataWriterTrait};
 use versatiles_derive::context;
+
+use super::{BlockDefinition, TileIndex};
 
 /// Builds a block by streaming tiles with deferred bbox/index calculation.
 ///
@@ -160,8 +162,9 @@ impl<'a> BlockBuilder<'a> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles_core::io::DataWriterBlob;
+
+	use super::*;
 
 	fn coord(level: u8, x: u32, y: u32) -> TileCoord {
 		TileCoord::new(level, x, y).unwrap()

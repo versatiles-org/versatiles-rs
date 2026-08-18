@@ -111,9 +111,10 @@ where
 
 #[cfg(test)]
 mod tests {
+	use anyhow::bail;
+
 	use super::*;
 	use crate::Blob;
-	use anyhow::bail;
 
 	fn tc(level: u8, x: u32, y: u32) -> TileCoord {
 		TileCoord::new(level, x, y).unwrap()

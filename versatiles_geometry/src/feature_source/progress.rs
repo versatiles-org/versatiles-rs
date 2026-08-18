@@ -62,11 +62,12 @@ impl<R: Seek> Seek for ProgressReader<R> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use std::{
 		io::Cursor,
 		sync::atomic::{AtomicU64, Ordering},
 	};
+
+	use super::*;
 
 	#[test]
 	fn callback_sees_bytes_read() {

@@ -3,11 +3,13 @@
 //! and a set of typed properties. Geometry is a `geo_types::Geometry<f64>`; helpers in
 //! `crate::ext` handle GeoJSON output, projection, and validation.
 
+use std::fmt::Debug;
+
+use geo_types::{Geometry, MultiLineString, MultiPoint, MultiPolygon, Point};
+use versatiles_core::json::{JsonObject, JsonValue};
+
 use super::{GeoProperties, GeoValue};
 use crate::ext::geometry_to_json;
-use geo_types::{Geometry, MultiLineString, MultiPoint, MultiPolygon, Point};
-use std::fmt::Debug;
-use versatiles_core::json::{JsonObject, JsonValue};
 
 /// A single geographic feature consisting of an optional `id`, a `Geometry`, and `GeoProperties`.
 ///
@@ -169,8 +171,9 @@ impl From<MultiPolygon<f64>> for GeoFeature {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use geo_types::{Coord, MultiPolygon, polygon};
+
+	use super::*;
 
 	#[test]
 	fn new_sets_defaults() {

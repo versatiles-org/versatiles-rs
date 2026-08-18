@@ -1,8 +1,10 @@
-use crate::Blob;
+use std::io::Read;
+
 use anyhow::Result;
 use flate2::bufread::{GzDecoder, GzEncoder};
-use std::io::Read;
 use versatiles_derive::context;
+
+use crate::Blob;
 
 /// Compresses data using Gzip with highest quality settings.
 ///
@@ -84,8 +86,7 @@ pub fn decompress_gzip(blob: &Blob) -> Result<Blob> {
 
 #[cfg(test)]
 mod tests {
-	use super::super::super::test_utils::generate_test_data;
-	use super::*;
+	use super::{super::super::test_utils::generate_test_data, *};
 
 	#[test]
 	fn should_compress_and_decompress_gzip_correctly() -> Result<()> {

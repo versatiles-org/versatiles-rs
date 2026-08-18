@@ -1,5 +1,6 @@
-use napi_derive::napi;
 use std::collections::BTreeMap;
+
+use napi_derive::napi;
 
 #[napi(object)]
 #[derive(Debug, PartialEq)]

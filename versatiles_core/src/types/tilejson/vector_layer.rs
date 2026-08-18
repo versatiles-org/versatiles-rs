@@ -1,10 +1,12 @@
+use std::{collections::BTreeMap, fmt::Debug};
+
+use anyhow::{Context, Result, anyhow, ensure};
+
 use crate::{
 	json::{JsonObject, JsonValue},
 	types::TileSchema,
 	utils::float_to_int,
 };
-use anyhow::{Context, Result, anyhow, ensure};
-use std::{collections::BTreeMap, fmt::Debug};
 
 /// A collection of [`VectorLayer`]s keyed by their `id` string.
 ///
@@ -377,8 +379,9 @@ impl VectorLayer {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use approx::assert_relative_eq;
+
+	use super::*;
 
 	#[test]
 	fn test_from_json_array_basic() -> Result<()> {

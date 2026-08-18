@@ -1,9 +1,11 @@
 //! Constructors for [`TilePyramid`].
 
+use std::array::from_fn;
+
+use anyhow::Result;
+
 use super::TilePyramid;
 use crate::{GeoBBox, MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileCover, TileQuadtree};
-use anyhow::Result;
-use std::array::from_fn;
 
 impl TilePyramid {
 	/// Creates an empty pyramid (all levels empty).

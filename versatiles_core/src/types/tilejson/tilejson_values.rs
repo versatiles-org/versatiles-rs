@@ -1,7 +1,9 @@
+use std::collections::BTreeMap;
+
+use anyhow::{Result, bail};
+
 use super::TileJsonValue;
 use crate::json::JsonValue;
-use anyhow::{Result, bail};
-use std::collections::BTreeMap;
 
 /// A map storing string keys and their associated typed JSON values.
 ///

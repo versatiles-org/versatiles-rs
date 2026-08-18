@@ -1,8 +1,9 @@
 //! This module provides a simple `Url` struct to represent and manipulate internal URL-like paths.
 //! It is mainly used within the server for file and directory handling.
 
-use anyhow::{Result, ensure};
 use std::path::{Path, PathBuf};
+
+use anyhow::{Result, ensure};
 use versatiles_derive::context;
 
 /// Represents a URL-like path starting with `/`.

@@ -64,14 +64,15 @@ pub fn build_cors_layer(allowed_origins: &[String], max_age_seconds: u64) -> Res
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use axum::{
 		Router,
 		body::Body,
 		http::{Request, header},
 		routing::get,
 	};
-	use tower::ServiceExt; // for `oneshot`
+	use tower::ServiceExt;
+
+	use super::*; // for `oneshot`
 
 	async fn has_acao(layer: &CorsLayer, origin: &str) -> bool {
 		let app = Router::new().route("/", get(|| async { "ok" })).layer(layer.clone());

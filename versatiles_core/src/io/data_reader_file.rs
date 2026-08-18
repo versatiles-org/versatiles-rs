@@ -27,12 +27,14 @@
 //! }
 //! ```
 
-use super::DataReaderTrait;
-use crate::{Blob, ByteRange};
+use std::{fs::File, io::Read, path::Path};
+
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use std::{fs::File, io::Read, path::Path};
 use versatiles_derive::context;
+
+use super::DataReaderTrait;
+use crate::{Blob, ByteRange};
 
 /// A struct that provides reading capabilities from a file.
 #[derive(Debug)]
@@ -182,10 +184,12 @@ impl Read for DataReaderFile {
 
 #[cfg(test)]
 mod tests {
+	use std::io::Write;
+
+	use assert_fs::NamedTempFile;
+
 	use super::*;
 	use crate::assert_wildcard;
-	use assert_fs::NamedTempFile;
-	use std::io::Write;
 
 	// Test the 'new' method for valid and invalid files
 	#[tokio::test]
@@ -292,6 +296,7 @@ mod tests {
 	#[tokio::test]
 	async fn concurrent_range_reads_return_correct_data() -> Result<()> {
 		use std::sync::Arc;
+
 		use tokio::task::JoinSet;
 
 		// Create test file with known pattern

@@ -7,9 +7,10 @@
 //! discards it in favour of a rendered string; [`render_trace`] is a port of that rendering which
 //! keeps the offsets and fixes its caret placement.
 
+use std::{fmt, ops::Range};
+
 use nom::{Offset, error::ErrorKind};
 use nom_language::error::{VerboseError, VerboseErrorKind};
-use std::{fmt, ops::Range};
 
 /// One frame of the parser's context stack.
 ///

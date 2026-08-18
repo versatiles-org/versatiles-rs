@@ -1,8 +1,9 @@
 //! Mutation methods for [`TilePyramid`].
 
+use anyhow::Result;
+
 use super::TilePyramid;
 use crate::{GeoBBox, MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileCover};
-use anyhow::Result;
 
 impl TilePyramid {
 	/// Sets the cover at the level encoded in `cover`.

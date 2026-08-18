@@ -1,7 +1,6 @@
+use std::{collections::BTreeMap, io::Write, sync::Arc};
+
 use anyhow::{Result, anyhow, bail};
-use std::collections::BTreeMap;
-use std::io::Write;
-use std::sync::Arc;
 use versatiles_container::{SharedTileSource, Tile, TileSource, TilesRuntime};
 use versatiles_core::{TileJSON, TileType, VectorLayer, VectorLayers};
 use versatiles_geometry::geo::GeoValue;
@@ -275,8 +274,9 @@ async fn scan(args: &VectorLayersTool, runtime: &TilesRuntime) -> Result<TileJSO
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles::runtime::create_test_runtime;
+
+	use super::*;
 
 	#[tokio::test]
 	async fn test_scan_generates_vector_layers() {

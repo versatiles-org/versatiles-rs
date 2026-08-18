@@ -110,9 +110,10 @@ impl TileBBox {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use anyhow::Result;
 	use rstest::rstest;
+
+	use super::*;
 
 	fn extract_tc(iter: ZOrderIterator) -> Vec<String> {
 		let mut result: [[Option<usize>; 8]; 8] = [[None; 8]; 8];

@@ -2,11 +2,12 @@
 //! allowing for parsing and handling of input specifications that may include
 //! driver prefixes, standard input, and extension inference.
 
-use super::data_location::DataLocation;
 use anyhow::Result;
 use regex::Regex;
 use versatiles_core::{Blob, json::JsonValue};
 use versatiles_derive::context;
+
+use super::data_location::DataLocation;
 
 #[derive(Debug, Clone, PartialEq)]
 /// Represents a parsed input specification which may include a driver prefix (like `mbtiles:`).
@@ -165,10 +166,12 @@ impl TryFrom<DataLocation> for DataSource {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use std::path::PathBuf;
+
 	use reqwest::Url;
 	use rstest::rstest;
-	use std::path::PathBuf;
+
+	use super::*;
 
 	#[rstest]
 	#[case("(ascii)", "", "", "Blob(len=5)")]

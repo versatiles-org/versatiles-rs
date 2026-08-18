@@ -1,10 +1,12 @@
-use super::{Cutline, GdalPool, Instance, ResampleAlg, get_spatial_ref};
+use std::{path::Path, sync::Arc};
+
 use anyhow::{Context, Result, bail, ensure};
 use gdal::{Dataset, DriverManager, GeoTransform};
 use imageproc::image::{DynamicImage, RgbImage};
-use std::{path::Path, sync::Arc};
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
+
+use super::{Cutline, GdalPool, Instance, ResampleAlg, get_spatial_ref};
 
 /// DEM encoding format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -234,10 +236,10 @@ impl std::fmt::Debug for DemSource {
 
 #[cfg(test)]
 mod tests {
-	use super::super::get_spatial_ref;
-	use super::*;
 	use gdal::DriverManager;
 	use rstest::rstest;
+
+	use super::{super::get_spatial_ref, *};
 
 	struct DemDatasetFactory {
 		geotransform: [f64; 6],

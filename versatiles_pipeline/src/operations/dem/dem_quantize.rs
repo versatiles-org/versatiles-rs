@@ -1,12 +1,14 @@
-use super::encoding::{DemEncoding, raw_unit_meters, resolve_encoding, to_tile_schema};
-use crate::{PipelineFactory, vpl::VPLNode};
+use std::{fmt::Debug, sync::Arc};
+
 use anyhow::{Result, bail};
 use async_trait::async_trait;
-use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileCoord, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_image::DynamicImage;
+
+use super::encoding::{DemEncoding, raw_unit_meters, resolve_encoding, to_tile_schema};
+use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Quantize DEM (elevation) raster tiles by rounding to a per-tile power-of-two step.
@@ -189,12 +191,11 @@ crate::operations::macros::define_transform_factory!("dem_quantize", Args, Opera
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::factory::OperationFactoryTrait;
-	use crate::helpers::dummy_image_source::DummyImageSource;
 	use versatiles_core::{TileBBox, TileCoord, TileFormat, TileSchema};
-	use versatiles_image::DynamicImage;
-	use versatiles_image::traits::DynamicImageTraitConvert;
+	use versatiles_image::{DynamicImage, traits::DynamicImageTraitConvert};
+
+	use super::*;
+	use crate::{factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource};
 
 	/// Combine RGB channels into a single 24-bit raw value for test assertions.
 	fn pixel_to_raw(r: u8, g: u8, b: u8) -> u32 {

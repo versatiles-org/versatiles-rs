@@ -1,9 +1,10 @@
+use std::sync::LazyLock;
+
 use ab_glyph::{FontArc, PxScale};
 use imageproc::{
 	drawing::draw_text_mut,
 	image::{DynamicImage, Rgba, RgbaImage},
 };
-use std::sync::LazyLock;
 use versatiles_core::TileCoord;
 
 static FONT: LazyLock<FontArc> =

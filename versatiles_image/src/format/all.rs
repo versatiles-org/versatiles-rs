@@ -11,11 +11,12 @@
 //! - **WebP** — lossy or lossless 8‑bit RGB/RGBA.
 //!
 //! Any unsupported `TileFormat` will return a `bail!` error.
-use crate::{avif, jpeg, png, webp};
 use anyhow::{Result, bail};
 use image::DynamicImage;
 use versatiles_core::{Blob, TileFormat};
 use versatiles_derive::context;
+
+use crate::{avif, jpeg, png, webp};
 
 #[context("encoding {}x{} {:?} as {:?} (q={:?}, e={:?})", image.width(), image.height(), image.color(), format, quality, effort)]
 /// Encode a [`DynamicImage`] into the given [`TileFormat`].

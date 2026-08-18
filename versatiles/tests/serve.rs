@@ -3,6 +3,7 @@
 mod test_utilities;
 
 use std::process::Child;
+
 use test_utilities::*;
 use versatiles_core::json::JsonValue;
 
@@ -33,6 +34,7 @@ async fn e2e_serve_remote_url() {
 #[tokio::test]
 async fn e2e_serve_concurrent_tile_requests_return_correct_data() {
 	use std::collections::HashMap;
+
 	use tokio::task::JoinSet;
 
 	let input = get_testdata("berlin.mbtiles");

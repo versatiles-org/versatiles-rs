@@ -70,9 +70,10 @@ impl Node {
 
 #[cfg(test)]
 mod tests {
+	use rstest::rstest;
+
 	use super::*;
 	use crate::TileCoord;
-	use rstest::rstest;
 
 	fn coord(level: u8, x: u32, y: u32) -> TileCoord {
 		TileCoord::new(level, x, y).unwrap()

@@ -1,5 +1,6 @@
-use crate::{json::JsonValue, utils::float_to_int};
 use anyhow::{Result, bail};
+
+use crate::{json::JsonValue, utils::float_to_int};
 
 /// An enumeration representing allowed JSON value types in this module.
 #[derive(Clone, Debug, PartialEq)]

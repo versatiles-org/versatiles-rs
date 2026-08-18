@@ -48,8 +48,9 @@ pub async fn run(args: &CountTiles, runtime: &TilesRuntime) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles::runtime::create_test_runtime;
+
+	use super::*;
 
 	#[tokio::test]
 	async fn test_count_all_levels() {

@@ -1,8 +1,9 @@
 //! Query methods for [`TilePyramid`].
 
+use anyhow::Result;
+
 use super::TilePyramid;
 use crate::{GeoBBox, GeoCenter, TileBBox, TileCoord, TileCover};
-use anyhow::Result;
 
 impl TilePyramid {
 	/// Returns a reference to the [`TileCover`] at the given zoom level.
@@ -189,9 +190,10 @@ impl TilePyramid {
 
 #[cfg(test)]
 mod tests {
+	use rstest::rstest;
+
 	use super::*;
 	use crate::{TileCover, TileQuadtree};
-	use rstest::rstest;
 
 	fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()

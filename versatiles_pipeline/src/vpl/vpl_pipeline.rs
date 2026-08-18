@@ -1,7 +1,9 @@
-use super::{VPLNode, parse_vpl};
-use anyhow::{Result, ensure};
 use std::{fmt::Debug, str::FromStr};
+
+use anyhow::{Result, ensure};
 use versatiles_derive::context;
+
+use super::{VPLNode, parse_vpl};
 
 #[derive(Clone, Default, PartialEq)]
 pub struct VPLPipeline {

@@ -1,11 +1,13 @@
-use super::encoding::{resolve_encoding, to_tile_schema};
-use crate::{PipelineFactory, helpers::tile_resize::TileResizeCore, vpl::VPLNode};
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
-use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
+
+use super::encoding::{resolve_encoding, to_tile_schema};
+use crate::{PipelineFactory, helpers::tile_resize::TileResizeCore, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Convert DEM tile size between 256px and 512px by splitting or merging tiles.
@@ -78,11 +80,11 @@ crate::operations::macros::define_transform_factory!("dem_tile_resize", Args, Op
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
-	use super::*;
-	use crate::factory::OperationFactoryTrait;
-	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::{DynamicImage, GenericImageView, Rgb, RgbImage};
 	use versatiles_core::{TileBBox, TileCoord, TileFormat, TilePyramid, TileSchema};
+
+	use super::*;
+	use crate::{factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource};
 
 	fn raw_to_rgb(v: u32) -> Rgb<u8> {
 		Rgb([((v >> 16) & 0xFF) as u8, ((v >> 8) & 0xFF) as u8, (v & 0xFF) as u8])

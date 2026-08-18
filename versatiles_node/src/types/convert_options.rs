@@ -81,8 +81,9 @@ pub struct ConvertOptions {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use approx::assert_relative_eq;
+
+	use super::*;
 
 	#[test]
 	fn test_convert_options_clone() {

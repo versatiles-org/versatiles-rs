@@ -30,11 +30,13 @@
 //! }
 //! ```
 
-use crate::{TileSource, TilesRuntime};
+use std::path::Path;
+
 use anyhow::{Result, bail};
 use async_trait::async_trait;
-use std::path::Path;
 use versatiles_core::io::{DataWriterFile, DataWriterTrait};
+
+use crate::{TileSource, TilesRuntime};
 
 /// Object‑safe interface for writing tiles from a reader into a container format.
 ///

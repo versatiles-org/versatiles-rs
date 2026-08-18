@@ -1,5 +1,6 @@
-use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use std::{hint::black_box, io::Cursor};
+
+use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use versatiles_core::byte_iterator::ByteIterator;
 
 const DATA_SIZE: usize = 100 * 1024 * 1024;

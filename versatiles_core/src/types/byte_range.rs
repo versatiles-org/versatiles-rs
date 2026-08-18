@@ -19,9 +19,9 @@
 //! assert_eq!(range.to_range_usize().unwrap().end, 65); // 23 + 42 = 65
 //! ```
 
+use std::{fmt, ops::Range};
+
 use anyhow::{Context, Result};
-use std::fmt;
-use std::ops::Range;
 
 /// A struct representing a range of bytes with an offset and length.
 ///

@@ -18,17 +18,21 @@
 //! - TileJSON: `/tiles/{name}/tiles.json` - Metadata for tile source
 //! - Static files: Served according to configured URL prefixes
 
-use crate::{
-	macros::NapiResultExt, napi_result, runtime::create_runtime, tile_source::TileSource, types::ServerOptions,
+use std::{
+	collections::HashMap,
+	sync::{Arc, RwLock},
 };
+
 use anyhow::Context;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
 use tokio::sync::Mutex;
 use versatiles::{config::Config, server::TileServer as RustTileServer};
 use versatiles_container::{DataLocation, TileSource as RustTileSource, TilesRuntime};
+
+use crate::{
+	macros::NapiResultExt, napi_result, runtime::create_runtime, tile_source::TileSource, types::ServerOptions,
+};
 
 // Type aliases for complex types
 type TileSourceList = Mutex<HashMap<String, Arc<Box<dyn RustTileSource>>>>; // Map of name -> TileSource

@@ -31,10 +31,12 @@
 // }
 // ```
 
-use crate::{Blob, ByteRange};
+use std::io::{Read, Seek};
+
 use anyhow::{Context, Result, bail};
 use byteorder::{ByteOrder, ReadBytesExt};
-use std::io::{Read, Seek};
+
+use crate::{Blob, ByteRange};
 
 /// A simple alias for types implementing both `Seek` and `Read`, used for convenience.
 pub trait SeekRead: Seek + Read {}
@@ -378,9 +380,9 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 
 #[cfg(test)]
 mod tests {
-	use super::super::ValueReaderSlice;
-	use super::*;
 	use approx::assert_relative_eq;
+
+	use super::{super::ValueReaderSlice, *};
 
 	#[test]
 	fn test_is_empty() {

@@ -1,10 +1,12 @@
-use super::{EventBus, RuntimeBuilder, RuntimeInner};
-use crate::{CacheType, DataLocation, DataSource, ProgressHandle, SharedTileSource};
-use anyhow::Result;
 use std::{
 	path::Path,
 	sync::{Arc, atomic::Ordering},
 };
+
+use anyhow::Result;
+
+use super::{EventBus, RuntimeBuilder, RuntimeInner};
+use crate::{CacheType, DataLocation, DataSource, ProgressHandle, SharedTileSource};
 
 /// Immutable runtime configuration and services for tile processing operations
 ///
@@ -188,9 +190,8 @@ impl Default for TilesRuntime {
 
 #[cfg(test)]
 mod tests {
-	use crate::Event;
-
 	use super::*;
+	use crate::Event;
 
 	#[test]
 	fn test_runtime_creation() {

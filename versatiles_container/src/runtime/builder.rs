@@ -1,7 +1,5 @@
 //! Builder pattern for constructing `TilesRuntime` instances
 
-use super::{EventBus, RuntimeInner, TilesRuntime};
-use crate::{CacheType, ContainerRegistry, ProgressFactory};
 use std::{
 	path::PathBuf,
 	sync::{
@@ -9,6 +7,9 @@ use std::{
 		atomic::{AtomicBool, AtomicUsize},
 	},
 };
+
+use super::{EventBus, RuntimeInner, TilesRuntime};
+use crate::{CacheType, ContainerRegistry, ProgressFactory};
 
 /// Builder for creating customized `TilesRuntime` instances
 ///

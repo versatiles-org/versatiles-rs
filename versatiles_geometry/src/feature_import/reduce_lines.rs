@@ -26,8 +26,9 @@ pub fn passes_min_length(g: &Geometry<f64>, min_length: f64) -> bool {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use geo_types::{LineString, Point};
+
+	use super::*;
 
 	#[test]
 	fn drops_short_line() {

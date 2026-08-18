@@ -387,10 +387,12 @@ where
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
+	use std::sync::atomic::{AtomicUsize, Ordering};
+
+	use anyhow::bail;
+
 	use super::*;
 	use crate::Blob;
-	use anyhow::bail;
-	use std::sync::atomic::{AtomicUsize, Ordering};
 
 	fn tc(level: u8, x: u32, y: u32) -> TileCoord {
 		TileCoord::new(level, x, y).unwrap()

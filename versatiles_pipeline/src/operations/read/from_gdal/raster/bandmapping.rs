@@ -11,11 +11,13 @@
 //! supported: Grey, Grey+Alpha, RGB, RGBA. Any other configuration (e.g. palette
 //! indexed or multispectral) will produce an error.
 
-use super::get_spatial_ref;
+use std::fmt::Debug;
+
 use anyhow::{Result, bail, ensure};
 use gdal::{DriverManager, raster::ColorInterpretation};
-use std::fmt::Debug;
 use versatiles_derive::context;
+
+use super::get_spatial_ref;
 
 /// Describes a single mapping from an input GDAL band (1-based index)
 /// to an output logical channel (0-based index).
@@ -290,8 +292,9 @@ impl Debug for BandMapping {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use rstest::rstest;
+
+	use super::*;
 
 	fn mem_dataset_with_bands(cis: Vec<ColorInterpretation>) -> Result<gdal::Dataset> {
 		let driver = DriverManager::get_driver_by_name("MEM")?;

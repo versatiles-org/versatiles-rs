@@ -56,12 +56,6 @@ pub fn project_and_flatten(mut feature: crate::geo::GeoFeature) -> Vec<crate::ge
 	feature.geometry = MercatorExt::to_mercator(original);
 	flatten_feature(feature)
 }
-use versatiles_derive::context;
-
-use crate::arc_graph::{self, ArcGraph, FeatureArcs};
-use crate::ext::{MercatorExt, coord_from_mercator};
-use crate::geo::GeoFeature;
-use crate::vector_tile::VectorTile;
 use anyhow::{Result, bail};
 use geo::BoundingRect;
 use geo_types::{Coord, Geometry};
@@ -69,6 +63,14 @@ use heuristics::auto_max_zoom_projected;
 use rstar::RTree;
 use spatial_index::{FeatureRef, query};
 use versatiles_core::{GeoBBox, WORLD_SIZE};
+use versatiles_derive::context;
+
+use crate::{
+	arc_graph::{self, ArcGraph, FeatureArcs},
+	ext::{MercatorExt, coord_from_mercator},
+	geo::GeoFeature,
+	vector_tile::VectorTile,
+};
 
 /// MVT tile-local coordinate extent (4096 pixels per tile, the conventional default).
 pub const TILE_EXTENT: u32 = 4096;
@@ -466,9 +468,10 @@ fn build_rtree_from_entries(entries: &[ZoomEntry]) -> RTree<FeatureRef> {
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
+	use geo_types::{LineString, Point, Polygon};
+
 	use super::*;
 	use crate::geo::GeoValue;
-	use geo_types::{LineString, Point, Polygon};
 
 	fn point_feature(id: u64, name: &str, lon: f64, lat: f64) -> GeoFeature {
 		let mut f = GeoFeature::new(Geometry::Point(Point::new(lon, lat)));
@@ -665,8 +668,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn from_features_via_geojson_source() -> Result<()> {
-		use crate::feature_source::{FeatureSource, GeoJsonSource};
 		use futures::StreamExt;
+
+		use crate::feature_source::{FeatureSource, GeoJsonSource};
 		let src = GeoJsonSource::new("../testdata/places.geojson");
 		// Disable simplification + reduction so this test exercises only the
 		// import + render path. (At z=0, the default simplify tolerance is

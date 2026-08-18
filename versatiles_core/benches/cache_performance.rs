@@ -1,11 +1,9 @@
+use std::{collections::HashMap, hint::black_box, sync::Arc};
+
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use dashmap::DashMap;
 use moka::future::Cache;
-use std::collections::HashMap;
-use std::hint::black_box;
-use std::sync::Arc;
-use tokio::runtime::Runtime;
-use tokio::sync::Mutex as AsyncMutex;
+use tokio::{runtime::Runtime, sync::Mutex as AsyncMutex};
 use versatiles_core::TileCoord;
 
 // Type aliases for complex types

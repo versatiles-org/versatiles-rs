@@ -1,16 +1,18 @@
+use std::collections::HashSet;
+
+use anyhow::Result;
+use async_trait::async_trait;
+use versatiles_container::TileSource;
+use versatiles_core::TileJSON;
+use versatiles_derive::context;
+use versatiles_geometry::vector_tile::VectorTile;
+
 use crate::{
 	PipelineFactory,
 	factory::{OperationFactoryTrait, TransformOperationFactoryTrait},
 	operations::vector::traits::{RunnerTrait, build_transform},
 	vpl::VPLNode,
 };
-use anyhow::Result;
-use async_trait::async_trait;
-use std::collections::HashSet;
-use versatiles_container::TileSource;
-use versatiles_core::TileJSON;
-use versatiles_derive::context;
-use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filters vector tile layers by name.
@@ -86,10 +88,11 @@ impl TransformOperationFactoryTrait for Factory {
 // ───────────────────────── TESTS ─────────────────────────
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use pretty_assertions::assert_eq;
 	use versatiles_core::TileBBox;
 	use versatiles_geometry::{geo::*, vector_tile::VectorTileLayer};
+
+	use super::*;
 
 	#[tokio::test]
 	async fn test_runner_run() {

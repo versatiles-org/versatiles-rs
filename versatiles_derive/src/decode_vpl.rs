@@ -539,8 +539,9 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 
 #[cfg(test)]
 mod tests {
-	use super::decode_struct;
 	use syn::{DeriveInput, parse_quote};
+
+	use super::decode_struct;
 
 	fn pretty_tokens(ts: &proc_macro2::TokenStream) -> Vec<String> {
 		prettyplease::unparse(&syn::parse_file(&ts.to_string()).unwrap())

@@ -1,7 +1,8 @@
+use std::{fmt::Debug, sync::Arc};
+
 use anyhow::{Result, anyhow, bail, ensure};
 use imageproc::image::DynamicImage;
 use moka::future::Cache;
-use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TilePyramid, TileStream};
 use versatiles_image::GenericImage;
@@ -286,10 +287,14 @@ impl TileResizeCore {
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
+	use versatiles_core::{TileFormat, TilePyramid};
+	use versatiles_image::{
+		DynamicImage,
+		traits::{DynamicImageTraitConvert, DynamicImageTraitOperation},
+	};
+
 	use super::*;
 	use crate::helpers::dummy_image_source::DummyImageSource;
-	use versatiles_core::{TileFormat, TilePyramid};
-	use versatiles_image::{DynamicImage, traits::DynamicImageTraitConvert, traits::DynamicImageTraitOperation};
 
 	fn make_source_512() -> DummyImageSource {
 		let image = DynamicImage::from_fn(512, 512, |x, y| [x as u8, y as u8, 0u8]);

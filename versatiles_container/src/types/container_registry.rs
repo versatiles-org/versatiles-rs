@@ -26,16 +26,6 @@
 //! }
 //! ```
 
-use crate::{
-	DataSource, DirectoryReader, DirectoryWriter, MBTilesReader, MBTilesWriter, PMTilesReader, PMTilesWriter,
-	SharedTileSource, TarTilesReader, TarTilesWriter, TileSource, TilesReader, TilesRuntime, TilesWriter,
-	VersaTilesReader, VersaTilesWriter, types::data_location::DataLocation,
-};
-#[cfg(test)]
-use crate::{MockReader, TileSourceMetadata, Traversal};
-use anyhow::{Context, Result, anyhow, bail};
-#[cfg(test)]
-use assert_fs::NamedTempFile;
 use std::{
 	collections::HashMap,
 	env,
@@ -44,12 +34,24 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
+
+use anyhow::{Context, Result, anyhow, bail};
+#[cfg(test)]
+use assert_fs::NamedTempFile;
 use versatiles_core::io::{DataReader, DataReaderBlob, DataReaderHttp, DataWriterTrait};
 #[cfg(feature = "ssh2")]
 use versatiles_core::io::{DataReaderSftp, DataWriterSftp};
 #[cfg(test)]
 use versatiles_core::{TileCompression, TileFormat, TilePyramid};
 use versatiles_derive::context;
+
+use crate::{
+	DataSource, DirectoryReader, DirectoryWriter, MBTilesReader, MBTilesWriter, PMTilesReader, PMTilesWriter,
+	SharedTileSource, TarTilesReader, TarTilesWriter, TileSource, TilesReader, TilesRuntime, TilesWriter,
+	VersaTilesReader, VersaTilesWriter, types::data_location::DataLocation,
+};
+#[cfg(test)]
+use crate::{MockReader, TileSourceMetadata, Traversal};
 
 /// Signature for async opener functions used by the registry.
 type ReadFuture = Pin<Box<dyn Future<Output = Result<SharedTileSource>> + Send>>;
@@ -408,10 +410,12 @@ pub async fn make_test_file(
 #[cfg(test)]
 /// Integration tests for container readers and writers across supported formats.
 pub mod tests {
+	use std::time::Instant;
+
+	use assert_fs::TempDir;
+
 	use super::*;
 	use crate::MockWriter;
-	use assert_fs::TempDir;
-	use std::time::Instant;
 
 	#[test]
 	fn sanitize_extension_handles_dots_and_case() {

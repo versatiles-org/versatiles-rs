@@ -6,9 +6,11 @@
 //! - Step/stage messages
 //! - Warnings and errors
 
-use crate::ProgressState;
-use arc_swap::ArcSwap;
 use std::sync::Arc;
+
+use arc_swap::ArcSwap;
+
+use crate::ProgressState;
 
 /// Event types that can be emitted by the runtime
 #[derive(Debug, Clone)]
@@ -181,9 +183,10 @@ impl EventBus {
 
 #[cfg(test)]
 mod tests {
+	use std::sync::{Arc, Mutex};
+
 	use super::*;
 	use crate::ProgressId;
-	use std::sync::{Arc, Mutex};
 
 	#[test]
 	fn test_event_bus_new() {

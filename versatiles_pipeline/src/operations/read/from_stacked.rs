@@ -15,18 +15,20 @@
 //! 2. [`Operation`] – the runtime implementation,  
 //! 3. Tests that verify error handling and overlay semantics.
 
+use std::sync::Arc;
+
+use anyhow::{Result, ensure};
+use async_trait::async_trait;
+use futures::{StreamExt, future::join_all, stream};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
+use versatiles_core::{TileBBox, TileBBoxMap, TileJSON, TilePyramid, TileStream};
+use versatiles_derive::context;
+
 use crate::{
 	PipelineFactory,
 	operations::read::traits::ReadTileSource,
 	vpl::{VPLNode, VPLPipeline},
 };
-use anyhow::{Result, ensure};
-use async_trait::async_trait;
-use futures::{StreamExt, future::join_all, stream};
-use std::sync::Arc;
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileBBoxMap, TileJSON, TilePyramid, TileStream};
-use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Overlays multiple tile sources, using the tile from the first source that provides it.
@@ -190,12 +192,13 @@ impl TileSource for Operation {
 crate::operations::macros::define_read_factory!("from_stacked", Args, Operation);
 #[cfg(test)]
 mod tests {
+	use std::sync::LazyLock;
+
 	use versatiles_container::TraversalOrder;
+	use versatiles_core::TilePyramid;
 
 	use super::*;
 	use crate::helpers::{arrange_tiles, dummy_vector_source::DummyVectorSource};
-	use std::sync::LazyLock;
-	use versatiles_core::TilePyramid;
 
 	static RESULT_PATTERN: LazyLock<Vec<String>> = LazyLock::new(|| {
 		vec![

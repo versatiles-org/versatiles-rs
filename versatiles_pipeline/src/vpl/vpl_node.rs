@@ -5,11 +5,13 @@
 //! (`properties`), and zero or more child pipelines (`sources`). Helpers convert
 //! stringly-typed values to typed parameters with clear, contextual errors.
 
+use std::{collections::BTreeMap, fmt::Debug, str::FromStr};
+
+use anyhow::{Result, anyhow, ensure};
+use versatiles_derive::context;
+
 use super::VPLPipeline;
 use crate::vpl::parse_vpl;
-use anyhow::{Result, anyhow, ensure};
-use std::{collections::BTreeMap, fmt::Debug, str::FromStr};
-use versatiles_derive::context;
 
 /// A single operation node in a VPL pipeline.
 ///

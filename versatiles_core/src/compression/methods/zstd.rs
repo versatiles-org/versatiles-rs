@@ -1,7 +1,9 @@
-use crate::Blob;
-use anyhow::Result;
 use std::io::Cursor;
+
+use anyhow::Result;
 use versatiles_derive::context;
+
+use crate::Blob;
 
 /// Compresses data using Zstd with highest quality settings.
 ///
@@ -73,8 +75,7 @@ pub fn decompress_zstd(blob: &Blob) -> Result<Blob> {
 
 #[cfg(test)]
 mod tests {
-	use super::super::super::test_utils::generate_test_data;
-	use super::*;
+	use super::{super::super::test_utils::generate_test_data, *};
 
 	#[test]
 	fn should_compress_and_decompress_zstd_correctly() -> Result<()> {

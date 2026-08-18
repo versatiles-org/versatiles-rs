@@ -80,8 +80,9 @@ fn validate_geometry_collection(gc: &GeometryCollection<f64>) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use geo_types::{Coord, LineString, Point, Polygon};
+
+	use super::*;
 
 	#[test]
 	fn point_is_always_valid() {

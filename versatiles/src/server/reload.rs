@@ -1,13 +1,15 @@
-use super::sources::{ServerTileSource, StaticSource};
-use crate::config::{Config, StaticSourceConfig, TileSourceConfig};
-use anyhow::Result;
-use arc_swap::ArcSwap;
-use dashmap::DashMap;
 use std::{
 	path::PathBuf,
 	sync::{Arc, Mutex},
 };
+
+use anyhow::Result;
+use arc_swap::ArcSwap;
+use dashmap::DashMap;
 use versatiles_container::TilesRuntime;
+
+use super::sources::{ServerTileSource, StaticSource};
+use crate::config::{Config, StaticSourceConfig, TileSourceConfig};
 
 pub struct ReloadHandle {
 	pub(super) config_path: PathBuf,

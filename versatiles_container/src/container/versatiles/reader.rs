@@ -53,16 +53,12 @@
 //! Returns errors when the file cannot be read or decompressed, when metadata/index parsing fails,
 //! or when a requested tile is missing.
 
-use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
-use crate::{
-	SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal,
-	TraversalOrder, TraversalSize, container::tile_chunking::Chunks,
-};
+use std::{fmt::Debug, mem::size_of, ops::Shr, path::Path, sync::Arc, time::Instant};
+
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::stream::StreamExt;
 use moka::future::Cache;
-use std::{fmt::Debug, mem::size_of, ops::Shr, path::Path, sync::Arc, time::Instant};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
@@ -71,6 +67,12 @@ use versatiles_core::{
 	io::{DataReader, DataReaderFile},
 };
 use versatiles_derive::context;
+
+use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
+use crate::{
+	SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal,
+	TraversalOrder, TraversalSize, container::tile_chunking::Chunks,
+};
 
 /// Reader for `.versatiles` containers.
 ///
@@ -491,10 +493,11 @@ impl PartialEq for VersaTilesReader {
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
-	use super::*;
-	use crate::{MOCK_BYTES_PBF, MockReader, TilesRuntime, TilesWriter, VersaTilesWriter, make_test_file};
 	use assert_fs::NamedTempFile;
 	use versatiles_core::{Blob, TileCompression, TileFormat, TilePyramid, assert_wildcard, io::DataWriterBlob};
+
+	use super::*;
+	use crate::{MOCK_BYTES_PBF, MockReader, TilesRuntime, TilesWriter, VersaTilesWriter, make_test_file};
 
 	// Helper to quickly create a test reader and bbox
 	async fn mk_reader() -> Result<(NamedTempFile, VersaTilesReader)> {

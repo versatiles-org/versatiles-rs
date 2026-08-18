@@ -1,5 +1,6 @@
-use anyhow::{Context, Result, anyhow, bail};
 use std::path::PathBuf;
+
+use anyhow::{Context, Result, anyhow, bail};
 use versatiles_container::TilesRuntime;
 use versatiles_geometry::{geo::GeoCollection, tile_outline::TileOutline};
 
@@ -69,9 +70,10 @@ pub async fn run(args: &ExportOutline, runtime: &TilesRuntime) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-	use crate::tests::run_command;
 	use anyhow::Result;
 	use assert_fs::TempDir;
+
+	use crate::tests::run_command;
 
 	#[test]
 	fn test_mbtiles_to_geojson() -> Result<()> {

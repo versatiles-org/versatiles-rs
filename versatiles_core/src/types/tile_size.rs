@@ -1,8 +1,10 @@
 //! Defines the `TileSize` enum representing supported raster or vector tile sizes.
 
-use crate::utils::float_to_int;
-use anyhow::{Result, bail};
 use std::fmt::Debug;
+
+use anyhow::{Result, bail};
+
+use crate::utils::float_to_int;
 
 /// Represents the pixel dimensions of a map tile.
 /// Currently supports 256×256 and 512×512 tiles.
@@ -92,8 +94,9 @@ impl TryFrom<u32> for TileSize {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use rstest::rstest;
+
+	use super::*;
 
 	#[rstest]
 	#[case(256, TileSize::Size256)]

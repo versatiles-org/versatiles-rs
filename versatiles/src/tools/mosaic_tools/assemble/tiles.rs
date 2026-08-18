@@ -14,12 +14,13 @@
 //!   does NOT encode — it keeps the merged image as raw content so that the
 //!   flush step is the only place where lossy compression is applied.
 
-use super::AssembleConfig;
 use anyhow::{Context, Result, ensure};
 use futures::StreamExt;
 use versatiles_container::{Tile, TilesRuntime};
 use versatiles_core::{Blob, ConcurrencyLimits, TileCoord, TileFormat};
 use versatiles_image::traits::DynamicImageTraitOperation;
+
+use super::AssembleConfig;
 
 pub(super) fn validate_source_format(
 	path: &str,
@@ -156,9 +157,10 @@ pub(super) async fn fetch_source_tiles(
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles_core::TileCompression;
 	use versatiles_image::{DynamicImage, ImageBuffer};
+
+	use super::*;
 
 	fn test_config() -> AssembleConfig {
 		AssembleConfig {

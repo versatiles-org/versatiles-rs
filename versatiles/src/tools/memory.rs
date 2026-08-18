@@ -10,6 +10,7 @@
 //! on other platforms the heartbeat is a no-op.
 
 use std::time::Duration;
+
 use tokio::task::JoinHandle;
 
 const DEFAULT_INTERVAL_SECS: u64 = 60;

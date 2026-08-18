@@ -7,8 +7,9 @@
 
 mod test_utilities;
 
-use reqwest::header::{ACCEPT_ENCODING, CONTENT_ENCODING, HeaderMap};
 use std::process::Child;
+
+use reqwest::header::{ACCEPT_ENCODING, CONTENT_ENCODING, HeaderMap};
 use test_utilities::*;
 
 struct CompressionTestServer {

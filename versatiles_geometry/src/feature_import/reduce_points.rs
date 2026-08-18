@@ -13,9 +13,10 @@
 //!
 //! Non-point geometries pass through both strategies unchanged.
 
+use std::collections::HashMap;
+
 use anyhow::{Result, bail};
 use geo_types::{Coord, Geometry};
-use std::collections::HashMap;
 
 /// User-selected point-reduction strategy. Threshold-style values are stored
 /// in [`crate::feature_import::FeatureImportConfig::min_distance_px`] and
@@ -147,8 +148,9 @@ fn splitmix64(mut x: u64) -> u64 {
 #[cfg(test)]
 #[allow(clippy::cast_precision_loss)] // test indices are small `usize`s
 mod tests {
-	use super::*;
 	use geo_types::{LineString, Point};
+
+	use super::*;
 
 	fn point_geom(lon: f64, lat: f64) -> Geometry<f64> {
 		Geometry::Point(Point::new(lon, lat))

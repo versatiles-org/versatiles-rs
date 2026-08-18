@@ -1,9 +1,11 @@
-use super::get_spatial_ref;
+use std::fmt::Debug;
+
 use anyhow::{Context, Result, ensure};
 use gdal::{Dataset, spatial_ref::CoordTransform, vector::Geometry};
-use std::fmt::Debug;
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
+
+use super::get_spatial_ref;
 
 #[derive(Debug)]
 pub struct Instance {
@@ -155,9 +157,10 @@ impl Instance {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use gdal::DriverManager;
 	use rstest::rstest;
+
+	use super::*;
 
 	fn mem_dataset(w: usize, h: usize, bands: usize) -> Dataset {
 		let driver = DriverManager::get_driver_by_name("MEM").expect("MEM driver");

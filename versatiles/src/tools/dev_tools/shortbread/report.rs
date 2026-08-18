@@ -6,8 +6,8 @@
 //! into a [`Registry`] keyed by `(severity, rule, layer, attr, value)`, keeping
 //! only a running count and a few example tile coordinates.
 
-use std::collections::BTreeMap;
-use std::fmt::Write as _;
+use std::{collections::BTreeMap, fmt::Write as _};
+
 use versatiles_core::TileCoord;
 
 /// How many example tile coordinates to keep per distinct issue.

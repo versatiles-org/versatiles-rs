@@ -1,12 +1,14 @@
-use crate::{PipelineFactory, vpl::VPLNode};
+use std::{fmt::Debug, sync::Arc};
+
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
-use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{
 	GeoBBox, GeoCenter, TileBBox, TileJSON, TilePyramid, TileSchema, TileStream, json::parse_json_str,
 };
 use versatiles_derive::context;
+
+use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Update metadata, see also <https://github.com/mapbox/tilejson-spec/tree/master/3.0.0>
@@ -188,10 +190,11 @@ crate::operations::macros::define_transform_factory!("meta_update", Args, Operat
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::PipelineFactory;
 	use approx::assert_relative_eq;
 	use assert_fs::prelude::*;
+
+	use super::*;
+	use crate::PipelineFactory;
 
 	fn get_str(o: &TileJSON, k: &str) -> Option<String> {
 		o.as_object().string(k).ok().flatten()

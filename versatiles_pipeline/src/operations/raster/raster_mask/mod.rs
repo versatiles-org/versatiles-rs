@@ -12,16 +12,18 @@
 mod blur_function;
 mod mask_geometry;
 
-use crate::{PipelineFactory, vpl::VPLNode};
+use std::{fmt::Debug, sync::Arc};
+
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use blur_function::BlurFunction;
 use mask_geometry::{MaskGeometry, TileClassification};
-use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_image::DynamicImage;
+
+use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Apply a polygon mask from GeoJSON to raster tiles.
@@ -194,11 +196,11 @@ crate::operations::macros::define_transform_factory!("raster_mask", Args, Operat
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::PipelineFactory;
-	use crate::factory::OperationFactoryTrait;
 	use assert_fs::prelude::*;
 	use versatiles_core::TileCoord;
+
+	use super::*;
+	use crate::{PipelineFactory, factory::OperationFactoryTrait};
 
 	fn create_test_geojson() -> assert_fs::NamedTempFile {
 		let file = assert_fs::NamedTempFile::new("test.geojson").unwrap();

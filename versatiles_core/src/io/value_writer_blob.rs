@@ -26,12 +26,16 @@
 
 #![allow(dead_code)]
 
-use super::ValueWriter;
-use crate::Blob;
+use std::{
+	io::{Cursor, Write},
+	marker::PhantomData,
+};
+
 use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use std::io::{Cursor, Write};
-use std::marker::PhantomData;
+
+use super::ValueWriter;
+use crate::Blob;
 
 /// A struct that provides writing capabilities to an in-memory blob using a specified byte order.
 pub struct ValueWriterBlob<E: ByteOrder> {

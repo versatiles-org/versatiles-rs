@@ -3,10 +3,12 @@
 //! Provides a small CSV reader with configurable separator, RFC4180-style quoted fields (double-quote escaping), and tolerant handling of `\n`/`\r\n` and empty lines.
 //! Exposes `read_csv_iter` for consumers and keeps parsing helpers internal.
 
-use crate::byte_iterator::ByteIterator;
-use anyhow::{Error, Result, bail};
 use std::io::BufRead;
+
+use anyhow::{Error, Result, bail};
 use versatiles_derive::context;
+
+use crate::byte_iterator::ByteIterator;
 
 /// Parses a quoted CSV field (`"..."`) with RFC&nbsp;4180-style escaping.
 ///
@@ -172,8 +174,9 @@ pub fn read_csv_iter<'a>(
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use std::io::Cursor;
+
+	use super::*;
 
 	#[test]
 	fn test_parse_simple_csv_string() {

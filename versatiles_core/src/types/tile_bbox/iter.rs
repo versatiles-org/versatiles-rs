@@ -1,5 +1,6 @@
-use crate::{TileBBox, TileCoord};
 use itertools::Itertools;
+
+use crate::{TileBBox, TileCoord};
 
 impl TileBBox {
 	// -------------------------------------------------------------------------
@@ -72,9 +73,10 @@ impl TileBBox {
 mod tests {
 	use std::{collections::HashMap, vec};
 
-	use super::*;
 	use anyhow::Result;
 	use rstest::rstest;
+
+	use super::*;
 
 	fn tc(z: u8, x: u32, y: u32) -> TileCoord {
 		TileCoord::new(z, x, y).unwrap()

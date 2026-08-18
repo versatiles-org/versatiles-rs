@@ -1,13 +1,15 @@
+use std::{fmt::Debug, sync::Arc};
+
+use anyhow::{Result, bail};
+use async_trait::async_trait;
+use versatiles_container::DataLocation;
+use versatiles_core::compression::TargetCompression;
+use versatiles_derive::context;
+
 use super::{
 	super::utils::Url, SourceResponse, static_source_folder::Folder, static_source_remote_folder::RemoteFolder,
 	static_source_tar::TarFile,
 };
-use anyhow::{Result, bail};
-use async_trait::async_trait;
-use std::{fmt::Debug, sync::Arc};
-use versatiles_container::DataLocation;
-use versatiles_core::compression::TargetCompression;
-use versatiles_derive::context;
 
 #[async_trait]
 pub trait StaticSourceTrait: Send + Sync + Debug {
@@ -76,10 +78,12 @@ impl StaticSource {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use async_trait::async_trait;
 	use std::{fs::File, io::Write, path::PathBuf};
+
+	use async_trait::async_trait;
 	use versatiles_core::{Blob, TileCompression, compression::compress};
+
+	use super::*;
 
 	#[derive(Debug)]
 	struct MockStaticSource;

@@ -54,9 +54,10 @@ impl From<&TileSourceMetadata> for SourceMetadata {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles_container::Traversal;
 	use versatiles_core::{TileCompression, TileFormat, TilePyramid};
+
+	use super::*;
 
 	fn create_test_parameters(
 		format: TileFormat,

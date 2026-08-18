@@ -43,15 +43,17 @@
 //! }
 //! ```
 
-use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
+use std::{fs::remove_file, path::Path, sync::Arc};
+
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use r2d2::Pool;
 use r2d2_sqlite::{SqliteConnectionManager, rusqlite::params};
-use std::{fs::remove_file, path::Path, sync::Arc};
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, json::JsonObject};
 use versatiles_derive::context;
+
+use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
 
 /// Writer for `MBTiles` (`SQLite`) containers.
 ///
@@ -239,10 +241,11 @@ impl TilesWriter for MBTilesWriter {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::{MBTilesReader, MockReader, MockWriter, TileSourceMetadata};
 	use assert_fs::NamedTempFile;
 	use versatiles_core::TilePyramid;
+
+	use super::*;
+	use crate::{MBTilesReader, MockReader, MockWriter, TileSourceMetadata};
 
 	#[tokio::test]
 	async fn read_write() -> Result<()> {

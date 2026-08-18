@@ -1,7 +1,8 @@
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use geo_types::{Geometry, Point};
-use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_geometry::{
@@ -187,8 +188,9 @@ impl TileSource for DummyVectorSource {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles_core::GeoBBox;
+
+	use super::*;
 
 	#[tokio::test]
 	async fn test_tile() {

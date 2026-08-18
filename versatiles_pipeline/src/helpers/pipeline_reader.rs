@@ -6,17 +6,21 @@
 //! It supports opening from paths or arbitrary [`DataReader`]s, validates and
 //! executes the configured operations, and streams tiles for a given bbox.
 
-use crate::PipelineFactory;
-use crate::vpl::{VPLPipeline, parse_vpl};
+use std::{path::Path, sync::Arc};
+
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use std::{path::Path, sync::Arc};
 use versatiles_container::{
 	DataLocation, SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime,
 };
 use versatiles_core::{TileBBox, TileCoord, TileJSON, TilePyramid, TileStream, io::DataReader};
 use versatiles_derive::context;
+
+use crate::{
+	PipelineFactory,
+	vpl::{VPLPipeline, parse_vpl},
+};
 
 /// Tile reader that executes a VPL-defined operation pipeline and returns composed tiles.
 ///
@@ -186,10 +190,11 @@ impl std::fmt::Debug for PipelineReader {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use pretty_assertions::assert_eq;
 	use versatiles_container::MockWriter;
 	use versatiles_core::{TileCompression, TileCoord};
+
+	use super::*;
 
 	pub const VPL: &str = include_str!("../../../testdata/berlin.vpl");
 

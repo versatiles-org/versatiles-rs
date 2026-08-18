@@ -46,15 +46,11 @@
 //! Returns errors when the path is not absolute, the file cannot be read, the
 //! `PMTiles` header/directories cannot be parsed or decompressed, or a requested tile is missing.
 
-use super::types::{EntriesV3, HeaderV3};
-use crate::{
-	SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal,
-	TraversalOrder, TraversalSize, container::tile_chunking::Chunks,
-};
+use std::{fmt::Debug, mem::size_of, path::Path, sync::Arc};
+
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use moka::future::Cache;
-use std::{fmt::Debug, mem::size_of, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
@@ -64,6 +60,12 @@ use versatiles_core::{
 	utils::HilbertIndex,
 };
 use versatiles_derive::context;
+
+use super::types::{EntriesV3, HeaderV3};
+use crate::{
+	SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal,
+	TraversalOrder, TraversalSize, container::tile_chunking::Chunks,
+};
 
 /// Reader for `PMTiles` v3 containers.
 ///
@@ -523,9 +525,11 @@ impl TileSource for PMTilesReader {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use std::{env::current_dir, path::PathBuf, sync::LazyLock};
+
 	use versatiles_core::assert_wildcard;
+
+	use super::*;
 
 	static PATH: LazyLock<PathBuf> = LazyLock::new(|| current_dir().unwrap().join("../testdata/berlin.pmtiles"));
 

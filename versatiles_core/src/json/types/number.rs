@@ -44,8 +44,9 @@ impl_from_number_lossy!(u64, u128, usize, i64, i128, isize);
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use approx::assert_relative_eq;
+
+	use super::*;
 
 	/// Generate per-type tests that assert `From<T> for JsonValue` maps to `Number(v as f64)`.
 	/// Only include values that are within or equal to the exact-integer range of f64 where relevant.

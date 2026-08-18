@@ -36,8 +36,9 @@
 //!     .await?;
 //! ```
 
-use anyhow::{Result, bail};
 use std::{collections::HashSet, io::BufReader, path::Path};
+
+use anyhow::{Result, bail};
 use versatiles_container::TilesRuntime;
 use versatiles_core::utils::read_csv_iter;
 use versatiles_derive::context;
@@ -264,9 +265,11 @@ impl CsvReader {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use assert_fs::NamedTempFile;
 	use std::{fs::File, io::Write};
+
+	use assert_fs::NamedTempFile;
+
+	use super::*;
 
 	fn make_temp_file(name: &str, content: &str) -> Result<NamedTempFile> {
 		let temp_file = NamedTempFile::new(name)?;

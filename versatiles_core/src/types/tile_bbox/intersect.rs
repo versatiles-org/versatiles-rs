@@ -150,8 +150,9 @@ impl TileBBox {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use rstest::rstest;
+
+	use super::*;
 
 	fn bb(level: u8, x_min: u32, y_min: u32, x_max: u32, y_max: u32) -> TileBBox {
 		TileBBox::from_min_and_max(level, x_min, y_min, x_max, y_max).unwrap()

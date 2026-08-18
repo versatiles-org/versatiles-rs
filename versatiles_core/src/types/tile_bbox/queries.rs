@@ -8,10 +8,12 @@
 //! Most methods return `bool` or `Result<T>` depending on whether level mismatches
 //! or invalid states (such as odd dimensions) must be handled.
 
-use crate::{TileBBox, TileCoord};
-use anyhow::{Result, ensure};
 use std::ops::{Div, Rem};
+
+use anyhow::{Result, ensure};
 use versatiles_derive::context;
+
+use crate::{TileBBox, TileCoord};
 
 impl TileBBox {
 	// -------------------------------------------------------------------------
@@ -110,9 +112,10 @@ impl TileBBox {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use anyhow::Result;
 	use rstest::rstest;
+
+	use super::*;
 
 	fn bb(z: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 		TileBBox::from_min_and_max(z, x0, y0, x1, y1).unwrap()

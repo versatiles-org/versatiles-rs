@@ -3,15 +3,19 @@
 //! These types allow `versatiles_container` to use SFTP functionality without
 //! depending on the `ssh2` crate directly.
 
-use super::sftp_utils;
-use super::sftp_utils::{SftpKeepalive, SharedSession};
-use anyhow::{Context, Result, bail};
-use reqwest::Url;
 use std::{
 	io::Write,
 	path::{Path, PathBuf},
 	sync::{Arc, Mutex},
 	thread,
+};
+
+use anyhow::{Context, Result, bail};
+use reqwest::Url;
+
+use super::{
+	sftp_utils,
+	sftp_utils::{SftpKeepalive, SharedSession},
 };
 
 /// A [`Write`] stream to a remote file via SFTP.

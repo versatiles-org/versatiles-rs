@@ -1,3 +1,11 @@
+use std::{fmt::Debug, sync::Arc};
+
+use anyhow::{Result, anyhow, bail};
+use async_trait::async_trait;
+use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
+use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileStream};
+use versatiles_derive::context;
+
 use super::{DemSource, dem_source::DemEncoding};
 use crate::{
 	PipelineFactory,
@@ -5,12 +13,6 @@ use crate::{
 	operations::read::traits::ReadTileSource,
 	vpl::VPLNode,
 };
-use anyhow::{Result, anyhow, bail};
-use async_trait::async_trait;
-use std::{fmt::Debug, sync::Arc};
-use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
-use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileStream};
-use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a GDAL DEM dataset and produces terrain RGB tiles (Mapbox or Terrarium encoding).
@@ -274,12 +276,14 @@ impl ReadOperationFactoryTrait for Factory {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use std::path::Path;
+
 	use assert_fs::TempDir;
 	use gdal::DriverManager;
 	use rstest::rstest;
-	use std::path::Path;
 	use versatiles_core::GeoBBox;
+
+	use super::*;
 
 	/// Creates a temporary single-band float32 GeoTIFF with a gradient of elevation values.
 	fn create_test_dem(path: &Path, bbox: &GeoBBox) {

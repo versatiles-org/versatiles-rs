@@ -1,5 +1,6 @@
-use anyhow::Result;
 use std::io::Write;
+
+use anyhow::Result;
 use versatiles_container::TilesRuntime;
 
 #[derive(clap::Args, Debug)]
@@ -34,8 +35,9 @@ async fn fetch_tilejson(args: &PrintTilejson, runtime: &TilesRuntime) -> Result<
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles::runtime::create_test_runtime;
+
+	use super::*;
 
 	#[tokio::test]
 	async fn test_print_tilejson() {

@@ -1,18 +1,13 @@
-use crate::{
-	PipelineFactory,
-	factory::{OperationFactoryTrait, TransformOperationFactoryTrait},
-	operations::vector::traits::{RunnerTrait, build_transform},
-	vpl::VPLNode,
+use std::{
+	collections::{HashMap, HashSet},
+	sync::Arc,
 };
+
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use cel_interpreter::{
 	Context as CelContext, Program, Value as CelValue,
 	objects::{Key as CelKey, Map as CelMap},
-};
-use std::{
-	collections::{HashMap, HashSet},
-	sync::Arc,
 };
 use versatiles_container::TileSource;
 use versatiles_core::TileJSON;
@@ -20,6 +15,13 @@ use versatiles_derive::context;
 use versatiles_geometry::{
 	geo::{GeoProperties, GeoValue},
 	vector_tile::VectorTile,
+};
+
+use crate::{
+	PipelineFactory,
+	factory::{OperationFactoryTrait, TransformOperationFactoryTrait},
+	operations::vector::traits::{RunnerTrait, build_transform},
+	vpl::VPLNode,
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -193,13 +195,14 @@ impl TransformOperationFactoryTrait for Factory {
 // ───────────────────────── TESTS ─────────────────────────
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use pretty_assertions::assert_eq;
 	use versatiles_core::TileBBox;
 	use versatiles_geometry::{
 		geo::{GeoFeature, example_geometry},
 		vector_tile::VectorTileLayer,
 	};
+
+	use super::*;
 
 	fn feature(props: Vec<(&str, GeoValue)>) -> GeoFeature {
 		let mut f = GeoFeature::new(example_geometry());

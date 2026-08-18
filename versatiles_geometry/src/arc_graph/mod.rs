@@ -8,12 +8,12 @@ mod extract;
 mod reassemble;
 mod simplify;
 
+use std::collections::HashMap;
+
 pub use extract::build;
+use geo_types::Coord;
 pub use reassemble::{reassemble_features, reassemble_geometry};
 pub use simplify::simplify_arcs;
-
-use geo_types::Coord;
-use std::collections::HashMap;
 
 /// Stable identifier for an arc inside an [`ArcGraph`].
 pub type ArcId = usize;
@@ -109,9 +109,10 @@ impl PolygonArcs {
 
 #[cfg(test)]
 mod tests {
+	use geo_types::{Geometry, LineString, Polygon};
+
 	use super::*;
 	use crate::geo::GeoFeature;
-	use geo_types::{Geometry, LineString, Polygon};
 
 	fn polygon_feature(rings: &[Vec<[f64; 2]>]) -> GeoFeature {
 		let mut iter = rings.iter().map(|r| LineString::from(r.clone()));

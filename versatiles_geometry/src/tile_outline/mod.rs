@@ -2,9 +2,10 @@
 //! It can collect multiple tile or geographic bounding boxes, merge them into a single `MultiPolygon`,
 //! and export them as `GeoFeature` objects suitable for GeoJSON serialization.
 
-use crate::geo::GeoFeature;
 use geo::{MultiPolygon, Polygon, unary_union};
 use versatiles_core::{GeoBBox, TileBBox, TileCoord};
+
+use crate::geo::GeoFeature;
 
 /// Represents a collection of tile or geographic bounding boxes that can be merged into a unified polygon outline.
 ///

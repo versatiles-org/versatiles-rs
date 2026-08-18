@@ -1,7 +1,9 @@
+use std::thread;
+
+use anyhow::{Context, Result, bail};
+
 use super::DataWriterTrait;
 use crate::{Blob, ByteRange};
-use anyhow::{Context, Result, bail};
-use std::thread;
 
 /// Trait for network-based data writers (SFTP, cloud storage, etc.)
 /// that need retry logic with reconnection.
@@ -197,9 +199,11 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use anyhow::anyhow;
 	use std::collections::VecDeque;
+
+	use anyhow::anyhow;
+
+	use super::*;
 
 	/// Retry count from the shared policy (2 under `cfg(test)` defaults).
 	fn max_retries() -> u32 {

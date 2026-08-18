@@ -81,19 +81,21 @@
 //! 4. **Per-tile dispatch** — each coordinate is processed in parallel via
 //!    `tile`, then passed through `change_format`.
 
+use std::{collections::HashSet, sync::Arc, vec};
+
+use anyhow::{Result, ensure};
+use async_trait::async_trait;
+use futures::{future::try_join_all, stream};
+use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
+use versatiles_core::{TileBBox, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream, TileType};
+use versatiles_derive::context;
+use versatiles_image::traits::DynamicImageTraitOperation;
+
 use crate::{
 	PipelineFactory,
 	operations::read::traits::ReadTileSource,
 	vpl::{VPLNode, VPLPipeline},
 };
-use anyhow::{Result, ensure};
-use async_trait::async_trait;
-use futures::{future::try_join_all, stream};
-use std::{collections::HashSet, sync::Arc, vec};
-use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream, TileType};
-use versatiles_derive::context;
-use versatiles_image::traits::DynamicImageTraitOperation;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Overlays multiple raster tile sources on top of each other.
@@ -449,14 +451,15 @@ crate::operations::macros::define_read_factory!("from_stacked_raster", Args, Ope
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
-	use super::*;
-	use crate::helpers::{arrange_tiles, dummy_image_source::DummyImageSource};
 	use futures::future::BoxFuture;
 	use pretty_assertions::assert_eq;
 	use rstest::rstest;
 	use versatiles_container::{DataLocation, TileSource};
 	use versatiles_core::{Blob, TileCompression, TileCompression::Uncompressed, TileFormat, TilePyramid};
 	use versatiles_image::{DynamicImage, DynamicImageTraitConvert};
+
+	use super::*;
+	use crate::helpers::{arrange_tiles, dummy_image_source::DummyImageSource};
 
 	fn rgba_to_hex(rgba: &[u8]) -> String {
 		use std::fmt::Write;

@@ -5,12 +5,14 @@
 //! - JPEG: Always opaque, never empty (no alpha channel support)
 //! - PNG/WebP: Parse header to check for alpha channel, only decode if necessary
 
-use super::Tile;
-use anyhow::Result;
 use std::borrow::Cow;
+
+use anyhow::Result;
 use versatiles_core::{Blob, TileCompression, TileFormat, compression::decompress_ref};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitInfo;
+
+use super::Tile;
 
 impl Tile {
 	/// Returns `true` if the tile image is fully transparent (all alpha = 0).
@@ -189,16 +191,19 @@ pub(super) fn parse_webp_alpha(data: &[u8]) -> AlphaInfo {
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
-	use crate::TileContent;
-
-	use super::*;
-	use rstest::rstest;
 	use std::{collections::HashMap, sync::LazyLock};
+
+	use rstest::rstest;
 	use versatiles_image::{DynamicImage, DynamicImageTraitConvert};
 
+	use super::*;
+	use crate::TileContent;
+
 	static TEST_TILES: LazyLock<HashMap<String, Tile>> = LazyLock::new(|| {
-		use versatiles_core::TileCompression::Uncompressed as U;
-		use versatiles_core::TileFormat::{JPG, PNG, WEBP};
+		use versatiles_core::{
+			TileCompression::Uncompressed as U,
+			TileFormat::{JPG, PNG, WEBP},
+		};
 
 		fn create_image(colors: &str) -> DynamicImage {
 			let mut data = Vec::new();

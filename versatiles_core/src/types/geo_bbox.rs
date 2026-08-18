@@ -15,8 +15,9 @@
 //! ## Antimeridian & empties
 //! * Bounding boxes are **not** wrapped across the antimeridian; all input coordinates must lie within `[-180, 180]` longitude and `[-90, 90]` latitude.
 //! * Some operations (such as [`intersect`]) may yield an "empty" box with `x_min > x_max` or `y_min > y_max` to signal that there is no overlap.
-use anyhow::{Result, ensure};
 use std::fmt::Debug;
+
+use anyhow::{Result, ensure};
 use versatiles_derive::context;
 
 use super::constants::{EARTH_RADIUS, MAX_LAT, MAX_LON};
@@ -468,8 +469,9 @@ impl<T: Copy + Into<f64>> TryFrom<&[T; 4]> for GeoBBox {
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation, clippy::float_cmp)]
 mod tests {
-	use super::*;
 	use rstest::rstest;
+
+	use super::*;
 
 	#[test]
 	fn test_creation() {

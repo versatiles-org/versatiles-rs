@@ -1,11 +1,13 @@
 //! CacheValue implementation for serializing Tile to and from cache.
 
-use super::Tile;
-use crate::{CacheValue, TileContent};
-use anyhow::Result;
 use std::io::{Read, Write};
+
+use anyhow::Result;
 use versatiles_core::{Blob, TileCompression, TileFormat};
 use versatiles_derive::context;
+
+use super::Tile;
+use crate::{CacheValue, TileContent};
 
 impl CacheValue for Tile {
 	#[context("serializing Tile to cache (has_blob={}, has_content={})", self.has_blob(), self.has_content())]

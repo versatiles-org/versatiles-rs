@@ -19,9 +19,10 @@
 use anyhow::{Result, anyhow, ensure};
 use versatiles_container::{SharedTileSource, TilesRuntime};
 use versatiles_core::{TileCoord, TileType, utils::PrettyPrint};
-use versatiles_geometry::geo::GeoValue;
-use versatiles_geometry::vector_tile::{GeoValuePBF, GeomType, VectorTile};
-use versatiles_geometry::vector_tile::{LayerStats, layer_stats};
+use versatiles_geometry::{
+	geo::GeoValue,
+	vector_tile::{GeoValuePBF, GeomType, LayerStats, VectorTile, layer_stats},
+};
 
 /// How many entries to show in the "top features" and "top values" tables.
 const TOP_N: usize = 10;
@@ -553,14 +554,14 @@ fn fmt_bytes(v: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use geo_types::{Geometry, LineString, Point};
 	use versatiles::runtime::create_test_runtime;
 	use versatiles_geometry::{
 		geo::{GeoFeature, GeoProperties},
 		vector_tile::{VectorTile, VectorTileLayer},
 	};
 
-	use geo_types::{Geometry, LineString, Point};
+	use super::*;
 
 	fn line_feature(coords: Vec<[f64; 2]>, props: Vec<(&str, GeoValue)>) -> GeoFeature {
 		GeoFeature {

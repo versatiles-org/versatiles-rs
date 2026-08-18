@@ -128,11 +128,12 @@ pub fn get_encoding(headers: &HeaderMap) -> TargetCompression {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use axum::http::{HeaderMap, header::ACCEPT_ENCODING};
 	use enumset::{EnumSet, enum_set};
 	use rstest::rstest;
 	use versatiles_core::TileCompression as TC;
+
+	use super::*;
 
 	fn mk_headers(s: &str) -> HeaderMap {
 		let mut m = HeaderMap::new();

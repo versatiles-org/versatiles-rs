@@ -10,10 +10,11 @@
 //!
 //! The trait builds on top of [`super::convert::DynamicImageTraitConvert`], notably its
 //! `iter_pixels()` method for zero-copy pixel traversal.
-use super::convert::DynamicImageTraitConvert;
 use anyhow::{Result, ensure};
 use image::{DynamicImage, ExtendedColorType};
 use versatiles_derive::context;
+
+use super::convert::DynamicImageTraitConvert;
 
 /// Utilities to inspect/compare images and reason about alpha while avoiding extra allocations.
 pub trait DynamicImageTraitInfo: DynamicImageTraitConvert {
@@ -147,9 +148,10 @@ where
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation, clippy::float_cmp)]
 mod tests {
-	use super::*;
 	use image::ExtendedColorType;
 	use rstest::rstest;
+
+	use super::*;
 
 	// --- helpers -----------------------------------------------------------
 	fn sample_l8() -> DynamicImage {

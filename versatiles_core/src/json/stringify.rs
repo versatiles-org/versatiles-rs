@@ -82,9 +82,9 @@ pub fn escape_json_string(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-	use super::super::parse::parse_json_str;
-	use super::stringify;
 	use anyhow::Result;
+
+	use super::{super::parse::parse_json_str, stringify};
 
 	#[test]
 	fn test_as_string_primitives() -> Result<()> {

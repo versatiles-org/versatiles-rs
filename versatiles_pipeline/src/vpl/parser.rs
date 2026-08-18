@@ -5,9 +5,10 @@
 //! [`CstFile::lower`](super::CstFile::lower), which drops trivia, decodes escapes, and folds the
 //! parameters into the alphabetised map the engine wants.
 
-use super::{VPLPipeline, VplParseError, parse_cst};
 use anyhow::Result;
 use versatiles_derive::context;
+
+use super::{VPLPipeline, VplParseError, parse_cst};
 
 /// Parses VPL text into a [`VPLPipeline`], reporting failures with a machine-readable position.
 ///
@@ -52,9 +53,10 @@ pub fn parse_vpl(input: &str) -> Result<VPLPipeline> {
 
 #[cfg(test)]
 mod tests {
+	use rstest::rstest;
+
 	use super::*;
 	use crate::vpl::VPLNode;
-	use rstest::rstest;
 
 	/// Both quote forms must be able to spell the empty string, and an empty value must
 	/// survive all the way into the parsed node. See issue #218.

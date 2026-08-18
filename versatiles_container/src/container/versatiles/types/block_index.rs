@@ -2,15 +2,17 @@
 //!
 //! The `BlockIndex` struct contains metadata about the blocks, including their coordinates and bounding boxes, and provides methods to manipulate and query this data.
 
-use super::BlockDefinition;
-use anyhow::{Result, ensure};
 use std::{collections::HashMap, ops::Div};
+
+use anyhow::{Result, ensure};
 use versatiles_core::{
 	Blob, ByteRange, TileCoord, TilePyramid,
 	compression::{compress_brotli_fast, decompress_brotli},
 	io::{ValueWriter, ValueWriterBlob},
 };
 use versatiles_derive::context;
+
+use super::BlockDefinition;
 
 const BLOCK_INDEX_LENGTH: u64 = 33;
 
@@ -142,8 +144,9 @@ impl BlockIndex {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles_core::TileBBox;
+
+	use super::*;
 
 	#[test]
 	fn conversion() -> Result<()> {

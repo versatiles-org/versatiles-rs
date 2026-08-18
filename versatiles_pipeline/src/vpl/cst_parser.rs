@@ -21,10 +21,6 @@
 //! every token — and the total must come out equal to the input length, which makes the walk its
 //! own check that nothing was lost.
 
-use super::{
-	CstArray, CstFile, CstNode, CstPipeline, CstProperty, CstSources, CstString, CstStringKind, CstToken, CstValue,
-	Punctuated, PunctuatedItem, VplParseError,
-};
 use nom::{
 	IResult, Parser,
 	branch::alt,
@@ -36,6 +32,11 @@ use nom::{
 	sequence::{pair, preceded},
 };
 use nom_language::error::VerboseError;
+
+use super::{
+	CstArray, CstFile, CstNode, CstPipeline, CstProperty, CstSources, CstString, CstStringKind, CstToken, CstValue,
+	Punctuated, PunctuatedItem, VplParseError,
+};
 
 type Res<'a, T> = IResult<&'a str, T, VerboseError<&'a str>>;
 
@@ -417,9 +418,10 @@ pub fn parse_cst(input: &str) -> Result<CstFile, VplParseError> {
 
 #[cfg(test)]
 mod tests {
+	use rstest::rstest;
+
 	use super::*;
 	use crate::vpl::parse_vpl;
-	use rstest::rstest;
 
 	/// Everything the semantic parser's own tests throw at it, plus the awkward shapes.
 	const CORPUS: &[&str] = &[

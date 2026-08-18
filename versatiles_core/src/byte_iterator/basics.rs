@@ -15,10 +15,12 @@
 //! - Parsing functions consume only as much as needed and leave the iterator positioned at the
 //!   next token (e.g., after a closing `]` or `}`).
 
-use super::iterator::ByteIterator;
-use anyhow::{Error, Result, bail};
 use std::str::FromStr;
+
+use anyhow::{Error, Result, bail};
 use versatiles_derive::context;
+
+use super::iterator::ByteIterator;
 
 /// Match a fixed ASCII tag at the current iterator position.
 ///
@@ -326,9 +328,11 @@ pub fn parse_array_entries<R>(
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use approx::assert_relative_eq;
 	use std::io::Cursor;
+
+	use approx::assert_relative_eq;
+
+	use super::*;
 
 	fn get_reader(s: &str) -> ByteIterator<'_> {
 		ByteIterator::from_reader(Cursor::new(s), true)

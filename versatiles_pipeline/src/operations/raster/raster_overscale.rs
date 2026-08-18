@@ -34,15 +34,17 @@
 //! This significantly improves performance when generating multiple high-zoom tiles
 //! from the same parent tile, as the parent only needs to be fetched and decoded once.
 
-use crate::{PipelineFactory, vpl::VPLNode};
+use std::{fmt::Debug, sync::Arc};
+
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use moka::future::Cache;
-use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_image::{DynamicImage, traits::DynamicImageTraitOperation};
+
+use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Raster overscale operation - generates tiles beyond the source's native resolution.
@@ -388,12 +390,12 @@ crate::operations::macros::define_transform_factory!("raster_overscale", Args, O
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
-	use super::*;
-	use crate::factory::OperationFactoryTrait;
-	use crate::helpers::dummy_image_source::DummyImageSource;
 	use rstest::rstest;
 	use versatiles_core::{TileCoord, TileFormat};
 	use versatiles_image::{DynamicImage, DynamicImageTraitConvert, DynamicImageTraitOperation};
+
+	use super::*;
+	use crate::{factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource};
 
 	fn make_gradient_image(channel_count: usize) -> DynamicImage {
 		let s = 256;

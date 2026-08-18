@@ -8,6 +8,7 @@
 mod test_utilities;
 
 use std::sync::Arc;
+
 use tempfile::TempDir;
 use test_utilities::*;
 use versatiles_container::{TileSource, TilesRuntime};

@@ -1,9 +1,10 @@
 //! Mutation methods for [`TileQuadtree`].
 
-use super::{BBox, Node, TileQuadtree};
-use crate::{TileBBox, TileCoord};
 use anyhow::Result;
 use versatiles_derive::context;
+
+use super::{BBox, Node, TileQuadtree};
+use crate::{TileBBox, TileCoord};
 
 impl TileQuadtree {
 	/// Insert a single tile into the quadtree.

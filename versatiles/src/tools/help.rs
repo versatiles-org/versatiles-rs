@@ -103,8 +103,9 @@ fn print_markdown(md: &str) {
 
 #[cfg(test)]
 mod tests {
-	use crate::tests::run_command;
 	use anyhow::Result;
+
+	use crate::tests::run_command;
 
 	#[test]
 	fn test_help1() -> Result<()> {

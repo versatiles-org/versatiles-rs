@@ -6,12 +6,13 @@
 
 mod bench_common;
 
+use std::time::Instant;
+
 use bench_common::{load_tile_rgb_data, print_header, print_row};
 use image::{
 	DynamicImage, ImageBuffer, ImageEncoder,
 	codecs::png::{CompressionType, FilterType, PngEncoder},
 };
-use std::time::Instant;
 
 fn encode_png(
 	image: &DynamicImage,

@@ -1,13 +1,15 @@
-use super::{DataReaderTrait, network_reader::NetworkReader, sftp_pool, sftp_utils};
-use crate::{Blob, ByteRange};
-use anyhow::{Context, Result, bail};
-use async_trait::async_trait;
-use reqwest::Url;
 use std::{
 	path::Path,
 	sync::{Arc, atomic::AtomicU64},
 	thread,
 };
+
+use anyhow::{Context, Result, bail};
+use async_trait::async_trait;
+use reqwest::Url;
+
+use super::{DataReaderTrait, network_reader::NetworkReader, sftp_pool, sftp_utils};
+use crate::{Blob, ByteRange};
 
 /// A struct that provides reading capabilities from a remote file via SFTP.
 ///

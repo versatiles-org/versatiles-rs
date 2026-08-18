@@ -1,8 +1,7 @@
-use super::super::utils::{Url, guess_mime};
-use super::{SourceResponse, static_source::StaticSourceTrait};
+use std::{collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::File, io::Read, path::Path};
+
 use anyhow::{Result, anyhow, bail, ensure};
 use async_trait::async_trait;
-use std::{collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::File, io::Read, path::Path};
 use tar::{Archive, EntryType};
 use versatiles_core::{
 	Blob, TileCompression,
@@ -10,6 +9,12 @@ use versatiles_core::{
 	io::{DataReaderHttp, DataReaderTrait},
 };
 use versatiles_derive::context;
+
+use super::{
+	super::utils::{Url, guess_mime},
+	SourceResponse,
+	static_source::StaticSourceTrait,
+};
 
 #[derive(Debug)]
 struct FileEntry {
@@ -220,14 +225,16 @@ impl Debug for TarFile {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use std::sync::Arc;
+
 	use assert_fs::NamedTempFile;
 	use rstest::rstest;
-	use std::sync::Arc;
 	use versatiles_container::{
 		MockReader, MockReaderProfile, TileSource, TilesConverterParameters, TilesRuntime, convert_tiles_container,
 	};
 	use versatiles_core::TilePyramid;
+
+	use super::*;
 
 	pub async fn make_test_tar(compression: TileCompression) -> NamedTempFile {
 		// get dummy reader

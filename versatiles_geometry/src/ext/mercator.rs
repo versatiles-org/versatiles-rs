@@ -188,9 +188,10 @@ impl MercatorExt for Geometry<f64> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use approx::assert_relative_eq;
 	use geo_types::GeometryCollection;
+
+	use super::*;
 
 	/// Tight equality tolerance for round-trips that go through `to_radians()`
 	/// then `from_radians()`. f64 round-tripping introduces ~1e-9 noise; we

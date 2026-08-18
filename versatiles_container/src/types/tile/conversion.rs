@@ -1,6 +1,5 @@
 //! Internal conversion methods for blob/content materialization and compression.
 
-use super::Tile;
 use anyhow::{Result, ensure};
 use versatiles_core::{
 	TileCompression,
@@ -8,6 +7,7 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
+use super::Tile;
 use crate::TileContent;
 
 impl Tile {

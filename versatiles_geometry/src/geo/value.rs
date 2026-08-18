@@ -5,14 +5,15 @@
 //! primitive Rust types, lexicographic/total ordering for deterministic output,
 //! parsing from strings, hashing/equality, and conversion to the crate’s `JsonValue`.
 
-use anyhow::{Result, bail};
-use regex::Regex;
 use std::{
 	cmp::Ordering,
 	fmt::{Debug, Display},
 	hash::Hash,
 	sync::LazyLock,
 };
+
+use anyhow::{Result, bail};
+use regex::Regex;
 use versatiles_core::json::JsonValue;
 
 /// A compact, typed representation of a property value used in GeoJSON-like features.
@@ -281,8 +282,9 @@ impl GeoValue {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use rstest::rstest;
+
+	use super::*;
 
 	#[test]
 	fn test_geo_value_ord() {
@@ -455,8 +457,10 @@ mod tests {
 	fn hash_separates_variants_with_same_inner_bits() {
 		// 0u64 and 0i64 share inner bits but live in different variants —
 		// hashing must include the discriminant so they don't collide.
-		use std::collections::hash_map::DefaultHasher;
-		use std::hash::{Hash, Hasher};
+		use std::{
+			collections::hash_map::DefaultHasher,
+			hash::{Hash, Hasher},
+		};
 		let mut h_uint = DefaultHasher::new();
 		GeoValue::UInt(0).hash(&mut h_uint);
 		let mut h_int = DefaultHasher::new();

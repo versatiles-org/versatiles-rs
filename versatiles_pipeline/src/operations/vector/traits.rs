@@ -1,6 +1,7 @@
+use std::sync::Arc;
+
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream, TileType};
 use versatiles_derive::context;
@@ -94,11 +95,12 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::helpers::dummy_vector_source::DummyVectorSource;
 	use anyhow::Result;
 	use versatiles_core::{TileBBox, TilePyramid};
 	use versatiles_geometry::vector_tile::VectorTile;
+
+	use super::*;
+	use crate::helpers::dummy_vector_source::DummyVectorSource;
 
 	#[derive(Debug)]
 	struct PassthroughRunner;
@@ -149,8 +151,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_build_transform_rejects_raster_source() {
-		use crate::helpers::dummy_image_source::DummyImageSource;
 		use versatiles_core::TileFormat;
+
+		use crate::helpers::dummy_image_source::DummyImageSource;
 		let source = Box::new(DummyImageSource::from_color(&[128u8, 0, 0], 256, TileFormat::PNG, None).unwrap());
 		let result = build_transform(source, PassthroughRunner).await;
 		assert!(result.is_err());

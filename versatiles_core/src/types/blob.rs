@@ -25,12 +25,12 @@
 //! assert_eq!(blob.as_str(), "Xylofön");
 //! ```
 
-use super::ByteRange;
+use std::{fmt::Debug, ops::Range, path::Path};
+
 use anyhow::{Result, bail};
-use std::fmt::Debug;
-use std::ops::Range;
-use std::path::Path;
 use versatiles_derive::context;
+
+use super::ByteRange;
 
 /// A simple wrapper around [`Vec<u8>`] that provides additional methods for working with byte data.
 ///

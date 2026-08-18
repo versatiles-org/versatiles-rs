@@ -70,8 +70,9 @@ impl TileBBox {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use rstest::rstest;
+
+	use super::*;
 
 	fn tc(z: u8, x: u32, y: u32) -> TileCoord {
 		TileCoord::new(z, x, y).unwrap()

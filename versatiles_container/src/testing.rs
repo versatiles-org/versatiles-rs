@@ -4,10 +4,11 @@
 //! including downstream crates that pull `versatiles_container` with the `test`
 //! feature enabled.
 
-use crate::TileSource;
 use anyhow::Result;
 use versatiles_core::TileBBox;
 use versatiles_image::{DynamicImage, ImageBuffer};
+
+use crate::TileSource;
 
 /// Creates a tiny 2x2 RGB test image with known pixel values.
 ///
@@ -49,8 +50,9 @@ pub async fn assert_stream_counts_agree(source: &dyn TileSource, bbox: TileBBox)
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles_image::GenericImageView;
+
+	use super::*;
 
 	#[test]
 	fn tiny_rgb_image_has_expected_dimensions() {

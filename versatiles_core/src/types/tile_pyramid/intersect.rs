@@ -51,9 +51,10 @@ impl TilePyramid {
 
 #[cfg(test)]
 mod tests {
+	use rstest::rstest;
+
 	use super::*;
 	use crate::{GeoBBox, TileCoord};
-	use rstest::rstest;
 
 	fn bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
 		TileBBox::from_min_and_max(level, x0, y0, x1, y1).unwrap()

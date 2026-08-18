@@ -1,8 +1,9 @@
 //! Display, Debug, and PartialEq for [`TilePyramid`].
 
+use std::fmt;
+
 use super::TilePyramid;
 use crate::MAX_ZOOM_LEVEL;
-use std::fmt;
 
 /// Shared formatting helper: lists non-empty levels separated by commas.
 fn fmt_pyramid(pyramid: &TilePyramid, f: &mut fmt::Formatter<'_>) -> fmt::Result {

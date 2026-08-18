@@ -7,14 +7,16 @@
 //!
 //! Pipelines cross the boundary as JSON strings, matching `TileSource.fromPipeline`.
 
-use crate::macros::NapiResultExt;
+use std::collections::BTreeMap;
+
 use anyhow::Context;
 use napi::Result;
 use napi_derive::napi;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
 use versatiles::pipeline::vpl::{CstFile, VPLNode, VPLPipeline, parse_cst, parse_vpl_detailed};
+
+use crate::macros::NapiResultExt;
 
 /// One operation in the JSON pipeline representation the TypeScript builder produces.
 #[derive(Deserialize)]

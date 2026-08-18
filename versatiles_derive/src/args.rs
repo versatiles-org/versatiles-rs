@@ -1,8 +1,10 @@
 extern crate proc_macro;
 
 use proc_macro2::TokenStream as TokenStream2;
-use syn::Token;
-use syn::parse::{self, Parse, ParseStream};
+use syn::{
+	Token,
+	parse::{self, Parse, ParseStream},
+};
 
 #[derive(Debug)]
 pub struct Args(pub Option<Token![move]>, pub TokenStream2);
@@ -21,8 +23,9 @@ impl Parse for Args {
 
 #[cfg(test)]
 mod tests {
-	use super::Args;
 	use syn::parse_str;
+
+	use super::Args;
 
 	#[test]
 	fn test_parse_without_move() {

@@ -1,10 +1,11 @@
 //! This module defines the `GeoCollection` struct, a container for multiple geographic features (`GeoFeature`).
 //! It is typically used for representing GeoJSON FeatureCollections.
 
-use super::GeoFeature;
-use crate::geojson::parse_geojson;
 use anyhow::Result;
 use versatiles_core::json::{JsonObject, JsonValue};
+
+use super::GeoFeature;
+use crate::geojson::parse_geojson;
 
 /// Represents a collection of `GeoFeature` instances corresponding to a GeoJSON FeatureCollection.
 ///
@@ -59,8 +60,9 @@ impl GeoCollection {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use approx::assert_relative_eq;
+
+	use super::*;
 
 	#[test]
 	fn test_from_empty() {

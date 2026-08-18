@@ -1,10 +1,11 @@
-use crate::{PipelineFactory, vpl::VPLNode};
-use anyhow::Result;
-use futures::StreamExt;
-use futures::stream::FuturesUnordered;
 use std::collections::HashSet;
+
+use anyhow::Result;
+use futures::{StreamExt, stream::FuturesUnordered};
 use versatiles_container::TileSource;
 use versatiles_core::{ConcurrencyLimits, TileBBox, TileCoord, TileStream};
+
+use crate::{PipelineFactory, vpl::VPLNode};
 
 // ---------------------------------------------------------------------------
 // Bounded gathering: shared memory budget for operations that read tiles from
@@ -122,9 +123,10 @@ pub async fn union_tile_coord_streams(sources: &[&dyn TileSource], bbox: TileBBo
 
 #[cfg(test)]
 mod tests {
+	use versatiles_core::TilePyramid;
+
 	use super::*;
 	use crate::helpers::dummy_vector_source::DummyVectorSource;
-	use versatiles_core::TilePyramid;
 
 	#[tokio::test]
 	async fn test_union_empty_sources() -> Result<()> {

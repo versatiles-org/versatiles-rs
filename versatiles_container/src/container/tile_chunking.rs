@@ -13,13 +13,15 @@
 //! and retried. This continues recursively down to individual tile reads, so a
 //! flaky connection can still make progress instead of failing on large downloads.
 
-use crate::Tile;
+use std::sync::Arc;
+
 use anyhow::Result;
 use futures::stream::StreamExt;
-use std::sync::Arc;
 use versatiles_core::{
 	Blob, ByteRange, ConcurrencyLimits, TileCompression, TileCoord, TileFormat, TileStream, io::DataReader,
 };
+
+use crate::Tile;
 
 /// Default maximum size of a single coalesced chunk. Each chunk is read as one
 /// in-memory blob, so `chunk size × read-ahead` bounds peak read memory. Override
@@ -244,14 +246,16 @@ impl FromIterator<Chunk> for Chunks {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use anyhow::Result;
-	use async_trait::async_trait;
 	use std::{
 		sync::atomic::{AtomicUsize, Ordering},
 		time::Duration,
 	};
+
+	use anyhow::Result;
+	use async_trait::async_trait;
 	use versatiles_core::io::DataReaderTrait;
+
+	use super::*;
 
 	/// Shared counters observed from outside the boxed reader.
 	#[derive(Debug, Default)]

@@ -29,20 +29,22 @@
 //! }
 //! ```
 
-use super::{DataReaderTrait, network_reader::NetworkReader};
-use crate::{Blob, ByteRange};
+use std::{
+	fmt, str,
+	sync::{Arc, LazyLock, atomic::AtomicU64},
+	time::Duration,
+};
+
 use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use percent_encoding::percent_decode_str;
 use regex::{Regex, RegexBuilder};
 use reqwest::{Client, RequestBuilder, StatusCode, Url};
-use std::{
-	fmt, str,
-	sync::{Arc, LazyLock, atomic::AtomicU64},
-	time::Duration,
-};
 use tokio::{sync::Semaphore, time::sleep};
+
+use super::{DataReaderTrait, network_reader::NetworkReader};
+use crate::{Blob, ByteRange};
 
 /// Maximum number of HTTP requests allowed in flight, shared across all
 /// readers pointing at the same host.

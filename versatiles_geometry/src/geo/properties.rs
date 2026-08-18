@@ -1,13 +1,14 @@
 //! This module defines `GeoProperties`, a key–value store for feature attributes in GeoJSON-like data structures.
 //! It is used in `GeoFeature` for the `properties` field, supports insertion, removal, iteration, and JSON serialization.
 
-use versatiles_core::json::JsonObject;
-
-use super::GeoValue;
 use std::{
 	collections::{BTreeMap, btree_map},
 	fmt::Debug,
 };
+
+use versatiles_core::json::JsonObject;
+
+use super::GeoValue;
 
 /// A key–value map of properties associated with a geographic feature.
 ///

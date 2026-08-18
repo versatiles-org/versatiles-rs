@@ -1,11 +1,13 @@
-use super::{BandMapping, BandMappingItem, Cutline, GdalPool, Instance, ResampleAlg};
+use std::{path::Path, sync::Arc};
+
 use anyhow::{Result, ensure};
 use gdal::{Dataset, GeoTransform};
 use imageproc::image::DynamicImage;
-use std::{path::Path, sync::Arc};
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitConvert;
+
+use super::{BandMapping, BandMappingItem, Cutline, GdalPool, Instance, ResampleAlg};
 
 /// Reproject the source dataset into an 8-bit in-memory dataset in EPSG:3857.
 #[context("Failed to reproject GDAL dataset to target bbox ({bbox:?}) and size {width}x{height}")]
@@ -355,13 +357,14 @@ impl std::fmt::Debug for RasterSource {
 
 #[cfg(test)]
 mod tests {
-	use super::super::get_spatial_ref;
-	use super::*;
+	use std::vec;
+
 	use gdal::DriverManager;
 	use imageproc::image::ColorType;
 	use rstest::rstest;
-	use std::vec;
 	use versatiles_image::{DynamicImageTraitOperation, DynamicImageTraitTest, compare_marker_result};
+
+	use super::{super::get_spatial_ref, *};
 
 	struct DatasetFactory {
 		/// Number of source bands (as the GDAL dataset would have).

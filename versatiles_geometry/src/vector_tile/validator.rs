@@ -49,10 +49,13 @@
 //!   (field absent). A tile claiming `version = 1` may be MVT 1.x; that is
 //!   handled at the application level, not here.
 
-use super::VectorTile;
-use super::feature::{WINDING_EPSILON, parse_geom_command_stream, ring_signed_double_area};
-use super::geometry_type::GeomType;
 use geo_types::Coord;
+
+use super::{
+	VectorTile,
+	feature::{WINDING_EPSILON, parse_geom_command_stream, ring_signed_double_area},
+	geometry_type::GeomType,
+};
 
 /// A single MVT spec violation, located by layer name and optionally a feature index.
 ///
@@ -297,11 +300,13 @@ fn degeneracy_reason_for_linestring(coords: &[Coord<f64>]) -> Option<DegenerateR
 
 #[cfg(test)]
 mod tests {
+	use versatiles_core::{
+		Blob,
+		io::{ValueWriter, ValueWriterBlob},
+	};
+
 	use super::*;
-	use crate::vector_tile::VectorTileLayer;
-	use crate::vector_tile::feature::VectorTileFeature;
-	use versatiles_core::Blob;
-	use versatiles_core::io::{ValueWriter, ValueWriterBlob};
+	use crate::vector_tile::{VectorTileLayer, feature::VectorTileFeature};
 
 	/// Build a polygon-typed feature whose `geom_data` is the literal rings —
 	/// bypasses the encoder's winding normalisation and degeneracy filtering,

@@ -26,17 +26,19 @@
 //! assert_eq!(format, TileFormat::JPG);
 //! ```
 
-use super::TileType;
+use std::{
+	fmt::{Display, Formatter},
+	path::Path,
+};
+
 use TileFormat::{AVIF, BIN, GEOJSON, JPG, JSON, MVT, PNG, SVG, TOPOJSON, WEBP};
 use anyhow::{Result, bail};
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
 use enumset::EnumSetType;
-use std::{
-	fmt::{Display, Formatter},
-	path::Path,
-};
 use versatiles_derive::context;
+
+use super::TileType;
 
 /// Enum representing supported tile formats.
 ///
@@ -398,10 +400,12 @@ impl Display for TileFormat {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use std::collections::HashSet;
+
 	use enumset::EnumSet;
 	use rstest::rstest;
-	use std::collections::HashSet;
+
+	use super::*;
 
 	#[test]
 	fn test_format_conversion() {

@@ -1,5 +1,6 @@
-use anyhow::{Result, bail};
 use std::time::Instant;
+
+use anyhow::{Result, bail};
 use versatiles_container::{TilesConverterParameters, TilesRuntime, convert_tiles_container_to_str};
 use versatiles_core::{GeoBBox, TileCompression, TileFormat, TilePyramid};
 use versatiles_derive::context;
@@ -197,12 +198,13 @@ fn tile_pyramid(arguments: &Subcommand) -> Result<(Option<TilePyramid>, Option<G
 
 #[cfg(test)]
 mod tests {
-	use super::parse_tile_format;
-	use crate::tests::run_command;
 	use anyhow::Result;
 	use assert_fs::TempDir;
 	use rstest::rstest;
 	use versatiles_core::TileFormat;
+
+	use super::parse_tile_format;
+	use crate::tests::run_command;
 
 	#[rstest]
 	#[case("webp", TileFormat::WEBP, None, None)]

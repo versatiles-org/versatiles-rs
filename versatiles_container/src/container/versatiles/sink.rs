@@ -17,12 +17,6 @@
 //!
 //! Supports both local paths and `sftp://` URLs as output destinations.
 
-use super::types::{BlockBuilder, BlockIndex, FileHeader};
-use crate::{TileSink, cache::CacheValue};
-use anyhow::Result;
-use anyhow::anyhow;
-#[cfg(not(feature = "ssh2"))]
-use anyhow::bail;
 use std::{
 	collections::HashMap,
 	env,
@@ -31,11 +25,18 @@ use std::{
 	path::PathBuf,
 	sync::Mutex,
 };
+
+#[cfg(not(feature = "ssh2"))]
+use anyhow::bail;
+use anyhow::{Result, anyhow};
 use versatiles_core::{
 	Blob, GeoBBox, TileCompression, TileCoord, TileFormat, TileJSON,
 	compression::compress,
 	io::{DataWriterFile, DataWriterTrait},
 };
+
+use super::types::{BlockBuilder, BlockIndex, FileHeader};
+use crate::{TileSink, cache::CacheValue};
 
 /// Block key: (level, block_x, block_y) where block_x = x/256, block_y = y/256.
 type BlockKey = (u8, u32, u32);

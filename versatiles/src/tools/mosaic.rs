@@ -1,8 +1,9 @@
+use anyhow::Result;
+use versatiles_container::TilesRuntime;
+
 use super::mosaic_tools::assemble;
 #[cfg(feature = "gdal")]
 use super::mosaic_tools::tile;
-use anyhow::Result;
-use versatiles_container::TilesRuntime;
 
 #[derive(clap::Args, Debug)]
 #[command(

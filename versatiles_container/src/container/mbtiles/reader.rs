@@ -54,12 +54,14 @@
 //! - Returns errors if the database is unreadable, the `format` is missing/unknown,
 //!   or queries fail.
 
-use crate::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal};
+use std::{path::Path, sync::Arc};
+
 use anyhow::{Result, anyhow, bail, ensure};
 use async_trait::async_trait;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use std::{path::Path, sync::Arc};
+#[cfg(feature = "cli")]
+use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
 	TileCompression::{Gzip, Uncompressed},
 	TileFormat::{JPG, MVT, PNG, WEBP},
@@ -70,8 +72,7 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
-#[cfg(feature = "cli")]
-use versatiles_core::utils::PrettyPrint;
+use crate::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal};
 
 /// Reader for `MBTiles` (`SQLite`) containers.
 ///
@@ -511,9 +512,10 @@ struct RecordMetadata {
 
 #[cfg(test)]
 pub mod tests {
+	use std::{env, path::PathBuf, sync::LazyLock};
+
 	use super::*;
 	use crate::MockWriter;
-	use std::{env, path::PathBuf, sync::LazyLock};
 
 	static PATH: LazyLock<PathBuf> = LazyLock::new(|| env::current_dir().unwrap().join("../testdata/berlin.mbtiles"));
 

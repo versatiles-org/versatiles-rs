@@ -22,10 +22,11 @@
 //! while ignoring saturated or clipped pixels. Only the **offset projection** along the line’s direction is
 //! identifiable; perpendicular shifts cannot be reconstructed from pixel intensities alone.
 
-use super::convert::DynamicImageTraitConvert;
 use anyhow::{Result, bail, ensure};
 use image::{DynamicImage, GenericImageView};
 use versatiles_derive::context;
+
+use super::convert::DynamicImageTraitConvert;
 
 /// Describes a synthetic directional gradient marker for one image channel.
 /// Used by [`DynamicImageTraitTest::new_marker`] to generate test images.
@@ -333,9 +334,10 @@ where
 /// The test compares selected pixel values (0, 128, 255) to symbolic representations for clarity.
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use rstest::rstest;
 	use versatiles_derive::context;
+
+	use super::*;
 
 	/// Helper: run `MarkerResult::compare` expecting failure and return the error message string.
 	fn compare_err_msg(p: MarkerParameters, r: MarkerResult, factor: f64) -> String {

@@ -10,14 +10,18 @@ mod report;
 mod schema;
 mod validate;
 
-use crate::tools::tile_sampling::{build_scan_plan, parse_sample};
+use std::sync::{
+	Arc,
+	atomic::{AtomicU64, Ordering},
+};
+
 use anyhow::{Context, Result, bail};
 use report::{Registry, Severity};
 use schema::{Schema, SchemaSelector};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use versatiles_container::TilesRuntime;
 use versatiles_core::{TileBBox, TileType};
+
+use crate::tools::tile_sampling::{build_scan_plan, parse_sample};
 
 /// How to present the findings.
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
@@ -188,8 +192,9 @@ fn parse_zoom(spec: Option<&str>, default_min: u8, default_max: u8) -> Result<(u
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles::runtime::create_test_runtime;
+
+	use super::*;
 
 	fn args(input: &str) -> ValidateSchema {
 		ValidateSchema {

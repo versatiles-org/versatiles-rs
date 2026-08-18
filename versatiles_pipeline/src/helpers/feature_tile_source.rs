@@ -14,19 +14,20 @@
 //!   constructs one of these from its [`FeatureImport`] + chosen settings
 //!   and returns it from the `ReadTileSource::build` factory.
 
-use crate::helpers::{
-	tile_error_monitor::{TileErrorMonitor, TileErrorStage},
-	tile_size_monitor::{MaxTileBytes, TileBreakdown, TileSizeMonitor, resolve_hard_cap},
-};
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
-use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{
 	TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream, VectorLayer, VectorLayers,
 };
-use versatiles_geometry::feature_import::FeatureImport;
-use versatiles_geometry::geo::GeoFeature;
+use versatiles_geometry::{feature_import::FeatureImport, geo::GeoFeature};
+
+use crate::helpers::{
+	tile_error_monitor::{TileErrorMonitor, TileErrorStage},
+	tile_size_monitor::{MaxTileBytes, TileBreakdown, TileSizeMonitor, resolve_hard_cap},
+};
 
 /// Apply `properties_include` (whitelist) or `properties_exclude` (blacklist)
 /// to every feature. Either argument may be `None` — the caller has already
@@ -238,11 +239,14 @@ fn populate_vector_layers(tilejson: &mut TileJSON, layer_name: &str, import: &Fe
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use geo_types::{Geometry, Point};
 	use versatiles_core::TileBBox;
-	use versatiles_geometry::feature_import::{FeatureImportArgs, project_and_flatten};
-	use versatiles_geometry::geo::GeoValue;
+	use versatiles_geometry::{
+		feature_import::{FeatureImportArgs, project_and_flatten},
+		geo::GeoValue,
+	};
+
+	use super::*;
 
 	// ── apply_property_filters ───────────────────────────────────────────
 

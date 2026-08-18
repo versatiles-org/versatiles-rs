@@ -1,10 +1,12 @@
 #![allow(clippy::cast_possible_truncation)]
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use futures::TryStreamExt;
+use tokio::sync::Mutex;
+
 use super::*;
 use crate::TileBBox;
-use futures::TryStreamExt;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use tokio::sync::Mutex;
 
 fn tc(level: u8, x: u32, y: u32) -> TileCoord {
 	TileCoord::new(level, x, y).unwrap()

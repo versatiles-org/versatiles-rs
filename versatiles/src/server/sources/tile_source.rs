@@ -1,9 +1,11 @@
-use super::{super::utils::Url, SourceResponse};
-use anyhow::Result;
 use std::{fmt::Debug, sync::Arc};
+
+use anyhow::Result;
 use versatiles_container::TileSource;
 use versatiles_core::{Blob, TileCompression, TileCoord, compression::TargetCompression};
 use versatiles_derive::context;
+
+use super::{super::utils::Url, SourceResponse};
 
 // TileSource struct definition
 #[derive(Clone)]
@@ -121,12 +123,13 @@ impl Debug for ServerTileSource {
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 mod tests {
-	use super::*;
-	use crate::runtime::create_test_runtime;
 	use anyhow::Result;
 	use rstest::rstest;
 	use versatiles_container::{MockReader, MockReaderProfile};
 	use versatiles_core::TileJSON;
+
+	use super::*;
+	use crate::runtime::create_test_runtime;
 
 	// Test the constructor function for TileSource
 	#[tokio::test]

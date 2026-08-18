@@ -1,11 +1,13 @@
-use super::encoding::{resolve_encoding, to_tile_schema};
-use crate::{PipelineFactory, helpers::overview::OverviewCore, vpl::VPLNode};
+use std::{fmt::Debug, sync::Arc};
+
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use imageproc::image::{DynamicImage, Rgb, RgbImage, Rgba, RgbaImage};
-use std::{fmt::Debug, sync::Arc};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
+
+use super::encoding::{resolve_encoding, to_tile_schema};
+use crate::{PipelineFactory, helpers::overview::OverviewCore, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Generate lower-zoom DEM overview tiles by averaging 24-bit elevation values.
@@ -157,11 +159,11 @@ crate::operations::macros::define_transform_factory!("dem_overview", Args, Opera
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
-	use super::*;
-	use crate::factory::OperationFactoryTrait;
-	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::{GenericImage, Pixel};
 	use versatiles_core::{GeoBBox, TileFormat, TilePyramid, TileSchema};
+
+	use super::*;
+	use crate::{factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource};
 
 	fn raw_to_rgb(v: u32) -> Rgb<u8> {
 		Rgb([((v >> 16) & 0xFF) as u8, ((v >> 8) & 0xFF) as u8, (v & 0xFF) as u8])

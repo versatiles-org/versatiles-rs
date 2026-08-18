@@ -1,10 +1,12 @@
-use super::Instance;
+use std::{ops::Deref, sync::Arc};
+
 use anyhow::{Result, ensure};
 use deadpool::managed::{Manager, Object, Pool, RecycleResult};
 use gdal::{Dataset, config::set_config_option};
-use std::{ops::Deref, sync::Arc};
 use versatiles_core::{GeoBBox, WORLD_SIZE, utils::float_to_int};
 use versatiles_derive::context;
+
+use super::Instance;
 
 /// Manager for deadpool that creates and recycles GDAL dataset instances
 struct GdalManager {

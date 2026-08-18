@@ -1,7 +1,7 @@
+use std::{hint::black_box, sync::Arc};
+
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use futures::stream::{self, StreamExt};
-use std::hint::black_box;
-use std::sync::Arc;
 use tokio::runtime::Runtime;
 use versatiles_core::{ConcurrencyLimits, TileCoord, TileStream};
 
@@ -134,8 +134,9 @@ fn bench_stream_buffering(c: &mut Criterion) {
 
 // Benchmark: Concurrent hash map lookups (simulating DashMap)
 fn bench_concurrent_lookups(c: &mut Criterion) {
-	use dashmap::DashMap;
 	use std::collections::HashMap;
+
+	use dashmap::DashMap;
 	use tokio::sync::RwLock;
 
 	let rt = Runtime::new().unwrap();
@@ -286,8 +287,9 @@ fn bench_arcswap_vs_rwlock(c: &mut Criterion) {
 
 // Benchmark: parking_lot::Mutex vs std::sync::Mutex
 fn bench_parking_lot_mutex(c: &mut Criterion) {
-	use parking_lot::Mutex as ParkingMutex;
 	use std::sync::Mutex as StdMutex;
+
+	use parking_lot::Mutex as ParkingMutex;
 
 	let mut group = c.benchmark_group("mutex_comparison");
 

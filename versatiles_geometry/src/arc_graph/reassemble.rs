@@ -4,9 +4,10 @@
 //! the corresponding [`Arc`] (in the right direction), and concatenate
 //! coords skipping the duplicated junction vertex between consecutive arcs.
 
+use geo_types::{Coord, Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon};
+
 use super::{Arc, ArcRef, FeatureArcs, LineStringArcs, PolygonArcs};
 use crate::geo::GeoFeature;
-use geo_types::{Coord, Geometry, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon};
 
 /// Reassemble all features from simplified arcs + per-feature ref lists.
 ///
@@ -89,10 +90,10 @@ fn concat_arc_refs(arcs: &[Arc], refs: &[ArcRef]) -> Vec<Coord<f64>> {
 
 #[cfg(test)]
 mod tests {
-	use super::super::build;
-	use super::*;
-	use crate::geo::GeoFeature;
 	use geo_types::{Geometry, LineString, Polygon};
+
+	use super::{super::build, *};
+	use crate::geo::GeoFeature;
 
 	fn poly_feat(rings: &[Vec<[f64; 2]>]) -> GeoFeature {
 		let mut iter = rings.iter().map(|r| LineString::from(r.clone()));

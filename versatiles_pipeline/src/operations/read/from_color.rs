@@ -12,13 +12,15 @@
 //! from_color  # defaults: color=000000 size=512 format=png
 //! ```
 
-use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
+use std::sync::Arc;
+
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use std::sync::Arc;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_image::{DynamicImageTraitConvert, color::parse_hex_color};
+
+use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Generates solid-color tiles of the specified size and format.
@@ -143,8 +145,9 @@ crate::operations::macros::define_read_factory!("from_color", Args, Operation);
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles_core::{TileCompression::Uncompressed, TileCoord};
+
+	use super::*;
 
 	#[test]
 	fn test_operation_default_parameters() {

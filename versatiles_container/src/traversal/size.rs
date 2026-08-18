@@ -139,8 +139,9 @@ fn size_to_bits(size: u32) -> Result<u8> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use anyhow::Result;
+
+	use super::*;
 
 	fn extract_error_lines<T: std::fmt::Debug>(result: anyhow::Result<T>) -> Vec<String> {
 		result

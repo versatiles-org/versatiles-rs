@@ -12,26 +12,34 @@
 //! timeouts, panic catching), listening on a socket, graceful shutdown, and
 //! a tiny `/status` probe for liveness checks.
 
-use super::{cors, reload::ReloadHandle, routes, sources};
-use crate::config::{Config, StaticSourceConfig, TileSourceConfig};
+use std::{
+	path::Path,
+	sync::{Arc, Mutex},
+};
+
 use anyhow::{Result, bail};
 use arc_swap::ArcSwap;
-use axum::error_handling::HandleErrorLayer;
-use axum::http::{StatusCode, header::HeaderName, header::HeaderValue};
-use axum::{BoxError, response::IntoResponse};
-use axum::{Router, routing::get};
+use axum::{
+	BoxError, Router,
+	error_handling::HandleErrorLayer,
+	http::{
+		StatusCode,
+		header::{HeaderName, HeaderValue},
+	},
+	response::IntoResponse,
+	routing::get,
+};
 use dashmap::DashMap;
-use std::path::Path;
-use std::sync::Arc;
-use std::sync::Mutex;
 use tokio::{net::TcpListener, sync::oneshot};
 use tower::{
 	ServiceBuilder, buffer::BufferLayer, limit::ConcurrencyLimitLayer, load_shed::LoadShedLayer, timeout::TimeoutLayer,
 };
-use tower_http::catch_panic::CatchPanicLayer;
-use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::{catch_panic::CatchPanicLayer, set_header::SetResponseHeaderLayer};
 use versatiles_container::{DataLocation, TileSource, TilesRuntime};
 use versatiles_derive::context;
+
+use super::{cors, reload::ReloadHandle, routes, sources};
+use crate::config::{Config, StaticSourceConfig, TileSourceConfig};
 
 /// Thin orchestration layer for the VersaTiles HTTP server.
 ///
@@ -453,14 +461,16 @@ impl TileServer {
 /// These spin up a real TCP listener on localhost ports (see port numbers in cases).
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use std::sync::Arc;
+
 	use axum::http::{HeaderMap, HeaderValue, header};
 	use regex::Regex;
 	use reqwest::Client;
 	use rstest::rstest;
-	use std::sync::Arc;
 	use versatiles_container::{MockReader, MockReaderProfile as MRP, TileSourceMetadata, Traversal};
 	use versatiles_core::{TileCompression as TC, TileFormat as TF, TilePyramid};
+
+	use super::*;
 
 	const IP: &str = "127.0.0.1";
 

@@ -1,7 +1,8 @@
-use crate::{napi_result, types::z_to_u8};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use versatiles_core::TileCoord as RustTileCoord;
+
+use crate::{napi_result, types::z_to_u8};
 
 /// Tile coordinate in the Web Mercator tile grid
 ///
@@ -188,9 +189,10 @@ impl TileCoord {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use approx::assert_relative_eq;
 	use rstest::rstest;
+
+	use super::*;
 
 	#[rstest]
 	#[case(5, 10, 15)]

@@ -33,12 +33,14 @@
 
 #![allow(dead_code)]
 
-use super::{DataReaderTrait, DataWriterBlob};
-use crate::{Blob, ByteRange};
+use std::io::{Cursor, Read};
+
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use std::io::{Cursor, Read};
 use versatiles_derive::context;
+
+use super::{DataReaderTrait, DataWriterBlob};
+use crate::{Blob, ByteRange};
 
 /// A struct that provides reading capabilities from an in-memory blob of data.
 #[derive(Debug)]

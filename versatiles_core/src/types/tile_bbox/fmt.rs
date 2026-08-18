@@ -1,5 +1,6 @@
-use crate::TileBBox;
 use std::fmt;
+
+use crate::TileBBox;
 
 /// Implements `Debug` for [`TileBBox`].
 ///
@@ -47,9 +48,10 @@ impl fmt::Display for TileBBox {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use anyhow::Result;
 	use rstest::rstest;
+
+	use super::*;
 
 	#[rstest]
 	// z=0 full world (1x1)

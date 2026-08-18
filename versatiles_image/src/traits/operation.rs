@@ -13,12 +13,13 @@
 //! Most operations use efficient backends (`fast_image_resize` where applicable) and avoid
 //! unnecessary allocations.
 
-use super::info::DynamicImageTraitInfo;
 use anyhow::{Result, bail};
 use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 use image::{DynamicImage, Rgb, imageops::overlay};
 use imageproc::map::map_pixels;
 use versatiles_derive::context;
+
+use super::info::DynamicImageTraitInfo;
 
 /// High-level convenience operations for modifying and transforming `DynamicImage`s.
 pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
@@ -313,11 +314,11 @@ where
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]
 mod tests {
+	use image::{ExtendedColorType as ECT, GenericImageView, Pixel, Rgba};
+	use rstest::rstest;
+
 	use super::*;
 	use crate::traits::*;
-	use image::ExtendedColorType as ECT;
-	use image::{GenericImageView, Pixel, Rgba};
-	use rstest::rstest;
 
 	#[rstest]
 	#[case::rgba(DynamicImage::new_test_rgba(), ECT::Rgb8, false)]

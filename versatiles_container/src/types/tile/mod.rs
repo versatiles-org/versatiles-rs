@@ -26,6 +26,7 @@ mod transparency;
 mod tests;
 
 use std::fmt::Debug;
+
 use versatiles_core::{Blob, TileCompression, TileFormat};
 
 use crate::TileContent;

@@ -7,23 +7,23 @@
 //! Note: CORS headers are handled exclusively by the `CorsLayer`. Don't set
 //! `Access-Control-Allow-Origin` here; that avoids header drift.
 
-use std::fmt::Write;
+use std::{fmt::Write, sync::Arc};
 
-use super::{
-	encoding::get_encoding,
-	sources::{ServerTileSource, SourceResponse, StaticSource},
-	utils::Url,
-};
 use axum::{
 	body::Body,
 	extract::State,
 	http::{HeaderMap, Uri, header},
 	response::Response,
 };
-use std::sync::Arc;
 use versatiles_core::{
 	Blob, TileCompression,
 	compression::{TargetCompression, optimize_compression},
+};
+
+use super::{
+	encoding::get_encoding,
+	sources::{ServerTileSource, SourceResponse, StaticSource},
+	utils::Url,
 };
 
 /// State for static file requests across multiple `StaticSource`s.
@@ -207,8 +207,9 @@ pub fn ok_json(message: &str) -> Response<Body> {
 // --- tests -------------------------------------------------------------------
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use axum::http::header;
+
+	use super::*;
 
 	#[test]
 	fn ok_json_sets_expected_headers() {

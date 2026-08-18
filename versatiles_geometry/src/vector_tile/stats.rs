@@ -14,8 +14,9 @@
 //! categories plus [`LayerStats::other_bytes`] (framing/geom-type/name residual)
 //! sum to it.
 
-use super::{GeoValuePBF, VectorTile};
 use anyhow::Result;
+
+use super::{GeoValuePBF, VectorTile};
 
 /// Accumulated byte breakdown for one layer. Used both per-tile (one decoded
 /// layer) and aggregated (summed across many tiles via [`LayerStats::add`]).
@@ -121,13 +122,13 @@ pub fn layer_stats(vt: &VectorTile) -> Result<Vec<LayerStats>> {
 
 #[cfg(test)]
 mod tests {
+	use geo_types::{Geometry, LineString, Point};
+
 	use super::*;
 	use crate::{
 		geo::{GeoFeature, GeoProperties, GeoValue},
 		vector_tile::{VectorTile, VectorTileLayer},
 	};
-
-	use geo_types::{Geometry, LineString, Point};
 
 	#[test]
 	fn varint_len_matches_leb128_boundaries() {

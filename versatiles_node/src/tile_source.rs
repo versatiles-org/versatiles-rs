@@ -1,3 +1,12 @@
+use std::{path::PathBuf, sync::Arc};
+
+use anyhow::Context;
+use napi::{bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
+use napi_derive::napi;
+use versatiles::pipeline::PipelineReader;
+use versatiles_container::{SourceType as RustSourceType, TileSource as RustTileSource};
+use versatiles_core::TileCoord as RustTileCoord;
+
 /// Tile container reader
 ///
 /// This module provides the [`TileSource`] class for reading tiles from
@@ -19,13 +28,6 @@ use crate::{
 	types::{ConvertOptions, SourceMetadata, TileJSON, z_to_u8},
 	vpl::{PipelineStep, steps_to_pipeline},
 };
-use anyhow::Context;
-use napi::{bindgen_prelude::*, threadsafe_function::ThreadsafeFunction};
-use napi_derive::napi;
-use std::{path::PathBuf, sync::Arc};
-use versatiles::pipeline::PipelineReader;
-use versatiles_container::{SourceType as RustSourceType, TileSource as RustTileSource};
-use versatiles_core::TileCoord as RustTileCoord;
 
 /// Container reader for accessing tile data from various formats
 ///
@@ -561,8 +563,9 @@ impl From<Arc<RustSourceType>> for SourceType {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use approx::assert_relative_eq;
+
+	use super::*;
 
 	#[tokio::test]
 	async fn test_open_valid_mbtiles() {

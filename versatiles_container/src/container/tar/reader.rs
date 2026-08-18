@@ -31,13 +31,10 @@
 //! Returns errors when the tar cannot be opened or read, when no tiles are found,
 //! or when mixed formats/compressions are detected.
 
-use crate::{
-	ProgressHandle, SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime,
-	Traversal,
-};
+use std::{collections::HashMap, fmt::Debug, io::Read, path::Path, sync::Arc};
+
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
-use std::{collections::HashMap, fmt::Debug, io::Read, path::Path, sync::Arc};
 use tar::{Archive, EntryType};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
@@ -47,6 +44,11 @@ use versatiles_core::{
 	io::{DataReaderFile, DataReaderTrait},
 };
 use versatiles_derive::context;
+
+use crate::{
+	ProgressHandle, SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime,
+	Traversal,
+};
 
 /// Reader for tiles stored inside a tar archive.
 ///
@@ -377,12 +379,12 @@ impl Debug for TarTilesReader {
 
 #[cfg(test)]
 pub mod tests {
-	use super::*;
-	use crate::{MOCK_BYTES_PBF, MockWriter, make_test_file};
 	use versatiles_core::assert_wildcard;
-
 	#[cfg(feature = "cli")]
 	use versatiles_core::utils::PrettyPrint;
+
+	use super::*;
+	use crate::{MOCK_BYTES_PBF, MockWriter, make_test_file};
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {

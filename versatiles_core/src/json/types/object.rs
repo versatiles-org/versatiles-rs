@@ -1,11 +1,13 @@
 //! JSON object type and utilities for serializing, deserializing, and converting JSON to Rust types.
-use crate::json::{
-	JsonArray, JsonValue, escape_json_string, stringify, stringify_pretty_multi_line, stringify_pretty_single_line,
-};
-use anyhow::Result;
 use std::{
 	collections::BTreeMap,
 	fmt::{Debug, Display},
+};
+
+use anyhow::Result;
+
+use crate::json::{
+	JsonArray, JsonValue, escape_json_string, stringify, stringify_pretty_multi_line, stringify_pretty_single_line,
 };
 
 /// A JSON object backed by a `BTreeMap<String, JsonValue>`.

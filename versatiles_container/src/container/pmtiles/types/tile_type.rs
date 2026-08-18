@@ -54,8 +54,9 @@ impl PMTilesType {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use TileFormat::*;
+
+	use super::*;
 
 	#[test]
 	fn test_from_u8() {

@@ -1,11 +1,12 @@
-use super::{PMTilesCompression, PMTilesType};
-use crate::TileSourceMetadata;
 use anyhow::{Result, ensure};
 use versatiles_core::{
 	Blob, ByteRange, TileJSON, TilePyramid,
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 	utils::float_to_int,
 };
+
+use super::{PMTilesCompression, PMTilesType};
+use crate::TileSourceMetadata;
 
 #[derive(Debug, PartialEq)]
 pub struct HeaderV3 {

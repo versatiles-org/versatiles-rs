@@ -1,9 +1,10 @@
+use std::path::Path;
+
 use anyhow::{Context, Result};
 use gdal::{
 	spatial_ref::SpatialRef,
 	vector::{Geometry, LayerAccess},
 };
-use std::path::Path;
 use versatiles_core::GeoBBox;
 
 use super::get_spatial_ref;
@@ -73,8 +74,9 @@ impl Cutline {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use assert_fs::NamedTempFile;
+
+	use super::*;
 
 	fn write_geojson(content: &str) -> NamedTempFile {
 		let f = NamedTempFile::new("cutline.geojson").unwrap();

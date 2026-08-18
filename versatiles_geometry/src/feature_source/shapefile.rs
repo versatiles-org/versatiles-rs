@@ -14,17 +14,21 @@
 //! Projection: only WGS84 input is supported. If a `.prj` file is present
 //! and is not WGS84, [`load`](FeatureSource::load) bails.
 
-use super::{FeatureSource, ProgressCallback, ProgressReader};
-use crate::geo::{GeoFeature, GeoProperties, GeoValue};
-use anyhow::{Context, Result, anyhow, bail};
-use futures::stream::{self, BoxStream, StreamExt};
-use geo_types::Geometry;
-use shapefile::Shape;
-use shapefile::dbase::{self, FieldValue};
 use std::{
 	fs,
 	path::{Path, PathBuf},
 };
+
+use anyhow::{Context, Result, anyhow, bail};
+use futures::stream::{self, BoxStream, StreamExt};
+use geo_types::Geometry;
+use shapefile::{
+	Shape,
+	dbase::{self, FieldValue},
+};
+
+use super::{FeatureSource, ProgressCallback, ProgressReader};
+use crate::geo::{GeoFeature, GeoProperties, GeoValue};
 
 /// Reads features from an Esri Shapefile (`.shp` + `.dbf`).
 #[derive(Clone)]
@@ -238,9 +242,10 @@ fn is_wgs84_prj(prj: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+	use futures::StreamExt;
+
 	use super::*;
 	use crate::ext::type_name;
-	use futures::StreamExt;
 
 	const FIXTURE: &str = "../testdata/admin.shp";
 
@@ -313,8 +318,11 @@ mod tests {
 	#[test]
 	#[ignore = "regenerates a committed binary fixture; run only when the fixture intentionally changes"]
 	fn regenerate_admin_fixture() -> Result<()> {
-		use shapefile::dbase::{FieldName, TableWriterBuilder};
-		use shapefile::{Polygon, PolygonRing, Writer, record::Point};
+		use shapefile::{
+			Polygon, PolygonRing, Writer,
+			dbase::{FieldName, TableWriterBuilder},
+			record::Point,
+		};
 
 		let shp_path = std::path::PathBuf::from(FIXTURE);
 		let dbf_path = shp_path.with_extension("dbf");
@@ -358,8 +366,11 @@ mod tests {
 	/// Write a minimal shapefile + DBF whose only Character field contains a
 	/// stray 0xFF byte. Returns the path to the `.shp`.
 	fn write_lossy_fixture(shp_path: &Path) -> Result<()> {
-		use shapefile::dbase::{FieldName, TableWriterBuilder};
-		use shapefile::{Polygon, PolygonRing, Writer, record::Point};
+		use shapefile::{
+			Polygon, PolygonRing, Writer,
+			dbase::{FieldName, TableWriterBuilder},
+			record::Point,
+		};
 
 		let dbf_path = shp_path.with_extension("dbf");
 		let table_writer = TableWriterBuilder::new()

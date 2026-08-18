@@ -1,16 +1,15 @@
 //! Unit tests for Tile struct.
 
-use super::*;
-use crate::testing::tiny_rgb_image;
-use crate::{CacheValue, TileContent};
+use std::io::Cursor;
+
 use anyhow::Result;
 use rstest::rstest;
-use std::io::Cursor;
-use versatiles_core::TileCompression::*;
-use versatiles_core::TileFormat::*;
-use versatiles_core::{Blob, TileCompression, TileFormat};
+use versatiles_core::{Blob, TileCompression, TileCompression::*, TileFormat, TileFormat::*};
 use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::{GenericImage, GenericImageView};
+
+use super::*;
+use crate::{CacheValue, TileContent, testing::tiny_rgb_image};
 
 #[rstest]
 #[case(Uncompressed, Uncompressed)]

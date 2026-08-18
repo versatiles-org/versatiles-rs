@@ -1,15 +1,20 @@
-use super::sftp_utils::{self, SftpKeepalive, SharedSession};
-use super::{DataWriterTrait, network_writer::NetworkWriter};
-use crate::{Blob, ByteRange};
-use anyhow::{Context, Result};
-use reqwest::Url;
-use ssh2::{OpenFlags, OpenType};
 use std::{
 	io::{Seek, SeekFrom, Write},
 	path::{Path, PathBuf},
 	sync::{Arc, Mutex},
 	time::{Duration, Instant},
 };
+
+use anyhow::{Context, Result};
+use reqwest::Url;
+use ssh2::{OpenFlags, OpenType};
+
+use super::{
+	DataWriterTrait,
+	network_writer::NetworkWriter,
+	sftp_utils::{self, SftpKeepalive, SharedSession},
+};
+use crate::{Blob, ByteRange};
 
 /// Size of the in-memory append buffer. The `.versatiles`/`pmtiles` writers
 /// append once per tile (often only a few KB); over SFTP each unbuffered write

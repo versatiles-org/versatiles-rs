@@ -33,11 +33,12 @@
 //! that does not parse back. Likewise an empty [`VPLPipeline`] prints as the empty string,
 //! which is not a valid pipeline — the grammar requires at least one node.
 
-use super::{VPLNode, VPLPipeline};
 use std::{
 	borrow::Cow,
 	fmt::{self, Display, Write},
 };
+
+use super::{VPLNode, VPLPipeline};
 
 /// Returns `true` if `value` can be written without quotes.
 ///
@@ -183,9 +184,10 @@ impl Display for VPLPipeline {
 
 #[cfg(test)]
 mod tests {
+	use rstest::rstest;
+
 	use super::*;
 	use crate::vpl::parse_vpl;
-	use rstest::rstest;
 
 	#[rstest]
 	// bare, where the grammar allows it

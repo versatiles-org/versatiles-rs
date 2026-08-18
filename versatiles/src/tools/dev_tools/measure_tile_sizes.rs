@@ -1,5 +1,6 @@
-use anyhow::{Result, ensure};
 use std::path::PathBuf;
+
+use anyhow::{Result, ensure};
 use versatiles_container::TilesRuntime;
 use versatiles_core::{TileBBox, TileFormat};
 use versatiles_image::{DynamicImage, DynamicImageTraitConvert, encode};
@@ -96,11 +97,12 @@ pub async fn run(args: &MeasureTileSizes, runtime: &TilesRuntime) -> Result<()> 
 
 #[cfg(test)]
 mod tests {
-	use crate::tests::run_command;
 	use anyhow::Result;
 	use assert_fs::TempDir;
 	use versatiles_core::{Blob, TileFormat};
 	use versatiles_image::{DynamicImageTraitOperation, GenericImageView};
+
+	use crate::tests::run_command;
 
 	#[test]
 	fn test_measure_tile_sizes() -> Result<()> {

@@ -1,7 +1,9 @@
 //! JSON array type and utilities for serializing, deserializing, and converting to Rust types.
-use crate::json::{JsonValue, stringify, stringify_pretty_multi_line, stringify_pretty_single_line};
-use anyhow::{Result, anyhow};
 use std::fmt::Debug;
+
+use anyhow::{Result, anyhow};
+
+use crate::json::{JsonValue, stringify, stringify_pretty_multi_line, stringify_pretty_single_line};
 
 #[derive(Clone, Default, PartialEq)]
 /// A JSON array, backed by a `Vec<JsonValue>`.
@@ -138,8 +140,9 @@ where
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use approx::assert_relative_eq;
+
+	use super::*;
 
 	#[test]
 	fn test_stringify() {

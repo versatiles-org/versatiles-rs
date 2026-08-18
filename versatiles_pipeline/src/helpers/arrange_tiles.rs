@@ -53,8 +53,9 @@ pub fn arrange_tiles<T: ToString>(tiles: Vec<(TileCoord, Tile)>, cb: impl Fn(Til
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles_core::{Blob, TileCompression::Uncompressed, TileFormat::BIN};
+
+	use super::*;
 
 	#[test]
 	fn test_arrange_tiles() {

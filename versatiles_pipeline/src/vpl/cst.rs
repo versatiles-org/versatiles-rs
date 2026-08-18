@@ -25,13 +25,15 @@
 //! inserted that is not already in the file. [`CstToken::span`] keeps the original byte range
 //! where there was one, and is `None` for anything built rather than parsed.
 
-use super::{VPLNode, VPLPipeline, serializer::quote};
-use serde::{Deserialize, Serialize};
 use std::{
 	collections::BTreeMap,
 	fmt::{self, Display},
 	ops::Range,
 };
+
+use serde::{Deserialize, Serialize};
+
+use super::{VPLNode, VPLPipeline, serializer::quote};
 
 /// A single piece of source text, together with the trivia that preceded it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -677,9 +679,10 @@ fn unwrap_quotes(text: &str, quote: char) -> &str {
 
 #[cfg(test)]
 mod tests {
+	use rstest::rstest;
+
 	use super::*;
 	use crate::vpl::parse_vpl;
-	use rstest::rstest;
 
 	fn pipe() -> CstToken {
 		CstToken::with_leading(" ", "| ")

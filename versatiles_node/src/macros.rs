@@ -69,9 +69,10 @@ macro_rules! napi_result {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use anyhow::{Context, anyhow};
 	use rstest::rstest;
+
+	use super::*;
 
 	#[test]
 	fn test_anyhow_to_napi_conversion() {

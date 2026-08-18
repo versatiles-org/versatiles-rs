@@ -1,6 +1,3 @@
-use anyhow::{Context, Result, bail};
-use reqwest::Url;
-use ssh2::Session;
 use std::{
 	net::{TcpStream, ToSocketAddrs},
 	path::{Path, PathBuf},
@@ -11,6 +8,10 @@ use std::{
 	thread::JoinHandle,
 	time::Duration,
 };
+
+use anyhow::{Context, Result, bail};
+use reqwest::Url;
+use ssh2::Session;
 
 /// A shared SSH session that can be swapped on reconnect — the unit the keepalive
 /// pings. `ssh2::Session` is `Clone` and internally `Arc<Mutex<_>>`-guarded, so the
@@ -245,9 +246,9 @@ fn try_agent_auth(session: &Session, username: &str) -> Result<()> {
 
 /// Try authenticating with identity files from `~/.ssh/config`.
 fn try_config_key_auth(session: &Session, username: &str, host: &str) -> Result<()> {
+	use std::{fs::File, io::BufReader};
+
 	use ssh2_config::{ParseRule, SshConfig};
-	use std::fs::File;
-	use std::io::BufReader;
 
 	let home = dirs_home()?;
 	let config_path = home.join(".ssh/config");

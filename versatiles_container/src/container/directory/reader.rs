@@ -38,12 +38,6 @@
 //! ## Errors
 //! Errors are returned if the directory is not absolute, does not exist, is not a directory, contains no tiles, or if tiles have inconsistent formats or compressions.
 
-#[cfg(feature = "cli")]
-use crate::TilesRuntime;
-use crate::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use anyhow::{Result, bail, ensure};
-use async_trait::async_trait;
-use itertools::Itertools;
 use std::{
 	collections::HashMap,
 	fmt::Debug,
@@ -51,12 +45,20 @@ use std::{
 	path::{Path, PathBuf},
 	sync::Arc,
 };
+
+use anyhow::{Result, bail, ensure};
+use async_trait::async_trait;
+use itertools::Itertools;
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
 	Blob, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream, compression::decompress,
 };
 use versatiles_derive::context;
+
+#[cfg(feature = "cli")]
+use crate::TilesRuntime;
+use crate::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 
 /// A reader for tiles stored in a directory structure.
 ///
@@ -322,13 +324,15 @@ impl Debug for DirectoryReader {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use std::fs::{self};
+
 	use assert_fs::{
 		TempDir,
 		fixture::{FileWriteStr, PathChild},
 	};
-	use std::fs::{self};
 	use versatiles_core::{assert_wildcard, compression::compress};
+
+	use super::*;
 
 	#[tokio::test]
 	async fn tile_reader_new() -> Result<()> {

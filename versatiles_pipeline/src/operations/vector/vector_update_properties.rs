@@ -1,3 +1,12 @@
+use std::collections::{HashMap, HashSet};
+
+use anyhow::{Context, Result, anyhow};
+use async_trait::async_trait;
+use versatiles_container::{DataLocation, TileSource};
+use versatiles_core::TileJSON;
+use versatiles_derive::context;
+use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
+
 use crate::{
 	PipelineFactory,
 	factory::{OperationFactoryTrait, TransformOperationFactoryTrait},
@@ -5,13 +14,6 @@ use crate::{
 	operations::vector::traits::{RunnerTrait, build_transform},
 	vpl::VPLNode,
 };
-use anyhow::{Context, Result, anyhow};
-use async_trait::async_trait;
-use std::collections::{HashMap, HashSet};
-use versatiles_container::{DataLocation, TileSource};
-use versatiles_core::TileJSON;
-use versatiles_derive::context;
-use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
 
 /// Arguments for the `vector_update_properties` operation.
 ///
@@ -224,15 +226,17 @@ fn parse_separator_char(s: &str) -> Result<char> {
 // ───────────────────────── TESTS ─────────────────────────
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use std::{fs::File, io::Write, vec};
+
 	use assert_fs::NamedTempFile;
 	use pretty_assertions::assert_eq;
-	use std::{fs::File, io::Write, vec};
 	use versatiles_core::TileCoord;
 	use versatiles_geometry::{
 		geo::{GeoFeature, GeoProperties, GeoValue, example_geometry},
 		vector_tile::VectorTileLayer,
 	};
+
+	use super::*;
 
 	fn create_sample_vector_tile() -> VectorTile {
 		let mut feature = GeoFeature::new(example_geometry());
@@ -401,8 +405,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn output_tiles_pass_mvt_validation() -> Result<()> {
-		use crate::helpers::assert_tiles_valid;
 		use versatiles_core::TileBBox;
+
+		use crate::helpers::assert_tiles_valid;
 		let temp_file = NamedTempFile::new("test.csv")?;
 		let mut file = File::create(&temp_file)?;
 		writeln!(&mut file, "data_id,value\n1,test")?;

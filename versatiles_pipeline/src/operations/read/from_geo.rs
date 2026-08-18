@@ -15,22 +15,28 @@
 //! from_geo filename="places.geojson" layer_name="places" max_zoom=12
 //! ```
 
-use crate::{
-	PipelineFactory,
-	helpers::feature_tile_source::{FeatureTileSource, apply_property_filters},
-	helpers::tile_size_monitor::MaxTileBytes,
-	operations::read::traits::ReadTileSource,
-	vpl::VPLNode,
-};
+use std::{path::Path, sync::Arc};
+
 use anyhow::{Result, bail};
 use futures::StreamExt;
-use std::{path::Path, sync::Arc};
 use versatiles_container::{DataLocation, TileSource};
 use versatiles_core::TileCompression;
 use versatiles_derive::context;
-use versatiles_geometry::feature_import::{FeatureImport, FeatureImportArgs, PointReductionStrategy};
-use versatiles_geometry::feature_source::{FeatureSource, GeoJsonSource, ProgressCallback, ShapefileSource};
-use versatiles_geometry::geo::GeoFeature;
+use versatiles_geometry::{
+	feature_import::{FeatureImport, FeatureImportArgs, PointReductionStrategy},
+	feature_source::{FeatureSource, GeoJsonSource, ProgressCallback, ShapefileSource},
+	geo::GeoFeature,
+};
+
+use crate::{
+	PipelineFactory,
+	helpers::{
+		feature_tile_source::{FeatureTileSource, apply_property_filters},
+		tile_size_monitor::MaxTileBytes,
+	},
+	operations::read::traits::ReadTileSource,
+	vpl::VPLNode,
+};
 
 /// Don't bother showing a progress bar for tiny inputs — the bar would
 /// flicker once and disappear. 10 MB is the smallest size where users start
@@ -281,9 +287,9 @@ crate::operations::macros::define_read_factory!("from_geo", Args, Operation);
 
 #[cfg(test)]
 mod tests {
+	use versatiles_core::{TileCompression::Uncompressed, TileCoord};
+
 	use super::*;
-	use versatiles_core::TileCompression::Uncompressed;
-	use versatiles_core::TileCoord;
 
 	#[tokio::test]
 	async fn loads_places_geojson() -> Result<()> {

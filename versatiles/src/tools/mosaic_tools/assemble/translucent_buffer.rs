@@ -8,8 +8,8 @@
 //! The buffer is shared across `spawn_blocking` tasks via `Arc<TranslucentBuffer>`.
 //! All methods acquire the internal `Mutex` for the duration of their operation.
 
-use std::collections::HashMap;
-use std::sync::Mutex;
+use std::{collections::HashMap, sync::Mutex};
+
 use versatiles_container::Tile;
 use versatiles_core::{TileCoord, utils::HilbertIndex};
 
@@ -72,8 +72,9 @@ impl TranslucentBuffer {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles_core::{Blob, TileCompression, TileFormat};
+
+	use super::*;
 
 	fn dummy_tile() -> Tile {
 		Tile::from_blob(Blob::from(vec![0u8; 4]), TileCompression::Uncompressed, TileFormat::PNG)

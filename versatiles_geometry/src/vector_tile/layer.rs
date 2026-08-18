@@ -14,16 +14,18 @@
 //!  * field 5: `extent` (varint, default 4096)
 //!  * field 15: `version` (varint, default 1)
 
-use crate::{
-	geo::{GeoFeature, GeoProperties, GeoValue},
-	vector_tile::{feature::VectorTileFeature, property_manager::PropertyManager, value::GeoValuePBF},
-};
+use std::mem::swap;
+
 use anyhow::{Context, Result, anyhow, bail};
 use byteorder::LE;
-use std::mem::swap;
 use versatiles_core::{
 	Blob,
 	io::{ValueReader, ValueWriter, ValueWriterBlob},
+};
+
+use crate::{
+	geo::{GeoFeature, GeoProperties, GeoValue},
+	vector_tile::{feature::VectorTileFeature, property_manager::PropertyManager, value::GeoValuePBF},
 };
 
 /// A single vector‑tile layer with features, key/value property tables, extent, and version.
@@ -337,15 +339,13 @@ impl VectorTileLayer {
 
 #[cfg(test)]
 mod tests {
-	use super::super::geometry_type::GeomType;
-	use super::*;
-	use versatiles_core::io::ValueReaderSlice;
-
 	// ========================================================================
 	// Test Helpers
 	// ========================================================================
-
 	use geo_types::{Geometry, LineString, Point};
+	use versatiles_core::io::ValueReaderSlice;
+
+	use super::{super::geometry_type::GeomType, *};
 
 	/// Creates a point feature with the given id and coordinates
 	fn point_feature(id: u64, x: f64, y: f64) -> GeoFeature {

@@ -11,7 +11,6 @@
 //!   encoding to reduce size.
 //! - Quality boundary: `< 100` = lossy, `>= 100` = lossless, `None` defaults to 95.
 
-use crate::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 use anyhow::{Result, bail};
 use image::{DynamicImage, ImageBuffer};
 use libwebp_sys::{
@@ -21,6 +20,8 @@ use libwebp_sys::{
 };
 use versatiles_core::Blob;
 use versatiles_derive::context;
+
+use crate::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 
 #[context("encoding {}x{} {:?} as WebP (q={:?}, e={:?})", image.width(), image.height(), image.color(), quality, effort)]
 /// Encode a `DynamicImage` into a WebP [`Blob`].
@@ -214,12 +215,13 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 
 #[cfg(test)]
 mod tests {
+	use approx::assert_relative_eq;
+	use rstest::rstest;
+
 	/// WebP tests: lossy & lossless success cases, rejection of grey/greya inputs,
 	/// and verification that fully opaque RGBA is stored without alpha.
 	use super::*;
 	use crate::traits::DynamicImageTraitTest;
-	use approx::assert_relative_eq;
-	use rstest::rstest;
 
 	#[rstest]
 	#[case::rgb(          DynamicImage::new_test_rgb(),  false, 0.95, vec![0.9, 0.5, 1.5]     )]

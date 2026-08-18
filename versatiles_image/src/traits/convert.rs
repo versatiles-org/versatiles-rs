@@ -9,11 +9,12 @@
 //! Supported formats include: PNG, JPEG, WEBP, and AVIF.
 //! These utilities are used in VersaTiles Pipeline.
 
-use crate::format::{avif, jpeg, png, webp};
 use anyhow::{Result, anyhow, bail, ensure};
 use image::{DynamicImage, EncodableLayout, ImageBuffer};
 use versatiles_core::{Blob, TileFormat};
 use versatiles_derive::context;
+
+use crate::format::{avif, jpeg, png, webp};
 
 /// Trait for converting between `DynamicImage` and raw/encoded formats, and for constructing images from functions.
 pub trait DynamicImageTraitConvert {
@@ -142,9 +143,10 @@ impl DynamicImageTraitConvert for DynamicImage {
 /// These tests verify conversion between raw data, pixel iteration, and format roundtrips using `rstest`.
 #[cfg(test)]
 mod tests {
+	use rstest::rstest;
+
 	use super::*;
 	use crate::{DynamicImageTraitInfo, DynamicImageTraitOperation};
-	use rstest::rstest;
 
 	fn sample_l8() -> DynamicImage {
 		#[allow(clippy::cast_possible_truncation)]

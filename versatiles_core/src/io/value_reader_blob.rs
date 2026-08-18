@@ -33,11 +33,13 @@
 
 #![allow(dead_code)]
 
-use super::{SeekRead, ValueReader, ValueReaderSlice};
-use crate::Blob;
+use std::{io::Cursor, marker::PhantomData};
+
 use anyhow::{Context, Result, anyhow, bail};
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use std::{io::Cursor, marker::PhantomData};
+
+use super::{SeekRead, ValueReader, ValueReaderSlice};
+use crate::Blob;
 
 /// A struct that provides reading capabilities from an in-memory blob of data using a specified byte order.
 pub struct ValueReaderBlob<E: ByteOrder> {

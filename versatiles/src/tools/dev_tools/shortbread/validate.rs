@@ -3,12 +3,15 @@
 //! [`analyze_tile`] is pure and CPU-bound; it runs on the stream worker pool and
 //! returns a compact [`Issue`] list that the caller folds into a `Registry`.
 
-use super::report::{Issue, Rule, Severity};
-use super::schema::{EnumSeverity, LayerDef, Schema, is_name_variant};
 use versatiles_core::TileCoord;
 use versatiles_geometry::{
 	geo::GeoValue,
 	vector_tile::{GeomType, VectorTile, VectorTileLayer},
+};
+
+use super::{
+	report::{Issue, Rule, Severity},
+	schema::{EnumSeverity, LayerDef, Schema, is_name_variant},
 };
 
 /// Validates one decoded vector tile against `schema`, returning every finding.
@@ -135,9 +138,10 @@ fn value_type_name(v: &GeoValue) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use geo_types::{Coord, Geometry, LineString, Point, Polygon};
 	use versatiles_geometry::geo::{GeoFeature, GeoProperties};
+
+	use super::*;
 
 	fn schema() -> Schema {
 		use super::super::schema::{SchemaSelector, SchemaVersion};

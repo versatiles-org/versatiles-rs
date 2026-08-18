@@ -52,11 +52,13 @@
 //! }
 //! ```
 
-use super::ValueWriterBlob;
-use crate::{Blob, ByteRange};
+use std::io::Write;
+
 use anyhow::{Context, Result};
 use byteorder::{ByteOrder, WriteBytesExt};
-use std::io::Write;
+
+use super::ValueWriterBlob;
+use crate::{Blob, ByteRange};
 
 /// A trait for writing values to various destinations with support for different byte orders.
 #[allow(dead_code)]
@@ -332,9 +334,11 @@ pub trait ValueWriter<E: ByteOrder> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use byteorder::LittleEndian;
 	use std::io::Cursor;
+
+	use byteorder::LittleEndian;
+
+	use super::*;
 
 	pub struct MockValueWriter {
 		cursor: Cursor<Vec<u8>>,

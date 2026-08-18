@@ -6,13 +6,15 @@
 //! [`TileSource`] so that the rest of the pipeline can treat it like any
 //! other data source.
 
-use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
+use std::fmt::Debug;
+
 use anyhow::Result;
 use async_trait::async_trait;
-use std::fmt::Debug;
 use versatiles_container::{DataLocation, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
+
+use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*.tar` file.
@@ -106,8 +108,9 @@ pub fn operation_from_reader(reader: Box<dyn TileSource>) -> Box<dyn TileSource>
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use versatiles_core::TileCompression::Uncompressed;
+
+	use super::*;
 
 	#[tokio::test]
 	async fn test_vector() -> Result<()> {
