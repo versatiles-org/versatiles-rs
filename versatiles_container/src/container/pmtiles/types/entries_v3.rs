@@ -145,6 +145,11 @@ impl EntriesV3 {
 	/// Returns an error if the entries cannot be serialized or compressed as specified.
 	pub fn build_directory(&mut self, target_root_len: u64, compression: TileCompression) -> Result<Directory> {
 		self.entries.sort_by_cached_key(|e| e.tile_id);
+		// Runs can only be found once entries are in tile-id order, which is why
+		// this lives here rather than at the call site — where it previously ran
+		// *before* this sort and was correct only because the traversal happened
+		// to deliver entries sorted.
+		self.merge_runs();
 		let entries: &EntriesSliceV3 = &self.as_slice();
 
 		if entries.len() < 16384 {

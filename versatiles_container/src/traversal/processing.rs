@@ -33,6 +33,39 @@ pub enum TraversalTranslationStep {
 	Stream(Vec<TileBBox>, TileBBox),
 }
 
+/// How a source traversing one way can feed a writer requiring another.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TraversalTranslation {
+	/// The orders and sizes overlap: tiles stream straight through.
+	Direct,
+	/// The writer takes any order in larger blocks: tiles are buffered per block.
+	Buffered,
+	/// Two different concrete orders. Reordering would mean holding the whole
+	/// tileset, so there is nothing to be done.
+	Impossible,
+}
+
+/// Decides how (or whether) `read` can feed `write`, without doing the work.
+///
+/// [`translate_traversals`] branches on exactly this, so a caller that wants to
+/// fail before opening anything cannot drift away from what the translation
+/// actually supports.
+#[must_use]
+pub fn translation_between(read: &Traversal, write: &Traversal) -> TraversalTranslation {
+	if read.intersected(write).is_ok() {
+		return TraversalTranslation::Direct;
+	}
+
+	if write.order() == &TraversalOrder::AnyOrder
+		&& let (Ok(read_max), Ok(write_min)) = (read.size.max_size(), write.size.min_size())
+		&& read_max <= write_min
+	{
+		return TraversalTranslation::Buffered;
+	}
+
+	TraversalTranslation::Impossible
+}
+
 #[context("Could not find a way to translate traversals from {traversal_read:?} to {traversal_write:?}")]
 /// Translates traversal steps from a reading traversal configuration to a writing traversal configuration.
 ///
@@ -51,6 +84,12 @@ pub fn translate_traversals(
 	traversal_read: &Traversal,
 	traversal_write: &Traversal,
 ) -> Result<Vec<TraversalTranslationStep>> {
+	match translation_between(traversal_read, traversal_write) {
+		TraversalTranslation::Direct => {}
+		TraversalTranslation::Buffered => return translate_buffered(pyramid, traversal_read, traversal_write),
+		TraversalTranslation::Impossible => bail!("Could not find a way to translate traversals."),
+	}
+
 	if let Ok(traversal) = traversal_read.intersected(traversal_write) {
 		return Ok(traversal
 			.traverse_pyramid(pyramid)?
@@ -59,8 +98,15 @@ pub fn translate_traversals(
 			.collect::<Vec<_>>());
 	}
 
-	if traversal_write.order() == &TraversalOrder::AnyOrder
-		&& traversal_read.size.max_size()? <= traversal_write.size.min_size()?
+	bail!("Could not find a way to translate traversals.")
+}
+
+#[context("Could not buffer traversal from {traversal_read:?} to {traversal_write:?}")]
+fn translate_buffered(
+	pyramid: &TilePyramid,
+	traversal_read: &Traversal,
+	traversal_write: &Traversal,
+) -> Result<Vec<TraversalTranslationStep>> {
 	{
 		let write_size = traversal_write.size.min_size()?;
 		let read_bboxes = traversal_read.traverse_pyramid(pyramid)?;
@@ -90,10 +136,8 @@ pub fn translate_traversals(
 			pyramid,
 		)?;
 
-		return Ok(steps);
+		Ok(steps)
 	}
-
-	bail!("Could not find a way to translate traversals.")
 }
 
 #[context("Could not simplify traversal translation steps")]
@@ -408,5 +452,41 @@ mod tests {
 				"Stream: [13: 4369,3750 46x48]; [13: 4352,3584 256x256]"
 			]
 		);
+	}
+
+	/// The pre-flight predicate and the real translation must agree, or a
+	/// writer would refuse work that would have succeeded — or start work that
+	/// cannot finish.
+	#[test]
+	fn translation_between_agrees_with_translate_traversals() {
+		let pyramid = TilePyramid::from_geo_bbox(4, 6, &GeoBBox::new(12.0, 13.0, 14.0, 15.0).unwrap()).unwrap();
+
+		let traversals = [
+			Traversal::new(AnyOrder, 1, 256).unwrap(),
+			Traversal::new(AnyOrder, 256, 256).unwrap(),
+			Traversal::new(DepthFirst, 16, 16).unwrap(),
+			Traversal::new(DepthFirst, 1, 64).unwrap(),
+			Traversal::new(PMTiles, 1, 64).unwrap(),
+			Traversal::new(PMTiles, 64, 64).unwrap(),
+		];
+
+		for read in &traversals {
+			for write in &traversals {
+				let predicted = translation_between(read, write) != TraversalTranslation::Impossible;
+				let actual = translate_traversals(&pyramid, read, write).is_ok();
+				assert_eq!(predicted, actual, "disagreement for {read:?} -> {write:?}");
+			}
+		}
+	}
+
+	/// The case from the issue: an overview pipeline cannot feed PMTiles.
+	#[test]
+	fn an_overview_cannot_feed_pmtiles() {
+		let overview = Traversal::new(DepthFirst, 16, 16).unwrap();
+		let pmtiles = Traversal::new(PMTiles, 1, 64).unwrap();
+		let versatiles = Traversal::new_any_size(256, 256).unwrap();
+
+		assert!(!overview.can_translate_to(&pmtiles), "PMTiles cannot take DepthFirst");
+		assert!(overview.can_translate_to(&versatiles), "but .versatiles buffers it");
 	}
 }

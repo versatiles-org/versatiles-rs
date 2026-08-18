@@ -19,7 +19,7 @@
 //! use versatiles_container::*;
 //! use versatiles_core::*;
 //! use std::path::Path;
-//! use anyhow::Result;
+//! use anyhow::{Result, ensure};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
@@ -45,7 +45,7 @@ use std::{
 	sync::Arc,
 };
 
-use anyhow::Result;
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use versatiles_core::{
@@ -92,6 +92,20 @@ impl TilesWriter for PMTilesWriter {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
 
 		let parameters = reader.metadata().clone();
+
+		// PMTiles stores tiles in Hilbert order and has no way to reorder them
+		// while writing, so check before anything is opened or written. Failing
+		// here also means no truncated file is left behind.
+		let required = Traversal::new(TraversalOrder::PMTiles, 1, 64)?;
+		let available = parameters.traversal();
+		ensure!(
+			available.can_translate_to(&required),
+			"cannot write PMTiles: this source produces tiles in {} order, and PMTiles needs them in \
+			 Hilbert order — reordering would mean holding the whole tileset in memory. Operations \
+			 that build lower zoom levels from higher ones, such as `raster_overview`, force this \
+			 order. Write .versatiles or .mbtiles instead, which accept any order.",
+			available.order()
+		);
 
 		let entries = EntriesV3::new();
 
@@ -172,9 +186,10 @@ impl TilesWriter for PMTilesWriter {
 
 		header.tile_data = ByteRange::new(tile_data_start, tile_data_end - tile_data_start);
 
-		entries.merge_runs();
-
 		writer.set_position(HeaderV3::len())?;
+		// `build_directory` sorts by tile id; `merge_runs` documents that it
+		// requires sorted input. Today the traversal happens to deliver entries
+		// sorted, so the order of these two worked by accident.
 		let directory = entries.build_directory(16384 - HeaderV3::len(), INTERNAL_COMPRESSION)?;
 		header.root_dir = writer.append(&directory.root_bytes)?;
 

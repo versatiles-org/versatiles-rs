@@ -11,7 +11,7 @@ mod traits;
 
 use anyhow::Result;
 pub use order::TraversalOrder;
-pub use processing::{TraversalTranslationStep, translate_traversals};
+pub use processing::{TraversalTranslation, TraversalTranslationStep, translate_traversals, translation_between};
 pub use size::TraversalSize;
 pub use traits::TileSourceTraverseExt;
 use versatiles_core::{TileBBox, TilePyramid};
@@ -139,6 +139,16 @@ impl Traversal {
 	#[context("while computing traversal translation steps between {:?} and {:?}", self.order, other.order)]
 	pub fn traversal_steps(&self, other: &Self, pyramid: &TilePyramid) -> Result<Vec<TraversalTranslationStep>> {
 		translate_traversals(pyramid, self, other)
+	}
+
+	/// Whether a source traversing this way can feed a writer requiring
+	/// `other`, without computing the steps.
+	///
+	/// [`traversal_steps`](Self::traversal_steps) branches on the same decision,
+	/// so a pre-flight check cannot disagree with what the write would do.
+	#[must_use]
+	pub fn can_translate_to(&self, other: &Self) -> bool {
+		translation_between(self, other) != TraversalTranslation::Impossible
 	}
 
 	#[must_use]
