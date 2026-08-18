@@ -16,7 +16,8 @@ pub use container_registry::ContainerRegistry;
 #[cfg(test)]
 pub use container_registry::make_test_file;
 pub use converter::{
-	TilesConvertReader, TilesConverterParameters, convert_tiles_container, convert_tiles_container_to_str,
+	DEFAULT_TILE_COUNT_LIMIT, TILE_COUNT_LIMIT_ENV, TilesConvertReader, TilesConverterParameters,
+	convert_tiles_container, convert_tiles_container_to_str, resolve_tile_count_limit,
 };
 pub use data_location::DataLocation;
 pub use data_source::DataSource;

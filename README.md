@@ -704,6 +704,7 @@ VersaTiles supports the following environment variables:
 
 - `VERSATILES_CACHE_DIR` - Enable disk-based tile caching. This is useful if you want to convert large tile sets with the `from_gdal_raster` VPL operation but have limited memory. Example: `VERSATILES_CACHE_DIR=/tmp/versatiles_cache`
 - `VERSATILES_SSH_IDENTITY` - SSH identity (private key) file used for SFTP authentication.
+- `VERSATILES_MAX_TILES` - Refuse a conversion whose pyramid holds more than this many tiles (default `10000000000`). Guards against a source advertising a pyramid too deep to ever finish. Set to `0` to disable.
 
 Network resilience for remote reads/writes (HTTP and SFTP) over long-running transfers:
 

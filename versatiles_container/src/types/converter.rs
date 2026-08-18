@@ -116,6 +116,96 @@ impl Default for TilesConverterParameters {
 ///
 /// ### Example
 /// See the module-level example.
+/// Default ceiling on how many tiles one conversion may write.
+///
+/// A writer's block index grows with the pyramid and is never freed, so a deep
+/// enough pyramid exhausts memory long before it finishes — with no error, just
+/// steadily climbing RSS. A source advertising levels 0-30 describes roughly
+/// 1.5 x 10^18 tiles, which is not a slow job but an impossible one.
+///
+/// The value clears real work by a wide margin: a whole-planet pyramid is about
+/// 3.6 x 10^8 tiles at level 14 and 1.4 x 10^9 at level 15. Anything in between
+/// is far likelier to be a missing `--max-zoom` than an intention.
+pub const DEFAULT_TILE_COUNT_LIMIT: u64 = 10_000_000_000;
+
+/// Environment variable overriding [`DEFAULT_TILE_COUNT_LIMIT`]; `0` disables
+/// the check.
+pub const TILE_COUNT_LIMIT_ENV: &str = "VERSATILES_MAX_TILES";
+
+/// The tile-count limit in force, from [`TILE_COUNT_LIMIT_ENV`] or
+/// [`DEFAULT_TILE_COUNT_LIMIT`]. `0` maps to `u64::MAX`, i.e. no limit.
+///
+/// A value that does not parse is ignored rather than fatal: a typo in an
+/// environment variable should not stop a conversion that would otherwise be
+/// fine, and the limit it falls back to is the safe one.
+#[must_use]
+pub fn resolve_tile_count_limit() -> u64 {
+	let Ok(value) = std::env::var(TILE_COUNT_LIMIT_ENV) else {
+		return DEFAULT_TILE_COUNT_LIMIT;
+	};
+	match value.trim().parse::<u64>() {
+		Ok(0) => u64::MAX,
+		Ok(limit) => limit,
+		Err(_) => {
+			log::warn!(
+				"ignoring {TILE_COUNT_LIMIT_ENV}={value:?}: not a number; using the default limit of {DEFAULT_TILE_COUNT_LIMIT}"
+			);
+			DEFAULT_TILE_COUNT_LIMIT
+		}
+	}
+}
+
+/// Refuses a conversion whose pyramid is too large to be possible.
+///
+/// Counting is pure bounds arithmetic on the pyramid, so this costs nothing,
+/// and it runs before the output is opened — nothing is created on disk when it
+/// fires.
+#[context("Checking the size of the conversion")]
+fn check_tile_count(pyramid: &TilePyramid, limit: u64) -> Result<()> {
+	let count = pyramid.count_tiles();
+	if count <= limit {
+		return Ok(());
+	}
+
+	let levels = match (pyramid.level_min(), pyramid.level_max()) {
+		(Some(min), Some(max)) => format!("levels {min}-{max}"),
+		_ => "an empty level range".to_string(),
+	};
+
+	// Only explain *why* a limit exists when the user did not pick it. Someone
+	// who set VERSATILES_MAX_TILES knows; telling them their pyramid is
+	// suspicious would be wrong as well as patronising.
+	let hint = if limit == DEFAULT_TILE_COUNT_LIMIT {
+		" The source advertises a pyramid this large, which is rarely intended."
+	} else {
+		""
+	};
+
+	bail!(
+		"refusing to convert {} tiles ({levels}): more than the limit of {}.{hint} \
+		 Restrict the job with --max-zoom and/or --bbox, or raise the ceiling with \
+		 {TILE_COUNT_LIMIT_ENV} (0 disables the check).",
+		group_digits(count),
+		group_digits(limit)
+	)
+}
+
+/// Formats a count with thousands separators.
+///
+/// These numbers span nine orders of magnitude, and the point of the message is
+/// that the reader can tell 10 billion from 1.5 quintillion at a glance.
+fn group_digits(value: u64) -> String {
+	let digits = value.to_string();
+	let mut out = String::with_capacity(digits.len() * 4 / 3);
+	for (i, c) in digits.chars().enumerate() {
+		if i > 0 && (digits.len() - i).is_multiple_of(3) {
+			out.push('_');
+		}
+		out.push(c);
+	}
+	out
+}
+
 #[context("Converting tiles from reader to file")]
 pub async fn convert_tiles_container(
 	reader: SharedTileSource,
@@ -126,6 +216,8 @@ pub async fn convert_tiles_container(
 	runtime.events().step("Starting conversion".to_string());
 
 	let converter = TilesConvertReader::new_from_reader(reader, cp).await?;
+	let pyramid = converter.tile_pyramid().await?;
+	check_tile_count(&pyramid, resolve_tile_count_limit())?;
 	runtime.write_to_path(converter.into_shared(), path).await?;
 
 	if runtime.had_errors() {
@@ -152,6 +244,8 @@ pub async fn convert_tiles_container_to_str(
 	runtime.events().step("Starting conversion".to_string());
 
 	let converter = TilesConvertReader::new_from_reader(reader, cp).await?;
+	let pyramid = converter.tile_pyramid().await?;
+	check_tile_count(&pyramid, resolve_tile_count_limit())?;
 	runtime.write_to_str(converter.into_shared(), destination).await?;
 
 	if runtime.had_errors() {
@@ -742,5 +836,122 @@ mod tests {
 			crate::testing::assert_stream_counts_agree(&conv, bbox).await?;
 		}
 		Ok(())
+	}
+
+	// --- tile-count guard (issue #227) ---------------------------------------
+
+	/// A pyramid that reaches the deepest levels describes more tiles than any
+	/// machine can index, so it must be refused rather than started.
+	#[test]
+	fn tile_count_guard_refuses_an_impossible_pyramid() {
+		let pyramid = TilePyramid::new_full();
+
+		let err = check_tile_count(&pyramid, DEFAULT_TILE_COUNT_LIMIT).unwrap_err();
+		let msg = format!("{err:#}");
+
+		assert!(msg.contains("refusing to convert"), "unexpected message: {msg}");
+		// Both numbers must be readable, and the hint must explain itself
+		// because the user did not choose this limit.
+		assert!(msg.contains("1_537_228_672_809_129_301"), "unexpected message: {msg}");
+		assert!(msg.contains("10_000_000_000"), "unexpected message: {msg}");
+		assert!(msg.contains("rarely intended"), "unexpected message: {msg}");
+	}
+
+	/// A whole-planet tileset is the largest thing anyone routinely builds, and
+	/// the default limit exists to stop impossible jobs — not big ones.
+	#[rstest]
+	#[case::planet_z14(14)]
+	#[case::planet_z15(15)]
+	fn tile_count_guard_allows_a_planet_sized_pyramid(#[case] level_max: u8) {
+		let mut pyramid = TilePyramid::new_full();
+		pyramid.set_level_max(level_max);
+
+		assert!(
+			check_tile_count(&pyramid, DEFAULT_TILE_COUNT_LIMIT).is_ok(),
+			"a planet through zoom {level_max} ({} tiles) must not be refused",
+			pyramid.count_tiles()
+		);
+	}
+
+	/// The boundary is inclusive: exactly `limit` tiles is allowed.
+	#[test]
+	fn tile_count_guard_boundary_is_inclusive() {
+		let mut pyramid = TilePyramid::new_full();
+		pyramid.set_level_max(2);
+		let count = pyramid.count_tiles();
+
+		assert!(check_tile_count(&pyramid, count).is_ok(), "count == limit must pass");
+		assert!(
+			check_tile_count(&pyramid, count - 1).is_err(),
+			"count > limit must fail"
+		);
+	}
+
+	/// `VERSATILES_MAX_TILES` overrides the default, and `0` means "no limit".
+	///
+	/// Serialised because it mutates process-global state, and reads the
+	/// variable's prior value so a developer running with it set does not see a
+	/// spurious failure.
+	#[test]
+	fn tile_count_limit_env_var_is_honoured() {
+		static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+		let _guard = ENV_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+
+		let previous = std::env::var(TILE_COUNT_LIMIT_ENV).ok();
+		// SAFETY: serialised by ENV_LOCK; the prior value is restored below.
+		let set = |v: Option<&str>| unsafe {
+			match v {
+				Some(v) => std::env::set_var(TILE_COUNT_LIMIT_ENV, v),
+				None => std::env::remove_var(TILE_COUNT_LIMIT_ENV),
+			}
+		};
+
+		set(None);
+		assert_eq!(resolve_tile_count_limit(), DEFAULT_TILE_COUNT_LIMIT, "unset -> default");
+
+		set(Some("500"));
+		assert_eq!(resolve_tile_count_limit(), 500, "a number is taken as the limit");
+
+		set(Some("  500  "));
+		assert_eq!(resolve_tile_count_limit(), 500, "surrounding whitespace is tolerated");
+
+		set(Some("0"));
+		assert_eq!(resolve_tile_count_limit(), u64::MAX, "0 disables the check");
+
+		set(Some("banana"));
+		assert_eq!(
+			resolve_tile_count_limit(),
+			DEFAULT_TILE_COUNT_LIMIT,
+			"an unparseable value falls back to the safe default rather than failing"
+		);
+
+		set(previous.as_deref());
+	}
+
+	/// A user-chosen limit should not be second-guessed in the message.
+	#[test]
+	fn tile_count_guard_drops_the_hint_when_the_limit_was_chosen() {
+		let mut pyramid = TilePyramid::new_full();
+		pyramid.set_level_max(2);
+
+		let msg = format!("{:#}", check_tile_count(&pyramid, 5).unwrap_err());
+		assert!(!msg.contains("rarely intended"), "unexpected message: {msg}");
+		assert!(msg.contains("VERSATILES_MAX_TILES"), "unexpected message: {msg}");
+	}
+
+	/// `u64::MAX` is what `VERSATILES_MAX_TILES=0` resolves to, and must let
+	/// even the deepest pyramid through.
+	#[test]
+	fn tile_count_guard_can_be_disabled() {
+		assert!(check_tile_count(&TilePyramid::new_full(), u64::MAX).is_ok());
+	}
+
+	#[test]
+	fn group_digits_inserts_separators() {
+		assert_eq!(group_digits(0), "0");
+		assert_eq!(group_digits(999), "999");
+		assert_eq!(group_digits(1_000), "1_000");
+		assert_eq!(group_digits(1_234_567), "1_234_567");
+		assert_eq!(group_digits(u64::MAX), "18_446_744_073_709_551_615");
 	}
 }
