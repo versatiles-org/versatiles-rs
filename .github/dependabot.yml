@@ -5,29 +5,38 @@ updates:
     directory: /
     schedule: { interval: weekly }
     open-pull-requests-limit: 0
+    groups: { security: { applies-to: security-updates, patterns: ['*'] } }
 
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
     open-pull-requests-limit: 0
+    groups: { security: { applies-to: security-updates, patterns: ['*'] } }
 
   - package-ecosystem: docker
     directory: /docker
     schedule: { interval: weekly }
     open-pull-requests-limit: 0
+    groups: { security: { applies-to: security-updates, patterns: ['*'] } }
 
   # Monthly regular updates
   - package-ecosystem: cargo
     directory: /
     schedule: { interval: monthly }
-    groups: { cargo: { patterns: ['*'] } }
+    groups:
+      cargo: { patterns: ['*'] }
+      security: { applies-to: security-updates, patterns: ['*'] }
 
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }
-    groups: { github-action: { patterns: ['*'] } }
+    groups:
+      github-action: { patterns: ['*'] }
+      security: { applies-to: security-updates, patterns: ['*'] }
 
   - package-ecosystem: docker
     directory: /docker
     schedule: { interval: monthly }
-    groups: { docker: { patterns: ['*'] } }
+    groups:
+      docker: { patterns: ['*'] }
+      security: { applies-to: security-updates, patterns: ['*'] }
