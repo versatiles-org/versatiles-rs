@@ -57,6 +57,18 @@ pub struct ServerConfig {
 	#[serde()]
 	#[config_demo("false")]
 	pub disable_api: Option<bool>,
+
+	/// Optional `Cache-Control` header sent with every tile
+	/// Defaults to "public, max-age=2419200, no-transform" (four weeks)
+	///
+	/// Tile URLs are stable — built from a mount name and a coordinate — so a
+	/// client answers from its own cache when the tiles behind a mount change.
+	/// Four weeks suits a public, CDN-fronted server; a preview or a test
+	/// harness serving tiles that change wants something shorter, e.g.
+	/// "no-cache".
+	#[serde()]
+	#[config_demo("public, max-age=2419200, no-transform")]
+	pub cache_control: Option<String>,
 }
 
 /// Helper methods for merging partial `ServerConfig` values.
@@ -67,6 +79,11 @@ impl ServerConfig {
 	pub fn override_optional_ip(&mut self, ip: &Option<String>) {
 		if ip.is_some() {
 			self.ip.clone_from(ip);
+		}
+	}
+	pub fn override_optional_cache_control(&mut self, cache_control: &Option<String>) {
+		if cache_control.is_some() {
+			self.cache_control.clone_from(cache_control);
 		}
 	}
 	pub fn override_optional_port(&mut self, port: &Option<u16>) {

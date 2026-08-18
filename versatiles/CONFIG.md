@@ -49,6 +49,16 @@ server:
   # Optional flag to disable the `/api` endpoints
   # Defaults to false (enabling the API)
   disable_api: false
+  
+  # Optional `Cache-Control` header sent with every tile
+  # Defaults to "public, max-age=2419200, no-transform" (four weeks)
+  # 
+  # Tile URLs are stable — built from a mount name and a coordinate — so a
+  # client answers from its own cache when the tiles behind a mount change.
+  # Four weeks suits a public, CDN-fronted server; a preview or a test
+  # harness serving tiles that change wants something shorter, e.g.
+  # "no-cache".
+  cache_control: public, max-age=2419200, no-transform
 
 # Optional Cross-Origin Resource Sharing (CORS) settings
 cors: 

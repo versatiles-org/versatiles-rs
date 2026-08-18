@@ -28,6 +28,7 @@ use super::{
 pub struct DynamicTileHandlerState {
 	pub tile_sources: Arc<DashMap<String, Arc<ServerTileSource>>>,
 	pub minimal_recompression: bool,
+	pub cache_control: Arc<str>,
 }
 
 /// Dynamic tile handler that extracts source_id from the path and looks it up.
@@ -58,7 +59,14 @@ pub async fn serve_dynamic_tile(
 	};
 
 	// Delegate to core serving logic
-	serve_tile_from_source(path, headers, tile_source, state.minimal_recompression).await
+	serve_tile_from_source(
+		path,
+		headers,
+		tile_source,
+		state.minimal_recompression,
+		&state.cache_control,
+	)
+	.await
 }
 
 /// Attach dynamic tile routing with single catch-all route.
@@ -66,10 +74,12 @@ pub fn add_tile_sources_to_app(
 	app: Router,
 	sources: Arc<DashMap<String, Arc<ServerTileSource>>>,
 	minimal_recompression: bool,
+	cache_control: Arc<str>,
 ) -> Router {
 	let state = DynamicTileHandlerState {
 		tile_sources: sources,
 		minimal_recompression,
+		cache_control,
 	};
 
 	let tile_router = Router::new()
@@ -85,10 +95,12 @@ pub fn add_static_sources_to_app(
 	app: Router,
 	static_sources: Arc<arc_swap::ArcSwap<Vec<StaticSource>>>,
 	minimal_recompression: bool,
+	cache_control: Arc<str>,
 ) -> Router {
 	let state = StaticHandlerState {
 		sources: static_sources,
 		minimal_recompression,
+		cache_control,
 	};
 	let static_app = Router::new().fallback(get(serve_static)).with_state(state);
 	app.merge(static_app)
@@ -149,7 +161,12 @@ mod tests {
 	async fn no_tile_sources_yields_404() {
 		let app = Router::new();
 		let sources = Arc::new(DashMap::new());
-		let app = add_tile_sources_to_app(app, sources, false);
+		let app = add_tile_sources_to_app(
+			app,
+			sources,
+			false,
+			Arc::from(crate::server::handlers::DEFAULT_CACHE_CONTROL),
+		);
 
 		let (status, _body) = get_body_text(app, "/tiles/any/1/2/3").await;
 		assert_eq!(status, StatusCode::NOT_FOUND);
@@ -159,7 +176,12 @@ mod tests {
 	async fn no_static_sources_yields_404() {
 		let app = Router::new();
 		let static_sources = Arc::new(arc_swap::ArcSwap::from_pointee(Vec::new()));
-		let app = add_static_sources_to_app(app, static_sources, false);
+		let app = add_static_sources_to_app(
+			app,
+			static_sources,
+			false,
+			Arc::from(crate::server::handlers::DEFAULT_CACHE_CONTROL),
+		);
 
 		let (status, _body) = get_body_text(app, "/").await;
 		assert_eq!(status, StatusCode::NOT_FOUND);

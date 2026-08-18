@@ -149,6 +149,7 @@ mod tests {
 			port: Some(8080),
 			ip: Some("127.0.0.1".to_string()),
 			minimal_recompression: None,
+			cache_control: None,
 		};
 		assert_eq!(opts.port, Some(8080));
 		assert_eq!(opts.ip, Some("127.0.0.1".to_string()));

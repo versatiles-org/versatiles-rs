@@ -79,4 +79,17 @@ pub struct ServerOptions {
 	///
 	/// **Default:** `false` (optimal recompression)
 	pub minimal_recompression: Option<bool>,
+
+	/// `Cache-Control` header sent with every tile
+	///
+	/// Tile URLs are stable — built from a mount name and a coordinate — so
+	/// when the tiles behind a mount change, the URL does not, and the browser
+	/// answers from its own cache. A dev server or an interactive preview that
+	/// re-mounts under the same name will otherwise keep showing the previous
+	/// edit.
+	///
+	/// Example: `"no-cache"`.
+	///
+	/// **Default:** `"public, max-age=2419200, no-transform"` (four weeks)
+	pub cache_control: Option<String>,
 }

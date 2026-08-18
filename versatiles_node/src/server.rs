@@ -82,6 +82,7 @@ pub struct TileServer {
 	actual_port: Arc<RwLock<Option<u16>>>, // Cached actual bound port for sync access
 	ip: String,
 	minimal_recompression: Option<bool>,
+	cache_control: Option<String>,
 	// Track accumulated sources to rebuild config on start
 	tile_sources: TileSourceList,     // Map of name -> TileSource
 	static_sources: StaticSourceList, // Vec of (path, url_prefix)
@@ -123,6 +124,7 @@ impl TileServer {
 			ip: None,
 			port: None,
 			minimal_recompression: None,
+			cache_control: None,
 		});
 
 		let runtime = create_runtime();
@@ -131,6 +133,7 @@ impl TileServer {
 			.context("Port number must be between 0 and 65535")
 			.to_napi()?;
 		let minimal_recompression = opts.minimal_recompression;
+		let cache_control = opts.cache_control;
 
 		Ok(Self {
 			inner: Mutex::new(None),
@@ -139,6 +142,7 @@ impl TileServer {
 			actual_port: Arc::new(RwLock::new(None)),
 			ip,
 			minimal_recompression,
+			cache_control,
 			tile_sources: Mutex::new(HashMap::new()),
 			static_sources: Mutex::new(Vec::new()),
 		})
@@ -307,6 +311,7 @@ impl TileServer {
 		config.server.port = Some(self.initial_port);
 		config.server.ip = Some(self.ip.clone());
 		config.server.minimal_recompression = self.minimal_recompression;
+		config.server.cache_control = self.cache_control.clone();
 
 		// Add all static sources to config
 		let static_sources = self.static_sources.lock().await;
@@ -438,6 +443,7 @@ mod tests {
 			ip: None,
 			port: Some(3000),
 			minimal_recompression: None,
+			cache_control: None,
 		};
 		let server = TileServer::new(Some(options)).unwrap();
 
@@ -451,6 +457,7 @@ mod tests {
 			ip: Some("127.0.0.1".to_string()),
 			port: None,
 			minimal_recompression: None,
+			cache_control: None,
 		};
 		let server = TileServer::new(Some(options)).unwrap();
 
@@ -464,6 +471,7 @@ mod tests {
 			ip: None,
 			port: None,
 			minimal_recompression: Some(true),
+			cache_control: None,
 		};
 		let server = TileServer::new(Some(options)).unwrap();
 
@@ -477,6 +485,7 @@ mod tests {
 			ip: Some("0.0.0.0".to_string()),
 			port: Some(9999),
 			minimal_recompression: Some(false),
+			cache_control: None,
 		};
 		let server = TileServer::new(Some(options)).unwrap();
 
@@ -492,6 +501,7 @@ mod tests {
 			ip: None,
 			port: Some(8080),
 			minimal_recompression: None,
+			cache_control: None,
 		};
 		let server = TileServer::new(Some(options)).unwrap();
 
@@ -505,6 +515,7 @@ mod tests {
 			ip: None,
 			port: Some(0), // Ephemeral port
 			minimal_recompression: None,
+			cache_control: None,
 		};
 		let server = TileServer::new(Some(options)).unwrap();
 
@@ -518,6 +529,7 @@ mod tests {
 			ip: None,
 			port: Some(0), // Ephemeral port
 			minimal_recompression: None,
+			cache_control: None,
 		};
 		let server = TileServer::new(Some(options)).unwrap();
 
@@ -780,6 +792,7 @@ mod tests {
 			ip: Some("127.0.0.1".to_string()),
 			port: Some(0), // Use ephemeral port to avoid conflicts
 			minimal_recompression: None,
+			cache_control: None,
 		}))
 		.unwrap();
 
@@ -804,6 +817,7 @@ mod tests {
 			ip: Some("127.0.0.1".to_string()),
 			port: Some(0), // Use ephemeral port
 			minimal_recompression: None,
+			cache_control: None,
 		}))
 		.unwrap();
 
@@ -838,6 +852,7 @@ mod tests {
 			ip: Some("127.0.0.1".to_string()),
 			port: Some(0),
 			minimal_recompression: None,
+			cache_control: None,
 		}))
 		.unwrap();
 
@@ -859,6 +874,7 @@ mod tests {
 			ip: Some("127.0.0.1".to_string()),
 			port: Some(0),
 			minimal_recompression: None,
+			cache_control: None,
 		}))
 		.unwrap();
 
@@ -887,6 +903,7 @@ mod tests {
 			ip: Some("127.0.0.1".to_string()),
 			port: Some(0),
 			minimal_recompression: None,
+			cache_control: None,
 		}))
 		.unwrap();
 
@@ -945,6 +962,7 @@ mod tests {
 			ip: Some("127.0.0.1".to_string()),
 			port: Some(0),
 			minimal_recompression: None,
+			cache_control: None,
 		}))
 		.unwrap();
 
@@ -1006,6 +1024,7 @@ mod tests {
 			ip: Some("127.0.0.1".to_string()),
 			port: Some(0),
 			minimal_recompression: None,
+			cache_control: None,
 		}))
 		.unwrap();
 
@@ -1038,6 +1057,7 @@ mod tests {
 			ip: Some("127.0.0.1".to_string()),
 			port: Some(0),
 			minimal_recompression: None,
+			cache_control: None,
 		}))
 		.unwrap();
 
@@ -1079,6 +1099,7 @@ mod tests {
 			ip: Some("127.0.0.1".to_string()),
 			port: Some(0),
 			minimal_recompression: None,
+			cache_control: None,
 		}))
 		.unwrap();
 
@@ -1110,6 +1131,7 @@ mod tests {
 				port: Some(0),
 				ip: None,
 				minimal_recompression: None,
+				cache_control: None,
 			}))
 			.unwrap(),
 		);
@@ -1149,6 +1171,7 @@ mod tests {
 				port: Some(0),
 				ip: None,
 				minimal_recompression: None,
+				cache_control: None,
 			}))
 			.unwrap(),
 		);

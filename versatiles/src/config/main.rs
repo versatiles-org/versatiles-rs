@@ -191,7 +191,8 @@ mod tests {
 					ip: Some("127.0.0.1".parse().unwrap()),
 					port: Some(51234),
 					minimal_recompression: Some(true),
-					disable_api: Some(true)
+					disable_api: Some(true),
+					cache_control: None,
 				},
 				cors: CorsConfig {
 					allowed_origins: vec!["https://example.org".to_string(), "*.other-example.org".to_string()],
@@ -235,7 +236,7 @@ mod tests {
 				.collect::<Vec<_>>(),
 			vec![
 				"parsing config from string (YAML)",
-				"server: unknown field `pi`, expected one of `ip`, `port`, `minimal_recompression`, `disable_api` at line 2 column 3"
+				"server: unknown field `pi`, expected one of `ip`, `port`, `minimal_recompression`, `disable_api`, `cache_control` at line 2 column 3"
 			]
 		);
 	}
@@ -252,6 +253,7 @@ mod tests {
 					port: Some(8080,),
 					minimal_recompression: Some(false,),
 					disable_api: Some(false,),
+					cache_control: Some("public, max-age=2419200, no-transform".to_string()),
 				},
 				cors: CorsConfig {
 					allowed_origins: vec!["https://example.org".to_string(), "*.example.net".to_string()],

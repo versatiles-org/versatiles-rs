@@ -74,6 +74,9 @@ pub struct TileServer {
 	join: Option<tokio::task::JoinHandle<()>>,
 	/// If true, prefer faster (lower ratio) recompression when negotiating encodings.
 	minimal_recompression: bool,
+	/// `Cache-Control` sent with every served tile and static file. Validated
+	/// when the server is built, so a malformed value fails at startup.
+	cache_control: Arc<str>,
 	/// Expose small helper endpoints like `/tiles/index.json` and `/status`.
 	disable_api: bool,
 	runtime: TilesRuntime,
@@ -101,6 +104,7 @@ impl TileServer {
 			exit_signal: None,
 			join: None,
 			minimal_recompression,
+			cache_control: Arc::from(super::handlers::DEFAULT_CACHE_CONTROL),
 			disable_api,
 			runtime,
 			cors_allowed_origins: crate::config::CorsConfig::default().allowed_origins,
@@ -125,6 +129,15 @@ impl TileServer {
 			parsed_headers.push((name, value));
 		}
 
+		// Reject a malformed value at startup rather than on the first request,
+		// where it would surface as a failed response build.
+		let cache_control = config
+			.server
+			.cache_control
+			.unwrap_or_else(|| super::handlers::DEFAULT_CACHE_CONTROL.to_string());
+		HeaderValue::from_str(&cache_control)
+			.map_err(|e| anyhow::anyhow!("invalid server.cache_control value {cache_control:?}: {e}"))?;
+
 		let mut server = TileServer {
 			ip: config.server.ip.unwrap_or("0.0.0.0".into()),
 			port: config.server.port.unwrap_or(8080),
@@ -133,6 +146,7 @@ impl TileServer {
 			exit_signal: None,
 			join: None,
 			minimal_recompression: config.server.minimal_recompression.unwrap_or(false),
+			cache_control: Arc::from(cache_control.as_str()),
 			disable_api: config.server.disable_api.unwrap_or(false),
 			runtime,
 			cors_allowed_origins: config.cors.allowed_origins.clone(),
@@ -419,12 +433,22 @@ impl TileServer {
 
 	/// Helper: delegate to `routes::add_tile_sources_to_app` to attach tile endpoints.
 	fn add_tile_sources_to_app(&self, app: Router) -> Router {
-		routes::add_tile_sources_to_app(app, Arc::clone(&self.tile_sources), self.minimal_recompression)
+		routes::add_tile_sources_to_app(
+			app,
+			Arc::clone(&self.tile_sources),
+			self.minimal_recompression,
+			Arc::clone(&self.cache_control),
+		)
 	}
 
 	/// Helper: delegate to `routes::add_static_sources_to_app` to attach static endpoints.
 	fn add_static_sources_to_app(&self, app: Router) -> Router {
-		routes::add_static_sources_to_app(app, Arc::clone(&self.static_sources), self.minimal_recompression)
+		routes::add_static_sources_to_app(
+			app,
+			Arc::clone(&self.static_sources),
+			self.minimal_recompression,
+			Arc::clone(&self.cache_control),
+		)
 	}
 
 	/// Helper: delegate to `routes::add_api_to_app` to attach small JSON API endpoints.

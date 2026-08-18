@@ -55,6 +55,14 @@ pub struct Subcommand {
 	/// disable API
 	#[arg(long, display_order = 4)]
 	pub disable_api: Option<bool>,
+
+	/// Cache-Control header sent with every tile, e.g. "no-cache"
+	///
+	/// Tile URLs are stable, so a client answers from its own cache when the
+	/// tiles behind a mount change. The default of four weeks suits a public,
+	/// CDN-fronted server; a preview or a test harness wants something shorter.
+	#[arg(long, value_name = "header", display_order = 2, verbatim_doc_comment)]
+	pub cache_control: Option<String>,
 }
 
 #[tokio::main]
@@ -72,6 +80,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 		.server
 		.override_optional_minimal_recompression(&arguments.minimal_recompression);
 	config.server.override_optional_disable_api(&arguments.disable_api);
+	config.server.override_optional_cache_control(&arguments.cache_control);
 
 	for src in &arguments.tile_sources {
 		let src = DataSource::parse(src)?;

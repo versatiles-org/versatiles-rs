@@ -26,11 +26,19 @@ use super::{
 	utils::Url,
 };
 
+/// Default `Cache-Control` for served content: four weeks.
+///
+/// Right for a public, CDN-fronted tile server. Wrong for anything serving
+/// tiles that change — tile URLs are stable, so a client answers from its own
+/// cache and shows the previous edit. Override with `server.cache_control`.
+pub const DEFAULT_CACHE_CONTROL: &str = "public, max-age=2419200, no-transform";
+
 /// State for static file requests across multiple `StaticSource`s.
 #[derive(Clone)]
 pub struct StaticHandlerState {
 	pub sources: Arc<arc_swap::ArcSwap<Vec<StaticSource>>>,
 	pub minimal_recompression: bool,
+	pub cache_control: Arc<str>,
 }
 
 /// Core tile serving logic extracted for reuse in dynamic routing.
@@ -40,6 +48,7 @@ pub async fn serve_tile_from_source(
 	headers: HeaderMap,
 	tile_source: Arc<ServerTileSource>,
 	minimal_recompression: bool,
+	cache_control: &str,
 ) -> Response<Body> {
 	log::debug!("handle tile request: {path}");
 
@@ -66,7 +75,7 @@ pub async fn serve_tile_from_source(
 	match response {
 		Ok(Some(result)) => {
 			log::debug!("send response for tile request: {path}");
-			ok_data(result, target)
+			ok_data(result, target, cache_control)
 		}
 		Ok(None) => {
 			log::debug!("send 404 for tile request: {path}");
@@ -102,7 +111,7 @@ pub async fn serve_static(uri: Uri, headers: HeaderMap, State(state): State<Stat
 	for source in sources.iter() {
 		if let Some(result) = source.get_data(&url, &target).await {
 			log::debug!("send response to static request: {url}");
-			return ok_data(result, target);
+			return ok_data(result, target, &state.cache_control);
 		}
 	}
 	log::debug!("send 404 to static request: {url}");
@@ -142,7 +151,7 @@ pub fn error_500() -> Response<Body> {
 	error_with(500, "Internal Server Error")
 }
 
-fn ok_data(result: SourceResponse, mut target: TargetCompression) -> Response<Body> {
+fn ok_data(result: SourceResponse, mut target: TargetCompression, cache_control: &str) -> Response<Body> {
 	// Binary images are effectively incompressible; avoid recompression.
 	if matches!(
 		result.mime.as_str(),
@@ -154,7 +163,7 @@ fn ok_data(result: SourceResponse, mut target: TargetCompression) -> Response<Bo
 	let mut response = Response::builder()
 		.status(200)
 		.header(header::CONTENT_TYPE, &result.mime)
-		.header(header::CACHE_CONTROL, "public, max-age=2419200, no-transform")
+		.header(header::CACHE_CONTROL, cache_control)
 		.header(header::VARY, "accept-encoding");
 
 	log::trace!(
@@ -201,6 +210,9 @@ pub fn ok_json(message: &str) -> Response<Body> {
 			mime: String::from("application/json"),
 		},
 		TargetCompression::from_none(),
+		// API responses keep the historical header; making them configurable is
+		// a separate question from the tile cache lifetime.
+		DEFAULT_CACHE_CONTROL,
 	)
 }
 
@@ -227,6 +239,27 @@ mod tests {
 		assert!(headers.get(header::CONTENT_ENCODING).is_none());
 	}
 
+	/// The whole point of #222: the header must follow the configured value,
+	/// not a constant. A server serving tiles that change needs a short one.
+	#[test]
+	fn ok_data_uses_the_configured_cache_control() {
+		for cache_control in ["no-cache", "public, max-age=60", "private, max-age=0, must-revalidate"] {
+			let src = SourceResponse {
+				blob: Blob::from("{}"),
+				compression: TileCompression::Uncompressed,
+				mime: "application/json".into(),
+			};
+
+			let resp = super::ok_data(src, TargetCompression::from_none(), cache_control);
+
+			assert_eq!(
+				resp.headers().get(header::CACHE_CONTROL).unwrap(),
+				cache_control,
+				"served header must be the configured one"
+			);
+		}
+	}
+
 	#[test]
 	fn ok_data_plain_text_gzip_when_allowed() {
 		// Source is uncompressed text; client allows gzip
@@ -238,7 +271,7 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Gzip);
 
-		let resp = super::ok_data(src, target);
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL);
 		assert_eq!(resp.status(), 200);
 		let headers = resp.headers();
 
@@ -298,7 +331,7 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Brotli);
 
-		let resp = super::ok_data(src, target);
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL);
 		assert_eq!(resp.status(), 200);
 		let headers = resp.headers();
 
@@ -340,7 +373,7 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Brotli);
 
-		let resp = super::ok_data(src, target);
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL);
 		assert_eq!(resp.status(), 200);
 		let headers = resp.headers();
 
@@ -359,7 +392,7 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Gzip);
 
-		let resp = super::ok_data(src, target);
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL);
 		assert_eq!(resp.status(), 200);
 		// No content-encoding for incompressible images
 		assert!(resp.headers().get(header::CONTENT_ENCODING).is_none());
@@ -375,7 +408,7 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Gzip);
 
-		let resp = super::ok_data(src, target);
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL);
 		assert_eq!(resp.status(), 200);
 		assert!(resp.headers().get(header::CONTENT_ENCODING).is_none());
 	}
@@ -390,7 +423,7 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Brotli);
 
-		let resp = super::ok_data(src, target);
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL);
 		assert_eq!(resp.status(), 200);
 		assert!(resp.headers().get(header::CONTENT_ENCODING).is_none());
 	}
@@ -398,6 +431,7 @@ mod tests {
 	#[test]
 	fn static_handler_state_clone() {
 		let state = StaticHandlerState {
+			cache_control: std::sync::Arc::from(DEFAULT_CACHE_CONTROL),
 			sources: Arc::new(arc_swap::ArcSwap::from_pointee(vec![])),
 			minimal_recompression: true,
 		};
