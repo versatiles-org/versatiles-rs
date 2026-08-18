@@ -1,17 +1,21 @@
 //! Per-layer byte breakdown of a decoded vector tile.
 //!
-//! Shared between the `analyze-tile` dev tool (single-tile drill-down) and
-//! `probe -ddd` (whole-container aggregation by zoom × layer). Both need the
-//! same notion of "how many bytes does each layer cost, split by geometry, tag
-//! references, property table, and feature ids", so it lives here once.
+//! Answers "which layer is eating my tile, and on what" — splitting each
+//! layer's cost into geometry, per-feature tag references, the property table,
+//! and feature ids. The geometry-versus-properties split is the part that says
+//! what to do about it; a bare total per layer does not.
+//!
+//! Used by `versatiles probe -ddd` (aggregated by zoom × layer) and the
+//! `analyze-tile` dev tool (single-tile drill-down), and available to any
+//! consumer building a tile inspector.
 //!
 //! All figures are **uncompressed** MVT content — what the user can actually
 //! shrink. `encoded_bytes` is the exact serialized layer size; the named
 //! categories plus [`LayerStats::other_bytes`] (framing/geom-type/name residual)
 //! sum to it.
 
+use super::{GeoValuePBF, VectorTile};
 use anyhow::Result;
-use versatiles_geometry::vector_tile::{GeoValuePBF, VectorTile};
 
 /// Accumulated byte breakdown for one layer. Used both per-tile (one decoded
 /// layer) and aggregated (summed across many tiles via [`LayerStats::add`]).
@@ -118,7 +122,7 @@ pub fn layer_stats(vt: &VectorTile) -> Result<Vec<LayerStats>> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use versatiles_geometry::{
+	use crate::{
 		geo::{GeoFeature, GeoProperties, GeoValue},
 		vector_tile::{VectorTile, VectorTileLayer},
 	};

@@ -16,12 +16,12 @@
 //! actually shrink (compression ratio is downstream). The stored/compressed size
 //! is reported alongside for reference.
 
-use crate::tools::tile_breakdown::{LayerStats, layer_stats};
 use anyhow::{Result, anyhow, ensure};
 use versatiles_container::{SharedTileSource, TilesRuntime};
 use versatiles_core::{TileCoord, TileType, utils::PrettyPrint};
 use versatiles_geometry::geo::GeoValue;
 use versatiles_geometry::vector_tile::{GeoValuePBF, GeomType, VectorTile};
+use versatiles_geometry::vector_tile::{LayerStats, layer_stats};
 
 /// How many entries to show in the "top features" and "top values" tables.
 const TOP_N: usize = 10;

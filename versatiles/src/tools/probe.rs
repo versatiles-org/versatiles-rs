@@ -1,4 +1,3 @@
-use crate::tools::tile_breakdown::{LayerStats, layer_stats};
 use crate::tools::tile_sampling::{build_scan_plan, parse_sample};
 use anyhow::Result;
 use std::collections::HashMap;
@@ -6,6 +5,7 @@ use versatiles_container::{TileSource, TilesRuntime};
 use versatiles_core::TileBBox;
 use versatiles_core::{ProbeDepth, TileType, utils::PrettyPrint};
 use versatiles_geometry::vector_tile::{DegenerateReason, GeomType, IssueKind, ValidationIssue, validate_tile};
+use versatiles_geometry::vector_tile::{LayerStats, layer_stats};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]

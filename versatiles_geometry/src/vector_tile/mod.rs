@@ -15,6 +15,7 @@ mod geometry_type;
 mod layer;
 mod property_manager;
 mod repair;
+mod stats;
 mod tile;
 mod validator;
 mod value;
@@ -22,6 +23,7 @@ mod value;
 pub use geometry_type::GeomType;
 pub use layer::VectorTileLayer;
 pub use repair::repair_tile;
+pub use stats::{LayerStats, layer_stats, varint_len};
 pub use tile::VectorTile;
 pub use validator::{DegenerateReason, IssueKind, ValidationIssue, validate_tile};
 /// Trait for encoding/decoding individual MVT property values. Exposed so
