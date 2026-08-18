@@ -32,8 +32,15 @@ impl ServerTileSource {
 		})
 	}
 
-	pub fn source_name(&self) -> String {
-		self.reader.source_type().to_string() // Direct access!
+	/// A human-readable description of where these tiles come from, e.g.
+	/// `container 'mbtiles' ('/home/me/berlin.mbtiles')`.
+	///
+	/// This is [`SourceType`](versatiles_container::SourceType)'s `Display`
+	/// form: a diagnostic sentence including the full path, suited to a log
+	/// line rather than a label. For a short name — `"mbtiles"` — use
+	/// `source_type().name()` instead.
+	pub fn source_description(&self) -> String {
+		self.reader.source_type().to_string()
 	}
 
 	// Retrieve the tile data as an HTTP response

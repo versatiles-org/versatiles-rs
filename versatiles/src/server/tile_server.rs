@@ -443,8 +443,7 @@ impl TileServer {
 		let mut result = Vec::new();
 		for entry in self.tile_sources.iter() {
 			let tile_source = entry.value();
-			let source_name = tile_source.source_name();
-			result.push((tile_source.prefix.clone(), source_name));
+			result.push((tile_source.prefix.clone(), tile_source.source_description()));
 		}
 		result
 	}
