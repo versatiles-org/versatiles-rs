@@ -153,6 +153,52 @@ pub fn parse_vpl(vpl: String) -> String {
 	result.to_string()
 }
 
+/// Checks VPL text against the known operations, without building the pipeline.
+///
+/// Building opens files and fetches URLs, so it cannot run on a keystroke — and it conflates two
+/// failures. `from_container filename=missing.mbtiles` is the *world* being wrong; `from_debug
+/// format=png nonsense=1` is the *pipeline* being wrong. This reports only the second kind, and
+/// performs no I/O.
+///
+/// Returns a JSON string, with the same result shape as [`parse_vpl`]:
+///
+/// - on success, `{"ok": true, "problems": [{"message": "...", "path": [0], "property": "nonsense"}]}`
+///   — an empty `problems` array means nothing is wrong with the pipeline
+/// - on failure, `{"ok": false, "error": {...}}` — the text did not parse at all
+///
+/// `path` addresses the offending node by index: `[2]` is the third node of the pipeline, and
+/// descending into a node's bracketed sources appends the source index and then the node index.
+/// The same walk applies to the tree from [`parse_vpl_cst`], which is how this becomes a span.
+///
+/// Two things are deliberately *not* reported, because doing so would reject VPL that runs:
+/// parameter values are never validated (`color=red` passes here and fails at build time), and
+/// neither are enum values, since the accepted set includes aliases the metadata does not list.
+///
+/// @param vpl - the VPL text to check
+/// @returns a JSON string describing either the problems found or a parse error
+#[napi]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn check_vpl(vpl: String) -> String {
+	let result = match parse_vpl_detailed(&vpl) {
+		Ok(pipeline) => {
+			let problems = versatiles::pipeline::check_pipeline(&pipeline)
+				.into_iter()
+				.map(|problem| {
+					json!({
+						"message": problem.message,
+						"path": problem.path,
+						"property": problem.property,
+					})
+				})
+				.collect::<Vec<_>>();
+			json!({ "ok": true, "problems": problems })
+		}
+		Err(error) => json!({ "ok": false, "error": error_to_json(&error) }),
+	};
+	result.to_string()
+}
+
 /// Parses VPL text into the lossless syntax tree.
 ///
 /// Unlike [`parse_vpl`], which returns the semantic pipeline the engine runs, this keeps

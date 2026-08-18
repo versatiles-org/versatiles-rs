@@ -502,7 +502,6 @@ fn build_impl_tokens(
 				#doc_details.to_string()
 			}
 
-			#[cfg(feature = "codegen")]
 			pub fn field_metadata() -> Vec<crate::vpl::VPLFieldMeta> {
 				vec![#(#meta_entries),*]
 			}

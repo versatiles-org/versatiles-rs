@@ -40,7 +40,6 @@ pub trait OperationFactoryTrait: Send + Sync {
 	/// [`docs`](Self::docs) minus the summary and the generated parameter list.
 	#[cfg(feature = "codegen")]
 	fn doc_details(&self) -> String;
-	#[cfg(feature = "codegen")]
 	fn field_metadata(&self) -> Vec<crate::vpl::VPLFieldMeta>;
 }
 
@@ -194,6 +193,48 @@ impl PipelineFactory {
 	#[context("Failed to create reader from VPL")]
 	pub async fn operation_from_vpl(&self, text: &str) -> Result<Box<dyn TileSource>> {
 		self.build_pipeline(parse_vpl(text)?).await
+	}
+
+	/// Parameter metadata for every registered read operation, by name.
+	pub(crate) fn read_registry(&self) -> std::collections::HashMap<String, Vec<crate::vpl::VPLFieldMeta>> {
+		self
+			.read_ops
+			.iter()
+			.map(|(k, v)| (k.clone(), v.field_metadata()))
+			.collect()
+	}
+
+	/// Parameter metadata for every registered transform operation, by name.
+	pub(crate) fn transform_registry(&self) -> std::collections::HashMap<String, Vec<crate::vpl::VPLFieldMeta>> {
+		self
+			.tran_ops
+			.iter()
+			.map(|(k, v)| (k.clone(), v.field_metadata()))
+			.collect()
+	}
+
+	/// `true` if `name` is a registered read operation.
+	#[must_use]
+	pub fn has_read_operation(&self, name: &str) -> bool {
+		self.read_ops.contains_key(name)
+	}
+
+	/// `true` if `name` is a registered transform operation.
+	#[must_use]
+	pub fn has_transform_operation(&self, name: &str) -> bool {
+		self.tran_ops.contains_key(name)
+	}
+
+	/// Parameter metadata for a read operation, or `None` if it is not registered.
+	#[must_use]
+	pub fn read_field_metadata(&self, name: &str) -> Option<Vec<crate::vpl::VPLFieldMeta>> {
+		self.read_ops.get(name).map(|f| f.field_metadata())
+	}
+
+	/// Parameter metadata for a transform operation, or `None` if it is not registered.
+	#[must_use]
+	pub fn transform_field_metadata(&self, name: &str) -> Option<Vec<crate::vpl::VPLFieldMeta>> {
+		self.tran_ops.get(name).map(|f| f.field_metadata())
 	}
 
 	/// Builds an executable operation graph from a parsed `VPLPipeline`.

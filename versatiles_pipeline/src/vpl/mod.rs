@@ -80,7 +80,6 @@
 mod cst;
 mod cst_parser;
 mod error;
-#[cfg(feature = "codegen")]
 mod field_meta;
 mod parser;
 mod serializer;
@@ -93,7 +92,6 @@ pub use cst::{
 };
 pub use cst_parser::parse_cst;
 pub use error::{VplErrorFrame, VplParseError};
-#[cfg(feature = "codegen")]
 pub use field_meta::VPLFieldMeta;
 pub use parser::{parse_vpl, parse_vpl_detailed};
 pub use vpl_node::VPLNode;

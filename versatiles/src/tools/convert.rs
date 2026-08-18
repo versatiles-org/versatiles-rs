@@ -1,9 +1,12 @@
-use std::time::Instant;
+use std::{fs, time::Instant};
 
 use anyhow::{Result, bail};
-use versatiles_container::{TilesConverterParameters, TilesRuntime, convert_tiles_container_to_str};
+use versatiles_container::{
+	DataLocation, DataSource, TilesConverterParameters, TilesRuntime, convert_tiles_container_to_str,
+};
 use versatiles_core::{GeoBBox, GeoCrop, TileCompression, TileFormat, TilePyramid};
 use versatiles_derive::context;
+use versatiles_pipeline::{check_pipeline, vpl::parse_vpl};
 
 /// Parse a tile format string like "webp", "webp,80", or "avif,90,50"
 /// into (TileFormat, Option<quality>, Option<effort>).
@@ -99,6 +102,15 @@ pub struct Subcommand {
 	/// set the output tile format, e.g. "webp", "webp,80", "avif,90,50"
 	#[arg(long, value_name = "format[,quality][,effort]", display_order = 3)]
 	tile_format: Option<String>,
+
+	/// check the pipeline and exit without reading or writing any tiles
+	///
+	/// Reports mistakes in the pipeline itself — an unknown operation or
+	/// parameter, a missing required parameter, a composite without sources.
+	/// Nothing is opened, so a typo fails in the first second rather than after
+	/// the inputs have been read.
+	#[arg(long, display_order = 4, verbatim_doc_comment)]
+	dry_run: bool,
 }
 
 #[tokio::main]
@@ -112,6 +124,10 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	// Periodically log RSS so memory growth (e.g. toward an OOM kill, which the
 	// process can't report itself) is visible in the conversion's own output.
 	let _memory_heartbeat = super::memory::start();
+
+	if arguments.dry_run {
+		return dry_run(arguments);
+	}
 
 	log::trace!("convert: opening source '{}'", arguments.input_file);
 	let open_start = Instant::now();
@@ -192,6 +208,51 @@ fn tile_pyramid(arguments: &Subcommand) -> Result<(Option<TilePyramid>, Option<G
 	}
 
 	Ok((Some(tile_pyramid), geo_bbox))
+}
+
+/// Reports problems with the pipeline without opening anything.
+///
+/// Only a VPL source can be checked statically; for a plain container there is
+/// nothing to validate short of opening it, which is exactly what `--dry-run`
+/// promises not to do.
+#[context("Checking '{}'", arguments.input_file)]
+fn dry_run(arguments: &Subcommand) -> Result<()> {
+	let source = DataSource::parse(&arguments.input_file)?;
+
+	if source.optional_container_type() != Some("vpl") {
+		log::info!(
+			"'{}' is not a VPL pipeline, so there is nothing to check without opening it",
+			arguments.input_file
+		);
+		return Ok(());
+	}
+
+	let vpl = match source.location() {
+		DataLocation::Blob(blob) => blob.as_str().to_string(),
+		DataLocation::Path(path) => fs::read_to_string(path)?,
+		DataLocation::Url(url) => bail!("cannot check a pipeline hosted at '{url}' without fetching it"),
+	};
+
+	// `check_pipeline` needs no factory and no runtime, which is what makes the
+	// "opens nothing" promise checkable rather than merely intended.
+	let problems = check_pipeline(&parse_vpl(&vpl)?);
+
+	if problems.is_empty() {
+		log::info!("pipeline is valid");
+		return Ok(());
+	}
+
+	for problem in &problems {
+		let node = problem
+			.path
+			.iter()
+			.map(std::string::ToString::to_string)
+			.collect::<Vec<_>>()
+			.join(".");
+		log::error!("node {node}: {}", problem.message);
+	}
+
+	bail!("found {} problem(s) in the pipeline", problems.len())
 }
 
 #[cfg(test)]
