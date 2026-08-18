@@ -19,8 +19,10 @@ use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLN
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*.tar` file.
 struct Args {
-	/// The filename of the tile container (relative to the VPL file path), or a URL (http/https).
+	/// The filename of the tile container (relative to the VPL file path), or a URL
+	/// (`http`, `https`, or `sftp`).
 	/// For example: `filename="world.versatiles"` or `filename="https://example.com/world.versatiles"`.
+	/// See `versatiles help source` for URL and authentication details.
 	filename: String,
 }
 

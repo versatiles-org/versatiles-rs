@@ -164,7 +164,7 @@ Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*
 
 ### Parameters
 
-- **`filename`: String (required)** - The filename of the tile container (relative to the VPL file path), or a URL (http/https). For example: `filename="world.versatiles"` or `filename="https://example.com/world.versatiles"`.
+- **`filename`: String (required)** - The filename of the tile container (relative to the VPL file path), or a URL (`http`, `https`, or `sftp`). For example: `filename="world.versatiles"` or `filename="https://example.com/world.versatiles"`. See `versatiles help source` for URL and authentication details.
 
 ---
 
@@ -380,9 +380,13 @@ Like raster_tile_resize, but uses 24-bit raw value averaging for downscaling
 
 Filter tiles by bounding box, zoom levels, and/or the tile coordinates present in another container.
 
+Every parameter narrows the tile set, except `bbox_border`, which widens it
+by keeping a ring of tiles around `bbox`.
+
 ### Parameters
 
 - *`bbox`: [f64,f64,f64,f64] (optional)* - Bounding box in WGS84: [min lng, min lat, max lng, max lat].
+- *`bbox_border`: u32 (optional)* - Ring of extra tiles to keep around `bbox`, in tiles per zoom level. Note that this is the one parameter here that *widens*: every other parameter narrows the tile set, but `bbox_border=2` keeps tiles the bbox alone would have dropped. Those tiles lie outside the crop, so the advertised bounds are extended to cover them and a client actually requests them. This matters wherever a cropped tileset is rendered rather than just stored: without a border, labels and geometry near the edge have no neighbouring tiles to be laid out against. Requires `bbox`; setting it alone is an error rather than a no-op.
 - *`level_min`: u8 (optional)* - minimal zoom level
 - *`level_max`: u8 (optional)* - maximal zoom level
 - *`filename`: String (optional)* - Path to a tile container used as a coordinate allow-list. Only tiles whose coordinates exist in this container are passed through. Accepts the same path/URL syntax as `from_container`. Note: opening the container and building the allow-list requires I/O at pipeline build time.

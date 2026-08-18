@@ -10,9 +10,26 @@ use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filter tiles by bounding box, zoom levels, and/or the tile coordinates present in another container.
+///
+/// Every parameter narrows the tile set, except `bbox_border`, which widens it
+/// by keeping a ring of tiles around `bbox`.
 struct Args {
 	/// Bounding box in WGS84: [min lng, min lat, max lng, max lat].
 	bbox: Option<[f64; 4]>,
+	/// Ring of extra tiles to keep around `bbox`, in tiles per zoom level.
+	///
+	/// Note that this is the one parameter here that *widens*: every other
+	/// parameter narrows the tile set, but `bbox_border=2` keeps tiles the
+	/// bbox alone would have dropped. Those tiles lie outside the crop, so the
+	/// advertised bounds are extended to cover them and a client actually
+	/// requests them.
+	///
+	/// This matters wherever a cropped tileset is rendered rather than just
+	/// stored: without a border, labels and geometry near the edge have no
+	/// neighbouring tiles to be laid out against.
+	///
+	/// Requires `bbox`; setting it alone is an error rather than a no-op.
+	bbox_border: Option<u32>,
 	/// minimal zoom level
 	level_min: Option<u8>,
 	/// maximal zoom level
@@ -69,14 +86,60 @@ impl Operation {
 			tilejson.set_zoom_max(level_max);
 		}
 
+		if args.bbox.is_none() && args.bbox_border.is_some() {
+			bail!(
+				"Invalid arguments in filter node {:?}: bbox_border has nothing to widen without bbox",
+				vpl_node.name
+			);
+		}
+
 		if let Some(bbox) = args.bbox {
 			let bbox = GeoBBox::try_from(&bbox)?;
-			tile_pyramid.intersect_geo_bbox(&bbox)?;
-			if let Some(existing_bbox) = &mut tilejson.bounds {
-				existing_bbox.intersect(&bbox);
+
+			if let Some(border) = args.bbox_border.filter(|border| *border > 0) {
+				// Grow the ring from a *full* pyramid cropped to the bbox, then
+				// intersect with the source — exactly what `convert
+				// --bbox-border` does. Buffering the source-intersected pyramid
+				// instead would let the ring invent tiles the source does not
+				// have, and at low zoom levels a two-tile ring swallows the
+				// whole level.
+				let mut cropped = TilePyramid::new_full();
+				if let Some(level_min) = tile_pyramid.level_min() {
+					cropped.set_level_min(level_min);
+				}
+				if let Some(level_max) = tile_pyramid.level_max() {
+					cropped.set_level_max(level_max);
+				}
+				cropped.intersect_geo_bbox(&bbox)?;
+				cropped.buffer(border);
+				tile_pyramid.intersect_pyramid(&cropped);
 			} else {
-				tilejson.bounds = Some(bbox);
+				tile_pyramid.intersect_geo_bbox(&bbox)?;
 			}
+
+			// Base bounds: the precise crop, intersected with any bounds the
+			// source already advertises.
+			let mut bounds = match tilejson.bounds {
+				Some(mut existing) => {
+					existing.intersect(&bbox);
+					existing
+				}
+				None => bbox,
+			};
+
+			// A border ring keeps tiles *outside* the crop, which the crop
+			// rectangle does not overlap — so a client selecting tiles by bbox
+			// overlap would never ask for them. Extend the advertised bounds to
+			// the minimal box touching every tile actually kept. Mirrors
+			// `TilesConvertReader::new_from_reader`, so `filter bbox_border=N`
+			// and `convert --bbox-border N` describe the same tileset.
+			if args.bbox_border.is_some_and(|border| border > 0)
+				&& let Some(touching) = tile_pyramid.geo_bbox_touching_all_tiles()
+			{
+				bounds.extend(&touching);
+			}
+
+			tilejson.bounds = Some(bounds);
 			tilejson.center = None; // Center may no longer be valid after bbox intersection, so clear it to avoid confusion
 		}
 
@@ -343,5 +406,172 @@ mod tests {
 		assert!(count > 0);
 
 		Ok(())
+	}
+
+	/// `bbox_border` must keep tiles the bbox alone drops, at every level.
+	#[tokio::test]
+	async fn bbox_border_widens_the_pyramid() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+
+		let without = factory
+			.operation_from_vpl("from_debug format=mvt | filter bbox=[0,0,40,20] level_max=5")
+			.await?
+			.tile_pyramid()
+			.await?;
+		let with = factory
+			.operation_from_vpl("from_debug format=mvt | filter bbox=[0,0,40,20] level_max=5 bbox_border=2")
+			.await?
+			.tile_pyramid()
+			.await?;
+
+		assert!(
+			with.count_tiles() > without.count_tiles(),
+			"a border must add tiles: {} vs {}",
+			without.count_tiles(),
+			with.count_tiles()
+		);
+
+		// Every tile inside the crop is still there — a border only adds.
+		for level in 0..=5u8 {
+			let inner = without.level_ref(level).to_bbox();
+			if inner.is_empty() {
+				continue;
+			}
+			let outer = with.level_ref(level).to_bbox();
+			assert!(
+				outer.includes_bbox(&inner),
+				"level {level}: border must not drop tiles the crop kept"
+			);
+		}
+		Ok(())
+	}
+
+	/// The advertised bounds have to grow with the border, or a client selecting
+	/// tiles by bbox overlap never requests the ring that was just written.
+	#[tokio::test]
+	async fn bbox_border_extends_the_advertised_bounds() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+
+		let plain = factory
+			.operation_from_vpl("from_debug format=mvt | filter bbox=[0,0,40,20] level_max=5")
+			.await?;
+		let bordered = factory
+			.operation_from_vpl("from_debug format=mvt | filter bbox=[0,0,40,20] level_max=5 bbox_border=2")
+			.await?;
+
+		let plain_bounds = plain.tilejson().as_object().number_array::<4>("bounds")?.unwrap();
+		let border_bounds = bordered.tilejson().as_object().number_array::<4>("bounds")?.unwrap();
+
+		assert_relative_eq!(plain_bounds.as_slice(), [0.0_f64, 0.0, 40.0, 20.0].as_slice());
+		assert!(border_bounds[0] < plain_bounds[0], "west must extend");
+		assert!(border_bounds[1] < plain_bounds[1], "south must extend");
+		assert!(border_bounds[2] > plain_bounds[2], "east must extend");
+		assert!(border_bounds[3] > plain_bounds[3], "north must extend");
+		Ok(())
+	}
+
+	/// `bbox_border=0` is the documented no-op, so it must not widen anything.
+	#[tokio::test]
+	async fn bbox_border_zero_changes_nothing() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let plain = factory
+			.operation_from_vpl("from_debug format=mvt | filter bbox=[0,0,40,20] level_max=5")
+			.await?;
+		let zero = factory
+			.operation_from_vpl("from_debug format=mvt | filter bbox=[0,0,40,20] level_max=5 bbox_border=0")
+			.await?;
+
+		assert_eq!(
+			plain.tile_pyramid().await?.count_tiles(),
+			zero.tile_pyramid().await?.count_tiles()
+		);
+		assert_relative_eq!(
+			plain
+				.tilejson()
+				.as_object()
+				.number_array::<4>("bounds")?
+				.unwrap()
+				.as_slice(),
+			zero
+				.tilejson()
+				.as_object()
+				.number_array::<4>("bounds")?
+				.unwrap()
+				.as_slice()
+		);
+		Ok(())
+	}
+
+	/// `filter bbox_border=N` must describe the same tileset as
+	/// `convert --bbox-border N`. The two implementations are separate, so this
+	/// pins them together — the whole point of #219 was that the CLI could
+	/// express something a pipeline could not.
+	#[tokio::test]
+	async fn bbox_border_matches_the_converter() -> Result<()> {
+		use versatiles_container::{TilesConvertReader, TilesConverterParameters};
+
+		const BBOX: [f64; 4] = [13.3, 52.4, 13.5, 52.6];
+		const BORDER: u32 = 2;
+		const LEVEL_MAX: u8 = 12;
+
+		let factory = PipelineFactory::new_dummy();
+
+		// What `versatiles convert --bbox ... --bbox-border 2 --max-zoom 12` builds.
+		let mut cli_pyramid = TilePyramid::new_full();
+		cli_pyramid.set_level_max(LEVEL_MAX);
+		cli_pyramid.intersect_geo_bbox(&GeoBBox::try_from(&BBOX)?)?;
+		cli_pyramid.buffer(BORDER);
+		let converter = TilesConvertReader::new_from_reader(
+			std::sync::Arc::new(factory.operation_from_vpl("from_debug format=mvt").await?),
+			TilesConverterParameters {
+				tile_pyramid: Some(cli_pyramid),
+				geo_bbox: Some(GeoBBox::try_from(&BBOX)?),
+				bbox_border: Some(BORDER),
+				..Default::default()
+			},
+		)
+		.await?;
+
+		let filtered = factory
+			.operation_from_vpl(&format!(
+				"from_debug format=mvt | filter bbox=[13.3,52.4,13.5,52.6] level_max={LEVEL_MAX} bbox_border={BORDER}"
+			))
+			.await?;
+
+		assert_eq!(
+			filtered.tile_pyramid().await?.as_ref(),
+			converter.tile_pyramid().await?.as_ref(),
+			"filter and convert must select the same tiles"
+		);
+		assert_relative_eq!(
+			filtered
+				.tilejson()
+				.as_object()
+				.number_array::<4>("bounds")?
+				.unwrap()
+				.as_slice(),
+			converter
+				.tilejson()
+				.as_object()
+				.number_array::<4>("bounds")?
+				.unwrap()
+				.as_slice()
+		);
+		Ok(())
+	}
+
+	/// Without a bbox there is nothing to widen. Failing beats silently ignoring
+	/// the parameter, which is what the CLI flag does today.
+	#[tokio::test]
+	async fn bbox_border_without_bbox_is_an_error() {
+		let factory = PipelineFactory::new_dummy();
+		let err = factory
+			.operation_from_vpl("from_debug format=mvt | filter bbox_border=2")
+			.await
+			.unwrap_err();
+		assert!(
+			format!("{err:#}").contains("bbox_border has nothing to widen without bbox"),
+			"unexpected error: {err:#}"
+		);
 	}
 }
