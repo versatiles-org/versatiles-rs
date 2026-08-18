@@ -31,7 +31,15 @@ static MULTIPLE_NEWLINES_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"
 
 pub trait OperationFactoryTrait: Send + Sync {
 	fn tag_name(&self) -> &str;
+	/// The operation's full documentation, including the generated parameter
+	/// list. This is what the operation reference and `versatiles help` render.
 	fn docs(&self) -> String;
+	/// The first paragraph of [`docs`](Self::docs), as one sentence.
+	#[cfg(feature = "codegen")]
+	fn doc_summary(&self) -> String;
+	/// [`docs`](Self::docs) minus the summary and the generated parameter list.
+	#[cfg(feature = "codegen")]
+	fn doc_details(&self) -> String;
 	#[cfg(feature = "codegen")]
 	fn field_metadata(&self) -> Vec<crate::vpl::VPLFieldMeta>;
 }
@@ -323,7 +331,16 @@ unsafe impl Send for PipelineFactory {}
 pub struct OperationMeta {
 	pub tag_name: String,
 	pub kind: &'static str,
+	/// Full documentation: summary, details, and a rendered parameter list.
+	///
+	/// The parameter list duplicates `fields` in prose. Prefer `summary` and
+	/// `details` for anything that is not rendering the complete reference.
 	pub doc: String,
+	/// First paragraph of `doc` — one sentence, for a tooltip or picker entry.
+	pub summary: String,
+	/// `doc` minus the summary and the parameter list. Empty when there is
+	/// nothing more to say.
+	pub details: String,
 	pub fields: Vec<crate::vpl::VPLFieldMeta>,
 }
 
@@ -340,6 +357,8 @@ pub fn all_operation_metadata() -> Vec<OperationMeta> {
 			tag_name: f.tag_name().to_string(),
 			kind: "read",
 			doc: f.docs(),
+			summary: f.doc_summary(),
+			details: f.doc_details(),
 			fields: f.field_metadata(),
 		});
 	}
@@ -349,6 +368,8 @@ pub fn all_operation_metadata() -> Vec<OperationMeta> {
 			tag_name: f.tag_name().to_string(),
 			kind: "transform",
 			doc: f.docs(),
+			summary: f.doc_summary(),
+			details: f.doc_details(),
 			fields: f.field_metadata(),
 		});
 	}

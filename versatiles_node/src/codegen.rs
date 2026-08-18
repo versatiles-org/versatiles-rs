@@ -315,10 +315,10 @@ fn generate_read_method(out: &mut String, op: &OperationMeta) {
 	let all_optional = all_fields_optional(op);
 	let tag = &op.tag_name;
 
-	// JSDoc
-	let doc_first_line = op.doc.lines().next().unwrap_or("").trim();
-	if !doc_first_line.is_empty() {
-		writeln!(out, "\t/** {} */", doc_first_line.replace("*/", "* /")).expect("writing to string never fails");
+	// JSDoc. Use the summary rather than slicing `doc`: a summary that wraps
+	// onto a second line would otherwise be emitted truncated mid-sentence.
+	if !op.summary.is_empty() {
+		writeln!(out, "\t/** {} */", op.summary.replace("*/", "* /")).expect("writing to string never fails");
 	}
 
 	// Method signature
@@ -387,10 +387,10 @@ fn generate_transform_method(out: &mut String, op: &OperationMeta) {
 	let all_optional = all_fields_optional(op);
 	let tag = &op.tag_name;
 
-	// JSDoc
-	let doc_first_line = op.doc.lines().next().unwrap_or("").trim();
-	if !doc_first_line.is_empty() {
-		writeln!(out, "\t/** {} */", doc_first_line.replace("*/", "* /")).expect("writing to string never fails");
+	// JSDoc. Use the summary rather than slicing `doc`: a summary that wraps
+	// onto a second line would otherwise be emitted truncated mid-sentence.
+	if !op.summary.is_empty() {
+		writeln!(out, "\t/** {} */", op.summary.replace("*/", "* /")).expect("writing to string never fails");
 	}
 
 	// Method signature
@@ -562,6 +562,8 @@ mod tests {
 			tag_name: "from_container".to_string(),
 			kind: "read",
 			doc: "Reads a tile container.".to_string(),
+			summary: "Reads a tile container.".to_string(),
+			details: String::new(),
 			fields: vec![VPLFieldMeta {
 				name: "filename".to_string(),
 				rust_type: "String".to_string(),
@@ -590,6 +592,8 @@ mod tests {
 			tag_name: "filter".to_string(),
 			kind: "transform",
 			doc: "Filter tiles.".to_string(),
+			summary: "Filter tiles.".to_string(),
+			details: String::new(),
 			fields: vec![
 				VPLFieldMeta {
 					name: "level_min".to_string(),
@@ -624,6 +628,8 @@ mod tests {
 			tag_name: "from_stacked_raster".to_string(),
 			kind: "read",
 			doc: "Stack raster sources.".to_string(),
+			summary: "Stack raster sources.".to_string(),
+			details: String::new(),
 			fields: vec![
 				VPLFieldMeta {
 					name: "sources".to_string(),

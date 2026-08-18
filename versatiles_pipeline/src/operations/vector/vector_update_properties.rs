@@ -168,6 +168,14 @@ impl OperationFactoryTrait for Factory {
 	fn docs(&self) -> String {
 		Args::docs()
 	}
+	#[cfg(feature = "codegen")]
+	fn doc_summary(&self) -> String {
+		Args::doc_summary()
+	}
+	#[cfg(feature = "codegen")]
+	fn doc_details(&self) -> String {
+		Args::doc_details()
+	}
 	fn tag_name(&self) -> &str {
 		"vector_update_properties"
 	}

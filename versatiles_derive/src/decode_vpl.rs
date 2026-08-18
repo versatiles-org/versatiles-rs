@@ -274,6 +274,33 @@ fn extract_struct_docs(attrs: &[Attribute]) -> String {
 		.to_string()
 }
 
+/// Splits a struct's rustdoc into its summary and the rest.
+///
+/// The summary is the first paragraph — everything up to the first blank line —
+/// with its line breaks collapsed to spaces, so it renders as one sentence in a
+/// tooltip or a picker. The remainder is returned verbatim.
+///
+/// Taking the first *paragraph* rather than the first *line* matters: rustdoc
+/// summaries routinely wrap, and a line-based split silently truncates them
+/// mid-sentence.
+fn split_summary(docs: &str) -> (String, String) {
+	let docs = docs.trim();
+	let (summary, details) = match docs.split_once("\n\n") {
+		Some((first, rest)) => (first, rest.trim()),
+		None => (docs, ""),
+	};
+
+	let summary = summary
+		.lines()
+		.map(str::trim)
+		.collect::<Vec<_>>()
+		.join(" ")
+		.trim()
+		.to_string();
+
+	(summary, details.to_string())
+}
+
 /// Metadata for a single field, used for code generation.
 struct FieldMeta {
 	name: String,
@@ -400,6 +427,8 @@ fn build_impl_tokens(
 	field_names: &[String],
 	parser_fields: &[TokenStream],
 	doc: &str,
+	doc_summary: &str,
+	doc_details: &str,
 	field_metas: &[FieldMeta],
 ) -> TokenStream {
 	let meta_entries: Vec<TokenStream> = field_metas
@@ -456,6 +485,21 @@ fn build_impl_tokens(
 
 			pub fn docs() -> String {
 				#doc.to_string()
+			}
+
+			/// The first paragraph of the operation's documentation — one
+			/// sentence, suitable for a tooltip or a picker entry.
+			#[cfg(feature = "codegen")]
+			pub fn doc_summary() -> String {
+				#doc_summary.to_string()
+			}
+
+			/// Everything after the summary, excluding the generated parameter
+			/// list (which is already available, structured, via
+			/// `field_metadata`). Empty when there is nothing more to say.
+			#[cfg(feature = "codegen")]
+			pub fn doc_details() -> String {
+				#doc_details.to_string()
 			}
 
 			#[cfg(feature = "codegen")]
@@ -520,7 +564,22 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 		format!("### Parameters\n\n{}", doc_fields.join("\n"))
 	};
 
-	let doc = vec![doc_struct, doc_sources.unwrap_or_default(), doc_fields_str]
+	// `doc` stays whole: it is what `versatiles help` and the generated
+	// operation reference render, and both want the parameter list.
+	let doc_sources = doc_sources.unwrap_or_default();
+	let doc = vec![doc_struct.clone(), doc_sources.clone(), doc_fields_str]
+		.into_iter()
+		.filter(|s| !s.is_empty())
+		.collect::<Vec<String>>()
+		.join("\n\n")
+		.trim()
+		.to_string();
+
+	// `summary` and `details` are the same prose without the generated
+	// parameter section, so a UI never has to split markdown to find out what an
+	// operation does.
+	let (doc_summary, doc_struct_rest) = split_summary(&doc_struct);
+	let doc_details = vec![doc_struct_rest, doc_sources]
 		.into_iter()
 		.filter(|s| !s.is_empty())
 		.collect::<Vec<String>>()
@@ -533,6 +592,8 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 		&field_names,
 		&parser_fields,
 		&doc,
+		&doc_summary,
+		&doc_details,
 		&field_metas,
 	))
 }
@@ -813,5 +874,60 @@ mod tests {
 		assert!(code.contains("\"Vec<VPLPipeline>\""));
 		let code_no_spaces = code.replace(' ', "");
 		assert!(code_no_spaces.contains("is_sources:true"));
+	}
+
+	#[test]
+	fn split_summary_takes_the_whole_first_paragraph() {
+		// A wrapped summary must survive intact — splitting on the first *line*
+		// is what truncated four operations' JSDoc mid-sentence.
+		let (summary, details) = super::split_summary(
+			"Merges multiple vector tile sources.\nEach resulting tile will contain all the features.\n\n### Sources\n\nAll sources must provide vector tiles.",
+		);
+		assert_eq!(
+			summary,
+			"Merges multiple vector tile sources. Each resulting tile will contain all the features."
+		);
+		assert_eq!(details, "### Sources\n\nAll sources must provide vector tiles.");
+	}
+
+	#[test]
+	fn split_summary_handles_a_lone_paragraph() {
+		let (summary, details) = super::split_summary("Reads a tile container.");
+		assert_eq!(summary, "Reads a tile container.");
+		assert!(details.is_empty(), "nothing to say beyond the summary");
+	}
+
+	#[test]
+	fn split_summary_handles_empty_docs() {
+		let (summary, details) = super::split_summary("");
+		assert!(summary.is_empty());
+		assert!(details.is_empty());
+	}
+
+	#[test]
+	fn generated_code_exposes_summary_and_details() {
+		let input: DeriveInput = parse_quote!(
+			/// Does a thing.
+			/// Continues the summary on a second line.
+			///
+			/// A longer explanation.
+			struct Test {
+				#[doc = "Field documentation"]
+				field1: String,
+			}
+		);
+		let data_struct = match &input.data {
+			syn::Data::Struct(ds) => ds.clone(),
+			_ => panic!("Expected struct data"),
+		};
+		let code = pretty_tokens(&decode_struct(input, data_struct).unwrap()).join("\n");
+
+		assert!(code.contains("pub fn doc_summary() -> String"));
+		assert!(code.contains("pub fn doc_details() -> String"));
+		// The summary is the joined first paragraph, and carries no parameter list.
+		assert!(code.contains("Does a thing. Continues the summary on a second line."));
+		// `docs()` is unchanged and still carries the generated parameter list,
+		// because that is what the operation reference renders.
+		assert!(code.contains("### Parameters"));
 	}
 }

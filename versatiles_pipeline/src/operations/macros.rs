@@ -12,6 +12,14 @@ macro_rules! define_transform_factory {
 			fn docs(&self) -> String {
 				<$args>::docs()
 			}
+			#[cfg(feature = "codegen")]
+			fn doc_summary(&self) -> String {
+				<$args>::doc_summary()
+			}
+			#[cfg(feature = "codegen")]
+			fn doc_details(&self) -> String {
+				<$args>::doc_details()
+			}
 			fn tag_name(&self) -> &str {
 				$tag
 			}
@@ -50,6 +58,14 @@ macro_rules! define_read_factory {
 		impl $crate::factory::OperationFactoryTrait for Factory {
 			fn docs(&self) -> String {
 				<$args>::docs()
+			}
+			#[cfg(feature = "codegen")]
+			fn doc_summary(&self) -> String {
+				<$args>::doc_summary()
+			}
+			#[cfg(feature = "codegen")]
+			fn doc_details(&self) -> String {
+				<$args>::doc_details()
 			}
 			fn tag_name(&self) -> &str {
 				$tag
