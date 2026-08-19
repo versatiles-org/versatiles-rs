@@ -235,6 +235,22 @@ impl TilesRuntime {
 		self.inner.registry.reader_from_location(location, self.clone()).await
 	}
 
+	/// Open a tile container reader, authenticating SFTP with `ssh_identity`.
+	///
+	/// The identity applies to this source alone and wins over
+	/// [`Self::ssh_identity`], which applies to every source in the process.
+	pub async fn reader_from_location_with_ssh_identity(
+		&self,
+		location: DataLocation,
+		ssh_identity: Option<&Path>,
+	) -> Result<SharedTileSource> {
+		self
+			.inner
+			.registry
+			.reader_from_location_with_ssh_identity(location, self.clone(), ssh_identity)
+			.await
+	}
+
 	pub async fn reader(&self, data_source: DataSource) -> Result<SharedTileSource> {
 		self.inner.registry.reader(data_source, self.clone()).await
 	}

@@ -147,8 +147,9 @@ pub trait TransformOperationFactoryTrait: OperationFactoryTrait {
 /// Callback used to resolve a filename/URL into a concrete [`TileSource`].
 ///
 /// The factory invokes this to open external containers referenced by VPL `read` nodes.
-/// It receives the resolved path (relative to `dir`) and returns a boxed reader.
-type Callback = Box<dyn Fn(DataLocation) -> BoxFuture<'static, Result<Box<dyn TileSource>>>>;
+/// It receives the resolved path (relative to `dir`), an optional SSH identity
+/// for that one source, and returns a boxed reader.
+type Callback = Box<dyn Fn(DataLocation, Option<PathBuf>) -> BoxFuture<'static, Result<Box<dyn TileSource>>>>;
 
 /// Builder that registers read/transform operation factories and produces an operation graph.
 ///
@@ -201,7 +202,7 @@ impl PipelineFactory {
 	#[must_use]
 	pub fn new_dummy() -> Self {
 		PipelineFactory::new_dummy_reader(Box::new(
-			|location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
+			|location: DataLocation, _ssh_identity: Option<PathBuf>| -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
 					let mut name = location.to_string();
 					let format = TileFormat::from_filename(&mut name)
@@ -253,10 +254,31 @@ impl PipelineFactory {
 	}
 
 	/// Invokes `create_reader` to open a container. Callers must resolve first.
-	#[context("Failed to get reader for file '{}'", location)]
 	pub async fn reader(&self, location: DataLocation) -> Result<Box<dyn TileSource>> {
+		self.reader_with_ssh_identity(location, None).await
+	}
+
+	/// As [`Self::reader`], with an SSH identity for this source alone.
+	///
+	/// A relative identity path is resolved against the VPL file's directory, the
+	/// same base `filename` uses, so a pipeline that names both stays internally
+	/// consistent.
+	#[context("Failed to get reader for file '{}'", location)]
+	pub async fn reader_with_ssh_identity(
+		&self,
+		location: DataLocation,
+		ssh_identity: Option<&str>,
+	) -> Result<Box<dyn TileSource>> {
 		let location = location.resolved(&self.dir)?;
-		(self.create_reader.as_ref())(location).await
+		let ssh_identity = match ssh_identity {
+			Some(identity) => Some(
+				DataLocation::from(PathBuf::from(identity))
+					.resolved(&self.dir)?
+					.to_path_buf()?,
+			),
+			None => None,
+		};
+		(self.create_reader.as_ref())(location, ssh_identity).await
 	}
 
 	/// Parses VPL text and builds the corresponding operation graph.

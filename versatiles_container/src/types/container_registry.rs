@@ -163,9 +163,25 @@ impl ContainerRegistry {
 
 	/// Get a tile container reader for a given [`DataLocation`] (path or URL).
 	pub async fn reader_from_location(&self, location: DataLocation, runtime: TilesRuntime) -> Result<SharedTileSource> {
+		self
+			.reader_from_location_with_ssh_identity(location, runtime, None)
+			.await
+	}
+
+	/// Get a tile container reader, authenticating SFTP with `ssh_identity`.
+	///
+	/// The identity applies to this source alone and takes precedence over the
+	/// runtime's, which is process-wide. That is what lets one pipeline read from
+	/// two SFTP hosts that need different keys.
+	pub async fn reader_from_location_with_ssh_identity(
+		&self,
+		location: DataLocation,
+		runtime: TilesRuntime,
+		ssh_identity: Option<&Path>,
+	) -> Result<SharedTileSource> {
 		let debug = format!("{location:?}");
 		self
-			.reader(DataSource::try_from(location)?, runtime)
+			.reader_with_ssh_identity(DataSource::try_from(location)?, runtime, ssh_identity)
 			.await
 			.with_context(|| format!("Failed to get reader from location '{debug}'"))
 	}
@@ -179,8 +195,18 @@ impl ContainerRegistry {
 	///
 	/// # Returns
 	/// A `SharedTileSource` for reading tiles.
-	#[context("Failed to get reader for '{data_source:?}'")]
 	pub async fn reader(&self, data_source: DataSource, runtime: TilesRuntime) -> Result<SharedTileSource> {
+		self.reader_with_ssh_identity(data_source, runtime, None).await
+	}
+
+	/// As [`Self::reader`], with an SFTP identity for this source alone.
+	#[context("Failed to get reader for '{data_source:?}'")]
+	pub async fn reader_with_ssh_identity(
+		&self,
+		data_source: DataSource,
+		runtime: TilesRuntime,
+		ssh_identity: Option<&Path>,
+	) -> Result<SharedTileSource> {
 		let mut data_source = data_source.clone();
 		data_source.resolve(&DataLocation::cwd()?)?;
 		let extension = sanitize_extension(data_source.container_type()?);
@@ -188,7 +214,7 @@ impl ContainerRegistry {
 		let started = std::time::Instant::now();
 		let label = data_source.location().to_string();
 		log::trace!("registry: opening '{label}' (.{extension})");
-		let result = self.reader_impl(data_source, runtime, extension).await;
+		let result = self.reader_impl(data_source, runtime, extension, ssh_identity).await;
 		log::trace!(
 			"registry: '{label}' → {} in {:.2}s",
 			if result.is_ok() { "ok" } else { "err" },
@@ -197,11 +223,15 @@ impl ContainerRegistry {
 		result
 	}
 
+	// `ssh_identity` is read only by the SFTP branch, which is compiled out
+	// without the `ssh2` feature.
+	#[cfg_attr(not(feature = "ssh2"), allow(unused_variables))]
 	async fn reader_impl(
 		&self,
 		data_source: DataSource,
 		runtime: TilesRuntime,
 		extension: String,
+		ssh_identity: Option<&Path>,
 	) -> Result<SharedTileSource> {
 		match data_source.into_location() {
 			DataLocation::Url(url) => {
@@ -213,7 +243,10 @@ impl ContainerRegistry {
 						// `from_stacked_raster` building several sub-pipelines at
 						// once) actually run in parallel instead of serializing
 						// on the async task's worker thread.
-						let identity = runtime.ssh_identity().map(std::path::Path::to_path_buf);
+						// A key named on the source itself wins over the process-wide one.
+						let identity = ssh_identity
+							.or_else(|| runtime.ssh_identity())
+							.map(std::path::Path::to_path_buf);
 						let url_for_open = url.clone();
 						let reader =
 							tokio::task::spawn_blocking(move || DataReaderSftp::open(&url_for_open, identity.as_deref()))

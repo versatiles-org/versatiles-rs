@@ -88,6 +88,9 @@ Default port is **22**. Connect timeout is 30 s. TCP and SSH keepalive both fire
 4. `IdentityFile` entries in `~/.ssh/config` for the target host
 5. Default key files: `~/.ssh/id_ed25519`, `~/.ssh/id_rsa`, `~/.ssh/id_ecdsa`
 
+In a VPL pipeline, `from_container` takes `ssh_identity="…"` for one source, which overrides both
+of the above — that is how a single pipeline reads from two SFTP hosts needing different keys.
+
 Writing to SFTP:
 
 ```bash

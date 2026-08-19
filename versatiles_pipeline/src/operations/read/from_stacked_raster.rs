@@ -579,7 +579,9 @@ mod tests {
 	#[tokio::test]
 	async fn test_operation_parameters() -> Result<()> {
 		let factory = PipelineFactory::new_dummy_reader(Box::new(
-			|location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
+			|location: DataLocation,
+			 _ssh_identity: Option<std::path::PathBuf>|
+			 -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
 					let mut pyramide = TilePyramid::new_empty();
 					let filename = location.to_string();
@@ -887,7 +889,9 @@ mod tests {
 
 		// Create a factory that returns a vector tile source
 		let factory = PipelineFactory::new_dummy_reader(Box::new(
-			|_location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
+			|_location: DataLocation,
+			 _ssh_identity: Option<std::path::PathBuf>|
+			 -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
 					// Create a mock vector tile source with MVT format
 					#[derive(Debug)]
@@ -983,7 +987,9 @@ mod tests {
 
 		// Create a factory where the source only has data up to level 2
 		let factory = PipelineFactory::new_dummy_reader(Box::new(
-			|_location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
+			|_location: DataLocation,
+			 _ssh_identity: Option<std::path::PathBuf>|
+			 -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
 					let mut pyramid = TilePyramid::new_empty();
 					pyramid.insert_bbox(&TileBBox::new_full(0)?)?;
@@ -1018,7 +1024,9 @@ mod tests {
 
 		// Create two sources: first has data at all levels, second only at lower levels
 		let factory = PipelineFactory::new_dummy_reader(Box::new(
-			|location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
+			|location: DataLocation,
+			 _ssh_identity: Option<std::path::PathBuf>|
+			 -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
 					let mut pyramid = TilePyramid::new_empty();
 					let filename = location.to_string();

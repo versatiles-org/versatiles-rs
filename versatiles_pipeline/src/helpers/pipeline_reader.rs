@@ -6,7 +6,10 @@
 //! It supports opening from paths or arbitrary [`DataReader`]s, validates and
 //! executes the configured operations, and streams tiles for a given bbox.
 
-use std::{path::Path, sync::Arc};
+use std::{
+	path::{Path, PathBuf},
+	sync::Arc,
+};
 
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
@@ -83,10 +86,13 @@ impl<'a> PipelineReader {
 	) -> Result<PipelineReader> {
 		let runtime2 = runtime.clone();
 		let callback = Box::new(
-			move |location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
+			move |location: DataLocation, ssh_identity: Option<PathBuf>| -> BoxFuture<Result<Box<dyn TileSource>>> {
 				let runtime = runtime2.clone();
 				Box::pin(async move {
-					let arc_reader = runtime.clone().reader_from_location(location).await?;
+					let arc_reader = runtime
+						.clone()
+						.reader_from_location_with_ssh_identity(location, ssh_identity.as_deref())
+						.await?;
 					Arc::try_unwrap(arc_reader)
 						.map_err(|_| anyhow::anyhow!("Cannot get exclusive access to reader for pipeline"))
 				})

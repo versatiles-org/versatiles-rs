@@ -417,7 +417,9 @@ mod tests {
 	#[tokio::test]
 	async fn test_operation_parameters() -> Result<()> {
 		let factory = PipelineFactory::new_dummy_reader(Box::new(
-			|location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
+			|location: DataLocation,
+			 _ssh_identity: Option<std::path::PathBuf>|
+			 -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
 					let mut pyramide = TilePyramid::new_empty();
 					let filename = location.to_string();
@@ -471,7 +473,9 @@ mod tests {
 		// Each source advertises a different attribution; the merged source must
 		// keep both credits (the bug was overwriting to a single one).
 		let factory = PipelineFactory::new_dummy_reader(Box::new(
-			|location: DataLocation| -> BoxFuture<Result<Box<dyn TileSource>>> {
+			|location: DataLocation,
+			 _ssh_identity: Option<std::path::PathBuf>|
+			 -> BoxFuture<Result<Box<dyn TileSource>>> {
 				Box::pin(async move {
 					let filename = location.to_string();
 					let attribution = format!("© {filename}");
