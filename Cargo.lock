@@ -5787,6 +5787,7 @@ dependencies = [
  "approx",
  "ctor",
  "env_logger",
+ "geo-types",
  "log",
  "napi",
  "napi-build",
@@ -5800,6 +5801,7 @@ dependencies = [
  "versatiles",
  "versatiles_container",
  "versatiles_core",
+ "versatiles_geometry",
 ]
 
 [[package]]

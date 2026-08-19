@@ -20,6 +20,7 @@
 //! - [`TileServer`]: HTTP server for serving tiles and static content
 //! - [`Progress`]: Progress monitoring for conversion operations
 //! - [`ConvertOptions`]: Configuration for tile conversion
+//! - [`layer_stats_of`]: Per-layer byte breakdown of a vector tile
 //!
 //! ## Example Usage
 //!
@@ -49,6 +50,7 @@
 
 mod codegen;
 mod convert;
+mod layer_stats;
 mod macros;
 mod progress;
 mod runtime;
@@ -58,6 +60,7 @@ mod types;
 mod vpl;
 
 pub use convert::convert;
+pub use layer_stats::{LayerStats, layer_stats_of};
 pub use progress::{Progress, ProgressData};
 pub use server::TileServer;
 pub use tile_source::TileSource;
