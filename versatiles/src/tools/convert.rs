@@ -127,7 +127,7 @@ pub struct Subcommand {
 	/// Repeatable. Which options exist depends on the output format; an option
 	/// the chosen writer does not accept is an error, not a no-op, and the
 	/// message lists what that format does accept.
-	/// Example: `-w allow_unclustered=true` when writing PMTiles.
+	/// Example: `--writer-option allow_unclustered=true` when writing PMTiles.
 	#[arg(long, value_name = "key=value", display_order = 4, verbatim_doc_comment)]
 	writer_option: Vec<String>,
 

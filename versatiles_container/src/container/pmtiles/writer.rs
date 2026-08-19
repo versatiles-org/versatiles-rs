@@ -71,8 +71,18 @@ use crate::{
 /// Tiles are ordered using the **Hilbert curve** to optimize spatial locality in the output.
 pub struct PMTilesWriter {}
 
+/// Writer option: accept a source that cannot supply Hilbert order, at the cost
+/// of a truthful `clustered` flag. See [`PMTilesWriter::supported_options`].
+const ALLOW_UNCLUSTERED: &str = "allow_unclustered";
+
 #[async_trait]
 impl TilesWriter for PMTilesWriter {
+	/// See the module docs on clustering. `allow_unclustered` is the only option
+	/// today; #231 adds `reorder`, which buys clustering back with a second pass.
+	fn supported_options() -> &'static [&'static str] {
+		&[ALLOW_UNCLUSTERED]
+	}
+
 	#[context("writing PMTiles to DataWriter")]
 	/// Write tiles and metadata from a [`TileSource`] to a [`DataWriterTrait`] as a `PMTiles` archive.
 	///
@@ -93,21 +103,36 @@ impl TilesWriter for PMTilesWriter {
 
 		let parameters = reader.metadata().clone();
 
-		// PMTiles stores tiles in Hilbert order and has no way to reorder them
-		// while writing, so check before any tile is read — on a real pipeline the
-		// alternative is failing minutes in. The destination file is already open
-		// by this point, so a failure here still leaves an empty one behind;
+		// A PMTiles archive is only *physically* clustered if tiles arrive in
+		// Hilbert order; the directory does not depend on it, because
+		// `EntriesV3::build_directory` sorts by tile id itself. So arrival order
+		// decides one thing: whether `header.clustered = true` would be truthful.
+		//
+		// Checked before any tile is read — on a real pipeline the alternative is
+		// failing minutes in. The destination file is already open by this point,
+		// so a failure here still leaves an empty one behind;
 		// `ContainerRegistry::write_to_path` removes it.
 		let required = Traversal::new(TraversalOrder::PMTiles, 1, 64)?;
 		let available = parameters.traversal();
+		let clustered = available.can_translate_to(&required);
+		let allow_unclustered = runtime.writer_option_bool(ALLOW_UNCLUSTERED)?.unwrap_or(false);
+
 		ensure!(
-			available.can_translate_to(&required),
-			"cannot write PMTiles: this source produces tiles in {} order, and PMTiles needs them in \
-			 Hilbert order — reordering would mean holding the whole tileset in memory. Operations \
-			 that build lower zoom levels from higher ones, such as `raster_overview`, force this \
-			 order. Write .versatiles or .mbtiles instead, which accept any order.",
+			clustered || allow_unclustered,
+			"cannot write PMTiles: this source produces tiles in {} order, and PMTiles stores them \
+			 in Hilbert order — reordering while writing would mean holding the whole tileset in \
+			 memory. Operations that build lower zoom levels from higher ones, such as \
+			 `raster_overview`, force this order.\n\
+			 Either write .versatiles or .mbtiles, which accept any order, or pass \
+			 `--writer-option {ALLOW_UNCLUSTERED}=true` to write a PMTiles archive whose tile data is not \
+			 physically clustered. The archive is valid and reads correctly either way, but an \
+			 unclustered one needs more range requests to serve, so it is not chosen for you.",
 			available.order()
 		);
+
+		// Only negotiate the order down once the source has been accepted, so a
+		// clustered source still gets the chunked Hilbert traversal.
+		let traversal = if clustered { required } else { Traversal::ANY };
 
 		let entries = EntriesV3::new();
 
@@ -130,7 +155,7 @@ impl TilesWriter for PMTilesWriter {
 
 		reader
 			.traverse_all_tiles(
-				&Traversal::new(TraversalOrder::PMTiles, 1, 64)?,
+				&traversal,
 				|_bbox, stream| {
 					let writer_mutex = Arc::clone(&writer_mutex);
 					let entries_mutex = Arc::clone(&entries_mutex);
@@ -198,7 +223,7 @@ impl TilesWriter for PMTilesWriter {
 		writer.set_position(tile_data_end)?;
 		header.leaf_dirs = writer.append(&directory.leaves_bytes)?;
 
-		header.clustered = true;
+		header.clustered = clustered;
 		header.internal_compression = PMTilesCompression::from_value(INTERNAL_COMPRESSION)?;
 		header.addressed_tiles_count = entries.tile_count();
 		header.tile_entries_count = entries.len() as u64;
@@ -223,6 +248,108 @@ mod tests {
 			pmtiles::PMTilesReader,
 		},
 	};
+
+	/// A source whose order PMTiles cannot accept — what `raster_overview`
+	/// produces, and the case #228 reported.
+	fn depth_first_source() -> Result<MockReader> {
+		MockReader::new_mock(
+			TilePyramid::new_full_up_to(3),
+			TileSourceMetadata::new(
+				TileFormat::PNG,
+				TileCompression::Uncompressed,
+				Traversal::new(TraversalOrder::DepthFirst, 1, 16)?,
+				None,
+			),
+		)
+	}
+
+	/// The header is the first `HeaderV3::len()` bytes of the archive.
+	fn read_header(blob: &Blob) -> Result<HeaderV3> {
+		let len = usize::try_from(HeaderV3::len())?;
+		HeaderV3::deserialize(&Blob::from(&blob.as_slice()[..len]))
+	}
+
+	async fn write_to_blob(reader: &mut MockReader, runtime: TilesRuntime) -> Result<Blob> {
+		let mut writer = DataWriterBlob::new()?;
+		PMTilesWriter::write_to_writer(reader, &mut writer, runtime).await?;
+		Ok(writer.into_blob())
+	}
+
+	#[tokio::test]
+	async fn unclustered_source_is_refused_by_default() -> Result<()> {
+		let err = write_to_blob(&mut depth_first_source()?, TilesRuntime::new_silent())
+			.await
+			.unwrap_err();
+		let err = format!("{err:#}");
+
+		assert!(err.contains("DepthFirst"), "should name the source's order: {err}");
+		assert!(err.contains("raster_overview"), "should name the usual cause: {err}");
+		// The failure has to name both escape hatches, so the choice is visible
+		// where it is made rather than only in the documentation.
+		assert!(err.contains(".versatiles"), "should offer another container: {err}");
+		assert!(err.contains("allow_unclustered=true"), "should offer the opt-in: {err}");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn allow_unclustered_accepts_the_source_and_says_so_in_the_header() -> Result<()> {
+		let runtime = TilesRuntime::builder()
+			.silent_progress(true)
+			.writer_option("allow_unclustered", "true")
+			.build();
+		let blob = write_to_blob(&mut depth_first_source()?, runtime).await?;
+
+		let header = read_header(&blob)?;
+		assert!(
+			!header.clustered,
+			"an archive written out of order must not claim to be clustered"
+		);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn a_clustered_source_still_reports_clustered() -> Result<()> {
+		// The opt-in must not make every archive claim to be unclustered: the
+		// flag follows the source, not the option.
+		let mut reader = MockReader::new_mock(
+			TilePyramid::new_full_up_to(3),
+			TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None),
+		)?;
+		let runtime = TilesRuntime::builder()
+			.silent_progress(true)
+			.writer_option("allow_unclustered", "true")
+			.build();
+		let blob = write_to_blob(&mut reader, runtime).await?;
+
+		assert!(read_header(&blob)?.clustered);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn allow_unclustered_false_still_refuses() -> Result<()> {
+		let runtime = TilesRuntime::builder()
+			.silent_progress(true)
+			.writer_option("allow_unclustered", "false")
+			.build();
+		assert!(write_to_blob(&mut depth_first_source()?, runtime).await.is_err());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn a_non_boolean_option_value_is_an_error() -> Result<()> {
+		let runtime = TilesRuntime::builder()
+			.silent_progress(true)
+			.writer_option("allow_unclustered", "maybe")
+			.build();
+		let err = write_to_blob(&mut depth_first_source()?, runtime).await.unwrap_err();
+		assert!(format!("{err:#}").contains("expects true or false"));
+		Ok(())
+	}
+
+	#[test]
+	fn the_option_is_declared_so_the_registry_accepts_it() {
+		assert!(PMTilesWriter::supported_options().contains(&"allow_unclustered"));
+	}
 
 	#[context("test: PMTiles read↔write roundtrip")]
 	#[tokio::test]
