@@ -91,15 +91,26 @@ jobs:
   linux-docs:
     name: "Linux: Docs"
     runs-on: ubuntu-latest
+    # GDAL comes from the image rather than apt; see "Install build tools".
+    container: ghcr.io/osgeo/gdal:ubuntu-small-3.12.0
     steps:
+      # The GDAL image is minimal, so the build toolchain the runner would
+      # normally provide has to be installed. This runs before checkout so that
+      # actions/checkout has git. Installing 129 packages here takes ~15s,
+      # against ~75s for the 279 that `apt-get install libgdal-dev` pulls in —
+      # and this way GDAL is the 3.12 the project actually wants, which Ubuntu's
+      # own packages cannot supply.
+      - name: Install build tools
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            build-essential git pkg-config libclang-dev
+
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup GDAL
-        uses: ./.github/actions/setup-gdal
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
@@ -181,15 +192,26 @@ jobs:
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'push'
+    # GDAL comes from the image rather than apt; see "Install build tools".
+    container: ghcr.io/osgeo/gdal:ubuntu-small-3.12.0
     steps:
+      # The GDAL image is minimal, so the build toolchain the runner would
+      # normally provide has to be installed. This runs before checkout so that
+      # actions/checkout has git. Installing 129 packages here takes ~15s,
+      # against ~75s for the 279 that `apt-get install libgdal-dev` pulls in —
+      # and this way GDAL is the 3.12 the project actually wants, which Ubuntu's
+      # own packages cannot supply.
+      - name: Install build tools
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            build-essential git pkg-config libclang-dev
+
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup GDAL
-        uses: ./.github/actions/setup-gdal
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
@@ -234,23 +256,32 @@ jobs:
             features: "--no-default-features --features server"
           - name: "gdal"
             features: "--features gdal"
-            needs-gdal: true
+            container: "ghcr.io/osgeo/gdal:ubuntu-small-3.12.0"
             run-tests: true
           - name: "all-features"
             features: "--all-features"
-            needs-gdal: true
+            container: "ghcr.io/osgeo/gdal:ubuntu-small-3.12.0"
             run-clippy: true
             run-tests: true
+    # Only the two GDAL entries need the image; the rest run directly on the
+    # runner, where the toolchain is already present. An empty value here means
+    # "no container".
+    container: ${{ matrix.container }}
     steps:
+      # See the same step in "Linux: Docs" for why this is here and why it runs
+      # before checkout. Only needed inside the container.
+      - name: Install build tools
+        if: matrix.container
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            build-essential git pkg-config libclang-dev
+
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup GDAL
-        if: matrix.needs-gdal
-        uses: ./.github/actions/setup-gdal
 
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
