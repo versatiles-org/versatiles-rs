@@ -136,10 +136,38 @@ Convert tiles from one format to another.
   - `compress` (string): Compression `"gzip"`, `"brotli"`, or `"uncompressed"`
   - `flipY` (boolean): Flip tiles vertically
   - `swapXy` (boolean): Swap x and y coordinates
+  - `writerOptions` (object): Format-specific settings for the writer, see below
 - `onProgress` (function, optional): Progress callback `(data: ProgressData) => void`
 - `onMessage` (function, optional): Message callback `(data: MessageData) => void`
 
 **Returns:** `Promise<void>`
+
+#### Writer options
+
+`writerOptions` passes settings to the writer that produces `output`. Which ones exist depends on the
+output format, so the keys keep the writer's own `snake_case` spelling rather than the camelCase of
+the options above. An option the chosen format does not accept is an error that names what it does
+accept — never a silent no-op.
+
+PMTiles is the only format with writer options today:
+
+| Key                 | Value   | Effect                                                                                                                |
+| ------------------- | ------- | --------------------------------------------------------------------------------------------------------------------- |
+| `allow_unclustered` | boolean | Write the archive in a single pass without physical clustering, at the cost of more range requests when serving it    |
+| `reorder`           | boolean | Stay clustered by writing the tile data twice, at the cost of a second pass and temporary disk the size of the output |
+| `temp_dir`          | path    | Where `reorder` puts that temporary file (default: the output file's own directory)                                   |
+
+Both opt-ins matter only for a source that cannot supply Hilbert order — a pipeline containing
+`raster_overview`, for example, builds lower zoom levels from higher ones and so produces tiles in
+the opposite order. Writing such a source to `.pmtiles` without one of them fails; asking for both is
+an error, since they buy different things. Booleans are strings: `'true'`, `'1'` or `'yes'`,
+case-insensitively, and likewise for false.
+
+```javascript
+await convert('pipeline.vpl', 'output.pmtiles', {
+  writerOptions: { reorder: 'true', temp_dir: '/mnt/scratch' },
+});
+```
 
 ### `class TileSource`
 

@@ -89,6 +89,20 @@ pub struct ConvertOptions {
 	/// Keys reach the writer verbatim, so they keep the writer's own spelling —
 	/// `snake_case`, unlike the camelCase fields around them here.
 	///
+	/// PMTiles accepts three; every other format accepts none:
+	/// - `allow_unclustered` — write an archive that is not physically clustered,
+	///   in a single pass, at the cost of more range requests when serving it
+	/// - `reorder` — stay clustered by writing the tile data twice, at the cost of
+	///   a second pass and temporary disk the size of the output
+	/// - `temp_dir` — where `reorder` puts that temporary file (default: the
+	///   output file's own directory)
+	///
+	/// They matter only for a source that cannot supply Hilbert order, such as a
+	/// pipeline containing `raster_overview`; writing one to `.pmtiles` without
+	/// either opt-in is an error. Asking for both is also an error, since they buy
+	/// different things. Booleans are strings — `'true'`, `'1'` or `'yes'`,
+	/// case-insensitively, and likewise for false.
+	///
 	/// **Example:** `{ allow_unclustered: 'true' }` when writing PMTiles
 	///
 	/// **Default:** No writer options
