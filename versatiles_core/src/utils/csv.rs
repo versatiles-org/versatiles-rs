@@ -116,9 +116,18 @@ fn read_csv_fields<'a>(
 						return Some(Ok((fields, iter.position())));
 					}
 					Some(e) if e == separator => break,
-					// parse_simple_csv_string / parse_quoted_csv_string stop at separator,
-					// \r, \n, or EOF — so consume() here can only yield one of those.
-					Some(_) => unreachable!("csv field parser left non-boundary byte unread"),
+					// `parse_simple_csv_string` stops at a boundary, so it cannot land here.
+					// `parse_quoted_csv_string` stops at its *closing quote*, and what follows
+					// is whatever the file says — so a separator that does not match the file
+					// arrives here. That is a diagnosable input error, not a broken invariant:
+					// a semicolon-separated file with quoted fields read with the default `,`
+					// is the ordinary way to reach it.
+					Some(byte) => {
+						return Some(Err(iter.format_error(&format!(
+							"expected {:?} or end of line after a quoted field, found {:?}",
+							separator as char, byte as char
+						))));
+					}
 				}
 			}
 		}
@@ -315,5 +324,36 @@ mod tests {
 		let results: Vec<_> = iter.collect();
 		assert!(results.is_empty());
 		Ok(())
+	}
+
+	#[test]
+	fn test_read_csv_iter_wrong_separator_after_quoted_field_errors() {
+		// A quoted field ends at its closing quote, so the byte after it is
+		// whatever the file says — here `,` while the reader was given `;`.
+		let mut iter = read_csv_iter(Cursor::new("\"a\",b\n"), b';').unwrap();
+		let err = iter.next().unwrap().unwrap_err();
+		let msg = err.to_string();
+		assert!(msg.contains("after a quoted field"), "unexpected message: {msg}");
+		assert!(msg.contains("';'"), "message should name the expected separator: {msg}");
+		assert!(msg.contains("','"), "message should name the byte found: {msg}");
+	}
+
+	#[test]
+	fn test_read_csv_iter_semicolon_file_read_with_comma_errors() {
+		// The ordinary German export: `;`-separated with quoted fields, read
+		// with the `,` that `CsvReader` defaults to for `.csv`.
+		let mut iter = read_csv_iter(Cursor::new("\"Name\";\"Ort\"\n"), b',').unwrap();
+		assert!(iter.next().unwrap().is_err());
+	}
+
+	#[test]
+	fn test_read_csv_iter_separator_can_be_detected_by_trying() {
+		// Because a mismatched separator now errors instead of aborting the
+		// process, "which separator is this?" is answerable by trial parse.
+		let data = "\"a\";\"b\"\n1;2\n";
+		let detected = (*b",;\t|")
+			.into_iter()
+			.find(|sep| read_csv_iter(Cursor::new(data), *sep).is_ok_and(|mut i| i.all(|r| r.is_ok())));
+		assert_eq!(detected, Some(b';'));
 	}
 }
