@@ -1,9 +1,18 @@
 //! VPL serialisation.
 //!
 //! The counterpart to [`parser`](super::parser): where the parser turns VPL text into a
-//! [`VPLPipeline`], the [`Display`] implementations here turn one back into text that the
-//! parser accepts. That makes it possible to write a `.vpl` file from a pipeline assembled
-//! in code, and to round-trip the parser against itself in tests.
+//! [`VPLPipeline`], the implementations here turn one back into text that the parser accepts.
+//! That makes it possible to write a `.vpl` file from a pipeline assembled in code, and to
+//! round-trip the parser against itself in tests.
+//!
+//! Two styles, for two audiences:
+//!
+//! - [`Display`] never breaks a line. It is what a log message, an error, or a test assertion
+//!   wants, and what the Node bindings emit.
+//! - [`VPLPipeline::to_string_pretty`] puts one operation per line. It is what a `.vpl` file a
+//!   person reads wants, since a pipeline of any length is unreadable on one line.
+//!
+//! Both normalise the same way — the list below applies to either.
 //!
 //! Values are written with the least punctuation that parses back: bare where the grammar
 //! allows it, single quotes next (they need no escapes), double quotes with escapes last.
@@ -84,6 +93,123 @@ pub(super) fn quote(value: &str) -> Cow<'_, str> {
 	Cow::Owned(result)
 }
 
+/// Renders one parameter as `key=value`.
+///
+/// A single value is written plainly; anything else needs the bracket form, which includes the
+/// empty list, since `a=` alone is not a value.
+fn property(key: &str, values: &[String]) -> String {
+	let mut out = format!("{key}=");
+	if let [value] = values {
+		out.push_str(&quote(value));
+	} else {
+		out.push('[');
+		for (i, value) in values.iter().enumerate() {
+			if i > 0 {
+				out.push_str(", ");
+			}
+			out.push_str(&quote(value));
+		}
+		out.push(']');
+	}
+	out
+}
+
+/// One tab per nesting level.
+///
+/// Tabs rather than spaces so that indentation stays *identifiable*: a tab reaches the output
+/// only as structure, since a tab inside a value is escaped to `\t` and a bare value cannot
+/// contain one. The same holds for the `\n` between lines. That makes both replaceable exactly
+/// — see [`VPLPipeline::to_string_pretty`] — which is a configuration mechanism that costs no
+/// API at all.
+fn indent(level: usize) -> String {
+	"\t".repeat(level)
+}
+
+impl VPLPipeline {
+	/// Writes the pipeline across several lines, one operation per line.
+	///
+	/// The counterpart to [`Display`], which never breaks a line: this is for `.vpl` files
+	/// people read, where a long pipeline on one line is unreadable. It normalises exactly as
+	/// much as `Display` does — comments and the author's parameter order are still gone — so
+	/// it is a serialiser too, not a formatter. Rewriting a file someone is editing needs the
+	/// CST, which keeps comments and source order.
+	///
+	/// Every operation goes on its own line and every parameter on its own, always — a layout
+	/// that never depends on how long a value happens to be is one where adding a parameter
+	/// changes exactly one line. The `|` starts the line rather than ending the previous one and
+	/// sits at the pipeline's own level, so the operations read as a single column and appending
+	/// a stage is a one-line diff too. Parameters and nested sources indent one level in.
+	///
+	/// # Indentation and line endings
+	///
+	/// One tab per level, `\n` between lines. Both are *only* ever structure: a tab or newline
+	/// inside a value is escaped (`\t`, `\n`), and a bare value cannot contain either. So a
+	/// caller who wants something else can rewrite it exactly, with no ambiguity to get wrong:
+	///
+	/// ```
+	/// # use versatiles_pipeline::vpl::parse_vpl;
+	/// # let pipeline = parse_vpl("from_debug format=png").unwrap();
+	/// let two_spaces_crlf = pipeline.to_string_pretty().replace('\t', "  ").replace('\n', "\r\n");
+	/// ```
+	///
+	/// The parser accepts either form back, so a rewritten file still round-trips.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_pipeline::vpl::parse_vpl;
+	///
+	/// let pipeline = parse_vpl("from_debug format=png | filter level_min=2").unwrap();
+	/// assert_eq!(pipeline.to_string_pretty(), "from_debug\n\tformat=png\n| filter\n\tlevel_min=2");
+	///
+	/// // ...and it parses back to the same pipeline.
+	/// assert_eq!(parse_vpl(&pipeline.to_string_pretty()).unwrap(), pipeline);
+	/// ```
+	#[must_use]
+	pub fn to_string_pretty(&self) -> String {
+		pretty_pipeline(self, 0)
+	}
+}
+
+/// A pipeline whose operations sit at `level`.
+fn pretty_pipeline(pipeline: &VPLPipeline, level: usize) -> String {
+	let mut out = String::new();
+	for (i, node) in pipeline.pipeline.iter().enumerate() {
+		if i > 0 {
+			// The `|` leads its line and stays at the pipeline's own level, so the operations
+			// line up in one column however deeply their parameters nest.
+			write!(out, "\n{}| ", indent(level)).expect("writing to a String");
+		}
+		out.push_str(&pretty_node(node, level));
+	}
+	out
+}
+
+/// A node whose name sits at `level`, with its parameters and sources one level in.
+fn pretty_node(node: &VPLNode, level: usize) -> String {
+	let mut out = node.name.clone();
+
+	for (key, values) in &node.properties {
+		write!(out, "\n{}{}", indent(level + 1), property(key, values)).expect("writing to a String");
+	}
+
+	if !node.sources.is_empty() {
+		out.push_str(" [");
+		for (i, source) in node.sources.iter().enumerate() {
+			if i > 0 {
+				// The comma belongs to the source it follows, on the line that source ends on.
+				out.push(',');
+			}
+			write!(out, "\n{}{}", indent(level + 1), pretty_pipeline(source, level + 1)).expect("writing to a String");
+		}
+		// The grammar has no trailing comma, so the closing bracket gets its own line at the
+		// node's level.
+		write!(out, "\n{}]", indent(level)).expect("writing to a String");
+	}
+
+	out
+}
+
 impl Display for VPLNode {
 	/// Writes the node as VPL text, using the least punctuation that parses back.
 	///
@@ -102,21 +228,7 @@ impl Display for VPLNode {
 		f.write_str(&self.name)?;
 
 		for (key, values) in &self.properties {
-			write!(f, " {key}=")?;
-			// A single value is written plainly; anything else needs the bracket form, which
-			// includes the empty list, since `a=` alone is not a value.
-			if let [value] = values.as_slice() {
-				f.write_str(&quote(value))?;
-			} else {
-				f.write_char('[')?;
-				for (i, value) in values.iter().enumerate() {
-					if i > 0 {
-						f.write_str(", ")?;
-					}
-					f.write_str(&quote(value))?;
-				}
-				f.write_char(']')?;
-			}
+			write!(f, " {}", property(key, values))?;
 		}
 
 		if !self.sources.is_empty() {
@@ -179,6 +291,105 @@ impl Display for VPLPipeline {
 			write!(f, "{node}")?;
 		}
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod pretty_tests {
+	use crate::vpl::parse_vpl;
+
+	fn pretty(text: &str) -> String {
+		parse_vpl(text).expect("valid VPL").to_string_pretty()
+	}
+
+	#[test]
+	fn every_operation_and_every_parameter_gets_its_own_line() {
+		assert_eq!(
+			pretty("from_debug format=png | filter level_min=2 level_max=9"),
+			"from_debug\n\tformat=png\n| filter\n\tlevel_max=9\n\tlevel_min=2"
+		);
+	}
+
+	#[test]
+	fn a_node_without_parameters_stays_on_one_line() {
+		assert_eq!(pretty("from_debug | filter"), "from_debug\n| filter");
+	}
+
+	#[test]
+	fn sources_nest_one_level_at_a_time() {
+		assert_eq!(
+			pretty(
+				"from_stacked [ from_container filename=a.versatiles | filter level_min=5, from_container filename=b.versatiles ] | filter level_max=9"
+			),
+			concat!(
+				"from_stacked [\n",
+				"\tfrom_container\n",
+				"\t\tfilename=a.versatiles\n",
+				"\t| filter\n",
+				"\t\tlevel_min=5,\n",
+				"\tfrom_container\n",
+				"\t\tfilename=b.versatiles\n",
+				"]\n",
+				"| filter\n",
+				"\tlevel_max=9"
+			)
+		);
+	}
+
+	#[test]
+	fn the_closing_bracket_carries_no_comma() {
+		// The grammar rejects a trailing comma, so the last source cannot have one.
+		let pretty = pretty("from_stacked [ from_debug format=png, from_debug format=jpg ]");
+		assert!(!pretty.contains(",\n]"), "{pretty}");
+		assert_eq!(pretty.matches(',').count(), 1, "{pretty}");
+	}
+
+	/// Indentation and line endings are configured by rewriting them, which only works while a
+	/// tab or newline cannot reach the output any other way.
+	#[test]
+	fn tabs_and_newlines_are_structure_and_nothing_else() {
+		// Values holding both, from the parser and built by hand, in every quoting form.
+		let cases = [
+			"node a='tab\there' b=\"nl\\nthere\" c='has space'",
+			"node a=\"tab\\there\" b=[\"x\\ty\", \"p\\nq\"]",
+		];
+
+		for case in cases {
+			let pipeline = parse_vpl(case).expect("valid VPL");
+			let text = pipeline.to_string_pretty();
+			for line in text.split('\n') {
+				let body = line.trim_start_matches('\t');
+				assert!(!body.contains('\t'), "a tab escaped the indentation: {text:?}");
+			}
+			// And a caller's rewrite of both still parses back to the same pipeline.
+			let rewritten = text.replace('\t', "  ").replace('\n', "\r\n");
+			assert_eq!(
+				parse_vpl(&rewritten).expect(&rewritten),
+				pipeline,
+				"rewritten:\n{rewritten}"
+			);
+		}
+	}
+
+	/// Whatever it prints has to parse back to what it was printed from — the property that
+	/// makes this a serialiser rather than a pretty-printer.
+	#[test]
+	fn everything_it_prints_parses_back() {
+		let cases = [
+			"from_debug format=png",
+			"from_debug format=png | filter level_min=2",
+			"filter layer=[\"a\", \"b\"] level_min=2",
+			"filter layer=[]",
+			"node key='a b' other=\"tab\\there\"",
+			"from_stacked [ from_debug format=png, from_debug format=jpg | filter level_min=1 ]",
+			"from_stacked [ from_stacked [ from_debug format=png ] | filter level_min=3 ] | filter level_max=8",
+		];
+
+		for case in cases {
+			let pipeline = parse_vpl(case).expect("valid VPL");
+			let printed = pipeline.to_string_pretty();
+			assert_eq!(parse_vpl(&printed).expect(&printed), pipeline, "printed as:\n{printed}");
+		}
 	}
 }
 
