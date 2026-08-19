@@ -6,6 +6,9 @@
 //!
 //! The main entry points are [`PipelineFactory`] (for building operation graphs from VPL) and [`PipelineReader`] (for executing them via the container interface).
 //!
+//! [`CsvReader`] is exported too: it is the reader `from_csv` uses, so a consumer that
+//! needs to inspect a CSV before building a pipeline sees exactly what the pipeline will.
+//!
 //! This crate integrates tightly with [`versatiles_container`] and [`versatiles_core`] for tile I/O and metadata management.
 
 mod check;
@@ -19,5 +22,5 @@ pub mod vpl;
 pub use factory::PipelineFactory;
 #[cfg(feature = "codegen")]
 pub use factory::{OperationMeta, all_operation_metadata};
-pub use helpers::{PipelineReader, register_pipeline_readers};
+pub use helpers::{CsvReader, PipelineReader, register_pipeline_readers};
 pub use vpl::{VPLNode, VPLPipeline};

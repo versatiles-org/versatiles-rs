@@ -3,9 +3,9 @@
 //! Provides a small CSV reader with configurable separator, RFC4180-style quoted fields (double-quote escaping), and tolerant handling of `\n`/`\r\n` and empty lines.
 //! Exposes `read_csv_iter` for consumers and keeps parsing helpers internal.
 
-use std::io::BufRead;
+use std::{io::BufRead, path::Path};
 
-use anyhow::{Error, Result, bail};
+use anyhow::{Context, Error, Result, anyhow, bail};
 use versatiles_derive::context;
 
 use crate::byte_iterator::ByteIterator;
@@ -181,6 +181,90 @@ pub fn read_csv_iter<'a>(
 	}))
 }
 
+/// Candidate separators tried when sniffing, in preference order.
+///
+/// Ties are broken by this order, so the most common separator wins when two
+/// candidates split the header into the same number of fields.
+pub const CSV_SEPARATOR_CANDIDATES: [u8; 4] = *b",;\t|";
+
+/// A CSV file's first row, and the separator it was read with.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CsvHeader {
+	/// Column names, in file order.
+	pub columns: Vec<String>,
+	/// The separator the columns were split on — either the one supplied by the
+	/// caller, or the one detected.
+	pub separator: u8,
+}
+
+/// Reads a CSV/TSV file's header row, without parsing the body.
+///
+/// Uses the same parser as [`read_csv_iter`], so the columns reported here are
+/// exactly the columns a subsequent read will produce — quoting, embedded
+/// separators and embedded newlines included. Only as many bytes as the first
+/// record occupies are read.
+///
+/// # Arguments
+/// * `path` — Path to the CSV/TSV file.
+/// * `separator` — The field separator, or `None` to detect it.
+///
+/// # Detection
+/// When `separator` is `None`, each candidate in [`CSV_SEPARATOR_CANDIDATES`] is
+/// tried and the one splitting the header into the most fields wins; ties go to
+/// the earlier candidate. A file no candidate splits is a single-column file, and
+/// is reported with the first candidate as its separator.
+///
+/// # Errors
+/// Returns an error if the file cannot be opened, if it has no header row, or —
+/// when `separator` was given explicitly — if the header cannot be parsed with it.
+///
+/// # Example
+/// ```no_run
+/// use std::path::Path;
+/// use versatiles_core::utils::read_csv_header;
+/// # use anyhow::Result;
+/// # fn main() -> Result<()> {
+/// let header = read_csv_header(Path::new("cities.csv"), None)?;
+/// println!("{:?} separated by {:?}", header.columns, header.separator as char);
+/// # Ok(()) }
+/// ```
+#[context("Reading the CSV header of {path:?}")]
+pub fn read_csv_header(path: &Path, separator: Option<u8>) -> Result<CsvHeader> {
+	if let Some(separator) = separator {
+		return Ok(CsvHeader {
+			columns: read_first_record(path, separator)?,
+			separator,
+		});
+	}
+
+	// Try every candidate and keep the one that splits the header into the most
+	// fields — that is the separator actually in the file. A candidate that is
+	// not in the file yields one field, or fails outright on a quoted field,
+	// which is what makes trying them viable at all.
+	let mut best: Option<CsvHeader> = None;
+	for separator in CSV_SEPARATOR_CANDIDATES {
+		let Ok(columns) = read_first_record(path, separator) else {
+			continue;
+		};
+		if best.as_ref().is_none_or(|b| columns.len() > b.columns.len()) {
+			best = Some(CsvHeader { columns, separator });
+		}
+	}
+
+	best.ok_or_else(|| anyhow!("could not read a header row with any known separator"))
+}
+
+/// Reads just the first record of `path` using `separator`.
+fn read_first_record(path: &Path, separator: u8) -> Result<Vec<String>> {
+	let file = std::fs::File::open(path).with_context(|| format!("failed to open {path:?}"))?;
+	// `read_csv_iter` is lazy, so taking one item reads only the first record —
+	// which may span several physical lines if a field is quoted.
+	read_csv_iter(std::io::BufReader::new(file), separator)?
+		.next()
+		.ok_or_else(|| anyhow!("file has no header row"))?
+		.map(|(fields, _line, _byte)| fields)
+}
+
 #[cfg(test)]
 mod tests {
 	use std::io::Cursor;
@@ -344,6 +428,94 @@ mod tests {
 		// with the `,` that `CsvReader` defaults to for `.csv`.
 		let mut iter = read_csv_iter(Cursor::new("\"Name\";\"Ort\"\n"), b',').unwrap();
 		assert!(iter.next().unwrap().is_err());
+	}
+
+	fn write_temp(name: &str, content: &str) -> assert_fs::NamedTempFile {
+		use std::io::Write;
+
+		let file = assert_fs::NamedTempFile::new(name).unwrap();
+		std::fs::File::create(&file)
+			.unwrap()
+			.write_all(content.as_bytes())
+			.unwrap();
+		file
+	}
+
+	#[test]
+	fn test_read_csv_header_explicit_separator() {
+		let file = write_temp("h.csv", "name;age\nHans;35\n");
+		let header = read_csv_header(file.path(), Some(b';')).unwrap();
+		assert_eq!(header.columns, vec!["name", "age"]);
+		assert_eq!(header.separator, b';');
+	}
+
+	#[test]
+	fn test_read_csv_header_detects_semicolon() {
+		let file = write_temp("h.csv", "name;age;city\nHans;35;Hamburg\n");
+		let header = read_csv_header(file.path(), None).unwrap();
+		assert_eq!(header.columns, vec!["name", "age", "city"]);
+		assert_eq!(header.separator, b';');
+	}
+
+	#[test]
+	fn test_read_csv_header_detects_comma_tab_and_pipe() {
+		for (content, sep) in [
+			("a,b,c\n1,2,3\n", b','),
+			("a\tb\tc\n1\t2\t3\n", b'\t'),
+			("a|b|c\n1|2|3\n", b'|'),
+		] {
+			let file = write_temp("h.csv", content);
+			let header = read_csv_header(file.path(), None).unwrap();
+			assert_eq!(header.columns, vec!["a", "b", "c"], "content {content:?}");
+			assert_eq!(header.separator, sep, "content {content:?}");
+		}
+	}
+
+	#[test]
+	fn test_read_csv_header_detects_separator_past_quoted_fields() {
+		// The case that used to abort the process: a quoted field read with a
+		// candidate separator that is not the file's.
+		let file = write_temp("h.csv", "\"Name, full\";\"Ort\"\n\"Doe, Jane\";Berlin\n");
+		let header = read_csv_header(file.path(), None).unwrap();
+		assert_eq!(header.columns, vec!["Name, full", "Ort"]);
+		assert_eq!(header.separator, b';');
+	}
+
+	#[test]
+	fn test_read_csv_header_single_column_file() {
+		let file = write_temp("h.csv", "name\nHans\n");
+		let header = read_csv_header(file.path(), None).unwrap();
+		assert_eq!(header.columns, vec!["name"]);
+	}
+
+	#[test]
+	fn test_read_csv_header_does_not_read_the_body() {
+		// A body that cannot be parsed at all must not affect the header, which
+		// is what "reads only the first row" has to mean in practice.
+		let file = write_temp("h.csv", "a,b\nbroken,row,with,too,many,fields\n");
+		let header = read_csv_header(file.path(), Some(b',')).unwrap();
+		assert_eq!(header.columns, vec!["a", "b"]);
+	}
+
+	#[test]
+	fn test_read_csv_header_missing_file_and_empty_file() {
+		assert!(read_csv_header(Path::new("does_not_exist.csv"), Some(b',')).is_err());
+
+		let file = write_temp("empty.csv", "");
+		assert!(read_csv_header(file.path(), Some(b',')).is_err());
+		assert!(read_csv_header(file.path(), None).is_err());
+	}
+
+	#[test]
+	fn test_read_csv_header_matches_read_csv_iter() {
+		// The point of the function: the columns it reports are exactly the
+		// columns a subsequent full read produces.
+		let content = "\"a;a\";b;\"c\nc\"\n1;2;3\n";
+		let file = write_temp("h.csv", content);
+		let header = read_csv_header(file.path(), None).unwrap();
+		let mut iter = read_csv_iter(Cursor::new(content), header.separator).unwrap();
+		let (first, _, _) = iter.next().unwrap().unwrap();
+		assert_eq!(header.columns, first);
 	}
 
 	#[test]

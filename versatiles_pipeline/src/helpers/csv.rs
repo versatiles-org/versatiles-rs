@@ -40,7 +40,7 @@ use std::{collections::HashSet, io::BufReader, path::Path};
 
 use anyhow::{Result, bail};
 use versatiles_container::TilesRuntime;
-use versatiles_core::utils::read_csv_iter;
+use versatiles_core::utils::{CsvHeader, read_csv_header, read_csv_iter};
 use versatiles_derive::context;
 use versatiles_geometry::geo::{GeoProperties, GeoValue};
 
@@ -169,6 +169,31 @@ impl CsvReader {
 	pub fn with_string_field(mut self, field_name: &str) -> Self {
 		self.string_fields.insert(field_name.to_string());
 		self
+	}
+
+	/// Reads only the header row, using this reader's configured field separator.
+	///
+	/// Same parser as [`read`](Self::read), so the columns reported here are exactly
+	/// the property names a full read will produce. Use this to offer column names
+	/// (for `lon_column`, `id_field_data`, …) without paying for the whole file.
+	///
+	/// To detect the separator rather than rely on the extension default, call
+	/// [`versatiles_core::utils::read_csv_header`] with `None` directly.
+	///
+	/// # Errors
+	/// Returns an error if the file cannot be opened, has no header row, or cannot
+	/// be parsed with the configured separator.
+	///
+	/// # Example
+	///
+	/// ```ignore
+	/// let columns = CsvReader::new(Path::new("data.csv"), runtime)
+	///     .with_field_separator(';')
+	///     .read_header()?
+	///     .columns;
+	/// ```
+	pub fn read_header(&self) -> Result<CsvHeader> {
+		read_csv_header(&self.path, Some(self.field_separator))
 	}
 
 	/// Converts a string value to a [`GeoValue`], applying decimal separator conversion if needed.
@@ -490,6 +515,51 @@ mod tests {
 		assert_eq!(nrw.get("Fläche_km2").unwrap(), &GeoValue::Double(34112.31));
 
 		Ok(())
+	}
+
+	// ───────────────────────── Header Tests ─────────────────────────
+
+	#[test]
+	fn test_read_header_uses_configured_separator() -> Result<()> {
+		let file_path = make_temp_csv("name;age;city\nHans;35;Hamburg")?;
+		let header = CsvReader::new(file_path.path(), runtime())
+			.with_field_separator(';')
+			.read_header()?;
+		assert_eq!(header.columns, vec!["name", "age", "city"]);
+		assert_eq!(header.separator, b';');
+		Ok(())
+	}
+
+	#[test]
+	fn test_read_header_auto_detects_tsv_from_extension() -> Result<()> {
+		let file_path = make_temp_file("test.tsv", "name\tage\nJohn\t30")?;
+		let header = CsvReader::new(file_path.path(), runtime()).read_header()?;
+		assert_eq!(header.columns, vec!["name", "age"]);
+		assert_eq!(header.separator, b'\t');
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_read_header_matches_the_keys_read_produces() -> Result<()> {
+		// The reason this exists: a form filled in from read_header() must not be
+		// able to offer a column that the pipeline then cannot find.
+		let file_path = make_temp_csv("\"Name, full\";Ort\n\"Doe, Jane\";Berlin")?;
+		let reader = CsvReader::new(file_path.path(), runtime()).with_field_separator(';');
+
+		let header = reader.read_header()?;
+		let rows = reader.read().await?;
+
+		assert_eq!(header.columns, vec!["Name, full", "Ort"]);
+		for column in &header.columns {
+			assert!(rows[0].get(column).is_some(), "read() lost column {column:?}");
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn test_read_header_missing_file() {
+		let result = CsvReader::new(Path::new("non_existent.csv"), runtime()).read_header();
+		assert!(result.is_err());
 	}
 
 	// ───────────────────────── CsvReader Unit Tests ─────────────────────────
