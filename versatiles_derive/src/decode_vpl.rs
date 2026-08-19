@@ -59,7 +59,10 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		method_name: "property_number_array_required",
 		is_required: true,
 		generic_param: Some("f64"),
-		generic_param2: None,
+		// The array accessors are generic over the length too, and it cannot be
+		// inferred from the call, so a required array needs it spelled out just
+		// as the optional ones do.
+		generic_param2: Some("4"),
 		is_enum: false,
 	},
 	TypeMapping {
@@ -690,7 +693,7 @@ mod tests {
 					v: [f64; 4],
 				}
 			),
-			"property_number_array_required::<f64>",
+			"property_number_array_required::<f64, 4>",
 			"**`v`: [f64,f64,f64,f64] (required)**",
 		);
 		assert_field_type_decodes(
