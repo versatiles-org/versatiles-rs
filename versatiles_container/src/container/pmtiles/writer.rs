@@ -42,15 +42,16 @@
 use std::{
 	collections::HashMap,
 	hash::{DefaultHasher, Hash, Hasher},
+	path::{Path, PathBuf},
 	sync::Arc,
 };
 
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use versatiles_core::{
 	compression::compress,
-	io::DataWriterTrait,
+	io::{DataReaderFile, DataReaderTrait, DataWriterFile, DataWriterTrait},
 	types::{Blob, ByteRange, TileCompression},
 	utils::HilbertIndex,
 };
@@ -58,7 +59,7 @@ use versatiles_derive::context;
 
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression};
 use crate::{
-	TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter,
+	TileSource, TileSourceMetadata, TileSourceTraverseExt, TilesRuntime, TilesWriter,
 	traversal::{Traversal, TraversalOrder},
 };
 
@@ -75,12 +76,31 @@ pub struct PMTilesWriter {}
 /// of a truthful `clustered` flag. See [`PMTilesWriter::supported_options`].
 const ALLOW_UNCLUSTERED: &str = "allow_unclustered";
 
+/// Writer option: buy clustering back with a second pass over the tile data.
+const REORDER: &str = "reorder";
+
+/// Writer option: where the second pass puts its temporary file.
+const TEMP_DIR: &str = "temp_dir";
+
 #[async_trait]
 impl TilesWriter for PMTilesWriter {
-	/// See the module docs on clustering. `allow_unclustered` is the only option
-	/// today; #231 adds `reorder`, which buys clustering back with a second pass.
+	/// A source that cannot supply Hilbert order is refused by default; these
+	/// are the two ways to accept one, and they trade against each other.
+	/// `allow_unclustered` costs nothing and gives up clustering;
+	/// `reorder` keeps clustering and costs an extra full pass over the tile
+	/// data plus temporary disk of the same size. `temp_dir` says where that
+	/// temporary goes.
 	fn supported_options() -> &'static [&'static str] {
-		&[ALLOW_UNCLUSTERED]
+		&[ALLOW_UNCLUSTERED, REORDER, TEMP_DIR]
+	}
+
+	/// Writes to `path`, which is also the only place the output's location is
+	/// known — a `reorder` pass borrows its directory so the temporary file
+	/// lands on the same filesystem as the output rather than on whatever `/tmp`
+	/// happens to be.
+	async fn write_to_path(reader: &mut dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
+		let mut writer = DataWriterFile::from_path(path)?;
+		Self::write(reader, &mut writer, runtime, path.parent()).await
 	}
 
 	#[context("writing PMTiles to DataWriter")]
@@ -99,40 +119,25 @@ impl TilesWriter for PMTilesWriter {
 		writer: &mut dyn DataWriterTrait,
 		runtime: TilesRuntime,
 	) -> Result<()> {
+		// A generic sink (e.g. SFTP) has no local directory to borrow.
+		Self::write(reader, writer, runtime, None).await
+	}
+}
+
+impl PMTilesWriter {
+	#[context("writing PMTiles")]
+	async fn write(
+		reader: &mut dyn TileSource,
+		writer: &mut dyn DataWriterTrait,
+		runtime: TilesRuntime,
+		output_dir: Option<&Path>,
+	) -> Result<()> {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
 
 		let parameters = reader.metadata().clone();
 
-		// A PMTiles archive is only *physically* clustered if tiles arrive in
-		// Hilbert order; the directory does not depend on it, because
-		// `EntriesV3::build_directory` sorts by tile id itself. So arrival order
-		// decides one thing: whether `header.clustered = true` would be truthful.
-		//
-		// Checked before any tile is read — on a real pipeline the alternative is
-		// failing minutes in. The destination file is already open by this point,
-		// so a failure here still leaves an empty one behind;
-		// `ContainerRegistry::write_to_path` removes it.
-		let required = Traversal::new(TraversalOrder::PMTiles, 1, 64)?;
-		let available = parameters.traversal();
-		let clustered = available.can_translate_to(&required);
-		let allow_unclustered = runtime.writer_option_bool(ALLOW_UNCLUSTERED)?.unwrap_or(false);
-
-		ensure!(
-			clustered || allow_unclustered,
-			"cannot write PMTiles: this source produces tiles in {} order, and PMTiles stores them \
-			 in Hilbert order — reordering while writing would mean holding the whole tileset in \
-			 memory. Operations that build lower zoom levels from higher ones, such as \
-			 `raster_overview`, force this order.\n\
-			 Either write .versatiles or .mbtiles, which accept any order, or pass \
-			 `--writer-option {ALLOW_UNCLUSTERED}=true` to write a PMTiles archive whose tile data is not \
-			 physically clustered. The archive is valid and reads correctly either way, but an \
-			 unclustered one needs more range requests to serve, so it is not chosen for you.",
-			available.order()
-		);
-
-		// Only negotiate the order down once the source has been accepted, so a
-		// clustered source still gets the chunked Hilbert traversal.
-		let traversal = if clustered { required } else { Traversal::ANY };
+		let plan = OrderPlan::negotiate(&parameters, &runtime)?;
+		let (traversal, reorder, clustered) = (plan.traversal, plan.reorder, plan.clustered);
 
 		let entries = EntriesV3::new();
 
@@ -148,7 +153,29 @@ impl TilesWriter for PMTilesWriter {
 
 		let tile_data_start = writer.position()?;
 
-		let writer_mutex = Arc::new(Mutex::new(writer));
+		// With `reorder`, pass 1 writes tile data to a local temporary instead of
+		// the real sink, so pass 2 can copy it back in tile-id order. The
+		// temporary has to be local and readable — `DataWriterTrait` is
+		// append-only with no way to read back — which is also why it cannot be a
+		// second remote file when the sink is SFTP.
+		let temp = if reorder {
+			Some(TempTileData::create(&runtime, output_dir)?)
+		} else {
+			None
+		};
+		let mut temp_writer = match &temp {
+			Some(temp) => Some(DataWriterFile::from_path(temp.path())?),
+			None => None,
+		};
+		let tile_data_writer: &mut dyn DataWriterTrait = match temp_writer.as_mut() {
+			Some(w) => w,
+			None => &mut *writer,
+		};
+		// Ranges are stored relative to the tile-data section, which starts at 0
+		// in the temporary and after the metadata in the real sink.
+		let pass1_origin = if reorder { 0 } else { tile_data_start };
+
+		let writer_mutex = Arc::new(Mutex::new(tile_data_writer));
 		let entries_mutex = Arc::new(Mutex::new(entries));
 		let dedup_map: Arc<Mutex<HashMap<u64, ByteRange>>> = Arc::new(Mutex::new(HashMap::new()));
 		let tile_compression = *reader.metadata().tile_compression();
@@ -191,7 +218,7 @@ impl TilesWriter for PMTilesWriter {
 							let range = if let Some(&existing) = dedup.get(&hash) {
 								existing
 							} else {
-								let range = writer.append(blob)?.shifted_backward(tile_data_start)?;
+								let range = writer.append(blob)?.shifted_backward(pass1_origin)?;
 								dedup.insert(hash, range);
 								range
 							};
@@ -206,8 +233,13 @@ impl TilesWriter for PMTilesWriter {
 			.await?;
 
 		let mut entries = entries_mutex.lock().await;
-		let mut writer = writer_mutex.lock().await;
 		let tile_contents_count = dedup_map.lock().await.len() as u64;
+		drop(writer_mutex.lock().await);
+		drop(temp_writer);
+
+		if let Some(temp) = &temp {
+			copy_tiles_in_id_order(&mut entries, temp, writer, tile_data_start, &runtime).await?;
+		}
 
 		let tile_data_end = writer.position()?;
 
@@ -233,6 +265,169 @@ impl TilesWriter for PMTilesWriter {
 
 		Ok(())
 	}
+}
+
+/// How the writer will satisfy — or decline — PMTiles' ordering requirement.
+struct OrderPlan {
+	/// The order to ask the source for.
+	traversal: Traversal,
+	/// Whether a second pass will put the tile data into tile-id order.
+	reorder: bool,
+	/// Whether the finished archive may claim `clustered = true`.
+	clustered: bool,
+}
+
+impl OrderPlan {
+	/// A PMTiles archive is only *physically* clustered if tiles arrive in
+	/// Hilbert order; the directory does not depend on it, because
+	/// `EntriesV3::build_directory` sorts by tile id itself. So arrival order
+	/// decides one thing: whether `header.clustered = true` would be truthful.
+	///
+	/// Decided before any tile is read — on a real pipeline the alternative is
+	/// failing minutes in.
+	fn negotiate(parameters: &TileSourceMetadata, runtime: &TilesRuntime) -> Result<Self> {
+		let required = Traversal::new(TraversalOrder::PMTiles, 1, 64)?;
+		let available = parameters.traversal();
+		let source_is_ordered = available.can_translate_to(&required);
+
+		let allow_unclustered = runtime.writer_option_bool(ALLOW_UNCLUSTERED)?.unwrap_or(false);
+		let reorder_requested = runtime.writer_option_bool(REORDER)?.unwrap_or(false);
+
+		// The two opt-ins ask for different outcomes, so asking for both is a
+		// mistake rather than a preference to resolve silently.
+		ensure!(
+			!(allow_unclustered && reorder_requested),
+			"`{ALLOW_UNCLUSTERED}` and `{REORDER}` ask for different things: one gives up clustering \
+			 to write in a single pass, the other keeps it by writing the tile data twice. Pick one."
+		);
+
+		// Reordering an already-ordered source would cost a full extra pass and
+		// change nothing, so it is skipped — but silently skipping it would look
+		// like the option was ignored.
+		let reorder = reorder_requested && !source_is_ordered;
+		if reorder_requested && source_is_ordered {
+			log::info!(
+				"`{REORDER}` was requested but this source already produces Hilbert order; skipping the extra pass"
+			);
+		}
+
+		let clustered = source_is_ordered || reorder;
+
+		ensure!(
+			clustered || allow_unclustered,
+			"cannot write PMTiles: this source produces tiles in {} order, and PMTiles stores them \
+			 in Hilbert order — reordering while writing would mean holding the whole tileset in \
+			 memory. Operations that build lower zoom levels from higher ones, such as \
+			 `raster_overview`, force this order.\n\
+			 Either write .versatiles or .mbtiles, which accept any order, or pass \
+			 `--writer-option {ALLOW_UNCLUSTERED}=true` to write a PMTiles archive whose tile data is not \
+			 physically clustered. The archive is valid and reads correctly either way, but an \
+			 unclustered one needs more range requests to serve, so it is not chosen for you.",
+			available.order()
+		);
+
+		Ok(Self {
+			// A reorder pass reads in whatever order the source gives and sorts
+			// afterwards, so only an already-ordered source wants the chunked
+			// Hilbert traversal.
+			traversal: if source_is_ordered { required } else { Traversal::ANY },
+			reorder,
+			clustered,
+		})
+	}
+}
+
+/// The temporary file a `reorder` pass writes its tile data to.
+///
+/// Removed on drop, so it goes on success, on error, and on most panics — the
+/// file is the size of the whole tile data section, which is exactly the thing
+/// not to leave behind.
+struct TempTileData {
+	file: tempfile::NamedTempFile,
+}
+
+impl TempTileData {
+	/// Places the temporary next to the output by default.
+	///
+	/// The output's directory is the one location known to have room for
+	/// something the size of the output, and keeping both on one filesystem
+	/// avoids a cross-device copy. `temp_dir=` overrides it; the system
+	/// temporary directory is the last resort, which is what a generic sink
+	/// (SFTP) gets since it has no local directory to borrow.
+	fn create(runtime: &TilesRuntime, output_dir: Option<&Path>) -> Result<Self> {
+		let dir: PathBuf = match runtime.writer_option(TEMP_DIR) {
+			Some(dir) => PathBuf::from(dir),
+			None => match output_dir {
+				Some(dir) if dir.as_os_str().is_empty() => PathBuf::from("."),
+				Some(dir) => dir.to_path_buf(),
+				None => std::env::temp_dir(),
+			},
+		};
+
+		let file = tempfile::Builder::new()
+			.prefix(".versatiles-reorder-")
+			.suffix(".tmp")
+			.tempfile_in(&dir)
+			.with_context(|| format!("could not create the reorder temporary file in {dir:?}"))?;
+		log::debug!("reorder: writing tile data to {:?} first", file.path());
+		Ok(Self { file })
+	}
+
+	fn path(&self) -> &Path {
+		self.file.path()
+	}
+}
+
+/// Copies tile data from the temporary into the real sink in tile-id order, and
+/// rewrites every entry to point at its new home.
+///
+/// This is what makes `clustered = true` truthful for a source that could not
+/// supply Hilbert order: the directory never depended on arrival order, since
+/// `EntriesV3::build_directory` sorts by tile id itself, so only the physical
+/// layout of the tile data had to be fixed.
+///
+/// Deduplication is preserved rather than expanded. The writer maps content hash
+/// to one byte range, so several tile ids can share a range; the first entry to
+/// reference a temporary range copies the blob, and every later entry pointing at
+/// the same temporary range is remapped to the same destination. Expanding them
+/// into copies would silently undo dedup and inflate the archive.
+async fn copy_tiles_in_id_order(
+	entries: &mut EntriesV3,
+	temp: &TempTileData,
+	writer: &mut dyn DataWriterTrait,
+	tile_data_start: u64,
+	runtime: &TilesRuntime,
+) -> Result<()> {
+	let reader = DataReaderFile::open(temp.path())?;
+
+	// Sorting here rather than relying on `build_directory` to do it later: the
+	// copy has to happen in tile-id order, and the directory is built from the
+	// same vector afterwards.
+	entries.sort_by_tile_id();
+
+	let progress = runtime.create_progress("reordering tiles", entries.len() as u64);
+	let mut moved: HashMap<ByteRange, ByteRange> = HashMap::new();
+
+	for entry in entries.iter_mut() {
+		let destination = if let Some(&range) = moved.get(&entry.range) {
+			range
+		} else {
+			let blob = reader.read_range(&entry.range).await?;
+			let range = writer.append(&blob)?.shifted_backward(tile_data_start)?;
+			moved.insert(entry.range, range);
+			range
+		};
+		entry.range = destination;
+		progress.inc(1);
+	}
+
+	progress.finish();
+	log::debug!(
+		"reorder: copied {} unique blob(s) for {} entries",
+		moved.len(),
+		entries.len()
+	);
+	Ok(())
 }
 
 #[cfg(test)]
@@ -346,9 +541,136 @@ mod tests {
 		Ok(())
 	}
 
+	async fn write_with(reader: &mut MockReader, options: &[(&str, &str)]) -> Result<Blob> {
+		let mut builder = TilesRuntime::builder().silent_progress(true);
+		for (key, value) in options {
+			builder = builder.writer_option(key, value);
+		}
+		write_to_blob(reader, builder.build()).await
+	}
+
+	#[tokio::test]
+	async fn reorder_accepts_an_unordered_source_and_keeps_it_clustered() -> Result<()> {
+		let blob = write_with(&mut depth_first_source()?, &[("reorder", "true")]).await?;
+		let header = read_header(&blob)?;
+		assert!(
+			header.clustered,
+			"a reordered archive is physically in tile-id order, so it may say so"
+		);
+		assert!(header.addressed_tiles_count > 0);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn reorder_preserves_deduplication() -> Result<()> {
+		// The hazard #231 names: several tile ids share one byte range, and the
+		// copy pass must keep them sharing rather than writing a copy each.
+		// MockReader's PNG tiles are a single constant blob, so every tile in the
+		// pyramid dedups down to one stored range — dozens of ids sharing it.
+		let unclustered = write_with(&mut depth_first_source()?, &[("allow_unclustered", "true")]).await?;
+		let reordered = write_with(&mut depth_first_source()?, &[("reorder", "true")]).await?;
+
+		let a = read_header(&unclustered)?;
+		let b = read_header(&reordered)?;
+
+		assert_eq!(a.addressed_tiles_count, b.addressed_tiles_count);
+		assert_eq!(
+			a.tile_contents_count, b.tile_contents_count,
+			"reordering must not change how many distinct blobs are stored"
+		);
+		assert_eq!(a.tile_entries_count, b.tile_entries_count);
+		assert_eq!(
+			unclustered.len(),
+			reordered.len(),
+			"expanding dedup would make the reordered archive much larger"
+		);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn reorder_and_allow_unclustered_together_are_refused() -> Result<()> {
+		let err = write_with(
+			&mut depth_first_source()?,
+			&[("reorder", "true"), ("allow_unclustered", "true")],
+		)
+		.await
+		.unwrap_err();
+		let err = format!("{err:#}");
+		assert!(err.contains("ask for different things"), "unexpected: {err}");
+		assert!(err.contains("Pick one"), "unexpected: {err}");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn reorder_is_skipped_when_the_source_is_already_ordered() -> Result<()> {
+		// Asking for it costs nothing and changes nothing, rather than paying for
+		// a second pass that would reproduce the same layout.
+		let mut reader = MockReader::new_mock(
+			TilePyramid::new_full_up_to(3),
+			TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None),
+		)?;
+		let with_reorder = write_with(&mut reader, &[("reorder", "true")]).await?;
+
+		let mut reader = MockReader::new_mock(
+			TilePyramid::new_full_up_to(3),
+			TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None),
+		)?;
+		let without = write_with(&mut reader, &[]).await?;
+
+		assert!(read_header(&with_reorder)?.clustered);
+		assert_eq!(with_reorder.len(), without.len(), "the extra pass should not have run");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn reorder_false_still_refuses_an_unordered_source() -> Result<()> {
+		assert!(
+			write_with(&mut depth_first_source()?, &[("reorder", "false")])
+				.await
+				.is_err()
+		);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn an_unusable_temp_dir_names_itself() -> Result<()> {
+		let err = write_with(
+			&mut depth_first_source()?,
+			&[("reorder", "true"), ("temp_dir", "/nonexistent-versatiles-test")],
+		)
+		.await
+		.unwrap_err();
+		let err = format!("{err:#}");
+		assert!(err.contains("/nonexistent-versatiles-test"), "unexpected: {err}");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn reorder_leaves_no_temporary_behind() -> Result<()> {
+		let dir = assert_fs::TempDir::new()?;
+		let runtime = TilesRuntime::builder()
+			.silent_progress(true)
+			.writer_option("reorder", "true")
+			.writer_option("temp_dir", dir.path().to_str().unwrap())
+			.build();
+		write_to_blob(&mut depth_first_source()?, runtime).await?;
+
+		let leftovers: Vec<_> = std::fs::read_dir(dir.path())?.collect();
+		assert!(
+			leftovers.is_empty(),
+			"the temporary must be removed after a successful write"
+		);
+		Ok(())
+	}
+
 	#[test]
 	fn the_option_is_declared_so_the_registry_accepts_it() {
-		assert!(PMTilesWriter::supported_options().contains(&"allow_unclustered"));
+		for option in ["allow_unclustered", "reorder", "temp_dir"] {
+			assert!(
+				PMTilesWriter::supported_options().contains(&option),
+				"{option} not declared"
+			);
+		}
 	}
 
 	#[context("test: PMTiles read↔write roundtrip")]

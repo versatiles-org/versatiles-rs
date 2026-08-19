@@ -99,6 +99,24 @@ impl EntriesV3 {
 		self.entries.iter()
 	}
 
+	/// Iterates over the entries, allowing each to be modified.
+	///
+	/// Used by the PMTiles writer's reorder pass, which rewrites every entry's
+	/// byte range after copying the tile data into tile-id order.
+	pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, EntryV3> {
+		self.entries.iter_mut()
+	}
+
+	/// Sorts the entries by tile id.
+	///
+	/// [`build_directory`](Self::build_directory) does this itself, so calling it
+	/// is only necessary when something else needs the entries in that order
+	/// first — the reorder pass copies tile data in tile-id order, and the
+	/// directory is then built from the same, already-sorted vector.
+	pub fn sort_by_tile_id(&mut self) {
+		self.entries.sort_by_cached_key(|e| e.tile_id);
+	}
+
 	/// Finds an `EntryV3` by its tile ID using a binary search.
 	///
 	/// # Arguments
@@ -144,7 +162,7 @@ impl EntriesV3 {
 	/// # Errors
 	/// Returns an error if the entries cannot be serialized or compressed as specified.
 	pub fn build_directory(&mut self, target_root_len: u64, compression: TileCompression) -> Result<Directory> {
-		self.entries.sort_by_cached_key(|e| e.tile_id);
+		self.sort_by_tile_id();
 		// Runs can only be found once entries are in tile-id order, which is why
 		// this lives here rather than at the call site — where it previously ran
 		// *before* this sort and was correct only because the traversal happened

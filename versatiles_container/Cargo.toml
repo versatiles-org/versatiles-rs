@@ -33,6 +33,7 @@ r2d2_sqlite = { version = "0.35.0", default-features = false, features = ["bundl
 regex.workspace = true
 reqwest.workspace = true
 tar.workspace = true
+tempfile.workspace = true
 terminal_size = "0.4.4"
 time = { version = "0.3.55", default-features = false, features = ["formatting", "local-offset"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
