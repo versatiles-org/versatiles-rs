@@ -75,12 +75,15 @@ sftp://user:password@fileserver.example.org/data/world.versatiles
 sftp://fileserver.example.org:2222/data/world.versatiles
 ```
 
-Default port is **22**. Connect timeout is 30 s; SSH keepalive fires every 60 s.
+Default port is **22**. Connect timeout is 30 s. TCP and SSH keepalive both fire every 15 s
+(`VERSATILES_SFTP_KEEPALIVE_SECS`), and a single SFTP operation may take 30 s
+(`VERSATILES_SFTP_TIMEOUT_MS`) before it is given up on.
 
 **Authentication** is tried in this order:
 
 1. Password embedded in the URL (`sftp://user:password@host/…`)
-2. Explicit identity file passed via `--ssh-identity`
+2. Explicit identity file: `--ssh-identity`, or the `VERSATILES_SSH_IDENTITY`
+   environment variable when the flag is not given
 3. SSH agent
 4. `IdentityFile` entries in `~/.ssh/config` for the target host
 5. Default key files: `~/.ssh/id_ed25519`, `~/.ssh/id_rsa`, `~/.ssh/id_ecdsa`
