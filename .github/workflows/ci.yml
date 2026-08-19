@@ -128,9 +128,6 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Setup GDAL
-        uses: ./.github/actions/setup-gdal
-
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
