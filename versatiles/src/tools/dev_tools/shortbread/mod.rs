@@ -18,10 +18,11 @@ use std::sync::{
 use anyhow::{Context, Result, bail};
 use report::{Registry, Severity};
 use schema::{Schema, SchemaSelector};
-use versatiles_container::TilesRuntime;
+use versatiles_container::{
+	TilesRuntime,
+	probe::sampling::{build_scan_plan, parse_sample},
+};
 use versatiles_core::{TileBBox, TileType};
-
-use versatiles_container::probe::sampling::{build_scan_plan, parse_sample};
 
 /// How to present the findings.
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]
