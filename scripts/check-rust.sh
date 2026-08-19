@@ -2,9 +2,12 @@
 # Run all Rust quality checks across the workspace.
 #
 # Steps (in order): rustfmt, cargo check (no-default-features, server, cli,
-# server+cli, all-features), clippy with -D warnings, tests with all features,
-# and doc build with -D warnings and the gdal feature. Each step mirrors what
-# CI runs, so a green run here should mean a green run there.
+# server+cli, default, all-features), clippy with -D warnings, tests with all
+# features, and doc build with -D warnings and the gdal feature.
+#
+# These mirror what CI checks, with one gap: CI also runs the test suite under
+# the default and gdal feature sets, while this runs it only under
+# --all-features. A green run here is therefore strong but not conclusive.
 #
 # Note that several steps use --all-features, so a local GDAL installation is
 # required (scripts/install-gdal.sh).
@@ -41,6 +44,15 @@ if [ $? -ne 0 ]; then
 fi
 echo "cargo check - server, cli"
 result=$(cargo check --color=always --workspace --no-default-features --features server,cli --all-targets 2>&1)
+if [ $? -ne 0 ]; then
+   echo -e "$result\nERROR DURING: cargo check"
+   exit 1
+fi
+# The feature set released binaries are built with. Bracketed by the
+# server,cli and all-features checks above and below, but not implied by
+# either: `default` also pulls in ssh2.
+echo "cargo check - default features"
+result=$(cargo check --color=always --workspace --all-targets 2>&1)
 if [ $? -ne 0 ]; then
    echo -e "$result\nERROR DURING: cargo check"
    exit 1
