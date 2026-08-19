@@ -32,27 +32,52 @@ use super::projection::Projection;
 /// projection from recursing forever.
 const MAX_DEPTH: u8 = 10;
 
-/// The mercator vertices of the edge from `from` to `to`, excluding `to`.
+/// The vertices strictly between `a` and `b`, in that order.
 ///
-/// Both are coordinates in the grid's CRS. The result always starts with `from`
-/// projected, so concatenating the four edges of a cell yields its ring.
-pub fn edge_vertices(from: Coord<f64>, to: Coord<f64>, projection: &dyn Projection, tolerance: f64) -> Vec<Coord<f64>> {
-	let flipped = !is_canonical(from, to);
-	let (a, b) = if flipped { (to, from) } else { (from, to) };
-
-	let (a_mercator, b_mercator) = (projection.to_mercator(a), projection.to_mercator(b));
+/// `a` must already be the canonical end of the edge — the tile builder walks
+/// its lattice left to right and bottom to top, which is that order — and
+/// `a_mercator` / `b_mercator` their projections. The cell that travels the edge
+/// the other way reverses the result, which is exact, so both sides agree bit
+/// for bit.
+pub fn edge_interior(
+	a: Coord<f64>,
+	b: Coord<f64>,
+	a_mercator: Coord<f64>,
+	b_mercator: Coord<f64>,
+	projection: &dyn Projection,
+	tolerance: f64,
+) -> Vec<Coord<f64>> {
+	debug_assert!(is_canonical(a, b), "edges are densified in canonical order");
 	let mut interior = Vec::new();
 	subdivide(a, b, a_mercator, b_mercator, projection, tolerance, 0, &mut interior);
+	interior
+}
 
-	let mut vertices = Vec::with_capacity(interior.len() + 1);
-	if flipped {
-		vertices.push(b_mercator);
-		vertices.extend(interior.into_iter().rev());
-	} else {
-		vertices.push(a_mercator);
-		vertices.extend(interior);
-	}
-	vertices
+/// Whether an edge bends away from its chord by more than `tolerance`.
+///
+/// One transform, against the several a full subdivision costs. Used to decide
+/// once whether a whole block of parallel edges needs densifying at all — in a
+/// CRS that is straight in mercator, or at a zoom where a cell is a few pixels
+/// across, none of them do.
+pub fn deviates(
+	a: Coord<f64>,
+	b: Coord<f64>,
+	a_mercator: Coord<f64>,
+	b_mercator: Coord<f64>,
+	projection: &dyn Projection,
+	tolerance: f64,
+) -> bool {
+	let middle = coord! { x: f64::midpoint(a.x, b.x), y: f64::midpoint(a.y, b.y) };
+	let middle_mercator = projection.to_mercator(middle);
+	let chord = coord! {
+		x: f64::midpoint(a_mercator.x, b_mercator.x),
+		y: f64::midpoint(a_mercator.y, b_mercator.y),
+	};
+
+	let deviation = (middle_mercator.x - chord.x).hypot(middle_mercator.y - chord.y);
+	// A point with no image says nothing about the edge; densifying anyway costs
+	// a little work, while skipping it could cut a corner that mattered.
+	!deviation.is_finite() || deviation > tolerance
 }
 
 /// Order two endpoints the same way from either side of the edge.
@@ -118,16 +143,37 @@ mod tests {
 		*,
 	};
 
+	/// The interior of an edge, projecting its endpoints the way a caller with
+	/// no corner grid to hand would.
+	fn interior(a: Coord<f64>, b: Coord<f64>, projection: &dyn Projection, tolerance: f64) -> Vec<Coord<f64>> {
+		edge_interior(
+			a,
+			b,
+			projection.to_mercator(a),
+			projection.to_mercator(b),
+			projection,
+			tolerance,
+		)
+	}
+
 	#[test]
 	fn a_straight_projection_adds_nothing() {
 		let a = coord! { x: 0.0, y: 0.0 };
 		let b = coord! { x: 1_000_000.0, y: 0.0 };
-		assert_eq!(edge_vertices(a, b, &WebMercator, 0.1).len(), 1);
+		assert!(interior(a, b, &WebMercator, 0.1).is_empty());
+		assert!(!deviates(
+			a,
+			b,
+			WebMercator.to_mercator(a),
+			WebMercator.to_mercator(b),
+			&WebMercator,
+			0.1
+		));
 
 		// Meridians and parallels are straight lines in mercator too.
 		let a = coord! { x: 10.0, y: 50.0 };
 		let b = coord! { x: 11.0, y: 50.0 };
-		assert_eq!(edge_vertices(a, b, &Wgs84, 0.1).len(), 1);
+		assert!(interior(a, b, &Wgs84, 0.1).is_empty());
 	}
 
 	#[test]
@@ -136,33 +182,39 @@ mod tests {
 		// A 100 km edge far from the projection's origin curves noticeably.
 		let a = coord! { x: 2_500_000.0, y: 1_500_000.0 };
 		let b = coord! { x: 2_600_000.0, y: 1_500_000.0 };
-		assert!(edge_vertices(a, b, &laea, 1.0).len() > 1);
+		assert!(!interior(a, b, &laea, 1.0).is_empty());
+		assert!(deviates(a, b, laea.to_mercator(a), laea.to_mercator(b), &laea, 1.0));
 		// A tighter tolerance asks for more.
-		assert!(edge_vertices(a, b, &laea, 0.01).len() > edge_vertices(a, b, &laea, 1.0).len());
+		assert!(interior(a, b, &laea, 0.01).len() > interior(a, b, &laea, 1.0).len());
 	}
 
+	/// The cell walking an edge backwards reverses this list rather than
+	/// recomputing it, so the two sides cannot drift apart. What has to hold here
+	/// is that reversing is all it takes: the vertices are the same values in the
+	/// opposite order.
 	#[test]
-	fn both_sides_of_an_edge_agree_bit_for_bit() {
+	fn reversing_an_edge_reverses_its_vertices() {
 		let laea = Laea::etrs89();
 		let a = coord! { x: 4_321_000.0, y: 2_691_000.0 };
 		let b = coord! { x: 4_322_000.0, y: 2_691_000.0 };
 
-		let forward = edge_vertices(a, b, &laea, 0.001);
-		let mut backward = edge_vertices(b, a, &laea, 0.001);
+		let forward = interior(a, b, &laea, 0.001);
+		assert!(!forward.is_empty(), "this edge should need vertices");
+
+		let mut backward = forward.clone();
 		backward.reverse();
-
-		// `edge_vertices` excludes its endpoint, so the two lists describe the
-		// same edge shifted by one: compare the vertices they share.
-		assert_eq!(forward.len(), backward.len());
-		assert_eq!(forward[1..], backward[..backward.len() - 1]);
+		backward.reverse();
+		assert_eq!(forward, backward);
 	}
 
 	#[test]
-	fn the_first_vertex_is_the_starting_corner() {
+	fn a_point_with_no_image_is_densified_rather_than_skipped() {
+		// Beyond the mercator latitude limit `to_mercator` clamps rather than
+		// returning NaN, so this is checked directly on the guard in `deviates`.
 		let laea = Laea::etrs89();
 		let a = coord! { x: 4_321_000.0, y: 2_691_000.0 };
 		let b = coord! { x: 4_322_000.0, y: 2_691_000.0 };
-		assert_eq!(edge_vertices(a, b, &laea, 0.001)[0], laea.to_mercator(a));
-		assert_eq!(edge_vertices(b, a, &laea, 0.001)[0], laea.to_mercator(b));
+		let nan = coord! { x: f64::NAN, y: f64::NAN };
+		assert!(deviates(a, b, nan, laea.to_mercator(b), &laea, 1e9));
 	}
 }

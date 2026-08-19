@@ -45,7 +45,7 @@ mod id_template;
 mod lattice;
 mod projection;
 
-use std::{fmt::Debug, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
@@ -60,7 +60,12 @@ use versatiles_geometry::{
 	geo::{GeoFeature, GeoProperties, GeoValue},
 };
 
-use self::{densify::edge_vertices, id_template::IdTemplate, lattice::Lattice, projection::Projection};
+use self::{
+	densify::{deviates, edge_interior},
+	id_template::IdTemplate,
+	lattice::Lattice,
+	projection::Projection,
+};
 use crate::{
 	PipelineFactory,
 	helpers::{grid_zoom::min_zoom_for_cell_size, tilejson::set_single_vector_layer},
@@ -76,6 +81,12 @@ const DEFAULT_ZOOM_RANGE: u8 = 3;
 
 /// Largest zoom level a tile pyramid may use.
 const MAX_ZOOM: u8 = 30;
+
+/// How many parallel edges share one densification verdict.
+///
+/// Curvature changes slowly across a grid, so probing every edge would pay a
+/// transform to learn what its neighbour already knows.
+const DENSIFY_BLOCK: i64 = 64;
 
 /// How far a densified edge may stray from the true curve, in tile pixels.
 const DEFAULT_DENSIFY_TOLERANCE: f64 = 0.5;
@@ -294,18 +305,173 @@ impl Grid {
 	fn build_tile(&self, coord: TileCoord) -> Result<Option<Tile>> {
 		let tile_mercator = coord.to_mercator_bbox();
 		let (xs, ys) = self.lattice.candidates(self.projection.as_ref(), tile_mercator);
-		let tolerance = self.tolerance_meters(coord.level);
+		if xs.is_empty() || ys.is_empty() {
+			return Ok(None);
+		}
 
-		let mut features = Vec::new();
-		for iy in ys {
-			for ix in xs.clone() {
-				features.extend(self.cell(ix, iy, tolerance));
+		let block = CellBlock::build(
+			self,
+			*xs.start(),
+			*xs.end(),
+			*ys.start(),
+			*ys.end(),
+			self.tolerance_meters(coord.level),
+		);
+
+		render_tile(block.features(self), &self.fields.layer, tile_mercator, TILE_EXTENT)?
+			.map(|vector_tile| Tile::from_vector(vector_tile, TileFormat::MVT))
+			.transpose()
+	}
+
+	/// Whether the edges around `(ix, iy)` bend enough to need extra vertices.
+	///
+	/// Probing every edge would cost a transform per edge, which after the corner
+	/// grid is the bulk of what is left. Curvature changes slowly, so one probe
+	/// decides for a block of [`DENSIFY_BLOCK`] parallel edges — and the verdict
+	/// is keyed on lattice indices and zoom, never on the tile, so a cell that
+	/// spans a tile border is drawn the same way in both tiles.
+	fn densifies(
+		&self,
+		edge: Edge,
+		ix: i64,
+		iy: i64,
+		tolerance: f64,
+		cache: &mut HashMap<(Edge, i64, i64), bool>,
+	) -> bool {
+		let (fixed, block) = match edge {
+			Edge::Horizontal => (iy, ix.div_euclid(DENSIFY_BLOCK)),
+			Edge::Vertical => (ix, iy.div_euclid(DENSIFY_BLOCK)),
+		};
+
+		*cache.entry((edge, fixed, block)).or_insert_with(|| {
+			let start = block * DENSIFY_BLOCK;
+			let (a, b) = match edge {
+				Edge::Horizontal => (self.lattice.corner(start, fixed), self.lattice.corner(start + 1, fixed)),
+				Edge::Vertical => (self.lattice.corner(fixed, start), self.lattice.corner(fixed, start + 1)),
+			};
+			deviates(
+				a,
+				b,
+				self.projection.to_mercator(a),
+				self.projection.to_mercator(b),
+				self.projection.as_ref(),
+				tolerance,
+			)
+		})
+	}
+
+	/// The densify tolerance for one zoom level, in mercator meters.
+	fn tolerance_meters(&self, level: u8) -> f64 {
+		let tile_span = WORLD_SIZE / 2f64.powi(i32::from(level));
+		tile_span / TILE_PIXELS * self.tolerance_pixels
+	}
+}
+
+/// Which way an edge runs. Horizontal edges join `(ix, iy)` to `(ix + 1, iy)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Edge {
+	Horizontal,
+	Vertical,
+}
+
+/// A rectangle of cells, projected once.
+///
+/// Corners are shared by four cells and edges by two, so projecting them per
+/// cell means transforming each corner up to eight times. Here the corner grid
+/// is projected in a single pass and every edge densified once, which is what
+/// makes an expensive projection — GDAL's, at roughly ten times the cost of a
+/// hand-written one per point — affordable.
+struct CellBlock {
+	/// Cells across and up.
+	size: (usize, usize),
+	/// Corners in the grid's CRS, row-major, `(nx + 1) * (ny + 1)` of them.
+	source: Vec<Coord<f64>>,
+	/// The same corners in web mercator.
+	mercator: Vec<Coord<f64>>,
+	/// Vertices between the ends of each horizontal edge, `nx * (ny + 1)`.
+	horizontal: Vec<Vec<Coord<f64>>>,
+	/// Vertices between the ends of each vertical edge, `(nx + 1) * ny`.
+	vertical: Vec<Vec<Coord<f64>>>,
+}
+
+impl CellBlock {
+	fn build(grid: &Grid, x0: i64, x1: i64, y0: i64, y1: i64, tolerance: f64) -> Self {
+		// A candidate range is a handful of cells wide; anything that does not fit
+		// a `usize` is an empty block rather than a panic.
+		let nx = usize::try_from(x1 - x0 + 1).unwrap_or(0);
+		let ny = usize::try_from(y1 - y0 + 1).unwrap_or(0);
+
+		let mut source = Vec::with_capacity((nx + 1) * (ny + 1));
+		for j in 0..=ny {
+			for i in 0..=nx {
+				source.push(grid.lattice.corner(x0 + as_offset(i), y0 + as_offset(j)));
+			}
+		}
+		let mut mercator = source.clone();
+		grid.projection.to_mercator_many(&mut mercator);
+
+		let corner = |i: usize, j: usize| j * (nx + 1) + i;
+		let mut verdicts = HashMap::new();
+		let projection = grid.projection.as_ref();
+
+		let mut horizontal = Vec::with_capacity(nx * (ny + 1));
+		for j in 0..=ny {
+			for i in 0..nx {
+				let (a, b) = (corner(i, j), corner(i + 1, j));
+				horizontal.push(
+					if grid.densifies(
+						Edge::Horizontal,
+						x0 + as_offset(i),
+						y0 + as_offset(j),
+						tolerance,
+						&mut verdicts,
+					) {
+						edge_interior(source[a], source[b], mercator[a], mercator[b], projection, tolerance)
+					} else {
+						Vec::new()
+					},
+				);
 			}
 		}
 
-		render_tile(features, &self.fields.layer, tile_mercator, TILE_EXTENT)?
-			.map(|vector_tile| Tile::from_vector(vector_tile, TileFormat::MVT))
-			.transpose()
+		let mut vertical = Vec::with_capacity((nx + 1) * ny);
+		for j in 0..ny {
+			for i in 0..=nx {
+				let (a, b) = (corner(i, j), corner(i, j + 1));
+				vertical.push(
+					if grid.densifies(
+						Edge::Vertical,
+						x0 + as_offset(i),
+						y0 + as_offset(j),
+						tolerance,
+						&mut verdicts,
+					) {
+						edge_interior(source[a], source[b], mercator[a], mercator[b], projection, tolerance)
+					} else {
+						Vec::new()
+					},
+				);
+			}
+		}
+
+		Self {
+			size: (nx, ny),
+			source,
+			mercator,
+			horizontal,
+			vertical,
+		}
+	}
+
+	fn features(&self, grid: &Grid) -> Vec<GeoFeature> {
+		let (nx, ny) = self.size;
+		let mut features = Vec::with_capacity(nx * ny);
+		for j in 0..ny {
+			for i in 0..nx {
+				features.extend(self.cell(grid, i, j));
+			}
+		}
+		features
 	}
 
 	/// One cell as a mercator polygon with its id and corner coordinates.
@@ -314,38 +480,36 @@ impl Grid {
 	/// area of use, or past the mercator latitude limit. Dropping it is the only
 	/// honest answer: a cell drawn from broken coordinates would land somewhere
 	/// it does not belong.
-	fn cell(&self, ix: i64, iy: i64, tolerance: f64) -> Option<GeoFeature> {
-		let (min, max) = (self.lattice.corner(ix, iy), self.lattice.corner(ix + 1, iy + 1));
-		let corners = [
-			coord! { x: min.x, y: min.y },
-			coord! { x: max.x, y: min.y },
-			coord! { x: max.x, y: max.y },
-			coord! { x: min.x, y: max.y },
-		];
+	fn cell(&self, grid: &Grid, i: usize, j: usize) -> Option<GeoFeature> {
+		let (nx, _) = self.size;
+		let corner = |i: usize, j: usize| self.mercator[j * (nx + 1) + i];
 
-		let mut ring: Vec<Coord<f64>> = Vec::new();
-		for edge in 0..4 {
-			ring.extend(edge_vertices(
-				corners[edge],
-				corners[(edge + 1) % 4],
-				self.projection.as_ref(),
-				tolerance,
-			));
-		}
+		// Each edge is walked in the direction this cell needs. The two that run
+		// against the canonical order reverse the stored vertices, which moves
+		// values without arithmetic, so the neighbouring cell sharing the edge
+		// ends up with the very same coordinates.
+		let mut ring = vec![corner(i, j)];
+		ring.extend(&self.horizontal[j * nx + i]);
+		ring.push(corner(i + 1, j));
+		ring.extend(&self.vertical[j * (nx + 1) + i + 1]);
+		ring.push(corner(i + 1, j + 1));
+		ring.extend(self.horizontal[(j + 1) * nx + i].iter().rev());
+		ring.push(corner(i, j + 1));
+		ring.extend(self.vertical[j * (nx + 1) + i].iter().rev());
+
 		if ring.iter().any(|c| !c.x.is_finite() || !c.y.is_finite()) {
 			return None;
 		}
-		if let Some(first) = ring.first().copied() {
-			ring.push(first);
-		}
+		ring.push(ring[0]);
 
+		let origin = self.source[j * (nx + 1) + i];
 		let mut properties = GeoProperties::new();
 		properties.insert(
-			self.fields.id.clone(),
-			GeoValue::from(self.id_template.render(min.x, min.y)),
+			grid.fields.id.clone(),
+			GeoValue::from(grid.id_template.render(origin.x, origin.y)),
 		);
-		properties.insert(self.fields.x.clone(), number(min.x));
-		properties.insert(self.fields.y.clone(), number(min.y));
+		properties.insert(grid.fields.x.clone(), number(origin.x));
+		properties.insert(grid.fields.y.clone(), number(origin.y));
 
 		Some(GeoFeature {
 			// The id is a string, and MVT feature ids are `u64`, so setting one
@@ -355,12 +519,12 @@ impl Grid {
 			properties,
 		})
 	}
+}
 
-	/// The densify tolerance for one zoom level, in mercator meters.
-	fn tolerance_meters(&self, level: u8) -> f64 {
-		let tile_span = WORLD_SIZE / 2f64.powi(i32::from(level));
-		tile_span / TILE_PIXELS * self.tolerance_pixels
-	}
+/// A loop counter as a lattice offset.
+#[allow(clippy::cast_possible_wrap)]
+fn as_offset(i: usize) -> i64 {
+	i as i64
 }
 
 /// A number property, kept whole where the value is whole.
@@ -505,6 +669,13 @@ mod tests {
 		}
 	}
 
+	/// Coarse cells and a tolerance tight enough that LAEA's curve shows up.
+	fn curved_args() -> Args {
+		let mut args = args(3035, 100_000.0);
+		args.densify_tolerance = Some(0.001);
+		args
+	}
+
 	fn features_of(tile: Tile) -> Result<Vec<GeoFeature>> {
 		let vt = VectorTile::from_blob(&tile.into_blob(&Uncompressed)?)?;
 		vt.layers[0].to_features()
@@ -557,8 +728,13 @@ mod tests {
 		let grid = &operation.grid;
 		let tolerance = grid.tolerance_meters(10);
 
-		let left = grid.cell(4341, 2691, tolerance).expect("cell projects");
-		let right = grid.cell(4342, 2691, tolerance).expect("cell projects");
+		// Two cells built independently, as two neighbouring tiles would build them.
+		let left = CellBlock::build(grid, 4341, 4341, 2691, 2691, tolerance)
+			.cell(grid, 0, 0)
+			.expect("cell projects");
+		let right = CellBlock::build(grid, 4342, 4342, 2691, 2691, tolerance)
+			.cell(grid, 0, 0)
+			.expect("cell projects");
 
 		let bits = |feature: &GeoFeature| -> Vec<(u64, u64)> {
 			let Geometry::Polygon(polygon) = &feature.geometry else {
@@ -577,22 +753,93 @@ mod tests {
 		// The shared edge runs from (4342000, 2691000) to (4342000, 2692000):
 		// both corners plus whatever the densifier put between them, and not one
 		// vertex less — a single differing bit would show as a sliver on the map.
-		let edge = edge_vertices(
-			grid.lattice.corner(4342, 2691),
-			grid.lattice.corner(4342, 2692),
+		let (from, to) = (grid.lattice.corner(4342, 2691), grid.lattice.corner(4342, 2692));
+		let edge = edge_interior(
+			from,
+			to,
+			grid.projection.to_mercator(from),
+			grid.projection.to_mercator(to),
 			grid.projection.as_ref(),
 			tolerance,
 		);
-		assert_eq!(shared, edge.len() + 1);
+		assert_eq!(shared, edge.len() + 2);
+		Ok(())
+	}
+
+	/// Within a block, the two cells either side of an edge must be handed the
+	/// same vertices — the tile builder computes each edge once, so this checks
+	/// the assembly walks it in the right direction from both sides.
+	#[test]
+	fn cells_in_one_block_share_their_edge() -> Result<()> {
+		let operation = Operation::from_args(curved_args())?;
+		let grid = &operation.grid;
+		// A coarse grid at a low zoom, where LAEA curves enough to add vertices.
+		let block = CellBlock::build(grid, 43, 44, 26, 26, grid.tolerance_meters(4));
+		assert!(
+			!block.vertical[1].is_empty(),
+			"the shared edge should be densified here"
+		);
+
+		let bits = |feature: &GeoFeature| -> Vec<(u64, u64)> {
+			let Geometry::Polygon(polygon) = &feature.geometry else {
+				panic!("expected a polygon");
+			};
+			polygon
+				.exterior()
+				.coords()
+				.map(|c| (c.x.to_bits(), c.y.to_bits()))
+				.collect()
+		};
+
+		let left = bits(&block.cell(grid, 0, 0).expect("cell projects"));
+		let right = bits(&block.cell(grid, 1, 0).expect("cell projects"));
+		let shared = left.iter().filter(|c| right.contains(c)).count();
+		assert_eq!(
+			shared,
+			block.vertical[1].len() + 2,
+			"both corners and every vertex between them"
+		);
+		Ok(())
+	}
+
+	/// A cell that straddles a tile border is drawn in both tiles, from two
+	/// different blocks. The two copies have to agree — which is why the
+	/// densification verdict is keyed on lattice indices rather than on the tile.
+	#[test]
+	fn a_cell_is_the_same_from_any_block() -> Result<()> {
+		let operation = Operation::from_args(curved_args())?;
+		let grid = &operation.grid;
+		let tolerance = grid.tolerance_meters(4);
+
+		let alone = CellBlock::build(grid, 43, 43, 26, 26, tolerance)
+			.cell(grid, 0, 0)
+			.expect("cell projects");
+		// The same cell as the corner of a larger block, offset differently.
+		let in_block = CellBlock::build(grid, 41, 45, 24, 28, tolerance)
+			.cell(grid, 2, 2)
+			.expect("cell projects");
+
+		let bits = |feature: &GeoFeature| -> Vec<(u64, u64)> {
+			let Geometry::Polygon(polygon) = &feature.geometry else {
+				panic!("expected a polygon");
+			};
+			polygon
+				.exterior()
+				.coords()
+				.map(|c| (c.x.to_bits(), c.y.to_bits()))
+				.collect()
+		};
+		assert_eq!(bits(&alone), bits(&in_block));
+		assert_eq!(alone.properties, in_block.properties);
 		Ok(())
 	}
 
 	#[test]
 	fn a_mercator_grid_needs_no_extra_vertices() -> Result<()> {
 		let operation = Operation::from_args(args(3857, 1000.0))?;
-		let cell = operation
-			.grid
-			.cell(0, 0, operation.grid.tolerance_meters(10))
+		let grid = &operation.grid;
+		let cell = CellBlock::build(grid, 0, 0, 0, 0, grid.tolerance_meters(10))
+			.cell(grid, 0, 0)
 			.expect("cell projects");
 		let Geometry::Polygon(polygon) = &cell.geometry else {
 			panic!("expected a polygon");
@@ -607,9 +854,9 @@ mod tests {
 		let mut tight = args(3035, 100_000.0);
 		tight.densify_tolerance = Some(0.001);
 		let operation = Operation::from_args(tight)?;
-		let cell = operation
-			.grid
-			.cell(43, 26, operation.grid.tolerance_meters(10))
+		let grid = &operation.grid;
+		let cell = CellBlock::build(grid, 43, 43, 26, 26, grid.tolerance_meters(10))
+			.cell(grid, 0, 0)
 			.expect("cell projects");
 		let Geometry::Polygon(polygon) = &cell.geometry else {
 			panic!("expected a polygon");
@@ -715,6 +962,133 @@ mod tests {
 			let err = format!("{:?}", result.unwrap_err());
 			assert!(err.contains("4326") && err.contains("gdal"), "{err}");
 		}
+	}
+
+	/// Counts how often a tile asks the projection for a coordinate.
+	#[derive(Debug)]
+	struct Counting {
+		inner: super::projection::Laea,
+		count: Arc<std::sync::atomic::AtomicUsize>,
+	}
+
+	impl Projection for Counting {
+		fn to_mercator(&self, c: Coord<f64>) -> Coord<f64> {
+			self.count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+			self.inner.to_mercator(c)
+		}
+
+		fn to_source(&self, c: Coord<f64>) -> Coord<f64> {
+			self.inner.to_source(c)
+		}
+
+		fn to_mercator_many(&self, coords: &mut [Coord<f64>]) {
+			self.count.fetch_add(coords.len(), std::sync::atomic::Ordering::Relaxed);
+			self.inner.to_mercator_many(coords);
+		}
+	}
+
+	/// A grid that counts the transforms a tile costs it.
+	fn counting_grid(template: &Operation) -> (Grid, Arc<std::sync::atomic::AtomicUsize>) {
+		let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+		let grid = Grid {
+			projection: Box::new(Counting {
+				inner: super::projection::Laea::etrs89(),
+				count: Arc::clone(&count),
+			}),
+			lattice: template.grid.lattice,
+			id_template: template.grid.id_template.clone(),
+			fields: template.grid.fields.clone(),
+			tolerance_pixels: template.grid.tolerance_pixels,
+		};
+		(grid, count)
+	}
+
+	/// A corner is shared by four cells and an edge by two, so projecting per
+	/// cell means transforming each corner up to eight times over. Projecting the
+	/// block instead should cost barely more than one transform per cell.
+	#[test]
+	fn a_tile_costs_about_one_transform_per_cell() -> Result<()> {
+		let template = Operation::from_args(args(3035, 1000.0))?;
+		let (grid, count) = counting_grid(&template);
+
+		let tile = grid
+			.build_tile(TileCoord::from_geo(13.4, 52.5, 10)?)?
+			.expect("tile present");
+		let cells = VectorTile::from_blob(&tile.into_blob(&Uncompressed)?)?.layers[0]
+			.to_features()?
+			.len();
+		let transforms = count.load(std::sync::atomic::Ordering::Relaxed);
+
+		assert!(cells > 500, "expected a full tile of cells, got {cells}");
+		// Per cell rather than in total, so the bound survives a different tile.
+		let per_cell = transforms as f64 / cells as f64;
+		assert!(
+			per_cell < 2.0,
+			"{transforms} transforms for {cells} cells is {per_cell:.2} each"
+		);
+		Ok(())
+	}
+
+	#[test]
+	#[ignore = "measurement, not a test"]
+	fn measure_transforms_per_tile() -> Result<()> {
+		let template = Operation::from_args(args(3035, 1000.0))?;
+		let (grid, count) = counting_grid(&template);
+
+		let tile = grid
+			.build_tile(TileCoord::from_geo(13.4, 52.5, 10)?)?
+			.expect("tile present");
+		let cells = VectorTile::from_blob(&tile.into_blob(&Uncompressed)?)?.layers[0]
+			.to_features()?
+			.len();
+		let transforms = count.load(std::sync::atomic::Ordering::Relaxed);
+
+		println!("\ntile z10 of a 1 km EPSG:3035 grid:");
+		println!("  cells drawn     : {cells}");
+		println!(
+			"  transforms used : {transforms} ({:.2} per cell)",
+			transforms as f64 / cells as f64
+		);
+		println!("  per-cell design : {} (12 per cell)", cells * 12);
+		Ok(())
+	}
+
+	#[cfg(feature = "gdal")]
+	#[test]
+	#[ignore = "measurement, not a test"]
+	fn measure_gdal_tile_time() -> Result<()> {
+		use std::time::Instant;
+
+		let mut rd = args(28992, 500.0);
+		rd.bbox = [4.85, 52.3, 4.95, 52.4];
+		let operation = Operation::from_args(rd)?;
+		let coord = TileCoord::from_geo(4.9, 52.35, 11)?;
+
+		// First tile pays for PROJ's setup in this thread; that is startup, not
+		// per-tile work.
+		let start = Instant::now();
+		let tile = operation.grid.build_tile(coord)?.expect("tile present");
+		let warmup = start.elapsed();
+		let cells = VectorTile::from_blob(&tile.into_blob(&Uncompressed)?)?.layers[0]
+			.to_features()?
+			.len();
+
+		const ROUNDS: u32 = 20;
+		let start = Instant::now();
+		for _ in 0..ROUNDS {
+			std::hint::black_box(operation.grid.build_tile(coord)?);
+		}
+		let per_tile = start.elapsed() / ROUNDS;
+
+		println!("\nEPSG:28992 grid, 500 m cells, tile z11:");
+		println!("  cells per tile    : {cells}");
+		println!("  first tile        : {warmup:?}  (includes PROJ setup)");
+		println!("  steady state      : {per_tile:?} per tile");
+		println!(
+			"  implied rate      : {:.0} tiles/s single-threaded",
+			1.0 / per_tile.as_secs_f64()
+		);
+		Ok(())
 	}
 
 	#[tokio::test]

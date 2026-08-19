@@ -59,6 +59,33 @@ impl Projection for GdalProjection {
 	fn to_source(&self, c: Coord<f64>) -> Coord<f64> {
 		self.with(|transforms| apply(&transforms.to_source, c))
 	}
+
+	fn to_mercator_many(&self, coords: &mut [Coord<f64>]) {
+		if coords.is_empty() {
+			return;
+		}
+		// Worth about 15% over one call per coordinate — PROJ's per-point work
+		// dominates, not the crossing. The real saving is in asking for fewer
+		// points, which is what the caller does.
+		let mut xs: Vec<f64> = coords.iter().map(|c| c.x).collect();
+		let mut ys: Vec<f64> = coords.iter().map(|c| c.y).collect();
+		let mut zs = vec![0.0; coords.len()];
+
+		let ok = self.with(|transforms| {
+			transforms
+				.to_mercator
+				.transform_coords(&mut xs, &mut ys, &mut zs)
+				.is_ok()
+		});
+
+		for (i, c) in coords.iter_mut().enumerate() {
+			*c = if ok {
+				coord! { x: xs[i], y: ys[i] }
+			} else {
+				coord! { x: f64::NAN, y: f64::NAN }
+			};
+		}
+	}
 }
 
 /// Both directions between one CRS and web mercator.
@@ -135,6 +162,66 @@ mod tests {
 		assert!(
 			(back.x - source.x).abs() < 0.01 && (back.y - source.y).abs() < 0.01,
 			"{source:?} came back as {back:?}"
+		);
+		Ok(())
+	}
+
+	#[test]
+	#[ignore = "measurement, not a test"]
+	fn measure_transform_costs() -> Result<()> {
+		use std::time::Instant;
+		const N: usize = 100_000;
+
+		let gdal = GdalProjection::new(28992)?;
+		let native = Laea::etrs89();
+		let points: Vec<Coord<f64>> = (0..N)
+			.map(|i| coord! { x: 100_000.0 + (i % 1000) as f64, y: 450_000.0 + (i / 1000) as f64 })
+			.collect();
+
+		let t = Instant::now();
+		for p in &points {
+			std::hint::black_box(gdal.to_mercator(*p));
+		}
+		let one_by_one = t.elapsed();
+
+		let t = Instant::now();
+		let mut xs: Vec<f64> = points.iter().map(|c| c.x).collect();
+		let mut ys: Vec<f64> = points.iter().map(|c| c.y).collect();
+		let mut zs = vec![0.0; N];
+		TRANSFORMS.with_borrow_mut(|cache| {
+			let transforms = cache.get(&28992).expect("built above");
+			transforms
+				.to_mercator
+				.transform_coords(&mut xs, &mut ys, &mut zs)
+				.unwrap();
+		});
+		let batched = t.elapsed();
+
+		let laea_points: Vec<Coord<f64>> = (0..N)
+			.map(|i| coord! { x: 4_300_000.0 + (i % 1000) as f64, y: 2_700_000.0 + (i / 1000) as f64 })
+			.collect();
+		let t = Instant::now();
+		for p in &laea_points {
+			std::hint::black_box(native.to_mercator(*p));
+		}
+		let native_time = t.elapsed();
+
+		println!("\n{N} coordinates:");
+		println!(
+			"  gdal, one call each : {one_by_one:?}  ({:.2} µs/coord)",
+			one_by_one.as_secs_f64() * 1e6 / N as f64
+		);
+		println!(
+			"  gdal, one batch     : {batched:?}  ({:.3} µs/coord)",
+			batched.as_secs_f64() * 1e6 / N as f64
+		);
+		println!(
+			"  native LAEA         : {native_time:?}  ({:.3} µs/coord)",
+			native_time.as_secs_f64() * 1e6 / N as f64
+		);
+		println!(
+			"  batching gains      : {:.0}x",
+			one_by_one.as_secs_f64() / batched.as_secs_f64()
 		);
 		Ok(())
 	}

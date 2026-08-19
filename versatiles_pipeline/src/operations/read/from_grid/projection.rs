@@ -29,6 +29,16 @@ pub trait Projection: Debug + Send + Sync {
 
 	/// A web mercator coordinate, in the grid's CRS.
 	fn to_source(&self, c: Coord<f64>) -> Coord<f64>;
+
+	/// Project a whole slice in place.
+	///
+	/// The default projects one at a time; an implementation that can transform
+	/// a batch more cheaply than the sum of its parts overrides this.
+	fn to_mercator_many(&self, coords: &mut [Coord<f64>]) {
+		for c in coords.iter_mut() {
+			*c = self.to_mercator(*c);
+		}
+	}
 }
 
 /// The projection for an EPSG code, or an error naming what is available.
