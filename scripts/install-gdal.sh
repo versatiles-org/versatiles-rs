@@ -44,6 +44,15 @@ ok()    { printf "\033[1;32m[+] %s\033[0m\n" "$*"; }
 die()   { printf "\033[1;31m[x] %s\033[0m\n" "$*" >&2; exit 1; }
 
 install_debian() {
+  # The testing repo is a Debian-stable measure. On Ubuntu it cannot satisfy the
+  # pinned version, so the install falls back to Ubuntu's own package having
+  # re-indexed a foreign repo for nothing — and were it ever to succeed, it
+  # would pull Debian's libc onto an Ubuntu system.
+  if [[ "$USE_TESTING" == "1" ]] && grep -qi '^ID=ubuntu' /etc/os-release 2>/dev/null; then
+    warn "Ignoring --testing: this is Ubuntu, where the Debian testing repo cannot be used safely."
+    USE_TESTING=0
+  fi
+
   if [[ "$USE_TESTING" == "1" ]]; then
     info "Adding Debian testing repo…"
     sudo apt-get install -y debian-archive-keyring

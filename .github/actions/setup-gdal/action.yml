@@ -40,11 +40,15 @@ runs:
         done
         command -v gdal-config >/dev/null || { echo "gdal-config missing after relink"; exit 1; }
 
+    # `--testing` is deliberately not passed. The runners are Ubuntu, where the
+    # Debian testing repo cannot satisfy `libgdal-dev=3.12.*` anyway — the
+    # install failed and fell back to Ubuntu's own 3.8.4, so the only effect was
+    # re-indexing a foreign repo on every run.
     - name: Install GDAL
       shell: bash
       env:
         HOMEBREW_NO_AUTO_UPDATE: "1"
-      run: ./scripts/install-gdal.sh --testing
+      run: ./scripts/install-gdal.sh
 
     # Cache miss: pack GDAL's Cellar package files and `opt` symlinks (the
     # latter are how libgdal locates its dependencies at runtime) for next run.
