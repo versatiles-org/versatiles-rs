@@ -3,7 +3,11 @@
 #
 # Steps (in order): rustfmt, cargo check (no-default-features, server, cli,
 # server+cli, all-features), clippy with -D warnings, tests with all features,
-# and doc build with -D warnings. Exits non-zero on the first failure.
+# and doc build with -D warnings and the gdal feature. Each step mirrors what
+# CI runs, so a green run here should mean a green run there.
+#
+# Note that several steps use --all-features, so a local GDAL installation is
+# required (scripts/install-gdal.sh).
 
 cd "$(dirname "$0")/.."
 PROJECT_DIR=$(pwd)
@@ -72,9 +76,12 @@ if [ $? -ne 0 ]; then
    exit 1
 fi
 
+# Matches the CI docs job exactly, `--features gdal` included: a broken
+# intra-doc link inside a gdal-gated item is invisible without it, and CI
+# treats every rustdoc warning as an error.
 echo "cargo doc"
 cd $PROJECT_DIR
-result=$(RUSTDOCFLAGS="-D warnings" cargo doc --color=always --no-deps 2>&1)
+result=$(RUSTDOCFLAGS="-D warnings" cargo doc --color=always --no-deps --features gdal 2>&1)
 if [ $? -ne 0 ]; then
    echo -e "$result\nERROR DURING: cargo doc"
    exit 1

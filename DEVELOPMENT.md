@@ -62,7 +62,7 @@ cargo doc --no-deps
 cargo doc --no-deps --open
 
 # Check for documentation warnings
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --features gdal
 ```
 
 ## Node.js Commands
