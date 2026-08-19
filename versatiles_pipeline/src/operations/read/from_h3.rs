@@ -489,8 +489,10 @@ mod tests {
 		std::fs::write(&csv, format!("h3,population\n{cell},4321\n"))?;
 
 		let op = build(&format!(
-			"from_h3 resolution=8 {BBOX} | vector_update_properties data_source_path=\"{}\" layer_name=\"grid\" 			 id_field_tiles=\"h3\" id_field_data=\"h3\"",
-			csv.display()
+			"from_h3 resolution=8 {BBOX} | vector_update_properties data_source_path=\"{}\" \
+			 layer_name=\"grid\" id_field_tiles=\"h3\" id_field_data=\"h3\"",
+			// A Windows path is full of backslashes, and VPL reads those as escapes.
+			csv.to_string_lossy().replace('\\', "\\\\")
 		))
 		.await?;
 

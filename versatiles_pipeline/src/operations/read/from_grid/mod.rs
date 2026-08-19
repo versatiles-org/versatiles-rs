@@ -918,7 +918,8 @@ mod tests {
 		let joined = build(&format!(
 			"from_grid epsg=3035 size=1000 {BBOX} | vector_update_properties data_source_path=\"{}\" \
 			 layer_name=\"grid\" id_field_tiles=\"id\" id_field_data=\"GRD_ID\"",
-			csv.display()
+			// A Windows path is full of backslashes, and VPL reads those as escapes.
+			csv.to_string_lossy().replace('\\', "\\\\")
 		))
 		.await?;
 
