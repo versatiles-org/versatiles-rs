@@ -1,6 +1,6 @@
 //! Shared tile-sampling utilities.
 //!
-//! Used by `probe -ddd` and `validate-schema` to let callers read a
+//! Used by the deep probe and `validate-schema` to let callers read a
 //! representative subset of a large tile pyramid rather than every tile.
 //! Tiles are grouped into contiguous square *windows* so remote sources
 //! can coalesce multiple coordinate lookups into a single byte-range request.
@@ -25,6 +25,7 @@ pub fn parse_sample(percent: Option<f64>) -> Result<Option<f64>> {
 }
 
 /// Splitmix64 finaliser — cheap, well-distributed avalanche mixing.
+#[must_use]
 pub fn mix64(mut z: u64) -> u64 {
 	z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
 	z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
@@ -39,6 +40,7 @@ pub fn mix64(mut z: u64) -> u64 {
 	clippy::cast_possible_truncation,
 	clippy::cast_sign_loss
 )]
+#[must_use]
 pub fn windows_for_sample(fraction: f64, deepest_tiles: u64) -> u32 {
 	let target = (fraction * deepest_tiles as f64).ceil() as u64;
 	let per_window = u64::from(WINDOW_SIZE) * u64::from(WINDOW_SIZE);

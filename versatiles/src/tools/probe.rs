@@ -1,13 +1,17 @@
-use std::collections::HashMap;
+//! `versatiles probe` — render a container analysis for the terminal.
+//!
+//! The analysis itself lives in [`versatiles_container::probe`] and returns a
+//! [`ProbeReport`]. This module only turns that value into `PrettyPrint` output,
+//! so the same answers are reachable from a library, a server or a test without
+//! going through rendered text.
 
 use anyhow::Result;
-use versatiles_container::{TileSource, TilesRuntime};
-use versatiles_core::{ProbeDepth, TileBBox, TileType, utils::PrettyPrint};
-use versatiles_geometry::vector_tile::{
-	DegenerateReason, GeomType, IssueKind, LayerStats, ValidationIssue, layer_stats, validate_tile,
+use versatiles_container::{
+	ContentsReport, LayerSizeEntry, ProbeReport, TileSizeReport, TileSource, TilesRuntime, VectorContentsReport,
+	probe::sampling::parse_sample, probe_report,
 };
-
-use crate::tools::tile_sampling::{build_scan_plan, parse_sample};
+use versatiles_core::{ProbeDepth, utils::PrettyPrint};
+use versatiles_geometry::vector_tile::LayerStats;
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -53,12 +57,12 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	Ok(())
 }
 
-/// Performs a hierarchical CLI probe of `source` at the specified depth.
+/// Analyses `source` and renders the result to a fresh `PrettyPrint` reporter.
 ///
-/// Writes metadata, container specifics, tiles, and tile contents to a fresh
-/// `PrettyPrint` reporter based on `level`. Format-specific details are
-/// delegated to the source via `TileSource::probe_container` and
-/// `TileSource::probe_tile_contents`.
+/// Everything except the container-specific section comes from a single
+/// [`probe_report`] call; the container section is still delegated to
+/// [`TileSource::probe_container`], which writes to the reporter directly
+/// because it is implemented per container format.
 pub async fn probe(
 	source: &dyn TileSource,
 	level: ProbeDepth,
@@ -67,14 +71,14 @@ pub async fn probe(
 ) -> Result<()> {
 	use ProbeDepth::{Container, TileContents, TileSizes};
 
+	let report = probe_report(source, level, runtime, sample).await?;
 	let mut print = PrettyPrint::new();
 
 	let cat = print.category("meta_data").await;
-	cat.add_key_value("source_type", &source.source_type().to_string())
-		.await;
-	cat.add_key_json("meta", &source.tilejson().as_json_value()).await;
+	cat.add_key_value("source_type", &report.source_type).await;
+	cat.add_key_json("meta", &report.tilejson.as_json_value()).await;
 
-	probe_metadata(source, &mut print.category("parameters").await).await?;
+	print_metadata(&report, &mut print.category("parameters").await).await;
 
 	if matches!(level, Container | TileSizes | TileContents) {
 		log::debug!("probing source {:?} at depth {:?}", source.source_type(), level);
@@ -83,46 +87,31 @@ pub async fn probe(
 			.await?;
 	}
 
-	if matches!(level, TileSizes | TileContents) {
-		log::debug!(
-			"probing tiles {:?} at depth {:?}",
-			source.tilejson().as_json_value(),
-			level
-		);
-		probe_tile_sizes(source, &mut print.category("tiles").await, runtime).await?;
+	if let Some(sizes) = &report.tile_sizes {
+		print_tile_sizes(sizes, &mut print.category("tiles").await).await;
 	}
 
-	if matches!(level, TileContents) {
-		log::debug!(
-			"probing tile contents {:?} at depth {:?}",
-			source.tilejson().as_json_value(),
-			level
-		);
-		probe_tile_contents(source, &mut print.category("tile contents").await, runtime, sample).await?;
+	if let Some(contents) = &report.contents {
+		print_contents(contents, &mut print.category("tile contents").await).await;
 	}
 
 	Ok(())
 }
 
-/// Writes source metadata (tile pyramid, formats, compression) to `print`.
-pub async fn probe_metadata(source: &dyn TileSource, print: &mut PrettyPrint) -> Result<()> {
-	let metadata = source.metadata();
-	let tile_pyramid = source.tile_pyramid().await?;
-	let rows: Vec<Vec<String>> = tile_pyramid
+/// Writes the tile pyramid, compression and format.
+async fn print_metadata(report: &ProbeReport, print: &mut PrettyPrint) {
+	let rows: Vec<Vec<String>> = report
+		.pyramid
 		.iter()
-		.filter(|level| !level.is_empty())
 		.map(|level| {
-			let bbox = level.to_bbox();
-			let tiles = level.count_tiles();
-			let coverage = tiles * 100 / bbox.count_tiles();
 			vec![
-				format!("{}", level.level()),
-				format_integer_str(&bbox.x_min().unwrap().to_string()),
-				format_integer_str(&bbox.x_max().unwrap().to_string()),
-				format_integer_str(&bbox.y_min().unwrap().to_string()),
-				format_integer_str(&bbox.y_max().unwrap().to_string()),
-				format_integer_str(&tiles.to_string()),
-				format!("{coverage}%"),
+				format!("{}", level.level),
+				format_integer_str(&level.x_min.to_string()),
+				format_integer_str(&level.x_max.to_string()),
+				format_integer_str(&level.y_min.to_string()),
+				format_integer_str(&level.y_max.to_string()),
+				format_integer_str(&level.tiles.to_string()),
+				format!("{}%", level.coverage_percent),
 			]
 		})
 		.collect();
@@ -133,11 +122,8 @@ pub async fn probe_metadata(source: &dyn TileSource, print: &mut PrettyPrint) ->
 			&rows,
 		)
 		.await;
-	print
-		.add_key_value("tile compression", metadata.tile_compression())
-		.await;
-	print.add_key_value("tile format", metadata.tile_format()).await;
-	Ok(())
+	print.add_key_value("tile compression", &report.tile_compression).await;
+	print.add_key_value("tile format", &report.tile_format).await;
 }
 
 /// Formats a `u64` with underscores as thousands separators (e.g. `1_234_567`).
@@ -152,327 +138,84 @@ fn format_integer_str(v: &str) -> String {
 	result
 }
 
-/// Scans all tiles, reporting average size and the top-10 biggest tiles.
-#[allow(clippy::too_many_lines)]
-pub async fn probe_tile_sizes(source: &dyn TileSource, print: &mut PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
-	#[derive(Debug)]
-	#[allow(dead_code)]
-	struct Entry {
-		size: u64,
-		x: u32,
-		y: u32,
-		z: u8,
-	}
-
-	let mut biggest_tiles: Vec<Entry> = Vec::new();
-	let mut min_size: u64 = 0;
-	let mut size_sum: u64 = 0;
-	let mut tile_count: u64 = 0;
-	let mut level_stats: Vec<(u8, u64, u64)> = Vec::new();
-
-	let tile_pyramid = source.tile_pyramid().await?;
-	let total_tiles = tile_pyramid.count_tiles();
-	let progress = runtime.create_progress("scanning tiles", total_tiles);
-
-	for bbox in tile_pyramid.to_iter_bboxes().filter(|b| !b.is_empty()) {
-		let mut level_size_sum: u64 = 0;
-		let mut level_count: u64 = 0;
-		let mut stream = source.tile_size_stream(bbox).await?;
-		while let Some((coord, size_u32)) = stream.next().await {
-			let size = u64::from(size_u32);
-
-			tile_count += 1;
-			size_sum += size;
-			level_size_sum += size;
-			level_count += 1;
-			progress.inc(1);
-
-			if size < min_size {
-				continue;
-			}
-
-			let pos = biggest_tiles
-				.binary_search_by(|e| e.size.cmp(&size).reverse())
-				.unwrap_or_else(|p| p);
-			biggest_tiles.insert(
-				pos,
-				Entry {
-					size,
-					x: coord.x,
-					y: coord.y,
-					z: coord.level,
-				},
-			);
-			if biggest_tiles.len() > 10 {
-				biggest_tiles.pop();
-			}
-			min_size = biggest_tiles.last().expect("biggest_tiles is non-empty").size;
-		}
-		level_stats.push((bbox.level(), level_count, level_size_sum));
-	}
-	progress.finish();
-
-	if tile_count > 0 {
-		print.add_key_value("tile count", &tile_count).await;
-		print
-			.add_key_value("average tile size", &size_sum.div_euclid(tile_count))
-			.await;
-
-		let rows: Vec<Vec<String>> = biggest_tiles
-			.iter()
-			.enumerate()
-			.map(|(i, e)| {
-				vec![
-					format!("{}", i + 1),
-					format!("{}", e.z),
-					format!("{}", e.x),
-					format!("{}", e.y),
-					format_integer_str(&e.size.to_string()),
-				]
-			})
-			.collect();
-		print
-			.add_table("biggest tiles", &["#", "z", "x", "y", "size"], &rows)
-			.await;
-
-		let rows: Vec<Vec<String>> = level_stats
-			.iter()
-			.map(|(level, count, size)| {
-				let avg = if *count > 0 { size / count } else { 0 };
-				vec![
-					format!("{level}"),
-					format_integer_str(&count.to_string()),
-					format_integer_str(&size.to_string()),
-					format_integer_str(&avg.to_string()),
-				]
-			})
-			.collect();
-		print
-			.add_table(
-				"tile size analysis per level",
-				&["level", "count", "size_sum", "avg_size"],
-				&rows,
-			)
-			.await;
-	} else {
+/// Writes average size and the top-10 biggest tiles.
+async fn print_tile_sizes(sizes: &TileSizeReport, print: &mut PrettyPrint) {
+	if sizes.tile_count == 0 {
 		print.add_warning("no tiles found").await;
+		return;
 	}
 
-	Ok(())
+	print.add_key_value("tile count", &sizes.tile_count).await;
+	print.add_key_value("average tile size", &sizes.average_size()).await;
+
+	let rows: Vec<Vec<String>> = sizes
+		.biggest_tiles
+		.iter()
+		.enumerate()
+		.map(|(i, e)| {
+			vec![
+				format!("{}", i + 1),
+				format!("{}", e.z),
+				format!("{}", e.x),
+				format!("{}", e.y),
+				format_integer_str(&e.size.to_string()),
+			]
+		})
+		.collect();
+	print
+		.add_table("biggest tiles", &["#", "z", "x", "y", "size"], &rows)
+		.await;
+
+	let rows: Vec<Vec<String>> = sizes
+		.per_level
+		.iter()
+		.map(|level| {
+			vec![
+				format!("{}", level.level),
+				format_integer_str(&level.count.to_string()),
+				format_integer_str(&level.size_sum.to_string()),
+				format_integer_str(&level.average_size().to_string()),
+			]
+		})
+		.collect();
+	print
+		.add_table(
+			"tile size analysis per level",
+			&["level", "count", "size_sum", "avg_size"],
+			&rows,
+		)
+		.await;
 }
 
-/// Walks every tile in `source` and reports MVT spec violations found by the
-/// validator. For non-vector sources, emits a "not implemented" warning — we
-/// don't have content-level diagnostics for raster yet.
-async fn probe_tile_contents(
-	source: &dyn TileSource,
-	print: &mut PrettyPrint,
-	runtime: &TilesRuntime,
-	sample: Option<f64>,
-) -> Result<()> {
-	if source.metadata().tile_format().to_type() != TileType::Vector {
-		print
-			.add_warning("deep tile contents probing is only implemented for vector sources")
-			.await;
-		return Ok(());
-	}
-
-	probe_mvt_validation(source, print, runtime, sample).await
-}
-
-#[derive(Default)]
-struct ValidationCounters {
-	missing_extent: u64,
-	missing_version: u64,
-	duplicate_layer_name: u64,
-	orphan_inner: u64,
-	degenerate_too_few: u64,
-	degenerate_sub_pixel: u64,
-	degenerate_collinear: u64,
-	unknown_geom: u64,
-	empty_geom_point: u64,
-	empty_geom_line: u64,
-	empty_geom_polygon: u64,
-	malformed_stream: u64,
-	decode_failures: u64,
-	tiles_with_issues: u64,
-}
-
-impl ValidationCounters {
-	fn total_issues(&self) -> u64 {
-		self.missing_extent
-			+ self.missing_version
-			+ self.duplicate_layer_name
-			+ self.orphan_inner
-			+ self.degenerate_too_few
-			+ self.degenerate_sub_pixel
-			+ self.degenerate_collinear
-			+ self.unknown_geom
-			+ self.empty_geom_point
-			+ self.empty_geom_line
-			+ self.empty_geom_polygon
-			+ self.malformed_stream
-	}
-
-	fn record(&mut self, kind: &IssueKind) {
-		match kind {
-			IssueKind::MissingExtent => self.missing_extent += 1,
-			IssueKind::MissingVersion => self.missing_version += 1,
-			IssueKind::DuplicateLayerName => self.duplicate_layer_name += 1,
-			IssueKind::OrphanInnerRing => self.orphan_inner += 1,
-			IssueKind::DegenerateRing(DegenerateReason::TooFewVertices) => self.degenerate_too_few += 1,
-			IssueKind::DegenerateRing(DegenerateReason::SubPixel) => self.degenerate_sub_pixel += 1,
-			IssueKind::DegenerateRing(DegenerateReason::Collinear) => self.degenerate_collinear += 1,
-			// `EmptyGeometryForType(Unknown)` is unreachable in practice (the
-			// validator filters that case out before recording), but folded
-			// into `unknown_geom` so the match stays exhaustive.
-			IssueKind::UnknownGeometryType | IssueKind::EmptyGeometryForType(GeomType::Unknown) => self.unknown_geom += 1,
-			IssueKind::EmptyGeometryForType(GeomType::MultiPoint) => self.empty_geom_point += 1,
-			IssueKind::EmptyGeometryForType(GeomType::MultiLineString) => self.empty_geom_line += 1,
-			IssueKind::EmptyGeometryForType(GeomType::MultiPolygon) => self.empty_geom_polygon += 1,
-			IssueKind::MalformedCommandStream(_) => self.malformed_stream += 1,
+async fn print_contents(contents: &ContentsReport, print: &mut PrettyPrint) {
+	match contents {
+		ContentsReport::Unsupported => {
+			print
+				.add_warning("deep tile contents probing is only implemented for vector sources")
+				.await;
+		}
+		ContentsReport::Vector(report) => {
+			if let Some(percent) = report.sample_fraction.map(|f| f * 100.0) {
+				print
+					.add_key_value("sampling", &format!("~{percent:.0}% of deepest zoom level"))
+					.await;
+			}
+			print_validation_summary(print, report).await;
+			print_size_breakdown(print, report).await;
 		}
 	}
-}
-
-const VALIDATION_SAMPLE_LIMIT: usize = 10;
-
-/// Per-tile result of the decode+validate step, produced off-thread so the
-/// aggregation loop only has to fold cheap owned values.
-enum TileCheck {
-	/// The tile could not be decoded as a vector tile.
-	DecodeFailed,
-	/// The tile decoded; carries the spec violations and the per-layer byte
-	/// breakdown for size aggregation.
-	Validated {
-		issues: Vec<ValidationIssue>,
-		layers: Vec<LayerStats>,
-	},
-}
-
-/// Decodes a single tile, validates it, and computes its per-layer byte
-/// breakdown. This is the CPU-bound work (decompress + protobuf parse + geometry
-/// validation + re-encode for sizes) that gets fanned out across worker threads
-/// by `map_parallel`.
-fn check_tile(mut tile: versatiles_container::Tile) -> TileCheck {
-	match tile.as_vector() {
-		Ok(vt) => TileCheck::Validated {
-			issues: validate_tile(vt),
-			// Size aggregation is best-effort: if a layer fails to re-encode we
-			// skip its sizes rather than aborting the whole deep probe.
-			layers: layer_stats(vt).unwrap_or_default(),
-		},
-		Err(_) => TileCheck::DecodeFailed,
-	}
-}
-
-/// Aggregated byte breakdown of one layer at one zoom level, across all tiles.
-#[derive(Default)]
-struct LayerAgg {
-	/// How many tiles at this zoom contained this layer.
-	tiles: u64,
-	stats: LayerStats,
-}
-
-/// Iterates every tile, runs the MVT validator and per-layer size breakdown on
-/// it, and prints both a validation summary and a zoom × layer size breakdown.
-/// The per-tile decode+validate+measure (the expensive part) runs in parallel
-/// across worker threads via `map_parallel`; the aggregation stays on this task
-/// so it needs no synchronization.
-async fn probe_mvt_validation(
-	source: &dyn TileSource,
-	print: &mut PrettyPrint,
-	runtime: &TilesRuntime,
-	sample: Option<f64>,
-) -> Result<()> {
-	let mut counters = ValidationCounters::default();
-	let mut samples: Vec<Vec<String>> = Vec::with_capacity(VALIDATION_SAMPLE_LIMIT);
-	let mut tile_count: u64 = 0;
-	// (zoom, layer name) -> aggregated byte breakdown.
-	let mut size_agg: HashMap<(u8, String), LayerAgg> = HashMap::new();
-
-	let tile_pyramid = source.tile_pyramid().await?;
-	let plan = build_scan_plan(tile_pyramid.to_iter_bboxes(), sample)?;
-	let total_in_plan: u64 = plan.iter().map(TileBBox::count_tiles).sum();
-	let progress = runtime.create_progress("validating tile contents", total_in_plan);
-
-	for bbox in plan {
-		let mut stream = source
-			.tile_stream(bbox)
-			.await?
-			.map_parallel(|_coord, tile| check_tile(tile));
-		while let Some((coord, check)) = stream.next().await {
-			tile_count += 1;
-			progress.inc(1);
-
-			let (issues, layers) = match check {
-				TileCheck::DecodeFailed => {
-					counters.decode_failures += 1;
-					continue;
-				}
-				TileCheck::Validated { issues, layers } => (issues, layers),
-			};
-
-			for layer in &layers {
-				let entry = size_agg.entry((coord.level, layer.name.clone())).or_default();
-				entry.tiles += 1;
-				entry.stats.add(layer);
-			}
-
-			if issues.is_empty() {
-				continue;
-			}
-			counters.tiles_with_issues += 1;
-
-			for issue in &issues {
-				counters.record(&issue.kind);
-				if samples.len() < VALIDATION_SAMPLE_LIMIT {
-					samples.push(vec![
-						format!("{}", coord.level),
-						format!("{}", coord.x),
-						format!("{}", coord.y),
-						issue.layer.clone(),
-						issue.feature_index.map_or("-".to_string(), |i| i.to_string()),
-						describe_kind(&issue.kind),
-					]);
-				}
-			}
-		}
-	}
-	progress.finish();
-
-	if let Some(percent) = sample.map(|f| f * 100.0) {
-		print
-			.add_key_value("sampling", &format!("~{percent:.0}% of deepest zoom level"))
-			.await;
-	}
-
-	print_validation_summary(print, tile_count, &counters, &samples).await;
-	print_size_breakdown(print, &size_agg).await;
-	Ok(())
 }
 
 /// Prints the container-wide uncompressed-byte breakdown grouped by zoom level
 /// and layer, plus an all-zooms per-layer roll-up. Bytes are the same
 /// uncompressed MVT figures `analyze-tile` reports, summed over every tile.
-async fn print_size_breakdown(print: &mut PrettyPrint, size_agg: &HashMap<(u8, String), LayerAgg>) {
-	if size_agg.is_empty() {
+async fn print_size_breakdown(print: &mut PrettyPrint, report: &VectorContentsReport) {
+	if report.layer_sizes.is_empty() {
 		return;
 	}
 
-	let grand_total: usize = size_agg.values().map(|a| a.stats.encoded_bytes).sum();
-	let total = grand_total.max(1);
-
-	// Whether any layer carries feature ids — controls the optional `ids` column.
-	let show_ids = size_agg.values().any(|a| a.stats.id_bytes > 0);
-
-	// Per zoom × layer, ordered by (zoom asc, total bytes desc).
-	let mut entries: Vec<(&(u8, String), &LayerAgg)> = size_agg.iter().collect();
-	entries.sort_by(|a, b| {
-		a.0.0
-			.cmp(&b.0.0)
-			.then(b.1.stats.encoded_bytes.cmp(&a.1.stats.encoded_bytes))
-	});
+	let total = report.total_bytes().max(1);
+	let show_ids = report.has_feature_ids();
 
 	let mut headers: Vec<&str> = vec!["zoom", "layer", "tiles", "features", "geometry", "tags", "props"];
 	if show_ids {
@@ -480,25 +223,16 @@ async fn print_size_breakdown(print: &mut PrettyPrint, size_agg: &HashMap<(u8, S
 	}
 	headers.extend(["other", "total", "%"]);
 
-	let rows: Vec<Vec<String>> = entries
+	let rows: Vec<Vec<String>> = report
+		.layer_sizes
 		.iter()
-		.map(|((zoom, name), agg)| {
-			let s = &agg.stats;
+		.map(|entry: &LayerSizeEntry| {
 			let mut row = vec![
-				format!("{zoom}"),
-				name.clone(),
-				format_integer_str(&agg.tiles.to_string()),
-				format_integer_str(&s.feature_count.to_string()),
-				format_integer_str(&s.geometry_bytes.to_string()),
-				format_integer_str(&s.tag_bytes.to_string()),
-				format_integer_str(&s.property_bytes().to_string()),
+				format!("{}", entry.zoom),
+				entry.layer.clone(),
+				format_integer_str(&entry.tiles.to_string()),
 			];
-			if show_ids {
-				row.push(format_integer_str(&s.id_bytes.to_string()));
-			}
-			row.push(format_integer_str(&s.other_bytes().to_string()));
-			row.push(format_integer_str(&s.encoded_bytes.to_string()));
-			row.push(format!("{}%", s.encoded_bytes * 100 / total));
+			row.extend(size_columns(&entry.stats, show_ids, total));
 			row
 		})
 		.collect();
@@ -507,36 +241,18 @@ async fn print_size_breakdown(print: &mut PrettyPrint, size_agg: &HashMap<(u8, S
 		.add_table("uncompressed size by zoom × layer", &headers, &rows)
 		.await;
 
-	// All-zooms roll-up: which layer dominates the whole container.
-	let mut per_layer: HashMap<&str, LayerStats> = HashMap::new();
-	for ((_, name), agg) in size_agg {
-		per_layer.entry(name).or_default().add(&agg.stats);
-	}
-	let mut layer_rows: Vec<(&str, LayerStats)> = per_layer.into_iter().collect();
-	layer_rows.sort_by_key(|entry| std::cmp::Reverse(entry.1.encoded_bytes));
-
 	let mut headers: Vec<&str> = vec!["layer", "features", "geometry", "tags", "props"];
 	if show_ids {
 		headers.push("ids");
 	}
 	headers.extend(["other", "total", "%"]);
 
-	let rows: Vec<Vec<String>> = layer_rows
+	let rows: Vec<Vec<String>> = report
+		.layer_totals()
 		.iter()
-		.map(|(name, s)| {
-			let mut row = vec![
-				(*name).to_string(),
-				format_integer_str(&s.feature_count.to_string()),
-				format_integer_str(&s.geometry_bytes.to_string()),
-				format_integer_str(&s.tag_bytes.to_string()),
-				format_integer_str(&s.property_bytes().to_string()),
-			];
-			if show_ids {
-				row.push(format_integer_str(&s.id_bytes.to_string()));
-			}
-			row.push(format_integer_str(&s.other_bytes().to_string()));
-			row.push(format_integer_str(&s.encoded_bytes.to_string()));
-			row.push(format!("{}%", s.encoded_bytes * 100 / total));
+		.map(|(name, stats)| {
+			let mut row = vec![name.clone()];
+			row.extend(size_columns(stats, show_ids, total));
 			row
 		})
 		.collect();
@@ -546,13 +262,26 @@ async fn print_size_breakdown(print: &mut PrettyPrint, size_agg: &HashMap<(u8, S
 		.await;
 }
 
-async fn print_validation_summary(
-	print: &mut PrettyPrint,
-	tile_count: u64,
-	counters: &ValidationCounters,
-	samples: &[Vec<String>],
-) {
-	print.add_key_value("tiles scanned", &tile_count).await;
+/// The byte columns both size tables share, from `features` to `%`.
+fn size_columns(stats: &LayerStats, show_ids: bool, total: usize) -> Vec<String> {
+	let mut row = vec![
+		format_integer_str(&stats.feature_count.to_string()),
+		format_integer_str(&stats.geometry_bytes.to_string()),
+		format_integer_str(&stats.tag_bytes.to_string()),
+		format_integer_str(&stats.property_bytes().to_string()),
+	];
+	if show_ids {
+		row.push(format_integer_str(&stats.id_bytes.to_string()));
+	}
+	row.push(format_integer_str(&stats.other_bytes().to_string()));
+	row.push(format_integer_str(&stats.encoded_bytes.to_string()));
+	row.push(format!("{}%", stats.encoded_bytes * 100 / total));
+	row
+}
+
+async fn print_validation_summary(print: &mut PrettyPrint, report: &VectorContentsReport) {
+	let counters = &report.issues;
+	print.add_key_value("tiles scanned", &report.tiles_scanned).await;
 
 	if counters.decode_failures > 0 {
 		print
@@ -574,53 +303,45 @@ async fn print_validation_summary(
 		.add_key_value("tiles with issues", &counters.tiles_with_issues)
 		.await;
 
-	let kind_rows: Vec<Vec<String>> = [
-		("MissingExtent", counters.missing_extent),
-		("MissingVersion", counters.missing_version),
-		("DuplicateLayerName", counters.duplicate_layer_name),
-		("OrphanInnerRing", counters.orphan_inner),
-		("DegenerateRing(TooFewVertices)", counters.degenerate_too_few),
-		("DegenerateRing(SubPixel)", counters.degenerate_sub_pixel),
-		("DegenerateRing(Collinear)", counters.degenerate_collinear),
-		("UnknownGeometryType", counters.unknown_geom),
-		("EmptyGeometryForType(MultiPoint)", counters.empty_geom_point),
-		("EmptyGeometryForType(MultiLineString)", counters.empty_geom_line),
-		("EmptyGeometryForType(MultiPolygon)", counters.empty_geom_polygon),
-		("MalformedCommandStream", counters.malformed_stream),
-	]
-	.into_iter()
-	.filter(|(_, n)| *n > 0)
-	.map(|(name, n)| vec![name.to_string(), format_integer_str(&n.to_string())])
-	.collect();
+	let kind_rows: Vec<Vec<String>> = counters
+		.by_kind()
+		.into_iter()
+		.filter(|(_, n)| *n > 0)
+		.map(|(name, n)| vec![name.to_string(), format_integer_str(&n.to_string())])
+		.collect();
 
 	print.add_table("issues by kind", &["kind", "count"], &kind_rows).await;
 
-	if !samples.is_empty() {
+	if !report.samples.is_empty() {
+		let rows: Vec<Vec<String>> = report
+			.samples
+			.iter()
+			.map(|s| {
+				vec![
+					format!("{}", s.z),
+					format!("{}", s.x),
+					format!("{}", s.y),
+					s.layer.clone(),
+					s.feature_index.map_or("-".to_string(), |i| i.to_string()),
+					s.kind.clone(),
+				]
+			})
+			.collect();
 		print
 			.add_table(
-				&format!("sample issues (first {})", samples.len()),
+				&format!("sample issues (first {})", rows.len()),
 				&["z", "x", "y", "layer", "feature", "kind"],
-				samples,
+				&rows,
 			)
 			.await;
 	}
 
 	// Actionable tip: distinguish issues that vector_repair fixes automatically
 	// from those that additionally require drop_offenders=true.
-	let fixable_automatically = counters.missing_extent
-		+ counters.missing_version
-		+ counters.duplicate_layer_name
-		+ counters.orphan_inner
-		+ counters.degenerate_too_few
-		+ counters.degenerate_sub_pixel
-		+ counters.degenerate_collinear;
-	let needs_drop_offenders = counters.unknown_geom
-		+ counters.empty_geom_point
-		+ counters.empty_geom_line
-		+ counters.empty_geom_polygon
-		+ counters.malformed_stream;
-
-	let tip = match (fixable_automatically > 0, needs_drop_offenders > 0) {
+	let tip = match (
+		counters.fixable_automatically() > 0,
+		counters.needs_drop_offenders() > 0,
+	) {
 		(true, false) => Some("pipe through `| vector_repair` to fix these issues automatically"),
 		(_, true) => Some(
 			"pipe through `| vector_repair drop_offenders=true` to fix all issues (unfixable features will be removed)",
@@ -629,19 +350,6 @@ async fn print_validation_summary(
 	};
 	if let Some(msg) = tip {
 		print.add_key_value("fix", &msg).await;
-	}
-}
-
-fn describe_kind(kind: &IssueKind) -> String {
-	match kind {
-		IssueKind::MissingExtent => "MissingExtent".to_string(),
-		IssueKind::MissingVersion => "MissingVersion".to_string(),
-		IssueKind::DuplicateLayerName => "DuplicateLayerName".to_string(),
-		IssueKind::OrphanInnerRing => "OrphanInnerRing".to_string(),
-		IssueKind::DegenerateRing(reason) => format!("DegenerateRing({reason:?})"),
-		IssueKind::UnknownGeometryType => "UnknownGeometryType".to_string(),
-		IssueKind::EmptyGeometryForType(geom_type) => format!("EmptyGeometryForType({geom_type:?})"),
-		IssueKind::MalformedCommandStream(_) => "MalformedCommandStream".to_string(),
 	}
 }
 
@@ -665,9 +373,8 @@ mod tests {
 		Ok(())
 	}
 
-	/// Exercises the full orchestration and each free function against a real
-	/// MBTiles file. This replaces the per-method tests that used to live on
-	/// `TileSource` before the probe helpers moved out of the trait.
+	/// Exercises the full orchestration and each renderer against a real MBTiles
+	/// file. The analysis behind them is covered in `versatiles_container::probe`.
 	#[tokio::test]
 	async fn probe_all_levels_against_mbtiles() -> Result<()> {
 		let runtime = create_test_runtime();
@@ -677,14 +384,20 @@ mod tests {
 		probe(source, ProbeDepth::Shallow, &runtime, None).await?;
 		probe(source, ProbeDepth::Container, &runtime, None).await?;
 
+		let report = probe_report(source, ProbeDepth::TileSizes, &runtime, None).await?;
+
 		let mut printer = PrettyPrint::new();
-		probe_metadata(source, &mut printer).await?;
+		print_metadata(&report, &mut printer).await;
 		let out = printer.stringify().await;
 		assert!(out.contains("tile compression"), "got: {out}");
 		assert!(out.contains("tile format"), "got: {out}");
 
 		let mut printer = PrettyPrint::new();
-		probe_tile_sizes(source, &mut printer.category("tiles").await, &runtime).await?;
+		print_tile_sizes(
+			report.tile_sizes.as_ref().expect("TileSizes depth"),
+			&mut printer.category("tiles").await,
+		)
+		.await;
 		let out = printer.stringify().await;
 		assert!(out.contains("tile count"), "got: {out}");
 		assert!(out.contains("biggest tiles"), "got: {out}");
@@ -694,352 +407,23 @@ mod tests {
 	}
 
 	/// Walk every tile in `berlin.mbtiles` through the validator-backed deep
-	/// probe. The fixture was regenerated through `vector_repair` so it is
-	/// Verifies that the probe runs correctly against the berlin.mbtiles fixture and
-	/// that the output has the expected structure. The fixture's layers omit the
-	/// `extent` field (relying on the proto default of 4096), which Phase 2 of the
-	/// MVT validator now correctly flags as `MissingExtent`. Phase 3 (repair) will
-	/// address this in the test fixture.
+	/// probe and render it, so the rendering path stays exercised end to end.
 	#[tokio::test]
-	async fn probe_tile_contents_against_mbtiles_reports_no_issues() -> Result<()> {
+	async fn probe_tile_contents_against_mbtiles() -> Result<()> {
 		let runtime = create_test_runtime();
 		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 		let source: &dyn TileSource = &**reader;
 
-		let mut printer = PrettyPrint::new();
-		probe_tile_contents(source, &mut printer.category("tile contents").await, &runtime, None).await?;
-		let out = printer.stringify().await;
-
-		assert!(out.contains("tiles scanned"), "missing tile count: {out}");
-		assert!(out.contains("MVT spec issues"), "missing validator section: {out}");
-		// berlin.mbtiles layers omit the `extent` field — the validator correctly
-		// reports MissingExtent for every layer of every tile.
-		assert!(
-			out.contains("MissingExtent"),
-			"probe must report MissingExtent for the berlin fixture: {out}"
-		);
-		// The validator-level fix tip should point to vector_repair.
-		assert!(
-			out.contains("vector_repair"),
-			"probe must suggest vector_repair when structural issues are found: {out}"
-		);
-		// No geometry-level issues (winding, degenerate rings, etc.) are expected.
-		assert!(!out.contains("OrphanInnerRing"), "unexpected geometry issues: {out}");
-		assert!(!out.contains("DegenerateRing"), "unexpected geometry issues: {out}");
-		assert!(
-			!out.contains("MalformedCommandStream"),
-			"unexpected geometry issues: {out}"
-		);
-		// The deep probe also emits the container-wide size breakdown.
-		assert!(
-			out.contains("uncompressed size by zoom × layer"),
-			"missing zoom × layer breakdown: {out}"
-		);
-		assert!(
-			out.contains("uncompressed size by layer (all zooms)"),
-			"missing per-layer roll-up: {out}"
-		);
-		// A known shortbread layer should appear in the breakdown.
-		assert!(
-			out.contains("place_labels"),
-			"expected a known layer in breakdown: {out}"
-		);
-		Ok(())
-	}
-
-	// ── pure-helper unit tests ────────────────────────────────────────────
-
-	#[test]
-	fn describe_kind_covers_every_issue_variant() {
-		assert_eq!(describe_kind(&IssueKind::MissingExtent), "MissingExtent");
-		assert_eq!(describe_kind(&IssueKind::MissingVersion), "MissingVersion");
-		assert_eq!(describe_kind(&IssueKind::DuplicateLayerName), "DuplicateLayerName");
-		assert_eq!(describe_kind(&IssueKind::OrphanInnerRing), "OrphanInnerRing");
-		assert_eq!(describe_kind(&IssueKind::UnknownGeometryType), "UnknownGeometryType");
-		assert_eq!(
-			describe_kind(&IssueKind::MalformedCommandStream("anything".into())),
-			"MalformedCommandStream"
-		);
-		assert_eq!(
-			describe_kind(&IssueKind::DegenerateRing(DegenerateReason::TooFewVertices)),
-			"DegenerateRing(TooFewVertices)"
-		);
-		assert_eq!(
-			describe_kind(&IssueKind::DegenerateRing(DegenerateReason::SubPixel)),
-			"DegenerateRing(SubPixel)"
-		);
-		assert_eq!(
-			describe_kind(&IssueKind::DegenerateRing(DegenerateReason::Collinear)),
-			"DegenerateRing(Collinear)"
-		);
-		assert_eq!(
-			describe_kind(&IssueKind::EmptyGeometryForType(GeomType::MultiPoint)),
-			"EmptyGeometryForType(MultiPoint)"
-		);
-		assert_eq!(
-			describe_kind(&IssueKind::EmptyGeometryForType(GeomType::MultiLineString)),
-			"EmptyGeometryForType(MultiLineString)"
-		);
-		assert_eq!(
-			describe_kind(&IssueKind::EmptyGeometryForType(GeomType::MultiPolygon)),
-			"EmptyGeometryForType(MultiPolygon)"
-		);
-	}
-
-	#[test]
-	fn validation_counters_record_increments_the_matching_field() {
-		let mut c = ValidationCounters::default();
-		c.record(&IssueKind::MissingExtent);
-		c.record(&IssueKind::MissingVersion);
-		c.record(&IssueKind::DuplicateLayerName);
-		c.record(&IssueKind::OrphanInnerRing);
-		c.record(&IssueKind::OrphanInnerRing);
-		c.record(&IssueKind::DegenerateRing(DegenerateReason::TooFewVertices));
-		c.record(&IssueKind::DegenerateRing(DegenerateReason::SubPixel));
-		c.record(&IssueKind::DegenerateRing(DegenerateReason::Collinear));
-		c.record(&IssueKind::UnknownGeometryType);
-		c.record(&IssueKind::EmptyGeometryForType(GeomType::MultiPoint));
-		c.record(&IssueKind::EmptyGeometryForType(GeomType::MultiLineString));
-		c.record(&IssueKind::EmptyGeometryForType(GeomType::MultiPolygon));
-		c.record(&IssueKind::MalformedCommandStream("err".into()));
-
-		assert_eq!(c.missing_extent, 1);
-		assert_eq!(c.missing_version, 1);
-		assert_eq!(c.duplicate_layer_name, 1);
-		assert_eq!(c.orphan_inner, 2);
-		assert_eq!(c.degenerate_too_few, 1);
-		assert_eq!(c.degenerate_sub_pixel, 1);
-		assert_eq!(c.degenerate_collinear, 1);
-		assert_eq!(c.unknown_geom, 1);
-		assert_eq!(c.empty_geom_point, 1);
-		assert_eq!(c.empty_geom_line, 1);
-		assert_eq!(c.empty_geom_polygon, 1);
-		assert_eq!(c.malformed_stream, 1);
-		assert_eq!(c.total_issues(), 13);
-	}
-
-	#[test]
-	fn validation_counters_total_is_zero_by_default() {
-		let c = ValidationCounters::default();
-		assert_eq!(c.total_issues(), 0);
-	}
-
-	// ── print_validation_summary output paths ─────────────────────────────
-
-	#[tokio::test]
-	async fn print_validation_summary_clean_reports_none() {
-		let mut printer = PrettyPrint::new();
-		let counters = ValidationCounters::default();
-		print_validation_summary(&mut printer, 42, &counters, &[]).await;
-		let out = printer.stringify().await;
-		assert!(out.contains("tiles scanned: 42"), "got: {out}");
-		assert!(out.contains("MVT spec issues"), "got: {out}");
-		assert!(out.contains("none"), "got: {out}");
-		assert!(!out.contains("issues by kind"), "got: {out}");
-	}
-
-	#[tokio::test]
-	async fn print_validation_summary_dirty_reports_kind_table_and_samples() {
-		let mut printer = PrettyPrint::new();
-		let counters = ValidationCounters {
-			missing_extent: 0,
-			missing_version: 0,
-			duplicate_layer_name: 0,
-			orphan_inner: 5,
-			degenerate_too_few: 0,
-			degenerate_sub_pixel: 1,
-			degenerate_collinear: 2,
-			unknown_geom: 0,
-			empty_geom_point: 0,
-			empty_geom_line: 0,
-			empty_geom_polygon: 0,
-			malformed_stream: 1,
-			decode_failures: 0,
-			tiles_with_issues: 7,
-		};
-		let samples = vec![vec![
-			"14".to_string(),
-			"8800".to_string(),
-			"5377".to_string(),
-			"land".to_string(),
-			"3".to_string(),
-			"OrphanInnerRing".to_string(),
-		]];
-		print_validation_summary(&mut printer, 130, &counters, &samples).await;
-		let out = printer.stringify().await;
-
-		assert!(out.contains("MVT spec issues (total): 9"), "got: {out}");
-		assert!(out.contains("tiles with issues: 7"), "got: {out}");
-		assert!(out.contains("issues by kind"), "got: {out}");
-		assert!(out.contains("OrphanInnerRing"), "got: {out}");
-		assert!(out.contains("DegenerateRing(SubPixel)"), "got: {out}");
-		assert!(out.contains("DegenerateRing(Collinear)"), "got: {out}");
-		assert!(out.contains("MalformedCommandStream"), "got: {out}");
-		// Zero-count kinds must not appear in the table.
-		assert!(!out.contains("DegenerateRing(TooFewVertices)"), "got: {out}");
-		assert!(!out.contains("UnknownGeometryType"), "got: {out}");
-		// Sample table
-		assert!(out.contains("sample issues (first 1)"), "got: {out}");
-		assert!(out.contains("land"), "got: {out}");
-		// Has both fixable (orphan rings) and needs-drop-offenders (malformed stream)
-		// → tip should mention drop_offenders=true.
-		assert!(
-			out.contains("drop_offenders=true"),
-			"expected drop_offenders tip: {out}"
-		);
-	}
-
-	#[tokio::test]
-	async fn print_validation_summary_decode_failures_warn() {
-		let mut printer = PrettyPrint::new();
-		let counters = ValidationCounters {
-			decode_failures: 3,
-			..ValidationCounters::default()
-		};
-		print_validation_summary(&mut printer, 10, &counters, &[]).await;
-		let out = printer.stringify().await;
-		assert!(out.contains("3 tile(s) failed to decode"), "got: {out}");
-		// total_issues is still 0 so we still report "none" for spec issues.
-		assert!(out.contains("MVT spec issues"), "got: {out}");
-		assert!(out.contains("none"), "got: {out}");
-	}
-
-	#[tokio::test]
-	async fn print_validation_summary_structural_issues_show_basic_fix_tip() {
-		let mut printer = PrettyPrint::new();
-		let counters = ValidationCounters {
-			missing_extent: 5,
-			missing_version: 2,
-			..ValidationCounters::default()
-		};
-		print_validation_summary(&mut printer, 10, &counters, &[]).await;
-		let out = printer.stringify().await;
-		assert!(out.contains("vector_repair"), "expected fix tip: {out}");
-		// Structural-only issues don't require drop_offenders.
-		assert!(
-			!out.contains("drop_offenders=true"),
-			"structural issues should not require drop_offenders: {out}"
-		);
-	}
-
-	#[tokio::test]
-	async fn print_validation_summary_clean_shows_no_fix_tip() {
-		let mut printer = PrettyPrint::new();
-		let counters = ValidationCounters::default();
-		print_validation_summary(&mut printer, 5, &counters, &[]).await;
-		let out = printer.stringify().await;
-		assert!(!out.contains("fix:"), "clean tiles should not show fix tip: {out}");
-		assert!(
-			!out.contains("vector_repair"),
-			"clean tiles should not show fix tip: {out}"
-		);
-	}
-
-	// ── probe_tile_contents on a raster source ────────────────────────────
-
-	#[tokio::test]
-	async fn probe_tile_contents_on_raster_emits_not_implemented_warning() -> Result<()> {
-		use versatiles_container::{MockReader, MockReaderProfile};
-		let reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
-		let source: &dyn TileSource = &reader;
-		let runtime = create_test_runtime();
+		let report = probe_report(source, ProbeDepth::TileContents, &runtime, None).await?;
+		let contents = report.contents.as_ref().expect("TileContents depth");
 
 		let mut printer = PrettyPrint::new();
-		probe_tile_contents(source, &mut printer.category("tile contents").await, &runtime, None).await?;
+		print_contents(contents, &mut printer.category("tile contents").await).await;
 		let out = printer.stringify().await;
-		assert!(
-			out.contains("only implemented for vector sources"),
-			"expected 'not implemented' warning, got: {out}",
-		);
-		// And we should NOT have walked any tiles for a raster source.
-		assert!(!out.contains("tiles scanned"), "got: {out}");
-		Ok(())
-	}
+		assert!(out.contains("tiles scanned"), "got: {out}");
+		assert!(out.contains("uncompressed size by zoom × layer"), "got: {out}");
+		assert!(out.contains("uncompressed size by layer (all zooms)"), "got: {out}");
 
-	// ── sampling mode ────────────────────────────────────────────────────
-
-	#[tokio::test]
-	async fn probe_tile_contents_with_sample_reports_sampling_note() -> Result<()> {
-		let runtime = create_test_runtime();
-		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
-		let source: &dyn TileSource = &**reader;
-
-		let mut printer = PrettyPrint::new();
-		// 10% sample — just enough to exercise the path without scanning everything.
-		probe_tile_contents(
-			source,
-			&mut printer.category("tile contents").await,
-			&runtime,
-			Some(0.1),
-		)
-		.await?;
-		let out = printer.stringify().await;
-
-		assert!(out.contains("sampling"), "expected sampling note in output: {out}");
-		assert!(out.contains("tiles scanned"), "expected tile count: {out}");
-		assert!(out.contains("MVT spec issues"), "expected validator section: {out}");
-		Ok(())
-	}
-
-	#[test]
-	fn run_with_sample_flag_does_not_error() -> Result<()> {
-		run_command(vec![
-			"versatiles",
-			"probe",
-			"-q",
-			"-ddd",
-			"--sample",
-			"25",
-			"../testdata/berlin.mbtiles",
-		])?;
-		Ok(())
-	}
-
-	// ── probe_tile_sizes on an empty pyramid ──────────────────────────────
-
-	#[tokio::test]
-	async fn probe_tile_sizes_no_tiles_warns() -> Result<()> {
-		use versatiles_container::{MockReader, TileSourceMetadata, Traversal};
-		use versatiles_core::{TileCompression, TileFormat, TilePyramid};
-		let pyramid = TilePyramid::new_empty();
-		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None);
-		let reader = MockReader::new_mock(pyramid, metadata)?;
-		let source: &dyn TileSource = &reader;
-		let runtime = create_test_runtime();
-
-		let mut printer = PrettyPrint::new();
-		probe_tile_sizes(source, &mut printer.category("tiles").await, &runtime).await?;
-		let out = printer.stringify().await;
-		assert!(out.contains("no tiles found"), "got: {out}");
-		Ok(())
-	}
-
-	// ── probe() dispatch at every depth ───────────────────────────────────
-
-	#[tokio::test]
-	async fn probe_dispatches_at_each_depth() -> Result<()> {
-		let runtime = create_test_runtime();
-		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
-		let source: &dyn TileSource = &**reader;
-
-		// Each depth level exercises a different branch of the matches!() arms
-		// in `probe()` and the `run()` ProbeDepth match. Shallow is already
-		// covered by `probe_all_levels_against_mbtiles`; this test fills the
-		// other three.
-		probe(source, ProbeDepth::Container, &runtime, None).await?;
-		probe(source, ProbeDepth::TileSizes, &runtime, None).await?;
-		probe(source, ProbeDepth::TileContents, &runtime, None).await?;
-		Ok(())
-	}
-
-	#[test]
-	fn run_at_each_deep_level_dispatches() -> Result<()> {
-		// Exercises lines 30..=32 of `run()` (the `-d`, `-dd`, `-ddd` arms of
-		// the ProbeDepth match). `-q` suppresses logging so the assertion
-		// boils down to "doesn't error out".
-		for flag in ["-d", "-dd", "-ddd"] {
-			run_command(vec!["versatiles", "probe", "-q", flag, "../testdata/berlin.mbtiles"])?;
-		}
 		Ok(())
 	}
 }

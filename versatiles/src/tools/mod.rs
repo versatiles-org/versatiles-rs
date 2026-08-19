@@ -10,4 +10,3 @@ mod mosaic_tools;
 pub mod probe;
 #[cfg(feature = "server")]
 pub mod serve;
-pub(crate) mod tile_sampling;

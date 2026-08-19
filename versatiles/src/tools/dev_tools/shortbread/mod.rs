@@ -21,7 +21,7 @@ use schema::{Schema, SchemaSelector};
 use versatiles_container::TilesRuntime;
 use versatiles_core::{TileBBox, TileType};
 
-use crate::tools::tile_sampling::{build_scan_plan, parse_sample};
+use versatiles_container::probe::sampling::{build_scan_plan, parse_sample};
 
 /// How to present the findings.
 #[derive(Clone, Copy, Debug, clap::ValueEnum)]

@@ -53,6 +53,9 @@ mod container;
 /// Re‑exports the container registry and common open/write helpers.
 pub use container::*;
 
+pub mod probe;
+pub use probe::*;
+
 pub mod progress;
 pub use progress::*;
 

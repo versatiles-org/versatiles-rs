@@ -20,7 +20,7 @@ use super::{GeoValuePBF, VectorTile};
 
 /// Accumulated byte breakdown for one layer. Used both per-tile (one decoded
 /// layer) and aggregated (summed across many tiles via [`LayerStats::add`]).
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct LayerStats {
 	pub name: String,
 	pub feature_count: usize,
