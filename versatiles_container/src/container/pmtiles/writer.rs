@@ -316,13 +316,20 @@ impl OrderPlan {
 		ensure!(
 			clustered || allow_unclustered,
 			"cannot write PMTiles: this source produces tiles in {} order, and PMTiles stores them \
-			 in Hilbert order — reordering while writing would mean holding the whole tileset in \
-			 memory. Operations that build lower zoom levels from higher ones, such as \
-			 `raster_overview`, force this order.\n\
-			 Either write .versatiles or .mbtiles, which accept any order, or pass \
-			 `--writer-option {ALLOW_UNCLUSTERED}=true` to write a PMTiles archive whose tile data is not \
-			 physically clustered. The archive is valid and reads correctly either way, but an \
-			 unclustered one needs more range requests to serve, so it is not chosen for you.",
+			 in Hilbert order. Operations that build lower zoom levels from higher ones, such as \
+			 `raster_overview`, force this order, and reordering while writing would mean holding \
+			 the whole tileset in memory.\n\
+			 \n\
+			 Three ways forward:\n\
+			 - write .versatiles or .mbtiles instead — they accept any order, and cost nothing\n\
+			 - `--writer-option {REORDER}=true` — keeps the archive clustered, at the cost of \
+			 writing the tile data twice and temporary disk the size of the output (see \
+			 `{TEMP_DIR}`)\n\
+			 - `--writer-option {ALLOW_UNCLUSTERED}=true` — a single pass, but the tile data is not \
+			 physically clustered, so serving it needs more range requests\n\
+			 \n\
+			 The archive is valid and reads correctly whichever you pick. None is chosen for you \
+			 because which cost is acceptable depends on the job.",
 			available.order()
 		);
 
@@ -479,10 +486,20 @@ mod tests {
 
 		assert!(err.contains("DepthFirst"), "should name the source's order: {err}");
 		assert!(err.contains("raster_overview"), "should name the usual cause: {err}");
-		// The failure has to name both escape hatches, so the choice is visible
-		// where it is made rather than only in the documentation.
+		// Every way forward has to be named here, so the choice is visible where
+		// it is made rather than only in the documentation.
 		assert!(err.contains(".versatiles"), "should offer another container: {err}");
-		assert!(err.contains("allow_unclustered=true"), "should offer the opt-in: {err}");
+		assert!(err.contains("reorder=true"), "should offer the reordering pass: {err}");
+		assert!(
+			err.contains("allow_unclustered=true"),
+			"should offer the unclustered opt-in: {err}"
+		);
+		// Each option is only a real choice if its cost is stated too.
+		assert!(err.contains("twice"), "should state reorder's cost: {err}");
+		assert!(
+			err.contains("range requests"),
+			"should state the unclustered cost: {err}"
+		);
 		Ok(())
 	}
 
