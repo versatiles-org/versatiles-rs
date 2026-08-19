@@ -167,7 +167,9 @@ pub(crate) async fn convert_tiles_with_options(
 /// - `bboxBorder`: Add border tiles around bbox (in tile units)
 /// - `compress`: Output compression ("gzip", "brotli", "uncompressed")
 /// - `flipY`: Flip tiles vertically (TMS ↔ XYZ coordinate systems)
-/// - `swapXY`: Swap X and Y tile coordinates
+/// - `swapXy`: Swap X and Y tile coordinates
+/// - `writerOptions`: Format-specific settings for the output writer, keyed by the
+///   writer's own `snake_case` names, e.g. `{ allow_unclustered: 'true' }` for PMTiles
 ///
 /// # Progress Callbacks
 ///
