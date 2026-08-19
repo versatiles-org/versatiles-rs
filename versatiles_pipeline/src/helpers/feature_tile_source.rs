@@ -19,14 +19,13 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{
-	TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream, VectorLayer, VectorLayers,
-};
+use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_geometry::{feature_import::FeatureImport, geo::GeoFeature};
 
 use crate::helpers::{
 	tile_error_monitor::{TileErrorMonitor, TileErrorStage},
 	tile_size_monitor::{MaxTileBytes, TileBreakdown, TileSizeMonitor, resolve_hard_cap},
+	tilejson::set_single_vector_layer,
 };
 
 /// Apply `properties_include` (whitelist) or `properties_exclude` (blacklist)
@@ -228,13 +227,13 @@ impl TileSource for FeatureTileSource {
 /// import's layer (id, fields, zoom range). MBTiles consumers (QGIS, Mapbox
 /// GL, etc.) read this to discover what's inside the tiles.
 fn populate_vector_layers(tilejson: &mut TileJSON, layer_name: &str, import: &FeatureImport) {
-	let layer = VectorLayer {
-		fields: import.property_schema().clone(),
-		description: None,
-		minzoom: Some(import.min_zoom()),
-		maxzoom: Some(import.max_zoom()),
-	};
-	tilejson.vector_layers = VectorLayers(std::iter::once((layer_name.to_string(), layer)).collect());
+	set_single_vector_layer(
+		tilejson,
+		layer_name,
+		import.property_schema().clone(),
+		import.min_zoom(),
+		import.max_zoom(),
+	);
 }
 
 #[cfg(test)]

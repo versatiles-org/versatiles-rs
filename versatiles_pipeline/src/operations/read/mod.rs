@@ -5,6 +5,7 @@ pub mod from_debug;
 #[cfg(feature = "gdal")]
 pub mod from_gdal;
 pub mod from_geo;
+pub mod from_h3;
 pub mod from_merged_vector;
 pub mod from_stacked;
 pub mod from_stacked_raster;
