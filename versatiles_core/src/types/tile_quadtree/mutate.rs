@@ -107,7 +107,10 @@ impl TileQuadtree {
 		self.root.swap_xy();
 	}
 
-	/// Flips all tile coordinates horizontally: `x → (level_size − 1 − x)`.
+	/// Flips all tile coordinates horizontally: `x → (2^level − 1 − x)`.
+	///
+	/// Recurses through the tree, swapping left and right quadrant pairs at
+	/// each `Partial` node. `Full` and `Empty` nodes are unaffected.
 	pub fn flip_x(&mut self) {
 		self.root.flip_x();
 	}

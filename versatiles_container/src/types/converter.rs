@@ -45,11 +45,11 @@ use std::{path::Path, sync::Arc};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use versatiles_core::{
-	GeoBBox, GeoCrop, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream,
+	GeoBBox, GeoCrop, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileRemap, TileStream,
 };
 use versatiles_derive::context;
 
-use crate::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
+use crate::{RemappedTileSource, SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime};
 
 /// Parameters that control how tiles are transformed during reading/conversion.
 ///
@@ -288,13 +288,17 @@ impl TilesConvertReader {
 	/// Propagates errors from querying/deriving parameters or updating metadata.
 	#[context("Creating converter reader from existing reader")]
 	pub async fn new_from_reader(reader: SharedTileSource, cp: TilesConverterParameters) -> Result<TilesConvertReader> {
+		// Coordinate remapping is delegated in full: the wrapper maps requests
+		// backwards and results forwards for every access path, which is what
+		// this type used to do by hand — inconsistently (issue #230).
+		let remap = TileRemap::new(false, cp.flip_y, cp.swap_xy);
+		let reader: SharedTileSource = if remap.is_identity() {
+			reader
+		} else {
+			Arc::new(Box::new(RemappedTileSource::new(reader, remap).await?) as Box<dyn TileSource>)
+		};
+
 		let mut tile_pyramid = reader.tile_pyramid().await?.as_ref().clone();
-		if cp.flip_y {
-			tile_pyramid.flip_y();
-		}
-		if cp.swap_xy {
-			tile_pyramid.swap_xy();
-		}
 
 		if let Some(filter_pyramid) = &cp.tile_pyramid {
 			tile_pyramid.intersect_pyramid(filter_pyramid);
@@ -349,17 +353,7 @@ impl TileSource for TilesConvertReader {
 	}
 
 	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		let mut coord = *coord;
-
-		if self.converter_parameters.flip_y {
-			coord.flip_y();
-		}
-
-		if self.converter_parameters.swap_xy {
-			coord.swap_xy();
-		}
-
-		let tile = self.reader.tile(&coord).await?;
+		let tile = self.reader.tile(coord).await?;
 
 		let Some(mut tile) = tile else { return Ok(None) };
 
@@ -378,59 +372,14 @@ impl TileSource for TilesConvertReader {
 		Ok(Some(tile))
 	}
 
-	async fn tile_coord_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		if self.converter_parameters.swap_xy {
-			bbox.swap_xy();
-		}
-		if self.converter_parameters.flip_y {
-			bbox.flip_y();
-		}
-
-		let mut stream = self.reader.tile_coord_stream(bbox).await?;
-
-		let flip_y = self.converter_parameters.flip_y;
-		let swap_xy = self.converter_parameters.swap_xy;
-
-		if flip_y || swap_xy {
-			stream = stream.map_coord(move |mut coord| {
-				if flip_y {
-					coord.flip_y();
-				}
-				if swap_xy {
-					coord.swap_xy();
-				}
-				coord
-			});
-		}
-
-		Ok(stream)
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		self.reader.tile_coord_stream(bbox).await
 	}
 
-	async fn tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("converter::tile_stream {bbox:?}");
-		if self.converter_parameters.swap_xy {
-			bbox.swap_xy();
-		}
-		if self.converter_parameters.flip_y {
-			bbox.flip_y();
-		}
 
 		let mut stream = self.reader.tile_stream(bbox).await?;
-
-		let flip_y = self.converter_parameters.flip_y;
-		let swap_xy = self.converter_parameters.swap_xy;
-
-		if flip_y || swap_xy {
-			stream = stream.map_coord(move |mut coord| {
-				if flip_y {
-					coord.flip_y();
-				}
-				if swap_xy {
-					coord.swap_xy();
-				}
-				coord
-			});
-		}
 
 		if let Some(tile_format) = self.converter_parameters.tile_format {
 			let quality = self.converter_parameters.format_quality;

@@ -329,7 +329,7 @@ impl TileBBox {
 		}
 	}
 
-	/// Mirrors the bbox horizontally within its zoom level: `x → 2^z − 1 − x`.
+	/// Flip the bbox horizontally (X axis) within the current level’s range.
 	pub fn flip_x(&mut self) {
 		if !self.is_empty() {
 			self

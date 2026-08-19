@@ -83,6 +83,9 @@ pub use tile_bbox::*;
 mod tile_quadtree;
 pub use tile_quadtree::*;
 
+mod tile_remap;
+pub use tile_remap::*;
+
 mod tile_cover;
 pub use tile_cover::*;
 

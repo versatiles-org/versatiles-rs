@@ -14,7 +14,7 @@ versatiles serve pipeline.vpl
 
 **Read:** [`from_color`](#from_color) · [`from_container`](#from_container) · [`from_csv`](#from_csv) · [`from_debug`](#from_debug) · [`from_gdal_dem`](#from_gdal_dem) · [`from_gdal_raster`](#from_gdal_raster) · [`from_geo`](#from_geo) · [`from_merged_vector`](#from_merged_vector) · [`from_stacked`](#from_stacked) · [`from_stacked_raster`](#from_stacked_raster) · [`from_tile`](#from_tile) · [`from_tilejson`](#from_tilejson)
 
-**Transform:** [`dem_overview`](#dem_overview) · [`dem_quantize`](#dem_quantize) · [`dem_tile_resize`](#dem_tile_resize) · [`filter`](#filter) · [`meta_update`](#meta_update) · [`raster_flatten`](#raster_flatten) · [`raster_format`](#raster_format) · [`raster_levels`](#raster_levels) · [`raster_mask`](#raster_mask) · [`raster_overscale`](#raster_overscale) · [`raster_overview`](#raster_overview) · [`raster_tile_resize`](#raster_tile_resize) · [`vector_filter_features`](#vector_filter_features) · [`vector_filter_layers`](#vector_filter_layers) · [`vector_filter_properties`](#vector_filter_properties) · [`vector_overzoom`](#vector_overzoom) · [`vector_repair`](#vector_repair) · [`vector_update_properties`](#vector_update_properties)
+**Transform:** [`dem_overview`](#dem_overview) · [`dem_quantize`](#dem_quantize) · [`dem_tile_resize`](#dem_tile_resize) · [`filter`](#filter) · [`meta_update`](#meta_update) · [`raster_flatten`](#raster_flatten) · [`raster_format`](#raster_format) · [`raster_levels`](#raster_levels) · [`raster_mask`](#raster_mask) · [`raster_overscale`](#raster_overscale) · [`raster_overview`](#raster_overview) · [`raster_tile_resize`](#raster_tile_resize) · [`remap_coords`](#remap_coords) · [`vector_filter_features`](#vector_filter_features) · [`vector_filter_layers`](#vector_filter_layers) · [`vector_filter_properties`](#vector_filter_properties) · [`vector_overzoom`](#vector_overzoom) · [`vector_repair`](#vector_repair) · [`vector_update_properties`](#vector_update_properties)
 
 ## Defining a pipeline
 
@@ -494,6 +494,37 @@ Convert the size of tiles by splitting or merging them to a width of 256px or 51
 ### Parameters
 
 - *`tile_size`: u32 (optional)* - Target tile size in pixels. A value of `256` expects source tiles of 512px, which will be split into four 256px output tiles at the next higher zoom level. Level 0 is downscaled instead. A value of `512` expects source tiles measuring 256px, which will be merged into 512px output tiles at the next lower zoom level.
+
+---
+
+## remap_coords
+
+Relabels tile coordinates, e.g. to correct a source that uses TMS row order or `z/y/x` paths.
+
+The three flags are applied in a fixed order — `flip_x`, then `flip_y`, then
+`swap_xy` — and between them reach all eight symmetries of the square: four
+rotations and four reflections, which is every relabelling that maps the tile
+grid onto itself. Because that set is closed, chaining two of these
+operations is never necessary; some single combination of the three flags
+does the same thing.
+
+The combinations most likely to be wanted:
+
+| `flip_x` | `flip_y` | `swap_xy` | result                    |
+| -------- | -------- | --------- | ------------------------- |
+| false    | true     | false     | TMS ↔ XYZ row order       |
+| false    | false    | true      | `z/y/x` ↔ `z/x/y` layouts |
+| true     | true     | false     | rotate 180°               |
+| true     | false    | true      | rotate 90°                |
+
+Unlike a global `--flip-y` flag, this applies to one source, so a pipeline
+can combine sources that disagree about their conventions.
+
+### Parameters
+
+- *`flip_x`: bool (optional)* - Mirror horizontally within each zoom level: `x` becomes `2^z - 1 - x`. No tile scheme uses this on its own; it is what makes the rotations reachable. Defaults to `false`.
+- *`flip_y`: bool (optional)* - Mirror vertically within each zoom level: `y` becomes `2^z - 1 - y`. This is the TMS ↔ XYZ correction. Defaults to `false`.
+- *`swap_xy`: bool (optional)* - Exchange the axes: `(x, y)` becomes `(y, x)`, for sources laid out as `z/y/x`. Applied after the flips. Defaults to `false`.
 
 ---
 

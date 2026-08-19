@@ -11,6 +11,7 @@ pub fn transform_operation_factories() -> Vec<Box<dyn TransformOperationFactoryT
 	vec![
 		Box::new(general::filter::Factory {}),
 		Box::new(general::meta_update::Factory {}),
+		Box::new(general::remap_coords::Factory {}),
 		Box::new(dem::dem_overview::Factory {}),
 		Box::new(dem::dem_quantize::Factory {}),
 		Box::new(dem::dem_tile_resize::Factory {}),
