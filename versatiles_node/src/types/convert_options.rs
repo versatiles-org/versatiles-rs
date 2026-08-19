@@ -86,7 +86,10 @@ pub struct ConvertOptions {
 	/// writer does not accept is an error, not a no-op, and the message lists
 	/// what that format does accept.
 	///
-	/// **Example:** `{ allowUnclustered: 'true' }` when writing PMTiles
+	/// Keys reach the writer verbatim, so they keep the writer's own spelling —
+	/// `snake_case`, unlike the camelCase fields around them here.
+	///
+	/// **Example:** `{ allow_unclustered: 'true' }` when writing PMTiles
 	///
 	/// **Default:** No writer options
 	pub writer_options: Option<HashMap<String, String>>,
