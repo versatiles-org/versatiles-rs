@@ -38,6 +38,7 @@ pub fn read_operation_factories() -> Vec<Box<dyn ReadOperationFactoryTrait>> {
 		Box::new(read::from_csv::Factory {}),
 		Box::new(read::from_debug::Factory {}),
 		Box::new(read::from_geo::Factory {}),
+		Box::new(read::from_grid::Factory {}),
 		Box::new(read::from_h3::Factory {}),
 		Box::new(read::from_merged_vector::Factory {}),
 		Box::new(read::from_stacked_raster::Factory {}),
