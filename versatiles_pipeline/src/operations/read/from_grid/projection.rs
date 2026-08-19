@@ -16,7 +16,9 @@
 
 use std::fmt::Debug;
 
-use anyhow::{Result, bail};
+use anyhow::Result;
+#[cfg(not(feature = "gdal"))]
+use anyhow::bail;
 use geo_types::{Coord, coord};
 use versatiles_geometry::ext::mercator::{coord_from_mercator, coord_to_mercator};
 
@@ -35,10 +37,20 @@ pub fn for_epsg(epsg: u32) -> Result<Box<dyn Projection>> {
 		4326 => Box::new(Wgs84) as Box<dyn Projection>,
 		3857 => Box::new(WebMercator) as Box<dyn Projection>,
 		3035 => Box::new(Laea::etrs89()) as Box<dyn Projection>,
-		other => bail!(
-			"EPSG:{other} is not supported for grids. Available without GDAL: 4326 (WGS84 lon/lat), 3857 (web \
-			 mercator) and 3035 (ETRS89-LAEA, what European gridded statistics use)."
-		),
+		other => {
+			// A GDAL build reaches every other code; without it these three are all
+			// there is, so the error names the way out as well as what is missing.
+			#[cfg(feature = "gdal")]
+			{
+				return Ok(Box::new(super::gdal_projection::GdalProjection::new(other)?) as Box<dyn Projection>);
+			}
+			#[cfg(not(feature = "gdal"))]
+			bail!(
+				"EPSG:{other} is not supported for grids in this build. Available: 4326 (WGS84 lon/lat), 3857 (web \
+				 mercator) and 3035 (ETRS89-LAEA, what European gridded statistics use). Any other code needs a build \
+				 with the `gdal` feature."
+			)
+		}
 	})
 }
 
@@ -276,6 +288,7 @@ mod tests {
 		assert!((back.x - c.x).abs() < 1e-9 && (back.y - c.y).abs() < 1e-9);
 	}
 
+	#[cfg(not(feature = "gdal"))]
 	#[test]
 	fn unsupported_codes_name_the_supported_ones() {
 		let err = for_epsg(28992).unwrap_err().to_string();
@@ -284,5 +297,15 @@ mod tests {
 			err.contains("4326") && err.contains("3857") && err.contains("3035"),
 			"{err}"
 		);
+		assert!(err.contains("gdal"), "the way out has to be named too: {err}");
+	}
+
+	#[cfg(feature = "gdal")]
+	#[test]
+	fn other_codes_go_through_gdal() {
+		// EPSG:28992 has no native implementation; with GDAL it still resolves.
+		assert!(for_epsg(28992).is_ok());
+		// ...and a code GDAL cannot use fails when the grid is built.
+		assert!(for_epsg(0).is_err());
 	}
 }

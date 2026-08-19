@@ -39,6 +39,8 @@
 //! [`densify`] explains why neighbouring cells still meet exactly.
 
 mod densify;
+#[cfg(feature = "gdal")]
+mod gdal_projection;
 mod id_template;
 mod lattice;
 mod projection;
@@ -297,7 +299,7 @@ impl Grid {
 		let mut features = Vec::new();
 		for iy in ys {
 			for ix in xs.clone() {
-				features.push(self.cell(ix, iy, tolerance));
+				features.extend(self.cell(ix, iy, tolerance));
 			}
 		}
 
@@ -307,7 +309,12 @@ impl Grid {
 	}
 
 	/// One cell as a mercator polygon with its id and corner coordinates.
-	fn cell(&self, ix: i64, iy: i64, tolerance: f64) -> GeoFeature {
+	///
+	/// `None` where the cell has no image in web mercator — beyond a projection's
+	/// area of use, or past the mercator latitude limit. Dropping it is the only
+	/// honest answer: a cell drawn from broken coordinates would land somewhere
+	/// it does not belong.
+	fn cell(&self, ix: i64, iy: i64, tolerance: f64) -> Option<GeoFeature> {
 		let (min, max) = (self.lattice.corner(ix, iy), self.lattice.corner(ix + 1, iy + 1));
 		let corners = [
 			coord! { x: min.x, y: min.y },
@@ -325,6 +332,9 @@ impl Grid {
 				tolerance,
 			));
 		}
+		if ring.iter().any(|c| !c.x.is_finite() || !c.y.is_finite()) {
+			return None;
+		}
 		if let Some(first) = ring.first().copied() {
 			ring.push(first);
 		}
@@ -337,13 +347,13 @@ impl Grid {
 		properties.insert(self.fields.x.clone(), number(min.x));
 		properties.insert(self.fields.y.clone(), number(min.y));
 
-		GeoFeature {
+		Some(GeoFeature {
 			// The id is a string, and MVT feature ids are `u64`, so setting one
 			// would offer a second, different key for the same cell.
 			id: None,
 			geometry: Geometry::Polygon(Polygon::new(LineString::from(ring), Vec::new())),
 			properties,
-		}
+		})
 	}
 
 	/// The densify tolerance for one zoom level, in mercator meters.
@@ -547,8 +557,8 @@ mod tests {
 		let grid = &operation.grid;
 		let tolerance = grid.tolerance_meters(10);
 
-		let left = grid.cell(4341, 2691, tolerance);
-		let right = grid.cell(4342, 2691, tolerance);
+		let left = grid.cell(4341, 2691, tolerance).expect("cell projects");
+		let right = grid.cell(4342, 2691, tolerance).expect("cell projects");
 
 		let bits = |feature: &GeoFeature| -> Vec<(u64, u64)> {
 			let Geometry::Polygon(polygon) = &feature.geometry else {
@@ -580,7 +590,10 @@ mod tests {
 	#[test]
 	fn a_mercator_grid_needs_no_extra_vertices() -> Result<()> {
 		let operation = Operation::from_args(args(3857, 1000.0))?;
-		let cell = operation.grid.cell(0, 0, operation.grid.tolerance_meters(10));
+		let cell = operation
+			.grid
+			.cell(0, 0, operation.grid.tolerance_meters(10))
+			.expect("cell projects");
 		let Geometry::Polygon(polygon) = &cell.geometry else {
 			panic!("expected a polygon");
 		};
@@ -594,7 +607,10 @@ mod tests {
 		let mut tight = args(3035, 100_000.0);
 		tight.densify_tolerance = Some(0.001);
 		let operation = Operation::from_args(tight)?;
-		let cell = operation.grid.cell(43, 26, operation.grid.tolerance_meters(10));
+		let cell = operation
+			.grid
+			.cell(43, 26, operation.grid.tolerance_meters(10))
+			.expect("cell projects");
 		let Geometry::Polygon(polygon) = &cell.geometry else {
 			panic!("expected a polygon");
 		};
@@ -664,7 +680,6 @@ mod tests {
 	#[tokio::test]
 	async fn bad_arguments_are_rejected() {
 		let cases = [
-			("from_grid epsg=28992 size=100", "4326"),
 			("from_grid epsg=3035 size=0", "size must be positive"),
 			("from_grid epsg=3035 size=1000 id_preset=\"nope\"", "unknown id_preset"),
 			("from_grid epsg=3035 size=1000 id_template=\"static\"", "no {x} or {y}"),
@@ -685,6 +700,21 @@ mod tests {
 
 		let err = format!("{:?}", build("from_grid epsg=3035 size=1000").await.unwrap_err());
 		assert!(err.contains("bbox"), "{err}");
+	}
+
+	/// EPSG:28992 is the Dutch grid CRS: unreachable without GDAL, ordinary with it.
+	#[tokio::test]
+	async fn a_crs_only_gdal_knows() {
+		let result = build(&format!("from_grid epsg=28992 size=100 {BBOX}")).await;
+
+		#[cfg(feature = "gdal")]
+		assert!(result.is_ok(), "{:?}", result.err());
+
+		#[cfg(not(feature = "gdal"))]
+		{
+			let err = format!("{:?}", result.unwrap_err());
+			assert!(err.contains("4326") && err.contains("gdal"), "{err}");
+		}
 	}
 
 	#[tokio::test]

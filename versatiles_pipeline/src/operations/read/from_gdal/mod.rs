@@ -4,7 +4,7 @@ mod gdal_pool;
 mod instance;
 pub mod raster;
 mod resample;
-mod spatial_ref;
+pub(crate) mod spatial_ref;
 
 use cutline::Cutline;
 use gdal_pool::GdalPool;
