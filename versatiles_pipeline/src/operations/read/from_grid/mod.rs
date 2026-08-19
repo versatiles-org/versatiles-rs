@@ -24,6 +24,13 @@
 //! default is the INSPIRE form that Eurostat, its member states and the Eurostat
 //! GridMaker all emit.
 //!
+//!
+//! ## Cells and tiles
+//!
+//! A cell reaching into several tiles is drawn in each of them, clipped to the
+//! tile it is in. The same id therefore recurs across tiles, which is what a
+//! join expects — but the geometry carrying it in any one tile is only the part
+//! that falls inside that tile, so it is not something to measure areas from.
 //! ## Zoom levels
 //!
 //! Cell size is fixed in the grid's CRS and does not change with zoom — that is

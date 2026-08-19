@@ -38,6 +38,30 @@ For tabular point data (CSV with explicit longitude/latitude columns) use `from_
 from_csv filename="quakes.csv" lon_column="longitude" lat_column="latitude"
 ```
 
+### Generating grid cells
+
+Gridded statistics — population per cell, sensor readings, anything aggregated to a regular tessellation — are published as tables keyed on a cell id, without the geometry that id refers to. `from_grid` and `from_h3` generate that geometry, so the table can be joined onto it with `vector_update_properties`:
+
+```vpl
+from_grid epsg=3035 size=1000 bbox=[5.8,47.2,15.1,55.1]
+  | vector_update_properties data_source_path="population.csv"
+      id_field_tiles="id" id_field_data="GRD_ID"
+```
+
+`from_grid` produces squares of a fixed size in a projected CRS. The id follows the INSPIRE form Eurostat and its member states publish (`CRS3035RES1000mN2691000E4341000`); `id_preset="geostat"` gives the short form (`1kmN2689E4337`), and `id_template=` spells out anything else — `E{x/100:04}N{y/100:04}` produces `E0643N4567`, the form Dutch grid statistics use. Each cell also carries its lower-left corner as `x` and `y`, mirroring the `X_LLC` / `Y_LLC` columns published beside the ids.
+
+Without GDAL, `epsg` accepts 3035 (ETRS89-LAEA, what European gridded statistics use), 3857 and 4326; a build with the `gdal` feature accepts any code, at roughly ten times the cost per coordinate. Released binaries ship without GDAL, so a `.vpl` naming another code will not run on one.
+
+`from_h3` produces H3 hexagons instead, addressed by resolution rather than size, and carries the H3 index as `h3` — the column name H3 datasets usually use:
+
+```vpl
+from_h3 resolution=8 bbox=[13.0,52.3,13.8,52.7]
+  | vector_update_properties data_source_path="kontur_population.csv"
+      id_field_tiles="h3" id_field_data="h3"
+```
+
+Both require a `bbox` and both derive their own minimum zoom: cell size is fixed, so at low zoom one tile would hold every cell in view. `max_cells_per_tile` moves that threshold. A cell reaching into several tiles is drawn in each of them, clipped to the tile — so the same id recurs across tiles, which a join expects, but the geometry in one tile is only the part that falls inside it.
+
 ### Reading from remote sources
 
 `from_container` also reads remote `versatiles`/`pmtiles` containers over HTTP, HTTPS, or SFTP (e.g. `filename="https://download.versatiles.org/osm.versatiles"`), fetching only the byte ranges it needs. See `versatiles help source` for URL and authentication details.
