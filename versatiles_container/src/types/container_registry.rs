@@ -89,6 +89,31 @@ pub struct ContainerRegistry {
 	writers: HashMap<String, WriterEntry>,
 }
 
+/// Removes an output file a failed write left behind.
+///
+/// A writer opens its destination before it knows whether the conversion will
+/// succeed — `DataWriterFile::from_path` calls `File::create`, and `MBTilesWriter`
+/// creates its database — so a failure at any later point leaves a file that looks
+/// like a real output. Even the earliest possible failure leaves a zero-byte one.
+///
+/// **Only ever called for a path that did not exist before the write started.** An
+/// output that overwrites an existing file is left alone: the writer may have
+/// failed before opening it, and deleting a file the caller already had would turn
+/// a failed conversion into data loss. The truncated-overwrite case is not
+/// recoverable either way, and losing the user's file is the worse of the two.
+///
+/// Best-effort: a failure to remove is logged, never propagated, because it must
+/// not replace the real error that caused the write to fail.
+fn remove_partial_output(path: &Path) {
+	if !path.is_file() {
+		return;
+	}
+	match std::fs::remove_file(path) {
+		Ok(()) => log::debug!("removed partial output {path:?} after a failed write"),
+		Err(e) => log::warn!("could not remove partial output {path:?} after a failed write: {e}"),
+	}
+}
+
 impl ContainerRegistry {
 	/// Creates a new `ContainerRegistry` with the specified runtime.
 	///
@@ -241,7 +266,15 @@ impl ContainerRegistry {
 			.writers
 			.get(&extension)
 			.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?;
-		(entry.write_to_path)(reader, path.clone(), runtime).await?;
+
+		// Whether the destination already existed decides whether a failed write
+		// may clean up after itself — see `remove_partial_output`.
+		let existed_before = path.exists();
+		let result = (entry.write_to_path)(reader, path.clone(), runtime).await;
+		if result.is_err() && !existed_before {
+			remove_partial_output(&path);
+		}
+		result?;
 
 		Ok(())
 	}
@@ -435,6 +468,86 @@ pub mod tests {
 		assert!(reg.supports_reader_extension("versatiles"));
 		assert!(!reg.supports_reader_extension("unknown"));
 		assert!(!reg.supports_reader_extension(""));
+	}
+
+	/// A source whose traversal order PMTiles cannot accept, so `write_to_path`
+	/// fails after the destination file has already been opened.
+	fn source_pmtiles_rejects() -> Result<SharedTileSource> {
+		let reader = MockReader::new_mock(
+			TilePyramid::new_full_up_to(2),
+			TileSourceMetadata::new(
+				TileFormat::PNG,
+				TileCompression::Uncompressed,
+				Traversal::new(crate::traversal::TraversalOrder::DepthFirst, 1, 16)?,
+				None,
+			),
+		)?;
+		Ok(Arc::new(Box::new(reader)))
+	}
+
+	#[tokio::test]
+	async fn failed_write_removes_the_file_it_created() -> Result<()> {
+		let dir = TempDir::new()?;
+		let path = dir.path().join("out.pmtiles");
+		let registry = ContainerRegistry::default();
+
+		let result = registry
+			.write_to_path(source_pmtiles_rejects()?, &path, TilesRuntime::new_silent())
+			.await;
+
+		assert!(result.is_err(), "the write was expected to fail");
+		assert!(
+			!path.exists(),
+			"a failed write must not leave a file that looks like an output"
+		);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn failed_write_keeps_a_file_it_did_not_create() -> Result<()> {
+		// Deleting a destination the caller already had would turn a failed
+		// conversion into data loss, so an overwrite is left alone.
+		let dir = TempDir::new()?;
+		let path = dir.path().join("out.pmtiles");
+		std::fs::write(&path, b"pre-existing")?;
+		let registry = ContainerRegistry::default();
+
+		let result = registry
+			.write_to_path(source_pmtiles_rejects()?, &path, TilesRuntime::new_silent())
+			.await;
+
+		assert!(result.is_err(), "the write was expected to fail");
+		assert!(path.exists(), "a pre-existing destination must not be removed");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn successful_write_keeps_its_output() -> Result<()> {
+		let dir = TempDir::new()?;
+		let path = dir.path().join("out.versatiles");
+		let reader = MockReader::new_mock(
+			TilePyramid::new_full_up_to(2),
+			TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None),
+		)?;
+		let registry = ContainerRegistry::default();
+
+		registry
+			.write_to_path(Arc::new(Box::new(reader)), &path, TilesRuntime::new_silent())
+			.await?;
+
+		assert!(path.is_file(), "a successful write must keep its output");
+		assert!(std::fs::metadata(&path)?.len() > 0);
+		Ok(())
+	}
+
+	#[test]
+	fn remove_partial_output_is_a_no_op_for_a_missing_or_non_file_path() {
+		let dir = TempDir::new().unwrap();
+		// Neither of these must panic, and the directory must survive: cleanup
+		// never removes a directory output.
+		remove_partial_output(&dir.path().join("does-not-exist"));
+		remove_partial_output(dir.path());
+		assert!(dir.path().is_dir(), "cleanup must never remove a directory");
 	}
 
 	#[test]

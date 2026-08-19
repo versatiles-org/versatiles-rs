@@ -94,8 +94,10 @@ impl TilesWriter for PMTilesWriter {
 		let parameters = reader.metadata().clone();
 
 		// PMTiles stores tiles in Hilbert order and has no way to reorder them
-		// while writing, so check before anything is opened or written. Failing
-		// here also means no truncated file is left behind.
+		// while writing, so check before any tile is read — on a real pipeline the
+		// alternative is failing minutes in. The destination file is already open
+		// by this point, so a failure here still leaves an empty one behind;
+		// `ContainerRegistry::write_to_path` removes it.
 		let required = Traversal::new(TraversalOrder::PMTiles, 1, 64)?;
 		let available = parameters.traversal();
 		ensure!(
