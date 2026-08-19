@@ -16,6 +16,10 @@ function getTempOutputPath(): string {
 	return path.join(tmpdir(), `output-test-${randomUUID()}.versatiles`);
 }
 
+function getTempPMTilesPath(): string {
+	return path.join(tmpdir(), `output-test-${randomUUID()}.pmtiles`);
+}
+
 describe('convertTo()', () => {
 	it('should convert from MBTiles to versatiles format', async () => {
 		const outputPath = getTempOutputPath();
@@ -75,6 +79,51 @@ describe('convertTo()', () => {
 		await convert(MBTILES_PATH, outputPath, { maxZoom: 3, writerOptions: {} });
 		expect(fs.existsSync(outputPath)).toBeTruthy();
 		fs.unlinkSync(outputPath);
+	});
+
+	it('should accept a writer option the output format declares', async () => {
+		// The rejections above only prove a key can be refused. This is the other
+		// half: a key PMTiles declares reaches the writer and the write completes.
+		const outputPath = getTempPMTilesPath();
+		await convert(MBTILES_PATH, outputPath, { maxZoom: 3, writerOptions: { allow_unclustered: 'true' } });
+		expect(fs.existsSync(outputPath)).toBeTruthy();
+
+		const newReader = await TileSource.fromPath(outputPath);
+		expect(newReader.metadata().tileFormat).toBe('mvt');
+
+		fs.unlinkSync(outputPath);
+	});
+
+	it('should carry more than one writer option through at once', async () => {
+		// Two keys, one of them taking a path rather than a boolean.
+		const outputPath = getTempPMTilesPath();
+		const tempDir = fs.mkdtempSync(path.join(tmpdir(), 'writer-option-temp-'));
+		await convert(MBTILES_PATH, outputPath, {
+			maxZoom: 3,
+			writerOptions: { reorder: 'true', temp_dir: tempDir },
+		});
+		expect(fs.existsSync(outputPath)).toBeTruthy();
+		// Whether or not the extra pass ran, it leaves nothing behind.
+		expect(fs.readdirSync(tempDir)).toStrictEqual([]);
+
+		fs.unlinkSync(outputPath);
+		fs.rmdirSync(tempDir);
+	});
+
+	it('should reject two writer options that ask for different outcomes', async () => {
+		const outputPath = getTempPMTilesPath();
+		await expect(
+			convert(MBTILES_PATH, outputPath, { writerOptions: { allow_unclustered: 'true', reorder: 'true' } }),
+		).rejects.toThrow(/Pick one/);
+	});
+
+	it('should reject a writer option value it cannot read as a boolean', async () => {
+		// A value that is not a recognised true/false spelling is an error, not a
+		// quiet false — same rule as an unknown key, applied to the value.
+		const outputPath = getTempPMTilesPath();
+		await expect(convert(MBTILES_PATH, outputPath, { writerOptions: { allow_unclustered: 'maybe' } })).rejects.toThrow(
+			/expects true or false, got 'maybe'/,
+		);
 	});
 
 	it('should convert with options', async () => {
