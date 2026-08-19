@@ -30,6 +30,13 @@ describe('TileSource', () => {
 			await expect(TileSource.fromPath(__filename)).rejects.toThrow();
 		});
 
+		it('should open an sftp:// path with the SFTP reader', async () => {
+			// The scheme has to be compiled in: without the ssh2 feature this failed
+			// with "unsupported URL scheme" before reaching any key. Port 1 on
+			// localhost refuses immediately, so this needs no server.
+			await expect(TileSource.fromPath('sftp://127.0.0.1:1/tiles.pmtiles')).rejects.toThrow(/SFTP data reader/);
+		});
+
 		it('should ignore an SSH identity for a local path', async () => {
 			// The identity is only consulted for sftp:// sources, so naming a key
 			// that does not exist must not affect anything else.

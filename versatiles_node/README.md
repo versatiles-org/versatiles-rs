@@ -127,7 +127,7 @@ Convert tiles from one format to another.
 **Parameters:**
 
 - `input` (string): Input file path (.versatiles, .mbtiles, .pmtiles, .tar, directory)
-- `output` (string): Output file path
+- `output` (string): Output file path, or an `sftp://` URL
 - `options` (ConvertOptions, optional):
   - `minZoom` (number): Minimum zoom level
   - `maxZoom` (number): Maximum zoom level
@@ -194,7 +194,16 @@ await convert('sftp://host/tiles.mbtiles', 'local.pmtiles', {
 });
 ```
 
-An `sftp://` **output** is not supported yet — `convert()` and `convertTo()` write to a local path.
+An `sftp://` URL works as a destination too, with the same identity resolution:
+
+```javascript
+await convert('local.mbtiles', 'sftp://host/tiles/berlin.pmtiles', {
+  sshIdentity: '/home/deploy/.ssh/id_ed25519',
+});
+```
+
+Uploading needs a format that can be written as a stream, which today means `.versatiles` and
+`.pmtiles`. `.mbtiles` is a local SQLite file, and is refused with a message saying so.
 
 ### `class TileSource`
 
@@ -279,7 +288,7 @@ Convert this source to another format.
 
 **Parameters:**
 
-- `output` (string): Output file path
+- `output` (string): Output file path, or an `sftp://` URL
 - `options` (ConvertOptions, optional): Same as `convert()`
 - `onProgress` (function, optional): Progress callback
 - `onMessage` (function, optional): Message callback

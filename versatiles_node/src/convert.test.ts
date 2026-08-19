@@ -135,6 +135,13 @@ describe('convertTo()', () => {
 		fs.unlinkSync(outputPath);
 	});
 
+	it('should treat an sftp:// destination as a remote upload', async () => {
+		// Without this, PathBuf::from() turned the URL into a local directory that
+		// does not exist, and the error never mentioned SFTP at all. No host here,
+		// so it fails before any connection is attempted.
+		await expect(convert(MBTILES_PATH, 'sftp:///out.pmtiles', { maxZoom: 1 })).rejects.toThrow(/writing tiles to SFTP/);
+	});
+
 	it('should convert with options', async () => {
 		const outputPath = getTempOutputPath();
 		await convert(MBTILES_PATH, outputPath, {

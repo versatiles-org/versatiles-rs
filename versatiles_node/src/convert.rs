@@ -13,7 +13,7 @@
 //! - **Transformations**: Flip Y-axis or swap X/Y coordinates
 //! - **Progress monitoring**: Real-time progress updates and messages
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use napi::{
 	bindgen_prelude::*,
@@ -37,7 +37,7 @@ use crate::{
 /// the `convert()` function and `TileSource.convertTo()` method.
 pub(crate) async fn convert_tiles_with_options(
 	reader: Arc<Box<dyn RustTileSource>>,
-	output: &Path,
+	output: &str,
 	options: Option<ConvertOptions>,
 	on_progress: Option<ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false, true>>,
 	on_message: Option<ThreadsafeFunction<MessageData, Unknown<'static>, MessageData, Status, false, true>>,
@@ -141,8 +141,10 @@ pub(crate) async fn convert_tiles_with_options(
 		});
 	}
 
-	// Convert tiles using the Rust API
-	napi_result!(versatiles_container::convert_tiles_container(reader, params, output, runtime).await)?;
+	// Convert tiles using the Rust API. The destination is a string rather than a
+	// path because it may be an `sftp://` URL, which a `Path` would mangle into a
+	// local directory that does not exist.
+	napi_result!(versatiles_container::convert_tiles_container_to_str(reader, params, output, runtime).await)?;
 
 	Ok(())
 }
@@ -156,7 +158,7 @@ pub(crate) async fn convert_tiles_with_options(
 /// # Arguments
 ///
 /// * `input` - Path or URL to the input tile container
-/// * `output` - Path to the output tile container
+/// * `output` - Path to the output tile container, or an `sftp://` URL
 /// * `options` - Optional conversion options (zoom range, bbox, compression, etc.)
 /// * `on_progress` - Optional callback for progress updates
 /// * `on_message` - Optional callback for step/warning/error messages
@@ -248,8 +250,7 @@ pub async fn convert(
 	let reader = napi_result!(runtime.reader_from_str(&input).await)?;
 
 	// Use shared conversion logic
-	let output_path = std::path::PathBuf::from(&output);
-	convert_tiles_with_options(reader, &output_path, options, on_progress, on_message).await
+	convert_tiles_with_options(reader, &output, options, on_progress, on_message).await
 }
 
 #[cfg(test)]
@@ -632,7 +633,7 @@ mod tests {
 		let temp_dir = tempfile::TempDir::new().unwrap();
 		let output_path = temp_dir.path().join("output.versatiles");
 
-		let result = convert_tiles_with_options(reader, &output_path, None, None, None).await;
+		let result = convert_tiles_with_options(reader, output_path.to_str().unwrap(), None, None, None).await;
 
 		assert!(result.is_ok());
 		assert!(output_path.exists());
@@ -659,7 +660,7 @@ mod tests {
 			ssh_identity: None,
 		};
 
-		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+		let result = convert_tiles_with_options(reader, output_path.to_str().unwrap(), Some(options), None, None).await;
 
 		assert!(result.is_ok());
 		assert!(output_path.exists());
@@ -687,7 +688,7 @@ mod tests {
 			ssh_identity: None,
 		};
 
-		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+		let result = convert_tiles_with_options(reader, output_path.to_str().unwrap(), Some(options), None, None).await;
 
 		assert!(result.is_ok());
 		assert!(output_path.exists());
@@ -714,7 +715,7 @@ mod tests {
 			ssh_identity: None,
 		};
 
-		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+		let result = convert_tiles_with_options(reader, output_path.to_str().unwrap(), Some(options), None, None).await;
 
 		assert!(result.is_ok());
 		assert!(output_path.exists());
@@ -741,7 +742,7 @@ mod tests {
 			ssh_identity: None,
 		};
 
-		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+		let result = convert_tiles_with_options(reader, output_path.to_str().unwrap(), Some(options), None, None).await;
 
 		assert!(result.is_ok());
 		assert!(output_path.exists());
@@ -768,7 +769,7 @@ mod tests {
 			ssh_identity: None,
 		};
 
-		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+		let result = convert_tiles_with_options(reader, output_path.to_str().unwrap(), Some(options), None, None).await;
 
 		assert!(result.is_ok());
 		assert!(output_path.exists());
@@ -795,7 +796,7 @@ mod tests {
 			ssh_identity: None,
 		};
 
-		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+		let result = convert_tiles_with_options(reader, output_path.to_str().unwrap(), Some(options), None, None).await;
 
 		assert!(result.is_ok());
 		assert!(output_path.exists());
@@ -823,7 +824,7 @@ mod tests {
 			ssh_identity: None,
 		};
 
-		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+		let result = convert_tiles_with_options(reader, output_path.to_str().unwrap(), Some(options), None, None).await;
 
 		assert!(result.is_err());
 		let err_msg = result.unwrap_err().to_string();
@@ -851,7 +852,7 @@ mod tests {
 			ssh_identity: None,
 		};
 
-		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+		let result = convert_tiles_with_options(reader, output_path.to_str().unwrap(), Some(options), None, None).await;
 
 		assert!(result.is_err());
 	}
@@ -865,7 +866,7 @@ mod tests {
 		let temp_dir = tempfile::TempDir::new().unwrap();
 		let output_path = temp_dir.path().join("output.versatiles");
 
-		let result = convert_tiles_with_options(reader, &output_path, None, None, None).await;
+		let result = convert_tiles_with_options(reader, output_path.to_str().unwrap(), None, None, None).await;
 
 		assert!(result.is_ok());
 		assert!(output_path.exists());
@@ -897,7 +898,7 @@ mod tests {
 			ssh_identity: None,
 		};
 
-		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
+		let result = convert_tiles_with_options(reader, output_path.to_str().unwrap(), Some(options), None, None).await;
 
 		assert!(result.is_ok(), "Failed to convert to {output_filename}");
 		assert!(output_path.exists(), "Output file {output_filename} does not exist");
@@ -925,7 +926,7 @@ mod tests {
 			ssh_identity: None,
 		};
 
-		convert_tiles_with_options(reader, &output_path, Some(options), None, None)
+		convert_tiles_with_options(reader, output_path.to_str().unwrap(), Some(options), None, None)
 			.await
 			.unwrap();
 

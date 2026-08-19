@@ -222,7 +222,7 @@ impl TileSource {
 	///
 	/// # Arguments
 	///
-	/// * `output` - Path to the output tile container
+	/// * `output` - Path to the output tile container, or an `sftp://` URL
 	/// * `options` - Optional conversion options (zoom range, bbox, compression, etc.)
 	/// * `on_progress` - Optional callback for progress updates
 	/// * `on_message` - Optional callback for step/warning/error messages
@@ -305,8 +305,7 @@ impl TileSource {
 		on_message: Option<ThreadsafeFunction<MessageData, Unknown<'static>, MessageData, Status, false, true>>,
 	) -> Result<()> {
 		// Use shared conversion logic
-		let output_path = std::path::PathBuf::from(&output);
-		convert_tiles_with_options(self.reader.clone(), &output_path, options, on_progress, on_message).await
+		convert_tiles_with_options(self.reader.clone(), &output, options, on_progress, on_message).await
 	}
 
 	/// Get a single tile at the specified coordinates
