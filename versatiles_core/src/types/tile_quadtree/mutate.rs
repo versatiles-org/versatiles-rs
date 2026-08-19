@@ -106,6 +106,11 @@ impl TileQuadtree {
 	pub fn swap_xy(&mut self) {
 		self.root.swap_xy();
 	}
+
+	/// Flips all tile coordinates horizontally: `x → (level_size − 1 − x)`.
+	pub fn flip_x(&mut self) {
+		self.root.flip_x();
+	}
 }
 
 impl Node {
@@ -201,6 +206,24 @@ impl Node {
 			}
 			for child in children.iter_mut() {
 				child.swap_xy();
+			}
+		}
+	}
+
+	/// Flip all tile coordinates horizontally: `x → (level_size − 1 − x)`.
+	///
+	/// At each `Partial` node the two left quadrants are swapped with the two
+	/// right quadrants (`NW↔NE`, `SW↔SE`), then every child is recursed.
+	/// `Full` and `Empty` nodes are symmetric — no-op.
+	pub(crate) fn flip_x(&mut self) {
+		if let Node::Partial(children) = self {
+			{
+				let s: &mut [Node] = &mut **children;
+				s.swap(0, 1); // NW ↔ NE
+				s.swap(2, 3); // SW ↔ SE
+			}
+			for child in children.iter_mut() {
+				child.flip_x();
 			}
 		}
 	}

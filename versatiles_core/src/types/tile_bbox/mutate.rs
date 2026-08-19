@@ -328,6 +328,18 @@ impl TileBBox {
 				.expect("shift within level bounds");
 		}
 	}
+
+	/// Mirrors the bbox horizontally within its zoom level: `x → 2^z − 1 − x`.
+	pub fn flip_x(&mut self) {
+		if !self.is_empty() {
+			self
+				.shift_to(
+					self.max_coord() - self.x_max().expect("bbox is non-empty"),
+					self.y_min().expect("bbox is non-empty"),
+				)
+				.expect("shift within level bounds");
+		}
+	}
 }
 
 #[cfg(test)]

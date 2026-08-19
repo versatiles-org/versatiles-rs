@@ -385,6 +385,15 @@ impl TileCoord {
 		self.y = self.max_coord() - self.y;
 	}
 
+	/// Flip the x coordinate within its zoom level: `x → 2^z − 1 − x`.
+	///
+	/// No tile scheme in the wild mirrors X on its own; this exists so that
+	/// [`TileRemap`](crate::TileRemap) can reach all eight symmetries of the
+	/// square, of which four need it.
+	pub fn flip_x(&mut self) {
+		self.x = self.max_coord() - self.x;
+	}
+
 	/// Swap the x and y coordinates.
 	///
 	/// This can be useful for transposing tile grids.

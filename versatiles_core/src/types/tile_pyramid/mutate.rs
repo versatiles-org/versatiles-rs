@@ -77,6 +77,13 @@ impl TilePyramid {
 	}
 
 	/// Applies a Y-flip to every level.
+	/// Applies an X-flip to every level.
+	pub fn flip_x(&mut self) {
+		for cover in &mut self.levels {
+			cover.flip_x();
+		}
+	}
+
 	pub fn flip_y(&mut self) {
 		for cover in &mut self.levels {
 			cover.flip_y();

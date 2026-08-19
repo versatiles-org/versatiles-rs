@@ -106,6 +106,14 @@ impl TileCover {
 		}
 	}
 
+	/// Applies an X-flip.
+	pub fn flip_x(&mut self) {
+		match self {
+			TileCover::Bbox(b) => b.flip_x(),
+			TileCover::Tree(t) => t.flip_x(),
+		}
+	}
+
 	/// Swaps x and y coordinates: `(x, y) → (y, x)`.
 	pub fn swap_xy(&mut self) {
 		match self {
