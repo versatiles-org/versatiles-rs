@@ -107,6 +107,21 @@ pub struct ConvertOptions {
 	///
 	/// **Default:** No writer options
 	pub writer_options: Option<HashMap<String, String>>,
+
+	/// SSH identity (private key) file used for `sftp://` sources
+	///
+	/// A path to a private key file on disk — the same thing the CLI's
+	/// `--ssh-identity` names. It is read when the input is an `sftp://` URL, and
+	/// ignored otherwise.
+	///
+	/// Without it, the `VERSATILES_SSH_IDENTITY` environment variable is used;
+	/// without that, a password in the URL, the SSH agent and the usual `~/.ssh`
+	/// defaults still apply.
+	///
+	/// **Example:** `'/home/deploy/.ssh/id_ed25519'`
+	///
+	/// **Default:** `VERSATILES_SSH_IDENTITY`, if set
+	pub ssh_identity: Option<String>,
 }
 
 #[cfg(test)]
@@ -126,6 +141,7 @@ mod tests {
 			flip_y: Some(true),
 			swap_xy: Some(false),
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		let cloned = options.clone();
@@ -149,6 +165,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		assert!(options.min_zoom.is_none());
@@ -171,6 +188,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		assert_eq!(options.min_zoom, Some(0));
@@ -189,6 +207,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		assert_eq!(options.bbox, Some(bbox));
@@ -206,6 +225,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		assert_eq!(options.compress, Some("gzip".to_string()));
@@ -222,6 +242,7 @@ mod tests {
 			flip_y: Some(true),
 			swap_xy: Some(true),
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		assert_eq!(options.flip_y, Some(true));
@@ -239,6 +260,7 @@ mod tests {
 			flip_y: Some(false),
 			swap_xy: Some(true),
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		assert_eq!(options.min_zoom, Some(5));
@@ -262,6 +284,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		if let Some(bbox) = &options.bbox {
@@ -286,6 +309,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		assert_eq!(options.bbox_border, Some(0));
@@ -302,6 +326,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		assert_eq!(options.bbox_border, Some(100));

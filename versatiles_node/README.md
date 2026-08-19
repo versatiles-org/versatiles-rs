@@ -137,6 +137,7 @@ Convert tiles from one format to another.
   - `flipY` (boolean): Flip tiles vertically
   - `swapXy` (boolean): Swap x and y coordinates
   - `writerOptions` (object): Format-specific settings for the writer, see below
+  - `sshIdentity` (string): Private key file for an `sftp://` input, see below
 - `onProgress` (function, optional): Progress callback `(data: ProgressData) => void`
 - `onMessage` (function, optional): Message callback `(data: MessageData) => void`
 
@@ -169,19 +170,47 @@ await convert('pipeline.vpl', 'output.pmtiles', {
 });
 ```
 
+#### SSH authentication
+
+Reading from `sftp://` needs a key. Keys are files on disk: `sshIdentity` is the path to a private
+key file, never the key itself.
+
+The identity is resolved in this order, first match wins:
+
+1. `sshIdentity` in the options passed to the call
+2. The `VERSATILES_SSH_IDENTITY` environment variable, the same one the CLI reads
+3. Nothing — a password in the URL (`sftp://user:pass@host/path`), the SSH agent, `~/.ssh/config`
+   and the usual default key files still apply
+
+```javascript
+// One key for this source, whatever the environment says
+const source = await TileSource.fromPath('sftp://host/tiles.pmtiles', {
+  sshIdentity: '/home/deploy/.ssh/id_ed25519',
+});
+
+// Same option during a conversion, for an sftp:// input
+await convert('sftp://host/tiles.mbtiles', 'local.pmtiles', {
+  sshIdentity: '/home/deploy/.ssh/id_ed25519',
+});
+```
+
+An `sftp://` **output** is not supported yet — `convert()` and `convertTo()` write to a local path.
+
 ### `class TileSource`
 
-#### `TileSource.fromPath(path)`
+#### `TileSource.fromPath(path, options?)`
 
 Open a tile container.
 
 **Parameters:**
 
 - `path` (string): File path or URL
+- `options` (SourceOptions, optional):
+  - `sshIdentity` (string): Private key file for an `sftp://` path, see [SSH authentication](#ssh-authentication)
 
 **Returns:** `Promise<TileSource>`
 
-#### `TileSource.openVpl(vpl, basePath?)`
+#### `TileSource.openVpl(vpl, basePath?, options?)`
 
 Create a tile source from VPL (VersaTiles Pipeline Language).
 
@@ -189,6 +218,7 @@ Create a tile source from VPL (VersaTiles Pipeline Language).
 
 - `vpl` (string): VPL query string
 - `basePath` (string, optional): Base path for resolving relative paths
+- `options` (SourceOptions, optional): Same as `TileSource.fromPath()`
 
 **Returns:** `Promise<TileSource>`
 

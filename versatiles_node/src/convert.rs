@@ -27,7 +27,7 @@ use crate::{
 	macros::NapiResultExt,
 	napi_result,
 	progress::{MessageData, ProgressData},
-	runtime::create_runtime,
+	runtime::create_runtime_with_ssh_identity,
 	types::{ConvertOptions, parse_compression},
 };
 
@@ -51,6 +51,7 @@ pub(crate) async fn convert_tiles_with_options(
 		flip_y: None,
 		swap_xy: None,
 		writer_options: None,
+		ssh_identity: None,
 	});
 
 	let mut tile_pyramid: Option<TilePyramid> = None;
@@ -104,7 +105,7 @@ pub(crate) async fn convert_tiles_with_options(
 	// Create a new runtime for this conversion with event bridging to JavaScript.
 	// Conversion must fail loudly on silently-dropped tiles, so enable
 	// abort-on-error — the JS caller will see the rejection.
-	let runtime = create_runtime();
+	let runtime = create_runtime_with_ssh_identity(opts.ssh_identity.as_deref());
 	runtime.set_abort_on_error(true);
 	if let Some(writer_options) = opts.writer_options {
 		runtime.set_writer_options(writer_options.into_iter().collect());
@@ -170,6 +171,8 @@ pub(crate) async fn convert_tiles_with_options(
 /// - `swapXy`: Swap X and Y tile coordinates
 /// - `writerOptions`: Format-specific settings for the output writer, keyed by the
 ///   writer's own `snake_case` names, e.g. `{ allow_unclustered: 'true' }` for PMTiles
+/// - `sshIdentity`: Private key file for an `sftp://` input, defaulting to
+///   `VERSATILES_SSH_IDENTITY`
 ///
 /// # Progress Callbacks
 ///
@@ -238,8 +241,10 @@ pub async fn convert(
 	on_progress: Option<ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false, true>>,
 	on_message: Option<ThreadsafeFunction<MessageData, Unknown<'static>, MessageData, Status, false, true>>,
 ) -> Result<()> {
-	// Open the input tile source
-	let runtime = create_runtime();
+	// Open the input tile source. The identity has to reach this runtime too:
+	// it is the one that opens an `sftp://` input, and it is built before
+	// `options` is handed on.
+	let runtime = create_runtime_with_ssh_identity(options.as_ref().and_then(|o| o.ssh_identity.as_deref()));
 	let reader = napi_result!(runtime.reader_from_str(&input).await)?;
 
 	// Use shared conversion logic
@@ -253,6 +258,7 @@ mod tests {
 	use versatiles_core::TileCompression;
 
 	use super::*;
+	use crate::runtime::create_runtime;
 
 	/// Test bbox validation - must have exactly 4 elements
 	#[rstest]
@@ -294,6 +300,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		assert!(opts.min_zoom.is_none());
@@ -317,6 +324,7 @@ mod tests {
 			flip_y: Some(true),
 			swap_xy: Some(true),
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		assert_eq!(opts.min_zoom, Some(0));
@@ -418,6 +426,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 		assert_eq!(opts.min_zoom, min_zoom);
 		assert_eq!(opts.max_zoom, max_zoom);
@@ -451,6 +460,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 		assert_eq!(opts.bbox_border, bbox_border);
 	}
@@ -471,6 +481,7 @@ mod tests {
 			flip_y,
 			swap_xy,
 			writer_options: None,
+			ssh_identity: None,
 		};
 		assert_eq!(opts.flip_y, flip_y);
 		assert_eq!(opts.swap_xy, swap_xy);
@@ -498,6 +509,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		// Condition on line 136: if min_zoom, max_zoom, or bbox is set
@@ -582,6 +594,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		// The code on line 147 checks if bbox exists before using bbox_border
@@ -643,6 +656,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -670,6 +684,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -696,6 +711,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -722,6 +738,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -748,6 +765,7 @@ mod tests {
 			flip_y: Some(true),
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -774,6 +792,7 @@ mod tests {
 			flip_y: Some(false),
 			swap_xy: Some(false),
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -801,6 +820,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -828,6 +848,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -873,6 +894,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -900,6 +922,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		convert_tiles_with_options(reader, &output_path, Some(options), None, None)

@@ -142,6 +142,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 		assert!(opts.min_zoom.is_none());
 	}

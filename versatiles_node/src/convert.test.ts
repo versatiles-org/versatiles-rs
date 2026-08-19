@@ -126,6 +126,15 @@ describe('convertTo()', () => {
 		);
 	});
 
+	it('should accept an SSH identity that a local conversion never uses', async () => {
+		// sshIdentity is read only for sftp:// sources; a local conversion must
+		// behave exactly as if it were not set.
+		const outputPath = getTempOutputPath();
+		await convert(MBTILES_PATH, outputPath, { maxZoom: 3, sshIdentity: '/nonexistent/id_ed25519' });
+		expect(fs.existsSync(outputPath)).toBeTruthy();
+		fs.unlinkSync(outputPath);
+	});
+
 	it('should convert with options', async () => {
 		const outputPath = getTempOutputPath();
 		await convert(MBTILES_PATH, outputPath, {

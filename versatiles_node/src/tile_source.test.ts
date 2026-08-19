@@ -29,6 +29,18 @@ describe('TileSource', () => {
 		it('should throw error for invalid file format', async () => {
 			await expect(TileSource.fromPath(__filename)).rejects.toThrow();
 		});
+
+		it('should ignore an SSH identity for a local path', async () => {
+			// The identity is only consulted for sftp:// sources, so naming a key
+			// that does not exist must not affect anything else.
+			const reader = await TileSource.fromPath(MBTILES_PATH, { sshIdentity: '/nonexistent/id_ed25519' });
+			expect(reader).toBeDefined();
+		});
+
+		it('should accept empty source options', async () => {
+			const reader = await TileSource.fromPath(MBTILES_PATH, {});
+			expect(reader).toBeDefined();
+		});
 	});
 
 	describe('getTile()', () => {

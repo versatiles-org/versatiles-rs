@@ -6,9 +6,15 @@
 //! - Pipeline readers registered for advanced tile processing
 //! - Silent mode enabled (no stderr output)
 //! - Default in-memory cache
+//! - An SSH identity for SFTP, if one was given or is in the environment
+
+use std::path::PathBuf;
 
 use versatiles::pipeline::register_pipeline_readers;
 use versatiles_container::TilesRuntime;
+
+/// Environment variable naming the SSH identity file, as the CLI reads it.
+const SSH_IDENTITY_ENV: &str = "VERSATILES_SSH_IDENTITY";
 
 /// Create a configured TilesRuntime for Node.js usage
 ///
@@ -28,15 +34,81 @@ use versatiles_container::TilesRuntime;
 /// let reader = runtime.reader_from_str("tiles.versatiles").await?;
 /// ```
 pub fn create_runtime() -> TilesRuntime {
-	TilesRuntime::builder()
+	create_runtime_with_ssh_identity(None)
+}
+
+/// Create a configured TilesRuntime that authenticates SFTP with `ssh_identity`
+///
+/// `ssh_identity` is a path to a private key file on disk. Without one, the
+/// `VERSATILES_SSH_IDENTITY` environment variable is used — the same variable
+/// the CLI reads — and without that, libssh2 falls back to any password in the
+/// URL, the SSH agent, and the usual `~/.ssh` defaults.
+///
+/// # Returns
+///
+/// A [`TilesRuntime`] configured as [`create_runtime`] describes, plus the
+/// identity.
+pub fn create_runtime_with_ssh_identity(ssh_identity: Option<&str>) -> TilesRuntime {
+	let mut builder = TilesRuntime::builder()
 		.customize_registry(register_pipeline_readers)
-		.silent_progress(true)
-		.build()
+		.silent_progress(true);
+
+	if let Some(path) = pick_ssh_identity(ssh_identity, std::env::var(SSH_IDENTITY_ENV).ok()) {
+		builder = builder.ssh_identity(path);
+	}
+
+	builder.build()
+}
+
+/// Decide which SSH identity to use, if any.
+///
+/// An explicit path wins over the environment, so one call can use a different
+/// key than the rest of the process. A blank value counts as unset rather than
+/// as a path to a file named "", which would fail with a confusing error.
+fn pick_ssh_identity(explicit: Option<&str>, from_env: Option<String>) -> Option<PathBuf> {
+	let explicit = explicit.map(str::to_string).filter(|value| !value.trim().is_empty());
+	let from_env = from_env.filter(|value| !value.trim().is_empty());
+	explicit.or(from_env).map(PathBuf::from)
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn explicit_ssh_identity_wins_over_the_environment() {
+		assert_eq!(
+			pick_ssh_identity(Some("/keys/explicit"), Some("/keys/from-env".to_string())),
+			Some(PathBuf::from("/keys/explicit"))
+		);
+	}
+
+	#[test]
+	fn ssh_identity_falls_back_to_the_environment() {
+		assert_eq!(
+			pick_ssh_identity(None, Some("/keys/from-env".to_string())),
+			Some(PathBuf::from("/keys/from-env"))
+		);
+	}
+
+	#[test]
+	fn blank_ssh_identity_counts_as_unset() {
+		// An empty explicit value must not shadow the environment, and an empty
+		// environment value must not become a path to a file named "".
+		assert_eq!(
+			pick_ssh_identity(Some("  "), Some("/keys/from-env".to_string())),
+			Some(PathBuf::from("/keys/from-env"))
+		);
+		assert_eq!(pick_ssh_identity(Some(""), None), None);
+		assert_eq!(pick_ssh_identity(None, Some(String::new())), None);
+		assert_eq!(pick_ssh_identity(None, None), None);
+	}
+
+	#[test]
+	fn runtime_carries_the_explicit_ssh_identity() {
+		let runtime = create_runtime_with_ssh_identity(Some("/keys/explicit"));
+		assert_eq!(runtime.ssh_identity(), Some(std::path::Path::new("/keys/explicit")));
+	}
 
 	#[test]
 	fn test_create_runtime() {

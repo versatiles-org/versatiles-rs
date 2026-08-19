@@ -192,7 +192,7 @@ impl TileServer {
 	#[napi]
 	pub async fn add_tile_source_from_path(&self, name: String, path: String) -> Result<()> {
 		// Open the tile source
-		let tile_source = TileSource::from_path(path).await?;
+		let tile_source = TileSource::from_path(path, None).await?;
 
 		// Delegate to add_tile_source
 		self.add_tile_source(name, &tile_source).await
@@ -935,7 +935,7 @@ mod tests {
 		let server = TileServer::new(None).unwrap();
 
 		// Open a TileSource
-		let tile_source = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let tile_source = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -970,7 +970,7 @@ mod tests {
 		server.start().await.unwrap();
 
 		// Open a TileSource
-		let tile_source = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let tile_source = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -999,7 +999,7 @@ mod tests {
 			.unwrap();
 
 		// Add from TileSource object
-		let tile_source = TileSource::from_path("../testdata/berlin.pmtiles".to_string())
+		let tile_source = TileSource::from_path("../testdata/berlin.pmtiles".to_string(), None)
 			.await
 			.unwrap();
 		server
@@ -1029,7 +1029,7 @@ mod tests {
 		.unwrap();
 
 		// Add TileSource object before starting
-		let tile_source = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let tile_source = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 		server
@@ -1064,7 +1064,7 @@ mod tests {
 		// Create a VPL-based TileSource and add it immediately (don't hold reference)
 		{
 			let vpl = r#"from_container filename="berlin.mbtiles" | filter level_min=5 level_max=10"#;
-			let tile_source = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
+			let tile_source = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()), None)
 				.await
 				.unwrap();
 
@@ -1108,7 +1108,7 @@ mod tests {
 
 		// Now add a VPL source after server has started (hot reload)
 		let vpl = r#"from_container filename="berlin.mbtiles" | filter level_min=5 level_max=10"#;
-		let tile_source = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
+		let tile_source = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()), None)
 			.await
 			.unwrap();
 

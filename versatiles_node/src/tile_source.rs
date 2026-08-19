@@ -24,10 +24,15 @@ use crate::{
 	macros::NapiResultExt,
 	napi_result,
 	progress::{MessageData, ProgressData},
-	runtime::create_runtime,
-	types::{ConvertOptions, SourceMetadata, TileJSON, z_to_u8},
+	runtime::create_runtime_with_ssh_identity,
+	types::{ConvertOptions, SourceMetadata, SourceOptions, TileJSON, z_to_u8},
 	vpl::{PipelineStep, steps_to_pipeline},
 };
+
+/// The identity from optional source options, if one was given.
+fn ssh_identity_of(options: Option<&SourceOptions>) -> Option<&str> {
+	options.and_then(|o| o.ssh_identity.as_deref())
+}
 
 /// Container reader for accessing tile data from various formats
 ///
@@ -62,6 +67,8 @@ impl TileSource {
 	/// # Arguments
 	///
 	/// * `path` - File path or URL to the tile container
+	/// * `options` - Optional source options; `sshIdentity` names a private key
+	///   file for an `sftp://` path
 	///
 	/// # Returns
 	///
@@ -82,10 +89,15 @@ impl TileSource {
 	///
 	/// // Open remote file
 	/// const reader = await ContainerReader.from_path('https://example.com/tiles.pmtiles');
+	///
+	/// // Open an SFTP file with a specific key
+	/// const reader = await TileSource.fromPath('sftp://host/tiles.pmtiles', {
+	///   sshIdentity: '/home/deploy/.ssh/id_ed25519',
+	/// });
 	/// ```
 	#[napi(factory)]
-	pub async fn from_path(path: String) -> Result<Self> {
-		let runtime = create_runtime();
+	pub async fn from_path(path: String, options: Option<SourceOptions>) -> Result<Self> {
+		let runtime = create_runtime_with_ssh_identity(ssh_identity_of(options.as_ref()));
 		let source = napi_result!(runtime.reader_from_str(&path).await)?;
 		Ok(Self::new(source))
 	}
@@ -163,8 +175,8 @@ impl TileSource {
 	/// VPL sources can be converted using `convertTo()` just like any other tile source.
 	/// The conversion will process the pipeline and write the output tiles to the target format.
 	#[napi(factory)]
-	pub async fn from_vpl(vpl: String, dir: Option<String>) -> Result<Self> {
-		let runtime = create_runtime();
+	pub async fn from_vpl(vpl: String, dir: Option<String>, options: Option<SourceOptions>) -> Result<Self> {
+		let runtime = create_runtime_with_ssh_identity(ssh_identity_of(options.as_ref()));
 		let path = if let Some(d) = dir {
 			PathBuf::from(&d)
 		} else {
@@ -184,13 +196,15 @@ impl TileSource {
 	/// * `steps_json` - JSON string describing the pipeline steps
 	/// * `dir` - Optional base directory for resolving relative file paths.
 	///   Defaults to the current working directory if not specified.
+	/// * `options` - Optional source options; `sshIdentity` names a private key
+	///   file for `sftp://` sources inside the pipeline
 	#[napi(factory)]
-	pub async fn from_pipeline(steps_json: String, dir: Option<String>) -> Result<Self> {
+	pub async fn from_pipeline(steps_json: String, dir: Option<String>, options: Option<SourceOptions>) -> Result<Self> {
 		let steps: Vec<PipelineStep> = serde_json::from_str(&steps_json)
 			.context("Invalid pipeline JSON")
 			.to_napi()?;
 		let pipeline = steps_to_pipeline(steps);
-		let runtime = create_runtime();
+		let runtime = create_runtime_with_ssh_identity(ssh_identity_of(options.as_ref()));
 		let path = if let Some(d) = dir {
 			PathBuf::from(&d)
 		} else {
@@ -223,6 +237,8 @@ impl TileSource {
 	/// - `swapXy`: Swap X and Y tile coordinates
 	/// - `writerOptions`: Format-specific settings for the output writer, keyed by the
 	///   writer's own `snake_case` names, e.g. `{ allow_unclustered: 'true' }` for PMTiles
+	/// - `sshIdentity`: Private key file for an `sftp://` input, defaulting to
+	///   `VERSATILES_SSH_IDENTITY`
 	///
 	/// # Progress Callbacks
 	///
@@ -571,32 +587,32 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_open_valid_mbtiles() {
-		let result = TileSource::from_path("../testdata/berlin.mbtiles".to_string()).await;
+		let result = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None).await;
 		assert!(result.is_ok());
 	}
 
 	#[tokio::test]
 	async fn test_open_valid_pmtiles() {
-		let result = TileSource::from_path("../testdata/berlin.pmtiles".to_string()).await;
+		let result = TileSource::from_path("../testdata/berlin.pmtiles".to_string(), None).await;
 		assert!(result.is_ok());
 	}
 
 	#[tokio::test]
 	async fn test_open_invalid_path() {
-		let result = TileSource::from_path("/nonexistent/file.mbtiles".to_string()).await;
+		let result = TileSource::from_path("/nonexistent/file.mbtiles".to_string(), None).await;
 		assert!(result.is_err());
 	}
 
 	#[tokio::test]
 	async fn test_open_invalid_extension() {
 		// Create a temporary file with unsupported extension
-		let result = TileSource::from_path("/tmp/invalid.xyz".to_string()).await;
+		let result = TileSource::from_path("/tmp/invalid.xyz".to_string(), None).await;
 		assert!(result.is_err());
 	}
 
 	#[tokio::test]
 	async fn test_get_tile_valid() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -613,7 +629,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_tile_non_existent() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -626,7 +642,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_tile_out_of_bounds() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -637,7 +653,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_tile_zero_coords() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -648,7 +664,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_json_mbtiles() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -667,7 +683,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_json_pmtiles() {
-		let reader = TileSource::from_path("../testdata/berlin.pmtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.pmtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -686,7 +702,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_metadata_valid() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -700,7 +716,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_metadata_zoom_levels() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -714,7 +730,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_metadata_tile_format() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -727,7 +743,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_metadata_compression() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -740,7 +756,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_source_type_container() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -754,7 +770,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_source_type_name() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -767,7 +783,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_source_type_uri_mbtiles() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -780,7 +796,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_source_type_uri_pmtiles() {
-		let reader = TileSource::from_path("../testdata/berlin.pmtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.pmtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -792,7 +808,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_source_type_container_no_input() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -805,10 +821,10 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_multiple_readers_independent() {
-		let reader1 = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader1 = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
-		let reader2 = TileSource::from_path("../testdata/berlin.pmtiles".to_string())
+		let reader2 = TileSource::from_path("../testdata/berlin.pmtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -823,7 +839,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_concurrent_tile_reads() {
 		let reader = Arc::new(
-			TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+			TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 				.await
 				.unwrap(),
 		);
@@ -845,7 +861,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_source_type_kind_values() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -858,7 +874,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_metadata_consistency_across_calls() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -875,7 +891,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_json_consistency_across_calls() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -889,7 +905,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_tile_returns_buffer() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -902,7 +918,7 @@ mod tests {
 	async fn test_from_vpl_simple_container() {
 		// Test loading a simple VPL that just references a container
 		let vpl = r#"from_container filename="berlin.mbtiles""#;
-		let reader = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
+		let reader = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()), None)
 			.await
 			.unwrap();
 
@@ -918,7 +934,7 @@ mod tests {
 	async fn test_from_vpl_file() {
 		// Test loading a VPL file that includes transformations
 		let vpl = std::fs::read_to_string("../testdata/berlin.vpl").unwrap();
-		let reader = TileSource::from_vpl(vpl, Some("../testdata".to_string()))
+		let reader = TileSource::from_vpl(vpl, Some("../testdata".to_string()), None)
 			.await
 			.unwrap();
 
@@ -936,7 +952,7 @@ mod tests {
 	async fn test_from_vpl_with_pipeline() {
 		// Test a VPL with multiple pipeline operations
 		let vpl = r#"from_container filename="berlin.mbtiles" | filter level_min=5 level_max=10"#;
-		let reader = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
+		let reader = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()), None)
 			.await
 			.unwrap();
 
@@ -950,7 +966,7 @@ mod tests {
 	async fn test_from_vpl_tile_retrieval() {
 		// Test that we can retrieve tiles through VPL
 		let vpl = r#"from_container filename="berlin.mbtiles""#;
-		let reader = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
+		let reader = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()), None)
 			.await
 			.unwrap();
 
@@ -963,7 +979,7 @@ mod tests {
 	async fn test_from_vpl_tilejson() {
 		// Test that TileJSON works with VPL sources
 		let vpl = r#"from_container filename="berlin.mbtiles""#;
-		let reader = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
+		let reader = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()), None)
 			.await
 			.unwrap();
 
@@ -978,7 +994,7 @@ mod tests {
 	async fn test_from_vpl_invalid_syntax() {
 		// Test that invalid VPL returns an error
 		let vpl = r"invalid vpl syntax here";
-		let result = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string())).await;
+		let result = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()), None).await;
 		assert!(result.is_err());
 	}
 
@@ -986,7 +1002,7 @@ mod tests {
 	async fn test_from_vpl_nonexistent_file() {
 		// Test that referencing a non-existent file returns an error
 		let vpl = r#"from_container filename="nonexistent.mbtiles""#;
-		let result = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string())).await;
+		let result = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()), None).await;
 		assert!(result.is_err());
 	}
 
@@ -994,7 +1010,7 @@ mod tests {
 	async fn test_from_vpl_source_type() {
 		// Test that source_type works correctly for VPL sources
 		let vpl = r#"from_container filename="berlin.mbtiles""#;
-		let reader = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
+		let reader = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()), None)
 			.await
 			.unwrap();
 
@@ -1009,7 +1025,7 @@ mod tests {
 		let output_path = std::env::temp_dir().join("test_convert_to.versatiles");
 
 		// Open a tile source
-		let source = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let source = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -1036,7 +1052,7 @@ mod tests {
 		let output_path = std::env::temp_dir().join("test_convert_to_with_options.versatiles");
 
 		// Open a tile source
-		let source = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let source = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 
@@ -1050,6 +1066,7 @@ mod tests {
 			flip_y: None,
 			swap_xy: None,
 			writer_options: None,
+			ssh_identity: None,
 		};
 
 		let result = source
@@ -1073,7 +1090,7 @@ mod tests {
 
 		// Create a VPL source
 		let vpl = r#"from_container filename="berlin.mbtiles""#;
-		let source = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
+		let source = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()), None)
 			.await
 			.unwrap();
 
@@ -1099,7 +1116,7 @@ mod tests {
 				"params": { "filename": "berlin.mbtiles" }
 			}
 		]"#;
-		let source = TileSource::from_pipeline(steps_json.to_string(), Some("../testdata".to_string()))
+		let source = TileSource::from_pipeline(steps_json.to_string(), Some("../testdata".to_string()), None)
 			.await
 			.unwrap();
 		assert!(!source.metadata().tile_format.is_empty());
@@ -1107,7 +1124,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_from_pipeline_invalid_json_bubbles_error() {
-		let result = TileSource::from_pipeline("not valid json".to_string(), Some("../testdata".to_string())).await;
+		let result = TileSource::from_pipeline("not valid json".to_string(), Some("../testdata".to_string()), None).await;
 		let Err(err) = result else {
 			panic!("expected error for invalid JSON");
 		};
@@ -1117,7 +1134,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_from_pipeline_empty_array_fails_build() {
 		// Empty pipeline should fail when PipelineReader tries to build.
-		let result = TileSource::from_pipeline("[]".to_string(), Some("../testdata".to_string())).await;
+		let result = TileSource::from_pipeline("[]".to_string(), Some("../testdata".to_string()), None).await;
 		assert!(result.is_err());
 	}
 
@@ -1135,7 +1152,7 @@ mod tests {
 				"params": { "level_min": 0, "level_max": 3 }
 			}
 		]"#;
-		let source = TileSource::from_pipeline(steps_json.to_string(), Some("../testdata".to_string()))
+		let source = TileSource::from_pipeline(steps_json.to_string(), Some("../testdata".to_string()), None)
 			.await
 			.unwrap();
 		assert!(source.metadata().max_zoom <= 3);
@@ -1159,7 +1176,7 @@ mod tests {
 				]
 			}
 		]"#;
-		let source = TileSource::from_pipeline(steps_json.to_string(), Some("../testdata".to_string()))
+		let source = TileSource::from_pipeline(steps_json.to_string(), Some("../testdata".to_string()), None)
 			.await
 			.unwrap();
 		assert!(!source.metadata().tile_format.is_empty());
@@ -1169,7 +1186,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_source_type_container_fields() {
-		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string())
+		let reader = TileSource::from_path("../testdata/berlin.mbtiles".to_string(), None)
 			.await
 			.unwrap();
 		let st = reader.source_type();
@@ -1184,7 +1201,7 @@ mod tests {
 	async fn test_source_type_processor_fields() {
 		// Applying a filter wraps the container in a Processor.
 		let vpl = r#"from_container filename="berlin.mbtiles" | filter level_min=3"#;
-		let source = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()))
+		let source = TileSource::from_vpl(vpl.to_string(), Some("../testdata".to_string()), None)
 			.await
 			.unwrap();
 		let st = source.source_type();
