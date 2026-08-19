@@ -50,6 +50,7 @@ pub(crate) async fn convert_tiles_with_options(
 		compress: None,
 		flip_y: None,
 		swap_xy: None,
+		writer_options: None,
 	});
 
 	let mut tile_pyramid: Option<TilePyramid> = None;
@@ -105,6 +106,9 @@ pub(crate) async fn convert_tiles_with_options(
 	// abort-on-error — the JS caller will see the rejection.
 	let runtime = create_runtime();
 	runtime.set_abort_on_error(true);
+	if let Some(writer_options) = opts.writer_options {
+		runtime.set_writer_options(writer_options.into_iter().collect());
+	}
 
 	// Bridge progress events to JavaScript callback
 	if let Some(cb) = on_progress {
@@ -287,6 +291,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		assert!(opts.min_zoom.is_none());
@@ -309,6 +314,7 @@ mod tests {
 			compress: Some("gzip".to_string()),
 			flip_y: Some(true),
 			swap_xy: Some(true),
+			writer_options: None,
 		};
 
 		assert_eq!(opts.min_zoom, Some(0));
@@ -409,6 +415,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 		assert_eq!(opts.min_zoom, min_zoom);
 		assert_eq!(opts.max_zoom, max_zoom);
@@ -441,6 +448,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 		assert_eq!(opts.bbox_border, bbox_border);
 	}
@@ -460,6 +468,7 @@ mod tests {
 			compress: None,
 			flip_y,
 			swap_xy,
+			writer_options: None,
 		};
 		assert_eq!(opts.flip_y, flip_y);
 		assert_eq!(opts.swap_xy, swap_xy);
@@ -486,6 +495,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		// Condition on line 136: if min_zoom, max_zoom, or bbox is set
@@ -569,6 +579,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		// The code on line 147 checks if bbox exists before using bbox_border
@@ -629,6 +640,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -655,6 +667,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -680,6 +693,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -705,6 +719,7 @@ mod tests {
 			compress: Some("brotli".to_string()),
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -730,6 +745,7 @@ mod tests {
 			compress: None,
 			flip_y: Some(true),
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -755,6 +771,7 @@ mod tests {
 			compress: Some("gzip".to_string()),
 			flip_y: Some(false),
 			swap_xy: Some(false),
+			writer_options: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -781,6 +798,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -807,6 +825,7 @@ mod tests {
 			compress: Some("invalid_compression".to_string()),
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -851,6 +870,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		let result = convert_tiles_with_options(reader, &output_path, Some(options), None, None).await;
@@ -877,6 +897,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		convert_tiles_with_options(reader, &output_path, Some(options), None, None)

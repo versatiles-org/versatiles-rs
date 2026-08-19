@@ -1047,6 +1047,7 @@ mod tests {
 			compress: Some("gzip".to_string()),
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		let result = source

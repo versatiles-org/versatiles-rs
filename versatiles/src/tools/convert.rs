@@ -1,4 +1,4 @@
-use std::{fs, time::Instant};
+use std::{collections::BTreeMap, fs, time::Instant};
 
 use anyhow::{Result, bail};
 use versatiles_container::{
@@ -49,6 +49,25 @@ fn parse_tile_format(s: &str) -> Result<(TileFormat, Option<u8>, Option<u8>)> {
 	};
 
 	Ok((format, quality, effort))
+}
+
+/// Parse repeated `-w key=value` arguments into the map the runtime carries.
+///
+/// A later occurrence of a key replaces an earlier one, matching how a shell
+/// user expects a repeated flag to behave.
+fn parse_writer_options(args: &[String]) -> Result<BTreeMap<String, String>> {
+	let mut options = BTreeMap::new();
+	for arg in args {
+		let (key, value) = arg
+			.split_once('=')
+			.ok_or_else(|| anyhow::anyhow!("invalid writer option '{arg}': expected key=value"))?;
+		let key = key.trim();
+		if key.is_empty() {
+			bail!("invalid writer option '{arg}': the key is empty");
+		}
+		options.insert(key.to_string(), value.trim().to_string());
+	}
+	Ok(options)
 }
 
 #[derive(clap::Args, Debug)]
@@ -103,6 +122,15 @@ pub struct Subcommand {
 	#[arg(long, value_name = "format[,quality][,effort]", display_order = 3)]
 	tile_format: Option<String>,
 
+	/// set a format-specific option on the output writer, as key=value
+	///
+	/// Repeatable. Which options exist depends on the output format; an option
+	/// the chosen writer does not accept is an error, not a no-op, and the
+	/// message lists what that format does accept.
+	/// Example: `-w allow_unclustered=true` when writing PMTiles.
+	#[arg(long, value_name = "key=value", display_order = 4, verbatim_doc_comment)]
+	writer_option: Vec<String>,
+
 	/// check the pipeline and exit without reading or writing any tiles
 	///
 	/// Reports mistakes in the pipeline itself — an unknown operation or
@@ -120,6 +148,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	// Conversion must fail loudly on any silently-dropped tile: a truncated
 	// output would be indistinguishable from a successful conversion.
 	runtime.set_abort_on_error(true);
+	runtime.set_writer_options(parse_writer_options(&arguments.writer_option)?);
 
 	// Periodically log RSS so memory growth (e.g. toward an OOM kill, which the
 	// process can't report itself) is visible in the conversion's own output.
@@ -257,6 +286,37 @@ fn dry_run(arguments: &Subcommand) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+	use super::parse_writer_options;
+
+	#[test]
+	fn parse_writer_options_splits_on_the_first_equals() {
+		let opts = parse_writer_options(&["allow_unclustered=true".into(), "temp_dir=/a=b".into()]).unwrap();
+		assert_eq!(opts.get("allow_unclustered").map(String::as_str), Some("true"));
+		// A value may itself contain '=' — only the first one separates.
+		assert_eq!(opts.get("temp_dir").map(String::as_str), Some("/a=b"));
+	}
+
+	#[test]
+	fn parse_writer_options_trims_and_allows_empty_values() {
+		let opts = parse_writer_options(&["  key  =  value  ".into(), "empty=".into()]).unwrap();
+		assert_eq!(opts.get("key").map(String::as_str), Some("value"));
+		assert_eq!(opts.get("empty").map(String::as_str), Some(""));
+	}
+
+	#[test]
+	fn parse_writer_options_last_occurrence_wins() {
+		let opts = parse_writer_options(&["k=1".into(), "k=2".into()]).unwrap();
+		assert_eq!(opts.get("k").map(String::as_str), Some("2"));
+	}
+
+	#[test]
+	fn parse_writer_options_rejects_malformed_input() {
+		let err = parse_writer_options(&["nonsense".into()]).unwrap_err().to_string();
+		assert!(err.contains("expected key=value"), "unexpected: {err}");
+
+		let err = parse_writer_options(&["=value".into()]).unwrap_err().to_string();
+		assert!(err.contains("the key is empty"), "unexpected: {err}");
+	}
 	use anyhow::Result;
 	use assert_fs::TempDir;
 	use rstest::rstest;

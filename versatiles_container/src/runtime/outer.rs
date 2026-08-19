@@ -1,9 +1,10 @@
 use std::{
+	collections::BTreeMap,
 	path::Path,
 	sync::{Arc, atomic::Ordering},
 };
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 
 use super::{EventBus, RuntimeBuilder, RuntimeInner};
 use crate::{CacheType, DataLocation, DataSource, ProgressHandle, SharedTileSource};
@@ -121,6 +122,63 @@ impl TilesRuntime {
 	/// `false` so the server keeps running when a read fails.
 	pub fn set_abort_on_error(&self, abort: bool) {
 		self.inner.abort_on_error.store(abort, Ordering::Relaxed);
+	}
+
+	/// A format-specific writer option, if set.
+	///
+	/// See [`RuntimeBuilder::writer_option`](super::RuntimeBuilder::writer_option).
+	#[must_use]
+	pub fn writer_option(&self, key: &str) -> Option<String> {
+		self
+			.inner
+			.writer_options
+			.lock()
+			.unwrap_or_else(std::sync::PoisonError::into_inner)
+			.get(key)
+			.cloned()
+	}
+
+	/// A writer option parsed as a boolean.
+	///
+	/// Accepts `true`/`false`, `1`/`0` and `yes`/`no`, case-insensitively.
+	/// Anything else is an error rather than a silent `false` — a writer option
+	/// that quietly does nothing is the failure this mechanism exists to avoid.
+	///
+	/// # Errors
+	/// Returns an error if the value is set but is not one of the accepted forms.
+	pub fn writer_option_bool(&self, key: &str) -> Result<Option<bool>> {
+		let Some(value) = self.writer_option(key) else {
+			return Ok(None);
+		};
+		match value.trim().to_ascii_lowercase().as_str() {
+			"true" | "1" | "yes" => Ok(Some(true)),
+			"false" | "0" | "no" => Ok(Some(false)),
+			other => bail!("writer option '{key}' expects true or false, got '{other}'"),
+		}
+	}
+
+	/// All writer options currently set, in key order.
+	#[must_use]
+	pub fn writer_options(&self) -> BTreeMap<String, String> {
+		self
+			.inner
+			.writer_options
+			.lock()
+			.unwrap_or_else(std::sync::PoisonError::into_inner)
+			.clone()
+	}
+
+	/// Replace the writer options after construction.
+	///
+	/// The CLI builds one shared runtime in `main` and dispatches it to every
+	/// subcommand, so `convert` fills these in on entry — the same reason
+	/// [`set_abort_on_error`](Self::set_abort_on_error) exists.
+	pub fn set_writer_options(&self, options: BTreeMap<String, String>) {
+		*self
+			.inner
+			.writer_options
+			.lock()
+			.unwrap_or_else(std::sync::PoisonError::into_inner) = options;
 	}
 
 	/// Create a progress bar for tracking operations
@@ -316,6 +374,56 @@ mod tests {
 		assert!(msg.contains("outer"));
 		assert!(msg.contains("middle"));
 		assert!(msg.contains("root cause"));
+	}
+
+	#[test]
+	fn writer_options_round_trip_through_builder_and_setter() {
+		let runtime = TilesRuntime::builder()
+			.writer_option("allow_unclustered", "true")
+			.writer_option("temp_dir", "/tmp")
+			.build();
+		assert_eq!(runtime.writer_option("allow_unclustered").as_deref(), Some("true"));
+		assert_eq!(runtime.writer_option("temp_dir").as_deref(), Some("/tmp"));
+		assert_eq!(runtime.writer_option("missing"), None);
+		assert_eq!(runtime.writer_options().len(), 2);
+
+		// The CLI builds one runtime in main and fills these in per subcommand.
+		runtime.set_writer_options(BTreeMap::from([("reorder".to_string(), "true".to_string())]));
+		assert_eq!(runtime.writer_options().len(), 1);
+		assert_eq!(runtime.writer_option("reorder").as_deref(), Some("true"));
+		assert_eq!(runtime.writer_option("allow_unclustered"), None);
+	}
+
+	#[test]
+	fn writer_option_bool_accepts_the_usual_spellings() {
+		for value in ["true", "TRUE", " true ", "1", "yes"] {
+			let runtime = TilesRuntime::builder().writer_option("k", value).build();
+			assert_eq!(runtime.writer_option_bool("k").unwrap(), Some(true), "value {value:?}");
+		}
+		for value in ["false", "False", "0", "no"] {
+			let runtime = TilesRuntime::builder().writer_option("k", value).build();
+			assert_eq!(runtime.writer_option_bool("k").unwrap(), Some(false), "value {value:?}");
+		}
+	}
+
+	#[test]
+	fn writer_option_bool_rejects_anything_else() {
+		// A value that quietly becomes `false` is the silent no-op this whole
+		// mechanism exists to prevent.
+		let runtime = TilesRuntime::builder().writer_option("k", "maybe").build();
+		let err = runtime.writer_option_bool("k").unwrap_err().to_string();
+		assert!(err.contains("expects true or false"), "unexpected: {err}");
+		assert!(err.contains("maybe"), "the message should quote the value: {err}");
+
+		assert_eq!(TilesRuntime::new().writer_option_bool("k").unwrap(), None);
+	}
+
+	#[test]
+	fn writer_options_are_shared_between_clones() {
+		let runtime = TilesRuntime::new();
+		let clone = runtime.clone();
+		runtime.set_writer_options(BTreeMap::from([("a".to_string(), "1".to_string())]));
+		assert_eq!(clone.writer_option("a").as_deref(), Some("1"));
 	}
 
 	#[test]

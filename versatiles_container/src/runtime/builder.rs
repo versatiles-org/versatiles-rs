@@ -1,6 +1,7 @@
 //! Builder pattern for constructing `TilesRuntime` instances
 
 use std::{
+	collections::BTreeMap,
 	path::PathBuf,
 	sync::{
 		Arc, Mutex,
@@ -25,6 +26,7 @@ use crate::{CacheType, ContainerRegistry, ProgressFactory};
 /// ```
 pub struct RuntimeBuilder {
 	cache_type: Option<CacheType>,
+	writer_options: BTreeMap<String, String>,
 	ssh_identity: Option<PathBuf>,
 	#[allow(clippy::type_complexity)]
 	registry_customizer: Vec<Box<dyn FnOnce(&mut ContainerRegistry)>>,
@@ -40,6 +42,7 @@ impl RuntimeBuilder {
 			cache_type: None,
 			ssh_identity: None,
 			registry_customizer: Vec::new(),
+			writer_options: BTreeMap::new(),
 			#[cfg(not(test))]
 			silent_progress: false,
 			#[cfg(test)]
@@ -90,6 +93,26 @@ impl RuntimeBuilder {
 	///
 	/// Set this on the runtime used for tile conversion (where a silently
 	/// dropped tile would cause corrupt output). Leave it `false` for servers
+	/// Set a format-specific option for whichever writer this runtime drives.
+	///
+	/// Repeatable; a later call with the same key replaces the earlier value.
+	/// Unknown keys are rejected when the writer is chosen, not here, because
+	/// only the writer knows which options it accepts.
+	///
+	/// # Example
+	/// ```
+	/// use versatiles_container::TilesRuntime;
+	/// let runtime = TilesRuntime::builder()
+	///     .writer_option("allow_unclustered", "true")
+	///     .build();
+	/// assert_eq!(runtime.writer_option("allow_unclustered").as_deref(), Some("true"));
+	/// ```
+	#[must_use]
+	pub fn writer_option(mut self, key: &str, value: &str) -> Self {
+		self.writer_options.insert(key.to_string(), value.to_string());
+		self
+	}
+
 	/// (which should log errors but keep running).
 	#[must_use]
 	pub fn abort_on_error(mut self, abort: bool) -> Self {
@@ -150,6 +173,7 @@ impl RuntimeBuilder {
 				progress_factory,
 				abort_on_error: AtomicBool::new(self.abort_on_error),
 				error_count: AtomicUsize::new(0),
+				writer_options: Mutex::new(self.writer_options),
 			}),
 		}
 	}

@@ -27,7 +27,7 @@
 //! ```
 
 use std::{
-	collections::HashMap,
+	collections::{BTreeMap, HashMap},
 	env,
 	future::Future,
 	path::{Path, PathBuf},
@@ -73,6 +73,8 @@ struct WriterEntry {
 	write_to_path: Arc<WriteFile>,
 	#[cfg_attr(not(feature = "ssh2"), allow(dead_code))]
 	write_to_writer: Option<Arc<WriteData>>,
+	/// Option keys this writer reads, from `TilesWriter::supported_options`.
+	supported_options: &'static [&'static str],
 }
 
 /// Registry mapping file extensions to async tile container readers and writers.
@@ -87,6 +89,34 @@ struct WriterEntry {
 pub struct ContainerRegistry {
 	readers: HashMap<String, ReaderEntry>,
 	writers: HashMap<String, WriterEntry>,
+}
+
+/// Rejects writer options the chosen writer will never read.
+///
+/// Runs before anything is opened, so a mistyped key fails immediately instead
+/// of being silently ignored — the same reason the PMTiles traversal check runs
+/// before the first tile is read.
+fn check_writer_options(options: &BTreeMap<String, String>, entry: &WriterEntry, extension: &str) -> Result<()> {
+	let unknown: Vec<&str> = options
+		.keys()
+		.map(String::as_str)
+		.filter(|key| !entry.supported_options.contains(key))
+		.collect();
+
+	if unknown.is_empty() {
+		return Ok(());
+	}
+
+	let known = if entry.supported_options.is_empty() {
+		"it accepts none".to_string()
+	} else {
+		format!("it accepts: {}", entry.supported_options.join(", "))
+	};
+	bail!(
+		"unknown writer option{} for '{extension}': {} — {known}",
+		if unknown.len() == 1 { "" } else { "s" },
+		unknown.join(", ")
+	);
 }
 
 /// Removes an output file a failed write left behind.
@@ -267,6 +297,8 @@ impl ContainerRegistry {
 			.get(&extension)
 			.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?;
 
+		check_writer_options(&runtime.writer_options(), entry, &extension)?;
+
 		// Whether the destination already existed decides whether a failed write
 		// may clean up after itself — see `remove_partial_output`.
 		let existed_before = path.exists();
@@ -308,6 +340,8 @@ impl ContainerRegistry {
 			.writers
 			.get(&extension)
 			.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?;
+		check_writer_options(&runtime.writer_options(), entry, &extension)?;
+
 		let write_to_writer = entry.write_to_writer.as_ref().ok_or_else(|| {
 			anyhow!(
 				"file extension '{extension}' does not support writing to SFTP \
@@ -367,6 +401,7 @@ impl ContainerRegistry {
 					})
 				})),
 				write_to_writer,
+				supported_options: W::supported_options(),
 			},
 		);
 	}
@@ -548,6 +583,66 @@ pub mod tests {
 		remove_partial_output(&dir.path().join("does-not-exist"));
 		remove_partial_output(dir.path());
 		assert!(dir.path().is_dir(), "cleanup must never remove a directory");
+	}
+
+	#[tokio::test]
+	async fn unknown_writer_option_is_rejected_before_anything_is_opened() -> Result<()> {
+		let dir = TempDir::new()?;
+		let path = dir.path().join("out.versatiles");
+		let reader = MockReader::new_mock(
+			TilePyramid::new_full_up_to(1),
+			TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None),
+		)?;
+		let runtime = TilesRuntime::builder()
+			.writer_option("allow_unclusterd", "true")
+			.build();
+
+		let err = ContainerRegistry::default()
+			.write_to_path(Arc::new(Box::new(reader)), &path, runtime)
+			.await
+			.unwrap_err();
+		// #[context] wraps the cause, so compare against the full chain.
+		let err = format!("{err:#}");
+
+		assert!(err.contains("unknown writer option"), "unexpected: {err}");
+		assert!(err.contains("allow_unclusterd"), "should quote the key: {err}");
+		assert!(err.contains("it accepts none"), "should say what is accepted: {err}");
+		assert!(
+			!path.exists(),
+			"a rejected option must fail before the destination is opened"
+		);
+		Ok(())
+	}
+
+	#[test]
+	fn unknown_option_message_lists_what_the_writer_accepts() {
+		let mut reg = ContainerRegistry::new_empty();
+		reg.register_writer::<MockWriter>("mock");
+		let entry = reg.writers.get("mock").unwrap();
+
+		let options = BTreeMap::from([("nope".to_string(), "1".to_string())]);
+		let err = check_writer_options(&options, entry, "mock").unwrap_err().to_string();
+		assert!(err.contains("nope"), "unexpected: {err}");
+		assert!(err.contains("mock_option, mock_flag"), "should list the keys: {err}");
+
+		// Plural wording when several are wrong.
+		let options = BTreeMap::from([("a".to_string(), "1".to_string()), ("b".to_string(), "2".to_string())]);
+		let err = check_writer_options(&options, entry, "mock").unwrap_err().to_string();
+		assert!(err.contains("unknown writer options"), "should pluralise: {err}");
+	}
+
+	#[test]
+	fn supported_options_are_accepted() {
+		let mut reg = ContainerRegistry::new_empty();
+		reg.register_writer::<MockWriter>("mock");
+		let entry = reg.writers.get("mock").unwrap();
+
+		let options = BTreeMap::from([
+			("mock_option".to_string(), "x".to_string()),
+			("mock_flag".to_string(), "true".to_string()),
+		]);
+		assert!(check_writer_options(&options, entry, "mock").is_ok());
+		assert!(check_writer_options(&BTreeMap::new(), entry, "mock").is_ok());
 	}
 
 	#[test]

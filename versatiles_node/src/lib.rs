@@ -141,6 +141,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 		assert!(opts.min_zoom.is_none());
 	}

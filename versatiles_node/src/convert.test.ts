@@ -53,6 +53,30 @@ describe('convertTo()', () => {
 		fs.unlinkSync(outputPath);
 	});
 
+	it('should reject a writer option the output format does not accept', async () => {
+		// A writer option that quietly does nothing is the failure this
+		// mechanism exists to prevent, so an unknown key is an error.
+		const outputPath = getTempOutputPath();
+		await expect(convert(MBTILES_PATH, outputPath, { writerOptions: { allowUnclusterd: 'true' } })).rejects.toThrow(
+			/unknown writer option/,
+		);
+		expect(fs.existsSync(outputPath)).toBeFalsy();
+	});
+
+	it('should name the key and what the format accepts', async () => {
+		const outputPath = getTempOutputPath();
+		await expect(convert(MBTILES_PATH, outputPath, { writerOptions: { nope: '1' } })).rejects.toThrow(
+			/nope.*it accepts none/s,
+		);
+	});
+
+	it('should convert normally when no writer options are given', async () => {
+		const outputPath = getTempOutputPath();
+		await convert(MBTILES_PATH, outputPath, { maxZoom: 3, writerOptions: {} });
+		expect(fs.existsSync(outputPath)).toBeTruthy();
+		fs.unlinkSync(outputPath);
+	});
+
 	it('should convert with options', async () => {
 		const outputPath = getTempOutputPath();
 		await convert(MBTILES_PATH, outputPath, {

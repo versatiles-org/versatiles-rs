@@ -1,4 +1,5 @@
 use std::{
+	collections::BTreeMap,
 	path::PathBuf,
 	sync::{
 		Mutex,
@@ -27,6 +28,18 @@ pub struct RuntimeInner {
 	/// Count of errors recorded via `TilesRuntime::record_error`. Producers
 	/// can inspect this after a stream drains to detect silent drops.
 	pub error_count: AtomicUsize,
+	/// Format-specific options for whichever writer this runtime ends up
+	/// driving, e.g. `allow_unclustered=true` for PMTiles.
+	///
+	/// Writers receive no arguments of their own — `TilesWriter`'s methods are
+	/// static and `TilesConverterParameters` is consumed by the reader wrapper —
+	/// so the runtime is the only channel that reaches them.
+	///
+	/// `BTreeMap` rather than `HashMap` so error messages listing the options
+	/// are in a stable order. Behind a `Mutex` for the same reason
+	/// `abort_on_error` is atomic: the CLI builds one runtime in `main` and
+	/// fills this in per subcommand.
+	pub writer_options: Mutex<BTreeMap<String, String>>,
 }
 
 #[cfg(test)]
@@ -48,6 +61,7 @@ mod tests {
 			progress_factory,
 			abort_on_error: AtomicBool::new(false),
 			error_count: AtomicUsize::new(0),
+			writer_options: Mutex::new(BTreeMap::new()),
 		};
 
 		assert_eq!(inner.cache_type, CacheType::InMemory);
@@ -69,6 +83,7 @@ mod tests {
 			progress_factory,
 			abort_on_error: AtomicBool::new(false),
 			error_count: AtomicUsize::new(0),
+			writer_options: Mutex::new(BTreeMap::new()),
 		};
 
 		assert_eq!(inner.cache_type, CacheType::Disk(path_buf));
@@ -89,6 +104,7 @@ mod tests {
 			progress_factory,
 			abort_on_error: AtomicBool::new(false),
 			error_count: AtomicUsize::new(0),
+			writer_options: Mutex::new(BTreeMap::new()),
 		};
 
 		// Verify we can lock and access the progress factory
@@ -112,6 +128,7 @@ mod tests {
 			progress_factory,
 			abort_on_error: AtomicBool::new(false),
 			error_count: AtomicUsize::new(0),
+			writer_options: Mutex::new(BTreeMap::new()),
 		};
 
 		// Verify event bus works

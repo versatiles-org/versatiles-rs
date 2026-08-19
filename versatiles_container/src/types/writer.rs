@@ -53,6 +53,21 @@ pub trait TilesWriter: Send {
 		true
 	}
 
+	/// Format-specific option keys this writer understands, in the order a help
+	/// message should list them.
+	///
+	/// Writers take no arguments of their own, so options travel on
+	/// [`TilesRuntime`]. Declaring them here lets the registry reject a key no
+	/// writer will read *before* anything is opened — otherwise `-w
+	/// allow_unclusterd=true` would be accepted and silently do nothing, which
+	/// is the failure mode writer options exist to prevent.
+	///
+	/// Defaults to none, so a writer opts in by listing its keys.
+	#[must_use]
+	fn supported_options() -> &'static [&'static str] {
+		&[]
+	}
+
 	/// Writes all tile data from `reader` into the file or directory at `path`.
 	///
 	/// The default implementation wraps `path` in a [`DataWriterFile`] and calls

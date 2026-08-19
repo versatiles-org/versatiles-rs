@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use napi_derive::napi;
 
 /// Options for tile conversion
@@ -77,6 +79,17 @@ pub struct ConvertOptions {
 	///
 	/// **Default:** `false` (no swapping)
 	pub swap_xy: Option<bool>,
+
+	/// Format-specific options for the output writer
+	///
+	/// Which options exist depends on the output format. An option the chosen
+	/// writer does not accept is an error, not a no-op, and the message lists
+	/// what that format does accept.
+	///
+	/// **Example:** `{ allowUnclustered: 'true' }` when writing PMTiles
+	///
+	/// **Default:** No writer options
+	pub writer_options: Option<HashMap<String, String>>,
 }
 
 #[cfg(test)]
@@ -95,6 +108,7 @@ mod tests {
 			compress: Some("brotli".to_string()),
 			flip_y: Some(true),
 			swap_xy: Some(false),
+			writer_options: None,
 		};
 
 		let cloned = options.clone();
@@ -117,6 +131,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		assert!(options.min_zoom.is_none());
@@ -138,6 +153,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		assert_eq!(options.min_zoom, Some(0));
@@ -155,6 +171,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		assert_eq!(options.bbox, Some(bbox));
@@ -171,6 +188,7 @@ mod tests {
 			compress: Some("gzip".to_string()),
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		assert_eq!(options.compress, Some("gzip".to_string()));
@@ -186,6 +204,7 @@ mod tests {
 			compress: None,
 			flip_y: Some(true),
 			swap_xy: Some(true),
+			writer_options: None,
 		};
 
 		assert_eq!(options.flip_y, Some(true));
@@ -202,6 +221,7 @@ mod tests {
 			compress: Some("brotli".to_string()),
 			flip_y: Some(false),
 			swap_xy: Some(true),
+			writer_options: None,
 		};
 
 		assert_eq!(options.min_zoom, Some(5));
@@ -224,6 +244,7 @@ mod tests {
 			compress: Some("brotli".to_string()),
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		if let Some(bbox) = &options.bbox {
@@ -247,6 +268,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		assert_eq!(options.bbox_border, Some(0));
@@ -262,6 +284,7 @@ mod tests {
 			compress: None,
 			flip_y: None,
 			swap_xy: None,
+			writer_options: None,
 		};
 
 		assert_eq!(options.bbox_border, Some(100));

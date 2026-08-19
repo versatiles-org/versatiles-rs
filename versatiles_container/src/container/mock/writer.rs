@@ -63,6 +63,13 @@ impl MockWriter {
 
 #[async_trait]
 impl TilesWriter for MockWriter {
+	/// Two keys with no effect, so the registry's option validation can be
+	/// exercised from both sides without waiting for a real writer to declare
+	/// options.
+	fn supported_options() -> &'static [&'static str] {
+		&["mock_option", "mock_flag"]
+	}
+
 	/// Writes tile data from a `TilesReader` to a `DataWriterTrait`.
 	///
 	/// This method is not implemented for the mock writer and simply calls `MockWriter::write`.
