@@ -91,7 +91,7 @@ impl TileSource for Operation {
 	}
 }
 
-crate::operations::macros::define_transform_factory!("raster_levels", Args, Operation);
+crate::operations::macros::define_transform_factory!("raster_levels", Args, Operation, requires: Raster);
 
 #[cfg(test)]
 mod tests {

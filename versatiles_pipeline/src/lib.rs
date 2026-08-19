@@ -19,8 +19,8 @@ mod helpers;
 mod operations;
 pub mod vpl;
 
-pub use factory::PipelineFactory;
+pub use factory::{Compatibility, PipelineFactory, require_tile_type};
 #[cfg(feature = "codegen")]
-pub use factory::{OperationMeta, all_operation_metadata};
+pub use factory::{OperationMeta, all_operation_metadata, compatible_transforms};
 pub use helpers::{CsvReader, PipelineReader, register_pipeline_readers};
 pub use vpl::{VPLNode, VPLPipeline};

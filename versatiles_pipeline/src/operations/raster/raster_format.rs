@@ -211,7 +211,7 @@ impl TileSource for Operation {
 	}
 }
 
-crate::operations::macros::define_transform_factory!("raster_format", Args, Operation);
+crate::operations::macros::define_transform_factory!("raster_format", Args, Operation, requires: Raster);
 
 #[cfg(test)]
 mod tests {

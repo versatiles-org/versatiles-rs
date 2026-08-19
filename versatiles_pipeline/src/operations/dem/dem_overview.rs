@@ -154,7 +154,7 @@ impl TileSource for Operation {
 	}
 }
 
-crate::operations::macros::define_transform_factory!("dem_overview", Args, Operation);
+crate::operations::macros::define_transform_factory!("dem_overview", Args, Operation, requires: Raster);
 
 #[cfg(test)]
 #[allow(clippy::cast_possible_truncation)]

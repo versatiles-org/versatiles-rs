@@ -10,7 +10,7 @@ use cel_interpreter::{
 	objects::{Key as CelKey, Map as CelMap},
 };
 use versatiles_container::TileSource;
-use versatiles_core::TileJSON;
+use versatiles_core::{TileJSON, TileType};
 use versatiles_derive::context;
 use versatiles_geometry::{
 	geo::{GeoProperties, GeoValue},
@@ -19,7 +19,7 @@ use versatiles_geometry::{
 
 use crate::{
 	PipelineFactory,
-	factory::{OperationFactoryTrait, TransformOperationFactoryTrait},
+	factory::{Compatibility, OperationFactoryTrait, TransformOperationFactoryTrait, require_tile_type},
 	operations::vector::traits::{RunnerTrait, build_transform},
 	vpl::VPLNode,
 };
@@ -196,6 +196,12 @@ impl TransformOperationFactoryTrait for Factory {
 	) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		build_transform::<Runner>(source, Runner::from_args(&args)?).await
+	}
+
+	/// These operations go through `build_transform`, which requires vector
+	/// tiles, so the refusal here matches what a build would do.
+	async fn compatibility(&self, source: &dyn TileSource) -> Compatibility {
+		require_tile_type(source, TileType::Vector, "vector_filter_features")
 	}
 }
 

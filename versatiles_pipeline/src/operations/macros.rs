@@ -2,10 +2,30 @@
 ///
 /// Usage: `define_transform_factory!("raster_flatten", Args, Operation);`
 ///
+/// Add `, requires: Raster` (or `Vector`) when the operation only applies to one
+/// kind of tile. That generates a `compatibility()` that refuses anything else,
+/// so a picker can leave the operation out and say why. Omit it when nothing
+/// about the source can rule the operation out — `filter` and `meta_update`
+/// apply to anything, and `dem_*` cannot tell terrarium elevation from a
+/// photograph, so both keep the default `Fits`.
+///
 /// This generates a `Factory` struct that implements `OperationFactoryTrait`
 /// and `TransformOperationFactoryTrait`, delegating to `Operation::build`.
 macro_rules! define_transform_factory {
 	($tag:literal, $args:ty, $op:ty) => {
+		$crate::operations::macros::define_transform_factory!(@impl $tag, $args, $op,);
+	};
+	($tag:literal, $args:ty, $op:ty, requires: $tile_type:ident) => {
+		$crate::operations::macros::define_transform_factory!(@impl $tag, $args, $op,
+			async fn compatibility(
+				&self,
+				source: &dyn versatiles_container::TileSource,
+			) -> $crate::factory::Compatibility {
+				$crate::factory::require_tile_type(source, versatiles_core::TileType::$tile_type, $tag)
+			}
+		);
+	};
+	(@impl $tag:literal, $args:ty, $op:ty, $($compatibility:tt)*) => {
 		pub struct Factory {}
 
 		impl $crate::factory::OperationFactoryTrait for Factory {
@@ -40,6 +60,8 @@ macro_rules! define_transform_factory {
 					.await
 					.map(|op| Box::new(op) as Box<dyn versatiles_container::TileSource>)
 			}
+
+			$($compatibility)*
 		}
 	};
 }

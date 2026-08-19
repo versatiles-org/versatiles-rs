@@ -154,7 +154,7 @@ impl TileSource for Operation {
 	}
 }
 
-crate::operations::macros::define_transform_factory!("vector_repair", Args, Operation);
+crate::operations::macros::define_transform_factory!("vector_repair", Args, Operation, requires: Vector);
 
 #[cfg(test)]
 mod tests {

@@ -192,7 +192,7 @@ impl TileSource for Operation {
 	}
 }
 
-crate::operations::macros::define_transform_factory!("raster_mask", Args, Operation);
+crate::operations::macros::define_transform_factory!("raster_mask", Args, Operation, requires: Raster);
 
 #[cfg(test)]
 mod tests {

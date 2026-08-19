@@ -83,7 +83,7 @@ impl TileSource for Operation {
 	}
 }
 
-crate::operations::macros::define_transform_factory!("raster_flatten", Args, Operation);
+crate::operations::macros::define_transform_factory!("raster_flatten", Args, Operation, requires: Raster);
 
 #[cfg(test)]
 mod tests {

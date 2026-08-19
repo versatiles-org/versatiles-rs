@@ -56,6 +56,62 @@ pub trait ReadOperationFactoryTrait: OperationFactoryTrait {
 	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn TileSource>>;
 }
 
+/// Whether a transform can be applied to a particular source.
+///
+/// The verdict is a *check*, not an estimate: [`Wrong`](Compatibility::Wrong)
+/// means the operation looked and found a reason, and anything it cannot
+/// demonstrate is [`Fits`](Compatibility::Fits). `dem_quantize` on an RGB PNG is
+/// `Fits`, because nothing distinguishes terrarium elevation from a photograph —
+/// a third "cannot tell" verdict would be offered exactly like `Fits` in a
+/// picker, so it would earn nothing.
+///
+/// The reason sits on the variant that needs one. An `Option<String>` beside a
+/// verdict would permit a `Wrong` with nothing to show, which is the one case a
+/// UI cannot render.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Compatibility {
+	/// No reason was found to rule this operation out.
+	Fits,
+	/// Checked and refused, e.g. "`raster_flatten` needs raster tiles; this
+	/// source is mvt".
+	Wrong(String),
+}
+
+impl Compatibility {
+	/// Whether this operation may be offered for the source.
+	#[must_use]
+	pub fn fits(&self) -> bool {
+		matches!(self, Compatibility::Fits)
+	}
+
+	/// Why the operation was refused, or `None` when it fits.
+	#[must_use]
+	pub fn reason(&self) -> Option<&str> {
+		match self {
+			Compatibility::Fits => None,
+			Compatibility::Wrong(reason) => Some(reason),
+		}
+	}
+}
+
+/// Refuses `source` unless its tiles are of `required` type.
+///
+/// The check every format-bound operation needs, so the wording of the refusal
+/// is written once. Used by `define_transform_factory!`'s `requires:` clause.
+#[must_use]
+pub fn require_tile_type(source: &dyn TileSource, required: TileType, tag: &str) -> Compatibility {
+	let format = *source.metadata().tile_format();
+	if format.to_type() == required {
+		Compatibility::Fits
+	} else {
+		Compatibility::Wrong(format!(
+			"`{tag}` needs {} tiles; this source is {format}",
+			required.as_str()
+		))
+	}
+}
+
 /// Factory trait for transform operations that wrap and modify existing tile sources.
 ///
 /// Transform operations take an upstream tile source and apply transformations,
@@ -72,6 +128,20 @@ pub trait TransformOperationFactoryTrait: OperationFactoryTrait {
 		source: Box<dyn TileSource>,
 		factory: &'a PipelineFactory,
 	) -> Result<Box<dyn TileSource>>;
+
+	/// Whether this operation could be applied to `source`.
+	///
+	/// Asked before any parameter is typed, so it takes `&self` on the singleton
+	/// factory rather than needing an instance — `vector_filter_layers` is not
+	/// constructible without `layers=`.
+	///
+	/// Defaults to [`Compatibility::Fits`], so operations adopt this one at a
+	/// time and a partial migration cannot hide one that would have worked.
+	/// `async` only for the few checks that need to read a tile; the format-based
+	/// ones are synchronous and borrow, so they cost nothing.
+	async fn compatibility(&self, _source: &dyn TileSource) -> Compatibility {
+		Compatibility::Fits
+	}
 }
 
 /// Callback used to resolve a filename/URL into a concrete [`TileSource`].
@@ -418,9 +488,198 @@ pub fn all_operation_metadata() -> Vec<OperationMeta> {
 	ops
 }
 
+/// Every transform, paired with whether it could be applied to `source`.
+///
+/// The question a node picker actually asks — "what can go here" — so the loop
+/// lives here rather than in every consumer.
+///
+/// Pairs rather than a map keyed by [`Compatibility`]: `Wrong` carries a reason
+/// that differs per operation, so it cannot be a key. Ordered as
+/// the crate registers them internally, which is stable across runs.
+#[cfg(feature = "codegen")]
+pub async fn compatible_transforms(source: &dyn TileSource) -> Vec<(OperationMeta, Compatibility)> {
+	use crate::operations::transform_operation_factories;
+
+	let mut out = Vec::new();
+	for f in transform_operation_factories() {
+		let meta = OperationMeta {
+			tag_name: f.tag_name().to_string(),
+			kind: "transform",
+			doc: f.docs(),
+			summary: f.doc_summary(),
+			details: f.doc_details(),
+			fields: f.field_metadata(),
+		};
+		out.push((meta, f.compatibility(source).await));
+	}
+	out
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::helpers::{dummy_image_source::DummyImageSource, dummy_vector_source::DummyVectorSource};
+
+	fn raster_source() -> Box<dyn TileSource> {
+		Box::new(DummyImageSource::new(|_| None, TileFormat::PNG, None).unwrap())
+	}
+
+	fn vector_source() -> Box<dyn TileSource> {
+		Box::new(DummyVectorSource::new(&[("places", &[&[("name", "Berlin")]])], None))
+	}
+
+	/// Every transform, by tag, with its verdict against one source.
+	async fn verdicts(source: &dyn TileSource) -> Vec<(String, Compatibility)> {
+		let mut out = Vec::new();
+		for f in crate::operations::transform_operation_factories() {
+			out.push((f.tag_name().to_string(), f.compatibility(source).await));
+		}
+		out
+	}
+
+	fn tags_that_fit(verdicts: &[(String, Compatibility)]) -> Vec<&str> {
+		verdicts
+			.iter()
+			.filter(|(_, c)| c.fits())
+			.map(|(tag, _)| tag.as_str())
+			.collect()
+	}
+
+	#[tokio::test]
+	async fn raster_source_offers_raster_and_dem_but_not_vector() {
+		let source = raster_source();
+		let verdicts = verdicts(&*source).await;
+		let fits = tags_that_fit(&verdicts);
+
+		// dem_* stays on the list: nothing separates terrarium elevation from a
+		// photograph, so it cannot be refused.
+		for tag in ["raster_flatten", "raster_overview", "dem_quantize", "dem_overview"] {
+			assert!(fits.contains(&tag), "{tag} should fit a PNG source, got {fits:?}");
+		}
+		for tag in ["vector_repair", "vector_filter_layers", "vector_overzoom"] {
+			assert!(!fits.contains(&tag), "{tag} should not fit a PNG source");
+		}
+	}
+
+	#[tokio::test]
+	async fn vector_source_offers_vector_but_not_raster() {
+		let source = vector_source();
+		let verdicts = verdicts(&*source).await;
+		let fits = tags_that_fit(&verdicts);
+
+		for tag in [
+			"vector_repair",
+			"vector_filter_layers",
+			"vector_update_properties",
+			"vector_overzoom",
+		] {
+			assert!(fits.contains(&tag), "{tag} should fit an MVT source, got {fits:?}");
+		}
+		for tag in ["raster_flatten", "raster_overview", "dem_quantize"] {
+			assert!(!fits.contains(&tag), "{tag} should not fit an MVT source");
+		}
+	}
+
+	#[tokio::test]
+	async fn format_agnostic_transforms_fit_everything() {
+		for source in [raster_source(), vector_source()] {
+			let verdicts = verdicts(&*source).await;
+			let fits = tags_that_fit(&verdicts);
+			for tag in ["filter", "meta_update", "remap_coords"] {
+				assert!(fits.contains(&tag), "{tag} should fit any source, got {fits:?}");
+			}
+		}
+	}
+
+	#[tokio::test]
+	async fn a_refusal_always_carries_a_usable_reason() {
+		// The whole point of putting the reason on the variant: a UI can never
+		// receive a `Wrong` it has nothing to display.
+		let source = raster_source();
+		for (tag, verdict) in verdicts(&*source).await {
+			let Compatibility::Wrong(reason) = &verdict else {
+				continue;
+			};
+			assert!(!reason.is_empty(), "{tag} refused with an empty reason");
+			assert!(
+				reason.contains(&tag),
+				"{tag}: reason should name the operation: {reason}"
+			);
+			assert!(
+				reason.contains("png"),
+				"{tag}: reason should name the source format: {reason}"
+			);
+		}
+	}
+
+	#[tokio::test]
+	async fn a_fitting_transform_can_actually_be_built() {
+		// The direction that must never break: hiding an operation a picker
+		// should have offered is the failure the default `Fits` exists to avoid.
+		let factory = PipelineFactory::new_dummy();
+
+		for (tag, make) in [
+			("raster_flatten", raster_source as fn() -> Box<dyn TileSource>),
+			("vector_repair", vector_source as fn() -> Box<dyn TileSource>),
+		] {
+			let find = || {
+				crate::operations::transform_operation_factories()
+					.into_iter()
+					.find(|f| f.tag_name() == tag)
+					.expect("registered transform")
+			};
+			assert!(find().compatibility(&*make()).await.fits(), "{tag} should fit");
+			assert!(
+				find()
+					.build(crate::vpl::VPLNode::from(tag), make(), &factory)
+					.await
+					.is_ok(),
+				"{tag} said it fits but would not build"
+			);
+		}
+	}
+
+	#[tokio::test]
+	async fn a_refused_vector_transform_also_fails_to_build() {
+		// Vector transforms go through `build_transform`, which already refuses a
+		// non-vector source, so verdict and build agree exactly.
+		//
+		// Raster transforms have no such build-time guard: `raster_flatten` on an
+		// MVT source builds and only fails once a tile is pulled through it. The
+		// verdict is therefore stricter than `build`, which is the useful
+		// direction for a picker — but it means this assertion only holds for the
+		// vector side today.
+		let factory = PipelineFactory::new_dummy();
+		let find = || {
+			crate::operations::transform_operation_factories()
+				.into_iter()
+				.find(|f| f.tag_name() == "vector_repair")
+				.expect("registered transform")
+		};
+
+		assert!(!find().compatibility(&*raster_source()).await.fits());
+		assert!(
+			find()
+				.build(crate::vpl::VPLNode::from("vector_repair"), raster_source(), &factory)
+				.await
+				.is_err()
+		);
+	}
+
+	#[cfg(feature = "codegen")]
+	#[tokio::test]
+	async fn compatible_transforms_pairs_every_transform_with_a_verdict() {
+		let source = vector_source();
+		let pairs = compatible_transforms(&*source).await;
+
+		assert_eq!(pairs.len(), crate::operations::transform_operation_factories().len());
+		for (meta, _) in &pairs {
+			assert_eq!(meta.kind, "transform");
+			assert!(!meta.summary.is_empty(), "{} has no summary", meta.tag_name);
+		}
+		assert!(pairs.iter().any(|(_, c)| c.fits()));
+		assert!(pairs.iter().any(|(_, c)| !c.fits()));
+	}
 
 	#[test]
 	fn help_md_includes_operations_toc() {

@@ -187,7 +187,7 @@ impl TileSource for Operation {
 	}
 }
 
-crate::operations::macros::define_transform_factory!("dem_quantize", Args, Operation);
+crate::operations::macros::define_transform_factory!("dem_quantize", Args, Operation, requires: Raster);
 
 #[cfg(test)]
 mod tests {
