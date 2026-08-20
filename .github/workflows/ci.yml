@@ -361,6 +361,9 @@ jobs:
   windows-test:
     name: "Windows: Test"
     runs-on: windows-latest
+    env:
+      CARGO_PROFILE_DEV_OPT_LEVEL: "0"
+      CARGO_PROFILE_TEST_OPT_LEVEL: "0"
     steps:
       - name: Configure Git
         shell: bash
