@@ -1,19 +1,15 @@
 use std::collections::{HashMap, HashSet};
 
-use anyhow::{Context, Result, anyhow};
-use async_trait::async_trait;
+use anyhow::{Result, anyhow};
 use versatiles_container::{DataLocation, TileSource};
-use versatiles_core::{TileJSON, TileType};
+use versatiles_core::TileJSON;
 use versatiles_derive::context;
 use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
 
 use crate::{
 	PipelineFactory,
-	factory::{
-		Compatibility, OperationFactoryTrait, TransformOperationFactoryTrait, check_compatibility, require_tile_type,
-	},
 	helpers::CsvReader,
-	operations::vector::traits::{RunnerTrait, build_transform},
+	operations::transform::{AsTileTransform, TransformOp, VectorTransform},
 	vpl::VPLNode,
 };
 
@@ -102,7 +98,9 @@ impl Runner {
 	}
 }
 
-impl RunnerTrait for Runner {
+impl VectorTransform for Runner {
+	const TAG: &'static str = "vector_update_properties";
+
 	fn update_tilejson(&self, tilejson: &mut TileJSON) {
 		if let Some(layer) = tilejson.vector_layers.0.get_mut(&self.args.layer_name) {
 			if self.args.replace_properties.unwrap_or(false) {
@@ -164,42 +162,13 @@ impl RunnerTrait for Runner {
 	}
 }
 
-pub struct Factory {}
-
-impl OperationFactoryTrait for Factory {
-	fn docs(&self) -> String {
-		Args::docs()
-	}
-	#[cfg(feature = "codegen")]
-	fn doc_summary(&self) -> String {
-		Args::doc_summary()
-	}
-	#[cfg(feature = "codegen")]
-	fn doc_details(&self) -> String {
-		Args::doc_details()
-	}
-	fn tag_name(&self) -> &str {
-		"vector_update_properties"
-	}
-	fn field_metadata(&self) -> Vec<crate::vpl::VPLFieldMeta> {
-		Args::field_metadata()
-	}
-}
-
-#[async_trait]
-impl TransformOperationFactoryTrait for Factory {
-	async fn build<'a>(
-		&self,
+impl Runner {
+	#[context("Building vector_update_properties operation in VPL node {:?}", vpl_node.name)]
+	async fn build(
 		vpl_node: VPLNode,
 		source: Box<dyn TileSource>,
-		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn TileSource>> {
-		// Same guard `define_transform_factory!` applies; these factories are
-		// hand-written, so they have to ask for it. Before the arguments are
-		// read, or a raster source is told about a missing `layer=` instead of
-		// being told it is a raster source.
-		check_compatibility(self.compatibility(source.as_ref()).await)?;
-
+		factory: &PipelineFactory,
+	) -> Result<TransformOp<AsTileTransform<Runner>>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		let path = factory
@@ -222,20 +191,15 @@ impl TransformOperationFactoryTrait for Factory {
 			.await
 			.with_context(|| format!("Failed to read CSV file from '{}'", args.data_source_path))?;
 
-		build_transform::<Runner>(
+		Ok(TransformOp::new(
 			source,
-			Runner::from_args(args, data)?,
-			"vector_update_properties",
+			AsTileTransform(Runner::from_args(args, data)?),
 			factory.runtime(),
-		)
-		.await
-	}
-
-	/// `build` refuses on this verdict, so it is exactly what a build would do.
-	async fn compatibility(&self, source: &dyn TileSource) -> Compatibility {
-		require_tile_type(source, TileType::Vector, "vector_update_properties")
+		))
 	}
 }
+
+crate::operations::macros::define_transform_factory!("vector_update_properties", Args, Runner, requires: Vector);
 
 /// Parses a separator string into a single character.
 /// Supports escape sequences like "\t" for tab.

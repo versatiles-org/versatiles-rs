@@ -1,13 +1,14 @@
-use std::{fmt::Debug, sync::Arc};
-
 use anyhow::Result;
-use async_trait::async_trait;
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime};
-use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
+use versatiles_container::{Tile, TileSource};
+use versatiles_core::TileCoord;
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitOperation;
 
-use crate::{PipelineFactory, vpl::VPLNode};
+use crate::{
+	PipelineFactory,
+	operations::transform::{TileTransform, TransformOp},
+	vpl::VPLNode,
+};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Adjust brightness, contrast and gamma of raster tiles.
@@ -22,8 +23,7 @@ struct Args {
 
 #[derive(Debug)]
 struct Operation {
-	runtime: TilesRuntime,
-	source: Box<dyn TileSource>,
+	/// Pre-divided by 255 at build time: `run` is called once per tile.
 	brightness: f32,
 	contrast: f32,
 	gamma: f32,
@@ -31,65 +31,33 @@ struct Operation {
 
 impl Operation {
 	#[context("Building raster_levels operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
-	where
-		Self: Sized + TileSource,
-	{
+	async fn build(
+		vpl_node: VPLNode,
+		source: Box<dyn TileSource>,
+		factory: &PipelineFactory,
+	) -> Result<TransformOp<Operation>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
-
-		Ok(Self {
-			runtime: factory.runtime(),
-			brightness: args.brightness.unwrap_or(0.0),
-			contrast: args.contrast.unwrap_or(1.0),
+		let operation = Operation {
+			brightness: args.brightness.unwrap_or(0.0) / 255.0,
+			contrast: args.contrast.unwrap_or(1.0) / 255.0,
 			gamma: args.gamma.unwrap_or(1.0),
-			source,
-		})
+		};
+		Ok(TransformOp::new(source, operation, factory.runtime()))
 	}
 }
 
-#[async_trait]
-impl TileSource for Operation {
-	fn source_type(&self) -> Arc<SourceType> {
-		SourceType::new_processor("raster_levels", self.source.source_type())
-	}
+impl TileTransform for Operation {
+	const TAG: &'static str = "raster_levels";
 
-	fn metadata(&self) -> &TileSourceMetadata {
-		self.source.metadata()
-	}
-
-	fn tilejson(&self) -> &TileJSON {
-		self.source.tilejson()
-	}
-
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self.source.tile_pyramid().await
-	}
-
-	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("raster_levels::tile_stream {bbox:?}");
-
-		let contrast = self.contrast / 255.0;
-		let brightness = self.brightness / 255.0;
-		let gamma = self.gamma;
-		Ok(self
-			.source
-			.tile_stream(bbox)
-			.await?
-			.map_parallel_try(move |_coord, mut tile| {
-				#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // clamp ensures 0..=255
-				tile.as_image_mut()?.map_color_values(|v| {
-					(((f32::from(v) - 127.5) * contrast + 0.5 + brightness).powf(gamma) * 255.0)
-						.round()
-						.clamp(0.0, 255.0) as u8
-				});
-				Ok(tile)
-			})
-			.record_errors(&self.runtime, "raster_levels"))
-	}
-
-	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.source.tile_coord_stream(bbox).await
+	fn run(&self, _coord: &TileCoord, mut tile: Tile) -> Result<Option<Tile>> {
+		let (contrast, brightness, gamma) = (self.contrast, self.brightness, self.gamma);
+		#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // clamp ensures 0..=255
+		tile.as_image_mut()?.map_color_values(|v| {
+			(((f32::from(v) - 127.5) * contrast + 0.5 + brightness).powf(gamma) * 255.0)
+				.round()
+				.clamp(0.0, 255.0) as u8
+		});
+		Ok(Some(tile))
 	}
 }
 
@@ -98,7 +66,8 @@ crate::operations::macros::define_transform_factory!("raster_levels", Args, Oper
 #[cfg(test)]
 mod tests {
 	use rstest::rstest;
-	use versatiles_core::{TileBBox, TileCoord, TileFormat};
+	use versatiles_container::TilesRuntime;
+	use versatiles_core::{TileBBox, TileFormat};
 	use versatiles_image::DynamicImageTraitOperation;
 
 	use super::*;
@@ -128,13 +97,15 @@ mod tests {
 		#[case] gamma: f32,
 		#[case] color_out: &[u8],
 	) -> Result<()> {
-		let op = Operation {
-			runtime: TilesRuntime::new_silent(),
-			source: Box::new(DummyImageSource::from_color(color_in, 4, TileFormat::PNG, None).unwrap()),
-			brightness,
-			contrast,
-			gamma,
-		};
+		let op = TransformOp::new(
+			Box::new(DummyImageSource::from_color(color_in, 4, TileFormat::PNG, None).unwrap()),
+			Operation {
+				brightness: brightness / 255.0,
+				contrast: contrast / 255.0,
+				gamma,
+			},
+			TilesRuntime::new_silent(),
+		);
 		let mut tiles = op
 			.tile_stream(TileBBox::from_min_and_max(8, 56, 56, 56, 56)?)
 			.await?

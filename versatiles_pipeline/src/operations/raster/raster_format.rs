@@ -1,12 +1,15 @@
-use std::{fmt::Debug, str, sync::Arc};
+use std::str;
 
 use anyhow::{Result, bail, ensure};
-use async_trait::async_trait;
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime};
-use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
+use versatiles_container::{Tile, TileSource, TileSourceMetadata};
+use versatiles_core::{TileCompression, TileCoord, TileFormat};
 use versatiles_derive::context;
 
-use crate::{PipelineFactory, vpl::VPLNode};
+use crate::{
+	PipelineFactory,
+	operations::transform::{TileTransform, TransformOp},
+	vpl::VPLNode,
+};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Convert raster tiles to a different image format and/or adjust quality/effort settings.
@@ -90,11 +93,7 @@ impl From<RasterTileFormat> for TileFormat {
 
 #[derive(Debug)]
 struct Operation {
-	runtime: TilesRuntime,
-	metadata: TileSourceMetadata,
-	source: Box<dyn TileSource>,
-	tilejson: TileJSON,
-	format: RasterTileFormat,
+	format: TileFormat,
 	quality: [Option<u8>; 32],
 	quality_translucent: Option<[Option<u8>; 32]>,
 	effort: Option<u8>,
@@ -102,25 +101,20 @@ struct Operation {
 
 impl Operation {
 	#[context("Building raster_format operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
-	where
-		Self: Sized + TileSource,
-	{
+	async fn build(
+		vpl_node: VPLNode,
+		source: Box<dyn TileSource>,
+		factory: &PipelineFactory,
+	) -> Result<TransformOp<Operation>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		let mut metadata = source.metadata().clone();
-
-		let format: RasterTileFormat = if let Some(f) = args.format {
-			f
-		} else {
-			RasterTileFormat::try_from(*metadata.tile_format())?
+		// The one thing that has to happen here rather than in `update_metadata`:
+		// with no `format=` the operation keeps the source's own format, which
+		// means reading it before it is overwritten.
+		let format: RasterTileFormat = match args.format {
+			Some(f) => f,
+			None => RasterTileFormat::try_from(*source.metadata().tile_format())?,
 		};
-
-		metadata.set_tile_format(format.into());
-		metadata.set_tile_compression(TileCompression::Uncompressed);
-
-		let mut tilejson = source.tilejson().clone();
-		metadata.update_tilejson(&mut tilejson);
 
 		let quality_translucent = if let Some(qt) = args.quality_translucent {
 			Some(parse_quality(Some(qt))?)
@@ -128,16 +122,33 @@ impl Operation {
 			None
 		};
 
-		Ok(Self {
-			runtime: factory.runtime(),
-			format,
+		let operation = Operation {
+			format: format.into(),
 			quality: parse_quality(args.quality)?,
 			quality_translucent,
 			effort: args.effort,
-			metadata,
-			source,
-			tilejson,
-		})
+		};
+		Ok(TransformOp::new(source, operation, factory.runtime()))
+	}
+}
+
+impl TileTransform for Operation {
+	const TAG: &'static str = "raster_format";
+
+	fn update_metadata(&self, metadata: &mut TileSourceMetadata) {
+		metadata.set_tile_format(self.format);
+		metadata.set_tile_compression(TileCompression::Uncompressed);
+	}
+
+	fn run(&self, coord: &TileCoord, mut tile: Tile) -> Result<Option<Tile>> {
+		let level = coord.level as usize;
+		let quality = self.quality[level];
+		let effective_quality = match self.quality_translucent {
+			Some(qt) if !tile.is_opaque()? => qt[level],
+			_ => quality,
+		};
+		tile.change_format(self.format, effective_quality, self.effort)?;
+		Ok(Some(tile))
 	}
 }
 
@@ -165,52 +176,6 @@ fn parse_quality(quality: Option<String>) -> Result<[Option<u8>; 32]> {
 		}
 	}
 	Ok(result)
-}
-
-#[async_trait]
-impl TileSource for Operation {
-	fn source_type(&self) -> Arc<SourceType> {
-		SourceType::new_processor("raster_format", self.source.source_type())
-	}
-
-	fn metadata(&self) -> &TileSourceMetadata {
-		&self.metadata
-	}
-
-	fn tilejson(&self) -> &TileJSON {
-		&self.tilejson
-	}
-
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self.source.tile_pyramid().await
-	}
-
-	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("raster_format::tile_stream {bbox:?}");
-
-		let quality = self.quality[bbox.level() as usize];
-		let quality_translucent = self.quality_translucent.map(|qt| qt[bbox.level() as usize]);
-		let effort = self.effort;
-		let stream = self.source.tile_stream(bbox).await?;
-		let format: TileFormat = self.format.into();
-
-		Ok(stream
-			.map_parallel_try(move |_coord, mut tile| {
-				let effective_quality = if let Some(qt) = quality_translucent {
-					if tile.is_opaque()? { quality } else { qt }
-				} else {
-					quality
-				};
-				tile.change_format(format, effective_quality, effort)?;
-				Ok(tile)
-			})
-			.record_errors(&self.runtime, "raster_format"))
-	}
-
-	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.source.tile_coord_stream(bbox).await
-	}
 }
 
 crate::operations::macros::define_transform_factory!("raster_format", Args, Operation, requires: Raster);

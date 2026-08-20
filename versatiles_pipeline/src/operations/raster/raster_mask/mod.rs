@@ -12,20 +12,21 @@
 mod blur_function;
 mod mask_geometry;
 
-use std::{fmt::Debug, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{Result, bail};
-use async_trait::async_trait;
 use blur_function::BlurFunction;
 use mask_geometry::{MaskGeometry, TileClassification};
-use versatiles_container::{
-	DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime,
-};
-use versatiles_core::{TileBBox, TileFormat, TileJSON, TilePyramid, TileStream};
+use versatiles_container::{DataLocation, Tile, TileSource, TileSourceMetadata};
+use versatiles_core::{TileCoord, TileFormat, TilePyramid};
 use versatiles_derive::context;
 use versatiles_image::DynamicImage;
 
-use crate::{PipelineFactory, vpl::VPLNode};
+use crate::{
+	PipelineFactory,
+	operations::transform::{TileTransform, TransformOp},
+	vpl::VPLNode,
+};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Apply a polygon mask from GeoJSON to raster tiles.
@@ -46,23 +47,24 @@ struct Args {
 
 #[derive(Debug)]
 struct Operation {
-	runtime: TilesRuntime,
-	source: Box<dyn TileSource>,
-	metadata: TileSourceMetadata,
-	tilejson: TileJSON,
 	mask: Arc<MaskGeometry>,
+	/// The source pyramid clipped to the mask, so tiles entirely outside it are
+	/// never requested. Computed in `build` because it needs the source's
+	/// pyramid, which is async to obtain.
+	tile_pyramid: Option<TilePyramid>,
 }
 
 impl Operation {
 	#[context("Building raster_mask operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
-	where
-		Self: Sized + TileSource,
-	{
+	async fn build(
+		vpl_node: VPLNode,
+		source: Box<dyn TileSource>,
+		factory: &PipelineFactory,
+	) -> Result<TransformOp<Operation>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		// Validate source format is raster
-		let mut metadata = source.metadata().clone();
+		let metadata = source.metadata().clone();
 		if !matches!(
 			metadata.tile_format(),
 			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP
@@ -95,104 +97,64 @@ impl Operation {
 
 		// Clip tile_pyramid to the mask geometry's geographic bounds so that tiles
 		// entirely outside the mask are never requested from the source.
-		if let Some(geo_bbox) = mask.geo_bbox() {
-			let mut tile_pyramid = source.tile_pyramid().await?.as_ref().clone();
-			tile_pyramid.intersect_geo_bbox(&geo_bbox)?;
-			metadata.set_tile_pyramid(tile_pyramid);
-		}
+		let tile_pyramid = match mask.geo_bbox() {
+			Some(geo_bbox) => {
+				let mut tile_pyramid = source.tile_pyramid().await?.as_ref().clone();
+				tile_pyramid.intersect_geo_bbox(&geo_bbox)?;
+				Some(tile_pyramid)
+			}
+			None => None,
+		};
 
-		let tilejson = source.tilejson().clone();
-
-		Ok(Self {
-			runtime: factory.runtime(),
-			source,
-			metadata,
-			tilejson,
+		let operation = Operation {
 			mask: Arc::new(mask),
-		})
+			tile_pyramid,
+		};
+		Ok(TransformOp::new(source, operation, factory.runtime()))
 	}
 }
 
-#[async_trait]
-impl TileSource for Operation {
-	fn source_type(&self) -> Arc<SourceType> {
-		SourceType::new_processor("raster_mask", self.source.source_type())
-	}
+impl TileTransform for Operation {
+	const TAG: &'static str = "raster_mask";
 
-	fn metadata(&self) -> &TileSourceMetadata {
-		&self.metadata
-	}
-
-	fn tilejson(&self) -> &TileJSON {
-		&self.tilejson
-	}
-
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		if let Some(pyramid) = self.metadata.tile_pyramid() {
-			Ok(pyramid)
-		} else {
-			self.source.tile_pyramid().await
+	fn update_metadata(&self, metadata: &mut TileSourceMetadata) {
+		if let Some(tile_pyramid) = self.tile_pyramid.clone() {
+			metadata.set_tile_pyramid(tile_pyramid);
 		}
 	}
 
-	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("raster_mask::tile_stream {bbox:?}");
+	fn run(&self, coord: &TileCoord, tile: Tile) -> Result<Option<Tile>> {
+		let tile_bbox = coord.to_mercator_bbox();
 
-		let mask = Arc::clone(&self.mask);
-		let stream = self.source.tile_stream(bbox).await?;
+		match self.mask.classify_tile(tile_bbox) {
+			TileClassification::FullyInside => Ok(Some(tile)),
+			TileClassification::FullyOutside => Ok(None),
+			TileClassification::Partial => {
+				// Process using hierarchical subdivision for efficiency
+				let format = tile.format();
 
-		Ok(stream
-			.filter_map_parallel_try(move |coord, tile| {
-				let tile_bbox = coord.to_mercator_bbox();
-				let classification = mask.classify_tile(tile_bbox);
+				let image = tile.into_image()?;
+				let (width, height) = (image.width(), image.height());
+				let mut rgba = image.into_rgba8();
 
-				match classification {
-					TileClassification::FullyInside => {
-						// Pass through unchanged
-						Ok(Some(tile))
-					}
-					TileClassification::FullyOutside => {
-						// Skip this tile entirely
-						Ok(None)
-					}
-					TileClassification::Partial => {
-						// Process using hierarchical subdivision for efficiency
-						let format = tile.format();
+				// Compute alpha values using the hierarchical method (R-tree accelerated)
+				let alpha_grid = self.mask.compute_alpha_grid(tile_bbox, width, height);
 
-						let image = tile.into_image()?;
-						let (width, height) = (image.width(), image.height());
-						let mut rgba = image.into_rgba8();
-
-						// Compute alpha grid using hierarchical method (R-tree accelerated)
-						let alpha_grid = mask.compute_alpha_grid(tile_bbox, width, height);
-
-						// Apply alpha values to pixels
-						for py in 0..height {
-							for px in 0..width {
-								let mask_alpha = alpha_grid[(py * width + px) as usize];
-								let pixel = rgba.get_pixel_mut(px, py);
-								// Multiply existing alpha with mask alpha
-								#[allow(clippy::cast_possible_truncation)]
-								{
-									pixel[3] = ((u16::from(pixel[3]) * u16::from(mask_alpha)) / 255) as u8;
-								}
-							}
+				for py in 0..height {
+					for px in 0..width {
+						let mask_alpha = alpha_grid[(py * width + px) as usize];
+						let pixel = rgba.get_pixel_mut(px, py);
+						// Multiply existing alpha with mask alpha
+						#[allow(clippy::cast_possible_truncation)]
+						{
+							pixel[3] = ((u16::from(pixel[3]) * u16::from(mask_alpha)) / 255) as u8;
 						}
-
-						// Convert back to the original format
-						let dynamic_image = DynamicImage::ImageRgba8(rgba);
-						let new_tile = Tile::from_image(dynamic_image, format)?;
-
-						Ok(Some(new_tile))
 					}
 				}
-			})
-			.record_errors(&self.runtime, "raster_mask"))
-	}
 
-	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.source.tile_coord_stream(bbox).await
+				Ok(Some(Tile::from_image(DynamicImage::ImageRgba8(rgba), format)?))
+			}
+		}
 	}
 }
 

@@ -4,13 +4,12 @@ use std::{
 };
 
 use anyhow::{Result, anyhow};
-use async_trait::async_trait;
 use cel_interpreter::{
 	Context as CelContext, Program, Value as CelValue,
 	objects::{Key as CelKey, Map as CelMap},
 };
 use versatiles_container::TileSource;
-use versatiles_core::{TileJSON, TileType};
+use versatiles_core::TileJSON;
 use versatiles_derive::context;
 use versatiles_geometry::{
 	geo::{GeoProperties, GeoValue},
@@ -19,10 +18,7 @@ use versatiles_geometry::{
 
 use crate::{
 	PipelineFactory,
-	factory::{
-		Compatibility, OperationFactoryTrait, TransformOperationFactoryTrait, check_compatibility, require_tile_type,
-	},
-	operations::vector::traits::{RunnerTrait, build_transform},
+	operations::transform::{AsTileTransform, TransformOp, VectorTransform},
 	vpl::VPLNode,
 };
 
@@ -145,7 +141,9 @@ fn geo_to_cel(v: &GeoValue) -> CelValue {
 	}
 }
 
-impl RunnerTrait for Runner {
+impl VectorTransform for Runner {
+	const TAG: &'static str = "vector_filter_features";
+
 	#[context("Failed to run vector_filter_features")]
 	fn run(&self, mut tile: VectorTile) -> Result<Option<VectorTile>> {
 		tile.layers.retain_mut(|layer| {
@@ -166,57 +164,23 @@ impl RunnerTrait for Runner {
 	fn update_tilejson(&self, _tilejson: &mut TileJSON) {}
 }
 
-pub struct Factory {}
-
-impl OperationFactoryTrait for Factory {
-	fn docs(&self) -> String {
-		Args::docs()
-	}
-	#[cfg(feature = "codegen")]
-	fn doc_summary(&self) -> String {
-		Args::doc_summary()
-	}
-	#[cfg(feature = "codegen")]
-	fn doc_details(&self) -> String {
-		Args::doc_details()
-	}
-	fn tag_name(&self) -> &str {
-		"vector_filter_features"
-	}
-	fn field_metadata(&self) -> Vec<crate::vpl::VPLFieldMeta> {
-		Args::field_metadata()
-	}
-}
-
-#[async_trait]
-impl TransformOperationFactoryTrait for Factory {
-	async fn build<'a>(
-		&self,
+impl Runner {
+	#[context("Building vector_filter_features operation in VPL node {:?}", vpl_node.name)]
+	async fn build(
 		vpl_node: VPLNode,
 		source: Box<dyn TileSource>,
-		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn TileSource>> {
-		// Same guard `define_transform_factory!` applies; these factories are
-		// hand-written, so they have to ask for it. Before the arguments are
-		// read, or a raster source is told about a missing `layer=` instead of
-		// being told it is a raster source.
-		check_compatibility(self.compatibility(source.as_ref()).await)?;
-
+		factory: &PipelineFactory,
+	) -> Result<TransformOp<AsTileTransform<Runner>>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
-		build_transform::<Runner>(
+		Ok(TransformOp::new(
 			source,
-			Runner::from_args(&args)?,
-			"vector_filter_features",
+			AsTileTransform(Runner::from_args(&args)?),
 			factory.runtime(),
-		)
-		.await
-	}
-
-	/// `build` refuses on this verdict, so it is exactly what a build would do.
-	async fn compatibility(&self, source: &dyn TileSource) -> Compatibility {
-		require_tile_type(source, TileType::Vector, "vector_filter_features")
+		))
 	}
 }
+
+crate::operations::macros::define_transform_factory!("vector_filter_features", Args, Runner, requires: Vector);
 
 // ───────────────────────── TESTS ─────────────────────────
 #[cfg(test)]

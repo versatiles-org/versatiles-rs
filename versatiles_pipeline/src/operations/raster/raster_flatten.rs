@@ -1,14 +1,15 @@
-use std::{fmt::Debug, sync::Arc};
-
 use anyhow::Result;
-use async_trait::async_trait;
 use imageproc::image::Rgb;
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime};
-use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
+use versatiles_container::{Tile, TileSource};
+use versatiles_core::TileCoord;
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitOperation;
 
-use crate::{PipelineFactory, vpl::VPLNode};
+use crate::{
+	PipelineFactory,
+	operations::transform::{TileTransform, TransformOp},
+	vpl::VPLNode,
+};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Flattens (translucent) raster tiles onto a background
@@ -19,69 +20,34 @@ struct Args {
 
 #[derive(Debug)]
 struct Operation {
-	runtime: TilesRuntime,
-	source: Box<dyn TileSource>,
 	color: Rgb<u8>,
 }
 
 impl Operation {
 	#[context("Building raster_flatten operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
-	where
-		Self: Sized + TileSource,
-	{
+	async fn build(
+		vpl_node: VPLNode,
+		source: Box<dyn TileSource>,
+		factory: &PipelineFactory,
+	) -> Result<TransformOp<Operation>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
-
-		Ok(Self {
-			runtime: factory.runtime(),
+		let operation = Operation {
 			color: Rgb(args.color.unwrap_or([255, 255, 255])),
-			source,
-		})
+		};
+		Ok(TransformOp::new(source, operation, factory.runtime()))
 	}
 }
 
-#[async_trait]
-impl TileSource for Operation {
-	fn source_type(&self) -> Arc<SourceType> {
-		SourceType::new_processor("raster_flatten", self.source.source_type())
-	}
+impl TileTransform for Operation {
+	const TAG: &'static str = "raster_flatten";
 
-	fn metadata(&self) -> &TileSourceMetadata {
-		self.source.metadata()
-	}
-
-	fn tilejson(&self) -> &TileJSON {
-		self.source.tilejson()
-	}
-
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self.source.tile_pyramid().await
-	}
-
-	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("raster_flatten::tile_stream {bbox:?}");
-
-		let color = self.color;
-		Ok(self
-			.source
-			.tile_stream(bbox)
-			.await?
-			.map_parallel_try(move |_coord, mut tile| {
-				if tile.as_image()?.has_alpha() {
-					let format = tile.format();
-					let image = tile.into_image()?.into_flattened(color)?;
-					let tile = Tile::from_image(image, format)?;
-					Ok(tile)
-				} else {
-					Ok(tile)
-				}
-			})
-			.record_errors(&self.runtime, "raster_flatten"))
-	}
-
-	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.source.tile_coord_stream(bbox).await
+	fn run(&self, _coord: &TileCoord, mut tile: Tile) -> Result<Option<Tile>> {
+		if !tile.as_image()?.has_alpha() {
+			return Ok(Some(tile));
+		}
+		let format = tile.format();
+		let image = tile.into_image()?.into_flattened(self.color)?;
+		Ok(Some(Tile::from_image(image, format)?))
 	}
 }
 

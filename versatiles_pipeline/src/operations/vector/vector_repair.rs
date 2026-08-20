@@ -20,16 +20,17 @@
 //! Clean tiles return the original blob unchanged; no re-encoding, no extra
 //! allocation.
 
-use std::{fmt::Debug, sync::Arc};
-
 use anyhow::{Result, ensure};
-use async_trait::async_trait;
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime};
-use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream, TileType};
+use versatiles_container::{Tile, TileSource, TilesRuntime};
+use versatiles_core::{TileCoord, TileType};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::repair_tile;
 
-use crate::{PipelineFactory, vpl::VPLNode};
+use crate::{
+	PipelineFactory,
+	operations::transform::{TileTransform, TransformOp},
+	vpl::VPLNode,
+};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Repairs vector tiles to conform to MVT 2.1.
@@ -63,39 +64,38 @@ pub struct Args {
 
 #[derive(Debug)]
 pub struct Operation {
-	runtime: TilesRuntime,
-	metadata: TileSourceMetadata,
-	source: Arc<Box<dyn TileSource>>,
-	tilejson: TileJSON,
 	drop_offenders: bool,
 }
 
 impl Operation {
 	#[context("Building vector_repair operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
-	where
-		Self: Sized + TileSource,
-	{
+	async fn build(
+		vpl_node: VPLNode,
+		source: Box<dyn TileSource>,
+		factory: &PipelineFactory,
+	) -> Result<TransformOp<Operation>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		Self::new(source, args.drop_offenders.unwrap_or(false), factory.runtime())
 	}
 
-	pub fn new(source: Box<dyn TileSource>, drop_offenders: bool, runtime: TilesRuntime) -> Result<Operation> {
+	pub fn new(
+		source: Box<dyn TileSource>,
+		drop_offenders: bool,
+		runtime: TilesRuntime,
+	) -> Result<TransformOp<Operation>> {
 		ensure!(
 			source.metadata().tile_format().to_type() == TileType::Vector,
 			"vector_repair requires a vector tile source"
 		);
+		Ok(TransformOp::new(source, Operation { drop_offenders }, runtime))
+	}
+}
 
-		let metadata = source.as_ref().metadata().clone();
-		let tilejson = source.as_ref().tilejson().clone();
+impl TileTransform for Operation {
+	const TAG: &'static str = "vector_repair";
 
-		Ok(Self {
-			runtime,
-			metadata,
-			source: Arc::new(source),
-			tilejson,
-			drop_offenders,
-		})
+	fn run(&self, _coord: &TileCoord, tile: Tile) -> Result<Option<Tile>> {
+		do_repair(tile, self.drop_offenders).map(Some)
 	}
 }
 
@@ -112,41 +112,6 @@ fn do_repair(mut tile: Tile, drop_offenders: bool) -> Result<Tile> {
 	};
 	let repaired = repair_tile(vt_owned, drop_offenders)?;
 	Tile::from_vector(repaired, tile_format)
-}
-
-#[async_trait]
-impl TileSource for Operation {
-	fn metadata(&self) -> &TileSourceMetadata {
-		&self.metadata
-	}
-
-	fn tilejson(&self) -> &TileJSON {
-		&self.tilejson
-	}
-
-	fn source_type(&self) -> Arc<SourceType> {
-		SourceType::new_processor("vector_repair", self.source.as_ref().source_type())
-	}
-
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self.source.tile_pyramid().await
-	}
-
-	#[context("Failed to get repaired tile stream for bbox: {:?}", bbox)]
-	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("vector_repair::tile_stream {bbox:?}");
-		let drop_offenders = self.drop_offenders;
-		Ok(self
-			.source
-			.tile_stream(bbox)
-			.await?
-			.map_parallel_try(move |_coord, tile| do_repair(tile, drop_offenders))
-			.record_errors(&self.runtime, "vector_repair"))
-	}
-
-	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.source.tile_coord_stream(bbox).await
-	}
 }
 
 crate::operations::macros::define_transform_factory!("vector_repair", Args, Operation, requires: Vector);
@@ -228,7 +193,7 @@ mod tests {
 			&PipelineFactory::new_dummy(),
 		)
 		.await?;
-		assert!(!op.drop_offenders, "drop_offenders should default to false");
+		assert!(!op.transform().drop_offenders, "drop_offenders should default to false");
 		Ok(())
 	}
 
@@ -244,7 +209,7 @@ mod tests {
 			&PipelineFactory::new_dummy(),
 		)
 		.await?;
-		assert!(op.drop_offenders);
+		assert!(op.transform().drop_offenders);
 		Ok(())
 	}
 

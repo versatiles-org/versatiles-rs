@@ -3,6 +3,7 @@ mod general;
 pub(crate) mod macros;
 mod raster;
 mod read;
+pub(crate) mod transform;
 mod vector;
 
 use crate::factory::{ReadOperationFactoryTrait, TransformOperationFactoryTrait};

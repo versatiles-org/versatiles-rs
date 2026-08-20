@@ -1,17 +1,13 @@
 use anyhow::{Context, Result};
-use async_trait::async_trait;
 use regex::Regex;
 use versatiles_container::TileSource;
-use versatiles_core::{TileJSON, TileType};
+use versatiles_core::TileJSON;
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 
 use crate::{
 	PipelineFactory,
-	factory::{
-		Compatibility, OperationFactoryTrait, TransformOperationFactoryTrait, check_compatibility, require_tile_type,
-	},
-	operations::vector::traits::{RunnerTrait, build_transform},
+	operations::transform::{AsTileTransform, TransformOp, VectorTransform},
 	vpl::VPLNode,
 };
 
@@ -45,7 +41,9 @@ impl Runner {
 	}
 }
 
-impl RunnerTrait for Runner {
+impl VectorTransform for Runner {
+	const TAG: &'static str = "vector_filter_properties";
+
 	#[context("Failed to run vector filter properties")]
 	fn run(&self, mut tile: VectorTile) -> Result<Option<VectorTile>> {
 		tile.layers.iter_mut().try_for_each(|layer| {
@@ -67,58 +65,23 @@ impl RunnerTrait for Runner {
 	}
 }
 
-pub struct Factory {}
-
-impl OperationFactoryTrait for Factory {
-	fn docs(&self) -> String {
-		Args::docs()
-	}
-	#[cfg(feature = "codegen")]
-	fn doc_summary(&self) -> String {
-		Args::doc_summary()
-	}
-	#[cfg(feature = "codegen")]
-	fn doc_details(&self) -> String {
-		Args::doc_details()
-	}
-	fn tag_name(&self) -> &str {
-		"vector_filter_properties"
-	}
-	fn field_metadata(&self) -> Vec<crate::vpl::VPLFieldMeta> {
-		Args::field_metadata()
-	}
-}
-
-#[async_trait]
-impl TransformOperationFactoryTrait for Factory {
-	async fn build<'a>(
-		&self,
+impl Runner {
+	#[context("Building vector_filter_properties operation in VPL node {:?}", vpl_node.name)]
+	async fn build(
 		vpl_node: VPLNode,
 		source: Box<dyn TileSource>,
-		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn TileSource>> {
-		// Same guard `define_transform_factory!` applies; these factories are
-		// hand-written, so they have to ask for it. Before the arguments are
-		// read, or a raster source is told about a missing `layer=` instead of
-		// being told it is a raster source.
-		check_compatibility(self.compatibility(source.as_ref()).await)?;
-
+		factory: &PipelineFactory,
+	) -> Result<TransformOp<AsTileTransform<Runner>>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
-
-		build_transform::<Runner>(
+		Ok(TransformOp::new(
 			source,
-			Runner::from_args(&args)?,
-			"vector_filter_properties",
+			AsTileTransform(Runner::from_args(&args)?),
 			factory.runtime(),
-		)
-		.await
-	}
-
-	/// `build` refuses on this verdict, so it is exactly what a build would do.
-	async fn compatibility(&self, source: &dyn TileSource) -> Compatibility {
-		require_tile_type(source, TileType::Vector, "vector_filter_properties")
+		))
 	}
 }
+
+crate::operations::macros::define_transform_factory!("vector_filter_properties", Args, Runner, requires: Vector);
 
 // ───────────────────────── TESTS ─────────────────────────
 #[cfg(test)]
@@ -238,6 +201,7 @@ mod tests {
 				"Failed to create reader from VPL",
 				"Failed to build pipeline from VPL",
 				"Failed to create transform operation from VPL node",
+				"Building vector_filter_properties operation in VPL node \"vector_filter_properties\"",
 				"Failed to get required property string 'regex' from VPL node 'vector_filter_properties'",
 				"In operation 'vector_filter_properties' the parameter 'regex' is required but missing.",
 			]

@@ -1,14 +1,15 @@
-use std::{fmt::Debug, sync::Arc};
-
 use anyhow::{Result, bail};
-use async_trait::async_trait;
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime};
-use versatiles_core::{TileBBox, TileCoord, TileJSON, TilePyramid, TileStream};
+use versatiles_container::{Tile, TileSource};
+use versatiles_core::{TileCoord, TileJSON};
 use versatiles_derive::context;
 use versatiles_image::DynamicImage;
 
 use super::encoding::{DemEncoding, raw_unit_meters, resolve_encoding, to_tile_schema};
-use crate::{PipelineFactory, vpl::VPLNode};
+use crate::{
+	PipelineFactory,
+	operations::transform::{TileTransform, TransformOp},
+	vpl::VPLNode,
+};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Quantize DEM (elevation) raster tiles by rounding to a per-tile power-of-two step.
@@ -30,9 +31,6 @@ struct Args {
 
 #[derive(Debug)]
 struct Operation {
-	runtime: TilesRuntime,
-	source: Box<dyn TileSource>,
-	tilejson: TileJSON,
 	elevation_error: f64,
 	slope_error: f64,
 	encoding: DemEncoding,
@@ -97,95 +95,58 @@ fn quantize_pixel(r: &mut u8, g: &mut u8, b: &mut u8, mask_24: u32, round_add: u
 
 impl Operation {
 	#[context("Building dem_quantize operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
-	where
-		Self: Sized + TileSource,
-	{
+	async fn build(
+		vpl_node: VPLNode,
+		source: Box<dyn TileSource>,
+		factory: &PipelineFactory,
+	) -> Result<TransformOp<Operation>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		let elevation_error = args.elevation_error.unwrap_or(0.1);
-		let slope_error = args.slope_error.unwrap_or(1.0);
-
-		let encoding = resolve_encoding(args.encoding.as_ref(), source.tilejson().tile_schema.as_ref())?;
-
-		let mut tilejson = source.tilejson().clone();
-		tilejson.tile_schema = Some(to_tile_schema(encoding));
-
-		Ok(Self {
-			runtime: factory.runtime(),
-			source,
-			tilejson,
-			elevation_error,
-			slope_error,
-			encoding,
-		})
+		let operation = Operation {
+			elevation_error: args.elevation_error.unwrap_or(0.1),
+			slope_error: args.slope_error.unwrap_or(1.0),
+			// Read from the source's schema before `update_tilejson` overwrites it.
+			encoding: resolve_encoding(args.encoding.as_ref(), source.tilejson().tile_schema.as_ref())?,
+		};
+		Ok(TransformOp::new(source, operation, factory.runtime()))
 	}
 }
 
-#[async_trait]
-impl TileSource for Operation {
-	fn source_type(&self) -> Arc<SourceType> {
-		SourceType::new_processor("dem_quantize", self.source.source_type())
+impl TileTransform for Operation {
+	const TAG: &'static str = "dem_quantize";
+
+	fn update_tilejson(&self, tilejson: &mut TileJSON) {
+		tilejson.tile_schema = Some(to_tile_schema(self.encoding));
 	}
 
-	fn metadata(&self) -> &TileSourceMetadata {
-		self.source.metadata()
-	}
+	fn run(&self, coord: &TileCoord, mut tile: Tile) -> Result<Option<Tile>> {
+		// Time per-tile decode+quantize; trace slow tiles — decoding one large image
+		// is single-threaded and can dominate when few tiles are in flight.
+		let started = std::time::Instant::now();
+		let (mask_24, round_add) = compute_quantizer(coord, self.elevation_error, self.slope_error, self.encoding);
 
-	fn tilejson(&self) -> &TileJSON {
-		&self.tilejson
-	}
-
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self.source.tile_pyramid().await
-	}
-
-	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
-	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
-		log::trace!("dem_quantize::tile_stream {bbox:?}");
-
-		let elevation_error = self.elevation_error;
-		let slope_error = self.slope_error;
-		let encoding = self.encoding;
-
-		Ok(self
-			.source
-			.tile_stream(bbox)
-			.await?
-			.map_parallel_try(move |coord, mut tile| {
-				// Time per-tile decode+quantize; trace slow tiles — decoding one large image
-				// is single-threaded and can dominate when few tiles are in flight.
-				let started = std::time::Instant::now();
-				let (mask_24, round_add) = compute_quantizer(&coord, elevation_error, slope_error, encoding);
-
-				let image = tile.as_image_mut()?;
-				match image {
-					DynamicImage::ImageRgb8(img) => {
-						for p in img.pixels_mut() {
-							let [r, g, b] = &mut p.0;
-							quantize_pixel(r, g, b, mask_24, round_add);
-						}
-					}
-					DynamicImage::ImageRgba8(img) => {
-						for p in img.pixels_mut() {
-							let [r, g, b, _a] = &mut p.0;
-							quantize_pixel(r, g, b, mask_24, round_add);
-						}
-					}
-					_ => bail!("dem_quantize requires RGB8 or RGBA8 images"),
+		match tile.as_image_mut()? {
+			DynamicImage::ImageRgb8(img) => {
+				for p in img.pixels_mut() {
+					let [r, g, b] = &mut p.0;
+					quantize_pixel(r, g, b, mask_24, round_add);
 				}
-				tile.set_format_quality(Some(100)); // max quality (lossless) to preserve pixel values
-				let elapsed = started.elapsed();
-				if elapsed.as_secs_f64() > 1.0 {
-					log::trace!("dem_quantize: slow tile {coord:?}: {elapsed:?}");
+			}
+			DynamicImage::ImageRgba8(img) => {
+				for p in img.pixels_mut() {
+					let [r, g, b, _a] = &mut p.0;
+					quantize_pixel(r, g, b, mask_24, round_add);
 				}
-				Ok(tile)
-			})
-			.record_errors(&self.runtime, "dem_quantize"))
-	}
+			}
+			_ => bail!("dem_quantize requires RGB8 or RGBA8 images"),
+		}
+		tile.set_format_quality(Some(100)); // max quality (lossless) to preserve pixel values
 
-	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		self.source.tile_coord_stream(bbox).await
+		let elapsed = started.elapsed();
+		if elapsed.as_secs_f64() > 1.0 {
+			log::trace!("dem_quantize: slow tile {coord:?}: {elapsed:?}");
+		}
+		Ok(Some(tile))
 	}
 }
 
@@ -193,6 +154,7 @@ crate::operations::macros::define_transform_factory!("dem_quantize", Args, Opera
 
 #[cfg(test)]
 mod tests {
+	use versatiles_container::TilesRuntime;
 	use versatiles_core::{TileBBox, TileCoord, TileFormat, TileSchema};
 	use versatiles_image::{DynamicImage, traits::DynamicImageTraitConvert};
 
@@ -410,17 +372,17 @@ mod tests {
 		}
 		let image = DynamicImage::from_raw(2, 2, raw_data)?;
 
-		let source = DummyImageSource::from_image(image, TileFormat::PNG, None)?;
-		let mut tilejson = source.tilejson().clone();
-		tilejson.tile_schema = Some(TileSchema::RasterDEMMapbox);
-		let op = Operation {
-			runtime: TilesRuntime::new_silent(),
-			source: Box::new(source),
-			tilejson,
-			elevation_error: 0.5,
-			slope_error: 1.0,
-			encoding: DemEncoding::Mapbox,
-		};
+		let mut source = DummyImageSource::from_image(image, TileFormat::PNG, None)?;
+		source.tilejson_mut().tile_schema = Some(TileSchema::RasterDEMMapbox);
+		let op = TransformOp::new(
+			Box::new(source),
+			Operation {
+				elevation_error: 0.5,
+				slope_error: 1.0,
+				encoding: DemEncoding::Mapbox,
+			},
+			TilesRuntime::new_silent(),
+		);
 
 		let bbox = TileBBox::from_min_and_max(8, 56, 56, 56, 56)?;
 		let mut tiles = op.tile_stream(bbox).await?.to_vec().await;
@@ -454,17 +416,17 @@ mod tests {
 		}
 		let image = DynamicImage::from_raw(2, 2, raw_data)?;
 
-		let source = DummyImageSource::from_image(image, TileFormat::PNG, None)?;
-		let mut tilejson = source.tilejson().clone();
-		tilejson.tile_schema = Some(TileSchema::RasterDEMMapbox);
-		let op = Operation {
-			runtime: TilesRuntime::new_silent(),
-			source: Box::new(source),
-			tilejson,
-			elevation_error: 0.5,
-			slope_error: 1.0,
-			encoding: DemEncoding::Mapbox,
-		};
+		let mut source = DummyImageSource::from_image(image, TileFormat::PNG, None)?;
+		source.tilejson_mut().tile_schema = Some(TileSchema::RasterDEMMapbox);
+		let op = TransformOp::new(
+			Box::new(source),
+			Operation {
+				elevation_error: 0.5,
+				slope_error: 1.0,
+				encoding: DemEncoding::Mapbox,
+			},
+			TilesRuntime::new_silent(),
+		);
 
 		let bbox = TileBBox::from_min_and_max(8, 56, 56, 56, 56)?;
 		let mut tiles = op.tile_stream(bbox).await?.to_vec().await;
