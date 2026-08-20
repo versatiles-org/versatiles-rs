@@ -321,6 +321,16 @@ jobs:
         if: env.BUILD_ENABLED == 'true'
         run: cargo build --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-apple-darwin"
 
+      # The only thing that ever executes the artifact being published. The unit
+      # tests that used to run here tested dev-profile binaries; these are built
+      # with `lto = true`, and nothing had run them before upload.
+      #
+      # Both macOS entries build on a runner of their own architecture, so both
+      # binaries can be executed where they are made.
+      - name: Smoke-test the CLI binary
+        if: env.BUILD_ENABLED == 'true'
+        run: ./scripts/selftest-versatiles.sh "target/${{ matrix.arch }}-apple-darwin/release/versatiles"
+
       - name: Build NAPI binding
         if: env.BUILD_ENABLED == 'true'
         run: cargo build --package "versatiles_node" --release --target "${{ matrix.arch }}-apple-darwin"
@@ -387,6 +397,16 @@ jobs:
       - name: Build CLI binary
         if: env.BUILD_ENABLED == 'true'
         run: cargo build --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-pc-windows-msvc"
+
+      # x86_64 only: this job runs on windows-latest, which is x64, so the
+      # aarch64 binary is cross-compiled and cannot be executed here. Testing it
+      # would need a windows-11-arm runner — CI has one for the test suite, so
+      # the code is covered on that architecture even though this artifact is
+      # not.
+      - name: Smoke-test the CLI binary
+        if: env.BUILD_ENABLED == 'true' && matrix.arch == 'x86_64'
+        shell: bash
+        run: ./scripts/selftest-versatiles.sh "target/${{ matrix.arch }}-pc-windows-msvc/release/versatiles.exe"
 
       - name: Build NAPI binding
         if: env.BUILD_ENABLED == 'true'
