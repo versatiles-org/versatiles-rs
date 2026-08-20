@@ -133,7 +133,7 @@ pub fn spawn_sighup_handler(_handle: ReloadHandle) {
 
 #[cfg(test)]
 mod tests {
-	use std::{io::Write, path::Path};
+	use std::path::Path;
 
 	use versatiles_container::{DataLocation, DataSource};
 
@@ -158,6 +158,20 @@ mod tests {
 		}
 	}
 
+	/// Write a config naming one tile source at `src`.
+	///
+	/// Single-quoted, which is the whole reason this is a function: an absolute
+	/// Windows path is full of backslashes, and YAML reads `\U` in a
+	/// double-quoted scalar as an escape sequence. A single-quoted scalar has no
+	/// escapes at all.
+	fn write_tiles_config(config_path: &Path, name: &str, src: &Path) -> Result<()> {
+		std::fs::write(
+			config_path,
+			format!("tiles:\n  - name: {name}\n    src: '{}'\n", src.display()),
+		)?;
+		Ok(())
+	}
+
 	fn loaded_names(handle: &ReloadHandle) -> Vec<String> {
 		let mut names: Vec<String> = handle.tile_sources.iter().map(|e| e.key().clone()).collect();
 		names.sort();
@@ -177,7 +191,7 @@ mod tests {
 		handle
 			.apply_tile_source_diff(&[
 				tile_config(Some("berlin"), "../testdata/berlin.mbtiles"),
-				tile_config(Some("also_berlin"), "../testdata/berlin.versatiles"),
+				tile_config(Some("also_berlin"), "../testdata/berlin.pmtiles"),
 			])
 			.await;
 		assert_eq!(loaded_names(&handle), ["also_berlin", "berlin"]);
@@ -213,13 +227,13 @@ mod tests {
 		let before = Arc::clone(&handle.tile_sources.get("tiles").unwrap());
 
 		handle
-			.apply_tile_source_diff(&[tile_config(Some("tiles"), "../testdata/berlin.versatiles")])
+			.apply_tile_source_diff(&[tile_config(Some("tiles"), "../testdata/berlin.pmtiles")])
 			.await;
 		let after = Arc::clone(&handle.tile_sources.get("tiles").unwrap());
 
 		assert!(!Arc::ptr_eq(&before, &after), "same name, new path: expected a reopen");
 		let description = after.source_description();
-		assert!(description.contains("versatiles"), "{description}");
+		assert!(description.contains("pmtiles"), "{description}");
 	}
 
 	#[tokio::test]
@@ -317,13 +331,7 @@ mod tests {
 		let config_path = dir.path().join("config.yml");
 		let testdata = std::fs::canonicalize("../testdata")?;
 
-		let mut file = std::fs::File::create(&config_path)?;
-		writeln!(
-			file,
-			"tiles:\n  - name: berlin\n    src: \"{}/berlin.mbtiles\"",
-			testdata.display()
-		)?;
-		drop(file);
+		write_tiles_config(&config_path, "berlin", &testdata.join("berlin.mbtiles"))?;
 
 		let handle = handle(config_path.clone());
 		handle.reload().await?;
@@ -367,13 +375,7 @@ mod tests {
 		tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
 		// A source appears in the file that the server has never seen.
-		std::fs::write(
-			&config_path,
-			format!(
-				"tiles:\n  - name: berlin\n    src: \"{}/berlin.mbtiles\"\n",
-				testdata.display()
-			),
-		)?;
+		write_tiles_config(&config_path, "berlin", &testdata.join("berlin.mbtiles"))?;
 
 		std::process::Command::new("kill")
 			.args(["-HUP", &std::process::id().to_string()])
