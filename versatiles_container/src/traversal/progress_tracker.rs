@@ -141,13 +141,6 @@ mod tests {
 			&self.tilejson
 		}
 
-		async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-			self
-				.metadata
-				.tile_pyramid()
-				.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
-		}
-
 		async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 			log::trace!("test_reader::tile_stream {bbox:?}");
 			let compression = *self.metadata.tile_compression();

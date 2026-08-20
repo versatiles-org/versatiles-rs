@@ -241,13 +241,6 @@ impl TileSource for Operation {
 		SourceType::new_container("gdal_raster", "gdal_raster")
 	}
 
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self
-			.metadata
-			.tile_pyramid()
-			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
-	}
-
 	/// Stream decoded raster images for all tiles within the bounding box.
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {

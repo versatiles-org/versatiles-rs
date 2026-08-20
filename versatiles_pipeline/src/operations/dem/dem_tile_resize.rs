@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
+use versatiles_core::{TileBBox, TileJSON, TileStream};
 use versatiles_derive::context;
 
 use super::encoding::{resolve_encoding, to_tile_schema};
@@ -56,14 +56,6 @@ impl TileSource for Operation {
 
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_processor("dem_tile_resize", self.core.source.as_ref().source_type())
-	}
-
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self
-			.core
-			.metadata
-			.tile_pyramid()
-			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
 	}
 
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {

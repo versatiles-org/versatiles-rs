@@ -100,13 +100,6 @@ impl TileSource for Operation {
 		SourceType::new_container("debug", "debug")
 	}
 
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self
-			.metadata
-			.tile_pyramid()
-			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
-	}
-
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("from_debug::tile_stream {bbox:?}");
 		let format = *self.metadata.tile_format();

@@ -116,13 +116,6 @@ impl TileSource for Operation {
 		SourceType::new_container("solid color", "color")
 	}
 
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self
-			.metadata
-			.tile_pyramid()
-			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
-	}
-
 	async fn tile(&self, _coord: &versatiles_core::TileCoord) -> Result<Option<Tile>> {
 		Ok(Some(self.tile.clone()))
 	}

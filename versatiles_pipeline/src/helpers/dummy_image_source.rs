@@ -93,13 +93,6 @@ impl TileSource for DummyImageSource {
 		&self.tilejson
 	}
 
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self
-			.metadata
-			.tile_pyramid()
-			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
-	}
-
 	#[context("Getting tile for coord: {:?}", coord)]
 	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		if let Some(pyramid) = self.metadata.tile_pyramid()

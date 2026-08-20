@@ -159,13 +159,6 @@ impl TileSource for Operation {
 		SourceType::new_container("gdal_dem", "gdal_dem")
 	}
 
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self
-			.metadata
-			.tile_pyramid()
-			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
-	}
-
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("from_gdal_dem::tile_stream {bbox:?}");

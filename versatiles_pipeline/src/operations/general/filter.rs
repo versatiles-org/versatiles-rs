@@ -3,7 +3,7 @@ use std::{collections::HashSet, fmt::Debug, sync::Arc};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{GeoBBox, GeoCrop, TileBBox, TileJSON, TilePyramid, TileStream};
+use versatiles_core::{GeoBBox, GeoCrop, TileBBox, TileJSON, TileStream};
 use versatiles_derive::context;
 
 use crate::{PipelineFactory, vpl::VPLNode};
@@ -143,13 +143,6 @@ impl TileSource for Operation {
 		&self.tilejson
 	}
 
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self
-			.metadata
-			.tile_pyramid()
-			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
-	}
-
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("filter::tile_stream {bbox:?}");
 		let bbox = self.metadata.intersection_bbox(&bbox);
@@ -193,7 +186,7 @@ mod tests {
 	use std::collections::HashSet;
 
 	use approx::assert_relative_eq;
-	use versatiles_core::TileCoord;
+	use versatiles_core::{TileCoord, TilePyramid};
 
 	use super::*;
 

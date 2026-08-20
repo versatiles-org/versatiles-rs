@@ -4,7 +4,7 @@ use anyhow::{Result, bail};
 use async_trait::async_trait;
 use imageproc::image::{DynamicImage, Rgb, RgbImage, Rgba, RgbaImage};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
+use versatiles_core::{TileBBox, TileJSON, TileStream};
 
 use super::encoding::{resolve_encoding, to_tile_schema};
 use crate::{PipelineFactory, helpers::overview::OverviewCore, vpl::VPLNode};
@@ -134,14 +134,6 @@ impl TileSource for Operation {
 
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_processor("dem_overview", self.core.source.source_type())
-	}
-
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self
-			.core
-			.metadata
-			.tile_pyramid()
-			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
 	}
 
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {

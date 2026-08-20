@@ -18,7 +18,7 @@
 
 use std::{fmt::Debug, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
@@ -82,7 +82,24 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	fn tilejson(&self) -> &TileJSON;
 
 	/// Gets the actual tile pyramid for this source.
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>>;
+	///
+	/// The default reads it from [`metadata`](Self::metadata), which is right for
+	/// every source that knows its extent when it is built. Two kinds of source
+	/// must override it:
+	///
+	/// - those that compute the pyramid lazily, where the answer is not in
+	///   `metadata()` until something asks for it (the container readers, via
+	///   `get_or_compute_tile_pyramid`);
+	/// - those that wrap another source and want its pyramid rather than their
+	///   own copy of it.
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		self.metadata().tile_pyramid().ok_or_else(|| {
+			anyhow!(
+				"{} has no tile_pyramid in its metadata; a source that computes one lazily has to override tile_pyramid()",
+				self.source_type()
+			)
+		})
+	}
 
 	/// Fetches a single tile at the given coordinate.
 	///
@@ -227,13 +244,56 @@ mod tests {
 				))
 			}))
 		}
+	}
 
-		async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-			Ok(self
-				.metadata
-				.tile_pyramid()
-				.unwrap_or_else(|| Arc::new(TilePyramid::new_full_up_to(3))))
+	/// A source whose metadata carries no pyramid, i.e. one that ought to have
+	/// overridden `tile_pyramid`.
+	#[derive(Debug)]
+	struct PyramidlessReader {
+		metadata: TileSourceMetadata,
+		tilejson: TileJSON,
+	}
+
+	#[async_trait]
+	impl TileSource for PyramidlessReader {
+		fn source_type(&self) -> Arc<SourceType> {
+			SourceType::new_container("pyramidless", "dummy_uri")
 		}
+
+		fn metadata(&self) -> &TileSourceMetadata {
+			&self.metadata
+		}
+
+		fn tilejson(&self) -> &TileJSON {
+			&self.tilejson
+		}
+
+		async fn tile_stream(&self, _bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+			Ok(TileStream::from_vec(vec![]))
+		}
+	}
+
+	#[tokio::test]
+	async fn the_default_tile_pyramid_reads_the_stored_one() {
+		let reader = TestReader::new_dummy();
+		let pyramid = reader.tile_pyramid().await.unwrap();
+		assert_eq!(*pyramid, TilePyramid::new_full_up_to(3));
+	}
+
+	#[tokio::test]
+	async fn a_source_without_a_stored_pyramid_is_told_what_to_do() {
+		// The default trades a compile error for a runtime one, so the runtime one
+		// has to name both the source and the fix.
+		let reader = PyramidlessReader {
+			metadata: TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, Traversal::ANY, None),
+			tilejson: TileJSON::default(),
+		};
+		let error = reader.tile_pyramid().await.unwrap_err().to_string();
+		assert!(error.contains("pyramidless"), "should name the source: {error}");
+		assert!(
+			error.contains("override tile_pyramid()"),
+			"should name the fix: {error}"
+		);
 	}
 
 	#[tokio::test]

@@ -135,13 +135,6 @@ impl TileSource for FeatureTileSource {
 		&self.tilejson
 	}
 
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self
-			.metadata
-			.tile_pyramid()
-			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
-	}
-
 	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		match self.import.get_tile(coord.level, coord.x, coord.y)? {
 			Some(vector_tile) => {

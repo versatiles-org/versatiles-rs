@@ -193,13 +193,6 @@ impl TileSource for Operation {
 		SourceType::new_container("h3 grid", "h3")
 	}
 
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self
-			.metadata
-			.tile_pyramid()
-			.ok_or_else(|| anyhow!("tile_pyramid not set"))
-	}
-
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		let bbox = self.metadata.intersection_bbox(&bbox);
 		let resolution = self.resolution;

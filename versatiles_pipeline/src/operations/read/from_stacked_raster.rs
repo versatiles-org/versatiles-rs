@@ -328,13 +328,6 @@ impl TileSource for Operation {
 		SourceType::new_composite("from_stacked_raster", &self.source_types)
 	}
 
-	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-		self
-			.metadata
-			.tile_pyramid()
-			.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
-	}
-
 	#[context("Failed to get stacked raster tile coord stream for bbox: {:?}", bbox)]
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let refs: Vec<&dyn TileSource> = self.sources.iter().map(|e| e.source.as_ref().as_ref()).collect();
@@ -910,12 +903,6 @@ mod tests {
 						}
 						fn source_type(&self) -> Arc<SourceType> {
 							SourceType::new_container("dummy_vector", "test")
-						}
-						async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
-							self
-								.metadata
-								.tile_pyramid()
-								.ok_or_else(|| anyhow::anyhow!("tile_pyramid not set"))
 						}
 						async fn tile_stream(&self, _bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 							Ok(TileStream::empty())
