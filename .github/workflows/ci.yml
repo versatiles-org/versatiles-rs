@@ -131,13 +131,10 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "linux-nodejs"
-          cache-targets: true
-          cache-on-failure: false
-          cache-bin: false
+      # No cache: at 201s saved per 0.88 GB this returned the least of any cache
+      # here, and the budget is at GitHub's 10 GB ceiling, so its space buys the
+      # musl job's — which returns roughly five times as much. Expect this job
+      # around 594s rather than 393s, still short of the critical path.
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -373,10 +370,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # No cache, deliberately: the cache budget sits at GitHub's 10 GB ceiling,
-      # where a new entry evicts one that earns more (see "Linux: Docs"). This
-      # job compiles from scratch every run, which is affordable only as long as
-      # it stays under the wall clock set by "Windows: Test".
+      # Uncached this job took 1330s — 1201s of it compiling — which made it the
+      # critical path on its own and took CI from 13.1 to 22.5 minutes. Alpine
+      # plus static musl linking is slower than the gnu equivalent by enough to
+      # matter. At roughly 1050 seconds saved per GB it is the best-earning
+      # cache here, ahead of windows-test at 654; the space comes from
+      # "Linux: Node.js", which earned the least.
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "linux-musl"
+          cache-targets: true
+          cache-on-failure: false
+          cache-bin: false
+
       - name: Build tests
         run: cargo test --workspace --no-run
 
