@@ -11,6 +11,8 @@
 ///
 /// This generates a `Factory` struct that implements `OperationFactoryTrait`
 /// and `TransformOperationFactoryTrait`, delegating to `Operation::build`.
+/// `build` consults `compatibility()` first and refuses with its reason, so an
+/// operation that a picker would leave out cannot be built by hand either.
 macro_rules! define_transform_factory {
 	($tag:literal, $args:ty, $op:ty) => {
 		$crate::operations::macros::define_transform_factory!(@impl $tag, $args, $op,);
@@ -56,6 +58,14 @@ macro_rules! define_transform_factory {
 				source: Box<dyn versatiles_container::TileSource>,
 				factory: &'a $crate::PipelineFactory,
 			) -> anyhow::Result<Box<dyn versatiles_container::TileSource>> {
+				// The verdict and the build agree by construction rather than by two
+				// people remembering. Without this, `compatibility()` was the stricter
+				// of the two: `raster_flatten` on an mvt source built successfully and
+				// only failed once a tile was pulled through it, where the failure had
+				// no way left to be an `Err`.
+				$crate::factory::check_compatibility(
+					<Self as $crate::factory::TransformOperationFactoryTrait>::compatibility(self, source.as_ref()).await,
+				)?;
 				<$op>::build(vpl_node, source, factory)
 					.await
 					.map(|op| Box::new(op) as Box<dyn versatiles_container::TileSource>)

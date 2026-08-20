@@ -210,10 +210,44 @@ where
 			inner: self
 				.inner
 				.map(|(coord, result)| {
-					let item = result.unwrap_or_else(|e| panic!("Stream contained error at {coord:?}: {e}"));
+					// `{e:#}` rather than `{e}`: these errors arrive wrapped in several
+					// layers of `#[context]`, and the outermost layer is the least
+					// informative one. Without the alternate form the panic reports
+					// "Failed to process tile at …" and drops the reason.
+					let item = result.unwrap_or_else(|e| panic!("Stream contained error at {coord:?}: {e:#}"));
 					(coord, item)
 				})
 				.boxed(),
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use anyhow::anyhow;
+
+	use super::*;
+	use crate::Blob;
+
+	/// The errors that reach `unwrap_results` are wrapped by `#[context]`, so the
+	/// outermost message names the step and the innermost names the reason. The
+	/// panic has to carry the reason: `{e}` alone reports only "failed to process
+	/// tile" and leaves nothing to act on.
+	#[tokio::test]
+	#[should_panic(expected = "source is mvt")]
+	async fn panic_message_carries_the_whole_cause_chain() {
+		let coord = TileCoord::new(0, 0, 0).unwrap();
+		let error = anyhow!("source is mvt").context("failed to process tile");
+		let stream: TileStream<Result<Blob>> = TileStream::from_vec(vec![(coord, Err(error))]);
+		let _ = stream.unwrap_results().to_vec().await;
+	}
+
+	#[tokio::test]
+	async fn ok_results_pass_through_untouched() {
+		let coord = TileCoord::new(0, 0, 0).unwrap();
+		let stream: TileStream<Result<Blob>> = TileStream::from_vec(vec![(coord, Ok(Blob::from("data")))]);
+		let items = stream.unwrap_results().to_vec().await;
+		assert_eq!(items.len(), 1);
+		assert_eq!(items[0].1.as_str(), "data");
 	}
 }

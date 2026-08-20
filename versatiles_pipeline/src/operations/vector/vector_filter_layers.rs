@@ -9,7 +9,9 @@ use versatiles_geometry::vector_tile::VectorTile;
 
 use crate::{
 	PipelineFactory,
-	factory::{Compatibility, OperationFactoryTrait, TransformOperationFactoryTrait, require_tile_type},
+	factory::{
+		Compatibility, OperationFactoryTrait, TransformOperationFactoryTrait, check_compatibility, require_tile_type,
+	},
 	operations::vector::traits::{RunnerTrait, build_transform},
 	vpl::VPLNode,
 };
@@ -86,13 +88,18 @@ impl TransformOperationFactoryTrait for Factory {
 		source: Box<dyn TileSource>,
 		_factory: &'a PipelineFactory,
 	) -> Result<Box<dyn TileSource>> {
+		// Same guard `define_transform_factory!` applies; these factories are
+		// hand-written, so they have to ask for it. Before the arguments are
+		// read, or a raster source is told about a missing `layer=` instead of
+		// being told it is a raster source.
+		check_compatibility(self.compatibility(source.as_ref()).await)?;
+
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		build_transform::<Runner>(source, Runner::from_args(&args)).await
 	}
 
-	/// These operations go through `build_transform`, which requires vector
-	/// tiles, so the refusal here matches what a build would do.
+	/// `build` refuses on this verdict, so it is exactly what a build would do.
 	async fn compatibility(&self, source: &dyn TileSource) -> Compatibility {
 		require_tile_type(source, TileType::Vector, "vector_filter_layers")
 	}

@@ -112,6 +112,22 @@ pub fn require_tile_type(source: &dyn TileSource, required: TileType, tag: &str)
 	}
 }
 
+/// Turns a refusal into the error a build should fail with.
+///
+/// Called by `define_transform_factory!` and by the hand-written factories that
+/// do not go through it, so "the verdict and the build agree" is one fact with
+/// one implementation rather than a convention each factory re-honours.
+///
+/// Belongs at the very top of `build`, before the node's parameters are read: an
+/// operation that cannot apply to this source should say so, not complain about
+/// a missing argument the caller had no reason to supply.
+pub fn check_compatibility(verdict: Compatibility) -> Result<()> {
+	match verdict {
+		Compatibility::Fits => Ok(()),
+		Compatibility::Wrong(reason) => bail!(reason),
+	}
+}
+
 /// Factory trait for transform operations that wrap and modify existing tile sources.
 ///
 /// Transform operations take an upstream tile source and apply transformations,
@@ -662,30 +678,39 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn a_refused_vector_transform_also_fails_to_build() {
-		// Vector transforms go through `build_transform`, which already refuses a
-		// non-vector source, so verdict and build agree exactly.
+	async fn every_refused_transform_also_fails_to_build() {
+		// `build` consults `compatibility()` first, so the two can no longer
+		// disagree. Before that, `raster_flatten` on an MVT source built happily
+		// and only failed once a tile was pulled through it — at which point the
+		// per-tile error had no way left to be an `Err` and became a panic.
 		//
-		// Raster transforms have no such build-time guard: `raster_flatten` on an
-		// MVT source builds and only fails once a tile is pulled through it. The
-		// verdict is therefore stricter than `build`, which is the useful
-		// direction for a picker — but it means this assertion only holds for the
-		// vector side today.
+		// The check runs before the node's arguments are read, which is why a
+		// bare `VPLNode::from(tag)` is enough here even for operations with
+		// required parameters: the refusal must come first, or the caller is told
+		// about a missing argument for an operation they could never have used.
 		let factory = PipelineFactory::new_dummy();
-		let find = || {
-			crate::operations::transform_operation_factories()
-				.into_iter()
-				.find(|f| f.tag_name() == "vector_repair")
-				.expect("registered transform")
-		};
 
-		assert!(!find().compatibility(&*raster_source()).await.fits());
-		assert!(
-			find()
-				.build(crate::vpl::VPLNode::from("vector_repair"), raster_source(), &factory)
-				.await
-				.is_err()
-		);
+		for (make_source, label) in [
+			(raster_source as fn() -> Box<dyn TileSource>, "png"),
+			(vector_source as fn() -> Box<dyn TileSource>, "mvt"),
+		] {
+			for f in crate::operations::transform_operation_factories() {
+				let Compatibility::Wrong(reason) = f.compatibility(&*make_source()).await else {
+					continue;
+				};
+				let tag = f.tag_name().to_string();
+				let error = f
+					.build(crate::vpl::VPLNode::from(tag.as_str()), make_source(), &factory)
+					.await
+					.expect_err(&format!("{tag} refused a {label} source but still built one"));
+
+				assert_eq!(
+					format!("{error:#}"),
+					reason,
+					"{tag}: the build should fail with the reason the verdict gave"
+				);
+			}
+		}
 	}
 
 	#[cfg(feature = "codegen")]
