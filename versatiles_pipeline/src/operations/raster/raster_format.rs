@@ -2,7 +2,7 @@ use std::{fmt::Debug, str, sync::Arc};
 
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime};
 use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 
@@ -90,6 +90,7 @@ impl From<RasterTileFormat> for TileFormat {
 
 #[derive(Debug)]
 struct Operation {
+	runtime: TilesRuntime,
 	metadata: TileSourceMetadata,
 	source: Box<dyn TileSource>,
 	tilejson: TileJSON,
@@ -101,7 +102,7 @@ struct Operation {
 
 impl Operation {
 	#[context("Building raster_format operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + TileSource,
 	{
@@ -128,6 +129,7 @@ impl Operation {
 		};
 
 		Ok(Self {
+			runtime: factory.runtime(),
 			format,
 			quality: parse_quality(args.quality)?,
 			quality_translucent,
@@ -203,7 +205,7 @@ impl TileSource for Operation {
 				tile.change_format(format, effective_quality, effort)?;
 				Ok(tile)
 			})
-			.unwrap_results())
+			.record_errors(&self.runtime, "raster_format"))
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {

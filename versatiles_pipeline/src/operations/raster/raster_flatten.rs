@@ -3,7 +3,7 @@ use std::{fmt::Debug, sync::Arc};
 use anyhow::Result;
 use async_trait::async_trait;
 use imageproc::image::Rgb;
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime};
 use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitOperation;
@@ -19,19 +19,21 @@ struct Args {
 
 #[derive(Debug)]
 struct Operation {
+	runtime: TilesRuntime,
 	source: Box<dyn TileSource>,
 	color: Rgb<u8>,
 }
 
 impl Operation {
 	#[context("Building raster_flatten operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		Ok(Self {
+			runtime: factory.runtime(),
 			color: Rgb(args.color.unwrap_or([255, 255, 255])),
 			source,
 		})
@@ -75,7 +77,7 @@ impl TileSource for Operation {
 					Ok(tile)
 				}
 			})
-			.unwrap_results())
+			.record_errors(&self.runtime, "raster_flatten"))
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {

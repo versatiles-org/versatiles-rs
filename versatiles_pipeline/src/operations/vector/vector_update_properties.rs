@@ -222,7 +222,13 @@ impl TransformOperationFactoryTrait for Factory {
 			.await
 			.with_context(|| format!("Failed to read CSV file from '{}'", args.data_source_path))?;
 
-		build_transform::<Runner>(source, Runner::from_args(args, data)?).await
+		build_transform::<Runner>(
+			source,
+			Runner::from_args(args, data)?,
+			"vector_update_properties",
+			factory.runtime(),
+		)
+		.await
 	}
 
 	/// `build` refuses on this verdict, so it is exactly what a build would do.

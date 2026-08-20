@@ -86,7 +86,7 @@ impl TransformOperationFactoryTrait for Factory {
 		&self,
 		vpl_node: VPLNode,
 		source: Box<dyn TileSource>,
-		_factory: &'a PipelineFactory,
+		factory: &'a PipelineFactory,
 	) -> Result<Box<dyn TileSource>> {
 		// Same guard `define_transform_factory!` applies; these factories are
 		// hand-written, so they have to ask for it. Before the arguments are
@@ -96,7 +96,13 @@ impl TransformOperationFactoryTrait for Factory {
 
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		build_transform::<Runner>(source, Runner::from_args(&args)).await
+		build_transform::<Runner>(
+			source,
+			Runner::from_args(&args),
+			"vector_filter_layers",
+			factory.runtime(),
+		)
+		.await
 	}
 
 	/// `build` refuses on this verdict, so it is exactly what a build would do.

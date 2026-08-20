@@ -2,7 +2,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use anyhow::{Result, bail};
 use async_trait::async_trait;
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime};
 use versatiles_core::{TileBBox, TileCoord, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_image::DynamicImage;
@@ -30,6 +30,7 @@ struct Args {
 
 #[derive(Debug)]
 struct Operation {
+	runtime: TilesRuntime,
 	source: Box<dyn TileSource>,
 	tilejson: TileJSON,
 	elevation_error: f64,
@@ -96,7 +97,7 @@ fn quantize_pixel(r: &mut u8, g: &mut u8, b: &mut u8, mask_24: u32, round_add: u
 
 impl Operation {
 	#[context("Building dem_quantize operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + TileSource,
 	{
@@ -111,6 +112,7 @@ impl Operation {
 		tilejson.tile_schema = Some(to_tile_schema(encoding));
 
 		Ok(Self {
+			runtime: factory.runtime(),
 			source,
 			tilejson,
 			elevation_error,
@@ -179,7 +181,7 @@ impl TileSource for Operation {
 				}
 				Ok(tile)
 			})
-			.unwrap_results())
+			.record_errors(&self.runtime, "dem_quantize"))
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
@@ -412,6 +414,7 @@ mod tests {
 		let mut tilejson = source.tilejson().clone();
 		tilejson.tile_schema = Some(TileSchema::RasterDEMMapbox);
 		let op = Operation {
+			runtime: TilesRuntime::new_silent(),
 			source: Box::new(source),
 			tilejson,
 			elevation_error: 0.5,
@@ -455,6 +458,7 @@ mod tests {
 		let mut tilejson = source.tilejson().clone();
 		tilejson.tile_schema = Some(TileSchema::RasterDEMMapbox);
 		let op = Operation {
+			runtime: TilesRuntime::new_silent(),
 			source: Box::new(source),
 			tilejson,
 			elevation_error: 0.5,

@@ -10,6 +10,7 @@ mod tile_sink;
 mod tile_source_metadata;
 mod tile_source_trait;
 mod tile_source_type;
+mod tile_stream_ext;
 mod writer;
 
 pub use container_registry::ContainerRegistry;
@@ -29,4 +30,5 @@ pub use tile_sink::{TileSink, deduplicating_tile_sink, open_tile_sink};
 pub use tile_source_metadata::TileSourceMetadata;
 pub use tile_source_trait::{SharedTileSource, TileSource};
 pub use tile_source_type::SourceType;
+pub use tile_stream_ext::TileStreamErrorExt;
 pub use writer::TilesWriter;

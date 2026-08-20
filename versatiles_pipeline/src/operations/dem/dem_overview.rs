@@ -106,7 +106,7 @@ fn raw_to_rgb(raw: u64) -> Rgb<u8> {
 
 impl Operation {
 	#[allow(clippy::unused_async)] // must be async for the factory macro
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + TileSource,
 	{
@@ -114,7 +114,7 @@ impl Operation {
 
 		let encoding = resolve_encoding(args.encoding.as_ref(), source.tilejson().tile_schema.as_ref())?;
 
-		let mut core = OverviewCore::new(source, args.level, Arc::new(dem_scale_down))?;
+		let mut core = OverviewCore::new(source, args.level, Arc::new(dem_scale_down), factory.runtime())?;
 
 		core.tilejson.tile_schema = Some(to_tile_schema(encoding));
 

@@ -24,6 +24,22 @@ pub struct TilesRuntime {
 	pub(crate) inner: Arc<RuntimeInner>,
 }
 
+/// Reports the settings a reader's behaviour actually depends on, and nothing
+/// about the shared machinery (registry, event bus, progress) that every
+/// runtime carries alike.
+///
+/// Exists so the many sources that hold a runtime can keep `#[derive(Debug)]`
+/// rather than each hand-writing an impl to skip this one field.
+impl std::fmt::Debug for TilesRuntime {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("TilesRuntime")
+			.field("abort_on_error", &self.inner.abort_on_error.load(Ordering::Relaxed))
+			.field("error_count", &self.error_count())
+			.field("writer_options", &self.writer_options())
+			.finish_non_exhaustive()
+	}
+}
+
 impl TilesRuntime {
 	/// Create a new runtime with default settings
 	///

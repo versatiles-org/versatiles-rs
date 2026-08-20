@@ -22,12 +22,17 @@ struct Operation {
 
 impl Operation {
 	#[allow(clippy::unused_async)] // must be async for the factory macro
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let core = OverviewCore::new(source, args.level, Arc::new(|img| img.scaled_down(2)))?;
+		let core = OverviewCore::new(
+			source,
+			args.level,
+			Arc::new(|img| img.scaled_down(2)),
+			factory.runtime(),
+		)?;
 
 		Ok(Self { core })
 	}

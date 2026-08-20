@@ -2,7 +2,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime};
 use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitOperation;
@@ -22,6 +22,7 @@ struct Args {
 
 #[derive(Debug)]
 struct Operation {
+	runtime: TilesRuntime,
 	source: Box<dyn TileSource>,
 	brightness: f32,
 	contrast: f32,
@@ -30,13 +31,14 @@ struct Operation {
 
 impl Operation {
 	#[context("Building raster_levels operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		Ok(Self {
+			runtime: factory.runtime(),
 			brightness: args.brightness.unwrap_or(0.0),
 			contrast: args.contrast.unwrap_or(1.0),
 			gamma: args.gamma.unwrap_or(1.0),
@@ -83,7 +85,7 @@ impl TileSource for Operation {
 				});
 				Ok(tile)
 			})
-			.unwrap_results())
+			.record_errors(&self.runtime, "raster_levels"))
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
@@ -127,6 +129,7 @@ mod tests {
 		#[case] color_out: &[u8],
 	) -> Result<()> {
 		let op = Operation {
+			runtime: TilesRuntime::new_silent(),
 			source: Box::new(DummyImageSource::from_color(color_in, 4, TileFormat::PNG, None).unwrap()),
 			brightness,
 			contrast,

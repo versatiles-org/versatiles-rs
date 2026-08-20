@@ -6,7 +6,9 @@ use std::sync::{
 use anyhow::{Result, ensure};
 use dashmap::DashMap;
 use imageproc::image::{DynamicImage, GenericImage};
-use versatiles_container::{Tile, TileSource, TileSourceMetadata, Traversal, TraversalOrder};
+use versatiles_container::{
+	Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime, Traversal, TraversalOrder,
+};
 use versatiles_core::{Blob, TileBBox, TileBBoxMap, TileCoord, TileJSON, TileStream};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitInfo;
@@ -21,6 +23,7 @@ pub type ScaleDownFn = Arc<dyn Fn(&DynamicImage) -> Result<DynamicImage> + Send 
 /// The actual downscaling algorithm is provided via `scale_fn`, allowing reuse for both
 /// standard raster (channel-wise averaging) and DEM (24-bit raw value averaging) tiles.
 pub struct OverviewCore {
+	pub runtime: TilesRuntime,
 	pub metadata: TileSourceMetadata,
 	pub source: Box<dyn TileSource>,
 	pub tilejson: TileJSON,
@@ -39,7 +42,12 @@ impl OverviewCore {
 	/// - `scale_fn`: function that downscales an image by factor 2
 	///
 	/// The tile size is read from the source's TileJSON (defaults to 512 if not set).
-	pub fn new(source: Box<dyn TileSource>, level: Option<u8>, scale_fn: ScaleDownFn) -> Result<Self> {
+	pub fn new(
+		source: Box<dyn TileSource>,
+		level: Option<u8>,
+		scale_fn: ScaleDownFn,
+		runtime: TilesRuntime,
+	) -> Result<Self> {
 		ensure!(source.metadata().traversal().is_any());
 
 		let mut metadata = source.metadata().clone();
@@ -76,6 +84,7 @@ impl OverviewCore {
 		)?);
 
 		Ok(Self {
+			runtime,
 			metadata,
 			source,
 			tilejson,
@@ -253,7 +262,7 @@ impl OverviewCore {
 					.tile_stream(bbox)
 					.await?
 					.map_parallel_try(|_coord, tile| tile.into_image())
-					.unwrap_results(),
+					.record_errors(&self.runtime, "overview"),
 			)
 			.await?
 		} else {
@@ -304,7 +313,7 @@ mod tests {
 		let source =
 			Box::new(DummyImageSource::from_color(&[200u8, 100, 50], 256, TileFormat::PNG, Some(pyramid)).unwrap());
 		let scale_fn: ScaleDownFn = Arc::new(|img| img.scaled_down(2));
-		OverviewCore::new(source, Some(level_base), scale_fn)
+		OverviewCore::new(source, Some(level_base), scale_fn, TilesRuntime::new_silent())
 	}
 
 	#[tokio::test]

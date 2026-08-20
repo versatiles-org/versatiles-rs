@@ -24,8 +24,8 @@ use std::{fmt::Debug, sync::Arc};
 
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileCoord, TileJSON, TilePyramid, TileStream, TileType};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime};
+use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream, TileType};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::repair_tile;
 
@@ -63,6 +63,7 @@ pub struct Args {
 
 #[derive(Debug)]
 pub struct Operation {
+	runtime: TilesRuntime,
 	metadata: TileSourceMetadata,
 	source: Arc<Box<dyn TileSource>>,
 	tilejson: TileJSON,
@@ -71,15 +72,15 @@ pub struct Operation {
 
 impl Operation {
 	#[context("Building vector_repair operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, _factory: &PipelineFactory) -> Result<Operation>
+	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		Self::new(source, args.drop_offenders.unwrap_or(false))
+		Self::new(source, args.drop_offenders.unwrap_or(false), factory.runtime())
 	}
 
-	pub fn new(source: Box<dyn TileSource>, drop_offenders: bool) -> Result<Operation> {
+	pub fn new(source: Box<dyn TileSource>, drop_offenders: bool, runtime: TilesRuntime) -> Result<Operation> {
 		ensure!(
 			source.metadata().tile_format().to_type() == TileType::Vector,
 			"vector_repair requires a vector tile source"
@@ -89,6 +90,7 @@ impl Operation {
 		let tilejson = source.as_ref().tilejson().clone();
 
 		Ok(Self {
+			runtime,
 			metadata,
 			source: Arc::new(source),
 			tilejson,
@@ -139,18 +141,11 @@ impl TileSource for Operation {
 			.tile_stream(bbox)
 			.await?
 			.map_parallel_try(move |_coord, tile| do_repair(tile, drop_offenders))
-			.unwrap_results())
+			.record_errors(&self.runtime, "vector_repair"))
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		self.source.tile_coord_stream(bbox).await
-	}
-
-	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		let Some(tile) = self.source.tile(coord).await? else {
-			return Ok(None);
-		};
-		Ok(Some(do_repair(tile, self.drop_offenders)?))
 	}
 }
 
@@ -296,7 +291,7 @@ mod tests {
 		let runtime = TilesRuntime::new_silent();
 		let reader = MBTilesReader::open(&path, runtime)?;
 		let source: Box<dyn TileSource> = Box::new(reader);
-		let op = Operation::new(source, false)?;
+		let op = Operation::new(source, false, TilesRuntime::new_silent())?;
 
 		let pyramid = op.tile_pyramid().await?;
 		let mut total_tiles = 0u64;

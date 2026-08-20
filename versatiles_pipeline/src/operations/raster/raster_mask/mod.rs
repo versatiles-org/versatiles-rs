@@ -18,7 +18,9 @@ use anyhow::{Result, bail};
 use async_trait::async_trait;
 use blur_function::BlurFunction;
 use mask_geometry::{MaskGeometry, TileClassification};
-use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata};
+use versatiles_container::{
+	DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime,
+};
 use versatiles_core::{TileBBox, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 use versatiles_image::DynamicImage;
@@ -44,6 +46,7 @@ struct Args {
 
 #[derive(Debug)]
 struct Operation {
+	runtime: TilesRuntime,
 	source: Box<dyn TileSource>,
 	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
@@ -101,6 +104,7 @@ impl Operation {
 		let tilejson = source.tilejson().clone();
 
 		Ok(Self {
+			runtime: factory.runtime(),
 			source,
 			metadata,
 			tilejson,
@@ -184,7 +188,7 @@ impl TileSource for Operation {
 					}
 				}
 			})
-			.unwrap_results())
+			.record_errors(&self.runtime, "raster_mask"))
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
