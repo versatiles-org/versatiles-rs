@@ -12,7 +12,7 @@ versatiles serve pipeline.vpl
 
 ## Operations
 
-**Read:** [`from_color`](#from_color) · [`from_container`](#from_container) · [`from_csv`](#from_csv) · [`from_debug`](#from_debug) · [`from_gdal_dem`](#from_gdal_dem) · [`from_gdal_raster`](#from_gdal_raster) · [`from_geo`](#from_geo) · [`from_merged_vector`](#from_merged_vector) · [`from_stacked`](#from_stacked) · [`from_stacked_raster`](#from_stacked_raster) · [`from_tile`](#from_tile) · [`from_tilejson`](#from_tilejson)
+**Read:** [`from_color`](#from_color) · [`from_container`](#from_container) · [`from_csv`](#from_csv) · [`from_debug`](#from_debug) · [`from_gdal_dem`](#from_gdal_dem) · [`from_gdal_raster`](#from_gdal_raster) · [`from_geo`](#from_geo) · [`from_grid`](#from_grid) · [`from_h3`](#from_h3) · [`from_merged_vector`](#from_merged_vector) · [`from_stacked`](#from_stacked) · [`from_stacked_raster`](#from_stacked_raster) · [`from_tile`](#from_tile) · [`from_tilejson`](#from_tilejson)
 
 **Transform:** [`dem_overview`](#dem_overview) · [`dem_quantize`](#dem_quantize) · [`dem_tile_resize`](#dem_tile_resize) · [`filter`](#filter) · [`meta_update`](#meta_update) · [`raster_flatten`](#raster_flatten) · [`raster_format`](#raster_format) · [`raster_levels`](#raster_levels) · [`raster_mask`](#raster_mask) · [`raster_overscale`](#raster_overscale) · [`raster_overview`](#raster_overview) · [`raster_tile_resize`](#raster_tile_resize) · [`remap_coords`](#remap_coords) · [`vector_filter_features`](#vector_filter_features) · [`vector_filter_layers`](#vector_filter_layers) · [`vector_filter_properties`](#vector_filter_properties) · [`vector_overzoom`](#vector_overzoom) · [`vector_repair`](#vector_repair) · [`vector_update_properties`](#vector_update_properties)
 
@@ -41,6 +41,30 @@ For tabular point data (CSV with explicit longitude/latitude columns) use `from_
 ```vpl
 from_csv filename="quakes.csv" lon_column="longitude" lat_column="latitude"
 ```
+
+### Generating grid cells
+
+Gridded statistics — population per cell, sensor readings, anything aggregated to a regular tessellation — are published as tables keyed on a cell id, without the geometry that id refers to. `from_grid` and `from_h3` generate that geometry, so the table can be joined onto it with `vector_update_properties`:
+
+```vpl
+from_grid epsg=3035 size=1000 bbox=[5.8,47.2,15.1,55.1]
+  | vector_update_properties data_source_path="population.csv"
+      id_field_tiles="id" id_field_data="GRD_ID"
+```
+
+`from_grid` produces squares of a fixed size in a projected CRS. The id follows the INSPIRE form Eurostat and its member states publish (`CRS3035RES1000mN2691000E4341000`); `id_preset="geostat"` gives the short form (`1kmN2689E4337`), and `id_template=` spells out anything else — `E{x/100:04}N{y/100:04}` produces `E0643N4567`, the form Dutch grid statistics use. Each cell also carries its lower-left corner as `x` and `y`, mirroring the `X_LLC` / `Y_LLC` columns published beside the ids.
+
+Without GDAL, `epsg` accepts 3035 (ETRS89-LAEA, what European gridded statistics use), 3857 and 4326; a build with the `gdal` feature accepts any code, at roughly ten times the cost per coordinate. Released binaries ship without GDAL, so a `.vpl` naming another code will not run on one.
+
+`from_h3` produces H3 hexagons instead, addressed by resolution rather than size, and carries the H3 index as `h3` — the column name H3 datasets usually use:
+
+```vpl
+from_h3 resolution=8 bbox=[13.0,52.3,13.8,52.7]
+  | vector_update_properties data_source_path="kontur_population.csv"
+      id_field_tiles="h3" id_field_data="h3"
+```
+
+Both require a `bbox` and both derive their own minimum zoom: cell size is fixed, so at low zoom one tile would hold every cell in view. `max_cells_per_tile` moves that threshold. A cell reaching into several tiles is drawn in each of them, clipped to the tile — so the same id recurs across tiles, which a join expects, but the geometry in one tile is only the part that falls inside it.
 
 ### Reading from remote sources
 
@@ -165,6 +189,7 @@ Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*
 ### Parameters
 
 - **`filename`: String (required)** - The filename of the tile container (relative to the VPL file path), or a URL (`http`, `https`, or `sftp`). For example: `filename="world.versatiles"` or `filename="https://example.com/world.versatiles"`. See `versatiles help source` for URL and authentication details.
+- *`ssh_identity`: String (optional)* - The private key file to authenticate this `sftp://` source with, for example `ssh_identity="/home/deploy/.ssh/id_ed25519"`. A relative path resolves against the VPL file, like `filename`. It applies to this source alone and overrides `--ssh-identity` and `VERSATILES_SSH_IDENTITY`, which apply to every source — so one pipeline can read from two SFTP hosts that need different keys. Ignored for other schemes. Note that naming a key makes the VPL file specific to machines that have it.
 
 ---
 
@@ -263,6 +288,43 @@ Reads a GeoJSON or Shapefile and emits MVT vector tiles.
 - *`compression`: TileCompression (optional)* - Tile-compression applied before the tiles leave this operation: `gzip` (default), `brotli`, `zstd`, or `none`.
 - *`max_tile_bytes`: u32 | none (optional)* - Maximum encoded tile size in bytes before a tile is considered broken and dropped (streaming path) / errors out (single-tile path). Defaults to 1048576 (1 MiB). Raise it when a legitimate low-zoom tile exceeds the default (e.g. `max_tile_bytes=2097152` for 2 MiB), or set `max_tile_bytes=none` to emit tiles at any size. The soft-cap warning threshold (200 KB at the default cap) scales with this value.
 - *`ignore_id`: bool (optional)* - If `true`, drop the GeoJSON / Shapefile `id` field from every feature before encoding. Useful for sources where the id is a string (e.g. USGS earthquakes — those would be silently dropped at MVT encode anyway, since MVT requires `uint64` ids), or when the id is just noise. Defaults to `false` — keep the id when it's a non-negative integer.
+
+---
+
+## from_grid
+
+Generates vector tiles containing the cells of a projected square grid, ready to be joined with data keyed on the cell id.
+
+### Parameters
+
+- **`epsg`: u32 (required)** - EPSG code of the grid's coordinate reference system. Without GDAL: `3035` (ETRS89-LAEA, what European gridded statistics use), `3857` (web mercator) and `4326` (WGS84 lon/lat).
+- **`size`: f64 (required)** - Edge length of a cell, in the CRS's own units — meters for a projected CRS, degrees for `epsg=4326`. For example: `size=1000` for the 1 km grid Eurostat publishes.
+- **`bbox`: [f64,f64,f64,f64] (required)** - The area to cover, as `[west, south, east, north]` in WGS84 degrees. Required: an unbounded grid has no pyramid to derive, and at most cell sizes it is more tiles than can be written.
+- *`offset`: [f64,f64] (optional)* - Where the cell with index `(0, 0)` has its lower-left corner, in CRS units. Default: `[0,0]`, which is what published grids align to.
+- *`max_cells_per_tile`: u32 (optional)* - Roughly how many cells one tile may hold. Decides the lowest zoom level this source offers. Default: `1024`.
+- *`max_zoom`: u8 (optional)* - Highest zoom level to generate. Defaults to three levels above the derived minimum, since further levels repeat the same cells.
+- *`id_preset`: String (optional)* - Ready-made id format. Either `"inspire"` (default), which produces `CRS3035RES1000mN2691000E4341000`, or `"geostat"`, which produces `1kmN2689E4337`.
+- *`id_template`: String (optional)* - Id format spelled out, for a grid whose publisher uses neither preset. `{x}` and `{y}` are the lower-left corner, each taking an optional divisor and zero-padded width: `E{x/100:04}N{y/100:04}` produces `E0643N4567`, the form Dutch grid statistics use. Overrides `id_preset`.
+- *`id_field`: String (optional)* - Name of the string property holding the cell id. Default: `"id"`.
+- *`x_field`: String (optional)* - Names of the number properties holding the lower-left corner. Defaults: `"x"` and `"y"`, mirroring the `X_LLC` / `Y_LLC` columns Eurostat ships beside its ids.
+- *`y_field`: String (optional)* - See `x_field`.
+- *`densify_tolerance`: f64 (optional)* - How far a cell edge may stray from its true curve, in tile pixels. Only matters for a CRS whose straight lines bend in mercator; in `3857` and `4326` no vertices are added whatever this says. Default: `0.5`.
+- *`layer_name`: String (optional)* - Name of the layer in the generated tiles. Default: `"grid"`.
+
+---
+
+## from_h3
+
+Generates vector tiles containing H3 grid cells, ready to be joined with data keyed on the H3 index.
+
+### Parameters
+
+- **`resolution`: u8 (required)** - H3 resolution, `0` (cells of ~4,250,000 km²) to `15` (~0.9 m²). For example: `resolution=8` for cells of roughly 0.7 km². See <https://h3geo.org/docs/core-library/restable/> for the full table.
+- **`bbox`: [f64,f64,f64,f64] (required)** - The area to cover, as `[west, south, east, north]` in WGS84 degrees. For example: `bbox=[13.0,52.3,13.8,52.7]` for Berlin. Required: a grid without bounds would be generated for the whole planet, which at most resolutions is more tiles than can be written.
+- *`max_cells_per_tile`: u32 (optional)* - Roughly how many cells one tile may hold. Decides the lowest zoom level this source offers: below it a single tile would carry more cells than a tile can usefully hold. Default: `1024`.
+- *`max_zoom`: u8 (optional)* - Highest zoom level to generate. Defaults to three levels above the derived minimum, since further levels repeat the same cells.
+- *`layer_name`: String (optional)* - Name of the layer in the generated tiles. Default: `"grid"`.
+- *`id_field`: String (optional)* - Name of the string property holding the H3 index, e.g. `"8928308280fffff"`. Default: `"h3"`, matching how H3 datasets usually name the column.
 
 ---
 
