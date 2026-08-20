@@ -6,10 +6,17 @@
 #   - commit groups that SKIP noise (style/test/chore/ci/build/release/bench +
 #     merges), which the default would otherwise render as their own sections.
 #
-# Benchmark/internal-only work should NOT appear in release notes. Mark it either
-# with a `bench:` type or a `(bench)` scope on any type (e.g. `feat(bench): ...`)
-# and it will be dropped. Parsers are first-match-wins, so the scope rule must come
-# before the type rules below.
+# A commit marked breaking — `feat!: ...` or a `BREAKING CHANGE:` footer — is
+# labelled as such in the notes. Nothing detects an API removal on its own, so a
+# commit that removes public API has to say so to be flagged: v4.9.0 dropped
+# TileProcessor and ReadTileSource from published crates and the generated notes
+# filed both under "Refactoring".
+#
+# Internal-only work should NOT appear in release notes. It is dropped either by
+# its type (`ci: ...`) or by its scope on any type (`feat(ci): ...`). Parsers are
+# first-match-wins, so the scope rules must come before the type rules below —
+# without them `fix(ci): ...` matches `^fix` and lands in "Bug Fixes", which is
+# how CI plumbing ended up in the v4.9.0 notes.
 # Docs: https://git-cliff.org/docs/configuration
 
 [changelog]
@@ -19,7 +26,7 @@ body = """
 ### {{ group | striptags | trim | upper_first }}
 
 {% for commit in commits -%}
-- {{ commit.message | split(pat="\n") | first | upper_first }}
+- {% if commit.breaking %}**Breaking:** {% endif %}{{ commit.message | split(pat="\n") | first | upper_first }}
 {% endfor -%}
 {% endfor -%}
 """
@@ -30,8 +37,18 @@ trim = true
 # Keep non-conventional commits (e.g. a plain "Update dependencies") under
 # "Other Changes" rather than dropping them (git-cliff drops them by default).
 filter_unconventional = false
+
+# A trailer glued to the subject with no blank line between makes the whole
+# message unparseable as a conventional commit, and git-cliff then falls back to
+# the raw subject — leaking the `type(scope):` prefix into the notes. Repair the
+# separation before parsing rather than rendering the prefix.
+commit_preprocessors = [
+  { pattern = "^(\\w+(\\(.+?\\))?!?: [^\\n]+)\\n([^\\n])", replace = "${1}\n\n${3}" },
+]
+
 commit_parsers = [
-  { message = "^\\w+\\(bench\\)", skip = true },
+  # Scope-based skips, before any type rule can claim them.
+  { message = "^\\w+\\((bench|ci|build|chore|style|test|release)\\)", skip = true },
   { message = "^feat", group = "<!-- 0 -->Features" },
   { message = "^fix", group = "<!-- 1 -->Bug Fixes" },
   { message = "^perf", group = "<!-- 2 -->Performance" },
