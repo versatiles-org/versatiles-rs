@@ -256,13 +256,19 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
+      # Shares the runner-side cache with the matrix's `default` entry, which
+      # writes it: both compile the workspace on the runner itself, so whatever
+      # is not feature-gated is common to them. One entry rather than two —
+      # the repository sits exactly on GitHub's 10 GB cache ceiling, where an
+      # extra entry does not add space, it evicts someone else's.
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "linux-feature-checks"
+          shared-key: "linux-feature-runner"
           cache-targets: true
           cache-on-failure: false
           cache-bin: false
+          save-if: false
 
       - name: Check no default features
         run: cargo check --workspace --all-targets --no-default-features
@@ -317,14 +323,23 @@ jobs:
         with:
           components: clippy
 
+      # Keyed by environment, not just by job. The GDAL entries run inside a
+      # container and `default` runs on the runner itself, so their CARGO_HOME
+      # differs — and rust-cache hashes that into the key. Under one shared key
+      # the runner-side entry spent every run looking for a key only the
+      # container ever wrote, and rebuilt the workspace from nothing: 444s,
+      # against 252s for all-features, which compiles strictly more.
+      #
+      # The container entries keep the old key so their working cache survives
+      # this change.
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "linux-feature"
+          shared-key: ${{ matrix.container && 'linux-feature' || 'linux-feature-runner' }}
           cache-targets: true
           cache-on-failure: false
           cache-bin: false
-          save-if: ${{ matrix.name == 'all-features' }}
+          save-if: ${{ matrix.name == 'all-features' || matrix.name == 'default' }}
 
       - name: Check lints
         if: matrix.run-clippy
