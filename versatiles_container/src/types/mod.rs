@@ -2,7 +2,6 @@ mod container_registry;
 mod converter;
 mod data_location;
 mod data_source;
-mod processor;
 mod reader;
 mod remapped_source;
 mod tile;
@@ -22,7 +21,6 @@ pub use converter::{
 };
 pub use data_location::DataLocation;
 pub use data_source::DataSource;
-pub use processor::TileProcessor;
 pub use reader::TilesReader;
 pub use remapped_source::RemappedTileSource;
 pub use tile::Tile;
