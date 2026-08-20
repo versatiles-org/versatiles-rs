@@ -40,6 +40,7 @@ on:
 permissions:
   contents: write
   packages: write
+  checks: read # reading the CI verdict for this commit in pre-flight-checks
   id-token: write  # Required for npm trusted publishing with OIDC (no token needed)
 
 env:
@@ -60,6 +61,56 @@ jobs:
 
       - name: Check version synchronization
         run: ./scripts/sync-version.sh
+
+      # A tag on a commit with a red CI currently builds and publishes anyway.
+      # CI does not run on tags (`tags-ignore: "**"` there), so its verdict
+      # belongs to the branch push that carried this same commit — which is why
+      # it exists by the time a tag lands and can be required here. "CI Success"
+      # is the aggregate job the branch protection already treats as the status
+      # of record.
+      #
+      # Polls rather than reading once: `git push --follow-tags` starts CI and
+      # this workflow in the same moment, and CI takes around 13 minutes.
+      #
+      # Fails closed, with no way past: releasing binaries built from a commit
+      # whose tests failed is not a case worth supporting. No CI run at all is
+      # refused for the same reason — it means the tag points at something that
+      # never landed on a branch CI watches. The way forward is to fix what CI
+      # caught, or to re-run CI if the failure was the runner rather than the
+      # code, and tag again.
+      - name: Require a successful CI run for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          deadline=$(( $(date +%s) + 40 * 60 ))
+          while :; do
+            verdict=$(gh api "repos/$REPO/commits/$SHA/check-runs" --paginate \
+              --jq '[.check_runs[] | select(.name == "CI Success")]
+                    | sort_by(.started_at) | last
+                    | if . == null then "absent"
+                      else "\(.status)/\(.conclusion // "pending")" end' 2>/dev/null || echo "unreadable")
+            case "$verdict" in
+              completed/success)
+                echo "CI passed for $SHA"
+                exit 0
+                ;;
+              completed/*)
+                echo "::error::CI concluded '${verdict#*/}' for $SHA. Refusing to release."
+                exit 1
+                ;;
+              *)
+                if [ "$(date +%s)" -ge "$deadline" ]; then
+                  echo "::error::No successful CI run for $SHA after 40 minutes (last seen: $verdict). Refusing to release."
+                  exit 1
+                fi
+                echo "waiting for CI ($verdict) ..."
+                sleep 30
+                ;;
+            esac
+          done
 
   prepare:
     name: Prepare release
