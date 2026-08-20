@@ -24,6 +24,30 @@ use std::sync::LazyLock;
 static RE_PREFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\[([\w,]*)\](.*)").expect("valid regex literal"));
 static RE_POSTFIX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(.*)\[([\w,]*)\]$").expect("valid regex literal"));
 
+/// Whether a trailing `[…]` is the name/type postfix rather than something else.
+///
+/// The notation is `location[name,type]`, and `[\w,]*` also matches a VPL array — every grid
+/// pipeline ends in one, `bbox=[13,52,14,53]`. Read as a postfix, that swallows the parameter
+/// and leaves a location ending in `bbox=`, which is how a pipeline turned into a container
+/// type of `52`. Two things tell them apart: a postfix follows a location, never an `=`, and it
+/// holds at most a name and a type.
+fn is_name_and_type(location: &str, postfix: &str) -> bool {
+	!location.trim_end().ends_with('=') && postfix.split(',').count() <= 2
+}
+
+/// Whether some text reads as a VPL pipeline rather than a filename.
+///
+/// Used only to explain a failure — a pipeline has to be typed as `[,vpl](…)` or live in a
+/// `.vpl` file, and the error for forgetting that used to be about a missing path. So this is
+/// allowed to be approximate: an operation name, then a space, then either a parameter or
+/// another stage.
+#[must_use]
+pub(crate) fn looks_like_vpl(text: &str) -> bool {
+	text.starts_with(|c: char| c.is_ascii_alphabetic())
+		&& text.contains(char::is_whitespace)
+		&& (text.contains('=') || text.contains('|'))
+}
+
 impl DataSource {
 	/// Returns an optional reference to the container type, if specified.
 	#[must_use]
@@ -107,7 +131,10 @@ impl DataSource {
 			DataLocation::try_from(captures.get(2).expect("regex has two groups").as_str())?
 		} else if input.ends_with(']')
 			&& let Some(captures) = RE_POSTFIX.captures(input)
-		{
+			&& is_name_and_type(
+				captures.get(1).expect("regex has two groups").as_str(),
+				captures.get(2).expect("regex has two groups").as_str(),
+			) {
 			// Postfix notation with optional name and container type
 			(name, container_type) = extract_name_and_type(captures.get(2).expect("regex has two groups").as_str());
 			DataLocation::try_from(captures.get(1).expect("regex has two groups").as_str())?
@@ -166,6 +193,62 @@ impl TryFrom<DataLocation> for DataSource {
 
 #[cfg(test)]
 mod tests {
+	/// Every grid pipeline ends in a bbox, and `[\w,]*` matches one — read as the name/type
+	/// postfix, it eats the parameter and leaves a location ending in `bbox=`.
+	#[test]
+	fn a_vpl_array_is_not_a_name_and_type_postfix() {
+		for input in [
+			"from_h3 resolution=8 bbox=[13,52,14,53]",
+			"from_grid epsg=3035 size=1000 bbox=[5,47,15,55]",
+			"filter layer=[places]",
+		] {
+			let source = DataSource::parse(input).expect("parses as a plain location");
+			assert_eq!(
+				source.location().to_string(),
+				input,
+				"the location lost part of itself: {source:?}"
+			);
+		}
+	}
+
+	#[test]
+	fn a_real_postfix_still_names_the_source() {
+		let source = DataSource::parse("world.mbtiles[osm,mbtiles]").unwrap();
+		assert_eq!(source.optional_name(), Some("osm"));
+		assert_eq!(source.optional_container_type(), Some("mbtiles"));
+
+		let source = DataSource::parse("pipeline.txt[osm,vpl]").unwrap();
+		assert_eq!(source.optional_name(), Some("osm"));
+		assert_eq!(source.optional_container_type(), Some("vpl"));
+	}
+
+	#[test]
+	fn more_than_a_name_and_a_type_is_not_a_postfix() {
+		let source = DataSource::parse("thing[a,b,c]").unwrap();
+		assert_eq!(source.location().to_string(), "thing[a,b,c]");
+	}
+
+	#[test]
+	fn vpl_text_is_told_apart_from_a_filename() {
+		for text in [
+			"from_debug format=png",
+			"from_h3 resolution=8 bbox=[13,52,14,53]",
+			"from_container filename=world.versatiles | filter level_min=5",
+		] {
+			assert!(looks_like_vpl(text), "{text}");
+		}
+
+		for text in [
+			"berlin.mbtiles",
+			"/data/tiles/world.versatiles",
+			"a file with spaces.mbtiles",
+			"https://example.org/tiles.pmtiles",
+			"C:\\Users\\me\\tiles.mbtiles",
+		] {
+			assert!(!looks_like_vpl(text), "{text}");
+		}
+	}
+
 	use std::path::PathBuf;
 
 	use reqwest::Url;

@@ -48,7 +48,8 @@ use versatiles_derive::context;
 use crate::{
 	DataSource, DirectoryReader, DirectoryWriter, MBTilesReader, MBTilesWriter, PMTilesReader, PMTilesWriter,
 	SharedTileSource, TarTilesReader, TarTilesWriter, TileSource, TilesReader, TilesRuntime, TilesWriter,
-	VersaTilesReader, VersaTilesWriter, types::data_location::DataLocation,
+	VersaTilesReader, VersaTilesWriter,
+	types::{data_location::DataLocation, data_source::looks_like_vpl},
 };
 #[cfg(test)]
 use crate::{MockReader, TileSourceMetadata, Traversal};
@@ -207,6 +208,21 @@ impl ContainerRegistry {
 		runtime: TilesRuntime,
 		ssh_identity: Option<&Path>,
 	) -> Result<SharedTileSource> {
+		// A pipeline passed as bare text is a path as far as this is concerned, and the error for
+		// that — a missing file, or a container type taken from the last dot — says nothing about
+		// the one thing the caller has to do. Checked before the container type, since a pipeline
+		// usually has no extension to report on either, and before resolving, which would turn the
+		// text into an absolute path and hide what it looks like.
+		if let DataLocation::Path(path) = data_source.location() {
+			let text = path.to_string_lossy();
+			if looks_like_vpl(&text) && !path.exists() {
+				bail!(
+					"'{text}' does not exist, and reads like a VPL pipeline rather than a file. Inline VPL has to say \
+					 so: wrap it as `[,vpl](…)`, or put it in a `.vpl` file. See `versatiles help source`."
+				);
+			}
+		}
+
 		let mut data_source = data_source.clone();
 		data_source.resolve(&DataLocation::cwd()?)?;
 		let extension = sanitize_extension(data_source.container_type()?);
@@ -616,6 +632,44 @@ pub mod tests {
 		remove_partial_output(&dir.path().join("does-not-exist"));
 		remove_partial_output(dir.path());
 		assert!(dir.path().is_dir(), "cleanup must never remove a directory");
+	}
+
+	/// The failure this exists for: a pipeline handed over as bare text, whose error used to be
+	/// about a missing file or an unknown container type.
+	#[tokio::test]
+	async fn bare_vpl_text_is_named_as_such() {
+		let runtime = TilesRuntime::new_silent();
+
+		for text in [
+			"from_debug format=png",
+			"from_h3 resolution=8 bbox=[13.0,52.3,13.8,52.7]",
+			"from_container filename=world.versatiles | filter level_min=5",
+		] {
+			let err = format!(
+				"{:?}",
+				ContainerRegistry::default()
+					.reader_from_str(text, runtime.clone())
+					.await
+					.unwrap_err()
+			);
+			assert!(err.contains("[,vpl]"), "{text} produced:\n{err}");
+			assert!(err.contains(".vpl"), "{text} produced:\n{err}");
+		}
+	}
+
+	/// ...while a path that is simply missing still says so.
+	#[tokio::test]
+	async fn a_missing_file_is_still_a_missing_file() {
+		let runtime = TilesRuntime::new_silent();
+		let err = format!(
+			"{:?}",
+			ContainerRegistry::default()
+				.reader_from_str("no-such-file.mbtiles", runtime)
+				.await
+				.unwrap_err()
+		);
+		assert!(err.contains("does not exist"), "{err}");
+		assert!(!err.contains("[,vpl]"), "{err}");
 	}
 
 	#[tokio::test]
