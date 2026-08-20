@@ -111,15 +111,7 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "linux-docs"
-          cache-targets: true
-          cache-on-failure: false
-          cache-bin: false
-
+        
       # `gdal` is opt-in (`default = []`), so without it rustdoc never sees the
       # gdal-gated modules — `from_gdal`, `mosaic_tools::tile` — and `-D warnings`
       # never checks their docs. That's why this job installs GDAL.
