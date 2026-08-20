@@ -69,6 +69,12 @@ impl ShapefileSource {
 
 	/// Attach a [`ProgressCallback`] reporting bytes consumed from the `.shp`
 	/// and `.dbf` sidecars. The smaller `.shx` index is not tracked.
+	///
+	/// The total is an indication rather than a count: each file is read through
+	/// a `BufReader`, which refills after the shapefile reader seeks, so some
+	/// stretches are reported twice. Expect a little more than the two files
+	/// hold — for the test fixture, about 15% more. Do not drive a percentage
+	/// off it without clamping.
 	#[must_use]
 	pub fn with_progress(mut self, callback: ProgressCallback) -> Self {
 		self.progress = Some(callback);
@@ -242,6 +248,11 @@ fn is_wgs84_prj(prj: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+	use std::sync::{
+		Arc,
+		atomic::{AtomicU64, Ordering},
+	};
+
 	use futures::StreamExt;
 
 	use super::*;
@@ -312,19 +323,314 @@ mod tests {
 		Ok(())
 	}
 
-	/// Regenerate the committed `testdata/admin.{shp,shx,dbf}` fixture.
-	/// Run with `cargo test -p versatiles_geometry -- --ignored regenerate_admin_fixture`
-	/// after intentionally changing the fixture shape.
+	async fn features_of(path: &Path) -> Result<Vec<GeoFeature>> {
+		let mut stream = ShapefileSource::new(path).load()?;
+		let mut features = Vec::new();
+		while let Some(item) = stream.next().await {
+			features.push(item?);
+		}
+		Ok(features)
+	}
+
+	#[tokio::test]
+	async fn the_committed_fixture_matches_its_generator() -> Result<()> {
+		// The generator used to be `#[ignore]`d, so nothing checked that the
+		// committed bytes still corresponded to it. Regenerating into a tempdir
+		// and comparing keeps the two from drifting apart.
+		let dir = tempfile::tempdir()?;
+		let regenerated = dir.path().join("admin.shp");
+		write_admin_fixture(&regenerated)?;
+
+		let from_fixture = features_of(Path::new(FIXTURE)).await?;
+		let from_generator = features_of(&regenerated).await?;
+
+		assert_eq!(from_fixture.len(), from_generator.len());
+		for (committed, fresh) in from_fixture.iter().zip(&from_generator) {
+			assert_eq!(committed.geometry, fresh.geometry);
+			assert_eq!(committed.properties, fresh.properties);
+		}
+		Ok(())
+	}
+
 	#[test]
-	#[ignore = "regenerates a committed binary fixture; run only when the fixture intentionally changes"]
-	fn regenerate_admin_fixture() -> Result<()> {
+	fn debug_names_the_path_and_whether_progress_is_attached() {
+		let plain = ShapefileSource::new(FIXTURE);
+		let text = format!("{plain:?}");
+		assert!(text.contains("admin"), "{text}");
+		assert!(text.contains("None"), "no callback attached: {text}");
+
+		let watched = ShapefileSource::new(FIXTURE).with_progress(Arc::new(|_| {}));
+		let text = format!("{watched:?}");
+		// The callback cannot be formatted, so it is described rather than shown.
+		assert!(text.contains("<callback>"), "{text}");
+	}
+
+	#[tokio::test]
+	async fn progress_counts_the_bytes_of_both_sidecars() -> Result<()> {
+		let seen = Arc::new(AtomicU64::new(0));
+		let counter = Arc::clone(&seen);
+
+		let source = ShapefileSource::new(FIXTURE).with_progress(Arc::new(move |bytes| {
+			counter.fetch_add(bytes, Ordering::Relaxed);
+		}));
+		let mut stream = source.load()?;
+		while stream.next().await.is_some() {}
+		drop(stream);
+
+		let counted = seen.load(Ordering::Relaxed);
+		let shp = std::fs::metadata(FIXTURE)?.len();
+		let dbf = std::fs::metadata("../testdata/admin.dbf")?.len();
+
+		// Reported at all, and of the right order — not asserted exactly. The
+		// readers are wrapped in a BufReader that refills after the shapefile
+		// reader seeks, so some stretches are counted twice; a progress bar fed
+		// from this can therefore run past its total. See the note on
+		// `with_progress`.
+		assert!(counted >= shp, "counted {counted}, the .shp alone is {shp}");
+		assert!(
+			counted <= 4 * (shp + dbf),
+			"counted {counted}, wildly more than the {} bytes of .shp + .dbf",
+			shp + dbf
+		);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn a_wgs84_prj_is_accepted_and_anything_else_is_refused() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let shp_path = dir.path().join("admin.shp");
+		write_admin_fixture(&shp_path)?;
+		let prj_path = shp_path.with_extension("prj");
+
+		// No .prj at all: nothing to disagree with.
+		assert_eq!(features_of(&shp_path).await?.len(), 2);
+
+		std::fs::write(&prj_path, r#"GEOGCS["WGS_1984",DATUM["D_WGS_1984"]]"#)?;
+		assert_eq!(features_of(&shp_path).await?.len(), 2);
+
+		std::fs::write(&prj_path, r#"PROJCS["ETRS89_LAEA",GEOGCS["ETRS89"]]"#)?;
+		let error = format!(
+			"{:#}",
+			ShapefileSource::new(&shp_path).load().err().expect("load should fail")
+		);
+		assert!(error.contains("non-WGS84"), "{error}");
+		assert!(error.contains("reprojection is not supported"), "{error}");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn a_shapefile_without_an_shx_still_loads() -> Result<()> {
+		// The .shx is an index, not data: the reader falls back to scanning the
+		// .shp when it is absent, which is common in the wild.
+		let dir = tempfile::tempdir()?;
+		let shp_path = dir.path().join("admin.shp");
+		write_admin_fixture(&shp_path)?;
+		std::fs::remove_file(shp_path.with_extension("shx"))?;
+
+		assert_eq!(features_of(&shp_path).await?.len(), 2);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn a_shapefile_with_no_dbf_is_an_error_naming_the_dbf() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let shp_path = dir.path().join("admin.shp");
+		write_admin_fixture(&shp_path)?;
+		std::fs::remove_file(shp_path.with_extension("dbf"))?;
+
+		let error = format!(
+			"{:#}",
+			ShapefileSource::new(&shp_path).load().err().expect("load should fail")
+		);
+		assert!(error.contains("dbf"), "{error}");
+		Ok(())
+	}
+
+	#[test]
+	fn unsupported_shapes_are_refused_one_by_one() {
+		use shapefile::{
+			Multipatch, NO_DATA, Patch, Shape,
+			record::{Point, PointM, PointZ, Polyline, PolylineM, PolylineZ},
+		};
+
+		// A NullShape is a hole in the file, not a geometry.
+		let error = format!("{:#}", shape_to_geometry(Shape::NullShape).unwrap_err());
+		assert!(error.contains("NullShape"), "{error}");
+
+		// Z and M variants carry a third ordinate this reader does not keep.
+		for shape in [
+			Shape::PointZ(PointZ::new(1.0, 2.0, 3.0, NO_DATA)),
+			Shape::PointM(PointM::new(1.0, 2.0, NO_DATA)),
+			Shape::PolylineZ(PolylineZ::new(vec![
+				PointZ::new(0.0, 0.0, 0.0, NO_DATA),
+				PointZ::new(1.0, 1.0, 0.0, NO_DATA),
+			])),
+			Shape::PolylineM(PolylineM::new(vec![
+				PointM::new(0.0, 0.0, NO_DATA),
+				PointM::new(1.0, 1.0, NO_DATA),
+			])),
+		] {
+			let error = format!("{:#}", shape_to_geometry(shape).unwrap_err());
+			assert!(error.contains("2D"), "{error}");
+		}
+
+		// Multipatch describes a 3D surface; there is no 2D reading of it.
+		let error = format!(
+			"{:#}",
+			shape_to_geometry(Shape::Multipatch(Multipatch::new(Patch::TriangleStrip(vec![
+				PointZ::new(0.0, 0.0, 0.0, NO_DATA),
+				PointZ::new(1.0, 0.0, 0.0, NO_DATA),
+				PointZ::new(0.0, 1.0, 0.0, NO_DATA),
+			]))))
+			.unwrap_err()
+		);
+		assert!(error.contains("Multipatch"), "{error}");
+
+		// And the 2D shapes it does accept.
+		assert!(shape_to_geometry(Shape::Point(Point::new(1.0, 2.0))).is_ok());
+		assert!(
+			shape_to_geometry(Shape::Multipoint(shapefile::Multipoint::new(vec![
+				Point::new(0.0, 0.0),
+				Point::new(1.0, 1.0),
+			])))
+			.is_ok()
+		);
+		assert!(
+			shape_to_geometry(Shape::MultipointZ(shapefile::MultipointZ::new(vec![PointZ::new(
+				0.0, 0.0, 0.0, NO_DATA
+			)])))
+			.is_err(),
+			"the Z variant is refused like the others"
+		);
+		assert!(
+			shape_to_geometry(Shape::Polyline(Polyline::new(vec![
+				Point::new(0.0, 0.0),
+				Point::new(1.0, 1.0)
+			])))
+			.is_ok()
+		);
+	}
+
+	#[tokio::test]
+	async fn an_unsupported_shape_fails_its_own_feature_and_not_the_file() -> Result<()> {
+		// A shapefile is a sequence of independent records: one 3D shape in the
+		// middle should cost that feature, not the whole load.
+		use shapefile::{
+			Writer,
+			dbase::{FieldName, TableWriterBuilder},
+			record::PointZ,
+		};
+
+		let dir = tempfile::tempdir()?;
+		let shp_path = dir.path().join("threed.shp");
+		let dbf_path = shp_path.with_extension("dbf");
+
+		let table_writer = TableWriterBuilder::new()
+			.add_character_field(FieldName::try_from("name").unwrap(), 8)
+			.build_with_file_dest(&dbf_path)?;
+		let shape_writer = shapefile::ShapeWriter::from_path(&shp_path)?;
+		let mut writer = Writer::new(shape_writer, table_writer);
+
+		let record = |name: &str| {
+			let mut r = dbase::Record::default();
+			r.insert("name".to_string(), FieldValue::Character(Some(name.to_string())));
+			r
+		};
+		// A shapefile carries one shape type for the whole file, so this is a
+		// file of 3D points: every record fails conversion, and the point is
+		// that the reader keeps going and reports each one.
+		writer.write_shape_and_record(&PointZ::new(1.0, 2.0, 3.0, shapefile::NO_DATA), &record("first"))?;
+		writer.write_shape_and_record(&PointZ::new(4.0, 5.0, 6.0, shapefile::NO_DATA), &record("second"))?;
+		drop(writer);
+
+		let mut stream = ShapefileSource::new(&shp_path).load()?;
+		let mut results = Vec::new();
+		while let Some(item) = stream.next().await {
+			results.push(item);
+		}
+
+		assert_eq!(results.len(), 2, "both records reach the caller as errors");
+		for result in &results {
+			let error = format!("{:#}", result.as_ref().expect_err("a 3D record cannot convert"));
+			assert!(error.contains("2D"), "{error}");
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn every_dbf_field_type_maps_to_a_geo_value() {
+		use dbase::{Date, FieldValue};
+
+		let mut lossy = false;
+		let value = |v: &FieldValue, lossy: &mut bool| field_to_geo_value(v, lossy);
+
+		assert_eq!(
+			value(&FieldValue::Character(Some("text".into())), &mut lossy),
+			Some(GeoValue::from("text"))
+		);
+		assert_eq!(
+			value(&FieldValue::Numeric(Some(1.5)), &mut lossy),
+			Some(GeoValue::from(1.5))
+		);
+		assert_eq!(
+			value(&FieldValue::Logical(Some(true)), &mut lossy),
+			Some(GeoValue::from(true))
+		);
+		assert_eq!(
+			value(&FieldValue::Float(Some(2.5f32)), &mut lossy),
+			Some(GeoValue::from(2.5f64))
+		);
+		assert_eq!(value(&FieldValue::Integer(7), &mut lossy), Some(GeoValue::from(7i64)));
+		assert_eq!(
+			value(&FieldValue::Currency(3.25), &mut lossy),
+			Some(GeoValue::from(3.25))
+		);
+		assert_eq!(value(&FieldValue::Double(4.5), &mut lossy), Some(GeoValue::from(4.5)));
+		assert_eq!(
+			value(&FieldValue::Memo("memo".into()), &mut lossy),
+			Some(GeoValue::from("memo"))
+		);
+		assert_eq!(
+			value(&FieldValue::Date(Some(Date::new(24, 12, 2024).unwrap())), &mut lossy),
+			Some(GeoValue::from("20241224"))
+		);
+		// DateTime has no display form of its own, so it goes in as its Debug —
+		// ugly, but lossless and the only variant with a time component.
+		let stamp = dbase::DateTime::new(Date::new(24, 12, 2024).unwrap(), dbase::Time::new(13, 45, 5).unwrap());
+		let Some(GeoValue::String(text)) = value(&FieldValue::DateTime(stamp), &mut lossy) else {
+			panic!("a DateTime should map to a string");
+		};
+		assert!(text.contains("2024"), "{text}");
+		assert!(!lossy, "none of those carried a replacement character");
+
+		// An absent value is absent, not an empty string or a zero.
+		assert_eq!(value(&FieldValue::Character(None), &mut lossy), None);
+		assert_eq!(value(&FieldValue::Numeric(None), &mut lossy), None);
+		assert_eq!(value(&FieldValue::Logical(None), &mut lossy), None);
+		assert_eq!(value(&FieldValue::Float(None), &mut lossy), None);
+		assert_eq!(value(&FieldValue::Date(None), &mut lossy), None);
+
+		// The replacement character is what sets the lossy flag, in either of
+		// the two text-carrying variants.
+		assert!(value(&FieldValue::Character(Some("a\u{FFFD}b".into())), &mut lossy).is_some());
+		assert!(lossy);
+		lossy = false;
+		assert!(value(&FieldValue::Memo("a\u{FFFD}b".into()), &mut lossy).is_some());
+		assert!(lossy);
+	}
+
+	/// Write the two-feature admin fixture to `shp_path`, alongside its `.dbf`.
+	///
+	/// The single definition of what the committed `testdata/admin.*` fixture
+	/// holds: `the_committed_fixture_matches_its_generator` regenerates into a
+	/// tempdir and compares, so the fixture cannot drift away from this.
+	fn write_admin_fixture(shp_path: &Path) -> Result<()> {
 		use shapefile::{
 			Polygon, PolygonRing, Writer,
 			dbase::{FieldName, TableWriterBuilder},
 			record::Point,
 		};
 
-		let shp_path = std::path::PathBuf::from(FIXTURE);
 		let dbf_path = shp_path.with_extension("dbf");
 		// Remove the .shx so it gets regenerated alongside the .shp.
 		let _ = std::fs::remove_file(shp_path.with_extension("shx"));
@@ -333,7 +639,7 @@ mod tests {
 			.add_character_field(FieldName::try_from("name").unwrap(), 32)
 			.add_numeric_field(FieldName::try_from("pop_k").unwrap(), 12, 0)
 			.build_with_file_dest(&dbf_path)?;
-		let shape_writer = shapefile::ShapeWriter::from_path(&shp_path)?;
+		let shape_writer = shapefile::ShapeWriter::from_path(shp_path)?;
 		let mut writer = Writer::new(shape_writer, table_writer);
 
 		let berlin = Polygon::with_rings(vec![PolygonRing::Outer(vec![
@@ -361,6 +667,15 @@ mod tests {
 		writer.write_shape_and_record(&brandenburg, &bb_record)?;
 
 		Ok(())
+	}
+
+	/// Regenerate the committed `testdata/admin.{shp,shx,dbf}` fixture.
+	/// Run with `cargo test -p versatiles_geometry -- --ignored regenerate_admin_fixture`
+	/// after intentionally changing [`write_admin_fixture`].
+	#[test]
+	#[ignore = "overwrites a committed binary fixture; run only when the fixture intentionally changes"]
+	fn regenerate_admin_fixture() -> Result<()> {
+		write_admin_fixture(Path::new(FIXTURE))
 	}
 
 	/// Write a minimal shapefile + DBF whose only Character field contains a

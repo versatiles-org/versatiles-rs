@@ -471,5 +471,154 @@ mod tests {
 				"password auth should succeed even with a missing identity file"
 			);
 		}
+
+		/// Sets the keepalive interval to its one-second floor for the duration of
+		/// one test. The default is 15 s, which no test is going to wait out — so
+		/// without this the loop only ever reaches its `continue`.
+		///
+		/// Safe because these tests are `#[serial]`: nothing else is reading the
+		/// environment while it is changed.
+		struct ShortKeepalive;
+
+		impl ShortKeepalive {
+			fn set() -> Self {
+				unsafe { std::env::set_var("VERSATILES_SFTP_KEEPALIVE_SECS", "1") };
+				ShortKeepalive
+			}
+		}
+
+		impl Drop for ShortKeepalive {
+			fn drop(&mut self) {
+				unsafe { std::env::remove_var("VERSATILES_SFTP_KEEPALIVE_SECS") };
+			}
+		}
+
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
+		async fn the_keepalive_thread_pings_and_stops_on_drop() {
+			// One second is the floor `start` clamps to, and the loop wakes every
+			// 500 ms, so a 2.5 s wait sees at least two pings.
+			let _interval = ShortKeepalive::set();
+			let server = TestSftpServer::start().await;
+			let url = server.url("/");
+			let session = tokio::task::spawn_blocking(move || open_session(&url, None))
+				.await
+				.unwrap()
+				.expect("test server accepts the password");
+
+			let shared: SharedSession = Arc::new(Mutex::new(session));
+			let keepalive = SftpKeepalive::start(Arc::clone(&shared), "test".to_string());
+
+			tokio::time::sleep(Duration::from_millis(2500)).await;
+
+			// Drop signals the thread and joins it; if the loop ignored `stop`,
+			// this would hang rather than fail.
+			tokio::task::spawn_blocking(move || drop(keepalive)).await.unwrap();
+		}
+
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
+		async fn a_poisoned_session_ends_the_keepalive_rather_than_spinning() {
+			let _interval = ShortKeepalive::set();
+			let server = TestSftpServer::start().await;
+			let url = server.url("/");
+			let session = tokio::task::spawn_blocking(move || open_session(&url, None))
+				.await
+				.unwrap()
+				.expect("test server accepts the password");
+
+			let shared: SharedSession = Arc::new(Mutex::new(session));
+			let keepalive = SftpKeepalive::start(Arc::clone(&shared), "poisoned".to_string());
+
+			// Poison the mutex: the owner panicked while holding it, so there is
+			// nothing left to keep alive.
+			let poisoner = Arc::clone(&shared);
+			let _ = std::thread::spawn(move || {
+				let _guard = poisoner.lock().unwrap();
+				panic!("owner died holding the session");
+			})
+			.join();
+			assert!(shared.lock().is_err(), "the mutex should now be poisoned");
+
+			tokio::time::sleep(Duration::from_millis(2500)).await;
+			tokio::task::spawn_blocking(move || drop(keepalive)).await.unwrap();
+		}
+
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
+		async fn an_identity_file_that_is_not_a_key_falls_through_to_the_next_method() {
+			// The branch where the file exists but libssh2 refuses it, as opposed
+			// to the already-covered case of it not existing at all.
+			let dir = tempfile::tempdir().unwrap();
+			let not_a_key = dir.path().join("id_rubbish");
+			std::fs::write(&not_a_key, b"this is not a private key\n").unwrap();
+
+			let server = TestSftpServer::start().await;
+			let url = server.url("/");
+			let session = tokio::task::spawn_blocking(move || open_session(&url, Some(&not_a_key)))
+				.await
+				.unwrap();
+
+			assert!(
+				session.is_ok(),
+				"password auth should still succeed: {:?}",
+				session.err()
+			);
+		}
+
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
+		async fn without_a_password_every_key_based_method_is_tried_and_reported() {
+			// No credentials in the URL, so the agent, ~/.ssh/config and the
+			// default key files are each attempted. None of them can authenticate
+			// against the test server, and the error names the target rather than
+			// whichever method happened to be last.
+			let server = TestSftpServer::start().await;
+			let mut url = server.url("/");
+			url.set_password(None).unwrap();
+			url.set_username("nobody").unwrap();
+			let target = display_name(&url);
+
+			let result = tokio::task::spawn_blocking(move || open_session(&url, None))
+				.await
+				.unwrap();
+
+			let error = format!("{:#}", result.err().expect("no key can authenticate here"));
+			assert!(error.contains(&target), "should name the target: {error}");
+		}
+
+		#[test]
+		fn the_agent_reports_when_it_has_nothing_for_this_user() {
+			// Exercised directly rather than through open_session: whether a
+			// developer machine has an agent running decides which branch runs,
+			// and both end in the same place for an unknown user.
+			let session = Session::new().unwrap();
+			let result = try_agent_auth(&session, "definitely-not-a-real-user");
+			assert!(result.is_err(), "an unconnected session cannot authenticate");
+		}
+
+		#[test]
+		fn the_default_key_files_are_reported_when_none_authenticates() {
+			let session = Session::new().unwrap();
+			let error = format!(
+				"{:#}",
+				try_key_auth(&session, "definitely-not-a-real-user").unwrap_err()
+			);
+			assert!(error.contains(".ssh"), "should name where it looked: {error}");
+		}
+
+		#[test]
+		fn the_ssh_config_is_reported_when_it_offers_nothing() {
+			let session = Session::new().unwrap();
+			let error = format!(
+				"{:#}",
+				try_config_key_auth(&session, "definitely-not-a-real-user", "definitely-not-a-real-host").unwrap_err()
+			);
+			// Either there is no config at all, or it has no key for this host.
+			assert!(
+				error.contains(".ssh/config") || error.contains("no suitable SSH key"),
+				"{error}"
+			);
+		}
 	}
 }

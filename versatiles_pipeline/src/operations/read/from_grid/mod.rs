@@ -1026,27 +1026,168 @@ mod tests {
 		Ok(())
 	}
 
+	#[tokio::test]
+	async fn the_source_names_itself_as_a_projected_grid() -> Result<()> {
+		let op = build(&format!("from_grid epsg=3035 size=1000 {BBOX}")).await?;
+		let source_type = op.source_type().to_string();
+		assert!(source_type.contains("projected grid"), "{source_type}");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn debug_names_the_projection_and_the_lattice() -> Result<()> {
+		let op = build(&format!("from_grid epsg=3035 size=1000 {BBOX}")).await?;
+		let text = format!("{op:?}");
+		assert!(text.contains("from_grid"), "{text}");
+		// The grid is generated, so its Debug has to say what it would generate;
+		// there is no file to point at.
+		assert!(text.contains("projection"), "{text}");
+		assert!(text.contains("lattice"), "{text}");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn the_coordinate_stream_covers_the_pyramid_without_building_tiles() -> Result<()> {
+		// Used to count work before doing it, so it has to agree with what
+		// `tile_stream` would yield rather than being a cheap approximation.
+		let op = build(&format!("from_grid epsg=3035 size=100000 {BBOX}")).await?;
+		let bbox = TileBBox::new_full(4)?;
+
+		let coords = op.tile_coord_stream(bbox).await?.to_vec().await;
+		let tiles = op.tile_stream(bbox).await?.to_vec().await;
+
+		assert!(!coords.is_empty());
+		assert_eq!(coords.len(), tiles.len(), "the two streams must agree");
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn a_tile_with_no_cells_in_it_yields_nothing() -> Result<()> {
+		// The grid is cut to Germany, so a tile at the same zoom over the
+		// Pacific has no candidate columns or rows at all.
+		let op = build(&format!("from_grid epsg=3035 size=100000 {BBOX}")).await?;
+		assert!(op.tile(&TileCoord::from_geo(-150.0, 0.0, 4)?).await?.is_none());
+		Ok(())
+	}
+
+	/// A projection whose image is undefined everywhere.
+	///
+	/// The real ones never produce this: the closed-form LAEA clamps rather than
+	/// diverging, and PROJ returns a wrong-but-finite coordinate outside a CRS's
+	/// area of use instead of failing. The guards against non-finite coordinates
+	/// are still worth having — a projection added later may not be so tidy —
+	/// so this is how they get exercised.
+	#[derive(Debug)]
+	struct NeverProjects;
+
+	impl Projection for NeverProjects {
+		fn to_mercator(&self, _c: Coord<f64>) -> Coord<f64> {
+			coord! { x: f64::NAN, y: f64::NAN }
+		}
+		fn to_source(&self, _c: Coord<f64>) -> Coord<f64> {
+			coord! { x: f64::NAN, y: f64::NAN }
+		}
+	}
+
 	#[test]
-	#[ignore = "measurement, not a test"]
-	fn measure_transforms_per_tile() -> Result<()> {
-		let template = Operation::from_args(args(3035, 1000.0))?;
-		let (grid, count) = counting_grid(&template);
+	fn a_cell_that_does_not_project_is_dropped_rather_than_drawn() -> Result<()> {
+		let mut operation = Operation::from_args(args(3035, 100_000.0))?;
+		let grid = Arc::get_mut(&mut operation.grid).expect("sole owner");
+		grid.projection = Box::new(NeverProjects);
 
-		let tile = grid
-			.build_tile(TileCoord::from_geo(13.4, 52.5, 10)?)?
-			.expect("tile present");
-		let cells = VectorTile::from_blob(&tile.into_blob(&Uncompressed)?)?.layers[0]
-			.to_features()?
-			.len();
-		let transforms = count.load(std::sync::atomic::Ordering::Relaxed);
+		let tolerance = grid.tolerance_meters(10);
+		let block = CellBlock::build(grid, 4341, 4341, 2691, 2691, tolerance);
 
-		println!("\ntile z10 of a 1 km EPSG:3035 grid:");
-		println!("  cells drawn     : {cells}");
-		println!(
-			"  transforms used : {transforms} ({:.2} per cell)",
-			transforms as f64 / cells as f64
+		// Drawn from NaN corners the cell would land somewhere it does not
+		// belong, so there is no honest answer but to leave it out.
+		assert!(block.cell(grid, 0, 0).is_none());
+		Ok(())
+	}
+
+	#[test]
+	fn a_sample_cell_that_does_not_project_falls_back_to_the_origin() -> Result<()> {
+		let operation = Operation::from_args(args(3035, 100_000.0))?;
+		let bbox = GeoBBox::new(5.8, 47.2, 15.1, 55.1)?;
+
+		let sampled = sample_cell(&NeverProjects, &operation.grid.lattice, &bbox);
+
+		// Only used to pick a zoom range and an example id, so an unusable
+		// answer becomes the origin rather than a NaN cast to a garbage index.
+		assert_eq!(sampled, (0, 0));
+		Ok(())
+	}
+
+	#[test]
+	fn the_pyramid_is_what_keeps_the_grid_inside_its_bbox() -> Result<()> {
+		// `build_tile` projects whatever coordinate it is handed: an EPSG:3035
+		// lattice has cells over the Pacific too, they are simply nowhere near
+		// where the CRS is meant to be used. Nothing asks for them because the
+		// pyramid is cut to `bbox=`, which is the only thing enforcing it.
+		let operation = Operation::from_args(args(3035, 100_000.0))?;
+		let pacific = TileCoord::from_geo(-150.0, 0.0, 4)?;
+
+		assert!(
+			operation.grid.build_tile(pacific)?.is_some(),
+			"build_tile does not consult the bbox"
 		);
-		println!("  per-cell design : {} (12 per cell)", cells * 12);
+		assert!(
+			!operation.metadata.tile_pyramid().unwrap().includes_coord(&pacific),
+			"but the pyramid excludes it, so tile_stream never asks"
+		);
+		Ok(())
+	}
+
+	#[test]
+	fn a_tile_with_no_candidate_cells_is_built_as_nothing() -> Result<()> {
+		// The early return before any block is built. Unreachable through the
+		// real projections — see `NeverProjects`.
+		let mut operation = Operation::from_args(args(3035, 100_000.0))?;
+		let grid = Arc::get_mut(&mut operation.grid).expect("sole owner");
+		grid.projection = Box::new(NeverProjects);
+
+		assert!(grid.build_tile(TileCoord::from_geo(13.4, 52.5, 4)?)?.is_none());
+		Ok(())
+	}
+
+	#[test]
+	fn whole_numbers_are_written_as_integers_and_the_rest_as_floats() {
+		// A grid index is a whole number and belongs in the tile as one; writing
+		// 4321 as 4321.0 would make every consumer parse it back.
+		assert_eq!(number(4321.0), GeoValue::from(4321i64));
+		assert_eq!(number(-1.0), GeoValue::from(-1i64));
+		assert_eq!(number(0.0), GeoValue::from(0i64));
+		assert_eq!(number(0.5), GeoValue::from(0.5f64));
+		assert_eq!(number(-2.25), GeoValue::from(-2.25f64));
+		// Past the point where an f64 can still name every integer, the value
+		// stays a float rather than being truncated into an i64.
+		assert_eq!(number(1e16), GeoValue::from(1e16f64));
+	}
+
+	#[test]
+	fn the_sample_cell_sits_at_the_latitude_closest_to_the_equator() -> Result<()> {
+		// Mercator stretches by 1/cos(lat), so the smallest cells — and the
+		// densest tile — are wherever the bbox comes closest to the equator.
+		let template = Operation::from_args(args(3035, 100_000.0))?;
+		let projection = template.grid.projection.as_ref();
+		let lattice = &template.grid.lattice;
+
+		let northern = sample_cell(projection, lattice, &GeoBBox::new(5.0, 47.0, 15.0, 55.0)?);
+		let southern = sample_cell(projection, lattice, &GeoBBox::new(5.0, -55.0, 15.0, -47.0)?);
+		let straddling = sample_cell(projection, lattice, &GeoBBox::new(5.0, -10.0, 15.0, 10.0)?);
+
+		// Northern bbox: y_min is closer to the equator, so it is the one picked.
+		let at_y_min = sample_cell(projection, lattice, &GeoBBox::new(5.0, 47.0, 15.0, 47.5)?);
+		assert_eq!(northern, at_y_min, "should measure at the southern edge");
+
+		// Southern bbox: y_max is the closer edge instead.
+		let at_y_max = sample_cell(projection, lattice, &GeoBBox::new(5.0, -47.5, 15.0, -47.0)?);
+		assert_eq!(southern, at_y_max, "should measure at the northern edge");
+
+		// A bbox spanning the equator measures at the equator itself.
+		let at_equator = sample_cell(projection, lattice, &GeoBBox::new(5.0, 0.0, 15.0, 0.0)?);
+		assert_eq!(straddling, at_equator);
+
+		assert_ne!(northern, southern, "different hemispheres, different cells");
 		Ok(())
 	}
 

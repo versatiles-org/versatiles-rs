@@ -227,6 +227,88 @@ mod tests {
 	}
 
 	#[test]
+	fn the_batch_path_agrees_with_one_call_per_point() -> Result<()> {
+		// `to_mercator_many` exists only to be faster, so its only real
+		// requirement is that it changes nothing.
+		let rd = GdalProjection::new(28992)?;
+		let points: Vec<Coord<f64>> = (0..8)
+			.map(|i| coord! { x: 60_000.0 + f64::from(i) * 5_000.0, y: 450_000.0 + f64::from(i) * 3_000.0 })
+			.collect();
+
+		let one_by_one: Vec<Coord<f64>> = points.iter().map(|c| rd.to_mercator(*c)).collect();
+		let mut batched = points;
+		rd.to_mercator_many(&mut batched);
+
+		assert_eq!(batched, one_by_one);
+		Ok(())
+	}
+
+	#[test]
+	fn an_empty_batch_is_not_a_transform() -> Result<()> {
+		// The early return matters: GDAL is asked for nothing rather than for
+		// three empty vectors.
+		let rd = GdalProjection::new(28992)?;
+		let mut nothing: Vec<Coord<f64>> = Vec::new();
+		rd.to_mercator_many(&mut nothing);
+		assert!(nothing.is_empty());
+		Ok(())
+	}
+
+	#[test]
+	fn a_batch_of_one_still_works() -> Result<()> {
+		let rd = GdalProjection::new(28992)?;
+		let point = coord! { x: 64_300.0, y: 456_700.0 };
+		let mut batch = vec![point];
+		rd.to_mercator_many(&mut batch);
+		assert_eq!(batch[0], rd.to_mercator(point));
+		Ok(())
+	}
+
+	#[test]
+	fn a_nan_coordinate_stays_nan() -> Result<()> {
+		// What the caller relies on to drop a cell rather than draw it somewhere
+		// wrong. PROJ propagates NaN rather than reporting an error, so this is
+		// the path that actually fires — see the note on `apply`.
+		let rd = GdalProjection::new(28992)?;
+		let out = rd.to_mercator(coord! { x: f64::NAN, y: f64::NAN });
+		assert!(out.x.is_nan() && out.y.is_nan(), "{out:?}");
+
+		let mut batch = vec![coord! { x: f64::NAN, y: f64::NAN }];
+		rd.to_mercator_many(&mut batch);
+		assert!(batch[0].x.is_nan() && batch[0].y.is_nan(), "{:?}", batch[0]);
+		Ok(())
+	}
+
+	#[test]
+	fn each_thread_builds_its_own_transforms() -> Result<()> {
+		// A CoordTransform is neither Send nor shareable, so the cache is
+		// thread-local and a worker that has never seen this EPSG code builds it
+		// on first use. Same answer either way.
+		let rd = GdalProjection::new(28992)?;
+		let point = coord! { x: 64_300.0, y: 456_700.0 };
+		let here = rd.to_mercator(point);
+
+		let there = std::thread::scope(|scope| scope.spawn(|| rd.to_mercator(point)).join().unwrap());
+
+		assert_eq!(here, there);
+		Ok(())
+	}
+
+	#[test]
+	fn a_second_national_crs_round_trips_too() -> Result<()> {
+		// EPSG:3067, the Finnish grid statistics CRS — the other code named in
+		// the module docs as having no native implementation.
+		let tm35fin = GdalProjection::new(3067)?;
+		let source = coord! { x: 385_000.0, y: 6_672_000.0 };
+		let back = tm35fin.to_source(tm35fin.to_mercator(source));
+		assert!(
+			(back.x - source.x).abs() < 0.01 && (back.y - source.y).abs() < 0.01,
+			"{source:?} came back as {back:?}"
+		);
+		Ok(())
+	}
+
+	#[test]
 	fn an_unusable_code_fails_when_the_grid_is_built() {
 		assert!(GdalProjection::new(0).is_err());
 	}
