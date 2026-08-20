@@ -348,6 +348,64 @@ jobs:
         run: cargo test --workspace ${{ matrix.features }}
 
   # ============================================================================
+  # Linux musl: Test
+  # ============================================================================
+  # musl and glibc differ in the places tests actually catch — thread stack
+  # sizes, DNS resolution, filesystem behaviour — and the release ships musl
+  # binaries for four of its eight targets. Nothing tested them until now: the
+  # release Dockerfile has always been invoked with `RUN_TESTS=false`, and CI
+  # had no musl job at all.
+  #
+  # `rust:alpine`'s host target *is* x86_64-unknown-linux-musl, so this is the
+  # suite running natively against musl rather than cross-compiled. The packages
+  # match the musl builder in docker/build-linux.Dockerfile, which is the image
+  # the release actually uses.
+  linux-musl-test:
+    name: "Linux musl: Test"
+    runs-on: ubuntu-latest
+    container: rust:alpine
+    steps:
+      # Before checkout so actions/checkout has git. openssl-dev is for
+      # openssl-sys, pulled in via ssh2.
+      - name: Install build tools
+        run: apk add --no-cache bash git musl-dev pkgconf openssl-dev openssl-libs-static
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # No cache, deliberately: the cache budget sits at GitHub's 10 GB ceiling,
+      # where a new entry evicts one that earns more (see "Linux: Docs"). This
+      # job compiles from scratch every run, which is affordable only as long as
+      # it stays under the wall clock set by "Windows: Test".
+      - name: Build tests
+        run: cargo test --workspace --no-run
+
+      - name: Run tests
+        run: cargo test --workspace
+
+  # ============================================================================
+  # Linux ARM: Test
+  # ============================================================================
+  # The other untested target the release ships. A native arm64 runner, so this
+  # is the real architecture rather than emulation. Uncached for the same reason
+  # as the musl job above.
+  linux-arm-test:
+    name: "Linux ARM: Test"
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build tests
+        run: cargo test --workspace --no-run
+
+      - name: Run tests
+        run: cargo test --workspace
+
+  # ============================================================================
   # Windows: Test
   # ============================================================================
   windows-test:
@@ -547,7 +605,9 @@ jobs:
       - linux-docs
       - linux-feature-checks
       - linux-feature-matrix
+      - linux-arm-test
       - linux-format
+      - linux-musl-test
       - linux-nodejs
       - macos-gdal
       - markdown-lint
