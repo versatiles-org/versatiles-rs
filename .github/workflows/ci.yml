@@ -236,6 +236,44 @@ jobs:
           verbose: true
 
   # ============================================================================
+  # Linux: Feature Checks
+  # ============================================================================
+  # The feature combinations that are only compiled, never run. One job rather
+  # than three: they differ by a single feature flag, so most of what they build
+  # is identical, and sharing a target directory means the second and third
+  # checks reuse the first one's artifacts instead of each starting from
+  # nothing. It also means one cache entry rather than three, which matters —
+  # the repository is at GitHub's 10 GB cache ceiling.
+  #
+  # Kept as separate steps so the timings stay legible per feature set.
+  linux-feature-checks:
+    name: "Linux: Features (checks)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "linux-feature-checks"
+          cache-targets: true
+          cache-on-failure: false
+          cache-bin: false
+
+      - name: Check no default features
+        run: cargo check --workspace --all-targets --no-default-features
+
+      - name: Check cli only
+        run: cargo check --workspace --all-targets --no-default-features --features cli
+
+      - name: Check server only
+        run: cargo check --workspace --all-targets --no-default-features --features server
+
+  # ============================================================================
   # Linux: Feature Matrix
   # ============================================================================
   linux-feature-matrix:
@@ -248,12 +286,6 @@ jobs:
           - name: "default"
             features: ""
             run-tests: true
-          - name: "no-default"
-            features: "--no-default-features"
-          - name: "cli-only"
-            features: "--no-default-features --features cli"
-          - name: "server-only"
-            features: "--no-default-features --features server"
           - name: "gdal"
             features: "--features gdal"
             container: "ghcr.io/osgeo/gdal:ubuntu-small-3.12.0"
@@ -293,10 +325,6 @@ jobs:
           cache-on-failure: false
           cache-bin: false
           save-if: ${{ matrix.name == 'all-features' }}
-
-      - name: Check compilation
-        if: ${{ !matrix.run-tests }}
-        run: cargo check --workspace --all-targets ${{ matrix.features }}
 
       - name: Check lints
         if: matrix.run-clippy
@@ -507,6 +535,7 @@ jobs:
     needs:
       - linux-coverage
       - linux-docs
+      - linux-feature-checks
       - linux-feature-matrix
       - linux-format
       - linux-nodejs
