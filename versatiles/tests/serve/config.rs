@@ -1,17 +1,14 @@
-#![cfg(all(feature = "cli", feature = "server"))]
-
 //! E2E tests for server configuration file integration.
 //!
 //! These tests verify that the server correctly loads and applies all settings
 //! from a YAML configuration file.
 
-mod test_utilities;
-
 use std::{fs, process::Child};
 
 use reqwest::header::ORIGIN;
 use tempfile::TempDir;
-use test_utilities::*;
+
+use crate::test_utilities::*;
 
 /// Convert a path to use forward slashes for YAML compatibility on all platforms.
 /// Windows backslashes in YAML are interpreted as escape sequences, causing parsing errors.

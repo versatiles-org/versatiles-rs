@@ -1,18 +1,15 @@
-#![cfg(feature = "cli")]
-
 //! E2E tests for tile data integrity after format conversions.
 //!
 //! These tests verify that tile data is preserved byte-for-byte when converting
 //! between container formats using the CLI.
 
-mod test_utilities;
-
 use std::sync::Arc;
 
 use tempfile::TempDir;
-use test_utilities::*;
 use versatiles_container::{TileSource, TilesRuntime};
 use versatiles_core::{TileCompression, TileCoord};
+
+use crate::test_utilities::*;
 
 /// Helper to compare tiles from two readers at a given coordinate.
 async fn assert_tiles_equal(

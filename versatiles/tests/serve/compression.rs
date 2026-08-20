@@ -1,16 +1,13 @@
-#![cfg(all(feature = "cli", feature = "server"))]
-
 //! E2E tests for compression negotiation in the HTTP server.
 //!
 //! These tests verify that the server correctly handles Accept-Encoding headers
 //! and returns appropriate Content-Encoding responses.
 
-mod test_utilities;
-
 use std::process::Child;
 
 use reqwest::header::{ACCEPT_ENCODING, CONTENT_ENCODING, HeaderMap};
-use test_utilities::*;
+
+use crate::test_utilities::*;
 
 struct CompressionTestServer {
 	host: String,

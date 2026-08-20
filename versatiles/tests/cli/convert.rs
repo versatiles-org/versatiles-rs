@@ -1,10 +1,7 @@
-#![cfg(feature = "cli")]
-#![allow(clippy::float_cmp)]
-
-mod test_utilities;
 use pretty_assertions::assert_eq;
-use test_utilities::*;
 use versatiles_core::json::JsonValue;
+
+use crate::test_utilities::*;
 
 #[test]
 fn e2e_convert_requires_input_and_output() {

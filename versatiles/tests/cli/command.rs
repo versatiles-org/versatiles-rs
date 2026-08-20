@@ -1,9 +1,7 @@
-#![cfg(feature = "cli")]
-
-mod test_utilities;
 use predicates::str;
 use rstest::rstest;
-use test_utilities::*;
+
+use crate::test_utilities::*;
 
 #[test]
 fn e2e_command() {
