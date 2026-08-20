@@ -14,7 +14,7 @@ use versatiles_container::{DataLocation, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 
-use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
+use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*.tar` file.
@@ -46,12 +46,9 @@ struct Operation {
 	tilejson: TileJSON,
 }
 
-impl ReadTileSource for Operation {
+impl Operation {
 	#[context("Failed to build from_container operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
-	where
-		Self: Sized + TileSource,
-	{
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let source = factory
 			.reader_with_ssh_identity(DataLocation::try_from(&args.filename)?, args.ssh_identity.as_deref())

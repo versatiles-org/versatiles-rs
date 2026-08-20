@@ -1,18 +1,21 @@
+//! Reading from several sources at once, within a memory budget.
+//!
+//! `from_merged_vector`, `from_stacked` and `from_stacked_raster` each pull
+//! tiles from many sources for one output tile. Peak memory is therefore
+//! concurrency × sources × tile size, which OOMs on large tiles, many sources
+//! or a huge bbox — so the concurrency here is derived from a tile budget
+//! rather than from the core count alone.
+//!
+//! Was `traits.rs`, for the one-method `ReadTileSource` marker it used to hold.
+//! Read operations now expose an inherent `build` and implement no trait; see
+//! `define_read_factory!`.
+
 use std::collections::HashSet;
 
 use anyhow::Result;
 use futures::{StreamExt, stream::FuturesUnordered};
 use versatiles_container::TileSource;
 use versatiles_core::{ConcurrencyLimits, TileBBox, TileCoord, TileStream};
-
-use crate::{PipelineFactory, vpl::VPLNode};
-
-// ---------------------------------------------------------------------------
-// Bounded gathering: shared memory budget for operations that read tiles from
-// several sources / coordinates at once (`from_merged_vector`, `from_stacked`,
-// `from_stacked_raster`). Without a cap, peak memory grows with concurrency ×
-// tile size, which OOMs on large tiles, many sources, or huge bboxes.
-// ---------------------------------------------------------------------------
 
 /// Number of read chunks processed concurrently while gathering source tiles:
 /// one chunk is processed while the next is read. Kept small so the tile budget
@@ -75,17 +78,6 @@ pub fn coord_concurrency(tiles_per_coord: usize) -> usize {
 pub fn chunk_concurrency(tiles_per_chunk: usize) -> usize {
 	let by_budget = (max_tiles_in_flight() / tiles_per_chunk.max(1)).max(1);
 	by_budget.min(ConcurrencyLimits::default().io_bound)
-}
-
-/// Marker trait implemented by each read operation's `Operation` type to
-/// host its `build` factory. The build result is `Box<dyn TileSource>`, which
-/// can be a *different* type than `Self` — useful when the actual runtime
-/// `TileSource` is shared across formats (see
-/// [`crate::helpers::feature_tile_source::FeatureTileSource`]).
-pub trait ReadTileSource {
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
-	where
-		Self: Sized;
 }
 
 /// Collect the union of tile coordinates from multiple sources into a single stream.

@@ -20,7 +20,7 @@ use async_trait::async_trait;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{Blob, TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
 
-use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
+use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a single tile file and uses it as a template for all tile requests.
@@ -65,11 +65,11 @@ impl Operation {
 	}
 }
 
-impl ReadTileSource for Operation {
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
-	where
-		Self: Sized + TileSource,
-	{
+impl Operation {
+	// `async` with nothing to await: the signature is fixed by
+	// `define_read_factory!`, which awaits every operation's `build`.
+	#[allow(clippy::unused_async)]
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let path = factory
 			.resolve_location(&DataLocation::try_from(&args.filename)?)?

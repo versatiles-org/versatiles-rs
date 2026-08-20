@@ -19,7 +19,6 @@ use super::RasterSource;
 use crate::{
 	PipelineFactory,
 	factory::{OperationFactoryTrait, ReadOperationFactoryTrait},
-	operations::read::traits::ReadTileSource,
 	vpl::VPLNode,
 };
 
@@ -213,12 +212,9 @@ impl Operation {
 	}
 }
 
-impl ReadTileSource for Operation {
+impl Operation {
 	#[context("Failed to build read operation")]
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
-	where
-		Self: Sized + TileSource,
-	{
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		Ok(Box::new(Self::new(vpl_node, factory).await?) as Box<dyn TileSource>)
 	}
 }
@@ -249,7 +245,7 @@ impl TileSource for Operation {
 		let count = 4096u32.div_euclid(self.tile_size).max(1);
 		// Each chunk decodes one large source image and produces `count²` tiles; bound how
 		// many chunks are read concurrently so peak memory stays within the tile budget.
-		let concurrency = crate::operations::read::traits::chunk_concurrency((count * count) as usize);
+		let concurrency = crate::operations::read::gathering::chunk_concurrency((count * count) as usize);
 
 		let bbox = self.metadata.intersection_bbox(&bbox);
 

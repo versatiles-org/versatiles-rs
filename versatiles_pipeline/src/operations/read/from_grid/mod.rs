@@ -76,7 +76,6 @@ use self::{
 use crate::{
 	PipelineFactory,
 	helpers::{grid_zoom::min_zoom_for_cell_size, tilejson::set_single_vector_layer},
-	operations::read::traits::ReadTileSource,
 	vpl::VPLNode,
 };
 
@@ -590,12 +589,9 @@ fn cell_size_mercator(projection: &dyn Projection, lattice: &Lattice, (ix, iy): 
 	width.max(height)
 }
 
-impl ReadTileSource for Operation {
+impl Operation {
 	#[context("Failed to build from_grid operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, _factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
-	where
-		Self: Sized + TileSource,
-	{
+	async fn build(vpl_node: VPLNode, _factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		Ok(Box::new(Operation::from_args(Args::from_vpl_node(&vpl_node)?)?) as Box<dyn TileSource>)
 	}
 }

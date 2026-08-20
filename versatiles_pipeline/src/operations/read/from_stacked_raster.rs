@@ -93,7 +93,6 @@ use versatiles_image::traits::DynamicImageTraitOperation;
 
 use crate::{
 	PipelineFactory,
-	operations::read::traits::ReadTileSource,
 	vpl::{VPLNode, VPLPipeline},
 };
 
@@ -217,12 +216,9 @@ async fn tile(coord: TileCoord, entries: Vec<FilteredSourceEntry>) -> Result<Opt
 	Ok(tile.map(|t| (coord, t)))
 }
 
-impl ReadTileSource for Operation {
+impl Operation {
 	#[context("Failed to build from_stacked_raster operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
-	where
-		Self: Sized + TileSource,
-	{
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		// Build sub-pipelines concurrently — for a stack of N SFTP sources this
@@ -331,7 +327,7 @@ impl TileSource for Operation {
 	#[context("Failed to get stacked raster tile coord stream for bbox: {:?}", bbox)]
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let refs: Vec<&dyn TileSource> = self.sources.iter().map(|e| e.source.as_ref().as_ref()).collect();
-		super::traits::union_tile_coord_streams(&refs, bbox).await
+		super::gathering::union_tile_coord_streams(&refs, bbox).await
 	}
 
 	/// Stream packed raster tiles intersecting `bbox`.
@@ -397,7 +393,7 @@ impl TileSource for Operation {
 			let native_coords = Arc::new(native_coords);
 			// Bound per-coordinate concurrency by the tile budget: blending holds one
 			// (decoded, potentially large) raster tile per source per in-flight coordinate.
-			let concurrency = super::traits::coord_concurrency(entries.len());
+			let concurrency = super::gathering::coord_concurrency(entries.len());
 			return Ok(TileStream::from_bbox_async_parallel_bounded(
 				bbox,
 				concurrency,
@@ -420,7 +416,7 @@ impl TileSource for Operation {
 		}
 
 		// Default: process tile by tile (all-native path)
-		let concurrency = super::traits::coord_concurrency(entries.len());
+		let concurrency = super::gathering::coord_concurrency(entries.len());
 		Ok(TileStream::from_bbox_async_parallel_bounded(
 			bbox,
 			concurrency,

@@ -26,7 +26,6 @@ use versatiles_derive::context;
 
 use crate::{
 	PipelineFactory,
-	operations::read::traits::ReadTileSource,
 	vpl::{VPLNode, VPLPipeline},
 };
 
@@ -50,12 +49,9 @@ struct Operation {
 	tilejson: TileJSON,
 }
 
-impl ReadTileSource for Operation {
+impl Operation {
 	#[context("Failed to build from_stacked operation")]
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
-	where
-		Self: Sized + TileSource,
-	{
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let sources = join_all(args.sources.into_iter().map(|c| factory.build_pipeline(c)))
 			.await
@@ -122,7 +118,7 @@ impl TileSource for Operation {
 	#[context("Failed to get stacked tile coord stream for bbox: {:?}", bbox)]
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let refs: Vec<&dyn TileSource> = self.sources.iter().map(|s| s.as_ref() as &dyn TileSource).collect();
-		super::traits::union_tile_coord_streams(&refs, bbox).await
+		super::gathering::union_tile_coord_streams(&refs, bbox).await
 	}
 
 	/// Stream packed tiles intersecting `bbox` using the overlay strategy.
@@ -135,7 +131,7 @@ impl TileSource for Operation {
 
 		// Overlay keeps a single tile per coordinate (first non-empty source wins), so the
 		// budget counts one tile per coordinate. Bounded read-ahead caps resident tiles.
-		let sub_bboxes: Vec<TileBBox> = bbox.iter_grid(super::traits::chunk_grid_size(1)).collect();
+		let sub_bboxes: Vec<TileBBox> = bbox.iter_grid(super::gathering::chunk_grid_size(1)).collect();
 
 		Ok(TileStream::from_streams_bounded(
 			stream::iter(sub_bboxes).map(move |bbox| {
@@ -177,7 +173,7 @@ impl TileSource for Operation {
 					TileStream::from_vec(vec)
 				}
 			}),
-			super::traits::READ_AHEAD,
+			super::gathering::READ_AHEAD,
 		))
 	}
 }

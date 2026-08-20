@@ -82,6 +82,15 @@ macro_rules! define_transform_factory {
 ///
 /// This generates a `Factory` struct that implements `OperationFactoryTrait`
 /// and `ReadOperationFactoryTrait`, delegating to `Operation::build`.
+///
+/// `$op` needs an inherent
+/// `async fn build(VPLNode, &PipelineFactory) -> Result<Box<dyn TileSource>>`
+/// and nothing else — no trait to implement. What it returns need not be `$op`:
+/// `from_geo` and `from_csv` both build a
+/// [`FeatureTileSource`](crate::helpers::feature_tile_source::FeatureTileSource),
+/// and the transform operations return a
+/// [`TransformOp`](crate::operations::transform::TransformOp) wrapping
+/// themselves.
 macro_rules! define_read_factory {
 	($tag:literal, $args:ty, $op:ty) => {
 		pub struct Factory {}

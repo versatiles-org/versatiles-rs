@@ -13,4 +13,4 @@ pub mod from_stacked_raster;
 pub mod from_tile;
 pub mod from_tilejson;
 
-mod traits;
+mod gathering;

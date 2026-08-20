@@ -23,7 +23,7 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
-use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
+use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads tiles from a remote tile server via a TileJSON endpoint.
@@ -62,12 +62,9 @@ impl std::fmt::Debug for Operation {
 	}
 }
 
-impl ReadTileSource for Operation {
+impl Operation {
 	#[context("Failed to build from_tilejson operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
-	where
-		Self: Sized + TileSource,
-	{
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		let max_retries = u32::from(args.max_retries.unwrap_or(3));

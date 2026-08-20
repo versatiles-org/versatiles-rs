@@ -34,7 +34,6 @@ use crate::{
 		feature_tile_source::{FeatureTileSource, apply_property_filters},
 		tile_size_monitor::MaxTileBytes,
 	},
-	operations::read::traits::ReadTileSource,
 	vpl::VPLNode,
 };
 
@@ -110,12 +109,9 @@ struct Args {
 /// is a [`FeatureTileSource`] returned from [`Operation::build`].
 pub struct Operation;
 
-impl ReadTileSource for Operation {
+impl Operation {
 	#[context("Failed to build from_geo operation in VPL node {:?}", vpl_node.name)]
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
-	where
-		Self: Sized,
-	{
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		reject_unsupported_args(&args)?;
 		let location = factory.resolve_location(&DataLocation::try_from(args.filename.as_str())?)?;

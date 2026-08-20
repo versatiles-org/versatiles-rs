@@ -20,7 +20,7 @@ use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Tra
 use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_image::{DynamicImageTraitConvert, color::parse_hex_color};
 
-use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
+use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Generates solid-color tiles of the specified size and format.
@@ -93,11 +93,11 @@ impl Operation {
 	}
 }
 
-impl ReadTileSource for Operation {
-	async fn build(vpl_node: VPLNode, _factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
-	where
-		Self: Sized + TileSource,
-	{
+impl Operation {
+	// `async` with nothing to await: the signature is fixed by
+	// `define_read_factory!`, which awaits every operation's `build`.
+	#[allow(clippy::unused_async)]
+	async fn build(vpl_node: VPLNode, _factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		Operation::from_vpl_node(&vpl_node).map(|op| Box::new(op) as Box<dyn TileSource>)
 	}
 }

@@ -26,7 +26,7 @@ use vector::create_debug_vector_tile;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream, TileType};
 
-use crate::{PipelineFactory, operations::read::traits::ReadTileSource, vpl::VPLNode};
+use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Generates debug tiles that display their coordinates as text.
@@ -75,11 +75,11 @@ impl Operation {
 	}
 }
 
-impl ReadTileSource for Operation {
-	async fn build(vpl_node: VPLNode, _factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
-	where
-		Self: Sized + TileSource,
-	{
+impl Operation {
+	// `async` with nothing to await: the signature is fixed by
+	// `define_read_factory!`, which awaits every operation's `build`.
+	#[allow(clippy::unused_async)]
+	async fn build(vpl_node: VPLNode, _factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		Operation::from_vpl_node(&vpl_node).map(|op| Box::new(op) as Box<dyn TileSource>)
 	}
 }

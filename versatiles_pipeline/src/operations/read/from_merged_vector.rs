@@ -26,7 +26,6 @@ use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
 
 use crate::{
 	PipelineFactory,
-	operations::read::traits::ReadTileSource,
 	vpl::{VPLNode, VPLPipeline},
 };
 
@@ -112,12 +111,9 @@ fn merge_tiles(mut tiles: Vec<Tile>, format: TileFormat) -> Result<Tile> {
 	Tile::from_vector(merge_vector_tiles(vector_tiles)?, format)
 }
 
-impl ReadTileSource for Operation {
+impl Operation {
 	#[context("Failed to build from_merged_vector operation")]
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>>
-	where
-		Self: Sized + TileSource,
-	{
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let sources = join_all(args.sources.into_iter().map(|c| factory.build_pipeline(c)))
 			.await
@@ -176,7 +172,7 @@ impl TileSource for Operation {
 	#[context("Failed to get merged tile coord stream for bbox: {:?}", bbox)]
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
 		let refs: Vec<&dyn TileSource> = self.sources.iter().map(|s| s.as_ref() as &dyn TileSource).collect();
-		super::traits::union_tile_coord_streams(&refs, bbox).await
+		super::gathering::union_tile_coord_streams(&refs, bbox).await
 	}
 
 	/// Stream merged vector tiles for every coordinate in `bbox`.
@@ -194,7 +190,7 @@ impl TileSource for Operation {
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("from_merged_vector::tile_stream {bbox:?}");
 		// Each coordinate holds one tile per source until merged.
-		let grid_size = super::traits::chunk_grid_size(self.sources.len());
+		let grid_size = super::gathering::chunk_grid_size(self.sources.len());
 		let bboxes: Vec<TileBBox> = bbox.iter_grid(grid_size).collect();
 		let sources = Arc::clone(&self.sources);
 		let format = *self.metadata.tile_format();
@@ -241,7 +237,7 @@ impl TileSource for Operation {
 					)
 				}
 			}),
-			super::traits::READ_AHEAD,
+			super::gathering::READ_AHEAD,
 		);
 
 		// Stage 2: merge synchronously as tiles are pulled. Single-source coordinates
