@@ -9,3 +9,22 @@
 [alias]
 fmt-all = ["fmt", "--all", "--", "--config", "imports_granularity=Crate,group_imports=StdExternalCrate"]
 fmt-check = ["fmt", "--all", "--", "--check", "--config", "imports_granularity=Crate,group_imports=StdExternalCrate"]
+
+# Link the Windows targets with the LLVM linker instead of MSVC's `link.exe`.
+#
+# `Build tests` is the slowest step in CI and the Windows job is its critical
+# path: 21 test binaries used to be linked per run, 13 after the integration
+# tests were consolidated, and link time is a large share of what remains.
+#
+# `rust-lld` ships inside the toolchain — rustc resolves the bare name from its
+# own sysroot, so this needs nothing installed and no `PATH` entry. That is what
+# rules the alternatives out: `-C linker-features=+lld` and
+# `-C link-self-contained=+linker` are both still unstable, and the Linux
+# equivalent (`-fuse-ld=lld`, or mold) depends on a system linker that a
+# checked-out clone cannot assume — it would break any Linux machine without it.
+# Linux is also not the critical path, so it keeps the default `cc` driver.
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
+
+[target.aarch64-pc-windows-msvc]
+linker = "rust-lld.exe"
