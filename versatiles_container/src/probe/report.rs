@@ -362,7 +362,7 @@ pub async fn probe_report(
 				y_min: bbox.y_min().unwrap_or(0),
 				y_max: bbox.y_max().unwrap_or(0),
 				tiles,
-				coverage_percent: tiles * 100 / bbox.count_tiles(),
+				coverage_percent: coverage_percent(tiles, bbox.count_tiles()),
 			}
 		})
 		.collect();
@@ -390,6 +390,21 @@ pub async fn probe_report(
 	}
 
 	Ok(report)
+}
+
+/// What share of a level's bounding box holds a tile, as a whole percentage.
+///
+/// `u128` because the obvious `tiles * 100 / total` overflows `u64`: a full
+/// level 29 holds 2^58 tiles, and multiplying that by 100 passes `u64::MAX`.
+/// That is not a hypothetical depth — a source can advertise levels 0–30, and
+/// `from_debug` does. With overflow checks on it panicked; without them, in the
+/// release binary, it wrapped and reported a fully covered level 30 as 4%.
+fn coverage_percent(tiles: u64, total: u64) -> u64 {
+	if total == 0 {
+		return 0;
+	}
+	let percent = u128::from(tiles) * 100 / u128::from(total);
+	u64::try_from(percent).unwrap_or(100)
 }
 
 /// Streams every tile's size, keeping totals, per-level totals and the biggest.
@@ -607,6 +622,10 @@ mod tests {
 		for level in &report.pyramid {
 			assert!(level.tiles > 0, "empty levels must be filtered out");
 			assert!(level.coverage_percent <= 100);
+			assert!(
+				level.coverage_percent > 0,
+				"a level with tiles cannot cover 0% — a wrapped multiplication reads like this"
+			);
 			assert!(level.x_min <= level.x_max);
 			assert!(level.y_min <= level.y_max);
 		}
@@ -702,5 +721,26 @@ mod tests {
 			counters.by_kind().iter().map(|(_, n)| n).sum::<u64>(),
 			counters.total_issues()
 		);
+	}
+
+	#[test]
+	fn coverage_survives_a_full_deep_level() {
+		// A full level 29 holds 2^58 tiles, and `tiles * 100` passes u64::MAX
+		// there. This panicked with overflow checks on, and — worse — wrapped
+		// silently in the release binary, reporting a fully covered level 30 as
+		// 4%. Not a hypothetical depth: `from_debug` advertises levels 0-30.
+		for level in 0..=30u8 {
+			let tiles = 1u64 << (2 * u32::from(level));
+			assert_eq!(coverage_percent(tiles, tiles), 100, "full level {level}");
+			if level > 0 {
+				// Level 0 holds a single tile, so it has no half.
+				assert_eq!(coverage_percent(tiles / 2, tiles), 50, "half of level {level}");
+			}
+		}
+	}
+
+	#[test]
+	fn coverage_of_nothing_is_zero_rather_than_a_division_by_zero() {
+		assert_eq!(coverage_percent(0, 0), 0);
 	}
 }
