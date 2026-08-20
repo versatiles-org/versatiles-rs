@@ -21,7 +21,7 @@ struct Operation {
 }
 
 impl Operation {
-	#[allow(clippy::unused_async)] // must be async for the factory macro
+	#[allow(clippy::unused_async, clippy::unused_async_trait_impl)] // must be async for the factory macro
 	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + TileSource,

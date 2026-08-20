@@ -149,7 +149,7 @@ fn summarize_tile(tile: Tile) -> Result<Vec<TileLayerFields>> {
 
 		let mut fields = BTreeMap::new();
 		for feature in &layer.features {
-			for pair in feature.tag_ids.chunks_exact(2) {
+			for pair in feature.tag_ids.as_chunks::<2>().0 {
 				let key = pm
 					.key
 					.list

@@ -34,6 +34,9 @@ impl Manager for GdalManager {
 		}
 	}
 
+	// `async` with nothing to await: deadpool's `Manager` trait declares this
+	// method async, so the signature is not ours to change.
+	#[allow(clippy::unused_async_trait_impl)]
 	async fn recycle(&self, obj: &mut Self::Type, _metrics: &deadpool::managed::Metrics) -> RecycleResult<Self::Error> {
 		use deadpool::managed::RecycleError;
 

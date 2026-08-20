@@ -79,6 +79,9 @@ struct SftpHandler {
 	drop_flag: Arc<AtomicBool>,
 }
 
+// `async` with nothing to await in several methods: the trait declares them
+// async, so the signatures are not ours to change.
+#[allow(clippy::unused_async_trait_impl)]
 impl russh_sftp::server::Handler for SftpHandler {
 	type Error = StatusCode;
 
@@ -225,6 +228,9 @@ struct SshHandler {
 	channel: Option<Channel<Msg>>,
 }
 
+// `async` with nothing to await in several methods: the trait declares them
+// async, so the signatures are not ours to change.
+#[allow(clippy::unused_async_trait_impl)]
 impl server::Handler for SshHandler {
 	type Error = anyhow::Error;
 

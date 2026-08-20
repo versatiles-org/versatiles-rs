@@ -284,7 +284,7 @@ fn analyze_vector_tile(vt: &VectorTile) -> Result<TileAnalysis> {
 			std::collections::HashMap::new();
 
 		for feature in &layer.features {
-			for pair in feature.tag_ids.chunks_exact(2) {
+			for pair in feature.tag_ids.as_chunks::<2>().0 {
 				let (key_id, value_id) = (pair[0] as usize, pair[1] as usize);
 				let entry = per_key.entry(key_id).or_default();
 				entry.0 += 1;

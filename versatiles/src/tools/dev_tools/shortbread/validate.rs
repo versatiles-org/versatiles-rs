@@ -66,7 +66,7 @@ fn check_layer(coord: TileCoord, layer: &VectorTileLayer, def: &LayerDef, issues
 		}
 
 		// Per key/value pair: unknown attribute, wrong type, bad enum value.
-		for pair in feature.tag_ids.chunks_exact(2) {
+		for pair in feature.tag_ids.as_chunks::<2>().0 {
 			let (Some(key), Some(value)) = (keys.get(pair[0] as usize), vals.get(pair[1] as usize)) else {
 				continue; // malformed index — structural decode already vetted this
 			};
@@ -106,7 +106,9 @@ fn check_layer(coord: TileCoord, layer: &VectorTileLayer, def: &LayerDef, issues
 /// Whether a feature's tag list contains `key`.
 fn feature_has_key(tag_ids: &[u32], keys: &[String], key: &str) -> bool {
 	tag_ids
-		.chunks_exact(2)
+		.as_chunks::<2>()
+		.0
+		.iter()
 		.any(|pair| keys.get(pair[0] as usize).is_some_and(|k| k == key))
 }
 
