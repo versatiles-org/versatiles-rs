@@ -59,7 +59,8 @@ struct Args {
 	/// Lowest zoom level emitted (default 0).
 	min_zoom: Option<u8>,
 	/// Highest zoom level emitted. Defaults to an auto-heuristic (median feature
-	/// size ≈ 4 tile-pixels, capped at 14).
+	/// size ≈ 4 tile-pixels, capped at 14). Points count as size zero, so a
+	/// mostly-point dataset lands on the cap.
 	max_zoom: Option<u8>,
 	/// Bounding-box clip in degrees `[w, s, e, n]`. Not supported in v1; setting
 	/// this errors out.
