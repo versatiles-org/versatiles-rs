@@ -188,6 +188,164 @@ mod tests {
 		file
 	}
 
+	// ─────────────────────── reference tests ───────────────────────
+	//
+	// These pin the alpha grid itself, which nothing did before: the tests above
+	// assert only that a tile came back, and pass just as happily if the mask
+	// returns nothing at all.
+	//
+	// They exist so `compute_alpha_grid` can be rewritten — scanline filling,
+	// clipping the edge set per tile, computing distances only near the boundary
+	// (see #251) — and the pixels can be shown not to have moved.
+	//
+	// The expectations are rendered as text rather than stored as a blob so a
+	// reviewer can see the shape, and a failure shows *where* it changed rather
+	// than that a hash differs.
+
+	/// A geometry built to break the things a scanline rewrite gets wrong:
+	/// a notch so a row crosses the boundary four times instead of two, an
+	/// interior ring, and a second detached polygon.
+	fn reference_geojson() -> assert_fs::NamedTempFile {
+		let file = assert_fs::NamedTempFile::new("reference.geojson").unwrap();
+		file
+			.write_str(
+				r#"{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"name":"reference"},
+				"geometry":{"type":"MultiPolygon","coordinates":[
+				[[[2,2],[18,2],[18,18],[12,18],[12,9],[8,9],[8,18],[2,18],[2,2]],
+				 [[5,5],[9,5],[9,7],[5,7],[5,5]]],
+				[[[20,12],[24,12],[24,16],[20,16],[20,12]]]]}}]}"#,
+			)
+			.unwrap();
+		file
+	}
+
+	/// One character per `step`×`step` block of the alpha grid, by mean value.
+	fn render(alpha: &[u8], width: u32, step: usize) -> String {
+		// No space in the ramp: trailing whitespace in a raw string is silently
+		// eaten by editors and formatters, which would corrupt the expectations.
+		const RAMP: &[u8] = b".:-=+*#%@";
+		let width = width as usize;
+		let height = alpha.len() / width;
+		let mut out = String::new();
+		for by in (0..height).step_by(step) {
+			for bx in (0..width).step_by(step) {
+				let mut sum = 0usize;
+				let mut n = 0usize;
+				for y in by..(by + step).min(height) {
+					for x in bx..(bx + step).min(width) {
+						sum += alpha[y * width + x] as usize;
+						n += 1;
+					}
+				}
+				let mean = sum / n.max(1);
+				out.push(RAMP[mean * (RAMP.len() - 1) / 255] as char);
+			}
+			out.push('\n');
+		}
+		out
+	}
+
+	/// Counts that a coarse rendering cannot see: how many pixels are fully
+	/// transparent, fully opaque, and somewhere in between.
+	// clippy suggests the `bytecount` crate; a whole dependency to count 65k
+	// bytes once per test is not a trade worth making.
+	#[allow(clippy::naive_bytecount)]
+	fn tally(alpha: &[u8]) -> (usize, usize, usize) {
+		let clear = alpha.iter().filter(|&&a| a == 0).count();
+		let solid = alpha.iter().filter(|&&a| a == 255).count();
+		(clear, solid, alpha.len() - clear - solid)
+	}
+
+	fn reference_mask(buffer: f64, blur: f64) -> MaskGeometry {
+		let file = reference_geojson();
+		MaskGeometry::from_geojson(file.path(), buffer, blur, BlurFunction::default()).unwrap()
+	}
+
+	#[test]
+	fn the_reference_shape_is_unchanged() {
+		// The whole geometry in one tile: the notch as a gap between two arms
+		// (rows 3-9), the island on the right (rows 4-7), the interior ring
+		// (rows 11-12), the southern edge (row 14).
+		let mask = reference_mask(0.0, 0.0);
+		let coord = TileCoord::new(4, 8, 7).unwrap();
+		let alpha = mask.compute_alpha_grid(coord.to_mercator_bbox(), 256, 256);
+
+		assert_eq!(
+			render(&alpha, 256, 16),
+			concat!(
+				"................\n",
+				"................\n",
+				"................\n",
+				".+%%%*..=%%%#...\n",
+				".+@@@*..=@@@#.=+\n",
+				".+@@@*..=@@@#.#@\n",
+				".+@@@*..=@@@#.#@\n",
+				".+@@@*..=@@@#.-=\n",
+				".+@@@*..=@@@#...\n",
+				".+@@@#==*@@@#...\n",
+				".+@%%%%@@@@@#...\n",
+				".+@+..+@@@@@#...\n",
+				".+@#++#@@@@@#...\n",
+				".+@@@@@@@@@@#...\n",
+				".-++++++++++=...\n",
+				"................\n",
+			)
+		);
+		// The rendering averages 16x16 blocks, so it cannot see a handful of
+		// changed pixels along an edge. These counts can.
+		assert_eq!(tally(&alpha), (35259, 27914, 2363), "(clear, solid, partial)");
+	}
+
+	#[test]
+	fn a_tile_well_inside_is_fully_opaque() {
+		let mask = reference_mask(0.0, 0.0);
+		let coord = TileCoord::from_geo(15.0, 15.0, 8).unwrap();
+		let alpha = mask.compute_alpha_grid(coord.to_mercator_bbox(), 256, 256);
+		assert_eq!(tally(&alpha), (0, 65536, 0));
+	}
+
+	#[test]
+	fn a_tile_inside_the_interior_ring_is_fully_transparent() {
+		// The case a scanline fill gets wrong by counting the hole's edges as
+		// entries rather than exits.
+		let mask = reference_mask(0.0, 0.0);
+		let coord = TileCoord::from_geo(7.0, 6.0, 9).unwrap();
+		let alpha = mask.compute_alpha_grid(coord.to_mercator_bbox(), 256, 256);
+		assert_eq!(tally(&alpha), (65536, 0, 0));
+	}
+
+	#[test]
+	fn a_tile_beyond_the_mask_is_fully_transparent() {
+		let mask = reference_mask(0.0, 0.0);
+		let coord = TileCoord::from_geo(30.0, 30.0, 6).unwrap();
+		let alpha = mask.compute_alpha_grid(coord.to_mercator_bbox(), 256, 256);
+		assert_eq!(tally(&alpha), (65536, 0, 0));
+	}
+
+	#[test]
+	fn blur_widens_the_transition_band() {
+		let coord = TileCoord::new(4, 8, 7).unwrap();
+		let sharp = reference_mask(0.0, 0.0).compute_alpha_grid(coord.to_mercator_bbox(), 256, 256);
+		let blurred = reference_mask(0.0, 60_000.0).compute_alpha_grid(coord.to_mercator_bbox(), 256, 256);
+
+		// Without blur the only partial pixels are the one-pixel antialiasing
+		// band; with it, the transition is many pixels wide.
+		assert_eq!(tally(&sharp).2, 2363);
+		assert_eq!(tally(&blurred).2, 14336);
+	}
+
+	#[test]
+	fn a_positive_buffer_grows_the_covered_area() {
+		let coord = TileCoord::new(4, 8, 7).unwrap();
+		let plain = reference_mask(0.0, 0.0).compute_alpha_grid(coord.to_mercator_bbox(), 256, 256);
+		let grown = reference_mask(80_000.0, 0.0).compute_alpha_grid(coord.to_mercator_bbox(), 256, 256);
+
+		let (plain_clear, plain_solid, _) = tally(&plain);
+		let (grown_clear, grown_solid, _) = tally(&grown);
+		assert!(grown_solid > plain_solid, "{grown_solid} should exceed {plain_solid}");
+		assert!(grown_clear < plain_clear, "{grown_clear} should be under {plain_clear}");
+	}
+
 	#[test]
 	fn test_factory_tag_name() {
 		let factory = Factory {};
