@@ -361,6 +361,20 @@ jobs:
     name: "Linux musl: Test"
     runs-on: ubuntu-latest
     container: rust:alpine
+    # 1132s of compiling against 109s of tests — a ten-to-one ratio, steeper even
+    # than the Windows job's four-to-one, which is what makes trading optimisation
+    # for compile time pay here. Measured over the whole workspace the trade is
+    # -72% on the build and +20% on the test run.
+    #
+    # This replaces a cache rather than complementing one. The cache could never
+    # hit: the store sits over GitHub's 10 GB ceiling, so entries are evicted by
+    # least-recent *access*, and an entry that is written at the end of every run
+    # and never read has its creation as its access time. It was saved and
+    # evicted, every run, forever. Not caching this job also returns ~1 GB of
+    # pressure to a budget that has none to spare.
+    env:
+      CARGO_PROFILE_DEV_OPT_LEVEL: "0"
+      CARGO_PROFILE_TEST_OPT_LEVEL: "0"
     steps:
       # Before checkout so actions/checkout has git. openssl-dev is for
       # openssl-sys, pulled in via ssh2.
@@ -369,20 +383,6 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v7
-
-      # Uncached this job took 1330s — 1201s of it compiling — which made it the
-      # critical path on its own and took CI from 13.1 to 22.5 minutes. Alpine
-      # plus static musl linking is slower than the gnu equivalent by enough to
-      # matter. At roughly 1050 seconds saved per GB it is the best-earning
-      # cache here, ahead of windows-test at 654; the space comes from
-      # "Linux: Node.js", which earned the least.
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "linux-musl"
-          cache-targets: true
-          cache-on-failure: false
-          cache-bin: false
 
       - name: Build tests
         run: cargo test --workspace --no-run
