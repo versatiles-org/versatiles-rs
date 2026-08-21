@@ -22,7 +22,8 @@ use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
-use versatiles_core::{TileBBox, TileCoord, TileJSON, TilePyramid, TileStream};
+use versatiles_core::{TileBBox, TileCoord, TileJSON, TilePyramid, TileSize, TileStream, TileType};
+use versatiles_image::GenericImageView;
 
 #[cfg(feature = "cli")]
 use crate::TilesRuntime;
@@ -99,6 +100,58 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 				self.source_type()
 			)
 		})
+	}
+
+	/// Measures the pixel size of this source's tiles by decoding one.
+	///
+	/// The answer a source *declares* is [`TileJSON::tile_size`](TileJSON), and
+	/// that is the one to prefer — this is the fallback for a source that declares
+	/// nothing, so a caller can fill the gap instead of leaving readers to fetch
+	/// and decode a tile themselves (issue #247). Containers written before
+	/// producers set the field are exactly that case.
+	///
+	/// Costs one tile read and one image decode. `Ok(None)` — never an error —
+	/// when the size cannot be established: a vector source, an empty pyramid, a
+	/// tile that will not decode, or a tile that is not a square 256 or 512.
+	/// Backfilling metadata must not be able to fail a conversion that would
+	/// otherwise succeed.
+	///
+	/// Only the first few levels are tried, cheapest first, so a sparse source
+	/// cannot turn this into a scan.
+	async fn measure_tile_size(&self) -> Result<Option<TileSize>> {
+		/// Levels to try before giving up.
+		const MAX_LEVELS_TRIED: usize = 4;
+
+		if self.metadata().tile_format().to_type() != TileType::Raster {
+			return Ok(None);
+		}
+
+		let pyramid = self.tile_pyramid().await?;
+		// Ascending, so the smallest bounding boxes are tried first.
+		let levels = pyramid.iter().filter(|level| !level.is_empty()).take(MAX_LEVELS_TRIED);
+
+		for level in levels {
+			let mut stream = self.tile_stream(level.to_bbox()).await?;
+			let Some((coord, tile)) = stream.next().await else {
+				continue;
+			};
+			drop(stream);
+
+			let (width, height) = match tile.into_image() {
+				Ok(image) => image.dimensions(),
+				Err(e) => {
+					log::debug!("could not decode {coord:?} to measure the tile size: {e}");
+					continue;
+				}
+			};
+			if width != height {
+				log::debug!("tile {coord:?} is {width}x{height}, not square; not measuring a tile size");
+				return Ok(None);
+			}
+			return Ok(u16::try_from(width).ok().and_then(|w| TileSize::new(w).ok()));
+		}
+
+		Ok(None)
 	}
 
 	/// Fetches a single tile at the given coordinate.

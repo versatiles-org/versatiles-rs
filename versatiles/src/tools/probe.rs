@@ -124,6 +124,11 @@ async fn print_metadata(report: &ProbeReport, print: &mut PrettyPrint) {
 		.await;
 	print.add_key_value("tile compression", &report.tile_compression).await;
 	print.add_key_value("tile format", &report.tile_format).await;
+	// Only shown when the TileJSON declares nothing — and labelled, because this
+	// one was read off a tile rather than claimed by the source (issue #247).
+	if let Some(size) = report.measured_tile_size {
+		print.add_key_value("tile size in px (measured)", &size.size()).await;
+	}
 }
 
 /// Formats a `u64` with underscores as thousands separators (e.g. `1_234_567`).

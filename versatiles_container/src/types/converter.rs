@@ -339,6 +339,18 @@ impl TilesConvertReader {
 		}
 		new_rp.update_tilejson(&mut tilejson);
 
+		// Backfill the one field `update_tilejson` cannot derive. A container
+		// written before its producers declared `tile_size` carries none, and
+		// copying that gap forward means every reconversion keeps producing output
+		// a client has to decode a tile to measure (issue #247). Measuring it here
+		// costs one tile read, once, and only when it is missing.
+		if tilejson.tile_size.is_none() {
+			tilejson.tile_size = reader.measure_tile_size().await?;
+			if let Some(size) = tilejson.tile_size {
+				log::debug!("source declared no tile_size; measured {} px from a tile", size.size());
+			}
+		}
+
 		Ok(TilesConvertReader {
 			reader,
 			converter_parameters: cp,
@@ -679,6 +691,42 @@ mod tests {
 		let tile = tcr.tile(&coord).await?.unwrap();
 		assert_eq!(tile.format(), WEBP);
 
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_missing_tile_size_is_measured_from_a_tile() -> Result<()> {
+		// Issue #247: a container written before its producers declared tile_size
+		// carries none, and reconverting used to copy that gap forward. The mock
+		// raster tiles are 256 px and its TileJSON says nothing, which is exactly
+		// the shape of the already-published tilesets.
+		let reader = get_mock_reader(PNG, Uncompressed);
+		assert_eq!(reader.tilejson().tile_size, None, "precondition");
+
+		let tcr = TilesConvertReader::new_from_reader(reader, TilesConverterParameters::default()).await?;
+		assert_eq!(tcr.tilejson().tile_size.map(|s| s.size()), Some(256));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_declared_tile_size_is_not_second_guessed() -> Result<()> {
+		// What the source says wins; nothing is read to second-guess it. The mock
+		// tiles are 256 px, so a declared 512 surviving proves nothing was measured.
+		let reader_metadata = TileSourceMetadata::new(PNG, Uncompressed, Traversal::ANY, None);
+		let mut reader = MockReader::new_mock(TilePyramid::new_full_up_to(4), reader_metadata)?;
+		reader.tilejson_mut().set_tile_size(512)?;
+
+		let tcr = TilesConvertReader::new_from_reader(reader.into_shared(), TilesConverterParameters::default()).await?;
+		assert_eq!(tcr.tilejson().tile_size.map(|s| s.size()), Some(512));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_vector_source_is_not_measured() -> Result<()> {
+		// A vector tile has no pixel size, and no tile should be read looking for one.
+		let reader = get_mock_reader(MVT, Uncompressed);
+		let tcr = TilesConvertReader::new_from_reader(reader, TilesConverterParameters::default()).await?;
+		assert_eq!(tcr.tilejson().tile_size, None);
 		Ok(())
 	}
 

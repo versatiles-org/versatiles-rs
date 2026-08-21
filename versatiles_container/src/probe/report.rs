@@ -17,7 +17,7 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use versatiles_core::{GeoBBox, ProbeDepth, TileBBox, TileCompression, TileFormat, TileJSON, TileType};
+use versatiles_core::{GeoBBox, ProbeDepth, TileBBox, TileCompression, TileFormat, TileJSON, TileSize, TileType};
 use versatiles_geometry::vector_tile::{
 	DegenerateReason, GeomType, IssueKind, LayerStats, ValidationIssue, layer_stats, validate_tile,
 };
@@ -49,6 +49,14 @@ pub struct ProbeReport {
 	/// One entry per non-empty zoom level, ascending. Derived from the actual
 	/// pyramid rather than from the TileJSON's declared zoom range.
 	pub pyramid: Vec<PyramidLevel>,
+	/// Pixel size measured by decoding one tile, set only when the TileJSON
+	/// declares no `tile_size` and one could be established.
+	///
+	/// Kept apart from `tilejson` on purpose: what the source *says* and what its
+	/// tiles *are* are different claims, and a probe that quietly merged them
+	/// would hide exactly the gap this reports (issue #247). Note that
+	/// `tile_sizes` below is unrelated — those are byte sizes.
+	pub measured_tile_size: Option<TileSize>,
 	/// Populated at [`ProbeDepth::TileSizes`] and deeper.
 	pub tile_sizes: Option<TileSizeReport>,
 	/// Populated at [`ProbeDepth::TileContents`].
@@ -367,12 +375,20 @@ pub async fn probe_report(
 		})
 		.collect();
 
+	let tilejson = source.tilejson().clone();
+	let measured_tile_size = if tilejson.tile_size.is_none() {
+		source.measure_tile_size().await?
+	} else {
+		None
+	};
+
 	let mut report = ProbeReport {
 		source_type: source.source_type().to_string(),
 		tile_format: *metadata.tile_format(),
 		tile_compression: *metadata.tile_compression(),
-		tilejson: source.tilejson().clone(),
+		tilejson,
 		pyramid,
+		measured_tile_size,
 		tile_sizes: None,
 		contents: None,
 	};
@@ -608,6 +624,36 @@ mod tests {
 		// Nothing deeper was asked for, so nothing deeper was computed.
 		assert!(report.tile_sizes.is_none());
 		assert!(report.contents.is_none());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn a_raster_source_that_declares_no_size_gets_one_measured() -> Result<()> {
+		use versatiles_core::{TileCompression, TilePyramid};
+
+		use crate::{MockReader, TileSourceMetadata, Traversal};
+
+		let runtime = TilesRuntime::new_silent();
+
+		// The mock raster tiles are 256 px and its TileJSON declares nothing —
+		// the shape of a container written before #247.
+		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None);
+		let reader = MockReader::new_mock(TilePyramid::new_full_up_to(3), metadata)?;
+		let report = probe_report(&reader, ProbeDepth::Shallow, &runtime, None).await?;
+		assert_eq!(report.tilejson.tile_size, None, "the source still declares nothing");
+		assert_eq!(report.measured_tile_size.map(|s| s.size()), Some(256));
+
+		// Once it declares a size, that is the answer and nothing is measured.
+		let metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None);
+		let mut reader = MockReader::new_mock(TilePyramid::new_full_up_to(3), metadata)?;
+		reader.tilejson_mut().set_tile_size(512)?;
+		let report = probe_report(&reader, ProbeDepth::Shallow, &runtime, None).await?;
+		assert_eq!(report.tilejson.tile_size.map(|s| s.size()), Some(512));
+		assert_eq!(report.measured_tile_size, None);
+
+		// A vector source has no pixel size to measure.
+		let report = berlin_report(ProbeDepth::Shallow).await?;
+		assert_eq!(report.measured_tile_size, None);
 		Ok(())
 	}
 
