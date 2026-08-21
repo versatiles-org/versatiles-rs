@@ -98,6 +98,21 @@ fn change_format_sets_flags() -> Result<()> {
 }
 
 #[test]
+fn change_format_across_tile_types_errors_instead_of_panicking() -> Result<()> {
+	// Issue #244: this used to be an `assert_eq!`, so a raster format against a
+	// vector tile aborted the worker task instead of returning an error.
+	let mut tile = Tile::from_image(tiny_rgb_image(), PNG)?;
+	let err = tile.change_format(MVT, None, None).unwrap_err();
+	assert!(
+		format!("{err:#}").contains("cannot change the format of a raster tile (png) to mvt, which is vector"),
+		"unexpected message: {err:#}"
+	);
+	// The tile is left untouched.
+	assert_eq!(tile.format(), PNG);
+	Ok(())
+}
+
+#[test]
 fn cachevalue_roundtrip_preserves_fields() -> Result<()> {
 	let img = tiny_rgb_image();
 	let mut original = Tile::from_image(img, PNG)?;

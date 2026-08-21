@@ -42,7 +42,7 @@
 
 use std::{path::Path, sync::Arc};
 
-use anyhow::{Result, bail};
+use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use versatiles_core::{
 	GeoBBox, GeoCrop, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileRemap, TileStream,
@@ -307,6 +307,17 @@ impl TilesConvertReader {
 		let mut new_rp: TileSourceMetadata = reader.metadata().clone();
 
 		if let Some(tile_format) = cp.tile_format {
+			// Checked here rather than per tile: `Tile::change_format` cannot turn a
+			// vector tile into a raster one (or back), and finding that out inside a
+			// spawned stream task buries the reason. One comparison, before the
+			// pyramid is walked, so the caller gets the error immediately (issue #244).
+			let source_format = *reader.metadata().tile_format();
+			ensure!(
+				tile_format.to_type() == source_format.to_type(),
+				"cannot convert to '{tile_format}': it is a {} format, but the source contains {} tiles ('{source_format}')",
+				tile_format.to_type().as_str(),
+				source_format.to_type().as_str()
+			);
 			new_rp.set_tile_format(tile_format);
 		}
 
@@ -668,6 +679,25 @@ mod tests {
 		let tile = tcr.tile(&coord).await?.unwrap();
 		assert_eq!(tile.format(), WEBP);
 
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_format_conversion_rejects_mismatched_tile_type() -> Result<()> {
+		// Issue #244: `--tile-format webp` against a vector container used to reach
+		// an assertion inside a spawned stream task. It has to fail here, while the
+		// reader is being built, before a single tile is read.
+		let reader = get_mock_reader(MVT, Uncompressed);
+		let cp = TilesConverterParameters {
+			tile_format: Some(WEBP),
+			..Default::default()
+		};
+		let err = TilesConvertReader::new_from_reader(reader, cp).await.unwrap_err();
+		assert!(
+			format!("{err:#}")
+				.contains("cannot convert to 'webp': it is a raster format, but the source contains vector tiles ('mvt')"),
+			"unexpected message: {err:#}"
+		);
 		Ok(())
 	}
 

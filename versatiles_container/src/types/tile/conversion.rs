@@ -99,7 +99,13 @@ impl Tile {
 			return Ok(());
 		}
 
-		assert_eq!(format.to_type(), self.format.to_type());
+		ensure!(
+			format.to_type() == self.format.to_type(),
+			"cannot change the format of a {} tile ({}) to {format}, which is {}",
+			self.format.to_type().as_str(),
+			self.format,
+			format.to_type().as_str()
+		);
 		self.materialize_content()?;
 		self.delete_blob();
 		self.compression = TileCompression::Uncompressed;
