@@ -31,6 +31,13 @@ struct Args {
 | Everything after the first paragraph | `doc_details()`           | Markdown, paragraph structure preserved            |
 | A field's doc comment                | `field_metadata()[i].doc` | One bullet in the generated `### Parameters` list  |
 
+**Wrapping in the source is cosmetic.** An operation's doc comment is read the
+way Markdown reads it: the line breaks inside a paragraph are not meaningful, so
+each paragraph is folded back onto one line before it is rendered or handed to
+an editor. Wrap the comment to whatever width suits the file. Fenced blocks,
+tables, headings and list items keep their own lines, because there the breaks
+_are_ meaningful.
+
 **The one hard constraint:** a field's doc comment lines are joined with a
 single space. Blank lines, `-` lists and fenced blocks inside a field doc do not
 become blank lines, lists or code — they collapse into one run-on line with

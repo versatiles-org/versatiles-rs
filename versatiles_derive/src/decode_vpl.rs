@@ -320,12 +320,89 @@ pub fn extract_comment(attr: &Attribute) -> Option<String> {
 	None
 }
 
+/// Whether a line begins a Markdown block that owns its own line.
+///
+/// A table row, a heading, a blockquote and a horizontal rule each mean
+/// something different from the line above them, so they must not be folded
+/// into the preceding paragraph.
+fn is_own_line_block(line: &str) -> bool {
+	line.starts_with('|') || line.starts_with('#') || line.starts_with('>') || line == "---"
+}
+
+/// Whether a line starts a list item, whose wrapped continuation lines belong
+/// to it rather than to a paragraph of their own.
+fn starts_list_item(line: &str) -> bool {
+	let rest = line
+		.strip_prefix("- ")
+		.or_else(|| line.strip_prefix("* "))
+		.or_else(|| line.strip_prefix("+ "));
+	if rest.is_some() {
+		return true;
+	}
+	// An ordered item: digits, then `. ` or `) `.
+	let digits = line.chars().take_while(char::is_ascii_digit).count();
+	digits > 0 && matches!(line.get(digits..digits + 2), Some(". " | ") "))
+}
+
+/// Rewrap a struct's doc comment the way Markdown reads it.
+///
+/// A doc comment is hard-wrapped to fit the source file, but those line breaks
+/// are not meaningful: Markdown treats a run of lines as one paragraph, and a
+/// blank line as the break between two. Everything downstream — a tooltip, a
+/// TypeScript doc comment, `versatiles help --raw` — wants the paragraph, not
+/// the author's chosen column width, so each paragraph is joined back into one
+/// line here.
+///
+/// Fenced code blocks are copied through untouched, because their line breaks
+/// *are* meaningful. So are tables, headings and blockquotes. A list item keeps
+/// its own line and absorbs its continuation lines, so a wrapped bullet becomes
+/// one bullet rather than a bullet followed by a stray paragraph.
+fn collapse_paragraphs(docs: &str) -> String {
+	let mut out: Vec<String> = Vec::new();
+	let mut paragraph: Vec<&str> = Vec::new();
+	let mut in_fence = false;
+
+	/// Emit whatever paragraph has been collected so far as one line.
+	fn flush(paragraph: &mut Vec<&str>, out: &mut Vec<String>) {
+		if !paragraph.is_empty() {
+			out.push(paragraph.join(" "));
+			paragraph.clear();
+		}
+	}
+
+	for line in docs.lines() {
+		let trimmed = line.trim();
+
+		if trimmed.starts_with("```") {
+			flush(&mut paragraph, &mut out);
+			in_fence = !in_fence;
+			out.push(trimmed.to_string());
+		} else if in_fence {
+			out.push(line.to_string());
+		} else if trimmed.is_empty() || is_own_line_block(trimmed) {
+			flush(&mut paragraph, &mut out);
+			out.push(trimmed.to_string());
+		} else if starts_list_item(trimmed) {
+			// A new item ends the previous one, then collects its own
+			// continuation lines through the branch below.
+			flush(&mut paragraph, &mut out);
+			paragraph.push(trimmed);
+		} else {
+			paragraph.push(trimmed);
+		}
+	}
+	flush(&mut paragraph, &mut out);
+
+	out.join("\n").trim().to_string()
+}
+
 /// Extract doc comments from struct attributes, preserving blank lines so the
 /// rendered markdown keeps headings and code fences legible. `extract_comment`
 /// collapses blank `///` lines to `None`; here we promote them to empty strings
-/// so `join("\n")` yields real paragraph breaks.
+/// so `join("\n")` yields real paragraph breaks, and
+/// [`collapse_paragraphs`] then folds each paragraph back onto one line.
 fn extract_struct_docs(attrs: &[Attribute]) -> String {
-	attrs
+	let joined = attrs
 		.iter()
 		.filter_map(|a| {
 			if a.path().is_ident("doc") {
@@ -335,9 +412,8 @@ fn extract_struct_docs(attrs: &[Attribute]) -> String {
 			}
 		})
 		.collect::<Vec<String>>()
-		.join("\n")
-		.trim()
-		.to_string()
+		.join("\n");
+	collapse_paragraphs(&joined)
 }
 
 /// Splits a struct's rustdoc into its summary and the rest.
@@ -993,6 +1069,47 @@ mod tests {
 		assert!(code.contains("\"Vec<VPLPipeline>\""));
 		let code_no_spaces = code.replace(' ', "");
 		assert!(code_no_spaces.contains("is_sources:true"));
+	}
+
+	#[test]
+	fn collapse_paragraphs_folds_wrapped_prose_onto_one_line() {
+		let input = "Reads a container.\n\nThe format is detected\nfrom the file's\nextension.";
+		assert_eq!(
+			super::collapse_paragraphs(input),
+			"Reads a container.\n\nThe format is detected from the file's extension."
+		);
+	}
+
+	#[test]
+	fn collapse_paragraphs_keeps_fenced_blocks_verbatim() {
+		let input = "Intro line\nwrapped.\n\n```vpl\nfrom_container filename=\"a.versatiles\"\nfrom_debug format=png\n```\n\nTrailing\nprose.";
+		assert_eq!(
+			super::collapse_paragraphs(input),
+			"Intro line wrapped.\n\n```vpl\nfrom_container filename=\"a.versatiles\"\nfrom_debug format=png\n```\n\nTrailing prose."
+		);
+	}
+
+	#[test]
+	fn collapse_paragraphs_keeps_tables_and_headings_on_their_own_lines() {
+		let input = "### Formats\n\n| Ext | Format |\n| --- | ------ |\n| shp | Esri   |";
+		assert_eq!(super::collapse_paragraphs(input), input);
+	}
+
+	#[test]
+	fn collapse_paragraphs_folds_a_wrapped_list_item_into_one_item() {
+		let input = "- first item that\n  wraps over lines\n- second item\n\nAfter.";
+		assert_eq!(
+			super::collapse_paragraphs(input),
+			"- first item that wraps over lines\n- second item\n\nAfter."
+		);
+	}
+
+	#[test]
+	fn collapse_paragraphs_recognises_ordered_items() {
+		assert!(super::starts_list_item("1. one"));
+		assert!(super::starts_list_item("12) twelve"));
+		assert!(!super::starts_list_item("1.5 is not a list"));
+		assert!(!super::starts_list_item("2^z - 1 - x"));
 	}
 
 	#[test]

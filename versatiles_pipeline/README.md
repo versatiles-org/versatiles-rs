@@ -188,14 +188,9 @@ Generates raster tiles of a single solid colour.
 
 Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*.tar` file.
 
-`filename` takes a local path or a URL — `filename="world.versatiles"` as
-readily as `filename="https://example.com/world.versatiles"`. Run
-`versatiles help source` for the URL and authentication syntax.
+`filename` takes a local path or a URL — `filename="world.versatiles"` as readily as `filename="https://example.com/world.versatiles"`. Run `versatiles help source` for the URL and authentication syntax.
 
-`ssh_identity` names a key for this source alone, overriding `--ssh-identity`
-and `VERSATILES_SSH_IDENTITY`, so one pipeline can read from two SFTP hosts
-that need different keys. It is ignored for every other scheme, and naming a
-key ties the `.vpl` file to machines that have it.
+`ssh_identity` names a key for this source alone, overriding `--ssh-identity` and `VERSATILES_SSH_IDENTITY`, so one pipeline can read from two SFTP hosts that need different keys. It is ignored for every other scheme, and naming a key ties the `.vpl` file to machines that have it.
 
 ### Parameters
 
@@ -208,18 +203,11 @@ key ties the `.vpl` file to machines that have it.
 
 Reads a CSV file with longitude and latitude columns and emits MVT point tiles.
 
-Left to itself, `max_zoom` picks the level at which the median feature spans
-roughly 4 tile-pixels, capped at 14. Points count as size zero, so a CSV of
-points always lands on the cap.
+Left to itself, `max_zoom` picks the level at which the median feature spans roughly 4 tile-pixels, capped at 14. Points count as size zero, so a CSV of points always lands on the cap.
 
-`properties_include` and `properties_exclude` act on what is left after the
-coordinate and id columns are consumed, so naming `lon_column`,
-`lat_column` or `id_column` in either has no effect.
+`properties_include` and `properties_exclude` act on what is left after the coordinate and id columns are consumed, so naming `lon_column`, `lat_column` or `id_column` in either has no effect.
 
-A tile over `max_tile_bytes` is dropped while streaming and an error when a
-single tile is requested. Raise the cap when a legitimate low-zoom tile
-exceeds it, or set `max_tile_bytes=none` to emit tiles at any size; the
-soft-cap warning threshold, 200 KB at the default, scales with it.
+A tile over `max_tile_bytes` is dropped while streaming and an error when a single tile is requested. Raise the cap when a legitimate low-zoom tile exceeds it, or set `max_tile_bytes=none` to emit tiles at any size; the soft-cap warning threshold, 200 KB at the default, scales with it.
 
 ### Parameters
 
@@ -273,9 +261,7 @@ Reads a GDAL elevation dataset and encodes it as terrain RGB tiles.
 
 Reads a GDAL raster dataset and reprojects it into tiles.
 
-When building a virtual raster with `gdalbuildvrt`, pass `-addalpha` — without
-it the VRT carries no alpha channel and nothing outside the data becomes
-transparent.
+When building a virtual raster with `gdalbuildvrt`, pass `-addalpha` — without it the VRT carries no alpha channel and nothing outside the data becomes transparent.
 
 ### Parameters
 
@@ -305,22 +291,13 @@ The input format is detected from the file extension:
 | `.ndjson`, `.geojsonl`, `.ndgeojson`, `.geojsonseq` | line-delimited GeoJSON, one feature per line |
 | `.shp`                                              | Esri Shapefile                               |
 
-A `.geojsonseq` file may prefix each record with the RFC 8142 record
-separator `U+001E`.
+A `.geojsonseq` file may prefix each record with the RFC 8142 record separator `U+001E`.
 
-Left to itself, `max_zoom` picks the level at which the median feature spans
-roughly 4 tile-pixels, capped at 14. Points count as size zero, so a
-mostly-point dataset lands on the cap.
+Left to itself, `max_zoom` picks the level at which the median feature spans roughly 4 tile-pixels, capped at 14. Points count as size zero, so a mostly-point dataset lands on the cap.
 
-A tile over `max_tile_bytes` is dropped while streaming and an error when a
-single tile is requested. Raise the cap when a legitimate low-zoom tile
-exceeds it, or set `max_tile_bytes=none` to emit tiles at any size; the
-soft-cap warning threshold, 200 KB at the default, scales with it.
+A tile over `max_tile_bytes` is dropped while streaming and an error when a single tile is requested. Raise the cap when a legitimate low-zoom tile exceeds it, or set `max_tile_bytes=none` to emit tiles at any size; the soft-cap warning threshold, 200 KB at the default, scales with it.
 
-`ignore_id` exists because MVT requires a `uint64` feature id. A string id —
-as USGS earthquake data has — is dropped at encode time anyway, so setting
-this makes that explicit; it is also the way to discard an id that is just
-noise.
+`ignore_id` exists because MVT requires a `uint64` feature id. A string id — as USGS earthquake data has — is dropped at encode time anyway, so setting this makes that explicit; it is also the way to discard an id that is just noise.
 
 ### Parameters
 
@@ -347,24 +324,13 @@ noise.
 
 Generates vector tiles holding the cells of a projected square grid.
 
-Gridded statistics are published as a table keyed on a cell id, without the
-geometry that id refers to. This generates that geometry, so the table can be
-joined onto it with `vector_update_properties`.
+Gridded statistics are published as a table keyed on a cell id, without the geometry that id refers to. This generates that geometry, so the table can be joined onto it with `vector_update_properties`.
 
-Without GDAL, `epsg` accepts `3035` (ETRS89-LAEA, what European gridded
-statistics use), `3857` (web mercator) and `4326` (WGS84 lon/lat). A build
-with the `gdal` feature accepts any code, at roughly ten times the cost per
-coordinate — and released binaries ship without GDAL, so a `.vpl` naming
-another code will not run on one.
+Without GDAL, `epsg` accepts `3035` (ETRS89-LAEA, what European gridded statistics use), `3857` (web mercator) and `4326` (WGS84 lon/lat). A build with the `gdal` feature accepts any code, at roughly ten times the cost per coordinate — and released binaries ship without GDAL, so a `.vpl` naming another code will not run on one.
 
-`bbox` is required: an unbounded grid has no pyramid to derive from, and at
-most cell sizes it would be more tiles than can be written.
+`bbox` is required: an unbounded grid has no pyramid to derive from, and at most cell sizes it would be more tiles than can be written.
 
-The two id presets produce `CRS3035RES1000mN2691000E4341000` for `inspire`
-and `1kmN2689E4337` for `geostat`. `id_template` spells out anything else:
-`{x}` and `{y}` each take an optional divisor and zero-padded width, so
-`E{x/100:04}N{y/100:04}` produces `E0643N4567`, the form Dutch grid
-statistics use.
+The two id presets produce `CRS3035RES1000mN2691000E4341000` for `inspire` and `1kmN2689E4337` for `geostat`. `id_template` spells out anything else: `{x}` and `{y}` each take an optional divisor and zero-padded width, so `E{x/100:04}N{y/100:04}` produces `E0643N4567`, the form Dutch grid statistics use.
 
 ### Parameters
 
@@ -388,16 +354,11 @@ statistics use.
 
 Generates vector tiles holding H3 hexagons.
 
-The hexagonal counterpart to `from_grid`: data published as a table keyed on
-an H3 index gets the geometry that index refers to, ready to be joined onto
-with `vector_update_properties`.
+The hexagonal counterpart to `from_grid`: data published as a table keyed on an H3 index gets the geometry that index refers to, ready to be joined onto with `vector_update_properties`.
 
-Resolution `0` gives cells of about 4,250,000 km² and `15` about 0.9 m²;
-`resolution=8` lands near 0.7 km². The full table of cell areas and edge
-lengths is at <https://h3geo.org/docs/core-library/restable/>.
+Resolution `0` gives cells of about 4,250,000 km² and `15` about 0.9 m²; `resolution=8` lands near 0.7 km². The full table of cell areas and edge lengths is at <https://h3geo.org/docs/core-library/restable/>.
 
-`bbox` is required: without bounds the grid would cover the whole planet,
-which at most resolutions is more tiles than can be written.
+`bbox` is required: without bounds the grid would cover the whole planet, which at most resolutions is more tiles than can be written.
 
 ### Parameters
 
@@ -414,9 +375,7 @@ which at most resolutions is more tiles than can be written.
 
 Merges several vector tile sources into one, keeping every feature.
 
-Each output tile carries the features and properties of all the sources at
-that coordinate, so layers with the same name end up side by side rather than
-one replacing the other.
+Each output tile carries the features and properties of all the sources at that coordinate, so layers with the same name end up side by side rather than one replacing the other.
 
 ### Sources
 
@@ -438,14 +397,9 @@ The sources to stack, in priority order, all with the same format.
 
 Blends several raster tile sources into one by alpha-compositing them.
 
-Unlike `from_stacked`, which picks one source's tile whole, this composites
-them pixel by pixel, so a translucent source lets the ones beneath it show
-through.
+Unlike `from_stacked`, which picks one source's tile whole, this composites them pixel by pixel, so a translucent source lets the ones beneath it show through.
 
-With `auto_overscale=true`, a request that no source covers natively returns
-an empty stream rather than a blank tile. Put a `raster_overscale` _after_
-`from_stacked_raster` to fill those in — upscaling one blended tile is
-cheaper than upscaling each source separately.
+With `auto_overscale=true`, a request that no source covers natively returns an empty stream rather than a blank tile. Put a `raster_overscale` _after_ `from_stacked_raster` to fill those in — upscaling one blended tile is cheaper than upscaling each source separately.
 
 ### Sources
 
@@ -472,9 +426,7 @@ Reads one tile file and returns it for every requested coordinate.
 
 Reads tiles from a remote tile server described by a TileJSON endpoint.
 
-The TileJSON document is fetched once when the pipeline is built, and each
-tile is then requested individually through the URL template in its `tiles`
-array.
+The TileJSON document is fetched once when the pipeline is built, and each tile is then requested individually through the URL template in its `tiles` array.
 
 ### Parameters
 
@@ -492,11 +444,7 @@ array.
 
 Generates lower-zoom DEM overview tiles by averaging 24-bit elevation values.
 
-`raster_overview` averages the R, G and B channels independently, which is
-meaningless for a DEM: the channels are one number split across three bytes,
-so averaging them separately mixes the high byte of one pixel with the low
-byte of another. This operation decodes each pixel to its 24-bit raw
-elevation, averages that, and re-encodes.
+`raster_overview` averages the R, G and B channels independently, which is meaningless for a DEM: the channels are one number split across three bytes, so averaging them separately mixes the high byte of one pixel with the low byte of another. This operation decodes each pixel to its 24-bit raw elevation, averages that, and re-encodes.
 
 ### Parameters
 
@@ -509,14 +457,9 @@ elevation, averages that, and re-encodes.
 
 Quantizes DEM raster tiles by rounding elevations to a per-tile power-of-two step.
 
-Discarding low bits that carry no usable signal makes the tiles compress much
-better. The step is derived per tile from two physical criteria —
-`elevation_error` relative to the pixel's ground size, and `slope_error` —
-and the stricter of the two wins.
+Discarding low bits that carry no usable signal makes the tiles compress much better. The step is derived per tile from two physical criteria — `elevation_error` relative to the pixel's ground size, and `slope_error` — and the stricter of the two wins.
 
-Values are rounded to the nearest multiple of the step rather than
-truncated, which halves the worst-case elevation error and removes the
-downward bias at no cost in size. Single-pass: no scan of the data first.
+Values are rounded to the nearest multiple of the step rather than truncated, which halves the worst-case elevation error and removes the downward bias at no cost in size. Single-pass: no scan of the data first.
 
 ### Parameters
 
@@ -530,10 +473,7 @@ downward bias at no cost in size. Single-pass: no scan of the data first.
 
 Converts DEM tiles between 256 and 512 pixels by splitting or merging them.
 
-The counterpart to `raster_tile_resize` for elevation data: downscaling
-averages the decoded 24-bit elevation rather than the R, G and B channels
-separately, which for a DEM would mix the high byte of one pixel with the low
-byte of another.
+The counterpart to `raster_tile_resize` for elevation data: downscaling averages the decoded 24-bit elevation rather than the R, G and B channels separately, which for a DEM would mix the high byte of one pixel with the low byte of another.
 
 ### Parameters
 
@@ -546,18 +486,11 @@ byte of another.
 
 Filters tiles by bounding box, zoom range, or the coordinates present in another container.
 
-Every parameter narrows the tile set, except `bbox_border`, which widens it.
-A `bbox_border=2` keeps a ring of tiles the bbox alone would have dropped;
-those tiles lie outside the crop, so the advertised bounds are extended to
-cover them and a client actually requests them.
+Every parameter narrows the tile set, except `bbox_border`, which widens it. A `bbox_border=2` keeps a ring of tiles the bbox alone would have dropped; those tiles lie outside the crop, so the advertised bounds are extended to cover them and a client actually requests them.
 
-That ring matters wherever a cropped tileset is rendered rather than just
-stored: without it, labels and geometry near the edge have no neighbouring
-tiles to be laid out against.
+That ring matters wherever a cropped tileset is rendered rather than just stored: without it, labels and geometry near the edge have no neighbouring tiles to be laid out against.
 
-`filename` takes the same path and URL syntax as `from_container`. Opening
-it to build the allow-list costs I/O when the pipeline is built, unlike
-every other parameter here.
+`filename` takes the same path and URL syntax as `from_container`. Opening it to build the allow-list costs I/O when the pipeline is built, unlike every other parameter here.
 
 ### Parameters
 
@@ -573,20 +506,13 @@ every other parameter here.
 
 Overwrites fields of the source's TileJSON metadata.
 
-Three ways to supply the new values, applied in that order: a whole document
-via `tilejson` or `tilejson_file` replaces the source's, `tilejson_update` or
-`tilejson_update_file` merges onto it, and the individual parameters below
-override whatever the first two produced.
+Three ways to supply the new values, applied in that order: a whole document via `tilejson` or `tilejson_file` replaces the source's, `tilejson_update` or `tilejson_update_file` merges onto it, and the individual parameters below override whatever the first two produced.
 
-Each of those pairs is mutually exclusive: `tilejson` with `tilejson_file`,
-`tilejson_update` with `tilejson_update_file`, `vector_layers` with
-`vector_layers_file`. The `_file` form exists to avoid quoting JSON inline.
+Each of those pairs is mutually exclusive: `tilejson` with `tilejson_file`, `tilejson_update` with `tilejson_update_file`, `vector_layers` with `vector_layers_file`. The `_file` form exists to avoid quoting JSON inline.
 
-A merge overwrites scalar fields and `vector_layers`, and widens `bounds`
-and the zoom range to the union.
+A merge overwrites scalar fields and `vector_layers`, and widens `bounds` and the zoom range to the union.
 
-The fields and their meaning follow the TileJSON 3.0.0 specification:
-<https://github.com/mapbox/tilejson-spec/tree/master/3.0.0>
+The fields and their meaning follow the TileJSON 3.0.0 specification: <https://github.com/mapbox/tilejson-spec/tree/master/3.0.0>
 
 ### Parameters
 
@@ -621,15 +547,9 @@ Composites translucent raster tiles onto an opaque background colour.
 
 Re-encodes raster tiles into another image format, quality or effort setting.
 
-`quality` and `quality_translucent` take a zoom-dependent list as well as a
-single number. In `quality="70,14:50,15:20"` the first value is the default
-and each `zoom:value` pair applies from that zoom level upwards — so zoom 0
-to 13 use 70, zoom 14 uses 50, and zoom 15 and above use 20. Tiles that are
-already in the target format and need no quality change are passed through
-without re-encoding. `quality` is ignored for PNG, which is always lossless.
+`quality` and `quality_translucent` take a zoom-dependent list as well as a single number. In `quality="70,14:50,15:20"` the first value is the default and each `zoom:value` pair applies from that zoom level upwards — so zoom 0 to 13 use 70, zoom 14 uses 50, and zoom 15 and above use 20. Tiles that are already in the target format and need no quality change are passed through without re-encoding. `quality` is ignored for PNG, which is always lossless.
 
-`quality_translucent` is typically `100`: lossy encoders handle an alpha
-channel badly. Setting it makes every tile be checked for opacity.
+`quality_translucent` is typically `100`: lossy encoders handle an alpha channel badly. Setting it makes every tile be checked for opacity.
 
 ### Parameters
 
@@ -669,10 +589,7 @@ Makes raster pixels outside a GeoJSON polygon transparent.
 
 Serves raster tiles above the source's native resolution by upscaling.
 
-Tiles at `level_base` and below are passed through unchanged; above it, the
-covering tile from `level_base` is cropped to the requested area and scaled
-up. The result is blurry rather than detailed — the point is that a client
-can keep zooming instead of hitting a blank map.
+Tiles at `level_base` and below are passed through unchanged; above it, the covering tile from `level_base` is cropped to the requested area and scaled up. The result is blurry rather than detailed — the point is that a client can keep zooming instead of hitting a blank map.
 
 ### Parameters
 
@@ -696,12 +613,7 @@ Generates the lower zoom levels of a raster pyramid by downscaling.
 
 Converts raster tiles between 256 and 512 pixels by splitting or merging them.
 
-Changing the tile size shifts the zoom levels with it, because the ground
-resolution of a pixel has to stay the same. `tile_size=256` splits each
-512-pixel tile into four 256-pixel tiles one zoom level higher, except at
-level 0, which has no level below it to move to and is downscaled instead.
-`tile_size=512` merges four 256-pixel tiles into one 512-pixel tile one zoom
-level lower.
+Changing the tile size shifts the zoom levels with it, because the ground resolution of a pixel has to stay the same. `tile_size=256` splits each 512-pixel tile into four 256-pixel tiles one zoom level higher, except at level 0, which has no level below it to move to and is downscaled instead. `tile_size=512` merges four 256-pixel tiles into one 512-pixel tile one zoom level lower.
 
 ### Parameters
 
@@ -713,12 +625,7 @@ level lower.
 
 Relabels tile coordinates, correcting a source that uses TMS row order or `z/y/x` paths.
 
-The three flags are applied in a fixed order — `flip_x`, then `flip_y`, then
-`swap_xy` — and between them reach all eight symmetries of the square: four
-rotations and four reflections, which is every relabelling that maps the tile
-grid onto itself. Because that set is closed, chaining two of these
-operations is never necessary; some single combination of the three flags
-does the same thing.
+The three flags are applied in a fixed order — `flip_x`, then `flip_y`, then `swap_xy` — and between them reach all eight symmetries of the square: four rotations and four reflections, which is every relabelling that maps the tile grid onto itself. Because that set is closed, chaining two of these operations is never necessary; some single combination of the three flags does the same thing.
 
 The combinations most likely to be wanted:
 
@@ -729,8 +636,7 @@ The combinations most likely to be wanted:
 | true     | true     | false     | rotate 180°               |
 | true     | false    | true      | rotate 90°                |
 
-Unlike a global `--flip-y` flag, this applies to one source, so a pipeline
-can combine sources that disagree about their conventions.
+Unlike a global `--flip-y` flag, this applies to one source, so a pipeline can combine sources that disagree about their conventions.
 
 ### Parameters
 
@@ -746,12 +652,7 @@ Drops vector features in selected layers that do not satisfy a boolean expressio
 
 Features in layers outside `layer` pass through untouched.
 
-In `expr`, feature properties are available as `props["key"]`, and those
-whose names are valid CEL identifiers — letters, digits and underscore — are
-also exposed as top-level identifiers. A missing key resolves to null, so
-test for presence with `name != null` for an identifier-safe key or
-`has(props.key)` for any key. Run `versatiles help` for a CEL operator
-cheat-sheet.
+In `expr`, feature properties are available as `props["key"]`, and those whose names are valid CEL identifiers — letters, digits and underscore — are also exposed as top-level identifiers. A missing key resolves to null, so test for presence with `name != null` for an identifier-safe key or `has(props.key)` for any key. Run `versatiles help` for a CEL operator cheat-sheet.
 
 ### Examples
 
@@ -786,11 +687,7 @@ Removes whole layers from vector tiles by name.
 
 Removes feature properties from vector tiles by matching their names against a regex.
 
-A property's name is matched with its layer as a prefix, in the form
-`layer_name/property_name`. That makes it possible to target one layer —
-`regex="^places/"` drops every property of the `places` layer — or to reach
-across all of them, as `regex="/name_.*$"` does for every property starting
-with `name_`.
+A property's name is matched with its layer as a prefix, in the form `layer_name/property_name`. That makes it possible to target one layer — `regex="^places/"` drops every property of the `places` layer — or to reach across all of them, as `regex="/name_.*$"` does for every property starting with `name_`.
 
 ### Parameters
 
@@ -803,14 +700,9 @@ with `name_`.
 
 Serves vector tiles above the source's highest zoom level by clipping and rescaling.
 
-Tiles at `level_base` and below are passed through unchanged; above it, the
-covering tile from `level_base` is clipped to the requested sub-region and
-its coordinates rescaled. No detail is added — the geometry is the parent's —
-but a client can keep zooming instead of hitting a blank map.
+Tiles at `level_base` and below are passed through unchanged; above it, the covering tile from `level_base` is clipped to the requested sub-region and its coordinates rescaled. No detail is added — the geometry is the parent's — but a client can keep zooming instead of hitting a blank map.
 
-`level_max` defaults to four levels above `level_base` because each extra
-level quadruples the tile count, and four is usually as far as the pyramid
-stays manageable.
+`level_max` defaults to four levels above `level_base` because each extra level quadruples the tile count, and four is usually as far as the pyramid stays manageable.
 
 ### Parameters
 
@@ -825,16 +717,11 @@ stays manageable.
 
 Repairs vector tiles so that they conform to MVT 2.1.
 
-Always fixed: missing `extent` and `version` fields, duplicate layer names,
-inverted polygon winding, and degenerate rings.
+Always fixed: missing `extent` and `version` fields, duplicate layer names, inverted polygon winding, and degenerate rings.
 
-Tiles the validator considers clean pass through unchanged — the original
-encoded blob is forwarded without re-encoding — so this operation is cheap
-on conformant input.
+Tiles the validator considers clean pass through unchanged — the original encoded blob is forwarded without re-encoding — so this operation is cheap on conformant input.
 
-Without `drop_offenders`, a layer holding a feature whose geometry cannot be
-decoded keeps its original geometry bytes, while the structural fixes are
-still applied to it.
+Without `drop_offenders`, a layer holding a feature whose geometry cannot be decoded keeps its original geometry bytes, while the structural fixes are still applied to it.
 
 ### Example
 
@@ -853,11 +740,7 @@ from_container filename="bad.versatiles" | vector_repair drop_offenders=true
 
 Joins tabular data onto vector features, matching on an id column.
 
-Each row of a CSV or TSV file is matched to the features whose
-`id_field_tiles` property equals the row's `id_field_data` column, and the
-row's remaining columns become properties on those features. This is how a
-published statistics table is attached to the geometry it refers to — see
-`from_grid` and `from_h3` for generating that geometry.
+Each row of a CSV or TSV file is matched to the features whose `id_field_tiles` property equals the row's `id_field_data` column, and the row's remaining columns become properties on those features. This is how a published statistics table is attached to the geometry it refers to — see `from_grid` and `from_h3` for generating that geometry.
 
 ### Parameters
 
