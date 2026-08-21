@@ -225,7 +225,7 @@ mod tests {
 				"  \"maxzoom\": 15,",
 				"  \"minzoom\": 3,",
 				"  \"name\": \"dummy vector source\",",
-				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
+				"  \"tile_format\": \"application/vnd.mapbox-vector-tile\",",
 				"  \"tile_schema\": \"other\",",
 				"  \"tile_type\": \"vector\",",
 				"  \"tilejson\": \"3.0.0\"",

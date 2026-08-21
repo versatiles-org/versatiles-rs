@@ -306,7 +306,7 @@ mod tests {
 			if result.compression == TileCompression::Uncompressed {
 				assert_eq!(
 					result.blob.as_str(),
-					"{\"tile_format\":\"vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tile_type\":\"vector\",\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
+					"{\"tile_format\":\"application/vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tile_type\":\"vector\",\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 				);
 			}
 

@@ -278,7 +278,7 @@ mod tests {
 				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
 				"  \"maxzoom\": 30,",
 				"  \"minzoom\": 0,",
-				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
+				"  \"tile_format\": \"application/vnd.mapbox-vector-tile\",",
 				"  \"tile_schema\": \"other\",",
 				"  \"tile_type\": \"vector\",",
 				"  \"tilejson\": \"3.0.0\",",

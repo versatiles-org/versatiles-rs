@@ -171,17 +171,17 @@ mod tests {
 	#[case(
 		"../testdata/berlin.mbtiles",
 		"12/2200/1343",
-		("vnd.mapbox-vector-tile", "[13.3,52.45,13.46,52.55]", [31, 139, 8, 0], 0, 14)
+		("application/vnd.mapbox-vector-tile", "[13.3,52.45,13.46,52.55]", [31, 139, 8, 0], 0, 14)
 	)]
 	#[case(
 		"../testdata/berlin.pmtiles",
 		"12/2200/1343",
-		("vnd.mapbox-vector-tile", "[13.3,52.45,13.46,52.55]", [31, 139, 8, 0], 0, 14)
+		("application/vnd.mapbox-vector-tile", "[13.3,52.45,13.46,52.55]", [31, 139, 8, 0], 0, 14)
 	)]
 	#[case(
 		"../testdata/berlin.vpl",
 		"12/2200/1343",
-		("vnd.mapbox-vector-tile", "[13.3,52.45,13.46,52.55]", [31, 139, 8, 0], 0, 14)
+		("application/vnd.mapbox-vector-tile", "[13.3,52.45,13.46,52.55]", [31, 139, 8, 0], 0, 14)
 	)]
 	#[tokio::test]
 	async fn tile_container_get_data(

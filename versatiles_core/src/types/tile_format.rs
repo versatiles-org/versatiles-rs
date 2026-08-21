@@ -189,13 +189,18 @@ impl TileFormat {
 			WEBP => "image/webp",
 			AVIF => "image/avif",
 			SVG => "image/svg+xml",
-			MVT => "vnd.mapbox-vector-tile",
+			MVT => "application/vnd.mapbox-vector-tile",
 			GEOJSON => "application/geo+json",
 			TOPOJSON => "application/topo+json",
 			JSON => "application/json",
 		}
 	}
 
+	/// Parses a MIME type produced by [`Self::as_mime_str`].
+	///
+	/// `vnd.mapbox-vector-tile` — the bare IANA name, which `as_mime_str` returned
+	/// for MVT until issue #246 — is still accepted. It is embedded in the TileJSON
+	/// of every container written before that fix, and those have to keep opening.
 	#[context("Failed to get TileFormat from MIME type '{mime}'")]
 	pub fn try_from_mime(mime: &str) -> Result<Self> {
 		Ok(match mime.to_lowercase().as_str() {
@@ -205,7 +210,7 @@ impl TileFormat {
 			"image/webp" => WEBP,
 			"image/avif" => AVIF,
 			"image/svg+xml" => SVG,
-			"vnd.mapbox-vector-tile" => MVT,
+			"application/vnd.mapbox-vector-tile" | "vnd.mapbox-vector-tile" => MVT,
 			"application/geo+json" => GEOJSON,
 			"application/topo+json" => TOPOJSON,
 			"application/json" => JSON,
@@ -531,7 +536,7 @@ mod tests {
 	#[case(GEOJSON, "application/geo+json")]
 	#[case(JPG, "image/jpeg")]
 	#[case(JSON, "application/json")]
-	#[case(MVT, "vnd.mapbox-vector-tile")]
+	#[case(MVT, "application/vnd.mapbox-vector-tile")]
 	#[case(PNG, "image/png")]
 	#[case(SVG, "image/svg+xml")]
 	#[case(TOPOJSON, "application/topo+json")]
@@ -550,6 +555,17 @@ mod tests {
 	fn should_try_from_mime_parse_valid_and_error_invalid() {
 		assert_eq!(TileFormat::try_from_mime("image/webp").unwrap(), TileFormat::WEBP);
 		assert!(TileFormat::try_from_mime("application/x-unknown").is_err());
+	}
+
+	#[test]
+	fn mvt_still_parses_the_pre_246_mime_string() {
+		// Containers written before #246 carry the bare IANA name in their embedded
+		// TileJSON. Dropping it here would stop them opening.
+		assert_eq!(TileFormat::try_from_mime("vnd.mapbox-vector-tile").unwrap(), MVT);
+		assert_eq!(
+			TileFormat::try_from_mime("application/vnd.mapbox-vector-tile").unwrap(),
+			MVT
+		);
 	}
 
 	#[rstest]
