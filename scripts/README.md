@@ -313,6 +313,27 @@ Find unused dependencies in the workspace with `cargo machete`.
 
 ---
 
+### `clean-target.sh`
+
+Reclaim disk space in `target/` without discarding what you are still building.
+
+Cargo never garbage-collects `target/`: every configuration ever built stays there — six
+feature sets across the check matrix, dev and test profiles, a tree per `--target` release
+build, a complete second tree under `llvm-cov-target/`, and every dependency version that
+predates a `cargo update`. One `cargo test --no-run` is about 3.6 GB, so the total is that
+figure times however many distinct builds have piled up.
+
+```sh
+./scripts/clean-target.sh        # keep anything used in the last 14 days
+./scripts/clean-target.sh 30     # ...or a period of your choosing
+./scripts/clean-target.sh --all  # remove target/ entirely (cargo clean)
+```
+
+Requires [`cargo-sweep`](https://github.com/holmgr/cargo-sweep) for the age-based pass:
+`cargo install cargo-sweep`.
+
+---
+
 ## Analysis & Profiling
 
 ### `analyze-binary-size.sh`
