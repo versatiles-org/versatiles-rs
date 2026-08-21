@@ -1,1 +1,8 @@
-*.rs
+node_modules
+target
+dist
+
+# Vendored verbatim from the Contributor Covenant 2.0. Restyling it — list
+# markers, collapsed double spaces — makes it harder to diff against upstream
+# for no benefit of ours.
+CODE_OF_CONDUCT.md
