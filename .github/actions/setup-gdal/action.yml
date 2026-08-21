@@ -16,7 +16,11 @@ runs:
     - name: Cache GDAL Homebrew tree
       id: gdal-cache
       if: runner.os == 'macOS'
-      uses: actions/cache@v5
+      # Restore-only: the matching save step below is pinned to `main`, because
+      # the repository is on GitHub's 10 GB cache ceiling and a cache written on
+      # any other ref is unreadable from `main` and from PRs. See "Cache policy"
+      # in ci.yml.
+      uses: actions/cache/restore@v5
       with:
         path: ~/gdal-brew-tree.tar
         # ImageVersion keeps the cached Cellar in lockstep with the Homebrew
@@ -53,7 +57,7 @@ runs:
     # Cache miss: pack GDAL's Cellar package files and `opt` symlinks (the
     # latter are how libgdal locates its dependencies at runtime) for next run.
     - name: Pack GDAL Homebrew tree
-      if: runner.os == 'macOS' && steps.gdal-cache.outputs.cache-hit != 'true'
+      if: runner.os == 'macOS' && steps.gdal-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
       shell: bash
       run: |
         members=()
@@ -63,6 +67,13 @@ runs:
           done
         done
         tar -cf ~/gdal-brew-tree.tar -C / "${members[@]}"
+
+    - name: Save GDAL Homebrew tree
+      if: runner.os == 'macOS' && steps.gdal-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
+      uses: actions/cache/save@v5
+      with:
+        path: ~/gdal-brew-tree.tar
+        key: ${{ steps.gdal-cache.outputs.cache-primary-key }}
 
     - name: Check GDAL installation
       id: verify

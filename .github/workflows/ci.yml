@@ -29,6 +29,28 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
+# Cache policy: only `main` writes.
+#
+# GitHub scopes every cache entry to the ref that created it, and a run may
+# only read its own ref's scope plus the *default branch*'s scope. `main` is
+# the default branch here and every PR targets it, so an entry written on `dev`
+# is invisible to PRs and to `main` — it only ever serves the next `dev` push.
+#
+# That matters because the repository sits exactly on GitHub's 10 GB cache
+# ceiling: a single copy of the eight Rust entries plus the macOS GDAL tree is
+# already ~10.1 GB. There is no room for a second branch's copy, so whichever
+# branch writes last evicts the other by LRU. With `dev` pushed several times a
+# day and `main` only on fast-forward, `dev` won every eviction and `main`/PR
+# runs compiled the workspace from nothing on every single run.
+#
+# So the writes are pinned to `main`: one copy, readable by `main`, by `dev`
+# (default-branch scope), and by every PR. The cost is that a `dev` push is
+# warm from the last fast-forward rather than from its own previous push —
+# bounded by how often `dev` lands on `main`, which is a few times a week.
+#
+# If `dev` ever becomes the repository's default branch, flip these refs with
+# it; the rule is "the default branch writes", not "main writes".
+
 permissions:
   contents: read
 
@@ -209,6 +231,7 @@ jobs:
           cache-targets: true
           cache-on-failure: false
           cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }} # see "Cache policy" above
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
@@ -328,7 +351,9 @@ jobs:
           cache-targets: true
           cache-on-failure: false
           cache-bin: false
-          save-if: ${{ matrix.name == 'all-features' || matrix.name == 'default' }}
+          # Only the two entries that write, and only from `main` —
+          # see "Cache policy" above.
+          save-if: ${{ github.ref == 'refs/heads/main' && (matrix.name == 'all-features' || matrix.name == 'default') }}
 
       - name: Check lints
         if: matrix.run-clippy
@@ -446,6 +471,7 @@ jobs:
           cache-targets: true
           cache-on-failure: false
           cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }} # see "Cache policy" above
 
       # Split so the step timings separate compile cost from test execution;
       # "Test" reuses the artifacts built here.
@@ -489,6 +515,7 @@ jobs:
           cache-targets: true
           cache-on-failure: false
           cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }} # see "Cache policy" above
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -556,6 +583,7 @@ jobs:
           cache-targets: true
           cache-on-failure: false
           cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }} # see "Cache policy" above
 
       # Split so the step timings separate compile cost from test execution;
       # "Test" reuses the artifacts built here.
@@ -592,6 +620,7 @@ jobs:
           cache-targets: true
           cache-on-failure: false
           cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }} # see "Cache policy" above
 
       # Split so the step timings separate compile cost from test execution;
       # "Test with GDAL" reuses the artifacts built here.
