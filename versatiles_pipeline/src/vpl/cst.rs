@@ -9,7 +9,8 @@
 //! The CST keeps all of it. Every token owns the trivia — whitespace and `#` comments —
 //! immediately *before* it, so printing is a concatenation in tree order and
 //! `print(parse(x)) == x` holds by construction rather than by care. [`CstPipeline::lower`]
-//! converts to the semantic tree when it is time to run something.
+//! converts to the semantic tree when it is time to run something, and [`CstFile::format`]
+//! rewrites the trivia to `to_string_pretty`'s layout without touching anything else.
 //!
 //! # Crossing a boundary
 //!

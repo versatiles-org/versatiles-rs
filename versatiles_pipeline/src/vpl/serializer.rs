@@ -131,8 +131,9 @@ impl VPLPipeline {
 	/// The counterpart to [`Display`], which never breaks a line: this is for `.vpl` files
 	/// people read, where a long pipeline on one line is unreadable. It normalises exactly as
 	/// much as `Display` does — comments and the author's parameter order are still gone — so
-	/// it is a serialiser too, not a formatter. Rewriting a file someone is editing needs the
-	/// CST, which keeps comments and source order.
+	/// it is a serialiser too, not a formatter. Rewriting a file someone is editing wants
+	/// [`CstFile::format`](crate::vpl::CstFile::format), which applies this same layout to the
+	/// tree that still has the comments in it.
 	///
 	/// Every operation goes on its own line and every parameter on its own, always — a layout
 	/// that never depends on how long a value happens to be is one where adding a parameter

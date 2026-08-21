@@ -246,6 +246,34 @@ pub fn stringify_vpl_cst(cst_json: String) -> Result<String> {
 	Ok(file.to_string())
 }
 
+/// Reformats a lossless syntax tree, keeping the comments in it.
+///
+/// [`stringify_vpl`] formats the semantic pipeline, which has already forgotten the comments, so
+/// "reformat this file" and "keep what I wrote" are otherwise exclusive. This applies the same
+/// layout — one tab per level, `|` at the pipeline's own level, parameters one level in — to the
+/// tree that still has them.
+///
+/// Whitespace and nothing else is rewritten: parameters keep the order they were written in, and
+/// values keep the quotes the author chose. Every comment keeps the token it was attached to and
+/// takes that token's line and indentation.
+///
+/// Returns the formatted tree rather than the text, so the `span` of every token is fresh and
+/// addresses the formatted result. Print it with [`stringify_vpl_cst`].
+///
+/// @param cstJson - JSON string describing the syntax tree
+/// @returns a JSON string describing the formatted syntax tree
+#[allow(clippy::needless_pass_by_value)]
+#[napi]
+pub fn format_vpl_cst(cst_json: String) -> Result<String> {
+	let mut file: CstFile = serde_json::from_str(&cst_json)
+		.context("Invalid VPL syntax tree JSON")
+		.to_napi()?;
+	file.format();
+	serde_json::to_string(&file)
+		.context("Failed to serialize the formatted VPL syntax tree")
+		.to_napi()
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -352,6 +380,27 @@ mod tests {
 			let printed = stringify_vpl_cst(parsed["cst"].to_string()).unwrap();
 			assert_eq!(printed, vpl, "comments or formatting were lost");
 		}
+	}
+
+	/// The Format command an editor offers: layout is rewritten, the comments
+	/// and the author's quoting are not, and the returned tree can be printed.
+	#[test]
+	fn formatting_keeps_the_comments_and_returns_a_printable_tree() {
+		let source = "# which file\nfrom_container   filename = 'berlin.versatiles' | filter level_min=5";
+		let parsed: Value = serde_json::from_str(&parse_vpl_cst(source.to_string())).unwrap();
+
+		let formatted = format_vpl_cst(parsed["cst"].to_string()).unwrap();
+		let printed = stringify_vpl_cst(formatted).unwrap();
+
+		assert_eq!(
+			printed,
+			"# which file\nfrom_container\n\tfilename='berlin.versatiles'\n| filter\n\tlevel_min=5\n"
+		);
+	}
+
+	#[test]
+	fn formatting_rejects_a_tree_that_is_not_one() {
+		assert!(format_vpl_cst("{\"nonsense\": true}".to_string()).is_err());
 	}
 
 	/// Editing the tree changes only what was edited.

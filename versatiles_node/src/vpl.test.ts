@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { VPL } from '../vpl.js';
 import { parseVpl } from '../index.js';
-import { parseCst, parseCstResult, stringifyCst } from '../vpl.js';
+import { formatCst, parseCst, parseCstResult, stringifyCst } from '../vpl.js';
 
 /**
  * Asserts the serialised pipeline, and that it is actually valid VPL.
@@ -206,6 +206,17 @@ describe('CST (lossless syntax tree)', () => {
 
 	it('accepts a tree built by hand, without the formatting fields', () => {
 		expect(stringifyCst({ pipeline: { nodes: [{ value: { name: { text: 'from_debug' } } }] } })).toBe('from_debug');
+	});
+
+	it('reformats without discarding the comments', () => {
+		const formatted = stringifyCst(formatCst(parseCst(source)));
+		expect(formatted).toBe(
+			"# which file\nfrom_container\n\tfilename='berlin.versatiles'\n# note\n| filter\n\tlevel_min=5\n",
+		);
+		// Idempotent, and the spans address the formatted text.
+		expect(stringifyCst(formatCst(parseCst(formatted)))).toBe(formatted);
+		const name = formatCst(parseCst(source)).pipeline.nodes[0].value.name;
+		expect(formatted.slice(name.span!.start, name.span!.end)).toBe('from_container');
 	});
 
 	it('reports a syntax error as data, or throws', () => {

@@ -100,7 +100,10 @@ fn generate_typescript(ops: &[OperationMeta]) -> String {
 	// Header
 	out.push_str("// AUTO-GENERATED — DO NOT EDIT\n");
 	out.push_str("// Generated from Rust VPL operation metadata\n\n");
-	out.push_str("import { TileSource, parseVpl, parseVplCst, stringifyVpl, stringifyVplCst } from './index.js';\n\n");
+	out.push_str(
+		"import { TileSource, formatVplCst, parseVpl, parseVplCst, stringifyVpl, stringifyVplCst } from \
+		 './index.js';\n\n",
+	);
 	generate_parse_types(&mut out);
 	generate_cst_types(&mut out);
 
@@ -235,6 +238,19 @@ fn generate_cst_types(out: &mut String) {
 	out.push_str("/** Write a lossless syntax tree back out as VPL text. */\n");
 	out.push_str("export function stringifyCst(cst: CstFile): string {\n");
 	out.push_str("\treturn stringifyVplCst(JSON.stringify(cst));\n");
+	out.push_str("}\n\n");
+
+	out.push_str(
+		"/**\n\
+		 * Reformat a syntax tree, keeping its comments.\n\
+		 *\n\
+		 * Whitespace and nothing else is rewritten: parameters keep the order they were written in\n\
+		 * and values keep the quotes the author chose. Every comment keeps the token it was attached\n\
+		 * to and takes that token's line and indentation. The returned tree carries fresh spans.\n\
+		 */\n",
+	);
+	out.push_str("export function formatCst(cst: CstFile): CstFile {\n");
+	out.push_str("\treturn JSON.parse(formatVplCst(JSON.stringify(cst))) as CstFile;\n");
 	out.push_str("}\n\n");
 }
 

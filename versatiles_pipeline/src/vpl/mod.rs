@@ -67,6 +67,10 @@
 //! # Ok::<(), versatiles_pipeline::vpl::VplParseError>(())
 //! ```
 //!
+//! [`CstFile::format`] lays that same tree out the way
+//! [`VPLPipeline::to_string_pretty`] would, keeping the comments — which is what an editor's
+//! Format command needs, since the semantic tree has already forgotten them.
+//!
 //! There is only one grammar: [`parse_vpl`] is [`parse_cst`] followed by
 //! [`CstFile::lower`], so the two cannot disagree about what VPL means.
 //!
@@ -78,6 +82,7 @@
 //! needs.
 
 mod cst;
+mod cst_format;
 mod cst_parser;
 mod error;
 mod field_meta;
