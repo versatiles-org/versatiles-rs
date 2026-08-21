@@ -3,7 +3,7 @@
 #
 # The write-mode counterpart to check.sh. Steps:
 #   - Rust:     cargo fmt-all
-#   - Markdown: markdownlint-cli2 --fix (same file set as check-markdown.sh)
+#   - Markdown: markdownlint-cli2 --fix, then prettier --write (layout)
 #   - Node.js:  npm run fix (eslint --fix + prettier --write) in versatiles_node
 #
 # Linters can only auto-fix some issues; anything left needs manual attention.
@@ -32,6 +32,13 @@ npx --yes markdownlint-cli2 --fix "**/*.md" "#.**" "#versatiles_node/node_module
 if [ $? -ne 0 ]; then
    echo "Some Markdown issues could not be auto-fixed (see above)."
    FAILED="${FAILED} markdown"
+fi
+
+# Layout second: markdownlint fixes structure, prettier the table columns and
+# spacing it leaves alone.
+npx --yes prettier --write "**/*.md" >/dev/null
+if [ $? -ne 0 ]; then
+   FAILED="${FAILED} prettier-markdown"
 fi
 
 echo ""
