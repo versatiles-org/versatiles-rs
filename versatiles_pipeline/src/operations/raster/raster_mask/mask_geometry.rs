@@ -619,7 +619,100 @@ fn extract_ring_edges(ring: &LineString<f64>, edges: &mut Vec<EdgeSegment>) {
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {
+	use assert_fs::prelude::*;
+	use versatiles_core::TileCoord;
+
 	use super::*;
+
+	/// The same reference shape the operation's own tests use: a body with a
+	/// notch cut out of the top, an interior ring, and a detached polygon.
+	fn oracle_mask(buffer: f64, blur: f64) -> MaskGeometry {
+		let file = assert_fs::NamedTempFile::new("oracle.geojson").unwrap();
+		file
+			.write_str(
+				r#"{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},
+				"geometry":{"type":"MultiPolygon","coordinates":[
+				[[[2,2],[18,2],[18,18],[12,18],[12,9],[8,9],[8,18],[2,18],[2,2]],
+				 [[5,5],[9,5],[9,7],[5,7],[5,5]]],
+				[[[20,12],[24,12],[24,16],[20,16],[20,12]]]]}}]}"#,
+			)
+			.unwrap();
+		MaskGeometry::from_geojson(file.path(), buffer, blur, BlurFunction::default()).unwrap()
+	}
+
+	/// The definition of the answer, with no shortcuts at all: every edge is
+	/// measured against every point. Deliberately not built on `signed_distance`,
+	/// whose R-tree radius makes it exact only near the boundary.
+	fn brute_force_alpha(mask: &MaskGeometry, point: [f64; 2], blur: f64) -> u8 {
+		let mut min_sq = f64::INFINITY;
+		for edge in &mask.edge_rtree {
+			min_sq = min_sq.min(edge.distance_squared_to_point(point));
+		}
+		let dist = min_sq.sqrt();
+		let raw_signed = if mask.contains_point_rtree(point[0], point[1]) {
+			dist
+		} else {
+			-dist
+		};
+		mask.distance_to_alpha_with_blur(raw_signed + mask.buffer_meters, blur)
+	}
+
+	/// `compute_alpha_grid` gets its answer from scanline parity plus distances
+	/// stamped only near an edge. Both are shortcuts, and both are supposed to be
+	/// free rather than approximate: every pixel must equal the brute-force value.
+	///
+	/// The tiles are chosen to reach the cases a single tile cannot. Parity is
+	/// seeded at the tile's right border, so a tile whose right border falls
+	/// *inside* the shape is the one that catches a seed left at zero; the
+	/// interior ring catches a fill that treats a hole's edges as entries; and
+	/// the negative buffer catches a band computed without an absolute value,
+	/// which would put the shifted boundary outside the stamped region and drop
+	/// the buffer silently.
+	#[test]
+	fn the_alpha_grid_matches_a_brute_force_reference() {
+		for (buffer, blur) in [(0.0, 0.0), (0.0, 60_000.0), (80_000.0, 0.0), (-80_000.0, 20_000.0)] {
+			let mask = oracle_mask(buffer, blur);
+
+			for (z, lon, lat) in [
+				(4, 10.0, 10.0), // the whole shape inside one tile
+				(6, 14.0, 12.0), // right border inside the body: the seed is 1
+				(6, 4.0, 10.0),  // left border outside, the body to the right
+				(7, 7.0, 6.0),   // straddling the interior ring
+				(6, 22.0, 14.0), // the detached polygon
+				(6, 30.0, 30.0), // clear of everything
+			] {
+				let coord = TileCoord::from_geo(lon, lat, z).unwrap();
+				let bbox = coord.to_mercator_bbox();
+				let [x_min, _, x_max, y_max] = bbox;
+
+				// Both a coarse grid, where a pixel dwarfs the blur and nearly
+				// every pixel lands in the stamped band, and a full-size one,
+				// where most pixels are past it and decided by sign alone.
+				for size in [64u32, 256] {
+					let px_width = (x_max - x_min) / f64::from(size);
+					let px_height = (y_max - bbox[1]) / f64::from(size);
+					let effective_blur = mask.blur_meters.max(px_width.max(px_height));
+
+					let actual = mask.compute_alpha_grid(bbox, size, size);
+
+					for py in 0..size as usize {
+						for px in 0..size as usize {
+							let point = [
+								x_min + (px as f64 + 0.5) * px_width,
+								y_max - (py as f64 + 0.5) * px_height,
+							];
+							let expected = brute_force_alpha(&mask, point, effective_blur);
+							assert_eq!(
+								actual[py * size as usize + px],
+								expected,
+								"buffer={buffer} blur={blur} z{z} ({lon},{lat}) {size}px at ({px},{py})"
+							);
+						}
+					}
+				}
+			}
+		}
+	}
 
 	#[test]
 	fn test_edge_segment_distance() {
