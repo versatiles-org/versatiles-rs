@@ -7,7 +7,7 @@
 //! - Building R-tree spatial indices for efficient distance queries
 //! - Computing signed distances and alpha values for pixel masking
 
-use std::{fs::File, io::BufReader, path::Path};
+use std::{fs::File, io::BufReader, ops::Range, path::Path};
 
 use anyhow::{Result, ensure};
 use geo::BoundingRect;
@@ -78,24 +78,30 @@ impl EdgeSegment {
 		dx * dx + dy * dy
 	}
 
+	/// Where this edge crosses the horizontal line `y = py`, if it crosses at all.
+	///
+	/// The span test is half-open — an endpoint exactly on the line counts for one
+	/// of the two edges meeting there, never both — which is what keeps a shared
+	/// vertex from being double-counted by parity.
+	#[must_use]
+	pub fn crossing_x(&self, py: f64) -> Option<f64> {
+		let [x1, y1] = self.start;
+		let [x2, y2] = self.end;
+
+		// The edge must span the y coordinate (one endpoint above, one below or on)
+		if (y1 > py) == (y2 > py) {
+			return None;
+		}
+
+		Some(x1 + (x2 - x1) * (py - y1) / (y2 - y1))
+	}
+
 	/// Check if a horizontal ray from point (px, py) going to +∞ crosses this edge.
 	/// Uses the ray casting algorithm logic for point-in-polygon testing.
 	#[must_use]
 	pub fn ray_crosses(&self, px: f64, py: f64) -> bool {
-		let [x1, y1] = self.start;
-		let [x2, y2] = self.end;
-
-		// Check if the ray at height py could intersect this edge
-		// The edge must span the y coordinate (one endpoint above, one below or on)
-		if (y1 > py) == (y2 > py) {
-			return false;
-		}
-
-		// Calculate x coordinate where edge crosses the horizontal line y = py
-		let x_intersect = x1 + (x2 - x1) * (py - y1) / (y2 - y1);
-
-		// Ray crosses if intersection is to the right of point
-		px < x_intersect
+		// Ray crosses if the intersection is to the right of the point.
+		self.crossing_x(py).is_some_and(|x_intersect| px < x_intersect)
 	}
 }
 
@@ -421,11 +427,24 @@ impl MaskGeometry {
 		crossings % 2 == 1
 	}
 
-	/// Compute alpha values for a tile using hierarchical subdivision.
+	/// Compute alpha values for a tile.
 	///
-	/// This method subdivides the tile into a grid of sub-regions, classifies each
-	/// as fully inside, fully outside, or partial, and only computes per-pixel
-	/// values for partial regions.
+	/// The work is split so that neither half is quadratic:
+	///
+	/// * **Inside/outside** comes from a single scanline pass. Parity is seeded at
+	///   the tile's right border — [`EdgeSegment::ray_crosses`] casts toward +∞ —
+	///   and then walked leftwards across that row's own crossings, so a pixel
+	///   costs a binary search instead of a fresh ray cast against every edge.
+	/// * **Distance** is computed only where it can still change the answer. The
+	///   alpha ramp has saturated once a pixel is further than `|buffer| + blur`
+	///   from the boundary, so each edge stamps its own neighbourhood and every
+	///   pixel that no edge reached is decided by its sign alone.
+	///
+	/// Together that makes the cost proportional to *edges + covered pixels*
+	/// rather than *pixels × edges*. The previous version sampled five points per
+	/// 32×32 block to skip whole blocks, which both missed slivers that crossed a
+	/// block without touching a sample point and still left every surviving pixel
+	/// paying a full [`Self::distance_to_nearest_edge`] scan.
 	///
 	/// Applies automatic antialiasing: the effective blur is at least 1 pixel wide,
 	/// producing smooth edges even when no explicit blur is configured.
@@ -438,8 +457,14 @@ impl MaskGeometry {
 	/// # Returns
 	/// A vector of alpha values (0-255) for each pixel, in row-major order.
 	#[must_use]
+	#[allow(
+		clippy::cast_possible_truncation,
+		clippy::cast_sign_loss,
+		clippy::cast_precision_loss
+	)]
 	pub fn compute_alpha_grid(&self, tile_bbox: [f64; 4], width: u32, height: u32) -> Vec<u8> {
 		let [x_min, y_min, x_max, y_max] = tile_bbox;
+		let (w, h) = (width as usize, height as usize);
 		let px_width = (x_max - x_min) / f64::from(width);
 		let px_height = (y_max - y_min) / f64::from(height);
 
@@ -447,115 +472,109 @@ impl MaskGeometry {
 		let pixel_size = px_width.max(px_height);
 		let effective_blur = self.blur_meters.max(pixel_size);
 
-		let mut alpha = vec![0u8; (width * height) as usize];
+		// Past this distance from the boundary the ramp has saturated and only the
+		// sign still matters. `buffer` slides the ramp away from the boundary in
+		// either direction, so it widens the band that needs a real distance.
+		let band = self.buffer_meters.abs() + effective_blur;
 
-		// Subdivide into grid of sub-regions (e.g., 8x8 for 256x256 tiles = 32x32 pixel blocks)
-		let grid_size: u32 = 8;
-		let block_width = width / grid_size;
-		let block_height = height / grid_size;
+		// One R-tree query feeds both halves. It reaches `band` beyond the tile on
+		// three sides — enough for any edge that can be a pixel's nearest — and all
+		// the way to the mask's right edge, because seeding parity on the right has
+		// to see every edge out there. Nothing further left is needed: those edges
+		// lie left of every pixel in the tile and so never flip one's parity.
+		let [_, _, mask_x_max, _] = self.bounds_mercator;
+		let envelope = AABB::from_corners(
+			[x_min - band, y_min - band],
+			[mask_x_max.max(x_max + band), y_max + band],
+		);
 
-		for grid_y in 0..grid_size {
-			for grid_x in 0..grid_size {
-				let px_start_x = grid_x * block_width;
-				let px_start_y = grid_y * block_height;
-				let px_end_x = if grid_x == grid_size - 1 {
-					width
-				} else {
-					px_start_x + block_width
-				};
-				let px_end_y = if grid_y == grid_size - 1 {
-					height
-				} else {
-					px_start_y + block_height
-				};
+		// Pixel centres, and the rows/columns a Mercator span covers. Both clamp
+		// before casting so a far-away edge cannot produce an out-of-range index.
+		let center_x = |px: usize| x_min + (px as f64 + 0.5) * px_width;
+		let center_y = |py: usize| y_max - (py as f64 + 0.5) * px_height;
+		let rows_between = |lo: f64, hi: f64| -> Range<usize> {
+			// Rows run top to bottom, so a larger y means a smaller index.
+			let first = ((y_max - hi) / px_height - 0.5).ceil().clamp(0.0, h as f64);
+			let last = ((y_max - lo) / px_height - 0.5).floor().clamp(-1.0, h as f64 - 1.0);
+			if last < 0.0 {
+				return 0..0;
+			}
+			first as usize..last as usize + 1
+		};
+		let cols_between = |lo: f64, hi: f64| -> Range<usize> {
+			let first = ((lo - x_min) / px_width - 0.5).ceil().clamp(0.0, w as f64);
+			let last = ((hi - x_min) / px_width - 0.5).floor().clamp(-1.0, w as f64 - 1.0);
+			if last < 0.0 {
+				return 0..0;
+			}
+			first as usize..last as usize + 1
+		};
 
-				// Compute sub-region bbox in Mercator coordinates
-				let sub_x_min = x_min + f64::from(px_start_x) * px_width;
-				let sub_x_max = x_min + f64::from(px_end_x) * px_width;
-				let sub_y_max = y_max - f64::from(px_start_y) * px_height;
-				let sub_y_min = y_max - f64::from(px_end_y) * px_height;
+		// Where each row's edges cross it, how many crossings sit right of the
+		// tile, and the squared distance to the nearest edge that reached a pixel.
+		let mut crossings: Vec<Vec<f64>> = vec![Vec::new(); h];
+		let mut seed_parity = vec![0u32; h];
+		let mut dist_sq = vec![f64::INFINITY; w * h];
 
-				let sub_bbox = [sub_x_min, sub_y_min, sub_x_max, sub_y_max];
-				let classification = self.classify_sub_region(sub_bbox);
+		for edge in self.edge_rtree.locate_in_envelope_intersecting(envelope) {
+			let (ex_lo, ex_hi) = (edge.start[0].min(edge.end[0]), edge.start[0].max(edge.end[0]));
+			let (ey_lo, ey_hi) = (edge.start[1].min(edge.end[1]), edge.start[1].max(edge.end[1]));
 
-				match classification {
-					TileClassification::FullyInside => {
-						// Fill entire sub-region with opaque
-						for py in px_start_y..px_end_y {
-							for px in px_start_x..px_end_x {
-								alpha[(py * width + px) as usize] = 255;
-							}
-						}
+			// Sign: note where this edge crosses each row it spans. Crossings right
+			// of the tile go into the seed; the rest are walked through below.
+			for py in rows_between(ey_lo, ey_hi) {
+				if let Some(cx) = edge.crossing_x(center_y(py)) {
+					if cx > x_max {
+						seed_parity[py] += 1;
+					} else {
+						crossings[py].push(cx);
 					}
-					TileClassification::FullyOutside => {
-						// Already 0, nothing to do
-					}
-					TileClassification::Partial => {
-						// Compute per-pixel for this sub-region
-						for py in px_start_y..px_end_y {
-							for px in px_start_x..px_end_x {
-								let merc_x = x_min + (f64::from(px) + 0.5) * px_width;
-								let merc_y = y_max - (f64::from(py) + 0.5) * px_height;
+				}
+			}
 
-								let signed_dist = self.signed_distance([merc_x, merc_y]);
-								alpha[(py * width + px) as usize] =
-									self.distance_to_alpha_with_blur(signed_dist, effective_blur);
-							}
-						}
+			// Distance: stamp the pixels this edge could still be nearest to. A
+			// point within `band` of the segment is within `band` of the segment's
+			// envelope too, so widening the envelope misses nothing.
+			let cols = cols_between(ex_lo - band, ex_hi + band);
+			for py in rows_between(ey_lo - band, ey_hi + band) {
+				let cy = center_y(py);
+				for px in cols.clone() {
+					let d = edge.distance_squared_to_point([center_x(px), cy]);
+					let slot = &mut dist_sq[py * w + px];
+					if d < *slot {
+						*slot = d;
 					}
 				}
 			}
 		}
 
+		let mut alpha = vec![0u8; w * h];
+		for (py, row) in crossings.iter_mut().enumerate() {
+			row.sort_unstable_by(f64::total_cmp);
+			let seeded_inside = seed_parity[py] % 2 == 1;
+
+			for px in 0..w {
+				let i = py * w + px;
+				// Parity at the right border, flipped once per crossing passed
+				// while walking left to this pixel.
+				let to_the_right = row.len() - row.partition_point(|&c| c <= center_x(px));
+				let inside = seeded_inside ^ (to_the_right % 2 == 1);
+
+				let d = dist_sq[i];
+				if d.is_infinite() {
+					// Further than `band` from every edge, so the ramp is saturated
+					// and the sign alone gives the same answer the formula would.
+					alpha[i] = u8::from(inside) * 255;
+					continue;
+				}
+
+				let raw = d.sqrt();
+				let raw_signed = if inside { raw } else { -raw };
+				alpha[i] = self.distance_to_alpha_with_blur(raw_signed + self.buffer_meters, effective_blur);
+			}
+		}
+
 		alpha
-	}
-
-	/// Classify a sub-region of a tile for hierarchical processing.
-	///
-	/// Similar to `classify_tile` but optimized for smaller regions within a tile.
-	fn classify_sub_region(&self, bbox: [f64; 4]) -> TileClassification {
-		let [sx_min, sy_min, sx_max, sy_max] = bbox;
-
-		// Quick rejection against mask bounds
-		let [mx_min, my_min, mx_max, my_max] = self.bounds_mercator;
-		if sx_max < mx_min - self.outer_threshold
-			|| sx_min > mx_max + self.outer_threshold
-			|| sy_max < my_min - self.outer_threshold
-			|| sy_min > my_max + self.outer_threshold
-		{
-			return TileClassification::FullyOutside;
-		}
-
-		// Check corners and center
-		let corners = [[sx_min, sy_min], [sx_min, sy_max], [sx_max, sy_min], [sx_max, sy_max]];
-		let center = [f64::midpoint(sx_min, sx_max), f64::midpoint(sy_min, sy_max)];
-
-		// Compute signed distances for all sample points
-		let corner_dists: Vec<f64> = corners.iter().map(|&c| self.signed_distance(c)).collect();
-		let center_dist = self.signed_distance(center);
-
-		// Check if all points are clearly inside (beyond blur zone)
-		let all_inside = corner_dists.iter().all(|&d| d > self.blur_meters) && center_dist > self.blur_meters;
-
-		// Check if all points are clearly outside
-		let all_outside = corner_dists.iter().all(|&d| d < 0.0) && center_dist < 0.0;
-
-		if all_inside {
-			// Additional check: ensure the sub-region doesn't cross any edge
-			let diagonal = ((sx_max - sx_min).powi(2) + (sy_max - sy_min).powi(2)).sqrt();
-			if center_dist > diagonal / 2.0 + self.blur_meters {
-				return TileClassification::FullyInside;
-			}
-		}
-
-		if all_outside {
-			let diagonal = ((sx_max - sx_min).powi(2) + (sy_max - sy_min).powi(2)).sqrt();
-			if center_dist < -(diagonal / 2.0) {
-				return TileClassification::FullyOutside;
-			}
-		}
-
-		TileClassification::Partial
 	}
 
 	/// Find the distance to the nearest edge using the R-tree.
