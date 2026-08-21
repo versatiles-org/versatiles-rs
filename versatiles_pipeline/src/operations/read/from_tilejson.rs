@@ -35,6 +35,7 @@ struct Args {
 	/// URL of the TileJSON endpoint.
 	url: String,
 	/// How often to retry a failed tile request. Defaults to `3`.
+	#[vpl(default = "3")]
 	max_retries: Option<u16>,
 	/// How many tile requests may be in flight. Defaults to the I/O concurrency limit.
 	max_concurrent_requests: Option<u16>,

@@ -307,6 +307,33 @@ fn supported_types_list() -> String {
 	TYPE_MAPPINGS.iter().map(|m| m.pattern).collect::<Vec<_>>().join(", ")
 }
 
+/// Reads `#[vpl(default = "…")]` off a field, if it carries one.
+///
+/// The value is VPL text rather than a Rust expression: it is what a form shows
+/// and what a caller writes into the document to make the default explicit, so
+/// `#[vpl(default = "000000")]` and `#[vpl(default = "false")]` are both plain
+/// strings. Nothing here parses or type-checks it — `docs_style.rs` holds it
+/// against the doc comment's "Defaults to `X`." sentence instead, which is the
+/// copy a reader sees.
+fn extract_vpl_default(attrs: &[Attribute]) -> Result<Option<String>, syn::Error> {
+	let mut default = None;
+	for attr in attrs {
+		if !attr.path().is_ident("vpl") {
+			continue;
+		}
+		attr.parse_nested_meta(|meta| {
+			if meta.path.is_ident("default") {
+				let value: syn::LitStr = meta.value()?.parse()?;
+				default = Some(value.value());
+				Ok(())
+			} else {
+				Err(meta.error("unknown VPLDecode field attribute; expected `default = \"…\"`"))
+			}
+		})?;
+	}
+	Ok(default)
+}
+
 /// Extract a doc comment from an attribute, if present.
 pub fn extract_comment(attr: &Attribute) -> Option<String> {
 	if attr.path().is_ident("doc")
@@ -463,6 +490,8 @@ struct FieldMeta {
 	/// a closed variant list, and `check` can still tell a bad value from a good
 	/// one even where a picker has nothing to offer.
 	parsed_type: Option<&'static str>,
+	/// The `#[vpl(default = "…")]` attribute, verbatim, or `None`.
+	default: Option<String>,
 }
 
 /// Processed field information returned by `process_field`.
@@ -511,6 +540,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 			doc: raw_comment,
 			enum_type: None,
 			parsed_type: None,
+			default: None,
 		};
 		return Ok((field_str, ProcessedField::Sources { doc, parser }, meta));
 	}
@@ -546,6 +576,14 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 
 	let doc = field_doc_expr(&field_str, &raw_comment, mapping);
 
+	let default = extract_vpl_default(&field.attrs)?;
+	if default.is_some() && mapping.is_required {
+		return Err(syn::Error::new_spanned(
+			field,
+			format!("`{field_str}` is a required parameter, so it cannot have a default"),
+		));
+	}
+
 	let meta = FieldMeta {
 		name: field_str.clone(),
 		rust_type: field_type_str,
@@ -558,6 +596,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 		} else {
 			None
 		},
+		default,
 	};
 
 	Ok((
@@ -661,6 +700,11 @@ fn build_impl_tokens(
 			} else {
 				quote! { None }
 			};
+			let default_expr: TokenStream = if let Some(default) = &m.default {
+				quote! { Some(#default.to_string()) }
+			} else {
+				quote! { None }
+			};
 			quote! {
 				crate::vpl::VPLFieldMeta {
 					name: #fname.to_string(),
@@ -670,6 +714,7 @@ fn build_impl_tokens(
 					doc: #fdoc.to_string(),
 					enum_variants: #variants_expr,
 					accepts: #accepts_expr,
+					default: #default_expr,
 				}
 			}
 		})

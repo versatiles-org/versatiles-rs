@@ -117,6 +117,7 @@ struct Args {
 	format: Option<RasterTileFormat>,
 
 	/// Whether to wrap each source in `raster_overscale`. Defaults to `false`.
+	#[vpl(default = "false")]
 	auto_overscale: Option<bool>,
 }
 

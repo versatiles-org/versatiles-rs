@@ -270,8 +270,25 @@ fn generate_interface(out: &mut String, op: &OperationMeta) {
 		let camel_name = to_camel_case(&field.name);
 		let optional = if field.is_required { "" } else { "?" };
 
-		if !field.doc.is_empty() {
-			writeln!(out, "\t/** {} */", field.doc.replace("*/", "* /")).expect("writing to string never fails");
+		// A `@default` tag rather than prose, so an editor shows it beside the
+		// property instead of burying it at the end of the description. The
+		// value is VPL's spelling of it, which is what a caller would write.
+		match (field.doc.is_empty(), field.default.as_deref()) {
+			(true, None) => (),
+			(true, Some(default)) => {
+				writeln!(out, "\t/** @default {default} */").expect("writing to string never fails");
+			}
+			(false, None) => {
+				writeln!(out, "\t/** {} */", field.doc.replace("*/", "* /")).expect("writing to string never fails");
+			}
+			(false, Some(default)) => {
+				writeln!(
+					out,
+					"\t/**\n\t * {}\n\t *\n\t * @default {default}\n\t */",
+					field.doc.replace("*/", "* /")
+				)
+				.expect("writing to string never fails");
+			}
 		}
 
 		writeln!(out, "\t{camel_name}{optional}: {ts_type};").expect("writing to string never fails");
@@ -533,6 +550,7 @@ mod tests {
 			doc: String::new(),
 			enum_variants: Vec::new(),
 			accepts: None,
+			default: None,
 		}
 	}
 
@@ -540,6 +558,7 @@ mod tests {
 		VPLFieldMeta {
 			enum_variants: variants,
 			accepts: None,
+			default: None,
 			..plain_field(rust_type)
 		}
 	}
@@ -590,6 +609,7 @@ mod tests {
 				doc: "The filename of the tile container.".to_string(),
 				enum_variants: Vec::new(),
 				accepts: None,
+				default: None,
 			}],
 		}];
 
@@ -603,6 +623,45 @@ mod tests {
 		assert!(ts.contains("export interface VplSyntaxError"));
 		assert!(ts.contains("export interface CstFile"));
 		assert!(ts.contains("export function stringifyCst"));
+	}
+
+	/// A default reaches the generated interface as a `@default` tag, so an
+	/// editor shows it beside the property rather than at the end of the prose.
+	#[test]
+	fn a_declared_default_becomes_a_jsdoc_tag() {
+		let mut with_default = plain_field("Option<String>");
+		with_default.name = "color".to_string();
+		with_default.doc = "Hex colour, `RRGGBB` or `RRGGBBAA`.".to_string();
+		with_default.default = Some("000000".to_string());
+
+		let mut without = plain_field("Option<String>");
+		without.name = "lon_column".to_string();
+		without.doc = "Column holding the longitude.".to_string();
+
+		let ops = vec![OperationMeta {
+			tag_name: "from_color".to_string(),
+			kind: "read",
+			doc: "Generates tiles.".to_string(),
+			summary: "Generates tiles.".to_string(),
+			details: String::new(),
+			fields: vec![with_default, without],
+		}];
+
+		let ts = generate_typescript(&ops);
+		assert!(ts.contains("@default 000000"), "{ts}");
+		// A field with no default says nothing rather than inventing one.
+		assert!(ts.contains("/** Column holding the longitude. */"), "{ts}");
+	}
+
+	/// The live metadata carries the defaults too, not just a hand-built
+	/// `VPLFieldMeta` — this is the wiring the derive is responsible for.
+	#[test]
+	fn live_metadata_carries_declared_defaults() {
+		let color = find_field(&all_operation_metadata(), "from_color", "color");
+		assert_eq!(color.default.as_deref(), Some("000000"));
+
+		let filename = find_field(&all_operation_metadata(), "from_container", "filename");
+		assert_eq!(filename.default, None, "a required parameter has no default");
 	}
 
 	#[test]
@@ -622,6 +681,7 @@ mod tests {
 					doc: "minimal zoom level".to_string(),
 					enum_variants: Vec::new(),
 					accepts: None,
+					default: None,
 				},
 				VPLFieldMeta {
 					name: "level_max".to_string(),
@@ -631,6 +691,7 @@ mod tests {
 					doc: "maximal zoom level".to_string(),
 					enum_variants: Vec::new(),
 					accepts: None,
+					default: None,
 				},
 			],
 		}];
@@ -660,6 +721,7 @@ mod tests {
 					doc: "Raster sources.".to_string(),
 					enum_variants: Vec::new(),
 					accepts: None,
+					default: None,
 				},
 				VPLFieldMeta {
 					name: "format".to_string(),
@@ -669,6 +731,7 @@ mod tests {
 					doc: "Output format.".to_string(),
 					enum_variants: vec!["avif", "jpg", "png", "webp"],
 					accepts: None,
+					default: None,
 				},
 			],
 		}];

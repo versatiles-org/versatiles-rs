@@ -73,9 +73,11 @@ pub struct Args {
 	pub level_max: Option<u8>,
 
 	/// Whether to climb to lower levels when the `level_base` tile is missing. Defaults to `false`.
+	#[vpl(default = "false")]
 	pub enable_climbing: Option<bool>,
 
 	/// Clip buffer in tile-extent units, so edge-straddling features survive. Defaults to `80`.
+	#[vpl(default = "80")]
 	pub buffer: Option<u32>,
 }
 

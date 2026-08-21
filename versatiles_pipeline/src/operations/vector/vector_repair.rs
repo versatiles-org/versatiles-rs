@@ -54,6 +54,7 @@ use crate::{
 /// ```
 pub struct Args {
 	/// Whether to remove features whose geometry cannot be decoded. Defaults to `false`.
+	#[vpl(default = "false")]
 	pub drop_offenders: Option<bool>,
 }
 

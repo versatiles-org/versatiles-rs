@@ -27,6 +27,7 @@ struct Args {
 	/// Area to keep, in WGS84 degrees. Defaults to the source's own bounds.
 	bbox: Option<[f64; 4]>,
 	/// Ring of extra tiles kept around `bbox`, per zoom level. Requires `bbox`. Defaults to `0`.
+	#[vpl(default = "0")]
 	bbox_border: Option<u32>,
 	/// Lowest zoom level to keep. Defaults to the source's lowest.
 	level_min: Option<u8>,

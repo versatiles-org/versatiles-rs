@@ -28,10 +28,13 @@ use crate::{PipelineFactory, vpl::VPLNode};
 /// can combine sources that disagree about their conventions.
 struct Args {
 	/// Whether to mirror horizontally, so `x` becomes `2^z - 1 - x`. Defaults to `false`.
+	#[vpl(default = "false")]
 	flip_x: Option<bool>,
 	/// Whether to mirror vertically, so `y` becomes `2^z - 1 - y`. Defaults to `false`.
+	#[vpl(default = "false")]
 	flip_y: Option<bool>,
 	/// Whether to exchange the axes, so `(x, y)` becomes `(y, x)`. Defaults to `false`.
+	#[vpl(default = "false")]
 	swap_xy: Option<bool>,
 }
 

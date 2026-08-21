@@ -58,9 +58,11 @@ pub struct Args {
 	pub level_base: Option<u8>,
 
 	/// Highest zoom level to serve. Defaults to `30`.
+	#[vpl(default = "30")]
 	pub level_max: Option<u8>,
 
 	/// Whether to climb to lower levels when the `level_base` tile is missing. Defaults to `false`.
+	#[vpl(default = "false")]
 	pub enable_climbing: Option<bool>,
 }
 

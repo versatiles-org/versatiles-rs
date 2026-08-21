@@ -75,6 +75,7 @@ struct Args {
 	/// Name of the layer to write into. Defaults to the file's stem.
 	layer_name: Option<String>,
 	/// Lowest zoom level to emit. Defaults to `0`.
+	#[vpl(default = "0")]
 	min_zoom: Option<u8>,
 	/// Highest zoom level to emit. Defaults to a heuristic capped at `14`.
 	max_zoom: Option<u8>,
@@ -85,23 +86,31 @@ struct Args {
 	/// Properties to drop. Mutually exclusive with `properties_include`. Defaults to none.
 	properties_exclude: Option<Vec<String>>,
 	/// Area in square tile-pixels below which a polygon is dropped. Defaults to `4`.
+	#[vpl(default = "4")]
 	polygon_min_area: Option<f32>,
 	/// Douglas-Peucker tolerance for polygons, in tile-pixels. Defaults to `4`.
+	#[vpl(default = "4")]
 	polygon_simplify: Option<f32>,
 	/// Length in tile-pixels below which a line is dropped. Defaults to `4`.
+	#[vpl(default = "4")]
 	line_min_length: Option<f32>,
 	/// Douglas-Peucker tolerance for lines, in tile-pixels. Defaults to `4`.
+	#[vpl(default = "4")]
 	line_simplify: Option<f32>,
 	/// How to thin out points too close to distinguish. Defaults to `min_distance`.
+	#[vpl(default = "min_distance")]
 	point_reduction: Option<PointReductionStrategy>,
 	/// Distance in tile-pixels for `min_distance`, keep-fraction for `drop_rate`. Defaults to
 	/// `16`/`0.5`.
 	point_reduction_value: Option<f32>,
 	/// Compression applied before the tiles leave. Defaults to `gzip`.
+	#[vpl(default = "gzip")]
 	compression: Option<TileCompression>,
 	/// Size in bytes above which a tile counts as broken. Defaults to `1048576`.
+	#[vpl(default = "1048576")]
 	max_tile_bytes: Option<MaxTileBytes>,
 	/// Whether to drop each feature's `id` before encoding. Defaults to `false`.
+	#[vpl(default = "false")]
 	ignore_id: Option<bool>,
 }
 

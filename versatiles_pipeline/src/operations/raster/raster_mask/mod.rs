@@ -34,10 +34,13 @@ struct Args {
 	/// Path to a GeoJSON file holding a Polygon or MultiPolygon.
 	geojson: String,
 	/// Distance in meters by which to grow the mask, or shrink it when negative. Defaults to `0`.
+	#[vpl(default = "0")]
 	buffer: Option<f32>,
 	/// Width in meters of the soft transition at the mask edge. Defaults to `0`.
+	#[vpl(default = "0")]
 	blur: Option<f32>,
 	/// Falloff curve across the `blur` band. Defaults to `linear`.
+	#[vpl(default = "linear")]
 	blur_function: Option<BlurFunction>,
 }
 

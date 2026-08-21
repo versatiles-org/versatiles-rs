@@ -32,6 +32,7 @@ use crate::{PipelineFactory, helpers::tile_format_subset::DebugTileFormat, vpl::
 /// Generates tiles that draw their own coordinates, for inspecting a pipeline.
 struct Args {
 	/// Format to generate the tiles in. Defaults to `mvt`.
+	#[vpl(default = "mvt")]
 	format: Option<DebugTileFormat>,
 }
 

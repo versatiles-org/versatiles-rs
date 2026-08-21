@@ -33,16 +33,20 @@ struct Args {
 	/// Path to the raster dataset.
 	filename: String,
 	/// Tile size in pixels. Defaults to `512`.
+	#[vpl(default = "512")]
 	tile_size: Option<u32>,
 	/// Highest zoom level to generate. Defaults to the dataset's native resolution.
 	level_max: Option<u8>,
 	/// Lowest zoom level to generate. Defaults to `level_max`.
 	level_min: Option<u8>,
 	/// How many tiles a GDAL instance renders before being replaced. Defaults to `100`.
+	#[vpl(default = "100")]
 	gdal_reuse_limit: Option<u32>,
 	/// How many GDAL instances may run at once. Defaults to `4`.
+	#[vpl(default = "4")]
 	gdal_concurrency_limit: Option<u8>,
 	/// Format to encode the tiles in. Defaults to `png`.
+	#[vpl(default = "png")]
 	tile_format: Option<RasterTileFormat>,
 	/// GeoJSON polygon outside which pixels become transparent. Defaults to the whole dataset.
 	cutline: Option<String>,

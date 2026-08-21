@@ -35,18 +35,22 @@ struct Args {
 	id_field_data: String,
 
 	/// Whether to replace a feature's properties instead of merging. Defaults to `false`.
+	#[vpl(default = "false")]
 	replace_properties: Option<bool>,
 
 	/// Whether to drop features that have no matching row. Defaults to `false`.
+	#[vpl(default = "false")]
 	remove_non_matching: Option<bool>,
 
 	/// Whether to keep the id column among the written properties. Defaults to `false`.
+	#[vpl(default = "false")]
 	include_id: Option<bool>,
 
 	/// Character separating a row's fields. Defaults to `,` for `.csv` and a tab for `.tsv`.
 	field_separator: Option<String>,
 
 	/// Decimal separator for parsing numbers, so `,` reads `1.234,56`. Defaults to `.`.
+	#[vpl(default = ".")]
 	decimal_separator: Option<String>,
 }
 

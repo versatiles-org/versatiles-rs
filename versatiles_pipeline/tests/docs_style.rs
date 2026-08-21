@@ -105,6 +105,67 @@ fn check_details(op: &str, details: &str, v: &mut Violations) {
 	);
 }
 
+/// The literal a "Defaults to `X`." sentence promises, if it promises one.
+///
+/// A default is stated in exactly one form — `docs_style` enforces that much
+/// already — so the literal is whatever sits in backticks immediately after
+/// "Defaults to " and immediately before the closing period. Anything else is a
+/// *computed* default ("Defaults to the source's highest.", "Defaults to a
+/// heuristic capped at `14`.", "Defaults to `16`/`0.5`."), which has no literal
+/// to promise and yields `None`.
+fn stated_default(doc: &str) -> Option<&str> {
+	let start = doc.rfind("Defaults to ")? + "Defaults to ".len();
+	let tail = doc[start..].strip_prefix('`')?.strip_suffix('.')?;
+	let literal = tail.strip_suffix('`')?;
+	// One backticked span, not two: "Defaults to `16`/`0.5`." promises neither.
+	(!literal.contains('`')).then_some(literal)
+}
+
+/// Whether a stated default is a value at all, rather than a reference to
+/// something else.
+///
+/// `filter`'s `level_min` defaults to `level_max` and `from_grid`'s
+/// `id_template` to `id_preset` — the backticks are naming another parameter,
+/// not a value to put in a form. `raster_overview`'s `level_max` defaults to
+/// `level_base + 4`, an expression rather than a literal. Neither is something
+/// `VPLFieldMeta::default` should carry, so neither is required to.
+fn is_a_value(literal: &str, siblings: &[String]) -> bool {
+	!literal.contains(char::is_whitespace) && !siblings.iter().any(|name| name == literal)
+}
+
+/// Holds `#[vpl(default = "…")]` against the doc comment a reader actually
+/// sees, in both directions.
+///
+/// The attribute is what a generated form shows and the sentence is what the
+/// reference prints, so they are one fact written twice — and a form promising
+/// a default that changed two releases ago is exactly the failure this is meant
+/// to prevent.
+fn check_default(op: &str, field: &VPLFieldMeta, siblings: &[String], v: &mut Violations) {
+	let at = format!("{op}.{}", field.name);
+	let stated = stated_default(field.doc.trim());
+
+	match (&field.default, stated) {
+		(Some(declared), Some(literal)) => v.check(
+			declared == literal,
+			format!("{at}: declares the default {declared:?} but its description says {literal:?}"),
+		),
+		(Some(declared), None) => v.check(
+			false,
+			format!(
+				"{at}: declares the default {declared:?}, which its description does not state; \
+				 write \"Defaults to `{declared}`.\""
+			),
+		),
+		(None, Some(literal)) => v.check(
+			!is_a_value(literal, siblings),
+			format!(
+				"{at}: describes the default `{literal}` but does not declare it; add #[vpl(default = \"{literal}\")]"
+			),
+		),
+		(None, None) => (),
+	}
+}
+
 fn check_field(op: &str, field: &VPLFieldMeta, v: &mut Violations) {
 	// The `sources` pseudo-field is rendered as its own section, not as a
 	// parameter bullet, so the bullet rules do not apply to it.
@@ -215,8 +276,12 @@ fn every_operation_follows_the_doc_style() {
 	for op in &ops {
 		check_summary(&op.tag_name, op.summary.trim(), &mut v);
 		check_details(&op.tag_name, op.details.trim(), &mut v);
+		let names = op.fields.iter().map(|f| f.name.clone()).collect::<Vec<_>>();
 		for field in &op.fields {
 			check_field(&op.tag_name, field, &mut v);
+			if !field.is_sources {
+				check_default(&op.tag_name, field, &names, &mut v);
+			}
 		}
 	}
 
@@ -226,6 +291,30 @@ fn every_operation_follows_the_doc_style() {
 		v.0.len(),
 		v.0.join("\n  ")
 	);
+}
+
+#[test]
+fn stated_default_finds_only_a_bare_literal() {
+	assert_eq!(stated_default("Tile size in pixels. Defaults to `512`."), Some("512"));
+	assert_eq!(stated_default("Whether to climb. Defaults to `false`."), Some("false"));
+	assert_eq!(stated_default("Lower-left corner. Defaults to `[0,0]`."), Some("[0,0]"));
+	// Computed, so there is no literal to promise.
+	assert_eq!(stated_default("Zoom level. Defaults to the source's highest."), None);
+	assert_eq!(
+		stated_default("Highest zoom. Defaults to a heuristic capped at `14`."),
+		None
+	);
+	assert_eq!(stated_default("Distance. Defaults to `16`/`0.5`."), None);
+	assert_eq!(stated_default("Filename of the CSV file."), None);
+}
+
+#[test]
+fn a_reference_to_another_parameter_is_not_a_value() {
+	let siblings = ["level_min".to_string(), "level_max".to_string()];
+	assert!(!is_a_value("level_max", &siblings));
+	assert!(!is_a_value("level_base + 4", &siblings));
+	assert!(is_a_value("512", &siblings));
+	assert!(is_a_value("[0,0]", &siblings));
 }
 
 #[test]

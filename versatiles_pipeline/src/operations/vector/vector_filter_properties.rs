@@ -24,6 +24,7 @@ struct Args {
 	regex: String,
 
 	/// Whether to keep the matching properties instead of removing them. Defaults to `false`.
+	#[vpl(default = "false")]
 	invert: Option<bool>,
 }
 

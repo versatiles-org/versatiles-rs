@@ -14,10 +14,13 @@ use crate::{
 /// Adjusts the brightness, contrast and gamma of raster tiles.
 struct Args {
 	/// Offset added to every channel, `-255` to `255`. Defaults to `0.0`.
+	#[vpl(default = "0.0")]
 	brightness: Option<f32>,
 	/// Factor applied around mid-grey, above `0`. Defaults to `1.0`.
+	#[vpl(default = "1.0")]
 	contrast: Option<f32>,
 	/// Gamma exponent, above `0`. Defaults to `1.0`.
+	#[vpl(default = "1.0")]
 	gamma: Option<f32>,
 }
 

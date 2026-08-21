@@ -40,7 +40,13 @@ use crate::{
 ///
 /// Special fields:
 /// - `sources: Vec<VPLPipeline>` - for operations that accept child pipelines
-#[proc_macro_derive(VPLDecode)]
+///
+/// # Field attributes
+///
+/// - `#[vpl(default = "…")]` - what the operation uses when the parameter is
+///   absent, spelled the way it would be written in VPL. Optional fields only;
+///   see [`VPLFieldMeta::default`](../versatiles_pipeline/vpl/struct.VPLFieldMeta.html).
+#[proc_macro_derive(VPLDecode, attributes(vpl))]
 pub fn decode_vpl(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as syn::DeriveInput);
 

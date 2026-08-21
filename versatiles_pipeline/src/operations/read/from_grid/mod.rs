@@ -132,33 +132,41 @@ struct Args {
 	bbox: [f64; 4],
 
 	/// Lower-left corner of cell `(0, 0)`, in CRS units. Defaults to `[0,0]`.
+	#[vpl(default = "[0,0]")]
 	offset: Option<[f64; 2]>,
 
 	/// Roughly how many cells one tile may hold. Defaults to `1024`.
+	#[vpl(default = "1024")]
 	max_cells_per_tile: Option<u32>,
 
 	/// Highest zoom level to generate. Defaults to three above the derived minimum.
 	max_zoom: Option<u8>,
 
 	/// Ready-made id format. Overridden by `id_template`. Defaults to `inspire`.
+	#[vpl(default = "inspire")]
 	id_preset: Option<IdPreset>,
 
 	/// Id format spelled out, with `{x}` and `{y}` for the corner. Defaults to `id_preset`.
 	id_template: Option<String>,
 
 	/// Property holding the cell id. Defaults to `id`.
+	#[vpl(default = "id")]
 	id_field: Option<String>,
 
 	/// Property holding the corner's easting. Defaults to `x`.
+	#[vpl(default = "x")]
 	x_field: Option<String>,
 
 	/// Property holding the corner's northing. Defaults to `y`.
+	#[vpl(default = "y")]
 	y_field: Option<String>,
 
 	/// How far a cell edge may stray from its true curve, in tile pixels. Defaults to `0.5`.
+	#[vpl(default = "0.5")]
 	densify_tolerance: Option<f64>,
 
 	/// Name of the layer to write into. Defaults to `grid`.
+	#[vpl(default = "grid")]
 	layer_name: Option<String>,
 }
 

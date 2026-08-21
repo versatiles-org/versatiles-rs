@@ -89,15 +89,18 @@ struct Args {
 	bbox: [f64; 4],
 
 	/// Roughly how many cells one tile may hold. Defaults to `1024`.
+	#[vpl(default = "1024")]
 	max_cells_per_tile: Option<u32>,
 
 	/// Highest zoom level to generate. Defaults to three above the derived minimum.
 	max_zoom: Option<u8>,
 
 	/// Name of the layer to write into. Defaults to `grid`.
+	#[vpl(default = "grid")]
 	layer_name: Option<String>,
 
 	/// Property holding the H3 index. Defaults to `h3`.
+	#[vpl(default = "h3")]
 	id_field: Option<String>,
 }
 

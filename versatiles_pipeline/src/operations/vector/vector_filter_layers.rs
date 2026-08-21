@@ -19,6 +19,7 @@ struct Args {
 	filter: Vec<String>,
 
 	/// Whether to keep the named layers instead of removing them. Defaults to `false`.
+	#[vpl(default = "false")]
 	invert: Option<bool>,
 }
 

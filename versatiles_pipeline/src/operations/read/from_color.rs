@@ -26,10 +26,13 @@ use crate::{PipelineFactory, helpers::tile_format_subset::RasterTileFormat, vpl:
 /// Generates raster tiles of a single solid colour.
 struct Args {
 	/// Hex colour, `RRGGBB` or `RRGGBBAA`. Defaults to `000000`.
+	#[vpl(default = "000000")]
 	color: Option<String>,
 	/// Tile size in pixels, `256` or `512`. Defaults to `512`.
+	#[vpl(default = "512")]
 	size: Option<u16>,
 	/// Format to encode the tiles in. Defaults to `png`.
+	#[vpl(default = "png")]
 	format: Option<RasterTileFormat>,
 }
 

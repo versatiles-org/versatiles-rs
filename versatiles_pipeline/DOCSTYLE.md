@@ -99,7 +99,9 @@ interacts → default.**
 6. **Defaults come last, always in the same form** — one sentence beginning
    "Defaults to". Never `Default:`, never a trailing parenthesis, never "If not
    specified". A computed default is spelled out rather than left implicit. A
-   required parameter gets no default sentence at all.
+   required parameter gets no default sentence at all. A default that is a
+   literal value is also **declared on the field**; see "Declaring a default"
+   below.
 7. **Cross-references** name the other parameter in backticks and say what the
    relation is: "Mutually exclusive with", "Requires", "Overrides".
 8. **Literals, paths, identifiers and values go in backticks**, not in straight
@@ -159,9 +161,41 @@ Before adding or editing an operation:
 - [ ] No parameter description repeats the type, `(required)`/`(optional)`, or
       an enum's accepted values.
 - [ ] Every default reads `Defaults to X.` and comes last.
+- [ ] Every literal default is declared with `#[vpl(default = "…")]`.
 - [ ] Every parameter description is under 100 characters.
 - [ ] Nothing repeats a convention already stated in `help.md`.
 - [ ] Ran `./scripts/build-docs-readme.sh` so the generated reference matches.
+
+## Declaring a default
+
+The sentence tells a *reader* what happens when a parameter is left out. A
+generated form needs the same fact as data, or it shows an empty box for
+`from_color`'s `color` — which will use `000000` — and an identical empty box
+for `from_csv`'s `lon_column`, whose absence is an error.
+
+So a literal default is written twice, once for each audience, and
+`docs_style.rs` holds the two against each other in both directions:
+
+```rust
+/// Hex colour, `RRGGBB` or `RRGGBBAA`. Defaults to `000000`.
+#[vpl(default = "000000")]
+color: Option<String>,
+```
+
+The attribute is **VPL text**, not a Rust expression: it is what a form shows
+and what a caller writes into the document to make the default explicit, so
+`"000000"`, `"false"` and `"[0,0]"` are all plain strings. It reaches consumers
+as `VPLFieldMeta::default`.
+
+Only a *literal* gets one. These do not, and the test does not ask for them:
+
+- **A computed default.** "Defaults to the source's highest." — there is no
+  value to write. `VPLFieldMeta::default` is `None`, and a form should say
+  nothing rather than invent something.
+- **A reference to another parameter.** `level_min` defaults to `level_max`;
+  the backticks name a parameter, not a value.
+- **No default at all**, which is not the same as required: `filter`'s `bbox`
+  clips nothing when unset, and that absence *does* something.
 
 ## Accepted values come from the type
 
