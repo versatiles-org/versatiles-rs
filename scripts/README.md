@@ -57,14 +57,15 @@ Run any of them as `./scripts/<name>` from anywhere in the repository.
 
 ## Analysis & Profiling
 
-| Script                                                                   | Purpose                                                                                     |
-| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| [`analyze-binary-size.sh`](#analyze-binary-sizesh)                       | Analyse the size of the release binary, breaking down contributions by crate and dependency |
-| `doc-coverage-report.sh`                                                 | Generate a documentation coverage report for all public API items                           |
-| `profile-macos.sh`                                                       | Profile the versatiles binary on macOS using Instruments (CPU Profiler)                     |
-| `stress-ddos.sh`                                                         | Load-test a local tile server with parallel HTTP requests                                   |
-| [`bench-container-initialisation.sh`](#bench-container-initialisationsh) | Measure how long each container reader takes to open, with and without a pyramid scan       |
-| [`benchmark_server.sh`](#benchmark_serversh)                             | Measure average server response time over a 21x21 grid of tile requests                     |
+| Script                                                                   | Purpose                                                                                                            |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| [`analyze-binary-size.sh`](#analyze-binary-sizesh)                       | Analyse the size of the release binary, breaking down contributions by crate and dependency                        |
+| `doc-coverage-report.sh`                                                 | Generate a documentation coverage report for all public API items                                                  |
+| `profile-macos.sh`                                                       | Profile the versatiles binary on macOS using Instruments (CPU Profiler)                                            |
+| `stress-ddos.sh`                                                         | Load-test a local tile server with parallel HTTP requests                                                          |
+| [`bench-container-initialisation.sh`](#bench-container-initialisationsh) | Measure how long each container reader takes to open, with and without a pyramid scan                              |
+| [`benchmark_server.sh`](#benchmark_serversh)                             | Measure average server response time over a 21x21 grid of tile requests                                            |
+| [`bench-raster-mask.sh`](#bench-raster-masksh)                           | Measure how `raster_mask` scales with GeoJSON complexity, separating fully-inside, fully-outside and partial tiles |
 
 ## CI / Workflow
 
@@ -180,6 +181,15 @@ ITERATIONS=10 ./scripts/bench-container-initialisation.sh
 ```
 
 Defaults to 5 iterations.
+
+### `bench-raster-mask.sh`
+
+```sh
+./scripts/bench-raster-mask.sh          # zooms 6 8 10
+./scripts/bench-raster-mask.sh 8 12
+```
+
+Unpacks `testdata/germany.geojson.br` (84143 vertices) into the gitignored `testdata/bench/` on first run and builds the release binary if needed. The partial-tile case with the large mask takes tens of seconds per tile — that is the measurement, not a fault.
 
 ### `benchmark_server.sh`
 
