@@ -400,6 +400,7 @@ jobs:
     env:
       CARGO_PROFILE_DEV_OPT_LEVEL: "0"
       CARGO_PROFILE_TEST_OPT_LEVEL: "0"
+    if: github.ref == 'refs/heads/main'
     steps:
       # Before checkout so actions/checkout has git. openssl-dev is for
       # openssl-sys, pulled in via ssh2.
