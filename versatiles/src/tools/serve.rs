@@ -24,7 +24,7 @@ pub struct Subcommand {
 	#[arg(verbatim_doc_comment)]
 	pub tile_sources: Vec<String>,
 
-	/// Path to a configuration file (TOML format) to configure the server, CORS, static and tile sources.
+	/// Path to a configuration file (YAML format) to configure the server, CORS, static and tile sources.
 	/// Command line arguments will override configuration file settings.
 	#[arg(short = 'c', long, value_name = "FILE", display_order = 0)]
 	pub config: Option<PathBuf>,
