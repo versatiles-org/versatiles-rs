@@ -455,6 +455,14 @@ struct FieldMeta {
 	/// emits `<T>::variants().to_vec()` into the generated metadata for
 	/// these fields, where `T` is this generic param.
 	enum_type: Option<&'static str>,
+	/// `Some(generic_param)` when the field is parsed through
+	/// `TryFrom<&str>`; `None` otherwise. The derive emits a
+	/// `<T>::try_from(v).is_ok()` probe into `VPLFieldMeta::accepts` for these.
+	///
+	/// A superset of `enum_type`: `MaxTileBytes` parses this way without having
+	/// a closed variant list, and `check` can still tell a bad value from a good
+	/// one even where a picker has nothing to offer.
+	parsed_type: Option<&'static str>,
 }
 
 /// Processed field information returned by `process_field`.
@@ -502,6 +510,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 			is_sources: true,
 			doc: raw_comment,
 			enum_type: None,
+			parsed_type: None,
 		};
 		return Ok((field_str, ProcessedField::Sources { doc, parser }, meta));
 	}
@@ -544,6 +553,11 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 		is_sources: false,
 		doc: raw_comment,
 		enum_type: if mapping.is_enum { mapping.generic_param } else { None },
+		parsed_type: if mapping.method_name == "property_enum_option" {
+			mapping.generic_param
+		} else {
+			None
+		},
 	};
 
 	Ok((
@@ -638,6 +652,15 @@ fn build_impl_tokens(
 			} else {
 				quote! { Vec::new() }
 			};
+			// Ask the parser whether a value is accepted, rather than comparing
+			// against `variants()`: the two are different sets on purpose, and
+			// the parser is the one that decides whether a pipeline builds.
+			let accepts_expr: TokenStream = if let Some(parsed_ty) = m.parsed_type {
+				let ty = format_ident!("{}", parsed_ty);
+				quote! { Some(|value: &str| <#ty as TryFrom<&str>>::try_from(value).is_ok()) }
+			} else {
+				quote! { None }
+			};
 			quote! {
 				crate::vpl::VPLFieldMeta {
 					name: #fname.to_string(),
@@ -646,6 +669,7 @@ fn build_impl_tokens(
 					is_sources: #is_sources,
 					doc: #fdoc.to_string(),
 					enum_variants: #variants_expr,
+					accepts: #accepts_expr,
 				}
 			}
 		})

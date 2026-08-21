@@ -170,9 +170,10 @@ pub fn parse_vpl(vpl: String) -> String {
 /// descending into a node's bracketed sources appends the source index and then the node index.
 /// The same walk applies to the tree from `parseVplCst`, which is how this becomes a span.
 ///
-/// Two things are deliberately *not* reported, because doing so would reject VPL that runs:
-/// parameter values are never validated (`color=red` passes here and fails at build time), and
-/// neither are enum values, since the accepted set includes aliases the metadata does not list.
+/// A parameter whose type has a parser is handed to it, so `format=notaformat` is reported and
+/// the alias `format=pbf` is not — the parser decides, never the list of values a picker offers.
+/// A value whose type has no parser is deliberately *not* validated, because doing so would
+/// reject VPL that runs: `color=red` passes here and fails at build time.
 ///
 /// @param vpl - the VPL text to check
 /// @returns a JSON string describing either the problems found or a parse error
