@@ -98,6 +98,8 @@ Both quoted forms may be empty: `""` and `''` are the empty string. That is dist
 
 To pass several values to one parameter, use a comma-separated list in square brackets, e.g. `layer=["place", "water"]`. The same three forms apply to each element.
 
+Every parameter that takes a file path resolves a relative one against the `.vpl` file's own directory, so a pipeline and the data it reads can be moved together. The individual parameters below do not repeat this.
+
 ## Filter expressions (CEL)
 
 The `vector_filter_features` transform evaluates a boolean [CEL (Common Expression Language)](https://github.com/google/cel-spec) expression per feature. Quick reference:

@@ -23,10 +23,9 @@ use versatiles_core::{Blob, TileBBox, TileCompression, TileFormat, TileJSON, Til
 use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Reads a single tile file and uses it as a template for all tile requests.
+/// Reads one tile file and returns it for every requested coordinate.
 struct Args {
-	/// The filename of the tile. Supported formats: png, jpg/jpeg, webp, avif, pbf/mvt.
-	/// The format is automatically detected from the file extension.
+	/// Path to the tile file; its format comes from the extension.
 	filename: String,
 }
 

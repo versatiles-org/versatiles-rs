@@ -30,9 +30,9 @@ use crate::{
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Overlays multiple tile sources, using the tile from the first source that provides it.
+/// Overlays several tile sources, taking each tile from the first source that has it.
 struct Args {
-	/// All tile sources must have the same format.
+	/// The sources to stack, in priority order, all with the same format.
 	sources: Vec<VPLPipeline>,
 }
 

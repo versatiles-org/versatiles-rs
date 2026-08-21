@@ -31,7 +31,10 @@ That wraps `cargo fmt-check`, `cargo clippy -D warnings`, `cargo test`, and the 
 - Use [conventional commit](https://www.conventionalcommits.org/) prefixes — `feat:`, `fix:`, `refactor:`, `docs:`, `ci:`, `test:`, `chore:`. Look at recent commits for examples.
 - One concern per PR. Keep diffs focused; unrelated cleanups belong in a separate PR.
 - Add or update tests for any code change that can be tested.
-- Update `README.md` and `versatiles_pipeline/README.md` if you add user-facing operations, CLI flags, or behaviour.
+- Update `README.md` if you add user-facing operations, CLI flags, or behaviour.
+- `versatiles_pipeline/README.md` and `versatiles/CONFIG.md` are generated — run
+  `./scripts/build-docs-readme.sh` rather than editing them. When you touch a VPL
+  operation's doc comments, follow `versatiles_pipeline/DOCSTYLE.md`.
 - The `main` branch requires linear history; PRs are merged via rebase only — no squash, no merge commits. Keep your branch up to date with `main` before requesting a final review.
 
 ## License

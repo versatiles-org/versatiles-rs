@@ -12,9 +12,9 @@ use crate::{
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Flattens (translucent) raster tiles onto a background
+/// Composites translucent raster tiles onto an opaque background colour.
 struct Args {
-	/// background color to use for the flattened tiles, in RGB format. Defaults to white.
+	/// Background colour, as `[r, g, b]`. Defaults to white.
 	color: Option<[u8; 3]>,
 }
 

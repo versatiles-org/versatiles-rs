@@ -93,31 +93,30 @@ use versatiles_image::traits::DynamicImageTraitOperation;
 
 use crate::{
 	PipelineFactory,
+	helpers::tile_format_subset::RasterTileFormat,
 	vpl::{VPLNode, VPLPipeline},
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Overlays multiple raster tile sources on top of each other.
+/// Blends several raster tile sources into one by alpha-compositing them.
+///
+/// Unlike `from_stacked`, which picks one source's tile whole, this composites
+/// them pixel by pixel, so a translucent source lets the ones beneath it show
+/// through.
+///
+/// With `auto_overscale=true`, a request that no source covers natively returns
+/// an empty stream rather than a blank tile. Put a `raster_overscale` *after*
+/// `from_stacked_raster` to fill those in — upscaling one blended tile is
+/// cheaper than upscaling each source separately.
 struct Args {
-	/// All tile sources must provide raster tiles in the same resolution.
-	/// The first source overlays the others.
+	/// The sources to blend, with the first on top. All must provide raster
+	/// tiles at the same resolution.
 	sources: Vec<VPLPipeline>,
 
-	/// The tile format to use for the output tiles.
-	/// Default: format of the first source.
-	format: Option<TileFormat>,
+	/// Format to encode the blended tiles in. Defaults to the first source's.
+	format: Option<RasterTileFormat>,
 
-	/// Whether to automatically wrap each source with `raster_overscale` so
-	/// that sources missing native tiles at the requested zoom level still
-	/// contribute via upscaled tiles.
-	///
-	/// When all sources overlapping a requested bbox are overscaled (none
-	/// have native data), this operation returns an empty stream. Place a
-	/// `raster_overscale` *after* `from_stacked_raster` in the pipeline to
-	/// cover those tiles — it is more efficient to upscale one blended tile
-	/// than N individual tiles.
-	///
-	/// Default: `false`.
+	/// Whether to wrap each source in `raster_overscale`. Defaults to `false`.
 	auto_overscale: Option<bool>,
 }
 
@@ -237,7 +236,9 @@ impl Operation {
 			.first()
 			.expect("already ensured non-empty sources")
 			.metadata();
-		let tile_format = args.format.unwrap_or(*first_source_metadata.tile_format());
+		let tile_format = args
+			.format
+			.map_or_else(|| *first_source_metadata.tile_format(), TileFormat::from);
 		ensure!(
 			tile_format.to_type() == TileType::Raster,
 			"output format must be a raster format"
@@ -905,6 +906,9 @@ mod tests {
 		assert_eq!(rgba_to_hex(&color), "FF000080");
 	}
 
+	/// `format` is typed to the raster subset, so a non-raster value is refused
+	/// while parsing the node — before any source is opened — and the message
+	/// names what is accepted.
 	#[tokio::test]
 	async fn test_non_raster_output_format_error() {
 		let factory = PipelineFactory::new_dummy();
@@ -914,7 +918,11 @@ mod tests {
 
 		assert!(result.is_err());
 		let err_msg = result.unwrap_err().chain().last().unwrap().to_string();
-		assert_eq!(err_msg, "output format must be a raster format");
+		assert_eq!(
+			err_msg,
+			"In operation 'from_stacked_raster' the parameter 'format' has an invalid value: \
+			 Invalid tile format 'pbf'; expected one of avif, jpg, png, webp"
+		);
 	}
 
 	#[tokio::test]

@@ -6,19 +6,21 @@ use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileJSON, TileStream};
 use versatiles_derive::context;
 
-use super::encoding::{resolve_encoding, to_tile_schema};
+use super::encoding::{DemEncoding, resolve_encoding, to_tile_schema};
 use crate::{PipelineFactory, helpers::tile_resize::TileResizeCore, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Convert DEM tile size between 256px and 512px by splitting or merging tiles.
+/// Converts DEM tiles between 256 and 512 pixels by splitting or merging them.
 ///
-/// Like raster_tile_resize, but uses 24-bit raw value averaging for downscaling
-/// (level 0, 512→256) instead of channel-wise averaging.
+/// The counterpart to `raster_tile_resize` for elevation data: downscaling
+/// averages the decoded 24-bit elevation rather than the R, G and B channels
+/// separately, which for a DEM would mix the high byte of one pixel with the low
+/// byte of another.
 pub struct Args {
-	/// Target tile size in pixels. Must be 256 or 512.
-	pub tile_size: Option<u32>,
-	/// Override auto-detection of DEM encoding. Values: "mapbox", "terrarium".
-	pub encoding: Option<String>,
+	/// Target tile size in pixels, `256` or `512`, and it must differ from the source's.
+	pub tile_size: u32,
+	/// DEM encoding of the source. Defaults to the encoding its tile schema implies.
+	pub encoding: Option<DemEncoding>,
 }
 
 #[derive(Clone, Debug)]
@@ -33,9 +35,9 @@ impl Operation {
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let tile_size = args.tile_size.ok_or_else(|| anyhow::anyhow!("tile_size is required"))?;
+		let tile_size = args.tile_size;
 
-		let encoding = resolve_encoding(args.encoding.as_ref(), source.tilejson().tile_schema.as_ref())?;
+		let encoding = resolve_encoding(args.encoding, source.tilejson().tile_schema.as_ref())?;
 
 		let mut core = TileResizeCore::new(source, tile_size, Arc::new(super::dem_overview::dem_scale_down))?;
 		core.tilejson.tile_schema = Some(to_tile_schema(encoding));

@@ -12,21 +12,23 @@ use crate::{
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Quantize DEM (elevation) raster tiles by rounding to a per-tile power-of-two step.
+/// Quantizes DEM raster tiles by rounding elevations to a per-tile power-of-two step.
 ///
-/// Computes the step from two physically meaningful criteria: elevation error relative to
-/// pixel size, and maximum slope distortion. The stricter (smaller step) wins. Values are
-/// rounded to the nearest multiple of the step (not truncated), which halves the worst-case
-/// elevation error and removes the downward bias at no size cost. Single-pass — no scan.
+/// Discarding low bits that carry no usable signal makes the tiles compress much
+/// better. The step is derived per tile from two physical criteria —
+/// `elevation_error` relative to the pixel's ground size, and `slope_error` —
+/// and the stricter of the two wins.
+///
+/// Values are rounded to the nearest multiple of the step rather than
+/// truncated, which halves the worst-case elevation error and removes the
+/// downward bias at no cost in size. Single-pass: no scan of the data first.
 struct Args {
-	/// Allowed elevation error as fraction of pixel ground size.
-	/// E.g. 0.1 means for a 10 m pixel, allow up to 1 m elevation error. Defaults to 0.1.
+	/// Allowed elevation error as a fraction of the pixel's ground size. Defaults to `0.1`.
 	elevation_error: Option<f64>,
-	/// Maximum allowed slope change in degrees due to quantization.
-	/// Defaults to 1.0.
+	/// Largest slope change in degrees that quantization may introduce. Defaults to `1.0`.
 	slope_error: Option<f64>,
-	/// Override auto-detection of DEM encoding. Values: "mapbox", "terrarium".
-	encoding: Option<String>,
+	/// DEM encoding of the source. Defaults to the encoding its tile schema implies.
+	encoding: Option<DemEncoding>,
 }
 
 #[derive(Debug)]
@@ -106,7 +108,7 @@ impl Operation {
 			elevation_error: args.elevation_error.unwrap_or(0.1),
 			slope_error: args.slope_error.unwrap_or(1.0),
 			// Read from the source's schema before `update_tilejson` overwrites it.
-			encoding: resolve_encoding(args.encoding.as_ref(), source.tilejson().tile_schema.as_ref())?,
+			encoding: resolve_encoding(args.encoding, source.tilejson().tile_schema.as_ref())?,
 		};
 		Ok(TransformOp::new(source, operation, factory.runtime()))
 	}

@@ -69,33 +69,35 @@ const DEFAULT_ZOOM_RANGE: u8 = 3;
 const MAX_ZOOM: u8 = 30;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Generates vector tiles containing H3 grid cells, ready to be joined with data keyed on the H3 index.
+/// Generates vector tiles holding H3 hexagons.
+///
+/// The hexagonal counterpart to `from_grid`: data published as a table keyed on
+/// an H3 index gets the geometry that index refers to, ready to be joined onto
+/// with `vector_update_properties`.
+///
+/// Resolution `0` gives cells of about 4,250,000 km² and `15` about 0.9 m²;
+/// `resolution=8` lands near 0.7 km². The full table of cell areas and edge
+/// lengths is at <https://h3geo.org/docs/core-library/restable/>.
+///
+/// `bbox` is required: without bounds the grid would cover the whole planet,
+/// which at most resolutions is more tiles than can be written.
 struct Args {
-	/// H3 resolution, `0` (cells of ~4,250,000 km²) to `15` (~0.9 m²).
-	/// For example: `resolution=8` for cells of roughly 0.7 km².
-	/// See <https://h3geo.org/docs/core-library/restable/> for the full table.
+	/// H3 resolution, `0` (coarsest) to `15` (finest).
 	resolution: u8,
 
-	/// The area to cover, as `[west, south, east, north]` in WGS84 degrees.
-	/// For example: `bbox=[13.0,52.3,13.8,52.7]` for Berlin.
-	/// Required: a grid without bounds would be generated for the whole planet,
-	/// which at most resolutions is more tiles than can be written.
+	/// Area to cover, as `[west, south, east, north]` in WGS84 degrees.
 	bbox: [f64; 4],
 
-	/// Roughly how many cells one tile may hold. Decides the lowest zoom level
-	/// this source offers: below it a single tile would carry more cells than a
-	/// tile can usefully hold. Default: `1024`.
+	/// Roughly how many cells one tile may hold. Defaults to `1024`.
 	max_cells_per_tile: Option<u32>,
 
-	/// Highest zoom level to generate. Defaults to three levels above the
-	/// derived minimum, since further levels repeat the same cells.
+	/// Highest zoom level to generate. Defaults to three above the derived minimum.
 	max_zoom: Option<u8>,
 
-	/// Name of the layer in the generated tiles. Default: `"grid"`.
+	/// Name of the layer to write into. Defaults to `grid`.
 	layer_name: Option<String>,
 
-	/// Name of the string property holding the H3 index, e.g. `"8928308280fffff"`.
-	/// Default: `"h3"`, matching how H3 datasets usually name the column.
+	/// Property holding the H3 index. Defaults to `h3`.
 	id_field: Option<String>,
 }
 

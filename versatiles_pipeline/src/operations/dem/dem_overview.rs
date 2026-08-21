@@ -6,20 +6,22 @@ use imageproc::image::{DynamicImage, Rgb, RgbImage, Rgba, RgbaImage};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileJSON, TileStream};
 
-use super::encoding::{resolve_encoding, to_tile_schema};
+use super::encoding::{DemEncoding, resolve_encoding, to_tile_schema};
 use crate::{PipelineFactory, helpers::overview::OverviewCore, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Generate lower-zoom DEM overview tiles by averaging 24-bit elevation values.
+/// Generates lower-zoom DEM overview tiles by averaging 24-bit elevation values.
 ///
-/// Unlike raster_overview which averages RGB channels independently,
-/// this operation decodes each pixel to its 24-bit raw elevation value,
-/// averages the values correctly, and re-encodes back to RGB.
+/// `raster_overview` averages the R, G and B channels independently, which is
+/// meaningless for a DEM: the channels are one number split across three bytes,
+/// so averaging them separately mixes the high byte of one pixel with the low
+/// byte of another. This operation decodes each pixel to its 24-bit raw
+/// elevation, averages that, and re-encodes.
 struct Args {
-	/// Use this zoom level to build the overview. Defaults to the maximum zoom level of the source.
+	/// Zoom level to build the overview from. Defaults to the source's highest.
 	level: Option<u8>,
-	/// Override auto-detection of DEM encoding. Values: "mapbox", "terrarium".
-	encoding: Option<String>,
+	/// DEM encoding of the source. Defaults to the encoding its tile schema implies.
+	encoding: Option<DemEncoding>,
 }
 
 #[derive(Debug)]
@@ -112,7 +114,7 @@ impl Operation {
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		let encoding = resolve_encoding(args.encoding.as_ref(), source.tilejson().tile_schema.as_ref())?;
+		let encoding = resolve_encoding(args.encoding, source.tilejson().tile_schema.as_ref())?;
 
 		let mut core = OverviewCore::new(source, args.level, Arc::new(dem_scale_down), factory.runtime())?;
 

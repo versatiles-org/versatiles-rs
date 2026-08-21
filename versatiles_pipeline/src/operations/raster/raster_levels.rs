@@ -11,13 +11,13 @@ use crate::{
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Adjust brightness, contrast and gamma of raster tiles.
+/// Adjusts the brightness, contrast and gamma of raster tiles.
 struct Args {
-	/// Brightness adjustment, between -255 and 255. Defaults to 0.0 (no change).
+	/// Offset added to every channel, `-255` to `255`. Defaults to `0.0`.
 	brightness: Option<f32>,
-	/// Contrast adjustment, between 0 and infinity. Defaults to 1.0 (no change).
+	/// Factor applied around mid-grey, above `0`. Defaults to `1.0`.
 	contrast: Option<f32>,
-	/// Gamma adjustment, between 0 and infinity. Defaults to 1.0 (no change).
+	/// Gamma exponent, above `0`. Defaults to `1.0`.
 	gamma: Option<f32>,
 }
 

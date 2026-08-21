@@ -9,9 +9,9 @@ use versatiles_image::traits::DynamicImageTraitOperation;
 use crate::{PipelineFactory, helpers::overview::OverviewCore, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Generate lower-zoom overview tiles by downscaling from a base zoom level.
+/// Generates the lower zoom levels of a raster pyramid by downscaling.
 struct Args {
-	/// use this zoom level to build the overview. Defaults to the maximum zoom level of the source.
+	/// Zoom level to build the overview from. Defaults to the source's highest.
 	level: Option<u8>,
 }
 

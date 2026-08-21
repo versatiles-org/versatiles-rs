@@ -20,17 +20,17 @@ use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Tra
 use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
 use versatiles_image::{DynamicImageTraitConvert, color::parse_hex_color};
 
-use crate::{PipelineFactory, vpl::VPLNode};
+use crate::{PipelineFactory, helpers::tile_format_subset::RasterTileFormat, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Generates solid-color tiles of the specified size and format.
+/// Generates raster tiles of a single solid colour.
 struct Args {
-	/// Hex color in RGB or RGBA format (e.g., "FF5733" or "FF573380"). Defaults to "000000" (black).
+	/// Hex colour, `RRGGBB` or `RRGGBBAA`. Defaults to `000000`.
 	color: Option<String>,
-	/// Tile size in pixels (256 or 512). Defaults to 512.
+	/// Tile size in pixels, `256` or `512`. Defaults to `512`.
 	size: Option<u16>,
-	/// Tile format: one of "avif", "jpg", "png", or "webp". Defaults to "png".
-	format: Option<TileFormat>,
+	/// Format to encode the tiles in. Defaults to `png`.
+	format: Option<RasterTileFormat>,
 }
 
 /// Implements [`TileSource`] by returning clones of a pre-generated solid-color tile.
@@ -90,7 +90,7 @@ impl Operation {
 
 		let tile_size = u32::from(args.size.unwrap_or(512));
 
-		let tile_format = args.format.unwrap_or(TileFormat::PNG);
+		let tile_format = args.format.map_or(TileFormat::PNG, TileFormat::from);
 
 		Self::from_parameters(&color_bytes, tile_size, tile_format)
 	}

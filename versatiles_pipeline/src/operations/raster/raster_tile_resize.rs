@@ -10,12 +10,17 @@ use versatiles_image::traits::DynamicImageTraitOperation;
 use crate::{PipelineFactory, helpers::tile_resize::TileResizeCore, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Convert the size of tiles by splitting or merging them to a width of 256px or 512px.
+/// Converts raster tiles between 256 and 512 pixels by splitting or merging them.
+///
+/// Changing the tile size shifts the zoom levels with it, because the ground
+/// resolution of a pixel has to stay the same. `tile_size=256` splits each
+/// 512-pixel tile into four 256-pixel tiles one zoom level higher, except at
+/// level 0, which has no level below it to move to and is downscaled instead.
+/// `tile_size=512` merges four 256-pixel tiles into one 512-pixel tile one zoom
+/// level lower.
 pub struct Args {
-	/// Target tile size in pixels.
-	/// A value of `256` expects source tiles of 512px, which will be split into four 256px output tiles at the next higher zoom level. Level 0 is downscaled instead.
-	/// A value of `512` expects source tiles measuring 256px, which will be merged into 512px output tiles at the next lower zoom level.
-	pub tile_size: Option<u32>,
+	/// Target tile size in pixels, `256` or `512`, and it must differ from the source's.
+	pub tile_size: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -30,7 +35,7 @@ impl Operation {
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let tile_size = args.tile_size.ok_or_else(|| anyhow::anyhow!("tile_size is required"))?;
+		let tile_size = args.tile_size;
 		let core = TileResizeCore::new(source, tile_size, Arc::new(|img| img.scaled_down(2)))?;
 		Ok(Self { core })
 	}

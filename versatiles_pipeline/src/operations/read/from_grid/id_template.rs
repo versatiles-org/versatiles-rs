@@ -43,6 +43,46 @@ pub struct IdTemplate {
 	source: String,
 }
 
+/// A ready-made [`IdTemplate`] a grid publisher already uses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum IdPreset {
+	/// The INSPIRE form, e.g. `CRS3035RES1000mN2691000E4341000`.
+	#[default]
+	Inspire,
+	/// The short GEOSTAT form, e.g. `1kmN2689E4337`.
+	Geostat,
+}
+
+impl IdPreset {
+	/// The accepted VPL spellings, in the order they should be listed.
+	///
+	/// The single source of truth for what `id_preset=` accepts: `VPLDecode`
+	/// renders these into the generated parameter reference, so no doc comment
+	/// repeats them. Kept in step with [`TryFrom<&str>`] by
+	/// `variants_match_try_from`.
+	#[allow(dead_code)] // Called by VPLDecode-generated metadata; the lint can't see through the proc-macro.
+	#[must_use]
+	pub fn variants() -> &'static [&'static str] {
+		&["inspire", "geostat"]
+	}
+}
+
+impl TryFrom<&str> for IdPreset {
+	type Error = anyhow::Error;
+
+	fn try_from(value: &str) -> Result<Self> {
+		match value {
+			"inspire" => Ok(IdPreset::Inspire),
+			"geostat" => Ok(IdPreset::Geostat),
+			other => bail!(
+				"unknown id_preset '{other}': available presets are {}. Use id_template= to spell out a format of \
+				 your own.",
+				IdPreset::variants().join(" and ")
+			),
+		}
+	}
+}
+
 impl IdTemplate {
 	/// Parse a template of literal text with `{x}` / `{y}` placeholders.
 	pub fn parse(template: &str) -> Result<Self> {

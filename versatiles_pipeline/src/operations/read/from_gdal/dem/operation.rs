@@ -1,6 +1,6 @@
 use std::{fmt::Debug, sync::Arc};
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileStream};
@@ -14,28 +14,23 @@ use crate::{
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Reads a GDAL DEM dataset and produces terrain RGB tiles (Mapbox or Terrarium encoding).
+/// Reads a GDAL elevation dataset and encodes it as terrain RGB tiles.
 struct Args {
-	/// The filename of the GDAL DEM dataset to read.
-	/// For example: `filename="dem.tif"`.
+	/// Path to the DEM dataset.
 	filename: String,
-	/// The DEM encoding format: `"mapbox"` or `"terrarium"`. (default: `"mapbox"`)
-	encoding: Option<String>,
-	/// The size of the generated tiles in pixels. (default: 512)
+	/// How elevation is packed into the RGB channels. Defaults to `mapbox`.
+	encoding: Option<DemEncoding>,
+	/// Tile size in pixels. Defaults to `512`.
 	tile_size: Option<u32>,
-	/// The maximum zoom level to generate tiles for.
-	/// (default: the maximum zoom level based on the dataset's native resolution)
+	/// Highest zoom level to generate. Defaults to the dataset's native resolution.
 	level_max: Option<u8>,
-	/// The minimum zoom level to generate tiles for. (default: level_max)
+	/// Lowest zoom level to generate. Defaults to `level_max`.
 	level_min: Option<u8>,
-	/// How often to reuse a GDAL instance. (default: 100)
-	/// Set to a lower value if you have problems like memory leaks in GDAL.
+	/// How many tiles a GDAL instance renders before being replaced. Defaults to `100`.
 	gdal_reuse_limit: Option<u32>,
-	/// The number of maximum concurrent GDAL instances to allow. (default: 4)
-	/// Set to a higher value if you have enough system resources and want to increase throughput.
+	/// How many GDAL instances may run at once. Defaults to `4`.
 	gdal_concurrency_limit: Option<u8>,
-	/// Optional path to a GeoJSON file with Polygon/MultiPolygon geometry.
-	/// Only pixels inside the polygon will be rendered; everything outside becomes nodata.
+	/// GeoJSON polygon outside which pixels become nodata. Defaults to the whole dataset.
 	cutline: Option<String>,
 }
 
@@ -65,11 +60,7 @@ impl Operation {
 	{
 		let args = Args::from_vpl_node(&vpl_node).context("Failed to parse arguments from VPL node")?;
 
-		let encoding = match args.encoding.as_deref() {
-			None | Some("mapbox") => DemEncoding::Mapbox,
-			Some("terrarium") => DemEncoding::Terrarium,
-			Some(other) => bail!("Unknown DEM encoding: \"{other}\". Expected \"mapbox\" or \"terrarium\"."),
-		};
+		let encoding = args.encoding.unwrap_or(DemEncoding::Mapbox);
 
 		let filename = factory
 			.resolve_location(&DataLocation::try_from(&args.filename)?)?

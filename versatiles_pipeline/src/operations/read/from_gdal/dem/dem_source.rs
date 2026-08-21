@@ -7,13 +7,13 @@ use versatiles_core::GeoBBox;
 use versatiles_derive::context;
 
 use super::{Cutline, GdalPool, Instance, ResampleAlg, get_spatial_ref};
-
 /// DEM encoding format.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DemEncoding {
-	Mapbox,
-	Terrarium,
-}
+///
+/// Re-exported rather than redeclared: `encoding=` on `from_gdal_dem` and on the
+/// `dem_*` transforms must accept exactly the same spellings, and `VPLDecode`
+/// renders that list from the enum's own `variants()`. Two enums would be two
+/// lists that could drift.
+pub use crate::operations::dem::encoding::DemEncoding;
 
 /// Encode an elevation value (in meters) into an RGB triplet.
 ///

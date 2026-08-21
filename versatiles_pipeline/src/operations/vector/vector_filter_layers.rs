@@ -13,12 +13,12 @@ use crate::{
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Filters vector tile layers by name.
+/// Removes whole layers from vector tiles by name.
 struct Args {
-	/// Layer names to remove from the tiles, e.g. `filter=["pois","ocean"]`.
+	/// Layer names to remove, for example `filter=["pois","ocean"]`.
 	filter: Vec<String>,
 
-	/// If set, inverts the filter logic (i.e., keeps only layers matching the filter).
+	/// Whether to keep the named layers instead of removing them. Defaults to `false`.
 	invert: Option<bool>,
 }
 

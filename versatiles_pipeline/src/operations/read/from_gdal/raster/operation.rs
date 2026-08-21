@@ -19,48 +19,38 @@ use super::RasterSource;
 use crate::{
 	PipelineFactory,
 	factory::{OperationFactoryTrait, ReadOperationFactoryTrait},
+	helpers::tile_format_subset::RasterTileFormat,
 	vpl::VPLNode,
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Reads a GDAL raster dataset and exposes it as a tile source.
-/// Hint: When using "gdalbuildvrt" to create a virtual raster, don't forget to set `-addalpha` option to include alpha channel.
+/// Reads a GDAL raster dataset and reprojects it into tiles.
+///
+/// When building a virtual raster with `gdalbuildvrt`, pass `-addalpha` — without
+/// it the VRT carries no alpha channel and nothing outside the data becomes
+/// transparent.
 struct Args {
-	/// The filename of the GDAL raster dataset to read.
-	/// For example: `filename="world.tif"`.
+	/// Path to the raster dataset.
 	filename: String,
-	/// The size of the generated tiles in pixels. (default: 512)
+	/// Tile size in pixels. Defaults to `512`.
 	tile_size: Option<u32>,
-	/// The tile format to use for the output tiles. (default: `PNG`)
-	tile_format: Option<TileFormat>,
-	/// The maximum zoom level to generate tiles for.
-	/// (default: the maximum zoom level based on the dataset's native resolution)
+	/// Highest zoom level to generate. Defaults to the dataset's native resolution.
 	level_max: Option<u8>,
-	/// The minimum zoom level to generate tiles for. (default: level_max)
+	/// Lowest zoom level to generate. Defaults to `level_max`.
 	level_min: Option<u8>,
-	/// How often to reuse an GDAL instances. (default: 100)
-	/// Set to a lower value if you have problems like memory leaks in GDAL.
+	/// How many tiles a GDAL instance renders before being replaced. Defaults to `100`.
 	gdal_reuse_limit: Option<u32>,
-	/// The number of maximum concurrent GDAL instances to allow. (default: 4)
-	/// Set to a higher value if you have enough system resources and want to increase throughput.
+	/// How many GDAL instances may run at once. Defaults to `4`.
 	gdal_concurrency_limit: Option<u8>,
-	/// Optional path to a GeoJSON file with Polygon/MultiPolygon geometry.
-	/// Only pixels inside the polygon will be rendered; everything outside becomes transparent.
+	/// Format to encode the tiles in. Defaults to `png`.
+	tile_format: Option<RasterTileFormat>,
+	/// GeoJSON polygon outside which pixels become transparent. Defaults to the whole dataset.
 	cutline: Option<String>,
-	/// Comma-separated list of 1-based band indices to use as color channels.
-	/// E.g. "4,3,2" maps band 4→Red, band 3→Green, band 2→Blue.
-	/// "1" maps band 1→Grey. Defaults to auto-detection from color interpretation.
+	/// Band indices to read as colour channels, 1-based. Defaults to the colour interpretation.
 	bands: Option<String>,
-	/// NoData value(s) to treat as transparent. Multiple values can be
-	/// separated by semicolons (e.g. "0;255" treats both 0 and 255 as nodata).
-	/// Each value can be a single number applied to all bands or
-	/// comma-separated per-band values (e.g. "0,0,0;255,255,255").
-	/// The first value is handled natively by GDAL during reprojection;
-	/// additional values are applied as a post-warp alpha mask.
-	/// If not specified, the source dataset's per-band nodata value is used (if any).
+	/// Pixel values to render as transparent. Defaults to the dataset's own.
 	nodata: Option<String>,
-	/// Override the source CRS with an EPSG code (e.g. "4326" or "25832").
-	/// Use this when the input image has no embedded CRS or an incorrect one.
+	/// EPSG code to read the dataset with. Defaults to the dataset's own.
 	crs: Option<u32>,
 }
 
@@ -164,7 +154,7 @@ impl Operation {
 		let tile_pyramid = TilePyramid::from_geo_bbox(level_min, level_max, bbox)?;
 
 		let metadata = TileSourceMetadata::new(
-			args.tile_format.unwrap_or(TileFormat::PNG),
+			args.tile_format.map_or(TileFormat::PNG, TileFormat::from),
 			TileCompression::Uncompressed,
 			Traversal::ANY,
 			Some(tile_pyramid),

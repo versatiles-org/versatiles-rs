@@ -33,32 +33,27 @@ use crate::{
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Repairs vector tiles to conform to MVT 2.1.
+/// Repairs vector tiles so that they conform to MVT 2.1.
 ///
-/// Always fixed: missing `extent`/`version` fields, duplicate layer names,
+/// Always fixed: missing `extent` and `version` fields, duplicate layer names,
 /// inverted polygon winding, and degenerate rings.
 ///
-/// Tiles that the validator considers clean pass through unchanged — the
-/// original encoded blob is forwarded without re-encoding, so this operation
-/// is cheap on conformant input.
+/// Tiles the validator considers clean pass through unchanged — the original
+/// encoded blob is forwarded without re-encoding — so this operation is cheap
+/// on conformant input.
 ///
-/// ### Arguments
-///
-/// - `drop_offenders` (bool, default `false`): when `true`, features whose
-///   geometry byte stream cannot be decoded are silently removed. When `false`
-///   (the default), any layer containing such features keeps its original
-///   geometry bytes intact while structural fixes (extent, version) are still
-///   applied.
+/// Without `drop_offenders`, a layer holding a feature whose geometry cannot be
+/// decoded keeps its original geometry bytes, while the structural fixes are
+/// still applied to it.
 ///
 /// ### Example
 ///
-/// ```text
+/// ```vpl
 /// from_container filename="bad.versatiles" | vector_repair
 /// from_container filename="bad.versatiles" | vector_repair drop_offenders=true
 /// ```
 pub struct Args {
-	/// Drop features that cannot be decoded rather than leaving them in place.
-	/// Defaults to false.
+	/// Whether to remove features whose geometry cannot be decoded. Defaults to `false`.
 	pub drop_offenders: Option<bool>,
 }
 

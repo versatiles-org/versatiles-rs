@@ -9,6 +9,7 @@ pub mod grid_zoom;
 pub mod overview;
 mod pipeline_reader;
 pub mod tile_error_monitor;
+pub mod tile_format_subset;
 pub mod tile_resize;
 pub mod tile_size_monitor;
 pub mod tilejson;

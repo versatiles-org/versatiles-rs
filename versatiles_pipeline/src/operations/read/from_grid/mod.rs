@@ -54,7 +54,7 @@ mod projection;
 
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use geo_types::{Coord, Geometry, LineString, Polygon, coord};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
@@ -69,7 +69,7 @@ use versatiles_geometry::{
 
 use self::{
 	densify::{deviates, edge_interior},
-	id_template::IdTemplate,
+	id_template::{IdPreset, IdTemplate},
 	lattice::Lattice,
 	projection::Projection,
 };
@@ -101,65 +101,64 @@ const DEFAULT_DENSIFY_TOLERANCE: f64 = 0.5;
 const TILE_PIXELS: f64 = 256.0;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Generates vector tiles containing the cells of a projected square grid, ready to be joined with data keyed on the cell id.
+/// Generates vector tiles holding the cells of a projected square grid.
+///
+/// Gridded statistics are published as a table keyed on a cell id, without the
+/// geometry that id refers to. This generates that geometry, so the table can be
+/// joined onto it with `vector_update_properties`.
+///
+/// Without GDAL, `epsg` accepts `3035` (ETRS89-LAEA, what European gridded
+/// statistics use), `3857` (web mercator) and `4326` (WGS84 lon/lat). A build
+/// with the `gdal` feature accepts any code, at roughly ten times the cost per
+/// coordinate — and released binaries ship without GDAL, so a `.vpl` naming
+/// another code will not run on one.
+///
+/// `bbox` is required: an unbounded grid has no pyramid to derive from, and at
+/// most cell sizes it would be more tiles than can be written.
+///
+/// The two id presets produce `CRS3035RES1000mN2691000E4341000` for `inspire`
+/// and `1kmN2689E4337` for `geostat`. `id_template` spells out anything else:
+/// `{x}` and `{y}` each take an optional divisor and zero-padded width, so
+/// `E{x/100:04}N{y/100:04}` produces `E0643N4567`, the form Dutch grid
+/// statistics use.
 struct Args {
 	/// EPSG code of the grid's coordinate reference system.
-	/// Without GDAL: `3035` (ETRS89-LAEA, what European gridded statistics use),
-	/// `3857` (web mercator) and `4326` (WGS84 lon/lat).
 	epsg: u32,
 
-	/// Edge length of a cell, in the CRS's own units — meters for a projected
-	/// CRS, degrees for `epsg=4326`.
-	/// For example: `size=1000` for the 1 km grid Eurostat publishes.
+	/// Edge length of a cell, in the CRS's units — meters, or degrees for `epsg=4326`.
 	size: f64,
 
-	/// The area to cover, as `[west, south, east, north]` in WGS84 degrees.
-	/// Required: an unbounded grid has no pyramid to derive, and at most cell
-	/// sizes it is more tiles than can be written.
+	/// Area to cover, as `[west, south, east, north]` in WGS84 degrees.
 	bbox: [f64; 4],
 
-	/// Where the cell with index `(0, 0)` has its lower-left corner, in CRS
-	/// units. Default: `[0,0]`, which is what published grids align to.
+	/// Lower-left corner of cell `(0, 0)`, in CRS units. Defaults to `[0,0]`.
 	offset: Option<[f64; 2]>,
 
-	/// Roughly how many cells one tile may hold. Decides the lowest zoom level
-	/// this source offers. Default: `1024`.
+	/// Roughly how many cells one tile may hold. Defaults to `1024`.
 	max_cells_per_tile: Option<u32>,
 
-	/// Highest zoom level to generate. Defaults to three levels above the
-	/// derived minimum, since further levels repeat the same cells.
+	/// Highest zoom level to generate. Defaults to three above the derived minimum.
 	max_zoom: Option<u8>,
 
-	/// Ready-made id format. Either `"inspire"` (default), which produces
-	/// `CRS3035RES1000mN2691000E4341000`, or `"geostat"`, which produces
-	/// `1kmN2689E4337`.
-	id_preset: Option<String>,
+	/// Ready-made id format. Overridden by `id_template`. Defaults to `inspire`.
+	id_preset: Option<IdPreset>,
 
-	/// Id format spelled out, for a grid whose publisher uses neither preset.
-	/// `{x}` and `{y}` are the lower-left corner, each taking an optional
-	/// divisor and zero-padded width: `E{x/100:04}N{y/100:04}` produces
-	/// `E0643N4567`, the form Dutch grid statistics use.
-	/// Overrides `id_preset`.
+	/// Id format spelled out, with `{x}` and `{y}` for the corner. Defaults to `id_preset`.
 	id_template: Option<String>,
 
-	/// Name of the string property holding the cell id. Default: `"id"`.
+	/// Property holding the cell id. Defaults to `id`.
 	id_field: Option<String>,
 
-	/// Names of the number properties holding the lower-left corner.
-	/// Defaults: `"x"` and `"y"`, mirroring the `X_LLC` / `Y_LLC` columns
-	/// Eurostat ships beside its ids.
+	/// Property holding the corner's easting. Defaults to `x`.
 	x_field: Option<String>,
 
-	/// See `x_field`.
+	/// Property holding the corner's northing. Defaults to `y`.
 	y_field: Option<String>,
 
-	/// How far a cell edge may stray from its true curve, in tile pixels.
-	/// Only matters for a CRS whose straight lines bend in mercator; in
-	/// `3857` and `4326` no vertices are added whatever this says.
-	/// Default: `0.5`.
+	/// How far a cell edge may stray from its true curve, in tile pixels. Defaults to `0.5`.
 	densify_tolerance: Option<f64>,
 
-	/// Name of the layer in the generated tiles. Default: `"grid"`.
+	/// Name of the layer to write into. Defaults to `grid`.
 	layer_name: Option<String>,
 }
 
@@ -210,16 +209,12 @@ impl Operation {
 			offset,
 		};
 
-		let id_template = match (&args.id_template, args.id_preset.as_deref()) {
-			(Some(template), _) => IdTemplate::parse(template)?,
-			(None, Some("inspire") | None) => IdTemplate::inspire(args.epsg, args.size)?,
-			(None, Some("geostat")) => IdTemplate::geostat(args.size)?,
-			(None, Some(other)) => {
-				return Err(anyhow!(
-					"unknown id_preset '{other}': available presets are 'inspire' and 'geostat'. Use id_template= to \
-					 spell out a format of your own."
-				));
-			}
+		let id_template = match &args.id_template {
+			Some(template) => IdTemplate::parse(template)?,
+			None => match args.id_preset.unwrap_or_default() {
+				IdPreset::Inspire => IdTemplate::inspire(args.epsg, args.size)?,
+				IdPreset::Geostat => IdTemplate::geostat(args.size)?,
+			},
 		};
 		id_template.validate_for(args.size, offset)?;
 

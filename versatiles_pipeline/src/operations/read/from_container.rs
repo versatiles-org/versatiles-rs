@@ -18,20 +18,20 @@ use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*.tar` file.
+///
+/// `filename` takes a local path or a URL — `filename="world.versatiles"` as
+/// readily as `filename="https://example.com/world.versatiles"`. Run
+/// `versatiles help source` for the URL and authentication syntax.
+///
+/// `ssh_identity` names a key for this source alone, overriding `--ssh-identity`
+/// and `VERSATILES_SSH_IDENTITY`, so one pipeline can read from two SFTP hosts
+/// that need different keys. It is ignored for every other scheme, and naming a
+/// key ties the `.vpl` file to machines that have it.
 struct Args {
-	/// The filename of the tile container (relative to the VPL file path), or a URL
-	/// (`http`, `https`, or `sftp`).
-	/// For example: `filename="world.versatiles"` or `filename="https://example.com/world.versatiles"`.
-	/// See `versatiles help source` for URL and authentication details.
+	/// Path to the container, or an `http`, `https` or `sftp` URL.
 	filename: String,
 
-	/// The private key file to authenticate this `sftp://` source with, for example
-	/// `ssh_identity="/home/deploy/.ssh/id_ed25519"`. A relative path resolves against
-	/// the VPL file, like `filename`.
-	/// It applies to this source alone and overrides `--ssh-identity` and
-	/// `VERSATILES_SSH_IDENTITY`, which apply to every source — so one pipeline can read
-	/// from two SFTP hosts that need different keys. Ignored for other schemes.
-	/// Note that naming a key makes the VPL file specific to machines that have it.
+	/// Private key for this one `sftp://` source. Defaults to the global setting.
 	ssh_identity: Option<String>,
 }
 

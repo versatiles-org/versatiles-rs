@@ -23,12 +23,20 @@ use crate::{
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Drops vector features in selected layers that do not satisfy a boolean CEL expression.
+/// Drops vector features in selected layers that do not satisfy a boolean expression.
+///
 /// Features in layers outside `layer` pass through untouched.
+///
+/// In `expr`, feature properties are available as `props["key"]`, and those
+/// whose names are valid CEL identifiers — letters, digits and underscore — are
+/// also exposed as top-level identifiers. A missing key resolves to null, so
+/// test for presence with `name != null` for an identifier-safe key or
+/// `has(props.key)` for any key. Run `versatiles help` for a CEL operator
+/// cheat-sheet.
 ///
 /// ### Examples
 ///
-/// ```text
+/// ```vpl
 /// vector_filter_features layer=["place"] expr="name == 'Berlin'"
 /// vector_filter_features layer=["poi"]   expr="population >= 1000"
 /// vector_filter_features layer=["road"]  expr="highway in ['primary','secondary']"
@@ -37,17 +45,10 @@ use crate::{
 /// vector_filter_features layer=["addr"]  expr="props['addr:street'] == 'Hauptstr.'"
 /// ```
 struct Args {
-	/// Layers the expression applies to, as a VPL array of strings.
-	/// Features in all other layers are left unchanged.
-	/// Example: `layer=["poi","place"]`.
+	/// Layers the expression applies to, for example `layer=["poi","place"]`.
 	layer: Vec<String>,
 
-	/// CEL (Common Expression Language) boolean expression.
-	/// Feature properties are available as `props["key"]`; properties whose names are
-	/// valid CEL identifiers (letters, digits, underscore) are also exposed as top-level
-	/// identifiers. Missing keys resolve to null; use `name != null` (for identifier-safe
-	/// keys) or `has(props.key)` (for any key) for explicit presence checks.
-	/// See `versatiles help` for a CEL operator cheat-sheet.
+	/// Boolean CEL expression over the feature's properties.
 	expr: String,
 }
 

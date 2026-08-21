@@ -26,16 +26,17 @@ use versatiles_derive::context;
 use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Reads tiles from a remote tile server via a TileJSON endpoint.
-/// The TileJSON is fetched from the given URL, and tiles are loaded individually
-/// using the URL template from the TileJSON `tiles` array.
+/// Reads tiles from a remote tile server described by a TileJSON endpoint.
+///
+/// The TileJSON document is fetched once when the pipeline is built, and each
+/// tile is then requested individually through the URL template in its `tiles`
+/// array.
 struct Args {
-	/// The URL of the TileJSON endpoint.
-	/// For example: `url="https://example.com/tiles.json"`.
+	/// URL of the TileJSON endpoint.
 	url: String,
-	/// Maximum number of retries per tile request (default: 3).
+	/// How often to retry a failed tile request. Defaults to `3`.
 	max_retries: Option<u16>,
-	/// Maximum number of concurrent tile requests (default: io_bound concurrency limit).
+	/// How many tile requests may be in flight. Defaults to the I/O concurrency limit.
 	max_concurrent_requests: Option<u16>,
 }
 

@@ -14,6 +14,18 @@ pub enum BlurFunction {
 }
 
 impl BlurFunction {
+	/// The accepted VPL spellings, in the order they should be listed.
+	///
+	/// The single source of truth for what `blur_function=` accepts: `VPLDecode`
+	/// renders these into the generated parameter reference, so no doc comment
+	/// repeats them. Kept in step with [`TryFrom<&str>`] by
+	/// `variants_match_try_from`.
+	#[allow(dead_code)] // Called by VPLDecode-generated metadata; the lint can't see through the proc-macro.
+	#[must_use]
+	pub fn variants() -> &'static [&'static str] {
+		&["linear", "cosine"]
+	}
+
 	/// Interpolate a value in the range [0, 1] using this blur function.
 	///
 	/// # Arguments
@@ -37,7 +49,10 @@ impl TryFrom<&str> for BlurFunction {
 		match value.to_lowercase().as_str() {
 			"linear" => Ok(BlurFunction::Linear),
 			"cosine" => Ok(BlurFunction::Cosine),
-			_ => anyhow::bail!("Invalid blur function '{value}'. Expected 'linear' or 'cosine'."),
+			other => anyhow::bail!(
+				"Invalid blur function '{other}'; expected one of {}",
+				BlurFunction::variants().join(", ")
+			),
 		}
 	}
 }
@@ -45,6 +60,19 @@ impl TryFrom<&str> for BlurFunction {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// Guards the promise `variants()` makes to the generated reference.
+	#[test]
+	fn variants_match_try_from() {
+		for variant in BlurFunction::variants() {
+			assert!(
+				BlurFunction::try_from(*variant).is_ok(),
+				"variant {variant:?} does not parse"
+			);
+		}
+		assert_eq!(BlurFunction::variants().len(), 2);
+		assert!(BlurFunction::try_from("nope").is_err());
+	}
 
 	#[test]
 	fn test_linear_interpolation() {

@@ -40,24 +40,42 @@ pub fn to_tile_schema(encoding: DemEncoding) -> TileSchema {
 	}
 }
 
-/// Parse a DEM encoding from a string parameter.
-pub fn parse_encoding(s: &str) -> Result<DemEncoding> {
-	match s {
-		"mapbox" => Ok(DemEncoding::Mapbox),
-		"terrarium" => Ok(DemEncoding::Terrarium),
-		other => bail!("Unknown DEM encoding '{other}'; expected 'mapbox' or 'terrarium'"),
+impl DemEncoding {
+	/// The accepted VPL spellings, in the order they should be listed.
+	///
+	/// The single source of truth for what `encoding=` accepts: `VPLDecode`
+	/// renders these into the generated parameter reference and the TypeScript
+	/// bindings, so no doc comment repeats them. Kept in step with
+	/// [`TryFrom<&str>`] by `variants_match_try_from`.
+	#[must_use]
+	pub fn variants() -> &'static [&'static str] {
+		&["mapbox", "terrarium"]
 	}
 }
 
-/// Resolve DEM encoding from an optional string override and a tile schema.
+impl TryFrom<&str> for DemEncoding {
+	type Error = anyhow::Error;
+
+	fn try_from(value: &str) -> Result<Self> {
+		match value {
+			"mapbox" => Ok(DemEncoding::Mapbox),
+			"terrarium" => Ok(DemEncoding::Terrarium),
+			other => bail!(
+				"Unknown DEM encoding '{other}'; expected one of {}",
+				DemEncoding::variants().join(", ")
+			),
+		}
+	}
+}
+
+/// Resolve DEM encoding from an optional explicit override and a tile schema.
 ///
-/// If `encoding_str` is provided, it is parsed directly.
-/// Otherwise, the encoding is auto-detected from the tile schema.
-pub fn resolve_encoding(encoding_str: Option<&String>, schema: Option<&TileSchema>) -> Result<DemEncoding> {
-	if let Some(enc_str) = encoding_str {
-		parse_encoding(enc_str)
-	} else {
-		from_tile_schema(schema)
+/// The override wins when given; otherwise the encoding is auto-detected from
+/// the tile schema.
+pub fn resolve_encoding(encoding: Option<DemEncoding>, schema: Option<&TileSchema>) -> Result<DemEncoding> {
+	match encoding {
+		Some(encoding) => Ok(encoding),
+		None => from_tile_schema(schema),
 	}
 }
 
@@ -92,16 +110,28 @@ mod tests {
 	}
 
 	#[test]
-	fn test_parse_encoding() {
-		assert_eq!(parse_encoding("mapbox").unwrap(), DemEncoding::Mapbox);
-		assert_eq!(parse_encoding("terrarium").unwrap(), DemEncoding::Terrarium);
-		assert!(parse_encoding("invalid").is_err());
+	fn test_try_from_str() {
+		assert_eq!(DemEncoding::try_from("mapbox").unwrap(), DemEncoding::Mapbox);
+		assert_eq!(DemEncoding::try_from("terrarium").unwrap(), DemEncoding::Terrarium);
+		assert!(DemEncoding::try_from("invalid").is_err());
+	}
+
+	/// Guards the promise `variants()` makes to the generated reference: every
+	/// listed spelling parses, and nothing parses that is not listed.
+	#[test]
+	fn variants_match_try_from() {
+		for variant in DemEncoding::variants() {
+			assert!(
+				DemEncoding::try_from(*variant).is_ok(),
+				"variant {variant:?} does not parse"
+			);
+		}
+		assert_eq!(DemEncoding::variants().len(), 2);
 	}
 
 	#[test]
 	fn test_resolve_encoding_with_override() {
-		let enc = "terrarium".to_string();
-		let result = resolve_encoding(Some(&enc), None);
+		let result = resolve_encoding(Some(DemEncoding::Terrarium), None);
 		assert_eq!(result.unwrap(), DemEncoding::Terrarium);
 	}
 
@@ -114,9 +144,8 @@ mod tests {
 
 	#[test]
 	fn test_resolve_encoding_override_takes_priority() {
-		let enc = "terrarium".to_string();
 		let schema = TileSchema::RasterDEMMapbox;
-		let result = resolve_encoding(Some(&enc), Some(&schema));
+		let result = resolve_encoding(Some(DemEncoding::Terrarium), Some(&schema));
 		assert_eq!(result.unwrap(), DemEncoding::Terrarium);
 	}
 }

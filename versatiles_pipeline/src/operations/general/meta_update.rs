@@ -11,43 +11,50 @@ use versatiles_derive::context;
 use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Update metadata, see also <https://github.com/mapbox/tilejson-spec/tree/master/3.0.0>
+/// Overwrites fields of the source's TileJSON metadata.
+///
+/// Three ways to supply the new values, applied in that order: a whole document
+/// via `tilejson` or `tilejson_file` replaces the source's, `tilejson_update` or
+/// `tilejson_update_file` merges onto it, and the individual parameters below
+/// override whatever the first two produced.
+///
+/// Each of those pairs is mutually exclusive: `tilejson` with `tilejson_file`,
+/// `tilejson_update` with `tilejson_update_file`, `vector_layers` with
+/// `vector_layers_file`. The `_file` form exists to avoid quoting JSON inline.
+///
+/// A merge overwrites scalar fields and `vector_layers`, and widens `bounds`
+/// and the zoom range to the union.
+///
+/// The fields and their meaning follow the TileJSON 3.0.0 specification:
+/// <https://github.com/mapbox/tilejson-spec/tree/master/3.0.0>
 struct Args {
-	/// Attribution text.
+	/// Attribution text. Defaults to the source's.
 	attribution: Option<String>,
-	/// Geographic bounding box [west, south, east, north].
+	/// Area covered, as `[west, south, east, north]` in WGS84 degrees. Defaults to the source's.
 	bounds: Option<[f64; 4]>,
-	/// Default center [longitude, latitude, zoom].
+	/// Where a client should open the map, as `[lon, lat, zoom]`. Defaults to the source's.
 	center: Option<[f64; 3]>,
-	/// Description text.
+	/// Description text. Defaults to the source's.
 	description: Option<String>,
-	/// Fill zoom level.
+	/// Zoom level from which clients should fill from the parent tile. Defaults to the source's.
 	fillzoom: Option<u8>,
-	/// Legend text.
+	/// Legend text. Defaults to the source's.
 	legend: Option<String>,
-	/// Name text.
+	/// Name of the tileset. Defaults to the source's.
 	name: Option<String>,
-	/// Tile schema, allowed values: "rgb", "rgba", "dem/mapbox", "dem/terrarium", "dem/versatiles", "openmaptiles", "shortbread@1.0", "other", "unknown"
+	/// What the tiles contain. Defaults to the source's.
 	schema: Option<TileSchema>,
-	/// A complete TileJSON document (JSON string) used as the basis for the new metadata.
-	/// When given, the new metadata starts from this document instead of the source's; the
-	/// other parameters then override individual fields on top of it.
+	/// Complete TileJSON document, as a JSON string. Defaults to the source's metadata.
 	tilejson: Option<String>,
-	/// Path to a file containing a complete TileJSON document, resolved relative to the VPL
-	/// file. Use instead of `tilejson` to avoid inline JSON quoting. Mutually exclusive with `tilejson`.
+	/// Path to a file holding a complete TileJSON document. Defaults to the source's metadata.
 	tilejson_file: Option<String>,
-	/// A partial TileJSON document (JSON string) merged onto the current metadata.
-	/// Scalar fields (e.g. `name`, `attribution`) and `vector_layers` overwrite; `bounds` and the
-	/// zoom range are widened to the union. The individual parameters still take precedence.
+	/// Partial TileJSON document to merge on, as a JSON string. Defaults to merging nothing.
 	tilejson_update: Option<String>,
-	/// Path to a file containing a partial TileJSON document, resolved relative to the VPL file.
-	/// Use instead of `tilejson_update`. Mutually exclusive with `tilejson_update`.
+	/// Path to a file holding a partial TileJSON document. Defaults to merging nothing.
 	tilejson_update_file: Option<String>,
-	/// The `vector_layers` array as a JSON string. It is parsed and validated against the
-	/// TileJSON spec before replacing the source's `vector_layers`.
+	/// The `vector_layers` array as a JSON string. Defaults to the source's.
 	vector_layers: Option<String>,
-	/// Path to a file containing the `vector_layers` array as JSON, resolved relative to the VPL
-	/// file. Use instead of `vector_layers`. Mutually exclusive with `vector_layers`.
+	/// Path to a file holding the `vector_layers` array as JSON. Defaults to the source's.
 	vector_layers_file: Option<String>,
 }
 

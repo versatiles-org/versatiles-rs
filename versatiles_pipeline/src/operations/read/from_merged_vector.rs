@@ -30,10 +30,13 @@ use crate::{
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Merges multiple vector tile sources.
-/// Each resulting tile will contain all the features and properties from all the sources.
+/// Merges several vector tile sources into one, keeping every feature.
+///
+/// Each output tile carries the features and properties of all the sources at
+/// that coordinate, so layers with the same name end up side by side rather than
+/// one replacing the other.
 struct Args {
-	/// All tile sources must provide vector tiles.
+	/// The sources to merge, all of which must provide vector tiles.
 	sources: Vec<VPLPipeline>,
 }
 

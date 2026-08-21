@@ -12,15 +12,18 @@ use crate::{
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Filters properties based on a regular expressions.
+/// Removes feature properties from vector tiles by matching their names against a regex.
+///
+/// A property's name is matched with its layer as a prefix, in the form
+/// `layer_name/property_name`. That makes it possible to target one layer —
+/// `regex="^places/"` drops every property of the `places` layer — or to reach
+/// across all of them, as `regex="/name_.*$"` does for every property starting
+/// with `name_`.
 struct Args {
-	/// A regular expression pattern that should match property names to be removed from all features.
-	/// The property names contain the layer name as a prefix, e.g., `layer_name/property_name`,
-	/// so an expression like `regex="^layer_name/"` will match all properties of that layer or
-	/// `regex="/name_.*$"` will match all properties starting with `name_` in all layers.
+	/// Regular expression matched against each property's prefixed name.
 	regex: String,
 
-	/// If set, inverts the filter logic (i.e., keeps only properties matching the filter).
+	/// Whether to keep the matching properties instead of removing them. Defaults to `false`.
 	invert: Option<bool>,
 }
 

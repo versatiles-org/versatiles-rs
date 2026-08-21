@@ -44,65 +44,64 @@ const PROGRESS_MIN_BYTES: u64 = 10_000_000;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a GeoJSON or Shapefile and emits MVT vector tiles.
+///
+/// The input format is detected from the file extension:
+///
+/// | Extension                                          | Format                                |
+/// | -------------------------------------------------- | ------------------------------------- |
+/// | `.geojson`, `.json`                                | GeoJSON `FeatureCollection`           |
+/// | `.ndjson`, `.geojsonl`, `.ndgeojson`, `.geojsonseq` | line-delimited GeoJSON, one feature per line |
+/// | `.shp`                                             | Esri Shapefile                        |
+///
+/// A `.geojsonseq` file may prefix each record with the RFC 8142 record
+/// separator `U+001E`.
+///
+/// Left to itself, `max_zoom` picks the level at which the median feature spans
+/// roughly 4 tile-pixels, capped at 14. Points count as size zero, so a
+/// mostly-point dataset lands on the cap.
+///
+/// A tile over `max_tile_bytes` is dropped while streaming and an error when a
+/// single tile is requested. Raise the cap when a legitimate low-zoom tile
+/// exceeds it, or set `max_tile_bytes=none` to emit tiles at any size; the
+/// soft-cap warning threshold, 200 KB at the default, scales with it.
+///
+/// `ignore_id` exists because MVT requires a `uint64` feature id. A string id —
+/// as USGS earthquake data has — is dropped at encode time anyway, so setting
+/// this makes that explicit; it is also the way to discard an id that is just
+/// noise.
 struct Args {
-	/// Filename of the input (relative to the VPL file path). Format is detected
-	/// from the extension:
-	///
-	/// - `.geojson` / `.json` — GeoJSON `FeatureCollection`
-	/// - `.ndjson` / `.geojsonl` / `.ndgeojson` / `.geojsonseq` — line-delimited
-	///   GeoJSON (one feature per line; `.geojsonseq` may use the RFC 8142
-	///   record-separator prefix `U+001E`)
-	/// - `.shp` — Esri Shapefile
+	/// Path to the input file; its format comes from the extension.
 	filename: String,
-	/// Name of the MVT layer in the output tiles. Defaults to the filename stem.
+	/// Name of the layer to write into. Defaults to the file's stem.
 	layer_name: Option<String>,
-	/// Lowest zoom level emitted (default 0).
+	/// Lowest zoom level to emit. Defaults to `0`.
 	min_zoom: Option<u8>,
-	/// Highest zoom level emitted. Defaults to an auto-heuristic (median feature
-	/// size ≈ 4 tile-pixels, capped at 14). Points count as size zero, so a
-	/// mostly-point dataset lands on the cap.
+	/// Highest zoom level to emit. Defaults to a heuristic capped at `14`.
 	max_zoom: Option<u8>,
-	/// Bounding-box clip in degrees `[w, s, e, n]`. Not supported in v1; setting
-	/// this errors out.
+	/// Area to clip to, in WGS84 degrees. Not implemented yet. Defaults to no clipping.
 	bbox: Option<[f64; 4]>,
-	/// Property whitelist: keep only the named properties, drop everything else.
-	/// Mutually exclusive with `properties_exclude`.
+	/// Properties to keep. Mutually exclusive with `properties_exclude`. Defaults to all.
 	properties_include: Option<Vec<String>>,
-	/// Property blacklist: drop the named properties, keep everything else.
-	/// Mutually exclusive with `properties_include`.
+	/// Properties to drop. Mutually exclusive with `properties_include`. Defaults to none.
 	properties_exclude: Option<Vec<String>>,
-	/// Drop polygons whose area is below this many tile-pixels² (default 4).
+	/// Area in square tile-pixels below which a polygon is dropped. Defaults to `4`.
 	polygon_min_area: Option<f32>,
-	/// Douglas-Peucker tolerance for polygons, in tile-pixels (default 4).
+	/// Douglas-Peucker tolerance for polygons, in tile-pixels. Defaults to `4`.
 	polygon_simplify: Option<f32>,
-	/// Drop lines whose length is below this many tile-pixels (default 4).
+	/// Length in tile-pixels below which a line is dropped. Defaults to `4`.
 	line_min_length: Option<f32>,
-	/// Douglas-Peucker tolerance for lines, in tile-pixels (default 4).
+	/// Douglas-Peucker tolerance for lines, in tile-pixels. Defaults to `4`.
 	line_simplify: Option<f32>,
-	/// Point reduction strategy: `none` / `drop_rate` / `min_distance`
-	/// (default `min_distance`).
+	/// How to thin out points too close to distinguish. Defaults to `min_distance`.
 	point_reduction: Option<PointReductionStrategy>,
-	/// Numeric value whose meaning depends on `point_reduction`:
-	/// - `min_distance` (default): minimum distance between kept points,
-	///   in tile-pixels at the current zoom. Defaults to 16.
-	/// - `drop_rate`: per-zoom keep-fraction in `[0, 1]`. Defaults to 0.5.
-	/// - `none`: ignored.
+	/// Distance in tile-pixels for `min_distance`, keep-fraction for `drop_rate`. Defaults to
+	/// `16`/`0.5`.
 	point_reduction_value: Option<f32>,
-	/// Tile-compression applied before the tiles leave this operation:
-	/// `gzip` (default), `brotli`, `zstd`, or `none`.
+	/// Compression applied before the tiles leave. Defaults to `gzip`.
 	compression: Option<TileCompression>,
-	/// Maximum encoded tile size in bytes before a tile is considered broken
-	/// and dropped (streaming path) / errors out (single-tile path). Defaults to
-	/// 1048576 (1 MiB). Raise it when a legitimate low-zoom tile exceeds the
-	/// default (e.g. `max_tile_bytes=2097152` for 2 MiB), or set
-	/// `max_tile_bytes=none` to emit tiles at any size. The soft-cap warning
-	/// threshold (200 KB at the default cap) scales with this value.
+	/// Size in bytes above which a tile counts as broken. Defaults to `1048576`.
 	max_tile_bytes: Option<MaxTileBytes>,
-	/// If `true`, drop the GeoJSON / Shapefile `id` field from every feature
-	/// before encoding. Useful for sources where the id is a string (e.g. USGS
-	/// earthquakes — those would be silently dropped at MVT encode anyway, since
-	/// MVT requires `uint64` ids), or when the id is just noise. Defaults to
-	/// `false` — keep the id when it's a non-negative integer.
+	/// Whether to drop each feature's `id` before encoding. Defaults to `false`.
 	ignore_id: Option<bool>,
 }
 

@@ -9,35 +9,30 @@ use versatiles_derive::context;
 use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Filter tiles by bounding box, zoom levels, and/or the tile coordinates present in another container.
+/// Filters tiles by bounding box, zoom range, or the coordinates present in another container.
 ///
-/// Every parameter narrows the tile set, except `bbox_border`, which widens it
-/// by keeping a ring of tiles around `bbox`.
+/// Every parameter narrows the tile set, except `bbox_border`, which widens it.
+/// A `bbox_border=2` keeps a ring of tiles the bbox alone would have dropped;
+/// those tiles lie outside the crop, so the advertised bounds are extended to
+/// cover them and a client actually requests them.
+///
+/// That ring matters wherever a cropped tileset is rendered rather than just
+/// stored: without it, labels and geometry near the edge have no neighbouring
+/// tiles to be laid out against.
+///
+/// `filename` takes the same path and URL syntax as `from_container`. Opening
+/// it to build the allow-list costs I/O when the pipeline is built, unlike
+/// every other parameter here.
 struct Args {
-	/// Bounding box in WGS84: [min lng, min lat, max lng, max lat].
+	/// Area to keep, in WGS84 degrees. Defaults to the source's own bounds.
 	bbox: Option<[f64; 4]>,
-	/// Ring of extra tiles to keep around `bbox`, in tiles per zoom level.
-	///
-	/// Note that this is the one parameter here that *widens*: every other
-	/// parameter narrows the tile set, but `bbox_border=2` keeps tiles the
-	/// bbox alone would have dropped. Those tiles lie outside the crop, so the
-	/// advertised bounds are extended to cover them and a client actually
-	/// requests them.
-	///
-	/// This matters wherever a cropped tileset is rendered rather than just
-	/// stored: without a border, labels and geometry near the edge have no
-	/// neighbouring tiles to be laid out against.
-	///
-	/// Requires `bbox`; setting it alone is an error rather than a no-op.
+	/// Ring of extra tiles kept around `bbox`, per zoom level. Requires `bbox`. Defaults to `0`.
 	bbox_border: Option<u32>,
-	/// minimal zoom level
+	/// Lowest zoom level to keep. Defaults to the source's lowest.
 	level_min: Option<u8>,
-	/// maximal zoom level
+	/// Highest zoom level to keep. Defaults to the source's highest.
 	level_max: Option<u8>,
-	/// Path to a tile container used as a coordinate allow-list.
-	/// Only tiles whose coordinates exist in this container are passed through.
-	/// Accepts the same path/URL syntax as `from_container`.
-	/// Note: opening the container and building the allow-list requires I/O at pipeline build time.
+	/// Tile container whose coordinates act as an allow-list. Defaults to no allow-list.
 	filename: Option<String>,
 }
 

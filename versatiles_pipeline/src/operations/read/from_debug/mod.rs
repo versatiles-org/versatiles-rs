@@ -26,13 +26,13 @@ use vector::create_debug_vector_tile;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream, TileType};
 
-use crate::{PipelineFactory, vpl::VPLNode};
+use crate::{PipelineFactory, helpers::tile_format_subset::DebugTileFormat, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Generates debug tiles that display their coordinates as text.
+/// Generates tiles that draw their own coordinates, for inspecting a pipeline.
 struct Args {
-	/// Target tile format: one of `"mvt"` (default), `"avif"`, `"jpg"`, `"png"` or `"webp"`
-	format: Option<TileFormat>,
+	/// Format to generate the tiles in. Defaults to `mvt`.
+	format: Option<DebugTileFormat>,
 }
 
 /// Implements [`TileSource`] by fabricating debug tiles entirely in
@@ -75,7 +75,7 @@ impl Operation {
 	}
 	pub fn from_vpl_node(vpl_node: &VPLNode) -> Result<Self> {
 		let args = Args::from_vpl_node(vpl_node)?;
-		Self::from_parameters(args.format.unwrap_or(TileFormat::MVT))
+		Self::from_parameters(args.format.map_or(TileFormat::MVT, TileFormat::from))
 	}
 }
 

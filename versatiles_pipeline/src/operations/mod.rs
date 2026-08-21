@@ -1,3 +1,10 @@
+//! The built-in VPL operations.
+//!
+//! Each operation is a module whose `Args` struct derives `VPLDecode`. The doc
+//! comments on that struct and its fields *are* the operation reference — see
+//! `DOCSTYLE.md` at the crate root for what they have to look like and where
+//! each one is rendered.
+
 mod dem;
 mod general;
 pub(crate) mod macros;

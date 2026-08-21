@@ -697,26 +697,22 @@ mod tests {
 	/// Chunk B. One row per migrated arg; the canonical-variants list is
 	/// pinned here so the test fails loudly if a new variant is added to an
 	/// enum but the migration doc / TS surface forgets to follow.
+	//
+	// `from_color` and `from_debug` are typed to a subset of `TileFormat` rather
+	// than to `TileFormat` itself: neither can produce `bin`, `json`, `svg`,
+	// `geojson` or `topojson`, so offering them in the TS union was offering
+	// values that fail at build time.
 	const ENUM_FIELDS: &[(&str, &str, &[&str])] = &[
-		(
-			"from_color",
-			"format",
-			&[
-				"avif", "bin", "geojson", "jpg", "json", "mvt", "png", "svg", "topojson", "webp",
-			],
-		),
-		(
-			"from_debug",
-			"format",
-			&[
-				"avif", "bin", "geojson", "jpg", "json", "mvt", "png", "svg", "topojson", "webp",
-			],
-		),
+		("from_color", "format", &["avif", "jpg", "png", "webp"]),
+		("from_debug", "format", &["mvt", "avif", "jpg", "png", "webp"]),
 		("from_geo", "compression", &["none", "gzip", "brotli", "zstd"]),
 		("from_geo", "point_reduction", &["none", "drop_rate", "min_distance"]),
 		("from_csv", "compression", &["none", "gzip", "brotli", "zstd"]),
 		("from_csv", "point_reduction", &["none", "drop_rate", "min_distance"]),
 		("raster_format", "format", &["avif", "jpg", "png", "webp"]),
+		("from_grid", "id_preset", &["inspire", "geostat"]),
+		("raster_mask", "blur_function", &["linear", "cosine"]),
+		("dem_quantize", "encoding", &["mapbox", "terrarium"]),
 	];
 
 	#[test]

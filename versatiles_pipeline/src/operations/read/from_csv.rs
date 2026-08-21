@@ -38,57 +38,53 @@ use crate::{
 const PROGRESS_MIN_BYTES: u64 = 10_000_000;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Reads a CSV file with longitude/latitude columns and emits MVT point tiles.
+/// Reads a CSV file with longitude and latitude columns and emits MVT point tiles.
+///
+/// Left to itself, `max_zoom` picks the level at which the median feature spans
+/// roughly 4 tile-pixels, capped at 14. Points count as size zero, so a CSV of
+/// points always lands on the cap.
+///
+/// `properties_include` and `properties_exclude` act on what is left after the
+/// coordinate and id columns are consumed, so naming `lon_column`,
+/// `lat_column` or `id_column` in either has no effect.
+///
+/// A tile over `max_tile_bytes` is dropped while streaming and an error when a
+/// single tile is requested. Raise the cap when a legitimate low-zoom tile
+/// exceeds it, or set `max_tile_bytes=none` to emit tiles at any size; the
+/// soft-cap warning threshold, 200 KB at the default, scales with it.
 struct Args {
-	/// Filename of the CSV file (relative to the VPL file path).
+	/// Path to the CSV file.
 	filename: String,
-	/// Header column name holding the longitude (degrees, WGS84). Required.
+	/// Column holding the longitude, in WGS84 degrees.
 	lon_column: String,
-	/// Header column name holding the latitude (degrees, WGS84). Required.
+	/// Column holding the latitude, in WGS84 degrees.
 	lat_column: String,
-	/// Optional column to expose as the MVT feature `id` (numeric if it parses as `u64`, else string).
+	/// Column to expose as the feature id. Defaults to emitting no id.
 	id_column: Option<String>,
-	/// Field delimiter as a single ASCII character. Defaults to `,`.
+	/// Character separating a row's fields. Defaults to `,`.
 	delimiter: Option<String>,
-	/// Whether row 1 contains column names. Defaults to `true`. Header-less CSVs aren't supported in v1.
+	/// Whether the first row holds column names; `false` is not supported yet. Defaults to `true`.
 	has_header: Option<bool>,
-	/// Name of the MVT layer in the output tiles. Defaults to the filename stem.
+	/// Name of the layer to write into. Defaults to the file's stem.
 	layer_name: Option<String>,
-	/// Lowest zoom level emitted (default 0).
+	/// Lowest zoom level to emit. Defaults to `0`.
 	min_zoom: Option<u8>,
-	/// Highest zoom level emitted. Defaults to an auto-heuristic (median feature
-	/// size ≈ 4 tile-pixels, capped at 14). For point-only inputs the heuristic
-	/// returns 14.
+	/// Highest zoom level to emit. Defaults to a heuristic capped at `14`.
 	max_zoom: Option<u8>,
-	/// Bounding-box clip in degrees `[w, s, e, n]`. Not supported in v1; setting
-	/// this errors out.
+	/// Area to clip to, in WGS84 degrees. Not implemented yet. Defaults to no clipping.
 	bbox: Option<[f64; 4]>,
-	/// Property whitelist: keep only the named columns as feature properties,
-	/// drop everything else. Mutually exclusive with `properties_exclude`.
-	/// (`lon_column` / `lat_column` / `id_column` are consumed earlier by the
-	/// CSV adapter and aren't affected.)
+	/// Columns to keep as properties. Mutually exclusive with `properties_exclude`. Defaults to all.
 	properties_include: Option<Vec<String>>,
-	/// Property blacklist: drop the named properties, keep everything else.
-	/// Mutually exclusive with `properties_include`.
+	/// Columns to drop. Mutually exclusive with `properties_include`. Defaults to none.
 	properties_exclude: Option<Vec<String>>,
-	/// Point reduction strategy: `none` / `drop_rate` / `min_distance`
-	/// (default `min_distance`).
+	/// How to thin out points too close to distinguish. Defaults to `min_distance`.
 	point_reduction: Option<PointReductionStrategy>,
-	/// Numeric value whose meaning depends on `point_reduction`:
-	/// - `min_distance` (default): minimum distance between kept points,
-	///   in tile-pixels at the current zoom. Defaults to 16.
-	/// - `drop_rate`: per-zoom keep-fraction in `[0, 1]`. Defaults to 0.5.
-	/// - `none`: ignored.
+	/// Distance in tile-pixels for `min_distance`, keep-fraction for `drop_rate`. Defaults to
+	/// `16`/`0.5`.
 	point_reduction_value: Option<f32>,
-	/// Tile-compression applied before the tiles leave this operation:
-	/// `gzip` (default), `brotli`, `zstd`, or `none`.
+	/// Compression applied before the tiles leave. Defaults to `gzip`.
 	compression: Option<TileCompression>,
-	/// Maximum encoded tile size in bytes before a tile is considered broken
-	/// and dropped (streaming path) / errors out (single-tile path). Defaults to
-	/// 1048576 (1 MiB). Raise it when a legitimate low-zoom tile exceeds the
-	/// default (e.g. `max_tile_bytes=2097152` for 2 MiB), or set
-	/// `max_tile_bytes=none` to emit tiles at any size. The soft-cap warning
-	/// threshold (200 KB at the default cap) scales with this value.
+	/// Size in bytes above which a tile counts as broken. Defaults to `1048576`.
 	max_tile_bytes: Option<MaxTileBytes>,
 }
 

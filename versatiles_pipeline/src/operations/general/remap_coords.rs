@@ -6,7 +6,7 @@ use versatiles_derive::context;
 use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Relabels tile coordinates, e.g. to correct a source that uses TMS row order or `z/y/x` paths.
+/// Relabels tile coordinates, correcting a source that uses TMS row order or `z/y/x` paths.
 ///
 /// The three flags are applied in a fixed order — `flip_x`, then `flip_y`, then
 /// `swap_xy` — and between them reach all eight symmetries of the square: four
@@ -27,15 +27,11 @@ use crate::{PipelineFactory, vpl::VPLNode};
 /// Unlike a global `--flip-y` flag, this applies to one source, so a pipeline
 /// can combine sources that disagree about their conventions.
 struct Args {
-	/// Mirror horizontally within each zoom level: `x` becomes `2^z - 1 - x`.
-	/// No tile scheme uses this on its own; it is what makes the rotations
-	/// reachable. Defaults to `false`.
+	/// Whether to mirror horizontally, so `x` becomes `2^z - 1 - x`. Defaults to `false`.
 	flip_x: Option<bool>,
-	/// Mirror vertically within each zoom level: `y` becomes `2^z - 1 - y`.
-	/// This is the TMS ↔ XYZ correction. Defaults to `false`.
+	/// Whether to mirror vertically, so `y` becomes `2^z - 1 - y`. Defaults to `false`.
 	flip_y: Option<bool>,
-	/// Exchange the axes: `(x, y)` becomes `(y, x)`, for sources laid out as
-	/// `z/y/x`. Applied after the flips. Defaults to `false`.
+	/// Whether to exchange the axes, so `(x, y)` becomes `(y, x)`. Defaults to `false`.
 	swap_xy: Option<bool>,
 }
 

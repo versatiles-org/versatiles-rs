@@ -13,49 +13,40 @@ use crate::{
 	vpl::VPLNode,
 };
 
-/// Arguments for the `vector_update_properties` operation.
-///
-/// This operation joins vector tile features with external tabular data (CSV/TSV)
-/// based on matching ID fields, allowing you to enrich or update feature properties.
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
+/// Joins tabular data onto vector features, matching on an id column.
+///
+/// Each row of a CSV or TSV file is matched to the features whose
+/// `id_field_tiles` property equals the row's `id_field_data` column, and the
+/// row's remaining columns become properties on those features. This is how a
+/// published statistics table is attached to the geometry it refers to — see
+/// `from_grid` and `from_h3` for generating that geometry.
 struct Args {
-	/// Path to the CSV/TSV data file:
-	/// The file must have a header row. Each subsequent row will be matched
-	/// to vector features using the ID fields.
+	/// Path to the CSV or TSV file, which must have a header row.
 	data_source_path: String,
 
-	/// Name of the vector layer to update:
-	/// Only features in this layer will be modified. Other layers pass through unchanged.
+	/// Name of the layer whose features are updated.
 	layer_name: String,
 
-	/// Field name in the vector tiles that contains the feature ID:
-	/// This field is used to match features with rows in the data source.
+	/// Feature property holding the id to match on.
 	id_field_tiles: String,
 
-	/// Column name in the data source that contains the matching ID:
-	/// This column is used to look up data for each feature.
+	/// Column in the data file holding the id to match on.
 	id_field_data: String,
 
-	/// If `true`, replaces all existing properties with the data source values.
-	/// If `false` (default), merges new properties with existing ones.
+	/// Whether to replace a feature's properties instead of merging. Defaults to `false`.
 	replace_properties: Option<bool>,
 
-	/// If `true`, removes features that don't have a matching row in the data source.
-	/// If `false` (default), non-matching features are kept unchanged.
+	/// Whether to drop features that have no matching row. Defaults to `false`.
 	remove_non_matching: Option<bool>,
 
-	/// If `true`, includes the ID field from the data source in the output properties.
-	/// If `false` (default), the ID field is excluded from the merged properties.
+	/// Whether to keep the id column among the written properties. Defaults to `false`.
 	include_id: Option<bool>,
 
-	/// Field separator character for the data file:
-	/// Default for `.csv` files is `,` (comma).
-	/// Default for `.tsv` files is `\t` (tab, auto-detected)
+	/// Character separating a row's fields. Defaults to `,` for `.csv` and a tab for `.tsv`.
 	field_separator: Option<String>,
 
-	/// Decimal separator character for parsing numbers:
-	/// Default is `.` (US/UK format).
-	/// Use `,` (comma) e.g. for German/European number format like `1.234,56`
+	/// Decimal separator for parsing numbers, so `,` reads `1.234,56`. Defaults to `.`.
 	decimal_separator: Option<String>,
 }
 

@@ -1,94 +1,38 @@
 use std::str;
 
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, ensure};
 use versatiles_container::{Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileCompression, TileCoord, TileFormat};
 use versatiles_derive::context;
 
 use crate::{
 	PipelineFactory,
+	helpers::tile_format_subset::RasterTileFormat,
 	operations::transform::{TileTransform, TransformOp},
 	vpl::VPLNode,
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Convert raster tiles to a different image format and/or adjust quality/effort settings.
+/// Re-encodes raster tiles into another image format, quality or effort setting.
+///
+/// `quality` and `quality_translucent` take a zoom-dependent list as well as a
+/// single number. In `quality="70,14:50,15:20"` the first value is the default
+/// and each `zoom:value` pair applies from that zoom level upwards — so zoom 0
+/// to 13 use 70, zoom 14 uses 50, and zoom 15 and above use 20. Tiles that are
+/// already in the target format and need no quality change are passed through
+/// without re-encoding. `quality` is ignored for PNG, which is always lossless.
+///
+/// `quality_translucent` is typically `100`: lossy encoders handle an alpha
+/// channel badly. Setting it makes every tile be checked for opacity.
 struct Args {
-	/// The desired tile format. Allowed values are: AVIF, JPG, PNG or WEBP.
-	/// If not specified, the source format will be used.
+	/// Format to encode the tiles into. Defaults to the source's.
 	format: Option<RasterTileFormat>,
-	/// Quality level for the tile compression (only AVIF, JPG or WEBP), between 0 (worst) and 100 (lossless).
-	/// To allow different quality levels for different zoom levels, this can also be a comma-separated list like this:
-	/// "70,14:50,15:20", where the first value is the default quality, and the other values specify the quality for the specified zoom level (and higher).
+	/// Encoder quality, `0` (worst) to `100` (lossless). Defaults to the encoder's own.
 	quality: Option<String>,
-	/// Quality level for translucent (semi-transparent) tiles, using the same zoom-dependent syntax as quality.
-	/// When set, tiles are checked for opacity: opaque tiles use the normal quality setting,
-	/// while translucent tiles use this value (typically 100 for lossless).
+	/// Encoder quality for tiles with translucent pixels. Defaults to using `quality` throughout.
 	quality_translucent: Option<String>,
-	/// Compression effort, between 0 (fastest) and 100 (slowest/best).
+	/// Encoder effort, `0` (fastest) to `100` (smallest). Defaults to the encoder's own.
 	effort: Option<u8>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RasterTileFormat {
-	Avif,
-	Jpeg,
-	Png,
-	Webp,
-}
-
-impl RasterTileFormat {
-	#[context("Parsing raster tile format from string '{text}'")]
-	fn from_str(text: &str) -> Result<Self> {
-		use RasterTileFormat::{Avif, Jpeg, Png, Webp};
-		Ok(match text.to_lowercase().trim() {
-			"avif" => Avif,
-			"jpg" | "jpeg" => Jpeg,
-			"png" => Png,
-			"webp" => Webp,
-			_ => bail!("Invalid tile format '{text}'"),
-		})
-	}
-
-	/// Canonical strings for codegen / completion. Aliases (`"jpeg"`)
-	/// accepted by [`Self::from_str`] are *not* included.
-	#[allow(dead_code)] // called by VPLDecode-generated metadata; dead-code lint can't see through the proc-macro.
-	pub fn variants() -> &'static [&'static str] {
-		&["avif", "jpg", "png", "webp"]
-	}
-}
-
-impl TryFrom<&str> for RasterTileFormat {
-	type Error = anyhow::Error;
-	fn try_from(value: &str) -> Result<Self> {
-		Self::from_str(value)
-	}
-}
-
-impl TryFrom<TileFormat> for RasterTileFormat {
-	type Error = anyhow::Error;
-	fn try_from(value: TileFormat) -> std::result::Result<Self, Self::Error> {
-		use RasterTileFormat::{Avif, Jpeg, Png, Webp};
-		Ok(match value {
-			TileFormat::AVIF => Avif,
-			TileFormat::JPG => Jpeg,
-			TileFormat::PNG => Png,
-			TileFormat::WEBP => Webp,
-			_ => bail!("Invalid tile format '{value}' for raster operations"),
-		})
-	}
-}
-
-impl From<RasterTileFormat> for TileFormat {
-	fn from(value: RasterTileFormat) -> Self {
-		use RasterTileFormat::{Avif, Jpeg, Png, Webp};
-		match value {
-			Avif => TileFormat::AVIF,
-			Jpeg => TileFormat::JPG,
-			Png => TileFormat::PNG,
-			Webp => TileFormat::WEBP,
-		}
-	}
 }
 
 #[derive(Debug)]
@@ -228,30 +172,6 @@ mod tests {
 	#[case("5:x")]
 	fn parse_quality_non_numeric_errors(#[case] input: &str) {
 		assert!(super::parse_quality(Some(input.to_string())).is_err());
-	}
-
-	#[rstest]
-	#[case("avif", RasterTileFormat::Avif)]
-	#[case("jpg", RasterTileFormat::Jpeg)]
-	#[case("jpeg", RasterTileFormat::Jpeg)]
-	#[case("png", RasterTileFormat::Png)]
-	#[case("webp", RasterTileFormat::Webp)]
-	fn raster_tile_format_from_str_ok(#[case] s: &str, #[case] expected: RasterTileFormat) {
-		assert_eq!(RasterTileFormat::from_str(s).unwrap(), expected);
-	}
-
-	#[test]
-	fn raster_tile_format_from_str_err() {
-		assert!(RasterTileFormat::from_str("tiff").is_err());
-	}
-
-	#[rstest]
-	#[case(TileFormat::AVIF, RasterTileFormat::Avif)]
-	#[case(TileFormat::JPG, RasterTileFormat::Jpeg)]
-	#[case(TileFormat::PNG, RasterTileFormat::Png)]
-	#[case(TileFormat::WEBP, RasterTileFormat::Webp)]
-	fn raster_tile_format_try_from_tileformat(#[case] input: TileFormat, #[case] expected: RasterTileFormat) {
-		assert_eq!(RasterTileFormat::try_from(input).unwrap(), expected);
 	}
 
 	#[tokio::test]

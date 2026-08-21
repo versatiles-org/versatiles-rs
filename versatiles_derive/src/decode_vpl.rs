@@ -251,6 +251,42 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_enum: false,
 	},
 	TypeMapping {
+		pattern: "Option<IdPreset>",
+		display_name: "IdPreset",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("IdPreset"),
+		generic_param2: None,
+		is_enum: true,
+	},
+	TypeMapping {
+		pattern: "Option<BlurFunction>",
+		display_name: "BlurFunction",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("BlurFunction"),
+		generic_param2: None,
+		is_enum: true,
+	},
+	TypeMapping {
+		pattern: "Option<DebugTileFormat>",
+		display_name: "DebugTileFormat",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("DebugTileFormat"),
+		generic_param2: None,
+		is_enum: true,
+	},
+	TypeMapping {
+		pattern: "Option<DemEncoding>",
+		display_name: "DemEncoding",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("DemEncoding"),
+		generic_param2: None,
+		is_enum: true,
+	},
+	TypeMapping {
 		pattern: "Option<RasterTileFormat>",
 		display_name: "RasterTileFormat",
 		method_name: "property_enum_option",
@@ -347,8 +383,10 @@ struct FieldMeta {
 
 /// Processed field information returned by `process_field`.
 enum ProcessedField {
-	/// A regular property field with (doc_field, parser_field)
-	Property { doc: String, parser: TokenStream },
+	/// A regular property field. `doc` is an expression evaluating to this
+	/// parameter's rendered bullet line — a plain literal for most types, and a
+	/// `format!` over the enum's `variants()` for enum-typed ones.
+	Property { doc: TokenStream, parser: TokenStream },
 	/// The special "sources" field with its doc string
 	Sources { doc: String, parser: TokenStream },
 }
@@ -392,11 +430,6 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 		return Ok((field_str, ProcessedField::Sources { doc, parser }, meta));
 	}
 
-	let mut comment = raw_comment.clone();
-	if !comment.is_empty() {
-		comment = format!(" - {comment}");
-	}
-
 	let Some(mapping) = find_type_mapping(&field_type_str) else {
 		return Err(syn::Error::new_spanned(
 			field_type,
@@ -426,11 +459,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 		}
 	};
 
-	let doc = if mapping.is_required {
-		format!("- **`{field_str}`: {} (required)**{comment}", mapping.display_name)
-	} else {
-		format!("- *`{field_str}`: {} (optional)*{comment}", mapping.display_name)
-	};
+	let doc = field_doc_expr(&field_str, &raw_comment, mapping);
 
 	let meta = FieldMeta {
 		name: field_str.clone(),
@@ -444,11 +473,62 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 	Ok((
 		field_str,
 		ProcessedField::Property {
-			doc: doc.trim().to_string(),
+			doc,
 			parser: quote! { #field_name: #call },
 		},
 		meta,
 	))
+}
+
+/// Build the expression that renders one parameter's bullet line.
+///
+/// For most types this is a plain literal, fixed at expansion time. An
+/// enum-typed field instead renders its accepted values from the enum's own
+/// `variants()`, so that the reference and the parser cannot drift apart — and
+/// since that list is only known at run time, `docs()` assembles its parameter
+/// section from these expressions rather than from one baked-in literal.
+fn field_doc_expr(field_str: &str, raw_comment: &str, mapping: &TypeMapping) -> TokenStream {
+	let head = if mapping.is_required {
+		format!("- **`{field_str}`: {} (required)**", mapping.display_name)
+	} else {
+		format!("- *`{field_str}`: {} (optional)*", mapping.display_name)
+	};
+
+	if let (true, Some(enum_type)) = (mapping.is_enum, mapping.generic_param) {
+		let enum_ident = format_ident!("{}", enum_type);
+		let tail = if raw_comment.is_empty() {
+			String::new()
+		} else {
+			format!(" {raw_comment}")
+		};
+		return quote! {{
+			let values = #enum_ident::variants()
+				.iter()
+				.map(|v| format!("`{v}`"))
+				.collect::<Vec<String>>()
+				.join(", ");
+			format!("{} - Values: {}.{}", #head, values, #tail)
+		}};
+	}
+
+	let literal = if raw_comment.is_empty() {
+		head
+	} else {
+		format!("{head} - {raw_comment}")
+	};
+	quote! { #literal.to_string() }
+}
+
+/// The rendered documentation an operation's generated impl exposes.
+struct Docs<'a> {
+	/// Everything ahead of the generated parameter list, fixed at expansion time.
+	prefix: &'a str,
+	/// One expression per parameter, each evaluating to its bullet line.
+	fields: &'a [TokenStream],
+	/// First paragraph of the struct doc, collapsed to one line.
+	summary: &'a str,
+	/// Struct doc after the summary, plus the `sources` section.
+	details: &'a str,
 }
 
 /// Build the final impl TokenStream for the struct.
@@ -456,11 +536,15 @@ fn build_impl_tokens(
 	name: &Ident,
 	field_names: &[String],
 	parser_fields: &[TokenStream],
-	doc: &str,
-	doc_summary: &str,
-	doc_details: &str,
+	docs: &Docs<'_>,
 	field_metas: &[FieldMeta],
 ) -> TokenStream {
+	let Docs {
+		prefix: doc_prefix,
+		fields: doc_fields,
+		summary: doc_summary,
+		details: doc_details,
+	} = *docs;
 	let meta_entries: Vec<TokenStream> = field_metas
 		.iter()
 		.map(|m| {
@@ -514,7 +598,15 @@ fn build_impl_tokens(
 			}
 
 			pub fn docs() -> String {
-				#doc.to_string()
+				let parameters: Vec<String> = vec![#(#doc_fields),*];
+				let mut parts: Vec<String> = Vec::new();
+				if !#doc_prefix.is_empty() {
+					parts.push(#doc_prefix.to_string());
+				}
+				if !parameters.is_empty() {
+					parts.push(format!("### Parameters\n\n{}", parameters.join("\n")));
+				}
+				parts.join("\n\n").trim().to_string()
 			}
 
 			/// The first paragraph of the operation's documentation — one
@@ -558,7 +650,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 	};
 
 	let mut parser_fields: Vec<TokenStream> = Vec::new();
-	let mut doc_fields: Vec<String> = Vec::new();
+	let mut doc_fields: Vec<TokenStream> = Vec::new();
 	let mut doc_sources: Option<String> = None;
 	let mut field_names: Vec<String> = Vec::new();
 	let mut field_metas: Vec<FieldMeta> = Vec::new();
@@ -587,16 +679,11 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 		}
 	}
 
-	let doc_fields_str = if doc_fields.is_empty() {
-		String::new()
-	} else {
-		format!("### Parameters\n\n{}", doc_fields.join("\n"))
-	};
-
-	// `doc` stays whole: it is what `versatiles help` and the generated
-	// operation reference render, and both want the parameter list.
+	// Everything ahead of the generated parameter list. `docs()` appends the
+	// parameters at run time, because enum-typed ones interpolate their
+	// `variants()`; the prose ahead of them is fixed at expansion time.
 	let doc_sources = doc_sources.unwrap_or_default();
-	let doc = vec![doc_struct.clone(), doc_sources.clone(), doc_fields_str]
+	let doc_prefix = vec![doc_struct.clone(), doc_sources.clone()]
 		.into_iter()
 		.filter(|s| !s.is_empty())
 		.collect::<Vec<String>>()
@@ -620,9 +707,12 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 		&name,
 		&field_names,
 		&parser_fields,
-		&doc,
-		&doc_summary,
-		&doc_details,
+		&Docs {
+			prefix: &doc_prefix,
+			fields: &doc_fields,
+			summary: &doc_summary,
+			details: &doc_details,
+		},
 		&field_metas,
 	))
 }

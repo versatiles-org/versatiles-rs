@@ -29,20 +29,16 @@ use crate::{
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Apply a polygon mask from GeoJSON to raster tiles.
-/// Pixels outside the polygon become transparent.
+/// Makes raster pixels outside a GeoJSON polygon transparent.
 struct Args {
-	/// Path to GeoJSON file with Polygon or MultiPolygon geometry.
+	/// Path to a GeoJSON file holding a Polygon or MultiPolygon.
 	geojson: String,
-	/// Buffer distance in meters. Positive values expand the mask, negative values shrink it.
-	/// Default: 0
+	/// Distance in meters by which to grow the mask, or shrink it when negative. Defaults to `0`.
 	buffer: Option<f32>,
-	/// Edge blur distance in meters. Creates a soft transition at the mask edge.
-	/// Default: 0
+	/// Width in meters of the soft transition at the mask edge. Defaults to `0`.
 	blur: Option<f32>,
-	/// Blur falloff function: "linear" or "cosine".
-	/// Default: "linear"
-	blur_function: Option<String>,
+	/// Falloff curve across the `blur` band. Defaults to `linear`.
+	blur_function: Option<BlurFunction>,
 }
 
 #[derive(Debug)]
@@ -76,11 +72,7 @@ impl Operation {
 		}
 
 		// Parse blur function
-		let blur_function = if let Some(bf) = args.blur_function {
-			BlurFunction::try_from(bf.as_str())?
-		} else {
-			BlurFunction::default()
-		};
+		let blur_function = args.blur_function.unwrap_or_default();
 
 		// Resolve GeoJSON path relative to the factory's base path
 		let geojson_path = factory
