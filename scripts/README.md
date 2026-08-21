@@ -30,7 +30,7 @@ Development, testing, and CI/CD automation scripts for the VersaTiles Rust works
 | Script | Purpose |
 | --- | --- |
 | [`test-unix.sh`](#test-unixsh) | Developer test script: format, lint, and test the Rust workspace on Unix |
-| [`test-windows.ps1`](#test-windowsps1) | Run Rust quality checks on Windows (PowerShell equivalent of `test-unix.sh`) |
+| `test-windows.ps1` | Run Rust quality checks on Windows (PowerShell equivalent of `test-unix.sh`) |
 | [`test-coverage.sh`](#test-coveragesh) | Generate code coverage reports with `cargo llvm-cov` |
 | [`test-timing.sh`](#test-timingsh) | Measure and analyse per-test runtimes to identify slow tests |
 | `perf-benchmarks.sh` | Run all unit tests with per-test timing via libtest's `--report-time` flag |
@@ -43,7 +43,7 @@ Development, testing, and CI/CD automation scripts for the VersaTiles Rust works
 | --- | --- |
 | `install-gdal.sh` | Install GDAL development libraries via the system package manager |
 | [`install-unix.sh`](#install-unixsh) | Install the VersaTiles binary on Unix by downloading the correct precompiled release binary |
-| [`install-windows.ps1`](#install-windowsps1) | Install the VersaTiles binary on Windows by downloading the correct precompiled release binary |
+| `install-windows.ps1` | Install the VersaTiles binary on Windows by downloading the correct precompiled release binary |
 
 ### Release & Maintenance
 
@@ -68,17 +68,15 @@ Development, testing, and CI/CD automation scripts for the VersaTiles Rust works
 
 | Script | Purpose |
 | --- | --- |
-| [`workflow-create-release.sh`](#workflow-create-releasesh) | CI script: create a draft GitHub release for the latest version tag. Fetches the two most recent version tags, assembles a changelog from commits between them, and creates a draft pre-release. Intended for use inside GitHub Actions. --- |
+| `workflow-create-release.sh` | Fetches the last two version tags, assembles a changelog from the commits between them, and creates a draft pre-release. For use inside GitHub Actions |
 | [`workflow-pack-upload.sh`](#workflow-pack-uploadsh) | CI script: package a compiled binary as `.tar.gz` and upload it to a GitHub release |
-| [`workflow-pack-upload.ps1`](#workflow-pack-uploadps1) | PowerShell equivalent of `workflow-pack-upload.sh` for Windows CI runners |
+| `workflow-pack-upload.ps1` | PowerShell equivalent of `workflow-pack-upload.sh` for Windows CI runners |
 
 ---
 
 ## Build
 
 ### `build-release-with-gdal.sh`
-
-Build the release binary with GDAL support. Optionally installs it to `/usr/local/bin`.
 
 ```sh
 ./scripts/build-release-with-gdal.sh [--install]
@@ -94,8 +92,6 @@ Requires GDAL development libraries — install first with `install-gdal.sh`.
 
 ### `test-unix.sh`
 
-Developer test script: format, lint, and test the Rust workspace on Unix.
-
 ```sh
 ./scripts/test-unix.sh [extra-cargo-args]
 ```
@@ -104,19 +100,7 @@ Runs `rustfmt`, `clippy` (binary + lib, multiple feature combinations), and `car
 
 ---
 
-### `test-windows.ps1`
-
-Run Rust quality checks on Windows (PowerShell equivalent of `test-unix.sh`).
-
-```powershell
-./scripts/test-windows.ps1
-```
-
----
-
 ### `test-coverage.sh`
-
-Generate code coverage reports with `cargo llvm-cov`.
 
 ```sh
 ./scripts/test-coverage.sh [extra-args]
@@ -127,8 +111,6 @@ Outputs `lcov.info` at the repo root. Skips e2e tests (`e2e_` prefix).
 ---
 
 ### `test-timing.sh`
-
-Measure and analyse per-test runtimes to identify slow tests.
 
 ```sh
 ./scripts/test-timing.sh [cargo-test-args]
@@ -142,8 +124,6 @@ Requires the nightly toolchain (`rustup toolchain install nightly`). Outputs a r
 
 ### `selftest-versatiles.sh`
 
-Smoke-test the versatiles binary with a convert and serve command.
-
 ```sh
 ./scripts/selftest-versatiles.sh [path-to-binary]
 ```
@@ -156,20 +136,8 @@ Defaults to `versatiles` on `PATH`. Used inside Docker image builds to verify th
 
 ### `install-unix.sh`
 
-Install the VersaTiles binary on Unix by downloading the correct precompiled release binary.
-
 ```sh
 curl -Ls "https://github.com/versatiles-org/versatiles-rs/releases/latest/download/install-unix.sh" | sudo sh
-```
-
----
-
-### `install-windows.ps1`
-
-Install the VersaTiles binary on Windows by downloading the correct precompiled release binary.
-
-```powershell
-./scripts/install-windows.ps1
 ```
 
 ---
@@ -177,8 +145,6 @@ Install the VersaTiles binary on Windows by downloading the correct precompiled 
 ## Release & Maintenance
 
 ### `release-package.sh`
-
-Interactively create a versioned release by bumping the version, tagging, and committing.
 
 ```sh
 ./scripts/release-package.sh              # interactive menu
@@ -190,14 +156,6 @@ After running, push with `git push origin main --follow-tags` to trigger the CI 
 ---
 
 ### `clean-target.sh`
-
-Reclaim disk space in `target/` without discarding what you are still building.
-
-Cargo never garbage-collects `target/`: every configuration ever built stays there — six
-feature sets across the check matrix, dev and test profiles, a tree per `--target` release
-build, a complete second tree under `llvm-cov-target/`, and every dependency version that
-predates a `cargo update`. One `cargo test --no-run` is about 3.6 GB, so the total is that
-figure times however many distinct builds have piled up.
 
 ```sh
 ./scripts/clean-target.sh        # keep anything used in the last 14 days
@@ -214,24 +172,10 @@ Requires [`cargo-sweep`](https://github.com/holmgr/cargo-sweep) for the age-base
 
 ## CI / Workflow
 
-### `workflow-create-release.sh`
-
-CI script: create a draft GitHub release for the latest version tag.
-
-Fetches the two most recent version tags, assembles a changelog from commits between them, and creates a draft pre-release. Intended for use inside GitHub Actions.
-
----
-
 ### `workflow-pack-upload.sh`
-
-CI script: package a compiled binary as `.tar.gz` and upload it to a GitHub release.
 
 ```sh
 ./scripts/workflow-pack-upload.sh <folder> <filename-stem> <tag>
 ```
 
 ---
-
-### `workflow-pack-upload.ps1`
-
-PowerShell equivalent of `workflow-pack-upload.sh` for Windows CI runners.
