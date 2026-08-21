@@ -69,6 +69,9 @@ impl Operation {
 		let tilejson = {
 			let mut tilejson = TileJSON::default();
 			metadata.update_tilejson(&mut tilejson);
+			// The size is a parameter here, so there is no excuse for the output
+			// not to declare it (issue #247).
+			tilejson.set_tile_size(tile_size)?;
 			tilejson
 		};
 
@@ -157,6 +160,23 @@ mod tests {
 	#[test]
 	fn test_operation_invalid_format() {
 		assert!(Operation::from_parameters(&[0, 0, 0], 512, TileFormat::MVT).is_err());
+	}
+
+	#[tokio::test]
+	async fn test_size_reaches_the_tilejson() {
+		// Issue #247: `size=256` and `size=512` produced identical metadata,
+		// even though the size is right there in the parameters.
+		let factory = PipelineFactory::new_dummy();
+		for size in [256u16, 512] {
+			let op = factory
+				.operation_from_vpl(&format!("from_color format=png size={size}"))
+				.await
+				.unwrap();
+			assert_eq!(op.tilejson().tile_size.map(|s| s.size()), Some(size), "size={size}");
+		}
+		// The default is 512, and it is declared like any other.
+		let op = factory.operation_from_vpl("from_color").await.unwrap();
+		assert_eq!(op.tilejson().tile_size.map(|s| s.size()), Some(512));
 	}
 
 	#[tokio::test]

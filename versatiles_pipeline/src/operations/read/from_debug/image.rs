@@ -7,6 +7,10 @@ use imageproc::{
 };
 use versatiles_core::TileCoord;
 
+/// Edge length of every debug tile, in pixels. Declared in the operation's
+/// TileJSON as `tile_size`, so the two cannot drift apart.
+pub const DEBUG_TILE_SIZE: u32 = 512;
+
 static FONT: LazyLock<FontArc> =
 	LazyLock::new(|| FontArc::try_from_slice(include_bytes!("./trim.ttf")).expect("bundled font is valid"));
 
@@ -14,7 +18,11 @@ pub fn create_debug_image(coord: &TileCoord, use_alpha: bool) -> DynamicImage {
 	let br = ((coord.x + coord.y) % 2) as u8 * 255;
 
 	// Build everything as RGBA; for RGB output we drop alpha at the end.
-	let mut img = RgbaImage::from_pixel(512, 512, Rgba([br, br, br, if use_alpha { 16 } else { 255 }]));
+	let mut img = RgbaImage::from_pixel(
+		DEBUG_TILE_SIZE,
+		DEBUG_TILE_SIZE,
+		Rgba([br, br, br, if use_alpha { 16 } else { 255 }]),
+	);
 
 	let font: &FontArc = &FONT;
 	let mut draw =

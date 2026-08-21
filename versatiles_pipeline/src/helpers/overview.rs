@@ -15,6 +15,9 @@ use versatiles_image::traits::DynamicImageTraitInfo;
 
 static BLOCK_TILE_COUNT: u32 = 16;
 
+/// Tile size assumed when a source declares none.
+const DEFAULT_TILE_SIZE: u32 = 512;
+
 /// Scaling function type used to downscale tiles by a factor of 2.
 pub type ScaleDownFn = Arc<dyn Fn(&DynamicImage) -> Result<DynamicImage> + Send + Sync>;
 
@@ -73,7 +76,20 @@ impl OverviewCore {
 
 		metadata.update_tilejson(&mut tilejson);
 
-		let tile_size = tilejson.tile_size.map_or(512, |ts| u32::from(ts.size()));
+		// Guessing here is not harmless: the overview is rendered at this size, so
+		// a 256 px source silently assumed to be 512 produces wrong tiles. The
+		// fallback stays, because sources that never declared a size predate the
+		// field being filled in (issue #247), but it says so.
+		let tile_size = tilejson.tile_size.map_or_else(
+			|| {
+				log::warn!(
+					"source declares no tile_size; assuming {DEFAULT_TILE_SIZE} px for the overview. If its tiles are a \
+					 different size, the result will be wrong — set the size on the source, or insert `raster_tile_resize`."
+				);
+				DEFAULT_TILE_SIZE
+			},
+			|ts| u32::from(ts.size()),
+		);
 		let cache = Arc::new(DashMap::new());
 		let cache_bytes = Arc::new(AtomicUsize::new(0));
 

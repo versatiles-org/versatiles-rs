@@ -259,11 +259,33 @@ impl Operation {
 			);
 		}
 
+		// `merge_all` deliberately leaves the four `tile_*` fields alone, and
+		// `update_tilejson` fills in every one of them except `tile_size` — so a
+		// stack of sources that all declare their pixel size produced output that
+		// declared none (issue #247). Stacking only composes if the sources agree
+		// on that size, so disagreement is an error, not something to pick from.
+		let mut tile_size = None;
+		for source in &original_sources {
+			let Some(size) = source.tilejson().tile_size else {
+				continue;
+			};
+			match tile_size {
+				None => tile_size = Some(size),
+				Some(first) => ensure!(
+					first == size,
+					"all sources must have the same tile size, got {} and {}",
+					first.size(),
+					size.size()
+				),
+			}
+		}
+
 		let level_max = pyramid
 			.level_max()
 			.ok_or_else(|| anyhow::anyhow!("combined source pyramid is empty"))?;
 		let metadata = TileSourceMetadata::new(tile_format, tile_compression, traversal, Some(pyramid));
 		metadata.update_tilejson(&mut tilejson);
+		tilejson.tile_size = tile_size;
 
 		// Build source entries, optionally wrapping each source with raster_overscale
 		let auto_overscale = args.auto_overscale.unwrap_or(false);
@@ -483,6 +505,30 @@ mod tests {
 
 		error("from_stacked_raster").await;
 		error("from_stacked_raster [ ]").await;
+	}
+
+	#[tokio::test]
+	async fn test_tile_size_carries_through_the_stack() -> Result<()> {
+		// Issue #247: `merge_all` leaves the `tile_*` fields alone and
+		// `update_tilejson` fills in all of them but `tile_size`, so a stack of
+		// sources that each declared their size produced output that declared none.
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl("from_stacked_raster [ from_color format=png size=256, from_color format=png size=256 ]")
+			.await?;
+		assert_eq!(op.tilejson().tile_size.map(|s| s.size()), Some(256));
+
+		// Stacking only composes when the sources agree on the pixel size, so a
+		// mismatch is an error rather than a coin toss between the two.
+		let err = factory
+			.operation_from_vpl("from_stacked_raster [ from_color format=png size=256, from_color format=png size=512 ]")
+			.await
+			.unwrap_err();
+		assert!(
+			format!("{err:#}").contains("all sources must have the same tile size, got 256 and 512"),
+			"unexpected message: {err:#}"
+		);
+		Ok(())
 	}
 
 	#[tokio::test]

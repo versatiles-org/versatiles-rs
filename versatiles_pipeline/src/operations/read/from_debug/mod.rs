@@ -21,7 +21,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use anyhow::{Result, bail};
 use async_trait::async_trait;
-use image::create_debug_image;
+use image::{DEBUG_TILE_SIZE, create_debug_image};
 use vector::create_debug_vector_tile;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream, TileType};
@@ -66,6 +66,10 @@ impl Operation {
 		}
 
 		metadata.update_tilejson(&mut tilejson);
+
+		if tile_format.to_type() == TileType::Raster {
+			tilejson.set_tile_size(DEBUG_TILE_SIZE)?;
+		}
 
 		Ok(Self { tilejson, metadata })
 	}
@@ -186,6 +190,7 @@ mod tests {
 				"  \"minzoom\": 0,",
 				"  \"tile_format\": \"image/avif\",",
 				"  \"tile_schema\": \"rgb\",",
+				"  \"tile_size\": 512,",
 				"  \"tile_type\": \"raster\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}",
@@ -207,6 +212,7 @@ mod tests {
 				"  \"minzoom\": 0,",
 				"  \"tile_format\": \"image/jpeg\",",
 				"  \"tile_schema\": \"rgb\",",
+				"  \"tile_size\": 512,",
 				"  \"tile_type\": \"raster\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}",
@@ -228,6 +234,7 @@ mod tests {
 				"  \"minzoom\": 0,",
 				"  \"tile_format\": \"image/png\",",
 				"  \"tile_schema\": \"rgb\",",
+				"  \"tile_size\": 512,",
 				"  \"tile_type\": \"raster\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}",
@@ -249,6 +256,7 @@ mod tests {
 				"  \"minzoom\": 0,",
 				"  \"tile_format\": \"image/webp\",",
 				"  \"tile_schema\": \"rgb\",",
+				"  \"tile_size\": 512,",
 				"  \"tile_type\": \"raster\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}",
