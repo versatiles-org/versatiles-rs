@@ -168,7 +168,7 @@ Before adding or editing an operation:
 
 ## Declaring a default
 
-The sentence tells a *reader* what happens when a parameter is left out. A
+The sentence tells a _reader_ what happens when a parameter is left out. A
 generated form needs the same fact as data, or it shows an empty box for
 `from_color`'s `color` — which will use `000000` — and an identical empty box
 for `from_csv`'s `lon_column`, whose absence is an error.
@@ -187,7 +187,7 @@ and what a caller writes into the document to make the default explicit, so
 `"000000"`, `"false"` and `"[0,0]"` are all plain strings. It reaches consumers
 as `VPLFieldMeta::default`.
 
-Only a *literal* gets one. These do not, and the test does not ask for them:
+Only a _literal_ gets one. These do not, and the test does not ask for them:
 
 - **A computed default.** "Defaults to the source's highest." — there is no
   value to write. `VPLFieldMeta::default` is `None`, and a form should say
@@ -195,7 +195,7 @@ Only a *literal* gets one. These do not, and the test does not ask for them:
 - **A reference to another parameter.** `level_min` defaults to `level_max`;
   the backticks name a parameter, not a value.
 - **No default at all**, which is not the same as required: `filter`'s `bbox`
-  clips nothing when unset, and that absence *does* something.
+  clips nothing when unset, and that absence _does_ something.
 
 ## Accepted values come from the type
 
