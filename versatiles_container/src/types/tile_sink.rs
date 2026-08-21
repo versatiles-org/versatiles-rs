@@ -65,6 +65,24 @@ pub fn deduplicating_tile_sink(sink: Box<dyn TileSink>) -> Box<dyn TileSink> {
 	})
 }
 
+/// Whether a local output path names a directory of tiles rather than a container file.
+///
+/// The single rule both write paths dispatch on — [`open_tile_sink`] here and
+/// [`ContainerRegistry::write_to_path`](crate::ContainerRegistry::write_to_path).
+/// They used to answer it differently, so `convert in.versatiles out/` worked
+/// through one and failed through the other with *"file extension '' unknown"*
+/// (issue #245).
+///
+/// A path that does not exist yet still counts as a directory when it has no
+/// extension: no container format could be picked from an empty extension, and
+/// the writer creates the directory on the way. The `!exists` guard keeps an
+/// *existing* extensionless file out — that is a file, and writing tiles into it
+/// has to fail.
+#[must_use]
+pub(crate) fn destination_is_directory(path: &Path) -> bool {
+	path.is_dir() || (!path.exists() && path.extension().is_none())
+}
+
 /// Open a tile sink based on the destination's file extension.
 ///
 /// The destination can be a local path or an `sftp://` URL.
@@ -104,19 +122,14 @@ pub fn open_tile_sink(
 		Some("mbtiles") => MBTilesTileSink::open(destination, format, compression, runtime)?,
 		Some("versatiles") => VersaTilesSink::open(destination, format, compression, runtime)?,
 		_ => {
-			let is_dir = !destination.starts_with("sftp://") && {
-				let path = Path::new(destination);
-				path.is_dir() || path.extension().is_none()
-			};
-			if destination.starts_with("sftp://") || is_dir {
+			let is_dir = destination.starts_with("sftp://") || destination_is_directory(Path::new(destination));
+			if is_dir {
 				DirectoryTileSink::open(destination, format, compression, runtime)?
+			} else if let Some(extension) = extension.as_deref() {
+				bail!("unsupported tile sink format: .{extension}")
 			} else {
 				bail!(
-					"unsupported tile sink format: .{}",
-					Path::new(destination)
-						.extension()
-						.expect("extension matched above")
-						.to_string_lossy()
+					"cannot write tiles to {destination:?}: it is an existing file with no extension, so it names neither a container format nor a directory"
 				)
 			}
 		}

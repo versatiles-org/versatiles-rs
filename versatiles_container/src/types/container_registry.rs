@@ -49,7 +49,7 @@ use crate::{
 	DataSource, DirectoryReader, DirectoryWriter, MBTilesReader, MBTilesWriter, PMTilesReader, PMTilesWriter,
 	SharedTileSource, TarTilesReader, TarTilesWriter, TileSource, TilesReader, TilesRuntime, TilesWriter,
 	VersaTilesReader, VersaTilesWriter,
-	types::{data_location::DataLocation, data_source::looks_like_vpl},
+	types::{data_location::DataLocation, data_source::looks_like_vpl, tile_sink::destination_is_directory},
 };
 #[cfg(test)]
 use crate::{MockReader, TileSourceMetadata, Traversal};
@@ -333,7 +333,12 @@ impl ContainerRegistry {
 	pub async fn write_to_path(&self, reader: SharedTileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
 		let path = env::current_dir()?.join(path);
 
-		if path.is_dir() {
+		if destination_is_directory(&path) {
+			// `DirectoryWriter` creates each tile's parent on the way, so this is not
+			// what makes the write work — it turns an unwritable destination into an
+			// error naming the directory, and makes an empty conversion still produce
+			// the directory it was asked for.
+			std::fs::create_dir_all(&path).with_context(|| format!("Failed to create output directory {path:?}"))?;
 			let mut boxed_reader = Arc::try_unwrap(reader)
 				.map_err(|_| anyhow!("Cannot get exclusive access to reader for directory write"))?;
 			return DirectoryWriter::write_to_path(boxed_reader.as_mut(), &path, runtime).await;
@@ -341,10 +346,13 @@ impl ContainerRegistry {
 
 		let extension = sanitize_extension(&path.extension().unwrap_or_default().to_string_lossy());
 
-		let entry = self
-			.writers
-			.get(&extension)
-			.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?;
+		let entry = self.writers.get(&extension).ok_or_else(|| {
+			if extension.is_empty() {
+				anyhow!("cannot write to {path:?}: it is an existing file with no extension, so it names neither a container format nor a directory")
+			} else {
+				anyhow!("file extension '{extension}' unknown")
+			}
+		})?;
 
 		check_writer_options(&runtime.writer_options(), entry, &extension)?;
 
@@ -632,6 +640,54 @@ pub mod tests {
 		remove_partial_output(&dir.path().join("does-not-exist"));
 		remove_partial_output(dir.path());
 		assert!(dir.path().is_dir(), "cleanup must never remove a directory");
+	}
+
+	/// Issue #245: `convert in.versatiles out/` used to need `mkdir out` first, and
+	/// failed with *"file extension '' unknown"* when it was missing.
+	#[tokio::test]
+	async fn writing_to_a_missing_directory_creates_it() -> Result<()> {
+		let dir = TempDir::new()?;
+		let path = dir.path().join("out");
+		assert!(!path.exists());
+
+		let reader = MockReader::new_mock(
+			TilePyramid::new_full_up_to(2),
+			TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None),
+		)?;
+		ContainerRegistry::default()
+			.write_to_path(Arc::new(Box::new(reader)), &path, TilesRuntime::new_silent())
+			.await?;
+
+		assert!(path.is_dir(), "the destination directory must have been created");
+		let reader = ContainerRegistry::default()
+			.reader_from_location(DataLocation::Path(path), TilesRuntime::new_silent())
+			.await?;
+		assert_eq!(reader.tile_pyramid().await?.level_max(), Some(2));
+		Ok(())
+	}
+
+	/// ...but an existing file with no extension is a file, not a directory, and
+	/// must say so rather than blaming the empty extension.
+	#[tokio::test]
+	async fn writing_to_an_extensionless_file_is_rejected() -> Result<()> {
+		let dir = TempDir::new()?;
+		let path = dir.path().join("out");
+		std::fs::write(&path, b"not a container")?;
+
+		let reader = MockReader::new_mock(
+			TilePyramid::new_full_up_to(1),
+			TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None),
+		)?;
+		let err = format!(
+			"{:?}",
+			ContainerRegistry::default()
+				.write_to_path(Arc::new(Box::new(reader)), &path, TilesRuntime::new_silent())
+				.await
+				.unwrap_err()
+		);
+		assert!(err.contains("existing file with no extension"), "{err}");
+		assert!(path.is_file(), "the caller's file must survive");
+		Ok(())
 	}
 
 	/// The failure this exists for: a pipeline handed over as bare text, whose error used to be
