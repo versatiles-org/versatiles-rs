@@ -1,9 +1,14 @@
 //! Machine-readable Shortbread schema model and the embedded reference data.
 //!
-//! The two `shortbread_*.yaml` files are generated from the official spec
-//! markdown by `generate_schema.py` (kept alongside them for provenance) and
-//! hand-reviewed before commit. They are embedded at compile time so the tool
-//! stays offline and deterministic.
+//! The two `shortbread_*.yaml` files are hand-maintained: `required` and
+//! `enum_severity` are validator policy, not facts the specification states, so
+//! nothing can generate them. Everything the spec *does* state — the layer set,
+//! each layer's geometry and minimum zoom, its property names and types, and the
+//! `kind` vocabulary — is checked against the published spec by `check_schema.py`
+//! next to them. Run it when a new Shortbread version lands.
+//!
+//! The YAML is embedded at compile time, so the tool itself stays offline and
+//! deterministic.
 
 use std::collections::BTreeMap;
 
@@ -178,13 +183,13 @@ impl Schema {
 
 	/// Resolves a [`SchemaSelector`] into a concrete schema.
 	///
-	/// `Auto` and `Shortbread { version: None }` auto-detect the version: the one
-	/// whose layer set best overlaps `present_layers` wins (ties → 1.1). Only the
-	/// Shortbread family exists today, so `Auto` resolves to it.
-	pub fn resolve(selector: SchemaSelector, present_layers: &[String]) -> Result<Schema> {
+	/// `Auto` and `Shortbread { version: None }` auto-detect the version from
+	/// `present`, the container's declared layers and their fields (ties → 1.1).
+	/// Only the Shortbread family exists today, so `Auto` resolves to it.
+	pub fn resolve(selector: SchemaSelector, present: &[(String, Vec<String>)]) -> Result<Schema> {
 		match selector {
 			SchemaSelector::Auto | SchemaSelector::Shortbread { version: None } => {
-				Schema::resolve_shortbread_auto(present_layers)
+				Schema::resolve_shortbread_auto(present)
 			}
 			SchemaSelector::Shortbread {
 				version: Some(SchemaVersion::V1_0),
@@ -195,12 +200,24 @@ impl Schema {
 		}
 	}
 
-	/// Picks the Shortbread version whose layer set best overlaps `present_layers`
-	/// (ties → 1.1, the current superset spec).
-	fn resolve_shortbread_auto(present_layers: &[String]) -> Result<Schema> {
+	/// Picks the Shortbread version the container's declared layers and fields fit
+	/// best (ties → 1.1, the current spec).
+	///
+	/// Scoring on layer names alone can never separate the two: 1.0 and 1.1 define
+	/// the same 26 layers, so every comparison tied and `auto` silently always
+	/// meant 1.1 (issue #241). The versions differ in their *fields* — 1.0 declares
+	/// `name_de`/`name_en` on the label layers, 1.1 dropped those and added
+	/// `streets.motorcar`/`streets.foot` — so the fields are what decide.
+	fn resolve_shortbread_auto(present: &[(String, Vec<String>)]) -> Result<Schema> {
 		let s10 = Schema::v1_0()?;
 		let s11 = Schema::v1_1()?;
-		let score = |s: &Schema| present_layers.iter().filter(|n| s.layers.contains_key(*n)).count();
+		let score = |s: &Schema| {
+			present
+				.iter()
+				.filter_map(|(layer, fields)| s.layers.get(layer).map(|def| (def, fields)))
+				.map(|(def, fields)| 1 + fields.iter().filter(|f| def.attributes.contains_key(*f)).count())
+				.sum::<usize>()
+		};
 		if score(&s10) > score(&s11) { Ok(s10) } else { Ok(s11) }
 	}
 }
@@ -256,6 +273,70 @@ mod tests {
 		// `shortbread` (family only) auto-detects the version the same way.
 		let s = Schema::resolve(SchemaSelector::Shortbread { version: None }, &[]).unwrap();
 		assert_eq!(s.version, "1.1");
+	}
+
+	fn layer(name: &str, fields: &[&str]) -> (String, Vec<String>) {
+		(name.to_string(), fields.iter().map(|s| (*s).to_string()).collect())
+	}
+
+	#[test]
+	fn auto_tells_the_versions_apart_by_their_fields() {
+		// Both versions define all 26 layers, so the layer names alone always tie
+		// and `auto` used to mean 1.1 no matter what it was given (issue #241).
+		let layers_only = [layer("streets", &[]), layer("place_labels", &[])];
+		assert_eq!(
+			Schema::resolve(SchemaSelector::Auto, &layers_only).unwrap().version,
+			"1.1"
+		);
+
+		// `name_de`/`name_en` exist in 1.0 only.
+		let v1_0 = [layer("place_labels", &["kind", "name", "name_de", "name_en"])];
+		assert_eq!(Schema::resolve(SchemaSelector::Auto, &v1_0).unwrap().version, "1.0");
+
+		// `motorcar`/`foot` were added in 1.1.
+		let v1_1 = [layer("streets", &["kind", "motorcar", "foot"])];
+		assert_eq!(Schema::resolve(SchemaSelector::Auto, &v1_1).unwrap().version, "1.1");
+	}
+
+	#[test]
+	fn streets_carries_the_full_access_group_in_1_1() {
+		// The 1.1 spec normalises all four access tags to yes/limited/no; 1.0 has
+		// only `bicycle` and `horse`, carrying the raw OSM value.
+		let s11 = Schema::v1_1().unwrap();
+		for name in ["motorcar", "bicycle", "foot", "horse"] {
+			let attr = s11.layers["streets"]
+				.attributes
+				.get(name)
+				.unwrap_or_else(|| panic!("1.1 streets.{name}"));
+			assert_eq!(attr.ty, AttrType::String);
+			assert_eq!(
+				attr.enum_values.as_deref(),
+				Some(["yes".to_string(), "limited".to_string(), "no".to_string()].as_slice()),
+				"streets.{name}"
+			);
+		}
+
+		let s10 = Schema::v1_0().unwrap();
+		assert!(!s10.layers["streets"].attributes.contains_key("motorcar"));
+		assert!(!s10.layers["streets"].attributes.contains_key("foot"));
+		assert!(s10.layers["streets"].attributes["bicycle"].enum_values.is_none());
+	}
+
+	#[test]
+	fn label_layers_inherit_their_kind_vocabulary() {
+		// The spec defines these by reference ("see the water_polygons layer for a
+		// list of values"), so they had no enum at all and went unvalidated.
+		for s in [Schema::v1_0().unwrap(), Schema::v1_1().unwrap()] {
+			for (borrower, lender) in [
+				("water_polygons_labels", "water_polygons"),
+				("water_lines_labels", "water_lines"),
+			] {
+				let borrowed = s.layers[borrower].attributes["kind"].enum_values.as_deref();
+				let lent = s.layers[lender].attributes["kind"].enum_values.as_deref();
+				assert!(lent.is_some_and(|v| !v.is_empty()), "{lender} in {}", s.version);
+				assert_eq!(borrowed, lent, "{borrower} in {}", s.version);
+			}
+		}
 	}
 
 	#[test]

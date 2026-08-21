@@ -449,6 +449,8 @@ layers:
       kind:
         type: String
         required: true
+        enum: [canal, river, stream, ditch]
+        enum_severity: warn
       name:
         type: String
         required: false
@@ -480,6 +482,8 @@ layers:
       kind:
         type: String
         required: true
+        enum: [glacier, water, river, reservoir, basin, dock, canal]
+        enum_severity: warn
       name:
         type: String
         required: false

@@ -329,12 +329,21 @@ layers:
       bicycle:
         type: String
         required: false
+        enum: ["yes", "limited", "no"]
+        enum_severity: warn
       bridge:
         type: Boolean
         required: false
+      foot:
+        type: String
+        required: false
+        enum: ["yes", "limited", "no"]
+        enum_severity: warn
       horse:
         type: String
         required: false
+        enum: ["yes", "limited", "no"]
+        enum_severity: warn
       kind:
         type: String
         required: true
@@ -343,6 +352,11 @@ layers:
       link:
         type: Boolean
         required: false
+      motorcar:
+        type: String
+        required: false
+        enum: ["yes", "limited", "no"]
+        enum_severity: warn
       oneway:
         type: Boolean
         required: false
@@ -401,6 +415,8 @@ layers:
       kind:
         type: String
         required: true
+        enum: [canal, river, stream, drain, ditch]
+        enum_severity: warn
       name:
         type: String
         required: false
@@ -426,6 +442,8 @@ layers:
       kind:
         type: String
         required: true
+        enum: [glacier, water, river, reservoir, basin, dock, canal]
+        enum_severity: warn
       name:
         type: String
         required: false

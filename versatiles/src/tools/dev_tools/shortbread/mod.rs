@@ -97,9 +97,16 @@ pub async fn run(args: &ValidateSchema, runtime: &TilesRuntime) -> Result<()> {
 		);
 	}
 
-	// Layer names declared in the TileJSON help auto-detect the schema version.
-	let present_layers: Vec<String> = reader.tilejson().vector_layers.iter().map(|(k, _)| k.clone()).collect();
-	let schema = Arc::new(Schema::resolve(args.schema, &present_layers)?);
+	// The layers and fields declared in the TileJSON auto-detect the schema
+	// version. Both are needed: the two Shortbread versions share a layer set and
+	// differ only in their fields.
+	let present: Vec<(String, Vec<String>)> = reader
+		.tilejson()
+		.vector_layers
+		.iter()
+		.map(|(name, layer)| (name.clone(), layer.fields.keys().cloned().collect()))
+		.collect();
+	let schema = Arc::new(Schema::resolve(args.schema, &present)?);
 
 	let pyramid = reader.tile_pyramid().await?;
 	let pmin = pyramid.level_min().unwrap_or(0);
