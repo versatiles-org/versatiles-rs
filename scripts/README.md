@@ -2,9 +2,11 @@
 
 Development, testing, and CI/CD automation scripts for the VersaTiles Rust workspace.
 
-## Scripts
+Run any of them as `./scripts/<name>` from anywhere in the repository.
 
-### Build
+#
+
+## Build
 
 | Script | Purpose |
 | --- | --- |
@@ -15,7 +17,7 @@ Development, testing, and CI/CD automation scripts for the VersaTiles Rust works
 | `build-docs.sh` | Generate Rust API documentation with `cargo doc` |
 | `build-docs-readme.sh` | Regenerate the pipeline and config reference READMEs from the built binary |
 
-### Check / Quality
+## Check / Quality
 
 | Script | Purpose |
 | --- | --- |
@@ -25,7 +27,7 @@ Development, testing, and CI/CD automation scripts for the VersaTiles Rust works
 | `check-markdown.sh` | Lint all Markdown files in the repository with `markdownlint-cli2` |
 | `format.sh` | Auto-format the codebase in place — the write-mode counterpart to `check.sh` |
 
-### Test
+## Test
 
 | Script | Purpose |
 | --- | --- |
@@ -37,7 +39,7 @@ Development, testing, and CI/CD automation scripts for the VersaTiles Rust works
 | `bench-lossless.sh` | Run lossless compression benchmarks for WebP and PNG image formats |
 | [`selftest-versatiles.sh`](#selftest-versatilessh) | Smoke-test the versatiles binary with a convert and serve command |
 
-### Install
+## Install
 
 | Script | Purpose |
 | --- | --- |
@@ -45,7 +47,7 @@ Development, testing, and CI/CD automation scripts for the VersaTiles Rust works
 | [`install-unix.sh`](#install-unixsh) | Install the VersaTiles binary on Unix by downloading the correct precompiled release binary |
 | `install-windows.ps1` | Install the VersaTiles binary on Windows by downloading the correct precompiled release binary |
 
-### Release & Maintenance
+## Release & Maintenance
 
 | Script | Purpose |
 | --- | --- |
@@ -55,7 +57,7 @@ Development, testing, and CI/CD automation scripts for the VersaTiles Rust works
 | `audit-unused-deps.sh` | Find unused dependencies in the workspace with `cargo machete` |
 | [`clean-target.sh`](#clean-targetsh) | Reclaim disk space in `target/` without discarding what you are still building. Cargo never garbage-collects `target/`: every configuration ever built stays there — six feature sets across the check matrix, dev and test profiles, a tree per `--target` release build, a complete second tree under `llvm-cov-target/`, and every dependency version that predates a `cargo update`. One `cargo test --no-run` is about 3.6 GB, so the total is that figure times however many distinct builds have piled up |
 
-### Analysis & Profiling
+## Analysis & Profiling
 
 | Script | Purpose |
 | --- | --- |
@@ -63,8 +65,10 @@ Development, testing, and CI/CD automation scripts for the VersaTiles Rust works
 | `doc-coverage-report.sh` | Generate a documentation coverage report for all public API items |
 | `profile-macos.sh` | Profile the versatiles binary on macOS using Instruments (CPU Profiler) |
 | `stress-ddos.sh` | Load-test a local tile server with parallel HTTP requests |
+| `bench-container-initialisation.sh` | Measure how long each container reader takes to open, with and without a pyramid scan |
+| [`benchmark_server.sh`](#benchmark_serversh) | Measure average server response time over a 21x21 grid of tile requests |
 
-### CI / Workflow
+## CI / Workflow
 
 | Script | Purpose |
 | --- | --- |
@@ -72,9 +76,17 @@ Development, testing, and CI/CD automation scripts for the VersaTiles Rust works
 | [`workflow-pack-upload.sh`](#workflow-pack-uploadsh) | CI script: package a compiled binary as `.tar.gz` and upload it to a GitHub release |
 | `workflow-pack-upload.ps1` | PowerShell equivalent of `workflow-pack-upload.sh` for Windows CI runners |
 
----
+## Usage notes
 
-## Build
+Scripts not listed here take no arguments.
+
+### `benchmark_server.sh`
+
+```sh
+./scripts/benchmark_server.sh [FILE] [PORT]
+```
+
+Requires the release build.
 
 ### `build-release-with-gdal.sh`
 
@@ -84,12 +96,6 @@ Development, testing, and CI/CD automation scripts for the VersaTiles Rust works
 
 Requires GDAL development libraries — install first with `install-gdal.sh`.
 
----
-
-## Check / Quality
-
-## Test
-
 ### `test-unix.sh`
 
 ```sh
@@ -98,8 +104,6 @@ Requires GDAL development libraries — install first with `install-gdal.sh`.
 
 Runs `rustfmt`, `clippy` (binary + lib, multiple feature combinations), and `cargo test` (bins, lib, doc tests).
 
----
-
 ### `test-coverage.sh`
 
 ```sh
@@ -107,8 +111,6 @@ Runs `rustfmt`, `clippy` (binary + lib, multiple feature combinations), and `car
 ```
 
 Outputs `lcov.info` at the repo root. Skips e2e tests (`e2e_` prefix).
-
----
 
 ### `test-timing.sh`
 
@@ -120,8 +122,6 @@ Outputs `lcov.info` at the repo root. Skips e2e tests (`e2e_` prefix).
 
 Requires the nightly toolchain (`rustup toolchain install nightly`). Outputs a ranked list of the 30 slowest tests and a per-module summary.
 
----
-
 ### `selftest-versatiles.sh`
 
 ```sh
@@ -130,19 +130,11 @@ Requires the nightly toolchain (`rustup toolchain install nightly`). Outputs a r
 
 Defaults to `versatiles` on `PATH`. Used inside Docker image builds to verify the binary works in the target environment.
 
----
-
-## Install
-
 ### `install-unix.sh`
 
 ```sh
 curl -Ls "https://github.com/versatiles-org/versatiles-rs/releases/latest/download/install-unix.sh" | sudo sh
 ```
-
----
-
-## Release & Maintenance
 
 ### `release-package.sh`
 
@@ -152,8 +144,6 @@ curl -Ls "https://github.com/versatiles-org/versatiles-rs/releases/latest/downlo
 ```
 
 After running, push with `git push origin main --follow-tags` to trigger the CI release workflow.
-
----
 
 ### `clean-target.sh`
 
@@ -166,16 +156,8 @@ After running, push with `git push origin main --follow-tags` to trigger the CI 
 Requires [`cargo-sweep`](https://github.com/holmgr/cargo-sweep) for the age-based pass:
 `cargo install cargo-sweep`.
 
----
-
-## Analysis & Profiling
-
-## CI / Workflow
-
 ### `workflow-pack-upload.sh`
 
 ```sh
 ./scripts/workflow-pack-upload.sh <folder> <filename-stem> <tag>
 ```
-
----
