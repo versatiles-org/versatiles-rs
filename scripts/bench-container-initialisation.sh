@@ -18,8 +18,8 @@
 # cached files in testdata/bench/.
 #
 # Usage:
-#   ./scripts/bench-init.sh [ITERATIONS]
-#   ITERATIONS=10 ./scripts/bench-init.sh
+#   ./scripts/bench-container-initialisation.sh [ITERATIONS]
+#   ITERATIONS=10 ./scripts/bench-container-initialisation.sh
 
 set -uo pipefail
 cd "$(dirname "$0")/.."

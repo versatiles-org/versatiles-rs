@@ -4,8 +4,6 @@ Development, testing, and CI/CD automation scripts for the VersaTiles Rust works
 
 Run any of them as `./scripts/<name>` from anywhere in the repository.
 
-#
-
 ## Build
 
 | Script | Purpose |
@@ -32,7 +30,7 @@ Run any of them as `./scripts/<name>` from anywhere in the repository.
 | Script | Purpose |
 | --- | --- |
 | [`test-unix.sh`](#test-unixsh) | Developer test script: format, lint, and test the Rust workspace on Unix |
-| `test-windows.ps1` | Run Rust quality checks on Windows (PowerShell equivalent of `test-unix.sh`) |
+| [`test-windows.ps1`](#test-windowsps1) | Run Rust quality checks on Windows (PowerShell equivalent of `test-unix.sh`) |
 | [`test-coverage.sh`](#test-coveragesh) | Generate code coverage reports with `cargo llvm-cov` |
 | [`test-timing.sh`](#test-timingsh) | Measure and analyse per-test runtimes to identify slow tests |
 | `perf-benchmarks.sh` | Run all unit tests with per-test timing via libtest's `--report-time` flag |
@@ -43,7 +41,7 @@ Run any of them as `./scripts/<name>` from anywhere in the repository.
 
 | Script | Purpose |
 | --- | --- |
-| `install-gdal.sh` | Install GDAL development libraries via the system package manager |
+| [`install-gdal.sh`](#install-gdalsh) | Install GDAL development libraries via the system package manager |
 | [`install-unix.sh`](#install-unixsh) | Install the VersaTiles binary on Unix by downloading the correct precompiled release binary |
 | `install-windows.ps1` | Install the VersaTiles binary on Windows by downloading the correct precompiled release binary |
 
@@ -55,17 +53,17 @@ Run any of them as `./scripts/<name>` from anywhere in the repository.
 | `sync-version.sh` | Validate and optionally sync the version between `Cargo.toml` and `package.json` |
 | `upgrade-deps.sh` | Update Rust dependencies to their latest compatible versions |
 | `audit-unused-deps.sh` | Find unused dependencies in the workspace with `cargo machete` |
-| [`clean-target.sh`](#clean-targetsh) | Reclaim disk space in `target/` without discarding what you are still building. Cargo never garbage-collects `target/`: every configuration ever built stays there — six feature sets across the check matrix, dev and test profiles, a tree per `--target` release build, a complete second tree under `llvm-cov-target/`, and every dependency version that predates a `cargo update`. One `cargo test --no-run` is about 3.6 GB, so the total is that figure times however many distinct builds have piled up |
+| [`clean-target.sh`](#clean-targetsh) | Reclaim disk space in `target/` without discarding what you are still building |
 
 ## Analysis & Profiling
 
 | Script | Purpose |
 | --- | --- |
-| `analyze-binary-size.sh` | Analyse the size of the release binary, breaking down contributions by crate and dependency |
+| [`analyze-binary-size.sh`](#analyze-binary-sizesh) | Analyse the size of the release binary, breaking down contributions by crate and dependency |
 | `doc-coverage-report.sh` | Generate a documentation coverage report for all public API items |
 | `profile-macos.sh` | Profile the versatiles binary on macOS using Instruments (CPU Profiler) |
 | `stress-ddos.sh` | Load-test a local tile server with parallel HTTP requests |
-| `bench-container-initialisation.sh` | Measure how long each container reader takes to open, with and without a pyramid scan |
+| [`bench-container-initialisation.sh`](#bench-container-initialisationsh) | Measure how long each container reader takes to open, with and without a pyramid scan |
 | [`benchmark_server.sh`](#benchmark_serversh) | Measure average server response time over a 21x21 grid of tile requests |
 
 ## CI / Workflow
@@ -79,14 +77,6 @@ Run any of them as `./scripts/<name>` from anywhere in the repository.
 ## Usage notes
 
 Scripts not listed here take no arguments.
-
-### `benchmark_server.sh`
-
-```sh
-./scripts/benchmark_server.sh [FILE] [PORT]
-```
-
-Requires the release build.
 
 ### `build-release-with-gdal.sh`
 
@@ -103,6 +93,14 @@ Requires GDAL development libraries — install first with `install-gdal.sh`.
 ```
 
 Runs `rustfmt`, `clippy` (binary + lib, multiple feature combinations), and `cargo test` (bins, lib, doc tests).
+
+### `test-windows.ps1`
+
+```powershell
+./scripts/test-windows.ps1 [extra-cargo-args]
+```
+
+The PowerShell counterpart to `test-unix.sh`; extra arguments are forwarded to `cargo`.
 
 ### `test-coverage.sh`
 
@@ -130,6 +128,14 @@ Requires the nightly toolchain (`rustup toolchain install nightly`). Outputs a r
 
 Defaults to `versatiles` on `PATH`. Used inside Docker image builds to verify the binary works in the target environment.
 
+### `install-gdal.sh`
+
+```sh
+./scripts/install-gdal.sh [--testing]
+```
+
+`--testing` installs GDAL from the Debian testing repository (Debian and Ubuntu only).
+
 ### `install-unix.sh`
 
 ```sh
@@ -155,6 +161,33 @@ After running, push with `git push origin main --follow-tags` to trigger the CI 
 
 Requires [`cargo-sweep`](https://github.com/holmgr/cargo-sweep) for the age-based pass:
 `cargo install cargo-sweep`.
+
+### `analyze-binary-size.sh`
+
+```sh
+./scripts/analyze-binary-size.sh [--clean] [--crates-only] [--deps-only] [--workspace-only]
+./scripts/analyze-binary-size.sh --filter <pattern> --features <list>
+./scripts/analyze-binary-size.sh --save-baseline <name> | --compare <name>
+```
+
+`--help` lists every flag.
+
+### `bench-container-initialisation.sh`
+
+```sh
+./scripts/bench-container-initialisation.sh [ITERATIONS]
+ITERATIONS=10 ./scripts/bench-container-initialisation.sh
+```
+
+Defaults to 5 iterations.
+
+### `benchmark_server.sh`
+
+```sh
+./scripts/benchmark_server.sh [FILE] [PORT]
+```
+
+Requires the release build.
 
 ### `workflow-pack-upload.sh`
 
