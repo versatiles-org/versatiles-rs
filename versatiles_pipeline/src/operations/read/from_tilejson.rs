@@ -72,7 +72,7 @@ impl Operation {
 		let max_concurrent_requests = args.max_concurrent_requests.unwrap_or(4) as usize;
 
 		let client = reqwest::Client::builder()
-			.user_agent(versatiles_core::io::USER_AGENT)
+			.user_agent(versatiles_core::io::user_agent())
 			.tcp_keepalive(Duration::from_secs(600))
 			.use_rustls_tls()
 			.build()?;
