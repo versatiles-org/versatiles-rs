@@ -226,7 +226,7 @@ VersaTiles works with **tile containers** - files or directories containing map 
 **Supported formats:**
 
 | Feature      | `.versatiles` | `.pmtiles` | `.mbtiles` | `.tar` | directory |
-|--------------|:-------------:|:----------:|:----------:|:------:|:---------:|
+| ------------ | :-----------: | :--------: | :--------: | :----: | :-------: |
 | Read         |      ✅       |     ✅     |     ✅     |   ✅   |    ✅     |
 | Write        |      ✅       |     ✅     |     ✅     |   ✅   |    ✅     |
 | Local file   |      ✅       |     ✅     |     ✅     |   ✅   |    ✅     |
@@ -270,7 +270,7 @@ versatiles convert input.mbtiles output.versatiles
 **Advanced options:**
 
 | Option                     | Description                                      | Example                      |
-|----------------------------|--------------------------------------------------|------------------------------|
+| -------------------------- | ------------------------------------------------ | ---------------------------- |
 | `--min-zoom`, `--max-zoom` | Filter zoom levels                               | `--min-zoom=5 --max-zoom=12` |
 | `--bbox`                   | Extract region (lon_min,lat_min,lon_max,lat_max) | `--bbox=13.0,52.3,13.8,52.7` |
 | `--bbox-border`            | Add border tiles around bbox                     | `--bbox-border=3`            |
@@ -323,7 +323,7 @@ versatiles probe tiles.versatiles
 **Depth levels:**
 
 | Level | Flag   | Scans              | Use Case                                                                                                                          |
-|-------|--------|--------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| ----- | ------ | ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | 1     | `-d`   | Container metadata | Quick info (zoom range, tile format)                                                                                              |
 | 2     | `-dd`  | All tile sizes     | Find actual tile coverage and biggest tiles                                                                                       |
 | 3     | `-ddd` | Tile contents      | Validate MVT 2.1 conformance; reports missing `extent`/`version`, duplicate layer names, polygon winding issues, degenerate rings |
@@ -372,7 +372,7 @@ versatiles serve tiles.versatiles
 **Server options:**
 
 | Option                    | Description                     | Default |
-|---------------------------|---------------------------------|---------|
+| ------------------------- | ------------------------------- | ------- |
 | `-i, --ip`                | Bind IP address                 | 0.0.0.0 |
 | `-p, --port`              | Port number                     | 8080    |
 | `-c, --config`            | YAML configuration file         | -       |
@@ -575,8 +575,8 @@ For production deployments, use YAML configuration files for fine-grained contro
 server:
   ip: 0.0.0.0
   port: 8080
-  minimal_recompression: false  # true = faster, larger responses
-  disable_api: false             # true = disable /api endpoints
+  minimal_recompression: false # true = faster, larger responses
+  disable_api: false # true = disable /api endpoints
 
 tiles:
   - name: osm
@@ -602,9 +602,9 @@ versatiles serve -c config.yaml
 ```yaml
 cors:
   allowed_origins:
-    - "https://example.org"          # Exact domain
-    - "*.dev.example.org"            # Subdomain wildcard
-    - "https://example.*"            # TLD wildcard
+    - "https://example.org" # Exact domain
+    - "*.dev.example.org" # Subdomain wildcard
+    - "https://example.*" # TLD wildcard
     - "/^https://.*\\.example\\.org$/" # Regex pattern
   max_age_seconds: 86400
 ```
@@ -614,8 +614,8 @@ cors:
 ```yaml
 extra_response_headers:
   Cache-Control: "public, max-age=86400, immutable"
-  Surrogate-Control: "max-age=604800"      # For Varnish
-  CDN-Cache-Control: "max-age=604800"      # For CDNs
+  Surrogate-Control: "max-age=604800" # For Varnish
+  CDN-Cache-Control: "max-age=604800" # For CDNs
 ```
 
 **Multiple Tile Sources** - Serve multiple tile sets:

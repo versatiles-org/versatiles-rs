@@ -263,7 +263,7 @@ Make sure GDAL is installed via your system package manager:
 ### `libsqlite3-sys` conflict when bundling GDAL
 
 This repository links GDAL dynamically against a system install, so it never hits this. You will
-hit it if you depend on `versatiles` with the `gdal` feature *and* build GDAL statically
+hit it if you depend on `versatiles` with the `gdal` feature _and_ build GDAL statically
 (`gdal-sys/bundled`) — which is the usual choice for an application that ships to end users:
 
 ```text
@@ -276,10 +276,10 @@ previous package which links to `sqlite3` as well: package `libsqlite3-sys v0.38
 `libsqlite3-sys` declares `links = "sqlite3"`, so cargo permits exactly one copy per graph. Two
 chains want it and their requirements do not overlap:
 
-| Chain | Requires |
-| --- | --- |
+| Chain                                                 | Requires        |
+| ----------------------------------------------------- | --------------- |
 | `gdal-sys` (`bundled`) → `gdal-src` → `proj-sys` 0.27 | `>=0.28, <0.36` |
-| `versatiles_container` → `r2d2_sqlite` → `rusqlite` | `^0.38` |
+| `versatiles_container` → `r2d2_sqlite` → `rusqlite`   | `^0.38`         |
 
 The ceiling on the `proj-sys` side predates `libsqlite3-sys` 0.36, 0.37 and 0.38; it is not a real
 incompatibility, since `proj-sys` uses the crate only for linkage and for the `DEP_SQLITE3_INCLUDE`
@@ -392,7 +392,7 @@ Uniform regions collapse to a single node regardless of size — a fully covered
 
 Key properties:
 
-- **Space-filling**: memory proportional to the number of coverage *boundaries*, not tiles
+- **Space-filling**: memory proportional to the number of coverage _boundaries_, not tiles
 - **Serializable**: compact 2-bit-per-node prefix encoding
 - **Set operations**: `union`, `intersection`, `difference` short-circuit on `Full`/`Empty` nodes
 
@@ -451,12 +451,12 @@ pub trait PyramidInfo {
 
 ### What Uses What
 
-| Type            | Used for                                                                        |
-|-----------------|---------------------------------------------------------------------------------|
-| `TileQuadtree`  | Exact coverage at one zoom level — arbitrary tile shapes, set operations        |
-| `TileCover`     | Coverage at one zoom level — rectangular (fast) or quadtree (exact)             |
-| `TilePyramid`   | Multi-zoom coverage tracking — which tiles exist across all zoom levels         |
-| `TileBBox`      | Rectangular geometry — image dimensions, request shapes, container block layout |
+| Type           | Used for                                                                        |
+| -------------- | ------------------------------------------------------------------------------- |
+| `TileQuadtree` | Exact coverage at one zoom level — arbitrary tile shapes, set operations        |
+| `TileCover`    | Coverage at one zoom level — rectangular (fast) or quadtree (exact)             |
+| `TilePyramid`  | Multi-zoom coverage tracking — which tiles exist across all zoom levels         |
+| `TileBBox`     | Rectangular geometry — image dimensions, request shapes, container block layout |
 
 `TileBBox` is kept for anything that is inherently rectangular: requesting a range of tiles from a container, describing image dimensions, wire format block indices. `TilePyramid` is used wherever the question is "does this tile exist in this data source?"
 

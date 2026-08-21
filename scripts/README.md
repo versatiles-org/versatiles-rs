@@ -6,73 +6,73 @@ Run any of them as `./scripts/<name>` from anywhere in the repository.
 
 ## Build
 
-| Script | Purpose |
-| --- | --- |
-| `build-debug-with-gdal.sh` | Build the debug binary with GDAL support enabled |
-| [`build-release-with-gdal.sh`](#build-release-with-gdalsh) | Build the release binary with GDAL support. Optionally installs it to `/usr/local/bin` |
-| `build-docker-gdal.sh` | Build the GDAL-enabled Docker image (`versatiles-gdal`) from `docker/gdal-debian.Dockerfile` |
-| `build-docker-images.sh` | Build and smoke-test Docker images for all supported Linux base images (debian, alpine, scratch) on `linux/amd64` |
-| `build-docs.sh` | Generate Rust API documentation with `cargo doc` |
-| `build-docs-readme.sh` | Regenerate the pipeline and config reference READMEs from the built binary |
+| Script                                                     | Purpose                                                                                                           |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `build-debug-with-gdal.sh`                                 | Build the debug binary with GDAL support enabled                                                                  |
+| [`build-release-with-gdal.sh`](#build-release-with-gdalsh) | Build the release binary with GDAL support. Optionally installs it to `/usr/local/bin`                            |
+| `build-docker-gdal.sh`                                     | Build the GDAL-enabled Docker image (`versatiles-gdal`) from `docker/gdal-debian.Dockerfile`                      |
+| `build-docker-images.sh`                                   | Build and smoke-test Docker images for all supported Linux base images (debian, alpine, scratch) on `linux/amd64` |
+| `build-docs.sh`                                            | Generate Rust API documentation with `cargo doc`                                                                  |
+| `build-docs-readme.sh`                                     | Regenerate the pipeline and config reference READMEs from the built binary                                        |
 
 ## Check / Quality
 
-| Script | Purpose |
-| --- | --- |
-| `check.sh` | Run all quality checks: Rust, Node.js, and Markdown. Run this before committing or opening a pull request |
-| `check-rust.sh` | Run all Rust quality checks across the workspace |
-| `check-node.sh` | Run all Node.js quality checks for the `versatiles_node` package |
-| `check-markdown.sh` | Lint all Markdown files in the repository with `markdownlint-cli2` |
-| `format.sh` | Auto-format the codebase in place — the write-mode counterpart to `check.sh` |
+| Script              | Purpose                                                                                                   |
+| ------------------- | --------------------------------------------------------------------------------------------------------- |
+| `check.sh`          | Run all quality checks: Rust, Node.js, and Markdown. Run this before committing or opening a pull request |
+| `check-rust.sh`     | Run all Rust quality checks across the workspace                                                          |
+| `check-node.sh`     | Run all Node.js quality checks for the `versatiles_node` package                                          |
+| `check-markdown.sh` | Lint all Markdown files in the repository with `markdownlint-cli2`                                        |
+| `format.sh`         | Auto-format the codebase in place — the write-mode counterpart to `check.sh`                              |
 
 ## Test
 
-| Script | Purpose |
-| --- | --- |
-| [`test-unix.sh`](#test-unixsh) | Developer test script: format, lint, and test the Rust workspace on Unix |
-| [`test-windows.ps1`](#test-windowsps1) | Run Rust quality checks on Windows (PowerShell equivalent of `test-unix.sh`) |
-| [`test-coverage.sh`](#test-coveragesh) | Generate code coverage reports with `cargo llvm-cov` |
-| [`test-timing.sh`](#test-timingsh) | Measure and analyse per-test runtimes to identify slow tests |
-| `perf-benchmarks.sh` | Run all unit tests with per-test timing via libtest's `--report-time` flag |
-| `bench-lossless.sh` | Run lossless compression benchmarks for WebP and PNG image formats |
-| [`selftest-versatiles.sh`](#selftest-versatilessh) | Smoke-test the versatiles binary with a convert and serve command |
+| Script                                             | Purpose                                                                      |
+| -------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [`test-unix.sh`](#test-unixsh)                     | Developer test script: format, lint, and test the Rust workspace on Unix     |
+| [`test-windows.ps1`](#test-windowsps1)             | Run Rust quality checks on Windows (PowerShell equivalent of `test-unix.sh`) |
+| [`test-coverage.sh`](#test-coveragesh)             | Generate code coverage reports with `cargo llvm-cov`                         |
+| [`test-timing.sh`](#test-timingsh)                 | Measure and analyse per-test runtimes to identify slow tests                 |
+| `perf-benchmarks.sh`                               | Run all unit tests with per-test timing via libtest's `--report-time` flag   |
+| `bench-lossless.sh`                                | Run lossless compression benchmarks for WebP and PNG image formats           |
+| [`selftest-versatiles.sh`](#selftest-versatilessh) | Smoke-test the versatiles binary with a convert and serve command            |
 
 ## Install
 
-| Script | Purpose |
-| --- | --- |
-| [`install-gdal.sh`](#install-gdalsh) | Install GDAL development libraries via the system package manager |
-| [`install-unix.sh`](#install-unixsh) | Install the VersaTiles binary on Unix by downloading the correct precompiled release binary |
-| `install-windows.ps1` | Install the VersaTiles binary on Windows by downloading the correct precompiled release binary |
+| Script                               | Purpose                                                                                        |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| [`install-gdal.sh`](#install-gdalsh) | Install GDAL development libraries via the system package manager                              |
+| [`install-unix.sh`](#install-unixsh) | Install the VersaTiles binary on Unix by downloading the correct precompiled release binary    |
+| `install-windows.ps1`                | Install the VersaTiles binary on Windows by downloading the correct precompiled release binary |
 
 ## Release & Maintenance
 
-| Script | Purpose |
-| --- | --- |
+| Script                                     | Purpose                                                                                  |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------- |
 | [`release-package.sh`](#release-packagesh) | Interactively create a versioned release by bumping the version, tagging, and committing |
-| `sync-version.sh` | Validate and optionally sync the version between `Cargo.toml` and `package.json` |
-| `upgrade-deps.sh` | Update Rust dependencies to their latest compatible versions |
-| `audit-unused-deps.sh` | Find unused dependencies in the workspace with `cargo machete` |
-| [`clean-target.sh`](#clean-targetsh) | Reclaim disk space in `target/` without discarding what you are still building |
+| `sync-version.sh`                          | Validate and optionally sync the version between `Cargo.toml` and `package.json`         |
+| `upgrade-deps.sh`                          | Update Rust dependencies to their latest compatible versions                             |
+| `audit-unused-deps.sh`                     | Find unused dependencies in the workspace with `cargo machete`                           |
+| [`clean-target.sh`](#clean-targetsh)       | Reclaim disk space in `target/` without discarding what you are still building           |
 
 ## Analysis & Profiling
 
-| Script | Purpose |
-| --- | --- |
-| [`analyze-binary-size.sh`](#analyze-binary-sizesh) | Analyse the size of the release binary, breaking down contributions by crate and dependency |
-| `doc-coverage-report.sh` | Generate a documentation coverage report for all public API items |
-| `profile-macos.sh` | Profile the versatiles binary on macOS using Instruments (CPU Profiler) |
-| `stress-ddos.sh` | Load-test a local tile server with parallel HTTP requests |
-| [`bench-container-initialisation.sh`](#bench-container-initialisationsh) | Measure how long each container reader takes to open, with and without a pyramid scan |
-| [`benchmark_server.sh`](#benchmark_serversh) | Measure average server response time over a 21x21 grid of tile requests |
+| Script                                                                   | Purpose                                                                                     |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| [`analyze-binary-size.sh`](#analyze-binary-sizesh)                       | Analyse the size of the release binary, breaking down contributions by crate and dependency |
+| `doc-coverage-report.sh`                                                 | Generate a documentation coverage report for all public API items                           |
+| `profile-macos.sh`                                                       | Profile the versatiles binary on macOS using Instruments (CPU Profiler)                     |
+| `stress-ddos.sh`                                                         | Load-test a local tile server with parallel HTTP requests                                   |
+| [`bench-container-initialisation.sh`](#bench-container-initialisationsh) | Measure how long each container reader takes to open, with and without a pyramid scan       |
+| [`benchmark_server.sh`](#benchmark_serversh)                             | Measure average server response time over a 21x21 grid of tile requests                     |
 
 ## CI / Workflow
 
-| Script | Purpose |
-| --- | --- |
-| `workflow-create-release.sh` | Fetches the last two version tags, assembles a changelog from the commits between them, and creates a draft pre-release. For use inside GitHub Actions |
-| [`workflow-pack-upload.sh`](#workflow-pack-uploadsh) | CI script: package a compiled binary as `.tar.gz` and upload it to a GitHub release |
-| `workflow-pack-upload.ps1` | PowerShell equivalent of `workflow-pack-upload.sh` for Windows CI runners |
+| Script                                               | Purpose                                                                                                                                                |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `workflow-create-release.sh`                         | Fetches the last two version tags, assembles a changelog from the commits between them, and creates a draft pre-release. For use inside GitHub Actions |
+| [`workflow-pack-upload.sh`](#workflow-pack-uploadsh) | CI script: package a compiled binary as `.tar.gz` and upload it to a GitHub release                                                                    |
+| `workflow-pack-upload.ps1`                           | PowerShell equivalent of `workflow-pack-upload.sh` for Windows CI runners                                                                              |
 
 ## Usage notes
 

@@ -32,27 +32,26 @@ VPL (VersaTiles Pipeline Language) allows you to define complex tile processing 
 
 ```yaml
 # Optional HTTP server configuration
-server: 
-  
+server:
   # Optional IP address to bind to
   # Defaults to "0.0.0.0"
   ip: 0.0.0.0
-  
+
   # Optional HTTP server port
   # Defaults to 8080
   port: 8080
-  
+
   # Optional flag to prefer faster compression over smaller size
   # Defaults to false (smaller compression)
   minimal_recompression: false
-  
+
   # Optional flag to disable the `/api` endpoints
   # Defaults to false (enabling the API)
   disable_api: false
-  
+
   # Optional `Cache-Control` header sent with every tile
   # Defaults to "public, max-age=2419200, no-transform" (four weeks)
-  # 
+  #
   # Tile URLs are stable — built from a mount name and a coordinate — so a
   # client answers from its own cache when the tiles behind a mount change.
   # Four weeks suits a public, CDN-fronted server; a preview or a test
@@ -61,8 +60,7 @@ server:
   cache_control: public, max-age=2419200, no-transform
 
 # Optional Cross-Origin Resource Sharing (CORS) settings
-cors: 
-  
+cors:
   # Allowed origins for CORS requests
   # Defaults to `["*"]` (all origins allowed).
   # Supports:
@@ -71,36 +69,36 @@ cors:
   # - Globs at the start of the domain like `*.example.com`
   # - Globs at the end of the domain like `example.*`
   # - Regular expressions enclosed in slashes like `/domain\..*$/`
-  allowed_origins: 
+  allowed_origins:
     - "https://example.org"
     - "*.example.net"
-  
+
   # Optional duration for preflight cache in seconds
   # Defaults to 86400 (1 day)
   max_age_seconds: 86400
 
 # Optional extra HTTP response headers to add to every response
 # For example, cache control or timing headers
-extra_response_headers: 
+extra_response_headers:
   Cache-Control: public, max-age=86400, immutable
   CDN-Cache-Control: max-age=604800
 
 # Optional list of static content sources
-static: 
+static:
   - # Path to static files, archive (e.g., .tar.gz) or directory containing assets
     src: ./frontend.tar
-    
+
     # Optional URL prefix where static files will be served
     # Defaults to root ("/")
     prefix: /
 
 # Optional list of tile sources
-tiles: 
+tiles:
   - # Optional name identifier for this tile source
     # Tiles will be available under `/tiles/{name}/...`
     # Defaults to the basename (e.g., "osm" for "osm.versatiles")
     name: osm
-    
+
     # Path or URL to the tile data source
     # Can be a local file (.versatiles, .mbtiles, .pmtiles, .tar),
     # a remote URL, or a VPL pipeline file (.vpl).
