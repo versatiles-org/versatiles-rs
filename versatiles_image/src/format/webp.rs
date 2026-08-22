@@ -11,7 +11,7 @@
 //!   encoding to reduce size.
 //! - Quality boundary: `< 100` = lossy, `>= 100` = lossless, `None` defaults to 95.
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 use image::{DynamicImage, ImageBuffer};
 use libwebp_sys::{
 	VP8StatusCode, WebPBitstreamFeatures, WebPConfig, WebPDecodeRGB, WebPDecodeRGBA, WebPEncode, WebPFree,
@@ -178,39 +178,78 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 			bail!("Failed to decode WebP image: invalid WebP data");
 		}
 
-		#[allow(clippy::cast_sign_loss)]
-		let width = features.width as u32;
-		#[allow(clippy::cast_sign_loss)]
-		let height = features.height as u32;
+		let has_alpha = features.has_alpha != 0;
+		let channels = if has_alpha { 4 } else { 3 };
 
-		if features.has_alpha != 0 {
-			let mut out_width: i32 = 0;
-			let mut out_height: i32 = 0;
-			let ptr = WebPDecodeRGBA(data.as_ptr(), data.len(), &raw mut out_width, &raw mut out_height);
-			if ptr.is_null() {
-				bail!("Failed to decode WebP image: RGBA decoding failed");
-			}
-			let buf_size = (width as usize) * (height as usize) * 4;
-			let pixels = std::slice::from_raw_parts(ptr, buf_size).to_vec();
-			WebPFree(ptr.cast::<std::ffi::c_void>());
+		// `out_width`/`out_height` are written by the decoder and describe the
+		// buffer it actually allocated. The header's `features.width/height`
+		// describe what the file *claims*, are parsed from untrusted input, and
+		// need not agree — an extended-format file carries a canvas size next to
+		// its frame size. Sizing the copy from the claim rather than from the
+		// buffer is a heap overread waiting for the two to diverge, so only the
+		// decoder's own numbers are used below.
+		let mut out_width: i32 = 0;
+		let mut out_height: i32 = 0;
+		let ptr = if has_alpha {
+			WebPDecodeRGBA(data.as_ptr(), data.len(), &raw mut out_width, &raw mut out_height)
+		} else {
+			WebPDecodeRGB(data.as_ptr(), data.len(), &raw mut out_width, &raw mut out_height)
+		};
+		if ptr.is_null() {
+			bail!(
+				"Failed to decode WebP image: {} decoding failed",
+				if has_alpha { "RGBA" } else { "RGB" }
+			);
+		}
+
+		// The buffer is libwebp's, so it is copied and freed before any `?` can
+		// return: an early exit between the two would leak it.
+		let copied = copy_decoded_pixels(ptr, out_width, out_height, channels);
+		WebPFree(ptr.cast::<std::ffi::c_void>());
+		let (width, height, pixels) = copied?;
+
+		if has_alpha {
 			let buffer = ImageBuffer::from_raw(width, height, pixels)
 				.ok_or_else(|| anyhow::anyhow!("Failed to create RGBA image buffer"))?;
 			Ok(DynamicImage::ImageRgba8(buffer))
 		} else {
-			let mut out_width: i32 = 0;
-			let mut out_height: i32 = 0;
-			let ptr = WebPDecodeRGB(data.as_ptr(), data.len(), &raw mut out_width, &raw mut out_height);
-			if ptr.is_null() {
-				bail!("Failed to decode WebP image: RGB decoding failed");
-			}
-			let buf_size = (width as usize) * (height as usize) * 3;
-			let pixels = std::slice::from_raw_parts(ptr, buf_size).to_vec();
-			WebPFree(ptr.cast::<std::ffi::c_void>());
 			let buffer = ImageBuffer::from_raw(width, height, pixels)
 				.ok_or_else(|| anyhow::anyhow!("Failed to create RGB image buffer"))?;
 			Ok(DynamicImage::ImageRgb8(buffer))
 		}
 	}
+}
+
+/// Copy `width * height * channels` bytes out of a buffer libwebp allocated.
+///
+/// Every value that decides how much is read is validated first: the dimensions
+/// come back from C as `i32` and must be positive, and their product must not
+/// overflow `usize` — on a 32-bit target a large enough image would otherwise
+/// wrap to a small length and, worse, a wrapped length in the other direction
+/// would read past the allocation.
+///
+/// # Safety
+/// `ptr` must point to a readable buffer of at least `width * height * channels`
+/// bytes, which is what `WebPDecodeRGB`/`WebPDecodeRGBA` return alongside the
+/// `width`/`height` they wrote.
+unsafe fn copy_decoded_pixels(ptr: *const u8, width: i32, height: i32, channels: usize) -> Result<(u32, u32, Vec<u8>)> {
+	let width = u32::try_from(width).context("WebP decoder returned a negative width")?;
+	let height = u32::try_from(height).context("WebP decoder returned a negative height")?;
+	ensure!(
+		width > 0 && height > 0,
+		"WebP decoder returned an empty image ({width}x{height})"
+	);
+
+	let size = usize::try_from(width)
+		.ok()
+		.and_then(|w| w.checked_mul(usize::try_from(height).ok()?))
+		.and_then(|pixels| pixels.checked_mul(channels))
+		.context("WebP image is too large to fit in memory on this platform")?;
+
+	// SAFETY: the caller guarantees `ptr` covers `size` bytes; `size` is exactly
+	// the buffer size implied by the dimensions the decoder reported.
+	let pixels = unsafe { std::slice::from_raw_parts(ptr, size) }.to_vec();
+	Ok((width, height, pixels))
 }
 
 #[cfg(test)]
@@ -222,6 +261,41 @@ mod tests {
 	/// and verification that fully opaque RGBA is stored without alpha.
 	use super::*;
 	use crate::traits::DynamicImageTraitTest;
+
+	/// The decoded image is sized by the decoder, not by the file header, and a
+	/// roundtrip still returns the dimensions it went in with.
+	#[test]
+	fn decode_uses_the_decoder_dimensions() -> Result<()> {
+		for image in [DynamicImage::new_test_rgb(), DynamicImage::new_test_rgba()] {
+			let decoded = blob2image(&image2blob_lossless(&image)?)?;
+			assert_eq!(
+				(decoded.width(), decoded.height()),
+				(image.width(), image.height()),
+				"roundtrip changed the image size"
+			);
+		}
+		Ok(())
+	}
+
+	/// Input the decoder rejects must produce an error rather than a copy out of
+	/// a buffer that was never allocated. The truncated case matters most: the
+	/// header still announces the full size, so a copy sized from the header
+	/// would read past what libwebp returned.
+	#[test]
+	fn decode_rejects_malformed_input() -> Result<()> {
+		assert!(blob2image(&Blob::from(Vec::new())).is_err(), "empty input");
+		assert!(
+			blob2image(&Blob::from(b"RIFF____WEBPVP8 ".to_vec())).is_err(),
+			"header only"
+		);
+
+		let blob = image2blob_lossless(&DynamicImage::new_test_rgb())?;
+		let bytes = blob.as_slice();
+		let truncated = Blob::from(bytes[..bytes.len() / 2].to_vec());
+		assert!(blob2image(&truncated).is_err(), "truncated input");
+
+		Ok(())
+	}
 
 	#[rstest]
 	#[case::rgb(          DynamicImage::new_test_rgb(),  false, 0.95, vec![0.9, 0.5, 1.5]     )]
