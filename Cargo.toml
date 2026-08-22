@@ -25,6 +25,13 @@ keywords = ["versatiles", "mbtiles", "pmtiles", "tiles", "map"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/versatiles-org/versatiles-rs"
+# The oldest toolchain the workspace compiles on, enforced by the "Linux: MSRV"
+# CI job and repeated in README.md. 1.94 is not a free choice: `h3o` (a default
+# dependency of versatiles_pipeline) calls `f64::mul_add` inside a `const fn`,
+# which is not stable before it, and declares no `rust-version` of its own — so
+# without this line a 1.93 user gets a compile error inside a dependency rather
+# than cargo's "requires rustc 1.94" message.
+rust-version = "1.94"
 version = "4.9.1"
 exclude = [
 	".githooks/",
