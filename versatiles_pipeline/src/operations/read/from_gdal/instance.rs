@@ -13,8 +13,6 @@ pub struct Instance {
 	age: u32,
 }
 
-unsafe impl Sync for Instance {}
-
 impl Instance {
 	/// Create a new GDAL dataset instance wrapper.
 	pub fn new(dataset: Dataset) -> Self {

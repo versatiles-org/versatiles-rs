@@ -165,7 +165,13 @@ pub trait TransformOperationFactoryTrait: OperationFactoryTrait {
 /// The factory invokes this to open external containers referenced by VPL `read` nodes.
 /// It receives the resolved path (relative to `dir`), an optional SSH identity
 /// for that one source, and returns a boxed reader.
-type Callback = Box<dyn Fn(DataLocation, Option<PathBuf>) -> BoxFuture<'static, Result<Box<dyn TileSource>>>>;
+///
+/// `Send + Sync` because a [`PipelineFactory`] is shared across the worker
+/// threads that build an operation graph. The bound belongs here rather than on
+/// the factory: stated on the callback type, the compiler checks it for every
+/// callback anyone installs.
+type Callback =
+	Box<dyn Fn(DataLocation, Option<PathBuf>) -> BoxFuture<'static, Result<Box<dyn TileSource>>> + Send + Sync>;
 
 /// Builder that registers read/transform operation factories and produces an operation graph.
 ///
@@ -181,6 +187,15 @@ pub struct PipelineFactory {
 	create_reader: Callback,
 	runtime: TilesRuntime,
 }
+
+// The factory is shared while an operation graph is built, so it has to be
+// thread-safe. Every field is, including the `Callback` — see the bound on its
+// type above — so the compiler derives both traits and this assertion is what
+// notices if that ever stops being true.
+const _: fn() = || {
+	fn assert_send_sync<T: Send + Sync>() {}
+	assert_send_sync::<PipelineFactory>();
+};
 
 impl PipelineFactory {
 	/// Creates an empty factory with no registered operations.
@@ -471,9 +486,6 @@ impl PipelineFactory {
 		self.runtime.clone()
 	}
 }
-
-unsafe impl Sync for PipelineFactory {}
-unsafe impl Send for PipelineFactory {}
 
 /// Metadata about a single VPL operation, used for code generation.
 #[cfg(feature = "codegen")]

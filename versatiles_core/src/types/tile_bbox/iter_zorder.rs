@@ -76,7 +76,6 @@ impl Iterator for ZOrderIterator {
 }
 
 // Safe because all fields are Send (u8, Vec, u32)
-unsafe impl Send for ZOrderIterator {}
 
 impl TileBBox {
 	/// Returns an iterator over all tile coordinates in Z-order (Morton curve).

@@ -596,9 +596,17 @@ impl Default for Blob {
 	}
 }
 
-// Allow `Blob` to be used in multithreaded scenarios
-unsafe impl Send for Blob {}
-unsafe impl Sync for Blob {}
+// `Blob` crosses threads constantly — tile streams, caches, the server's
+// response path — so `Send + Sync` is part of what it promises. It gets both
+// automatically from its `Vec<u8>`, and this assertion is what keeps that
+// honest: it fails the build if a field is ever added that is not thread-safe.
+//
+// It replaces a hand-written `unsafe impl Send`/`Sync` pair, which claimed the
+// same property while switching off the check that verifies it.
+const _: fn() = || {
+	fn assert_send_sync<T: Send + Sync>() {}
+	assert_send_sync::<Blob>();
+};
 
 #[cfg(test)]
 mod tests {

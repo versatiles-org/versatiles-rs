@@ -119,8 +119,6 @@ pub struct RasterSource {
 	extra_nodata: Vec<Vec<u8>>,
 }
 
-unsafe impl Sync for RasterSource {}
-
 impl RasterSource {
 	/// Create a `RasterSource` from a file path.
 	#[context("Failed to create RasterSource from file {:?}", filename)]

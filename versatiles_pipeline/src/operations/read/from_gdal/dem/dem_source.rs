@@ -139,8 +139,6 @@ pub struct DemSource {
 	cutline: Option<Cutline>,
 }
 
-unsafe impl Sync for DemSource {}
-
 impl DemSource {
 	#[context("Failed to create DemSource from file {:?}", filename)]
 	pub async fn new(

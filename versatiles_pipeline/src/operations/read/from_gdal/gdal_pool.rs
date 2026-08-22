@@ -58,7 +58,15 @@ pub struct GdalPool {
 	pixel_size: f64,
 }
 
-unsafe impl Sync for GdalPool {}
+// The pool is shared by every task that needs a dataset, so it has to be
+// thread-safe. Note what is deliberately *not* asserted: `Instance`. A GDAL
+// dataset must not be touched by two threads at once, and the pool is what makes
+// that impossible — it lends each instance out exclusively — so `Instance` has
+// no business being `Sync`, and no longer claims to be.
+const _: fn() = || {
+	fn assert_send_sync<T: Send + Sync>() {}
+	assert_send_sync::<GdalPool>();
+};
 
 impl GdalPool {
 	/// Create a `GdalPool` from a factory that opens a fresh GDAL `Dataset` on demand.

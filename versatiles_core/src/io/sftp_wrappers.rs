@@ -29,8 +29,14 @@ pub struct SftpWriteStream {
 	_keepalive: SftpKeepalive,
 }
 
-// ssh2::Session and ssh2::File are backed by libssh2 ref-counted handles.
-unsafe impl Send for SftpWriteStream {}
+// Held across await points and moved between worker threads, so it has to be
+// thread-safe — which it is on its own: `ssh2::Session` and `ssh2::File` are
+// backed by libssh2 handles that ssh2 guards with a mutex, and are `Send` and
+// `Sync` themselves.
+const _: fn() = || {
+	fn assert_send_sync<T: Send + Sync>() {}
+	assert_send_sync::<SftpWriteStream>();
+};
 
 impl SftpWriteStream {
 	/// Open a remote file for writing from an SFTP URL.
@@ -75,9 +81,12 @@ pub struct SftpFileSystem {
 	_keepalive: SftpKeepalive,
 }
 
-// ssh2::Sftp is backed by libssh2 ref-counted handles.
-unsafe impl Send for SftpFileSystem {}
-unsafe impl Sync for SftpFileSystem {}
+// Same as above: `ssh2::Sftp` is a libssh2 handle that ssh2 guards internally,
+// so the wrapper is thread-safe without help.
+const _: fn() = || {
+	fn assert_send_sync<T: Send + Sync>() {}
+	assert_send_sync::<SftpFileSystem>();
+};
 
 impl SftpFileSystem {
 	/// Connect to an SFTP server and use the URL path as the base directory.

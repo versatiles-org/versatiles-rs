@@ -37,10 +37,15 @@ impl Backend {
 	}
 }
 
-// Backend is Send+Sync because Local uses only PathBuf (Send+Sync) and
-// Sftp wraps SftpFileSystem (Send+Sync) in a Mutex.
-unsafe impl Send for Backend {}
-unsafe impl Sync for Backend {}
+// The sink is shared across the tasks writing a directory tree, so `Backend`
+// has to be thread-safe. Both variants earn it on their own: `Local` holds only
+// a `PathBuf`, and `Sftp` holds its file system behind a `Mutex`. Asserting it
+// rather than hand-implementing it makes a change to either variant a compile
+// error instead of a silent one.
+const _: fn() = || {
+	fn assert_send_sync<T: Send + Sync>() {}
+	assert_send_sync::<Backend>();
+};
 
 /// A tile sink that writes pre-compressed blobs to a directory tree.
 ///
