@@ -165,6 +165,45 @@ mod tests {
 		assert_eq!(response.compression, TileCompression::Uncompressed);
 	}
 
+	/// A request path that climbs out of the served directory must not reach the
+	/// file it points at. Before `Url` resolved dot segments, `GET /../secret.txt`
+	/// returned the file's contents with status 200: `Path::starts_with` compares
+	/// components lexically, so `<folder>/../secret.txt` passed the containment
+	/// check and the operating system resolved the `..` on open.
+	#[tokio::test]
+	async fn path_traversal_is_rejected() {
+		let temp_dir = assert_fs::TempDir::new().unwrap();
+		let public = temp_dir.path().join("public");
+		std::fs::create_dir(&public).unwrap();
+		std::fs::write(public.join("index.html"), b"public").unwrap();
+		std::fs::write(temp_dir.path().join("secret.txt"), b"TOP-SECRET").unwrap();
+
+		let folder = Folder::from(&public).unwrap();
+
+		// The file inside the folder is still served.
+		assert!(
+			folder
+				.get_data(&Url::from("index.html"), &TargetCompression::from_none())
+				.await
+				.is_some()
+		);
+
+		for request in [
+			"/../secret.txt",
+			"/../../secret.txt",
+			"/./../secret.txt",
+			"//../secret.txt",
+		] {
+			assert!(
+				folder
+					.get_data(&Url::from(request), &TargetCompression::from_none())
+					.await
+					.is_none(),
+				"{request} escaped the served folder"
+			);
+		}
+	}
+
 	#[tokio::test]
 	async fn test_compressed_files() {
 		// Setup: Create a temporary directory with Brotli and Gzip compressed files

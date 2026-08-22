@@ -1,7 +1,7 @@
 //! This module provides a simple `Url` struct to represent and manipulate internal URL-like paths.
 //! It is mainly used within the server for file and directory handling.
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Result, ensure};
 use versatiles_derive::context;
@@ -32,7 +32,17 @@ pub struct Url {
 }
 
 impl Url {
-	/// Creates a new `Url` from a string, ensuring it starts with `/`.
+	/// Creates a new `Url` from a string, ensuring it starts with `/` and
+	/// contains no `.` or `..` segments.
+	///
+	/// Dot segments are resolved the way RFC 3986 §5.2.4 requires, and `..` can
+	/// never climb above the root: `/../etc/passwd` becomes `/etc/passwd`, not a
+	/// path outside whatever the URL is later resolved against. Empty segments
+	/// collapse with them, so `//etc/passwd` cannot survive as an absolute path
+	/// either. Both matter because a `Url` is joined onto a served directory —
+	/// see [`Url::to_pathbug`], which drops such segments a second time.
+	///
+	/// A trailing slash is preserved, since [`Url::is_dir`] reads it.
 	///
 	/// # Arguments
 	///
@@ -41,10 +51,21 @@ impl Url {
 	/// # Returns
 	///
 	/// A new `Url` instance starting with `/`.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles::server::Url;
+	/// assert_eq!(Url::from("/a/../b").to_string(), "/b");
+	/// assert_eq!(Url::from("/../../etc/passwd").to_string(), "/etc/passwd");
+	/// assert_eq!(Url::from("/a/./b/").to_string(), "/a/b/");
+	/// ```
 	#[must_use]
 	pub fn new(url: String) -> Url {
 		let str = if url.starts_with('/') { url } else { format!("/{url}") };
-		Url { str }
+		Url {
+			str: remove_dot_segments(&str),
+		}
 	}
 
 	/// Checks if the current `Url` starts with the given prefix `Url`.
@@ -126,7 +147,22 @@ impl Url {
 	/// A `PathBuf` representing the combined path.
 	#[must_use]
 	pub fn to_pathbug(&self, base: &Path) -> PathBuf {
-		base.join(&self.str[1..])
+		// Appended segment by segment rather than joined as one string: a joined
+		// `..` would be resolved by the operating system on `open`, and a joined
+		// absolute path would discard `base` entirely. `Url::new` already strips
+		// dot segments; this is the second line of defence, and the one that also
+		// covers the platform-specific cases — a `\` separator or a `C:` drive
+		// prefix inside a single URL segment, which mean nothing on unix but are
+		// path syntax on Windows.
+		let mut path = base.to_path_buf();
+		for segment in self.str.split('/') {
+			// Kept only if the segment is exactly one ordinary path component.
+			let mut components = Path::new(segment).components();
+			if let (Some(Component::Normal(name)), None) = (components.next(), components.next()) {
+				path.push(name);
+			}
+		}
+		path
 	}
 
 	/// Pushes a filename onto the `Url`, modifying it in place.
@@ -135,7 +171,8 @@ impl Url {
 	///
 	/// * `filename` - A filename to append to the `Url`.
 	pub fn push(&mut self, filename: &str) {
-		self.str = self.join_as_string(filename);
+		// Via `new`, so a filename carrying dot segments is normalised here too.
+		self.str = Url::new(self.join_as_string(filename)).str;
 	}
 
 	/// Joins a filename to the `Url` and returns the resulting string.
@@ -155,6 +192,39 @@ impl Url {
 			format!("{}/{}", self.str, filename)
 		}
 	}
+}
+
+/// Resolves `.` and `..` segments and drops empty ones, per RFC 3986 §5.2.4.
+///
+/// A `..` with nothing to pop is discarded rather than escaping the root, which
+/// is the property the server depends on. `path` is expected to start with `/`,
+/// and the result always does.
+fn remove_dot_segments(path: &str) -> String {
+	// A path ending in a separator, `.` or `..` denotes a directory, and
+	// `is_dir` reads that from the string, so the trailing slash is restored
+	// after the segments are rebuilt.
+	let is_dir = path.ends_with('/') || path.ends_with("/.") || path.ends_with("/..");
+
+	let mut segments: Vec<&str> = Vec::new();
+	for segment in path.split('/') {
+		match segment {
+			"" | "." => {}
+			".." => {
+				segments.pop();
+			}
+			s => segments.push(s),
+		}
+	}
+
+	let mut result = String::with_capacity(path.len() + 1);
+	for segment in segments {
+		result.push('/');
+		result.push_str(segment);
+	}
+	if result.is_empty() || (is_dir && !result.ends_with('/')) {
+		result.push('/');
+	}
+	result
 }
 
 impl std::fmt::Display for Url {
@@ -177,6 +247,75 @@ mod tests {
 	fn test_url_new() {
 		assert_eq!(Url::from("test").str, "/test");
 		assert_eq!(Url::from("/test").str, "/test");
+	}
+
+	/// `..` must be resolved away, never carried into the path a request is
+	/// later resolved against, and never able to climb above the root.
+	#[test]
+	fn dot_segments_are_resolved() {
+		assert_eq!(Url::from("/a/../b").str, "/b");
+		assert_eq!(Url::from("/a/./b").str, "/a/b");
+		assert_eq!(Url::from("/../secret.txt").str, "/secret.txt");
+		assert_eq!(Url::from("/../../../../etc/passwd").str, "/etc/passwd");
+		assert_eq!(Url::from("/a/b/../..").str, "/");
+		assert_eq!(Url::from("//etc/passwd").str, "/etc/passwd");
+		assert_eq!(Url::from("/").str, "/");
+		assert_eq!(Url::from("").str, "/");
+	}
+
+	/// Normalisation must not eat the trailing slash `is_dir` reads.
+	#[test]
+	fn dot_segment_removal_keeps_directory_marker() {
+		assert!(Url::from("/a/./b/").is_dir());
+		assert_eq!(Url::from("/a/./b/").str, "/a/b/");
+		assert_eq!(Url::from("/a/b/..").str, "/a/");
+		assert!(!Url::from("/a/b").is_dir());
+	}
+
+	/// `push` normalises too — it is how a directory request becomes
+	/// `…/index.html`.
+	#[test]
+	fn push_normalises() {
+		let mut url = Url::from("/assets/");
+		url.push("../../etc/passwd");
+		assert_eq!(url.str, "/etc/passwd");
+	}
+
+	/// The path built for a static file must stay inside the served directory,
+	/// whatever the request looked like.
+	#[test]
+	fn to_pathbug_cannot_escape_the_base() {
+		let base = Path::new("/srv/www");
+		for request in [
+			"/../secret.txt",
+			"/../../../../etc/passwd",
+			"//etc/passwd",
+			"/a/../../secret.txt",
+			"/./../secret.txt",
+		] {
+			let path = Url::from(request).to_pathbug(base);
+			assert!(path.starts_with(base), "{request} escaped the base directory: {path:?}");
+			assert!(
+				!path.components().any(|c| c == Component::ParentDir),
+				"{request} left a parent-dir component in {path:?}"
+			);
+		}
+	}
+
+	/// A single segment that is path syntax on some platform must not become one
+	/// — `to_pathbug` drops it rather than letting the OS interpret it.
+	#[test]
+	fn to_pathbug_drops_non_plain_segments() {
+		let base = Path::new("/srv/www");
+		assert_eq!(Url::from("/a/b").to_pathbug(base), Path::new("/srv/www/a/b"));
+
+		// Constructed directly: `new` would already have removed these.
+		let url = Url { str: "/..".to_string() };
+		assert_eq!(url.to_pathbug(base), base);
+		let url = Url {
+			str: "/x/./y".to_string(),
+		};
+		assert_eq!(url.to_pathbug(base), Path::new("/srv/www/x/y"));
 	}
 
 	#[test]

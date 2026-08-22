@@ -90,6 +90,22 @@ impl DataReaderTrait for DataReaderFile {
 	/// which is thread-safe and allows concurrent reads without race conditions.
 	#[context("while reading range {range:?} from file '{}'", self.name)]
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
+		// Checked before the allocation, not after. Container headers carry byte
+		// ranges as raw u64s, so a 127-byte crafted PMTiles file could ask for a
+		// four-exabyte read: `vec![0; n]` then aborts the process through
+		// `handle_alloc_error`, which no caller can catch. Comparing against the
+		// file size first turns that into an ordinary error.
+		let end = range
+			.offset
+			.checked_add(range.length)
+			.context("range offset + length overflows u64")?;
+		ensure!(
+			end <= self.size,
+			"range {range} is outside file '{}', which is {} bytes long",
+			self.name,
+			self.size
+		);
+
 		let mut buffer = vec![0; usize::try_from(range.length).context("Range length too large for this platform")?];
 
 		// Use position-independent I/O - thread-safe by design
@@ -235,6 +251,36 @@ mod tests {
 
 		// Check if the read range matches the expected text
 		assert_eq!(blob.as_str(), "o, wor");
+
+		Ok(())
+	}
+
+	/// A range that reaches past the end of the file is rejected before the
+	/// buffer for it is allocated. Container headers hold byte ranges as raw
+	/// u64s, so this is what a crafted file asks for; allocating first meant
+	/// `handle_alloc_error` aborted the process instead of returning an error.
+	#[tokio::test]
+	async fn read_range_outside_file_is_an_error() -> Result<()> {
+		let temp_file_path = NamedTempFile::new("bounds.txt")?;
+		{
+			let mut temp_file = File::create(&temp_file_path)?;
+			temp_file.write_all(b"Hello, world!")?; // 13 bytes
+		}
+		let reader = DataReaderFile::open(temp_file_path.path())?;
+
+		// The whole file still reads.
+		assert_eq!(
+			reader.read_range(&ByteRange::new(0, 13)).await?.as_str(),
+			"Hello, world!"
+		);
+
+		// One byte too many, an absurd length, and an offset past the end.
+		assert!(reader.read_range(&ByteRange::new(0, 14)).await.is_err());
+		assert!(reader.read_range(&ByteRange::new(13, 1)).await.is_err());
+		assert!(reader.read_range(&ByteRange::new(0, 1 << 62)).await.is_err());
+
+		// offset + length overflowing u64 is an error, not a wrap.
+		assert!(reader.read_range(&ByteRange::new(u64::MAX, 1)).await.is_err());
 
 		Ok(())
 	}

@@ -33,7 +33,10 @@
 
 #![allow(dead_code)]
 
-use std::io::{Cursor, Read};
+use std::{
+	io::{Cursor, Read},
+	ops::Range,
+};
 
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
@@ -75,8 +78,12 @@ impl DataReaderTrait for DataReaderBlob {
 	/// * A Result containing a Blob with the read data or an error.
 	#[context("while reading range {range:?} from DataReaderBlob")]
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
-		let start = usize::try_from(range.offset).context("Offset too large for this platform")?;
-		let end = usize::try_from(range.offset + range.length).context("End offset too large for this platform")?;
+		// `to_range_usize` adds offset and length with `checked_add`. Doing the
+		// arithmetic here instead used to overflow on a range like
+		// `offset = u64::MAX, length = 1`, which comes straight out of a container
+		// header: the sum wrapped to 0, the bounds check below passed, and slicing
+		// `start..0` panicked.
+		let Range { start, end } = range.to_range_usize()?;
 		let blob = self.blob.get_ref();
 		ensure!(
 			end <= blob.len(),
@@ -278,6 +285,25 @@ mod tests {
 		let n = data_reader.read(&mut buffer).unwrap();
 		assert_eq!(n, 2);
 		assert_eq!(&buffer[..2], &[4, 5]);
+	}
+
+	/// `offset + length` must not wrap. With the addition unchecked,
+	/// `offset = u64::MAX, length = 1` summed to 0, slipped past the bounds
+	/// check, and panicked while slicing `usize::MAX..0`.
+	#[tokio::test]
+	async fn read_range_offset_overflow_is_an_error() -> Result<()> {
+		let data_reader = DataReaderBlob::from(Blob::from("Hello world!"));
+
+		assert!(data_reader.read_range(&ByteRange::new(u64::MAX, 1)).await.is_err());
+		assert!(
+			data_reader
+				.read_range(&ByteRange::new(u64::MAX, u64::MAX))
+				.await
+				.is_err()
+		);
+		assert!(data_reader.read_range(&ByteRange::new(1, u64::MAX)).await.is_err());
+
+		Ok(())
 	}
 
 	// Test edge cases for 'read_range' method
