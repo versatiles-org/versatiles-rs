@@ -1,4 +1,7 @@
 use std::{
+	fmt::Write as _,
+	fs::{OpenOptions, create_dir_all},
+	io::Write as _,
 	net::{TcpStream, ToSocketAddrs},
 	path::{Path, PathBuf},
 	sync::{
@@ -11,7 +14,7 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 use reqwest::Url;
-use ssh2::Session;
+use ssh2::{CheckResult, HashType, HostKeyType, KnownHostFileKind, KnownHostKeyFormat, Session};
 
 /// A shared SSH session that can be swapped on reconnect — the unit the keepalive
 /// pings. `ssh2::Session` is `Clone` and internally `Arc<Mutex<_>>`-guarded, so the
@@ -157,6 +160,10 @@ pub fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Session> 
 		.unwrap_or(500);
 	session.set_timeout(timeout_ms);
 	session.handshake()?;
+
+	// Who the server is, before we tell it who we are: the password branch below
+	// would otherwise hand the credentials to whatever answered the connection.
+	verify_host_key(&session, host, port)?;
 	// SSH-level keepalive prevents the server's idle disconnect. Disabled in tests
 	// because the in-process test server never acknowledges keepalive or channel-close
 	// replies, which would make session teardown block for `api_timeout` per drop.
@@ -294,6 +301,176 @@ fn try_key_auth(session: &Session, username: &str) -> Result<()> {
 	bail!("no suitable SSH key found in ~/.ssh/")
 }
 
+/// Check the server's host key against the known-hosts file, accept-new style.
+///
+/// The three outcomes mirror OpenSSH's `StrictHostKeyChecking=accept-new`:
+///
+/// - **known and equal** — proceed;
+/// - **unknown host** — record the key and proceed, so a first connection is not
+///   a dead end;
+/// - **known but different** — abort. This is the case worth failing on: either
+///   the server was rebuilt, or someone is sitting in the middle of the
+///   connection.
+///
+/// Accept-new leaves exactly one hole — the very first connection to a host,
+/// which has nothing to compare against. Closing that hole needs a fingerprint
+/// distributed out of band, which this tool has no channel for; everything after
+/// that first connection is protected.
+///
+/// # Errors
+/// Returns an error on a mismatched key, and if the known-hosts file cannot be
+/// read or written.
+fn verify_host_key(session: &Session, host: &str, port: u16) -> Result<()> {
+	let Some(path) = known_hosts_path()? else {
+		log::warn!("SFTP host key verification is disabled for {host}:{port} (VERSATILES_SFTP_KNOWN_HOSTS)");
+		return Ok(());
+	};
+
+	// Copied out of the session: the slice points into libssh2's memory, and it
+	// is handed to calls on that same session below.
+	let (key, key_type) = {
+		let (key, key_type) = session.host_key().context("the server presented no host key")?;
+		(key.to_vec(), key_type)
+	};
+
+	let mut known_hosts = session.known_hosts()?;
+	if path.exists() {
+		known_hosts
+			.read_file(&path, KnownHostFileKind::OpenSSH)
+			.with_context(|| format!("failed to read the known hosts file {}", path.display()))?;
+	}
+
+	// `check_port` tries `[host]:port` first and then the plain `host`, so an
+	// entry written by OpenSSH for the default port still matches.
+	match known_hosts.check_port(host, port, &key) {
+		CheckResult::Match => {
+			log::debug!("SFTP host key for {host}:{port} matches {}", path.display());
+			Ok(())
+		}
+		CheckResult::NotFound => {
+			remember_host_key(session, &path, host, port, &key, key_type)
+				.with_context(|| format!("failed to record the host key for {host}:{port}"))?;
+			log::warn!(
+				"SFTP: {host}:{port} was not known; recorded its host key ({}) in {}",
+				fingerprint(session),
+				path.display()
+			);
+			Ok(())
+		}
+		CheckResult::Mismatch => bail!(
+			"host key verification failed for {host}:{port}: the server presented {}, which is not the key recorded in {}. \
+			 Either the server's key changed, or this connection is being intercepted. \
+			 If the change was expected, remove the stale line from that file.",
+			fingerprint(session),
+			path.display()
+		),
+		CheckResult::Failure => bail!(
+			"host key verification failed for {host}:{port}: the key could not be checked against {}",
+			path.display()
+		),
+	}
+}
+
+/// Append one known-hosts line for `host`/`port`.
+///
+/// Written into a *second*, empty set rather than by rewriting the file: with
+/// only this entry in it, `write_string` yields exactly the line to append.
+/// `write_file` would instead round-trip every existing entry through libssh2
+/// and drop whatever it does not model — `@cert-authority` markers, comments —
+/// from a file this tool does not own.
+fn remember_host_key(
+	session: &Session,
+	path: &Path,
+	host: &str,
+	port: u16,
+	key: &[u8],
+	key_type: HostKeyType,
+) -> Result<()> {
+	// OpenSSH's convention: the bracketed form only for a non-default port.
+	let name = if port == 22 {
+		host.to_owned()
+	} else {
+		format!("[{host}]:{port}")
+	};
+
+	let mut entry = session.known_hosts()?;
+	entry.add(&name, key, "added by versatiles", KnownHostKeyFormat::from(key_type))?;
+	let hosts = entry.hosts()?;
+	let host_entry = hosts.first().context("the host key could not be encoded")?;
+	let line = entry.write_string(host_entry, KnownHostFileKind::OpenSSH)?;
+
+	if let Some(dir) = path.parent() {
+		create_dir_all(dir).with_context(|| format!("failed to create {}", dir.display()))?;
+	}
+	// A file whose last line has no terminator would otherwise absorb the new
+	// entry into it, corrupting both.
+	let needs_newline = match std::fs::read(path) {
+		Ok(bytes) => !bytes.is_empty() && !bytes.ends_with(b"\n"),
+		Err(_) => false,
+	};
+
+	let mut file = OpenOptions::new()
+		.create(true)
+		.append(true)
+		.open(path)
+		.with_context(|| format!("failed to open {} for appending", path.display()))?;
+	if needs_newline {
+		writeln!(file)?;
+	}
+	writeln!(file, "{}", line.trim_end())?;
+
+	Ok(())
+}
+
+/// The known-hosts file accept-new reads and appends to.
+///
+/// `VERSATILES_SFTP_KNOWN_HOSTS` overrides the path; setting it to `off` (or
+/// `none`, or nothing) disables verification, which is the escape hatch for
+/// throwaway hosts whose key changes on every boot. Under `cfg(test)` the
+/// default is "disabled" so that running the suite never reads or writes the
+/// developer's own `~/.ssh/known_hosts`; the tests that exercise this code set
+/// the variable to a temporary file.
+fn known_hosts_path() -> Result<Option<PathBuf>> {
+	if let Ok(value) = std::env::var("VERSATILES_SFTP_KNOWN_HOSTS") {
+		let value = value.trim();
+		if value.is_empty() || value.eq_ignore_ascii_case("off") || value.eq_ignore_ascii_case("none") {
+			return Ok(None);
+		}
+		return Ok(Some(PathBuf::from(value)));
+	}
+
+	#[cfg(test)]
+	{
+		Ok(None)
+	}
+	#[cfg(not(test))]
+	{
+		let home = dirs_home().context(
+			"could not determine the home directory holding ~/.ssh/known_hosts, so the SFTP host key cannot be verified. \
+			 Set VERSATILES_SFTP_KNOWN_HOSTS to a file path, or to 'off' to connect without verifying",
+		)?;
+		Ok(Some(home.join(".ssh").join("known_hosts")))
+	}
+}
+
+/// The server's SHA-256 host key fingerprint, for log and error messages.
+///
+/// Hex rather than OpenSSH's base64 spelling: it needs no dependency, and these
+/// strings are read by a human comparing two values, not parsed.
+fn fingerprint(session: &Session) -> String {
+	session.host_key_hash(HashType::Sha256).map_or_else(
+		|| "an unknown host key".to_owned(),
+		|hash| {
+			let mut out = String::from("SHA256(hex):");
+			for byte in hash {
+				// Infallible for a String; the trait method returns a Result anyway.
+				let _ = write!(out, "{byte:02x}");
+			}
+			out
+		},
+	)
+}
+
 fn dirs_home() -> Result<PathBuf> {
 	home_dir().context("could not determine home directory")
 }
@@ -429,6 +606,58 @@ mod tests {
 		assert_eq!(remote_path(&url), PathBuf::from(expected));
 	}
 
+	/// Sets `VERSATILES_SFTP_KNOWN_HOSTS` for the duration of a test and restores
+	/// the previous value on drop.
+	///
+	/// `set_var` is unsafe in edition 2024 because another thread may be reading
+	/// the environment concurrently. Every test using this guard is marked
+	/// `#[serial_test::serial]`, so no other test is running, and nothing else in
+	/// the process reads this variable outside `known_hosts_path`.
+	struct KnownHostsEnv(Option<String>);
+
+	impl KnownHostsEnv {
+		fn set(value: &str) -> Self {
+			let previous = std::env::var("VERSATILES_SFTP_KNOWN_HOSTS").ok();
+			unsafe { std::env::set_var("VERSATILES_SFTP_KNOWN_HOSTS", value) };
+			Self(previous)
+		}
+	}
+
+	impl Drop for KnownHostsEnv {
+		fn drop(&mut self) {
+			match self.0.take() {
+				Some(value) => unsafe { std::env::set_var("VERSATILES_SFTP_KNOWN_HOSTS", value) },
+				None => unsafe { std::env::remove_var("VERSATILES_SFTP_KNOWN_HOSTS") },
+			}
+		}
+	}
+
+	/// `off`, `none` and an empty value all mean "do not verify"; anything else
+	/// is a path.
+	#[test]
+	#[serial_test::serial]
+	fn known_hosts_path_from_env() {
+		{
+			let _env = KnownHostsEnv::set("off");
+			assert_eq!(known_hosts_path().unwrap(), None);
+		}
+		{
+			let _env = KnownHostsEnv::set("NONE");
+			assert_eq!(known_hosts_path().unwrap(), None);
+		}
+		{
+			let _env = KnownHostsEnv::set("  ");
+			assert_eq!(known_hosts_path().unwrap(), None);
+		}
+		{
+			let _env = KnownHostsEnv::set("/tmp/some/known_hosts");
+			assert_eq!(
+				known_hosts_path().unwrap(),
+				Some(PathBuf::from("/tmp/some/known_hosts"))
+			);
+		}
+	}
+
 	#[cfg(all(feature = "ssh2", unix))]
 	mod sftp_server_tests {
 		use super::*;
@@ -443,6 +672,102 @@ mod tests {
 				.await
 				.unwrap();
 			assert!(session.is_ok(), "expected successful auth: {:?}", session.err());
+		}
+
+		/// Accept-new: an unknown host connects and its key is written down; the
+		/// next connection to the same host matches that record instead of
+		/// adding a second one.
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
+		async fn known_hosts_accept_new_records_the_key() {
+			let dir = tempfile::tempdir().unwrap();
+			let path = dir.path().join("known_hosts");
+			let _env = KnownHostsEnv::set(path.to_str().unwrap());
+
+			// An existing file whose last line has no terminator: the new entry
+			// must not be appended onto it.
+			std::fs::write(&path, b"# an existing entry without a trailing newline").unwrap();
+
+			let server = TestSftpServer::start().await;
+			let url = server.url("/");
+			let port = url.port().unwrap();
+
+			let first = tokio::task::spawn_blocking({
+				let url = url.clone();
+				move || open_session(&url, None)
+			})
+			.await
+			.unwrap();
+			assert!(first.is_ok(), "first connection failed: {:?}", first.err());
+
+			let recorded = std::fs::read_to_string(&path).unwrap();
+			assert!(
+				recorded.contains(&format!("[127.0.0.1]:{port}")),
+				"host key was not recorded: {recorded:?}"
+			);
+
+			let second = tokio::task::spawn_blocking(move || open_session(&url, None))
+				.await
+				.unwrap();
+			assert!(second.is_ok(), "second connection failed: {:?}", second.err());
+
+			let contents = std::fs::read_to_string(&path).unwrap();
+			let lines = contents
+				.lines()
+				.filter(|line| !line.trim().is_empty())
+				.collect::<Vec<_>>();
+			assert_eq!(
+				lines.len(),
+				2,
+				"expected the pre-existing line plus one recorded key, got {lines:?}"
+			);
+			assert_eq!(lines[0], "# an existing entry without a trailing newline");
+		}
+
+		/// A recorded key that does not match the one the server presents aborts
+		/// the connection — the case accept-new exists to catch.
+		///
+		/// Built from two test servers, each of which generates its own Ed25519
+		/// key: the entry recorded for the first is repointed at the second's
+		/// port, so the key material is genuine and only the host association is
+		/// wrong.
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
+		async fn known_hosts_mismatch_is_refused() {
+			let dir = tempfile::tempdir().unwrap();
+			let path = dir.path().join("known_hosts");
+			let _env = KnownHostsEnv::set(path.to_str().unwrap());
+
+			let server_a = TestSftpServer::start().await;
+			let url_a = server_a.url("/");
+			let port_a = url_a.port().unwrap();
+			let recorded = tokio::task::spawn_blocking(move || open_session(&url_a, None))
+				.await
+				.unwrap();
+			assert!(recorded.is_ok(), "could not record server A: {:?}", recorded.err());
+
+			let server_b = TestSftpServer::start().await;
+			let url_b = server_b.url("/");
+			let port_b = url_b.port().unwrap();
+			assert_ne!(port_a, port_b, "the two test servers reused a port");
+
+			let entry = std::fs::read_to_string(&path)
+				.unwrap()
+				.replace(&format!("[127.0.0.1]:{port_a}"), &format!("[127.0.0.1]:{port_b}"));
+			std::fs::write(&path, entry).unwrap();
+
+			let result = tokio::task::spawn_blocking(move || open_session(&url_b, None))
+				.await
+				.unwrap();
+			// `ssh2::Session` is not `Debug`, so `expect_err` is not available.
+			let error = match result {
+				Ok(_) => panic!("a mismatched host key must not connect"),
+				Err(error) => format!("{error:#}"),
+			};
+			assert!(
+				error.contains("host key verification failed"),
+				"unexpected error: {error}"
+			);
 		}
 
 		#[tokio::test(flavor = "current_thread")]

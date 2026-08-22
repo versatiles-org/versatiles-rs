@@ -79,6 +79,11 @@ Default port is **22**. Connect timeout is 30 s. TCP and SSH keepalive both fire
 (`VERSATILES_SFTP_KEEPALIVE_SECS`), and a single SFTP operation may take 30 s
 (`VERSATILES_SFTP_TIMEOUT_MS`) before it is given up on.
 
+**Host keys** are verified against `~/.ssh/known_hosts` before authentication,
+OpenSSH `accept-new` style: an unknown host is recorded and accepted, a host
+whose key has _changed_ is refused. `VERSATILES_SFTP_KNOWN_HOSTS` selects a
+different file, or disables the check when set to `off`.
+
 **Authentication** is tried in this order:
 
 1. Password embedded in the URL (`sftp://user:password@host/…`)

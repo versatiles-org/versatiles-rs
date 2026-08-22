@@ -242,6 +242,16 @@ VersaTiles works with **tile containers** - files or directories containing map 
 versatiles serve https://download.versatiles.org/osm.versatiles
 ```
 
+#### SFTP host keys
+
+SFTP connections verify the server's host key against `~/.ssh/known_hosts` before authenticating, following OpenSSH's `accept-new` policy:
+
+- **Host already known, key matches** — connect.
+- **Host not known yet** — record the key and connect, so a first connection is not a dead end. The new entry is appended; the rest of the file is left untouched.
+- **Host known, key differs** — refuse to connect. Either the server was rebuilt, or the connection is being intercepted. If the change was expected, remove the stale line from `known_hosts`.
+
+`VERSATILES_SFTP_KNOWN_HOSTS` points at a different file, or disables verification entirely when set to `off` — appropriate only for a host whose key changes by design, and it gives up the protection against a man-in-the-middle, including the password sent by URL authentication.
+
 ### Commands
 
 Run `versatiles` to see available commands:
@@ -717,6 +727,7 @@ SFTP connection tuning:
 - `VERSATILES_SFTP_TIMEOUT_MS` - Per-operation SFTP API timeout in milliseconds (default `30000`). Raise it if you see "API timeout expired" / "draining incoming flow" errors on congested links.
 - `VERSATILES_SFTP_KEEPALIVE_SECS` - TCP and SSH keepalive interval in seconds (default `15`), keeping connections alive across idle gaps.
 - `VERSATILES_SFTP_MAX_CONNECTIONS` - Maximum number of pooled SFTP connections per server.
+- `VERSATILES_SFTP_KNOWN_HOSTS` - Known-hosts file used to verify SFTP server keys (default `~/.ssh/known_hosts`). Set it to `off` to skip verification, which also skips the protection against a man-in-the-middle. See [SFTP host keys](#sftp-host-keys).
 
 Memory for tile-gathering operations:
 
