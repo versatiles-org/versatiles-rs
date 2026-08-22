@@ -737,6 +737,7 @@ Memory for reading containers (PMTiles / VersaTiles):
 
 - `VERSATILES_CHUNK_MAX_BYTES` - Maximum size of a single coalesced byte-range read when streaming tiles, in bytes (default `67108864` = 64 MiB). Each chunk is read as one in-memory blob.
 - `VERSATILES_CHUNK_READ_MEMORY` - Budget for total in-flight chunk-read bytes (default `268435456` = 256 MiB). The number of chunks read concurrently is `budget / chunk_size`, so peak read memory stays near this value regardless of CPU count. Lower it on memory-constrained machines, or raise it to read further ahead on fast links.
+- `VERSATILES_MAX_DECOMPRESSED_BYTES` - Ceiling on the result of a single decompression, in bytes (default `268435456` = 256 MiB); `0` removes it. Compressed data in a container is untrusted input, and gzip, Brotli and Zstd all expand zeroes by a factor of a thousand or more, so without a ceiling a small crafted file decides how much memory the process asks for. The ceiling is far above anything the formats produce in practice — the largest blob VersaTiles decompresses in one call is a `.versatiles` block index, under a megabyte — so raise it only if a legitimate input hits it.
 
 Memory for writing `.versatiles` containers:
 

@@ -1,9 +1,10 @@
 use std::io::Cursor;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use brotli::{BrotliCompress, BrotliDecompress, enc::BrotliEncoderParams};
 use versatiles_derive::context;
 
+use super::super::{LimitedWriter, max_decompressed_bytes};
 use crate::Blob;
 
 /// Compresses data using Brotli.
@@ -84,14 +85,47 @@ pub fn compress_brotli_fast(blob: &Blob) -> Result<Blob> {
 /// * If the Brotli decompression process fails.
 #[context("Decompressing blob ({} bytes) using Brotli", blob.len())]
 pub fn decompress_brotli(blob: &Blob) -> Result<Blob> {
+	decompress_brotli_bounded(blob, max_decompressed_bytes())
+}
+
+/// Decompress into a sink bounded by `limit` bytes (`0` = unbounded).
+///
+/// Split out so the bound itself is testable without touching the process
+/// environment. See [`super::super::limit`] for why the bound exists.
+fn decompress_brotli_bounded(blob: &Blob, limit: u64) -> Result<Blob> {
 	let mut cursor = Cursor::new(blob.as_slice());
-	let mut decompressed_data = Vec::new();
-	BrotliDecompress(&mut cursor, &mut decompressed_data).context("Failed to decompress data using Brotli")?;
-	Ok(Blob::from(decompressed_data))
+	let mut writer = LimitedWriter::new(limit);
+	BrotliDecompress(&mut cursor, &mut writer).context("Failed to decompress data using Brotli")?;
+	Ok(Blob::from(writer.into_vec()))
 }
 
 #[cfg(test)]
 mod tests {
+	/// A megabyte of zeroes compresses to a couple of kilobytes; decompressing
+	/// it stops at the limit instead of running to completion. This is the shape
+	/// of a decompression bomb, and the reason the bound exists.
+	#[test]
+	fn decompression_stops_at_the_limit() -> Result<()> {
+		let bomb = compress_brotli_fast(&Blob::from(vec![0u8; 1_000_000]))?;
+		assert!(
+			bomb.len() < 100_000,
+			"the test bomb did not compress: {} bytes",
+			bomb.len()
+		);
+
+		let error = decompress_brotli_bounded(&bomb, 64 * 1024).unwrap_err();
+		assert!(
+			format!("{error:#}").contains("exceeds the limit"),
+			"unexpected error: {error:#}"
+		);
+
+		// A limit that fits the data, and 0 for no limit at all, both decompress fully.
+		assert_eq!(decompress_brotli_bounded(&bomb, 2_000_000)?.len(), 1_000_000);
+		assert_eq!(decompress_brotli_bounded(&bomb, 0)?.len(), 1_000_000);
+
+		Ok(())
+	}
+
 	use super::{super::super::test_utils::generate_test_data, *};
 
 	#[test]

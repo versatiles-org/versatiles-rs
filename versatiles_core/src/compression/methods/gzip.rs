@@ -1,9 +1,10 @@
-use std::io::Read;
+use std::io::{Read, copy};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use flate2::bufread::{GzDecoder, GzEncoder};
 use versatiles_derive::context;
 
+use super::super::{LimitedWriter, max_decompressed_bytes};
 use crate::Blob;
 
 /// Compresses data using Gzip with highest quality settings.
@@ -76,16 +77,47 @@ pub fn compress_gzip_fast(blob: &Blob) -> Result<Blob> {
 /// * If the Gzip decompression process fails.
 #[context("Decompressing blob ({} bytes) using Gzip", blob.len())]
 pub fn decompress_gzip(blob: &Blob) -> Result<Blob> {
+	decompress_gzip_bounded(blob, max_decompressed_bytes())
+}
+
+/// Decompress into a sink bounded by `limit` bytes (`0` = unbounded).
+///
+/// Split out so the bound itself is testable without touching the process
+/// environment. See [`super::super::limit`] for why the bound exists.
+fn decompress_gzip_bounded(blob: &Blob, limit: u64) -> Result<Blob> {
 	let mut decoder = GzDecoder::new(blob.as_slice());
-	let mut decompressed_data = Vec::new();
-	decoder
-		.read_to_end(&mut decompressed_data)
-		.context("Failed to decompress data using Gzip")?;
-	Ok(Blob::from(decompressed_data))
+	let mut writer = LimitedWriter::new(limit);
+	copy(&mut decoder, &mut writer).context("Failed to decompress data using Gzip")?;
+	Ok(Blob::from(writer.into_vec()))
 }
 
 #[cfg(test)]
 mod tests {
+	/// A megabyte of zeroes compresses to a couple of kilobytes; decompressing
+	/// it stops at the limit instead of running to completion. This is the shape
+	/// of a decompression bomb, and the reason the bound exists.
+	#[test]
+	fn decompression_stops_at_the_limit() -> Result<()> {
+		let bomb = compress_gzip(&Blob::from(vec![0u8; 1_000_000]))?;
+		assert!(
+			bomb.len() < 100_000,
+			"the test bomb did not compress: {} bytes",
+			bomb.len()
+		);
+
+		let error = decompress_gzip_bounded(&bomb, 64 * 1024).unwrap_err();
+		assert!(
+			format!("{error:#}").contains("exceeds the limit"),
+			"unexpected error: {error:#}"
+		);
+
+		// A limit that fits the data, and 0 for no limit at all, both decompress fully.
+		assert_eq!(decompress_gzip_bounded(&bomb, 2_000_000)?.len(), 1_000_000);
+		assert_eq!(decompress_gzip_bounded(&bomb, 0)?.len(), 1_000_000);
+
+		Ok(())
+	}
+
 	use super::{super::super::test_utils::generate_test_data, *};
 
 	#[test]

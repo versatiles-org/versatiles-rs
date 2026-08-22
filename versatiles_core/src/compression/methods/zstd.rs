@@ -3,6 +3,7 @@ use std::io::Cursor;
 use anyhow::Result;
 use versatiles_derive::context;
 
+use super::super::{LimitedWriter, max_decompressed_bytes};
 use crate::Blob;
 
 /// Compresses data using Zstd with highest quality settings.
@@ -69,12 +70,46 @@ pub fn compress_zstd_fast(blob: &Blob) -> Result<Blob> {
 /// * If the Zstd decompression process fails.
 #[context("Decompressing blob ({} bytes) using Zstd", blob.len())]
 pub fn decompress_zstd(blob: &Blob) -> Result<Blob> {
-	let decompressed = zstd::decode_all(Cursor::new(blob.as_slice()))?;
-	Ok(Blob::from(decompressed))
+	decompress_zstd_bounded(blob, max_decompressed_bytes())
+}
+
+/// Decompress into a sink bounded by `limit` bytes (`0` = unbounded).
+///
+/// Split out so the bound itself is testable without touching the process
+/// environment. See [`super::super::limit`] for why the bound exists.
+fn decompress_zstd_bounded(blob: &Blob, limit: u64) -> Result<Blob> {
+	let mut writer = LimitedWriter::new(limit);
+	zstd::stream::copy_decode(Cursor::new(blob.as_slice()), &mut writer)?;
+	Ok(Blob::from(writer.into_vec()))
 }
 
 #[cfg(test)]
 mod tests {
+	/// A megabyte of zeroes compresses to a couple of kilobytes; decompressing
+	/// it stops at the limit instead of running to completion. This is the shape
+	/// of a decompression bomb, and the reason the bound exists.
+	#[test]
+	fn decompression_stops_at_the_limit() -> Result<()> {
+		let bomb = compress_zstd(&Blob::from(vec![0u8; 1_000_000]))?;
+		assert!(
+			bomb.len() < 100_000,
+			"the test bomb did not compress: {} bytes",
+			bomb.len()
+		);
+
+		let error = decompress_zstd_bounded(&bomb, 64 * 1024).unwrap_err();
+		assert!(
+			format!("{error:#}").contains("exceeds the limit"),
+			"unexpected error: {error:#}"
+		);
+
+		// A limit that fits the data, and 0 for no limit at all, both decompress fully.
+		assert_eq!(decompress_zstd_bounded(&bomb, 2_000_000)?.len(), 1_000_000);
+		assert_eq!(decompress_zstd_bounded(&bomb, 0)?.len(), 1_000_000);
+
+		Ok(())
+	}
+
 	use super::{super::super::test_utils::generate_test_data, *};
 
 	#[test]
