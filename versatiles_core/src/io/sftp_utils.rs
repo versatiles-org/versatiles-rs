@@ -140,9 +140,6 @@ pub fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Session> 
 		}
 	}
 
-	// SSH handshake
-	let mut session = Session::new()?;
-	session.set_tcp_stream(tcp);
 	// API timeout for individual SFTP operations. Too low and a slow write under load
 	// turns into a `Session(-9)` ("API timeout expired") / "draining incoming flow"
 	// error mid-transfer; 30 s (configurable) tolerates congested links. In tests
@@ -158,6 +155,35 @@ pub fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Session> 
 		.find(|(k, _)| k == "timeout_ms")
 		.and_then(|(_, v)| v.parse::<u32>().ok())
 		.unwrap_or(500);
+
+	// The same budget, at the socket. `Session::set_timeout` alone does not bound a
+	// read: libssh2 only consults it after `recv` returns, and on a blocking socket
+	// `recv` does not return — it waits for a packet the peer may never send. A
+	// server that accepts the connection and then goes silent therefore stalls the
+	// process for good, which is how it behaved: a stuck handshake was measured
+	// parked in `recvfrom` for over an hour, with `VERSATILES_SFTP_TIMEOUT_MS`
+	// documented as 30 s and enforcing nothing.
+	//
+	// With `SO_RCVTIMEO`/`SO_SNDTIMEO` set, that `recv` returns `EWOULDBLOCK`
+	// instead, libssh2 treats it as "not ready yet" and falls into its own bounded
+	// wait — so the session timeout starts applying to reads as well, and a silent
+	// peer produces an error rather than a hang. Best-effort: if the option cannot
+	// be set, the connection is still usable, just unbounded as before.
+	// `0` means "no timeout" to libssh2, and a zero `Duration` is rejected by
+	// `set_read_timeout`, so the two agree by leaving the socket unbounded.
+	if timeout_ms > 0 {
+		let socket_timeout = Duration::from_millis(u64::from(timeout_ms));
+		if let Err(e) = tcp.set_read_timeout(Some(socket_timeout)) {
+			log::warn!("failed to set the read timeout on the SFTP socket: {e}");
+		}
+		if let Err(e) = tcp.set_write_timeout(Some(socket_timeout)) {
+			log::warn!("failed to set the write timeout on the SFTP socket: {e}");
+		}
+	}
+
+	// SSH handshake
+	let mut session = Session::new()?;
+	session.set_tcp_stream(tcp);
 	session.set_timeout(timeout_ms);
 	session.handshake()?;
 
@@ -674,6 +700,42 @@ mod tests {
 			assert!(session.is_ok(), "expected successful auth: {:?}", session.err());
 		}
 
+		/// A peer that accepts the connection and then says nothing must not stall
+		/// the client for ever.
+		///
+		/// `Session::set_timeout` does not cover this on its own: libssh2 only
+		/// consults it once `recv` returns, and on a blocking socket `recv` waits
+		/// for a packet that never arrives. This hung indefinitely before the
+		/// socket carried its own timeout — a run of this suite was found parked
+		/// in `recvfrom` for over an hour.
+		#[test]
+		fn a_silent_server_does_not_hang_the_client() {
+			use std::{net::TcpListener, time::Instant};
+
+			let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+			let port = listener.local_addr().unwrap().port();
+
+			// Accept, then hold the connection open without sending a banner.
+			let server = std::thread::spawn(move || {
+				let accepted = listener.accept();
+				std::thread::sleep(Duration::from_secs(2));
+				drop(accepted);
+			});
+
+			let url = Url::parse(&format!("sftp://user:pass@127.0.0.1:{port}/?timeout_ms=300")).unwrap();
+			let started = Instant::now();
+			let result = open_session(&url, None);
+			let elapsed = started.elapsed();
+
+			assert!(result.is_err(), "a server that never speaks must not authenticate");
+			assert!(
+				elapsed < Duration::from_millis(1500),
+				"open_session waited {elapsed:?}; the socket timeout should have ended it"
+			);
+
+			server.join().ok();
+		}
+
 		/// Accept-new: an unknown host connects and its key is written down; the
 		/// next connection to the same host matches that record instead of
 		/// adding a second one.
@@ -912,18 +974,71 @@ mod tests {
 			assert!(error.contains(&target), "should name the target: {error}");
 		}
 
+		/// Points `HOME` at an empty directory and hides any SSH agent for the
+		/// duration of a test.
+		///
+		/// The three tests below hand an *unconnected* `Session` to the auth
+		/// helpers, and what those helpers do next depends on the machine: if
+		/// `~/.ssh/id_rsa` happens to exist, `try_key_auth` passes it to libssh2,
+		/// which then blocks reading a socket the session does not have. That is
+		/// not hypothetical — it parked a full `cargo test` run in `recvfrom` for
+		/// over an hour, and the suite passes on CI only because CI has no keys.
+		/// With an empty `HOME` the helpers find nothing to try and return the
+		/// error each test is actually about.
+		///
+		/// `set_var` is unsafe in edition 2024 because another thread may read the
+		/// environment concurrently; every user of this guard is
+		/// `#[serial_test::serial]`.
+		struct IsolatedHome {
+			_dir: tempfile::TempDir,
+			home: Option<std::ffi::OsString>,
+			agent: Option<std::ffi::OsString>,
+		}
+
+		impl IsolatedHome {
+			fn set() -> Self {
+				let dir = tempfile::tempdir().unwrap();
+				let home = std::env::var_os("HOME");
+				let agent = std::env::var_os("SSH_AUTH_SOCK");
+				unsafe {
+					std::env::set_var("HOME", dir.path());
+					std::env::remove_var("SSH_AUTH_SOCK");
+				}
+				Self { _dir: dir, home, agent }
+			}
+		}
+
+		impl Drop for IsolatedHome {
+			fn drop(&mut self) {
+				unsafe {
+					match self.home.take() {
+						Some(value) => std::env::set_var("HOME", value),
+						None => std::env::remove_var("HOME"),
+					}
+					match self.agent.take() {
+						Some(value) => std::env::set_var("SSH_AUTH_SOCK", value),
+						None => std::env::remove_var("SSH_AUTH_SOCK"),
+					}
+				}
+			}
+		}
+
 		#[test]
+		#[serial_test::serial]
 		fn the_agent_reports_when_it_has_nothing_for_this_user() {
 			// Exercised directly rather than through open_session: whether a
 			// developer machine has an agent running decides which branch runs,
 			// and both end in the same place for an unknown user.
+			let _home = IsolatedHome::set();
 			let session = Session::new().unwrap();
 			let result = try_agent_auth(&session, "definitely-not-a-real-user");
 			assert!(result.is_err(), "an unconnected session cannot authenticate");
 		}
 
 		#[test]
+		#[serial_test::serial]
 		fn the_default_key_files_are_reported_when_none_authenticates() {
+			let _home = IsolatedHome::set();
 			let session = Session::new().unwrap();
 			let error = format!(
 				"{:#}",
@@ -933,7 +1048,9 @@ mod tests {
 		}
 
 		#[test]
+		#[serial_test::serial]
 		fn the_ssh_config_is_reported_when_it_offers_nothing() {
+			let _home = IsolatedHome::set();
 			let session = Session::new().unwrap();
 			let error = format!(
 				"{:#}",
