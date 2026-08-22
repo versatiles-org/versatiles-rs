@@ -3,7 +3,8 @@
 #
 # Steps (in order): rustfmt, cargo check (no-default-features, server, cli,
 # server+cli, default, all-features), clippy with -D warnings, tests with all
-# features, and doc build with -D warnings and the gdal feature.
+# features, doc build with -D warnings and the gdal feature, and the cargo-deny
+# dependency policy.
 #
 # These mirror what CI checks, with one gap: CI also runs the test suite under
 # the default and gdal feature sets, while this runs it only under
@@ -97,6 +98,25 @@ result=$(RUSTDOCFLAGS="-D warnings" cargo doc --color=always --no-deps --feature
 if [ $? -ne 0 ]; then
    echo -e "$result\nERROR DURING: cargo doc"
    exit 1
+fi
+
+# Dependency policy: RustSec advisories, the licence allow-list, and the
+# crates.io-only source rule. Mirrors the "Linux: Dependencies" CI job; the
+# policy and its exceptions live in deny.toml.
+#
+# Skipped rather than failed when cargo-deny is missing: it is a separate
+# binary rather than part of the toolchain, so a contributor without it should
+# still get a usable check run. CI always has it.
+cd $PROJECT_DIR
+if command -v cargo-deny >/dev/null 2>&1; then
+   echo "cargo deny"
+   result=$(cargo deny check 2>&1)
+   if [ $? -ne 0 ]; then
+      echo -e "$result\nERROR DURING: cargo deny"
+      exit 1
+   fi
+else
+   echo "cargo deny (skipped: not installed — brew install cargo-deny)"
 fi
 
 echo "Rust checks passed!"

@@ -108,6 +108,67 @@ jobs:
         run: cargo fmt-check
 
   # ============================================================================
+  # Linux: Dependencies
+  # ============================================================================
+  # The only check that looks at *published* vulnerabilities: clippy and CodeQL
+  # analyse the code in this repository, cargo-deny reads Cargo.lock against the
+  # RustSec advisory database. It also enforces the licence allow-list and the
+  # crates.io-only source rule. The policy, and the reasoning behind every
+  # accepted exception, lives in deny.toml.
+  #
+  # Unlike every other job here, this one can turn red without anything in the
+  # repository changing — a new advisory published against a dependency that was
+  # already there. That is what the weekly `schedule` trigger at the top of this
+  # file is for, and why a green run is not durable the way a green test run is.
+  #
+  # No toolchain and no compilation: the action ships a prebuilt cargo-deny, and
+  # the checks read the manifests and the lockfile.
+  linux-deny:
+    name: "Linux: Dependencies"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check dependencies
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
+  # ============================================================================
+  # Linux: MSRV
+  # ============================================================================
+  # `rust-version` in the root Cargo.toml is a promise to anyone depending on
+  # these crates from crates.io, and nothing else here keeps it honest: every
+  # other job runs `stable`, which is always new enough. This one pins the
+  # declared minimum, so raising it becomes a deliberate edit rather than
+  # something that happens the first time a newer language feature is used —
+  # or, as happened before this job existed, the first time a dependency starts
+  # needing one.
+  #
+  # Libraries and binaries only. `--all-targets` would drag in dev-dependencies
+  # (`serial_test` alone declares 1.93.1), and those are not part of what a
+  # consumer compiles. Default features for the same reason: `gdal` is optional
+  # and needs the container image to build at all.
+  #
+  # Deliberately uncached — see "Cache policy" above. The repository sits on
+  # GitHub's 10 GB cache ceiling, so a second toolchain's target directory would
+  # not add space, it would evict someone else's entry.
+  linux-msrv:
+    name: "Linux: MSRV"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Keep in sync with `rust-version` in the root Cargo.toml.
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.94
+
+      - name: Check workspace
+        run: cargo check --workspace --lib --bins
+
+  # ============================================================================
   # Linux: Docs
   # ============================================================================
   linux-docs:
@@ -639,11 +700,13 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - linux-coverage
+      - linux-deny
       - linux-docs
       - linux-feature-checks
       - linux-feature-matrix
       - linux-arm-test
       - linux-format
+      - linux-msrv
       - linux-musl-test
       - linux-nodejs
       - macos-gdal

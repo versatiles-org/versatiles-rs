@@ -1,0 +1,96 @@
+# cargo-deny configuration — dependency policy for the workspace.
+#
+# Four checks run from this file:
+#   advisories  RustSec advisories against Cargo.lock (the reason this exists;
+#               nothing else in CI looks at published vulnerabilities)
+#   licenses    every crate in the graph resolves to a license we may ship
+#   bans        duplicate and unwanted crates
+#   sources     every crate comes from crates.io and nowhere else
+#
+# Run locally with `cargo deny check` (brew install cargo-deny).
+
+[graph]
+# The gdal, ssh2, server and cli features each pull dependencies the default
+# build does not, and a vulnerability in one of them is still a vulnerability in
+# a released binary. Check the union.
+all-features = true
+
+[advisories]
+# `vulnerability` and `unsound` are always denied and no longer configurable.
+# Unmaintained crates are reported only when the workspace depends on one
+# directly: those we can act on. A transitive one is the upstream crate's
+# problem until it turns into an actual advisory.
+unmaintained = "workspace"
+yanked = "deny"
+
+# Advisories consciously accepted. Every entry needs a reason and, where the fix
+# is out of our hands, the upstream issue that would close it.
+ignore = [
+	# RUSTSEC-2023-0071 — timing sidechannel in `rsa` (Marvin Attack).
+	#
+	# Reached only through `russh`, the unix-only dev-dependency that runs the
+	# in-process SFTP test server (versatiles_core/Cargo.toml). It never enters
+	# a published crate or a released binary, and the keys it handles are
+	# generated per test run. RustSec lists no safe upgrade
+	# (https://github.com/RustCrypto/RSA/issues/626), so there is nothing to
+	# bump to; drop this entry once `russh` depends on a fixed `rsa`.
+	"RUSTSEC-2023-0071",
+]
+
+[licenses]
+# The workspace ships under MIT, so the allow list is the set of permissive
+# licenses compatible with distributing a linked binary. Anything else has to be
+# an explicit exception below, which is the point: a new copyleft dependency
+# should fail CI rather than arrive unnoticed.
+allow = [
+	"0BSD",
+	"Apache-2.0",
+	"Apache-2.0 WITH LLVM-exception",
+	"BSD-2-Clause",
+	"BSD-3-Clause",
+	"BSL-1.0",
+	"CC0-1.0",
+	"CDLA-Permissive-2.0",
+	"ISC",
+	"MIT",
+	"MIT-0",
+	"NCSA",
+	"Unicode-3.0",
+	"Unlicense",
+	"Zlib",
+]
+
+# Per-crate exceptions to the list above.
+#
+# MPL-2.0 is file-level copyleft: it obliges us to publish modifications to the
+# licensed files themselves, and we use both crates unmodified. That is
+# compatible with an MIT binary, but it is a licence we want to know about
+# crate by crate rather than blanket-allow.
+exceptions = [
+	{ name = "colored", allow = ["MPL-2.0"] },
+	{ name = "option-ext", allow = ["MPL-2.0"] },
+]
+
+confidence-threshold = 0.8
+
+[bans]
+# Duplicate versions are a size and compile-time cost, not a correctness
+# problem, and most of them are out of our control (a transitive crate pinning
+# an older `hashbrown` or `itertools`). Warn so the list stays visible; do not
+# fail CI on someone else's release schedule.
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+# Every dependency comes from crates.io today. Denying anything else means a git
+# or alternate-registry dependency cannot be introduced without editing this
+# file — the cheapest supply-chain guard available.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+# The one exception, and a temporary one: `gdal`/`gdal-sys` are pinned to a fork
+# carrying georust/gdal#714 (GDAL 3.13 compatibility), by exact revision — see
+# the comment on the dependency in versatiles_pipeline/Cargo.toml. Remove this
+# entry together with the pin, once a crates.io release includes the fix.
+allow-git = ["https://github.com/AlexanderWillner/gdal"]

@@ -12,8 +12,10 @@ Run all checks (Rust + Node.js):
 
 This runs:
 
-- Rust: `cargo check`, `cargo fmt-check`, `cargo clippy`, `cargo test`, `cargo doc`
+- Rust: `cargo check`, `cargo fmt-check`, `cargo clippy`, `cargo test`, `cargo doc`,
+  `cargo deny check` (skipped if cargo-deny is not installed)
 - Node.js: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`
+- Markdown: `markdownlint-cli2`, `prettier --check`
 
 ## Rust Commands
 
@@ -338,16 +340,34 @@ npm install
 
 ### What Runs in CI
 
-The GitHub Actions CI workflow runs:
+`.github/workflows/ci.yml` runs these jobs; `CI Success` depends on all of them
+and is the status branch protection requires.
 
-1. **Linux Job:**
-   - Install GDAL
-   - Rust checks (fmt, clippy, tests, doc)
-   - Node.js checks (typecheck, lint, format, tests)
-   - Code coverage
+| Job                      | What it checks                                            |
+| ------------------------ | --------------------------------------------------------- |
+| Markdown Lint            | markdownlint over every `*.md`                            |
+| Linux: Format            | `cargo fmt-check`                                         |
+| Linux: Dependencies      | `cargo deny check` — advisories, licences, sources        |
+| Linux: MSRV              | workspace compiles on the declared `rust-version`         |
+| Linux: Docs              | `cargo doc` with `-D warnings`, gdal feature              |
+| Linux: Node.js           | typecheck, lint, format, native build, Node tests         |
+| Linux: Coverage          | `cargo llvm-cov`, uploaded to Codecov                     |
+| Linux: Features (checks) | `cargo check` for no-default-features, cli, server        |
+| Linux: Features (matrix) | clippy and tests for default, gdal, all-features          |
+| Linux musl: Test         | test suite natively on musl (four release targets use it) |
+| Linux ARM: Test          | test suite on aarch64                                     |
+| Windows: Test            | test suite on x86_64 Windows                              |
+| Windows ARM: Test        | test suite on aarch64 Windows                             |
+| Windows: Node.js         | Node bindings on Windows                                  |
+| macOS: GDAL              | test suite on macOS with GDAL                             |
 
-2. **Windows Job:**
-   - Rust checks (fmt, tests)
+Two things are worth knowing about the dependency job: it is the only check that
+looks at _published_ vulnerabilities rather than at this repository's code, and
+it can therefore fail on an unchanged repository. The workflow's weekly schedule
+exists for exactly that.
+
+Separate workflows: `codeql.yml` (CodeQL for Rust and Actions, weekly and on
+`main`), `docs.yml`, and `release.yml`.
 
 ### Testing CI Locally
 
@@ -357,7 +377,9 @@ You can approximate CI checks by running:
 ./scripts/check.sh
 ```
 
-This covers most of what CI checks, except for coverage reporting.
+That covers the Rust, Node.js and Markdown checks on your own platform. It does
+not cover coverage reporting, the MSRV job, or any of the cross-platform jobs
+(musl, ARM, Windows, macOS) — those need CI.
 
 ## File Locations
 
