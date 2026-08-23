@@ -252,7 +252,12 @@ impl MaskGeometry {
 			return TileClassification::FullyOutside;
 		}
 
-		// Check all four corners of the tile
+		// The blur ramp is centred on the boundary and reaches `blur` metres to *both*
+		// sides of it: a pixel is fully opaque at a signed distance of `+blur` and only
+		// fully transparent at `-blur`. Both tests below therefore have to clear the
+		// whole band; testing the outside against 0 instead of `-blur` would classify a
+		// tile sitting in the outer half of the ramp as `FullyOutside`, and the
+		// operation drops such tiles — punching tile-shaped holes into the gradient.
 		let corners = [[tx_min, ty_min], [tx_min, ty_max], [tx_max, ty_min], [tx_max, ty_max]];
 
 		let mut all_inside = true;
@@ -261,14 +266,14 @@ impl MaskGeometry {
 		for corner in &corners {
 			let signed_dist = self.signed_distance(*corner);
 
-			if signed_dist > self.blur_meters {
-				// Corner is fully inside (beyond blur zone)
+			if signed_dist >= self.blur_meters {
+				// Corner is fully opaque (past the inner end of the ramp)
 				all_outside = false;
-			} else if signed_dist < 0.0 {
-				// Corner is fully outside
+			} else if signed_dist <= -self.blur_meters {
+				// Corner is fully transparent (past the outer end of the ramp)
 				all_inside = false;
 			} else {
-				// Corner is in the blur zone
+				// Corner is somewhere in the ramp
 				all_inside = false;
 				all_outside = false;
 			}
@@ -278,30 +283,27 @@ impl MaskGeometry {
 		let center = [f64::midpoint(tx_min, tx_max), f64::midpoint(ty_min, ty_max)];
 		let center_dist = self.signed_distance(center);
 
-		if center_dist < 0.0 {
-			all_inside = false;
-		} else if center_dist <= self.blur_meters {
-			all_inside = false;
+		if center_dist >= self.blur_meters {
 			all_outside = false;
+		} else if center_dist <= -self.blur_meters {
+			all_inside = false;
 		} else {
+			all_inside = false;
 			all_outside = false;
 		}
 
-		if all_inside {
-			// Additional check: ensure minimum distance to edge is greater than tile diagonal + blur
-			let tile_diagonal = ((tx_max - tx_min).powi(2) + (ty_max - ty_min).powi(2)).sqrt();
-			if center_dist > tile_diagonal / 2.0 + self.blur_meters {
-				return TileClassification::FullyInside;
-			}
+		// Corners and centre are five samples of a continuous field, so agreeing among
+		// themselves is not enough: the boundary can pass between them. Only a centre
+		// further from the boundary than the tile's own half-diagonal — plus the half
+		// of the ramp that lies on the tile's side of it — rules that out.
+		let tile_half_diagonal = ((tx_max - tx_min).powi(2) + (ty_max - ty_min).powi(2)).sqrt() / 2.0;
+
+		if all_inside && center_dist > tile_half_diagonal + self.blur_meters {
+			return TileClassification::FullyInside;
 		}
 
-		if all_outside {
-			// Check if the minimum distance from tile center to polygon is greater than
-			// the tile diagonal / 2, meaning the polygon cannot intersect the tile
-			let tile_diagonal = ((tx_max - tx_min).powi(2) + (ty_max - ty_min).powi(2)).sqrt();
-			if center_dist < -(tile_diagonal / 2.0) {
-				return TileClassification::FullyOutside;
-			}
+		if all_outside && center_dist < -(tile_half_diagonal + self.blur_meters) {
+			return TileClassification::FullyOutside;
 		}
 
 		TileClassification::Partial
@@ -377,13 +379,24 @@ impl MaskGeometry {
 		self.bounds_mercator
 	}
 
-	/// Get the mask bounds as a WGS84 geographic bounding box.
+	/// Get the area the mask can still tint, as a WGS84 geographic bounding box.
 	///
-	/// Converts the stored Mercator bounds back to longitude/latitude degrees.
-	/// Returns `None` if the inverse projection produces invalid coordinates.
+	/// This is the polygon's own bounds grown by [`Self::outer_threshold`], the distance
+	/// the buffer and the blur ramp together reach *outside* the geometry. The caller
+	/// clips the tile pyramid to it, so anything left out here is never rendered: bounding
+	/// the raw polygon would cut the outer half of the blur ramp off along a straight
+	/// line, which is exactly the artefact the ramp exists to avoid.
+	///
+	/// Converts the resulting Mercator bounds back to longitude/latitude degrees.
 	#[must_use]
-	pub fn geo_bbox(&self) -> Option<GeoBBox> {
+	pub fn geo_bbox(&self) -> GeoBBox {
+		// A negative buffer larger than the blur pulls the tinted area inside the
+		// polygon's bounds, but shrinking the box risks clipping a coastline that the
+		// bounds only just contain, so only growth is applied.
+		let reach = self.outer_threshold.max(0.0);
 		let [mx_min, my_min, mx_max, my_max] = self.bounds_mercator;
+		let (mx_min, my_min) = (mx_min - reach, my_min - reach);
+		let (mx_max, my_max) = (mx_max + reach, my_max + reach);
 
 		// Inverse spherical Mercator: x (meters) → longitude (degrees)
 		let lon_min = (mx_min / EARTH_RADIUS).to_degrees();
@@ -394,7 +407,10 @@ impl MaskGeometry {
 		let lat_min = (2.0 * (my_min / EARTH_RADIUS).exp().atan() - std::f64::consts::FRAC_PI_2).to_degrees();
 		let lat_max = (2.0 * (my_max / EARTH_RADIUS).exp().atan() - std::f64::consts::FRAC_PI_2).to_degrees();
 
-		GeoBBox::new(lon_min, lat_min, lon_max, lat_max).ok()
+		// Growing by the reach can push the box past the antimeridian or the poles;
+		// clamping keeps it a valid geographic box instead of failing the check and
+		// silently skipping the clip.
+		GeoBBox::new_normalized(lon_min, lat_min, lon_max, lat_max)
 	}
 
 	/// Check if a point is inside the polygon using R-tree accelerated ray casting.
@@ -730,6 +746,81 @@ mod tests {
 					}
 				}
 			}
+		}
+	}
+
+	/// A tile lying in the *outer* half of the blur ramp must not be classified
+	/// `FullyOutside`.
+	///
+	/// The ramp is centred on the boundary: alpha only reaches 0 at `-blur`, so a tile
+	/// that is entirely outside the polygon can still be visibly tinted. The operation
+	/// drops whatever this call reports as `FullyOutside`, so getting it wrong deletes
+	/// whole tiles out of the gradient and leaves a staircase of tile-sized holes along
+	/// the mask edge — the artefact grows with the blur radius and with the zoom level,
+	/// because the test it used to fail compared the centre distance against the tile's
+	/// own half-diagonal, which shrinks as tiles do.
+	#[test]
+	fn a_tile_in_the_outer_blur_band_is_not_dropped() {
+		let mask = oracle_mask(0.0, 200_000.0);
+		// Roughly 2° east of the shape's eastern edge at lon 18: outside the polygon,
+		// well inside a 200 km ramp, and small enough at z7 to clear its own diagonal.
+		let coord = TileCoord::from_geo(20.0, 17.0, 7).unwrap();
+		let bbox = coord.to_mercator_bbox();
+
+		assert_eq!(mask.classify_tile(bbox), TileClassification::Partial);
+		assert!(mask.compute_alpha_grid(bbox, 64, 64).iter().any(|&a| a > 0));
+	}
+
+	/// The classification must never disagree with the pixels it stands in for.
+	///
+	/// `FullyInside` passes the tile through untouched and `FullyOutside` deletes it, so
+	/// each is a claim about every pixel of the grid. This sweeps the tiles around the
+	/// shape's edge at the zoom and blur where the two shortcuts are tightest, and holds
+	/// them to that claim.
+	#[test]
+	fn classification_agrees_with_the_alpha_grid() {
+		for blur in [0.0, 50_000.0, 200_000.0] {
+			let mask = oracle_mask(0.0, blur);
+			for x in 130..146 {
+				for y in 108..124 {
+					let coord = TileCoord::new(8, x, y).unwrap();
+					let bbox = coord.to_mercator_bbox();
+					let class = mask.classify_tile(bbox);
+					if class == TileClassification::Partial {
+						continue;
+					}
+					let alpha = mask.compute_alpha_grid(bbox, 32, 32);
+					match class {
+						TileClassification::FullyInside => {
+							assert!(alpha.iter().all(|&a| a == 255), "{coord:?} blur={blur} is not opaque");
+						}
+						TileClassification::FullyOutside => {
+							assert!(alpha.iter().all(|&a| a == 0), "{coord:?} blur={blur} is not empty");
+						}
+						TileClassification::Partial => unreachable!(),
+					}
+				}
+			}
+		}
+	}
+
+	/// The clipping box has to include the ground the blur and buffer reach.
+	///
+	/// It is used to trim the tile pyramid, so a box drawn around the bare polygon stops
+	/// the outer half of the ramp from ever being rendered — a straight-edged cut across
+	/// the gradient wherever the shape approaches its own bounding box.
+	#[test]
+	fn the_geo_bbox_covers_the_blur_and_buffer_reach() {
+		let plain = oracle_mask(0.0, 0.0).geo_bbox();
+		let blurred = oracle_mask(0.0, 200_000.0).geo_bbox();
+		let buffered = oracle_mask(200_000.0, 0.0).geo_bbox();
+
+		// 200 km is a bit under 2° of longitude at this latitude.
+		for grown in [blurred, buffered] {
+			assert!(grown.x_min < plain.x_min - 1.5, "{grown:?} vs {plain:?}");
+			assert!(grown.y_min < plain.y_min - 1.5, "{grown:?} vs {plain:?}");
+			assert!(grown.x_max > plain.x_max + 1.5, "{grown:?} vs {plain:?}");
+			assert!(grown.y_max > plain.y_max + 1.5, "{grown:?} vs {plain:?}");
 		}
 	}
 

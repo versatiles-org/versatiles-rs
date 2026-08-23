@@ -50,7 +50,7 @@ struct Operation {
 	/// The source pyramid clipped to the mask, so tiles entirely outside it are
 	/// never requested. Computed in `build` because it needs the source's
 	/// pyramid, which is async to obtain.
-	tile_pyramid: Option<TilePyramid>,
+	tile_pyramid: TilePyramid,
 }
 
 impl Operation {
@@ -90,16 +90,11 @@ impl Operation {
 			blur_function,
 		)?;
 
-		// Clip tile_pyramid to the mask geometry's geographic bounds so that tiles
-		// entirely outside the mask are never requested from the source.
-		let tile_pyramid = match mask.geo_bbox() {
-			Some(geo_bbox) => {
-				let mut tile_pyramid = source.tile_pyramid().await?.as_ref().clone();
-				tile_pyramid.intersect_geo_bbox(&geo_bbox)?;
-				Some(tile_pyramid)
-			}
-			None => None,
-		};
+		// Clip tile_pyramid to the ground the mask can still tint — the polygon plus the
+		// reach of its buffer and blur — so that tiles it cannot touch are never
+		// requested from the source.
+		let mut tile_pyramid = source.tile_pyramid().await?.as_ref().clone();
+		tile_pyramid.intersect_geo_bbox(&mask.geo_bbox())?;
 
 		let operation = Operation {
 			mask: Arc::new(mask),
@@ -113,9 +108,7 @@ impl TileTransform for Operation {
 	const TAG: &'static str = "raster_mask";
 
 	fn update_metadata(&self, metadata: &mut TileSourceMetadata) {
-		if let Some(tile_pyramid) = self.tile_pyramid.clone() {
-			metadata.set_tile_pyramid(tile_pyramid);
-		}
+		metadata.set_tile_pyramid(self.tile_pyramid.clone());
 	}
 
 	fn run(&self, coord: &TileCoord, tile: Tile) -> Result<Option<Tile>> {
@@ -412,6 +405,49 @@ mod tests {
 		let coord = TileCoord::new(2, 2, 1)?;
 		let stream = op.tile_stream(coord.to_tile_bbox()).await?;
 		let _tiles: Vec<_> = stream.to_vec().await;
+
+		Ok(())
+	}
+
+	/// End to end: a tile that lies outside the polygon but inside the blur ramp has to
+	/// come out of the pipeline, translucent.
+	///
+	/// Two separate shortcuts used to delete such tiles — the pyramid was clipped to the
+	/// bare polygon bounds, and `classify_tile` called anything outside the polygon
+	/// `FullyOutside` — and both leave the same artefact: tile-sized rectangles of full
+	/// transparency stepping along the mask edge instead of a smooth falloff.
+	#[tokio::test]
+	async fn a_tile_in_the_blur_band_comes_out_translucent() -> Result<()> {
+		let geojson_file = create_test_geojson(); // a square spanning lon/lat 0..10
+		let geojson_path = geojson_file.path().display();
+
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl(&format!(
+				"from_debug format=png | raster_mask geojson='{geojson_path}' blur=300000"
+			))
+			.await?;
+
+		// ~1.5° east of the square's edge: outside it, but well inside a 300 km ramp.
+		let coord = TileCoord::from_geo(11.5, 5.0, 8)?;
+		let tiles: Vec<_> = op.tile_stream(coord.to_tile_bbox()).await?.to_vec().await;
+		assert_eq!(tiles.len(), 1, "a tile in the blur band must not be dropped");
+
+		let alpha_max = tiles
+			.into_iter()
+			.next()
+			.unwrap()
+			.1
+			.into_image()?
+			.into_rgba8()
+			.pixels()
+			.map(|p| p.0[3])
+			.max()
+			.unwrap();
+		assert!(
+			alpha_max > 0 && alpha_max < 255,
+			"expected a translucent tile, got {alpha_max}"
+		);
 
 		Ok(())
 	}
