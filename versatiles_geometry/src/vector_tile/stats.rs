@@ -22,8 +22,11 @@ use super::{GeoValuePBF, VectorTile};
 /// layer) and aggregated (summed across many tiles via [`LayerStats::add`]).
 #[derive(Clone, Debug, Default)]
 pub struct LayerStats {
+	/// The layer's name. Empty when the stats are an aggregate over layers.
 	pub name: String,
+	/// Features counted.
 	pub feature_count: usize,
+	/// Vertices across every feature's geometry.
 	pub vertex_count: usize,
 	/// Sum of `feature.geom_data.len()` — the geometry command streams.
 	pub geometry_bytes: usize,

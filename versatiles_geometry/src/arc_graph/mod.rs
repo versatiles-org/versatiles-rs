@@ -21,6 +21,8 @@ pub type ArcId = usize;
 /// One arc — a sequence of coordinates that may be shared by multiple features.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Arc {
+	/// The arc's coordinates, in its stored orientation. An [`ArcRef`] may
+	/// traverse them in reverse.
 	pub coords: Vec<Coord<f64>>,
 }
 
@@ -28,7 +30,11 @@ pub struct Arc {
 /// traverses it relative to the arc's stored orientation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ArcRef {
+	/// Which arc in the graph is referenced.
 	pub arc_id: ArcId,
+	/// Whether this feature walks the arc backwards. Two features sharing an
+	/// edge in opposite directions reference the same arc with different
+	/// values here, which is what lets the edge be simplified once.
 	pub reversed: bool,
 }
 
@@ -43,21 +49,26 @@ pub struct ArcGraph {
 }
 
 impl ArcGraph {
+	/// Every distinct arc, indexed by [`ArcId`].
 	#[must_use]
 	pub fn arcs(&self) -> &[Arc] {
 		&self.arcs
 	}
 
+	/// One arc by id, or `None` if the id is out of range.
 	#[must_use]
 	pub fn arc(&self, id: ArcId) -> Option<&Arc> {
 		self.arcs.get(id)
 	}
 
+	/// How many distinct arcs the graph holds — after deduplication, so
+	/// typically far fewer than the input features have edges.
 	#[must_use]
 	pub fn len(&self) -> usize {
 		self.arcs.len()
 	}
 
+	/// Whether the graph holds no arcs at all.
 	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.arcs.is_empty()
@@ -68,11 +79,17 @@ impl ArcGraph {
 /// passed to [`build`]. Points pass through verbatim.
 #[derive(Clone, Debug)]
 pub enum FeatureArcs {
+	/// A single point, carried through without decomposition.
 	Point(Coord<f64>),
+	/// Several points, carried through without decomposition.
 	MultiPoint(Vec<Coord<f64>>),
+	/// One linestring, as the arcs it walks.
 	LineString(LineStringArcs),
+	/// Several linestrings, each as the arcs it walks.
 	MultiLineString(Vec<LineStringArcs>),
+	/// One polygon, as the arcs its rings walk.
 	Polygon(PolygonArcs),
+	/// Several polygons, each as the arcs its rings walk.
 	MultiPolygon(Vec<PolygonArcs>),
 }
 
@@ -81,6 +98,7 @@ pub enum FeatureArcs {
 pub struct LineStringArcs(pub(super) Vec<ArcRef>);
 
 impl LineStringArcs {
+	/// The arcs this linestring walks, in order.
 	#[must_use]
 	pub fn arcs(&self) -> &[ArcRef] {
 		&self.0
@@ -96,11 +114,13 @@ pub struct PolygonArcs {
 }
 
 impl PolygonArcs {
+	/// The arcs forming the outer ring, in ring order.
 	#[must_use]
 	pub fn exterior(&self) -> &[ArcRef] {
 		&self.exterior
 	}
 
+	/// The arcs forming each hole, one entry per interior ring.
 	#[must_use]
 	pub fn interiors(&self) -> &[Vec<ArcRef>] {
 		&self.interiors

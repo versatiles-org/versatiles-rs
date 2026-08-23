@@ -7,8 +7,14 @@ use versatiles_core::{
 
 use crate::geo::GeoValue;
 
+/// Reads and writes a [`GeoValue`] in MVT's protobuf `Value` encoding.
+///
+/// An extension trait rather than inherent methods, so `versatiles_geometry`'s
+/// generic value type does not have to know about the MVT wire format.
 pub trait GeoValuePBF<'a> {
+	/// Decodes one protobuf `Value` message from `reader`.
 	fn read(reader: &mut dyn ValueReader<'a, LE>) -> Result<GeoValue>;
+	/// Encodes this value as a protobuf `Value` message.
 	fn to_blob(&self) -> Result<Blob>;
 }
 

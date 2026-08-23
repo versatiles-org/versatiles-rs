@@ -63,12 +63,15 @@ use super::{
 /// and `Some(i)` for feature-level issues.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValidationIssue {
+	/// Name of the layer the violation was found in.
 	pub layer: String,
 	/// `None` for layer-level issues; `Some(i)` for feature `i` within the layer.
 	pub feature_index: Option<usize>,
+	/// What the violation is.
 	pub kind: IssueKind,
 }
 
+/// The kinds of MVT spec violation [`validate_tile`](super::validate_tile) reports.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IssueKind {
 	// ── Layer-level issues ────────────────────────────────────────────────
@@ -104,6 +107,7 @@ pub enum IssueKind {
 	MalformedCommandStream(String),
 }
 
+/// Why a polygon ring would not render once encoded to the MVT integer grid.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DegenerateReason {
 	/// Fewer than 3 vertices in the ring (after dropping the optional closing

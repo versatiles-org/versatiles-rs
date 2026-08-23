@@ -71,6 +71,10 @@ impl GeoJsonSource {
 		Self::with_format(path, Format::LineDelimited)
 	}
 
+	/// Reads `path` in an explicitly chosen format.
+	///
+	/// The layer name defaults to the file stem, or `"features"` when the path
+	/// has none.
 	#[must_use]
 	pub fn with_format(path: impl AsRef<Path>, format: Format) -> Self {
 		let path = path.as_ref().to_path_buf();

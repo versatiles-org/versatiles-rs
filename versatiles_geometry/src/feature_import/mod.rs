@@ -301,6 +301,7 @@ impl FeatureImport {
 		Ok(Some(GeoBBox::new(lon_min, lat_min, lon_max, lat_max)?))
 	}
 
+	/// The resolved configuration this import is running with.
 	#[must_use]
 	pub fn config(&self) -> &FeatureImportConfig {
 		&self.config

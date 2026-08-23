@@ -24,8 +24,13 @@ use geo_types::{Coord, Geometry};
 /// only the field matching the active strategy is read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum PointReductionStrategy {
+	/// Keep every point at every zoom.
 	None,
+	/// Keep a fixed fraction of points per zoom level, composing
+	/// geometrically as zoom decreases.
 	DropRate,
+	/// Keep points no closer together than a minimum distance, measured in
+	/// tile-pixels at the zoom being generated.
 	#[default]
 	MinDistance,
 }

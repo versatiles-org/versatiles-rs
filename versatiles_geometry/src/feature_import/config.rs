@@ -22,16 +22,27 @@ use super::PointReductionStrategy;
 /// meaningful signal there ("run the auto-heuristic"), not a missing value.
 #[derive(Clone, Debug, Default)]
 pub struct FeatureImportArgs {
+	/// Overrides [`FeatureImportConfig::layer_name`].
 	pub layer_name: Option<String>,
+	/// Overrides [`FeatureImportConfig::min_zoom`].
 	pub min_zoom: Option<u8>,
 	/// Highest zoom level emitted. `None` triggers the auto-heuristic
 	/// (median feature size ≈ 4 tile-pixels, capped at 14).
 	pub max_zoom: Option<u8>,
+	/// Overrides [`FeatureImportConfig::polygon_simplify_px`].
 	pub polygon_simplify_px: Option<f32>,
+	/// Overrides [`FeatureImportConfig::line_simplify_px`].
 	pub line_simplify_px: Option<f32>,
+	/// Overrides [`FeatureImportConfig::polygon_min_area_px`].
 	pub polygon_min_area_px: Option<f32>,
+	/// Overrides [`FeatureImportConfig::line_min_length_px`].
 	pub line_min_length_px: Option<f32>,
+	/// Overrides [`FeatureImportConfig::point_reduction`].
 	pub point_reduction: Option<PointReductionStrategy>,
+	/// The threshold for whichever strategy `point_reduction` selects: it
+	/// resolves to [`FeatureImportConfig::min_distance_px`] for `MinDistance`
+	/// and to [`FeatureImportConfig::drop_rate_keep_ratio`] for `DropRate`.
+	/// One knob here, two fields there, because only one is ever read.
 	pub point_reduction_value: Option<f32>,
 }
 
@@ -40,7 +51,9 @@ pub struct FeatureImportArgs {
 /// (typical) or constructed directly (advanced/test code).
 #[derive(Clone, Debug)]
 pub struct FeatureImportConfig {
+	/// Name given to the layer the imported features are written into.
 	pub layer_name: String,
+	/// Lowest zoom level emitted.
 	pub min_zoom: u8,
 	/// Highest zoom level emitted. `None` triggers the auto-heuristic
 	/// (median feature size ≈ 4 tile-pixels, capped at 14).

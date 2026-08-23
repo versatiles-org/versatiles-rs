@@ -1,15 +1,25 @@
 use geo_types::Geometry;
 
+/// A feature's geometry type, as the number MVT stores on the wire.
+///
+/// The discriminants are the spec's values, so a cast round-trips. MVT has no
+/// singular variants: a lone point is a `MultiPoint` of one.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum GeomType {
+	/// Type 0. The spec defines it but assigns it no shape, so a feature
+	/// carrying geometry under it is ambiguous.
 	#[default]
 	Unknown = 0,
+	/// Type 1: one or more points.
 	MultiPoint = 1,
+	/// Type 2: one or more linestrings.
 	MultiLineString = 2,
+	/// Type 3: one or more polygons, each with an outer ring and any holes.
 	MultiPolygon = 3,
 }
 
 impl GeomType {
+	/// The wire value for this type.
 	#[must_use]
 	pub fn as_u64(&self) -> u64 {
 		*self as u64
