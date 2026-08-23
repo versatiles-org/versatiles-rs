@@ -9,10 +9,11 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    # Cache only GDAL's own Homebrew dependency tree, packed into one tarball.
-    # Caching the whole /opt/homebrew prefix also works but is ~5 GB, because
-    # it captures everything GitHub preinstalls on the runner; restricting it
-    # to the ~70 formulae GDAL pulls in keeps the cache a few times smaller.
+    # Cache the parts of GDAL's Homebrew tree a build actually reads, packed
+    # into one tarball — see scripts/pack-gdal-tree.sh for what is kept and why.
+    # Packing the kegs whole is ~5 GB; packing libgdal's link closure plus the
+    # install receipts is ~190 MB, and both let `brew install` relink instead of
+    # re-pouring bottles.
     - name: Cache GDAL Homebrew tree
       id: gdal-cache
       if: runner.os == 'macOS'
@@ -26,7 +27,7 @@ runs:
         # ImageVersion keeps the cached Cellar in lockstep with the Homebrew
         # formula versions baked into the runner image, so `brew install`
         # below relinks instead of re-pouring.
-        key: macos-gdal-tree-${{ runner.arch }}-${{ env.ImageVersion }}-${{ hashFiles('scripts/install-gdal.sh') }}
+        key: macos-gdal-tree-${{ runner.arch }}-${{ env.ImageVersion }}-${{ hashFiles('scripts/install-gdal.sh', 'scripts/pack-gdal-tree.sh') }}
 
     # Cache hit: unpack GDAL's Cellar + opt entries, then relink. This skips
     # pouring ~70 bottles (~6 min). `brew install` below does NOT relink an
@@ -54,19 +55,11 @@ runs:
         HOMEBREW_NO_AUTO_UPDATE: "1"
       run: ./scripts/install-gdal.sh
 
-    # Cache miss: pack GDAL's Cellar package files and `opt` symlinks (the
-    # latter are how libgdal locates its dependencies at runtime) for next run.
+    # Cache miss: pack the tree for next run.
     - name: Pack GDAL Homebrew tree
       if: runner.os == 'macOS' && steps.gdal-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
       shell: bash
-      run: |
-        members=()
-        for f in gdal $(brew deps gdal); do
-          for sub in "Cellar/$f" "opt/$f"; do
-            [ -e "/opt/homebrew/$sub" ] && members+=("opt/homebrew/$sub")
-          done
-        done
-        tar -cf ~/gdal-brew-tree.tar -C / "${members[@]}"
+      run: ./scripts/pack-gdal-tree.sh ~/gdal-brew-tree.tar
 
     - name: Save GDAL Homebrew tree
       if: runner.os == 'macOS' && steps.gdal-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main'
