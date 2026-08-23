@@ -154,8 +154,18 @@ pub(super) fn parse_geom_command_stream(geom_data: &Blob) -> Result<Vec<Vec<Coor
 						line = Vec::new();
 					}
 
-					x += reader.read_svarint().context("Failed to read x coordinate")?;
-					y += reader.read_svarint().context("Failed to read y coordinate")?;
+					// The deltas are signed varints straight out of the tile, and they
+					// accumulate. Unchecked, a crafted stream overflows `i64` — a panic
+					// in a debug build, and in a release one a coordinate that wrapped
+					// to the far side of the number line before being cast to `f64`.
+					// A tile coordinate lives within the layer extent, so anything that
+					// overflows is malformed rather than merely large.
+					x = x
+						.checked_add(reader.read_svarint().context("Failed to read x coordinate")?)
+						.context("geometry x coordinates overflow i64")?;
+					y = y
+						.checked_add(reader.read_svarint().context("Failed to read y coordinate")?)
+						.context("geometry y coordinates overflow i64")?;
 
 					#[allow(clippy::cast_precision_loss)]
 					line.push(Coord {
@@ -651,6 +661,47 @@ mod tests {
 	use geo_types::{LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon};
 
 	use super::*;
+
+	/// Geometry deltas accumulate, and they come from the tile. A stream of large
+	/// but individually legal deltas used to overflow the `i64` accumulator: a
+	/// panic in a debug build, and in a release one a coordinate wrapped to the
+	/// far side of the number line and then cast to `f64`.
+	#[test]
+	fn geometry_deltas_that_overflow_are_rejected() {
+		use versatiles_core::io::{ValueWriter, ValueWriterBlob};
+
+		let mut writer = ValueWriterBlob::new_le();
+		// MoveTo, five coordinate pairs, each stepping 2^61 — the largest step the
+		// varint reader accepts.
+		writer.write_varint((5 << 3) | 1).unwrap();
+		for _ in 0..5 {
+			writer.write_svarint(1 << 61).unwrap();
+			writer.write_svarint(0).unwrap();
+		}
+
+		let error = parse_geom_command_stream(&writer.into_blob()).unwrap_err();
+		assert!(
+			format!("{error:#}").contains("overflow"),
+			"expected an overflow error, got: {error:#}"
+		);
+	}
+
+	/// Ordinary geometry still decodes.
+	#[test]
+	fn geometry_with_ordinary_deltas_decodes() {
+		use versatiles_core::io::{ValueWriter, ValueWriterBlob};
+
+		let mut writer = ValueWriterBlob::new_le();
+		writer.write_varint((2 << 3) | 1).unwrap();
+		writer.write_svarint(10).unwrap();
+		writer.write_svarint(20).unwrap();
+		writer.write_svarint(-5).unwrap();
+		writer.write_svarint(5).unwrap();
+
+		let lines = parse_geom_command_stream(&writer.into_blob()).unwrap();
+		let coords: Vec<(f64, f64)> = lines.iter().flatten().map(|c| (c.x, c.y)).collect();
+		assert_eq!(coords, vec![(10.0, 20.0), (5.0, 25.0)]);
+	}
 
 	fn ls_from(pts: &[[i32; 2]]) -> LineString<f64> {
 		LineString::from(
