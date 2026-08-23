@@ -393,13 +393,17 @@ versatiles serve tiles.versatiles
 | Option                    | Description                                            | Default |
 | ------------------------- | ------------------------------------------------------ | ------- |
 | `-i, --ip`                | Bind IP address                                        | 0.0.0.0 |
-| `-p, --port`              | Port number                                            | 8080    |
+| `-p, --port`              | Port number; `0` picks a free one                      | 8080    |
 | `-c, --config`            | YAML configuration file                                | -       |
 | `-s, --static`            | Serve static content from a folder or tar (repeatable) | -       |
 | `--minimal-recompression` | Fast serving (less compression)                        | false   |
 | `--disable-api`           | Disable `/api` endpoints                               | false   |
 | `--cache-control`         | `Cache-Control` header sent with every tile            | -       |
 | `--auto-shutdown`         | Shut down automatically after N milliseconds           | -       |
+
+With `--port 0` the server binds a free port chosen by the operating system and
+prints it to stdout as `VERSATILES_PORT=<port>` before serving, so a wrapper
+script can discover where it landed.
 
 **Custom tile IDs:**
 
@@ -745,6 +749,7 @@ VersaTiles supports the following environment variables:
 - `VERSATILES_CACHE_DIR` - Enable disk-based tile caching. This is useful if you want to convert large tile sets with the `from_gdal_raster` VPL operation but have limited memory. Example: `VERSATILES_CACHE_DIR=/tmp/versatiles_cache`
 - `VERSATILES_SSH_IDENTITY` - SSH identity (private key) file used for SFTP authentication.
 - `VERSATILES_MAX_TILES` - Refuse a conversion whose pyramid holds more than this many tiles (default `10000000000`). Guards against a source advertising a pyramid too deep to ever finish. Set to `0` to disable.
+- `VERSATILES_MEMORY_LOG_SECS` - Interval in seconds for logging the process's resident memory during long commands (default `60`); set to `0` to disable. Reads `/proc/self/status`, so it is Linux-only and a no-op elsewhere. Useful when a conversion is being killed by the OOM killer, which the process cannot report itself.
 
 Network resilience for remote reads/writes (HTTP and SFTP) over long-running transfers:
 

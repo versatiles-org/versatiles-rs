@@ -388,6 +388,64 @@ mod tests {
 		);
 	}
 
+	/// Every `VERSATILES_*` environment variable the workspace reads has to be
+	/// listed in the README.
+	///
+	/// These are the program's other user interface, and the only place they are
+	/// collected is that list — a variable added without a line there is
+	/// invisible unless someone greps the source. `VERSATILES_MEMORY_LOG_SECS`
+	/// was exactly that: documented in the module that reads it, nowhere a user
+	/// would look.
+	#[test]
+	fn every_environment_variable_is_documented_in_the_readme() {
+		use std::collections::BTreeSet;
+
+		/// Variables that exist only inside tests.
+		const EXEMPT: &[&str] = &["VERSATILES_TEST_DEFINITELY_UNSET_XYZ"];
+
+		let workspace = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/.."));
+		let readme = std::fs::read_to_string(workspace.join("README.md")).expect("README.md should be readable");
+
+		let mut found: BTreeSet<String> = BTreeSet::new();
+		let mut stack = vec![workspace.to_path_buf()];
+		while let Some(dir) = stack.pop() {
+			let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+			for entry in entries.flatten() {
+				let path = entry.path();
+				let name = entry.file_name();
+				// Skip build output and vendored code.
+				if name == "target" || name == "node_modules" || name == ".git" {
+					continue;
+				}
+				if path.is_dir() {
+					stack.push(path);
+				} else if path.extension().is_some_and(|e| e == "rs") {
+					let text = std::fs::read_to_string(&path).unwrap_or_default();
+					let mut rest = text.as_str();
+					while let Some(start) = rest.find("VERSATILES_") {
+						let tail = &rest[start..];
+						let end = tail
+							.find(|c: char| !c.is_ascii_uppercase() && !c.is_ascii_digit() && c != '_')
+							.unwrap_or(tail.len());
+						found.insert(tail[..end].to_string());
+						rest = &tail[end..];
+					}
+				}
+			}
+		}
+
+		let undocumented: Vec<&String> = found
+			.iter()
+			.filter(|name| !EXEMPT.contains(&name.as_str()))
+			.filter(|name| !readme.contains(name.as_str()))
+			.collect();
+
+		assert!(
+			undocumented.is_empty(),
+			"these environment variables are not documented in README.md:\n  {undocumented:?}"
+		);
+	}
+
 	/// Parse-time checks for the global `-v`/`-q` flags.
 	#[rstest::rstest]
 	#[case(vec!["versatiles", "-v", "help", "source"])]
