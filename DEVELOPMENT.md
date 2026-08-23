@@ -482,9 +482,11 @@ pub trait PyramidInfo {
 
 `TileBBox` is kept for anything that is inherently rectangular: requesting a range of tiles from a container, describing image dimensions, wire format block indices. `TilePyramid` is used wherever the question is "does this tile exist in this data source?"
 
-### High-Zoom Memory Limit
+### Why Geographic Intersection Needs No Quadtree
 
-Building a `TileQuadtree` from a geographic bounding box at zoom ≥ 17 would require O(perimeter_tiles) nodes, which can reach gigabytes of RAM. `TilePyramid::intersect_geo_bbox` therefore uses a fast rectangular `TileBBox` approximation for zoom levels above `MAX_QUADTREE_INTERSECT_ZOOM = 16`. This is accurate enough for filtering purposes at high zoom levels.
+`TilePyramid::intersect_geo_bbox` intersects every zoom level against a plain `TileBBox`, never a `TileQuadtree`. That is not an approximation: a `GeoBBox` is a rectangle, and both Web Mercator axes are monotonic in longitude and latitude, so the tiles covering a geographic rectangle are themselves always a rectangle. A quadtree could not describe that set more precisely, and building one at high zoom would cost O(perimeter_tiles) nodes — gigabytes of RAM around zoom 17 and above.
+
+Quadtree coverage earns its keep where the shape genuinely is not rectangular — unions of separate regions, or coverage read back from a container — which is what `TileCover::Tree` is for.
 
 ## Further Reading
 
