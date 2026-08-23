@@ -3,6 +3,11 @@
 //! This operation applies a polygonal mask from GeoJSON to raster tiles.
 //! Pixels outside the polygon become transparent.
 //!
+//! The mask must be in EPSG:4326 lon/lat degrees, longitude first; reprojection
+//! is not performed. Coordinates outside that range are refused, as is a GeoJSON
+//! `crs` member naming another projection — but a mask written lat,lon is in
+//! range and cannot be detected, and masks the wrong part of the world.
+//!
 //! # Example
 //!
 //! ```text
@@ -30,8 +35,13 @@ use crate::{
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Makes raster pixels outside a GeoJSON polygon transparent.
+///
+/// The mask is not reprojected: coordinates outside the WGS84 range are refused,
+/// as is a `crs` member naming another projection. A mask written lat,lon is in
+/// range and cannot be detected — it masks the wrong part of the world.
 struct Args {
-	/// Path to a GeoJSON file holding a Polygon or MultiPolygon.
+	/// Path to a GeoJSON file holding a Polygon or MultiPolygon, in EPSG:4326
+	/// lon/lat degrees.
 	geojson: String,
 	/// Distance in meters by which to grow the mask, or shrink it when negative. Defaults to `0`.
 	#[vpl(default = "0")]

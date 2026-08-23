@@ -9,5 +9,5 @@ pub mod mercator;
 pub mod validate;
 
 pub use geojson_io::{coord_to_json, geometry_to_json, type_name};
-pub use mercator::{MercatorExt, coord_from_mercator, coord_to_mercator};
+pub use mercator::{MercatorExt, coord_from_mercator, coord_to_mercator, ensure_wgs84_degrees};
 pub use validate::validate;

@@ -4,13 +4,75 @@
 //! converted to/from Web Mercator (EPSG:3857) coordinates in meters.
 //!
 //! Latitude is clamped to ±[`MAX_LAT`] in `to_mercator` to avoid singularities.
+//! That clamp is why [`ensure_wgs84_degrees`] lives here: it is the guard callers
+//! run over untrusted input *before* projecting it, while the coordinates can
+//! still be recognised as belonging to some other CRS.
 
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_4};
 
+use anyhow::{Result, bail};
 use geo_types::{
 	Coord, Geometry, Line, LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon, Rect, Triangle,
 };
 use versatiles_core::{EARTH_RADIUS, MAX_LAT};
+
+/// How far outside the WGS84 range a coordinate may land before it is refused,
+/// in degrees.
+///
+/// Exports that round-trip through another projection come back a few ULPs past
+/// ±180 / ±90, and those files are fine. 1e-6° is about 11 cm at the equator: far
+/// wider than any rounding, far narrower than any real mistake, since a coordinate
+/// in the wrong CRS is out by whole degrees at least.
+const WGS84_TOLERANCE_DEG: f64 = 1e-6;
+
+/// Refuse bounds that cannot be WGS84 lon/lat degrees.
+///
+/// Every reader in this workspace hands [`MercatorExt::to_mercator`] coordinates
+/// it believes are EPSG:4326, and nothing else checks that belief. Run this over
+/// the bounds first — [`geo::BoundingRect::bounding_rect`] gives them, and its
+/// corners are the extremes over every coordinate, so they are out of range
+/// exactly when some coordinate is. `None` means the geometry holds no
+/// coordinates at all, which is not this function's problem.
+///
+/// The check has to happen *before* projection. `to_mercator` clamps latitude to
+/// ±[`MAX_LAT`], so afterwards a northing in metres is indistinguishable from the
+/// north edge of the world; longitude survives, but only to be clamped later when
+/// bounds are converted back — which is how projected input used to reach
+/// `TileCover` as a degenerate box at the corner of the world and fail there,
+/// several layers from the actual mistake.
+///
+/// Reprojection is out of scope, so the only job here is to fail immediately and
+/// name the cause. Input that is in range but still wrong — lat/lon written with
+/// the axes swapped — is not detectable and passes; the message says so, because
+/// the reader who sees it may have that problem instead.
+///
+/// # Errors
+///
+/// Returns an error naming the offending coordinate when a bound is outside
+/// longitude ±180 / latitude ±90, or is not a number.
+pub fn ensure_wgs84_degrees(bounds: Option<Rect<f64>>) -> Result<()> {
+	let Some(rect) = bounds else {
+		return Ok(());
+	};
+
+	let lon_limit = 180.0 + WGS84_TOLERANCE_DEG;
+	let lat_limit = 90.0 + WGS84_TOLERANCE_DEG;
+	for corner in [rect.min(), rect.max()] {
+		// Written as a negated range test so that a NaN coordinate — which
+		// compares false against everything — is refused rather than accepted.
+		if !(corner.x.abs() <= lon_limit && corner.y.abs() <= lat_limit) {
+			bail!(
+				"coordinate ({}, {}) is outside the WGS84 range (longitude ±180, latitude ±90) — \
+				 input must be EPSG:4326 lon/lat in degrees. Reproject it first, e.g. \
+				 `ogr2ogr -t_srs EPSG:4326 out.geojson in.geojson`, and check the axis order: \
+				 GeoJSON is lon,lat, while some EPSG:4326 exporters write lat,lon",
+				corner.x,
+				corner.y
+			);
+		}
+	}
+	Ok(())
+}
 
 /// Project a single coordinate from WGS84 (lon/lat in degrees) to Web Mercator (meters).
 #[inline]

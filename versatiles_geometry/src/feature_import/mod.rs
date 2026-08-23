@@ -35,55 +35,6 @@ pub use heuristics::auto_max_zoom;
 pub use reduce_points::PointReductionStrategy;
 pub use tile_render::{clip_geometry, render_tile};
 
-/// How far outside the WGS84 range a coordinate may land before it is refused,
-/// in degrees.
-///
-/// Exports that round-trip through another projection come back a few ULPs past
-/// ±180 / ±90, and those files are fine. 1e-6° is about 11 cm at the equator: far
-/// wider than any rounding, far narrower than any real mistake, since a coordinate
-/// in the wrong CRS is out by whole degrees at least.
-const WGS84_TOLERANCE_DEG: f64 = 1e-6;
-
-/// Refuse coordinates that cannot be WGS84 lon/lat.
-///
-/// This is the only place the assumption "input is EPSG:4326" is checked, and it
-/// has to happen *before* projection: [`crate::ext::coord_to_mercator`] clamps
-/// latitude to ±[`versatiles_core::MAX_LAT`], so a northing in metres silently
-/// becomes the north edge of the world and nothing downstream can tell it was
-/// ever wrong. Longitude survives projection but only to be clamped later, when
-/// the bounds are converted back — which is how projected input used to reach
-/// `TileCover` as a degenerate box at the corner of the world and fail there,
-/// several layers away from the actual mistake.
-///
-/// Reprojection is out of scope, so the only job here is to fail immediately and
-/// name the cause.
-fn check_wgs84_range(geometry: &Geometry<f64>) -> Result<()> {
-	// The bounding rect's corners are the extremes over every coordinate, so one
-	// of them is out of range exactly when some coordinate is. `None` means the
-	// geometry holds no coordinates at all, which is not this function's problem.
-	let Some(rect) = geometry.bounding_rect() else {
-		return Ok(());
-	};
-
-	let lon_limit = 180.0 + WGS84_TOLERANCE_DEG;
-	let lat_limit = 90.0 + WGS84_TOLERANCE_DEG;
-	for corner in [rect.min(), rect.max()] {
-		// Written as a negated range test so that a NaN coordinate — which
-		// compares false against everything — is refused rather than accepted.
-		if !(corner.x.abs() <= lon_limit && corner.y.abs() <= lat_limit) {
-			bail!(
-				"coordinate ({}, {}) is outside the WGS84 range (longitude ±180, latitude ±90) — \
-				 input must be EPSG:4326 lon/lat in degrees. Reproject it first, e.g. \
-				 `ogr2ogr -t_srs EPSG:4326 out.geojson in.geojson`, and check the axis order: \
-				 GeoJSON is lon,lat, while some EPSG:4326 exporters write lat,lon",
-				corner.x,
-				corner.y
-			);
-		}
-	}
-	Ok(())
-}
-
 /// Project a single feature to web mercator and split any `Multi*` geometry
 /// into one feature per sub-geometry. Callers that load features from disk
 /// should run this on every record as it arrives so that the
@@ -101,15 +52,13 @@ fn check_wgs84_range(geometry: &Geometry<f64>) -> Result<()> {
 ///
 /// # Errors
 ///
-/// Returns an error when a coordinate is outside the WGS84 range — longitude
-/// ±180, latitude ±90, with a tolerance for float noise. This is where input in
-/// the wrong CRS is caught, and it has to be here: projection clamps latitude,
-/// so afterwards a northing in metres is indistinguishable from the north edge
-/// of the world.
+/// Returns an error when a coordinate is outside the WGS84 range; see
+/// [`ensure_wgs84_degrees`]. This is where input in the wrong CRS is caught on
+/// the feature-import path.
 pub fn project_and_flatten(mut feature: crate::geo::GeoFeature) -> Result<Vec<crate::geo::GeoFeature>> {
 	let stub = geo_types::Geometry::Point(geo_types::Point::new(0.0, 0.0));
 	let original = std::mem::replace(&mut feature.geometry, stub);
-	check_wgs84_range(&original)?;
+	ensure_wgs84_degrees(original.bounding_rect())?;
 	feature.geometry = MercatorExt::to_mercator(original);
 	Ok(flatten_feature(feature))
 }
@@ -124,7 +73,7 @@ use versatiles_derive::context;
 
 use crate::{
 	arc_graph::{self, ArcGraph, FeatureArcs},
-	ext::{MercatorExt, coord_from_mercator},
+	ext::{MercatorExt, coord_from_mercator, ensure_wgs84_degrees},
 	geo::GeoFeature,
 	vector_tile::VectorTile,
 };

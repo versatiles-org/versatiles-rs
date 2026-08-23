@@ -578,9 +578,11 @@ Adjusts the brightness, contrast and gamma of raster tiles.
 
 Makes raster pixels outside a GeoJSON polygon transparent.
 
+The mask is not reprojected: coordinates outside the WGS84 range are refused, as is a `crs` member naming another projection. A mask written lat,lon is in range and cannot be detected — it masks the wrong part of the world.
+
 ### Parameters
 
-- **`geojson`: String (required)** - Path to a GeoJSON file holding a Polygon or MultiPolygon.
+- **`geojson`: String (required)** - Path to a GeoJSON file holding a Polygon or MultiPolygon, in EPSG:4326 lon/lat degrees.
 - _`buffer`: f32 (optional)_ - Distance in meters by which to grow the mask, or shrink it when negative. Defaults to `0`.
 - _`blur`: f32 (optional)_ - Width in meters of the soft transition at the mask edge. Defaults to `0`.
 - _`blur_function`: BlurFunction (optional)_ - Values: `linear`, `cosine`. Falloff curve across the `blur` band. Defaults to `linear`.

@@ -15,7 +15,10 @@ use geo_types::{Geometry, LineString, MultiPolygon, Polygon};
 use rstar::{AABB, RTree, RTreeObject};
 use versatiles_core::{EARTH_RADIUS, GeoBBox};
 use versatiles_derive::context;
-use versatiles_geometry::{ext::MercatorExt, geojson::read_geojson};
+use versatiles_geometry::{
+	ext::{MercatorExt, ensure_wgs84_degrees},
+	geojson::read_geojson,
+};
 
 use super::blur_function::BlurFunction;
 
@@ -204,8 +207,15 @@ impl MaskGeometry {
 			"No polygon geometries found in GeoJSON file"
 		);
 
-		// Convert to Web Mercator
-		let multi_polygon = MultiPolygon(polygons_wgs84).to_mercator();
+		// Convert to Web Mercator, but only once the coordinates have been shown to
+		// be lon/lat degrees. Projecting first would clamp a northing in metres to
+		// the north edge of the world, and the mask would come out as a shape
+		// nobody drew — either a hard error four layers down in the pyramid clip,
+		// or, for a mask whose numbers happen to be in range, silently the wrong
+		// part of the planet.
+		let multi_polygon = MultiPolygon(polygons_wgs84);
+		ensure_wgs84_degrees(multi_polygon.bounding_rect())?;
+		let multi_polygon = multi_polygon.to_mercator();
 
 		// Build R-tree from edges
 		let edges = extract_edges(&multi_polygon);
@@ -747,6 +757,69 @@ mod tests {
 				}
 			}
 		}
+	}
+
+	/// A mask in the wrong CRS is refused where the mistake is.
+	///
+	/// The mask is projected on load, and projection clamps: metre-scale
+	/// coordinates used to collapse to a degenerate box at the corner of the world
+	/// and fail four layers on, in the pyramid clip, with "x (180.0000000001) must
+	/// be <= 180" — a message that says nothing about the actual mistake.
+	#[test]
+	fn a_mask_in_the_wrong_crs_is_refused_by_name() {
+		let file = assert_fs::NamedTempFile::new("utm.geojson").unwrap();
+		file
+			.write_str(
+				r#"{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},
+				"geometry":{"type":"Polygon","coordinates":[[[389298,5819938],[565932,5819938],
+				[565932,5933496],[389298,5933496],[389298,5819938]]]}}]}"#,
+			)
+			.unwrap();
+
+		let err = MaskGeometry::from_geojson(file.path(), 0.0, 0.0, BlurFunction::default()).unwrap_err();
+		let msg = format!("{err:#}");
+		assert!(msg.contains("389298"), "{msg}");
+		assert!(msg.contains("EPSG:4326"), "{msg}");
+		assert!(!msg.contains("TileBBox"), "should fail before the pyramid clip: {msg}");
+	}
+
+	/// A mask declaring a non-WGS84 CRS is refused even when its coordinates are
+	/// in range — the file says what it is.
+	#[test]
+	fn a_mask_declaring_another_crs_is_refused() {
+		let file = assert_fs::NamedTempFile::new("declared.geojson").unwrap();
+		file
+			.write_str(
+				r#"{"type":"FeatureCollection",
+				"crs":{"type":"name","properties":{"name":"urn:ogc:def:crs:EPSG::25832"}},
+				"features":[{"type":"Feature","properties":{},
+				"geometry":{"type":"Polygon","coordinates":[[[2,2],[4,2],[4,4],[2,4],[2,2]]]}}]}"#,
+			)
+			.unwrap();
+
+		let msg = format!(
+			"{:#}",
+			MaskGeometry::from_geojson(file.path(), 0.0, 0.0, BlurFunction::default()).unwrap_err()
+		);
+		assert!(msg.contains("EPSG::25832"), "{msg}");
+	}
+
+	/// An axis-swapped mask still loads, because nothing can tell it apart.
+	///
+	/// Pinned so the range check is not later mistaken for protection against it:
+	/// both numbers are in range, and the mask lands in the wrong place quietly.
+	#[test]
+	fn an_axis_swapped_mask_is_not_detectable() {
+		let file = assert_fs::NamedTempFile::new("swapped.geojson").unwrap();
+		file
+			.write_str(
+				r#"{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},
+				"geometry":{"type":"Polygon","coordinates":[[[52.5,9.9],[53.6,9.9],[53.6,13.5],
+				[52.5,13.5],[52.5,9.9]]]}}]}"#,
+			)
+			.unwrap();
+
+		assert!(MaskGeometry::from_geojson(file.path(), 0.0, 0.0, BlurFunction::default()).is_ok());
 	}
 
 	/// A tile lying in the *outer* half of the blur ramp must not be classified
