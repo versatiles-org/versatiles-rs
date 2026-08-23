@@ -12,7 +12,7 @@
 
 use std::sync::Arc;
 
-use anyhow::{Result, bail};
+use anyhow::{Result, bail, ensure};
 use futures::StreamExt;
 use versatiles_container::{DataLocation, TileSource};
 use versatiles_core::TileCompression;
@@ -26,7 +26,7 @@ use versatiles_geometry::{
 use crate::{
 	PipelineFactory,
 	helpers::{
-		feature_tile_source::{FeatureTileSource, apply_property_filters},
+		feature_tile_source::{BBoxClip, FeatureTileSource, FeatureTileSourceArgs, apply_property_filters},
 		tile_size_monitor::MaxTileBytes,
 	},
 	vpl::VPLNode,
@@ -52,6 +52,12 @@ const PROGRESS_MIN_BYTES: u64 = 10_000_000;
 /// single tile is requested. Raise the cap when a legitimate low-zoom tile
 /// exceeds it, or set `max_tile_bytes=none` to emit tiles at any size; the
 /// soft-cap warning threshold, 200 KB at the default, scales with it.
+///
+/// `bbox` is `[west, south, east, north]` in degrees, and crops while reading:
+/// rows outside it are dropped before anything is built, and the tile pyramid is
+/// clipped to it. That turns a large CSV into one region's tiles in a single
+/// pass, where cropping afterwards with `versatiles convert --bbox` means
+/// writing the whole thing out first. The crop is tile-granular, as it is there.
 struct Args {
 	/// Path to the CSV file.
 	filename: String,
@@ -74,7 +80,7 @@ struct Args {
 	min_zoom: Option<u8>,
 	/// Highest zoom level to emit. Defaults to a heuristic capped at `14`.
 	max_zoom: Option<u8>,
-	/// Area to clip to, in WGS84 degrees. Not implemented yet. Defaults to no clipping.
+	/// Area to restrict the output to, in WGS84 degrees. Defaults to the input's extent.
 	bbox: Option<[f64; 4]>,
 	/// Columns to keep as properties. Mutually exclusive with `properties_exclude`. Defaults to all.
 	properties_include: Option<Vec<String>>,
@@ -147,6 +153,7 @@ impl Operation {
 
 		let point_reduction = args.point_reduction;
 		let compression = args.compression.unwrap_or(TileCompression::Gzip);
+		let clip = args.bbox.map(BBoxClip::new).transpose()?;
 
 		log::info!("from_csv: importing CSV from {}", path.display());
 		// Drain features once so the auto-max-zoom heuristic can inspect them.
@@ -158,11 +165,30 @@ impl Operation {
 		let mut stream = source.load()?;
 		let mut features: Vec<GeoFeature> = Vec::new();
 		while let Some(item) = stream.next().await {
-			features.extend(project_and_flatten(item?)?);
+			// A `bbox=` filters here rather than afterwards: on a large input
+			// cropped to a small area the dropped rows are nearly all of them,
+			// and never accumulating them is the point.
+			features.extend(
+				project_and_flatten(item?)?
+					.into_iter()
+					.filter(|f| clip.as_ref().is_none_or(|c| c.keeps(f))),
+			);
 		}
 		if let Some(h) = progress_handle {
 			h.finish();
 		}
+		// A clip that keeps nothing is worth saying out loud: the alternative is
+		// `FeatureImport` reporting that it could not compute bounds, which reads
+		// like a broken file rather than a bbox that missed.
+		if let Some(clip) = &clip {
+			ensure!(
+				!features.is_empty(),
+				"bbox={:?} selects no features from {}",
+				clip.geo().as_tuple(),
+				path.display()
+			);
+		}
+
 		// Apply property filters before passing to FeatureImport so the
 		// generated `vector_layers` schema reflects the kept fields.
 		apply_property_filters(
@@ -187,22 +213,22 @@ impl Operation {
 
 		Ok(Box::new(FeatureTileSource::new(
 			import,
-			&layer_name,
-			compression,
-			"from_csv",
-			"csv features",
-			"csv",
-			args.max_tile_bytes,
+			&FeatureTileSourceArgs {
+				layer_name: &layer_name,
+				compression,
+				label: "from_csv",
+				source_description: "csv features",
+				source_short: "csv",
+				max_tile_bytes: args.max_tile_bytes,
+				clip,
+			},
 		)?) as Box<dyn TileSource>)
 	}
 }
 
-/// Reject the args we still don't support (`bbox=`) and the combination
-/// `properties_include= … properties_exclude=` (ambiguous: pick one).
+/// Reject the argument combination `properties_include= … properties_exclude=`
+/// (ambiguous: pick one).
 fn reject_unsupported_args(args: &Args) -> Result<()> {
-	if args.bbox.is_some() {
-		bail!("from_csv: `bbox=` is not supported");
-	}
 	if args.properties_include.is_some() && args.properties_exclude.is_some() {
 		bail!("from_csv: `properties_include=` and `properties_exclude=` are mutually exclusive");
 	}
@@ -330,21 +356,56 @@ mod tests {
 		Ok(())
 	}
 
+	/// `bbox=` keeps only the rows inside it, and bounds the output to it.
+	///
+	/// The fixture has one point over Berlin, one over Hamburg and one over
+	/// Munich; a box around Berlin alone must leave one feature and a pyramid
+	/// that no longer reaches the others.
+	#[tokio::test]
+	async fn bbox_keeps_only_the_rows_inside_it() -> Result<()> {
+		const FIXTURE: &str = "from_csv filename=\"../testdata/quakes.csv\" \
+			 lon_column=\"longitude\" lat_column=\"latitude\" max_zoom=8";
+
+		let cropped = PipelineFactory::new_dummy()
+			.operation_from_vpl(&format!("{FIXTURE} bbox=[13.0,52.3,13.8,52.7]"))
+			.await?;
+
+		let coord = TileCoord::from_geo(13.405, 52.52, 8)?;
+		let tile = cropped.tile(&coord).await?.expect("tile over Berlin");
+		let vt = versatiles_geometry::vector_tile::VectorTile::from_blob(&tile.into_blob(&Uncompressed)?)?;
+		assert_eq!(vt.layers[0].features.len(), 1);
+
+		// Hamburg is ~3.4° west and 1° north: outside the box, and now outside the
+		// pyramid as well.
+		let hamburg = TileCoord::from_geo(9.9937, 53.5511, 8)?;
+		assert!(cropped.tile(&hamburg).await?.is_none());
+
+		let whole = PipelineFactory::new_dummy().operation_from_vpl(FIXTURE).await?;
+		assert!(
+			whole.tile(&hamburg).await?.is_some(),
+			"without a bbox Hamburg is still there"
+		);
+		Ok(())
+	}
+
+	/// A box that misses every row says so, rather than reporting unusable bounds.
+	#[tokio::test]
+	async fn a_bbox_that_selects_nothing_says_so() {
+		let msg = format!(
+			"{:#}",
+			PipelineFactory::new_dummy()
+				.operation_from_vpl(
+					"from_csv filename=\"../testdata/quakes.csv\" \
+					 lon_column=\"longitude\" lat_column=\"latitude\" bbox=[0,0,1,1]"
+				)
+				.await
+				.expect_err("a box over the Atlantic should be refused")
+		);
+		assert!(msg.contains("selects no features"), "{msg}");
+	}
+
 	#[tokio::test]
 	async fn unsupported_args_error() -> Result<()> {
-		// `bbox=` is still rejected.
-		let factory = PipelineFactory::new_dummy();
-		let result = factory
-			.operation_from_vpl(
-				"from_csv filename=\"../testdata/quakes.csv\" \
-				 lon_column=\"longitude\" lat_column=\"latitude\" \
-				 bbox=[0,0,1,1]",
-			)
-			.await;
-		assert!(result.is_err());
-		let msg = format!("{:#}", result.unwrap_err());
-		assert!(msg.contains("bbox"), "{msg}");
-
 		// Combining include + exclude is rejected as ambiguous.
 		let factory = PipelineFactory::new_dummy();
 		let result = factory

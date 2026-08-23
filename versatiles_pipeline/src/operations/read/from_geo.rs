@@ -17,7 +17,7 @@
 
 use std::{path::Path, sync::Arc};
 
-use anyhow::{Result, bail};
+use anyhow::{Result, bail, ensure};
 use futures::StreamExt;
 use versatiles_container::{DataLocation, TileSource};
 use versatiles_core::TileCompression;
@@ -31,7 +31,7 @@ use versatiles_geometry::{
 use crate::{
 	PipelineFactory,
 	helpers::{
-		feature_tile_source::{FeatureTileSource, apply_property_filters},
+		feature_tile_source::{BBoxClip, FeatureTileSource, FeatureTileSourceArgs, apply_property_filters},
 		tile_size_monitor::MaxTileBytes,
 	},
 	vpl::VPLNode,
@@ -73,6 +73,14 @@ const PROGRESS_MIN_BYTES: u64 = 10_000_000;
 /// exceeds it, or set `max_tile_bytes=none` to emit tiles at any size; the
 /// soft-cap warning threshold, 200 KB at the default, scales with it.
 ///
+/// `bbox` is `[west, south, east, north]` in degrees, and crops while reading:
+/// features outside it are dropped before anything is built, and the tile
+/// pyramid is clipped to it. That turns a planet-scale extract into one city's
+/// tiles in a single pass, where cropping afterwards with
+/// `versatiles convert --bbox` means writing the whole thing out first. The crop
+/// is tile-granular, as it is there — a boundary tile keeps whatever falls
+/// inside it, including the parts of a feature that reach past the box.
+///
 /// `ignore_id` exists because MVT requires a `uint64` feature id. A string id —
 /// as USGS earthquake data has — is dropped at encode time anyway, so setting
 /// this makes that explicit; it is also the way to discard an id that is just
@@ -87,7 +95,7 @@ struct Args {
 	min_zoom: Option<u8>,
 	/// Highest zoom level to emit. Defaults to a heuristic capped at `14`.
 	max_zoom: Option<u8>,
-	/// Area to clip to, in WGS84 degrees. Not implemented yet. Defaults to no clipping.
+	/// Area to restrict the output to, in WGS84 degrees. Defaults to the input's extent.
 	bbox: Option<[f64; 4]>,
 	/// Properties to keep. Mutually exclusive with `properties_exclude`. Defaults to all.
 	properties_include: Option<Vec<String>>,
@@ -144,6 +152,7 @@ impl Operation {
 
 		let point_reduction = args.point_reduction;
 		let compression = args.compression.unwrap_or(TileCompression::Gzip);
+		let clip = args.bbox.map(BBoxClip::new).transpose()?;
 
 		// Format dispatch by extension (case-insensitive).
 		let ext = path
@@ -162,12 +171,24 @@ impl Operation {
 			other => bail!("unsupported file extension '.{other}' for from_geo"),
 		};
 		log::debug!("from_geo: loading {format_label} from {}", path.display());
-		let mut features = load_features(&path, ext.as_str(), format_label, factory).await?;
+		let mut features = load_features(&path, ext.as_str(), format_label, factory, clip.as_ref()).await?;
 		if args.ignore_id.unwrap_or(false) {
 			for f in &mut features {
 				f.id = None;
 			}
 		}
+		// A clip that keeps nothing is worth saying out loud: the alternative is
+		// `FeatureImport` reporting that it could not compute bounds, which reads
+		// like a broken file rather than a bbox that missed.
+		if let Some(clip) = &clip {
+			ensure!(
+				!features.is_empty(),
+				"bbox={:?} selects no features from {}",
+				clip.geo().as_tuple(),
+				path.display()
+			);
+		}
+
 		// Apply property filters before passing to FeatureImport so the
 		// generated `vector_layers` schema reflects the kept fields.
 		apply_property_filters(
@@ -194,22 +215,22 @@ impl Operation {
 
 		Ok(Box::new(FeatureTileSource::new(
 			import,
-			&layer_name,
-			compression,
-			"from_geo",
-			"geo features",
-			"geo",
-			args.max_tile_bytes,
+			&FeatureTileSourceArgs {
+				layer_name: &layer_name,
+				compression,
+				label: "from_geo",
+				source_description: "geo features",
+				source_short: "geo",
+				max_tile_bytes: args.max_tile_bytes,
+				clip,
+			},
 		)?) as Box<dyn TileSource>)
 	}
 }
 
-/// Reject the args we still don't support (`bbox=`) and the combination
-/// `properties_include= … properties_exclude=` (ambiguous: pick one).
+/// Reject the argument combination `properties_include= … properties_exclude=`
+/// (ambiguous: pick one).
 fn reject_unsupported_args(args: &Args) -> Result<()> {
-	if args.bbox.is_some() {
-		bail!("from_geo: `bbox=` is not supported");
-	}
 	if args.properties_include.is_some() && args.properties_exclude.is_some() {
 		bail!("from_geo: `properties_include=` and `properties_exclude=` are mutually exclusive");
 	}
@@ -223,6 +244,7 @@ async fn load_features(
 	ext: &str,
 	format_label: &str,
 	factory: &PipelineFactory,
+	clip: Option<&BBoxClip>,
 ) -> Result<Vec<GeoFeature>> {
 	let total_bytes = source_size_bytes(path, ext);
 	let (handle, cb) = if total_bytes >= PROGRESS_MIN_BYTES {
@@ -242,21 +264,21 @@ async fn load_features(
 			if let Some(cb) = cb {
 				s = s.with_progress(cb);
 			}
-			drain(&s).await?
+			drain(&s, clip).await?
 		}
 		"ndjson" | "ndgeojson" | "geojsonl" | "geojsonseq" => {
 			let mut s = GeoJsonSource::new_line_delimited(path);
 			if let Some(cb) = cb {
 				s = s.with_progress(cb);
 			}
-			drain(&s).await?
+			drain(&s, clip).await?
 		}
 		"shp" => {
 			let mut s = ShapefileSource::new(path);
 			if let Some(cb) = cb {
 				s = s.with_progress(cb);
 			}
-			drain(&s).await?
+			drain(&s, clip).await?
 		}
 		_ => unreachable!("caller validated the extension"),
 	};
@@ -286,12 +308,20 @@ fn source_size_bytes(path: &Path, ext: &str) -> u64 {
 /// [`FeatureImport::from_features`] expects as input — fusing the work into
 /// the load loop avoids two extra full-Vec passes on what's typically a
 /// multi-GB feature set.
-async fn drain<S: FeatureSource + ?Sized>(source: &S) -> Result<Vec<GeoFeature>> {
+///
+/// A `bbox=` filters here rather than afterwards, for the same reason: on a
+/// planet-scale extract cropped to one city, the features that are dropped are
+/// nearly all of them, and never accumulating them is the whole point.
+async fn drain<S: FeatureSource + ?Sized>(source: &S, clip: Option<&BBoxClip>) -> Result<Vec<GeoFeature>> {
 	use versatiles_geometry::feature_import::project_and_flatten;
 	let mut stream = source.load()?;
 	let mut features = Vec::new();
 	while let Some(item) = stream.next().await {
-		features.extend(project_and_flatten(item?)?);
+		features.extend(
+			project_and_flatten(item?)?
+				.into_iter()
+				.filter(|f| clip.is_none_or(|c| c.keeps(f))),
+		);
 	}
 	Ok(features)
 }
@@ -579,17 +609,102 @@ mod tests {
 		Ok(())
 	}
 
+	/// `bbox=` bounds the output, not just the features that are read.
+	///
+	/// Dropping features alone would not do it: the fixture's polygons reach past
+	/// any small box, so the data bounds — and with them the pyramid — would still
+	/// cover everything the input touches. The pyramid has to be clipped too, or
+	/// the operation would emit tiles the caller asked it not to.
+	#[tokio::test]
+	async fn bbox_bounds_the_pyramid_and_the_tiles() -> Result<()> {
+		const FIXTURE: &str = "from_geo filename=\"../testdata/places.geojson\" max_zoom=8";
+
+		let whole = PipelineFactory::new_dummy().operation_from_vpl(FIXTURE).await?;
+		let cropped = PipelineFactory::new_dummy()
+			.operation_from_vpl(&format!("{FIXTURE} bbox=[13.3,52.4,13.5,52.6]"))
+			.await?;
+
+		let bounds = |op: &dyn TileSource| -> (f64, f64, f64, f64) {
+			op.metadata()
+				.tile_pyramid()
+				.expect("pyramid")
+				.geo_bbox()
+				.expect("bounds")
+				.as_tuple()
+		};
+		let (w0, s0, e0, n0) = bounds(whole.as_ref());
+		let (w1, s1, e1, n1) = bounds(cropped.as_ref());
+
+		// The pyramid is a set of tiles, so the box it reports is the requested
+		// one rounded out to tile edges: at max_zoom=8 a tile is 1.4° wide and the
+		// whole request falls inside one of them. What must hold is that cropping
+		// only ever shrinks, and shrinks something.
+		assert!(
+			w1 >= w0 && s1 >= s0 && e1 <= e0 && n1 <= n0,
+			"{:?} vs {:?}",
+			(w1, s1, e1, n1),
+			(w0, s0, e0, n0)
+		);
+		assert!(
+			e1 < e0,
+			"the eastern arm of the fixture should have been cropped away: {e1} vs {e0}"
+		);
+
+		// Rounded out, but never by more than one tile at max_zoom.
+		let tile_width = 360.0 / 2f64.powi(8);
+		assert!(w1 > 13.3 - tile_width && e1 < 13.5 + tile_width, "{:?}", (w1, e1));
+
+		// The single-tile path honours the same promise as the stream.
+		let far_away = TileCoord::from_geo(0.0, 0.0, 8)?;
+		assert!(whole.tile(&far_away).await?.is_none());
+		assert!(cropped.tile(&far_away).await?.is_none());
+		Ok(())
+	}
+
+	/// Features outside the box are dropped while reading, not carried and then
+	/// clipped per tile — that is what makes cropping a planet-scale input
+	/// affordable.
+	#[tokio::test]
+	async fn bbox_drops_features_outside_it() -> Result<()> {
+		const FIXTURE: &str = "from_geo filename=\"../testdata/places.geojson\" layer_name=\"places\" \
+			 max_zoom=8 polygon_simplify=0 line_simplify=0 polygon_min_area=0 line_min_length=0";
+
+		// The fixture's `Districts` MultiPolygon has a piece around lon 14.0-14.5;
+		// this box excludes it while keeping the three features over Berlin.
+		let cropped = PipelineFactory::new_dummy()
+			.operation_from_vpl(&format!("{FIXTURE} bbox=[12.9,52.4,13.9,52.8]"))
+			.await?;
+
+		let coord = TileCoord::from_geo(13.4, 52.5, 8)?;
+		let tile = cropped.tile(&coord).await?.expect("tile over Berlin");
+		let vt = versatiles_geometry::vector_tile::VectorTile::from_blob(&tile.into_blob(&Uncompressed)?)?;
+		let names: Vec<String> = vt.layers[0]
+			.features
+			.iter()
+			.filter_map(|f| f.to_feature(&vt.layers[0]).ok())
+			.filter_map(|f| f.properties.get("name").map(ToString::to_string))
+			.collect();
+		assert!(!names.iter().any(|n| n.contains("Districts")), "{names:?}");
+		Ok(())
+	}
+
+	/// A box that misses everything says so, instead of reporting that the bounds
+	/// could not be computed — which reads like a broken file.
+	#[tokio::test]
+	async fn a_bbox_that_selects_nothing_says_so() {
+		let msg = format!(
+			"{:#}",
+			PipelineFactory::new_dummy()
+				.operation_from_vpl("from_geo filename=\"../testdata/places.geojson\" bbox=[0,0,1,1]")
+				.await
+				.expect_err("a box over the Atlantic should be refused")
+		);
+		assert!(msg.contains("selects no features"), "{msg}");
+		assert!(!msg.contains("failed to compute bounds"), "{msg}");
+	}
+
 	#[tokio::test]
 	async fn unsupported_args_error() -> Result<()> {
-		// `bbox=` is still rejected.
-		let factory = PipelineFactory::new_dummy();
-		let bbox_err = factory
-			.operation_from_vpl("from_geo filename=\"../testdata/places.geojson\" bbox=[0,0,1,1]")
-			.await;
-		assert!(bbox_err.is_err());
-		let msg = format!("{:#}", bbox_err.unwrap_err());
-		assert!(msg.contains("bbox"), "{msg}");
-
 		// Combining include + exclude is rejected as ambiguous.
 		let factory = PipelineFactory::new_dummy();
 		let result = factory

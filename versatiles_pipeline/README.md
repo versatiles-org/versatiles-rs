@@ -209,6 +209,8 @@ Left to itself, `max_zoom` picks the level at which the median feature spans rou
 
 A tile over `max_tile_bytes` is dropped while streaming and an error when a single tile is requested. Raise the cap when a legitimate low-zoom tile exceeds it, or set `max_tile_bytes=none` to emit tiles at any size; the soft-cap warning threshold, 200 KB at the default, scales with it.
 
+`bbox` is `[west, south, east, north]` in degrees, and crops while reading: rows outside it are dropped before anything is built, and the tile pyramid is clipped to it. That turns a large CSV into one region's tiles in a single pass, where cropping afterwards with `versatiles convert --bbox` means writing the whole thing out first. The crop is tile-granular, as it is there.
+
 ### Parameters
 
 - **`filename`: String (required)** - Path to the CSV file.
@@ -220,7 +222,7 @@ A tile over `max_tile_bytes` is dropped while streaming and an error when a sing
 - _`layer_name`: String (optional)_ - Name of the layer to write into. Defaults to the file's stem.
 - _`min_zoom`: u8 (optional)_ - Lowest zoom level to emit. Defaults to `0`.
 - _`max_zoom`: u8 (optional)_ - Highest zoom level to emit. Defaults to a heuristic capped at `14`.
-- _`bbox`: [f64,f64,f64,f64] (optional)_ - Area to clip to, in WGS84 degrees. Not implemented yet. Defaults to no clipping.
+- _`bbox`: [f64,f64,f64,f64] (optional)_ - Area to restrict the output to, in WGS84 degrees. Defaults to the input's extent.
 - _`properties_include`: [String,...] (optional)_ - Columns to keep as properties. Mutually exclusive with `properties_exclude`. Defaults to all.
 - _`properties_exclude`: [String,...] (optional)_ - Columns to drop. Mutually exclusive with `properties_include`. Defaults to none.
 - _`point_reduction`: PointReductionStrategy (optional)_ - Values: `none`, `drop_rate`, `min_distance`. How to thin out points too close to distinguish. Defaults to `min_distance`.
@@ -299,6 +301,8 @@ Left to itself, `max_zoom` picks the level at which the median feature spans rou
 
 A tile over `max_tile_bytes` is dropped while streaming and an error when a single tile is requested. Raise the cap when a legitimate low-zoom tile exceeds it, or set `max_tile_bytes=none` to emit tiles at any size; the soft-cap warning threshold, 200 KB at the default, scales with it.
 
+`bbox` is `[west, south, east, north]` in degrees, and crops while reading: features outside it are dropped before anything is built, and the tile pyramid is clipped to it. That turns a planet-scale extract into one city's tiles in a single pass, where cropping afterwards with `versatiles convert --bbox` means writing the whole thing out first. The crop is tile-granular, as it is there — a boundary tile keeps whatever falls inside it, including the parts of a feature that reach past the box.
+
 `ignore_id` exists because MVT requires a `uint64` feature id. A string id — as USGS earthquake data has — is dropped at encode time anyway, so setting this makes that explicit; it is also the way to discard an id that is just noise.
 
 ### Parameters
@@ -307,7 +311,7 @@ A tile over `max_tile_bytes` is dropped while streaming and an error when a sing
 - _`layer_name`: String (optional)_ - Name of the layer to write into. Defaults to the file's stem.
 - _`min_zoom`: u8 (optional)_ - Lowest zoom level to emit. Defaults to `0`.
 - _`max_zoom`: u8 (optional)_ - Highest zoom level to emit. Defaults to a heuristic capped at `14`.
-- _`bbox`: [f64,f64,f64,f64] (optional)_ - Area to clip to, in WGS84 degrees. Not implemented yet. Defaults to no clipping.
+- _`bbox`: [f64,f64,f64,f64] (optional)_ - Area to restrict the output to, in WGS84 degrees. Defaults to the input's extent.
 - _`properties_include`: [String,...] (optional)_ - Properties to keep. Mutually exclusive with `properties_exclude`. Defaults to all.
 - _`properties_exclude`: [String,...] (optional)_ - Properties to drop. Mutually exclusive with `properties_include`. Defaults to none.
 - _`polygon_min_area`: f32 (optional)_ - Area in square tile-pixels below which a polygon is dropped. Defaults to `4`.

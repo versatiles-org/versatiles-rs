@@ -16,11 +16,13 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
+use geo::BoundingRect;
+use geo_types::{Coord, Rect};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
-use versatiles_geometry::{feature_import::FeatureImport, geo::GeoFeature};
+use versatiles_core::{GeoBBox, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
+use versatiles_geometry::{ext::coord_to_mercator, feature_import::FeatureImport, geo::GeoFeature};
 
 use crate::helpers::{
 	tile_error_monitor::{TileErrorMonitor, TileErrorStage},
@@ -46,6 +48,87 @@ pub fn apply_property_filters(features: &mut [GeoFeature], include: Option<&[Str
 	}
 }
 
+/// The `bbox=` argument, resolved once into the two forms the load path needs.
+///
+/// Cropping happens in two places and both are necessary. Dropping features
+/// keeps a planet-scale input from being carried through simplification for a
+/// city-sized output, but on its own it does not bound the result: one country
+/// polygon reaching into the box would still stretch the data bounds — and with
+/// them the tile pyramid — across a continent. Clipping the pyramid bounds the
+/// output; dropping the features makes getting there affordable.
+#[derive(Clone, Debug)]
+pub struct BBoxClip {
+	/// The requested area, for clipping the tile pyramid.
+	geo: GeoBBox,
+	/// The same area in web mercator, for testing features — which have already
+	/// been projected by the time they are filtered.
+	mercator: Rect<f64>,
+}
+
+impl BBoxClip {
+	/// Resolve a `[west, south, east, north]` argument in WGS84 degrees.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the values are not a valid geographic box.
+	pub fn new(bbox: [f64; 4]) -> Result<Self> {
+		let geo = GeoBBox::try_from(&bbox)?;
+		let mercator = Rect::new(
+			coord_to_mercator(Coord {
+				x: geo.x_min,
+				y: geo.y_min,
+			}),
+			coord_to_mercator(Coord {
+				x: geo.x_max,
+				y: geo.y_max,
+			}),
+		);
+		Ok(Self { geo, mercator })
+	}
+
+	/// Whether a projected feature reaches into the box.
+	///
+	/// Tested on bounding rectangles, so a feature whose envelope overlaps but
+	/// whose geometry does not is kept. That errs the safe way: the tile renderer
+	/// clips per tile anyway, and the alternative — an exact test per feature —
+	/// would cost more than it saves on the inputs this exists for.
+	#[must_use]
+	pub fn keeps(&self, feature: &GeoFeature) -> bool {
+		feature.geometry.bounding_rect().is_some_and(|r| {
+			r.min().x <= self.mercator.max().x
+				&& r.max().x >= self.mercator.min().x
+				&& r.min().y <= self.mercator.max().y
+				&& r.max().y >= self.mercator.min().y
+		})
+	}
+
+	/// The requested area, for clipping the tile pyramid.
+	#[must_use]
+	pub fn geo(&self) -> &GeoBBox {
+		&self.geo
+	}
+}
+
+/// Everything [`FeatureTileSource::new`] needs besides the import itself.
+///
+/// A struct rather than eight positional arguments, most of which are strings.
+pub struct FeatureTileSourceArgs<'a> {
+	/// Layer name, used for the TileJSON `name` and the single vector layer.
+	pub layer_name: &'a str,
+	/// Compression applied to emitted tiles.
+	pub compression: TileCompression,
+	/// Operation name in monitor log lines, e.g. `"from_geo"`.
+	pub label: &'static str,
+	/// `SourceType::new_container` description, e.g. `"geo features"`.
+	pub source_description: &'static str,
+	/// `SourceType::new_container` short name, e.g. `"geo"`.
+	pub source_short: &'static str,
+	/// Hard cap on encoded tile size; `None` keeps the default 1 MiB.
+	pub max_tile_bytes: Option<MaxTileBytes>,
+	/// `bbox=`, when the operation was given one.
+	pub clip: Option<BBoxClip>,
+}
+
 /// Concrete `TileSource` shared by `from_geo` and `from_csv`. Wraps a
 /// fully-built [`FeatureImport`] plus per-operation runtime state
 /// (compression, size/error monitors, source-type labels).
@@ -65,30 +148,49 @@ pub struct FeatureTileSource {
 impl FeatureTileSource {
 	/// Build a [`FeatureTileSource`] from a populated [`FeatureImport`].
 	///
-	/// `label` identifies the operation in monitor log lines (e.g.
+	/// `args.label` identifies the operation in monitor log lines (e.g.
 	/// `"from_geo"`); `source_description` and `source_short` go into the
 	/// `SourceType` used by tooling that introspects the pipeline.
 	///
-	/// `max_tile_bytes` sets the hard cap on encoded tile size: `None` keeps
+	/// `args.max_tile_bytes` sets the hard cap on encoded tile size: `None` keeps
 	/// the default 1 MiB, [`MaxTileBytes::Disabled`] switches the cap off, and
 	/// [`MaxTileBytes::Limit`] caps encoded tiles at that many bytes. Tiles
 	/// above the cap are skipped by the streaming path and error out on the
 	/// single-tile path; the soft-cap warning threshold scales with the cap.
-	pub fn new(
-		import: FeatureImport,
-		layer_name: &str,
-		compression: TileCompression,
-		label: &'static str,
-		source_description: &'static str,
-		source_short: &'static str,
-		max_tile_bytes: Option<MaxTileBytes>,
-	) -> Result<Self> {
+	///
+	/// `args.clip` narrows the pyramid to the requested `bbox=`, so a feature
+	/// reaching out of the box cannot pull the output across a continent with it.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the clip selects no tiles, or if the TileJSON cannot
+	/// be assembled.
+	pub fn new(import: FeatureImport, args: &FeatureTileSourceArgs) -> Result<Self> {
+		let FeatureTileSourceArgs {
+			layer_name,
+			compression,
+			label,
+			source_description,
+			source_short,
+			max_tile_bytes,
+			clip,
+		} = args;
+		let compression = *compression;
+
 		// Tile pyramid covers the data bbox over [min_zoom, max_zoom];
 		// for empty input, an empty pyramid.
-		let pyramid = match import.bounds_geo()? {
+		let mut pyramid = match import.bounds_geo()? {
 			Some(bbox) => TilePyramid::from_geo_bbox(import.min_zoom(), import.max_zoom(), &bbox)?,
 			None => TilePyramid::new_empty(),
 		};
+		if let Some(clip) = clip {
+			pyramid.intersect_geo_bbox(clip.geo())?;
+			ensure!(
+				!pyramid.is_empty(),
+				"bbox={:?} selects no tiles from this input",
+				clip.geo().as_tuple()
+			);
+		}
 		let metadata = TileSourceMetadata::new(TileFormat::MVT, compression, Traversal::ANY, Some(pyramid));
 
 		let mut tilejson = TileJSON::default();
@@ -104,7 +206,7 @@ impl FeatureTileSource {
 			metadata,
 			tilejson,
 			compression,
-			size_monitor: TileSizeMonitor::new(label, resolve_hard_cap(max_tile_bytes)),
+			size_monitor: TileSizeMonitor::new(label, resolve_hard_cap(*max_tile_bytes)),
 			error_monitor: TileErrorMonitor::new(label),
 			source_description,
 			source_short,
@@ -136,6 +238,12 @@ impl TileSource for FeatureTileSource {
 	}
 
 	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+		// The advertised pyramid is the promise; honour it here too, or a `bbox=`
+		// would bound the stream while single-tile requests still answered from
+		// outside it.
+		if self.metadata.intersection_bbox(&coord.to_tile_bbox()).is_empty() {
+			return Ok(None);
+		}
 		match self.import.get_tile(coord.level, coord.x, coord.y)? {
 			Some(vector_tile) => {
 				// Compute the breakdown before `Tile::from_vector` consumes
@@ -318,12 +426,15 @@ mod tests {
 		let import = FeatureImport::from_features(features, args).unwrap();
 		FeatureTileSource::new(
 			import,
-			"features",
-			TileCompression::Uncompressed,
-			"test_label",
-			"test source",
-			"test",
-			max_tile_bytes,
+			&FeatureTileSourceArgs {
+				layer_name: "features",
+				compression: TileCompression::Uncompressed,
+				label: "test_label",
+				source_description: "test source",
+				source_short: "test",
+				max_tile_bytes,
+				clip: None,
+			},
 		)
 		.unwrap()
 	}
