@@ -125,6 +125,31 @@ impl FeatureImport {
 	/// Callers loading from disk should run [`project_and_flatten`] on every
 	/// record as it arrives — fusing the work into the load loop saves two
 	/// full passes over what's typically a multi-GB feature vector.
+	///
+	/// ```
+	/// use versatiles_geometry::feature_import::{FeatureImport, FeatureImportArgs, project_and_flatten};
+	/// use versatiles_geometry::geo::GeoFeature;
+	/// use geo_types::{Geometry, Point};
+	///
+	/// // WGS84 in; `project_and_flatten` is what satisfies the precondition
+	/// // above, so it runs before the features reach `from_features`.
+	/// let source = vec![GeoFeature::new(Geometry::Point(Point::new(13.4, 52.5)))];
+	/// let flattened: Vec<GeoFeature> = source.into_iter().flat_map(project_and_flatten).collect();
+	///
+	/// let import = FeatureImport::from_features(
+	///     flattened,
+	///     FeatureImportArgs {
+	///         layer_name: Some("places".to_string()),
+	///         max_zoom: Some(6),
+	///         ..Default::default()
+	///     },
+	/// )?;
+	///
+	/// // Tiles are generated on demand, per coordinate.
+	/// assert_eq!(import.max_zoom(), 6);
+	/// assert!(import.get_tile(0, 0, 0)?.is_some());
+	/// # Ok::<(), anyhow::Error>(())
+	/// ```
 	#[context("importing features")]
 	pub fn from_features(flattened: Vec<GeoFeature>, args: FeatureImportArgs) -> Result<Self> {
 		let config: FeatureImportConfig = args.into();

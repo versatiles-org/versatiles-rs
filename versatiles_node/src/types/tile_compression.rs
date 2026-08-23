@@ -31,6 +31,9 @@ use versatiles_core::TileCompression;
 ///
 /// # Example
 ///
+/// Not a doctest: `types` is a private module, so this function is not reachable
+/// from one. The cases below are covered by the unit tests in this file.
+///
 /// ```ignore
 /// let compression = parse_compression("gzip")?; // TileCompression::Gzip
 /// let compression = parse_compression("BROTLI")?; // TileCompression::Brotli

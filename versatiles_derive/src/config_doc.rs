@@ -12,7 +12,7 @@ use syn::Type;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```text
 /// /// First line
 /// /// Second line
 /// struct Foo;
@@ -42,7 +42,7 @@ pub fn collect_doc(attrs: &[syn::Attribute]) -> String {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```text
 /// #[serde(rename = "user_name")]
 /// name: String,
 /// ```

@@ -13,27 +13,45 @@
 //! # Examples
 //!
 //! ## Standard CSV (US/UK format)
-//! ```ignore
+//! ```no_run
+//! # use std::path::Path;
+//! # use versatiles_container::TilesRuntime;
+//! # use versatiles_pipeline::CsvReader;
+//! # async fn example() -> anyhow::Result<()> {
+//! # let runtime = TilesRuntime::default();
 //! let data = CsvReader::new(Path::new("data.csv"), runtime)
 //!     .read()
 //!     .await?;
+//! # Ok(()) }
 //! ```
 //!
 //! ## German CSV (semicolon + comma decimal)
-//! ```ignore
+//! ```no_run
+//! # use std::path::Path;
+//! # use versatiles_container::TilesRuntime;
+//! # use versatiles_pipeline::CsvReader;
+//! # async fn example() -> anyhow::Result<()> {
+//! # let runtime = TilesRuntime::default();
 //! let data = CsvReader::new(Path::new("data.csv"), runtime)
 //!     .with_field_separator(';')
 //!     .with_decimal_separator(',')
 //!     .read()
 //!     .await?;
+//! # Ok(()) }
 //! ```
 //!
 //! ## TSV file (auto-detected)
-//! ```ignore
+//! ```no_run
+//! # use std::path::Path;
+//! # use versatiles_container::TilesRuntime;
+//! # use versatiles_pipeline::CsvReader;
+//! # async fn example() -> anyhow::Result<()> {
+//! # let runtime = TilesRuntime::default();
 //! // Tab separator is auto-detected from .tsv extension
 //! let data = CsvReader::new(Path::new("data.tsv"), runtime)
 //!     .read()
 //!     .await?;
+//! # Ok(()) }
 //! ```
 
 use std::{collections::HashSet, io::BufReader, path::Path};
@@ -54,9 +72,12 @@ use versatiles_geometry::geo::{GeoProperties, GeoValue};
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```no_run
 /// use std::path::Path;
-/// use versatiles_pipeline::helpers::CsvReader;
+/// use versatiles_pipeline::CsvReader;
+/// # use versatiles_container::TilesRuntime;
+/// # async fn example() -> anyhow::Result<()> {
+/// # let runtime = TilesRuntime::default();
 ///
 /// // Read a German CSV file with semicolon separator and comma decimals
 /// let data = CsvReader::new(Path::new("german_data.csv"), runtime)
@@ -69,6 +90,7 @@ use versatiles_geometry::geo::{GeoProperties, GeoValue};
 /// for row in &data {
 ///     println!("{:?}", row.get("column_name"));
 /// }
+/// # Ok(()) }
 /// ```
 #[derive(Clone)]
 pub struct CsvReader {
@@ -99,7 +121,12 @@ impl CsvReader {
 	///
 	/// # Example
 	///
-	/// ```ignore
+	/// ```no_run
+	/// # use std::path::Path;
+	/// # use versatiles_container::TilesRuntime;
+	/// use versatiles_pipeline::CsvReader;
+	///
+	/// let runtime = TilesRuntime::default();
 	/// let reader = CsvReader::new(Path::new("data.csv"), runtime);
 	/// ```
 	#[must_use]
@@ -131,7 +158,11 @@ impl CsvReader {
 	///
 	/// # Example
 	///
-	/// ```ignore
+	/// ```no_run
+	/// # use std::path::Path;
+	/// # use versatiles_container::TilesRuntime;
+	/// # use versatiles_pipeline::CsvReader;
+	/// # let (path, runtime) = (Path::new("data.csv"), TilesRuntime::default());
 	/// // Parse a German CSV file with semicolon separator
 	/// let reader = CsvReader::new(path, runtime)
 	///     .with_field_separator(';');
@@ -150,7 +181,11 @@ impl CsvReader {
 	///
 	/// # Example
 	///
-	/// ```ignore
+	/// ```no_run
+	/// # use std::path::Path;
+	/// # use versatiles_container::TilesRuntime;
+	/// # use versatiles_pipeline::CsvReader;
+	/// # let (path, runtime) = (Path::new("data.csv"), TilesRuntime::default());
 	/// // Parse German numbers like "3,14" as 3.14
 	/// let reader = CsvReader::new(path, runtime)
 	///     .with_decimal_separator(',');
@@ -187,11 +222,17 @@ impl CsvReader {
 	///
 	/// # Example
 	///
-	/// ```ignore
+	/// ```no_run
+	/// # use std::path::Path;
+	/// # use versatiles_container::TilesRuntime;
+	/// # use versatiles_pipeline::CsvReader;
+	/// # fn example() -> anyhow::Result<()> {
+	/// # let runtime = TilesRuntime::default();
 	/// let columns = CsvReader::new(Path::new("data.csv"), runtime)
 	///     .with_field_separator(';')
 	///     .read_header()?
 	///     .columns;
+	/// # Ok(()) }
 	/// ```
 	pub fn read_header(&self) -> Result<CsvHeader> {
 		read_csv_header(&self.path, Some(self.field_separator))
@@ -227,7 +268,12 @@ impl CsvReader {
 	///
 	/// # Example
 	///
-	/// ```ignore
+	/// ```no_run
+	/// # use std::path::Path;
+	/// # use versatiles_container::TilesRuntime;
+	/// # use versatiles_pipeline::CsvReader;
+	/// # async fn example() -> anyhow::Result<()> {
+	/// # let runtime = TilesRuntime::default();
 	/// let data = CsvReader::new(Path::new("data.csv"), runtime)
 	///     .read()
 	///     .await?;
@@ -237,6 +283,7 @@ impl CsvReader {
 	///         println!("Name: {name}");
 	///     }
 	/// }
+	/// # Ok(()) }
 	/// ```
 	#[context("Failed to read CSV file at path: {:?}", self.path)]
 	pub async fn read(&self) -> Result<Vec<GeoProperties>> {

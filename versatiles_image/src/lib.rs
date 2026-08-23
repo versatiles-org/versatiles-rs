@@ -12,6 +12,25 @@
 //!   - Metadata and pixel introspection (`traits::info`)
 //!   - Common transformations (scaling, flattening, cropping; `traits::operation`)
 //!   - Deterministic test image generation (`traits::test`)
+//!
+//! ### Encoding and decoding a tile
+//!
+//! [`encode`] takes `quality` and `effort` for every format and ignores the one
+//! a given codec has no use for — PNG has no quality setting, so it is `None`
+//! here:
+//!
+//! ```
+//! use versatiles_core::TileFormat;
+//! use versatiles_image::{DynamicImage, GenericImageView, decode, encode};
+//!
+//! let image = DynamicImage::new_rgb8(256, 256);
+//!
+//! let blob = encode(&image, TileFormat::PNG, None, Some(6))?;
+//! let decoded = decode(&blob, TileFormat::PNG)?;
+//!
+//! assert_eq!(decoded.dimensions(), (256, 256));
+//! # Ok::<(), anyhow::Error>(())
+//! ```
 
 pub mod color;
 pub mod format;
