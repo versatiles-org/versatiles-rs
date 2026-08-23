@@ -148,6 +148,20 @@ pub fn open_tile_sink(
 			if is_dir {
 				DirectoryTileSink::open(destination, format, compression, runtime)?
 			} else if let Some(extension) = extension.as_deref() {
+				// PMTiles is the one format this workspace can write but not write
+				// *incrementally*. A sink accepts tiles in whatever order the threads
+				// producing them finish, while a clustered PMTiles archive needs them
+				// ordered by Hilbert index — which is only knowable once they are all
+				// in. `PMTilesWriter` solves that by reordering through a temporary
+				// file, an option a sink does not have. So the answer is not "this
+				// format is unsupported" but "use the command that writes it whole".
+				if extension == "pmtiles" {
+					bail!(
+						"cannot write .pmtiles here: a PMTiles archive orders its tiles, which is only possible once every \
+						 tile is known, so it cannot be written incrementally. Use `versatiles convert` to produce PMTiles, \
+						 or write .versatiles, .mbtiles, .tar or a directory instead"
+					)
+				}
 				bail!("unsupported tile sink format: .{extension}")
 			} else {
 				bail!(
@@ -171,6 +185,49 @@ mod tests {
 	use std::sync::atomic::{AtomicUsize, Ordering};
 
 	use super::*;
+
+	/// PMTiles cannot be a sink, and the error has to say why rather than calling
+	/// the format unsupported — `versatiles convert` writes it perfectly well.
+	#[test]
+	fn a_pmtiles_destination_points_at_convert() {
+		let temp = assert_fs::TempDir::new().unwrap();
+		let destination = temp.path().join("mosaic.pmtiles");
+
+		// `Box<dyn TileSink>` is not `Debug`, so `expect_err` is unavailable.
+		let message = match open_tile_sink(
+			destination.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&TilesRuntime::default(),
+		) {
+			Ok(_) => panic!("a pmtiles sink should not open"),
+			Err(error) => format!("{error:#}"),
+		};
+		assert!(
+			message.contains("versatiles convert"),
+			"should name the way out: {message}"
+		);
+		assert!(
+			!message.contains("unsupported tile sink format"),
+			"the format is supported, just not incrementally: {message}"
+		);
+
+		// An extension nothing writes still gets the plain message.
+		let unknown = temp.path().join("mosaic.sqlite3");
+		let message = match open_tile_sink(
+			unknown.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&TilesRuntime::default(),
+		) {
+			Ok(_) => panic!("an unknown extension should not open"),
+			Err(error) => format!("{error:#}"),
+		};
+		assert!(
+			message.contains("unsupported tile sink format"),
+			"unknown extensions keep the plain message: {message}"
+		);
+	}
 
 	/// A destination written with a trailing separator is a directory, whatever
 	/// its name contains. `out.dir/` used to be read as a container with an
