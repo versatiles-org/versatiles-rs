@@ -11,6 +11,14 @@ use crate::{
 	json::{JsonArray, JsonObject, JsonValue},
 };
 
+/// How deeply arrays and objects may nest before parsing gives up.
+///
+/// The parser is recursive descent, so nesting depth is stack depth: without a
+/// bound, `[[[[…]]]]` from a container's metadata overflows the stack and aborts
+/// the process, which no caller can catch. 128 is the same limit `serde_json`
+/// applies by default, and far beyond anything a real document uses.
+const MAX_NESTING_DEPTH: usize = 128;
+
 /// Parse a JSON string into a `JsonValue`.
 ///
 /// # Errors
@@ -29,10 +37,20 @@ pub fn parse_json_str(json: &str) -> Result<JsonValue> {
 /// Returns an error if an unexpected character is encountered or parsing fails.
 #[context("while parsing JSON data")]
 pub fn parse_json_iter(iter: &mut ByteIterator) -> Result<JsonValue> {
+	parse_json_at_depth(iter, 0)
+}
+
+/// Parse a value that sits `depth` levels inside the document.
+fn parse_json_at_depth(iter: &mut ByteIterator, depth: usize) -> Result<JsonValue> {
+	if depth >= MAX_NESTING_DEPTH {
+		return Err(iter.format_error(&format!("JSON nested deeper than {MAX_NESTING_DEPTH} levels")));
+	}
+
 	iter.skip_whitespace();
 	match iter.expect_peeked_byte()? {
-		b'[' => parse_array_entries(iter, parse_json_iter).map(|i| JsonValue::Array(JsonArray(i))),
-		b'{' => parse_json_object(iter),
+		b'[' => parse_array_entries(iter, |iter2| parse_json_at_depth(iter2, depth + 1))
+			.map(|i| JsonValue::Array(JsonArray(i))),
+		b'{' => parse_json_object(iter, depth),
 		b'"' => parse_quoted_json_string(iter).map(JsonValue::String),
 		d if d.is_ascii_digit() || d == b'.' || d == b'-' => parse_number_as::<f64>(iter).map(JsonValue::Number),
 		b't' => parse_tag(iter, "true").map(|()| JsonValue::Boolean(true)),
@@ -49,10 +67,10 @@ pub fn parse_json_iter(iter: &mut ByteIterator) -> Result<JsonValue> {
 /// # Errors
 /// Returns an error if object syntax is invalid.
 #[context("while parsing JSON object")]
-fn parse_json_object(iter: &mut ByteIterator) -> Result<JsonValue> {
+fn parse_json_object(iter: &mut ByteIterator, depth: usize) -> Result<JsonValue> {
 	let mut list: Vec<(String, JsonValue)> = Vec::new();
 	parse_object_entries(iter, |key, iter2| {
-		list.push((key, parse_json_iter(iter2)?));
+		list.push((key, parse_json_at_depth(iter2, depth + 1)?));
 		Ok(())
 	})?;
 	Ok(JsonValue::Object(JsonObject(BTreeMap::from_iter(list))))
@@ -61,6 +79,36 @@ fn parse_json_object(iter: &mut ByteIterator) -> Result<JsonValue> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// Recursive descent means nesting depth is stack depth. Without a bound,
+	/// `[[[[…]]]]` in a container's metadata overflowed the stack and aborted the
+	/// process — 10,000 levels was enough, and no caller can catch that.
+	#[test]
+	fn nesting_is_bounded() -> Result<()> {
+		// Ordinary depth still parses, both shapes, right up to the limit.
+		assert!(parse_json_str(&format!("{}{}", "[".repeat(100), "]".repeat(100))).is_ok());
+		assert!(parse_json_str(&format!("{}1{}", "{\"a\":".repeat(100), "}".repeat(100))).is_ok());
+		assert!(
+			parse_json_str(&format!(
+				"{}{}",
+				"[".repeat(MAX_NESTING_DEPTH),
+				"]".repeat(MAX_NESTING_DEPTH)
+			))
+			.is_ok(),
+			"exactly {MAX_NESTING_DEPTH} levels must still parse"
+		);
+
+		// One level past it is an error, not a crash.
+		for depth in [MAX_NESTING_DEPTH + 1, 10_000, 1_000_000] {
+			let error = parse_json_str(&format!("{}{}", "[".repeat(depth), "]".repeat(depth))).unwrap_err();
+			assert!(
+				format!("{error:#}").contains("nested deeper"),
+				"depth {depth} gave: {error:#}"
+			);
+		}
+
+		Ok(())
+	}
 	/// JSON spells a character outside the BMP as a surrogate pair, and a writer
 	/// that escapes everything above ASCII produces them for emoji and the CJK
 	/// extensions alike. Decoding the halves separately rejected all of them.
