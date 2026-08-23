@@ -43,7 +43,7 @@
 //! ### Errors
 //! Returns errors if the destination path is not absolute, if file I/O fails, or if compression/encoding fails.
 
-use std::{fs, path::Path};
+use std::{fs, io::ErrorKind, path::Path};
 
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
@@ -60,15 +60,27 @@ pub struct DirectoryWriter {}
 
 impl DirectoryWriter {
 	/// Write a `Blob` to `path`, creating missing parent directories.
+	///
+	/// The write is attempted first and the directory created only if it turns
+	/// out to be missing. Testing `parent.exists()` beforehand cost a stat per
+	/// tile — 87,381 of them for the 511 directories of a level-8 pyramid — where
+	/// this costs none: the common case is one syscall, and the miss costs the
+	/// same as the old code did every time.
+	///
+	/// Two threads can both miss on the same directory; `create_dir_all` treats
+	/// an existing directory as success, so that races safely.
 	#[context("writing file '{}'", path.display())]
 	fn write(path: &Path, blob: &Blob) -> Result<()> {
-		let parent = path.parent().expect("tile path has parent directory");
-		if !parent.exists() {
-			fs::create_dir_all(parent)?;
+		match fs::write(path, blob.as_slice()) {
+			Ok(()) => Ok(()),
+			Err(error) if error.kind() == ErrorKind::NotFound => {
+				let parent = path.parent().expect("tile path has parent directory");
+				fs::create_dir_all(parent)?;
+				fs::write(path, blob.as_slice())?;
+				Ok(())
+			}
+			Err(error) => Err(error.into()),
 		}
-
-		fs::write(path, blob.as_slice())?;
-		Ok(())
 	}
 }
 
