@@ -92,6 +92,8 @@ pub struct TileServer {
 }
 
 impl TileServer {
+	/// A server wired to the silent test runtime, for tests that need one
+	/// without a config file.
 	#[cfg(test)]
 	#[must_use]
 	pub fn new_test(ip: &str, port: u16, minimal_recompression: bool, disable_api: bool) -> TileServer {

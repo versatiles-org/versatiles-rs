@@ -1,3 +1,5 @@
+//! Benchmarks for CSV parsing.
+
 use std::{fmt::Write, hint::black_box, io::Cursor};
 
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};

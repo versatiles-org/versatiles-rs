@@ -45,6 +45,7 @@ exclude = [
 ]
 
 [workspace.lints.rust]
+missing_docs = "deny"
 unused_imports = "deny"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
 

@@ -203,6 +203,8 @@ pub async fn spawn_server(extra_args: &[&str], health_path: &str) -> (String, st
 	(host, child)
 }
 
+/// Asserts that the left string contains the right one, printing both when it
+/// does not — which `assert!(a.contains(b))` alone will not do.
 #[macro_export]
 macro_rules! assert_contains {
 	($left:expr, $right:expr$(,)?) => ({

@@ -1,3 +1,6 @@
+//! Benchmarks for the tile cache under sequential, concurrent-write and
+//! read-heavy access.
+
 use std::{collections::HashMap, hint::black_box, sync::Arc};
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};

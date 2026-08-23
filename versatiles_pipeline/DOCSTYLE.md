@@ -9,6 +9,9 @@ comment, several audiences — so the shape matters as much as the wording.
 This page is the contract. `docs_style.rs` enforces the mechanical half of it as
 a test; the rest is judgement.
 
+For ordinary rustdoc — everything that is not VPL operation or parameter text —
+see [`DOCSTYLE.md`](../DOCSTYLE.md) in the workspace root.
+
 ## Where the text ends up
 
 ```rust

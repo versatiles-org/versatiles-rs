@@ -1,3 +1,6 @@
+//! Benchmarks for the concurrency helpers: concurrency limits, tile-stream
+//! parallelism, stream buffering and concurrent lookups.
+
 use std::{hint::black_box, sync::Arc};
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};

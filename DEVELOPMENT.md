@@ -490,6 +490,8 @@ Quadtree coverage earns its keep where the shape genuinely is not rectangular â€
 
 ## Further Reading
 
+- **Writing rustdoc:** [DOCSTYLE.md](DOCSTYLE.md)
+- **Writing VPL operation docs:** [versatiles_pipeline/DOCSTYLE.md](versatiles_pipeline/DOCSTYLE.md)
 - **Node.js Development:** [versatiles_node/CONTRIBUTING.md](versatiles_node/CONTRIBUTING.md)
 - **VersaTiles Pipeline:** [versatiles_pipeline/README.md](versatiles_pipeline/README.md)
 - **Configuration:** [versatiles/CONFIG.md](versatiles/CONFIG.md)

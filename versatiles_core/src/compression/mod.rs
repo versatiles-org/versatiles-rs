@@ -13,6 +13,7 @@ mod functions;
 mod limit;
 mod methods;
 mod target_compression;
+/// Round-trip helpers shared by the codec tests.
 #[cfg(test)]
 pub mod test_utils;
 

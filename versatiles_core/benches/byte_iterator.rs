@@ -1,3 +1,6 @@
+//! Benchmarks for `ByteIterator`: advancing, consuming, skipping whitespace
+//! and collecting to a string.
+
 use std::{hint::black_box, io::Cursor};
 
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
