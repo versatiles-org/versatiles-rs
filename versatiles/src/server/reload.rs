@@ -105,7 +105,8 @@ impl ReloadHandle {
 }
 
 /// Spawn a background task that reloads the config from `handle.config_path` on every SIGHUP.
-/// No-op on non-Unix platforms.
+///
+/// Platforms without SIGHUP get the stub below instead, which warns and returns.
 #[cfg(unix)]
 pub fn spawn_sighup_handler(handle: ReloadHandle) {
 	use tokio::signal::unix::{SignalKind, signal};
@@ -131,6 +132,10 @@ pub fn spawn_sighup_handler(handle: ReloadHandle) {
 	});
 }
 
+// Each `cfg` arm is a separate item and needs its own docs. The arm the host does
+// not compile is invisible to `missing_docs`, so a Unix build cannot vouch for
+// this one — it reached CI undocumented and broke every Windows job.
+/// Warn that hot-reload is unavailable: this platform has no SIGHUP to listen for.
 #[cfg(not(unix))]
 pub fn spawn_sighup_handler(_handle: ReloadHandle) {
 	log::warn!("SIGHUP hot-reload is not supported on this platform");
