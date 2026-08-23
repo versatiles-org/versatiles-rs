@@ -43,7 +43,10 @@ use regex::{Regex, RegexBuilder};
 use reqwest::{Client, RequestBuilder, StatusCode, Url};
 use tokio::{sync::Semaphore, time::sleep};
 
-use super::{DataReaderTrait, network_reader::NetworkReader};
+use super::{
+	DataReaderTrait,
+	network_reader::{NetworkReader, SmallerRangeWontHelp},
+};
 use crate::{Blob, ByteRange};
 
 /// Maximum number of HTTP requests allowed in flight, shared across all
@@ -179,6 +182,29 @@ fn is_retryable_error(err: &reqwest::Error) -> bool {
 	err.is_connect() || err.is_timeout() || err.is_body()
 }
 
+/// Describe a response whose status is not `206`, marking it when splitting the
+/// range would meet the same answer.
+///
+/// Server errors stay splittable: a server can genuinely fail on a large
+/// response and manage a small one, and so can a proxy answering `413`.
+/// Everything else here — a `200` from a server that ignores `Range`, a `404`,
+/// a `416` for a range past the end of the file — is an answer about the
+/// request rather than its size, and halving it just asks twice.
+fn unexpected_status(range: &ByteRange, len: u64, url: &Url, status: StatusCode, total_attempts: u32) -> anyhow::Error {
+	if status.is_server_error() {
+		return anyhow!(
+			"could not read {range} ({len} bytes) from '{url}': server returned {status} — gave up after {total_attempts} attempts"
+		);
+	}
+
+	let error = anyhow!("could not read {range} ({len} bytes) from '{url}': expected HTTP 206, got {status}");
+	if status == StatusCode::PAYLOAD_TOO_LARGE {
+		error
+	} else {
+		error.context(SmallerRangeWontHelp)
+	}
+}
+
 /// Render a `reqwest::Error` together with its full `source()` chain.
 ///
 /// `reqwest::Error`'s Display reports the outer wrapper (e.g. "error sending
@@ -255,12 +281,7 @@ impl DataReaderHttp {
 			}
 
 			if status != StatusCode::PARTIAL_CONTENT {
-				if status.is_server_error() {
-					bail!(
-						"could not read {range} ({len} bytes) from '{url}': server returned {status} — gave up after {total_attempts} attempts"
-					);
-				}
-				bail!("could not read {range} ({len} bytes) from '{url}': expected HTTP 206, got {status}");
+				return Err(unexpected_status(range, len, url, status, total_attempts));
 			}
 
 			let content_range = response
