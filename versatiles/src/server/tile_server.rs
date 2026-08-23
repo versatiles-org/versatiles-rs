@@ -535,6 +535,45 @@ mod tests {
 		Ok(())
 	}
 
+	/// A request for a tile source's root, with or without the trailing slash,
+	/// must be an ordinary "not found".
+	///
+	/// `/tiles/cheese/` left the path with no segments at all, and the handler
+	/// indexed `parts[0]` on the way to its `meta.json` check: "index out of
+	/// bounds: the len is 0 but the index is 0", once per request, from any
+	/// client that follows a link with a trailing slash. `/tiles/cheese` missed
+	/// the prefix instead and produced a 500 with an ERROR line, which let the
+	/// same client fill the log.
+	#[tokio::test]
+	async fn a_source_root_is_not_found_rather_than_a_server_error() -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+		let reader = Arc::new(MockReader::new_mock_profile(MRP::Pbf)?.boxed());
+		server.add_tile_source("cheese".to_string(), reader).await?;
+		server.start().await?;
+		let port = server.port();
+
+		for path in ["tiles/cheese/", "tiles/cheese", "tiles/cheese//"] {
+			let response = reqwest::get(format!("http://{IP}:{port}/{path}"))
+				.await
+				.expect("request should complete");
+			assert_eq!(
+				response.status(),
+				StatusCode::NOT_FOUND,
+				"{path} should be 404, not a server error"
+			);
+		}
+
+		// The source itself still works.
+		let response = reqwest::get(format!("http://{IP}:{port}/tiles/cheese/meta.json"))
+			.await
+			.expect("request should complete");
+		assert_eq!(response.status(), StatusCode::OK);
+
+		server.stop().await;
+
+		Ok(())
+	}
+
 	#[tokio::test]
 	#[should_panic(expected = "already exists")]
 	async fn same_prefix_twice() {

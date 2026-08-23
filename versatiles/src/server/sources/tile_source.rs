@@ -81,7 +81,10 @@ impl ServerTileSource {
 			} else {
 				Ok(None)
 			};
-		} else if (parts[0] == "meta.json") || (parts[0] == "tiles.json") {
+		} else if parts
+			.first()
+			.is_some_and(|name| name == "meta.json" || name == "tiles.json")
+		{
 			// Get metadata
 			let tile_json = self.build_tile_json().await?;
 

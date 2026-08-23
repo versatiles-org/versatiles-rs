@@ -60,13 +60,17 @@ pub async fn serve_tile_from_source(
 	let stripped_path = match path.strip_prefix(&tile_source.prefix) {
 		Ok(p) => p,
 		Err(err) => {
-			log::error!(
-				"Path prefix mismatch: path '{}' does not start with expected prefix '{}':\n{}",
+			// `/tiles/{id}` without the trailing slash lands here, which is a
+			// request for something this source does not have — not a fault on our
+			// side. Reported as such, and at debug level: a 500 with an ERROR line
+			// per request let any client fill the log by dropping a slash.
+			log::debug!(
+				"path '{}' is not under the prefix '{}' of this tile source: {}",
 				path,
 				tile_source.prefix,
 				format_error_chain(&err)
 			);
-			return error_500();
+			return error_404();
 		}
 	};
 
