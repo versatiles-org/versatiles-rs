@@ -342,6 +342,52 @@ mod tests {
 		);
 	}
 
+	/// Every optional feature of this crate has to be described in its crate
+	/// docs.
+	///
+	/// `ssh2` and `codegen` were both absent: a reader could see `--features
+	/// gdal` in the README and never learn that SFTP support is a feature at
+	/// all, or what `codegen` is for. The list lives in `lib.rs`; this keeps it
+	/// complete.
+	#[test]
+	fn every_feature_is_documented_in_the_crate_docs() {
+		let manifest = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"))
+			.expect("the manifest should be readable");
+		let lib_docs = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/lib.rs"))
+			.expect("lib.rs should be readable");
+
+		let features_section = manifest
+			.split("[features]")
+			.nth(1)
+			.expect("the manifest should declare features");
+		let features_section = features_section.split("\n[").next().unwrap_or(features_section);
+
+		// A feature is a name at the start of a line: the continuation lines of a
+		// multi-line list (`server = [\n  "dep:axum",`) are not names.
+		let undocumented: Vec<&str> = features_section
+			.lines()
+			.filter_map(|line| {
+				let (name, rest) = line.split_once('=')?;
+				let name = name.trim_end();
+				let is_name = !name.is_empty()
+					&& !line.starts_with(char::is_whitespace)
+					&& name
+						.chars()
+						.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
+					&& rest.trim_start().starts_with('[');
+				is_name.then_some(name)
+			})
+			// `default` names the others rather than being one.
+			.filter(|name| *name != "default")
+			.filter(|name| !lib_docs.contains(&format!("**{name}**")))
+			.collect();
+
+		assert!(
+			undocumented.is_empty(),
+			"these features are not described in versatiles/src/lib.rs:\n  {undocumented:?}"
+		);
+	}
+
 	/// Parse-time checks for the global `-v`/`-q` flags.
 	#[rstest::rstest]
 	#[case(vec!["versatiles", "-v", "help", "source"])]
