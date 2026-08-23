@@ -279,15 +279,17 @@ versatiles convert input.mbtiles output.versatiles
 
 **Advanced options:**
 
-| Option                     | Description                                      | Example                      |
-| -------------------------- | ------------------------------------------------ | ---------------------------- |
-| `--min-zoom`, `--max-zoom` | Filter zoom levels                               | `--min-zoom=5 --max-zoom=12` |
-| `--bbox`                   | Extract region (lon_min,lat_min,lon_max,lat_max) | `--bbox=13.0,52.3,13.8,52.7` |
-| `--bbox-border`            | Add border tiles around bbox                     | `--bbox-border=3`            |
-| `--compress`               | Set compression (gzip, brotli, zstd)             | `--compress=brotli`          |
-| `--tile-format`            | Convert tile format (png, jpg, webp, avif, pbf)  | `--tile-format=webp`         |
-| `--swap-xy`                | Swap X/Y coordinates (z/x/y → z/y/x)             | `--swap-xy`                  |
-| `--flip-y`                 | Flip tiles vertically                            | `--flip-y`                   |
+| Option                     | Description                                      | Example                           |
+| -------------------------- | ------------------------------------------------ | --------------------------------- |
+| `--min-zoom`, `--max-zoom` | Filter zoom levels                               | `--min-zoom=5 --max-zoom=12`      |
+| `--bbox`                   | Extract region (lon_min,lat_min,lon_max,lat_max) | `--bbox=13.0,52.3,13.8,52.7`      |
+| `--bbox-border`            | Add border tiles around bbox                     | `--bbox-border=3`                 |
+| `--compress`               | Set compression (gzip, brotli, zstd)             | `--compress=brotli`               |
+| `--tile-format`            | Convert tile format (png, jpg, webp, avif, pbf)  | `--tile-format=webp`              |
+| `--swap-xy`                | Swap X/Y coordinates (z/x/y → z/y/x)             | `--swap-xy`                       |
+| `--flip-y`                 | Flip tiles vertically                            | `--flip-y`                        |
+| `--dry-run`                | Check the pipeline and exit, reading no tiles    | `--dry-run`                       |
+| `--writer-option`          | Format-specific output option (repeatable)       | `--writer-option=clustered=false` |
 
 The output path can also be an SFTP URL (`sftp://[user[:pass]@]host[:port]/path`) to write directly to a remote server. This requires the `ssh2` feature. Only formats that support streaming writes (`.versatiles`, `.pmtiles`) are supported over SFTP.
 
@@ -338,6 +340,13 @@ versatiles probe tiles.versatiles
 | 2     | `-dd`  | All tile sizes     | Find actual tile coverage and biggest tiles                                                                                       |
 | 3     | `-ddd` | Tile contents      | Validate MVT 2.1 conformance; reports missing `extent`/`version`, duplicate layer names, polygon winding issues, degenerate rings |
 
+**Probe options:**
+
+| Option               | Description                                                                               | Example       |
+| -------------------- | ----------------------------------------------------------------------------------------- | ------------- |
+| `-d, --deep`         | Scan depth; repeat for more (`-d`, `-dd`, `-ddd`), as in the table above                  | `-dd`         |
+| `--sample <PERCENT>` | With `-ddd`, read only that share of the deepest zoom level, in contiguous square windows | `--sample 10` |
+
 **Examples:**
 
 ```sh
@@ -381,13 +390,16 @@ versatiles serve tiles.versatiles
 
 **Server options:**
 
-| Option                    | Description                     | Default |
-| ------------------------- | ------------------------------- | ------- |
-| `-i, --ip`                | Bind IP address                 | 0.0.0.0 |
-| `-p, --port`              | Port number                     | 8080    |
-| `-c, --config`            | YAML configuration file         | -       |
-| `--minimal-recompression` | Fast serving (less compression) | false   |
-| `--disable-api`           | Disable `/api` endpoints        | false   |
+| Option                    | Description                                            | Default |
+| ------------------------- | ------------------------------------------------------ | ------- |
+| `-i, --ip`                | Bind IP address                                        | 0.0.0.0 |
+| `-p, --port`              | Port number                                            | 8080    |
+| `-c, --config`            | YAML configuration file                                | -       |
+| `-s, --static`            | Serve static content from a folder or tar (repeatable) | -       |
+| `--minimal-recompression` | Fast serving (less compression)                        | false   |
+| `--disable-api`           | Disable `/api` endpoints                               | false   |
+| `--cache-control`         | `Cache-Control` header sent with every tile            | -       |
+| `--auto-shutdown`         | Shut down automatically after N milliseconds           | -       |
 
 **Custom tile IDs:**
 
@@ -712,6 +724,19 @@ Or run:
 ```sh
 versatiles help config
 ```
+
+### Global Options
+
+These accept the same values on every subcommand:
+
+| Option           | Description                                                 | Environment variable      |
+| ---------------- | ----------------------------------------------------------- | ------------------------- |
+| `-v, --verbose`  | Increase logging verbosity; repeat for more (`-vv`, `-vvv`) | -                         |
+| `-q, --quiet`    | Decrease logging verbosity                                  | -                         |
+| `--cache-dir`    | Directory for temporary cache files                         | `VERSATILES_CACHE_DIR`    |
+| `--ssh-identity` | SSH identity file for SFTP authentication                   | `VERSATILES_SSH_IDENTITY` |
+
+The flag wins where both are set.
 
 ### Environment Variables
 

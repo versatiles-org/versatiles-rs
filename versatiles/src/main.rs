@@ -297,6 +297,51 @@ mod tests {
 		Ok(())
 	}
 
+	/// Every long flag the CLI accepts has to appear in the README.
+	///
+	/// The README carries flag tables per subcommand, and they had drifted: of
+	/// the 15 options `convert` accepts, 7 were absent, and `serve` documented 5
+	/// of 13. A table nobody checks stops describing the program. This walks
+	/// clap's own definition instead, so adding a flag without documenting it
+	/// fails here rather than misleading a reader later.
+	#[test]
+	fn every_flag_is_documented_in_the_readme() {
+		use clap::CommandFactory;
+
+		/// Flags deliberately absent from the README.
+		const EXEMPT: &[&str] = &[
+			// clap's own, on every command and never worth a table row.
+			"--help",
+			"--version",
+		];
+
+		let readme = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../README.md"))
+			.expect("README.md should be readable from the crate directory");
+
+		let mut undocumented: Vec<String> = Vec::new();
+		let command = Cli::command();
+
+		// The root command plus every subcommand, one level deep — `dev` nests
+		// further, and its tools are documented as a group rather than per flag.
+		let commands = std::iter::once(&command).chain(command.get_subcommands());
+		for cmd in commands {
+			for arg in cmd.get_arguments() {
+				let Some(long) = arg.get_long() else { continue };
+				let flag = format!("--{long}");
+				if EXEMPT.contains(&flag.as_str()) || readme.contains(&flag) {
+					continue;
+				}
+				undocumented.push(format!("{} {flag}", cmd.get_name()));
+			}
+		}
+
+		assert!(
+			undocumented.is_empty(),
+			"these flags are not mentioned in README.md:\n  {}",
+			undocumented.join("\n  ")
+		);
+	}
+
 	/// Parse-time checks for the global `-v`/`-q` flags.
 	#[rstest::rstest]
 	#[case(vec!["versatiles", "-v", "help", "source"])]
