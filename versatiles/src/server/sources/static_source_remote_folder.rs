@@ -47,6 +47,17 @@ impl StaticSourceTrait for RemoteFolder {
 
 	async fn get_data(&self, url: &Url, _accept: &TargetCompression) -> Option<SourceResponse> {
 		let path = url.str.trim_start_matches('/');
+
+		// `Url::join` resolves `..` against the base, so a path carrying dot
+		// segments fetches from above the configured prefix. `Url::new` strips
+		// them before this is reached, which closes the route through the server;
+		// this is the same guarantee for a caller that built the value another
+		// way. Leading slashes are already gone, so the protocol-relative
+		// `//other.host/x` form cannot change the host either.
+		if path.split('/').any(|segment| segment == "." || segment == "..") {
+			return None;
+		}
+
 		let target_url = self.base_url.join(path).ok()?;
 		let reader = DataReaderHttp::try_from(&target_url).ok()?;
 		let blob = reader.read_all().await.ok()?;
@@ -64,6 +75,28 @@ impl Debug for RemoteFolder {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// A path that tries to climb above the configured prefix is refused rather
+	/// than fetched.
+	#[tokio::test]
+	async fn dot_segments_are_refused() {
+		let url = ReqwestUrl::parse("https://example.com/assets/").unwrap();
+		let folder = RemoteFolder::from(&url);
+
+		for request in ["/../secret", "/a/../../secret", "/./../secret"] {
+			// Constructed directly: `Url::new` would already have removed these.
+			let requested = Url {
+				str: request.to_string(),
+			};
+			assert!(
+				folder
+					.get_data(&requested, &TargetCompression::from_none())
+					.await
+					.is_none(),
+				"{request} was not refused"
+			);
+		}
+	}
 
 	#[test]
 	fn base_url_gets_trailing_slash() {

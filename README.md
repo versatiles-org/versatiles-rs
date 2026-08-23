@@ -612,12 +612,17 @@ versatiles serve -c config.yaml
 ```yaml
 cors:
   allowed_origins:
-    - "https://example.org" # Exact domain
-    - "*.dev.example.org" # Subdomain wildcard
-    - "https://example.*" # TLD wildcard
-    - "/^https://.*\\.example\\.org$/" # Regex pattern
+    - "https://example.org" # Exact origin
+    - "https://*.dev.example.org" # Any subdomain
+    - "https://example.org:*" # Any port on that host
+    - "null" # Sandboxed iframes, file://
+    - "/^https://.*\\.example\\.org$/" # Regex, anchored
   max_age_seconds: 86400
 ```
+
+The first four forms are matched on the parts of an origin — scheme, host labels, port — so they cannot be extended from either end.
+
+Two older forms are still accepted, and both warn at startup: `https://example.*` allows anything starting with `https://example.`, including `https://example.attacker.test`, and `*example.org` allows `https://notexample.org`. Prefer `https://*.example.org` for subdomains and `https://example.org:*` for ports. A regex is unanchored unless you write `^...$`, so `/example\.org/` matches any origin containing it.
 
 **Custom Response Headers** - Add caching and CDN headers:
 

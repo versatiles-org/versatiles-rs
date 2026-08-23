@@ -66,9 +66,18 @@ cors:
   # Supports:
   # - `*` to allow all origins
   # - Exact origins like `https://example.com`
-  # - Globs at the start of the domain like `*.example.com`
-  # - Globs at the end of the domain like `example.*`
-  # - Regular expressions enclosed in slashes like `/domain\..*$/`
+  # - Subdomains like `https://*.example.com` (matched on host labels)
+  # - Any port on one host like `https://example.com:*`
+  # - `null` for the null origin (sandboxed iframes, `file://`)
+  # - Regular expressions enclosed in slashes like `/^https:\/\/example\.com$/`
+  #
+  # Two older forms still work but match raw string edges rather than the
+  # parts of an origin, and are open at one end: `https://example.com*` also
+  # allows `https://example.com.attacker.test`, and `*example.com` also
+  # allows `https://notexample.com`. Both log a warning at startup.
+  # `https://*.example.com` and `https://example.com:*` say what those are
+  # usually reached for, without the open end. An unanchored regular
+  # expression matches any origin *containing* it, so wrap it in `^...$`.
   allowed_origins:
     - "https://example.org"
     - "*.example.net"
