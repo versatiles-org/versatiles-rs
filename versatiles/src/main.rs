@@ -297,6 +297,224 @@ mod tests {
 		Ok(())
 	}
 
+	/// Every `--writer-option` key the README names has to be one some writer
+	/// actually accepts.
+	///
+	/// This is the check that would have caught E-3. The README showed
+	/// `--writer-option=clustered=false`; there is no `clustered` option, and
+	/// [`every_readme_command_parses`] cannot see it because clap takes any
+	/// string here, and [`every_flag_is_documented_in_the_readme`] only checks
+	/// that the flag itself exists. The example also sat in a table rather than
+	/// a code block, so this scans the whole file.
+	#[test]
+	fn every_readme_writer_option_exists() {
+		use versatiles_container::ContainerRegistry;
+
+		let readme = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../README.md"))
+			.expect("README.md should be readable from the crate directory");
+
+		let registry = ContainerRegistry::default();
+		let known: Vec<&str> = registry
+			.all_writer_options()
+			.into_iter()
+			.flat_map(|(_, options)| options.iter().copied())
+			.collect();
+
+		let mut unknown: Vec<String> = Vec::new();
+		let mut checked = 0usize;
+		for (index, rest) in readme
+			.match_indices("--writer-option=")
+			.map(|(i, m)| (i, &readme[i + m.len()..]))
+		{
+			let key: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+			if key.is_empty() {
+				continue;
+			}
+			checked += 1;
+			if !known.contains(&key.as_str()) {
+				let line = readme[..index].lines().count();
+				unknown.push(format!(
+					"README.md:{line}: `{key}` — writers accept: {}",
+					known.join(", ")
+				));
+			}
+		}
+
+		assert!(checked > 0, "no --writer-option examples found in README.md");
+		assert!(
+			unknown.is_empty(),
+			"these writer options do not exist:\n  {}",
+			unknown.join("\n  ")
+		);
+	}
+
+	/// Every `versatiles …` command in the README has to parse.
+	///
+	/// [`every_flag_is_documented_in_the_readme`] checks that flag *names*
+	/// exist, which is a weaker claim than it looks: it passed while the README
+	/// showed `--writer-option=clustered=false`, an option value that does not
+	/// exist (E-3). This parses each command line in full, so a renamed
+	/// subcommand, a flag that moved between subcommands, or an option given
+	/// the wrong number of values fails here.
+	///
+	/// What it cannot check is whether a *value* is meaningful — clap accepts
+	/// any string for `--writer-option`. Commands are parsed, never executed:
+	/// most of them want files or network that a test has neither of.
+	#[test]
+	fn every_readme_command_parses() {
+		use clap::Parser;
+
+		let readme = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../README.md"))
+			.expect("README.md should be readable from the crate directory");
+
+		let mut failures: Vec<String> = Vec::new();
+		let mut checked = 0usize;
+		for (line_no, command) in readme_shell_commands(&readme) {
+			let Some(argv) = split_shell_words(&command) else {
+				failures.push(format!("README.md:{line_no}: unbalanced quotes in `{command}`"));
+				continue;
+			};
+			checked += 1;
+			match Cli::try_parse_from(&argv) {
+				Ok(_) => {}
+				// `--help` and `--version` are reported as errors by clap; both
+				// mean the command line was understood.
+				Err(error)
+					if matches!(
+						error.kind(),
+						clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion
+					) => {}
+				Err(error) => {
+					let reason = error.to_string();
+					let first = reason.lines().next().unwrap_or(&reason);
+					failures.push(format!("README.md:{line_no}: `{command}`\n      {first}"));
+				}
+			}
+		}
+
+		// The README carried 49 commands when this was written. The floor
+		// guards the extractor itself: a fence or quoting change that made it
+		// silently stop finding commands would otherwise leave the test green.
+		assert!(
+			checked >= 40,
+			"expected the README to carry many commands, found {checked} — has the extraction broken?"
+		);
+		assert!(
+			failures.is_empty(),
+			"these README commands do not parse:\n  {}",
+			failures.join("\n  ")
+		);
+	}
+
+	/// Every `versatiles …` line inside a shell code block, with its line
+	/// number. Continuation lines ending in `\` are joined first.
+	fn readme_shell_commands(readme: &str) -> Vec<(usize, String)> {
+		const SHELL: &[&str] = &["sh", "bash", "shell", "console"];
+
+		let mut commands = Vec::new();
+		let mut in_shell_block = false;
+		let mut pending: Option<(usize, String)> = None;
+
+		for (index, line) in readme.lines().enumerate() {
+			let line_no = index + 1;
+			if let Some(language) = line.strip_prefix("```") {
+				// A fence either opens a block (and names a language) or closes
+				// the open one; only the opening fence carries a language.
+				in_shell_block = if in_shell_block {
+					false
+				} else {
+					SHELL.contains(&language.trim())
+				};
+				pending = None;
+				continue;
+			}
+			if !in_shell_block {
+				continue;
+			}
+
+			let text = line.trim();
+			let text = text.strip_prefix("$ ").unwrap_or(text);
+
+			let (start, mut joined) = match pending.take() {
+				Some((start, joined)) => (start, joined + " " + text),
+				None if text.starts_with("versatiles ") => (line_no, text.to_string()),
+				None => continue,
+			};
+
+			if let Some(head) = joined.strip_suffix('\\') {
+				pending = Some((start, head.trim_end().to_string()));
+				continue;
+			}
+			// A quote left open runs onto the next line — inline VPL pipelines
+			// are written that way.
+			if split_shell_words(&joined).is_none() {
+				pending = Some((start, joined));
+				continue;
+			}
+			// A pipe outside quotes is a shell construct; one inside quotes
+			// belongs to an inline VPL pipeline and must be left alone.
+			if let Some(pipe) = unquoted_pipe(&joined) {
+				joined.truncate(pipe);
+			}
+			commands.push((start, joined.trim().to_string()));
+		}
+		commands
+	}
+
+	/// Byte offset of the first ` | ` that is not inside quotes.
+	fn unquoted_pipe(command: &str) -> Option<usize> {
+		let mut quote: Option<char> = None;
+		let bytes = command.as_bytes();
+		for (index, character) in command.char_indices() {
+			match (quote, character) {
+				(Some(open), c) if c == open => quote = None,
+				(None, c @ ('\'' | '"')) => quote = Some(c),
+				(None, '|') if index > 0 && bytes[index - 1] == b' ' && bytes.get(index + 1) == Some(&b' ') => {
+					return Some(index - 1);
+				}
+				(Some(_) | None, _) => {}
+			}
+		}
+		None
+	}
+
+	/// Splits a command line on whitespace, honouring single and double quotes.
+	/// `None` when a quote is left open.
+	fn split_shell_words(command: &str) -> Option<Vec<String>> {
+		let mut words = Vec::new();
+		let mut current = String::new();
+		let mut quote: Option<char> = None;
+		let mut started = false;
+
+		for character in command.chars() {
+			match (quote, character) {
+				(Some(open), c) if c == open => quote = None,
+				(Some(_), c) => current.push(c),
+				(None, c @ ('\'' | '"')) => {
+					quote = Some(c);
+					started = true;
+				}
+				(None, c) if c.is_whitespace() => {
+					if started {
+						words.push(std::mem::take(&mut current));
+						started = false;
+					}
+				}
+				(None, c) => {
+					current.push(c);
+					started = true;
+				}
+			}
+		}
+		if quote.is_some() {
+			return None;
+		}
+		if started {
+			words.push(current);
+		}
+		Some(words)
+	}
+
 	/// Every long flag the CLI accepts has to appear in the README.
 	///
 	/// The README carries flag tables per subcommand, and they had drifted: of

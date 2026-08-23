@@ -480,6 +480,30 @@ impl ContainerRegistry {
 		let ext = sanitize_extension(ext);
 		self.writers.contains_key(&ext)
 	}
+
+	/// The `--writer-option` keys a format accepts, or `None` if the format
+	/// cannot be written at all.
+	///
+	/// The same list the error message for an unknown option is built from, so
+	/// a caller that wants to offer or check the keys up front cannot disagree
+	/// with what a write would accept.
+	#[must_use]
+	pub fn writer_options(&self, ext: &str) -> Option<&'static [&'static str]> {
+		let ext = sanitize_extension(ext);
+		self.writers.get(&ext).map(|entry| entry.supported_options)
+	}
+
+	/// Every writable extension paired with the options it accepts.
+	#[must_use]
+	pub fn all_writer_options(&self) -> Vec<(&str, &'static [&'static str])> {
+		let mut all: Vec<(&str, &'static [&'static str])> = self
+			.writers
+			.iter()
+			.map(|(ext, entry)| (ext.as_str(), entry.supported_options))
+			.collect();
+		all.sort_unstable_by_key(|(ext, _)| *ext);
+		all
+	}
 }
 
 impl Default for ContainerRegistry {

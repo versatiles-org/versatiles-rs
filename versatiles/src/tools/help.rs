@@ -9,7 +9,11 @@ pub struct Subcommand {
 	topic: Topic,
 
 	/// print raw markdown help without formatting
-	#[arg(long)]
+	///
+	/// Global so it is accepted on either side of the topic: `help --raw
+	/// pipeline` and `help pipeline --raw` both work. The README documented the
+	/// second form while only the first parsed.
+	#[arg(long, global = true)]
 	raw: bool,
 }
 
