@@ -61,7 +61,7 @@ wildmatch.workspace = true
 # In-process SFTP test server — only needed on unix (russh depends on aws-lc-rs
 # which requires NASM/cmake on Windows and is not needed for the Windows build).
 [target.'cfg(unix)'.dev-dependencies]
-russh = "0.62"
+russh = "0.63"
 russh-sftp = "2.4"
 
 # Multithreading benchmark dependencies

@@ -47,7 +47,7 @@ regex = { workspace = true, optional = true, features = ["unicode"] }
 serde.workspace = true
 serde_yaml_ng = "0.10.0"
 tar = { workspace = true, optional = true }
-termimad = { version = "0.35.1", optional = true }
+termimad = { version = "0.35.2", optional = true }
 tokio = { workspace = true, features = [
 	"rt-multi-thread",
 	"signal",
