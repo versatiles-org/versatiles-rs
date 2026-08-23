@@ -83,7 +83,13 @@ impl BlockDefinition {
 		let index_length = u64::from(reader.read_u32()?);
 
 		let tiles_range = ByteRange::new(offset, tiles_length);
-		let index_range = ByteRange::new(offset + tiles_length, index_length);
+		// Both operands are read straight from the file. Unchecked, the sum
+		// panics in a debug build and wraps in a release one, and a wrapped
+		// offset points the index read at an unrelated part of the file.
+		let index_offset = offset
+			.checked_add(tiles_length)
+			.context("block offset + tiles length overflows u64")?;
+		let index_range = ByteRange::new(index_offset, index_length);
 
 		let global_bbox = TileBBox::from_min_and_max(
 			level,
@@ -227,6 +233,28 @@ impl fmt::Debug for BlockDefinition {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// The offset and length of a block's tile range are read from the file, and
+	/// their sum locates the block's index. Unchecked, it panicked in a debug
+	/// build and wrapped in a release one, pointing the index read at an
+	/// unrelated part of the file.
+	#[test]
+	fn a_block_whose_offset_overflows_is_rejected() {
+		let mut blob = Vec::new();
+		blob.push(3); // level
+		blob.extend_from_slice(&1u32.to_be_bytes()); // x
+		blob.extend_from_slice(&1u32.to_be_bytes()); // y
+		blob.extend_from_slice(&[0, 0, 1, 1]); // bbox min/max
+		blob.extend_from_slice(&u64::MAX.to_be_bytes()); // tiles offset
+		blob.extend_from_slice(&1u64.to_be_bytes()); // tiles length
+		blob.extend_from_slice(&4u32.to_be_bytes()); // index length
+
+		let error = BlockDefinition::from_blob(&Blob::from(blob)).unwrap_err();
+		assert!(
+			format!("{error:#}").contains("overflow"),
+			"expected an overflow error, got: {error:#}"
+		);
+	}
 
 	#[test]
 	fn multitest() -> Result<()> {

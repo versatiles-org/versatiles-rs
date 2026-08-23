@@ -4,7 +4,7 @@ use std::{
 	slice::{Iter, SliceIndex},
 };
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use versatiles_core::{
 	Blob, ByteRange, TileCompression,
 	compression::compress,
@@ -51,8 +51,15 @@ impl EntriesV3 {
 		let mut last_id: u64 = 0;
 
 		for _ in 0..num_entries {
+			// The deltas come out of the file, so their sum is the file's choice.
+			// Unchecked, it panics in a debug build and wraps in a release one —
+			// and a wrapped id breaks the ordering `find_tile` binary-searches on,
+			// which turns a malformed directory into a wrong tile rather than an
+			// error.
 			let diff = reader.read_varint()?;
-			last_id += diff;
+			last_id = last_id
+				.checked_add(diff)
+				.context("tile ids in the PMTiles directory overflow u64")?;
 			entries.push(EntryV3::new(last_id, ByteRange::empty(), 0));
 		}
 
@@ -144,7 +151,9 @@ impl EntriesV3 {
 			if entry.run_length == 0 {
 				return Some(entry);
 			}
-			if tile_id - entry.tile_id < u64::from(entry.run_length) {
+			// Saturating rather than bare subtraction: the ordering that would
+			// guarantee `entry.tile_id <= tile_id` comes from the parsed file.
+			if tile_id.saturating_sub(entry.tile_id) < u64::from(entry.run_length) {
 				return Some(entry);
 			}
 		}
@@ -355,6 +364,37 @@ impl EntriesSliceV3<'_> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// Tile ids in a directory are deltas, so their sum is whatever the file
+	/// says it is. Unchecked, that addition panicked in a debug build and
+	/// wrapped in a release one — and a wrapped id breaks the ordering
+	/// `find_tile` binary-searches on, turning a malformed directory into a
+	/// wrong tile instead of an error.
+	#[test]
+	fn tile_ids_that_overflow_are_rejected() {
+		fn push_varint(mut value: u64, out: &mut Vec<u8>) {
+			loop {
+				let byte = u8::try_from(value & 0x7f).unwrap();
+				value >>= 7;
+				if value == 0 {
+					out.push(byte);
+					return;
+				}
+				out.push(byte | 0x80);
+			}
+		}
+
+		let mut blob = Vec::new();
+		push_varint(2, &mut blob); // two entries
+		push_varint(u64::MAX, &mut blob); // the first id
+		push_varint(1, &mut blob); // one more than u64 holds
+
+		let error = EntriesV3::from_blob(&Blob::from(blob)).unwrap_err();
+		assert!(
+			format!("{error:#}").contains("overflow"),
+			"expected an overflow error, got: {error:#}"
+		);
+	}
 
 	// Helper function to create sample entries
 	fn create_entries() -> EntriesV3 {

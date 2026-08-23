@@ -151,10 +151,22 @@ impl TarTilesReader {
 			}
 
 			let path = entry.path()?.clone();
-			let mut path_tmp: Vec<&str> = path
-				.iter()
-				.map(|s| s.to_str().expect("tar path component is utf-8"))
-				.collect();
+
+			// An entry name is arbitrary bytes, and a name that is not UTF-8 makes
+			// a perfectly legal archive — so it is a reason to skip an entry, not
+			// to end the process. Nothing this reader looks for can be spelled in
+			// non-UTF-8: tile paths are `z/x/y.ext` and the metadata names are
+			// fixed ASCII.
+			let Some(mut path_tmp) = path.iter().map(std::ffi::OsStr::to_str).collect::<Option<Vec<&str>>>() else {
+				log::debug!("skipping tar entry with a non-UTF-8 name: {:?}", path.as_os_str());
+				continue;
+			};
+
+			// An entry named "" has no components at all.
+			if path_tmp.is_empty() {
+				log::debug!("skipping tar entry with an empty name");
+				continue;
+			}
 
 			if path_tmp[0] == "." {
 				path_tmp.remove(0);
@@ -195,28 +207,32 @@ impl TarTilesReader {
 				continue;
 			}
 
-			let mut read_to_end = || {
+			// Fallible: a truncated archive fails here, and that is an error about
+			// the file rather than a broken assumption about it.
+			let mut read_to_end = || -> Result<Blob> {
 				let mut blob: Vec<u8> = Vec::new();
-				entry.read_to_end(&mut blob).expect("tar entry readable");
-				Blob::from(blob)
+				entry
+					.read_to_end(&mut blob)
+					.with_context(|| format!("reading tar entry {path_tmp_string:?}"))?;
+				Ok(Blob::from(blob))
 			};
 
 			if path_vec.len() == 1 {
 				match path_vec[0] {
 					"meta.json" | "tiles.json" | "metadata.json" => {
-						tilejson.merge(&TileJSON::try_from_blob_or_default(&read_to_end()))?;
+						tilejson.merge(&TileJSON::try_from_blob_or_default(&read_to_end()?))?;
 						continue;
 					}
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
 						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
-							read_to_end(),
+							read_to_end()?,
 							&TileCompression::Gzip,
 						)?))?;
 						continue;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
 						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
-							read_to_end(),
+							read_to_end()?,
 							&TileCompression::Brotli,
 						)?))?;
 						continue;
@@ -245,7 +261,9 @@ impl TarTilesReader {
 
 		Ok(TarTilesReader {
 			tilejson,
-			name: path.to_str().expect("tar path is utf-8").to_string(),
+			// The archive's own path, from the caller. Lossy rather than fatal: this
+			// string is only ever shown to a human.
+			name: path.to_string_lossy().into_owned(),
 			metadata,
 			reader: Arc::new(*reader),
 			tile_map: Arc::new(tile_map),
@@ -385,6 +403,46 @@ pub mod tests {
 
 	use super::*;
 	use crate::{MOCK_BYTES_PBF, MockWriter, make_test_file};
+
+	/// A tar entry name is arbitrary bytes. One that is not UTF-8, or empty,
+	/// makes a legal archive — and used to panic the process at
+	/// `s.to_str().expect("tar path component is utf-8")`, reachable from
+	/// `versatiles probe`, `convert` and a served `.tar` alike.
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn hostile_entry_names_are_skipped_not_fatal() -> Result<()> {
+		use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
+
+		use versatiles_core::compression::compress_gzip;
+
+		let dir = assert_fs::TempDir::new()?;
+		let path = dir.path().join("hostile.tar");
+
+		let tile = compress_gzip(&Blob::from(MOCK_BYTES_PBF.to_vec()))?;
+		let mut builder = tar::Builder::new(std::fs::File::create(&path)?);
+
+		let mut append = |name: &OsStr, data: &[u8]| -> Result<()> {
+			let mut header = tar::Header::new_gnu();
+			header.set_size(data.len() as u64);
+			header.set_mode(0o644);
+			header.set_cksum();
+			builder.append_data(&mut header, Path::new(name), data)?;
+			Ok(())
+		};
+
+		append(OsStr::new("5/3/4.pbf.gz"), tile.as_slice())?;
+		append(OsStr::from_bytes(b"5/3/\xff\xfe.pbf.gz"), tile.as_slice())?;
+		builder.finish()?;
+		drop(builder);
+
+		// The archive opens, and the readable tile is still there.
+		let reader = TarTilesReader::open(&path)?;
+		let coord = TileCoord::new(5, 3, 4)?;
+		assert!(reader.tile_map.contains_key(&coord), "the valid tile was lost");
+		assert_eq!(reader.tile_map.len(), 1, "a skipped entry was counted");
+
+		Ok(())
+	}
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {

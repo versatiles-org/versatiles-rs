@@ -77,6 +77,21 @@ pub struct DirectoryReader {
 	metadata: TileSourceMetadata,
 }
 
+/// The entries of `dir` that this reader can do anything with, paired with their
+/// names and sorted by name.
+///
+/// Two kinds are skipped rather than reported. An entry that cannot be read at
+/// all — a permission, or a file removed while the directory is being scanned —
+/// says nothing about the tiles beside it. And a name that is not valid UTF-8
+/// cannot be a zoom level, an x column or a `y.ext` tile in any case; a
+/// directory is free to contain one, so reading it must not end the process.
+fn usable_entries(dir: &Path) -> Result<impl Iterator<Item = (String, fs::DirEntry)>> {
+	Ok(fs::read_dir(dir)?
+		.filter_map(Result::ok)
+		.filter_map(|entry| Some((entry.file_name().into_string().ok()?, entry)))
+		.sorted_unstable_by(|a, b| a.0.cmp(&b.0)))
+}
+
 impl DirectoryReader {
 	/// Opens a directory and initializes a `DirectoryReader`.
 	///
@@ -111,37 +126,17 @@ impl DirectoryReader {
 		let mut tile_map = HashMap::new();
 		let mut container_form: Option<TileFormat> = None;
 		let mut container_comp: Option<TileCompression> = None;
-		for result1 in fs::read_dir(dir)? {
+		for (name1, entry1) in usable_entries(dir)? {
 			// z level
-			if result1.is_err() {
-				continue;
-			}
-			let entry1 = result1?;
-			let name1 = entry1.file_name().into_string().expect("filesystem name is utf-8");
-			let numeric1 = name1.parse::<u8>();
-			if numeric1.is_ok() {
-				let level = numeric1?;
-
-				for result2 in fs::read_dir(entry1.path())? {
+			if let Ok(level) = name1.parse::<u8>() {
+				for (name2, entry2) in usable_entries(&entry1.path())? {
 					// x level
-					if result2.is_err() {
+					let Ok(x) = name2.parse::<u32>() else {
 						continue;
-					}
-					let entry2 = result2?;
-					let name2 = entry2.file_name().into_string().expect("filesystem name is utf-8");
-					let numeric2 = name2.parse::<u32>();
-					if numeric2.is_err() {
-						continue;
-					}
-					let x = numeric2?;
+					};
 
-					let files = fs::read_dir(entry2.path())?.map(|f| f.expect("readable dir entry"));
-					let files = files
-						.sorted_unstable_by(|a, b| a.file_name().partial_cmp(&b.file_name()).expect("OsString total order"));
-
-					for entry3 in files {
+					for (mut filename, entry3) in usable_entries(&entry2.path())? {
 						// y level
-						let mut filename = entry3.file_name().into_string().expect("filesystem name is utf-8");
 						let file_comp = TileCompression::from_filename(&mut filename);
 						let this_form = TileFormat::from_filename(&mut filename);
 
@@ -355,6 +350,39 @@ mod tests {
 		);
 
 		assert!(reader.tile(&TileCoord::new(2, 2, 1)?).await?.is_none());
+
+		Ok(())
+	}
+
+	/// A tile directory can contain a file whose name is not UTF-8 — copied from
+	/// another system, or simply written that way. Reading the directory used to
+	/// panic on it at `into_string().expect("filesystem name is utf-8")`; the
+	/// tiles beside it are still perfectly readable.
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn non_utf8_filenames_are_skipped_not_fatal() -> Result<()> {
+		use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
+
+		let dir = TempDir::new()?;
+		dir.child("3/2/1.png").write_str("test tile data")?;
+
+		// A neighbour of the tile, and a whole zoom-level directory, both named in
+		// bytes that are not UTF-8. Not every filesystem accepts such a name —
+		// APFS rejects it with EILSEQ — so where it cannot be created there is
+		// nothing to test and the reader is checked on the tile alone.
+		let odd_file = dir.path().join("3/2").join(OsStr::from_bytes(b"\xff\xfe.png"));
+		let odd_dir = dir.path().join(OsStr::from_bytes(b"\xff"));
+		let odd_names_supported = fs::write(&odd_file, "junk").is_ok() && fs::create_dir(&odd_dir).is_ok();
+		if !odd_names_supported {
+			eprintln!("note: this filesystem rejects non-UTF-8 names; the interesting half of the test is skipped");
+		}
+
+		let reader = DirectoryReader::open(&dir)?;
+		let mut tile = reader.tile(&TileCoord::new(3, 2, 1)?).await?.unwrap();
+		assert_eq!(
+			tile.as_blob(reader.metadata().tile_compression())?,
+			&Blob::from("test tile data")
+		);
 
 		Ok(())
 	}
