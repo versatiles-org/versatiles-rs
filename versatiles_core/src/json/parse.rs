@@ -61,6 +61,24 @@ fn parse_json_object(iter: &mut ByteIterator) -> Result<JsonValue> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	/// JSON spells a character outside the BMP as a surrogate pair, and a writer
+	/// that escapes everything above ASCII produces them for emoji and the CJK
+	/// extensions alike. Decoding the halves separately rejected all of them.
+	#[test]
+	fn escaped_characters_decode_including_surrogate_pairs() -> Result<()> {
+		assert_eq!(parse_json_str(r#""\u0041""#)?, JsonValue::from("A"));
+		assert_eq!(parse_json_str(r#""\u00e4""#)?, JsonValue::from("ä"));
+		assert_eq!(parse_json_str(r#""\ud83d\ude00""#)?, JsonValue::from("😀"));
+		assert_eq!(parse_json_str(r#""\ud840\udc0b""#)?, JsonValue::from("\u{2000b}"));
+
+		// A high surrogate with nothing after it, and a lone low surrogate, are
+		// both malformed rather than silently mangled.
+		assert!(parse_json_str(r#""\ud83d""#).is_err());
+		assert!(parse_json_str(r#""\ud83dx""#).is_err());
+		assert!(parse_json_str(r#""\ude00""#).is_err());
+
+		Ok(())
+	}
 
 	fn v<T>(input: T) -> JsonValue
 	where

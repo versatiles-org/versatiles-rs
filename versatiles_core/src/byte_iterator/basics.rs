@@ -65,6 +65,15 @@ pub fn parse_tag(iter: &mut ByteIterator, tag: &str) -> Result<()> {
 /// let mut it = ByteIterator::from_reader(Cursor::new("\"he\\nllo\""), true);
 /// assert_eq!(parse_quoted_json_string(&mut it).unwrap(), "he\nllo");
 /// ```
+/// Read the four hex digits of a `\uXXXX` escape.
+fn read_hex4(iter: &mut ByteIterator, hex: &mut [u8; 4]) -> Result<u16> {
+	for digit in &mut *hex {
+		*digit = iter.expect_next_byte()?;
+	}
+	let hex_str = std::str::from_utf8(hex).map_err(|_| iter.format_error("invalid hex escape sequence"))?;
+	u16::from_str_radix(hex_str, 16).map_err(|_| iter.format_error("invalid unicode code point"))
+}
+
 #[context("while parsing a quoted JSON string")]
 pub fn parse_quoted_json_string(iter: &mut ByteIterator) -> Result<String> {
 	iter.skip_whitespace();
@@ -88,17 +97,24 @@ pub fn parse_quoted_json_string(iter: &mut ByteIterator) -> Result<String> {
 				b'r' => bytes.push(b'\r'),
 				b't' => bytes.push(b'\t'),
 				b'u' => {
-					for i in &mut hex {
-						*i = iter.expect_next_byte()?;
-					}
-					let hex_str = std::str::from_utf8(&hex).map_err(|_| iter.format_error("invalid hex escape sequence"))?;
-					let code_point =
-						u16::from_str_radix(hex_str, 16).map_err(|_| iter.format_error("invalid unicode code point"))?;
-					bytes.extend_from_slice(
-						&String::from_utf16(&[code_point])
-							.map_err(|_| iter.format_error("invalid unicode code point"))?
-							.into_bytes(),
-					);
+					let first = read_hex4(iter, &mut hex)?;
+
+					// A character outside the BMP is written as a surrogate pair —
+					// `\ud83d\ude00` is how JSON spells an emoji — and the low half
+					// must follow immediately. Decoding the halves separately, as this
+					// did, rejects every non-BMP character in a document, which is what
+					// escaping JSON writers produce for anything above ASCII.
+					let text = if (0xD800..=0xDBFF).contains(&first) {
+						if iter.expect_next_byte()? != b'\\' || iter.expect_next_byte()? != b'u' {
+							bail!(iter.format_error("expected a low surrogate escape after a high surrogate"));
+						}
+						let second = read_hex4(iter, &mut hex)?;
+						String::from_utf16(&[first, second]).map_err(|_| iter.format_error("invalid surrogate pair"))?
+					} else {
+						String::from_utf16(&[first]).map_err(|_| iter.format_error("invalid unicode code point"))?
+					};
+
+					bytes.extend_from_slice(text.as_bytes());
 				}
 				c => bytes.push(c),
 			},
@@ -367,7 +383,12 @@ mod tests {
 
 		// Invalid Unicode escape
 		assert!(parse(" \"he\\u004Gllo\" ").is_err()); // Invalid hex
-		assert!(parse(" \"he\\uD834\\uDD1E\" ").is_err()); // Surrogate pairs in non-UTF-16
+
+		// A surrogate pair is how JSON spells a character outside the BMP —
+		// U+1D11E, the musical G clef. This was asserted as an error until the
+		// pair was decoded as a pair; a half on its own is still malformed.
+		assert_eq!(parse(" \"he\\uD834\\uDD1Ello\" ").unwrap(), "he\u{1D11E}llo");
+		assert!(parse(" \"he\\uD834llo\" ").is_err());
 
 		// Unescaped special characters (error cases)
 		assert!(parse(" \"unterminated string ").is_err());

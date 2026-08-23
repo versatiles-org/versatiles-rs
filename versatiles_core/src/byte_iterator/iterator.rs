@@ -93,7 +93,7 @@ impl<'a> ByteIterator<'a> {
 	pub fn format_error(&self, msg: &str) -> Error {
 		if self.is_debug_enabled {
 			let (start_index, length) = if self.position < DEBUG_RING_BUFFER_SIZE {
-				(0, self.position - 1)
+				(0, self.position.saturating_sub(1))
 			} else {
 				(self.position % DEBUG_RING_BUFFER_SIZE, DEBUG_RING_BUFFER_SIZE - 1)
 			};
@@ -107,7 +107,13 @@ impl<'a> ByteIterator<'a> {
 				.copied()
 				.collect();
 
-			let mut debug_output = String::from_utf8(debug_snapshot).expect("debug snapshot is valid UTF-8");
+			// Lossy, because the snapshot is a window onto raw bytes: it starts
+			// wherever the ring buffer happens to start, so a parse error inside a
+			// multi-byte character leaves a lone continuation byte in it. This used
+			// to be `expect("debug snapshot is valid UTF-8")`, which turned any such
+			// error — a truncated string in a container's metadata, say — into a
+			// panic *while reporting* the error.
+			let mut debug_output = String::from_utf8_lossy(&debug_snapshot).into_owned();
 			if self.peeked_byte.is_none() {
 				debug_output.push_str("<EOF>");
 			}
@@ -232,6 +238,25 @@ mod tests {
 	use std::io::Cursor;
 
 	use super::*;
+
+	/// A parse error positioned inside a multi-byte character must produce an
+	/// error, not a panic. The debug ring buffer is a window onto raw bytes, so
+	/// its contents are not UTF-8 in general.
+	#[test]
+	fn an_error_inside_a_multibyte_character_is_reported_not_panicked() {
+		for text in ["ä", "😀", "\u{10FFFF}"] {
+			let data = format!("{text}{}", "b".repeat(40));
+			for consumed in 0..data.len() {
+				let mut iter = ByteIterator::from_reader(Cursor::new(data.clone()), true);
+				for _ in 0..consumed {
+					iter.consume();
+				}
+				// The message is best-effort; not panicking is the point.
+				let error = iter.format_error("probe");
+				assert!(!error.to_string().is_empty());
+			}
+		}
+	}
 
 	#[test]
 	fn test_from_iterator() {
