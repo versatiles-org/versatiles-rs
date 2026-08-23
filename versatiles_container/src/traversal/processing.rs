@@ -265,7 +265,7 @@ fn verify_steps(
 				}
 				Pop(idx, bbox) => {
 					ensure!(pushes.contains_key(idx), "Pop without Push {idx}");
-					ensure!(!pops.contains(idx), "Double Pop {idx}");
+					ensure!(!pops.contains(idx), "double Pop {idx}");
 					for push_bbox in pushes.get(idx).expect("contains_key ensured above") {
 						ensure!(!push_bbox.is_empty(), "Pushed BBox {push_bbox:?} is empty");
 						ensure!(
@@ -297,7 +297,7 @@ fn verify_steps(
 			ensure!(scaled.height() == 1);
 
 			let key = (scaled.level(), scaled.x_min()?, scaled.y_min()?);
-			ensure!(!lookup.contains_key(&key), "Duplicate read of bbox {bbox:?}");
+			ensure!(!lookup.contains_key(&key), "duplicate read of bbox {bbox:?}");
 			lookup.insert(key, false);
 		}
 
@@ -313,7 +313,7 @@ fn verify_steps(
 			ensure!(scaled.height() == 1);
 
 			let key = (scaled.level(), scaled.x_min()?, scaled.y_min()?);
-			ensure!(lookup.contains_key(&key), "Missing read of bbox {bbox:?}");
+			ensure!(lookup.contains_key(&key), "missing read of bbox {bbox:?}");
 			ensure!(
 				!lookup.get(&key).expect("contains_key ensured above"),
 				"Duplicate (2) read of bbox {bbox:?}"
@@ -322,7 +322,7 @@ fn verify_steps(
 		}
 
 		for (key, value) in lookup {
-			ensure!(value, "Missing (2) read of bbox key {key:?}");
+			ensure!(value, "missing (2) read of bbox key {key:?}");
 		}
 
 		Ok(())

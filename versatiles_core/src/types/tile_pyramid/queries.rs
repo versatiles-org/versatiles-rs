@@ -178,7 +178,7 @@ impl TilePyramid {
 				weight_sum += weight;
 			}
 		}
-		ensure!(weight_sum > 0.0, "Cannot compute weighted bbox for an empty pyramid");
+		ensure!(weight_sum > 0.0, "cannot compute weighted bbox for an empty pyramid");
 		GeoBBox::new(
 			x_min_sum / weight_sum,
 			y_min_sum / weight_sum,

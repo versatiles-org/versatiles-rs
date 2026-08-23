@@ -29,7 +29,7 @@ where
 	let max_f: F = NumCast::from(I::max_value())
 		.ok_or_else(|| anyhow!("Cannot represent {}::MAX in float type", type_name::<I>()))?;
 
-	ensure!(n >= min_f && n <= max_f, "Number out of range for {}", type_name::<I>());
+	ensure!(n >= min_f && n <= max_f, "number out of range for {}", type_name::<I>());
 
 	// Now cast the rounded value to the integer type. If something weird happens, error.
 	NumCast::from(n).ok_or_else(|| anyhow!("Failed converting rounded value to {}", type_name::<I>()))

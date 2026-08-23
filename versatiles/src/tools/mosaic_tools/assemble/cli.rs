@@ -116,11 +116,17 @@ pub(super) fn parse_quality(quality: &str) -> Result<[Option<u8>; 32]> {
 		}
 		if let Some(idx) = part.find(':') {
 			zoom = part[0..idx].trim().parse()?;
-			ensure!((0..=31).contains(&zoom), "zoom level must be between 0 and 31, but is {zoom}");
+			ensure!(
+				(0..=31).contains(&zoom),
+				"zoom level must be between 0 and 31, but is {zoom}"
+			);
 			part = &part[(idx + 1)..];
 		}
 		let quality_val: u8 = part.trim().parse()?;
-		ensure!(quality_val <= 100, "quality must be between 0 and 100, but is {quality_val}");
+		ensure!(
+			quality_val <= 100,
+			"quality must be between 0 and 100, but is {quality_val}"
+		);
 		for z in zoom..32 {
 			result[usize::try_from(z).expect("zoom is non-negative")] = Some(quality_val);
 		}
@@ -163,7 +169,7 @@ pub(super) fn resolve_inputs(args: &[String]) -> Result<Vec<String>> {
 				let path = entry.with_context(|| format!("Error reading glob result for: {arg}"))?;
 				matches.push(path.to_string_lossy().into_owned());
 			}
-			ensure!(!matches.is_empty(), "Glob pattern matched no files: {arg}");
+			ensure!(!matches.is_empty(), "glob pattern matched no files: {arg}");
 			matches.sort();
 			result.extend(matches);
 		} else {
@@ -211,7 +217,7 @@ pub(super) fn parse_buffer_size(s: &str) -> Result<u64> {
 		.trim()
 		.parse()
 		.with_context(|| format!("Invalid buffer size: {s}"))?;
-	ensure!(num >= 0.0, "Buffer size must not be negative: {s}");
+	ensure!(num >= 0.0, "buffer size must not be negative: {s}");
 	#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 	Ok((num * multiplier as f64) as u64)
 }

@@ -189,8 +189,8 @@ impl VectorLayers {
 		// See: https://github.com/mapbox/tilejson-spec/tree/master/3.0.0#33-vector_layers
 		for (id, layer) in &self.0 {
 			// 3.3.1 id - required
-			ensure!(!id.is_empty(), "Empty layer id");
-			ensure!(id.len() <= 255, "Layer id too long: '{id}'");
+			ensure!(!id.is_empty(), "empty layer id");
+			ensure!(id.len() <= 255, "layer id too long: '{id}'");
 			ensure!(
 				id.chars().all(|c| c.is_ascii_alphanumeric()),
 				"Invalid layer id '{id}': must be alphanumeric"
@@ -319,8 +319,8 @@ impl VectorLayer {
 
 		// 3.3.2 fields - required
 		for key in self.fields.keys() {
-			ensure!(!key.is_empty(), "Empty field name");
-			ensure!(key.len() <= 255, "Field name too long: '{key}'");
+			ensure!(!key.is_empty(), "empty field name");
+			ensure!(key.len() <= 255, "field name too long: '{key}'");
 			ensure!(
 				key.chars().all(|c| c.is_ascii_alphanumeric()),
 				"Invalid field name '{key}': must be alphanumeric"

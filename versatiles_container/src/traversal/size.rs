@@ -86,7 +86,7 @@ impl TraversalSize {
 	pub fn intersect(&mut self, other: &TraversalSize) -> Result<()> {
 		let min = self.min.max(other.min);
 		let max = self.max.min(other.max);
-		ensure!(min <= max, "Non-overlapping traversal sizes: {self:?} and {other:?}");
+		ensure!(min <= max, "non-overlapping traversal sizes: {self:?} and {other:?}");
 		self.min = min;
 		self.max = max;
 		Ok(())
@@ -130,10 +130,10 @@ impl std::fmt::Debug for TraversalSize {
 /// # Errors
 /// Returns an error if `size` is zero, not a power of two, or too large.
 fn size_to_bits(size: u32) -> Result<u8> {
-	ensure!(size > 0, "Size must be greater than zero");
-	ensure!(size.is_power_of_two(), "Size must be a power of two, but is {size}");
+	ensure!(size > 0, "size must be greater than zero");
+	ensure!(size.is_power_of_two(), "size must be a power of two, but is {size}");
 	let bits: u8 = float_to_int(f64::from(size).log2().floor()).expect("log2 of u32 fits in u8");
-	ensure!(bits < 32, "Size {size} is too large");
+	ensure!(bits < 32, "size {size} is too large");
 	Ok(bits)
 }
 
@@ -155,7 +155,7 @@ mod tests {
 	fn test_new_zero_min_errors() {
 		assert_eq!(
 			extract_error_lines(TraversalSize::new(0, 1)),
-			["Failed to create TraversalSize", "Size must be greater than zero"]
+			["Failed to create TraversalSize", "size must be greater than zero"]
 		);
 	}
 
@@ -189,7 +189,7 @@ mod tests {
 		let ts2 = TraversalSize::new(8, 16)?;
 		assert_eq!(
 			extract_error_lines(ts1.intersect(&ts2)),
-			["Non-overlapping traversal sizes: TraversalSize(2..4) and TraversalSize(8..16)"]
+			["non-overlapping traversal sizes: TraversalSize(2..4) and TraversalSize(8..16)"]
 		);
 		Ok(())
 	}
@@ -219,7 +219,7 @@ mod tests {
 			extract_error_lines(TraversalSize::new(3, 8)),
 			[
 				"Failed to create TraversalSize",
-				"Size must be a power of two, but is 3"
+				"size must be a power of two, but is 3"
 			]
 		);
 	}

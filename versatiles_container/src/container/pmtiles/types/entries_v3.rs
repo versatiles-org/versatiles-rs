@@ -190,7 +190,10 @@ impl EntriesV3 {
 			}
 		}
 
-		// TODO: case 2: mixed tile entries/directory entries in root
+		// The PMTiles spec also allows case 2 — a root holding tile entries and
+		// leaf pointers side by side — which packs a little tighter than case 3.
+		// It is not implemented: case 3 below covers the same inputs correctly,
+		// so the only cost of skipping it is a slightly larger root directory.
 
 		// case 3: root directory is leaf pointers only
 		// use an iterative method, increasing the size of the leaf directory until the root fits

@@ -57,7 +57,7 @@ impl Tile {
 	#[context("materializing blob from content (format={:?}, q={:?}, e={:?})", self.format, self.format_quality, self.format_effort)]
 	pub(super) fn materialize_blob(&mut self) -> Result<()> {
 		if self.blob.is_none() {
-			ensure!(self.content.is_some(), "Cannot materialize blob without content");
+			ensure!(self.content.is_some(), "cannot materialize blob without content");
 			self.blob = Some(self.content.as_ref().expect("content presence ensured above").to_blob(
 				self.format,
 				self.format_quality,
@@ -71,7 +71,7 @@ impl Tile {
 	#[context("materializing content from blob (format={:?})", self.format)]
 	pub(super) fn materialize_content(&mut self) -> Result<()> {
 		if self.content.is_none() {
-			ensure!(self.blob.is_some(), "Cannot materialize content without blob");
+			ensure!(self.blob.is_some(), "cannot materialize content without blob");
 			self.decompress_blob()?;
 			self.content = Some(TileContent::from_blob(
 				self.blob.as_ref().expect("blob presence ensured above"),

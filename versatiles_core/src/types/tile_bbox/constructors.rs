@@ -293,33 +293,33 @@ impl TileBBox {
 	/// Minimum x‑tile (column) coordinate.
 	#[inline]
 	pub fn x_min(&self) -> Result<u32> {
-		ensure!(!self.is_empty(), "Cannot get x_min of an empty TileBBox");
+		ensure!(!self.is_empty(), "cannot get x_min of an empty TileBBox");
 		Ok(self.x_min)
 	}
 
 	/// Minimum y‑tile (row) coordinate.
 	#[inline]
 	pub fn y_min(&self) -> Result<u32> {
-		ensure!(!self.is_empty(), "Cannot get y_min of an empty TileBBox");
+		ensure!(!self.is_empty(), "cannot get y_min of an empty TileBBox");
 		Ok(self.y_min)
 	}
 
 	/// Clamp to the level’s maximum if the requested width would exceed bounds.
 	pub fn set_width(&mut self, width: u32) -> Result<()> {
-		ensure!(!self.is_empty(), "Cannot set width of an empty TileBBox");
+		ensure!(!self.is_empty(), "cannot set width of an empty TileBBox");
 		self.width = width.min(self.max_count().saturating_sub(self.x_min));
 		Ok(())
 	}
 
 	/// Clamp to the level’s maximum if the requested height would exceed bounds.
 	pub fn set_height(&mut self, height: u32) -> Result<()> {
-		ensure!(!self.is_empty(), "Cannot set height of an empty TileBBox");
+		ensure!(!self.is_empty(), "cannot set height of an empty TileBBox");
 		self.height = height.min(self.max_count().saturating_sub(self.y_min));
 		Ok(())
 	}
 
 	pub fn set_size(&mut self, width: u32, height: u32) -> Result<()> {
-		ensure!(!self.is_empty(), "Cannot set size of an empty TileBBox");
+		ensure!(!self.is_empty(), "cannot set size of an empty TileBBox");
 		self.set_width(width)?;
 		self.set_height(height)?;
 		Ok(())
@@ -328,7 +328,7 @@ impl TileBBox {
 	/// Sets the minimum x-coordinate, while keeping the maximum x-coordinate consistent.
 	#[context("Failed to set x_min to {x_min}")]
 	pub fn set_x_min(&mut self, x_min: u32) -> Result<()> {
-		ensure!(!self.is_empty(), "Cannot set x_min of an empty TileBBox");
+		ensure!(!self.is_empty(), "cannot set x_min of an empty TileBBox");
 		ensure!(
 			x_min < self.max_count(),
 			"x_min ({x_min}) must be < max ({})",
@@ -342,7 +342,7 @@ impl TileBBox {
 	/// Sets the minimum y-coordinate, while keeping the maximum y-coordinate consistent.
 	#[context("Failed to set y_min to {y_min}")]
 	pub fn set_y_min(&mut self, y_min: u32) -> Result<()> {
-		ensure!(!self.is_empty(), "Cannot set y_min of an empty TileBBox");
+		ensure!(!self.is_empty(), "cannot set y_min of an empty TileBBox");
 		ensure!(
 			y_min < self.max_count(),
 			"y_min ({y_min}) must be < max ({})",
@@ -355,20 +355,20 @@ impl TileBBox {
 
 	/// Returns the maximum x-coordinate of the bounding box.
 	pub fn x_max(&self) -> Result<u32> {
-		ensure!(!self.is_empty(), "Cannot get x_max of an empty TileBBox");
+		ensure!(!self.is_empty(), "cannot get x_max of an empty TileBBox");
 		Ok((self.x_min + self.width).saturating_sub(1))
 	}
 
 	/// Returns the maximum y-coordinate of the bounding box.
 	pub fn y_max(&self) -> Result<u32> {
-		ensure!(!self.is_empty(), "Cannot get y_max of an empty TileBBox");
+		ensure!(!self.is_empty(), "cannot get y_max of an empty TileBBox");
 		Ok((self.y_min + self.height).saturating_sub(1))
 	}
 
 	/// Sets the maximum x-coordinate, while keeping the minimum x-coordinate consistent.
 	#[context("Failed to set x_max to {x_max}")]
 	pub fn set_x_max(&mut self, x_max: u32) -> Result<()> {
-		ensure!(!self.is_empty(), "Cannot set x_max of an empty TileBBox");
+		ensure!(!self.is_empty(), "cannot set x_max of an empty TileBBox");
 		ensure!(
 			x_max < self.max_count(),
 			"x_max ({x_max}) must be < max ({})",
@@ -385,7 +385,7 @@ impl TileBBox {
 	/// Sets the maximum y-coordinate, while keeping the minimum y-coordinate consistent.
 	#[context("Failed to set y_max to {y_max}")]
 	pub fn set_y_max(&mut self, y_max: u32) -> Result<()> {
-		ensure!(!self.is_empty(), "Cannot set y_max of an empty TileBBox");
+		ensure!(!self.is_empty(), "cannot set y_max of an empty TileBBox");
 		ensure!(
 			y_max < self.max_count(),
 			"y_max ({y_max}) must be < max ({})",
