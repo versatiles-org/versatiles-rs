@@ -8,7 +8,17 @@ where
 	F: Float,
 	I: PrimInt + Bounded,
 {
-	ensure!(value.is_finite(), "Value must be finite");
+	ensure!(
+		value.is_finite(),
+		"value must be finite, but is {}",
+		if value.is_nan() {
+			"NaN"
+		} else if value.is_sign_positive() {
+			"infinity"
+		} else {
+			"-infinity"
+		}
+	);
 
 	let n = value.round();
 

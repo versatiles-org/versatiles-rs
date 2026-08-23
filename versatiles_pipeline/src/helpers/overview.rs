@@ -118,9 +118,14 @@ impl OverviewCore {
 
 		let size = bbox.max_count().min(BLOCK_TILE_COUNT);
 
-		ensure!(bbox.level() < self.level_base, "Invalid level");
-		ensure!(bbox.width() <= size, "Invalid width");
-		ensure!(bbox.height() <= size, "Invalid height");
+		ensure!(
+			bbox.level() < self.level_base,
+			"bbox level {} must be below the base level {}",
+			bbox.level(),
+			self.level_base
+		);
+		ensure!(bbox.width() <= size, "bbox width {} exceeds the block size {size}", bbox.width());
+		ensure!(bbox.height() <= size, "bbox height {} exceeds the block size {size}", bbox.height());
 
 		let bbox0 = bbox.rounded(size);
 		assert_eq!(bbox0.width(), size);

@@ -492,7 +492,10 @@ impl TileJSON {
 
 		// 3.17 version - optional
 		if let Some(v) = self.values.string("version") {
-			ensure!(Regex::new(r"^\d+\.\d+\.\d+$")?.is_match(&v), "Invalid version number");
+			ensure!(
+				Regex::new(r"^\d+\.\d+\.\d+$")?.is_match(&v),
+				"version must look like '1.2.3', but is '{v}'"
+			);
 		}
 
 		Ok(())

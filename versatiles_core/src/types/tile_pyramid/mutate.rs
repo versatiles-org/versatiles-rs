@@ -43,8 +43,10 @@ impl TilePyramid {
 	/// Intersects each zoom level with the coverage derived from a geographic
 	/// bounding box.
 	///
-	/// Levels ≤ 16 get an exact quadtree; higher levels reuse the cap tree scaled
-	/// via `at_level` (O(1)).
+	/// A geographic bounding box is a rectangle, and both Web Mercator axes are
+	/// monotonic, so the tiles it covers are always a rectangle too. Every level
+	/// can therefore intersect against a plain [`TileBBox`] without losing
+	/// precision — no quadtree is needed, whatever the zoom.
 	pub fn intersect_geo_bbox(&mut self, geo_bbox: &GeoBBox) -> Result<()> {
 		for z in 0..=MAX_ZOOM_LEVEL {
 			if let Some(level) = self.levels.get_mut(z as usize) {

@@ -109,11 +109,11 @@ fn parse_quality(quality: Option<String>) -> Result<[Option<u8>; 32]> {
 			}
 			if let Some(idx) = part.find(':') {
 				zoom = part[0..idx].trim().parse()?;
-				ensure!((0..=31).contains(&zoom), "Zoom level must be between 0 and 31");
+				ensure!((0..=31).contains(&zoom), "zoom level must be between 0 and 31, but is {zoom}");
 				part = &part[(idx + 1)..];
 			}
 			let quality_val: u8 = part.trim().parse()?;
-			ensure!(quality_val <= 100, "Quality value must be between 0 and 100");
+			ensure!(quality_val <= 100, "quality must be between 0 and 100, but is {quality_val}");
 			for z in zoom..32 {
 				result[usize::try_from(z).expect("zoom in 0..32 fits in usize")] = Some(quality_val);
 			}
@@ -154,8 +154,8 @@ mod tests {
 	}
 
 	#[rstest]
-	#[case("32:10", "Zoom level must be between 0 and 31")] // invalid zoom
-	#[case("5:101", "Quality value must be between 0 and 100")] // invalid quality
+	#[case("32:10", "zoom level must be between 0 and 31, but is 32")] // invalid zoom
+	#[case("5:101", "quality must be between 0 and 100, but is 101")] // invalid quality
 	fn parse_quality_errors(#[case] input: &str, #[case] needle: &str) {
 		let msg = super::parse_quality(Some(input.to_string()))
 			.unwrap_err()
