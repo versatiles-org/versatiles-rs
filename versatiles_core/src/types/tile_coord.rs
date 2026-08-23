@@ -38,8 +38,13 @@ use versatiles_derive::context;
 use super::constants::WORLD_SIZE;
 use crate::{GeoBBox, TileBBox};
 
+/// The deepest zoom level this library supports.
+///
+/// At level 30 a tile index still fits in a `u32` (2^30 tiles per axis), which
+/// is what every coordinate type here assumes.
 pub const MAX_ZOOM_LEVEL: u8 = 30;
 
+/// Errors unless `level` is within [`MAX_ZOOM_LEVEL`].
 pub fn validate_zoom_level(level: u8) -> Result<()> {
 	ensure!(level <= MAX_ZOOM_LEVEL, "level ({level}) must be <= {MAX_ZOOM_LEVEL}");
 	Ok(())

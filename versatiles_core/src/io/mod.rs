@@ -130,6 +130,7 @@ mod network_writer;
 pub(crate) mod retry;
 #[cfg(feature = "ssh2")]
 mod sftp_pool;
+/// Host-key verification and SFTP session setup.
 #[cfg(feature = "ssh2")]
 pub mod sftp_utils;
 #[cfg(feature = "ssh2")]

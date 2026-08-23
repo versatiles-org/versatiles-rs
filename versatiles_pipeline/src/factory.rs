@@ -29,7 +29,10 @@ use crate::{
 
 static MULTIPLE_NEWLINES_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\n{3,}").expect("valid regex literal"));
 
+/// What every VPL operation exposes to the registry, the reference generator
+/// and `versatiles help`.
 pub trait OperationFactoryTrait: Send + Sync {
+	/// The operation's name as written in VPL, e.g. `from_container`.
 	fn tag_name(&self) -> &str;
 	/// The operation's full documentation, including the generated parameter
 	/// list. This is what the operation reference and `versatiles help` render.
@@ -40,6 +43,7 @@ pub trait OperationFactoryTrait: Send + Sync {
 	/// [`docs`](Self::docs) minus the summary and the generated parameter list.
 	#[cfg(feature = "codegen")]
 	fn doc_details(&self) -> String;
+	/// One entry per argument the operation accepts.
 	fn field_metadata(&self) -> Vec<crate::vpl::VPLFieldMeta>;
 }
 
@@ -490,7 +494,9 @@ impl PipelineFactory {
 /// Metadata about a single VPL operation, used for code generation.
 #[cfg(feature = "codegen")]
 pub struct OperationMeta {
+	/// The operation's name as written in VPL.
 	pub tag_name: String,
+	/// Whether this is a `"read"` or a `"transform"` operation.
 	pub kind: &'static str,
 	/// Full documentation: summary, details, and a rendered parameter list.
 	///
@@ -502,6 +508,7 @@ pub struct OperationMeta {
 	/// `doc` minus the summary and the parameter list. Empty when there is
 	/// nothing more to say.
 	pub details: String,
+	/// One entry per argument, in declaration order.
 	pub fields: Vec<crate::vpl::VPLFieldMeta>,
 }
 

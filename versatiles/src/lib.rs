@@ -50,6 +50,8 @@
 //! ```
 
 pub mod config;
+/// Building the [`TilesRuntime`](versatiles_container::TilesRuntime) the CLI
+/// and server share.
 pub mod runtime;
 #[cfg(feature = "server")]
 pub mod server;

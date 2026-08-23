@@ -76,26 +76,31 @@ pub struct ServerConfig {
 /// These methods selectively override fields only if the provided values are `Some`.
 /// Used when combining multiple configuration sources (e.g., defaults, CLI, and YAML).
 impl ServerConfig {
+	/// Overrides the address to bind to, if a value is given.
 	pub fn override_optional_ip(&mut self, ip: &Option<String>) {
 		if ip.is_some() {
 			self.ip.clone_from(ip);
 		}
 	}
+	/// Overrides the `Cache-Control` header sent with tiles, if a value is given.
 	pub fn override_optional_cache_control(&mut self, cache_control: &Option<String>) {
 		if cache_control.is_some() {
 			self.cache_control.clone_from(cache_control);
 		}
 	}
+	/// Overrides the port to listen on, if a value is given.
 	pub fn override_optional_port(&mut self, port: &Option<u16>) {
 		if port.is_some() {
 			self.port = *port;
 		}
 	}
+	/// Overrides whether to recompress as little as possible, if a value is given.
 	pub fn override_optional_minimal_recompression(&mut self, minimal_recompression: &Option<bool>) {
 		if minimal_recompression.is_some() {
 			self.minimal_recompression = *minimal_recompression;
 		}
 	}
+	/// Overrides whether the JSON API is switched off, if a value is given.
 	pub fn override_optional_disable_api(&mut self, disable_api: &Option<bool>) {
 		if disable_api.is_some() {
 			self.disable_api = *disable_api;

@@ -470,6 +470,8 @@ impl TileServer {
 		}
 	}
 
+	/// Every served URL prefix paired with a description of what it serves,
+	/// for the startup banner and the API's source listing.
 	#[must_use]
 	pub fn url_mapping(&self) -> Vec<(super::Url, String)> {
 		let mut result = Vec::new();

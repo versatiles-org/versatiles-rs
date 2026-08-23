@@ -128,6 +128,10 @@ impl TileFormat {
 		]
 	}
 
+	/// Parses a format name or file extension, case-insensitively and ignoring
+	/// surrounding spaces and dots.
+	///
+	/// Accepts the common aliases: `jpg`/`jpeg`, and `pbf`/`mvt`.
 	#[context("Could not convert string '{value}' to TileFormat")]
 	pub fn try_from_str(value: &str) -> Result<Self> {
 		Ok(match value.to_lowercase().trim_matches([' ', '.']) {
@@ -145,6 +149,7 @@ impl TileFormat {
 		})
 	}
 
+	/// Determines the format from a path's file extension.
 	#[context("Failed to get TileFormat from path {path:?}")]
 	pub fn try_from_path(path: &Path) -> Result<Self> {
 		Self::try_from_str(path.extension().and_then(|s| s.to_str()).unwrap_or_default())

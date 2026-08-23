@@ -117,11 +117,14 @@ impl VectorLayers {
 		)
 	}
 
+	/// Whether every one of `ids` names a layer in this set.
 	#[must_use]
 	pub fn contains_ids(&self, ids: &[&str]) -> bool {
 		ids.iter().all(|id| self.0.contains_key(*id))
 	}
 
+	/// Guesses which published schema these layers follow, by looking for the
+	/// layer names each one is known to define.
 	#[must_use]
 	pub fn tile_schema(&self) -> TileSchema {
 		if self.contains_ids(&[
@@ -232,14 +235,17 @@ impl VectorLayers {
 	/// Finds a layer by its id.
 	/// Returns `None` if the layer does not exist.
 	#[must_use]
+	/// One layer by id, or `None` if this set has no such layer.
 	pub fn find(&self, id: &str) -> Option<&VectorLayer> {
 		self.0.get(id)
 	}
 
+	/// Iterates the layers by id, in sorted order, allowing mutation.
 	pub fn iter_mut(&mut self) -> std::collections::btree_map::IterMut<'_, String, VectorLayer> {
 		self.0.iter_mut()
 	}
 
+	/// Iterates the layers by id, in sorted order.
 	pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, VectorLayer> {
 		self.0.iter()
 	}
@@ -262,9 +268,13 @@ impl FromIterator<(String, VectorLayer)> for VectorLayers {
 /// - `minzoom`, `maxzoom`: Optional `u8` values (0..=30).
 #[derive(Clone, Debug, PartialEq)]
 pub struct VectorLayer {
+	/// Field name to field type, both as written in the TileJSON.
 	pub fields: BTreeMap<String, String>,
+	/// Free-text description of the layer.
 	pub description: Option<String>,
+	/// Lowest zoom this layer appears at.
 	pub minzoom: Option<u8>,
+	/// Highest zoom this layer appears at.
 	pub maxzoom: Option<u8>,
 }
 

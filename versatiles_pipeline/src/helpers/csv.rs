@@ -165,6 +165,7 @@ impl CsvReader {
 		self
 	}
 
+	/// Reads this column as text, without trying to parse it as a number.
 	#[must_use]
 	pub fn with_string_field(mut self, field_name: &str) -> Self {
 		self.string_fields.insert(field_name.to_string());

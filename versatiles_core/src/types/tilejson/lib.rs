@@ -162,6 +162,7 @@ impl TileJSON {
 		obj
 	}
 
+	/// This TileJSON as a JSON value, ready to serialize.
 	#[must_use]
 	pub fn as_json_value(&self) -> JsonValue {
 		JsonValue::Object(self.as_object())
@@ -293,6 +294,9 @@ impl TileJSON {
 		}
 	}
 
+	/// The declared `minzoom`, if it is present and fits in a `u8`.
+	///
+	/// This is what the source *claims*; the tile pyramid is what it holds.
 	#[must_use]
 	pub fn zoom_min(&self) -> Option<u8> {
 		self.values.integer("minzoom").and_then(|z| u8::try_from(z).ok())
@@ -311,6 +315,7 @@ impl TileJSON {
 		self.values.set("minzoom", z);
 	}
 
+	/// The declared `maxzoom`, if it is present and fits in a `u8`.
 	#[must_use]
 	pub fn zoom_max(&self) -> Option<u8> {
 		self.values.integer("maxzoom").and_then(|z| u8::try_from(z).ok())
@@ -329,6 +334,8 @@ impl TileJSON {
 		self.values.set("maxzoom", z);
 	}
 
+	/// Records the tile's pixel size. Errors unless `size` is a supported
+	/// [`TileSize`].
 	pub fn set_tile_size(&mut self, size: u32) -> Result<()> {
 		self.tile_size = Some(TileSize::try_from(size)?);
 		Ok(())

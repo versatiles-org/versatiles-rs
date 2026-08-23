@@ -26,11 +26,13 @@ impl TileBBox {
 		self.level
 	}
 
+	/// The northwest corner tile. Errors when the bbox is empty.
 	pub fn min_tile(&self) -> Result<TileCoord> {
 		ensure!(!self.is_empty(), "cannot get min tile of an empty TileBBox");
 		TileCoord::new(self.level, self.x_min()?, self.y_min()?)
 	}
 
+	/// The southeast corner tile. Errors when the bbox is empty.
 	pub fn max_tile(&self) -> Result<TileCoord> {
 		ensure!(!self.is_empty(), "cannot get max tile of an empty TileBBox");
 		TileCoord::new(self.level, self.x_max()?, self.y_max()?)

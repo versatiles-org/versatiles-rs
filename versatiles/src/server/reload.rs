@@ -11,6 +11,10 @@ use versatiles_container::TilesRuntime;
 use super::sources::{ServerTileSource, StaticSource};
 use crate::config::{Config, StaticSourceConfig, TileSourceConfig};
 
+/// Re-reads the config file and applies the difference to a running server.
+///
+/// Sources that did not change keep their open containers and caches, so a
+/// reload costs only what actually changed.
 pub struct ReloadHandle {
 	pub(super) config_path: PathBuf,
 	pub(super) tile_sources: Arc<DashMap<String, Arc<ServerTileSource>>>,
@@ -21,6 +25,7 @@ pub struct ReloadHandle {
 }
 
 impl ReloadHandle {
+	/// Re-reads the config and adds, drops or replaces sources to match it.
 	pub async fn reload(&self) -> Result<()> {
 		let new_config = Config::from_path(&self.config_path)?;
 		self.apply_tile_source_diff(&new_config.tile_sources).await;

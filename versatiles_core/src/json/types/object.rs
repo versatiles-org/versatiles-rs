@@ -42,6 +42,8 @@ impl JsonObject {
 		self.get(key).map(JsonValue::to_string).transpose()
 	}
 
+	/// Retrieve a nested object for the specified key, returning `None` if
+	/// missing or not an object.
 	pub fn object(&self, key: &str) -> Result<Option<&JsonObject>> {
 		self.get(key).map(JsonValue::as_object).transpose()
 	}

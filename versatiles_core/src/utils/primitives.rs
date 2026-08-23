@@ -3,6 +3,10 @@ use std::any::type_name;
 use anyhow::{Result, anyhow, ensure};
 use num_traits::{Bounded, Float, NumCast, PrimInt};
 
+/// Rounds a float to the nearest integer of type `I`.
+///
+/// Errors when `value` is not finite, or when the rounded result lies outside
+/// `I`'s range — so a lossy cast cannot happen silently.
 pub fn float_to_int<F, I>(value: F) -> Result<I>
 where
 	F: Float,

@@ -5,31 +5,41 @@ use versatiles_derive::context;
 
 use super::{VPLNode, parse_vpl};
 
+/// A parsed VPL pipeline: one read operation followed by any transforms.
 #[derive(Clone, Default, PartialEq)]
 pub struct VPLPipeline {
+	/// The operations, in the order they were written. The first reads a
+	/// source; each one after it transforms what the previous produced.
 	pub pipeline: Vec<VPLNode>,
 }
 
 impl VPLPipeline {
+	/// Builds a pipeline from already-parsed nodes.
 	#[must_use]
 	pub fn new(pipeline: Vec<VPLNode>) -> Self {
 		VPLPipeline { pipeline }
 	}
 
+	/// How many operations the pipeline has.
 	#[must_use]
 	pub fn len(&self) -> usize {
 		self.pipeline.len()
 	}
 
+	/// Whether the pipeline has no operations.
 	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.pipeline.is_empty()
 	}
 
+	/// Removes and returns the last operation.
 	pub fn pop(&mut self) -> Option<VPLNode> {
 		self.pipeline.pop()
 	}
 
+	/// Splits into the source operation and the transforms that follow it.
+	///
+	/// Errors on an empty pipeline, which has no source to read from.
 	#[context("Failed to split VPL pipeline")]
 	pub fn split(mut self) -> Result<(VPLNode, Vec<VPLNode>)> {
 		ensure!(!self.pipeline.is_empty(), "pipeline is empty");

@@ -43,6 +43,7 @@
 
 pub mod byte_iterator;
 pub mod compression;
+/// Helpers for running work across threads.
 pub mod concurrency;
 pub use concurrency::*;
 pub mod io;

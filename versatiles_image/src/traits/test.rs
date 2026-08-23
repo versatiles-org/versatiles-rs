@@ -48,6 +48,7 @@ pub struct MarkerParameters {
 }
 
 impl MarkerParameters {
+	/// Describes one marker gradient to draw.
 	#[must_use]
 	pub fn new(offset: f64, angle: f64, scale: f64) -> Self {
 		Self { offset, angle, scale }
@@ -63,13 +64,21 @@ impl MarkerParameters {
 /// * `error` – mean absolute residual from the regression fit.
 #[derive(Clone, Copy, Debug)]
 pub struct MarkerResult {
+	/// Recovered translation along the detected direction.
 	pub offset: f64,
+	/// Detected gradient orientation, in degrees.
 	pub angle: f64,
+	/// Recovered slope magnitude, normalised to 1/256.
 	pub scale: f64,
+	/// Mean absolute residual of the regression fit — how well the recovered
+	/// parameters actually explain the pixels.
 	pub error: f64,
 }
 
 impl MarkerResult {
+	/// Errors unless this result matches `p` within a tolerance scaled by
+	/// `factor`, which lets a lossy codec be checked more loosely than a
+	/// lossless one.
 	#[context("comparing marker result (factor={:.3}) to expected (offset={:.3}, angle={:.1}, scale={:.3})", factor, p.offset, p.angle, p.scale)]
 	pub fn compare(&self, p: &MarkerParameters, factor: f64) -> Result<()> {
 		fn angle_delta(a: f64, b: f64) -> f64 {
@@ -120,6 +129,7 @@ impl MarkerResult {
 	}
 }
 
+/// Compares one marker result per channel against what was drawn.
 #[context("comparing {} channel marker results", params.len())]
 pub fn compare_marker_result(params: &[MarkerParameters], results: &[MarkerResult]) -> Result<()> {
 	ensure!(
@@ -155,7 +165,12 @@ pub trait DynamicImageTraitTest: DynamicImageTraitConvert {
 	/// The luminance increases with x, and the alpha increases with y.
 	fn new_test_greya() -> DynamicImage;
 
+	/// Draws one linear gradient per channel, from `parameters`.
+	///
+	/// Round-tripping such an image through a codec and calling
+	/// [`gauge_marker`](Self::gauge_marker) measures what the codec did to it.
 	fn new_marker(parameters: &[MarkerParameters]) -> DynamicImage;
+	/// Recovers the gradient parameters from each channel by regression.
 	fn gauge_marker(&self) -> Vec<MarkerResult>;
 }
 

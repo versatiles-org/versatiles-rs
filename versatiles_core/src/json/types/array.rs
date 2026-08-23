@@ -78,16 +78,19 @@ impl JsonArray {
 			.map_err(|e: Vec<f64>| anyhow!("vector length mismatch {} != {}", e.len(), N))
 	}
 
+	/// Number of elements in the array.
 	#[must_use]
 	pub fn len(&self) -> usize {
 		self.0.len()
 	}
 
+	/// Whether the array has no elements.
 	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.0.is_empty()
 	}
 
+	/// Iterates the elements in order.
 	pub fn iter(&self) -> std::slice::Iter<'_, JsonValue> {
 		self.0.iter()
 	}

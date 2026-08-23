@@ -74,6 +74,10 @@ fn read_hex4(iter: &mut ByteIterator, hex: &mut [u8; 4]) -> Result<u16> {
 	u16::from_str_radix(hex_str, 16).map_err(|_| iter.format_error("invalid unicode code point"))
 }
 
+/// Reads one double-quoted JSON string, resolving escapes.
+///
+/// Consumes the opening and closing quotes. `\uXXXX` escapes are decoded,
+/// including surrogate pairs, so characters outside the BMP survive.
 #[context("while parsing a quoted JSON string")]
 pub fn parse_quoted_json_string(iter: &mut ByteIterator) -> Result<String> {
 	iter.skip_whitespace();

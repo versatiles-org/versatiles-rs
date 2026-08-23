@@ -74,6 +74,7 @@ pub struct PrettyPrint {
 }
 
 impl PrettyPrint {
+	/// A printer writing at the top indentation level.
 	#[must_use]
 	pub fn new() -> Self {
 		Self {
@@ -186,6 +187,7 @@ impl PrettyPrint {
 			.await;
 	}
 
+	/// Everything printed so far, as one string. Test-only.
 	#[cfg(any(test, feature = "test"))]
 	pub async fn stringify(&self) -> String {
 		self.printer.stringify().await

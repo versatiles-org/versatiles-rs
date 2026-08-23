@@ -285,6 +285,7 @@ impl TileBBox {
 		if self.is_empty() { 0 } else { self.height }
 	}
 
+	/// Width and height in tiles; `(0, 0)` for an empty bbox.
 	#[must_use]
 	pub fn dimensions(&self) -> (u32, u32) {
 		(self.width(), self.height())
@@ -318,6 +319,8 @@ impl TileBBox {
 		Ok(())
 	}
 
+	/// Resizes the bbox, keeping its origin. Errors if it is empty or the new
+	/// size would leave the level's bounds.
 	pub fn set_size(&mut self, width: u32, height: u32) -> Result<()> {
 		ensure!(!self.is_empty(), "cannot set size of an empty TileBBox");
 		self.set_width(width)?;
@@ -454,6 +457,7 @@ impl TileBBox {
 		Ok(())
 	}
 
+	/// Replaces all four edges at once. Bounds are inclusive.
 	#[context("Failed to set TileBBox to min ({x_min}, {y_min}) and max ({x_max}, {y_max})")]
 	pub fn set_min_and_max(&mut self, x_min: u32, y_min: u32, x_max: u32, y_max: u32) -> Result<()> {
 		ensure!(x_min <= x_max, "x_min ({x_min}) must be <= x_max ({x_max})");

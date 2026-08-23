@@ -1,9 +1,18 @@
+/// Everything the VPL reference generator knows about one operation argument.
+///
+/// Produced by the `VPLDecode` derive from the argument struct itself, so the
+/// generated documentation cannot drift from the code that parses it.
 #[derive(Debug, Clone)]
 pub struct VPLFieldMeta {
+	/// The argument's name as written in VPL.
 	pub name: String,
+	/// The Rust type the argument parses into, as a string.
 	pub rust_type: String,
+	/// Whether the operation fails when the argument is absent.
 	pub is_required: bool,
+	/// Whether this argument takes upstream sources rather than a value.
 	pub is_sources: bool,
+	/// The argument's doc comment, used to generate the VPL reference.
 	pub doc: String,
 	/// Accepted string values for enum-typed fields (e.g.
 	/// `["none", "gzip", "brotli", "zstd"]` for `Option<TileCompression>`).
