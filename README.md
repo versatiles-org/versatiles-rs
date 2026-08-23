@@ -279,17 +279,17 @@ versatiles convert input.mbtiles output.versatiles
 
 **Advanced options:**
 
-| Option                     | Description                                      | Example                           |
-| -------------------------- | ------------------------------------------------ | --------------------------------- |
-| `--min-zoom`, `--max-zoom` | Filter zoom levels                               | `--min-zoom=5 --max-zoom=12`      |
-| `--bbox`                   | Extract region (lon_min,lat_min,lon_max,lat_max) | `--bbox=13.0,52.3,13.8,52.7`      |
-| `--bbox-border`            | Add border tiles around bbox                     | `--bbox-border=3`                 |
-| `--compress`               | Set compression (gzip, brotli, zstd)             | `--compress=brotli`               |
-| `--tile-format`            | Convert tile format (png, jpg, webp, avif, pbf)  | `--tile-format=webp`              |
-| `--swap-xy`                | Swap X/Y coordinates (z/x/y → z/y/x)             | `--swap-xy`                       |
-| `--flip-y`                 | Flip tiles vertically                            | `--flip-y`                        |
-| `--dry-run`                | Check the pipeline and exit, reading no tiles    | `--dry-run`                       |
-| `--writer-option`          | Format-specific output option (repeatable)       | `--writer-option=clustered=false` |
+| Option                     | Description                                      | Example                                  |
+| -------------------------- | ------------------------------------------------ | ---------------------------------------- |
+| `--min-zoom`, `--max-zoom` | Filter zoom levels                               | `--min-zoom=5 --max-zoom=12`             |
+| `--bbox`                   | Extract region (lon_min,lat_min,lon_max,lat_max) | `--bbox=13.0,52.3,13.8,52.7`             |
+| `--bbox-border`            | Add border tiles around bbox                     | `--bbox-border=3`                        |
+| `--compress`               | Set compression (gzip, brotli, zstd)             | `--compress=brotli`                      |
+| `--tile-format`            | Convert tile format (png, jpg, webp, avif, pbf)  | `--tile-format=webp`                     |
+| `--swap-xy`                | Swap X/Y coordinates (z/x/y → z/y/x)             | `--swap-xy`                              |
+| `--flip-y`                 | Flip tiles vertically                            | `--flip-y`                               |
+| `--dry-run`                | Check the pipeline and exit, reading no tiles    | `--dry-run`                              |
+| `--writer-option`          | Format-specific output option (repeatable)       | `--writer-option=allow_unclustered=true` |
 
 The output path can also be an SFTP URL (`sftp://[user[:pass]@]host[:port]/path`) to write directly to a remote server. This requires the `ssh2` feature. Only formats that support streaming writes (`.versatiles`, `.pmtiles`) are supported over SFTP.
 
