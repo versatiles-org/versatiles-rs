@@ -242,12 +242,22 @@ impl GeoValue {
 			"true" => GeoValue::Bool(true),
 			"false" => GeoValue::Bool(false),
 			_ => {
+				// The regexes match the *shape* of a number, not its range. A CSV cell
+				// holding a 20-digit id is ordinary data and does not fit `i64` or
+				// `u64`, so parsing is fallible and falls back to `Double` — lossy
+				// past 2^53, but a number stays a number, which is already what this
+				// function does with `1e999`. It used to `expect` on the parse and
+				// take the process down instead.
+				fn as_double(value: &str) -> GeoValue {
+					GeoValue::Double(value.parse::<f64>().unwrap_or(f64::NAN))
+				}
+
 				if REG_DOUBLE.is_match(value) {
-					GeoValue::Double(value.parse::<f64>().expect("regex matched numeric literal"))
+					as_double(value)
 				} else if REG_INT.is_match(value) {
-					GeoValue::Int(value.parse::<i64>().expect("regex matched signed integer literal"))
+					value.parse::<i64>().map_or_else(|_| as_double(value), GeoValue::Int)
 				} else if REG_UINT.is_match(value) {
-					GeoValue::UInt(value.parse::<u64>().expect("regex matched unsigned integer literal"))
+					value.parse::<u64>().map_or_else(|_| as_double(value), GeoValue::UInt)
 				} else {
 					GeoValue::String(value.to_string())
 				}
@@ -285,6 +295,34 @@ mod tests {
 	use rstest::rstest;
 
 	use super::*;
+
+	/// A numeric literal that does not fit its integer type is ordinary CSV data —
+	/// a long id, a hash — and used to panic here, taking down whatever was
+	/// reading the file. It now falls back to `Double`, the same way an
+	/// out-of-range float already did.
+	#[test]
+	fn numbers_too_large_for_their_type_fall_back_to_double() {
+		// The boundaries still parse as integers.
+		assert_eq!(GeoValue::parse_str("18446744073709551615"), GeoValue::UInt(u64::MAX));
+		assert_eq!(GeoValue::parse_str("-9223372036854775808"), GeoValue::Int(i64::MIN));
+
+		// One past each boundary becomes a double instead of a panic.
+		assert_eq!(
+			GeoValue::parse_str("18446744073709551616"),
+			GeoValue::Double(18_446_744_073_709_551_616.0)
+		);
+		assert_eq!(
+			GeoValue::parse_str("-9223372036854775809"),
+			GeoValue::Double(-9_223_372_036_854_775_809.0)
+		);
+		assert_eq!(
+			GeoValue::parse_str("99999999999999999999999999"),
+			GeoValue::Double(1e26)
+		);
+
+		// And the existing out-of-range float behaviour is unchanged.
+		assert_eq!(GeoValue::parse_str("1e999"), GeoValue::Double(f64::INFINITY));
+	}
 
 	#[test]
 	fn test_geo_value_ord() {
