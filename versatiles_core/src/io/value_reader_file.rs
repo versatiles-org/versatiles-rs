@@ -137,7 +137,13 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderFile<E> {
 		E: 'b,
 	{
 		let start = self.reader.stream_position().context("file stream_position failed")?;
-		let end = start + length;
+		// Checked before the bounds test, because the allocation below is sized by
+		// `length`: unchecked, a crafted length wraps `end` to something small, the
+		// test passes, and `vec![0; length]` then asks for the whole address space —
+		// an allocation failure, which aborts rather than returning an error.
+		let end = start
+			.checked_add(length)
+			.context("sub-reader start + length overflows u64")?;
 		if end > self.len {
 			bail!("sub-reader length exceeds file length");
 		}
@@ -229,6 +235,26 @@ mod tests {
 		reader.set_position(2)?;
 		assert_eq!(reader.position()?, 2);
 		assert_eq!(reader.read_u8()?, 0x03);
+		Ok(())
+	}
+
+	/// Same as the slice reader, with more at stake: the file reader allocates a
+	/// buffer of `length` bytes right after the bounds test, so a wrapped `end`
+	/// turned a crafted length into an allocation the process cannot survive.
+	#[test]
+	fn sub_reader_length_that_overflows_is_rejected() -> Result<()> {
+		let file = NamedTempFile::new("overflow.bin")?;
+		file.write_binary(&[1, 2, 3, 4])?;
+		let mut reader = ValueReaderFile::new_le(File::open(file.path())?)?;
+		reader.set_position(2)?;
+
+		// `Box<dyn ValueReader>` is not `Debug`, so `unwrap_err` is unavailable.
+		let error = match reader.get_sub_reader(u64::MAX) {
+			Ok(_) => panic!("an overflowing length must not produce a sub-reader"),
+			Err(error) => format!("{error:#}"),
+		};
+		assert!(error.contains("overflow"), "expected an overflow error, got: {error}");
+
 		Ok(())
 	}
 

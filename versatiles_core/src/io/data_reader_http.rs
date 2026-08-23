@@ -225,7 +225,10 @@ fn describe_error(err: &reqwest::Error) -> String {
 impl DataReaderHttp {
 	/// Single-range read with retry/backoff.
 	async fn try_read_range_impl(&self, range: &ByteRange) -> Result<Blob> {
-		let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
+		// `end()` is checked: the range comes from a container header, and an
+		// unchecked sum here panics in a debug build and asks for a wrapped byte
+		// range in a release one.
+		let request_range: String = format!("bytes={}-{}", range.offset, range.end()? - 1);
 		let policy = super::retry::policy();
 		let max_retries = policy.max_retries;
 		let total_attempts = max_retries + 1;
@@ -310,7 +313,7 @@ impl DataReaderHttp {
 				);
 			}
 
-			let expected_end = range.offset + range.length - 1;
+			let expected_end = range.end()? - 1;
 			if content_range_end != expected_end {
 				bail!("Content-Range end mismatch: expected {expected_end}, got {content_range_end}");
 			}

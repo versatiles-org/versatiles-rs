@@ -96,6 +96,9 @@ pub(crate) trait NetworkReader: DataReaderTrait {
 	/// fetched concurrently so wall-clock stays near max(left, right)
 	/// instead of left + right.
 	async fn split_and_read(&self, range: &ByteRange) -> Result<Blob> {
+		// One checked question up front: everything below stays at or under the
+		// end of the range, so nothing else here can overflow.
+		range.end()?;
 		let mid = range.offset + range.length / 2;
 		let left = ByteRange::new(range.offset, mid - range.offset);
 		let right = ByteRange::new(mid, range.offset + range.length - mid);

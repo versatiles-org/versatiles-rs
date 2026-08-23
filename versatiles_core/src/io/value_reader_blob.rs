@@ -128,7 +128,13 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderBlob<E> {
 		E: 'b,
 	{
 		let start = self.cursor.position();
-		let end = start + length;
+		// Checked: `length` reaches here straight from a file — `get_pbf_sub_reader`
+		// reads it as a varint — and an unchecked sum panics in a debug build and
+		// wraps in a release one, where a wrapped `end` slips past the bounds test
+		// below.
+		let end = start
+			.checked_add(length)
+			.context("sub-reader start + length overflows u64")?;
 		if end > self.len {
 			bail!("Requested sub-reader length exceeds remaining data");
 		}

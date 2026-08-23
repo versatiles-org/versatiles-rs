@@ -79,10 +79,17 @@ impl Chunk {
 			entry.1.offset >= self.range.offset,
 			"entry offset must be >= range offset"
 		);
-		self.range.length = self
-			.range
-			.length
-			.max(entry.1.offset + entry.1.length - self.range.offset);
+		// Saturating throughout `coalesce`: grouping tiles into chunks is a
+		// heuristic over offsets read from a tile index, and an absurd offset
+		// should leave a tile ungrouped rather than panic in a debug build or
+		// wrap in a release one. The read itself is bounds-checked either way.
+		self.range.length = self.range.length.max(
+			entry
+				.1
+				.offset
+				.saturating_add(entry.1.length)
+				.saturating_sub(self.range.offset),
+		);
 		self.tiles.push(entry);
 	}
 
@@ -168,12 +175,12 @@ impl Chunks {
 
 		for entry in tile_ranges.drain(..) {
 			let chunk_start = chunk.range.offset;
-			let chunk_end = chunk.range.offset + chunk.range.length;
+			let chunk_end = chunk.range.offset.saturating_add(chunk.range.length);
 
 			let tile_start = entry.1.offset;
-			let tile_end = entry.1.offset + entry.1.length;
+			let tile_end = entry.1.offset.saturating_add(entry.1.length);
 
-			if (chunk_start + max_size > tile_end) && (chunk_end + max_gap > tile_start) {
+			if (chunk_start.saturating_add(max_size) > tile_end) && (chunk_end.saturating_add(max_gap) > tile_start) {
 				chunk.push(entry);
 			} else {
 				chunks.push(chunk);

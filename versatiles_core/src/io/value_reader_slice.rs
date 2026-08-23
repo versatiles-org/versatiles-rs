@@ -156,7 +156,11 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderSlice<'a, E> {
 		E: 'b,
 	{
 		let start = self.cursor.position();
-		let end = start + length;
+		// See the blob reader: `length` is parsed from the input, so the sum is
+		// checked rather than trusted.
+		let end = start
+			.checked_add(length)
+			.context("sub-reader start + length overflows u64")?;
 		if end > self.len {
 			bail!("Requested sub-reader length exceeds remaining data");
 		}
@@ -253,6 +257,26 @@ mod tests {
 		reader.set_position(2)?;
 		assert_eq!(reader.position()?, 2);
 		assert_eq!(reader.read_u8()?, 0x03);
+		Ok(())
+	}
+
+	/// A sub-reader length is read from the input — `get_pbf_sub_reader` takes it
+	/// as a varint — so a crafted message can ask for one that overflows the
+	/// position arithmetic. Unchecked, that panicked in a debug build and wrapped
+	/// in a release one, where the wrapped end slipped past the bounds test.
+	#[test]
+	fn sub_reader_length_that_overflows_is_rejected() -> Result<()> {
+		let data = vec![1, 2, 3, 4];
+		let mut reader = ValueReaderSlice::new_le(&data);
+		reader.set_position(2)?;
+
+		// `Box<dyn ValueReader>` is not `Debug`, so `unwrap_err` is unavailable.
+		let error = match reader.get_sub_reader(u64::MAX) {
+			Ok(_) => panic!("an overflowing length must not produce a sub-reader"),
+			Err(error) => format!("{error:#}"),
+		};
+		assert!(error.contains("overflow"), "expected an overflow error, got: {error}");
+
 		Ok(())
 	}
 

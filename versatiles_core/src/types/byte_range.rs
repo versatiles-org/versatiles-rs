@@ -180,6 +180,30 @@ impl ByteRange {
 		self.offset = self.offset.wrapping_sub(offset);
 	}
 
+	/// The offset just past the end of the range.
+	///
+	/// Checked, because both fields routinely come out of a container header:
+	/// unchecked, the sum panics in a debug build and wraps in a release one,
+	/// and a wrapped end passes bounds tests it should fail.
+	///
+	/// # Errors
+	/// Returns an error if `offset + length` does not fit in a `u64`.
+	///
+	/// # Examples
+	///
+	/// ```rust
+	/// use versatiles_core::ByteRange;
+	///
+	/// assert_eq!(ByteRange::new(10, 5).end().unwrap(), 15);
+	/// assert!(ByteRange::new(u64::MAX, 1).end().is_err());
+	/// ```
+	pub fn end(&self) -> Result<u64> {
+		self
+			.offset
+			.checked_add(self.length)
+			.with_context(|| format!("ByteRange offset + length overflows u64: {self}"))
+	}
+
 	/// Converts the `ByteRange` to a `std::ops::Range<usize>`.
 	///
 	/// # Returns
@@ -229,6 +253,19 @@ impl fmt::Display for ByteRange {
 #[cfg(test)]
 mod tests {
 	use super::ByteRange;
+
+	/// `offset + length` is checked: both come out of container headers, where a
+	/// wrapped end would pass bounds tests it should fail.
+	#[test]
+	fn end_is_checked() {
+		assert_eq!(ByteRange::new(10, 5).end().unwrap(), 15);
+		assert_eq!(ByteRange::new(0, 0).end().unwrap(), 0);
+		assert_eq!(ByteRange::new(u64::MAX, 0).end().unwrap(), u64::MAX);
+
+		assert!(ByteRange::new(u64::MAX, 1).end().is_err());
+		assert!(ByteRange::new(1, u64::MAX).end().is_err());
+		assert!(ByteRange::new(u64::MAX, u64::MAX).end().is_err());
+	}
 
 	/// Verifies that `new` correctly sets offset and length.
 	#[test]
