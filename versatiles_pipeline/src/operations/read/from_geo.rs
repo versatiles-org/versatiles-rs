@@ -556,10 +556,14 @@ mod tests {
 			r#"{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},
 			   "geometry":{"type":"Point","coordinates":[389298.0,5819938.0]}}]}"#,
 		)?;
+		// Single quotes, not double: VPL processes escapes inside `"…"` and accepts
+		// only `\\`, `\"`, `\n` and `\t`, so a Windows temp path — `C:\Users\…` —
+		// fails to parse before the test reaches what it is about. A single-quoted
+		// string is taken literally.
 		let msg = format!(
 			"{:#}",
 			PipelineFactory::new_dummy()
-				.operation_from_vpl(&format!("from_geo filename=\"{}\"", projected.display()))
+				.operation_from_vpl(&format!("from_geo filename='{}'", projected.display()))
 				.await
 				.expect_err("projected coordinates should be refused")
 		);
@@ -579,7 +583,7 @@ mod tests {
 		let msg = format!(
 			"{:#}",
 			PipelineFactory::new_dummy()
-				.operation_from_vpl(&format!("from_geo filename=\"{}\"", declared.display()))
+				.operation_from_vpl(&format!("from_geo filename='{}'", declared.display()))
 				.await
 				.expect_err("a declared non-WGS84 CRS should be refused")
 		);
@@ -604,7 +608,7 @@ mod tests {
 			   "geometry":{"type":"Point","coordinates":[52.52,13.405]}}]}"#,
 		)?;
 		PipelineFactory::new_dummy()
-			.operation_from_vpl(&format!("from_geo filename=\"{}\" max_zoom=6", swapped.display()))
+			.operation_from_vpl(&format!("from_geo filename='{}' max_zoom=6", swapped.display()))
 			.await?;
 		Ok(())
 	}
