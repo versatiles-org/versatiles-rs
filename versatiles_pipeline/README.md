@@ -293,6 +293,8 @@ The input format is detected from the file extension:
 
 A `.geojsonseq` file may prefix each record with the RFC 8142 record separator `U+001E`.
 
+Input must be **EPSG:4326 lon/lat in degrees, longitude first** — reprojection is not performed. Coordinates outside that range are refused, as is a GeoJSON `crs` member naming another projection, but lat/lon input with the axes swapped is in range and cannot be detected: it produces valid tiles of the wrong place. Reproject first if needed, e.g. `ogr2ogr -t_srs EPSG:4326 out.geojson in.geojson`. A shapefile without a `.prj` is read as WGS84 with a warning, since it carries no CRS of its own.
+
 Left to itself, `max_zoom` picks the level at which the median feature spans roughly 4 tile-pixels, capped at 14. Points count as size zero, so a mostly-point dataset lands on the cap.
 
 A tile over `max_tile_bytes` is dropped while streaming and an error when a single tile is requested. Raise the cap when a legitimate low-zoom tile exceeds it, or set `max_tile_bytes=none` to emit tiles at any size; the soft-cap warning threshold, 200 KB at the default, scales with it.

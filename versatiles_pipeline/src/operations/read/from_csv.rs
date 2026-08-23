@@ -158,7 +158,7 @@ impl Operation {
 		let mut stream = source.load()?;
 		let mut features: Vec<GeoFeature> = Vec::new();
 		while let Some(item) = stream.next().await {
-			features.extend(project_and_flatten(item?));
+			features.extend(project_and_flatten(item?)?);
 		}
 		if let Some(h) = progress_handle {
 			h.finish();

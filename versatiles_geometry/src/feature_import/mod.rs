@@ -35,6 +35,55 @@ pub use heuristics::auto_max_zoom;
 pub use reduce_points::PointReductionStrategy;
 pub use tile_render::{clip_geometry, render_tile};
 
+/// How far outside the WGS84 range a coordinate may land before it is refused,
+/// in degrees.
+///
+/// Exports that round-trip through another projection come back a few ULPs past
+/// ±180 / ±90, and those files are fine. 1e-6° is about 11 cm at the equator: far
+/// wider than any rounding, far narrower than any real mistake, since a coordinate
+/// in the wrong CRS is out by whole degrees at least.
+const WGS84_TOLERANCE_DEG: f64 = 1e-6;
+
+/// Refuse coordinates that cannot be WGS84 lon/lat.
+///
+/// This is the only place the assumption "input is EPSG:4326" is checked, and it
+/// has to happen *before* projection: [`crate::ext::coord_to_mercator`] clamps
+/// latitude to ±[`versatiles_core::MAX_LAT`], so a northing in metres silently
+/// becomes the north edge of the world and nothing downstream can tell it was
+/// ever wrong. Longitude survives projection but only to be clamped later, when
+/// the bounds are converted back — which is how projected input used to reach
+/// `TileCover` as a degenerate box at the corner of the world and fail there,
+/// several layers away from the actual mistake.
+///
+/// Reprojection is out of scope, so the only job here is to fail immediately and
+/// name the cause.
+fn check_wgs84_range(geometry: &Geometry<f64>) -> Result<()> {
+	// The bounding rect's corners are the extremes over every coordinate, so one
+	// of them is out of range exactly when some coordinate is. `None` means the
+	// geometry holds no coordinates at all, which is not this function's problem.
+	let Some(rect) = geometry.bounding_rect() else {
+		return Ok(());
+	};
+
+	let lon_limit = 180.0 + WGS84_TOLERANCE_DEG;
+	let lat_limit = 90.0 + WGS84_TOLERANCE_DEG;
+	for corner in [rect.min(), rect.max()] {
+		// Written as a negated range test so that a NaN coordinate — which
+		// compares false against everything — is refused rather than accepted.
+		if !(corner.x.abs() <= lon_limit && corner.y.abs() <= lat_limit) {
+			bail!(
+				"coordinate ({}, {}) is outside the WGS84 range (longitude ±180, latitude ±90) — \
+				 input must be EPSG:4326 lon/lat in degrees. Reproject it first, e.g. \
+				 `ogr2ogr -t_srs EPSG:4326 out.geojson in.geojson`, and check the axis order: \
+				 GeoJSON is lon,lat, while some EPSG:4326 exporters write lat,lon",
+				corner.x,
+				corner.y
+			);
+		}
+	}
+	Ok(())
+}
+
 /// Project a single feature to web mercator and split any `Multi*` geometry
 /// into one feature per sub-geometry. Callers that load features from disk
 /// should run this on every record as it arrives so that the
@@ -49,12 +98,20 @@ pub use tile_render::{clip_geometry, render_tile};
 ///
 /// Properties and the `id` are cloned per output piece. For the no-split
 /// case there's no clone — `feature.geometry` is replaced in place.
-#[must_use]
-pub fn project_and_flatten(mut feature: crate::geo::GeoFeature) -> Vec<crate::geo::GeoFeature> {
+///
+/// # Errors
+///
+/// Returns an error when a coordinate is outside the WGS84 range — longitude
+/// ±180, latitude ±90, with a tolerance for float noise. This is where input in
+/// the wrong CRS is caught, and it has to be here: projection clamps latitude,
+/// so afterwards a northing in metres is indistinguishable from the north edge
+/// of the world.
+pub fn project_and_flatten(mut feature: crate::geo::GeoFeature) -> Result<Vec<crate::geo::GeoFeature>> {
 	let stub = geo_types::Geometry::Point(geo_types::Point::new(0.0, 0.0));
 	let original = std::mem::replace(&mut feature.geometry, stub);
+	check_wgs84_range(&original)?;
 	feature.geometry = MercatorExt::to_mercator(original);
-	flatten_feature(feature)
+	Ok(flatten_feature(feature))
 }
 use anyhow::{Result, bail};
 use geo::BoundingRect;
@@ -124,7 +181,8 @@ impl FeatureImport {
 	/// `Multi*` variants have been split into single-geometry features.
 	/// Callers loading from disk should run [`project_and_flatten`] on every
 	/// record as it arrives — fusing the work into the load loop saves two
-	/// full passes over what's typically a multi-GB feature vector.
+	/// full passes over what's typically a multi-GB feature vector, and it is
+	/// also where input that is not WGS84 lon/lat is refused.
 	///
 	/// ```
 	/// use versatiles_geometry::feature_import::{FeatureImport, FeatureImportArgs, project_and_flatten};
@@ -134,7 +192,10 @@ impl FeatureImport {
 	/// // WGS84 in; `project_and_flatten` is what satisfies the precondition
 	/// // above, so it runs before the features reach `from_features`.
 	/// let source = vec![GeoFeature::new(Geometry::Point(Point::new(13.4, 52.5)))];
-	/// let flattened: Vec<GeoFeature> = source.into_iter().flat_map(project_and_flatten).collect();
+	/// let mut flattened: Vec<GeoFeature> = Vec::new();
+	/// for feature in source {
+	///     flattened.extend(project_and_flatten(feature)?);
+	/// }
 	///
 	/// let import = FeatureImport::from_features(
 	///     flattened,
@@ -506,6 +567,64 @@ mod tests {
 		f
 	}
 
+	/// Coordinates that cannot be WGS84 are refused before they are projected.
+	///
+	/// This is the check that has to happen first: `coord_to_mercator` clamps
+	/// latitude, so a northing in metres becomes the north edge of the world and
+	/// every later stage sees plausible-looking input. Before this existed, such a
+	/// file collapsed to a degenerate bbox at the corner of the world and failed
+	/// several layers away, in `TileCover`, with a message about x > 180.
+	#[test]
+	fn projected_coordinates_are_refused_with_a_message_about_the_crs() {
+		// EPSG:25832 easting/northing for Berlin, the shape of a file that was
+		// never reprojected.
+		let err = project_and_flatten(point_feature(1, "berlin", 389_298.0, 5_819_938.0)).unwrap_err();
+		let msg = format!("{err:#}");
+		assert!(msg.contains("389298"), "{msg}");
+		assert!(msg.contains("EPSG:4326"), "{msg}");
+	}
+
+	/// Out of range in one axis only is still out of range.
+	///
+	/// Latitude is the important half: longitude survives projection and gets
+	/// caught later anyway, but a bad latitude is clamped on the way in and
+	/// leaves no trace.
+	#[test]
+	fn one_bad_axis_is_enough() {
+		assert!(project_and_flatten(point_feature(1, "lon", 181.0, 0.0)).is_err());
+		assert!(project_and_flatten(point_feature(2, "lat", 0.0, 91.0)).is_err());
+		assert!(project_and_flatten(point_feature(3, "nan", f64::NAN, 0.0)).is_err());
+	}
+
+	/// The corners of the world, and a rounding error past them, are fine.
+	///
+	/// Exports that round-trip through another projection come back a few ULPs
+	/// outside the range; refusing those would reject valid files for nothing.
+	#[test]
+	fn the_range_check_admits_the_edges_and_float_noise() -> Result<()> {
+		for (lon, lat) in [
+			(180.0, 90.0),
+			(-180.0, -90.0),
+			(180.000_000_000_000_03, 85.051_128_779_806_6),
+			(-180.000_000_1, 90.000_000_1),
+		] {
+			project_and_flatten(point_feature(1, "edge", lon, lat))
+				.map_err(|e| e.context(format!("({lon}, {lat}) should be accepted")))?;
+		}
+		Ok(())
+	}
+
+	/// Every coordinate is checked, not just the first.
+	#[test]
+	fn a_bad_coordinate_anywhere_in_a_geometry_is_found() {
+		let line = GeoFeature::new(Geometry::LineString(LineString::from(vec![
+			(13.4, 52.5),
+			(13.5, 52.6),
+			(565_932.0, 5_933_496.0),
+		])));
+		assert!(project_and_flatten(line).is_err());
+	}
+
 	#[test]
 	fn imports_two_points_and_renders_world_tile() -> Result<()> {
 		let features = vec![
@@ -516,7 +635,14 @@ mod tests {
 			max_zoom: Some(5),
 			..Default::default()
 		};
-		let import = FeatureImport::from_features(features.into_iter().flat_map(project_and_flatten).collect(), args)?;
+		let import = FeatureImport::from_features(
+			features
+				.into_iter()
+				.map(project_and_flatten)
+				.collect::<Result<Vec<_>>>()?
+				.concat(),
+			args,
+		)?;
 
 		assert_eq!(import.bounds_mercator().map(|b| b as i64), [0, 0, 10018754, 3503549]);
 
@@ -541,7 +667,7 @@ mod tests {
 			max_zoom: Some(3),
 			..Default::default()
 		};
-		let import = FeatureImport::from_features(project_and_flatten(point_feature(1, "o", 0.0, 0.0)), args)?;
+		let import = FeatureImport::from_features(project_and_flatten(point_feature(1, "o", 0.0, 0.0))?, args)?;
 		assert!(import.get_tile(10, 0, 0)?.is_none());
 		Ok(())
 	}
@@ -565,7 +691,7 @@ mod tests {
 			polygon_simplify_px: Some(0.0),
 			..Default::default()
 		};
-		let import = FeatureImport::from_features(project_and_flatten(feature), args)?;
+		let import = FeatureImport::from_features(project_and_flatten(feature)?, args)?;
 		// Tile (z=5) over Berlin is the smallest tile we built.
 		let coord = versatiles_core::TileCoord::from_geo(13.405, 52.52, 5)?;
 		assert!(import.get_tile(coord.level, coord.x, coord.y)?.is_none());
@@ -583,7 +709,7 @@ mod tests {
 			line_simplify_px: Some(0.0),
 			..Default::default()
 		};
-		let import = FeatureImport::from_features(project_and_flatten(feature), args)?;
+		let import = FeatureImport::from_features(project_and_flatten(feature)?, args)?;
 		// At z=0, the line is too short.
 		assert!(import.get_tile(0, 0, 0)?.is_none());
 		// At z=14, the line is large enough.
@@ -612,7 +738,7 @@ mod tests {
 			polygon_simplify_px: Some(0.0), // disable simplification for this test
 			..Default::default()
 		};
-		let import = FeatureImport::from_features(project_and_flatten(feature), args)?;
+		let import = FeatureImport::from_features(project_and_flatten(feature)?, args)?;
 
 		let tile = import.get_tile(2, 1, 1)?.expect("tile in the polygon");
 		assert_eq!(tile.layers.len(), 1);
@@ -714,7 +840,7 @@ mod tests {
 		let mut stream = src.load()?;
 		let mut features = Vec::new();
 		while let Some(item) = stream.next().await {
-			features.extend(project_and_flatten(item?));
+			features.extend(project_and_flatten(item?)?);
 		}
 		let import = FeatureImport::from_features(features, args)?;
 		assert_eq!(

@@ -83,9 +83,20 @@ impl ShapefileSource {
 
 	/// Read the optional `.prj` sibling file. If present and not WGS84,
 	/// returns an error.
+	///
+	/// A shapefile carries no CRS of its own, so a missing `.prj` leaves nothing
+	/// to check and the coordinates are read as WGS84 lon/lat. That assumption is
+	/// right often enough to keep, and wrong quietly enough to warn about: a
+	/// projected shapefile without its `.prj` is refused later by the coordinate
+	/// range check, but one in another geographic CRS is in range and would just
+	/// land in the wrong place.
 	fn check_projection(&self) -> Result<()> {
 		let prj_path = self.path.with_extension("prj");
 		if !prj_path.exists() {
+			log::warn!(
+				"shapefile {} has no .prj file; assuming its coordinates are WGS84 lon/lat degrees",
+				self.path.display()
+			);
 			return Ok(());
 		}
 		let contents =
@@ -402,7 +413,10 @@ mod tests {
 		write_admin_fixture(&shp_path)?;
 		let prj_path = shp_path.with_extension("prj");
 
-		// No .prj at all: nothing to disagree with.
+		// No .prj at all: nothing to disagree with, so the read proceeds on the
+		// assumption that the coordinates are WGS84 — logged as a warning, since
+		// a shapefile in another geographic CRS is in range and would otherwise
+		// land silently in the wrong place.
 		assert_eq!(features_of(&shp_path).await?.len(), 2);
 
 		std::fs::write(&prj_path, r#"GEOGCS["WGS_1984",DATUM["D_WGS_1984"]]"#)?;

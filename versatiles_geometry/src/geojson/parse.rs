@@ -44,6 +44,10 @@ pub fn parse_geojson_collection(iter: &mut ByteIterator) -> Result<GeoCollection
 		match key.as_str() {
 			"type" => object_type = Some(parse_quoted_json_string(iter2)?),
 			"features" => features = parse_array_entries(iter2, parse_geojson_feature)?,
+			// RFC 7946 dropped `crs` and fixed the CRS at WGS84, but ogr2ogr's
+			// older output and ArcGIS exports still carry it — and when it names
+			// something else, the file really is in another projection.
+			"crs" => check_crs_is_wgs84(&parse_json_iter(iter2)?)?,
 			_ => _ = parse_json_iter(iter2)?,
 		}
 		Ok(())
@@ -52,6 +56,74 @@ pub fn parse_geojson_collection(iter: &mut ByteIterator) -> Result<GeoCollection
 	check_type(object_type, "FeatureCollection")?;
 
 	Ok(GeoCollection { features })
+}
+
+/// CRS identifiers that mean "WGS84 longitude/latitude in degrees".
+///
+/// Compared lowercased. `CRS84` and `EPSG:4326` name the same datum; they differ
+/// on axis order in principle, but every GeoJSON writer emits lon,lat regardless,
+/// so both are accepted and the axis question is left to the range check in
+/// [`versatiles_geometry::feature_import`](crate::feature_import).
+const WGS84_CRS_NAMES: &[&str] = &[
+	"crs84",
+	"epsg:4326",
+	"epsg::4326",
+	"urn:ogc:def:crs:ogc:1.3:crs84",
+	"urn:ogc:def:crs:ogc::crs84",
+	"urn:ogc:def:crs:ogc:2:84",
+	"urn:ogc:def:crs:epsg::4326",
+	"http://www.opengis.net/gml/srs/epsg.xml#4326",
+	"www.opengis.net/gml/srs/epsg.xml#4326",
+];
+
+/// Refuse a `crs` member that positively names a projection other than WGS84.
+///
+/// Only a CRS we can read *and* recognise as something else is an error. A shape
+/// we cannot interpret — a `link` CRS pointing at a document we will not fetch,
+/// or a member some writer invented — is warned about instead: guessing that an
+/// unreadable CRS is wrong would reject valid files, and the coordinate range
+/// check downstream still catches the cases that matter.
+#[context("checking the GeoJSON `crs` member")]
+fn check_crs_is_wgs84(crs: &versatiles_core::json::JsonValue) -> Result<()> {
+	use versatiles_core::json::JsonValue;
+
+	// Both the object form and the bare-string shorthand some writers emit.
+	let name = match crs {
+		JsonValue::String(name) => Some(name.clone()),
+		JsonValue::Object(object) => match object.string("type")?.as_deref() {
+			Some("name") => object
+				.object("properties")?
+				.and_then(|p| p.string("name").ok().flatten()),
+			// `{"type": "EPSG", "properties": {"code": 25832}}` — pre-2008 form,
+			// still emitted by some tools.
+			Some("EPSG") => object
+				.object("properties")?
+				.and_then(|p| p.number("code").ok().flatten())
+				.map(|code| format!("epsg:{code:.0}")),
+			_ => None,
+		},
+		// `"crs": null` is how RFC 7946 writers spell "no CRS member"; nothing to check.
+		JsonValue::Null => return Ok(()),
+		_ => None,
+	};
+
+	let Some(name) = name else {
+		log::warn!(
+			"GeoJSON has a `crs` member this reader cannot interpret ({}); assuming WGS84 lon/lat",
+			crs.stringify()
+		);
+		return Ok(());
+	};
+
+	let normalized = name.trim().to_lowercase();
+	if WGS84_CRS_NAMES.contains(&normalized.as_str()) {
+		return Ok(());
+	}
+
+	bail!(
+		"GeoJSON declares the CRS {name:?}, but only WGS84 lon/lat is supported — reproject it \
+		 first, e.g. `ogr2ogr -t_srs EPSG:4326 out.geojson in.geojson`"
+	)
 }
 
 /// Validates the required GeoJSON `type` field for a given object.
@@ -351,6 +423,66 @@ mod tests {
 
 	use super::*;
 	use crate::ext::type_name;
+
+	/// A `crs` member naming a projection other than WGS84 is refused.
+	///
+	/// RFC 7946 deleted `crs`, but ogr2ogr's pre-2016 output and ArcGIS exports
+	/// still write it, and when they do it is telling the truth about the file.
+	/// Accepting it silently is how projected data used to get as far as the tile
+	/// cover before failing for an unrelated-looking reason.
+	#[test]
+	fn a_non_wgs84_crs_member_is_refused() {
+		for crs in [
+			r#"{"type":"name","properties":{"name":"urn:ogc:def:crs:EPSG::25832"}}"#,
+			r#"{"type":"name","properties":{"name":"EPSG:3857"}}"#,
+			r#"{"type":"EPSG","properties":{"code":25832}}"#,
+			r#""EPSG:25832""#,
+		] {
+			let json = format!(r#"{{"type":"FeatureCollection","crs":{crs},"features":[]}}"#);
+			let msg = match parse_geojson(&json) {
+				Ok(_) => panic!("{crs} should have been refused"),
+				Err(err) => format!("{err:#}"),
+			};
+			assert!(msg.contains("only WGS84 lon/lat is supported"), "{crs}: {msg}");
+		}
+	}
+
+	/// The spellings that do mean WGS84 keep working, in every form writers use.
+	#[test]
+	fn the_wgs84_crs_spellings_are_accepted() -> Result<()> {
+		for crs in [
+			r#"{"type":"name","properties":{"name":"urn:ogc:def:crs:OGC:1.3:CRS84"}}"#,
+			r#"{"type":"name","properties":{"name":"urn:ogc:def:crs:EPSG::4326"}}"#,
+			r#"{"type":"name","properties":{"name":"EPSG:4326"}}"#,
+			r#"{"type":"EPSG","properties":{"code":4326}}"#,
+			r#"{"type":"name","properties":{"name":"http://www.opengis.net/gml/srs/epsg.xml#4326"}}"#,
+			r#""CRS84""#,
+			"null",
+		] {
+			let json = format!(r#"{{"type":"FeatureCollection","crs":{crs},"features":[]}}"#);
+			parse_geojson(&json).map_err(|e| e.context(format!("{crs} should be accepted")))?;
+		}
+		Ok(())
+	}
+
+	/// A `crs` member we cannot read is a warning, not an error.
+	///
+	/// A `link` CRS points at a document this reader will not fetch, and writers
+	/// invent shapes. Refusing what we merely failed to understand would reject
+	/// valid files; the coordinate range check still catches the cases that make
+	/// a practical difference.
+	#[test]
+	fn an_uninterpretable_crs_member_is_tolerated() -> Result<()> {
+		for crs in [
+			r#"{"type":"link","properties":{"href":"http://example.com/crs.wkt","type":"esriwkt"}}"#,
+			r#"{"type":"name"}"#,
+			"42",
+		] {
+			let json = format!(r#"{{"type":"FeatureCollection","crs":{crs},"features":[]}}"#);
+			parse_geojson(&json).map_err(|e| e.context(format!("{crs} should be tolerated")))?;
+		}
+		Ok(())
+	}
 
 	#[test]
 	fn test_parse_geojson_valid_feature_collection() -> Result<()> {

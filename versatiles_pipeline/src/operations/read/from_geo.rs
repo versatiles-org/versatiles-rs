@@ -56,6 +56,14 @@ const PROGRESS_MIN_BYTES: u64 = 10_000_000;
 /// A `.geojsonseq` file may prefix each record with the RFC 8142 record
 /// separator `U+001E`.
 ///
+/// Input must be **EPSG:4326 lon/lat in degrees, longitude first** —
+/// reprojection is not performed. Coordinates outside that range are refused,
+/// as is a GeoJSON `crs` member naming another projection, but lat/lon input
+/// with the axes swapped is in range and cannot be detected: it produces valid
+/// tiles of the wrong place. Reproject first if needed, e.g.
+/// `ogr2ogr -t_srs EPSG:4326 out.geojson in.geojson`. A shapefile without a
+/// `.prj` is read as WGS84 with a warning, since it carries no CRS of its own.
+///
 /// Left to itself, `max_zoom` picks the level at which the median feature spans
 /// roughly 4 tile-pixels, capped at 14. Points count as size zero, so a
 /// mostly-point dataset lands on the cap.
@@ -283,7 +291,7 @@ async fn drain<S: FeatureSource + ?Sized>(source: &S) -> Result<Vec<GeoFeature>>
 	let mut stream = source.load()?;
 	let mut features = Vec::new();
 	while let Some(item) = stream.next().await {
-		features.extend(project_and_flatten(item?));
+		features.extend(project_and_flatten(item?)?);
 	}
 	Ok(features)
 }
@@ -498,6 +506,77 @@ mod tests {
 				q
 			})
 			.collect()
+	}
+
+	/// Input in the wrong CRS is refused where the mistake is, and says so.
+	///
+	/// Coordinates in metres used to be clamped to the corner of the world and
+	/// then fail four layers down in `TileCover` with "x (180.0000000001) must be
+	/// <= 180" — a message from which the actual mistake, data that was never
+	/// reprojected, is not recoverable. A declared non-WGS84 `crs` member was not
+	/// looked at at all.
+	#[tokio::test]
+	async fn input_in_the_wrong_crs_is_refused_by_name() -> Result<()> {
+		let tmp = tempfile::tempdir()?;
+
+		// EPSG:25832 easting/northing, no `crs` member to give it away.
+		let projected = tmp.path().join("utm.geojson");
+		std::fs::write(
+			&projected,
+			r#"{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},
+			   "geometry":{"type":"Point","coordinates":[389298.0,5819938.0]}}]}"#,
+		)?;
+		let msg = format!(
+			"{:#}",
+			PipelineFactory::new_dummy()
+				.operation_from_vpl(&format!("from_geo filename=\"{}\"", projected.display()))
+				.await
+				.expect_err("projected coordinates should be refused")
+		);
+		assert!(msg.contains("389298"), "{msg}");
+		assert!(msg.contains("EPSG:4326"), "{msg}");
+		assert!(!msg.contains("TileCover"), "should fail before the tile cover: {msg}");
+
+		// Lon/lat coordinates, but the file says they are something else.
+		let declared = tmp.path().join("declared.geojson");
+		std::fs::write(
+			&declared,
+			r#"{"type":"FeatureCollection",
+			   "crs":{"type":"name","properties":{"name":"urn:ogc:def:crs:EPSG::25832"}},
+			   "features":[{"type":"Feature","properties":{},
+			   "geometry":{"type":"Point","coordinates":[13.405,52.52]}}]}"#,
+		)?;
+		let msg = format!(
+			"{:#}",
+			PipelineFactory::new_dummy()
+				.operation_from_vpl(&format!("from_geo filename=\"{}\"", declared.display()))
+				.await
+				.expect_err("a declared non-WGS84 CRS should be refused")
+		);
+		assert!(msg.contains("EPSG::25832"), "{msg}");
+		assert!(msg.contains("only WGS84 lon/lat is supported"), "{msg}");
+		Ok(())
+	}
+
+	/// Axis-swapped lat,lon input stays accepted, because it cannot be told apart.
+	///
+	/// Both numbers are in range, so nothing here can distinguish it from a place
+	/// in the Indian Ocean. Pinned so that the range check is not later mistaken
+	/// for protection against it — that half of the problem is a documentation
+	/// matter, and the error message says so where a user will read it.
+	#[tokio::test]
+	async fn axis_swapped_input_is_not_detectable() -> Result<()> {
+		let tmp = tempfile::tempdir()?;
+		let swapped = tmp.path().join("swapped.geojson");
+		std::fs::write(
+			&swapped,
+			r#"{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},
+			   "geometry":{"type":"Point","coordinates":[52.52,13.405]}}]}"#,
+		)?;
+		PipelineFactory::new_dummy()
+			.operation_from_vpl(&format!("from_geo filename=\"{}\" max_zoom=6", swapped.display()))
+			.await?;
+		Ok(())
 	}
 
 	#[tokio::test]

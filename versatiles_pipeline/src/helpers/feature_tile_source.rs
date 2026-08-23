@@ -309,7 +309,7 @@ mod tests {
 			point_feature(2, "east", 90.0, 30.0),
 		]
 		.into_iter()
-		.flat_map(project_and_flatten)
+		.flat_map(|f| project_and_flatten(f).unwrap())
 		.collect();
 		let args = FeatureImportArgs {
 			max_zoom: Some(max_zoom),
