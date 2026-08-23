@@ -84,7 +84,6 @@ impl ProgressTracker {
 }
 
 #[cfg(test)]
-#[allow(clippy::too_many_arguments)]
 mod tests {
 	use std::sync::Arc;
 

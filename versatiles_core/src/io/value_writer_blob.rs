@@ -24,8 +24,6 @@
 //! }
 //! ```
 
-#![allow(dead_code)]
-
 use std::{
 	io::{Cursor, Write},
 	marker::PhantomData,

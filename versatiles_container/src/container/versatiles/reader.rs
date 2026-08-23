@@ -81,13 +81,11 @@ use crate::{
 /// indices are cached (least-recently-used) to accelerate repeated random access.
 pub struct VersaTilesReader {
 	block_index: BlockIndex,
-	#[allow(dead_code)] // used by probe_container under #[cfg(feature = "cli")]
 	header: FileHeader,
 	metadata: TileSourceMetadata,
 	reader: Arc<DataReader>,
 	tile_index_cache: Cache<TileCoord, Arc<TileIndex>>,
 	tilejson: TileJSON,
-	#[allow(dead_code)] // used by probe_tiles under #[cfg(feature = "cli")]
 	runtime: TilesRuntime,
 }
 

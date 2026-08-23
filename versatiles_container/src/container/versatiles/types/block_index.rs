@@ -128,7 +128,6 @@ impl BlockIndex {
 	///
 	/// # Returns
 	/// The number of blocks in the index.
-	#[allow(dead_code)] // used under #[cfg(feature = "cli")]
 	pub fn len(&self) -> usize {
 		self.lookup.len()
 	}

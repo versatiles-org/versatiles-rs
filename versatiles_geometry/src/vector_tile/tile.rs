@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! Vector Tile **Tile** container.
 //!
 //! This module defines [`VectorTile`], a container of vector‑tile layers following the

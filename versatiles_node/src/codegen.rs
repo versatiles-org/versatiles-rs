@@ -8,7 +8,6 @@ use versatiles::pipeline::{OperationMeta, all_operation_metadata, vpl::VPLFieldM
 /// Returns the complete TypeScript source as a string. Write it to a `.ts` file
 /// and compile with `tsc` to produce `.js` + `.d.ts`.
 #[napi]
-#[allow(unused)]
 pub fn generate_vpl_typescript() -> String {
 	let ops = all_operation_metadata();
 	generate_typescript(&ops)

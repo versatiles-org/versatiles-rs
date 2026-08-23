@@ -31,8 +31,6 @@
 //! }
 //! ```
 
-#![allow(dead_code)]
-
 use std::{io::Cursor, marker::PhantomData};
 
 use anyhow::{Context, Result, anyhow, bail};

@@ -57,7 +57,6 @@ use super::TileType;
 /// - `SVG` - SVG image format
 /// - `TOPOJSON` - `TopoJSON` vector data
 /// - `WEBP` - WEBP image format
-#[allow(clippy::upper_case_acronyms)]
 #[cfg_attr(feature = "cli", derive(ValueEnum))]
 #[derive(Debug, Default, PartialOrd, Ord, EnumSetType)]
 pub enum TileFormat {

@@ -5,8 +5,6 @@
 //! from this crate's root); helpers in [`crate::ext`] provide projection, GeoJSON
 //! output, and validation over those primitives.
 
-#![allow(clippy::module_inception)]
-
 mod collection;
 mod feature;
 mod properties;

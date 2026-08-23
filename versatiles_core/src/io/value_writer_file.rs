@@ -26,8 +26,6 @@
 //! }
 //! ```
 
-#![allow(dead_code)]
-
 use std::{
 	fs::File,
 	io::{BufWriter, Seek, Write},

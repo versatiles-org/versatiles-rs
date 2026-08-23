@@ -19,7 +19,7 @@ pub struct DummyVectorSource {
 }
 
 impl DummyVectorSource {
-	#[allow(clippy::type_complexity, clippy::needless_pass_by_value)]
+	#[allow(clippy::type_complexity)]
 	pub fn new(layers: &[(&str, &[&[(&str, &str)]])], pyramid: Option<TilePyramid>) -> Self {
 		// Convert the layers input into the required data structure
 		let data: Vec<(String, Vec<Vec<(String, String)>>)> = layers

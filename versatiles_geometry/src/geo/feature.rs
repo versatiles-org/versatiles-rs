@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! Defines `GeoFeature`, a single GeoJSON-like feature with optional `id`, a `Geometry`,
 //! and a set of typed properties. Geometry is a `geo_types::Geometry<f64>`; helpers in
 //! `crate::ext` handle GeoJSON output, projection, and validation.

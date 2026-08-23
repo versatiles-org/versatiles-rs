@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anyhow::{Context, Result, anyhow, bail};
 use byteorder::LE;
 use versatiles_core::{

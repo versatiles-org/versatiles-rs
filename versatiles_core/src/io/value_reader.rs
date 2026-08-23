@@ -41,7 +41,6 @@ use crate::{Blob, ByteRange};
 /// A simple alias for types implementing both `Seek` and `Read`, used for convenience.
 pub trait SeekRead: Seek + Read {}
 
-#[allow(dead_code)]
 /// A trait for reading values from various sources with support for different byte orders.
 pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// Returns the underlying reader to access raw bytes.
@@ -287,7 +286,6 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 		let value = self.read_varint().context("Failed to read varint for PBF key")?;
 		let field_number = u32::try_from(value >> 3).context("PBF field number too large (exceeds u32::MAX)")?;
 		// Wire type is always 0-7, so masking with 0x07 guarantees it fits in u8
-		#[allow(clippy::cast_possible_truncation)]
 		let wire_type = (value & 0x07) as u8;
 		Ok((field_number, wire_type))
 	}

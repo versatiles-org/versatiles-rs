@@ -1,6 +1,5 @@
 //! Utilities for reading newline-delimited JSON (NDJSON) from readers,
 //! providing both synchronous iterator and asynchronous stream interfaces.
-#![allow(dead_code)]
 use std::io::BufRead;
 
 use anyhow::{Context, Error, Result};

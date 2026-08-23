@@ -58,7 +58,6 @@ pub struct TileCoord {
 	pub y: u32,
 }
 
-#[allow(dead_code)]
 impl TileCoord {
 	/// Create a new `TileCoord` at the given zoom `level` and tile indices `x`, `y`.
 	///

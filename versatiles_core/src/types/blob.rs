@@ -52,7 +52,6 @@ use super::ByteRange;
 #[derive(Clone, PartialEq, Eq)]
 pub struct Blob(Vec<u8>);
 
-#[allow(dead_code)]
 impl Blob {
 	/// Creates an empty `Blob`.
 	///

@@ -131,7 +131,6 @@ fn is_point(g: &Geometry<f64>) -> bool {
 fn keep_for_index(index: usize, keep_ratio: f64) -> bool {
 	let h = splitmix64(index as u64);
 	// Take the high 53 bits, divide by 2^53 — same approach as `f64::random`.
-	#[allow(clippy::cast_precision_loss)]
 	let u = (h >> 11) as f64 / (1u64 << 53) as f64;
 	u < keep_ratio
 }

@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! Vector Tile **Layer** utilities.
 //!
 //! This module defines [`VectorTileLayer`], which represents a single layer in a

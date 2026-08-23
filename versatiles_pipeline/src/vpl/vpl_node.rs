@@ -29,7 +29,6 @@ pub struct VPLNode {
 	pub sources: Vec<VPLPipeline>,
 }
 
-#[allow(dead_code)]
 impl VPLNode {
 	/// Parses a single-node VPL string into a `VPLNode` (asserts exactly one node).
 	///

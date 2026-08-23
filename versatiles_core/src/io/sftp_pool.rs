@@ -462,7 +462,6 @@ pub fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection
 
 /// Number of pooled connections currently held for `url`'s server.
 #[cfg(test)]
-#[allow(dead_code)]
 fn connection_count(url: &Url) -> Result<usize> {
 	let key = ServerKey::from_url(url)?;
 	let guard = pool().lock().map_err(|e| anyhow!("SFTP pool lock poisoned: {e}"))?;

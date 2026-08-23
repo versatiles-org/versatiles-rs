@@ -52,7 +52,6 @@ impl DummyImageSource {
 	}
 
 	#[context("Creating DummyImageSource from image, tile_format='{tile_format}'")]
-	#[allow(clippy::needless_pass_by_value)]
 	pub fn new<F>(generate_tile: F, tile_format: TileFormat, pyramid: Option<TilePyramid>) -> Result<Self>
 	where
 		F: Fn(&TileCoord) -> Option<Tile> + Send + Sync + 'static,

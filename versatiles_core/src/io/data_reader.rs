@@ -87,7 +87,6 @@ pub trait DataReaderTrait: Debug + Send + Sync {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with all the data or an error.
-	#[allow(dead_code)]
 	async fn read_all(&self) -> Result<Blob>;
 
 	/// Gets the name of the data source.

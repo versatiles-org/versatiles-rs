@@ -31,8 +31,6 @@
 //! }
 //! ```
 
-#![allow(dead_code)]
-
 use std::{
 	io::{Cursor, Read},
 	ops::Range,

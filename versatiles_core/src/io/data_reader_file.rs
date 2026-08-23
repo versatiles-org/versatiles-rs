@@ -353,7 +353,6 @@ mod tests {
 		// Each byte is (position % 256) so we can verify correctness
 		let mut data = Vec::new();
 		for i in 0u16..10240 {
-			#[allow(clippy::cast_possible_truncation)]
 			// Safe: i is non-negative and i & 0xFF always fits in u8
 			data.push((i & 0xFF) as u8);
 		}

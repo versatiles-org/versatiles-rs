@@ -30,8 +30,6 @@
 //! }
 //! ```
 
-#![allow(dead_code)]
-
 use std::io::{Cursor, Seek, SeekFrom, Write};
 
 use anyhow::Result;

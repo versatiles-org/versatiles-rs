@@ -109,7 +109,6 @@ pub(super) struct FirstPassResult {
 // ─── First pass: scan sources + write opaque tiles ───
 
 /// Stream every source once: write opaque tiles directly, record translucent coords.
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn scan_sources(
 	output: &str,
 	paths: &[String],

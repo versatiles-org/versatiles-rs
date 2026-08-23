@@ -35,7 +35,6 @@ struct Operation {
 /// 24-bit integer (`raw = R*65536 + G*256 + B`), averaged, and re-encoded.
 /// This is correct for all linear DEM encodings (Mapbox, Terrarium) because
 /// `avg(elevation) = decode(avg(raw))` when the encoding is linear.
-#[allow(clippy::many_single_char_names)]
 pub(super) fn dem_scale_down(image: &DynamicImage) -> Result<DynamicImage> {
 	let half_w = image.width() / 2;
 	let half_h = image.height() / 2;
@@ -151,7 +150,6 @@ impl TileSource for Operation {
 crate::operations::macros::define_transform_factory!("dem_overview", Args, Operation, requires: Raster);
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
 mod tests {
 	use imageproc::image::{GenericImage, Pixel};
 	use versatiles_core::{GeoBBox, TileFormat, TilePyramid, TileSchema};

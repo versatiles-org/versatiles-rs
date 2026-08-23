@@ -29,7 +29,6 @@ macro_rules! impl_from_number_lossless {
 macro_rules! impl_from_number_lossy {
 	($($t:ty),+ $(,)?) => {
 		$(
-			#[allow(clippy::cast_precision_loss)]
 			impl From<$t> for JsonValue {
 				fn from(input: $t) -> Self {
 					JsonValue::Number(input as f64)

@@ -27,7 +27,6 @@ impl Lattice {
 	/// previous corner: two cells sharing a corner have to arrive at the very
 	/// same coordinate, and accumulated addition would not.
 	#[must_use]
-	#[allow(clippy::cast_precision_loss)]
 	pub fn corner(&self, ix: i64, iy: i64) -> Coord<f64> {
 		coord! {
 			x: self.offset[0] + ix as f64 * self.size,
@@ -50,7 +49,6 @@ impl Lattice {
 		let (mut left, mut bottom) = (f64::INFINITY, f64::INFINITY);
 		let (mut right, mut top) = (f64::NEG_INFINITY, f64::NEG_INFINITY);
 
-		#[allow(clippy::cast_precision_loss)]
 		for step in 0..=BOUNDARY_SAMPLES {
 			let t = step as f64 / BOUNDARY_SAMPLES as f64;
 			let x = x_min + (x_max - x_min) * t;

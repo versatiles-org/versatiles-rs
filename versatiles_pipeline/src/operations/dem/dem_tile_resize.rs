@@ -72,7 +72,6 @@ impl TileSource for Operation {
 crate::operations::macros::define_transform_factory!("dem_tile_resize", Args, Operation, requires: Raster);
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
 mod tests {
 	use imageproc::image::{DynamicImage, GenericImageView, Rgb, RgbImage};
 	use versatiles_core::{TileBBox, TileCoord, TileFormat, TilePyramid, TileSchema};

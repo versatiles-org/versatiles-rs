@@ -37,7 +37,6 @@ pub struct PipelineReader {
 	operation: Box<dyn TileSource>,
 }
 
-#[allow(dead_code)]
 impl<'a> PipelineReader {
 	/// Opens a `PipelineReader` from a VPL file on disk.
 	///

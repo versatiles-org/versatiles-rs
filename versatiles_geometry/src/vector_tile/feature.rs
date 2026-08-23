@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anyhow::{Context, Result, bail, ensure};
 use byteorder::LE;
 use geo_types::{
@@ -167,7 +165,6 @@ pub(super) fn parse_geom_command_stream(geom_data: &Blob) -> Result<Vec<Vec<Coor
 						.checked_add(reader.read_svarint().context("Failed to read y coordinate")?)
 						.context("geometry y coordinates overflow i64")?;
 
-					#[allow(clippy::cast_precision_loss)]
 					line.push(Coord {
 						x: x as f64,
 						y: y as f64,

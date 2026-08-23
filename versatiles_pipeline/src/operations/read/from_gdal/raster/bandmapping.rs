@@ -251,7 +251,6 @@ impl BandMapping {
 	///
 	/// # Safety
 	/// This function modifies the provided `GDALWarpOptions` structure.
-	#[allow(clippy::cast_possible_truncation)]
 	#[context("Failed to setup GDAL warp options for band mapping")]
 	pub unsafe fn setup_gdal_warp_options(&self, options: &mut gdal_sys::GDALWarpOptions) -> Result<()> {
 		let color_count = self.color_band_count();

@@ -61,7 +61,6 @@ use super::ValueWriterBlob;
 use crate::{Blob, ByteRange};
 
 /// A trait for writing values to various destinations with support for different byte orders.
-#[allow(dead_code)]
 pub trait ValueWriter<E: ByteOrder> {
 	/// Returns a mutable reference to the underlying writer.
 	///
