@@ -138,7 +138,12 @@ tokio = { version = "1.53.1", features = ["rt-multi-thread", "sync"] }
 
 # CLI dependencies
 clap = { version = "4.6.6", features = ["default", "derive", "wrap_help"] }
-env_logger = { version = "0.11.11" }
+# No `humantime`: both loggers install a custom `format` that never prints a
+# timestamp, so the feature only pulled in `jiff` (~5 s of every clean build).
+env_logger = { version = "0.11.11", default-features = false, features = [
+	"auto-color",
+	"regex",
+] }
 
 # Container/archive dependencies
 tar = { version = "0.4.46", default-features = false }
@@ -151,7 +156,7 @@ reqwest = { version = "0.13.4", default-features = false, features = ["default-t
 imageproc = { version = "0.27.0", default-features = false }
 
 # Geometry dependencies
-geo = { version = "0.33.1" }
+geo = { version = "0.33.1", default-features = false }
 geo-types = { version = "0.7.20" }
 rstar = { version = "0.13.0", default-features = false }
 
