@@ -17,31 +17,51 @@ use crate::ProgressState;
 pub enum Event {
 	/// Logging event with level and message
 	Log {
+		/// Severity of the message.
 		level: LogLevel,
+		/// Module path the message came from, as `log`'s `target`.
 		target: String,
+		/// The message itself, already formatted.
 		message: String,
 	},
 
 	/// Progress update event
-	Progress { data: ProgressState },
+	Progress {
+		/// The progress bar's state at the moment the event was emitted.
+		data: ProgressState,
+	},
 
 	/// Step/stage message
-	Step { message: String },
+	Step {
+		/// Name of the stage being entered.
+		message: String,
+	},
 
 	/// Warning message
-	Warning { message: String },
+	Warning {
+		/// What went wrong without stopping the run.
+		message: String,
+	},
 
 	/// Error message
-	Error { message: String },
+	Error {
+		/// What went wrong.
+		message: String,
+	},
 }
 
 /// Log level for logging events
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LogLevel {
+	/// Something failed.
 	Error,
+	/// Something looks wrong but the run continues.
 	Warn,
+	/// Normal progress worth reporting.
 	Info,
+	/// Detail useful when diagnosing a problem.
 	Debug,
+	/// Per-tile detail, far too noisy for normal runs.
 	Trace,
 }
 

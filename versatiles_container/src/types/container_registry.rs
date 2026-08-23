@@ -157,6 +157,7 @@ impl ContainerRegistry {
 		}
 	}
 
+	/// Open a reader for a path or URL given as a string.
 	#[context("Failed to get reader from string '{data_source}'")]
 	pub async fn reader_from_str(&self, data_source: &str, runtime: TilesRuntime) -> Result<SharedTileSource> {
 		self.reader(DataSource::parse(data_source)?, runtime).await
@@ -463,12 +464,17 @@ impl ContainerRegistry {
 		);
 	}
 
+	/// Whether a container with this file extension can be read.
 	#[must_use]
 	pub fn supports_reader_extension(&self, ext: &str) -> bool {
 		let ext = sanitize_extension(ext);
 		self.readers.contains_key(&ext)
 	}
 
+	/// Whether a container with this file extension can be written.
+	///
+	/// Not the same set as [`supports_reader_extension`](Self::supports_reader_extension):
+	/// see the crate docs for which formats can only be read.
 	#[must_use]
 	pub fn supports_writer_extension(&self, ext: &str) -> bool {
 		let ext = sanitize_extension(ext);

@@ -48,9 +48,17 @@ pub enum MockReaderProfile {
 	Pbf,
 }
 
+// The bytes a [`MockReader`] serves, chosen by the source's `TileFormat` rather
+// than by its [`MockReaderProfile`]. Each is a real, decodable file, so a test
+// that runs a mock through an image or MVT decoder exercises the real path.
+
+/// The tile a mock source serves for `TileFormat::JPG`.
 pub const MOCK_BYTES_JPG: &[u8; 671] = include_bytes!("./mock_tiles/mock.jpg");
+/// The tile a mock source serves for `TileFormat::MVT`.
 pub const MOCK_BYTES_PBF: &[u8; 54] = include_bytes!("./mock_tiles/mock.pbf");
+/// The tile a mock source serves for `TileFormat::PNG`.
 pub const MOCK_BYTES_PNG: &[u8; 103] = include_bytes!("./mock_tiles/mock.png");
+/// The tile a mock source serves for `TileFormat::WEBP`.
 pub const MOCK_BYTES_WEBP: &[u8; 44] = include_bytes!("./mock_tiles/mock.webp");
 
 /// Mock implementation of a `TilesReader`.

@@ -135,6 +135,11 @@ impl Traversal {
 		Ok(bboxes)
 	}
 
+	/// The steps needed to feed a writer requiring `other` from a source
+	/// traversing this way.
+	///
+	/// Errors when the two cannot be reconciled; use
+	/// [`can_translate_to`](Self::can_translate_to) to ask without computing.
 	#[must_use = "this returns the traversal steps, it doesn't modify anything"]
 	#[context("while computing traversal translation steps between {:?} and {:?}", self.order, other.order)]
 	pub fn traversal_steps(&self, other: &Self, pyramid: &TilePyramid) -> Result<Vec<TraversalTranslationStep>> {
@@ -151,11 +156,13 @@ impl Traversal {
 		translation_between(self, other) != TraversalTranslation::Impossible
 	}
 
+	/// Whether tiles may arrive in any order.
 	#[must_use]
 	pub fn is_any(&self) -> bool {
 		self.order == TraversalOrder::AnyOrder
 	}
 
+	/// Imposes no ordering or size constraint at all.
 	pub const ANY: Self = Self::new_any();
 }
 

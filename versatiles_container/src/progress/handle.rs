@@ -115,6 +115,10 @@ pub struct ProgressHandle {
 }
 
 impl ProgressHandle {
+	/// Starts a progress bar labelled `message`, counting up to `total`.
+	///
+	/// `silent` suppresses terminal drawing but not events, which is what a
+	/// server or a test wants.
 	#[must_use]
 	pub fn new(id: ProgressId, message: String, total: u64, event_bus: EventBus, silent: bool) -> Self {
 		if !silent {
@@ -217,6 +221,10 @@ impl ProgressHandle {
 		}
 	}
 
+	/// Repaints the bar, unless it is silent or was drawn too recently.
+	///
+	/// Rate-limited to one repaint every 500 ms; a finished bar always draws, so
+	/// the last frame shows the final count.
 	pub fn redraw(&self, state: &mut ProgressState) {
 		if self.silent {
 			return;

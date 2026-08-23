@@ -49,6 +49,7 @@ impl TilesRuntime {
 		Self::builder().build()
 	}
 
+	/// A runtime that emits progress events but never draws to the terminal.
 	#[must_use]
 	pub fn new_silent() -> Self {
 		Self::builder().silent_progress(true).build()
@@ -229,6 +230,7 @@ impl TilesRuntime {
 			.create(message, total)
 	}
 
+	/// Write tiles to a filesystem path, picking the writer from its extension.
 	pub async fn write_to_path(&self, reader: SharedTileSource, path: &Path) -> Result<()> {
 		self.inner.registry.write_to_path(reader, path, self.clone()).await
 	}
@@ -242,6 +244,7 @@ impl TilesRuntime {
 			.await
 	}
 
+	/// Open a tile container reader from a path or URL given as a string.
 	pub async fn reader_from_str(&self, filename: &str) -> Result<SharedTileSource> {
 		self.inner.registry.reader_from_str(filename, self.clone()).await
 	}
@@ -267,6 +270,7 @@ impl TilesRuntime {
 			.await
 	}
 
+	/// Open a tile container reader from an already-resolved [`DataSource`].
 	pub async fn reader(&self, data_source: DataSource) -> Result<SharedTileSource> {
 		self.inner.registry.reader(data_source, self.clone()).await
 	}

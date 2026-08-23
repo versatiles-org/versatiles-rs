@@ -102,33 +102,45 @@ impl TileSourceMetadata {
 		}
 	}
 
+	/// The order and granularity in which this source hands out tiles.
 	#[must_use]
 	pub fn traversal(&self) -> &Traversal {
 		&self.traversal
 	}
 
+	/// The compression the source's tiles are stored with.
 	#[must_use]
 	pub fn tile_compression(&self) -> &TileCompression {
 		&self.tile_compression
 	}
 
+	/// The format the source's tiles are stored in.
 	#[must_use]
 	pub fn tile_format(&self) -> &TileFormat {
 		&self.tile_format
 	}
 
+	/// Replaces the traversal, for an operation that changes the order or
+	/// granularity of the tiles it passes on.
 	pub fn set_traversal(&mut self, traversal: Traversal) {
 		self.traversal = traversal;
 	}
 
+	/// Records that tiles are now stored with a different compression.
 	pub fn set_tile_compression(&mut self, tile_compression: TileCompression) {
 		self.tile_compression = tile_compression;
 	}
 
+	/// Records that tiles are now stored in a different format.
 	pub fn set_tile_format(&mut self, tile_format: TileFormat) {
 		self.tile_format = tile_format;
 	}
 
+	/// The source's tile pyramid, if one has been computed or set.
+	///
+	/// `None` means nobody has asked yet — not that the source is empty. Use
+	/// [`get_or_compute_tile_pyramid`](Self::get_or_compute_tile_pyramid) to
+	/// compute it on first use.
 	#[must_use]
 	pub fn tile_pyramid(&self) -> Option<Arc<TilePyramid>> {
 		self.tile_pyramid.read().expect("poisoned RwLock").clone()
@@ -141,6 +153,14 @@ impl TileSourceMetadata {
 		*self.tile_pyramid.write().expect("poisoned RwLock") = Some(Arc::new(tile_pyramid));
 	}
 
+	/// Returns the tile pyramid, computing it with `compute_fn` if it is not
+	/// there yet.
+	///
+	/// The read lock is released before the write lock is taken, so two threads
+	/// racing on a cold pyramid can both run `compute_fn` and the second result
+	/// wins. Both compute the same pyramid, so the only cost is the duplicated
+	/// work; scanning a container twice is cheaper than holding a write lock
+	/// across the whole scan.
 	pub fn get_or_compute_tile_pyramid(
 		&self,
 		compute_fn: impl FnOnce() -> Result<TilePyramid>,
@@ -155,7 +175,10 @@ impl TileSourceMetadata {
 		}
 	}
 
-	// takes a requested tile bbox and returns the intersection of it with the tile pyramid, if available
+	/// Narrows `bbox` to what this source actually holds.
+	///
+	/// Returns `bbox` unchanged when no pyramid has been computed, so a caller
+	/// never loses tiles by asking early — it just does not gain the narrowing.
 	#[must_use]
 	pub fn intersection_bbox(&self, bbox: &TileBBox) -> TileBBox {
 		if let Some(tile_pyramid) = self.tile_pyramid() {

@@ -55,6 +55,7 @@ impl TraversalSize {
 		self.min > self.max
 	}
 
+	/// Whether every supported block size is acceptable.
 	#[must_use]
 	pub fn is_full_range(&self) -> bool {
 		self.min == MIN_TRAVERSAL_SIZE_BITS && self.max == MAX_TRAVERSAL_SIZE_BITS
@@ -92,6 +93,7 @@ impl TraversalSize {
 		Ok(())
 	}
 
+	/// The size range satisfying both, or an error when they do not overlap.
 	pub fn intersected(&self, other: &TraversalSize) -> Result<TraversalSize> {
 		let mut result = self.clone();
 		result.intersect(other)?;

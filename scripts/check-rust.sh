@@ -94,7 +94,7 @@ fi
 # treats every rustdoc warning as an error.
 echo "cargo doc"
 cd $PROJECT_DIR
-result=$(RUSTDOCFLAGS="-D warnings" cargo doc --color=always --no-deps --features gdal 2>&1)
+result=$(RUSTDOCFLAGS="-D warnings" cargo doc --color=always --no-deps --features gdal,versatiles_container/test 2>&1)
 if [ $? -ne 0 ]; then
    echo -e "$result\nERROR DURING: cargo doc"
    exit 1

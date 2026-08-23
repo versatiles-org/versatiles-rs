@@ -88,6 +88,7 @@ pub enum TraversalCache<V: CacheValue> {
 		next_writer_id: AtomicUsize,
 		/// Tracks which files belong to each cache index.
 		file_index: DashMap<usize, Vec<PathBuf>>,
+		/// Ties the variant to `V` without storing one.
 		_marker: PhantomData<V>,
 	},
 }

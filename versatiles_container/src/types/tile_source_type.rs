@@ -4,14 +4,30 @@ use std::{fmt::Debug, sync::Arc};
 #[derive(Clone, PartialEq, Eq)]
 pub enum SourceType {
 	/// Physical container format (e.g., "mbtiles", "versatiles", "pmtiles", "tar", "directory")
-	Container { name: String, input: String },
+	Container {
+		/// The container format's registered name.
+		name: String,
+		/// Path or URL the container is read from.
+		input: String,
+	},
 	/// Tile processor/transformer (e.g., "filter", "`raster_format`", "converter")
-	Processor { name: String, input: Arc<SourceType> },
+	Processor {
+		/// The operation's name.
+		name: String,
+		/// The single source this operation reads from.
+		input: Arc<SourceType>,
+	},
 	/// Composite source combining multiple upstream sources (e.g., "stacked", "merged")
-	Composite { name: String, inputs: Vec<Arc<SourceType>> },
+	Composite {
+		/// The operation's name.
+		name: String,
+		/// The sources being combined, in the order they were given.
+		inputs: Vec<Arc<SourceType>>,
+	},
 }
 
 impl SourceType {
+	/// Describes a container read from `input`.
 	#[must_use]
 	pub fn new_container(name: &str, input: &str) -> Arc<SourceType> {
 		Arc::new(SourceType::Container {
@@ -20,6 +36,7 @@ impl SourceType {
 		})
 	}
 
+	/// Describes an operation reading from a single upstream source.
 	#[must_use]
 	pub fn new_processor(name: &str, input: Arc<SourceType>) -> Arc<SourceType> {
 		Arc::new(SourceType::Processor {
@@ -28,6 +45,7 @@ impl SourceType {
 		})
 	}
 
+	/// Describes an operation combining several upstream sources.
 	#[must_use]
 	pub fn new_composite(name: &str, inputs: &[Arc<SourceType>]) -> Arc<SourceType> {
 		Arc::new(SourceType::Composite {

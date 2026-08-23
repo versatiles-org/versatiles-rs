@@ -10,11 +10,21 @@ use std::{
 use super::EventBus;
 use crate::{CacheType, ContainerRegistry, ProgressFactory};
 
+/// The state a [`TilesRuntime`](crate::TilesRuntime) shares between every
+/// operation running under it.
+///
+/// Held behind an `Arc` by the runtime handle, so cloning a runtime is cheap and
+/// all clones see the same caches, registry and event bus.
 pub struct RuntimeInner {
+	/// Where operations should spill intermediate data.
 	pub cache_type: CacheType,
+	/// Private key file offered to SFTP sources, if the caller configured one.
 	pub ssh_identity: Option<PathBuf>,
+	/// The container formats this runtime can open and write.
 	pub registry: ContainerRegistry,
+	/// Where log, progress and error events are published.
 	pub event_bus: EventBus,
+	/// Hands out the progress bars for operations under this runtime.
 	pub progress_factory: Mutex<ProgressFactory>,
 	/// When `true`, operations running under this runtime should abort once
 	/// their stream drains if any error has been recorded via

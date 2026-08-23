@@ -85,10 +85,16 @@ impl ProbeReport {
 /// One non-empty zoom level of the source's tile pyramid.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PyramidLevel {
+	/// The zoom level these bounds describe.
 	pub level: u8,
+	/// Westmost tile column holding a tile, inclusive.
 	pub x_min: u32,
+	/// Eastmost tile column holding a tile, inclusive.
 	pub x_max: u32,
+	/// Northmost tile row holding a tile, inclusive. XYZ scheme, so `y_min` is
+	/// the *northern* edge; `TileCoord::flip_y` converts to TMS.
 	pub y_min: u32,
+	/// Southmost tile row holding a tile, inclusive.
 	pub y_max: u32,
 	/// Tiles actually present at this level.
 	pub tiles: u64,
@@ -99,6 +105,7 @@ pub struct PyramidLevel {
 /// Result of scanning every tile's size.
 #[derive(Clone, Debug, Default)]
 pub struct TileSizeReport {
+	/// Tiles whose size was measured.
 	pub tile_count: u64,
 	/// Total bytes across all tiles, as stored.
 	pub size_sum: u64,
@@ -119,21 +126,30 @@ impl TileSizeReport {
 /// One tile and its stored size.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TileSizeEntry {
+	/// Zoom level of the tile.
 	pub z: u8,
+	/// Tile column.
 	pub x: u32,
+	/// Tile row, XYZ scheme.
 	pub y: u32,
+	/// Size in bytes as stored in the container — compressed, if the container
+	/// stores it compressed.
 	pub size: u64,
 }
 
 /// Tile-size totals for one zoom level.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LevelSizeStats {
+	/// The zoom level these totals cover.
 	pub level: u8,
+	/// Tiles present at this level.
 	pub count: u64,
+	/// Total stored bytes across those tiles.
 	pub size_sum: u64,
 }
 
 impl LevelSizeStats {
+	/// Mean tile size in bytes at this level, or `0` if the level is empty.
 	#[must_use]
 	pub fn average_size(&self) -> u64 {
 		self.size_sum.checked_div(self.count).unwrap_or(0)
@@ -158,6 +174,7 @@ pub struct VectorContentsReport {
 	pub sample_fraction: Option<f64>,
 	/// Tiles actually read, including ones that failed to decode.
 	pub tiles_scanned: u64,
+	/// How many of each kind of spec violation were found.
 	pub issues: ValidationCounters,
 	/// Up to [`VALIDATION_SAMPLE_LIMIT`] concrete examples, in encounter order.
 	pub samples: Vec<IssueSample>,
@@ -204,42 +221,73 @@ impl VectorContentsReport {
 /// Byte breakdown of one layer at one zoom level, summed over every tile.
 #[derive(Clone, Debug)]
 pub struct LayerSizeEntry {
+	/// The zoom level this breakdown covers.
 	pub zoom: u8,
+	/// The layer's name, as written in the tile.
 	pub layer: String,
 	/// Tiles at this zoom that contained this layer.
 	pub tiles: u64,
+	/// Uncompressed byte totals, split by what the bytes were spent on.
 	pub stats: LayerStats,
 }
 
 /// One concrete spec violation, kept as an example.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IssueSample {
+	/// Zoom level of the offending tile.
 	pub z: u8,
+	/// Tile column.
 	pub x: u32,
+	/// Tile row, XYZ scheme.
 	pub y: u32,
+	/// The layer the violation was found in.
 	pub layer: String,
+	/// Index of the offending feature within the layer, where the violation is
+	/// attributable to one — `None` for layer-wide problems such as a missing
+	/// `extent`.
 	pub feature_index: Option<usize>,
+	/// The [`IssueKind`] rendered as text, so a consumer can display it without
+	/// depending on `versatiles_geometry`.
 	pub kind: String,
 }
 
 /// Counts of each kind of MVT spec violation found across a container.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ValidationCounters {
+	/// Layers without an `extent` — [`IssueKind::MissingExtent`].
 	pub missing_extent: u64,
+	/// Layers without a `version` — [`IssueKind::MissingVersion`].
 	pub missing_version: u64,
+	/// Layer names reused within one tile — [`IssueKind::DuplicateLayerName`].
 	pub duplicate_layer_name: u64,
+	/// Inner rings with no enclosing outer ring — [`IssueKind::OrphanInnerRing`].
 	pub orphan_inner: u64,
+	/// Rings with fewer than three vertices —
+	/// [`DegenerateReason::TooFewVertices`].
 	pub degenerate_too_few: u64,
+	/// Rings that collapse below one integer-grid pixel —
+	/// [`DegenerateReason::SubPixel`].
 	pub degenerate_sub_pixel: u64,
+	/// Rings whose vertices are all collinear —
+	/// [`DegenerateReason::Collinear`].
 	pub degenerate_collinear: u64,
+	/// Features typed `Unknown` that still carry geometry —
+	/// [`IssueKind::UnknownGeometryType`].
 	pub unknown_geom: u64,
+	/// Point features that decode to no coordinates —
+	/// [`IssueKind::EmptyGeometryForType`].
 	pub empty_geom_point: u64,
+	/// Line features that decode to no coordinates.
 	pub empty_geom_line: u64,
+	/// Polygon features that decode to no coordinates.
 	pub empty_geom_polygon: u64,
+	/// Geometry command streams that failed to parse —
+	/// [`IssueKind::MalformedCommandStream`].
 	pub malformed_stream: u64,
 	/// Tiles that could not be decoded as vector tiles at all. Counted, but not
 	/// validated, so excluded from [`total_issues`](Self::total_issues).
 	pub decode_failures: u64,
+	/// Tiles carrying at least one violation, however many they carry.
 	pub tiles_with_issues: u64,
 }
 

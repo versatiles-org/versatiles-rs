@@ -37,6 +37,8 @@ impl TraversalOrder {
 		}
 	}
 
+	/// Whether `bboxes` are already in this order, so a caller can assert an
+	/// upstream's claim rather than trusting it.
 	#[must_use]
 	pub fn verify_order(&self, bboxes: &[TileBBox], size: u32) -> bool {
 		use TraversalOrder::{AnyOrder, DepthFirst, PMTiles};
@@ -65,6 +67,7 @@ impl TraversalOrder {
 		bail!("Incompatible traversal orders, cannot merge {self:?} with {other:?}");
 	}
 
+	/// The order satisfying both, or an error when they are incompatible.
 	pub fn intersected(&self, other: &TraversalOrder) -> Result<TraversalOrder> {
 		let mut result = *self;
 		result.intersect(other)?;

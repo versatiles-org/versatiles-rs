@@ -210,6 +210,10 @@ fn group_digits(value: u64) -> String {
 	out
 }
 
+/// Converts a source into a container at `path`, applying `cp`.
+///
+/// The writer is chosen from the path's extension; the conversion itself is
+/// driven by [`TilesConverterParameters`].
 #[context("Converting tiles from reader to file")]
 pub async fn convert_tiles_container(
 	reader: SharedTileSource,

@@ -1,15 +1,35 @@
+//! The values a progress bar is made of.
+//!
+//! [`ProgressState`] is a snapshot rather than a live handle: it is what
+//! [`ProgressHandle`](crate::ProgressHandle) publishes on the event bus, so a
+//! listener sees a consistent set of numbers without holding the handle's lock.
+
+/// Identifies one progress bar, so a listener can tell concurrent bars apart.
 #[derive(Debug, Clone)]
 pub struct ProgressId(pub u32);
 
+/// A snapshot of one progress bar.
 #[derive(Debug, Clone)]
 pub struct ProgressState {
+	/// Which bar this snapshot belongs to.
 	pub id: ProgressId,
+	/// Label shown beside the bar.
 	pub message: String,
+	/// Units completed so far.
 	pub position: u64,
+	/// Units expected in total. Zero means the total is not known.
 	pub total: u64,
+	/// When the bar was created; the basis for the throughput and ETA figures.
 	pub start: std::time::Instant,
+	/// Earliest time the bar may repaint the terminal. Redrawing is throttled
+	/// to roughly 2 Hz, because a terminal write is far more expensive than an
+	/// increment.
 	pub next_draw: std::time::Instant,
+	/// Earliest time the bar may publish another event. Throttled separately
+	/// from `next_draw`, and about 50× more often, so a non-terminal consumer
+	/// gets a usable stream without paying for redraws.
 	pub next_emit: std::time::Instant,
+	/// Whether the work this bar tracks has finished.
 	pub finished: bool,
 }
 

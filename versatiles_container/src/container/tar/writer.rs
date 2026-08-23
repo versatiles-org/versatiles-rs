@@ -56,6 +56,7 @@ impl Write for DataWriterAdapter<'_> {
 	}
 }
 
+/// Writes a source into an uncompressed `.tar` archive of tile files.
 pub struct TarTilesWriter {}
 
 impl TarTilesWriter {

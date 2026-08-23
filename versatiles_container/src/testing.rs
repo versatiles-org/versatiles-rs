@@ -31,7 +31,7 @@ pub fn tiny_rgb_image() -> DynamicImage {
 /// Asserts that a source's `tile_coord_stream` and `tile_stream` produce the
 /// same number of items for the given `bbox`.
 ///
-/// This invariant is required by the [`TileSource`](crate::TileSource) trait:
+/// This invariant is required by the [`TileSource`] trait:
 /// any implementation that diverges between the two streams will silently
 /// break the converter's progress accounting (and any other code that counts
 /// via the lighter `tile_coord_stream`). See the trait docs for the rationale.
