@@ -18,7 +18,7 @@
 //! cors:
 //!   allowed_origins:
 //!     - https://example.org
-//!     - "*.example.net"
+//!     - "https://*.example.net"
 //!   max_age_seconds: 86400         # optional
 //!
 //! # Optional extra HTTP response headers
@@ -256,7 +256,7 @@ mod tests {
 					cache_control: Some("public, max-age=2419200, no-transform".to_string()),
 				},
 				cors: CorsConfig {
-					allowed_origins: vec!["https://example.org".to_string(), "*.example.net".to_string()],
+					allowed_origins: vec!["https://example.org".to_string(), "https://*.example.net".to_string()],
 					max_age_seconds: Some(86400),
 				},
 				extra_response_headers: [

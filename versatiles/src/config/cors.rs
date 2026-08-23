@@ -9,7 +9,7 @@
 //! Typical usage:
 //! - Allowing all origins (default): `["*"]`
 //! - Restricting to trusted domains (e.g., `https://example.org`)
-//! - Allowing wildcard subdomains (e.g., `*.example.org`)
+//! - Allowing wildcard subdomains (e.g., `https://*.example.org`)
 //! - Enabling short-lived preflight cache times during development
 //!
 //! The `Cors` struct can be parsed from YAML or JSON using Serde.
@@ -19,7 +19,7 @@
 //! cors:
 //!   allowed_origins:
 //!     - "https://example.org"
-//!     - "*.example.net"
+//!     - "https://*.example.net"
 //!   max_age_seconds: 86400
 //! ```
 use serde::Deserialize;
@@ -49,15 +49,17 @@ pub struct CorsConfig {
 	/// Two older forms still work but match raw string edges rather than the
 	/// parts of an origin, and are open at one end: `https://example.com*` also
 	/// allows `https://example.com.attacker.test`, and `*example.com` also
-	/// allows `https://notexample.com`. Both log a warning at startup.
-	/// `https://*.example.com` and `https://example.com:*` say what those are
-	/// usually reached for, without the open end. An unanchored regular
+	/// allows `https://notexample.com`. A scheme-less `*.example.com` is open in
+	/// a third way — it allows `http://` as readily as `https://`, while never
+	/// matching an origin that carries a port. All three log a warning at
+	/// startup. `https://*.example.com` and `https://example.com:*` say what
+	/// those are usually reached for, without the open end. An unanchored regular
 	/// expression matches any origin *containing* it, so wrap it in `^...$`.
 	#[serde(default = "default_allowed_origins")]
 	#[config_demo(
 		r#"
     - "https://example.org"
-    - "*.example.net""#
+    - "https://*.example.net""#
 	)]
 	pub allowed_origins: Vec<String>,
 

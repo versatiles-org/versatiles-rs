@@ -16,7 +16,14 @@
 //!   allows `https://example.com.attacker.test`;
 //! - `"*suffix"` is an `ends_with` test, so `"*example.com"` also allows
 //!   `https://notexample.com` — the dot in `"*.example.com"` is what makes that
-//!   form mean what it looks like.
+//!   form mean what it looks like on the host.
+//!
+//! Even written with the dot, `"*.example.com"` constrains neither end of the
+//! origin: it names no scheme, so `http://a.example.com` is allowed as readily
+//! as `https://`, and it never matches `https://a.example.com:8443`, because a
+//! port sits exactly where the suffix has to end. That combination — looser than
+//! it looks against a MITM, stricter than it looks against a port — is why the
+//! scheme-qualified form exists.
 //!
 //! Each of those logs a warning at startup naming the origins it lets through,
 //! because the failure is otherwise silent. `https://*.example.org` and
@@ -200,7 +207,19 @@ pub fn build_cors_layer(allowed_origins: &[String], max_age_seconds: u64) -> Res
 			} else if Regex::new(r"^\*[^*]+$")?.is_match(pattern) {
 				// "*suffix" → suffix match
 				let suffix = pattern[1..].to_string();
-				if !suffix.starts_with('.') {
+				if suffix.starts_with('.') {
+					// Written with the dot, this form at least means what it looks
+					// like on the host — but it is still a string test over the whole
+					// origin, and the two ends of an origin it does not constrain are
+					// worth naming: the scheme it never checks, and the port it cannot
+					// tolerate, since a port sits exactly where the suffix has to end.
+					log::warn!(
+						"CORS: the pattern {pattern:?} names no scheme, so it also allows http://any{suffix} — \
+						 and being a plain suffix test it never matches an origin carrying an explicit port. \
+						 Write \"https://*{suffix}\" for that scheme on the default port, or \
+						 \"https://*{suffix}:*\" for any port"
+					);
+				} else {
 					log::warn!(
 						"CORS: the pattern {pattern:?} matches any origin ending in {suffix:?}, including \
 						 https://not{suffix} — write \"*.{suffix}\" for subdomains only"
@@ -210,10 +229,16 @@ pub fn build_cors_layer(allowed_origins: &[String], max_age_seconds: u64) -> Res
 			} else if Regex::new(r"^[^*]+\*$")?.is_match(pattern) {
 				// "prefix*" → prefix match
 				let prefix = pattern[..pattern.len() - 1].to_string();
+				// Which migration fits depends on what the prefix was standing in
+				// for, and the pattern does not say — so name all three, each as
+				// something that can be pasted back into the config. The regex is
+				// the one for a prefix that is not a whole host, like
+				// `https://dev-*`, where the open end is the point.
 				log::warn!(
 					"CORS: the pattern {pattern:?} matches any origin starting with {prefix:?}, including \
-					 {prefix}.attacker.test — write \"{prefix}:*\" for any port, or \"scheme://*.host\" for \
-					 any subdomain"
+					 {prefix}.attacker.test — write \"{prefix}:*\" for any port, \"scheme://*.host\" for \
+					 any subdomain, or the anchored regex \"/^{}.*$/\" when the open end is deliberate",
+					regex::escape(&prefix)
 				);
 				Box::new(move |origin: &str| origin.starts_with(&prefix))
 			} else if Regex::new(r"^/.+/$")?.is_match(pattern) {
@@ -432,6 +457,64 @@ mod tests {
 		let dotted = build_cors_layer(&["*.example.com".into()], 3600).unwrap();
 		assert!(has_acao(&dotted, "https://foo.example.com").await);
 		assert!(!has_acao(&dotted, "https://notexample.com").await);
+	}
+
+	/// A scheme-less `*.example.com` is open at an end the dot does not close.
+	///
+	/// It reads as "any subdomain of example.com", and on the host it is: the dot
+	/// keeps `notexample.com` out. But it constrains neither the scheme nor the
+	/// port, and the two failures point opposite ways — it admits a plain-HTTP
+	/// origin a MITM can occupy, and it refuses the very origin an operator
+	/// running a dev server on `:8443` would expect it to cover, because a port
+	/// sits where the suffix has to end.
+	///
+	/// Pinned as the baseline for #254: the scheme-qualified form is what these
+	/// patterns should migrate to, and this is what they do until they are.
+	#[tokio::test]
+	async fn a_scheme_less_suffix_ignores_the_scheme_and_trips_over_a_port() {
+		let dotted = build_cors_layer(&["*.example.com".into()], 3600).unwrap();
+		assert!(has_acao(&dotted, "https://foo.example.com").await);
+		assert!(
+			has_acao(&dotted, "http://foo.example.com").await,
+			"no scheme is named, so http passes"
+		);
+		assert!(
+			!has_acao(&dotted, "https://foo.example.com:8443").await,
+			"a port breaks the suffix test"
+		);
+		assert!(!has_acao(&dotted, "https://notexample.com").await);
+
+		// The scheme-qualified forms say what was meant, on the parts of an origin.
+		let scoped = build_cors_layer(&["https://*.example.com".into()], 3600).unwrap();
+		assert!(has_acao(&scoped, "https://foo.example.com").await);
+		assert!(!has_acao(&scoped, "http://foo.example.com").await);
+
+		let any_port = build_cors_layer(&["https://*.example.com:*".into()], 3600).unwrap();
+		assert!(has_acao(&any_port, "https://foo.example.com:8443").await);
+		assert!(!has_acao(&any_port, "http://foo.example.com:8443").await);
+	}
+
+	/// The replacements the warnings name have to work when pasted back.
+	///
+	/// Each legacy form is warned about with a concrete migration in the message;
+	/// a suggestion that does not parse, or that stops matching what the operator
+	/// was covering, is worse than no suggestion at all.
+	#[tokio::test]
+	async fn the_suggested_migrations_do_what_the_originals_did() {
+		// "https://dev-*" → an anchored regex, where the open end is the point.
+		let migrated = build_cors_layer(&[format!("/^{}.*$/", regex::escape("https://dev-"))], 3600).unwrap();
+		assert!(has_acao(&migrated, "https://dev-01.example.com").await);
+		assert!(!has_acao(&migrated, "https://prod-01.example.com").await);
+
+		// "https://example.com*" → the port form, for the case it was reached for.
+		let migrated = build_cors_layer(&["https://example.com:*".into()], 3600).unwrap();
+		assert!(has_acao(&migrated, "https://example.com:8443").await);
+		assert!(!has_acao(&migrated, "https://example.com.attacker.test").await);
+
+		// "*.example.com" → the scheme-qualified subdomain form.
+		let migrated = build_cors_layer(&["https://*.example.com".into()], 3600).unwrap();
+		assert!(has_acao(&migrated, "https://foo.example.com").await);
+		assert!(!has_acao(&migrated, "http://foo.example.com").await);
 	}
 
 	#[tokio::test]
