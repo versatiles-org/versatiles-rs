@@ -80,7 +80,29 @@ pub fn deduplicating_tile_sink(sink: Box<dyn TileSink>) -> Box<dyn TileSink> {
 /// has to fail.
 #[must_use]
 pub(crate) fn destination_is_directory(path: &Path) -> bool {
-	path.is_dir() || (!path.exists() && path.extension().is_none())
+	if path.is_dir() {
+		return true;
+	}
+	if path.exists() {
+		return false;
+	}
+	// A trailing separator says "directory" outright, whatever the name looks
+	// like. `out.dir/` is a directory called `out.dir`, and reading `.dir` off it
+	// as a container extension produced "file extension 'dir' unknown" for a
+	// destination that could not have meant anything else.
+	ends_with_separator(path) || path.extension().is_none()
+}
+
+/// Whether `path` was written with a trailing path separator.
+///
+/// `Path` keeps the string as given, so the separator survives here even though
+/// `components()` and `extension()` both look past it.
+fn ends_with_separator(path: &Path) -> bool {
+	path
+		.as_os_str()
+		.as_encoded_bytes()
+		.last()
+		.is_some_and(|byte| *byte == b'/' || (cfg!(windows) && *byte == b'\\'))
 }
 
 /// Open a tile sink based on the destination's file extension.
@@ -149,6 +171,32 @@ mod tests {
 	use std::sync::atomic::{AtomicUsize, Ordering};
 
 	use super::*;
+
+	/// A destination written with a trailing separator is a directory, whatever
+	/// its name contains. `out.dir/` used to be read as a container with an
+	/// unknown `.dir` extension and refused.
+	#[test]
+	fn a_trailing_separator_means_directory() {
+		let temp = assert_fs::TempDir::new().unwrap();
+		let base = temp.path();
+
+		// Nothing exists yet: the trailing slash is the only signal.
+		assert!(destination_is_directory(&base.join("tiles.dir/")));
+		assert!(destination_is_directory(&base.join("tiles/")));
+		// Without the separator, a known-looking extension still names a file.
+		assert!(!destination_is_directory(&base.join("tiles.dir")));
+		assert!(!destination_is_directory(&base.join("tiles.versatiles")));
+		// An extensionless path is still a directory, as before.
+		assert!(destination_is_directory(&base.join("tiles")));
+
+		// An existing file is a file, trailing separator or not.
+		std::fs::write(base.join("real.file"), b"x").unwrap();
+		assert!(!destination_is_directory(&base.join("real.file")));
+
+		// An existing directory is a directory, trailing separator or not.
+		std::fs::create_dir(base.join("real.dir")).unwrap();
+		assert!(destination_is_directory(&base.join("real.dir")));
+	}
 
 	/// A mock TileSink that counts write_tile calls and records coords.
 	struct MockSink {
