@@ -21,7 +21,7 @@
 //! let decoded = blob2image(&blob).expect("decode ok");
 //! ```
 use anyhow::{Result, anyhow, bail};
-use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::jpeg::JpegEncoder, load_from_memory_with_format};
+use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::jpeg::JpegEncoder};
 use versatiles_core::Blob;
 use versatiles_derive::context;
 
@@ -73,8 +73,7 @@ pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 /// Returns a decoding error if the blob is not a valid JPEG.
 #[context("decoding JPEG image ({} bytes)", blob.len())]
 pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
-	load_from_memory_with_format(blob.as_slice(), ImageFormat::Jpeg)
-		.map_err(|e| anyhow!("Failed to decode JPEG image: {e}"))
+	super::all::decode_limited(blob, ImageFormat::Jpeg).map_err(|e| anyhow!("Failed to decode JPEG image: {e}"))
 }
 
 /// Tests for JPEG encoding and decoding.

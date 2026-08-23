@@ -11,7 +11,7 @@
 //! - Uses `image::codecs::png::PngEncoder` with an effort → (compression, filter) mapping.
 
 use anyhow::{Result, anyhow, bail};
-use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::png, load_from_memory_with_format};
+use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::png};
 use versatiles_core::Blob;
 use versatiles_derive::context;
 
@@ -76,8 +76,7 @@ pub fn image2blob(image: &DynamicImage) -> Result<Blob> {
 ///
 /// Returns a decoding error if the blob is not valid PNG.
 pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
-	load_from_memory_with_format(blob.as_slice(), ImageFormat::Png)
-		.map_err(|e| anyhow!("Failed to decode PNG image: {e}"))
+	super::all::decode_limited(blob, ImageFormat::Png).map_err(|e| anyhow!("Failed to decode PNG image: {e}"))
 }
 
 #[cfg(test)]
