@@ -22,6 +22,10 @@ use crate::{SharedTileSource, TilesRuntime};
 /// Implementors that support generic data readers get a default `open_path` that delegates
 /// via [`DataReaderFile`]. File-only readers override `open_path` and set
 /// `supports_data_reader() -> false`.
+///
+/// Opens a container; the tiles themselves come from the [`TileSource`](crate::TileSource)
+/// it returns. See the [crate documentation](crate) for how the four IO
+/// traits relate.
 #[async_trait]
 pub trait TilesReader: Send {
 	/// Returns `true` when the reader can open from a generic [`DataReader`] source

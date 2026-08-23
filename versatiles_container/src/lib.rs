@@ -36,6 +36,44 @@
 //! }
 //! ```
 //!
+//! # Four traits, two axes
+//!
+//! Reading and writing are each split in two, which is easier to hold onto as a
+//! grid than as four separate names:
+//!
+//! |           | Open a container                            | Move the tiles                                   |
+//! | --------- | ------------------------------------------- | ------------------------------------------------ |
+//! | **Read**  | [`TilesReader`] — a path or a `DataReader` becomes a source | [`TileSource`] — the tiles, object‑safe, wrappable by adapters |
+//! | **Write** | [`TilesWriter`] — serialise a whole source in one pass | [`TileSink`] — take tiles one at a time, shared across threads |
+//!
+//! The read row is a pipeline: a [`TilesReader`] *opens* something and hands
+//! back a [`TileSource`], and everything downstream — adapters, the server, the
+//! VPL pipeline — only ever sees the source.
+//!
+//! The write row is a choice, and it is the one worth understanding. A
+//! [`TilesWriter`] is handed the entire source and writes the file its own way,
+//! which is what `versatiles convert` uses. A [`TileSink`] is the opposite: it
+//! is wrapped in an `Arc`, shared by several threads, and fed tiles in whatever
+//! order they finish — which is what `versatiles mosaic` needs, because it
+//! composites tiles as they are produced.
+//!
+//! ## Which formats do what
+//!
+//! | Format        | Read | Write whole | Write incrementally |
+//! | ------------- | :--: | :---------: | :-----------------: |
+//! | `.versatiles` |  ✓   |      ✓      |          ✓          |
+//! | `.mbtiles`    |  ✓   |      ✓      |          ✓          |
+//! | `.tar`        |  ✓   |      ✓      |          ✓          |
+//! | directory     |  ✓   |      ✓      |          ✓          |
+//! | `.pmtiles`    |  ✓   |      ✓      |          —          |
+//!
+//! PMTiles is the one gap, and it follows from the format rather than from an
+//! omission: a clustered archive stores its tiles ordered by Hilbert index, so
+//! the order cannot be known until every tile is in. [`PMTilesWriter`] gets there
+//! by reordering through a temporary file, which a sink — receiving tiles as
+//! they arrive, with no idea what is still coming — cannot do. Writing PMTiles
+//! therefore goes through the registry, not through [`open_tile_sink`].
+//!
 //! # Features
 //! - `cli`: enables human‑readable probing of containers and tiles.
 //! - `test`: helpers for integration tests in downstream crates.
@@ -43,6 +81,7 @@
 //! ## See also
 //! - [`ContainerRegistry`]: register custom reader/writer implementations at runtime
 //! - [`TileSource`], [`TilesWriter`]: object‑safe traits for IO
+//! - [`open_tile_sink`]: pick a [`TileSink`] from a destination path
 //! - [`TilesConvertReader`], [`convert_tiles_container`]: convenience conversion helpers
 
 pub mod cache;

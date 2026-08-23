@@ -44,6 +44,10 @@ use crate::{TileSource, TilesRuntime};
 /// and can operate either on filesystem paths or any sink implementing [`DataWriterTrait`].
 ///
 /// Implementors should handle compression, metadata, and configuration from [`TilesRuntime`].
+///
+/// Writes a source out in one pass; [`TileSink`](crate::TileSink) is the
+/// incremental counterpart. See the [crate documentation](crate) for how the
+/// four IO traits relate.
 #[async_trait]
 pub trait TilesWriter: Send {
 	/// Returns `true` when the writer can serialize to a generic [`DataWriterTrait`] sink

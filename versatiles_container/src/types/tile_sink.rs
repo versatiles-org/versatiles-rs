@@ -16,6 +16,10 @@ use crate::{DirectoryTileSink, MBTilesTileSink, TarTileSink, TilesRuntime, Versa
 ///
 /// The tile format and compression are fixed at construction time; every blob
 /// passed to [`write_tile`](TileSink::write_tile) must already be encoded and compressed accordingly.
+///
+/// Takes tiles one at a time from several threads; [`TilesWriter`](crate::TilesWriter)
+/// is the whole-source counterpart, and not every format supports both — see
+/// the [crate documentation](crate) for the grid and the one exception.
 pub trait TileSink: Send + Sync {
 	/// Write a single pre-compressed tile blob at the given coordinate.
 	///

@@ -60,6 +60,10 @@ pub type SharedTileSource = Arc<Box<dyn TileSource>>;
 /// Implementors should add a regression test calling
 /// `testing::assert_stream_counts_agree` (gated by the `test` feature)
 /// against their representative bboxes.
+///
+/// The read half that everything downstream sees; [`TilesReader`](crate::TilesReader)
+/// is what produces one. See the [crate documentation](crate) for how the
+/// four IO traits relate.
 #[async_trait]
 pub trait TileSource: Debug + Send + Sync + Unpin {
 	/// Returns the source type (container format, processor name, or composite).
