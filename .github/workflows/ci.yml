@@ -617,9 +617,26 @@ jobs:
   # ============================================================================
   # Windows ARM: Test
   # ============================================================================
+  # Uncached and `main`-only, for the two separate reasons the musl job is:
+  #
+  # The cache went first. One entry is ~1 GB, and the store sits over GitHub's
+  # 10 GB ceiling whenever a `Cargo.lock` bump leaves a key holding two versions
+  # — so this entry was competing for space against jobs that run on every push,
+  # and losing it costs ~210s here against ~1 GB returned to a budget with none
+  # to spare.
+  #
+  # The `main` gate is a compute decision rather than a cache one: an uncached
+  # job neither reads nor writes the store, so skipping it on `dev` saves
+  # runner minutes, not bytes.
+  #
+  # What that gives up: `Windows: Test` still covers Windows on every push, but
+  # only on x64. An arm64-specific failure — a target-gated intrinsic, an
+  # alignment assumption — now surfaces after the merge instead of before it.
+  # It still surfaces before a release, since every tag is cut from `main`.
   windows-arm-test:
     name: "Windows ARM: Test"
     runs-on: windows-11-arm
+    if: github.ref == 'refs/heads/main'
     steps:
       - name: Configure Git
         shell: bash
@@ -637,15 +654,6 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "windows-arm-test"
-          cache-targets: true
-          cache-on-failure: false
-          cache-bin: false
-          save-if: ${{ github.ref == 'refs/heads/main' }} # see "Cache policy" above
 
       # Split so the step timings separate compile cost from test execution;
       # "Test" reuses the artifacts built here.
