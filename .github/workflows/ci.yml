@@ -223,12 +223,37 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: "22"
-          cache: "npm"
-          cache-dependency-path: versatiles_node/package-lock.json
+
+      # `cache: "npm"` is not used, because it saves from whatever ref it runs
+      # on and there is no way to tell it not to. Two of the three npm entries
+      # in the store were written from `dev`, where nothing can read them — see
+      # "Cache policy" above. Restoring is unconditional; only `main` writes.
+      - name: Locate the npm cache
+        id: npm-dir
+        shell: bash
+        run: echo "path=$(npm config get cache)" >>"$GITHUB_OUTPUT"
+
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ steps.npm-dir.outputs.path }}
+          key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('versatiles_node/package-lock.json') }}
+          # A lockfile bump should still start from the previous download rather
+          # than from nothing: npm's store is content-addressed, so what did not
+          # change is still valid.
+          restore-keys: npm-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Install dependencies
         working-directory: ./versatiles_node
         run: npm install
+
+      - name: Save npm cache
+        if: github.ref == 'refs/heads/main' && steps.npm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ steps.npm-dir.outputs.path }}
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
 
       - name: Build package
         working-directory: ./versatiles_node
@@ -583,12 +608,37 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: "22"
-          cache: "npm"
-          cache-dependency-path: versatiles_node/package-lock.json
+
+      # `cache: "npm"` is not used, because it saves from whatever ref it runs
+      # on and there is no way to tell it not to. Two of the three npm entries
+      # in the store were written from `dev`, where nothing can read them — see
+      # "Cache policy" above. Restoring is unconditional; only `main` writes.
+      - name: Locate the npm cache
+        id: npm-dir
+        shell: bash
+        run: echo "path=$(npm config get cache)" >>"$GITHUB_OUTPUT"
+
+      - name: Restore npm cache
+        id: npm-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ steps.npm-dir.outputs.path }}
+          key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('versatiles_node/package-lock.json') }}
+          # A lockfile bump should still start from the previous download rather
+          # than from nothing: npm's store is content-addressed, so what did not
+          # change is still valid.
+          restore-keys: npm-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Install dependencies
         working-directory: ./versatiles_node
         run: npm install
+
+      - name: Save npm cache
+        if: github.ref == 'refs/heads/main' && steps.npm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ steps.npm-dir.outputs.path }}
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
 
       - name: Build package
         working-directory: ./versatiles_node

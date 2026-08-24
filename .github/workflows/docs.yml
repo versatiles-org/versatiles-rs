@@ -29,8 +29,10 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: versatiles_node/package-lock.json
+          # No npm cache: this workflow runs on tags, and a cache written from
+          # a tag ref is scoped to that tag — unreadable by the next release,
+          # so it would be one write-only entry per version. See "Cache policy"
+          # in ci.yml.
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
