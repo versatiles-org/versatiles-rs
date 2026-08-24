@@ -9,6 +9,17 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    # `ImageVersion` is an environment variable on the runner, and the `env`
+    # context inside a composite action does not carry the runner's process
+    # environment — `${{ env.ImageVersion }}` in the cache key below expanded to
+    # nothing, leaving the key `…-ARM64--<hash>` and the guard it documents
+    # inert. Read it in a step, where the shell can see it.
+    - name: Identify the runner image
+      id: image
+      if: runner.os == 'macOS'
+      shell: bash
+      run: echo "version=${ImageVersion:-unknown}" >>"$GITHUB_OUTPUT"
+
     # Cache the parts of GDAL's Homebrew tree a build actually reads, packed
     # into one tarball — see scripts/pack-gdal-tree.sh for what is kept and why.
     # Packing the kegs whole is ~5 GB; packing libgdal's link closure plus the
@@ -27,7 +38,7 @@ runs:
         # ImageVersion keeps the cached Cellar in lockstep with the Homebrew
         # formula versions baked into the runner image, so `brew install`
         # below relinks instead of re-pouring.
-        key: macos-gdal-tree-${{ runner.arch }}-${{ env.ImageVersion }}-${{ hashFiles('scripts/install-gdal.sh', 'scripts/pack-gdal-tree.sh') }}
+        key: macos-gdal-tree-${{ runner.arch }}-${{ steps.image.outputs.version }}-${{ hashFiles('scripts/install-gdal.sh', 'scripts/pack-gdal-tree.sh') }}
 
     # Cache hit: unpack GDAL's Cellar + opt entries, then relink. This skips
     # pouring ~70 bottles (~6 min). `brew install` below does NOT relink an
