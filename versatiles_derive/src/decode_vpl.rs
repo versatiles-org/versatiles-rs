@@ -21,7 +21,7 @@ struct TypeMapping {
 	/// `VPLFieldMeta::enum_variants`, which downstream codegen
 	/// (`versatiles_node`) uses to synthesize TS string-literal unions.
 	is_enum: bool,
-	/// True if `generic_param` names a type implementing `TryFrom<&str>`. The
+	/// How `generic_param`'s own parser takes the values, if it has one. The
 	/// derive emits that parser as a probe into `VPLFieldMeta::validate`, so
 	/// `check` can tell a bad value from a good one without building.
 	///
@@ -34,7 +34,20 @@ struct TypeMapping {
 	/// judged is a fact about the type, not about which accessor a field
 	/// happens to route through — tying the two together is what left every
 	/// `property_string_*` and `property_number_*` field unchecked (#257).
-	is_parsed: bool,
+	parsed_from: ParsedFrom,
+}
+
+/// How a type's own parser takes the values written for a field.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ParsedFrom {
+	/// No parser of its own: only the shape of the values can be judged.
+	Nothing,
+	/// `TryFrom<&str>` — one value, judged on its own.
+	Str,
+	/// `TryFrom<&[String]>` — every value at once, so that a constraint
+	/// *between* them is decidable. A bounding box whose west lies east of its
+	/// east is only wrong as a group, and one probe per value cannot see it.
+	Values,
 }
 
 /// All supported type mappings for VPLDecode.
@@ -48,7 +61,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "bool",
@@ -58,7 +71,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "u8",
@@ -68,7 +81,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u8"),
 		generic_param2: None,
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "u32",
@@ -78,7 +91,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u32"),
 		generic_param2: None,
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "f64",
@@ -88,7 +101,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f64"),
 		generic_param2: None,
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "[f64;4]",
@@ -101,7 +114,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		// as the optional ones do.
 		generic_param2: Some("4"),
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "Vec<String>",
@@ -111,7 +124,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	// Optional types
 	TypeMapping {
@@ -122,7 +135,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "Option<String>",
@@ -132,7 +145,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "Option<f32>",
@@ -142,7 +155,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f32"),
 		generic_param2: None,
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "Option<u8>",
@@ -152,7 +165,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u8"),
 		generic_param2: None,
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "Option<u16>",
@@ -162,7 +175,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u16"),
 		generic_param2: None,
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "Option<u32>",
@@ -172,7 +185,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u32"),
 		generic_param2: None,
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "Option<f64>",
@@ -182,7 +195,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f64"),
 		generic_param2: None,
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "Option<[f64;3]>",
@@ -192,7 +205,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f64"),
 		generic_param2: Some("3"),
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "Option<[f64;2]>",
@@ -202,7 +215,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f64"),
 		generic_param2: Some("2"),
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "Option<[f64;4]>",
@@ -212,7 +225,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f64"),
 		generic_param2: Some("4"),
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "Option<[u8;3]>",
@@ -222,7 +235,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u8"),
 		generic_param2: Some("3"),
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "Option<Vec<String>>",
@@ -232,7 +245,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
-		is_parsed: false,
+		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
 		pattern: "Option<TileCompression>",
@@ -242,7 +255,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("TileCompression"),
 		generic_param2: None,
 		is_enum: true,
-		is_parsed: true,
+		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
 		pattern: "Option<TileSchema>",
@@ -252,7 +265,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("TileSchema"),
 		generic_param2: None,
 		is_enum: true,
-		is_parsed: true,
+		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
 		pattern: "Option<TileFormat>",
@@ -262,7 +275,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("TileFormat"),
 		generic_param2: None,
 		is_enum: true,
-		is_parsed: true,
+		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
 		pattern: "Option<PointReductionStrategy>",
@@ -272,7 +285,30 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("PointReductionStrategy"),
 		generic_param2: None,
 		is_enum: true,
-		is_parsed: true,
+		parsed_from: ParsedFrom::Str,
+	},
+	// Judged as a group rather than one value at a time: the count, the numbers
+	// and the ordering between them are all decidable from the literal, and
+	// only the whole list can show that west lies east of east (#255).
+	TypeMapping {
+		pattern: "GeoBBox",
+		display_name: "[west,south,east,north]",
+		method_name: "property_parsed_required",
+		is_required: true,
+		generic_param: Some("GeoBBox"),
+		generic_param2: None,
+		is_enum: false,
+		parsed_from: ParsedFrom::Values,
+	},
+	TypeMapping {
+		pattern: "Option<GeoBBox>",
+		display_name: "[west,south,east,north]",
+		method_name: "property_parsed_option",
+		is_required: false,
+		generic_param: Some("GeoBBox"),
+		generic_param2: None,
+		is_enum: false,
+		parsed_from: ParsedFrom::Values,
 	},
 	// Like `MaxTileBytes`, parsed but not enumerated: every `RRGGBB` is a
 	// colour, so there is no list for a picker to offer or for the TS codegen
@@ -285,7 +321,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("HexColor"),
 		generic_param2: None,
 		is_enum: false,
-		is_parsed: true,
+		parsed_from: ParsedFrom::Str,
 	},
 	// Parsed via `TryFrom<&str>` like the string enums above, but its accepted
 	// values aren't a closed set (`none` or any byte count), so `is_enum` stays
@@ -299,7 +335,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("MaxTileBytes"),
 		generic_param2: None,
 		is_enum: false,
-		is_parsed: true,
+		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
 		pattern: "Option<BlurFunction>",
@@ -309,7 +345,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("BlurFunction"),
 		generic_param2: None,
 		is_enum: true,
-		is_parsed: true,
+		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
 		pattern: "Option<DebugTileFormat>",
@@ -319,7 +355,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("DebugTileFormat"),
 		generic_param2: None,
 		is_enum: true,
-		is_parsed: true,
+		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
 		pattern: "Option<DemEncoding>",
@@ -329,7 +365,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("DemEncoding"),
 		generic_param2: None,
 		is_enum: true,
-		is_parsed: true,
+		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
 		pattern: "Option<RasterTileFormat>",
@@ -339,7 +375,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("RasterTileFormat"),
 		generic_param2: None,
 		is_enum: true,
-		is_parsed: true,
+		parsed_from: ParsedFrom::Str,
 	},
 ];
 
@@ -352,6 +388,11 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 /// probe emitted from these calls the same `parse::<T>()`, so `check` reporting
 /// a shape problem and the builder refusing to parse one are the same fact.
 fn shape_of(mapping: &TypeMapping) -> (Option<usize>, Option<&'static str>) {
+	if mapping.parsed_from == ParsedFrom::Values {
+		// The type's parser owns the count and says something better about it
+		// than "expects 4 values" — `GeoBBox` names west, south, east, north.
+		return (None, None);
+	}
 	let method = mapping.method_name;
 	if method.starts_with("property_number_array") {
 		// `generic_param2` is the array length, as a literal to be parsed twice:
@@ -564,6 +605,8 @@ struct FieldMeta {
 	/// a closed variant list, and `check` can still tell a bad value from a good
 	/// one even where a picker has nothing to offer.
 	parsed_type: Option<&'static str>,
+	/// How that parser takes the values — see [`ParsedFrom`].
+	parsed_from: ParsedFrom,
 	/// `Some(T)` when every value has to parse as the numeric type `T`; `None`
 	/// when the accessor does not parse at all. The derive emits the same
 	/// `parse::<T>()` the accessor makes.
@@ -621,6 +664,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 			doc: raw_comment,
 			enum_type: None,
 			parsed_type: None,
+			parsed_from: ParsedFrom::Nothing,
 			// Sources are pipelines, not values; there is nothing to parse and
 			// no count to hold them to. `check_sources` handles them instead.
 			number_type: None,
@@ -677,7 +721,12 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 		is_sources: false,
 		doc: raw_comment,
 		enum_type: if mapping.is_enum { mapping.generic_param } else { None },
-		parsed_type: if mapping.is_parsed { mapping.generic_param } else { None },
+		parsed_type: if mapping.parsed_from == ParsedFrom::Nothing {
+			None
+		} else {
+			mapping.generic_param
+		},
+		parsed_from: mapping.parsed_from,
 		number_type,
 		arity,
 		default,
@@ -744,7 +793,85 @@ struct Docs<'a> {
 	details: &'a str,
 }
 
-/// Build the final impl TokenStream for the struct.
+/// Build the probe that judges the *values* written for one field.
+///
+/// Which probe depends on what the field's type can decide for itself, never on
+/// which accessor it routes through — that distinction is what `ParsedFrom`
+/// carries, and conflating the two is the bug in #257.
+fn value_check_expr(m: &FieldMeta) -> TokenStream {
+	let fname = &m.name;
+	// Ask the parser whether a value is accepted, rather than comparing
+	// against `variants()`: the two are different sets on purpose, and
+	// the parser is the one that decides whether a pipeline builds.
+	//
+	// What the message offers depends on what there is to offer. A closed
+	// variant list is the useful thing to print, and it is `variants()`
+	// rather than the accepted set: the aliases exist so that other
+	// people's spellings work, not so that one format is listed under two
+	// names. Where there is no list, the parser's own reason is the useful
+	// thing — "expected 3, 4, 6, or 8 hex characters" tells a reader what
+	// to write, and a bounding box can only explain itself.
+	match (m.parsed_type, m.parsed_from) {
+		(Some(parsed_ty), ParsedFrom::Values) => {
+			let ty = format_ident!("{}", parsed_ty);
+			// One probe for the whole list: the count and the relationship
+			// between the values are exactly what this shape exists to see.
+			quote! {
+				if let Err(error) = <#ty as TryFrom<&[String]>>::try_from(values) {
+					problems.push(format!(
+						"does not accept '{}=[{}]': {:#}",
+						#fname,
+						values.join(","),
+						error
+					));
+				}
+			}
+		}
+		(Some(parsed_ty), ParsedFrom::Str) => {
+			let ty = format_ident!("{}", parsed_ty);
+			if let Some(enum_ty) = m.enum_type {
+				let enum_ident = format_ident!("{}", enum_ty);
+				quote! {
+					for value in values {
+						if <#ty as TryFrom<&str>>::try_from(value.as_str()).is_err() {
+							problems.push(format!(
+								"does not accept '{}={}'. Values: {}",
+								#fname,
+								value,
+								#enum_ident::variants().join(", ")
+							));
+						}
+					}
+				}
+			} else {
+				quote! {
+					for value in values {
+						if let Err(error) = <#ty as TryFrom<&str>>::try_from(value.as_str()) {
+							problems.push(format!("does not accept '{}={}': {:#}", #fname, value, error));
+						}
+					}
+				}
+			}
+		}
+		_ => {
+			if let Some(number_ty) = m.number_type {
+				let ty = format_ident!("{}", number_ty);
+				// The parser's own error, rather than "is not a number": it
+				// is the one that knows 300 is a fine number and a bad `u8`.
+				quote! {
+					for value in values {
+						if let Err(error) = value.parse::<#ty>() {
+							problems.push(format!("does not accept '{}={}': {}", #fname, value, error));
+						}
+					}
+				}
+			} else {
+				quote! {}
+			}
+		}
+	}
+}
+
 /// Build the `VPLFieldMeta` literal the derive emits for one field.
 ///
 /// Everything in it is fixed at expansion time except the two run-time calls
@@ -766,44 +893,7 @@ fn field_meta_expr(m: &FieldMeta) -> TokenStream {
 		} else {
 			quote! { Vec::new() }
 		};
-		// Ask the parser whether a value is accepted, rather than comparing
-		// against `variants()`: the two are different sets on purpose, and
-		// the parser is the one that decides whether a pipeline builds.
-		//
-		// The suggestion appended to the message is `variants()`, not the
-		// accepted set: the aliases exist so that other people's spellings
-		// work, not so that this list offers one format under two names. A
-		// type with no closed variant list — `MaxTileBytes` takes a byte
-		// count or `none` — gets no suggestion rather than a misleading one.
-		let value_check: TokenStream = if let Some(parsed_ty) = m.parsed_type {
-			let ty = format_ident!("{}", parsed_ty);
-			let suggestion: TokenStream = if let Some(enum_ty) = m.enum_type {
-				let enum_ident = format_ident!("{}", enum_ty);
-				quote! { format!(". Values: {}", #enum_ident::variants().join(", ")) }
-			} else {
-				quote! { String::new() }
-			};
-			quote! {
-				for value in values {
-					if <#ty as TryFrom<&str>>::try_from(value.as_str()).is_err() {
-						problems.push(format!("does not accept '{}={}'{}", #fname, value, #suggestion));
-					}
-				}
-			}
-		} else if let Some(number_ty) = m.number_type {
-			let ty = format_ident!("{}", number_ty);
-			// The parser's own error, rather than "is not a number": it is
-			// the one that knows 300 is a fine number and a bad `u8`.
-			quote! {
-				for value in values {
-					if let Err(error) = value.parse::<#ty>() {
-						problems.push(format!("does not accept '{}={}': {}", #fname, value, error));
-					}
-				}
-			}
-		} else {
-			quote! {}
-		};
+		let value_check = value_check_expr(m);
 		let arity_check: TokenStream = match m.arity {
 			Some(1) => quote! {
 				if values.len() != 1 {
@@ -1021,7 +1111,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 mod tests {
 	use syn::{DeriveInput, parse_quote};
 
-	use super::{TYPE_MAPPINGS, decode_struct, shape_of};
+	use super::{ParsedFrom, TYPE_MAPPINGS, decode_struct, shape_of};
 
 	/// The table is hand-maintained, and the two flags on it are the only place
 	/// where a new type can be added without the derive noticing that nothing
@@ -1031,21 +1121,35 @@ mod tests {
 	fn the_type_mapping_table_is_self_consistent() {
 		for m in TYPE_MAPPINGS {
 			assert!(
-				!m.is_enum || m.is_parsed,
+				!m.is_enum || m.parsed_from == ParsedFrom::Str,
 				"{}: a type with `variants()` parses from `&str` too",
 				m.pattern
 			);
 			assert!(
-				!m.is_parsed || m.generic_param.is_some(),
-				"{}: `is_parsed` names the type in `generic_param`, so it cannot be `None`",
+				m.parsed_from == ParsedFrom::Nothing || m.generic_param.is_some(),
+				"{}: a parsed type is named in `generic_param`, so it cannot be `None`",
 				m.pattern
 			);
 			// A field checked by its parser is checked by that and nothing else:
 			// a numeric probe on the same values would be a second opinion.
-			let (_, number_type) = shape_of(m);
+			let (arity, number_type) = shape_of(m);
 			assert!(
-				!(m.is_parsed && number_type.is_some()),
-				"{}: parses through both `TryFrom<&str>` and `parse::<T>()`",
+				m.parsed_from == ParsedFrom::Nothing || number_type.is_none(),
+				"{}: parses through both its own type and `parse::<T>()`",
+				m.pattern
+			);
+			// The probe and the accessor have to agree about how many values
+			// they take, or `check` would judge a list the builder never sees
+			// as one — and vice versa.
+			assert_eq!(
+				m.parsed_from == ParsedFrom::Values,
+				m.method_name.starts_with("property_parsed"),
+				"{}: `ParsedFrom::Values` and the list accessor go together",
+				m.pattern
+			);
+			assert!(
+				m.parsed_from != ParsedFrom::Values || arity.is_none(),
+				"{}: a group-parsed type owns its own count",
 				m.pattern
 			);
 		}

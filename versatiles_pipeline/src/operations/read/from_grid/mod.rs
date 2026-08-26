@@ -152,8 +152,8 @@ struct Args {
 	/// Edge length of a cell, in the CRS's units — meters, or degrees for `epsg=4326`.
 	size: f64,
 
-	/// Area to cover, as `[west, south, east, north]` in WGS84 degrees.
-	bbox: [f64; 4],
+	/// Area to cover, in WGS84 degrees.
+	bbox: GeoBBox,
 
 	/// Lower-left corner of cell `(0, 0)`, in CRS units. Defaults to `[0,0]`.
 	#[vpl(default = "[0,0]")]
@@ -242,7 +242,7 @@ impl Operation {
 		)?;
 		id_template.validate_for(args.size, offset)?;
 
-		let bbox = GeoBBox::new(args.bbox[0], args.bbox[1], args.bbox[2], args.bbox[3])?;
+		let bbox = args.bbox;
 		let max_cells_per_tile = args.max_cells_per_tile.unwrap_or(DEFAULT_MAX_CELLS_PER_TILE);
 		ensure!(max_cells_per_tile > 0, "max_cells_per_tile must be at least 1");
 
@@ -661,7 +661,7 @@ mod tests {
 		Args {
 			epsg,
 			size,
-			bbox: [5.8, 47.2, 15.1, 55.1],
+			bbox: GeoBBox::new(5.8, 47.2, 15.1, 55.1).unwrap(),
 			offset: None,
 			max_cells_per_tile: None,
 			id_template: None,
@@ -1234,7 +1234,7 @@ mod tests {
 		use std::time::Instant;
 
 		let mut rd = args(28992, 500.0);
-		rd.bbox = [4.85, 52.3, 4.95, 52.4];
+		rd.bbox = GeoBBox::new(4.85, 52.3, 4.95, 52.4).unwrap();
 		let operation = Operation::from_args(rd)?;
 		let coord = TileCoord::from_geo(4.9, 52.35, 11)?;
 

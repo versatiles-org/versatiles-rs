@@ -66,13 +66,14 @@ pub struct BBoxClip {
 }
 
 impl BBoxClip {
-	/// Resolve a `[west, south, east, north]` argument in WGS84 degrees.
+	/// Project a `[west, south, east, north]` area into the space features are
+	/// tested in.
 	///
-	/// # Errors
-	///
-	/// Returns an error if the values are not a valid geographic box.
-	pub fn new(bbox: [f64; 4]) -> Result<Self> {
-		let geo = GeoBBox::try_from(&bbox)?;
+	/// Infallible: whether the values are a valid geographic box was settled
+	/// when `GeoBBox` parsed them, which is what lets `check` refuse a bad one
+	/// without building anything.
+	#[must_use]
+	pub fn new(geo: GeoBBox) -> Self {
 		let mercator = Rect::new(
 			coord_to_mercator(Coord {
 				x: geo.x_min,
@@ -83,7 +84,7 @@ impl BBoxClip {
 				y: geo.y_max,
 			}),
 		);
-		Ok(Self { geo, mercator })
+		Self { geo, mercator }
 	}
 
 	/// Whether a projected feature reaches into the box.

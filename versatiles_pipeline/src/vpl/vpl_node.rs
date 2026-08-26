@@ -84,6 +84,40 @@ impl VPLNode {
 		})
 	}
 
+	/// Parses `field` through the type's own `TryFrom<&[String]>`, returning
+	/// `Ok(None)` if absent.
+	///
+	/// Unlike [`property_enum_option`](Self::property_enum_option), the parser
+	/// sees every value at once — how many there are and how they relate to each
+	/// other. A bounding box whose west lies east of its east is only wrong as a
+	/// group, so no accessor that hands over one value at a time can refuse it.
+	#[context("Failed to get optional parsed property '{field}' from VPL node '{}'", self.name)]
+	pub fn property_parsed_option<'a, T>(&'a self, field: &str) -> Result<Option<T>>
+	where
+		T: TryFrom<&'a [String]>,
+		<T as TryFrom<&'a [String]>>::Error: std::fmt::Display + Send + Sync + 'static,
+	{
+		self.get_property_vec(field).map_or(Ok(None), |values| {
+			T::try_from(values.as_slice()).map(Some).map_err(|e| {
+				anyhow!(
+					"In operation '{}' the parameter '{field}' has an invalid value: {}",
+					self.name,
+					e
+				)
+			})
+		})
+	}
+
+	/// Required counterpart of [`property_parsed_option`](Self::property_parsed_option).
+	#[context("Failed to get required parsed property '{field}' from VPL node '{}'", self.name)]
+	pub fn property_parsed_required<'a, T>(&'a self, field: &str) -> Result<T>
+	where
+		T: TryFrom<&'a [String]>,
+		<T as TryFrom<&'a [String]>>::Error: std::fmt::Display + Send + Sync + 'static,
+	{
+		self.required(field, self.property_parsed_option::<T>(field))
+	}
+
 	/// Optional string parameter accessor; clones the stored value when present.
 	#[context("Failed to get optional property string '{field}' from VPL node '{}'", self.name)]
 	pub fn property_string_option(&self, field: &str) -> Result<Option<String>> {

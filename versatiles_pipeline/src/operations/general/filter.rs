@@ -25,7 +25,7 @@ use crate::{PipelineFactory, vpl::VPLNode};
 /// every other parameter here.
 struct Args {
 	/// Area to keep, in WGS84 degrees. Defaults to the source's own bounds.
-	bbox: Option<[f64; 4]>,
+	bbox: Option<GeoBBox>,
 	/// Ring of extra tiles kept around `bbox`, per zoom level. Requires `bbox`. Defaults to `0`.
 	#[vpl(default = "0")]
 	bbox_border: Option<u32>,
@@ -90,7 +90,7 @@ impl Operation {
 		}
 
 		if let Some(bbox) = args.bbox {
-			let crop = GeoCrop::new(GeoBBox::try_from(&bbox)?, args.bbox_border.unwrap_or(0));
+			let crop = GeoCrop::new(bbox, args.bbox_border.unwrap_or(0));
 			crop.apply_to_pyramid(&mut tile_pyramid)?;
 
 			tilejson.bounds = Some(crop.bounds(tilejson.bounds, &tile_pyramid));

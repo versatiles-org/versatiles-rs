@@ -20,7 +20,7 @@ use std::{path::Path, sync::Arc};
 use anyhow::{Result, bail, ensure};
 use futures::StreamExt;
 use versatiles_container::{DataLocation, TileSource};
-use versatiles_core::TileCompression;
+use versatiles_core::{GeoBBox, TileCompression};
 use versatiles_derive::context;
 use versatiles_geometry::{
 	feature_import::{FeatureImport, FeatureImportArgs, PointReductionStrategy},
@@ -96,7 +96,7 @@ struct Args {
 	/// Highest zoom level to emit. Defaults to a heuristic capped at `14`.
 	max_zoom: Option<u8>,
 	/// Area to restrict the output to, in WGS84 degrees. Defaults to the input's extent.
-	bbox: Option<[f64; 4]>,
+	bbox: Option<GeoBBox>,
 	/// Properties to keep. Mutually exclusive with `properties_exclude`. Defaults to all.
 	properties_include: Option<Vec<String>>,
 	/// Properties to drop. Mutually exclusive with `properties_include`. Defaults to none.
@@ -152,7 +152,7 @@ impl Operation {
 
 		let point_reduction = args.point_reduction;
 		let compression = args.compression.unwrap_or(TileCompression::Gzip);
-		let clip = args.bbox.map(BBoxClip::new).transpose()?;
+		let clip = args.bbox.map(BBoxClip::new);
 
 		// Format dispatch by extension (case-insensitive).
 		let ext = path

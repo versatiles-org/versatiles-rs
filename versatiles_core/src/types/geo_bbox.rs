@@ -451,6 +451,47 @@ impl TryFrom<[f64; 4]> for GeoBBox {
 	}
 }
 
+impl TryFrom<&[String]> for GeoBBox {
+	type Error = anyhow::Error;
+
+	/// Parses `[west, south, east, north]` from the values as they were written,
+	/// before anything has been built.
+	///
+	/// Exists so that a bounding box can be judged as a group. A probe that saw
+	/// one value at a time could tell `13.5` from `nonsense`, but not that a west
+	/// of `13.5` lies east of an east of `13.3` — which is the same failure as
+	/// #255 with the corners transposed, and unlike the CRS case it is decidable
+	/// from the literal alone.
+	///
+	/// # Examples
+	/// ```
+	/// use versatiles_core::GeoBBox;
+	///
+	/// let values = ["13.3", "52.4", "13.5", "52.6"].map(String::from);
+	/// assert_eq!(GeoBBox::try_from(&values[..]).unwrap().as_tuple(), (13.3, 52.4, 13.5, 52.6));
+	///
+	/// let transposed = ["13.5", "52.6", "13.3", "52.4"].map(String::from);
+	/// assert!(GeoBBox::try_from(&transposed[..]).is_err());
+	/// ```
+	fn try_from(values: &[String]) -> Result<Self> {
+		ensure!(
+			values.len() == 4,
+			"expected 4 values [west, south, east, north], got {}",
+			values.len()
+		);
+		let mut numbers = [0f64; 4];
+		for (number, value) in numbers.iter_mut().zip(values) {
+			*number = value
+				.parse::<f64>()
+				.map_err(|e| anyhow::anyhow!("'{value}' is not a number: {e}"))?;
+		}
+		// `new` rather than the `Vec<f64>` conversion: that one wraps its error in
+		// context, which would bury the reason a box was rejected under a sentence
+		// about converting.
+		GeoBBox::new(numbers[0], numbers[1], numbers[2], numbers[3])
+	}
+}
+
 impl<T: Copy + Into<f64>> TryFrom<&[T; 4]> for GeoBBox {
 	type Error = anyhow::Error;
 	/// Converts a fixed-size array of four numbers into a `GeoBBox`.

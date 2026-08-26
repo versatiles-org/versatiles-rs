@@ -138,7 +138,7 @@ A tile over `max_tile_bytes` is dropped while streaming and an error when a sing
 - _`layer_name`: String (optional)_ - Name of the layer to write into. Defaults to the file's stem.
 - _`min_zoom`: u8 (optional)_ - Lowest zoom level to emit. Defaults to `0`.
 - _`max_zoom`: u8 (optional)_ - Highest zoom level to emit. Defaults to a heuristic capped at `14`.
-- _`bbox`: [f64,f64,f64,f64] (optional)_ - Area to restrict the output to, in WGS84 degrees. Defaults to the input's extent.
+- _`bbox`: [west,south,east,north] (optional)_ - Area to restrict the output to, in WGS84 degrees. Defaults to the input's extent.
 - _`properties_include`: [String,...] (optional)_ - Columns to keep as properties. Mutually exclusive with `properties_exclude`. Defaults to all.
 - _`properties_exclude`: [String,...] (optional)_ - Columns to drop. Mutually exclusive with `properties_include`. Defaults to none.
 - _`point_reduction`: PointReductionStrategy (optional)_ - Values: `none`, `drop_rate`, `min_distance`. How to thin out points too close to distinguish. Defaults to `min_distance`.
@@ -227,7 +227,7 @@ A tile over `max_tile_bytes` is dropped while streaming and an error when a sing
 - _`layer_name`: String (optional)_ - Name of the layer to write into. Defaults to the file's stem.
 - _`min_zoom`: u8 (optional)_ - Lowest zoom level to emit. Defaults to `0`.
 - _`max_zoom`: u8 (optional)_ - Highest zoom level to emit. Defaults to a heuristic capped at `14`.
-- _`bbox`: [f64,f64,f64,f64] (optional)_ - Area to restrict the output to, in WGS84 degrees. Defaults to the input's extent.
+- _`bbox`: [west,south,east,north] (optional)_ - Area to restrict the output to, in WGS84 degrees. Defaults to the input's extent.
 - _`properties_include`: [String,...] (optional)_ - Properties to keep. Mutually exclusive with `properties_exclude`. Defaults to all.
 - _`properties_exclude`: [String,...] (optional)_ - Properties to drop. Mutually exclusive with `properties_include`. Defaults to none.
 - _`polygon_min_area`: f32 (optional)_ - Area in square tile-pixels below which a polygon is dropped. Defaults to `4`.
@@ -271,7 +271,7 @@ A cell reaching into several tiles is drawn in each of them, clipped to the tile
 
 - **`epsg`: u32 (required)** - EPSG code of the grid's coordinate reference system.
 - **`size`: f64 (required)** - Edge length of a cell, in the CRS's units — meters, or degrees for `epsg=4326`.
-- **`bbox`: [f64,f64,f64,f64] (required)** - Area to cover, as `[west, south, east, north]` in WGS84 degrees.
+- **`bbox`: [west,south,east,north] (required)** - Area to cover, in WGS84 degrees.
 - _`offset`: [f64,f64] (optional)_ - Lower-left corner of cell `(0, 0)`, in CRS units. Defaults to `[0,0]`.
 - _`max_cells_per_tile`: u32 (optional)_ - Roughly how many cells one tile may hold. Defaults to `1024`.
 - _`id_template`: String (optional)_ - Cell id format. Defaults to `CRS{epsg}RES{size}m{y:h}{x:h}`.
@@ -429,7 +429,7 @@ That ring matters wherever a cropped tileset is rendered rather than just stored
 
 ### Parameters
 
-- _`bbox`: [f64,f64,f64,f64] (optional)_ - Area to keep, in WGS84 degrees. Defaults to the source's own bounds.
+- _`bbox`: [west,south,east,north] (optional)_ - Area to keep, in WGS84 degrees. Defaults to the source's own bounds.
 - _`bbox_border`: u32 (optional)_ - Ring of extra tiles kept around `bbox`, per zoom level. Requires `bbox`. Defaults to `0`.
 - _`level_min`: u8 (optional)_ - Lowest zoom level to keep. Defaults to the source's lowest.
 - _`level_max`: u8 (optional)_ - Highest zoom level to keep. Defaults to the source's highest.
@@ -452,7 +452,7 @@ The fields and their meaning follow the TileJSON 3.0.0 specification: <https://g
 ### Parameters
 
 - _`attribution`: String (optional)_ - Attribution text. Defaults to the source's.
-- _`bounds`: [f64,f64,f64,f64] (optional)_ - Area covered, as `[west, south, east, north]` in WGS84 degrees. Defaults to the source's.
+- _`bounds`: [west,south,east,north] (optional)_ - Area covered, in WGS84 degrees. Defaults to the source's.
 - _`center`: [f64,f64,f64] (optional)_ - Where a client should open the map, as `[lon, lat, zoom]`. Defaults to the source's.
 - _`description`: String (optional)_ - Description text. Defaults to the source's.
 - _`fillzoom`: u8 (optional)_ - Zoom level from which clients should fill from the parent tile. Defaults to the source's.

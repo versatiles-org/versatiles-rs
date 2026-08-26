@@ -30,8 +30,8 @@ use crate::{PipelineFactory, vpl::VPLNode};
 struct Args {
 	/// Attribution text. Defaults to the source's.
 	attribution: Option<String>,
-	/// Area covered, as `[west, south, east, north]` in WGS84 degrees. Defaults to the source's.
-	bounds: Option<[f64; 4]>,
+	/// Area covered, in WGS84 degrees. Defaults to the source's.
+	bounds: Option<GeoBBox>,
 	/// Where a client should open the map, as `[lon, lat, zoom]`. Defaults to the source's.
 	center: Option<[f64; 3]>,
 	/// Description text. Defaults to the source's.
@@ -99,7 +99,7 @@ impl Operation {
 		}
 
 		if let Some(bounds) = args.bounds {
-			tilejson.bounds = Some(GeoBBox::try_from(&bounds)?);
+			tilejson.bounds = Some(bounds);
 		}
 
 		if let Some(center) = args.center {

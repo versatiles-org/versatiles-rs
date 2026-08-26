@@ -319,7 +319,10 @@ mod tests {
 	fn a_type_with_no_variant_list_is_still_checked() {
 		assert_eq!(
 			problems("from_geo filename=a.geojson max_tile_bytes=fnord"),
-			["'from_geo' does not accept 'max_tile_bytes=fnord'"]
+			[
+				"'from_geo' does not accept 'max_tile_bytes=fnord': invalid max_tile_bytes 'fnord'; \
+				 expected a byte count (e.g. 2097152) or 'none' to disable the cap"
+			]
 		);
 		assert!(problems("from_geo filename=a.geojson max_tile_bytes=none").is_empty());
 		assert!(problems("from_geo filename=a.geojson max_tile_bytes=4096").is_empty());
@@ -328,9 +331,9 @@ mod tests {
 	/// Every value of a list is judged, not just the first.
 	#[test]
 	fn each_value_of_a_repeated_parameter_is_checked() {
-		let found = problems("from_debug format=png | filter bbox=[a,b,c,d]");
-		assert_eq!(found.len(), 4, "{found:?}");
-		assert!(found[3].contains("'bbox=d'"), "{found:?}");
+		let found = problems("from_debug format=png | raster_flatten color=[a,b,c]");
+		assert_eq!(found.len(), 3, "{found:?}");
+		assert!(found[2].contains("'color=c'"), "{found:?}");
 	}
 
 	/// A scalar parameter given a list is wrong twice over, and both are worth
@@ -368,9 +371,32 @@ mod tests {
 	#[test]
 	fn an_array_of_the_wrong_length_is_reported() {
 		assert_eq!(
-			problems("from_debug format=png | filter bbox=[0,0,10]"),
-			["'filter' expects 4 values for 'bbox', got 3"]
+			problems("from_debug format=png | raster_flatten color=[0,0]"),
+			["'raster_flatten' expects 3 values for 'color', got 2"]
 		);
+	}
+
+	/// The case #255 is about, with the corners transposed rather than the CRS
+	/// wrong — and unlike the CRS, decidable from the literal alone.
+	///
+	/// A `GeoBBox` is judged as a group because that is the only way to see it:
+	/// every one of these four numbers is a fine `f64` on its own, and it is the
+	/// relationship between them that is wrong.
+	#[test]
+	fn a_bounding_box_is_judged_as_a_group() {
+		assert_eq!(
+			problems("from_debug format=png | filter bbox=[13.5,52.6,13.3,52.4]"),
+			["'filter' does not accept 'bbox=[13.5,52.6,13.3,52.4]': x_min (13.5) must be <= x_max (13.3)"]
+		);
+		assert_eq!(
+			problems("from_debug format=png | filter bbox=[0,0,200,10]"),
+			["'filter' does not accept 'bbox=[0,0,200,10]': x_max (200) must be <= 180"]
+		);
+		assert_eq!(
+			problems("from_debug format=png | filter bbox=[0,0,10]"),
+			["'filter' does not accept 'bbox=[0,0,10]': expected 4 values [west, south, east, north], got 3"]
+		);
+		assert!(problems("from_debug format=png | filter bbox=[13.3,52.4,13.5,52.6]").is_empty());
 	}
 
 	/// A list-typed parameter takes any number of values and judges none of
@@ -461,6 +487,8 @@ mod tests {
 			"from_debug format=[png, png]",
 			"from_debug format=png | filter level_max=abc",
 			"from_debug format=png | filter level_max=300",
+			"from_debug format=png | raster_flatten color=[0,0]",
+			"from_debug format=png | filter bbox=[13.5,52.6,13.3,52.4]",
 			"from_debug format=png | filter bbox=[0,0,10]",
 			"from_color color=red",
 		] {
@@ -480,7 +508,7 @@ mod tests {
 	fn a_value_in_the_wrong_format_is_reported() {
 		assert_eq!(
 			problems("from_color color=red"),
-			["'from_color' does not accept 'color=red'"]
+			["'from_color' does not accept 'color=red': Invalid hex color 'red': invalid digit found in string"]
 		);
 		assert!(problems("from_color color=FF5733").is_empty());
 		assert!(problems("from_color color=FF573380").is_empty());
