@@ -27,13 +27,6 @@ use crate::{
 ///
 /// Features in layers outside `layer` pass through untouched.
 ///
-/// In `expr`, feature properties are available as `props["key"]`, and those
-/// whose names are valid CEL identifiers — letters, digits and underscore — are
-/// also exposed as top-level identifiers. A missing key resolves to null, so
-/// test for presence with `name != null` for an identifier-safe key or
-/// `has(props.key)` for any key. Run `versatiles help` for a CEL operator
-/// cheat-sheet.
-///
 /// ### Examples
 ///
 /// ```vpl
@@ -44,6 +37,58 @@ use crate::{
 /// vector_filter_features layer=["poi"]   expr="name != null && name != ''"
 /// vector_filter_features layer=["addr"]  expr="props['addr:street'] == 'Hauptstr.'"
 /// ```
+///
+/// ### Expression language
+///
+/// `expr` is a boolean [CEL (Common Expression
+/// Language)](https://github.com/google/cel-spec) expression, evaluated once per
+/// feature.
+///
+/// **Types** — bool (`true`, `false`), int / uint (`42`, `-7`, `1000u`), double
+/// (`3.14`, `-0.5`, `1e-6`), string (`'hello'` or `"hello"`), list (`[1, 2, 3]`,
+/// `['a', 'b']`), map (`m['key']` or `m.key`), and `null`.
+///
+/// **Operators** — equality `==` `!=`, ordering `<` `<=` `>` `>=`, logical `&&`
+/// `||` `!`, membership `x in [1, 2, 3]`, and `s.matches('pattern')` for a regex
+/// in RE2 syntax, matched anywhere in `s`.
+///
+/// ### Accessing feature properties
+///
+/// Properties whose names are valid CEL identifiers — letters, digits and
+/// underscore — are exposed as top-level variables:
+///
+/// ```vpl
+/// vector_filter_features layer=["place"] expr="name == 'Berlin'"
+/// ```
+///
+/// For keys containing `:`, `-`, `.`, or anything else that is not an
+/// identifier, use the `props` map:
+///
+/// ```vpl
+/// vector_filter_features layer=["addr"] expr="props['addr:street'] == 'Hauptstr.'"
+/// ```
+///
+/// ### Missing keys
+///
+/// A property a feature does not carry resolves to `null` for identifier-safe
+/// access, so compare against `null` to say explicitly whether such features are
+/// kept or dropped:
+///
+/// ```vpl
+/// vector_filter_features layer=["place"] expr="name != null && name != ''"
+/// ```
+///
+/// The `has()` macro asks the same question of an identifier-safe key, and `in`
+/// of any key:
+///
+/// ```vpl
+/// vector_filter_features layer=["place"] expr="has(props.name)"
+/// vector_filter_features layer=["addr"]  expr="'addr:street' in props"
+/// ```
+///
+/// The [CEL language
+/// spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md) has the
+/// full grammar, built-in functions and string methods.
 struct Args {
 	/// Layers the expression applies to, for example `layer=["poi","place"]`.
 	layer: Vec<String>,
@@ -82,7 +127,7 @@ impl Runner {
 					"Failed to compile CEL expression:\n  {}\n\n\
 					 Parser crashed (likely malformed CEL input): {detail}\n\n\
 					 Common causes: unmatched brackets, trailing operators, unsupported tokens. \
-					 Run `versatiles help` for the CEL operator cheat-sheet.",
+					 Run `versatiles help pipeline` for the CEL operator cheat-sheet.",
 					args.expr
 				)
 			})?
@@ -241,7 +286,7 @@ mod tests {
 	fn test_expr_compile_error_on_panic_path_is_helpful() {
 		// Incomplete trailing operator — `cel-parser 0.10.1` panics on this input.
 		// The error should: (a) echo the user's expression, (b) flag likely-malformed input,
-		// (c) point them at `versatiles help` for reference material.
+		// (c) point them at `versatiles help pipeline` for reference material.
 		let err = Runner::from_args(&Args {
 			layer: vec!["x".into()],
 			expr: "population >=".into(),
@@ -255,7 +300,7 @@ mod tests {
 				"",
 				"Parser crashed (likely malformed CEL input): internal error: entered unreachable code: should have been properly implemented by generated context when reachable",
 				"",
-				"Common causes: unmatched brackets, trailing operators, unsupported tokens. Run `versatiles help` for the CEL operator cheat-sheet.",
+				"Common causes: unmatched brackets, trailing operators, unsupported tokens. Run `versatiles help pipeline` for the CEL operator cheat-sheet.",
 			]
 		);
 	}

@@ -82,6 +82,17 @@ const DEFAULT_MAX_CELLS_PER_TILE: u32 = 1024;
 /// at up to level 30. Nothing is generated until a tile is asked for, so bound
 /// the work where it is done instead: `versatiles convert --bbox --max-zoom`, or
 /// a `filter` operation.
+///
+/// Cell size is fixed by the resolution and does not change with zoom — that is
+/// what keeps an id stable enough to join against — so low zoom levels are
+/// unusable, and the pyramid starts at the level where a tile holds at most
+/// `max_cells_per_tile` cells. Cells are measured at the equator, where mercator
+/// stretches them least, so the level it starts at holds everywhere.
+///
+/// A cell reaching into several tiles is drawn in each of them, clipped to the
+/// tile it is in. The same id therefore recurs across tiles, which is what a
+/// join expects — but the geometry carrying it in any one tile is only the part
+/// inside that tile, so it is not something to measure areas from.
 struct Args {
 	/// H3 resolution, `0` (coarsest) to `15` (finest).
 	resolution: u8,

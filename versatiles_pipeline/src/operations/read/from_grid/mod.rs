@@ -121,6 +121,15 @@ const TILE_PIXELS: f64 = 256.0;
 /// `{x}` and `{y}` each take an optional divisor and zero-padded width, so
 /// `E{x/100:04}N{y/100:04}` produces `E0643N4567`, the form Dutch grid
 /// statistics use.
+/// Cell size is fixed by `size` and does not change with zoom — that is what
+/// keeps an id stable enough to join against — so low zoom levels are unusable,
+/// and the pyramid starts at the level where a tile holds at most
+/// `max_cells_per_tile` cells.
+///
+/// A cell reaching into several tiles is drawn in each of them, clipped to the
+/// tile it is in. The same id therefore recurs across tiles, which is what a
+/// join expects — but the geometry carrying it in any one tile is only the part
+/// inside that tile, so it is not something to measure areas from.
 struct Args {
 	/// EPSG code of the grid's coordinate reference system.
 	epsg: u32,
