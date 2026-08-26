@@ -491,6 +491,7 @@ mod tests {
 			"from_debug format=png | filter bbox=[13.5,52.6,13.3,52.4]",
 			"from_debug format=png | filter bbox=[0,0,10]",
 			"from_color color=red",
+			"from_debug format=png | remap_coords flip_x=yess",
 		] {
 			assert!(!factory.check(&parse_vpl(vpl)?).is_empty(), "check accepted {vpl:?}");
 			assert!(
@@ -499,6 +500,21 @@ mod tests {
 			);
 		}
 		Ok(())
+	}
+
+	/// A typo in a flag used to mean the opposite of what it said: anything that
+	/// was not `1/true/yes/ok` parsed as `false`, silently. Now it is refused,
+	/// by the same function the accessor calls.
+	#[test]
+	fn a_value_that_is_not_a_boolean_is_reported() {
+		assert_eq!(
+			problems("from_debug format=png | remap_coords flip_x=yess"),
+			["'remap_coords' does not accept 'flip_x=yess': expected a boolean (1/true/yes/ok or 0/false/no), got 'yess'"]
+		);
+		for spelling in ["1", "true", "YES", " ok ", "0", "false", "no"] {
+			let vpl = format!("from_debug format=png | remap_coords flip_x=\"{spelling}\"");
+			assert!(problems(&vpl).is_empty(), "{spelling:?} should be a boolean");
+		}
 	}
 
 	/// The gap #257 was opened for, closed for the field it was opened about.

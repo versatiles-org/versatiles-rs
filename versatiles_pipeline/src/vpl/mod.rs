@@ -99,5 +99,5 @@ pub use cst_parser::parse_cst;
 pub use error::{VplErrorFrame, VplParseError};
 pub use field_meta::{VPLFieldMeta, ValueValidator};
 pub use parser::{parse_vpl, parse_vpl_detailed};
-pub use vpl_node::VPLNode;
+pub use vpl_node::{VPLNode, parse_bool};
 pub use vpl_pipeline::VPLPipeline;

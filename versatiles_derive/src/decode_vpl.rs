@@ -48,6 +48,11 @@ enum ParsedFrom {
 	/// *between* them is decidable. A bounding box whose west lies east of its
 	/// east is only wrong as a group, and one probe per value cannot see it.
 	Values,
+	/// `crate::vpl::parse_bool` — the one case where the parser is a function
+	/// rather than a type. `bool` is not ours to write a `TryFrom` impl for, and
+	/// a newtype for a flag would cost every operation author more than the typo
+	/// it catches.
+	Bool,
 }
 
 /// All supported type mappings for VPLDecode.
@@ -71,7 +76,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
-		parsed_from: ParsedFrom::Nothing,
+		parsed_from: ParsedFrom::Bool,
 	},
 	TypeMapping {
 		pattern: "u8",
@@ -135,7 +140,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
-		parsed_from: ParsedFrom::Nothing,
+		parsed_from: ParsedFrom::Bool,
 	},
 	TypeMapping {
 		pattern: "Option<String>",
@@ -405,9 +410,8 @@ fn shape_of(mapping: &TypeMapping) -> (Option<usize>, Option<&'static str>) {
 		(Some(1), mapping.generic_param)
 	} else {
 		// String, bool and enum accessors all go through `get_property`, which
-		// takes one value and no more. Bools judge nothing beyond that: anything
-		// that is not `1/true/yes/ok` parses as `false` rather than failing, so
-		// checking the value here would reject VPL that builds.
+		// takes one value and no more. What each of them makes of that value is
+		// `parsed_from`'s business, not this function's.
 		(Some(1), None)
 	}
 }
@@ -853,6 +857,17 @@ fn value_check_expr(m: &FieldMeta) -> TokenStream {
 				}
 			}
 		}
+		(_, ParsedFrom::Bool) => {
+			// The same function the accessor calls, so a value `check` accepts
+			// and a value that builds are the same set by construction.
+			quote! {
+				for value in values {
+					if let Err(error) = crate::vpl::parse_bool(value) {
+						problems.push(format!("does not accept '{}={}': {:#}", #fname, value, error));
+					}
+				}
+			}
+		}
 		_ => {
 			if let Some(number_ty) = m.number_type {
 				let ty = format_ident!("{}", number_ty);
@@ -1125,9 +1140,16 @@ mod tests {
 				"{}: a type with `variants()` parses from `&str` too",
 				m.pattern
 			);
-			assert!(
-				m.parsed_from == ParsedFrom::Nothing || m.generic_param.is_some(),
-				"{}: a parsed type is named in `generic_param`, so it cannot be `None`",
+			assert_eq!(
+				matches!(m.parsed_from, ParsedFrom::Str | ParsedFrom::Values),
+				m.generic_param.is_some() && !m.method_name.starts_with("property_number"),
+				"{}: a type that parses for itself is the one named in `generic_param`",
+				m.pattern
+			);
+			assert_eq!(
+				m.parsed_from == ParsedFrom::Bool,
+				m.method_name.starts_with("property_bool"),
+				"{}: `ParsedFrom::Bool` and the bool accessor go together",
 				m.pattern
 			);
 			// A field checked by its parser is checked by that and nothing else:

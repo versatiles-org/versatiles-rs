@@ -7,7 +7,7 @@
 
 use std::{collections::BTreeMap, fmt::Debug, str::FromStr};
 
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Result, anyhow, bail, ensure};
 use versatiles_derive::context;
 
 use super::VPLPipeline;
@@ -27,6 +27,38 @@ pub struct VPLNode {
 	pub properties: BTreeMap<String, Vec<String>>,
 	/// Zero or more child pipelines (nested VPL blocks) used as this node's inputs.
 	pub sources: Vec<VPLPipeline>,
+}
+
+/// Parses a VPL boolean: `1`, `true`, `yes` or `ok` for true, `0`, `false` or
+/// `no` for false, case-insensitively and ignoring surrounding space.
+///
+/// Anything else is an error rather than `false`. It used to be `false`, which
+/// meant `overwrite=yess` silently did the opposite of what it said — the one
+/// way a typo can change what a pipeline does without anything going wrong.
+///
+/// A free function rather than a method because the `VPLDecode` derive emits a
+/// call to it as well: the metadata's probe and the accessor have to agree about
+/// what a boolean is, and the cheapest way to guarantee that is one function.
+///
+/// # Errors
+///
+/// When the value is not one of the accepted spellings.
+///
+/// # Examples
+///
+/// ```
+/// use versatiles_pipeline::vpl::parse_bool;
+///
+/// assert!(parse_bool(" YES ").unwrap());
+/// assert!(!parse_bool("0").unwrap());
+/// assert!(parse_bool("yess").is_err());
+/// ```
+pub fn parse_bool(value: &str) -> Result<bool> {
+	match value.trim().to_lowercase().as_str() {
+		"1" | "true" | "yes" | "ok" => Ok(true),
+		"0" | "false" | "no" => Ok(false),
+		_ => bail!("expected a boolean (1/true/yes/ok or 0/false/no), got '{value}'"),
+	}
 }
 
 impl VPLNode {
@@ -145,18 +177,16 @@ impl VPLNode {
 		self.required(field, self.property_string_list_option(field))
 	}
 
-	/// Required boolean parameter accessor; accepts `1/true/yes/ok` (case-insensitive) for `true`.
+	/// Required boolean parameter accessor; see [`parse_bool`] for the spellings.
 	#[context("Failed to get required property bool '{field}' from VPL node '{}'", self.name)]
 	pub fn property_bool_required(&self, field: &str) -> Result<bool> {
 		self.required(field, self.property_bool_option(field))
 	}
 
-	/// Optional boolean parameter accessor; accepts `1/true/yes/ok` (case-insensitive).
+	/// Optional boolean parameter accessor; see [`parse_bool`] for the spellings.
 	#[context("Failed to get optional property bool '{field}' from VPL node '{}'", self.name)]
 	pub fn property_bool_option(&self, field: &str) -> Result<Option<bool>> {
-		Ok(self
-			.get_property(field)?
-			.map(|v| matches!(v.trim().to_lowercase().as_str(), "1" | "true" | "yes" | "ok")))
+		self.get_property(field)?.map(|v| parse_bool(v)).transpose()
 	}
 
 	/// Optional numeric parameter accessor using `FromStr` for the target type.
@@ -379,6 +409,32 @@ mod tests {
 		};
 		assert!(node.property_bool_required("key1").unwrap());
 		assert!(!node.property_bool_required("key2").unwrap());
+	}
+
+	#[test]
+	fn parse_bool_takes_both_spellings_of_each_answer() {
+		for value in ["1", "true", "TRUE", "yes", "ok", " ok "] {
+			assert!(parse_bool(value).unwrap(), "{value:?}");
+		}
+		for value in ["0", "false", "FALSE", "no", " no "] {
+			assert!(!parse_bool(value).unwrap(), "{value:?}");
+		}
+	}
+
+	/// The point of the change: a typo is refused rather than quietly meaning
+	/// `false`, which is how `overwrite=yess` used to do the opposite of what it
+	/// said without anything appearing to go wrong.
+	#[test]
+	fn parse_bool_refuses_anything_else() {
+		for value in ["yess", "", "maybe", "2", "-1", "y"] {
+			assert!(parse_bool(value).is_err(), "{value:?} should not be a boolean");
+		}
+		let node = VPLNode {
+			name: "node".to_string(),
+			properties: make_property(vec![("key1", "yess")]),
+			sources: vec![],
+		};
+		assert!(node.property_bool_option("key1").is_err());
 	}
 
 	#[test]
