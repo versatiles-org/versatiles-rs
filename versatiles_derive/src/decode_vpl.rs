@@ -274,6 +274,19 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_enum: true,
 		is_parsed: true,
 	},
+	// Like `MaxTileBytes`, parsed but not enumerated: every `RRGGBB` is a
+	// colour, so there is no list for a picker to offer or for the TS codegen
+	// to turn into a union.
+	TypeMapping {
+		pattern: "Option<HexColor>",
+		display_name: "HexColor",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("HexColor"),
+		generic_param2: None,
+		is_enum: false,
+		is_parsed: true,
+	},
 	// Parsed via `TryFrom<&str>` like the string enums above, but its accepted
 	// values aren't a closed set (`none` or any byte count), so `is_enum` stays
 	// false — there's no variant list for the TS codegen to turn into a

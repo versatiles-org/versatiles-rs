@@ -55,6 +55,51 @@ pub fn parse_hex_color(hex: &str) -> Result<Vec<u8>> {
 	bytes.map_err(|e| anyhow::anyhow!("Invalid hex color '{hex}': {e}"))
 }
 
+/// A colour written as hex, holding the channel bytes it parsed into.
+///
+/// Exists so that a `color=` parameter carries its format in its type. A
+/// `String` field is only judged by whatever happens to parse it later, which
+/// means a typo survives until something builds; this is judged wherever a
+/// value is decoded, including by `versatiles_pipeline`'s `check`, which never
+/// builds anything (#257).
+///
+/// Wraps [`parse_hex_color`] rather than reimplementing it — the point is one
+/// parser with two callers, not two parsers to keep in step.
+///
+/// # Examples
+///
+/// ```
+/// use versatiles_image::color::HexColor;
+///
+/// assert_eq!(HexColor::try_from("FF5733").unwrap().channels(), [255, 87, 51]);
+/// assert_eq!(HexColor::try_from("#F00").unwrap().channels(), [255, 0, 0]);
+/// assert!(HexColor::try_from("red").is_err());
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HexColor(Vec<u8>);
+
+impl HexColor {
+	/// Opaque black, the colour `000000` parses to.
+	#[must_use]
+	pub fn black() -> Self {
+		Self(vec![0, 0, 0])
+	}
+
+	/// The channel bytes: three for `RRGGBB`, four for `RRGGBBAA`.
+	#[must_use]
+	pub fn channels(&self) -> &[u8] {
+		&self.0
+	}
+}
+
+impl TryFrom<&str> for HexColor {
+	type Error = anyhow::Error;
+
+	fn try_from(value: &str) -> Result<Self> {
+		parse_hex_color(value).map(Self)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -89,6 +134,17 @@ mod tests {
 	fn test_parse_hex_color_with_hash() {
 		assert_eq!(parse_hex_color("#FF5733").unwrap(), vec![255, 87, 51]);
 		assert_eq!(parse_hex_color("#F00").unwrap(), vec![255, 0, 0]);
+	}
+
+	#[test]
+	fn hex_color_accepts_exactly_what_the_parser_accepts() {
+		assert_eq!(HexColor::try_from("FF5733").unwrap().channels(), [255, 87, 51]);
+		assert_eq!(HexColor::try_from("FF573380").unwrap().channels(), [255, 87, 51, 128]);
+		assert_eq!(HexColor::try_from("#F00").unwrap().channels(), [255, 0, 0]);
+		assert_eq!(HexColor::black().channels(), [0, 0, 0]);
+		assert_eq!(HexColor::try_from("000000").unwrap(), HexColor::black());
+		assert!(HexColor::try_from("red").is_err());
+		assert!(HexColor::try_from("GG0000").is_err());
 	}
 
 	#[test]

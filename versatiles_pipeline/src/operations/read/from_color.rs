@@ -18,7 +18,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
-use versatiles_image::{DynamicImageTraitConvert, color::parse_hex_color};
+use versatiles_image::{DynamicImageTraitConvert, color::HexColor};
 
 use crate::{PipelineFactory, helpers::tile_format_subset::RasterTileFormat, vpl::VPLNode};
 
@@ -27,7 +27,7 @@ use crate::{PipelineFactory, helpers::tile_format_subset::RasterTileFormat, vpl:
 struct Args {
 	/// Hex colour, `RRGGBB` or `RRGGBBAA`. Defaults to `000000`.
 	#[vpl(default = "000000")]
-	color: Option<String>,
+	color: Option<HexColor>,
 	/// Tile size in pixels, `256` or `512`. Defaults to `512`.
 	#[vpl(default = "512")]
 	tile_size: Option<u16>,
@@ -88,14 +88,16 @@ impl Operation {
 	pub fn from_vpl_node(vpl_node: &VPLNode) -> Result<Self> {
 		let args = Args::from_vpl_node(vpl_node)?;
 
-		let color = args.color.as_deref().unwrap_or("000000");
-		let color_bytes = parse_hex_color(color)?;
+		// Parsed already: `HexColor` is what `Args` decodes into, so a bad
+		// colour fails in `from_vpl_node` — and in `check`, which asks the same
+		// parser without building anything.
+		let color = args.color.unwrap_or_else(HexColor::black);
 
 		let tile_size = u32::from(args.tile_size.unwrap_or(512));
 
 		let tile_format = args.format.map_or(TileFormat::PNG, TileFormat::from);
 
-		Self::from_parameters(&color_bytes, tile_size, tile_format)
+		Self::from_parameters(color.channels(), tile_size, tile_format)
 	}
 }
 

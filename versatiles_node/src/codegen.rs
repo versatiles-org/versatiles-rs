@@ -62,7 +62,9 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 			.join(" | ");
 	}
 	let ts: &'static str = match field.rust_type.as_str() {
-		"String" | "Option<String>" => "string",
+		// `HexColor` lands here too: TS has no way to require hex digits, so the
+		// narrowing that field gained lives in `check`, not in the type.
+		"String" | "Option<String>" | "Option<HexColor>" => "string",
 		"bool" | "Option<bool>" => "boolean",
 		"u8" | "u16" | "u32" | "f32" | "f64" | "Option<u8>" | "Option<u16>" | "Option<u32>" | "Option<f32>"
 		| "Option<f64>" => "number",
