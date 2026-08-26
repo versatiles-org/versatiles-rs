@@ -1,3 +1,14 @@
+/// Everything wrong with the values written for one parameter, or an empty
+/// vector when they are fine.
+///
+/// A plain function pointer rather than a boxed closure: every one of these is
+/// emitted by the `VPLDecode` derive and captures nothing, so the metadata stays
+/// `Copy`-cheap to hand around.
+///
+/// See [`VPLFieldMeta::validate`] for what the messages look like and what they
+/// can and cannot decide.
+pub type ValueValidator = fn(&[String]) -> Vec<String>;
+
 /// Everything the VPL reference generator knows about one operation argument.
 ///
 /// Produced by the `VPLDecode` derive from the argument struct itself, so the
@@ -21,24 +32,36 @@ pub struct VPLFieldMeta {
 	///
 	/// This is the *display* list: what a picker should offer, and what the
 	/// reference and the TypeScript unions render. It is not the accepted set —
-	/// see [`accepts`](Self::accepts).
+	/// see [`validate`](Self::validate).
 	pub enum_variants: Vec<&'static str>,
-	/// Whether the type's own parser accepts a given value.
+	/// Everything wrong with the values written for this parameter, or an empty
+	/// vector when they are fine.
 	///
-	/// `None` for fields with no enumerated type, which are decided by building.
+	/// `None` for parameters with nothing to check: a string list takes any
+	/// number of values and judges none of them.
 	///
-	/// The accepted set and the advertised set are two different things, and
-	/// this is the accepted one: `TileFormat::variants` lists `mvt` and `jpg`,
-	/// while the parser also takes `pbf` and `jpeg`. Offering both spellings in
-	/// a picker would present one format as two, so `enum_variants` stays the
-	/// canonical list — and validating against it would reject `format=pbf`,
-	/// which builds. Asking the parser is the only way to get both right.
+	/// Each message is a verb phrase whose subject is the operation, so a caller
+	/// puts its own name in front — `format!("'{}' {reason}", node.name)` yields
+	/// `'from_debug' does not accept 'format=xyz'. Values: …`. Every problem is
+	/// returned rather than the first, which is what lets an editor underline
+	/// them all at once.
+	///
+	/// Two kinds of problem are decidable without building. *Shape* — how many
+	/// values the accessor takes, and whether each parses as the field's numeric
+	/// type — follows from the type mapping alone and is emitted for every
+	/// field. *Value* is emitted for types that parse through `TryFrom<&str>`,
+	/// and asks that parser rather than comparing against `enum_variants`: the
+	/// accepted set and the advertised set are two different things, and this is
+	/// the accepted one. `TileFormat::variants` lists `mvt` and `jpg` while the
+	/// parser also takes `pbf` and `jpeg`, so validating against the list would
+	/// reject `format=pbf`, which builds.
 	///
 	/// A function rather than a second, longer list, because aliases are the
 	/// parser's business and a list to keep in step is how the mismatch started.
-	/// The `VPLDecode` derive emits it from the same type as `enum_variants`, so
-	/// the two cannot drift.
-	pub accepts: Option<fn(&str) -> bool>,
+	/// The `VPLDecode` derive emits the same `parse::<T>()` and `T::try_from`
+	/// calls the accessors on [`VPLNode`](super::VPLNode) make, so what this
+	/// reports and what building enforces cannot drift.
+	pub validate: Option<ValueValidator>,
 	/// What the operation uses when this field is absent, as it would be written
 	/// in VPL. `None` when there is no default.
 	///

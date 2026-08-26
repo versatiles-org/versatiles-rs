@@ -548,7 +548,7 @@ mod tests {
 			is_sources: false,
 			doc: String::new(),
 			enum_variants: Vec::new(),
-			accepts: None,
+			validate: None,
 			default: None,
 		}
 	}
@@ -556,7 +556,7 @@ mod tests {
 	fn enum_field(rust_type: &str, variants: Vec<&'static str>) -> VPLFieldMeta {
 		VPLFieldMeta {
 			enum_variants: variants,
-			accepts: None,
+			validate: None,
 			default: None,
 			..plain_field(rust_type)
 		}
@@ -607,7 +607,7 @@ mod tests {
 				is_sources: false,
 				doc: "The filename of the tile container.".to_string(),
 				enum_variants: Vec::new(),
-				accepts: None,
+				validate: None,
 				default: None,
 			}],
 		}];
@@ -679,7 +679,7 @@ mod tests {
 					is_sources: false,
 					doc: "minimal zoom level".to_string(),
 					enum_variants: Vec::new(),
-					accepts: None,
+					validate: None,
 					default: None,
 				},
 				VPLFieldMeta {
@@ -689,7 +689,7 @@ mod tests {
 					is_sources: false,
 					doc: "maximal zoom level".to_string(),
 					enum_variants: Vec::new(),
-					accepts: None,
+					validate: None,
 					default: None,
 				},
 			],
@@ -719,7 +719,7 @@ mod tests {
 					is_sources: true,
 					doc: "Raster sources.".to_string(),
 					enum_variants: Vec::new(),
-					accepts: None,
+					validate: None,
 					default: None,
 				},
 				VPLFieldMeta {
@@ -729,7 +729,7 @@ mod tests {
 					is_sources: false,
 					doc: "Output format.".to_string(),
 					enum_variants: vec!["avif", "jpg", "png", "webp"],
-					accepts: None,
+					validate: None,
 					default: None,
 				},
 			],

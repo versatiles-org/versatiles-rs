@@ -288,6 +288,34 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	},
 ];
 
+/// What can be said about a field's *shape* — `(arity, number_type)` — from its
+/// type mapping alone.
+///
+/// Both facts belong to the accessor rather than to this derive: `get_property`
+/// errors unless a scalar parameter was given exactly one value, and
+/// `property_number_array_option` unless an array was given exactly `N`. The
+/// probe emitted from these calls the same `parse::<T>()`, so `check` reporting
+/// a shape problem and the builder refusing to parse one are the same fact.
+fn shape_of(mapping: &TypeMapping) -> (Option<usize>, Option<&'static str>) {
+	let method = mapping.method_name;
+	if method.starts_with("property_number_array") {
+		// `generic_param2` is the array length, as a literal to be parsed twice:
+		// once here, once into the accessor's const generic.
+		let n = mapping.generic_param2.and_then(|s| s.parse::<usize>().ok());
+		(n, mapping.generic_param)
+	} else if method.starts_with("property_string_list") {
+		(None, None)
+	} else if method.starts_with("property_number") {
+		(Some(1), mapping.generic_param)
+	} else {
+		// String, bool and enum accessors all go through `get_property`, which
+		// takes one value and no more. Bools judge nothing beyond that: anything
+		// that is not `1/true/yes/ok` parses as `false` rather than failing, so
+		// checking the value here would reject VPL that builds.
+		(Some(1), None)
+	}
+}
+
 /// Find a type mapping by its pattern string.
 fn find_type_mapping(type_str: &str) -> Option<&'static TypeMapping> {
 	TYPE_MAPPINGS.iter().find(|m| m.pattern == type_str)
@@ -474,13 +502,20 @@ struct FieldMeta {
 	/// these fields, where `T` is this generic param.
 	enum_type: Option<&'static str>,
 	/// `Some(generic_param)` when the field is parsed through
-	/// `TryFrom<&str>`; `None` otherwise. The derive emits a
-	/// `<T>::try_from(v).is_ok()` probe into `VPLFieldMeta::accepts` for these.
+	/// `TryFrom<&str>`; `None` otherwise. The derive emits a `<T>::try_from(v)`
+	/// probe into `VPLFieldMeta::validate` for these.
 	///
 	/// A superset of `enum_type`: `MaxTileBytes` parses this way without having
 	/// a closed variant list, and `check` can still tell a bad value from a good
 	/// one even where a picker has nothing to offer.
 	parsed_type: Option<&'static str>,
+	/// `Some(T)` when every value has to parse as the numeric type `T`; `None`
+	/// when the accessor does not parse at all. The derive emits the same
+	/// `parse::<T>()` the accessor makes.
+	number_type: Option<&'static str>,
+	/// How many values the accessor takes: `Some(1)` for a scalar, `Some(N)` for
+	/// a fixed-size array, `None` for a list that takes any number.
+	arity: Option<usize>,
 	/// The `#[vpl(default = "…")]` attribute, verbatim, or `None`.
 	default: Option<String>,
 }
@@ -531,6 +566,10 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 			doc: raw_comment,
 			enum_type: None,
 			parsed_type: None,
+			// Sources are pipelines, not values; there is nothing to parse and
+			// no count to hold them to. `check_sources` handles them instead.
+			number_type: None,
+			arity: None,
 			default: None,
 		};
 		return Ok((field_str, ProcessedField::Sources { doc, parser }, meta));
@@ -566,6 +605,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 	};
 
 	let doc = field_doc_expr(&field_str, &raw_comment, mapping);
+	let (arity, number_type) = shape_of(mapping);
 
 	let default = extract_vpl_default(&field.attrs)?;
 	if default.is_some() && mapping.is_required {
@@ -587,6 +627,8 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 		} else {
 			None
 		},
+		number_type,
+		arity,
 		default,
 	};
 
@@ -652,6 +694,121 @@ struct Docs<'a> {
 }
 
 /// Build the final impl TokenStream for the struct.
+/// Build the `VPLFieldMeta` literal the derive emits for one field.
+///
+/// Everything in it is fixed at expansion time except the two run-time calls
+/// into the field's own type — `variants()` for the display list, and the
+/// parser probes inside `validate` — which is what keeps the metadata from
+/// drifting away from the code that parses.
+fn field_meta_expr(m: &FieldMeta) -> TokenStream {
+		let fname = &m.name;
+		let rtype = &m.rust_type;
+		let required = m.is_required;
+		let is_sources = m.is_sources;
+		let fdoc = &m.doc;
+		// For enum-typed fields, ask the enum itself for its accepted
+		// variants — single source of truth, kept in sync with the
+		// `TryFrom<&str>` impl by the enum's own round-trip test.
+		let variants_expr: TokenStream = if let Some(enum_ty) = m.enum_type {
+			let ty = format_ident!("{}", enum_ty);
+			quote! { #ty::variants().to_vec() }
+		} else {
+			quote! { Vec::new() }
+		};
+		// Ask the parser whether a value is accepted, rather than comparing
+		// against `variants()`: the two are different sets on purpose, and
+		// the parser is the one that decides whether a pipeline builds.
+		//
+		// The suggestion appended to the message is `variants()`, not the
+		// accepted set: the aliases exist so that other people's spellings
+		// work, not so that this list offers one format under two names. A
+		// type with no closed variant list — `MaxTileBytes` takes a byte
+		// count or `none` — gets no suggestion rather than a misleading one.
+		let value_check: TokenStream = if let Some(parsed_ty) = m.parsed_type {
+			let ty = format_ident!("{}", parsed_ty);
+			let suggestion: TokenStream = if let Some(enum_ty) = m.enum_type {
+				let enum_ident = format_ident!("{}", enum_ty);
+				quote! { format!(". Values: {}", #enum_ident::variants().join(", ")) }
+			} else {
+				quote! { String::new() }
+			};
+			quote! {
+				for value in values {
+					if <#ty as TryFrom<&str>>::try_from(value.as_str()).is_err() {
+						problems.push(format!("does not accept '{}={}'{}", #fname, value, #suggestion));
+					}
+				}
+			}
+		} else if let Some(number_ty) = m.number_type {
+			let ty = format_ident!("{}", number_ty);
+			// The parser's own error, rather than "is not a number": it is
+			// the one that knows 300 is a fine number and a bad `u8`.
+			quote! {
+				for value in values {
+					if let Err(error) = value.parse::<#ty>() {
+						problems.push(format!("does not accept '{}={}': {}", #fname, value, error));
+					}
+				}
+			}
+		} else {
+			quote! {}
+		};
+		let arity_check: TokenStream = match m.arity {
+			Some(1) => quote! {
+				if values.len() != 1 {
+					problems.push(format!("expects a single value for '{}', got {}", #fname, values.len()));
+				}
+			},
+			Some(n) => {
+				let n_lit = proc_macro2::Literal::usize_unsuffixed(n);
+				quote! {
+					if values.len() != #n_lit {
+						problems.push(format!(
+							"expects {} values for '{}', got {}",
+							#n_lit,
+							#fname,
+							values.len()
+						));
+					}
+				}
+			}
+			None => quote! {},
+		};
+		// A parameter with nothing to say about either its values or how
+		// many of them there are gets `None`, so `check` can skip it.
+		let validate_expr: TokenStream = if value_check.is_empty() && arity_check.is_empty() {
+			quote! { None }
+		} else {
+			// Values first: which value is wrong is more specific than how
+			// many there are, and a reader wants the specific one first.
+			quote! {
+				Some(|values: &[String]| -> Vec<String> {
+					let mut problems: Vec<String> = Vec::new();
+					#value_check
+					#arity_check
+					problems
+				})
+			}
+		};
+		let default_expr: TokenStream = if let Some(default) = &m.default {
+			quote! { Some(#default.to_string()) }
+		} else {
+			quote! { None }
+		};
+		quote! {
+			crate::vpl::VPLFieldMeta {
+				name: #fname.to_string(),
+				rust_type: #rtype.to_string(),
+				is_required: #required,
+				is_sources: #is_sources,
+				doc: #fdoc.to_string(),
+				enum_variants: #variants_expr,
+				validate: #validate_expr,
+				default: #default_expr,
+			}
+		}
+}
+
 fn build_impl_tokens(
 	name: &Ident,
 	field_names: &[String],
@@ -665,51 +822,7 @@ fn build_impl_tokens(
 		summary: doc_summary,
 		details: doc_details,
 	} = *docs;
-	let meta_entries: Vec<TokenStream> = field_metas
-		.iter()
-		.map(|m| {
-			let fname = &m.name;
-			let rtype = &m.rust_type;
-			let required = m.is_required;
-			let is_sources = m.is_sources;
-			let fdoc = &m.doc;
-			// For enum-typed fields, ask the enum itself for its accepted
-			// variants — single source of truth, kept in sync with the
-			// `TryFrom<&str>` impl by the enum's own round-trip test.
-			let variants_expr: TokenStream = if let Some(enum_ty) = m.enum_type {
-				let ty = format_ident!("{}", enum_ty);
-				quote! { #ty::variants().to_vec() }
-			} else {
-				quote! { Vec::new() }
-			};
-			// Ask the parser whether a value is accepted, rather than comparing
-			// against `variants()`: the two are different sets on purpose, and
-			// the parser is the one that decides whether a pipeline builds.
-			let accepts_expr: TokenStream = if let Some(parsed_ty) = m.parsed_type {
-				let ty = format_ident!("{}", parsed_ty);
-				quote! { Some(|value: &str| <#ty as TryFrom<&str>>::try_from(value).is_ok()) }
-			} else {
-				quote! { None }
-			};
-			let default_expr: TokenStream = if let Some(default) = &m.default {
-				quote! { Some(#default.to_string()) }
-			} else {
-				quote! { None }
-			};
-			quote! {
-				crate::vpl::VPLFieldMeta {
-					name: #fname.to_string(),
-					rust_type: #rtype.to_string(),
-					is_required: #required,
-					is_sources: #is_sources,
-					doc: #fdoc.to_string(),
-					enum_variants: #variants_expr,
-					accepts: #accepts_expr,
-					default: #default_expr,
-				}
-			}
-		})
-		.collect();
+	let meta_entries: Vec<TokenStream> = field_metas.iter().map(field_meta_expr).collect();
 
 	quote! {
 		impl #name {

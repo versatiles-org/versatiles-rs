@@ -95,10 +95,19 @@ impl PipelineFactory {
 	/// without building it.
 	///
 	/// Reports everything it can find rather than stopping at the first problem,
-	/// so an editor can underline all of them at once. An empty result means
-	/// nothing is wrong *with the pipeline* — building it can still fail because
-	/// a file is missing, or because a value has the right name but the wrong
-	/// format (`color=red` is not hex, and no parser in the metadata says so).
+	/// so an editor can underline all of them at once.
+	///
+	/// What it decides about a parameter is its *shape*: how many values it
+	/// takes, whether each one parses as the field's numeric type, and — for
+	/// types with a `TryFrom<&str>` parser — whether that parser accepts it.
+	/// Meaning the Rust type does not carry is out of reach: `epsg=99999` is a
+	/// `u32` and not an EPSG code, `color=red` is a `String` and not a hex
+	/// colour. Closing that means giving those fields types that parse (#257),
+	/// not giving `check` a second opinion about values.
+	///
+	/// So an empty result means nothing is wrong *with the pipeline* — building
+	/// it can still fail because a file is missing, or because a value has the
+	/// right shape and the wrong meaning.
 	///
 	/// Never performs I/O. Use [`check_pipeline`] when there is no factory to
 	/// hand and the built-in operations are enough.
@@ -199,21 +208,15 @@ fn check_properties(node: &VPLNode, fields: &[VPLFieldMeta], path: &[usize], pro
 			continue;
 		};
 
-		// A value is judged by the type's own parser, never by `enum_variants`.
-		// That list is the canonical names — the ones a picker should offer and
-		// the reference should print — and the parsers accept aliases besides:
-		// `TileFormat` takes "pbf" and "jpeg" while listing only "mvt" and
-		// "jpg". Comparing against the list would reject `from_debug
-		// format=pbf`, which builds perfectly well, and a validator that says
-		// "expected one of ..." reads as authoritative, which is what makes
-		// being wrong here worse than being silent.
-		let Some(accepts) = field.accepts else {
+		// What counts as a problem is the derive's business, not this
+		// function's: it emits probes that call the same parsers the accessors
+		// call, so anything reported here is something building would refuse.
+		// All that is left to do is name the operation the problem belongs to.
+		let Some(validate) = field.validate else {
 			continue;
 		};
-		for value in values {
-			if !accepts(value) {
-				problems.push(VplProblem::about(path, key, unknown_value(node, field, key, value)));
-			}
+		for reason in validate(values) {
+			problems.push(VplProblem::about(path, key, format!("'{}' {reason}", node.name)));
 		}
 	}
 
@@ -225,24 +228,6 @@ fn check_properties(node: &VPLNode, fields: &[VPLFieldMeta], path: &[usize], pro
 				format!("'{}' requires the parameter '{}'", node.name, field.name),
 			));
 		}
-	}
-}
-
-/// Phrases the "this value does not parse" problem for the person who wrote it.
-///
-/// The suggestion is `enum_variants`, not the accepted set: the aliases exist so
-/// that other people's spellings work, not so that this list offers one format
-/// under two names. A type with no closed variant list — `MaxTileBytes` accepts
-/// a byte count or `none` — gets no suggestion rather than a misleading one.
-fn unknown_value(node: &VPLNode, field: &VPLFieldMeta, key: &str, value: &str) -> String {
-	if field.enum_variants.is_empty() {
-		format!("'{}' does not accept '{key}={value}'", node.name)
-	} else {
-		format!(
-			"'{}' does not accept '{key}={value}'. Values: {}",
-			node.name,
-			field.enum_variants.join(", ")
-		)
 	}
 }
 
@@ -343,9 +328,56 @@ mod tests {
 	/// Every value of a list is judged, not just the first.
 	#[test]
 	fn each_value_of_a_repeated_parameter_is_checked() {
+		let found = problems("from_debug format=png | filter bbox=[a,b,c,d]");
+		assert_eq!(found.len(), 4, "{found:?}");
+		assert!(found[3].contains("'bbox=d'"), "{found:?}");
+	}
+
+	/// A scalar parameter given a list is wrong twice over, and both are worth
+	/// saying: the value that does not parse, and the count. `get_property`
+	/// refuses more than one value, so the builder rejects this either way.
+	#[test]
+	fn a_bad_value_and_a_bad_count_are_both_reported() {
 		let found = problems("from_debug format=[png, nonsense]");
-		assert_eq!(found.len(), 1, "{found:?}");
-		assert!(found[0].contains("'format=nonsense'"), "{found:?}");
+		assert_eq!(found.len(), 2, "{found:?}");
+		assert!(found[0].starts_with("'from_debug' does not accept 'format=nonsense'."), "{found:?}");
+		assert_eq!(found[1], "'from_debug' expects a single value for 'format', got 2");
+	}
+
+	/// The shape of a value is decidable from the metadata even where its
+	/// meaning is not: `epsg` is checked as a number without anyone claiming to
+	/// know which numbers are EPSG codes.
+	#[test]
+	fn a_value_that_is_not_a_number_is_reported() {
+		assert_eq!(
+			problems("from_debug format=png | filter level_max=abc"),
+			["'filter' does not accept 'level_max=abc': invalid digit found in string"]
+		);
+	}
+
+	/// The parser's own error, not a guess at one: 300 is a perfectly good
+	/// number and a bad `u8`, and only `parse` knows which of those matters.
+	#[test]
+	fn a_number_out_of_range_is_reported() {
+		assert_eq!(
+			problems("from_debug format=png | filter level_max=300"),
+			["'filter' does not accept 'level_max=300': number too large to fit in target type"]
+		);
+	}
+
+	#[test]
+	fn an_array_of_the_wrong_length_is_reported() {
+		assert_eq!(
+			problems("from_debug format=png | filter bbox=[0,0,10]"),
+			["'filter' expects 4 values for 'bbox', got 3"]
+		);
+	}
+
+	/// A list-typed parameter takes any number of values and judges none of
+	/// them, so it carries no validator at all.
+	#[test]
+	fn a_string_list_takes_any_number_of_values() {
+		assert!(problems("from_debug format=png | vector_filter_features layer=[a,b,c] expr=true").is_empty());
 	}
 
 	#[test]
@@ -424,6 +456,10 @@ mod tests {
 			"from_stacked",
 			"filter level_max=5",
 			"from_debug format=notaformat",
+			"from_debug format=[png, png]",
+			"from_debug format=png | filter level_max=abc",
+			"from_debug format=png | filter level_max=300",
+			"from_debug format=png | filter bbox=[0,0,10]",
 		] {
 			assert!(!factory.check(&parse_vpl(vpl)?).is_empty(), "check accepted {vpl:?}");
 			assert!(
@@ -434,15 +470,15 @@ mod tests {
 		Ok(())
 	}
 
-	/// Recorded on purpose: a value whose type is not enumerated is judged by
-	/// building, not by `check` — `accepts` is `None` for it, and there is
-	/// nothing in the metadata that knows hex from a colour name. Closing this
-	/// gap needs a format hint on VPLFieldMeta (the second half of #224).
+	/// Recorded on purpose: `color` is a `String`, so the only thing its
+	/// validator can say is that exactly one value was written. Nothing in the
+	/// metadata tells hex from a colour name because nothing in the type does —
+	/// closing this gap means giving the field a type that parses (#257).
 	#[test]
 	fn value_formats_are_not_checked() {
 		assert!(
 			problems("from_color color=red").is_empty(),
-			"if this starts failing, VPLFieldMeta grew format hints and the docs should say so"
+			"if this starts failing, `color` grew a type that parses and the docs should say so"
 		);
 	}
 }
