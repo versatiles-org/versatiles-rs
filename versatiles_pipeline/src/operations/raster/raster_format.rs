@@ -28,9 +28,9 @@ struct Args {
 	/// Format to encode the tiles into. Defaults to the source's.
 	format: Option<RasterTileFormat>,
 	/// Encoder quality, `0` (worst) to `100` (lossless). Defaults to the encoder's own.
-	quality: Option<String>,
+	quality: Option<QualityByZoom>,
 	/// Encoder quality for tiles with translucent pixels. Defaults to using `quality` throughout.
-	quality_translucent: Option<String>,
+	quality_translucent: Option<QualityByZoom>,
 	/// Encoder effort, `0` (fastest) to `100` (smallest). Defaults to the encoder's own.
 	effort: Option<u8>,
 }
@@ -60,16 +60,13 @@ impl Operation {
 			None => RasterTileFormat::try_from(*source.metadata().tile_format())?,
 		};
 
-		let quality_translucent = if let Some(qt) = args.quality_translucent {
-			Some(parse_quality(Some(qt))?)
-		} else {
-			None
-		};
-
+		// Parsed already: `QualityByZoom` is what `Args` decodes into, so a bad
+		// zoom list fails in `from_vpl_node` — and in `check`, which asks the
+		// same parser without building anything.
 		let operation = Operation {
 			format: format.into(),
-			quality: parse_quality(args.quality)?,
-			quality_translucent,
+			quality: args.quality.unwrap_or_default().into_levels(),
+			quality_translucent: args.quality_translucent.map(QualityByZoom::into_levels),
 			effort: args.effort,
 		};
 		Ok(TransformOp::new(source, operation, factory.runtime()))
@@ -96,33 +93,58 @@ impl TileTransform for Operation {
 	}
 }
 
+/// An encoder quality setting resolved per zoom level.
+///
+/// Carries the format of `quality=` in its type, so that `70,14:50,15:20` is
+/// judged where a value is decoded rather than by whatever parses it later —
+/// including by `check`, which never builds anything (#257).
+///
+/// `Default` is "nothing set at any zoom", which is what an absent `quality=`
+/// means and what the encoder's own default fills in.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct QualityByZoom([Option<u8>; 32]);
+
+impl QualityByZoom {
+	/// The per-zoom levels, indexed by zoom.
+	#[must_use]
+	pub fn into_levels(self) -> [Option<u8>; 32] {
+		self.0
+	}
+}
+
+impl TryFrom<&str> for QualityByZoom {
+	type Error = anyhow::Error;
+
+	fn try_from(value: &str) -> Result<Self> {
+		parse_quality(value).map(Self)
+	}
+}
+
 #[context("Parsing quality string")]
-fn parse_quality(quality: Option<String>) -> Result<[Option<u8>; 32]> {
+fn parse_quality(text: &str) -> Result<[Option<u8>; 32]> {
 	let mut result: [Option<u8>; 32] = [None; 32];
-	if let Some(text) = quality {
-		let mut zoom: i32 = -1;
-		for part in text.split(',') {
-			let mut part = part.trim();
-			zoom += 1;
-			if part.is_empty() {
-				continue;
-			}
-			if let Some(idx) = part.find(':') {
-				zoom = part[0..idx].trim().parse()?;
-				ensure!(
-					(0..=31).contains(&zoom),
-					"zoom level must be between 0 and 31, but is {zoom}"
-				);
-				part = &part[(idx + 1)..];
-			}
-			let quality_val: u8 = part.trim().parse()?;
+	let mut zoom: i32 = -1;
+	for part in text.split(',') {
+		let mut part = part.trim();
+		zoom += 1;
+		if part.is_empty() {
+			continue;
+		}
+		if let Some(idx) = part.find(':') {
+			zoom = part[0..idx].trim().parse()?;
 			ensure!(
-				quality_val <= 100,
-				"quality must be between 0 and 100, but is {quality_val}"
+				(0..=31).contains(&zoom),
+				"zoom level must be between 0 and 31, but is {zoom}"
 			);
-			for z in zoom..32 {
-				result[usize::try_from(z).expect("zoom in 0..32 fits in usize")] = Some(quality_val);
-			}
+			part = &part[(idx + 1)..];
+		}
+		let quality_val: u8 = part.trim().parse()?;
+		ensure!(
+			quality_val <= 100,
+			"quality must be between 0 and 100, but is {quality_val}"
+		);
+		for z in zoom..32 {
+			result[usize::try_from(z).expect("zoom in 0..32 fits in usize")] = Some(quality_val);
 		}
 	}
 	Ok(result)
@@ -147,7 +169,7 @@ mod tests {
 	#[case(" ,80 , ,  -> ,80,80,80,80,80,80,80,80,80,80,80,80,80,80,80")]
 	fn parse_quality_cases(#[case] case: &str) -> Result<()> {
 		let (input_str, expected_str) = case.split_once(" -> ").unwrap();
-		let result = super::parse_quality(Some(input_str.to_string()))?;
+		let result = super::parse_quality(input_str)?;
 		assert_eq!(result.len(), 32);
 		let result_str = result[0..16]
 			.iter()
@@ -163,7 +185,7 @@ mod tests {
 	#[case("32:10", "zoom level must be between 0 and 31, but is 32")] // invalid zoom
 	#[case("5:101", "quality must be between 0 and 100, but is 101")] // invalid quality
 	fn parse_quality_errors(#[case] input: &str, #[case] needle: &str) {
-		let msg = super::parse_quality(Some(input.to_string()))
+		let msg = super::parse_quality(input)
 			.unwrap_err()
 			.chain()
 			.map(std::string::ToString::to_string)
@@ -177,7 +199,7 @@ mod tests {
 	#[case("a:b")]
 	#[case("5:x")]
 	fn parse_quality_non_numeric_errors(#[case] input: &str) {
-		assert!(super::parse_quality(Some(input.to_string())).is_err());
+		assert!(super::parse_quality(input).is_err());
 	}
 
 	#[tokio::test]

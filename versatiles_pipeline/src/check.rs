@@ -492,6 +492,7 @@ mod tests {
 			"from_debug format=png | filter bbox=[0,0,10]",
 			"from_color color=red",
 			"from_debug format=png | remap_coords flip_x=yess",
+			"from_debug format=png | raster_format quality=110",
 		] {
 			assert!(!factory.check(&parse_vpl(vpl)?).is_empty(), "check accepted {vpl:?}");
 			assert!(
@@ -528,6 +529,29 @@ mod tests {
 		);
 		assert!(problems("from_color color=FF5733").is_empty());
 		assert!(problems("from_color color=FF573380").is_empty());
+	}
+
+	/// The tail of #257: three parameters whose format lived in a doc comment and
+	/// an `if` inside `build`, now in a type each. Nothing here is a correctness
+	/// bug — they are typo-catchers — but the typo used to cost however long it
+	/// took to open the source first.
+	#[test]
+	fn formats_that_used_to_be_checked_only_at_build_time() {
+		assert_eq!(
+			problems("from_debug format=png | raster_format quality=110"),
+			["'raster_format' does not accept 'quality=110': Parsing quality string: quality must be between 0 and 100, but is 110"]
+		);
+		assert_eq!(
+			problems("from_csv filename=a.csv lon_column=x lat_column=y delimiter=\";;\""),
+			["'from_csv' does not accept 'delimiter=;;': delimiter must be exactly one ASCII byte, got ';;'"]
+		);
+		assert_eq!(
+			problems("from_debug format=mvt | vector_update_properties data_source_path=a.csv layer_name=l id_field_tiles=a id_field_data=b field_separator=\";;\""),
+			["'vector_update_properties' does not accept 'field_separator=;;': Separator must be a single character, got ';;'"]
+		);
+
+		assert!(problems("from_debug format=png | raster_format quality=\"70,14:50,15:20\"").is_empty());
+		assert!(problems("from_csv filename=a.csv lon_column=x lat_column=y delimiter=\";\"").is_empty());
 	}
 
 	/// Still open, and the reason `epsg` is left alone: `u32` is the whole of

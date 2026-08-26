@@ -47,11 +47,11 @@ struct Args {
 	include_id: Option<bool>,
 
 	/// Character separating a row's fields. Defaults to `,` for `.csv` and a tab for `.tsv`.
-	field_separator: Option<String>,
+	field_separator: Option<SeparatorChar>,
 
 	/// Decimal separator for parsing numbers, so `,` reads `1.234,56`. Defaults to `.`.
 	#[vpl(default = ".")]
-	decimal_separator: Option<String>,
+	decimal_separator: Option<SeparatorChar>,
 }
 
 #[derive(Debug)]
@@ -171,13 +171,11 @@ impl Runner {
 			.to_path_buf()?;
 		let mut csv_reader = CsvReader::new(&path, factory.runtime()).with_string_field(&args.id_field_data);
 
-		if let Some(ref sep) = args.field_separator {
-			let sep_char = parse_separator_char(sep).with_context(|| format!("Invalid field_separator: '{sep}'"))?;
-			csv_reader = csv_reader.with_field_separator(sep_char);
+		if let Some(sep) = args.field_separator {
+			csv_reader = csv_reader.with_field_separator(sep.char());
 		}
-		if let Some(ref sep) = args.decimal_separator {
-			let sep_char = parse_separator_char(sep).with_context(|| format!("Invalid decimal_separator: '{sep}'"))?;
-			csv_reader = csv_reader.with_decimal_separator(sep_char);
+		if let Some(sep) = args.decimal_separator {
+			csv_reader = csv_reader.with_decimal_separator(sep.char());
 		}
 
 		// Load the CSV file referenced in the VPL.
@@ -198,6 +196,33 @@ crate::operations::macros::define_transform_factory!("vector_update_properties",
 
 /// Parses a separator string into a single character.
 /// Supports escape sequences like "\t" for tab.
+/// A CSV separator: one character, or an escape naming one.
+///
+/// Carries the format of `field_separator=` and `decimal_separator=` in their
+/// type, so a two-character separator is refused where the value is decoded
+/// rather than when the file is read (#257).
+///
+/// Accepts a `char` rather than a byte, unlike [`CsvDelimiter`](super::super::read::from_csv::CsvDelimiter):
+/// these separators are matched against text that has already been decoded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SeparatorChar(char);
+
+impl SeparatorChar {
+	/// The separator as a single character.
+	#[must_use]
+	pub fn char(self) -> char {
+		self.0
+	}
+}
+
+impl TryFrom<&str> for SeparatorChar {
+	type Error = anyhow::Error;
+
+	fn try_from(value: &str) -> Result<Self> {
+		parse_separator_char(value).map(Self)
+	}
+}
+
 fn parse_separator_char(s: &str) -> Result<char> {
 	match s {
 		"\\t" | "\t" => Ok('\t'),

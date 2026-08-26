@@ -37,6 +37,32 @@ use crate::{
 /// to notice the wait.
 const PROGRESS_MIN_BYTES: u64 = 10_000_000;
 
+/// A CSV field delimiter: exactly one ASCII byte.
+///
+/// One byte rather than one `char` because that is what the reader takes; a
+/// multi-byte separator is not something it could use. Carrying that in the type
+/// is what lets `check` refuse `delimiter=";;"` without opening the file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CsvDelimiter(u8);
+
+impl CsvDelimiter {
+	/// The delimiter as the single byte the reader takes.
+	#[must_use]
+	pub fn byte(self) -> u8 {
+		self.0
+	}
+}
+
+impl TryFrom<&str> for CsvDelimiter {
+	type Error = anyhow::Error;
+
+	fn try_from(value: &str) -> Result<Self> {
+		let bytes = value.as_bytes();
+		ensure!(bytes.len() == 1, "delimiter must be exactly one ASCII byte, got '{value}'");
+		Ok(Self(bytes[0]))
+	}
+}
+
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a CSV file with longitude and latitude columns and emits MVT point tiles.
 ///
@@ -69,7 +95,7 @@ struct Args {
 	id_column: Option<String>,
 	/// Character separating a row's fields. Defaults to `,`.
 	#[vpl(default = ",")]
-	delimiter: Option<String>,
+	delimiter: Option<CsvDelimiter>,
 	/// Whether the first row holds column names; `false` is not supported yet. Defaults to `true`.
 	#[vpl(default = "true")]
 	has_header: Option<bool>,
@@ -125,12 +151,8 @@ impl Operation {
 		if let Some(id_col) = &args.id_column {
 			builder = builder.id_column(id_col.clone());
 		}
-		if let Some(delim) = &args.delimiter {
-			let bytes = delim.as_bytes();
-			if bytes.len() != 1 {
-				bail!("delimiter must be exactly one ASCII byte, got '{delim}'");
-			}
-			builder = builder.delimiter(bytes[0]);
+		if let Some(delim) = args.delimiter {
+			builder = builder.delimiter(delim.byte());
 		}
 		if let Some(has_header) = args.has_header {
 			builder = builder.has_header(has_header);

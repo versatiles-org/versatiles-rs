@@ -315,6 +315,36 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_enum: false,
 		parsed_from: ParsedFrom::Values,
 	},
+	TypeMapping {
+		pattern: "Option<QualityByZoom>",
+		display_name: "u8 | zoom:u8,...",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("QualityByZoom"),
+		generic_param2: None,
+		is_enum: false,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
+		pattern: "Option<CsvDelimiter>",
+		display_name: "ASCII char",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("CsvDelimiter"),
+		generic_param2: None,
+		is_enum: false,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
+		pattern: "Option<SeparatorChar>",
+		display_name: "char",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("SeparatorChar"),
+		generic_param2: None,
+		is_enum: false,
+		parsed_from: ParsedFrom::Str,
+	},
 	// Like `MaxTileBytes`, parsed but not enumerated: every `RRGGBB` is a
 	// colour, so there is no list for a picker to offer or for the TS codegen
 	// to turn into a union.

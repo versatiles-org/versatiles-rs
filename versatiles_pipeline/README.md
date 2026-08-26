@@ -133,7 +133,7 @@ A tile over `max_tile_bytes` is dropped while streaming and an error when a sing
 - **`lon_column`: String (required)** - Column holding the longitude, in WGS84 degrees.
 - **`lat_column`: String (required)** - Column holding the latitude, in WGS84 degrees.
 - _`id_column`: String (optional)_ - Column to expose as the feature id. Defaults to emitting no id.
-- _`delimiter`: String (optional)_ - Character separating a row's fields. Defaults to `,`.
+- _`delimiter`: ASCII char (optional)_ - Character separating a row's fields. Defaults to `,`.
 - _`has_header`: bool (optional)_ - Whether the first row holds column names; `false` is not supported yet. Defaults to `true`.
 - _`layer_name`: String (optional)_ - Name of the layer to write into. Defaults to the file's stem.
 - _`min_zoom`: u8 (optional)_ - Lowest zoom level to emit. Defaults to `0`.
@@ -489,8 +489,8 @@ Re-encodes raster tiles into another image format, quality or effort setting.
 ### Parameters
 
 - _`format`: RasterTileFormat (optional)_ - Values: `avif`, `jpg`, `png`, `webp`. Format to encode the tiles into. Defaults to the source's.
-- _`quality`: String (optional)_ - Encoder quality, `0` (worst) to `100` (lossless). Defaults to the encoder's own.
-- _`quality_translucent`: String (optional)_ - Encoder quality for tiles with translucent pixels. Defaults to using `quality` throughout.
+- _`quality`: u8 | zoom:u8,... (optional)_ - Encoder quality, `0` (worst) to `100` (lossless). Defaults to the encoder's own.
+- _`quality_translucent`: u8 | zoom:u8,... (optional)_ - Encoder quality for tiles with translucent pixels. Defaults to using `quality` throughout.
 - _`effort`: u8 (optional)_ - Encoder effort, `0` (fastest) to `100` (smallest). Defaults to the encoder's own.
 
 ---
@@ -725,5 +725,5 @@ Each row of a CSV or TSV file is matched to the features whose `id_field_tiles` 
 - _`replace_properties`: bool (optional)_ - Whether to replace a feature's properties instead of merging. Defaults to `false`.
 - _`remove_non_matching`: bool (optional)_ - Whether to drop features that have no matching row. Defaults to `false`.
 - _`include_id`: bool (optional)_ - Whether to keep the id column among the written properties. Defaults to `false`.
-- _`field_separator`: String (optional)_ - Character separating a row's fields. Defaults to `,` for `.csv` and a tab for `.tsv`.
-- _`decimal_separator`: String (optional)_ - Decimal separator for parsing numbers, so `,` reads `1.234,56`. Defaults to `.`.
+- _`field_separator`: char (optional)_ - Character separating a row's fields. Defaults to `,` for `.csv` and a tab for `.tsv`.
+- _`decimal_separator`: char (optional)_ - Decimal separator for parsing numbers, so `,` reads `1.234,56`. Defaults to `.`.
