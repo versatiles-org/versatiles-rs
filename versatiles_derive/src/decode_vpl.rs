@@ -21,6 +21,20 @@ struct TypeMapping {
 	/// `VPLFieldMeta::enum_variants`, which downstream codegen
 	/// (`versatiles_node`) uses to synthesize TS string-literal unions.
 	is_enum: bool,
+	/// True if `generic_param` names a type implementing `TryFrom<&str>`. The
+	/// derive emits that parser as a probe into `VPLFieldMeta::validate`, so
+	/// `check` can tell a bad value from a good one without building.
+	///
+	/// A superset of `is_enum`, and stated separately from it because the two
+	/// answer different questions: `is_enum` is "can a picker offer a list",
+	/// this is "can anything decide a value". `MaxTileBytes` takes a byte count
+	/// or `none`, so it parses without having a list to offer.
+	///
+	/// Deliberately not inferred from `method_name`. Whether a value can be
+	/// judged is a fact about the type, not about which accessor a field
+	/// happens to route through — tying the two together is what left every
+	/// `property_string_*` and `property_number_*` field unchecked (#257).
+	is_parsed: bool,
 }
 
 /// All supported type mappings for VPLDecode.
@@ -34,6 +48,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "bool",
@@ -43,6 +58,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "u8",
@@ -52,6 +68,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u8"),
 		generic_param2: None,
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "u32",
@@ -61,6 +78,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u32"),
 		generic_param2: None,
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "f64",
@@ -70,6 +88,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f64"),
 		generic_param2: None,
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "[f64;4]",
@@ -82,6 +101,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		// as the optional ones do.
 		generic_param2: Some("4"),
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "Vec<String>",
@@ -91,6 +111,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
+		is_parsed: false,
 	},
 	// Optional types
 	TypeMapping {
@@ -101,6 +122,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "Option<String>",
@@ -110,6 +132,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "Option<f32>",
@@ -119,6 +142,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f32"),
 		generic_param2: None,
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "Option<u8>",
@@ -128,6 +152,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u8"),
 		generic_param2: None,
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "Option<u16>",
@@ -137,6 +162,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u16"),
 		generic_param2: None,
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "Option<u32>",
@@ -146,6 +172,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u32"),
 		generic_param2: None,
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "Option<f64>",
@@ -155,6 +182,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f64"),
 		generic_param2: None,
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "Option<[f64;3]>",
@@ -164,6 +192,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f64"),
 		generic_param2: Some("3"),
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "Option<[f64;2]>",
@@ -173,6 +202,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f64"),
 		generic_param2: Some("2"),
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "Option<[f64;4]>",
@@ -182,6 +212,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f64"),
 		generic_param2: Some("4"),
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "Option<[u8;3]>",
@@ -191,6 +222,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u8"),
 		generic_param2: Some("3"),
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "Option<Vec<String>>",
@@ -200,6 +232,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
+		is_parsed: false,
 	},
 	TypeMapping {
 		pattern: "Option<TileCompression>",
@@ -209,6 +242,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("TileCompression"),
 		generic_param2: None,
 		is_enum: true,
+		is_parsed: true,
 	},
 	TypeMapping {
 		pattern: "Option<TileSchema>",
@@ -218,6 +252,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("TileSchema"),
 		generic_param2: None,
 		is_enum: true,
+		is_parsed: true,
 	},
 	TypeMapping {
 		pattern: "Option<TileFormat>",
@@ -227,6 +262,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("TileFormat"),
 		generic_param2: None,
 		is_enum: true,
+		is_parsed: true,
 	},
 	TypeMapping {
 		pattern: "Option<PointReductionStrategy>",
@@ -236,6 +272,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("PointReductionStrategy"),
 		generic_param2: None,
 		is_enum: true,
+		is_parsed: true,
 	},
 	// Parsed via `TryFrom<&str>` like the string enums above, but its accepted
 	// values aren't a closed set (`none` or any byte count), so `is_enum` stays
@@ -249,6 +286,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("MaxTileBytes"),
 		generic_param2: None,
 		is_enum: false,
+		is_parsed: true,
 	},
 	TypeMapping {
 		pattern: "Option<BlurFunction>",
@@ -258,6 +296,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("BlurFunction"),
 		generic_param2: None,
 		is_enum: true,
+		is_parsed: true,
 	},
 	TypeMapping {
 		pattern: "Option<DebugTileFormat>",
@@ -267,6 +306,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("DebugTileFormat"),
 		generic_param2: None,
 		is_enum: true,
+		is_parsed: true,
 	},
 	TypeMapping {
 		pattern: "Option<DemEncoding>",
@@ -276,6 +316,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("DemEncoding"),
 		generic_param2: None,
 		is_enum: true,
+		is_parsed: true,
 	},
 	TypeMapping {
 		pattern: "Option<RasterTileFormat>",
@@ -285,6 +326,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("RasterTileFormat"),
 		generic_param2: None,
 		is_enum: true,
+		is_parsed: true,
 	},
 ];
 
@@ -622,11 +664,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 		is_sources: false,
 		doc: raw_comment,
 		enum_type: if mapping.is_enum { mapping.generic_param } else { None },
-		parsed_type: if mapping.method_name == "property_enum_option" {
-			mapping.generic_param
-		} else {
-			None
-		},
+		parsed_type: if mapping.is_parsed { mapping.generic_param } else { None },
 		number_type,
 		arity,
 		default,
@@ -970,7 +1008,35 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 mod tests {
 	use syn::{DeriveInput, parse_quote};
 
-	use super::decode_struct;
+	use super::{TYPE_MAPPINGS, decode_struct, shape_of};
+
+	/// The table is hand-maintained, and the two flags on it are the only place
+	/// where a new type can be added without the derive noticing that nothing
+	/// checks its values. These are the invariants a reviewer would otherwise
+	/// have to hold in their head.
+	#[test]
+	fn the_type_mapping_table_is_self_consistent() {
+		for m in TYPE_MAPPINGS {
+			assert!(
+				!m.is_enum || m.is_parsed,
+				"{}: a type with `variants()` parses from `&str` too",
+				m.pattern
+			);
+			assert!(
+				!m.is_parsed || m.generic_param.is_some(),
+				"{}: `is_parsed` names the type in `generic_param`, so it cannot be `None`",
+				m.pattern
+			);
+			// A field checked by its parser is checked by that and nothing else:
+			// a numeric probe on the same values would be a second opinion.
+			let (_, number_type) = shape_of(m);
+			assert!(
+				!(m.is_parsed && number_type.is_some()),
+				"{}: parses through both `TryFrom<&str>` and `parse::<T>()`",
+				m.pattern
+			);
+		}
+	}
 
 	fn pretty_tokens(ts: &proc_macro2::TokenStream) -> Vec<String> {
 		prettyplease::unparse(&syn::parse_file(&ts.to_string()).unwrap())
