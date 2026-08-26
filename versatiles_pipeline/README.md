@@ -250,7 +250,9 @@ Gridded statistics are published as a table keyed on a cell id, without the geom
 
 Without GDAL, `epsg` accepts `3035` (ETRS89-LAEA, what European gridded statistics use), `3857` (web mercator) and `4326` (WGS84 lon/lat). A build with the `gdal` feature accepts any code, at roughly ten times the cost per coordinate — and released binaries ship without GDAL, so a `.vpl` naming another code will not run on one.
 
-`bbox` is required: an unbounded grid has no pyramid to derive from, and at most cell sizes it would be more tiles than can be written.
+`bbox` is required: a grid of squares has no extent beyond the one it is given, and in a projected CRS an extent outside the projection's own area is not so much wrong as meaningless.
+
+Within that bbox the grid covers every zoom from the level its cells become legible at up to level 30. Nothing is generated until a tile is asked for, so bound the work where it is done: `versatiles convert --max-zoom`, or a `filter` operation.
 
 The two id presets produce `CRS3035RES1000mN2691000E4341000` for `inspire` and `1kmN2689E4337` for `geostat`. `id_template` spells out anything else: `{x}` and `{y}` each take an optional divisor and zero-padded width, so `E{x/100:04}N{y/100:04}` produces `E0643N4567`, the form Dutch grid statistics use. Cell size is fixed by `size` and does not change with zoom — that is what keeps an id stable enough to join against — so low zoom levels are unusable, and the pyramid starts at the level where a tile holds at most `max_cells_per_tile` cells.
 
@@ -263,7 +265,6 @@ A cell reaching into several tiles is drawn in each of them, clipped to the tile
 - **`bbox`: [f64,f64,f64,f64] (required)** - Area to cover, as `[west, south, east, north]` in WGS84 degrees.
 - _`offset`: [f64,f64] (optional)_ - Lower-left corner of cell `(0, 0)`, in CRS units. Defaults to `[0,0]`.
 - _`max_cells_per_tile`: u32 (optional)_ - Roughly how many cells one tile may hold. Defaults to `1024`.
-- _`max_zoom`: u8 (optional)_ - Highest zoom level to generate. Defaults to three above the derived minimum.
 - _`id_preset`: IdPreset (optional)_ - Values: `inspire`, `geostat`. Ready-made id format. Overridden by `id_template`. Defaults to `inspire`.
 - _`id_template`: String (optional)_ - Id format spelled out, with `{x}` and `{y}` for the corner. Defaults to `id_preset`.
 - _`id_field`: String (optional)_ - Property holding the cell id. Defaults to `id`.

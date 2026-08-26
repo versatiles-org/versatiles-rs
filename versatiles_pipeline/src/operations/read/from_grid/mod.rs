@@ -59,7 +59,8 @@ use async_trait::async_trait;
 use geo_types::{Coord, Geometry, LineString, Polygon, coord};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{
-	GeoBBox, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream, WORLD_SIZE,
+	GeoBBox, MAX_ZOOM_LEVEL, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream,
+	WORLD_SIZE,
 };
 use versatiles_derive::context;
 use versatiles_geometry::{
@@ -81,12 +82,6 @@ use crate::{
 
 /// Cells per tile the derived minimum zoom aims for when nothing is given.
 const DEFAULT_MAX_CELLS_PER_TILE: u32 = 1024;
-
-/// Zoom levels published above the derived minimum when nothing is given.
-const DEFAULT_ZOOM_RANGE: u8 = 3;
-
-/// Largest zoom level a tile pyramid may use.
-const MAX_ZOOM: u8 = 30;
 
 /// How many parallel edges share one densification verdict.
 ///
@@ -113,8 +108,14 @@ const TILE_PIXELS: f64 = 256.0;
 /// coordinate — and released binaries ship without GDAL, so a `.vpl` naming
 /// another code will not run on one.
 ///
-/// `bbox` is required: an unbounded grid has no pyramid to derive from, and at
-/// most cell sizes it would be more tiles than can be written.
+/// `bbox` is required: a grid of squares has no extent beyond the one it is
+/// given, and in a projected CRS an extent outside the projection's own area is
+/// not so much wrong as meaningless.
+///
+/// Within that bbox the grid covers every zoom from the level its cells become
+/// legible at up to level 30. Nothing is generated until a tile is asked for, so
+/// bound the work where it is done: `versatiles convert --max-zoom`, or a
+/// `filter` operation.
 ///
 /// The two id presets produce `CRS3035RES1000mN2691000E4341000` for `inspire`
 /// and `1kmN2689E4337` for `geostat`. `id_template` spells out anything else:
@@ -147,9 +148,6 @@ struct Args {
 	/// Roughly how many cells one tile may hold. Defaults to `1024`.
 	#[vpl(default = "1024")]
 	max_cells_per_tile: Option<u32>,
-
-	/// Highest zoom level to generate. Defaults to three above the derived minimum.
-	max_zoom: Option<u8>,
 
 	/// Ready-made id format. Overridden by `id_template`. Defaults to `inspire`.
 	#[vpl(default = "inspire")]
@@ -249,17 +247,7 @@ impl Operation {
 		);
 
 		let min_zoom = min_zoom_for_cell_size(cell_mercator, max_cells_per_tile);
-		let max_zoom = args
-			.max_zoom
-			.unwrap_or_else(|| min_zoom.saturating_add(DEFAULT_ZOOM_RANGE).min(MAX_ZOOM));
-		ensure!(
-			max_zoom >= min_zoom,
-			"max_zoom ({max_zoom}) is below the zoom this grid starts at ({min_zoom}): cells of {} units are about {} \
-			 meters across in web mercator, so a tile holds at most {max_cells_per_tile} of them from zoom {min_zoom} \
-			 on. Raise max_zoom, raise max_cells_per_tile, or use larger cells.",
-			args.size,
-			cell_mercator.round()
-		);
+		let max_zoom = MAX_ZOOM_LEVEL;
 
 		let fields = Fields {
 			layer: args.layer_name.unwrap_or_else(|| String::from("grid")),
@@ -269,7 +257,8 @@ impl Operation {
 		};
 
 		log::info!(
-			"from_grid: EPSG:{} cells of {} units (~{} m in mercator) cover zoom {min_zoom}..={max_zoom}, ids like '{}'",
+			"from_grid: EPSG:{} cells of {} units (~{} m in mercator) cover zoom {min_zoom}..={max_zoom} inside the bbox, \
+			 ids like '{}'; restrict a conversion with --max-zoom",
 			args.epsg,
 			args.size,
 			cell_mercator.round(),
@@ -666,7 +655,6 @@ mod tests {
 			bbox: [5.8, 47.2, 15.1, 55.1],
 			offset: None,
 			max_cells_per_tile: None,
-			max_zoom: None,
 			id_preset: None,
 			id_template: None,
 			id_field: None,
@@ -689,18 +677,45 @@ mod tests {
 		vt.layers[0].to_features()
 	}
 
+	/// Cell size decides where the pyramid starts; it always runs to the end.
+	///
+	/// Cells are computed per requested tile, so advertising every level above
+	/// the minimum costs nothing until something asks for one. Bounding the depth
+	/// belongs to whoever does the work — `convert --max-zoom`, or `filter`.
 	#[tokio::test]
-	async fn cell_size_decides_the_zoom_range() -> Result<()> {
+	async fn cell_size_decides_where_the_pyramid_starts() -> Result<()> {
 		// 1 km cells are ~1.5 km across in mercator at this latitude, so 1024 of
 		// them fit in a tile from zoom 10 down.
-		let op = build(&format!("from_grid epsg=3035 size=1000 {BBOX}")).await?;
-		let pyramid = op.tile_pyramid().await?;
+		let pyramid = build(&format!("from_grid epsg=3035 size=1000 {BBOX}"))
+			.await?
+			.tile_pyramid()
+			.await?;
 		assert_eq!(pyramid.level_min(), Some(10));
-		assert_eq!(pyramid.level_max(), Some(13));
+		assert_eq!(pyramid.level_max(), Some(MAX_ZOOM_LEVEL));
 
-		// 100 km cells are servable much earlier.
-		let op = build(&format!("from_grid epsg=3035 size=100000 {BBOX}")).await?;
-		assert_eq!(op.tile_pyramid().await?.level_min(), Some(4));
+		// 100 km cells are servable much earlier, and still to the end.
+		let pyramid = build(&format!("from_grid epsg=3035 size=100000 {BBOX}"))
+			.await?
+			.tile_pyramid()
+			.await?;
+		assert_eq!(pyramid.level_min(), Some(4));
+		assert_eq!(pyramid.level_max(), Some(MAX_ZOOM_LEVEL));
+		Ok(())
+	}
+
+	/// The area stays bounded even though the depth does not.
+	///
+	/// `from_grid` keeps its `bbox` — unlike `from_h3`, a grid of squares has no
+	/// extent of its own — so removing `max_zoom` must not have widened it.
+	#[tokio::test]
+	async fn the_pyramid_stays_inside_the_bbox() -> Result<()> {
+		let pyramid = build(&format!("from_grid epsg=3035 size=1000 {BBOX}"))
+			.await?
+			.tile_pyramid()
+			.await?;
+		let bbox = pyramid.geo_bbox().expect("bounds");
+		assert!(bbox.x_min > -10.0 && bbox.x_max < 30.0, "{bbox:?}");
+		assert!(bbox.y_min > 40.0 && bbox.y_max < 60.0, "{bbox:?}");
 		Ok(())
 	}
 
@@ -943,10 +958,9 @@ mod tests {
 				"from_grid epsg=3035 size=100 id_preset=\"geostat\" id_template=\"{x/1000}\"",
 				"share an id",
 			),
-			(
-				"from_grid epsg=3035 size=1000 max_zoom=2",
-				"below the zoom this grid starts at",
-			),
+			// `max_zoom` is not an argument: the grid runs to level 30 and the
+			// consumer bounds it, so naming one here is a typo, not a narrowing.
+			("from_grid epsg=3035 size=1000 max_zoom=2", "max_zoom"),
 		];
 
 		for (vpl, expected) in cases {
