@@ -118,8 +118,8 @@ describe('VPL Builder', () => {
 		});
 
 		it('should accept fromColor with options', () => {
-			const vpl = VPL.fromColor({ color: 'FF5733', size: 256 });
-			expectVpl(vpl, 'from_color color=FF5733 size=256');
+			const vpl = VPL.fromColor({ color: 'FF5733', tileSize: 256 });
+			expectVpl(vpl, 'from_color color=FF5733 tile_size=256');
 		});
 
 		it('should accept rasterLevels with brightness', () => {

@@ -95,7 +95,7 @@ Generates raster tiles of a single solid colour.
 ### Parameters
 
 - _`color`: String (optional)_ - Hex colour, `RRGGBB` or `RRGGBBAA`. Defaults to `000000`.
-- _`size`: u16 (optional)_ - Tile size in pixels, `256` or `512`. Defaults to `512`.
+- _`tile_size`: u16 (optional)_ - Tile size in pixels, `256` or `512`. Defaults to `512`.
 - _`format`: RasterTileFormat (optional)_ - Values: `avif`, `jpg`, `png`, `webp`. Format to encode the tiles in. Defaults to `png`.
 
 ---

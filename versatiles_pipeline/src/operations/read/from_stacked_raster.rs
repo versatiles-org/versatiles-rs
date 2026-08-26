@@ -516,14 +516,18 @@ mod tests {
 		// sources that each declared their size produced output that declared none.
 		let factory = PipelineFactory::new_dummy();
 		let op = factory
-			.operation_from_vpl("from_stacked_raster [ from_color format=png size=256, from_color format=png size=256 ]")
+			.operation_from_vpl(
+				"from_stacked_raster [ from_color format=png tile_size=256, from_color format=png tile_size=256 ]",
+			)
 			.await?;
 		assert_eq!(op.tilejson().tile_size.map(|s| s.size()), Some(256));
 
 		// Stacking only composes when the sources agree on the pixel size, so a
 		// mismatch is an error rather than a coin toss between the two.
 		let err = factory
-			.operation_from_vpl("from_stacked_raster [ from_color format=png size=256, from_color format=png size=512 ]")
+			.operation_from_vpl(
+				"from_stacked_raster [ from_color format=png tile_size=256, from_color format=png tile_size=512 ]",
+			)
 			.await
 			.unwrap_err();
 		assert!(

@@ -90,7 +90,9 @@ mod tests {
 		let op = factory
 			// `filter` only because 512→256 needs headroom above the source's max
 			// zoom, and `from_color` advertises the full pyramid.
-			.operation_from_vpl("from_color format=png size=512 | filter level_max=10 | raster_tile_resize tile_size=256")
+			.operation_from_vpl(
+				"from_color format=png tile_size=512 | filter level_max=10 | raster_tile_resize tile_size=256",
+			)
 			.await
 			.unwrap();
 		assert_eq!(op.tilejson().tile_size.map(|s| s.size()), Some(256));

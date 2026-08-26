@@ -7,9 +7,9 @@
 //! ## Examples
 //!
 //! ```text
-//! from_color color=FF5733 size=512 format=png
-//! from_color color=FF573380 size=256 format=webp
-//! from_color  # defaults: color=000000 size=512 format=png
+//! from_color color=FF5733 tile_tile_size=512 format=png
+//! from_color color=FF573380 tile_tile_size=256 format=webp
+//! from_color  # defaults: color=000000 tile_tile_size=512 format=png
 //! ```
 
 use std::sync::Arc;
@@ -30,7 +30,7 @@ struct Args {
 	color: Option<String>,
 	/// Tile size in pixels, `256` or `512`. Defaults to `512`.
 	#[vpl(default = "512")]
-	size: Option<u16>,
+	tile_size: Option<u16>,
 	/// Format to encode the tiles in. Defaults to `png`.
 	#[vpl(default = "png")]
 	format: Option<RasterTileFormat>,
@@ -91,7 +91,7 @@ impl Operation {
 		let color = args.color.as_deref().unwrap_or("000000");
 		let color_bytes = parse_hex_color(color)?;
 
-		let tile_size = u32::from(args.size.unwrap_or(512));
+		let tile_size = u32::from(args.tile_size.unwrap_or(512));
 
 		let tile_format = args.format.map_or(TileFormat::PNG, TileFormat::from);
 
@@ -166,16 +166,20 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_size_reaches_the_tilejson() {
-		// Issue #247: `size=256` and `size=512` produced identical metadata,
+	async fn test_tile_size_reaches_the_tilejson() {
+		// Issue #247: `tile_size=256` and `tile_size=512` produced identical metadata,
 		// even though the size is right there in the parameters.
 		let factory = PipelineFactory::new_dummy();
-		for size in [256u16, 512] {
+		for tile_size in [256u16, 512] {
 			let op = factory
-				.operation_from_vpl(&format!("from_color format=png size={size}"))
+				.operation_from_vpl(&format!("from_color format=png tile_size={tile_size}"))
 				.await
 				.unwrap();
-			assert_eq!(op.tilejson().tile_size.map(|s| s.size()), Some(size), "size={size}");
+			assert_eq!(
+				op.tilejson().tile_size.map(|s| s.size()),
+				Some(tile_size),
+				"tile_size={tile_size}"
+			);
 		}
 		// The default is 512, and it is declared like any other.
 		let op = factory.operation_from_vpl("from_color").await.unwrap();
@@ -197,7 +201,7 @@ mod tests {
 
 		// Test with all parameters
 		let op = factory
-			.operation_from_vpl("from_color color=FF5733 size=256 format=webp")
+			.operation_from_vpl("from_color color=FF5733 tile_size=256 format=webp")
 			.await
 			.unwrap();
 		assert_eq!(*op.metadata().tile_format(), TileFormat::WEBP);
