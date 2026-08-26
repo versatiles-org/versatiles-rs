@@ -198,7 +198,7 @@ mod tests {
 	#[test]
 	fn a_vpl_array_is_not_a_name_and_type_postfix() {
 		for input in [
-			"from_h3 resolution=8 bbox=[13,52,14,53]",
+			"from_h3 resolution=8 | filter bbox=[13,52,14,53]",
 			"from_grid epsg=3035 size=1000 bbox=[5,47,15,55]",
 			"filter layer=[places]",
 		] {
@@ -232,7 +232,7 @@ mod tests {
 	fn vpl_text_is_told_apart_from_a_filename() {
 		for text in [
 			"from_debug format=png",
-			"from_h3 resolution=8 bbox=[13,52,14,53]",
+			"from_h3 resolution=8 | filter bbox=[13,52,14,53]",
 			"from_container filename=world.versatiles | filter level_min=5",
 		] {
 			assert!(looks_like_vpl(text), "{text}");

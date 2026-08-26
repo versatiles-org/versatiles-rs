@@ -728,7 +728,7 @@ pub mod tests {
 
 		for text in [
 			"from_debug format=png",
-			"from_h3 resolution=8 bbox=[13.0,52.3,13.8,52.7]",
+			"from_h3 resolution=8 | filter bbox=[13.0,52.3,13.8,52.7]",
 			"from_container filename=world.versatiles | filter level_min=5",
 		] {
 			let err = format!(

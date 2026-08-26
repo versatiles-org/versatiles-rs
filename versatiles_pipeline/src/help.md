@@ -55,12 +55,14 @@ Without GDAL, `epsg` accepts 3035 (ETRS89-LAEA, what European gridded statistics
 `from_h3` produces H3 hexagons instead, addressed by resolution rather than size, and carries the H3 index as `h3` — the column name H3 datasets usually use:
 
 ```vpl
-from_h3 resolution=8 bbox=[13.0,52.3,13.8,52.7]
+from_h3 resolution=8
   | vector_update_properties data_source_path="kontur_population.csv"
       id_field_tiles="h3" id_field_data="h3"
 ```
 
-Both require a `bbox` and both derive their own minimum zoom: cell size is fixed, so at low zoom one tile would hold every cell in view. `max_cells_per_tile` moves that threshold. A cell reaching into several tiles is drawn in each of them, clipped to the tile — so the same id recurs across tiles, which a join expects, but the geometry in one tile is only the part that falls inside it.
+`from_grid` requires a `bbox`, `from_h3` has none. A grid of squares has no extent beyond the one you give it — and in a projected CRS like 3035 an extent outside the projection's own area is not wrong so much as meaningless — whereas H3 tiles the planet, so the hexagon source covers the world and leaves the bounding to whoever does the work: `versatiles convert --bbox --max-zoom`, or a `filter` operation.
+
+Both derive their own minimum zoom: cell size is fixed, so at low zoom one tile would hold every cell in view. `max_cells_per_tile` moves that threshold, and `from_h3` measures its cells at the equator, where mercator stretches them least, so the level it starts at holds everywhere. A cell reaching into several tiles is drawn in each of them, clipped to the tile — so the same id recurs across tiles, which a join expects, but the geometry in one tile is only the part that falls inside it.
 
 ### Reading from remote sources
 

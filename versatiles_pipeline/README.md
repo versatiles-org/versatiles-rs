@@ -59,12 +59,14 @@ Without GDAL, `epsg` accepts 3035 (ETRS89-LAEA, what European gridded statistics
 `from_h3` produces H3 hexagons instead, addressed by resolution rather than size, and carries the H3 index as `h3` — the column name H3 datasets usually use:
 
 ```vpl
-from_h3 resolution=8 bbox=[13.0,52.3,13.8,52.7]
+from_h3 resolution=8
   | vector_update_properties data_source_path="kontur_population.csv"
       id_field_tiles="h3" id_field_data="h3"
 ```
 
-Both require a `bbox` and both derive their own minimum zoom: cell size is fixed, so at low zoom one tile would hold every cell in view. `max_cells_per_tile` moves that threshold. A cell reaching into several tiles is drawn in each of them, clipped to the tile — so the same id recurs across tiles, which a join expects, but the geometry in one tile is only the part that falls inside it.
+`from_grid` requires a `bbox`, `from_h3` has none. A grid of squares has no extent beyond the one you give it — and in a projected CRS like 3035 an extent outside the projection's own area is not wrong so much as meaningless — whereas H3 tiles the planet, so the hexagon source covers the world and leaves the bounding to whoever does the work: `versatiles convert --bbox --max-zoom`, or a `filter` operation.
+
+Both derive their own minimum zoom: cell size is fixed, so at low zoom one tile would hold every cell in view. `max_cells_per_tile` moves that threshold, and `from_h3` measures its cells at the equator, where mercator stretches them least, so the level it starts at holds everywhere. A cell reaching into several tiles is drawn in each of them, clipped to the tile — so the same id recurs across tiles, which a join expects, but the geometry in one tile is only the part that falls inside it.
 
 ### Reading from remote sources
 
@@ -364,14 +366,12 @@ The hexagonal counterpart to `from_grid`: data published as a table keyed on an 
 
 Resolution `0` gives cells of about 4,250,000 km² and `15` about 0.9 m²; `resolution=8` lands near 0.7 km². The full table of cell areas and edge lengths is at <https://h3geo.org/docs/core-library/restable/>.
 
-`bbox` is required: without bounds the grid would cover the whole planet, which at most resolutions is more tiles than can be written.
+The source covers the whole planet, from the zoom its cells become legible at up to level 30. Nothing is generated until a tile is asked for, so bound the work where it is done instead: `versatiles convert --bbox --max-zoom`, or a `filter` operation.
 
 ### Parameters
 
 - **`resolution`: u8 (required)** - H3 resolution, `0` (coarsest) to `15` (finest).
-- **`bbox`: [f64,f64,f64,f64] (required)** - Area to cover, as `[west, south, east, north]` in WGS84 degrees.
 - _`max_cells_per_tile`: u32 (optional)_ - Roughly how many cells one tile may hold. Defaults to `1024`.
-- _`max_zoom`: u8 (optional)_ - Highest zoom level to generate. Defaults to three above the derived minimum.
 - _`layer_name`: String (optional)_ - Name of the layer to write into. Defaults to `grid`.
 - _`id_field`: String (optional)_ - Property holding the H3 index. Defaults to `h3`.
 

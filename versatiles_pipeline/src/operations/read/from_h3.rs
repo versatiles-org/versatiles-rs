@@ -11,7 +11,7 @@
 //! `vector_update_properties` matches that column against the id property here:
 //!
 //! ```text
-//! from_h3 resolution=8 bbox=[13.0,52.3,13.8,52.7]
+//! from_h3 resolution=8
 //!   | vector_update_properties data_source_path="population.csv"
 //!       id_field_tiles="h3" id_field_data="h3"
 //! ```
@@ -23,13 +23,20 @@
 //! tile it is in. The same id therefore recurs across tiles, which is what a
 //! join expects — but the geometry carrying it in any one tile is only the part
 //! that falls inside that tile, so it is not something to measure areas from.
-//! ## Zoom levels
+//! ## Extent and zoom levels
+//!
+//! The grid is the whole planet at every zoom level it can be served at: cells
+//! are computed per requested tile, so an unbounded source costs nothing until
+//! something asks for a tile. Restricting the area is the consumer's business —
+//! `versatiles convert --bbox --max-zoom`, or a `filter` operation in the
+//! pipeline — which is why there is no `bbox` or `max_zoom` here to disagree
+//! with it.
 //!
 //! Cell size is fixed by the resolution and does not change with zoom — that is
 //! what keeps an id stable enough to join against. Low zoom levels are
 //! therefore unusable, since one tile would hold every cell in view, so the
-//! source derives its own minimum zoom from the resolution and only advertises
-//! levels at or above it. See [`min_zoom_for_cell_size`].
+//! source derives its own minimum zoom from the resolution and advertises every
+//! level from there to [`MAX_ZOOM_LEVEL`]. See [`min_zoom_for_cell_size`].
 
 use std::{fmt::Debug, sync::Arc};
 
@@ -41,7 +48,9 @@ use h3o::{
 	geom::{ContainmentMode, TilerBuilder},
 };
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{GeoBBox, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream};
+use versatiles_core::{
+	MAX_ZOOM_LEVEL, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream,
+};
 use versatiles_derive::context;
 use versatiles_geometry::{
 	ext::mercator::coord_to_mercator,
@@ -58,16 +67,6 @@ use crate::{
 /// Cells per tile the derived minimum zoom aims for when nothing is given.
 const DEFAULT_MAX_CELLS_PER_TILE: u32 = 1024;
 
-/// Zoom levels published above the derived minimum when nothing is given.
-///
-/// A grid is mostly looked at around the zoom where its cells are legible, and
-/// every extra level multiplies the tile count by four while showing the same
-/// hexagons, so the default is deliberately shallow.
-const DEFAULT_ZOOM_RANGE: u8 = 3;
-
-/// Largest zoom level a tile pyramid may use.
-const MAX_ZOOM: u8 = 30;
-
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Generates vector tiles holding H3 hexagons.
 ///
@@ -79,21 +78,17 @@ const MAX_ZOOM: u8 = 30;
 /// `resolution=8` lands near 0.7 km². The full table of cell areas and edge
 /// lengths is at <https://h3geo.org/docs/core-library/restable/>.
 ///
-/// `bbox` is required: without bounds the grid would cover the whole planet,
-/// which at most resolutions is more tiles than can be written.
+/// The source covers the whole planet, from the zoom its cells become legible
+/// at up to level 30. Nothing is generated until a tile is asked for, so bound
+/// the work where it is done instead: `versatiles convert --bbox --max-zoom`, or
+/// a `filter` operation.
 struct Args {
 	/// H3 resolution, `0` (coarsest) to `15` (finest).
 	resolution: u8,
 
-	/// Area to cover, as `[west, south, east, north]` in WGS84 degrees.
-	bbox: [f64; 4],
-
 	/// Roughly how many cells one tile may hold. Defaults to `1024`.
 	#[vpl(default = "1024")]
 	max_cells_per_tile: Option<u32>,
-
-	/// Highest zoom level to generate. Defaults to three above the derived minimum.
-	max_zoom: Option<u8>,
 
 	/// Name of the layer to write into. Defaults to `grid`.
 	#[vpl(default = "grid")]
@@ -120,31 +115,25 @@ impl Operation {
 		let resolution = Resolution::try_from(args.resolution)
 			.map_err(|_| anyhow!("resolution must be between 0 and 15, got {}", args.resolution))?;
 
-		let bbox = GeoBBox::new(args.bbox[0], args.bbox[1], args.bbox[2], args.bbox[3])?;
 		let max_cells_per_tile = args.max_cells_per_tile.unwrap_or(DEFAULT_MAX_CELLS_PER_TILE);
 		ensure!(max_cells_per_tile > 0, "max_cells_per_tile must be at least 1");
 
-		let min_zoom = min_zoom_for_cell_size(cell_size_mercator(resolution, &bbox), max_cells_per_tile);
-		let max_zoom = args
-			.max_zoom
-			.unwrap_or_else(|| min_zoom.saturating_add(DEFAULT_ZOOM_RANGE).min(MAX_ZOOM));
-		ensure!(
-			max_zoom >= min_zoom,
-			"max_zoom ({max_zoom}) is below the zoom this grid starts at ({min_zoom}): resolution {} needs zoom {min_zoom} \
-			 before a tile holds at most {max_cells_per_tile} cells. Raise max_zoom, raise max_cells_per_tile, or pick a \
-			 coarser resolution.",
-			args.resolution
-		);
+		let min_zoom = min_zoom_for_cell_size(cell_size_mercator(resolution), max_cells_per_tile);
+		let max_zoom = MAX_ZOOM_LEVEL;
 
 		let layer_name = args.layer_name.unwrap_or_else(|| String::from("grid"));
 		let id_field = args.id_field.unwrap_or_else(|| String::from("h3"));
 
 		log::info!(
-			"from_h3: resolution {} covers zoom {min_zoom}..={max_zoom} (at most ~{max_cells_per_tile} cells per tile)",
+			"from_h3: resolution {} covers zoom {min_zoom}..={max_zoom} worldwide (at most ~{max_cells_per_tile} cells \
+			 per tile); restrict a conversion with --bbox / --max-zoom",
 			args.resolution
 		);
 
-		let pyramid = TilePyramid::from_geo_bbox(min_zoom, max_zoom, &bbox)?;
+		// The whole world from `min_zoom` up. Levels below it are cleared rather
+		// than served badly: there a single tile would hold every cell in view.
+		let mut pyramid = TilePyramid::new_full_up_to(max_zoom);
+		pyramid.set_level_min(min_zoom);
 		let metadata = TileSourceMetadata::new(
 			TileFormat::MVT,
 			TileCompression::Uncompressed,
@@ -220,16 +209,17 @@ impl TileSource for Operation {
 /// H3 areas are measured on the sphere; mercator stretches them by `1/cos(lat)`,
 /// so cells are smallest — and therefore densest per tile — at the latitude in
 /// `bbox` closest to the equator. Measuring there keeps the derived minimum zoom
-/// on the safe side.
-fn cell_size_mercator(resolution: Resolution, bbox: &GeoBBox) -> f64 {
-	let lat = if bbox.y_min <= 0.0 && bbox.y_max >= 0.0 {
-		0.0
-	} else {
-		bbox.y_min.abs().min(bbox.y_max.abs())
-	};
+/// A cell's edge length in mercator meters, measured at the equator.
+///
+/// Mercator stretches with latitude, so a cell of fixed ground area covers more
+/// mercator meters the further it sits from the equator. Measuring at the
+/// equator is the conservative end: it yields the smallest mercator size, hence
+/// the highest minimum zoom, so no part of the world is served at a level where
+/// its tiles would be overfull.
+fn cell_size_mercator(resolution: Resolution) -> f64 {
 	// Compare cells as squares of equal area: close enough for choosing a zoom,
 	// and it avoids pretending a hexagon has one width.
-	resolution.area_m2().sqrt() / lat.to_radians().cos()
+	resolution.area_m2().sqrt()
 }
 
 /// Build one tile: every cell touching it, clipped and encoded.
@@ -328,7 +318,6 @@ mod tests {
 	/// Berlin, well away from the poles and the antimeridian.
 	const LAT: f64 = 52.52;
 	const LNG: f64 = 13.405;
-	const BBOX: &str = "bbox=[13.0,52.3,13.8,52.7]";
 
 	async fn build(vpl: &str) -> Result<Box<dyn TileSource>> {
 		PipelineFactory::new_dummy().operation_from_vpl(vpl).await
@@ -346,35 +335,49 @@ mod tests {
 			.collect()
 	}
 
+	/// The resolution decides where the pyramid starts; it always runs to the end.
+	///
+	/// Cells are computed per requested tile, so advertising every level above
+	/// the minimum costs nothing until something asks for one. Bounding the work
+	/// belongs to whoever does it — `convert --bbox --max-zoom`, or `filter`.
 	#[tokio::test]
-	async fn resolution_decides_the_zoom_range() -> Result<()> {
+	async fn resolution_decides_where_the_pyramid_starts() -> Result<()> {
 		// Resolution 8 cells are ~0.74 km², so ~0.86 km across on the ground and
-		// ~1.4 km in mercator at this latitude: 1024 of them fit in a tile from
-		// zoom 10 down.
-		let op = build(&format!("from_h3 resolution=8 {BBOX}")).await?;
-		let pyramid = op.tile_pyramid().await?;
-		assert_eq!(pyramid.level_min(), Some(10));
-		assert_eq!(pyramid.level_max(), Some(13));
+		// in mercator at the equator, where they are smallest: 1024 of them fit
+		// in a tile from zoom 11 down.
+		let pyramid = build("from_h3 resolution=8").await?.tile_pyramid().await?;
+		assert_eq!(pyramid.level_min(), Some(11));
+		assert_eq!(pyramid.level_max(), Some(MAX_ZOOM_LEVEL));
 
-		// Coarser cells are servable earlier.
-		let op = build(&format!("from_h3 resolution=4 {BBOX}")).await?;
-		let pyramid = op.tile_pyramid().await?;
+		// Coarser cells are servable earlier, and still to the end.
+		let pyramid = build("from_h3 resolution=4").await?.tile_pyramid().await?;
 		assert_eq!(pyramid.level_min(), Some(5));
+		assert_eq!(pyramid.level_max(), Some(MAX_ZOOM_LEVEL));
+		Ok(())
+	}
+
+	/// The grid covers the planet, not the area someone happened to ask about.
+	#[tokio::test]
+	async fn the_pyramid_spans_the_world() -> Result<()> {
+		let pyramid = build("from_h3 resolution=4").await?.tile_pyramid().await?;
+		let bbox = pyramid.geo_bbox().expect("bounds");
+		assert!(bbox.x_min <= -179.9 && bbox.x_max >= 179.9, "{bbox:?}");
+		assert!(bbox.y_min <= -85.0 && bbox.y_max >= 85.0, "{bbox:?}");
 		Ok(())
 	}
 
 	#[tokio::test]
 	async fn a_bigger_budget_lowers_the_minimum_zoom() -> Result<()> {
-		let op = build(&format!("from_h3 resolution=8 {BBOX} max_cells_per_tile=16384")).await?;
-		assert_eq!(op.tile_pyramid().await?.level_min(), Some(8));
+		let op = build("from_h3 resolution=8 max_cells_per_tile=16384").await?;
+		assert_eq!(op.tile_pyramid().await?.level_min(), Some(9));
 		Ok(())
 	}
 
 	#[tokio::test]
 	async fn the_tile_holding_a_point_carries_that_point_s_cell() -> Result<()> {
-		let op = build(&format!("from_h3 resolution=8 {BBOX}")).await?;
+		let op = build("from_h3 resolution=8").await?;
 		let cell = LatLng::new(LAT, LNG)?.to_cell(Resolution::Eight);
-		let coord = TileCoord::from_geo(LNG, LAT, 10)?;
+		let coord = TileCoord::from_geo(LNG, LAT, 11)?;
 
 		let tile = op.tile(&coord).await?.expect("tile present");
 		let vt = VectorTile::from_blob(&tile.into_blob(&Uncompressed)?)?;
@@ -389,7 +392,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn a_cell_crossing_a_tile_border_is_in_both_tiles() -> Result<()> {
-		let coord = TileCoord::from_geo(LNG, LAT, 10)?;
+		let coord = TileCoord::from_geo(LNG, LAT, 11)?;
 		let right = TileCoord::new(coord.level, coord.x + 1, coord.y)?;
 
 		let here = cells_covering(coord, Resolution::Eight)?;
@@ -430,25 +433,25 @@ mod tests {
 		assert!(span < WORLD_SIZE / 100.0, "cell spans {span} meters");
 	}
 
+	/// Cell size is measured at the equator, where mercator stretches least.
+	///
+	/// That is the conservative end: it gives the smallest mercator size and so
+	/// the highest minimum zoom, which is the one that holds everywhere. A grid
+	/// serving the whole world has no single latitude to measure at, so it takes
+	/// the one that cannot leave a tile overfull.
 	#[test]
-	fn cells_are_smallest_in_mercator_near_the_equator() {
-		let at =
-			|y_min: f64, y_max: f64| cell_size_mercator(Resolution::Eight, &GeoBBox::new(0.0, y_min, 1.0, y_max).unwrap());
-		assert!(at(0.0, 1.0) < at(50.0, 51.0));
-		assert!(at(50.0, 51.0) < at(70.0, 71.0));
-		// A bbox spanning the equator is measured there, where mercator stretches
-		// least — the same as a bbox sitting on it.
-		assert!((at(-10.0, 10.0) - at(0.0, 1.0)).abs() < f64::EPSILON);
+	fn cells_are_measured_at_the_equator() {
+		let size = cell_size_mercator(Resolution::Eight);
+		assert!((size - Resolution::Eight.area_m2().sqrt()).abs() < f64::EPSILON);
+		// Finer resolutions give smaller cells, hence deeper minimum zooms.
+		assert!(cell_size_mercator(Resolution::Nine) < size);
 	}
 
 	#[tokio::test]
 	async fn the_id_property_can_be_renamed() -> Result<()> {
-		let op = build(&format!(
-			"from_h3 resolution=8 {BBOX} id_field=\"cell\" layer_name=\"hexes\""
-		))
-		.await?;
+		let op = build("from_h3 resolution=8 id_field=\"cell\" layer_name=\"hexes\"").await?;
 		let tile = op
-			.tile(&TileCoord::from_geo(LNG, LAT, 10)?)
+			.tile(&TileCoord::from_geo(LNG, LAT, 11)?)
 			.await?
 			.expect("tile present");
 		let vt = VectorTile::from_blob(&tile.into_blob(&Uncompressed)?)?;
@@ -464,9 +467,9 @@ mod tests {
 	async fn features_carry_no_numeric_id() -> Result<()> {
 		// An H3 index does not fit a u64 MVT id as published, so the string
 		// property is the only key; a numeric id would be a second, different one.
-		let op = build(&format!("from_h3 resolution=8 {BBOX}")).await?;
+		let op = build("from_h3 resolution=8").await?;
 		let tile = op
-			.tile(&TileCoord::from_geo(LNG, LAT, 10)?)
+			.tile(&TileCoord::from_geo(LNG, LAT, 11)?)
 			.await?
 			.expect("tile present");
 		let vt = VectorTile::from_blob(&tile.into_blob(&Uncompressed)?)?;
@@ -483,7 +486,7 @@ mod tests {
 		std::fs::write(&csv, format!("h3,population\n{cell},4321\n"))?;
 
 		let op = build(&format!(
-			"from_h3 resolution=8 {BBOX} | vector_update_properties data_source_path=\"{}\" \
+			"from_h3 resolution=8 | vector_update_properties data_source_path=\"{}\" \
 			 layer_name=\"grid\" id_field_tiles=\"h3\" id_field_data=\"h3\"",
 			// A Windows path is full of backslashes, and VPL reads those as escapes.
 			csv.to_string_lossy().replace('\\', "\\\\")
@@ -491,7 +494,7 @@ mod tests {
 		.await?;
 
 		let tile = op
-			.tile(&TileCoord::from_geo(LNG, LAT, 10)?)
+			.tile(&TileCoord::from_geo(LNG, LAT, 11)?)
 			.await?
 			.expect("tile present");
 		let vt = VectorTile::from_blob(&tile.into_blob(&Uncompressed)?)?;
@@ -514,32 +517,32 @@ mod tests {
 
 	#[tokio::test]
 	async fn tilejson_declares_the_layer_and_its_field() -> Result<()> {
-		let op = build(&format!("from_h3 resolution=8 {BBOX}")).await?;
+		let op = build("from_h3 resolution=8").await?;
 		let layers = &op.tilejson().vector_layers.0;
 		let layer = layers.get("grid").expect("layer declared");
 		assert_eq!(layer.fields.get("h3").map(String::as_str), Some("String"));
-		assert_eq!(layer.minzoom, Some(10));
-		assert_eq!(layer.maxzoom, Some(13));
+		assert_eq!(layer.minzoom, Some(11));
+		assert_eq!(layer.maxzoom, Some(MAX_ZOOM_LEVEL));
 		Ok(())
 	}
 
 	#[tokio::test]
 	async fn bad_arguments_are_rejected() {
-		let err = format!(
-			"{:?}",
-			build(&format!("from_h3 resolution=16 {BBOX}")).await.unwrap_err()
-		);
+		let err = format!("{:?}", build("from_h3 resolution=16").await.unwrap_err());
 		assert!(err.contains("between 0 and 15"), "{err}");
 
 		let err = format!(
 			"{:?}",
-			build(&format!("from_h3 resolution=8 {BBOX} max_zoom=3"))
-				.await
-				.unwrap_err()
+			build("from_h3 resolution=8 max_cells_per_tile=0").await.unwrap_err()
 		);
-		assert!(err.contains("below the zoom this grid starts at"), "{err}");
+		assert!(err.contains("at least 1"), "{err}");
 
-		let err = format!("{:?}", build("from_h3 resolution=8").await.unwrap_err());
+		// `bbox` and `max_zoom` are not arguments here, so either is a typo
+		// rather than a narrowing — and is reported as one.
+		let err = format!("{:?}", build("from_h3 resolution=8 bbox=[0,0,1,1]").await.unwrap_err());
 		assert!(err.contains("bbox"), "{err}");
+
+		let err = format!("{:?}", build("from_h3 resolution=8 max_zoom=12").await.unwrap_err());
+		assert!(err.contains("max_zoom"), "{err}");
 	}
 }
