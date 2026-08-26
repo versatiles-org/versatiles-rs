@@ -124,9 +124,8 @@ fn stated_default(doc: &str) -> Option<&str> {
 /// Whether a stated default is a value at all, rather than a reference to
 /// something else.
 ///
-/// `filter`'s `level_min` defaults to `level_max` and `from_grid`'s
-/// `id_template` to `id_preset` — the backticks are naming another parameter,
-/// not a value to put in a form. `raster_overview`'s `level_max` defaults to
+/// `filter`'s `level_min` defaults to `level_max` — the backticks are naming
+/// another parameter, not a value to put in a form. `raster_overview`'s `level_max` defaults to
 /// `level_base + 4`, an expression rather than a literal. Neither is something
 /// `VPLFieldMeta::default` should carry, so neither is required to.
 fn is_a_value(literal: &str, siblings: &[String]) -> bool {

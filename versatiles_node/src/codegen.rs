@@ -795,7 +795,6 @@ mod tests {
 		("from_csv", "compression", &["none", "gzip", "brotli", "zstd"]),
 		("from_csv", "point_reduction", &["none", "drop_rate", "min_distance"]),
 		("raster_format", "format", &["avif", "jpg", "png", "webp"]),
-		("from_grid", "id_preset", &["inspire", "geostat"]),
 		("raster_mask", "blur_function", &["linear", "cosine"]),
 		("dem_quantize", "encoding", &["mapbox", "terrarium"]),
 	];

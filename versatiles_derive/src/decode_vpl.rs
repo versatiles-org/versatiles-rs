@@ -251,15 +251,6 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_enum: false,
 	},
 	TypeMapping {
-		pattern: "Option<IdPreset>",
-		display_name: "IdPreset",
-		method_name: "property_enum_option",
-		is_required: false,
-		generic_param: Some("IdPreset"),
-		generic_param2: None,
-		is_enum: true,
-	},
-	TypeMapping {
 		pattern: "Option<BlurFunction>",
 		display_name: "BlurFunction",
 		method_name: "property_enum_option",

@@ -254,7 +254,16 @@ Without GDAL, `epsg` accepts `3035` (ETRS89-LAEA, what European gridded statisti
 
 Within that bbox the grid covers every zoom from the level its cells become legible at up to level 30. Nothing is generated until a tile is asked for, so bound the work where it is done: `versatiles convert --max-zoom`, or a `filter` operation.
 
-The two id presets produce `CRS3035RES1000mN2691000E4341000` for `inspire` and `1kmN2689E4337` for `geostat`. `id_template` spells out anything else: `{x}` and `{y}` each take an optional divisor and zero-padded width, so `E{x/100:04}N{y/100:04}` produces `E0643N4567`, the form Dutch grid statistics use. Cell size is fixed by `size` and does not change with zoom — that is what keeps an id stable enough to join against — so low zoom levels are unusable, and the pyramid starts at the level where a tile holds at most `max_cells_per_tile` cells.
+`id_template` builds the cell id from literal text and placeholders: `{x}` and `{y}` for the corner, `{epsg}` and `{size}` for the grid's own arguments, each taking an optional divisor (`{x/1000}`), a sign style and a zero-padded width (`{x/100:h04}`). The sign style is `-` for a minus sign when negative (the default), `+` for one either way, `h` for a hemisphere letter — N/S for `y`, E/W for `x` — before the digits, and `H` for one after them.
+
+| Published as                                             | `id_template`                       |
+| -------------------------------------------------------- | ----------------------------------- |
+| `CRS3035RES1000mN2691000E4341000` (INSPIRE, the default) | `CRS{epsg}RES{size}m{y:h}{x:h}`     |
+| `1kmN2689E4337` (GEOSTAT short form)                     | `{size/1000}km{y/1000:h}{x/1000:h}` |
+| `E0643N4567` (CBS Netherlands)                           | `{x/100:h04}{y/100:h04}`            |
+| `250mN674400E31725` (Statistics Finland)                 | `{size}m{y/10:h}{x/10:h}`           |
+
+Cell size is fixed by `size` and does not change with zoom — that is what keeps an id stable enough to join against — so low zoom levels are unusable, and the pyramid starts at the level where a tile holds at most `max_cells_per_tile` cells.
 
 A cell reaching into several tiles is drawn in each of them, clipped to the tile it is in. The same id therefore recurs across tiles, which is what a join expects — but the geometry carrying it in any one tile is only the part inside that tile, so it is not something to measure areas from.
 
@@ -265,8 +274,7 @@ A cell reaching into several tiles is drawn in each of them, clipped to the tile
 - **`bbox`: [f64,f64,f64,f64] (required)** - Area to cover, as `[west, south, east, north]` in WGS84 degrees.
 - _`offset`: [f64,f64] (optional)_ - Lower-left corner of cell `(0, 0)`, in CRS units. Defaults to `[0,0]`.
 - _`max_cells_per_tile`: u32 (optional)_ - Roughly how many cells one tile may hold. Defaults to `1024`.
-- _`id_preset`: IdPreset (optional)_ - Values: `inspire`, `geostat`. Ready-made id format. Overridden by `id_template`. Defaults to `inspire`.
-- _`id_template`: String (optional)_ - Id format spelled out, with `{x}` and `{y}` for the corner. Defaults to `id_preset`.
+- _`id_template`: String (optional)_ - Cell id format. Defaults to `CRS{epsg}RES{size}m{y:h}{x:h}`.
 - _`id_field`: String (optional)_ - Property holding the cell id. Defaults to `id`.
 - _`x_field`: String (optional)_ - Property holding the corner's easting. Defaults to `x`.
 - _`y_field`: String (optional)_ - Property holding the corner's northing. Defaults to `y`.

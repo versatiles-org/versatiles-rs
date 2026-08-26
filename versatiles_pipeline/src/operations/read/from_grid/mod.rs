@@ -70,7 +70,7 @@ use versatiles_geometry::{
 
 use self::{
 	densify::{deviates, edge_interior},
-	id_template::{IdPreset, IdTemplate},
+	id_template::IdTemplate,
 	lattice::Lattice,
 	projection::Projection,
 };
@@ -82,6 +82,10 @@ use crate::{
 
 /// Cells per tile the derived minimum zoom aims for when nothing is given.
 const DEFAULT_MAX_CELLS_PER_TILE: u32 = 1024;
+
+/// The INSPIRE id, as Eurostat, its member states and the Eurostat GridMaker
+/// publish it: `CRS3035RES1000mN2691000E4341000`.
+const DEFAULT_ID_TEMPLATE: &str = "CRS{epsg}RES{size}m{y:h}{x:h}";
 
 /// How many parallel edges share one densification verdict.
 ///
@@ -117,11 +121,21 @@ const TILE_PIXELS: f64 = 256.0;
 /// bound the work where it is done: `versatiles convert --max-zoom`, or a
 /// `filter` operation.
 ///
-/// The two id presets produce `CRS3035RES1000mN2691000E4341000` for `inspire`
-/// and `1kmN2689E4337` for `geostat`. `id_template` spells out anything else:
-/// `{x}` and `{y}` each take an optional divisor and zero-padded width, so
-/// `E{x/100:04}N{y/100:04}` produces `E0643N4567`, the form Dutch grid
-/// statistics use.
+/// `id_template` builds the cell id from literal text and placeholders:
+/// `{x}` and `{y}` for the corner, `{epsg}` and `{size}` for the grid's own
+/// arguments, each taking an optional divisor (`{x/1000}`), a sign style and a
+/// zero-padded width (`{x/100:h04}`). The sign style is `-` for a minus sign
+/// when negative (the default), `+` for one either way, `h` for a hemisphere
+/// letter — N/S for `y`, E/W for `x` — before the digits, and `H` for one after
+/// them.
+///
+/// | Published as | `id_template` |
+/// | --- | --- |
+/// | `CRS3035RES1000mN2691000E4341000` (INSPIRE, the default) | `CRS{epsg}RES{size}m{y:h}{x:h}` |
+/// | `1kmN2689E4337` (GEOSTAT short form) | `{size/1000}km{y/1000:h}{x/1000:h}` |
+/// | `E0643N4567` (CBS Netherlands) | `{x/100:h04}{y/100:h04}` |
+/// | `250mN674400E31725` (Statistics Finland) | `{size}m{y/10:h}{x/10:h}` |
+///
 /// Cell size is fixed by `size` and does not change with zoom — that is what
 /// keeps an id stable enough to join against — so low zoom levels are unusable,
 /// and the pyramid starts at the level where a tile holds at most
@@ -149,11 +163,8 @@ struct Args {
 	#[vpl(default = "1024")]
 	max_cells_per_tile: Option<u32>,
 
-	/// Ready-made id format. Overridden by `id_template`. Defaults to `inspire`.
-	#[vpl(default = "inspire")]
-	id_preset: Option<IdPreset>,
-
-	/// Id format spelled out, with `{x}` and `{y}` for the corner. Defaults to `id_preset`.
+	/// Cell id format. Defaults to `CRS{epsg}RES{size}m{y:h}{x:h}`.
+	#[vpl(default = "CRS{epsg}RES{size}m{y:h}{x:h}")]
 	id_template: Option<String>,
 
 	/// Property holding the cell id. Defaults to `id`.
@@ -224,13 +235,11 @@ impl Operation {
 			offset,
 		};
 
-		let id_template = match &args.id_template {
-			Some(template) => IdTemplate::parse(template)?,
-			None => match args.id_preset.unwrap_or_default() {
-				IdPreset::Inspire => IdTemplate::inspire(args.epsg, args.size)?,
-				IdPreset::Geostat => IdTemplate::geostat(args.size)?,
-			},
-		};
+		let id_template = IdTemplate::parse(
+			args.id_template.as_deref().unwrap_or(DEFAULT_ID_TEMPLATE),
+			args.epsg,
+			args.size,
+		)?;
 		id_template.validate_for(args.size, offset)?;
 
 		let bbox = GeoBBox::new(args.bbox[0], args.bbox[1], args.bbox[2], args.bbox[3])?;
@@ -655,7 +664,6 @@ mod tests {
 			bbox: [5.8, 47.2, 15.1, 55.1],
 			offset: None,
 			max_cells_per_tile: None,
-			id_preset: None,
 			id_template: None,
 			id_field: None,
 			x_field: None,
@@ -889,8 +897,12 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn the_geostat_preset_and_custom_templates_work() -> Result<()> {
-		let op = build(&format!("from_grid epsg=3035 size=1000 {BBOX} id_preset=\"geostat\"")).await?;
+	async fn published_id_forms_are_reachable_from_the_template() -> Result<()> {
+		// The GEOSTAT short form, spelled out rather than named.
+		let op = build(&format!(
+			"from_grid epsg=3035 size=1000 {BBOX} id_template=\"{{size/1000}}km{{y/1000:h}}{{x/1000:h}}\""
+		))
+		.await?;
 		let tile = op
 			.tile(&TileCoord::from_geo(LON, LAT, 10)?)
 			.await?
@@ -952,12 +964,10 @@ mod tests {
 	async fn bad_arguments_are_rejected() {
 		let cases = [
 			("from_grid epsg=3035 size=0", "size must be positive"),
-			("from_grid epsg=3035 size=1000 id_preset=\"nope\"", "unknown id_preset"),
 			("from_grid epsg=3035 size=1000 id_template=\"static\"", "no {x} or {y}"),
-			(
-				"from_grid epsg=3035 size=100 id_preset=\"geostat\" id_template=\"{x/1000}\"",
-				"share an id",
-			),
+			("from_grid epsg=3035 size=100 id_template=\"{x/1000}\"", "share an id"),
+			// `id_preset` is gone: the presets are templates now.
+			("from_grid epsg=3035 size=1000 id_preset=\"geostat\"", "id_preset"),
 			// `max_zoom` is not an argument: the grid runs to level 30 and the
 			// consumer bounds it, so naming one here is a typo, not a narrowing.
 			("from_grid epsg=3035 size=1000 max_zoom=2", "max_zoom"),
