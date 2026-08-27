@@ -5,10 +5,14 @@
 ### 1. Prepare
 
 ```bash
-git checkout main
-git pull origin main
+git checkout dev
+git pull origin dev
 ./scripts/sync-version.sh  # Verify versions match
 ```
+
+Releases are cut from `dev` — the script refuses to run on any other branch. It also
+requires a clean working tree and that `origin/main` is an ancestor of `dev`; if `main`
+has commits `dev` does not, sync first with `git merge --ff-only origin/main`.
 
 ### 2. Create Release
 
@@ -123,17 +127,17 @@ This script will:
 
 - Sync versions between Cargo.toml and package.json
 - Run tests
-- Execute cargo-release (updates Cargo.toml, creates commit and tag)
-- Update package.json
-- Amend commit to include package.json
+- Execute cargo-release (updates Cargo.toml, creates the release commit)
+- Update package.json and amend the commit to include it
+- Push `dev` and wait for CI to pass on that exact commit
+- Fast-forward `main` to dev's tip (`git push origin dev:main`)
+- Tag the green commit and push the tag
 
-### 3. Push
+There is no separate push step: the script does all of it, in that order, because
+branch protection on `main` requires the tip to carry a green `CI Success` check and
+the `v*` tag ruleset should only fire once the commit is known good.
 
-```bash
-git push origin main --follow-tags
-```
-
-This triggers GitHub Actions which will:
+Pushing the tag triggers GitHub Actions which will:
 
 - Validate version synchronization
 - Build CLI binaries for 8 platforms (Linux gnu/musl x64/arm64, macOS x64/arm64, Windows x64/arm64)
@@ -143,7 +147,7 @@ This triggers GitHub Actions which will:
 - Publish to npmjs.com (main package + 8 platform-specific packages)
 - Trigger Docker and Homebrew workflows
 
-### 4. Verify
+### 3. Verify
 
 ```bash
 # Check npm
