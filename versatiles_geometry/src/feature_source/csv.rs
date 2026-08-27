@@ -289,6 +289,32 @@ mod tests {
 		Ok(())
 	}
 
+	/// `from_csv` reads through the `csv` crate rather than the parser in
+	/// `versatiles_core`, so CRLF is handled somewhere else entirely. Pinned here
+	/// because "the other CSV reader handles it" is not something this crate
+	/// should have to take on trust — a `\r` surviving into a coordinate would
+	/// fail to parse, and one surviving into a property would be invisible.
+	#[tokio::test]
+	async fn reads_a_file_with_crlf_line_endings() -> Result<()> {
+		let dir = tempfile::tempdir()?;
+		let path = dir.path().join("crlf.csv");
+		std::fs::write(&path, "id,longitude,latitude,name\r\n1,13.4,52.5,Berlin\r\n2,9.9,53.5,Hamburg\r\n")?;
+
+		let source = CsvSourceBuilder::new(&path, "longitude", "latitude").build()?;
+		let mut stream = source.load()?;
+		let mut features = Vec::new();
+		while let Some(item) = stream.next().await {
+			features.push(item?);
+		}
+
+		assert_eq!(features.len(), 2);
+		// The last column of each row is where a stray `\r` would end up.
+		assert_eq!(features[0].properties.get("name"), Some(&GeoValue::from("Berlin")));
+		assert_eq!(features[1].properties.get("name"), Some(&GeoValue::from("Hamburg")));
+		assert_eq!(type_name(&features[0].geometry), "Point");
+		Ok(())
+	}
+
 	#[tokio::test]
 	async fn missing_lon_column_errors() -> Result<()> {
 		let source = CsvSourceBuilder::new(FIXTURE, "lon_missing", "latitude").build()?;

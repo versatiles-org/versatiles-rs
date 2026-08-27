@@ -316,6 +316,62 @@ mod tests {
 		);
 	}
 
+	/// The line ending Excel writes on Windows, which is most of the CSV anyone
+	/// will feed this. `test_read_csv_fields_basic` above mixes `\n` and `\r\n`;
+	/// these are the cases it does not reach.
+	///
+	/// The parser gets this right by construction — `parse_simple_csv_string`
+	/// stops at `\r` so a field never absorbs a trailing one, and the record loop
+	/// treats `\r` as nothing and `\n` as the terminator — which is exactly the
+	/// kind of correctness a rewrite of the state machine could lose without
+	/// anything else noticing.
+	#[test]
+	fn crlf_line_endings() {
+		fn rows(input: &str) -> Vec<Vec<String>> {
+			check(read_csv_fields(Cursor::new(input.to_string()), b','))
+		}
+
+		// Every line, including the last.
+		assert_eq!(
+			rows("name,age\r\nJohn,30\r\nJane,29\r\n"),
+			vec![vec!["name", "age"], vec!["John", "30"], vec!["Jane", "29"]]
+		);
+
+		// No terminator on the final record.
+		assert_eq!(
+			rows("name,age\r\nJohn,30"),
+			vec![vec!["name", "age"], vec!["John", "30"]]
+		);
+
+		// A blank CRLF line is skipped, like a blank LF one.
+		assert_eq!(
+			rows("name,age\r\n\r\nJohn,30\r\n"),
+			vec![vec!["name", "age"], vec!["John", "30"]]
+		);
+
+		// Inside a quoted field the CRLF is data, not a terminator, and is kept
+		// verbatim — RFC 4180 allows it and normalising would corrupt the value.
+		assert_eq!(
+			rows("name,age\r\n\"John\r\nDoe\",30\r\n"),
+			vec![vec!["name", "age"], vec!["John\r\nDoe", "30"]]
+		);
+	}
+
+	/// Recorded, not endorsed. A stray `\r` anywhere before a separator or a
+	/// newline is dropped, and a file using lone `\r` as its line ending — classic
+	/// Mac, and nothing else — fails with a message about quoted fields it does
+	/// not have. Neither is right; both are what happens, and pinning them here
+	/// means a fix has to be deliberate.
+	#[test]
+	fn lone_carriage_returns_are_not_line_endings() {
+		let stray = read_csv_fields(Cursor::new("a,b\r,c\n".to_string()), b',');
+		assert_eq!(check(stray), vec![vec!["a", "b", "c"]], "the CR is silently dropped");
+
+		let mut lone_cr = read_csv_fields(Cursor::new("a,b\r1,2\r".to_string()), b',');
+		let first = lone_cr.next().expect("an entry").unwrap_err().to_string();
+		assert!(first.contains("after a quoted field"), "{first}");
+	}
+
 	#[test]
 	fn test_read_csv_fields_with_quotes() {
 		let mut reader = Cursor::new("name,age\n\"John, A. Doe\",30\r\n\"Jane Doe\",29");

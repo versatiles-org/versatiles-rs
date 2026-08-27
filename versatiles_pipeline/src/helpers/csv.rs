@@ -386,6 +386,32 @@ mod tests {
 		Ok(())
 	}
 
+	/// The reader `vector_update_properties` uses, on the line ending Excel
+	/// writes. `versatiles_core::utils::csv` covers the parser underneath; this
+	/// covers the layer that turns its fields into properties, where a `\r` left
+	/// on the end of a value would quietly become part of the data.
+	#[tokio::test]
+	async fn reads_a_file_with_crlf_line_endings() -> Result<()> {
+		let file_path = make_temp_csv("name;price\r\nApfel;1,99\r\nBirne;2,49\r\n")?;
+		let data = CsvReader::new(file_path.path(), runtime())
+			.with_field_separator(';')
+			.with_decimal_separator(',')
+			.read()
+			.await?;
+
+		assert_eq!(data.len(), 2);
+		assert_eq!(data[0].get("name"), Some(&GeoValue::from("Apfel")));
+		assert_eq!(data[0].get("price"), Some(&GeoValue::from(1.99)));
+		assert_eq!(data[1].get("name"), Some(&GeoValue::from("Birne")));
+
+		// The header keys carry no `\r` either, or every lookup above would miss.
+		let header = CsvReader::new(file_path.path(), runtime())
+			.with_field_separator(';')
+			.read_header()?;
+		assert_eq!(header.columns, vec!["name".to_string(), "price".to_string()]);
+		Ok(())
+	}
+
 	#[tokio::test]
 	async fn test_read_empty_csv_file() -> Result<()> {
 		let file_path = make_temp_csv("name,age,city")?;
