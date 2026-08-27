@@ -327,7 +327,7 @@ mod tests {
 	}
 
 	#[test]
-	fn get_level_bbox_empty_level() {
+	fn level_bbox_empty_level() {
 		assert!(TilePyramid::new_empty().level_bbox(5).is_empty());
 	}
 

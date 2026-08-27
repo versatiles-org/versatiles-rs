@@ -113,7 +113,7 @@ mod tests {
 	}
 
 	#[test]
-	fn get_level_and_set_level() {
+	fn set_level_and_level_ref() {
 		let mut p = TilePyramid::new_empty();
 		let qt = TileQuadtree::new_full(4).unwrap();
 		p.set_level(TileCover::from(qt));
