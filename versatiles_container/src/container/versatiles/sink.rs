@@ -18,7 +18,7 @@
 //! Supports both local paths and `sftp://` URLs as output destinations.
 
 use std::{
-	collections::HashMap,
+	collections::{HashMap, hash_map::Entry},
 	env,
 	fs::{self, File},
 	io::{BufReader, BufWriter, Write},
@@ -28,7 +28,7 @@ use std::{
 
 #[cfg(not(feature = "ssh2"))]
 use anyhow::bail;
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use versatiles_core::{
 	Blob, GeoBBox, TileCompression, TileCoord, TileFormat, TileJSON,
 	compression::compress,
@@ -219,10 +219,18 @@ impl TileSink for VersaTilesSink {
 		// it without deadlocking.
 		let is_full = {
 			let mut writers = self.block_writers.lock().expect("poisoned mutex");
-			let writer = writers.entry(block_key).or_insert_with(|| {
-				let path = self.block_path(&block_key);
-				BufWriter::new(File::create(path).expect("failed to create block temp file"))
-			});
+			// Not `or_insert_with`: opening the temp file is fallible — a large
+			// conversion holds one per unflushed block and can hit the process
+			// descriptor limit — and the closure has no way to report that.
+			let writer = match writers.entry(block_key) {
+				Entry::Occupied(entry) => entry.into_mut(),
+				Entry::Vacant(entry) => {
+					let path = self.block_path(&block_key);
+					let file = File::create(&path)
+						.with_context(|| format!("Failed to create block temp file '{}'", path.display()))?;
+					entry.insert(BufWriter::new(file))
+				}
+			};
 
 			coord.write_to_cache(writer)?;
 			blob.write_to_cache(writer)?;
@@ -332,6 +340,46 @@ impl Drop for VersaTilesSink {
 mod tests {
 	use super::*;
 	use crate::{TileSource, TilesRuntime, VersaTilesReader};
+
+	/// Opening a block's temp file is fallible — a large conversion holds one
+	/// per unflushed block and can exhaust the process descriptor limit — so
+	/// `write_tile` must report the failure, not panic inside the critical
+	/// section that holds `block_writers`.
+	///
+	/// A directory standing where the temp file belongs makes `File::create`
+	/// fail the same way, without depending on permissions or ulimits.
+	#[tokio::test]
+	async fn write_tile_reports_an_unopenable_block_file() -> Result<()> {
+		let temp_dir = assert_fs::TempDir::new()?;
+		let output = temp_dir.path().join("blocked.versatiles");
+		let runtime = TilesRuntime::default();
+
+		let sink = VersaTilesSink::open(
+			output.to_str().unwrap(),
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			&runtime,
+		)?;
+
+		// Occupy the exact path the sink will want for block (2, 0, 0).
+		let blocked = PathBuf::from(output.to_str().unwrap())
+			.with_extension("versatiles.tmp")
+			.join("2_0_0.bin");
+		fs::create_dir_all(&blocked)?;
+
+		let coord = TileCoord::new(2, 0, 0)?;
+		let error = sink
+			.write_tile(&coord, &Blob::from(vec![0u8; 4]))
+			.expect_err("creating the block temp file cannot succeed");
+
+		let chain = error.chain().map(ToString::to_string).collect::<Vec<_>>().join(" -> ");
+		assert!(
+			chain.contains("Failed to create block temp file") && chain.contains("2_0_0.bin"),
+			"the error should name the file it could not create, got: {chain}"
+		);
+
+		Ok(())
+	}
 
 	#[tokio::test]
 	async fn write_and_read_back() -> Result<()> {
