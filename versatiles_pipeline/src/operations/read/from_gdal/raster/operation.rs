@@ -277,23 +277,21 @@ impl TileSource for Operation {
 				if let Some(image) = image {
 					// Crop into tiles on a blocking thread
 					let spawn_result = tokio::task::spawn_blocking(move || {
+						// The decoded image covers the whole chunk, so a tile's pixel offset
+						// within it is its distance from the chunk's top-left corner.
+						let x_min = bbox.x_min().expect("bbox is non-empty");
+						let y_min = bbox.y_min().expect("bbox is non-empty");
+
 						bbox
 							.iter_coords_zorder()
 							.filter_map(|coord| {
-								image
-									.crop_imm(
-										(coord.x - bbox.x_min().expect("bbox is non-empty")) * size,
-										(coord.y - bbox.y_min().expect("bbox is non-empty")) * size,
-										size,
-										size,
-									)
-									.into_optional()
-									.map(|img| {
-										(
-											coord,
-											Tile::from_image(img, tile_format).expect("tile_format is raster"),
-										)
-									})
+								let tile = image
+									.crop_imm((coord.x - x_min) * size, (coord.y - y_min) * size, size, size)
+									.into_optional()?;
+								Some((
+									coord,
+									Tile::from_image(tile, tile_format).expect("tile_format is raster"),
+								))
 							})
 							.collect::<Vec<_>>()
 					})

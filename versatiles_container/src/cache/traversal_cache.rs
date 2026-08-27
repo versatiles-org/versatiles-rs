@@ -187,28 +187,9 @@ impl<V: CacheValue> TraversalCache<V> {
 				for file_path in files {
 					let tx = tx.clone();
 					tokio::task::spawn_blocking(move || {
-						match Self::iter_values_from_file(&file_path) {
-							Err(e) => log::warn!("failed to open cache file {}: {e}", file_path.display()),
-							Ok(iter) => {
-								for result in iter {
-									match result {
-										Ok(value) => {
-											if tx.blocking_send(value).is_err() {
-												break;
-											}
-										}
-										Err(e) => {
-											log::warn!(
-												"failed to deserialize value from cache file {}: {e}",
-												file_path.display()
-											);
-											break;
-										}
-									}
-								}
-							}
-						}
-						// Iterator (and file handle) is dropped; delete the individual file.
+						Self::drain_file_into(&file_path, &tx);
+						// `drain_file_into` has returned, so the iterator — and with it the
+						// file handle — is dropped; the file can be deleted.
 						let _ = remove_file(&file_path);
 					});
 				}
@@ -245,6 +226,48 @@ impl<V: CacheValue> TraversalCache<V> {
 		match file_index.remove(&index) {
 			Some((_, files)) if !files.is_empty() => Some(files),
 			_ => None,
+		}
+	}
+
+	/// Send every value in one cache file to `tx`, in file order.
+	///
+	/// Runs on a blocking thread, one per file. Three things end it early and
+	/// none of them is fatal to the traversal, so all three are swallowed
+	/// rather than propagated:
+	///
+	/// - the file cannot be opened — logged, nothing sent;
+	/// - a value fails to deserialize — logged, and the rest of *this* file is
+	///   skipped, since the read position is no longer trustworthy;
+	/// - the receiver is gone — routine, not logged: the consumer dropped the
+	///   stream before draining it, which [`take_stream`](Self::take_stream)
+	///   explicitly allows.
+	///
+	/// The caller deletes the file afterwards, once the iterator this holds
+	/// has been dropped.
+	fn drain_file_into(file_path: &Path, tx: &tokio::sync::mpsc::Sender<V>) {
+		let values = match Self::iter_values_from_file(file_path) {
+			Ok(values) => values,
+			Err(e) => {
+				log::warn!("failed to open cache file {}: {e}", file_path.display());
+				return;
+			}
+		};
+
+		for value in values {
+			match value {
+				Ok(value) => {
+					if tx.blocking_send(value).is_err() {
+						return;
+					}
+				}
+				Err(e) => {
+					log::warn!(
+						"failed to deserialize value from cache file {}: {e}",
+						file_path.display()
+					);
+					return;
+				}
+			}
 		}
 	}
 
