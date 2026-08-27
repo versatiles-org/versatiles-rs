@@ -10,15 +10,15 @@
 //! - `format = "pbf"` → `TileFormat::MVT`  + `TileCompression::Gzip`
 //!
 //! It also reads optional fields like `bounds`, `minzoom`, `maxzoom`, and `json` (for
-//! `vector_layers`) and merges them into an internal [`TileJSON`](versatiles_core::TileJSON).
+//! `vector_layers`) and merges them into an internal [`TileJSON`].
 //!
 //! The per-level coverage pyramid is **not** scanned at open time. It is computed
-//! lazily on the first call to [`TileSource::tile_pyramid`](crate::TileSource::tile_pyramid)
+//! lazily on the first call to [`TileSource::tile_pyramid`]
 //! by reading `(zoom_level, tile_column, tile_row)` from the `tiles` table, and
 //! the result is cached for subsequent calls.
 //!
 //! ## Requirements
-//! - The `MBTiles` file **must be an absolute path** when opening with [`open`].
+//! - The `MBTiles` file **must be an absolute path** when opening with [`MBTilesReader::open`].
 //! - The database must include a `format` entry in `metadata` so that format & compression
 //!   can be determined.
 //!
@@ -110,7 +110,7 @@ impl MBTilesReader {
 	}
 
 	/// Internal loader that establishes the `SQLite` pool, sets default parameters,
-	/// and then calls [`load_meta_data`] to populate `tilejson` and parameters.
+	/// and then calls [`Self::load_meta_data`] to populate `tilejson` and parameters.
 	///
 	/// # Errors
 	/// Returns an error if the connection cannot be established or metadata fails to load.

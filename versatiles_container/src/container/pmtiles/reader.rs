@@ -13,7 +13,7 @@
 //!   computed **tile pyramid** inferred from the directory tree
 //!
 //! ## Requirements
-//! - Use an **absolute** filesystem path when opening via [`open`].
+//! - Use an **absolute** filesystem path when opening via [`PMTilesReader::open`].
 //! - The container must be a valid `PMTiles` v3 file with readable header, directories, and data.
 //!
 //! ## Usage

@@ -183,7 +183,7 @@ impl TileSource for Operation {
 	/// Two stages so the CPU work scales across cores while peak memory stays bounded:
 	/// 1. **I/O** — read the raw, still-encoded source tiles per coordinate, one grid
 	///    chunk at a time. At most `MERGE_READ_AHEAD` chunks are read concurrently and
-	///    the chunk size is derived from a tile budget (see [`merge_grid_size`]), so the
+	///    the chunk size is derived from a tile budget (see [`chunk_grid_size`](crate::operations::read::gathering::chunk_grid_size)), so the
 	///    number of raw tiles held in memory is capped regardless of the bbox size —
 	///    important because a single tile can be large and there may be many sources.
 	/// 2. **CPU** — decode + merge + re-encode each coordinate's tiles on the blocking

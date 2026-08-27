@@ -3,7 +3,7 @@
 //! This module provides the [`TilesReader`] trait, which enables opening tile containers
 //! from filesystem paths or generic [`DataReader`] sources.
 //!
-//! Implementations of this trait are registered in the [`ContainerRegistry`] to handle specific
+//! Implementations of this trait are registered in the [`ContainerRegistry`](crate::ContainerRegistry) to handle specific
 //! input formats (e.g. `.mbtiles`, `.pmtiles`, `.versatiles`, `.tar`).
 
 use std::path::Path;

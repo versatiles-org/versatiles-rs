@@ -4,7 +4,7 @@
 //! from any [`TileSource`] source into a file or arbitrary output writer implementing
 //! [`DataWriterTrait`].
 //!
-//! Implementations of this trait are registered in the [`ContainerRegistry`] to handle specific
+//! Implementations of this trait are registered in the [`ContainerRegistry`](crate::ContainerRegistry) to handle specific
 //! output formats (e.g. `.mbtiles`, `.pmtiles`, `.versatiles`, `.tar`, or directory trees).
 //!
 //! ## Responsibilities

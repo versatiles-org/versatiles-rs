@@ -7,7 +7,7 @@
 //! and color semantics are preserved.
 //!
 //! The mapping is later used to create in-memory datasets with equivalent channel
-//! structure using [`create_mem_dataset`]. Only the most common color layouts are
+//! structure using [`BandMapping::create_mem_dataset`]. Only the most common color layouts are
 //! supported: Grey, Grey+Alpha, RGB, RGBA. Any other configuration (e.g. palette
 //! indexed or multispectral) will produce an error.
 
@@ -64,7 +64,7 @@ impl BandMapping {
 	}
 
 	/// Create a band mapping from explicit 1-based band indices.
-	/// `bands` contains the color channel band indices (e.g. [4,3,2] for RGB from bands 4,3,2).
+	/// `bands` contains the color channel band indices (e.g. `[4,3,2]` for RGB from bands 4,3,2).
 	/// The alpha band is NOT included in `bands` — it's always added as an extra output channel.
 	pub fn from_bands(bands: Vec<usize>) -> Result<Self> {
 		ensure!(!bands.is_empty(), "band list must not be empty");

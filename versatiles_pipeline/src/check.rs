@@ -11,7 +11,7 @@
 //!
 //! Values are checked as far as the metadata allows: a parameter with an
 //! enumerated type is handed to that type's own parser
-//! ([`VPLFieldMeta::accepts`](crate::vpl::VPLFieldMeta::accepts)), so
+//! (its `TryFrom<&str>` implementation), so
 //! `format=notaformat` is reported and the alias `format=pbf` is not. A value
 //! that is merely the wrong *format* for an unenumerated type — `color=red` is
 //! not hex — still needs building.

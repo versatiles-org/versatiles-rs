@@ -4,7 +4,7 @@ use syn::{Attribute, DataStruct, DeriveInput, Field, Fields, Meta};
 
 /// Metadata for mapping a Rust type to its VPL parsing method and documentation.
 struct TypeMapping {
-	/// The type pattern as a string (e.g., "String", "Option<u8>")
+	/// The type pattern as a string (e.g., "String", "`Option<u8>`")
 	pattern: &'static str,
 	/// Human-readable type name for documentation
 	display_name: &'static str,
@@ -12,7 +12,7 @@ struct TypeMapping {
 	method_name: &'static str,
 	/// Whether this is a required field (affects documentation formatting)
 	is_required: bool,
-	/// Optional generic type parameter (e.g., "u8" for property_number_option::<u8>)
+	/// Optional generic type parameter (e.g., "u8" for `property_number_option::<u8>`)
 	generic_param: Option<&'static str>,
 	/// Optional second generic parameter (e.g., "4" for array lengths)
 	generic_param2: Option<&'static str>,

@@ -1,4 +1,4 @@
-//! Small parsing helpers built on top of [`ByteIterator`](super::iterator::ByteIterator).
+//! Small parsing helpers built on top of [`ByteIterator`].
 //!
 //! These functions implement a tiny, allocation‑light subset of JSON/JSON‑like parsing:
 //! - `parse_tag` for matching fixed ASCII tags

@@ -17,7 +17,7 @@ use super::{VPLPipeline, VplParseError, parse_cst};
 /// caret-annotated trace `parse_vpl` produces, so nothing is lost by preferring it.
 ///
 /// Callers that want to *edit* the text rather than run it should reach for
-/// [`parse_cst`](super::parse_cst) instead, which keeps the comments and formatting this discards.
+/// [`parse_cst`] instead, which keeps the comments and formatting this discards.
 ///
 /// # Examples
 ///

@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 use crate::json::{JsonValue, stringify_pretty_multi_line};
 
 /// Low-level writer abstraction that handles output buffering.
-/// In runtime, writes directly to stderr; in tests, buffers output in a Vec<u8>.
+/// In runtime, writes directly to stderr; in tests, buffers output in a `Vec<u8>`.
 struct PrettyPrinter {
 	indention: String,
 	#[cfg(not(any(test, feature = "test")))]

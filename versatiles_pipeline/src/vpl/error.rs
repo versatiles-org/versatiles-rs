@@ -54,7 +54,7 @@ pub struct VplParseError {
 	/// all. That frame is not drawn in the [`std::fmt::Display`] trace, which shows only what `nom`
 	/// itself recorded.
 	pub context: Vec<VplErrorFrame>,
-	/// The caret-annotated trace, rendered eagerly because [`Display`] has no access to the input.
+	/// The caret-annotated trace, rendered eagerly because [`Display`](std::fmt::Display) has no access to the input.
 	trace: String,
 }
 
@@ -118,7 +118,7 @@ impl VplParseError {
 /// that could not belong to it, so `all_consuming` raised the failure above every `context(…)`
 /// call. The input is still meant to be one pipeline starting at offset 0, and that is what the
 /// leftover is measured against, so the stack is that single frame rather than nothing. It is not
-/// drawn in [`Display`], which shows only what `nom` itself recorded.
+/// drawn in [`Display`](std::fmt::Display), which shows only what `nom` itself recorded.
 fn whole_pipeline() -> Vec<VplErrorFrame> {
 	vec![VplErrorFrame {
 		label: String::from("parsing pipeline"),

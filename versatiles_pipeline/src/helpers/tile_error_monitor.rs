@@ -1,7 +1,7 @@
 //! Per-tile error accounting for the read operations that synthesise vector
 //! tiles (`from_geo`, `from_csv`).
 //!
-//! [`TileStream::from_bbox_parallel`] takes a callback returning `Option<T>`,
+//! [`TileStream::from_bbox_parallel`](versatiles_core::TileStream::from_bbox_parallel) takes a callback returning `Option<T>`,
 //! so every error inside the tile-generation pipeline (decoding, compression,
 //! size cap) is silently coerced to "no tile". On a multi-million-tile
 //! pyramid that's catastrophic when a systemic bug makes every tile fail —

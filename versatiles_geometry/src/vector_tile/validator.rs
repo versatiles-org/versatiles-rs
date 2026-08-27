@@ -71,7 +71,7 @@ pub struct ValidationIssue {
 	pub kind: IssueKind,
 }
 
-/// The kinds of MVT spec violation [`validate_tile`](super::validate_tile) reports.
+/// The kinds of MVT spec violation [`validate_tile`] reports.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IssueKind {
 	// ── Layer-level issues ────────────────────────────────────────────────

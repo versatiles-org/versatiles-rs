@@ -9,7 +9,7 @@
 //!
 //! ## `auto_overscale`
 //!
-//! When enabled, each source is automatically wrapped with [`raster_overscale`]
+//! When enabled, each source is automatically wrapped with [`raster_overscale`](crate::operations::raster::raster_overscale)
 //! so that sources missing native tiles at a requested zoom level still
 //! contribute via upscaled tiles from lower zoom levels.
 //!

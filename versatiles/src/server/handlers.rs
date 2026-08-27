@@ -42,7 +42,7 @@ pub struct StaticHandlerState {
 }
 
 /// Core tile serving logic extracted for reuse in dynamic routing.
-/// Takes an Arc<ServerTileSource> to support both static and dynamic routing.
+/// Takes an `Arc<ServerTileSource>` to support both static and dynamic routing.
 pub async fn serve_tile_from_source(
 	path: Url,
 	headers: HeaderMap,

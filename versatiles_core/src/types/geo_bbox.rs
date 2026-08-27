@@ -14,7 +14,7 @@
 //!
 //! ## Antimeridian & empties
 //! * Bounding boxes are **not** wrapped across the antimeridian; all input coordinates must lie within `[-180, 180]` longitude and `[-90, 90]` latitude.
-//! * Some operations (such as [`intersect`]) may yield an "empty" box with `x_min > x_max` or `y_min > y_max` to signal that there is no overlap.
+//! * Some operations (such as [`GeoBBox::intersect`]) may yield an "empty" box with `x_min > x_max` or `y_min > y_max` to signal that there is no overlap.
 use std::fmt::Debug;
 
 use anyhow::{Result, ensure};

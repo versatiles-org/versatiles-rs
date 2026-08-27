@@ -47,7 +47,7 @@ const FULL_BLOCK_TILE_COUNT: u32 = 256 * 256;
 /// State kept for the final output writer, created lazily on first flush.
 ///
 /// Holds the output writer itself plus the running block index that
-/// accumulates [`BlockDefinition`](super::types::BlockDefinition)s as blocks
+/// accumulates [`BlockDefinition`](super::types::BlockDefinition)(super::types::BlockDefinition)s as blocks
 /// are flushed. Guarded by one mutex so every block emission appends
 /// atomically.
 struct OutputState {
@@ -160,7 +160,7 @@ impl VersaTilesSink {
 	}
 
 	/// Stream one block's temp file through a [`BlockBuilder`] into the output
-	/// writer and append the resulting [`BlockDefinition`] to the running
+	/// writer and append the resulting [`BlockDefinition`](super::types::BlockDefinition) to the running
 	/// block index.
 	///
 	/// Removes the temp file on success. The block writer and tile counter

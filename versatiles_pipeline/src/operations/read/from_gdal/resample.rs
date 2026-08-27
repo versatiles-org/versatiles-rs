@@ -2,7 +2,7 @@
 //! Resampling algorithm mapping for GDAL operations.
 //!
 //! This module defines [`ResampleAlg`], a simple enum that mirrors GDAL’s
-//! [`GDALResampleAlg`] constants. It is used to select how raster values are
+//! `GDALResampleAlg` constants. It is used to select how raster values are
 //! interpolated or aggregated when reprojecting, rescaling, or warping datasets.
 //!
 //! # Overview
@@ -21,7 +21,7 @@
 )]
 /// Enumeration of resampling algorithms compatible with GDAL.
 ///
-/// These values are mapped 1‑to‑1 to GDAL’s [`GDALResampleAlg`] constants via [`to_gdal`].
+/// These values are mapped 1‑to‑1 to GDAL’s `GDALResampleAlg` constants via [`ResampleAlg::as_gdal`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResampleAlg {
 	/// Nearest neighbour — fastest, no smoothing.

@@ -3,7 +3,7 @@
 //! The `TarTilesWriter` emits a directory-like tile pyramid into a tarball using the
 //! `{z}/{x}/{y}.<format>[.<compression>]` layout and writes `TileJSON` as `tiles.json[.<compression>]`.
 //! The transport **compression** (`.br`/`.gz` or none) follows the source reader’s
-//! [`TileSourceMetadata::tile_compression`].
+//! [`TileSourceMetadata::tile_compression`](crate::TileSourceMetadata::tile_compression).
 //!
 //! ## Behavior
 //! - Creates regular file entries with mode `0644`.

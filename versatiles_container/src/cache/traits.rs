@@ -11,11 +11,11 @@
 //! Many fundamental types are already implemented, including:
 //! - Primitives: `u8`, `u32`
 //! - Collections: `Vec<T>`, `(A, B)`, `Option<V>`
-//! - Domain types: [`TileCoord`](versatiles_core::TileCoord),
-//!   [`TileFormat`](versatiles_core::TileFormat),
-//!   [`TileCompression`](versatiles_core::TileCompression),
-//!   [`Blob`](versatiles_core::Blob),
-//!   and [`DynamicImage`](versatiles_image::DynamicImage)
+//! - Domain types: [`TileCoord`],
+//!   [`TileFormat`],
+//!   [`TileCompression`],
+//!   [`Blob`],
+//!   and [`DynamicImage`]
 //!
 //! Each implementation encodes its content in little-endian order where applicable.
 
@@ -162,7 +162,7 @@ impl<A: CacheValue, B: CacheValue> CacheValue for (A, B) {
 	}
 }
 
-/// Implements serialization for [`TileCoord`](versatiles_core::TileCoord).
+/// Implements serialization for [`TileCoord`].
 ///
 /// Format:
 /// - 1 byte: zoom level
@@ -184,7 +184,7 @@ impl CacheValue for TileCoord {
 	}
 }
 
-/// Implements serialization for [`Blob`](versatiles_core::Blob).
+/// Implements serialization for [`Blob`].
 ///
 /// Format:
 /// - 8 bytes: blob length (`u64`, little-endian)
@@ -204,7 +204,7 @@ impl CacheValue for Blob {
 	}
 }
 
-/// Implements serialization for [`TileFormat`](versatiles_core::TileFormat)
+/// Implements serialization for [`TileFormat`]
 /// by storing its numeric discriminant as a single byte.
 impl CacheValue for TileFormat {
 	fn write_to_cache(&self, writer: &mut impl Write) -> Result<()> {
@@ -218,7 +218,7 @@ impl CacheValue for TileFormat {
 	}
 }
 
-/// Implements serialization for [`TileCompression`](versatiles_core::TileCompression)
+/// Implements serialization for [`TileCompression`]
 /// by storing its numeric discriminant as a single byte.
 impl CacheValue for TileCompression {
 	fn write_to_cache(&self, writer: &mut impl Write) -> Result<()> {
@@ -263,7 +263,7 @@ impl<V: CacheValue> CacheValue for Option<V> {
 	}
 }
 
-/// Implements serialization for [`DynamicImage`](versatiles_image::DynamicImage).
+/// Implements serialization for [`DynamicImage`].
 ///
 /// Format:
 /// - 4 bytes: width

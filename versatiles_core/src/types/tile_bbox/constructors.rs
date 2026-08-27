@@ -18,7 +18,7 @@
 //! - Build from min+max:  [`TileBBox::from_min_and_max`]
 //! - Cover full level:    [`TileBBox::new_full`]
 //! - Empty at level:      [`TileBBox::new_empty`]
-//! - Convert from lon/lat: [`TileBBox::from_geo`]
+//! - Convert from lon/lat: [`TileBBox::from_geo_bbox`]
 //!
 //! ## Examples
 //! Create a 3×2 bbox at z=4 starting at (5,6):

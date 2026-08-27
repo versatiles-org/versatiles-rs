@@ -12,7 +12,7 @@
 //! ### Requirements
 //! - The output `path` **must be absolute**.
 //! - All emitted tiles use the **same format** and **compression** as reported by the source reader's
-//!   [`TileSourceMetadata`](versatiles_core::TileSourceMetadata).
+//!   [`TileSourceMetadata`](crate::TileSourceMetadata).
 //! - The directory tree is created as needed.
 //!
 //! ### Recognized outputs

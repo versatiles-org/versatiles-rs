@@ -8,7 +8,7 @@
 //! `anyhow::Error`, `serde_json::Error`, `std::io::Error`, `TryFromIntError`,
 //! etc.). Add context first via `.context("…")` to enrich the error.
 //!
-//! The legacy [`napi_result!`] macro is kept for backward compatibility but
+//! The legacy [`napi_result!`](crate::napi_result) macro is kept for backward compatibility but
 //! new code should prefer `.to_napi()`.
 
 use napi::Error as NapiError;

@@ -3,7 +3,7 @@
 //! This module provides:
 //! - [`TilesConverterParameters`]: declarative knobs (bbox filter, compression override, `flip_y`, `swap_xy`)
 //! - [`TilesConvertReader`]: an adapter that applies those conversions while reading
-//! - [`convert_tiles_container`]: a convenience function to convert and write to a target path using a [`ContainerRegistry`]
+//! - [`convert_tiles_container`]: a convenience function to convert and write to a target path using a [`ContainerRegistry`](crate::ContainerRegistry)
 //!
 //! ## Coordinate transforms
 //! - `flip_y`: inverts Y within the zoom level (useful to switch between TMS and XYZ-like schemes)

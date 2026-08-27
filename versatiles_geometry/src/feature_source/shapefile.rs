@@ -6,7 +6,7 @@
 //! DBF attributes are mapped to [`GeoProperties`] using the
 //! [`dbase`] field types.
 //!
-//! Encoding: the underlying `dbase` reader uses [`UnicodeLossy`]
+//! Encoding: the underlying `dbase` reader uses `UnicodeLossy`
 //! by default — non-UTF-8 bytes are replaced with `U+FFFD`. We log a
 //! single `log::warn!` per source if any decoded value contains a
 //! replacement character.
