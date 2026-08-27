@@ -657,7 +657,7 @@ mod tests {
 	async fn berlin_report(depth: ProbeDepth) -> Result<ProbeReport> {
 		let runtime = TilesRuntime::new_silent();
 		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
-		probe_report(&**reader, depth, &runtime, None).await
+		probe_report(&*reader, depth, &runtime, None).await
 	}
 
 	#[tokio::test]
@@ -778,8 +778,8 @@ mod tests {
 		let runtime = TilesRuntime::new_silent();
 		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
 
-		let full = probe_report(&**reader, ProbeDepth::TileContents, &runtime, None).await?;
-		let sampled = probe_report(&**reader, ProbeDepth::TileContents, &runtime, Some(0.1)).await?;
+		let full = probe_report(&*reader, ProbeDepth::TileContents, &runtime, None).await?;
+		let sampled = probe_report(&*reader, ProbeDepth::TileContents, &runtime, Some(0.1)).await?;
 
 		let ContentsReport::Vector(full) = full.contents.unwrap() else {
 			panic!("vector source")

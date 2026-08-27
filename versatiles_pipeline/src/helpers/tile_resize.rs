@@ -3,7 +3,7 @@ use std::{fmt::Debug, sync::Arc};
 use anyhow::{Result, anyhow, bail, ensure};
 use imageproc::image::DynamicImage;
 use moka::future::Cache;
-use versatiles_container::{Tile, TileSource, TileSourceMetadata};
+use versatiles_container::{SharedTileSource, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TilePyramid, TileStream};
 use versatiles_image::GenericImage;
 
@@ -11,7 +11,7 @@ pub type ScaleDownFn = Arc<dyn Fn(&DynamicImage) -> Result<DynamicImage> + Send 
 
 #[derive(Clone)]
 pub struct TileResizeCore {
-	pub source: Arc<Box<dyn TileSource>>,
+	pub source: SharedTileSource,
 	pub metadata: TileSourceMetadata,
 	pub tilejson: TileJSON,
 	source_tile_size: u32,
@@ -115,7 +115,7 @@ impl TileResizeCore {
 			.build();
 
 		Ok(Self {
-			source: Arc::new(source),
+			source: Arc::from(source),
 			metadata,
 			tilejson,
 			source_tile_size,

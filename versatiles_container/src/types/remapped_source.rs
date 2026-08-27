@@ -143,7 +143,7 @@ mod tests {
 			TilePyramid::new_full_up_to(3),
 			TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, Traversal::ANY, None),
 		)?;
-		RemappedTileSource::new(Arc::new(Box::new(source) as Box<dyn TileSource>), remap).await
+		RemappedTileSource::new(Arc::new(source), remap).await
 	}
 
 	/// The bug #230 records: `tile()` and `tile_stream()` disagreeing for the
@@ -226,8 +226,8 @@ mod tests {
 				TilePyramid::new_full_up_to(3),
 				TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, Traversal::ANY, None),
 			)?;
-			let once = RemappedTileSource::new(Arc::new(Box::new(source) as Box<dyn TileSource>), remap).await?;
-			let twice = RemappedTileSource::new(Arc::new(Box::new(once) as Box<dyn TileSource>), remap.inverted()).await?;
+			let once = RemappedTileSource::new(Arc::new(source), remap).await?;
+			let twice = RemappedTileSource::new(Arc::new(once), remap.inverted()).await?;
 
 			let coord = TileCoord::new(3, 1, 2)?;
 			assert!(twice.tile(&coord).await?.is_some(), "{remap:?} did not round-trip");

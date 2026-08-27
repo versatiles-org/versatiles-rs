@@ -60,7 +60,7 @@ impl Operation {
 		_factory: &PipelineFactory,
 	) -> Result<RemappedTileSource> {
 		let args = Args::from_vpl_node(&vpl_node)?;
-		RemappedTileSource::new(std::sync::Arc::new(source), args.remap()).await
+		RemappedTileSource::new(std::sync::Arc::from(source), args.remap()).await
 	}
 }
 

@@ -340,7 +340,7 @@ impl ContainerRegistry {
 			// error naming the directory, and makes an empty conversion still produce
 			// the directory it was asked for.
 			std::fs::create_dir_all(&path).with_context(|| format!("Failed to create output directory {path:?}"))?;
-			return DirectoryWriter::write_to_path(reader.as_ref().as_ref(), &path, runtime).await;
+			return DirectoryWriter::write_to_path(reader.as_ref(), &path, runtime).await;
 		}
 
 		let extension = sanitize_extension(&path.extension().unwrap_or_default().to_string_lossy());
@@ -437,7 +437,7 @@ impl ContainerRegistry {
 			Some(Arc::new(
 				Box::new(|r: SharedTileSource, mut w: Box<dyn DataWriterTrait>, rt| {
 					Box::pin(async move {
-						W::write_to_writer(r.as_ref().as_ref(), w.as_mut(), rt).await?;
+						W::write_to_writer(r.as_ref(), w.as_mut(), rt).await?;
 						// Flush any buffered data (e.g. the SFTP writer's coalesced blocks).
 						w.finalize()
 					}) as WriteFuture
@@ -450,7 +450,7 @@ impl ContainerRegistry {
 			sanitize_extension(ext),
 			WriterEntry {
 				write_to_path: Arc::new(Box::new(|r, p, rt| {
-					Box::pin(async move { W::write_to_path(r.as_ref().as_ref(), &p, rt).await })
+					Box::pin(async move { W::write_to_path(r.as_ref(), &p, rt).await })
 				})),
 				write_to_writer,
 				supported_options: W::supported_options(),
@@ -547,11 +547,7 @@ pub async fn make_test_file(
 
 	let registry = ContainerRegistry::default();
 	registry
-		.write_to_path(
-			Arc::new(Box::new(reader)),
-			container_file.path(),
-			TilesRuntime::default(),
-		)
+		.write_to_path(Arc::new(reader), container_file.path(), TilesRuntime::default())
 		.await?;
 	Ok(container_file)
 }
@@ -598,7 +594,7 @@ pub mod tests {
 				None,
 			),
 		)?;
-		Ok(Arc::new(Box::new(reader)))
+		Ok(Arc::new(reader))
 	}
 
 	#[tokio::test]
@@ -648,7 +644,7 @@ pub mod tests {
 		let registry = ContainerRegistry::default();
 
 		registry
-			.write_to_path(Arc::new(Box::new(reader)), &path, TilesRuntime::new_silent())
+			.write_to_path(Arc::new(reader), &path, TilesRuntime::new_silent())
 			.await?;
 
 		assert!(path.is_file(), "a successful write must keep its output");
@@ -679,7 +675,7 @@ pub mod tests {
 			TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None),
 		)?;
 		ContainerRegistry::default()
-			.write_to_path(Arc::new(Box::new(reader)), &path, TilesRuntime::new_silent())
+			.write_to_path(Arc::new(reader), &path, TilesRuntime::new_silent())
 			.await?;
 
 		assert!(path.is_dir(), "the destination directory must have been created");
@@ -705,7 +701,7 @@ pub mod tests {
 		let err = format!(
 			"{:?}",
 			ContainerRegistry::default()
-				.write_to_path(Arc::new(Box::new(reader)), &path, TilesRuntime::new_silent())
+				.write_to_path(Arc::new(reader), &path, TilesRuntime::new_silent())
 				.await
 				.unwrap_err()
 		);
@@ -765,7 +761,7 @@ pub mod tests {
 			.build();
 
 		let err = ContainerRegistry::default()
-			.write_to_path(Arc::new(Box::new(reader)), &path, runtime)
+			.write_to_path(Arc::new(reader), &path, runtime)
 			.await
 			.unwrap_err();
 		// #[context] wraps the cause, so compare against the full chain.
@@ -854,10 +850,7 @@ pub mod tests {
 				TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None),
 			)?;
 			let path = std::env::temp_dir().join("file.unknown_ext");
-			let err = reg
-				.write_to_path(Arc::new(Box::new(reader)), &path, runtime)
-				.await
-				.unwrap_err();
+			let err = reg.write_to_path(Arc::new(reader), &path, runtime).await.unwrap_err();
 			assert!(err.to_string().contains("unknown"), "unexpected error: {err}");
 			Ok(())
 		}
@@ -886,7 +879,7 @@ pub mod tests {
 			let temp = assert_fs::NamedTempFile::new("blob_test.versatiles")?;
 			let reg = ContainerRegistry::default();
 			let runtime = TilesRuntime::default();
-			reg.write_to_path(Arc::new(Box::new(reader)), temp.path(), runtime.clone())
+			reg.write_to_path(Arc::new(reader), temp.path(), runtime.clone())
 				.await?;
 
 			// Read the file into a blob and open it via the data reader path
@@ -945,12 +938,12 @@ pub mod tests {
 			let registry = ContainerRegistry::default();
 			let runtime = TilesRuntime::default();
 			registry
-				.write_to_path(Arc::new(Box::new(reader1)), &path, runtime.clone())
+				.write_to_path(Arc::new(reader1), &path, runtime.clone())
 				.await?;
 
 			// get test container reader using the default registry (back-compat)
 			let reader2 = registry.reader_from_str(path.to_str().unwrap(), runtime).await?;
-			MockWriter::write(reader2.as_ref().as_ref()).await?;
+			MockWriter::write(reader2.as_ref()).await?;
 
 			Ok(())
 		}

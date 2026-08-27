@@ -309,7 +309,7 @@ impl Operation {
 				};
 				let wrapped_source = raster_overscale::Operation::new(source, &overscale_args)?;
 				sources.push(SourceEntry {
-					source: Arc::new(Box::new(wrapped_source)),
+					source: Arc::new(wrapped_source),
 					native_level_max,
 				});
 			}
@@ -317,7 +317,7 @@ impl Operation {
 			// Without auto_overscale, all tiles are considered native
 			for source in original_sources {
 				sources.push(SourceEntry {
-					source: Arc::new(source),
+					source: Arc::from(source),
 					native_level_max: NO_OVERSCALE_LEVEL,
 				});
 			}
@@ -350,7 +350,7 @@ impl TileSource for Operation {
 
 	#[context("Failed to get stacked raster tile coord stream for bbox: {:?}", bbox)]
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
-		let refs: Vec<&dyn TileSource> = self.sources.iter().map(|e| e.source.as_ref().as_ref()).collect();
+		let refs: Vec<&dyn TileSource> = self.sources.iter().map(|e| e.source.as_ref()).collect();
 		super::gathering::union_tile_coord_streams(&refs, bbox).await
 	}
 
@@ -701,7 +701,7 @@ mod tests {
 					.collect();
 				let source = DummyImageSource::from_color(&c, 4, PNG, None).unwrap();
 				FilteredSourceEntry {
-					source: Arc::new(Box::new(source) as Box<dyn TileSource>),
+					source: Arc::from(source),
 					is_overscaled: false,
 				}
 			})
@@ -800,7 +800,7 @@ mod tests {
 
 		let source = DummyImageSource::from_color(&[255, 0, 0], 4, PNG, None).unwrap();
 		let entry = SourceEntry {
-			source: Arc::new(Box::new(source) as Box<dyn TileSource>),
+			source: Arc::new(source),
 			native_level_max,
 		};
 
@@ -828,7 +828,7 @@ mod tests {
 				let alpha = if i < overscaled_flags.len() - 1 { 128 } else { 255 };
 				let source = DummyImageSource::from_color(&[255, 0, 0, alpha], 4, PNG, None).unwrap();
 				FilteredSourceEntry {
-					source: Arc::new(Box::new(source) as Box<dyn TileSource>),
+					source: Arc::from(source),
 					is_overscaled,
 				}
 			})
@@ -864,7 +864,7 @@ mod tests {
 
 		let source = DummyImageSource::from_color(&[255, 0, 0], 4, PNG, None).unwrap();
 		let entry = SourceEntry {
-			source: Arc::new(Box::new(source) as Box<dyn TileSource>),
+			source: Arc::new(source),
 			native_level_max: 5,
 		};
 
@@ -892,11 +892,11 @@ mod tests {
 
 		let entries = vec![
 			FilteredSourceEntry {
-				source: Arc::new(Box::new(empty_source) as Box<dyn TileSource>),
+				source: Arc::new(empty_source),
 				is_overscaled: false,
 			},
 			FilteredSourceEntry {
-				source: Arc::new(Box::new(fg_source) as Box<dyn TileSource>),
+				source: Arc::new(fg_source),
 				is_overscaled: false,
 			},
 		];
@@ -1245,7 +1245,7 @@ mod tests {
 			};
 			let wrapped_source = raster_overscale::Operation::new(source, &overscale_args).unwrap();
 			sources.push(SourceEntry {
-				source: Arc::new(Box::new(wrapped_source)),
+				source: Arc::new(wrapped_source),
 				native_level_max,
 			});
 		}
@@ -1467,7 +1467,7 @@ mod tests {
 			};
 			let wrapped_source = raster_overscale::Operation::new(source, &overscale_args).unwrap();
 			sources.push(SourceEntry {
-				source: Arc::new(Box::new(wrapped_source)),
+				source: Arc::new(wrapped_source),
 				native_level_max,
 			});
 		}

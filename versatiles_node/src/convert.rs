@@ -36,7 +36,7 @@ use crate::{
 /// This shared function handles the common conversion logic used by both
 /// the `convert()` function and `TileSource.convertTo()` method.
 pub(crate) async fn convert_tiles_with_options(
-	reader: Arc<Box<dyn RustTileSource>>,
+	reader: Arc<dyn RustTileSource>,
 	output: &str,
 	options: Option<ConvertOptions>,
 	on_progress: Option<ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false, true>>,

@@ -35,7 +35,7 @@ use crate::{
 };
 
 // Type aliases for complex types
-type TileSourceList = Mutex<HashMap<String, Arc<Box<dyn RustTileSource>>>>; // Map of name -> TileSource
+type TileSourceList = Mutex<HashMap<String, Arc<dyn RustTileSource>>>; // Map of name -> TileSource
 type StaticSourceList = Mutex<Vec<(String, Option<String>)>>; // Vec of (path, url_prefix)
 
 /// HTTP tile server for serving tiles and static content

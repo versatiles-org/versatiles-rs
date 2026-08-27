@@ -299,7 +299,7 @@ impl TilesConvertReader {
 		let reader: SharedTileSource = if remap.is_identity() {
 			reader
 		} else {
-			Arc::new(Box::new(RemappedTileSource::new(reader, remap).await?) as Box<dyn TileSource>)
+			Arc::new(RemappedTileSource::new(reader, remap).await?)
 		};
 
 		let mut tile_pyramid = reader.tile_pyramid().await?.as_ref().clone();

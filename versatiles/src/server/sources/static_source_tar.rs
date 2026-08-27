@@ -225,7 +225,6 @@ impl Debug for TarFile {
 
 #[cfg(test)]
 mod tests {
-	use std::sync::Arc;
 
 	use assert_fs::NamedTempFile;
 	use rstest::rstest;
@@ -238,7 +237,9 @@ mod tests {
 
 	pub async fn make_test_tar(compression: TileCompression) -> NamedTempFile {
 		// get dummy reader
-		let reader = Arc::new(MockReader::new_mock_profile(MockReaderProfile::Pbf).unwrap().boxed());
+		let reader = MockReader::new_mock_profile(MockReaderProfile::Pbf)
+			.unwrap()
+			.into_shared();
 
 		// get to test container converter
 		let container_file = NamedTempFile::new("temp.tar").unwrap();

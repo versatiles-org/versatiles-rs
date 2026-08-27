@@ -39,7 +39,7 @@ use std::{fmt::Debug, sync::Arc};
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use moka::future::Cache;
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
+use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TileStream};
 use versatiles_derive::context;
 use versatiles_image::{DynamicImage, traits::DynamicImageTraitOperation};
@@ -74,7 +74,7 @@ pub struct Args {
 #[derive(Clone)]
 pub struct Operation {
 	metadata: TileSourceMetadata,
-	source: Arc<Box<dyn TileSource>>,
+	source: SharedTileSource,
 	tilejson: TileJSON,
 	/// The zoom level used as source for overscaled tiles
 	level_base: u8,
@@ -151,7 +151,7 @@ impl Operation {
 
 		Ok(Self {
 			metadata,
-			source: Arc::new(source),
+			source: Arc::from(source),
 			tilejson,
 			level_base,
 			level_min,

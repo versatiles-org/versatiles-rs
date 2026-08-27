@@ -52,7 +52,7 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	};
 
 	log::debug!("probing {:?} at depth {:?}", arguments.filename, level);
-	probe(&**reader, level, runtime, sample).await?;
+	probe(&*reader, level, runtime, sample).await?;
 
 	Ok(())
 }
@@ -384,7 +384,7 @@ mod tests {
 	async fn probe_all_levels_against_mbtiles() -> Result<()> {
 		let runtime = create_test_runtime();
 		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
-		let source: &dyn TileSource = &**reader;
+		let source: &dyn TileSource = &*reader;
 
 		probe(source, ProbeDepth::Shallow, &runtime, None).await?;
 		probe(source, ProbeDepth::Container, &runtime, None).await?;
@@ -417,7 +417,7 @@ mod tests {
 	async fn probe_tile_contents_against_mbtiles() -> Result<()> {
 		let runtime = create_test_runtime();
 		let reader = runtime.reader_from_str("../testdata/berlin.mbtiles").await?;
-		let source: &dyn TileSource = &**reader;
+		let source: &dyn TileSource = &*reader;
 
 		let report = probe_report(source, ProbeDepth::TileContents, &runtime, None).await?;
 		let contents = report.contents.as_ref().expect("TileContents depth");

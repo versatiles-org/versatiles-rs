@@ -33,13 +33,7 @@ use crate::{SourceType, Tile, TileSourceMetadata};
 ///
 /// This type alias simplifies passing tile sources across async boundaries
 /// and between threads.
-///
-/// The `Box` is a leftover. It was there so that writers could `Arc::try_unwrap` their way to
-/// mutable access, which needs a sized inner type — but no method on [`TileSource`] takes
-/// `&mut self`, so there was never anything for that access to do, and the writers now take
-/// `&dyn TileSource`. `Arc<dyn TileSource>` would do as well; collapsing it touches every
-/// `Arc::new(Box::new(…))` in the tree, so it is left for its own change.
-pub type SharedTileSource = Arc<Box<dyn TileSource>>;
+pub type SharedTileSource = Arc<dyn TileSource>;
 
 /// Unified object-safe interface for reading or processing tiles.
 ///
@@ -240,7 +234,7 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	where
 		Self: Sized + 'static,
 	{
-		Arc::new(Box::new(self))
+		Arc::new(self)
 	}
 }
 
@@ -250,8 +244,8 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 /// A pipeline transform takes its input as `Box<dyn TileSource>` **by value**, which leaves a
 /// caller that wants to keep the input with nothing to hold on to — an editor rebuilding only the
 /// tail of a pipeline after an edit needs the head to survive being built on. Boxing the `Arc`
-/// gives it a shape the existing signatures already accept, at the cost of one pointer hop per
-/// call. See issue #259.
+/// gives it a shape those signatures already accept, at the cost of one pointer hop per call.
+/// See issue #259.
 ///
 /// Every method is forwarded explicitly rather than left to the trait defaults. The defaults are
 /// written in terms of [`metadata`](TileSource::metadata) and

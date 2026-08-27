@@ -37,7 +37,7 @@ use async_trait::async_trait;
 use geo::MapCoords;
 use geo_types::{Coord, Geometry, MultiPolygon, Polygon};
 use moka::future::Cache;
-use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
+use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TileStream};
 use versatiles_derive::context;
 use versatiles_geometry::{
@@ -85,7 +85,7 @@ pub struct Args {
 #[derive(Clone)]
 pub struct Operation {
 	metadata: TileSourceMetadata,
-	source: Arc<Box<dyn TileSource>>,
+	source: SharedTileSource,
 	tilejson: TileJSON,
 	level_base: u8,
 	level_min: u8,
@@ -179,7 +179,7 @@ impl Operation {
 
 		Ok(Self {
 			metadata,
-			source: Arc::new(source),
+			source: Arc::from(source),
 			tilejson,
 			level_base,
 			level_min,

@@ -1,7 +1,7 @@
-use std::{fmt::Debug, sync::Arc};
+use std::fmt::Debug;
 
 use anyhow::Result;
-use versatiles_container::TileSource;
+use versatiles_container::{SharedTileSource, TileSource};
 use versatiles_core::{Blob, TileCompression, TileCoord, compression::TargetCompression};
 use versatiles_derive::context;
 
@@ -12,7 +12,7 @@ use super::{super::utils::Url, SourceResponse};
 pub struct ServerTileSource {
 	pub prefix: Url,
 	pub id: String,
-	reader: Arc<Box<dyn TileSource>>, // NO MORE MUTEX! 🚀
+	reader: SharedTileSource, // NO MORE MUTEX! 🚀
 	pub tile_mime: String,
 	pub compression: TileCompression,
 }
@@ -20,7 +20,7 @@ pub struct ServerTileSource {
 impl ServerTileSource {
 	// Constructor function for creating a TileSource instance
 	#[context("creating tile source: id='{id}'")]
-	pub fn from(reader: Arc<Box<dyn TileSource>>, id: &str) -> Result<ServerTileSource> {
+	pub fn from(reader: SharedTileSource, id: &str) -> Result<ServerTileSource> {
 		let metadata = reader.metadata();
 		let tile_mime = metadata.tile_format().as_mime_str().to_string();
 		let compression = *metadata.tile_compression();
@@ -137,7 +137,7 @@ mod tests {
 	// Test the constructor function for TileSource
 	#[tokio::test]
 	async fn tile_container_from() -> Result<()> {
-		let reader = Arc::new(MockReader::new_mock_profile(MockReaderProfile::Png)?.boxed());
+		let reader = MockReader::new_mock_profile(MockReaderProfile::Png)?.into_shared();
 		let container = ServerTileSource::from(reader, "prefix")?;
 
 		assert_eq!(container.prefix.str, "/tiles/prefix/");
@@ -152,7 +152,7 @@ mod tests {
 	// Test the debug function
 	#[test]
 	fn debug() -> Result<()> {
-		let reader = Arc::new(MockReader::new_mock_profile(MockReaderProfile::Png)?.boxed());
+		let reader = MockReader::new_mock_profile(MockReaderProfile::Png)?.into_shared();
 		let container = ServerTileSource::from(reader, "prefix")?;
 		// Updated expected output - no more "Mutex { data: ... }"
 		let debug_str = format!("{container:?}");

@@ -469,7 +469,7 @@ mod tests {
 		cli_pyramid.intersect_geo_bbox(&GeoBBox::try_from(&BBOX)?)?;
 		cli_pyramid.buffer(BORDER);
 		let converter = TilesConvertReader::new_from_reader(
-			std::sync::Arc::new(factory.operation_from_vpl("from_debug format=mvt").await?),
+			std::sync::Arc::from(factory.operation_from_vpl("from_debug format=mvt").await?),
 			TilesConverterParameters {
 				tile_pyramid: Some(cli_pyramid),
 				geo_bbox: Some(GeoBBox::try_from(&BBOX)?),

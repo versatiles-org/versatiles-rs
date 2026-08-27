@@ -3,20 +3,14 @@
 //! These tests verify that tile data is preserved byte-for-byte when converting
 //! between container formats using the CLI.
 
-use std::sync::Arc;
-
 use tempfile::TempDir;
-use versatiles_container::{TileSource, TilesRuntime};
+use versatiles_container::{SharedTileSource, TileSource, TilesRuntime};
 use versatiles_core::{TileCompression, TileCoord};
 
 use crate::test_utilities::*;
 
 /// Helper to compare tiles from two readers at a given coordinate.
-async fn assert_tiles_equal(
-	source_reader: &Arc<Box<dyn TileSource>>,
-	output_reader: &Arc<Box<dyn TileSource>>,
-	coord: &TileCoord,
-) {
+async fn assert_tiles_equal(source_reader: &SharedTileSource, output_reader: &SharedTileSource, coord: &TileCoord) {
 	let source_tile = source_reader.tile(coord).await.unwrap();
 	let output_tile = output_reader.tile(coord).await.unwrap();
 

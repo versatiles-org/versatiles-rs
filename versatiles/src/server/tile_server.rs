@@ -35,7 +35,7 @@ use tower::{
 	ServiceBuilder, buffer::BufferLayer, limit::ConcurrencyLimitLayer, load_shed::LoadShedLayer, timeout::TimeoutLayer,
 };
 use tower_http::{catch_panic::CatchPanicLayer, set_header::SetResponseHeaderLayer};
-use versatiles_container::{DataLocation, TileSource, TilesRuntime};
+use versatiles_container::{DataLocation, SharedTileSource, TilesRuntime};
 use versatiles_derive::context;
 
 use super::{cors, reload::ReloadHandle, routes, sources};
@@ -194,7 +194,7 @@ impl TileServer {
 	/// Returns error if a source with this name already exists or if URL prefix collides.
 	/// Can be called before or after `start()` - changes take effect immediately.
 	#[context("adding tile source: id='{name}'")]
-	pub async fn add_tile_source(&mut self, name: String, reader: Arc<Box<dyn TileSource>>) -> Result<()> {
+	pub async fn add_tile_source(&mut self, name: String, reader: SharedTileSource) -> Result<()> {
 		log::debug!("add source: id='{name}', source={reader:?}");
 
 		// Create ServerTileSource (validates and wraps reader)
@@ -495,7 +495,7 @@ mod tests {
 	use regex::Regex;
 	use reqwest::Client;
 	use rstest::rstest;
-	use versatiles_container::{MockReader, MockReaderProfile as MRP, TileSourceMetadata, Traversal};
+	use versatiles_container::{MockReader, MockReaderProfile as MRP, TileSource, TileSourceMetadata, Traversal};
 	use versatiles_core::{TileCompression as TC, TileFormat as TF, TilePyramid};
 
 	use super::*;
@@ -510,7 +510,7 @@ mod tests {
 		// range. Let the OS pick a free port, then read it back via `port()`.
 		let mut server = TileServer::new_test(IP, 0, true, false);
 
-		let reader = Arc::new(MockReader::new_mock_profile(MRP::Pbf)?.boxed());
+		let reader = MockReader::new_mock_profile(MRP::Pbf)?.into_shared();
 		server.add_tile_source("cheese".to_string(), reader).await?;
 
 		server.start().await?;
@@ -551,7 +551,7 @@ mod tests {
 	#[tokio::test]
 	async fn a_source_root_is_not_found_rather_than_a_server_error() -> Result<()> {
 		let mut server = TileServer::new_test(IP, 0, true, false);
-		let reader = Arc::new(MockReader::new_mock_profile(MRP::Pbf)?.boxed());
+		let reader = MockReader::new_mock_profile(MRP::Pbf)?.into_shared();
 		server.add_tile_source("cheese".to_string(), reader).await?;
 		server.start().await?;
 		let port = server.port();
@@ -583,10 +583,10 @@ mod tests {
 	async fn same_prefix_twice() {
 		let mut server = TileServer::new_test(IP, 0, true, false);
 
-		let reader = Arc::new(MockReader::new_mock_profile(MRP::Png).unwrap().boxed());
+		let reader = MockReader::new_mock_profile(MRP::Png).unwrap().into_shared();
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 
-		let reader = Arc::new(MockReader::new_mock_profile(MRP::Pbf).unwrap().boxed());
+		let reader = MockReader::new_mock_profile(MRP::Pbf).unwrap().into_shared();
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 	}
 
@@ -606,7 +606,7 @@ mod tests {
 		let mut server = TileServer::new_test(IP, 0, true, false);
 		assert_eq!(server.ip, IP);
 
-		let reader = Arc::new(MockReader::new_mock_profile(MRP::Pbf).unwrap().boxed());
+		let reader = MockReader::new_mock_profile(MRP::Pbf).unwrap().into_shared();
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 
 		assert_eq!(server.tile_sources.len(), 1);
@@ -619,7 +619,7 @@ mod tests {
 		let mut server = TileServer::new_test(IP, 0, true, false);
 		assert_eq!(server.ip, IP);
 
-		let reader = Arc::new(MockReader::new_mock_profile(MRP::Pbf).unwrap().boxed());
+		let reader = MockReader::new_mock_profile(MRP::Pbf).unwrap().into_shared();
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 
 		assert_eq!(
@@ -664,11 +664,9 @@ mod tests {
 		let mut server = TileServer::new_test(IP, 0, true, false);
 
 		let parameters = TileSourceMetadata::new(format, compression, Traversal::ANY, None);
-		let reader = Arc::new(
-			MockReader::new_mock(TilePyramid::new_full_up_to(8), parameters)
-				.unwrap()
-				.boxed(),
-		);
+		let reader = MockReader::new_mock(TilePyramid::new_full_up_to(8), parameters)
+			.unwrap()
+			.into_shared();
 		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 		server.start().await.unwrap();
 

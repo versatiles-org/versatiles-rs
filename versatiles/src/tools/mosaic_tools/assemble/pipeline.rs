@@ -705,7 +705,7 @@ mod tests {
 		let reader = MockReader::new_mock_profile(MockReaderProfile::Png).unwrap().boxed();
 		let dir = TempDir::new().unwrap();
 		let path = dir.path().join("src.versatiles").to_string_lossy().into_owned();
-		runtime.write_to_str(Arc::new(reader), &path).await.unwrap();
+		runtime.write_to_str(Arc::from(reader), &path).await.unwrap();
 		(dir, path)
 	}
 

@@ -65,7 +65,7 @@ async fn write_via_meta_update(input: &str, tilejson: &TileJSON, output: &str, r
 
 	let dir = std::env::current_dir()?;
 	let reader = PipelineReader::open_str(&vpl, &dir, runtime.clone()).await?;
-	let shared: SharedTileSource = Arc::new(Box::new(reader) as Box<dyn TileSource>);
+	let shared: SharedTileSource = Arc::new(reader);
 
 	// Fail loudly on any dropped tile rather than writing a truncated container.
 	runtime.set_abort_on_error(true);

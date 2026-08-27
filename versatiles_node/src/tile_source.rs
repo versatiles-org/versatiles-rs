@@ -54,7 +54,7 @@ fn ssh_identity_of(options: Option<&SourceOptions>) -> Option<&str> {
 #[napi]
 #[derive(Clone)]
 pub struct TileSource {
-	reader: Arc<Box<dyn RustTileSource>>,
+	reader: Arc<dyn RustTileSource>,
 }
 
 #[napi]
@@ -102,13 +102,13 @@ impl TileSource {
 		Ok(Self::new(source))
 	}
 
-	fn new(source: Arc<Box<dyn RustTileSource>>) -> Self {
+	fn new(source: Arc<dyn RustTileSource>) -> Self {
 		Self { reader: source }
 	}
 
 	/// Create a new reader from this TileSource (for server use)
 	/// This recreates the reader, which is needed when the server API requires ownership
-	pub(crate) fn reader(&self) -> Arc<Box<dyn RustTileSource>> {
+	pub(crate) fn reader(&self) -> Arc<dyn RustTileSource> {
 		self.reader.clone()
 	}
 
@@ -183,7 +183,7 @@ impl TileSource {
 			std::env::current_dir()?
 		};
 		let source = napi_result!(PipelineReader::open_str(&vpl, &path, runtime).await)?;
-		Ok(Self::new(Arc::new(Box::new(source))))
+		Ok(Self::new(Arc::new(source)))
 	}
 
 	/// Create a TileSource from a pipeline definition (JSON)
@@ -211,7 +211,7 @@ impl TileSource {
 			std::env::current_dir()?
 		};
 		let source = napi_result!(PipelineReader::from_pipeline(pipeline, "from pipeline", &path, runtime).await)?;
-		Ok(Self::new(Arc::new(Box::new(source))))
+		Ok(Self::new(Arc::new(source)))
 	}
 
 	/// Convert this tile source to another format
