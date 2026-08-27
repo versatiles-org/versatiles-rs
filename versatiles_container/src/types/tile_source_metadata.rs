@@ -156,23 +156,30 @@ impl TileSourceMetadata {
 	/// Returns the tile pyramid, computing it with `compute_fn` if it is not
 	/// there yet.
 	///
-	/// The read lock is released before the write lock is taken, so two threads
-	/// racing on a cold pyramid can both run `compute_fn` and the second result
-	/// wins. Both compute the same pyramid, so the only cost is the duplicated
-	/// work; scanning a container twice is cheaper than holding a write lock
-	/// across the whole scan.
+	/// `compute_fn` runs while **no** lock is held. That matters because it
+	/// scans the whole container — for `MBTilesReader` it is a full
+	/// `SELECT … FROM tiles` — and every reader of this metadata, including
+	/// [`tile_pyramid`](Self::tile_pyramid), would otherwise block for the
+	/// length of that scan.
+	///
+	/// The cost is that two threads racing on a cold pyramid can both run
+	/// `compute_fn`. They compute the same pyramid, so the only loss is the
+	/// duplicated work; the first result to be stored is the one every caller
+	/// gets, so they all end up sharing one `Arc`.
 	pub fn get_or_compute_tile_pyramid(
 		&self,
 		compute_fn: impl FnOnce() -> Result<TilePyramid>,
 	) -> Result<Arc<TilePyramid>> {
 		if let Some(pyramid) = self.tile_pyramid() {
-			Ok(pyramid)
-		} else {
-			let mut write_guard = self.tile_pyramid.write().expect("poisoned RwLock");
-			let pyramid = Arc::new(compute_fn()?);
-			*write_guard = Some(pyramid.clone());
-			Ok(pyramid)
+			return Ok(pyramid);
 		}
+
+		let computed = Arc::new(compute_fn()?);
+
+		// Another thread may have finished computing while this one was
+		// scanning; keep whichever result landed first.
+		let mut write_guard = self.tile_pyramid.write().expect("poisoned RwLock");
+		Ok(write_guard.get_or_insert(computed).clone())
 	}
 
 	/// Narrows `bbox` to what this source actually holds.
@@ -195,6 +202,61 @@ mod tests {
 	use versatiles_core::GeoBBox;
 
 	use super::*;
+
+	/// `compute_fn` must run without the write lock held, or every reader of
+	/// this metadata stalls for the length of a full container scan.
+	///
+	/// Against the previous implementation, which took the write lock before
+	/// calling `compute_fn`, the reader below blocks and this test fails on the
+	/// `recv_timeout`.
+	#[test]
+	fn readers_are_not_blocked_while_the_pyramid_is_computed() {
+		use std::{sync::mpsc, thread, time::Duration};
+
+		let metadata = Arc::new(TileSourceMetadata::new(
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			Traversal::ANY,
+			None,
+		));
+
+		let (inside_tx, inside_rx) = mpsc::channel();
+		let (release_tx, release_rx) = mpsc::channel();
+
+		let writer = {
+			let metadata = Arc::clone(&metadata);
+			thread::spawn(move || {
+				metadata.get_or_compute_tile_pyramid(|| {
+					inside_tx.send(()).expect("test receiver alive");
+					release_rx.recv().expect("test sender alive");
+					Ok(TilePyramid::new_empty())
+				})
+			})
+		};
+
+		// Wait until the writer is provably inside `compute_fn`.
+		inside_rx.recv().expect("writer reached compute_fn");
+
+		let (read_tx, read_rx) = mpsc::channel();
+		{
+			let metadata = Arc::clone(&metadata);
+			thread::spawn(move || {
+				let _ = read_tx.send(metadata.tile_pyramid().is_none());
+			});
+		}
+
+		let still_cold = read_rx
+			.recv_timeout(Duration::from_secs(10))
+			.expect("a reader blocked while the pyramid was being computed");
+		assert!(
+			still_cold,
+			"the pyramid should not be published before compute_fn returns"
+		);
+
+		release_tx.send(()).expect("writer alive");
+		writer.join().expect("writer did not panic").expect("compute succeeded");
+		assert!(metadata.tile_pyramid().is_some(), "the pyramid is published afterwards");
+	}
 
 	#[test]
 	fn test_tiles_reader_parameters_new() {
