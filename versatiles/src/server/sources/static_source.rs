@@ -22,7 +22,7 @@ pub trait StaticSourceTrait: Send + Sync + Debug {
 
 #[derive(Clone)]
 pub struct StaticSource {
-	source: Arc<Box<dyn StaticSourceTrait>>,
+	source: Arc<dyn StaticSourceTrait>,
 	prefix: Url,
 }
 
@@ -31,24 +31,24 @@ impl StaticSource {
 	pub async fn from_location(location: &DataLocation, prefix: &str) -> Result<StaticSource> {
 		let prefix = Url::from(prefix).to_dir();
 		Ok(StaticSource {
-			source: Arc::new(match location {
+			source: match location {
 				DataLocation::Url(url) => {
 					let filename = url.path_segments().and_then(|mut s| s.next_back()).unwrap_or("");
 					if filename.contains(".tar") {
-						Box::new(TarFile::from_url(url).await?) as Box<dyn StaticSourceTrait>
+						Arc::new(TarFile::from_url(url).await?) as Arc<dyn StaticSourceTrait>
 					} else {
-						Box::new(RemoteFolder::from(url)) as Box<dyn StaticSourceTrait>
+						Arc::new(RemoteFolder::from(url)) as Arc<dyn StaticSourceTrait>
 					}
 				}
 				DataLocation::Path(path) => {
 					if std::fs::metadata(path)?.is_dir() {
-						Box::new(Folder::from(path)?) as Box<dyn StaticSourceTrait>
+						Arc::new(Folder::from(path)?) as Arc<dyn StaticSourceTrait>
 					} else {
-						Box::new(TarFile::from(path)?)
+						Arc::new(TarFile::from(path)?)
 					}
 				}
 				DataLocation::Blob(_) => bail!("Blob is not supported as a static source"),
-			}),
+			},
 			prefix,
 		})
 	}
@@ -181,7 +181,7 @@ mod tests {
 	#[tokio::test]
 	async fn get_data_valid_path() {
 		let static_source = StaticSource {
-			source: Arc::new(Box::new(MockStaticSource)),
+			source: Arc::new(MockStaticSource),
 			prefix: Url::from(""),
 		};
 		let result = static_source
@@ -193,7 +193,7 @@ mod tests {
 	#[tokio::test]
 	async fn get_data_invalid_path() {
 		let static_source = StaticSource {
-			source: Arc::new(Box::new(MockStaticSource)),
+			source: Arc::new(MockStaticSource),
 			prefix: Url::from(""),
 		};
 		let result = static_source
@@ -205,7 +205,7 @@ mod tests {
 	#[tokio::test]
 	async fn get_data_with_path_filtering() {
 		let static_source = StaticSource {
-			source: Arc::new(Box::new(MockStaticSource)),
+			source: Arc::new(MockStaticSource),
 			prefix: Url::from("path/to"),
 		};
 		let result = static_source

@@ -101,6 +101,11 @@ pub(super) struct FirstPassResult {
 	pub(super) config: AssembleConfig,
 	pub(super) tilejson: TileJSON,
 	pub(super) tile_dim: u64,
+	/// The `Box` inside the `Arc` is load-bearing, not redundant: both passes
+	/// share the sink, and [`TileSink::finish`] then consumes it as
+	/// `self: Box<Self>`. Recovering that owned `Box` needs
+	/// `Arc::try_unwrap`, which requires a `Sized` payload — so a plain
+	/// `Arc<dyn TileSink>` cannot be finished at all.
 	pub(super) sink: Arc<Box<dyn TileSink>>,
 	pub(super) translucent_map: HashMap<TileCoord, Vec<usize>>,
 	pub(super) done: HashSet<TileCoord>,
