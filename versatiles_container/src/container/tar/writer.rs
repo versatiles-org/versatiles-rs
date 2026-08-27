@@ -60,7 +60,7 @@ impl Write for DataWriterAdapter<'_> {
 pub struct TarTilesWriter {}
 
 impl TarTilesWriter {
-	async fn write_tar<W: Write + Send>(reader: &mut dyn TileSource, sink: W, runtime: TilesRuntime) -> Result<()> {
+	async fn write_tar<W: Write + Send>(reader: &dyn TileSource, sink: W, runtime: TilesRuntime) -> Result<()> {
 		let mut builder = Builder::new(sink);
 
 		let parameters = reader.metadata();
@@ -117,14 +117,14 @@ impl TarTilesWriter {
 #[async_trait]
 impl TilesWriter for TarTilesWriter {
 	#[context("writing tar to path '{}'", path.display())]
-	async fn write_to_path(reader: &mut dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
+	async fn write_to_path(reader: &dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
 		let file = File::create(path)?;
 		Self::write_tar(reader, file, runtime).await
 	}
 
 	#[context("writing tar to DataWriter")]
 	async fn write_to_writer(
-		reader: &mut dyn TileSource,
+		reader: &dyn TileSource,
 		writer: &mut dyn DataWriterTrait,
 		runtime: TilesRuntime,
 	) -> Result<()> {
@@ -143,29 +143,29 @@ mod tests {
 
 	#[tokio::test]
 	async fn read_write() -> Result<()> {
-		let mut mock_reader = MockReader::new_mock(
+		let mock_reader = MockReader::new_mock(
 			TilePyramid::new_full_up_to(4),
 			TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, Traversal::ANY, None),
 		)?;
 
 		let temp_path = NamedTempFile::new("test_output.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, TilesRuntime::default()).await?;
+		TarTilesWriter::write_to_path(&mock_reader, &temp_path, TilesRuntime::default()).await?;
 
-		let mut reader = TarTilesReader::open(&temp_path)?;
-		MockWriter::write(&mut reader).await?;
+		let reader = TarTilesReader::open(&temp_path)?;
+		MockWriter::write(&reader).await?;
 
 		Ok(())
 	}
 
 	#[tokio::test]
 	async fn test_meta_data() -> Result<()> {
-		let mut mock_reader = MockReader::new_mock(
+		let mock_reader = MockReader::new_mock(
 			TilePyramid::new_full_up_to(1),
 			TileSourceMetadata::new(TileFormat::JSON, TileCompression::Uncompressed, Traversal::ANY, None),
 		)?;
 
 		let temp_path = NamedTempFile::new("test_meta_output.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, TilesRuntime::default()).await?;
+		TarTilesWriter::write_to_path(&mock_reader, &temp_path, TilesRuntime::default()).await?;
 
 		let reader = TarTilesReader::open(&temp_path)?;
 		assert_eq!(
@@ -178,13 +178,13 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_empty_tiles() -> Result<()> {
-		let mut mock_reader = MockReader::new_mock(
+		let mock_reader = MockReader::new_mock(
 			TilePyramid::new_empty(),
 			TileSourceMetadata::new(TileFormat::JSON, TileCompression::Uncompressed, Traversal::ANY, None),
 		)?;
 
 		let temp_path = NamedTempFile::new("test_empty_tiles.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, TilesRuntime::default()).await?;
+		TarTilesWriter::write_to_path(&mock_reader, &temp_path, TilesRuntime::default()).await?;
 
 		assert_eq!(
 			TarTilesReader::open(&temp_path)
@@ -201,13 +201,13 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_invalid_path() -> Result<()> {
-		let mut mock_reader = MockReader::new_mock(
+		let mock_reader = MockReader::new_mock(
 			TilePyramid::new_full_up_to(2),
 			TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, Traversal::ANY, None),
 		)?;
 
 		let invalid_path = Path::new("/invalid/path/output.tar");
-		let result = TarTilesWriter::write_to_path(&mut mock_reader, invalid_path, TilesRuntime::default()).await;
+		let result = TarTilesWriter::write_to_path(&mock_reader, invalid_path, TilesRuntime::default()).await;
 
 		assert!(result.is_err());
 		Ok(())
@@ -215,13 +215,13 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_large_tile_set() -> Result<()> {
-		let mut mock_reader = MockReader::new_mock(
+		let mock_reader = MockReader::new_mock(
 			TilePyramid::new_full_up_to(7),
 			TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None),
 		)?;
 
 		let temp_path = NamedTempFile::new("test_large_tiles.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, TilesRuntime::default()).await?;
+		TarTilesWriter::write_to_path(&mock_reader, &temp_path, TilesRuntime::default()).await?;
 
 		let reader = TarTilesReader::open(&temp_path)?;
 		assert_eq!(reader.tile_pyramid().await?.count_tiles(), 21845);
@@ -238,13 +238,13 @@ mod tests {
 		];
 
 		for tile_compression in compressions {
-			let mut mock_reader = MockReader::new_mock(
+			let mock_reader = MockReader::new_mock(
 				TilePyramid::new_full_up_to(2),
 				TileSourceMetadata::new(TileFormat::MVT, tile_compression, Traversal::ANY, None),
 			)?;
 
 			let temp_path = NamedTempFile::new(format!("test_compression_{tile_compression:?}.tar"))?;
-			TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, TilesRuntime::default()).await?;
+			TarTilesWriter::write_to_path(&mock_reader, &temp_path, TilesRuntime::default()).await?;
 
 			let reader = TarTilesReader::open(&temp_path)?;
 			assert_eq!(reader.metadata().tile_compression(), &tile_compression);
@@ -257,13 +257,13 @@ mod tests {
 	async fn test_correct_zxy_scheme() -> Result<()> {
 		let mut tile_pyramid = TilePyramid::new_empty();
 		tile_pyramid.insert_coord(&TileCoord::new(3, 1, 2)?);
-		let mut mock_reader = MockReader::new_mock(
+		let mock_reader = MockReader::new_mock(
 			tile_pyramid,
 			TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, Traversal::ANY, None),
 		)?;
 
 		let temp_path = NamedTempFile::new("test_zxy_scheme.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, TilesRuntime::default()).await?;
+		TarTilesWriter::write_to_path(&mock_reader, &temp_path, TilesRuntime::default()).await?;
 
 		let mut filenames = tar::Archive::new(File::open(&temp_path)?)
 			.entries()?

@@ -98,7 +98,7 @@ impl TilesWriter for PMTilesWriter {
 	/// known — a `reorder` pass borrows its directory so the temporary file
 	/// lands on the same filesystem as the output rather than on whatever `/tmp`
 	/// happens to be.
-	async fn write_to_path(reader: &mut dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
+	async fn write_to_path(reader: &dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
 		let mut writer = DataWriterFile::from_path(path)?;
 		Self::write(reader, &mut writer, runtime, path.parent()).await
 	}
@@ -115,7 +115,7 @@ impl TilesWriter for PMTilesWriter {
 	/// # Errors
 	/// Returns an error if any I/O, compression, or serialization operation fails.
 	async fn write_to_writer(
-		reader: &mut dyn TileSource,
+		reader: &dyn TileSource,
 		writer: &mut dyn DataWriterTrait,
 		runtime: TilesRuntime,
 	) -> Result<()> {
@@ -127,7 +127,7 @@ impl TilesWriter for PMTilesWriter {
 impl PMTilesWriter {
 	#[context("writing PMTiles")]
 	async fn write(
-		reader: &mut dyn TileSource,
+		reader: &dyn TileSource,
 		writer: &mut dyn DataWriterTrait,
 		runtime: TilesRuntime,
 		output_dir: Option<&Path>,
@@ -693,7 +693,7 @@ mod tests {
 	#[context("test: PMTiles read↔write roundtrip")]
 	#[tokio::test]
 	async fn read_write() -> Result<()> {
-		let mut mock_reader = MockReader::new_mock(
+		let mock_reader = MockReader::new_mock(
 			TilePyramid::new_full_up_to(4),
 			TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, Traversal::ANY, None),
 		)?;
@@ -701,11 +701,11 @@ mod tests {
 		let runtime = TilesRuntime::default();
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, runtime.clone()).await?;
+		PMTilesWriter::write_to_writer(&mock_reader, &mut data_writer, runtime.clone()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
-		let mut reader = PMTilesReader::open_data(Box::new(data_reader), runtime).await?;
-		MockWriter::write(&mut reader).await?;
+		let reader = PMTilesReader::open_data(Box::new(data_reader), runtime).await?;
+		MockWriter::write(&reader).await?;
 
 		Ok(())
 	}
@@ -717,7 +717,7 @@ mod tests {
 		tile_pyramid.insert_bbox(&TileBBox::from_min_and_max(15, 4090, 4090, 4139, 4139)?)?;
 		tile_pyramid.insert_bbox(&TileBBox::from_min_and_max(14, 250, 250, 260, 260)?)?;
 
-		let mut mock_reader = MockReader::new_mock(
+		let mock_reader = MockReader::new_mock(
 			tile_pyramid,
 			TileSourceMetadata::new(TileFormat::MVT, TileCompression::Uncompressed, Traversal::ANY, None),
 		)?;
@@ -725,7 +725,7 @@ mod tests {
 		let runtime = TilesRuntime::default();
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, runtime.clone()).await?;
+		PMTilesWriter::write_to_writer(&mock_reader, &mut data_writer, runtime.clone()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let reader = PMTilesReader::open_data(Box::new(data_reader), runtime).await?;

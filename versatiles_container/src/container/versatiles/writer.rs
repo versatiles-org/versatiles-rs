@@ -113,7 +113,7 @@ impl TilesWriter for VersaTilesWriter {
 	/// Returns an error if writing, compression, or bounding box validation fails.
 	#[context("writing VersaTiles to DataWriter")]
 	async fn write_to_writer(
-		reader: &mut dyn TileSource,
+		reader: &dyn TileSource,
 		writer: &mut dyn DataWriterTrait,
 		runtime: TilesRuntime,
 	) -> Result<()> {
@@ -186,7 +186,7 @@ impl VersaTilesWriter {
 	/// Returns the byte range covering the block index blob.
 	#[context("Failed to write blocks")]
 	async fn write_blocks(
-		reader: &mut dyn TileSource,
+		reader: &dyn TileSource,
 		writer: &mut dyn DataWriterTrait,
 		tile_compression: TileCompression,
 		runtime: TilesRuntime,

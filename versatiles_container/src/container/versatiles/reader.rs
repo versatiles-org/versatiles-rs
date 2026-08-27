@@ -623,7 +623,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn read_your_own_dog_food() -> Result<()> {
-		let mut reader1 = MockReader::new_mock(
+		let reader1 = MockReader::new_mock(
 			TilePyramid::new_full_up_to(4),
 			TileSourceMetadata::new(TileFormat::JSON, TileCompression::Gzip, Traversal::ANY, None),
 		)?;
@@ -631,13 +631,13 @@ mod tests {
 		let runtime = TilesRuntime::default();
 
 		let mut data_writer1 = DataWriterBlob::new()?;
-		VersaTilesWriter::write_to_writer(&mut reader1, &mut data_writer1, runtime.clone()).await?;
+		VersaTilesWriter::write_to_writer(&reader1, &mut data_writer1, runtime.clone()).await?;
 
 		let data_reader1 = data_writer1.to_reader();
-		let mut reader2 = VersaTilesReader::open_data(Box::new(data_reader1), runtime.clone()).await?;
+		let reader2 = VersaTilesReader::open_data(Box::new(data_reader1), runtime.clone()).await?;
 
 		let mut data_writer2 = DataWriterBlob::new()?;
-		VersaTilesWriter::write_to_writer(&mut reader2, &mut data_writer2, runtime.clone()).await?;
+		VersaTilesWriter::write_to_writer(&reader2, &mut data_writer2, runtime.clone()).await?;
 
 		let data_reader2 = data_writer2.to_reader();
 		let reader3 = VersaTilesReader::open_data(Box::new(data_reader2), runtime).await?;
@@ -805,13 +805,13 @@ mod tests {
 	/// Build a fresh in-memory `.versatiles` blob and open a reader against it,
 	/// wrapped in a `CountingReader` so we can observe the data-layer traffic.
 	async fn mk_counting_reader(delay_ms: u64) -> Result<(VersaTilesReader, Arc<CountingState>)> {
-		let mut src = MockReader::new_mock(
+		let src = MockReader::new_mock(
 			TilePyramid::new_full_up_to(4),
 			TileSourceMetadata::new(TileFormat::JSON, TileCompression::Gzip, Traversal::ANY, None),
 		)?;
 		let runtime = TilesRuntime::default();
 		let mut writer = DataWriterBlob::new()?;
-		VersaTilesWriter::write_to_writer(&mut src, &mut writer, runtime.clone()).await?;
+		VersaTilesWriter::write_to_writer(&src, &mut writer, runtime.clone()).await?;
 		let inner: DataReader = Box::new(writer.to_reader());
 		let state = Arc::new(CountingState::default());
 		let counting = CountingReader {

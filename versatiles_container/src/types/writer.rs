@@ -80,7 +80,7 @@ pub trait TilesWriter: Send {
 	///
 	/// # Errors
 	/// Returns an error if the file cannot be created or the writing operation fails.
-	async fn write_to_path(reader: &mut dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
+	async fn write_to_path(reader: &dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
 		Self::write_to_writer(reader, &mut DataWriterFile::from_path(path)?, runtime).await
 	}
 
@@ -92,7 +92,7 @@ pub trait TilesWriter: Send {
 	/// # Errors
 	/// Returns an error if the format does not support generic writers, or if I/O fails.
 	async fn write_to_writer(
-		_reader: &mut dyn TileSource,
+		_reader: &dyn TileSource,
 		_writer: &mut dyn DataWriterTrait,
 		_runtime: TilesRuntime,
 	) -> Result<()> {

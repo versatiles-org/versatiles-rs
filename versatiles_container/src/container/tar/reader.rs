@@ -483,9 +483,9 @@ pub mod tests {
 			let temp_file = make_test_file(TileFormat::MVT, compression, 2, "tar").await?;
 
 			// get tar reader
-			let mut reader = TarTilesReader::open(&temp_file)?;
+			let reader = TarTilesReader::open(&temp_file)?;
 
-			MockWriter::write(&mut reader).await?;
+			MockWriter::write(&reader).await?;
 			Ok(())
 		}
 

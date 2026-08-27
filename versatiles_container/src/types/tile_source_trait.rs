@@ -34,8 +34,11 @@ use crate::{SourceType, Tile, TileSourceMetadata};
 /// This type alias simplifies passing tile sources across async boundaries
 /// and between threads.
 ///
-/// Note: The `Box` wrapper is required because writers use `Arc::try_unwrap`
-/// to get mutable access, which requires a sized inner type.
+/// The `Box` is a leftover. It was there so that writers could `Arc::try_unwrap` their way to
+/// mutable access, which needs a sized inner type — but no method on [`TileSource`] takes
+/// `&mut self`, so there was never anything for that access to do, and the writers now take
+/// `&dyn TileSource`. `Arc<dyn TileSource>` would do as well; collapsing it touches every
+/// `Arc::new(Box::new(…))` in the tree, so it is left for its own change.
 pub type SharedTileSource = Arc<Box<dyn TileSource>>;
 
 /// Unified object-safe interface for reading or processing tiles.

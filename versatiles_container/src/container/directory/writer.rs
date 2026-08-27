@@ -100,7 +100,7 @@ impl TilesWriter for DirectoryWriter {
 	/// # Errors
 	/// Returns an error for non-absolute paths, I/O failures, or encoding/compression errors.
 	#[context("writing tiles to directory '{}'", path.display())]
-	async fn write_to_path(reader: &mut dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
+	async fn write_to_path(reader: &dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
 		log::trace!("convert_from");
@@ -161,12 +161,12 @@ mod tests {
 		let temp_dir = assert_fs::TempDir::new()?;
 		let temp_path = temp_dir.path();
 
-		let mut mock_reader = MockReader::new_mock(
+		let mock_reader = MockReader::new_mock(
 			TilePyramid::new_full_up_to(2),
 			TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, Traversal::ANY, None),
 		)?;
 
-		DirectoryWriter::write_to_path(&mut mock_reader, temp_path, TilesRuntime::default()).await?;
+		DirectoryWriter::write_to_path(&mock_reader, temp_path, TilesRuntime::default()).await?;
 
 		let load = |filename| {
 			let path = temp_path.join(filename);

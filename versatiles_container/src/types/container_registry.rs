@@ -340,9 +340,7 @@ impl ContainerRegistry {
 			// error naming the directory, and makes an empty conversion still produce
 			// the directory it was asked for.
 			std::fs::create_dir_all(&path).with_context(|| format!("Failed to create output directory {path:?}"))?;
-			let mut boxed_reader = Arc::try_unwrap(reader)
-				.map_err(|_| anyhow!("Cannot get exclusive access to reader for directory write"))?;
-			return DirectoryWriter::write_to_path(boxed_reader.as_mut(), &path, runtime).await;
+			return DirectoryWriter::write_to_path(reader.as_ref().as_ref(), &path, runtime).await;
 		}
 
 		let extension = sanitize_extension(&path.extension().unwrap_or_default().to_string_lossy());
@@ -439,8 +437,7 @@ impl ContainerRegistry {
 			Some(Arc::new(
 				Box::new(|r: SharedTileSource, mut w: Box<dyn DataWriterTrait>, rt| {
 					Box::pin(async move {
-						let mut boxed = Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader"))?;
-						W::write_to_writer(boxed.as_mut(), w.as_mut(), rt).await?;
+						W::write_to_writer(r.as_ref().as_ref(), w.as_mut(), rt).await?;
 						// Flush any buffered data (e.g. the SFTP writer's coalesced blocks).
 						w.finalize()
 					}) as WriteFuture
@@ -453,10 +450,7 @@ impl ContainerRegistry {
 			sanitize_extension(ext),
 			WriterEntry {
 				write_to_path: Arc::new(Box::new(|r, p, rt| {
-					Box::pin(async move {
-						let mut boxed = Arc::try_unwrap(r).map_err(|_| anyhow!("Cannot get exclusive access to reader"))?;
-						W::write_to_path(boxed.as_mut(), &p, rt).await
-					})
+					Box::pin(async move { W::write_to_path(r.as_ref().as_ref(), &p, rt).await })
 				})),
 				write_to_writer,
 				supported_options: W::supported_options(),
@@ -956,9 +950,7 @@ pub mod tests {
 
 			// get test container reader using the default registry (back-compat)
 			let reader2 = registry.reader_from_str(path.to_str().unwrap(), runtime).await?;
-			let mut boxed =
-				Arc::try_unwrap(reader2).map_err(|_| anyhow!("Cannot get exclusive access to reader for test"))?;
-			MockWriter::write(boxed.as_mut()).await?;
+			MockWriter::write(reader2.as_ref().as_ref()).await?;
 
 			Ok(())
 		}

@@ -43,7 +43,7 @@ impl MockWriter {
 	/// # Returns
 	///
 	/// A `Result` indicating the success or failure of the operation.
-	pub async fn write(reader: &mut dyn TileSource) -> Result<()> {
+	pub async fn write(reader: &dyn TileSource) -> Result<()> {
 		let _temp = reader.tilejson();
 
 		reader
@@ -84,7 +84,7 @@ impl TilesWriter for MockWriter {
 	/// A `Result` indicating the success or failure of the operation.
 	#[context("mock writing tiles to DataWriter")]
 	async fn write_to_writer(
-		reader: &mut dyn TileSource,
+		reader: &dyn TileSource,
 		_writer: &mut dyn DataWriterTrait,
 		_runtime: TilesRuntime,
 	) -> Result<()> {
@@ -99,15 +99,15 @@ mod tests {
 
 	#[tokio::test]
 	async fn convert_png() -> Result<()> {
-		let mut reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
-		MockWriter::write(&mut reader).await?;
+		let reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
+		MockWriter::write(&reader).await?;
 		Ok(())
 	}
 
 	#[tokio::test]
 	async fn convert_pbf() -> Result<()> {
-		let mut reader = MockReader::new_mock_profile(MockReaderProfile::Pbf)?;
-		MockWriter::write(&mut reader).await?;
+		let reader = MockReader::new_mock_profile(MockReaderProfile::Pbf)?;
+		MockWriter::write(&reader).await?;
 		Ok(())
 	}
 }

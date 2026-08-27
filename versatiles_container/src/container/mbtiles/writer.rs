@@ -150,7 +150,7 @@ impl TilesWriter for MBTilesWriter {
 	/// Returns an error if writing fails, if an unsupported format/compression is used,
 	/// or if database insertion encounters an error.
 	#[context("writing MBTiles to '{}'", path.display())]
-	async fn write_to_path(reader: &mut dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
+	async fn write_to_path(reader: &dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
 		let writer = MBTilesWriter::new(path)?;
 
 		let metadata = reader.metadata().clone();
@@ -246,17 +246,17 @@ mod tests {
 
 	#[tokio::test]
 	async fn read_write() -> Result<()> {
-		let mut mock_reader = MockReader::new_mock(
+		let mock_reader = MockReader::new_mock(
 			TilePyramid::new_full_up_to(5),
 			TileSourceMetadata::new(TileFormat::MVT, TileCompression::Gzip, Traversal::ANY, None),
 		)?;
 
 		let filename = NamedTempFile::new("temp.mbtiles")?;
-		MBTilesWriter::write_to_path(&mut mock_reader, &filename, TilesRuntime::default()).await?;
+		MBTilesWriter::write_to_path(&mock_reader, &filename, TilesRuntime::default()).await?;
 
-		let mut reader = MBTilesReader::open(&filename, TilesRuntime::default())?;
+		let reader = MBTilesReader::open(&filename, TilesRuntime::default())?;
 
-		MockWriter::write(&mut reader).await?;
+		MockWriter::write(&reader).await?;
 
 		Ok(())
 	}
@@ -267,12 +267,12 @@ mod tests {
 	#[tokio::test]
 	async fn uncompressed_mvt_is_gzipped_rather_than_refused() -> Result<()> {
 		let file = NamedTempFile::new("uncompressed_mvt.mbtiles")?;
-		let mut reader = MockReader::new_mock(
+		let reader = MockReader::new_mock(
 			TilePyramid::new_full_up_to(2),
 			TileSourceMetadata::new(TileFormat::MVT, TileCompression::Uncompressed, Traversal::ANY, None),
 		)?;
 
-		MBTilesWriter::write_to_path(&mut reader, file.path(), TilesRuntime::default()).await?;
+		MBTilesWriter::write_to_path(&reader, file.path(), TilesRuntime::default()).await?;
 
 		// MBTiles stores vector tiles gzipped, so that is what comes back.
 		let written = MBTilesReader::open(file.path(), TilesRuntime::default())?;

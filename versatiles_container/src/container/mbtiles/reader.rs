@@ -522,7 +522,7 @@ pub mod tests {
 	#[tokio::test]
 	async fn reader() -> Result<()> {
 		// get test container reader
-		let mut reader = MBTilesReader::open(&PATH, TilesRuntime::default())?;
+		let reader = MBTilesReader::open(&PATH, TilesRuntime::default())?;
 
 		assert_eq!(
 			format!("{reader:?}"),
@@ -554,7 +554,7 @@ pub mod tests {
 		// only check the stable prefix here.
 		assert_eq!(tile.range(0..4), &[31, 139, 8, 0]);
 
-		MockWriter::write(&mut reader).await?;
+		MockWriter::write(&reader).await?;
 
 		Ok(())
 	}

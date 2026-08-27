@@ -372,7 +372,7 @@ async fn versatiles_deduplicated_tiles_readable() -> Result<()> {
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
 
 	// Create a mock source with duplicate small tiles
-	let mut source = MockReader::new_mock(
+	let source = MockReader::new_mock(
 		TilePyramid::new_full_up_to(2), // Small: 4x4 = 16 tiles at level 2
 		TileSourceMetadata::new(TileFormat::MVT, TileCompression::Uncompressed, Traversal::ANY, None),
 	)?;
@@ -388,7 +388,7 @@ async fn versatiles_deduplicated_tiles_readable() -> Result<()> {
 		.await;
 
 	// Write to versatiles (MockReader tiles are small and may be deduplicated)
-	VersaTilesWriter::write_to_path(&mut source, &versatiles_path, runtime.clone()).await?;
+	VersaTilesWriter::write_to_path(&source, &versatiles_path, runtime.clone()).await?;
 
 	// Read back
 	let reader = runtime.reader_from_str(versatiles_path.to_str().unwrap()).await?;
@@ -420,13 +420,13 @@ async fn versatiles_empty_source_fails_gracefully() -> Result<()> {
 	let runtime = TilesRuntime::builder().silent_progress(true).build();
 
 	// Create an empty mock source (no zoom levels at all)
-	let mut source = MockReader::new_mock(
+	let source = MockReader::new_mock(
 		TilePyramid::new_empty(),
 		TileSourceMetadata::new(TileFormat::MVT, TileCompression::Uncompressed, Traversal::ANY, None),
 	)?;
 
 	// Writing should fail because the VersaTiles format requires valid minzoom/maxzoom
-	let result = VersaTilesWriter::write_to_path(&mut source, &versatiles_path, runtime.clone()).await;
+	let result = VersaTilesWriter::write_to_path(&source, &versatiles_path, runtime.clone()).await;
 	assert!(
 		result.is_err(),
 		"Writing an empty source should fail because VersaTiles requires valid zoom range"

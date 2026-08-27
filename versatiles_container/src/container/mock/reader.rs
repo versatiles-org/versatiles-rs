@@ -249,8 +249,8 @@ mod tests {
 
 	#[tokio::test]
 	async fn convert_from() -> Result<()> {
-		let mut reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
-		MockWriter::write(&mut reader).await.unwrap();
+		let reader = MockReader::new_mock_profile(MockReaderProfile::Png)?;
+		MockWriter::write(&reader).await.unwrap();
 		Ok(())
 	}
 
