@@ -64,13 +64,7 @@ pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 	)
 	.await?;
 
-	let batches = pipeline::prepare_batches(
-		first.translucent_map,
-		first.done,
-		first.tile_dim,
-		max_buffer_size,
-		paths.len(),
-	);
+	let batches = pipeline::prepare_batches(first.translucent_map, first.done, first.tile_dim, max_buffer_size);
 
 	pipeline::composite_batches(&batches, &paths, &first.config, &first.sink, runtime).await?;
 

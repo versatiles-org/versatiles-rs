@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use anyhow::Result;
 use versatiles_container::{SharedTileSource, TileSource};
-use versatiles_core::{Blob, TileCompression, TileCoord, compression::TargetCompression};
+use versatiles_core::{Blob, TileCompression, TileCoord};
 use versatiles_derive::context;
 
 use super::{super::utils::Url, SourceResponse};
@@ -45,9 +45,12 @@ impl ServerTileSource {
 		self.reader.source_type().to_string()
 	}
 
-	// Retrieve the tile data as an HTTP response
+	// Retrieve the tile data as an HTTP response.
+	//
+	// Tiles come back in this source's own compression; the caller negotiates
+	// against the client's `Accept-Encoding` afterwards, in `handlers::ok_data`.
 	#[context("getting tile data: url={url}")]
-	pub async fn get_data(&self, url: &Url, _accept: &TargetCompression) -> Result<Option<SourceResponse>> {
+	pub async fn get_data(&self, url: &Url) -> Result<Option<SourceResponse>> {
 		let parts: Vec<String> = url.as_vec();
 
 		if parts.len() >= 3 {
@@ -192,31 +195,18 @@ mod tests {
 		#[case] coord: &str,
 		#[case] expected_tile_json: (&str, &str, [u8; 4], u8, u8),
 	) -> Result<()> {
-		use TileCompression::*;
-
-		async fn get_response(
-			container: &mut ServerTileSource,
-			url: &str,
-			compression: TileCompression,
-		) -> Result<Option<SourceResponse>> {
-			container
-				.get_data(&Url::from(url), &TargetCompression::from(compression))
-				.await
+		async fn get_response(container: &mut ServerTileSource, url: &str) -> Result<Option<SourceResponse>> {
+			container.get_data(&Url::from(url)).await
 		}
 
-		async fn check_response(
-			container: &mut ServerTileSource,
-			url: &str,
-			compression: TileCompression,
-			mime_type: &str,
-		) -> Result<Vec<u8>> {
-			let response = get_response(container, url, compression).await?.unwrap();
+		async fn check_response(container: &mut ServerTileSource, url: &str, mime_type: &str) -> Result<Vec<u8>> {
+			let response = get_response(container, url).await?.unwrap();
 			assert_eq!(response.mime, mime_type);
 			Ok(response.blob.into_vec())
 		}
 
 		async fn check_status(container: &mut ServerTileSource, url: &str) -> u16 {
-			let response = get_response(container, url, Uncompressed).await;
+			let response = get_response(container, url).await;
 			if response.is_err() {
 				return 400;
 			}
@@ -229,12 +219,9 @@ mod tests {
 		let reader = runtime.reader_from_str(filename).await?;
 		let c = &mut ServerTileSource::from(reader, "prefix")?;
 
-		assert_eq!(
-			&check_response(c, coord, Uncompressed, exp_mime).await?[0..4],
-			exp_header
-		);
+		assert_eq!(&check_response(c, coord, exp_mime).await?[0..4], exp_header);
 
-		let tile_json = check_response(c, "meta.json", Uncompressed, "application/json").await?;
+		let tile_json = check_response(c, "meta.json", "application/json").await?;
 		let tile_json = TileJSON::try_from(tile_json)?.as_object();
 		assert_eq!(tile_json.string("tile_format")?.unwrap(), exp_mime);
 		assert_eq!(tile_json.array("bounds")?.unwrap().stringify(), exp_bounds);
