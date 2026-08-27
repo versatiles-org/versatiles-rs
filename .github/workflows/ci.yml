@@ -198,8 +198,16 @@ jobs:
       # `gdal` is opt-in (`default = []`), so without it rustdoc never sees the
       # gdal-gated modules — `from_gdal`, `mosaic_tools::tile` — and `-D warnings`
       # never checks their docs. That's why this job installs GDAL.
+      #
+      # `--document-private-items` extends the same check to items that are not
+      # publicly reachable — most of the code. Without it rustdoc resolves links
+      # only in public items, so a broken link in anything `pub(crate)`,
+      # `pub(super)` or private goes unnoticed.
+      #
+      # Keep these flags in step with `scripts/check-rust.sh`, or a link can
+      # fail locally and pass here (or the reverse).
       - name: Build docs
-        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --features gdal
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --document-private-items --features gdal,versatiles_container/test
 
   # ============================================================================
   # Linux: Node.js

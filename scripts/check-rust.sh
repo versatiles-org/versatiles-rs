@@ -92,9 +92,19 @@ fi
 # Matches the CI docs job exactly, `--features gdal` included: a broken
 # intra-doc link inside a gdal-gated item is invisible without it, and CI
 # treats every rustdoc warning as an error.
+#
+# `--document-private-items` is what makes this check reach the whole codebase.
+# Without it rustdoc resolves links only in *public* items, so a broken link in
+# anything `pub(crate)`, `pub(super)` or private is never checked — which is
+# most of the code. Turning it on found 24 broken links, one of which named a
+# `VPLFieldMeta::accepts` that does not exist and never did.
+#
+# Note this only checks real intra-doc links, `[`Foo`]`. A bare backtick
+# mention of a type that no longer exists is invisible to rustdoc, so linking
+# is what buys the guarantee — see DOCSTYLE.md, "Link, do not paraphrase".
 echo "cargo doc"
 cd $PROJECT_DIR
-result=$(RUSTDOCFLAGS="-D warnings" cargo doc --color=always --no-deps --features gdal,versatiles_container/test 2>&1)
+result=$(RUSTDOCFLAGS="-D warnings" cargo doc --color=always --no-deps --document-private-items --features gdal,versatiles_container/test 2>&1)
 if [ $? -ne 0 ]; then
    echo -e "$result\nERROR DURING: cargo doc"
    exit 1
