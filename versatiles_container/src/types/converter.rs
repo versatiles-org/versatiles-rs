@@ -295,7 +295,11 @@ impl TilesConvertReader {
 		// Coordinate remapping is delegated in full: the wrapper maps requests
 		// backwards and results forwards for every access path, which is what
 		// this type used to do by hand — inconsistently (issue #230).
-		let remap = TileRemap::new(false, cp.flip_y, cp.swap_xy);
+		let remap = TileRemap {
+			flip_y: cp.flip_y,
+			swap_xy: cp.swap_xy,
+			..TileRemap::default()
+		};
 		let reader: SharedTileSource = if remap.is_identity() {
 			reader
 		} else {

@@ -213,7 +213,11 @@ mod tests {
 	/// A relabelled source can no longer promise the order it was built with.
 	#[tokio::test]
 	async fn the_declared_traversal_is_reset() -> Result<()> {
-		let wrapped = wrap(TileRemap::new(false, true, false)).await?;
+		let wrapped = wrap(TileRemap {
+			flip_y: true,
+			..TileRemap::default()
+		})
+		.await?;
 		assert!(wrapped.metadata().traversal().is_any());
 		Ok(())
 	}

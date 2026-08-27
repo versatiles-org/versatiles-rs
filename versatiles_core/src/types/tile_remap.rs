@@ -236,7 +236,12 @@ mod tests {
 	fn flips_and_swap_do_not_commute() {
 		let coord = TileCoord::new(LEVEL, 1, 2).unwrap();
 
-		let flip_then_swap = TileRemap::new(false, true, true).remapped_coord(coord);
+		let flip_then_swap = TileRemap {
+			flip_y: true,
+			swap_xy: true,
+			..TileRemap::default()
+		}
+		.remapped_coord(coord);
 		let mut swap_then_flip = coord;
 		swap_then_flip.swap_xy();
 		swap_then_flip.flip_y();
@@ -253,7 +258,13 @@ mod tests {
 		assert!(remap.is_identity());
 		assert_eq!(signature(&remap), grid());
 		assert_eq!(remap.inverted(), remap);
-		assert!(!TileRemap::new(false, true, false).is_identity());
+		assert!(
+			!TileRemap {
+				flip_y: true,
+				..TileRemap::default()
+			}
+			.is_identity()
+		);
 	}
 
 	#[test]
