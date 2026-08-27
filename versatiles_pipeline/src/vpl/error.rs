@@ -50,7 +50,9 @@ pub struct VplParseError {
 	///
 	/// Never empty, so a consumer can always compose `message` with the construct it happened in.
 	/// The one failure `nom` raises outside every frame — input following an otherwise complete
-	/// pipeline — is attributed to [`whole_pipeline`] instead of carrying no stack at all.
+	/// pipeline — carries a single `parsing pipeline` frame at offset 0 rather than no stack at
+	/// all. That frame is not drawn in the [`std::fmt::Display`] trace, which shows only what `nom`
+	/// itself recorded.
 	pub context: Vec<VplErrorFrame>,
 	/// The caret-annotated trace, rendered eagerly because [`Display`] has no access to the input.
 	trace: String,
