@@ -924,75 +924,75 @@ fn value_check_expr(m: &FieldMeta) -> TokenStream {
 /// parser probes inside `validate` — which is what keeps the metadata from
 /// drifting away from the code that parses.
 fn field_meta_expr(m: &FieldMeta) -> TokenStream {
-		let fname = &m.name;
-		let rtype = &m.rust_type;
-		let required = m.is_required;
-		let is_sources = m.is_sources;
-		let fdoc = &m.doc;
-		// For enum-typed fields, ask the enum itself for its accepted
-		// variants — single source of truth, kept in sync with the
-		// `TryFrom<&str>` impl by the enum's own round-trip test.
-		let variants_expr: TokenStream = if let Some(enum_ty) = m.enum_type {
-			let ty = format_ident!("{}", enum_ty);
-			quote! { #ty::variants().to_vec() }
-		} else {
-			quote! { Vec::new() }
-		};
-		let value_check = value_check_expr(m);
-		let arity_check: TokenStream = match m.arity {
-			Some(1) => quote! {
-				if values.len() != 1 {
-					problems.push(format!("expects a single value for '{}', got {}", #fname, values.len()));
-				}
-			},
-			Some(n) => {
-				let n_lit = proc_macro2::Literal::usize_unsuffixed(n);
-				quote! {
-					if values.len() != #n_lit {
-						problems.push(format!(
-							"expects {} values for '{}', got {}",
-							#n_lit,
-							#fname,
-							values.len()
-						));
-					}
-				}
+	let fname = &m.name;
+	let rtype = &m.rust_type;
+	let required = m.is_required;
+	let is_sources = m.is_sources;
+	let fdoc = &m.doc;
+	// For enum-typed fields, ask the enum itself for its accepted
+	// variants — single source of truth, kept in sync with the
+	// `TryFrom<&str>` impl by the enum's own round-trip test.
+	let variants_expr: TokenStream = if let Some(enum_ty) = m.enum_type {
+		let ty = format_ident!("{}", enum_ty);
+		quote! { #ty::variants().to_vec() }
+	} else {
+		quote! { Vec::new() }
+	};
+	let value_check = value_check_expr(m);
+	let arity_check: TokenStream = match m.arity {
+		Some(1) => quote! {
+			if values.len() != 1 {
+				problems.push(format!("expects a single value for '{}', got {}", #fname, values.len()));
 			}
-			None => quote! {},
-		};
-		// A parameter with nothing to say about either its values or how
-		// many of them there are gets `None`, so `check` can skip it.
-		let validate_expr: TokenStream = if value_check.is_empty() && arity_check.is_empty() {
-			quote! { None }
-		} else {
-			// Values first: which value is wrong is more specific than how
-			// many there are, and a reader wants the specific one first.
+		},
+		Some(n) => {
+			let n_lit = proc_macro2::Literal::usize_unsuffixed(n);
 			quote! {
-				Some(|values: &[String]| -> Vec<String> {
-					let mut problems: Vec<String> = Vec::new();
-					#value_check
-					#arity_check
-					problems
-				})
-			}
-		};
-		let default_expr: TokenStream = if let Some(default) = &m.default {
-			quote! { Some(#default.to_string()) }
-		} else {
-			quote! { None }
-		};
-		quote! {
-			crate::vpl::VPLFieldMeta {
-				name: #fname.to_string(),
-				rust_type: #rtype.to_string(),
-				is_required: #required,
-				is_sources: #is_sources,
-				doc: #fdoc.to_string(),
-				enum_variants: #variants_expr,
-				validate: #validate_expr,
-				default: #default_expr,
+				if values.len() != #n_lit {
+					problems.push(format!(
+						"expects {} values for '{}', got {}",
+						#n_lit,
+						#fname,
+						values.len()
+					));
+				}
 			}
 		}
+		None => quote! {},
+	};
+	// A parameter with nothing to say about either its values or how
+	// many of them there are gets `None`, so `check` can skip it.
+	let validate_expr: TokenStream = if value_check.is_empty() && arity_check.is_empty() {
+		quote! { None }
+	} else {
+		// Values first: which value is wrong is more specific than how
+		// many there are, and a reader wants the specific one first.
+		quote! {
+			Some(|values: &[String]| -> Vec<String> {
+				let mut problems: Vec<String> = Vec::new();
+				#value_check
+				#arity_check
+				problems
+			})
+		}
+	};
+	let default_expr: TokenStream = if let Some(default) = &m.default {
+		quote! { Some(#default.to_string()) }
+	} else {
+		quote! { None }
+	};
+	quote! {
+		crate::vpl::VPLFieldMeta {
+			name: #fname.to_string(),
+			rust_type: #rtype.to_string(),
+			is_required: #required,
+			is_sources: #is_sources,
+			doc: #fdoc.to_string(),
+			enum_variants: #variants_expr,
+			validate: #validate_expr,
+			default: #default_expr,
+		}
+	}
 }
 
 fn build_impl_tokens(

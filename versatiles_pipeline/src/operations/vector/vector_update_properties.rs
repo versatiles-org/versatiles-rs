@@ -8,7 +8,7 @@ use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
 
 use crate::{
 	PipelineFactory,
-	helpers::CsvReader,
+	helpers::{CsvReader, SeparatorChar},
 	operations::transform::{AsTileTransform, TransformOp, VectorTransform},
 	vpl::VPLNode,
 };
@@ -196,43 +196,6 @@ crate::operations::macros::define_transform_factory!("vector_update_properties",
 
 /// Parses a separator string into a single character.
 /// Supports escape sequences like "\t" for tab.
-/// A CSV separator: one character, or an escape naming one.
-///
-/// Carries the format of `field_separator=` and `decimal_separator=` in their
-/// type, so a two-character separator is refused where the value is decoded
-/// rather than when the file is read (#257).
-///
-/// Accepts a `char` rather than a byte, unlike [`CsvDelimiter`](super::super::read::from_csv::CsvDelimiter):
-/// these separators are matched against text that has already been decoded.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SeparatorChar(char);
-
-impl SeparatorChar {
-	/// The separator as a single character.
-	#[must_use]
-	pub fn char(self) -> char {
-		self.0
-	}
-}
-
-impl TryFrom<&str> for SeparatorChar {
-	type Error = anyhow::Error;
-
-	fn try_from(value: &str) -> Result<Self> {
-		parse_separator_char(value).map(Self)
-	}
-}
-
-fn parse_separator_char(s: &str) -> Result<char> {
-	match s {
-		"\\t" | "\t" => Ok('\t'),
-		"\\n" | "\n" => Ok('\n'),
-		"\\r" | "\r" => Ok('\r'),
-		s if s.len() == 1 => Ok(s.chars().next().expect("non-empty string has at least one char")),
-		_ => Err(anyhow!("Separator must be a single character, got '{s}'")),
-	}
-}
-
 // ───────────────────────── TESTS ─────────────────────────
 #[cfg(test)]
 mod tests {

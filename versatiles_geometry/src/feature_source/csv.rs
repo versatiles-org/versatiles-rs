@@ -298,7 +298,10 @@ mod tests {
 	async fn reads_a_file_with_crlf_line_endings() -> Result<()> {
 		let dir = tempfile::tempdir()?;
 		let path = dir.path().join("crlf.csv");
-		std::fs::write(&path, "id,longitude,latitude,name\r\n1,13.4,52.5,Berlin\r\n2,9.9,53.5,Hamburg\r\n")?;
+		std::fs::write(
+			&path,
+			"id,longitude,latitude,name\r\n1,13.4,52.5,Berlin\r\n2,9.9,53.5,Hamburg\r\n",
+		)?;
 
 		let source = CsvSourceBuilder::new(&path, "longitude", "latitude").build()?;
 		let mut stream = source.load()?;

@@ -343,7 +343,10 @@ mod tests {
 	fn a_bad_value_and_a_bad_count_are_both_reported() {
 		let found = problems("from_debug format=[png, nonsense]");
 		assert_eq!(found.len(), 2, "{found:?}");
-		assert!(found[0].starts_with("'from_debug' does not accept 'format=nonsense'."), "{found:?}");
+		assert!(
+			found[0].starts_with("'from_debug' does not accept 'format=nonsense'."),
+			"{found:?}"
+		);
 		assert_eq!(found[1], "'from_debug' expects a single value for 'format', got 2");
 	}
 
@@ -539,19 +542,54 @@ mod tests {
 	fn formats_that_used_to_be_checked_only_at_build_time() {
 		assert_eq!(
 			problems("from_debug format=png | raster_format quality=110"),
-			["'raster_format' does not accept 'quality=110': Parsing quality string: quality must be between 0 and 100, but is 110"]
+			[
+				"'raster_format' does not accept 'quality=110': Parsing quality string: quality must be between 0 and 100, but is 110"
+			]
 		);
 		assert_eq!(
 			problems("from_csv filename=a.csv lon_column=x lat_column=y delimiter=\";;\""),
-			["'from_csv' does not accept 'delimiter=;;': delimiter must be exactly one ASCII byte, got ';;'"]
+			[
+				r#"'from_csv' does not accept 'delimiter=;;': separator must be one character or an escape (\t, \n, \r), got ";;""#
+			]
 		);
 		assert_eq!(
-			problems("from_debug format=mvt | vector_update_properties data_source_path=a.csv layer_name=l id_field_tiles=a id_field_data=b field_separator=\";;\""),
-			["'vector_update_properties' does not accept 'field_separator=;;': Separator must be a single character, got ';;'"]
+			problems(
+				"from_debug format=mvt | vector_update_properties data_source_path=a.csv layer_name=l id_field_tiles=a id_field_data=b field_separator=\";;\""
+			),
+			[
+				r#"'vector_update_properties' does not accept 'field_separator=;;': separator must be one character or an escape (\t, \n, \r), got ";;""#
+			]
 		);
 
 		assert!(problems("from_debug format=png | raster_format quality=\"70,14:50,15:20\"").is_empty());
 		assert!(problems("from_csv filename=a.csv lon_column=x lat_column=y delimiter=\";\"").is_empty());
+	}
+
+	/// Every way of writing a tab means a tab, for both parameters. It used to
+	/// depend on which operation you were writing and which quotes you used:
+	/// VPL resolves escapes inside double quotes but not single ones, so `'\t'`
+	/// arrives as two characters — a tab for `field_separator`, an error for
+	/// `delimiter`, with a message that printed `\t` back and looked like it was
+	/// denying its own rule.
+	#[test]
+	fn a_tab_is_a_tab_however_it_is_spelled() {
+		for tab in ["\"\\t\"", "'\\t'", "\"\\\\t\""] {
+			assert!(
+				problems(&format!(
+					"from_csv filename=a.csv lon_column=x lat_column=y delimiter={tab}"
+				))
+				.is_empty(),
+				"delimiter={tab}"
+			);
+			assert!(
+				problems(&format!(
+					"from_debug format=mvt | vector_update_properties data_source_path=a.csv \
+					 layer_name=l id_field_tiles=a id_field_data=b field_separator={tab}"
+				))
+				.is_empty(),
+				"field_separator={tab}"
+			);
+		}
 	}
 
 	/// Still open, and the reason `epsg` is left alone: `u32` is the whole of

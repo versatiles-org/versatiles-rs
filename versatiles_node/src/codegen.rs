@@ -65,7 +65,11 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		// `HexColor`, the separators and the zoom-dependent quality list all land
 		// here: each has a format TS cannot express, so the narrowing they gained
 		// lives in `check`, not in the type.
-		"String" | "Option<String>" | "Option<HexColor>" | "Option<CsvDelimiter>" | "Option<SeparatorChar>"
+		"String"
+		| "Option<String>"
+		| "Option<HexColor>"
+		| "Option<CsvDelimiter>"
+		| "Option<SeparatorChar>"
 		| "Option<QualityByZoom>" => "string",
 		"bool" | "Option<bool>" => "boolean",
 		"u8" | "u16" | "u32" | "f32" | "f64" | "Option<u8>" | "Option<u16>" | "Option<u32>" | "Option<f32>"
