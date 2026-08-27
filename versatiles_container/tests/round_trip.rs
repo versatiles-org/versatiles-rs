@@ -3,7 +3,10 @@
 //! These tests verify that tiles can be written to and read from various formats
 //! without data loss or corruption.
 
-#![allow(clippy::float_cmp)]
+#![expect(
+	clippy::float_cmp,
+	reason = "tile coordinates and bounds round-trip exactly, so they are compared exactly"
+)]
 
 use anyhow::Result;
 use rstest::rstest;

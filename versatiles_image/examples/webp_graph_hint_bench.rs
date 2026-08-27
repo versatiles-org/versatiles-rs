@@ -1,6 +1,11 @@
-#![allow(clippy::cast_sign_loss)]
-#![allow(clippy::cast_precision_loss)]
-#![allow(clippy::cast_possible_wrap)]
+#![expect(
+	clippy::cast_precision_loss,
+	reason = "a benchmark binary: arithmetic on measured sizes, ratios and durations"
+)]
+#![expect(
+	clippy::cast_possible_wrap,
+	reason = "a benchmark binary: arithmetic on measured sizes, ratios and durations"
+)]
 
 //! Focused benchmark: does `WEBP_HINT_GRAPH` help lossless DEM encoding at method=6?
 //!

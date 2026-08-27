@@ -1,4 +1,7 @@
-#![allow(unused)]
+#![allow(
+	unused,
+	reason = "shared by several integration-test binaries; each uses a different subset"
+)]
 
 use std::{
 	path::{Path, PathBuf},

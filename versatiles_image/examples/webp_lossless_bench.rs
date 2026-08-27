@@ -1,5 +1,3 @@
-#![allow(clippy::cast_sign_loss)]
-
 //! Benchmark for WebP lossless encoding parameters.
 //!
 //! Usage: cargo run --release --example webp_lossless_bench

@@ -1,5 +1,11 @@
-#![allow(dead_code)]
-#![allow(clippy::cast_sign_loss)]
+#![allow(
+	dead_code,
+	reason = "shared by several example binaries; each uses a different subset"
+)]
+#![allow(
+	clippy::cast_sign_loss,
+	reason = "shared by several example binaries; each uses a different subset"
+)]
 
 use std::path::PathBuf;
 

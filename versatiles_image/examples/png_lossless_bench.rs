@@ -1,4 +1,7 @@
-#![allow(clippy::cast_sign_loss)]
+#![expect(
+	clippy::cast_sign_loss,
+	reason = "a benchmark binary: arithmetic on measured sizes, ratios and durations"
+)]
 
 //! Benchmark for PNG lossless encoding parameters.
 //!

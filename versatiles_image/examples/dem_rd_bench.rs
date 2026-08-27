@@ -1,10 +1,31 @@
-#![allow(clippy::cast_sign_loss)]
-#![allow(clippy::cast_possible_truncation)]
-#![allow(clippy::cast_precision_loss)]
-#![allow(clippy::cast_possible_wrap)]
-#![allow(clippy::cast_lossless)]
-#![allow(clippy::many_single_char_names)]
-#![allow(dead_code)]
+#![expect(
+	clippy::cast_sign_loss,
+	reason = "a benchmark binary: arithmetic on measured sizes, ratios and durations"
+)]
+#![expect(
+	clippy::cast_possible_truncation,
+	reason = "a benchmark binary: arithmetic on measured sizes, ratios and durations"
+)]
+#![expect(
+	clippy::cast_precision_loss,
+	reason = "a benchmark binary: arithmetic on measured sizes, ratios and durations"
+)]
+#![expect(
+	clippy::cast_possible_wrap,
+	reason = "a benchmark binary: arithmetic on measured sizes, ratios and durations"
+)]
+#![expect(
+	clippy::cast_lossless,
+	reason = "a benchmark binary: arithmetic on measured sizes, ratios and durations"
+)]
+#![expect(
+	clippy::many_single_char_names,
+	reason = "a benchmark binary: arithmetic on measured sizes, ratios and durations"
+)]
+#![expect(
+	dead_code,
+	reason = "a benchmark binary: arithmetic on measured sizes, ratios and durations"
+)]
 
 //! Rate–distortion benchmark for terrarium DEM size-reduction strategies.
 //!

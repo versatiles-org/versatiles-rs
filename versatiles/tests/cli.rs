@@ -3,7 +3,10 @@
 //! One test target rather than four; see the note in `serve.rs`.
 
 #![cfg(feature = "cli")]
-#![allow(clippy::float_cmp)]
+#![expect(
+	clippy::float_cmp,
+	reason = "tile coordinates and bounds round-trip exactly, so they are compared exactly"
+)]
 
 // `#[macro_use]` so the submodules below see `assert_contains!`, which each
 // file used to get for free by being its own crate root.

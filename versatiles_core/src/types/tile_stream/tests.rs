@@ -1,4 +1,4 @@
-#![allow(clippy::cast_possible_truncation)]
+#![expect(clippy::cast_possible_truncation, reason = "test data is built from literal values")]
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 

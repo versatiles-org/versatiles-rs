@@ -53,6 +53,23 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }
 # Enable pedantic lints for code quality
 pedantic = { level = "deny", priority = -1 }
 
+# Every lint suppression must say why it is there. A bare `#[allow]` is a claim
+# that a lint should not fire, and the claim silently stops being true — an
+# earlier audit found 43 suppressions guarding code that no longer triggered
+# anything, 25 of them hiding real `dead_code` from the compiler.
+#
+# Prefer `#[expect(..., reason = "...")]`, which additionally warns once the
+# lint stops firing. Three situations cannot use it and keep `#[allow]` with a
+# reason and a note in place: attributes inside a `macro_rules!` body (the lint
+# fires at each expansion, so the expectation reads as unfulfilled), `dead_code`
+# on items used only by tests (unfulfilled under `--all-targets`, required for
+# the library build), and functions re-emitted by an attribute macro such as
+# `#[napi]`.
+#
+# `allow_attributes` — which would forbid `#[allow]` outright — is deliberately
+# not enabled, because those three cases have no `#[expect]` spelling.
+allow_attributes_without_reason = "deny"
+
 # Allow noisy/stylistic lints that don't improve safety
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
