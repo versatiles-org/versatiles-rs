@@ -20,7 +20,7 @@ use versatiles_container::{Tile, TilesRuntime};
 use versatiles_core::{Blob, ConcurrencyLimits, TileCoord, TileFormat};
 use versatiles_image::traits::DynamicImageTraitOperation;
 
-use super::AssembleConfig;
+use super::{AssembleConfig, pipeline::SourceIndices};
 
 pub(super) fn validate_source_format(
 	path: &str,
@@ -112,7 +112,7 @@ pub(super) fn encode_tiles_parallel(
 /// Used both for direct fetching and for pre-fetching the next source.
 pub(super) async fn fetch_source_tiles(
 	source_idx: usize,
-	batch: &[(TileCoord, Vec<usize>)],
+	batch: &[(TileCoord, SourceIndices)],
 	paths: &[String],
 	runtime: &TilesRuntime,
 ) -> Result<Vec<(TileCoord, Tile)>> {
@@ -124,7 +124,7 @@ pub(super) async fn fetch_source_tiles(
 
 	let coords: Vec<TileCoord> = batch
 		.iter()
-		.filter(|(_, srcs)| srcs.contains(&source_idx))
+		.filter(|(_, srcs)| srcs.contains(source_idx))
 		.map(|(coord, _)| *coord)
 		.collect();
 

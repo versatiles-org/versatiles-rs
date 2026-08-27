@@ -16,6 +16,60 @@ use super::{
 	translucent_buffer::TranslucentBuffer,
 };
 
+/// The sources contributing to one tile, sorted ascending and deduped.
+///
+/// The order is load-bearing, not cosmetic. The second pass composites sources
+/// in ascending index order, so three things depend on this list being sorted:
+/// [`last_source`](Self::last_source) is the source after which the tile can be
+/// flushed, [`position_of`](Self::position_of) locates a source in that
+/// schedule, and the packer treats the list as a canonical signature when
+/// scoring overlap between tiles.
+///
+/// [`SourceIndices::new`] is the only way to build one, so the invariant cannot
+/// be skipped at a call site.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct SourceIndices(Vec<usize>);
+
+impl SourceIndices {
+	/// Sorts and dedupes `sources`, establishing the invariant.
+	fn new(mut sources: Vec<usize>) -> Self {
+		sources.sort_unstable();
+		sources.dedup();
+		Self(sources)
+	}
+
+	fn len(&self) -> usize {
+		self.0.len()
+	}
+
+	fn iter(&self) -> impl Iterator<Item = usize> + '_ {
+		self.0.iter().copied()
+	}
+
+	pub(super) fn contains(&self, source: usize) -> bool {
+		self.0.binary_search(&source).is_ok()
+	}
+
+	#[cfg(test)]
+	fn as_slice(&self) -> &[usize] {
+		&self.0
+	}
+
+	/// The last source to contribute to this tile, and so the one after whose
+	/// step the tile can be flushed from the compositing buffer.
+	fn last_source(&self) -> usize {
+		*self.0.last().expect("a translucent tile has at least one source")
+	}
+
+	/// Where `source` falls in the ascending processing order of `all`.
+	///
+	/// `all` must be the batch's own source list, which contains every source of
+	/// every tile in it.
+	fn position_of(all: &[usize], source: usize) -> usize {
+		all.binary_search(&source).expect("source present in batch")
+	}
+}
+
 /// A batch of tiles, each annotated with the source indices that contribute to it.
 ///
 /// Sources inside the batch are processed in ascending index order during the
@@ -24,8 +78,7 @@ use super::{
 /// compositing buffer under that schedule, so the packer can keep the peak
 /// bounded by `max_buffer_size / tile_bytes`.
 pub(super) struct TileBatch {
-	/// Tuples of `(coord, sources)`. `sources` is sorted ascending and deduped.
-	tiles: Vec<(TileCoord, Vec<usize>)>,
+	tiles: Vec<(TileCoord, SourceIndices)>,
 }
 
 impl TileBatch {
@@ -38,22 +91,22 @@ impl TileBatch {
 		self.tiles.len()
 	}
 
-	pub(super) fn tiles(&self) -> &[(TileCoord, Vec<usize>)] {
+	pub(super) fn tiles(&self) -> &[(TileCoord, SourceIndices)] {
 		&self.tiles
 	}
 
-	fn push(&mut self, coord: TileCoord, sources: Vec<usize>) {
+	fn push(&mut self, coord: TileCoord, sources: SourceIndices) {
 		self.tiles.push((coord, sources));
 	}
 
 	/// All unique source indices used in this batch, sorted ascending.
 	pub(super) fn sources(&self) -> Vec<usize> {
-		let set: BTreeSet<usize> = self.tiles.iter().flat_map(|(_, s)| s).copied().collect();
+		let set: BTreeSet<usize> = self.tiles.iter().flat_map(|(_, s)| s.iter()).collect();
 		set.into_iter().collect()
 	}
 
 	#[cfg(test)]
-	pub(super) fn into_tiles(self) -> Vec<(TileCoord, Vec<usize>)> {
+	pub(super) fn into_tiles(self) -> Vec<(TileCoord, SourceIndices)> {
 		self.tiles
 	}
 
@@ -75,9 +128,7 @@ impl TileBatch {
 		let mut starts = vec![0usize; n];
 		let mut ends = vec![0usize; n];
 		for (_, srcs) in &self.tiles {
-			let positions = srcs
-				.iter()
-				.map(|s| sources.binary_search(s).expect("source present in batch"));
+			let positions = srcs.iter().map(|s| SourceIndices::position_of(&sources, s));
 			let (first, last) = positions.fold((usize::MAX, 0usize), |(lo, hi), p| (lo.min(p), hi.max(p)));
 			starts[first] += 1;
 			ends[last] += 1;
@@ -299,15 +350,9 @@ pub(super) fn prepare_batches(
 
 	let total_tiles = translucent_map.len();
 
-	// Each tile's source list must be sorted+deduped so `max_tiles_in_memory` and the
-	// scoring step can treat it as a canonical signature.
-	let mut pool: Vec<(TileCoord, Vec<usize>)> = translucent_map
+	let mut pool: Vec<(TileCoord, SourceIndices)> = translucent_map
 		.into_iter()
-		.map(|(c, mut s)| {
-			s.sort_unstable();
-			s.dedup();
-			(c, s)
-		})
+		.map(|(c, s)| (c, SourceIndices::new(s)))
 		.collect();
 
 	let batch_size: usize = if max_buffer_size > 0 {
@@ -351,7 +396,7 @@ pub(super) fn prepare_batches(
 			// Step 5: score each remaining tile — reward overlap, penalise new sources.
 			// The ranking key is `(overlap desc, new_sources asc)` which matches
 			// "favour overlap, penalise new sources" without any signed arithmetic.
-			let batch_sources: BTreeSet<usize> = batch.tiles().iter().flat_map(|(_, s)| s).copied().collect();
+			let batch_sources: BTreeSet<usize> = batch.tiles().iter().flat_map(|(_, s)| s.iter()).collect();
 
 			let mut scored: Vec<(usize, usize, usize)> = pool
 				.iter()
@@ -442,7 +487,7 @@ async fn composite_one_batch(
 	// that source — those tiles are safe to flush right after the source step ends.
 	let mut flush_keys: HashMap<usize, Vec<u64>> = HashMap::new();
 	for (coord, srcs) in tiles {
-		let last = *srcs.last().expect("tile has at least one source");
+		let last = srcs.last_source();
 		flush_keys.entry(last).or_default().push(coord.get_hilbert_index()?);
 	}
 
@@ -809,7 +854,7 @@ mod tests {
 		// Use a tile coord that exists in both sources (level 4 is "full" in MockReader)
 		let coord = TileCoord::new(4, 0, 0).unwrap();
 		let mut batch = TileBatch::new();
-		batch.push(coord, vec![0, 1]);
+		batch.push(coord, SourceIndices::new(vec![0, 1]));
 
 		let progress = runtime.create_progress("test", 2);
 		composite_one_batch(&batch, &paths, &config, &sink, &runtime, 4, &progress)
@@ -843,8 +888,8 @@ mod tests {
 
 		// Two tiles with different last-sources: tile_a ends at source 1, tile_b at source 2.
 		let mut batch = TileBatch::new();
-		batch.push(TileCoord::new(4, 0, 0).unwrap(), vec![0, 1]);
-		batch.push(TileCoord::new(4, 1, 0).unwrap(), vec![0, 2]);
+		batch.push(TileCoord::new(4, 0, 0).unwrap(), SourceIndices::new(vec![0, 1]));
+		batch.push(TileCoord::new(4, 1, 0).unwrap(), SourceIndices::new(vec![0, 2]));
 
 		let progress = runtime.create_progress("test", 3);
 		composite_one_batch(&batch, &paths, &config, &sink, &runtime, 4, &progress)
@@ -861,7 +906,7 @@ mod tests {
 	fn batch_of(entries: &[(TileCoord, &[usize])]) -> TileBatch {
 		let mut batch = TileBatch::new();
 		for (c, s) in entries {
-			batch.push(*c, s.to_vec());
+			batch.push(*c, SourceIndices::new(s.to_vec()));
 		}
 		batch
 	}
@@ -1006,9 +1051,9 @@ mod tests {
 
 		for (coord, sources) in &all_tiles {
 			if *coord == tc(0, 0, 0) {
-				assert_eq!(sources, &[0, 2]);
+				assert_eq!(sources.as_slice(), [0, 2]);
 			} else if *coord == tc(1, 0, 0) {
-				assert_eq!(sources, &[1, 3]);
+				assert_eq!(sources.as_slice(), [1, 3]);
 			} else {
 				panic!("unexpected coord: {coord:?}");
 			}
@@ -1042,7 +1087,7 @@ mod tests {
 		assert_eq!(batches.len(), 1);
 		assert_eq!(batches[0].len(), 1);
 		assert_eq!(batches[0].tiles()[0].0, tc(0, 0, 0));
-		assert_eq!(batches[0].tiles()[0].1, vec![0]);
+		assert_eq!(batches[0].tiles()[0].1.as_slice(), [0]);
 	}
 
 	#[test]
@@ -1136,7 +1181,7 @@ mod tests {
 		// Source indices must be ascending for max_tiles_in_memory to work; `prepare_batches` sorts them.
 		let map = make_translucent_map(&[(tc(0, 0, 0), &[3, 1, 2])]);
 		let batches = prepare_batches(map, HashSet::new(), 256, 0);
-		assert_eq!(batches[0].tiles()[0].1, vec![1, 2, 3]);
+		assert_eq!(batches[0].tiles()[0].1.as_slice(), [1, 2, 3]);
 	}
 
 	#[test]
