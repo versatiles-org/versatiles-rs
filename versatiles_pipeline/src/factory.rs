@@ -404,8 +404,17 @@ impl PipelineFactory {
 	}
 
 	/// Instantiates a read operation from a VPL node using the registered factory.
+	///
+	/// This and [`tran_operation_from_node`](Self::tran_operation_from_node) are the two halves
+	/// [`build_pipeline`](Self::build_pipeline) folds over, exposed so a caller can drive the fold
+	/// itself. An editor rebuilding a pipeline after every keystroke wants to keep the read node it
+	/// already built — that is where essentially all the cost is, since a transform only parses its
+	/// parameters and wraps its input — and rebuild just the tail. Pull the nodes apart with
+	/// [`VPLPipeline::split`](crate::VPLPipeline::split), keep the head as a
+	/// [`SharedTileSource`](versatiles_container::SharedTileSource), and box a clone of it into the
+	/// first transform. See issue #259.
 	#[context("Failed to create read operation from VPL node")]
-	async fn read_operation_from_node(&self, node: VPLNode) -> Result<Box<dyn TileSource>> {
+	pub async fn read_operation_from_node(&self, node: VPLNode) -> Result<Box<dyn TileSource>> {
 		let factory = self
 			.read_ops
 			.get(&node.name)
@@ -414,9 +423,18 @@ impl PipelineFactory {
 		factory.build(node, self).await
 	}
 
-	/// Instantiates a transform operation from a VPL node using the registered factory.
+	/// Instantiates a transform operation from a VPL node, wrapping `source`.
+	///
+	/// `source` is consumed, so a caller that wants to keep it — to build a different tail onto the
+	/// same head — should hold it as a
+	/// [`SharedTileSource`](versatiles_container::SharedTileSource) and pass `Box::new(shared.clone())`.
+	/// See [`read_operation_from_node`](Self::read_operation_from_node).
 	#[context("Failed to create transform operation from VPL node")]
-	async fn tran_operation_from_node(&self, node: VPLNode, source: Box<dyn TileSource>) -> Result<Box<dyn TileSource>> {
+	pub async fn tran_operation_from_node(
+		&self,
+		node: VPLNode,
+		source: Box<dyn TileSource>,
+	) -> Result<Box<dyn TileSource>> {
 		let factory = self
 			.tran_ops
 			.get(&node.name)
@@ -574,7 +592,60 @@ pub async fn compatible_transforms(source: &dyn TileSource) -> Vec<(OperationMet
 
 #[cfg(test)]
 mod tests {
+	use std::sync::Arc;
+
+	use versatiles_container::SharedTileSource;
+
 	use super::*;
+
+	/// The point of exposing the two builders: a caller can keep the read node it already built
+	/// and put a different tail on it, which is what makes an editor's rebuild cost proportional
+	/// to the edit rather than to what the pipeline reads. See issue #259.
+	#[tokio::test]
+	async fn a_built_read_node_can_be_reused_for_several_tails() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let (head, tail) = parse_vpl("from_debug format=png | filter level_min=2 level_max=5")?.split()?;
+
+		// Built once, and kept.
+		let head: SharedTileSource = factory.read_operation_from_node(head).await?.into();
+
+		// Two different tails onto the same head, neither of which consumes it.
+		let filtered = factory
+			.tran_operation_from_node(tail[0].clone(), Box::new(head.clone()))
+			.await?;
+		let bare = factory
+			.tran_operation_from_node(parse_vpl("filter level_min=1")?.split()?.0, Box::new(head.clone()))
+			.await?;
+
+		assert_eq!(filtered.metadata().tile_format(), head.metadata().tile_format());
+		assert_eq!(bare.metadata().tile_format(), head.metadata().tile_format());
+		// the head is shared by both tails rather than rebuilt for either, and still usable
+		assert_eq!(Arc::strong_count(&head), 3);
+		assert!(head.tile_pyramid().await.is_ok());
+
+		Ok(())
+	}
+
+	/// Folding the two builders by hand must produce what `build_pipeline` produces.
+	#[tokio::test]
+	async fn building_node_by_node_matches_build_pipeline() -> Result<()> {
+		const VPL: &str = "from_debug format=png | filter level_min=2 level_max=5";
+		let factory = PipelineFactory::new_dummy();
+
+		let whole = factory.build_pipeline(parse_vpl(VPL)?).await?;
+
+		let (head, tail) = parse_vpl(VPL)?.split()?;
+		let mut folded = factory.read_operation_from_node(head).await?;
+		for node in tail {
+			folded = factory.tran_operation_from_node(node, folded).await?;
+		}
+
+		assert_eq!(folded.source_type(), whole.source_type());
+		assert_eq!(folded.metadata(), whole.metadata());
+		assert_eq!(folded.tilejson().stringify(), whole.tilejson().stringify());
+
+		Ok(())
+	}
 
 	/// Every operation this build registers must have a section in the generated
 	/// reference, and every section must name an operation that exists.

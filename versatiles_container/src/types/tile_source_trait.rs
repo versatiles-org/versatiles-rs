@@ -241,6 +241,70 @@ pub trait TileSource: Debug + Send + Sync + Unpin {
 	}
 }
 
+/// Forwards every call to the source inside, so a shared source can be passed where an owned one
+/// is wanted.
+///
+/// A pipeline transform takes its input as `Box<dyn TileSource>` **by value**, which leaves a
+/// caller that wants to keep the input with nothing to hold on to — an editor rebuilding only the
+/// tail of a pipeline after an edit needs the head to survive being built on. Boxing the `Arc`
+/// gives it a shape the existing signatures already accept, at the cost of one pointer hop per
+/// call. See issue #259.
+///
+/// Every method is forwarded explicitly rather than left to the trait defaults. The defaults are
+/// written in terms of [`metadata`](TileSource::metadata) and
+/// [`tile_stream`](TileSource::tile_stream), so a wrapped source that overrides
+/// [`tile_pyramid`](TileSource::tile_pyramid) or
+/// [`tile_coord_stream`](TileSource::tile_coord_stream) — the container readers override both —
+/// would have its override silently bypassed.
+#[async_trait]
+impl TileSource for SharedTileSource {
+	fn source_type(&self) -> Arc<SourceType> {
+		(**self).source_type()
+	}
+
+	fn metadata(&self) -> &TileSourceMetadata {
+		(**self).metadata()
+	}
+
+	fn tilejson(&self) -> &TileJSON {
+		(**self).tilejson()
+	}
+
+	async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+		(**self).tile_pyramid().await
+	}
+
+	async fn measure_tile_size(&self) -> Result<Option<TileSize>> {
+		(**self).measure_tile_size().await
+	}
+
+	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+		(**self).tile(coord).await
+	}
+
+	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		(**self).tile_stream(bbox).await
+	}
+
+	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
+		(**self).tile_coord_stream(bbox).await
+	}
+
+	async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+		(**self).tile_size_stream(bbox).await
+	}
+
+	#[cfg(feature = "cli")]
+	async fn probe_container(&self, print: &mut PrettyPrint, runtime: &TilesRuntime) -> Result<()> {
+		(**self).probe_container(print, runtime).await
+	}
+
+	/// Already shared; the default would wrap it a second time.
+	fn into_shared(self) -> SharedTileSource {
+		self
+	}
+}
+
 /// Tests cover trait defaults, parameter plumbing, streaming behavior, and the CLI probe stubs.
 #[cfg(test)]
 mod tests {
@@ -328,6 +392,128 @@ mod tests {
 		async fn tile_stream(&self, _bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 			Ok(TileStream::from_vec(vec![]))
 		}
+	}
+
+	/// A source that overrides two of the defaulted methods, exactly as the container readers do:
+	/// its pyramid is not in its metadata, and its sizes come from an index rather than from
+	/// reading tiles. Both overrides are invisible to the trait defaults, so a forwarding impl
+	/// that leaned on them would quietly answer differently from the source it wraps.
+	#[derive(Debug)]
+	struct OverridingReader {
+		metadata: TileSourceMetadata,
+		tilejson: TileJSON,
+	}
+
+	impl OverridingReader {
+		/// The size it reports, which is nothing like the length of the blob it streams.
+		const INDEXED_SIZE: u32 = 4242;
+
+		fn new() -> Self {
+			OverridingReader {
+				// No pyramid stored: the default `tile_pyramid` would fail outright.
+				metadata: TileSourceMetadata::new(TileFormat::MVT, TileCompression::Uncompressed, Traversal::ANY, None),
+				tilejson: TileJSON::default(),
+			}
+		}
+	}
+
+	#[async_trait]
+	impl TileSource for OverridingReader {
+		fn source_type(&self) -> Arc<SourceType> {
+			SourceType::new_container("overriding", "dummy_uri")
+		}
+
+		fn metadata(&self) -> &TileSourceMetadata {
+			&self.metadata
+		}
+
+		fn tilejson(&self) -> &TileJSON {
+			&self.tilejson
+		}
+
+		async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+			Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {
+				Some(Tile::from_blob(
+					Blob::from("x"),
+					TileCompression::Uncompressed,
+					TileFormat::MVT,
+				))
+			}))
+		}
+
+		async fn tile_pyramid(&self) -> Result<Arc<TilePyramid>> {
+			Ok(Arc::new(TilePyramid::new_full_up_to(2)))
+		}
+
+		async fn tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, u32>> {
+			Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {
+				Some(Self::INDEXED_SIZE)
+			}))
+		}
+	}
+
+	/// The wrapper answers as the source does, for the plain methods.
+	#[tokio::test]
+	async fn a_shared_source_answers_as_the_source_it_wraps() {
+		let shared = TestReader::new_dummy().into_shared();
+
+		assert_eq!(
+			shared.source_type(),
+			SourceType::new_container("dummy_format", "dummy_uri")
+		);
+		assert_eq!(shared.metadata(), TestReader::new_dummy().metadata());
+		assert_eq!(
+			shared.tilejson().stringify(),
+			"{\"metadata\":\"test\",\"tilejson\":\"3.0.0\"}"
+		);
+		assert_eq!(*shared.tile_pyramid().await.unwrap(), TilePyramid::new_full_up_to(3));
+
+		let bbox = TileBBox::new_full(2).unwrap();
+		let tiles = shared.tile_stream(bbox).await.unwrap().to_vec().await;
+		assert_eq!(tiles.len(), 16);
+		assert!(shared.tile(&TileCoord::new(2, 0, 0).unwrap()).await.unwrap().is_some());
+	}
+
+	/// The reason every method is forwarded by hand: leaving the defaulted ones to the trait would
+	/// bypass the wrapped source's overrides. Here the default `tile_pyramid` would error outright
+	/// and the default `tile_size_stream` would report the blob length instead of the index.
+	#[tokio::test]
+	async fn a_shared_source_forwards_overridden_methods_too() {
+		let source = OverridingReader::new();
+		let bbox = TileBBox::new_full(1).unwrap();
+
+		let direct = source.tile_pyramid().await.unwrap();
+		let direct_sizes = source.tile_size_stream(bbox).await.unwrap().to_vec().await;
+		let shared = source.into_shared();
+
+		assert_eq!(shared.tile_pyramid().await.unwrap(), direct);
+		let sizes = shared.tile_size_stream(bbox).await.unwrap().to_vec().await;
+		assert_eq!(sizes, direct_sizes);
+		assert!(sizes.iter().all(|(_, size)| *size == OverridingReader::INDEXED_SIZE));
+	}
+
+	/// The point of the impl: the same source can be handed to two consumers that each take it by
+	/// value, which is what lets a caller keep a built pipeline prefix and build a new tail onto it.
+	#[tokio::test]
+	async fn a_shared_source_survives_being_boxed_twice() {
+		let shared = TestReader::new_dummy().into_shared();
+
+		let first: Box<dyn TileSource> = Box::new(shared.clone());
+		let second: Box<dyn TileSource> = Box::new(shared.clone());
+
+		let bbox = TileBBox::new_full(1).unwrap();
+		assert_eq!(first.tile_stream(bbox).await.unwrap().drain_and_count().await, 4);
+		assert_eq!(second.tile_stream(bbox).await.unwrap().drain_and_count().await, 4);
+		// and the original is still usable after both
+		assert_eq!(shared.tile_stream(bbox).await.unwrap().drain_and_count().await, 4);
+	}
+
+	/// `into_shared` on something already shared returns it, rather than wrapping it again.
+	#[test]
+	fn sharing_an_already_shared_source_is_a_no_op() {
+		let shared = TestReader::new_dummy().into_shared();
+		let again = shared.clone().into_shared();
+		assert!(Arc::ptr_eq(&shared, &again));
 	}
 
 	#[tokio::test]
