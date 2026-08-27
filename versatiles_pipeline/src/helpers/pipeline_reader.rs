@@ -88,12 +88,16 @@ impl<'a> PipelineReader {
 			move |location: DataLocation, ssh_identity: Option<PathBuf>| -> BoxFuture<Result<Box<dyn TileSource>>> {
 				let runtime = runtime2.clone();
 				Box::pin(async move {
-					let arc_reader = runtime
+					let reader = runtime
 						.clone()
 						.reader_from_location_with_ssh_identity(location, ssh_identity.as_deref())
 						.await?;
-					Arc::try_unwrap(arc_reader)
-						.map_err(|_| anyhow::anyhow!("Cannot get exclusive access to reader for pipeline"))
+					// The runtime hands out a `SharedTileSource`, and the callback owes a `Box`.
+					// Boxing the `Arc` satisfies that without claiming sole ownership of the
+					// reader: nothing here mutates it, because `TileSource` has no `&mut self`
+					// method to mutate it with. Unwrapping the `Arc` instead would fail outright
+					// whenever the runtime already holds the reader in its cache. See issue #259.
+					Ok(Box::new(reader) as Box<dyn TileSource>)
 				})
 			},
 		);
