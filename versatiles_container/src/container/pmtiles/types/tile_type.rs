@@ -1,7 +1,10 @@
 use anyhow::{Result, bail};
 use versatiles_core::TileFormat;
 
-#[allow(clippy::upper_case_acronyms)]
+#[expect(
+	clippy::upper_case_acronyms,
+	reason = "variant names mirror the tile types named in the PMTiles spec"
+)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PMTilesType {
 	UNKNOWN = 0x0,

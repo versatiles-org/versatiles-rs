@@ -104,11 +104,13 @@ pub trait ValueWriter<E: ByteOrder> {
 	/// Returns an error if writing to the underlying writer fails.
 	fn write_varint(&mut self, mut value: u64) -> Result<()> {
 		while value >= 0x80 {
-			#[allow(clippy::cast_possible_truncation)] // Safe: value & 0x7F always fits in u8
 			self.writer().write_all(&[((value & 0x7F) as u8) | 0x80])?;
 			value >>= 7;
 		}
-		#[allow(clippy::cast_possible_truncation)] // Safe: value always fits in u8 here
+		#[expect(
+			clippy::cast_possible_truncation,
+			reason = "the loop above exits only once `value < 0x80`"
+		)]
 		self.writer().write_all(&[value as u8])?;
 		Ok(())
 	}

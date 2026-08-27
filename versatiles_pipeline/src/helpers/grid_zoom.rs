@@ -50,7 +50,11 @@ pub fn min_zoom_for_cell_size(cell_size_mercator: f64, max_cells_per_tile: u32) 
 		MAX_ZOOM
 	} else {
 		// Safe: bounded by MAX_ZOOM above and > 0 by the ratio check.
-		#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+		#[expect(
+			clippy::cast_possible_truncation,
+			clippy::cast_sign_loss,
+			reason = "bounded by MAX_ZOOM above and positive by the ratio check"
+		)]
 		let zoom = zoom as u8;
 		zoom
 	}

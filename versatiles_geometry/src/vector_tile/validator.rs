@@ -269,7 +269,7 @@ fn degeneracy_reason(coords: &[Coord<f64>]) -> Option<DegenerateReason> {
 
 	let mut seen = std::collections::HashSet::<(i64, i64)>::with_capacity(n);
 	for c in coords {
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(clippy::cast_possible_truncation, reason = "tile-local coordinates, far inside i64")]
 		seen.insert((c.x.round() as i64, c.y.round() as i64));
 		if seen.len() >= 3 {
 			break;
@@ -293,7 +293,7 @@ fn degeneracy_reason_for_linestring(coords: &[Coord<f64>]) -> Option<DegenerateR
 	}
 	let mut seen = std::collections::HashSet::<(i64, i64)>::with_capacity(coords.len());
 	for c in coords {
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(clippy::cast_possible_truncation, reason = "tile-local coordinates, far inside i64")]
 		seen.insert((c.x.round() as i64, c.y.round() as i64));
 		if seen.len() >= 2 {
 			return None;

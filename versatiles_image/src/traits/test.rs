@@ -179,22 +179,34 @@ where
 	DynamicImage: DynamicImageTraitConvert,
 {
 	fn new_test_rgba() -> DynamicImage {
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(
+			clippy::cast_possible_truncation,
+			reason = "256x256 fixture, so x and y stay below 256"
+		)]
 		DynamicImage::from_fn(256, 256, |x, y| [x as u8, (255 - x) as u8, y as u8, (255 - y) as u8])
 	}
 
 	fn new_test_rgb() -> DynamicImage {
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(
+			clippy::cast_possible_truncation,
+			reason = "256x256 fixture, so x and y stay below 256"
+		)]
 		DynamicImage::from_fn(256, 256, |x, y| [x as u8, (255 - x) as u8, y as u8])
 	}
 
 	fn new_test_grey() -> DynamicImage {
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(
+			clippy::cast_possible_truncation,
+			reason = "256x256 fixture, so x and y stay below 256"
+		)]
 		DynamicImage::from_fn(256, 256, |x, _y| [x as u8])
 	}
 
 	fn new_test_greya() -> DynamicImage {
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(
+			clippy::cast_possible_truncation,
+			reason = "256x256 fixture, so x and y stay below 256"
+		)]
 		DynamicImage::from_fn(256, 256, |x, y| [x as u8, y as u8])
 	}
 
@@ -206,7 +218,11 @@ where
 			let xf = f64::from(x) - 128.0;
 			let yf = f64::from(y) - 128.0;
 
-			#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // clamp ensures 0..=255
+			#[expect(
+				clippy::cast_possible_truncation,
+				clippy::cast_sign_loss,
+				reason = "clamped to 0..=255 on the same line"
+			)]
 			parameters.map(|p| {
 				let angle_rad = p.angle.to_radians();
 				let v = angle_rad.cos() * xf + angle_rad.sin() * yf - p.offset;

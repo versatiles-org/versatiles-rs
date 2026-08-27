@@ -15,7 +15,10 @@
 //!
 //! See [GDALWarpResample](https://gdal.org/api/gdalwarp_cpp.html) for details.
 
-#[allow(dead_code)]
+#[allow(
+	dead_code,
+	reason = "mirrors GDAL's full resampling enum; only some variants are selectable today"
+)]
 /// Enumeration of resampling algorithms compatible with GDAL.
 ///
 /// These values are mapped 1‑to‑1 to GDAL’s [`GDALResampleAlg`] constants via [`to_gdal`].

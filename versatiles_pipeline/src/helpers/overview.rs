@@ -32,7 +32,10 @@ pub struct OverviewCore {
 	pub tilejson: TileJSON,
 	pub level_base: u8,
 	pub tile_size: u32,
-	#[allow(clippy::type_complexity)]
+	#[expect(
+		clippy::type_complexity,
+		reason = "a coord-keyed cache of scaled-down tiles; a type alias would only move the signature"
+	)]
 	pub cache: Arc<DashMap<TileCoord, Vec<(TileCoord, Option<Blob>)>>>,
 	pub(crate) cache_bytes: Arc<AtomicUsize>,
 	scale_fn: ScaleDownFn,
@@ -306,7 +309,7 @@ impl OverviewCore {
 	}
 }
 
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "a blob length, already a usize")]
 pub(crate) fn estimate_entry_bytes(entries: &[(TileCoord, Option<Blob>)]) -> usize {
 	entries
 		.iter()

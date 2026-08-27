@@ -86,7 +86,10 @@ fn is_canonical(from: Coord<f64>, to: Coord<f64>) -> bool {
 }
 
 /// Push the interior vertices between `a` and `b`, in order.
-#[allow(clippy::too_many_arguments)]
+#[expect(
+	clippy::too_many_arguments,
+	reason = "a recursive subdivision step; every argument is part of its state"
+)]
 fn subdivide(
 	a: Coord<f64>,
 	b: Coord<f64>,

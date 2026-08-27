@@ -54,7 +54,11 @@ impl TileTransform for Operation {
 
 	fn run(&self, _coord: &TileCoord, mut tile: Tile) -> Result<Option<Tile>> {
 		let (contrast, brightness, gamma) = (self.contrast, self.brightness, self.gamma);
-		#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // clamp ensures 0..=255
+		#[expect(
+			clippy::cast_possible_truncation,
+			clippy::cast_sign_loss,
+			reason = "clamped to 0..=255 before the cast"
+		)]
 		tile.as_image_mut()?.map_color_values(|v| {
 			(((f32::from(v) - 127.5) * contrast + 0.5 + brightness).powf(gamma) * 255.0)
 				.round()

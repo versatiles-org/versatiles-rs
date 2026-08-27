@@ -143,7 +143,11 @@ impl TileCoord {
 		let x = zoom * (x / 360.0 + 0.5);
 		let y = zoom * (0.5 - 0.5 * (y * PI / 360.0 + PI / 4.0).tan().ln() / PI);
 
-		#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // Safe: clamped to valid tile range
+		#[expect(
+			clippy::cast_possible_truncation,
+			clippy::cast_sign_loss,
+			reason = "clamped to 0..=2^z-1 on the next line, so in range and non-negative"
+		)]
 		TileCoord::new(
 			z,
 			x.clamp(0.0, zoom - 1.0).floor() as u32,
@@ -480,7 +484,12 @@ impl PartialOrd for TileCoord {
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::float_cmp)]
+#[expect(
+	clippy::cast_possible_truncation,
+	clippy::cast_sign_loss,
+	clippy::float_cmp,
+	reason = "test vectors use literal coordinates and exact expected values"
+)]
 mod tests {
 	use std::{
 		cmp::Ordering::{self, *},

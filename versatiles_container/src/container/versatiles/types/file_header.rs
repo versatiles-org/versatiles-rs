@@ -206,7 +206,10 @@ impl FileHeader {
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+	clippy::cast_possible_truncation,
+	reason = "test data is built from literal byte ranges"
+)]
 mod tests {
 	use std::panic::catch_unwind;
 
@@ -215,7 +218,10 @@ mod tests {
 	use super::*;
 
 	#[test]
-	#[allow(clippy::zero_prefixed_literal)]
+	#[expect(
+		clippy::zero_prefixed_literal,
+		reason = "the four values are consecutive 18-digit runs of pi; the last is zero-padded to match"
+	)]
 	fn conversion() {
 		let test = |tile_format: TileFormat, compression: TileCompression, a: u64, b: u64, c: u64, d: u64| {
 			let mut header1 = FileHeader::new(

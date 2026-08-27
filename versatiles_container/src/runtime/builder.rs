@@ -28,7 +28,10 @@ pub struct RuntimeBuilder {
 	cache_type: Option<CacheType>,
 	writer_options: BTreeMap<String, String>,
 	ssh_identity: Option<PathBuf>,
-	#[allow(clippy::type_complexity)]
+	#[expect(
+		clippy::type_complexity,
+		reason = "a list of registry customizers; naming the closure type would not help"
+	)]
 	registry_customizer: Vec<Box<dyn FnOnce(&mut ContainerRegistry)>>,
 	silent_progress: bool,
 	abort_on_error: bool,

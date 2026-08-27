@@ -26,7 +26,11 @@ pub fn encode_elevation(elevation: f32, encoding: DemEncoding) -> [u8; 3] {
 		DemEncoding::Mapbox => ((f64::from(elevation) + 10000.0) * 10.0).round(),
 		DemEncoding::Terrarium => ((f64::from(elevation) + 32768.0) * 256.0).round(),
 	};
-	#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+	#[expect(
+		clippy::cast_possible_truncation,
+		clippy::cast_sign_loss,
+		reason = "clamped to 0..=0xFF_FFFF on the same line"
+	)]
 	let raw = (raw as i64).clamp(0, 0x00FF_FFFF) as u32;
 	[
 		((raw >> 16) & 0xFF) as u8,
@@ -110,7 +114,6 @@ fn reproject_to_float_dataset(
 
 		let operation: GDALWarpOperationH = GDALCreateWarpOperation(options_ptr);
 
-		#[allow(clippy::cast_possible_truncation)]
 		let rv = GDALChunkAndWarpMulti(
 			operation,
 			0,

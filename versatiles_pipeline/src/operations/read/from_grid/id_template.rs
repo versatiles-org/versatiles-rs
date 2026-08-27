@@ -199,7 +199,11 @@ impl IdTemplate {
 						Sign::LetterLast => {}
 					}
 
-					#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+					#[expect(
+						clippy::cast_possible_truncation,
+						clippy::cast_sign_loss,
+						reason = "`abs()` makes it non-negative; the check above bounds the magnitude"
+					)]
 					let magnitude = value.abs() as u64;
 					// Infallible: writing into a String.
 					let _ = write!(out, "{magnitude:0width$}", width = *width);
@@ -301,7 +305,11 @@ fn render_constant(value: f64, divisor: f64, width: usize, template: &str, name:
 		"id template '{template}' writes {{{name}}} into every id, so it has to be a whole number, but it is {value}. \
 		 Divide it — `{{{name}/1000}}` — or spell the label out as literal text."
 	);
-	#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+	#[expect(
+		clippy::cast_possible_truncation,
+		clippy::cast_sign_loss,
+		reason = "`abs()` makes it non-negative; the check above bounds the magnitude"
+	)]
 	let magnitude = value.abs() as u64;
 	Ok(format!("{}{magnitude:0width$}", if value < 0.0 { "-" } else { "" }))
 }

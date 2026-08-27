@@ -143,7 +143,10 @@ impl TileTransform for Operation {
 						let mask_alpha = alpha_grid[(py * width + px) as usize];
 						let pixel = rgba.get_pixel_mut(px, py);
 						// Multiply existing alpha with mask alpha
-						#[allow(clippy::cast_possible_truncation)]
+						#[expect(
+							clippy::cast_possible_truncation,
+							reason = "the product divided by 255 is back in 0..=255"
+						)]
 						{
 							pixel[3] = ((u16::from(pixel[3]) * u16::from(mask_alpha)) / 255) as u8;
 						}
@@ -247,7 +250,10 @@ mod tests {
 	/// transparent, fully opaque, and somewhere in between.
 	// clippy suggests the `bytecount` crate; a whole dependency to count 65k
 	// bytes once per test is not a trade worth making.
-	#[allow(clippy::naive_bytecount)]
+	#[expect(
+		clippy::naive_bytecount,
+		reason = "counts two different byte values; adding a bytecount dependency is not worth it"
+	)]
 	fn tally(alpha: &[u8]) -> (usize, usize, usize) {
 		let clear = alpha.iter().filter(|&&a| a == 0).count();
 		let solid = alpha.iter().filter(|&&a| a == 255).count();

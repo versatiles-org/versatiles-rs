@@ -538,7 +538,7 @@ impl CellBlock {
 }
 
 /// A loop counter as a lattice offset.
-#[allow(clippy::cast_possible_wrap)]
+#[expect(clippy::cast_possible_wrap, reason = "a grid index; no lattice has 2^63 cells")]
 fn as_offset(i: usize) -> i64 {
 	i as i64
 }
@@ -549,7 +549,10 @@ fn as_offset(i: usize) -> i64 {
 /// an id of `4341000` next to an `x` of `4341000.0` reads as two different
 /// things.
 fn number(value: f64) -> GeoValue {
-	#[allow(clippy::cast_possible_truncation)]
+	#[expect(
+		clippy::cast_possible_truncation,
+		reason = "the guard on the next line bounds the value below 9e15"
+	)]
 	if value.fract().abs() < f64::EPSILON && value.abs() < 9e15 {
 		GeoValue::from(value as i64)
 	} else {
@@ -579,9 +582,15 @@ fn sample_cell(projection: &dyn Projection, lattice: &Lattice, bbox: &GeoBBox) -
 		return (0, 0);
 	}
 
-	#[allow(clippy::cast_possible_truncation)]
+	#[expect(
+		clippy::cast_possible_truncation,
+		reason = "lattice indices; the quotient stays far inside i64"
+	)]
 	let ix = ((source.x - lattice.offset[0]) / lattice.size).floor() as i64;
-	#[allow(clippy::cast_possible_truncation)]
+	#[expect(
+		clippy::cast_possible_truncation,
+		reason = "lattice indices; the quotient stays far inside i64"
+	)]
 	let iy = ((source.y - lattice.offset[1]) / lattice.size).floor() as i64;
 	(ix, iy)
 }

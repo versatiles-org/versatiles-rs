@@ -122,7 +122,10 @@ impl RTreeObject for EdgeSegment {
 /// Pre-computed mask geometry with spatial index for efficient distance queries.
 pub struct MaskGeometry {
 	/// Geometry in Web Mercator (EPSG:3857) for meter-based calculations
-	#[allow(dead_code)]
+	#[expect(
+		dead_code,
+		reason = "kept beside the R-tree it was built from; nothing reads it back"
+	)]
 	polygon_mercator: MultiPolygon<f64>,
 
 	/// R-tree index of polygon edges for fast distance queries
@@ -376,7 +379,11 @@ impl MaskGeometry {
 
 		let alpha = self.blur_function.interpolate(t);
 
-		#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+		#[expect(
+			clippy::cast_possible_truncation,
+			clippy::cast_sign_loss,
+			reason = "`t` is clamped to 0..=1 and the blur function keeps it there, so this is 0..=255"
+		)]
 		{
 			(alpha * 255.0).round() as u8
 		}
@@ -384,7 +391,7 @@ impl MaskGeometry {
 
 	/// Get the mask bounds in Mercator coordinates.
 	#[must_use]
-	#[allow(dead_code)]
+	#[expect(dead_code, reason = "completes the mask's bounds API; nothing calls it today")]
 	pub fn bounds_mercator(&self) -> [f64; 4] {
 		self.bounds_mercator
 	}
@@ -483,10 +490,10 @@ impl MaskGeometry {
 	/// # Returns
 	/// A vector of alpha values (0-255) for each pixel, in row-major order.
 	#[must_use]
-	#[allow(
+	#[expect(
 		clippy::cast_possible_truncation,
 		clippy::cast_sign_loss,
-		clippy::cast_precision_loss
+		reason = "pixel indices and alpha values, both bounded by the grid size and 255"
 	)]
 	pub fn compute_alpha_grid(&self, tile_bbox: [f64; 4], width: u32, height: u32) -> Vec<u8> {
 		let [x_min, y_min, x_max, y_max] = tile_bbox;
@@ -604,7 +611,10 @@ impl MaskGeometry {
 	}
 
 	/// Find the distance to the nearest edge using the R-tree.
-	#[allow(clippy::float_cmp)]
+	#[expect(
+		clippy::float_cmp,
+		reason = "`f64::MAX` is a not-found sentinel here, so the comparison is exact on purpose"
+	)]
 	fn distance_to_nearest_edge(&self, point: [f64; 2]) -> f64 {
 		// Use the R-tree to find nearby edges efficiently
 		let search_radius = self.outer_threshold.max(1000.0); // At least 1km search radius
@@ -662,7 +672,7 @@ fn extract_ring_edges(ring: &LineString<f64>, edges: &mut Vec<EdgeSegment>) {
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_lossless)]
+#[expect(clippy::cast_lossless, reason = "test data is built from literal values")]
 mod tests {
 	use assert_fs::prelude::*;
 	use versatiles_core::TileCoord;

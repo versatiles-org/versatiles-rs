@@ -20,7 +20,6 @@ impl BlurFunction {
 	/// renders these into the generated parameter reference, so no doc comment
 	/// repeats them. Kept in step with [`TryFrom<&str>`] by
 	/// `variants_match_try_from`.
-	#[allow(dead_code)] // Called by VPLDecode-generated metadata; the lint can't see through the proc-macro.
 	#[must_use]
 	pub fn variants() -> &'static [&'static str] {
 		&["linear", "cosine"]

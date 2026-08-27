@@ -220,7 +220,10 @@ impl PMTilesReader {
 	///
 	/// Traverses up to three levels of PMTiles directories to locate the tile data.
 	/// Returns `Ok(None)` if the tile does not exist in the directory structure.
-	#[allow(clippy::too_many_arguments)]
+	#[expect(
+		clippy::too_many_arguments,
+		reason = "a private helper threading the directory-traversal state; grouping it would only move the list"
+	)]
 	async fn lookup_tile_by_id(
 		tile_id: u64,
 		data_reader: &DataReader,

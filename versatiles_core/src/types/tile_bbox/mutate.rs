@@ -343,7 +343,7 @@ impl TileBBox {
 }
 
 #[cfg(test)]
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments, reason = "rstest cases pass one argument per bbox edge")]
 mod tests {
 	use anyhow::Result;
 	use rstest::rstest;

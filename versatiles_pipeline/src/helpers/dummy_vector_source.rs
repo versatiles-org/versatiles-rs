@@ -12,14 +12,20 @@ use versatiles_geometry::{
 
 #[derive(Debug)]
 pub struct DummyVectorSource {
-	#[allow(clippy::type_complexity)]
+	#[expect(
+		clippy::type_complexity,
+		reason = "layers of features of key/value pairs; the shape is the documentation"
+	)]
 	data: Arc<Vec<(String, Vec<Vec<(String, String)>>)>>,
 	metadata: TileSourceMetadata,
 	tilejson: TileJSON,
 }
 
 impl DummyVectorSource {
-	#[allow(clippy::type_complexity)]
+	#[expect(
+		clippy::type_complexity,
+		reason = "layers of features of key/value pairs; the shape is the documentation"
+	)]
 	pub fn new(layers: &[(&str, &[&[(&str, &str)]])], pyramid: Option<TilePyramid>) -> Self {
 		// Convert the layers input into the required data structure
 		let data: Vec<(String, Vec<Vec<(String, String)>>)> = layers
@@ -60,9 +66,9 @@ impl DummyVectorSource {
 		}
 	}
 
+	#[allow(dead_code, reason = "a test-support builder; used only under cfg(test)")]
 	/// Builder helper to give the dummy source a TileJSON `attribution`, used by
 	/// tests that exercise multi-source metadata merging.
-	#[allow(dead_code)]
 	#[must_use]
 	pub fn with_attribution(mut self, attribution: &str) -> Self {
 		self
@@ -72,7 +78,7 @@ impl DummyVectorSource {
 		self
 	}
 
-	#[allow(dead_code)]
+	#[allow(dead_code, reason = "a test-support setter; used only under cfg(test)")]
 	pub fn set_traversal(&mut self, traversal: Traversal) {
 		self.metadata.set_traversal(traversal);
 	}

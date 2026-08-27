@@ -531,7 +531,7 @@ mod tests {
 		coords
 			.iter()
 			.map(|c| {
-				#[allow(clippy::cast_possible_truncation)]
+				#[expect(clippy::cast_possible_truncation, reason = "tile-local coordinates, far inside i64")]
 				let q = (c.x.round() as i64, c.y.round() as i64);
 				q
 			})

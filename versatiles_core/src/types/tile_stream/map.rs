@@ -385,7 +385,10 @@ where
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+	clippy::cast_possible_truncation,
+	reason = "test streams are built from literal counters"
+)]
 mod tests {
 	use std::sync::atomic::{AtomicUsize, Ordering};
 

@@ -73,7 +73,10 @@ impl Lattice {
 
 		if !left.is_finite() || !bottom.is_finite() {
 			// Nothing projected: no cells rather than every cell.
-			#[allow(clippy::reversed_empty_ranges)]
+			#[expect(
+				clippy::reversed_empty_ranges,
+				reason = "deliberately empty: nothing projected means no cells, not every cell"
+			)]
 			return (0..=-1, 0..=-1);
 		}
 
@@ -87,7 +90,10 @@ impl Lattice {
 	}
 
 	/// The index of the cell containing `value` along `axis`.
-	#[allow(clippy::cast_possible_truncation)]
+	#[expect(
+		clippy::cast_possible_truncation,
+		reason = "lattice indices; the quotient stays far inside i64"
+	)]
 	fn index(&self, value: f64, axis: usize) -> i64 {
 		((value - self.offset[axis]) / self.size).floor() as i64
 	}
@@ -144,7 +150,7 @@ mod tests {
 
 		// The tile's own center has to be inside the returned range.
 		let center = laea.to_source(coord! { x: 1_506_729.0, y: 6_907_464.0 });
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(clippy::cast_possible_truncation, reason = "test data is built from literal values")]
 		let (cx, cy) = ((center.x / 1000.0).floor() as i64, (center.y / 1000.0).floor() as i64);
 		assert!(xs.contains(&cx) && ys.contains(&cy), "{xs:?} {ys:?} vs ({cx}, {cy})");
 	}

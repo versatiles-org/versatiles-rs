@@ -153,7 +153,11 @@ fn draw_quad(p0: Point, c0: Point, p1: Point) -> Vec<Point> {
 	let devsq = devx * devx + devy * devy;
 	if devsq >= 0.333 {
 		let tol = 3.0;
-		#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // devsq is sum of squares (non-negative)
+		#[expect(
+			clippy::cast_possible_truncation,
+			clippy::cast_sign_loss,
+			reason = "`devsq` is a sum of squares, so the fourth root is non-negative and small"
+		)]
 		let n = 1 + (tol * devsq).sqrt().sqrt().floor() as usize;
 		for i in 1..n {
 			let t = (i as f32).div(n as f32);

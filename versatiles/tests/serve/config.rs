@@ -19,7 +19,10 @@ fn to_yaml_path(path: &str) -> String {
 struct ConfigTestServer {
 	host: String,
 	child: Child,
-	#[allow(dead_code)]
+	#[expect(
+		dead_code,
+		reason = "held for its Drop: the temp directory must outlive the server process"
+	)]
 	temp_dir: TempDir,
 }
 

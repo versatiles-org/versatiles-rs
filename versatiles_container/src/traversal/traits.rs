@@ -135,7 +135,10 @@ pub trait TileSourceTraverseExt: TileSource {
 impl<T: TileSource + ?Sized> TileSourceTraverseExt for T {}
 
 #[cfg(test)]
-#[allow(clippy::too_many_arguments)]
+#[expect(
+	clippy::too_many_arguments,
+	reason = "rstest cases pass one argument per traversal parameter"
+)]
 mod tests {
 	use std::sync::atomic::{AtomicU64, Ordering};
 

@@ -381,7 +381,7 @@ impl TileSource for Operation {
 crate::operations::macros::define_transform_factory!("raster_overscale", Args, Operation, requires: Raster);
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "test data is built from literal values")]
 mod tests {
 	use rstest::rstest;
 	use versatiles_core::{TileCoord, TileFormat};
@@ -401,7 +401,11 @@ mod tests {
 		}
 	}
 
-	#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // c is u8, scale is u32, result is 0..=255
+	#[expect(
+		clippy::cast_possible_truncation,
+		clippy::cast_sign_loss,
+		reason = "`c` is a u8 and `scale` a small u32, so the average is 0..=255"
+	)]
 	async fn get_avg(op: &Operation, coord: (u8, u8, u8), scale: u32) -> Vec<u8> {
 		let (level, x, y) = coord;
 		let coord = TileCoord::new(level, u32::from(x), u32::from(y))

@@ -103,9 +103,12 @@ fn pipeline_to_steps(pipeline: &VPLPipeline) -> Value {
 ///
 /// @param stepsJson - JSON string describing the pipeline steps
 /// @returns the pipeline as VPL text
-// The `String` arguments below are taken by value because that is the shape napi generates for a
-// JavaScript `string`; clippy sees them only borrowed and would rather they were `&str`.
-#[allow(clippy::needless_pass_by_value)]
+// `#[expect]` cannot be used on these: `#[napi]` re-emits the function, so the
+// suppression works by span but the expectation is never marked fulfilled.
+#[allow(
+	clippy::needless_pass_by_value,
+	reason = "napi generates by-value `String` arguments for JavaScript strings"
+)]
 #[napi]
 pub fn stringify_vpl(steps_json: String) -> Result<String> {
 	let steps: Vec<PipelineStep> = serde_json::from_str(&steps_json)
@@ -144,7 +147,10 @@ fn error_to_json(error: &versatiles::pipeline::vpl::VplParseError) -> Value {
 /// @returns a JSON string describing either the pipeline or the error
 #[napi]
 #[must_use]
-#[allow(clippy::needless_pass_by_value)]
+#[allow(
+	clippy::needless_pass_by_value,
+	reason = "napi generates by-value `String` arguments for JavaScript strings"
+)]
 pub fn parse_vpl(vpl: String) -> String {
 	let result = match parse_vpl_detailed(&vpl) {
 		Ok(pipeline) => json!({ "ok": true, "pipeline": pipeline_to_steps(&pipeline) }),
@@ -179,7 +185,10 @@ pub fn parse_vpl(vpl: String) -> String {
 /// @returns a JSON string describing either the problems found or a parse error
 #[napi]
 #[must_use]
-#[allow(clippy::needless_pass_by_value)]
+#[allow(
+	clippy::needless_pass_by_value,
+	reason = "napi generates by-value `String` arguments for JavaScript strings"
+)]
 pub fn check_vpl(vpl: String) -> String {
 	let result = match parse_vpl_detailed(&vpl) {
 		Ok(pipeline) => {
@@ -218,7 +227,10 @@ pub fn check_vpl(vpl: String) -> String {
 /// @returns a JSON string describing either the syntax tree or the error
 #[napi]
 #[must_use]
-#[allow(clippy::needless_pass_by_value)]
+#[allow(
+	clippy::needless_pass_by_value,
+	reason = "napi generates by-value `String` arguments for JavaScript strings"
+)]
 pub fn parse_vpl_cst(vpl: String) -> String {
 	match parse_cst(&vpl) {
 		Ok(file) => json!({ "ok": true, "cst": file }),
@@ -238,7 +250,10 @@ pub fn parse_vpl_cst(vpl: String) -> String {
 ///
 /// @param cstJson - JSON string describing the syntax tree
 /// @returns the tree as VPL text
-#[allow(clippy::needless_pass_by_value)]
+#[allow(
+	clippy::needless_pass_by_value,
+	reason = "napi generates by-value `String` arguments for JavaScript strings"
+)]
 #[napi]
 pub fn stringify_vpl_cst(cst_json: String) -> Result<String> {
 	let file: CstFile = serde_json::from_str(&cst_json)
@@ -263,7 +278,10 @@ pub fn stringify_vpl_cst(cst_json: String) -> Result<String> {
 ///
 /// @param cstJson - JSON string describing the syntax tree
 /// @returns a JSON string describing the formatted syntax tree
-#[allow(clippy::needless_pass_by_value)]
+#[allow(
+	clippy::needless_pass_by_value,
+	reason = "napi generates by-value `String` arguments for JavaScript strings"
+)]
 #[napi]
 pub fn format_vpl_cst(cst_json: String) -> Result<String> {
 	let mut file: CstFile = serde_json::from_str(&cst_json)

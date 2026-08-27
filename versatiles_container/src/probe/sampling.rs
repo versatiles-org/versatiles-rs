@@ -35,10 +35,10 @@ pub fn mix64(mut z: u64) -> u64 {
 /// Returns the number of windows per level that approximate `fraction` of the
 /// deepest level (the level with the most tiles). Applying this count to every
 /// level means shallower levels are sampled more fully. Always at least 1.
-#[allow(
-	clippy::cast_precision_loss,
+#[expect(
 	clippy::cast_possible_truncation,
-	clippy::cast_sign_loss
+	clippy::cast_sign_loss,
+	reason = "`fraction` is a ratio and `ceil()` keeps the product non-negative; `u32::try_from` bounds the result"
 )]
 #[must_use]
 pub fn windows_for_sample(fraction: f64, deepest_tiles: u64) -> u32 {

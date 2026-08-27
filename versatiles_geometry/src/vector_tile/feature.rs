@@ -110,7 +110,7 @@ pub(super) fn ring_is_degenerate(coords: &[Coord<f64>]) -> bool {
 
 	let mut seen = std::collections::HashSet::<(i64, i64)>::with_capacity(n);
 	for c in coords {
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(clippy::cast_possible_truncation, reason = "tile-local coordinates, far inside i64")]
 		seen.insert((c.x.round() as i64, c.y.round() as i64));
 		if seen.len() >= 3 {
 			break;
@@ -499,7 +499,10 @@ impl VectorTileFeature {
 		Ok(Geometry::MultiPolygon(MultiPolygon(polygons)))
 	}
 
-	#[allow(clippy::too_many_lines)]
+	#[expect(
+		clippy::too_many_lines,
+		reason = "one match over the geometry variants; splitting it would separate the encoder from its cases"
+	)]
 	pub fn from_geometry(id: Option<u64>, tag_ids: Vec<u32>, geometry: Geometry<f64>) -> Result<VectorTileFeature> {
 		fn write_coord(writer: &mut ValueWriterBlob<LE>, coord0: &mut (i64, i64), coord: Coord<f64>) -> Result<()> {
 			let x = float_to_int(coord.x)?;

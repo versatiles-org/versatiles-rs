@@ -67,7 +67,11 @@ fn compute_quantizer(coord: &TileCoord, elevation_error: f64, slope_error: f64, 
 	let zero_bits = if max_step_raw < 1.0 {
 		0u32
 	} else {
-		#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+		#[expect(
+			clippy::cast_possible_truncation,
+			clippy::cast_sign_loss,
+			reason = "`max_step_raw >= 1.0`, so log2 is non-negative and the floor fits u32"
+		)]
 		// Safe: max_step_raw >= 1.0, so log2 >= 0 and floor fits in u32
 		let bits = (max_step_raw + 1.0).log2().floor() as u32;
 		bits
@@ -88,7 +92,6 @@ fn compute_quantizer(coord: &TileCoord, elevation_error: f64, slope_error: f64, 
 ///
 /// Rounding is done on the reconstructed 24-bit value so a carry can propagate across
 /// channel boundaries (B → G → R), then clamped to the 24-bit range.
-#[allow(clippy::cast_possible_truncation)]
 fn quantize_pixel(r: &mut u8, g: &mut u8, b: &mut u8, mask_24: u32, round_add: u32) {
 	let raw = (u32::from(*r) << 16) | (u32::from(*g) << 8) | u32::from(*b);
 	let q = (raw + round_add).min(0x00FF_FFFF) & mask_24;
@@ -173,7 +176,6 @@ mod tests {
 	/// Per-channel masks `(mask_r, mask_g, mask_b)` derived from the quantizer, for tests.
 	fn masks(coord: &TileCoord, elevation_error: f64, slope_error: f64, encoding: DemEncoding) -> (u8, u8, u8) {
 		let (mask_24, _round_add) = compute_quantizer(coord, elevation_error, slope_error, encoding);
-		#[allow(clippy::cast_possible_truncation)]
 		(
 			((mask_24 >> 16) & 0xFF) as u8,
 			((mask_24 >> 8) & 0xFF) as u8,

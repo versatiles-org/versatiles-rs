@@ -195,7 +195,11 @@ pub(super) fn parse_buffer_size(s: &str) -> Result<u64> {
 			"Buffer size percentage must be between 0 and 100, got {pct}"
 		);
 		let total = total_system_memory()?;
-		#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+		#[expect(
+			clippy::cast_possible_truncation,
+			clippy::cast_sign_loss,
+			reason = "`pct` is checked to be 0..=100 above, so the product cannot exceed `total`"
+		)]
 		return Ok((total as f64 * pct / 100.0) as u64);
 	}
 
@@ -218,7 +222,11 @@ pub(super) fn parse_buffer_size(s: &str) -> Result<u64> {
 		.parse()
 		.with_context(|| format!("Invalid buffer size: {s}"))?;
 	ensure!(num >= 0.0, "buffer size must not be negative: {s}");
-	#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+	#[expect(
+		clippy::cast_possible_truncation,
+		clippy::cast_sign_loss,
+		reason = "`num` is checked non-negative above, and the float-to-int cast saturates"
+	)]
 	Ok((num * multiplier as f64) as u64)
 }
 

@@ -44,7 +44,10 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>, effort: Option<u8>) -> 
 	}
 
 	let mut image_ref = image;
-	#[allow(unused_assignments)]
+	#[expect(
+		unused_assignments,
+		reason = "the None is replaced in the branch below; the binding must outlive `image_ref`"
+	)]
 	let mut optional_image: Option<DynamicImage> = None;
 	if image.has_alpha() && image.is_opaque() {
 		let i = image.to_no_alpha()?;
@@ -53,9 +56,15 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>, effort: Option<u8>) -> 
 	}
 
 	let quality = quality.unwrap_or(95);
-	#[allow(clippy::cast_possible_wrap)]
+	#[expect(
+		clippy::cast_possible_wrap,
+		reason = "libwebp takes dimensions as i32; image dimensions stay far below i32::MAX"
+	)]
 	let width = image_ref.width() as i32;
-	#[allow(clippy::cast_possible_wrap)]
+	#[expect(
+		clippy::cast_possible_wrap,
+		reason = "libwebp takes dimensions as i32; image dimensions stay far below i32::MAX"
+	)]
 	let height = image_ref.height() as i32;
 	let data = image_ref.as_bytes();
 	let has_alpha = image_ref.has_alpha();
@@ -111,7 +120,10 @@ fn encode_lossy(data: &[u8], width: i32, height: i32, has_alpha: bool, quality: 
 	config.lossless = 0;
 	config.quality = f32::from(quality);
 	// Map effort 0..=100 to libwebp method 0..=6 (effort 0 → fastest, effort 100 → best)
-	#[allow(clippy::cast_possible_truncation)]
+	#[expect(
+		clippy::cast_possible_truncation,
+		reason = "`effort` is clamped to 0..=100, so the result is 0..=6"
+	)]
 	{
 		config.method = (f32::from(effort.clamp(0, 100)) / 100.0 * 6.0).round() as i32;
 	}

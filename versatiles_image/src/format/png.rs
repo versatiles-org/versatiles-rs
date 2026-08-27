@@ -46,7 +46,10 @@ pub fn encode(image: &DynamicImage, effort: Option<u8>) -> Result<Blob> {
 	};
 
 	let mut image_ref = image;
-	#[allow(unused_assignments)]
+	#[expect(
+		unused_assignments,
+		reason = "the None is replaced in the branch below; the binding must outlive `image_ref`"
+	)]
 	let mut optional_image: Option<DynamicImage> = None;
 	if image.has_alpha() && image.is_opaque() {
 		let i = image.to_no_alpha()?;

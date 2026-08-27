@@ -99,7 +99,7 @@ fn distinct_grid_vertices_at_least(coords: &[Coord<f64>], n: usize) -> bool {
 	let mut seen: std::collections::HashSet<(i64, i64)> = std::collections::HashSet::with_capacity(coords.len());
 	for c in coords {
 		// Match the encoder's rounding (`float_to_int` rounds half-away-from-zero).
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(clippy::cast_possible_truncation, reason = "tile-local coordinates, far inside i64")]
 		let key = (c.x.round() as i64, c.y.round() as i64);
 		seen.insert(key);
 		if seen.len() >= n {
@@ -209,7 +209,10 @@ fn reverse_polygon_rings(g: Geometry<f64>) -> Geometry<f64> {
 ///
 /// The single-letter binding names (`a`, `b`, `p`, `q`, `t`) follow the
 /// canonical Liang-Barsky paper notation; renaming would only obscure them.
-#[allow(clippy::many_single_char_names)]
+#[expect(
+	clippy::many_single_char_names,
+	reason = "a, b, p, q, t are the Liang-Barsky paper's own notation"
+)]
 fn clip_segment(a: Coord<f64>, b: Coord<f64>, bbox: [f64; 4]) -> Option<(Coord<f64>, Coord<f64>)> {
 	let [xmin, ymin, xmax, ymax] = bbox;
 	let dx = b.x - a.x;

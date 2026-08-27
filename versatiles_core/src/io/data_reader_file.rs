@@ -377,7 +377,6 @@ mod tests {
 
 				// Verify every byte is correct
 				for (i, &byte) in blob.as_slice().iter().enumerate() {
-					#[allow(clippy::cast_possible_truncation)] // Safe: & 0xFF always fits in u8
 					let expected = ((offset + i as u64) & 0xFF) as u8;
 					assert_eq!(
 						byte,

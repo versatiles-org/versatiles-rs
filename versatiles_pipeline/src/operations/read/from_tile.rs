@@ -67,7 +67,11 @@ impl Operation {
 impl Operation {
 	// `async` with nothing to await: the signature is fixed by
 	// `define_read_factory!`, which awaits every operation's `build`.
-	#[allow(clippy::unused_async, clippy::unused_async_trait_impl)]
+	#[expect(
+		clippy::unused_async,
+		clippy::unused_async_trait_impl,
+		reason = "the factory trait declares `build` async; this implementation has nothing to await"
+	)]
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let path = factory

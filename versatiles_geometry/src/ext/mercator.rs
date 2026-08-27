@@ -97,7 +97,10 @@ pub fn coord_from_mercator(c: Coord<f64>) -> Coord<f64> {
 }
 
 /// Extension trait providing WGS84 ↔ Web Mercator projection for `geo_types` geometries.
-#[allow(clippy::wrong_self_convention)] // `from_mercator` mirrors `to_mercator` and naturally takes `self`.
+#[expect(
+	clippy::wrong_self_convention,
+	reason = "`from_mercator` mirrors `to_mercator` and naturally takes `self`"
+)]
 pub trait MercatorExt: Sized {
 	/// Convert from WGS84 (lon/lat in degrees) to Web Mercator (meters).
 	#[must_use]

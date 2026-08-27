@@ -189,7 +189,10 @@ pub(super) fn parse_webp_alpha(data: &[u8]) -> AlphaInfo {
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+	clippy::cast_possible_truncation,
+	reason = "test images are built from literal pixel values"
+)]
 mod tests {
 	use std::{collections::HashMap, sync::LazyLock};
 

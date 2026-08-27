@@ -60,7 +60,10 @@ impl TilePyramid {
 	/// O(T log T + T · level) overall instead of O(T · level²) for sequential
 	/// insertion.
 	#[must_use]
-	#[allow(clippy::cast_possible_truncation)]
+	#[expect(
+		clippy::cast_possible_truncation,
+		reason = "`z` indexes MAX_ZOOM_LEVEL + 1 entries, so it fits u8"
+	)]
 	pub fn from_tile_coords(coords: impl Iterator<Item = TileCoord>) -> Self {
 		let mut per_level: Vec<Vec<(u32, u32)>> = vec![Vec::new(); (MAX_ZOOM_LEVEL + 1) as usize];
 		for c in coords {

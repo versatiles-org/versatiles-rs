@@ -333,7 +333,11 @@ fn make_bar(pos: u64, len: u64, width: usize) -> String {
 	let width = width.max(1);
 	let frac = (pos as f64 / len.max(1) as f64).clamp(0.0, 1.0);
 	let exact = frac * (width as f64);
-	#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+	#[expect(
+		clippy::cast_possible_truncation,
+		clippy::cast_sign_loss,
+		reason = "`frac` is clamped to 0..=1, so `exact` lies in 0..=width"
+	)]
 	let whole = exact.floor() as usize;
 	let rem = exact - whole as f64;
 
@@ -347,7 +351,11 @@ fn make_bar(pos: u64, len: u64, width: usize) -> String {
 	}
 	if whole < width {
 		// pick partial if there's any remainder
-		#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+		#[expect(
+			clippy::cast_possible_truncation,
+			clippy::cast_sign_loss,
+			reason = "`rem` is a fractional part below 1, so this is 0..=7"
+		)]
 		let idx = (rem * 8.0).floor() as usize; // 0..=7
 		if idx > 0 {
 			s.push_str(partials[idx.min(7)]);

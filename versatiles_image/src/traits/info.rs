@@ -146,7 +146,11 @@ where
 
 /// Tests cover metadata queries, size/meta validation, empty/opaque logic and per-channel diffs.
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation, clippy::float_cmp)]
+#[expect(
+	clippy::cast_possible_truncation,
+	clippy::float_cmp,
+	reason = "test images use literal pixel values and exact expected values"
+)]
 mod tests {
 	use image::ExtendedColorType;
 	use rstest::rstest;

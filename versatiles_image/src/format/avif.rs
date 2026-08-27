@@ -42,7 +42,11 @@ const DEFAULT_SPEED: u8 = 8;
 /// Encoder speed 10 is deliberately unreachable: rav1e emits *larger* files there than at speed 9
 /// — measured 90.3 KB vs 42.2 KB on a 256×256 satellite tile at quality 90 — so it is dominated on
 /// both axes and no effort value should select it.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[expect(
+	clippy::cast_possible_truncation,
+	clippy::cast_sign_loss,
+	reason = "clamped to 1..=9 on the same line"
+)]
 fn effort_to_speed(effort: Option<u8>) -> u8 {
 	effort.map_or(DEFAULT_SPEED, |e| {
 		(9.0 - f32::from(e) / 100.0 * 8.0).round().clamp(1.0, 9.0) as u8
@@ -190,7 +194,10 @@ mod tests {
 	#[case::middle(50)]
 	#[case::slowest(100)]
 	fn encode_accepts_valid_effort(#[case] effort: u8) -> Result<()> {
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(
+			clippy::cast_possible_truncation,
+			reason = "32x32 test fixture; x and y stay below 256"
+		)]
 		let img = DynamicImage::from_fn(32, 32, |x, y| [x as u8, (255 - x) as u8, y as u8]);
 		let blob = encode(&img, Some(80), Some(effort))?;
 		assert!(!blob.is_empty());

@@ -149,22 +149,30 @@ mod tests {
 	use crate::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 
 	fn sample_l8() -> DynamicImage {
-		#[allow(clippy::cast_possible_truncation)]
 		DynamicImage::from_fn(4, 3, |x, y| [((x + y) % 2) as u8])
 	}
 
 	fn sample_la8() -> DynamicImage {
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(
+			clippy::cast_possible_truncation,
+			reason = "4x3 test fixture; x and y stay far below 256"
+		)]
 		DynamicImage::from_fn(4, 3, |x, y| [((x * 2 + y) % 256) as u8, 255])
 	}
 
 	fn sample_rgb8() -> DynamicImage {
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(
+			clippy::cast_possible_truncation,
+			reason = "4x3 test fixture; x and y stay far below 256"
+		)]
 		DynamicImage::from_fn(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8])
 	}
 
 	fn sample_rgba8() -> DynamicImage {
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(
+			clippy::cast_possible_truncation,
+			reason = "4x3 test fixture; x and y stay far below 256"
+		)]
 		DynamicImage::from_fn(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8, 200])
 	}
 
@@ -202,7 +210,7 @@ mod tests {
 	fn from_raw_accepts_supported_channel_counts(#[case] channels: usize) {
 		let w = 4usize;
 		let h = 3usize; // 12 pixels
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(clippy::cast_possible_truncation, reason = "`& 0xFF` always fits in u8")]
 		let data = (0..(w * h * channels)).map(|v| (v & 0xFF) as u8).collect::<Vec<_>>();
 
 		let img = DynamicImage::from_raw(w, h, data).expect("from_raw failed");

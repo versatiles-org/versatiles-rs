@@ -573,7 +573,10 @@ fn combined_within_tube(orig: &Grid, w: usize, h: usize, pm: f64, ee: f64, se: f
 	rounded_mask_transform(orig, zb)
 }
 
-#[allow(clippy::too_many_lines)]
+#[expect(
+	clippy::too_many_lines,
+	reason = "a benchmark main(): one linear sequence of measurements"
+)]
 fn main() {
 	let images = load_tile_rgb_data();
 

@@ -502,7 +502,10 @@ fn build_rtree_from_entries(entries: &[ZoomEntry]) -> RTree<FeatureRef> {
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+	clippy::cast_possible_truncation,
+	reason = "test data is built from literal coordinates"
+)]
 mod tests {
 	use geo_types::{LineString, Point, Polygon};
 

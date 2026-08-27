@@ -9,7 +9,10 @@ use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitConvert;
 
 pub struct DummyImageSource {
-	#[allow(clippy::type_complexity)]
+	#[expect(
+		clippy::type_complexity,
+		reason = "a tile-generating closure; a type alias would only move the signature"
+	)]
 	generate_tile: Arc<dyn Fn(&TileCoord) -> Option<Tile> + Send + Sync>,
 	metadata: TileSourceMetadata,
 	tilejson: TileJSON,

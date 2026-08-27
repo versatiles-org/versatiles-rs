@@ -52,7 +52,10 @@ pub struct BandMapping {
 
 impl BandMapping {
 	/// Create a new band mapping without alpha.
-	#[allow(dead_code)]
+	#[expect(
+		dead_code,
+		reason = "completes the type's constructor pair; only the alpha form is used today"
+	)]
 	pub fn new(map: Vec<usize>) -> Self {
 		Self {
 			map,
@@ -181,7 +184,7 @@ impl BandMapping {
 	}
 
 	/// Maximum GDAL band index referenced by this mapping.
-	#[allow(dead_code)]
+	#[expect(dead_code, reason = "completes the mapping's query API; nothing calls it today")]
 	pub fn max_band_index(&self) -> usize {
 		let color_max = *self.map.iter().max().expect("map always has at least one color band");
 		self.src_alpha_band.map_or(color_max, |a| color_max.max(a))

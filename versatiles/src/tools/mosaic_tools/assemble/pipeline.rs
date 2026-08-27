@@ -572,7 +572,10 @@ mod tests {
 	}
 
 	// Build sink that we can observe from outside via a shared counter.
-	#[allow(clippy::type_complexity)]
+	#[expect(
+		clippy::type_complexity,
+		reason = "a test helper returning the sink plus the two counters it writes into"
+	)]
 	fn make_observable_sink() -> (Arc<Box<dyn TileSink>>, Arc<AtomicUsize>, Arc<Mutex<Vec<TileCoord>>>) {
 		let count = Arc::new(AtomicUsize::new(0));
 		let coords: Arc<Mutex<Vec<TileCoord>>> = Arc::new(Mutex::new(Vec::new()));

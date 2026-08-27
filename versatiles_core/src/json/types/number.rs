@@ -53,7 +53,10 @@ mod tests {
 		($($name:ident : $t:ty => [$($v:expr),+ $(,)?];)+) => {
 			$(
 				#[test]
-				#[allow(clippy::cast_lossless)]
+				// `#[expect]` cannot be used here: `cast_lossless` fires at each macro
+				// *expansion*, so an expectation written in the macro body reads as
+				// unfulfilled even though the suppression is doing real work.
+				#[allow(clippy::cast_lossless, reason = "one body per numeric type; `as` also covers u64/u128, which lack `f64: From`")]
 				fn $name() {
 					let vals: &[$t] = &[$($v),+];
 					for &v in vals {

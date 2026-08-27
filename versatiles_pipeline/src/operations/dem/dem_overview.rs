@@ -106,7 +106,11 @@ fn raw_to_rgb(raw: u64) -> Rgb<u8> {
 }
 
 impl Operation {
-	#[allow(clippy::unused_async, clippy::unused_async_trait_impl)] // must be async for the factory macro
+	#[expect(
+		clippy::unused_async,
+		clippy::unused_async_trait_impl,
+		reason = "the factory trait declares `build` async; this implementation has nothing to await"
+	)]
 	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + TileSource,

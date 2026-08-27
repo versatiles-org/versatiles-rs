@@ -19,7 +19,7 @@ pub fn z_to_u8(z: u32) -> napi::Result<u8> {
 			"Zoom level {z} is invalid; must be between 0 and {MAX_ZOOM_LEVEL}"
 		)));
 	}
-	#[allow(clippy::cast_possible_truncation)] // bounded by MAX_ZOOM_LEVEL above
+	#[expect(clippy::cast_possible_truncation, reason = "bounded by MAX_ZOOM_LEVEL above")]
 	Ok(z as u8)
 }
 

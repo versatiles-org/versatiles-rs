@@ -462,7 +462,7 @@ impl TileSource for Operation {
 crate::operations::macros::define_read_factory!("from_stacked_raster", Args, Operation);
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "test data is built from literal values")]
 mod tests {
 	use futures::future::BoxFuture;
 	use pretty_assertions::assert_eq;

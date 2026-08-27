@@ -59,14 +59,16 @@ impl TileBreakdown {
 		// Blob lengths are u64; on 32-bit targets they could in principle
 		// truncate, but a single MVT tile fits comfortably in a usize. Same
 		// stance as the existing `blob.len() as usize` in `check`.
-		#[allow(clippy::cast_possible_truncation)]
 		let mut feature_count = 0usize;
 		let mut geometry_bytes = 0usize;
 		let mut property_bytes = 0usize;
 		for layer in &vt.layers {
 			feature_count += layer.features.len();
 			for f in &layer.features {
-				#[allow(clippy::cast_possible_truncation)]
+				#[expect(
+					clippy::cast_possible_truncation,
+					reason = "a single MVT tile fits comfortably in a usize"
+				)]
 				let g = f.geom_data.len() as usize;
 				geometry_bytes += g;
 			}
@@ -75,7 +77,10 @@ impl TileBreakdown {
 			}
 			for v in layer.property_manager.iter_val() {
 				if let Ok(blob) = GeoValuePBF::to_blob(v) {
-					#[allow(clippy::cast_possible_truncation)]
+					#[expect(
+						clippy::cast_possible_truncation,
+						reason = "a single MVT tile fits comfortably in a usize"
+					)]
 					let p = blob.len() as usize;
 					property_bytes += p;
 				}
@@ -260,7 +265,10 @@ impl TileSizeMonitor {
 	/// cost. Compute it via [`TileBreakdown::from_vector_tile`] before the
 	/// underlying `VectorTile` is consumed by encoding.
 	pub fn check(&self, coord: TileCoord, blob: &Blob, breakdown: TileBreakdown) -> Result<()> {
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(
+			clippy::cast_possible_truncation,
+			reason = "a single MVT tile fits comfortably in a usize"
+		)]
 		let size = blob.len() as usize;
 		let inner = &self.inner;
 		if let Some(hard_cap) = inner.hard_cap_bytes

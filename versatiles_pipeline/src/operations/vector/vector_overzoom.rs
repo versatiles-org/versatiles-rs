@@ -240,7 +240,7 @@ fn has_n_distinct_grid_vertices(coords: &[Coord<f64>], n: usize) -> bool {
 	}
 	let mut seen: std::collections::HashSet<(i64, i64)> = std::collections::HashSet::with_capacity(coords.len());
 	for c in coords {
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(clippy::cast_possible_truncation, reason = "tile-local coordinates, far inside i64")]
 		let key = (c.x.round() as i64, c.y.round() as i64);
 		seen.insert(key);
 		if seen.len() >= n {
@@ -327,7 +327,7 @@ fn extract_features(
 	let level_diff = i32::from(coord_dst.level) - i32::from(coord_src.level);
 	ensure!(level_diff > 0, "extract_features requires level_diff > 0");
 
-	#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+	#[expect(clippy::cast_sign_loss, reason = "`level_diff` is a small positive zoom difference")]
 	let scale = 1u32 << level_diff as u32;
 	let f_scale = f64::from(scale);
 	let buf = f64::from(buffer);

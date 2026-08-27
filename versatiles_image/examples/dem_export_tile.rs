@@ -167,7 +167,10 @@ fn encode_webp(raw: &[i64], w: i32, h: i32) -> Vec<u8> {
 	}
 }
 
-#[allow(clippy::too_many_lines)]
+#[expect(
+	clippy::too_many_lines,
+	reason = "a benchmark main(): one linear sequence of measurements"
+)]
 fn main() {
 	let images = load_tile_rgb_data();
 	let blobs = original_blobs();

@@ -201,7 +201,11 @@ impl RasterSource {
 			let extra: Vec<Vec<u8>> = iter
 				.map(|vals| {
 					let resolved = resolve_nodata_set(vals, n_color_bands)?;
-					#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+					#[expect(
+						clippy::cast_possible_truncation,
+						clippy::cast_sign_loss,
+						reason = "clamped to 0..=255 before the cast"
+					)]
 					Ok(resolved
 						.into_iter()
 						.map(|v| v.round().clamp(0.0, 255.0) as u8)

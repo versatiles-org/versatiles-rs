@@ -250,7 +250,7 @@ impl PipelineFactory {
 						)) as Box<dyn TileSource>,
 						TileType::Raster => {
 							let color = if !name.is_empty() && name.len() <= 4 {
-								#[allow(clippy::cast_possible_truncation)]
+								#[expect(clippy::cast_possible_truncation, reason = "a hex digit times 17 is 0..=255")]
 								name
 									.chars()
 									.filter_map(|c| c.to_digit(16).map(|d| (d * 17) as u8))
@@ -455,7 +455,10 @@ impl PipelineFactory {
 	/// which is replaced by an auto-generated table of contents linking to every
 	/// operation, so the generated `README.md` carries an up-to-date operation index.
 	pub fn help_md(&self) -> String {
-		#[allow(clippy::borrowed_box)]
+		#[expect(
+			clippy::borrowed_box,
+			reason = "the slice comes from the registry, which stores boxed trait objects"
+		)]
 		fn to_md<T>(vec: &[&Box<T>]) -> String
 		where
 			T: OperationFactoryTrait + ?Sized,
@@ -466,7 +469,10 @@ impl PipelineFactory {
 		}
 
 		/// Inline list of links to each operation's section, e.g. ``[`filter`](#filter)``.
-		#[allow(clippy::borrowed_box)]
+		#[expect(
+			clippy::borrowed_box,
+			reason = "the slice comes from the registry, which stores boxed trait objects"
+		)]
 		fn toc<T>(vec: &[&Box<T>]) -> String
 		where
 			T: OperationFactoryTrait + ?Sized,

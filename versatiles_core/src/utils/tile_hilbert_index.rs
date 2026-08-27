@@ -175,7 +175,11 @@ fn index_to_coord(index: u64) -> Result<TileCoord> {
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[expect(
+	clippy::cast_possible_truncation,
+	clippy::cast_sign_loss,
+	reason = "test vectors use literal coordinates"
+)]
 mod tests {
 	use super::*;
 	use crate::MAX_ZOOM_LEVEL;

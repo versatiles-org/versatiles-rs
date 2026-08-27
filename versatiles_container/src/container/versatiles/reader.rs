@@ -489,7 +489,10 @@ impl PartialEq for VersaTilesReader {
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+	clippy::cast_possible_truncation,
+	reason = "test data is built from literal counters"
+)]
 mod tests {
 	use assert_fs::NamedTempFile;
 	use versatiles_core::{Blob, TileCompression, TileFormat, TilePyramid, assert_wildcard, io::DataWriterBlob};

@@ -71,7 +71,11 @@ pub(super) fn auto_max_zoom_projected(features_mercator: &[GeoFeature]) -> u8 {
 	if !zoom_f.is_finite() {
 		return MAX_ZOOM;
 	}
-	#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+	#[expect(
+		clippy::cast_possible_truncation,
+		clippy::cast_sign_loss,
+		reason = "clamped to 0..=MAX_ZOOM on the next line"
+	)]
 	let z = zoom_f.round().clamp(0.0, f64::from(MAX_ZOOM)) as u8;
 	z
 }

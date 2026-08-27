@@ -41,7 +41,6 @@ macro_rules! tile_format_subset {
 			/// `VPLDecode` renders these into the generated parameter reference,
 			/// so no doc comment repeats them. Kept in step with
 			/// [`TryFrom<&str>`] by this module's round-trip test.
-			#[allow(dead_code)] // Called by VPLDecode-generated metadata; the lint can't see through the proc-macro.
 			#[must_use]
 			pub fn variants() -> &'static [&'static str] {
 				&[$($canonical),+]

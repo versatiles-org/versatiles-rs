@@ -127,7 +127,11 @@ impl Debug for ServerTileSource {
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[expect(
+	clippy::cast_possible_truncation,
+	clippy::cast_sign_loss,
+	reason = "test data is built from literal values"
+)]
 mod tests {
 	use anyhow::Result;
 	use rstest::rstest;

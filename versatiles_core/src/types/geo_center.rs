@@ -150,7 +150,10 @@ impl TryFrom<Vec<f64>> for GeoCenter {
 			input.len() == 3,
 			"center must have 3 elements: [longitude, latitude, zoom]"
 		);
-		#[allow(clippy::cast_possible_truncation)] // Safe: zoom value is clamped and converted properly
+		#[expect(
+			clippy::cast_possible_truncation,
+			reason = "the f64->i64 cast saturates, so `u8::try_from` still rejects out-of-range zooms"
+		)]
 		Ok(GeoCenter(input[0], input[1], u8::try_from(input[2].round() as i64)?))
 	}
 }

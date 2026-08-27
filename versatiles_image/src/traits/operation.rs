@@ -136,7 +136,10 @@ where
 	}
 
 	#[context("flattening image onto RGB({:?})", color)]
-	#[allow(clippy::cast_possible_truncation)]
+	#[expect(
+		clippy::cast_possible_truncation,
+		reason = "the alpha blend divides by 255, so each channel is back in 0..=255"
+	)]
 	fn into_flattened(self, color: Rgb<u8>) -> Result<DynamicImage> {
 		if !self.has_alpha() {
 			return Ok(self);
@@ -249,7 +252,10 @@ where
 		Ok(())
 	}
 
-	#[allow(clippy::cast_possible_truncation)]
+	#[expect(
+		clippy::cast_possible_truncation,
+		reason = "`.min(255)` bounds each channel, and `a_out` is snapped to at most 255"
+	)]
 	fn overlay_additive(&mut self, top: &DynamicImage) -> Result<()> {
 		self.ensure_same_size(top)?;
 
@@ -312,7 +318,10 @@ where
 /// Tests: alpha handling (drop/flatten/opaque), average color, scaling/cropping, overlays, and
 /// color‑channel mutations using `rstest` parameterization where appropriate.
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+	clippy::cast_possible_truncation,
+	reason = "test images are built from literal pixel values"
+)]
 mod tests {
 	use image::{ExtendedColorType as ECT, GenericImageView, Pixel, Rgba};
 	use rstest::rstest;

@@ -36,7 +36,10 @@ impl ProgressFactory {
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+	clippy::cast_possible_truncation,
+	reason = "test data is built from literal counters"
+)]
 mod tests {
 	use super::*;
 

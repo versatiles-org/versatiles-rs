@@ -18,7 +18,10 @@ fn to_yaml_path(path: &str) -> String {
 struct CorsTestServer {
 	host: String,
 	child: Child,
-	#[allow(dead_code)]
+	#[expect(
+		dead_code,
+		reason = "held for its Drop: the temp directory must outlive the server process"
+	)]
 	temp_dir: TempDir,
 }
 
@@ -229,7 +232,10 @@ async fn e2e_cors_on_tile_endpoint() {
 struct DefaultCorsTestServer {
 	host: String,
 	child: Child,
-	#[allow(dead_code)]
+	#[expect(
+		dead_code,
+		reason = "held for its Drop: the temp directory must outlive the server process"
+	)]
 	temp_dir: TempDir,
 }
 

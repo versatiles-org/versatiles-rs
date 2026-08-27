@@ -85,9 +85,12 @@ pub struct LayerStats {
 /// }
 /// ```
 #[napi(js_name = "layerStats")]
-// napi requires an owned `Buffer` for arguments — `&Buffer` does not implement
-// `FromNapiRef`, so the by-value binding is the only shape that compiles.
-#[allow(clippy::needless_pass_by_value)]
+// `#[expect]` cannot be used on these: `#[napi]` re-emits the function, so the
+// suppression works by span but the expectation is never marked fulfilled.
+#[allow(
+	clippy::needless_pass_by_value,
+	reason = "napi requires an owned `Buffer`; `&Buffer` does not implement `FromNapiRef`"
+)]
 pub fn layer_stats_of(tile: Buffer) -> napi::Result<Vec<LayerStats>> {
 	stats_from_bytes(tile.as_ref()).to_napi()
 }

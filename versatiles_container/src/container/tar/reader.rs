@@ -121,7 +121,10 @@ impl TarTilesReader {
 	///
 	/// When a `ProgressHandle` is provided, progress is reported in bytes scanned.
 	#[context("opening tar from path '{}'", path.display())]
-	#[allow(clippy::too_many_lines)]
+	#[expect(
+		clippy::too_many_lines,
+		reason = "one linear scan over the tar entries; splitting it would separate parsing from the fields it fills"
+	)]
 	fn open_with_progress(path: &Path, progress: Option<&ProgressHandle>) -> Result<TarTilesReader> {
 		let mut reader = DataReaderFile::open(path)?;
 

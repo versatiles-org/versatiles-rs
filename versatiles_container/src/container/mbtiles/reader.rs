@@ -85,7 +85,7 @@ pub struct MBTilesReader {
 	pool: Pool<SqliteConnectionManager>,
 	tilejson: TileJSON,
 	metadata: TileSourceMetadata,
-	#[allow(dead_code)]
+	#[expect(dead_code, reason = "stored to mirror the other readers; nothing reads it back")]
 	runtime: TilesRuntime,
 }
 

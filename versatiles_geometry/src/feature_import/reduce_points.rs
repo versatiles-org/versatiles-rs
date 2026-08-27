@@ -101,9 +101,15 @@ pub fn apply_min_distance(features: Vec<(usize, Geometry<f64>)>, threshold: f64)
 		if !coord.x.is_finite() || !coord.y.is_finite() {
 			continue;
 		}
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(
+			clippy::cast_possible_truncation,
+			reason = "non-finite coordinates are skipped above; this is a grid index"
+		)]
 		let cx = (coord.x / cell_size).floor() as i64;
-		#[allow(clippy::cast_possible_truncation)]
+		#[expect(
+			clippy::cast_possible_truncation,
+			reason = "non-finite coordinates are skipped above; this is a grid index"
+		)]
 		let cy = (coord.y / cell_size).floor() as i64;
 		let mut too_close = false;
 		'outer: for dx in -1..=1_i64 {
@@ -150,7 +156,6 @@ fn splitmix64(mut x: u64) -> u64 {
 }
 
 #[cfg(test)]
-#[allow(clippy::cast_precision_loss)] // test indices are small `usize`s
 mod tests {
 	use geo_types::{LineString, Point};
 

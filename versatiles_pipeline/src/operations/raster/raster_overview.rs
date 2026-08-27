@@ -21,7 +21,11 @@ struct Operation {
 }
 
 impl Operation {
-	#[allow(clippy::unused_async, clippy::unused_async_trait_impl)] // must be async for the factory macro
+	#[expect(
+		clippy::unused_async,
+		clippy::unused_async_trait_impl,
+		reason = "the factory trait declares `build` async; this implementation has nothing to await"
+	)]
 	async fn build(vpl_node: VPLNode, source: Box<dyn TileSource>, factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + TileSource,
@@ -65,7 +69,7 @@ impl TileSource for Operation {
 crate::operations::macros::define_transform_factory!("raster_overview", Args, Operation, requires: Raster);
 
 #[cfg(test)]
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "test data is built from literal values")]
 mod tests {
 	use imageproc::image::{DynamicImage, GenericImage, GenericImageView, Rgba};
 	use versatiles_core::{Blob, GeoBBox, TileCoord, TileFormat, TilePyramid};

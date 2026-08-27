@@ -10,7 +10,11 @@ use crate::Blob;
 ///
 /// * `Blob` containing the generated data.
 #[must_use]
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+#[expect(
+	clippy::cast_possible_truncation,
+	clippy::cast_sign_loss,
+	reason = "arbitrary deterministic test bytes; saturating on `sin`'s negative values is fine here"
+)]
 pub fn generate_test_data(size: usize) -> Blob {
 	let mut data = Vec::with_capacity(size);
 	for i in 0..size {

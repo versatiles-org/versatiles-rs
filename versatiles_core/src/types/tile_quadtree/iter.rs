@@ -205,7 +205,7 @@ fn collect_grid_cells(
 /// current subtree is placed into the correct NW/NE/SW/SE child slot determined
 /// by the corresponding bits of `col` and `row`.  The root covers the full
 /// `[0, 2^depth)^2` tile space with content only in the `(col, row)` cell.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(clippy::cast_possible_truncation, reason = "the two masked bits below give 0..=3")]
 fn embed_node(node: Node, col: u64, row: u64, depth: u8) -> Node {
 	let mut result = node;
 	for bit in 0..depth {
