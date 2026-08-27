@@ -338,21 +338,19 @@ fn pipeline_body<'a>(input: &'a str, leading: &'a str) -> Res<'a, CstPipeline> {
 	}];
 	let mut input = input;
 
-	// As `separated_list1`: a soft failure after the `|` gives the separator back, so
-	// `node | | node` is reported as unexpected input at the first `|`.
+	// Unlike `separated_list1`, the node after a `|` is mandatory: nothing in the grammar lets a
+	// `|` follow a finished pipeline, so handing the separator back on a soft failure would only
+	// leave it as unattached input for `all_consuming` to reject — outside every context frame,
+	// and pointing at the separator rather than at what is missing after it. `cut` keeps the
+	// failure inside the node being parsed, where the frames are. See issue #258.
 	while let Ok((rest, pipe)) = punct(input, '|') {
-		let Ok((rest, leading)) = ws0(rest) else { break };
-		match cst_node(rest, leading) {
-			Ok((rest, node)) => {
-				nodes.push(PunctuatedItem {
-					separator: Some(pipe),
-					value: node,
-				});
-				input = rest;
-			}
-			Err(nom::Err::Error(_)) => break,
-			Err(e) => return Err(e),
-		}
+		let (rest, leading) = ws0(rest)?;
+		let (rest, node) = cut(move |i| cst_node(i, leading)).parse(rest)?;
+		nodes.push(PunctuatedItem {
+			separator: Some(pipe),
+			value: node,
+		});
+		input = rest;
 	}
 
 	Ok((

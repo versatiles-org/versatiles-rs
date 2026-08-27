@@ -47,6 +47,10 @@ pub struct VplParseError {
 	/// The innermost failure, e.g. `"expected '=', found k"`.
 	pub message: String,
 	/// The context stack, innermost first and outermost last.
+	///
+	/// Never empty, so a consumer can always compose `message` with the construct it happened in.
+	/// The one failure `nom` raises outside every frame — input following an otherwise complete
+	/// pipeline — is attributed to [`whole_pipeline`] instead of carrying no stack at all.
 	pub context: Vec<VplErrorFrame>,
 	/// The caret-annotated trace, rendered eagerly because [`Display`] has no access to the input.
 	trace: String,
@@ -82,7 +86,8 @@ impl VplParseError {
 				}),
 				_ => None,
 			})
-			.collect();
+			.collect::<Vec<_>>();
+		let context = if context.is_empty() { whole_pipeline() } else { context };
 
 		let trace = render_trace(input, error);
 		VplParseError {
@@ -100,9 +105,23 @@ impl VplParseError {
 			span: input.len()..input.len(),
 			trace: message.clone(),
 			message,
-			context: Vec::new(),
+			context: whole_pipeline(),
 		}
 	}
+}
+
+/// The stack for a failure `nom` recorded no frames of its own for.
+///
+/// Only unattached input reaches this: the pipeline parsed to completion and something followed it
+/// that could not belong to it, so `all_consuming` raised the failure above every `context(…)`
+/// call. The input is still meant to be one pipeline starting at offset 0, and that is what the
+/// leftover is measured against, so the stack is that single frame rather than nothing. It is not
+/// drawn in [`Display`], which shows only what `nom` itself recorded.
+fn whole_pipeline() -> Vec<VplErrorFrame> {
+	vec![VplErrorFrame {
+		label: String::from("parsing pipeline"),
+		offset: 0,
+	}]
 }
 
 impl fmt::Display for VplParseError {
@@ -230,6 +249,8 @@ fn describe_kind(kind: ErrorKind) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
+	use rstest::rstest;
+
 	use super::*;
 	use crate::vpl::parse_vpl_detailed;
 
@@ -295,16 +316,64 @@ mod tests {
 		assert_eq!(&input[offsets[1]..error.span.end], "key=[n k");
 	}
 
-	/// Failures from `all_consuming` carry no context at all — a correct span with a `nom`
-	/// kind for a message. Recorded so the gap is visible rather than surprising.
-	#[test]
-	fn some_failures_have_no_context_at_all() {
-		let input = "node | | node";
+	/// A trailing separator is the typo of issue #258, and the one a person editing a pipeline is
+	/// most likely to make. The node after a `|` is mandatory, so the failure is reported inside
+	/// the node that is missing — with the frames — rather than against the separator.
+	#[rstest]
+	#[case("node a=1 | ")]
+	#[case("node a=1 |")]
+	#[case("node a=1 | | node")]
+	fn a_trailing_separator_reports_inside_the_missing_node(#[case] input: &str) {
+		let error = error_of(input);
+
+		assert_eq!(error.message, "unexpected character");
+		assert_eq!(
+			labels(&error),
+			[
+				"parsing bare_identifier",
+				"parsing node identifier",
+				"parsing node",
+				"parsing pipeline"
+			]
+		);
+		// against what follows the `|`, not against the `|` itself
+		assert!(error.span.start > input.find('|').unwrap());
+	}
+
+	/// Input that follows an otherwise complete pipeline is the one failure `nom` raises outside
+	/// every frame, because nothing was in progress when `all_consuming` rejected it. It is
+	/// attributed to the pipeline as a whole so that `context` is never empty. See issue #258.
+	#[rstest]
+	#[case("node [ ] [ ]", "[")]
+	#[case("node [n key=2]]", "]")]
+	#[case("node [ child key=value ] node", "n")]
+	fn trailing_input_is_attributed_to_the_whole_pipeline(#[case] input: &str, #[case] at: &str) {
 		let error = error_of(input);
 
 		assert_eq!(error.message, "unexpected input");
-		assert_eq!(&input[error.span.clone()], "|");
-		assert!(error.context.is_empty());
+		assert_eq!(&input[error.span.clone()], at);
+		assert_eq!(labels(&error), ["parsing pipeline"]);
+		assert_eq!(error.context[0].offset, 0);
+	}
+
+	/// The guarantee the frames are worth relying on: whatever goes wrong, there is something to
+	/// compose the message with.
+	#[rstest]
+	fn context_is_never_empty(#[values(0)] _dummy: usize) {
+		for input in [
+			"",
+			" ",
+			"node | | node",
+			"node a=1 | ",
+			"node [ ] [ ]",
+			"node [n key=2]]",
+			"node child key=value ]",
+			"node key=\"2.1",
+			"node a=/data/berlin.mbtiles",
+			"| node",
+		] {
+			assert!(!error_of(input).context.is_empty(), "no context for {input:?}");
+		}
 	}
 
 	#[test]

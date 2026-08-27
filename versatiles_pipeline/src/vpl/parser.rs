@@ -245,8 +245,24 @@ mod tests {
 	#[case("node | | node", &[
 		"0: at line 1:",
 		"node | | node",
-		"     ^",
-		"unexpected input"
+		"       ^",
+		"unexpected character",
+		"",
+		"1: at line 1, in parsing bare_identifier:",
+		"node | | node",
+		"       ^",
+		"",
+		"2: at line 1, in parsing node identifier:",
+		"node | | node",
+		"       ^",
+		"",
+		"3: at line 1, in parsing node:",
+		"node | | node",
+		"       ^",
+		"",
+		"4: at line 1, in parsing pipeline:",
+		"node | | node",
+		"^"
 	])]
 	fn test_error_messages(#[case] vpl: &str, #[case] message: &[&str]) {
 		let error = parse_vpl(vpl).unwrap_err().chain().last().unwrap().to_string();
