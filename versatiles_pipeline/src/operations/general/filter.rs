@@ -2,10 +2,11 @@ use std::{collections::HashSet, fmt::Debug, sync::Arc};
 
 use anyhow::{Result, bail};
 use async_trait::async_trait;
-use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{GeoBBox, GeoCrop, TileBBox, TileJSON, TileStream, ZoomLevel};
 use versatiles_derive::context;
 
+use crate::helpers::location::SourceLocation;
 use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -34,7 +35,7 @@ struct Args {
 	/// Highest zoom level to keep. Defaults to the source's highest.
 	level_max: Option<ZoomLevel>,
 	/// Tile container whose coordinates act as an allow-list. Defaults to no allow-list.
-	filename: Option<String>,
+	filename: Option<SourceLocation>,
 }
 
 #[derive(Debug)]
@@ -102,7 +103,7 @@ impl Operation {
 		}
 
 		let mask = if let Some(filename) = args.filename {
-			let mask = factory.reader(DataLocation::try_from(&filename)?).await?;
+			let mask = factory.reader(filename.to_location()?).await?;
 			let mask_pyramid = mask.tile_pyramid().await?;
 			tile_pyramid.intersect_pyramid(&mask_pyramid);
 			Some(mask)

@@ -2,12 +2,13 @@ use std::{fmt::Debug, sync::Arc};
 
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
-use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{
 	GeoBBox, GeoCenter, TileBBox, TileJSON, TilePyramid, TileSchema, TileStream, VectorLayers, ZoomLevel,
 };
 use versatiles_derive::context;
 
+use crate::helpers::location::FilePath;
 use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -47,15 +48,15 @@ struct Args {
 	/// Complete TileJSON document, as a JSON string. Defaults to the source's metadata.
 	tilejson: Option<TileJSON>,
 	/// Path to a file holding a complete TileJSON document. Defaults to the source's metadata.
-	tilejson_file: Option<String>,
+	tilejson_file: Option<FilePath>,
 	/// Partial TileJSON document to merge on, as a JSON string. Defaults to merging nothing.
 	tilejson_update: Option<TileJSON>,
 	/// Path to a file holding a partial TileJSON document. Defaults to merging nothing.
-	tilejson_update_file: Option<String>,
+	tilejson_update_file: Option<FilePath>,
 	/// The `vector_layers` array as a JSON string. Defaults to the source's.
 	vector_layers: Option<VectorLayers>,
 	/// Path to a file holding the `vector_layers` array as JSON. Defaults to the source's.
-	vector_layers_file: Option<String>,
+	vector_layers_file: Option<FilePath>,
 }
 
 #[derive(Debug)]
@@ -146,7 +147,12 @@ impl Operation {
 /// was decoded, so `check` reports a malformed document without building
 /// anything (#260). The file half cannot: reading a file is I/O, which `check`
 /// promises not to do, so it is read here and parsed by the same `TryFrom`.
-fn load_json_arg<T>(inline: Option<T>, file: Option<String>, factory: &PipelineFactory, name: &str) -> Result<Option<T>>
+fn load_json_arg<T>(
+	inline: Option<T>,
+	file: Option<FilePath>,
+	factory: &PipelineFactory,
+	name: &str,
+) -> Result<Option<T>>
 where
 	T: for<'a> TryFrom<&'a str, Error = anyhow::Error>,
 {
@@ -155,7 +161,7 @@ where
 		(Some(value), None) => Ok(Some(value)),
 		(None, Some(path)) => {
 			let location = factory
-				.resolve_location(&DataLocation::try_from(path.as_str())?)
+				.resolve_location(&path.to_location())
 				.with_context(|| format!("resolving '{name}_file' path {path:?}"))?;
 			let path_buf = location.to_path_buf()?;
 			let content = std::fs::read_to_string(&path_buf)

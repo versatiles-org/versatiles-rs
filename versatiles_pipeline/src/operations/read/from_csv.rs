@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail, ensure};
 use futures::StreamExt;
-use versatiles_container::{DataLocation, TileSource};
+use versatiles_container::TileSource;
 use versatiles_core::{GeoBBox, TileCompression, ZoomLevel};
 use versatiles_derive::context;
 use versatiles_geometry::{
@@ -23,6 +23,7 @@ use versatiles_geometry::{
 	geo::GeoFeature,
 };
 
+use crate::helpers::location::FilePath;
 use crate::{
 	PipelineFactory,
 	helpers::{
@@ -61,7 +62,7 @@ const PROGRESS_MIN_BYTES: u64 = 10_000_000;
 /// writing the whole thing out first. The crop is tile-granular, as it is there.
 struct Args {
 	/// Path to the CSV file.
-	filename: String,
+	filename: FilePath,
 	/// Column holding the longitude, in WGS84 degrees.
 	#[vpl(field_of = "filename")]
 	lon_column: String,
@@ -116,7 +117,7 @@ impl Operation {
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		reject_unsupported_args(&args)?;
-		let location = factory.resolve_location(&DataLocation::try_from(args.filename.as_str())?)?;
+		let location = factory.resolve_location(&args.filename.to_location())?;
 		let path = location.to_path_buf()?;
 
 		let layer_name = args.layer_name.clone().unwrap_or_else(|| {

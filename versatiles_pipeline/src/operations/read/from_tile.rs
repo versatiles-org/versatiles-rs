@@ -17,16 +17,17 @@ use std::{path::Path, sync::Arc};
 
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{Blob, TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
 
+use crate::helpers::location::FilePath;
 use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads one tile file and returns it for every requested coordinate.
 struct Args {
 	/// Path to the tile file; its format comes from the extension.
-	filename: String,
+	filename: FilePath,
 }
 
 /// Implements [`TileSource`] by returning clones of a tile loaded from a file.
@@ -74,9 +75,7 @@ impl Operation {
 	)]
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let path = factory
-			.resolve_location(&DataLocation::try_from(&args.filename)?)?
-			.to_path_buf()?;
+		let path = factory.resolve_location(&args.filename.to_location())?.to_path_buf()?;
 		Operation::from_file(&path).map(|op| Box::new(op) as Box<dyn TileSource>)
 	}
 }

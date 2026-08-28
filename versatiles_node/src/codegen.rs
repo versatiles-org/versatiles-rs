@@ -82,6 +82,11 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		| "Option<NodataValues>"
 		| "RegexPattern"
 		| "CelExpression"
+		| "FilePath"
+		| "Option<FilePath>"
+		| "SourceLocation"
+		| "Option<SourceLocation>"
+		| "HttpUrl"
 		| "Option<TileJSON>"
 		| "Option<VectorLayers>" => "string",
 		// Two spellings of one colour, both accepted: `"FF5733"` and

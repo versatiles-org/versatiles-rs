@@ -10,7 +10,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
-use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
 use versatiles_core::{
 	EpsgCode, TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileSize, TileStream, ZoomLevel,
 };
@@ -18,6 +18,7 @@ use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitInfo;
 
 use super::{CrsExtent, GeoreferenceOverride, RasterSource, RasterTransform};
+use crate::helpers::location::FilePath;
 use crate::{
 	PipelineFactory,
 	factory::{OperationFactoryTrait, ReadOperationFactoryTrait},
@@ -62,7 +63,7 @@ use crate::{
 /// disk.
 struct Args {
 	/// Path to the raster dataset.
-	filename: String,
+	filename: FilePath,
 	/// Tile size in pixels. Defaults to `512`.
 	#[vpl(default = "512")]
 	tile_size: Option<TileSize>,
@@ -80,7 +81,7 @@ struct Args {
 	#[vpl(default = "png")]
 	tile_format: Option<RasterTileFormat>,
 	/// GeoJSON polygon outside which pixels become transparent. Defaults to the whole dataset.
-	cutline: Option<String>,
+	cutline: Option<FilePath>,
 	/// Band indices to read as colour channels, 1-based. Defaults to the colour interpretation.
 	bands: Option<BandIndices>,
 	/// Pixel values to render as transparent. Defaults to the dataset's own.
@@ -128,18 +129,12 @@ impl Operation {
 			args.level_min,
 			args.level_max
 		);
-		let filename = factory
-			.resolve_location(&DataLocation::try_from(&args.filename)?)?
-			.to_path_buf()?;
+		let filename = factory.resolve_location(&args.filename.to_location())?.to_path_buf()?;
 
 		let cutline_path = args
 			.cutline
 			.as_ref()
-			.map(|c| {
-				factory
-					.resolve_location(&DataLocation::try_from(c.as_str())?)
-					.and_then(|l| l.to_path_buf())
-			})
+			.map(|c| factory.resolve_location(&c.to_location()).and_then(|l| l.to_path_buf()))
 			.transpose()?;
 
 		let bands = args.bands.map(BandIndices::into_indices);

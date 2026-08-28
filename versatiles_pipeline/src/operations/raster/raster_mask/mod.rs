@@ -22,11 +22,12 @@ use std::sync::Arc;
 use anyhow::{Result, bail};
 use blur_function::BlurFunction;
 use mask_geometry::{MaskGeometry, TileClassification};
-use versatiles_container::{DataLocation, Tile, TileSource, TileSourceMetadata};
+use versatiles_container::{Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileCoord, TileFormat, TilePyramid};
 use versatiles_derive::context;
 use versatiles_image::DynamicImage;
 
+use crate::helpers::location::FilePath;
 use crate::{
 	PipelineFactory,
 	operations::transform::{TileTransform, TransformOp},
@@ -42,7 +43,7 @@ use crate::{
 struct Args {
 	/// Path to a GeoJSON file holding a Polygon or MultiPolygon, in EPSG:4326
 	/// lon/lat degrees.
-	geojson: String,
+	geojson: FilePath,
 	/// Distance in meters by which to grow the mask, or shrink it when negative. Defaults to `0`.
 	#[vpl(default = "0")]
 	buffer: Option<f32>,
@@ -88,9 +89,7 @@ impl Operation {
 		let blur_function = args.blur_function.unwrap_or_default();
 
 		// Resolve GeoJSON path relative to the factory's base path
-		let geojson_path = factory
-			.resolve_location(&DataLocation::try_from(&args.geojson)?)?
-			.to_path_buf()?;
+		let geojson_path = factory.resolve_location(&args.geojson.to_location())?.to_path_buf()?;
 
 		// Load mask geometry
 		let mask = MaskGeometry::from_geojson(

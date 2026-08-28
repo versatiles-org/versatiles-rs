@@ -23,6 +23,7 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
+use crate::helpers::location::HttpUrl;
 use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -33,7 +34,7 @@ use crate::{PipelineFactory, vpl::VPLNode};
 /// array.
 struct Args {
 	/// URL of the TileJSON endpoint.
-	url: String,
+	url: HttpUrl,
 	/// How often to retry a failed tile request. Defaults to `3`.
 	#[vpl(default = "3")]
 	max_retries: Option<u16>,
@@ -79,7 +80,7 @@ impl Operation {
 			.build()?;
 
 		// Fetch TileJSON
-		let response = client.get(&args.url).send().await?;
+		let response = client.get(args.url.as_str()).send().await?;
 		if !response.status().is_success() {
 			bail!(
 				"Failed to fetch TileJSON from '{}': HTTP {}",
@@ -122,7 +123,7 @@ impl Operation {
 			max_concurrent_requests,
 			metadata,
 			tilejson: result_tilejson,
-			url: args.url,
+			url: args.url.to_string(),
 			runtime: factory.runtime(),
 		}) as Box<dyn TileSource>)
 	}

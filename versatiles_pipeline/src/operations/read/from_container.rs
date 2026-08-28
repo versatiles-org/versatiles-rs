@@ -10,10 +10,11 @@ use std::fmt::Debug;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_container::{DataLocation, Tile, TileSource, TileSourceMetadata};
+use versatiles_container::{Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 
+use crate::helpers::location::{FilePath, SourceLocation};
 use crate::{PipelineFactory, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -29,10 +30,10 @@ use crate::{PipelineFactory, vpl::VPLNode};
 /// key ties the `.vpl` file to machines that have it.
 struct Args {
 	/// Path to the container, or an `http`, `https` or `sftp` URL.
-	filename: String,
+	filename: SourceLocation,
 
 	/// Private key for this one `sftp://` source. Defaults to the global setting.
-	ssh_identity: Option<String>,
+	ssh_identity: Option<FilePath>,
 }
 
 #[derive(Debug)]
@@ -50,8 +51,14 @@ impl Operation {
 	#[context("Failed to build from_container operation in VPL node {:?}", vpl_node.name)]
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn TileSource>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
+		// The key stays a path on disk, so the reader takes one; the container
+		// itself may be a URL, or standard input.
+		let ssh_identity = args
+			.ssh_identity
+			.as_ref()
+			.map(|key| key.as_path().display().to_string());
 		let source = factory
-			.reader_with_ssh_identity(DataLocation::try_from(&args.filename)?, args.ssh_identity.as_deref())
+			.reader_with_ssh_identity(args.filename.to_location()?, ssh_identity.as_deref())
 			.await?;
 		let tile_pyramid = source.tile_pyramid().await?;
 		let mut metadata = source.metadata().clone();
@@ -124,7 +131,7 @@ mod tests {
 	};
 
 	use futures::future::BoxFuture;
-	use versatiles_container::TilesRuntime;
+	use versatiles_container::{DataLocation, TilesRuntime};
 	use versatiles_core::TileCompression::Uncompressed;
 
 	use super::*;

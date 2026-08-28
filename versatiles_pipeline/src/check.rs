@@ -466,6 +466,35 @@ mod tests {
 		}
 	}
 
+	/// Where the data is, as something a consumer can read — and, for the
+	/// thirteen that take a path, refused early instead of on `to_path_buf`
+	/// after the pipeline was built (#260).
+	#[test]
+	fn a_location_of_the_wrong_kind_is_reported() {
+		assert_eq!(
+			problems("from_csv filename=\"https://example.org/cities.csv\" lon_column=x lat_column=y"),
+			["'from_csv' does not accept 'filename=https://example.org/cities.csv': \
+				 'https://example.org/cities.csv' is a URL, and this argument takes a path to a file"]
+		);
+		assert_eq!(
+			problems("from_tilejson url=\"tiles/index.json\""),
+			[
+				"'from_tilejson' does not accept 'url=tiles/index.json': 'tiles/index.json' is not a URL: relative URL without a base"
+			]
+		);
+
+		for vpl in [
+			// A container may be a URL, a path, or standard input.
+			"from_container filename=\"https://example.org/world.versatiles\"",
+			"from_container filename=\"world.versatiles\"",
+			"from_container filename=\"-\"",
+			"from_csv filename=\"cities.csv\" lon_column=x lat_column=y",
+			"from_tilejson url=\"https://example.org/tiles.json\"",
+		] {
+			assert!(problems(vpl).is_empty(), "check rejected {vpl:?}: {:?}", problems(vpl));
+		}
+	}
+
 	/// The three JSON documents, refused before anything is built — including
 	/// the layer structure, not just the JSON syntax (#260).
 	///

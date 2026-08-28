@@ -2,13 +2,14 @@ use std::{fmt::Debug, sync::Arc};
 
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
-use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
+use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
 use versatiles_core::{
 	EpsgCode, TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileSize, TileStream, ZoomLevel,
 };
 use versatiles_derive::context;
 
 use super::{CrsExtent, DemSource, GeoreferenceOverride, RasterTransform, dem_source::DemEncoding};
+use crate::helpers::location::FilePath;
 use crate::{
 	PipelineFactory,
 	factory::{OperationFactoryTrait, ReadOperationFactoryTrait},
@@ -48,7 +49,7 @@ use crate::{
 /// disk.
 struct Args {
 	/// Path to the DEM dataset.
-	filename: String,
+	filename: FilePath,
 	/// How elevation is packed into the RGB channels. Defaults to `mapbox`.
 	#[vpl(default = "mapbox")]
 	encoding: Option<DemEncoding>,
@@ -66,7 +67,7 @@ struct Args {
 	#[vpl(default = "4")]
 	gdal_concurrency_limit: Option<u8>,
 	/// GeoJSON polygon outside which pixels become nodata. Defaults to the whole dataset.
-	cutline: Option<String>,
+	cutline: Option<FilePath>,
 	/// EPSG code to read the dataset with. Defaults to the dataset's own.
 	crs: Option<EpsgCode>,
 	/// Extent as `west,south,east,north` in the units of `crs`. Defaults to the dataset's own.
@@ -103,18 +104,12 @@ impl Operation {
 
 		let encoding = args.encoding.unwrap_or(DemEncoding::Mapbox);
 
-		let filename = factory
-			.resolve_location(&DataLocation::try_from(&args.filename)?)?
-			.to_path_buf()?;
+		let filename = factory.resolve_location(&args.filename.to_location())?.to_path_buf()?;
 
 		let cutline_path = args
 			.cutline
 			.as_ref()
-			.map(|c| {
-				factory
-					.resolve_location(&DataLocation::try_from(c.as_str())?)
-					.and_then(|l| l.to_path_buf())
-			})
+			.map(|c| factory.resolve_location(&c.to_location()).and_then(|l| l.to_path_buf()))
 			.transpose()?;
 
 		let source = DemSource::new(

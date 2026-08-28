@@ -1,11 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
 use anyhow::{Result, anyhow};
-use versatiles_container::{DataLocation, TileSource};
+use versatiles_container::TileSource;
 use versatiles_core::TileJSON;
 use versatiles_derive::context;
 use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
 
+use crate::helpers::location::FilePath;
 use crate::{
 	PipelineFactory,
 	helpers::{CsvReader, SeparatorChar},
@@ -23,7 +24,7 @@ use crate::{
 /// `from_grid` and `from_h3` for generating that geometry.
 struct Args {
 	/// Path to the CSV or TSV file, which must have a header row.
-	data_source_path: String,
+	data_source_path: FilePath,
 
 	/// Name of the layer whose features are updated.
 	#[vpl(layer_of_source)]
@@ -170,7 +171,7 @@ impl Runner {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
 		let path = factory
-			.resolve_location(&DataLocation::try_from(&args.data_source_path)?)?
+			.resolve_location(&args.data_source_path.to_location())?
 			.to_path_buf()?;
 		let mut csv_reader = CsvReader::new(&path, factory.runtime()).with_string_field(&args.id_field_data);
 
@@ -233,7 +234,7 @@ mod tests {
 
 		let runner = Runner {
 			args: Args {
-				data_source_path: "data.csv".to_string(),
+				data_source_path: FilePath::try_from("data.csv").unwrap(),
 				id_field_tiles: "id".to_string(),
 				id_field_data: "id".to_string(),
 				layer_name: "test_layer".to_string(),
@@ -262,7 +263,7 @@ mod tests {
 		.unwrap();
 
 		let args = Args::from_vpl_node(&vpl_node).unwrap();
-		assert_eq!(args.data_source_path, "data.csv");
+		assert_eq!(args.data_source_path.as_path(), std::path::Path::new("data.csv"));
 		assert_eq!(args.id_field_tiles, "id");
 		assert_eq!(args.id_field_data, "id");
 		assert_eq!(args.replace_properties, Some(true));
