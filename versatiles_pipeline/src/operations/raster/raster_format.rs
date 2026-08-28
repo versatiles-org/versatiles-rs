@@ -2,7 +2,7 @@ use std::str;
 
 use anyhow::{Result, ensure};
 use versatiles_container::{Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileCompression, TileCoord, TileFormat};
+use versatiles_core::{TileCompression, TileCoord, TileFormat, bounded_number};
 use versatiles_derive::context;
 
 use crate::{
@@ -31,8 +31,8 @@ struct Args {
 	quality: Option<QualityByZoom>,
 	/// Encoder quality for tiles with translucent pixels. Defaults to using `quality` throughout.
 	quality_translucent: Option<QualityByZoom>,
-	/// Encoder effort, `0` (fastest) to `100` (smallest). Defaults to the encoder's own.
-	effort: Option<u8>,
+	/// Encoder effort, `0` is fastest and `100` smallest. Defaults to the encoder's own.
+	effort: Option<Effort>,
 }
 
 #[derive(Debug)]
@@ -67,7 +67,7 @@ impl Operation {
 			format: format.into(),
 			quality: args.quality.unwrap_or_default().into_levels(),
 			quality_translucent: args.quality_translucent.map(QualityByZoom::into_levels),
-			effort: args.effort,
+			effort: args.effort.map(Effort::get),
 		};
 		Ok(TransformOp::new(source, operation, factory.runtime()))
 	}
@@ -91,6 +91,14 @@ impl TileTransform for Operation {
 		tile.change_format(self.format, effective_quality, self.effort)?;
 		Ok(Some(tile))
 	}
+}
+
+bounded_number! {
+	/// How hard an encoder should work, from `0` (fastest) to `100` (smallest).
+	///
+	/// The same range `quality` enforces below, and for the same encoders — it
+	/// was documented here and enforced nowhere until it had a type (#260).
+	Effort: u8, 0..=100;
 }
 
 /// An encoder quality setting resolved per zoom level.

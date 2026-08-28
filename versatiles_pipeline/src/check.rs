@@ -334,11 +334,16 @@ mod tests {
 	}
 
 	/// Every value of a list is judged, not just the first.
+	///
+	/// `from_grid.offset` is the last parameter that is a bare array of numbers
+	/// rather than a type that parses as a group — this test and the one below
+	/// have already moved twice as `color` and then `center` grew types. If it
+	/// grows one too, these need a fixture rather than a real parameter.
 	#[test]
 	fn each_value_of_a_repeated_parameter_is_checked() {
-		let found = problems("from_debug format=png | meta_update center=[a,b,c]");
-		assert_eq!(found.len(), 3, "{found:?}");
-		assert!(found[2].contains("'center=c'"), "{found:?}");
+		let found = problems("from_grid epsg=3035 size=1 bbox=[0,0,1,1] offset=[a,b]");
+		assert_eq!(found.len(), 2, "{found:?}");
+		assert!(found[1].contains("'offset=b'"), "{found:?}");
 	}
 
 	/// A scalar parameter given a list is wrong twice over, and both are worth
@@ -402,9 +407,60 @@ mod tests {
 	#[test]
 	fn an_array_of_the_wrong_length_is_reported() {
 		assert_eq!(
-			problems("from_debug format=png | meta_update center=[0,0]"),
-			["'meta_update' expects 3 values for 'center', got 2"]
+			problems("from_grid epsg=3035 size=1 bbox=[0,0,1,1] offset=[0,0,0]"),
+			["'from_grid' expects 2 values for 'offset', got 3"]
 		);
+	}
+
+	/// The three bounded numbers whose bound lived in a doc comment and nowhere
+	/// else: `gamma=-5` and `effort=200` both *built*, and produced whatever
+	/// they produced. Two of them are "above `0`", which is why the type
+	/// carries an exclusive bound rather than a min/max pair (#260).
+	#[test]
+	fn a_number_outside_its_documented_bound_is_reported() {
+		assert_eq!(
+			problems("from_debug format=png | raster_levels gamma=-5"),
+			["'raster_levels' does not accept 'gamma=-5': Gamma must be greater than 0.0, but is -5"]
+		);
+		assert_eq!(
+			problems("from_debug format=png | raster_levels contrast=0"),
+			["'raster_levels' does not accept 'contrast=0': Contrast must be greater than 0.0, but is 0"]
+		);
+		assert_eq!(
+			problems("from_debug format=png | raster_levels brightness=300"),
+			[
+				"'raster_levels' does not accept 'brightness=300': Brightness must be between -255.0 and 255.0, but \
+				 is 300"
+			]
+		);
+		assert_eq!(
+			problems("from_debug format=png | raster_format format=png effort=200"),
+			["'raster_format' does not accept 'effort=200': Effort must be between 0 and 100, but is 200"]
+		);
+
+		for vpl in [
+			"from_debug format=png | raster_levels gamma=0.5 contrast=1.2 brightness=-20",
+			"from_debug format=png | raster_format format=png effort=100",
+		] {
+			assert!(problems(vpl).is_empty(), "check rejected {vpl:?}: {:?}", problems(vpl));
+		}
+	}
+
+	/// The last of the four Tier 1 gaps for `center`: three numbers that were
+	/// only ever counted, never read. `GeoCenter::check` existed the whole time
+	/// — a longitude of 1000 reached the TileJSON that clients read because
+	/// nothing on the way asked it (#260).
+	#[test]
+	fn a_centre_off_the_globe_is_reported() {
+		assert_eq!(
+			problems("from_debug format=png | meta_update center=[1000,99,7]"),
+			["'meta_update' does not accept 'center=[1000,99,7]': center[0] (longitude) must be <= 180"]
+		);
+		assert_eq!(
+			problems("from_debug format=png | meta_update center=[13.4,52.5,99]"),
+			["'meta_update' does not accept 'center=[13.4,52.5,99]': center[2] (zoom) must be <= 30"]
+		);
+		assert!(problems("from_debug format=png | meta_update center=[13.4,52.5,12]").is_empty());
 	}
 
 	/// The case #255 is about, with the corners transposed rather than the CRS

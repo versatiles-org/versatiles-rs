@@ -158,6 +158,55 @@ impl TryFrom<Vec<f64>> for GeoCenter {
 	}
 }
 
+impl TryFrom<&[String]> for GeoCenter {
+	type Error = anyhow::Error;
+
+	/// Parses `[longitude, latitude, zoom]` from the values as they were
+	/// written, before anything has been built.
+	///
+	/// Unlike the `Vec<f64>` conversion this **checks the value**, not just the
+	/// count: a longitude of `1000` reached the TileJSON that clients read,
+	/// because nothing between `meta_update center=[1000,99,7]` and the output
+	/// asked [`check`](Self::check) (#260).
+	///
+	/// The tolerant conversion stays tolerant on purpose. It reads centres out
+	/// of TileJSON documents and MBTiles metadata — data this project did not
+	/// write — where refusing to open a file over a sloppy centre would be the
+	/// wrong trade. A VPL argument is something the author can fix now.
+	///
+	/// # Examples
+	/// ```
+	/// use versatiles_core::GeoCenter;
+	///
+	/// let values = ["13.4", "52.5", "12"].map(String::from);
+	/// assert_eq!(GeoCenter::try_from(&values[..]).unwrap(), GeoCenter(13.4, 52.5, 12));
+	///
+	/// let off_the_globe = ["1000", "99", "7"].map(String::from);
+	/// assert!(GeoCenter::try_from(&off_the_globe[..]).is_err());
+	/// ```
+	fn try_from(values: &[String]) -> Result<Self> {
+		ensure!(
+			values.len() == 3,
+			"expected 3 values [longitude, latitude, zoom], got {}",
+			values.len()
+		);
+		let mut numbers = Vec::with_capacity(3);
+		for value in values {
+			numbers.push(
+				value
+					.parse::<f64>()
+					.map_err(|e| anyhow::anyhow!("'{value}' is not a number: {e}"))?,
+			);
+		}
+
+		// Through the same conversion the readers use, so a centre means one
+		// thing everywhere — and then the check they cannot afford.
+		let center = GeoCenter::try_from(numbers)?;
+		center.check()?;
+		Ok(center)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use std::convert::TryFrom;

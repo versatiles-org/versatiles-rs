@@ -116,6 +116,159 @@ impl NumberBounds for f64 {
 	const BOUNDS: Bounds = Bounds::reals();
 }
 
+/// Declares a number type that carries the range it accepts.
+///
+/// The bound belongs to a *type* rather than to each field that has it, for the
+/// same reason `variants()` does: a fact repeated at every site is free to
+/// drift, and four bounds in this codebase are already shared by two parameters
+/// each. The type gives one parser with two callers — the accessor the builder
+/// uses and the probe `check` runs — so a value `check` accepts and a value
+/// that builds are the same set by construction.
+///
+/// Two spellings, because two of the parameters this exists for are documented
+/// "above `0`", which an inclusive pair cannot express. The range lands on the
+/// type as `MIN`, `MAX` and `MIN_INCLUSIVE`.
+///
+/// Works for any number `f64` can hold exactly — `u8` through `u32`, `i8`
+/// through `i32`, and `f32`.
+///
+/// ```
+/// use versatiles_core::bounded_number;
+///
+/// bounded_number! {
+///     /// Encoder effort, `0` (fastest) to `100` (smallest).
+///     Effort: u8, 0..=100;
+///     /// Gamma exponent.
+///     Gamma: f32, greater_than 0.0;
+/// }
+///
+/// assert_eq!(Effort::try_from("80").unwrap().get(), 80);
+/// assert_eq!(Effort::MAX, Some(100));
+/// assert!(Effort::try_from("200").is_err());
+///
+/// assert!(Gamma::try_from("0").is_err(), "`0` is not above `0`");
+/// assert_eq!(Gamma::MAX, None, "no upper end");
+/// assert!(!Gamma::bounds().min_inclusive);
+/// ```
+#[macro_export]
+macro_rules! bounded_number {
+	() => {};
+
+	// An inclusive range: `-255.0..=255.0`.
+	(
+		$(#[$meta:meta])*
+		$name:ident : $inner:ty, $min:literal ..= $max:literal ;
+		$($rest:tt)*
+	) => {
+		$crate::bounded_number!(@define $(#[$meta])* $name : $inner,
+			min = $min, max = ::core::option::Option::Some($max), min_inclusive = true,
+			reason = ::core::concat!("must be between ", ::core::stringify!($min), " and ", ::core::stringify!($max)));
+		$crate::bounded_number!($($rest)*);
+	};
+
+	// An exclusive lower bound with no upper end: `greater_than 0.0`.
+	(
+		$(#[$meta:meta])*
+		$name:ident : $inner:ty, greater_than $min:literal ;
+		$($rest:tt)*
+	) => {
+		$crate::bounded_number!(@define $(#[$meta])* $name : $inner,
+			min = $min, max = ::core::option::Option::None, min_inclusive = false,
+			reason = ::core::concat!("must be greater than ", ::core::stringify!($min)));
+		$crate::bounded_number!($($rest)*);
+	};
+
+	(
+		@define
+		$(#[$meta:meta])*
+		$name:ident : $inner:ty,
+		min = $min:literal, max = $max:expr, min_inclusive = $min_inclusive:literal,
+		reason = $reason:expr
+	) => {
+		$(#[$meta])*
+		///
+		/// Declared with [`bounded_number!`](crate::bounded_number), so the range
+		/// it accepts and the range it advertises are one fact.
+		#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+		pub struct $name($inner);
+
+		impl $name {
+			/// The smallest value this type accepts, or the value it must
+			/// exceed when [`MIN_INCLUSIVE`](Self::MIN_INCLUSIVE) is false.
+			pub const MIN: $inner = $min;
+			/// The largest value this type accepts, or `None` where there is no
+			/// upper end.
+			pub const MAX: ::core::option::Option<$inner> = $max;
+			/// Whether [`MIN`](Self::MIN) itself is accepted.
+			pub const MIN_INCLUSIVE: bool = $min_inclusive;
+
+			/// Builds the value, checking it against the range.
+			///
+			/// # Errors
+			///
+			/// Errors outside the range this type declares.
+			pub fn new(value: $inner) -> ::anyhow::Result<Self> {
+				let above_floor = if Self::MIN_INCLUSIVE { value >= Self::MIN } else { value > Self::MIN };
+				let below_ceiling = match Self::MAX {
+					::core::option::Option::Some(max) => value <= max,
+					::core::option::Option::None => true,
+				};
+				::anyhow::ensure!(
+					above_floor && below_ceiling,
+					::core::concat!(::core::stringify!($name), " ", $reason, ", but is {}"),
+					value
+				);
+				::core::result::Result::Ok(Self(value))
+			}
+
+			/// The value itself.
+			#[must_use]
+			pub fn get(self) -> $inner {
+				self.0
+			}
+
+			/// What a form should offer: the range this type accepts.
+			#[must_use]
+			pub fn bounds() -> $crate::Bounds {
+				$crate::Bounds {
+					min: ::core::option::Option::Some(f64::from(Self::MIN)),
+					max: match Self::MAX {
+						::core::option::Option::Some(max) => ::core::option::Option::Some(f64::from(max)),
+						::core::option::Option::None => ::core::option::Option::None,
+					},
+					min_inclusive: Self::MIN_INCLUSIVE,
+					max_inclusive: true,
+					integer: <$inner as $crate::NumberBounds>::BOUNDS.integer,
+				}
+			}
+		}
+
+		impl ::core::convert::From<$name> for $inner {
+			fn from(value: $name) -> Self {
+				value.0
+			}
+		}
+
+		impl ::core::convert::TryFrom<&str> for $name {
+			type Error = ::anyhow::Error;
+
+			fn try_from(value: &str) -> ::anyhow::Result<Self> {
+				let text = value.trim();
+				let parsed = text.parse::<$inner>().map_err(|_| {
+					::anyhow::anyhow!(::core::concat!(::core::stringify!($name), " '{}' is not a number"), text)
+				})?;
+				Self::new(parsed)
+			}
+		}
+
+		impl ::core::fmt::Display for $name {
+			fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+				::core::fmt::Display::fmt(&self.0, f)
+			}
+		}
+	};
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

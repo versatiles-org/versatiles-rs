@@ -33,7 +33,7 @@ struct Args {
 	/// Area covered, in WGS84 degrees. Defaults to the source's.
 	bounds: Option<GeoBBox>,
 	/// Where a client should open the map, as `[lon, lat, zoom]`. Defaults to the source's.
-	center: Option<[f64; 3]>,
+	center: Option<GeoCenter>,
 	/// Description text. Defaults to the source's.
 	description: Option<String>,
 	/// Zoom level from which clients should fill from the parent tile. Defaults to the source's.
@@ -103,7 +103,7 @@ impl Operation {
 		}
 
 		if let Some(center) = args.center {
-			tilejson.center = Some(GeoCenter::try_from(center.to_vec())?);
+			tilejson.center = Some(center);
 		}
 
 		if let Some(description) = args.description {

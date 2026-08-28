@@ -1,6 +1,6 @@
 use anyhow::Result;
 use versatiles_container::{Tile, TileSource};
-use versatiles_core::TileCoord;
+use versatiles_core::{TileCoord, bounded_number};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitOperation;
 
@@ -10,18 +10,28 @@ use crate::{
 	vpl::VPLNode,
 };
 
+bounded_number! {
+	/// An offset added to every colour channel, in 0..=255 terms.
+	Brightness: f32, -255.0..=255.0;
+	/// A factor applied around mid-grey. Zero would flatten every tile to one
+	/// colour and a negative factor would invert it, so neither is accepted.
+	Contrast: f32, greater_than 0.0;
+	/// A gamma exponent. Zero divides by zero rather than being a mild edge.
+	Gamma: f32, greater_than 0.0;
+}
+
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Adjusts the brightness, contrast and gamma of raster tiles.
 struct Args {
-	/// Offset added to every channel, `-255` to `255`. Defaults to `0.0`.
+	/// Offset added to every channel. Defaults to `0.0`.
 	#[vpl(default = "0.0")]
-	brightness: Option<f32>,
-	/// Factor applied around mid-grey, above `0`. Defaults to `1.0`.
+	brightness: Option<Brightness>,
+	/// Factor applied around mid-grey. Defaults to `1.0`.
 	#[vpl(default = "1.0")]
-	contrast: Option<f32>,
-	/// Gamma exponent, above `0`. Defaults to `1.0`.
+	contrast: Option<Contrast>,
+	/// Gamma exponent. Defaults to `1.0`.
 	#[vpl(default = "1.0")]
-	gamma: Option<f32>,
+	gamma: Option<Gamma>,
 }
 
 #[derive(Debug)]
@@ -41,9 +51,9 @@ impl Operation {
 	) -> Result<TransformOp<Operation>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let operation = Operation {
-			brightness: args.brightness.unwrap_or(0.0) / 255.0,
-			contrast: args.contrast.unwrap_or(1.0) / 255.0,
-			gamma: args.gamma.unwrap_or(1.0),
+			brightness: args.brightness.map_or(0.0, Brightness::get) / 255.0,
+			contrast: args.contrast.map_or(1.0, Contrast::get) / 255.0,
+			gamma: args.gamma.map_or(1.0, Gamma::get),
 		};
 		Ok(TransformOp::new(source, operation, factory.runtime()))
 	}

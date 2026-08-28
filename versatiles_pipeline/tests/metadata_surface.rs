@@ -332,15 +332,16 @@ fn a_plain_number_falls_back_to_the_range_of_its_rust_type() {
 	assert_eq!((border.min, border.max), (Some(0.0), Some(4_294_967_295.0)));
 	assert!(border.integer);
 
-	let gamma = find_field(&ops, "raster_levels", "gamma")
+	// `gamma` stood here until it grew a type with a real bound of its own.
+	let tolerance = find_field(&ops, "from_geo", "polygon_simplify")
 		.bounds
 		.expect("f32 is still describable");
 	assert_eq!(
-		(gamma.min, gamma.max),
+		(tolerance.min, tolerance.max),
 		(None, None),
 		"no end is not the same as no answer"
 	);
-	assert!(!gamma.integer, "a form should allow decimals here");
+	assert!(!tolerance.integer, "a form should allow decimals here");
 
 	// Not a number, so there is nothing to describe.
 	assert!(find_field(&ops, "from_container", "filename").bounds.is_none());

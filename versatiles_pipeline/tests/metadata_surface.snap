@@ -138,7 +138,7 @@ from_tilejson.max_concurrent_requests: Option<u16> | optional | bounds=[0,65535]
 meta_update [transform]
 meta_update.attribution: Option<String> | optional
 meta_update.bounds: Option<GeoBBox> | optional
-meta_update.center: Option<[f64;3]> | optional
+meta_update.center: Option<GeoCenter> | optional
 meta_update.description: Option<String> | optional
 meta_update.fillzoom: Option<ZoomLevel> | optional | bounds=[0,30] int
 meta_update.legend: Option<String> | optional
@@ -158,12 +158,12 @@ raster_format [transform]
 raster_format.format: Option<RasterTileFormat> | optional | values=[avif,jpg,png,webp]
 raster_format.quality: Option<QualityByZoom> | optional
 raster_format.quality_translucent: Option<QualityByZoom> | optional
-raster_format.effort: Option<u8> | optional | bounds=[0,255] int
+raster_format.effort: Option<Effort> | optional | bounds=[0,100] int
 
 raster_levels [transform]
-raster_levels.brightness: Option<f32> | optional | default=0.0 | bounds=(-inf,inf) float
-raster_levels.contrast: Option<f32> | optional | default=1.0 | bounds=(-inf,inf) float
-raster_levels.gamma: Option<f32> | optional | default=1.0 | bounds=(-inf,inf) float
+raster_levels.brightness: Option<Brightness> | optional | default=0.0 | bounds=[-255,255] float
+raster_levels.contrast: Option<Contrast> | optional | default=1.0 | bounds=(0,inf) float
+raster_levels.gamma: Option<Gamma> | optional | default=1.0 | bounds=(0,inf) float
 
 raster_mask [transform]
 raster_mask.geojson: String | required

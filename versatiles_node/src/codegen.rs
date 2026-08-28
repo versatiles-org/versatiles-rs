@@ -81,9 +81,10 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		// `ZoomLevel` is a range, not a closed set, so TS says `number` and the
 		// bound stays with `check` — the same split as the separators above.
 		"u8" | "u16" | "u32" | "f32" | "f64" | "Option<u8>" | "Option<u16>" | "Option<u32>" | "Option<f32>"
-		| "Option<f64>" | "Option<ZoomLevel>" => "number",
+		| "Option<f64>" | "Option<ZoomLevel>" | "Option<Effort>" | "Option<Brightness>" | "Option<Contrast>"
+		| "Option<Gamma>" => "number",
 		"[f64;4]" | "Option<[f64;4]>" | "GeoBBox" | "Option<GeoBBox>" => "[number, number, number, number]",
-		"[f64;3]" | "Option<[f64;3]>" | "[u8;3]" | "Option<[u8;3]>" => "[number, number, number]",
+		"[f64;3]" | "Option<[f64;3]>" | "[u8;3]" | "Option<[u8;3]>" | "Option<GeoCenter>" => "[number, number, number]",
 		"Vec<VPLPipeline>" => "VPL[]",
 		// Not a closed variant set, so it carries no `enum_variants`: a byte
 		// count, or the literal "none" to switch the cap off.

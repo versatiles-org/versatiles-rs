@@ -347,6 +347,54 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		has_bounds: true,
 		parsed_from: ParsedFrom::Str,
 	},
+	// The bounded numbers, each declared with `bounded_number!` beside the
+	// operation that takes it. Parsed but not enumerated, like `ZoomLevel`: a
+	// range is not a list, and what they add is the range itself — three of
+	// these were documented with a bound that nothing enforced (#260).
+	TypeMapping {
+		pattern: "Option<Effort>",
+		display_name: "0-100",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("Effort"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: true,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
+		pattern: "Option<Brightness>",
+		display_name: "-255..255",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("Brightness"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: true,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
+		pattern: "Option<Contrast>",
+		display_name: "above 0",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("Contrast"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: true,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
+		pattern: "Option<Gamma>",
+		display_name: "above 0",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("Gamma"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: true,
+		parsed_from: ParsedFrom::Str,
+	},
 	TypeMapping {
 		pattern: "Option<ZoomLevel>",
 		display_name: "0-30",
@@ -411,6 +459,20 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		method_name: "property_parsed_option",
 		is_required: false,
 		generic_param: Some("GeoBBox"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: false,
+		parsed_from: ParsedFrom::Values,
+	},
+	// Judged as a group like `GeoBBox`: three numbers whose meanings differ from
+	// each other, and a longitude that is not a longitude is only visible when
+	// the parser sees which of the three it is looking at (#260).
+	TypeMapping {
+		pattern: "Option<GeoCenter>",
+		display_name: "[lon,lat,zoom]",
+		method_name: "property_parsed_option",
+		is_required: false,
+		generic_param: Some("GeoCenter"),
 		generic_param2: None,
 		is_enum: false,
 		has_bounds: false,
