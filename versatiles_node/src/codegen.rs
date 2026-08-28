@@ -71,9 +71,15 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		// The separators and the zoom-dependent quality list land here: each has
 		// a format TS cannot express, so the narrowing they gained lives in
 		// `check`, not in the type.
-		"String" | "Option<String>" | "Option<CsvDelimiter>" | "Option<SeparatorChar>" | "Option<QualityByZoom>" => {
-			"string"
-		}
+		"String"
+		| "Option<String>"
+		| "Option<CsvDelimiter>"
+		| "Option<SeparatorChar>"
+		| "Option<QualityByZoom>"
+		| "Option<CrsExtent>"
+		| "Option<RasterTransform>"
+		| "Option<BandIndices>"
+		| "Option<NodataValues>" => "string",
 		// Two spellings of one colour, both accepted: `"FF5733"` and
 		// `[255, 87, 51]`.
 		"Option<HexColor>" => "string | [number, number, number]",

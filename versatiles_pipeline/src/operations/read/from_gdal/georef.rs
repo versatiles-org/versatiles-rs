@@ -57,9 +57,74 @@ use super::get_spatial_ref;
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Placement {
 	/// `west, south, east, north` in the units of the dataset's CRS, north-up.
-	Bounds([f64; 4]),
+	Bounds(CrsExtent),
 	/// The six GDAL geotransform coefficients, used verbatim.
-	Transform(GeoTransform),
+	Transform(RasterTransform),
+}
+
+/// `west,south,east,north` in the units of the dataset's CRS.
+///
+/// A type rather than a `String` so the count, the numbers and the ordering
+/// between them are judged where the value is decoded — including by `check`,
+/// which never builds anything (#260). Deliberately not a [`GeoBBox`]: that one
+/// validates longitude and latitude, and these coordinates are in whatever
+/// units `crs` uses, which for a projected CRS are metres in the millions.
+///
+/// [`GeoBBox`]: versatiles_core::GeoBBox
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CrsExtent([f64; 4]);
+
+impl TryFrom<&str> for CrsExtent {
+	type Error = anyhow::Error;
+
+	/// Parses `west,south,east,north`, rejecting an inverted box.
+	fn try_from(text: &str) -> Result<Self> {
+		let bounds: [f64; 4] = parse_numbers("bounds", text)?;
+		let [west, south, east, north] = bounds;
+
+		// An inverted box mirrors the image rather than failing, so it is caught
+		// here instead of producing a map that is silently back-to-front.
+		ensure!(
+			east > west,
+			"`bounds` needs east > west, but got west={west}, east={east}"
+		);
+		ensure!(
+			north > south,
+			"`bounds` needs north > south, but got south={south}, north={north}"
+		);
+
+		Ok(Self(bounds))
+	}
+}
+
+/// The six GDAL geotransform coefficients, used verbatim.
+///
+/// See [`CrsExtent`] for why this is a type; the two are the same argument
+/// written two ways.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RasterTransform(GeoTransform);
+
+impl TryFrom<&str> for RasterTransform {
+	type Error = anyhow::Error;
+
+	/// Parses the six coefficients, rejecting a degenerate pixel size.
+	fn try_from(text: &str) -> Result<Self> {
+		let transform: GeoTransform = parse_numbers("geo_transform", text)?;
+
+		// GDAL accepts a zero pixel size and then renders nothing from it.
+		ensure!(
+			transform[1] != 0.0,
+			"`geo_transform` needs a non-zero pixel width as its 2nd number, but got {}",
+			transform[1]
+		);
+		ensure!(
+			transform[5] != 0.0,
+			"`geo_transform` needs a non-zero pixel height as its 6th number, but got {}",
+			transform[5]
+		);
+
+		Ok(Self(transform))
+	}
 }
 
 /// Georeferencing to impose on each dataset as it is opened.
@@ -80,13 +145,13 @@ impl GeoreferenceOverride {
 	/// Errors when `bounds` and `geo_transform` are both given, when either
 	/// holds the wrong count of numbers or something unparseable, when `bounds`
 	/// is inverted, or when `geo_transform` has a zero pixel size.
-	pub fn parse(crs: Option<u32>, bounds: Option<&str>, geo_transform: Option<&str>) -> Result<Self> {
+	pub fn parse(crs: Option<u32>, bounds: Option<CrsExtent>, geo_transform: Option<RasterTransform>) -> Result<Self> {
 		let placement = match (bounds, geo_transform) {
 			(Some(_), Some(_)) => {
 				bail!("`bounds` and `geo_transform` are two spellings of the same placement, so only one may be given")
 			}
-			(Some(text), None) => Some(Placement::Bounds(parse_bounds(text)?)),
-			(None, Some(text)) => Some(Placement::Transform(parse_geo_transform(text)?)),
+			(Some(extent), None) => Some(Placement::Bounds(extent)),
+			(None, Some(transform)) => Some(Placement::Transform(transform)),
 			(None, None) => None,
 		};
 		Ok(Self { crs, placement })
@@ -134,8 +199,8 @@ impl GeoreferenceOverride {
 
 		if let Some(placement) = self.placement {
 			let transform = match placement {
-				Placement::Transform(transform) => transform,
-				Placement::Bounds(bounds) => bounds_to_transform(bounds, dataset)?,
+				Placement::Transform(transform) => transform.0,
+				Placement::Bounds(extent) => bounds_to_transform(extent.0, dataset)?,
 			};
 			dataset
 				.set_geo_transform(&transform)
@@ -218,44 +283,6 @@ fn parse_numbers<const N: usize>(field: &str, text: &str) -> Result<[f64; N]> {
 	})
 }
 
-/// Parses `west,south,east,north`, rejecting an inverted box.
-fn parse_bounds(text: &str) -> Result<[f64; 4]> {
-	let bounds: [f64; 4] = parse_numbers("bounds", text)?;
-	let [west, south, east, north] = bounds;
-
-	// An inverted box mirrors the image rather than failing, so it is caught
-	// here instead of producing a map that is silently back-to-front.
-	ensure!(
-		east > west,
-		"`bounds` needs east > west, but got west={west}, east={east}"
-	);
-	ensure!(
-		north > south,
-		"`bounds` needs north > south, but got south={south}, north={north}"
-	);
-
-	Ok(bounds)
-}
-
-/// Parses the six GDAL coefficients, rejecting a degenerate pixel size.
-fn parse_geo_transform(text: &str) -> Result<GeoTransform> {
-	let transform: GeoTransform = parse_numbers("geo_transform", text)?;
-
-	// GDAL accepts a zero pixel size and then renders nothing from it.
-	ensure!(
-		transform[1] != 0.0,
-		"`geo_transform` needs a non-zero pixel width as its 2nd number, but got {}",
-		transform[1]
-	);
-	ensure!(
-		transform[5] != 0.0,
-		"`geo_transform` needs a non-zero pixel height as its 6th number, but got {}",
-		transform[5]
-	);
-
-	Ok(transform)
-}
-
 #[cfg(test)]
 #[expect(
 	clippy::float_cmp,
@@ -263,6 +290,15 @@ fn parse_geo_transform(text: &str) -> Result<GeoTransform> {
 )]
 mod tests {
 	use super::*;
+
+	/// The two placements as a caller writes them, so the tests below read the
+	/// way the arguments do.
+	fn extent(text: &str) -> CrsExtent {
+		CrsExtent::try_from(text).expect("a valid extent")
+	}
+	fn transform(text: &str) -> RasterTransform {
+		RasterTransform::try_from(text).expect("a valid transform")
+	}
 
 	/// A PNG whose CRS can only live in a `.aux.xml` sidecar, because the
 	/// format cannot carry one itself. Its extent comes from the world file
@@ -272,7 +308,7 @@ mod tests {
 
 	#[test]
 	fn bounds_and_geo_transform_are_mutually_exclusive() {
-		let error = GeoreferenceOverride::parse(None, Some("0,0,1,1"), Some("0,1,0,1,0,-1"))
+		let error = GeoreferenceOverride::parse(None, Some(extent("0,0,1,1")), Some(transform("0,1,0,1,0,-1")))
 			.expect_err("giving both placements is an error");
 		assert!(error.to_string().contains("only one may be given"), "{error}");
 	}
@@ -290,7 +326,7 @@ mod tests {
 	#[case::inverted_x("1,0,0,1", "needs east > west")]
 	#[case::inverted_y("0,1,1,0", "needs north > south")]
 	fn bounds_rejects(#[case] text: &str, #[case] expected: &str) {
-		let error = GeoreferenceOverride::parse(None, Some(text), None).expect_err("should be rejected");
+		let error = CrsExtent::try_from(text).expect_err("should be rejected");
 		assert!(error.to_string().contains(expected), "got: {error}");
 	}
 
@@ -299,7 +335,7 @@ mod tests {
 	#[case::zero_pixel_width("0,0,0,1,0,-1", "non-zero pixel width")]
 	#[case::zero_pixel_height("0,1,0,1,0,0", "non-zero pixel height")]
 	fn geo_transform_rejects(#[case] text: &str, #[case] expected: &str) {
-		let error = GeoreferenceOverride::parse(None, None, Some(text)).expect_err("should be rejected");
+		let error = RasterTransform::try_from(text).expect_err("should be rejected");
 		assert!(error.to_string().contains(expected), "got: {error}");
 	}
 
@@ -315,7 +351,7 @@ mod tests {
 		let sidecar = std::path::Path::new("../testdata/gradient.tif.aux.xml");
 		let before = std::fs::read(source).expect("test fixture readable");
 
-		let dataset = GeoreferenceOverride::parse(Some(25832), None, Some("400000,9.6,2.5,5610000,2.5,-9.6"))
+		let dataset = GeoreferenceOverride::parse(Some(25832), None, Some(transform("400000,9.6,2.5,5610000,2.5,-9.6")))
 			.unwrap()
 			.open(source)
 			.unwrap();
@@ -385,7 +421,7 @@ mod tests {
 			"fixture size, which the maths below assumes"
 		);
 
-		let dataset = GeoreferenceOverride::parse(None, Some("0,0,256,128"), None)
+		let dataset = GeoreferenceOverride::parse(None, Some(extent("0,0,256,128")), None)
 			.unwrap()
 			.open(path)
 			.unwrap();
@@ -396,7 +432,6 @@ mod tests {
 
 	#[test]
 	fn whitespace_around_numbers_is_accepted() {
-		let parsed = GeoreferenceOverride::parse(None, Some(" 0 , 0 , 10 , 10 "), None).unwrap();
-		assert_eq!(parsed.placement, Some(Placement::Bounds([0.0, 0.0, 10.0, 10.0])));
+		assert_eq!(extent(" 0 , 0 , 10 , 10 "), CrsExtent([0.0, 0.0, 10.0, 10.0]));
 	}
 }

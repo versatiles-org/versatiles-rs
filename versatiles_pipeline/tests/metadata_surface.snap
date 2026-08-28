@@ -61,8 +61,8 @@ from_gdal_dem.gdal_reuse_limit: Option<u32> | optional | default=100 | bounds=[0
 from_gdal_dem.gdal_concurrency_limit: Option<u8> | optional | default=4 | bounds=[0,255] int
 from_gdal_dem.cutline: Option<String> | optional
 from_gdal_dem.crs: Option<EpsgCode> | optional | bounds=[1024,32766] int
-from_gdal_dem.bounds: Option<String> | optional
-from_gdal_dem.geo_transform: Option<String> | optional
+from_gdal_dem.bounds: Option<CrsExtent> | optional
+from_gdal_dem.geo_transform: Option<RasterTransform> | optional
 
 from_gdal_raster [read]
 from_gdal_raster.filename: String | required
@@ -73,11 +73,11 @@ from_gdal_raster.gdal_reuse_limit: Option<u32> | optional | default=100 | bounds
 from_gdal_raster.gdal_concurrency_limit: Option<u8> | optional | default=4 | bounds=[0,255] int
 from_gdal_raster.tile_format: Option<RasterTileFormat> | optional | default=png | values=[avif,jpg,png,webp]
 from_gdal_raster.cutline: Option<String> | optional
-from_gdal_raster.bands: Option<String> | optional
-from_gdal_raster.nodata: Option<String> | optional
+from_gdal_raster.bands: Option<BandIndices> | optional
+from_gdal_raster.nodata: Option<NodataValues> | optional
 from_gdal_raster.crs: Option<EpsgCode> | optional | bounds=[1024,32766] int
-from_gdal_raster.bounds: Option<String> | optional
-from_gdal_raster.geo_transform: Option<String> | optional
+from_gdal_raster.bounds: Option<CrsExtent> | optional
+from_gdal_raster.geo_transform: Option<RasterTransform> | optional
 
 from_geo [read]
 from_geo.filename: String | required

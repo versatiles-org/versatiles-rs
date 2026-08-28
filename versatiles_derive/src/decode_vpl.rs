@@ -351,6 +351,54 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	// operation that takes it. Parsed but not enumerated, like `ZoomLevel`: a
 	// range is not a list, and what they add is the range itself — three of
 	// these were documented with a bound that nothing enforced (#260).
+	// The two spellings of a GDAL placement. Written as one comma-separated
+	// value, like `gdalinfo -json` prints them, so they parse from `&str`
+	// rather than from a VPL list — the count and the ordering are the type's
+	// business either way (#260).
+	TypeMapping {
+		pattern: "Option<CrsExtent>",
+		display_name: "west,south,east,north",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("CrsExtent"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: false,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
+		pattern: "Option<RasterTransform>",
+		display_name: "6 coefficients",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("RasterTransform"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: false,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
+		pattern: "Option<BandIndices>",
+		display_name: "band indices",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("BandIndices"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: false,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
+		pattern: "Option<NodataValues>",
+		display_name: "nodata values",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("NodataValues"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: false,
+		parsed_from: ParsedFrom::Str,
+	},
 	TypeMapping {
 		pattern: "Option<Effort>",
 		display_name: "0-100",

@@ -6,9 +6,9 @@
 //! [`TileSource`] so that the rest of the pipeline can treat it like any
 //! other data source.
 
-use std::{fmt::Debug, sync::Arc, vec};
+use std::{fmt::Debug, sync::Arc};
 
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
 use versatiles_core::{
@@ -17,7 +17,7 @@ use versatiles_core::{
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitInfo;
 
-use super::{GeoreferenceOverride, RasterSource};
+use super::{CrsExtent, GeoreferenceOverride, RasterSource, RasterTransform};
 use crate::{
 	PipelineFactory,
 	factory::{OperationFactoryTrait, ReadOperationFactoryTrait},
@@ -82,15 +82,15 @@ struct Args {
 	/// GeoJSON polygon outside which pixels become transparent. Defaults to the whole dataset.
 	cutline: Option<String>,
 	/// Band indices to read as colour channels, 1-based. Defaults to the colour interpretation.
-	bands: Option<String>,
+	bands: Option<BandIndices>,
 	/// Pixel values to render as transparent. Defaults to the dataset's own.
-	nodata: Option<String>,
+	nodata: Option<NodataValues>,
 	/// EPSG code to read the dataset with. Defaults to the dataset's own.
 	crs: Option<EpsgCode>,
 	/// Extent as `west,south,east,north` in the units of `crs`. Defaults to the dataset's own.
-	bounds: Option<String>,
+	bounds: Option<CrsExtent>,
 	/// The six GDAL geotransform coefficients. Defaults to the dataset's own.
-	geo_transform: Option<String>,
+	geo_transform: Option<RasterTransform>,
 }
 
 /// Concrete [`TileSource`] that merely forwards every request to an
@@ -142,23 +142,10 @@ impl Operation {
 			})
 			.transpose()?;
 
-		let bands: Option<Vec<usize>> = args
-			.bands
-			.as_ref()
-			.map(|s| {
-				s.split(',')
-					.map(|b| b.trim().parse::<usize>())
-					.collect::<std::result::Result<Vec<_>, _>>()
-			})
-			.transpose()
-			.context("Failed to parse band indices")?;
+		let bands = args.bands.map(BandIndices::into_indices);
+		let nodata = args.nodata.map(NodataValues::into_groups);
 
-		let nodata = parse_nodata(args.nodata.as_deref())?;
-		let georeference = GeoreferenceOverride::parse(
-			args.crs.map(EpsgCode::code),
-			args.bounds.as_deref(),
-			args.geo_transform.as_deref(),
-		)?;
+		let georeference = GeoreferenceOverride::parse(args.crs.map(EpsgCode::code), args.bounds, args.geo_transform)?;
 
 		log::trace!("Resolved filename: {filename:?}");
 		let source = RasterSource::new(
@@ -355,23 +342,81 @@ impl TileSource for Operation {
 	}
 }
 
-/// Parses the `nodata` argument: groups separated by `;`, values within a group
-/// by `,` — one group per band, or one group for all of them.
-#[context("Failed to parse nodata values")]
-fn parse_nodata(text: Option<&str>) -> Result<Option<Vec<Vec<f64>>>> {
-	Ok(text
-		.map(|text| {
-			text
-				.split(';')
-				.map(|group| {
-					group
-						.split(',')
-						.map(|value| value.trim().parse::<f64>())
-						.collect::<std::result::Result<Vec<_>, _>>()
-				})
-				.collect::<std::result::Result<Vec<_>, _>>()
-		})
-		.transpose()?)
+/// The `bands` argument: 1-based band indices, comma-separated.
+///
+/// A type rather than a `String` so a band that is not a number — or the `0` a
+/// zero-based habit produces — is reported where the value is decoded, by
+/// `check`, rather than after the dataset has been opened (#260).
+///
+/// How *many* bands make a colour is `BandMapping`'s rule and stays there: one
+/// grey or three RGB is a fact about rasters, not about the literal.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BandIndices(Vec<usize>);
+
+impl BandIndices {
+	/// The indices, as the band mapping takes them.
+	#[must_use]
+	pub fn into_indices(self) -> Vec<usize> {
+		self.0
+	}
+}
+
+impl TryFrom<&str> for BandIndices {
+	type Error = anyhow::Error;
+
+	fn try_from(text: &str) -> Result<Self> {
+		let indices = text
+			.split(',')
+			.map(|band| {
+				let band = band.trim();
+				let index = band
+					.parse::<usize>()
+					.map_err(|_| anyhow!("'{band}' is not a band index"))?;
+				ensure!(index >= 1, "band indices are 1-based, so {index} is not one");
+				Ok(index)
+			})
+			.collect::<Result<Vec<usize>>>()?;
+
+		ensure!(!indices.is_empty(), "`bands` needs at least one band index");
+		Ok(Self(indices))
+	}
+}
+
+/// The `nodata` argument: groups separated by `;`, values within a group by
+/// `,` — one group per band, or one group for all of them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NodataValues(Vec<Vec<f64>>);
+
+impl NodataValues {
+	/// The groups, as the raster source takes them.
+	#[must_use]
+	pub fn into_groups(self) -> Vec<Vec<f64>> {
+		self.0
+	}
+}
+
+impl TryFrom<&str> for NodataValues {
+	type Error = anyhow::Error;
+
+	fn try_from(text: &str) -> Result<Self> {
+		let groups = text
+			.split(';')
+			.map(|group| {
+				group
+					.split(',')
+					.map(|value| {
+						let value = value.trim();
+						value
+							.parse::<f64>()
+							.map_err(|_| anyhow!("'{value}' is not a nodata value"))
+					})
+					.collect::<Result<Vec<f64>>>()
+			})
+			.collect::<Result<Vec<Vec<f64>>>>()?;
+
+		ensure!(!groups.is_empty(), "`nodata` needs at least one value");
+		Ok(Self(groups))
+	}
 }
 
 pub struct Factory {}

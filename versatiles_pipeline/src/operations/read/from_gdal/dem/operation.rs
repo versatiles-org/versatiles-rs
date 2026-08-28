@@ -8,7 +8,7 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
-use super::{DemSource, GeoreferenceOverride, dem_source::DemEncoding};
+use super::{CrsExtent, DemSource, GeoreferenceOverride, RasterTransform, dem_source::DemEncoding};
 use crate::{
 	PipelineFactory,
 	factory::{OperationFactoryTrait, ReadOperationFactoryTrait},
@@ -70,9 +70,9 @@ struct Args {
 	/// EPSG code to read the dataset with. Defaults to the dataset's own.
 	crs: Option<EpsgCode>,
 	/// Extent as `west,south,east,north` in the units of `crs`. Defaults to the dataset's own.
-	bounds: Option<String>,
+	bounds: Option<CrsExtent>,
 	/// The six GDAL geotransform coefficients. Defaults to the dataset's own.
-	geo_transform: Option<String>,
+	geo_transform: Option<RasterTransform>,
 }
 
 struct Operation {
@@ -122,11 +122,7 @@ impl Operation {
 			args.gdal_reuse_limit.unwrap_or(100),
 			args.gdal_concurrency_limit.unwrap_or(4) as usize,
 			cutline_path.as_deref(),
-			GeoreferenceOverride::parse(
-				args.crs.map(EpsgCode::code),
-				args.bounds.as_deref(),
-				args.geo_transform.as_deref(),
-			)?,
+			GeoreferenceOverride::parse(args.crs.map(EpsgCode::code), args.bounds, args.geo_transform)?,
 		)
 		.await?;
 		let mut bbox = *source.bbox();

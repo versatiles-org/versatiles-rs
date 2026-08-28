@@ -9,7 +9,7 @@ pub(crate) mod spatial_ref;
 
 use cutline::Cutline;
 use gdal_pool::GdalPool;
-use georef::GeoreferenceOverride;
+use georef::{CrsExtent, GeoreferenceOverride, RasterTransform};
 use instance::Instance;
 use resample::ResampleAlg;
 use spatial_ref::get_spatial_ref;

@@ -412,6 +412,60 @@ mod tests {
 		);
 	}
 
+	/// The arguments whose parsers used to run only when a dataset was opened:
+	/// the two spellings of a placement, the band list and the nodata groups.
+	/// An editor showed nothing for any of them, and the failure arrived
+	/// minutes into a run (#260).
+	///
+	/// Behind the feature that registers the operations, like the operations
+	/// themselves — `check` cannot report a parameter of an operation this
+	/// build does not have.
+	#[cfg(feature = "gdal")]
+	#[test]
+	fn a_gdal_argument_that_cannot_parse_is_reported() {
+		assert_eq!(
+			problems("from_gdal_raster filename=a.tif crs=0"),
+			["'from_gdal_raster' does not accept 'crs=0': EPSG codes run from 1024 to 32766, so 0 is not one"]
+		);
+		assert_eq!(
+			problems("from_gdal_raster filename=a.tif bounds=\"0,0,1\""),
+			[
+				"'from_gdal_raster' does not accept 'bounds=0,0,1': `bounds` needs 4 comma-separated numbers, but '0,0,1' has 3"
+			]
+		);
+		assert_eq!(
+			problems("from_gdal_raster filename=a.tif bounds=\"10,0,0,10\""),
+			["'from_gdal_raster' does not accept 'bounds=10,0,0,10': `bounds` needs east > west, but got west=10, east=0"]
+		);
+		assert_eq!(
+			problems("from_gdal_dem filename=a.tif geo_transform=\"0,0,0,1,0,-1\""),
+			[
+				"'from_gdal_dem' does not accept 'geo_transform=0,0,0,1,0,-1': `geo_transform` needs a non-zero pixel \
+				 width as its 2nd number, but got 0"
+			]
+		);
+		assert_eq!(
+			problems("from_gdal_raster filename=a.tif bands=\"1,two,3\""),
+			["'from_gdal_raster' does not accept 'bands=1,two,3': 'two' is not a band index"]
+		);
+		assert_eq!(
+			problems("from_gdal_raster filename=a.tif bands=\"0,1,2\""),
+			["'from_gdal_raster' does not accept 'bands=0,1,2': band indices are 1-based, so 0 is not one"]
+		);
+		assert_eq!(
+			problems("from_gdal_raster filename=a.tif nodata=\"0,0,nothing\""),
+			["'from_gdal_raster' does not accept 'nodata=0,0,nothing': 'nothing' is not a nodata value"]
+		);
+
+		for vpl in [
+			"from_gdal_raster filename=a.tif bounds=\"0,0,10,10\"",
+			"from_gdal_raster filename=a.tif geo_transform=\"400000,9.6,2.5,5610000,2.5,-9.6\"",
+			"from_gdal_raster filename=a.tif bands=\"1,2,3\" nodata=\"0,0,0;255,255,255\"",
+		] {
+			assert!(problems(vpl).is_empty(), "check rejected {vpl:?}: {:?}", problems(vpl));
+		}
+	}
+
 	/// The three bounded numbers whose bound lived in a doc comment and nowhere
 	/// else: `gamma=-5` and `effort=200` both *built*, and produced whatever
 	/// they produced. Two of them are "above `0`", which is why the type
@@ -738,10 +792,6 @@ mod tests {
 		assert_eq!(
 			problems("from_grid epsg=99999 size=1 bbox=[0,0,1,1]"),
 			["'from_grid' does not accept 'epsg=99999': EPSG codes run from 1024 to 32766, so 99999 is not one"]
-		);
-		assert_eq!(
-			problems("from_gdal_raster filename=a.tif crs=0"),
-			["'from_gdal_raster' does not accept 'crs=0': EPSG codes run from 1024 to 32766, so 0 is not one"]
 		);
 		for vpl in [
 			"from_grid epsg=3035 size=1 bbox=[0,0,1,1]",
