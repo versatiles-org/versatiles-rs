@@ -72,7 +72,13 @@ struct ReaderEntry {
 #[derive(Clone)]
 struct WriterEntry {
 	write_to_path: Arc<WriteFile>,
-	#[cfg_attr(not(feature = "ssh2"), allow(dead_code))]
+	#[cfg_attr(
+		not(feature = "ssh2"),
+		allow(
+			dead_code,
+			reason = "only the SFTP branch reads this, and it is compiled out without `ssh2`"
+		)
+	)]
 	write_to_writer: Option<Arc<WriteData>>,
 	/// Option keys this writer reads, from `TilesWriter::supported_options`.
 	supported_options: &'static [&'static str],
@@ -240,9 +246,13 @@ impl ContainerRegistry {
 		result
 	}
 
-	// `ssh_identity` is read only by the SFTP branch, which is compiled out
-	// without the `ssh2` feature.
-	#[cfg_attr(not(feature = "ssh2"), allow(unused_variables))]
+	#[cfg_attr(
+		not(feature = "ssh2"),
+		allow(
+			unused_variables,
+			reason = "`ssh_identity` is read only by the SFTP branch, compiled out without `ssh2`"
+		)
+	)]
 	async fn reader_impl(
 		&self,
 		data_source: DataSource,
