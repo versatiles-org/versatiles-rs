@@ -1,0 +1,221 @@
+# The VPL metadata surface, as consumers see it. Generated — see tests/metadata_surface.rs.
+# A diff in this file is a change other people's software can see.
+
+dem_overview [transform]
+dem_overview.level: Option<u8> | optional
+dem_overview.encoding: Option<DemEncoding> | optional | values=[mapbox,terrarium]
+
+dem_quantize [transform]
+dem_quantize.elevation_error: Option<f64> | optional | default=0.1
+dem_quantize.slope_error: Option<f64> | optional | default=1.0
+dem_quantize.encoding: Option<DemEncoding> | optional | values=[mapbox,terrarium]
+
+dem_tile_resize [transform]
+dem_tile_resize.tile_size: u32 | required
+dem_tile_resize.encoding: Option<DemEncoding> | optional | values=[mapbox,terrarium]
+
+filter [transform]
+filter.bbox: Option<GeoBBox> | optional
+filter.bbox_border: Option<u32> | optional | default=0
+filter.level_min: Option<u8> | optional
+filter.level_max: Option<u8> | optional
+filter.filename: Option<String> | optional
+
+from_color [read]
+from_color.color: Option<HexColor> | optional | default=000000
+from_color.tile_size: Option<u16> | optional | default=512
+from_color.format: Option<RasterTileFormat> | optional | default=png | values=[avif,jpg,png,webp]
+
+from_container [read]
+from_container.filename: String | required
+from_container.ssh_identity: Option<String> | optional
+
+from_csv [read]
+from_csv.filename: String | required
+from_csv.lon_column: String | required
+from_csv.lat_column: String | required
+from_csv.id_column: Option<String> | optional
+from_csv.delimiter: Option<CsvDelimiter> | optional | default=,
+from_csv.has_header: Option<bool> | optional | default=true
+from_csv.layer_name: Option<String> | optional
+from_csv.min_zoom: Option<u8> | optional | default=0
+from_csv.max_zoom: Option<u8> | optional
+from_csv.bbox: Option<GeoBBox> | optional
+from_csv.properties_include: Option<Vec<String>> | optional
+from_csv.properties_exclude: Option<Vec<String>> | optional
+from_csv.point_reduction: Option<PointReductionStrategy> | optional | default=min_distance | values=[none,drop_rate,min_distance]
+from_csv.point_reduction_value: Option<f32> | optional
+from_csv.compression: Option<TileCompression> | optional | default=gzip | values=[none,gzip,brotli,zstd]
+from_csv.max_tile_bytes: Option<MaxTileBytes> | optional | default=1048576
+
+from_debug [read]
+from_debug.format: Option<DebugTileFormat> | optional | default=mvt | values=[mvt,avif,jpg,png,webp]
+
+from_gdal_dem [read]
+from_gdal_dem.filename: String | required
+from_gdal_dem.encoding: Option<DemEncoding> | optional | default=mapbox | values=[mapbox,terrarium]
+from_gdal_dem.tile_size: Option<u32> | optional | default=512
+from_gdal_dem.level_max: Option<u8> | optional
+from_gdal_dem.level_min: Option<u8> | optional
+from_gdal_dem.gdal_reuse_limit: Option<u32> | optional | default=100
+from_gdal_dem.gdal_concurrency_limit: Option<u8> | optional | default=4
+from_gdal_dem.cutline: Option<String> | optional
+from_gdal_dem.crs: Option<u32> | optional
+from_gdal_dem.bounds: Option<String> | optional
+from_gdal_dem.geo_transform: Option<String> | optional
+
+from_gdal_raster [read]
+from_gdal_raster.filename: String | required
+from_gdal_raster.tile_size: Option<u32> | optional | default=512
+from_gdal_raster.level_max: Option<u8> | optional
+from_gdal_raster.level_min: Option<u8> | optional
+from_gdal_raster.gdal_reuse_limit: Option<u32> | optional | default=100
+from_gdal_raster.gdal_concurrency_limit: Option<u8> | optional | default=4
+from_gdal_raster.tile_format: Option<RasterTileFormat> | optional | default=png | values=[avif,jpg,png,webp]
+from_gdal_raster.cutline: Option<String> | optional
+from_gdal_raster.bands: Option<String> | optional
+from_gdal_raster.nodata: Option<String> | optional
+from_gdal_raster.crs: Option<u32> | optional
+from_gdal_raster.bounds: Option<String> | optional
+from_gdal_raster.geo_transform: Option<String> | optional
+
+from_geo [read]
+from_geo.filename: String | required
+from_geo.layer_name: Option<String> | optional
+from_geo.min_zoom: Option<u8> | optional | default=0
+from_geo.max_zoom: Option<u8> | optional
+from_geo.bbox: Option<GeoBBox> | optional
+from_geo.properties_include: Option<Vec<String>> | optional
+from_geo.properties_exclude: Option<Vec<String>> | optional
+from_geo.polygon_min_area: Option<f32> | optional | default=4
+from_geo.polygon_simplify: Option<f32> | optional | default=4
+from_geo.line_min_length: Option<f32> | optional | default=4
+from_geo.line_simplify: Option<f32> | optional | default=4
+from_geo.point_reduction: Option<PointReductionStrategy> | optional | default=min_distance | values=[none,drop_rate,min_distance]
+from_geo.point_reduction_value: Option<f32> | optional
+from_geo.compression: Option<TileCompression> | optional | default=gzip | values=[none,gzip,brotli,zstd]
+from_geo.max_tile_bytes: Option<MaxTileBytes> | optional | default=1048576
+from_geo.ignore_id: Option<bool> | optional | default=false
+
+from_grid [read]
+from_grid.epsg: u32 | required
+from_grid.size: f64 | required
+from_grid.bbox: GeoBBox | required
+from_grid.offset: Option<[f64;2]> | optional | default=[0,0]
+from_grid.max_cells_per_tile: Option<u32> | optional | default=1024
+from_grid.id_template: Option<String> | optional | default=CRS{epsg}RES{size}m{y:h}{x:h}
+from_grid.id_field: Option<String> | optional | default=id
+from_grid.x_field: Option<String> | optional | default=x
+from_grid.y_field: Option<String> | optional | default=y
+from_grid.densify_tolerance: Option<f64> | optional | default=0.5
+from_grid.layer_name: Option<String> | optional | default=grid
+
+from_h3 [read]
+from_h3.resolution: u8 | required
+from_h3.max_cells_per_tile: Option<u32> | optional | default=1024
+from_h3.layer_name: Option<String> | optional | default=grid
+from_h3.id_field: Option<String> | optional | default=h3
+
+from_merged_vector [read]
+from_merged_vector.sources: Vec<VPLPipeline> | required | sources
+
+from_stacked [read]
+from_stacked.sources: Vec<VPLPipeline> | required | sources
+
+from_stacked_raster [read]
+from_stacked_raster.sources: Vec<VPLPipeline> | required | sources
+from_stacked_raster.format: Option<RasterTileFormat> | optional | values=[avif,jpg,png,webp]
+from_stacked_raster.auto_overscale: Option<bool> | optional | default=false
+
+from_tile [read]
+from_tile.filename: String | required
+
+from_tilejson [read]
+from_tilejson.url: String | required
+from_tilejson.max_retries: Option<u16> | optional | default=3
+from_tilejson.max_concurrent_requests: Option<u16> | optional
+
+meta_update [transform]
+meta_update.attribution: Option<String> | optional
+meta_update.bounds: Option<GeoBBox> | optional
+meta_update.center: Option<[f64;3]> | optional
+meta_update.description: Option<String> | optional
+meta_update.fillzoom: Option<u8> | optional
+meta_update.legend: Option<String> | optional
+meta_update.name: Option<String> | optional
+meta_update.schema: Option<TileSchema> | optional | values=[rgb,rgba,dem/mapbox,dem/terrarium,dem/versatiles,openmaptiles,shortbread@1.0,other]
+meta_update.tilejson: Option<String> | optional
+meta_update.tilejson_file: Option<String> | optional
+meta_update.tilejson_update: Option<String> | optional
+meta_update.tilejson_update_file: Option<String> | optional
+meta_update.vector_layers: Option<String> | optional
+meta_update.vector_layers_file: Option<String> | optional
+
+raster_flatten [transform]
+raster_flatten.color: Option<HexColor> | optional | default=FFFFFF
+
+raster_format [transform]
+raster_format.format: Option<RasterTileFormat> | optional | values=[avif,jpg,png,webp]
+raster_format.quality: Option<QualityByZoom> | optional
+raster_format.quality_translucent: Option<QualityByZoom> | optional
+raster_format.effort: Option<u8> | optional
+
+raster_levels [transform]
+raster_levels.brightness: Option<f32> | optional | default=0.0
+raster_levels.contrast: Option<f32> | optional | default=1.0
+raster_levels.gamma: Option<f32> | optional | default=1.0
+
+raster_mask [transform]
+raster_mask.geojson: String | required
+raster_mask.buffer: Option<f32> | optional | default=0
+raster_mask.blur: Option<f32> | optional | default=0
+raster_mask.blur_function: Option<BlurFunction> | optional | default=linear | values=[linear,cosine]
+
+raster_overscale [transform]
+raster_overscale.level_base: Option<u8> | optional
+raster_overscale.level_max: Option<u8> | optional | default=30
+raster_overscale.enable_climbing: Option<bool> | optional | default=false
+
+raster_overview [transform]
+raster_overview.level: Option<u8> | optional
+
+raster_tile_resize [transform]
+raster_tile_resize.tile_size: u32 | required
+
+remap_coords [transform]
+remap_coords.flip_x: Option<bool> | optional | default=false
+remap_coords.flip_y: Option<bool> | optional | default=false
+remap_coords.swap_xy: Option<bool> | optional | default=false
+
+vector_filter_features [transform]
+vector_filter_features.layer: Vec<String> | required
+vector_filter_features.expr: String | required
+
+vector_filter_layers [transform]
+vector_filter_layers.filter: Vec<String> | required
+vector_filter_layers.invert: Option<bool> | optional | default=false
+
+vector_filter_properties [transform]
+vector_filter_properties.regex: String | required
+vector_filter_properties.invert: Option<bool> | optional | default=false
+
+vector_overzoom [transform]
+vector_overzoom.level_base: Option<u8> | optional
+vector_overzoom.level_max: Option<u8> | optional
+vector_overzoom.enable_climbing: Option<bool> | optional | default=false
+vector_overzoom.buffer: Option<u32> | optional | default=80
+
+vector_repair [transform]
+vector_repair.drop_offenders: Option<bool> | optional | default=false
+
+vector_update_properties [transform]
+vector_update_properties.data_source_path: String | required
+vector_update_properties.layer_name: String | required
+vector_update_properties.id_field_tiles: String | required
+vector_update_properties.id_field_data: String | required
+vector_update_properties.replace_properties: Option<bool> | optional | default=false
+vector_update_properties.remove_non_matching: Option<bool> | optional | default=false
+vector_update_properties.include_id: Option<bool> | optional | default=false
+vector_update_properties.field_separator: Option<SeparatorChar> | optional
+vector_update_properties.decimal_separator: Option<SeparatorChar> | optional | default=.
+
