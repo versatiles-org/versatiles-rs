@@ -113,6 +113,9 @@ pub use tile_schema::*;
 mod tile_size;
 pub use tile_size::*;
 
+mod zoom_level;
+pub use zoom_level::*;
+
 mod tile_stream;
 pub use tile_stream::*;
 

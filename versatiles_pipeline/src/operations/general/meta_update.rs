@@ -4,7 +4,7 @@ use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{
-	GeoBBox, GeoCenter, TileBBox, TileJSON, TilePyramid, TileSchema, TileStream, json::parse_json_str,
+	GeoBBox, GeoCenter, TileBBox, TileJSON, TilePyramid, TileSchema, TileStream, ZoomLevel, json::parse_json_str,
 };
 use versatiles_derive::context;
 
@@ -37,7 +37,7 @@ struct Args {
 	/// Description text. Defaults to the source's.
 	description: Option<String>,
 	/// Zoom level from which clients should fill from the parent tile. Defaults to the source's.
-	fillzoom: Option<u8>,
+	fillzoom: Option<ZoomLevel>,
 	/// Legend text. Defaults to the source's.
 	legend: Option<String>,
 	/// Name of the tileset. Defaults to the source's.
@@ -111,7 +111,7 @@ impl Operation {
 		}
 
 		if let Some(fillzoom) = args.fillzoom {
-			tilejson.set_byte("fillzoom", fillzoom)?;
+			tilejson.set_byte("fillzoom", u8::from(fillzoom))?;
 		}
 
 		if let Some(legend) = args.legend {

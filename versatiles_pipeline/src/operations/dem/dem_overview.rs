@@ -4,7 +4,7 @@ use anyhow::{Result, bail};
 use async_trait::async_trait;
 use imageproc::image::{DynamicImage, Rgb, RgbImage, Rgba, RgbaImage};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileJSON, TileStream};
+use versatiles_core::{TileBBox, TileJSON, TileStream, ZoomLevel};
 
 use super::encoding::{DemEncoding, resolve_encoding, to_tile_schema};
 use crate::{PipelineFactory, helpers::overview::OverviewCore, vpl::VPLNode};
@@ -19,7 +19,7 @@ use crate::{PipelineFactory, helpers::overview::OverviewCore, vpl::VPLNode};
 /// elevation, averages that, and re-encodes.
 struct Args {
 	/// Zoom level to build the overview from. Defaults to the source's highest.
-	level: Option<u8>,
+	level: Option<ZoomLevel>,
 	/// DEM encoding of the source. Defaults to the encoding its tile schema implies.
 	encoding: Option<DemEncoding>,
 }
@@ -119,7 +119,12 @@ impl Operation {
 
 		let encoding = resolve_encoding(args.encoding, source.tilejson().tile_schema.as_ref())?;
 
-		let mut core = OverviewCore::new(source, args.level, Arc::new(dem_scale_down), factory.runtime())?;
+		let mut core = OverviewCore::new(
+			source,
+			args.level.map(u8::from),
+			Arc::new(dem_scale_down),
+			factory.runtime(),
+		)?;
 
 		core.tilejson.tile_schema = Some(to_tile_schema(encoding));
 

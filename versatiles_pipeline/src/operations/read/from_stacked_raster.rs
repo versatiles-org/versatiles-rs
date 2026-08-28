@@ -87,7 +87,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::{future::try_join_all, stream};
 use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream, TileType};
+use versatiles_core::{TileBBox, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream, TileType, ZoomLevel};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitOperation;
 
@@ -303,8 +303,8 @@ impl Operation {
 					.level_max()
 					.ok_or_else(|| anyhow::anyhow!("source pyramid is empty"))?;
 				let overscale_args = raster_overscale::Args {
-					level_base: Some(native_level_max),
-					level_max: Some(level_max),
+					level_base: Some(ZoomLevel::new(native_level_max)?),
+					level_max: Some(ZoomLevel::new(level_max)?),
 					enable_climbing: Some(true),
 				};
 				let wrapped_source = raster_overscale::Operation::new(source, &overscale_args)?;
@@ -1239,8 +1239,8 @@ mod tests {
 		for source in original_sources {
 			let native_level_max = source.tile_pyramid().await.unwrap().level_max().unwrap();
 			let overscale_args = raster_overscale::Args {
-				level_base: Some(native_level_max),
-				level_max: Some(level_max),
+				level_base: Some(ZoomLevel::new(native_level_max).unwrap()),
+				level_max: Some(ZoomLevel::new(level_max).unwrap()),
 				enable_climbing: Some(true),
 			};
 			let wrapped_source = raster_overscale::Operation::new(source, &overscale_args).unwrap();
@@ -1461,8 +1461,8 @@ mod tests {
 		for source in original_sources {
 			let native_level_max = source.tile_pyramid().await.unwrap().level_max().unwrap();
 			let overscale_args = raster_overscale::Args {
-				level_base: Some(native_level_max),
-				level_max: Some(level_max),
+				level_base: Some(ZoomLevel::new(native_level_max).unwrap()),
+				level_max: Some(ZoomLevel::new(level_max).unwrap()),
 				enable_climbing: Some(true),
 			};
 			let wrapped_source = raster_overscale::Operation::new(source, &overscale_args).unwrap();

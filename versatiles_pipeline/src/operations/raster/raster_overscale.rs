@@ -40,7 +40,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use moka::future::Cache;
 use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TileStream};
+use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TileStream, ZoomLevel};
 use versatiles_derive::context;
 use versatiles_image::{DynamicImage, traits::DynamicImageTraitOperation};
 
@@ -55,11 +55,11 @@ use crate::{PipelineFactory, vpl::VPLNode};
 /// can keep zooming instead of hitting a blank map.
 pub struct Args {
 	/// Zoom level to upscale from. Defaults to the source's highest.
-	pub level_base: Option<u8>,
+	pub level_base: Option<ZoomLevel>,
 
 	/// Highest zoom level to serve. Defaults to `30`.
 	#[vpl(default = "30")]
-	pub level_max: Option<u8>,
+	pub level_max: Option<ZoomLevel>,
 
 	/// Whether to climb to lower levels when the `level_base` tile is missing. Defaults to `false`.
 	#[vpl(default = "false")]
@@ -118,7 +118,7 @@ impl Operation {
 			.ok_or_else(|| anyhow::anyhow!("source tile_pyramid not set"))?;
 
 		let level_base = match args.level_base {
-			Some(level) => level,
+			Some(level) => u8::from(level),
 			None => source_pyramid
 				.level_max()
 				.ok_or_else(|| anyhow::anyhow!("source pyramid is empty"))?,
@@ -127,7 +127,7 @@ impl Operation {
 
 		let level_max = args
 			.level_max
-			.unwrap_or(MAX_ZOOM_LEVEL)
+			.map_or(MAX_ZOOM_LEVEL, u8::from)
 			.clamp(level_base, MAX_ZOOM_LEVEL);
 
 		let mut new_pyramid = source_pyramid.as_ref().clone();

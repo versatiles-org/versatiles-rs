@@ -15,7 +15,7 @@ use std::sync::Arc;
 use anyhow::{Result, bail, ensure};
 use futures::StreamExt;
 use versatiles_container::{DataLocation, TileSource};
-use versatiles_core::{GeoBBox, TileCompression};
+use versatiles_core::{GeoBBox, TileCompression, ZoomLevel};
 use versatiles_derive::context;
 use versatiles_geometry::{
 	feature_import::{FeatureImport, FeatureImportArgs, PointReductionStrategy},
@@ -78,9 +78,9 @@ struct Args {
 	layer_name: Option<String>,
 	/// Lowest zoom level to emit. Defaults to `0`.
 	#[vpl(default = "0")]
-	min_zoom: Option<u8>,
+	min_zoom: Option<ZoomLevel>,
 	/// Highest zoom level to emit. Defaults to a heuristic capped at `14`.
-	max_zoom: Option<u8>,
+	max_zoom: Option<ZoomLevel>,
 	/// Area to restrict the output to, in WGS84 degrees. Defaults to the input's extent.
 	bbox: Option<GeoBBox>,
 	/// Columns to keep as properties. Mutually exclusive with `properties_exclude`. Defaults to all.
@@ -200,8 +200,8 @@ impl Operation {
 		// (which are no-ops for point-only input).
 		let import_args = FeatureImportArgs {
 			layer_name: Some(layer_name.clone()),
-			min_zoom: args.min_zoom,
-			max_zoom: args.max_zoom,
+			min_zoom: args.min_zoom.map(u8::from),
+			max_zoom: args.max_zoom.map(u8::from),
 			point_reduction,
 			point_reduction_value: args.point_reduction_value,
 			..FeatureImportArgs::default()

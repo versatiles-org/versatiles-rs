@@ -38,7 +38,7 @@ use geo::MapCoords;
 use geo_types::{Coord, Geometry, MultiPolygon, Polygon};
 use moka::future::Cache;
 use versatiles_container::{SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TileStream};
+use versatiles_core::{MAX_ZOOM_LEVEL, TileBBox, TileCoord, TileJSON, TileStream, ZoomLevel};
 use versatiles_derive::context;
 use versatiles_geometry::{
 	feature_import::clip_geometry,
@@ -67,10 +67,10 @@ const CACHE_CAPACITY_BYTES: u64 = 256 * 1024 * 1024;
 /// stays manageable.
 pub struct Args {
 	/// Zoom level to overzoom from. Defaults to the source's highest.
-	pub level_base: Option<u8>,
+	pub level_base: Option<ZoomLevel>,
 
 	/// Highest zoom level to serve, capped at `30`. Defaults to `level_base + 4`.
-	pub level_max: Option<u8>,
+	pub level_max: Option<ZoomLevel>,
 
 	/// Whether to climb to lower levels when the `level_base` tile is missing. Defaults to `false`.
 	#[vpl(default = "false")]
@@ -132,7 +132,7 @@ impl Operation {
 			.ok_or_else(|| anyhow::anyhow!("source tile_pyramid not set"))?;
 
 		let level_base = match args.level_base {
-			Some(level) => level,
+			Some(level) => u8::from(level),
 			None => source_pyramid
 				.level_max()
 				.ok_or_else(|| anyhow::anyhow!("source pyramid is empty"))?,
@@ -141,7 +141,7 @@ impl Operation {
 
 		let level_max = args
 			.level_max
-			.unwrap_or_else(|| level_base.saturating_add(4))
+			.map_or_else(|| level_base.saturating_add(4), u8::from)
 			.clamp(level_base, MAX_ZOOM_LEVEL);
 
 		let mut new_pyramid = source_pyramid.as_ref().clone();

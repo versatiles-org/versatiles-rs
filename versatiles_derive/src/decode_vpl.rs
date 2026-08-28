@@ -285,6 +285,20 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_enum: true,
 		parsed_from: ParsedFrom::Str,
 	},
+	// Parsed but not enumerated, like `MaxTileBytes`: 31 levels is a range
+	// rather than a list, so there is nothing for a picker to offer or for the
+	// TS codegen to turn into a union. What the type buys is the range itself —
+	// `u8` advertises 0..=255 for something that means 0..=30 (#260).
+	TypeMapping {
+		pattern: "Option<ZoomLevel>",
+		display_name: "0-30",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("ZoomLevel"),
+		generic_param2: None,
+		is_enum: false,
+		parsed_from: ParsedFrom::Str,
+	},
 	TypeMapping {
 		pattern: "Option<TileSchema>",
 		display_name: "TileSchema",

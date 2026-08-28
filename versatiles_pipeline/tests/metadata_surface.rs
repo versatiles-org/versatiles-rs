@@ -225,6 +225,49 @@ fn the_metadata_surface_matches_the_committed_snapshot() {
 	);
 }
 
+/// A parameter named like a zoom level is typed as one.
+///
+/// The snapshot pins the seventeen that exist; this is about the eighteenth.
+/// Adding `level_max: Option<u8>` to a new operation would show up there as one
+/// more plausible-looking line, and nothing would object — while `level_max=99`
+/// went on parsing fine and failing later (#260). The naming convention is
+/// already consistent, so it is worth holding to.
+#[test]
+fn every_parameter_named_like_a_zoom_level_is_typed_as_one() {
+	let ops = all_operation_metadata();
+	let mut seen = 0;
+
+	for op in &ops {
+		for field in &op.fields {
+			let name = field.name.as_str();
+			let names_a_zoom =
+				name == "level" || name.starts_with("level_") || name.ends_with("_zoom") || name.ends_with("zoom");
+			if !names_a_zoom {
+				continue;
+			}
+			seen += 1;
+			assert_eq!(
+				field.rust_type,
+				"Option<ZoomLevel>",
+				"{}.{name} is named like a zoom level but typed {}; `u8` advertises 0..=255 for \
+				 something that means 0..={}",
+				op.tag_name,
+				field.rust_type,
+				versatiles_core::MAX_ZOOM_LEVEL
+			);
+		}
+	}
+
+	// The floor: a rule keyed on a shape stops having a subject when the shape
+	// goes, and goes green rather than red. Thirteen without `gdal`; the two
+	// GDAL read operations carry two zoom parameters each.
+	let expected = if cfg!(feature = "gdal") { 17 } else { 13 };
+	assert_eq!(
+		seen, expected,
+		"expected {expected} zoom-level parameters, found {seen} — did they stop sharing a name or a type?"
+	);
+}
+
 /// The snapshot only guards what it lists, so it has to list everything this
 /// build can see — including the operations behind a feature.
 ///

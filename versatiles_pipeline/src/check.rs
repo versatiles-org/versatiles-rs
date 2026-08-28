@@ -356,19 +356,42 @@ mod tests {
 	#[test]
 	fn a_value_that_is_not_a_number_is_reported() {
 		assert_eq!(
-			problems("from_debug format=png | filter level_max=abc"),
-			["'filter' does not accept 'level_max=abc': invalid digit found in string"]
+			problems("from_debug format=png | filter bbox_border=abc"),
+			["'filter' does not accept 'bbox_border=abc': invalid digit found in string"]
 		);
 	}
 
-	/// The parser's own error, not a guess at one: 300 is a perfectly good
-	/// number and a bad `u8`, and only `parse` knows which of those matters.
+	/// The parser's own error, not a guess at one: a border of four billion is
+	/// a perfectly good number and a bad `u32`, and only `parse` knows which of
+	/// those matters.
 	#[test]
 	fn a_number_out_of_range_is_reported() {
 		assert_eq!(
-			problems("from_debug format=png | filter level_max=300"),
-			["'filter' does not accept 'level_max=300': number too large to fit in target type"]
+			problems("from_debug format=png | filter bbox_border=4294967296"),
+			["'filter' does not accept 'bbox_border=4294967296': number too large to fit in target type"]
 		);
+	}
+
+	/// What a `u8` could not say. Seventeen parameters advertised `0..=255` for
+	/// something that means `0..=30`, so `level_max=99` parsed fine and failed
+	/// later, somewhere else (#260). The range is the type's now, and the same
+	/// parser answers `check`.
+	#[test]
+	fn a_zoom_level_outside_the_pyramid_is_reported() {
+		assert_eq!(
+			problems("from_debug format=png | filter level_max=99"),
+			["'filter' does not accept 'level_max=99': level (99) must be <= 30"]
+		);
+		assert_eq!(
+			problems("from_debug format=png | filter level_max=abc"),
+			["'filter' does not accept 'level_max=abc': zoom level 'abc' is not a number between 0 and 30"]
+		);
+		for vpl in [
+			"from_debug format=png | filter level_min=0 level_max=30",
+			"from_geo filename=a.geojson max_zoom=14",
+		] {
+			assert!(problems(vpl).is_empty(), "check rejected {vpl:?}: {:?}", problems(vpl));
+		}
 	}
 
 	#[test]

@@ -11,7 +11,9 @@ use std::{fmt::Debug, sync::Arc, vec};
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
-use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileSize, TileStream};
+use versatiles_core::{
+	TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileSize, TileStream, ZoomLevel,
+};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitInfo;
 
@@ -65,9 +67,9 @@ struct Args {
 	#[vpl(default = "512")]
 	tile_size: Option<TileSize>,
 	/// Highest zoom level to generate. Defaults to the dataset's native resolution.
-	level_max: Option<u8>,
+	level_max: Option<ZoomLevel>,
 	/// Lowest zoom level to generate. Defaults to `level_max`.
-	level_min: Option<u8>,
+	level_min: Option<ZoomLevel>,
 	/// How many tiles a GDAL instance renders before being replaced. Defaults to `100`.
 	#[vpl(default = "100")]
 	gdal_reuse_limit: Option<u32>,
@@ -185,8 +187,11 @@ impl Operation {
 		let bbox = &bbox;
 		let tile_size = u32::from(args.tile_size.map_or(512, |size| size.size()));
 
-		let level_max = args.level_max.unwrap_or(source.level_max(tile_size)?);
-		let level_min = args.level_min.unwrap_or(level_max);
+		let level_max = match args.level_max {
+			Some(level) => u8::from(level),
+			None => source.level_max(tile_size)?,
+		};
+		let level_min = args.level_min.map_or(level_max, u8::from);
 		log::trace!("Building tile pyramid: level_min={level_min}, level_max={level_max}, tile_size={tile_size}");
 		let tile_pyramid = TilePyramid::from_geo_bbox(level_min, level_max, bbox)?;
 

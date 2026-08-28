@@ -3,7 +3,7 @@ use std::{fmt::Debug, sync::Arc};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileJSON, TileStream};
+use versatiles_core::{TileBBox, TileJSON, TileStream, ZoomLevel};
 use versatiles_image::traits::DynamicImageTraitOperation;
 
 use crate::{PipelineFactory, helpers::overview::OverviewCore, vpl::VPLNode};
@@ -12,7 +12,7 @@ use crate::{PipelineFactory, helpers::overview::OverviewCore, vpl::VPLNode};
 /// Generates the lower zoom levels of a raster pyramid by downscaling.
 struct Args {
 	/// Zoom level to build the overview from. Defaults to the source's highest.
-	level: Option<u8>,
+	level: Option<ZoomLevel>,
 }
 
 #[derive(Debug)]
@@ -33,7 +33,7 @@ impl Operation {
 		let args = Args::from_vpl_node(&vpl_node)?;
 		let core = OverviewCore::new(
 			source,
-			args.level,
+			args.level.map(u8::from),
 			Arc::new(|img| img.scaled_down(2)),
 			factory.runtime(),
 		)?;

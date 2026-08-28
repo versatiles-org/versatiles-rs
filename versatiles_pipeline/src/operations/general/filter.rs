@@ -3,7 +3,7 @@ use std::{collections::HashSet, fmt::Debug, sync::Arc};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{GeoBBox, GeoCrop, TileBBox, TileJSON, TileStream};
+use versatiles_core::{GeoBBox, GeoCrop, TileBBox, TileJSON, TileStream, ZoomLevel};
 use versatiles_derive::context;
 
 use crate::{PipelineFactory, vpl::VPLNode};
@@ -30,9 +30,9 @@ struct Args {
 	#[vpl(default = "0")]
 	bbox_border: Option<u32>,
 	/// Lowest zoom level to keep. Defaults to the source's lowest.
-	level_min: Option<u8>,
+	level_min: Option<ZoomLevel>,
 	/// Highest zoom level to keep. Defaults to the source's highest.
-	level_max: Option<u8>,
+	level_max: Option<ZoomLevel>,
 	/// Tile container whose coordinates act as an allow-list. Defaults to no allow-list.
 	filename: Option<String>,
 }
@@ -55,7 +55,11 @@ impl Operation {
 		let mut metadata = source.metadata().clone();
 		let mut tilejson = source.tilejson().clone();
 
-		if let (Some(lo), Some(hi)) = (args.level_min, args.level_max)
+		// Out of the type and into the `u8` the pyramid and the tilejson take:
+		// the level's range is checked where it is parsed, not here.
+		let (arg_level_min, arg_level_max) = (args.level_min.map(u8::from), args.level_max.map(u8::from));
+
+		if let (Some(lo), Some(hi)) = (arg_level_min, arg_level_max)
 			&& lo > hi
 		{
 			bail!(
@@ -66,7 +70,7 @@ impl Operation {
 
 		let mut tile_pyramid = source.tile_pyramid().await?.as_ref().clone();
 
-		if let Some(mut level_min) = args.level_min {
+		if let Some(mut level_min) = arg_level_min {
 			if let Some(existing_level_min) = tile_pyramid.level_min() {
 				level_min = level_min.max(existing_level_min);
 			}
@@ -74,7 +78,7 @@ impl Operation {
 			tilejson.set_zoom_min(level_min);
 		}
 
-		if let Some(mut level_max) = args.level_max {
+		if let Some(mut level_max) = arg_level_max {
 			if let Some(existing_level_max) = tile_pyramid.level_max() {
 				level_max = level_max.min(existing_level_max);
 			}
