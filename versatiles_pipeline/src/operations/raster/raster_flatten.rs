@@ -3,7 +3,7 @@ use imageproc::image::Rgb;
 use versatiles_container::{Tile, TileSource};
 use versatiles_core::TileCoord;
 use versatiles_derive::context;
-use versatiles_image::traits::DynamicImageTraitOperation;
+use versatiles_image::{color::HexColor, traits::DynamicImageTraitOperation};
 
 use crate::{
 	PipelineFactory,
@@ -14,8 +14,9 @@ use crate::{
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Composites translucent raster tiles onto an opaque background colour.
 struct Args {
-	/// Background colour, as `[r, g, b]`. Defaults to white.
-	color: Option<[u8; 3]>,
+	/// Background colour, as `RRGGBB` or `[r,g,b]`. Defaults to `FFFFFF`.
+	#[vpl(default = "FFFFFF")]
+	color: Option<HexColor>,
 }
 
 #[derive(Debug)]
@@ -31,9 +32,11 @@ impl Operation {
 		factory: &PipelineFactory,
 	) -> Result<TransformOp<Operation>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let operation = Operation {
-			color: Rgb(args.color.unwrap_or([255, 255, 255])),
-		};
+		// Opaque by construction: compositing onto a translucent background is
+		// not a thing this operation can do, so `RRGGBBAA` is refused here
+		// rather than having its alpha quietly dropped.
+		let color = args.color.map_or(Ok([255, 255, 255]), |color| color.rgb())?;
+		let operation = Operation { color: Rgb(color) };
 		Ok(TransformOp::new(source, operation, factory.runtime()))
 	}
 }
@@ -77,6 +80,40 @@ mod tests {
 		assert_eq!(image.average_color(), [254, 135, 16]);
 
 		Ok(())
+	}
+
+	/// The two spellings are one colour, which is the compatibility #260 asked
+	/// for: `[255,127,0]` is what this operation took before it had a type, and
+	/// `FF7F00` is what `from_color` has always taken.
+	#[tokio::test]
+	async fn both_spellings_of_a_colour_flatten_alike() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let mut flattened = Vec::new();
+
+		for vpl in [
+			"from_debug format=png | raster_flatten color=[255,127,0]",
+			"from_debug format=png | raster_flatten color=FF7F00",
+		] {
+			let op = factory.operation_from_vpl(vpl).await?;
+			let bbox = TileCoord::new(2, 1, 1)?.to_tile_bbox();
+			let image = op.tile_stream(bbox).await?.next().await.unwrap().1.into_image()?;
+			flattened.push(image.average_color());
+		}
+
+		assert_eq!(flattened[0], flattened[1], "the same colour written two ways");
+		Ok(())
+	}
+
+	/// `HexColor` accepts `RRGGBBAA` because `from_color` has a use for it, but
+	/// a background to composite *onto* cannot be translucent — so the refusal
+	/// belongs to this operation rather than to the type.
+	#[tokio::test]
+	async fn a_translucent_background_is_refused() {
+		let error = PipelineFactory::new_dummy()
+			.operation_from_vpl("from_debug format=png | raster_flatten color=FF7F0080")
+			.await
+			.expect_err("a background with an alpha channel is not a background");
+		assert!(format!("{error:#}").contains("alpha channel"), "{error:#}");
 	}
 
 	#[tokio::test]

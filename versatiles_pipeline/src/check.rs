@@ -331,9 +331,9 @@ mod tests {
 	/// Every value of a list is judged, not just the first.
 	#[test]
 	fn each_value_of_a_repeated_parameter_is_checked() {
-		let found = problems("from_debug format=png | raster_flatten color=[a,b,c]");
+		let found = problems("from_debug format=png | meta_update center=[a,b,c]");
 		assert_eq!(found.len(), 3, "{found:?}");
-		assert!(found[2].contains("'color=c'"), "{found:?}");
+		assert!(found[2].contains("'center=c'"), "{found:?}");
 	}
 
 	/// A scalar parameter given a list is wrong twice over, and both are worth
@@ -374,8 +374,8 @@ mod tests {
 	#[test]
 	fn an_array_of_the_wrong_length_is_reported() {
 		assert_eq!(
-			problems("from_debug format=png | raster_flatten color=[0,0]"),
-			["'raster_flatten' expects 3 values for 'color', got 2"]
+			problems("from_debug format=png | meta_update center=[0,0]"),
+			["'meta_update' expects 3 values for 'center', got 2"]
 		);
 	}
 
@@ -528,10 +528,40 @@ mod tests {
 	fn a_value_in_the_wrong_format_is_reported() {
 		assert_eq!(
 			problems("from_color color=red"),
-			["'from_color' does not accept 'color=red': Invalid hex color 'red': invalid digit found in string"]
+			["'from_color' does not accept 'color=[red]': Invalid hex color 'red': invalid digit found in string"]
 		);
 		assert!(problems("from_color color=FF5733").is_empty());
 		assert!(problems("from_color color=FF573380").is_empty());
+	}
+
+	/// A colour has two spellings and both are accepted, so `raster_flatten`
+	/// keeps the `r,g,b` it took before it had a type while gaining the hex
+	/// `from_color` always had (#260). VPL splits on commas, so the two arrive
+	/// as different value counts and only a group parser can tell them apart.
+	#[test]
+	fn both_spellings_of_a_colour_are_accepted() {
+		for vpl in [
+			"from_color color=FF5733",
+			"from_color color=[255,87,51]",
+			"from_debug format=png | raster_flatten color=FF5733",
+			"from_debug format=png | raster_flatten color=[255,255,255]",
+		] {
+			assert!(problems(vpl).is_empty(), "check rejected {vpl:?}: {:?}", problems(vpl));
+		}
+	}
+
+	/// Neither spelling: too few numbers to be channels, too many values to be
+	/// hex. The count belongs to the colour's own parser now, which is why the
+	/// message names both spellings instead of demanding three values.
+	#[test]
+	fn a_colour_that_is_neither_spelling_is_reported() {
+		assert_eq!(
+			problems("from_debug format=png | raster_flatten color=[0,0]"),
+			[
+				"'raster_flatten' does not accept 'color=[0,0]': a colour is one hex value like `RRGGBB`, \
+				 or 3 to 4 channel numbers, but 2 values were given"
+			]
+		);
 	}
 
 	/// The tail of #257: three parameters whose format lived in a doc comment and

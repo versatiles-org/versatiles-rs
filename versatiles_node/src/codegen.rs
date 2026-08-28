@@ -62,15 +62,15 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 			.join(" | ");
 	}
 	let ts: &'static str = match field.rust_type.as_str() {
-		// `HexColor`, the separators and the zoom-dependent quality list all land
-		// here: each has a format TS cannot express, so the narrowing they gained
-		// lives in `check`, not in the type.
-		"String"
-		| "Option<String>"
-		| "Option<HexColor>"
-		| "Option<CsvDelimiter>"
-		| "Option<SeparatorChar>"
-		| "Option<QualityByZoom>" => "string",
+		// The separators and the zoom-dependent quality list land here: each has
+		// a format TS cannot express, so the narrowing they gained lives in
+		// `check`, not in the type.
+		"String" | "Option<String>" | "Option<CsvDelimiter>" | "Option<SeparatorChar>" | "Option<QualityByZoom>" => {
+			"string"
+		}
+		// Two spellings of one colour, both accepted: `"FF5733"` and
+		// `[255, 87, 51]`.
+		"Option<HexColor>" => "string | [number, number, number]",
 		"bool" | "Option<bool>" => "boolean",
 		"u8" | "u16" | "u32" | "f32" | "f64" | "Option<u8>" | "Option<u16>" | "Option<u32>" | "Option<f32>"
 		| "Option<f64>" => "number",
@@ -771,6 +771,24 @@ mod tests {
 			"Option<TileFormat> field should carry enum_variants"
 		);
 		assert!(format_field.enum_variants.contains(&"png"));
+	}
+
+	/// Both colour parameters answer "what is this?" the same way, which is
+	/// what #260 asked for: one type, one TS surface, and no downstream table
+	/// mapping `raster_flatten.color` back to a colour by its name. The union
+	/// carries both spellings the type accepts.
+	#[test]
+	fn both_colour_fields_render_as_the_same_typescript_type() {
+		let ops = versatiles::pipeline::all_operation_metadata();
+		for op_name in ["from_color", "raster_flatten"] {
+			let color = find_field(&ops, op_name, "color");
+			assert_eq!(color.rust_type, "Option<HexColor>", "{op_name}.color is not a HexColor");
+			assert_eq!(
+				rust_type_to_ts(&color),
+				"string | [number, number, number]",
+				"{op_name}.color renders the wrong TS type"
+			);
+		}
 	}
 
 	/// Look up `(op_name, field_name)` in the live VPL metadata.

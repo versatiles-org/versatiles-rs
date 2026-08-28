@@ -347,16 +347,18 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	},
 	// Like `MaxTileBytes`, parsed but not enumerated: every `RRGGBB` is a
 	// colour, so there is no list for a picker to offer or for the TS codegen
-	// to turn into a union.
+	// to turn into a union. Judged as a group like `GeoBBox` rather than one
+	// value at a time, because a colour has two spellings and they differ by
+	// value count: `FF5733` is one value, `[255,87,51]` is three (#260).
 	TypeMapping {
 		pattern: "Option<HexColor>",
-		display_name: "HexColor",
-		method_name: "property_enum_option",
+		display_name: "RRGGBB | [r,g,b]",
+		method_name: "property_parsed_option",
 		is_required: false,
 		generic_param: Some("HexColor"),
 		generic_param2: None,
 		is_enum: false,
-		parsed_from: ParsedFrom::Str,
+		parsed_from: ParsedFrom::Values,
 	},
 	// Parsed via `TryFrom<&str>` like the string enums above, but its accepted
 	// values aren't a closed set (`none` or any byte count), so `is_enum` stays
