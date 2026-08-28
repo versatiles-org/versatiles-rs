@@ -15,7 +15,7 @@ use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyram
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitInfo;
 
-use super::RasterSource;
+use super::{GeoreferenceOverride, RasterSource};
 use crate::{
 	PipelineFactory,
 	factory::{OperationFactoryTrait, ReadOperationFactoryTrait},
@@ -29,6 +29,35 @@ use crate::{
 /// When building a virtual raster with `gdalbuildvrt`, pass `-addalpha` — without
 /// it the VRT carries no alpha channel and nothing outside the data becomes
 /// transparent.
+///
+/// ### Placing an unreferenced raster
+///
+/// A scanned map or a plain image export carries no georeferencing, and GDAL
+/// cannot place it at all. `crs` supplies the coordinate system and one of
+/// `bounds` or `geo_transform` supplies the position; `crs` on its own is not
+/// enough, because a coordinate system says nothing about where the pixels sit.
+///
+/// `bounds` is the north-up shorthand: `west,south,east,north` in the units of
+/// `crs` — metres for a projected system, degrees for `4326`. Pixel size is
+/// derived from the raster's own dimensions, exactly as `gdal_translate
+/// -a_ullr` does, so it cannot disagree with the image.
+///
+/// `geo_transform` takes the six GDAL coefficients verbatim, which is what a
+/// rotated or skewed raster needs:
+///
+/// ```text
+/// origin_x, pixel_width, row_rotation, origin_y, column_rotation, pixel_height
+/// ```
+///
+/// `origin_y` is the fourth number rather than the second, and `pixel_height`
+/// is normally negative. `gdalinfo -json` prints this array as its
+/// `geoTransform` field, which is the safest thing to copy. World files
+/// (`.tfw`, `.wld`) hold the same six values in a different order and measure
+/// the origin from the pixel centre rather than its corner, so their numbers
+/// cannot be pasted in unchanged.
+///
+/// The two are mutually exclusive, and neither writes anything to the file on
+/// disk.
 struct Args {
 	/// Path to the raster dataset.
 	filename: String,
@@ -56,6 +85,10 @@ struct Args {
 	nodata: Option<String>,
 	/// EPSG code to read the dataset with. Defaults to the dataset's own.
 	crs: Option<u32>,
+	/// Extent as `west,south,east,north` in the units of `crs`. Defaults to the dataset's own.
+	bounds: Option<String>,
+	/// The six GDAL geotransform coefficients. Defaults to the dataset's own.
+	geo_transform: Option<String>,
 }
 
 /// Concrete [`TileSource`] that merely forwards every request to an
@@ -142,7 +175,7 @@ impl Operation {
 			cutline_path.as_deref(),
 			bands,
 			nodata,
-			args.crs,
+			GeoreferenceOverride::parse(args.crs, args.bounds.as_deref(), args.geo_transform.as_deref())?,
 		)
 		.await?;
 		let mut bbox = *source.bbox();
@@ -458,6 +491,34 @@ mod tests {
 			count += 1;
 		}
 		assert_eq!(count, 4);
+		Ok(())
+	}
+
+	/// End to end: `bounds` relocates the raster, so the pyramid the operation
+	/// reports follows it. `gradient.tif` is a whole-world EPSG:4326 raster;
+	/// placing it in a 10°×10° box near the origin must move the tilejson bounds.
+	#[tokio::test(flavor = "multi_thread")]
+	async fn bounds_argument_relocates_the_raster() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+
+		let placed = factory
+			.operation_from_vpl(
+				"from_gdal_raster filename=\"../testdata/gradient.tif\" crs=\"4326\" \
+				 bounds=\"0,0,10,10\" level_min=\"0\" level_max=\"2\"",
+			)
+			.await?;
+
+		let bounds = placed.tilejson().bounds.expect("bounds are derived from the dataset");
+		let [west, south, east, north] = bounds.as_array();
+		assert!(
+			(-0.01..0.01).contains(&west) && (-0.01..0.01).contains(&south),
+			"south-west corner should sit at the origin, got {bounds:?}"
+		);
+		assert!(
+			(9.99..10.01).contains(&east) && (9.99..10.01).contains(&north),
+			"north-east corner should sit at 10,10, got {bounds:?}"
+		);
+
 		Ok(())
 	}
 

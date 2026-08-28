@@ -162,6 +162,22 @@ Generates tiles that draw their own coordinates, for inspecting a pipeline.
 
 Reads a GDAL elevation dataset and encodes it as terrain RGB tiles.
 
+### Placing an unreferenced raster
+
+A scanned map or a plain image export carries no georeferencing, and GDAL cannot place it at all. `crs` supplies the coordinate system and one of `bounds` or `geo_transform` supplies the position; `crs` on its own is not enough, because a coordinate system says nothing about where the pixels sit.
+
+`bounds` is the north-up shorthand: `west,south,east,north` in the units of `crs` — metres for a projected system, degrees for `4326`. Pixel size is derived from the raster's own dimensions, exactly as `gdal_translate -a_ullr` does, so it cannot disagree with the image.
+
+`geo_transform` takes the six GDAL coefficients verbatim, which is what a rotated or skewed raster needs:
+
+```text
+origin_x, pixel_width, row_rotation, origin_y, column_rotation, pixel_height
+```
+
+`origin_y` is the fourth number rather than the second, and `pixel_height` is normally negative. `gdalinfo -json` prints this array as its `geoTransform` field, which is the safest thing to copy. World files (`.tfw`, `.wld`) hold the same six values in a different order and measure the origin from the pixel centre rather than its corner, so their numbers cannot be pasted in unchanged.
+
+The two are mutually exclusive, and neither writes anything to the file on disk.
+
 ### Parameters
 
 - **`filename`: String (required)** - Path to the DEM dataset.
@@ -172,6 +188,9 @@ Reads a GDAL elevation dataset and encodes it as terrain RGB tiles.
 - _`gdal_reuse_limit`: u32 (optional)_ - How many tiles a GDAL instance renders before being replaced. Defaults to `100`.
 - _`gdal_concurrency_limit`: u8 (optional)_ - How many GDAL instances may run at once. Defaults to `4`.
 - _`cutline`: String (optional)_ - GeoJSON polygon outside which pixels become nodata. Defaults to the whole dataset.
+- _`crs`: u32 (optional)_ - EPSG code to read the dataset with. Defaults to the dataset's own.
+- _`bounds`: String (optional)_ - Extent as `west,south,east,north` in the units of `crs`. Defaults to the dataset's own.
+- _`geo_transform`: String (optional)_ - The six GDAL geotransform coefficients. Defaults to the dataset's own.
 
 ---
 
@@ -180,6 +199,22 @@ Reads a GDAL elevation dataset and encodes it as terrain RGB tiles.
 Reads a GDAL raster dataset and reprojects it into tiles.
 
 When building a virtual raster with `gdalbuildvrt`, pass `-addalpha` — without it the VRT carries no alpha channel and nothing outside the data becomes transparent.
+
+### Placing an unreferenced raster
+
+A scanned map or a plain image export carries no georeferencing, and GDAL cannot place it at all. `crs` supplies the coordinate system and one of `bounds` or `geo_transform` supplies the position; `crs` on its own is not enough, because a coordinate system says nothing about where the pixels sit.
+
+`bounds` is the north-up shorthand: `west,south,east,north` in the units of `crs` — metres for a projected system, degrees for `4326`. Pixel size is derived from the raster's own dimensions, exactly as `gdal_translate -a_ullr` does, so it cannot disagree with the image.
+
+`geo_transform` takes the six GDAL coefficients verbatim, which is what a rotated or skewed raster needs:
+
+```text
+origin_x, pixel_width, row_rotation, origin_y, column_rotation, pixel_height
+```
+
+`origin_y` is the fourth number rather than the second, and `pixel_height` is normally negative. `gdalinfo -json` prints this array as its `geoTransform` field, which is the safest thing to copy. World files (`.tfw`, `.wld`) hold the same six values in a different order and measure the origin from the pixel centre rather than its corner, so their numbers cannot be pasted in unchanged.
+
+The two are mutually exclusive, and neither writes anything to the file on disk.
 
 ### Parameters
 
@@ -194,6 +229,8 @@ When building a virtual raster with `gdalbuildvrt`, pass `-addalpha` — without
 - _`bands`: String (optional)_ - Band indices to read as colour channels, 1-based. Defaults to the colour interpretation.
 - _`nodata`: String (optional)_ - Pixel values to render as transparent. Defaults to the dataset's own.
 - _`crs`: u32 (optional)_ - EPSG code to read the dataset with. Defaults to the dataset's own.
+- _`bounds`: String (optional)_ - Extent as `west,south,east,north` in the units of `crs`. Defaults to the dataset's own.
+- _`geo_transform`: String (optional)_ - The six GDAL geotransform coefficients. Defaults to the dataset's own.
 
 ---
 

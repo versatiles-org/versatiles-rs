@@ -6,7 +6,7 @@ use imageproc::image::{DynamicImage, RgbImage};
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
 
-use super::{Cutline, GdalPool, Instance, ResampleAlg, get_spatial_ref};
+use super::{Cutline, GdalPool, GeoreferenceOverride, Instance, ResampleAlg, get_spatial_ref};
 /// DEM encoding format.
 ///
 /// Re-exported rather than redeclared: `encoding=` on `from_gdal_dem` and on the
@@ -149,10 +149,14 @@ impl DemSource {
 		reuse_limit: u32,
 		concurrency_limit: usize,
 		cutline_path: Option<&Path>,
+		georeference: GeoreferenceOverride,
 	) -> Result<DemSource> {
 		let path = filename.to_path_buf();
-		let factory: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static> =
-			Arc::new(move || Dataset::open(&path).with_context(|| format!("failed to open GDAL dataset: {path:?}")));
+		let factory: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static> = Arc::new(move || {
+			let mut dataset = Dataset::open(&path).with_context(|| format!("failed to open GDAL dataset: {path:?}"))?;
+			georeference.apply(&mut dataset)?;
+			Ok(dataset)
+		});
 		Self::new_with_factory(factory, reuse_limit, concurrency_limit, cutline_path).await
 	}
 

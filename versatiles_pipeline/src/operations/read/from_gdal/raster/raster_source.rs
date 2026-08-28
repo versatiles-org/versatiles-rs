@@ -7,7 +7,7 @@ use versatiles_core::GeoBBox;
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitConvert;
 
-use super::{BandMapping, BandMappingItem, Cutline, GdalPool, Instance, ResampleAlg};
+use super::{BandMapping, BandMappingItem, Cutline, GdalPool, GeoreferenceOverride, Instance, ResampleAlg};
 
 /// Reproject the source dataset into an 8-bit in-memory dataset in EPSG:3857.
 #[context("Failed to reproject GDAL dataset to target bbox ({bbox:?}) and size {width}x{height}")]
@@ -129,16 +129,12 @@ impl RasterSource {
 		cutline_path: Option<&Path>,
 		explicit_bands: Option<Vec<usize>>,
 		nodata: Option<Vec<Vec<f64>>>,
-		crs_override: Option<u32>,
+		georeference: GeoreferenceOverride,
 	) -> Result<RasterSource> {
 		let path = filename.to_path_buf();
 		let factory: Arc<dyn Fn() -> Result<gdal::Dataset> + Send + Sync + 'static> = Arc::new(move || {
 			let mut ds = gdal::Dataset::open(&path).with_context(|| format!("failed to open GDAL dataset: {path:?}"))?;
-			if let Some(epsg) = crs_override {
-				let srs = super::get_spatial_ref(epsg)?;
-				ds.set_spatial_ref(&srs)
-					.with_context(|| format!("failed to set CRS override to EPSG:{epsg}"))?;
-			}
+			georeference.apply(&mut ds)?;
 			Ok(ds)
 		});
 		Self::new_with_factory(
