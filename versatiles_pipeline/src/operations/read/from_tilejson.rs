@@ -23,8 +23,7 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
-use crate::helpers::location::HttpUrl;
-use crate::{PipelineFactory, vpl::VPLNode};
+use crate::{PipelineFactory, helpers::location::HttpUrl, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads tiles from a remote tile server described by a TileJSON endpoint.

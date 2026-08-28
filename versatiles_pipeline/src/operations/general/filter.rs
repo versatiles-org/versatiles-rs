@@ -6,8 +6,7 @@ use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{GeoBBox, GeoCrop, TileBBox, TileJSON, TileStream, ZoomLevel};
 use versatiles_derive::context;
 
-use crate::helpers::location::SourceLocation;
-use crate::{PipelineFactory, vpl::VPLNode};
+use crate::{PipelineFactory, helpers::location::SourceLocation, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filters tiles by bounding box, zoom range, or the coordinates present in another container.

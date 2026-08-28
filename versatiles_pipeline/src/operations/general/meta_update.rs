@@ -8,8 +8,7 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
-use crate::helpers::location::FilePath;
-use crate::{PipelineFactory, vpl::VPLNode};
+use crate::{PipelineFactory, helpers::location::FilePath, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Overwrites fields of the source's TileJSON metadata.

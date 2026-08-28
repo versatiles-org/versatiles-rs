@@ -9,10 +9,10 @@ use versatiles_core::{
 use versatiles_derive::context;
 
 use super::{CrsExtent, DemSource, GeoreferenceOverride, RasterTransform, dem_source::DemEncoding};
-use crate::helpers::location::FilePath;
 use crate::{
 	PipelineFactory,
 	factory::{OperationFactoryTrait, ReadOperationFactoryTrait},
+	helpers::location::FilePath,
 	vpl::VPLNode,
 };
 

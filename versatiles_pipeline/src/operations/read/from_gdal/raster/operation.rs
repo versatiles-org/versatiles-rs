@@ -18,11 +18,10 @@ use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitInfo;
 
 use super::{CrsExtent, GeoreferenceOverride, RasterSource, RasterTransform};
-use crate::helpers::location::FilePath;
 use crate::{
 	PipelineFactory,
 	factory::{OperationFactoryTrait, ReadOperationFactoryTrait},
-	helpers::tile_format_subset::RasterTileFormat,
+	helpers::{location::FilePath, tile_format_subset::RasterTileFormat},
 	vpl::VPLNode,
 };
 

@@ -6,10 +6,9 @@ use versatiles_core::TileJSON;
 use versatiles_derive::context;
 use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
 
-use crate::helpers::location::FilePath;
 use crate::{
 	PipelineFactory,
-	helpers::{CsvReader, SeparatorChar},
+	helpers::{CsvReader, SeparatorChar, location::FilePath},
 	operations::transform::{AsTileTransform, TransformOp, VectorTransform},
 	vpl::VPLNode,
 };

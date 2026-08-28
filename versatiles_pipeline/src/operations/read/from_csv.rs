@@ -23,12 +23,12 @@ use versatiles_geometry::{
 	geo::GeoFeature,
 };
 
-use crate::helpers::location::FilePath;
 use crate::{
 	PipelineFactory,
 	helpers::{
 		CsvDelimiter,
 		feature_tile_source::{BBoxClip, FeatureTileSource, FeatureTileSourceArgs, apply_property_filters},
+		location::FilePath,
 		tile_size_monitor::MaxTileBytes,
 	},
 	vpl::VPLNode,

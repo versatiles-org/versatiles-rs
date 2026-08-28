@@ -27,9 +27,9 @@ use versatiles_core::{TileCoord, TileFormat, TilePyramid};
 use versatiles_derive::context;
 use versatiles_image::DynamicImage;
 
-use crate::helpers::location::FilePath;
 use crate::{
 	PipelineFactory,
+	helpers::location::FilePath,
 	operations::transform::{TileTransform, TransformOp},
 	vpl::VPLNode,
 };

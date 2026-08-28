@@ -14,8 +14,11 @@ use versatiles_container::{Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{TileBBox, TileJSON, TilePyramid, TileStream};
 use versatiles_derive::context;
 
-use crate::helpers::location::{FilePath, SourceLocation};
-use crate::{PipelineFactory, vpl::VPLNode};
+use crate::{
+	PipelineFactory,
+	helpers::location::{FilePath, SourceLocation},
+	vpl::VPLNode,
+};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*.tar` file.
