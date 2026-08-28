@@ -1,5 +1,34 @@
 use versatiles_core::Bounds;
 
+/// What an argument that names something in the *data* is naming.
+///
+/// The one thing on the argument surface that no type expresses. `lon_column`
+/// names a column of the file `filename` names — a relationship between two
+/// arguments, not a property of one — so a newtype has nowhere to put it, and a
+/// consumer building a form is left matching on argument names and reading doc
+/// comments (#260).
+///
+/// The `VPLDecode` derive checks that the argument named here exists on the
+/// same operation, so unlike a doc phrase this cannot rot: rename `filename`
+/// and the operation stops compiling.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FieldReference {
+	/// Names a field — a CSV column, a GeoJSON property — of the data another
+	/// argument points at. The argument is named here.
+	FieldOf {
+		/// The argument naming the data this field belongs to.
+		argument: &'static str,
+	},
+	/// Names a field of the features arriving from upstream.
+	FieldOfSource,
+	/// Names a layer of the tiles arriving from upstream.
+	LayerOfSource,
+	/// Names a layer this operation creates.
+	NewLayer,
+	/// Names a field this operation writes into the features it creates.
+	NewField,
+}
+
 /// Everything wrong with the values written for one parameter, or an empty
 /// vector when they are fine.
 ///
@@ -50,6 +79,12 @@ pub struct VPLFieldMeta {
 	/// answers `0..=255`). Both come from the same place the parser does, so
 	/// what a form offers and what building accepts cannot drift (#260).
 	pub bounds: Option<Bounds>,
+	/// What this argument names in the data, when it names something there.
+	///
+	/// `None` for a value that stands on its own. See [`FieldReference`] for
+	/// why this is metadata rather than a type: it is a relationship between
+	/// two arguments, which no newtype can hold.
+	pub refers_to: Option<FieldReference>,
 	/// Everything wrong with the values written for this parameter, or an empty
 	/// vector when they are fine.
 	///

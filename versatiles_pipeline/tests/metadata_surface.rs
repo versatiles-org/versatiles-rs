@@ -41,7 +41,7 @@ use std::{collections::BTreeMap, fmt::Write as _, fs};
 
 use versatiles_pipeline::{
 	OperationMeta, all_operation_metadata,
-	vpl::{Bounds, VPLFieldMeta},
+	vpl::{Bounds, FieldReference, VPLFieldMeta},
 };
 
 /// Committed beside this file so a diff of the surface lands in the same review
@@ -84,7 +84,21 @@ fn render_field(op: &str, field: &VPLFieldMeta) -> String {
 	if let Some(bounds) = &field.bounds {
 		let _ = write!(line, " | bounds={}", render_bounds(bounds));
 	}
+	if let Some(reference) = &field.refers_to {
+		let _ = write!(line, " | names={}", render_reference(*reference));
+	}
 	line
+}
+
+/// What an argument names in the data, when it names something there.
+fn render_reference(reference: FieldReference) -> String {
+	match reference {
+		FieldReference::FieldOf { argument } => format!("field-of:{argument}"),
+		FieldReference::FieldOfSource => "field-of-source".to_string(),
+		FieldReference::LayerOfSource => "layer-of-source".to_string(),
+		FieldReference::NewLayer => "new-layer".to_string(),
+		FieldReference::NewField => "new-field".to_string(),
+	}
 }
 
 /// A range in interval notation: square where an end is included, round where
@@ -358,6 +372,54 @@ fn find_field(ops: &[OperationMeta], op_name: &str, field_name: &str) -> VPLFiel
 		.find(|f| f.name == field_name)
 		.unwrap_or_else(|| panic!("field `{field_name}` not found on `{op_name}`"))
 		.clone()
+}
+
+/// Every argument that names something in the data says so, and says what.
+///
+/// The one thing on the surface no type expresses: `lon_column` names a column
+/// of the file `filename` names, which is a relationship between two arguments
+/// (#260). A consumer was left matching on argument names and reading doc
+/// comments to rebuild it.
+///
+/// The derive already refuses a `field_of` pointing at an argument that does
+/// not exist, so what is left to check here is that the annotations are still
+/// *there* — a rule keyed on a shape goes green, not red, when the shape goes.
+#[test]
+fn every_argument_that_names_data_says_what_it_names() {
+	let ops = all_operation_metadata();
+	let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+
+	for op in &ops {
+		for field in &op.fields {
+			if let Some(reference) = field.refers_to {
+				*counts.entry(render_reference(reference)).or_default() += 1;
+			}
+		}
+	}
+
+	// The counts today. Adding an annotated argument is fine; losing one is an
+	// edit to make on purpose, because a form loses a picker with it.
+	assert!(counts["field-of:filename"] >= 7, "{counts:?}");
+	assert!(counts["field-of:data_source_path"] >= 1, "{counts:?}");
+	assert!(counts["field-of-source"] >= 1, "{counts:?}");
+	assert!(counts["layer-of-source"] >= 3, "{counts:?}");
+	assert!(counts["new-layer"] >= 4, "{counts:?}");
+	assert!(counts["new-field"] >= 4, "{counts:?}");
+
+	// Spot-checks, so the counts cannot be satisfied by the wrong fields.
+	assert_eq!(
+		find_field(&ops, "from_csv", "lon_column").refers_to,
+		Some(FieldReference::FieldOf { argument: "filename" })
+	);
+	assert_eq!(
+		find_field(&ops, "vector_update_properties", "id_field_tiles").refers_to,
+		Some(FieldReference::FieldOfSource)
+	);
+	assert_eq!(
+		find_field(&ops, "from_csv", "filename").refers_to,
+		None,
+		"the file itself does not name a field of anything"
+	);
 }
 
 /// The snapshot only guards what it lists, so it has to list everything this

@@ -89,6 +89,7 @@ struct Args {
 	/// Path to the input file; its format comes from the extension.
 	filename: String,
 	/// Name of the layer to write into. Defaults to the file's stem.
+	#[vpl(new_layer)]
 	layer_name: Option<String>,
 	/// Lowest zoom level to emit. Defaults to `0`.
 	#[vpl(default = "0")]
@@ -98,8 +99,10 @@ struct Args {
 	/// Area to restrict the output to, in WGS84 degrees. Defaults to the input's extent.
 	bbox: Option<GeoBBox>,
 	/// Properties to keep. Mutually exclusive with `properties_exclude`. Defaults to all.
+	#[vpl(field_of = "filename")]
 	properties_include: Option<Vec<String>>,
 	/// Properties to drop. Mutually exclusive with `properties_include`. Defaults to none.
+	#[vpl(field_of = "filename")]
 	properties_exclude: Option<Vec<String>>,
 	/// Area in square tile-pixels below which a polygon is dropped. Defaults to `4`.
 	#[vpl(default = "4")]

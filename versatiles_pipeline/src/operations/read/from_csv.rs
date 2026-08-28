@@ -63,10 +63,13 @@ struct Args {
 	/// Path to the CSV file.
 	filename: String,
 	/// Column holding the longitude, in WGS84 degrees.
+	#[vpl(field_of = "filename")]
 	lon_column: String,
 	/// Column holding the latitude, in WGS84 degrees.
+	#[vpl(field_of = "filename")]
 	lat_column: String,
 	/// Column to expose as the feature id. Defaults to emitting no id.
+	#[vpl(field_of = "filename")]
 	id_column: Option<String>,
 	/// Character separating a row's fields. Defaults to `,`.
 	#[vpl(default = ",")]
@@ -75,6 +78,7 @@ struct Args {
 	#[vpl(default = "true")]
 	has_header: Option<bool>,
 	/// Name of the layer to write into. Defaults to the file's stem.
+	#[vpl(new_layer)]
 	layer_name: Option<String>,
 	/// Lowest zoom level to emit. Defaults to `0`.
 	#[vpl(default = "0")]
@@ -84,8 +88,10 @@ struct Args {
 	/// Area to restrict the output to, in WGS84 degrees. Defaults to the input's extent.
 	bbox: Option<GeoBBox>,
 	/// Columns to keep as properties. Mutually exclusive with `properties_exclude`. Defaults to all.
+	#[vpl(field_of = "filename")]
 	properties_include: Option<Vec<String>>,
 	/// Columns to drop. Mutually exclusive with `properties_include`. Defaults to none.
+	#[vpl(field_of = "filename")]
 	properties_exclude: Option<Vec<String>>,
 	/// How to thin out points too close to distinguish. Defaults to `min_distance`.
 	#[vpl(default = "min_distance")]

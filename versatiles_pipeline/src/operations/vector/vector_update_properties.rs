@@ -26,12 +26,15 @@ struct Args {
 	data_source_path: String,
 
 	/// Name of the layer whose features are updated.
+	#[vpl(layer_of_source)]
 	layer_name: String,
 
 	/// Feature property holding the id to match on.
+	#[vpl(field_of_source)]
 	id_field_tiles: String,
 
 	/// Column in the data file holding the id to match on.
+	#[vpl(field_of = "data_source_path")]
 	id_field_data: String,
 
 	/// Whether to replace a feature's properties instead of merging. Defaults to `false`.

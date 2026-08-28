@@ -102,11 +102,11 @@ struct Args {
 	max_cells_per_tile: Option<u32>,
 
 	/// Name of the layer to write into. Defaults to `grid`.
-	#[vpl(default = "grid")]
+	#[vpl(default = "grid", new_layer)]
 	layer_name: Option<String>,
 
 	/// Property holding the H3 index. Defaults to `h3`.
-	#[vpl(default = "h3")]
+	#[vpl(default = "h3", new_field)]
 	id_field: Option<String>,
 }
 

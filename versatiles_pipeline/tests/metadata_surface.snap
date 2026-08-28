@@ -32,17 +32,17 @@ from_container.ssh_identity: Option<String> | optional
 
 from_csv [read]
 from_csv.filename: String | required
-from_csv.lon_column: String | required
-from_csv.lat_column: String | required
-from_csv.id_column: Option<String> | optional
+from_csv.lon_column: String | required | names=field-of:filename
+from_csv.lat_column: String | required | names=field-of:filename
+from_csv.id_column: Option<String> | optional | names=field-of:filename
 from_csv.delimiter: Option<CsvDelimiter> | optional | default=,
 from_csv.has_header: Option<bool> | optional | default=true
-from_csv.layer_name: Option<String> | optional
+from_csv.layer_name: Option<String> | optional | names=new-layer
 from_csv.min_zoom: Option<ZoomLevel> | optional | default=0 | bounds=[0,30] int
 from_csv.max_zoom: Option<ZoomLevel> | optional | bounds=[0,30] int
 from_csv.bbox: Option<GeoBBox> | optional
-from_csv.properties_include: Option<Vec<String>> | optional
-from_csv.properties_exclude: Option<Vec<String>> | optional
+from_csv.properties_include: Option<Vec<String>> | optional | names=field-of:filename
+from_csv.properties_exclude: Option<Vec<String>> | optional | names=field-of:filename
 from_csv.point_reduction: Option<PointReductionStrategy> | optional | default=min_distance | values=[none,drop_rate,min_distance]
 from_csv.point_reduction_value: Option<f32> | optional | bounds=(-inf,inf) float
 from_csv.compression: Option<TileCompression> | optional | default=gzip | values=[none,gzip,brotli,zstd]
@@ -81,12 +81,12 @@ from_gdal_raster.geo_transform: Option<RasterTransform> | optional
 
 from_geo [read]
 from_geo.filename: String | required
-from_geo.layer_name: Option<String> | optional
+from_geo.layer_name: Option<String> | optional | names=new-layer
 from_geo.min_zoom: Option<ZoomLevel> | optional | default=0 | bounds=[0,30] int
 from_geo.max_zoom: Option<ZoomLevel> | optional | bounds=[0,30] int
 from_geo.bbox: Option<GeoBBox> | optional
-from_geo.properties_include: Option<Vec<String>> | optional
-from_geo.properties_exclude: Option<Vec<String>> | optional
+from_geo.properties_include: Option<Vec<String>> | optional | names=field-of:filename
+from_geo.properties_exclude: Option<Vec<String>> | optional | names=field-of:filename
 from_geo.polygon_min_area: Option<f32> | optional | default=4 | bounds=(-inf,inf) float
 from_geo.polygon_simplify: Option<f32> | optional | default=4 | bounds=(-inf,inf) float
 from_geo.line_min_length: Option<f32> | optional | default=4 | bounds=(-inf,inf) float
@@ -104,17 +104,17 @@ from_grid.bbox: GeoBBox | required
 from_grid.offset: Option<[f64;2]> | optional | default=[0,0]
 from_grid.max_cells_per_tile: Option<u32> | optional | default=1024 | bounds=[0,4294967295] int
 from_grid.id_template: Option<String> | optional | default=CRS{epsg}RES{size}m{y:h}{x:h}
-from_grid.id_field: Option<String> | optional | default=id
-from_grid.x_field: Option<String> | optional | default=x
-from_grid.y_field: Option<String> | optional | default=y
+from_grid.id_field: Option<String> | optional | default=id | names=new-field
+from_grid.x_field: Option<String> | optional | default=x | names=new-field
+from_grid.y_field: Option<String> | optional | default=y | names=new-field
 from_grid.densify_tolerance: Option<f64> | optional | default=0.5 | bounds=(-inf,inf) float
-from_grid.layer_name: Option<String> | optional | default=grid
+from_grid.layer_name: Option<String> | optional | default=grid | names=new-layer
 
 from_h3 [read]
 from_h3.resolution: H3Resolution | required | bounds=[0,15] int
 from_h3.max_cells_per_tile: Option<u32> | optional | default=1024 | bounds=[0,4294967295] int
-from_h3.layer_name: Option<String> | optional | default=grid
-from_h3.id_field: Option<String> | optional | default=h3
+from_h3.layer_name: Option<String> | optional | default=grid | names=new-layer
+from_h3.id_field: Option<String> | optional | default=h3 | names=new-field
 
 from_merged_vector [read]
 from_merged_vector.sources: Vec<VPLPipeline> | required | sources
@@ -188,11 +188,11 @@ remap_coords.flip_y: Option<bool> | optional | default=false
 remap_coords.swap_xy: Option<bool> | optional | default=false
 
 vector_filter_features [transform]
-vector_filter_features.layer: Vec<String> | required
+vector_filter_features.layer: Vec<String> | required | names=layer-of-source
 vector_filter_features.expr: CelExpression | required
 
 vector_filter_layers [transform]
-vector_filter_layers.filter: Vec<String> | required
+vector_filter_layers.filter: Vec<String> | required | names=layer-of-source
 vector_filter_layers.invert: Option<bool> | optional | default=false
 
 vector_filter_properties [transform]
@@ -210,9 +210,9 @@ vector_repair.drop_offenders: Option<bool> | optional | default=false
 
 vector_update_properties [transform]
 vector_update_properties.data_source_path: String | required
-vector_update_properties.layer_name: String | required
-vector_update_properties.id_field_tiles: String | required
-vector_update_properties.id_field_data: String | required
+vector_update_properties.layer_name: String | required | names=layer-of-source
+vector_update_properties.id_field_tiles: String | required | names=field-of-source
+vector_update_properties.id_field_data: String | required | names=field-of:data_source_path
 vector_update_properties.replace_properties: Option<bool> | optional | default=false
 vector_update_properties.remove_non_matching: Option<bool> | optional | default=false
 vector_update_properties.include_id: Option<bool> | optional | default=false

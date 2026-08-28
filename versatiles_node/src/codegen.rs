@@ -577,6 +577,7 @@ mod tests {
 			enum_variants: Vec::new(),
 			validate: None,
 			bounds: None,
+			refers_to: None,
 			default: None,
 		}
 	}
@@ -586,6 +587,7 @@ mod tests {
 			enum_variants: variants,
 			validate: None,
 			bounds: None,
+			refers_to: None,
 			default: None,
 			..plain_field(rust_type)
 		}
@@ -638,6 +640,7 @@ mod tests {
 				enum_variants: Vec::new(),
 				validate: None,
 				bounds: None,
+				refers_to: None,
 				default: None,
 			}],
 		}];
@@ -711,6 +714,7 @@ mod tests {
 					enum_variants: Vec::new(),
 					validate: None,
 					bounds: None,
+					refers_to: None,
 					default: None,
 				},
 				VPLFieldMeta {
@@ -722,6 +726,7 @@ mod tests {
 					enum_variants: Vec::new(),
 					validate: None,
 					bounds: None,
+					refers_to: None,
 					default: None,
 				},
 			],
@@ -753,6 +758,7 @@ mod tests {
 					enum_variants: Vec::new(),
 					validate: None,
 					bounds: None,
+					refers_to: None,
 					default: None,
 				},
 				VPLFieldMeta {
@@ -764,6 +770,7 @@ mod tests {
 					enum_variants: vec!["avif", "jpg", "png", "webp"],
 					validate: None,
 					bounds: None,
+					refers_to: None,
 					default: None,
 				},
 			],

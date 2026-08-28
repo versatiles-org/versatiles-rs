@@ -91,6 +91,7 @@ use crate::{
 /// full grammar, built-in functions and string methods.
 struct Args {
 	/// Layers the expression applies to, for example `layer=["poi","place"]`.
+	#[vpl(layer_of_source)]
 	layer: Vec<String>,
 
 	/// Boolean CEL expression over the feature's properties.

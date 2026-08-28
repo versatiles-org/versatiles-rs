@@ -16,6 +16,7 @@ use crate::{
 /// Removes whole layers from vector tiles by name.
 struct Args {
 	/// Layer names to remove, for example `filter=["pois","ocean"]`.
+	#[vpl(layer_of_source)]
 	filter: Vec<String>,
 
 	/// Whether to keep the named layers instead of removing them. Defaults to `false`.

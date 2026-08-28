@@ -168,15 +168,15 @@ struct Args {
 	id_template: Option<String>,
 
 	/// Property holding the cell id. Defaults to `id`.
-	#[vpl(default = "id")]
+	#[vpl(default = "id", new_field)]
 	id_field: Option<String>,
 
 	/// Property holding the corner's easting. Defaults to `x`.
-	#[vpl(default = "x")]
+	#[vpl(default = "x", new_field)]
 	x_field: Option<String>,
 
 	/// Property holding the corner's northing. Defaults to `y`.
-	#[vpl(default = "y")]
+	#[vpl(default = "y", new_field)]
 	y_field: Option<String>,
 
 	/// How far a cell edge may stray from its true curve, in tile pixels. Defaults to `0.5`.
@@ -184,7 +184,7 @@ struct Args {
 	densify_tolerance: Option<f64>,
 
 	/// Name of the layer to write into. Defaults to `grid`.
-	#[vpl(default = "grid")]
+	#[vpl(default = "grid", new_layer)]
 	layer_name: Option<String>,
 }
 

@@ -97,7 +97,7 @@ pub use cst::{
 };
 pub use cst_parser::parse_cst;
 pub use error::{VplErrorFrame, VplParseError};
-pub use field_meta::{VPLFieldMeta, ValueValidator};
+pub use field_meta::{FieldReference, VPLFieldMeta, ValueValidator};
 // Re-exported for the code `VPLDecode` generates: a field with no domain type
 // of its own describes itself with the range of its Rust number type.
 pub use parser::{parse_vpl, parse_vpl_detailed};

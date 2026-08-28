@@ -747,23 +747,72 @@ fn supported_types_list() -> String {
 /// strings. Nothing here parses or type-checks it — `docs_style.rs` holds it
 /// against the doc comment's "Defaults to `X`." sentence instead, which is the
 /// copy a reader sees.
-fn extract_vpl_default(attrs: &[Attribute]) -> Result<Option<String>, syn::Error> {
+/// What an argument naming something in the data is naming, as written in
+/// `#[vpl(…)]`.
+///
+/// Mirrors `VPLFieldMeta::refers_to`; kept as a separate enum because a proc
+/// macro cannot depend on the crate it generates code for.
+#[derive(Clone, PartialEq, Eq)]
+enum FieldReference {
+	/// `field_of = "filename"` — a field of the data that argument points at.
+	FieldOf(String),
+	/// `field_of_source` — a field of the features arriving from upstream.
+	FieldOfSource,
+	/// `layer_of_source` — a layer of the tiles arriving from upstream.
+	LayerOfSource,
+	/// `new_layer` — a layer this operation creates.
+	NewLayer,
+	/// `new_field` — a field this operation writes.
+	NewField,
+}
+
+/// Reads the `#[vpl(…)]` attributes off a field.
+///
+/// Two independent facts today: the default a form shows, and what the argument
+/// names in the data. Both are read in one pass so an unknown key is reported
+/// once, with the whole vocabulary.
+fn extract_vpl_attrs(attrs: &[Attribute]) -> Result<(Option<String>, Option<FieldReference>), syn::Error> {
 	let mut default = None;
+	let mut refers_to: Option<FieldReference> = None;
+
 	for attr in attrs {
 		if !attr.path().is_ident("vpl") {
 			continue;
 		}
 		attr.parse_nested_meta(|meta| {
+			let mut set_reference = |reference: FieldReference| -> Result<(), syn::Error> {
+				if refers_to.is_some() {
+					return Err(meta.error("an argument names one thing; only one of these may be given"));
+				}
+				refers_to = Some(reference);
+				Ok(())
+			};
+
 			if meta.path.is_ident("default") {
 				let value: syn::LitStr = meta.value()?.parse()?;
 				default = Some(value.value());
 				Ok(())
+			} else if meta.path.is_ident("field_of") {
+				let value: syn::LitStr = meta.value()?.parse()?;
+				set_reference(FieldReference::FieldOf(value.value()))
+			} else if meta.path.is_ident("field_of_source") {
+				set_reference(FieldReference::FieldOfSource)
+			} else if meta.path.is_ident("layer_of_source") {
+				set_reference(FieldReference::LayerOfSource)
+			} else if meta.path.is_ident("new_layer") {
+				set_reference(FieldReference::NewLayer)
+			} else if meta.path.is_ident("new_field") {
+				set_reference(FieldReference::NewField)
 			} else {
-				Err(meta.error("unknown VPLDecode field attribute; expected `default = \"…\"`"))
+				Err(meta.error(
+					"unknown VPLDecode field attribute; expected `default = \"…\"`, `field_of = \"…\"`, \
+					 `field_of_source`, `layer_of_source`, `new_layer` or `new_field`",
+				))
 			}
 		})?;
 	}
-	Ok(default)
+
+	Ok((default, refers_to))
 }
 
 /// Extract a doc comment from an attribute, if present.
@@ -937,6 +986,11 @@ struct FieldMeta {
 	bounds_type: Option<&'static str>,
 	/// The `#[vpl(default = "…")]` attribute, verbatim, or `None`.
 	default: Option<String>,
+	/// What the argument names in the data, from `#[vpl(field_of = "…")]` and
+	/// its siblings. Checked against the other field names before it is
+	/// emitted, so a reference to an argument that does not exist is a compile
+	/// error rather than a lie in the metadata.
+	refers_to: Option<FieldReference>,
 }
 
 /// Processed field information returned by `process_field`.
@@ -950,6 +1004,42 @@ enum ProcessedField {
 }
 
 /// Process a single struct field into parsing code.
+/// The `sources` pseudo-field, which takes upstream pipelines rather than a
+/// value — no type mapping, no parser, no count to hold it to.
+fn process_sources_field(
+	field_str: String,
+	field_type_str: String,
+	raw_comment: String,
+	field_type: &syn::Type,
+) -> Result<(String, ProcessedField, FieldMeta), syn::Error> {
+	if field_type_str != "Vec<VPLPipeline>" {
+		return Err(syn::Error::new_spanned(
+			field_type,
+			format!("type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'"),
+		));
+	}
+	let doc = format!("### Sources\n\n{raw_comment}");
+	let parser = quote! { sources: node.sources.clone() };
+	let meta = FieldMeta {
+		name: field_str.clone(),
+		rust_type: field_type_str,
+		is_required: true,
+		is_sources: true,
+		doc: raw_comment,
+		enum_type: None,
+		parsed_type: None,
+		parsed_from: ParsedFrom::Nothing,
+		// Sources are pipelines, not values; there is nothing to parse and
+		// no count to hold them to. `check_sources` handles them instead.
+		number_type: None,
+		arity: None,
+		bounds_type: None,
+		default: None,
+		refers_to: None,
+	};
+	Ok((field_str, ProcessedField::Sources { doc, parser }, meta))
+}
+
 fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), syn::Error> {
 	let field_name = &field.ident;
 	let field_type = &field.ty;
@@ -969,31 +1059,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 		.to_string();
 
 	if field_str == "sources" {
-		if field_type_str != "Vec<VPLPipeline>" {
-			return Err(syn::Error::new_spanned(
-				field_type,
-				format!("type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'"),
-			));
-		}
-		let doc = format!("### Sources\n\n{raw_comment}");
-		let parser = quote! { sources: node.sources.clone() };
-		let meta = FieldMeta {
-			name: field_str.clone(),
-			rust_type: field_type_str,
-			is_required: true,
-			is_sources: true,
-			doc: raw_comment,
-			enum_type: None,
-			parsed_type: None,
-			parsed_from: ParsedFrom::Nothing,
-			// Sources are pipelines, not values; there is nothing to parse and
-			// no count to hold them to. `check_sources` handles them instead.
-			number_type: None,
-			arity: None,
-			bounds_type: None,
-			default: None,
-		};
-		return Ok((field_str, ProcessedField::Sources { doc, parser }, meta));
+		return process_sources_field(field_str, field_type_str, raw_comment, field_type);
 	}
 
 	let Some(mapping) = find_type_mapping(&field_type_str) else {
@@ -1028,7 +1094,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 	let doc = field_doc_expr(&field_str, &raw_comment, mapping);
 	let (arity, number_type) = shape_of(mapping);
 
-	let default = extract_vpl_default(&field.attrs)?;
+	let (default, refers_to) = extract_vpl_attrs(&field.attrs)?;
 	if default.is_some() && mapping.is_required {
 		return Err(syn::Error::new_spanned(
 			field,
@@ -1053,6 +1119,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 		arity,
 		bounds_type: mapping.has_bounds.then_some(mapping.generic_param).flatten(),
 		default,
+		refers_to,
 	};
 
 	Ok((
@@ -1243,6 +1310,18 @@ fn field_meta_expr(m: &FieldMeta) -> TokenStream {
 		// An array's bound would be per element, and nothing consumes that yet.
 		_ => quote! { None },
 	};
+	// What the argument names in the data, when it names something there — the
+	// relationship no type can hold, checked against the sibling list below.
+	let refers_to_expr: TokenStream = match &m.refers_to {
+		Some(FieldReference::FieldOf(argument)) => {
+			quote! { Some(crate::vpl::FieldReference::FieldOf { argument: #argument }) }
+		}
+		Some(FieldReference::FieldOfSource) => quote! { Some(crate::vpl::FieldReference::FieldOfSource) },
+		Some(FieldReference::LayerOfSource) => quote! { Some(crate::vpl::FieldReference::LayerOfSource) },
+		Some(FieldReference::NewLayer) => quote! { Some(crate::vpl::FieldReference::NewLayer) },
+		Some(FieldReference::NewField) => quote! { Some(crate::vpl::FieldReference::NewField) },
+		None => quote! { None },
+	};
 	let value_check = value_check_expr(m);
 	let arity_check: TokenStream = match m.arity {
 		Some(1) => quote! {
@@ -1295,6 +1374,7 @@ fn field_meta_expr(m: &FieldMeta) -> TokenStream {
 			doc: #fdoc.to_string(),
 			enum_variants: #variants_expr,
 			bounds: #bounds_expr,
+			refers_to: #refers_to_expr,
 			validate: #validate_expr,
 			default: #default_expr,
 		}
@@ -1395,6 +1475,9 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 	let mut doc_sources: Option<String> = None;
 	let mut field_names: Vec<String> = Vec::new();
 	let mut field_metas: Vec<FieldMeta> = Vec::new();
+	// Kept alongside so `field_of = "…"` can be reported against the field that
+	// wrote it, once every name on the struct is known.
+	let mut reference_spans: Vec<Option<syn::Ident>> = Vec::new();
 
 	for field in fields {
 		let (field_str, processed, meta) = process_field(&field)?;
@@ -1408,6 +1491,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 
 		field_names.push(field_str);
 		field_metas.push(meta);
+		reference_spans.push(field.ident.clone());
 		match processed {
 			ProcessedField::Sources { doc, parser } => {
 				doc_sources = Some(doc);
@@ -1417,6 +1501,29 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> Result<Toke
 				doc_fields.push(doc);
 				parser_fields.push(parser);
 			}
+		}
+	}
+
+	// `field_of = "…"` names another argument of this same operation, and now
+	// that every name is known it can be held to that. This is what makes the
+	// annotation something a compiler keeps rather than something a doc comment
+	// claims: rename `filename` and the operations that point at it stop
+	// compiling, instead of shipping metadata that quietly names nothing.
+	for (meta, span) in field_metas.iter().zip(&reference_spans) {
+		let Some(FieldReference::FieldOf(argument)) = &meta.refers_to else {
+			continue;
+		};
+		if !field_names.iter().any(|name| name == argument) {
+			let message = format!(
+				"`{}` says it names a field of `{argument}`, which is not an argument of this operation. \
+				 Available: {}",
+				meta.name,
+				field_names.join(", ")
+			);
+			return Err(match span {
+				Some(ident) => syn::Error::new_spanned(ident, message),
+				None => syn::Error::new(proc_macro2::Span::call_site(), message),
+			});
 		}
 	}
 
