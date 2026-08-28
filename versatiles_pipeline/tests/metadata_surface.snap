@@ -111,7 +111,7 @@ from_grid.densify_tolerance: Option<f64> | optional | default=0.5 | bounds=(-inf
 from_grid.layer_name: Option<String> | optional | default=grid
 
 from_h3 [read]
-from_h3.resolution: u8 | required | bounds=[0,255] int
+from_h3.resolution: H3Resolution | required | bounds=[0,15] int
 from_h3.max_cells_per_tile: Option<u32> | optional | default=1024 | bounds=[0,4294967295] int
 from_h3.layer_name: Option<String> | optional | default=grid
 from_h3.id_field: Option<String> | optional | default=h3
@@ -189,14 +189,14 @@ remap_coords.swap_xy: Option<bool> | optional | default=false
 
 vector_filter_features [transform]
 vector_filter_features.layer: Vec<String> | required
-vector_filter_features.expr: String | required
+vector_filter_features.expr: CelExpression | required
 
 vector_filter_layers [transform]
 vector_filter_layers.filter: Vec<String> | required
 vector_filter_layers.invert: Option<bool> | optional | default=false
 
 vector_filter_properties [transform]
-vector_filter_properties.regex: String | required
+vector_filter_properties.regex: RegexPattern | required
 vector_filter_properties.invert: Option<bool> | optional | default=false
 
 vector_overzoom [transform]

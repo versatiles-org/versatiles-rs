@@ -79,7 +79,9 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		| "Option<CrsExtent>"
 		| "Option<RasterTransform>"
 		| "Option<BandIndices>"
-		| "Option<NodataValues>" => "string",
+		| "Option<NodataValues>"
+		| "RegexPattern"
+		| "CelExpression" => "string",
 		// Two spellings of one colour, both accepted: `"FF5733"` and
 		// `[255, 87, 51]`.
 		"Option<HexColor>" => "string | [number, number, number]",
@@ -88,7 +90,7 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		// bound stays with `check` — the same split as the separators above.
 		"u8" | "u16" | "u32" | "f32" | "f64" | "Option<u8>" | "Option<u16>" | "Option<u32>" | "Option<f32>"
 		| "Option<f64>" | "Option<ZoomLevel>" | "Option<Effort>" | "Option<Brightness>" | "Option<Contrast>"
-		| "Option<Gamma>" => "number",
+		| "Option<Gamma>" | "H3Resolution" => "number",
 		"[f64;4]" | "Option<[f64;4]>" | "GeoBBox" | "Option<GeoBBox>" => "[number, number, number, number]",
 		"[f64;3]" | "Option<[f64;3]>" | "[u8;3]" | "Option<[u8;3]>" | "Option<GeoCenter>" => "[number, number, number]",
 		"Vec<VPLPipeline>" => "VPL[]",

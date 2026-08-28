@@ -21,11 +21,27 @@ use crate::{
 /// with `name_`.
 struct Args {
 	/// Regular expression matched against each property's prefixed name.
-	regex: String,
+	regex: RegexPattern,
 
 	/// Whether to keep the matching properties instead of removing them. Defaults to `false`.
 	#[vpl(default = "false")]
 	invert: Option<bool>,
+}
+
+/// A regular expression, compiled where the value is decoded.
+///
+/// A pattern that does not compile used to be found when the operation was
+/// built; now `check` finds it, without building anything (#260). The compiled
+/// form is kept rather than the text, so the pattern is compiled once.
+#[derive(Clone, Debug)]
+pub struct RegexPattern(Regex);
+
+impl TryFrom<&str> for RegexPattern {
+	type Error = anyhow::Error;
+
+	fn try_from(pattern: &str) -> Result<Self> {
+		Regex::new(pattern).map(Self).context("Failed to compile regex")
+	}
 }
 
 #[derive(Debug)]
@@ -36,10 +52,8 @@ struct Runner {
 
 impl Runner {
 	pub fn from_args(args: &Args) -> Result<Self> {
-		let regex = Regex::new(&args.regex).context("Failed to compile regex")?;
-
 		Ok(Self {
-			regex,
+			regex: args.regex.0.clone(),
 			invert: args.invert.unwrap_or(false),
 		})
 	}
@@ -142,7 +156,7 @@ mod tests {
 		}
 
 		let runner = Runner::from_args(&Args {
-			regex: "index$".to_string(),
+			regex: RegexPattern::try_from("index$").unwrap(),
 			invert: None,
 		})
 		.unwrap();
@@ -206,7 +220,7 @@ mod tests {
 				"Failed to build pipeline from VPL",
 				"Failed to create transform operation from VPL node",
 				"Building vector_filter_properties operation in VPL node \"vector_filter_properties\"",
-				"Failed to get required property string 'regex' from VPL node 'vector_filter_properties'",
+				"Failed to get required property enum 'regex' from VPL node 'vector_filter_properties'",
 				"In operation 'vector_filter_properties' the parameter 'regex' is required but missing.",
 			]
 		);

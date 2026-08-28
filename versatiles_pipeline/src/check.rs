@@ -466,6 +466,48 @@ mod tests {
 		}
 	}
 
+	/// Two languages whose compilers only ever ran when the operation was
+	/// built: a regex and a CEL expression. An editor showed nothing for either
+	/// (#260). The CEL parser panics on some malformed input rather than
+	/// returning an error, which `compile_cel` contains — so `check` can be
+	/// asked about a half-typed expression without taking the caller down.
+	#[test]
+	fn a_pattern_or_expression_that_does_not_compile_is_reported() {
+		let found = problems(r#"from_debug format=mvt | vector_filter_properties regex="[unclosed""#);
+		assert_eq!(found.len(), 1, "{found:?}");
+		assert!(
+			found[0].starts_with("'vector_filter_properties' does not accept 'regex=[unclosed'"),
+			"{found:?}"
+		);
+
+		let found = problems(r#"from_debug format=mvt | vector_filter_features layer=["a"] expr="foo @@""#);
+		assert_eq!(found.len(), 1, "{found:?}");
+		assert!(found[0].contains("Failed to compile CEL expression"), "{found:?}");
+
+		// The input that panics the parser rather than erroring.
+		let found = problems(r#"from_debug format=mvt | vector_filter_features layer=["a"] expr="population >=""#);
+		assert_eq!(found.len(), 1, "{found:?}");
+		assert!(found[0].contains("Parser crashed"), "{found:?}");
+
+		for vpl in [
+			r#"from_debug format=mvt | vector_filter_properties regex="^name:""#,
+			r#"from_debug format=mvt | vector_filter_features layer=["a"] expr="props.population > 1000""#,
+		] {
+			assert!(problems(vpl).is_empty(), "check rejected {vpl:?}: {:?}", problems(vpl));
+		}
+	}
+
+	/// The H3 resolution, which was a `u8` with its range in an `if` inside
+	/// `from_args` — so `resolution=99` built far enough to ask H3 about it.
+	#[test]
+	fn an_h3_resolution_outside_the_grid_is_reported() {
+		assert_eq!(
+			problems("from_h3 resolution=99"),
+			["'from_h3' does not accept 'resolution=99': H3Resolution must be between 0 and 15, but is 99"]
+		);
+		assert!(problems("from_h3 resolution=7").is_empty());
+	}
+
 	/// The three bounded numbers whose bound lived in a doc comment and nowhere
 	/// else: `gamma=-5` and `effort=200` both *built*, and produced whatever
 	/// they produced. Two of them are "above `0`", which is why the type

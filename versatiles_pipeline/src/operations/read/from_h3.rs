@@ -49,7 +49,7 @@ use h3o::{
 };
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{
-	MAX_ZOOM_LEVEL, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream,
+	MAX_ZOOM_LEVEL, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream, bounded_number,
 };
 use versatiles_derive::context;
 use versatiles_geometry::{
@@ -94,8 +94,8 @@ const DEFAULT_MAX_CELLS_PER_TILE: u32 = 1024;
 /// join expects — but the geometry carrying it in any one tile is only the part
 /// inside that tile, so it is not something to measure areas from.
 struct Args {
-	/// H3 resolution, `0` (coarsest) to `15` (finest).
-	resolution: u8,
+	/// H3 resolution, `0` is coarsest and `15` finest.
+	resolution: H3Resolution,
 
 	/// Roughly how many cells one tile may hold. Defaults to `1024`.
 	#[vpl(default = "1024")]
@@ -108,6 +108,15 @@ struct Args {
 	/// Property holding the H3 index. Defaults to `h3`.
 	#[vpl(default = "h3")]
 	id_field: Option<String>,
+}
+
+bounded_number! {
+	/// An H3 resolution, `0` (coarsest) to `15` (finest).
+	///
+	/// The range was in the doc comment and in an `if` inside `from_args`; now
+	/// it is in the type, so `check` reports `resolution=99` without building
+	/// anything (#260).
+	H3Resolution: u8, 0..=15;
 }
 
 /// A [`TileSource`] that fabricates H3 cells per requested tile.
@@ -123,8 +132,9 @@ pub struct Operation {
 impl Operation {
 	#[context("Failed to build from_h3 operation")]
 	fn from_args(args: Args) -> Result<Self> {
-		let resolution = Resolution::try_from(args.resolution)
-			.map_err(|_| anyhow!("resolution must be between 0 and 15, got {}", args.resolution))?;
+		// The range is the type's; `Resolution` still owns the conversion.
+		let resolution = Resolution::try_from(args.resolution.get())
+			.map_err(|e| anyhow!("resolution {} is not an H3 resolution: {e}", args.resolution))?;
 
 		let max_cells_per_tile = args.max_cells_per_tile.unwrap_or(DEFAULT_MAX_CELLS_PER_TILE);
 		ensure!(max_cells_per_tile > 0, "max_cells_per_tile must be at least 1");

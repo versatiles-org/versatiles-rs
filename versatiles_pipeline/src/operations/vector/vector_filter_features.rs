@@ -94,7 +94,72 @@ struct Args {
 	layer: Vec<String>,
 
 	/// Boolean CEL expression over the feature's properties.
-	expr: String,
+	expr: CelExpression,
+}
+
+/// A CEL expression, compiled where the value is decoded.
+///
+/// An expression that does not compile used to be found when the operation was
+/// built; `check` finds it now, without building anything (#260). The text is
+/// kept rather than the [`Program`], which is not `Clone`; both this and the
+/// runner call [`compile_cel`], so what `check` accepts and what builds are the
+/// same set.
+#[derive(Clone, Debug)]
+pub struct CelExpression(String);
+
+impl CelExpression {
+	/// The expression as it was written.
+	#[must_use]
+	pub fn as_str(&self) -> &str {
+		&self.0
+	}
+}
+
+impl TryFrom<&str> for CelExpression {
+	type Error = anyhow::Error;
+
+	fn try_from(expr: &str) -> Result<Self> {
+		compile_cel(expr)?;
+		Ok(Self(expr.to_string()))
+	}
+}
+
+/// Compiles a CEL expression, containing the parser's panics.
+///
+/// `cel-parser 0.10.1` panics on some malformed inputs instead of returning
+/// `ParseErrors`. Containing the panic keeps a bad expression from taking down
+/// the whole pipeline — and now also from taking down an editor asking `check`
+/// what is wrong with the line someone is halfway through typing.
+///
+/// The recovery is silent to the caller but not to the terminal: `catch_unwind`
+/// still runs the panic hook, so a panicking expression prints
+/// `thread … panicked at antlr4rust …` to stderr. Silencing it would mean
+/// installing a process-global panic hook from inside a library, which is the
+/// shape of problem #261 was filed about. Whoever owns the process can set a
+/// hook; this function will not.
+fn compile_cel(expr: &str) -> Result<Program> {
+	std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Program::compile(expr)))
+		.map_err(|panic_payload| {
+			// `catch_unwind` returns `Box<dyn Any + Send>`; extract a message if the panic
+			// carried one (Rust panics with string literals or `format!`-ed Strings).
+			let detail = panic_payload
+				.downcast_ref::<String>()
+				.map(String::as_str)
+				.or_else(|| panic_payload.downcast_ref::<&'static str>().copied())
+				.unwrap_or("no panic message");
+			anyhow!(
+				"Failed to compile CEL expression:\n  {expr}\n\n\
+				 Parser crashed (likely malformed CEL input): {detail}\n\n\
+				 Common causes: unmatched brackets, trailing operators, unsupported tokens. \
+				 Run `versatiles help pipeline` for the CEL operator cheat-sheet."
+			)
+		})?
+		.map_err(|e| {
+			// `ParseErrors::Display` already renders `ERROR: <input>:L:C: msg` plus a source
+			// snippet with a caret. Put the expression and the report on separate lines so
+			// the caret alignment survives and terminal output stays readable.
+			anyhow!("Failed to compile CEL expression:\n  {expr}\n\n{e}")
+		})
 }
 
 #[derive(Debug)]
@@ -111,32 +176,7 @@ struct Runner {
 
 impl Runner {
 	pub fn from_args(args: &Args) -> Result<Self> {
-		// `cel-parser 0.10.1` panics on some malformed inputs instead of returning ParseErrors.
-		// Containing the panic here keeps a bad expression from taking down the whole pipeline
-		// and preserves our contract: CEL errors surface cleanly at build time.
-		let program = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Program::compile(&args.expr)))
-			.map_err(|panic_payload| {
-				// `catch_unwind` returns `Box<dyn Any + Send>`; extract a message if the panic
-				// carried one (Rust panics with string literals or `format!`-ed Strings).
-				let detail = panic_payload
-					.downcast_ref::<String>()
-					.map(String::as_str)
-					.or_else(|| panic_payload.downcast_ref::<&'static str>().copied())
-					.unwrap_or("no panic message");
-				anyhow!(
-					"Failed to compile CEL expression:\n  {}\n\n\
-					 Parser crashed (likely malformed CEL input): {detail}\n\n\
-					 Common causes: unmatched brackets, trailing operators, unsupported tokens. \
-					 Run `versatiles help pipeline` for the CEL operator cheat-sheet.",
-					args.expr
-				)
-			})?
-			.map_err(|e| {
-				// `ParseErrors::Display` already renders `ERROR: <input>:L:C: msg` plus a source
-				// snippet with a caret. Put the expression and the report on separate lines so
-				// the caret alignment survives and terminal output stays readable.
-				anyhow!("Failed to compile CEL expression:\n  {}\n\n{e}", args.expr)
-			})?;
+		let program = compile_cel(args.expr.as_str())?;
 
 		let refs = program.references();
 		let binds_props = refs.has_variable("props");
@@ -253,7 +293,7 @@ mod tests {
 	fn run_expr(layers: &[&str], expr: &str, tile: VectorTile) -> Result<Option<VectorTile>> {
 		let runner = Runner::from_args(&Args {
 			layer: layers.iter().map(|s| (*s).to_string()).collect(),
-			expr: expr.to_string(),
+			expr: CelExpression::try_from(expr)?,
 		})?;
 		runner.run(tile)
 	}
@@ -279,7 +319,7 @@ mod tests {
 		let n = VPLNode::try_from_str(r#"vector_filter_features layer=["poi","place"] expr="true""#).unwrap();
 		let a = Args::from_vpl_node(&n).unwrap();
 		assert_eq!(a.layer, vec!["poi".to_string(), "place".to_string()]);
-		assert_eq!(a.expr, "true");
+		assert_eq!(a.expr.as_str(), "true");
 	}
 
 	#[test]
@@ -287,11 +327,10 @@ mod tests {
 		// Incomplete trailing operator — `cel-parser 0.10.1` panics on this input.
 		// The error should: (a) echo the user's expression, (b) flag likely-malformed input,
 		// (c) point them at `versatiles help pipeline` for reference material.
-		let err = Runner::from_args(&Args {
-			layer: vec!["x".into()],
-			expr: "population >=".into(),
-		})
-		.unwrap_err();
+		//
+		// Asked of the type rather than of `Runner`: an expression that does not
+		// compile can no longer reach one, which is the point of the type.
+		let err = CelExpression::try_from("population >=").unwrap_err();
 		assert_eq!(
 			err.to_string().split('\n').collect::<Vec<_>>(),
 			[
@@ -309,11 +348,7 @@ mod tests {
 	fn test_expr_compile_error_on_err_path_includes_location() {
 		// Unknown / unsupported token — cel-parser returns ParseErrors with line/column info
 		// rather than panicking. The error should surface that location report to the user.
-		let err = Runner::from_args(&Args {
-			layer: vec!["x".into()],
-			expr: "foo @@".into(),
-		})
-		.unwrap_err();
+		let err = CelExpression::try_from("foo @@").unwrap_err();
 		assert_eq!(
 			err.to_string().split('\n').collect::<Vec<_>>(),
 			[
