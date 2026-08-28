@@ -81,7 +81,9 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		| "Option<BandIndices>"
 		| "Option<NodataValues>"
 		| "RegexPattern"
-		| "CelExpression" => "string",
+		| "CelExpression"
+		| "Option<TileJSON>"
+		| "Option<VectorLayers>" => "string",
 		// Two spellings of one colour, both accepted: `"FF5733"` and
 		// `[255, 87, 51]`.
 		"Option<HexColor>" => "string | [number, number, number]",

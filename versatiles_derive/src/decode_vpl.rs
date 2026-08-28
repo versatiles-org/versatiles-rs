@@ -380,6 +380,31 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	// A language, not a value: the parser is the authority on what it accepts,
 	// and running it in `check` is what turns a build-time failure into an
 	// underline (#260).
+	// JSON documents, parsed where the value is decoded. Only the inline halves
+	// of the `X` / `X_file` pairs: reading a file is I/O, which `check` does not
+	// do, so the file halves stay paths (#260).
+	TypeMapping {
+		pattern: "Option<TileJSON>",
+		display_name: "TileJSON as JSON",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("TileJSON"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: false,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
+		pattern: "Option<VectorLayers>",
+		display_name: "vector_layers as JSON",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("VectorLayers"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: false,
+		parsed_from: ParsedFrom::Str,
+	},
 	TypeMapping {
 		pattern: "RegexPattern",
 		display_name: "regex",

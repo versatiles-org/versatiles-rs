@@ -251,6 +251,31 @@ impl VectorLayers {
 	}
 }
 
+impl TryFrom<&str> for VectorLayers {
+	type Error = anyhow::Error;
+
+	/// Parses the `vector_layers` array from JSON text.
+	///
+	/// Exists so that a `vector_layers=` argument is judged where the value is
+	/// decoded — by `check`, which never builds anything — rather than when a
+	/// pipeline reaches the operation that writes it (#260). Both the JSON and
+	/// the layer structure are decided here: the same parser either way.
+	///
+	/// # Examples
+	/// ```
+	/// use versatiles_core::VectorLayers;
+	///
+	/// let layers = VectorLayers::try_from(r#"[{"id":"roads","fields":{}}]"#).unwrap();
+	/// assert!(layers.0.contains_key("roads"));
+	///
+	/// assert!(VectorLayers::try_from("{not json").is_err());
+	/// assert!(VectorLayers::try_from(r#"{"id":"roads"}"#).is_err(), "an array is expected");
+	/// ```
+	fn try_from(text: &str) -> Result<Self> {
+		Self::from_json(&crate::json::parse_json_str(text)?)
+	}
+}
+
 impl FromIterator<(String, VectorLayer)> for VectorLayers {
 	/// Constructs a [`VectorLayers`] from an iterator of tuples `(String, VectorLayer)`.
 	///

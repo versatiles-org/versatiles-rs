@@ -466,6 +466,38 @@ mod tests {
 		}
 	}
 
+	/// The three JSON documents, refused before anything is built — including
+	/// the layer structure, not just the JSON syntax (#260).
+	///
+	/// Only the inline halves: `tilejson_file` and its siblings name a file,
+	/// and reading one is I/O that `check` does not do.
+	#[test]
+	fn a_json_document_that_does_not_parse_is_reported() {
+		let found = problems("from_debug format=mvt | meta_update tilejson='{not valid'");
+		assert_eq!(found.len(), 1, "{found:?}");
+		assert!(found[0].contains("while parsing JSON string"), "{found:?}");
+
+		let found = problems("from_debug format=mvt | meta_update vector_layers='[{\"fields\":{}}]'");
+		assert_eq!(found.len(), 1, "{found:?}");
+		assert!(found[0].contains("missing `id`"), "a layer without an id: {found:?}");
+
+		let found = problems("from_debug format=mvt | meta_update vector_layers='{\"id\":\"roads\"}'");
+		assert_eq!(found.len(), 1, "{found:?}");
+		assert!(
+			found[0].contains("array"),
+			"an object where an array belongs: {found:?}"
+		);
+
+		for vpl in [
+			"from_debug format=mvt | meta_update tilejson='{\"tilejson\":\"3.0.0\"}'",
+			"from_debug format=mvt | meta_update vector_layers='[{\"id\":\"roads\",\"fields\":{}}]'",
+			// The file halves are still paths, and still nobody's business here.
+			"from_debug format=mvt | meta_update tilejson_file='not-read-by-check.json'",
+		] {
+			assert!(problems(vpl).is_empty(), "check rejected {vpl:?}: {:?}", problems(vpl));
+		}
+	}
+
 	/// Two languages whose compilers only ever ran when the operation was
 	/// built: a regex and a CEL expression. An editor showed nothing for either
 	/// (#260). The CEL parser panics on some malformed input rather than

@@ -144,11 +144,11 @@ meta_update.fillzoom: Option<ZoomLevel> | optional | bounds=[0,30] int
 meta_update.legend: Option<String> | optional
 meta_update.name: Option<String> | optional
 meta_update.schema: Option<TileSchema> | optional | values=[rgb,rgba,dem/mapbox,dem/terrarium,dem/versatiles,openmaptiles,shortbread@1.0,other]
-meta_update.tilejson: Option<String> | optional
+meta_update.tilejson: Option<TileJSON> | optional
 meta_update.tilejson_file: Option<String> | optional
-meta_update.tilejson_update: Option<String> | optional
+meta_update.tilejson_update: Option<TileJSON> | optional
 meta_update.tilejson_update_file: Option<String> | optional
-meta_update.vector_layers: Option<String> | optional
+meta_update.vector_layers: Option<VectorLayers> | optional
 meta_update.vector_layers_file: Option<String> | optional
 
 raster_flatten [transform]

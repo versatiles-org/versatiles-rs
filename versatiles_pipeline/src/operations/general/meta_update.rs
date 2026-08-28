@@ -4,7 +4,7 @@ use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata};
 use versatiles_core::{
-	GeoBBox, GeoCenter, TileBBox, TileJSON, TilePyramid, TileSchema, TileStream, ZoomLevel, json::parse_json_str,
+	GeoBBox, GeoCenter, TileBBox, TileJSON, TilePyramid, TileSchema, TileStream, VectorLayers, ZoomLevel,
 };
 use versatiles_derive::context;
 
@@ -45,15 +45,15 @@ struct Args {
 	/// What the tiles contain. Defaults to the source's.
 	schema: Option<TileSchema>,
 	/// Complete TileJSON document, as a JSON string. Defaults to the source's metadata.
-	tilejson: Option<String>,
+	tilejson: Option<TileJSON>,
 	/// Path to a file holding a complete TileJSON document. Defaults to the source's metadata.
 	tilejson_file: Option<String>,
 	/// Partial TileJSON document to merge on, as a JSON string. Defaults to merging nothing.
-	tilejson_update: Option<String>,
+	tilejson_update: Option<TileJSON>,
 	/// Path to a file holding a partial TileJSON document. Defaults to merging nothing.
 	tilejson_update_file: Option<String>,
 	/// The `vector_layers` array as a JSON string. Defaults to the source's.
-	vector_layers: Option<String>,
+	vector_layers: Option<VectorLayers>,
 	/// Path to a file holding the `vector_layers` array as JSON. Defaults to the source's.
 	vector_layers_file: Option<String>,
 }
@@ -84,13 +84,12 @@ impl Operation {
 		let vector_layers_arg = load_json_arg(args.vector_layers, args.vector_layers_file, factory, "vector_layers")?;
 
 		let mut tilejson = match tilejson_arg {
-			Some(tilejson) => TileJSON::try_from(tilejson.as_str()).context("parsing 'tilejson'")?,
+			Some(tilejson) => tilejson,
 			None => source.tilejson().clone(),
 		};
 
 		// Overlay the update document before the scalar parameters, so the latter win.
-		if let Some(tilejson_update) = tilejson_update_arg {
-			let update = TileJSON::try_from(tilejson_update.as_str()).context("parsing 'tilejson_update'")?;
+		if let Some(update) = tilejson_update_arg {
 			tilejson.merge(&update).context("merging 'tilejson_update'")?;
 		}
 
@@ -127,10 +126,9 @@ impl Operation {
 		}
 
 		if let Some(vector_layers) = vector_layers_arg {
-			let json = parse_json_str(&vector_layers).context("parsing 'vector_layers' as JSON")?;
-			tilejson
-				.set_vector_layers(&json)
-				.context("validating 'vector_layers'")?;
+			// Already validated: `VectorLayers` is what the argument parses into,
+			// so there is nothing left for `set_vector_layers` to decide.
+			tilejson.vector_layers = vector_layers;
 		}
 
 		Ok(Self { source, tilejson })
@@ -142,12 +140,16 @@ impl Operation {
 /// Returns the JSON text. When the `*_file` form is used, the path is resolved relative to
 /// the VPL file and the file is read to a string. Providing both the inline value and the
 /// file path for the same field is an error.
-fn load_json_arg(
-	inline: Option<String>,
-	file: Option<String>,
-	factory: &PipelineFactory,
-	name: &str,
-) -> Result<Option<String>> {
+/// Resolves the `X` / `X_file` pair into one parsed document.
+///
+/// The inline half arrives already parsed — its type did that where the value
+/// was decoded, so `check` reports a malformed document without building
+/// anything (#260). The file half cannot: reading a file is I/O, which `check`
+/// promises not to do, so it is read here and parsed by the same `TryFrom`.
+fn load_json_arg<T>(inline: Option<T>, file: Option<String>, factory: &PipelineFactory, name: &str) -> Result<Option<T>>
+where
+	T: for<'a> TryFrom<&'a str, Error = anyhow::Error>,
+{
 	match (inline, file) {
 		(Some(_), Some(_)) => bail!("'{name}' and '{name}_file' are mutually exclusive; provide only one"),
 		(Some(value), None) => Ok(Some(value)),
@@ -158,7 +160,8 @@ fn load_json_arg(
 			let path_buf = location.to_path_buf()?;
 			let content = std::fs::read_to_string(&path_buf)
 				.with_context(|| format!("reading '{name}_file' from {}", path_buf.display()))?;
-			Ok(Some(content))
+			let parsed = T::try_from(content.as_str()).with_context(|| format!("parsing '{name}_file'"))?;
+			Ok(Some(parsed))
 		}
 		(None, None) => Ok(None),
 	}
@@ -325,7 +328,11 @@ mod tests {
 			.operation_from_vpl("from_debug format=mvt | meta_update tilejson_update='{not valid'")
 			.await
 			.unwrap_err();
-		assert!(format!("{err:#}").contains("parsing 'tilejson_update'"), "got: {err:#}");
+		// Refused where the value is decoded now, not when the document is merged.
+		assert!(
+			format!("{err:#}").contains("the parameter 'tilejson_update' has an invalid value"),
+			"got: {err:#}"
+		);
 	}
 
 	#[tokio::test]
@@ -335,7 +342,10 @@ mod tests {
 			.operation_from_vpl("from_debug format=mvt | meta_update tilejson='{not valid'")
 			.await
 			.unwrap_err();
-		assert!(format!("{err:#}").contains("parsing 'tilejson'"), "got: {err:#}");
+		assert!(
+			format!("{err:#}").contains("the parameter 'tilejson' has an invalid value"),
+			"got: {err:#}"
+		);
 	}
 
 	#[tokio::test]
@@ -369,7 +379,7 @@ mod tests {
 			.await
 			.unwrap_err();
 		assert!(
-			format!("{err:#}").contains("parsing 'vector_layers' as JSON"),
+			format!("{err:#}").contains("the parameter 'vector_layers' has an invalid value"),
 			"got: {err:#}"
 		);
 	}
@@ -382,10 +392,8 @@ mod tests {
 			.operation_from_vpl("from_debug format=mvt | meta_update vector_layers='[{\"fields\":{}}]'")
 			.await
 			.unwrap_err();
-		assert!(
-			format!("{err:#}").contains("validating 'vector_layers'"),
-			"got: {err:#}"
-		);
+		// The structure is the type's business too, not just the JSON syntax.
+		assert!(format!("{err:#}").contains("missing `id`"), "got: {err:#}");
 	}
 
 	#[tokio::test]
