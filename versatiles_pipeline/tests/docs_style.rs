@@ -329,12 +329,16 @@ fn every_operation_follows_the_doc_style() {
 	// A rule of the form "every field shaped like X must be Y" stops having a
 	// subject when X does, and goes green rather than red. Typing fields is
 	// exactly what empties such a rule, so the count it examined is asserted
-	// too: 20 closed-set parameters today. Adding one is fine; losing one is an
-	// edit to make on purpose.
+	// too. Adding one is fine; losing one is an edit to make on purpose.
+	//
+	// Feature-dependent, because the registry is: the two GDAL read operations
+	// carry four closed-set parameters between them, and a workspace build
+	// unifies `codegen` on without `gdal`.
+	let expected = if cfg!(feature = "gdal") { 20 } else { 16 };
 	assert!(
-		closed_sets >= 20,
-		"only {closed_sets} parameters carry a closed set of values; the variant rule has almost \
-		 nothing left to check, which is a change to look at rather than to accept"
+		closed_sets >= expected,
+		"only {closed_sets} parameters carry a closed set of values, expected {expected}; the variant \
+		 rule has almost nothing left to check, which is a change to look at rather than to accept"
 	);
 
 	assert!(
