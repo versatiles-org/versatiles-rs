@@ -7,9 +7,9 @@
 //! ## Examples
 //!
 //! ```text
-//! from_color color=FF5733 tile_tile_size=512 format=png
-//! from_color color=FF573380 tile_tile_size=256 format=webp
-//! from_color  # defaults: color=000000 tile_tile_size=512 format=png
+//! from_color color=FF5733 tile_size=512 format=png
+//! from_color color=FF573380 tile_size=256 format=webp
+//! from_color  # defaults: color=000000 tile_size=512 format=png
 //! ```
 
 use std::sync::Arc;
@@ -17,7 +17,7 @@ use std::sync::Arc;
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
-use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
+use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSize, TileStream};
 use versatiles_image::{DynamicImageTraitConvert, color::HexColor};
 
 use crate::{PipelineFactory, helpers::tile_format_subset::RasterTileFormat, vpl::VPLNode};
@@ -28,9 +28,9 @@ struct Args {
 	/// Hex colour, `RRGGBB` or `RRGGBBAA`. Defaults to `000000`.
 	#[vpl(default = "000000")]
 	color: Option<HexColor>,
-	/// Tile size in pixels, `256` or `512`. Defaults to `512`.
+	/// Tile size in pixels. Defaults to `512`.
 	#[vpl(default = "512")]
-	tile_size: Option<u16>,
+	tile_size: Option<TileSize>,
 	/// Format to encode the tiles in. Defaults to `png`.
 	#[vpl(default = "png")]
 	format: Option<RasterTileFormat>,
@@ -93,7 +93,7 @@ impl Operation {
 		// parser without building anything.
 		let color = args.color.unwrap_or_else(HexColor::black);
 
-		let tile_size = u32::from(args.tile_size.unwrap_or(512));
+		let tile_size = u32::from(args.tile_size.map_or(512, |size| size.size()));
 
 		let tile_format = args.format.map_or(TileFormat::PNG, TileFormat::from);
 

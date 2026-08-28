@@ -534,6 +534,26 @@ mod tests {
 		assert!(problems("from_color color=FF573380").is_empty());
 	}
 
+	/// The tightening #260 asked for. `from_gdal_raster` and `from_gdal_dem`
+	/// took any `u32` and documented only "Tile size in pixels", so
+	/// `tile_size=1024` built a pyramid no client asks for; the other three
+	/// refused it, but only once something was built. One type now answers for
+	/// all five, and `check` answers without building anything.
+	#[test]
+	fn a_tile_size_outside_the_closed_set_is_reported() {
+		assert_eq!(
+			problems("from_color tile_size=300"),
+			["'from_color' does not accept 'tile_size=300'. Values: 256, 512"]
+		);
+		assert_eq!(
+			problems("from_debug format=png | raster_tile_resize tile_size=1024"),
+			["'raster_tile_resize' does not accept 'tile_size=1024'. Values: 256, 512"]
+		);
+		for vpl in ["from_color tile_size=256", "from_color tile_size=512"] {
+			assert!(problems(vpl).is_empty(), "check rejected {vpl:?}");
+		}
+	}
+
 	/// A colour has two spellings and both are accepted, so `raster_flatten`
 	/// keeps the `r,g,b` it took before it had a type while gaining the hex
 	/// `from_color` always had (#260). VPL splits on commas, so the two arrive

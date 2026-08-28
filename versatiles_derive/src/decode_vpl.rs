@@ -262,6 +262,29 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		is_enum: true,
 		parsed_from: ParsedFrom::Str,
 	},
+	// A closed set of two, so it carries `variants()` like the string enums: a
+	// picker offers both and the TS bindings render `256 | 512`, instead of five
+	// doc comments each restating the range — three of which used to (#260).
+	TypeMapping {
+		pattern: "TileSize",
+		display_name: "TileSize",
+		method_name: "property_enum_required",
+		is_required: true,
+		generic_param: Some("TileSize"),
+		generic_param2: None,
+		is_enum: true,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
+		pattern: "Option<TileSize>",
+		display_name: "TileSize",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("TileSize"),
+		generic_param2: None,
+		is_enum: true,
+		parsed_from: ParsedFrom::Str,
+	},
 	TypeMapping {
 		pattern: "Option<TileSchema>",
 		display_name: "TileSchema",

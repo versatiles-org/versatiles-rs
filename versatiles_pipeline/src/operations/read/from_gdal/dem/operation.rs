@@ -3,7 +3,7 @@ use std::{fmt::Debug, sync::Arc};
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
-use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileStream};
+use versatiles_core::{TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileSize, TileStream};
 use versatiles_derive::context;
 
 use super::{DemSource, GeoreferenceOverride, dem_source::DemEncoding};
@@ -52,7 +52,7 @@ struct Args {
 	encoding: Option<DemEncoding>,
 	/// Tile size in pixels. Defaults to `512`.
 	#[vpl(default = "512")]
-	tile_size: Option<u32>,
+	tile_size: Option<TileSize>,
 	/// Highest zoom level to generate. Defaults to the dataset's native resolution.
 	level_max: Option<u8>,
 	/// Lowest zoom level to generate. Defaults to `level_max`.
@@ -128,7 +128,7 @@ impl Operation {
 			bbox.intersect(cutline_bbox);
 		}
 		let bbox = &bbox;
-		let tile_size = args.tile_size.unwrap_or(512);
+		let tile_size = u32::from(args.tile_size.map_or(512, |size| size.size()));
 
 		let level_max = args.level_max.unwrap_or(source.level_max(tile_size)?);
 		let level_min = args.level_min.unwrap_or(level_max);

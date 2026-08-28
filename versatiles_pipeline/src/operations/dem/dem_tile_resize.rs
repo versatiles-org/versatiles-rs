@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileJSON, TileStream};
+use versatiles_core::{TileBBox, TileJSON, TileSize, TileStream};
 use versatiles_derive::context;
 
 use super::encoding::{DemEncoding, resolve_encoding, to_tile_schema};
@@ -17,8 +17,8 @@ use crate::{PipelineFactory, helpers::tile_resize::TileResizeCore, vpl::VPLNode}
 /// separately, which for a DEM would mix the high byte of one pixel with the low
 /// byte of another.
 pub struct Args {
-	/// Target tile size in pixels, `256` or `512`, and it must differ from the source's.
-	pub tile_size: u32,
+	/// Target tile size in pixels, which must differ from the source's.
+	pub tile_size: TileSize,
 	/// DEM encoding of the source. Defaults to the encoding its tile schema implies.
 	pub encoding: Option<DemEncoding>,
 }
@@ -35,7 +35,7 @@ impl Operation {
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let tile_size = args.tile_size;
+		let tile_size = u32::from(args.tile_size.size());
 
 		let encoding = resolve_encoding(args.encoding, source.tilejson().tile_schema.as_ref())?;
 

@@ -116,6 +116,16 @@ impl VPLNode {
 		})
 	}
 
+	/// Required counterpart of [`property_enum_option`](Self::property_enum_option).
+	#[context("Failed to get required property enum '{field}' from VPL node '{}'", self.name)]
+	pub fn property_enum_required<'a, T>(&'a self, field: &str) -> Result<T>
+	where
+		T: TryFrom<&'a str>,
+		<T as TryFrom<&'a str>>::Error: std::fmt::Display + Send + Sync + 'static,
+	{
+		self.required(field, self.property_enum_option::<T>(field))
+	}
+
 	/// Parses `field` through the type's own `TryFrom<&[String]>`, returning
 	/// `Ok(None)` if absent.
 	///

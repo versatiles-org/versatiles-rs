@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileJSON, TileStream};
+use versatiles_core::{TileBBox, TileJSON, TileSize, TileStream};
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitOperation;
 
@@ -19,8 +19,8 @@ use crate::{PipelineFactory, helpers::tile_resize::TileResizeCore, vpl::VPLNode}
 /// `tile_size=512` merges four 256-pixel tiles into one 512-pixel tile one zoom
 /// level lower.
 pub struct Args {
-	/// Target tile size in pixels, `256` or `512`, and it must differ from the source's.
-	pub tile_size: u32,
+	/// Target tile size in pixels, which must differ from the source's.
+	pub tile_size: TileSize,
 }
 
 #[derive(Clone, Debug)]
@@ -35,7 +35,7 @@ impl Operation {
 		Self: Sized + TileSource,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
-		let tile_size = args.tile_size;
+		let tile_size = u32::from(args.tile_size.size());
 		let core = TileResizeCore::new(source, tile_size, Arc::new(|img| img.scaled_down(2)))?;
 		Ok(Self { core })
 	}

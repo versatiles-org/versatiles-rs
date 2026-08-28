@@ -165,6 +165,43 @@ fn check_default(op: &str, field: &VPLFieldMeta, siblings: &[String], v: &mut Vi
 	}
 }
 
+/// A type with a closed set of values already says what they are; a
+/// description that lists them too is one fact written twice, and the two
+/// drift apart.
+///
+/// They did: five `tile_size` parameters documented one range three ways —
+/// three said "`256` or `512`", two said only "Tile size in pixels." — so a
+/// reader assembling the set from the prose got three right and could not tell
+/// which two they had missed. Typing the field ended that (#260); this keeps it
+/// ended.
+///
+/// The default sentence is exempt. "Defaults to `512`." names one value as a
+/// value, not as the range, and `check_default` already holds it against the
+/// declared default.
+fn check_states_no_variants(op: &str, field: &VPLFieldMeta, v: &mut Violations) {
+	if field.enum_variants.len() < 2 {
+		return;
+	}
+	let doc = field.doc.trim();
+	let without_default = doc.rfind("Defaults to ").map_or(doc, |at| &doc[..at]);
+
+	let named = field
+		.enum_variants
+		.iter()
+		.filter(|variant| without_default.contains(**variant))
+		.copied()
+		.collect::<Vec<_>>();
+
+	v.check(
+		named.len() < 2,
+		format!(
+			"{op}.{}: its description lists {named:?}, which its type already carries; \
+			 say what the value is and let the type say which ones there are",
+			field.name
+		),
+	);
+}
+
 fn check_field(op: &str, field: &VPLFieldMeta, v: &mut Violations) {
 	// The `sources` pseudo-field is rendered as its own section, not as a
 	// parameter bullet, so the bullet rules do not apply to it.
@@ -272,6 +309,7 @@ fn every_operation_follows_the_doc_style() {
 
 	assert!(!ops.is_empty(), "no operations registered");
 
+	let mut closed_sets = 0;
 	for op in &ops {
 		check_summary(&op.tag_name, op.summary.trim(), &mut v);
 		check_details(&op.tag_name, op.details.trim(), &mut v);
@@ -281,8 +319,23 @@ fn every_operation_follows_the_doc_style() {
 			if !field.is_sources {
 				check_default(&op.tag_name, field, &names, &mut v);
 			}
+			if field.enum_variants.len() >= 2 {
+				closed_sets += 1;
+				check_states_no_variants(&op.tag_name, field, &mut v);
+			}
 		}
 	}
+
+	// A rule of the form "every field shaped like X must be Y" stops having a
+	// subject when X does, and goes green rather than red. Typing fields is
+	// exactly what empties such a rule, so the count it examined is asserted
+	// too: 20 closed-set parameters today. Adding one is fine; losing one is an
+	// edit to make on purpose.
+	assert!(
+		closed_sets >= 20,
+		"only {closed_sets} parameters carry a closed set of values; the variant rule has almost \
+		 nothing left to check, which is a change to look at rather than to accept"
+	);
 
 	assert!(
 		v.0.is_empty(),

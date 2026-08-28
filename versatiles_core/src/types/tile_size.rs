@@ -2,7 +2,7 @@
 
 use std::fmt::Debug;
 
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 
 use crate::utils::float_to_int;
 
@@ -45,6 +45,24 @@ impl TileSize {
 		}
 	}
 
+	/// The sizes a picker should offer, written as VPL writes them.
+	///
+	/// This is what makes `tile_size` a closed set downstream: the TypeScript
+	/// bindings render it as `256 | 512` and an editor can offer both, instead
+	/// of every consumer rediscovering the range from a doc comment (#260).
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileSize;
+	///
+	/// assert_eq!(TileSize::variants(), ["256", "512"]);
+	/// ```
+	#[must_use]
+	pub fn variants() -> &'static [&'static str] {
+		&["256", "512"]
+	}
+
 	/// Returns the size of the tile in pixels.
 	///
 	/// # Examples
@@ -75,6 +93,30 @@ impl TryFrom<f64> for TileSize {
 
 	fn try_from(value: f64) -> Result<Self> {
 		TileSize::new(float_to_int(value)?)
+	}
+}
+
+impl TryFrom<&str> for TileSize {
+	type Error = anyhow::Error;
+
+	/// Parses the size as VPL writes it, so a `tile_size=` argument is judged
+	/// by this type rather than by whatever happens to read it later.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::TileSize;
+	///
+	/// assert_eq!(TileSize::try_from("512").unwrap().size(), 512);
+	/// assert!(TileSize::try_from("1024").is_err());
+	/// assert!(TileSize::try_from("big").is_err());
+	/// ```
+	fn try_from(value: &str) -> Result<Self> {
+		let text = value.trim();
+		let size = text
+			.parse::<u16>()
+			.map_err(|_| anyhow!("Invalid tile size: '{text}'. Supported sizes are 256 or 512."))?;
+		Self::new(size)
 	}
 }
 
@@ -119,6 +161,35 @@ mod tests {
 		let err = TileSize::new(input).expect_err("expected Err for unsupported size");
 		let msg = format!("{err}");
 		assert!(msg.contains("Invalid tile size"));
+	}
+
+	/// Every advertised variant parses, and parsing is the only way in — so the
+	/// list a picker offers cannot drift from the set the parser accepts.
+	#[test]
+	fn every_advertised_variant_parses() {
+		for &variant in TileSize::variants() {
+			let parsed = TileSize::try_from(variant).unwrap_or_else(|_| panic!("`{variant}` is advertised but rejected"));
+			assert_eq!(parsed.size().to_string(), variant);
+		}
+		assert_eq!(
+			TileSize::variants().len(),
+			2,
+			"a new size needs a look at the TS bindings too"
+		);
+	}
+
+	#[rstest]
+	#[case::unsupported("1024", "Supported sizes are 256 or 512")]
+	#[case::not_a_number("big", "Invalid tile size: 'big'")]
+	#[case::empty("", "Invalid tile size: ''")]
+	fn parsing_a_bad_size_says_what_is_accepted(#[case] input: &str, #[case] expected: &str) {
+		let error = TileSize::try_from(input).expect_err("should be rejected");
+		assert!(error.to_string().contains(expected), "got: {error}");
+	}
+
+	#[test]
+	fn whitespace_around_a_size_is_accepted() {
+		assert_eq!(TileSize::try_from(" 256 ").unwrap(), TileSize::Size256);
 	}
 
 	#[test]

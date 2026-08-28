@@ -11,7 +11,7 @@ dem_quantize.slope_error: Option<f64> | optional | default=1.0
 dem_quantize.encoding: Option<DemEncoding> | optional | values=[mapbox,terrarium]
 
 dem_tile_resize [transform]
-dem_tile_resize.tile_size: u32 | required
+dem_tile_resize.tile_size: TileSize | required | values=[256,512]
 dem_tile_resize.encoding: Option<DemEncoding> | optional | values=[mapbox,terrarium]
 
 filter [transform]
@@ -23,7 +23,7 @@ filter.filename: Option<String> | optional
 
 from_color [read]
 from_color.color: Option<HexColor> | optional | default=000000
-from_color.tile_size: Option<u16> | optional | default=512
+from_color.tile_size: Option<TileSize> | optional | default=512 | values=[256,512]
 from_color.format: Option<RasterTileFormat> | optional | default=png | values=[avif,jpg,png,webp]
 
 from_container [read]
@@ -54,7 +54,7 @@ from_debug.format: Option<DebugTileFormat> | optional | default=mvt | values=[mv
 from_gdal_dem [read]
 from_gdal_dem.filename: String | required
 from_gdal_dem.encoding: Option<DemEncoding> | optional | default=mapbox | values=[mapbox,terrarium]
-from_gdal_dem.tile_size: Option<u32> | optional | default=512
+from_gdal_dem.tile_size: Option<TileSize> | optional | default=512 | values=[256,512]
 from_gdal_dem.level_max: Option<u8> | optional
 from_gdal_dem.level_min: Option<u8> | optional
 from_gdal_dem.gdal_reuse_limit: Option<u32> | optional | default=100
@@ -66,7 +66,7 @@ from_gdal_dem.geo_transform: Option<String> | optional
 
 from_gdal_raster [read]
 from_gdal_raster.filename: String | required
-from_gdal_raster.tile_size: Option<u32> | optional | default=512
+from_gdal_raster.tile_size: Option<TileSize> | optional | default=512 | values=[256,512]
 from_gdal_raster.level_max: Option<u8> | optional
 from_gdal_raster.level_min: Option<u8> | optional
 from_gdal_raster.gdal_reuse_limit: Option<u32> | optional | default=100
@@ -180,7 +180,7 @@ raster_overview [transform]
 raster_overview.level: Option<u8> | optional
 
 raster_tile_resize [transform]
-raster_tile_resize.tile_size: u32 | required
+raster_tile_resize.tile_size: TileSize | required | values=[256,512]
 
 remap_coords [transform]
 remap_coords.flip_x: Option<bool> | optional | default=false

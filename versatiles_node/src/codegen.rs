@@ -53,6 +53,12 @@ fn to_pascal_case(s: &str) -> String {
 /// string-literal union (`"a" | "b" | "c"`). Everything else falls back to
 /// the static type-string match below.
 fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
+	// A closed set of numbers rather than of words. `tile_size=512` is written
+	// unquoted in VPL and is a number in TS, so its variants render as `256 |
+	// 512` and not as the string union the branch below would give it.
+	if matches!(field.rust_type.as_str(), "TileSize" | "Option<TileSize>") {
+		return field.enum_variants.join(" | ");
+	}
 	if !field.enum_variants.is_empty() {
 		return field
 			.enum_variants
@@ -771,6 +777,35 @@ mod tests {
 			"Option<TileFormat> field should carry enum_variants"
 		);
 		assert!(format_field.enum_variants.contains(&"png"));
+	}
+
+	/// The five tile sizes are one closed set, and TypeScript can say so: a
+	/// numeric union, not `number` and not a union of quoted digits (#260).
+	#[test]
+	fn every_tile_size_renders_as_the_same_numeric_union() {
+		let ops = versatiles::pipeline::all_operation_metadata();
+		let sizes: Vec<&VPLFieldMeta> = ops
+			.iter()
+			.flat_map(|op| &op.fields)
+			.filter(|f| matches!(f.rust_type.as_str(), "TileSize" | "Option<TileSize>"))
+			.collect();
+
+		// A rule keyed on a type matches nothing once that type stops existing,
+		// and passes while it does so. The floor is what turns that green into a
+		// red.
+		//
+		// Three, not five: this crate builds `versatiles` without `gdal`, so
+		// `from_gdal_raster` and `from_gdal_dem` are not in the registry here.
+		// All five are pinned by name in `versatiles_pipeline`'s metadata
+		// snapshot, which does run with the feature on.
+		assert!(
+			sizes.len() >= 3,
+			"expected at least 3 tile-size fields, found {} — did they stop sharing a type?",
+			sizes.len()
+		);
+		for field in sizes {
+			assert_eq!(rust_type_to_ts(field), "256 | 512", "{} renders wrong", field.name);
+		}
 	}
 
 	/// Both colour parameters answer "what is this?" the same way, which is
