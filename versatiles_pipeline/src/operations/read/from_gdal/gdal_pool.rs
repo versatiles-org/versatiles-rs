@@ -2,11 +2,41 @@ use std::{ops::Deref, sync::Arc};
 
 use anyhow::{Result, ensure};
 use deadpool::managed::{Manager, Object, Pool, RecycleResult};
-use gdal::{Dataset, config::set_config_option};
+use gdal::{
+	Dataset,
+	config::{get_config_option, set_config_option},
+};
 use versatiles_core::{GeoBBox, WORLD_SIZE, utils::float_to_int};
 use versatiles_derive::context;
 
 use super::Instance;
+
+/// Asks GDAL to decode and warp with every core — unless someone already said
+/// otherwise.
+///
+/// Rendering a tile pyramid is the work this process exists to do, so every
+/// core is the right default and GDAL's own default of one is not. But
+/// `GDAL_NUM_THREADS` is a process-global setting, the same shape as
+/// `GDAL_PAM_ENABLED` was in #261: setting it unconditionally means a caller
+/// who chose a thread count — through the environment, or because they embed
+/// this crate in a process that has other work to do — silently does not get
+/// what they asked for. A library may pick a default; it may not overrule a
+/// decision.
+///
+/// `CPLGetConfigOption` reads the environment as well as options set in code,
+/// so both spellings of "I have chosen" are honoured. Setting the option also
+/// makes it non-empty, so every pool built after the first one takes this same
+/// branch and leaves it alone.
+fn use_all_cpus_unless_told_otherwise() -> Result<()> {
+	let chosen = get_config_option("GDAL_NUM_THREADS", "")?;
+	if chosen.is_empty() {
+		set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
+		log::trace!("GDAL_NUM_THREADS set to ALL_CPUS");
+	} else {
+		log::trace!("GDAL_NUM_THREADS left at {chosen}, which was chosen before this pool was built");
+	}
+	Ok(())
+}
 
 /// Manager for deadpool that creates and recycles GDAL dataset instances
 struct GdalManager {
@@ -83,8 +113,7 @@ impl GdalPool {
 		reuse_limit: u32,
 		concurrency_limit: usize,
 	) -> Result<(GdalPool, Dataset)> {
-		set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
-		log::trace!("GDAL_NUM_THREADS set to ALL_CPUS");
+		use_all_cpus_unless_told_otherwise()?;
 
 		// Open one dataset to probe metadata
 		let dataset = (open_dataset)()?;
@@ -187,5 +216,38 @@ impl Deref for PooledInstance {
 	type Target = Instance;
 	fn deref(&self) -> &Instance {
 		&self.0
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use gdal::config::clear_config_option;
+
+	use super::*;
+
+	/// A thread count the caller chose survives pool construction, and the
+	/// default is still applied when nobody chose one.
+	///
+	/// Both halves are one test because they mutate one process-global option:
+	/// as two tests they would race each other. They are safe against the rest
+	/// of the suite either way — a pool built concurrently either sees a value
+	/// and leaves it, or sets the same `ALL_CPUS` this asserts.
+	#[test]
+	fn a_thread_count_the_caller_chose_is_left_alone() {
+		set_config_option("GDAL_NUM_THREADS", "2").unwrap();
+		use_all_cpus_unless_told_otherwise().unwrap();
+		assert_eq!(
+			get_config_option("GDAL_NUM_THREADS", "").unwrap(),
+			"2",
+			"the pool overruled a thread count the caller had chosen"
+		);
+
+		clear_config_option("GDAL_NUM_THREADS").unwrap();
+		use_all_cpus_unless_told_otherwise().unwrap();
+		assert_eq!(
+			get_config_option("GDAL_NUM_THREADS", "").unwrap(),
+			"ALL_CPUS",
+			"with nothing chosen, the pool should still ask for every core"
+		);
 	}
 }
