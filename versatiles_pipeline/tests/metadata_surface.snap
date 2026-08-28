@@ -60,7 +60,7 @@ from_gdal_dem.level_min: Option<ZoomLevel> | optional | bounds=[0,30] int
 from_gdal_dem.gdal_reuse_limit: Option<u32> | optional | default=100 | bounds=[0,4294967295] int
 from_gdal_dem.gdal_concurrency_limit: Option<u8> | optional | default=4 | bounds=[0,255] int
 from_gdal_dem.cutline: Option<String> | optional
-from_gdal_dem.crs: Option<u32> | optional | bounds=[0,4294967295] int
+from_gdal_dem.crs: Option<EpsgCode> | optional | bounds=[1024,32766] int
 from_gdal_dem.bounds: Option<String> | optional
 from_gdal_dem.geo_transform: Option<String> | optional
 
@@ -75,7 +75,7 @@ from_gdal_raster.tile_format: Option<RasterTileFormat> | optional | default=png 
 from_gdal_raster.cutline: Option<String> | optional
 from_gdal_raster.bands: Option<String> | optional
 from_gdal_raster.nodata: Option<String> | optional
-from_gdal_raster.crs: Option<u32> | optional | bounds=[0,4294967295] int
+from_gdal_raster.crs: Option<EpsgCode> | optional | bounds=[1024,32766] int
 from_gdal_raster.bounds: Option<String> | optional
 from_gdal_raster.geo_transform: Option<String> | optional
 
@@ -98,7 +98,7 @@ from_geo.max_tile_bytes: Option<MaxTileBytes> | optional | default=1048576
 from_geo.ignore_id: Option<bool> | optional | default=false
 
 from_grid [read]
-from_grid.epsg: u32 | required | bounds=[0,4294967295] int
+from_grid.epsg: EpsgCode | required | bounds=[1024,32766] int
 from_grid.size: f64 | required | bounds=(-inf,inf) float
 from_grid.bbox: GeoBBox | required
 from_grid.offset: Option<[f64;2]> | optional | default=[0,0]

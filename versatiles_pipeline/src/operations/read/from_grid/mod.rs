@@ -59,8 +59,8 @@ use async_trait::async_trait;
 use geo_types::{Coord, Geometry, LineString, Polygon, coord};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{
-	GeoBBox, MAX_ZOOM_LEVEL, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream,
-	WORLD_SIZE,
+	EpsgCode, GeoBBox, MAX_ZOOM_LEVEL, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid,
+	TileStream, WORLD_SIZE,
 };
 use versatiles_derive::context;
 use versatiles_geometry::{
@@ -147,7 +147,7 @@ const TILE_PIXELS: f64 = 256.0;
 /// inside that tile, so it is not something to measure areas from.
 struct Args {
 	/// EPSG code of the grid's coordinate reference system.
-	epsg: u32,
+	epsg: EpsgCode,
 
 	/// Edge length of a cell, in the CRS's units — meters, or degrees for `epsg=4326`.
 	size: f64,
@@ -226,7 +226,10 @@ impl Debug for Operation {
 impl Operation {
 	#[context("Failed to build from_grid operation")]
 	fn from_args(args: Args) -> Result<Self> {
-		let projection = projection::for_epsg(args.epsg)?;
+		// Out of the type and into the `u32` the projection libraries take; the
+		// code's shape is checked where it is parsed.
+		let epsg = args.epsg.code();
+		let projection = projection::for_epsg(epsg)?;
 		ensure!(args.size > 0.0 && args.size.is_finite(), "size must be positive");
 
 		let offset = args.offset.unwrap_or([0.0, 0.0]);
@@ -237,7 +240,7 @@ impl Operation {
 
 		let id_template = IdTemplate::parse(
 			args.id_template.as_deref().unwrap_or(DEFAULT_ID_TEMPLATE),
-			args.epsg,
+			epsg,
 			args.size,
 		)?;
 		id_template.validate_for(args.size, offset)?;
@@ -252,7 +255,7 @@ impl Operation {
 			cell_mercator.is_finite() && cell_mercator > 0.0,
 			"a cell of {} units in EPSG:{} does not project into web mercator — check size and epsg",
 			args.size,
-			args.epsg
+			epsg
 		);
 
 		let min_zoom = min_zoom_for_cell_size(cell_mercator, max_cells_per_tile);
@@ -268,7 +271,7 @@ impl Operation {
 		log::info!(
 			"from_grid: EPSG:{} cells of {} units (~{} m in mercator) cover zoom {min_zoom}..={max_zoom} inside the bbox, \
 			 ids like '{}'; restrict a conversion with --max-zoom",
-			args.epsg,
+			epsg,
 			args.size,
 			cell_mercator.round(),
 			{
@@ -668,7 +671,7 @@ mod tests {
 
 	fn args(epsg: u32, size: f64) -> Args {
 		Args {
-			epsg,
+			epsg: EpsgCode::new(epsg).unwrap(),
 			size,
 			bbox: GeoBBox::new(5.8, 47.2, 15.1, 55.1).unwrap(),
 			offset: None,

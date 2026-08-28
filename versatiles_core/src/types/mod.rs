@@ -116,6 +116,9 @@ pub use tile_size::*;
 mod bounds;
 pub use bounds::*;
 
+mod epsg_code;
+pub use epsg_code::*;
+
 mod zoom_level;
 pub use zoom_level::*;
 

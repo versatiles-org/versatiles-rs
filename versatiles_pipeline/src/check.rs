@@ -100,10 +100,15 @@ impl PipelineFactory {
 	/// What it decides about a parameter is its *shape*: how many values it
 	/// takes, whether each one parses as the field's numeric type, and — for
 	/// types with a `TryFrom<&str>` parser — whether that parser accepts it.
-	/// Meaning the Rust type does not carry is out of reach: `epsg=99999` is a
-	/// perfectly good `u32` and not an EPSG code. Closing that means giving the
-	/// field a type that parses (#257), the way `color` is a `HexColor` rather
-	/// than a `String` — not giving `check` a second opinion about values.
+	/// Meaning the Rust type does not carry is out of reach. Closing that means
+	/// giving the field a type that parses (#257, #260), the way `color` is a
+	/// `HexColor` rather than a `String` and `crs` is an `EpsgCode` rather than
+	/// a `u32` — not giving `check` a second opinion about values.
+	///
+	/// A type reaches as far as its own parser and no further. `EpsgCode` knows
+	/// the register's range, so `epsg=99999` is refused here; whether `epsg=9999`
+	/// names a real CRS is a question for `proj.db`, which means I/O, which this
+	/// does not do.
 	///
 	/// So an empty result means nothing is wrong *with the pipeline* — building
 	/// it can still fail because a file is missing, or because a value has the
@@ -351,8 +356,8 @@ mod tests {
 	}
 
 	/// The shape of a value is decidable from the metadata even where its
-	/// meaning is not: `epsg` is checked as a number without anyone claiming to
-	/// know which numbers are EPSG codes.
+	/// meaning is not: `bbox_border` is checked as a number without anyone
+	/// claiming to know which borders are sensible.
 	#[test]
 	fn a_value_that_is_not_a_number_is_reported() {
 		assert_eq!(
@@ -665,14 +670,29 @@ mod tests {
 		}
 	}
 
-	/// Still open, and the reason `epsg` is left alone: `u32` is the whole of
-	/// what the type knows, and "parses as `u32`" is all `check` can say
-	/// without a registry to check against.
+	/// The gap this test used to hold open, closed — and the one still left.
+	///
+	/// `epsg` was the example of a meaning no type carried; it is an `EpsgCode`
+	/// now, so a code outside the register is refused without building anything
+	/// (#260). How far that reaches is the type's range and no further: `9999`
+	/// is inside the register's range and is not a CRS, and only `proj.db` knows
+	/// that — which is I/O, which `check` does not do.
 	#[test]
-	fn meaning_the_type_does_not_carry_is_not_checked() {
-		assert!(
-			problems("from_grid epsg=99999 size=1 bbox=[0,0,1,1]").is_empty(),
-			"if this starts failing, `epsg` grew a type that parses and the docs should say so"
+	fn a_code_outside_the_epsg_register_is_reported() {
+		assert_eq!(
+			problems("from_grid epsg=99999 size=1 bbox=[0,0,1,1]"),
+			["'from_grid' does not accept 'epsg=99999': EPSG codes run from 1024 to 32766, so 99999 is not one"]
 		);
+		assert_eq!(
+			problems("from_gdal_raster filename=a.tif crs=0"),
+			["'from_gdal_raster' does not accept 'crs=0': EPSG codes run from 1024 to 32766, so 0 is not one"]
+		);
+		for vpl in [
+			"from_grid epsg=3035 size=1 bbox=[0,0,1,1]",
+			// In range, not in the register: shallower than GDAL, on purpose.
+			"from_grid epsg=9999 size=1 bbox=[0,0,1,1]",
+		] {
+			assert!(problems(vpl).is_empty(), "check rejected {vpl:?}: {:?}", problems(vpl));
+		}
 	}
 }

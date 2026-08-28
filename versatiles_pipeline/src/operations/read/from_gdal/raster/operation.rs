@@ -12,7 +12,7 @@ use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
 use versatiles_core::{
-	TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileSize, TileStream, ZoomLevel,
+	EpsgCode, TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileSize, TileStream, ZoomLevel,
 };
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitInfo;
@@ -86,7 +86,7 @@ struct Args {
 	/// Pixel values to render as transparent. Defaults to the dataset's own.
 	nodata: Option<String>,
 	/// EPSG code to read the dataset with. Defaults to the dataset's own.
-	crs: Option<u32>,
+	crs: Option<EpsgCode>,
 	/// Extent as `west,south,east,north` in the units of `crs`. Defaults to the dataset's own.
 	bounds: Option<String>,
 	/// The six GDAL geotransform coefficients. Defaults to the dataset's own.
@@ -153,21 +153,12 @@ impl Operation {
 			.transpose()
 			.context("Failed to parse band indices")?;
 
-		let nodata: Option<Vec<Vec<f64>>> = args
-			.nodata
-			.as_ref()
-			.map(|s| {
-				s.split(';')
-					.map(|group| {
-						group
-							.split(',')
-							.map(|v| v.trim().parse::<f64>())
-							.collect::<std::result::Result<Vec<_>, _>>()
-					})
-					.collect::<std::result::Result<Vec<_>, _>>()
-			})
-			.transpose()
-			.context("Failed to parse nodata values")?;
+		let nodata = parse_nodata(args.nodata.as_deref())?;
+		let georeference = GeoreferenceOverride::parse(
+			args.crs.map(EpsgCode::code),
+			args.bounds.as_deref(),
+			args.geo_transform.as_deref(),
+		)?;
 
 		log::trace!("Resolved filename: {filename:?}");
 		let source = RasterSource::new(
@@ -177,7 +168,7 @@ impl Operation {
 			cutline_path.as_deref(),
 			bands,
 			nodata,
-			GeoreferenceOverride::parse(args.crs, args.bounds.as_deref(), args.geo_transform.as_deref())?,
+			georeference,
 		)
 		.await?;
 		let mut bbox = *source.bbox();
@@ -362,6 +353,25 @@ impl TileSource for Operation {
 			Some(())
 		}))
 	}
+}
+
+/// Parses the `nodata` argument: groups separated by `;`, values within a group
+/// by `,` — one group per band, or one group for all of them.
+#[context("Failed to parse nodata values")]
+fn parse_nodata(text: Option<&str>) -> Result<Option<Vec<Vec<f64>>>> {
+	Ok(text
+		.map(|text| {
+			text
+				.split(';')
+				.map(|group| {
+					group
+						.split(',')
+						.map(|value| value.trim().parse::<f64>())
+						.collect::<std::result::Result<Vec<_>, _>>()
+				})
+				.collect::<std::result::Result<Vec<_>, _>>()
+		})
+		.transpose()?)
 }
 
 pub struct Factory {}

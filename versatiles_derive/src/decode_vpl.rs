@@ -322,6 +322,31 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 	// rather than a list, so there is nothing for a picker to offer or for the
 	// TS codegen to turn into a union. What the type buys is the range itself —
 	// `u8` advertises 0..=255 for something that means 0..=30 (#260).
+	// Shallower than the projection library on purpose — see `EpsgCode`. The
+	// register's range is what a form can offer; whether a code is in the
+	// register needs `proj.db`, and `check` performs no I/O.
+	TypeMapping {
+		pattern: "EpsgCode",
+		display_name: "EPSG code",
+		method_name: "property_enum_required",
+		is_required: true,
+		generic_param: Some("EpsgCode"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: true,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
+		pattern: "Option<EpsgCode>",
+		display_name: "EPSG code",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("EpsgCode"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: true,
+		parsed_from: ParsedFrom::Str,
+	},
 	TypeMapping {
 		pattern: "Option<ZoomLevel>",
 		display_name: "0-30",

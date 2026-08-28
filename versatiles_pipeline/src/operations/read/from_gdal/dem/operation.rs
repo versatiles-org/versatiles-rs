@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use versatiles_container::{DataLocation, SourceType, Tile, TileSource, TileSourceMetadata, TilesRuntime, Traversal};
 use versatiles_core::{
-	TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileSize, TileStream, ZoomLevel,
+	EpsgCode, TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileSchema, TileSize, TileStream, ZoomLevel,
 };
 use versatiles_derive::context;
 
@@ -68,7 +68,7 @@ struct Args {
 	/// GeoJSON polygon outside which pixels become nodata. Defaults to the whole dataset.
 	cutline: Option<String>,
 	/// EPSG code to read the dataset with. Defaults to the dataset's own.
-	crs: Option<u32>,
+	crs: Option<EpsgCode>,
 	/// Extent as `west,south,east,north` in the units of `crs`. Defaults to the dataset's own.
 	bounds: Option<String>,
 	/// The six GDAL geotransform coefficients. Defaults to the dataset's own.
@@ -122,7 +122,11 @@ impl Operation {
 			args.gdal_reuse_limit.unwrap_or(100),
 			args.gdal_concurrency_limit.unwrap_or(4) as usize,
 			cutline_path.as_deref(),
-			GeoreferenceOverride::parse(args.crs, args.bounds.as_deref(), args.geo_transform.as_deref())?,
+			GeoreferenceOverride::parse(
+				args.crs.map(EpsgCode::code),
+				args.bounds.as_deref(),
+				args.geo_transform.as_deref(),
+			)?,
 		)
 		.await?;
 		let mut bbox = *source.bbox();

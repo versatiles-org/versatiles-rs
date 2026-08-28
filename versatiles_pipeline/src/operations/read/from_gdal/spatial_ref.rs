@@ -65,6 +65,27 @@ mod tests {
 		Ok(())
 	}
 
+	/// `EpsgCode` is deliberately shallower than PROJ's register — it knows the
+	/// range, not the contents — but it must not be *narrower*: a code GDAL
+	/// resolves has to parse, or `check` would refuse a pipeline that builds.
+	#[test]
+	fn every_code_gdal_resolves_is_one_the_type_accepts() {
+		for code in [2000, 3035, 3068, 3785, 3857, 4326, 25832, 32766] {
+			assert!(get_spatial_ref(code).is_ok(), "EPSG:{code} should resolve");
+			assert!(
+				versatiles_core::EpsgCode::new(code).is_ok(),
+				"GDAL resolves EPSG:{code} and the type refuses it"
+			);
+		}
+
+		// The one documented exception. GDAL resolves the legacy Google spelling
+		// of web mercator; the register has no such code, so the type refuses it
+		// and the error names 3857 instead.
+		assert!(get_spatial_ref(900_913).is_ok(), "GDAL still resolves the legacy code");
+		let error = versatiles_core::EpsgCode::new(900_913).expect_err("not a register code");
+		assert!(error.to_string().contains("use 3857"), "{error}");
+	}
+
 	#[test]
 	fn invalid_epsg_yields_error() {
 		// 0 is not a valid EPSG code; expect an error
