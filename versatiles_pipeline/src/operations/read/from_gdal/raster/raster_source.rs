@@ -132,11 +132,8 @@ impl RasterSource {
 		georeference: GeoreferenceOverride,
 	) -> Result<RasterSource> {
 		let path = filename.to_path_buf();
-		let factory: Arc<dyn Fn() -> Result<gdal::Dataset> + Send + Sync + 'static> = Arc::new(move || {
-			let mut ds = gdal::Dataset::open(&path).with_context(|| format!("failed to open GDAL dataset: {path:?}"))?;
-			georeference.apply(&mut ds)?;
-			Ok(ds)
-		});
+		let factory: Arc<dyn Fn() -> Result<gdal::Dataset> + Send + Sync + 'static> =
+			Arc::new(move || georeference.open(&path));
 		Self::new_with_factory(
 			factory,
 			reuse_limit,
