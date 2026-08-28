@@ -94,8 +94,8 @@ Generates raster tiles of a single solid colour.
 
 ### Parameters
 
-- _`color`: HexColor (optional)_ - Hex colour, `RRGGBB` or `RRGGBBAA`. Defaults to `000000`.
-- _`tile_size`: u16 (optional)_ - Tile size in pixels, `256` or `512`. Defaults to `512`.
+- _`color`: RRGGBB | [r,g,b] (optional)_ - Hex colour, `RRGGBB` or `RRGGBBAA`. Defaults to `000000`.
+- _`tile_size`: TileSize (optional)_ - Values: `256`, `512`. Tile size in pixels. Defaults to `512`.
 - _`format`: RasterTileFormat (optional)_ - Values: `avif`, `jpg`, `png`, `webp`. Format to encode the tiles in. Defaults to `png`.
 
 ---
@@ -110,8 +110,8 @@ Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*
 
 ### Parameters
 
-- **`filename`: String (required)** - Path to the container, or an `http`, `https` or `sftp` URL.
-- _`ssh_identity`: String (optional)_ - Private key for this one `sftp://` source. Defaults to the global setting.
+- **`filename`: path or URL (required)** - Path to the container, or an `http`, `https` or `sftp` URL.
+- _`ssh_identity`: path (optional)_ - Private key for this one `sftp://` source. Defaults to the global setting.
 
 ---
 
@@ -129,15 +129,15 @@ A tile over `max_tile_bytes` is dropped while streaming and an error when a sing
 
 ### Parameters
 
-- **`filename`: String (required)** - Path to the CSV file.
+- **`filename`: path (required)** - Path to the CSV file.
 - **`lon_column`: String (required)** - Column holding the longitude, in WGS84 degrees.
 - **`lat_column`: String (required)** - Column holding the latitude, in WGS84 degrees.
 - _`id_column`: String (optional)_ - Column to expose as the feature id. Defaults to emitting no id.
 - _`delimiter`: ASCII char (optional)_ - Character separating a row's fields. Defaults to `,`.
 - _`has_header`: bool (optional)_ - Whether the first row holds column names; `false` is not supported yet. Defaults to `true`.
 - _`layer_name`: String (optional)_ - Name of the layer to write into. Defaults to the file's stem.
-- _`min_zoom`: u8 (optional)_ - Lowest zoom level to emit. Defaults to `0`.
-- _`max_zoom`: u8 (optional)_ - Highest zoom level to emit. Defaults to a heuristic capped at `14`.
+- _`min_zoom`: 0-30 (optional)_ - Lowest zoom level to emit. Defaults to `0`.
+- _`max_zoom`: 0-30 (optional)_ - Highest zoom level to emit. Defaults to a heuristic capped at `14`.
 - _`bbox`: [west,south,east,north] (optional)_ - Area to restrict the output to, in WGS84 degrees. Defaults to the input's extent.
 - _`properties_include`: [String,...] (optional)_ - Columns to keep as properties. Mutually exclusive with `properties_exclude`. Defaults to all.
 - _`properties_exclude`: [String,...] (optional)_ - Columns to drop. Mutually exclusive with `properties_include`. Defaults to none.
@@ -180,17 +180,17 @@ The two are mutually exclusive, and neither writes anything to the file on disk.
 
 ### Parameters
 
-- **`filename`: String (required)** - Path to the DEM dataset.
+- **`filename`: path (required)** - Path to the DEM dataset.
 - _`encoding`: DemEncoding (optional)_ - Values: `mapbox`, `terrarium`. How elevation is packed into the RGB channels. Defaults to `mapbox`.
-- _`tile_size`: u32 (optional)_ - Tile size in pixels. Defaults to `512`.
-- _`level_max`: u8 (optional)_ - Highest zoom level to generate. Defaults to the dataset's native resolution.
-- _`level_min`: u8 (optional)_ - Lowest zoom level to generate. Defaults to `level_max`.
+- _`tile_size`: TileSize (optional)_ - Values: `256`, `512`. Tile size in pixels. Defaults to `512`.
+- _`level_max`: 0-30 (optional)_ - Highest zoom level to generate. Defaults to the dataset's native resolution.
+- _`level_min`: 0-30 (optional)_ - Lowest zoom level to generate. Defaults to `level_max`.
 - _`gdal_reuse_limit`: u32 (optional)_ - How many tiles a GDAL instance renders before being replaced. Defaults to `100`.
 - _`gdal_concurrency_limit`: u8 (optional)_ - How many GDAL instances may run at once. Defaults to `4`.
-- _`cutline`: String (optional)_ - GeoJSON polygon outside which pixels become nodata. Defaults to the whole dataset.
-- _`crs`: u32 (optional)_ - EPSG code to read the dataset with. Defaults to the dataset's own.
-- _`bounds`: String (optional)_ - Extent as `west,south,east,north` in the units of `crs`. Defaults to the dataset's own.
-- _`geo_transform`: String (optional)_ - The six GDAL geotransform coefficients. Defaults to the dataset's own.
+- _`cutline`: path (optional)_ - GeoJSON polygon outside which pixels become nodata. Defaults to the whole dataset.
+- _`crs`: EPSG code (optional)_ - EPSG code to read the dataset with. Defaults to the dataset's own.
+- _`bounds`: west,south,east,north (optional)_ - Extent as `west,south,east,north` in the units of `crs`. Defaults to the dataset's own.
+- _`geo_transform`: 6 coefficients (optional)_ - The six GDAL geotransform coefficients. Defaults to the dataset's own.
 
 ---
 
@@ -218,19 +218,19 @@ The two are mutually exclusive, and neither writes anything to the file on disk.
 
 ### Parameters
 
-- **`filename`: String (required)** - Path to the raster dataset.
-- _`tile_size`: u32 (optional)_ - Tile size in pixels. Defaults to `512`.
-- _`level_max`: u8 (optional)_ - Highest zoom level to generate. Defaults to the dataset's native resolution.
-- _`level_min`: u8 (optional)_ - Lowest zoom level to generate. Defaults to `level_max`.
+- **`filename`: path (required)** - Path to the raster dataset.
+- _`tile_size`: TileSize (optional)_ - Values: `256`, `512`. Tile size in pixels. Defaults to `512`.
+- _`level_max`: 0-30 (optional)_ - Highest zoom level to generate. Defaults to the dataset's native resolution.
+- _`level_min`: 0-30 (optional)_ - Lowest zoom level to generate. Defaults to `level_max`.
 - _`gdal_reuse_limit`: u32 (optional)_ - How many tiles a GDAL instance renders before being replaced. Defaults to `100`.
 - _`gdal_concurrency_limit`: u8 (optional)_ - How many GDAL instances may run at once. Defaults to `4`.
 - _`tile_format`: RasterTileFormat (optional)_ - Values: `avif`, `jpg`, `png`, `webp`. Format to encode the tiles in. Defaults to `png`.
-- _`cutline`: String (optional)_ - GeoJSON polygon outside which pixels become transparent. Defaults to the whole dataset.
-- _`bands`: String (optional)_ - Band indices to read as colour channels, 1-based. Defaults to the colour interpretation.
-- _`nodata`: String (optional)_ - Pixel values to render as transparent. Defaults to the dataset's own.
-- _`crs`: u32 (optional)_ - EPSG code to read the dataset with. Defaults to the dataset's own.
-- _`bounds`: String (optional)_ - Extent as `west,south,east,north` in the units of `crs`. Defaults to the dataset's own.
-- _`geo_transform`: String (optional)_ - The six GDAL geotransform coefficients. Defaults to the dataset's own.
+- _`cutline`: path (optional)_ - GeoJSON polygon outside which pixels become transparent. Defaults to the whole dataset.
+- _`bands`: band indices (optional)_ - Band indices to read as colour channels, 1-based. Defaults to the colour interpretation.
+- _`nodata`: nodata values (optional)_ - Pixel values to render as transparent. Defaults to the dataset's own.
+- _`crs`: EPSG code (optional)_ - EPSG code to read the dataset with. Defaults to the dataset's own.
+- _`bounds`: west,south,east,north (optional)_ - Extent as `west,south,east,north` in the units of `crs`. Defaults to the dataset's own.
+- _`geo_transform`: 6 coefficients (optional)_ - The six GDAL geotransform coefficients. Defaults to the dataset's own.
 
 ---
 
@@ -260,10 +260,10 @@ A tile over `max_tile_bytes` is dropped while streaming and an error when a sing
 
 ### Parameters
 
-- **`filename`: String (required)** - Path to the input file; its format comes from the extension.
+- **`filename`: path (required)** - Path to the input file; its format comes from the extension.
 - _`layer_name`: String (optional)_ - Name of the layer to write into. Defaults to the file's stem.
-- _`min_zoom`: u8 (optional)_ - Lowest zoom level to emit. Defaults to `0`.
-- _`max_zoom`: u8 (optional)_ - Highest zoom level to emit. Defaults to a heuristic capped at `14`.
+- _`min_zoom`: 0-30 (optional)_ - Lowest zoom level to emit. Defaults to `0`.
+- _`max_zoom`: 0-30 (optional)_ - Highest zoom level to emit. Defaults to a heuristic capped at `14`.
 - _`bbox`: [west,south,east,north] (optional)_ - Area to restrict the output to, in WGS84 degrees. Defaults to the input's extent.
 - _`properties_include`: [String,...] (optional)_ - Properties to keep. Mutually exclusive with `properties_exclude`. Defaults to all.
 - _`properties_exclude`: [String,...] (optional)_ - Properties to drop. Mutually exclusive with `properties_include`. Defaults to none.
@@ -306,7 +306,7 @@ A cell reaching into several tiles is drawn in each of them, clipped to the tile
 
 ### Parameters
 
-- **`epsg`: u32 (required)** - EPSG code of the grid's coordinate reference system.
+- **`epsg`: EPSG code (required)** - EPSG code of the grid's coordinate reference system.
 - **`size`: f64 (required)** - Edge length of a cell, in the CRS's units — meters, or degrees for `epsg=4326`.
 - **`bbox`: [west,south,east,north] (required)** - Area to cover, in WGS84 degrees.
 - _`offset`: [f64,f64] (optional)_ - Lower-left corner of cell `(0, 0)`, in CRS units. Defaults to `[0,0]`.
@@ -336,7 +336,7 @@ A cell reaching into several tiles is drawn in each of them, clipped to the tile
 
 ### Parameters
 
-- **`resolution`: u8 (required)** - H3 resolution, `0` (coarsest) to `15` (finest).
+- **`resolution`: 0-15 (required)** - H3 resolution, `0` is coarsest and `15` finest.
 - _`max_cells_per_tile`: u32 (optional)_ - Roughly how many cells one tile may hold. Defaults to `1024`.
 - _`layer_name`: String (optional)_ - Name of the layer to write into. Defaults to `grid`.
 - _`id_field`: String (optional)_ - Property holding the H3 index. Defaults to `h3`.
@@ -390,7 +390,7 @@ Reads one tile file and returns it for every requested coordinate.
 
 ### Parameters
 
-- **`filename`: String (required)** - Path to the tile file; its format comes from the extension.
+- **`filename`: path (required)** - Path to the tile file; its format comes from the extension.
 
 ---
 
@@ -402,7 +402,7 @@ The TileJSON document is fetched once when the pipeline is built, and each tile 
 
 ### Parameters
 
-- **`url`: String (required)** - URL of the TileJSON endpoint.
+- **`url`: URL (required)** - URL of the TileJSON endpoint.
 - _`max_retries`: u16 (optional)_ - How often to retry a failed tile request. Defaults to `3`.
 - _`max_concurrent_requests`: u16 (optional)_ - How many tile requests may be in flight. Defaults to the I/O concurrency limit.
 
@@ -420,7 +420,7 @@ Generates lower-zoom DEM overview tiles by averaging 24-bit elevation values.
 
 ### Parameters
 
-- _`level`: u8 (optional)_ - Zoom level to build the overview from. Defaults to the source's highest.
+- _`level`: 0-30 (optional)_ - Zoom level to build the overview from. Defaults to the source's highest.
 - _`encoding`: DemEncoding (optional)_ - Values: `mapbox`, `terrarium`. DEM encoding of the source. Defaults to the encoding its tile schema implies.
 
 ---
@@ -449,7 +449,7 @@ The counterpart to `raster_tile_resize` for elevation data: downscaling averages
 
 ### Parameters
 
-- **`tile_size`: u32 (required)** - Target tile size in pixels, `256` or `512`, and it must differ from the source's.
+- **`tile_size`: TileSize (required)** - Values: `256`, `512`. Target tile size in pixels, which must differ from the source's.
 - _`encoding`: DemEncoding (optional)_ - Values: `mapbox`, `terrarium`. DEM encoding of the source. Defaults to the encoding its tile schema implies.
 
 ---
@@ -468,9 +468,9 @@ That ring matters wherever a cropped tileset is rendered rather than just stored
 
 - _`bbox`: [west,south,east,north] (optional)_ - Area to keep, in WGS84 degrees. Defaults to the source's own bounds.
 - _`bbox_border`: u32 (optional)_ - Ring of extra tiles kept around `bbox`, per zoom level. Requires `bbox`. Defaults to `0`.
-- _`level_min`: u8 (optional)_ - Lowest zoom level to keep. Defaults to the source's lowest.
-- _`level_max`: u8 (optional)_ - Highest zoom level to keep. Defaults to the source's highest.
-- _`filename`: String (optional)_ - Tile container whose coordinates act as an allow-list. Defaults to no allow-list.
+- _`level_min`: 0-30 (optional)_ - Lowest zoom level to keep. Defaults to the source's lowest.
+- _`level_max`: 0-30 (optional)_ - Highest zoom level to keep. Defaults to the source's highest.
+- _`filename`: path or URL (optional)_ - Tile container whose coordinates act as an allow-list. Defaults to no allow-list.
 
 ---
 
@@ -490,18 +490,18 @@ The fields and their meaning follow the TileJSON 3.0.0 specification: <https://g
 
 - _`attribution`: String (optional)_ - Attribution text. Defaults to the source's.
 - _`bounds`: [west,south,east,north] (optional)_ - Area covered, in WGS84 degrees. Defaults to the source's.
-- _`center`: [f64,f64,f64] (optional)_ - Where a client should open the map, as `[lon, lat, zoom]`. Defaults to the source's.
+- _`center`: [lon,lat,zoom] (optional)_ - Where a client should open the map, as `[lon, lat, zoom]`. Defaults to the source's.
 - _`description`: String (optional)_ - Description text. Defaults to the source's.
-- _`fillzoom`: u8 (optional)_ - Zoom level from which clients should fill from the parent tile. Defaults to the source's.
+- _`fillzoom`: 0-30 (optional)_ - Zoom level from which clients should fill from the parent tile. Defaults to the source's.
 - _`legend`: String (optional)_ - Legend text. Defaults to the source's.
 - _`name`: String (optional)_ - Name of the tileset. Defaults to the source's.
 - _`schema`: TileSchema (optional)_ - Values: `rgb`, `rgba`, `dem/mapbox`, `dem/terrarium`, `dem/versatiles`, `openmaptiles`, `shortbread@1.0`, `other`. What the tiles contain. Defaults to the source's.
-- _`tilejson`: String (optional)_ - Complete TileJSON document, as a JSON string. Defaults to the source's metadata.
-- _`tilejson_file`: String (optional)_ - Path to a file holding a complete TileJSON document. Defaults to the source's metadata.
-- _`tilejson_update`: String (optional)_ - Partial TileJSON document to merge on, as a JSON string. Defaults to merging nothing.
-- _`tilejson_update_file`: String (optional)_ - Path to a file holding a partial TileJSON document. Defaults to merging nothing.
-- _`vector_layers`: String (optional)_ - The `vector_layers` array as a JSON string. Defaults to the source's.
-- _`vector_layers_file`: String (optional)_ - Path to a file holding the `vector_layers` array as JSON. Defaults to the source's.
+- _`tilejson`: TileJSON as JSON (optional)_ - Complete TileJSON document, as a JSON string. Defaults to the source's metadata.
+- _`tilejson_file`: path (optional)_ - Path to a file holding a complete TileJSON document. Defaults to the source's metadata.
+- _`tilejson_update`: TileJSON as JSON (optional)_ - Partial TileJSON document to merge on, as a JSON string. Defaults to merging nothing.
+- _`tilejson_update_file`: path (optional)_ - Path to a file holding a partial TileJSON document. Defaults to merging nothing.
+- _`vector_layers`: vector_layers as JSON (optional)_ - The `vector_layers` array as a JSON string. Defaults to the source's.
+- _`vector_layers_file`: path (optional)_ - Path to a file holding the `vector_layers` array as JSON. Defaults to the source's.
 
 ---
 
@@ -511,7 +511,7 @@ Composites translucent raster tiles onto an opaque background colour.
 
 ### Parameters
 
-- _`color`: [u8,u8,u8] (optional)_ - Background colour, as `[r, g, b]`. Defaults to white.
+- _`color`: RRGGBB | [r,g,b] (optional)_ - Background colour, as `RRGGBB` or `[r,g,b]`. Defaults to `FFFFFF`.
 
 ---
 
@@ -528,7 +528,7 @@ Re-encodes raster tiles into another image format, quality or effort setting.
 - _`format`: RasterTileFormat (optional)_ - Values: `avif`, `jpg`, `png`, `webp`. Format to encode the tiles into. Defaults to the source's.
 - _`quality`: u8 | zoom:u8,... (optional)_ - Encoder quality, `0` (worst) to `100` (lossless). Defaults to the encoder's own.
 - _`quality_translucent`: u8 | zoom:u8,... (optional)_ - Encoder quality for tiles with translucent pixels. Defaults to using `quality` throughout.
-- _`effort`: u8 (optional)_ - Encoder effort, `0` (fastest) to `100` (smallest). Defaults to the encoder's own.
+- _`effort`: 0-100 (optional)_ - Encoder effort, `0` is fastest and `100` smallest. Defaults to the encoder's own.
 
 ---
 
@@ -538,9 +538,9 @@ Adjusts the brightness, contrast and gamma of raster tiles.
 
 ### Parameters
 
-- _`brightness`: f32 (optional)_ - Offset added to every channel, `-255` to `255`. Defaults to `0.0`.
-- _`contrast`: f32 (optional)_ - Factor applied around mid-grey, above `0`. Defaults to `1.0`.
-- _`gamma`: f32 (optional)_ - Gamma exponent, above `0`. Defaults to `1.0`.
+- _`brightness`: -255..255 (optional)_ - Offset added to every channel. Defaults to `0.0`.
+- _`contrast`: above 0 (optional)_ - Factor applied around mid-grey. Defaults to `1.0`.
+- _`gamma`: above 0 (optional)_ - Gamma exponent. Defaults to `1.0`.
 
 ---
 
@@ -552,7 +552,7 @@ The mask is not reprojected: coordinates outside the WGS84 range are refused, as
 
 ### Parameters
 
-- **`geojson`: String (required)** - Path to a GeoJSON file holding a Polygon or MultiPolygon, in EPSG:4326 lon/lat degrees.
+- **`geojson`: path (required)** - Path to a GeoJSON file holding a Polygon or MultiPolygon, in EPSG:4326 lon/lat degrees.
 - _`buffer`: f32 (optional)_ - Distance in meters by which to grow the mask, or shrink it when negative. Defaults to `0`.
 - _`blur`: f32 (optional)_ - Width in meters of the soft transition at the mask edge. Defaults to `0`.
 - _`blur_function`: BlurFunction (optional)_ - Values: `linear`, `cosine`. Falloff curve across the `blur` band. Defaults to `linear`.
@@ -567,8 +567,8 @@ Tiles at `level_base` and below are passed through unchanged; above it, the cove
 
 ### Parameters
 
-- _`level_base`: u8 (optional)_ - Zoom level to upscale from. Defaults to the source's highest.
-- _`level_max`: u8 (optional)_ - Highest zoom level to serve. Defaults to `30`.
+- _`level_base`: 0-30 (optional)_ - Zoom level to upscale from. Defaults to the source's highest.
+- _`level_max`: 0-30 (optional)_ - Highest zoom level to serve. Defaults to `30`.
 - _`enable_climbing`: bool (optional)_ - Whether to climb to lower levels when the `level_base` tile is missing. Defaults to `false`.
 
 ---
@@ -579,7 +579,7 @@ Generates the lower zoom levels of a raster pyramid by downscaling.
 
 ### Parameters
 
-- _`level`: u8 (optional)_ - Zoom level to build the overview from. Defaults to the source's highest.
+- _`level`: 0-30 (optional)_ - Zoom level to build the overview from. Defaults to the source's highest.
 
 ---
 
@@ -591,7 +591,7 @@ Changing the tile size shifts the zoom levels with it, because the ground resolu
 
 ### Parameters
 
-- **`tile_size`: u32 (required)** - Target tile size in pixels, `256` or `512`, and it must differ from the source's.
+- **`tile_size`: TileSize (required)** - Values: `256`, `512`. Target tile size in pixels, which must differ from the source's.
 
 ---
 
@@ -679,7 +679,7 @@ The [CEL language spec](https://github.com/google/cel-spec/blob/master/doc/langd
 ### Parameters
 
 - **`layer`: [String,...] (required)** - Layers the expression applies to, for example `layer=["poi","place"]`.
-- **`expr`: String (required)** - Boolean CEL expression over the feature's properties.
+- **`expr`: CEL expression (required)** - Boolean CEL expression over the feature's properties.
 
 ---
 
@@ -702,7 +702,7 @@ A property's name is matched with its layer as a prefix, in the form `layer_name
 
 ### Parameters
 
-- **`regex`: String (required)** - Regular expression matched against each property's prefixed name.
+- **`regex`: regex (required)** - Regular expression matched against each property's prefixed name.
 - _`invert`: bool (optional)_ - Whether to keep the matching properties instead of removing them. Defaults to `false`.
 
 ---
@@ -717,8 +717,8 @@ Tiles at `level_base` and below are passed through unchanged; above it, the cove
 
 ### Parameters
 
-- _`level_base`: u8 (optional)_ - Zoom level to overzoom from. Defaults to the source's highest.
-- _`level_max`: u8 (optional)_ - Highest zoom level to serve, capped at `30`. Defaults to `level_base + 4`.
+- _`level_base`: 0-30 (optional)_ - Zoom level to overzoom from. Defaults to the source's highest.
+- _`level_max`: 0-30 (optional)_ - Highest zoom level to serve, capped at `30`. Defaults to `level_base + 4`.
 - _`enable_climbing`: bool (optional)_ - Whether to climb to lower levels when the `level_base` tile is missing. Defaults to `false`.
 - _`buffer`: u32 (optional)_ - Clip buffer in tile-extent units, so edge-straddling features survive. Defaults to `80`.
 
@@ -755,7 +755,7 @@ Each row of a CSV or TSV file is matched to the features whose `id_field_tiles` 
 
 ### Parameters
 
-- **`data_source_path`: String (required)** - Path to the CSV or TSV file, which must have a header row.
+- **`data_source_path`: path (required)** - Path to the CSV or TSV file, which must have a header row.
 - **`layer_name`: String (required)** - Name of the layer whose features are updated.
 - **`id_field_tiles`: String (required)** - Feature property holding the id to match on.
 - **`id_field_data`: String (required)** - Column in the data file holding the id to match on.
