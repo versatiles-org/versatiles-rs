@@ -264,6 +264,12 @@ fn parse_geo_transform(text: &str) -> Result<GeoTransform> {
 mod tests {
 	use super::*;
 
+	/// A PNG whose CRS can only live in a `.aux.xml` sidecar, because the
+	/// format cannot carry one itself. Its extent comes from the world file
+	/// beside it; delete the sidecar and the extent survives while the CRS does
+	/// not, which is the shape of the dataset #261 was reported for.
+	const SIDECAR: &str = "../testdata/sidecar_georeferenced.png";
+
 	#[test]
 	fn bounds_and_geo_transform_are_mutually_exclusive() {
 		let error = GeoreferenceOverride::parse(None, Some("0,0,1,1"), Some("0,1,0,1,0,-1"))
@@ -301,7 +307,8 @@ mod tests {
 	///
 	/// GDAL persists metadata written to a read-only dataset into a `.aux.xml`
 	/// sidecar, which then overrides that file's georeferencing for every other
-	/// tool. Without `disable_pam` this test finds one next to `gradient.tif`.
+	/// tool. Without [`PamSuppressed`] this test finds one next to
+	/// `gradient.tif`, which is how it earns its keep.
 	#[test]
 	fn applying_an_override_writes_no_sidecar() {
 		let source = std::path::Path::new("../testdata/gradient.tif");
@@ -325,6 +332,46 @@ mod tests {
 			sidecar.display()
 		);
 		assert_eq!(before, std::fs::read(source).unwrap(), "the source file is unchanged");
+	}
+
+	/// The regression #261 was filed for: 4.11 switched PAM off for every
+	/// dataset the pool opened, and PAM is how GDAL *reads* a `.aux.xml`
+	/// sidecar as well as how it writes one. A dataset with nothing to
+	/// override must be opened with GDAL's sidecar handling left alone.
+	#[test]
+	fn a_dataset_with_no_override_keeps_its_sidecar() {
+		let dataset = GeoreferenceOverride::default()
+			.open(Path::new(SIDECAR))
+			.expect("the fixture opens");
+
+		let srs = dataset
+			.spatial_ref()
+			.expect("the CRS is in the sidecar, so opening must not disable PAM");
+		assert_eq!(srs.auth_code().unwrap(), 4326);
+	}
+
+	/// The blast radius the same issue demonstrated: because the option used to
+	/// be process-global and latched behind a `Once`, one overridden raster
+	/// stopped *every* later dataset in the process from seeing its sidecar —
+	/// including datasets opened by code with no connection to VersaTiles.
+	///
+	/// Both halves run on this thread, in this order, so the assertion below
+	/// fails if the suppression outlives the open it was needed for.
+	#[test]
+	fn an_override_does_not_hide_another_datasets_sidecar() {
+		let overridden = GeoreferenceOverride::parse(Some(25832), None, None)
+			.unwrap()
+			.open(Path::new("../testdata/gradient.tif"))
+			.unwrap();
+		assert_eq!(overridden.spatial_ref().unwrap().auth_code().unwrap(), 25832);
+		drop(overridden);
+
+		let untouched = Dataset::open(Path::new(SIDECAR)).unwrap();
+		assert_eq!(
+			untouched.spatial_ref().map(|srs| srs.auth_code().unwrap()).ok(),
+			Some(4326),
+			"overriding one dataset must not change how GDAL reads another"
+		);
 	}
 
 	/// `bounds` is shorthand for a north-up geotransform derived from the

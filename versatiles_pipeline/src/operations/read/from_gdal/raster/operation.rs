@@ -494,6 +494,32 @@ mod tests {
 		Ok(())
 	}
 
+	/// End to end for #261: a PNG carries no CRS of its own, so `gdal_translate
+	/// -a_srs` puts one in a `.aux.xml` sidecar and a world file supplies the
+	/// extent. 4.11 disabled GDAL's sidecar reading for every dataset it
+	/// opened, so this pipeline failed with "GDAL dataset must have a spatial
+	/// reference (SRS) defined" on a file `gdalinfo` reads without complaint.
+	#[tokio::test(flavor = "multi_thread")]
+	async fn a_raster_georeferenced_by_a_sidecar_opens() -> Result<()> {
+		let operation = PipelineFactory::new_dummy()
+			.operation_from_vpl(
+				"from_gdal_raster filename=\"../testdata/sidecar_georeferenced.png\" level_min=\"0\" level_max=\"2\"",
+			)
+			.await?;
+
+		let bounds = operation.tilejson().bounds.expect("bounds come from the sidecar's CRS");
+		let [west, south, east, north] = bounds.as_array();
+		assert!(
+			(4.99..5.01).contains(&west) && (44.99..45.01).contains(&south),
+			"south-west corner should sit at 5,45, got {bounds:?}"
+		);
+		assert!(
+			(14.99..15.01).contains(&east) && (49.99..50.01).contains(&north),
+			"north-east corner should sit at 15,50, got {bounds:?}"
+		);
+		Ok(())
+	}
+
 	/// End to end: `bounds` relocates the raster, so the pyramid the operation
 	/// reports follows it. `gradient.tif` is a whole-world EPSG:4326 raster;
 	/// placing it in a 10°×10° box near the origin must move the tilejson bounds.
