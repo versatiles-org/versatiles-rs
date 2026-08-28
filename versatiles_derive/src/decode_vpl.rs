@@ -35,6 +35,17 @@ struct TypeMapping {
 	/// happens to route through — tying the two together is what left every
 	/// `property_string_*` and `property_number_*` field unchecked (#257).
 	parsed_from: ParsedFrom,
+	/// True if `generic_param` names a type exposing `fn bounds() -> Bounds`.
+	///
+	/// The describing half of a range, and the counterpart of `is_enum`: a
+	/// closed set is described by its `variants()`, a range by its `bounds()`.
+	/// Emitted into `VPLFieldMeta::bounds` so a form can offer a spinner or a
+	/// slider before anyone types, which `validate` — a predicate — cannot say
+	/// (#260).
+	///
+	/// A field with no such type falls back to the range of its Rust number
+	/// type, so `Option<u8>` still describes itself as `0..=255` whole numbers.
+	has_bounds: bool,
 }
 
 /// How a type's own parser takes the values written for a field.
@@ -66,6 +77,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
@@ -76,6 +88,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Bool,
 	},
 	TypeMapping {
@@ -86,6 +99,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u8"),
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
@@ -96,6 +110,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u32"),
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
@@ -106,6 +121,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f64"),
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
@@ -119,6 +135,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		// as the optional ones do.
 		generic_param2: Some("4"),
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
@@ -129,6 +146,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	// Optional types
@@ -140,6 +158,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Bool,
 	},
 	TypeMapping {
@@ -150,6 +169,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
@@ -160,6 +180,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f32"),
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
@@ -170,6 +191,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u8"),
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
@@ -180,6 +202,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u16"),
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
@@ -190,6 +213,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u32"),
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
@@ -200,6 +224,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f64"),
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
@@ -210,6 +235,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f64"),
 		generic_param2: Some("3"),
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
@@ -220,6 +246,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f64"),
 		generic_param2: Some("2"),
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
@@ -230,6 +257,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("f64"),
 		generic_param2: Some("4"),
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
@@ -240,6 +268,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("u8"),
 		generic_param2: Some("3"),
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
@@ -250,6 +279,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: None,
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Nothing,
 	},
 	TypeMapping {
@@ -260,6 +290,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("TileCompression"),
 		generic_param2: None,
 		is_enum: true,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
 	// A closed set of two, so it carries `variants()` like the string enums: a
@@ -273,6 +304,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("TileSize"),
 		generic_param2: None,
 		is_enum: true,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
@@ -283,6 +315,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("TileSize"),
 		generic_param2: None,
 		is_enum: true,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
 	// Parsed but not enumerated, like `MaxTileBytes`: 31 levels is a range
@@ -297,6 +330,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("ZoomLevel"),
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: true,
 		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
@@ -307,6 +341,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("TileSchema"),
 		generic_param2: None,
 		is_enum: true,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
@@ -317,6 +352,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("TileFormat"),
 		generic_param2: None,
 		is_enum: true,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
@@ -327,6 +363,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("PointReductionStrategy"),
 		generic_param2: None,
 		is_enum: true,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
 	// Judged as a group rather than one value at a time: the count, the numbers
@@ -340,6 +377,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("GeoBBox"),
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Values,
 	},
 	TypeMapping {
@@ -350,6 +388,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("GeoBBox"),
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Values,
 	},
 	TypeMapping {
@@ -360,6 +399,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("QualityByZoom"),
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
@@ -370,6 +410,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("CsvDelimiter"),
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
@@ -380,6 +421,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("SeparatorChar"),
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
 	// Like `MaxTileBytes`, parsed but not enumerated: every `RRGGBB` is a
@@ -395,6 +437,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("HexColor"),
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Values,
 	},
 	// Parsed via `TryFrom<&str>` like the string enums above, but its accepted
@@ -409,6 +452,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("MaxTileBytes"),
 		generic_param2: None,
 		is_enum: false,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
@@ -419,6 +463,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("BlurFunction"),
 		generic_param2: None,
 		is_enum: true,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
@@ -429,6 +474,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("DebugTileFormat"),
 		generic_param2: None,
 		is_enum: true,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
@@ -439,6 +485,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("DemEncoding"),
 		generic_param2: None,
 		is_enum: true,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
 	TypeMapping {
@@ -449,6 +496,7 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		generic_param: Some("RasterTileFormat"),
 		generic_param2: None,
 		is_enum: true,
+		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
 ];
@@ -687,6 +735,10 @@ struct FieldMeta {
 	/// How many values the accessor takes: `Some(1)` for a scalar, `Some(N)` for
 	/// a fixed-size array, `None` for a list that takes any number.
 	arity: Option<usize>,
+	/// `Some(T)` when the field's own type describes its range through
+	/// `fn bounds() -> Bounds`; `None` when it does not, in which case a scalar
+	/// number falls back to the range of `number_type`.
+	bounds_type: Option<&'static str>,
 	/// The `#[vpl(default = "…")]` attribute, verbatim, or `None`.
 	default: Option<String>,
 }
@@ -742,6 +794,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 			// no count to hold them to. `check_sources` handles them instead.
 			number_type: None,
 			arity: None,
+			bounds_type: None,
 			default: None,
 		};
 		return Ok((field_str, ProcessedField::Sources { doc, parser }, meta));
@@ -802,6 +855,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 		parsed_from: mapping.parsed_from,
 		number_type,
 		arity,
+		bounds_type: mapping.has_bounds.then_some(mapping.generic_param).flatten(),
 		default,
 	};
 
@@ -977,6 +1031,22 @@ fn field_meta_expr(m: &FieldMeta) -> TokenStream {
 	} else {
 		quote! { Vec::new() }
 	};
+	// The describing half of a range, beside `variants()` above. A type that
+	// owns its range answers for itself; a plain number falls back to what its
+	// Rust type accepts, which is still worth saying — `Option<u8>` is whole
+	// numbers from 0 to 255, and a form can step it by one.
+	let bounds_expr: TokenStream = match (m.bounds_type, m.arity, m.number_type) {
+		(Some(bounds_ty), _, _) => {
+			let ty = format_ident!("{}", bounds_ty);
+			quote! { Some(#ty::bounds()) }
+		}
+		(None, Some(1), Some(number_ty)) => {
+			let ty = format_ident!("{}", number_ty);
+			quote! { Some(<#ty as crate::vpl::NumberBounds>::BOUNDS) }
+		}
+		// An array's bound would be per element, and nothing consumes that yet.
+		_ => quote! { None },
+	};
 	let value_check = value_check_expr(m);
 	let arity_check: TokenStream = match m.arity {
 		Some(1) => quote! {
@@ -1028,6 +1098,7 @@ fn field_meta_expr(m: &FieldMeta) -> TokenStream {
 			is_sources: #is_sources,
 			doc: #fdoc.to_string(),
 			enum_variants: #variants_expr,
+			bounds: #bounds_expr,
 			validate: #validate_expr,
 			default: #default_expr,
 		}

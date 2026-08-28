@@ -1,3 +1,5 @@
+use versatiles_core::Bounds;
+
 /// Everything wrong with the values written for one parameter, or an empty
 /// vector when they are fine.
 ///
@@ -34,6 +36,20 @@ pub struct VPLFieldMeta {
 	/// reference and the TypeScript unions render. It is not the accepted set —
 	/// see [`validate`](Self::validate).
 	pub enum_variants: Vec<&'static str>,
+	/// What a numeric parameter accepts, for a form to render before anyone
+	/// types. `None` for everything that is not a number.
+	///
+	/// The describing half of a range, and the counterpart of `enum_variants`:
+	/// a closed set is described by its variants, a range by its bounds.
+	/// [`validate`](Self::validate) is the *checking* half and cannot stand in
+	/// for this — it is a predicate, so recovering a bound from it would mean
+	/// probing it with candidate values, which is plainly not the intent.
+	///
+	/// Sourced from the field's own type where it has one (`ZoomLevel` answers
+	/// `0..=30`), and from its Rust number type where it does not (`Option<u8>`
+	/// answers `0..=255`). Both come from the same place the parser does, so
+	/// what a form offers and what building accepts cannot drift (#260).
+	pub bounds: Option<Bounds>,
 	/// Everything wrong with the values written for this parameter, or an empty
 	/// vector when they are fine.
 	///

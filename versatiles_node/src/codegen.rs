@@ -565,6 +565,7 @@ mod tests {
 			doc: String::new(),
 			enum_variants: Vec::new(),
 			validate: None,
+			bounds: None,
 			default: None,
 		}
 	}
@@ -573,6 +574,7 @@ mod tests {
 		VPLFieldMeta {
 			enum_variants: variants,
 			validate: None,
+			bounds: None,
 			default: None,
 			..plain_field(rust_type)
 		}
@@ -624,6 +626,7 @@ mod tests {
 				doc: "The filename of the tile container.".to_string(),
 				enum_variants: Vec::new(),
 				validate: None,
+				bounds: None,
 				default: None,
 			}],
 		}];
@@ -696,6 +699,7 @@ mod tests {
 					doc: "minimal zoom level".to_string(),
 					enum_variants: Vec::new(),
 					validate: None,
+					bounds: None,
 					default: None,
 				},
 				VPLFieldMeta {
@@ -706,6 +710,7 @@ mod tests {
 					doc: "maximal zoom level".to_string(),
 					enum_variants: Vec::new(),
 					validate: None,
+					bounds: None,
 					default: None,
 				},
 			],
@@ -736,6 +741,7 @@ mod tests {
 					doc: "Raster sources.".to_string(),
 					enum_variants: Vec::new(),
 					validate: None,
+					bounds: None,
 					default: None,
 				},
 				VPLFieldMeta {
@@ -746,6 +752,7 @@ mod tests {
 					doc: "Output format.".to_string(),
 					enum_variants: vec!["avif", "jpg", "png", "webp"],
 					validate: None,
+					bounds: None,
 					default: None,
 				},
 			],

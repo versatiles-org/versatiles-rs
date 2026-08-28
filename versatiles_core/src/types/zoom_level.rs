@@ -4,7 +4,10 @@ use std::fmt::{Debug, Display};
 
 use anyhow::{Result, anyhow};
 
-use super::tile_coord::{MAX_ZOOM_LEVEL, validate_zoom_level};
+use super::{
+	bounds::Bounds,
+	tile_coord::{MAX_ZOOM_LEVEL, validate_zoom_level},
+};
 
 /// A zoom level between `0` and [`MAX_ZOOM_LEVEL`].
 ///
@@ -47,6 +50,17 @@ impl ZoomLevel {
 	#[must_use]
 	pub fn level(self) -> u8 {
 		self.0
+	}
+
+	/// What a form should offer: whole numbers from `0` to [`MAX_ZOOM_LEVEL`].
+	///
+	/// The describing half of the range, beside the parsing half above. Without
+	/// it, typing these fields would *remove* information from the metadata: a
+	/// consumer could read `0..=255` off `Option<u8>` — wrong at the top, but
+	/// present — and reads nothing off `Option<ZoomLevel>` (#260).
+	#[must_use]
+	pub fn bounds() -> Bounds {
+		Bounds::integers(0.0, f64::from(MAX_ZOOM_LEVEL))
 	}
 }
 
@@ -122,6 +136,26 @@ mod tests {
 	fn the_deepest_level_is_the_one_the_coordinate_types_allow() {
 		assert!(ZoomLevel::new(MAX_ZOOM_LEVEL).is_ok());
 		assert!(ZoomLevel::new(MAX_ZOOM_LEVEL + 1).is_err());
+	}
+
+	/// The range a consumer renders and the range the parser enforces are one
+	/// fact: every level the bounds advertise parses, and the first one past
+	/// the end does not.
+	#[test]
+	fn the_advertised_bounds_are_the_ones_the_parser_enforces() {
+		let bounds = ZoomLevel::bounds();
+		assert_eq!((bounds.min, bounds.max), (Some(0.0), Some(30.0)));
+		assert!(bounds.min_inclusive && bounds.max_inclusive);
+		assert!(bounds.integer, "a zoom control steps by one");
+
+		// The advertised end and the enforced one are the same number, checked
+		// without casting back and forth: the bound above *is* `MAX_ZOOM_LEVEL`.
+		assert_eq!(bounds.max, Some(f64::from(MAX_ZOOM_LEVEL)));
+		assert!(ZoomLevel::new(0).is_ok() && ZoomLevel::new(MAX_ZOOM_LEVEL).is_ok());
+		assert!(
+			ZoomLevel::new(MAX_ZOOM_LEVEL + 1).is_err(),
+			"the advertised end is the real one"
+		);
 	}
 
 	#[test]

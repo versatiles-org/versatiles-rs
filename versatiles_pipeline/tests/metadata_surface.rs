@@ -39,7 +39,10 @@
 
 use std::{collections::BTreeMap, fmt::Write as _, fs};
 
-use versatiles_pipeline::{OperationMeta, all_operation_metadata, vpl::VPLFieldMeta};
+use versatiles_pipeline::{
+	OperationMeta, all_operation_metadata,
+	vpl::{Bounds, VPLFieldMeta},
+};
 
 /// Committed beside this file so a diff of the surface lands in the same review
 /// as the change that caused it.
@@ -78,7 +81,29 @@ fn render_field(op: &str, field: &VPLFieldMeta) -> String {
 	if !field.enum_variants.is_empty() {
 		let _ = write!(line, " | values=[{}]", field.enum_variants.join(","));
 	}
+	if let Some(bounds) = &field.bounds {
+		let _ = write!(line, " | bounds={}", render_bounds(bounds));
+	}
 	line
+}
+
+/// A range in interval notation: square where an end is included, round where
+/// it is not or where there is no end at all.
+fn render_bounds(bounds: &Bounds) -> String {
+	let open = if bounds.min.is_some() && bounds.min_inclusive {
+		'['
+	} else {
+		'('
+	};
+	let close = if bounds.max.is_some() && bounds.max_inclusive {
+		']'
+	} else {
+		')'
+	};
+	let low = bounds.min.map_or_else(|| "-inf".to_string(), |value| value.to_string());
+	let high = bounds.max.map_or_else(|| "inf".to_string(), |value| value.to_string());
+	let kind = if bounds.integer { "int" } else { "float" };
+	format!("{open}{low},{high}{close} {kind}")
 }
 
 /// The block for one operation: a header naming its kind, then its fields in
@@ -266,6 +291,72 @@ fn every_parameter_named_like_a_zoom_level_is_typed_as_one() {
 		seen, expected,
 		"expected {expected} zoom-level parameters, found {seen} — did they stop sharing a name or a type?"
 	);
+}
+
+/// Every zoom parameter describes the range it accepts, not just enforces it.
+///
+/// B3 typed these seventeen and, for a consumer, took something away: `u8` at
+/// least said "whole numbers, 0 to 255" — wrong at the top end but readable —
+/// while `ZoomLevel` said nothing at all until `bounds()` existed. A form that
+/// wants to bound its input should not have to hardcode 30 (#260).
+#[test]
+fn every_zoom_parameter_describes_its_range() {
+	let ops = all_operation_metadata();
+	let mut seen = 0;
+
+	for op in &ops {
+		for field in op.fields.iter().filter(|f| f.rust_type == "Option<ZoomLevel>") {
+			seen += 1;
+			let bounds = field.bounds.expect("a zoom parameter describes its range");
+			assert_eq!((bounds.min, bounds.max), (Some(0.0), Some(30.0)), "{}", op.tag_name);
+			assert!(bounds.min_inclusive && bounds.max_inclusive);
+			assert!(bounds.integer, "a zoom control steps by one");
+		}
+	}
+
+	let expected = if cfg!(feature = "gdal") { 17 } else { 13 };
+	assert_eq!(seen, expected, "expected {expected} zoom parameters, found {seen}");
+}
+
+/// A parameter with no domain type of its own still describes itself, from the
+/// range of its Rust number type. Saying "whole numbers, 0 to 4294967295" is
+/// less useful than a real bound and much more useful than silence — and it is
+/// where `integer` comes from for every field that has no `bounds()`.
+#[test]
+fn a_plain_number_falls_back_to_the_range_of_its_rust_type() {
+	let ops = all_operation_metadata();
+
+	let border = find_field(&ops, "filter", "bbox_border")
+		.bounds
+		.expect("u32 has a range");
+	assert_eq!((border.min, border.max), (Some(0.0), Some(4_294_967_295.0)));
+	assert!(border.integer);
+
+	let gamma = find_field(&ops, "raster_levels", "gamma")
+		.bounds
+		.expect("f32 is still describable");
+	assert_eq!(
+		(gamma.min, gamma.max),
+		(None, None),
+		"no end is not the same as no answer"
+	);
+	assert!(!gamma.integer, "a form should allow decimals here");
+
+	// Not a number, so there is nothing to describe.
+	assert!(find_field(&ops, "from_container", "filename").bounds.is_none());
+}
+
+/// Look up `(op_name, field_name)` in the live metadata.
+fn find_field(ops: &[OperationMeta], op_name: &str, field_name: &str) -> VPLFieldMeta {
+	let op = ops
+		.iter()
+		.find(|o| o.tag_name == op_name)
+		.unwrap_or_else(|| panic!("operation `{op_name}` not registered"));
+	op.fields
+		.iter()
+		.find(|f| f.name == field_name)
+		.unwrap_or_else(|| panic!("field `{field_name}` not found on `{op_name}`"))
+		.clone()
 }
 
 /// The snapshot only guards what it lists, so it has to list everything this
