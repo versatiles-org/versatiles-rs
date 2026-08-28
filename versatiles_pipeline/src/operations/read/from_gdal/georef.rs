@@ -26,14 +26,29 @@
 //!
 //! Overriding either the CRS or the geotransform of a *read-only* dataset makes
 //! GDAL persist the change to a `.aux.xml` sidecar next to the input, silently
-//! changing how every other tool reads that file afterwards. `GdalPool` sets
-//! `GDAL_PAM_ENABLED=NO` before opening anything to stop that; the overrides
-//! then live only in memory, for the lifetime of the dataset handle.
+//! changing how every other tool reads that file afterwards.
+//! [`open`](GeoreferenceOverride::open) suppresses GDAL's persistent auxiliary
+//! metadata (PAM) around the datasets it is about to mutate, so the overrides
+//! live only in memory, for the lifetime of the dataset handle.
+//!
+//! That suppression is kept as small as it can be, in two directions, because
+//! PAM is also how GDAL *reads* a sidecar:
+//!
+//! * It is skipped when there is nothing to impose. A PNG or JPEG cannot carry
+//!   a CRS itself, so `gdal_translate -a_srs` writes one to `<file>.aux.xml`;
+//!   switching PAM off would hide the georeferencing of a dataset nobody asked
+//!   to override (#261).
+//! * It is thread-local rather than process-global, so a pipeline that does
+//!   override a raster does not change how GDAL behaves for every other dataset
+//!   in the host process — including code with no connection to VersaTiles.
 
-use std::sync::Once;
+use std::path::Path;
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
-use gdal::{Dataset, GeoTransform, config::set_config_option};
+use gdal::{
+	Dataset, GeoTransform,
+	config::{clear_thread_local_config_option, set_thread_local_config_option},
+};
 use versatiles_derive::context;
 
 use super::get_spatial_ref;
@@ -50,7 +65,7 @@ enum Placement {
 /// Georeferencing to impose on each dataset as it is opened.
 ///
 /// Build one with [`parse`](Self::parse) from the operation's arguments, then
-/// call [`apply`](Self::apply) inside the dataset factory.
+/// let [`open`](Self::open) open each dataset the factory needs.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GeoreferenceOverride {
 	crs: Option<u32>,
@@ -77,13 +92,39 @@ impl GeoreferenceOverride {
 		Ok(Self { crs, placement })
 	}
 
+	/// Opens `path` with the override already imposed on the dataset.
+	///
+	/// The dataset factories call this instead of opening the file themselves,
+	/// because whether GDAL's sidecar handling has to be suppressed depends on
+	/// whether this override is going to mutate the dataset — and the guard has
+	/// to be alive across the open, not just across the mutation. See the
+	/// module documentation.
+	///
+	/// Called once per dataset the pool opens, so it must stay cheap; an
+	/// override that imposes nothing costs one comparison and a plain open.
+	#[context("Failed to open GDAL dataset {:?}", path)]
+	pub fn open(&self, path: &Path) -> Result<Dataset> {
+		if self.is_empty() {
+			return Ok(Dataset::open(path)?);
+		}
+
+		let _pam = PamSuppressed::new()?;
+		let mut dataset = Dataset::open(path)?;
+		self.apply(&mut dataset)?;
+		Ok(dataset)
+	}
+
+	/// Whether the override has anything to impose.
+	fn is_empty(&self) -> bool {
+		self.crs.is_none() && self.placement.is_none()
+	}
+
 	/// Imposes the override on a freshly opened dataset.
 	///
-	/// Called once per dataset the pool opens, so it must stay cheap.
+	/// Private because it is only half the job: PAM has to be suppressed before
+	/// the dataset is opened, which is what [`open`](Self::open) is for.
 	#[context("Failed to apply the georeferencing override")]
-	pub fn apply(&self, dataset: &mut Dataset) -> Result<()> {
-		disable_pam()?;
-
+	fn apply(&self, dataset: &mut Dataset) -> Result<()> {
 		if let Some(epsg) = self.crs {
 			let srs = get_spatial_ref(epsg)?;
 			dataset
@@ -105,24 +146,37 @@ impl GeoreferenceOverride {
 	}
 }
 
-/// Stops GDAL persisting our in-memory overrides to the user's filesystem.
+/// Stops GDAL persisting our in-memory overrides to the user's filesystem, for
+/// as long as the guard is held on this thread.
 ///
 /// Writing either the CRS or the geotransform of a read-only dataset makes GDAL
 /// save the change into a `.aux.xml` sidecar beside the input file, where it
 /// then overrides that file's georeferencing for every other tool — QGIS,
 /// `gdalinfo`, a later VersaTiles run. Reading a dataset must not rewrite it, so
-/// the setting goes here, next to the only code that mutates one.
+/// the guard goes here, next to the only code that mutates one.
 ///
-/// The option is process-global, hence the [`Once`]; it is set before any
-/// override is applied, which is the only point at which it matters.
-fn disable_pam() -> Result<()> {
-	static DISABLE: Once = Once::new();
-	let mut result = Ok(());
-	DISABLE.call_once(|| {
-		result = set_config_option("GDAL_PAM_ENABLED", "NO").map_err(anyhow::Error::from);
-		log::trace!("GDAL_PAM_ENABLED set to NO");
-	});
-	result.context("failed to disable GDAL's persistent auxiliary metadata")
+/// `GDAL_PAM_ENABLED` is read when a dataset initialises its PAM state, which
+/// happens while the dataset is being opened, so the guard has to span the open
+/// and not merely the mutation that follows it. Thread-local rather than
+/// global: a dataset opened at the same moment on another thread — by another
+/// pipeline, or by another library entirely — goes on reading its sidecars.
+struct PamSuppressed;
+
+impl PamSuppressed {
+	fn new() -> Result<Self> {
+		set_thread_local_config_option("GDAL_PAM_ENABLED", "NO")
+			.context("failed to disable GDAL's persistent auxiliary metadata")?;
+		log::trace!("GDAL_PAM_ENABLED set to NO for this thread");
+		Ok(Self)
+	}
+}
+
+impl Drop for PamSuppressed {
+	fn drop(&mut self) {
+		if let Err(error) = clear_thread_local_config_option("GDAL_PAM_ENABLED") {
+			log::warn!("failed to restore GDAL_PAM_ENABLED: {error}");
+		}
+	}
 }
 
 /// Derives a north-up geotransform from corner coordinates and the raster's
@@ -254,10 +308,9 @@ mod tests {
 		let sidecar = std::path::Path::new("../testdata/gradient.tif.aux.xml");
 		let before = std::fs::read(source).expect("test fixture readable");
 
-		let mut dataset = Dataset::open(source).unwrap();
-		GeoreferenceOverride::parse(Some(25832), None, Some("400000,9.6,2.5,5610000,2.5,-9.6"))
+		let dataset = GeoreferenceOverride::parse(Some(25832), None, Some("400000,9.6,2.5,5610000,2.5,-9.6"))
 			.unwrap()
-			.apply(&mut dataset)
+			.open(source)
 			.unwrap();
 		assert_eq!(
 			dataset.geo_transform().unwrap(),
@@ -278,17 +331,16 @@ mod tests {
 	/// raster's own pixel dimensions, the way `gdal_translate -a_ullr` is.
 	#[test]
 	fn bounds_derives_a_north_up_transform_from_the_raster_size() {
-		let mut dataset = Dataset::open(std::path::Path::new("../testdata/gradient.tif")).unwrap();
-		let (width, height) = dataset.raster_size();
+		let path = std::path::Path::new("../testdata/gradient.tif");
 		assert_eq!(
-			(width, height),
+			Dataset::open(path).unwrap().raster_size(),
 			(256, 256),
 			"fixture size, which the maths below assumes"
 		);
 
-		GeoreferenceOverride::parse(None, Some("0,0,256,128"), None)
+		let dataset = GeoreferenceOverride::parse(None, Some("0,0,256,128"), None)
 			.unwrap()
-			.apply(&mut dataset)
+			.open(path)
 			.unwrap();
 
 		// 256 px across 256 units → 1.0/px; 256 px down 128 units → -0.5/px.
