@@ -248,7 +248,7 @@ mod tests {
 		"       ^",
 		"unexpected character",
 		"",
-		"1: at line 1, in parsing bare_identifier:",
+		"1: at line 1, in parsing name:",
 		"node | | node",
 		"       ^",
 		"",

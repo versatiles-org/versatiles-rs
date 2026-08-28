@@ -4,7 +4,9 @@
 //! Two things are deliberately identical to it, because both are observable:
 //!
 //! - the `context(…)` labels and `cut(…)` placement, which the rendered error traces are built
-//!   from and which eight tests pin byte-for-byte;
+//!   from and which eight tests pin byte-for-byte. The labels are user-facing copy — they are
+//!   rendered into the error a person reads — so a new one is named for a reader rather than
+//!   after the grammar production it guards;
 //! - what the grammar *accepts*. In particular parameters are still separated by `ws1`: with
 //!   `ws0` there, `node a="x"b=2` would silently become two parameters instead of an error.
 //!
@@ -74,7 +76,11 @@ fn punct(input: &str, expected: char) -> Res<'_, CstToken> {
 
 fn bare_identifier(input: &str) -> Res<'_, &str> {
 	context(
-		"parsing bare_identifier",
+		// Named for a reader, not after the grammar production: this label
+		// reaches users. A trailing `|` fails inside the node that is missing,
+		// and its innermost frame is this one — so `bare_identifier` was being
+		// rendered as "unexpected character in a `bare_identifier`" (#258).
+		"parsing name",
 		recognize(pair(
 			take_while1(|c: char| c.is_ascii_alphabetic()),
 			take_while(|c: char| c.is_ascii_alphanumeric() || "_-".contains(c)),
@@ -416,6 +422,35 @@ pub fn parse_cst(input: &str) -> Result<CstFile, VplParseError> {
 
 #[cfg(test)]
 mod tests {
+	/// Frame labels are user-facing copy, not internal names.
+	///
+	/// They are rendered into the trace a person reads — a trailing `|` used to
+	/// produce "unexpected character in a `bare_identifier`", which is a grammar
+	/// production leaking into an error message (#258). Nothing stops the next
+	/// one being named after its production, so this does: read the labels out
+	/// of this file and hold them to the same rule a reader would.
+	#[test]
+	fn every_context_label_reads_as_english() {
+		let source = include_str!("cst_parser.rs");
+		let labels = source
+			.match_indices("\"parsing ")
+			.map(|(at, _)| {
+				let rest = &source[at + 1..];
+				&rest[..rest.find('"').expect("a closing quote")]
+			})
+			.collect::<Vec<_>>();
+
+		// A rule that matches nothing passes forever; eleven labels today.
+		assert!(labels.len() >= 11, "only {} labels found: {labels:?}", labels.len());
+
+		for label in labels {
+			assert!(
+				!label.contains('_'),
+				"`{label}` reads as a grammar production rather than as English"
+			);
+		}
+	}
+
 	use rstest::rstest;
 
 	use super::*;

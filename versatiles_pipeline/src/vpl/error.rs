@@ -332,7 +332,7 @@ mod tests {
 		assert_eq!(
 			labels(&error),
 			[
-				"parsing bare_identifier",
+				"parsing name",
 				"parsing node identifier",
 				"parsing node",
 				"parsing pipeline"
