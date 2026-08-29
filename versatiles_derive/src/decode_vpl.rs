@@ -66,6 +66,59 @@ enum ParsedFrom {
 	Bool,
 }
 
+/// Which types name a file, and which of them state their own accepted set.
+///
+/// Keyed on `TypeMapping::pattern` rather than being a column on it: a column
+/// would say `false` on 54 of the 58 entries in order to say something about
+/// the four that name a path.
+///
+/// `Some(ty)` is a type owning `EXTENSIONS` whose `TryFrom` refuses everything
+/// else, so its metadata is `Accepts::Only` and the field must not restate it.
+/// `None` names a file whose accepted set nothing enforces, so the field has to
+/// declare a `#[vpl(accepts = "…")]` hint or `#[vpl(accepts_any)]` — a path
+/// argument that says nothing is a compile error, which is what stops this
+/// becoming a table of intentions nobody consults (#260).
+const PATH_TYPES: &[(&str, PathKind)] = &[
+	("FilePath", PathKind::Undeclared),
+	("Option<FilePath>", PathKind::Undeclared),
+	("SourceLocation", PathKind::Undeclared),
+	("Option<SourceLocation>", PathKind::Undeclared),
+	("GeoDataPath", PathKind::Stated("GeoDataPath")),
+	("Option<GeoDataPath>", PathKind::Stated("GeoDataPath")),
+	("TileFilePath", PathKind::Stated("TileFilePath")),
+	("Option<TileFilePath>", PathKind::Stated("TileFilePath")),
+];
+
+/// What a type that names a file says about which files.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PathKind {
+	/// The type states the set and refuses everything outside it; the name here
+	/// owns `EXTENSIONS`. The field must not restate it.
+	Stated(&'static str),
+	/// The type names a file and nothing enforces a set, so the field has to
+	/// declare one.
+	Undeclared,
+}
+
+/// How a path argument answers "which files".
+#[derive(Clone, PartialEq, Eq)]
+enum AcceptsSpec {
+	/// `#[vpl(accepts_any)]` — any file at all.
+	Any,
+	/// `#[vpl(accepts = "csv, tsv")]` — a convention, not a rule.
+	Suggested(Vec<String>),
+	/// The field's type states the set; the name here owns `EXTENSIONS`.
+	Only(&'static str),
+}
+
+/// What a type says about the files it names, or `None` if it names none.
+fn path_kind(pattern: &str) -> Option<PathKind> {
+	PATH_TYPES
+		.iter()
+		.find(|(name, _)| *name == pattern)
+		.map(|(_, kind)| *kind)
+}
+
 /// All supported type mappings for VPLDecode.
 const TYPE_MAPPINGS: &[TypeMapping] = &[
 	// Required types
@@ -464,6 +517,56 @@ const TYPE_MAPPINGS: &[TypeMapping] = &[
 		has_bounds: false,
 		parsed_from: ParsedFrom::Str,
 	},
+	// `from_geo` and `from_tile` refuse an extension they do not know, so their
+	// arguments are typed by what they read rather than by "a file". That is
+	// what lets the metadata state the accepted set instead of a guess, and
+	// what puts the refusal where `check` can see it: `ParsedFrom::Str` emits
+	// the type's `TryFrom` into `VPLFieldMeta::validate`, so a bad extension is
+	// reported as it is typed rather than when the operation builds.
+	TypeMapping {
+		pattern: "GeoDataPath",
+		display_name: "path",
+		method_name: "property_enum_required",
+		is_required: true,
+		generic_param: Some("GeoDataPath"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: false,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
+		pattern: "Option<GeoDataPath>",
+		display_name: "path",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("GeoDataPath"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: false,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
+		pattern: "TileFilePath",
+		display_name: "path",
+		method_name: "property_enum_required",
+		is_required: true,
+		generic_param: Some("TileFilePath"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: false,
+		parsed_from: ParsedFrom::Str,
+	},
+	TypeMapping {
+		pattern: "Option<TileFilePath>",
+		display_name: "path",
+		method_name: "property_enum_option",
+		is_required: false,
+		generic_param: Some("TileFilePath"),
+		generic_param2: None,
+		is_enum: false,
+		has_bounds: false,
+		parsed_from: ParsedFrom::Str,
+	},
 	TypeMapping {
 		pattern: "RegexPattern",
 		display_name: "regex",
@@ -827,12 +930,24 @@ enum FieldReference {
 
 /// Reads the `#[vpl(…)]` attributes off a field.
 ///
+/// What `#[vpl(…)]` said about one field.
+struct VplFieldAttrs {
+	/// `default = "…"`, as it would be written in VPL.
+	default: Option<String>,
+	/// What the argument names in the data, when it names something there.
+	refers_to: Option<FieldReference>,
+	/// `accepts = "…"` or `accepts_any`; `None` when the field said nothing,
+	/// which is only allowed for an argument that does not name a file.
+	accepts: Option<AcceptsSpec>,
+}
+
 /// Two independent facts today: the default a form shows, and what the argument
 /// names in the data. Both are read in one pass so an unknown key is reported
 /// once, with the whole vocabulary.
-fn extract_vpl_attrs(attrs: &[Attribute]) -> Result<(Option<String>, Option<FieldReference>), syn::Error> {
+fn extract_vpl_attrs(attrs: &[Attribute]) -> Result<VplFieldAttrs, syn::Error> {
 	let mut default = None;
 	let mut refers_to: Option<FieldReference> = None;
+	let mut accepts: Option<AcceptsSpec> = None;
 
 	for attr in attrs {
 		if !attr.path().is_ident("vpl") {
@@ -851,6 +966,28 @@ fn extract_vpl_attrs(attrs: &[Attribute]) -> Result<(Option<String>, Option<Fiel
 				let value: syn::LitStr = meta.value()?.parse()?;
 				default = Some(value.value());
 				Ok(())
+			} else if meta.path.is_ident("accepts") {
+				if accepts.is_some() {
+					return Err(meta.error("an argument takes one set of files; only one of these may be given"));
+				}
+				let value: syn::LitStr = meta.value()?.parse()?;
+				let list: Vec<String> = value
+					.value()
+					.split(',')
+					.map(|e| e.trim().trim_start_matches('.').to_ascii_lowercase())
+					.filter(|e| !e.is_empty())
+					.collect();
+				if list.is_empty() {
+					return Err(meta.error("`accepts` needs at least one extension; use `accepts_any` for any file"));
+				}
+				accepts = Some(AcceptsSpec::Suggested(list));
+				Ok(())
+			} else if meta.path.is_ident("accepts_any") {
+				if accepts.is_some() {
+					return Err(meta.error("an argument takes one set of files; only one of these may be given"));
+				}
+				accepts = Some(AcceptsSpec::Any);
+				Ok(())
 			} else if meta.path.is_ident("field_of") {
 				let value: syn::LitStr = meta.value()?.parse()?;
 				set_reference(FieldReference::FieldOf(value.value()))
@@ -864,14 +1001,19 @@ fn extract_vpl_attrs(attrs: &[Attribute]) -> Result<(Option<String>, Option<Fiel
 				set_reference(FieldReference::NewField)
 			} else {
 				Err(meta.error(
-					"unknown VPLDecode field attribute; expected `default = \"…\"`, `field_of = \"…\"`, \
-					 `field_of_source`, `layer_of_source`, `new_layer` or `new_field`",
+					"unknown VPLDecode field attribute; expected `default = \"…\"`, `accepts = \"…\"`, \
+					 `accepts_any`, `field_of = \"…\"`, `field_of_source`, `layer_of_source`, `new_layer` or \
+					 `new_field`",
 				))
 			}
 		})?;
 	}
 
-	Ok((default, refers_to))
+	Ok(VplFieldAttrs {
+		default,
+		refers_to,
+		accepts,
+	})
 }
 
 /// Extract a doc comment from an attribute, if present.
@@ -1032,6 +1174,10 @@ struct FieldMeta {
 	parsed_type: Option<&'static str>,
 	/// How that parser takes the values — see [`ParsedFrom`].
 	parsed_from: ParsedFrom,
+	/// Which files this argument takes, when it names one; `None` when it does
+	/// not. Either the field's type states it (`Accepts::Only`) or the field
+	/// declares it — a path argument that does neither does not compile.
+	accepts: Option<AcceptsSpec>,
 	/// `Some(T)` when every value has to parse as the numeric type `T`; `None`
 	/// when the accessor does not parse at all. The derive emits the same
 	/// `parse::<T>()` the accessor makes.
@@ -1088,6 +1234,7 @@ fn process_sources_field(
 		enum_type: None,
 		parsed_type: None,
 		parsed_from: ParsedFrom::Nothing,
+		accepts: None,
 		// Sources are pipelines, not values; there is nothing to parse and
 		// no count to hold them to. `check_sources` handles them instead.
 		number_type: None,
@@ -1097,6 +1244,51 @@ fn process_sources_field(
 		refers_to: None,
 	};
 	Ok((field_str, ProcessedField::Sources { doc, parser }, meta))
+}
+
+/// Which files an argument takes, from its type and its own declaration.
+///
+/// A path argument must answer. The answer only ever existed in its doc
+/// comment's prose, so a consumer offering a file dialog had to guess from the
+/// operation's name — which for fifteen arguments got two actively wrong and
+/// eight not at all (#260). Refusing to compile is what keeps this from
+/// becoming another table of intentions.
+fn resolve_accepts(
+	field: &Field,
+	field_str: &str,
+	mapping: &TypeMapping,
+	declared: Option<AcceptsSpec>,
+) -> Result<Option<AcceptsSpec>, syn::Error> {
+	match (path_kind(mapping.pattern), declared) {
+		// The type refuses everything outside its own set, so it is the set.
+		(Some(PathKind::Stated(ty)), None) => Ok(Some(AcceptsSpec::Only(ty))),
+		(Some(PathKind::Stated(_)), Some(_)) => Err(syn::Error::new_spanned(
+			field,
+			format!(
+				"`{field_str}` is typed `{}`, which states the files it takes; a second list here is the \
+				 drift this exists to prevent",
+				mapping.pattern
+			),
+		)),
+		(Some(PathKind::Undeclared), Some(spec)) => Ok(Some(spec)),
+		(Some(PathKind::Undeclared), None) => Err(syn::Error::new_spanned(
+			field,
+			format!(
+				"`{field_str}` names a file but does not say which. Add `#[vpl(accepts = \"csv, tsv\")]` for \
+				 the extensions it is written with, or `#[vpl(accepts_any)]` where the set is not ours to \
+				 state — GDAL opens what it was built with, an SSH key has no extension. Without this a \
+				 file dialog has to guess from the operation's name."
+			),
+		)),
+		(None, Some(_)) => Err(syn::Error::new_spanned(
+			field,
+			format!(
+				"`{field_str}` is typed `{}`, which does not name a file",
+				mapping.pattern
+			),
+		)),
+		(None, None) => Ok(None),
+	}
 }
 
 fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), syn::Error> {
@@ -1153,13 +1345,22 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 	let doc = field_doc_expr(&field_str, &raw_comment, mapping);
 	let (arity, number_type) = shape_of(mapping);
 
-	let (default, refers_to) = extract_vpl_attrs(&field.attrs)?;
+	let VplFieldAttrs {
+		default,
+		refers_to,
+		accepts: declared_accepts,
+	} = extract_vpl_attrs(&field.attrs)?;
 	if default.is_some() && mapping.is_required {
 		return Err(syn::Error::new_spanned(
 			field,
 			format!("`{field_str}` is a required parameter, so it cannot have a default"),
 		));
 	}
+
+	// Which files this argument takes. A path argument must answer, because the
+	// answer only ever existed in its doc comment's prose and a consumer
+	// offering a file dialog had to guess from the operation's name (#260).
+	let accepts = resolve_accepts(field, &field_str, mapping, declared_accepts)?;
 
 	let meta = FieldMeta {
 		name: field_str.clone(),
@@ -1179,6 +1380,7 @@ fn process_field(field: &Field) -> Result<(String, ProcessedField, FieldMeta), s
 		bounds_type: mapping.has_bounds.then_some(mapping.generic_param).flatten(),
 		default,
 		refers_to,
+		accepts,
 	};
 
 	Ok((
@@ -1369,6 +1571,20 @@ fn field_meta_expr(m: &FieldMeta) -> TokenStream {
 		// An array's bound would be per element, and nothing consumes that yet.
 		_ => quote! { None },
 	};
+	// Which files a path argument takes. `Only` reads the list off the type that
+	// enforces it, so the metadata and the parser are one fact; the others are
+	// the field's own declaration, for sets nothing enforces.
+	let accepts_expr: TokenStream = match &m.accepts {
+		None => quote! { None },
+		Some(AcceptsSpec::Any) => quote! { Some(crate::vpl::Accepts::Any) },
+		Some(AcceptsSpec::Suggested(list)) => {
+			quote! { Some(crate::vpl::Accepts::Suggested(&[#(#list),*])) }
+		}
+		Some(AcceptsSpec::Only(ty)) => {
+			let ty = format_ident!("{}", ty);
+			quote! { Some(crate::vpl::Accepts::Only(crate::helpers::location::#ty::EXTENSIONS)) }
+		}
+	};
 	// What the argument names in the data, when it names something there — the
 	// relationship no type can hold, checked against the sibling list below.
 	let refers_to_expr: TokenStream = match &m.refers_to {
@@ -1434,6 +1650,7 @@ fn field_meta_expr(m: &FieldMeta) -> TokenStream {
 			enum_variants: #variants_expr,
 			bounds: #bounds_expr,
 			refers_to: #refers_to_expr,
+			accepts: #accepts_expr,
 			validate: #validate_expr,
 			default: #default_expr,
 		}
