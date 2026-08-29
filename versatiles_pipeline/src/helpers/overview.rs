@@ -3,7 +3,6 @@ use std::sync::Arc;
 use anyhow::{Result, anyhow, ensure};
 use futures::FutureExt;
 use imageproc::image::{DynamicImage, GenericImage};
-use moka::future::Cache;
 use versatiles_container::{
 	Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime, Traversal, TraversalOrder,
 };
@@ -11,19 +10,12 @@ use versatiles_core::{Blob, TileBBox, TileBBoxMap, TileCoord, TileJSON, TileStre
 use versatiles_derive::context;
 use versatiles_image::traits::DynamicImageTraitInfo;
 
+use super::overview_cache::BlockCache;
+
 static BLOCK_TILE_COUNT: u32 = 16;
 
 /// Tile size assumed when a source declares none.
 const DEFAULT_TILE_SIZE: u32 = 512;
-
-/// How much the staging cache may hold before blocks start being evicted.
-///
-/// A bound where there used to be none: the map this replaced grew without
-/// limit and only logged a warning once it passed this same figure. Evicting a
-/// block is now merely expensive rather than wrong — whatever is missing gets
-/// computed again — so the number only has to be large enough that a
-/// depth-first pass never reaches it.
-const CACHE_CAPACITY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 /// Scaling function type used to downscale tiles by a factor of 2.
 pub type ScaleDownFn = Arc<dyn Fn(&DynamicImage) -> Result<DynamicImage> + Send + Sync>;
@@ -51,15 +43,11 @@ pub struct OverviewCore {
 	/// Scaled blocks, keyed by the northwest tile of the block they cover.
 	///
 	/// This is a memo table, not a hand-off buffer: reading a block leaves it
-	/// in place, and a block that is not there is computed rather than reported
-	/// as missing. That is what makes the operation answer the same thing
-	/// however the requests arrive — a tile server asking for one tile out of
-	/// nowhere gets the same bytes as a converter walking the pyramid.
-	///
-	/// Filling it is still worth it for exactly one reason: a depth-first pass
-	/// produces every block just before the level above needs it, so each one
-	/// is computed once and read once.
-	pub cache: Cache<TileCoord, ScaledBlock>,
+	/// available, and a block that is not there is computed rather than
+	/// reported as missing. That is what makes the operation answer the same
+	/// thing however the requests arrive — a tile server asking for one tile
+	/// out of nowhere gets the same bytes as a converter walking the pyramid.
+	pub cache: BlockCache,
 	scale_fn: ScaleDownFn,
 }
 
@@ -129,12 +117,7 @@ impl OverviewCore {
 			|ts| u32::from(ts.size()),
 		);
 
-		let cache = Cache::builder()
-			.max_capacity(CACHE_CAPACITY_BYTES)
-			.weigher(|_key: &TileCoord, block: &ScaledBlock| -> u32 {
-				u32::try_from(estimate_entry_bytes(block)).unwrap_or(u32::MAX)
-			})
-			.build();
+		let cache = BlockCache::new(level_base);
 
 		metadata.set_traversal(Traversal::new(
 			TraversalOrder::DepthFirst,
@@ -195,23 +178,20 @@ impl OverviewCore {
 		.boxed()
 	}
 
-	/// The scaled block at `key`, computing it if it is not cached.
+	/// The scaled block at `key`, computing it if neither tier has it.
 	///
-	/// [`Cache::try_get_with`] makes concurrent callers asking for the same
-	/// block share one computation instead of each doing the whole subtree.
-	///
-	/// The recursion underneath cannot deadlock on the per-key guard moka holds
-	/// while computing: a block is built only from blocks one level *closer to
-	/// the base*, so the keys a computation waits on are strictly deeper than
-	/// its own and no cycle can form.
+	/// The recursion underneath cannot deadlock on the per-key guard the cache
+	/// holds while computing: a block is built only from blocks one level
+	/// *closer to the base*, so the keys a computation waits on are strictly
+	/// deeper than its own and no cycle can form.
 	fn scaled_block(&self, key: TileCoord) -> futures::future::BoxFuture<'_, Result<ScaledBlock>> {
 		async move {
 			self
 				.cache
-				.try_get_with(key, self.compute_scaled_block(key))
+				.get_or_compute(key, self.compute_scaled_block(key))
 				.await
-				// `try_get_with` hands back a shared error, which `anyhow` cannot
-				// take ownership of; keep the whole chain as the message.
+				// The cache hands back a shared error, which `anyhow` cannot take
+				// ownership of; keep the whole chain as the message.
 				.map_err(|e: Arc<anyhow::Error>| anyhow!("{e:#}"))
 		}
 		.boxed()
@@ -265,7 +245,7 @@ impl OverviewCore {
 			// under this child, which is ordinary for any raster that does not
 			// cover the whole world, and building it would walk all the way
 			// down to the base level only to find nothing there.
-			let block = match self.cache.get(&key).await {
+			let block = match self.cache.consume(key).await {
 				Some(block) => block,
 				None if self.metadata.intersection_bbox(&child).is_empty() => continue,
 				None => self.scaled_block(key).await?,
@@ -424,7 +404,7 @@ impl OverviewCore {
 			let (entries, block_tiles) = self.scale_and_emit(container, Some(bbox), worth_caching).await?;
 
 			if worth_caching {
-				self.cache.insert(block.min_tile()?, Arc::new(entries)).await;
+				self.cache.produce(block.min_tile()?, Arc::new(entries)).await;
 			}
 			tiles.extend(block_tiles);
 		}
@@ -439,6 +419,24 @@ pub(crate) fn estimate_entry_bytes(entries: &[(TileCoord, Option<Blob>)]) -> usi
 		.iter()
 		.map(|(_, blob)| blob.as_ref().map_or(16, |b| b.len() as usize))
 		.sum()
+}
+
+impl Drop for OverviewCore {
+	/// Report what the cache had to do, once, when the operation goes away.
+	///
+	/// `blocks_computed` is zero for a depth-first pass: every block is
+	/// produced just before the level below asks for it, so nothing is ever
+	/// built a second time. A number above zero is the cost of arriving in some
+	/// other order — which is legitimate, but worth being able to see.
+	fn drop(&mut self) {
+		let (computed, peak_pending) = self.cache.stats();
+		if computed > 0 || peak_pending > 0 {
+			log::debug!(
+				"overview: {computed} block(s) built on demand, {} MiB peak in blocks awaiting their consumer",
+				peak_pending >> 20
+			);
+		}
+	}
 }
 
 impl std::fmt::Debug for OverviewCore {

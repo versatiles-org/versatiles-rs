@@ -155,13 +155,9 @@ mod tests {
 			.min_tile()
 	}
 
-	/// How many blocks the cache is holding.
-	///
-	/// moka applies inserts and evictions from a queue, so the count is only
-	/// exact once that queue has been drained.
+	/// How many blocks the cache is holding across both its tiers.
 	async fn cached_blocks(op: &Operation) -> u64 {
-		op.core.cache.run_pending_tasks().await;
-		op.core.cache.entry_count()
+		op.core.cache.entry_count().await
 	}
 
 	/// The encoded bytes of a tile, for comparing two tiles for equality.
@@ -369,7 +365,7 @@ mod tests {
 				entries.push((coord, Some(blob)));
 			}
 		}
-		op.core.cache.insert(block_key, std::sync::Arc::new(entries)).await;
+		op.core.cache.produce(block_key, std::sync::Arc::new(entries)).await;
 
 		// Request composed images at level 5 for a 2×2 bbox
 		let bbox_lvl5 = TileBBox::from_min_and_size(5, 0, 0, 2, 2)?;
@@ -483,16 +479,14 @@ mod tests {
 	#[tokio::test]
 	async fn the_cache_weighs_what_it_holds() -> Result<()> {
 		let op = make_operation(256, 6).await;
-		op.core.cache.run_pending_tasks().await;
-		assert_eq!(op.core.cache.weighted_size(), 0, "nothing has been cached yet");
+		assert_eq!(op.core.cache.total_bytes().await, 0, "nothing has been cached yet");
 
 		let base_bbox = op.metadata().tile_pyramid().unwrap().level_ref(6).to_bbox();
 		op.tile_stream(base_bbox).await?.to_vec().await;
 
-		op.core.cache.run_pending_tasks().await;
 		assert!(
-			op.core.cache.weighted_size() > 0,
-			"the weigher is not reporting the size of cached blocks"
+			op.core.cache.total_bytes().await > 0,
+			"the cache is not reporting the size of the blocks it holds"
 		);
 
 		Ok(())
@@ -570,7 +564,7 @@ mod tests {
 				entries.push((coord, blob));
 			}
 		}
-		op.core.cache.insert(block_key, std::sync::Arc::new(entries)).await;
+		op.core.cache.produce(block_key, std::sync::Arc::new(entries)).await;
 
 		let bbox = TileBBox::from_min_and_size(5, 0, 0, 8, 8)?;
 		let result = op.core.compose_from_children(bbox).await?;
@@ -709,6 +703,14 @@ mod tests {
 			reads.load(Ordering::Relaxed) as u64,
 			base_tiles,
 			"the pass rebuilt part of the pyramid from the source instead of from the cache"
+		);
+
+		// Every block is produced just before the level below consumes it, so
+		// none of them should have had to be built on demand.
+		assert_eq!(
+			op.core.cache.stats().0,
+			0,
+			"a block was rebuilt: the reservation did not hold it until its consumer arrived"
 		);
 
 		Ok(())

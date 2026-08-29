@@ -8,6 +8,7 @@ pub mod feature_tile_source;
 pub mod grid_zoom;
 pub mod location;
 pub mod overview;
+pub mod overview_cache;
 mod pipeline_reader;
 pub mod separator;
 pub mod tile_error_monitor;
