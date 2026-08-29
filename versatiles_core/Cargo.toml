@@ -25,7 +25,7 @@ dashmap.workspace = true
 clap = { workspace = true, optional = true, features = ["derive"] }
 colored = { version = "3.1.1", default-features = false, optional = true }
 enumset.workspace = true
-flate2 = { version = "1.1.9", default-features = false, features = ["default"] }
+flate2 = { version = "1.1.10", default-features = false, features = ["default"] }
 futures.workspace = true
 itertools.workspace = true
 log.workspace = true
