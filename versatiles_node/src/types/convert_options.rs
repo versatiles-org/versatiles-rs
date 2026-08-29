@@ -97,11 +97,10 @@ pub struct ConvertOptions {
 	/// - `temp_dir` — where `reorder` puts that temporary file (default: the
 	///   output file's own directory)
 	///
-	/// They matter only for a source that cannot supply Hilbert order, such as a
-	/// pipeline containing `raster_overview`; writing one to `.pmtiles` without
-	/// either opt-in is an error. Asking for both is also an error, since they buy
-	/// different things. Booleans are strings — `'true'`, `'1'` or `'yes'`,
-	/// case-insensitively, and likewise for false.
+	/// They matter only for a source that cannot supply Hilbert order; writing
+	/// one to `.pmtiles` without either opt-in is an error. Asking for both is
+	/// also an error, since they buy different things. Booleans are strings —
+	/// `'true'`, `'1'` or `'yes'`, case-insensitively, and likewise for false.
 	///
 	/// **Example:** `{ allow_unclustered: 'true' }` when writing PMTiles
 	///

@@ -316,9 +316,8 @@ impl OrderPlan {
 		ensure!(
 			clustered || allow_unclustered,
 			"cannot write PMTiles: this source produces tiles in {} order, and PMTiles stores them \
-			 in Hilbert order. Operations that build lower zoom levels from higher ones, such as \
-			 `raster_overview`, force this order, and reordering while writing would mean holding \
-			 the whole tileset in memory.\n\
+			 in Hilbert order. Reordering while writing would mean holding the whole tileset in \
+			 memory.\n\
 			 \n\
 			 Three ways forward:\n\
 			 - write .versatiles or .mbtiles instead — they accept any order, and cost nothing\n\
@@ -451,8 +450,11 @@ mod tests {
 		},
 	};
 
-	/// A source whose order PMTiles cannot accept — what `raster_overview`
-	/// produces, and the case #228 reported.
+	/// A source whose order PMTiles cannot accept — the case #228 reported.
+	///
+	/// `raster_overview` used to be one: it now *prefers* depth-first rather
+	/// than requiring it, so it writes PMTiles clustered in a single pass. A
+	/// source that genuinely cannot produce Hilbert order still lands here.
 	fn depth_first_source() -> Result<MockReader> {
 		MockReader::new_mock(
 			TilePyramid::new_full_up_to(3),
@@ -485,7 +487,6 @@ mod tests {
 		let err = format!("{err:#}");
 
 		assert!(err.contains("DepthFirst"), "should name the source's order: {err}");
-		assert!(err.contains("raster_overview"), "should name the usual cause: {err}");
 		// Every way forward has to be named here, so the choice is visible where
 		// it is made rather than only in the documentation.
 		assert!(err.contains(".versatiles"), "should offer another container: {err}");

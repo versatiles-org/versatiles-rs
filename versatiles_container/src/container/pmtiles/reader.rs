@@ -557,7 +557,7 @@ mod tests {
 
 		assert_eq!(
 			format!("{:?}", reader.metadata()),
-			"TileSourceMetadata { tile_compression: Gzip, tile_format: MVT, traversal: Traversal(PMTiles,full), tile_pyramid: RwLock { data: None, poisoned: false, .. } }"
+			"TileSourceMetadata { tile_compression: Gzip, tile_format: MVT, traversal: Traversal(PMTiles,full), preferred_traversal: None, tile_pyramid: RwLock { data: None, poisoned: false, .. } }"
 		);
 
 		assert_eq!(

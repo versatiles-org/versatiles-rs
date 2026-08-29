@@ -767,6 +767,7 @@ SFTP connection tuning:
 Memory for tile-gathering operations:
 
 - `VERSATILES_MAX_TILES_IN_FLIGHT` - Upper bound on the number of raw source tiles held in memory at once by operations that combine sources (`from_merged_vector`, `from_stacked`, `from_stacked_raster`); default `2048`. Peak memory ≈ this × the largest tile size, so lower it for very large tiles or many sources (e.g. `512`), or raise it for more read-ahead on small tiles.
+- `VERSATILES_OVERVIEW_CACHE_MB` - Memory in megabytes for the block cache `raster_overview` and `dem_overview` build lower zoom levels through (default `2048`). Half of it is reserved for blocks a traversal has already scheduled a consumer for, which is what lets a depth-first conversion build every tile exactly once; the rest is split evenly across zoom levels, keeping the low zooms — the ones that cost the most to rebuild — resident. Raise it if a conversion warns that the reserved half is full, which means some blocks are being built twice.
 
 Memory for reading containers (PMTiles / VersaTiles):
 

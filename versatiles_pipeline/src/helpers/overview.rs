@@ -119,11 +119,19 @@ impl OverviewCore {
 
 		let cache = BlockCache::new(level_base);
 
-		metadata.set_traversal(Traversal::new(
+		// A preference, not a requirement. Every zoom level here is built from
+		// the one above it, so a depth-first walk produces each block just
+		// before the level below consumes it and nothing is ever built twice —
+		// but any other order still gives the same tiles, at the cost of
+		// rebuilding. Declaring depth-first as a *requirement* is what used to
+		// force PMTiles to choose between staying clustered and writing the
+		// tile data twice, for an ordering this operation can live without.
+		metadata.set_preferred_traversal(Traversal::new(
 			TraversalOrder::DepthFirst,
 			BLOCK_TILE_COUNT,
 			BLOCK_TILE_COUNT,
 		)?);
+		metadata.set_traversal(Traversal::ANY);
 
 		Ok(Self {
 			runtime,

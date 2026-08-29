@@ -22,6 +22,20 @@ pub struct TileSourceMetadata {
 
 	traversal: Traversal,
 
+	/// The order this source would rather be read in, when the consumer does
+	/// not insist on one of its own.
+	///
+	/// Separate from `traversal`, which is a *requirement*: a source that can
+	/// serve any order but is far cheaper to read in one particular one has no
+	/// way to say so otherwise, and declaring the cheap order as a requirement
+	/// makes it impossible for consumers that need a different one. Operations
+	/// that build lower zoom levels from higher ones are the case this exists
+	/// for — depth-first costs them nothing extra, anything else makes them
+	/// rebuild work — and stating it as a preference is what lets a PMTiles
+	/// archive stay clustered while they still convert cheaply to every other
+	/// format.
+	preferred_traversal: Option<Traversal>,
+
 	tile_pyramid: Arc<RwLock<Option<Arc<TilePyramid>>>>,
 }
 
@@ -38,12 +52,17 @@ impl Clone for TileSourceMetadata {
 			tile_compression: self.tile_compression,
 			tile_format: self.tile_format,
 			traversal: self.traversal.clone(),
+			preferred_traversal: self.preferred_traversal.clone(),
 			tile_pyramid: Arc::new(RwLock::new(pyramid)),
 		}
 	}
 }
 
 impl PartialEq for TileSourceMetadata {
+	/// `preferred_traversal` is deliberately not compared: it is a hint about
+	/// what is cheap, not a statement about what the source produces, and two
+	/// sources that differ only in what they would prefer describe the same
+	/// tiles.
 	fn eq(&self, other: &Self) -> bool {
 		self.tile_compression == other.tile_compression
 			&& self.tile_format == other.tile_format
@@ -72,6 +91,7 @@ impl TileSourceMetadata {
 			tile_compression,
 			tile_format,
 			traversal,
+			preferred_traversal: None,
 			tile_pyramid: Arc::new(RwLock::new(tile_pyramid.map(Arc::new))),
 		}
 	}
@@ -124,6 +144,25 @@ impl TileSourceMetadata {
 	/// granularity of the tiles it passes on.
 	pub fn set_traversal(&mut self, traversal: Traversal) {
 		self.traversal = traversal;
+	}
+
+	/// The order this source would rather be read in, if it has one.
+	///
+	/// A consumer free to choose should read in this order; one that needs a
+	/// different order may still use any order [`traversal`](Self::traversal)
+	/// allows, and should expect the source to be slower.
+	#[must_use]
+	pub fn preferred_traversal(&self) -> Option<&Traversal> {
+		self.preferred_traversal.as_ref()
+	}
+
+	/// Records an order this source is cheaper to read in.
+	///
+	/// The source must be able to satisfy both this and its declared
+	/// [`traversal`](Self::traversal) — a preference narrows what a free
+	/// consumer picks, it never widens what the source can do.
+	pub fn set_preferred_traversal(&mut self, traversal: Traversal) {
+		self.preferred_traversal = Some(traversal);
 	}
 
 	/// Records that tiles are now stored with a different compression.

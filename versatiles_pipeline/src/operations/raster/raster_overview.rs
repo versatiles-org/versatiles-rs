@@ -72,7 +72,7 @@ crate::operations::macros::define_transform_factory!("raster_overview", Args, Op
 #[expect(clippy::cast_possible_truncation, reason = "test data is built from literal values")]
 mod tests {
 	use imageproc::image::{DynamicImage, GenericImage, GenericImageView, Rgb, RgbImage, Rgba};
-	use versatiles_container::testing::assert_stream_counts_agree;
+	use versatiles_container::{Traversal, TraversalOrder, testing::assert_stream_counts_agree};
 	use versatiles_core::{Blob, GeoBBox, TileCompression, TileCoord, TileFormat, TilePyramid};
 
 	use super::*;
@@ -129,11 +129,11 @@ mod tests {
 		.unwrap()
 	}
 
-	/// Stream every block the declared traversal asks for, in the order it asks
-	/// for it, down to `level_stop` — the depth-first pass a converter performs.
-	async fn depth_first_pass(op: &Operation, level_stop: u8) -> Result<Vec<(TileCoord, Tile)>> {
+	/// Stream every block `traversal` asks for, in the order it asks for it,
+	/// down to `level_stop`.
+	async fn pass_in(op: &Operation, traversal: &Traversal, level_stop: u8) -> Result<Vec<(TileCoord, Tile)>> {
 		let pyramid = op.metadata().tile_pyramid().unwrap();
-		let bboxes = op.metadata().traversal().traverse_pyramid(&pyramid)?;
+		let bboxes = traversal.traverse_pyramid(&pyramid)?;
 
 		let mut tiles = Vec::new();
 		for bbox in bboxes {
@@ -143,6 +143,18 @@ mod tests {
 			tiles.extend(op.tile_stream(bbox).await?.to_vec().await);
 		}
 		Ok(tiles)
+	}
+
+	/// The pass a converter performs: the order the operation asks to be read
+	/// in, which is what `traverse_all_tiles` picks when the destination leaves
+	/// the choice open.
+	async fn depth_first_pass(op: &Operation, level_stop: u8) -> Result<Vec<(TileCoord, Tile)>> {
+		let metadata = op.metadata().clone();
+		let traversal = metadata
+			.preferred_traversal()
+			.unwrap_or_else(|| metadata.traversal())
+			.clone();
+		pass_in(op, &traversal, level_stop).await
 	}
 
 	/// The northwest tile the operation covers at `level`.
@@ -174,6 +186,65 @@ mod tests {
 	// below describes behaviour a `TileSource` is expected to have, and every
 	// one of them fails on the current implementation.
 	// ---------------------------------------------------------------------
+
+	/// Depth-first is what this operation *wants*, not what it demands.
+	///
+	/// Declaring it as a requirement is what used to force a PMTiles archive to
+	/// give up clustering or write its tile data twice, for an order the
+	/// operation can do without — expensively, but correctly.
+	#[tokio::test]
+	async fn the_operation_prefers_depth_first_without_requiring_it() -> Result<()> {
+		let op = make_operation(256, 6).await;
+		let metadata = op.metadata();
+
+		assert!(
+			metadata.traversal().is_any(),
+			"the operation should accept tiles being asked for in any order"
+		);
+
+		let preferred = metadata.preferred_traversal().expect("a preferred order");
+		assert_eq!(preferred.order(), &TraversalOrder::DepthFirst);
+		assert_eq!(preferred.min_size()?, 16);
+		assert_eq!(preferred.max_size()?, 16);
+
+		Ok(())
+	}
+
+	/// Reading in an order the operation did not ask for still gives the same
+	/// tiles — only slower.
+	///
+	/// This is what a PMTiles archive does: it needs Hilbert order, which no
+	/// amount of preference can change. It is allowed to, and the result has to
+	/// be indistinguishable.
+	#[tokio::test]
+	async fn a_different_order_produces_the_same_tiles() -> Result<()> {
+		let preferred = make_varied_operation(256, 6).await;
+		let mut from_preferred = depth_first_pass(&preferred, 0).await?;
+
+		let hilbert = make_varied_operation(256, 6).await;
+		let mut from_hilbert = pass_in(&hilbert, &Traversal::new(TraversalOrder::PMTiles, 1, 16)?, 0).await?;
+
+		assert!(!from_preferred.is_empty(), "the pass should have produced tiles");
+		assert_eq!(
+			from_preferred.len(),
+			from_hilbert.len(),
+			"the two orders produced different numbers of tiles"
+		);
+
+		from_preferred.sort_by_key(|(coord, _)| (coord.level, coord.x, coord.y));
+		from_hilbert.sort_by_key(|(coord, _)| (coord.level, coord.x, coord.y));
+
+		for ((coord_a, tile_a), (coord_b, tile_b)) in from_preferred.into_iter().zip(from_hilbert) {
+			assert_eq!(coord_a, coord_b);
+			assert_eq!(
+				bytes_of(tile_a)?,
+				bytes_of(tile_b)?,
+				"{coord_a:?} differs between orders"
+			);
+		}
+
+		Ok(())
+	}
 
 	/// A single tile below the base level, asked for out of the blue.
 	///

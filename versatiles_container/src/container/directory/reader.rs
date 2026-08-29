@@ -536,7 +536,7 @@ mod tests {
 
 		assert_wildcard!(
 			format!("{reader:?}"),
-			"DirectoryReader { source_type: Container { name: \"directory\", uri: \"*\" }, parameters: TileSourceMetadata { tile_compression: Brotli, tile_format: PNG, traversal: Traversal(AnyOrder,full), tile_pyramid: RwLock { data: * poisoned: false, .. } } }"
+			"DirectoryReader { source_type: Container { name: \"directory\", uri: \"*\" }, parameters: TileSourceMetadata { tile_compression: Brotli, tile_format: PNG, traversal: Traversal(AnyOrder,full), preferred_traversal: None, tile_pyramid: RwLock { data: * poisoned: false, .. } } }"
 		);
 
 		assert_eq!(

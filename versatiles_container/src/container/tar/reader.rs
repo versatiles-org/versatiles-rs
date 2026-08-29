@@ -456,7 +456,7 @@ pub mod tests {
 
 		assert_eq!(
 			format!("{reader:?}"),
-			"TarTilesReader { parameters: TileSourceMetadata { tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,full), tile_pyramid: RwLock { data: None, poisoned: false, .. } } }"
+			"TarTilesReader { parameters: TileSourceMetadata { tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,full), preferred_traversal: None, tile_pyramid: RwLock { data: None, poisoned: false, .. } } }"
 		);
 		assert_wildcard!(reader.source_type().to_string(), "container 'tar' ('*.tar')");
 		assert_eq!(
@@ -465,7 +465,7 @@ pub mod tests {
 		);
 		assert_eq!(
 			format!("{:?}", reader.metadata()),
-			"TileSourceMetadata { tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,full), tile_pyramid: RwLock { data: None, poisoned: false, .. } }"
+			"TileSourceMetadata { tile_compression: Gzip, tile_format: MVT, traversal: Traversal(AnyOrder,full), preferred_traversal: None, tile_pyramid: RwLock { data: None, poisoned: false, .. } }"
 		);
 		assert_eq!(reader.metadata().tile_compression(), &TileCompression::Gzip);
 		assert_eq!(reader.metadata().tile_format(), &TileFormat::MVT);

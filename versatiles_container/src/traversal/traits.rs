@@ -9,8 +9,11 @@ use anyhow::Result;
 use futures::{StreamExt, future::BoxFuture, stream};
 use versatiles_core::{TileBBox, TileCoord, TileStream};
 
-use super::{Traversal, TraversalTranslationStep, progress_tracker::ProgressTracker, translate_traversals};
-use crate::{Tile, TileSource, TilesRuntime, TraversalCache};
+use super::{
+	Traversal, TraversalTranslation, TraversalTranslationStep, progress_tracker::ProgressTracker, translate_traversals,
+	translation_between,
+};
+use crate::{Tile, TileSource, TileSourceMetadata, TilesRuntime, TraversalCache};
 
 /// Extension trait providing traversal with higher-rank trait bounds (HRTBs).
 ///
@@ -43,7 +46,8 @@ pub trait TileSourceTraverseExt: TileSource {
 			let phase = Instant::now();
 			let metadata = self.metadata();
 			let tile_pyramid = self.tile_pyramid().await?;
-			let traversal_steps = translate_traversals(&tile_pyramid, metadata.traversal(), traversal_write)?;
+			let traversal_read = choose_read_traversal(metadata, traversal_write);
+			let traversal_steps = translate_traversals(&tile_pyramid, traversal_read, traversal_write)?;
 			log::trace!(
 				"traverse: tile_pyramid + translate_traversals in {:.2}s ({} step(s))",
 				phase.elapsed().as_secs_f32(),
@@ -131,6 +135,34 @@ pub trait TileSourceTraverseExt: TileSource {
 	}
 }
 
+/// The order to read a source in, given what the destination requires.
+///
+/// A preference is honoured whenever it can feed the destination at all —
+/// including by buffering, which is how a source handing out 16-tile blocks
+/// depth-first feeds a writer that wants 256-tile blocks in any order.
+///
+/// When the destination insists on an order the preference cannot reach, the
+/// source's own traversal is used instead. That is always allowed — a
+/// preference never widens what a source can do — but it is worth saying out
+/// loud, because a source states a preference precisely because every other
+/// order makes it redo work.
+fn choose_read_traversal<'a>(metadata: &'a TileSourceMetadata, write: &Traversal) -> &'a Traversal {
+	let Some(preferred) = metadata.preferred_traversal() else {
+		return metadata.traversal();
+	};
+
+	if translation_between(preferred, write) == TraversalTranslation::Impossible {
+		log::warn!(
+			"this source is built to be read {preferred:?}, but the destination requires {write:?}. It will be read \
+			 in that order instead, which means rebuilding work it would otherwise have done once."
+		);
+		return metadata.traversal();
+	}
+
+	log::trace!("reading in the source's preferred order: {preferred:?}");
+	preferred
+}
+
 // Blanket implementation: all TileSource implementors get traversal support
 impl<T: TileSource + ?Sized> TileSourceTraverseExt for T {}
 
@@ -149,6 +181,85 @@ mod tests {
 
 	use super::*;
 	use crate::{SourceType, TileSourceMetadata, TilesRuntime, TraversalOrder};
+
+	// -----------------------------------------------------------------
+	// Choosing what order to read a source in.
+	// -----------------------------------------------------------------
+
+	fn metadata_preferring(preferred: Option<Traversal>, declared: Traversal) -> TileSourceMetadata {
+		let mut metadata = TileSourceMetadata::new(TileFormat::PNG, TileCompression::Uncompressed, declared, None);
+		if let Some(preferred) = preferred {
+			metadata.set_preferred_traversal(preferred);
+		}
+		metadata
+	}
+
+	#[test]
+	fn a_source_with_no_preference_is_read_the_way_it_declares() -> Result<()> {
+		let declared = Traversal::new(TraversalOrder::AnyOrder, 1, 64)?;
+		let metadata = metadata_preferring(None, declared.clone());
+
+		let chosen = choose_read_traversal(&metadata, &Traversal::new(TraversalOrder::PMTiles, 1, 64)?);
+
+		assert_eq!(chosen, &declared);
+		Ok(())
+	}
+
+	/// A preference the destination can take directly is taken.
+	#[test]
+	fn a_reachable_preference_is_honoured() -> Result<()> {
+		let preferred = Traversal::new(TraversalOrder::DepthFirst, 16, 16)?;
+		let metadata = metadata_preferring(Some(preferred.clone()), Traversal::ANY);
+
+		let chosen = choose_read_traversal(&metadata, &Traversal::ANY);
+
+		assert_eq!(chosen, &preferred);
+		Ok(())
+	}
+
+	/// Reachable *through buffering* still counts as reachable.
+	///
+	/// This is the case that matters in practice: an overview hands out 16-tile
+	/// blocks depth-first and the `.versatiles` writer wants 256-tile blocks in
+	/// any order. The two do not intersect directly — the sizes are disjoint —
+	/// so a rule that only accepted a direct translation would throw the
+	/// preference away on the single most common conversion there is.
+	#[test]
+	fn a_preference_reachable_only_by_buffering_is_still_honoured() -> Result<()> {
+		let preferred = Traversal::new(TraversalOrder::DepthFirst, 16, 16)?;
+		let metadata = metadata_preferring(Some(preferred.clone()), Traversal::ANY);
+		let write = Traversal::new_any_size(256, 256)?;
+
+		assert_eq!(
+			translation_between(&preferred, &write),
+			TraversalTranslation::Buffered,
+			"the fixture should exercise the buffered path"
+		);
+		assert_eq!(choose_read_traversal(&metadata, &write), &preferred);
+		Ok(())
+	}
+
+	/// A destination that insists on a different concrete order wins.
+	///
+	/// PMTiles needs Hilbert, which no preference can change; the source falls
+	/// back to what it declared it can do, and pays for the reordering.
+	#[test]
+	fn an_unreachable_preference_gives_way_to_the_destination() -> Result<()> {
+		let preferred = Traversal::new(TraversalOrder::DepthFirst, 16, 16)?;
+		let metadata = metadata_preferring(Some(preferred.clone()), Traversal::ANY);
+		let write = Traversal::new(TraversalOrder::PMTiles, 1, 64)?;
+
+		assert_eq!(
+			translation_between(&preferred, &write),
+			TraversalTranslation::Impossible
+		);
+		assert_eq!(
+			choose_read_traversal(&metadata, &write),
+			&Traversal::ANY,
+			"the declared traversal should be used when the preference cannot be met"
+		);
+		Ok(())
+	}
 
 	/// Test reader that produces tiles with predictable content.
 	#[derive(Debug)]
