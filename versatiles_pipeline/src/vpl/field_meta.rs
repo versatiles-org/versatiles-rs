@@ -71,7 +71,13 @@ pub enum Accepts {
 	/// Comes from the argument's own type, which is what refuses the others —
 	/// see `GeoDataPath` and `TileFilePath`. Stated on a field instead it would
 	/// be a second list to keep in step, which is the mismatch this exists to
-	/// end.
+	/// end, so the derive accepts it from a type and nowhere else.
+	///
+	/// An argument that takes more than files — `from_container.filename` also
+	/// takes an `http`, `https` or `sftp` URL, `-`, or inline data — has no
+	/// closed set of extensions and carries [`Suggested`](Self::Suggested)
+	/// instead. `only_is_a_set_the_parser_actually_enforces` holds every field
+	/// carrying this to the promise.
 	Only(&'static [&'static str]),
 }
 

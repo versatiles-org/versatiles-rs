@@ -322,6 +322,56 @@ fn every_argument_naming_a_file_says_which_files() {
 	assert!(seen >= expected, "expected {expected} path arguments, found {seen}");
 }
 
+/// `Only` is a promise the parser keeps, for every field that carries it.
+///
+/// It tells a consumer it may filter hard: anything outside the list will be
+/// refused anyway, so hiding it costs nothing. A field claiming `Only` whose
+/// parser accepts more would turn that into a dialog hiding files that build.
+///
+/// `from_container.filename` is why the distinction is load-bearing rather than
+/// decorative. It also takes an `http`/`https`/`sftp` URL, `-`, and inline
+/// data, so no list of extensions is its accepted set and it carries
+/// `Suggested`. The derive already makes the mistake unrepresentable — `Only`
+/// is only ever derived from a type owning `EXTENSIONS`, never from the
+/// `accepts = "…"` attribute — and this is the runtime half of that, covering
+/// any type added later.
+#[test]
+fn only_is_a_set_the_parser_actually_enforces() {
+	let ops = all_operation_metadata();
+	let mut seen = 0;
+
+	for op in &ops {
+		for field in &op.fields {
+			let Some(Accepts::Only(offered)) = field.accepts else {
+				continue;
+			};
+			seen += 1;
+			let validate = field
+				.validate
+				.unwrap_or_else(|| panic!("{}.{} claims a closed set but decides nothing", op.tag_name, field.name));
+
+			for ext in offered {
+				let problems = validate(&[format!("x.{ext}")]);
+				assert!(
+					problems.is_empty(),
+					"{}.{} offers '.{ext}' but rejects it: {problems:?}",
+					op.tag_name,
+					field.name
+				);
+			}
+			assert!(
+				!validate(&["x.not_an_extension_anyone_offers".to_string()]).is_empty(),
+				"{}.{} claims `Only`, so something outside its list has to be refused — \
+				 otherwise the list is a suggestion and should say so",
+				op.tag_name,
+				field.name
+			);
+		}
+	}
+
+	assert!(seen >= 2, "expected the two closed path sets, found {seen}");
+}
+
 /// `Only` is the accepted set, so everything in it has to build.
 ///
 /// The list `from_geo` publishes is the list its type refuses everything
