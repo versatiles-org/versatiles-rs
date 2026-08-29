@@ -418,6 +418,8 @@ Generates lower-zoom DEM overview tiles by averaging 24-bit elevation values.
 
 `raster_overview` averages the R, G and B channels independently, which is meaningless for a DEM: the channels are one number split across three bytes, so averaging them separately mixes the high byte of one pixel with the low byte of another. This operation decodes each pixel to its 24-bit raw elevation, averages that, and re-encodes.
 
+Only the averaging differs. Read order, what a tile costs to build on demand, and the memory the intermediate levels use are all as described for [`raster_overview`](#raster_overview).
+
 ### Parameters
 
 - _`level`: 0-30 (optional)_ - Zoom level to build the overview from. Defaults to the source's highest.
@@ -576,6 +578,12 @@ Tiles at `level_base` and below are passed through unchanged; above it, the cove
 ## raster_overview
 
 Generates the lower zoom levels of a raster pyramid by downscaling.
+
+Every zoom level is built from the four tiles above it, down to zoom 0. Read depth-first — which is what a conversion does, unless the destination insists on another order — each tile is built exactly once.
+
+Any other order produces the same tiles, at a different price. A tile at zoom `z` built from nothing costs `4^(level - z)` source tiles: over a zoom-14 source, one zoom-6 tile is some sixteen million of them. Serving a deep pyramid live is therefore not what this is for — convert once, serve the result. Writing `.pmtiles` is the same situation, because that format stores tiles in an order this cannot produce for free; it succeeds, and says in the log what it is costing.
+
+Levels are held in memory between being built and being consumed, within `VERSATILES_OVERVIEW_CACHE_MB` megabytes (default `2048`).
 
 ### Parameters
 

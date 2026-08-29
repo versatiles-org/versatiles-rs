@@ -10,6 +10,21 @@ use crate::{PipelineFactory, helpers::overview::OverviewCore, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Generates the lower zoom levels of a raster pyramid by downscaling.
+///
+/// Every zoom level is built from the four tiles above it, down to zoom 0.
+/// Read depth-first — which is what a conversion does, unless the destination
+/// insists on another order — each tile is built exactly once.
+///
+/// Any other order produces the same tiles, at a different price. A tile at
+/// zoom `z` built from nothing costs `4^(level - z)` source tiles: over a
+/// zoom-14 source, one zoom-6 tile is some sixteen million of them. Serving a
+/// deep pyramid live is therefore not what this is for — convert once, serve
+/// the result. Writing `.pmtiles` is the same situation, because that format
+/// stores tiles in an order this cannot produce for free; it succeeds, and
+/// says in the log what it is costing.
+///
+/// Levels are held in memory between being built and being consumed, within
+/// `VERSATILES_OVERVIEW_CACHE_MB` megabytes (default `2048`).
 struct Args {
 	/// Zoom level to build the overview from. Defaults to the source's highest.
 	level: Option<ZoomLevel>,

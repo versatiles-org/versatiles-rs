@@ -17,6 +17,10 @@ use crate::{PipelineFactory, helpers::overview::OverviewCore, vpl::VPLNode};
 /// so averaging them separately mixes the high byte of one pixel with the low
 /// byte of another. This operation decodes each pixel to its 24-bit raw
 /// elevation, averages that, and re-encodes.
+///
+/// Only the averaging differs. Read order, what a tile costs to build on
+/// demand, and the memory the intermediate levels use are all as described for
+/// [`raster_overview`](#raster_overview).
 struct Args {
 	/// Zoom level to build the overview from. Defaults to the source's highest.
 	level: Option<ZoomLevel>,
