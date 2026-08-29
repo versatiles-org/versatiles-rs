@@ -171,7 +171,7 @@ crate::operations::macros::define_transform_factory!("dem_overview", Args, Opera
 #[cfg(test)]
 mod tests {
 	use imageproc::image::{GenericImage, Pixel};
-	use versatiles_core::{GeoBBox, TileFormat, TilePyramid, TileSchema};
+	use versatiles_core::{GeoBBox, TileCompression, TileFormat, TilePyramid, TileSchema};
 
 	use super::*;
 	use crate::{factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource};
@@ -356,6 +356,125 @@ mod tests {
 		assert!(result.is_err());
 	}
 
+	// ── random tile access ───────────────────────────────────────────
+	//
+	// `dem_overview` shares `OverviewCore` with `raster_overview`, so it
+	// inherits the ability to answer a tile asked for out of nowhere. Sharing
+	// an implementation is not the same as being covered by its tests: nothing
+	// here would notice if this operation stopped routing through the core, and
+	// a DEM is the one most likely to be served live.
+
+	/// A source with a bounded pyramid whose tiles differ from one another.
+	///
+	/// Distinct tiles matter for the comparison below: a DEM of one constant
+	/// elevation encodes identically however its quadrants are arranged, so it
+	/// cannot tell a correct composition from a wrong one.
+	async fn make_dem_operation() -> Result<Box<dyn TileSource>> {
+		PipelineFactory::new_dummy()
+			.operation_from_vpl(
+				"from_debug format=png | filter level_min=6 level_max=6 bbox=[2,48,3,49] | dem_overview encoding=terrarium",
+			)
+			.await
+	}
+
+	/// The northwest tile the operation covers at `level`.
+	async fn min_tile_at(op: &dyn TileSource, level: u8) -> Result<TileCoord> {
+		op.tile_pyramid().await?.level_ref(level).to_bbox().min_tile()
+	}
+
+	#[tokio::test]
+	async fn a_single_tile_below_the_base_level_is_produced_on_demand() -> Result<()> {
+		let op = make_dem_operation().await?;
+		let coord = min_tile_at(op.as_ref(), 4).await?;
+
+		assert!(
+			op.tile(&coord).await?.is_some(),
+			"{coord:?} is inside the pyramid the operation advertises, so it has to be produced on request"
+		);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn both_streams_agree_on_how_many_tiles_exist() -> Result<()> {
+		let op = make_dem_operation().await?;
+		let pyramid = op.tile_pyramid().await?;
+
+		for level in [4, 6, 7] {
+			versatiles_container::testing::assert_stream_counts_agree(op.as_ref(), pyramid.level_ref(level).to_bbox())
+				.await?;
+		}
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn reading_an_overview_tile_twice_returns_it_twice() -> Result<()> {
+		let op = make_dem_operation().await?;
+		let coord = min_tile_at(op.as_ref(), 4).await?;
+
+		let first = op.tile(&coord).await?.expect("first read");
+		let second = op.tile(&coord).await?.expect("second read");
+
+		assert_eq!(
+			first.into_blob(&TileCompression::Uncompressed)?,
+			second.into_blob(&TileCompression::Uncompressed)?,
+			"two reads of {coord:?} disagree"
+		);
+		Ok(())
+	}
+
+	/// Elevations must not depend on how the tile was asked for.
+	///
+	/// The DEM-specific risk: this operation averages 24-bit elevations rather
+	/// than channels, and a tile composed on demand goes through the same
+	/// `scale_fn` as one built by a pass. If the two ever diverged, the numbers
+	/// would be wrong rather than merely different, and nothing else here looks
+	/// at the pixels of a composed tile.
+	#[tokio::test]
+	async fn a_tile_is_the_same_whether_it_was_streamed_or_asked_for() -> Result<()> {
+		let streamed = make_dem_operation().await?;
+		let coord = min_tile_at(streamed.as_ref(), 3).await?;
+
+		let metadata = streamed.metadata().clone();
+		let traversal = metadata
+			.preferred_traversal()
+			.unwrap_or_else(|| metadata.traversal())
+			.clone();
+		let pyramid = streamed.tile_pyramid().await?;
+
+		let mut from_pass = None;
+		for bbox in traversal.traverse_pyramid(pyramid.as_ref())? {
+			for (c, tile) in streamed.tile_stream(bbox).await?.to_vec().await {
+				if c == coord {
+					from_pass = Some(tile);
+				}
+			}
+		}
+		let from_pass = from_pass.expect("the pass covers the whole pyramid, including this tile");
+
+		// A second operation, so the cold read cannot benefit from the pass.
+		let asked = make_dem_operation().await?;
+		let on_demand = asked.tile(&coord).await?.expect("the same tile, asked for directly");
+
+		assert_eq!(
+			from_pass.into_blob(&TileCompression::Uncompressed)?,
+			on_demand.into_blob(&TileCompression::Uncompressed)?,
+			"{coord:?} differs between the pass and a direct request"
+		);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn the_operation_prefers_depth_first_without_requiring_it() -> Result<()> {
+		let op = make_dem_operation().await?;
+		let metadata = op.metadata();
+
+		assert!(metadata.traversal().is_any(), "tiles may be asked for in any order");
+
+		let preferred = metadata.preferred_traversal().expect("a preferred order");
+		assert_eq!(preferred.order(), &versatiles_container::TraversalOrder::DepthFirst);
+		Ok(())
+	}
+
 	#[tokio::test]
 	async fn test_streaming_generates_lower_zoom_tiles() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
@@ -365,8 +484,9 @@ mod tests {
 			)
 			.await?;
 
-		// Stream tiles level-by-level from highest to lowest (as the traversal does).
-		// This populates the cache at each level so lower levels can build from it.
+		// Stream every block the operation hands out, in the order it hands them
+		// out. That order is no longer load-bearing — a level builds whatever it
+		// is missing — but it is what a conversion does.
 		let traversal = op.metadata().traversal().clone();
 		let pyramid = op.tile_pyramid().await?;
 		let bboxes = traversal.traverse_pyramid(pyramid.as_ref())?;
