@@ -275,6 +275,35 @@ mod tests {
 		Ok(())
 	}
 
+	/// `tile` must route through the core, where the read ceiling lives.
+	///
+	/// The trait supplies a default `tile` that takes the first item of a
+	/// one-tile `tile_stream`, which works and is completely unbudgeted. If the
+	/// override here were dropped, every other test in this file would still
+	/// pass and the ceiling would silently stop applying to served tiles — so
+	/// this asserts the one thing that distinguishes the two paths.
+	#[tokio::test]
+	async fn tile_is_answered_under_the_read_ceiling() -> Result<()> {
+		let mut op = make_operation(256, 6).await;
+		op.core.set_request_budget(Some(0));
+		let coord = min_tile_at(&op, 4)?;
+
+		// Through the trait, which is how a server reaches it.
+		let source: &dyn TileSource = &op;
+		let error = source
+			.tile(&coord)
+			.await
+			.expect_err("a ceiling of nothing should refuse a request that has to read");
+		assert!(
+			format!("{error:#}").contains("source tiles to build"),
+			"should fail on the ceiling, not something else: {error:#}"
+		);
+
+		// The same tile in bulk is not subject to it.
+		assert_eq!(source.tile_stream(coord.to_tile_bbox()).await?.to_vec().await.len(), 1);
+		Ok(())
+	}
+
 	/// A single tile below the base level, asked for out of the blue.
 	///
 	/// This is what a tile server does — `ServerTileSource::get_data` calls

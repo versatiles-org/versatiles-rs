@@ -57,11 +57,6 @@ impl ReadBudget {
 		}
 	}
 
-	/// The configured budget, or `None` when the limit is disabled.
-	fn from_env() -> Option<Arc<Self>> {
-		parse_request_budget(std::env::var(REQUEST_BUDGET_ENV).ok().as_deref()).map(|limit| Arc::new(Self::new(limit)))
-	}
-
 	/// Spend `tiles` of the budget, or explain why the request stops here.
 	fn take(&self, tiles: u64, bbox: TileBBox) -> Result<()> {
 		let left = self
@@ -80,10 +75,11 @@ impl ReadBudget {
 	}
 }
 
-/// [`ReadBudget::from_env`] without the environment, so the parsing can be
-/// tested without a process-wide variable every other test would also see.
+/// The ceiling [`REQUEST_BUDGET_ENV`] asks for, as a number of source tiles.
 ///
-/// `None` means the ceiling is disabled.
+/// Takes the raw value rather than reading the environment itself, so the
+/// parsing can be tested without a process-wide variable that every other test
+/// would also see. `None` means the ceiling is disabled.
 fn parse_request_budget(raw: Option<&str>) -> Option<u64> {
 	match raw {
 		None => Some(DEFAULT_REQUEST_BUDGET),
@@ -128,6 +124,10 @@ pub struct OverviewCore {
 	/// thing however the requests arrive — a tile server asking for one tile
 	/// out of nowhere gets the same bytes as a converter walking the pyramid.
 	pub cache: BlockCache,
+	/// Source tiles a single request may read, or `None` when the ceiling is
+	/// switched off. Read from the environment once, when the operation is
+	/// built, rather than on every request.
+	request_budget: Option<u64>,
 	scale_fn: ScaleDownFn,
 }
 
@@ -198,6 +198,7 @@ impl OverviewCore {
 		);
 
 		let cache = BlockCache::new(level_base);
+		let request_budget = parse_request_budget(std::env::var(REQUEST_BUDGET_ENV).ok().as_deref());
 
 		// A preference, not a requirement. Every zoom level here is built from
 		// the one above it, so a depth-first walk produces each block just
@@ -221,6 +222,7 @@ impl OverviewCore {
 			level_base,
 			tile_size,
 			cache,
+			request_budget,
 			scale_fn,
 		})
 	}
@@ -473,7 +475,20 @@ impl OverviewCore {
 	/// on how much of the pyramid it may build to answer them.
 	#[context("Failed to get tile {coord:?}")]
 	pub async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		self.tile_within(coord, ReadBudget::from_env()).await
+		let budget = self.request_budget.map(|limit| Arc::new(ReadBudget::new(limit)));
+		self.tile_within(coord, budget).await
+	}
+
+	/// Replace the per-request ceiling.
+	///
+	/// Exists so a test can prove that a `TileSource::tile` implementation
+	/// really routes here — the ceiling is the only observable difference
+	/// between doing so and letting the trait's default take the first item of
+	/// a one-tile stream, and the alternative way to set it is an environment
+	/// variable that every other test in the process would also see.
+	#[cfg(test)]
+	pub(crate) fn set_request_budget(&mut self, limit: Option<u64>) {
+		self.request_budget = limit;
 	}
 
 	/// [`tile`](Self::tile) with the budget given rather than read from the

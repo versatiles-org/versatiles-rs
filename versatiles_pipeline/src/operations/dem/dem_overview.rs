@@ -382,6 +382,55 @@ mod tests {
 		op.tile_pyramid().await?.level_ref(level).to_bbox().min_tile()
 	}
 
+	/// The same operation as [`make_dem_operation`], built directly so a test
+	/// can reach its core.
+	async fn make_dem_op_concrete() -> Result<Operation> {
+		let pyramid = TilePyramid::from_geo_bbox(6, 6, &GeoBBox::new(2.0, 48.0, 3.0, 49.0).unwrap())?;
+		let source = DummyImageSource::from_color(&[100u8, 150, 200], 256, TileFormat::PNG, Some(pyramid))?;
+
+		Operation::build(
+			VPLNode::try_from_str("dem_overview encoding=terrarium level=6").unwrap(),
+			Box::new(source),
+			&PipelineFactory::new_dummy(),
+		)
+		.await
+	}
+
+	/// `tile` must route through the core, where the read ceiling lives.
+	///
+	/// The trait supplies a default `tile` that takes the first item of a
+	/// one-tile `tile_stream`, which works and is completely unbudgeted. If the
+	/// override here were dropped, every other test in this file would still
+	/// pass and the ceiling would silently stop applying to served tiles — so
+	/// this asserts the one thing that distinguishes the two paths.
+	#[tokio::test]
+	async fn tile_is_answered_under_the_read_ceiling() -> Result<()> {
+		let mut op = make_dem_op_concrete().await?;
+		op.core.set_request_budget(Some(0));
+		let coord = op
+			.metadata()
+			.tile_pyramid()
+			.unwrap()
+			.level_ref(4)
+			.to_bbox()
+			.min_tile()?;
+
+		// Through the trait, which is how a server reaches it.
+		let source: &dyn TileSource = &op;
+		let error = source
+			.tile(&coord)
+			.await
+			.expect_err("a ceiling of nothing should refuse a request that has to read");
+		assert!(
+			format!("{error:#}").contains("source tiles to build"),
+			"should fail on the ceiling, not something else: {error:#}"
+		);
+
+		// The same tile in bulk is not subject to it.
+		assert_eq!(source.tile_stream(coord.to_tile_bbox()).await?.to_vec().await.len(), 1);
+		Ok(())
+	}
+
 	#[tokio::test]
 	async fn a_single_tile_below_the_base_level_is_produced_on_demand() -> Result<()> {
 		let op = make_dem_operation().await?;
