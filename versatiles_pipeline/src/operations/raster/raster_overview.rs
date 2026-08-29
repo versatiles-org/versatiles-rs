@@ -155,6 +155,15 @@ mod tests {
 			.min_tile()
 	}
 
+	/// How many blocks the cache is holding.
+	///
+	/// moka applies inserts and evictions from a queue, so the count is only
+	/// exact once that queue has been drained.
+	async fn cached_blocks(op: &Operation) -> u64 {
+		op.core.cache.run_pending_tasks().await;
+		op.core.cache.entry_count()
+	}
+
 	/// The encoded bytes of a tile, for comparing two tiles for equality.
 	fn bytes_of(tile: Tile) -> Result<Blob> {
 		tile.into_blob(&TileCompression::Uncompressed)
@@ -300,7 +309,7 @@ mod tests {
 
 		// Cache should now contain entries for the base-level block
 		assert!(
-			!op.core.cache.is_empty(),
+			cached_blocks(&op).await > 0,
 			"cache should be populated after base-level fetch"
 		);
 
@@ -316,7 +325,7 @@ mod tests {
 		// First, fetch all base-level tiles to populate the cache
 		let base_bbox = level_bbox;
 		let _base_tiles = op.tile_stream(base_bbox).await?.to_vec().await;
-		assert!(!op.core.cache.is_empty(), "cache should be populated");
+		assert!(cached_blocks(&op).await > 0, "cache should be populated");
 
 		// Now fetch at level 5 — should compose from cached half-size images
 		let lvl5_bbox = metadata.tile_pyramid().unwrap().level_ref(5).to_bbox();
@@ -360,11 +369,11 @@ mod tests {
 				entries.push((coord, Some(blob)));
 			}
 		}
-		op.core.cache.insert(block_key, entries);
+		op.core.cache.insert(block_key, std::sync::Arc::new(entries)).await;
 
 		// Request composed images at level 5 for a 2×2 bbox
 		let bbox_lvl5 = TileBBox::from_min_and_size(5, 0, 0, 2, 2)?;
-		let result = op.core.build_images_from_cache(bbox_lvl5).await?;
+		let result = op.core.compose_from_children(bbox_lvl5).await?;
 		let items: Vec<_> = result.into_iter().filter(|(_, img)| img.is_some()).collect();
 		assert!(!items.is_empty());
 
@@ -466,75 +475,80 @@ mod tests {
 		Ok(())
 	}
 
+	/// The cache is bounded by the weight of what it holds, not by entry count.
+	///
+	/// Blocks differ in size by orders of magnitude between a dense base level
+	/// and a nearly empty overview, so a bound counted in entries would not be
+	/// a bound on memory at all.
 	#[tokio::test]
-	async fn cache_bytes_tracks_insert_and_remove() -> Result<()> {
-		use std::sync::atomic::Ordering;
-
+	async fn the_cache_weighs_what_it_holds() -> Result<()> {
 		let op = make_operation(256, 6).await;
-		assert_eq!(op.core.cache_bytes.load(Ordering::Relaxed), 0);
+		op.core.cache.run_pending_tasks().await;
+		assert_eq!(op.core.cache.weighted_size(), 0, "nothing has been cached yet");
 
-		// Fetch at base level to populate cache
-		let metadata = op.metadata().clone();
-		let base_bbox = metadata.tile_pyramid().unwrap().level_ref(6).to_bbox();
-		let _tiles = op.tile_stream(base_bbox).await?.to_vec().await;
+		let base_bbox = op.metadata().tile_pyramid().unwrap().level_ref(6).to_bbox();
+		op.tile_stream(base_bbox).await?.to_vec().await;
 
-		// cache_bytes should be non-zero after populating
-		let bytes_after_insert = op.core.cache_bytes.load(Ordering::Relaxed);
-		assert!(bytes_after_insert > 0, "cache_bytes should increase after insert");
-
-		// Walk all the way down to level 0 to fully drain the cache
-		for level in (0..6).rev() {
-			let lvl_bbox = metadata.tile_pyramid().unwrap().level_ref(level).to_bbox();
-			let _tiles = op.tile_stream(lvl_bbox).await?.to_vec().await;
-		}
-
-		// After draining everything, cache_bytes should be 0
-		let bytes_after_drain = op.core.cache_bytes.load(Ordering::Relaxed);
-		assert_eq!(bytes_after_drain, 0, "cache_bytes should be 0 after full drain");
+		op.core.cache.run_pending_tasks().await;
+		assert!(
+			op.core.cache.weighted_size() > 0,
+			"the weigher is not reporting the size of cached blocks"
+		);
 
 		Ok(())
 	}
 
+	/// Building the levels below must not consume the blocks they were built from.
+	///
+	/// The staging map this replaced was drained as it was read, which is what
+	/// made a second read of the same tile return nothing. The inverse is the
+	/// property worth pinning down.
 	#[tokio::test]
-	async fn cache_is_drained_after_full_overview_build() -> Result<()> {
+	async fn blocks_stay_cached_after_the_level_above_has_been_built() -> Result<()> {
 		let op = make_operation(256, 6).await;
 		let metadata = op.metadata().clone();
 
-		// Fetch all base-level tiles
 		let base_bbox = metadata.tile_pyramid().unwrap().level_ref(6).to_bbox();
-		let _base_tiles = op.tile_stream(base_bbox).await?.to_vec().await;
-		assert!(!op.core.cache.is_empty(), "cache should be populated");
+		op.tile_stream(base_bbox).await?.to_vec().await;
 
-		// Walk down through all zoom levels to drain the cache
+		let after_base = cached_blocks(&op).await;
+		assert!(after_base > 0, "the base level should have been cached");
+
 		for level in (0..6).rev() {
 			let lvl_bbox = metadata.tile_pyramid().unwrap().level_ref(level).to_bbox();
-			let _tiles = op.tile_stream(lvl_bbox).await?.to_vec().await;
+			op.tile_stream(lvl_bbox).await?.to_vec().await;
 		}
 
-		// After consuming all levels the cache should be empty
 		assert!(
-			op.core.cache.is_empty(),
-			"cache should be fully drained after building all levels"
+			cached_blocks(&op).await >= after_base,
+			"building every level below the base emptied the cache"
+		);
+
+		Ok(())
+	}
+
+	/// A cold cache is a slow path, not an empty answer.
+	///
+	/// Nothing is cached here, so every block this needs is computed from the
+	/// source on the way down.
+	#[tokio::test]
+	async fn compose_from_children_computes_what_is_not_cached() -> Result<()> {
+		let op = make_operation(256, 6).await;
+
+		let bbox = min_tile_at(&op, 5)?.to_tile_bbox();
+		let result = op.core.compose_from_children(bbox).await?;
+
+		let items: Vec<_> = result.into_iter().filter(|(_, img)| img.is_some()).collect();
+		assert!(
+			!items.is_empty(),
+			"a cold cache should be filled, not reported as empty"
 		);
 
 		Ok(())
 	}
 
 	#[tokio::test]
-	async fn build_images_from_cache_with_empty_cache() -> Result<()> {
-		let op = make_operation(256, 6).await;
-
-		// Request from cache without populating it — should return empty/transparent tiles
-		let bbox = TileBBox::from_min_and_size(5, 0, 0, 1, 1)?;
-		let result = op.core.build_images_from_cache(bbox).await?;
-		let items: Vec<_> = result.into_iter().filter(|(_, img)| img.is_some()).collect();
-		assert!(items.is_empty(), "empty cache should produce no composed images");
-
-		Ok(())
-	}
-
-	#[tokio::test]
-	async fn build_images_from_cache_with_none_entries() -> Result<()> {
+	async fn compose_from_children_with_none_entries() -> Result<()> {
 		let op = make_operation(256, 6).await;
 		let half_size = op.core.tile_size / 2;
 
@@ -556,10 +570,10 @@ mod tests {
 				entries.push((coord, blob));
 			}
 		}
-		op.core.cache.insert(block_key, entries);
+		op.core.cache.insert(block_key, std::sync::Arc::new(entries)).await;
 
 		let bbox = TileBBox::from_min_and_size(5, 0, 0, 8, 8)?;
-		let result = op.core.build_images_from_cache(bbox).await?;
+		let result = op.core.compose_from_children(bbox).await?;
 
 		// Should still produce some composed tiles without errors
 		let items: Vec<_> = result.into_iter().collect();
@@ -640,6 +654,62 @@ mod tests {
 		let lvl3_bbox = metadata.tile_pyramid().unwrap().level_ref(3).to_bbox();
 		let tiles = op.tile_stream(lvl3_bbox).await?.to_vec().await;
 		assert!(!tiles.is_empty(), "should produce overview tiles with tile_size=512");
+
+		Ok(())
+	}
+	/// A depth-first pass must read every source tile exactly once.
+	///
+	/// This is the whole reason the cache exists. Composing a level consumes
+	/// the blocks above it, and a traversal hands out blocks *clipped* to the
+	/// pyramid rather than whole ones — so a caching rule that only recognised
+	/// whole blocks would quietly cache nothing at the edges of the data and
+	/// rebuild entire subtrees from the source, with every other test here
+	/// still passing. Counting the reads is what notices.
+	#[tokio::test]
+	async fn a_depth_first_pass_reads_every_source_tile_exactly_once() -> Result<()> {
+		use std::sync::{
+			Arc,
+			atomic::{AtomicUsize, Ordering},
+		};
+
+		let base = 7u8;
+		// Wide enough that the base level spans several blocks and is clipped
+		// by most of them; a fixture the size of one block cannot show this.
+		let geo = GeoBBox::new(-20.0, 20.0, 30.0, 55.0).unwrap();
+		let pyramid = TilePyramid::from_geo_bbox(base, base, &geo).unwrap();
+		let base_tiles = pyramid.level_ref(base).to_bbox().count_tiles();
+
+		let reads = Arc::new(AtomicUsize::new(0));
+		let counter = reads.clone();
+
+		let mut source = DummyImageSource::new(
+			move |coord| {
+				counter.fetch_add(1, Ordering::Relaxed);
+				let color = Rgb([(coord.x % 251) as u8, (coord.y % 251) as u8, 7]);
+				let image = DynamicImage::ImageRgb8(RgbImage::from_pixel(256, 256, color));
+				Tile::from_image(image, TileFormat::PNG).ok()
+			},
+			TileFormat::PNG,
+			Some(pyramid),
+		)
+		.unwrap();
+		source.tilejson_mut().set_tile_size(256).unwrap();
+
+		let op = Operation::build(
+			VPLNode::try_from_str(&format!("raster_overview level={base}")).unwrap(),
+			Box::new(source),
+			&PipelineFactory::new_dummy(),
+		)
+		.await?;
+
+		let produced = depth_first_pass(&op, 0).await?;
+		assert!(!produced.is_empty(), "the pass should have produced tiles");
+
+		assert_eq!(
+			reads.load(Ordering::Relaxed) as u64,
+			base_tiles,
+			"the pass rebuilt part of the pyramid from the source instead of from the cache"
+		);
 
 		Ok(())
 	}

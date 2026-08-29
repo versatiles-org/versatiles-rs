@@ -1,11 +1,9 @@
-use std::sync::{
-	Arc,
-	atomic::{AtomicUsize, Ordering},
-};
+use std::sync::Arc;
 
-use anyhow::{Result, ensure};
-use dashmap::DashMap;
+use anyhow::{Result, anyhow, ensure};
+use futures::FutureExt;
 use imageproc::image::{DynamicImage, GenericImage};
+use moka::future::Cache;
 use versatiles_container::{
 	Tile, TileSource, TileSourceMetadata, TileStreamErrorExt, TilesRuntime, Traversal, TraversalOrder,
 };
@@ -18,8 +16,26 @@ static BLOCK_TILE_COUNT: u32 = 16;
 /// Tile size assumed when a source declares none.
 const DEFAULT_TILE_SIZE: u32 = 512;
 
+/// How much the staging cache may hold before blocks start being evicted.
+///
+/// A bound where there used to be none: the map this replaced grew without
+/// limit and only logged a warning once it passed this same figure. Evicting a
+/// block is now merely expensive rather than wrong — whatever is missing gets
+/// computed again — so the number only has to be large enough that a
+/// depth-first pass never reaches it.
+const CACHE_CAPACITY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
 /// Scaling function type used to downscale tiles by a factor of 2.
 pub type ScaleDownFn = Arc<dyn Fn(&DynamicImage) -> Result<DynamicImage> + Send + Sync>;
+
+/// One block of tiles, each already downscaled by half and PNG-encoded.
+///
+/// This is how a zoom level is remembered: four of these placed side by side
+/// are exactly one block of full-size tiles at the level below.
+pub type ScaledEntries = Vec<(TileCoord, Option<Blob>)>;
+
+/// A [`ScaledEntries`] shared between the cache and everything reading it.
+pub type ScaledBlock = Arc<ScaledEntries>;
 
 /// Shared overview core that generates lower-zoom tiles by downscaling from a base zoom level.
 ///
@@ -32,12 +48,18 @@ pub struct OverviewCore {
 	pub tilejson: TileJSON,
 	pub level_base: u8,
 	pub tile_size: u32,
-	#[expect(
-		clippy::type_complexity,
-		reason = "a coord-keyed cache of scaled-down tiles; a type alias would only move the signature"
-	)]
-	pub cache: Arc<DashMap<TileCoord, Vec<(TileCoord, Option<Blob>)>>>,
-	pub(crate) cache_bytes: Arc<AtomicUsize>,
+	/// Scaled blocks, keyed by the northwest tile of the block they cover.
+	///
+	/// This is a memo table, not a hand-off buffer: reading a block leaves it
+	/// in place, and a block that is not there is computed rather than reported
+	/// as missing. That is what makes the operation answer the same thing
+	/// however the requests arrive — a tile server asking for one tile out of
+	/// nowhere gets the same bytes as a converter walking the pyramid.
+	///
+	/// Filling it is still worth it for exactly one reason: a depth-first pass
+	/// produces every block just before the level above needs it, so each one
+	/// is computed once and read once.
+	pub cache: Cache<TileCoord, ScaledBlock>,
 	scale_fn: ScaleDownFn,
 }
 
@@ -106,8 +128,13 @@ impl OverviewCore {
 			},
 			|ts| u32::from(ts.size()),
 		);
-		let cache = Arc::new(DashMap::new());
-		let cache_bytes = Arc::new(AtomicUsize::new(0));
+
+		let cache = Cache::builder()
+			.max_capacity(CACHE_CAPACITY_BYTES)
+			.weigher(|_key: &TileCoord, block: &ScaledBlock| -> u32 {
+				u32::try_from(estimate_entry_bytes(block)).unwrap_or(u32::MAX)
+			})
+			.build();
 
 		metadata.set_traversal(Traversal::new(
 			TraversalOrder::DepthFirst,
@@ -123,16 +150,90 @@ impl OverviewCore {
 			level_base,
 			tile_size,
 			cache,
-			cache_bytes,
 			scale_fn,
 		})
 	}
 
-	#[context("Failed to build images from cache for bbox {bbox:?}")]
-	pub async fn build_images_from_cache(&self, bbox: TileBBox) -> Result<TileBBoxMap<Option<DynamicImage>>> {
-		log::trace!("build_images_from_cache: {bbox:?}");
+	/// The block a cache key stands for: `BLOCK_TILE_COUNT` tiles square, or
+	/// the whole level when the level is smaller than one block.
+	fn block_bbox(key: TileCoord) -> Result<TileBBox> {
+		let size = BLOCK_TILE_COUNT.min(1u32 << key.level);
+		TileBBox::from_min_and_size(key.level, key.x, key.y, size, size)
+	}
 
-		let size = bbox.max_count().min(BLOCK_TILE_COUNT);
+	/// The blocks covering `bbox`, in the grid the cache is keyed on.
+	fn blocks_covering(bbox: TileBBox) -> Vec<TileBBox> {
+		let size = BLOCK_TILE_COUNT.min(bbox.max_count());
+		bbox.rounded(size).iter_grid(size).collect()
+	}
+
+	/// Full-size images for `bbox`: read from the source at the base level,
+	/// composed from the level above it anywhere below that.
+	///
+	/// Boxed because this and [`OverviewCore::scaled_block`] call each other —
+	/// a plain pair of `async fn`s would have infinitely sized futures.
+	pub fn full_images(
+		&self,
+		bbox: TileBBox,
+	) -> futures::future::BoxFuture<'_, Result<TileBBoxMap<Option<DynamicImage>>>> {
+		async move {
+			if bbox.level() == self.level_base {
+				log::trace!("overview: reading images from the source for {bbox:?}");
+				return TileBBoxMap::<Option<DynamicImage>>::from_stream(
+					bbox,
+					self
+						.source
+						.tile_stream(bbox)
+						.await?
+						.map_parallel_try(|_coord, tile| tile.into_image())
+						.record_errors(&self.runtime, "overview"),
+				)
+				.await;
+			}
+			self.compose_from_children(bbox).await
+		}
+		.boxed()
+	}
+
+	/// The scaled block at `key`, computing it if it is not cached.
+	///
+	/// [`Cache::try_get_with`] makes concurrent callers asking for the same
+	/// block share one computation instead of each doing the whole subtree.
+	///
+	/// The recursion underneath cannot deadlock on the per-key guard moka holds
+	/// while computing: a block is built only from blocks one level *closer to
+	/// the base*, so the keys a computation waits on are strictly deeper than
+	/// its own and no cycle can form.
+	fn scaled_block(&self, key: TileCoord) -> futures::future::BoxFuture<'_, Result<ScaledBlock>> {
+		async move {
+			self
+				.cache
+				.try_get_with(key, self.compute_scaled_block(key))
+				.await
+				// `try_get_with` hands back a shared error, which `anyhow` cannot
+				// take ownership of; keep the whole chain as the message.
+				.map_err(|e: Arc<anyhow::Error>| anyhow!("{e:#}"))
+		}
+		.boxed()
+	}
+
+	#[context("Failed to compute the scaled block at {key:?}")]
+	async fn compute_scaled_block(&self, key: TileCoord) -> Result<ScaledBlock> {
+		let bbox = Self::block_bbox(key)?;
+		log::trace!("overview: computing scaled block {bbox:?}");
+		let container = self.full_images(bbox).await?;
+		let (entries, _) = self.scale_and_emit(container, None, true).await?;
+		Ok(Arc::new(entries))
+	}
+
+	/// Compose full-size images for `bbox` out of the four blocks above it.
+	///
+	/// Each source block holds tiles already downscaled by half, so a tile here
+	/// is its four children placed in quadrants — no scaling happens on this
+	/// path, only assembly.
+	#[context("Failed to compose images for bbox {bbox:?}")]
+	pub async fn compose_from_children(&self, bbox: TileBBox) -> Result<TileBBoxMap<Option<DynamicImage>>> {
+		log::trace!("compose_from_children: {bbox:?}");
 
 		ensure!(
 			bbox.level() < self.level_base,
@@ -140,44 +241,50 @@ impl OverviewCore {
 			bbox.level(),
 			self.level_base
 		);
-		ensure!(
-			bbox.width() <= size,
-			"bbox width {} exceeds the block size {size}",
-			bbox.width()
-		);
-		ensure!(
-			bbox.height() <= size,
-			"bbox height {} exceeds the block size {size}",
-			bbox.height()
-		);
 
-		let bbox0 = bbox.rounded(size);
-		assert_eq!(bbox0.width(), size);
-		assert_eq!(bbox0.height(), size);
+		let block = bbox.rounded(BLOCK_TILE_COUNT.min(bbox.max_count()));
+		ensure!(
+			block.width() <= BLOCK_TILE_COUNT && block.height() <= BLOCK_TILE_COUNT,
+			"bbox {bbox:?} spans more than one block"
+		);
 
 		let mut map: TileBBoxMap<Vec<(TileCoord, DynamicImage)>> = TileBBoxMap::new_default(bbox)?;
 
 		let full_size = self.tile_size;
 		let half_size = self.tile_size / 2;
 
-		// get images from cache
-		for q in &[0, 1, 2, 3] {
-			let bbox1 = bbox0.leveled_up().quadrant(*q)?;
+		// Collected rather than iterated lazily: `iter_grid` hands back a boxed
+		// iterator that is not `Send`, and this loop awaits inside.
+		let children: Vec<TileBBox> = block.leveled_up().iter_grid(BLOCK_TILE_COUNT).collect();
 
-			if let Some((_, blobs1)) = self.cache.remove(&bbox1.min_tile()?) {
-				let entry_bytes = estimate_entry_bytes(&blobs1);
-				self.cache_bytes.fetch_sub(entry_bytes, Ordering::Relaxed);
-				for (coord1, blob1) in blobs1 {
-					if let Some(blob1) = blob1 {
-						let image1 = versatiles_image::format::png::blob2image(&blob1)?;
-						assert_eq!(image1.width(), half_size);
-						assert_eq!(image1.height(), half_size);
-						let coord0 = coord1.to_level_decreased()?;
-						if bbox.includes_coord(&coord0) {
-							map.get_mut(&coord0)?.push((coord1, image1));
-						}
-					}
+		for child in children {
+			let key = child.min_tile()?;
+
+			// The pyramid check is a shortcut past *computing* a block, not a
+			// reason to ignore one already held: nothing of the source lies
+			// under this child, which is ordinary for any raster that does not
+			// cover the whole world, and building it would walk all the way
+			// down to the base level only to find nothing there.
+			let block = match self.cache.get(&key).await {
+				Some(block) => block,
+				None if self.metadata.intersection_bbox(&child).is_empty() => continue,
+				None => self.scaled_block(key).await?,
+			};
+
+			for (coord1, blob1) in block.iter() {
+				let Some(blob1) = blob1 else { continue };
+				let coord0 = coord1.to_level_decreased()?;
+				if !bbox.includes_coord(&coord0) {
+					continue;
 				}
+				let image1 = versatiles_image::format::png::blob2image(blob1)?;
+				ensure!(
+					image1.width() == half_size && image1.height() == half_size,
+					"cached tile {coord1:?} is {}x{} px, expected {half_size} px square",
+					image1.width(),
+					image1.height()
+				);
+				map.get_mut(&coord0)?.push((*coord1, image1));
 			}
 		}
 
@@ -203,24 +310,25 @@ impl OverviewCore {
 		TileBBoxMap::<Option<DynamicImage>>::from_iter(bbox, vec.into_iter())
 	}
 
-	/// Consume the container: scale each image down for the cache and wrap
-	/// the original in a [`Tile`] — all in parallel, with zero image clones.
-	#[context("Failed to scale and encode tiles for bbox {bbox:?}")]
-	async fn scale_cache_and_encode(
+	/// Consume the container: scale each image down for the cache and wrap the
+	/// ones inside `emit` in a [`Tile`] — all in parallel, with zero image
+	/// clones. Skipping either half costs nothing, so a caller that only wants
+	/// tiles does not pay for scaling, and vice versa.
+	#[context("Failed to scale and encode tiles for {emit:?}")]
+	async fn scale_and_emit(
 		&self,
 		container: TileBBoxMap<Option<DynamicImage>>,
-		bbox: TileBBox,
-	) -> Result<Vec<(TileCoord, Tile)>> {
-		let container_bbox = *container.bbox();
+		emit: Option<TileBBox>,
+		scale: bool,
+	) -> Result<(ScaledEntries, Vec<(TileCoord, Tile)>)> {
 		let format = *self.source.metadata().tile_format();
 		let full_size = self.tile_size;
 		let scale_fn = self.scale_fn.clone();
-		let need_cache = container_bbox.level() > 0 && container_bbox.level() <= self.level_base;
 
 		let results: Vec<_> = futures::future::join_all(container.into_iter().map(|(coord, image_opt)| {
 			let scale_fn = scale_fn.clone();
 			tokio::task::spawn_blocking(move || {
-				let cached = if need_cache {
+				let cached = if scale {
 					image_opt.as_ref().map(|img| {
 						assert_eq!(img.width(), full_size);
 						assert_eq!(img.height(), full_size);
@@ -231,7 +339,7 @@ impl OverviewCore {
 				} else {
 					None
 				};
-				let tile = if bbox.includes_coord(&coord) {
+				let tile = if emit.is_some_and(|bbox| bbox.includes_coord(&coord)) {
 					image_opt.map(|img| (coord, Tile::from_image(img, format).expect("source format is raster")))
 				} else {
 					None
@@ -245,19 +353,7 @@ impl OverviewCore {
 
 		let (cache_entries, tiles): (Vec<_>, Vec<_>) = results.into_iter().unzip();
 
-		if need_cache {
-			let mut key = container_bbox.min_tile()?;
-			key.floor(BLOCK_TILE_COUNT);
-			let entry_bytes = estimate_entry_bytes(&cache_entries);
-			let total = self.cache_bytes.fetch_add(entry_bytes, Ordering::Relaxed) + entry_bytes;
-			let gb = total as f64 / (1024.0 * 1024.0 * 1024.0);
-			if gb > 2.0 {
-				log::warn!("Overview staging area using {gb:.1} GB — consider reducing dataset size or base zoom level");
-			}
-			self.cache.insert(key, cache_entries);
-		}
-
-		Ok(tiles.into_iter().flatten().collect())
+		Ok((cache_entries, tiles.into_iter().flatten().collect()))
 	}
 
 	pub async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {
@@ -292,45 +388,48 @@ impl OverviewCore {
 			return self.source.tile_stream(bbox).await;
 		}
 
-		let size = bbox.max_count().min(BLOCK_TILE_COUNT);
-		let bbox0_raw = bbox.rounded(size);
-		assert_eq!(bbox0_raw.width(), size);
-		assert_eq!(bbox0_raw.height(), size);
-		let bbox0 = self.metadata.intersection_bbox(&bbox0_raw);
-		// Nothing of the source lies under this block, which is ordinary for any
-		// raster that does not cover the whole world: below the base level a
-		// request outside the data's footprint intersects to nothing. The answer
-		// is an empty stream, the same one `tile_coord_stream` gives after its
-		// own intersection above. Without this, `build_images_from_cache` is
-		// handed an empty bbox — which passes all three of its `ensure!`s, since
-		// a width of 0 is not too wide — and `TileBBox::round`, a documented
-		// no-op on an empty bbox, leaves the width at 0 for its `assert_eq!` to
-		// abort on. See issue #263.
-		if bbox0.is_empty() {
-			return Ok(TileStream::empty());
+		let mut tiles: Vec<(TileCoord, Tile)> = Vec::new();
+
+		for block in Self::blocks_covering(bbox) {
+			// What the source can possibly have in this block. An empty
+			// intersection is ordinary for any raster that does not cover the
+			// whole world: below the base level a request outside the data's
+			// footprint intersects to nothing. The answer is no tiles, the same
+			// one `tile_coord_stream` gives after its own intersection above.
+			// See issue #263.
+			let present = self.metadata.intersection_bbox(&block);
+			if present.is_empty() {
+				continue;
+			}
+
+			// Only the part of the block the caller asked for. Computing the
+			// whole block regardless would mean 256 tiles of work to answer a
+			// tile server asking for one.
+			let mut wanted = block;
+			wanted.intersect_bbox(&bbox)?;
+			if wanted.is_empty() {
+				continue;
+			}
+
+			// Caching a partial block would be worse than not caching it: the
+			// entry would be indistinguishable from a complete one and every
+			// level built on top of it would silently be missing tiles. So the
+			// block is only remembered once what was computed covers everything
+			// the source has here — which is exactly what a traversal asks for,
+			// since it clips its blocks to the pyramid too. Level 0 has nothing
+			// above it to be composed into and is never worth keeping.
+			let worth_caching = block.level() > 0 && wanted.includes_bbox(&present);
+
+			let container = self.full_images(wanted).await?;
+			let (entries, block_tiles) = self.scale_and_emit(container, Some(bbox), worth_caching).await?;
+
+			if worth_caching {
+				self.cache.insert(block.min_tile()?, Arc::new(entries)).await;
+			}
+			tiles.extend(block_tiles);
 		}
 
-		let container: TileBBoxMap<Option<DynamicImage>> = if bbox.level() == self.level_base {
-			log::trace!("Fetching images from source for bbox {bbox:?}");
-			TileBBoxMap::<Option<DynamicImage>>::from_stream(
-				bbox,
-				self
-					.source
-					.tile_stream(bbox)
-					.await?
-					.map_parallel_try(|_coord, tile| tile.into_image())
-					.record_errors(&self.runtime, "overview"),
-			)
-			.await?
-		} else {
-			log::trace!("Building images from cache for bbox {bbox:?}");
-			self.build_images_from_cache(bbox0).await?
-		};
-
-		log::trace!("Scaling, caching, and encoding tiles for bbox {bbox:?}");
-		let vec = self.scale_cache_and_encode(container, bbox).await?;
-
-		Ok(TileStream::from_vec(vec))
+		Ok(TileStream::from_vec(tiles))
 	}
 }
 
@@ -394,10 +493,10 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn build_images_from_cache_rejects_level_gte_base() -> Result<()> {
+	async fn compose_from_children_rejects_level_gte_base() -> Result<()> {
 		let core = make_core(5)?;
 		let bbox = TileBBox::new_full(5)?;
-		let result = core.build_images_from_cache(bbox).await;
+		let result = core.compose_from_children(bbox).await;
 		assert!(result.is_err());
 		Ok(())
 	}

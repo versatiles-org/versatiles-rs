@@ -32,7 +32,6 @@ gdal = { git = "https://github.com/AlexanderWillner/gdal", rev = "bc255dce662300
 gdal-sys = { git = "https://github.com/AlexanderWillner/gdal", rev = "bc255dce662300a70d64b64be7c641912f48e780", version = "0.12", optional = true, features = ["bindgen"] }
 imageproc = { workspace = true, features = ["text"] }
 itertools = { workspace = true, features = ["use_alloc"] }
-dashmap.workspace = true
 log.workspace = true
 moka.workspace = true
 nom = { version = "8.0.0" }
