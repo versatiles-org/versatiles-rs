@@ -442,13 +442,27 @@ mod tests {
 		Ok(())
 	}
 
+	/// The name has to be refused for its extension, not for anything else.
+	///
+	/// `assert!(is_err())` alone passed for the wrong reason: `places.txt` is
+	/// not a committed fixture, so on a clean checkout this reported a missing
+	/// file and the extension was never reached. `GeoDataPath` now refuses the
+	/// name before anything opens it, which is what makes the assertion below
+	/// meaningful — and true whether or not the file is there.
 	#[tokio::test]
 	async fn unsupported_extension_errors() {
 		let factory = PipelineFactory::new_dummy();
-		let result = factory
+		let error = factory
 			.operation_from_vpl("from_geo filename=\"../testdata/places.txt\"")
-			.await;
-		assert!(result.is_err());
+			.await
+			.expect_err("'.txt' is not an extension from_geo reads");
+
+		assert!(
+			error
+				.chain()
+				.any(|e| e.to_string().contains("unsupported file extension '.txt'")),
+			"expected the extension to be the reason, got: {error:?}"
+		);
 	}
 
 	#[tokio::test]

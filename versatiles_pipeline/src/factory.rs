@@ -701,7 +701,7 @@ mod tests {
 		let factory = PipelineFactory::new_runtime_reader(Path::new("../testdata"), TilesRuntime::new_silent());
 
 		let operation = factory
-			.operation_from_vpl("from_container filename=\"berlin.versatiles\"")
+			.operation_from_vpl("from_container filename=\"berlin.mbtiles\"")
 			.await?;
 
 		let pyramid = operation.tile_pyramid().await?;
@@ -716,7 +716,7 @@ mod tests {
 	/// neither consuming it, and the folded result matches what `build_pipeline` produces.
 	#[tokio::test]
 	async fn a_runtime_read_node_can_be_reused_for_several_tails() -> Result<()> {
-		const VPL: &str = "from_container filename=\"berlin.versatiles\" | filter level_min=10 level_max=12";
+		const VPL: &str = "from_container filename=\"berlin.mbtiles\" | filter level_min=10 level_max=12";
 		let factory = PipelineFactory::new_runtime_reader(Path::new("../testdata"), TilesRuntime::new_silent());
 
 		let whole = factory.build_pipeline(parse_vpl(VPL)?).await?;

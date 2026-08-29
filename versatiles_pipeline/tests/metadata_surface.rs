@@ -315,8 +315,11 @@ fn every_argument_naming_a_file_says_which_files() {
 	}
 
 	// The floor: a rule keyed on a shape stops having a subject when the shape
-	// is renamed, and would then pass by vacuum.
-	assert!(seen >= 15, "expected the fifteen path arguments, found {seen}");
+	// is renamed, and would then pass by vacuum. Four of the fifteen belong to
+	// the `from_gdal_*` operations, which the registry only holds when that
+	// feature is on — the same absence `FEATURE_GATED` accounts for above.
+	let expected = if feature_is_on("gdal") { 15 } else { 11 };
+	assert!(seen >= expected, "expected {expected} path arguments, found {seen}");
 }
 
 /// `Only` is the accepted set, so everything in it has to build.

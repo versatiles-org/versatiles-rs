@@ -231,7 +231,7 @@ mod tests {
 	/// result changing. See issue #262.
 	#[tokio::test]
 	async fn from_parts_matches_from_pipeline() -> Result<()> {
-		const VPL: &str = "from_container filename=\"berlin.versatiles\" | filter level_min=10 level_max=12";
+		const VPL: &str = "from_container filename=\"berlin.mbtiles\" | filter level_min=10 level_max=12";
 		let dir = Path::new("../testdata");
 
 		let whole = PipelineReader::from_pipeline(parse_vpl(VPL)?, "whole", dir, TilesRuntime::new_silent()).await?;
@@ -263,7 +263,7 @@ mod tests {
 	async fn from_parts_rejects_a_read_node_in_the_tail() -> Result<()> {
 		let dir = Path::new("../testdata");
 		let factory = PipelineFactory::new_runtime_reader(dir, TilesRuntime::new_silent());
-		let (head, _) = parse_vpl("from_container filename=\"berlin.versatiles\"")?.split()?;
+		let (head, _) = parse_vpl("from_container filename=\"berlin.mbtiles\"")?.split()?;
 		let head: SharedTileSource = factory.read_operation_from_node(head).await?.into();
 
 		let tail = vec![parse_vpl("from_debug format=png")?.split()?.0];
