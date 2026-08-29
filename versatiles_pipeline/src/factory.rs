@@ -278,6 +278,45 @@ impl PipelineFactory {
 		PipelineFactory::new_default(DataLocation::from(PathBuf::new()), create_reader, runtime)
 	}
 
+	/// Creates a default-registered factory whose reads resolve through `runtime`.
+	///
+	/// This is the wiring [`PipelineReader::from_pipeline`](crate::PipelineReader::from_pipeline)
+	/// uses, kept in one place. The callback [`new_default`](Self::new_default) takes is not
+	/// something a caller outside this crate can reproduce by inspection: it has to resolve the
+	/// [`DataLocation`] against the runtime, thread the per-source SSH identity through, and box
+	/// the `Arc` the runtime returns rather than unwrap it — that last one is not a style choice,
+	/// since unwrapping fails outright whenever the runtime already holds the reader in its cache.
+	///
+	/// So a caller driving the fold itself with
+	/// [`read_operation_from_node`](Self::read_operation_from_node) — which is what
+	/// [`PipelineReader::from_parts`](crate::PipelineReader::from_parts) does — gets the factory
+	/// `PipelineReader` builds rather than a lookalike that drifts from it. See issue #262.
+	#[must_use]
+	pub fn new_runtime_reader(dir: impl Into<DataLocation>, runtime: TilesRuntime) -> Self {
+		let callback = Self::runtime_reader_callback(runtime.clone());
+		PipelineFactory::new_default(dir.into(), callback, runtime)
+	}
+
+	/// The reader callback [`new_runtime_reader`](Self::new_runtime_reader) installs.
+	fn runtime_reader_callback(runtime: TilesRuntime) -> Callback {
+		Box::new(
+			move |location: DataLocation, ssh_identity: Option<PathBuf>| -> BoxFuture<Result<Box<dyn TileSource>>> {
+				let runtime = runtime.clone();
+				Box::pin(async move {
+					let reader = runtime
+						.reader_from_location_with_ssh_identity(location, ssh_identity.as_deref())
+						.await?;
+					// The runtime hands out a `SharedTileSource`, and the callback owes a `Box`.
+					// Boxing the `Arc` satisfies that without claiming sole ownership of the
+					// reader: nothing here mutates it, because `TileSource` has no `&mut self`
+					// method to mutate it with. Unwrapping the `Arc` instead would fail outright
+					// whenever the runtime already holds the reader in its cache. See issue #259.
+					Ok(Box::new(reader) as Box<dyn TileSource>)
+				})
+			},
+		)
+	}
+
 	/// Registers a read operation factory under its VPL tag name.
 	fn add_read_factory(&mut self, factory: Box<dyn ReadOperationFactoryTrait>) {
 		self.read_ops.insert(factory.tag_name().to_string(), factory);
@@ -598,7 +637,7 @@ pub async fn compatible_transforms(source: &dyn TileSource) -> Vec<(OperationMet
 
 #[cfg(test)]
 mod tests {
-	use std::sync::Arc;
+	use std::{path::Path, sync::Arc};
 
 	use versatiles_container::SharedTileSource;
 
@@ -649,6 +688,70 @@ mod tests {
 		assert_eq!(folded.source_type(), whole.source_type());
 		assert_eq!(folded.metadata(), whole.metadata());
 		assert_eq!(folded.tilejson().stringify(), whole.tilejson().stringify());
+
+		Ok(())
+	}
+
+	/// The callback [`PipelineFactory::new_runtime_reader`] installs is the one thing
+	/// [`PipelineFactory::new_dummy`] cannot exercise — every other test here resolves reads to a
+	/// synthetic source, so a break in the real wiring would show up first in someone else's
+	/// repository. This opens an actual container through the runtime.
+	#[tokio::test]
+	async fn a_runtime_reader_factory_opens_a_real_container() -> Result<()> {
+		let factory = PipelineFactory::new_runtime_reader(Path::new("../testdata"), TilesRuntime::new_silent());
+
+		let operation = factory
+			.operation_from_vpl("from_container filename=\"berlin.versatiles\"")
+			.await?;
+
+		let pyramid = operation.tile_pyramid().await?;
+		assert_eq!(pyramid.level_min(), Some(0));
+		assert_eq!(pyramid.level_max(), Some(14));
+
+		Ok(())
+	}
+
+	/// The fold issue #262 exists to make reachable, driven through the runtime-backed callback
+	/// rather than the dummy one: the read node is built once and two different tails go onto it,
+	/// neither consuming it, and the folded result matches what `build_pipeline` produces.
+	#[tokio::test]
+	async fn a_runtime_read_node_can_be_reused_for_several_tails() -> Result<()> {
+		const VPL: &str = "from_container filename=\"berlin.versatiles\" | filter level_min=10 level_max=12";
+		let factory = PipelineFactory::new_runtime_reader(Path::new("../testdata"), TilesRuntime::new_silent());
+
+		let whole = factory.build_pipeline(parse_vpl(VPL)?).await?;
+
+		// Built once, and kept.
+		let (head, tail) = parse_vpl(VPL)?.split()?;
+		let head: SharedTileSource = factory.read_operation_from_node(head).await?.into();
+
+		let mut folded: Box<dyn TileSource> = Box::new(head.clone());
+		for node in tail {
+			folded = factory.tran_operation_from_node(node, folded).await?;
+		}
+		let other = factory
+			.tran_operation_from_node(parse_vpl("filter level_min=11")?.split()?.0, Box::new(head.clone()))
+			.await?;
+
+		assert_eq!(folded.source_type(), whole.source_type());
+		assert_eq!(folded.metadata(), whole.metadata());
+		assert_eq!(folded.tilejson().stringify(), whole.tilejson().stringify());
+
+		// the two tails are different pipelines over the same head, not the same one twice
+		let folded_pyramid = folded.tile_pyramid().await?;
+		let other_pyramid = other.tile_pyramid().await?;
+		assert_eq!(
+			(folded_pyramid.level_min(), folded_pyramid.level_max()),
+			(Some(10), Some(12))
+		);
+		assert_eq!(
+			(other_pyramid.level_min(), other_pyramid.level_max()),
+			(Some(11), Some(14))
+		);
+
+		// the head is shared by both tails rather than read again for either, and still usable
+		assert_eq!(Arc::strong_count(&head), 3);
+		assert!(!head.tile_pyramid().await?.is_empty());
 
 		Ok(())
 	}

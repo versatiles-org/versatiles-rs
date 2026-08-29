@@ -6,6 +6,13 @@
 //!
 //! The main entry points are [`PipelineFactory`] (for building operation graphs from VPL) and [`PipelineReader`] (for executing them via the container interface).
 //!
+//! A consumer that rebuilds pipelines repeatedly — an editor watching a map redraw as someone
+//! types — should reach for [`PipelineFactory::new_runtime_reader`] and
+//! [`PipelineReader::from_parts`] instead of rebuilding the whole graph. Building a transform
+//! costs a parameter parse; building a read node costs whatever it takes to load the source,
+//! seconds for a large CSV or GeoJSON. Both of those let a caller keep the read node it already
+//! built across an edit to a transform. See issues #259 and #262.
+//!
 //! [`CsvReader`] is exported too: it is the reader `from_csv` uses, so a consumer that
 //! needs to inspect a CSV before building a pipeline sees exactly what the pipeline will.
 //!

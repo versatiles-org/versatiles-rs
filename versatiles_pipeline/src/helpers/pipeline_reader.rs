@@ -6,23 +6,20 @@
 //! It supports opening from paths or arbitrary [`DataReader`]s, validates and
 //! executes the configured operations, and streams tiles for a given bbox.
 
-use std::{
-	path::{Path, PathBuf},
-	sync::Arc,
-};
+use std::{path::Path, sync::Arc};
 
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use versatiles_container::{
-	DataLocation, SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime,
+	SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime,
 };
 use versatiles_core::{TileBBox, TileCoord, TileJSON, TilePyramid, TileStream, io::DataReader};
 use versatiles_derive::context;
 
 use crate::{
 	PipelineFactory,
-	vpl::{VPLPipeline, parse_vpl},
+	vpl::{VPLNode, VPLPipeline, parse_vpl},
 };
 
 /// Tile reader that executes a VPL-defined operation pipeline and returns composed tiles.
@@ -40,7 +37,7 @@ pub struct PipelineReader {
 impl<'a> PipelineReader {
 	/// Opens a `PipelineReader` from a VPL file on disk.
 	///
-	/// Reads the file, builds the operation graph with [`PipelineFactory::new_default`],
+	/// Reads the file, builds the operation graph with [`PipelineFactory::new_runtime_reader`],
 	/// and returns a ready-to-use reader. Errors include contextual messages via `#[context]`.
 	#[context("opening VPL path '{}'", path.display())]
 	pub async fn open(path: &Path, runtime: TilesRuntime) -> Result<PipelineReader> {
@@ -83,26 +80,40 @@ impl<'a> PipelineReader {
 		dir: &Path,
 		runtime: TilesRuntime,
 	) -> Result<PipelineReader> {
-		let runtime2 = runtime.clone();
-		let callback = Box::new(
-			move |location: DataLocation, ssh_identity: Option<PathBuf>| -> BoxFuture<Result<Box<dyn TileSource>>> {
-				let runtime = runtime2.clone();
-				Box::pin(async move {
-					let reader = runtime
-						.clone()
-						.reader_from_location_with_ssh_identity(location, ssh_identity.as_deref())
-						.await?;
-					// The runtime hands out a `SharedTileSource`, and the callback owes a `Box`.
-					// Boxing the `Arc` satisfies that without claiming sole ownership of the
-					// reader: nothing here mutates it, because `TileSource` has no `&mut self`
-					// method to mutate it with. Unwrapping the `Arc` instead would fail outright
-					// whenever the runtime already holds the reader in its cache. See issue #259.
-					Ok(Box::new(reader) as Box<dyn TileSource>)
-				})
-			},
-		);
-		let factory = PipelineFactory::new_default(DataLocation::from(dir), callback, runtime);
+		let factory = PipelineFactory::new_runtime_reader(dir, runtime);
 		let operation = factory.build_pipeline(pipeline).await?;
+		Ok(PipelineReader {
+			name: name.to_string(),
+			operation,
+		})
+	}
+
+	/// Builds `tail` onto an already-built `head`, for an editor rebuilding only what changed.
+	///
+	/// [`from_pipeline`](Self::from_pipeline) rebuilds every node, and the read node is where
+	/// essentially all the cost is — a transform only parses its parameters and wraps its input,
+	/// while a read node scales with its input, seconds for a large CSV or GeoJSON. An editor
+	/// that rebuilds after each keystroke pays that again for an edit that cannot have changed
+	/// it. Splitting a pipeline with [`VPLPipeline::split`](crate::VPLPipeline::split), keeping
+	/// the head as a [`SharedTileSource`] and passing it here makes the rebuild cost
+	/// proportional to the edit instead. See issues #259 and #262.
+	///
+	/// `head` is taken by value, so a caller keeping it across rebuilds passes a clone of its
+	/// `Arc`; the tile source itself is not cloned. `tail` must contain transform nodes only —
+	/// a read node in it is an error, the same as it would be mid-pipeline.
+	#[context("building pipeline from parts")]
+	pub async fn from_parts(
+		head: SharedTileSource,
+		tail: Vec<VPLNode>,
+		name: &str,
+		dir: &Path,
+		runtime: TilesRuntime,
+	) -> Result<PipelineReader> {
+		let factory = PipelineFactory::new_runtime_reader(dir, runtime);
+		let mut operation: Box<dyn TileSource> = Box::new(head);
+		for node in tail {
+			operation = factory.tran_operation_from_node(node, operation).await?;
+		}
 		Ok(PipelineReader {
 			name: name.to_string(),
 			operation,
@@ -211,6 +222,61 @@ mod tests {
 	async fn open_vpl_str() -> Result<()> {
 		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), TilesRuntime::new_silent()).await?;
 		MockWriter::write(&reader).await?;
+
+		Ok(())
+	}
+
+	/// `from_parts` must produce what [`PipelineReader::from_pipeline`] produces for the same
+	/// pipeline — that is the whole point of it: an editor swaps the cheap path in without the
+	/// result changing. See issue #262.
+	#[tokio::test]
+	async fn from_parts_matches_from_pipeline() -> Result<()> {
+		const VPL: &str = "from_container filename=\"berlin.versatiles\" | filter level_min=10 level_max=12";
+		let dir = Path::new("../testdata");
+
+		let whole = PipelineReader::from_pipeline(parse_vpl(VPL)?, "whole", dir, TilesRuntime::new_silent()).await?;
+
+		let factory = PipelineFactory::new_runtime_reader(dir, TilesRuntime::new_silent());
+		let (head, tail) = parse_vpl(VPL)?.split()?;
+		let head: SharedTileSource = factory.read_operation_from_node(head).await?.into();
+
+		let parts = PipelineReader::from_parts(head.clone(), tail, "parts", dir, TilesRuntime::new_silent()).await?;
+
+		assert_eq!(parts.source_type(), whole.source_type());
+		assert_eq!(parts.metadata(), whole.metadata());
+		assert_eq!(parts.tilejson().stringify(), whole.tilejson().stringify());
+		// a tile inside the Berlin bounds, so this compares content rather than two `None`s
+		let coord = TileCoord::new(12, 2200, 1343)?;
+		let tile = parts.tile(&coord).await?;
+		assert!(tile.is_some(), "expected a tile at {coord:?}");
+		assert_eq!(tile, whole.tile(&coord).await?);
+
+		// the caller keeps its head: `from_parts` took a clone of the `Arc`, not the source
+		assert!(!head.tile_pyramid().await?.is_empty());
+
+		Ok(())
+	}
+
+	/// A read node in `tail` is an error, the same as it would be mid-pipeline — `from_parts`
+	/// folds transforms only.
+	#[tokio::test]
+	async fn from_parts_rejects_a_read_node_in_the_tail() -> Result<()> {
+		let dir = Path::new("../testdata");
+		let factory = PipelineFactory::new_runtime_reader(dir, TilesRuntime::new_silent());
+		let (head, _) = parse_vpl("from_container filename=\"berlin.versatiles\"")?.split()?;
+		let head: SharedTileSource = factory.read_operation_from_node(head).await?.into();
+
+		let tail = vec![parse_vpl("from_debug format=png")?.split()?.0];
+		let error = PipelineReader::from_parts(head, tail, "parts", dir, TilesRuntime::new_silent())
+			.await
+			.unwrap_err();
+
+		assert!(
+			error
+				.chain()
+				.any(|e| e.to_string() == "transform operation 'from_debug' unknown"),
+			"expected an unknown-transform error, got: {error:?}"
+		);
 
 		Ok(())
 	}
