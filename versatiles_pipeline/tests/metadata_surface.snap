@@ -19,7 +19,7 @@ filter.bbox: Option<GeoBBox> | optional
 filter.bbox_border: Option<u32> | optional | default=0 | bounds=[0,4294967295] int
 filter.level_min: Option<ZoomLevel> | optional | bounds=[0,30] int
 filter.level_max: Option<ZoomLevel> | optional | bounds=[0,30] int
-filter.filename: Option<SourceLocation> | optional
+filter.filename: Option<SourceLocation> | optional | accepts=suggested[versatiles,mbtiles,pmtiles,tar]
 
 from_color [read]
 from_color.color: Option<HexColor> | optional | default=000000
@@ -27,11 +27,11 @@ from_color.tile_size: Option<TileSize> | optional | default=512 | values=[256,51
 from_color.format: Option<RasterTileFormat> | optional | default=png | values=[avif,jpg,png,webp]
 
 from_container [read]
-from_container.filename: SourceLocation | required
-from_container.ssh_identity: Option<FilePath> | optional
+from_container.filename: SourceLocation | required | accepts=suggested[versatiles,mbtiles,pmtiles,tar]
+from_container.ssh_identity: Option<FilePath> | optional | accepts=any
 
 from_csv [read]
-from_csv.filename: FilePath | required
+from_csv.filename: FilePath | required | accepts=suggested[csv,tsv]
 from_csv.lon_column: String | required | names=field-of:filename
 from_csv.lat_column: String | required | names=field-of:filename
 from_csv.id_column: Option<String> | optional | names=field-of:filename
@@ -52,27 +52,27 @@ from_debug [read]
 from_debug.format: Option<DebugTileFormat> | optional | default=mvt | values=[mvt,avif,jpg,png,webp]
 
 from_gdal_dem [read]
-from_gdal_dem.filename: FilePath | required
+from_gdal_dem.filename: FilePath | required | accepts=any
 from_gdal_dem.encoding: Option<DemEncoding> | optional | default=mapbox | values=[mapbox,terrarium]
 from_gdal_dem.tile_size: Option<TileSize> | optional | default=512 | values=[256,512]
 from_gdal_dem.level_max: Option<ZoomLevel> | optional | bounds=[0,30] int
 from_gdal_dem.level_min: Option<ZoomLevel> | optional | bounds=[0,30] int
 from_gdal_dem.gdal_reuse_limit: Option<u32> | optional | default=100 | bounds=[0,4294967295] int
 from_gdal_dem.gdal_concurrency_limit: Option<u8> | optional | default=4 | bounds=[0,255] int
-from_gdal_dem.cutline: Option<FilePath> | optional
+from_gdal_dem.cutline: Option<FilePath> | optional | accepts=suggested[geojson,json]
 from_gdal_dem.crs: Option<EpsgCode> | optional | bounds=[1024,32766] int
 from_gdal_dem.bounds: Option<CrsExtent> | optional
 from_gdal_dem.geo_transform: Option<RasterTransform> | optional
 
 from_gdal_raster [read]
-from_gdal_raster.filename: FilePath | required
+from_gdal_raster.filename: FilePath | required | accepts=any
 from_gdal_raster.tile_size: Option<TileSize> | optional | default=512 | values=[256,512]
 from_gdal_raster.level_max: Option<ZoomLevel> | optional | bounds=[0,30] int
 from_gdal_raster.level_min: Option<ZoomLevel> | optional | bounds=[0,30] int
 from_gdal_raster.gdal_reuse_limit: Option<u32> | optional | default=100 | bounds=[0,4294967295] int
 from_gdal_raster.gdal_concurrency_limit: Option<u8> | optional | default=4 | bounds=[0,255] int
 from_gdal_raster.tile_format: Option<RasterTileFormat> | optional | default=png | values=[avif,jpg,png,webp]
-from_gdal_raster.cutline: Option<FilePath> | optional
+from_gdal_raster.cutline: Option<FilePath> | optional | accepts=suggested[geojson,json]
 from_gdal_raster.bands: Option<BandIndices> | optional
 from_gdal_raster.nodata: Option<NodataValues> | optional
 from_gdal_raster.crs: Option<EpsgCode> | optional | bounds=[1024,32766] int
@@ -80,7 +80,7 @@ from_gdal_raster.bounds: Option<CrsExtent> | optional
 from_gdal_raster.geo_transform: Option<RasterTransform> | optional
 
 from_geo [read]
-from_geo.filename: FilePath | required
+from_geo.filename: GeoDataPath | required | accepts=only[geojson,json,ndjson,ndgeojson,geojsonl,geojsonseq,shp]
 from_geo.layer_name: Option<String> | optional | names=new-layer
 from_geo.min_zoom: Option<ZoomLevel> | optional | default=0 | bounds=[0,30] int
 from_geo.max_zoom: Option<ZoomLevel> | optional | bounds=[0,30] int
@@ -128,7 +128,7 @@ from_stacked_raster.format: Option<RasterTileFormat> | optional | values=[avif,j
 from_stacked_raster.auto_overscale: Option<bool> | optional | default=false
 
 from_tile [read]
-from_tile.filename: FilePath | required
+from_tile.filename: TileFilePath | required | accepts=only[avif,bin,geojson,jpeg,jpg,json,mvt,pbf,png,svg,topojson,webp]
 
 from_tilejson [read]
 from_tilejson.url: HttpUrl | required
@@ -145,11 +145,11 @@ meta_update.legend: Option<String> | optional
 meta_update.name: Option<String> | optional
 meta_update.schema: Option<TileSchema> | optional | values=[rgb,rgba,dem/mapbox,dem/terrarium,dem/versatiles,openmaptiles,shortbread@1.0,other]
 meta_update.tilejson: Option<TileJSON> | optional
-meta_update.tilejson_file: Option<FilePath> | optional
+meta_update.tilejson_file: Option<FilePath> | optional | accepts=suggested[json]
 meta_update.tilejson_update: Option<TileJSON> | optional
-meta_update.tilejson_update_file: Option<FilePath> | optional
+meta_update.tilejson_update_file: Option<FilePath> | optional | accepts=suggested[json]
 meta_update.vector_layers: Option<VectorLayers> | optional
-meta_update.vector_layers_file: Option<FilePath> | optional
+meta_update.vector_layers_file: Option<FilePath> | optional | accepts=suggested[json]
 
 raster_flatten [transform]
 raster_flatten.color: Option<HexColor> | optional | default=FFFFFF
@@ -166,7 +166,7 @@ raster_levels.contrast: Option<Contrast> | optional | default=1.0 | bounds=(0,in
 raster_levels.gamma: Option<Gamma> | optional | default=1.0 | bounds=(0,inf) float
 
 raster_mask [transform]
-raster_mask.geojson: FilePath | required
+raster_mask.geojson: FilePath | required | accepts=suggested[geojson,json]
 raster_mask.buffer: Option<f32> | optional | default=0 | bounds=(-inf,inf) float
 raster_mask.blur: Option<f32> | optional | default=0 | bounds=(-inf,inf) float
 raster_mask.blur_function: Option<BlurFunction> | optional | default=linear | values=[linear,cosine]
@@ -209,7 +209,7 @@ vector_repair [transform]
 vector_repair.drop_offenders: Option<bool> | optional | default=false
 
 vector_update_properties [transform]
-vector_update_properties.data_source_path: FilePath | required
+vector_update_properties.data_source_path: FilePath | required | accepts=suggested[csv,tsv]
 vector_update_properties.layer_name: String | required | names=layer-of-source
 vector_update_properties.id_field_tiles: String | required | names=field-of-source
 vector_update_properties.id_field_data: String | required | names=field-of:data_source_path

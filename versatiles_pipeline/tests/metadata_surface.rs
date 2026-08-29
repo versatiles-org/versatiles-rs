@@ -41,7 +41,7 @@ use std::{collections::BTreeMap, fmt::Write as _, fs};
 
 use versatiles_pipeline::{
 	OperationMeta, all_operation_metadata,
-	vpl::{Bounds, FieldReference, VPLFieldMeta},
+	vpl::{Accepts, Bounds, FieldReference, VPLFieldMeta},
 };
 
 /// Committed beside this file so a diff of the surface lands in the same review
@@ -87,7 +87,22 @@ fn render_field(op: &str, field: &VPLFieldMeta) -> String {
 	if let Some(reference) = &field.refers_to {
 		let _ = write!(line, " | names={}", render_reference(*reference));
 	}
+	if let Some(accepts) = &field.accepts {
+		let _ = write!(line, " | accepts={}", render_accepts(*accepts));
+	}
 	line
+}
+
+/// Which files an argument takes. `only=` is a set a dialog can filter on,
+/// `suggested=` one it should preselect and let be overridden, and `any` is a
+/// file argument with no filter — distinct from a line with no `accepts=` at
+/// all, which is an argument that does not name a file.
+fn render_accepts(accepts: Accepts) -> String {
+	match accepts {
+		Accepts::Any => "any".to_string(),
+		Accepts::Suggested(list) => format!("suggested[{}]", list.join(",")),
+		Accepts::Only(list) => format!("only[{}]", list.join(",")),
+	}
 }
 
 /// What an argument names in the data, when it names something there.
@@ -262,6 +277,143 @@ fn the_metadata_surface_matches_the_committed_snapshot() {
 		differences.len(),
 		differences.join("\n\n")
 	);
+}
+
+/// Every argument that names a file says which files.
+///
+/// The compile-time floor is in the `VPLDecode` derive, which refuses a path
+/// argument that declares nothing. This is the runtime half: it survives a
+/// refactor of the derive, and it is what fails if a path type is added to
+/// `PATH_TYPES` without the guard reaching it.
+///
+/// The prose was always there — "GeoJSON polygon outside which pixels become
+/// transparent", "Path to the CSV or TSV file" — and a consumer building a file
+/// dialog could not read it. Fifteen arguments, of which a per-operation guess
+/// got two actively wrong and eight not at all.
+#[test]
+fn every_argument_naming_a_file_says_which_files() {
+	let ops = all_operation_metadata();
+	let mut seen = 0;
+
+	for op in &ops {
+		for field in &op.fields {
+			let names_a_file = field.rust_type.contains("FilePath")
+				|| field.rust_type.contains("SourceLocation")
+				|| field.rust_type.contains("GeoDataPath");
+			if !names_a_file {
+				continue;
+			}
+			seen += 1;
+			assert!(
+				field.accepts.is_some(),
+				"{}.{} is typed {} but says nothing about which files it takes",
+				op.tag_name,
+				field.name,
+				field.rust_type
+			);
+		}
+	}
+
+	// The floor: a rule keyed on a shape stops having a subject when the shape
+	// is renamed, and would then pass by vacuum.
+	assert!(seen >= 15, "expected the fifteen path arguments, found {seen}");
+}
+
+/// `Only` is the accepted set, so everything in it has to build.
+///
+/// The list `from_geo` publishes is the list its type refuses everything
+/// outside of, which is the whole difference between this and the table that
+/// was deleted for being aspirational: that one recorded `["geojson", …]` for
+/// `cutline` and nothing ever consulted it. This consults it.
+#[test]
+fn what_from_geo_offers_is_what_from_geo_reads() {
+	let ops = all_operation_metadata();
+	let field = ops
+		.iter()
+		.find(|op| op.tag_name == "from_geo")
+		.and_then(|op| op.fields.iter().find(|f| f.name == "filename"))
+		.expect("from_geo has a filename");
+
+	let Some(Accepts::Only(offered)) = field.accepts else {
+		panic!("from_geo.filename refuses what it does not read, so it offers a closed set");
+	};
+
+	let validate = field.validate.expect("a typed path parameter validates its value");
+	for ext in offered {
+		let problems = validate(&[format!("data.{ext}")]);
+		assert!(problems.is_empty(), "'.{ext}' is offered but rejected: {problems:?}");
+	}
+	assert!(
+		!validate(&["data.txt".to_string()]).is_empty(),
+		"'.txt' is not offered and must not be accepted"
+	);
+	assert!(
+		!validate(&["data".to_string()]).is_empty(),
+		"a file with no extension names no format"
+	);
+}
+
+/// The same, for the tile formats `from_tile` reads.
+///
+/// `TileFilePath` delegates its parser to `TileFormat`, so this is what keeps
+/// the *published* list in step with it: a format added to `TileFormat` and not
+/// to `EXTENSIONS` shows up here rather than as a dialog quietly filtering out
+/// a file that would have opened.
+#[test]
+fn what_from_tile_offers_is_what_tile_format_reads() {
+	let ops = all_operation_metadata();
+	let field = ops
+		.iter()
+		.find(|op| op.tag_name == "from_tile")
+		.and_then(|op| op.fields.iter().find(|f| f.name == "filename"))
+		.expect("from_tile has a filename");
+
+	let Some(Accepts::Only(offered)) = field.accepts else {
+		panic!("from_tile.filename offers the formats it reads");
+	};
+
+	let validate = field.validate.expect("a typed path parameter validates its value");
+	for ext in offered {
+		assert!(
+			versatiles_core::TileFormat::try_from_str(ext).is_ok(),
+			"'.{ext}' is offered but names no tile format"
+		);
+		let problems = validate(&[format!("tile.{ext}")]);
+		assert!(problems.is_empty(), "'.{ext}' is offered but rejected: {problems:?}");
+	}
+	assert!(
+		!validate(&["tile.txt".to_string()]).is_empty(),
+		"'.txt' names no tile format and must not be accepted"
+	);
+}
+
+/// `Any` is a filter of its own, not a missing one.
+///
+/// `ssh_identity` was handed its operation's container filter — `versatiles,
+/// mbtiles, pmtiles, tar` — for a private key, which is conventionally
+/// extensionless. The correct filter is none, and that has to be sayable.
+#[test]
+fn an_argument_whose_set_is_not_ours_to_state_says_so() {
+	let ops = all_operation_metadata();
+	for (op_name, field_name) in [
+		("from_container", "ssh_identity"),
+		("from_gdal_raster", "filename"),
+		("from_gdal_dem", "filename"),
+	] {
+		let Some(op) = ops.iter().find(|op| op.tag_name == op_name) else {
+			continue; // gdal operations are feature-gated
+		};
+		let field = op
+			.fields
+			.iter()
+			.find(|f| f.name == field_name)
+			.unwrap_or_else(|| panic!("{op_name} has a {field_name}"));
+		assert_eq!(
+			field.accepts,
+			Some(Accepts::Any),
+			"{op_name}.{field_name} takes any file; a list here would be a guess"
+		);
+	}
 }
 
 /// A parameter named like a zoom level is typed as one.
