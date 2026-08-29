@@ -768,6 +768,7 @@ Memory for tile-gathering operations:
 
 - `VERSATILES_MAX_TILES_IN_FLIGHT` - Upper bound on the number of raw source tiles held in memory at once by operations that combine sources (`from_merged_vector`, `from_stacked`, `from_stacked_raster`); default `2048`. Peak memory ≈ this × the largest tile size, so lower it for very large tiles or many sources (e.g. `512`), or raise it for more read-ahead on small tiles.
 - `VERSATILES_OVERVIEW_CACHE_MB` - Memory in megabytes for the block cache `raster_overview` and `dem_overview` build lower zoom levels through (default `2048`). Half of it is reserved for blocks a traversal has already scheduled a consumer for, which is what lets a depth-first conversion build every tile exactly once; the rest is split evenly across zoom levels, keeping the low zooms — the ones that cost the most to rebuild — resident. Raise it if a conversion warns that the reserved half is full, which means some blocks are being built twice.
+- `VERSATILES_OVERVIEW_REQUEST_TILES` - Ceiling on how many source tiles one _single-tile_ request may read while `raster_overview` or `dem_overview` builds it (default `65536`); `0` removes it. Building a low zoom level on demand costs `256 x 4^(levels below the base)` source tiles, so over a dense source a request for a very low zoom is work for a conversion rather than for someone waiting on a response. Bulk streaming — what a conversion does — is never limited.
 
 Memory for reading containers (PMTiles / VersaTiles):
 

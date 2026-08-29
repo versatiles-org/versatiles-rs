@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::sync::{
+	Arc,
+	atomic::{AtomicU64, Ordering},
+};
 
 use anyhow::{Result, anyhow, ensure};
 use futures::FutureExt;
@@ -19,6 +22,83 @@ const DEFAULT_TILE_SIZE: u32 = 512;
 
 /// Scaling function type used to downscale tiles by a factor of 2.
 pub type ScaleDownFn = Arc<dyn Fn(&DynamicImage) -> Result<DynamicImage> + Send + Sync>;
+
+/// Source tiles one interactive request may read before it gives up.
+///
+/// Reaching this means the request asked for a tile far above a dense source:
+/// a tile at zoom `z` costs `256 * 4^(level - z)` source reads from cold, so
+/// four levels above a fully covered base is already the whole base level. Such
+/// a request cannot finish inside a tile server's request timeout anyway, and
+/// failing immediately with the numbers beats spending minutes on a result
+/// nobody is still waiting for.
+const DEFAULT_REQUEST_BUDGET: u64 = 65_536;
+
+/// Overrides [`DEFAULT_REQUEST_BUDGET`]; `0` removes the limit.
+const REQUEST_BUDGET_ENV: &str = "VERSATILES_OVERVIEW_REQUEST_TILES";
+
+/// What one request has left to spend on source tiles.
+///
+/// Only [`OverviewCore::tile`] carries one. Bulk streaming does not: a
+/// conversion asks for the whole pyramid on purpose, and the single call that
+/// builds zoom 0 legitimately reads everything underneath it.
+#[derive(Debug)]
+pub struct ReadBudget {
+	remaining: AtomicU64,
+	limit: u64,
+}
+
+impl ReadBudget {
+	/// A budget of `limit` source tiles.
+	#[must_use]
+	pub fn new(limit: u64) -> Self {
+		Self {
+			remaining: AtomicU64::new(limit),
+			limit,
+		}
+	}
+
+	/// The configured budget, or `None` when the limit is disabled.
+	fn from_env() -> Option<Arc<Self>> {
+		parse_request_budget(std::env::var(REQUEST_BUDGET_ENV).ok().as_deref()).map(|limit| Arc::new(Self::new(limit)))
+	}
+
+	/// Spend `tiles` of the budget, or explain why the request stops here.
+	fn take(&self, tiles: u64, bbox: TileBBox) -> Result<()> {
+		let left = self
+			.remaining
+			.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |left| left.checked_sub(tiles));
+
+		ensure!(
+			left.is_ok(),
+			"this tile needs more than {} source tiles to build, and {bbox:?} is where the budget ran out. Building a \
+			 low zoom level on demand costs 256 x 4^(levels below the base) source tiles, so over a dense source it is \
+			 work for a conversion, not for a request someone is waiting on: convert once and serve the result. Raise \
+			 or remove the ceiling with {REQUEST_BUDGET_ENV} (tiles, 0 disables it).",
+			self.limit
+		);
+		Ok(())
+	}
+}
+
+/// [`ReadBudget::from_env`] without the environment, so the parsing can be
+/// tested without a process-wide variable every other test would also see.
+///
+/// `None` means the ceiling is disabled.
+fn parse_request_budget(raw: Option<&str>) -> Option<u64> {
+	match raw {
+		None => Some(DEFAULT_REQUEST_BUDGET),
+		Some(raw) => match raw.trim().parse::<u64>() {
+			Ok(0) => None,
+			Ok(limit) => Some(limit),
+			Err(_) => {
+				log::warn!(
+					"{REQUEST_BUDGET_ENV} is \"{raw}\", which is not a number of tiles; using {DEFAULT_REQUEST_BUDGET}"
+				);
+				Some(DEFAULT_REQUEST_BUDGET)
+			}
+		},
+	}
+}
 
 /// One block of tiles, each already downscaled by half and PNG-encoded.
 ///
@@ -166,10 +246,18 @@ impl OverviewCore {
 	pub fn full_images(
 		&self,
 		bbox: TileBBox,
+		budget: Option<Arc<ReadBudget>>,
 	) -> futures::future::BoxFuture<'_, Result<TileBBoxMap<Option<DynamicImage>>>> {
 		async move {
 			if bbox.level() == self.level_base {
 				log::trace!("overview: reading images from the source for {bbox:?}");
+				// The only place source tiles are read, so the only place a
+				// budget is spent. Charged against what the source can actually
+				// have here rather than the size of the request, so a sparse
+				// pyramid is not billed for the emptiness around its data.
+				if let Some(budget) = &budget {
+					budget.take(self.metadata.intersection_bbox(&bbox).count_tiles(), bbox)?;
+				}
 				return TileBBoxMap::<Option<DynamicImage>>::from_stream(
 					bbox,
 					self
@@ -181,7 +269,7 @@ impl OverviewCore {
 				)
 				.await;
 			}
-			self.compose_from_children(bbox).await
+			self.compose_from_children(bbox, budget).await
 		}
 		.boxed()
 	}
@@ -192,11 +280,15 @@ impl OverviewCore {
 	/// holds while computing: a block is built only from blocks one level
 	/// *closer to the base*, so the keys a computation waits on are strictly
 	/// deeper than its own and no cycle can form.
-	fn scaled_block(&self, key: TileCoord) -> futures::future::BoxFuture<'_, Result<ScaledBlock>> {
+	fn scaled_block(
+		&self,
+		key: TileCoord,
+		budget: Option<Arc<ReadBudget>>,
+	) -> futures::future::BoxFuture<'_, Result<ScaledBlock>> {
 		async move {
 			self
 				.cache
-				.get_or_compute(key, self.compute_scaled_block(key))
+				.get_or_compute(key, self.compute_scaled_block(key, budget))
 				.await
 				// The cache hands back a shared error, which `anyhow` cannot take
 				// ownership of; keep the whole chain as the message.
@@ -206,10 +298,10 @@ impl OverviewCore {
 	}
 
 	#[context("Failed to compute the scaled block at {key:?}")]
-	async fn compute_scaled_block(&self, key: TileCoord) -> Result<ScaledBlock> {
+	async fn compute_scaled_block(&self, key: TileCoord, budget: Option<Arc<ReadBudget>>) -> Result<ScaledBlock> {
 		let bbox = Self::block_bbox(key)?;
 		log::trace!("overview: computing scaled block {bbox:?}");
-		let container = self.full_images(bbox).await?;
+		let container = self.full_images(bbox, budget).await?;
 		let (entries, _) = self.scale_and_emit(container, None, true).await?;
 		Ok(Arc::new(entries))
 	}
@@ -220,7 +312,11 @@ impl OverviewCore {
 	/// is its four children placed in quadrants — no scaling happens on this
 	/// path, only assembly.
 	#[context("Failed to compose images for bbox {bbox:?}")]
-	pub async fn compose_from_children(&self, bbox: TileBBox) -> Result<TileBBoxMap<Option<DynamicImage>>> {
+	pub async fn compose_from_children(
+		&self,
+		bbox: TileBBox,
+		budget: Option<Arc<ReadBudget>>,
+	) -> Result<TileBBoxMap<Option<DynamicImage>>> {
 		log::trace!("compose_from_children: {bbox:?}");
 
 		ensure!(
@@ -256,7 +352,7 @@ impl OverviewCore {
 			let block = match self.cache.consume(key).await {
 				Some(block) => block,
 				None if self.metadata.intersection_bbox(&child).is_empty() => continue,
-				None => self.scaled_block(key).await?,
+				None => self.scaled_block(key, budget.clone()).await?,
 			};
 
 			for (coord1, blob1) in block.iter() {
@@ -368,8 +464,36 @@ impl OverviewCore {
 		Ok(TileStream::from_vec(vec))
 	}
 
+	/// One tile, for a caller waiting on it.
+	///
+	/// The difference from [`tile_stream`](Self::tile_stream) is the budget.
+	/// Bulk streaming is a conversion asking for the whole pyramid on purpose,
+	/// and the one call that builds zoom 0 legitimately reads everything
+	/// underneath it; a single tile is someone waiting, so there is a ceiling
+	/// on how much of the pyramid it may build to answer them.
+	#[context("Failed to get tile {coord:?}")]
+	pub async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+		self.tile_within(coord, ReadBudget::from_env()).await
+	}
+
+	/// [`tile`](Self::tile) with the budget given rather than read from the
+	/// environment, so a test can reach the ceiling without a pyramid big
+	/// enough to cost what the ceiling is worth.
+	pub(crate) async fn tile_within(&self, coord: &TileCoord, budget: Option<Arc<ReadBudget>>) -> Result<Option<Tile>> {
+		let mut stream = self.tile_stream_within(coord.to_tile_bbox(), budget).await?;
+		Ok(stream.next().await.map(|(_, tile)| tile))
+	}
+
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
 	pub async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
+		self.tile_stream_within(bbox, None).await
+	}
+
+	async fn tile_stream_within(
+		&self,
+		bbox: TileBBox,
+		budget: Option<Arc<ReadBudget>>,
+	) -> Result<TileStream<'static, Tile>> {
 		log::trace!("overview::tile_stream {bbox:?}");
 
 		if bbox.level() > self.level_base {
@@ -408,7 +532,7 @@ impl OverviewCore {
 			// above it to be composed into and is never worth keeping.
 			let worth_caching = block.level() > 0 && wanted.includes_bbox(&present);
 
-			let container = self.full_images(wanted).await?;
+			let container = self.full_images(wanted, budget.clone()).await?;
 			let (entries, block_tiles) = self.scale_and_emit(container, Some(bbox), worth_caching).await?;
 
 			if worth_caching {
@@ -502,7 +626,7 @@ mod tests {
 	async fn compose_from_children_rejects_level_gte_base() -> Result<()> {
 		let core = make_core(5)?;
 		let bbox = TileBBox::new_full(5)?;
-		let result = core.compose_from_children(bbox).await;
+		let result = core.compose_from_children(bbox, None).await;
 		assert!(result.is_err());
 		Ok(())
 	}
@@ -562,6 +686,116 @@ mod tests {
 		);
 
 		Ok(())
+	}
+
+	// -----------------------------------------------------------------
+	// The ceiling on what one request may build.
+	// -----------------------------------------------------------------
+
+	/// A source covering enough ground that one block holds many tiles.
+	///
+	/// `make_core` covers a single city, which is one tile at zoom 8 — too
+	/// little to spend a budget on.
+	fn make_wide_core(level_base: u8) -> Result<OverviewCore> {
+		let pyramid =
+			TilePyramid::from_geo_bbox(level_base, level_base, &GeoBBox::new(-30.0, 20.0, 30.0, 60.0).unwrap())?;
+		let source =
+			Box::new(DummyImageSource::from_color(&[200u8, 100, 50], 256, TileFormat::PNG, Some(pyramid)).unwrap());
+		let scale_fn: ScaleDownFn = Arc::new(|img| img.scaled_down(2));
+		OverviewCore::new(source, Some(level_base), scale_fn, TilesRuntime::new_silent())
+	}
+
+	#[tokio::test]
+	async fn a_request_that_would_build_too_much_is_refused() -> Result<()> {
+		let core = make_wide_core(8)?;
+		let coord = core
+			.metadata
+			.tile_pyramid()
+			.unwrap()
+			.level_ref(4)
+			.to_bbox()
+			.min_tile()?;
+
+		let error = core
+			.tile_within(&coord, Some(Arc::new(ReadBudget::new(1))))
+			.await
+			.expect_err("one tile of budget cannot pay for a whole block");
+		let error = format!("{error:#}");
+
+		assert!(
+			error.contains("source tiles to build"),
+			"should say what ran out: {error}"
+		);
+		assert!(
+			error.contains(REQUEST_BUDGET_ENV),
+			"should name the way to raise it: {error}"
+		);
+		Ok(())
+	}
+
+	/// A warm request is not refused, however expensive it would have been cold.
+	///
+	/// This is why the ceiling counts tiles actually read rather than
+	/// predicting the cost from the pyramid: the prediction cannot see the
+	/// cache, so it would refuse exactly the requests that are already cheap —
+	/// the neighbours a tile server asks for right after the first one.
+	#[tokio::test]
+	async fn a_warm_request_is_not_refused() -> Result<()> {
+		let core = make_core(8)?;
+		let coord = core
+			.metadata
+			.tile_pyramid()
+			.unwrap()
+			.level_ref(4)
+			.to_bbox()
+			.min_tile()?;
+
+		// Cold, with room to spare; then again with a budget of nothing.
+		core
+			.tile_within(&coord, Some(Arc::new(ReadBudget::new(u64::MAX))))
+			.await?;
+
+		let warm = core.tile_within(&coord, Some(Arc::new(ReadBudget::new(0)))).await?;
+		assert!(warm.is_some(), "a request that reads nothing should not be refused");
+		Ok(())
+	}
+
+	/// Bulk streaming has no ceiling.
+	///
+	/// A conversion asks for the whole pyramid on purpose, and the single call
+	/// that builds zoom 0 legitimately reads everything underneath it.
+	#[tokio::test]
+	async fn bulk_streaming_is_not_budgeted() -> Result<()> {
+		let core = make_core(8)?;
+		let coord = core
+			.metadata
+			.tile_pyramid()
+			.unwrap()
+			.level_ref(4)
+			.to_bbox()
+			.min_tile()?;
+
+		assert!(
+			core
+				.tile_within(&coord, Some(Arc::new(ReadBudget::new(0))))
+				.await
+				.is_err(),
+			"a budget of nothing should refuse a request that has to read"
+		);
+
+		let tiles = core.tile_stream(coord.to_tile_bbox()).await?.to_vec().await;
+		assert_eq!(tiles.len(), 1, "the same tile, streamed, should not be refused");
+		Ok(())
+	}
+
+	#[test]
+	fn the_request_ceiling_is_read_in_tiles() {
+		assert_eq!(parse_request_budget(None), Some(DEFAULT_REQUEST_BUDGET));
+		assert_eq!(parse_request_budget(Some("100")), Some(100));
+		assert_eq!(parse_request_budget(Some(" 100 ")), Some(100));
+		assert_eq!(parse_request_budget(Some("0")), None, "0 removes the ceiling");
+		assert_eq!(parse_request_budget(Some("many")), Some(DEFAULT_REQUEST_BUDGET));
+		assert_eq!(parse_request_budget(Some("-1")), Some(DEFAULT_REQUEST_BUDGET));
 	}
 
 	#[tokio::test]

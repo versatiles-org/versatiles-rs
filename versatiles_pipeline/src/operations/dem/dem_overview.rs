@@ -4,7 +4,7 @@ use anyhow::{Result, bail};
 use async_trait::async_trait;
 use imageproc::image::{DynamicImage, Rgb, RgbImage, Rgba, RgbaImage};
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileJSON, TileStream, ZoomLevel};
+use versatiles_core::{TileBBox, TileCoord, TileJSON, TileStream, ZoomLevel};
 
 use super::encoding::{DemEncoding, resolve_encoding, to_tile_schema};
 use crate::{PipelineFactory, helpers::overview::OverviewCore, vpl::VPLNode};
@@ -148,6 +148,12 @@ impl TileSource for Operation {
 
 	fn source_type(&self) -> Arc<SourceType> {
 		SourceType::new_processor("dem_overview", self.core.source.source_type())
+	}
+
+	/// Overridden so a single tile is answered under a read budget, which the
+	/// default implementation's route through `tile_stream` would not apply.
+	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+		self.core.tile(coord).await
 	}
 
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {

@@ -581,7 +581,11 @@ Generates the lower zoom levels of a raster pyramid by downscaling.
 
 Every zoom level is built from the four tiles above it, down to zoom 0. Read depth-first — which is what a conversion does, unless the destination insists on another order — each tile is built exactly once.
 
-Any other order produces the same tiles, at a different price. A tile at zoom `z` built from nothing costs `4^(level - z)` source tiles: over a zoom-14 source, one zoom-6 tile is some sixteen million of them. Serving a deep pyramid live is therefore not what this is for — convert once, serve the result. Writing `.pmtiles` is the same situation, because that format stores tiles in an order this cannot produce for free; it succeeds, and says in the log what it is costing.
+Any other order produces the same tiles, at a different price. Tiles are built a 16x16 block at a time, so one tile at zoom `z` built from a cold start costs `256 * 4^(level - z)` source tiles — bounded by however many the source actually has under it, which for anything short of global coverage is far fewer. The block is not waste: its neighbours come out of it for free.
+
+The consequence is that the first request into a region of a dense, deep pyramid is expensive and the rest are not. Over a zoom-14 world, one cold zoom-6 tile reads some sixteen million source tiles; over a city-sized source, the same request reads a handful. Serving a dense deep pyramid live is therefore not what this is for — convert once, serve the result.
+
+Writing `.pmtiles` is the same situation, because that format stores tiles in an order this cannot produce for free; it succeeds, and says in the log what it is costing.
 
 Levels are held in memory between being built and being consumed, within `VERSATILES_OVERVIEW_CACHE_MB` megabytes (default `2048`).
 

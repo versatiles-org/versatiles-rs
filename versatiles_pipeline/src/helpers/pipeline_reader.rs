@@ -8,7 +8,7 @@
 
 use std::{path::Path, sync::Arc};
 
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use versatiles_container::{
@@ -168,19 +168,18 @@ impl TileSource for PipelineReader {
 
 	/// Fetches a single tile for `coord` by executing the pipeline over that tile’s bbox.
 	///
-	/// Returns `Ok(None)` if the pipeline yields no tile; returns an error if multiple tiles
-	/// are produced (pipelines must emit at most one tile per coordinate).
+	/// Returns `Ok(None)` if the pipeline yields no tile.
+	///
+	/// Forwarded to the operation's own `tile` rather than taking the first
+	/// item of a one-tile stream. An operation is allowed to answer a single
+	/// tile differently from a bulk read — `raster_overview` puts a ceiling on
+	/// how much of the pyramid one request may build, which is the difference
+	/// between a slow response and a server spending minutes on a tile nobody
+	/// is waiting for any more — and going around it would silently disable
+	/// every such implementation.
 	#[context("getting tile {:?} via pipeline '{}'", coord, self.name)]
 	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		let mut vec = self.operation.tile_stream(coord.to_tile_bbox()).await?.to_vec().await;
-
-		ensure!(vec.len() <= 1, "PipelineReader should return at most one tile");
-
-		if let Some((_, b)) = vec.pop() {
-			Ok(Some(b))
-		} else {
-			Ok(None)
-		}
+		self.operation.tile(coord).await
 	}
 
 	async fn tile_coord_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, ()>> {

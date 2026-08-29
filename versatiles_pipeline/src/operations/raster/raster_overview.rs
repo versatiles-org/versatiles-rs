@@ -3,7 +3,7 @@ use std::{fmt::Debug, sync::Arc};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata};
-use versatiles_core::{TileBBox, TileJSON, TileStream, ZoomLevel};
+use versatiles_core::{TileBBox, TileCoord, TileJSON, TileStream, ZoomLevel};
 use versatiles_image::traits::DynamicImageTraitOperation;
 
 use crate::{PipelineFactory, helpers::overview::OverviewCore, vpl::VPLNode};
@@ -15,13 +15,21 @@ use crate::{PipelineFactory, helpers::overview::OverviewCore, vpl::VPLNode};
 /// Read depth-first — which is what a conversion does, unless the destination
 /// insists on another order — each tile is built exactly once.
 ///
-/// Any other order produces the same tiles, at a different price. A tile at
-/// zoom `z` built from nothing costs `4^(level - z)` source tiles: over a
-/// zoom-14 source, one zoom-6 tile is some sixteen million of them. Serving a
-/// deep pyramid live is therefore not what this is for — convert once, serve
-/// the result. Writing `.pmtiles` is the same situation, because that format
-/// stores tiles in an order this cannot produce for free; it succeeds, and
-/// says in the log what it is costing.
+/// Any other order produces the same tiles, at a different price. Tiles are
+/// built a 16x16 block at a time, so one tile at zoom `z` built from a cold
+/// start costs `256 * 4^(level - z)` source tiles — bounded by however many the
+/// source actually has under it, which for anything short of global coverage is
+/// far fewer. The block is not waste: its neighbours come out of it for free.
+///
+/// The consequence is that the first request into a region of a dense, deep
+/// pyramid is expensive and the rest are not. Over a zoom-14 world, one cold
+/// zoom-6 tile reads some sixteen million source tiles; over a city-sized
+/// source, the same request reads a handful. Serving a dense deep pyramid live
+/// is therefore not what this is for — convert once, serve the result.
+///
+/// Writing `.pmtiles` is the same situation, because that format stores tiles
+/// in an order this cannot produce for free; it succeeds, and says in the log
+/// what it is costing.
 ///
 /// Levels are held in memory between being built and being consumed, within
 /// `VERSATILES_OVERVIEW_CACHE_MB` megabytes (default `2048`).
@@ -71,6 +79,12 @@ impl TileSource for Operation {
 		SourceType::new_processor("raster_overview", self.core.source.source_type())
 	}
 
+	/// Overridden so a single tile is answered under a read budget, which the
+	/// default implementation's route through `tile_stream` would not apply.
+	async fn tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+		self.core.tile(coord).await
+	}
+
 	async fn tile_stream(&self, bbox: TileBBox) -> Result<TileStream<'static, Tile>> {
 		log::trace!("raster_overview::tile_stream {bbox:?}");
 		self.core.tile_stream(bbox).await
@@ -88,7 +102,7 @@ crate::operations::macros::define_transform_factory!("raster_overview", Args, Op
 mod tests {
 	use imageproc::image::{DynamicImage, GenericImage, GenericImageView, Rgb, RgbImage, Rgba};
 	use versatiles_container::{Traversal, TraversalOrder, testing::assert_stream_counts_agree};
-	use versatiles_core::{Blob, GeoBBox, TileCompression, TileCoord, TileFormat, TilePyramid};
+	use versatiles_core::{Blob, GeoBBox, TileCompression, TileFormat, TilePyramid};
 
 	use super::*;
 	use crate::{factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource};
@@ -455,7 +469,7 @@ mod tests {
 
 		// Request composed images at level 5 for a 2×2 bbox
 		let bbox_lvl5 = TileBBox::from_min_and_size(5, 0, 0, 2, 2)?;
-		let result = op.core.compose_from_children(bbox_lvl5).await?;
+		let result = op.core.compose_from_children(bbox_lvl5, None).await?;
 		let items: Vec<_> = result.into_iter().filter(|(_, img)| img.is_some()).collect();
 		assert!(!items.is_empty());
 
@@ -616,7 +630,7 @@ mod tests {
 		let op = make_operation(256, 6).await;
 
 		let bbox = min_tile_at(&op, 5)?.to_tile_bbox();
-		let result = op.core.compose_from_children(bbox).await?;
+		let result = op.core.compose_from_children(bbox, None).await?;
 
 		let items: Vec<_> = result.into_iter().filter(|(_, img)| img.is_some()).collect();
 		assert!(
@@ -653,7 +667,7 @@ mod tests {
 		op.core.cache.produce(block_key, std::sync::Arc::new(entries)).await;
 
 		let bbox = TileBBox::from_min_and_size(5, 0, 0, 8, 8)?;
-		let result = op.core.compose_from_children(bbox).await?;
+		let result = op.core.compose_from_children(bbox, None).await?;
 
 		// Should still produce some composed tiles without errors
 		let items: Vec<_> = result.into_iter().collect();

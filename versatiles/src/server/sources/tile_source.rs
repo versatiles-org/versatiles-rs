@@ -69,8 +69,13 @@ impl ServerTileSource {
 			// Get tile data
 			let tile = self.reader.tile(&coord).await;
 
-			// If tile data is not found, return a not found response
-			if tile.is_err() {
+			// A tile that cannot be produced is answered as "not found", because
+			// that is what a client can do something about. The reason is not
+			// the client's business but it is very much the operator's, and
+			// discarding it left a 404 as the only evidence that anything went
+			// wrong — indistinguishable from a hole in the data.
+			if let Err(error) = &tile {
+				log::warn!("could not produce tile {} of '{}': {error:#}", coord.to_json(), self.id);
 				return Ok(None);
 			}
 
