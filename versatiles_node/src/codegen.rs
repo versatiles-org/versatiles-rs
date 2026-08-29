@@ -84,6 +84,8 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		| "CelExpression"
 		| "FilePath"
 		| "Option<FilePath>"
+		| "GeoDataPath"
+		| "TileFilePath"
 		| "SourceLocation"
 		| "Option<SourceLocation>"
 		| "HttpUrl"
@@ -97,8 +99,15 @@ fn rust_type_to_ts(field: &VPLFieldMeta) -> String {
 		// bound stays with `check` — the same split as the separators above.
 		"u8" | "u16" | "u32" | "f32" | "f64" | "Option<u8>" | "Option<u16>" | "Option<u32>" | "Option<f32>"
 		| "Option<f64>" | "Option<ZoomLevel>" | "Option<Effort>" | "Option<Brightness>" | "Option<Contrast>"
-		| "Option<Gamma>" | "H3Resolution" => "number",
+		| "Option<Gamma>" | "H3Resolution" | "EpsgCode" | "Option<EpsgCode>" => "number",
 		"[f64;4]" | "Option<[f64;4]>" | "GeoBBox" | "Option<GeoBBox>" => "[number, number, number, number]",
+		"[f64;2]" | "Option<[f64;2]>" => "[number, number]",
+		// A list of names — layers to act on, properties to keep or drop. VPL
+		// takes one value or several (`filter=ocean` as well as
+		// `filter=["a","b"]`), so the single string is part of the type rather
+		// than a shorthand a consumer has to wrap.
+		"Vec<String>" | "Option<Vec<String>>" => "string | string[]",
+
 		"[f64;3]" | "Option<[f64;3]>" | "[u8;3]" | "Option<[u8;3]>" | "Option<GeoCenter>" => "[number, number, number]",
 		"Vec<VPLPipeline>" => "VPL[]",
 		// Not a closed variant set, so it carries no `enum_variants`: a byte
@@ -566,6 +575,33 @@ mod tests {
 		assert_eq!(to_camel_case("filename"), "filename");
 	}
 
+	/// Every parameter renders as a TypeScript type, not as `unknown`.
+	///
+	/// `rust_type_to_ts` falls through to `"unknown"` for a type it has never
+	/// been told about, which is silent: the generated `.d.ts` still builds and
+	/// still type-checks, having quietly stopped describing one parameter. A
+	/// new newtype is exactly the change that lands there — `GeoDataPath` and
+	/// `TileFilePath` both would have, and nothing would have said so.
+	#[test]
+	fn every_parameter_renders_as_a_typescript_type() {
+		let mut missing = Vec::new();
+		for op in all_operation_metadata() {
+			for field in &op.fields {
+				if field.is_sources {
+					continue;
+				}
+				if rust_type_to_ts(field) == "unknown" {
+					missing.push(format!("{}.{} ({})", op.tag_name, field.name, field.rust_type));
+				}
+			}
+		}
+		assert!(
+			missing.is_empty(),
+			"no TypeScript type for: {}\nAdd the Rust type to the match in `rust_type_to_ts`.",
+			missing.join(", ")
+		);
+	}
+
 	#[test]
 	fn test_to_pascal_case() {
 		assert_eq!(to_pascal_case("from_container"), "FromContainer");
@@ -583,6 +619,7 @@ mod tests {
 			validate: None,
 			bounds: None,
 			refers_to: None,
+			accepts: None,
 			default: None,
 		}
 	}
@@ -646,6 +683,7 @@ mod tests {
 				validate: None,
 				bounds: None,
 				refers_to: None,
+				accepts: None,
 				default: None,
 			}],
 		}];
@@ -720,6 +758,7 @@ mod tests {
 					validate: None,
 					bounds: None,
 					refers_to: None,
+					accepts: None,
 					default: None,
 				},
 				VPLFieldMeta {
@@ -732,6 +771,7 @@ mod tests {
 					validate: None,
 					bounds: None,
 					refers_to: None,
+					accepts: None,
 					default: None,
 				},
 			],
@@ -764,6 +804,7 @@ mod tests {
 					validate: None,
 					bounds: None,
 					refers_to: None,
+					accepts: None,
 					default: None,
 				},
 				VPLFieldMeta {
@@ -776,6 +817,7 @@ mod tests {
 					validate: None,
 					bounds: None,
 					refers_to: None,
+					accepts: None,
 					default: None,
 				},
 			],
