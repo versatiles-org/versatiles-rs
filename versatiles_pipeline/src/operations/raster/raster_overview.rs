@@ -71,19 +71,20 @@ crate::operations::macros::define_transform_factory!("raster_overview", Args, Op
 #[cfg(test)]
 #[expect(clippy::cast_possible_truncation, reason = "test data is built from literal values")]
 mod tests {
-	use imageproc::image::{DynamicImage, GenericImage, GenericImageView, Rgba};
-	use versatiles_core::{Blob, GeoBBox, TileCoord, TileFormat, TilePyramid};
+	use imageproc::image::{DynamicImage, GenericImage, GenericImageView, Rgb, RgbImage, Rgba};
+	use versatiles_container::testing::assert_stream_counts_agree;
+	use versatiles_core::{Blob, GeoBBox, TileCompression, TileCoord, TileFormat, TilePyramid};
 
 	use super::*;
 	use crate::{factory::OperationFactoryTrait, helpers::dummy_image_source::DummyImageSource};
 
+	/// The extent every fixture is built over: central Paris.
+	fn paris() -> GeoBBox {
+		GeoBBox::new(2.224, 48.815, 2.47, 48.903).unwrap()
+	}
+
 	async fn make_operation(tile_size: u32, level_base: u8) -> Operation {
-		let pyramid = TilePyramid::from_geo_bbox(
-			level_base,
-			level_base,
-			&GeoBBox::new(2.224, 48.815, 2.47, 48.903).unwrap(),
-		)
-		.unwrap();
+		let pyramid = TilePyramid::from_geo_bbox(level_base, level_base, &paris()).unwrap();
 
 		return Operation::build(
 			VPLNode::try_from_str(&format!("raster_overview level={level_base}")).unwrap(),
@@ -92,6 +93,198 @@ mod tests {
 		)
 		.await
 		.unwrap();
+	}
+
+	/// An operation over a source whose tiles differ per coordinate.
+	///
+	/// `make_operation` paints every tile the same solid red, which cannot tell
+	/// a correctly composed overview from a wrongly composed one — every
+	/// arrangement of identical quadrants encodes to identical bytes. These
+	/// fixtures exist to compare tiles, so the source has to vary.
+	async fn make_varied_operation(tile_size: u32, level_base: u8) -> Operation {
+		let pyramid = TilePyramid::from_geo_bbox(level_base, level_base, &paris()).unwrap();
+
+		let mut source = DummyImageSource::new(
+			move |coord| {
+				let color = Rgb([
+					(coord.x % 251) as u8,
+					(coord.y % 251) as u8,
+					coord.level.wrapping_mul(8),
+				]);
+				let image = DynamicImage::ImageRgb8(RgbImage::from_pixel(tile_size, tile_size, color));
+				Tile::from_image(image, TileFormat::PNG).ok()
+			},
+			TileFormat::PNG,
+			Some(pyramid),
+		)
+		.unwrap();
+		source.tilejson_mut().set_tile_size(tile_size).unwrap();
+
+		Operation::build(
+			VPLNode::try_from_str(&format!("raster_overview level={level_base}")).unwrap(),
+			Box::new(source),
+			&PipelineFactory::new_dummy(),
+		)
+		.await
+		.unwrap()
+	}
+
+	/// Stream every block the declared traversal asks for, in the order it asks
+	/// for it, down to `level_stop` — the depth-first pass a converter performs.
+	async fn depth_first_pass(op: &Operation, level_stop: u8) -> Result<Vec<(TileCoord, Tile)>> {
+		let pyramid = op.metadata().tile_pyramid().unwrap();
+		let bboxes = op.metadata().traversal().traverse_pyramid(&pyramid)?;
+
+		let mut tiles = Vec::new();
+		for bbox in bboxes {
+			if bbox.level() < level_stop {
+				continue;
+			}
+			tiles.extend(op.tile_stream(bbox).await?.to_vec().await);
+		}
+		Ok(tiles)
+	}
+
+	/// The northwest tile the operation covers at `level`.
+	fn min_tile_at(op: &Operation, level: u8) -> Result<TileCoord> {
+		op.metadata()
+			.tile_pyramid()
+			.unwrap()
+			.level_ref(level)
+			.to_bbox()
+			.min_tile()
+	}
+
+	/// The encoded bytes of a tile, for comparing two tiles for equality.
+	fn bytes_of(tile: Tile) -> Result<Blob> {
+		tile.into_blob(&TileCompression::Uncompressed)
+	}
+
+	// ---------------------------------------------------------------------
+	// Phase 0 regressions: random tile access.
+	//
+	// The operation composes each overview level from a staging cache that the
+	// level above *removes* as it consumes it, so a tile is only ever produced
+	// for a consumer walking the pyramid in post-order depth-first. Every test
+	// below describes behaviour a `TileSource` is expected to have, and every
+	// one of them fails on the current implementation.
+	// ---------------------------------------------------------------------
+
+	/// A single tile below the base level, asked for out of the blue.
+	///
+	/// This is what a tile server does — `ServerTileSource::get_data` calls
+	/// `tile()` per request — so on the current implementation `versatiles
+	/// serve` answers every level below `level_base` with a blank tile.
+	#[tokio::test]
+	async fn a_single_tile_below_the_base_level_is_produced_on_demand() -> Result<()> {
+		let op = make_operation(256, 6).await;
+		let coord = min_tile_at(&op, 4)?;
+
+		let tile = op.tile(&coord).await?;
+
+		assert!(
+			tile.is_some(),
+			"{coord:?} lies inside the pyramid the operation advertises, so it has to be produced on request"
+		);
+		Ok(())
+	}
+
+	/// The two streams must yield the same number of items for any bbox.
+	///
+	/// Required by the `TileSource` docs and relied on by the converter's
+	/// progress accounting: `tile_coord_stream` computes coordinates below the
+	/// base level from the source, while `tile_stream` answers from the staging
+	/// cache, so the two disagree exactly where the cache is cold.
+	#[tokio::test]
+	async fn both_streams_agree_on_how_many_tiles_exist() -> Result<()> {
+		let op = make_operation(256, 6).await;
+		let pyramid = op.metadata().tile_pyramid().unwrap();
+
+		for level in [4, 6, 7] {
+			assert_stream_counts_agree(&op, pyramid.level_ref(level).to_bbox()).await?;
+		}
+		Ok(())
+	}
+
+	/// Reading a tile must not consume it.
+	///
+	/// The cache is drained by `remove`, so the first read of an overview tile
+	/// takes the level below it away and the second read finds nothing. The
+	/// pass below stops at level 5 deliberately: it leaves the level-5 cache
+	/// populated, which is the state in which the first read succeeds.
+	#[tokio::test]
+	async fn reading_an_overview_tile_twice_returns_it_twice() -> Result<()> {
+		let op = make_varied_operation(256, 6).await;
+		depth_first_pass(&op, 5).await?;
+
+		let coord = min_tile_at(&op, 4)?;
+
+		let first = op.tile(&coord).await?;
+		let second = op.tile(&coord).await?;
+
+		assert!(first.is_some(), "the first read of {coord:?} should produce a tile");
+		assert!(
+			second.is_some(),
+			"the second read of {coord:?} produced nothing — reading consumed the tile"
+		);
+		assert_eq!(
+			bytes_of(first.unwrap())?,
+			bytes_of(second.unwrap())?,
+			"two reads of {coord:?} disagree"
+		);
+		Ok(())
+	}
+
+	/// A bbox wider than one block is a request, not a contract violation.
+	///
+	/// `tile_stream` rounds the request to the 16-tile block grid and then
+	/// asserts the result is exactly one block, so anything wider aborts the
+	/// process instead of returning tiles.
+	#[tokio::test]
+	async fn a_bbox_wider_than_one_block_is_served_rather_than_asserted_on() -> Result<()> {
+		let op = make_operation(256, 8).await;
+
+		// Two blocks across and two down, positioned so the data is inside it.
+		let mut min = min_tile_at(&op, 7)?;
+		min.floor(32);
+		let bbox = TileBBox::from_min_and_size(7, min.x, min.y, 32, 32)?;
+
+		let tiles = op.tile_stream(bbox).await?.to_vec().await;
+
+		assert!(!tiles.is_empty(), "expected the tiles covering the data in {bbox:?}");
+		for (coord, _) in &tiles {
+			assert_eq!(coord.level, 7);
+		}
+		Ok(())
+	}
+
+	/// Both paths to the same tile have to produce the same bytes.
+	///
+	/// The depth-first pass composes from the staging cache and random access
+	/// has to compose from whatever it can reach; if the two ever diverge, one
+	/// of them is wrong and nothing else here would say which.
+	#[tokio::test]
+	async fn a_tile_is_the_same_whether_it_was_streamed_or_asked_for() -> Result<()> {
+		let streamed = make_varied_operation(256, 6).await;
+		let coord = min_tile_at(&streamed, 3)?;
+
+		let from_pass = depth_first_pass(&streamed, 0)
+			.await?
+			.into_iter()
+			.find(|(c, _)| *c == coord)
+			.map(|(_, tile)| tile)
+			.expect("the depth-first pass covers the whole pyramid, including this tile");
+
+		// A second operation, so the cold read cannot benefit from the pass.
+		let asked = make_varied_operation(256, 6).await;
+		let on_demand = asked.tile(&coord).await?.expect("the same tile, asked for directly");
+
+		assert_eq!(
+			bytes_of(from_pass)?,
+			bytes_of(on_demand)?,
+			"{coord:?} differs between the depth-first pass and a direct request"
+		);
+		Ok(())
 	}
 
 	#[tokio::test]
