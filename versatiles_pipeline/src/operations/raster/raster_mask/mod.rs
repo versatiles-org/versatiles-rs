@@ -43,6 +43,7 @@ use crate::{
 struct Args {
 	/// Path to a GeoJSON file holding a Polygon or MultiPolygon, in EPSG:4326
 	/// lon/lat degrees.
+	#[vpl(accepts = "geojson, json")]
 	geojson: FilePath,
 	/// Distance in meters by which to grow the mask, or shrink it when negative. Defaults to `0`.
 	#[vpl(default = "0")]

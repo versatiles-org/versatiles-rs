@@ -29,6 +29,68 @@ pub enum FieldReference {
 	NewField,
 }
 
+/// Which files an argument that names a file will take.
+///
+/// The third describing field, beside `enum_variants` for a closed set and
+/// `bounds` for a range. `FilePath` says an argument names a file and stops
+/// there, so a consumer offering a file dialog had a picker and no filter, and
+/// the only per-field answer available was the doc comment's prose — "GeoJSON
+/// polygon outside which pixels become transparent", "Path to the CSV or TSV
+/// file", "Private key for this one `sftp://` source" (#260 typed the argument;
+/// this says what it takes).
+///
+/// # Why three states and not a list
+///
+/// The fifteen arguments that name a file fall into three kinds, and one flat
+/// list of extensions describes only the middle one — offered for all three it
+/// is wrong twice:
+///
+/// * `from_geo` refuses an extension it does not know, so its list *is* the
+///   accepted set and a dialog can filter on it.
+/// * `from_csv` checks no extension at all. `.txt` builds today, so a filter
+///   would block a pipeline that works.
+/// * `from_gdal_raster` opens whatever GDAL was built with, and a private key
+///   is conventionally extensionless — for both, the correct filter is no
+///   filter, which is not the same fact as an absent one.
+///
+/// [`VPLFieldMeta::accepts`] is `Option<Accepts>` for that last distinction:
+/// `None` means the argument does not name a file, [`Accepts::Any`] means it
+/// names any file.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Accepts {
+	/// Any file. The set is not ours to state — GDAL decides its own, and a
+	/// private key has no conventional extension.
+	Any,
+	/// The extensions this argument is written with by convention. Anything
+	/// else still builds, so a dialog preselects these and lets them be
+	/// overridden.
+	Suggested(&'static [&'static str]),
+	/// Every extension that builds. Anything else is refused when the value is
+	/// decoded, so a dialog can filter on this and be right.
+	///
+	/// Comes from the argument's own type, which is what refuses the others —
+	/// see `GeoDataPath` and `TileFilePath`. Stated on a field instead it would
+	/// be a second list to keep in step, which is the mismatch this exists to
+	/// end.
+	Only(&'static [&'static str]),
+}
+
+impl Accepts {
+	/// The extensions to offer, or an empty slice for [`Any`](Self::Any).
+	///
+	/// For a dialog that wants the list and handles "no filter" by its
+	/// emptiness. Callers that must tell [`Only`](Self::Only) from
+	/// [`Suggested`](Self::Suggested) — a hard filter from a preselection —
+	/// match on the variant instead.
+	#[must_use]
+	pub const fn extensions(&self) -> &'static [&'static str] {
+		match self {
+			Accepts::Any => &[],
+			Accepts::Suggested(list) | Accepts::Only(list) => list,
+		}
+	}
+}
+
 /// Everything wrong with the values written for one parameter, or an empty
 /// vector when they are fine.
 ///
@@ -85,6 +147,11 @@ pub struct VPLFieldMeta {
 	/// why this is metadata rather than a type: it is a relationship between
 	/// two arguments, which no newtype can hold.
 	pub refers_to: Option<FieldReference>,
+	/// Which files this argument takes, when it names a file.
+	///
+	/// `None` when it does not name one. See [`Accepts`] for why "any file" is
+	/// a state of its own rather than an empty list.
+	pub accepts: Option<Accepts>,
 	/// Everything wrong with the values written for this parameter, or an empty
 	/// vector when they are fine.
 	///

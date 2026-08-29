@@ -34,6 +34,7 @@ struct Args {
 	/// Highest zoom level to keep. Defaults to the source's highest.
 	level_max: Option<ZoomLevel>,
 	/// Tile container whose coordinates act as an allow-list. Defaults to no allow-list.
+	#[vpl(accepts = "versatiles, mbtiles, pmtiles, tar")]
 	filename: Option<SourceLocation>,
 }
 

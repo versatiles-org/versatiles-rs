@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Result, bail, ensure};
 use versatiles_container::DataLocation;
+use versatiles_core::TileFormat;
 
 /// A path to a file on disk.
 ///
@@ -70,6 +71,131 @@ impl TryFrom<&str> for FilePath {
 			Location::Stdin => bail!("'-' reads from standard input, which this argument cannot do"),
 			Location::Inline => bail!("'{text}' is inline data, and this argument takes a path to a file"),
 		}
+	}
+}
+
+/// A path to a file `from_geo` can read, refused here if it cannot.
+///
+/// The extensions are the operation's own dispatch, moved to where the value is
+/// decoded. Two things follow that a `FilePath` could not give:
+/// [`Accepts::Only`](crate::vpl::Accepts::Only) in the argument metadata, so a
+/// file dialog filters correctly instead of guessing from the node's name; and
+/// the refusal reaching [`check`](crate::check_pipeline), because the
+/// `VPLDecode` derive emits this `TryFrom` into
+/// [`VPLFieldMeta::validate`](crate::vpl::VPLFieldMeta::validate). An editor
+/// underlines `filename="notes.txt"` as it is typed rather than at build time.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GeoDataPath(FilePath);
+
+impl GeoDataPath {
+	/// Every extension `from_geo` reads, lowercase and without the dot.
+	///
+	/// The single source of truth: the operation dispatches on the value this
+	/// type already accepted, and the metadata reports this list.
+	pub const EXTENSIONS: &'static [&'static str] = &[
+		"geojson",
+		"json",
+		"ndjson",
+		"ndgeojson",
+		"geojsonl",
+		"geojsonseq",
+		"shp",
+	];
+
+	/// The location to resolve against the VPL document's directory.
+	#[must_use]
+	pub fn to_location(&self) -> DataLocation {
+		self.0.to_location()
+	}
+
+	/// The extension this path was accepted for, lowercase and without the dot.
+	///
+	/// Infallible: nothing else got past [`TryFrom`].
+	#[must_use]
+	pub fn extension(&self) -> String {
+		self
+			.0
+			.as_path()
+			.extension()
+			.and_then(|s| s.to_str())
+			.unwrap_or_default()
+			.to_ascii_lowercase()
+	}
+}
+
+impl TryFrom<&str> for GeoDataPath {
+	type Error = anyhow::Error;
+
+	fn try_from(text: &str) -> Result<Self> {
+		let path = FilePath::try_from(text)?;
+		let ext = path
+			.as_path()
+			.extension()
+			.and_then(|s| s.to_str())
+			.map(str::to_ascii_lowercase)
+			.unwrap_or_default();
+		ensure!(
+			!ext.is_empty(),
+			"file '{text}' has no extension; expected .{}",
+			Self::EXTENSIONS.join(" / .")
+		);
+		ensure!(
+			Self::EXTENSIONS.contains(&ext.as_str()),
+			"unsupported file extension '.{ext}'; expected .{}",
+			Self::EXTENSIONS.join(" / .")
+		);
+		Ok(Self(path))
+	}
+}
+
+impl std::fmt::Display for GeoDataPath {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		self.0.fmt(f)
+	}
+}
+
+/// A path to a single tile file, refused here if its extension names no format.
+///
+/// Delegates to [`TileFormat::try_from_str`], so a format added there is
+/// accepted here and reported by the metadata without this list being touched —
+/// the reason it is a function of `TileFormat` rather than a copy of its arms.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TileFilePath(FilePath);
+
+impl TileFilePath {
+	/// Every extension [`TileFormat`] names, lowercase and without the dot.
+	///
+	/// Kept beside `TileFormat::try_from_str` by
+	/// `every_tile_extension_is_offered`, which fails if the two drift.
+	pub const EXTENSIONS: &'static [&'static str] = &[
+		"avif", "bin", "geojson", "jpeg", "jpg", "json", "mvt", "pbf", "png", "svg", "topojson", "webp",
+	];
+
+	/// The location to resolve against the VPL document's directory.
+	#[must_use]
+	pub fn to_location(&self) -> DataLocation {
+		self.0.to_location()
+	}
+}
+
+impl TryFrom<&str> for TileFilePath {
+	type Error = anyhow::Error;
+
+	fn try_from(text: &str) -> Result<Self> {
+		let path = FilePath::try_from(text)?;
+		TileFormat::try_from_path(path.as_path()).map_err(|_| {
+			anyhow::anyhow!(
+				"'{text}' does not name a tile format; expected .{}",
+				Self::EXTENSIONS.join(" / .")
+			)
+		})?;
+		Ok(Self(path))
+	}
+}
+
+impl std::fmt::Display for TileFilePath {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		self.0.fmt(f)
 	}
 }
 
@@ -190,6 +316,71 @@ mod tests {
 	fn what_is_not_a_path_says_what_it_is(#[case] text: &str, #[case] expected: &str) {
 		let error = FilePath::try_from(text).expect_err("should be rejected");
 		assert!(error.to_string().contains(expected), "got: {error}");
+	}
+
+	#[rstest]
+	#[case("world.geojson")]
+	#[case("world.GeoJSON")]
+	#[case("data/places.geojsonl")]
+	#[case("admin.shp")]
+	fn a_geo_data_path_takes_what_from_geo_reads(#[case] text: &str) {
+		assert!(GeoDataPath::try_from(text).is_ok(), "'{text}' should be accepted");
+	}
+
+	/// The refusal `from_geo` used to make at build time, made where the value
+	/// is decoded — which is where `check` can see it.
+	#[rstest]
+	#[case::wrong_extension("notes.txt", "unsupported file extension")]
+	#[case::no_extension("notes", "has no extension")]
+	#[case::a_url("https://example.org/a.geojson", "is a URL")]
+	fn a_geo_data_path_refuses_what_from_geo_cannot_read(#[case] text: &str, #[case] expected: &str) {
+		let error = GeoDataPath::try_from(text).expect_err("should be rejected");
+		assert!(error.to_string().contains(expected), "got: {error}");
+	}
+
+	/// The extension is lowercased on the way in, so the operation's dispatch
+	/// sees one spelling.
+	#[test]
+	fn a_geo_data_path_reports_its_extension_lowercased() {
+		assert_eq!(GeoDataPath::try_from("Places.GeoJSON").unwrap().extension(), "geojson");
+	}
+
+	#[rstest]
+	#[case("tile.png")]
+	#[case("tile.pbf")]
+	#[case("tile.MVT")]
+	fn a_tile_file_path_takes_what_tile_format_names(#[case] text: &str) {
+		assert!(TileFilePath::try_from(text).is_ok(), "'{text}' should be accepted");
+	}
+
+	#[test]
+	fn a_tile_file_path_refuses_what_names_no_format() {
+		let error = TileFilePath::try_from("tile.txt").expect_err("should be rejected");
+		assert!(
+			error.to_string().contains("does not name a tile format"),
+			"got: {error}"
+		);
+	}
+
+	/// `EXTENSIONS` is published to consumers while `TileFormat` is what parses,
+	/// so the two have to agree in both directions: everything offered parses,
+	/// and nothing that parses is left off the list.
+	#[test]
+	fn every_tile_extension_is_offered() {
+		for ext in TileFilePath::EXTENSIONS {
+			assert!(
+				TileFormat::try_from_str(ext).is_ok(),
+				"'{ext}' is offered but names no format"
+			);
+		}
+		for ext in [
+			"avif", "bin", "geojson", "jpeg", "jpg", "json", "mvt", "pbf", "png", "svg", "topojson", "webp",
+		] {
+			assert!(
+				TileFilePath::EXTENSIONS.contains(&ext),
+				"'{ext}' parses as a tile format but is not offered"
+			);
+		}
 	}
 
 	/// A container may live anywhere, so this one refuses nothing that a

@@ -23,6 +23,7 @@ use crate::{
 /// `from_grid` and `from_h3` for generating that geometry.
 struct Args {
 	/// Path to the CSV or TSV file, which must have a header row.
+	#[vpl(accepts = "csv, tsv")]
 	data_source_path: FilePath,
 
 	/// Name of the layer whose features are updated.

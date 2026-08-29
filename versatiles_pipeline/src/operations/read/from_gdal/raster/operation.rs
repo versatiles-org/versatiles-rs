@@ -62,6 +62,7 @@ use crate::{
 /// disk.
 struct Args {
 	/// Path to the raster dataset.
+	#[vpl(accepts_any)]
 	filename: FilePath,
 	/// Tile size in pixels. Defaults to `512`.
 	#[vpl(default = "512")]
@@ -80,6 +81,7 @@ struct Args {
 	#[vpl(default = "png")]
 	tile_format: Option<RasterTileFormat>,
 	/// GeoJSON polygon outside which pixels become transparent. Defaults to the whole dataset.
+	#[vpl(accepts = "geojson, json")]
 	cutline: Option<FilePath>,
 	/// Band indices to read as colour channels, 1-based. Defaults to the colour interpretation.
 	bands: Option<BandIndices>,

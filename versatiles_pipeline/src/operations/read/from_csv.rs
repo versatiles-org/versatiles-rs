@@ -62,6 +62,7 @@ const PROGRESS_MIN_BYTES: u64 = 10_000_000;
 /// writing the whole thing out first. The crop is tile-granular, as it is there.
 struct Args {
 	/// Path to the CSV file.
+	#[vpl(accepts = "csv, tsv")]
 	filename: FilePath,
 	/// Column holding the longitude, in WGS84 degrees.
 	#[vpl(field_of = "filename")]

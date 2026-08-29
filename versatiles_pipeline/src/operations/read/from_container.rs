@@ -33,9 +33,11 @@ use crate::{
 /// key ties the `.vpl` file to machines that have it.
 struct Args {
 	/// Path to the container, or an `http`, `https` or `sftp` URL.
+	#[vpl(accepts = "versatiles, mbtiles, pmtiles, tar")]
 	filename: SourceLocation,
 
 	/// Private key for this one `sftp://` source. Defaults to the global setting.
+	#[vpl(accepts_any)]
 	ssh_identity: Option<FilePath>,
 }
 

@@ -20,13 +20,13 @@ use async_trait::async_trait;
 use versatiles_container::{SourceType, Tile, TileSource, TileSourceMetadata, Traversal};
 use versatiles_core::{Blob, TileBBox, TileCompression, TileFormat, TileJSON, TilePyramid, TileStream};
 
-use crate::{PipelineFactory, helpers::location::FilePath, vpl::VPLNode};
+use crate::{PipelineFactory, helpers::location::TileFilePath, vpl::VPLNode};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads one tile file and returns it for every requested coordinate.
 struct Args {
 	/// Path to the tile file; its format comes from the extension.
-	filename: FilePath,
+	filename: TileFilePath,
 }
 
 /// Implements [`TileSource`] by returning clones of a tile loaded from a file.

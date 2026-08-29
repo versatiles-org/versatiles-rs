@@ -49,6 +49,7 @@ use crate::{
 /// disk.
 struct Args {
 	/// Path to the DEM dataset.
+	#[vpl(accepts_any)]
 	filename: FilePath,
 	/// How elevation is packed into the RGB channels. Defaults to `mapbox`.
 	#[vpl(default = "mapbox")]
@@ -67,6 +68,7 @@ struct Args {
 	#[vpl(default = "4")]
 	gdal_concurrency_limit: Option<u8>,
 	/// GeoJSON polygon outside which pixels become nodata. Defaults to the whole dataset.
+	#[vpl(accepts = "geojson, json")]
 	cutline: Option<FilePath>,
 	/// EPSG code to read the dataset with. Defaults to the dataset's own.
 	crs: Option<EpsgCode>,

@@ -680,6 +680,30 @@ mod tests {
 		assert_eq!(found, [(vec![0, 1, 0], Some("nonsense".to_string()))]);
 	}
 
+	/// A file extension the operation cannot read is a problem `check` reports,
+	/// not one the build discovers.
+	///
+	/// This is what typing `from_geo.filename` as a `GeoDataPath` bought beyond
+	/// the dialog filter: the derive emits the type's `TryFrom` into
+	/// `VPLFieldMeta::validate`, so an editor underlines `notes.txt` as it is
+	/// typed. As a `FilePath` the value parsed fine here and failed later, in
+	/// `from_geo`'s own dispatch.
+	#[test]
+	fn an_extension_the_operation_cannot_read_is_reported_without_building() {
+		let found = problems("from_geo filename=\"notes.txt\"");
+		assert_eq!(found.len(), 1, "expected one problem, got {found:?}");
+		assert!(
+			found[0].contains("unsupported file extension"),
+			"expected the extension to be named, got: {}",
+			found[0]
+		);
+
+		assert!(
+			problems("from_geo filename=\"places.geojson\"").is_empty(),
+			"an extension from_geo reads is not a problem"
+		);
+	}
+
 	#[test]
 	fn every_problem_is_reported_not_just_the_first() {
 		assert_eq!(problems("from_debug nonsense=1 | filter rubbish=2").len(), 2);

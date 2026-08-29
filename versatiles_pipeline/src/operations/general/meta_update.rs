@@ -47,14 +47,17 @@ struct Args {
 	/// Complete TileJSON document, as a JSON string. Defaults to the source's metadata.
 	tilejson: Option<TileJSON>,
 	/// Path to a file holding a complete TileJSON document. Defaults to the source's metadata.
+	#[vpl(accepts = "json")]
 	tilejson_file: Option<FilePath>,
 	/// Partial TileJSON document to merge on, as a JSON string. Defaults to merging nothing.
 	tilejson_update: Option<TileJSON>,
 	/// Path to a file holding a partial TileJSON document. Defaults to merging nothing.
+	#[vpl(accepts = "json")]
 	tilejson_update_file: Option<FilePath>,
 	/// The `vector_layers` array as a JSON string. Defaults to the source's.
 	vector_layers: Option<VectorLayers>,
 	/// Path to a file holding the `vector_layers` array as JSON. Defaults to the source's.
+	#[vpl(accepts = "json")]
 	vector_layers_file: Option<FilePath>,
 }
 

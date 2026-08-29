@@ -32,7 +32,7 @@ use crate::{
 	PipelineFactory,
 	helpers::{
 		feature_tile_source::{BBoxClip, FeatureTileSource, FeatureTileSourceArgs, apply_property_filters},
-		location::FilePath,
+		location::GeoDataPath,
 		tile_size_monitor::MaxTileBytes,
 	},
 	vpl::VPLNode,
@@ -88,7 +88,7 @@ const PROGRESS_MIN_BYTES: u64 = 10_000_000;
 /// noise.
 struct Args {
 	/// Path to the input file; its format comes from the extension.
-	filename: FilePath,
+	filename: GeoDataPath,
 	/// Name of the layer to write into. Defaults to the file's stem.
 	#[vpl(new_layer)]
 	layer_name: Option<String>,
@@ -158,21 +158,16 @@ impl Operation {
 		let compression = args.compression.unwrap_or(TileCompression::Gzip);
 		let clip = args.bbox.map(BBoxClip::new);
 
-		// Format dispatch by extension (case-insensitive).
-		let ext = path
-			.extension()
-			.and_then(|s| s.to_str())
-			.map(str::to_ascii_lowercase)
-			.unwrap_or_default();
+		// Which reader to use. Every arm is an extension `GeoDataPath` accepted,
+		// and it accepted nothing else — so this maps the set rather than
+		// guarding it, and the set itself lives on the type. An extension added
+		// to `GeoDataPath::EXTENSIONS` without an arm here is a compile error.
+		let ext = args.filename.extension();
 		let format_label = match ext.as_str() {
 			"geojson" | "json" => "GeoJSON",
 			"ndjson" | "ndgeojson" | "geojsonl" | "geojsonseq" => "line-delimited GeoJSON",
 			"shp" => "Shapefile",
-			"" => bail!(
-				"file '{}' has no extension; expected .geojson / .json / .ndjson / .geojsonl / .ndgeojson / .geojsonseq / .shp",
-				path.display()
-			),
-			other => bail!("unsupported file extension '.{other}' for from_geo"),
+			other => unreachable!("'{other}' is not an extension GeoDataPath accepts"),
 		};
 		log::debug!("from_geo: loading {format_label} from {}", path.display());
 		let mut features = load_features(&path, ext.as_str(), format_label, factory, clip.as_ref()).await?;
