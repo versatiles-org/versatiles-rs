@@ -69,6 +69,19 @@ impl OverviewCore {
 				.ok_or_else(|| anyhow::anyhow!("source pyramid is empty"))?,
 		};
 
+		// The overview reads the source at `level_base` and composes everything
+		// below it from what that produced, so a base level the source has no
+		// tiles at leaves nothing to build from. Worth refusing rather than
+		// accepting: the loop below is what extends the pyramid downward, it is
+		// seeded from this level, and seeded empty it inserts nothing — leaving
+		// an operation that answers `None` at every level and never says why.
+		ensure!(
+			!source_pyramid.level_ref(level_base).to_bbox().is_empty(),
+			"the source has no tiles at level {level_base} to build an overview from; its levels are {:?}..={:?}",
+			source_pyramid.level_min(),
+			source_pyramid.level_max()
+		);
+
 		let mut new_pyramid = source_pyramid.as_ref().clone();
 		let mut level_bbox = new_pyramid.level_ref(level_base).to_bbox();
 		while !level_bbox.is_empty() && level_bbox.level() > 0 {
@@ -284,6 +297,18 @@ impl OverviewCore {
 		assert_eq!(bbox0_raw.width(), size);
 		assert_eq!(bbox0_raw.height(), size);
 		let bbox0 = self.metadata.intersection_bbox(&bbox0_raw);
+		// Nothing of the source lies under this block, which is ordinary for any
+		// raster that does not cover the whole world: below the base level a
+		// request outside the data's footprint intersects to nothing. The answer
+		// is an empty stream, the same one `tile_coord_stream` gives after its
+		// own intersection above. Without this, `build_images_from_cache` is
+		// handed an empty bbox — which passes all three of its `ensure!`s, since
+		// a width of 0 is not too wide — and `TileBBox::round`, a documented
+		// no-op on an empty bbox, leaves the width at 0 for its `assert_eq!` to
+		// abort on. See issue #263.
+		if bbox0.is_empty() {
+			return Ok(TileStream::empty());
+		}
 
 		let container: TileBBoxMap<Option<DynamicImage>> = if bbox.level() == self.level_base {
 			log::trace!("Fetching images from source for bbox {bbox:?}");
@@ -374,6 +399,63 @@ mod tests {
 		let bbox = TileBBox::new_full(5)?;
 		let result = core.build_images_from_cache(bbox).await;
 		assert!(result.is_err());
+		Ok(())
+	}
+
+	/// A tile below the base level, outside the data's footprint, is `None`.
+	///
+	/// This needs no misconfiguration: `make_core` is a correctly built overview
+	/// over Paris, and any raster that is not the whole world has the same
+	/// shape. Asking for a level-4 tile off the coast of Africa used to abort
+	/// the process on an `assert_eq!` deep in `build_images_from_cache`, because
+	/// the intersection with the source's pyramid is empty there and an empty
+	/// bbox satisfies every guard on the way in. See issue #263.
+	#[tokio::test]
+	async fn tile_stream_outside_the_data_below_the_base_level_is_empty() -> Result<()> {
+		// Base level 8, so the level below spans 128 tiles and a 16-wide block can
+		// miss the data. At level 5 it could not: the whole level is one block
+		// wide, so rounding always covers Paris again and nothing is ever empty.
+		let core = make_core(8)?;
+
+		// Paris sits near (64, 41) on level 7; this block covers (0..15, 0..15).
+		let far_away = TileBBox::from_min_and_max(7, 0, 0, 0, 0)?;
+		let tiles = core.tile_stream(far_away).await?.to_vec().await;
+		assert!(
+			tiles.is_empty(),
+			"expected no tiles away from the data, got {}",
+			tiles.len()
+		);
+
+		// The same request through the sibling method, which already guarded it.
+		let coords = core.tile_coord_stream(far_away).await?.to_vec().await;
+		assert!(coords.is_empty());
+
+		Ok(())
+	}
+
+	/// A base level the source has no tiles at is refused when the operation is
+	/// built, not discovered as silence at every zoom.
+	///
+	/// The pyramid is extended downward from this level, so seeding it from an
+	/// empty one inserts nothing and leaves an overview that answers `None`
+	/// everywhere. Before issue #263 this configuration panicked instead; the
+	/// guard in `tile_stream` turns that into `None`, and this turns it into an
+	/// error that names the cause.
+	#[tokio::test]
+	async fn a_base_level_the_source_has_no_tiles_at_is_refused() -> Result<()> {
+		let pyramid = TilePyramid::from_geo_bbox(8, 8, &GeoBBox::new(2.224, 48.815, 2.47, 48.903).unwrap())?;
+		let source =
+			Box::new(DummyImageSource::from_color(&[200u8, 100, 50], 256, TileFormat::PNG, Some(pyramid)).unwrap());
+		let scale_fn: ScaleDownFn = Arc::new(|img| img.scaled_down(2));
+
+		let error = OverviewCore::new(source, Some(3), scale_fn, TilesRuntime::new_silent())
+			.expect_err("level 3 holds no tiles to build from");
+
+		assert!(
+			error.to_string().contains("no tiles at level 3"),
+			"expected the level to be named, got: {error}"
+		);
+
 		Ok(())
 	}
 
