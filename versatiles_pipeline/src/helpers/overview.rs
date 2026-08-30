@@ -288,6 +288,24 @@ impl OverviewCore {
 		budget: Option<Arc<ReadBudget>>,
 	) -> futures::future::BoxFuture<'_, Result<ScaledBlock>> {
 		async move {
+			// A known rough edge, kept on purpose.
+			//
+			// `get_or_compute` coalesces concurrent callers for one key into a
+			// single computation, and the budget travels *inside* that
+			// computation. So the caller that wins the race spends its budget on
+			// behalf of everyone waiting, and they all receive its result —
+			// including its error. Two clients asking for neighbouring low-zoom
+			// tiles at the same moment can therefore see one refused for the
+			// other's spending, with its own budget untouched.
+			//
+			// Both alternatives cost more than the defect. Billing each waiter
+			// after the fact would mean the ceiling could only notice a runaway
+			// build once it had finished, which is most of what it is for;
+			// keying the coalescing by budget would make concurrent requests for
+			// the same region each rebuild it, which is the sharing that makes
+			// them cheap. The failure is transient — the cache does not keep the
+			// error, so a retry recomputes — and it only reaches requests for a
+			// region that was already over the ceiling.
 			self
 				.cache
 				.get_or_compute(key, self.compute_scaled_block(key, budget))
