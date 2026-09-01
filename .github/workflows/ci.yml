@@ -163,7 +163,7 @@ jobs:
 
       # Keep in sync with `rust-version` in the root Cargo.toml.
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@1.94
+        uses: dtolnay/rust-toolchain@1.100
 
       - name: Check workspace
         run: cargo check --workspace --lib --bins
@@ -243,7 +243,7 @@ jobs:
 
       - name: Restore npm cache
         id: npm-cache
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: ${{ steps.npm-dir.outputs.path }}
           key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('versatiles_node/package-lock.json') }}
@@ -258,7 +258,7 @@ jobs:
 
       - name: Save npm cache
         if: github.ref == 'refs/heads/main' && steps.npm-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: ${{ steps.npm-dir.outputs.path }}
           key: ${{ steps.npm-cache.outputs.cache-primary-key }}
@@ -628,7 +628,7 @@ jobs:
 
       - name: Restore npm cache
         id: npm-cache
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: ${{ steps.npm-dir.outputs.path }}
           key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('versatiles_node/package-lock.json') }}
@@ -643,7 +643,7 @@ jobs:
 
       - name: Save npm cache
         if: github.ref == 'refs/heads/main' && steps.npm-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: ${{ steps.npm-dir.outputs.path }}
           key: ${{ steps.npm-cache.outputs.cache-primary-key }}
