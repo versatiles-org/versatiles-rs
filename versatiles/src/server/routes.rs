@@ -141,6 +141,7 @@ pub async fn add_api_to_app(app: Router, sources: Arc<DashMap<String, Arc<Server
 mod tests {
 	use axum::{body::Body, http::StatusCode};
 	use tower::ServiceExt as _;
+	use versatiles_container::{MockReader, MockReaderProfile, TileSource as _};
 
 	use super::*; // for `oneshot`
 
@@ -190,6 +191,59 @@ mod tests {
 		);
 
 		let (status, _body) = get_body_text(app, "/").await;
+		assert_eq!(status, StatusCode::NOT_FOUND);
+	}
+
+	/// Builds a router serving `ids`, bypassing `TileServer::add_tile_source` so a
+	/// test can register whatever id it needs to exercise routing.
+	fn app_with_sources(ids: &[&str]) -> Router {
+		let sources: Arc<DashMap<String, Arc<ServerTileSource>>> = Arc::new(DashMap::new());
+		for id in ids {
+			let reader = MockReader::new_mock_profile(MockReaderProfile::Png)
+				.unwrap()
+				.into_shared();
+			let source = ServerTileSource::from(reader, id).unwrap();
+			sources.insert((*id).to_string(), Arc::new(source));
+		}
+		add_tile_sources_to_app(
+			Router::new(),
+			sources,
+			false,
+			Arc::from(crate::server::handlers::DEFAULT_CACHE_CONTROL),
+		)
+	}
+
+	/// Source ids may contain slashes — servers configured before v3 rely on it.
+	/// The route is a single catch-all, so `/tiles/{*path}` cannot tell where the
+	/// id ends and the tile path begins; the id is recovered by matching
+	/// progressively shorter prefixes of the path against the registered sources.
+	#[tokio::test]
+	async fn slashed_source_id_is_reachable() {
+		let app = app_with_sources(&["2025/de/wahlkreise"]);
+
+		let (status, body) = get_body_text(app.clone(), "/tiles/2025/de/wahlkreise/meta.json").await;
+		assert_eq!(status, StatusCode::OK);
+		// The prefix has to survive into the tilejson, or the URLs it advertises
+		// point at a source that does not answer.
+		assert!(
+			body.contains(r#""tiles":["/tiles/2025/de/wahlkreise/{z}/{x}/{y}"]"#),
+			"unexpected tilejson: {body}"
+		);
+
+		let (status, _) = get_body_text(app, "/tiles/2025/de/wahlkreise/2/1/1").await;
+		assert_eq!(status, StatusCode::OK);
+	}
+
+	/// The prefix search only runs once an exact match has failed, so this guards
+	/// the ordinary single-segment case against regressions in that fallback.
+	#[tokio::test]
+	async fn plain_source_id_still_resolves() {
+		let app = app_with_sources(&["cheese"]);
+
+		let (status, _) = get_body_text(app.clone(), "/tiles/cheese/meta.json").await;
+		assert_eq!(status, StatusCode::OK);
+
+		let (status, _) = get_body_text(app, "/tiles/cheddar/meta.json").await;
 		assert_eq!(status, StatusCode::NOT_FOUND);
 	}
 }
