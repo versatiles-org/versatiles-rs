@@ -161,9 +161,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # Keep in sync with `rust-version` in the root Cargo.toml.
+      # The toolchain is read from `rust-version` in the root Cargo.toml, so
+      # raising the MSRV is a single edit and cannot drift from what the crates
+      # promise on crates.io.
+      #
+      # `RUSTUP_TOOLCHAIN` is what actually pins the check. rust-toolchain.toml
+      # in the repository root selects `stable`, and a toolchain file outranks
+      # `rustup default`, so installing the MSRV and defaulting to it is not
+      # enough: `cargo check` below would still run on stable and pass no matter
+      # what `rust-version` says.
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@1.94
+        run: |
+          msrv="$(sed -n 's/^rust-version = "\(.*\)"$/\1/p' Cargo.toml)"
+          [ -n "$msrv" ] || { echo "::error::no rust-version found in Cargo.toml"; exit 1; }
+          echo "MSRV from Cargo.toml: $msrv"
+          rustup toolchain install "$msrv" --profile minimal --no-self-update
+          echo "RUSTUP_TOOLCHAIN=$msrv" >> "$GITHUB_ENV"
 
       - name: Check workspace
         run: cargo check --workspace --lib --bins
