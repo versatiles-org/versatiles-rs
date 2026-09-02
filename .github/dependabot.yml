@@ -11,6 +11,11 @@ updates:
     directory: /
     schedule: { interval: weekly }
     open-pull-requests-limit: 0
+    # `dtolnay/rust-toolchain@<version>` pins the MSRV, not a dependency
+    # version: Dependabot compares the tag numerically and "bumps" 1.94 to a
+    # nonexistent 1.100. Keep it in sync with `rust-version` in Cargo.toml.
+    ignore:
+      - dependency-name: dtolnay/rust-toolchain
     groups: { security: { applies-to: security-updates, patterns: ['*'] } }
 
   - package-ecosystem: docker
@@ -30,6 +35,11 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }
+    # `dtolnay/rust-toolchain@<version>` pins the MSRV, not a dependency
+    # version: Dependabot compares the tag numerically and "bumps" 1.94 to a
+    # nonexistent 1.100. Keep it in sync with `rust-version` in Cargo.toml.
+    ignore:
+      - dependency-name: dtolnay/rust-toolchain
     groups:
       github-action: { patterns: ['*'] }
       security: { applies-to: security-updates, patterns: ['*'] }
