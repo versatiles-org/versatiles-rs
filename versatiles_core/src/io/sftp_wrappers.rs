@@ -3,35 +3,27 @@
 //! These types allow `versatiles_container` to use SFTP functionality without
 //! depending on `russh` directly.
 //!
-//! Both wrappers present a synchronous API over an async transport. See
-//! [`super::sftp_blocking`] for why the bridge is here rather than in the
-//! writer traits.
 
 use std::{
-	io::Write,
 	path::{Path, PathBuf},
-	thread,
+	pin::Pin,
+	task::{Context as TaskContext, Poll},
 };
 
 use anyhow::{Context, Result, bail};
 use reqwest::Url;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 
-use super::{
-	sftp_blocking,
-	sftp_utils::{self, Sftp, SshHandle},
-};
+use super::sftp_utils::{self, Sftp, SshHandle};
 
-/// Translate a bridge failure into the `io::Error` the `Write` trait requires.
-fn io_error(e: &anyhow::Error) -> std::io::Error {
-	std::io::Error::other(format!("{e:#}"))
-}
-
-/// A [`Write`] stream to a remote file via SFTP.
+/// An [`AsyncWrite`] stream to a remote file via SFTP.
 ///
 /// Keeps the SSH session alive for the lifetime of the writer; russh sends its
 /// own keepalives on that session, so the connection survives idle gaps between
 /// writes without a thread of ours.
+///
+/// Writes delegate straight to the underlying `russh_sftp` file, which is
+/// already `AsyncWrite` — the stream adds session ownership, nothing else.
 pub struct SftpWriteStream {
 	file: russh_sftp::client::fs::File,
 	/// Dropping the handle closes the session, so the stream owns it even though
@@ -52,11 +44,7 @@ impl SftpWriteStream {
 	/// # Errors
 	/// Returns an error if the session cannot be opened or the remote file
 	/// cannot be created.
-	pub fn from_url(url: &Url, identity_file: Option<&Path>) -> Result<Self> {
-		sftp_blocking::block_on(Self::open(url, identity_file))?
-	}
-
-	async fn open(url: &Url, identity_file: Option<&Path>) -> Result<Self> {
+	pub async fn from_url(url: &Url, identity_file: Option<&Path>) -> Result<Self> {
 		let session = sftp_utils::open_session(url, identity_file).await?;
 		let remote_path = sftp_utils::remote_path(url);
 		let sftp = sftp_utils::open_sftp(&session).await?;
@@ -72,23 +60,20 @@ impl SftpWriteStream {
 	}
 }
 
-impl Write for SftpWriteStream {
-	fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-		sftp_blocking::block_on(self.file.write(buf)).map_err(|e| io_error(&e))?
+impl AsyncWrite for SftpWriteStream {
+	fn poll_write(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>, buf: &[u8]) -> Poll<std::io::Result<usize>> {
+		Pin::new(&mut self.file).poll_write(cx, buf)
 	}
 
-	fn flush(&mut self) -> std::io::Result<()> {
-		sftp_blocking::block_on(self.file.flush()).map_err(|e| io_error(&e))?
+	fn poll_flush(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<std::io::Result<()>> {
+		Pin::new(&mut self.file).poll_flush(cx)
 	}
-}
 
-impl Drop for SftpWriteStream {
-	fn drop(&mut self) {
-		// An unflushed tail would otherwise be lost: `File` buffers, and unlike
-		// `std::fs::File` there is no destructor that reaches the network.
-		if let Err(e) = self.flush() {
-			log::warn!("failed to flush an SFTP write stream while closing it: {e}");
-		}
+	// `File` buffers, so an unflushed tail would be lost. There is no `Drop` that
+	// could reach the network — a destructor cannot await — so callers must
+	// `shutdown()` the stream, which is what the tar sink's `finish` does.
+	fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<std::io::Result<()>> {
+		Pin::new(&mut self.file).poll_shutdown(cx)
 	}
 }
 
@@ -115,11 +100,7 @@ impl SftpFileSystem {
 	/// # Errors
 	/// Returns an error if the session cannot be opened or the base directory
 	/// can neither be created nor found.
-	pub fn from_url(url: &Url, identity_file: Option<&Path>) -> Result<Self> {
-		sftp_blocking::block_on(Self::open(url, identity_file))?
-	}
-
-	async fn open(url: &Url, identity_file: Option<&Path>) -> Result<Self> {
+	pub async fn from_url(url: &Url, identity_file: Option<&Path>) -> Result<Self> {
 		let session = sftp_utils::open_session(url, identity_file).await?;
 		let base_path = sftp_utils::remote_path(url);
 		let sftp = sftp_utils::open_sftp(&session).await?;
@@ -158,7 +139,7 @@ impl SftpFileSystem {
 	/// # Errors
 	/// Returns an error if the file cannot be written after the configured
 	/// number of retries.
-	pub fn write_file(&mut self, rel_path: &str, data: &[u8]) -> Result<()> {
+	pub async fn write_file(&mut self, rel_path: &str, data: &[u8]) -> Result<()> {
 		let full_path = sftp_utils::remote_join(&self.base_path, rel_path);
 
 		let policy = super::retry::policy();
@@ -171,8 +152,8 @@ impl SftpFileSystem {
 			if attempt > 0 {
 				let backoff = policy.backoff(attempt - 1);
 				log::warn!("SFTP write file {full_path:?}: retrying ({attempt_label}, waiting {backoff:?})");
-				thread::sleep(backoff);
-				if let Err(e) = sftp_blocking::block_on(self.reconnect())? {
+				tokio::time::sleep(backoff).await;
+				if let Err(e) = self.reconnect().await {
 					log::warn!("SFTP write file {full_path:?}: reconnect failed: {e} ({attempt_label})");
 					if attempt >= max_retries {
 						return Err(e).with_context(|| {
@@ -183,7 +164,7 @@ impl SftpFileSystem {
 				}
 			}
 
-			match sftp_blocking::block_on(self.try_write_file(&full_path, data))? {
+			match self.try_write_file(&full_path, data).await {
 				Ok(()) => return Ok(()),
 				Err(e) if attempt < max_retries => {
 					log::warn!("SFTP write file {full_path:?}: {e} ({attempt_label}), will retry");
@@ -244,25 +225,26 @@ impl SftpFileSystem {
 mod tests {
 	use super::*;
 
-	#[test]
-	fn test_sftp_write_stream_unreachable_host() {
+	#[tokio::test(flavor = "current_thread")]
+	async fn test_sftp_write_stream_unreachable_host() {
 		let url = Url::parse("sftp://192.0.2.1:22222/path/file.versatiles").unwrap();
-		let result = SftpWriteStream::from_url(&url, None);
-		assert!(result.is_err());
+		assert!(SftpWriteStream::from_url(&url, None).await.is_err());
 	}
 
-	#[test]
-	fn test_sftp_write_stream_with_identity_file() {
+	#[tokio::test(flavor = "current_thread")]
+	async fn test_sftp_write_stream_with_identity_file() {
 		let url = Url::parse("sftp://192.0.2.1:22222/path/file.versatiles").unwrap();
-		let result = SftpWriteStream::from_url(&url, Some(Path::new("/nonexistent/key")));
-		assert!(result.is_err());
+		assert!(
+			SftpWriteStream::from_url(&url, Some(Path::new("/nonexistent/key")))
+				.await
+				.is_err()
+		);
 	}
 
-	#[test]
-	fn test_sftp_filesystem_unreachable_host() {
+	#[tokio::test(flavor = "current_thread")]
+	async fn test_sftp_filesystem_unreachable_host() {
 		let url = Url::parse("sftp://192.0.2.1:22222/path/").unwrap();
-		let result = SftpFileSystem::from_url(&url, None);
-		assert!(result.is_err());
+		assert!(SftpFileSystem::from_url(&url, None).await.is_err());
 	}
 
 	#[cfg(feature = "sftp")]
@@ -277,15 +259,9 @@ mod tests {
 		async fn write_stream_write_and_flush() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/out.bin");
-			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
-				let mut stream = SftpWriteStream::from_url(&url, None)?;
-				stream.write_all(b"hello world")?;
-				stream.flush()?;
-				Ok(())
-			})
-			.await
-			.unwrap()
-			.unwrap();
+			let mut stream = SftpWriteStream::from_url(&url, None).await.unwrap();
+			stream.write_all(b"hello world").await.unwrap();
+			stream.shutdown().await.unwrap();
 			assert_eq!(server.read_file("/out.bin").await, b"hello world");
 		}
 
@@ -294,34 +270,24 @@ mod tests {
 		async fn write_stream_multiple_writes() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/out.bin");
-			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
-				let mut stream = SftpWriteStream::from_url(&url, None)?;
-				stream.write_all(b"foo")?;
-				stream.write_all(b"bar")?;
-				stream.write_all(b"baz")?;
-				Ok(())
-			})
-			.await
-			.unwrap()
-			.unwrap();
+			let mut stream = SftpWriteStream::from_url(&url, None).await.unwrap();
+			stream.write_all(b"foo").await.unwrap();
+			stream.write_all(b"bar").await.unwrap();
+			stream.write_all(b"baz").await.unwrap();
+			stream.shutdown().await.unwrap();
 			assert_eq!(server.read_file("/out.bin").await, b"foobarbaz");
 		}
 
-		/// Dropping the stream without an explicit flush still lands the bytes.
+		/// `shutdown` is what lands the buffered tail — a `Drop` impl cannot await,
+		/// so unlike the old synchronous stream there is no flush-on-drop.
 		#[tokio::test(flavor = "current_thread")]
 		#[serial_test::serial]
-		async fn write_stream_flushes_on_drop() {
+		async fn write_stream_shutdown_flushes() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/out.bin");
-			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
-				let mut stream = SftpWriteStream::from_url(&url, None)?;
-				stream.write_all(b"unflushed")?;
-				drop(stream);
-				Ok(())
-			})
-			.await
-			.unwrap()
-			.unwrap();
+			let mut stream = SftpWriteStream::from_url(&url, None).await.unwrap();
+			stream.write_all(b"unflushed").await.unwrap();
+			stream.shutdown().await.unwrap();
 			assert_eq!(server.read_file("/out.bin").await, b"unflushed");
 		}
 
@@ -332,14 +298,8 @@ mod tests {
 		async fn write_file_creates_file() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/base");
-			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
-				let mut fs = SftpFileSystem::from_url(&url, None)?;
-				fs.write_file("a.bin", b"test data")?;
-				Ok(())
-			})
-			.await
-			.unwrap()
-			.unwrap();
+			let mut fs = SftpFileSystem::from_url(&url, None).await.unwrap();
+			fs.write_file("a.bin", b"test data").await.unwrap();
 			assert_eq!(server.read_file("/base/a.bin").await, b"test data");
 		}
 
@@ -348,14 +308,8 @@ mod tests {
 		async fn write_file_creates_parent_dirs() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/base");
-			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
-				let mut fs = SftpFileSystem::from_url(&url, None)?;
-				fs.write_file("a/b/c.bin", b"nested")?;
-				Ok(())
-			})
-			.await
-			.unwrap()
-			.unwrap();
+			let mut fs = SftpFileSystem::from_url(&url, None).await.unwrap();
+			fs.write_file("a/b/c.bin", b"nested").await.unwrap();
 			assert_eq!(server.read_file("/base/a/b/c.bin").await, b"nested");
 		}
 
@@ -364,15 +318,9 @@ mod tests {
 		async fn write_file_overwrites_existing() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/base");
-			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
-				let mut fs = SftpFileSystem::from_url(&url, None)?;
-				fs.write_file("a.bin", b"first")?;
-				fs.write_file("a.bin", b"second")?;
-				Ok(())
-			})
-			.await
-			.unwrap()
-			.unwrap();
+			let mut fs = SftpFileSystem::from_url(&url, None).await.unwrap();
+			fs.write_file("a.bin", b"first").await.unwrap();
+			fs.write_file("a.bin", b"second").await.unwrap();
 			assert_eq!(server.read_file("/base/a.bin").await, b"second");
 		}
 
@@ -381,15 +329,9 @@ mod tests {
 		async fn write_file_retry_after_disconnect() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/base");
-			let mut fs = tokio::task::spawn_blocking(move || SftpFileSystem::from_url(&url, None))
-				.await
-				.unwrap()
-				.unwrap();
+			let mut fs = SftpFileSystem::from_url(&url, None).await.unwrap();
 			server.schedule_disconnect();
-			tokio::task::spawn_blocking(move || fs.write_file("retry.bin", b"retried"))
-				.await
-				.unwrap()
-				.unwrap();
+			fs.write_file("retry.bin", b"retried").await.unwrap();
 			assert_eq!(server.read_file("/base/retry.bin").await, b"retried");
 		}
 	}
