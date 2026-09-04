@@ -91,7 +91,7 @@
     "@types/node": "^26.4.1",
     "@vitest/ui": "^5.0.0",
     "chalk": "^6.0.0",
-    "eslint": "^10.9.1",
+    "eslint": "^10.10.0",
     "eslint-config-prettier": "^10.1.8",
     "npm-check-updates": "^23.1.0",
     "prettier": "^3.9.6",
