@@ -19,11 +19,11 @@
 //!     let data = Blob::from(vec![1, 2, 3, 4]);
 //!
 //!     // Appending data
-//!     writer.append(&data)?;
+//!     writer.append(&data).await?;
 //!     assert_eq!(writer.as_slice(), &[1, 2, 3, 4]);
 //!
 //!     // Writing data from the start
-//!     writer.write_start(&Blob::from(vec![5, 6, 7, 8]))?;
+//!     writer.write_start(&Blob::from(vec![5, 6, 7, 8])).await?;
 //!     assert_eq!(writer.as_slice(), &[5, 6, 7, 8]);
 //!
 //!     Ok(())
@@ -120,6 +120,7 @@ impl DataWriterBlob {
 }
 
 #[async_trait]
+#[async_trait]
 impl DataWriterTrait for DataWriterBlob {
 	/// Appends data to the writer.
 	///
@@ -131,7 +132,7 @@ impl DataWriterTrait for DataWriterBlob {
 	///
 	/// * A Result containing a `ByteRange` indicating the position and length of the appended data, or an error.
 	#[context("while appending data of length {} to DataWriterBlob", blob.len())]
-	fn append(&mut self, blob: &Blob) -> Result<ByteRange> {
+	async fn append(&mut self, blob: &Blob) -> Result<ByteRange> {
 		let pos = self.writer.stream_position()?;
 		let len = self.writer.write(blob.as_slice())?;
 
@@ -148,7 +149,7 @@ impl DataWriterTrait for DataWriterBlob {
 	///
 	/// * A Result indicating success or an error.
 	#[context("while writing data of length {} from start to DataWriterBlob", blob.len())]
-	fn write_start(&mut self, blob: &Blob) -> Result<()> {
+	async fn write_start(&mut self, blob: &Blob) -> Result<()> {
 		let pos = self.writer.stream_position()?;
 		self.writer.rewind()?;
 		self.writer.write_all(blob.as_slice())?;
@@ -162,7 +163,7 @@ impl DataWriterTrait for DataWriterBlob {
 	///
 	/// * A Result containing the current write position in bytes or an error.
 	#[context("while getting current write position from DataWriterBlob")]
-	fn position(&mut self) -> Result<u64> {
+	async fn position(&mut self) -> Result<u64> {
 		Ok(self.writer.stream_position()?)
 	}
 
@@ -176,7 +177,7 @@ impl DataWriterTrait for DataWriterBlob {
 	///
 	/// * A Result indicating success or an error.
 	#[context("while setting write position to {} in DataWriterBlob", position)]
-	fn set_position(&mut self, position: u64) -> Result<()> {
+	async fn set_position(&mut self, position: u64) -> Result<()> {
 		self.writer.seek(SeekFrom::Start(position))?;
 		Ok(())
 	}
@@ -193,57 +194,57 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn test_append() -> Result<()> {
+	#[tokio::test]
+	async fn test_append() -> Result<()> {
 		let mut writer = DataWriterBlob::new()?;
 		let blob = Blob::from(vec![1, 2, 3, 4]);
 
-		let range = writer.append(&blob)?;
+		let range = writer.append(&blob).await?;
 		assert_eq!(range, ByteRange::new(0, 4));
 		assert_eq!(writer.as_slice(), blob.as_slice());
 
 		let more_data = Blob::from(vec![5, 6, 7, 8]);
-		let range = writer.append(&more_data)?;
+		let range = writer.append(&more_data).await?;
 		assert_eq!(range, ByteRange::new(4, 4));
 		assert_eq!(writer.as_slice(), &[1, 2, 3, 4, 5, 6, 7, 8]);
 
 		Ok(())
 	}
 
-	#[test]
-	fn test_write_start() -> Result<()> {
+	#[tokio::test]
+	async fn test_write_start() -> Result<()> {
 		let mut writer = DataWriterBlob::new()?;
 		let blob = Blob::from(vec![1, 2, 3, 4]);
 
-		writer.append(&blob)?;
-		writer.write_start(&Blob::from(vec![5, 6, 7, 8]))?;
+		writer.append(&blob).await?;
+		writer.write_start(&Blob::from(vec![5, 6, 7, 8])).await?;
 
 		assert_eq!(writer.as_slice(), &[5, 6, 7, 8]);
 
 		Ok(())
 	}
 
-	#[test]
-	fn test_get_and_set_position() -> Result<()> {
+	#[tokio::test]
+	async fn test_get_and_set_position() -> Result<()> {
 		let mut writer = DataWriterBlob::new()?;
-		writer.append(&Blob::from(vec![1, 2, 3, 4]))?;
+		writer.append(&Blob::from(vec![1, 2, 3, 4])).await?;
 
-		assert_eq!(writer.position()?, 4);
-		writer.set_position(2)?;
-		assert_eq!(writer.position()?, 2);
+		assert_eq!(writer.position().await?, 4);
+		writer.set_position(2).await?;
+		assert_eq!(writer.position().await?, 2);
 
-		writer.append(&Blob::from(vec![5, 6]))?;
+		writer.append(&Blob::from(vec![5, 6])).await?;
 		assert_eq!(writer.as_slice(), &[1, 2, 5, 6]);
 
 		Ok(())
 	}
 
-	#[test]
-	fn test_as_slice() -> Result<()> {
+	#[tokio::test]
+	async fn test_as_slice() -> Result<()> {
 		let mut writer = DataWriterBlob::new()?;
 		let blob = Blob::from(vec![1, 2, 3, 4]);
 
-		writer.append(&blob)?;
+		writer.append(&blob).await?;
 		assert_eq!(writer.as_slice(), blob.as_slice());
 
 		Ok(())
@@ -255,7 +256,7 @@ mod tests {
 		let blob = Blob::from(vec![1, 2, 3, 4]);
 		let range = ByteRange::new(0, 4);
 
-		writer.append(&blob)?;
+		writer.append(&blob).await?;
 
 		assert_eq!(writer.clone().to_reader().read_range(&range).await?, blob);
 
@@ -266,16 +267,16 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn test_len() -> Result<()> {
+	#[tokio::test]
+	async fn test_len() -> Result<()> {
 		let mut writer = DataWriterBlob::new()?;
 		let blob = Blob::from(vec![1, 2, 3, 4]);
 
-		writer.append(&blob)?;
+		writer.append(&blob).await?;
 		assert_eq!(writer.len(), 4);
 
 		let more_data = Blob::from(vec![5, 6, 7, 8]);
-		writer.append(&more_data)?;
+		writer.append(&more_data).await?;
 		assert_eq!(writer.len(), 8);
 
 		Ok(())

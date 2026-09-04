@@ -1,6 +1,5 @@
-use std::thread;
-
 use anyhow::{Context, Result, bail};
+use async_trait::async_trait;
 
 use super::DataWriterTrait;
 use crate::{Blob, ByteRange};
@@ -10,18 +9,19 @@ use crate::{Blob, ByteRange};
 ///
 /// Implementors provide single-attempt operations and reconnection logic.
 /// The default `network_*` methods handle retry loops with exponential backoff.
+#[async_trait]
 pub(crate) trait NetworkWriter: DataWriterTrait {
 	/// Single-attempt write at current position.
-	fn try_append(&mut self, blob: &Blob) -> Result<ByteRange>;
+	async fn try_append(&mut self, blob: &Blob) -> Result<ByteRange>;
 
 	/// Single-attempt: seek to `offset`, write `blob`, seek back to `restore_pos`.
-	fn try_write_at(&mut self, offset: u64, blob: &Blob, restore_pos: u64) -> Result<()>;
+	async fn try_write_at(&mut self, offset: u64, blob: &Blob, restore_pos: u64) -> Result<()>;
 
 	/// Single-attempt seek to `position`.
-	fn try_seek(&mut self, position: u64) -> Result<()>;
+	async fn try_seek(&mut self, position: u64) -> Result<()>;
 
 	/// Re-establish the connection (new session, reopen file, seek to tracked position).
-	fn reconnect(&mut self) -> Result<()>;
+	async fn reconnect(&mut self) -> Result<()>;
 
 	/// Display name for log messages.
 	fn writer_name(&self) -> &str;
@@ -36,7 +36,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 	}
 
 	/// Append with retry and reconnect on failure.
-	fn network_append(&mut self, blob: &Blob) -> Result<ByteRange> {
+	async fn network_append(&mut self, blob: &Blob) -> Result<ByteRange> {
 		let name = self.writer_name().to_string();
 		let pos = self.tracked_position();
 		let blob_len = blob.len();
@@ -51,9 +51,9 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 					"write to '{name}' at position {pos}: retrying (attempt {}/{total_attempts}, waiting {backoff:?})",
 					attempt + 1
 				);
-				thread::sleep(backoff);
+				tokio::time::sleep(backoff).await;
 
-				if let Err(e) = self.reconnect() {
+				if let Err(e) = self.reconnect().await {
 					log::warn!(
 						"write to '{name}' at position {pos}: reconnect failed (attempt {}/{total_attempts}): {e}",
 						attempt + 1
@@ -67,7 +67,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 				}
 			}
 
-			match self.try_append(blob) {
+			match self.try_append(blob).await {
 				Ok(range) => return Ok(range),
 				Err(e) if attempt < max_retries => {
 					let ctx = self.failure_context();
@@ -90,7 +90,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 	}
 
 	/// Write at start of file with retry and reconnect on failure.
-	fn network_write_start(&mut self, blob: &Blob) -> Result<()> {
+	async fn network_write_start(&mut self, blob: &Blob) -> Result<()> {
 		let name = self.writer_name().to_string();
 		let blob_len = blob.len();
 		let policy = super::retry::policy();
@@ -106,9 +106,9 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 					"write_start to '{name}': retrying (attempt {}/{total_attempts}, waiting {backoff:?})",
 					attempt + 1
 				);
-				thread::sleep(backoff);
+				tokio::time::sleep(backoff).await;
 
-				if let Err(e) = self.reconnect() {
+				if let Err(e) = self.reconnect().await {
 					log::warn!(
 						"write_start to '{name}': reconnect failed (attempt {}/{total_attempts}): {e}",
 						attempt + 1
@@ -122,7 +122,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 				}
 			}
 
-			match self.try_write_at(0, blob, restore_pos) {
+			match self.try_write_at(0, blob, restore_pos).await {
 				Ok(()) => return Ok(()),
 				Err(e) if attempt < max_retries => {
 					let ctx = self.failure_context();
@@ -145,7 +145,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 	}
 
 	/// Seek with retry and reconnect on failure.
-	fn network_set_position(&mut self, position: u64) -> Result<()> {
+	async fn network_set_position(&mut self, position: u64) -> Result<()> {
 		let name = self.writer_name().to_string();
 		let policy = super::retry::policy();
 		let max_retries = policy.max_retries;
@@ -158,9 +158,9 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 					"seek in '{name}' to position {position}: retrying (attempt {}/{total_attempts}, waiting {backoff:?})",
 					attempt + 1
 				);
-				thread::sleep(backoff);
+				tokio::time::sleep(backoff).await;
 
-				if let Err(e) = self.reconnect() {
+				if let Err(e) = self.reconnect().await {
 					log::warn!(
 						"seek in '{name}' to position {position}: reconnect failed (attempt {}/{total_attempts}): {e}",
 						attempt + 1
@@ -176,7 +176,7 @@ pub(crate) trait NetworkWriter: DataWriterTrait {
 				}
 			}
 
-			match self.try_seek(position) {
+			match self.try_seek(position).await {
 				Ok(()) => return Ok(()),
 				Err(e) if attempt < max_retries => {
 					let ctx = self.failure_context();
@@ -246,24 +246,26 @@ mod tests {
 		}
 	}
 
+	#[async_trait]
 	impl DataWriterTrait for FakeWriter {
-		fn append(&mut self, _blob: &Blob) -> Result<ByteRange> {
+		async fn append(&mut self, _blob: &Blob) -> Result<ByteRange> {
 			unreachable!("FakeWriter uses try_append via NetworkWriter default impl")
 		}
-		fn write_start(&mut self, _blob: &Blob) -> Result<()> {
+		async fn write_start(&mut self, _blob: &Blob) -> Result<()> {
 			unreachable!("FakeWriter uses try_write_at via NetworkWriter default impl")
 		}
-		fn position(&mut self) -> Result<u64> {
+		async fn position(&mut self) -> Result<u64> {
 			Ok(self.position)
 		}
-		fn set_position(&mut self, p: u64) -> Result<()> {
+		async fn set_position(&mut self, p: u64) -> Result<()> {
 			self.position = p;
 			Ok(())
 		}
 	}
 
+	#[async_trait]
 	impl NetworkWriter for FakeWriter {
-		fn try_append(&mut self, blob: &Blob) -> Result<ByteRange> {
+		async fn try_append(&mut self, blob: &Blob) -> Result<ByteRange> {
 			self.append_calls += 1;
 			let outcome = self.append_outcomes.pop_front().unwrap_or(Ok(()));
 			outcome?;
@@ -272,7 +274,7 @@ mod tests {
 			self.position += blob.len();
 			Ok(ByteRange::new(pos, blob.len()))
 		}
-		fn try_write_at(&mut self, offset: u64, blob: &Blob, restore_pos: u64) -> Result<()> {
+		async fn try_write_at(&mut self, offset: u64, blob: &Blob, restore_pos: u64) -> Result<()> {
 			self.write_at_calls += 1;
 			let outcome = self.write_at_outcomes.pop_front().unwrap_or(Ok(()));
 			outcome?;
@@ -281,14 +283,14 @@ mod tests {
 			self.position = restore_pos;
 			Ok(())
 		}
-		fn try_seek(&mut self, position: u64) -> Result<()> {
+		async fn try_seek(&mut self, position: u64) -> Result<()> {
 			self.seek_calls += 1;
 			let outcome = self.seek_outcomes.pop_front().unwrap_or(Ok(()));
 			outcome?;
 			self.position = position;
 			Ok(())
 		}
-		fn reconnect(&mut self) -> Result<()> {
+		async fn reconnect(&mut self) -> Result<()> {
 			self.reconnect_calls += 1;
 			self.reconnect_outcomes.pop_front().unwrap_or(Ok(()))
 		}
@@ -302,62 +304,62 @@ mod tests {
 
 	// ── network_append ────────────────────────────────────────────────────────
 
-	#[test]
-	fn network_append_succeeds_on_first_attempt() {
+	#[tokio::test]
+	async fn network_append_succeeds_on_first_attempt() {
 		let mut w = FakeWriter::new();
-		let range = w.network_append(&Blob::from(vec![1, 2, 3])).unwrap();
+		let range = w.network_append(&Blob::from(vec![1, 2, 3])).await.unwrap();
 		assert_eq!(range, ByteRange::new(0, 3));
 		assert_eq!(w.append_calls, 1);
 		assert_eq!(w.reconnect_calls, 0);
 		assert_eq!(w.appended, vec![1, 2, 3]);
 	}
 
-	#[test]
-	fn network_append_recovers_on_retry() {
+	#[tokio::test]
+	async fn network_append_recovers_on_retry() {
 		let mut w = FakeWriter::new();
 		w.append_outcomes.push_back(Err(anyhow!("transient")));
-		let range = w.network_append(&Blob::from(vec![7, 8])).unwrap();
+		let range = w.network_append(&Blob::from(vec![7, 8])).await.unwrap();
 		assert_eq!(range, ByteRange::new(0, 2));
 		assert_eq!(w.append_calls, 2);
 		assert_eq!(w.reconnect_calls, 1); // one reconnect before attempt 1
 	}
 
-	#[test]
-	fn network_append_gives_up_after_max_retries() {
+	#[tokio::test]
+	async fn network_append_gives_up_after_max_retries() {
 		let mut w = FakeWriter::new();
 		for _ in 0..=max_retries() {
 			w.append_outcomes.push_back(Err(anyhow!("disk full")));
 		}
-		let err = w.network_append(&Blob::from(vec![1])).unwrap_err();
+		let err = w.network_append(&Blob::from(vec![1])).await.unwrap_err();
 		let msg = format!("{err:#}");
 		assert!(msg.contains("gave up"));
 		assert!(msg.contains("disk full"));
 		assert_eq!(w.append_calls, max_retries() + 1);
 	}
 
-	#[test]
-	fn network_append_reconnect_failure_retries_until_exhaustion() {
+	#[tokio::test]
+	async fn network_append_reconnect_failure_retries_until_exhaustion() {
 		let mut w = FakeWriter::new();
 		// Fail first attempt, then fail all reconnects.
 		w.append_outcomes.push_back(Err(anyhow!("boom")));
 		for _ in 0..=max_retries() {
 			w.reconnect_outcomes.push_back(Err(anyhow!("link down")));
 		}
-		let err = w.network_append(&Blob::from(vec![1])).unwrap_err();
+		let err = w.network_append(&Blob::from(vec![1])).await.unwrap_err();
 		let msg = format!("{err:#}");
 		assert!(msg.contains("reconnect failed"));
 		assert!(msg.contains("link down"));
 	}
 
-	#[test]
-	fn network_append_reconnect_recovers_before_exhaustion() {
+	#[tokio::test]
+	async fn network_append_reconnect_recovers_before_exhaustion() {
 		let mut w = FakeWriter::new();
 		// Attempt 0 fails; reconnect before attempt 1 fails too; reconnect before
 		// attempt 2 succeeds and try_append then succeeds.
 		w.append_outcomes.push_back(Err(anyhow!("boom")));
 		w.reconnect_outcomes.push_back(Err(anyhow!("still down")));
 		w.reconnect_outcomes.push_back(Ok(()));
-		let range = w.network_append(&Blob::from(vec![9])).unwrap();
+		let range = w.network_append(&Blob::from(vec![9])).await.unwrap();
 		assert_eq!(range.length, 1);
 		assert_eq!(w.reconnect_calls, 2);
 		// attempt 0: try_append (err); attempt 1: reconnect (err, continue) — no try_append;
@@ -367,87 +369,87 @@ mod tests {
 
 	// ── network_write_start ───────────────────────────────────────────────────
 
-	#[test]
-	fn network_write_start_succeeds_on_first_attempt() {
+	#[tokio::test]
+	async fn network_write_start_succeeds_on_first_attempt() {
 		let mut w = FakeWriter::new();
 		w.position = 42; // should be restored after
-		w.network_write_start(&Blob::from(vec![0xAA, 0xBB])).unwrap();
+		w.network_write_start(&Blob::from(vec![0xAA, 0xBB])).await.unwrap();
 		assert_eq!(w.write_at_calls, 1);
 		assert_eq!(w.written_at_start.unwrap(), vec![0xAA, 0xBB]);
 		assert_eq!(w.position, 42);
 	}
 
-	#[test]
-	fn network_write_start_recovers_on_retry() {
+	#[tokio::test]
+	async fn network_write_start_recovers_on_retry() {
 		let mut w = FakeWriter::new();
 		w.write_at_outcomes.push_back(Err(anyhow!("transient")));
-		w.network_write_start(&Blob::from(vec![1])).unwrap();
+		w.network_write_start(&Blob::from(vec![1])).await.unwrap();
 		assert_eq!(w.write_at_calls, 2);
 	}
 
-	#[test]
-	fn network_write_start_gives_up_after_max_retries() {
+	#[tokio::test]
+	async fn network_write_start_gives_up_after_max_retries() {
 		let mut w = FakeWriter::new();
 		for _ in 0..=max_retries() {
 			w.write_at_outcomes.push_back(Err(anyhow!("nope")));
 		}
-		let err = w.network_write_start(&Blob::from(vec![1])).unwrap_err();
+		let err = w.network_write_start(&Blob::from(vec![1])).await.unwrap_err();
 		assert!(format!("{err:#}").contains("gave up"));
 	}
 
-	#[test]
-	fn network_write_start_reconnect_failure_surfaces() {
+	#[tokio::test]
+	async fn network_write_start_reconnect_failure_surfaces() {
 		let mut w = FakeWriter::new();
 		w.write_at_outcomes.push_back(Err(anyhow!("boom")));
 		for _ in 0..=max_retries() {
 			w.reconnect_outcomes.push_back(Err(anyhow!("link down")));
 		}
-		let err = w.network_write_start(&Blob::from(vec![1])).unwrap_err();
+		let err = w.network_write_start(&Blob::from(vec![1])).await.unwrap_err();
 		let msg = format!("{err:#}");
 		assert!(msg.contains("reconnect failed"));
 	}
 
 	// ── network_set_position ──────────────────────────────────────────────────
 
-	#[test]
-	fn network_set_position_succeeds_on_first_attempt() {
+	#[tokio::test]
+	async fn network_set_position_succeeds_on_first_attempt() {
 		let mut w = FakeWriter::new();
-		w.network_set_position(123).unwrap();
+		w.network_set_position(123).await.unwrap();
 		assert_eq!(w.position, 123);
 		assert_eq!(w.seek_calls, 1);
 		assert_eq!(w.reconnect_calls, 0);
 	}
 
-	#[test]
-	fn network_set_position_recovers_on_retry() {
+	#[tokio::test]
+	async fn network_set_position_recovers_on_retry() {
 		let mut w = FakeWriter::new();
 		w.seek_outcomes.push_back(Err(anyhow!("transient")));
-		w.network_set_position(77).unwrap();
+		w.network_set_position(77).await.unwrap();
 		assert_eq!(w.position, 77);
 		assert_eq!(w.seek_calls, 2);
 		assert_eq!(w.reconnect_calls, 1);
 	}
 
-	#[test]
-	fn network_set_position_gives_up_after_max_retries() {
+	#[tokio::test]
+	async fn network_set_position_gives_up_after_max_retries() {
 		let mut w = FakeWriter::new();
 		for _ in 0..=max_retries() {
 			w.seek_outcomes.push_back(Err(anyhow!("eof")));
 		}
-		let err = w.network_set_position(1).unwrap_err();
+		let err = w.network_set_position(1).await.unwrap_err();
 		let msg = format!("{err:#}");
 		assert!(msg.contains("gave up"));
 		assert!(msg.contains("eof"));
 	}
 
-	#[test]
-	fn network_set_position_reconnect_failure_surfaces() {
+	#[tokio::test]
+	async fn network_set_position_reconnect_failure_surfaces() {
 		let mut w = FakeWriter::new();
 		w.seek_outcomes.push_back(Err(anyhow!("boom")));
 		for _ in 0..=max_retries() {
 			w.reconnect_outcomes.push_back(Err(anyhow!("link down")));
 		}
-		let err = w.network_set_position(9).unwrap_err();
+		let err = w.network_set_position(9).await.unwrap_err();
 		assert!(format!("{err:#}").contains("reconnect failed"));
 	}
 }

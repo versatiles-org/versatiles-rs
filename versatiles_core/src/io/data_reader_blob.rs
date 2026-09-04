@@ -233,7 +233,7 @@ mod tests {
 	async fn from_data_writer_blob() -> Result<()> {
 		let data = [100u8, 101, 102, 103, 104, 105].as_slice();
 		let mut data_writer = DataWriterBlob::new()?;
-		data_writer.append(&Blob::from(data))?;
+		data_writer.append(&Blob::from(data)).await?;
 		let data_reader: DataReaderBlob = data_writer.into();
 
 		assert_eq!(data_reader.name(), "memory");
@@ -250,7 +250,7 @@ mod tests {
 	async fn from_boxed_data_writer_blob() -> Result<()> {
 		let data = [100u8, 101, 102, 103, 104, 105].as_slice();
 		let mut data_writer = DataWriterBlob::new()?;
-		data_writer.append(&Blob::from(data))?;
+		data_writer.append(&Blob::from(data)).await?;
 		let data_reader: DataReaderBlob = Box::new(data_writer).into();
 
 		assert_eq!(data_reader.name(), "memory");

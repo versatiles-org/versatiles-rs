@@ -60,12 +60,16 @@ impl Drop for DataReaderSftp {
 		// re-opened on future reconnects. The connection itself stays pooled.
 		//
 		// `unregister` needs the connection lock and `Drop` cannot await, so the
-		// release is handed to the SFTP runtime and allowed to finish on its own.
-		// Losing it would only mean the handle is reopened on the next reconnect,
-		// so there is nothing to wait for.
+		// release is spawned onto the ambient runtime and allowed to finish on its
+		// own. Losing it would only mean the handle is reopened on the next
+		// reconnect, so there is nothing to wait for — which is also why a reader
+		// dropped outside any runtime just logs and moves on.
 		let connection = Arc::clone(&self.connection);
 		let file_id = self.file_id;
-		super::sftp_blocking::spawn(async move { connection.unregister(file_id).await });
+		match tokio::runtime::Handle::try_current() {
+			Ok(handle) => drop(handle.spawn(async move { connection.unregister(file_id).await })),
+			Err(e) => log::debug!("SFTP reader dropped outside a runtime, file handle {file_id} stays registered: {e}"),
+		}
 	}
 }
 

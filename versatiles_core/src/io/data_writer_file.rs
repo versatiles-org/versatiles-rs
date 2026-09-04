@@ -20,13 +20,13 @@
 //!     let data = Blob::from(vec![1, 2, 3, 4]);
 //!
 //!     // Appending data
-//!     writer.append(&data)?;
-//!     assert_eq!(writer.position()?, 4);
+//!     writer.append(&data).await?;
+//!     assert_eq!(writer.position().await?, 4);
 //!
 //!     // Writing data from the start
-//!     writer.write_start(&Blob::from(vec![5, 6, 7, 8]))?;
-//!     writer.set_position(0)?;
-//!     assert_eq!(writer.position()?, 0);
+//!     writer.write_start(&Blob::from(vec![5, 6, 7, 8])).await?;
+//!     writer.set_position(0).await?;
+//!     assert_eq!(writer.position().await?, 0);
 //!
 //!     Ok(())
 //! }
@@ -71,6 +71,7 @@ impl DataWriterFile {
 }
 
 #[async_trait]
+#[async_trait]
 impl DataWriterTrait for DataWriterFile {
 	/// Appends data to the file.
 	///
@@ -82,7 +83,7 @@ impl DataWriterTrait for DataWriterFile {
 	///
 	/// * A Result containing a `ByteRange` indicating the position and length of the appended data, or an error.
 	#[context("while appending {} bytes to file", blob.len())]
-	fn append(&mut self, blob: &Blob) -> Result<ByteRange> {
+	async fn append(&mut self, blob: &Blob) -> Result<ByteRange> {
 		let pos = self.writer.stream_position()?;
 		let len = self.writer.write(blob.as_slice())?;
 
@@ -99,7 +100,7 @@ impl DataWriterTrait for DataWriterFile {
 	///
 	/// * A Result indicating success or an error.
 	#[context("while writing {} bytes at start of file", blob.len())]
-	fn write_start(&mut self, blob: &Blob) -> Result<()> {
+	async fn write_start(&mut self, blob: &Blob) -> Result<()> {
 		let pos = self.writer.stream_position()?;
 		self.writer.rewind()?;
 		self.writer.write_all(blob.as_slice())?;
@@ -113,7 +114,7 @@ impl DataWriterTrait for DataWriterFile {
 	///
 	/// * A Result containing the current write position in bytes or an error.
 	#[context("while getting current write position")]
-	fn position(&mut self) -> Result<u64> {
+	async fn position(&mut self) -> Result<u64> {
 		Ok(self.writer.stream_position()?)
 	}
 
@@ -127,7 +128,7 @@ impl DataWriterTrait for DataWriterFile {
 	///
 	/// * A Result indicating success or an error.
 	#[context("while setting write position to {}", position)]
-	fn set_position(&mut self, position: u64) -> Result<()> {
+	async fn set_position(&mut self, position: u64) -> Result<()> {
 		self.writer.seek(SeekFrom::Start(position))?;
 		Ok(())
 	}
@@ -143,8 +144,8 @@ mod tests {
 	use super::*;
 	use crate::Blob;
 
-	#[test]
-	fn test_append_and_position() -> Result<()> {
+	#[tokio::test]
+	async fn test_append_and_position() -> Result<()> {
 		// Create a temporary file
 		let temp = NamedTempFile::new("test1")?;
 		let path = temp.path();
@@ -154,10 +155,10 @@ mod tests {
 		let mut writer = DataWriterFile::from_path(path)?;
 		let data = Blob::from(vec![10, 20, 30]);
 		// Append data
-		let range = writer.append(&data)?;
+		let range = writer.append(&data).await?;
 		assert_eq!(range.to_string(), "[0..=2]");
 		// Position should now equal length
-		assert_eq!(writer.position()?, 3);
+		assert_eq!(writer.position().await?, 3);
 
 		// Read back file contents
 		let mut file = File::open(path)?;
@@ -167,21 +168,21 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn test_write_start_and_append() -> Result<()> {
+	#[tokio::test]
+	async fn test_write_start_and_append() -> Result<()> {
 		let temp = NamedTempFile::new("test2")?;
 		let path = temp.path();
 		let mut writer = DataWriterFile::from_path(path)?;
 
 		// Write start should write data at position 0
 		let start = Blob::from(vec![1, 2, 3, 4]);
-		writer.write_start(&start)?;
+		writer.write_start(&start).await?;
 		// After write_start, position unchanged (0)
-		assert_eq!(writer.position()?, 0);
+		assert_eq!(writer.position().await?, 0);
 
 		// Now append more data
 		let extra = Blob::from(vec![5, 6]);
-		let range2 = writer.append(&extra)?;
+		let range2 = writer.append(&extra).await?;
 		assert_eq!(range2.to_string(), "[0..=1]");
 
 		drop(writer);
