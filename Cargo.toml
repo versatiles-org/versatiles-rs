@@ -9,7 +9,7 @@ members = [
 	"versatiles_node",
 	"versatiles_pipeline",
 ]
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 authors = ["Michael Kreil <versatiles@michael-kreil.de>"]
