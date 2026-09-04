@@ -33,7 +33,7 @@ r2d2 = { version = "0.8.10", default-features = false }
 r2d2_sqlite = { version = "0.35.0", default-features = false, features = ["bundled"] }
 regex.workspace = true
 reqwest.workspace = true
-tar.workspace = true
+astral-tokio-tar.workspace = true
 tempfile.workspace = true
 terminal_size = "0.4.4"
 time = { version = "0.3.55", default-features = false, features = ["formatting", "local-offset"] }

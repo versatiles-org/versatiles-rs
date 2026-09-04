@@ -1,8 +1,10 @@
-use std::{collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::File, io::Read, path::Path};
+use std::{collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, path::Path};
 
 use anyhow::{Result, anyhow, bail, ensure};
 use async_trait::async_trait;
-use tar::{Archive, EntryType};
+use futures::StreamExt;
+use tokio::io::AsyncReadExt;
+use tokio_tar::{Archive, EntryType};
 use versatiles_core::{
 	Blob, TileCompression,
 	compression::{TargetCompression, decompress_brotli, decompress_gzip, decompress_zstd},
@@ -44,17 +46,14 @@ pub struct TarFile {
 
 impl TarFile {
 	#[context("loading static tar file from path: {path:?}")]
-	pub fn from(path: &Path) -> Result<Self> {
+	pub async fn from(path: &Path) -> Result<Self> {
 		let path = current_dir()?.join(path).canonicalize()?;
 
 		ensure!(path.exists(), "path {path:?} does not exist");
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 		ensure!(path.is_file(), "path {path:?} must be a file");
 
-		let mut file = File::open(&path)?;
-		let mut bytes: Vec<u8> = Vec::new();
-		file.read_to_end(&mut bytes)?;
-		drop(file);
+		let bytes = tokio::fs::read(&path).await?;
 
 		let filename = path
 			.file_name()
@@ -62,7 +61,7 @@ impl TarFile {
 			.ok_or_else(|| anyhow!("path {path:?} has no valid UTF-8 filename"))?;
 		let name = path.to_str().expect("path is valid UTF-8 (checked above)").to_owned();
 
-		Self::from_bytes(Blob::from(bytes), filename, name)
+		Self::from_bytes(Blob::from(bytes), filename, name).await
 	}
 
 	#[context("loading static tar file from URL: {url}")]
@@ -73,10 +72,10 @@ impl TarFile {
 			.path_segments()
 			.and_then(|mut s| s.next_back())
 			.unwrap_or("remote.tar");
-		Self::from_bytes(data, filename, url.to_string())
+		Self::from_bytes(data, filename, url.to_string()).await
 	}
 
-	fn from_bytes(mut data: Blob, filename: &str, name: String) -> Result<Self> {
+	async fn from_bytes(mut data: Blob, filename: &str, name: String) -> Result<Self> {
 		use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
 
 		for part in filename.rsplit('.') {
@@ -92,7 +91,8 @@ impl TarFile {
 		let mut archive = Archive::new(data.as_slice());
 
 		let mut lookup: HashMap<String, FileEntry> = HashMap::new();
-		for file_result in archive.entries()? {
+		let mut entries = archive.entries()?;
+		while let Some(file_result) = entries.next().await {
 			let Ok(mut file) = file_result else {
 				continue;
 			};
@@ -116,7 +116,7 @@ impl TarFile {
 			}
 
 			let mut buffer = Vec::new();
-			file.read_to_end(&mut buffer)?;
+			file.read_to_end(&mut buffer).await?;
 			let blob = Blob::from(buffer);
 
 			let Some(entry_filename) = entry_path.file_name() else {
@@ -262,22 +262,22 @@ mod tests {
 	async fn small_stuff() {
 		let file = make_test_tar(TileCompression::Uncompressed).await;
 
-		let tar_file = TarFile::from(&file).unwrap();
+		let tar_file = TarFile::from(&file).await.unwrap();
 
 		assert!(tar_file.name().ends_with("temp.tar"));
 		assert!(format!("{tar_file:?}").starts_with("TarFile { name:"));
 	}
 
-	#[test]
-	fn from_non_existing_path() {
+	#[tokio::test]
+	async fn from_non_existing_path() {
 		let path = Path::new("path/to/non-existing/file.tar");
-		assert!(TarFile::from(path).is_err());
+		assert!(TarFile::from(path).await.is_err());
 	}
 
-	#[test]
-	fn from_directory() {
+	#[tokio::test]
+	async fn from_directory() {
 		let path = Path::new(".");
-		assert!(TarFile::from(path).is_err());
+		assert!(TarFile::from(path).await.is_err());
 	}
 
 	#[rstest]
@@ -287,7 +287,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_get_data(#[case] compression_tar: TileCompression) -> Result<()> {
 		let file = make_test_tar(compression_tar).await;
-		let tar_file = TarFile::from(&file)?;
+		let tar_file = TarFile::from(&file).await?;
 
 		for compression_accept in [
 			TileCompression::Uncompressed,

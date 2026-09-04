@@ -16,16 +16,17 @@
 //! tiles/TileJSON fails while streaming from the reader.
 
 use std::{
-	fs::File,
-	io::Write,
 	path::{Path, PathBuf},
+	pin::Pin,
 	sync::Arc,
+	task::{Context as TaskContext, Poll},
 };
 
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use tar::{Builder, Header};
+use tokio::io::AsyncWrite;
+use tokio_tar::{Builder, Header};
 use versatiles_core::{compression::compress, io::DataWriterTrait};
 use versatiles_derive::context;
 
@@ -38,21 +39,32 @@ use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traver
 ///
 /// Internally uses a mutex around the tar `Builder` to allow asynchronous streaming
 /// of tiles while maintaining a single-writer model.
-/// Adapter that implements `std::io::Write` for a `&mut dyn DataWriterTrait`.
+/// Adapter that implements [`AsyncWrite`] for a `&mut dyn DataWriterTrait`.
+///
+/// `DataWriterTrait` is still synchronous, so every poll completes immediately
+/// and never returns `Pending`. That is sound but not free: a writer that blocks
+/// internally blocks the polling task. Issue #271 converts the trait to async,
+/// at which point this adapter goes away entirely.
 struct DataWriterAdapter<'a>(&'a mut dyn DataWriterTrait);
 
-impl Write for DataWriterAdapter<'_> {
-	fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+impl AsyncWrite for DataWriterAdapter<'_> {
+	fn poll_write(mut self: Pin<&mut Self>, _cx: &mut TaskContext<'_>, buf: &[u8]) -> Poll<std::io::Result<usize>> {
 		let blob = versatiles_core::Blob::from(buf.to_vec());
-		self
-			.0
-			.append(&blob)
-			.and_then(|range| usize::try_from(range.length).map_err(Into::into))
-			.map_err(std::io::Error::other)
+		Poll::Ready(
+			self
+				.0
+				.append(&blob)
+				.and_then(|range| usize::try_from(range.length).map_err(Into::into))
+				.map_err(std::io::Error::other),
+		)
 	}
 
-	fn flush(&mut self) -> std::io::Result<()> {
-		Ok(())
+	fn poll_flush(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<std::io::Result<()>> {
+		Poll::Ready(Ok(()))
+	}
+
+	fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<std::io::Result<()>> {
+		Poll::Ready(Ok(()))
 	}
 }
 
@@ -60,8 +72,17 @@ impl Write for DataWriterAdapter<'_> {
 pub struct TarTilesWriter {}
 
 impl TarTilesWriter {
-	async fn write_tar<W: Write + Send>(reader: &dyn TileSource, sink: W, runtime: TilesRuntime) -> Result<()> {
-		let mut builder = Builder::new(sink);
+	async fn write_tar<W: AsyncWrite + Unpin + Send>(
+		reader: &dyn TileSource,
+		sink: W,
+		runtime: TilesRuntime,
+	) -> Result<()> {
+		// `new_non_terminated` rather than `new`: `Builder::new` spawns a task that
+		// owns the sink so it can write the terminator on drop, which forces
+		// `W: 'static` and rules out the borrowed `DataWriterAdapter`. The explicit
+		// `finish()` below writes that same 1024-byte terminator, so the archive is
+		// identical either way.
+		let mut builder = Builder::new_non_terminated(sink);
 
 		let parameters = reader.metadata();
 		let tile_format = *parameters.tile_format();
@@ -75,7 +96,9 @@ impl TarTilesWriter {
 		let mut header = Header::new_gnu();
 		header.set_size(meta_data.len() as u64);
 		header.set_mode(0o644);
-		builder.append_data(&mut header, Path::new(&filename), meta_data.as_slice())?;
+		builder
+			.append_data(&mut header, Path::new(&filename), meta_data.as_slice())
+			.await?;
 
 		let builder_mutex = Arc::new(Mutex::new(builder));
 
@@ -99,7 +122,7 @@ impl TarTilesWriter {
 							header.set_size(blob.len());
 							header.set_mode(0o644);
 
-							builder.append_data(&mut header, path, blob.as_slice())?;
+							builder.append_data(&mut header, path, blob.as_slice()).await?;
 						}
 						Ok(())
 					})
@@ -108,7 +131,7 @@ impl TarTilesWriter {
 			)
 			.await?;
 
-		builder_mutex.lock().await.finish()?;
+		builder_mutex.lock().await.finish().await?;
 
 		Ok(())
 	}
@@ -118,7 +141,7 @@ impl TarTilesWriter {
 impl TilesWriter for TarTilesWriter {
 	#[context("writing tar to path '{}'", path.display())]
 	async fn write_to_path(reader: &dyn TileSource, path: &Path, runtime: TilesRuntime) -> Result<()> {
-		let file = File::create(path)?;
+		let file = tokio::fs::File::create(path).await?;
 		Self::write_tar(reader, file, runtime).await
 	}
 
@@ -136,6 +159,7 @@ impl TilesWriter for TarTilesWriter {
 #[cfg(test)]
 mod tests {
 	use assert_fs::NamedTempFile;
+	use futures::StreamExt;
 	use versatiles_core::*;
 
 	use super::*;
@@ -151,7 +175,7 @@ mod tests {
 		let temp_path = NamedTempFile::new("test_output.tar")?;
 		TarTilesWriter::write_to_path(&mock_reader, &temp_path, TilesRuntime::default()).await?;
 
-		let reader = TarTilesReader::open(&temp_path)?;
+		let reader = TarTilesReader::open(&temp_path).await?;
 		MockWriter::write(&reader).await?;
 
 		Ok(())
@@ -167,7 +191,7 @@ mod tests {
 		let temp_path = NamedTempFile::new("test_meta_output.tar")?;
 		TarTilesWriter::write_to_path(&mock_reader, &temp_path, TilesRuntime::default()).await?;
 
-		let reader = TarTilesReader::open(&temp_path)?;
+		let reader = TarTilesReader::open(&temp_path).await?;
 		assert_eq!(
 			reader.tilejson().stringify(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
@@ -188,6 +212,7 @@ mod tests {
 
 		assert_eq!(
 			TarTilesReader::open(&temp_path)
+				.await
 				.unwrap_err()
 				.chain()
 				.last()
@@ -223,7 +248,7 @@ mod tests {
 		let temp_path = NamedTempFile::new("test_large_tiles.tar")?;
 		TarTilesWriter::write_to_path(&mock_reader, &temp_path, TilesRuntime::default()).await?;
 
-		let reader = TarTilesReader::open(&temp_path)?;
+		let reader = TarTilesReader::open(&temp_path).await?;
 		assert_eq!(reader.tile_pyramid().await?.count_tiles(), 21845);
 
 		Ok(())
@@ -246,7 +271,7 @@ mod tests {
 			let temp_path = NamedTempFile::new(format!("test_compression_{tile_compression:?}.tar"))?;
 			TarTilesWriter::write_to_path(&mock_reader, &temp_path, TilesRuntime::default()).await?;
 
-			let reader = TarTilesReader::open(&temp_path)?;
+			let reader = TarTilesReader::open(&temp_path).await?;
 			assert_eq!(reader.metadata().tile_compression(), &tile_compression);
 		}
 
@@ -265,10 +290,12 @@ mod tests {
 		let temp_path = NamedTempFile::new("test_zxy_scheme.tar")?;
 		TarTilesWriter::write_to_path(&mock_reader, &temp_path, TilesRuntime::default()).await?;
 
-		let mut filenames = tar::Archive::new(File::open(&temp_path)?)
+		let mut archive = tokio_tar::Archive::new(tokio::fs::File::open(&temp_path).await?);
+		let mut filenames = archive
 			.entries()?
 			.map(|entry| entry.unwrap().path().unwrap().to_str().unwrap().to_string())
-			.collect::<Vec<_>>();
+			.collect::<Vec<_>>()
+			.await;
 		filenames.sort();
 
 		assert_eq!(filenames, vec!["3/1/2.png", "tiles.json"]);

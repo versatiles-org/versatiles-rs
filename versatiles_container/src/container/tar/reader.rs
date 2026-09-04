@@ -31,11 +31,13 @@
 //! Returns errors when the tar cannot be opened or read, when no tiles are found,
 //! or when mixed formats/compressions are detected.
 
-use std::{collections::HashMap, fmt::Debug, io::Read, path::Path, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, path::Path, sync::Arc};
 
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
-use tar::{Archive, EntryType};
+use futures::StreamExt;
+use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio_tar::{Archive, Entry, EntryType};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
@@ -73,7 +75,7 @@ struct ParsedTile {
 }
 
 /// Try to parse a tile path like `{z}/{x}/{y}.<format>[.<compression>]`.
-fn try_parse_tile_path<R: std::io::Read>(entry: &tar::Entry<R>, path_vec: &[&str]) -> Result<Option<ParsedTile>> {
+fn try_parse_tile_path<R: AsyncRead + Unpin>(entry: &Entry<R>, path_vec: &[&str]) -> Result<Option<ParsedTile>> {
 	if path_vec.len() != 3 {
 		return Ok(None);
 	}
@@ -95,7 +97,7 @@ fn try_parse_tile_path<R: std::io::Read>(entry: &tar::Entry<R>, path_vec: &[&str
 		format,
 		compression,
 		offset: entry.raw_file_position(),
-		length: entry.size(),
+		length: entry.effective_size(),
 	}))
 }
 
@@ -113,8 +115,8 @@ impl TarTilesReader {
 	/// Returns an error if the file cannot be opened, if **no tiles** are found, or if mixed
 	/// formats/compressions are encountered.
 	#[context("opening tar from path '{}'", path.display())]
-	pub fn open(path: &Path) -> Result<TarTilesReader> {
-		Self::open_with_progress(path, None)
+	pub async fn open(path: &Path) -> Result<TarTilesReader> {
+		Self::open_with_progress(path, None).await
 	}
 
 	/// Open a tar archive and build an index of tiles and metadata, with optional progress reporting.
@@ -125,8 +127,8 @@ impl TarTilesReader {
 		clippy::too_many_lines,
 		reason = "one linear scan over the tar entries; splitting it would separate parsing from the fields it fills"
 	)]
-	fn open_with_progress(path: &Path, progress: Option<&ProgressHandle>) -> Result<TarTilesReader> {
-		let mut reader = DataReaderFile::open(path)?;
+	async fn open_with_progress(path: &Path, progress: Option<&ProgressHandle>) -> Result<TarTilesReader> {
+		let reader = DataReaderFile::open(path)?;
 
 		// Set progress total to file size if available
 		if let Some(progress) = &progress
@@ -135,13 +137,20 @@ impl TarTilesReader {
 			progress.set_max_value(file_meta.len());
 		}
 
-		let mut archive = Archive::new(&mut reader);
+		// A second handle on the same file: the scan below streams the archive
+		// front to back, while `reader` stays for the random-access range reads
+		// that serve tiles afterwards.
+		let scan_file = tokio::fs::File::open(path)
+			.await
+			.with_context(|| format!("opening {} for scanning", path.display()))?;
+		let mut archive = Archive::new(tokio::io::BufReader::new(scan_file));
 
 		let mut tilejson = TileJSON::default();
 		let mut tile_map = HashMap::new();
 		let mut tile_format: Option<TileFormat> = None;
 		let mut tile_compression: Option<TileCompression> = None;
-		for entry in archive.entries()? {
+		let mut entries = archive.entries()?;
+		while let Some(entry) = entries.next().await {
 			let mut entry = entry?;
 			let header = entry.header();
 			if header.entry_type() != EntryType::Regular {
@@ -210,38 +219,31 @@ impl TarTilesReader {
 				continue;
 			}
 
-			// Fallible: a truncated archive fails here, and that is an error about
-			// the file rather than a broken assumption about it.
-			let mut read_to_end = || -> Result<Blob> {
+			// One lookup and one read, rather than three arms each calling a
+			// closure that borrows `entry`: such a closure cannot be held across
+			// the `await` the read now needs.
+			let metadata_compression = if path_vec.len() == 1 {
+				match path_vec[0] {
+					"meta.json" | "tiles.json" | "metadata.json" => Some(TileCompression::Uncompressed),
+					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => Some(TileCompression::Gzip),
+					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => Some(TileCompression::Brotli),
+					_ => None,
+				}
+			} else {
+				None
+			};
+
+			if let Some(compression) = metadata_compression {
+				// Fallible: a truncated archive fails here, and that is an error
+				// about the file rather than a broken assumption about it.
 				let mut blob: Vec<u8> = Vec::new();
 				entry
 					.read_to_end(&mut blob)
+					.await
 					.with_context(|| format!("reading tar entry {path_tmp_string:?}"))?;
-				Ok(Blob::from(blob))
-			};
-
-			if path_vec.len() == 1 {
-				match path_vec[0] {
-					"meta.json" | "tiles.json" | "metadata.json" => {
-						tilejson.merge(&TileJSON::try_from_blob_or_default(&read_to_end()?))?;
-						continue;
-					}
-					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
-						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
-							read_to_end()?,
-							&TileCompression::Gzip,
-						)?))?;
-						continue;
-					}
-					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
-						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
-							read_to_end()?,
-							&TileCompression::Brotli,
-						)?))?;
-						continue;
-					}
-					&_ => {}
-				}
+				let blob = decompress(Blob::from(blob), &compression)?;
+				tilejson.merge(&TileJSON::try_from_blob_or_default(&blob))?;
+				continue;
 			}
 
 			log::warn!("unknown file in tar: {path_tmp_string:?}");
@@ -298,7 +300,7 @@ impl TilesReader for TarTilesReader {
 
 	async fn open_path(path: &Path, runtime: TilesRuntime) -> Result<SharedTileSource> {
 		let progress = runtime.create_progress("scanning tar", 0);
-		Ok(Self::open_with_progress(path, Some(&progress))?.into_shared())
+		Ok(Self::open_with_progress(path, Some(&progress)).await?.into_shared())
 	}
 }
 
@@ -422,24 +424,22 @@ pub mod tests {
 		let path = dir.path().join("hostile.tar");
 
 		let tile = compress_gzip(&Blob::from(MOCK_BYTES_PBF.to_vec()))?;
-		let mut builder = tar::Builder::new(std::fs::File::create(&path)?);
+		let mut builder = tokio_tar::Builder::new_non_terminated(tokio::fs::File::create(&path).await?);
 
-		let mut append = |name: &OsStr, data: &[u8]| -> Result<()> {
-			let mut header = tar::Header::new_gnu();
-			header.set_size(data.len() as u64);
+		for name in [OsStr::new("5/3/4.pbf.gz"), OsStr::from_bytes(b"5/3/\xff\xfe.pbf.gz")] {
+			let mut header = tokio_tar::Header::new_gnu();
+			header.set_size(tile.len());
 			header.set_mode(0o644);
 			header.set_cksum();
-			builder.append_data(&mut header, Path::new(name), data)?;
-			Ok(())
-		};
-
-		append(OsStr::new("5/3/4.pbf.gz"), tile.as_slice())?;
-		append(OsStr::from_bytes(b"5/3/\xff\xfe.pbf.gz"), tile.as_slice())?;
-		builder.finish()?;
+			builder
+				.append_data(&mut header, Path::new(name), tile.as_slice())
+				.await?;
+		}
+		builder.finish().await?;
 		drop(builder);
 
 		// The archive opens, and the readable tile is still there.
-		let reader = TarTilesReader::open(&path)?;
+		let reader = TarTilesReader::open(&path).await?;
 		let coord = TileCoord::new(5, 3, 4)?;
 		assert!(reader.tile_map.contains_key(&coord), "the valid tile was lost");
 		assert_eq!(reader.tile_map.len(), 1, "a skipped entry was counted");
@@ -452,7 +452,7 @@ pub mod tests {
 		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 3, "tar").await?;
 
 		// get tar reader
-		let reader = TarTilesReader::open(&temp_file)?;
+		let reader = TarTilesReader::open(&temp_file).await?;
 
 		assert_eq!(
 			format!("{reader:?}"),
@@ -486,7 +486,7 @@ pub mod tests {
 			let temp_file = make_test_file(TileFormat::MVT, compression, 2, "tar").await?;
 
 			// get tar reader
-			let reader = TarTilesReader::open(&temp_file)?;
+			let reader = TarTilesReader::open(&temp_file).await?;
 
 			MockWriter::write(&reader).await?;
 			Ok(())
@@ -504,7 +504,7 @@ pub mod tests {
 	async fn probe() -> Result<()> {
 		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 4, "tar").await?;
 
-		let reader = TarTilesReader::open(&temp_file)?;
+		let reader = TarTilesReader::open(&temp_file).await?;
 		let runtime = TilesRuntime::default();
 
 		let mut printer = PrettyPrint::new();
@@ -522,12 +522,13 @@ pub mod tests {
 	#[tokio::test]
 	async fn empty_tar_file() -> Result<()> {
 		let filename = assert_fs::NamedTempFile::new("empty_tar_file.tar")?;
-		let file = std::fs::File::create(&filename)?;
-		let mut a = tar::Builder::new(file);
-		a.finish()?;
+		let file = tokio::fs::File::create(&filename).await?;
+		let mut a = tokio_tar::Builder::new_non_terminated(file);
+		a.finish().await?;
 
 		assert_eq!(
 			TarTilesReader::open(&filename)
+				.await
 				.unwrap_err()
 				.chain()
 				.last()
@@ -541,15 +542,16 @@ pub mod tests {
 	#[tokio::test]
 	async fn correct_zxy_scheme() -> Result<()> {
 		let filename = assert_fs::NamedTempFile::new("correct_zxy_scheme.tar")?;
-		let file = std::fs::File::create(&filename)?;
-		let mut a = tar::Builder::new(file);
-		let mut header = tar::Header::new_gnu();
+		let file = tokio::fs::File::create(&filename).await?;
+		let mut a = tokio_tar::Builder::new_non_terminated(file);
+		let mut header = tokio_tar::Header::new_gnu();
 		header.set_size(6);
 		header.set_cksum();
-		a.append_data(&mut header, "3/1/2.bin", [3, 1, 4, 1, 5, 9].as_ref())?;
-		a.finish()?;
+		a.append_data(&mut header, "3/1/2.bin", [3, 1, 4, 1, 5, 9].as_ref())
+			.await?;
+		a.finish().await?;
 
-		let reader = TarTilesReader::open(&filename)?;
+		let reader = TarTilesReader::open(&filename).await?;
 		assert_eq!(reader.metadata().tile_format(), &TileFormat::BIN);
 		assert_eq!(reader.metadata().tile_compression(), &TileCompression::Uncompressed);
 		assert_eq!(reader.tile_pyramid().await?.count_tiles(), 1);
@@ -568,7 +570,7 @@ pub mod tests {
 	#[tokio::test]
 	async fn tile_stream_matches_individual_reads() -> Result<()> {
 		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 2, "tar").await?;
-		let reader = TarTilesReader::open(&temp_file)?;
+		let reader = TarTilesReader::open(&temp_file).await?;
 
 		// Use level 2 bbox (4x4 = 16 tiles)
 		let bbox = TileBBox::new_full(2)?;

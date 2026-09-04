@@ -46,7 +46,7 @@ mime_guess = { version = "2.0.5", default-features = false, optional = true }
 regex = { workspace = true, optional = true, features = ["unicode"] }
 serde.workspace = true
 serde_yaml_ng = "0.10.0"
-tar = { workspace = true, optional = true }
+astral-tokio-tar = { workspace = true, optional = true }
 termimad = { version = "0.35.3", optional = true }
 tokio = { workspace = true, features = [
 	"rt-multi-thread",
@@ -101,7 +101,7 @@ server = [
 	"dep:mime_guess",
 	"dep:regex",
 	"dep:reqwest",
-	"dep:tar",
+	"dep:astral-tokio-tar",
 	"dep:tokio",
 	"dep:tower",
 	"dep:tower-http",
@@ -111,7 +111,7 @@ cli = [
 	"dep:env_logger",
 	"dep:enumset",
 	"dep:glob",
-	"dep:tar",
+	"dep:astral-tokio-tar",
 	"dep:termimad",
 	"dep:tokio",
 	"versatiles_container/cli",

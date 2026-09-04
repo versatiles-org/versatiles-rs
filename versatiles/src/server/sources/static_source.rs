@@ -44,7 +44,7 @@ impl StaticSource {
 					if std::fs::metadata(path)?.is_dir() {
 						Arc::new(Folder::from(path)?) as Arc<dyn StaticSourceTrait>
 					} else {
-						Arc::new(TarFile::from(path)?)
+						Arc::new(TarFile::from(path).await?)
 					}
 				}
 				DataLocation::Blob(_) => bail!("Blob is not supported as a static source"),

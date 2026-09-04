@@ -1,7 +1,7 @@
 //! A [`TileSink`] implementation that appends tiles to a `.tar` archive.
 //!
 //! Uses the same `{z}/{x}/{y}.<format>[.<compression>]` layout as [`TarTilesWriter`](super::TarTilesWriter).
-//! Thread-safe via an internal `Mutex` around the `tar::Builder`.
+//! Thread-safe via an internal `Mutex` around the `tokio_tar::Builder`.
 //!
 //! Supports both local paths and `sftp://` URLs as output destinations.
 
@@ -9,14 +9,43 @@ use std::{
 	fs::File,
 	io::{BufWriter, Write},
 	path::Path,
+	pin::Pin,
 	sync::Mutex,
+	task::{Context as TaskContext, Poll},
 };
 
 use anyhow::{Context, Result};
-use tar::{Builder, Header};
+use tokio::io::AsyncWrite;
+use tokio_tar::{Builder, Header};
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, TileJSON, compression::compress};
 
 use crate::TileSink;
+
+/// Presents a synchronous `std::io::Write` as the [`AsyncWrite`] that
+/// `tokio_tar::Builder` requires.
+///
+/// [`TileSink`] is synchronous while the tar builder is not, and this is the
+/// join between them. It is safe in a way a general bridge would not be: the
+/// inner writer is an ordinary blocking `Write`, so `poll_write` always returns
+/// `Ready` and the `block_on` in the sink below never parks — it needs no
+/// reactor, no runtime, and cannot deadlock even on a current-thread runtime.
+///
+/// Issue #271 converts `TileSink` to async, which removes this adapter.
+struct SyncWriteAdapter<W>(W);
+
+impl<W: Write + Unpin> AsyncWrite for SyncWriteAdapter<W> {
+	fn poll_write(mut self: Pin<&mut Self>, _cx: &mut TaskContext<'_>, buf: &[u8]) -> Poll<std::io::Result<usize>> {
+		Poll::Ready(self.0.write(buf))
+	}
+
+	fn poll_flush(mut self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<std::io::Result<()>> {
+		Poll::Ready(self.0.flush())
+	}
+
+	fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<std::io::Result<()>> {
+		Poll::Ready(Ok(()))
+	}
+}
 
 /// A tile sink that writes pre-compressed blobs into a `.tar` archive.
 ///
@@ -26,11 +55,11 @@ use crate::TileSink;
 ///
 /// # Thread Safety
 ///
-/// Uses a `std::sync::Mutex` around the inner `tar::Builder` so that
+/// Uses a `std::sync::Mutex` around the inner `tokio_tar::Builder` so that
 /// multiple threads can call `write_tile` concurrently (e.g. from
 /// `spawn_blocking` tasks).
-pub struct TarTileSink<W: Write + Send> {
-	builder: Mutex<Builder<W>>,
+pub struct TarTileSink<W: Write + Send + Unpin> {
+	builder: Mutex<Builder<SyncWriteAdapter<W>>>,
 	tile_format: TileFormat,
 	tile_compression: TileCompression,
 }
@@ -73,18 +102,21 @@ impl TarTileSink<BufWriter<File>> {
 	}
 }
 
-impl<W: Write + Send> TarTileSink<W> {
+impl<W: Write + Send + Unpin> TarTileSink<W> {
 	/// Create a new `TarTileSink` from any `Write` implementor.
 	pub fn from_writer(writer: W, tile_format: TileFormat, tile_compression: TileCompression) -> Self {
 		Self {
-			builder: Mutex::new(Builder::new(writer)),
+			// `new_non_terminated` avoids `Builder::new`'s `W: 'static` bound, which
+			// comes from the task it spawns to terminate the archive on drop.
+			// `finish()` below writes that same terminator.
+			builder: Mutex::new(Builder::new_non_terminated(SyncWriteAdapter(writer))),
 			tile_format,
 			tile_compression,
 		}
 	}
 }
 
-impl<W: Write + Send> TileSink for TarTileSink<W> {
+impl<W: Write + Send + Unpin> TileSink for TarTileSink<W> {
 	fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
 		let filename = format!(
 			"./{}/{}/{}{}{}",
@@ -99,11 +131,8 @@ impl<W: Write + Send> TileSink for TarTileSink<W> {
 		header.set_size(blob.len());
 		header.set_mode(0o644);
 
-		self
-			.builder
-			.lock()
-			.expect("poisoned mutex")
-			.append_data(&mut header, Path::new(&filename), blob.as_slice())?;
+		let mut builder = self.builder.lock().expect("poisoned mutex");
+		futures::executor::block_on(builder.append_data(&mut header, Path::new(&filename), blob.as_slice()))?;
 		Ok(())
 	}
 
@@ -116,9 +145,12 @@ impl<W: Write + Send> TileSink for TarTileSink<W> {
 		let mut header = Header::new_gnu();
 		header.set_size(meta_blob.len());
 		header.set_mode(0o644);
-		builder.append_data(&mut header, Path::new(&filename), meta_blob.as_slice())?;
-
-		builder.finish()?;
+		futures::executor::block_on(async {
+			builder
+				.append_data(&mut header, Path::new(&filename), meta_blob.as_slice())
+				.await?;
+			builder.finish().await
+		})?;
 		Ok(())
 	}
 }
@@ -128,8 +160,11 @@ mod tests {
 	use super::*;
 	use crate::{TarTilesReader, TileSource, TilesRuntime};
 
-	#[test]
-	fn write_and_read_back() -> Result<()> {
+	// `tokio::test` rather than a manually built runtime: these now also exercise
+	// the claim on `SyncWriteAdapter`, since `write_tile` runs its `block_on`
+	// inside a current-thread runtime, where parking would deadlock.
+	#[tokio::test]
+	async fn write_and_read_back() -> Result<()> {
 		let temp = assert_fs::NamedTempFile::new("test_sink.tar")?;
 
 		let sink = TarTileSink::new(&temp, TileFormat::PNG, TileCompression::Uncompressed)?;
@@ -142,17 +177,16 @@ mod tests {
 		tilejson.set_string("tilejson", "3.0.0")?;
 		Box::new(sink).finish(&tilejson, &TilesRuntime::default())?;
 
-		let reader = TarTilesReader::open(&temp)?;
+		let reader = TarTilesReader::open(&temp).await?;
 		assert_eq!(reader.metadata().tile_format(), &TileFormat::PNG);
 		assert_eq!(reader.metadata().tile_compression(), &TileCompression::Uncompressed);
-		let rt = tokio::runtime::Runtime::new()?;
-		assert_eq!(rt.block_on(reader.tile_pyramid())?.count_tiles(), 1);
+		assert_eq!(reader.tile_pyramid().await?.count_tiles(), 1);
 
 		Ok(())
 	}
 
-	#[test]
-	fn write_multiple_tiles() -> Result<()> {
+	#[tokio::test]
+	async fn write_multiple_tiles() -> Result<()> {
 		let temp = assert_fs::NamedTempFile::new("test_sink_multi.tar")?;
 
 		let sink = TarTileSink::new(&temp, TileFormat::WEBP, TileCompression::Brotli)?;
@@ -170,11 +204,10 @@ mod tests {
 		tilejson.set_string("tilejson", "3.0.0")?;
 		Box::new(sink).finish(&tilejson, &TilesRuntime::default())?;
 
-		let reader = TarTilesReader::open(&temp)?;
+		let reader = TarTilesReader::open(&temp).await?;
 		assert_eq!(reader.metadata().tile_format(), &TileFormat::WEBP);
 		assert_eq!(reader.metadata().tile_compression(), &TileCompression::Brotli);
-		let rt = tokio::runtime::Runtime::new()?;
-		assert_eq!(rt.block_on(reader.tile_pyramid())?.count_tiles(), 16);
+		assert_eq!(reader.tile_pyramid().await?.count_tiles(), 16);
 
 		Ok(())
 	}
