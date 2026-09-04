@@ -509,10 +509,10 @@ jobs:
       CARGO_PROFILE_TEST_OPT_LEVEL: "0"
     if: github.ref == 'refs/heads/main'
     steps:
-      # Before checkout so actions/checkout has git. openssl-dev is for
-      # openssl-sys, pulled in via ssh2.
+      # Before checkout so actions/checkout has git. No OpenSSL packages:
+      # `russh` replaced `ssh2`, so openssl-sys is not in the graph.
       - name: Install build tools
-        run: apk add --no-cache bash git musl-dev pkgconf openssl-dev openssl-libs-static
+        run: apk add --no-cache bash git musl-dev pkgconf
 
       - name: Checkout
         uses: actions/checkout@v7

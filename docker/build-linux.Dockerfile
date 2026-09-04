@@ -7,9 +7,10 @@ FROM rust:alpine AS builder_musl
 # but -crt-static for cdylib (Node.js bindings) to enable dynamic linking
 # The RUSTFLAGS will be overridden per-build below
 # Install necessary packages
-# pkgconf + openssl-dev: required by openssl-sys (pulled in by ssh2/libssh2-sys)
-# openssl-libs-static: required for static linking (-C target-feature=+crt-static)
-RUN apk add --no-cache bash musl-dev pkgconf openssl-dev openssl-libs-static
+# musl-dev supplies the C toolchain the remaining -sys crates need to build.
+# OpenSSL is deliberately absent: SFTP moved from `ssh2` (libssh2-sys ->
+# openssl-sys) to the pure-Rust `russh`, so nothing in the graph links OpenSSL.
+RUN apk add --no-cache bash musl-dev pkgconf
 
 # CREATE BUILDER SYSTEM FOR GNU
 # Pinned to bookworm (glibc 2.36) instead of the floating `rust:slim` tag, which
@@ -20,8 +21,9 @@ FROM rust:slim-bookworm AS builder_gnu
 # Avoid prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 # Install necessary packages
-# pkg-config + libssl-dev: required by openssl-sys (pulled in by ssh2/libssh2-sys)
-RUN apt update -y && apt install -y bash pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+# No libssl-dev: since SFTP moved to the pure-Rust `russh`, openssl-sys is no
+# longer in the dependency graph.
+RUN apt update -y && apt install -y bash pkg-config && rm -rf /var/lib/apt/lists/*
 
 # SELECT BUILDER BASED ON LIBC
 # NOTE: BuildKit warns about ${LIBC} interpolation below - this is expected.

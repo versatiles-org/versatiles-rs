@@ -297,7 +297,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Use native runners to avoid cross-compilation; pkg-config finds OpenSSL without extra setup.
+          # Use native runners to avoid cross-compilation.
           - arch: x86_64
             runner: macos-26-intel
           - arch: aarch64
