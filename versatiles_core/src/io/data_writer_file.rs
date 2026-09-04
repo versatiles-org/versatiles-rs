@@ -50,6 +50,25 @@ pub struct DataWriterFile {
 	writer: BufWriter<File>,
 }
 
+// The `DataWriterTrait` methods below are `async` because the trait is — SFTP
+// needs it — but their bodies deliberately use blocking `std::fs`. Two reasons,
+// both of which make `tokio::fs` a worse fit here rather than a better one:
+//
+//  - `tokio::fs` is `spawn_blocking` underneath on every platform, so it does
+//    not remove the blocking; it moves it to a pool thread and adds a
+//    round-trip per operation. A buffered local write is short and never
+//    yields, so paying that per call buys nothing.
+//  - `std::io::BufWriter` flushes on `Drop`. `tokio::io::BufWriter` cannot —
+//    a destructor cannot await — and of the five places that build a
+//    `DataWriterFile`, only the registry's `write_to_writer` path calls
+//    `finalize()`. Switching would silently truncate the other four.
+//
+// A further trap if anyone does revisit this: `append` and `write_start` call
+// `stream_position`, which `std` specialises on `BufWriter` to read the
+// position without flushing. Tokio's `BufWriter` flushes on every seek, so a
+// direct port would flush the buffer on each append. Track the position
+// manually instead, the way `DataWriterSftp` does.
+
 impl DataWriterFile {
 	/// Creates a `DataWriterFile` from a file path.
 	///
