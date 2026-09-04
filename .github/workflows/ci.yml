@@ -200,7 +200,7 @@ jobs:
         run: |
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-            build-essential git pkg-config libclang-dev libssl-dev
+            build-essential git pkg-config libclang-dev
 
       - name: Checkout
         uses: actions/checkout@v7
@@ -323,7 +323,7 @@ jobs:
         run: |
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-            build-essential git pkg-config libclang-dev libssl-dev
+            build-essential git pkg-config libclang-dev
 
       - name: Checkout
         uses: actions/checkout@v7
@@ -432,7 +432,7 @@ jobs:
         run: |
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-            build-essential git pkg-config libclang-dev libssl-dev
+            build-essential git pkg-config libclang-dev
 
       - name: Checkout
         uses: actions/checkout@v7
