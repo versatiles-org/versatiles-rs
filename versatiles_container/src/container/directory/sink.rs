@@ -15,8 +15,11 @@ enum Backend {
 	Local {
 		base_path: PathBuf,
 	},
+	// Boxed: an `SftpFileSystem` carries a live SSH session and an SFTP channel,
+	// which makes it an order of magnitude larger than the local variant, and
+	// every `Backend` — local ones included — would otherwise be sized for it.
 	#[cfg(feature = "sftp")]
-	Sftp(std::sync::Mutex<versatiles_core::io::SftpFileSystem>),
+	Sftp(Box<std::sync::Mutex<versatiles_core::io::SftpFileSystem>>),
 }
 
 impl Backend {
@@ -72,13 +75,13 @@ impl DirectoryTileSink {
 				return Ok(Box::new(Self {
 					tile_format,
 					tile_compression,
-					backend: Backend::Sftp(std::sync::Mutex::new(sftp_fs)),
+					backend: Backend::Sftp(Box::new(std::sync::Mutex::new(sftp_fs))),
 				}));
 			}
 			#[cfg(not(feature = "sftp"))]
 			{
 				let _ = runtime;
-				anyhow::bail!("SFTP support requires the 'ssh2' feature");
+				anyhow::bail!("SFTP support requires the 'sftp' feature");
 			}
 		}
 

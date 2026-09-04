@@ -46,7 +46,7 @@ pub async fn open_session(url: &Url, identity_file: Option<&Path>) -> Result<Ssh
 	};
 
 	let timeout = operation_timeout(url);
-	let tcp = connect_tcp(host, port, timeout).await?;
+	let tcp = connect_tcp(host, port)?;
 
 	// Budget for the handshake as a whole. Under ssh2 this needed `SO_RCVTIMEO`
 	// on the socket, because libssh2 read from a blocking socket and only
@@ -94,9 +94,35 @@ pub async fn open_sftp(handle: &SshHandle) -> Result<Sftp> {
 }
 
 /// Extract the remote file path from an SFTP URL.
+///
+/// A `String`, not a `PathBuf`: SFTP paths are always `/`-separated, and now
+/// that Windows is a supported build target `PathBuf::join` would splice a
+/// backslash into a remote path. Under ssh2 this could not happen because the
+/// whole SFTP stack was unix-only.
 #[must_use]
-pub fn remote_path(url: &Url) -> PathBuf {
-	PathBuf::from(url.path())
+pub fn remote_path(url: &Url) -> String {
+	url.path().to_owned()
+}
+
+/// Join a relative path onto a remote directory, `/`-separated.
+#[must_use]
+pub fn remote_join(base: &str, relative: &str) -> String {
+	let base = base.trim_end_matches('/');
+	let relative = relative.trim_start_matches('/');
+	if relative.is_empty() {
+		return if base.is_empty() { "/".to_owned() } else { base.to_owned() };
+	}
+	format!("{base}/{relative}")
+}
+
+/// The parent directory of a remote path, or `None` at the root.
+#[must_use]
+pub fn remote_parent(path: &str) -> Option<&str> {
+	let trimmed = path.trim_end_matches('/');
+	match trimmed.rfind('/') {
+		None | Some(0) => None,
+		Some(index) => Some(&trimmed[..index]),
+	}
 }
 
 /// Build a sanitized display name (without credentials).
@@ -171,7 +197,7 @@ fn client_config(timeout: Option<Duration>) -> Config {
 }
 
 /// Open the TCP connection the SSH transport runs over.
-async fn connect_tcp(host: &str, port: u16, timeout: Option<Duration>) -> Result<tokio::net::TcpStream> {
+fn connect_tcp(host: &str, port: u16) -> Result<tokio::net::TcpStream> {
 	let addr = (host, port)
 		.to_socket_addrs()
 		.with_context(|| format!("failed to resolve {host}:{port}"))?
@@ -206,7 +232,6 @@ async fn connect_tcp(host: &str, port: u16, timeout: Option<Duration>) -> Result
 		}
 	}
 
-	let _ = timeout;
 	tcp
 		.set_nonblocking(true)
 		.with_context(|| format!("failed to put the socket to {host}:{port} into non-blocking mode"))?;
@@ -441,6 +466,12 @@ pub struct ClientHandler {
 impl client::Handler for ClientHandler {
 	type Error = anyhow::Error;
 
+	// Known-hosts checking is file I/O, not network I/O, so nothing here awaits.
+	// The signature is russh's, and it is called from inside the handshake.
+	#[allow(
+		clippy::unused_async_trait_impl,
+		reason = "the async signature is required by russh's Handler trait"
+	)]
 	async fn check_server_key(&mut self, key: &PublicKeyOrCertificate) -> Result<bool> {
 		let key = match key {
 			PublicKeyOrCertificate::PublicKey { key, .. } => key,
@@ -586,31 +617,31 @@ mod tests {
 	#[test]
 	fn test_remote_path() {
 		let url = Url::parse("sftp://host/data/tiles.versatiles").unwrap();
-		assert_eq!(remote_path(&url), PathBuf::from("/data/tiles.versatiles"));
+		assert_eq!(remote_path(&url), "/data/tiles.versatiles");
 	}
 
 	#[test]
 	fn test_remote_path_root() {
 		let url = Url::parse("sftp://host/").unwrap();
-		assert_eq!(remote_path(&url), PathBuf::from("/"));
+		assert_eq!(remote_path(&url), "/");
 	}
 
 	#[test]
 	fn test_remote_path_nested() {
 		let url = Url::parse("sftp://host/a/b/c/d/file.tar").unwrap();
-		assert_eq!(remote_path(&url), PathBuf::from("/a/b/c/d/file.tar"));
+		assert_eq!(remote_path(&url), "/a/b/c/d/file.tar");
 	}
 
 	#[test]
 	fn test_remote_path_with_credentials() {
 		let url = Url::parse("sftp://user:pass@host/data/file.versatiles").unwrap();
-		assert_eq!(remote_path(&url), PathBuf::from("/data/file.versatiles"));
+		assert_eq!(remote_path(&url), "/data/file.versatiles");
 	}
 
 	#[test]
 	fn test_remote_path_with_port() {
 		let url = Url::parse("sftp://host:2222/data/file.versatiles").unwrap();
-		assert_eq!(remote_path(&url), PathBuf::from("/data/file.versatiles"));
+		assert_eq!(remote_path(&url), "/data/file.versatiles");
 	}
 
 	#[test]
@@ -694,7 +725,29 @@ mod tests {
 	#[case("sftp://host/a%20b/file.tar", "/a%20b/file.tar")] // URL-encoded space stays encoded
 	fn test_remote_path_variants(#[case] url_str: &str, #[case] expected: &str) {
 		let url = Url::parse(url_str).unwrap();
-		assert_eq!(remote_path(&url), PathBuf::from(expected));
+		assert_eq!(remote_path(&url), expected);
+	}
+
+	/// Remote paths are `/`-separated whatever the host platform does.
+	#[rstest::rstest]
+	#[case("/base", "a.bin", "/base/a.bin")]
+	#[case("/base/", "a.bin", "/base/a.bin")]
+	#[case("/base", "/a.bin", "/base/a.bin")]
+	#[case("/base", "a/b/c.bin", "/base/a/b/c.bin")]
+	#[case("/", "a.bin", "/a.bin")]
+	#[case("", "a.bin", "/a.bin")]
+	#[case("/base", "", "/base")]
+	fn test_remote_join(#[case] base: &str, #[case] relative: &str, #[case] expected: &str) {
+		assert_eq!(remote_join(base, relative), expected);
+	}
+
+	#[rstest::rstest]
+	#[case("/a/b/c", Some("/a/b"))]
+	#[case("/a/b/c/", Some("/a/b"))]
+	#[case("/a", None)]
+	#[case("/", None)]
+	fn test_remote_parent(#[case] path: &str, #[case] expected: Option<&str>) {
+		assert_eq!(remote_parent(path), expected);
 	}
 
 	/// Sets an environment variable for the duration of a test and restores the

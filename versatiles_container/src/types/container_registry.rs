@@ -265,21 +265,15 @@ impl ContainerRegistry {
 				let reader: DataReader = match url.scheme() {
 					#[cfg(feature = "sftp")]
 					"sftp" => {
-						// SFTP open does a blocking SSH handshake. Off-load it to
-						// the tokio blocking pool so concurrent opens (e.g. from
-						// `from_stacked_raster` building several sub-pipelines at
-						// once) actually run in parallel instead of serializing
-						// on the async task's worker thread.
+						// The SSH handshake is async now, so concurrent opens (e.g.
+						// from `from_stacked_raster` building several sub-pipelines
+						// at once) already interleave on one worker — no
+						// `spawn_blocking` needed to keep them from serializing.
 						// A key named on the source itself wins over the process-wide one.
-						let identity = ssh_identity
-							.or_else(|| runtime.ssh_identity())
-							.map(std::path::Path::to_path_buf);
-						let url_for_open = url.clone();
-						let reader =
-							tokio::task::spawn_blocking(move || DataReaderSftp::open(&url_for_open, identity.as_deref()))
-								.await
-								.with_context(|| format!("SFTP open task panicked for '{url}'"))?
-								.with_context(|| format!("Failed to create SFTP data reader for URL '{url}'"))?;
+						let identity = ssh_identity.or_else(|| runtime.ssh_identity());
+						let reader = DataReaderSftp::open(&url, identity)
+							.await
+							.with_context(|| format!("Failed to create SFTP data reader for URL '{url}'"))?;
 						Box::new(reader)
 					}
 					"http" | "https" => Box::new(
@@ -398,7 +392,15 @@ impl ContainerRegistry {
 		let url = reqwest::Url::parse(url).with_context(|| format!("invalid SFTP URL: {url}"))?;
 		let remote_path = DataWriterSftp::path_from_url(&url);
 
-		let extension = sanitize_extension(&remote_path.extension().unwrap_or_default().to_string_lossy());
+		// A `/`-separated remote path, so the extension is found by hand rather
+		// than through `Path`, whose separator is the *local* platform's.
+		let extension = sanitize_extension(
+			remote_path
+				.rsplit('/')
+				.next()
+				.and_then(|name| name.rsplit_once('.'))
+				.map_or("", |(_, ext)| ext),
+		);
 
 		let writer = DataWriterSftp::from_url(&url, runtime.ssh_identity())?;
 

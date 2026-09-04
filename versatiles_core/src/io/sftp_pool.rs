@@ -12,10 +12,9 @@
 
 use std::{
 	collections::HashMap,
-	io::{Read, Seek, SeekFrom},
 	path::{Path, PathBuf},
 	sync::{
-		Arc, Condvar, Mutex, MutexGuard, OnceLock,
+		Arc, OnceLock,
 		atomic::{AtomicU64, Ordering},
 	},
 	time::Instant,
@@ -23,9 +22,12 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use reqwest::Url;
-use ssh2::{Session, Sftp};
+use tokio::{
+	io::{AsyncReadExt, AsyncSeekExt},
+	sync::{Mutex, Notify, Semaphore},
+};
 
-use super::sftp_utils;
+use super::sftp_utils::{self, Sftp, SshHandle};
 use crate::{Blob, ByteRange};
 
 /// Monotonic id for log correlation across pool / connection / read messages.
@@ -34,9 +36,10 @@ fn next_connection_id() -> u64 {
 	NEXT.fetch_add(1, Ordering::Relaxed)
 }
 
-/// Default maximum SSH connections kept open per server. Operations on a
-/// single libssh2 session are serialized (the session is not thread-safe), so
-/// this is also the per-server ceiling on *concurrent* reads.
+/// Default maximum SSH connections kept open per server.
+///
+/// Operations on a single connection are serialized behind its lock, so this
+/// is also the per-server ceiling on *concurrent* reads.
 ///
 /// Kept conservative because some SFTP servers cap simultaneous connections
 /// aggressively — e.g. a Hetzner Storage Box allows only 10. Override with the
@@ -62,51 +65,13 @@ fn connections_per_server() -> usize {
 /// still letting handshakes proceed in parallel rather than one at a time.
 const MAX_CONCURRENT_OPENS: usize = 8;
 
-/// A minimal counting semaphore (std only) bounding concurrent SSH handshakes.
-struct OpenThrottle {
-	permits: Mutex<usize>,
-	released: Condvar,
-}
-
-impl OpenThrottle {
-	/// Block until a permit is free; the returned guard releases it on drop.
-	fn acquire(&self) -> OpenPermit<'_> {
-		let mut permits = self.permits.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-		while *permits == 0 {
-			permits = self
-				.released
-				.wait(permits)
-				.unwrap_or_else(std::sync::PoisonError::into_inner);
-		}
-		*permits -= 1;
-		OpenPermit { throttle: self }
-	}
-}
-
-/// RAII permit from [`OpenThrottle::acquire`]; returns the permit on drop.
-struct OpenPermit<'a> {
-	throttle: &'a OpenThrottle,
-}
-
-impl Drop for OpenPermit<'_> {
-	fn drop(&mut self) {
-		let mut permits = self
-			.throttle
-			.permits
-			.lock()
-			.unwrap_or_else(std::sync::PoisonError::into_inner);
-		*permits += 1;
-		self.throttle.released.notify_one();
-	}
-}
-
 /// Process-wide handshake throttle.
-fn open_throttle() -> &'static OpenThrottle {
-	static THROTTLE: OnceLock<OpenThrottle> = OnceLock::new();
-	THROTTLE.get_or_init(|| OpenThrottle {
-		permits: Mutex::new(MAX_CONCURRENT_OPENS),
-		released: Condvar::new(),
-	})
+///
+/// A `tokio::sync::Semaphore`; the ssh2 implementation had to hand-roll a
+/// counting semaphore out of `Mutex` and `Condvar` because it could not await.
+fn open_throttle() -> &'static Semaphore {
+	static THROTTLE: OnceLock<Semaphore> = OnceLock::new();
+	THROTTLE.get_or_init(|| Semaphore::new(MAX_CONCURRENT_OPENS))
 }
 
 /// Identifies one SSH endpoint. Sources sharing a key share connections.
@@ -136,18 +101,20 @@ impl ServerKey {
 /// The session-bound state of a connection: the SSH session, its SFTP channel,
 /// and the file handles opened on it. Replaced wholesale on every reconnect.
 struct LiveConnection {
-	// Kept alive for the lifetime of the SFTP channel.
-	_session: Session,
+	// Kept alive for the lifetime of the SFTP channel: dropping the handle
+	// closes the transport underneath it.
+	_session: SshHandle,
 	sftp: Sftp,
 	/// Open file handles, by id. Rebuilt from [`ConnectionInner::registered`]
 	/// on every reconnect.
-	files: HashMap<u64, ssh2::File>,
+	files: HashMap<u64, russh_sftp::client::fs::File>,
 }
 
 /// The mutable state behind a connection's lock.
 ///
-/// libssh2 sessions are not safe for concurrent use, so every operation —
-/// reading, opening a file, reconnecting — happens while this is locked.
+/// One SFTP channel serves every file on the connection, and a read is a
+/// seek followed by a read — two requests that must not interleave with
+/// another reader's — so every operation happens while this is locked.
 struct ConnectionInner {
 	/// The live SSH session, or `None` while a reconnect is in progress or
 	/// after one failed (the next read then triggers a fresh reconnect).
@@ -155,7 +122,7 @@ struct ConnectionInner {
 	/// Remote path of every registered file, by id. Kept outside `live` so it
 	/// survives reconnects — even failed ones — and stays the durable source
 	/// of truth for re-opening the file handles.
-	registered: HashMap<u64, PathBuf>,
+	registered: HashMap<u64, String>,
 	/// Bumped on every successful reconnect. Captured before a read so that
 	/// many sources racing to reconnect the same dropped connection trigger
 	/// just one actual reconnect.
@@ -180,13 +147,13 @@ pub struct Connection {
 }
 
 impl Connection {
-	fn open(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection>> {
+	async fn open(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection>> {
 		let id = next_connection_id();
 		let display = sftp_utils::display_name(url);
 		log::debug!("[sftp conn {id}] opening SSH+SFTP session to '{display}'");
 		let started = Instant::now();
-		let session = sftp_utils::open_session(url, identity_file)?;
-		let sftp = session.sftp()?;
+		let session = sftp_utils::open_session(url, identity_file).await?;
+		let sftp = sftp_utils::open_sftp(&session).await?;
 		log::debug!(
 			"[sftp conn {id}] session ready in {:.2}s",
 			started.elapsed().as_secs_f32()
@@ -209,18 +176,15 @@ impl Connection {
 		}))
 	}
 
-	fn lock(&self) -> Result<MutexGuard<'_, ConnectionInner>> {
-		self
-			.inner
-			.lock()
-			.map_err(|e| anyhow!("SFTP connection lock poisoned: {e}"))
-	}
-
 	/// Open `path` on this connection's shared SFTP channel.
 	///
 	/// Returns the file id (used for later reads) and the file size.
-	pub fn register(&self, path: &Path) -> Result<(u64, u64)> {
-		let mut inner = self.lock()?;
+	///
+	/// # Errors
+	/// Returns an error if the connection is not established, or if the remote
+	/// file cannot be stat'ed or opened.
+	pub async fn register(&self, path: &str) -> Result<(u64, u64)> {
+		let mut inner = self.inner.lock().await;
 		let id = inner.next_file_id;
 		let live = inner
 			.live
@@ -228,41 +192,47 @@ impl Connection {
 			.ok_or_else(|| anyhow!("SFTP connection is not established"))?;
 		let size = live
 			.sftp
-			.stat(path)
+			.metadata(path.to_owned())
+			.await
 			.with_context(|| format!("failed to stat remote file {path:?}"))?
 			.size
 			.unwrap_or(0);
 		let file = live
 			.sftp
-			.open(path)
+			.open(path.to_owned())
+			.await
 			.with_context(|| format!("failed to open remote file {path:?}"))?;
 		live.files.insert(id, file);
-		inner.registered.insert(id, path.to_path_buf());
+		inner.registered.insert(id, path.to_owned());
 		inner.next_file_id += 1;
 		Ok((id, size))
 	}
 
 	/// Drop a file handle once its source is gone. Best-effort.
-	pub fn unregister(&self, id: u64) {
-		if let Ok(mut inner) = self.lock() {
-			inner.registered.remove(&id);
-			if let Some(live) = inner.live.as_mut() {
-				live.files.remove(&id);
-			}
+	pub async fn unregister(&self, id: u64) {
+		let mut inner = self.inner.lock().await;
+		inner.registered.remove(&id);
+		if let Some(live) = inner.live.as_mut() {
+			live.files.remove(&id);
 		}
 	}
 
 	/// The current reconnect generation. Capture it before a read so a
 	/// failing read can request a reconnect without racing its siblings.
-	pub fn generation(&self) -> Result<u64> {
-		Ok(self.lock()?.generation)
+	pub async fn generation(&self) -> u64 {
+		self.inner.lock().await.generation
 	}
 
 	/// Read `range` from the file registered under `id`.
-	pub fn read_range(&self, id: u64, range: &ByteRange) -> Result<Blob> {
-		let mut inner = self.lock()?;
+	///
+	/// # Errors
+	/// Returns an error if the connection is not established, the id is not
+	/// registered, or the read fails.
+	pub async fn read_range(&self, id: u64, range: &ByteRange) -> Result<Blob> {
+		let mut inner = self.inner.lock().await;
 		let idle = inner.last_used.elapsed();
-		let read_result: Result<Blob> = (|| {
+
+		let read_result: Result<Blob> = async {
 			let file = inner
 				.live
 				.as_mut()
@@ -270,11 +240,12 @@ impl Connection {
 				.files
 				.get_mut(&id)
 				.ok_or_else(|| anyhow!("SFTP file id {id} is not registered"))?;
-			file.seek(SeekFrom::Start(range.offset))?;
+			file.seek(std::io::SeekFrom::Start(range.offset)).await?;
 			let mut buffer = vec![0u8; usize::try_from(range.length)?];
-			file.read_exact(&mut buffer)?;
+			file.read_exact(&mut buffer).await?;
 			Ok(Blob::from(buffer))
-		})();
+		}
+		.await;
 
 		match read_result {
 			Ok(blob) => {
@@ -298,11 +269,15 @@ impl Connection {
 	/// Rebuild the SSH session and SFTP channel and re-open every registered
 	/// file.
 	///
-	/// A no-op if another thread already reconnected past `seen_generation`,
+	/// A no-op if another task already reconnected past `seen_generation`,
 	/// so many sources sharing one dropped connection trigger a single
 	/// reconnect rather than one per source.
-	pub fn reconnect(&self, seen_generation: u64) -> Result<()> {
-		let mut inner = self.lock()?;
+	///
+	/// # Errors
+	/// Returns an error if the session cannot be re-established or a registered
+	/// file cannot be reopened.
+	pub async fn reconnect(&self, seen_generation: u64) -> Result<()> {
+		let mut inner = self.inner.lock().await;
 		if inner.generation != seen_generation {
 			// A sibling already reconnected this connection — nothing to do.
 			return Ok(());
@@ -318,12 +293,13 @@ impl Connection {
 		// both count against the server's simultaneous-connection limit.
 		inner.live = None;
 
-		let session = sftp_utils::open_session(&self.url, self.identity_file.as_deref())?;
-		let sftp = session.sftp()?;
+		let session = sftp_utils::open_session(&self.url, self.identity_file.as_deref()).await?;
+		let sftp = sftp_utils::open_sftp(&session).await?;
 		let mut files = HashMap::with_capacity(inner.registered.len());
 		for (id, path) in &inner.registered {
 			let file = sftp
-				.open(path)
+				.open(path.clone())
+				.await
 				.with_context(|| format!("failed to reopen remote file {path:?}"))?;
 			files.insert(*id, file);
 		}
@@ -356,7 +332,7 @@ struct ServerPool {
 }
 
 static POOL: OnceLock<Mutex<HashMap<ServerKey, ServerPool>>> = OnceLock::new();
-static POOL_READY: OnceLock<Condvar> = OnceLock::new();
+static POOL_READY: OnceLock<Notify> = OnceLock::new();
 
 fn pool() -> &'static Mutex<HashMap<ServerKey, ServerPool>> {
 	POOL.get_or_init(|| Mutex::new(HashMap::new()))
@@ -364,8 +340,8 @@ fn pool() -> &'static Mutex<HashMap<ServerKey, ServerPool>> {
 
 /// Signalled whenever a connection finishes opening, waking `acquire` calls
 /// waiting at the cap for a connection to become reusable.
-fn pool_ready() -> &'static Condvar {
-	POOL_READY.get_or_init(Condvar::new)
+fn pool_ready() -> &'static Notify {
+	POOL_READY.get_or_init(Notify::new)
 }
 
 /// What an `acquire` iteration decided to do, computed under the pool lock.
@@ -386,12 +362,19 @@ enum Decision {
 /// [`open_throttle`] — so neither opening nor reading is serialized through a
 /// single global lock, while the handshake burst still stays under `sshd`'s
 /// `MaxStartups` limit.
-pub fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection>> {
+///
+/// # Errors
+/// Returns an error if the URL has no host or the connection cannot be opened.
+pub async fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection>> {
 	let key = ServerKey::from_url(url)?;
-	let mut guard = pool().lock().map_err(|e| anyhow!("SFTP pool lock poisoned: {e}"))?;
 
 	loop {
+		// Subscribe before deciding: a connection that finishes opening between
+		// the decision and the wait must not be missed.
+		let ready = pool_ready().notified();
+
 		let decision = {
+			let mut guard = pool().lock().await;
 			let server = guard.entry(key.clone()).or_default();
 			if server.connections.len() + server.opening < connections_per_server() {
 				server.opening += 1;
@@ -416,22 +399,21 @@ pub fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection
 					key.host,
 					connections_per_server()
 				);
-				guard = pool_ready()
-					.wait(guard)
-					.map_err(|e| anyhow!("SFTP pool lock poisoned: {e}"))?;
+				ready.await;
 			}
 			Decision::Open => {
-				drop(guard);
-
 				// Handshake outside the pool lock, throttled to stay under MaxStartups.
 				let result = {
-					let _permit = open_throttle().acquire();
-					Connection::open(url, identity_file)
+					let _permit = open_throttle()
+						.acquire()
+						.await
+						.map_err(|e| anyhow!("the SFTP handshake throttle was closed: {e}"))?;
+					Connection::open(url, identity_file).await
 				};
 
 				let outcome = {
-					let mut g = pool().lock().map_err(|e| anyhow!("SFTP pool lock poisoned: {e}"))?;
-					let server = g.entry(key.clone()).or_default();
+					let mut guard = pool().lock().await;
+					let server = guard.entry(key.clone()).or_default();
 					server.opening -= 1;
 					match result {
 						Ok(connection) => {
@@ -453,7 +435,7 @@ pub fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection
 				};
 				// Wake anyone waiting at the cap: a connection appeared, or a
 				// reserved slot was freed by a failed open.
-				pool_ready().notify_all();
+				pool_ready().notify_waiters();
 				return outcome;
 			}
 		}
@@ -462,9 +444,9 @@ pub fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection
 
 /// Number of pooled connections currently held for `url`'s server.
 #[cfg(test)]
-fn connection_count(url: &Url) -> Result<usize> {
+async fn connection_count(url: &Url) -> Result<usize> {
 	let key = ServerKey::from_url(url)?;
-	let guard = pool().lock().map_err(|e| anyhow!("SFTP pool lock poisoned: {e}"))?;
+	let guard = pool().lock().await;
 	Ok(guard.get(&key).map_or(0, |server| server.connections.len()))
 }
 
@@ -474,7 +456,8 @@ mod tests {
 
 	#[test]
 	fn test_server_key_from_url_defaults() {
-		let key = ServerKey::from_url(&Url::parse("sftp://host/path").unwrap()).unwrap();
+		let url = Url::parse("sftp://host/path").unwrap();
+		let key = ServerKey::from_url(&url).unwrap();
 		assert_eq!(key.host, "host");
 		assert_eq!(key.port, 22);
 		assert_eq!(key.username, "root");
@@ -482,24 +465,27 @@ mod tests {
 
 	#[test]
 	fn test_server_key_from_url_explicit() {
-		let key = ServerKey::from_url(&Url::parse("sftp://alice@host:2222/path").unwrap()).unwrap();
+		let url = Url::parse("sftp://user@host:2222/path").unwrap();
+		let key = ServerKey::from_url(&url).unwrap();
+		assert_eq!(key.host, "host");
 		assert_eq!(key.port, 2222);
-		assert_eq!(key.username, "alice");
+		assert_eq!(key.username, "user");
 	}
 
 	#[test]
 	fn test_server_key_ignores_path() {
-		let a = ServerKey::from_url(&Url::parse("sftp://host/one.bin").unwrap()).unwrap();
-		let b = ServerKey::from_url(&Url::parse("sftp://host/two.bin").unwrap()).unwrap();
+		let a = ServerKey::from_url(&Url::parse("sftp://host/a").unwrap()).unwrap();
+		let b = ServerKey::from_url(&Url::parse("sftp://host/b").unwrap()).unwrap();
 		assert_eq!(a, b);
 	}
 
 	#[test]
 	fn test_server_key_missing_host() {
-		assert!(ServerKey::from_url(&Url::parse("sftp:///path").unwrap()).is_err());
+		let url = Url::parse("sftp:///path").unwrap();
+		assert!(ServerKey::from_url(&url).is_err());
 	}
 
-	#[cfg(all(feature = "sftp", unix))]
+	#[cfg(feature = "sftp")]
 	mod sftp_server_tests {
 		use super::*;
 		use crate::io::test_sftp_server::TestSftpServer;
@@ -519,7 +505,7 @@ mod tests {
 			let mut handles = Vec::with_capacity(total);
 			for _ in 0..total {
 				let url = url.clone();
-				handles.push(tokio::task::spawn_blocking(move || acquire(&url, None)));
+				handles.push(tokio::spawn(async move { acquire(&url, None).await }));
 			}
 			let mut acquired = Vec::with_capacity(total);
 			for handle in handles {
@@ -527,7 +513,7 @@ mod tests {
 			}
 
 			assert_eq!(acquired.len(), total);
-			assert_eq!(connection_count(&url).unwrap(), cap);
+			assert_eq!(connection_count(&url).await.unwrap(), cap);
 		}
 
 		#[tokio::test(flavor = "multi_thread")]
@@ -538,21 +524,21 @@ mod tests {
 			server.write_file("/b.bin", b"bbbbbb").await;
 			let url = server.url("/a.bin");
 
-			tokio::task::spawn_blocking(move || -> Result<()> {
-				let connection = acquire(&url, None)?;
-				let (id_a, size_a) = connection.register(Path::new("/a.bin"))?;
-				let (id_b, size_b) = connection.register(Path::new("/b.bin"))?;
-				assert_eq!(size_a, 4);
-				assert_eq!(size_b, 6);
-				assert_eq!(connection.read_range(id_a, &ByteRange::new(0, 4))?.as_slice(), b"aaaa");
-				assert_eq!(connection.read_range(id_b, &ByteRange::new(2, 4))?.as_slice(), b"bbbb");
-				connection.unregister(id_a);
-				assert!(connection.read_range(id_a, &ByteRange::new(0, 4)).is_err());
-				Ok(())
-			})
-			.await
-			.unwrap()
-			.unwrap();
+			let connection = acquire(&url, None).await.unwrap();
+			let (id_a, size_a) = connection.register("/a.bin").await.unwrap();
+			let (id_b, size_b) = connection.register("/b.bin").await.unwrap();
+			assert_eq!(size_a, 4);
+			assert_eq!(size_b, 6);
+			assert_eq!(
+				connection.read_range(id_a, &ByteRange::new(0, 4)).await.unwrap().as_slice(),
+				b"aaaa"
+			);
+			assert_eq!(
+				connection.read_range(id_b, &ByteRange::new(2, 4)).await.unwrap().as_slice(),
+				b"bbbb"
+			);
+			connection.unregister(id_a).await;
+			assert!(connection.read_range(id_a, &ByteRange::new(0, 4)).await.is_err());
 		}
 
 		#[tokio::test(flavor = "multi_thread")]
@@ -562,22 +548,19 @@ mod tests {
 			server.write_file("/a.bin", b"hello").await;
 			let url = server.url("/a.bin");
 
-			tokio::task::spawn_blocking(move || -> Result<()> {
-				let connection = acquire(&url, None)?;
-				let (id, _) = connection.register(Path::new("/a.bin"))?;
-				let generation = connection.generation()?;
-				connection.reconnect(generation)?;
-				assert_eq!(connection.generation()?, generation + 1);
-				// The file handle survives the reconnect.
-				assert_eq!(connection.read_range(id, &ByteRange::new(0, 5))?.as_slice(), b"hello");
-				// A stale generation makes reconnect a no-op.
-				connection.reconnect(generation)?;
-				assert_eq!(connection.generation()?, generation + 1);
-				Ok(())
-			})
-			.await
-			.unwrap()
-			.unwrap();
+			let connection = acquire(&url, None).await.unwrap();
+			let (id, _) = connection.register("/a.bin").await.unwrap();
+			let generation = connection.generation().await;
+			connection.reconnect(generation).await.unwrap();
+			assert_eq!(connection.generation().await, generation + 1);
+			// The file handle survives the reconnect.
+			assert_eq!(
+				connection.read_range(id, &ByteRange::new(0, 5)).await.unwrap().as_slice(),
+				b"hello"
+			);
+			// A stale generation makes reconnect a no-op.
+			connection.reconnect(generation).await.unwrap();
+			assert_eq!(connection.generation().await, generation + 1);
 		}
 	}
 }

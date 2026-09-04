@@ -1,38 +1,46 @@
-//! High-level SFTP wrappers that hide `ssh2` types from downstream crates.
+//! High-level SFTP wrappers that hide the SSH client types from downstream crates.
 //!
 //! These types allow `versatiles_container` to use SFTP functionality without
-//! depending on the `ssh2` crate directly.
+//! depending on `russh` directly.
+//!
+//! Both wrappers present a synchronous API over an async transport. See
+//! [`super::sftp_blocking`] for why the bridge is here rather than in the
+//! writer traits.
 
 use std::{
 	io::Write,
 	path::{Path, PathBuf},
-	sync::{Arc, Mutex},
 	thread,
 };
 
 use anyhow::{Context, Result, bail};
 use reqwest::Url;
+use tokio::io::AsyncWriteExt;
 
 use super::{
-	sftp_utils,
-	sftp_utils::{SftpKeepalive, SharedSession},
+	sftp_blocking,
+	sftp_utils::{self, Sftp, SshHandle},
 };
+
+/// Translate a bridge failure into the `io::Error` the `Write` trait requires.
+fn io_error(e: &anyhow::Error) -> std::io::Error {
+	std::io::Error::other(format!("{e:#}"))
+}
 
 /// A [`Write`] stream to a remote file via SFTP.
 ///
-/// Keeps the SSH session alive for the lifetime of the writer, with a background
-/// keepalive so the connection survives idle gaps between writes.
+/// Keeps the SSH session alive for the lifetime of the writer; russh sends its
+/// own keepalives on that session, so the connection survives idle gaps between
+/// writes without a thread of ours.
 pub struct SftpWriteStream {
-	file: ssh2::File,
-	// Shared session, pinged by the background keepalive.
-	_session: SharedSession,
-	_keepalive: SftpKeepalive,
+	file: russh_sftp::client::fs::File,
+	/// Dropping the handle closes the session, so the stream owns it even though
+	/// it never calls it directly.
+	_session: SshHandle,
 }
 
 // Held across await points and moved between worker threads, so it has to be
-// thread-safe — which it is on its own: `ssh2::Session` and `ssh2::File` are
-// backed by libssh2 handles that ssh2 guards with a mutex, and are `Send` and
-// `Sync` themselves.
+// thread-safe.
 const _: fn() = || {
 	fn assert_send_sync<T: Send + Sync>() {}
 	assert_send_sync::<SftpWriteStream>();
@@ -40,49 +48,62 @@ const _: fn() = || {
 
 impl SftpWriteStream {
 	/// Open a remote file for writing from an SFTP URL.
+	///
+	/// # Errors
+	/// Returns an error if the session cannot be opened or the remote file
+	/// cannot be created.
 	pub fn from_url(url: &Url, identity_file: Option<&Path>) -> Result<Self> {
-		let session = sftp_utils::open_session(url, identity_file)?;
-		let remote_path = sftp_utils::remote_path(url);
-		let sftp = session.sftp()?;
-		let file = sftp
-			.create(&remote_path)
-			.with_context(|| format!("failed to create remote file {remote_path:?}"))?;
+		sftp_blocking::block_on(Self::open(url, identity_file))?
+	}
 
-		let session: SharedSession = Arc::new(Mutex::new(session));
-		let keepalive = SftpKeepalive::start(Arc::clone(&session), sftp_utils::display_name(url));
+	async fn open(url: &Url, identity_file: Option<&Path>) -> Result<Self> {
+		let session = sftp_utils::open_session(url, identity_file).await?;
+		let remote_path = sftp_utils::remote_path(url);
+		let sftp = sftp_utils::open_sftp(&session).await?;
+		let file = sftp
+			.create(remote_path.clone())
+			.await
+			.with_context(|| format!("failed to create remote file {remote_path:?}"))?;
 
 		Ok(Self {
 			file,
 			_session: session,
-			_keepalive: keepalive,
 		})
 	}
 }
 
 impl Write for SftpWriteStream {
 	fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-		self.file.write(buf)
+		sftp_blocking::block_on(self.file.write(buf)).map_err(|e| io_error(&e))?
 	}
+
 	fn flush(&mut self) -> std::io::Result<()> {
-		self.file.flush()
+		sftp_blocking::block_on(self.file.flush()).map_err(|e| io_error(&e))?
+	}
+}
+
+impl Drop for SftpWriteStream {
+	fn drop(&mut self) {
+		// An unflushed tail would otherwise be lost: `File` buffers, and unlike
+		// `std::fs::File` there is no destructor that reaches the network.
+		if let Err(e) = self.flush() {
+			log::warn!("failed to flush an SFTP write stream while closing it: {e}");
+		}
 	}
 }
 
 /// A remote filesystem via SFTP for directory-style tile operations.
 ///
-/// Provides `mkdir_p` and `write_file` without exposing `ssh2` types.
+/// Provides `mkdir_p` and `write_file` without exposing SSH client types.
 pub struct SftpFileSystem {
-	sftp: ssh2::Sftp,
-	base_path: PathBuf,
+	sftp: Sftp,
+	session: SshHandle,
+	/// `/`-separated remote path, never a local `PathBuf`.
+	base_path: String,
 	url: Url,
 	identity_file: Option<PathBuf>,
-	// Shared session (swapped on reconnect), pinged by the background keepalive.
-	session: SharedSession,
-	_keepalive: SftpKeepalive,
 }
 
-// Same as above: `ssh2::Sftp` is a libssh2 handle that ssh2 guards internally,
-// so the wrapper is thread-safe without help.
 const _: fn() = || {
 	fn assert_send_sync<T: Send + Sync>() {}
 	assert_send_sync::<SftpFileSystem>();
@@ -90,39 +111,42 @@ const _: fn() = || {
 
 impl SftpFileSystem {
 	/// Connect to an SFTP server and use the URL path as the base directory.
+	///
+	/// # Errors
+	/// Returns an error if the session cannot be opened or the base directory
+	/// can neither be created nor found.
 	pub fn from_url(url: &Url, identity_file: Option<&Path>) -> Result<Self> {
-		let session = sftp_utils::open_session(url, identity_file)?;
+		sftp_blocking::block_on(Self::open(url, identity_file))?
+	}
+
+	async fn open(url: &Url, identity_file: Option<&Path>) -> Result<Self> {
+		let session = sftp_utils::open_session(url, identity_file).await?;
 		let base_path = sftp_utils::remote_path(url);
-		let sftp = session.sftp()?;
+		let sftp = sftp_utils::open_sftp(&session).await?;
 
 		// Create base directory (ignore error if it already exists)
-		if let Err(e) = sftp.mkdir(&base_path, 0o755) {
-			match sftp.stat(&base_path) {
-				Ok(stat) if stat.is_dir() => {}
+		if let Err(e) = sftp.create_dir(base_path.clone()).await {
+			match sftp.metadata(base_path.clone()).await {
+				Ok(metadata) if metadata.is_dir() => {}
 				_ => return Err(e).with_context(|| format!("failed to create base directory {base_path:?}")),
 			}
 		}
 
-		let session: SharedSession = Arc::new(Mutex::new(session));
-		let keepalive = SftpKeepalive::start(Arc::clone(&session), sftp_utils::display_name(url));
-
 		Ok(Self {
 			sftp,
+			session,
 			base_path,
 			url: url.clone(),
 			identity_file: identity_file.map(Path::to_path_buf),
-			session,
-			_keepalive: keepalive,
 		})
 	}
 
 	/// Reconnect the SFTP session (e.g. after a network error).
-	fn reconnect(&mut self) -> Result<()> {
-		let session = sftp_utils::open_session(&self.url, self.identity_file.as_deref())?;
-		let sftp = session.sftp()?;
-		self.sftp = sftp;
-		// Swap the shared session so the keepalive thread pings the new connection.
-		*self.session.lock().expect("session mutex poisoned") = session;
+	async fn reconnect(&mut self) -> Result<()> {
+		let session = sftp_utils::open_session(&self.url, self.identity_file.as_deref()).await?;
+		self.sftp = sftp_utils::open_sftp(&session).await?;
+		// Replacing the handle drops the old session, closing its transport.
+		self.session = session;
 		Ok(())
 	}
 
@@ -130,13 +154,12 @@ impl SftpFileSystem {
 	///
 	/// Creates parent directories as needed. Retries on error since
 	/// `write_file` is idempotent (creates/overwrites a complete file).
+	///
+	/// # Errors
+	/// Returns an error if the file cannot be written after the configured
+	/// number of retries.
 	pub fn write_file(&mut self, rel_path: &str, data: &[u8]) -> Result<()> {
-		let full_path = self.base_path.join(rel_path);
-
-		// Create parent directories
-		if let Some(parent) = full_path.parent() {
-			self.mkdir_p(parent)?;
-		}
+		let full_path = sftp_utils::remote_join(&self.base_path, rel_path);
 
 		let policy = super::retry::policy();
 		let max_retries = policy.max_retries;
@@ -149,7 +172,7 @@ impl SftpFileSystem {
 				let backoff = policy.backoff(attempt - 1);
 				log::warn!("SFTP write file {full_path:?}: retrying ({attempt_label}, waiting {backoff:?})");
 				thread::sleep(backoff);
-				if let Err(e) = self.reconnect() {
+				if let Err(e) = sftp_blocking::block_on(self.reconnect())? {
 					log::warn!("SFTP write file {full_path:?}: reconnect failed: {e} ({attempt_label})");
 					if attempt >= max_retries {
 						return Err(e).with_context(|| {
@@ -160,7 +183,7 @@ impl SftpFileSystem {
 				}
 			}
 
-			match self.try_write_file(&full_path, data) {
+			match sftp_blocking::block_on(self.try_write_file(&full_path, data))? {
 				Ok(()) => return Ok(()),
 				Err(e) if attempt < max_retries => {
 					log::warn!("SFTP write file {full_path:?}: {e} ({attempt_label}), will retry");
@@ -176,28 +199,41 @@ impl SftpFileSystem {
 		bail!("SFTP write_file retry loop exited without returning — MAX_RETRIES invariant violated")
 	}
 
-	fn try_write_file(&self, full_path: &Path, data: &[u8]) -> Result<()> {
+	async fn try_write_file(&self, full_path: &str, data: &[u8]) -> Result<()> {
+		if let Some(parent) = sftp_utils::remote_parent(full_path) {
+			self.mkdir_p(parent).await?;
+		}
+
 		let mut file = self
 			.sftp
-			.create(full_path)
+			.create(full_path.to_owned())
+			.await
 			.with_context(|| format!("failed to create remote file {full_path:?}"))?;
-		file.write_all(data)?;
+		file.write_all(data).await?;
+		// `File` buffers, so the bytes are not on the wire until this returns.
+		file.flush().await?;
 		Ok(())
 	}
 
-	/// Recursively create directories.
+	/// Create `path` and every missing directory above it.
+	///
+	/// Iterative rather than recursive: an `async fn` that calls itself needs to
+	/// be boxed, and walking the components costs nothing here.
 	///
 	/// Returns an error if a path component cannot be created and does not
 	/// already exist as a directory.
-	fn mkdir_p(&self, path: &Path) -> Result<()> {
-		if let Some(parent) = path.parent() {
-			self.mkdir_p(parent)?;
-		}
-		if let Err(e) = self.sftp.mkdir(path, 0o755) {
-			// Check whether the directory already exists
-			match self.sftp.stat(path) {
-				Ok(stat) if stat.is_dir() => {}
-				_ => bail!("failed to create directory {path:?}: {e}"),
+	async fn mkdir_p(&self, path: &str) -> Result<()> {
+		let mut prefix = String::new();
+		for component in path.split('/').filter(|c| !c.is_empty()) {
+			prefix.push('/');
+			prefix.push_str(component);
+
+			if let Err(e) = self.sftp.create_dir(prefix.clone()).await {
+				// Check whether the directory already exists
+				match self.sftp.metadata(prefix.clone()).await {
+					Ok(metadata) if metadata.is_dir() => {}
+					_ => bail!("failed to create directory {prefix:?}: {e}"),
+				}
 			}
 		}
 		Ok(())
@@ -229,7 +265,7 @@ mod tests {
 		assert!(result.is_err());
 	}
 
-	#[cfg(all(feature = "sftp", unix))]
+	#[cfg(feature = "sftp")]
 	mod sftp_server_tests {
 		use super::*;
 		use crate::io::test_sftp_server::TestSftpServer;
@@ -269,6 +305,24 @@ mod tests {
 			.unwrap()
 			.unwrap();
 			assert_eq!(server.read_file("/out.bin").await, b"foobarbaz");
+		}
+
+		/// Dropping the stream without an explicit flush still lands the bytes.
+		#[tokio::test(flavor = "current_thread")]
+		#[serial_test::serial]
+		async fn write_stream_flushes_on_drop() {
+			let server = TestSftpServer::start().await;
+			let url = server.url("/out.bin");
+			tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+				let mut stream = SftpWriteStream::from_url(&url, None)?;
+				stream.write_all(b"unflushed")?;
+				drop(stream);
+				Ok(())
+			})
+			.await
+			.unwrap()
+			.unwrap();
+			assert_eq!(server.read_file("/out.bin").await, b"unflushed");
 		}
 
 		// --- SftpFileSystem ---

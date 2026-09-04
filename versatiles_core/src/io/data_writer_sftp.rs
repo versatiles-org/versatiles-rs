@@ -1,24 +1,25 @@
 use std::{
-	io::{Seek, SeekFrom, Write},
+	io::SeekFrom,
 	path::{Path, PathBuf},
-	sync::{Arc, Mutex},
 	time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result};
 use reqwest::Url;
-use ssh2::{OpenFlags, OpenType};
+use russh_sftp::protocol::OpenFlags;
+use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
 use super::{
 	DataWriterTrait,
 	network_writer::NetworkWriter,
-	sftp_utils::{self, SftpKeepalive, SharedSession},
+	sftp_blocking,
+	sftp_utils::{self, SshHandle},
 };
 use crate::{Blob, ByteRange};
 
 /// Size of the in-memory append buffer. The `.versatiles`/`pmtiles` writers
 /// append once per tile (often only a few KB); over SFTP each unbuffered write
-/// is a separate, round-trip-bound libssh2 request, which collapses throughput.
+/// is a separate, round-trip-bound request, which collapses throughput.
 /// Coalescing appends into large writes of this size amortizes that overhead.
 const BUFFER_CAPACITY: usize = 16 * 1024 * 1024;
 
@@ -36,7 +37,7 @@ fn format_bytes(n: u64) -> String {
 
 /// A struct that provides writing capabilities to a remote file via SFTP.
 pub struct DataWriterSftp {
-	file: ssh2::File,
+	file: russh_sftp::client::fs::File,
 	/// Position of the last byte flushed to the remote file (excludes `buffer`).
 	position: u64,
 	/// Pending appended bytes not yet flushed to the network. Coalesced into a
@@ -45,11 +46,9 @@ pub struct DataWriterSftp {
 	url: Url,
 	identity_file: Option<PathBuf>,
 	name: String,
-	// Shared SSH session (swapped on reconnect). Shared with the background keepalive,
-	// which pings it during idle gaps so the peer does not reap the connection.
-	session: SharedSession,
-	// Background keepalive; dropping it stops and joins the pinger thread.
-	_keepalive: SftpKeepalive,
+	// The SSH session, replaced on reconnect. russh pings it during idle gaps so
+	// the peer does not reap the connection; dropping it closes the transport.
+	session: SshHandle,
 	// --- Connection diagnostics (reset on every (re)connect) ---
 	/// When the current connection was established.
 	connected_at: Instant,
@@ -73,17 +72,20 @@ impl DataWriterSftp {
 	/// 2. SSH agent
 	/// 3. Default key files (~/.ssh/id_ed25519, id_rsa, id_ecdsa)
 	pub fn from_url(url: &Url, identity_file: Option<&Path>) -> Result<Self> {
-		let session = sftp_utils::open_session(url, identity_file)?;
+		sftp_blocking::block_on(Self::open(url, identity_file))?
+	}
+
+	async fn open(url: &Url, identity_file: Option<&Path>) -> Result<Self> {
+		let session = sftp_utils::open_session(url, identity_file).await?;
 		let path = sftp_utils::remote_path(url);
 
-		let sftp = session.sftp()?;
+		let sftp = sftp_utils::open_sftp(&session).await?;
 		let file = sftp
-			.create(&path)
+			.create(path.clone())
+			.await
 			.with_context(|| format!("failed to create remote file {path:?}"))?;
 
 		let name = sftp_utils::display_name(url);
-		let session: SharedSession = Arc::new(Mutex::new(session));
-		let keepalive = SftpKeepalive::start(Arc::clone(&session), name.clone());
 
 		let now = Instant::now();
 		Ok(DataWriterSftp {
@@ -94,7 +96,6 @@ impl DataWriterSftp {
 			identity_file: identity_file.map(Path::to_path_buf),
 			name,
 			session,
-			_keepalive: keepalive,
 			connected_at: now,
 			bytes_on_connection: 0,
 			last_write_end: now,
@@ -104,7 +105,7 @@ impl DataWriterSftp {
 
 	/// Returns the remote path extracted from an SFTP URL (for extension detection).
 	#[must_use]
-	pub fn path_from_url(url: &Url) -> PathBuf {
+	pub fn path_from_url(url: &Url) -> String {
 		sftp_utils::remote_path(url)
 	}
 
@@ -122,25 +123,33 @@ impl DataWriterSftp {
 	}
 }
 
-impl NetworkWriter for DataWriterSftp {
-	fn try_append(&mut self, blob: &Blob) -> Result<ByteRange> {
+impl DataWriterSftp {
+	async fn try_append_impl(&mut self, blob: &Blob) -> Result<ByteRange> {
 		// Idle gap since the last successful write (time spent producing this block
 		// upstream, during which the SFTP session sat idle).
 		self.last_attempt_idle = self.last_write_end.elapsed();
 		let pos = self.position;
-		self.file.write_all(blob.as_slice())?;
+		self.file.write_all(blob.as_slice()).await?;
+		// `File` buffers internally, so without this the bytes are not on the
+		// wire and a later failure would be reported against the wrong write.
+		self.file.flush().await?;
 		self.position += blob.len();
 		self.bytes_on_connection += blob.len();
 		self.last_write_end = Instant::now();
 		Ok(ByteRange::new(pos, blob.len()))
 	}
 
-	fn try_write_at(&mut self, offset: u64, blob: &Blob, restore_pos: u64) -> Result<()> {
+	async fn try_write_at_impl(&mut self, offset: u64, blob: &Blob, restore_pos: u64) -> Result<()> {
 		self
 			.file
 			.seek(SeekFrom::Start(offset))
+			.await
 			.with_context(|| format!("failed to seek to offset {offset} in '{}'", self.name))?;
-		self.file.write_all(blob.as_slice()).with_context(|| {
+		let write = async {
+			self.file.write_all(blob.as_slice()).await?;
+			self.file.flush().await
+		};
+		write.await.with_context(|| {
 			format!(
 				"failed to write {} bytes at offset {offset} in '{}'",
 				blob.len(),
@@ -150,20 +159,22 @@ impl NetworkWriter for DataWriterSftp {
 		self
 			.file
 			.seek(SeekFrom::Start(restore_pos))
+			.await
 			.with_context(|| format!("failed to seek back to position {restore_pos} in '{}'", self.name))?;
 		Ok(())
 	}
 
-	fn try_seek(&mut self, position: u64) -> Result<()> {
+	async fn try_seek_impl(&mut self, position: u64) -> Result<()> {
 		self
 			.file
 			.seek(SeekFrom::Start(position))
+			.await
 			.with_context(|| format!("failed to seek to position {position} in '{}'", self.name))?;
 		self.position = position;
 		Ok(())
 	}
 
-	fn reconnect(&mut self) -> Result<()> {
+	async fn reconnect_impl(&mut self) -> Result<()> {
 		let path = sftp_utils::remote_path(&self.url);
 		// Summarize the connection that just died — this is the key signal for
 		// diagnosing *why* the server drops us: compare "alive" (time-based limit?),
@@ -177,23 +188,45 @@ impl NetworkWriter for DataWriterSftp {
 			self.last_attempt_idle.as_secs_f64(),
 		);
 
-		let session = sftp_utils::open_session(&self.url, self.identity_file.as_deref())?;
-		let sftp = session.sftp()?;
+		let session = sftp_utils::open_session(&self.url, self.identity_file.as_deref()).await?;
+		let sftp = sftp_utils::open_sftp(&session).await?;
+		// `WRITE` without `TRUNCATE`: the bytes already uploaded have to survive,
+		// and the seek below resumes where the dead connection stopped.
 		let mut file = sftp
-			.open_mode(&path, OpenFlags::WRITE, 0o644, OpenType::File)
+			.open_with_flags(path.clone(), OpenFlags::WRITE)
+			.await
 			.with_context(|| format!("failed to reopen remote file {path:?} for writing"))?;
 		file
 			.seek(SeekFrom::Start(self.position))
+			.await
 			.with_context(|| format!("failed to seek to position {} in {path:?}", self.position))?;
 
 		self.file = file;
-		// Swap the shared session so the keepalive thread pings the new connection.
-		*self.session.lock().expect("session mutex poisoned") = session;
+		// Replacing the handle drops the dead session, closing its transport.
+		self.session = session;
 		let now = Instant::now();
 		self.connected_at = now;
 		self.bytes_on_connection = 0;
 		self.last_write_end = now;
 		Ok(())
+	}
+}
+
+impl NetworkWriter for DataWriterSftp {
+	fn try_append(&mut self, blob: &Blob) -> Result<ByteRange> {
+		sftp_blocking::block_on(self.try_append_impl(blob))?
+	}
+
+	fn try_write_at(&mut self, offset: u64, blob: &Blob, restore_pos: u64) -> Result<()> {
+		sftp_blocking::block_on(self.try_write_at_impl(offset, blob, restore_pos))?
+	}
+
+	fn try_seek(&mut self, position: u64) -> Result<()> {
+		sftp_blocking::block_on(self.try_seek_impl(position))?
+	}
+
+	fn reconnect(&mut self) -> Result<()> {
+		sftp_blocking::block_on(self.reconnect_impl())?
 	}
 
 	fn writer_name(&self) -> &str {
@@ -272,28 +305,25 @@ mod tests {
 	#[test]
 	fn test_path_from_url() {
 		let url = Url::parse("sftp://host/data/out.versatiles").unwrap();
-		assert_eq!(
-			DataWriterSftp::path_from_url(&url),
-			PathBuf::from("/data/out.versatiles")
-		);
+		assert_eq!(DataWriterSftp::path_from_url(&url), "/data/out.versatiles");
 	}
 
 	#[test]
 	fn test_path_from_url_with_credentials() {
 		let url = Url::parse("sftp://user:pass@host:2222/output/tiles.tar").unwrap();
-		assert_eq!(DataWriterSftp::path_from_url(&url), PathBuf::from("/output/tiles.tar"));
+		assert_eq!(DataWriterSftp::path_from_url(&url), "/output/tiles.tar");
 	}
 
 	#[test]
 	fn test_path_from_url_root() {
 		let url = Url::parse("sftp://host/file.versatiles").unwrap();
-		assert_eq!(DataWriterSftp::path_from_url(&url), PathBuf::from("/file.versatiles"));
+		assert_eq!(DataWriterSftp::path_from_url(&url), "/file.versatiles");
 	}
 
 	#[test]
 	fn test_path_from_url_nested() {
 		let url = Url::parse("sftp://host/a/b/c/d.tar").unwrap();
-		assert_eq!(DataWriterSftp::path_from_url(&url), PathBuf::from("/a/b/c/d.tar"));
+		assert_eq!(DataWriterSftp::path_from_url(&url), "/a/b/c/d.tar");
 	}
 
 	#[test]
@@ -303,7 +333,7 @@ mod tests {
 		assert!(result.is_err());
 	}
 
-	#[cfg(all(feature = "sftp", unix))]
+	#[cfg(feature = "sftp")]
 	mod sftp_server_tests {
 		use super::*;
 		use crate::{Blob, io::test_sftp_server::TestSftpServer};
@@ -496,10 +526,7 @@ mod tests {
 			.unwrap()
 			.unwrap();
 
-			let reader = tokio::task::spawn_blocking(move || DataReaderSftp::open(&read_url, None))
-				.await
-				.unwrap()
-				.unwrap();
+			let reader = DataReaderSftp::open(&read_url, None).await.unwrap();
 
 			// The header lands at offset 0 (overwriting the reserved region).
 			let header = reader.read_range(&header_range).await.unwrap();

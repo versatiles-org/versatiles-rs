@@ -129,13 +129,15 @@ mod network_reader;
 mod network_writer;
 pub(crate) mod retry;
 #[cfg(feature = "sftp")]
+mod sftp_blocking;
+#[cfg(feature = "sftp")]
 mod sftp_pool;
 /// Host-key verification and SFTP session setup.
 #[cfg(feature = "sftp")]
 pub mod sftp_utils;
 #[cfg(feature = "sftp")]
 mod sftp_wrappers;
-#[cfg(all(feature = "sftp", test, unix))]
+#[cfg(all(feature = "sftp", test))]
 pub(crate) mod test_sftp_server;
 #[cfg(feature = "sftp")]
 pub use sftp_wrappers::*;
