@@ -5665,6 +5665,7 @@ dependencies = [
  "enumset",
  "flate2",
  "futures",
+ "getrandom 0.3.4",
  "itertools 0.15.0",
  "log",
  "lru",

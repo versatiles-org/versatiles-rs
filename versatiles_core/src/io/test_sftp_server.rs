@@ -14,9 +14,14 @@ use russh::{
 /// Test-only OS-backed RNG that satisfies `PrivateKey::random`'s `CryptoRng` bound.
 ///
 /// rand_core 0.10 (used by russh's forked ssh-key) no longer re-exports `OsRng`, so
-/// we provide a minimal `/dev/urandom`-backed adapter. Implementing `TryRng<Error =
+/// we provide a minimal adapter over `getrandom`. Implementing `TryRng<Error =
 /// Infallible>` + `TryCryptoRng` is enough — rand_core's blanket impls give us
 /// `Rng` + `CryptoRng` automatically.
+///
+/// `getrandom` rather than reading `/dev/urandom` directly: this module used to be
+/// `cfg(unix)`, because `ssh2` confined SFTP to unix. It is not any more, and a
+/// hard-coded device path fails on Windows with "The system cannot find the path
+/// specified".
 struct OsRng;
 
 impl TryRng for OsRng {
@@ -35,9 +40,7 @@ impl TryRng for OsRng {
 	}
 
 	fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
-		use std::io::Read;
-		let mut f = std::fs::File::open("/dev/urandom").expect("test OsRng: open /dev/urandom");
-		f.read_exact(dst).expect("test OsRng: read /dev/urandom");
+		getrandom::fill(dst).expect("test OsRng: getrandom");
 		Ok(())
 	}
 }
