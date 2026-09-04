@@ -110,7 +110,11 @@ pub fn remote_join(base: &str, relative: &str) -> String {
 	let base = base.trim_end_matches('/');
 	let relative = relative.trim_start_matches('/');
 	if relative.is_empty() {
-		return if base.is_empty() { "/".to_owned() } else { base.to_owned() };
+		return if base.is_empty() {
+			"/".to_owned()
+		} else {
+			base.to_owned()
+		};
 	}
 	format!("{base}/{relative}")
 }
@@ -165,7 +169,9 @@ async fn with_timeout<F: Future>(
 	message: impl FnOnce() -> String,
 ) -> Result<F::Output> {
 	match timeout {
-		Some(limit) => tokio::time::timeout(limit, future).await.map_err(|_| anyhow!(message())),
+		Some(limit) => tokio::time::timeout(limit, future)
+			.await
+			.map_err(|_| anyhow!(message())),
 		None => Ok(future.await),
 	}
 }
@@ -232,8 +238,7 @@ fn connect_tcp(host: &str, port: u16) -> Result<tokio::net::TcpStream> {
 		}
 	}
 
-	tcp
-		.set_nonblocking(true)
+	tcp.set_nonblocking(true)
 		.with_context(|| format!("failed to put the socket to {host}:{port} into non-blocking mode"))?;
 	tokio::net::TcpStream::from_std(tcp).with_context(|| format!("failed to register the socket to {host}:{port}"))
 }
@@ -858,7 +863,10 @@ mod tests {
 	impl IsolatedHome {
 		fn set() -> Self {
 			let dir = tempfile::tempdir().unwrap();
-			let home = EnvGuard::set(if cfg!(unix) { "HOME" } else { "USERPROFILE" }, dir.path().to_str().unwrap());
+			let home = EnvGuard::set(
+				if cfg!(unix) { "HOME" } else { "USERPROFILE" },
+				dir.path().to_str().unwrap(),
+			);
 			let agent = EnvGuard::unset("SSH_AUTH_SOCK");
 			Self {
 				_dir: dir,
@@ -1122,7 +1130,9 @@ mod tests {
 		async fn open_sftp_starts_a_subsystem() {
 			let server = TestSftpServer::start().await;
 			let url = server.url("/");
-			let handle = open_session(&url, None).await.expect("test server accepts the password");
+			let handle = open_session(&url, None)
+				.await
+				.expect("test server accepts the password");
 			assert!(open_sftp(&handle).await.is_ok());
 		}
 	}

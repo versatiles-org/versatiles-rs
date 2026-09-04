@@ -57,11 +57,8 @@ approx.workspace = true
 assert_fs.workspace = true
 criterion = "0.8.2"
 rstest.workspace = true
-# Not unix-only, even though the SFTP tests that need it most are: any test that
-# touches the process environment has to be serialised, and one of them
-# (`known_hosts_path_from_env`) runs on every platform. Keeping it below the
-# `cfg(unix)` line broke the Windows build with "cannot find module or crate
-# `serial_test`".
+# Every test that touches the process environment has to be serialised — the
+# SFTP tests set VERSATILES_SFTP_* and HOME, and now run on every platform.
 serial_test = "4.0.1"
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros"] }

@@ -32,6 +32,15 @@
 //!   `Handle::spawn` instead would demand `Send + 'static`, which for a write
 //!   means copying the caller's buffer for no reason.
 //!
+//! # Invariant
+//!
+//! [`block_on`] must not be called from a task running *on* the SFTP runtime:
+//! that runtime is single-threaded, so blocking its thread would stop it driving
+//! the very session the future is waiting on. Nothing does today — the only work
+//! placed on it is [`spawn`], whose futures never call back in — and the callers
+//! of `block_on` are the synchronous writer traits, which run on ordinary
+//! threads. Keep it that way.
+//!
 //! The runtime is process-global rather than per-writer: one thread drives
 //! every SFTP session, instead of one thread per open remote file.
 

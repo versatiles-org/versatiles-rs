@@ -28,12 +28,25 @@ yanked = "deny"
 ignore = [
 	# RUSTSEC-2023-0071 — timing sidechannel in `rsa` (Marvin Attack).
 	#
-	# Reached only through `russh`, the unix-only dev-dependency that runs the
-	# in-process SFTP test server (versatiles_core/Cargo.toml). It never enters
-	# a published crate or a released binary, and the keys it handles are
-	# generated per test run. RustSec lists no safe upgrade
-	# (https://github.com/RustCrypto/RSA/issues/626), so there is nothing to
-	# bump to; drop this entry once `russh` depends on a fixed `rsa`.
+	# This one *does* ship: `rsa` is reached through `russh`, which became a
+	# normal dependency of versatiles_core when SFTP moved off `ssh2`. The
+	# earlier version of this entry said the opposite, and was written when
+	# `russh` was still a unix-only dev-dependency.
+	#
+	# Accepted anyway, because the advisory's attack does not exist here. Marvin
+	# recovers a key by timing RSA *decryption* of chosen ciphertexts, which
+	# needs a decryption oracle. `russh` uses the `rsa` crate only to parse
+	# PKCS#1/PKCS#8 private key files (`russh/src/keys/format/*.rs`); signatures
+	# go through `ssh-key`/`signature`, and an SSH client decrypts nothing with
+	# its own RSA key. The vulnerable code path is never entered.
+	#
+	# Dropping `russh`'s `rsa` feature would remove the crate outright, at the
+	# cost of RSA public-key auth (`~/.ssh/id_rsa`, step 5 of the auth priority
+	# in `sftp_utils::open_session`).
+	#
+	# RustSec lists no safe upgrade (https://github.com/RustCrypto/RSA/issues/626),
+	# so there is nothing to bump to; drop this entry once `russh` depends on a
+	# fixed `rsa`.
 	"RUSTSEC-2023-0071",
 ]
 

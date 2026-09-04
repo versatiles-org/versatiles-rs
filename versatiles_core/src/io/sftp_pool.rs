@@ -368,10 +368,17 @@ enum Decision {
 pub async fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Connection>> {
 	let key = ServerKey::from_url(url)?;
 
+	// `Condvar::wait` used to release the pool lock and register for the wakeup
+	// as one atomic step. `Notify` splits those, and a `Notified` future does not
+	// register until it is polled — so creating it before the lock is not enough.
+	// Without the `enable()` below, a connection finishing between the decision
+	// and the `.await` would notify nobody, and this call would wait for a wakeup
+	// that had already happened.
+	let ready = pool_ready().notified();
+	tokio::pin!(ready);
+
 	loop {
-		// Subscribe before deciding: a connection that finishes opening between
-		// the decision and the wait must not be missed.
-		let ready = pool_ready().notified();
+		ready.as_mut().enable();
 
 		let decision = {
 			let mut guard = pool().lock().await;
@@ -399,7 +406,10 @@ pub async fn acquire(url: &Url, identity_file: Option<&Path>) -> Result<Arc<Conn
 					key.host,
 					connections_per_server()
 				);
-				ready.await;
+				ready.as_mut().await;
+				// A consumed `Notified` never fires again; the next iteration
+				// needs a fresh one to register with.
+				ready.set(pool_ready().notified());
 			}
 			Decision::Open => {
 				// Handshake outside the pool lock, throttled to stay under MaxStartups.
@@ -530,11 +540,19 @@ mod tests {
 			assert_eq!(size_a, 4);
 			assert_eq!(size_b, 6);
 			assert_eq!(
-				connection.read_range(id_a, &ByteRange::new(0, 4)).await.unwrap().as_slice(),
+				connection
+					.read_range(id_a, &ByteRange::new(0, 4))
+					.await
+					.unwrap()
+					.as_slice(),
 				b"aaaa"
 			);
 			assert_eq!(
-				connection.read_range(id_b, &ByteRange::new(2, 4)).await.unwrap().as_slice(),
+				connection
+					.read_range(id_b, &ByteRange::new(2, 4))
+					.await
+					.unwrap()
+					.as_slice(),
 				b"bbbb"
 			);
 			connection.unregister(id_a).await;
@@ -555,7 +573,11 @@ mod tests {
 			assert_eq!(connection.generation().await, generation + 1);
 			// The file handle survives the reconnect.
 			assert_eq!(
-				connection.read_range(id, &ByteRange::new(0, 5)).await.unwrap().as_slice(),
+				connection
+					.read_range(id, &ByteRange::new(0, 5))
+					.await
+					.unwrap()
+					.as_slice(),
 				b"hello"
 			);
 			// A stale generation makes reconnect a no-op.
