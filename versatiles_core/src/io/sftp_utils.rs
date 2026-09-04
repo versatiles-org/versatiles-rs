@@ -191,6 +191,17 @@ fn keepalive_interval() -> Duration {
 /// had to run: russh sends the keepalive from the task that already owns the
 /// transport, so there is no second handle to the session to synchronise and
 /// nothing to join on drop.
+///
+/// `inactivity_timeout` is what now enforces `VERSATILES_SFTP_TIMEOUT_MS` on
+/// individual SFTP operations, and it does so by a different mechanism than
+/// ssh2's `Session::set_timeout`: rather than bounding one call, it drops a
+/// connection that has received nothing for that long, which surfaces as an
+/// error on the operation waiting for it and hands the retry layer a
+/// reconnect. A healthy but idle connection is not at risk — the keepalives
+/// above are traffic, and the server's replies reset the timer — so the case
+/// this catches is the one worth catching: a peer that has stopped answering.
+/// A server that ignores keepalives entirely will be reconnected every
+/// `VERSATILES_SFTP_TIMEOUT_MS` of idleness, which the retry path handles.
 fn client_config(timeout: Option<Duration>) -> Config {
 	Config {
 		// Only under `cfg(not(test))`: the in-process test server never answers
