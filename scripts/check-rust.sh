@@ -51,7 +51,7 @@ if [ $? -ne 0 ]; then
 fi
 # The feature set released binaries are built with. Bracketed by the
 # server,cli and all-features checks above and below, but not implied by
-# either: `default` also pulls in ssh2.
+# either: `default` also pulls in sftp.
 echo "cargo check - default features"
 result=$(cargo check --color=always --workspace --all-targets 2>&1)
 if [ $? -ne 0 ]; then

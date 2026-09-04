@@ -5,6 +5,7 @@ set -e
 # Features by package:
 # cli:    versatiles, versatiles_container, versatiles_core
 # server: versatiles
+# sftp:   versatiles, versatiles_container, versatiles_core
 # test:   versatiles_container, versatiles_core, versatiles_geometry, versatiles_image
 # gdal:   versatiles_pipeline
 
@@ -43,7 +44,7 @@ run_check "Workspace: defaults" --lib --workspace
 run_check "Feature: cli" --lib --workspace --no-default-features --features cli --exclude versatiles_derive --exclude versatiles_geometry --exclude versatiles_image --exclude versatiles_node --exclude versatiles_pipeline
 run_check "Feature: gdal" --lib --package versatiles_pipeline --no-default-features --features gdal
 run_check "Feature: server" --lib --package versatiles --no-default-features --features server
-run_check "Feature: ssh2 (core)" --lib --package versatiles_core --no-default-features --features ssh2
+run_check "Feature: sftp (core)" --lib --package versatiles_core --no-default-features --features sftp
 run_check "Feature: test" --lib --workspace --no-default-features --features test --exclude versatiles --exclude versatiles_derive --exclude versatiles_node --exclude versatiles_pipeline
 run_check "All features" --lib --workspace --all-features --exclude versatiles --exclude versatiles_core
 
