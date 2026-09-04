@@ -8,7 +8,7 @@ use std::{
 use anyhow::{Context, Result, anyhow};
 use futures::{StreamExt, future::ready};
 use versatiles_container::{Tile, TileSink, TilesRuntime, open_tile_sink};
-use versatiles_core::{ConcurrencyLimits, TileCoord, TileJSON, TileStream, utils::HilbertIndex};
+use versatiles_core::{Blob, ConcurrencyLimits, TileCoord, TileJSON, TileStream, utils::HilbertIndex};
 
 use super::{
 	AssembleConfig,
@@ -212,12 +212,9 @@ pub(super) async fn scan_sources(
 				tile_size: reader_tilejson.tile_size,
 				..TileJSON::default()
 			});
-			sink = Some(Arc::new(open_tile_sink(
-				output,
-				cfg.tile_format,
-				cfg.tile_compression,
-				runtime,
-			)?));
+			sink = Some(Arc::new(
+				open_tile_sink(output, cfg.tile_format, cfg.tile_compression, runtime).await?,
+			));
 			config = Some(cfg.clone());
 			cfg
 		};
@@ -282,48 +279,72 @@ async fn classify_and_stream_tiles(
 	done: Arc<Mutex<HashSet<TileCoord>>>,
 ) -> Result<Vec<TileCoord>> {
 	let concurrency = ConcurrencyLimits::default().cpu_bound * 2;
-	let translucent_coords: Arc<Mutex<Vec<TileCoord>>> = Arc::default();
-	let translucent_coords_ref = Arc::clone(&translucent_coords);
 
-	let callback = Arc::new(move |coord: TileCoord, mut tile: Tile| -> Result<()> {
-		if done.lock().expect("poisoned mutex").contains(&coord) {
-			return Ok(());
+	/// What the blocking classification step decided about one tile.
+	enum Classified {
+		/// Already done, empty, or otherwise nothing to write.
+		Skip,
+		/// Opaque and encoded, ready for the sink.
+		Opaque(Blob),
+		/// Needs compositing in pass 2.
+		Translucent,
+	}
+
+	// The closure keeps only the CPU-bound half — emptiness checks and blob
+	// encoding — because it runs on the blocking pool. Writing to the sink is
+	// I/O and is now async, so it happens in the loop below instead; a
+	// `spawn_blocking` closure cannot await.
+	let done_for_read = Arc::clone(&done);
+	let callback = Arc::new(move |coord: TileCoord, mut tile: Tile| -> Result<Classified> {
+		if done_for_read.lock().expect("poisoned mutex").contains(&coord) {
+			return Ok(Classified::Skip);
 		}
 		if tile.is_empty()? {
-			return Ok(());
+			return Ok(Classified::Skip);
 		}
 		if tile.is_opaque()? {
-			let blob = write_opaque_blob(tile, &config)?;
-			sink.write_tile(&coord, &blob)?;
-			done.lock().expect("poisoned mutex").insert(coord);
+			Ok(Classified::Opaque(write_opaque_blob(tile, &config)?))
 		} else {
-			translucent_coords_ref.lock().expect("poisoned mutex").push(coord);
+			Ok(Classified::Translucent)
 		}
-		Ok(())
 	});
 
+	let mut translucent_coords: Vec<TileCoord> = Vec::new();
 	let mut result = Ok(());
-	stream
+	let mut tasks = stream
 		.inner
 		.map(move |(coord, item)| {
 			let cb = Arc::clone(&callback);
 			tokio::task::spawn_blocking(move || (coord, cb(coord, item)))
 		})
-		.buffer_unordered(concurrency)
-		.for_each(|task_result| {
-			match task_result {
-				Ok((coord, Err(e))) if result.is_ok() => {
+		.buffer_unordered(concurrency);
+
+	// The stream is drained even after a failure, and the first error is the one
+	// reported — the behaviour the `for_each` this replaced had.
+	while let Some(task_result) = tasks.next().await {
+		match task_result {
+			Err(e) => panic!("Spawned task panicked: {e}"),
+			Ok((coord, Err(e))) => {
+				if result.is_ok() {
 					result = Err(e.context(format!("Failed to process tile at {coord:?}")));
 				}
-				Err(e) => panic!("Spawned task panicked: {e}"),
-				_ => {}
 			}
-			ready(())
-		})
-		.await;
+			Ok((coord, Ok(Classified::Opaque(blob)))) => {
+				if let Err(e) = sink.write_tile(&coord, &blob).await {
+					if result.is_ok() {
+						result = Err(e.context(format!("Failed to process tile at {coord:?}")));
+					}
+				} else {
+					done.lock().expect("poisoned mutex").insert(coord);
+				}
+			}
+			Ok((coord, Ok(Classified::Translucent))) => translucent_coords.push(coord),
+			Ok((_, Ok(Classified::Skip))) => {}
+		}
+	}
 	result?;
 
-	Ok(std::mem::take(&mut *translucent_coords.lock().expect("poisoned mutex")))
+	Ok(translucent_coords)
 }
 
 // ─── Between passes: prepare batches ───
@@ -566,7 +587,7 @@ async fn composite_one_batch(
 				let prepared = encode_tiles_parallel(flushed, config);
 				for result in prepared {
 					let (coord, blob) = result?;
-					sink.write_tile(&coord, &blob)?;
+					sink.write_tile(&coord, &blob).await?;
 				}
 			}
 		}
@@ -631,13 +652,14 @@ mod tests {
 			count: Arc<AtomicUsize>,
 			coords: Arc<Mutex<Vec<TileCoord>>>,
 		}
+		#[async_trait::async_trait]
 		impl TileSink for ObsSink {
-			fn write_tile(&self, coord: &TileCoord, _blob: &Blob) -> Result<()> {
+			async fn write_tile(&self, coord: &TileCoord, _blob: &Blob) -> Result<()> {
 				self.count.fetch_add(1, Ordering::SeqCst);
 				self.coords.lock().unwrap().push(*coord);
 				Ok(())
 			}
-			fn finish(self: Box<Self>, _: &TileJSON, _: &TilesRuntime) -> Result<()> {
+			async fn finish(self: Box<Self>, _: &TileJSON, _: &TilesRuntime) -> Result<()> {
 				Ok(())
 			}
 		}

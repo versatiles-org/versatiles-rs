@@ -69,7 +69,7 @@ pub async fn run(args: &Assemble, runtime: &TilesRuntime) -> Result<()> {
 	pipeline::composite_batches(&batches, &paths, &first.config, &first.sink, runtime).await?;
 
 	let sink = Arc::try_unwrap(first.sink).map_err(|_| anyhow!("sink still has references"))?;
-	sink.finish(&first.tilejson, runtime)?;
+	sink.finish(&first.tilejson, runtime).await?;
 
 	log::info!("finished mosaic assemble");
 	Ok(())
