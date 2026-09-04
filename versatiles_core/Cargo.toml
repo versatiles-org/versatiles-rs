@@ -58,7 +58,7 @@ assert_fs.workspace = true
 criterion = "0.8.2"
 # Host keys for the in-process SFTP test server. rand_core 0.10, which russh's
 # ssh-key fork uses, no longer re-exports an `OsRng`.
-getrandom = "0.3"
+getrandom = "0.4"
 rstest.workspace = true
 # Every test that touches the process environment has to be serialised — the
 # SFTP tests set VERSATILES_SFTP_* and HOME, and now run on every platform.
