@@ -1,6 +1,7 @@
 use std::{collections::HashSet, path::Path, sync::Mutex};
 
 use anyhow::{Result, bail};
+use async_trait::async_trait;
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, TileJSON};
 
 use crate::{DirectoryTileSink, MBTilesTileSink, TarTileSink, TilesRuntime, VersaTilesSink};
@@ -20,6 +21,7 @@ use crate::{DirectoryTileSink, MBTilesTileSink, TarTileSink, TilesRuntime, Versa
 /// Takes tiles one at a time from several threads; [`TilesWriter`](crate::TilesWriter)
 /// is the whole-source counterpart, and not every format supports both — see
 /// the [crate documentation](crate) for the grid and the one exception.
+#[async_trait]
 pub trait TileSink: Send + Sync {
 	/// Write a single pre-compressed tile blob at the given coordinate.
 	///
@@ -27,7 +29,7 @@ pub trait TileSink: Send + Sync {
 	/// and compressed with the sink's configured `TileCompression`.
 	///
 	/// Implementations must be safe to call from multiple threads concurrently.
-	fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()>;
+	async fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()>;
 
 	/// Finalize the container, writing metadata and flushing all buffers.
 	///
@@ -36,7 +38,7 @@ pub trait TileSink: Send + Sync {
 	/// The `runtime` provides access to progress reporting and other services.
 	///
 	/// Uses `Box<Self>` instead of `self` for object safety.
-	fn finish(self: Box<Self>, tilejson: &TileJSON, runtime: &TilesRuntime) -> Result<()>;
+	async fn finish(self: Box<Self>, tilejson: &TileJSON, runtime: &TilesRuntime) -> Result<()>;
 }
 
 /// Wrapper that ensures each tile coordinate is written at most once.
@@ -47,16 +49,21 @@ struct DeduplicatingSink {
 	written: Mutex<HashSet<TileCoord>>,
 }
 
+#[async_trait]
 impl TileSink for DeduplicatingSink {
-	fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
-		if !self.written.lock().expect("poisoned mutex").insert(*coord) {
-			return Ok(());
+	async fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
+		// The lock is released before the await: it guards only the seen-set, and
+		// holding a `std::sync::Mutex` across an await point would be unsound.
+		{
+			if !self.written.lock().expect("poisoned mutex").insert(*coord) {
+				return Ok(());
+			}
 		}
-		self.inner.write_tile(coord, blob)
+		self.inner.write_tile(coord, blob).await
 	}
 
-	fn finish(self: Box<Self>, tilejson: &TileJSON, runtime: &TilesRuntime) -> Result<()> {
-		self.inner.finish(tilejson, runtime)
+	async fn finish(self: Box<Self>, tilejson: &TileJSON, runtime: &TilesRuntime) -> Result<()> {
+		self.inner.finish(tilejson, runtime).await
 	}
 }
 
@@ -127,7 +134,7 @@ fn ends_with_separator(path: &Path) -> bool {
 ///
 /// # Errors
 /// Returns an error if the extension is unsupported, or if the sink cannot be created.
-pub fn open_tile_sink(
+pub async fn open_tile_sink(
 	destination: &str,
 	format: TileFormat,
 	compression: TileCompression,
@@ -144,13 +151,13 @@ pub fn open_tile_sink(
 	};
 
 	let sink = match extension.as_deref() {
-		Some("tar") => TarTileSink::open(destination, format, compression, runtime)?,
+		Some("tar") => TarTileSink::open(destination, format, compression, runtime).await?,
 		Some("mbtiles") => MBTilesTileSink::open(destination, format, compression, runtime)?,
 		Some("versatiles") => VersaTilesSink::open(destination, format, compression, runtime)?,
 		_ => {
 			let is_dir = destination.starts_with("sftp://") || destination_is_directory(Path::new(destination));
 			if is_dir {
-				DirectoryTileSink::open(destination, format, compression, runtime)?
+				DirectoryTileSink::open(destination, format, compression, runtime).await?
 			} else if let Some(extension) = extension.as_deref() {
 				// PMTiles is the one format this workspace can write but not write
 				// *incrementally*. A sink accepts tiles in whatever order the threads
@@ -192,8 +199,8 @@ mod tests {
 
 	/// PMTiles cannot be a sink, and the error has to say why rather than calling
 	/// the format unsupported — `versatiles convert` writes it perfectly well.
-	#[test]
-	fn a_pmtiles_destination_points_at_convert() {
+	#[tokio::test]
+	async fn a_pmtiles_destination_points_at_convert() {
 		let temp = assert_fs::TempDir::new().unwrap();
 		let destination = temp.path().join("mosaic.pmtiles");
 
@@ -203,7 +210,9 @@ mod tests {
 			TileFormat::PNG,
 			TileCompression::Uncompressed,
 			&TilesRuntime::default(),
-		) {
+		)
+		.await
+		{
 			Ok(_) => panic!("a pmtiles sink should not open"),
 			Err(error) => format!("{error:#}"),
 		};
@@ -223,7 +232,9 @@ mod tests {
 			TileFormat::PNG,
 			TileCompression::Uncompressed,
 			&TilesRuntime::default(),
-		) {
+		)
+		.await
+		{
 			Ok(_) => panic!("an unknown extension should not open"),
 			Err(error) => format!("{error:#}"),
 		};
@@ -276,14 +287,15 @@ mod tests {
 		}
 	}
 
+	#[async_trait]
 	impl TileSink for MockSink {
-		fn write_tile(&self, coord: &TileCoord, _blob: &Blob) -> Result<()> {
+		async fn write_tile(&self, coord: &TileCoord, _blob: &Blob) -> Result<()> {
 			self.writes.fetch_add(1, Ordering::Relaxed);
 			self.coords.lock().unwrap().push(*coord);
 			Ok(())
 		}
 
-		fn finish(self: Box<Self>, _tilejson: &TileJSON, _runtime: &TilesRuntime) -> Result<()> {
+		async fn finish(self: Box<Self>, _tilejson: &TileJSON, _runtime: &TilesRuntime) -> Result<()> {
 			*self.finished.lock().unwrap() = true;
 			Ok(())
 		}
@@ -356,18 +368,18 @@ mod tests {
 
 	// ─── deduplicating_tile_sink ───
 
-	#[test]
-	fn test_dedup_sink_passes_first_write() -> Result<()> {
+	#[tokio::test]
+	async fn test_dedup_sink_passes_first_write() -> Result<()> {
 		let mock = MockSink::new();
 		let sink = deduplicating_tile_sink(Box::new(mock));
 		let c = coord(5, 1, 2);
-		sink.write_tile(&c, &blob(b"data"))?;
+		sink.write_tile(&c, &blob(b"data")).await?;
 		// Can't inspect mock directly after wrapping, but it should not error
 		Ok(())
 	}
 
-	#[test]
-	fn test_dedup_sink_drops_duplicate_writes() -> Result<()> {
+	#[tokio::test]
+	async fn test_dedup_sink_drops_duplicate_writes() -> Result<()> {
 		// We need a way to observe writes. Use Arc<MockSink> pattern via shared state.
 		let write_count = std::sync::Arc::new(AtomicUsize::new(0));
 		let count_clone = write_count.clone();
@@ -375,64 +387,67 @@ mod tests {
 		struct CountingSink {
 			count: std::sync::Arc<AtomicUsize>,
 		}
+		#[async_trait]
 		impl TileSink for CountingSink {
-			fn write_tile(&self, _coord: &TileCoord, _blob: &Blob) -> Result<()> {
+			async fn write_tile(&self, _coord: &TileCoord, _blob: &Blob) -> Result<()> {
 				self.count.fetch_add(1, Ordering::Relaxed);
 				Ok(())
 			}
-			fn finish(self: Box<Self>, _: &TileJSON, _: &TilesRuntime) -> Result<()> {
+			async fn finish(self: Box<Self>, _: &TileJSON, _: &TilesRuntime) -> Result<()> {
 				Ok(())
 			}
 		}
 
 		let sink = deduplicating_tile_sink(Box::new(CountingSink { count: count_clone }));
 		let c = coord(3, 0, 0);
-		sink.write_tile(&c, &blob(b"first"))?;
-		sink.write_tile(&c, &blob(b"second"))?;
-		sink.write_tile(&c, &blob(b"third"))?;
+		sink.write_tile(&c, &blob(b"first")).await?;
+		sink.write_tile(&c, &blob(b"second")).await?;
+		sink.write_tile(&c, &blob(b"third")).await?;
 		assert_eq!(write_count.load(Ordering::Relaxed), 1);
 		Ok(())
 	}
 
-	#[test]
-	fn test_dedup_sink_allows_different_coords() -> Result<()> {
+	#[tokio::test]
+	async fn test_dedup_sink_allows_different_coords() -> Result<()> {
 		let write_count = std::sync::Arc::new(AtomicUsize::new(0));
 		let count_clone = write_count.clone();
 
 		struct CountingSink {
 			count: std::sync::Arc<AtomicUsize>,
 		}
+		#[async_trait]
 		impl TileSink for CountingSink {
-			fn write_tile(&self, _coord: &TileCoord, _blob: &Blob) -> Result<()> {
+			async fn write_tile(&self, _coord: &TileCoord, _blob: &Blob) -> Result<()> {
 				self.count.fetch_add(1, Ordering::Relaxed);
 				Ok(())
 			}
-			fn finish(self: Box<Self>, _: &TileJSON, _: &TilesRuntime) -> Result<()> {
+			async fn finish(self: Box<Self>, _: &TileJSON, _: &TilesRuntime) -> Result<()> {
 				Ok(())
 			}
 		}
 
 		let sink = deduplicating_tile_sink(Box::new(CountingSink { count: count_clone }));
-		sink.write_tile(&coord(0, 0, 0), &blob(b"a"))?;
-		sink.write_tile(&coord(1, 0, 0), &blob(b"b"))?;
-		sink.write_tile(&coord(1, 1, 0), &blob(b"c"))?;
+		sink.write_tile(&coord(0, 0, 0), &blob(b"a")).await?;
+		sink.write_tile(&coord(1, 0, 0), &blob(b"b")).await?;
+		sink.write_tile(&coord(1, 1, 0), &blob(b"c")).await?;
 		assert_eq!(write_count.load(Ordering::Relaxed), 3);
 		Ok(())
 	}
 
-	#[test]
-	fn test_dedup_sink_finish_delegates() -> Result<()> {
+	#[tokio::test]
+	async fn test_dedup_sink_finish_delegates() -> Result<()> {
 		let finished = std::sync::Arc::new(Mutex::new(false));
 		let finished_clone = finished.clone();
 
 		struct FinishSink {
 			finished: std::sync::Arc<Mutex<bool>>,
 		}
+		#[async_trait]
 		impl TileSink for FinishSink {
-			fn write_tile(&self, _: &TileCoord, _: &Blob) -> Result<()> {
+			async fn write_tile(&self, _: &TileCoord, _: &Blob) -> Result<()> {
 				Ok(())
 			}
-			fn finish(self: Box<Self>, _: &TileJSON, _: &TilesRuntime) -> Result<()> {
+			async fn finish(self: Box<Self>, _: &TileJSON, _: &TilesRuntime) -> Result<()> {
 				*self.finished.lock().unwrap() = true;
 				Ok(())
 			}
@@ -442,15 +457,15 @@ mod tests {
 			finished: finished_clone,
 		}));
 		let runtime = TilesRuntime::new();
-		sink.finish(&TileJSON::default(), &runtime)?;
+		sink.finish(&TileJSON::default(), &runtime).await?;
 		assert!(*finished.lock().unwrap());
 		Ok(())
 	}
 
 	// ─── open_tile_sink ───
 
-	#[test]
-	fn test_open_tile_sink_tar() -> Result<()> {
+	#[tokio::test]
+	async fn test_open_tile_sink_tar() -> Result<()> {
 		let dir = tempfile::tempdir()?;
 		let path = dir.path().join("out.tar");
 		let runtime = TilesRuntime::new();
@@ -459,14 +474,15 @@ mod tests {
 			TileFormat::PNG,
 			TileCompression::Uncompressed,
 			&runtime,
-		)?;
+		)
+		.await?;
 		// Should succeed and be writable
-		sink.write_tile(&coord(0, 0, 0), &blob(b"data"))?;
+		sink.write_tile(&coord(0, 0, 0), &blob(b"data")).await?;
 		Ok(())
 	}
 
-	#[test]
-	fn test_open_tile_sink_versatiles() -> Result<()> {
+	#[tokio::test]
+	async fn test_open_tile_sink_versatiles() -> Result<()> {
 		let dir = tempfile::tempdir()?;
 		let path = dir.path().join("out.versatiles");
 		let runtime = TilesRuntime::new();
@@ -475,13 +491,14 @@ mod tests {
 			TileFormat::PNG,
 			TileCompression::Uncompressed,
 			&runtime,
-		)?;
-		sink.write_tile(&coord(0, 0, 0), &blob(b"tile"))?;
+		)
+		.await?;
+		sink.write_tile(&coord(0, 0, 0), &blob(b"tile")).await?;
 		Ok(())
 	}
 
-	#[test]
-	fn test_open_tile_sink_directory() -> Result<()> {
+	#[tokio::test]
+	async fn test_open_tile_sink_directory() -> Result<()> {
 		let dir = tempfile::tempdir()?;
 		let out = dir.path().join("tiles");
 		std::fs::create_dir(&out)?;
@@ -491,12 +508,13 @@ mod tests {
 			TileFormat::PNG,
 			TileCompression::Uncompressed,
 			&runtime,
-		)?;
+		)
+		.await?;
 		Ok(())
 	}
 
-	#[test]
-	fn test_open_tile_sink_no_extension_creates_directory() -> Result<()> {
+	#[tokio::test]
+	async fn test_open_tile_sink_no_extension_creates_directory() -> Result<()> {
 		let dir = tempfile::tempdir()?;
 		let out = dir.path().join("output_tiles");
 		let runtime = TilesRuntime::new();
@@ -505,12 +523,13 @@ mod tests {
 			TileFormat::PNG,
 			TileCompression::Uncompressed,
 			&runtime,
-		)?;
+		)
+		.await?;
 		Ok(())
 	}
 
-	#[test]
-	fn test_open_tile_sink_unsupported_extension() {
+	#[tokio::test]
+	async fn test_open_tile_sink_unsupported_extension() {
 		let dir = tempfile::tempdir().unwrap();
 		let path = dir.path().join("out.xyz");
 		let runtime = TilesRuntime::new();
@@ -519,13 +538,14 @@ mod tests {
 			TileFormat::PNG,
 			TileCompression::Uncompressed,
 			&runtime,
-		);
+		)
+		.await;
 		let err = result.err().expect("should fail for unsupported extension");
 		assert!(err.to_string().contains("unsupported"));
 	}
 
-	#[test]
-	fn test_open_tile_sink_deduplicates() -> Result<()> {
+	#[tokio::test]
+	async fn test_open_tile_sink_deduplicates() -> Result<()> {
 		let dir = tempfile::tempdir()?;
 		let path = dir.path().join("out.tar");
 		let runtime = TilesRuntime::new();
@@ -534,16 +554,17 @@ mod tests {
 			TileFormat::PNG,
 			TileCompression::Uncompressed,
 			&runtime,
-		)?;
+		)
+		.await?;
 		// Writing the same coord twice should silently drop the second
 		let c = coord(5, 3, 4);
-		sink.write_tile(&c, &blob(b"first"))?;
-		sink.write_tile(&c, &blob(b"second"))?; // should be dropped, no error
+		sink.write_tile(&c, &blob(b"first")).await?;
+		sink.write_tile(&c, &blob(b"second")).await?; // should be dropped, no error
 		Ok(())
 	}
 
-	#[test]
-	fn test_open_tile_sink_mbtiles() -> Result<()> {
+	#[tokio::test]
+	async fn test_open_tile_sink_mbtiles() -> Result<()> {
 		let dir = tempfile::tempdir()?;
 		let path = dir.path().join("out.mbtiles");
 		let runtime = TilesRuntime::new();
@@ -552,8 +573,9 @@ mod tests {
 			TileFormat::PNG,
 			TileCompression::Uncompressed,
 			&runtime,
-		)?;
-		sink.write_tile(&coord(0, 0, 0), &blob(b"tile"))?;
+		)
+		.await?;
+		sink.write_tile(&coord(0, 0, 0), &blob(b"tile")).await?;
 		Ok(())
 	}
 }

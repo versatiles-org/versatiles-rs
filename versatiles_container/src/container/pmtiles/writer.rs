@@ -141,7 +141,7 @@ impl PMTilesWriter {
 
 		let entries = EntriesV3::new();
 
-		writer.set_position(16384)?;
+		writer.set_position(16384).await?;
 
 		let tilejson = reader.tilejson();
 		let tile_pyramid = reader.tile_pyramid().await?;
@@ -149,9 +149,9 @@ impl PMTilesWriter {
 
 		let mut metadata: Blob = tilejson.into();
 		metadata = compress(metadata, &INTERNAL_COMPRESSION)?;
-		header.metadata = writer.append(&metadata)?;
+		header.metadata = writer.append(&metadata).await?;
 
-		let tile_data_start = writer.position()?;
+		let tile_data_start = writer.position().await?;
 
 		// With `reorder`, pass 1 writes tile data to a local temporary instead of
 		// the real sink, so pass 2 can copy it back in tile-id order. The
@@ -218,7 +218,7 @@ impl PMTilesWriter {
 							let range = if let Some(&existing) = dedup.get(&hash) {
 								existing
 							} else {
-								let range = writer.append(blob)?.shifted_backward(pass1_origin)?;
+								let range = writer.append(blob).await?.shifted_backward(pass1_origin)?;
 								dedup.insert(hash, range);
 								range
 							};
@@ -241,19 +241,19 @@ impl PMTilesWriter {
 			copy_tiles_in_id_order(&mut entries, temp, writer, tile_data_start, &runtime).await?;
 		}
 
-		let tile_data_end = writer.position()?;
+		let tile_data_end = writer.position().await?;
 
 		header.tile_data = ByteRange::new(tile_data_start, tile_data_end - tile_data_start);
 
-		writer.set_position(HeaderV3::len())?;
+		writer.set_position(HeaderV3::len()).await?;
 		// `build_directory` sorts by tile id; `merge_runs` documents that it
 		// requires sorted input. Today the traversal happens to deliver entries
 		// sorted, so the order of these two worked by accident.
 		let directory = entries.build_directory(16384 - HeaderV3::len(), INTERNAL_COMPRESSION)?;
-		header.root_dir = writer.append(&directory.root_bytes)?;
+		header.root_dir = writer.append(&directory.root_bytes).await?;
 
-		writer.set_position(tile_data_end)?;
-		header.leaf_dirs = writer.append(&directory.leaves_bytes)?;
+		writer.set_position(tile_data_end).await?;
+		header.leaf_dirs = writer.append(&directory.leaves_bytes).await?;
 
 		header.clustered = clustered;
 		header.internal_compression = PMTilesCompression::from_value(INTERNAL_COMPRESSION)?;
@@ -261,7 +261,7 @@ impl PMTilesWriter {
 		header.tile_entries_count = entries.len() as u64;
 		header.tile_contents_count = tile_contents_count;
 
-		writer.write_start(&header.serialize()?)?;
+		writer.write_start(&header.serialize()?).await?;
 
 		Ok(())
 	}
@@ -419,7 +419,7 @@ async fn copy_tiles_in_id_order(
 			range
 		} else {
 			let blob = reader.read_range(&entry.range).await?;
-			let range = writer.append(&blob)?.shifted_backward(tile_data_start)?;
+			let range = writer.append(&blob).await?.shifted_backward(tile_data_start)?;
 			moved.insert(entry.range, range);
 			range
 		};

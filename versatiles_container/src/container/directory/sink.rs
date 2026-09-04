@@ -6,6 +6,7 @@
 use std::{fs, path::PathBuf};
 
 use anyhow::{Context, Result};
+use async_trait::async_trait;
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, TileJSON, compression::compress};
 
 use crate::TileSink;
@@ -18,12 +19,14 @@ enum Backend {
 	// Boxed: an `SftpFileSystem` carries a live SSH session and an SFTP channel,
 	// which makes it an order of magnitude larger than the local variant, and
 	// every `Backend` — local ones included — would otherwise be sized for it.
+	// `tokio::sync::Mutex`, not `std`: `SftpFileSystem::write_file` is async and
+	// the guard is held across its await points.
 	#[cfg(feature = "sftp")]
-	Sftp(Box<std::sync::Mutex<versatiles_core::io::SftpFileSystem>>),
+	Sftp(Box<tokio::sync::Mutex<versatiles_core::io::SftpFileSystem>>),
 }
 
 impl Backend {
-	fn write_file(&self, rel_path: &str, data: &[u8]) -> Result<()> {
+	async fn write_file(&self, rel_path: &str, data: &[u8]) -> Result<()> {
 		match self {
 			Self::Local { base_path } => {
 				let path = base_path.join(rel_path);
@@ -35,7 +38,7 @@ impl Backend {
 				fs::write(&path, data).with_context(|| format!("Failed to write to {}", path.display()))
 			}
 			#[cfg(feature = "sftp")]
-			Self::Sftp(fs) => fs.lock().expect("poisoned mutex").write_file(rel_path, data),
+			Self::Sftp(fs) => fs.lock().await.write_file(rel_path, data).await,
 		}
 	}
 }
@@ -61,7 +64,7 @@ pub struct DirectoryTileSink {
 
 impl DirectoryTileSink {
 	/// Open a directory tile sink from a destination string (local path or `sftp://` URL).
-	pub fn open(
+	pub async fn open(
 		destination: &str,
 		tile_format: TileFormat,
 		tile_compression: TileCompression,
@@ -71,11 +74,11 @@ impl DirectoryTileSink {
 			#[cfg(feature = "sftp")]
 			{
 				let url = reqwest::Url::parse(destination)?;
-				let sftp_fs = versatiles_core::io::SftpFileSystem::from_url(&url, runtime.ssh_identity())?;
+				let sftp_fs = versatiles_core::io::SftpFileSystem::from_url(&url, runtime.ssh_identity()).await?;
 				return Ok(Box::new(Self {
 					tile_format,
 					tile_compression,
-					backend: Backend::Sftp(Box::new(std::sync::Mutex::new(sftp_fs))),
+					backend: Backend::Sftp(Box::new(tokio::sync::Mutex::new(sftp_fs))),
 				}));
 			}
 			#[cfg(not(feature = "sftp"))]
@@ -100,8 +103,9 @@ impl DirectoryTileSink {
 	}
 }
 
+#[async_trait]
 impl TileSink for DirectoryTileSink {
-	fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
+	async fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
 		let rel_path = format!(
 			"{}/{}/{}{}{}",
 			coord.level,
@@ -110,13 +114,13 @@ impl TileSink for DirectoryTileSink {
 			self.tile_format.as_extension(),
 			self.tile_compression.as_extension()
 		);
-		self.backend.write_file(&rel_path, blob.as_slice())
+		self.backend.write_file(&rel_path, blob.as_slice()).await
 	}
 
-	fn finish(self: Box<Self>, tilejson: &TileJSON, _runtime: &crate::TilesRuntime) -> Result<()> {
+	async fn finish(self: Box<Self>, tilejson: &TileJSON, _runtime: &crate::TilesRuntime) -> Result<()> {
 		let meta_blob = compress(Blob::from(tilejson), &self.tile_compression)?;
 		let filename = format!("tiles.json{}", self.tile_compression.as_extension());
-		self.backend.write_file(&filename, meta_blob.as_slice())
+		self.backend.write_file(&filename, meta_blob.as_slice()).await
 	}
 }
 
@@ -127,8 +131,8 @@ mod tests {
 	use super::*;
 	use crate::TilesRuntime;
 
-	#[test]
-	fn write_and_read_back() -> Result<()> {
+	#[tokio::test]
+	async fn write_and_read_back() -> Result<()> {
 		let temp = assert_fs::TempDir::new()?;
 		let base = temp.path().to_path_buf();
 		let runtime = TilesRuntime::default();
@@ -138,11 +142,12 @@ mod tests {
 			TileFormat::PNG,
 			TileCompression::Uncompressed,
 			&runtime,
-		)?;
+		)
+		.await?;
 
 		let coord = TileCoord::new(3, 1, 2)?;
 		let blob = Blob::from(vec![0u8; 16]);
-		sink.write_tile(&coord, &blob)?;
+		sink.write_tile(&coord, &blob).await?;
 
 		// Verify file exists
 		let tile_path = base.join("3/1/2.png");
@@ -152,7 +157,7 @@ mod tests {
 		// Finish and verify metadata
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
-		Box::new(sink).finish(&tilejson, &runtime)?;
+		Box::new(sink).finish(&tilejson, &runtime).await?;
 
 		let meta_path = base.join("tiles.json");
 		assert!(meta_path.exists());
@@ -160,18 +165,19 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn write_with_compression() -> Result<()> {
+	#[tokio::test]
+	async fn write_with_compression() -> Result<()> {
 		let temp = assert_fs::TempDir::new()?;
 		let base = temp.path().to_path_buf();
 		let runtime = TilesRuntime::default();
 
-		let sink = DirectoryTileSink::open(base.to_str().unwrap(), TileFormat::MVT, TileCompression::Gzip, &runtime)?;
+		let sink =
+			DirectoryTileSink::open(base.to_str().unwrap(), TileFormat::MVT, TileCompression::Gzip, &runtime).await?;
 
 		let coord = TileCoord::new(2, 3, 3)?;
 		let raw = Blob::from(vec![42u8; 8]);
 		let compressed = versatiles_core::compression::compress_gzip(&raw)?;
-		sink.write_tile(&coord, &compressed)?;
+		sink.write_tile(&coord, &compressed).await?;
 
 		// Verify file exists with correct extension
 		let tile_path = base.join("2/3/3.pbf.gz");
@@ -185,7 +191,7 @@ mod tests {
 		// Finish and verify metadata has compression extension
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
-		Box::new(sink).finish(&tilejson, &runtime)?;
+		Box::new(sink).finish(&tilejson, &runtime).await?;
 
 		let meta_path = base.join("tiles.json.gz");
 		assert!(meta_path.exists());

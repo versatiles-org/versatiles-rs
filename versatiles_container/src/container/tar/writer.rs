@@ -17,17 +17,15 @@
 
 use std::{
 	path::{Path, PathBuf},
-	pin::Pin,
 	sync::Arc,
-	task::{Context as TaskContext, Poll},
 };
 
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use tokio::io::AsyncWrite;
+use tokio::io::{AsyncReadExt, AsyncWrite};
 use tokio_tar::{Builder, Header};
-use versatiles_core::{compression::compress, io::DataWriterTrait};
+use versatiles_core::{Blob, compression::compress, io::DataWriterTrait};
 use versatiles_derive::context;
 
 use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
@@ -39,34 +37,9 @@ use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traver
 ///
 /// Internally uses a mutex around the tar `Builder` to allow asynchronous streaming
 /// of tiles while maintaining a single-writer model.
-/// Adapter that implements [`AsyncWrite`] for a `&mut dyn DataWriterTrait`.
-///
-/// `DataWriterTrait` is still synchronous, so every poll completes immediately
-/// and never returns `Pending`. That is sound but not free: a writer that blocks
-/// internally blocks the polling task. Issue #271 converts the trait to async,
-/// at which point this adapter goes away entirely.
-struct DataWriterAdapter<'a>(&'a mut dyn DataWriterTrait);
-
-impl AsyncWrite for DataWriterAdapter<'_> {
-	fn poll_write(mut self: Pin<&mut Self>, _cx: &mut TaskContext<'_>, buf: &[u8]) -> Poll<std::io::Result<usize>> {
-		let blob = versatiles_core::Blob::from(buf.to_vec());
-		Poll::Ready(
-			self
-				.0
-				.append(&blob)
-				.and_then(|range| usize::try_from(range.length).map_err(Into::into))
-				.map_err(std::io::Error::other),
-		)
-	}
-
-	fn poll_flush(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<std::io::Result<()>> {
-		Poll::Ready(Ok(()))
-	}
-
-	fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut TaskContext<'_>) -> Poll<std::io::Result<()>> {
-		Poll::Ready(Ok(()))
-	}
-}
+/// Buffer size for the duplex pipe used by [`TilesWriter::write_to_writer`], and
+/// the size of each chunk appended to the writer.
+const PIPE_CAPACITY: usize = 256 * 1024;
 
 /// Writes a source into an uncompressed `.tar` archive of tile files.
 pub struct TarTilesWriter {}
@@ -78,10 +51,10 @@ impl TarTilesWriter {
 		runtime: TilesRuntime,
 	) -> Result<()> {
 		// `new_non_terminated` rather than `new`: `Builder::new` spawns a task that
-		// owns the sink so it can write the terminator on drop, which forces
-		// `W: 'static` and rules out the borrowed `DataWriterAdapter`. The explicit
-		// `finish()` below writes that same 1024-byte terminator, so the archive is
-		// identical either way.
+		// owns the sink so it can write the terminator on drop, which would force a
+		// `W: 'static` bound on this function and cost a task per archive. The
+		// explicit `finish()` below writes that same 1024-byte terminator, so the
+		// archive is identical either way.
 		let mut builder = Builder::new_non_terminated(sink);
 
 		let parameters = reader.metadata();
@@ -151,8 +124,30 @@ impl TilesWriter for TarTilesWriter {
 		writer: &mut dyn DataWriterTrait,
 		runtime: TilesRuntime,
 	) -> Result<()> {
-		let adapter = DataWriterAdapter(writer);
-		Self::write_tar(reader, adapter, runtime).await
+		// `DataWriterTrait` is async, so it cannot be presented as an `AsyncWrite`
+		// without a hand-rolled future state machine in `poll_write`. A duplex pipe
+		// avoids that: the builder writes into one end while this task drains the
+		// other into the writer. `join!` rather than `spawn` because both halves
+		// borrow — the reader and the writer are references.
+		let (pipe, mut drain) = tokio::io::duplex(PIPE_CAPACITY);
+
+		let build = Self::write_tar(reader, pipe, runtime);
+		let forward = async {
+			let mut buffer = vec![0u8; PIPE_CAPACITY];
+			loop {
+				let read = drain.read(&mut buffer).await?;
+				if read == 0 {
+					break;
+				}
+				writer.append(&Blob::from(&buffer[..read])).await?;
+			}
+			anyhow::Ok(())
+		};
+
+		let (built, forwarded) = futures::join!(build, forward);
+		built?;
+		forwarded?;
+		Ok(())
 	}
 }
 

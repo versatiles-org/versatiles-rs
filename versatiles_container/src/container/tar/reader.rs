@@ -18,7 +18,7 @@
 //! use std::path::Path;
 //! # async fn demo() -> anyhow::Result<()> {
 //! let path = Path::new("/absolute/path/to/tiles.tar");
-//! let mut reader = TarTilesReader::open(path)?;
+//! let mut reader = TarTilesReader::open(path).await?;
 //!
 //! // Read one tile
 //! if let Some(mut tile) = reader.tile(&TileCoord::new(3, 6, 2)?).await? {

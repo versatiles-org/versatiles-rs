@@ -29,6 +29,7 @@ use std::{
 #[cfg(not(feature = "sftp"))]
 use anyhow::bail;
 use anyhow::{Context, Result, anyhow};
+use async_trait::async_trait;
 use versatiles_core::{
 	Blob, GeoBBox, TileCompression, TileCoord, TileFormat, TileJSON,
 	compression::compress,
@@ -75,7 +76,10 @@ pub struct VersaTilesSink {
 	/// tiles, it is flushed to the output and evicted from both maps.
 	block_tile_counts: Mutex<HashMap<BlockKey, u32>>,
 	/// Output writer + running block index, lazily created on the first flush.
-	output: Mutex<Option<OutputState>>,
+	// `tokio::sync::Mutex`, unlike the two above: the guard is held across the
+	// awaits in `ensure_output` and `flush_block_to_output`, which a `std` guard
+	// may not be. The other two protect purely local state and stay `std`.
+	output: tokio::sync::Mutex<Option<OutputState>>,
 	#[cfg(feature = "sftp")]
 	ssh_identity: Option<PathBuf>,
 }
@@ -106,7 +110,7 @@ impl VersaTilesSink {
 			temp_dir,
 			block_writers: Mutex::new(HashMap::new()),
 			block_tile_counts: Mutex::new(HashMap::new()),
-			output: Mutex::new(None),
+			output: tokio::sync::Mutex::new(None),
 			#[cfg(feature = "sftp")]
 			ssh_identity: runtime.ssh_identity().map(PathBuf::from),
 		}))
@@ -118,15 +122,14 @@ impl VersaTilesSink {
 	}
 
 	/// Create the appropriate DataWriter for the destination.
-	fn create_writer(&self) -> Result<Box<dyn DataWriterTrait>> {
+	async fn create_writer(&self) -> Result<Box<dyn DataWriterTrait>> {
 		if self.destination.starts_with("sftp://") {
 			#[cfg(feature = "sftp")]
 			{
 				let url = reqwest::Url::parse(&self.destination)?;
-				return Ok(Box::new(versatiles_core::io::DataWriterSftp::from_url(
-					&url,
-					self.ssh_identity.as_deref(),
-				)?));
+				return Ok(Box::new(
+					versatiles_core::io::DataWriterSftp::from_url(&url, self.ssh_identity.as_deref()).await?,
+				));
 			}
 			#[cfg(not(feature = "sftp"))]
 			bail!("SFTP support requires the 'sftp' feature")
@@ -141,14 +144,14 @@ impl VersaTilesSink {
 	/// `meta_range` and `blocks_range` are not known until `finish`. A
 	/// placeholder header using known fields and empty byte ranges is written
 	/// instead; it is overwritten at the end.
-	fn ensure_output<'a>(&self, out: &'a mut Option<OutputState>) -> Result<&'a mut OutputState> {
+	async fn ensure_output<'a>(&self, out: &'a mut Option<OutputState>) -> Result<&'a mut OutputState> {
 		if out.is_none() {
-			let mut writer = self.create_writer()?;
+			let mut writer = self.create_writer().await?;
 			// Reserve the header bytes by writing a placeholder; we overwrite
 			// it at finish() once we know the final ranges and zoom span.
 			let bbox = GeoBBox::new(0.0, 0.0, 0.0, 0.0)?;
 			let header = FileHeader::new(self.tile_format, self.tile_compression, [0, 0], &bbox)?;
-			writer.append(&header.to_blob()?)?;
+			writer.append(&header.to_blob()?).await?;
 			*out = Some(OutputState {
 				writer,
 				block_index: BlockIndex::new_empty(),
@@ -166,25 +169,25 @@ impl VersaTilesSink {
 	/// Removes the temp file on success. The block writer and tile counter
 	/// for `key` must have been evicted by the caller so no further writes
 	/// can race with the flush.
-	fn flush_block_to_output(&self, key: &BlockKey) -> Result<()> {
+	async fn flush_block_to_output(&self, key: &BlockKey) -> Result<()> {
 		let path = self.block_path(key);
 		let file = File::open(&path)?;
 		let mut reader = BufReader::new(file);
 
-		let mut output = self.output.lock().expect("poisoned mutex");
-		let state = self.ensure_output(&mut output)?;
+		let mut output = self.output.lock().await;
+		let state = self.ensure_output(&mut output).await?;
 
-		let mut block_builder = BlockBuilder::new(key.0, state.writer.as_mut())?;
+		let mut block_builder = BlockBuilder::new(key.0, state.writer.as_mut()).await?;
 		loop {
 			let Ok(coord) = TileCoord::read_from_cache(&mut reader) else {
 				break;
 			};
 			let blob =
 				Blob::read_from_cache(&mut reader).map_err(|e| anyhow!("failed to read tile blob from temp file: {e}"))?;
-			block_builder.write_tile(coord, blob)?;
+			block_builder.write_tile(coord, blob).await?;
 		}
 
-		if let Some(block) = block_builder.finalize()? {
+		if let Some(block) = block_builder.finalize().await? {
 			state.block_index.insert_block(block);
 			state.zoom_min = state.zoom_min.min(key.0);
 			state.zoom_max = state.zoom_max.max(key.0);
@@ -209,8 +212,9 @@ impl VersaTilesSink {
 	}
 }
 
+#[async_trait]
 impl TileSink for VersaTilesSink {
-	fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
+	async fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
 		let block_key: BlockKey = (coord.level, coord.x / 256, coord.y / 256);
 
 		// Step 1: append the tile record to this block's temp file and
@@ -245,13 +249,13 @@ impl TileSink for VersaTilesSink {
 		// updated again — flush it straight to the output and free disk.
 		if is_full {
 			self.close_block_writer(&block_key)?;
-			self.flush_block_to_output(&block_key)?;
+			self.flush_block_to_output(&block_key).await?;
 		}
 
 		Ok(())
 	}
 
-	fn finish(self: Box<Self>, tilejson: &TileJSON, runtime: &crate::TilesRuntime) -> Result<()> {
+	async fn finish(self: Box<Self>, tilejson: &TileJSON, runtime: &crate::TilesRuntime) -> Result<()> {
 		// 1. Collect and close any block writers that are still open, then
 		//    flush each one into the output (the already-early-flushed
 		//    blocks are already in the output and need no further work).
@@ -266,7 +270,7 @@ impl TileSink for VersaTilesSink {
 		};
 
 		let already_flushed = {
-			let output = self.output.lock().expect("poisoned mutex");
+			let output = self.output.lock().await;
 			output.as_ref().map_or(0, |s| s.block_index.len())
 		};
 
@@ -274,8 +278,8 @@ impl TileSink for VersaTilesSink {
 			// Genuinely empty sink — write a minimal header-only file.
 			let bbox = GeoBBox::new(0.0, 0.0, 0.0, 0.0)?;
 			let header = FileHeader::new(self.tile_format, self.tile_compression, [0, 0], &bbox)?;
-			let mut writer = self.create_writer()?;
-			writer.append(&header.to_blob()?)?;
+			let mut writer = self.create_writer().await?;
+			writer.append(&header.to_blob()?).await?;
 			fs::remove_dir_all(&self.temp_dir)?;
 			return Ok(());
 		}
@@ -288,7 +292,7 @@ impl TileSink for VersaTilesSink {
 
 		let progress = runtime.create_progress("finalizing versatiles", sorted_remaining.len() as u64);
 		for key in &sorted_remaining {
-			self.flush_block_to_output(key)?;
+			self.flush_block_to_output(key).await?;
 			progress.inc(1);
 		}
 		progress.finish();
@@ -302,7 +306,7 @@ impl TileSink for VersaTilesSink {
 		} = self
 			.output
 			.lock()
-			.expect("poisoned mutex")
+			.await
 			.take()
 			.expect("output must exist — we've either early-flushed or just flushed remaining blocks");
 
@@ -316,11 +320,11 @@ impl TileSink for VersaTilesSink {
 		//    already been streamed to the writer.
 		let meta_blob: Blob = tilejson.into();
 		let compressed_meta = compress(meta_blob, &self.tile_compression)?;
-		header.meta_range = writer.append(&compressed_meta)?;
-		header.blocks_range = writer.append(&block_index.to_brotli_blob()?)?;
+		header.meta_range = writer.append(&compressed_meta).await?;
+		header.blocks_range = writer.append(&block_index.to_brotli_blob()?).await?;
 
 		// 5. Rewrite the placeholder header with the real values.
-		writer.write_start(&header.to_blob()?)?;
+		writer.write_start(&header.to_blob()?).await?;
 
 		// 6. Remove the now-empty temp directory.
 		fs::remove_dir_all(&self.temp_dir)?;
@@ -370,6 +374,7 @@ mod tests {
 		let coord = TileCoord::new(2, 0, 0)?;
 		let error = sink
 			.write_tile(&coord, &Blob::from(vec![0u8; 4]))
+			.await
 			.expect_err("creating the block temp file cannot succeed");
 
 		let chain = error.chain().map(ToString::to_string).collect::<Vec<_>>().join(" -> ");
@@ -401,14 +406,14 @@ mod tests {
 		];
 
 		for (coord, blob) in &tiles {
-			sink.write_tile(coord, blob)?;
+			sink.write_tile(coord, blob).await?;
 		}
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
 		tilejson.set_zoom_min(10);
 		tilejson.set_zoom_max(10);
-		Box::new(sink).finish(&tilejson, &runtime)?;
+		Box::new(sink).finish(&tilejson, &runtime).await?;
 
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
 		assert_eq!(reader.metadata().tile_format(), &TileFormat::PNG);
@@ -443,14 +448,14 @@ mod tests {
 		];
 
 		for (coord, blob) in &tiles {
-			sink.write_tile(coord, blob)?;
+			sink.write_tile(coord, blob).await?;
 		}
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
 		tilejson.set_zoom_min(0);
 		tilejson.set_zoom_max(1);
-		Box::new(sink).finish(&tilejson, &runtime)?;
+		Box::new(sink).finish(&tilejson, &runtime).await?;
 
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
 		assert_eq!(reader.metadata().tile_format(), &TileFormat::MVT);
@@ -484,14 +489,14 @@ mod tests {
 		];
 
 		for (coord, blob) in &tiles {
-			sink.write_tile(coord, blob)?;
+			sink.write_tile(coord, blob).await?;
 		}
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
 		tilejson.set_zoom_min(10);
 		tilejson.set_zoom_max(10);
-		Box::new(sink).finish(&tilejson, &runtime)?;
+		Box::new(sink).finish(&tilejson, &runtime).await?;
 
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
 		for (coord, expected_blob) in &tiles {
@@ -544,7 +549,7 @@ mod tests {
 				temp_dir: temp_dir_path,
 				block_writers: Mutex::new(HashMap::new()),
 				block_tile_counts: Mutex::new(HashMap::new()),
-				output: Mutex::new(None),
+				output: tokio::sync::Mutex::new(None),
 				#[cfg(feature = "sftp")]
 				ssh_identity: None,
 			}
@@ -555,7 +560,7 @@ mod tests {
 		let blob = Blob::from(vec![0u8; 4]);
 		for y in 0..256u32 {
 			for x in 0..256u32 {
-				sink.write_tile(&TileCoord::new(8, x, y)?, &blob)?;
+				sink.write_tile(&TileCoord::new(8, x, y)?, &blob).await?;
 			}
 		}
 
@@ -577,7 +582,7 @@ mod tests {
 		// The output writer must exist and its running block index must
 		// already contain the flushed block.
 		{
-			let out = sink.output.lock().unwrap();
+			let out = sink.output.lock().await;
 			let state = out.as_ref().expect("output created during early flush");
 			assert_eq!(
 				state.block_index.len(),
@@ -592,7 +597,7 @@ mod tests {
 		tilejson.set_string("tilejson", "3.0.0")?;
 		tilejson.set_zoom_min(8);
 		tilejson.set_zoom_max(8);
-		sink.finish(&tilejson, &runtime)?;
+		sink.finish(&tilejson, &runtime).await?;
 
 		// After finish, the output file must be readable and all tiles present.
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
@@ -635,24 +640,29 @@ mod tests {
 			temp_dir: expected_tmp.clone(),
 			block_writers: Mutex::new(HashMap::new()),
 			block_tile_counts: Mutex::new(HashMap::new()),
-			output: Mutex::new(None),
+			output: tokio::sync::Mutex::new(None),
 			#[cfg(feature = "sftp")]
 			ssh_identity: None,
 		});
 
 		// Write only a handful of tiles — far from 65 536.
 		for x in 0..10u32 {
-			sink.write_tile(&TileCoord::new(10, x, 0)?, &Blob::from(vec![1u8; 8]))?;
+			sink
+				.write_tile(&TileCoord::new(10, x, 0)?, &Blob::from(vec![1u8; 8]))
+				.await?;
 		}
 
 		// Block writer for (10, 0, 0) must still be open — no early flush.
 		{
-			let writers = sink.block_writers.lock().unwrap();
-			assert!(
-				writers.contains_key(&(10, 0, 0)),
-				"sparse block should not yet have flushed"
-			);
-			let out = sink.output.lock().unwrap();
+			// The `std` guard is scoped to end before the `await` below: holding one
+			// across an await point is what `clippy::await_holding_lock` forbids.
+			let still_open = {
+				let writers = sink.block_writers.lock().unwrap();
+				writers.contains_key(&(10, 0, 0))
+			};
+			assert!(still_open, "sparse block should not yet have flushed");
+
+			let out = sink.output.lock().await;
 			assert!(out.is_none(), "no block has been flushed, so no output writer yet");
 		}
 
@@ -660,7 +670,7 @@ mod tests {
 		tilejson.set_string("tilejson", "3.0.0")?;
 		tilejson.set_zoom_min(10);
 		tilejson.set_zoom_max(10);
-		sink.finish(&tilejson, &runtime)?;
+		sink.finish(&tilejson, &runtime).await?;
 
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
 		for x in 0..10u32 {
@@ -690,20 +700,22 @@ mod tests {
 		let blob = Blob::from(vec![0u8; 4]);
 		for y in 0..256u32 {
 			for x in 0..256u32 {
-				sink.write_tile(&TileCoord::new(8, x, y)?, &blob)?;
+				sink.write_tile(&TileCoord::new(8, x, y)?, &blob).await?;
 			}
 		}
 
 		// Block (z=10, 0, 0): only a few tiles → stays on disk until finish.
 		for x in 0..5u32 {
-			sink.write_tile(&TileCoord::new(10, x, 0)?, &Blob::from(vec![2u8; 8]))?;
+			sink
+				.write_tile(&TileCoord::new(10, x, 0)?, &Blob::from(vec![2u8; 8]))
+				.await?;
 		}
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
 		tilejson.set_zoom_min(8);
 		tilejson.set_zoom_max(10);
-		sink.finish(&tilejson, &runtime)?;
+		sink.finish(&tilejson, &runtime).await?;
 
 		let reader = VersaTilesReader::open(&output, TilesRuntime::default()).await?;
 
@@ -724,8 +736,8 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn empty_sink_produces_valid_file() -> Result<()> {
+	#[tokio::test]
+	async fn empty_sink_produces_valid_file() -> Result<()> {
 		let temp_dir = assert_fs::TempDir::new()?;
 		let output = temp_dir.path().join("empty.versatiles");
 		let runtime = TilesRuntime::default();
@@ -738,7 +750,7 @@ mod tests {
 		)?;
 
 		let tilejson = TileJSON::default();
-		Box::new(sink).finish(&tilejson, &runtime)?;
+		Box::new(sink).finish(&tilejson, &runtime).await?;
 
 		assert!(output.exists());
 		Ok(())

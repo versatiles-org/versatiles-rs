@@ -7,6 +7,7 @@
 use std::{fs::remove_file, path::Path, sync::Mutex};
 
 use anyhow::{Result, bail};
+use async_trait::async_trait;
 use r2d2::Pool;
 use r2d2_sqlite::{SqliteConnectionManager, rusqlite::params};
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat, TileJSON, json::JsonObject};
@@ -153,8 +154,9 @@ impl MBTilesTileSink {
 	}
 }
 
+#[async_trait]
 impl TileSink for MBTilesTileSink {
-	fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
+	async fn write_tile(&self, coord: &TileCoord, blob: &Blob) -> Result<()> {
 		let mut buf = self.buffer.lock().expect("poisoned mutex");
 		buf.push((*coord, blob.as_slice().to_vec()));
 
@@ -167,7 +169,7 @@ impl TileSink for MBTilesTileSink {
 		Ok(())
 	}
 
-	fn finish(self: Box<Self>, tilejson: &TileJSON, _runtime: &crate::TilesRuntime) -> Result<()> {
+	async fn finish(self: Box<Self>, tilejson: &TileJSON, _runtime: &crate::TilesRuntime) -> Result<()> {
 		// Flush remaining tiles
 		let remaining: Vec<_> = self.buffer.lock().expect("poisoned mutex").drain(..).collect();
 		self.flush_buffer(&remaining)?;
@@ -198,13 +200,15 @@ mod tests {
 
 		let coord = TileCoord::new(3, 1, 2)?;
 		let blob = Blob::from(vec![0u8; 16]);
-		sink.write_tile(&coord, &blob)?;
+		sink.write_tile(&coord, &blob).await?;
 
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("tilejson", "3.0.0")?;
 		tilejson.set_zoom_min(3);
 		tilejson.set_zoom_max(3);
-		Box::new(sink).finish(&tilejson, &crate::TilesRuntime::default())?;
+		Box::new(sink)
+			.finish(&tilejson, &crate::TilesRuntime::default())
+			.await?;
 
 		let reader = MBTilesReader::open(&temp, TilesRuntime::default())?;
 		assert_eq!(reader.metadata().tile_format(), &TileFormat::PNG);
@@ -243,7 +247,7 @@ mod tests {
 				let coord = TileCoord::new(2, x, y)?;
 				#[expect(clippy::cast_possible_truncation, reason = "`x` runs 0..4")]
 				let blob = Blob::from(vec![x as u8; 8]);
-				sink.write_tile(&coord, &blob)?;
+				sink.write_tile(&coord, &blob).await?;
 			}
 		}
 
@@ -251,7 +255,9 @@ mod tests {
 		tilejson.set_string("tilejson", "3.0.0")?;
 		tilejson.set_zoom_min(2);
 		tilejson.set_zoom_max(2);
-		Box::new(sink).finish(&tilejson, &crate::TilesRuntime::default())?;
+		Box::new(sink)
+			.finish(&tilejson, &crate::TilesRuntime::default())
+			.await?;
 
 		let reader = MBTilesReader::open(&temp, TilesRuntime::default())?;
 		assert_eq!(reader.metadata().tile_format(), &TileFormat::WEBP);

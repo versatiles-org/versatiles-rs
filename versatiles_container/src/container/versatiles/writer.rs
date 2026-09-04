@@ -146,7 +146,7 @@ impl TilesWriter for VersaTilesWriter {
 		// Convert the header to a blob and write it
 		let blob: Blob = header.to_blob()?;
 		log::trace!("write header");
-		writer.append(&blob)?;
+		writer.append(&blob).await?;
 
 		log::trace!("write meta");
 		header.meta_range = Self::write_meta(reader, writer, tile_compression).await?;
@@ -156,7 +156,7 @@ impl TilesWriter for VersaTilesWriter {
 
 		log::trace!("update header");
 		let blob: Blob = header.to_blob()?;
-		writer.write_start(&blob)?;
+		writer.write_start(&blob).await?;
 
 		Ok(())
 	}
@@ -175,7 +175,7 @@ impl VersaTilesWriter {
 		let meta: Blob = reader.tilejson().into();
 		let compressed = compress(meta, &compression)?;
 
-		writer.append(&compressed)
+		writer.append(&compressed).await
 	}
 
 	/// Write all tile blocks and their Brotli-compressed indices.
@@ -270,12 +270,12 @@ impl VersaTilesWriter {
 				};
 				// `BlockBuilder` borrows the writer for the duration of this block only,
 				// writing tiles straight to the output as they arrive.
-				let mut block_builder = BlockBuilder::new(level, writer)?;
+				let mut block_builder = BlockBuilder::new(level, writer).await?;
 				let mut tile_count: u64 = 0;
 				loop {
 					match rx.next().await {
 						Some(BlockMessage::Tile(coord, blob)) => {
-							block_builder.write_tile(coord, blob)?;
+							block_builder.write_tile(coord, blob).await?;
 							tile_count += 1;
 						}
 						Some(BlockMessage::End) => break,
@@ -283,7 +283,7 @@ impl VersaTilesWriter {
 						None => return Err(anyhow!("producer dropped mid-block")),
 					}
 				}
-				if let Some(block) = block_builder.finalize()? {
+				if let Some(block) = block_builder.finalize().await? {
 					log::trace!("writer: wrote block ({tile_count} tiles) to output");
 					block_index.insert_block(block);
 				}
@@ -295,7 +295,7 @@ impl VersaTilesWriter {
 		let ((), block_index) = try_join!(produce, consume)?;
 
 		// write the block index
-		let range = writer.append(&block_index.to_brotli_blob()?)?;
+		let range = writer.append(&block_index.to_brotli_blob()?).await?;
 
 		Ok(range)
 	}

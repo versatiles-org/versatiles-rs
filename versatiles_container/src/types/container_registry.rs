@@ -402,7 +402,7 @@ impl ContainerRegistry {
 				.map_or("", |(_, ext)| ext),
 		);
 
-		let writer = DataWriterSftp::from_url(&url, runtime.ssh_identity())?;
+		let writer = DataWriterSftp::from_url(&url, runtime.ssh_identity()).await?;
 
 		let entry = self
 			.writers
@@ -451,7 +451,7 @@ impl ContainerRegistry {
 					Box::pin(async move {
 						W::write_to_writer(r.as_ref(), w.as_mut(), rt).await?;
 						// Flush any buffered data (e.g. the SFTP writer's coalesced blocks).
-						w.finalize()
+						w.finalize().await
 					}) as WriteFuture
 				}) as WriteData,
 			))

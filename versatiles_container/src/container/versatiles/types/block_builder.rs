@@ -48,8 +48,8 @@ impl<'a> BlockBuilder<'a> {
 	/// * `level` - The zoom level for this block (0..=31)
 	/// * `writer` - The data writer to write tiles to
 	#[context("creating BlockBuilder for level {level}")]
-	pub fn new(level: u8, writer: &'a mut dyn DataWriterTrait) -> Result<Self> {
-		let initial_offset = writer.position()?;
+	pub async fn new(level: u8, writer: &'a mut dyn DataWriterTrait) -> Result<Self> {
+		let initial_offset = writer.position().await?;
 		let actual_bbox = TileBBox::new_empty(level)?;
 
 		Ok(Self {
@@ -75,7 +75,7 @@ impl<'a> BlockBuilder<'a> {
 	/// Returns an error if the tile's block coordinates (`x/256`, `y/256`) don't match
 	/// the block coordinates established by the first tile written.
 	#[context("writing tile at {coord:?}")]
-	pub fn write_tile(&mut self, coord: TileCoord, blob: Blob) -> Result<()> {
+	pub async fn write_tile(&mut self, coord: TileCoord, blob: Blob) -> Result<()> {
 		// Validate block alignment: all tiles must share the same (x/256, y/256)
 		let tile_block_coords = (coord.x / 256, coord.y / 256);
 		match self.block_coords {
@@ -106,13 +106,13 @@ impl<'a> BlockBuilder<'a> {
 			if let Some(&existing) = self.tile_hash_lookup.get(blob.as_slice()) {
 				existing
 			} else {
-				let mut range = self.writer.append(&blob)?;
+				let mut range = self.writer.append(&blob).await?;
 				range.shift_backward(self.initial_offset);
 				self.tile_hash_lookup.insert(blob.into_vec(), range);
 				range
 			}
 		} else {
-			let mut range = self.writer.append(&blob)?;
+			let mut range = self.writer.append(&blob).await?;
 			range.shift_backward(self.initial_offset);
 			range
 		};
@@ -130,14 +130,14 @@ impl<'a> BlockBuilder<'a> {
 	/// * `Ok(Some(BlockDefinition))` - If tiles were written
 	/// * `Ok(None)` - If no tiles were written (empty block)
 	#[context("finalizing block builder")]
-	pub fn finalize(self) -> Result<Option<BlockDefinition>> {
+	pub async fn finalize(self) -> Result<Option<BlockDefinition>> {
 		// Early return if empty
 		if self.tile_positions.is_empty() {
 			return Ok(None);
 		}
 
 		// Calculate tile range
-		let tiles_end_offset = self.writer.position()?;
+		let tiles_end_offset = self.writer.position().await?;
 		let tiles_range = ByteRange::new(self.initial_offset, tiles_end_offset - self.initial_offset);
 
 		// Create optimally-sized TileIndex
@@ -149,7 +149,7 @@ impl<'a> BlockBuilder<'a> {
 		}
 
 		// Write index
-		let index_range = self.writer.append(&tile_index.to_brotli_blob()?)?;
+		let index_range = self.writer.append(&tile_index.to_brotli_blob()?).await?;
 
 		// Create BlockDefinition with actual bbox
 		let mut block = BlockDefinition::new(&self.actual_bbox)?;
@@ -170,24 +170,25 @@ mod tests {
 		TileCoord::new(level, x, y).unwrap()
 	}
 
-	#[test]
-	fn empty_block_returns_none() {
+	#[tokio::test]
+	async fn empty_block_returns_none() {
 		let mut writer = DataWriterBlob::new().unwrap();
-		let builder = BlockBuilder::new(10, &mut writer).unwrap();
-		let result = builder.finalize().unwrap();
+		let builder = BlockBuilder::new(10, &mut writer).await.unwrap();
+		let result = builder.finalize().await.unwrap();
 		assert!(result.is_none());
 	}
 
-	#[test]
-	fn single_tile_creates_valid_block() {
+	#[tokio::test]
+	async fn single_tile_creates_valid_block() {
 		let mut writer = DataWriterBlob::new().unwrap();
-		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).await.unwrap();
 
 		builder
 			.write_tile(coord(10, 100, 200), Blob::from("tile data"))
+			.await
 			.unwrap();
 
-		let block = builder.finalize().unwrap().unwrap();
+		let block = builder.finalize().await.unwrap().unwrap();
 		let bbox = block.global_bbox();
 
 		assert_eq!(bbox.level(), 10);
@@ -195,17 +196,26 @@ mod tests {
 		assert_eq!(bbox.height(), 1);
 	}
 
-	#[test]
-	fn multiple_tiles_same_block_work() {
+	#[tokio::test]
+	async fn multiple_tiles_same_block_work() {
 		let mut writer = DataWriterBlob::new().unwrap();
-		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).await.unwrap();
 
 		// All tiles have same x/256=0, y/256=0
-		builder.write_tile(coord(10, 10, 20), Blob::from("tile1")).unwrap();
-		builder.write_tile(coord(10, 50, 100), Blob::from("tile2")).unwrap();
-		builder.write_tile(coord(10, 200, 255), Blob::from("tile3")).unwrap();
+		builder
+			.write_tile(coord(10, 10, 20), Blob::from("tile1"))
+			.await
+			.unwrap();
+		builder
+			.write_tile(coord(10, 50, 100), Blob::from("tile2"))
+			.await
+			.unwrap();
+		builder
+			.write_tile(coord(10, 200, 255), Blob::from("tile3"))
+			.await
+			.unwrap();
 
-		let block = builder.finalize().unwrap().unwrap();
+		let block = builder.finalize().await.unwrap().unwrap();
 		let bbox = block.global_bbox();
 
 		// Bbox should span from (10,20) to (200,255)
@@ -215,16 +225,19 @@ mod tests {
 		assert_eq!(bbox.y_max().unwrap(), 255);
 	}
 
-	#[test]
-	fn tiles_from_different_blocks_cause_error() {
+	#[tokio::test]
+	async fn tiles_from_different_blocks_cause_error() {
 		let mut writer = DataWriterBlob::new().unwrap();
-		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).await.unwrap();
 
 		// First tile in block (0, 0)
-		builder.write_tile(coord(10, 100, 100), Blob::from("tile1")).unwrap();
+		builder
+			.write_tile(coord(10, 100, 100), Blob::from("tile1"))
+			.await
+			.unwrap();
 
 		// Second tile in block (1, 0) - different x/256
-		let result = builder.write_tile(coord(10, 256, 100), Blob::from("tile2"));
+		let result = builder.write_tile(coord(10, 256, 100), Blob::from("tile2")).await;
 		assert!(result.is_err());
 
 		// Check the error chain contains the block coords mismatch message
@@ -236,18 +249,18 @@ mod tests {
 		);
 	}
 
-	#[test]
-	fn deduplication_works_for_small_tiles() {
+	#[tokio::test]
+	async fn deduplication_works_for_small_tiles() {
 		let mut writer = DataWriterBlob::new().unwrap();
-		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).await.unwrap();
 
 		let small_blob = Blob::from("small"); // < 1000 bytes
 
 		// Write the same small blob twice
-		builder.write_tile(coord(10, 10, 10), small_blob.clone()).unwrap();
-		builder.write_tile(coord(10, 11, 10), small_blob.clone()).unwrap();
+		builder.write_tile(coord(10, 10, 10), small_blob.clone()).await.unwrap();
+		builder.write_tile(coord(10, 11, 10), small_blob.clone()).await.unwrap();
 
-		let block = builder.finalize().unwrap().unwrap();
+		let block = builder.finalize().await.unwrap().unwrap();
 
 		// The tiles_range should be smaller than 2x the blob size
 		// because the second tile reuses the first tile's data
@@ -255,30 +268,33 @@ mod tests {
 		assert!(tiles_range.length < 2 * small_blob.len());
 	}
 
-	#[test]
-	fn block_size_limited_to_256x256() {
+	#[tokio::test]
+	async fn block_size_limited_to_256x256() {
 		// This is enforced by BlockDefinition::new() which checks bbox dimensions
 		let mut writer = DataWriterBlob::new().unwrap();
-		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).await.unwrap();
 
 		// Write tiles spanning more than 256 in one dimension would require
 		// tiles from different blocks, which is caught by block_coords validation
-		builder.write_tile(coord(10, 0, 0), Blob::from("tile")).unwrap();
+		builder.write_tile(coord(10, 0, 0), Blob::from("tile")).await.unwrap();
 
 		// This would be in a different block (x/256 = 1)
-		let result = builder.write_tile(coord(10, 256, 0), Blob::from("tile2"));
+		let result = builder.write_tile(coord(10, 256, 0), Blob::from("tile2")).await;
 		assert!(result.is_err());
 	}
 
-	#[test]
-	fn level_0_single_tile_block() {
+	#[tokio::test]
+	async fn level_0_single_tile_block() {
 		// Level 0 has only one possible tile (0,0)
 		let mut writer = DataWriterBlob::new().unwrap();
-		let mut builder = BlockBuilder::new(0, &mut writer).unwrap();
+		let mut builder = BlockBuilder::new(0, &mut writer).await.unwrap();
 
-		builder.write_tile(coord(0, 0, 0), Blob::from("world tile")).unwrap();
+		builder
+			.write_tile(coord(0, 0, 0), Blob::from("world tile"))
+			.await
+			.unwrap();
 
-		let block = builder.finalize().unwrap().unwrap();
+		let block = builder.finalize().await.unwrap().unwrap();
 		let bbox = block.global_bbox();
 
 		assert_eq!(bbox.level(), 0);
@@ -288,21 +304,23 @@ mod tests {
 		assert_eq!(bbox.y_min().unwrap(), 0);
 	}
 
-	#[test]
-	fn high_zoom_level_large_coordinates() {
+	#[tokio::test]
+	async fn high_zoom_level_large_coordinates() {
 		// Level 14 has coordinates up to 16383
 		let mut writer = DataWriterBlob::new().unwrap();
-		let mut builder = BlockBuilder::new(14, &mut writer).unwrap();
+		let mut builder = BlockBuilder::new(14, &mut writer).await.unwrap();
 
 		// Block at (63, 63) - coordinates 16128-16383
 		builder
 			.write_tile(coord(14, 16128, 16128), Blob::from("tile1"))
+			.await
 			.unwrap();
 		builder
 			.write_tile(coord(14, 16383, 16383), Blob::from("tile2"))
+			.await
 			.unwrap();
 
-		let block = builder.finalize().unwrap().unwrap();
+		let block = builder.finalize().await.unwrap().unwrap();
 		let bbox = block.global_bbox();
 
 		assert_eq!(bbox.x_min().unwrap(), 16128);
@@ -311,16 +329,19 @@ mod tests {
 		assert_eq!(bbox.y_max().unwrap(), 16383);
 	}
 
-	#[test]
-	fn block_boundary_tiles_255_and_256() {
+	#[tokio::test]
+	async fn block_boundary_tiles_255_and_256() {
 		// Tile at x=255 is in block 0, tile at x=256 is in block 1
 		let mut writer = DataWriterBlob::new().unwrap();
-		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).await.unwrap();
 
 		// Last tile in block (0, 0)
-		builder.write_tile(coord(10, 255, 255), Blob::from("tile")).unwrap();
+		builder
+			.write_tile(coord(10, 255, 255), Blob::from("tile"))
+			.await
+			.unwrap();
 
-		let block = builder.finalize().unwrap().unwrap();
+		let block = builder.finalize().await.unwrap().unwrap();
 		let bbox = block.global_bbox();
 
 		assert_eq!(bbox.x_min().unwrap(), 255);
@@ -329,28 +350,31 @@ mod tests {
 		assert_eq!(bbox.y_max().unwrap(), 255);
 	}
 
-	#[test]
-	fn tile_level_must_match_builder_level() {
+	#[tokio::test]
+	async fn tile_level_must_match_builder_level() {
 		let mut writer = DataWriterBlob::new().unwrap();
-		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).await.unwrap();
 
 		// Try to write a tile with wrong level
-		let result = builder.write_tile(coord(9, 100, 100), Blob::from("wrong level"));
+		let result = builder.write_tile(coord(9, 100, 100), Blob::from("wrong level")).await;
 
 		// This should fail because include_coord checks the level
 		assert!(result.is_err());
 	}
 
-	#[test]
-	fn sparse_block_has_minimal_bbox() {
+	#[tokio::test]
+	async fn sparse_block_has_minimal_bbox() {
 		// Write only 2 tiles far apart within the same block
 		let mut writer = DataWriterBlob::new().unwrap();
-		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).await.unwrap();
 
-		builder.write_tile(coord(10, 5, 10), Blob::from("tile1")).unwrap();
-		builder.write_tile(coord(10, 200, 100), Blob::from("tile2")).unwrap();
+		builder.write_tile(coord(10, 5, 10), Blob::from("tile1")).await.unwrap();
+		builder
+			.write_tile(coord(10, 200, 100), Blob::from("tile2"))
+			.await
+			.unwrap();
 
-		let block = builder.finalize().unwrap().unwrap();
+		let block = builder.finalize().await.unwrap().unwrap();
 		let bbox = block.global_bbox();
 
 		// Bbox should be exactly (5,10) to (200,100), not the full 256x256
@@ -364,11 +388,11 @@ mod tests {
 		assert_eq!(bbox.count_tiles(), 196 * 91);
 	}
 
-	#[test]
-	fn tile_index_row_major_order() {
+	#[tokio::test]
+	async fn tile_index_row_major_order() {
 		// Verify that tiles are indexed in row-major order (x varies fastest)
 		let mut writer = DataWriterBlob::new().unwrap();
-		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).await.unwrap();
 
 		// Write tiles in non-sequential order
 		let tiles = [
@@ -381,10 +405,10 @@ mod tests {
 		];
 
 		for (coord, data) in &tiles {
-			builder.write_tile(*coord, Blob::from(*data)).unwrap();
+			builder.write_tile(*coord, Blob::from(*data)).await.unwrap();
 		}
 
-		let block = builder.finalize().unwrap().unwrap();
+		let block = builder.finalize().await.unwrap().unwrap();
 		let bbox = block.global_bbox();
 
 		// Verify bbox: (0,0) to (2,1) = 3x2 grid
@@ -404,28 +428,28 @@ mod tests {
 		assert_eq!(bbox.index_of(&coord(10, 2, 1)).unwrap(), 5);
 	}
 
-	#[test]
-	fn deduplication_boundary_1000_bytes() {
+	#[tokio::test]
+	async fn deduplication_boundary_1000_bytes() {
 		let mut writer = DataWriterBlob::new().unwrap();
-		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).await.unwrap();
 
 		// Exactly 999 bytes - should be deduplicated
 		let blob_999 = Blob::from(vec![0u8; 999]);
-		builder.write_tile(coord(10, 0, 0), blob_999.clone()).unwrap();
-		builder.write_tile(coord(10, 1, 0), blob_999.clone()).unwrap();
+		builder.write_tile(coord(10, 0, 0), blob_999.clone()).await.unwrap();
+		builder.write_tile(coord(10, 1, 0), blob_999.clone()).await.unwrap();
 
-		let block = builder.finalize().unwrap().unwrap();
+		let block = builder.finalize().await.unwrap().unwrap();
 		let tiles_range_999 = block.tiles_range();
 
 		// Reset and test 1000 bytes - should NOT be deduplicated
 		let mut writer2 = DataWriterBlob::new().unwrap();
-		let mut builder2 = BlockBuilder::new(10, &mut writer2).unwrap();
+		let mut builder2 = BlockBuilder::new(10, &mut writer2).await.unwrap();
 
 		let blob_1000 = Blob::from(vec![0u8; 1000]);
-		builder2.write_tile(coord(10, 0, 0), blob_1000.clone()).unwrap();
-		builder2.write_tile(coord(10, 1, 0), blob_1000.clone()).unwrap();
+		builder2.write_tile(coord(10, 0, 0), blob_1000.clone()).await.unwrap();
+		builder2.write_tile(coord(10, 1, 0), blob_1000.clone()).await.unwrap();
 
-		let block2 = builder2.finalize().unwrap().unwrap();
+		let block2 = builder2.finalize().await.unwrap().unwrap();
 		let tiles_range_1000 = block2.tiles_range();
 
 		// 999-byte blobs should be deduplicated (written once)
@@ -435,19 +459,19 @@ mod tests {
 		assert!(tiles_range_1000.length >= 2 * 1000);
 	}
 
-	#[test]
-	fn multiple_duplicate_small_tiles() {
+	#[tokio::test]
+	async fn multiple_duplicate_small_tiles() {
 		let mut writer = DataWriterBlob::new().unwrap();
-		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).await.unwrap();
 
 		let small_blob = Blob::from("duplicate");
 
 		// Write the same blob 10 times
 		for i in 0..10 {
-			builder.write_tile(coord(10, i, 0), small_blob.clone()).unwrap();
+			builder.write_tile(coord(10, i, 0), small_blob.clone()).await.unwrap();
 		}
 
-		let block = builder.finalize().unwrap().unwrap();
+		let block = builder.finalize().await.unwrap().unwrap();
 		let tiles_range = block.tiles_range();
 
 		// All 10 tiles should reference the same data
@@ -455,22 +479,22 @@ mod tests {
 		assert!(tiles_range.length < 2 * small_blob.len());
 	}
 
-	#[test]
-	fn mixed_duplicate_and_unique_tiles() {
+	#[tokio::test]
+	async fn mixed_duplicate_and_unique_tiles() {
 		let mut writer = DataWriterBlob::new().unwrap();
-		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).await.unwrap();
 
 		let dup_blob = Blob::from("duplicate");
 		let unique1 = Blob::from("unique1");
 		let unique2 = Blob::from("unique2");
 
-		builder.write_tile(coord(10, 0, 0), dup_blob.clone()).unwrap();
-		builder.write_tile(coord(10, 1, 0), unique1.clone()).unwrap();
-		builder.write_tile(coord(10, 2, 0), dup_blob.clone()).unwrap();
-		builder.write_tile(coord(10, 3, 0), unique2.clone()).unwrap();
-		builder.write_tile(coord(10, 4, 0), dup_blob.clone()).unwrap();
+		builder.write_tile(coord(10, 0, 0), dup_blob.clone()).await.unwrap();
+		builder.write_tile(coord(10, 1, 0), unique1.clone()).await.unwrap();
+		builder.write_tile(coord(10, 2, 0), dup_blob.clone()).await.unwrap();
+		builder.write_tile(coord(10, 3, 0), unique2.clone()).await.unwrap();
+		builder.write_tile(coord(10, 4, 0), dup_blob.clone()).await.unwrap();
 
-		let block = builder.finalize().unwrap().unwrap();
+		let block = builder.finalize().await.unwrap().unwrap();
 		let tiles_range = block.tiles_range();
 
 		// Should have: 1x dup_blob + 1x unique1 + 1x unique2 = 3 blobs stored
@@ -478,16 +502,22 @@ mod tests {
 		assert_eq!(tiles_range.length, expected_size);
 	}
 
-	#[test]
-	fn block_in_second_block_row() {
+	#[tokio::test]
+	async fn block_in_second_block_row() {
 		// Test tiles in block (0, 1) - y coordinates 256-511
 		let mut writer = DataWriterBlob::new().unwrap();
-		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).await.unwrap();
 
-		builder.write_tile(coord(10, 100, 300), Blob::from("tile1")).unwrap();
-		builder.write_tile(coord(10, 150, 400), Blob::from("tile2")).unwrap();
+		builder
+			.write_tile(coord(10, 100, 300), Blob::from("tile1"))
+			.await
+			.unwrap();
+		builder
+			.write_tile(coord(10, 150, 400), Blob::from("tile2"))
+			.await
+			.unwrap();
 
-		let block = builder.finalize().unwrap().unwrap();
+		let block = builder.finalize().await.unwrap().unwrap();
 		let bbox = block.global_bbox();
 
 		// Both tiles are in block (0, 1)
@@ -497,14 +527,17 @@ mod tests {
 		assert_eq!(bbox.y_max().unwrap(), 400);
 	}
 
-	#[test]
-	fn verify_tiles_and_index_ranges_are_set() {
+	#[tokio::test]
+	async fn verify_tiles_and_index_ranges_are_set() {
 		let mut writer = DataWriterBlob::new().unwrap();
-		let mut builder = BlockBuilder::new(10, &mut writer).unwrap();
+		let mut builder = BlockBuilder::new(10, &mut writer).await.unwrap();
 
-		builder.write_tile(coord(10, 0, 0), Blob::from("tile data")).unwrap();
+		builder
+			.write_tile(coord(10, 0, 0), Blob::from("tile data"))
+			.await
+			.unwrap();
 
-		let block = builder.finalize().unwrap().unwrap();
+		let block = builder.finalize().await.unwrap().unwrap();
 
 		// Both ranges should be non-empty
 		let tiles_range = block.tiles_range();
