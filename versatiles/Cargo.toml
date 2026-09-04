@@ -47,7 +47,7 @@ regex = { workspace = true, optional = true, features = ["unicode"] }
 serde.workspace = true
 serde_yaml_ng = "0.10.0"
 tar = { workspace = true, optional = true }
-termimad = { version = "0.35.2", optional = true }
+termimad = { version = "0.35.3", optional = true }
 tokio = { workspace = true, features = [
 	"rt-multi-thread",
 	"signal",
@@ -58,7 +58,7 @@ tower = { version = "0.5.3", optional = true, features = [
 	"limit",
 	"load-shed",
 ] }
-tower-http = { version = "0.7.0", optional = true, features = [
+tower-http = { version = "0.7.1", optional = true, features = [
 	"catch-panic",
 	"cors",
 	"set-header",

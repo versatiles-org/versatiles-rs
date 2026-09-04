@@ -19,7 +19,7 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-brotli = { version = "8.0.4", default-features = false, features = ["std"] }
+brotli = { version = "9.0.0", default-features = false, features = ["std"] }
 byteorder = { workspace = true, features = [] }
 dashmap.workspace = true
 clap = { workspace = true, optional = true, features = ["derive"] }
@@ -37,7 +37,7 @@ regex.workspace = true
 reqwest.workspace = true
 socket2 = { version = "0.6", optional = true }
 ssh2 = { version = "0.9", optional = true }
-ssh2-config = { version = "0.7", default-features = false, optional = true }
+ssh2-config = { version = "0.8", default-features = false, optional = true }
 tokio.workspace = true
 zstd = { version = "0.13.3", default-features = false }
 
