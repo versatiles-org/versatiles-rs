@@ -81,7 +81,18 @@ moka.workspace = true
 [features]
 default = []
 cli = ["dep:colored", "dep:clap"]
-sftp = ["dep:russh", "dep:russh-sftp", "dep:ssh2-config", "dep:socket2"]
+# `tokio/net` and friends are enabled here rather than on the bare `tokio`
+# dependency: versatiles_core is also built for wasm32, where tokio's networking
+# does not compile. Tying them to `sftp` keeps that target buildable.
+sftp = [
+	"dep:russh",
+	"dep:russh-sftp",
+	"dep:socket2",
+	"dep:ssh2-config",
+	"tokio/io-util",
+	"tokio/net",
+	"tokio/time",
+]
 test = []
 
 [[bench]]
