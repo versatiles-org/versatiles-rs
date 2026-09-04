@@ -63,7 +63,7 @@ impl TarTileSink<BufWriter<File>> {
 			#[cfg(not(feature = "sftp"))]
 			{
 				let _ = runtime;
-				anyhow::bail!("SFTP support requires the 'ssh2' feature");
+				anyhow::bail!("SFTP support requires the 'sftp' feature");
 			}
 		}
 

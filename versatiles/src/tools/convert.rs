@@ -80,7 +80,7 @@ pub struct Subcommand {
 
 	/// Output tile container path or SFTP URL.
 	/// Supported formats: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory.
-	/// SFTP URLs: sftp://[user[:pass]@]host[:port]/path (requires ssh2 feature)
+	/// SFTP URLs: sftp://[user[:pass]@]host[:port]/path (requires the sftp feature)
 	#[arg(verbatim_doc_comment)]
 	output_file: String,
 

@@ -563,7 +563,7 @@ mod tests {
 	/// Every optional feature of this crate has to be described in its crate
 	/// docs.
 	///
-	/// `ssh2` and `codegen` were both absent: a reader could see `--features
+	/// `sftp` and `codegen` were both absent: a reader could see `--features
 	/// gdal` in the README and never learn that SFTP support is a feature at
 	/// all, or what `codegen` is for. The list lives in `lib.rs`; this keeps it
 	/// complete.

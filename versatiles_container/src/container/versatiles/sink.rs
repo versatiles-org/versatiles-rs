@@ -90,7 +90,7 @@ impl VersaTilesSink {
 		tile_compression: TileCompression,
 		runtime: &crate::TilesRuntime,
 	) -> Result<Box<dyn TileSink>> {
-		let _ = runtime; // used only with ssh2 feature
+		let _ = runtime; // used only with the sftp feature
 
 		let temp_dir = if destination.starts_with("sftp://") {
 			env::temp_dir().join(format!("versatiles_sink_{}", std::process::id()))
@@ -129,7 +129,7 @@ impl VersaTilesSink {
 				)?));
 			}
 			#[cfg(not(feature = "sftp"))]
-			bail!("SFTP support requires the 'ssh2' feature")
+			bail!("SFTP support requires the 'sftp' feature")
 		}
 		let path = env::current_dir()?.join(&self.destination);
 		Ok(Box::new(DataWriterFile::from_path(&path)?))

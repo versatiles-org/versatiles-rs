@@ -10,7 +10,7 @@
 //!
 //! - **cli** *(default)*: Enables command-line interface support with colored output and progress indicators.
 //! - **server** *(default)*: Enables HTTP tile server functionality using axum.
-//! - **ssh2** *(default)*: Enables reading and writing containers over SFTP.
+//! - **sftp** *(default)*: Enables reading and writing containers over SFTP.
 //! - **gdal**: Enables GDAL raster data source support for reading geospatial formats like GeoTIFF.
 //!   Requires GDAL to be installed on the system.
 //! - **bindgen**: Compiles GDAL bindings from source instead of using pre-built bindings.

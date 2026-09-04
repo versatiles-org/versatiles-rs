@@ -76,7 +76,7 @@ struct WriterEntry {
 		not(feature = "sftp"),
 		allow(
 			dead_code,
-			reason = "only the SFTP branch reads this, and it is compiled out without `ssh2`"
+			reason = "only the SFTP branch reads this, and it is compiled out without `sftp`"
 		)
 	)]
 	write_to_writer: Option<Arc<WriteData>>,
@@ -250,7 +250,7 @@ impl ContainerRegistry {
 		not(feature = "sftp"),
 		allow(
 			unused_variables,
-			reason = "`ssh_identity` is read only by the SFTP branch, compiled out without `ssh2`"
+			reason = "`ssh_identity` is read only by the SFTP branch, compiled out without `sftp`"
 		)
 	)]
 	async fn reader_impl(
@@ -379,7 +379,7 @@ impl ContainerRegistry {
 
 	/// Write tiles to a destination specified as a string (path or SFTP URL).
 	///
-	/// Detects `sftp://` URLs and writes via SFTP when the `ssh2` feature is enabled.
+	/// Detects `sftp://` URLs and writes via SFTP when the `sftp` feature is enabled.
 	/// Otherwise falls back to path-based writing.
 	pub async fn write_to_str(&self, reader: SharedTileSource, destination: &str, runtime: TilesRuntime) -> Result<()> {
 		#[cfg(feature = "sftp")]

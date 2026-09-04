@@ -41,7 +41,7 @@ pub fn create_runtime() -> TilesRuntime {
 ///
 /// `ssh_identity` is a path to a private key file on disk. Without one, the
 /// `VERSATILES_SSH_IDENTITY` environment variable is used — the same variable
-/// the CLI reads — and without that, libssh2 falls back to any password in the
+/// the CLI reads — and without that, the SSH client falls back to any password in the
 /// URL, the SSH agent, and the usual `~/.ssh` defaults.
 ///
 /// # Returns

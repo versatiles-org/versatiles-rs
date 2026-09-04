@@ -300,7 +300,7 @@ pub struct TestSftpServer {
 	drop_flag: Arc<AtomicBool>,
 	/// Signals the server thread to exit its accept loop and shut down.
 	shutdown: Arc<AtomicBool>,
-	/// libssh2 API timeout (ms) embedded in URLs returned by [`Self::url`].
+	/// SFTP operation timeout (ms) embedded in URLs returned by [`Self::url`].
 	/// Defaults to 2000 ms in normal builds; automatically raised to 5000 ms
 	/// under `cargo-llvm-cov` (which sets `cfg(coverage)`) because the
 	/// instrumentation overhead slows the in-process server enough that the SSH
@@ -323,7 +323,7 @@ impl TestSftpServer {
 	/// thread, completely isolated from the calling test's runtime. This means the
 	/// server's async tasks (russh handshake, SFTP protocol) always have CPU
 	/// available regardless of how many tests run in parallel, eliminating the
-	/// libssh2 socket-timeout failures that occurred when the server shared a
+	/// SFTP timeout failures that occurred when the server shared a
 	/// runtime with heavily-loaded test workers.
 	pub async fn start() -> Self {
 		let key = PrivateKey::random(&mut OsRng, Algorithm::Ed25519).unwrap();
@@ -402,7 +402,7 @@ impl TestSftpServer {
 
 	/// Returns `sftp://testuser:testpass@127.0.0.1:{port}{path}?timeout_ms={timeout_ms}`.
 	/// The `timeout_ms` query parameter is read by `sftp_utils::open_session` in
-	/// test builds to set the libssh2 API timeout for that connection.
+	/// test builds to set the SFTP operation timeout for that connection.
 	pub fn url(&self, path: &str) -> Url {
 		Url::parse(&format!(
 			"sftp://testuser:testpass@127.0.0.1:{}{}?timeout_ms={}",
