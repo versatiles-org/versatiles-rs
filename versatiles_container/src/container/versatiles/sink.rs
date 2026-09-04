@@ -26,7 +26,7 @@ use std::{
 	sync::Mutex,
 };
 
-#[cfg(not(feature = "ssh2"))]
+#[cfg(not(feature = "sftp"))]
 use anyhow::bail;
 use anyhow::{Context, Result, anyhow};
 use versatiles_core::{
@@ -76,7 +76,7 @@ pub struct VersaTilesSink {
 	block_tile_counts: Mutex<HashMap<BlockKey, u32>>,
 	/// Output writer + running block index, lazily created on the first flush.
 	output: Mutex<Option<OutputState>>,
-	#[cfg(feature = "ssh2")]
+	#[cfg(feature = "sftp")]
 	ssh_identity: Option<PathBuf>,
 }
 
@@ -107,7 +107,7 @@ impl VersaTilesSink {
 			block_writers: Mutex::new(HashMap::new()),
 			block_tile_counts: Mutex::new(HashMap::new()),
 			output: Mutex::new(None),
-			#[cfg(feature = "ssh2")]
+			#[cfg(feature = "sftp")]
 			ssh_identity: runtime.ssh_identity().map(PathBuf::from),
 		}))
 	}
@@ -120,7 +120,7 @@ impl VersaTilesSink {
 	/// Create the appropriate DataWriter for the destination.
 	fn create_writer(&self) -> Result<Box<dyn DataWriterTrait>> {
 		if self.destination.starts_with("sftp://") {
-			#[cfg(feature = "ssh2")]
+			#[cfg(feature = "sftp")]
 			{
 				let url = reqwest::Url::parse(&self.destination)?;
 				return Ok(Box::new(versatiles_core::io::DataWriterSftp::from_url(
@@ -128,7 +128,7 @@ impl VersaTilesSink {
 					self.ssh_identity.as_deref(),
 				)?));
 			}
-			#[cfg(not(feature = "ssh2"))]
+			#[cfg(not(feature = "sftp"))]
 			bail!("SFTP support requires the 'ssh2' feature")
 		}
 		let path = env::current_dir()?.join(&self.destination);
@@ -545,7 +545,7 @@ mod tests {
 				block_writers: Mutex::new(HashMap::new()),
 				block_tile_counts: Mutex::new(HashMap::new()),
 				output: Mutex::new(None),
-				#[cfg(feature = "ssh2")]
+				#[cfg(feature = "sftp")]
 				ssh_identity: None,
 			}
 		});
@@ -636,7 +636,7 @@ mod tests {
 			block_writers: Mutex::new(HashMap::new()),
 			block_tile_counts: Mutex::new(HashMap::new()),
 			output: Mutex::new(None),
-			#[cfg(feature = "ssh2")]
+			#[cfg(feature = "sftp")]
 			ssh_identity: None,
 		});
 

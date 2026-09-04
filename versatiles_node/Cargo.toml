@@ -26,9 +26,9 @@ versatiles = { workspace = true, default-features = false, features = [
 	"codegen",
 	"server",
 ] }
-# `ssh2` brings in the SFTP reader and writer: without it an `sftp://` URL is
+# `sftp` brings in the SFTP reader and writer: without it an `sftp://` URL is
 # an unsupported scheme here, however good the key handling above it is.
-versatiles_container = { workspace = true, features = ["ssh2"] }
+versatiles_container = { workspace = true, features = ["sftp"] }
 versatiles_core = { workspace = true, default-features = false }
 versatiles_geometry.workspace = true
 serde.workspace = true

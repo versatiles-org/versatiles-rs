@@ -176,7 +176,7 @@ mod tests {
 		assert!(result.is_err());
 	}
 
-	#[cfg(all(feature = "ssh2", unix))]
+	#[cfg(all(feature = "sftp", unix))]
 	mod sftp_server_tests {
 		use super::*;
 		use crate::{ByteRange, io::test_sftp_server::TestSftpServer};

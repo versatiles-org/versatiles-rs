@@ -10,7 +10,7 @@
 # Run locally with `cargo deny check` (brew install cargo-deny).
 
 [graph]
-# The gdal, ssh2, server and cli features each pull dependencies the default
+# The gdal, sftp, server and cli features each pull dependencies the default
 # build does not, and a vulnerability in one of them is still a vulnerability in
 # a released binary. Check the union.
 all-features = true

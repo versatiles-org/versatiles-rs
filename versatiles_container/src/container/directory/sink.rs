@@ -15,7 +15,7 @@ enum Backend {
 	Local {
 		base_path: PathBuf,
 	},
-	#[cfg(feature = "ssh2")]
+	#[cfg(feature = "sftp")]
 	Sftp(std::sync::Mutex<versatiles_core::io::SftpFileSystem>),
 }
 
@@ -31,7 +31,7 @@ impl Backend {
 				}
 				fs::write(&path, data).with_context(|| format!("Failed to write to {}", path.display()))
 			}
-			#[cfg(feature = "ssh2")]
+			#[cfg(feature = "sftp")]
 			Self::Sftp(fs) => fs.lock().expect("poisoned mutex").write_file(rel_path, data),
 		}
 	}
@@ -65,7 +65,7 @@ impl DirectoryTileSink {
 		runtime: &crate::TilesRuntime,
 	) -> Result<Box<dyn TileSink>> {
 		if destination.starts_with("sftp://") {
-			#[cfg(feature = "ssh2")]
+			#[cfg(feature = "sftp")]
 			{
 				let url = reqwest::Url::parse(destination)?;
 				let sftp_fs = versatiles_core::io::SftpFileSystem::from_url(&url, runtime.ssh_identity())?;
@@ -75,7 +75,7 @@ impl DirectoryTileSink {
 					backend: Backend::Sftp(std::sync::Mutex::new(sftp_fs)),
 				}));
 			}
-			#[cfg(not(feature = "ssh2"))]
+			#[cfg(not(feature = "sftp"))]
 			{
 				let _ = runtime;
 				anyhow::bail!("SFTP support requires the 'ssh2' feature");

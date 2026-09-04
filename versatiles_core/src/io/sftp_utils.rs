@@ -684,7 +684,7 @@ mod tests {
 		}
 	}
 
-	#[cfg(all(feature = "ssh2", unix))]
+	#[cfg(all(feature = "sftp", unix))]
 	mod sftp_server_tests {
 		use super::*;
 		use crate::io::test_sftp_server::TestSftpServer;

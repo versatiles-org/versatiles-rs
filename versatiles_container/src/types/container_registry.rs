@@ -39,7 +39,7 @@ use anyhow::{Context, Result, anyhow, bail};
 #[cfg(test)]
 use assert_fs::NamedTempFile;
 use versatiles_core::io::{DataReader, DataReaderBlob, DataReaderHttp, DataWriterTrait};
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "sftp")]
 use versatiles_core::io::{DataReaderSftp, DataWriterSftp};
 #[cfg(test)]
 use versatiles_core::{TileCompression, TileFormat, TilePyramid};
@@ -73,7 +73,7 @@ struct ReaderEntry {
 struct WriterEntry {
 	write_to_path: Arc<WriteFile>,
 	#[cfg_attr(
-		not(feature = "ssh2"),
+		not(feature = "sftp"),
 		allow(
 			dead_code,
 			reason = "only the SFTP branch reads this, and it is compiled out without `ssh2`"
@@ -247,7 +247,7 @@ impl ContainerRegistry {
 	}
 
 	#[cfg_attr(
-		not(feature = "ssh2"),
+		not(feature = "sftp"),
 		allow(
 			unused_variables,
 			reason = "`ssh_identity` is read only by the SFTP branch, compiled out without `ssh2`"
@@ -263,7 +263,7 @@ impl ContainerRegistry {
 		match data_source.into_location() {
 			DataLocation::Url(url) => {
 				let reader: DataReader = match url.scheme() {
-					#[cfg(feature = "ssh2")]
+					#[cfg(feature = "sftp")]
 					"sftp" => {
 						// SFTP open does a blocking SSH handshake. Off-load it to
 						// the tokio blocking pool so concurrent opens (e.g. from
@@ -382,7 +382,7 @@ impl ContainerRegistry {
 	/// Detects `sftp://` URLs and writes via SFTP when the `ssh2` feature is enabled.
 	/// Otherwise falls back to path-based writing.
 	pub async fn write_to_str(&self, reader: SharedTileSource, destination: &str, runtime: TilesRuntime) -> Result<()> {
-		#[cfg(feature = "ssh2")]
+		#[cfg(feature = "sftp")]
 		if destination.starts_with("sftp://") {
 			return self.write_to_sftp(reader, destination, runtime).await;
 		}
@@ -392,7 +392,7 @@ impl ContainerRegistry {
 	}
 
 	/// Write tiles to a remote SFTP destination.
-	#[cfg(feature = "ssh2")]
+	#[cfg(feature = "sftp")]
 	#[context("writing tiles to SFTP '{url}'")]
 	async fn write_to_sftp(&self, reader: SharedTileSource, url: &str, runtime: TilesRuntime) -> Result<()> {
 		let url = reqwest::Url::parse(url).with_context(|| format!("invalid SFTP URL: {url}"))?;

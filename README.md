@@ -234,9 +234,9 @@ VersaTiles works with **tile containers** - files or directories containing map 
 | SFTP read    |      ✅       |     ✅     |     ❌     |   ❌   |    ❌     |
 | SFTP write   |      ✅       |     ✅     |     ❌     |   ❌   |    ❌     |
 
-✅ = supported, ❌ = not supported. Remote read over HTTP/HTTPS and SFTP read/write require the streamable single-file formats (`.versatiles`, `.pmtiles`); SFTP also requires the `ssh2` feature. All formats store opaque tile blobs, so each works with both vector and raster tiles.
+✅ = supported, ❌ = not supported. Remote read over HTTP/HTTPS and SFTP read/write require the streamable single-file formats (`.versatiles`, `.pmtiles`); SFTP also requires the `sftp` feature. All formats store opaque tile blobs, so each works with both vector and raster tiles.
 
-**Remote access:** VersaTiles can read remote `.versatiles` and `.pmtiles` files via HTTPS, and write to remote servers via SFTP (requires `ssh2` feature):
+**Remote access:** VersaTiles can read remote `.versatiles` and `.pmtiles` files via HTTPS, and write to remote servers via SFTP (requires `sftp` feature):
 
 ```sh
 versatiles serve https://download.versatiles.org/osm.versatiles
@@ -291,7 +291,7 @@ versatiles convert input.mbtiles output.versatiles
 | `--dry-run`                | Check the pipeline and exit, reading no tiles    | `--dry-run`                              |
 | `--writer-option`          | Format-specific output option (repeatable)       | `--writer-option=allow_unclustered=true` |
 
-The output path can also be an SFTP URL (`sftp://[user[:pass]@]host[:port]/path`) to write directly to a remote server. This requires the `ssh2` feature. Only formats that support streaming writes (`.versatiles`, `.pmtiles`) are supported over SFTP.
+The output path can also be an SFTP URL (`sftp://[user[:pass]@]host[:port]/path`) to write directly to a remote server. This requires the `sftp` feature. Only formats that support streaming writes (`.versatiles`, `.pmtiles`) are supported over SFTP.
 
 **Real-world examples:**
 
@@ -317,7 +317,7 @@ versatiles convert --min-zoom=1 --max-zoom=10 \
   https://download.versatiles.org/osm.versatiles \
   local-osm-filtered.versatiles
 
-# Write directly to a remote server via SFTP (requires ssh2 feature)
+# Write directly to a remote server via SFTP (requires sftp feature)
 versatiles convert tiles.mbtiles \
   sftp://user@host/path/to/output.versatiles
 ```

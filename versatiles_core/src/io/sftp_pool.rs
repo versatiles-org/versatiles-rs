@@ -499,7 +499,7 @@ mod tests {
 		assert!(ServerKey::from_url(&Url::parse("sftp:///path").unwrap()).is_err());
 	}
 
-	#[cfg(all(feature = "ssh2", unix))]
+	#[cfg(all(feature = "sftp", unix))]
 	mod sftp_server_tests {
 		use super::*;
 		use crate::io::test_sftp_server::TestSftpServer;

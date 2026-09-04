@@ -117,27 +117,27 @@ mod data_reader;
 mod data_reader_blob;
 mod data_reader_file;
 mod data_reader_http;
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "sftp")]
 mod data_reader_sftp;
 mod data_writer;
 mod data_writer_blob;
 mod data_writer_file;
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "sftp")]
 mod data_writer_sftp;
 mod network_reader;
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "sftp")]
 mod network_writer;
 pub(crate) mod retry;
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "sftp")]
 mod sftp_pool;
 /// Host-key verification and SFTP session setup.
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "sftp")]
 pub mod sftp_utils;
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "sftp")]
 mod sftp_wrappers;
-#[cfg(all(feature = "ssh2", test, unix))]
+#[cfg(all(feature = "sftp", test, unix))]
 pub(crate) mod test_sftp_server;
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "sftp")]
 pub use sftp_wrappers::*;
 mod value_reader;
 mod value_reader_blob;
@@ -151,12 +151,12 @@ pub use data_reader::*;
 pub use data_reader_blob::*;
 pub use data_reader_file::*;
 pub use data_reader_http::*;
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "sftp")]
 pub use data_reader_sftp::*;
 pub use data_writer::*;
 pub use data_writer_blob::*;
 pub use data_writer_file::*;
-#[cfg(feature = "ssh2")]
+#[cfg(feature = "sftp")]
 pub use data_writer_sftp::*;
 pub use value_reader::*;
 pub use value_reader_blob::*;

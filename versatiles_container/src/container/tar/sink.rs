@@ -50,7 +50,7 @@ impl TarTileSink<BufWriter<File>> {
 		runtime: &crate::TilesRuntime,
 	) -> Result<Box<dyn TileSink>> {
 		if destination.starts_with("sftp://") {
-			#[cfg(feature = "ssh2")]
+			#[cfg(feature = "sftp")]
 			{
 				let url = reqwest::Url::parse(destination)?;
 				let stream = versatiles_core::io::SftpWriteStream::from_url(&url, runtime.ssh_identity())?;
@@ -60,7 +60,7 @@ impl TarTileSink<BufWriter<File>> {
 					tile_compression,
 				)));
 			}
-			#[cfg(not(feature = "ssh2"))]
+			#[cfg(not(feature = "sftp"))]
 			{
 				let _ = runtime;
 				anyhow::bail!("SFTP support requires the 'ssh2' feature");

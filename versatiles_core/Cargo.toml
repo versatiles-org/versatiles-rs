@@ -35,8 +35,17 @@ num_cpus.workspace = true
 percent-encoding = "2"
 regex.workspace = true
 reqwest.workspace = true
+# `default-features = false` drops russh's `aws-lc-rs` backend, which needs NASM
+# and cmake on Windows; `ring` ships pre-assembled objects for the MSVC targets
+# and so builds with nothing but the C compiler the runners already have. This
+# is the whole reason SFTP can now be built on every target instead of unix only.
+russh = { version = "0.63", default-features = false, features = [
+	"flate2",
+	"ring",
+	"rsa",
+], optional = true }
+russh-sftp = { version = "2.4", optional = true }
 socket2 = { version = "0.6", optional = true }
-ssh2 = { version = "0.9", optional = true }
 ssh2-config = { version = "0.8", default-features = false, optional = true }
 tokio.workspace = true
 zstd = { version = "0.13.3", default-features = false }
@@ -58,12 +67,6 @@ tempfile.workspace = true
 tokio = { workspace = true, features = ["macros"] }
 wildmatch.workspace = true
 
-# In-process SFTP test server — only needed on unix (russh depends on aws-lc-rs
-# which requires NASM/cmake on Windows and is not needed for the Windows build).
-[target.'cfg(unix)'.dev-dependencies]
-russh = "0.63"
-russh-sftp = "2.4"
-
 # Multithreading benchmark dependencies
 dashmap.workspace = true
 arc-swap.workspace = true
@@ -72,12 +75,13 @@ moka.workspace = true
 
 # Features:
 # - cli: Enable CLI-specific dependencies (colored output, clap)
+# - sftp: Enable sftp:// sources and sinks (pure-Rust russh; no OpenSSL)
 # - test: Disable terminal output for testing
 # - no-terminal: Disable terminal progress output (for Node.js bindings, WASM, etc.)
 [features]
 default = []
 cli = ["dep:colored", "dep:clap"]
-ssh2 = ["dep:ssh2", "dep:ssh2-config", "dep:socket2"]
+sftp = ["dep:russh", "dep:russh-sftp", "dep:ssh2-config", "dep:socket2"]
 test = []
 
 [[bench]]
