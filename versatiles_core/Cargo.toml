@@ -43,6 +43,14 @@ zstd = { version = "0.13.3", default-features = false }
 
 versatiles_derive.workspace = true
 
+# OpenSSL must be vendored on darwin: without it, openssl-sys links against
+# Homebrew's OpenSSL through absolute install names (/opt/homebrew/opt/…),
+# so the shipped release artifacts fail to load on any machine that does not
+# have openssl@3 installed at exactly that path. Linux keeps using the
+# system OpenSSL.
+[target.'cfg(target_os = "macos")'.dependencies]
+ssh2 = { version = "0.9", optional = true, features = ["vendored-openssl"] }
+
 [dev-dependencies]
 approx.workspace = true
 assert_fs.workspace = true

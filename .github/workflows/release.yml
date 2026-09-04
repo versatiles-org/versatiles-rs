@@ -297,7 +297,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Use native runners to avoid cross-compilation; pkg-config finds OpenSSL without extra setup.
+          # Use native runners to avoid cross-compilation. OpenSSL is vendored on
+          # darwin (see versatiles_core/Cargo.toml), so no brew/pkg-config setup
+          # is needed and the artifacts carry no external dylib references.
           - arch: x86_64
             runner: macos-26-intel
           - arch: aarch64
