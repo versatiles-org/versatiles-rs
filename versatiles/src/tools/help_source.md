@@ -65,7 +65,7 @@ https://user:password@webdav.example.org/tiles/world.versatiles
 ### SFTP
 
 SFTP URLs are supported for both **reading** and **writing** when VersaTiles
-is built with the `ssh2` feature. Only formats with data-reader/writer support
+is built with the `sftp` feature. Only formats with data-reader/writer support
 are available over SFTP: `versatiles` and `pmtiles`.
 
 ```text
