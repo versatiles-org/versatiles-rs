@@ -150,7 +150,7 @@ cp ./target/release/versatiles /usr/local/bin/
 ```sh
 # Install system dependencies and Rust
 sudo apt-get update
-sudo apt-get install -y build-essential pkg-config libssl-dev git curl
+sudo apt-get install -y build-essential pkg-config git curl
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 source "$HOME/.cargo/env"
 
