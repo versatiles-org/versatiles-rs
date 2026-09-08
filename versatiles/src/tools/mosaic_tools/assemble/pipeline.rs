@@ -204,12 +204,40 @@ pub(super) async fn scan_sources(
 				tile_format: *metadata.tile_format(),
 				tile_compression: *metadata.tile_compression(),
 			};
-			tile_dim = reader_tilejson.tile_size.map_or(256, |ts| u64::from(ts.size()));
+			// Sources written before their producers declared `tile_size` carry
+			// none, and copying that gap forward means the assembled container is
+			// missing it too — which is how
+			// <https://tiles.versatiles.org/tiles/satellite/tiles.json> ended up
+			// with no `tile_size`. `TilesConvertReader` already backfills this for
+			// `versatiles convert` (issue #247); assemble is the other raster
+			// producer and needs the same treatment.
+			//
+			// It matters twice over. Besides the metadata, `tile_dim` feeds the
+			// memory budget in `prepare_batches`: falling back to 256 for a source
+			// of 512 px tiles underestimates the bytes per tile fourfold, so
+			// batches grow about four times larger than `max_buffer_size` intends.
+			//
+			// One tile read, once, and only when the source declares nothing.
+			// `measure_tile_size` is raster-only and returns `None` rather than
+			// failing, so a source whose tiles will not decode still assembles —
+			// exactly as before, just without the improvement.
+			let mut tile_size = reader_tilejson.tile_size;
+			if tile_size.is_none() {
+				tile_size = reader.measure_tile_size().await?;
+				if let Some(size) = tile_size {
+					log::debug!(
+						"source '{path}' declared no tile_size; measured {} px from a tile",
+						size.size()
+					);
+				}
+			}
+
+			tile_dim = tile_size.map_or(256, |ts| u64::from(ts.size()));
 			tilejson = Some(TileJSON {
 				tile_format: Some(cfg.tile_format),
 				tile_type: Some(cfg.tile_format.to_type()),
 				tile_schema: reader_tilejson.tile_schema,
-				tile_size: reader_tilejson.tile_size,
+				tile_size,
 				..TileJSON::default()
 			});
 			sink = Some(Arc::new(
@@ -797,6 +825,43 @@ mod tests {
 			.err()
 			.expect("expected an error");
 		assert!(err.to_string().contains("no sources found"), "got: {err}");
+	}
+
+	/// The mock source declares no `tile_size`, so this also asserts the
+	/// precondition: without the backfill the field would simply be `None`.
+	#[tokio::test]
+	async fn scan_sources_backfills_missing_tile_size() {
+		let runtime = TilesRuntime::default();
+		let (_src_dir, src_path) = create_png_versatiles(&runtime).await;
+
+		// Precondition: the source really does not declare a tile size, so the
+		// assertion below cannot pass by accident.
+		let source = runtime.reader_from_str(&src_path).await.unwrap();
+		assert_eq!(
+			source.tilejson().tile_size,
+			None,
+			"the mock source is expected to declare no tile_size"
+		);
+		let measured = source.measure_tile_size().await.unwrap();
+		drop(source);
+
+		let out_dir = TempDir::new().unwrap();
+		let output = out_dir.path().join("out.versatiles").to_string_lossy().into_owned();
+		let result = scan_sources(&output, &[src_path], &png_quality(), false, None, None, &runtime)
+			.await
+			.unwrap();
+
+		// A raster container must carry `tile_size`, measured from a tile when the
+		// source declares none — the gap that left the published satellite
+		// tiles.json without one.
+		assert_eq!(
+			result.tilejson.tile_size, measured,
+			"assemble should backfill tile_size by measuring a tile"
+		);
+		assert!(
+			result.tilejson.tile_size.is_some(),
+			"raster output must declare a tile_size"
+		);
 	}
 
 	#[tokio::test]
