@@ -171,7 +171,7 @@ astral-tokio-tar = { version = "0.7.0", default-features = false }
 
 # HTTP/Server dependencies
 axum = { version = "0.8.9", default-features = false }
-reqwest = { version = "0.13.4", default-features = false, features = ["default-tls"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["default-tls"] }
 
 # Image processing dependencies
 imageproc = { version = "0.27.0", default-features = false }
@@ -194,7 +194,7 @@ arc-swap = "1.9"                                    # Lock-free updates
 approx = { version = "0.5.1", default-features = false, features = ["std"] }
 assert_fs = "1.1.4"
 pretty_assertions = "1.4.1"
-rstest = { version = "0.26.1", default-features = false }
+rstest = { version = "0.27.0", default-features = false }
 tempfile = "3.27.0"
 
 versatiles = { version = "4.13.0", path = "versatiles", default-features = false }
