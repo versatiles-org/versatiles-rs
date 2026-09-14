@@ -23,15 +23,23 @@ const DEFAULT_TILE_SIZE: u32 = 512;
 /// Scaling function type used to downscale tiles by a factor of 2.
 pub type ScaleDownFn = Arc<dyn Fn(&DynamicImage) -> Result<DynamicImage> + Send + Sync>;
 
-/// Source tiles one interactive request may read before it gives up.
+/// Source tiles one interactive request may read before it is refused.
 ///
-/// Reaching this means the request asked for a tile far above a dense source:
-/// a tile at zoom `z` costs `256 * 4^(level - z)` source reads from cold, so
-/// four levels above a fully covered base is already the whole base level. Such
-/// a request cannot finish inside a tile server's request timeout anyway, and
-/// failing immediately with the numbers beats spending minutes on a result
-/// nobody is still waiting for.
-const DEFAULT_REQUEST_BUDGET: u64 = 65_536;
+/// Reaching this means the request asked for a tile far above a dense source.
+/// A tile is built from its whole block, `min(16, 2^z)` tiles on a side, so
+/// from cold over a fully covered base it reads `min(16, 2^z)² * 4^(level - z)`
+/// source tiles: `256 * 4^(level - z)` from zoom 4 up, and the entire base
+/// level, `4^level`, at zoom 0.
+///
+/// The ceiling is `4^7`: zoom 0 over a full level 7, or a tile three levels
+/// above a full base. Built from `from_debug` in a dev build on a laptop that
+/// took about eleven seconds, just inside the tile server's fifteen-second
+/// request timeout, and every level further costs four times as much. Such a
+/// request cannot finish inside that timeout anyway, and failing immediately
+/// with the numbers beats spending minutes on a result nobody is still waiting
+/// for — which is why the cost is counted before anything is read, see
+/// [`OverviewCore::cold_reads`].
+const DEFAULT_REQUEST_BUDGET: u64 = 16_384;
 
 /// Overrides [`DEFAULT_REQUEST_BUDGET`]; `0` removes the limit.
 const REQUEST_BUDGET_ENV: &str = "VERSATILES_OVERVIEW_REQUEST_TILES";
@@ -57,7 +65,27 @@ impl ReadBudget {
 		}
 	}
 
+	/// What is left to spend.
+	fn remaining(&self) -> u64 {
+		self.remaining.load(Ordering::Relaxed)
+	}
+
+	/// Refuse a request whose predicted `reads` do not fit, before it reads
+	/// anything.
+	fn afford(&self, reads: u64) -> Result<()> {
+		ensure!(
+			reads <= self.remaining(),
+			"{}",
+			self.refusal("predicted before reading")
+		);
+		Ok(())
+	}
+
 	/// Spend `tiles` of the budget, or explain why the request stops here.
+	///
+	/// A backstop behind [`afford`](Self::afford): the prediction counts a
+	/// cached block as free, and the cache may drop it before the build gets
+	/// there.
 	fn take(&self, tiles: u64, bbox: TileBBox) -> Result<()> {
 		let left = self
 			.remaining
@@ -65,13 +93,20 @@ impl ReadBudget {
 
 		ensure!(
 			left.is_ok(),
-			"this tile needs more than {} source tiles to build, and {bbox:?} is where the budget ran out. Building a \
-			 low zoom level on demand costs 256 x 4^(levels below the base) source tiles, so over a dense source it is \
-			 work for a conversion, not for a request someone is waiting on: convert once and serve the result. Raise \
-			 or remove the ceiling with {REQUEST_BUDGET_ENV} (tiles, 0 disables it).",
-			self.limit
+			"{}",
+			self.refusal(&format!("{bbox:?} is where the budget ran out"))
 		);
 		Ok(())
+	}
+
+	fn refusal(&self, detail: &str) -> String {
+		format!(
+			"this tile needs more than {} source tiles to build ({detail}). Building a low zoom level on demand costs up \
+			 to 256 x 4^(levels below the base) source tiles, and the whole base level at zoom 0, so over a dense source \
+			 it is work for a conversion, not for a request someone is waiting on: convert once and serve the result. \
+			 Raise or remove the ceiling with {REQUEST_BUDGET_ENV} (tiles, 0 disables it).",
+			self.limit
+		)
 	}
 }
 
@@ -513,8 +548,70 @@ impl OverviewCore {
 	/// environment, so a test can reach the ceiling without a pyramid big
 	/// enough to cost what the ceiling is worth.
 	pub(crate) async fn tile_within(&self, coord: &TileCoord, budget: Option<Arc<ReadBudget>>) -> Result<Option<Tile>> {
-		let mut stream = self.tile_stream_within(coord.to_tile_bbox(), budget).await?;
+		let bbox = coord.to_tile_bbox();
+		if let Some(budget) = &budget {
+			budget.afford(self.cold_reads(bbox, budget.remaining()).await?)?;
+		}
+		let mut stream = self.tile_stream_within(bbox, budget).await?;
 		Ok(stream.next().await.map(|(_, tile)| tile))
+	}
+
+	/// Source tiles [`tile_stream_within`](Self::tile_stream_within) would read
+	/// for `bbox`, given what the cache holds right now.
+	///
+	/// Walks the blocks the build would compute without computing them. A block
+	/// either tier of the cache holds is free, along with everything underneath
+	/// it, and one nothing of the source lies under is skipped exactly as
+	/// [`compose_from_children`](Self::compose_from_children) skips it. Only
+	/// blocks are visited, never tiles, and counting stops as soon as it passes
+	/// `limit` — so the answer may be any number above `limit` once the request
+	/// is over it.
+	///
+	/// This is what lets the ceiling refuse up front instead of after spending
+	/// it: charging reads as they happen, the only thing a request over the
+	/// ceiling could learn was that it had already done that much work.
+	async fn cold_reads(&self, bbox: TileBBox, limit: u64) -> Result<u64> {
+		if bbox.level() > self.level_base {
+			return Ok(0);
+		}
+
+		// The same first step as `tile_stream_within`.
+		let mut todo: Vec<TileBBox> = Vec::new();
+		for block in Self::blocks_covering(bbox) {
+			if self.metadata.intersection_bbox(&block).is_empty() {
+				continue;
+			}
+			let mut wanted = block;
+			wanted.intersect_bbox(&bbox)?;
+			if !wanted.is_empty() {
+				todo.push(wanted);
+			}
+		}
+
+		let mut reads = 0;
+		while let Some(bbox) = todo.pop() {
+			if bbox.level() == self.level_base {
+				// Charged the same way `full_images` charges it.
+				reads += self.metadata.intersection_bbox(&bbox).count_tiles();
+				if reads > limit {
+					break;
+				}
+				continue;
+			}
+
+			let block = bbox.rounded(BLOCK_TILE_COUNT.min(bbox.max_count()));
+			let children: Vec<TileBBox> = block.leveled_up().iter_grid(BLOCK_TILE_COUNT).collect();
+			for child in children {
+				if self.metadata.intersection_bbox(&child).is_empty() {
+					continue;
+				}
+				let key = child.min_tile()?;
+				if self.cache.peek(key).await.is_none() {
+					todo.push(Self::block_bbox(key)?);
+				}
+			}
+		}
+		Ok(reads)
 	}
 
 	#[context("Failed to get stream for bbox: {:?}", bbox)]
@@ -764,6 +861,48 @@ mod tests {
 			"should name the way to raise it: {error}"
 		);
 		Ok(())
+	}
+
+	/// A request over the ceiling is refused before it builds anything, and one
+	/// exactly at it is not.
+	///
+	/// Zoom 0 over a fully covered base reads the whole base level, `4^level`
+	/// source tiles. Charged only as reads happened, a ceiling one short of
+	/// that let the request build three of the four blocks under it before it
+	/// failed, so it spent the ceiling without delivering anything. See issue
+	/// #264.
+	#[tokio::test]
+	async fn a_request_over_the_ceiling_is_refused_before_it_builds_anything() -> Result<()> {
+		let level_base = 5;
+		let full = 4u64.pow(u32::from(level_base));
+		let coord = TileCoord::new(0, 0, 0)?;
+
+		let core = make_world_core(level_base)?;
+		let error = core
+			.tile_within(&coord, Some(Arc::new(ReadBudget::new(full - 1))))
+			.await
+			.expect_err("one tile short of the base level cannot pay for zoom 0");
+		assert!(
+			format!("{error:#}").contains("predicted before reading"),
+			"should be refused up front: {error:#}"
+		);
+		assert_eq!(core.cache.stats().0, 0, "nothing should have been built");
+		assert_eq!(core.cache.entry_count().await, 0, "nothing should have been cached");
+
+		let core = make_world_core(level_base)?;
+		let tile = core.tile_within(&coord, Some(Arc::new(ReadBudget::new(full)))).await?;
+		assert!(tile.is_some(), "the whole base level is exactly what zoom 0 costs");
+		Ok(())
+	}
+
+	/// A source covering the whole world at `level_base` and nothing else.
+	fn make_world_core(level_base: u8) -> Result<OverviewCore> {
+		let pyramid = TilePyramid::from_geo_bbox(level_base, level_base, &GeoBBox::new(-180.0, -85.0, 180.0, 85.0)?)?;
+		assert_eq!(pyramid.count_tiles(), 4u64.pow(u32::from(level_base)));
+		let source =
+			Box::new(DummyImageSource::from_color(&[200u8, 100, 50], 256, TileFormat::PNG, Some(pyramid)).unwrap());
+		let scale_fn: ScaleDownFn = Arc::new(|img| img.scaled_down(2));
+		OverviewCore::new(source, Some(level_base), scale_fn, TilesRuntime::new_silent())
 	}
 
 	/// A warm request is not refused, however expensive it would have been cold.
