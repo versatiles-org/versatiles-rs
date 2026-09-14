@@ -1,4 +1,11 @@
-use std::{collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, path::Path};
+use std::{
+	collections::HashMap,
+	env::current_dir,
+	ffi::OsStr,
+	fmt::Debug,
+	path::{Component, Path},
+	sync::Arc,
+};
 
 use anyhow::{Result, anyhow, bail, ensure};
 use async_trait::async_trait;
@@ -18,13 +25,15 @@ use super::{
 	static_source::StaticSourceTrait,
 };
 
+/// The compression variants of one file. Blobs are shared, so links to a file
+/// don't copy its content.
 #[derive(Debug)]
 struct FileEntry {
 	mime: String,
-	un: Option<Blob>,
-	gz: Option<Blob>,
-	br: Option<Blob>,
-	zstd: Option<Blob>,
+	un: Option<Arc<Blob>>,
+	gz: Option<Arc<Blob>>,
+	br: Option<Arc<Blob>>,
+	zstd: Option<Arc<Blob>>,
 }
 
 impl FileEntry {
@@ -76,8 +85,6 @@ impl TarFile {
 	}
 
 	async fn from_bytes(mut data: Blob, filename: &str, name: String) -> Result<Self> {
-		use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
-
 		for part in filename.rsplit('.') {
 			match part {
 				"tar" => break,
@@ -90,76 +97,157 @@ impl TarFile {
 
 		let mut archive = Archive::new(data.as_slice());
 
-		let mut lookup: HashMap<String, FileEntry> = HashMap::new();
+		// Links may point at entries that come later in the archive, or at other
+		// links, so every entry is collected first and links are resolved after.
+		let mut nodes: HashMap<String, Node> = HashMap::new();
+		let mut order: Vec<String> = Vec::new();
 		let mut entries = archive.entries()?;
 		while let Some(file_result) = entries.next().await {
 			let Ok(mut file) = file_result else {
 				continue;
 			};
 
-			if file.header().entry_type() != EntryType::Regular {
+			let entry_type = file.header().entry_type();
+			if !matches!(entry_type, EntryType::Regular | EntryType::Link | EntryType::Symlink) {
 				continue;
 			}
 
-			let mut entry_path = file.path()?.into_owned();
-			let compression = entry_path
-				.extension()
-				.and_then(OsStr::to_str)
-				.map_or(Uncompressed, |ext| match ext {
-					"br" => Brotli,
-					"gz" => Gzip,
-					_ => Uncompressed,
-				});
-
-			if compression != Uncompressed {
-				entry_path.set_extension("");
-			}
-
-			let mut buffer = Vec::new();
-			file.read_to_end(&mut buffer).await?;
-			let blob = Blob::from(buffer);
-
-			let Some(entry_filename) = entry_path.file_name() else {
+			let entry_path = file.path()?;
+			let Some(entry_name) = resolve_path("", &entry_path) else {
+				log::warn!("skipping tar entry with an invalid name: {entry_path:?}");
 				continue;
 			};
-			let mime = guess_mime(Path::new(&entry_filename));
+			drop(entry_path);
 
-			let mut add = |path: &Path, blob: Blob| {
-				let mut name = path
-					.iter()
-					.map(|s| s.to_str().expect("tar entry path is utf-8"))
-					.collect::<Vec<&str>>()
-					.join("/");
-
-				while name.starts_with(['.', '/']) {
-					name = name[1..].to_string();
-				}
-
-				log::trace!("Adding file from tar: {name} ({compression:?})");
-
-				let entry = lookup.entry(name);
-				let versions = entry.or_insert_with(|| FileEntry::new(mime.clone()));
-				match compression {
-					Uncompressed => versions.un = Some(blob),
-					Gzip => versions.gz = Some(blob),
-					Brotli => versions.br = Some(blob),
-					Zstd => versions.zstd = Some(blob),
-				}
+			let node = if entry_type == EntryType::Regular {
+				let mut buffer = Vec::new();
+				file.read_to_end(&mut buffer).await?;
+				Node::File(Arc::new(Blob::from(buffer)))
+			} else {
+				let Ok(Some(link_name)) = file.link_name() else {
+					log::warn!("skipping tar link {entry_name:?} without a readable target");
+					continue;
+				};
+				// Hardlink targets are archive paths, symlink targets are relative
+				// to the directory of the link. An absolute symlink points outside
+				// the archive.
+				let target = if entry_type == EntryType::Link {
+					resolve_path("", &link_name)
+				} else if link_name.has_root() {
+					None
+				} else {
+					resolve_path(parent_dir(&entry_name), &link_name)
+				};
+				let Some(target) = target else {
+					log::warn!("skipping tar link {entry_name:?}: target {link_name:?} is outside the archive");
+					continue;
+				};
+				Node::Link(target)
 			};
 
-			if entry_filename == OsStr::new("index.html") {
-				add(
-					entry_path
-						.parent()
-						.expect("entry_path has a file_name, so parent exists"),
-					blob.clone(),
-				);
+			if nodes.insert(entry_name.clone(), node).is_none() {
+				order.push(entry_name);
 			}
-			add(&entry_path, blob);
+		}
+
+		let mut lookup: HashMap<String, FileEntry> = HashMap::new();
+		for entry_name in &order {
+			let Some(blob) = resolve_node(&nodes, entry_name) else {
+				log::warn!("skipping tar link {entry_name:?}: target is missing or more than {MAX_LINK_DEPTH} links away");
+				continue;
+			};
+			add_file(&mut lookup, entry_name, blob);
 		}
 
 		Ok(Self { lookup, name })
 	}
+}
+
+/// A tar entry before links are resolved.
+enum Node {
+	File(Arc<Blob>),
+	/// Normalised archive path of the link target.
+	Link(String),
+}
+
+/// Maximum number of links followed to reach a file, so link loops terminate.
+const MAX_LINK_DEPTH: usize = 8;
+
+/// Follows links from `name` until a regular file is reached.
+fn resolve_node<'a>(nodes: &'a HashMap<String, Node>, name: &str) -> Option<&'a Arc<Blob>> {
+	let mut node = nodes.get(name)?;
+	for _ in 0..=MAX_LINK_DEPTH {
+		match node {
+			Node::File(blob) => return Some(blob),
+			Node::Link(target) => node = nodes.get(target)?,
+		}
+	}
+	None
+}
+
+/// Joins `path` onto the archive directory `base` and normalises it to `a/b/c`.
+///
+/// Leading `/` and `.` components are dropped, `..` removes the previous component.
+/// Returns `None` if the path is not UTF-8 or escapes the archive root.
+fn resolve_path(base: &str, path: &Path) -> Option<String> {
+	let mut parts: Vec<&str> = base.split('/').filter(|s| !s.is_empty()).collect();
+	for component in path.components() {
+		match component {
+			Component::Prefix(_) | Component::RootDir | Component::CurDir => {}
+			Component::ParentDir => {
+				parts.pop()?;
+			}
+			Component::Normal(part) => parts.push(part.to_str()?),
+		}
+	}
+	Some(parts.join("/"))
+}
+
+/// Returns the directory part of a normalised archive path.
+fn parent_dir(name: &str) -> &str {
+	name.rsplit_once('/').map_or("", |(dir, _)| dir)
+}
+
+/// Registers a file under its path, as a compression variant if it ends in `.br` or `.gz`.
+/// An `index.html` is registered for its directory, too.
+fn add_file(lookup: &mut HashMap<String, FileEntry>, entry_name: &str, blob: &Arc<Blob>) {
+	use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
+
+	let compression = match Path::new(entry_name).extension().and_then(OsStr::to_str) {
+		Some("br") => Brotli,
+		Some("gz") => Gzip,
+		_ => Uncompressed,
+	};
+	let path = if compression == Uncompressed {
+		entry_name
+	} else {
+		&entry_name[..entry_name.len() - 3]
+	};
+
+	let Some(filename) = Path::new(path).file_name() else {
+		return;
+	};
+	let mime = guess_mime(Path::new(filename));
+
+	let mut add = |name: &str| {
+		log::trace!("Adding file from tar: {name} ({compression:?})");
+
+		let versions = lookup
+			.entry(name.to_owned())
+			.or_insert_with(|| FileEntry::new(mime.clone()));
+		let blob = Some(Arc::clone(blob));
+		match compression {
+			Uncompressed => versions.un = blob,
+			Gzip => versions.gz = blob,
+			Brotli => versions.br = blob,
+			Zstd => versions.zstd = blob,
+		}
+	};
+
+	if filename == OsStr::new("index.html") {
+		add(parent_dir(path));
+	}
+	add(path);
 }
 
 #[async_trait]
@@ -177,40 +265,40 @@ impl StaticSourceTrait for TarFile {
 	async fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse> {
 		use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
 
-		let file_entry = self.lookup.get(&url.str[1..])?.to_owned();
+		let file_entry = self.lookup.get(&url.str[1..])?;
 
 		if accept.contains(Brotli)
 			&& let Some(blob) = &file_entry.br
 		{
-			return SourceResponse::new_some(blob.to_owned(), Brotli, &file_entry.mime);
+			return SourceResponse::new_some(Blob::clone(blob), Brotli, &file_entry.mime);
 		}
 
 		if accept.contains(Zstd)
 			&& let Some(blob) = &file_entry.zstd
 		{
-			return SourceResponse::new_some(blob.to_owned(), Zstd, &file_entry.mime);
+			return SourceResponse::new_some(Blob::clone(blob), Zstd, &file_entry.mime);
 		}
 
 		if accept.contains(Gzip)
 			&& let Some(blob) = &file_entry.gz
 		{
-			return SourceResponse::new_some(blob.to_owned(), Gzip, &file_entry.mime);
+			return SourceResponse::new_some(Blob::clone(blob), Gzip, &file_entry.mime);
 		}
 
 		if let Some(blob) = &file_entry.un {
-			return SourceResponse::new_some(blob.to_owned(), Uncompressed, &file_entry.mime);
+			return SourceResponse::new_some(Blob::clone(blob), Uncompressed, &file_entry.mime);
 		}
 
 		if let Some(blob) = &file_entry.br {
-			return SourceResponse::new_some(blob.to_owned(), Brotli, &file_entry.mime);
+			return SourceResponse::new_some(Blob::clone(blob), Brotli, &file_entry.mime);
 		}
 
 		if let Some(blob) = &file_entry.zstd {
-			return SourceResponse::new_some(blob.to_owned(), Zstd, &file_entry.mime);
+			return SourceResponse::new_some(Blob::clone(blob), Zstd, &file_entry.mime);
 		}
 
 		if let Some(blob) = &file_entry.gz {
-			return SourceResponse::new_some(blob.to_owned(), Gzip, &file_entry.mime);
+			return SourceResponse::new_some(Blob::clone(blob), Gzip, &file_entry.mime);
 		}
 
 		None
@@ -316,5 +404,133 @@ mod tests {
 		}
 
 		Ok(())
+	}
+
+	/// Builds an uncompressed tar from `(path, kind)` entries, where `kind` is
+	/// `File(content)`, `Hard(target)` or `Sym(target)`.
+	async fn make_link_tar(entries: &[(&str, TestEntry<'_>)]) -> Result<TarFile> {
+		let mut builder = tokio_tar::Builder::new(Vec::new());
+		for (path, kind) in entries {
+			let mut header = tokio_tar::Header::new_gnu();
+			header.set_mode(0o644);
+			let content: &[u8] = match kind {
+				TestEntry::File(content) => content.as_bytes(),
+				TestEntry::Hard(target) => {
+					header.set_entry_type(EntryType::Link);
+					header.set_link_name(target)?;
+					&[]
+				}
+				TestEntry::Sym(target) => {
+					header.set_entry_type(EntryType::Symlink);
+					header.set_link_name(target)?;
+					&[]
+				}
+			};
+			header.set_size(content.len() as u64);
+			builder.append_data(&mut header, path, content).await?;
+		}
+		let bytes = builder.into_inner().await?;
+		TarFile::from_bytes(Blob::from(bytes), "links.tar", "links.tar".to_owned()).await
+	}
+
+	enum TestEntry<'a> {
+		File(&'a str),
+		Hard(&'a str),
+		Sym(&'a str),
+	}
+
+	#[tokio::test]
+	async fn serves_links() -> Result<()> {
+		use TestEntry::{File, Hard, Sym};
+		use TileCompression::{Brotli, Uncompressed};
+
+		let tar_file = make_link_tar(&[
+			("early.txt", Hard("dir/file.txt")),
+			("dir/file.txt", File("content")),
+			("dir/file.txt.br", File("brotli content")),
+			("other/hard.txt", Hard("./dir/file.txt")),
+			("other/hard.txt.br", Hard("dir/file.txt.br")),
+			("other/sym.txt", Sym("../dir/file.txt")),
+			("chain.txt", Sym("other/sym.txt")),
+			("site/index.html", Sym("../dir/file.txt")),
+			("dangling.txt", Hard("missing.txt")),
+			("dir/escape.txt", Sym("../../file.txt")),
+			("absolute.txt", Sym("/dir/file.txt")),
+			("loop_a.txt", Sym("loop_b.txt")),
+			("loop_b.txt", Sym("loop_a.txt")),
+		])
+		.await?;
+
+		let get = async |path: &str, accept: TileCompression| {
+			tar_file
+				.get_data(&Url::from(path), &TargetCompression::from(accept))
+				.await
+				.map(|r| (r.blob.as_str().to_owned(), r.compression, r.mime))
+		};
+
+		let plain = Some((
+			"content".to_owned(),
+			Uncompressed,
+			"text/plain; charset=utf-8".to_owned(),
+		));
+		for path in [
+			"dir/file.txt",
+			"early.txt",
+			"other/hard.txt",
+			"other/sym.txt",
+			"chain.txt",
+		] {
+			assert_eq!(get(path, Uncompressed).await, plain, "{path}");
+		}
+
+		let brotli = Some((
+			"brotli content".to_owned(),
+			Brotli,
+			"text/plain; charset=utf-8".to_owned(),
+		));
+		assert_eq!(get("dir/file.txt", Brotli).await, brotli);
+		assert_eq!(get("other/hard.txt", Brotli).await, brotli);
+		// The symlink only links the uncompressed variant.
+		assert_eq!(get("other/sym.txt", Brotli).await, plain);
+
+		let html = Some((
+			"content".to_owned(),
+			Uncompressed,
+			"text/html; charset=utf-8".to_owned(),
+		));
+		assert_eq!(get("site", Uncompressed).await, html);
+		assert_eq!(get("site/index.html", Uncompressed).await, html);
+
+		for path in [
+			"dangling.txt",
+			"dir/escape.txt",
+			"absolute.txt",
+			"loop_a.txt",
+			"loop_b.txt",
+		] {
+			assert_eq!(get(path, Uncompressed).await, None, "{path}");
+		}
+
+		// Links share the buffer of their target.
+		let target = tar_file.lookup["dir/file.txt"].un.as_ref().unwrap();
+		assert!(Arc::ptr_eq(
+			target,
+			tar_file.lookup["other/hard.txt"].un.as_ref().unwrap()
+		));
+		assert!(Arc::ptr_eq(target, tar_file.lookup["chain.txt"].un.as_ref().unwrap()));
+
+		Ok(())
+	}
+
+	#[test]
+	fn resolve_path_normalises() {
+		let resolve = |base, path| resolve_path(base, Path::new(path));
+		assert_eq!(resolve("", "./a/b.txt").as_deref(), Some("a/b.txt"));
+		assert_eq!(resolve("", "/a/./b.txt").as_deref(), Some("a/b.txt"));
+		assert_eq!(resolve("", ".hidden/b.txt").as_deref(), Some(".hidden/b.txt"));
+		assert_eq!(resolve("a/b", "../c.txt").as_deref(), Some("a/c.txt"));
+		assert_eq!(resolve("a/b", "../../c.txt").as_deref(), Some("c.txt"));
+		assert_eq!(resolve("a/b", "../../../c.txt"), None);
+		assert_eq!(resolve("", "a/../../c.txt"), None);
 	}
 }
