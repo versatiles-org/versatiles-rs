@@ -113,6 +113,22 @@ async fn e2e_serve_static_from_tar_br() {
 	assert!(body.contains("html"), "Body should contain HTML content");
 }
 
+/// Test serving static content from a zstd-compressed tar archive.
+#[tokio::test]
+async fn e2e_serve_static_from_tar_zst() {
+	let static_path = get_testdata("static.tar.zst");
+	let server = StaticTestServer::with_static_source(&static_path).await;
+
+	// Request index.html
+	let (status, content_type, body) = server.get("/index.html").await;
+	assert_eq!(status, 200);
+	assert!(
+		content_type.as_ref().is_some_and(|ct| ct.contains("text/html")),
+		"Content-Type should be text/html, got: {content_type:?}"
+	);
+	assert!(body.contains("html"), "Body should contain HTML content");
+}
+
 /// Test that non-existent files return 404.
 #[tokio::test]
 async fn e2e_serve_static_returns_404_for_missing_file() {

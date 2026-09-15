@@ -38,7 +38,7 @@ pub struct Subcommand {
 	pub port: Option<u16>,
 
 	/// Serve static content at "http:/.../" from a local folder or a tar file.
-	/// Tar files can be compressed (.tar / .tar.gz / .tar.br).
+	/// Tar files can be compressed (.tar / .tar.gz / .tar.br / .tar.zst).
 	/// If multiple static sources are defined, the first hit will be served.
 	/// You can also add an optional url prefix like "[/assets/styles]styles.tar".
 	#[arg(short = 's', long = "static", verbatim_doc_comment, display_order = 1)]

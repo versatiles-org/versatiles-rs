@@ -28,7 +28,7 @@ use versatiles_derive::{ConfigDoc, context};
 /// This is used by the `StaticSources` subsystem to register handlers for
 /// static file serving.
 ///
-/// - `src` — Path to a directory or archive (`.tar`, `.tar.gz`, `.tar.zst`).
+/// - `src` — Path to a directory or archive (`.tar`, `.tar.gz`, `.tar.br`, `.tar.zst`).
 /// - `prefix` — Optional base URL prefix (defaults to `/` if `None`).
 ///
 /// Relative paths are resolved against the base path of the configuration file

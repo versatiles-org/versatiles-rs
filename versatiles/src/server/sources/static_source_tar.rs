@@ -208,21 +208,14 @@ fn parent_dir(name: &str) -> &str {
 	name.rsplit_once('/').map_or("", |(dir, _)| dir)
 }
 
-/// Registers a file under its path, as a compression variant if it ends in `.br` or `.gz`.
-/// An `index.html` is registered for its directory, too.
+/// Registers a file under its path, as a compression variant if it ends in `.br`, `.gz` or
+/// `.zst`. An `index.html` is registered for its directory, too.
 fn add_file(lookup: &mut HashMap<String, FileEntry>, entry_name: &str, blob: &Arc<Blob>) {
 	use TileCompression::{Brotli, Gzip, Uncompressed, Zstd};
 
-	let compression = match Path::new(entry_name).extension().and_then(OsStr::to_str) {
-		Some("br") => Brotli,
-		Some("gz") => Gzip,
-		_ => Uncompressed,
-	};
-	let path = if compression == Uncompressed {
-		entry_name
-	} else {
-		&entry_name[..entry_name.len() - 3]
-	};
+	let mut path = entry_name.to_owned();
+	let compression = TileCompression::from_filename(&mut path);
+	let path = path.as_str();
 
 	let Some(filename) = Path::new(path).file_name() else {
 		return;
@@ -372,6 +365,7 @@ mod tests {
 	#[case(TileCompression::Uncompressed)]
 	#[case(TileCompression::Gzip)]
 	#[case(TileCompression::Brotli)]
+	#[case(TileCompression::Zstd)]
 	#[tokio::test]
 	async fn test_get_data(#[case] compression_tar: TileCompression) -> Result<()> {
 		let file = make_test_tar(compression_tar).await;
@@ -381,6 +375,7 @@ mod tests {
 			TileCompression::Uncompressed,
 			TileCompression::Gzip,
 			TileCompression::Brotli,
+			TileCompression::Zstd,
 		] {
 			let accept = TargetCompression::from(compression_accept);
 

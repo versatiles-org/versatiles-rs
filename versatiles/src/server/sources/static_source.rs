@@ -165,6 +165,11 @@ mod tests {
 		create_file(&path, Brotli);
 		check_type(path, "tar").await;
 
+		// Test zstd compressed .tar file
+		let path = temp_dir.path().join("temp.tar.zst");
+		create_file(&path, Zstd);
+		check_type(path, "tar").await;
+
 		// Test non .tar file — treated as remote folder (URL), but path is local so error differs
 		let path = temp_dir.path().join("data.tar.bmp");
 		create_file(&path, Uncompressed);
