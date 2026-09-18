@@ -154,7 +154,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 tokio = { version = "1.53.1", features = ["rt-multi-thread", "sync"] }
 
 # CLI dependencies
-clap = { version = "4.6.6", features = ["default", "derive", "wrap_help"] }
+clap = { version = "4.6.7", features = ["default", "derive", "wrap_help"] }
 # No `humantime`: both loggers install a custom `format` that never prints a
 # timestamp, so the feature only pulled in `jiff` (~5 s of every clean build).
 env_logger = { version = "0.11.11", default-features = false, features = [
