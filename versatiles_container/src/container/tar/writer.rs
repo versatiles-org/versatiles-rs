@@ -249,12 +249,19 @@ mod tests {
 		Ok(())
 	}
 
+	/// Every compression the writer can produce is read back, metadata included.
+	///
+	/// The metadata half is the part worth asserting: `tiles.json` is written
+	/// under the tile compression's own extension, and a reader that knows only
+	/// some of those extensions does not fail on the rest — it files them under
+	/// "unknown file in tar" and hands back an empty `TileJSON`.
 	#[tokio::test]
 	async fn test_different_compressions() -> Result<()> {
 		let compressions = vec![
 			TileCompression::Uncompressed,
 			TileCompression::Gzip,
 			TileCompression::Brotli,
+			TileCompression::Zstd,
 		];
 
 		for tile_compression in compressions {
@@ -268,6 +275,12 @@ mod tests {
 
 			let reader = TarTilesReader::open(&temp_path).await?;
 			assert_eq!(reader.metadata().tile_compression(), &tile_compression);
+			assert_eq!(
+				reader.tilejson(),
+				mock_reader.tilejson(),
+				"the tilejson written as tiles.json{} should come back",
+				tile_compression.as_extension()
+			);
 		}
 
 		Ok(())

@@ -106,7 +106,7 @@ impl TarTilesReader {
 	///
 	/// Scans regular entries in the archive, recognizing:
 	/// - tiles at `{z}/{x}/{y}.<format>[.<compression>]`
-	/// - metadata files: `meta.json`, `tiles.json`, `metadata.json` (optionally `.gz`/`.br`)
+	/// - metadata files: `meta.json`, `tiles.json`, `metadata.json` (optionally `.gz`/`.br`/`.zst`)
 	///
 	/// Determines a uniform tile **format** and **compression**, and computes a tile pyramid
 	/// from discovered coordinates.
@@ -219,16 +219,18 @@ impl TarTilesReader {
 				continue;
 			}
 
-			// One lookup and one read, rather than three arms each calling a
+			// One lookup and one read, rather than an arm per name calling a
 			// closure that borrows `entry`: such a closure cannot be held across
 			// the `await` the read now needs.
+			//
+			// The compression comes off the name the same way a tile's does, so
+			// every compression the writer can produce is read back — spelling
+			// the names out per compression is what left a `.zst` archive's
+			// `tiles.json.zst` unread, and its metadata silently default.
 			let metadata_compression = if path_vec.len() == 1 {
-				match path_vec[0] {
-					"meta.json" | "tiles.json" | "metadata.json" => Some(TileCompression::Uncompressed),
-					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => Some(TileCompression::Gzip),
-					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => Some(TileCompression::Brotli),
-					_ => None,
-				}
+				let mut name = path_vec[0].to_owned();
+				let compression = TileCompression::from_filename(&mut name);
+				matches!(name.as_str(), "meta.json" | "tiles.json" | "metadata.json").then_some(compression)
 			} else {
 				None
 			};
