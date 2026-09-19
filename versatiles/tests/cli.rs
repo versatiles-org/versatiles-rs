@@ -21,3 +21,5 @@ mod convert;
 mod convert_integrity;
 #[path = "cli/help.rs"]
 mod help;
+#[path = "cli/reduce.rs"]
+mod reduce;

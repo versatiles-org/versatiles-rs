@@ -262,6 +262,7 @@ Usage: versatiles [OPTIONS] <COMMAND>
 Commands:
   convert  Convert between different tile containers
   probe    Show information about a tile container
+  reduce   Reduce a tileset to what a style actually draws
   serve    Serve tiles via HTTP
   dev      Developer tools (unstable)
   help     Show detailed help
@@ -376,6 +377,42 @@ versatiles convert \
   '[,vpl](from_container filename="bad.versatiles" | vector_repair drop_offenders=true)' \
   fixed.versatiles
 ```
+
+#### reduce - Strip a Tileset to What a Style Draws
+
+A tileset carries every layer, property and feature any style might ask for. A map that ships **one** style needs far less than that — measured against `@versatiles/style`'s `colorful` theme on the Shortbread schema, only 57 of 217 fields are ever read, and four layers are drawn with no properties at all.
+
+`reduce` takes the data requirement that `@versatiles/style` exports and renders it into a VPL pipeline that keeps only what the style draws.
+
+**Basic usage:**
+
+```sh
+versatiles reduce --requirements style.req.json tiles.versatiles reduced.versatiles
+```
+
+**Reduce options:**
+
+| Option                 | Description                                                 | Example             |
+| ---------------------- | ----------------------------------------------------------- | ------------------- |
+| `--requirements`, `-r` | JSON file describing what the style needs (required)        | `-r style.req.json` |
+| `--print`              | Print the rendered VPL pipeline and exit, touching no tiles | `--print`           |
+
+**Seeing the pipeline before running it:**
+
+`--print` writes the pipeline rather than executing it, so the reduction can be reviewed, edited, or kept in a `.vpl` file as the source of truth:
+
+```sh
+versatiles reduce --print -r style.req.json tiles.versatiles
+```
+
+Because inline VPL is a first-class input, the printed pipeline pipes straight into `convert`:
+
+```sh
+versatiles reduce --print -r style.req.json tiles.versatiles \
+  | versatiles convert "[,vpl]-" reduced.versatiles
+```
+
+**What it guarantees:** the reduction may keep features the style never draws, but never drops one it does. Anything in the requirement that this version cannot interpret — an operator from a newer exporter, say — widens to "keep" rather than being ignored.
 
 #### serve - HTTP Tile Server
 

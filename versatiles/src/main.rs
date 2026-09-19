@@ -108,6 +108,9 @@ enum Commands {
 	/// Show information about a tile container
 	Probe(tools::probe::Subcommand),
 
+	/// Reduce a tileset to what a style actually draws
+	Reduce(tools::reduce::Subcommand),
+
 	#[cfg(feature = "server")]
 	#[clap(alias = "server")]
 	/// Serve tiles via HTTP
@@ -196,6 +199,7 @@ fn run(cli: &Cli, runtime: &TilesRuntime) -> Result<()> {
 		Commands::Convert(arguments) => tools::convert::run(arguments, runtime),
 		Commands::Help(arguments) => tools::help::run(arguments),
 		Commands::Probe(arguments) => tools::probe::run(arguments, runtime),
+		Commands::Reduce(arguments) => tools::reduce::run(arguments, runtime),
 		#[cfg(feature = "server")]
 		Commands::Serve(arguments) => tools::serve::run(arguments, runtime),
 		Commands::Mosaic(arguments) => tools::mosaic::run(arguments, runtime),
