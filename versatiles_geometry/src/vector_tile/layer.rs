@@ -199,6 +199,10 @@ impl VectorTileLayer {
 
 	/// Filters/mutates features by decoding their properties, applying a filter that may drop the feature,
 	/// recomputing the global property tables, and re‑encoding tag ids. Returns an error if decoding fails.
+	///
+	/// A feature whose tag ids do not decode is an error, not a feature to skip: skipping it deletes
+	/// data from the tile, and doing so silently leaves the caller believing the filter is the only
+	/// thing that dropped anything. [`Self::add_from_layer`] already treats the same failure this way.
 	pub fn filter_map_properties<F>(&mut self, filter_fn: F) -> Result<()>
 	where
 		F: Fn(GeoProperties) -> Option<GeoProperties>,
@@ -211,7 +215,9 @@ impl VectorTileLayer {
 			.filter_map(
 				|feature: VectorTileFeature| match self.decode_tag_ids(&feature.tag_ids) {
 					Ok(p) => filter_fn(p).map(|properties| Ok((feature, properties))),
-					Err(_) => None,
+					Err(e) => Some(Err(
+						e.context(format!("Failed to decode properties in layer {:?}", self.name)),
+					)),
 				},
 			)
 			.collect::<Result<Vec<(VectorTileFeature, GeoProperties)>>>()?;
@@ -645,6 +651,36 @@ mod tests {
 		layer.filter_map_properties(|_| None)?;
 
 		assert_eq!(layer.features.len(), 0);
+		Ok(())
+	}
+
+	#[test]
+	fn test_filter_map_properties_reports_undecodable_tag_ids() -> Result<()> {
+		// A tag id pointing past the end of the property tables used to make the feature vanish
+		// and `filter_map_properties` still return `Ok`, so a caller could not tell a corrupt tile
+		// from one the filter emptied on purpose.
+		let mut layer = make_layer(vec![point_feature(1, 0.0, 0.0), point_feature(2, 1.0, 1.0)])?;
+		layer.features[1].tag_ids = vec![9999, 9999];
+
+		let err = layer.filter_map_properties(Some).unwrap_err();
+		assert!(
+			err.chain()
+				.any(|e| e.to_string().contains("Failed to get property key")),
+			"expected the decode failure to reach the caller, got: {err:?}"
+		);
+		Ok(())
+	}
+
+	#[test]
+	fn test_filter_map_properties_reports_odd_tag_id_count() -> Result<()> {
+		let mut layer = make_layer(vec![point_feature(1, 0.0, 0.0)])?;
+		layer.features[0].tag_ids = vec![0];
+
+		let err = layer.filter_map_properties(Some).unwrap_err();
+		assert!(
+			err.chain().any(|e| e.to_string().contains("must be even")),
+			"expected the decode failure to reach the caller, got: {err:?}"
+		);
 		Ok(())
 	}
 
