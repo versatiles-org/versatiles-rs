@@ -254,10 +254,21 @@ fn is_num(This(this): This<CelValue>) -> bool {
 	matches!(this, CelValue::Int(_) | CelValue::UInt(_) | CelValue::Float(_))
 }
 
-#[derive(Debug)]
 struct Runner {
 	layer_set: HashSet<String>,
 	program: Program,
+	/// The functions every evaluation needs, registered once.
+	///
+	/// `Context::default()` installs twelve builtins — `size`, `string`, `int`, `matches` and the
+	/// rest — and `evaluate` used to build one per feature, so a tile with 5,000 features paid
+	/// 60,000 registrations to answer one predicate. Building it here and deriving a child scope
+	/// per feature costs one `HashMap` instead.
+	///
+	/// `is_num` is registered here and *only* here: `Context::add_function` silently does nothing
+	/// on a child scope (`if let Context::Root { .. } = self`), so registering it per feature
+	/// would leave the expression calling an undeclared function, which errors, which drops every
+	/// feature. Silently.
+	context: CelContext<'static>,
 	/// Top-level identifiers referenced by the expression, other than the reserved names.
 	/// Bound to the feature's property value (or `Null` if absent) on each evaluation.
 	referenced_vars: Vec<String>,
@@ -268,6 +279,20 @@ struct Runner {
 	binds_zoom: bool,
 	/// Whether the expression calls [`is_num`], which is only registered when it does.
 	binds_is_num: bool,
+}
+
+/// Hand-written because [`CelContext`] is not `Debug`, and the trait bound on
+/// [`TileTransform`](crate::operations::transform::TileTransform) needs one.
+impl std::fmt::Debug for Runner {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Runner")
+			.field("layer_set", &self.layer_set)
+			.field("referenced_vars", &self.referenced_vars)
+			.field("binds_props", &self.binds_props)
+			.field("binds_zoom", &self.binds_zoom)
+			.field("binds_is_num", &self.binds_is_num)
+			.finish_non_exhaustive()
+	}
 }
 
 impl Runner {
@@ -285,9 +310,15 @@ impl Runner {
 			.map(String::from)
 			.collect();
 
+		let mut context = CelContext::default();
+		if binds_is_num {
+			context.add_function(IS_NUM_FN, is_num);
+		}
+
 		Ok(Self {
 			layer_set: args.layer.iter().cloned().collect(),
 			program,
+			context,
 			referenced_vars,
 			binds_props,
 			binds_zoom,
@@ -306,11 +337,9 @@ impl Runner {
 	}
 
 	fn evaluate(&self, coord: &TileCoord, props: &GeoProperties) -> bool {
-		let mut ctx = CelContext::default();
-
-		if self.binds_is_num {
-			ctx.add_function(IS_NUM_FN, is_num);
-		}
+		// A child of the prepared context: it carries only this feature's variables and resolves
+		// functions through its parent, so the builtins are not reinstalled per feature.
+		let mut ctx = self.context.new_inner_scope();
 
 		if self.binds_zoom {
 			// `Int` because CEL's integer literals are signed, so `zoom` and the `12` in
