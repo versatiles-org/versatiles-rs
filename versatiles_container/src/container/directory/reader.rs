@@ -176,23 +176,16 @@ impl DirectoryReader {
 					}
 				}
 			} else {
-				match name1.as_str() {
-					"meta.json" | "tiles.json" | "metadata.json" => {
-						tilejson.merge(&TileJSON::try_from_blob_or_default(&Self::read(&entry1.path())?))?;
-					}
-					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
-						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
-							Self::read(&entry1.path())?,
-							&TileCompression::Gzip,
-						)?))?;
-					}
-					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
-						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
-							Self::read(&entry1.path())?,
-							&TileCompression::Brotli,
-						)?))?;
-					}
-					&_ => {}
+				// The compression comes off the name the same way a tile's does a
+				// few lines up, so every compression the writer can produce is
+				// read back. Spelling the names out per compression is what left
+				// a zstd container's `tiles.json.zst` unread, and its metadata
+				// silently default.
+				let mut name = name1;
+				let compression = TileCompression::from_filename(&mut name);
+				if matches!(name.as_str(), "meta.json" | "tiles.json" | "metadata.json") {
+					let blob = decompress(Self::read(&entry1.path())?, &compression)?;
+					tilejson.merge(&TileJSON::try_from_blob_or_default(&blob))?;
 				}
 			}
 		}

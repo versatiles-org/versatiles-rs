@@ -6,7 +6,7 @@
 //! <root>/<z>/<x>/<y>.<format>[.<compression>]
 //! ```
 //!
-//! where `<format>` is the tile format (e.g., `png`, `pbf`/`mvt`) and `<compression>` is optional (`br`, `gz`).
+//! where `<format>` is the tile format (e.g., `png`, `pbf`/`mvt`) and `<compression>` is optional (`br`, `gz`, `zst`).
 //! A `TileJSON` file is written as `tiles.json[.<compression>]` using the same **compression** as the tiles.
 //!
 //! ### Requirements
@@ -16,8 +16,8 @@
 //! - The directory tree is created as needed.
 //!
 //! ### Recognized outputs
-//! - Tiles at `<z>/<x>/<y>.<ext>[.<br|gz>]` (e.g., `2/3/1.pbf.gz`, `7/21/42.png`).
-//! - `TileJSON` at `tiles.json[.<br|gz>]`.
+//! - Tiles at `<z>/<x>/<y>.<ext>[.<br|gz|zst>]` (e.g., `2/3/1.pbf.gz`, `7/21/42.png`).
+//! - `TileJSON` at `tiles.json[.<br|gz|zst>]`.
 //!
 //! ### Example
 //! ```rust,no_run
@@ -52,7 +52,7 @@ use versatiles_derive::context;
 
 use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traversal};
 
-/// Writes a directory-based tile pyramid along with a compressed `TileJSON` (`tiles.json[.<br|gz>]`).
+/// Writes a directory-based tile pyramid along with a compressed `TileJSON` (`tiles.json[.<br|gz|zst>]`).
 ///
 /// Tiles are encoded using the format and compression from the source `TilesReader`. The
 /// writer creates intermediate directories on demand and preserves the `{z}/{x}/{y}` layout.
@@ -185,6 +185,45 @@ mod tests {
 		);
 		assert_eq!(load("0/0/0.pbf.gz").as_slice(), MOCK_BYTES_PBF);
 		assert_eq!(load("2/3/3.pbf.gz").as_slice(), MOCK_BYTES_PBF);
+
+		Ok(())
+	}
+
+	/// Every compression the writer can produce is read back, metadata included.
+	///
+	/// The metadata half is the part worth asserting: `tiles.json` is written
+	/// under the tile compression's own extension, and a reader that knows only
+	/// some of those extensions does not fail on the rest — it ignores the file
+	/// and hands back an empty `TileJSON`.
+	#[tokio::test]
+	async fn every_compression_survives_a_round_trip() -> Result<()> {
+		use crate::{DirectoryReader, TileSource};
+
+		for tile_compression in [
+			TileCompression::Uncompressed,
+			TileCompression::Gzip,
+			TileCompression::Brotli,
+			TileCompression::Zstd,
+		] {
+			let mock_reader = MockReader::new_mock(
+				TilePyramid::new_full_up_to(2),
+				TileSourceMetadata::new(TileFormat::MVT, tile_compression, Traversal::ANY, None),
+			)?;
+
+			let temp_dir = assert_fs::TempDir::new()?;
+			DirectoryWriter::write_to_path(&mock_reader, temp_dir.path(), TilesRuntime::default()).await?;
+
+			let reader = DirectoryReader::open(temp_dir.path())?;
+			assert_eq!(reader.metadata().tile_compression(), &tile_compression);
+			// Not compared to the source's `TileJSON`: the reader fills in the
+			// bounds it found while scanning. `type` comes from the file alone.
+			assert!(
+				reader.tilejson().stringify().contains("\"type\":\"dummy\""),
+				"the tilejson written as tiles.json{} should come back, got {}",
+				tile_compression.as_extension(),
+				reader.tilejson().stringify()
+			);
+		}
 
 		Ok(())
 	}

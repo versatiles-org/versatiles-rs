@@ -2,7 +2,7 @@
 //!
 //! The `TarTilesWriter` emits a directory-like tile pyramid into a tarball using the
 //! `{z}/{x}/{y}.<format>[.<compression>]` layout and writes `TileJSON` as `tiles.json[.<compression>]`.
-//! The transport **compression** (`.br`/`.gz` or none) follows the source reader’s
+//! The transport **compression** (`.br`/`.gz`/`.zst` or none) follows the source reader’s
 //! [`TileSourceMetadata::tile_compression`](crate::TileSourceMetadata::tile_compression).
 //!
 //! ## Behavior
@@ -32,7 +32,7 @@ use crate::{TileSource, TileSourceTraverseExt, TilesRuntime, TilesWriter, Traver
 
 /// Writer for tiles packaged inside a tar archive.
 ///
-/// Serializes `TileJSON` as `tiles.json[.<br|gz>]` and each tile as `{z}/{x}/{y}.<ext>[.<br|gz>]`,
+/// Serializes `TileJSON` as `tiles.json[.<br|gz|zst>]` and each tile as `{z}/{x}/{y}.<ext>[.<br|gz|zst>]`,
 /// using the reader’s reported `tile_format` and `tile_compression`.
 ///
 /// Internally uses a mutex around the tar `Builder` to allow asynchronous streaming
