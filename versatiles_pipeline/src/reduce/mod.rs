@@ -16,6 +16,10 @@
 //! [`Predicate::Unknown`](ir::Predicate::Unknown) rather than failing — and the renderer turns
 //! that into "keep".
 
+mod cel;
 pub mod ir;
+mod predicate;
+mod render;
 
 pub use ir::{KeepEntry, LayerRequirement, Literal, Predicate, Requirement, SourceInfo};
+pub use render::operations;
