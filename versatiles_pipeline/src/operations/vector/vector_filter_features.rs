@@ -9,7 +9,7 @@ use cel_interpreter::{
 	extractors::This,
 	objects::{Key as CelKey, Map as CelMap},
 };
-use versatiles_container::TileSource;
+use versatiles_container::{Tile, TileSource};
 use versatiles_core::{TileCoord, TileJSON};
 use versatiles_derive::context;
 use versatiles_geometry::{
@@ -19,7 +19,7 @@ use versatiles_geometry::{
 
 use crate::{
 	PipelineFactory,
-	operations::transform::{AsTileTransform, TransformOp, VectorTransform},
+	operations::transform::{TileTransform, TransformOp},
 	vpl::VPLNode,
 };
 
@@ -349,14 +349,47 @@ fn geo_to_cel(v: &GeoValue) -> CelValue {
 	}
 }
 
-impl VectorTransform for Runner {
+/// Implemented directly rather than through `AsTileTransform`, because the adapter decodes the
+/// tile before the operation is asked anything.
+///
+/// For an expression that reads only `zoom` and keeps everything, decoding is the entire cost:
+/// measured on a Berlin z13 tile, decode and re-encode is 940 µs of the operation's 988 µs, and
+/// the remaining 48 µs is reading the tile. The hoist added in #274 skips the per-feature work but
+/// could not skip that, because by then the tile was already decoded. Answering before
+/// `into_vector()` lets the whole tile pass through as the bytes it arrived as.
+///
+/// A zoom range with no predicate is the most common operation a generated reduction pipeline
+/// emits, so this is the common path rather than a special case.
+impl TileTransform for Runner {
 	const TAG: &'static str = "vector_filter_features";
 
 	#[context("Failed to run vector_filter_features")]
-	fn run(&self, coord: &TileCoord, mut tile: VectorTile) -> Result<Option<VectorTile>> {
-		// An expression reading only `zoom` has one answer for the whole tile. Asking it once
-		// turns the operation into a whole-layer keep or drop, and a kept layer is passed through
-		// untouched rather than decoded and re-encoded to arrive back where it started.
+	fn run(&self, coord: &TileCoord, tile: Tile) -> Result<Option<Tile>> {
+		// An expression reading only `zoom` has one answer for the whole tile, and it can be had
+		// without looking inside.
+		if self.depends_only_on_zoom() && self.evaluate(coord, &GeoProperties::new()) {
+			// Every feature is kept, so there is nothing to rewrite. Hand back the original bytes.
+			//
+			// The `false` case is not symmetrical: dropping the in-scope layers means knowing
+			// which layers the tile has, and that needs the decode this is avoiding.
+			return Ok(Some(tile));
+		}
+
+		let format = tile.format();
+		let Some(vector) = self.filter(coord, tile.into_vector()?)? else {
+			return Ok(None);
+		};
+		Ok(Some(Tile::from_vector(vector, format)?))
+	}
+
+	fn update_tilejson(&self, _tilejson: &mut TileJSON) {}
+}
+
+impl Runner {
+	/// Filters a decoded tile, or returns `Ok(None)` to drop it.
+	fn filter(&self, coord: &TileCoord, mut tile: VectorTile) -> Result<Option<VectorTile>> {
+		// Still worth asking: a zoom-only expression that answered `false` reaches here, and then
+		// every in-scope layer goes rather than being walked feature by feature.
 		let same_for_every_feature = self
 			.depends_only_on_zoom()
 			.then(|| self.evaluate(coord, &GeoProperties::new()));
@@ -395,8 +428,6 @@ impl VectorTransform for Runner {
 			Ok(Some(tile))
 		}
 	}
-
-	fn update_tilejson(&self, _tilejson: &mut TileJSON) {}
 }
 
 impl Runner {
@@ -405,13 +436,9 @@ impl Runner {
 		vpl_node: VPLNode,
 		source: Box<dyn TileSource>,
 		factory: &PipelineFactory,
-	) -> Result<TransformOp<AsTileTransform<Runner>>> {
+	) -> Result<TransformOp<Runner>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
-		Ok(TransformOp::new(
-			source,
-			AsTileTransform(Runner::from_args(&args)?),
-			factory.runtime(),
-		))
+		Ok(TransformOp::new(source, Runner::from_args(&args)?, factory.runtime()))
 	}
 }
 
@@ -421,7 +448,7 @@ crate::operations::macros::define_transform_factory!("vector_filter_features", A
 #[cfg(test)]
 mod tests {
 	use pretty_assertions::assert_eq;
-	use versatiles_core::TileBBox;
+	use versatiles_core::{Blob, TileBBox, TileCompression, TileFormat};
 	use versatiles_geometry::{
 		geo::{GeoFeature, example_geometry},
 		vector_tile::VectorTileLayer,
@@ -449,7 +476,7 @@ mod tests {
 			layer: layers.iter().map(|s| (*s).to_string()).collect(),
 			expr: CelExpression::try_from(expr)?,
 		})?;
-		runner.run(&TileCoord::new(level, 0, 0)?, tile)
+		runner.filter(&TileCoord::new(level, 0, 0)?, tile)
 	}
 
 	/// Returns `(layer_name, feature_count)` pairs, sorted by layer name.
@@ -623,6 +650,78 @@ mod tests {
 		assert!(
 			run_expr_at(&["poi"], "zoom >= 12", tile(), 5).unwrap().is_none(),
 			"z5 does not, and the layer empties"
+		);
+	}
+
+	#[test]
+	fn test_a_zoom_only_keep_never_decodes_the_tile() {
+		// The point of implementing `TileTransform` directly: when a zoom-only expression keeps
+		// everything, the tile is not decoded at all. Re-encoding a tile that did not change is
+		// 940 µs of the operation's 988 µs on a real Berlin z13 tile.
+		//
+		// Proven with a blob that is not a vector tile. Comparing bytes would not prove it — MVT
+		// round-trips byte-identically for a simple tile, so a test written that way passes just
+		// as happily when the shortcut is removed. Undecodable input has no such ambiguity: the
+		// decoding path must fail on it, so surviving means no decode was attempted.
+		let tile = Tile::from_blob(
+			Blob::from("not a vector tile"),
+			TileCompression::Uncompressed,
+			TileFormat::MVT,
+		);
+
+		let runner = Runner::from_args(&Args {
+			layer: vec!["streets".to_string()],
+			expr: CelExpression::try_from("zoom >= 5").unwrap(),
+		})
+		.unwrap();
+
+		assert!(
+			runner.run(&TileCoord::new(9, 0, 0).unwrap(), tile).unwrap().is_some(),
+			"a zoom-only keep should pass the tile through without looking inside it"
+		);
+	}
+
+	#[test]
+	fn test_an_expression_reading_properties_does_decode() {
+		// The other half of the same proof: the shortcut is not reached when the expression needs
+		// to see a feature, so the same undecodable blob is an error rather than a pass-through.
+		let tile = Tile::from_blob(
+			Blob::from("not a vector tile"),
+			TileCompression::Uncompressed,
+			TileFormat::MVT,
+		);
+
+		let runner = Runner::from_args(&Args {
+			layer: vec!["streets".to_string()],
+			expr: CelExpression::try_from("props.kind == 'motorway'").unwrap(),
+		})
+		.unwrap();
+
+		assert!(runner.run(&TileCoord::new(9, 0, 0).unwrap(), tile).is_err());
+	}
+
+	#[test]
+	fn test_a_zoom_only_drop_still_works_through_the_decoding_path() {
+		// The `false` case is not symmetrical: dropping the in-scope layers means knowing which
+		// layers the tile has, which needs the decode the keep-case avoids.
+		let tile = Tile::from_vector(
+			VectorTile::new(vec![layer(
+				"streets",
+				vec![feature(vec![("kind", GeoValue::from("motorway"))])],
+			)]),
+			TileFormat::MVT,
+		)
+		.unwrap();
+
+		let runner = Runner::from_args(&Args {
+			layer: vec!["streets".to_string()],
+			expr: CelExpression::try_from("zoom >= 5").unwrap(),
+		})
+		.unwrap();
+
+		assert!(
+			runner.run(&TileCoord::new(1, 0, 0).unwrap(), tile).unwrap().is_none(),
+			"below the zoom, the only layer goes and the tile with it"
 		);
 	}
 
