@@ -5779,6 +5779,7 @@ dependencies = [
  "async-trait",
  "axum",
  "cel-interpreter",
+ "criterion",
  "deadpool",
  "futures",
  "gdal",

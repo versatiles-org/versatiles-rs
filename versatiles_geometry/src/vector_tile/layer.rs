@@ -210,6 +210,7 @@ impl VectorTileLayer {
 		let mut features: Vec<VectorTileFeature> = vec![];
 		swap(&mut features, &mut self.features);
 
+		// Fallible: decoding a feature's tag ids can fail, and that failure is the caller's to see.
 		let feature_prop_list = features
 			.into_iter()
 			.filter_map(
@@ -224,13 +225,15 @@ impl VectorTileLayer {
 
 		self.property_manager = PropertyManager::from_iter(feature_prop_list.iter().map(|(_, p)| p));
 
+		// Infallible, unlike the decode above: `encode_tag_ids` adds to the property tables rather
+		// than looking anything up in them, so there is nothing here that can be missing.
 		self.features = feature_prop_list
 			.into_iter()
 			.map(|(mut f, p)| {
 				f.tag_ids = self.encode_tag_ids(p);
-				Ok(f)
+				f
 			})
-			.collect::<Result<Vec<VectorTileFeature>>>()?;
+			.collect();
 
 		Ok(())
 	}
