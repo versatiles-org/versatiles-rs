@@ -6,6 +6,7 @@ use std::{
 use anyhow::{Result, anyhow};
 use cel_interpreter::{
 	Context as CelContext, Program, Value as CelValue,
+	extractors::This,
 	objects::{Key as CelKey, Map as CelMap},
 };
 use versatiles_container::TileSource;
@@ -132,9 +133,20 @@ use crate::{
 /// Equality and membership are safe without a guard: `==`, `!=` and `in`
 /// compare across types and return `false` rather than failing. Ordering
 /// comparisons — `<` `<=` `>` `>=` — are the ones that fail, and a `has()`
-/// guard does not rescue a property that is *present* but holds a string.
-/// There is no way to test a value's type beforehand, so a layer whose numeric
-/// property is a string in some tiles filters inconsistently.
+/// guard does not rescue a property that is *present* but holds a string,
+/// because `&&` short-circuits only on `false`.
+///
+/// `is_num(x)` closes that gap. It asks whether a value is a number and
+/// answers rather than failing, so an ordering comparison can be made total:
+///
+/// ```vpl
+/// vector_filter_features layer=["poi"] expr="is_num(props.population) && props.population >= 1000"
+/// ```
+///
+/// This is an extension rather than standard CEL, added because there is no
+/// other way to write the guard — `type()` does not exist here, and `int()`
+/// and `double()` answer by failing, which costs exactly what the guard was
+/// meant to avoid.
 ///
 /// The [CEL language
 /// spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md) has the
@@ -219,6 +231,29 @@ const ZOOM_VAR: &str = "zoom";
 /// The name bound to the feature's full property map.
 const PROPS_VAR: &str = "props";
 
+/// The name of the numeric type test this operation adds to CEL.
+const IS_NUM_FN: &str = "is_num";
+
+/// Whether a value is a number, as a CEL function.
+///
+/// CEL has no way to ask. `type()` is not implemented by `cel-interpreter 0.10`, there is no `is`
+/// operator, and every other route — `int()`, `double()` — answers by failing, which is no answer
+/// at all here: an evaluation error drops the feature, so asking costs exactly what it was meant
+/// to avoid.
+///
+/// That matters because ordering comparisons are the one family that errors on a type mismatch —
+/// `==`, `!=` and `in` return `false` instead — so a property that is a number in most tiles and
+/// a string in one makes `population >= 1000` silently drop features in that tile. Guarding with
+/// `has()` does not help: `&&` short-circuits only when the left side is `false`, and a property
+/// that is *present* and mistyped passes that guard.
+///
+/// This is an extension, not standard CEL. It earns that by being the only total way to write a
+/// safe ordering comparison, which is what a generated pipeline needs to keep its promise never
+/// to drop a feature the style draws.
+fn is_num(This(this): This<CelValue>) -> bool {
+	matches!(this, CelValue::Int(_) | CelValue::UInt(_) | CelValue::Float(_))
+}
+
 #[derive(Debug)]
 struct Runner {
 	layer_set: HashSet<String>,
@@ -231,6 +266,8 @@ struct Runner {
 	binds_props: bool,
 	/// Whether the expression references the reserved `zoom` variable.
 	binds_zoom: bool,
+	/// Whether the expression calls [`is_num`], which is only registered when it does.
+	binds_is_num: bool,
 }
 
 impl Runner {
@@ -240,6 +277,7 @@ impl Runner {
 		let refs = program.references();
 		let binds_props = refs.has_variable(PROPS_VAR);
 		let binds_zoom = refs.has_variable(ZOOM_VAR);
+		let binds_is_num = refs.has_function(IS_NUM_FN);
 		let referenced_vars: Vec<String> = refs
 			.variables()
 			.into_iter()
@@ -253,6 +291,7 @@ impl Runner {
 			referenced_vars,
 			binds_props,
 			binds_zoom,
+			binds_is_num,
 		})
 	}
 
@@ -268,6 +307,10 @@ impl Runner {
 
 	fn evaluate(&self, coord: &TileCoord, props: &GeoProperties) -> bool {
 		let mut ctx = CelContext::default();
+
+		if self.binds_is_num {
+			ctx.add_function(IS_NUM_FN, is_num);
+		}
 
 		if self.binds_zoom {
 			// `Int` because CEL's integer literals are signed, so `zoom` and the `12` in
@@ -746,6 +789,72 @@ mod tests {
 			vec![("poi".to_string(), 2)],
 			"both survive: the string is unequal to 1000 rather than incomparable with it"
 		);
+	}
+
+	#[test]
+	fn test_is_num_makes_an_ordering_comparison_total() {
+		// The whole point of the extension: with `is_num`, a mistyped value answers `false`
+		// instead of erroring, so it is filtered rather than silently lost. Without it, the same
+		// tile drops both features — see `test_a_guard_cannot_rescue_an_ordering_type_mismatch`.
+		let tile = || {
+			VectorTile::new(vec![layer(
+				"poi",
+				vec![
+					feature(vec![("population", GeoValue::from("many"))]),
+					feature(vec![("population", GeoValue::Int(2000))]),
+					feature(vec![("other", GeoValue::from("x"))]), // no `population` at all
+				],
+			)])
+		};
+
+		let expr = "is_num(props.population) && props.population >= 1000";
+		let out = run_expr(&["poi"], expr, tile()).unwrap().unwrap();
+		assert_eq!(
+			summarise(&out),
+			vec![("poi".to_string(), 1)],
+			"only the genuinely-numeric feature passes, and nothing errors"
+		);
+	}
+
+	#[test]
+	fn test_is_num_answers_for_every_value_shape() {
+		// It has to be total itself, or it just moves the failure. Each case keeps the feature
+		// only if `is_num` returned the expected answer without erroring.
+		let cases = [
+			(GeoValue::Int(1), true),
+			(GeoValue::UInt(1), true),
+			(GeoValue::Double(1.5), true),
+			(GeoValue::Float(1.5), true),
+			(GeoValue::from("text"), false),
+			(GeoValue::Bool(true), false),
+			(GeoValue::Null, false),
+		];
+
+		for (value, expected) in cases {
+			let tile = VectorTile::new(vec![layer("poi", vec![feature(vec![("v", value.clone())])])]);
+			let kept = run_expr(&["poi"], "is_num(props.v)", tile).unwrap().is_some();
+			assert_eq!(kept, expected, "is_num({value:?}) should be {expected}");
+		}
+	}
+
+	#[test]
+	fn test_is_num_is_only_registered_when_referenced() {
+		// Registered per evaluation, so an expression that does not mention it should not pay for
+		// it — and an expression that calls an undefined function errors, which is what makes the
+		// absence observable at all.
+		let runner = Runner::from_args(&Args {
+			layer: vec!["poi".to_string()],
+			expr: CelExpression::try_from("props.v == 1").unwrap(),
+		})
+		.unwrap();
+		assert!(!runner.binds_is_num);
+
+		let runner = Runner::from_args(&Args {
+			layer: vec!["poi".to_string()],
+			expr: CelExpression::try_from("is_num(props.v)").unwrap(),
+		})
+		.unwrap();
+		assert!(runner.binds_is_num);
 	}
 
 	#[test]

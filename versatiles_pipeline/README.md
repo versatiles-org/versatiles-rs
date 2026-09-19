@@ -718,7 +718,15 @@ A feature with no `population` compares `null` against a number and is dropped. 
 vector_filter_features layer=["poi"] expr="has(props.population) && props.population >= 1000"
 ```
 
-Equality and membership are safe without a guard: `==`, `!=` and `in` compare across types and return `false` rather than failing. Ordering comparisons — `<` `<=` `>` `>=` — are the ones that fail, and a `has()` guard does not rescue a property that is _present_ but holds a string. There is no way to test a value's type beforehand, so a layer whose numeric property is a string in some tiles filters inconsistently.
+Equality and membership are safe without a guard: `==`, `!=` and `in` compare across types and return `false` rather than failing. Ordering comparisons — `<` `<=` `>` `>=` — are the ones that fail, and a `has()` guard does not rescue a property that is _present_ but holds a string, because `&&` short-circuits only on `false`.
+
+`is_num(x)` closes that gap. It asks whether a value is a number and answers rather than failing, so an ordering comparison can be made total:
+
+```vpl
+vector_filter_features layer=["poi"] expr="is_num(props.population) && props.population >= 1000"
+```
+
+This is an extension rather than standard CEL, added because there is no other way to write the guard — `type()` does not exist here, and `int()` and `double()` answer by failing, which costs exactly what the guard was meant to avoid.
 
 The [CEL language spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md) has the full grammar, built-in functions and string methods.
 
