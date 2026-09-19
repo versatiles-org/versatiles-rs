@@ -29,6 +29,7 @@ pub use check::{VplProblem, check_pipeline};
 mod factory;
 mod helpers;
 mod operations;
+pub mod reduce;
 pub mod vpl;
 
 pub use factory::{

@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "source": { "schema": "shortbread" },
+  "layers": {
+    "all": {
+      "properties": ["kind", "name", "population", "bridge", "addr:street"],
+      "keep": [
+        { "where": { "op": "eq", "field": "kind", "value": "motorway" } },
+        { "where": { "op": "ne", "field": "kind", "value": "path" } },
+        { "where": { "op": "in", "field": "kind", "values": ["motorway", "trunk"] } },
+        { "where": { "op": "nin", "field": "kind", "values": ["path", "track"] } },
+        { "where": { "op": "lt", "field": "population", "value": 1000 } },
+        { "where": { "op": "le", "field": "population", "value": 1000 } },
+        { "where": { "op": "gt", "field": "population", "value": 1000 } },
+        { "where": { "op": "ge", "field": "population", "value": 1000 } },
+        { "where": { "op": "has", "field": "name" } },
+        { "where": { "op": "not", "args": [{ "op": "has", "field": "bridge" }] } },
+        {
+          "where": {
+            "op": "and",
+            "args": [
+              { "op": "has", "field": "name" },
+              { "op": "eq", "field": "kind", "value": "city" }
+            ]
+          }
+        },
+        {
+          "where": {
+            "op": "or",
+            "args": [
+              { "op": "has", "field": "addr:street" },
+              { "op": "ge", "field": "population", "value": 50000 }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
