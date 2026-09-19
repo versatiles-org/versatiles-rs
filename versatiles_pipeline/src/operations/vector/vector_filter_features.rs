@@ -86,6 +86,34 @@ use crate::{
 /// vector_filter_features layer=["addr"]  expr="'addr:street' in props"
 /// ```
 ///
+/// ### Evaluation failures
+///
+/// A feature is kept only when the expression evaluates to `true`. An
+/// expression that fails to evaluate, or that returns something other than a
+/// boolean, drops the feature — there is no separate error channel per feature,
+/// so a filter that cannot be answered filters nothing in.
+///
+/// The common way to reach that is an ordering comparison against a property
+/// that is absent or is not a number:
+///
+/// ```vpl
+/// vector_filter_features layer=["poi"] expr="population >= 1000"
+/// ```
+///
+/// A feature with no `population` compares `null` against a number and is
+/// dropped. Guard the comparison to say so deliberately:
+///
+/// ```vpl
+/// vector_filter_features layer=["poi"] expr="has(props.population) && props.population >= 1000"
+/// ```
+///
+/// Equality and membership are safe without a guard: `==`, `!=` and `in`
+/// compare across types and return `false` rather than failing. Ordering
+/// comparisons — `<` `<=` `>` `>=` — are the ones that fail, and a `has()`
+/// guard does not rescue a property that is *present* but holds a string.
+/// There is no way to test a value's type beforehand, so a layer whose numeric
+/// property is a string in some tiles filters inconsistently.
+///
 /// The [CEL language
 /// spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md) has the
 /// full grammar, built-in functions and string methods.
@@ -463,6 +491,93 @@ mod tests {
 		let tile = VectorTile::new(vec![layer("poi", vec![feature(vec![("other", GeoValue::from("x"))])])]);
 		let out = run_expr(&["poi"], "population >= 1000", tile).unwrap();
 		assert!(out.is_none());
+	}
+
+	#[test]
+	fn test_non_boolean_result_is_dropped() {
+		// `evaluate` keeps a feature only on `Ok(Bool(true))`, so an expression that is well-formed
+		// but not a predicate drops everything. Pinned because it reads like a bug at the call site
+		// and is a deliberate choice: there is no sensible truthiness rule for a tile property.
+		let tile = VectorTile::new(vec![layer(
+			"poi",
+			vec![feature(vec![("name", GeoValue::from("Berlin"))])],
+		)]);
+		let out = run_expr(&["poi"], "name", tile).unwrap();
+		assert!(out.is_none(), "a non-boolean expression keeps nothing");
+	}
+
+	#[test]
+	fn test_type_mismatch_is_dropped() {
+		// A property that is a string where the expression assumes a number errors at evaluation
+		// time, and an error is indistinguishable from `false` here. This is the failure mode that
+		// makes a generated expression need explicit guards — see `test_guarded_comparison_*`.
+		let tile = VectorTile::new(vec![layer(
+			"poi",
+			vec![
+				feature(vec![("population", GeoValue::from("many"))]),
+				feature(vec![("population", GeoValue::Int(2000))]),
+			],
+		)]);
+		let out = run_expr(&["poi"], "population >= 1000", tile).unwrap().unwrap();
+		assert_eq!(
+			summarise(&out),
+			vec![("poi".to_string(), 1)],
+			"the string-valued feature errors and is dropped; the int-valued one survives"
+		);
+	}
+
+	#[test]
+	fn test_guarded_comparison_survives_a_missing_property() {
+		// CEL's `&&` absorbs an error on one side when the other is `false`, so guarding a
+		// comparison with `has()` turns "missing property" from an error into a plain `false`.
+		// This is what lets an expression say what should happen to features lacking the key.
+		let tile = VectorTile::new(vec![layer(
+			"poi",
+			vec![
+				feature(vec![("other", GeoValue::from("x"))]), // no `population` at all
+				feature(vec![("population", GeoValue::Int(2000))]),
+			],
+		)]);
+		let out = run_expr(&["poi"], "has(props.population) && props.population >= 1000", tile)
+			.unwrap()
+			.unwrap();
+		assert_eq!(summarise(&out), vec![("poi".to_string(), 1)]);
+	}
+
+	#[test]
+	fn test_equality_across_types_is_false_not_an_error() {
+		// `==` and `!=` compare across types without erroring — an int is simply not equal to a
+		// string. So equality and membership need no type guard, unlike ordering below.
+		let tile = VectorTile::new(vec![layer(
+			"poi",
+			vec![
+				feature(vec![("population", GeoValue::from("many"))]),
+				feature(vec![("population", GeoValue::Int(2000))]),
+			],
+		)]);
+		let out = run_expr(&["poi"], "props.population != 1000", tile).unwrap().unwrap();
+		assert_eq!(
+			summarise(&out),
+			vec![("poi".to_string(), 2)],
+			"both survive: the string is unequal to 1000 rather than incomparable with it"
+		);
+	}
+
+	#[test]
+	fn test_a_guard_cannot_rescue_an_ordering_type_mismatch() {
+		// `has()` only helps when it is false, because `&&` short-circuits before the comparison.
+		// A property that is present but of the wrong type still reaches `>=` and still errors,
+		// and `cel-interpreter 0.10` offers no `type()` to test for it beforehand.
+		//
+		// So an ordering comparison cannot be made total in this CEL implementation. Anything
+		// generating expressions has to accept that a mistyped value drops its feature, or avoid
+		// emitting ordering comparisons at all.
+		let tile = VectorTile::new(vec![layer(
+			"poi",
+			vec![feature(vec![("population", GeoValue::from("many"))])],
+		)]);
+		let out = run_expr(&["poi"], "has(props.population) && props.population >= 1000", tile).unwrap();
+		assert!(out.is_none(), "the guard does not prevent the comparison from erroring");
 	}
 
 	#[test]

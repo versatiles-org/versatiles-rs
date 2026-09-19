@@ -686,6 +686,24 @@ vector_filter_features layer=["place"] expr="has(props.name)"
 vector_filter_features layer=["addr"]  expr="'addr:street' in props"
 ```
 
+### Evaluation failures
+
+A feature is kept only when the expression evaluates to `true`. An expression that fails to evaluate, or that returns something other than a boolean, drops the feature — there is no separate error channel per feature, so a filter that cannot be answered filters nothing in.
+
+The common way to reach that is an ordering comparison against a property that is absent or is not a number:
+
+```vpl
+vector_filter_features layer=["poi"] expr="population >= 1000"
+```
+
+A feature with no `population` compares `null` against a number and is dropped. Guard the comparison to say so deliberately:
+
+```vpl
+vector_filter_features layer=["poi"] expr="has(props.population) && props.population >= 1000"
+```
+
+Equality and membership are safe without a guard: `==`, `!=` and `in` compare across types and return `false` rather than failing. Ordering comparisons — `<` `<=` `>` `>=` — are the ones that fail, and a `has()` guard does not rescue a property that is _present_ but holds a string. There is no way to test a value's type beforehand, so a layer whose numeric property is a string in some tiles filters inconsistently.
+
 The [CEL language spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md) has the full grammar, built-in functions and string methods.
 
 ### Parameters
