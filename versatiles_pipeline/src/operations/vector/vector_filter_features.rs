@@ -55,7 +55,8 @@ use crate::{
 /// ### Accessing feature properties
 ///
 /// Properties whose names are valid CEL identifiers — letters, digits and
-/// underscore — are exposed as top-level variables:
+/// underscore — are exposed as top-level variables, except for the two reserved
+/// names below:
 ///
 /// ```vpl
 /// vector_filter_features layer=["place"] expr="name == 'Berlin'"
@@ -67,6 +68,27 @@ use crate::{
 /// ```vpl
 /// vector_filter_features layer=["addr"] expr="props['addr:street'] == 'Hauptstr.'"
 /// ```
+///
+/// ### Filtering by zoom level
+///
+/// `zoom` is the zoom level of the tile being filtered, so one expression can
+/// keep different features at different zooms — which is how cartography
+/// actually reads a layer:
+///
+/// ```vpl
+/// vector_filter_features layer=["streets"] expr="kind in ['motorway','trunk'] || zoom >= 12"
+/// ```
+///
+/// That keeps motorways everywhere and every other street only from z12. An
+/// expression mentioning only `zoom` is answered once per tile rather than once
+/// per feature, so a plain zoom range is cheap:
+///
+/// ```vpl
+/// vector_filter_features layer=["buildings"] expr="zoom >= 14"
+/// ```
+///
+/// `zoom` and `props` are reserved: a feature carrying a property of either name
+/// is shadowed, and `props['zoom']` reads it.
 ///
 /// ### Missing keys
 ///
@@ -191,16 +213,24 @@ fn compile_cel(expr: &str) -> Result<Program> {
 		})
 }
 
+/// The name bound to the tile's zoom level, reserved like [`PROPS_VAR`].
+const ZOOM_VAR: &str = "zoom";
+
+/// The name bound to the feature's full property map.
+const PROPS_VAR: &str = "props";
+
 #[derive(Debug)]
 struct Runner {
 	layer_set: HashSet<String>,
 	program: Program,
-	/// Top-level identifiers referenced by the expression, other than `props`.
+	/// Top-level identifiers referenced by the expression, other than the reserved names.
 	/// Bound to the feature's property value (or `Null` if absent) on each evaluation.
 	referenced_vars: Vec<String>,
 	/// Whether the expression references the reserved `props` map. The map is only built
 	/// per-feature when needed.
 	binds_props: bool,
+	/// Whether the expression references the reserved `zoom` variable.
+	binds_zoom: bool,
 }
 
 impl Runner {
@@ -208,11 +238,12 @@ impl Runner {
 		let program = compile_cel(args.expr.as_str())?;
 
 		let refs = program.references();
-		let binds_props = refs.has_variable("props");
+		let binds_props = refs.has_variable(PROPS_VAR);
+		let binds_zoom = refs.has_variable(ZOOM_VAR);
 		let referenced_vars: Vec<String> = refs
 			.variables()
 			.into_iter()
-			.filter(|v| *v != "props")
+			.filter(|v| *v != PROPS_VAR && *v != ZOOM_VAR)
 			.map(String::from)
 			.collect();
 
@@ -221,18 +252,37 @@ impl Runner {
 			program,
 			referenced_vars,
 			binds_props,
+			binds_zoom,
 		})
 	}
 
-	fn evaluate(&self, props: &GeoProperties) -> bool {
+	/// Whether the expression's answer is the same for every feature in a tile.
+	///
+	/// `zoom >= 12` reads nothing about the feature, so evaluating it per feature asks the same
+	/// question thousands of times — and a zoom range with no predicate is the shape a generated
+	/// pipeline emits most. [`Self::run`] evaluates such an expression once and keeps or drops
+	/// whole layers, which also skips decoding and re-encoding their properties.
+	fn depends_only_on_zoom(&self) -> bool {
+		self.binds_zoom && !self.binds_props && self.referenced_vars.is_empty()
+	}
+
+	fn evaluate(&self, coord: &TileCoord, props: &GeoProperties) -> bool {
 		let mut ctx = CelContext::default();
+
+		if self.binds_zoom {
+			// `Int` because CEL's integer literals are signed, so `zoom` and the `12` in
+			// `zoom >= 12` are the same type. `cel-interpreter` compares `UInt` against a signed
+			// literal correctly too, so this is a matter of matching the literal rather than a
+			// correctness requirement.
+			ctx.add_variable_from_value(ZOOM_VAR, CelValue::Int(i64::from(coord.level)));
+		}
 
 		if self.binds_props {
 			let mut map: HashMap<CelKey, CelValue> = HashMap::with_capacity(props.len());
 			for (key, value) in props.iter() {
 				map.insert(CelKey::from(key.clone()), geo_to_cel(value));
 			}
-			ctx.add_variable_from_value("props", CelValue::Map(CelMap { map: Arc::new(map) }));
+			ctx.add_variable_from_value(PROPS_VAR, CelValue::Map(CelMap { map: Arc::new(map) }));
 		}
 
 		for name in &self.referenced_vars {
@@ -260,7 +310,14 @@ impl VectorTransform for Runner {
 	const TAG: &'static str = "vector_filter_features";
 
 	#[context("Failed to run vector_filter_features")]
-	fn run(&self, _coord: &TileCoord, mut tile: VectorTile) -> Result<Option<VectorTile>> {
+	fn run(&self, coord: &TileCoord, mut tile: VectorTile) -> Result<Option<VectorTile>> {
+		// An expression reading only `zoom` has one answer for the whole tile. Asking it once
+		// turns the operation into a whole-layer keep or drop, and a kept layer is passed through
+		// untouched rather than decoded and re-encoded to arrive back where it started.
+		let same_for_every_feature = self
+			.depends_only_on_zoom()
+			.then(|| self.evaluate(coord, &GeoProperties::new()));
+
 		// Not `retain_mut`: filtering can fail, and a closure returning `bool` has nowhere to put
 		// the error but the floor. A tile whose properties do not decode is reported and dropped
 		// by `TransformOp`, rather than quietly losing the features that failed to decode.
@@ -270,9 +327,21 @@ impl VectorTransform for Runner {
 				kept.push(layer);
 				continue;
 			}
-			layer.filter_map_properties(|props| if self.evaluate(&props) { Some(props) } else { None })?;
-			if !layer.features.is_empty() {
-				kept.push(layer);
+			match same_for_every_feature {
+				Some(true) => kept.push(layer),
+				Some(false) => (),
+				None => {
+					layer.filter_map_properties(|props| {
+						if self.evaluate(coord, &props) {
+							Some(props)
+						} else {
+							None
+						}
+					})?;
+					if !layer.features.is_empty() {
+						kept.push(layer);
+					}
+				}
 			}
 		}
 		tile.layers = kept;
@@ -328,11 +397,16 @@ mod tests {
 	}
 
 	fn run_expr(layers: &[&str], expr: &str, tile: VectorTile) -> Result<Option<VectorTile>> {
+		run_expr_at(layers, expr, tile, 0)
+	}
+
+	/// `run_expr` with the tile placed at a chosen zoom level.
+	fn run_expr_at(layers: &[&str], expr: &str, tile: VectorTile, level: u8) -> Result<Option<VectorTile>> {
 		let runner = Runner::from_args(&Args {
 			layer: layers.iter().map(|s| (*s).to_string()).collect(),
 			expr: CelExpression::try_from(expr)?,
 		})?;
-		runner.run(&TileCoord::new(0, 0, 0)?, tile)
+		runner.run(&TileCoord::new(level, 0, 0)?, tile)
 	}
 
 	/// Returns `(layer_name, feature_count)` pairs, sorted by layer name.
@@ -491,6 +565,117 @@ mod tests {
 		let tile = VectorTile::new(vec![layer("poi", vec![feature(vec![("other", GeoValue::from("x"))])])]);
 		let out = run_expr(&["poi"], "population >= 1000", tile).unwrap();
 		assert!(out.is_none());
+	}
+
+	#[test]
+	fn test_zoom_compares_against_an_integer_literal() {
+		// `zoom` is a number the expression can order against, not a string or an opaque value.
+		let tile = || VectorTile::new(vec![layer("poi", vec![feature(vec![("a", GeoValue::Int(1))])])]);
+
+		assert_eq!(
+			summarise(&run_expr_at(&["poi"], "zoom >= 12", tile(), 12).unwrap().unwrap()),
+			vec![("poi".to_string(), 1)],
+			"z12 satisfies zoom >= 12"
+		);
+		assert!(
+			run_expr_at(&["poi"], "zoom >= 12", tile(), 5).unwrap().is_none(),
+			"z5 does not, and the layer empties"
+		);
+	}
+
+	#[test]
+	fn test_zoom_only_expression_keeps_or_drops_whole_layers() {
+		// The hoisted path: no property is read, so the tile is not decoded at all. Both features
+		// survive together or neither does.
+		let tile = || {
+			VectorTile::new(vec![layer(
+				"streets",
+				vec![
+					feature(vec![("kind", GeoValue::from("motorway"))]),
+					feature(vec![("kind", GeoValue::from("residential"))]),
+				],
+			)])
+		};
+
+		let kept = run_expr_at(&["streets"], "zoom >= 5 && zoom <= 14", tile(), 9)
+			.unwrap()
+			.unwrap();
+		assert_eq!(summarise(&kept), vec![("streets".to_string(), 2)]);
+
+		assert!(
+			run_expr_at(&["streets"], "zoom >= 5 && zoom <= 14", tile(), 15)
+				.unwrap()
+				.is_none()
+		);
+	}
+
+	#[test]
+	fn test_zoom_combined_with_a_property_predicate() {
+		// The shape a generated pipeline emits: keep the important features everywhere, and
+		// everything else only from a zoom onwards.
+		let tile = || {
+			VectorTile::new(vec![layer(
+				"streets",
+				vec![
+					feature(vec![("kind", GeoValue::from("motorway"))]),
+					feature(vec![("kind", GeoValue::from("residential"))]),
+				],
+			)])
+		};
+		let expr = "kind in ['motorway','trunk'] || zoom >= 12";
+
+		assert_eq!(
+			summarise(&run_expr_at(&["streets"], expr, tile(), 5).unwrap().unwrap()),
+			vec![("streets".to_string(), 1)],
+			"at z5 only the motorway survives"
+		);
+		assert_eq!(
+			summarise(&run_expr_at(&["streets"], expr, tile(), 12).unwrap().unwrap()),
+			vec![("streets".to_string(), 2)],
+			"at z12 both do"
+		);
+	}
+
+	#[test]
+	fn test_zoom_shadows_a_property_of_the_same_name() {
+		// `zoom` is reserved, like `props`. A feature carrying a property called `zoom` cannot be
+		// read through the bare identifier any more — `props['zoom']` is the way to it.
+		let tile = || VectorTile::new(vec![layer("poi", vec![feature(vec![("zoom", GeoValue::Int(3))])])]);
+
+		assert!(
+			run_expr_at(&["poi"], "zoom == 3", tile(), 7).unwrap().is_none(),
+			"the bare identifier is the tile's zoom (7), not the property (3)"
+		);
+		assert_eq!(
+			summarise(&run_expr_at(&["poi"], "props['zoom'] == 3", tile(), 7).unwrap().unwrap()),
+			vec![("poi".to_string(), 1)],
+			"the property is still reachable through the props map"
+		);
+	}
+
+	#[tokio::test]
+	async fn test_zoom_comes_from_the_tile_being_processed() -> Result<()> {
+		// End-to-end, so the coordinate arrives from the stream rather than from a test literal:
+		// the same pipeline keeps the layer at z2 and drops it at z1.
+		let factory = PipelineFactory::new_dummy();
+		let vpl = r#"from_debug format=mvt | vector_filter_features layer=["debug_x"] expr="zoom >= 2""#;
+		let op = factory.operation_from_vpl(vpl).await?;
+
+		let has_debug_x = async |level: u8| -> Result<bool> {
+			let tile = op
+				.tile_stream(TileBBox::new_full(level)?)
+				.await?
+				.next()
+				.await
+				.unwrap()
+				.1
+				.into_vector()?;
+			Ok(tile.layers.iter().any(|l| l.name == "debug_x"))
+		};
+
+		assert!(!has_debug_x(1).await?, "z1 fails zoom >= 2");
+		assert!(has_debug_x(2).await?, "z2 satisfies it");
+		Ok(())
 	}
 
 	#[test]

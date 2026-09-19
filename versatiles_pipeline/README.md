@@ -659,7 +659,7 @@ vector_filter_features layer=["addr"]  expr="props['addr:street'] == 'Hauptstr.'
 
 ### Accessing feature properties
 
-Properties whose names are valid CEL identifiers — letters, digits and underscore — are exposed as top-level variables:
+Properties whose names are valid CEL identifiers — letters, digits and underscore — are exposed as top-level variables, except for the two reserved names below:
 
 ```vpl
 vector_filter_features layer=["place"] expr="name == 'Berlin'"
@@ -670,6 +670,22 @@ For keys containing `:`, `-`, `.`, or anything else that is not an identifier, u
 ```vpl
 vector_filter_features layer=["addr"] expr="props['addr:street'] == 'Hauptstr.'"
 ```
+
+### Filtering by zoom level
+
+`zoom` is the zoom level of the tile being filtered, so one expression can keep different features at different zooms — which is how cartography actually reads a layer:
+
+```vpl
+vector_filter_features layer=["streets"] expr="kind in ['motorway','trunk'] || zoom >= 12"
+```
+
+That keeps motorways everywhere and every other street only from z12. An expression mentioning only `zoom` is answered once per tile rather than once per feature, so a plain zoom range is cheap:
+
+```vpl
+vector_filter_features layer=["buildings"] expr="zoom >= 14"
+```
+
+`zoom` and `props` are reserved: a feature carrying a property of either name is shadowed, and `props['zoom']` reads it.
 
 ### Missing keys
 
