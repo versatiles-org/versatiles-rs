@@ -136,7 +136,7 @@ fn benchmark_evaluate(c: &mut Criterion) {
 	let rt = runtime();
 	report_property_repetition(&rt);
 
-	let cases: [(&str, Option<&str>); 6] = [
+	let cases: [(&str, Option<&str>); 8] = [
 		// No filter at all: the floor every other case sits on.
 		("source_only", None),
 		// Keeps everything via the whole-tile shortcut: one evaluation per tile.
@@ -154,6 +154,15 @@ fn benchmark_evaluate(c: &mut Criterion) {
 			"reduction_shape",
 			Some("(has(props.kind) && props.kind in ['motorway', 'trunk']) || zoom >= 12"),
 		),
+		// Decodes and drops everything, so the tile never gets re-encoded. Subtracting this from
+		// `constant_true` splits the codec into its halves: what decoding costs, and what writing
+		// the tile back out costs. `zoom_only` cannot do that job any more — it stopped decoding
+		// at all when the pass-through landed.
+		("decode_only", Some("zoom >= 99")),
+		// Drops most features rather than none. Every other case keeps everything on purpose, so
+		// none of them can say what an operation costs when it actually filters — which is what a
+		// reduction does.
+		("selective", Some("props.kind == 'motorway'")),
 	];
 
 	let mut group = c.benchmark_group("vector_filter_features");
