@@ -1,27 +1,26 @@
 //! `versatiles reduce` — strip a tileset down to what one style draws.
 //!
-//! Takes the data requirement `@versatiles/style` exports, renders it into a VPL pipeline, and
-//! either prints that pipeline or runs it.
+//! Takes a MapLibre style, renders the VPL pipeline that reduces a tileset to it, and either prints
+//! that pipeline or runs it.
 //!
-//! Printing is not a debugging affordance. Studio's design note is explicit that the reduction
-//! should land in the VPL document someone is editing "rather than running it opaquely", so the
-//! text is the product and running it is the convenience. `--print` also composes with what
-//! already exists, since inline VPL is a first-class input:
+//! The work itself belongs to the `vector_reduce_to_style` operation, not here: reading the style
+//! and choosing the filters is something a VPL document should be able to do without a subcommand,
+//! and having one implementation means the CLI and a hand-written pipeline cannot disagree. What
+//! this adds is the convenience of naming an input and an output.
+//!
+//! `--print` composes with what already exists, since inline VPL is a first-class input:
 //!
 //! ```text
-//! versatiles reduce --print -r style.req.json in.versatiles | versatiles convert "[,vpl]-" out.versatiles
-//! versatiles reduce --print -r style.req.json in.versatiles | versatiles convert --dry-run "[,vpl]-" x
+//! versatiles reduce --print -s style.json in.versatiles | versatiles convert "[,vpl]-" out.versatiles
+//! versatiles reduce --print -s style.json in.versatiles | versatiles convert --dry-run "[,vpl]-" x
 //! ```
 
-use std::{fs, path::PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{Result, bail};
 use versatiles_container::{TileSource, TilesConverterParameters, TilesRuntime, convert_tiles_container_to_str};
 use versatiles_derive::context;
-use versatiles_pipeline::{
-	PipelineReader, VPLNode, VPLPipeline,
-	reduce::{Requirement, operations},
-};
+use versatiles_pipeline::{PipelineReader, VPLNode, VPLPipeline};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -36,9 +35,9 @@ pub struct Subcommand {
 	#[arg(verbatim_doc_comment)]
 	output_file: Option<String>,
 
-	/// JSON file describing what the style needs, as exported by @versatiles/style.
-	#[arg(long, short = 'r', value_name = "file", verbatim_doc_comment)]
-	requirements: PathBuf,
+	/// MapLibre style JSON file the tileset should be reduced to.
+	#[arg(long, short = 's', value_name = "file", verbatim_doc_comment)]
+	style: PathBuf,
 
 	/// print the rendered VPL pipeline and exit, without reading or writing any tiles
 	#[arg(long, verbatim_doc_comment)]
@@ -85,29 +84,33 @@ pub async fn run(arguments: &Subcommand, runtime: &TilesRuntime) -> Result<()> {
 	Ok(())
 }
 
-/// Reads the requirement and renders the whole pipeline, source included.
+/// Renders the whole pipeline, source included.
 ///
 /// The source node is part of the output because the text has to be runnable on its own — piped
-/// into `convert`, or pasted into a VPL document — and a list of transforms with nothing to
-/// transform is neither.
+/// into `convert`, or pasted into a VPL document — and a transform with nothing to transform is
+/// neither.
+///
+/// Note that this reads no files and opens no container: it renders the *text*, and the style is
+/// read when the pipeline is built. That is what lets `--print` answer without touching the input,
+/// and it is why a style that does not parse is reported by the run rather than by the print.
 #[context("Failed to build the reduction pipeline")]
 fn build_pipeline(arguments: &Subcommand) -> Result<VPLPipeline> {
-	let json = fs::read_to_string(&arguments.requirements)?;
-	let requirement = Requirement::from_json(&json)?;
+	let style = arguments
+		.style
+		.to_str()
+		.ok_or_else(|| anyhow::anyhow!("the style path is not valid UTF-8: {:?}", arguments.style))?;
 
-	let mut nodes = vec![source_node(&arguments.input_file)];
-	nodes.extend(operations(&requirement));
-
-	Ok(VPLPipeline::new(nodes))
+	Ok(VPLPipeline::new(vec![
+		node("from_container", "filename", &arguments.input_file),
+		node("vector_reduce_to_style", "style", style),
+	]))
 }
 
-/// The `from_container` node that reads the input.
-fn source_node(filename: &str) -> VPLNode {
+/// A VPL node with a single property.
+fn node(name: &str, key: &str, value: &str) -> VPLNode {
 	VPLNode {
-		name: "from_container".to_string(),
-		properties: [("filename".to_string(), vec![filename.to_string()])]
-			.into_iter()
-			.collect(),
+		name: name.to_string(),
+		properties: [(key.to_string(), vec![value.to_string()])].into_iter().collect(),
 		sources: Vec::new(),
 	}
 }
@@ -125,53 +128,45 @@ mod tests {
 	}
 
 	/// The pipeline `--print` would write, without going through stdout.
-	fn pipeline_for(requirement: &str) -> String {
+	fn pipeline_for(input: &str, style: &str) -> String {
 		let arguments = Subcommand {
-			input_file: testdata("berlin.versatiles"),
+			input_file: input.to_string(),
 			output_file: None,
-			requirements: PathBuf::from(testdata(requirement)),
+			style: PathBuf::from(style),
 			print: true,
 		};
 		build_pipeline(&arguments).unwrap().to_string()
 	}
 
 	#[test]
-	fn the_pipeline_starts_with_the_source() {
+	fn the_pipeline_is_a_source_and_one_operation() {
 		// The source node is part of the output so the text runs on its own — piped into
 		// `convert`, or pasted into a VPL document.
-		let text = pipeline_for("reduce/streets.json");
+		let text = pipeline_for(&testdata("berlin.versatiles"), &testdata("styles/colorful.json"));
 		assert!(text.starts_with("from_container filename="), "got: {text}");
-		assert!(text.contains("vector_filter_layers"), "got: {text}");
-		assert!(text.contains("vector_filter_properties"), "got: {text}");
+		assert!(text.contains("| vector_reduce_to_style style="), "got: {text}");
 	}
 
 	#[test]
 	fn the_pipeline_passes_check() {
-		// What `convert --dry-run` would say about it, asked directly: every operation resolves,
-		// every parameter validates against the operation's own metadata, and the CEL compiles.
-		for requirement in ["reduce/minimal.json", "reduce/streets.json", "reduce/operators.json"] {
-			let text = pipeline_for(requirement);
-			let pipeline = versatiles_pipeline::vpl::parse_vpl(&text).unwrap();
-			let problems: Vec<String> = versatiles_pipeline::check_pipeline(&pipeline)
-				.into_iter()
-				.map(|p| p.message)
-				.collect();
-			assert_eq!(problems, Vec::<String>::new(), "in: {text}");
-		}
+		// What `convert --dry-run` would say about it, asked directly: every operation resolves and
+		// every parameter validates against the operation's own metadata.
+		let text = pipeline_for(&testdata("berlin.versatiles"), &testdata("styles/colorful.json"));
+		let pipeline = versatiles_pipeline::vpl::parse_vpl(&text).unwrap();
+		let problems: Vec<String> = versatiles_pipeline::check_pipeline(&pipeline)
+			.into_iter()
+			.map(|p| p.message)
+			.collect();
+		assert_eq!(problems, Vec::<String>::new(), "in: {text}");
 	}
 
 	#[test]
-	fn an_input_path_needing_quotes_survives() {
-		// The path goes through the VPL serializer like any other value, so a space in it is the
+	fn paths_needing_quotes_survive() {
+		// Both paths go through the VPL serializer like any other value, so a space in one is the
 		// serializer's problem rather than a broken pipeline.
-		let arguments = Subcommand {
-			input_file: "/tmp/my tiles.versatiles".to_string(),
-			output_file: None,
-			requirements: PathBuf::from(testdata("reduce/minimal.json")),
-			print: true,
-		};
-		let text = build_pipeline(&arguments).unwrap().to_string();
+		let text = pipeline_for("/tmp/my tiles.versatiles", "/tmp/my style.json");
 		assert!(text.contains("filename='/tmp/my tiles.versatiles'"), "got: {text}");
+		assert!(text.contains("style='/tmp/my style.json'"), "got: {text}");
 		assert!(versatiles_pipeline::vpl::parse_vpl(&text).is_ok(), "got: {text}");
 	}
 
@@ -180,8 +175,8 @@ mod tests {
 		let err = run_command(vec![
 			"versatiles",
 			"reduce",
-			"-r",
-			&testdata("reduce/minimal.json"),
+			"-s",
+			&testdata("styles/colorful.json"),
 			&testdata("berlin.versatiles"),
 		])
 		.unwrap_err();
@@ -189,19 +184,10 @@ mod tests {
 	}
 
 	#[test]
-	fn a_missing_requirement_file_is_reported() {
-		let err = run_command(vec![
-			"versatiles",
-			"reduce",
-			"--print",
-			"-r",
-			&testdata("reduce/does-not-exist.json"),
-			&testdata("berlin.versatiles"),
-		])
-		.unwrap_err();
-		assert!(
-			err.chain().any(|e| e.to_string().contains("reduction pipeline")),
-			"got: {err:?}"
-		);
+	fn printing_does_not_read_the_style() {
+		// `--print` renders text and opens nothing, so a style that does not exist yet still prints
+		// a pipeline. The run mode is where it is read, and where a bad one is reported.
+		let text = pipeline_for(&testdata("berlin.versatiles"), "does-not-exist.json");
+		assert!(text.contains("style=does-not-exist.json"), "got: {text}");
 	}
 }

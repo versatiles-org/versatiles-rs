@@ -14,7 +14,7 @@ versatiles serve pipeline.vpl
 
 **Read:** [`from_color`](#from_color) · [`from_container`](#from_container) · [`from_csv`](#from_csv) · [`from_debug`](#from_debug) · [`from_gdal_dem`](#from_gdal_dem) · [`from_gdal_raster`](#from_gdal_raster) · [`from_geo`](#from_geo) · [`from_grid`](#from_grid) · [`from_h3`](#from_h3) · [`from_merged_vector`](#from_merged_vector) · [`from_stacked`](#from_stacked) · [`from_stacked_raster`](#from_stacked_raster) · [`from_tile`](#from_tile) · [`from_tilejson`](#from_tilejson)
 
-**Transform:** [`dem_overview`](#dem_overview) · [`dem_quantize`](#dem_quantize) · [`dem_tile_resize`](#dem_tile_resize) · [`filter`](#filter) · [`meta_update`](#meta_update) · [`raster_flatten`](#raster_flatten) · [`raster_format`](#raster_format) · [`raster_levels`](#raster_levels) · [`raster_mask`](#raster_mask) · [`raster_overscale`](#raster_overscale) · [`raster_overview`](#raster_overview) · [`raster_tile_resize`](#raster_tile_resize) · [`remap_coords`](#remap_coords) · [`vector_filter_features`](#vector_filter_features) · [`vector_filter_layers`](#vector_filter_layers) · [`vector_filter_properties`](#vector_filter_properties) · [`vector_overzoom`](#vector_overzoom) · [`vector_repair`](#vector_repair) · [`vector_update_properties`](#vector_update_properties)
+**Transform:** [`dem_overview`](#dem_overview) · [`dem_quantize`](#dem_quantize) · [`dem_tile_resize`](#dem_tile_resize) · [`filter`](#filter) · [`meta_update`](#meta_update) · [`raster_flatten`](#raster_flatten) · [`raster_format`](#raster_format) · [`raster_levels`](#raster_levels) · [`raster_mask`](#raster_mask) · [`raster_overscale`](#raster_overscale) · [`raster_overview`](#raster_overview) · [`raster_tile_resize`](#raster_tile_resize) · [`remap_coords`](#remap_coords) · [`vector_filter_features`](#vector_filter_features) · [`vector_filter_layers`](#vector_filter_layers) · [`vector_filter_properties`](#vector_filter_properties) · [`vector_overzoom`](#vector_overzoom) · [`vector_reduce_to_style`](#vector_reduce_to_style) · [`vector_repair`](#vector_repair) · [`vector_update_properties`](#vector_update_properties)
 
 ## Defining a pipeline
 
@@ -775,6 +775,24 @@ Tiles at `level_base` and below are passed through unchanged; above it, the cove
 - _`level_max`: 0-30 (optional)_ - Highest zoom level to serve, capped at `30`. Defaults to `level_base + 4`.
 - _`enable_climbing`: bool (optional)_ - Whether to climb to lower levels when the `level_base` tile is missing. Defaults to `false`.
 - _`buffer`: u32 (optional)_ - Clip buffer in tile-extent units, so edge-straddling features survive. Defaults to `80`.
+
+---
+
+## vector_reduce_to_style
+
+Reduces vector tiles to what one MapLibre style actually draws.
+
+Reads the style, works out which source-layers it draws, which properties it reads and which features it filters to, then drops everything else. A Shortbread tileset reduced to a style that only ever reads `name` loses every `name_*` translation, and a layer drawn as plain geometry loses all of its properties while keeping its shapes.
+
+It expands to `vector_filter_layers`, one `vector_filter_features` per layer that needs one, and `vector_filter_properties` — so the same reduction can be written by hand, and `versatiles reduce --print` shows what was derived.
+
+Zoom levels are clamped to the pyramid of the source it wraps. That matters: MapLibre overzooms, so a style drawing addresses from z17 against a tileset that stops at z14 must keep them in the z14 tiles, not drop them.
+
+**The reduction may keep features the style never draws; it never drops one it does.** Anything in the style that cannot be read widens toward keeping.
+
+### Parameters
+
+- **`style`: path (required)** - Path to the MapLibre style JSON the tileset should be reduced to.
 
 ---
 

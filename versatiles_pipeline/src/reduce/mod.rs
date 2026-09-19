@@ -1,25 +1,29 @@
 //! Reducing a tileset to what one style draws.
 //!
-//! `@versatiles/style` can say which source-layers, properties and features a built style
-//! actually reads (`versatiles-org/versatiles-style#134`). This module reads that requirement
-//! and renders the VPL pipeline that strips a tileset down to it.
+//! Two halves. [`style`] reads a built MapLibre style and works out which source-layers, properties
+//! and features it actually draws; [`render`](render::operations) turns that answer into the VPL
+//! operations that strip a tileset down to it.
 //!
-//! The rendering lives here rather than in the exporter because VPL's vocabulary — operation
-//! names, parameter spellings, what `vector_filter_properties`'s regex matches against — is this
-//! crate's, and a copy of it elsewhere is a second implementation that agrees until it does not.
+//! Both live here rather than beside the styles because VPL's vocabulary — operation names,
+//! parameter spellings, what `vector_filter_properties`'s regex matches against — is this crate's,
+//! and a copy of it elsewhere is a second implementation that agrees until it does not. Keeping the
+//! analysis here too means the two never disagree about what a predicate means, and that the
+//! tileset's own pyramid is available to clamp zooms against.
 //!
 //! ## The contract
 //!
-//! **The rendered pipeline may keep features the style never draws; it must never drop one it
-//! does.** Every decision made under uncertainty widens toward keeping. Reading the requirement
-//! ([`ir`]) already works that way — an unrecognised operator parses as
-//! [`Predicate::Unknown`](ir::Predicate::Unknown) rather than failing — and the renderer turns
-//! that into "keep".
+//! **The reduction may keep features the style never draws; it must never drop one it does.** Every
+//! decision made under uncertainty widens toward keeping: a filter that cannot be read becomes
+//! "keep everything in this zoom range", and a property that might be read is kept. The one thing
+//! that fails rather than widens is a style that draws no tile data at all, where widening would
+//! mean producing an empty tileset from what is almost certainly the wrong file.
 
 mod cel;
 pub mod ir;
 mod predicate;
 mod render;
+mod style;
 
-pub use ir::{KeepEntry, LayerRequirement, Literal, Predicate, Requirement, SourceInfo};
+pub use ir::{KeepEntry, LayerRequirement, Literal, Predicate, Requirement};
 pub use render::operations;
+pub use style::from_style;

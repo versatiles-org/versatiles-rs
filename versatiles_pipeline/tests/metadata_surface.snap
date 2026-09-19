@@ -205,6 +205,9 @@ vector_overzoom.level_max: Option<ZoomLevel> | optional | bounds=[0,30] int
 vector_overzoom.enable_climbing: Option<bool> | optional | default=false
 vector_overzoom.buffer: Option<u32> | optional | default=80 | bounds=[0,4294967295] int
 
+vector_reduce_to_style [transform]
+vector_reduce_to_style.style: FilePath | required | accepts=suggested[json]
+
 vector_repair [transform]
 vector_repair.drop_offenders: Option<bool> | optional | default=false
 

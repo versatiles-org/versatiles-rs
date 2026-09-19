@@ -380,39 +380,47 @@ versatiles convert \
 
 #### reduce - Strip a Tileset to What a Style Draws
 
-A tileset carries every layer, property and feature any style might ask for. A map that ships **one** style needs far less than that — measured against `@versatiles/style`'s `colorful` theme on the Shortbread schema, only 57 of 217 fields are ever read, and four layers are drawn with no properties at all.
+A tileset carries every layer, property and feature any style might ask for. A map that ships **one** style needs far less than that. The VersaTiles `colorful` style reads `name` and no `name_*` at all, so every translation in a Shortbread tileset can go; several layers are drawn as plain geometry and need no properties whatsoever.
 
-`reduce` takes the data requirement that `@versatiles/style` exports and renders it into a VPL pipeline that keeps only what the style draws.
+`reduce` reads a MapLibre style, works out what it actually draws, and renders a VPL pipeline that keeps only that.
 
 **Basic usage:**
 
 ```sh
-versatiles reduce --requirements style.req.json tiles.versatiles reduced.versatiles
+versatiles reduce --style colorful.json tiles.versatiles reduced.versatiles
 ```
 
 **Reduce options:**
 
-| Option                 | Description                                                 | Example             |
-| ---------------------- | ----------------------------------------------------------- | ------------------- |
-| `--requirements`, `-r` | JSON file describing what the style needs (required)        | `-r style.req.json` |
-| `--print`              | Print the rendered VPL pipeline and exit, touching no tiles | `--print`           |
+| Option          | Description                                                 | Example            |
+| --------------- | ----------------------------------------------------------- | ------------------ |
+| `--style`, `-s` | MapLibre style JSON to reduce the tileset to (required)     | `-s colorful.json` |
+| `--print`       | Print the rendered VPL pipeline and exit, touching no tiles | `--print`          |
 
 **Seeing the pipeline before running it:**
 
 `--print` writes the pipeline rather than executing it, so the reduction can be reviewed, edited, or kept in a `.vpl` file as the source of truth:
 
 ```sh
-versatiles reduce --print -r style.req.json tiles.versatiles
+versatiles reduce --print -s colorful.json tiles.versatiles
 ```
 
 Because inline VPL is a first-class input, the printed pipeline pipes straight into `convert`:
 
 ```sh
-versatiles reduce --print -r style.req.json tiles.versatiles \
+versatiles reduce --print -s colorful.json tiles.versatiles \
   | versatiles convert "[,vpl]-" reduced.versatiles
 ```
 
-**What it guarantees:** the reduction may keep features the style never draws, but never drops one it does. Anything in the requirement that this version cannot interpret — an operator from a newer exporter, say — widens to "keep" rather than being ignored.
+The work is done by the `vector_reduce_to_style` pipeline operation, so the same reduction can be written directly in VPL without going through this subcommand:
+
+```sh
+versatiles convert \
+  '[,vpl](from_container filename="tiles.versatiles" | vector_reduce_to_style style="colorful.json")' \
+  reduced.versatiles
+```
+
+**What it guarantees:** the reduction may keep features the style never draws, but never drops one it does. Anything in the style that cannot be interpreted — an expression outside the filter vocabulary, say — widens to "keep" rather than being ignored. Zoom levels are clamped to the tileset's own pyramid, so a style drawing a layer from z17 against a tileset that stops at z14 keeps that layer's features in the z14 tiles rather than dropping them.
 
 #### serve - HTTP Tile Server
 

@@ -22,7 +22,7 @@ fn e2e_command() {
 #[case("dev", "[OPTIONS] <COMMAND>")]
 #[case("help", "[OPTIONS] <COMMAND>")]
 #[case("probe", "[OPTIONS] <FILENAME>")]
-#[case("reduce", "[OPTIONS] --requirements <file> <INPUT_FILE> [OUTPUT_FILE]")]
+#[case("reduce", "[OPTIONS] --style <file> <INPUT_FILE> [OUTPUT_FILE]")]
 #[case("serve", "[OPTIONS] [TILE_SOURCES]...")]
 fn e2e_subcommand(#[case] sub_command: &str, #[case] usage: &str) {
 	let o = versatiles_output(sub_command);

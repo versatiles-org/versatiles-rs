@@ -23,10 +23,6 @@ use super::{
 /// positive position, `false` under an odd number of negations. Callers start with `true`.
 pub fn render(predicate: &Predicate, widen: bool) -> String {
 	match predicate {
-		// An operator from a newer exporter. Nothing is known about what it matches, so it takes
-		// the value that keeps the most in this position.
-		Predicate::Unknown => widen.to_string(),
-
 		Predicate::Has(field) => cel::has_property(field),
 
 		// Equality and membership never error, so they need no guard against a mistyped value —
@@ -202,32 +198,42 @@ mod tests {
 		assert_eq!(render_positive(&p), "has(props.name)");
 	}
 
+	/// An ordering against a non-numeric literal — the one predicate this module cannot express.
+	///
+	/// `normalize` never builds this: it answers `None` for `[">=", …, "10"]` rather than carry a
+	/// comparison whose meaning would change in translation. But the type still permits it, and a
+	/// future producer could, so the guard in [`ordering`] stays — and these tests pin the polarity
+	/// it widens with, which is the part that is easy to get backwards.
+	fn inexpressible() -> Predicate {
+		Predicate::Ge("k".to_string(), Literal::String("10".to_string()))
+	}
+
 	#[test]
-	fn an_unknown_operator_widens_to_keep() {
-		assert_eq!(render_positive(&Predicate::Unknown), "true");
+	fn an_inexpressible_predicate_widens_to_keep() {
+		assert_eq!(render_positive(&inexpressible()), "true");
 	}
 
 	#[test]
 	fn widening_inverts_under_a_negation() {
-		// The bug this exists to prevent: rendering the inner `Unknown` as `true` would make the
-		// whole thing `!(true)` — `false` — and drop every feature of the layer, which is the one
-		// outcome the contract forbids.
-		assert_eq!(render_positive(&Predicate::Not(vec![Predicate::Unknown])), "!(false)");
+		// The bug this exists to prevent: widening to `true` inside a negation would make the whole
+		// thing `!(true)` — `false` — and drop every feature of the layer, which is the one outcome
+		// the contract forbids.
+		assert_eq!(render_positive(&Predicate::Not(vec![inexpressible()])), "!(false)");
 	}
 
 	#[test]
 	fn widening_inverts_again_under_two_negations() {
-		let p = Predicate::Not(vec![Predicate::Not(vec![Predicate::Unknown])]);
+		let p = Predicate::Not(vec![Predicate::Not(vec![inexpressible()])]);
 		assert_eq!(render_positive(&p), "!(!(true))");
 	}
 
 	#[test]
 	fn widening_inside_a_negated_conjunction_still_keeps_everything() {
-		// `not(has(k) and <unknown>)`: the unknown must not make the conjunction *more* true,
-		// because the negation would then drop more.
+		// `not(has(k) and <inexpressible>)`: the widened arm must not make the conjunction *more*
+		// true, because the negation would then drop more.
 		let p = Predicate::Not(vec![Predicate::And(vec![
 			Predicate::Has("k".to_string()),
-			Predicate::Unknown,
+			inexpressible(),
 		])]);
 		assert_eq!(render_positive(&p), "!((has(props.k) && false))");
 	}

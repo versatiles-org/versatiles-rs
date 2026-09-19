@@ -159,12 +159,16 @@ fn entry(entry: &KeepEntry) -> String {
 mod tests {
 	use pretty_assertions::assert_eq;
 
-	use super::{super::ir::Requirement, *};
+	use super::{
+		super::{ir::Requirement, style::from_style},
+		*,
+	};
 
+	/// One of the styles vendored from `tiles.versatiles.org/assets/styles/`.
 	fn fixture(name: &str) -> Requirement {
-		let path = format!("{}/../testdata/reduce/{name}", env!("CARGO_MANIFEST_DIR"));
+		let path = format!("{}/../testdata/styles/{name}", env!("CARGO_MANIFEST_DIR"));
 		let json = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("reading {path}: {e}"));
-		Requirement::from_json(&json).unwrap()
+		from_style(&json, 14).unwrap()
 	}
 
 	/// The rendered operations as VPL text, one per line.
@@ -176,9 +180,20 @@ mod tests {
 			.join("\n")
 	}
 
+	/// An inline style, analysed against a z14 tileset.
 	fn parse(json: &str) -> Requirement {
-		Requirement::from_json(json).unwrap()
+		from_style(json, 14).unwrap()
 	}
+
+	/// The `streets`/`buildings` shape the format was documented with, as a style.
+	const STREETS: &str = r#"{"layers":[
+		{"id":"streets-major","source-layer":"streets","minzoom":5,
+		 "filter":["all",["in",["get","kind"],["literal",["motorway","trunk"]]],["!=",["get","bridge"],true]],
+		 "layout":{"text-field":["get","tunnel"]},
+		 "paint":{"line-width":["get","service"]}},
+		{"id":"streets-all","source-layer":"streets","minzoom":12},
+		{"id":"buildings","source-layer":"buildings","minzoom":14}
+	]}"#;
 
 	#[test]
 	fn renders_the_documentation_example() {
@@ -186,12 +201,12 @@ mod tests {
 		// parses back — both the serializer's doing, which is the point of building nodes rather
 		// than text.
 		assert_eq!(
-			render_text(&fixture("streets.json")),
+			render_text(&parse(STREETS)),
 			[
 				r"vector_filter_layers filter=[buildings, streets] invert=true",
-				r"vector_filter_features expr='zoom >= 14 && zoom <= 14' layer=buildings",
-				r#"vector_filter_features expr="(zoom >= 5 && zoom <= 14 && ((has(props.kind) && props.kind in ['motorway', 'trunk']) && !((has(props.bridge) && props.bridge == true)))) || (zoom >= 12 && zoom <= 14)" layer=streets"#,
-				r"vector_filter_properties invert=true regex='^(?:streets/kind|streets/bridge|streets/tunnel|streets/service)$'",
+				r"vector_filter_features expr='zoom >= 14' layer=buildings",
+				r#"vector_filter_features expr="(zoom >= 5 && ((has(props.kind) && props.kind in ['motorway', 'trunk']) && !((has(props.bridge) && props.bridge == true)))) || (zoom >= 12)" layer=streets"#,
+				r"vector_filter_properties invert=true regex='^(?:streets/bridge|streets/kind|streets/service|streets/tunnel)$'",
 			]
 			.join("\n")
 		);
@@ -199,15 +214,15 @@ mod tests {
 
 	#[test]
 	fn buildings_is_drawn_as_geometry_so_keeps_no_properties() {
-		// `buildings` has `properties: []` and a zoom-only keep entry, so it contributes nothing
-		// to the property regex and gets a zoom-only feature filter.
-		let text = render_text(&fixture("streets.json"));
+		// `buildings` is drawn with no filter and nothing read from it, so it contributes nothing to
+		// the property regex and gets a zoom-only feature filter.
+		let text = render_text(&parse(STREETS));
 		assert!(
 			!text.contains("buildings/"),
 			"no property of buildings survives: {text}"
 		);
 		assert!(
-			text.contains(r"vector_filter_features expr='zoom >= 14 && zoom <= 14' layer=buildings"),
+			text.contains(r"vector_filter_features expr='zoom >= 14' layer=buildings"),
 			"buildings keeps a zoom-only filter: {text}"
 		);
 	}
@@ -216,41 +231,50 @@ mod tests {
 	fn the_property_filter_comes_last() {
 		// Not cosmetic: the feature filters read properties through `has(props.k)`, so stripping
 		// properties first would make every guard false and delete the features they keep.
-		let names: Vec<String> = operations(&fixture("streets.json"))
-			.iter()
-			.map(|n| n.name.clone())
-			.collect();
+		let names: Vec<String> = operations(&parse(STREETS)).iter().map(|n| n.name.clone()).collect();
 		assert_eq!(names.first().unwrap(), "vector_filter_layers");
 		assert_eq!(names.last().unwrap(), "vector_filter_properties");
 	}
 
 	#[test]
 	fn a_layer_that_keeps_everything_gets_no_feature_filter() {
-		// An entry with no zoom bounds and no predicate keeps every feature, so the operation
-		// would decode and re-encode each one to arrive back where it started.
-		let r = parse(r#"{"version":1,"layers":{"a":{"properties":["k"],"keep":[{}]}}}"#);
+		// Unfiltered and drawn at every zoom, so the operation would decode and re-encode every
+		// feature to arrive back where it started.
+		let r = parse(r#"{"layers":[{"id":"a","source-layer":"a","paint":{"fill-color":["get","k"]}}]}"#);
 		let text = render_text(&r);
 		assert!(!text.contains("vector_filter_features"), "got: {text}");
 	}
 
 	#[test]
 	fn one_unbounded_entry_makes_the_whole_disjunction_unbounded() {
-		// `keep` is an OR, so an entry that matches everything subsumes the others.
+		// `keep` is an OR, so an entry that matches everything subsumes the others. Here a second
+		// style layer draws the same source-layer at every zoom with no filter.
 		let r = parse(
-			r#"{"version":1,"layers":{"a":{"keep":[
-				{"minzoom":5,"where":{"op":"has","field":"k"}},
-				{}
-			]}}}"#,
+			r#"{"layers":[
+				{"id":"a","source-layer":"a","minzoom":5,"filter":["has","k"]},
+				{"id":"b","source-layer":"a"}
+			]}"#,
 		);
 		assert!(!render_text(&r).contains("vector_filter_features"));
 	}
 
 	#[test]
 	fn an_empty_keep_widens_rather_than_dropping_the_layer() {
-		// Read literally, an empty disjunction matches nothing. But the format over-approximates,
-		// so a layer that failed to describe itself is far likelier than one that means "none of
-		// this", and the contract says to keep.
-		let r = parse(r#"{"version":1,"layers":{"a":{"properties":["k"],"keep":[]}}}"#);
+		// The analysis cannot produce this — a source-layer exists in the requirement only because
+		// some style layer drew it — but read literally an empty disjunction matches nothing, and
+		// the guard that reads it as "keep" instead is what the contract rests on. Built directly,
+		// since no style can express it.
+		let r = Requirement {
+			layers: [(
+				"a".to_string(),
+				crate::reduce::LayerRequirement {
+					properties: vec!["k".to_string()],
+					keep: Vec::new(),
+				},
+			)]
+			.into_iter()
+			.collect(),
+		};
 		let text = render_text(&r);
 		assert!(!text.contains("vector_filter_features"), "got: {text}");
 		assert!(
@@ -261,13 +285,9 @@ mod tests {
 
 	#[test]
 	fn a_widened_predicate_leaves_only_its_zoom_range() {
-		// An unknown operator contributes nothing, so the entry is its zoom test alone — which
+		// An unreadable filter contributes nothing, so the entry is its zoom test alone — which
 		// `vector_filter_features` then answers once per tile rather than once per feature.
-		let r = parse(
-			r#"{"version":1,"layers":{"a":{"keep":[
-				{"minzoom":12,"where":{"op":"sorcery","field":"k"}}
-			]}}}"#,
-		);
+		let r = parse(r#"{"layers":[{"id":"a","source-layer":"a","minzoom":12,"filter":["sorcery","k"]}]}"#);
 		assert!(
 			render_text(&r).contains(r"vector_filter_features expr='zoom >= 12' layer=a"),
 			"got: {}",
@@ -279,16 +299,19 @@ mod tests {
 	fn property_names_are_escaped_into_the_regex() {
 		// `addr:street` and `name.en` carry regex metacharacters; unescaped, `.` would match any
 		// character and keep properties the style never asked for.
-		let r = parse(r#"{"version":1,"layers":{"a":{"properties":["addr:street","name.en"]}}}"#);
+		let r = parse(
+			r#"{"layers":[{"id":"a","source-layer":"a",
+				"layout":{"text-field":["get","name.en"]},"paint":{"x":["get","addr:street"]}}]}"#,
+		);
 		let text = render_text(&r);
 		assert!(text.contains(r"a/name\.en"), "the dot is escaped: {text}");
 	}
 
 	#[test]
 	fn a_requirement_that_reads_no_properties_keeps_none() {
-		// `(?!)` never matches, so with `invert=true` every property is dropped. An empty
+		// `[^\s\S]` never matches, so with `invert=true` every property is dropped. An empty
 		// alternation would have been `^(?:)$`, which matches the empty string instead.
-		let r = parse(r#"{"version":1,"layers":{"a":{"properties":[],"keep":[{}]}}}"#);
+		let r = parse(r##"{"layers":[{"id":"a","source-layer":"a","paint":{"fill-color":"#fff"}}]}"##);
 		assert!(render_text(&r).contains(r"regex='[^\s\S]'"), "got: {}", render_text(&r));
 	}
 
@@ -313,8 +336,10 @@ mod tests {
 	}
 
 	#[test]
-	fn every_fixture_renders_a_valid_pipeline() {
-		for name in ["minimal.json", "streets.json", "operators.json"] {
+	fn every_deployed_style_renders_a_valid_pipeline() {
+		// The real cartography, not a fixture written to suit the renderer: 324 style layers and
+		// 318 filters in `colorful`, 207 and 203 in `neutrino`.
+		for name in ["colorful.json", "neutrino.json"] {
 			assert_eq!(problems(&fixture(name)), Vec::<String>::new(), "{name} rendered badly");
 		}
 	}
@@ -324,11 +349,14 @@ mod tests {
 		// Every character class that has bitten an escaper: quotes, backslashes, regex
 		// metacharacters, spaces, and a CEL keyword as a property name.
 		let r = parse(
-			r#"{"version":1,"layers":{
-				"it's a layer":{"properties":["addr:street","name.en","a\\b","in","quote'd"],
-					"keep":[{"minzoom":3,"where":{"op":"eq","field":"quote'd","value":"a'b"}}]},
-				"plain":{"properties":["k"],"keep":[{"where":{"op":"in","field":"a\\b","values":["x|y","^z$"]}}]}
-			}}"#,
+			r#"{"layers":[
+				{"id":"x","source-layer":"it's a layer","minzoom":3,
+				 "filter":["==","quote'd","a'b"],
+				 "paint":{"a":["get","addr:street"],"b":["get","name.en"],"c":["get","a\\b"],"d":["get","in"]}},
+				{"id":"y","source-layer":"plain",
+				 "filter":["in","a\\b","x|y","^z$"],
+				 "paint":{"a":["get","k"]}}
+			]}"#,
 		);
 		assert_eq!(problems(&r), Vec::<String>::new(), "got: {}", render_text(&r));
 	}
@@ -337,7 +365,7 @@ mod tests {
 	fn layer_names_needing_quotes_survive_the_serializer() {
 		// Building nodes rather than text means VPL quoting is the serializer's problem, and it
 		// already knows that a name with a space cannot be bare.
-		let r = parse(r#"{"version":1,"layers":{"my layer":{"properties":["k"],"keep":[{"minzoom":3}]}}}"#);
+		let r = parse(r#"{"layers":[{"id":"a","source-layer":"my layer","minzoom":3,"paint":{"a":["get","k"]}}]}"#);
 		let text = render_text(&r);
 		assert!(text.contains("filter='my layer'"), "got: {text}");
 		assert!(text.contains("layer='my layer'"), "got: {text}");

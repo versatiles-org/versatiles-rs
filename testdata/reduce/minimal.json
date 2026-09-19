@@ -1,9 +1,0 @@
-{
-  "version": 1,
-  "layers": {
-    "water": {
-      "properties": [],
-      "keep": [{ "minzoom": 0, "maxzoom": 14 }]
-    }
-  }
-}
