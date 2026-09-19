@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use regex::Regex;
 use versatiles_container::TileSource;
-use versatiles_core::TileJSON;
+use versatiles_core::{TileCoord, TileJSON};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 
@@ -63,7 +63,7 @@ impl VectorTransform for Runner {
 	const TAG: &'static str = "vector_filter_properties";
 
 	#[context("Failed to run vector filter properties")]
-	fn run(&self, mut tile: VectorTile) -> Result<Option<VectorTile>> {
+	fn run(&self, _coord: &TileCoord, mut tile: VectorTile) -> Result<Option<VectorTile>> {
 		tile.layers.iter_mut().try_for_each(|layer| {
 			let name = layer.name.clone();
 			layer.filter_map_properties(|mut properties| {
@@ -162,7 +162,7 @@ mod tests {
 		.unwrap();
 
 		let tile0 = VectorTile::new(vec![create_layer("1"), create_layer("2")]);
-		let tile1 = runner.run(tile0).unwrap().unwrap();
+		let tile1 = runner.run(&TileCoord::new(0, 0, 0).unwrap(), tile0).unwrap().unwrap();
 
 		assert_eq!(
 			extract_tile_properties(&tile1),

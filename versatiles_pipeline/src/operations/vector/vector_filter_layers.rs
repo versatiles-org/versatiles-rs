@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use anyhow::Result;
 use versatiles_container::TileSource;
-use versatiles_core::TileJSON;
+use versatiles_core::{TileCoord, TileJSON};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 
@@ -43,7 +43,7 @@ impl VectorTransform for Runner {
 	const TAG: &'static str = "vector_filter_layers";
 
 	#[context("Failed to run vector filter layers")]
-	fn run(&self, mut tile: VectorTile) -> Result<Option<VectorTile>> {
+	fn run(&self, _coord: &TileCoord, mut tile: VectorTile) -> Result<Option<VectorTile>> {
 		tile
 			.layers
 			.retain(|layer| self.layer_set.contains(&layer.name) == self.invert);
@@ -111,7 +111,7 @@ mod tests {
 		});
 
 		let tile0 = VectorTile::new(vec![create_layer("1"), create_layer("2")]);
-		let tile1 = runner.run(tile0).unwrap().unwrap();
+		let tile1 = runner.run(&TileCoord::new(0, 0, 0).unwrap(), tile0).unwrap().unwrap();
 
 		assert_eq!(tile1.layers.len(), 1);
 		assert_eq!(extract_suffix(&tile1.layers[0]).unwrap(), "2");

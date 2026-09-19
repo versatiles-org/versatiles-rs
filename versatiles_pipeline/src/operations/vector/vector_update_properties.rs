@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use anyhow::{Result, anyhow};
 use versatiles_container::TileSource;
-use versatiles_core::TileJSON;
+use versatiles_core::{TileCoord, TileJSON};
 use versatiles_derive::context;
 use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
 
@@ -119,7 +119,7 @@ impl VectorTransform for Runner {
 	}
 
 	#[context("Failed to run vector update properties")]
-	fn run(&self, mut tile: VectorTile) -> Result<Option<VectorTile>> {
+	fn run(&self, _coord: &TileCoord, mut tile: VectorTile) -> Result<Option<VectorTile>> {
 		let layer_name = &self.args.layer_name;
 
 		// Iterate over all layers in the tile and *only* touch the requested one.
@@ -248,7 +248,7 @@ mod tests {
 		};
 
 		let tile0 = create_sample_vector_tile();
-		let tile1 = runner.run(tile0).unwrap().unwrap();
+		let tile1 = runner.run(&TileCoord::new(0, 0, 0).unwrap(), tile0).unwrap().unwrap();
 
 		let properties = tile1.layers[0].features[0].decode_properties(&tile1.layers[0]).unwrap();
 

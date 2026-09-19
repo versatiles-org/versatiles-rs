@@ -9,7 +9,7 @@ use cel_interpreter::{
 	objects::{Key as CelKey, Map as CelMap},
 };
 use versatiles_container::TileSource;
-use versatiles_core::TileJSON;
+use versatiles_core::{TileCoord, TileJSON};
 use versatiles_derive::context;
 use versatiles_geometry::{
 	geo::{GeoProperties, GeoValue},
@@ -260,7 +260,7 @@ impl VectorTransform for Runner {
 	const TAG: &'static str = "vector_filter_features";
 
 	#[context("Failed to run vector_filter_features")]
-	fn run(&self, mut tile: VectorTile) -> Result<Option<VectorTile>> {
+	fn run(&self, _coord: &TileCoord, mut tile: VectorTile) -> Result<Option<VectorTile>> {
 		// Not `retain_mut`: filtering can fail, and a closure returning `bool` has nowhere to put
 		// the error but the floor. A tile whose properties do not decode is reported and dropped
 		// by `TransformOp`, rather than quietly losing the features that failed to decode.
@@ -332,7 +332,7 @@ mod tests {
 			layer: layers.iter().map(|s| (*s).to_string()).collect(),
 			expr: CelExpression::try_from(expr)?,
 		})?;
-		runner.run(tile)
+		runner.run(&TileCoord::new(0, 0, 0)?, tile)
 	}
 
 	/// Returns `(layer_name, feature_count)` pairs, sorted by layer name.

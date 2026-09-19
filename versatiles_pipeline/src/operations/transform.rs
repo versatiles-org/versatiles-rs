@@ -66,7 +66,12 @@ pub trait VectorTransform: Debug + Send + Sync + 'static {
 	fn update_tilejson(&self, _tilejson: &mut TileJSON) {}
 
 	/// Transforms one decoded tile, or returns `Ok(None)` to drop it.
-	fn run(&self, tile: VectorTile) -> Result<Option<VectorTile>>;
+	///
+	/// `coord` is passed for the same reason [`TileTransform::run`] takes one: a
+	/// vector operation may depend on where the tile sits, and a filter that
+	/// varies by zoom is the case this exists for. Operations that do not need it
+	/// ignore it, as three of the four implementors currently do.
+	fn run(&self, coord: &TileCoord, tile: VectorTile) -> Result<Option<VectorTile>>;
 }
 
 /// Adapts a [`VectorTransform`] into a [`TileTransform`].
@@ -80,9 +85,9 @@ impl<V: VectorTransform> TileTransform for AsTileTransform<V> {
 		self.0.update_tilejson(tilejson);
 	}
 
-	fn run(&self, _coord: &TileCoord, tile: Tile) -> Result<Option<Tile>> {
+	fn run(&self, coord: &TileCoord, tile: Tile) -> Result<Option<Tile>> {
 		let format = tile.format();
-		let Some(vector) = self.0.run(tile.into_vector()?)? else {
+		let Some(vector) = self.0.run(coord, tile.into_vector()?)? else {
 			return Ok(None);
 		};
 		Ok(Some(Tile::from_vector(vector, format)?))
