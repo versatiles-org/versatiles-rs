@@ -233,13 +233,21 @@ impl VectorTransform for Runner {
 
 	#[context("Failed to run vector_filter_features")]
 	fn run(&self, mut tile: VectorTile) -> Result<Option<VectorTile>> {
-		tile.layers.retain_mut(|layer| {
+		// Not `retain_mut`: filtering can fail, and a closure returning `bool` has nowhere to put
+		// the error but the floor. A tile whose properties do not decode is reported and dropped
+		// by `TransformOp`, rather than quietly losing the features that failed to decode.
+		let mut kept = Vec::with_capacity(tile.layers.len());
+		for mut layer in tile.layers.drain(..) {
 			if !self.layer_set.contains(&layer.name) {
-				return true;
+				kept.push(layer);
+				continue;
 			}
-			let _ = layer.filter_map_properties(|props| if self.evaluate(&props) { Some(props) } else { None });
-			!layer.features.is_empty()
-		});
+			layer.filter_map_properties(|props| if self.evaluate(&props) { Some(props) } else { None })?;
+			if !layer.features.is_empty() {
+				kept.push(layer);
+			}
+		}
+		tile.layers = kept;
 
 		if tile.layers.is_empty() {
 			Ok(None)
@@ -424,6 +432,29 @@ mod tests {
 		)]);
 		let out = run_expr(&["poi"], "population >= 1000", tile).unwrap();
 		assert!(out.is_none(), "all layers filtered empty should drop the tile");
+	}
+
+	#[test]
+	fn test_undecodable_properties_are_reported_not_swallowed() {
+		// The failure used to be discarded at the call site, so a corrupt feature disappeared and
+		// the operation reported success. `TransformOp` records the `Err` against the runtime and
+		// drops the tile — losing the tile is bad, but losing features without saying so is worse.
+		// That `TransformOp` does the recording is covered by `transform::tests`.
+		let mut tile = VectorTile::new(vec![layer(
+			"poi",
+			vec![
+				feature(vec![("population", GeoValue::Int(2000))]),
+				feature(vec![("population", GeoValue::Int(3000))]),
+			],
+		)]);
+		tile.layers[0].features[1].tag_ids = vec![9999, 9999];
+
+		let err = run_expr(&["poi"], "population >= 1000", tile).unwrap_err();
+		assert!(
+			err.chain()
+				.any(|e| e.to_string().contains("Failed to decode properties")),
+			"expected the decode failure to name the layer, got: {err:?}"
+		);
 	}
 
 	#[test]
