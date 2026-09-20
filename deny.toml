@@ -33,16 +33,30 @@ ignore = [
 	# earlier version of this entry said the opposite, and was written when
 	# `russh` was still a unix-only dev-dependency.
 	#
-	# Accepted anyway, because the advisory's attack does not exist here. Marvin
-	# recovers a key by timing RSA *decryption* of chosen ciphertexts, which
-	# needs a decryption oracle. `russh` uses the `rsa` crate only to parse
-	# PKCS#1/PKCS#8 private key files (`russh/src/keys/format/*.rs`); signatures
-	# go through `ssh-key`/`signature`, and an SSH client decrypts nothing with
-	# its own RSA key. The vulnerable code path is never entered.
+	# The vulnerable code is not merely present but reached. This entry used to
+	# say `rsa` was only used to parse PKCS#1/PKCS#8 key files, with signatures
+	# going through `ssh-key`/`signature` instead; that reading was wrong.
+	# Signing does go through `ssh-key`, and `ssh-key` performs the RSA
+	# signature with this very crate —
+	# `rsa::pkcs1v15::SigningKey::<Sha512>::try_from(..).try_sign(..)` in
+	# `ssh-key-0.7.0-rc.11/src/signature.rs:709`. The private-key exponentiation
+	# the advisory is about does happen here.
 	#
-	# Dropping `russh`'s `rsa` feature would remove the crate outright, at the
-	# cost of RSA public-key auth (`~/.ssh/id_rsa`, step 5 of the auth priority
-	# in `sftp_utils::open_session`).
+	# Accepted on the attack shape instead, which is the part that holds. Marvin
+	# recovers a key by timing RSA *decryption* of attacker-chosen ciphertexts:
+	# it needs an oracle that decrypts what the attacker submits and reveals how
+	# long it took. An SSH client decrypts nothing with its own key — it signs a
+	# transcript whose contents it largely determines — so that oracle does not
+	# exist. The residual is a malicious or MITM'd server inducing many timed
+	# PKCS#1v1.5 signatures, which is a materially harder attack, bounded by
+	# connection count, and only against a client authenticating with an RSA
+	# key at all.
+	#
+	# Two things narrow it further: step 5 of the auth priority in
+	# `sftp_utils::open_session` tries `~/.ssh/id_ed25519` before `~/.ssh/id_rsa`,
+	# so a user holding both never signs with RSA; and dropping `russh`'s `rsa`
+	# feature would remove the crate outright, at the cost of RSA public-key
+	# auth.
 	#
 	# RustSec lists no safe upgrade (https://github.com/RustCrypto/RSA/issues/626),
 	# so there is nothing to bump to; drop this entry once `russh` depends on a
