@@ -13,8 +13,6 @@
 
 use anyhow::{Context, Result, bail, ensure};
 use image::{DynamicImage, ImageBuffer};
-
-use super::all::ensure_decodable;
 use libwebp_sys::{
 	VP8StatusCode, WebPBitstreamFeatures, WebPConfig, WebPDecodeRGB, WebPDecodeRGBA, WebPEncode, WebPFree,
 	WebPGetFeatures, WebPMemoryWrite, WebPMemoryWriter, WebPMemoryWriterClear, WebPMemoryWriterInit, WebPPicture,
@@ -23,6 +21,7 @@ use libwebp_sys::{
 use versatiles_core::Blob;
 use versatiles_derive::context;
 
+use super::all::ensure_decodable;
 use crate::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 
 #[context("encoding {}x{} {:?} as WebP (q={:?}, e={:?})", image.width(), image.height(), image.color(), quality, effort)]
