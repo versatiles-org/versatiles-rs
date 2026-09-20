@@ -174,11 +174,16 @@ mod tests {
 
 	use super::*;
 
-	/// A style written to a temporary file, since the argument is a path.
+	/// A style written to a temporary file, spelled for embedding in double-quoted VPL.
+	///
+	/// The backslash doubling is not cosmetic: a double-quoted VPL string processes `\` as an
+	/// escape, so a Windows temp path like `C:\Users\RUNNER~1\AppData\…` fails to parse as written.
+	/// The operation itself is fine — the CLI builds `VPLNode`s and lets the serializer quote — but
+	/// a test that assembles VPL *text* has to escape it, as `vector_update_properties`' tests do.
 	fn style_file(dir: &tempfile::TempDir, json: &str) -> String {
 		let path = dir.path().join("style.json");
 		std::fs::write(&path, json).unwrap();
-		path.to_str().unwrap().to_string()
+		path.to_str().unwrap().replace('\\', "\\\\")
 	}
 
 	async fn operation(dir: &tempfile::TempDir, style: &str) -> Result<Box<dyn TileSource>> {
@@ -290,6 +295,32 @@ mod tests {
 		let rendered = operation.source_type().to_string();
 		assert_eq!(rendered.matches("vector_reduce_to_style").count(), 1, "got: {rendered}");
 		assert!(!rendered.contains("vector_filter_features"), "got: {rendered}");
+	}
+
+	#[tokio::test]
+	async fn a_path_containing_a_backslash_is_still_found() {
+		// Every Windows temp path is full of backslashes, and a double-quoted VPL string reads `\`
+		// as an escape — which is how this operation's tests failed on Windows and nowhere else.
+		// A backslash is a legal filename character on Unix too, so the hazard is reproducible on
+		// every platform rather than only in CI.
+		let dir = tempfile::tempdir().unwrap();
+		let nested = dir.path().join("a\\b");
+		std::fs::create_dir_all(&nested).unwrap();
+
+		let path = nested.join("style.json");
+		std::fs::write(
+			&path,
+			r#"{"layers":[{"id":"a","source-layer":"debug_x","paint":{"fill-color":["get","char"]}}]}"#,
+		)
+		.unwrap();
+		let escaped = path.to_str().unwrap().replace('\\', "\\\\");
+
+		PipelineFactory::new_dummy()
+			.operation_from_vpl(&format!(
+				"from_debug format=mvt | vector_reduce_to_style style=\"{escaped}\""
+			))
+			.await
+			.unwrap();
 	}
 
 	#[tokio::test]
