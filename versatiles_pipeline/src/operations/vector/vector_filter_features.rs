@@ -200,8 +200,48 @@ impl TryFrom<&str> for CelExpression {
 /// installing a process-global panic hook from inside a library, which is the
 /// shape of problem #261 was filed about. Whoever owns the process can set a
 /// hook; this function will not.
+///
+/// ## Why it parses on its own thread
+///
+/// `cel-parser`'s grammar is ANTLR-generated recursive descent, so its stack appetite grows with
+/// the expression — and an expression can be generated rather than typed. `vector_reduce_to_style`
+/// renders one term per drawn case, which for a real style is tens of kilobytes of CEL.
+///
+/// Compiling that in place means the parser gets whatever the caller happens to have left, and a
+/// pipeline builds several frames deep inside an async runtime. On Windows, where the main thread
+/// gets 1 MB against Linux's 8, that was not enough: `versatiles reduce` aborted with
+/// `thread 'main' has overflowed its stack`, inside `CELParser::member_rec`.
+///
+/// Parsing on a thread with a stack of its own makes the answer depend on the expression alone
+/// rather than on how deep the caller was. It costs one thread per compiled expression, which is a
+/// build-time cost paid once per operation, never per tile.
 fn compile_cel(expr: &str) -> Result<Program> {
-	std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Program::compile(expr)))
+	/// Generous, and deliberately so: it is reserved address space rather than committed memory,
+	/// it lives only for the parse, and the failure it prevents is an abort rather than an error.
+	const PARSER_STACK: usize = 16 * 1024 * 1024;
+
+	// `ParseErrors` holds an `Rc` and so cannot cross a thread boundary; it is rendered to its
+	// message here, inside the thread, which is all the caller ever did with it.
+	let parse = || {
+		std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+			Program::compile(expr).map_err(|e| e.to_string())
+		}))
+	};
+
+	// `scope` so the closure may borrow `expr` instead of forcing an allocation to satisfy
+	// `'static`. A thread that cannot be spawned is not fatal — parsing in place is what this did
+	// before, and it is still right for every expression small enough to have been fine anyway.
+	let compiled = std::thread::scope(|scope| {
+		match std::thread::Builder::new()
+			.stack_size(PARSER_STACK)
+			.spawn_scoped(scope, parse)
+		{
+			Ok(handle) => handle.join().unwrap_or_else(Err),
+			Err(_) => parse(),
+		}
+	});
+
+	compiled
 		.map_err(|panic_payload| {
 			// `catch_unwind` returns `Box<dyn Any + Send>`; extract a message if the panic
 			// carried one (Rust panics with string literals or `format!`-ed Strings).
@@ -254,7 +294,7 @@ fn is_num(This(this): This<CelValue>) -> bool {
 	matches!(this, CelValue::Int(_) | CelValue::UInt(_) | CelValue::Float(_))
 }
 
-struct Runner {
+pub(crate) struct Runner {
 	layer_set: HashSet<String>,
 	program: Program,
 	/// The functions every evaluation needs, registered once.
@@ -296,8 +336,18 @@ impl std::fmt::Debug for Runner {
 }
 
 impl Runner {
-	pub fn from_args(args: &Args) -> Result<Self> {
-		let program = compile_cel(args.expr.as_str())?;
+	fn from_args(args: &Args) -> Result<Self> {
+		Self::new(args.layer.iter().cloned(), args.expr.as_str())
+	}
+
+	/// Builds a runner from a layer set and an expression, without going through VPL.
+	///
+	/// This is what lets `vector_reduce_to_style` apply one predicate per source-layer inside a
+	/// single operation. Chaining one `vector_filter_features` per layer would work and would be
+	/// the same answer, but each link decodes and re-encodes the whole tile — twenty times over
+	/// for a real style, to touch one layer each time.
+	pub(crate) fn new(layers: impl IntoIterator<Item = String>, expr: &str) -> Result<Self> {
+		let program = compile_cel(expr)?;
 
 		let refs = program.references();
 		let binds_props = refs.has_variable(PROPS_VAR);
@@ -316,7 +366,7 @@ impl Runner {
 		}
 
 		Ok(Self {
-			layer_set: args.layer.iter().cloned().collect(),
+			layer_set: layers.into_iter().collect(),
 			program,
 			context,
 			referenced_vars,
@@ -416,7 +466,7 @@ impl TileTransform for Runner {
 
 impl Runner {
 	/// Filters a decoded tile, or returns `Ok(None)` to drop it.
-	fn filter(&self, coord: &TileCoord, mut tile: VectorTile) -> Result<Option<VectorTile>> {
+	pub(crate) fn filter(&self, coord: &TileCoord, mut tile: VectorTile) -> Result<Option<VectorTile>> {
 		// Still worth asking: a zoom-only expression that answered `false` reaches here, and then
 		// every in-scope layer goes rather than being walked feature by feature.
 		let same_for_every_feature = self

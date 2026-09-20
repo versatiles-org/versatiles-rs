@@ -29,29 +29,52 @@ fn node(name: &str, properties: &[(&str, Vec<String>)]) -> VPLNode {
 	}
 }
 
-/// The operations that reduce a tileset to `requirement`.
+/// The operations that reduce a tileset to `requirement`, as VPL nodes.
 ///
 /// Order matters and is not a preference: **properties are stripped last**, because the feature
 /// filter's expressions read properties, and removing them first would make every `has(props.k)`
 /// guard false and delete the features the filter was meant to keep.
+///
+/// This is the *readable* presentation of a reduction — what someone would have written by hand,
+/// and what an editor can paste into a pipeline. It is not how `vector_reduce_to_style` runs one:
+/// chaining these would decode and re-encode every tile once per node, twenty times over for a
+/// real style. The operation applies [`layer_names`], [`feature_expressions`] and
+/// [`property_regex`] in a single pass instead, so both presentations are built from the same three
+/// answers and cannot drift apart.
 #[must_use]
 pub fn operations(requirement: &Requirement) -> Vec<VPLNode> {
 	let mut nodes = Vec::new();
 
-	nodes.push(layer_filter(requirement));
-	nodes.extend(feature_filters(requirement));
-	nodes.push(property_filter(requirement));
+	nodes.push(node(
+		"vector_filter_layers",
+		&[
+			("filter", layer_names(requirement)),
+			("invert", vec!["true".to_string()]),
+		],
+	));
+
+	for (layer, expression) in feature_expressions(requirement) {
+		nodes.push(node(
+			"vector_filter_features",
+			&[("layer", vec![layer]), ("expr", vec![expression])],
+		));
+	}
+
+	nodes.push(node(
+		"vector_filter_properties",
+		&[
+			("regex", vec![property_regex(requirement)]),
+			("invert", vec!["true".to_string()]),
+		],
+	));
 
 	nodes
 }
 
-/// Keeps only the layers the requirement names.
-fn layer_filter(requirement: &Requirement) -> VPLNode {
-	let layers: Vec<String> = requirement.layers.keys().cloned().collect();
-	node(
-		"vector_filter_layers",
-		&[("filter", layers), ("invert", vec!["true".to_string()])],
-	)
+/// The source-layers to keep. Everything else is dropped.
+#[must_use]
+pub fn layer_names(requirement: &Requirement) -> Vec<String> {
+	requirement.layers.keys().cloned().collect()
 }
 
 /// Keeps only the properties the requirement names, across every layer.
@@ -59,7 +82,8 @@ fn layer_filter(requirement: &Requirement) -> VPLNode {
 /// One regex over `layer/property`, which is what `vector_filter_properties` matches against. A
 /// layer whose `properties` list is empty contributes no alternative and so loses every property
 /// while keeping its geometry — the case where a layer is drawn as shape alone.
-fn property_filter(requirement: &Requirement) -> VPLNode {
+#[must_use]
+pub fn property_regex(requirement: &Requirement) -> String {
 	let mut alternatives: Vec<String> = Vec::new();
 	for (layer, requirements) in &requirement.layers {
 		for property in &requirements.properties {
@@ -71,16 +95,11 @@ fn property_filter(requirement: &Requirement) -> VPLNode {
 	// than nothing at all. `[^\s\S]` asks for one character that is neither whitespace nor
 	// non-whitespace, so it can never match — and unlike `(?!)`, it needs no look-around, which
 	// the `regex` crate does not support.
-	let pattern = if alternatives.is_empty() {
+	if alternatives.is_empty() {
 		r"[^\s\S]".to_string()
 	} else {
 		format!("^(?:{})$", alternatives.join("|"))
-	};
-
-	node(
-		"vector_filter_properties",
-		&[("regex", vec![pattern]), ("invert", vec!["true".to_string()])],
-	)
+	}
 }
 
 /// One feature filter per layer that needs one.
@@ -88,7 +107,8 @@ fn property_filter(requirement: &Requirement) -> VPLNode {
 /// A layer whose entries add up to "keep everything" gets no operation at all, rather than one
 /// with `expr="true"`: the operation would decode and re-encode every feature's properties to
 /// arrive back where it started.
-fn feature_filters(requirement: &Requirement) -> Vec<VPLNode> {
+#[must_use]
+pub fn feature_expressions(requirement: &Requirement) -> Vec<(String, String)> {
 	let mut nodes = Vec::new();
 
 	for (layer, requirements) in &requirement.layers {
@@ -116,10 +136,7 @@ fn feature_filters(requirement: &Requirement) -> Vec<VPLNode> {
 			terms.iter().map(|t| format!("({t})")).collect::<Vec<_>>().join(" || ")
 		};
 
-		nodes.push(node(
-			"vector_filter_features",
-			&[("layer", vec![layer.clone()]), ("expr", vec![expression])],
-		));
+		nodes.push((layer.clone(), expression));
 	}
 
 	nodes

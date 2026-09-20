@@ -784,7 +784,7 @@ Reduces vector tiles to what one MapLibre style actually draws.
 
 Reads the style, works out which source-layers it draws, which properties it reads and which features it filters to, then drops everything else. A Shortbread tileset reduced to a style that only ever reads `name` loses every `name_*` translation, and a layer drawn as plain geometry loses all of its properties while keeping its shapes.
 
-It expands to `vector_filter_layers`, one `vector_filter_features` per layer that needs one, and `vector_filter_properties` — so the same reduction can be written by hand, and `versatiles reduce --print` shows what was derived.
+The same reduction can be written by hand as `vector_filter_layers`, one `vector_filter_features` per layer, and `vector_filter_properties`. This does it in one pass instead: chaining twenty operations would decode and re-encode every tile twenty times to touch one layer each time.
 
 Zoom levels are clamped to the pyramid of the source it wraps. That matters: MapLibre overzooms, so a style drawing addresses from z17 against a tileset that stops at z14 must keep them in the z14 tiles, not drop them.
 

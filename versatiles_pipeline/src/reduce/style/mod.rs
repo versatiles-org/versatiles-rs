@@ -152,8 +152,13 @@ pub fn from_style(json: &str, maxzoom: u8) -> Result<Requirement> {
 					match predicates.len() {
 						0 => None,
 						1 => predicates.into_iter().next(),
+						// Simplified, not merely built. One style layer per drawn case is how
+						// cartography is written, so this disjunction is the whole of a source-layer's
+						// styling flattened into one predicate — 232 terms for `colorful`'s `streets`.
+						// `simplify` is exact; what it removes is repetition, not meaning.
 						_ => Some(Predicate::Or(predicates)),
 					}
+					.map(crate::reduce::simplify::simplify)
 				};
 
 				KeepEntry {
@@ -348,9 +353,18 @@ mod tests {
 		);
 		let keep = &requirement.layers["streets"].keep;
 		assert_eq!(keep.len(), 2, "two zoom ranges, not three layers");
-		assert!(
-			matches!(keep[0].predicate, Some(Predicate::Or(_))),
-			"z5 is a disjunction"
+		// The two z5 layers are OR-ed, and `simplify` then recognises that a disjunction of
+		// equalities on one field is a membership test. One layer per drawn value is how
+		// cartography is written, so this is the shape almost every merged range takes.
+		assert_eq!(
+			keep[0].predicate,
+			Some(Predicate::In(
+				"kind".to_string(),
+				vec![
+					crate::reduce::Literal::String("motorway".to_string()),
+					crate::reduce::Literal::String("trunk".to_string()),
+				]
+			))
 		);
 		assert_eq!(keep[0].minzoom, Some(5));
 		assert_eq!(keep[1].minzoom, Some(9));
