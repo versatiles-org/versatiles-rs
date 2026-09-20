@@ -37,11 +37,20 @@ on:
         required: false
         default: true
 
+# The default for every job, overridden per job where more is needed.
+#
+# These used to be granted workflow-wide, which handed `contents: write` and an
+# OIDC token to the four build jobs — the ones that compile this repository's
+# code and run `docker buildx` over it, i.e. exactly the jobs where a malicious
+# dependency or build script would find them. Only `prepare`, the build jobs'
+# asset uploads and `finish-release` write to the repository, and only
+# `publish-npm` needs OIDC.
+#
+# `packages: write` was never used at all: nothing here touches ghcr.io or the
+# GitHub package registry. The Docker login is to Docker Hub, for pull rate
+# limits, and `docker buildx` writes `type=local` rather than pushing an image.
 permissions:
-  contents: write
-  packages: write
-  checks: read # reading the CI verdict for this commit in pre-flight-checks
-  id-token: write  # Required for npm trusted publishing with OIDC (no token needed)
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -49,6 +58,9 @@ env:
 jobs:
   pre-flight-checks:
     name: Pre-flight checks
+    permissions:
+      contents: read
+      checks: read # reads the CI verdict for this commit
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -114,6 +126,8 @@ jobs:
 
   prepare:
     name: Prepare release
+    permissions:
+      contents: write # creates the draft release
     needs: pre-flight-checks
     runs-on: ubuntu-latest
     outputs:
@@ -167,6 +181,8 @@ jobs:
 
   build-linux-arm:
     name: Build Linux ARM
+    permissions:
+      contents: write # uploads the CLI tarball to the release
     runs-on: ubuntu-24.04-arm
     needs: prepare
     env:
@@ -228,6 +244,8 @@ jobs:
 
   build-linux-x86:
     name: Build Linux x86
+    permissions:
+      contents: write # uploads the CLI tarball to the release
     runs-on: ubuntu-24.04
     needs: prepare
     env:
@@ -289,6 +307,8 @@ jobs:
 
   build-macos:
     name: Build MacOS
+    permissions:
+      contents: write # uploads the CLI tarball to the release
     runs-on: ${{ matrix.runner }}
     needs: prepare
     env:
@@ -361,6 +381,8 @@ jobs:
 
   build-windows:
     name: Build Windows
+    permissions:
+      contents: write # uploads the CLI tarball to the release
     runs-on: windows-latest
     needs: prepare
     env:
@@ -539,6 +561,9 @@ jobs:
 
   publish-npm:
     name: Publish to npm
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing with OIDC (no token needed)
     needs:
       - prepare
       - package-npm-binaries
@@ -883,6 +908,8 @@ jobs:
 
   finish-release:
     name: Finish release
+    permissions:
+      contents: write # uploads install scripts, undrafts the release
     needs:
       - prepare
       - build-linux-x86
