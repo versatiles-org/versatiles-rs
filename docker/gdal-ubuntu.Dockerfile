@@ -13,7 +13,7 @@ ENV RUSTUP_HOME=/usr/local/rustup \
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         build-essential curl clang llvm-dev libclang-dev pkg-config ca-certificates && \
-    curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain stable
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
 
 WORKDIR /app
 

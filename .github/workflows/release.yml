@@ -596,8 +596,12 @@ jobs:
           # bundled npm can't install another npm. corepack fetches the
           # tarball directly from the registry and activates it via a
           # shim — no dependency on the broken global tree.
+          # Pinned, not `@latest`: this fetches a tarball from the registry and
+          # runs it in the job that holds NPM_TOKEN and the OIDC identity, so
+          # `@latest` means "whatever was published by release time". Bump it
+          # deliberately; npm >= 11.5.1 is what OIDC trusted publishing needs.
           corepack enable npm
-          corepack prepare npm@latest --activate
+          corepack prepare npm@12.0.2 --activate
           echo "Updated npm version: $(npm --version)"
 
       - name: Install dependencies
@@ -830,6 +834,23 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
           set -o pipefail
+
+          # `cargo publish --allow-dirty` below disables cargo's check that the
+          # packaged tree matches a clean checkout, so nothing would notice if a
+          # future step wrote into the tree between checkout and publish — the
+          # result would go to crates.io silently. Why the flag was added is not
+          # recorded, and a release is the wrong place to find out by removing
+          # it, so assert the property here instead: the tree must be clean
+          # before any of the seven publishes begin.
+          #
+          # Deliberately not cargo's own check, which also trips on untracked
+          # files a build step may legitimately leave behind.
+          if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+            echo "::error::working tree differs from the tagged commit; refusing to publish"
+            git status --short
+            exit 1
+          fi
+
           echo "Publishing crates in dependency order..."
 
           # Publish in dependency order (derived from Cargo.toml dependencies)

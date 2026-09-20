@@ -2,7 +2,13 @@
 ARG LIBC
 
 # CREATE BUILDER SYSTEM FOR MUSL
-FROM rust:alpine AS builder_musl
+#
+# Pinned by digest, not just by tag: this image compiles every Linux binary we
+# ship, so `rust:alpine` moving underneath us silently changes the compiler that
+# produced a release and makes two builds of the same tag different artifacts.
+# The tag is kept alongside the digest so Dependabot can offer the bump (see the
+# docker entries in .github/dependabot.yml) and so a reader can see what it is.
+FROM rust:alpine@sha256:7cc1c22d77d9432f7fe012a70e6d3e555af54c2a6832700ed7d553f1769ae89f AS builder_musl
 # NOTE: We use +crt-static for CLI binaries (fully static)
 # but -crt-static for cdylib (Node.js bindings) to enable dynamic linking
 # The RUSTFLAGS will be overridden per-build below
@@ -17,7 +23,8 @@ RUN apk add --no-cache bash musl-dev pkgconf
 # now tracks trixie (glibc 2.41). Trixie-built binaries fail to start on common
 # stable distros (Debian 12, Ubuntu 22.04, RHEL 9). Bump to the next Debian
 # stable when bookworm nears EOL.
-FROM rust:slim-bookworm AS builder_gnu
+# Pinned by digest for the same reason as builder_musl above.
+FROM rust:slim-bookworm@sha256:ff521445a372125ed4f76e1453a1f8098f2d05332d1601d30db1c1f62757e730 AS builder_gnu
 # Avoid prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 # Install necessary packages
@@ -89,8 +96,12 @@ RUN echo "=== Build Output Verification ===" && \
     echo "✓ Output verification passed"
 
 # Build .deb package if using GNU
+# `--version` and `--locked`: unpinned, this compiles and runs whatever
+# cargo-deb was published most recently, inside the build that produces a
+# shipped .deb. `--locked` also keeps its own dependency tree from drifting
+# between builds.
 RUN if [ "$LIBC" = "gnu" ]; then \
-    cargo install cargo-deb && \
+    cargo install cargo-deb --version 3.8.0 --locked && \
     cargo deb --no-build --target "$TARGET" --package "versatiles" --output "/output/cli/versatiles-linux-${LIBC}-${ARCH}.deb"; \
 fi
 
