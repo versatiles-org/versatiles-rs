@@ -48,7 +48,7 @@
 
 use std::{fmt::Debug, mem::size_of, path::Path, sync::Arc};
 
-use anyhow::{Result, bail};
+use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use moka::future::Cache;
 #[cfg(feature = "cli")]
@@ -66,6 +66,21 @@ use crate::{
 	SharedTileSource, SourceType, Tile, TileSource, TileSourceMetadata, TilesReader, TilesRuntime, Traversal,
 	TraversalOrder, TraversalSize, container::tile_chunking::Chunks,
 };
+
+/// How many directory levels a lookup or a pyramid walk may descend.
+///
+/// Leaf directories are followed by reading a byte range out of the leaf blob,
+/// and nothing stops an entry from naming the bytes it was itself parsed from.
+/// The pyramid walk is recursive, so directory depth is stack depth: a
+/// self-referential entry recurses until the stack is gone, and a stack overflow
+/// aborts the process instead of unwinding — neither `catch_unwind` nor the
+/// server's `CatchPanicLayer` can turn that back into an error. A 132-byte file
+/// is enough to trigger it.
+///
+/// `PMTiles` v3 stores a root directory and one level of leaves, so two is what
+/// the format produces in practice; three leaves room to spare and is the bound
+/// the tile-lookup path has always applied.
+const MAX_DIRECTORY_DEPTH: usize = 3;
 
 /// Reader for `PMTiles` v3 containers.
 ///
@@ -237,7 +252,7 @@ impl PMTilesReader {
 	) -> Result<Option<Tile>> {
 		let mut entries = root_entries;
 
-		for _depth in 0..3 {
+		for _depth in 0..MAX_DIRECTORY_DEPTH {
 			let Some(entry) = entries.find_tile(tile_id) else {
 				return Ok(None);
 			};
@@ -286,7 +301,7 @@ impl PMTilesReader {
 	) -> Result<Option<ByteRange>> {
 		let mut entries = root_entries;
 
-		for _depth in 0..3 {
+		for _depth in 0..MAX_DIRECTORY_DEPTH {
 			let Some(entry) = entries.find_tile(tile_id) else {
 				return Ok(None);
 			};
@@ -363,15 +378,22 @@ fn calc_tile_pyramid(
 ) -> Result<TilePyramid> {
 	let mut coords: Vec<TileCoord> = Vec::new();
 
-	parse_directories(&mut coords, root_bytes_uncompressed, leaves_bytes, compression)?;
+	parse_directories(&mut coords, root_bytes_uncompressed, leaves_bytes, compression, 0)?;
 
 	fn parse_directories(
 		coords: &mut Vec<TileCoord>,
 		dir: &Blob,
 		leaves_bytes: &Blob,
 		compression: TileCompression,
+		depth: usize,
 	) -> Result<u64> {
 		log::trace!("parse_directories");
+
+		ensure!(
+			depth < MAX_DIRECTORY_DEPTH,
+			"PMTiles leaf directories nest more than {MAX_DIRECTORY_DEPTH} levels deep; \
+			 the file is malformed or a leaf directory points at itself"
+		);
 
 		let entries = EntriesV3::from_blob(dir)?;
 		let entries = entries.iter().collect::<Vec<_>>();
@@ -388,7 +410,7 @@ fn calc_tile_pyramid(
 					let range = entry.range;
 					let mut blob = leaves_bytes.read_range(&range)?;
 					blob = decompress(blob, &compression)?;
-					total_entries += parse_directories(coords, &blob, leaves_bytes, compression)?;
+					total_entries += parse_directories(coords, &blob, leaves_bytes, compression, depth + 1)?;
 				}
 			}
 		}
@@ -535,6 +557,59 @@ mod tests {
 	use super::*;
 
 	static PATH: LazyLock<PathBuf> = LazyLock::new(|| current_dir().unwrap().join("../testdata/berlin.pmtiles"));
+
+	/// Serializes one leaf-pointer entry (`run_length == 0`) covering `length`
+	/// bytes from the start of the leaf blob.
+	fn leaf_pointer_dir(length: u64) -> Result<Blob> {
+		let mut entries = super::super::types::EntriesV3::new();
+		entries.push(super::super::types::EntryV3::new(0, ByteRange::new(0, length), 0));
+		entries.as_slice().serialize_entries()
+	}
+
+	/// A leaf directory entry may name the very bytes it was parsed from. The
+	/// walk is recursive, so that is unbounded recursion: the stack goes, and a
+	/// stack overflow aborts the process rather than unwinding, so no caller can
+	/// catch it. It must be a plain error instead.
+	#[test]
+	fn a_self_referential_leaf_directory_is_refused() -> Result<()> {
+		// The entry has to describe the blob that contains it, so serialize once
+		// to learn the length, then again with that length filled in.
+		let mut blob = leaf_pointer_dir(5)?;
+		for _ in 0..4 {
+			let next = leaf_pointer_dir(blob.len())?;
+			if next.len() == blob.len() {
+				blob = next;
+				break;
+			}
+			blob = next;
+		}
+
+		// Root and leaves are the same bytes: following the entry re-reads the
+		// directory currently being parsed.
+		let error = calc_tile_pyramid(&blob, &blob, TileCompression::Uncompressed)
+			.expect_err("a self-referential leaf directory must be an error, not an abort");
+
+		let message = format!("{error:#}");
+		assert!(
+			message.contains("nest more than 3 levels deep"),
+			"unhelpful message: {message}"
+		);
+
+		Ok(())
+	}
+
+	/// The bound must not refuse the nesting the format actually produces.
+	#[test]
+	fn a_root_directory_without_leaves_still_walks() -> Result<()> {
+		let mut entries = super::super::types::EntriesV3::new();
+		entries.push(super::super::types::EntryV3::new(0, ByteRange::new(0, 10), 1));
+		let blob = entries.as_slice().serialize_entries()?;
+
+		let pyramid = calc_tile_pyramid(&blob, &Blob::default(), TileCompression::Uncompressed)?;
+		assert!(!pyramid.is_empty());
+
+		Ok(())
+	}
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
