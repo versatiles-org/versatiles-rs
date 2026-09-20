@@ -4,7 +4,7 @@ use std::{
 	slice::{Iter, SliceIndex},
 };
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, ensure};
 use versatiles_core::{
 	Blob, ByteRange, TileCompression,
 	compression::compress,
@@ -34,19 +34,31 @@ impl EntriesV3 {
 	/// * `data` - A reference to the `Blob` containing the serialized entries.
 	///
 	/// # Errors
-	/// Returns an error if the `Blob` format is incorrect or the data cannot be parsed.
-	///
-	/// # Panics
-	/// Panics if the number of entries exceeds 10 billion, which is considered an error.
+	/// Returns an error if the `Blob` format is incorrect, the data cannot be
+	/// parsed, or the declared entry count is larger than the blob could hold.
 	pub fn from_blob(data: &Blob) -> Result<Self> {
 		let mut entries: Vec<EntryV3> = Vec::new();
 		let mut reader = ValueReaderSlice::new_le(data.as_slice());
 
-		let num_entries = usize::try_from(reader.read_varint()?)?;
+		let declared_entries = reader.read_varint()?;
 
-		if num_entries > 10_000_000_000 {
-			bail!("there is something wrong: PMTiles with more then 10 billion tiles?")
-		}
+		// The count is one varint; each entry it promises costs at least four
+		// more — a tile-id delta, a run length, a length and an offset, one byte
+		// minimum each — so the bytes left bound how many entries can possibly
+		// follow. Checking that up front matters because an `EntryV3` is 32 bytes
+		// in memory against a single byte in the file: without it, a directory
+		// sized to the 256 MiB decompression ceiling asks for gigabytes before
+		// the reader runs out of input and errors. The previous guard allowed ten
+		// billion, which no directory could ever back.
+		const MIN_BYTES_PER_ENTRY: u64 = 4;
+		let remaining = reader.remaining()?;
+		let max_entries = remaining / MIN_BYTES_PER_ENTRY;
+		ensure!(
+			declared_entries <= max_entries,
+			"PMTiles directory declares {declared_entries} entries, but its {remaining} remaining bytes can hold at most {max_entries}"
+		);
+
+		let num_entries = usize::try_from(declared_entries)?;
 
 		let mut last_id: u64 = 0;
 
@@ -368,6 +380,41 @@ impl EntriesSliceV3<'_> {
 mod tests {
 	use super::*;
 
+	/// An `EntryV3` is 32 bytes in memory against a minimum of four bytes in the
+	/// file, so a directory that declares far more entries than its bytes can
+	/// back allocates gigabytes before running out of input. The declared count
+	/// is checked against the bytes that actually follow it.
+	#[test]
+	fn an_entry_count_larger_than_the_blob_can_hold_is_refused() {
+		let mut writer = ValueWriterBlob::new_le();
+		// Five billion entries, then twenty bytes of payload.
+		writer.write_varint(5_000_000_000).unwrap();
+		writer.write_blob(&Blob::from(vec![0u8; 20])).unwrap();
+
+		let error = EntriesV3::from_blob(&writer.into_blob()).expect_err("a count the blob cannot back must be an error");
+
+		let message = format!("{error:#}");
+		assert!(
+			message.contains("5000000000") && message.contains("at most"),
+			"unhelpful message: {message}"
+		);
+	}
+
+	/// The bound is derived from the remaining bytes, so a directory that is
+	/// exactly as large as it claims still parses.
+	#[test]
+	fn an_entry_count_the_blob_can_back_is_accepted() -> Result<()> {
+		let mut entries = EntriesV3::new();
+		for i in 0..3u64 {
+			entries.push(EntryV3::new(i, ByteRange::new(i * 10, 10), 1));
+		}
+		let blob = entries.as_slice().serialize_entries()?;
+
+		assert_eq!(EntriesV3::from_blob(&blob)?.len(), 3);
+
+		Ok(())
+	}
+
 	/// Tile ids in a directory are deltas, so their sum is whatever the file
 	/// says it is. Unchecked, that addition panicked in a debug build and
 	/// wrapped in a release one — and a wrapped id breaks the ordering
@@ -480,16 +527,19 @@ mod tests {
 		assert_eq!(entries.len(), 1_000_000);
 	}
 
-	/// Verifies that `EntriesV3` can handle the maximum allowed number of entries without panicking.
+	/// A directory holding nothing but a huge entry count is refused. The bound
+	/// used to be a flat ten billion, which this count exceeded; it is now the
+	/// bytes that follow, of which there are none.
 	#[test]
-	fn test_excessive_entries_panic() {
+	fn an_excessive_entry_count_with_no_payload_is_refused() {
 		let mut writer = ValueWriterBlob::new_le();
-		// Mocking an excessively large number of entries, e.g., 10 billion + 1
 		writer.write_varint(10_000_000_001).unwrap();
 		let blob = writer.into_blob();
-		assert_eq!(
-			EntriesV3::from_blob(&blob).unwrap_err().to_string(),
-			"there is something wrong: PMTiles with more then 10 billion tiles?"
+
+		let message = EntriesV3::from_blob(&blob).unwrap_err().to_string();
+		assert!(
+			message.contains("at most 0"),
+			"a directory with no payload can hold no entries: {message}"
 		);
 	}
 

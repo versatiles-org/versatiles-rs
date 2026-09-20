@@ -82,6 +82,17 @@ use crate::{
 /// the tile-lookup path has always applied.
 const MAX_DIRECTORY_DEPTH: usize = 3;
 
+/// Ceiling on how many tiles the directory walk may expand when the header does
+/// not say.
+///
+/// `addressed_tiles_count` is the header's own count of addressed tiles, and it
+/// is the natural bound on the walk — but writers are allowed to leave it `0`,
+/// and a crafted header can name any number it likes. This caps both cases. The
+/// largest real archives — a planet at zoom 15 — address on the order of 1.4
+/// billion tiles, so 2^32 keeps three times that in reserve while still refusing
+/// a `run_length` that exists only to make the reader count to 2^32.
+const MAX_UNDECLARED_ADDRESSED_TILES: u64 = 1 << 32;
+
 /// Reader for `PMTiles` v3 containers.
 ///
 /// Parses the header and directory blobs, merges embedded `TileJSON`, computes a
@@ -367,26 +378,52 @@ impl PMTilesReader {
 /// - `root_bytes_uncompressed`: uncompressed root directory bytes.
 /// - `leaves_bytes`: concatenated (compressed) leaf directory bytes as a single blob.
 /// - `compression`: compression algorithm used for directory blobs.
+/// - `addressed_tiles_count`: the header's own count of addressed tiles, used as
+///   the ceiling on how many the walk may expand. `0` means the writer left it
+///   unset, in which case [`MAX_UNDECLARED_ADDRESSED_TILES`] applies instead.
 ///
 /// ### Errors
-/// Returns an error when directory blobs cannot be parsed or decompressed.
+/// Returns an error when directory blobs cannot be parsed or decompressed, or
+/// when the directories address more tiles than the header declares.
 #[context("building tile pyramid from PMTiles directories")]
 fn calc_tile_pyramid(
 	root_bytes_uncompressed: &Blob,
 	leaves_bytes: &Blob,
 	compression: TileCompression,
+	addressed_tiles_count: u64,
 ) -> Result<TilePyramid> {
-	let mut coords: Vec<TileCoord> = Vec::new();
+	// The header's count is itself untrusted, so it bounds the walk rather than
+	// being believed: a file may declare fewer tiles than it addresses and be
+	// rejected, but it cannot declare more than the cap below and use that as a
+	// licence to spin.
+	let limit = if addressed_tiles_count == 0 {
+		MAX_UNDECLARED_ADDRESSED_TILES
+	} else {
+		addressed_tiles_count.min(MAX_UNDECLARED_ADDRESSED_TILES)
+	};
 
-	parse_directories(&mut coords, root_bytes_uncompressed, leaves_bytes, compression, 0)?;
+	let mut pyramid = TilePyramid::new_empty();
+	let mut total_entries = 0u64;
+
+	parse_directories(
+		&mut pyramid,
+		&mut total_entries,
+		limit,
+		root_bytes_uncompressed,
+		leaves_bytes,
+		compression,
+		0,
+	)?;
 
 	fn parse_directories(
-		coords: &mut Vec<TileCoord>,
+		pyramid: &mut TilePyramid,
+		total_entries: &mut u64,
+		limit: u64,
 		dir: &Blob,
 		leaves_bytes: &Blob,
 		compression: TileCompression,
 		depth: usize,
-	) -> Result<u64> {
+	) -> Result<()> {
 		log::trace!("parse_directories");
 
 		ensure!(
@@ -396,29 +433,48 @@ fn calc_tile_pyramid(
 		);
 
 		let entries = EntriesV3::from_blob(dir)?;
-		let entries = entries.iter().collect::<Vec<_>>();
 
-		let mut total_entries = 0;
-		for entry in &entries {
+		for entry in entries.iter() {
 			if entry.range.length > 0 {
 				if entry.run_length > 0 {
+					// `run_length` is a `u32` costing one varint byte in the file,
+					// so a handful of bytes can ask for billions of tiles. Folding
+					// each coordinate straight into the pyramid keeps that
+					// bounded in memory; the running total keeps it bounded in
+					// time.
+					*total_entries += u64::from(entry.run_length);
+					ensure!(
+						*total_entries <= limit,
+						"PMTiles directories address more than {limit} tiles, which the header does not account for"
+					);
+
 					for i in 0..u64::from(entry.run_length) {
-						coords.push(TileCoord::from_hilbert_index(i + entry.tile_id)?);
+						let tile_id = i
+							.checked_add(entry.tile_id)
+							.context("tile ids in the PMTiles directory overflow u64")?;
+						pyramid.insert_coord(&TileCoord::from_hilbert_index(tile_id)?);
 					}
-					total_entries += u64::from(entry.run_length);
 				} else {
 					let range = entry.range;
 					let mut blob = leaves_bytes.read_range(&range)?;
 					blob = decompress(blob, &compression)?;
-					total_entries += parse_directories(coords, &blob, leaves_bytes, compression, depth + 1)?;
+					parse_directories(
+						pyramid,
+						total_entries,
+						limit,
+						&blob,
+						leaves_bytes,
+						compression,
+						depth + 1,
+					)?;
 				}
 			}
 		}
 
-		Ok(total_entries)
+		Ok(())
 	}
 
-	Ok(TilePyramid::from_tile_coords(coords.into_iter()))
+	Ok(pyramid)
 }
 
 #[async_trait]
@@ -450,6 +506,7 @@ impl TileSource for PMTilesReader {
 				&self.root_bytes_uncompressed,
 				&self.leaves_bytes,
 				self.internal_compression,
+				self.header.addressed_tiles_count,
 			)
 		})
 	}
@@ -586,7 +643,7 @@ mod tests {
 
 		// Root and leaves are the same bytes: following the entry re-reads the
 		// directory currently being parsed.
-		let error = calc_tile_pyramid(&blob, &blob, TileCompression::Uncompressed)
+		let error = calc_tile_pyramid(&blob, &blob, TileCompression::Uncompressed, 0)
 			.expect_err("a self-referential leaf directory must be an error, not an abort");
 
 		let message = format!("{error:#}");
@@ -598,6 +655,38 @@ mod tests {
 		Ok(())
 	}
 
+	/// `run_length` is a `u32` costing one varint byte, so a few bytes can ask the
+	/// walk to expand billions of tiles. It is bounded by what the header says the
+	/// archive addresses.
+	#[test]
+	fn a_run_length_beyond_the_declared_tile_count_is_refused() -> Result<()> {
+		let mut entries = super::super::types::EntriesV3::new();
+		entries.push(super::super::types::EntryV3::new(0, ByteRange::new(0, 10), 50_000_000));
+		let blob = entries.as_slice().serialize_entries()?;
+
+		// The header declares eight addressed tiles; the directory asks for 50M.
+		let error = calc_tile_pyramid(&blob, &Blob::default(), TileCompression::Uncompressed, 8)
+			.expect_err("a run length beyond the declared count must be an error");
+
+		let message = format!("{error:#}");
+		assert!(message.contains("address more than 8 tiles"), "unhelpful: {message}");
+
+		Ok(())
+	}
+
+	/// A run that fits the declared count is expanded as before.
+	#[test]
+	fn a_run_length_within_the_declared_tile_count_is_expanded() -> Result<()> {
+		let mut entries = super::super::types::EntriesV3::new();
+		entries.push(super::super::types::EntryV3::new(0, ByteRange::new(0, 10), 4));
+		let blob = entries.as_slice().serialize_entries()?;
+
+		let pyramid = calc_tile_pyramid(&blob, &Blob::default(), TileCompression::Uncompressed, 4)?;
+		assert!(!pyramid.is_empty());
+
+		Ok(())
+	}
+
 	/// The bound must not refuse the nesting the format actually produces.
 	#[test]
 	fn a_root_directory_without_leaves_still_walks() -> Result<()> {
@@ -605,7 +694,7 @@ mod tests {
 		entries.push(super::super::types::EntryV3::new(0, ByteRange::new(0, 10), 1));
 		let blob = entries.as_slice().serialize_entries()?;
 
-		let pyramid = calc_tile_pyramid(&blob, &Blob::default(), TileCompression::Uncompressed)?;
+		let pyramid = calc_tile_pyramid(&blob, &Blob::default(), TileCompression::Uncompressed, 0)?;
 		assert!(!pyramid.is_empty());
 
 		Ok(())
