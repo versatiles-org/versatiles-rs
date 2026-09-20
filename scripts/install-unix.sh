@@ -1,6 +1,10 @@
 #!/bin/sh
 
-set -e
+# `-u` as well as `-e`: this script runs as root via `curl | sudo sh`, and an
+# unset variable expanding to nothing is how a path like "/usr/local/bin/$X"
+# quietly becomes something else. (`pipefail` is not POSIX, so it is not
+# available here — which is part of why the download below is no longer a pipe.)
+set -eu
 
 # Detect architecture
 
@@ -37,15 +41,57 @@ case $OS in
 esac
 echo "Detected OS: $OS"
 
-# Download and install the package
+# Download and install the package.
+#
+# The archive goes to a temporary file rather than straight down a pipe into
+# `tar`: a stream cannot be checked before it is unpacked, and what this unpacks
+# lands in /usr/local/bin as root. It is compared against the SHA-256 published
+# beside it and only then extracted. A missing or mismatched checksum aborts —
+# the point is to refuse an archive we cannot account for, so there is no flag
+# to skip this.
 PACKAGE_URL="https://github.com/versatiles-org/versatiles-rs/releases/latest/download/versatiles-$OS-$ARCH.tar.gz"
-if command -v curl >/dev/null 2>&1; then
-   curl -Ls "$PACKAGE_URL"
-elif command -v wget >/dev/null 2>&1; then
-   wget -qO- "$PACKAGE_URL"
+CHECKSUM_URL="$PACKAGE_URL.sha256"
+
+WORKDIR=$(mktemp -d)
+trap 'rm -rf "$WORKDIR"' EXIT HUP INT TERM
+
+# `-f` / the wget default make an HTTP error an error: without it a 404 page is
+# saved as the archive and the failure only surfaces later, as a corrupt file.
+download() {
+   if command -v curl >/dev/null 2>&1; then
+      curl -fLsS "$1" -o "$2"
+   elif command -v wget >/dev/null 2>&1; then
+      wget -q "$1" -O "$2"
+   else
+      echo "Error: Neither curl nor wget is installed." >&2
+      exit 1
+   fi
+}
+
+echo "Downloading $PACKAGE_URL"
+download "$PACKAGE_URL" "$WORKDIR/versatiles.tar.gz"
+download "$CHECKSUM_URL" "$WORKDIR/versatiles.tar.gz.sha256"
+
+# The published file is "<hash>  <filename>"; compare the hash only, since the
+# filename in it is the release asset's, not the local temporary one.
+EXPECTED=$(cut -d' ' -f1 <"$WORKDIR/versatiles.tar.gz.sha256")
+if command -v sha256sum >/dev/null 2>&1; then
+   ACTUAL=$(sha256sum "$WORKDIR/versatiles.tar.gz" | cut -d' ' -f1)
+elif command -v shasum >/dev/null 2>&1; then
+   ACTUAL=$(shasum -a 256 "$WORKDIR/versatiles.tar.gz" | cut -d' ' -f1)
 else
-   echo "Error: Neither curl nor wget is installed." >&2
+   echo "Error: neither sha256sum nor shasum is available to verify the download." >&2
    exit 1
-fi | tar -xzf - -C /usr/local/bin versatiles
+fi
+
+if [ -z "$EXPECTED" ] || [ "$EXPECTED" != "$ACTUAL" ]; then
+   echo "Error: checksum mismatch for $PACKAGE_URL" >&2
+   echo "  expected: $EXPECTED" >&2
+   echo "  actual:   $ACTUAL" >&2
+   exit 1
+fi
+echo "Checksum verified."
+
+tar -xzf "$WORKDIR/versatiles.tar.gz" -C /usr/local/bin versatiles
 
 echo "VersaTiles installed successfully."

@@ -17,14 +17,19 @@ tar -cf "$FILENAME.tar" "versatiles.exe"
 Write-Host "... and gzip it"
 gzip -9 "$FILENAME.tar"
 
-# Write-Host "Calculate SHA256 checksum"
-# $sha256 = Get-FileHash -Algorithm SHA256 -Path "$FILENAME.tar.gz"
-# $sha256.Hash | Out-File -FilePath "$FILENAME.tar.gz.sha256" -Encoding ASCII
-# 
-# Write-Host "Calculate MD5 checksum"
-# $md5 = Get-FileHash -Algorithm MD5 -Path "$FILENAME.tar.gz"
-# $md5.Hash | Out-File -FilePath "$FILENAME.tar.gz.md5" -Encoding ASCII
+# Publish a SHA-256 next to the tarball, so the install script can refuse an
+# archive it cannot verify. See workflow-pack-upload.sh for the reasoning.
+#
+# Written by hand in coreutils format ("<hash>  <filename>", lowercase, LF) to
+# match what the Unix packer produces: `Get-FileHash` returns a bare uppercase
+# hash, and `Out-File` would end the line with CRLF, neither of which
+# `sha256sum -c` accepts.
+Write-Host "Calculate SHA256 checksum"
+$sha256 = (Get-FileHash -Algorithm SHA256 -Path "$FILENAME.tar.gz").Hash.ToLower()
+[System.IO.File]::WriteAllText(
+   (Join-Path (Get-Location) "$FILENAME.tar.gz.sha256"),
+   "$sha256  $FILENAME.tar.gz`n"
+)
 
-Write-Host "Upload tarball and checksums to GitHub release"
-#&gh release upload $TAG "$FILENAME.tar.gz" "$FILENAME.tar.gz.sha256" "$FILENAME.tar.gz.md5" --clobber
-&gh release upload $TAG "$FILENAME.tar.gz" --clobber
+Write-Host "Upload tarball and checksum to GitHub release"
+&gh release upload $TAG "$FILENAME.tar.gz" "$FILENAME.tar.gz.sha256" --clobber

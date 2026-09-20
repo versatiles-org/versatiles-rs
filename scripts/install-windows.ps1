@@ -26,14 +26,36 @@ function Install-Package {
    )
 
    $packageUrl = "https://github.com/versatiles-org/versatiles-rs/releases/latest/download/versatiles-windows-$architecture.tar.gz"
+   $checksumUrl = "$packageUrl.sha256"
    $downloadPath = "$env:TEMP\versatiles.tar.gz"
+   $checksumPath = "$env:TEMP\versatiles.tar.gz.sha256"
    $installDir = "$env:ProgramFiles\versatiles"
 
-   # Download the package
+   # Download the package.
+   #
+   # try/catch, not `if (-not $?)`: Invoke-WebRequest throws on failure rather
+   # than setting $?, so the old check never ran and a failed download fell
+   # through to the extract step.
    Write-Host "Downloading versatiles for $architecture..." -ForegroundColor Green
-   Invoke-WebRequest -Uri $packageUrl -OutFile $downloadPath
-   if (-not $?) {
-      Write-Host "Failed to download the package." -ForegroundColor Red
+   try {
+      Invoke-WebRequest -Uri $packageUrl -OutFile $downloadPath
+      Invoke-WebRequest -Uri $checksumUrl -OutFile $checksumPath
+   } catch {
+      Write-Host "Failed to download the package: $_" -ForegroundColor Red
+      exit 1
+   }
+
+   # Verify the download before unpacking it into ProgramFiles. The published
+   # file is "<hash>  <filename>"; only the hash is compared, since the name in
+   # it is the release asset's rather than this temporary copy's.
+   Write-Host "Verifying checksum..." -ForegroundColor Green
+   $expected = ((Get-Content -Path $checksumPath -TotalCount 1) -split '\s+')[0].ToLower()
+   $actual = (Get-FileHash -Algorithm SHA256 -Path $downloadPath).Hash.ToLower()
+   if ([string]::IsNullOrWhiteSpace($expected) -or ($expected -ne $actual)) {
+      Write-Host "Checksum mismatch for $packageUrl" -ForegroundColor Red
+      Write-Host "  expected: $expected" -ForegroundColor Red
+      Write-Host "  actual:   $actual" -ForegroundColor Red
+      Remove-Item $downloadPath, $checksumPath -ErrorAction SilentlyContinue
       exit 1
    }
 
@@ -61,7 +83,7 @@ function Install-Package {
    }
 
    # Clean up
-   Remove-Item $downloadPath
+   Remove-Item $downloadPath, $checksumPath -ErrorAction SilentlyContinue
 
    Write-Host "VersaTiles installed successfully." -ForegroundColor Green
 }
