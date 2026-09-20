@@ -56,8 +56,7 @@ impl Operation {
 			.resolve_location(&args.style.to_location())
 			.with_context(|| format!("resolving 'style' path {:?}", args.style))?;
 		let path = location.to_path_buf()?;
-		let json =
-			std::fs::read_to_string(&path).with_context(|| format!("reading 'style' from {}", path.display()))?;
+		let json = std::fs::read_to_string(&path).with_context(|| format!("reading 'style' from {}", path.display()))?;
 
 		// The source's own pyramid is the only thing that knows how deep the tiles go, and an
 		// unclamped requirement is the one output that can silently destroy data — see the module
@@ -178,29 +177,28 @@ mod tests {
 	async fn it_keeps_only_what_the_style_reads() {
 		// `from_debug` draws layers `debug_x`, `debug_y` and `debug_z`, each carrying `char`,
 		// `index` and `x`. A style that reads one property of one layer should leave exactly that.
-		let properties = surviving(
-			r#"{"layers":[{"id":"a","source-layer":"debug_x","paint":{"fill-color":["get","char"]}}]}"#,
-		)
-		.await
-		.unwrap();
+		let properties =
+			surviving(r#"{"layers":[{"id":"a","source-layer":"debug_x","paint":{"fill-color":["get","char"]}}]}"#)
+				.await
+				.unwrap();
 		assert_eq!(properties, ["debug_x/char"]);
 	}
 
 	#[tokio::test]
 	async fn a_layer_drawn_as_geometry_keeps_its_shapes_but_no_properties() {
-		let properties =
-			surviving(r##"{"layers":[{"id":"a","source-layer":"debug_x","paint":{"fill-color":"#fff"}}]}"##)
-				.await
-				.unwrap();
+		let properties = surviving(r##"{"layers":[{"id":"a","source-layer":"debug_x","paint":{"fill-color":"#fff"}}]}"##)
+			.await
+			.unwrap();
 		assert_eq!(properties, Vec::<String>::new());
 	}
 
 	#[tokio::test]
 	async fn a_token_text_field_is_read_like_any_other_property() {
 		// The regression `reduce::style::fields` exists for, proven end to end through the pipeline.
-		let properties = surviving(r#"{"layers":[{"id":"a","source-layer":"debug_x","layout":{"text-field":"{char}"}}]}"#)
-			.await
-			.unwrap();
+		let properties =
+			surviving(r#"{"layers":[{"id":"a","source-layer":"debug_x","layout":{"text-field":"{char}"}}]}"#)
+				.await
+				.unwrap();
 		assert_eq!(properties, ["debug_x/char"]);
 	}
 

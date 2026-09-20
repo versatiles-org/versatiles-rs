@@ -183,14 +183,20 @@ mod tests {
 
 	#[test]
 	fn an_empty_or_unclosed_token_names_nothing() {
-		assert_eq!(fields(r#"{"layout":{"text-field":"{} {unclosed"}}"#), Vec::<String>::new());
+		assert_eq!(
+			fields(r#"{"layout":{"text-field":"{} {unclosed"}}"#),
+			Vec::<String>::new()
+		);
 	}
 
 	#[test]
 	fn paint_strings_are_not_scanned_for_tokens() {
 		// MapLibre expands no token in paint, and a colour like `#fff` carries no braces anyway —
 		// but a literal string that happens to look like one must not invent a property.
-		assert_eq!(fields(r#"{"paint":{"fill-color":"{not-a-field}"}}"#), Vec::<String>::new());
+		assert_eq!(
+			fields(r#"{"paint":{"fill-color":"{not-a-field}"}}"#),
+			Vec::<String>::new()
+		);
 	}
 
 	#[test]
@@ -218,9 +224,6 @@ mod tests {
 		let used = usage(&[&a, &b, &c]);
 
 		assert_eq!(used.len(), 1, "the layer without a source-layer draws no data");
-		assert_eq!(
-			used["streets"].iter().cloned().collect::<Vec<_>>(),
-			["kind", "ref"]
-		);
+		assert_eq!(used["streets"].iter().cloned().collect::<Vec<_>>(), ["kind", "ref"]);
 	}
 }

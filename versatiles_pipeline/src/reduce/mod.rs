@@ -22,7 +22,7 @@ mod cel;
 pub mod ir;
 mod predicate;
 mod render;
-mod style;
+pub mod style;
 
 pub use ir::{KeepEntry, LayerRequirement, Literal, Predicate, Requirement};
 pub use render::operations;

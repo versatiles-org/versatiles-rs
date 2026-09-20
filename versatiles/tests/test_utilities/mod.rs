@@ -23,16 +23,28 @@ pub const BINARY_NAME: &str = "versatiles.exe";
 pub const BINARY_NAME: &str = "versatiles";
 
 /// Helper to get a testdata file path.
+///
+/// Panics if the file is not there, which is worth doing here rather than leaving to the command
+/// under test. `.gitignore` excludes `*.versatiles`, so a fixture with that extension exists only
+/// on the machine that built it: a test using one passes locally and fails in CI, where the symptom
+/// is a container-reader error several `Caused by:` lines deep and nowhere near the cause. Failing
+/// at the point of use names the file instead.
 #[must_use]
 pub fn get_testdata(filename: &str) -> String {
-	PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+	let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 		.parent()
 		.unwrap()
 		.join("testdata")
-		.join(filename)
-		.to_str()
-		.unwrap()
-		.to_string()
+		.join(filename);
+
+	assert!(
+		path.exists(),
+		"testdata file {filename:?} does not exist. If it is a *.versatiles file, note that \
+		 .gitignore excludes those, so it is not in the repository and CI will not have it — \
+		 use berlin.mbtiles instead."
+	);
+
+	path.to_str().unwrap().to_string()
 }
 
 /// Helper to get a temp output file path.

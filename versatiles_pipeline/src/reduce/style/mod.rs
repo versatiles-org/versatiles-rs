@@ -104,8 +104,12 @@ pub fn from_style(json: &str, maxzoom: u8) -> Result<Requirement> {
 		let Some(source_layer) = layer.string("source-layer")? else {
 			continue;
 		};
-		let range = zoom_range(layer, maxzoom)
-			.with_context(|| format!("in style layer {:?}", layer.string("id").ok().flatten().unwrap_or_default()))?;
+		let range = zoom_range(layer, maxzoom).with_context(|| {
+			format!(
+				"in style layer {:?}",
+				layer.string("id").ok().flatten().unwrap_or_default()
+			)
+		})?;
 
 		grouped
 			.entry(source_layer)
@@ -315,7 +319,10 @@ mod tests {
 	#[test]
 	fn a_full_range_emits_no_zoom_bound() {
 		// `zoom >= 0` is satisfied by every tile and costs an evaluation to say so.
-		let requirement = from(r#"{"layers":[{"id":"a","source-layer":"water","minzoom":0,"maxzoom":14}]}"#, 14);
+		let requirement = from(
+			r#"{"layers":[{"id":"a","source-layer":"water","minzoom":0,"maxzoom":14}]}"#,
+			14,
+		);
 		let entry = &requirement.layers["water"].keep[0];
 		assert_eq!((entry.minzoom, entry.maxzoom), (None, None));
 	}
@@ -341,7 +348,10 @@ mod tests {
 		);
 		let keep = &requirement.layers["streets"].keep;
 		assert_eq!(keep.len(), 2, "two zoom ranges, not three layers");
-		assert!(matches!(keep[0].predicate, Some(Predicate::Or(_))), "z5 is a disjunction");
+		assert!(
+			matches!(keep[0].predicate, Some(Predicate::Or(_))),
+			"z5 is a disjunction"
+		);
 		assert_eq!(keep[0].minzoom, Some(5));
 		assert_eq!(keep[1].minzoom, Some(9));
 	}
@@ -388,7 +398,12 @@ mod tests {
 
 	#[test]
 	fn a_non_object_style_is_refused() {
-		assert!(from_style("[]", 14).unwrap_err().to_string().contains("not a JSON object"));
+		assert!(
+			from_style("[]", 14)
+				.unwrap_err()
+				.to_string()
+				.contains("not a JSON object")
+		);
 		assert!(from_style("{", 14).unwrap_err().to_string().contains("not valid JSON"));
 	}
 
@@ -400,9 +415,6 @@ mod tests {
 	#[test]
 	fn a_broken_zoom_names_the_style_layer() {
 		let error = from_style(r#"{"layers":[{"id":"oops","source-layer":"w","minzoom":14.5}]}"#, 14).unwrap_err();
-		assert!(
-			error.chain().any(|e| e.to_string().contains("oops")),
-			"got: {error:?}"
-		);
+		assert!(error.chain().any(|e| e.to_string().contains("oops")), "got: {error:?}");
 	}
 }

@@ -282,7 +282,7 @@ struct Runner {
 }
 
 /// Hand-written because [`CelContext`] is not `Debug`, and the trait bound on
-/// [`TileTransform`](crate::operations::transform::TileTransform) needs one.
+/// [`TileTransform`] needs one.
 impl std::fmt::Debug for Runner {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("Runner")
