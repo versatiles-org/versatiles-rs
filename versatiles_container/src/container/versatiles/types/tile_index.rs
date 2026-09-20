@@ -140,8 +140,22 @@ impl TileIndex {
 	///
 	/// # Arguments
 	/// * `delta` - The value to add to each byte range offset.
-	pub fn shift_by(&mut self, delta: u64) {
-		self.index.iter_mut().for_each(|r| r.offset += delta);
+	///
+	/// # Errors
+	/// Returns an error if any resulting offset overflows `u64`.
+	///
+	/// Both operands come out of the file: the per-entry offsets from the
+	/// decompressed index, `delta` from the block's tiles range. Unchecked, the
+	/// sum wraps in a release build, and a wrapped offset either fails the read
+	/// bounds test or — worse — lands somewhere valid.
+	pub fn shift_by(&mut self, delta: u64) -> Result<()> {
+		for range in &mut self.index {
+			range.offset = range
+				.offset
+				.checked_add(delta)
+				.with_context(|| format!("tile index offset {} + {delta} overflows u64", range.offset))?;
+		}
+		Ok(())
 	}
 }
 
@@ -165,12 +179,33 @@ mod tests {
 			assert_eq!(index.get(i as usize).unwrap(), &ByteRange::new(i * i, i));
 		}
 
-		index.shift_by(18);
+		index.shift_by(18).unwrap();
 
 		for (index, range) in index.iter().enumerate() {
 			let i = index as u64;
 			assert_eq!(range, &ByteRange::new(i * i + 18, i));
 		}
+	}
+
+	/// Both the per-entry offsets and the shift come out of the file, and release
+	/// builds do not check overflow — so a sum that wraps would point a read at
+	/// an unrelated part of the file instead of failing.
+	#[test]
+	fn a_shift_that_overflows_is_an_error() {
+		let mut index = TileIndex::new(2);
+		index.set(0, ByteRange::new(10, 5));
+		index.set(1, ByteRange::new(u64::MAX - 1, 5));
+
+		let error = index.shift_by(10).expect_err("an overflowing shift must be an error");
+		assert!(format!("{error:#}").contains("overflows u64"));
+
+		// A shift that fits still applies to every entry.
+		let mut index = TileIndex::new(2);
+		index.set(0, ByteRange::new(10, 5));
+		index.set(1, ByteRange::new(20, 5));
+		index.shift_by(7).unwrap();
+		assert_eq!(index.get(0).unwrap().offset, 17);
+		assert_eq!(index.get(1).unwrap().offset, 27);
 	}
 
 	/// The slot number and the index length come from different parts of an

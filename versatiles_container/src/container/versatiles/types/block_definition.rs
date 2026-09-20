@@ -91,12 +91,24 @@ impl BlockDefinition {
 			.context("block offset + tiles length overflows u64")?;
 		let index_range = ByteRange::new(index_offset, index_length);
 
+		// `x` and `y` are read straight from the file, so `x * 256` overflows a
+		// `u32` for any block coordinate at or above 2^24 — panicking in a debug
+		// build and wrapping in a release one, where the wrapped result still
+		// forms a plausible bbox and the block silently mis-describes which tiles
+		// it covers. Same reasoning as `offset + tiles_length` above.
+		let global = |block: u32, within: u32| -> Result<u32> {
+			block
+				.checked_mul(256)
+				.and_then(|base| base.checked_add(within))
+				.with_context(|| format!("block coordinate {block} * 256 + {within} overflows u32"))
+		};
+
 		let global_bbox = TileBBox::from_min_and_max(
 			level,
-			x_min + x * 256,
-			y_min + y * 256,
-			x_max + x * 256,
-			y_max + y * 256,
+			global(x, x_min)?,
+			global(y, y_min)?,
+			global(x, x_max)?,
+			global(y, y_max)?,
 		)?;
 
 		Ok(Self {
@@ -252,6 +264,28 @@ mod tests {
 		let error = BlockDefinition::from_blob(&Blob::from(blob)).unwrap_err();
 		assert!(
 			format!("{error:#}").contains("overflow"),
+			"expected an overflow error, got: {error:#}"
+		);
+	}
+
+	/// A block's global bbox is its own coordinate times 256 plus the offsets
+	/// inside it. `x` is a `u32` from the file, so `x * 256` overflows at 2^24 —
+	/// wrapping, in a release build, into a bbox that looks entirely plausible
+	/// and describes tiles the block does not hold.
+	#[test]
+	fn a_block_whose_global_bbox_overflows_is_rejected() {
+		let mut blob = Vec::new();
+		blob.push(30); // level
+		blob.extend_from_slice(&0x0100_0000u32.to_be_bytes()); // x = 2^24, so x * 256 = 2^32
+		blob.extend_from_slice(&1u32.to_be_bytes()); // y
+		blob.extend_from_slice(&[0, 0, 1, 1]); // bbox min/max
+		blob.extend_from_slice(&0u64.to_be_bytes()); // tiles offset
+		blob.extend_from_slice(&1u64.to_be_bytes()); // tiles length
+		blob.extend_from_slice(&4u32.to_be_bytes()); // index length
+
+		let error = BlockDefinition::from_blob(&Blob::from(blob)).unwrap_err();
+		assert!(
+			format!("{error:#}").contains("overflows u32"),
 			"expected an overflow error, got: {error:#}"
 		);
 	}

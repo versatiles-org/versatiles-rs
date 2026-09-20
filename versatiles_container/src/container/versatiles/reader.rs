@@ -204,7 +204,7 @@ impl VersaTilesReader {
 			.try_get_with(block_coord, async move {
 				let blob = reader.read_range(&index_range).await?;
 				let mut tile_index = TileIndex::from_brotli_blob(&blob)?;
-				tile_index.shift_by(tiles_offset);
+				tile_index.shift_by(tiles_offset)?;
 
 				// A `debug_assert_eq!` until it turned out to be the only thing
 				// standing between a crafted file and an out-of-bounds index —
