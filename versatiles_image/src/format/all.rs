@@ -59,16 +59,27 @@ pub fn decode(blob: &Blob, format: TileFormat) -> Result<DynamicImage> {
 /// Decode `blob` as `format` with explicit limits on what the result may be.
 ///
 /// The `image` crate's own default already caps allocation at 512 MiB, so this
-/// is not the difference between bounded and unbounded — it adds the bound that
-/// default does *not* carry: a cap on the dimensions themselves. A header can
-/// claim 65,535 x 65,535 pixels, and refusing that outright is cheaper and
-/// clearer than letting the allocation cap discover it. 16,384 is far above any
-/// map tile — WebP cannot even encode past 16,383 — so nothing legitimate meets
-/// it, and the allocation cap is left at the crate default so that no input
-/// which decodes today stops decoding.
+/// is not the difference between bounded and unbounded. It adds the two bounds
+/// that default does *not* carry: a cap on the dimensions themselves, and a cap
+/// on the decoded byte size that this crate checks rather than delegating.
+///
+/// The dimension cap is the cheap one — a header can claim 65,535 x 65,535, and
+/// refusing that outright is clearer than letting an allocation cap discover it.
+/// The byte cap exists because the two are not the same question: 16,384 x
+/// 16,384 passes a 16,384-per-side cap and is still a gigabyte. It is checked
+/// here, against the header, because `Limits` binds only decoders that consult
+/// it and `zune-jpeg` does not read `max_alloc`.
 pub(crate) fn decode_limited(blob: &Blob, format: ImageFormat) -> Result<DynamicImage> {
-	/// Longest side accepted from a decoded image, in pixels.
-	const MAX_SIDE: u32 = 16_384;
+	// Read the header first and judge it ourselves. `Limits` is only as good as
+	// the decoder that consults it — `zune-jpeg`, behind `ImageFormat::Jpeg`,
+	// does not read `max_alloc` — so a dimension pair that passes the width and
+	// height caps but multiplies out to hundreds of megabytes would still be
+	// decoded. `into_dimensions` parses the header without decoding, which makes
+	// the check independent of any decoder's cooperation.
+	let mut probe = ImageReader::new(Cursor::new(blob.as_slice()));
+	probe.set_format(format);
+	let (width, height) = probe.into_dimensions()?;
+	ensure_decodable(width, height, MAX_BYTES_PER_PIXEL)?;
 
 	let mut limits = Limits::default();
 	limits.max_image_width = Some(MAX_SIDE);
@@ -80,11 +91,52 @@ pub(crate) fn decode_limited(blob: &Blob, format: ImageFormat) -> Result<Dynamic
 	reader.decode().map_err(Into::into)
 }
 
+/// Longest side accepted from a decoded image, in pixels.
+///
+/// Far above any map tile — WebP cannot even encode past 16,383 — so nothing
+/// legitimate meets it.
+pub(crate) const MAX_SIDE: u32 = 16_384;
+
+/// Widest pixel this crate decodes to: RGBA, four bytes.
+pub(crate) const MAX_BYTES_PER_PIXEL: u64 = 4;
+
+/// Ceiling on the decoded size of one image.
+///
+/// The same 512 MiB the `image` crate applies by default, restated as a number
+/// this crate enforces itself so that formats whose decoders ignore `Limits`
+/// — WebP goes through libwebp directly, JPEG through `zune-jpeg` — are held to
+/// it too. Keeping it equal to the crate default means nothing that decodes
+/// today stops decoding.
+pub(crate) const MAX_DECODED_BYTES: u64 = 512 * 1024 * 1024;
+
+/// Refuse dimensions whose decoded form would be larger than we accept, before
+/// anything allocates for them.
+///
+/// # Errors
+/// Returns an error if either side exceeds [`MAX_SIDE`], or if
+/// `width * height * bytes_per_pixel` exceeds [`MAX_DECODED_BYTES`].
+pub(crate) fn ensure_decodable(width: u32, height: u32, bytes_per_pixel: u64) -> Result<()> {
+	anyhow::ensure!(
+		width <= MAX_SIDE && height <= MAX_SIDE,
+		"image is {width}x{height}, which exceeds the {MAX_SIDE} pixel limit per side"
+	);
+
+	// Cannot overflow: both sides are bounded above by MAX_SIDE (2^14) and the
+	// per-pixel count by 4, so the product fits in 32 bits with room to spare.
+	let bytes = u64::from(width) * u64::from(height) * bytes_per_pixel;
+	anyhow::ensure!(
+		bytes <= MAX_DECODED_BYTES,
+		"image is {width}x{height}, which decodes to {bytes} bytes and exceeds the {MAX_DECODED_BYTES} byte limit"
+	);
+
+	Ok(())
+}
+
 #[cfg(test)]
 mod limit_tests {
 	use super::*;
 
-	/// Build a PNG that consists of nothing but a header claiming `width`x`height`.
+	/// Build a structurally complete PNG that carries no pixels, claiming `width`x`height`.
 	fn png_header(width: u32, height: u32) -> Blob {
 		fn crc32(data: &[u8]) -> u32 {
 			let mut crc = 0xffff_ffffu32;
@@ -110,6 +162,17 @@ mod limit_tests {
 		png.extend_from_slice(&13u32.to_be_bytes());
 		png.extend_from_slice(&ihdr);
 		png.extend_from_slice(&crc32(&ihdr).to_be_bytes());
+
+		// An empty IDAT and an IEND, so the header parses to completion. Reading
+		// the dimensions needs the chunk after IHDR to exist; with IHDR alone the
+		// decoder reaches end-of-file first and reports that instead of anything
+		// about the dimensions it was asked for.
+		for tag in [b"IDAT", b"IEND"] {
+			png.extend_from_slice(&0u32.to_be_bytes());
+			png.extend_from_slice(tag);
+			png.extend_from_slice(&crc32(tag).to_be_bytes());
+		}
+
 		Blob::from(png)
 	}
 
@@ -133,5 +196,39 @@ mod limit_tests {
 			!message.contains("limit"),
 			"dimensions 256x256 must not hit a limit: {error:#}"
 		);
+	}
+
+	/// Both sides can sit under the per-side cap while their product does not:
+	/// 16384x16384 is within 16384 on each axis and still a gigabyte decoded.
+	/// The per-side cap alone does not catch that, which is what the byte
+	/// ceiling is for — and why it is checked here rather than left to a
+	/// decoder that may not consult `Limits` at all.
+	#[test]
+	fn dimensions_within_the_side_cap_can_still_be_too_large() {
+		let error = decode_limited(&png_header(MAX_SIDE, MAX_SIDE), ImageFormat::Png).unwrap_err();
+		let message = format!("{error:#}");
+		assert!(
+			message.contains("byte limit"),
+			"expected the byte ceiling to refuse it, got: {error:#}"
+		);
+	}
+
+	#[test]
+	fn ensure_decodable_accepts_what_it_should() {
+		// An ordinary tile.
+		assert!(ensure_decodable(256, 256, 4).is_ok());
+		// Exactly on the per-side cap, small enough in bytes at one byte each.
+		assert!(ensure_decodable(MAX_SIDE, 1, 1).is_ok());
+		// Exactly on the byte ceiling: 16384 * 8192 * 4 == 512 MiB.
+		assert!(ensure_decodable(16_384, 8_192, 4).is_ok());
+	}
+
+	#[test]
+	fn ensure_decodable_refuses_what_it_should() {
+		// One past the per-side cap.
+		assert!(ensure_decodable(MAX_SIDE + 1, 1, 1).is_err());
+		assert!(ensure_decodable(1, MAX_SIDE + 1, 1).is_err());
+		// One row past the byte ceiling.
+		assert!(ensure_decodable(16_384, 8_193, 4).is_err());
 	}
 }

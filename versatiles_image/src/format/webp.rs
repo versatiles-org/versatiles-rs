@@ -13,6 +13,8 @@
 
 use anyhow::{Context, Result, bail, ensure};
 use image::{DynamicImage, ImageBuffer};
+
+use super::all::ensure_decodable;
 use libwebp_sys::{
 	VP8StatusCode, WebPBitstreamFeatures, WebPConfig, WebPDecodeRGB, WebPDecodeRGBA, WebPEncode, WebPFree,
 	WebPGetFeatures, WebPMemoryWrite, WebPMemoryWriter, WebPMemoryWriterClear, WebPMemoryWriterInit, WebPPicture,
@@ -192,6 +194,22 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 
 		let has_alpha = features.has_alpha != 0;
 		let channels = if has_alpha { 4 } else { 3 };
+
+		// Judge the declared size before libwebp allocates for it. This decoder
+		// is reached directly rather than through `decode_limited`, so it gets
+		// no `Limits` and nothing else bounds the result: a few kilobytes of
+		// lossless VP8L may declare 16383x16383, which libwebp turns into about
+		// a gigabyte, and `copy_decoded_pixels` copies it again. `WebPGetFeatures`
+		// has already parsed the header at this point, so the numbers are here
+		// for free.
+		//
+		// These are the header's claims, not the decoder's output. They bound
+		// what is about to be allocated; the copy below is still sized from
+		// `out_width`/`out_height`, which is what keeps it memory-safe when the
+		// two disagree.
+		let claimed_width = u32::try_from(features.width).context("WebP header declares a negative width")?;
+		let claimed_height = u32::try_from(features.height).context("WebP header declares a negative height")?;
+		ensure_decodable(claimed_width, claimed_height, channels as u64)?;
 
 		// `out_width`/`out_height` are written by the decoder and describe the
 		// buffer it actually allocated. The header's `features.width/height`
@@ -427,5 +445,54 @@ mod tests {
 		let blob = Blob::from(vec![]);
 		let result = blob2image(&blob);
 		assert!(result.is_err());
+	}
+}
+
+#[cfg(test)]
+mod decode_limit_tests {
+	use super::*;
+
+	/// A WebP whose VP8L header declares `width` x `height` and carries no
+	/// actual image data. `WebPGetFeatures` parses this much, which is why the
+	/// size can be judged before anything is allocated for it.
+	fn vp8l_header(width: u32, height: u32) -> Blob {
+		let bits: u32 = (width - 1) | ((height - 1) << 14) | (1 << 28);
+		let mut chunk = vec![0x2fu8];
+		chunk.extend_from_slice(&bits.to_le_bytes());
+
+		let mut body = b"WEBP".to_vec();
+		body.extend_from_slice(b"VP8L");
+		body.extend_from_slice(&u32::try_from(chunk.len()).unwrap().to_le_bytes());
+		body.extend_from_slice(&chunk);
+
+		let mut out = b"RIFF".to_vec();
+		out.extend_from_slice(&u32::try_from(body.len()).unwrap().to_le_bytes());
+		out.extend_from_slice(&body);
+		Blob::from(out)
+	}
+
+	/// Twenty-five bytes declaring a 16383x16383 canvas made libwebp allocate
+	/// about a gigabyte, which `copy_decoded_pixels` then copied again. This
+	/// decoder does not go through `decode_limited`, so nothing else bounds it.
+	#[test]
+	fn an_oversized_declared_canvas_is_refused() {
+		let err = blob2image(&vp8l_header(16384, 16384)).unwrap_err();
+		let message = format!("{err:#}");
+		assert!(
+			message.contains("exceeds the") && message.contains("byte limit"),
+			"expected the size limit to refuse it, got: {message}"
+		);
+	}
+
+	/// The check must not stand in the way of an ordinary tile: this one gets
+	/// past it and fails later, on the image data it does not have.
+	#[test]
+	fn an_ordinary_declared_canvas_passes_the_size_check() {
+		let err = blob2image(&vp8l_header(256, 256)).unwrap_err();
+		let message = format!("{err:#}");
+		assert!(
+			message.contains("decoding failed"),
+			"should have failed at decode, not at the size check: {message}"
+		);
 	}
 }
