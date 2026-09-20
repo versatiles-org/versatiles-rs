@@ -23,6 +23,8 @@
 //! every token — and the total must come out equal to the input length, which makes the walk its
 //! own check that nothing was lost.
 
+use std::cell::Cell;
+
 use nom::{
 	IResult, Parser,
 	branch::alt,
@@ -259,9 +261,69 @@ fn cst_value(input: &str) -> Res<'_, CstValue> {
 	}
 }
 
+/// How deeply `[ … ]` source brackets may nest.
+///
+/// The parser is recursive descent, so bracket depth is stack depth: without a
+/// bound, `[[[[…]]]]` overflows the stack, and a stack overflow aborts the
+/// process rather than unwinding — no `catch_unwind` reaches it. Around two
+/// thousand brackets were enough; through the Node bindings that takes the host
+/// process with it.
+///
+/// 128 is what the JSON parser applies (`versatiles_core::json::parse`), and far
+/// beyond anything a real pipeline nests — sources inside sources inside sources
+/// is already unusual at three.
+const MAX_NESTING_DEPTH: usize = 128;
+
+thread_local! {
+	/// Bracket depth of the parse running on this thread.
+	///
+	/// Thread-local rather than a parameter because the recursion runs through
+	/// `nom` combinators that take closures of a fixed shape; threading a depth
+	/// argument would mean re-plumbing every one of them. Incremented and
+	/// decremented by [`NestingGuard`], so an early return unwinds it correctly.
+	static NESTING_DEPTH: Cell<usize> = const { Cell::new(0) };
+}
+
+/// Holds one level of nesting for as long as it is alive.
+struct NestingGuard;
+
+impl NestingGuard {
+	/// Takes a level, or reports that there are none left.
+	fn enter(input: &str) -> Result<Self, nom::Err<VerboseError<&str>>> {
+		let depth = NESTING_DEPTH.with(|d| {
+			let next = d.get() + 1;
+			d.set(next);
+			next
+		});
+
+		if depth > MAX_NESTING_DEPTH {
+			NESTING_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+			// `Failure`, not `Error`: too deep is not something an alternative
+			// branch could parse instead, and backtracking would re-descend.
+			return Err(nom::Err::Failure(VerboseError::from_error_kind(
+				input,
+				ErrorKind::TooLarge,
+			)));
+		}
+
+		Ok(NestingGuard)
+	}
+}
+
+impl Drop for NestingGuard {
+	fn drop(&mut self) {
+		NESTING_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+	}
+}
+
 fn cst_sources<'a>(input: &'a str, leading: &'a str) -> Res<'a, CstSources> {
 	context("parsing sources", move |input: &'a str| {
 		let (input, open) = bracket(input, leading, '[')?;
+
+		// Held until this bracket is closed, so the count tracks actual depth.
+		// Bound to a name: `let _ = …` would drop it immediately and count
+		// nothing.
+		let _nesting = NestingGuard::enter(input)?;
 		let (input, pipelines) = punctuated(input, ',', |i| {
 			let (rest, leading) = ws0(i)?;
 			cst_pipeline_nested(rest, leading)
@@ -741,5 +803,54 @@ mod tests {
 
 		let child = &node.sources.as_ref().unwrap().pipelines.items[0].value;
 		assert_eq!(child.nodes.items[0].value.name.text, "child");
+	}
+}
+
+#[cfg(test)]
+mod nesting_tests {
+	use super::*;
+
+	/// `[ … ]` nests by recursing, so bracket depth is stack depth. Around two
+	/// thousand brackets used to exhaust the stack — an abort, which unwinding
+	/// cannot catch and which takes a host Node process with it.
+	#[test]
+	fn deeply_nested_sources_are_refused_not_fatal() {
+		let depth = 5_000;
+		let vpl = format!("{}from_debug{}", "vectorize [".repeat(depth), "]".repeat(depth));
+
+		let error = parse_cst(&vpl).expect_err("nesting this deep must be refused");
+		assert!(
+			error.message.contains("nested too deeply"),
+			"the reason should be legible: {}",
+			error.message
+		);
+	}
+
+	/// The bound must leave room for pipelines anyone would actually write.
+	#[test]
+	fn ordinary_nesting_still_parses() {
+		assert!(parse_cst("from_debug").is_ok());
+		assert!(parse_cst("vectorize [ from_debug ]").is_ok());
+		assert!(parse_cst("vectorize [ vectorize [ from_debug ] ]").is_ok());
+
+		// Right up to the limit.
+		let depth = MAX_NESTING_DEPTH;
+		let vpl = format!("{}from_debug{}", "vectorize [".repeat(depth), "]".repeat(depth));
+		assert!(parse_cst(&vpl).is_ok(), "depth {depth} should parse");
+	}
+
+	/// The counter must come back to zero however a parse ends, or later parses
+	/// on the same thread inherit the depth.
+	#[test]
+	fn the_depth_counter_unwinds() {
+		let _ = parse_cst("vectorize [ vectorize [ from_debug ] ]");
+		assert_eq!(NESTING_DEPTH.with(std::cell::Cell::get), 0, "after a successful parse");
+
+		let _ = parse_cst("vectorize [ vectorize [ !!! ] ]");
+		assert_eq!(NESTING_DEPTH.with(std::cell::Cell::get), 0, "after a failed parse");
+
+		let deep = format!("{}x{}", "vectorize [".repeat(300), "]".repeat(300));
+		let _ = parse_cst(&deep);
+		assert_eq!(NESTING_DEPTH.with(std::cell::Cell::get), 0, "after hitting the limit");
 	}
 }

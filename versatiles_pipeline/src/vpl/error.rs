@@ -245,6 +245,9 @@ fn describe_kind(kind: ErrorKind) -> Option<&'static str> {
 		ErrorKind::Escaped => "malformed escape sequence",
 		ErrorKind::Alt => "none of the alternatives matched",
 		ErrorKind::Many1 => "expected at least one",
+		// Raised by this crate's own nesting guard rather than by a combinator:
+		// `[ … ]` nested past the depth the parser will descend.
+		ErrorKind::TooLarge => "sources nested too deeply",
 		_ => return None,
 	})
 }
