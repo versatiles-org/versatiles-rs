@@ -610,6 +610,97 @@ mod tests {
 		);
 	}
 
+	/// A `debug_assert!` in a parser is a check that is not there when it
+	/// matters.
+	///
+	/// Release builds set `debug-assertions = false`, so anything guarded this
+	/// way holds only in tests. That is fine for an invariant this code
+	/// establishes itself, and wrong for anything read out of a file: the block
+	/// index of a `.versatiles` container was compared against its tile index
+	/// with `debug_assert_eq!`, which meant the two were never compared in a
+	/// shipped binary, and a crafted file indexed out of bounds on an ordinary
+	/// tile request.
+	///
+	/// The crates listed here are the ones that parse untrusted bytes. Each
+	/// remaining `debug_assert` in them is named below with why it is sound.
+	/// Adding one fails this test until it is either justified here or — far
+	/// more likely, if it is about parsed input — written as an `ensure!`.
+	#[test]
+	fn no_parser_validates_untrusted_input_with_a_debug_assert() {
+		/// `crate/path.rs:line-content` fragments that are internal invariants
+		/// rather than checks on parsed data.
+		const JUSTIFIED: &[(&str, &str)] = &[
+			(
+				"versatiles_container/src/container/versatiles/reader.rs",
+				"bbox.level(), tiles_bbox_block.level()",
+			),
+			(
+				"versatiles_container/src/container/versatiles/reader.rs",
+				"bbox.level(), tiles_bbox_used.level()",
+			),
+			// Quadtree cells are square and larger than 1x1 by construction;
+			// neither fact comes from a file.
+			(
+				"versatiles_core/src/types/tile_quadtree/mod.rs",
+				"self.x_max - self.x_min",
+			),
+			("versatiles_core/src/types/tile_quadtree/mod.rs", "half > 0"),
+		];
+
+		/// Crates whose job is to read bytes someone else wrote.
+		const PARSING_CRATES: &[&str] = &["versatiles_core", "versatiles_container", "versatiles_geometry"];
+
+		let workspace = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/.."));
+		let mut unjustified: Vec<String> = Vec::new();
+
+		for crate_name in PARSING_CRATES {
+			let mut stack = vec![workspace.join(crate_name).join("src")];
+			while let Some(dir) = stack.pop() {
+				let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+				for entry in entries.flatten() {
+					let path = entry.path();
+					if path.is_dir() {
+						stack.push(path);
+						continue;
+					}
+					if path.extension().is_none_or(|e| e != "rs") {
+						continue;
+					}
+
+					let text = std::fs::read_to_string(&path).unwrap_or_default();
+					let relative = path
+						.strip_prefix(workspace)
+						.unwrap_or(&path)
+						.to_string_lossy()
+						.replace('\\', "/");
+
+					for (number, line) in text.lines().enumerate() {
+						let trimmed = line.trim_start();
+						// Only the macro call itself; prose about it in a doc
+						// comment is how the reasoning gets written down.
+						if !trimmed.starts_with("debug_assert") {
+							continue;
+						}
+						let justified = JUSTIFIED
+							.iter()
+							.any(|(file, fragment)| relative.ends_with(file) && line.contains(fragment));
+						if !justified {
+							unjustified.push(format!("{relative}:{}: {}", number + 1, trimmed));
+						}
+					}
+				}
+			}
+		}
+
+		assert!(
+			unjustified.is_empty(),
+			"these `debug_assert`s are in crates that parse untrusted input and are not listed as \
+			 internal invariants. A check on parsed data has to be an `ensure!`, or it is absent \
+			 from every release build:\n  {}",
+			unjustified.join("\n  ")
+		);
+	}
+
 	/// Every `VERSATILES_*` environment variable the workspace reads has to be
 	/// listed in the README.
 	///
