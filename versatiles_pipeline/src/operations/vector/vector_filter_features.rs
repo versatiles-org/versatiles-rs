@@ -3,7 +3,7 @@ use std::{
 	sync::Arc,
 };
 
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, ensure};
 use cel_interpreter::{
 	Context as CelContext, Program, Value as CelValue,
 	extractors::This,
@@ -220,6 +220,17 @@ fn compile_cel(expr: &str) -> Result<Program> {
 	/// it lives only for the parse, and the failure it prevents is an abort rather than an error.
 	const PARSER_STACK: usize = 16 * 1024 * 1024;
 
+	// Checked here, at build time, because the stack the compiler gets is not the
+	// stack the evaluator gets. Everything below protects the *parse*: its own
+	// thread, 16 MB, `catch_unwind`. `Program::execute` then runs per feature on
+	// the tiling thread, with none of that, and recurses over the same tree — so
+	// an expression deep enough to trouble the parser aborts the process later,
+	// during a conversion, where nothing catches it.
+	//
+	// Refusing it before it is ever evaluated turns that into an error at
+	// pipeline build, which is also when a person is best placed to fix it.
+	ensure_cel_nesting_is_bounded(expr)?;
+
 	// `ParseErrors` holds an `Rc` and so cannot cross a thread boundary; it is rendered to its
 	// message here, inside the thread, which is all the caller ever did with it.
 	let parse = || {
@@ -263,6 +274,59 @@ fn compile_cel(expr: &str) -> Result<Program> {
 			// the caret alignment survives and terminal output stays readable.
 			anyhow!("Failed to compile CEL expression:\n  {expr}\n\n{e}")
 		})
+}
+
+/// How deeply brackets may nest inside a CEL expression.
+///
+/// Bounds the shape that makes evaluation recurse: `((((…))))`. It deliberately
+/// does *not* bound expression *length* or operator chains — `a || b || c || …`
+/// parses left-leaning, so its evaluation depth grows with the number of terms,
+/// and that is exactly what `vector_reduce_to_style` generates: one
+/// parenthesised term per drawn case, joined with `||`, tens of kilobytes for a
+/// real style. Those have a nesting depth of about three however long they get,
+/// and they work today, so capping chain length would break generated pipelines
+/// to defend against a shape they do not have.
+const MAX_CEL_NESTING_DEPTH: usize = 128;
+
+/// Refuse an expression whose brackets nest deeper than the evaluator will go.
+///
+/// Brackets inside string literals are ignored: a generated style embeds
+/// property values verbatim, and a value containing `(` is not nesting.
+fn ensure_cel_nesting_is_bounded(expr: &str) -> Result<()> {
+	let mut depth = 0usize;
+	let mut deepest = 0usize;
+	let mut quote: Option<char> = None;
+	let mut escaped = false;
+
+	for c in expr.chars() {
+		if let Some(q) = quote {
+			if escaped {
+				escaped = false;
+			} else if c == '\\' {
+				escaped = true;
+			} else if c == q {
+				quote = None;
+			}
+			continue;
+		}
+
+		match c {
+			'\'' | '"' => quote = Some(c),
+			'(' | '[' | '{' => {
+				depth += 1;
+				deepest = deepest.max(depth);
+			}
+			')' | ']' | '}' => depth = depth.saturating_sub(1),
+			_ => {}
+		}
+	}
+
+	ensure!(
+		deepest <= MAX_CEL_NESTING_DEPTH,
+		"CEL expression nests brackets {deepest} deep, more than the {MAX_CEL_NESTING_DEPTH} this evaluates:\n  {expr}"
+	);
+
+	Ok(())
 }
 
 /// The name bound to the tile's zoom level, reserved like [`PROPS_VAR`].
@@ -1182,5 +1246,74 @@ mod tests {
 		let tiles = op.tile_stream(TileBBox::new_full(1)?).await?.to_vec().await;
 		assert_tiles_valid(tiles);
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod cel_nesting_tests {
+	use super::*;
+
+	/// `Program::execute` runs per feature on the tiling thread, with none of
+	/// the protection the parse gets, and recurses over the same tree. An
+	/// expression deep enough to trouble the parser therefore aborted the
+	/// process during a conversion rather than failing at build.
+	#[test]
+	fn a_deeply_nested_expression_is_refused_at_compile_time() {
+		let depth = 4_000;
+		let expr = format!("{}zoom > 1{}", "(".repeat(depth), ")".repeat(depth));
+
+		let error = compile_cel(&expr).expect_err("nesting this deep must be refused");
+		let message = format!("{error:#}");
+		assert!(message.contains("nests brackets"), "unhelpful message: {message}");
+	}
+
+	/// The shape `vector_reduce_to_style` generates is a long chain of shallow
+	/// terms — `(a) || (b) || (c) …`, tens of kilobytes for a real style. Its
+	/// depth is about one however long it gets, and capping length instead of
+	/// depth would break it.
+	#[test]
+	fn a_long_shallow_chain_still_compiles() {
+		let expr = (0..5_000)
+			.map(|i| format!("(zoom > {i})"))
+			.collect::<Vec<_>>()
+			.join(" || ");
+
+		assert!(ensure_cel_nesting_is_bounded(&expr).is_ok());
+	}
+
+	/// Brackets inside a string literal are data, not nesting — a generated
+	/// style embeds property values verbatim.
+	#[test]
+	fn brackets_inside_string_literals_do_not_count() {
+		let expr = format!("name == '{}'", "(".repeat(500));
+		assert!(ensure_cel_nesting_is_bounded(&expr).is_ok());
+
+		// Including one escaped just before the closing quote.
+		let expr = r"name == 'a\\' && kind == '((((('";
+		assert!(ensure_cel_nesting_is_bounded(expr).is_ok());
+	}
+
+	/// Ordinary expressions are unaffected, right up to the limit.
+	#[test]
+	fn ordinary_expressions_are_unaffected() {
+		assert!(ensure_cel_nesting_is_bounded("zoom >= 12").is_ok());
+		assert!(ensure_cel_nesting_is_bounded("has(props.name) && props.population >= 1000").is_ok());
+
+		let at_limit = format!(
+			"{}zoom > 1{}",
+			"(".repeat(MAX_CEL_NESTING_DEPTH),
+			")".repeat(MAX_CEL_NESTING_DEPTH)
+		);
+		assert!(
+			ensure_cel_nesting_is_bounded(&at_limit).is_ok(),
+			"the limit itself must pass"
+		);
+
+		let past_limit = format!(
+			"{}zoom > 1{}",
+			"(".repeat(MAX_CEL_NESTING_DEPTH + 1),
+			")".repeat(MAX_CEL_NESTING_DEPTH + 1)
+		);
+		assert!(ensure_cel_nesting_is_bounded(&past_limit).is_err());
 	}
 }
