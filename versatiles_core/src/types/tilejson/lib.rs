@@ -550,10 +550,13 @@ impl TileJSON {
 	/// Logs a warning with the parse error and falls back to a minimal default.
 	///
 	/// # Returns
-	/// A valid `TileJSON` even if the input is invalid.
+	/// A valid `TileJSON` even if the input is invalid — including input that is
+	/// not UTF-8 at all. Every container reader hands its metadata blob to this
+	/// function, and that blob is whatever the file says it is, so "invalid" here
+	/// has to mean arbitrary bytes rather than merely malformed JSON.
 	#[must_use]
 	pub fn try_from_blob_or_default(blob: &Blob) -> TileJSON {
-		TileJSON::try_from(blob.as_str()).unwrap_or_else(|e| {
+		TileJSON::try_from(blob).unwrap_or_else(|e| {
 			log::warn!("Failed to parse TileJSON: {e}");
 			log::warn!("Use default TileJSON instead");
 			TileJSON::default()
@@ -618,7 +621,10 @@ impl TryFrom<&Blob> for TileJSON {
 	type Error = anyhow::Error;
 
 	fn try_from(blob: &Blob) -> Result<TileJSON> {
-		TileJSON::try_from(blob.as_str())
+		// `try_as_str`, not `as_str`: a metadata blob comes from an untrusted
+		// container, and the panicking variant would fire before the fallible
+		// parse this signature promises.
+		TileJSON::try_from(blob.try_as_str()?)
 	}
 }
 
@@ -824,6 +830,28 @@ mod tests {
 		let blob = Blob::from("{ invalid json");
 		let tj = TileJSON::try_from_blob_or_default(&blob);
 		assert_eq!(tj, TileJSON::default());
+	}
+
+	/// A container's metadata blob is arbitrary bytes, not merely arbitrary text.
+	/// `try_from_blob_or_default` promises a value for any input, so a blob that
+	/// is not UTF-8 must fall back like malformed JSON does rather than panic.
+	#[test]
+	fn should_try_from_blob_or_default_return_default_on_non_utf8() {
+		for bytes in [
+			vec![0xFF, 0xFE],             // a UTF-16 BOM
+			vec![0x89, 0x50, 0x4E, 0x47], // a PNG magic number
+			vec![b'{', 0xC3, 0x28, b'}'], // otherwise-valid JSON, bad continuation byte
+		] {
+			let tj = TileJSON::try_from_blob_or_default(&Blob::from(bytes.clone()));
+			assert_eq!(tj, TileJSON::default(), "{bytes:?}");
+		}
+	}
+
+	/// The fallible conversion reports the failure rather than unwinding.
+	#[test]
+	fn should_try_from_non_utf8_blob_return_error() {
+		let blob = Blob::from(vec![0xFF, 0xFE]);
+		assert!(TileJSON::try_from(&blob).is_err());
 	}
 
 	#[test]

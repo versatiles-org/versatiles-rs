@@ -521,6 +521,43 @@ mod tests {
 		Ok((temp_file, reader))
 	}
 
+	/// A container's metadata is whatever bytes the file supplies. Opening one
+	/// whose metadata is not UTF-8 must fall back to a default TileJSON, the way
+	/// malformed JSON already does — the panic this replaced fired at open, before
+	/// any routing or authorization, for two bytes of metadata.
+	#[tokio::test]
+	async fn non_utf8_metadata_falls_back_to_a_default_tilejson() -> Result<()> {
+		use versatiles_core::{ByteRange, GeoBBox, TileJSON, io::DataReaderBlob};
+
+		let mut bytes = vec![0u8; 66]; // header, written last: it names the range below
+		let meta_offset = bytes.len() as u64;
+		bytes.extend_from_slice(&[0xFF, 0xFE]); // a UTF-16 BOM, not valid UTF-8
+
+		let blocks_blob = BlockIndex::new_empty().to_brotli_blob()?;
+		let blocks_offset = bytes.len() as u64;
+		bytes.extend_from_slice(blocks_blob.as_slice());
+
+		let mut header = FileHeader::new(
+			TileFormat::MVT,
+			TileCompression::Uncompressed,
+			[0, 0],
+			&GeoBBox::new(-180.0, -85.0, 180.0, 85.0)?,
+		)?;
+		header.meta_range = ByteRange::new(meta_offset, 2);
+		header.blocks_range = ByteRange::new(blocks_offset, blocks_blob.len());
+		bytes[0..66].copy_from_slice(header.to_blob()?.as_slice());
+
+		let reader = VersaTilesReader::open_data(
+			Box::new(DataReaderBlob::from(Blob::from(bytes))),
+			TilesRuntime::default(),
+		)
+		.await?;
+
+		assert_eq!(reader.tilejson(), &TileJSON::default());
+
+		Ok(())
+	}
+
 	/// A block definition declaring more tiles than its index actually holds is a
 	/// crafted file: the two counts live in different parts of the container and
 	/// nothing in the format ties them together. The reader must refuse it when

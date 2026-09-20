@@ -229,6 +229,11 @@ impl Blob {
 	/// let invalid_utf8 = Blob::from(vec![0xFF, 0xFE]);
 	/// let _ = invalid_utf8.as_str(); // Panics!
 	/// ```
+	///
+	/// Only for a `Blob` whose contents this process produced. A blob read out of
+	/// a container, a tile, or an HTTP response is whatever the file or the peer
+	/// says it is, and two bytes are enough to panic — use
+	/// [`try_as_str`](Self::try_as_str) for those.
 	#[must_use]
 	pub fn as_str(&self) -> &str {
 		std::str::from_utf8(&self.0).expect("Blob content was not valid UTF-8")

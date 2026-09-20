@@ -40,7 +40,7 @@ impl JsonValue {
 	/// # Errors
 	/// Returns an error if the JSON is invalid.
 	pub fn parse_blob(blob: &Blob) -> Result<JsonValue> {
-		parse_json_str(blob.as_str())
+		parse_json_str(blob.try_as_str()?)
 	}
 
 	/// Return the JSON type as a lowercase string (`"array"`, `"object"`, etc.).

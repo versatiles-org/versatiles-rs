@@ -257,7 +257,7 @@ fn dry_run(arguments: &Subcommand) -> Result<()> {
 	}
 
 	let vpl = match source.location() {
-		DataLocation::Blob(blob) => blob.as_str().to_string(),
+		DataLocation::Blob(blob) => blob.try_as_str()?.to_string(),
 		DataLocation::Path(path) => fs::read_to_string(path)?,
 		DataLocation::Url(url) => bail!("cannot check a pipeline hosted at '{url}' without fetching it"),
 	};
