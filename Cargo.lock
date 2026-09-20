@@ -5594,6 +5594,7 @@ dependencies = [
  "glob",
  "log",
  "mime_guess",
+ "percent-encoding",
  "predicates",
  "pretty_assertions",
  "regex",

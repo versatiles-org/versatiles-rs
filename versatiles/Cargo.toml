@@ -43,6 +43,7 @@ futures.workspace = true
 glob = { version = "0.3", default-features = false, optional = true }
 log.workspace = true
 mime_guess = { version = "2.0.5", default-features = false, optional = true }
+percent-encoding = { version = "2", default-features = false, optional = true }
 regex = { workspace = true, optional = true, features = ["unicode"] }
 serde.workspace = true
 serde_yaml_ng = "0.10.0"
@@ -99,6 +100,7 @@ server = [
 	"dep:dashmap",
 	"dep:enumset",
 	"dep:mime_guess",
+	"dep:percent-encoding",
 	"dep:regex",
 	"dep:reqwest",
 	"dep:astral-tokio-tar",
