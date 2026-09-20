@@ -135,6 +135,43 @@ incremental = false
 overflow-checks = false
 strip = true
 
+# The crates that parse untrusted bytes keep their overflow checks in release.
+#
+# Everywhere else `overflow-checks = false` is a reasonable trade: arithmetic on
+# values this process computed does not overflow, and the checks cost time in
+# hot pixel and geometry loops. Inside a parser the premise does not hold — the
+# operands are whatever a file says they are — and a wrapped offset is not a
+# crash but a wrong answer: an audit found a crafted PMTiles directory whose
+# offsets wrapped back inside the file, so the reader returned unrelated bytes
+# as a tile's content and reported success.
+#
+# Four such sites were found and fixed by hand; this is what catches the fifth.
+# A panic from a missed one is caught by the server's `CatchPanicLayer` and
+# surfaces as a 500, which is strictly better than serving wrong bytes.
+#
+# Cost, measured rather than assumed, on this machine:
+#
+#   - End-to-end, decoding 1207 vector tiles per run over 100 runs with process
+#     startup subtracted: 4.92 s → 4.95 s, +0.6%. That is the number that
+#     matters, and it is within run-to-run noise.
+#   - The `ByteIterator` micro-benchmark, a byte-at-a-time loop over 100 MB and
+#     the shape most exposed to this, is the worst case: +28% on `advance` and
+#     +30% on `skip_whitespace`. Its other three cases moved by less than the
+#     suite's own ±2–14% noise floor (measured by re-running an identical
+#     binary), so they say nothing either way.
+#
+# So: pathological in a tight scalar loop, unmeasurable in the workloads that
+# exist. Revisit if a profile ever shows one of these crates in a hot scalar
+# loop over whole files rather than per tile.
+[profile.release.package.versatiles_core]
+overflow-checks = true
+
+[profile.release.package.versatiles_container]
+overflow-checks = true
+
+[profile.release.package.versatiles_geometry]
+overflow-checks = true
+
 [workspace.dependencies]
 # Core dependencies
 anyhow = { version = "1.0.104", default-features = false, features = ["std"] }
