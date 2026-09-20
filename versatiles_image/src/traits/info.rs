@@ -131,6 +131,17 @@ where
 		if !self.color().has_alpha() {
 			return false;
 		}
+		// `iter_pixels` handles only 8-bit layouts and panics on the rest, and
+		// these two are the callers reached for every image tile. Decoded images
+		// are narrowed to 8 bits at the decode boundary, so this should not
+		// trigger; it is here because "should not" is doing the work of "cannot"
+		// otherwise, and the cost of being wrong is a panicked request.
+		//
+		// Answering "no" is the safe direction: the tile is kept rather than
+		// discarded as blank.
+		if self.bits_per_value() != 8 {
+			return false;
+		}
 		let alpha_channel = (self.color().channel_count() - 1) as usize;
 		return self.iter_pixels().all(|p| p[alpha_channel] == 0);
 	}
@@ -138,6 +149,11 @@ where
 	fn is_opaque(&self) -> bool {
 		if !self.color().has_alpha() {
 			return true;
+		}
+		// See `is_empty`. Answering "no" is the safe direction here too: the
+		// alpha channel is kept rather than dropped as redundant.
+		if self.bits_per_value() != 8 {
+			return false;
 		}
 		let alpha_channel = (self.color().channel_count() - 1) as usize;
 		return self.iter_pixels().all(|p| p[alpha_channel] == 255);

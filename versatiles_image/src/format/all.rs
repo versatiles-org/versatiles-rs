@@ -88,7 +88,36 @@ pub(crate) fn decode_limited(blob: &Blob, format: ImageFormat) -> Result<Dynamic
 	let mut reader = ImageReader::new(Cursor::new(blob.as_slice()));
 	reader.set_format(format);
 	reader.limits(limits);
-	reader.decode().map_err(Into::into)
+	Ok(narrow_to_8bit(reader.decode()?))
+}
+
+/// Narrow a decoded image to eight bits per channel, keeping its channel layout.
+///
+/// This crate is 8-bit throughout: every encoder refuses anything else, and the
+/// pixel helpers in `traits::convert` match only the 8-bit variants of
+/// `DynamicImage`. A 16-bit PNG is a perfectly valid image that decodes fine and
+/// then panics the first time something asks whether it is opaque — which the
+/// tile transparency check does for every image tile.
+///
+/// Narrowing at the decode boundary is what keeps that unreachable: nothing
+/// deeper in the crate has to know that other bit depths exist. It loses
+/// precision the encoders could not have preserved anyway.
+fn narrow_to_8bit(image: DynamicImage) -> DynamicImage {
+	use DynamicImage::{
+		ImageLuma8, ImageLuma16, ImageLumaA8, ImageLumaA16, ImageRgb8, ImageRgb16, ImageRgb32F, ImageRgba8, ImageRgba16,
+		ImageRgba32F,
+	};
+
+	match image {
+		ImageLuma16(_) => ImageLuma8(image.into_luma8()),
+		ImageLumaA16(_) => ImageLumaA8(image.into_luma_alpha8()),
+		ImageRgb16(_) | ImageRgb32F(_) => ImageRgb8(image.into_rgb8()),
+		ImageRgba16(_) | ImageRgba32F(_) => ImageRgba8(image.into_rgba8()),
+		// Already 8-bit. `DynamicImage` is `#[non_exhaustive]`, so a variant
+		// added upstream lands here rather than failing to compile; the guards
+		// in `is_empty`/`is_opaque` are what stop that becoming a panic.
+		other => other,
+	}
 }
 
 /// Longest side accepted from a decoded image, in pixels.
@@ -230,5 +259,69 @@ mod limit_tests {
 		assert!(ensure_decodable(1, MAX_SIDE + 1, 1).is_err());
 		// One row past the byte ceiling.
 		assert!(ensure_decodable(16_384, 8_193, 4).is_err());
+	}
+}
+
+#[cfg(test)]
+mod bit_depth_tests {
+	use super::*;
+	use crate::traits::DynamicImageTraitInfo;
+
+	/// A 16-bit RGBA PNG, encoded by the `image` crate so it is a genuine file
+	/// rather than a hand-built header.
+	fn png_16bit_rgba() -> Blob {
+		let img = DynamicImage::ImageRgba16(image::ImageBuffer::from_fn(4, 4, |x, y| {
+			image::Rgba([
+				u16::try_from(x).unwrap() * 1000,
+				u16::try_from(y).unwrap() * 1000,
+				40_000,
+				u16::MAX,
+			])
+		}));
+		let mut out = Cursor::new(Vec::new());
+		img.write_to(&mut out, ImageFormat::Png).unwrap();
+		Blob::from(out.into_inner())
+	}
+
+	/// Decoding a 16-bit PNG used to hand back an `ImageRgba16`, which panicked
+	/// the moment anything asked whether it was opaque — and the tile
+	/// transparency check asks that of every image tile.
+	#[test]
+	fn a_16bit_png_decodes_to_8bit() {
+		let image = decode_limited(&png_16bit_rgba(), ImageFormat::Png).unwrap();
+
+		assert_eq!(image.bits_per_value(), 8, "decode must narrow to 8 bits");
+		assert!(matches!(image, DynamicImage::ImageRgba8(_)), "layout must be kept");
+		assert_eq!((image.width(), image.height()), (4, 4));
+
+		// The calls that used to panic.
+		assert!(image.is_opaque());
+		assert!(!image.is_empty());
+	}
+
+	/// The guard in the info helpers stands even if an image reaches them
+	/// without passing through a decode — images built by the GDAL source do.
+	#[test]
+	fn the_info_helpers_do_not_panic_on_16bit() {
+		let image = DynamicImage::ImageRgba16(image::ImageBuffer::from_fn(2, 2, |_, _| {
+			image::Rgba([0, 0, 0, u16::MAX])
+		}));
+
+		assert!(!image.is_opaque(), "unknown rather than opaque");
+		assert!(!image.is_empty(), "unknown rather than blank");
+	}
+
+	/// Narrowing must not disturb the 8-bit images that are the normal case.
+	#[test]
+	fn an_8bit_png_is_unchanged() {
+		let img = DynamicImage::ImageRgb8(image::ImageBuffer::from_fn(4, 4, |x, y| {
+			image::Rgb([u8::try_from(x).unwrap(), u8::try_from(y).unwrap(), 7u8])
+		}));
+		let mut out = Cursor::new(Vec::new());
+		img.write_to(&mut out, ImageFormat::Png).unwrap();
+
+		let decoded = decode_limited(&Blob::from(out.into_inner()), ImageFormat::Png).unwrap();
+		assert!(matches!(decoded, DynamicImage::ImageRgb8(_)));
+		assert_eq!(decoded.as_bytes(), img.as_bytes());
 	}
 }
