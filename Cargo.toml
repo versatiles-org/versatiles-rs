@@ -208,7 +208,14 @@ astral-tokio-tar = { version = "0.7.0", default-features = false }
 
 # HTTP/Server dependencies
 axum = { version = "0.8.9", default-features = false }
-reqwest = { version = "0.13.5", default-features = false, features = ["default-tls"] }
+# `stream` is what allows a response body to be read with a running total
+# instead of buffered whole: `Response::bytes()` allocates whatever the peer
+# sends, and a peer answering a small range request with a huge body is exactly
+# the case worth refusing.
+reqwest = { version = "0.13.5", default-features = false, features = [
+	"default-tls",
+	"stream",
+] }
 
 # Image processing dependencies
 imageproc = { version = "0.27.0", default-features = false }

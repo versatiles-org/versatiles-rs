@@ -33,7 +33,7 @@
 
 use std::{collections::HashMap, fmt::Debug, path::Path, sync::Arc};
 
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Result, anyhow, bail, ensure};
 use async_trait::async_trait;
 use futures::StreamExt;
 use tokio::io::{AsyncRead, AsyncReadExt};
@@ -42,7 +42,7 @@ use tokio_tar::{Archive, Entry, EntryType};
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
 	Blob, ByteRange, TileBBox, TileCompression, TileCoord, TileFormat, TileJSON, TilePyramid, TileStream,
-	compression::decompress,
+	compression::{decompress, max_decompressed_bytes},
 	io::{DataReaderFile, DataReaderTrait},
 };
 use versatiles_derive::context;
@@ -236,6 +236,19 @@ impl TarTilesReader {
 			};
 
 			if let Some(compression) = metadata_compression {
+				// Bounded: the entry header states its own size, and a `meta.json`
+				// claiming four gigabytes is four gigabytes resident before
+				// anything looks at what it contains. The ceiling is the one the
+				// decompressor already applies, so metadata cannot arrive larger
+				// than it could be decompressed to anyway.
+				let declared = entry.header().raw_file_size().unwrap_or(0);
+				let limit = max_decompressed_bytes();
+				if limit > 0 && declared > limit {
+					bail!(
+						"tar entry {path_tmp_string:?} declares {declared} bytes of metadata, which exceeds the {limit} byte limit"
+					);
+				}
+
 				// Fallible: a truncated archive fails here, and that is an error
 				// about the file rather than a broken assumption about it.
 				let mut blob: Vec<u8> = Vec::new();
@@ -598,5 +611,55 @@ pub mod tests {
 		}
 
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod metadata_limit_tests {
+	use super::*;
+
+	/// One 512-byte ustar header declaring `size` bytes for `name`, with no
+	/// data behind it. Enough for the scan to reach the entry and read what it
+	/// claims — which is the point: the claim is what used to be allocated.
+	fn tar_header(name: &str, size: u64) -> Vec<u8> {
+		let mut header = [0u8; 512];
+		header[..name.len()].copy_from_slice(name.as_bytes());
+		header[100..107].copy_from_slice(b"0000644"); // mode
+		header[108..115].copy_from_slice(b"0000000"); // uid
+		header[116..123].copy_from_slice(b"0000000"); // gid
+		let size_field = format!("{size:011o}");
+		header[124..135].copy_from_slice(size_field.as_bytes());
+		header[136..147].copy_from_slice(b"00000000000"); // mtime
+		header[156] = b'0'; // regular file
+		header[257..263].copy_from_slice(b"ustar\0");
+		header[263..265].copy_from_slice(b"00");
+
+		// The checksum is computed with its own field read as spaces.
+		header[148..156].copy_from_slice(b"        ");
+		let sum: u32 = header.iter().map(|b| u32::from(*b)).sum();
+		let chk = format!("{sum:06o}\0 ");
+		header[148..156].copy_from_slice(chk.as_bytes());
+
+		header.to_vec()
+	}
+
+	/// A metadata entry was read whole with no ceiling, so a `meta.json`
+	/// declaring four gigabytes was four gigabytes resident before anything
+	/// looked at what it held.
+	#[tokio::test]
+	async fn an_oversized_metadata_entry_is_refused() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("huge-meta.tar");
+		std::fs::write(&path, tar_header("meta.json", 4 * 1024 * 1024 * 1024)).unwrap();
+
+		let error = TarTilesReader::open(&path)
+			.await
+			.expect_err("an oversized metadata entry must be refused");
+
+		let message = format!("{error:#}");
+		assert!(
+			message.contains("exceeds the") && message.contains("byte limit"),
+			"unhelpful message: {message}"
+		);
 	}
 }

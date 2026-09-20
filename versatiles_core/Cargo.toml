@@ -64,7 +64,11 @@ rstest.workspace = true
 # SFTP tests set VERSATILES_SFTP_* and HOME, and now run on every platform.
 serial_test = "4.0.1"
 tempfile.workspace = true
-tokio = { workspace = true, features = ["macros"] }
+# `net`/`io-util` are dev-only here: the HTTP reader's tests answer a request
+# from a throwaway TcpListener, which is the only way to give it a response
+# whose body disagrees with its headers. The library keeps them behind `sftp`
+# so the wasm32 build stays possible; a dev-dependency does not affect that.
+tokio = { workspace = true, features = ["io-util", "macros", "net"] }
 wildmatch.workspace = true
 
 # Multithreading benchmark dependencies

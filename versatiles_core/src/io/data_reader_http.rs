@@ -46,8 +46,96 @@ use tokio::{sync::Semaphore, time::sleep};
 use super::{
 	DataReaderTrait,
 	network_reader::{NetworkReader, SmallerRangeWontHelp},
+	retry::env_u64,
 };
 use crate::{Blob, ByteRange};
+
+/// Ceiling on a whole-body read when `VERSATILES_MAX_HTTP_BODY_BYTES` is unset.
+///
+/// Only applies to `read_all`, where nothing in the request says how much is
+/// expected — a range read is bounded by the range it asked for. 256 MiB is far
+/// above the style sheets, sprites and TileJSON documents fetched this way, and
+/// matches the decompression ceiling next door.
+const DEFAULT_MAX_BODY_BYTES: u64 = 256 * 1024 * 1024;
+
+/// Why reading a response body stopped.
+///
+/// Separated from a plain error so the retry loop can tell the two apart: a
+/// transport hiccup may be worth another attempt, a body that exceeds what was
+/// asked for never is — the next attempt would fetch the same oversized body.
+enum BodyError {
+	Transport(reqwest::Error),
+	TooLarge { limit: u64 },
+}
+
+/// Read a response body, refusing to buffer more than `limit` bytes.
+///
+/// `Response::bytes()` buffers whatever the peer sends: a server answering a
+/// 64 KiB range request with ten gigabytes is answered by allocating ten
+/// gigabytes, and `Content-Length` is the peer's claim rather than a
+/// constraint. Reading the stream chunk by chunk with a running total stops at
+/// the limit instead of after it.
+async fn read_body_limited(response: reqwest::Response, limit: u64) -> std::result::Result<Vec<u8>, BodyError> {
+	use futures::StreamExt;
+
+	// Only as a starting size, and only when the peer's claim is plausible —
+	// it is not trusted as a bound.
+	let mut body = match response.content_length() {
+		Some(len) if len <= limit => Vec::with_capacity(usize::try_from(len).unwrap_or(0)),
+		_ => Vec::new(),
+	};
+
+	let mut stream = response.bytes_stream();
+	while let Some(chunk) = stream.next().await {
+		let chunk = chunk.map_err(BodyError::Transport)?;
+		if body.len() as u64 + chunk.len() as u64 > limit {
+			return Err(BodyError::TooLarge { limit });
+		}
+		body.extend_from_slice(&chunk);
+	}
+
+	Ok(body)
+}
+
+/// Check that a `206` response describes the range that was asked for.
+///
+/// Only the header. How many bytes actually follow it is a separate question,
+/// checked against `range.length` once the body has been read — the two used to
+/// be conflated, and a short body passed for a complete one.
+fn verify_content_range(response: &reqwest::Response, range: &ByteRange) -> Result<()> {
+	let content_range = response
+		.headers()
+		.get("content-range")
+		.ok_or_else(|| anyhow!("response is missing Content-Range header"))?
+		.to_str()?;
+
+	static RE_RANGE: LazyLock<Regex> = LazyLock::new(|| {
+		RegexBuilder::new(r"^bytes (\d+)-(\d+)/\d+$")
+			.case_insensitive(true)
+			.build()
+			.expect("valid regex literal")
+	});
+
+	let caps = RE_RANGE.captures(content_range).ok_or_else(|| {
+		anyhow!("unexpected Content-Range format: '{content_range}', expected 'bytes <start>-<end>/<total>'")
+	})?;
+	let content_range_start: u64 = caps[1].parse()?;
+	let content_range_end: u64 = caps[2].parse()?;
+
+	if content_range_start != range.offset {
+		bail!(
+			"Content-Range start mismatch: expected {}, got {content_range_start}",
+			range.offset
+		);
+	}
+
+	let expected_end = range.end()? - 1;
+	if content_range_end != expected_end {
+		bail!("Content-Range end mismatch: expected {expected_end}, got {content_range_end}");
+	}
+
+	Ok(())
+}
 
 /// Maximum number of HTTP requests allowed in flight, shared across all
 /// readers pointing at the same host.
@@ -287,54 +375,56 @@ impl DataReaderHttp {
 				return Err(unexpected_status(range, len, url, status, total_attempts));
 			}
 
-			let content_range = response
-				.headers()
-				.get("content-range")
-				.ok_or_else(|| anyhow!("response is missing Content-Range header"))?
-				.to_str()?;
+			verify_content_range(&response, range)?;
 
-			static RE_RANGE: LazyLock<Regex> = LazyLock::new(|| {
-				RegexBuilder::new(r"^bytes (\d+)-(\d+)/\d+$")
-					.case_insensitive(true)
-					.build()
-					.expect("valid regex literal")
-			});
-
-			let caps = RE_RANGE.captures(content_range).ok_or_else(|| {
-				anyhow!("unexpected Content-Range format: '{content_range}', expected 'bytes <start>-<end>/<total>'")
-			})?;
-			let content_range_start: u64 = caps[1].parse()?;
-			let content_range_end: u64 = caps[2].parse()?;
-
-			if content_range_start != range.offset {
-				bail!(
-					"Content-Range start mismatch: expected {}, got {content_range_start}",
-					range.offset
-				);
-			}
-
-			let expected_end = range.end()? - 1;
-			if content_range_end != expected_end {
-				bail!("Content-Range end mismatch: expected {expected_end}, got {content_range_end}");
-			}
-
-			let bytes = match response.bytes().await {
+			// Bounded by the range that was asked for. `Content-Range` was checked
+			// above, but that is only the header: nothing so far constrains how
+			// many bytes actually follow it.
+			let bytes = match read_body_limited(response, range.length).await {
 				Ok(b) => b,
-				Err(e) if is_retryable_error(&e) && attempt < max_retries => {
+				Err(BodyError::Transport(e)) if is_retryable_error(&e) && attempt < max_retries => {
 					log::warn!(
 						"HTTP read {range} from '{url}': error reading body: {} ({attempt_label}), will retry",
 						describe_error(&e)
 					);
 					continue;
 				}
-				Err(e) => bail!(
+				Err(BodyError::Transport(e)) => bail!(
 					"could not read {range} ({len} bytes) from '{url}': error reading body: {} — gave up after {total_attempts} attempts",
 					describe_error(&e)
 				),
+				// Marked: a peer that sends more than it was asked for does so
+				// again for each half, so splitting turns one oversized body into
+				// several.
+				Err(BodyError::TooLarge { limit }) => {
+					return Err(
+						anyhow!(
+							"could not read {range} from '{url}': the response body is longer than the {limit} bytes requested"
+						)
+						.context(SmallerRangeWontHelp),
+					);
+				}
 			};
 
+			// A short body was previously concatenated into the result by
+			// `split_and_read`, which turned a truncated response into a blob
+			// that looked complete. The range was satisfied or it was not.
+			if bytes.len() as u64 != range.length {
+				// Marked for the same reason as an over-long body: the peer
+				// answered promptly with the wrong thing, and asking twice for
+				// halves gets two wrong answers instead of one.
+				return Err(
+					anyhow!(
+						"could not read {range} from '{url}': expected {} bytes, the response body carried {}",
+						range.length,
+						bytes.len()
+					)
+					.context(SmallerRangeWontHelp),
+				);
+			}
+
 			log::trace!("http: {range} {attempt_label}: read {} bytes ok", bytes.len());
-			return Ok(Blob::from(&*bytes));
+			return Ok(Blob::from(bytes));
 		}
 
 		bail!("could not read {range} ({len} bytes) from '{url}' — gave up after {total_attempts} attempts")
@@ -413,24 +503,29 @@ impl DataReaderTrait for DataReaderHttp {
 				bail!("could not read from '{url}': server returned {status}");
 			}
 
-			let bytes = match response.bytes().await {
+			let limit = env_u64("VERSATILES_MAX_HTTP_BODY_BYTES", DEFAULT_MAX_BODY_BYTES);
+			let bytes = match read_body_limited(response, limit).await {
 				Ok(b) => b,
-				Err(e) if is_retryable_error(&e) && attempt < max_retries => {
+				Err(BodyError::Transport(e)) if is_retryable_error(&e) && attempt < max_retries => {
 					log::warn!(
 						"HTTP read from '{url}': error reading body: {} ({attempt_label}), will retry",
 						describe_error(&e)
 					);
 					continue;
 				}
-				Err(e) => {
+				Err(BodyError::Transport(e)) => {
 					bail!(
 						"could not read from '{url}': error reading body: {} — gave up after {total_attempts} attempts",
 						describe_error(&e)
 					)
 				}
+				Err(BodyError::TooLarge { limit }) => bail!(
+					"could not read from '{url}': the response body exceeds {limit} bytes \
+					 (raise VERSATILES_MAX_HTTP_BODY_BYTES if that is expected)"
+				),
 			};
 
-			return Ok(Blob::from(&*bytes));
+			return Ok(Blob::from(bytes));
 		}
 
 		bail!("could not read from '{url}' — gave up after {total_attempts} attempts")
@@ -606,5 +701,90 @@ mod tests {
 		let r2 = DataReaderHttp::try_from(&Url::parse("https://host-b-test.invalid/").unwrap())?;
 		assert!(!Arc::ptr_eq(&r1.in_flight, &r2.in_flight));
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod body_limit_tests {
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+	use super::*;
+
+	/// Answers exactly one request with a fixed response, then stops.
+	///
+	/// Written by hand rather than with a mock library because the point is to
+	/// send a body that disagrees with the headers describing it, which a
+	/// well-behaved HTTP server will not do.
+	async fn serve_once(response: Vec<u8>) -> Url {
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let addr = listener.local_addr().unwrap();
+
+		tokio::spawn(async move {
+			if let Ok((mut socket, _)) = listener.accept().await {
+				let mut discard = [0u8; 2048];
+				let _ = socket.read(&mut discard).await;
+				let _ = socket.write_all(&response).await;
+				let _ = socket.flush().await;
+			}
+		});
+
+		Url::parse(&format!("http://{addr}/x")).unwrap()
+	}
+
+	fn partial_response(content_range: &str, body: &[u8]) -> Vec<u8> {
+		let mut out = format!(
+			"HTTP/1.1 206 Partial Content\r\nContent-Range: {content_range}\r\nContent-Length: {}\r\n\r\n",
+			body.len()
+		)
+		.into_bytes();
+		out.extend_from_slice(body);
+		out
+	}
+
+	/// The `Content-Range` header was checked, but nothing constrained how many
+	/// bytes followed it — so a server answering a small range request with a
+	/// huge body was answered by buffering the whole thing.
+	#[tokio::test]
+	async fn a_body_longer_than_the_requested_range_is_refused() {
+		let body = vec![b'x'; 5000];
+		let url = serve_once(partial_response("bytes 0-9/100", &body)).await;
+		let reader = DataReaderHttp::try_from(&url).unwrap();
+
+		let error = reader
+			.read_range(&ByteRange::new(0, 10))
+			.await
+			.expect_err("an over-long body must be refused");
+
+		let message = format!("{error:#}");
+		assert!(message.contains("longer than"), "unhelpful message: {message}");
+	}
+
+	/// A short body used to be concatenated into the result by `split_and_read`,
+	/// which turned a truncated response into a blob that looked complete.
+	#[tokio::test]
+	async fn a_body_shorter_than_the_requested_range_is_refused() {
+		let url = serve_once(partial_response("bytes 0-9/100", b"abc")).await;
+		let reader = DataReaderHttp::try_from(&url).unwrap();
+
+		let error = reader
+			.read_range(&ByteRange::new(0, 10))
+			.await
+			.expect_err("a short body must be refused");
+
+		let message = format!("{error:#}");
+		assert!(
+			message.contains("expected 10 bytes") && message.contains("carried 3"),
+			"unhelpful message: {message}"
+		);
+	}
+
+	/// A response that matches what was asked for still reads normally.
+	#[tokio::test]
+	async fn a_body_matching_the_requested_range_is_accepted() {
+		let url = serve_once(partial_response("bytes 0-9/100", b"0123456789")).await;
+		let reader = DataReaderHttp::try_from(&url).unwrap();
+
+		let blob = reader.read_range(&ByteRange::new(0, 10)).await.unwrap();
+		assert_eq!(blob.as_slice(), b"0123456789");
 	}
 }
