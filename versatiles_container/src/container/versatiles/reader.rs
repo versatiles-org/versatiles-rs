@@ -55,7 +55,7 @@
 
 use std::{fmt::Debug, mem::size_of, ops::Shr, path::Path, sync::Arc, time::Instant};
 
-use anyhow::Result;
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::stream::StreamExt;
 use moka::future::Cache;
@@ -205,7 +205,20 @@ impl VersaTilesReader {
 				let blob = reader.read_range(&index_range).await?;
 				let mut tile_index = TileIndex::from_brotli_blob(&blob)?;
 				tile_index.shift_by(tiles_offset);
-				debug_assert_eq!(tile_index.len(), expected_count);
+
+				// A `debug_assert_eq!` until it turned out to be the only thing
+				// standing between a crafted file and an out-of-bounds index —
+				// and release builds set `debug-assertions = false`, so it stood
+				// nowhere. The block definition declares how many tiles the block
+				// holds; the index blob decides how many entries actually exist.
+				// Nothing in the format ties them together, so they are checked
+				// here, once per index load, rather than per tile lookup.
+				ensure!(
+					tile_index.len() == expected_count,
+					"tile index of block {block_coord:?} holds {} entries, but its block definition declares {expected_count} tiles",
+					tile_index.len()
+				);
+
 				anyhow::Ok(Arc::new(tile_index))
 			})
 			.await
@@ -347,7 +360,7 @@ impl TileSource for VersaTilesReader {
 
 		// Retrieve the tile index from cache or read from the reader
 		let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await?;
-		let tile_range: ByteRange = *tile_index.get(tile_id);
+		let tile_range: ByteRange = *tile_index.get(tile_id)?;
 
 		//  None if the tile range has zero length
 		if tile_range.length == 0 {
@@ -506,6 +519,70 @@ mod tests {
 		let runtime = TilesRuntime::default();
 		let reader = VersaTilesReader::open(&temp_file, runtime).await?;
 		Ok((temp_file, reader))
+	}
+
+	/// A block definition declaring more tiles than its index actually holds is a
+	/// crafted file: the two counts live in different parts of the container and
+	/// nothing in the format ties them together. The reader must refuse it when
+	/// the index is loaded, rather than indexing out of bounds once a tile in the
+	/// missing range is asked for.
+	///
+	/// The shape reproduces a 105-byte file that panicked the HTTP tile server on
+	/// `GET /tiles/…/8/5/5`, through the same call path `tile()` uses.
+	#[tokio::test]
+	async fn a_block_index_shorter_than_its_definition_is_refused() -> Result<()> {
+		use versatiles_core::{ByteRange, GeoBBox, TileBBox, io::DataReaderBlob};
+
+		// A block spanning 4×4 tiles, so `count_tiles()` is 16 …
+		let mut block = BlockDefinition::new(&TileBBox::from_min_and_max(2, 0, 0, 3, 3)?)?;
+
+		// … whose index holds a single entry.
+		let index_blob = TileIndex::new(1).to_brotli_blob()?;
+
+		let mut bytes = vec![0u8; 66]; // header, written last: it names the ranges below
+		let tiles_offset = bytes.len() as u64;
+		bytes.extend_from_slice(b"tile");
+		let index_offset = bytes.len() as u64;
+		bytes.extend_from_slice(index_blob.as_slice());
+
+		block.set_tiles_range(ByteRange::new(tiles_offset, 4));
+		block.set_index_range(ByteRange::new(index_offset, index_blob.len()));
+
+		let mut block_index = BlockIndex::new_empty();
+		block_index.insert_block(block);
+		let blocks_blob = block_index.to_brotli_blob()?;
+		let blocks_offset = bytes.len() as u64;
+		bytes.extend_from_slice(blocks_blob.as_slice());
+
+		let mut header = FileHeader::new(
+			TileFormat::MVT,
+			TileCompression::Uncompressed,
+			[2, 2],
+			&GeoBBox::new(-180.0, -85.0, 180.0, 85.0)?,
+		)?;
+		header.blocks_range = ByteRange::new(blocks_offset, blocks_blob.len());
+		bytes[0..66].copy_from_slice(header.to_blob()?.as_slice());
+
+		let reader = VersaTilesReader::open_data(
+			Box::new(DataReaderBlob::from(Blob::from(bytes))),
+			TilesRuntime::default(),
+		)
+		.await?;
+
+		// Slot 5 exists as far as the block definition is concerned, and does not
+		// exist in the index — the out-of-bounds case.
+		let error = reader
+			.tile(&TileCoord::new(2, 1, 1)?)
+			.await
+			.expect_err("a short tile index must be an error, not a panic");
+
+		let message = format!("{error:#}");
+		assert!(
+			message.contains("holds 1 entries") && message.contains("declares 16 tiles"),
+			"unhelpful message: {message}"
+		);
+
+		Ok(())
 	}
 
 	#[tokio::test]

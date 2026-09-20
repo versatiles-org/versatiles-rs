@@ -4,7 +4,7 @@
 
 use std::ops::Div;
 
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use versatiles_core::{
 	Blob, ByteRange,
 	compression::{compress_brotli_fast, decompress_brotli},
@@ -106,8 +106,24 @@ impl TileIndex {
 	///
 	/// # Returns
 	/// The byte range at the specified index.
-	pub fn get(&self, index: usize) -> &ByteRange {
-		&self.index[index]
+	///
+	/// # Errors
+	/// Returns an error if `index` is out of bounds.
+	///
+	/// Fallible because the two numbers involved come from different parts of an
+	/// untrusted file: the caller's slot number is derived from a block
+	/// definition in the block index, while this index's length comes from a
+	/// separate Brotli-compressed blob. A crafted container can make them
+	/// disagree, so an unchecked `self.index[index]` is a panic a file can ask
+	/// for. `from_blob` is the other half of the guarantee — it refuses a blob
+	/// whose length is not a whole number of entries.
+	pub fn get(&self, index: usize) -> Result<&ByteRange> {
+		self.index.get(index).with_context(|| {
+			format!(
+				"tile index holds {} entries, but entry {index} was requested",
+				self.index.len()
+			)
+		})
 	}
 
 	/// Returns the number of byte ranges in the index.
@@ -146,7 +162,7 @@ mod tests {
 
 		for i in 0..COUNT {
 			index.set(i as usize, ByteRange::new(i * i, i));
-			assert_eq!(index.get(i as usize), &ByteRange::new(i * i, i));
+			assert_eq!(index.get(i as usize).unwrap(), &ByteRange::new(i * i, i));
 		}
 
 		index.shift_by(18);
@@ -155,6 +171,24 @@ mod tests {
 			let i = index as u64;
 			assert_eq!(range, &ByteRange::new(i * i + 18, i));
 		}
+	}
+
+	/// The slot number and the index length come from different parts of an
+	/// untrusted file, so a lookup past the end must be an error rather than a
+	/// panic.
+	#[test]
+	fn out_of_bounds_lookup_is_an_error() {
+		let index = TileIndex::new(4);
+
+		assert!(index.get(3).is_ok());
+		assert!(index.get(4).is_err());
+		assert!(index.get(usize::MAX).is_err());
+
+		let message = index.get(1285).unwrap_err().to_string();
+		assert!(
+			message.contains("holds 4 entries") && message.contains("entry 1285"),
+			"unhelpful message: {message}"
+		);
 	}
 
 	#[test]
