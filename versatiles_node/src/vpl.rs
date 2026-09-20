@@ -6,6 +6,22 @@
 //! array items that were never quoted.
 //!
 //! Pipelines cross the boundary as JSON strings, matching `TileSource.fromPipeline`.
+//!
+//! # Panics at the boundary
+//!
+//! Every entry point here is `#[napi(catch_unwind)]`. These take arbitrary text
+//! from JavaScript — an editor calls `parseVpl` on what someone is halfway
+//! through typing — and a Rust panic crossing an FFI boundary uninvited is
+//! undefined behaviour, not an exception. `catch_unwind` turns one into a
+//! thrown JavaScript error instead.
+//!
+//! What it does **not** do is contain an *abort*. A stack overflow or a failed
+//! allocation does not unwind, so no `catch_unwind` anywhere sees it and the
+//! host process dies. Both crashes reported against these bindings were of that
+//! kind — deeply nested VPL, and an eleven-byte vector tile through
+//! `layerStats` — and both were fixed where they happened, by bounding parser
+//! recursion and by checking a length before allocating for it. This attribute
+//! is the net under future panics, not a substitute for those bounds.
 
 use std::collections::BTreeMap;
 
@@ -109,7 +125,7 @@ fn pipeline_to_steps(pipeline: &VPLPipeline) -> Value {
 	clippy::needless_pass_by_value,
 	reason = "napi generates by-value `String` arguments for JavaScript strings"
 )]
-#[napi]
+#[napi(catch_unwind)]
 pub fn stringify_vpl(steps_json: String) -> Result<String> {
 	let steps: Vec<PipelineStep> = serde_json::from_str(&steps_json)
 		.context("Invalid pipeline JSON")
@@ -145,7 +161,7 @@ fn error_to_json(error: &versatiles::pipeline::vpl::VplParseError) -> Value {
 ///
 /// @param vpl - the VPL text to parse
 /// @returns a JSON string describing either the pipeline or the error
-#[napi]
+#[napi(catch_unwind)]
 #[must_use]
 #[allow(
 	clippy::needless_pass_by_value,
@@ -183,7 +199,7 @@ pub fn parse_vpl(vpl: String) -> String {
 ///
 /// @param vpl - the VPL text to check
 /// @returns a JSON string describing either the problems found or a parse error
-#[napi]
+#[napi(catch_unwind)]
 #[must_use]
 #[allow(
 	clippy::needless_pass_by_value,
@@ -225,7 +241,7 @@ pub fn check_vpl(vpl: String) -> String {
 ///
 /// @param vpl - the VPL text to parse
 /// @returns a JSON string describing either the syntax tree or the error
-#[napi]
+#[napi(catch_unwind)]
 #[must_use]
 #[allow(
 	clippy::needless_pass_by_value,
@@ -254,7 +270,7 @@ pub fn parse_vpl_cst(vpl: String) -> String {
 	clippy::needless_pass_by_value,
 	reason = "napi generates by-value `String` arguments for JavaScript strings"
 )]
-#[napi]
+#[napi(catch_unwind)]
 pub fn stringify_vpl_cst(cst_json: String) -> Result<String> {
 	let file: CstFile = serde_json::from_str(&cst_json)
 		.context("Invalid VPL syntax tree JSON")
@@ -282,7 +298,7 @@ pub fn stringify_vpl_cst(cst_json: String) -> Result<String> {
 	clippy::needless_pass_by_value,
 	reason = "napi generates by-value `String` arguments for JavaScript strings"
 )]
-#[napi]
+#[napi(catch_unwind)]
 pub fn format_vpl_cst(cst_json: String) -> Result<String> {
 	let mut file: CstFile = serde_json::from_str(&cst_json)
 		.context("Invalid VPL syntax tree JSON")

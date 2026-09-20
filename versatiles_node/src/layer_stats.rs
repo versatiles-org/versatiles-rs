@@ -84,7 +84,7 @@ pub struct LayerStats {
 ///   }
 /// }
 /// ```
-#[napi(js_name = "layerStats")]
+#[napi(js_name = "layerStats", catch_unwind)]
 // `#[expect]` cannot be used on these: `#[napi]` re-emits the function, so the
 // suppression works by span but the expectation is never marked fulfilled.
 #[allow(
