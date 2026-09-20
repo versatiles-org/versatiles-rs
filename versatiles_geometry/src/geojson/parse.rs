@@ -353,15 +353,34 @@ impl TemporaryCoordinates {
 /// is later converted to concrete geometry types.
 #[context("parsing GeoJSON coordinate arrays")]
 fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordinates> {
-	fn recursive(iter: &mut ByteIterator) -> Result<TemporaryCoordinates> {
+	/// How many array levels `coordinates` may nest.
+	///
+	/// The deepest shape RFC 7946 defines is a MultiPolygon —
+	/// `[[[[lon, lat]]]]`, four levels — so anything past that is malformed
+	/// whatever else it is. The slack above four is there so the error a reader
+	/// gets is still the one about coordinate shape.
+	///
+	/// This is a bound on *stack depth*, which is why it is checked on the way
+	/// in. The `C3` arm below rejects the same thing on the way out, and by then
+	/// the recursion has already been to the bottom: a `.ndgeojson` of 200,000
+	/// `[` overflowed the stack and aborted before any arm could run. The
+	/// document-level parser has its own depth limit, but the newline-delimited
+	/// path calls this parser directly and never passes through it.
+	const MAX_COORDINATE_DEPTH: usize = 8;
+
+	fn recursive(iter: &mut ByteIterator, depth: usize) -> Result<TemporaryCoordinates> {
 		use TemporaryCoordinates::{C0, C1, C2, C3, V};
+
+		if depth > MAX_COORDINATE_DEPTH {
+			bail!("coordinates are nested too deep")
+		}
 
 		iter.skip_whitespace();
 		match iter.expect_peeked_byte()? {
 			b'[' => {
 				let mut list = Vec::new();
 				parse_array_entries(iter, |iter2| {
-					list.push(recursive(iter2)?);
+					list.push(recursive(iter2, depth + 1)?);
 					Ok(())
 				})?;
 
@@ -414,7 +433,7 @@ fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordin
 		}
 	}
 
-	recursive(iter)
+	recursive(iter, 0)
 }
 
 #[cfg(test)]
@@ -909,5 +928,55 @@ mod tests {
 			assert_relative_eq!(coords.y(), -2.5);
 		}
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod coordinate_depth_tests {
+	use std::io::Cursor;
+
+	use super::*;
+
+	fn feature_with_coordinates(depth: usize) -> String {
+		format!(
+			r#"{{"type":"Feature","properties":{{}},"geometry":{{"type":"Point","coordinates":{}1,2{}}}}}"#,
+			"[".repeat(depth),
+			"]".repeat(depth)
+		)
+	}
+
+	/// The depth check used to sit on the way *out* of the recursion, so it
+	/// could only report a depth the parser had already descended. A
+	/// newline-delimited feature of 200,000 `[` exhausted the stack and aborted
+	/// — and this path calls the feature parser directly, so the document
+	/// parser's own depth limit never applies to it.
+	#[test]
+	fn deeply_nested_coordinates_are_refused_not_fatal() {
+		let line = feature_with_coordinates(200_000);
+		let mut iter = ByteIterator::from_reader(Cursor::new(line), true);
+
+		let error = parse_geojson_feature(&mut iter).expect_err("nesting this deep must be refused");
+		assert!(
+			format!("{error:#}").contains("nested too deep"),
+			"unhelpful message: {error:#}"
+		);
+	}
+
+	/// The deepest shape RFC 7946 defines is a MultiPolygon, four levels, and
+	/// it must still parse.
+	#[test]
+	fn a_multipolygon_still_parses() {
+		let line = r#"{"type":"Feature","properties":{},"geometry":{"type":"MultiPolygon",
+			"coordinates":[[[[0,0],[1,0],[1,1],[0,0]]]]}}"#;
+		let mut iter = ByteIterator::from_reader(Cursor::new(line), true);
+
+		assert!(parse_geojson_feature(&mut iter).is_ok());
+	}
+
+	/// A plain point is unaffected.
+	#[test]
+	fn a_point_still_parses() {
+		let mut iter = ByteIterator::from_reader(Cursor::new(feature_with_coordinates(1)), true);
+		assert!(parse_geojson_feature(&mut iter).is_ok());
 	}
 }
