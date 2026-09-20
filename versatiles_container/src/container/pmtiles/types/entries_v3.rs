@@ -83,13 +83,28 @@ impl EntriesV3 {
 			entry.range.length = reader.read_varint()?;
 		}
 
+		// Both branches are arithmetic on values the file chose, in a profile that
+		// does not check overflow. Unchecked, `tmp - 1` with `tmp == 0` on the
+		// first entry wrapped to `u64::MAX`, and a later shift wrapped it back to
+		// an offset inside the file — so the reader returned unrelated bytes as
+		// the tile's content and reported success. A wrong answer is worse than
+		// an error, which is why these are checked even though the read that
+		// follows would usually fail anyway.
 		for i in 0..num_entries {
 			let tmp = reader.read_varint()?;
-			if i > 0 && tmp == 0 {
-				entries[i].range.offset = entries[i - 1].range.offset + entries[i - 1].range.length;
+			entries[i].range.offset = if i > 0 && tmp == 0 {
+				let previous = entries[i - 1].range;
+				previous
+					.offset
+					.checked_add(previous.length)
+					.context("offsets in the PMTiles directory overflow u64")?
 			} else {
-				entries[i].range.offset = tmp - 1;
-			}
+				// The offset is stored biased by one so that zero can mean
+				// "directly after the previous entry"; an unbiased zero here is a
+				// malformed directory rather than offset `u64::MAX`.
+				tmp.checked_sub(1)
+					.context("the first entry of a PMTiles directory has no offset")?
+			};
 		}
 
 		Ok(EntriesV3 { entries })
@@ -379,6 +394,41 @@ impl EntriesSliceV3<'_> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// Offsets are stored biased by one so that zero can mean "directly after the
+	/// previous entry". An unbiased zero on the first entry used to underflow to
+	/// `u64::MAX`, which a later shift wrapped back to an offset inside the file
+	/// — so the reader returned unrelated bytes as a tile and reported success.
+	#[test]
+	fn a_zero_offset_on_the_first_entry_is_refused() {
+		let mut writer = ValueWriterBlob::new_le();
+		writer.write_varint(1).unwrap(); // one entry
+		writer.write_varint(0).unwrap(); // tile id delta
+		writer.write_varint(1).unwrap(); // run length
+		writer.write_varint(10).unwrap(); // length
+		writer.write_varint(0).unwrap(); // offset: unbiased zero on entry 0
+
+		let error = EntriesV3::from_blob(&writer.into_blob())
+			.expect_err("an unbiased zero offset on the first entry must be an error");
+
+		let message = format!("{error:#}");
+		assert!(message.contains("no offset"), "unhelpful message: {message}");
+	}
+
+	/// The biased encoding still round-trips: offset `n` is stored as `n + 1`,
+	/// and a zero on a later entry means "follows the previous one".
+	#[test]
+	fn offsets_are_decoded_from_their_biased_form() -> Result<()> {
+		let mut entries = EntriesV3::new();
+		entries.push(EntryV3::new(0, ByteRange::new(0, 10), 1));
+		entries.push(EntryV3::new(1, ByteRange::new(10, 20), 1));
+		let blob = entries.as_slice().serialize_entries()?;
+
+		let decoded = EntriesV3::from_blob(&blob)?;
+		assert_eq!(decoded.iter().map(|e| e.range.offset).collect::<Vec<_>>(), vec![0, 10]);
+
+		Ok(())
+	}
 
 	/// An `EntryV3` is 32 bytes in memory against a minimum of four bytes in the
 	/// file, so a directory that declares far more entries than its bytes can

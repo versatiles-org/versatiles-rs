@@ -82,23 +82,37 @@ impl ByteRange {
 	///
 	/// * `offset` - The number of bytes to shift the range forward.
 	///
+	/// # Errors
+	///
+	/// Returns an error if `self.offset + offset` overflows `u64`.
+	///
+	/// Checked rather than bare: both operands are read out of a container's
+	/// directory, and release builds set `overflow-checks = false`, so a bare
+	/// `+` wraps silently. A wrapped offset can land back inside the file and be
+	/// read successfully, which reports unrelated bytes as the tile's content
+	/// instead of failing.
+	///
 	/// # Examples
 	///
 	/// ```rust
 	/// use versatiles_core::ByteRange;
 	///
 	/// let r1 = ByteRange::new(10, 5);
-	/// let r2 = r1.shifted_forward(7);
+	/// let r2 = r1.shifted_forward(7).unwrap();
 	/// assert_eq!(r2.offset, 17);
 	/// assert_eq!(r2.length, 5);
 	/// assert_eq!(r1.offset, 10); // original remains unchanged
+	/// assert!(ByteRange::new(u64::MAX, 5).shifted_forward(1).is_err());
 	/// ```
-	#[must_use]
-	pub fn shifted_forward(&self, offset: u64) -> Self {
-		Self {
-			offset: self.offset + offset,
+	pub fn shifted_forward(&self, offset: u64) -> Result<Self> {
+		let new_offset = self
+			.offset
+			.checked_add(offset)
+			.with_context(|| format!("shifted_forward({offset}) overflows ByteRange offset ({})", self.offset))?;
+		Ok(Self {
+			offset: new_offset,
 			length: self.length,
-		}
+		})
 	}
 
 	/// Returns a new `ByteRange` that is shifted backward by the specified `offset`.
@@ -296,11 +310,21 @@ mod tests {
 	#[test]
 	fn test_shifted_forward() {
 		let original = ByteRange::new(10, 5);
-		let shifted = original.shifted_forward(3);
+		let shifted = original.shifted_forward(3).unwrap();
 		assert_eq!(shifted.offset, 13, "Offset should be 10 + 3 = 13");
 		assert_eq!(shifted.length, 5, "Length should remain unchanged");
 		// Original should remain unchanged
 		assert_eq!(original.offset, 10, "Original offset unchanged");
+	}
+
+	/// Both operands come out of a container's directory, and release builds do
+	/// not check overflow — so a wrapped offset would land back inside the file
+	/// and read unrelated bytes as a tile rather than failing.
+	#[test]
+	fn shifted_forward_reports_overflow_instead_of_wrapping() {
+		assert!(ByteRange::new(u64::MAX, 5).shifted_forward(1).is_err());
+		assert!(ByteRange::new(u64::MAX - 2, 5).shifted_forward(u64::MAX).is_err());
+		assert!(ByteRange::new(u64::MAX, 5).shifted_forward(0).is_ok(), "no overflow");
 	}
 
 	/// Ensures `shifted_backward` does not alter the original range and returns a new range with a decreased offset.

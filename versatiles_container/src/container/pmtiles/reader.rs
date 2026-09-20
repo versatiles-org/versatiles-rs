@@ -272,7 +272,7 @@ impl PMTilesReader {
 				if entry.run_length > 0 {
 					return Ok(Some(Tile::from_blob(
 						data_reader
-							.read_range(&entry.range.shifted_forward(tile_data_offset))
+							.read_range(&entry.range.shifted_forward(tile_data_offset)?)
 							.await?,
 						*tile_compression,
 						*tile_format,
@@ -322,7 +322,7 @@ impl PMTilesReader {
 			}
 
 			if entry.run_length > 0 {
-				return Ok(Some(entry.range.shifted_forward(tile_data_offset)));
+				return Ok(Some(entry.range.shifted_forward(tile_data_offset)?));
 			}
 
 			let range = entry.range;
