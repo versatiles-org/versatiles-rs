@@ -79,7 +79,7 @@ pub async fn serve_tile_from_source(
 	match response {
 		Ok(Some(result)) => {
 			log::debug!("send response for tile request: {path}");
-			ok_data(result, target, cache_control)
+			ok_data(result, target, cache_control).await
 		}
 		Ok(None) => {
 			log::debug!("send 404 for tile request: {path}");
@@ -115,7 +115,7 @@ pub async fn serve_static(uri: Uri, headers: HeaderMap, State(state): State<Stat
 	for source in sources.iter() {
 		if let Some(result) = source.get_data(&url, &target).await {
 			log::debug!("send response to static request: {url}");
-			return ok_data(result, target, &state.cache_control);
+			return ok_data(result, target, &state.cache_control).await;
 		}
 	}
 	log::debug!("send 404 to static request: {url}");
@@ -155,7 +155,7 @@ pub fn error_500() -> Response<Body> {
 	error_with(500, "Internal Server Error")
 }
 
-fn ok_data(result: SourceResponse, mut target: TargetCompression, cache_control: &str) -> Response<Body> {
+async fn ok_data(result: SourceResponse, mut target: TargetCompression, cache_control: &str) -> Response<Body> {
 	// Binary images are effectively incompressible; avoid recompression.
 	if matches!(
 		result.mime.as_str(),
@@ -176,16 +176,39 @@ fn ok_data(result: SourceResponse, mut target: TargetCompression, cache_control:
 		target
 	);
 
-	let (blob, compression) = match optimize_compression(result.blob, result.compression, &target) {
-		Ok(result) => result,
-		Err(err) => {
+	// Compression runs on the blocking pool, not the async worker.
+	//
+	// Brotli at the quality `optimize_compression` selects is pure CPU with no
+	// await inside it, and on a large asset it runs for seconds — repeated per
+	// request, since nothing caches the result. On an async worker that blocks
+	// the thread outright, so requests for one big asset stall every other
+	// request the runtime is serving, tile requests included. The 15 s
+	// `TimeoutLayer` cannot help: it cancels at await points, and the encoder
+	// has none.
+	//
+	// Measured with sixteen concurrent `Accept-Encoding: br` requests for a
+	// 12 MB file: an unrelated `GET /status` took 3.10 s before this change and
+	// 0.01 s after. The CPU cost itself is unchanged — this stops one slow
+	// response from becoming every response.
+	let mime = result.mime;
+	let source_compression = result.compression;
+	let blob = result.blob;
+	let target_debug = format!("{target:?}");
+
+	let outcome = tokio::task::spawn_blocking(move || optimize_compression(blob, source_compression, &target)).await;
+
+	let (blob, compression) = match outcome {
+		Ok(Ok(pair)) => pair,
+		Ok(Err(err)) => {
 			log::error!(
-				"Compression optimization failed for mime type '{}' (compression: {:?}, target: {:?}):\n{}",
-				result.mime,
-				result.compression,
-				target,
+				"Compression optimization failed for mime type '{mime}' (compression: {source_compression:?}, target: {target_debug}):\n{}",
 				format_error_chain(&err)
 			);
+			return error_500();
+		}
+		Err(err) => {
+			// The blocking task panicked or the runtime is shutting down.
+			log::error!("Compression task failed for mime type '{mime}': {err}");
 			return error_500();
 		}
 	};
@@ -206,7 +229,7 @@ fn ok_data(result: SourceResponse, mut target: TargetCompression, cache_control:
 }
 
 /// Tiny JSON helper used by API routes.
-pub fn ok_json(message: &str) -> Response<Body> {
+pub async fn ok_json(message: &str) -> Response<Body> {
 	ok_data(
 		SourceResponse {
 			blob: Blob::from(message),
@@ -218,6 +241,7 @@ pub fn ok_json(message: &str) -> Response<Body> {
 		// a separate question from the tile cache lifetime.
 		DEFAULT_CACHE_CONTROL,
 	)
+	.await
 }
 
 // --- tests -------------------------------------------------------------------
@@ -227,9 +251,9 @@ mod tests {
 
 	use super::*;
 
-	#[test]
-	fn ok_json_sets_expected_headers() {
-		let resp = ok_json(r#"{"ok":true}"#);
+	#[tokio::test]
+	async fn ok_json_sets_expected_headers() {
+		let resp = ok_json(r#"{"ok":true}"#).await;
 		assert_eq!(resp.status(), 200);
 
 		let headers = resp.headers();
@@ -245,8 +269,8 @@ mod tests {
 
 	/// The whole point of #222: the header must follow the configured value,
 	/// not a constant. A server serving tiles that change needs a short one.
-	#[test]
-	fn ok_data_uses_the_configured_cache_control() {
+	#[tokio::test]
+	async fn ok_data_uses_the_configured_cache_control() {
 		for cache_control in ["no-cache", "public, max-age=60", "private, max-age=0, must-revalidate"] {
 			let src = SourceResponse {
 				blob: Blob::from("{}"),
@@ -254,7 +278,7 @@ mod tests {
 				mime: "application/json".into(),
 			};
 
-			let resp = super::ok_data(src, TargetCompression::from_none(), cache_control);
+			let resp = super::ok_data(src, TargetCompression::from_none(), cache_control).await;
 
 			assert_eq!(
 				resp.headers().get(header::CACHE_CONTROL).unwrap(),
@@ -264,8 +288,8 @@ mod tests {
 		}
 	}
 
-	#[test]
-	fn ok_data_plain_text_gzip_when_allowed() {
+	#[tokio::test]
+	async fn ok_data_plain_text_gzip_when_allowed() {
 		// Source is uncompressed text; client allows gzip
 		let src = SourceResponse {
 			blob: Blob::from("The quick brown fox jumps over the lazy dog"),
@@ -275,7 +299,7 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Gzip);
 
-		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL);
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL).await;
 		assert_eq!(resp.status(), 200);
 		let headers = resp.headers();
 
@@ -323,8 +347,8 @@ mod tests {
 		assert!(lines[3].starts_with("    "));
 	}
 
-	#[test]
-	fn ok_data_png_is_not_recompressed() {
+	#[tokio::test]
+	async fn ok_data_png_is_not_recompressed() {
 		// PNG should be treated as incompressible even if br is allowed
 		let png_bytes = vec![137, 80, 78, 71, 13, 10, 26, 10]; // just a PNG signature; enough for header tests
 		let src = SourceResponse {
@@ -335,7 +359,7 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Brotli);
 
-		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL);
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL).await;
 		assert_eq!(resp.status(), 200);
 		let headers = resp.headers();
 
@@ -366,8 +390,8 @@ mod tests {
 		assert_eq!(headers.get(header::CONTENT_TYPE).unwrap(), "text/plain; charset=utf-8");
 	}
 
-	#[test]
-	fn ok_data_brotli_when_allowed() {
+	#[tokio::test]
+	async fn ok_data_brotli_when_allowed() {
 		// Source is uncompressed text; client allows brotli
 		let src = SourceResponse {
 			blob: Blob::from("The quick brown fox jumps over the lazy dog"),
@@ -377,7 +401,7 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Brotli);
 
-		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL);
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL).await;
 		assert_eq!(resp.status(), 200);
 		let headers = resp.headers();
 
@@ -386,8 +410,8 @@ mod tests {
 		assert_eq!(headers.get(header::CONTENT_ENCODING).unwrap(), "br");
 	}
 
-	#[test]
-	fn ok_data_jpeg_is_not_recompressed() {
+	#[tokio::test]
+	async fn ok_data_jpeg_is_not_recompressed() {
 		let src = SourceResponse {
 			blob: Blob::from(vec![0xFF, 0xD8, 0xFF]), // JPEG signature
 			compression: TileCompression::Uncompressed,
@@ -396,14 +420,14 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Gzip);
 
-		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL);
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL).await;
 		assert_eq!(resp.status(), 200);
 		// No content-encoding for incompressible images
 		assert!(resp.headers().get(header::CONTENT_ENCODING).is_none());
 	}
 
-	#[test]
-	fn ok_data_webp_is_not_recompressed() {
+	#[tokio::test]
+	async fn ok_data_webp_is_not_recompressed() {
 		let src = SourceResponse {
 			blob: Blob::from(vec![0x52, 0x49, 0x46, 0x46]), // RIFF header
 			compression: TileCompression::Uncompressed,
@@ -412,13 +436,13 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Gzip);
 
-		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL);
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL).await;
 		assert_eq!(resp.status(), 200);
 		assert!(resp.headers().get(header::CONTENT_ENCODING).is_none());
 	}
 
-	#[test]
-	fn ok_data_avif_is_not_recompressed() {
+	#[tokio::test]
+	async fn ok_data_avif_is_not_recompressed() {
 		let src = SourceResponse {
 			blob: Blob::from(vec![0x00, 0x00, 0x00]), // AVIF placeholder
 			compression: TileCompression::Uncompressed,
@@ -427,7 +451,7 @@ mod tests {
 		let mut target = TargetCompression::from_none();
 		target.insert(TileCompression::Brotli);
 
-		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL);
+		let resp = super::ok_data(src, target, DEFAULT_CACHE_CONTROL).await;
 		assert_eq!(resp.status(), 200);
 		assert!(resp.headers().get(header::CONTENT_ENCODING).is_none());
 	}

@@ -128,7 +128,7 @@ pub async fn add_api_to_app(app: Router, sources: Arc<DashMap<String, Arc<Server
 					"[{}]",
 					ids.iter().map(|id| format!("\"{id}\"")).collect::<Vec<_>>().join(",")
 				);
-				ok_json(&tiles_index_json)
+				ok_json(&tiles_index_json).await
 			}
 		}),
 	);
