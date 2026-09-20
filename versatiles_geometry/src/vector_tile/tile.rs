@@ -110,6 +110,26 @@ mod tests {
 		VectorTile::from_blob(&get_pbf().await?).context("Failed to convert blob to VectorTile")
 	}
 
+	/// A layer-name field whose length varint claims 2^50 asked the reader to
+	/// allocate a petabyte before reading a byte of it. The allocator answers a
+	/// request that size by aborting, which no caller can catch — eleven bytes
+	/// were enough to take down a Node process through `layerStats`.
+	#[test]
+	fn a_huge_field_length_is_an_error_not_an_abort() {
+		// field 3 (layers), length 9; inside it: field 1 (name) with a length
+		// varint of 2^50 — eleven bytes in total, the size of the original PoC.
+		let tile = Blob::from(vec![
+			0x1A, 0x09, // layers, 9 bytes
+			0x0A, // name, wire type 2
+			0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x02, // length = 2^50
+		]);
+
+		assert!(
+			VectorTile::from_blob(&tile).is_err(),
+			"a length beyond the input must be reported, not allocated"
+		);
+	}
+
 	#[tokio::test]
 	async fn from_to_blob() -> Result<()> {
 		let tile1 = tile().await.context("Failed to get initial VectorTile")?;

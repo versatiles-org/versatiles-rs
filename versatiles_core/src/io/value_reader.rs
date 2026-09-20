@@ -33,7 +33,7 @@
 
 use std::io::{Read, Seek};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 use byteorder::{ByteOrder, ReadBytesExt};
 
 use crate::{Blob, ByteRange};
@@ -92,6 +92,30 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// `true` if there are remaining bytes, otherwise `false`.
 	fn has_remaining(&mut self) -> Result<bool> {
 		Ok(self.remaining()? > 0)
+	}
+
+	/// Refuses a length that the reader cannot possibly satisfy.
+	///
+	/// Every caller that reads a counted field takes its length from the input —
+	/// a protobuf varint, a header field — and the reader is asked to allocate
+	/// that much before a single byte is read back. Ten bytes of varint can name
+	/// 2^60, and the allocator answers a request that large by aborting the
+	/// process, which no caller can catch: an eleven-byte vector tile was enough
+	/// to take down a Node process through `layerStats`.
+	///
+	/// Checking against the bytes actually left makes the failure a `Result`,
+	/// and costs one comparison. [`get_sub_reader`](Self::get_sub_reader) has
+	/// always done this; these are the paths that did not.
+	///
+	/// # Errors
+	/// Returns an error if `length` is greater than [`remaining`](Self::remaining).
+	fn ensure_available(&mut self, length: u64) -> Result<()> {
+		let remaining = self.remaining()?;
+		ensure!(
+			length <= remaining,
+			"requested {length} bytes, but only {remaining} remain"
+		);
+		Ok(())
 	}
 
 	/// Reads a variable-length unsigned integer (varint) from the data.
@@ -238,8 +262,10 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// A `Blob` containing the read bytes.
 	///
 	/// # Errors
-	/// Returns an error if reading fails.
+	/// Returns an error if `length` exceeds the remaining bytes, or if reading
+	/// fails.
 	fn read_blob(&mut self, length: u64) -> Result<Blob> {
+		self.ensure_available(length).context("Failed to read blob")?;
 		let mut blob = Blob::new_sized(usize::try_from(length).context("Blob length too large for this platform")?);
 		self.reader().read_exact(blob.as_mut_slice())?;
 		Ok(blob)
@@ -254,8 +280,10 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	/// A `String` containing the decoded UTF-8 data.
 	///
 	/// # Errors
-	/// Returns an error if reading fails or if the bytes are not valid UTF-8.
+	/// Returns an error if `length` exceeds the remaining bytes, if reading
+	/// fails, or if the bytes are not valid UTF-8.
 	fn read_string(&mut self, length: u64) -> Result<String> {
+		self.ensure_available(length).context("Failed to read string")?;
 		let mut vec = vec![0u8; usize::try_from(length).context("String length too large for this platform")?];
 		self.reader().read_exact(&mut vec)?;
 		Ok(String::from_utf8(vec)?)
@@ -386,6 +414,39 @@ mod tests {
 	fn test_is_empty() {
 		assert!(ValueReaderSlice::new_le(&[]).is_empty());
 		assert!(!ValueReaderSlice::new_le(&[0]).is_empty());
+	}
+
+	/// A counted field's length comes from the input, and the allocation used to
+	/// happen before anything checked it. A length the reader cannot satisfy has
+	/// to be an error — an allocation that large aborts the process instead.
+	#[test]
+	fn a_length_beyond_the_input_is_an_error_not_an_allocation() {
+		// 2^50, as a protobuf varint: far more than any allocator will hand over.
+		let huge = [0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x02];
+
+		let mut reader = ValueReaderSlice::new_le(&huge);
+		assert!(reader.read_pbf_blob().is_err());
+
+		let mut reader = ValueReaderSlice::new_le(&huge);
+		assert!(reader.read_pbf_string().is_err());
+
+		// Directly, without the varint in front.
+		let mut reader = ValueReaderSlice::new_le(&[1, 2, 3]);
+		assert!(reader.read_blob(1 << 50).is_err());
+		assert!(reader.read_string(1 << 50).is_err());
+		assert!(reader.read_blob(4).is_err(), "one past the end is still too many");
+	}
+
+	/// The guard must not refuse a field that fits exactly.
+	#[test]
+	fn a_length_that_fits_is_still_read() -> Result<()> {
+		let mut reader = ValueReaderSlice::new_le(&[1, 2, 3]);
+		assert_eq!(reader.read_blob(3)?.as_slice(), &[1, 2, 3]);
+
+		let mut reader = ValueReaderSlice::new_le(b"hello");
+		assert_eq!(reader.read_string(5)?, "hello");
+
+		Ok(())
 	}
 
 	#[test]
