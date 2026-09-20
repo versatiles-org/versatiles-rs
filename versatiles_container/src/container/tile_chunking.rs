@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Context, Result, ensure};
 use futures::stream::StreamExt;
 use versatiles_core::{
 	Blob, ByteRange, ConcurrencyLimits, TileCompression, TileCoord, TileFormat, TileStream, io::DataReader,
@@ -116,31 +116,53 @@ impl Chunk {
 			big_blob.len(),
 			self.range.offset
 		);
-		let tiles = self.slice_tiles(&big_blob, tile_compression, tile_format);
+		let tiles = self.slice_tiles(&big_blob, tile_compression, tile_format)?;
 		log::trace!("chunk: done slicing {} tiles", tiles.len());
 		Ok(tiles)
 	}
 
 	/// Slice a big blob into individual tiles using the chunk's tile ranges.
+	///
+	/// Fallible because every number involved comes out of the container's
+	/// index. `offset - chunk_start` underflows if a tile claims to start before
+	/// the chunk holding it, `start + length` can leave the blob entirely, and
+	/// `Blob::range` is an unchecked slice — so on a crafted index this used to
+	/// panic in a debug build and, with the subtraction wrapping in release,
+	/// index far outside the blob. Each tile is checked against the bytes
+	/// actually read instead.
 	fn slice_tiles(
 		&self,
 		big_blob: &Blob,
 		tile_compression: TileCompression,
 		tile_format: TileFormat,
-	) -> Vec<(TileCoord, Tile)> {
+	) -> Result<Vec<(TileCoord, Tile)>> {
 		let chunk_start = self.range.offset;
 		self
 			.tiles
 			.iter()
 			.map(|(coord, range)| {
-				let start =
-					usize::try_from(range.offset - chunk_start).expect("range offset difference should fit in usize");
-				let end = start + usize::try_from(range.length).expect("range length should fit in usize");
+				let offset_in_chunk = range.offset.checked_sub(chunk_start).with_context(|| {
+					format!(
+						"tile {coord:?} starts at {}, before the chunk at {chunk_start} that should contain it",
+						range.offset
+					)
+				})?;
+				let start = usize::try_from(offset_in_chunk).context("tile offset too large for this platform")?;
+				let length = usize::try_from(range.length).context("tile length too large for this platform")?;
+				let end = start
+					.checked_add(length)
+					.with_context(|| format!("tile {coord:?} range {start}+{length} overflows"))?;
+
+				ensure!(
+					end as u64 <= big_blob.len(),
+					"tile {coord:?} ends at {end}, past the {} bytes read for its chunk",
+					big_blob.len()
+				);
 
 				let blob = Blob::from(big_blob.range(start..end));
 				let tile = Tile::from_blob(blob, tile_compression, tile_format);
 
-				(*coord, tile)
+				Ok((*coord, tile))
 			})
 			.collect()
 	}
@@ -258,7 +280,6 @@ mod tests {
 		time::Duration,
 	};
 
-	use anyhow::Result;
 	use async_trait::async_trait;
 	use versatiles_core::io::DataReaderTrait;
 
@@ -375,5 +396,76 @@ mod tests {
 			peak <= limit,
 			"peak {peak} in flight exceeded the budget concurrency {limit}"
 		);
+	}
+}
+
+#[cfg(test)]
+mod slice_bounds_tests {
+	use super::*;
+
+	fn chunk_with(range: ByteRange, tiles: Vec<(TileCoord, ByteRange)>) -> Chunk {
+		Chunk { tiles, range }
+	}
+
+	/// Every number here comes out of the container's index. A tile claiming to
+	/// start before the chunk that holds it underflowed the offset subtraction —
+	/// a panic in a debug build, and in release a wrapped value that indexed far
+	/// outside the blob through `Blob::range`, which does not bounds-check.
+	#[test]
+	fn a_tile_starting_before_its_chunk_is_an_error() {
+		let coord = TileCoord::new(0, 0, 0).unwrap();
+		let chunk = chunk_with(ByteRange::new(100, 50), vec![(coord, ByteRange::new(40, 10))]);
+
+		let error = chunk
+			.slice_tiles(
+				&Blob::from(vec![0u8; 50]),
+				TileCompression::Uncompressed,
+				TileFormat::PNG,
+			)
+			.unwrap_err();
+
+		assert!(format!("{error:#}").contains("before the chunk"), "{error:#}");
+	}
+
+	/// A tile whose end runs past what was actually read would slice out of
+	/// bounds.
+	#[test]
+	fn a_tile_ending_past_the_chunk_is_an_error() {
+		let coord = TileCoord::new(0, 0, 0).unwrap();
+		let chunk = chunk_with(ByteRange::new(100, 50), vec![(coord, ByteRange::new(140, 999))]);
+
+		let error = chunk
+			.slice_tiles(
+				&Blob::from(vec![0u8; 50]),
+				TileCompression::Uncompressed,
+				TileFormat::PNG,
+			)
+			.unwrap_err();
+
+		assert!(format!("{error:#}").contains("past the 50 bytes"), "{error:#}");
+	}
+
+	/// The ordinary case still slices, including a tile that ends exactly on the
+	/// last byte read.
+	#[test]
+	fn tiles_inside_the_chunk_are_sliced() {
+		let a = TileCoord::new(0, 0, 0).unwrap();
+		let b = TileCoord::new(1, 1, 1).unwrap();
+		let chunk = chunk_with(
+			ByteRange::new(100, 50),
+			vec![(a, ByteRange::new(100, 10)), (b, ByteRange::new(140, 10))],
+		);
+
+		let tiles = chunk
+			.slice_tiles(
+				&Blob::from(vec![7u8; 50]),
+				TileCompression::Uncompressed,
+				TileFormat::PNG,
+			)
+			.unwrap();
+
+		assert_eq!(tiles.len(), 2);
+		assert_eq!(tiles[0].0, a);
+		assert_eq!(tiles[1].0, b);
 	}
 }
